@@ -2,6 +2,7 @@
 
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/Controls/DockNode.h"
+#include "GUI/Widgets/Controls/DockWorkspace.h"
 
 #include <memory>
 #include <optional>
@@ -15,6 +16,7 @@ namespace ya
 struct UIContainer;
 struct UISplitPane;
 struct UITabBar;
+struct UIDockWorkspace;
 
 /// DockSpace: a full nested dock tree (FDockTreeModel) projected into nested
 /// UISplitPanes with tab groups. There is no fixed zone layout — the initial
@@ -24,11 +26,14 @@ struct UITabBar;
 struct YA_GUI_API UIDockSpace : public UIElement
 {
     explicit UIDockSpace(std::string name = "DockSpace");
+    /// Bind the shared workspace this dock reads its model / registry / policy from.
+    void setWorkspace(std::shared_ptr<UIDockWorkspace> ws);
+    [[nodiscard]] UIDockWorkspace* workspace() const { return _ws.get(); }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIDockSpace>; }
 
-    /// Add a panel to the dock (its widget becomes that leaf's active content
-    /// when its tab is selected). Panels are added to the initial root leaf.
+    /// Add a panel through the workspace (its widget becomes that leaf's active
+    /// content when its tab is selected).
     void addPanel(const std::string& name, std::shared_ptr<UIElement> widget);
 
     /// Payload prefix carried by tab-drag sessions.
@@ -52,12 +57,6 @@ struct YA_GUI_API UIDockSpace : public UIElement
     [[nodiscard]] bool isDropPreviewMerge() const { return _preview.has_value() && _preview->bMerge; }
 
 private:
-    struct FPanel
-    {
-        DockPanelId                   id = kInvalidDockPanelId;
-        std::string                   name;
-        std::shared_ptr<UIElement>    widget;
-    };
     struct FLeafView
     {
         DockNodeId  leafId = kInvalidDockNodeId;
@@ -89,11 +88,9 @@ private:
     [[nodiscard]] bool parsePanelPayload(const std::string& payload, DockPanelId& panelId) const;
     void clearPreview();
 
-    std::unordered_map<DockPanelId, FPanel> _panels;
     std::unordered_map<DockNodeId, FLeafView> _leafViews;
     std::optional<FDropPreview> _preview;
-    FDockTreeModel _model;
-    DockPanelId _nextPanelId = 1;
+    std::shared_ptr<UIDockWorkspace> _ws;
 };
 
 } // namespace ya

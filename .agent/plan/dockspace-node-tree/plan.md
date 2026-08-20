@@ -328,6 +328,29 @@ policy 与 preview/drop 一致；随后将另一 tab 放入 placeholder，断言
 
 ### 阶段 5：单窗口浮动 host 和 re-dock
 
+**先建集中 workspace（UE 式注册/开关语义），再在其上搭 floating。**
+
+- 新增 UIDockWorkspace（一次一处，承载所有 DockSpace/Floating 共享状态）：
+  - 全局 FDockTreeModel、全局 panel registry、全局 panel id 分配；UIDockSpace 不再私有持有
+    model/panels，改为引用 workspace。
+  - 集中开关：SetDockingEnabled / SetFloatingEnabled / SetTearOffEnabled，一处统一控制“是否
+    允许 dock、是否允许 floating tab、是否允许拖拽 tear-off”；各 DockSpace 与 FloatingHost
+    都只读这份策略。
+  - 将来 server/multi-window 时它就是 IDockWorkspaceCoordinator 的地基：一个 workspace 可被
+    多窗口共享，每个窗口 DockSpace 只是它的投影之一。
+- UIDockSpace 瘦身为“该窗口的投影 + 交互”，docking 判定读取 workspace 的 bAllowDocking；
+  不再私自新增 panel。
+- floating 实例（FloatingWindow records）也归 workspace：全局 z-order、active floating
+  window、dock 目标查询都由 workspace 管。
+
+**float 创建入口（用户拍板）**：
+- 主入口 = 拖拽 tear-off：dock drag 释放到 NoTarget 时，若 bAllowTearOff && bAllowFloating，
+  把 panel 从 source leaf 移到 floating record 并 mount 浮窗。
+- 不做双击弹浮窗（后续每个 dock 可有自己的 context menu，作为另一条“创建 floating”入口；
+  双击/菜单只是旁路，不改变 core transaction）。
+
+### 阶段 5：单窗口浮动 host 和 re-dock
+
 - 新建 `UIDockFloatingHost`（Popup layer 常驻普通 child，维护多个 floating windows
   的 z-order）与 `UIFloatingDockWindow`（标题栏、移动、active visual、一个 Leaf view）。
   不复用 `UIPopupOverlay`，不引入 modal shield/dismiss；浮窗 press 提升 z-order。

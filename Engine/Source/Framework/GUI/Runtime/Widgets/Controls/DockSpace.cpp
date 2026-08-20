@@ -88,9 +88,17 @@ void UIDockSpace::clearPreview()
     }
 }
 
+void UIDockSpace::setWorkspace(std::shared_ptr<UIDockWorkspace> ws)
+{
+    _ws = std::move(ws);
+    if (getTree() && !getChildren().empty()) {
+        rebuildProjection();
+    }
+}
+
 void UIDockSpace::rebuildProjection()
 {
-    if (!getTree()) {
+    if (!getTree() || !_ws) {
         return;
     }
     clearPreview();
@@ -101,14 +109,17 @@ void UIDockSpace::rebuildProjection()
         }
     }
     _leafViews.clear();
-    addDetachedChild(materializeNode(*_model.root()));
+    addDetachedChild(materializeNode(*_ws->dockModel().root()));
     markLayoutDirty();
     markPaintDirty();
 }
 
 void UIDockSpace::rebuildLeaf(DockNodeId leafId)
 {
-    const FDockNode* leaf = _model.findNode(leafId);
+    if (!_ws) {
+        return;
+    }
+    const FDockNode* leaf = _ws->dockModel().findNode(leafId);
     FLeafView* view = leafViewForLeaf(leafId);
     if (!leaf || !view || !view->bar || !view->content) {
         return;
@@ -130,9 +141,8 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
     }
 
     for (DockPanelId panelId : leaf->panelIds) {
-        auto it = _panels.find(panelId);
-        if (it != _panels.end()) {
-            view->bar->addTab(it->second.name);
+        if (const UIDockWorkspace::FPanel* fp = _ws->findPanel(panelId)) {
+            view->bar->addTab(fp->name);
         }
     }
 
@@ -149,13 +159,13 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
 
     view->bar->_onTabSelected = [this, leafId](int index)
     {
-        const FDockNode* currentLeaf = _model.findNode(leafId);
+        const FDockNode* currentLeaf = _ws->dockModel().findNode(leafId);
         FLeafView* currentView = leafViewForLeaf(leafId);
         if (!currentLeaf || !currentView || !currentView->content || index < 0 || index >= static_cast<int>(currentLeaf->panelIds.size())) {
             return;
         }
         const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
-        _model.selectPanel(panelId);
+        _ws->dockModel().selectPanel(panelId);
         if (WidgetTree* tree = getTree()) {
             auto contentChildren = currentView->content->getChildrenInPaintOrder();
             for (UIElement* child : contentChildren) {
@@ -165,18 +175,16 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
                 }
             }
         }
-        auto panelIt = _panels.find(panelId);
-        if (panelIt != _panels.end()) {
-            currentView->content->addDetachedChild(panelIt->second.widget);
+        if (const UIDockWorkspace::FPanel* fp = _ws->findPanel(panelId)) {
+            currentView->content->addDetachedChild(fp->widget);
         }
     };
 
     if (selectedIndex >= 0) {
         view->bar->syncSelectedTab(selectedIndex);
         DockPanelId selectedPanel = leaf->panelIds[static_cast<size_t>(selectedIndex)];
-        auto it = _panels.find(selectedPanel);
-        if (it != _panels.end()) {
-            view->content->addDetachedChild(it->second.widget);
+        if (const UIDockWorkspace::FPanel* fp = _ws->findPanel(selectedPanel)) {
+            view->content->addDetachedChild(fp->widget);
         }
     }
     markLayoutDirty();
@@ -194,7 +202,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
         const DockNodeId splitId = node.id;
         split->setSplitRatioChangedCallback([this, splitId](float ratio)
         {
-            if (_model.setSplitRatio(splitId, ratio)) {
+            if (_ws->dockModel().setSplitRatio(splitId, ratio)) {
                 markLayoutDirty();
                 markPaintDirty();
             }
@@ -212,7 +220,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     bar->_emptyPlaceholder = std::format("{} (drop tabs here)", leaf->_name);
     bar->_onTabDragBegin = [this, leafId = node.id](int index, const std::string& label)
     {
-        const FDockNode* currentLeaf = _model.findNode(leafId);
+        const FDockNode* currentLeaf = _ws->dockModel().findNode(leafId);
         if (!currentLeaf || index < 0 || index >= static_cast<int>(currentLeaf->panelIds.size())) {
             return;
         }
@@ -301,24 +309,25 @@ const std::string& UIDockSpace::getDropPreviewDisabledReason() const
 
 void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> widget)
 {
-    const DockPanelId panelId = _nextPanelId++;
-    if (!_model.registerPanel({.id = panelId, .stableKey = name, .title = name}) ||
-        !_model.addPanel(panelId)) {
+    if (!_ws) {
+        return;
+    }
+    const DockPanelId panelId = _ws->addPanel(name, std::move(widget));
+    if (panelId == kInvalidDockPanelId) {
         YA_CORE_WARN("UIDockSpace '{}': rejected duplicate or invalid panel '{}'", _name, name);
         return;
     }
-    _panels.emplace(panelId, FPanel{panelId, name, std::move(widget)});
     if (getTree() && !getChildren().empty()) {
-        rebuildLeaf(_model.root()->id);
+        rebuildLeaf(_ws->dockModel().root()->id);
     }
 }
 
 std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const glm::vec2& logicalPoint, DockPanelId panelId) const
 {
-    if (panelId == kInvalidDockPanelId) {
+    if (!_ws || panelId == kInvalidDockPanelId) {
         return std::nullopt;
     }
-    const FDockNode* sourceLeaf = _model.findLeafForPanel(panelId);
+    const FDockNode* sourceLeaf = _ws->dockModel().findLeafForPanel(panelId);
     if (!sourceLeaf) {
         return std::nullopt;
     }
@@ -333,22 +342,7 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     if (!targetView || !targetView->root) {
         return std::nullopt;
     }
-    if (sourceLeaf->id == targetView->leafId) {
-        // Dragging a panel's own tab onto its own leaf is meaningless (it is
-        // already docked there). Show no dock affordance at all.
-        return FDropPreview{
-            targetView->leafId,
-            panelId,
-            EDockCorner::NorthWest,
-            EDockCardinalSide::West,
-            Rect2D{},
-            Rect2D{},
-            false,
-            false,
-            true,
-            "cannot dock a panel onto its own leaf",
-        };
-    }
+    const bool bSameLeaf = sourceLeaf->id == targetView->leafId;
 
     const bool bOverTabBar = targetView->bar && pointInRect(logicalPoint, targetView->bar->_layoutRect);
 
@@ -358,6 +352,10 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     }
     const glm::vec2 local = (logicalPoint - rect.pos) / rect.extent;
     if (bOverTabBar) {
+        if (bSameLeaf) {
+            return FDropPreview{targetView->leafId, panelId, EDockCorner::NorthWest, EDockCardinalSide::West,
+                                Rect2D{}, Rect2D{}, false, false, true, "already docked in this leaf"};
+        }
         return FDropPreview{
             targetView->leafId,
             panelId,
@@ -395,6 +393,16 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     }
 
     auto [bDisabled, reason] = rejectForExtent(bCorner, rect, local);
+    if (bSameLeaf) {
+        if (bMerge) {
+            bDisabled = true;
+            reason = "cannot merge a panel into its own leaf";
+        }
+        else if (sourceLeaf->panelIds.size() <= 1) {
+            bDisabled = true;
+            reason = "cannot split a single-panel leaf onto itself";
+        }
+    }
 
     Rect2D previewRect = rect;
     if (bCorner) {
@@ -464,7 +472,7 @@ void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoi
         return;
     }
 
-    const FDockNode* sourceLeaf = _model.findLeafForPanel(panelId);
+    const FDockNode* sourceLeaf = _ws->dockModel().findLeafForPanel(panelId);
     if (!sourceLeaf) {
         return;
     }
@@ -472,14 +480,14 @@ void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoi
     bool bChanged = false;
     if (preview->bMerge) {
         if (sourceLeaf->id != preview->targetLeafId) {
-            bChanged = _model.movePanel(panelId, preview->targetLeafId, SIZE_MAX, true);
+            bChanged = _ws->dockModel().movePanel(panelId, preview->targetLeafId, SIZE_MAX, true);
         }
     }
     else if (preview->bCorner) {
-        bChanged = _model.splitLeafCorner(preview->targetLeafId, preview->corner, panelId);
+        bChanged = _ws->dockModel().splitLeafCorner(preview->targetLeafId, preview->corner, panelId);
     }
     else {
-        bChanged = _model.splitLeaf(preview->targetLeafId, preview->side, panelId);
+        bChanged = _ws->dockModel().splitLeaf(preview->targetLeafId, preview->side, panelId);
     }
 
     if (bChanged) {

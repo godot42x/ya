@@ -230,3 +230,15 @@ widget 指针。
 - resolveDropPreview 现在在 source == target leaf 时直接返回 disabled preview（不高亮、
   canAcceptDrop 为 false），不再把“把自己 dock 到自己”当作可停靠区域；诊断 reason 为
   “cannot dock a panel onto its own leaf”。
+
+### 2026-08-20 — phase 5 切片 A：集中 UIDockWorkspace 层
+
+- 新增 UIDockWorkspace（DockWorkspace.h/.cpp）：集中持有 FDockTreeModel、panel registry、
+  panel id 分配，以及 bAllowDocking / bAllowFloating / bAllowTearOff 三个策略开关；是将来
+  IDockWorkspaceCoordinator 的地基（一个 workspace 可被多窗口共享）。
+- UIDockSpace 改为引用 workspace（setWorkspace + ws->dockModel()/findPanel），不再私有持有
+  model / panels / id；addPanel 委托 workspace。demo 创建 UIDockWorkspace 并绑定。
+- 同 leaf 语义细化：拖自己 title 悬停自己 —— tab bar / 中心 merge 禁用（自己 merge 自己
+  无意义），但边缘/角落 split 保留（单 root leaf 时这是长出多 leaf 的路径），仅当该 leaf
+  只有 1 个 panel 时才禁用（避免留空 half）。
+- 验证：GUIWorkbench 构建、三个 dock smoke、DockNodeTest 13/13 全绿。
