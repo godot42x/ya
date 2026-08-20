@@ -52,9 +52,9 @@ struct YA_GUI_API UISplitPane : public UIElement
     [[nodiscard]] float getMinSecondExtent() const { return _splitLayout.getMinSecondExtent(); }
     [[nodiscard]] float getDividerThickness() const { return _splitLayout.getDividerThickness(); }
 
-    glm::vec4 _dividerColor          = {0.20f, 0.22f, 0.27f, 1.0f};
-    glm::vec4 _dividerHoveredColor   = {0.34f, 0.40f, 0.50f, 1.0f};
-    glm::vec4 _dividerDraggingColor  = {0.24f, 0.46f, 0.82f, 1.0f};
+    glm::vec4 _dividerColor          = {0.11f, 0.12f, 0.15f, 1.0f};
+    glm::vec4 _dividerHoveredColor   = {0.26f, 0.31f, 0.40f, 1.0f};
+    glm::vec4 _dividerDraggingColor  = {0.32f, 0.55f, 0.92f, 1.0f};
 
     // Drag session state (runtime only, not serialized)
     VisualFlag _bDraggingDivider{*this};

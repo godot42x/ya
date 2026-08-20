@@ -14,8 +14,21 @@ namespace ya
 
 void UITabButton::paintSelf(UIFrameBuilder& builder)
 {
-    const glm::vec4 color = _bSelected ? _selectedColor : (_bHovered ? _hoveredColor : _normalColor);
-    builder.addSprite(_layoutRect, color, nullptr);
+    if (_bSelected) {
+        // Selected tab reads as "connected to the content below": the fill is
+        // the editor-chrome base, with a thin accent bar along the top edge.
+        // Drawing a slightly taller rect than our own (the bar's padding is
+        // above us) would look connected, but the bar clips children, so keep
+        // the fill inside this button and let the bar's bottom rule separate
+        // the strip from content.
+        builder.addSprite(_layoutRect, _selectedColor, nullptr);
+        const Rect2D accent{_layoutRect.pos, {_layoutRect.extent.x, 2.0f}};
+        builder.addSprite(accent, _accentColor, nullptr);
+    }
+    else {
+        const glm::vec4 color = _bHovered ? _hoveredColor : _normalColor;
+        builder.addSprite(_layoutRect, color, nullptr);
+    }
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {
         builder.addText(_layoutRect, _label, _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
@@ -224,6 +237,14 @@ glm::vec2 UITabBar::computeDesiredSize() const
 
 void UITabBar::paintSelf(UIFrameBuilder& builder)
 {
+    if (!_tabs.empty()) {
+        // Bottom rule separating the strip from the content host below it.
+        const float y = _layoutRect.pos.y + _layoutRect.extent.y - 1.0f;
+        builder.addLine({_layoutRect.pos.x, y},
+                        {_layoutRect.pos.x + _layoutRect.extent.x, y},
+                        {0.28f, 0.30f, 0.36f, 1.0f},
+                        1.0f);
+    }
     if (_tabs.empty() && !_emptyPlaceholder.empty()) {
         auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 13);
         if (font) {

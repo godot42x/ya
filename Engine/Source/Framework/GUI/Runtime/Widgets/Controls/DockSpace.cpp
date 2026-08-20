@@ -311,7 +311,9 @@ void UIDockSpace::layoutAssigned(const Rect2D& rect)
 
 void UIDockSpace::paintSelf(UIFrameBuilder& builder)
 {
-    (void)builder;
+    // Dock canvas base: darker than any panel so the tabs/content read as
+    // stacked surfaces instead of floating rectangles.
+    builder.addSprite(_layoutRect, {0.075f, 0.082f, 0.10f, 1.0f}, nullptr);
 }
 
 void UIDockSpace::paintChildren(UIFrameBuilder& builder)
@@ -321,10 +323,10 @@ void UIDockSpace::paintChildren(UIFrameBuilder& builder)
         return;
     }
     const glm::vec4 color = _preview->bMerge
-                                ? glm::vec4{0.24f, 0.72f, 0.42f, 0.20f}
-                                : glm::vec4{0.24f, 0.46f, 0.82f, 0.20f};
+                                ? glm::vec4{0.26f, 0.76f, 0.46f, 0.28f}
+                                : glm::vec4{0.28f, 0.52f, 0.90f, 0.28f};
     builder.addSprite(_preview->rect, color, nullptr);
-    builder.addRectOutline(_preview->rect, {0.24f, 0.46f, 0.82f, 1.0f}, 2.0f);
+    builder.addRectOutline(_preview->rect, {0.34f, 0.60f, 0.96f, 1.0f}, 1.5f);
 }
 
 const std::string& UIDockSpace::getDropPreviewDisabledReason() const

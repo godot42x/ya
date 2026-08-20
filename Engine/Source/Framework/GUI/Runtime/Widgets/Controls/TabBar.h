@@ -21,6 +21,7 @@ struct YA_GUI_API UITabButton : public UIElement
     YA_REFLECT_FIELD(_normalColor, .instanceEditable())
     YA_REFLECT_FIELD(_hoveredColor, .instanceEditable())
     YA_REFLECT_FIELD(_selectedColor, .instanceEditable())
+    YA_REFLECT_FIELD(_accentColor, .instanceEditable())
     YA_REFLECT_FIELD(_padding, .instanceEditable())
     YA_REFLECT_END()
 
@@ -42,9 +43,10 @@ struct YA_GUI_API UITabButton : public UIElement
     glm::vec2   _padding   = {14.0f, 6.0f};
 
     glm::vec4 _textColor     = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 _normalColor   = {0.10f, 0.11f, 0.13f, 1.0f};
-    glm::vec4 _hoveredColor  = {0.18f, 0.20f, 0.24f, 1.0f};
-    glm::vec4 _selectedColor = {0.20f, 0.34f, 0.58f, 1.0f};
+    glm::vec4 _normalColor   = {0.15f, 0.16f, 0.19f, 1.0f};
+    glm::vec4 _hoveredColor  = {0.21f, 0.23f, 0.27f, 1.0f};
+    glm::vec4 _selectedColor = {0.12f, 0.13f, 0.17f, 1.0f};
+    glm::vec4 _accentColor   = {0.30f, 0.55f, 0.92f, 1.0f};
 
     /// Fired when this tab is activated (click / Enter / Space).
     std::function<void()> _onActivated;
