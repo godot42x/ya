@@ -317,7 +317,7 @@ void UIDockSpace::paintSelf(UIFrameBuilder& builder)
 void UIDockSpace::paintChildren(UIFrameBuilder& builder)
 {
     UIElement::paintChildren(builder);
-    if (!_preview) {
+    if (!_preview || _preview->bDisabled) {
         return;
     }
     const glm::vec4 color = _preview->bMerge
@@ -325,6 +325,12 @@ void UIDockSpace::paintChildren(UIFrameBuilder& builder)
                                 : glm::vec4{0.24f, 0.46f, 0.82f, 0.20f};
     builder.addSprite(_preview->rect, color, nullptr);
     builder.addRectOutline(_preview->rect, {0.24f, 0.46f, 0.82f, 1.0f}, 2.0f);
+}
+
+const std::string& UIDockSpace::getDropPreviewDisabledReason() const
+{
+    static const std::string empty;
+    return _preview ? _preview->disabledReason : empty;
 }
 
 void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> widget, int zone)

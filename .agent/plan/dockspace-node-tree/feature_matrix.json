@@ -36,7 +36,7 @@
         {
           "id": "n4_corner_compound",
           "status": "in_progress",
-          "notes": "四 corner 的 two-split compound plan + visible persistent empty leaf 已接入 model 与 smoke；extent 不足时现在会进入 disabled preview，不高亮且不接受 drop。"
+          "notes": "四 corner 的 two-split compound plan + visible persistent empty leaf 已接入 model 与 smoke；extent 不足时现在会进入 disabled preview，不高亮且不接受 drop，tree dump 也会输出 disabled reason。"
         },
         {
           "id": "n5_floating_panel",

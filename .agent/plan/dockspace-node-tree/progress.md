@@ -191,3 +191,5 @@ widget 指针。
 - `UIDockSpace::resolveDropPreview()` 现在补上 cardinal / corner 的最小尺寸 gating：
   小于 240px 的单轴 split 会直接进入 disabled preview，不高亮且不接受 drop；corner
   要求宽高都至少 240px，避免在过小 viewport 下生成会立刻失真的 compound layout。
+- DockSpace dump 现在会带出 preview.active / disabled / kind / disabledReason，可直接被
+  headless scenario 与后续自动化断言消费，而不必靠人工猜测为什么某个角落不能停靠。

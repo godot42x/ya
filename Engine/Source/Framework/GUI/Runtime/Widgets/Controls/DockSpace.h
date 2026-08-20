@@ -51,6 +51,13 @@ struct YA_GUI_API UIDockSpace : public UIElement
     void setDropHighlight(bool bHighlight) override;
     void clearTransientInputState() override;
 
+    [[nodiscard]] bool hasDropPreview() const { return _preview.has_value(); }
+    [[nodiscard]] bool isDropPreviewDisabled() const { return _preview.has_value() && _preview->bDisabled; }
+    [[nodiscard]] DockNodeId getDropPreviewTargetLeafId() const { return _preview ? _preview->targetLeafId : kInvalidDockNodeId; }
+    [[nodiscard]] const std::string& getDropPreviewDisabledReason() const;
+    [[nodiscard]] bool isDropPreviewCorner() const { return _preview.has_value() && _preview->bCorner; }
+    [[nodiscard]] bool isDropPreviewMerge() const { return _preview.has_value() && _preview->bMerge; }
+
 private:
     struct FPanel
     {

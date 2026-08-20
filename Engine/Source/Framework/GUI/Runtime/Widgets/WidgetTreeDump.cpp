@@ -5,6 +5,7 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
+#include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DragDrop.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
@@ -255,6 +256,22 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
             {"type", "treeView"},
             {"visibleRows", treeView->getVisibleRowCount()},
             {"selected", treeView->getSelection() ? treeView->getSelection()->value() : std::string{}},
+        };
+    }
+    else if (const auto* dockSpace = dynamic_cast<const UIDockSpace*>(&element)) {
+        nlohmann::json preview = {
+            {"active", dockSpace->hasDropPreview()},
+            {"disabled", dockSpace->isDropPreviewDisabled()},
+            {"targetLeafId", dockSpace->getDropPreviewTargetLeafId()},
+            {"kind", dockSpace->isDropPreviewMerge() ? "merge" : dockSpace->isDropPreviewCorner() ? "corner" : "cardinal"},
+            {"disabledReason", dockSpace->getDropPreviewDisabledReason()},
+        };
+        if (!dockSpace->hasDropPreview()) {
+            preview["kind"] = "none";
+        }
+        node["control"] = {
+            {"type", "dockSpace"},
+            {"preview", std::move(preview)},
         };
     }
     else if (const auto* overlay = dynamic_cast<const UIPopupOverlay*>(&element)) {
