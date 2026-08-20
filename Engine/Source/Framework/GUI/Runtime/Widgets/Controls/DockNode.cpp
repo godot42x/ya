@@ -157,6 +157,13 @@ bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, 
         if (oldSelected == panelId) {
             oldSelected = oldPanels.empty() ? kInvalidDockPanelId : oldPanels.front();
         }
+        // Splitting a panel out of its own leaf must leave the "old" side
+        // non-empty: otherwise we fabricate a non-persistent empty leaf.
+        if (oldPanels.empty()) {
+            _root = std::move(backup);
+            _nextNodeId = nextNodeId;
+            return false;
+        }
     }
     target->kind = EDockNodeKind::Split;
     target->orientation = (side == EDockCardinalSide::West || side == EDockCardinalSide::East)
@@ -203,6 +210,12 @@ bool FDockTreeModel::splitLeafCorner(DockNodeId targetLeafId, EDockCorner corner
         oldPanels.erase(it);
         if (oldSelected == panelId) {
             oldSelected = oldPanels.empty() ? kInvalidDockPanelId : oldPanels.front();
+        }
+        // A same-leaf corner split must not empty the target's "old" side.
+        if (oldPanels.empty()) {
+            _root = std::move(backup);
+            _nextNodeId = nextNodeId;
+            return false;
         }
     }
 

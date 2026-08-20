@@ -196,4 +196,21 @@ TEST(DockNodeTest, CornerSplitCreatesCompoundTreeWithPersistentEmptyLeaf)
     EXPECT_TRUE(model.validateInvariants());
 }
 
+TEST(DockNodeTest, SinglePanelSameLeafSplitDoesNotCreateEmptyLeaf)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "scene");
+    ASSERT_TRUE(model.addPanel(1));
+    const DockNodeId rootId = model.root()->id;
+
+    // A one-panel leaf cannot split its only panel out onto its own edge:
+    // that would leave an empty (non-persistent) half.
+    EXPECT_FALSE(model.splitLeaf(rootId, EDockCardinalSide::East, 1));
+    EXPECT_FALSE(model.splitLeafCorner(rootId, EDockCorner::NorthWest, 1));
+    ASSERT_EQ(model.root()->kind, EDockNodeKind::Leaf);
+    EXPECT_EQ(model.root()->panelIds, std::vector<DockPanelId>({1}));
+    EXPECT_EQ(model.leafIds().size(), 1u);
+    EXPECT_TRUE(model.validateInvariants());
+}
+
 } // namespace ya
