@@ -333,6 +333,22 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     if (!targetView || !targetView->root) {
         return std::nullopt;
     }
+    if (sourceLeaf->id == targetView->leafId) {
+        // Dragging a panel's own tab onto its own leaf is meaningless (it is
+        // already docked there). Show no dock affordance at all.
+        return FDropPreview{
+            targetView->leafId,
+            panelId,
+            EDockCorner::NorthWest,
+            EDockCardinalSide::West,
+            Rect2D{},
+            Rect2D{},
+            false,
+            false,
+            true,
+            "cannot dock a panel onto its own leaf",
+        };
+    }
 
     const bool bOverTabBar = targetView->bar && pointInRect(logicalPoint, targetView->bar->_layoutRect);
 

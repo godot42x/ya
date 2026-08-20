@@ -215,3 +215,18 @@ widget 指针。
 - smoke dock.jsonl / dock_cardinal_split.jsonl / dock_corner_split.jsonl 全部改为单 root
   leaf 语义与动态节点名，三个场景 + DockNodeTest 12/12 全绿。
 - 后续仍未做：floating panel、跨 window、持久化；非 zone 的更深 subtree 投影仍需扩展验证。
+
+### 2026-08-20 — 守住“split 不制造空白 leaf”的模型不变量
+
+- 复现：把一个 panel 拖到自己所在 leaf 的边缘/角落（source == target），当该 leaf 只有一个
+  panel 时，splitLeaf / splitLeafCorner 会把它抽成新 leaf，旧一侧变成空的非 persistent
+  leaf —— 反复操作就堆积大量空 leaf。
+- 修复：same-source 分支在抽空 oldPanels 时直接拒绝该事务（rollback，返回 false）。模型层
+  因此保证“任何 split 都不会凭空制造非 persistent 空 leaf”，不依赖 UI 层兜底。
+- 新增 SinglePanelSameLeafSplitDoesNotCreateEmptyLeaf model test；DockNodeTest 13/13 通过。
+
+### 2026-08-20 — 拖自己 title 悬停自己 leaf 不再显示 dock 提示
+
+- resolveDropPreview 现在在 source == target leaf 时直接返回 disabled preview（不高亮、
+  canAcceptDrop 为 false），不再把“把自己 dock 到自己”当作可停靠区域；诊断 reason 为
+  “cannot dock a panel onto its own leaf”。
