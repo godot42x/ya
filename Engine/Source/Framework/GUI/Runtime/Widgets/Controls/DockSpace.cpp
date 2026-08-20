@@ -327,6 +327,11 @@ void UIDockSpace::paintChildren(UIFrameBuilder& builder)
                                 : glm::vec4{0.28f, 0.52f, 0.90f, 0.28f};
     builder.addSprite(_preview->rect, color, nullptr);
     builder.addRectOutline(_preview->rect, {0.34f, 0.60f, 0.96f, 1.0f}, 1.5f);
+    if (_preview->bCorner && _preview->emptyLeafRect.extent.x > 0.0f) {
+        // Ghost the persistent empty leaf the compound split will leave, so
+        // the user sees the operation keeps a second droppable zone.
+        builder.addRectOutline(_preview->emptyLeafRect, {0.55f, 0.58f, 0.64f, 0.55f}, 1.0f);
+    }
 }
 
 const std::string& UIDockSpace::getDropPreviewDisabledReason() const
@@ -388,6 +393,7 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
             EDockCorner::NorthWest,
             EDockCardinalSide::West,
             targetView->bar->_layoutRect,
+            Rect2D{},
             false,
             true,
             false,
@@ -441,7 +447,21 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
         }
     }
 
-    return FDropPreview{targetView->leafId, panelId, corner, side, previewRect, bCorner, bMerge, bDisabled, std::move(reason)};
+    Rect2D emptyLeafRect;
+    if (bCorner) {
+        // Compound plan leaves a persistent empty leaf next to the new panel:
+        // same left/right half as the corner, on the opposite vertical side.
+        const bool bLeft = corner == EDockCorner::NorthWest || corner == EDockCorner::SouthWest;
+        const bool bTop  = corner == EDockCorner::NorthWest || corner == EDockCorner::NorthEast;
+        const float halfX = rect.extent.x * 0.25f;
+        const float halfY = rect.extent.y * 0.25f;
+        const float x = bLeft ? rect.pos.x : rect.pos.x + rect.extent.x - halfX;
+        const float y = bTop ? rect.pos.y + halfY : rect.pos.y;
+        emptyLeafRect = Rect2D{glm::vec2{x, y}, glm::vec2{halfX, halfY}};
+    }
+
+    return FDropPreview{targetView->leafId, panelId, corner, side, previewRect, emptyLeafRect,
+                        bCorner, bMerge, bDisabled, std::move(reason)};
 }
 
 bool UIDockSpace::parsePanelPayload(const std::string& payload, DockPanelId& panelId) const

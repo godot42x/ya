@@ -83,6 +83,7 @@ private:
         EDockCorner corner = EDockCorner::NorthWest;
         EDockCardinalSide side = EDockCardinalSide::West;
         Rect2D rect{};
+        Rect2D emptyLeafRect{};
         bool bCorner = false;
         bool bMerge = false;
         bool bDisabled = false;

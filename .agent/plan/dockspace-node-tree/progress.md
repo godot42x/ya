@@ -193,3 +193,12 @@ widget 指针。
   要求宽高都至少 240px，避免在过小 viewport 下生成会立刻失真的 compound layout。
 - DockSpace dump 现在会带出 preview.active / disabled / kind / disabledReason，可直接被
   headless scenario 与后续自动化断言消费，而不必靠人工猜测为什么某个角落不能停靠。
+
+- 拖到 tab bar 上的 drop 现在优先按 merge 处理，不再被当成四角/四边 split 入口——这修复了
+  “拖到左上角 tab 附近 tab 越来越多”的扩散路径（每次 corner/cardinal split 都新开 leaf/tab）。
+- corner preview 现在会把 compound split 会留下的 persistent empty leaf 也用低强调 outline
+  画出来（ghost），让用户提前看到这次操作会保留第二个可投放区域。
+- dock 视觉收口：DockSpace 加 canvas 底色，tab 选中态改为“内容同底 + 顶部亮条 accent”、
+  hover/normal 拉出层次，split divider 提亮以建立分区感；已用真实窗口 GPU frame 像素采样确认。
+- 下一次仍缺：非 zone leaf 真正投影、panel registry 从过渡 zone 数据结构完全剥离、以及 corner
+  preview 的视觉实机验收。
