@@ -202,3 +202,16 @@ widget 指针。
   hover/normal 拉出层次，split divider 提亮以建立分区感；已用真实窗口 GPU frame 像素采样确认。
 - 下一次仍缺：非 zone leaf 真正投影、panel registry 从过渡 zone 数据结构完全剥离、以及 corner
   preview 的视觉实机验收。
+
+### 2026-08-20 — 移除三栏锚点，收敛为真正嵌套 dock
+
+- 删除 P7 三栏语义：_groups[3] / kZoneLeft/Center/Right / _zoneLeafIds[3] /
+  ensureModelLayout / refreshZoneLeafIds 与 addPanel(zone) 全部移除。
+- 初始不再固定 left/center/right 三栏：FDockTreeModel 默认就是一个 root leaf，所有注册
+  panel 先塞进 root leaf；拖到边缘/角落才真正裂变。
+- addPanel(name, widget) 不再带 zone；布局/命名统一为动态 DockLeaf<N> / DockTabBar<N>。
+- merge 路径 movePanel(collapseSource) 改回 true：source 被拖空后按真实 dock 语义向上
+  collapse，不再为“保三栏锚点”而硬关塌缩 —— 这正是之前“为什么有空 dock leaf”的根因之一。
+- smoke dock.jsonl / dock_cardinal_split.jsonl / dock_corner_split.jsonl 全部改为单 root
+  leaf 语义与动态节点名，三个场景 + DockNodeTest 12/12 全绿。
+- 后续仍未做：floating panel、跨 window、持久化；非 zone 的更深 subtree 投影仍需扩展验证。

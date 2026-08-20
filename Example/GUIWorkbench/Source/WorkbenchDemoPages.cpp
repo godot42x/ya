@@ -1371,9 +1371,9 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
         return std::shared_ptr<ya::UIElement>(panel);
     };
 
-    dock->addPanel("Scene", makePanel("Scene", "Scene viewport"), 1 /*center*/);
-    dock->addPanel("Inspector", makePanel("Inspector", "Inspector panel"), 0 /*left*/);
-    dock->addPanel("Console", makePanel("Console", "Console output"), 2 /*right*/);
+    dock->addPanel("Scene", makePanel("Scene", "Scene viewport"));
+    dock->addPanel("Inspector", makePanel("Inspector", "Inspector panel"));
+    dock->addPanel("Console", makePanel("Console", "Console output"));
 
     (void)state;
     (void)log;

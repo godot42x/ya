@@ -1,12 +1,15 @@
-# GUIWorkbench --start-page=Dock. Corner split smoke: drag a tab to a leaf corner,
-# which should create a compound split and leave a persistent empty leaf.
+# GUIWorkbench --start-page=Dock. Corner split smoke: drag a tab to the single root leaf's
+# top-left (content area) corner, which creates a compound split.
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
-{"assert":{"widget":"DockZoneLeft"}}
-{"assert":{"widget":"DockZoneCenter"}}
-{"assert":{"widget":"DockZoneRight"}}
+{"assert":{"widget":"DockLeaf1"}}
+{"assert":{"widget":"DockTabBar1"}}
+{"assert":{"widget":"Tab_Scene"}}
+{"assert":{"widget":"Tab_Inspector"}}
+{"assert":{"widget":"Tab_Console"}}
 {"checkpoint":"dock_initial"}
-{"drag":{"from":[350,79],"to":[286,66],"button":0,"steps":8}}
+{"drag":{"from":[40,79],"to":[110,120],"button":0,"steps":8}}
 {"frame":2}
+{"assert":{"widget":"DockSplit1"}}
 {"checkpoint":"dock_corner"}
 {"frame":1}

@@ -66,44 +66,6 @@ UIDockSpace::UIDockSpace(std::string name)
     : UIElement(std::move(name))
 {
     _hitFilter = EWidgetHitFilter::Stop;
-
-    // Three-zone layout: split(left | split(center | right)).
-    _groups[0].zoneName = kZoneLeft;
-    _groups[1].zoneName = kZoneCenter;
-    _groups[2].zoneName = kZoneRight;
-}
-
-void UIDockSpace::ensureModelLayout()
-{
-    if (_zoneLeafIds[0] != kInvalidDockNodeId && _zoneLeafIds[1] != kInvalidDockNodeId && _zoneLeafIds[2] != kInvalidDockNodeId) {
-        return;
-    }
-    if (_model.leafIds().size() >= 3) {
-        refreshZoneLeafIds();
-        return;
-    }
-    const DockNodeId rootId = _model.root()->id;
-    if (!_model.splitEmptyLeaf(rootId, EDockCardinalSide::East, 0.22f) || _model.leafIds().size() != 2) {
-        YA_CORE_ERROR("UIDockSpace '{}': failed to create default dock model", _name);
-        return;
-    }
-    const auto firstLeaves = _model.leafIds();
-    if (!_model.splitEmptyLeaf(firstLeaves[1], EDockCardinalSide::West, 0.78f) || _model.leafIds().size() != 3) {
-        YA_CORE_ERROR("UIDockSpace '{}': failed to create center dock leaf", _name);
-        return;
-    }
-    const auto leaves = _model.leafIds();
-    for (size_t i = 0; i < 3; ++i) {
-        _zoneLeafIds[i] = leaves[i];
-    }
-}
-
-void UIDockSpace::refreshZoneLeafIds()
-{
-    const auto leaves = _model.leafIds();
-    for (size_t i = 0; i < 3; ++i) {
-        _zoneLeafIds[i] = i < leaves.size() ? leaves[i] : kInvalidDockNodeId;
-    }
 }
 
 UIDockSpace::FLeafView* UIDockSpace::leafViewForLeaf(DockNodeId leafId)
@@ -131,7 +93,6 @@ void UIDockSpace::rebuildProjection()
     if (!getTree()) {
         return;
     }
-    refreshZoneLeafIds();
     clearPreview();
     auto children = getChildrenInPaintOrder();
     for (UIElement* child : children) {
@@ -243,11 +204,10 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
         return split;
     }
 
-    const int zone = node.id == _zoneLeafIds[0] ? 0 : (node.id == _zoneLeafIds[1] ? 1 : (node.id == _zoneLeafIds[2] ? 2 : -1));
-    auto leaf = std::make_shared<UIContainer>(zone == 0 ? kZoneLeft : zone == 1 ? kZoneCenter : zone == 2 ? kZoneRight : std::format("DockLeaf{}", node.id));
+    auto leaf = std::make_shared<UIContainer>(std::format("DockLeaf{}", node.id));
     leaf->setDirection(EWidgetBoxLayout::Vertical);
     leaf->setSpacing(0.0f);
-    auto bar = std::make_shared<UITabBar>(zone >= 0 ? std::format("DockTabBar{}", zone) : std::format("DockTabBar{}", node.id));
+    auto bar = std::make_shared<UITabBar>(std::format("DockTabBar{}", node.id));
     bar->_bDraggableTabs = true;
     bar->_emptyPlaceholder = std::format("{} (drop tabs here)", leaf->_name);
     bar->_onTabDragBegin = [this, leafId = node.id](int index, const std::string& label)
@@ -295,7 +255,6 @@ void UIDockSpace::layout(const Rect2D& parentRect)
 void UIDockSpace::layoutAssigned(const Rect2D& rect)
 {
     setLayoutRect(rect);
-    ensureModelLayout();
 
     if (getChildren().empty() && getTree()) {
         rebuildProjection();
@@ -340,21 +299,17 @@ const std::string& UIDockSpace::getDropPreviewDisabledReason() const
     return _preview ? _preview->disabledReason : empty;
 }
 
-void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> widget, int zone)
+void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> widget)
 {
-    if (zone < 0 || zone > 2) {
-        zone = 1;
-    }
-    ensureModelLayout();
     const DockPanelId panelId = _nextPanelId++;
     if (!_model.registerPanel({.id = panelId, .stableKey = name, .title = name}) ||
-        !_model.addPanel(panelId, _zoneLeafIds[zone])) {
+        !_model.addPanel(panelId)) {
         YA_CORE_WARN("UIDockSpace '{}': rejected duplicate or invalid panel '{}'", _name, name);
         return;
     }
     _panels.emplace(panelId, FPanel{panelId, name, std::move(widget)});
     if (getTree() && !getChildren().empty()) {
-        rebuildLeaf(_zoneLeafIds[zone]);
+        rebuildLeaf(_model.root()->id);
     }
 }
 
@@ -501,7 +456,7 @@ void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoi
     bool bChanged = false;
     if (preview->bMerge) {
         if (sourceLeaf->id != preview->targetLeafId) {
-            bChanged = _model.movePanel(panelId, preview->targetLeafId, SIZE_MAX, false);
+            bChanged = _model.movePanel(panelId, preview->targetLeafId, SIZE_MAX, true);
         }
     }
     else if (preview->bCorner) {
