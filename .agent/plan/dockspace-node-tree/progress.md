@@ -188,4 +188,6 @@ widget 指针。
   compound tree 已进入可见投影。
 - 新增 model focused test `CornerSplitCreatesCompoundTreeWithPersistentEmptyLeaf`，以及正式
   smoke 场景 `Example/GUIWorkbench/Scenarios/dock_corner_split.jsonl`。
-- 当前还缺 corner disabled reason / extent gating，以及 corner preview 的更细致视觉语义。
+- `UIDockSpace::resolveDropPreview()` 现在补上 cardinal / corner 的最小尺寸 gating：
+  小于 240px 的单轴 split 会直接进入 disabled preview，不高亮且不接受 drop；corner
+  要求宽高都至少 240px，避免在过小 viewport 下生成会立刻失真的 compound layout。

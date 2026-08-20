@@ -9,11 +9,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace ya
 {
 namespace
 {
+constexpr float kSplitMinExtent = 120.0f;
+
 bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 {
     return point.x >= rect.pos.x && point.x <= rect.pos.x + rect.extent.x &&
@@ -27,6 +30,35 @@ DockPanelId parsePanelId(const std::string& payload)
         return kInvalidDockPanelId;
     }
     return static_cast<DockPanelId>(std::strtoull(payload.c_str() + prefix.size(), nullptr, 10));
+}
+
+std::pair<bool, std::string> rejectForExtent(bool bCorner, const Rect2D& rect, const glm::vec2& local)
+{
+    if (bCorner) {
+        if (rect.extent.x < kSplitMinExtent * 2.0f && rect.extent.y < kSplitMinExtent * 2.0f) {
+            return {true, "corner split requires both width and height >= 240"};
+        }
+        if (rect.extent.x < kSplitMinExtent * 2.0f) {
+            return {true, "corner split requires width >= 240"};
+        }
+        if (rect.extent.y < kSplitMinExtent * 2.0f) {
+            return {true, "corner split requires height >= 240"};
+        }
+        return {false, {}};
+    }
+    if (rect.extent.x < kSplitMinExtent * 2.0f && rect.extent.y < kSplitMinExtent * 2.0f) {
+        return {true, "cardinal split requires width or height >= 240"};
+    }
+    const bool bHorizontal = std::abs(local.x - 0.5f) > std::abs(local.y - 0.5f);
+    if (bHorizontal) {
+        if (rect.extent.x < kSplitMinExtent * 2.0f) {
+            return {true, "cardinal split requires width >= 240"};
+        }
+    }
+    else if (rect.extent.y < kSplitMinExtent * 2.0f) {
+        return {true, "cardinal split requires height >= 240"};
+    }
+    return {false, {}};
 }
 }
 
@@ -362,6 +394,8 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
         }
     }
 
+    auto [bDisabled, reason] = rejectForExtent(bCorner, rect, local);
+
     Rect2D previewRect = rect;
     if (bCorner) {
         const float halfX = rect.extent.x * 0.25f;
@@ -384,7 +418,7 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
         }
     }
 
-    return FDropPreview{targetView->leafId, panelId, corner, side, previewRect, bCorner, bMerge};
+    return FDropPreview{targetView->leafId, panelId, corner, side, previewRect, bCorner, bMerge, bDisabled, std::move(reason)};
 }
 
 bool UIDockSpace::parsePanelPayload(const std::string& payload, DockPanelId& panelId) const
@@ -396,7 +430,8 @@ bool UIDockSpace::parsePanelPayload(const std::string& payload, DockPanelId& pan
 bool UIDockSpace::canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint)
 {
     DockPanelId panelId = kInvalidDockPanelId;
-    return parsePanelPayload(payload, panelId) && resolveDropPreview(logicalPoint, panelId).has_value();
+    auto preview = parsePanelPayload(payload, panelId) ? resolveDropPreview(logicalPoint, panelId) : std::nullopt;
+    return preview.has_value() && !preview->bDisabled;
 }
 
 void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoint)
@@ -409,6 +444,9 @@ void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoi
     auto preview = resolveDropPreview(logicalPoint, panelId);
     clearPreview();
     if (!preview) {
+        return;
+    }
+    if (preview->bDisabled) {
         return;
     }
 

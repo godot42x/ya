@@ -78,6 +78,8 @@ private:
         Rect2D rect{};
         bool bCorner = false;
         bool bMerge = false;
+        bool bDisabled = false;
+        std::string disabledReason;
     };
 
     void rebuildProjection();
