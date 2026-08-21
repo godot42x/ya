@@ -55,7 +55,7 @@
       "items": [
         { "id": "text_migrated", "status": "planned", "notes": "UIText 从 typed text style resolve" },
         { "id": "panel_migrated", "status": "planned", "notes": "UIPanel 从 panel style resolve" },
-        { "id": "button_migrated", "status": "planned", "notes": "UIButton 从 button style resolve" },
+        { "id": "button_migrated", "status": "pass", "notes": "UIButton 接线：_styleKey（默认 button）+ paintSelf resolveThemeStyle<FButtonStyle>（theme 驱动 per-state FBrush，含 disabledFill）；裸字段保留为 fallback" },
         { "id": "menubar_migrated", "status": "planned", "notes": "UIMenuBarItem/UIMenuBar 从 menubar style resolve" },
         { "id": "tabbar_migrated", "status": "planned", "notes": "UITabButton/UITabBar 从 tab style resolve" },
         { "id": "dockspace_migrated", "status": "planned", "notes": "UIDockSpace 从 dock style resolve" },

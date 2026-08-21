@@ -164,3 +164,12 @@
 
 **Phase 2 剩余**：white/dark 验收 demo（Phase 3 控件接线后，theme 切换才能端到端验证）。下一刀建议直接进 Phase 3 控件接线（至少接一个控件做活样本），或先做 white/dark demo 打通端到端。
 
+## 2026-08-21 — Phase 3 第一刀：UIButton 接线（活样本）
+
+- UIButton 加 `_styleKey`（默认 "button"），paintSelf 先 `resolveThemeStyle<FButtonStyle>(*this, _styleKey)`：theme 驱动时按状态取 FBrush（含 disabledFill）走 `addBrush`；`_styleKey` 为空或 resolve 不到 → 裸颜色字段 fallback（现有行为，零回归）。
+- **活样本验证 resolve 链**：resolveThemeStyle 的双层失效边（generation + style 值）第一次被真实控件消费；theme 切换/改 style 都会重绘该 button。
+- 裸字段保留为 fallback（删除留后续统一清理刀），符合"先验证 resolve 工作、再清理"的渐进。
+- ya-gui-widgets + GUIWorkbench 编译通过；feature_matrix button_migrated → pass。
+
+**下一步**：white/dark demo（GUIWorkbench 挂 dark/light 两个 UITheme + toggle），让 theme 切换端到端可验证（theme_toggle_e2e 收口）。
+

@@ -2,6 +2,7 @@
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Reactive.h"
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <functional>
@@ -45,6 +46,12 @@ struct YA_GUI_API UIButton : public UIElement
     glm::vec4 _hoveredColor = {0.6f, 0.6f, 0.6f, 1.0f};
     glm::vec4 _pressedColor = {0.4f, 0.4f, 0.4f, 1.0f};
     glm::vec4 _focusedColor = {0.26f, 0.52f, 0.90f, 1.0f};
+
+    /// Theme style key (style-system Phase 2/3). When the owning tree has a
+    /// theme that defines this key as an FButtonStyle, paintSelf resolves from
+    /// it (per-state FBrush); otherwise the bare color fields above are the
+    /// framework fallback. Empty key disables theme resolution.
+    std::string _styleKey = "button";
 
     [[nodiscard]] UISingleChildLayout& getContentLayout() { return _contentLayout; }
     [[nodiscard]] const UISingleChildLayout& getContentLayout() const { return _contentLayout; }
