@@ -194,6 +194,71 @@ style 系统不管（交给别的子系统）：
 2. **resolve 上游换人失效传播**（§3.2.1）：UIThemeContext 持 `Reactive<UITheme>` 或换 theme 走 `invalidateSubtreePaint()`。
 3. **white/dark 切换端到端验收**：同一树运行时换 UITheme → 全 shell 重绘、无漏标脏。这是本阶段完成标准的硬性条款，不只是「可 resolve 不同样式」。
 
+### Phase 2 详细设计（2026-08-21 评审后修订）
+
+#### 1. UIStyleSet 泛型化（B3）
+
+类型擦除容器，`ReactiveBase`（Reactive.h:70）作基类：
+
+```cpp
+class UIStyleSet {
+    template <typename TStyle>
+    std::shared_ptr<Reactive<TStyle>> define(std::string name, TStyle style);
+    template <typename TStyle>
+    std::shared_ptr<Reactive<TStyle>> find(const std::string& name) const;
+private:
+    std::unordered_map<std::type_index,
+                       std::unordered_map<std::string, std::shared_ptr<ReactiveBase>>> _styles;
+};
+```
+
+**G4 同名 set 语义（评审 major，必须保留）**：`define<TStyle>` 命中已存在的**同型** handle 时 `set()` 复用（不新建 ReactiveBase），否则替换 handle 会 orphan 旧依赖（控件的 `_paintDependencies` 存裸 `ReactiveBase*`，替换后收不到通知 → 静默漏标脏）。同 key 不同 type 走 type_index 分桶共存，语义显式化。
+
+#### 2. UITheme
+
+组合泛型 UIStyleSet：`define<TStyle>(key, style)` / `find<TStyle>(key)` 委托。
+
+#### 3. WidgetTree 挂载 + B1 失效传播
+
+WidgetTree 新增：
+
+```cpp
+UITheme* _theme = nullptr;
+std::shared_ptr<Reactive<uint64_t>> _themeGeneration = std::make_shared<Reactive<uint64_t>>(0);
+void setTheme(UITheme* t) { _theme = t; _themeGeneration->set(_themeGeneration->value() + 1); }
+```
+
+**用 `Reactive<uint64_t>` generation token 而非 `Reactive<UITheme>`**：换 theme 时 generation +1 触发依赖控件重绘，`==` 是 O(1)（避免 UITheme 递归 == 复杂度），比 `invalidateSubtree` 精确（只重绘依赖控件）。
+
+#### 4. resolve 链 = 框架 helper（评审 major，机制化依赖登记）
+
+```cpp
+template <typename TStyle>
+const TStyle* resolveThemeStyle(const UIElement& w, const std::string& key, EDirtyLevel level) {
+    if (WidgetTree* tree = w.getTree(); tree && tree->getTheme()) {
+        tree->getThemeGeneration()->get(level);   // 无条件登记，不可被 early-return 绕过
+        if (auto style = tree->getTheme()->find<TStyle>(key)) {
+            return &style->get(level);
+        }
+    }
+    return nullptr;  // 未找到 → 控件用 framework fallback（默认构造 TStyle）
+}
+```
+
+依赖登记收口为 helper（控件无法绕过），resolve 不到返回 nullptr → 控件用默认构造的 TStyle 作 fallback。
+
+#### 5. Layout 粒度（评审 major，禁止一刀切 Paint）
+
+typed style 含布局成员（`padding`/`fontSize`/`minSize`/`width`），改值须重跑 layout。`resolveThemeStyle` 的 `level` 参数由控件按需传：**布局亲和成员传 `Layout`，纯颜色/brush 成员传 `Paint`**（沿用 UIText 的 `_bAutoSize` 判据，Text.cpp:17-18）。generation 依赖的粒度同理。
+
+#### 6. 第一刀范围（评审 blocker 收口）
+
+**第一刀不做 subtree override**（resolve 链暂为 `style key (tree theme) → framework fallback`）。subtree override 留后续：届时 override 字段做成带 generation 的 Reactive（set 时 +1，控件 get 该 token 建依赖），或写入走 setter + `invalidateSubtree`。**禁止 raw `UITheme*` 字段无失效边**——那是 B1 在 override 层的复发。
+
+#### 7. 统一绑定路径（评审 major）
+
+废弃 `UIStyleSet::bindTo` 的 persistent 注册（与 `UIText::bindStyle` 的 paint 时 get 语义重复，且 persistent 有被 clearDependencies 冲掉的隐患），统一走 `resolveThemeStyle` 的 paint 时 `get(level)`。Gallery 的 bindTo/bindStyle 消费点同步迁移。
+
 ## Phase 3 - 第一批控件去硬编码
 
 UIText/UIButton/UIMenuBarItem/UIMenuBar/UITabBar/UITabButton/UISplitPane/UIDockFloatingWindow/UIDockSpace 从对应 typed style resolve。完成标准：Workbench 最外层 shell 不再遍历 child 二次覆写，Dock/Floating/Tab/Menu 视觉常量不再散落 cpp。

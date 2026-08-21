@@ -133,3 +133,14 @@
 
 **Phase 1 至此完整**：9 个 typed style + FBrush（类型层定型，fill 字段升 brush）+ default == 全部落地。剩余 Phase 1 项仅 NinePatch UV 切片渲染（brush 能力扩展，非结构件，可缓到 game UI 实际需要时）。
 
+## 2026-08-21 — Phase 2 theme runtime 设计评审（reject → 修订）
+
+探查（UIStyleSet/WidgetTree/UIText resolve 原型）+ 两视角独立评审，设计草案被 reject，1 blocker + 3 major 已修订落盘 plan.md Phase 2 详细设计：
+
+- **B-blocker：subtree override 无失效边**（装/换/卸 override 不触发重绘，B1 在 override 层复发）→ 第一刀不做 subtree override，resolve 链暂为 `style key → fallback`；override 留后续（带 generation 的 Reactive 或 setter + invalidateSubtree）。
+- **M1：generation 依赖登记是纪律非机制**（resolve 被 early-return 跳过即漏登记）→ 收口为框架 helper `resolveThemeStyle<TStyle>(key, level)`，内部无条件 get(generation)。
+- **M2：typed style 布局成员无 Layout 失效边**（padding/fontSize/minSize/width 改值须重跑 layout）→ helper 接受 level 参数，布局亲和成员传 Layout、颜色/brush 传 Paint（沿用 UIText _bAutoSize 判据）。
+- **M3：泛型 define 未声明 G4 同名 set 语义**（替换 Reactive 对象 orphan 旧依赖）→ define 命中同型 handle 时 set() 复用，同 key 不同 type 走 type_index 分桶共存。
+
+**关键设计决策锁定**：①UIStyleSet 泛型化 = type_index 分桶存 shared_ptr<ReactiveBase>；②换 theme 失效 = `Reactive<uint64_t>` generation token（O(1) == 比较，比 Reactive<UITheme> 简单、比 invalidateSubtree 精确）；③resolve 链 = 框架 helper 机制化（控件不可绕过依赖登记）；④废弃 UIStyleSet::bindTo 的 persistent 注册，统一 paint 时 get(level)。
+
