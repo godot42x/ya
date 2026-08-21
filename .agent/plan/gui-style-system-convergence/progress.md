@@ -124,3 +124,12 @@
 
 **Phase 1 brush-first 至此**：FBrush 类型 + addBrush 绘制对接 + typed style fill 字段升 brush 全部落地。剩余 Phase 1 项：NinePatch UV 切片渲染、reflect_equal（== 改反射）。
 
+## 2026-08-21 — operator== 改 C++20 `= default`（reflect_equal 收口）
+
+- FBrush + FWidgetStyle + 9 个 typed style 的手写 `operator==` 全部改为 `= default`（C++20 编译器生成逐字段比较）。
+- **为什么不用评审 M1 建议的 reflectEqual+YA_REFLECT**：typed style 是纯数据 struct，字段全可比较（FBrush/glm::vec4/uint32_t/float/string），`= default` 让编译器保证 == 与字段集一致，零反射负担、零手写维护；引擎 RHI/Render/Resource 层已在用此风格（VulkanImage.h:41、RenderGraph.h:37 等）。
+- 彻底消除 M1 风险：字段增删漏改 == → Reactive::set() 的 == no-op 短路 → 静默漏标脏（本引擎最高频 bug 类别）。
+- ya-gui-widgets + GUIWorkbench 编译通过；feature_matrix reflect_equal → pass，todo 勾选。
+
+**Phase 1 至此完整**：9 个 typed style + FBrush（类型层定型，fill 字段升 brush）+ default == 全部落地。剩余 Phase 1 项仅 NinePatch UV 切片渲染（brush 能力扩展，非结构件，可缓到 game UI 实际需要时）。
+

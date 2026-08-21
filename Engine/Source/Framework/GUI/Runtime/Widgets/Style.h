@@ -34,13 +34,7 @@ struct FWidgetStyle
     uint32_t  fontSize  = 16;
     glm::vec2 padding   = {0.0f, 0.0f};
 
-    bool operator==(const FWidgetStyle& other) const
-    {
-        return fillColor == other.fillColor &&
-               textColor == other.textColor &&
-               fontSize  == other.fontSize &&
-               padding   == other.padding;
-    }
+    bool operator==(const FWidgetStyle&) const = default;
 };
 
 // ============================================================================
@@ -64,10 +58,7 @@ struct FTextStyle
     glm::vec4 textColor = {1.0f, 1.0f, 1.0f, 1.0f};
     uint32_t  fontSize  = 16;
 
-    bool operator==(const FTextStyle& o) const
-    {
-        return textColor == o.textColor && fontSize == o.fontSize;
-    }
+    bool operator==(const FTextStyle&) const = default;
 };
 
 /// Panel: fill brush (solid color, or image later). Mirrors UIPanel default.
@@ -75,7 +66,7 @@ struct FPanelStyle
 {
     FBrush fillColor = FBrush::Solid({0.2f, 0.2f, 0.2f, 0.8f});
 
-    bool operator==(const FPanelStyle& o) const { return fillColor == o.fillColor; }
+    bool operator==(const FPanelStyle&) const = default;
 };
 
 /// Button: one fill brush per state + label color + padding. Mirrors
@@ -90,16 +81,7 @@ struct FButtonStyle
     glm::vec4  textColor    = {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec2  padding      = {12.0f, 4.0f};
 
-    bool operator==(const FButtonStyle& o) const
-    {
-        return normalFill == o.normalFill &&
-               hoveredFill == o.hoveredFill &&
-               pressedFill == o.pressedFill &&
-               focusedFill == o.focusedFill &&
-               disabledFill == o.disabledFill &&
-               textColor == o.textColor &&
-               padding == o.padding;
-    }
+    bool operator==(const FButtonStyle&) const = default;
 };
 
 /// Menu bar item: label + normal/hovered fill. Mirrors UIMenuBarItem.
@@ -109,12 +91,7 @@ struct FMenuBarItemStyle
     FBrush    normalFill  = FBrush::Solid({0.10f, 0.11f, 0.13f, 1.0f});
     FBrush    hoveredFill = FBrush::Solid({0.20f, 0.22f, 0.27f, 1.0f});
 
-    bool operator==(const FMenuBarItemStyle& o) const
-    {
-        return textColor == o.textColor &&
-               normalFill == o.normalFill &&
-               hoveredFill == o.hoveredFill;
-    }
+    bool operator==(const FMenuBarItemStyle&) const = default;
 };
 
 /// Tab strip button: per-state fill brush + accent. Mirrors UITabButton defaults.
@@ -127,15 +104,7 @@ struct FTabStyle
     glm::vec4 accentColor  = {0.30f, 0.55f, 0.92f, 1.0f};
     glm::vec2 padding      = {14.0f, 6.0f};
 
-    bool operator==(const FTabStyle& o) const
-    {
-        return textColor == o.textColor &&
-               normalFill == o.normalFill &&
-               hoveredFill == o.hoveredFill &&
-               selectedFill == o.selectedFill &&
-               accentColor == o.accentColor &&
-               padding == o.padding;
-    }
+    bool operator==(const FTabStyle&) const = default;
 };
 
 /// Split pane divider: one fill brush per state (normal / hovered / dragging).
@@ -146,12 +115,7 @@ struct FSplitPaneStyle
     FBrush dividerHoveredFill  = FBrush::Solid({0.26f, 0.31f, 0.40f, 1.0f});
     FBrush dividerDraggingFill = FBrush::Solid({0.32f, 0.55f, 0.92f, 1.0f});
 
-    bool operator==(const FSplitPaneStyle& o) const
-    {
-        return dividerFill == o.dividerFill &&
-               dividerHoveredFill == o.dividerHoveredFill &&
-               dividerDraggingFill == o.dividerDraggingFill;
-    }
+    bool operator==(const FSplitPaneStyle&) const = default;
 };
 
 /// Scroll bar: track + thumb fill brushes and thickness. Mirrors
@@ -163,12 +127,7 @@ struct FScrollBarStyle
     FBrush thumbColor = FBrush::Solid({0.34f, 0.38f, 0.46f, 1.0f});
     float  width      = 8.0f;
 
-    bool operator==(const FScrollBarStyle& o) const
-    {
-        return trackColor == o.trackColor &&
-               thumbColor == o.thumbColor &&
-               width == o.width;
-    }
+    bool operator==(const FScrollBarStyle&) const = default;
 };
 
 /// Dock space canvas + drop preview. The split divider color lives in
@@ -178,11 +137,7 @@ struct FDockSpaceStyle
     FBrush canvasColor      = FBrush::Solid({0.075f, 0.082f, 0.10f, 1.0f});
     FBrush dropPreviewColor = FBrush::Solid({0.30f, 0.55f, 0.90f, 0.55f});
 
-    bool operator==(const FDockSpaceStyle& o) const
-    {
-        return canvasColor == o.canvasColor &&
-               dropPreviewColor == o.dropPreviewColor;
-    }
+    bool operator==(const FDockSpaceStyle&) const = default;
 };
 
 /// Floating dock window body / border / edge affordance / title. Mirrors
@@ -196,15 +151,7 @@ struct FFloatingWindowStyle
     glm::vec4 titleTextColor = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec2 minSize        = {220.0f, 160.0f};
 
-    bool operator==(const FFloatingWindowStyle& o) const
-    {
-        return bodyFill == o.bodyFill &&
-               innerFill == o.innerFill &&
-               borderColor == o.borderColor &&
-               edgeAffordance == o.edgeAffordance &&
-               titleTextColor == o.titleTextColor &&
-               minSize == o.minSize;
-    }
+    bool operator==(const FFloatingWindowStyle&) const = default;
 };
 
 /// Named style collection. Styles are Reactive so widgets can bind them and

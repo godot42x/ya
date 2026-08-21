@@ -33,13 +33,10 @@ struct FBrush
     std::string resource;                             // asset path; empty = solid fill
     glm::vec4   margin = {0.0f, 0.0f, 0.0f, 0.0f};    // nine-patch insets (left/top/right/bottom, texture px)
 
-    bool operator==(const FBrush& o) const
-    {
-        return drawType == o.drawType &&
-               tintColor == o.tintColor &&
-               resource == o.resource &&
-               margin == o.margin;
-    }
+    // Compiler-generated memberwise equality: adding/removing a field can
+    // never silently desync == (which would make Reactive::set() short-circuit
+    // a real change and skip repaint).
+    bool operator==(const FBrush&) const = default;
 
     /// True when this brush is a solid fill (no image resource).
     [[nodiscard]] bool isSolid() const { return resource.empty(); }

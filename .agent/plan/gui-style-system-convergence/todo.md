@@ -31,7 +31,7 @@
 - [ ] 定义状态命名约定（已定：*Fill + textColor + padding + accent，待文档化）
 - [x] **补 FSplitPaneStyle（divider 三态）** —— 已落地（dividerFill/dividerHoveredFill/dividerDraggingFill），divider 色从 FDockSpaceStyle::splitDividerColor 迁出
 - [x] **补 FScrollBarStyle** —— 已落地（trackColor/thumbColor/width），默认值从 UIScrollViewport 三字段复制
-- [ ] typed style 的 operator== 改反射生成（reflectEqual<T> 或 YA_REFLECT），禁手写
+- [x] typed style 的 operator== 改反射生成（reflectEqual<T> 或 YA_REFLECT），禁手写 —— **实际用 C++20 `= default` 更简洁**（编译器生成逐字段比较，字段增删永不漏改）
 - [ ] **FBrush 抽象（第一阶段必须，蓝图调研新增）** —— tintColor + resource + drawType（Image/NinePatch/Border）+ margin 九宫格；纯色 = 无 resource 退化形态；typed style 字段从 glm::vec4 升级为 brush 引用
   - [x] FBrush 类型落地（Brush.h）
   - [x] UIFrameBuilder::addBrush 对接（Image 型复用 addSprite）
