@@ -33,6 +33,9 @@
 - [x] **补 FScrollBarStyle** —— 已落地（trackColor/thumbColor/width），默认值从 UIScrollViewport 三字段复制
 - [ ] typed style 的 operator== 改反射生成（reflectEqual<T> 或 YA_REFLECT），禁手写
 - [ ] **FBrush 抽象（第一阶段必须，蓝图调研新增）** —— tintColor + resource + drawType（Image/NinePatch/Border）+ margin 九宫格；纯色 = 无 resource 退化形态；typed style 字段从 glm::vec4 升级为 brush 引用
+  - [x] FBrush 类型落地（Brush.h）
+  - [x] UIFrameBuilder::addBrush 对接（Image 型复用 addSprite）
+  - [ ] NinePatch/Border 渲染（UV 子区域切片：暴露 drawTextureInternal 的 uvTranslation）
 
 ## Phase 2 — theme runtime
 

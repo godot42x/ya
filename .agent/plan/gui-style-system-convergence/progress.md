@@ -104,3 +104,13 @@
 
 **修订落盘**：plan.md（§3.1 补 brush 升级说明 + 新增 §3.5 brush 抽象含 tool/game 差异表与边界图 + §4 改"不做 image brush"为"brush 提前" + §8 补决策）、feature_matrix.json（brush_abstraction planned）、todo.md（FBrush 抽象待办）。
 
+## 2026-08-21 — FBrush 类型 + addBrush 绘制对接落地（brush-first 第一刀）
+
+- 新建 `GUI/Widgets/Brush.h`（FBrush 纯数据）：`drawType`（Image/NinePatch/Border）+ `tintColor` + `resource`（asset path，空=纯色）+ `margin`（九宫格四边距 left/top/right/bottom）；`isSolid()` 判定纯色。
+- `UIFrameBuilder::addBrush(rect, brush)`：Image 型复用现有 `addSprite`（纯色 = 无 resource + tint 上色白纹理；贴图 = resource 经 textureResolver 解析 + tint 调制）——「纯色是 brush 退化形态」的落地。NinePatch/Border 暂降级为整张拉伸。
+- **九宫格 UV 切片是下一刀**：`QuadRender::drawTextureInternal` 已有 `uvTranslation`（QuadRender.h:251），但公开 `drawTexture`/`makeSprite` 未暴露；需扩展 draw item 的 Sprite kind 加 uvOffset 字段 + compose pass 透传，才能把 NinePatch 分解成 9 个 sprite。
+- 公共头转发 `include/GUI/Widgets/Brush.h`（`#pragma once + #include "../../../Brush.h"`，与 Style.h 等转发头同构）。
+- ya-gui-widgets + GUIWorkbench 编译通过；feature_matrix brush_abstraction → in_progress，todo 勾选 FBrush 类型/Image 对接。
+
+**下一刀**：typed style 字段从 `glm::vec4` 升级为 FBrush 引用（Phase 3 控件去硬编码的前置，结构性）；或先补九宫格 UV 切片渲染（暴露 uvTranslation）。
+

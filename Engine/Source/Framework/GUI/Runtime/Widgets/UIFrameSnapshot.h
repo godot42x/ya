@@ -18,6 +18,7 @@
 #include "Core/Common/AssetRef.h"
 #include "Core/Common/Types.h"
 
+#include "GUI/Widgets/Brush.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <memory>
@@ -107,6 +108,14 @@ class YA_GUI_API UIFrameBuilder
     /// Record a sprite. `logicalRect` in tree-local logical pixels; null
     /// texture draws the white texture.
     void addSprite(const Rect2D& logicalRect, const glm::vec4& color, const std::shared_ptr<Texture>& texture);
+
+    /// Record a brush (solid color / image / nine-patch). A solid brush has an
+    /// empty resource and its tint colors the white sprite; an image brush
+    /// resolves `resource` through the build context's texture resolver.
+    /// NinePatch/Border currently degrade to a whole-resource stretch: UV
+    /// sub-region slicing needs `uvTranslation` exposed on the public draw
+    /// path (drawTextureInternal already carries it) — see Brush.h.
+    void addBrush(const Rect2D& logicalRect, const FBrush& brush);
 
     /// Record text aligned inside `logicalRect` (h/v align via measured text).
     void addText(const Rect2D& logicalRect,

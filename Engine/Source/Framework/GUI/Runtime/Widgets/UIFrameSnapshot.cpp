@@ -44,6 +44,21 @@ void UIFrameBuilder::addSprite(const Rect2D& logicalRect, const glm::vec4& color
     _items.push_back(std::move(item));
 }
 
+void UIFrameBuilder::addBrush(const Rect2D& logicalRect, const FBrush& brush)
+{
+    std::shared_ptr<Texture> texture;
+    if (!brush.resource.empty()) {
+        texture = resolveTexture(brush.resource);
+    }
+    // Solid fill (no resource) and image (resource + tint) both go through
+    // addSprite: null texture draws the white sprite, so tint colors it. This
+    // is the "solid color is the degenerate brush form" grounding.
+    // NinePatch/Border degrade to a whole-resource stretch until UV sub-region
+    // slicing lands (drawTextureInternal already carries uvTranslation; the
+    // public drawTexture/makeSprite path does not expose it yet).
+    addSprite(logicalRect, brush.tintColor, texture);
+}
+
 void UIFrameBuilder::addText(const Rect2D& logicalRect,
                              const std::string& text,
                              const glm::vec4& color,
