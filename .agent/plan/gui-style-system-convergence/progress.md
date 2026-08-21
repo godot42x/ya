@@ -154,3 +154,13 @@
 
 **Phase 2 剩余**：UITheme（组合 UIStyleSet）、WidgetTree 挂载 theme + generation token、resolveThemeStyle helper、white/dark 验收 demo。
 
+## 2026-08-21 — Phase 2 第二刀：UITheme + WidgetTree 挂载 + generation token
+
+- 新建 `GUI/Widgets/Theme.h`：`UITheme`（struct，组合泛型 UIStyleSet，`define/find<TStyle>` 委托）+ `resolveThemeStyle<TStyle>(widget, key, level)` 自由函数。
+- `WidgetTree` 挂载树级 theme：成员 `UITheme* _theme` + `shared_ptr<Reactive<uint64_t>> _themeGeneration`；`setTheme()` 在 theme 变化时 `_themeGeneration->set(value+1)` 触发依赖控件重绘（O(1) == 比较）。
+- **resolveThemeStyle 机制化依赖登记**：无条件 `getThemeGeneration()->get(level)`（换 theme 失效边）+ `find<TStyle>(key)` + `style->get(level)`（改 style 值失效边）；返回 nullptr → 控件用默认构造 TStyle fallback；`level` 参数由控件按布局亲和传 Layout/Paint。
+- 公共头转发 `include/GUI/Widgets/Theme.h`；WidgetTree.h 前向声明 `struct UITheme`（避免与 Theme.h 的 include 循环）。
+- ya-gui-widgets + GUIWorkbench 编译通过；feature_matrix ui_theme_object/resolve_invalidation → pass，ui_theme_context/style_key_lookup/resolve_chain → in_progress。
+
+**Phase 2 剩余**：white/dark 验收 demo（Phase 3 控件接线后，theme 切换才能端到端验证）。下一刀建议直接进 Phase 3 控件接线（至少接一个控件做活样本），或先做 white/dark demo 打通端到端。
+

@@ -17,6 +17,7 @@
 // Project code cannot override system layers through ordinary child zOrder.
 // ============================================================================
 
+#include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetAttachment.h"
@@ -31,6 +32,8 @@
 
 namespace ya
 {
+
+struct UITheme;
 
 /// Result of one game-UI event route pass. Named distinctly from the legacy
 /// EWidgetRouteResult while the old GUI/Scene module still exists (Phase 6 merge).
@@ -150,6 +153,16 @@ struct YA_GUI_API WidgetTree final
     // === Presentation context ===
     void setLogicalExtent(Extent2D extent);
     [[nodiscard]] Extent2D getLogicalExtent() const { return _logicalExtent; }
+
+    // === Theme (style-system Phase 2) ===
+    /// Mount the tree-level theme (app/game provides the content). Switching
+    /// bumps the generation token, which repaints every widget that resolved
+    /// a style through it (resolveThemeStyle registers that edge).
+    void setTheme(UITheme* theme);
+    [[nodiscard]] UITheme* getTheme() const { return _theme; }
+    /// Theme-switch invalidation token: widgets read it during paint (via
+    /// resolveThemeStyle) so a theme switch repaints them.
+    [[nodiscard]] const std::shared_ptr<Reactive<uint64_t>>& getThemeGeneration() const { return _themeGeneration; }
 
     // === Structure ===
     /// Internal root (owns the layers). Not a business object.
@@ -331,6 +344,12 @@ struct YA_GUI_API WidgetTree final
     Extent2D      _logicalExtent{};
     bool          _bLayoutDirty = true;
     GuiPerfStats  _perfStats;
+
+    // Tree-level theme (style-system Phase 2). _themeGeneration is a
+    // Reactive<uint64_t> token: setTheme bumps it so every widget that read
+    // it during paint (resolveThemeStyle) repaints on the next snapshot.
+    UITheme*                                _theme = nullptr;
+    std::shared_ptr<Reactive<uint64_t>>     _themeGeneration = std::make_shared<Reactive<uint64_t>>(0);
 
     // Invalidation diagnostics (GI-001): cumulative dirty-transition counters
     // since tree construction, plus the most recent invalidation reason.

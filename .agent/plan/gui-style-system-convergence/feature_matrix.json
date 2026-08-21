@@ -40,12 +40,12 @@
       "id": "phase2_theme_runtime",
       "title": "Phase 2 - Theme runtime and resolve chain",
       "items": [
-        { "id": "ui_theme_object", "status": "planned", "notes": "UITheme named typed style 容器" },
-        { "id": "ui_theme_context", "status": "planned", "notes": "WidgetTree/window/subtree theme owner" },
-        { "id": "style_key_lookup", "status": "planned", "notes": "style key 命名与 lookup" },
-        { "id": "resolve_chain", "status": "planned", "notes": "override -> key -> subtree -> tree/window -> fallback" },
+        { "id": "ui_theme_object", "status": "pass", "notes": "UITheme 落地（Theme.h，组合泛型 UIStyleSet，define/find<TStyle> 委托）" },
+        { "id": "ui_theme_context", "status": "in_progress", "notes": "WidgetTree 挂载树级 theme（setTheme/getTheme）；subtree override 留后续（第一刀不做，需带 generation 的 Reactive 失效边）" },
+        { "id": "style_key_lookup", "status": "in_progress", "notes": "resolveThemeStyle<TStyle>(key, level) helper 落地（无条件登记 generation 边）；控件接线在 Phase 3" },
+        { "id": "resolve_chain", "status": "in_progress", "notes": "第一刀 resolve 链 = style key (tree theme) -> fallback；explicit/subtree override 留后续" },
         { "id": "style_set_generic", "status": "pass", "notes": "UIStyleSet 泛型化为 define<TStyle>(name,style)/find<TStyle>(name)（type_index 分桶存 shared_ptr<ReactiveBase>，G4 同名同型 set 复用），typed styles 走同一容器" },
-        { "id": "resolve_invalidation", "status": "planned", "notes": "resolve 上游换人失效传播：UIThemeContext 持 Reactive<UITheme> 或换 theme 走 invalidateSubtreePaint（blocker，见 plan.md 3.2.1）" },
+        { "id": "resolve_invalidation", "status": "pass", "notes": "换 theme 失效 = WidgetTree 持 Reactive<uint64_t> generation token，setTheme 时 +1 触发依赖控件重绘（O(1) == 比较，比 Reactive<UITheme> 简单、比 invalidateSubtree 精确）" },
         { "id": "theme_toggle_e2e", "status": "planned", "notes": "white/dark 切换端到端验收：同树运行时换 UITheme → 全 shell 重绘无漏标脏（用户明确验收项）" }
       ]
     },

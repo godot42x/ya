@@ -9,6 +9,7 @@
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/Theme.h"
 
 #include <algorithm>
 #include <chrono>
@@ -55,6 +56,19 @@ WidgetTree::WidgetTree(Extent2D logicalExtent) : _logicalExtent(logicalExtent)
         _layers[i]->_tree   = this;
         _root->appendChildEdge(_layers[i]);
     }
+}
+
+void WidgetTree::setTheme(UITheme* theme)
+{
+    if (_theme == theme) {
+        return;
+    }
+    _theme = theme;
+    // Bump the generation token: every widget that read it during paint
+    // (resolveThemeStyle) is now a dependent and repaints on the next
+    // snapshot. == on uint64_t is O(1), so this is the cheap, precise form
+    // of "resolve upstream changed".
+    _themeGeneration->set(_themeGeneration->value() + 1);
 }
 
 UIElement* WidgetTree::hitTestAt(UIElement* element, const glm::vec2& logicalPoint, bool bForHover)
