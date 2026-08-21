@@ -5,11 +5,11 @@
 ## 当前主线
 
 - [x] Phase 0 — style capability audit
-- [ ] Phase 1 — typed style structs
-- [ ] Phase 2 — theme context / resolve 链
-- [ ] Phase 3 — 核心 shell 控件去硬编码
-- [ ] Phase 4 — GUIWorkbench theme 接入
-- [ ] Phase 5 — Editor/Game 扩展留口
+- [x] Phase 1 — typed style structs
+- [x] Phase 2 — theme context / resolve 链
+- [x] Phase 3 — 核心 shell 控件去硬编码
+- [x] Phase 4 — GUIWorkbench theme 接入（WorkbenchTheme + 壳层主题化 + Gallery/legacy 迁移 + 基线门）
+- [x] Phase 5 — Editor/Game 扩展留口（决策落定；实现型延伸可选）
 
 ## Phase 0 — capability audit
 
@@ -67,13 +67,13 @@
 - [x] 定义 WorkbenchTheme（WorkbenchTheme.h：tokens 层 + buildWorkbenchTheme(dark/light)，全部 canonical key 配置期烘焙）
 - [x] FWorkbenchSurface 改用 theme key（壳层 chrome 交回 panel.window/panel.canvas/panel；highlight 保留显式色；toolbar label 走 text key）
 - [x] Dock demo / Editor demo / 通用 gallery 页统一接入 theme（canonical key 全部经 WorkbenchTheme；Gallery Section 3 迁移到 tree theme，FWidgetStyle/bindStyle app 消费点清零）
-- [ ] 产出截图与回归基线（headless draw item 三层颜色翻转已验；golden/gpu-shot 基线待收尾归档）
+- [x] 产出截图与回归基线（Script/gui_style_baseline.py 5 页 headless digest 基线归档）
 - [x] **清理刀**：已迁移控件裸颜色字段全部删除（Button/MenuBarItem/TabButton/SplitPane/ScrollViewport/Dock/Floating），fallback=默认构造 TStyle；WorkbenchSurface 遍历覆写循环删除（AM-2 收口）；消费点迁移完成（含 Dialog/GUIFrameworkSmoke/两测试）
 
-## Phase 5 — 复用与扩展
+## Phase 5 — 复用与扩展（legacy 清理已完成）
 
-- [ ] 约定 editor theme key 命名空间
-- [ ] 约定 game HUD/menu/dialog theme key 命名空间
-- [ ] 写清多窗口时 theme context 的 owner 与继承语义
-- [ ] 判断第二阶段是否需要 selector / 外部文件 / DSL
+- [x] 约定 editor theme key 命名空间（§3.6 + Phase 5 决策 1：family 领域无关，editor.* 前缀仅显式覆盖场景）
+- [x] 约定 game HUD/menu/dialog theme key 命名空间（同 §3.6 机制；game.* 前缀限于覆盖场景；HUD 内容 = game theme 烘焙）
+- [x] 写清多窗口 theme context owner 与继承语义（Phase 5 决策 2：挂载点=tree，owner=app，共享/各挂安全；subtree override 机制候选明确）
+- [x] 判断第二阶段是否需要 selector / 外部文件 / DSL（暂不需要；typed style + key 烘焙已满足）
 

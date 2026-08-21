@@ -1,15 +1,16 @@
 #pragma once
 
 // ============================================================================
-// Style - data-driven widget styling (layout/style separation).
+// Style - data-driven widget styling (layout/style separation, style-system
+// Phase 1+).
 //
-// A UIStyleSet holds named styles; each style is a Reactive<FWidgetStyle>, so
-// widgets bind a style and a style edit marks every dependent paint-dirty via
-// the existing reactive invalidation — "change one style, the whole themed UI
-// repaints" without touching per-widget color fields.
-//
-// Minimal by design: fill/text colors + font size + padding. Richer style
-// properties (borders, radii, brushes, 9-patch) are later extensions.
+// A UIStyleSet holds named typed styles; each style is a Reactive<TStyle>
+// (bucketed by type), so a style edit marks every widget that read it
+// paint-/layout-dirty via the existing reactive invalidation — "change one
+// style, the whole themed UI repaints" without touching per-widget color
+// fields. Widgets resolve typed styles through UITheme + resolveThemeStyle
+// (Theme.h); the legacy FWidgetStyle/bindTo/bindStyle path was removed in
+// the Phase 3 cleanup (unified binding path: paint-time get()).
 // ============================================================================
 
 #include "Core/Api.h"
@@ -25,18 +26,6 @@
 
 namespace ya
 {
-
-/// Common style attributes. Deliberately small; controls read only the
-/// attributes they draw (text ignores fill, buttons ignore text, ...).
-struct FWidgetStyle
-{
-    glm::vec4 fillColor = {0.8f, 0.8f, 0.8f, 1.0f};
-    glm::vec4 textColor = {1.0f, 1.0f, 1.0f, 1.0f};
-    uint32_t  fontSize  = 16;
-    glm::vec2 padding   = {0.0f, 0.0f};
-
-    bool operator==(const FWidgetStyle&) const = default;
-};
 
 // ============================================================================
 // Typed widget styles (style-system Phase 1).
@@ -212,9 +201,6 @@ public:
         const auto jt = it->second.find(name);
         return jt != it->second.end() ? std::static_pointer_cast<Reactive<TStyle>>(jt->second) : nullptr;
     }
-
-    /// Bind a style to a widget. Implemented in .cpp (needs UIElement).
-    void bindTo(std::shared_ptr<Reactive<FWidgetStyle>> style, struct UIElement& widget);
 
 private:
     std::unordered_map<std::type_index,

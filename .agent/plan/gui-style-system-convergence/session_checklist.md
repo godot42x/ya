@@ -36,15 +36,16 @@
 
 ## 当前下一刀
 
-1. Phase 4 收尾：golden/截图基线归档（scenario-capture + dump digest），Theme/Editor/壳层静态基线
-2. FWidgetStyle / UIStyleSet::bindTo / UIText::bindStyle 去留定案（app 消费点已清零，仅闭包测试在用）
-3. Phase 5：editor/game theme key 命名空间、game HUD typed style 扩展、多窗口 theme context owner 语义
+1. （可选实现延伸）subtree override（带 generation Reactive）——需要时再做
+2. （可选）game HUD 首个 typed style 消费（前置：NinePatch UV 切片渲染）
+3. 长期观察：跨 app 主题资产平移需求出现时再评估 selector/DSL
 
 ## 已完成里程碑
 
 - Phase 0 audit / Phase 1 typed styles + FBrush / Phase 2 theme runtime（含 white-dark e2e）
-- Phase 3 全部接入控件接线 + **清理刀删尽裸颜色字段**（fallback=默认构造 TStyle；壳层遍历覆写循环废除）
-- Phase 4 第一刀：WorkbenchTheme（token 烘焙 + light 调色板）+ 壳层主题化 + Gallery 统一绑定路径；key 命名约定 §3.6
+- Phase 3 全部接入控件接线 + 清理刀删尽裸颜色字段
+- Phase 4 完整：WorkbenchTheme + 壳层主题化 + Gallery/legacy 绑定路径清零 + key 约定 §3.6 + 视觉回归基线（Script/gui_style_baseline.py）
+- Phase 5 决策落定：key 命名空间、多窗口 owner 语义、selector/DSL 判定
 
 ## 已知预存问题（非 style system 范围）
 

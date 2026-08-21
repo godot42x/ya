@@ -308,3 +308,56 @@
 1. Phase 4 收尾：golden/截图基线归档（scenario-capture + dump digest），Theme 页/Editor 页/壳层静态基线；
 2. FWidgetStyle / UIStyleSet::bindTo / UIText::bindStyle 去留定案（app 消费点已清零，闭包测试仍用）；
 3. Phase 5：editor/game theme key 命名空间、game HUD typed style 扩展、多窗口 theme context owner。
+
+## 2026-08-22 — FWidgetStyle / bindTo / bindStyle 移除（统一绑定路径收口）
+
+### 本轮完成
+
+- **FWidgetStyle struct 删除**（Style.h）：app/示例消费点已在前几轮清零，只剩闭包测试两处；typed style（FTextStyle 等）已覆盖其全部字段；
+- **UIStyleSet::bindTo + Style.cpp 删除**：persistent FWidgetStyle 样式边是「绑定路径」双轨的最后残余；persistent 机制本身仍由 UISplitPane::bindSplitRatio 使用（layout 长生命周期边），与 paint-time 样式边的统一不冲突；
+- **UIText::bindStyle + _styleBinding + resolvedStyle legacy 分支删除**：resolvedStyle 只剩「theme key（未着色时）→ authoring 字段」；
+- **两个闭包测试迁移到 theme 路径**：
+  - StyleEditRepaintsBoundTexts → **StyleEditRepaintsThemedTexts**（UITheme 挂 "text" key，编辑 style → 两个文本重绘 rebuiltWidgets==2——保护原意图：样式编辑触发依赖重绘，走统一路径）；
+  - PaintRebuildDoesNotDropPersistentStyleBinding → **PaintRebuildReCollectsStyleEdgeAfterForcedRebuild**（主题化面板强制 markPaintDirty 重建后，编辑 style 仍重绘——验证 paint-time get() 重建后重新收集依赖，覆盖原 clearDependencies 担忧的同类场景）。
+- 全仓 grep：FWidgetStyle/bindStyle/bindTo 零点（WorkbenchDemoPages 注释保留历史说明）。
+
+### 本轮验证
+
+- ya-gui-widgets/GUIWorkbench/ya-gui-tooling/ya-gui-framework/ya-gui-widgets-test/ya-gui-headless-host-test/ya-gui-minimal-host 全部构建过；
+- ya-gui-widgets-test 136/140（3 个 theme 路径测试显式跑过全 OK；5 失败预存）；
+- headless-host 2/2；场景 20/21（menus 预存）；
+- theme 翻转 headless dump 复核：shell root (0.075,0.082,0.10) ↔ (0.86,0.87,0.89) 不变。
+
+### 当前状态
+
+style system 最终形态：**机制单一**——UIStyleSet（泛型）+ UITheme + resolveThemeStyle（paint-time get）+ generation token；**无任何平行绑定路径**。UIStyleSet 泛型 define/find 仍直接可用（UITheme 组合它）。
+
+### 下一轮直接接力点
+
+1. Phase 4 收尾：golden/截图基线归档；
+2. Phase 5：editor/game theme key 命名空间约定、game HUD typed style 扩展点（brush image/nine-patch 消费）、多窗口 theme context owner 语义与实现。
+
+## 2026-08-22 — Phase 4 收尾：可复现视觉回归基线 + Phase 5 决策落定
+
+### 本轮完成
+
+- **新增 `Script/gui_style_baseline.py`**：对 Render / Theme(dark) / Theme(light，toggle) / Dock / Editor 五个关键页生成 headless snapshot，对比归档 digest；`--update` 重写、`--verify` 默认校验、`--verbose` 明细；GPU 无关（--headless），任意机器/CI 可跑。
+- **基线归档** `Example/GUIWorkbench/Baselines/<slug>.json`（5 份完整 snapshot json）：theme_light 与 theme_dark 的 digest 显著不同（6338562509553292916 vs 10260476919271715436），证明 toggle 被基线捕获。
+- **Phase 5 决策落定（plan.md）**：
+  - key 命名空间：canonical family key 领域无关，领域差异走 theme 内容 + `family.role`；editor.*/game.* 前缀仅用于显式覆盖场景；
+  - 多窗口 theme owner：theme 挂载点 = tree；UITheme 生命周期 owner = app（raw 指针，先于 tree 析构解除）；多窗口共享/各挂实例均安全（读多写少，generation 通知）；
+  - subtree override 机制候选明确（带 generation 的 Reactive or setter + invalidateSubtree，禁无失效边 raw 字段）；
+  - selector/外部文件/DSL：第二阶段暂不需要（typed style + key 烘焙已满足复用）。
+- §7 验证计划补基线 gate 用法。
+
+### 本轮验证
+
+- digest 同 build 双跑一致（确定性验证）；
+- `python3 Script/gui_style_baseline.py` 连续两次 PASS；
+- 全部 GUI target 构建不变。
+
+### 下一轮直接接力点
+
+1. Phase 5 实现型延伸（可选）：subtree override（带 generation Reactive）、game HUD 首个 typed style 消费（brush image/nine-patch 渲染补齐前置）；
+2. 如出现「一套主题资产跨 app 平移」需求再评估 selector/DSL；
+3. NinePatch UV 切片仍是 brush 扩展的长期待办（game UI 换肤资产管线前置）。

@@ -396,7 +396,7 @@ TEST(UIFrameSnapshotTest, PerfStateBridgeRecordsTreeMetrics)
     EXPECT_GE(perf.getLastValue("gui.tree.paint"_name, "ms"_name), 0.0f);
 }
 
-TEST(UIFrameSnapshotTest, StyleEditRepaintsBoundTexts)
+TEST(UIFrameSnapshotTest, StyleEditRepaintsThemedTexts)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       t1 = std::make_shared<UIText>("T1");
@@ -404,21 +404,23 @@ TEST(UIFrameSnapshotTest, StyleEditRepaintsBoundTexts)
     tree.attachToLayer(WidgetTree::ELayer::Content, t1);
     tree.attachToLayer(WidgetTree::ELayer::Content, t2);
 
-    UIStyleSet styleSet;
-    FWidgetStyle title;
-    title.textColor = {1.0f, 0.0f, 0.0f, 1.0f};
-    auto titleStyle = styleSet.define("title", title);
-
-    t1->bindStyle(titleStyle);
-    t2->bindStyle(titleStyle);
+    // Unified binding path (Phase 3 cleanup): un-authored texts resolve the
+    // "text" style from the tree theme; editing THAT style marks every
+    // dependent paint-dirty through the style's Reactive edge (the legacy
+    // FWidgetStyle bindStyle path is gone).
+    auto theme       = std::make_shared<UITheme>();
+    auto title       = FTextStyle{};
+    title.textColor  = {1.0f, 0.0f, 0.0f, 1.0f};
+    auto titleStyle  = theme->define<FTextStyle>("text", title);
+    tree.setTheme(theme.get());
 
     tree.buildSnapshot(UIFrameBuildContext{}); // cold start
     tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 
-    // Edit the shared style: both bound texts are dirty and re-run.
-    FWidgetStyle edited = titleStyle->value();
-    edited.textColor    = {0.0f, 1.0f, 0.0f, 1.0f};
+    // Edit the shared style: both themed texts are dirty and re-run.
+    FTextStyle edited = titleStyle->value();
+    edited.textColor  = {0.0f, 1.0f, 0.0f, 1.0f};
     titleStyle->set(edited);
     tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 2u);
@@ -874,27 +876,31 @@ TEST(UIFrameSnapshotTest, SameWidgetTwoLevelConsumeBothEdges)
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
 }
 
-TEST(UIFrameSnapshotTest, PaintRebuildDoesNotDropPersistentStyleBinding)
+TEST(UIFrameSnapshotTest, PaintRebuildReCollectsStyleEdgeAfterForcedRebuild)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);
 
-    UIStyleSet styleSet;
-    auto       style = styleSet.define("accent", FWidgetStyle{});
-    styleSet.bindTo(style, *panel); // persistent Paint edge
+    // Un-authored panel resolves the "panel" style from the tree theme
+    // (unified binding path; the old persistent FWidgetStyle bindTo edge is
+    // gone — paint-time get() re-collects the dependency every rebuild).
+    auto theme = std::make_shared<UITheme>();
+    auto style = theme->define<FPanelStyle>("panel", FPanelStyle{});
+    tree.setTheme(theme.get());
 
     tree.buildSnapshot(UIFrameBuildContext{}); // cold start
     tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
 
-    // Force a paint rebuild: the base paint runs clearDependencies(), which
-    // must NOT drop the persistent style edge.
+    // Force a paint rebuild: the base paint runs clearDependencies(), then
+    // paintSelf re-reads the themed style and re-collects the dependency, so
+    // a later style edit still repaints the panel.
     panel->markPaintDirty();
     tree.buildSnapshot(UIFrameBuildContext{});
 
     const uint64_t paintBefore = tree.getPerfStats().paintDirtyTransitions;
-    FWidgetStyle    changed;
-    changed.textColor = {1.0f, 0.0f, 0.0f, 1.0f};
+    FPanelStyle    changed;
+    changed.fillColor = FBrush::Solid({1.0f, 0.0f, 0.0f, 1.0f});
     style->set(changed);
     tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);

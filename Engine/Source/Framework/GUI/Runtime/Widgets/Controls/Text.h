@@ -35,8 +35,8 @@ struct YA_GUI_API UIText : public UIElement
   public:
     // Authoring-only (GI-202 exception list): base values set once at
     // construction/deserialization; fontSize/color are overridable at runtime
-    // via bindStyle (which does not write these fields). To be encapsulated
-    // when they gain a setter.
+    // (via a mounted theme for un-authored text). To be encapsulated when
+    // they gain a setter.
     uint32_t      _fontSize = 16;
     glm::vec4     _color    = {1.0f, 1.0f, 1.0f, 1.0f};
     EWidgetAlignH _hAlign   = EWidgetAlignH::Left;
@@ -75,14 +75,11 @@ struct YA_GUI_API UIText : public UIElement
         return _textBinding ? _textBinding->get(level) : _text;
     }
 
-    /// Style binding: a bound style overrides _color/_fontSize with the
-    /// style's textColor/fontSize. Dependency is recorded during the paint
-    /// walk (not at bind time). Legacy path (FWidgetStyle compatibility);
-    /// the preferred path is _styleKey + resolveThemeStyle<FTextStyle>.
-    void bindStyle(std::shared_ptr<Reactive<FWidgetStyle>> style);
-    /// Resolved text style (theme key first, then legacy style binding, then
-    /// authoring fields). Paint attributes only — never cache the result in a
-    /// member (would detach from the reactive dependency graph).
+    /// Resolved text style (theme key first when un-authored, then the
+    /// authoring fields). Paint attributes only — never cache the result in
+    /// a member (would detach from the reactive dependency graph). The
+    /// legacy FWidgetStyle bindStyle path was removed with the Phase 3
+    /// cleanup (unified binding path: resolveThemeStyle paint-time get()).
     [[nodiscard]] FTextStyle resolvedStyle(ReactiveBase::EDirtyLevel level = ReactiveBase::EDirtyLevel::Paint) const;
 
     /// Theme style key (style-system Phase 2/3). When the owning tree has a
@@ -104,7 +101,6 @@ struct YA_GUI_API UIText : public UIElement
 
   private:
     std::shared_ptr<Reactive<std::string>> _textBinding;
-    std::shared_ptr<Reactive<FWidgetStyle>> _styleBinding;
 };
 
 } // namespace ya

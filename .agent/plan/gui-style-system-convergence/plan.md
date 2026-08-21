@@ -285,6 +285,17 @@ UIText/UIButton/UIMenuBarItem/UIMenuBar/UITabBar/UITabButton/UISplitPane/UIDockF
 
 定义 game/editor theme key 命名约定，明确哪些 typed style 需扩展到 HUD/menu/dialog，明确多窗口 theme context owner 语义。完成标准：style runtime 可被 editor/game 复用，不需要重构 core。
 
+### Phase 5 决策（2026-08-22 收口时落定）
+
+1. **key 命名空间**（基于 §3.6）：canonical family key（text/panel/button/...）不区分领域——**family 是机制的、领域无关的**；领域差通过 theme 内容（WorkbenchTheme vs EditorTheme vs GameHUDTheme 各自烘焙同一 family key）与 `family.role` 变体（editor.* / game.* 前缀只用于显式覆盖场景）表达。新增领域不需要扩展 core。
+2. **多窗口 theme context owner 语义**：
+   - GUIWindowHost 一窗口一 tree → **theme 挂载点是 tree**（已实现）；子树的 context override 仍未做（处理后述）。
+   - **UITheme 生命周期 owner = app/delegate**（WorkbenchTheme 为共享实例）：tree 持 raw `UITheme*`，app owner 必须先于 tree 析构解除 setTheme（达成：WorkbenchTheme/FTheme 由 FWorkbenchApp 成员持有，先于 tree 释放）。
+   - 多窗口共享同一 UITheme shared_ptr 是安全路径：resolve 是读（Reactive get），换 theme 走 setTheme（generation 通知各自 tree 的依赖控件），无共享写。
+   - 多窗口各换各的主题：各 tree 挂不同 UITheme 实例即可，机制不变。
+3. **subtree override（未做，明确机制候选）**：resolve 链暂为 `style key (tree theme) → fallback`。后续 override 做成带 generation 的 Reactive（set 时 +1，控件 get 该 token 建依赖），或写入走 setter + invalidateSubtree；**禁止 raw override 字段无失效边**（B1 在 override 层复发）。
+4. **selector / 外部文件 / DSL**：第二阶段判定——**当前不需要**。typed style + key 可编程烘焙已满足 tool+game 复用（机制相同、内容不同）；CSS/selector 只在出现「一套主题资产跨多 app 平移」的可量化需求时再评估。
+
 ## 6. 目录与 owner 建议
 
 - Framework/GUI/Runtime/Widgets/Style.* 继续保留基础 reactive/style 能力；
@@ -304,6 +315,8 @@ UIText/UIButton/UIMenuBarItem/UIMenuBar/UITabBar/UITabButton/UISplitPane/UIDockF
 架构：新增 shell 控件不得继续默认扩展 _normalColor/_hoveredColor 等；Workbench 不以遍历 children 覆写控件字段作为主要主题机制；Theme/Style runtime 不直接依赖 Workbench/Game/Editor 语义。
 
 **theme 切换（white/dark）端到端验收**：Workbench 运行时在两个 UITheme 实例（dark/light）间切换，配合既有验收体系（scenario + dump_tree 断言解析后 fill/textColor 翻转、assert_validation_clean 验证整树重绘无漏标脏）。这是用户明确要的验收场景，机制做完必须有人验，缺失即视为 Phase 4 未完成。
+
+**可复现视觉回归基线**（Phase 4 收尾落定）：`python3 Script/gui_style_baseline.py`—— 对 Render/Theme(dark)/Theme(light)/Dock/Editor 五个关键页生成 headless snapshot，对比归档的 structural/semantic digest（Example/GUIWorkbench/Baselines/）。GPU 无关、可在任意机器/CI 跑；theme 改动必须显式 `--update` 后提交新基线。
 
 ## 8. 当前默认决策
 

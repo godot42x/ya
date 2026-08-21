@@ -78,14 +78,6 @@ std::vector<std::string> UIText::wrapText(const std::string& text,
     return lines;
 }
 
-void UIText::bindStyle(std::shared_ptr<Reactive<FWidgetStyle>> style)
-{
-    // Paint attributes are collected during the paint walk (via get()), not
-    // registered at bind time — a bind-time registration would be cleared by
-    // the base paint's clearDependencies() on the next re-run.
-    _styleBinding = std::move(style);
-}
-
 FTextStyle UIText::resolvedStyle(ReactiveBase::EDirtyLevel level) const
 {
     // Preferred path (style-system Phase 3/4): the tree theme resolves an
@@ -104,18 +96,12 @@ FTextStyle UIText::resolvedStyle(ReactiveBase::EDirtyLevel level) const
             return *themed;
         }
     }
-    // Fallback: legacy FWidgetStyle binding, then authoring fields.
+    // Fallback: authoring fields (this text has an explicit authored color,
+    // or no theme defines its key). Paint attributes only.
     FTextStyle style;
     style.fillColor = FBrush::Solid(_color);
     style.textColor = _color;
     style.fontSize  = _fontSize;
-    if (_styleBinding) {
-        const FWidgetStyle& bound = _styleBinding->get(level); // records the dependency
-        style.fillColor          = FBrush::Solid(bound.fillColor);
-        style.textColor          = bound.textColor;
-        style.fontSize           = bound.fontSize;
-        style.padding            = bound.padding;
-    }
     return style;
 }
 

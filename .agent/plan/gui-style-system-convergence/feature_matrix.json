@@ -204,8 +204,8 @@
         },
         {
           "id": "visual_regression_baseline",
-          "status": "in_progress",
-          "notes": "headless dump draw item 验证完成（root/label/panel 三处颜色翻转）；scenario-golden/gpu-shot 基线归档待 Phase 4 收尾"
+          "status": "pass",
+          "notes": "Script/gui_style_baseline.py：5 页 headless digest 基线（Example/GUIWorkbench/Baselines/），GPU 无关可 CI；theme_light vs dark digest 显著不同（toggle 被捕获）"
         }
       ]
     },
@@ -268,6 +268,58 @@
           "id": "consumers_migrated",
           "status": "pass",
           "notes": "UIFrameSnapshotTest/GUIHeadlessHostTest/GUIFrameworkSmoke/Dialog 全部迁移到 theme key"
+        }
+      ]
+    },
+    {
+      "id": "unified_binding_path",
+      "title": "Unified binding path (legacy removal)",
+      "items": [
+        {
+          "id": "fwidget_style_removed",
+          "status": "pass",
+          "notes": "FWidgetStyle struct 删除；typed styles 覆盖其字段"
+        },
+        {
+          "id": "bind_to_removed",
+          "status": "pass",
+          "notes": "UIStyleSet::bindTo + Style.cpp 删除（persistent 机制仍由 bindSplitRatio 使用）"
+        },
+        {
+          "id": "bind_style_removed",
+          "status": "pass",
+          "notes": "UIText::bindStyle/_styleBinding/legacy 分支删除；resolvedStyle = theme key → authoring"
+        },
+        {
+          "id": "tests_migrated",
+          "status": "pass",
+          "notes": "StyleEditRepaintsThemedTexts / PaintRebuildReCollectsStyleEdgeAfterForcedRebuild（theme 路径）"
+        }
+      ]
+    },
+    {
+      "id": "phase5_decisions",
+      "title": "Phase 5 - extension hooks (decisions documented)",
+      "items": [
+        {
+          "id": "key_namespaces",
+          "status": "pass",
+          "notes": "plan §3.6/Phase5：canonical family key 领域无关；editor.*/game.* 前缀仅显式覆盖场景"
+        },
+        {
+          "id": "multiwindow_theme_semantics",
+          "status": "pass",
+          "notes": "plan Phase5 决策 2：挂载点=tree；UITheme owner=app（先于 tree 析构解除）；多窗口共享/各挂均安全；subtree override 机制候选明确（禁无失效边 raw 字段）"
+        },
+        {
+          "id": "selector_or_dsl_decision",
+          "status": "pass",
+          "notes": "第二阶段暂不需要 selector/DSL；typed style + key 烘焙已满足 tool+game 复用"
+        },
+        {
+          "id": "game_hud_brush_extension",
+          "status": "planned",
+          "notes": "game HUD 首个 typed style 消费（image/nine-patch brush）——前置为 NinePatch UV 切片渲染（长期待办）"
         }
       ]
     }
