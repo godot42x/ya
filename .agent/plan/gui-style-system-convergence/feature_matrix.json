@@ -1,0 +1,199 @@
+{
+  "plan": "gui-style-system-convergence",
+  "updated_at": "2026-08-21",
+  "legend": {
+    "planned": "尚未开始",
+    "in_progress": "推进中",
+    "pass": "已验证",
+    "fail": "回归",
+    "blocked": "阻塞"
+  },
+  "tracks": [
+    {
+      "id": "phase0_audit",
+      "title": "Phase 0 - Style capability audit",
+      "items": [
+        {
+          "id": "core_widget_style_field_audit",
+          "status": "planned",
+          "notes": "审计 Text/Panel/Button/MenuBar/Tab/Dock/Floating 硬编码字段"
+        },
+        {
+          "id": "current_style_runtime_audit",
+          "status": "planned",
+          "notes": "审计 UIStyleSet/FWidgetStyle/Reactive style 使用点"
+        },
+        {
+          "id": "widget_to_typed_style_mapping",
+          "status": "planned",
+          "notes": "控件 -> typed style 映射表"
+        }
+      ]
+    },
+    {
+      "id": "phase1_typed_styles",
+      "title": "Phase 1 - Typed style structs",
+      "items": [
+        {
+          "id": "text_style",
+          "status": "planned",
+          "notes": "FTextStyle"
+        },
+        {
+          "id": "panel_style",
+          "status": "planned",
+          "notes": "FPanelStyle"
+        },
+        {
+          "id": "button_style",
+          "status": "planned",
+          "notes": "FButtonStyle"
+        },
+        {
+          "id": "menubar_item_style",
+          "status": "planned",
+          "notes": "FMenuBarItemStyle"
+        },
+        {
+          "id": "tab_style",
+          "status": "planned",
+          "notes": "FTabStyle"
+        },
+        {
+          "id": "dock_space_style",
+          "status": "planned",
+          "notes": "FDockSpaceStyle"
+        },
+        {
+          "id": "floating_window_style",
+          "status": "planned",
+          "notes": "FFloatingWindowStyle"
+        },
+        {
+          "id": "framework_fallback_defaults",
+          "status": "planned",
+          "notes": "typed styles fallback 默认值"
+        }
+      ]
+    },
+    {
+      "id": "phase2_theme_runtime",
+      "title": "Phase 2 - Theme runtime and resolve chain",
+      "items": [
+        {
+          "id": "ui_theme_object",
+          "status": "planned",
+          "notes": "UITheme named typed style 容器"
+        },
+        {
+          "id": "ui_theme_context",
+          "status": "planned",
+          "notes": "WidgetTree/window/subtree theme owner"
+        },
+        {
+          "id": "style_key_lookup",
+          "status": "planned",
+          "notes": "style key 命名与 lookup"
+        },
+        {
+          "id": "resolve_chain",
+          "status": "planned",
+          "notes": "override -> key -> subtree -> tree/window -> fallback"
+        }
+      ]
+    },
+    {
+      "id": "phase3_core_widget_migration",
+      "title": "Phase 3 - Core shell widget migration",
+      "items": [
+        {
+          "id": "text_migrated",
+          "status": "planned",
+          "notes": "UIText 从 typed text style resolve"
+        },
+        {
+          "id": "panel_migrated",
+          "status": "planned",
+          "notes": "UIPanel 从 panel style resolve"
+        },
+        {
+          "id": "button_migrated",
+          "status": "planned",
+          "notes": "UIButton 从 button style resolve"
+        },
+        {
+          "id": "menubar_migrated",
+          "status": "planned",
+          "notes": "UIMenuBarItem/UIMenuBar 从 menubar style resolve"
+        },
+        {
+          "id": "tabbar_migrated",
+          "status": "planned",
+          "notes": "UITabButton/UITabBar 从 tab style resolve"
+        },
+        {
+          "id": "dockspace_migrated",
+          "status": "planned",
+          "notes": "UIDockSpace 从 dock style resolve"
+        },
+        {
+          "id": "floating_migrated",
+          "status": "planned",
+          "notes": "UIDockFloatingWindow 从 floating style resolve"
+        }
+      ]
+    },
+    {
+      "id": "phase4_workbench_theme",
+      "title": "Phase 4 - GUIWorkbench theme integration",
+      "items": [
+        {
+          "id": "workbench_theme_defined",
+          "status": "planned",
+          "notes": "WorkbenchTheme/theme instance"
+        },
+        {
+          "id": "surface_shell_theme_driven",
+          "status": "planned",
+          "notes": "WorkbenchSurface 不再遍历 child 手改颜色"
+        },
+        {
+          "id": "demo_pages_theme_driven",
+          "status": "planned",
+          "notes": "Dock/Editor/gallery 共用主题来源"
+        },
+        {
+          "id": "visual_regression_baseline",
+          "status": "planned",
+          "notes": "截图/golden 基线"
+        }
+      ]
+    },
+    {
+      "id": "phase5_editor_game_followup",
+      "title": "Phase 5 - Editor/Game follow-up hooks",
+      "items": [
+        {
+          "id": "editor_theme_namespace",
+          "status": "planned",
+          "notes": "editor key namespace"
+        },
+        {
+          "id": "game_theme_namespace",
+          "status": "planned",
+          "notes": "game HUD/menu/dialog key namespace"
+        },
+        {
+          "id": "multiwindow_theme_semantics",
+          "status": "planned",
+          "notes": "多窗口 theme context owner 与继承"
+        },
+        {
+          "id": "selector_or_external_format_decision",
+          "status": "planned",
+          "notes": "第二阶段是否引入 selector/外部文件/DSL"
+        }
+      ]
+    }
+  ]
+}
