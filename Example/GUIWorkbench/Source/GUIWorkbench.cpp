@@ -41,6 +41,30 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     _tree = &tree;
     surface.setSmokeActionsEnabled(bSmokeActions);
 
+    // Tree-level theme (style-system Phase 2/3): two UIThemes define the
+    // "button" style key differently; setTheme swaps them, and every themed
+    // widget repaints through the generation token. The app owns the theme
+    // content; the framework owns the resolve + invalidation mechanism.
+    _darkTheme = std::make_shared<ya::UITheme>();
+    {
+        auto dark = ya::FButtonStyle{};
+        dark.normalFill  = ya::FBrush::Solid({0.16f, 0.18f, 0.22f, 1.0f});
+        dark.hoveredFill = ya::FBrush::Solid({0.24f, 0.28f, 0.34f, 1.0f});
+        dark.pressedFill = ya::FBrush::Solid({0.10f, 0.11f, 0.14f, 1.0f});
+        dark.textColor   = {0.82f, 0.86f, 0.92f, 1.0f};
+        _darkTheme->define<ya::FButtonStyle>("button", dark);
+    }
+    _lightTheme = std::make_shared<ya::UITheme>();
+    {
+        auto light = ya::FButtonStyle{};
+        light.normalFill  = ya::FBrush::Solid({0.94f, 0.95f, 0.97f, 1.0f});
+        light.hoveredFill = ya::FBrush::Solid({0.84f, 0.86f, 0.90f, 1.0f});
+        light.pressedFill = ya::FBrush::Solid({0.72f, 0.74f, 0.80f, 1.0f});
+        light.textColor   = {0.10f, 0.12f, 0.16f, 1.0f};
+        _lightTheme->define<ya::FButtonStyle>("button", light);
+    }
+    tree.setTheme(_darkTheme.get());
+
     // Demo pages are example content: register them into the shell. The
     // builders capture this app's demo state; the shell stays demo-agnostic.
     surface.addPage("Render", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
@@ -86,6 +110,14 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     surface.addPage("Dock", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
         buildDockDemo(t, p, demoState, status);
+    });
+    surface.addPage("Theme", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildThemeDemo(t, p, demoState, status, [this](bool bDark)
+        {
+            _bDarkTheme = bDark;
+            _tree->setTheme((bDark ? _darkTheme : _lightTheme).get());
+        });
     });
 
     applyStartPage();

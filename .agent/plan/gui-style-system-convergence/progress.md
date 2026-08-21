@@ -173,3 +173,15 @@
 
 **下一步**：white/dark demo（GUIWorkbench 挂 dark/light 两个 UITheme + toggle），让 theme 切换端到端可验证（theme_toggle_e2e 收口）。
 
+## 2026-08-22 — white/dark demo + theme_toggle_e2e 收口（Phase 2 主线完成）
+
+- FWorkbenchApp 持 `_darkTheme`/`_lightTheme`（shared_ptr<UITheme>，各 define "button" key 为不同 FButtonStyle）；buildUI 里 `tree.setTheme(_darkTheme)` 挂载。
+- 新增独立 **Theme 页**（memory 规则：新 demo 开独立页）：toggle 按钮（切 tree theme）+ 两个展示按钮（"button" key 驱动）+ 说明文字；toggle 回调经 [this] 捕获 app 的 theme 实例 + `_tree->setTheme(...)`。
+- **端到端验收（三层）**：
+  - 结构：ThemeToggle/ThemeShowButton/ThemeShowButton2 存在（scenario assert）
+  - **颜色（draw item 层）**：按钮 sprite 颜色 dark `(0.160,0.180,0.220)` → light `(0.940,0.950,0.970)`，精确匹配两个 theme 的 normalFill（--dump-snapshot-json 验证）
+  - **渲染**：`assert_validation_clean` 通过（换 theme 后零漏标脏，B1 generation token 失效传播收口）
+- theme.jsonl（正式 scenario，Scenarios/ 下）+ 编译通过 + exit 0。
+
+**Phase 2 至此完整**：UIStyleSet 泛型化 + UITheme + WidgetTree 挂载 + generation token + resolveThemeStyle + UIButton 接线活样本 + white/dark 端到端验收，全部落地。剩余主线：Phase 3 其余控件接线（Panel/MenuBar/Tab/SplitPane/ScrollBar/Dock/Floating）、Phase 4 Workbench 主题接入、Phase 5 Editor/Game 留口。
+

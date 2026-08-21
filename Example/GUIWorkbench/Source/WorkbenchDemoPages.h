@@ -128,4 +128,12 @@ void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoSta
 void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                    const std::function<void(const std::string&)>& log);
 
+/// Theme page (style-system Phase 2/3): white/dark theme toggle driven by the
+/// tree-level UITheme (WidgetTree::setTheme) — the end-to-end acceptance of
+/// the resolve chain. `onToggleTheme(bDark)` switches the tree's theme; the
+/// callback is owned by the app (captures the app's theme instances).
+void buildThemeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                    const std::function<void(const std::string&)>& log,
+                    const std::function<void(bool bDark)>& onToggleTheme);
+
 } // namespace guiworkbench

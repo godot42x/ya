@@ -16,10 +16,13 @@
 
 #include "GUI/Host/GUIApp.h"
 #include "GUI/Tooling/Workbench/WorkbenchSurface.h"
+#include "GUI/Widgets/Theme.h"
 
 #include "WorkbenchDemoPages.h"
 
 #include <glm/glm.hpp>
+
+#include <memory>
 
 namespace guiworkbench
 {
@@ -50,6 +53,12 @@ class FWorkbenchApp final : public ya::IGUIAppDelegate
     void dispatchKey(const ya::Event& event);
 
     ya::WidgetTree* _tree = nullptr;
+
+    // Tree-level themes (style-system Phase 2/3). Owned by the app so they
+    // outlive the tree; buildUI mounts _darkTheme via setTheme.
+    std::shared_ptr<ya::UITheme> _darkTheme;
+    std::shared_ptr<ya::UITheme> _lightTheme;
+    bool                         _bDarkTheme = true;
 };
 
 } // namespace guiworkbench

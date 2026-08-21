@@ -47,7 +47,7 @@
 - [x] **UIStyleSet 泛型化**：`define<TStyle>(name, style)`，typed styles 复用 Reactive<T>，不另起第二套容器
 - [x] **resolve 上游换人失效传播**：WidgetTree 持 `Reactive<uint64_t>` generation token，setTheme 时 +1 触发依赖控件重绘
 - [ ] **token → typed style 转换**：配置代码烘焙（app 构造 theme 时用 token 初始化 typed style），framework 不做运行时 token 求值（见 plan.md §3.4）
-- [ ] **white/dark 切换端到端验收**：同树运行时换 UITheme → 全 shell 重绘无漏标脏
+- [x] **white/dark 切换端到端验收**：Theme 页 toggle 换 UITheme，按钮 sprite 颜色 dark 0.16→light 0.94（draw item 层）+ assert_validation_clean 零漏标脏
 
 ## Phase 3 — 第一批控件接入
 

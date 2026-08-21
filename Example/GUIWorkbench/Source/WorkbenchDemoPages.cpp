@@ -1389,4 +1389,44 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
     (void)log;
 }
 
+void buildThemeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                    const std::function<void(const std::string&)>& log,
+                    const std::function<void(bool bDark)>& onToggleTheme)
+{
+    auto form = std::make_shared<ya::UIContainer>("ThemeForm");
+    form->setDirection(ya::EWidgetBoxLayout::Vertical);
+    form->setSpacing(8.0f);
+    form->setPadding({12.0f, 12.0f});
+    form->_bAutoSize = true;
+    tree.attach(parent, form);
+
+    tree.attach(*form, makeLabel("Theme — white/dark toggle drives the tree-level UITheme"));
+    tree.attach(*form, makeLabel("Buttons below use style key \"button\"; toggling swaps the tree theme", 12.0f));
+
+    // A dark/light flag the toggle flips (value-captured so the callback
+    // outlives this builder without dangling).
+    auto bDark = std::make_shared<bool>(true);
+
+    auto toggle = makeDemoButton("ThemeToggle", "Toggle theme (dark/white)", 240.0f);
+    toggle->_onClick = [bDark, onToggleTheme, log]
+    {
+        *bDark = !*bDark;
+        onToggleTheme(*bDark);
+        log(std::format("Theme -> {}", *bDark ? "dark" : "white"));
+    };
+    tree.attach(*form, toggle);
+
+    // Show buttons that render through the "button" style key: their fill
+    // follows the current tree theme, so the toggle visibly restyles them.
+    auto showButton = makeDemoButton("ThemeShowButton", "Themed button", 180.0f);
+    tree.attach(*form, showButton);
+
+    auto showButton2 = makeDemoButton("ThemeShowButton2", "Another themed button", 180.0f);
+    tree.attach(*form, showButton2);
+
+    tree.attach(*form, makeLabel("(both buttons share style key \"button\")", 11.0f));
+
+    (void)state;
+}
+
 } // namespace guiworkbench

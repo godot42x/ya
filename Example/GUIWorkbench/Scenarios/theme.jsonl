@@ -1,0 +1,16 @@
+# GUIWorkbench --start-page=Theme. white/dark theme toggle (style-system
+# Phase 2/3 acceptance): pressing ThemeToggle swaps the tree-level UITheme and
+# every themed button must repaint (assert_validation_clean = no dirty leak).
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"ThemeToggle"}}
+{"assert":{"widget":"ThemeShowButton"}}
+{"assert":{"widget":"ThemeShowButton2"}}
+{"checkpoint":"theme_dark"}
+{"event":"mouse_press","x":255,"y":135,"button":0}
+{"event":"mouse_release","x":255,"y":135,"button":0}
+{"frame":2}
+{"assert":{"widget":"ThemeShowButton"}}
+{"assert_validation_clean":true}
+{"checkpoint":"theme_light"}
+{"frame":1}
