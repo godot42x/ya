@@ -14,6 +14,18 @@ namespace ya
 
 void UITabButton::paintSelf(UIFrameBuilder& builder)
 {
+    // Theme resolution (style-system Phase 3). Layout level: the style's
+    // padding feeds computeDesiredSize, so an edit to this tab's style must
+    // re-measure (a Paint-only edge would leave the old geometry). Absent
+    // key/theme → default-constructed FTabStyle is the framework fallback
+    // (Phase 3 cleanup: no bare fields).
+    FTabStyle style;
+    if (!_styleKey.empty()) {
+        if (const FTabStyle* themed = resolveThemeStyle<FTabStyle>(*this, _styleKey, ReactiveBase::EDirtyLevel::Layout)) {
+            style = *themed;
+        }
+    }
+
     if (_bSelected) {
         // Selected tab reads as "connected to the content below": the fill is
         // the editor-chrome base, with a thin accent bar along the top edge.
@@ -21,17 +33,16 @@ void UITabButton::paintSelf(UIFrameBuilder& builder)
         // above us) would look connected, but the bar clips children, so keep
         // the fill inside this button and let the bar's bottom rule separate
         // the strip from content.
-        builder.addSprite(_layoutRect, _selectedColor, nullptr);
+        builder.addBrush(_layoutRect, style.selectedFill);
         const Rect2D accent{_layoutRect.pos, {_layoutRect.extent.x, 2.0f}};
-        builder.addSprite(accent, _accentColor, nullptr);
+        builder.addBrush(accent, FBrush::Solid(style.accentColor));
     }
     else {
-        const glm::vec4 color = _bHovered ? _hoveredColor : _normalColor;
-        builder.addSprite(_layoutRect, color, nullptr);
+        builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.normalFill);
     }
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {
-        builder.addText(_layoutRect, _label, _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+        builder.addText(_layoutRect, _label, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     }
 }
 
@@ -40,9 +51,20 @@ glm::vec2 UITabButton::computeDesiredSize() const
     if (!_bAutoSize) {
         return _size;
     }
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    // Theme padding drives the measure (the Layout edge is established by
+    // paintSelf; resolve here is a pure read, no dependency registration
+    // outside the paint walk). Absent key/theme → default-constructed
+    // FTabStyle padding is the framework fallback.
+    FTabStyle style;
+    if (!_styleKey.empty()) {
+        if (const FTabStyle* themed =
+                resolveThemeStyle<FTabStyle>(*this, _styleKey, ReactiveBase::EDirtyLevel::Layout)) {
+            style = *themed;
+        }
+    }
+    auto            font    = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     const float textWidth = font ? font->measureText(_label) : static_cast<float>(_label.size()) * 7.0f;
-    return {textWidth + _padding.x * 2.0f, _padding.y * 2.0f + (font ? font->lineHeight : 14.0f)};
+    return {textWidth + style.padding.x * 2.0f, style.padding.y * 2.0f + (font ? font->lineHeight : 14.0f)};
 }
 
 bool UITabButton::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
@@ -237,18 +259,29 @@ glm::vec2 UITabBar::computeDesiredSize() const
 
 void UITabBar::paintSelf(UIFrameBuilder& builder)
 {
+    // Theme resolution (style-system Phase 3): strip chrome (separator rule +
+    // empty-zone placeholder) comes from FTabStyle when the key resolves.
+    // Resolve unconditionally so the theme-generation edge is registered even
+    // when only the rule branch paints.
+    const FTabStyle* themed = (!_styleKey.empty())
+                                  ? resolveThemeStyle<FTabStyle>(*this, _styleKey)
+                                  : nullptr;
     if (!_tabs.empty()) {
         // Bottom rule separating the strip from the content host below it.
-        const float y = _layoutRect.pos.y + _layoutRect.extent.y - 1.0f;
+        const glm::vec4 ruleColor = themed ? themed->separatorColor
+                                           : glm::vec4{0.28f, 0.30f, 0.36f, 1.0f};
+        const float     y = _layoutRect.pos.y + _layoutRect.extent.y - 1.0f;
         builder.addLine({_layoutRect.pos.x, y},
                         {_layoutRect.pos.x + _layoutRect.extent.x, y},
-                        {0.28f, 0.30f, 0.36f, 1.0f},
+                        ruleColor,
                         1.0f);
     }
     if (_tabs.empty() && !_emptyPlaceholder.empty()) {
         auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 13);
         if (font) {
-            builder.addText(_layoutRect, _emptyPlaceholder, {0.45f, 0.48f, 0.55f, 1.0f},
+            const glm::vec4 placeholderColor = themed ? themed->placeholderTextColor
+                                                      : glm::vec4{0.45f, 0.48f, 0.55f, 1.0f};
+            builder.addText(_layoutRect, _emptyPlaceholder, placeholderColor,
                             font, EWidgetAlignH::Center, EWidgetAlignV::Center);
         }
     }

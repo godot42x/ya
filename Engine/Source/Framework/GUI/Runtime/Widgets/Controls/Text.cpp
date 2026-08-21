@@ -17,7 +17,7 @@ void UIText::paintSelf(UIFrameBuilder& builder)
     const ReactiveBase::EDirtyLevel level = _bAutoSize ? ReactiveBase::EDirtyLevel::Layout
                                                        : ReactiveBase::EDirtyLevel::Paint;
     const std::string&               text  = resolvedText(level);
-    const FWidgetStyle               style = resolvedStyle(level);
+    const FTextStyle                style = resolvedStyle(level);
     auto                             font  = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (!font) {
         return;
@@ -28,7 +28,7 @@ void UIText::paintSelf(UIFrameBuilder& builder)
         Rect2D bg = _layoutRect;
         bg.pos -= style.padding;
         bg.extent += style.padding * 2.0f;
-        builder.addSprite(bg, style.fillColor, nullptr);
+        builder.addBrush(bg, style.fillColor);
     }
     if (_bWrap) {
         // Wrapped text paints line by line; each line is its own text item
@@ -86,15 +86,32 @@ void UIText::bindStyle(std::shared_ptr<Reactive<FWidgetStyle>> style)
     _styleBinding = std::move(style);
 }
 
-FWidgetStyle UIText::resolvedStyle(ReactiveBase::EDirtyLevel level) const
+FTextStyle UIText::resolvedStyle(ReactiveBase::EDirtyLevel level) const
 {
-    FWidgetStyle style;
-    style.fillColor = _color;
+    // Preferred path (style-system Phase 3/4): the tree theme resolves an
+    // FTextStyle by key. resolveThemeStyle registers both the theme-generation
+    // edge and the style Reactive edge, so a theme switch OR an edit to this
+    // text's style repaints (and, at Layout level, re-measures) it.
+    //
+    // Explicit authoring wins over the theme (resolve chain "widget explicit
+    // override" first, plan §3.2): a text with a non-default authored _color
+    // keeps it under any mounted theme, so headers/status/body hierarchy
+    // stays stable in every look. Only un-authored text (default white) is
+    // theme-driven — e.g. button labels follow the theme's text color.
+    const bool bAuthoredColor = !(_color == glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+    if (!_styleKey.empty() && !bAuthoredColor) {
+        if (const FTextStyle* themed = resolveThemeStyle<FTextStyle>(*this, _styleKey, level)) {
+            return *themed;
+        }
+    }
+    // Fallback: legacy FWidgetStyle binding, then authoring fields.
+    FTextStyle style;
+    style.fillColor = FBrush::Solid(_color);
     style.textColor = _color;
     style.fontSize  = _fontSize;
     if (_styleBinding) {
         const FWidgetStyle& bound = _styleBinding->get(level); // records the dependency
-        style.fillColor          = bound.fillColor;
+        style.fillColor          = FBrush::Solid(bound.fillColor);
         style.textColor          = bound.textColor;
         style.fontSize           = bound.fontSize;
         style.padding            = bound.padding;
@@ -111,7 +128,7 @@ glm::vec2 UIText::computeDesiredSize() const
     // exactly when a binding is active. (Measure runs during layout, before
     // the paint walk, so get() here does not register a dependency; the Layout
     // edge is instead established by paintSelf at the same level.)
-    const FWidgetStyle style = resolvedStyle(ReactiveBase::EDirtyLevel::Layout);
+    const FTextStyle style = resolvedStyle(ReactiveBase::EDirtyLevel::Layout);
     auto               font  = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (!font) {
         return _size;

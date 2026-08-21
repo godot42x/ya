@@ -32,20 +32,30 @@ void UIScrollViewport::paintSelf(UIFrameBuilder& builder)
     if (!_bShowScrollbar || !isScrollable()) {
         return;
     }
-    const float trackX = _layoutRect.pos.x + _layoutRect.extent.x - _scrollbarWidth;
+    // Theme resolution (style-system Phase 3): track/thumb brushes + width
+    // from FScrollBarStyle. Paint-only (the width does not inset content).
+    // Absent key/theme → default-constructed style is the fallback (Phase 3
+    // cleanup: no bare fields).
+    FScrollBarStyle style;
+    if (!_styleKey.empty()) {
+        if (const FScrollBarStyle* themed = resolveThemeStyle<FScrollBarStyle>(*this, _styleKey)) {
+            style = *themed;
+        }
+    }
+
+    const float  trackX = _layoutRect.pos.x + _layoutRect.extent.x - style.width;
     const Rect2D track{
         .pos    = {trackX, _layoutRect.pos.y},
-        .extent = {_scrollbarWidth, _layoutRect.extent.y},
+        .extent = {style.width, _layoutRect.extent.y},
     };
-    builder.addSprite(track, _scrollbarTrackColor, nullptr);
+    builder.addBrush(track, style.trackColor);
 
     const float viewH    = _layoutRect.extent.y;
     const float contentH = viewH + getMaxScrollOffset();
     const float thumbH   = std::max(16.0f, viewH * viewH / contentH);
     const float thumbY   = _layoutRect.pos.y +
                            (viewH - thumbH) * (getScrollOffset() / getMaxScrollOffset());
-    builder.addSprite(Rect2D{.pos = {trackX, thumbY}, .extent = {_scrollbarWidth, thumbH}},
-                      _scrollbarThumbColor, nullptr);
+    builder.addBrush(Rect2D{.pos = {trackX, thumbY}, .extent = {style.width, thumbH}}, style.thumbColor);
 }
 
 void UIScrollViewport::paintChildren(UIFrameBuilder& builder)

@@ -45,31 +45,24 @@ void UIButton::paintSelf(UIFrameBuilder& builder)
     // recorded even when the button has no visible content to draw.
     const bool bEnabled = resolvedEnabled();
 
-    // Theme resolution (style-system Phase 3): resolve FButtonStyle by key; a
-    // themed button draws per-state FBrush (incl. disabledFill). The theme
+    // Theme resolution (style-system Phase 3): resolve FButtonStyle by key;
+    // a themed button draws per-state FBrush (incl. disabledFill). The theme
     // generation edge + the style Reactive edge are both registered by
     // resolveThemeStyle, so a theme switch OR a style edit repaints this
-    // button.
+    // button. When the key/theme is absent, the default-constructed style IS
+    // the framework fallback (Phase 3 cleanup: no bare color fields).
+    FButtonStyle style;
     if (!_styleKey.empty()) {
-        if (const FButtonStyle* style = resolveThemeStyle<FButtonStyle>(*this, _styleKey)) {
-            const FBrush& fill = !bEnabled      ? style->disabledFill
-                                 : _bPressed    ? style->pressedFill
-                                 : _bHovered    ? style->hoveredFill
-                                 : _bFocused    ? style->focusedFill
-                                                : style->normalFill;
-            builder.addBrush(_layoutRect, fill);
-            return;
+        if (const FButtonStyle* themed = resolveThemeStyle<FButtonStyle>(*this, _styleKey)) {
+            style = *themed;
         }
     }
-
-    // Framework fallback: bare color fields (unchanged behavior).
-    const glm::vec4 color    = _bPressed
-                                   ? _pressedColor
-                                   : (_bHovered
-                                          ? _hoveredColor
-                                          : (_bFocused ? _focusedColor : _normalColor));
-    const glm::vec4 finalColor = bEnabled ? color : glm::vec4(color.r * 0.5f, color.g * 0.5f, color.b * 0.5f, color.a);
-    builder.addSprite(_layoutRect, finalColor, nullptr);
+    const FBrush& fill = !bEnabled   ? style.disabledFill
+                         : _bPressed ? style.pressedFill
+                         : _bHovered ? style.hoveredFill
+                         : _bFocused ? style.focusedFill
+                                     : style.normalFill;
+    builder.addBrush(_layoutRect, fill);
 }
 
 bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ctx)

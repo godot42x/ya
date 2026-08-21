@@ -10,6 +10,7 @@
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
 #include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/Style.h"
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
@@ -424,6 +425,59 @@ TEST(UIFrameSnapshotTest, StyleEditRepaintsBoundTexts)
     EXPECT_EQ(t1->resolvedStyle().textColor, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
 }
 
+TEST(UIFrameSnapshotTest, PanelResolvesThemeStyleAndRepaintsOnThemeSwitch)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    panel->setPosition({10.0f, 10.0f});
+    panel->setSize({100.0f, 50.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+
+    // Two tree-level themes define the same "panel" key differently
+    // (style-system Phase 3): the panel resolves FPanelStyle through the tree
+    // theme and must repaint when the theme is swapped (generation token).
+    auto dark  = std::make_shared<UITheme>();
+    auto darkStyle = FPanelStyle{};
+    darkStyle.fillColor = FBrush::Solid({0.16f, 0.18f, 0.22f, 1.0f});
+    dark->define<FPanelStyle>("panel", darkStyle);
+    auto light = std::make_shared<UITheme>();
+    auto lightStyle = FPanelStyle{};
+    lightStyle.fillColor = FBrush::Solid({0.94f, 0.95f, 0.97f, 1.0f});
+    light->define<FPanelStyle>("panel", lightStyle);
+
+    tree.setTheme(dark.get());
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    const auto findPanelSprite = [&](const UIFrameSnapshot& s) -> const UIFrameDrawItem*
+    {
+        for (const UIFrameDrawItem& item : s.items) {
+            if (item.kind == UIFrameDrawItem::EKind::Sprite && item.size == glm::vec2(100.0f, 50.0f)) {
+                return &item;
+            }
+        }
+        return nullptr;
+    };
+
+    // Dark: the panel paints the themed dark fill.
+    const UIFrameSnapshot darkSnap = tree.buildSnapshot(UIFrameBuildContext{});
+    const UIFrameDrawItem* darkItem = findPanelSprite(darkSnap);
+    ASSERT_NE(darkItem, nullptr);
+    EXPECT_EQ(darkItem->color, darkStyle.fillColor.tintColor);
+
+    // Swap the tree theme: the generation token must repaint the panel (no
+    // style Reactive value changed, so only the theme-switch edge can mark it
+    // dirty).
+    tree.setTheme(light.get());
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
+    const UIFrameSnapshot lightSnap = tree.buildSnapshot(UIFrameBuildContext{});
+    const UIFrameDrawItem* lightItem = findPanelSprite(lightSnap);
+    ASSERT_NE(lightItem, nullptr);
+    EXPECT_EQ(lightItem->color, lightStyle.fillColor.tintColor);
+}
+
 TEST(UIFrameSnapshotTest, TreeViewExpandCollapseChangesVisibleRows)
 {
     WidgetTree tree({.width = 800, .height = 600});
@@ -515,6 +569,11 @@ TEST(UIFrameSnapshotTest, TransientHoverAndFocusRepaintButton)
     auto       btn = std::make_shared<UIButton>("Btn");
     tree.attachToLayer(WidgetTree::ELayer::Content, btn);
 
+    // No theme mounted: the button paints the default-constructed
+    // FButtonStyle (framework fallback). Phase 3 cleanup removed the bare
+    // color fields, so the test compares against the typed style defaults.
+    const FButtonStyle fallback;
+
     tree.buildSnapshot(UIFrameBuildContext{}); // cold start
     tree.buildSnapshot(UIFrameBuildContext{}); // clean: all reuse
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
@@ -525,17 +584,17 @@ TEST(UIFrameSnapshotTest, TransientHoverAndFocusRepaintButton)
     UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
     ASSERT_EQ(snap.items.size(), 1u);
-    EXPECT_EQ(snap.items[0].color, btn->_hoveredColor);
+    EXPECT_EQ(snap.items[0].color, fallback.hoveredFill.tintColor);
 
     // Leave re-paints back to the normal color.
     btn->onPointerLeave();
     snap = tree.buildSnapshot(UIFrameBuildContext{});
-    EXPECT_EQ(snap.items[0].color, btn->_normalColor);
+    EXPECT_EQ(snap.items[0].color, fallback.normalFill.tintColor);
 
     // Focus (keyboard) re-paints to the focused color.
     btn->onFocusGained(true);
     snap = tree.buildSnapshot(UIFrameBuildContext{});
-    EXPECT_EQ(snap.items[0].color, btn->_focusedColor);
+    EXPECT_EQ(snap.items[0].color, fallback.focusedFill.tintColor);
 }
 
 TEST(UIFrameSnapshotTest, ReactivePaintMutationRecordsReasonAndTransition)

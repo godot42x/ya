@@ -25,10 +25,22 @@ void UIMenuBarItem::paintSelf(UIFrameBuilder& builder)
     // recorded even when the font is unavailable and the text is skipped
     // (mirrors UIText::resolvedText ordering).
     const std::string& label = resolvedLabel(ReactiveBase::EDirtyLevel::Paint);
-    builder.addSprite(_layoutRect, _bHovered ? _hoveredColor : _normalColor, nullptr);
+
+    // Theme resolution (style-system Phase 3): the item draws its normal /
+    // hovered fill brushes + the label color from FMenuBarItemStyle. The item
+    // is explicitly sized by UIMenuBar (fontSize is not auto-measured), so
+    // Paint level. When the key/theme is absent, the default-constructed
+    // style IS the framework fallback (Phase 3 cleanup: no bare fields).
+    FMenuBarItemStyle style;
+    if (!_styleKey.empty()) {
+        if (const FMenuBarItemStyle* themed = resolveThemeStyle<FMenuBarItemStyle>(*this, _styleKey)) {
+            style = *themed;
+        }
+    }
+    builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.normalFill);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {
-        builder.addText(_layoutRect, label, _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+        builder.addText(_layoutRect, label, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     }
 }
 

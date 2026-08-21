@@ -2,6 +2,7 @@
 
 #include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/Style.h"
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <memory>
@@ -76,9 +77,20 @@ struct YA_GUI_API UIText : public UIElement
 
     /// Style binding: a bound style overrides _color/_fontSize with the
     /// style's textColor/fontSize. Dependency is recorded during the paint
-    /// walk (not at bind time).
+    /// walk (not at bind time). Legacy path (FWidgetStyle compatibility);
+    /// the preferred path is _styleKey + resolveThemeStyle<FTextStyle>.
     void bindStyle(std::shared_ptr<Reactive<FWidgetStyle>> style);
-    [[nodiscard]] FWidgetStyle resolvedStyle(ReactiveBase::EDirtyLevel level = ReactiveBase::EDirtyLevel::Paint) const;
+    /// Resolved text style (theme key first, then legacy style binding, then
+    /// authoring fields). Paint attributes only — never cache the result in a
+    /// member (would detach from the reactive dependency graph).
+    [[nodiscard]] FTextStyle resolvedStyle(ReactiveBase::EDirtyLevel level = ReactiveBase::EDirtyLevel::Paint) const;
+
+    /// Theme style key (style-system Phase 2/3). When the owning tree has a
+    /// theme that defines this key as an FTextStyle AND the text has no
+    /// authored color (default white — e.g. button labels), resolvedStyle
+    /// reads from it; authored _color wins over the theme (explicit override
+    /// first in the resolve chain). Empty key disables theme resolution.
+    std::string _styleKey = "text";
 
     void paintSelf(UIFrameBuilder& builder) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;

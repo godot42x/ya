@@ -36,7 +36,17 @@
 
 ## 当前下一刀
 
-1. 产出 style capability audit
-2. 拍板第一批 typed style structs
-3. 拍板 UITheme / UIThemeContext 挂载点
+1. Phase 4 收尾：golden/截图基线归档（scenario-capture + dump digest），Theme/Editor/壳层静态基线
+2. FWidgetStyle / UIStyleSet::bindTo / UIText::bindStyle 去留定案（app 消费点已清零，仅闭包测试在用）
+3. Phase 5：editor/game theme key 命名空间、game HUD typed style 扩展、多窗口 theme context owner 语义
+
+## 已完成里程碑
+
+- Phase 0 audit / Phase 1 typed styles + FBrush / Phase 2 theme runtime（含 white-dark e2e）
+- Phase 3 全部接入控件接线 + **清理刀删尽裸颜色字段**（fallback=默认构造 TStyle；壳层遍历覆写循环废除）
+- Phase 4 第一刀：WorkbenchTheme（token 烘焙 + light 调色板）+ 壳层主题化 + Gallery 统一绑定路径；key 命名约定 §3.6
+
+## 已知预存问题（非 style system 范围）
+
+- menus_popup_interaction.jsonl 失败（hover-switch 后 lastRoute 非 popup）：91ded16e 基线 A/B 对照确认预存，需另立 ticket 根因。
 

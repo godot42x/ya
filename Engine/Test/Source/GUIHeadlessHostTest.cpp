@@ -1,6 +1,7 @@
 #include "GUI/Host/GUIHeadlessHost.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
+#include "GUI/Widgets/Theme.h"
 
 #include <gtest/gtest.h>
 
@@ -89,6 +90,12 @@ TEST(GUIHeadlessHostTest, MenuBarItemHoverRepaintsWithHoveredColor)
 
     struct MenuBarDelegate final : IGUIAppDelegate
     {
+        // Owned by the delegate: WidgetTree keeps a raw UITheme* after
+        // setTheme, so the theme must outlive buildUI (style-system Phase 3
+        // cleanup: menu items resolve the "menubar" key instead of bare
+        // color fields).
+        std::shared_ptr<ya::UITheme> theme;
+
         void buildUI(ya::WidgetTree& tree) override
         {
             auto barOwned   = std::make_shared<ya::UIMenuBar>("TestMenuBar");
@@ -96,11 +103,16 @@ TEST(GUIHeadlessHostTest, MenuBarItemHoverRepaintsWithHoveredColor)
             barOwned->_anchorMax = {1.0f, 0.0f};
             barOwned->setSize({0.0f, 30.0f});
             tree.attachToLayer(ya::WidgetTree::ELayer::Content, barOwned);
-            auto* item = barOwned->addItem("File", [] { return ya::UIMenu::create({{"New", nullptr}}); });
+            barOwned->addItem("File", [] { return ya::UIMenu::create({{"New", nullptr}}); });
+
             // Mirror the workbench theme: lift both stops above the window
             // background (0.075) and widen the gap so hover is visible.
-            item->_normalColor  = {0.16f, 0.18f, 0.22f, 1.0f};
-            item->_hoveredColor = {0.30f, 0.33f, 0.40f, 1.0f};
+            theme             = std::make_shared<ya::UITheme>();
+            auto style        = ya::FMenuBarItemStyle{};
+            style.normalFill  = ya::FBrush::Solid({0.16f, 0.18f, 0.22f, 1.0f});
+            style.hoveredFill = ya::FBrush::Solid({0.30f, 0.33f, 0.40f, 1.0f});
+            theme->define<ya::FMenuBarItemStyle>("menubar", style);
+            tree.setTheme(theme.get());
         }
         void updateUI() override {}
     };

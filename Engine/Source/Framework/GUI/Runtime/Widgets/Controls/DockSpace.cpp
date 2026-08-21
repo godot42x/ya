@@ -284,9 +284,17 @@ void UIDockSpace::layoutAssigned(const Rect2D& rect)
 
 void UIDockSpace::paintSelf(UIFrameBuilder& builder)
 {
-    // Dock canvas base: darker than any panel so the tabs/content read as
-    // stacked surfaces instead of floating rectangles.
-    builder.addSprite(_layoutRect, {0.075f, 0.082f, 0.10f, 1.0f}, nullptr);
+    // Theme resolution (style-system Phase 3): the dock canvas base from
+    // FDockSpaceStyle (darker than any panel so the tabs/content read as
+    // stacked surfaces instead of floating rectangles). Absent key/theme →
+    // default-constructed style is the fallback (no magic literals here).
+    FDockSpaceStyle style;
+    if (!_styleKey.empty()) {
+        if (const FDockSpaceStyle* themed = resolveThemeStyle<FDockSpaceStyle>(*this, _styleKey)) {
+            style = *themed;
+        }
+    }
+    builder.addBrush(_layoutRect, style.canvasColor);
 }
 
 void UIDockSpace::paintChildren(UIFrameBuilder& builder)
@@ -295,11 +303,18 @@ void UIDockSpace::paintChildren(UIFrameBuilder& builder)
     if (!_preview || _preview->bDisabled) {
         return;
     }
-    const glm::vec4 color = _preview->bMerge
-                                ? glm::vec4{0.26f, 0.76f, 0.46f, 0.28f}
-                                : glm::vec4{0.28f, 0.52f, 0.90f, 0.28f};
-    builder.addSprite(_preview->rect, color, nullptr);
-    builder.addRectOutline(_preview->rect, {0.34f, 0.60f, 0.96f, 1.0f}, 1.5f);
+    // Theme resolution: the drop preview brushes (merge vs split states +
+    // outline) come from FDockSpaceStyle when the key resolves; otherwise
+    // the default-constructed style is the fallback (no magic literals).
+    FDockSpaceStyle style;
+    if (!_styleKey.empty()) {
+        if (const FDockSpaceStyle* themed = resolveThemeStyle<FDockSpaceStyle>(*this, _styleKey)) {
+            style = *themed;
+        }
+    }
+    const FBrush previewFill = _preview->bMerge ? style.dropPreviewMergeColor : style.dropPreviewColor;
+    builder.addBrush(_preview->rect, previewFill);
+    builder.addRectOutline(_preview->rect, style.dropPreviewOutlineColor, 1.5f);
 }
 
 const std::string& UIDockSpace::getDropPreviewDisabledReason() const

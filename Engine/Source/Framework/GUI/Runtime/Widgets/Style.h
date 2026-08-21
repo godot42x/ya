@@ -53,11 +53,16 @@ struct FWidgetStyle
 // behavior-preserving.
 // ============================================================================
 
-/// Text: color + size. Mirrors UIText's authoring fields.
+/// Text: color + size, plus the optional themed background (badge/chip) fill
+/// + padding. Mirrors what UIText's paint actually consumes (authoring
+/// fields + the _bFillBackground background); the background is off unless
+/// the widget opts in via _bFillBackground.
 struct FTextStyle
 {
     glm::vec4 textColor = {1.0f, 1.0f, 1.0f, 1.0f};
     uint32_t  fontSize  = 16;
+    FBrush    fillColor = FBrush::Solid({0.8f, 0.8f, 0.8f, 1.0f});
+    glm::vec2 padding   = {0.0f, 0.0f};
 
     bool operator==(const FTextStyle&) const = default;
 };
@@ -95,7 +100,9 @@ struct FMenuBarItemStyle
     bool operator==(const FMenuBarItemStyle&) const = default;
 };
 
-/// Tab strip button: per-state fill brush + accent. Mirrors UITabButton defaults.
+/// Tab strip button: per-state fill brush + accent + strip chrome (bottom
+/// separator rule, empty-zone placeholder). Mirrors UITabButton/UITabBar
+/// paint defaults.
 struct FTabStyle
 {
     glm::vec4 textColor    = {0.90f, 0.92f, 0.95f, 1.0f};
@@ -104,12 +111,18 @@ struct FTabStyle
     FBrush    selectedFill = FBrush::Solid({0.12f, 0.13f, 0.17f, 1.0f});
     glm::vec4 accentColor  = {0.30f, 0.55f, 0.92f, 1.0f};
     glm::vec2 padding      = {14.0f, 6.0f};
+    /// Bottom rule separating the strip from the content host below it.
+    glm::vec4 separatorColor      = {0.28f, 0.30f, 0.36f, 1.0f};
+    /// Muted placeholder label when the bar hosts no tabs (empty zone hint).
+    glm::vec4 placeholderTextColor = {0.45f, 0.48f, 0.55f, 1.0f};
 
     bool operator==(const FTabStyle&) const = default;
 };
 
 /// Split pane divider: one fill brush per state (normal / hovered / dragging).
-/// Mirrors UISplitPane's _dividerColor/_dividerHoveredColor/_dividerDraggingColor.
+/// These defaults are the framework fallback for UISplitPane's divider (the old
+    /// bare _dividerColor/_dividerHoveredColor/_dividerDraggingColor fields were
+    /// deleted in the Phase 3 cleanup).
 struct FSplitPaneStyle
 {
     FBrush dividerFill         = FBrush::Solid({0.11f, 0.12f, 0.15f, 1.0f});
@@ -120,7 +133,9 @@ struct FSplitPaneStyle
 };
 
 /// Scroll bar: track + thumb fill brushes and thickness. Mirrors
-/// UIScrollViewport's _scrollbarTrackColor/_scrollbarThumbColor/_scrollbarWidth.
+/// These defaults are the framework fallback for UIScrollViewport's scrollbar (the
+    /// old bare _scrollbarTrackColor/_scrollbarThumbColor/_scrollbarWidth fields were
+    /// deleted in the Phase 3 cleanup).
 /// (_bShowScrollbar stays a widget behavior switch, not a style attribute.)
 struct FScrollBarStyle
 {
@@ -131,12 +146,16 @@ struct FScrollBarStyle
     bool operator==(const FScrollBarStyle&) const = default;
 };
 
-/// Dock space canvas + drop preview. The split divider color lives in
-/// FSplitPaneStyle (SplitPane is a general control, not dock-specific).
+/// Dock space canvas + drop preview (merge vs split states + outline). The
+/// split divider color lives in FSplitPaneStyle (SplitPane is a general
+/// control, not dock-specific).
 struct FDockSpaceStyle
 {
-    FBrush canvasColor      = FBrush::Solid({0.075f, 0.082f, 0.10f, 1.0f});
-    FBrush dropPreviewColor = FBrush::Solid({0.30f, 0.55f, 0.90f, 0.55f});
+    FBrush canvasColor          = FBrush::Solid({0.075f, 0.082f, 0.10f, 1.0f});
+    FBrush dropPreviewColor     = FBrush::Solid({0.28f, 0.52f, 0.90f, 0.28f});
+    /// Preview highlight when the drop merges into an existing leaf.
+    FBrush dropPreviewMergeColor = FBrush::Solid({0.26f, 0.76f, 0.46f, 0.28f});
+    glm::vec4 dropPreviewOutlineColor = {0.34f, 0.60f, 0.96f, 1.0f};
 
     bool operator==(const FDockSpaceStyle&) const = default;
 };

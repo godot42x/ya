@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Theme.h"
 
 #include <functional>
 #include <string>
@@ -17,12 +18,6 @@ struct YA_GUI_API UITabButton : public UIElement
     YA_REFLECT_FIELD(_label, .instanceEditable())
     YA_REFLECT_FIELD(_bSelected, .instanceEditable())
     YA_REFLECT_FIELD(_fontSize, .instanceEditable())
-    YA_REFLECT_FIELD(_textColor, .instanceEditable())
-    YA_REFLECT_FIELD(_normalColor, .instanceEditable())
-    YA_REFLECT_FIELD(_hoveredColor, .instanceEditable())
-    YA_REFLECT_FIELD(_selectedColor, .instanceEditable())
-    YA_REFLECT_FIELD(_accentColor, .instanceEditable())
-    YA_REFLECT_FIELD(_padding, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UITabButton(std::string name = "TabButton") : UIElement(std::move(name))
@@ -40,13 +35,13 @@ struct YA_GUI_API UITabButton : public UIElement
     std::string _label;
     bool        _bSelected = false;
     uint32_t    _fontSize  = 13;
-    glm::vec2   _padding   = {14.0f, 6.0f};
 
-    glm::vec4 _textColor     = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 _normalColor   = {0.15f, 0.16f, 0.19f, 1.0f};
-    glm::vec4 _hoveredColor  = {0.21f, 0.23f, 0.27f, 1.0f};
-    glm::vec4 _selectedColor = {0.12f, 0.13f, 0.17f, 1.0f};
-    glm::vec4 _accentColor   = {0.30f, 0.55f, 0.92f, 1.0f};
+    /// Theme style key (style-system Phase 2/3). paintSelf/measure resolve
+    /// FTabStyle by this key (fills + accent + text + padding) from the tree
+    /// theme; an empty key or absent theme falls back to the
+    /// default-constructed style — the framework fallback (Phase 3 cleanup:
+    /// no bare color fields).
+    std::string _styleKey = "tab";
 
     /// Fired when this tab is activated (click / Enter / Space).
     std::function<void()> _onActivated;
@@ -103,6 +98,10 @@ struct YA_GUI_API UITabBar : public UIContainer
     std::function<void(int index, const std::string& label)> _onTabDragBegin;
 
     std::function<void(int selectedIndex)> _onTabSelected;
+
+    /// Theme style key for the strip's own chrome (bottom separator rule,
+    /// empty-zone placeholder); shares the "tab" key with UITabButton.
+    std::string _styleKey = "tab";
 
     /// When the bar has no tabs, draw this placeholder text (and keep a
     /// header-sized height) so an empty zone is still a visible drop target

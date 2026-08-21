@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 namespace ya
@@ -58,10 +59,15 @@ struct YA_GUI_API UIScrollViewport : public UIElement
     // === Scrollbar ===
     /// Draw a vertical scrollbar along the right edge when the content
     /// overflows (configurable style; set _bShowScrollbar = false to hide).
-    bool      _bShowScrollbar     = true;
-    float     _scrollbarWidth     = 8.0f;
-    glm::vec4 _scrollbarTrackColor = {0.10f, 0.11f, 0.14f, 0.9f};
-    glm::vec4 _scrollbarThumbColor = {0.34f, 0.38f, 0.46f, 1.0f};
+    bool _bShowScrollbar = true;
+
+    /// Theme style key (style-system Phase 2/3). paintSelf resolves
+    /// FScrollBarStyle by this key (track/thumb brushes + width) from the
+    /// tree theme; an empty key or absent theme falls back to the
+    /// default-constructed style — the framework fallback (Phase 3 cleanup:
+    /// no bare fields). _bShowScrollbar stays a behavior switch, not a style
+    /// attribute.
+    std::string _styleKey = "scrollbar";
 
     /// Whether the content can scroll at all (after the last layout).
     [[nodiscard]] bool isScrollable() const { return _scrollLayout.isScrollable(); }

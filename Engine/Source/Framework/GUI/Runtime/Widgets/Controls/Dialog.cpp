@@ -55,13 +55,11 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
         auto button = std::make_shared<UIButton>(name);
         button->_bAutoSize = true;
         button->setContentPadding({12.0f, 4.0f});
-        button->_normalColor  = {0.20f, 0.22f, 0.27f, 1.0f};
-        button->_hoveredColor = {0.27f, 0.30f, 0.37f, 1.0f};
-        button->_pressedColor = {0.14f, 0.16f, 0.20f, 1.0f};
+        // Dialog buttons resolve the "button"/"text" style keys from the
+        // mounted tree theme (style-system Phase 3 cleanup: no bare fields).
         auto text = std::make_shared<UIText>(name + "_Label");
         text->_bAutoSize = true;
         text->_fontSize  = 13;
-        text->_color     = {0.92f, 0.94f, 0.97f, 1.0f};
         text->_hAlign    = EWidgetAlignH::Center;
         text->_vAlign    = EWidgetAlignV::Center;
         text->setText(label);

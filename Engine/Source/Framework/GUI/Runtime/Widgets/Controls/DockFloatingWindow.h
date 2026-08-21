@@ -2,6 +2,7 @@
 
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockNode.h"
+#include "GUI/Widgets/Theme.h"
 
 #include <functional>
 #include <memory>
@@ -40,6 +41,13 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void clearTransientInputState() override;
+
+    /// Theme style key (style-system Phase 2/3). When the owning tree has a
+    /// theme that defines this key as an FFloatingWindowStyle, paintSelf
+    /// resolves body/inner/border + the resize-handle edge affordance from it,
+    /// and resize clamps read minSize from it. Empty key disables theme
+    /// resolution (framework fallback = FFloatingWindowStyle defaults).
+    std::string _styleKey = "floating";
 
     enum class EResizeEdge : uint8_t
     {

@@ -15,6 +15,7 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <format>
@@ -61,9 +62,8 @@ void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
     demo.button = std::make_shared<UIButton>("ClickButton");
     demo.button->setPosition({16.0f, 100.0f});
     demo.button->setSize({150.0f, 44.0f});
-    demo.button->_normalColor  = {0.22f, 0.48f, 0.86f, 1.0f};
-    demo.button->_hoveredColor = {0.32f, 0.58f, 0.96f, 1.0f};
-    demo.button->_pressedColor = {0.14f, 0.34f, 0.66f, 1.0f};
+    // Button fills come from the mounted theme ("button" key) — style-system
+    // Phase 3 cleanup removed the bare color fields (see FSmokeApp::buildUI).
 
     demo.buttonLabel = std::make_shared<UIText>("ButtonLabel");
     demo.buttonLabel->setSize({150.0f, 44.0f});
@@ -91,9 +91,25 @@ void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
 
 struct FSmokeApp final : IGUIAppDelegate
 {
-    void buildUI(WidgetTree& tree) override { buildDemoContent(tree, demo); }
+    void buildUI(WidgetTree& tree) override
+    {
+        // Theme CONTENT (style-system Phase 4): the smoke app owns a small
+        // UITheme that gives its demo button the blue look; the framework
+        // only resolves + invalidates. The theme must outlive buildUI
+        // (WidgetTree stores a raw pointer).
+        theme = std::make_shared<ya::UITheme>();
+        auto style       = ya::FButtonStyle{};
+        style.normalFill = ya::FBrush::Solid({0.22f, 0.48f, 0.86f, 1.0f});
+        style.hoveredFill = ya::FBrush::Solid({0.32f, 0.58f, 0.96f, 1.0f});
+        style.pressedFill = ya::FBrush::Solid({0.14f, 0.34f, 0.66f, 1.0f});
+        theme->define<ya::FButtonStyle>("button", style);
+        tree.setTheme(theme.get());
+
+        buildDemoContent(tree, demo);
+    }
 
     FMinimalUIDemo demo;
+    std::shared_ptr<ya::UITheme> theme;
 };
 
 } // namespace

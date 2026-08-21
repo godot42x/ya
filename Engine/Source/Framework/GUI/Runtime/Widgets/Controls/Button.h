@@ -26,10 +26,6 @@ namespace ya
 struct YA_GUI_API UIButton : public UIElement
 {
     YA_REFLECT_BEGIN(UIButton, UIElement)
-    YA_REFLECT_FIELD(_normalColor, .instanceEditable())
-    YA_REFLECT_FIELD(_hoveredColor, .instanceEditable())
-    YA_REFLECT_FIELD(_pressedColor, .instanceEditable())
-    YA_REFLECT_FIELD(_focusedColor, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIButton(std::string name = "Button") : UIElement(std::move(name))
@@ -42,15 +38,11 @@ struct YA_GUI_API UIButton : public UIElement
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIButton>; }
 
-    glm::vec4 _normalColor  = {0.8f, 0.8f, 0.8f, 1.0f};
-    glm::vec4 _hoveredColor = {0.6f, 0.6f, 0.6f, 1.0f};
-    glm::vec4 _pressedColor = {0.4f, 0.4f, 0.4f, 1.0f};
-    glm::vec4 _focusedColor = {0.26f, 0.52f, 0.90f, 1.0f};
-
-    /// Theme style key (style-system Phase 2/3). When the owning tree has a
-    /// theme that defines this key as an FButtonStyle, paintSelf resolves from
-    /// it (per-state FBrush); otherwise the bare color fields above are the
-    /// framework fallback. Empty key disables theme resolution.
+    /// Theme style key (style-system Phase 2/3). paintSelf resolves
+    /// FButtonStyle by this key (per-state FBrush incl. disabledFill) from
+    /// the tree theme; an empty key or an absent theme falls back to the
+    /// default-constructed FButtonStyle — the framework fallback. There are
+    /// no bare per-state color fields anymore (Phase 3 cleanup).
     std::string _styleKey = "button";
 
     [[nodiscard]] UISingleChildLayout& getContentLayout() { return _contentLayout; }

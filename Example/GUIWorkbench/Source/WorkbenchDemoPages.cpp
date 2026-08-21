@@ -40,10 +40,8 @@ namespace
 
 constexpr glm::vec4 kPanelColor   = {0.11f, 0.12f, 0.15f, 1.0f};
 constexpr glm::vec4 kHeaderColor  = {0.55f, 0.60f, 0.68f, 1.0f};
-constexpr glm::vec4 kButtonNormal  = {0.20f, 0.22f, 0.27f, 1.0f};
-constexpr glm::vec4 kButtonHovered = {0.27f, 0.30f, 0.37f, 1.0f};
-constexpr glm::vec4 kButtonPressed = {0.14f, 0.16f, 0.20f, 1.0f};
-constexpr glm::vec4 kButtonFocused = {0.24f, 0.46f, 0.82f, 1.0f};
+// Button fills come from the mounted WorkbenchTheme ("button" key); these
+// scaffold values were the pre-theme source and are retired (Phase 4).
 constexpr glm::vec4 kTextColor    = {0.88f, 0.90f, 0.94f, 1.0f};
 
 std::shared_ptr<ya::UIText> makeLabel(const std::string& text, float fontSize = 13.0f)
@@ -76,16 +74,13 @@ std::shared_ptr<ya::UIButton> makeDemoButton(const std::string& name, const std:
         button->_bAutoSize      = true;
         button->setContentPadding({12.0f, 4.0f});
     }
-    button->_normalColor  = kButtonNormal;
-    button->_hoveredColor = kButtonHovered;
-    button->_pressedColor = kButtonPressed;
-    button->_focusedColor = kButtonFocused;
 
     auto text = std::make_shared<ya::UIText>(name + "_Label");
     text->_bAutoSize = true;
     text->_fontSize  = 13;
     text->setText(label);
-    text->_color     = {0.92f, 0.94f, 0.97f, 1.0f};
+    // No authored color: the label resolves the theme "text" style, so a
+    // light theme flips button labels to dark text (style-system Phase 4).
     text->_hAlign    = ya::EWidgetAlignH::Center;
     text->_vAlign    = ya::EWidgetAlignV::Center;
     button->addDetachedChild(text);
@@ -757,7 +752,8 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
 }
 
 void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
-                      const std::function<void(const std::string&)>& log)
+                      const std::function<void(const std::string&)>& log,
+                      const std::function<void(bool bDark)>& onToggleTheme)
 {
     auto panel = std::make_shared<ya::UIPanel>("GalleryDemo");
     panel->_anchorMin = {0.0f, 0.0f};
@@ -1036,59 +1032,35 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     tree.attach(*form, selectedLabel);
 
     // ---------------------------------------------------------------------
-    // Section 3 — Style system. A UIStyleSet holds named styles; a style is
-    // a Reactive<FWidgetStyle>, so mutating it via set() repaints every
-    // widget bound to it without touching per-widget color fields.
+    // Section 3 — Style system. The tree-level UITheme (WorkbenchTheme,
+    // mounted on the WidgetTree by the app) resolves the "text" key: editing
+    // one named style in the theme restyles every un-authored text that opt
+    // in (badges below). The legacy FWidgetStyle/bindStyle path is retired
+    // from app content (style-system Phase 4, unified binding path).
     // ---------------------------------------------------------------------
-    tree.attach(*form, makeLabel("3. Style system — one edit restyles the group"));
-
-    auto styleSet = std::make_shared<ya::UIStyleSet>();
-    // Define the theme ONCE and mutate the returned handle with set().
-    // Re-defining the same name would replace the handle and orphan every
-    // binding that captured the previous one (they would never repaint).
-    const ya::FWidgetStyle kDarkTheme{
-        .fillColor = {0.16f, 0.18f, 0.22f, 1.0f},
-        .textColor = {0.82f, 0.86f, 0.92f, 1.0f},
-        .fontSize  = 14,
-        .padding   = {8.0f, 4.0f},
-    };
-    const ya::FWidgetStyle kWhiteTheme{
-        .fillColor = {0.94f, 0.95f, 0.97f, 1.0f},
-        .textColor = {0.10f, 0.12f, 0.16f, 1.0f},
-        .fontSize  = 14,
-        .padding   = {8.0f, 4.0f},
-    };
-    auto themeRef = styleSet->define("theme", kDarkTheme);
-
-    // Buttons outlive this builder function: capture only values/shared_ptrs.
-    // A [&] capture (styleSet / local bool / local FWidgetStyle) would dangle
-    // after the page is built and crash on the first click.
-    auto bDarkRef = std::make_shared<bool>(true);
-    const auto applyTheme = [themeRef, kDarkTheme, kWhiteTheme](bool bDark)
-    {
-        themeRef->set(bDark ? kDarkTheme : kWhiteTheme);
-    };
+    tree.attach(*form, makeLabel("3. Style system — tree theme restyles the group"));
 
     auto styledText = std::make_shared<ya::UIText>("GalleryStyledText");
     styledText->_bAutoSize = true;
     styledText->setText("Styled text (themed)");
     styledText->_bFillBackground = true;
-    styledText->bindStyle(themeRef);
     tree.attach(*form, styledText);
 
     auto styledCaption = std::make_shared<ya::UIText>("GalleryStyledCaption");
     styledCaption->_bAutoSize = true;
-    styledCaption->setText("Another themed text bound to the same style");
+    styledCaption->setText("Another themed text resolving the same \"text\" key");
     styledCaption->_bFillBackground = true;
-    styledCaption->bindStyle(themeRef);
     tree.attach(*form, styledCaption);
 
+    // Buttons outlive this builder function: capture only values/shared_ptrs.
+    auto bDarkRef = std::make_shared<bool>(true);
+
     auto themeButton = makeDemoButton("GalleryTheme", "Toggle theme (dark/white)", 260.0f);
-    themeButton->_onClick = [applyTheme, bDarkRef, log]
+    themeButton->_onClick = [bDarkRef, onToggleTheme, log]
     {
         *bDarkRef = !*bDarkRef;
-        applyTheme(*bDarkRef);
-        log(std::format("Style theme -> {}", *bDarkRef ? "dark" : "white"));
+        onToggleTheme(*bDarkRef);
+        log(std::format("Tree theme -> {}", *bDarkRef ? "dark" : "white"));
     };
     tree.attach(*form, themeButton);
 
@@ -1425,6 +1397,20 @@ void buildThemeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
     tree.attach(*form, showButton2);
 
     tree.attach(*form, makeLabel("(both buttons share style key \"button\")", 11.0f));
+
+    // A themed panel + text resolving the "panel"/"text" keys: proves the
+    // same resolve chain drives non-button controls (Phase 3 wiring). The
+    // panel fill follows the tree theme like the buttons above.
+    auto showPanel = std::make_shared<ya::UIPanel>("ThemeShowPanel");
+    showPanel->setSize({180.0f, 40.0f});
+    tree.attach(*form, showPanel);
+
+    auto panelCaption = std::make_shared<ya::UIText>("ThemeShowCaption");
+    panelCaption->_bAutoSize = true;
+    panelCaption->setText("Panel resolves style key \"panel\"");
+    panelCaption->_fontSize  = 11;
+    panelCaption->_color     = kHeaderColor;
+    tree.attach(*form, panelCaption);
 
     (void)state;
 }

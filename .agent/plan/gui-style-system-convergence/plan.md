@@ -160,6 +160,18 @@ style 系统不管（交给别的子系统）：
 
 **分阶段边界**：第一阶段落 brush（含 drawType + margin 九宫格字段，成本低，但决定 typed style 字段类型，越晚改破坏越大）；动画 tween、完整皮肤资源管线、字体 atlas 打包、DPI 断点系统推迟到第二阶段。Godot 的换 theme 机制（`NOTIFICATION_THEME_CHANGED` 树级通知 + 查询时解引用）印证 §3.2.1 的 B1 解法。
 
+## 3.6 Style key 命名约定（Phase 4 收尾落定）
+
+`<family>[.<role>]`——`family` 是框架 canonical 控件族，`role` 是主题内变体，点号分层。
+
+- **canonical family key（框架控件默认 `_styleKey`，theme 必须可驱动）**：
+  `text` / `panel` / `button` / `menubar` / `tab` / `split` / `scrollbar` / `dock` / `floating`。
+- **role 变体 key（shell/app 按角色选，theme 各自烘焙）**：
+  `panel.window`（WorkbenchRoot/DemoHost/EditorDemo）、`panel.canvas`（PreviewCanvas）、`panel`（通用表面，ItemList/Inspector）。
+- 后缀规则与业务语义解耦：role 表示「同一家族的不同表面角色」，不做状态后缀（状态是 typed style 内部字段，不是 key 维度）。
+- UITheme 定义的是 `define<TStyle>(key, style)` 的完整 key 集；resolve 不到 → 默认构造 TStyle = framework fallback。
+- editor/game 的命名空间（Phase 5 预留）：`panel.window` 已是通用形式；editor 用 `editor.*`、game 用 `game.*` 前缀时只在显式覆盖场景订 key（第一阶段不强制）。
+
 ## 4. 最小闭环设计
 
 第一阶段只做 retain-mode GUI shell 所需的最小闭环，不做大而全主题系统。

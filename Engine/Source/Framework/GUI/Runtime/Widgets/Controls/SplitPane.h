@@ -2,6 +2,7 @@
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Reactive.h"
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <memory>
@@ -52,9 +53,12 @@ struct YA_GUI_API UISplitPane : public UIElement
     [[nodiscard]] float getMinSecondExtent() const { return _splitLayout.getMinSecondExtent(); }
     [[nodiscard]] float getDividerThickness() const { return _splitLayout.getDividerThickness(); }
 
-    glm::vec4 _dividerColor          = {0.11f, 0.12f, 0.15f, 1.0f};
-    glm::vec4 _dividerHoveredColor   = {0.26f, 0.31f, 0.40f, 1.0f};
-    glm::vec4 _dividerDraggingColor  = {0.32f, 0.55f, 0.92f, 1.0f};
+    /// Theme style key (style-system Phase 2/3). paintSelf resolves
+    /// FSplitPaneStyle by this key (per-state divider brush) from the tree
+    /// theme; an empty key or absent theme falls back to the
+    /// default-constructed style — the framework fallback (Phase 3 cleanup:
+    /// no bare color fields).
+    std::string _styleKey = "split";
 
     // Drag session state (runtime only, not serialized)
     VisualFlag _bDraggingDivider{*this};

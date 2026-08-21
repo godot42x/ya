@@ -2,6 +2,7 @@
 
 #include "Core/Common/AssetRef.h"
 
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 namespace ya
@@ -21,11 +22,25 @@ struct YA_GUI_API UIPanel : public UIElement
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIPanel>; }
 
-    // Runtime mutable fill color (GI-202): highlight/selection presenters
-    // change this per frame, so it is a protected backing field with a
-    // changed-only setter and a getter.
+    /// Theme style key (style-system Phase 2/3). When the owning tree has a
+    /// theme that defines this key as an FPanelStyle AND the panel has no
+    /// explicitly authored fill (setColor never called), paintSelf resolves
+    /// the fill brush from it; explicit authoring and the bare fallback apply
+    /// otherwise. Empty key disables theme resolution.
+    std::string _styleKey = "panel";
+
+    /// Runtime mutable fill color (GI-202): highlight/selection presenters
+    /// change this per frame, so it is a protected backing field with a
+    /// changed-only setter and a getter.
   protected:
     glm::vec4 _color = {0.2f, 0.2f, 0.2f, 0.8f};
+    /// True once setColor() authored an explicit fill. Explicit authoring is
+    /// the widget-level override in the resolve chain (plan §3.2) and wins
+    /// over the theme's "panel" style; a panel WITHOUT an authored fill is
+    /// theme-driven. This keeps presenters that recolor panels per frame
+    /// (GI-202) immune to theme changes until they deliberately hand the
+    /// appearance to the theme.
+    bool _bExplicitFill = false;
   public:
     // Authoring-only (GI-202 exception list): set once at construction /
     // deserialization; no runtime business write path yet. To be encapsulated
@@ -40,7 +55,8 @@ struct YA_GUI_API UIPanel : public UIElement
         if (_color == value) {
             return;
         }
-        _color = value;
+        _color         = value;
+        _bExplicitFill = true;
         invalidateProperty(EUIPropertyImpact::Paint);
     }
     [[nodiscard]] const glm::vec4& getColor() const { return _color; }

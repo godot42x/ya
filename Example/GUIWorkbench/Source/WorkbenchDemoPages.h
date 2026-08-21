@@ -114,9 +114,12 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
 
 /// Feature gallery: one page that exercises the framework's reactive binding
 /// layer, the style system, and the data-driven TreeView — three capabilities
-/// that the other demo pages do not cover.
+/// that the other demo pages do not cover. `onToggleTheme(bDark)` switches
+/// the tree theme (the Gallery's themed-text section resolves the "text"
+/// key from it).
 void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
-                      const std::function<void(const std::string&)>& log);
+                      const std::function<void(const std::string&)>& log,
+                      const std::function<void(bool bDark)>& onToggleTheme);
 
 /// Interaction-completion page (editor-parity P6): tooltip, wrapped text,
 /// subtree disable and the modal dialog.

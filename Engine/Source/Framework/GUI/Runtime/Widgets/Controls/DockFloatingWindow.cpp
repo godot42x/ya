@@ -15,10 +15,8 @@ namespace ya
 
 namespace
 {
-constexpr float kMinFloatingWidth  = 220.0f;
-constexpr float kMinFloatingHeight = 160.0f;
-constexpr float kResizeThickness   = 6.0f;
-constexpr float kCornerGripSize    = 14.0f;
+constexpr float kResizeThickness = 6.0f;
+constexpr float kCornerGripSize  = 14.0f;
 
 struct FResizeHandle final : UIElement
 {
@@ -56,7 +54,17 @@ struct FResizeHandle final : UIElement
 
     void paintSelf(UIFrameBuilder& builder) override
     {
-        const glm::vec4 edgeColor = {0.40f, 0.47f, 0.62f, 0.42f};
+        // Theme resolution (style-system Phase 3): the edge affordance color
+        // comes from the owner window's FFloatingWindowStyle when its key
+        // resolves (same tree; the handle registers its own generation edge).
+        FFloatingWindowStyle style;
+        if (_owner && !_owner->_styleKey.empty()) {
+            if (const FFloatingWindowStyle* themed =
+                    resolveThemeStyle<FFloatingWindowStyle>(*this, _owner->_styleKey)) {
+                style = *themed;
+            }
+        }
+        const glm::vec4 edgeColor = style.edgeAffordance;
         switch (_edge) {
         case UIDockFloatingWindow::EResizeEdge::Left:
             builder.addSprite({_layoutRect.pos, {1.0f, _layoutRect.extent.y}}, edgeColor, nullptr);
@@ -218,11 +226,23 @@ void UIDockFloatingWindow::layoutAssigned(const Rect2D& rect)
 
 void UIDockFloatingWindow::paintSelf(UIFrameBuilder& builder)
 {
-    builder.addSprite(_layoutRect, {0.145f, 0.150f, 0.180f, 0.985f}, nullptr);
-    builder.addRectOutline(_layoutRect, {0.27f, 0.30f, 0.38f, 1.0f}, 1.0f);
+    // Theme resolution (style-system Phase 3): body / border / inner chrome
+    // from FFloatingWindowStyle when the key resolves; otherwise the
+    // default-constructed style is the fallback (no magic literals). Pure
+    // visual, Paint level (minSize is consumed by the resize interaction
+    // path, not layout).
+    FFloatingWindowStyle style;
+    if (!_styleKey.empty()) {
+        if (const FFloatingWindowStyle* themed =
+                resolveThemeStyle<FFloatingWindowStyle>(*this, _styleKey)) {
+            style = *themed;
+        }
+    }
+    builder.addBrush(_layoutRect, style.bodyFill);
+    builder.addRectOutline(_layoutRect, style.borderColor, 1.0f);
     builder.addRectOutline(
         Rect2D{_layoutRect.pos + glm::vec2{1.0f, 1.0f}, _layoutRect.extent - glm::vec2{2.0f, 2.0f}},
-        {0.08f, 0.09f, 0.12f, 0.55f}, 1.0f);
+        style.innerFill.tintColor, 1.0f);
 }
 
 void UIDockFloatingWindow::beginTabDrag()
@@ -274,10 +294,26 @@ void UIDockFloatingWindow::clearTransientInputState()
     UIContainer::clearTransientInputState();
 }
 
+/// Resolve the window's min size from its theme style (fallback = the
+/// framework-constructed FFloatingWindowStyle default minSize, which matches
+/// the historical constants). Interaction paths read this live; the theme
+/// edge is registered by paintSelf.
+static glm::vec2 floatingMinSize(const UIDockFloatingWindow& window)
+{
+    if (!window._styleKey.empty()) {
+        if (const FFloatingWindowStyle* style =
+                resolveThemeStyle<FFloatingWindowStyle>(window, window._styleKey)) {
+            return style->minSize;
+        }
+    }
+    return {220.0f, 160.0f};
+}
+
 void UIDockFloatingWindow::resizeTo(const glm::vec2& extent)
 {
-    _windowRect.extent.x = std::max(kMinFloatingWidth, extent.x);
-    _windowRect.extent.y = std::max(kMinFloatingHeight, extent.y);
+    const glm::vec2 minSize = floatingMinSize(*this);
+    _windowRect.extent.x    = std::max(minSize.x, extent.x);
+    _windowRect.extent.y    = std::max(minSize.y, extent.y);
 }
 
 Rect2D UIDockFloatingWindow::resizeHandleRect(EResizeEdge edge) const
@@ -305,31 +341,32 @@ Rect2D UIDockFloatingWindow::resizeHandleRect(EResizeEdge edge) const
 
 void UIDockFloatingWindow::applyResizeFromEdge(EResizeEdge edge, const glm::vec2& pointerDelta)
 {
-    const float right  = _windowRect.pos.x + _windowRect.extent.x;
-    const float bottom = _windowRect.pos.y + _windowRect.extent.y;
+    const float     right   = _windowRect.pos.x + _windowRect.extent.x;
+    const float     bottom  = _windowRect.pos.y + _windowRect.extent.y;
+    const glm::vec2 minSize = floatingMinSize(*this);
 
     switch (edge) {
     case EResizeEdge::Left: {
-        const float nextLeft = std::min(_windowRect.pos.x + pointerDelta.x, right - kMinFloatingWidth);
+        const float nextLeft = std::min(_windowRect.pos.x + pointerDelta.x, right - minSize.x);
         _windowRect.pos.x    = nextLeft;
         _windowRect.extent.x = right - nextLeft;
         break;
     }
     case EResizeEdge::Right:
-        _windowRect.extent.x = std::max(kMinFloatingWidth, _windowRect.extent.x + pointerDelta.x);
+        _windowRect.extent.x = std::max(minSize.x, _windowRect.extent.x + pointerDelta.x);
         break;
     case EResizeEdge::Top: {
-        const float nextTop = std::min(_windowRect.pos.y + pointerDelta.y, bottom - kMinFloatingHeight);
+        const float nextTop = std::min(_windowRect.pos.y + pointerDelta.y, bottom - minSize.y);
         _windowRect.pos.y   = nextTop;
         _windowRect.extent.y = bottom - nextTop;
         break;
     }
     case EResizeEdge::Bottom:
-        _windowRect.extent.y = std::max(kMinFloatingHeight, _windowRect.extent.y + pointerDelta.y);
+        _windowRect.extent.y = std::max(minSize.y, _windowRect.extent.y + pointerDelta.y);
         break;
     case EResizeEdge::BottomRight:
-        _windowRect.extent.x = std::max(kMinFloatingWidth, _windowRect.extent.x + pointerDelta.x);
-        _windowRect.extent.y = std::max(kMinFloatingHeight, _windowRect.extent.y + pointerDelta.y);
+        _windowRect.extent.x = std::max(minSize.x, _windowRect.extent.x + pointerDelta.x);
+        _windowRect.extent.y = std::max(minSize.y, _windowRect.extent.y + pointerDelta.y);
         break;
     }
 }

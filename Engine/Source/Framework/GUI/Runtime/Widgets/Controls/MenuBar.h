@@ -3,6 +3,7 @@
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Reactive.h"
+#include "GUI/Widgets/Theme.h"
 
 #include <functional>
 #include <memory>
@@ -17,18 +18,19 @@ struct YA_GUI_API UIMenuBarItem : public UIElement
     YA_REFLECT_BEGIN(UIMenuBarItem, UIElement)
     YA_REFLECT_FIELD(_label, .instanceEditable())
     YA_REFLECT_FIELD(_fontSize, .instanceEditable())
-    YA_REFLECT_FIELD(_textColor, .instanceEditable())
-    YA_REFLECT_FIELD(_normalColor, .instanceEditable())
-    YA_REFLECT_FIELD(_hoveredColor, .instanceEditable())
     YA_REFLECT_END()
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIMenuBarItem>; }
 
     std::string _label;
-    uint32_t    _fontSize    = 13;
-    glm::vec4   _textColor   = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4   _normalColor = {0.10f, 0.11f, 0.13f, 1.0f};
-    glm::vec4   _hoveredColor = {0.20f, 0.22f, 0.27f, 1.0f};
+    uint32_t    _fontSize = 13;
+
+    /// Theme style key (style-system Phase 2/3). paintSelf resolves
+    /// FMenuBarItemStyle by this key (normal/hovered fill brushes + label
+    /// color) from the tree theme; an empty key or absent theme falls back to
+    /// the default-constructed style — the framework fallback (Phase 3
+    /// cleanup: no bare color fields).
+    std::string _styleKey = "menubar";
 
     /// Fired on click / Space / Enter (the bar opens the menu).
     std::function<void()> _onActivate;

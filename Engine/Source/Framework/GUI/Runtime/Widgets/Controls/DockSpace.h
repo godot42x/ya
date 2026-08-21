@@ -3,6 +3,7 @@
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/Controls/DockNode.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Theme.h"
 
 #include <memory>
 #include <optional>
@@ -48,6 +49,12 @@ struct YA_GUI_API UIDockSpace : public UIElement
     void onDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
     void setDropHighlight(bool bHighlight) override;
     void clearTransientInputState() override;
+
+    /// Theme style key (style-system Phase 2/3). When the owning tree has a
+    /// theme that defines this key as an FDockSpaceStyle, paintSelf resolves
+    /// the canvas + drop-preview brushes from it; otherwise the literals in
+    /// paintSelf are the fallback. Empty key disables theme resolution.
+    std::string _styleKey = "dock";
 
     [[nodiscard]] bool hasDropPreview() const { return _preview.has_value(); }
     [[nodiscard]] bool isDropPreviewDisabled() const { return _preview.has_value() && _preview->bDisabled; }

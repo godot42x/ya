@@ -51,22 +51,24 @@
 
 ## Phase 3 — 第一批控件接入
 
-- [ ] UIText -> FTextStyle
-- [ ] UIPanel -> FPanelStyle
-- [ ] UIButton -> FButtonStyle
-- [ ] UIMenuBarItem/UIMenuBar -> FMenuBarItemStyle
-- [ ] UITabButton/UITabBar -> FTabStyle
-- [ ] UISplitPane -> FSplitPaneStyle（divider 三态）
-- [ ] UIDockSpace -> FDockSpaceStyle
-- [ ] UIDockFloatingWindow -> FFloatingWindowStyle
-- [ ] **resolve 读取路径契约**：paint 属性在 paintSelf 内走 `Reactive<T>::get()`，禁止缓存 resolved style 进成员（防 layout→paint 漏标脏）
+- [x] UIText -> FTextStyle（_styleKey="text"，resolvedStyle→FTextStyle，FTextStyle 补 fillColor/padding；legacy bindStyle 保留为 fallback）
+- [x] UIPanel -> FPanelStyle（_styleKey="panel"；显式 setColor() 覆盖胜出，未显式着色才 theme 驱动）
+- [x] UIButton -> FButtonStyle（前轮活样本）
+- [x] UIMenuBarItem/UIMenuBar -> FMenuBarItemStyle（_styleKey="menubar"）
+- [x] UITabButton/UITabBar -> FTabStyle（_styleKey="tab"，Layout 粒度；strip chrome 入 FTabStyle）
+- [x] UISplitPane -> FSplitPaneStyle（divider 三态，_styleKey="split"）
+- [x] UIScrollViewport scrollbar -> FScrollBarStyle（_styleKey="scrollbar"，track/thumb brush + width）
+- [x] UIDockSpace -> FDockSpaceStyle（_styleKey="dock"，canvas+preview）
+- [x] UIDockFloatingWindow -> FFloatingWindowStyle（_styleKey="floating"，body/border/minSize/resize affordance）
+- [x] **resolve 读取路径契约**：paint 属性在 paintSelf 内走 `Reactive<T>::get()`，禁止缓存 resolved style 进成员（TabButton/SplitPane/ScrollViewport/Dock/Floating 均已按此接线；UIText 沿用 _bAutoSize 粒度判据）
 
 ## Phase 4 — Workbench theme
 
-- [ ] 定义 WorkbenchTheme
-- [ ] FWorkbenchSurface 改为使用 theme key，而不是手工 child 覆写
-- [ ] Dock demo / Editor demo / 通用 gallery 页统一接入 theme
-- [ ] 产出截图与回归基线
+- [x] 定义 WorkbenchTheme（WorkbenchTheme.h：tokens 层 + buildWorkbenchTheme(dark/light)，全部 canonical key 配置期烘焙）
+- [x] FWorkbenchSurface 改用 theme key（壳层 chrome 交回 panel.window/panel.canvas/panel；highlight 保留显式色；toolbar label 走 text key）
+- [x] Dock demo / Editor demo / 通用 gallery 页统一接入 theme（canonical key 全部经 WorkbenchTheme；Gallery Section 3 迁移到 tree theme，FWidgetStyle/bindStyle app 消费点清零）
+- [ ] 产出截图与回归基线（headless draw item 三层颜色翻转已验；golden/gpu-shot 基线待收尾归档）
+- [x] **清理刀**：已迁移控件裸颜色字段全部删除（Button/MenuBarItem/TabButton/SplitPane/ScrollViewport/Dock/Floating），fallback=默认构造 TStyle；WorkbenchSurface 遍历覆写循环删除（AM-2 收口）；消费点迁移完成（含 Dialog/GUIFrameworkSmoke/两测试）
 
 ## Phase 5 — 复用与扩展
 

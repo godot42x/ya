@@ -1,4 +1,5 @@
 #include "GUI/Tooling/Workbench/WorkbenchSurface.h"
+#include "GUI/Tooling/Workbench/WorkbenchTheme.h"
 
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
@@ -29,14 +30,12 @@ namespace guiworkbench
 namespace
 {
 
-constexpr glm::vec4 kWindowColor   = {0.075f, 0.082f, 0.10f, 1.0f};
-constexpr glm::vec4 kPanelColor    = {0.11f, 0.12f, 0.15f, 1.0f};
-constexpr glm::vec4 kCanvasColor   = {0.05f, 0.055f, 0.07f, 1.0f};
-constexpr glm::vec4 kHeaderColor   = {0.55f, 0.60f, 0.68f, 1.0f};
-constexpr glm::vec4 kButtonNormal  = {0.00f, 0.09f, 0.27f, 1.0f};
-constexpr glm::vec4 kButtonHovered = {0.57f, 0.30f, 0.37f, 1.0f};
-constexpr glm::vec4 kButtonPressed = {0.14f, 0.16f, 0.20f, 1.0f};
-constexpr glm::vec4 kButtonFocused = {0.24f, 0.46f, 0.82f, 1.0f};
+// The shell chrome reads its palette from the theme tokens (style-system
+// Phase 4); the values below mirror the token names for legacy refs. Labels
+// keep their authored token colors (explicit-authoring wins over the theme
+// in the resolve chain), so headers/status stay hierarchy-stable under any
+// mounted theme.
+constexpr glm::vec4 kHeaderColor = guiworkbench::tokens::kHeaderColor;
 
 std::shared_ptr<ya::UIButton> makeToolButton(const std::string& name, const std::string& label, float width = 0.0f)
 {
@@ -50,17 +49,14 @@ std::shared_ptr<ya::UIButton> makeToolButton(const std::string& name, const std:
         button->_bAutoSize      = true;
         button->setContentPadding({10.0f, 4.0f});
     }
-    button->_normalColor  = kButtonNormal;
-    button->_hoveredColor = kButtonHovered;
-    button->_pressedColor = kButtonPressed;
-    button->_focusedColor = kButtonFocused;
 
     auto text = std::make_shared<ya::UIText>(name + "_Label");
     text->_bAutoSize = true;
     text->setVisibility(ya::EWidgetVisibility::SelfHitTestInvisible);
     text->_fontSize  = 14;
     text->setText(label);
-    text->_color     = {0.92f, 0.94f, 0.97f, 1.0f};
+    // No authored color: the label resolves the theme "text" style, so a
+    // light theme flips button labels to dark text (style-system Phase 4).
     text->_hAlign    = ya::EWidgetAlignH::Center;
     text->_vAlign    = ya::EWidgetAlignV::Center;
     button->addDetachedChild(text);
@@ -102,7 +98,10 @@ void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
     _root = std::make_shared<ya::UIPanel>("WorkbenchRoot");
     _root->_anchorMin = {0.0f, 0.0f};
     _root->_anchorMax = {1.0f, 1.0f};
-    _root->setColor(kWindowColor);
+    // Shell chrome resolves its fill from the mounted theme (Phase 4): the
+    // window key drives the root backdrop; no authored color so the
+    // white/dark toggle restyles the whole shell.
+    _root->_styleKey = "panel.window";
     tree.attachToLayer(ya::WidgetTree::ELayer::Content, _root);
 
     buildMenuBar(tree, *_root);
@@ -188,18 +187,10 @@ void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent
         });
     });
 
-    // Theme the bar items so hover is actually visible: the UIMenuBarItem
-    // default normal color (0.10) sits almost on top of the window background
-    // (0.075), so an un-themed bar reads as a flat dark strip with no hover
-    // feedback. Lift both stops above the background and widen the gap.
-    constexpr glm::vec4 kMenuBarNormal  = {0.16f, 0.18f, 0.22f, 1.0f};
-    constexpr glm::vec4 kMenuBarHovered = {0.30f, 0.33f, 0.40f, 1.0f};
-    for (const auto& child : _menuBar->getChildren()) {
-        if (auto* item = dynamic_cast<ya::UIMenuBarItem*>(child.get())) {
-            item->_normalColor  = kMenuBarNormal;
-            item->_hoveredColor = kMenuBarHovered;
-        }
-    }
+    // The bar items resolve the "menubar" style from the mounted
+    // WorkbenchTheme (Phase 4): its normal/hovered stops are lifted above the
+    // window background so hover is visible. No per-item color writes — the
+    // shell no longer traverses children to re-style controls.
 }
 
 void FWorkbenchSurface::buildTabBar(ya::WidgetTree& tree, ya::UIElement& parent)
@@ -224,7 +215,8 @@ void FWorkbenchSurface::buildDemoHost(ya::WidgetTree& tree, ya::UIElement& paren
     _demoHost = std::make_shared<ya::UIPanel>("DemoHost");
     _demoHost->_anchorMin = {0.0f, 0.085f};
     _demoHost->_anchorMax = {1.0f, 0.94f};
-    _demoHost->setColor(kWindowColor);
+    // Theme-driven shell chrome (Phase 4): same window key as the root.
+    _demoHost->_styleKey = "panel.window";
     tree.attach(parent, _demoHost);
 }
 
@@ -313,7 +305,8 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
     auto editorPanel = std::make_shared<ya::UIPanel>("EditorDemo");
     editorPanel->_anchorMin = {0.0f, 0.0f};
     editorPanel->_anchorMax = {1.0f, 1.0f};
-    editorPanel->setColor(kWindowColor);
+    // Theme-driven shell chrome (Phase 4): window key.
+    editorPanel->_styleKey = "panel.window";
     tree.attach(parent, editorPanel);
 
     buildToolbar(tree, *editorPanel);
@@ -376,7 +369,8 @@ void FWorkbenchSurface::buildDocumentList(ya::WidgetTree& tree, ya::UIElement& p
     _listPanel = std::make_shared<ya::UIPanel>("ItemList");
     _listPanel->_anchorMin = {0.0f, 0.0f};
     _listPanel->_anchorMax = {1.0f, 1.0f};
-    _listPanel->setColor(kPanelColor);
+    // Theme-driven shell chrome (Phase 4): the generic panel key.
+    _listPanel->_styleKey = "panel";
     tree.attach(parent, _listPanel);
 
     auto header = makeHeaderText("ITEMS");
@@ -405,7 +399,8 @@ void FWorkbenchSurface::buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent)
     _canvasPanel = std::make_shared<ya::UIPanel>("PreviewCanvas");
     _canvasPanel->_anchorMin = {0.0f, 0.0f};
     _canvasPanel->_anchorMax = {1.0f, 1.0f};
-    _canvasPanel->setColor(kCanvasColor);
+    // Theme-driven shell chrome (Phase 4): the canvas key.
+    _canvasPanel->_styleKey = "panel.canvas";
     tree.attach(parent, _canvasPanel);
 
     auto header = makeHeaderText("PREVIEW");
@@ -435,7 +430,8 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     auto inspectorPanel = std::make_shared<ya::UIPanel>("Inspector");
     inspectorPanel->_anchorMin = {0.0f, 0.0f};
     inspectorPanel->_anchorMax = {1.0f, 1.0f};
-    inspectorPanel->setColor(kPanelColor);
+    // Theme-driven shell chrome (Phase 4): the generic panel key.
+    inspectorPanel->_styleKey = "panel";
     tree.attach(parent, inspectorPanel);
 
     auto form = std::make_shared<ya::UIContainer>("InspectorForm");

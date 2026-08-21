@@ -72,10 +72,20 @@ void UISplitPane::paintChildren(UIFrameBuilder& builder)
 
 void UISplitPane::paintSelf(UIFrameBuilder& builder)
 {
-    const glm::vec4 color = _bDraggingDivider
-                                ? _dividerDraggingColor
-                                : (_bHoveredDivider ? _dividerHoveredColor : _dividerColor);
-    builder.addSprite(_splitLayout.getDividerRect(), color, nullptr);
+    // Theme resolution (style-system Phase 3): the divider draws its
+    // per-state brush (normal / hovered / dragging) from FSplitPaneStyle.
+    // Pure color, Paint level. Absent key/theme → default-constructed style
+    // is the framework fallback (Phase 3 cleanup: no bare fields).
+    FSplitPaneStyle style;
+    if (!_styleKey.empty()) {
+        if (const FSplitPaneStyle* themed = resolveThemeStyle<FSplitPaneStyle>(*this, _styleKey)) {
+            style = *themed;
+        }
+    }
+    const FBrush& fill = _bDraggingDivider
+                             ? style.dividerDraggingFill
+                             : (_bHoveredDivider ? style.dividerHoveredFill : style.dividerFill);
+    builder.addBrush(_splitLayout.getDividerRect(), fill);
 }
 
 bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext& ctx)

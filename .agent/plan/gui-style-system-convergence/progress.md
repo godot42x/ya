@@ -185,3 +185,126 @@
 
 **Phase 2 至此完整**：UIStyleSet 泛型化 + UITheme + WidgetTree 挂载 + generation token + resolveThemeStyle + UIButton 接线活样本 + white/dark 端到端验收，全部落地。剩余主线：Phase 3 其余控件接线（Panel/MenuBar/Tab/SplitPane/ScrollBar/Dock/Floating）、Phase 4 Workbench 主题接入、Phase 5 Editor/Game 留口。
 
+
+## 2026-08-22 — Phase 3 剩余 8 控件接线（第一刀完整收口）
+
+### 本轮完成
+
+- **FTabStyle/FDockSpaceStyle/FTextStyle 补字段**（paint 实际消费值，默认=现状字面量）：
+  - FTextStyle += fillColor（brush）+ padding（文本 badge/chip 背景）；FWidgetStyle 仍是 legacy 兼容路径（UIText bindStyle）
+  - FTabStyle += separatorColor + placeholderTextColor（tab strip 底部分隔线 / 空区占位）
+  - FDockSpaceStyle += dropPreviewMergeColor + dropPreviewOutlineColor
+- **8 个控件从 typed style resolve（theme-first，裸字段 fallback，零视觉变化）**：
+  - UIText：`_styleKey="text"`，resolvedStyle 返回 FTextStyle，resolve 顺序 = theme key → legacy FWidgetStyle 绑定 → authoring 字段（_bAutoSize 时 Layout 粒度）
+  - UIPanel：`_styleKey="panel"`；**显式 setColor() 覆写胜出**（resolve 链「widget explicit override」优先，GI-202 presenter 每帧改色不受 theme 影响），未显式着色面板才 theme 驱动
+  - UIMenuBarItem：`_styleKey="menubar"`，normal/hovered fill brush + textColor
+  - UITabButton：`_styleKey="tab"`，**Layout 粒度**（padding 喂 computeDesiredSize）
+  - UITabBar：strip 分隔线 + 占位文本从 FTabStyle 取（无条件登记 generation 边）
+  - UISplitPane：`_styleKey="split"`，divider 三态 brush
+  - UIScrollViewport：`_styleKey="scrollbar"`，track/thumb brush + width（Paint 粒度，宽度不影响布局）
+  - UIDockSpace：`_styleKey="dock"`，canvas + 合并/拆分 drop preview + outline
+  - UIDockFloatingWindow：`_styleKey="floating"`，body/inner/border + resize handle edge affordance（ResizeHandle 经 owner key resolve）+ resize clamp 读 style minSize（floatingMinSize helper，交互路径实时读、paint 登记 generation 边）
+- **UIPanel 显式填充语义（架构决策）**：plan §3.2 resolve 链「widget explicit override 优先」落地——面板 `setColor()` 是显式 per-instance 填充意图（GI-202 运行时彩色面板），theme 仅驱动未显式着色的面板。WorkbenchSurface/各 demo 页带 setColor 的面板全部保持原外观；ThemeShowPanel（无显式色）为 theme 驱动样本。Phase 4 把壳层面板 setColor 删掉交回 theme key 即完成「壳层 theme 驱动」。
+
+### 端到端验收（新增 panel 活样本 + 场景 + 测试）
+
+- FWorkbenchApp dark/light 两个 theme 各 define `"panel"`（FBrush::Solid，dark 0.14/0.16/0.20 vs light 0.94/0.95/0.97）；
+- Theme 页新增 ThemeShowPanel（style key "panel"，无 authored color）+ 说明文本；
+- theme.jsonl 场景补 `{"assert":{"widget":"ThemeShowPanel"}}`（dark/light 双 checkpoint），--scenario-render 真机跑通 + assert_validation_clean 通过（整树重绘零漏标脏）；
+- **draw item 层颜色翻转验证（--headless + --dump-snapshot-json）**：panel sprite dark `(0.14,0.16,0.20)` → light `(0.94,0.95,0.97)`，精确匹配两 theme 的 FPanelStyle.fillColor；壳层 backdrop 保持 kWindowColor `(0.075,0.082,0.10)`（显式填充胜出生效）；
+- **新增 gtest `PanelResolvesThemeStyleAndRepaintsOnThemeSwitch`**（UIFrameSnapshotTest）：挂 tree theme → panel sprite == themed fill；setTheme 换 theme → `rebuiltWidgets == 1`（只有 panel 重绘，generation token 失效边在非 button 控件上定量验证）；换 theme 后 sprite == 新 fill。
+
+### 本轮验证
+
+- xmake b ya-gui-widgets / GUIWorkbench / ya-gui-widgets-test 全过；
+- ya-gui-widgets-test：136/140 通过（含新增 1 条）；5 个失败为**预存失败**（git stash 对照确认与本次改动无关：BuildResolvesItemsToRenderPixelsInPaintOrder / ScrollViewportClipsContentToViewportRect / SplitPaneClipsChildrenToOwnPaneRect / ContainerClipResizeInvalidatesChildSegments / SplitPaneDividerDragChangesRatioAndEndsSession）；
+- ya-gui-closure-test 的 Render2DClipTest include 错误仍为预存问题；
+- theme.jsonl 真机 scenario exit 0。
+
+### 当前未完成 / 风险
+
+- 控件裸字段（_normalColor 等）仍保留为 fallback，Phase 3 收尾的「删除裸字段」清理刀未做（行为安全，等全部接线后统一删）；
+- UIMenuBarItem/UIMenuBar 的 fontSize 仍为控件字段，FMenuBarItemStyle 未含 fontSize；
+- FTextStyle 的 "text" key 未在 Workbench theme 定义（全局文本换肤属 Phase 4）；
+- NinePatch UV 切片（brush 能力扩展）仍缓做。
+
+### 下一轮直接接力点
+
+1. Phase 3 收尾：全量回归跑 Workbench 既有 scenario（menus/dock/tab/floating/resize），确认 shell 外观零变化；
+2. Phase 4：WorkbenchTheme（token 常量 → typed style 烘焙），FWorkbenchSurface 壳层 setColor 交回 theme key，"text" 全局接入，editor/gallery 页统一；
+3. 阶段尾声清理刀：删控件裸颜色字段（__normalColor 等），FWidgetStyle 去留定案。
+
+## 2026-08-22 — Phase 4 第一刀：WorkbenchTheme + 壳层主题化 + Gallery 统一绑定路径
+
+### 本轮完成
+
+- **新增 WorkbenchTheme**（Framework/GUI/Tooling/Workbench/WorkbenchTheme.h，plan §6 owner 落位）：
+  - design token 层：tokens 命名空间（kWindowColor/kPanelColor/kCanvasColor/kHeaderColor/kTextColor + 按钮 dark 调色板 + **light 全景调色板**）；
+  - `buildWorkbenchTheme(bool bDark)` 配置期烘焙（plan §3.4）dark/light 两套 UITheme，定义全部 canonical key：button/panel/panel.window/panel.canvas/menubar/tab/split/scrollbar/dock/floating/text；
+  - 壳层旧字面量 kWindowColor 等迁入 token，WorkbenchSurface/演示页不再平行定义。
+- **FWorkbenchSurface 壳层主题化**（不再手工 setColor 覆写壳层）：
+  - WorkbenchRoot/DemoHost/EditorDemo → `panel.window` key；PreviewCanvas → `panel.canvas`；ItemList/Inspector → `panel`；SelectionHighlight 保留显式 setColor（每帧选择色，explicit override 契约）；
+  - 壳层工具栏按钮 label 去掉 authored color → 走 theme "text" key（light 主题给出深色文本，light 按钮可读）；
+  - 壳层 label/status/header 保留 authored token 色（树级 header 层级稳定）。
+- **UIText 显式 authored 色语义**（与 UIPanel 同契约，plan §3.2 explicit override 优先）：非默认 `_color` 的文本不被 theme 覆盖（header/body/status 层级在两种主题下稳定）；未着色文本（按钮 label、主题 badge）由 theme "text" 驱动。
+- **Gallery Section 3 迁移到统一绑定路径**（plan 统一绑定路径刀）：
+  - 删掉本地 UIStyleSet/FWidgetStyle theme + bindStyle 用法（app 层不再有 FWidgetStyle 消费点）；badge 文本走 theme "text" key；
+  - GalleryTheme 按钮改为切 tree theme（onToggleTheme 回调，GUIWorkbench 注入）；
+  - UIText::bindStyle / UIStyleSet::bindTo 保留为 legacy 兼容（闭包测试仍用），后续 Phase 3 收尾定 FWidgetStyle 去留。
+
+### 端到端验收（--headless --dump-snapshot-json，draw item 层）
+
+- shell root（panel.window）：dark (0.075,0.082,0.10) → light (0.86,0.87,0.89) —— **壳层整体随 theme 翻转**；
+- 按钮 label（text key）：dark (0.88,0.90,0.94) → light (0.10,0.12,0.16) —— un-authored 文本可读翻转；
+- demo 面板（panel key）：dark (0.11,0.12,0.15) → light (0.93,0.94,0.96)；
+- Gallery 徽章文本解析 theme "text" 色 (0.88,0.90,0.94) ✓。
+
+### 回归确认
+
+- **menus_popup_interaction 失败为预存问题**（A/B 对照：91ded16e 基线同样 rc=4，同样 assertion "expected popup but got hitTest"；跟 uv 会话无关）；
+- 全量 scenario 20/21（唯一失败 = 预存 menus）；
+- ya-gui-widgets-test 136/140（新增 PanelResolves... 通过；5 失败预存）；
+- widgets/gallery/theme 关键场景 rc=0；theme.jsonl validation_clean 通过。
+
+### 当前未完成 / 风险
+
+- "text" key 的 fontSize（13）会覆盖 toolbar label 的 authored 14 —— 有意的「theme 控制排版」决定，demo 按钮 13 无变化；若日后需要 per-attribute 覆盖再做 merge 语义；
+- 演示页内容（makeLabel/makeBodyText authored 色）在 light 主题下保持原色（explicit override 契约）；demo 页整体亮化属 Phase 5 内容级主题；
+- 视觉 golden 基线（scenario-golden/gpu-shot）未建立——按计划 Phase 4 收尾时产出截图基线；
+- menus hover-switch 预存失败需另立 ticket 根因（非 style system 范围）。
+
+### 下一轮直接接力点
+
+1. Phase 4 收尾：现成 screenshot/dump 基线归档 + editor/gallery 页主题统一确认；WorkbenchTheme key 命名约定落文档；
+2. Phase 3 收尾清理刀：删控件裸颜色字段（Button/MenuBarItem/TabButton/SplitPane/ScrollViewport/Dock/Floating），FWidgetStyle/bindTo/bindStyle 去留定案；
+3. Phase 5：editor/game theme key 命名空间约定、多窗口 theme context owner。
+
+## 2026-08-22 — Phase 3 收尾清理刀：删已迁移控件裸颜色字段
+
+### 本轮完成
+
+- **删除 5 个已迁移控件的裸颜色字段，fallback 统一为「默认构造 TStyle = framework fallback」**：
+  - UIButton：删除 _normalColor/_hoveredColor/_pressedColor/_focusedColor + reflect 条目；paintSelf 单一路径 `FButtonStyle style; if themed style=*themed;` + addBrush（含 disabledFill）。旧 fallback 的 disabled = normal×0.5 (0.4) → 新 = disabledFill {0.5,0.5,0.5}，微小且有意的语义修正；
+  - UIMenuBarItem：删除 _textColor/_normalColor/_hoveredColor；
+  - UITabButton：删除 _textColor/_normalColor/_hoveredColor/_selectedColor/_accentColor/_padding（padding 走 FTabStyle，measure 同源）；
+  - UISplitPane：删除 _dividerColor/_dividerHoveredColor/_dividerDraggingColor；
+  - UIScrollViewport：删除 _scrollbarWidth/_scrollbarTrackColor/_scrollbarThumbColor；
+  - DockSpace/DockFloatingWindow paint 的魔法字面量 fallback → 默认构造 TStyle（含 ResizeHandle edgeAffordance）。
+- **WorkbenchSurface 删除「遍历 children 覆写 menubar 颜色」的 AM-2 反模式**：颜色进 WorkbenchTheme "menubar" key（提升 stops 0.16/0.30 保证 hover 可见，与旧覆写值一致，零视觉变化）。
+- **消费点迁移**：UIFrameSnapshotTest 按钮颜色断言改比默认 FButtonStyle；GUIHeadlessHostTest menubar hover 测试改挂 UITheme（delegate 持有 theme 保活）；GUIFrameworkSmoke 挂 UITheme（蓝色 button）；Dialog 的 OK/Cancel 按钮去裸字段 + label 去 authored 色（走 theme）。
+- **key 命名约定落文档**（plan.md 新增 §3.6）：`<family>[.<role>]`，canonical family key 列表 + panel.window/panel.canvas role 变体；状态不走 key 维度。
+- UIPanel._color / UIText._color 保留（显式覆写契约的两个活 authoring API）。
+
+### 本轮验证
+
+- ya-gui-widgets / GUIWorkbench / ya-gui-widgets-test / ya-gui-headless-host-test / ya-gui-minimal-host 全构建过；
+- ya-gui-widgets-test 136 通过（TransientHoverAndFocusRepaintButton 已改断言）；headless-host 2 测试过（含迁移的 menubar hover）；minimal-host 30 帧跑完；
+- 全量 scenario 20/21（menus 预存失败不变）；
+- headless dump：menubar item normal fill = (0.16,0.18,0.22)（主题提升 stops 生效，壳层零变化）；
+- style 系统最终形态：**核心 shell 控件零裸颜色字段**，resolve 单一路径 + 默认构造 fallback，framework 不再需要按控件补颜色字段（AM-1 收口）。
+
+### 下一轮直接接力点
+
+1. Phase 4 收尾：golden/截图基线归档（scenario-capture + dump digest），Theme 页/Editor 页/壳层静态基线；
+2. FWidgetStyle / UIStyleSet::bindTo / UIText::bindStyle 去留定案（app 消费点已清零，闭包测试仍用）；
+3. Phase 5：editor/game theme key 命名空间、game HUD typed style 扩展、多窗口 theme context owner。
