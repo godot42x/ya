@@ -79,6 +79,8 @@ A. design token 层：表达主题原料，不直接给控件使用。颜色如 
 
 B. typed widget style 层：第一阶段重点。每类控件有自己的 style struct：FTextStyle、FPanelStyle、FButtonStyle、FTabStyle、FMenuBarItemStyle、FSplitPaneStyle、FScrollBarStyle、FDockSpaceStyle、FFloatingWindowStyle。不允许继续共用 FWidgetStyle 假装通用；不允许新的 shell 控件继续直接暴露一整套颜色字段；控件只读取与自己有关的 style 属性。
 
+> 关键升级（2026-08-21 蓝图调研，推翻原「第一阶段不做 image brush」决策）：typed style 的视觉字段应从 `glm::vec4` 纯色升级为 **brush 引用**（见 §3.5）。brush 把「画什么资源」与「叠什么颜色」统一进一个类型，纯色 fill 是 brush 的退化形态（无 texture + tint）。这是「一套 GUI 服务 tool + game」的根基——tool GUI 用纯色退化 brush，game UI 用 image/九宫格完整 brush，机制同一、内容不同。
+
 > ⚠ Phase 1 落地遗漏（评审发现）：Style.h 实际只落了 7 个 struct，**FSplitPaneStyle 与 FScrollBarStyle 未落地**，SplitPane 的 divider 色被错误塞进 `FDockSpaceStyle::splitDividerColor`。UISplitPane 是通用控件（非 dock 场景也在用），不应从 dock style 取色；且 SplitPane 有三个 divider 状态（normal/hovered/dragging）被压成单一静态色（状态丢失）。Phase 2 动工前必须补 `FSplitPaneStyle`（dividerFill/dividerHoveredFill/dividerDraggingFill 三态），从 FDockSpaceStyle 移除 splitDividerColor。
 
 C. theme context / style lookup 层：UITheme 持有 token 与 named typed styles；UIThemeContext 挂在 WidgetTree/GUIWindowHost/subtree override 上；UIStyleKey 是命名查找键，如 button.toolbar、tab.workbench、dock.floating。
@@ -116,6 +118,48 @@ token 是「原料」、typed style 是「成品」，但两者之间必须有�
 
 理由：运行时 token 求值会引入一套新的求值引擎（无谓复杂度），而 retain-mode GUI 的 theme 在 app 启动时确定、运行期只做「切换预构造好的 theme 实例」，编译期烘焙完全够用，且与 §3.2.1 的「Reactive\<UITheme\> 切换」天然契合。
 
+### 3.5 brush 抽象：color 与 image 的统一（第一阶段必须，game UI 复用前提）
+
+**背景**：调研确认（UE FSlateBrush / Godot StyleBox 三方一致），让一套 GUI 同时服务 tool GUI 和 game UI 的根基，不是模块摆放也不是 resolve 链，而是 **brush 抽象**——把纯色与贴图统一进一个类型。
+
+- **UE**：`FSlateBrush` = `TintColor`（着色）+ `ResourceObject`（纹理/材质）+ `DrawType`（Image/Box/Border/RoundedBox）+ `Margin`（九宫格）。纯色按钮 = ResourceObject 为空 + TintColor 上色的退化 brush。
+- **Godot**：`StyleBox` 多态——`StyleBoxFlat`（纯色/圆角）是特例，`StyleBoxTexture`（九宫格）是通用；同一控件在 editor 主题拿 Flat、game 主题拿 Texture，换外观只换资源不换控件。
+
+**结论**：typed style 的视觉字段应从 `glm::vec4` 升级为 **brush 引用**（`FBrush`），brush 含：
+- `tintColor`（着色，纯色 brush = 无 resource + tint 上色）
+- `resource`（可选纹理/材质，game UI 的 hover image / 背景图）
+- `drawType`（Image / NinePatch / Border，九宫格 = NinePatch + `margin`）
+- `margin`（九宫格四边距，patch 数据属 app 内容，九宫格渲染算法属 framework 能力）
+
+**tool GUI vs game UI：差异在内容，不在机制**：
+
+| 维度 | tool GUI（editor/workbench） | game UI（HUD/menu） |
+|---|---|---|
+| 视觉形态 | 纯色 fill（brush 退化） | image / 九宫格（brush 完整） |
+| 状态态 | 全态（normal/hover/pressed/focused/disabled） | 常只 normal/hover/pressed |
+| 主题切换 | white/dark 频繁运行时切换 | 通常固定，换肤=换整套资产 |
+| 按钮多样性 | 同型 | Primary/Danger 等**业务角色变体**（Godot `theme_type_variation`） |
+| 动画 | 少 | hover 渐变、按下缩放（常见） |
+
+机制相同（typed style + 状态集 + theme context + resolve 链），差异只在内容（值是纯色还是贴图、状态集全不全）。
+
+**抽象边界（style 管什么、不管什么，避免过度设计）**：
+
+```
+style 系统管：
+  ├─ 静态的、按状态离散的视觉（每状态一个 brush/色）
+  ├─ 九宫格 = brush 的 drawType + margin 字段  ← 进 brush 类型
+  └─ 字体引用 token（family/size/weight）
+
+style 系统不管（交给别的子系统）：
+  ├─ 动画/过渡 = 独立 tween/动画系统（style 管「哪个状态长什么样」，动画管「状态间怎么过渡」）
+  ├─ 字体资产/emoji atlas/本地化 = 资源 + text 子系统
+  ├─ 图标 atlas 打包 = 资源系统（图标本身 = image brush 实例）
+  └─ DPI/分辨率断点 = layout/metric 系统（style 只贡献「可缩放 token 单位」）
+```
+
+**分阶段边界**：第一阶段落 brush（含 drawType + margin 九宫格字段，成本低，但决定 typed style 字段类型，越晚改破坏越大）；动画 tween、完整皮肤资源管线、字体 atlas 打包、DPI 断点系统推迟到第二阶段。Godot 的换 theme 机制（`NOTIFICATION_THEME_CHANGED` 树级通知 + 查询时解引用）印证 §3.2.1 的 B1 解法。
+
 ## 4. 最小闭环设计
 
 第一阶段只做 retain-mode GUI shell 所需的最小闭环，不做大而全主题系统。
@@ -124,7 +168,9 @@ token 是「原料」、typed style 是「成品」，但两者之间必须有�
 
 第一个主题宿主：GUIWorkbench。它是 feature gallery + regression app，能覆盖 menu/tab/dock/floating/editor shell，可作为 editor 主题系统前置验证场。
 
-第一阶段明确不做：CSS/QSS 解析器、selector engine、XML/DSL style file、editor/game 双主题同时落地、图像 brush/9-patch/radii/shadow 全量体系、运行时样式编辑器。
+第一阶段明确不做：CSS/QSS 解析器、selector engine、XML/DSL style file、editor/game 双主题同时落地、radii/shadow 全量体系、运行时样式编辑器。
+
+> ⚠ 修订（2026-08-21 蓝图调研）：原决策「第一阶段不做图像 brush/9-patch」已推翻。**brush 抽象（含 drawType + margin 九宫格字段）提前到第一阶段必须**——它是 game UI 复用 style 系统的前提，且决定 typed style 的字段类型（`glm::vec4` → brush 引用），越晚改破坏越大。纯色 fill 是 brush 的退化形态。radii/shadow 仍推迟到第二阶段。
 
 ## 5. 分阶段落地顺序
 
@@ -184,7 +230,7 @@ UIText/UIButton/UIMenuBarItem/UIMenuBar/UITabBar/UITabButton/UISplitPane/UIDockF
 
 ## 8. 当前默认决策
 
-1. 第一阶段不做 CSS/QSS；2. 采用可编程 theme + typed styles + style keys；3. style runtime 属于 framework；4. theme 内容属于 app；5. GUIWorkbench 是第一接入宿主；6. game UI 复用同一 runtime 但主题复杂度更低；7. 临时 WorkbenchStyle 只是过渡输入。
+1. 第一阶段不做 CSS/QSS；2. 采用可编程 theme + typed styles + style keys；3. style runtime 属于 framework；4. theme 内容属于 app；5. GUIWorkbench 是第一接入宿主；6. game UI 复用同一 runtime 但主题复杂度更低；7. 临时 WorkbenchStyle 只是过渡输入；8. **brush 抽象（color+image 统一，含 drawType+margin 九宫格字段）第一阶段必须落**，纯色是 brush 退化形态，是 game UI 复用 style 系统的前提。
 
 ## 9. 退出条件
 

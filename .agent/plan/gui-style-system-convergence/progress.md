@@ -84,3 +84,23 @@
 
 **Phase 1 至此完整**：计划承诺的 9 个 typed style struct 全部落地（FTextStyle/FPanelStyle/FButtonStyle/FMenuBarItemStyle/FTabStyle/FSplitPaneStyle/FScrollBarStyle/FDockSpaceStyle/FFloatingWindowStyle）。剩余 reflect_equal（== 改反射）是独立待办，非遗漏。
 
+## 2026-08-21 — 蓝图调研：style 系统复用边界 + brush 抽象提前到第一阶段
+
+用户澄清战略目标：**这套 GUI 框架就是为了实现游戏内 UI，不想和 ImGui 维护两条主线，选自绘 GUI + 自绘游戏内 GUI 一条路**。据此调研「style 系统如何被 GUI app / game editor / game runtime 三处复用」。
+
+**三消费者现状**（模块依赖已就绪，复用不是模块问题）：
+- GUI app（GUIWorkbench）：retain UI + Style.h typed style（Phase 1）
+- game editor：ImGui（ImGuiStyle + PushStyleColor），明确迁到 retain UI
+- game runtime：ImGui 旧路径（GuiSystem + ImGui backend）+ retain UI 新路径（GameUIHost，"ui-widget-tree-refactor Phase 3"）并存，正在迁移
+
+**核心结论（UE FSlateBrush / Godot StyleBox 三方交叉验证）**：
+- **brush 抽象是「一套 GUI 服务 tool + game」的根基**——color 和 image 统一进一个类型（UE `FSlateBrush` = TintColor + ResourceObject + DrawType + Margin；Godot `StyleBox` = Flat 纯色特例 / Texture 九宫格通用），纯色 fill 是 brush 的退化形态。
+- 当前 9 个 typed style 全是 `glm::vec4` 纯色，缺 brush，game UI 的 hover image / 背景图需求无处安放。
+- **tool GUI vs game UI 差异在内容不在机制**：机制相同（typed style + 状态集 + theme context + resolve 链），差异只在值（纯色 vs 贴图）、状态集全不全、切换频率。
+- **抽象边界**：style 管静态的按状态离散的视觉（每状态一个 brush/色）+ 九宫格（brush 的 drawType+margin 字段）；动画（tween）、字体 atlas、图标 atlas、DPI 断点隔离到别的子系统。
+- **Godot 印证**：换 theme = 树级通知（`NOTIFICATION_THEME_CHANGED`）+ 查询时解引用，正是 B1 的解法；`theme_type_variation`（业务角色变体，Primary/Danger）是 game UI 按钮多样性的第二维。
+
+**决策变更**：brush 抽象从「第二阶段」提前到「第一阶段必须」（含 drawType + margin 九宫格字段，成本低但决定 typed style 字段类型，越晚改破坏越大）。radii/shadow/动画/皮肤管线仍第二阶段。
+
+**修订落盘**：plan.md（§3.1 补 brush 升级说明 + 新增 §3.5 brush 抽象含 tool/game 差异表与边界图 + §4 改"不做 image brush"为"brush 提前" + §8 补决策）、feature_matrix.json（brush_abstraction planned）、todo.md（FBrush 抽象待办）。
+
