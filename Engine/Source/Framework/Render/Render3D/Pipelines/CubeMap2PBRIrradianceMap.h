@@ -64,8 +64,8 @@ struct CubeMap2PBRIrradianceMap
 
     struct ExecuteResult
     {
-        bool                               bSuccess = false;
-        std::vector<std::shared_ptr<void>> keepAliveResources;
+        bool                               bSuccess          = false;
+        std::vector<RetainedResource>      retainedResources;
     };
 
     struct ExecuteContext

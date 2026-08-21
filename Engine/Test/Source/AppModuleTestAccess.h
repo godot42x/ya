@@ -7,6 +7,7 @@ namespace ya
 {
 
 struct JSScriptingSystem;
+class AppAutomationControlService;
 
 /**
  * @brief AppModuleTestAccess - friend-class test seam into App's private
@@ -25,12 +26,21 @@ class AppModuleTestAccess
     static void setSceneManager(App& app, SceneManager* sceneManager) { app._sceneManager = sceneManager; }
     static void setAppState(App& app, AppState state) { app._appState = state; }
     static void setJSScriptingSystem(App& app, JSScriptingSystem* js) { app._jsScriptingSystem = js; }
-    static bool dispatchEvent(App& app, const Event& event) { return app.dispatchHostModuleEvent(event); }
+    static AppAutomationControlService* getAutomationControlService(App& app) { return app.getAutomationControlService(); }
+    static bool dispatchEvent(App& app, const Event& event) { return app.dispatchModuleEvent(event); }
     static void tick(App& app, float dt) { app.tickModules(dt); }
     static void prepareRender(App& app, float dt) { app.prepareModulesForRender(dt); }
     static void recordPresentation(App& app, ICommandBuffer& commandBuffer, float dt)
     {
         app.recordModulePresentation(commandBuffer, dt);
+    }
+    static std::string resolveStartupScenePath(const AppDesc& desc)
+    {
+        return App::resolveStartupScenePath(desc);
+    }
+    static bool loadScene(App& app, const std::string& path)
+    {
+        return app.loadSceneInternal(path);
     }
 };
 

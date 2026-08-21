@@ -418,9 +418,7 @@ void FQuadRender::preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colo
         auto retired = std::move(pipelines.uiPipeline);
         pipelines.uiPipeline = std::move(pipeline);
         pipelines.uiColorFormat = colorFormat;
-        if (DeferredDeletionQueue::get().isInitialized()) {
-            DeferredDeletionQueue::get().retireResource(std::move(retired));
-        }
+        DeferredDeletionQueue::get().retire(std::move(retired));
         return;
     }
 
@@ -439,9 +437,7 @@ void FQuadRender::preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colo
     pipelines.screenPipeline = std::move(pipeline);
     pipelines.screenColorFormat = colorFormat;
     pipelines.screenDepthFormat = depthFormat;
-    if (DeferredDeletionQueue::get().isInitialized()) {
-        DeferredDeletionQueue::get().retireResource(std::move(retired));
-    }
+    DeferredDeletionQueue::get().retire(std::move(retired));
 }
 
 void FQuadRender::ensureSlotResources(Render2DPassSlot passSlot)

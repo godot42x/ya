@@ -31,9 +31,9 @@ struct YA_RHI_API RenderTexture
     [[nodiscard]] std::shared_ptr<IImage> getImageShared() const { return resource ? resource->getImageShared() : nullptr; }
     [[nodiscard]] IImageView* getImageView() const { return resource ? resource->getImageView() : nullptr; }
     [[nodiscard]] std::shared_ptr<IImageView> getImageViewShared() const { return resource ? resource->getImageViewShared() : nullptr; }
-    [[nodiscard]] const std::vector<std::shared_ptr<void>>& getRetainedResources() const
+    [[nodiscard]] const std::vector<RetainedResource>& getRetainedResources() const
     {
-        static const std::vector<std::shared_ptr<void>> kEmpty;
+        static const std::vector<RetainedResource> kEmpty;
         return resource ? resource->getRetainedResources() : kEmpty;
     }
     [[nodiscard]] uint32_t getWidth() const { return resource ? resource->getWidth() : 0; }

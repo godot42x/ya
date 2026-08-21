@@ -268,7 +268,7 @@ void VulkanCommandPool::cleanup()
 
 bool VulkanCommandBuffer::begin(bool oneTimeSubmit)
 {
-    clearRetainedResources();
+    clearRetiredResources();
 #if YA_CMDBUF_RECORD_MODE
     recordedCommands.clear();
 #endif
@@ -307,7 +307,7 @@ void VulkanCommandBuffer::reset()
     _isRecording = false;
     _debugLabelDepth = 0;
     _resourceStateTracker.reset();
-    clearRetainedResources();
+    clearRetiredResources();
 #if YA_CMDBUF_RECORD_MODE
     recordedCommands.clear();
 #endif

@@ -358,11 +358,11 @@ class EditorViewportCompositor
             return;
         }
 
-        commandBuffer.retainResource(source->getImageShared());
-        commandBuffer.retainResource(source->getImageViewShared());
-        commandBuffer.retainResources(source->getRetainedResources());
-        commandBuffer.retainResource(_composedViewportImage->getImageShared());
-        commandBuffer.retainResource(_composedViewportImage->getImageViewShared());
+        commandBuffer.retireResource(source->getImageShared());
+        commandBuffer.retireResource(source->getImageViewShared());
+        commandBuffer.retireResources(source->getRetainedResources());
+        commandBuffer.retireResource(_composedViewportImage->getImageShared());
+        commandBuffer.retireResource(_composedViewportImage->getImageViewShared());
 
         commandBuffer.transitionImageLayoutAuto(source->getImage(), EImageLayout::ShaderReadOnlyOptimal);
         commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(), EImageLayout::ColorAttachmentOptimal);
@@ -373,9 +373,9 @@ class EditorViewportCompositor
         const bool  bAttachDepth = depthOwner && depthOwner->isValid() &&
                                    depthOwner->getExtent() == _composedViewportImage->getExtent();
         if (bAttachDepth) {
-            commandBuffer.retainResource(depthOwner->getImageShared());
-            commandBuffer.retainResource(depthOwner->getImageViewShared());
-            commandBuffer.retainResources(depthOwner->getRetainedResources());
+            commandBuffer.retireResource(depthOwner->getImageShared());
+            commandBuffer.retireResource(depthOwner->getImageViewShared());
+            commandBuffer.retireResources(depthOwner->getRetainedResources());
             commandBuffer.transitionImageLayoutAuto(depthOwner->getImage(), EImageLayout::DepthStencilAttachmentOptimal);
         }
 

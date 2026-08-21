@@ -137,7 +137,7 @@ void BasicShadowMapTechnique::rebuildLayerTextures(const std::shared_ptr<IImage>
     _depthResource->label             = "BasicShadowMap.Depth";
     _depthResource->image             = shadowImage;
     _depthResource->defaultView       = _shadowDepthArrayView;
-    _depthResource->retainedResources = {shadowImage, _shadowDepthArrayView};
+    _depthResource->retainedResources = {RetainedResource{shadowImage}, RetainedResource{_shadowDepthArrayView}};
 
     std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> directionalViews{};
     for (uint32_t cascadeIndex = 0; cascadeIndex < MAX_DIRECTIONAL_CASCADES; ++cascadeIndex) {

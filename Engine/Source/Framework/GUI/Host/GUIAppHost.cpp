@@ -1204,8 +1204,8 @@ void GUIWindowHost::onTick(float /*dt*/)
     cmdBuf->reset();
     cmdBuf->begin();
 
-    cmdBuf->retainResource(renderImage->getImageShared());
-    cmdBuf->retainResource(renderImage->getImageViewShared());
+    cmdBuf->retireResource(renderImage->getImageShared());
+    cmdBuf->retireResource(renderImage->getImageViewShared());
     cmdBuf->transitionImageLayoutAuto(renderImage->getImage(), EImageLayout::ColorAttachmentOptimal);
     cmdBuf->beginRendering(RenderingInfo{
         .label                         = "GUIApp_Clear",

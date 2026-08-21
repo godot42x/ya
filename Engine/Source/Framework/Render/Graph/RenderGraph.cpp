@@ -571,9 +571,9 @@ std::string formatBufferRange(const RGBufferRange& range)
 
 void retainResolvedRenderTexture(ICommandBuffer& cmdBuf, const RenderTexture& image)
 {
-    cmdBuf.retainResource(image.getImageShared());
-    cmdBuf.retainResource(image.getImageViewShared());
-    cmdBuf.retainResources(image.getRetainedResources());
+    cmdBuf.retireResource(image.getImageShared());
+    cmdBuf.retireResource(image.getImageViewShared());
+    cmdBuf.retireResources(image.getRetainedResources());
 }
 
 } // namespace
@@ -740,7 +740,7 @@ IBuffer* RGRenderContext::resolveBuffer(RGBufferHandle handle) const
     const auto* resource = _graph.getBuffer(handle);
     YA_CORE_ASSERT(resource != nullptr, "RGRenderContext pass {} references invalid buffer handle {}", _pass.name, handle.index);
     if (resource->imported.has_value()) {
-        _cmdBuf.retainResources(resource->imported->retainedResources);
+        _cmdBuf.retireResources(resource->imported->retainedResources);
     }
     return _registry.resolveBuffer(handle);
 }

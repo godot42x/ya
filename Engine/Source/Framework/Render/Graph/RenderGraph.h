@@ -7,6 +7,7 @@
 #include "RHI/Core/Sampler.h"
 #include "RHI/RenderDefines.h"
 #include "Core/Api.h"
+#include "Core/Common/RetainedResource.h"
 
 #include <cstdint>
 #include <functional>
@@ -116,7 +117,7 @@ struct RGImportedTextureDesc
     std::shared_ptr<ImageResource> resource = nullptr;
     std::optional<ImageSubresourceRange> subresourceRange{};
     std::optional<ImageViewCreateInfo> viewDesc{};
-    std::vector<std::shared_ptr<void>> retainedResources{};
+    std::vector<RetainedResource> retainedResources{};
 };
 
 struct RGImportedBufferDesc
@@ -125,7 +126,7 @@ struct RGImportedBufferDesc
     IBuffer*           buffer = nullptr;
     BufferResourceState initialState{};
     std::optional<BufferResourceState> finalState{};
-    std::vector<std::shared_ptr<void>> retainedResources{};
+    std::vector<RetainedResource> retainedResources{};
 };
 
 struct RGTextureResource

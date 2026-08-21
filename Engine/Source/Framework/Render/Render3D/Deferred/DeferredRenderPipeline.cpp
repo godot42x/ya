@@ -45,7 +45,7 @@ std::shared_ptr<ImageResource> makeShadowDebugResource(const std::shared_ptr<IIm
     resource->label       = std::string(label);
     resource->image       = image;
     resource->defaultView = view;
-    resource->retainedResources = {image, view};
+    resource->retainedResources = {RetainedResource{image}, RetainedResource{view}};
     return resource;
 }
 

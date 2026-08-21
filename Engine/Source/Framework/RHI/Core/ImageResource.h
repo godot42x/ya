@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Common/RetainedResource.h"
 #include "RenderResourceFactory.h"
 
 namespace ya
@@ -17,7 +18,7 @@ struct ImageResource
     ImageResourceDesc               desc{};
     std::shared_ptr<IImage>         image;
     std::shared_ptr<IImageView>     defaultView;
-    std::vector<std::shared_ptr<void>> retainedResources;
+    std::vector<RetainedResource>   retainedResources;
 
     [[nodiscard]] const std::string& getLabel() const { return label; }
     [[nodiscard]] const ImageResourceDesc& getDesc() const { return desc; }
@@ -25,7 +26,7 @@ struct ImageResource
     [[nodiscard]] IImageView* getImageView() const { return defaultView.get(); }
     [[nodiscard]] std::shared_ptr<IImage> getImageShared() const { return image; }
     [[nodiscard]] std::shared_ptr<IImageView> getImageViewShared() const { return defaultView; }
-    [[nodiscard]] const std::vector<std::shared_ptr<void>>& getRetainedResources() const { return retainedResources; }
+    [[nodiscard]] const std::vector<RetainedResource>& getRetainedResources() const { return retainedResources; }
     [[nodiscard]] uint32_t getWidth() const { return image ? image->getWidth() : 0; }
     [[nodiscard]] uint32_t getHeight() const { return image ? image->getHeight() : 0; }
     [[nodiscard]] EFormat::T getFormat() const { return image ? image->getFormat() : EFormat::Undefined; }

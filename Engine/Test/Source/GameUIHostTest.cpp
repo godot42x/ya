@@ -154,14 +154,14 @@ TEST(GameUIHostTest, InputRoutesThroughPresentationMapping)
     host.buildSnapshot();
 
     // Window point maps to logical (120,110): inside the button.
-    EXPECT_EQ(host.dispatchEvent(MouseButtonPressedEvent(0), {100.0f + 240.0f, 50.0f + 220.0f}),
+    EXPECT_EQ(host.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), {100.0f + 240.0f, 50.0f + 220.0f}),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(host.dispatchEvent(MouseButtonReleasedEvent(0), {100.0f + 240.0f, 50.0f + 220.0f}),
+    EXPECT_EQ(host.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), {100.0f + 240.0f, 50.0f + 220.0f}),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(clicks, 1);
 
     // Outside the viewport: not routed at all.
-    EXPECT_EQ(host.dispatchEvent(MouseButtonPressedEvent(0), {10.0f, 10.0f}),
+    EXPECT_EQ(host.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), {10.0f, 10.0f}),
               EWidgetRouteResult::NotHandled);
     EXPECT_EQ(clicks, 1);
 }
@@ -218,7 +218,7 @@ TEST(GameUIHostTest, DocumentPathEntriesResolveOnActivation)
     EXPECT_EQ(content->getChildren()[0]->_typeId, "engine.panel");
     auto* panel = dynamic_cast<UIPanel*>(content->getChildren()[0].get());
     ASSERT_NE(panel, nullptr);
-    EXPECT_EQ(panel->_color, glm::vec4(0.1f, 0.2f, 0.3f, 0.9f));
+    EXPECT_EQ(panel->getColor(), glm::vec4(0.1f, 0.2f, 0.3f, 0.9f));
 
     std::filesystem::remove(docPath);
 }

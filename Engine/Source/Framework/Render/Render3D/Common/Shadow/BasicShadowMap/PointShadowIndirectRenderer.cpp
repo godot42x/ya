@@ -412,9 +412,7 @@ bool PointShadowIndirectRenderer::ensureInstanceCapacity(uint32_t flightIndex, u
             IDescriptorSetHelper::writeOneStorageBuffer(flight.indirectDS, 0, flight.instanceBuffer.get()),
         });
     }
-    if (DeferredDeletionQueue::get().isInitialized()) {
-        DeferredDeletionQueue::get().retireResource(std::move(oldBuffer));
-    }
+    DeferredDeletionQueue::get().retire(std::move(oldBuffer));
     return true;
 }
 

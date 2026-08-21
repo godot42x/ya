@@ -3331,8 +3331,8 @@ TEST(RenderGraphCoreTest, ExecutorRetainsImportedBufferKeepAliveResources)
         [](RGRenderContext&) {});
 
     ASSERT_TRUE(executor.execute(graph, cmdBuf));
-    ASSERT_EQ(cmdBuf.retainedResources.size(), 1u);
-    EXPECT_EQ(cmdBuf.retainedResources[0].get(), owner.get());
+    ASSERT_EQ(cmdBuf.retiredResources.size(), 1u);
+    EXPECT_EQ(cmdBuf.retiredResources[0].get(), owner.get());
 }
 
 TEST(RenderGraphCoreTest, ExecutorRestoresImportedBufferFinalStateAfterTransferPass)
@@ -3470,10 +3470,10 @@ TEST(RenderGraphCoreTest, ResolveTextureRetainsImportedTextureKeepAliveResources
         });
 
     ASSERT_TRUE(executor.execute(graph, cmdBuf));
-    ASSERT_EQ(cmdBuf.retainedResources.size(), 3u);
-    EXPECT_EQ(cmdBuf.retainedResources[0].get(), existingImage.get());
-    EXPECT_EQ(cmdBuf.retainedResources[1].get(), existingView.get());
-    EXPECT_EQ(cmdBuf.retainedResources[2].get(), owner.get());
+    ASSERT_EQ(cmdBuf.retiredResources.size(), 3u);
+    EXPECT_EQ(cmdBuf.retiredResources[0].get(), existingImage.get());
+    EXPECT_EQ(cmdBuf.retiredResources[1].get(), existingView.get());
+    EXPECT_EQ(cmdBuf.retiredResources[2].get(), owner.get());
 }
 
 TEST(RenderGraphCoreTest, PassBindingContextResolvesTextureDescriptorAndRetainsOwners)
@@ -3531,10 +3531,10 @@ TEST(RenderGraphCoreTest, PassBindingContextResolvesTextureDescriptorAndRetainsO
     EXPECT_EQ(resolved->sampler, sampler.getHandle());
     EXPECT_EQ(resolved->imageLayout, EImageLayout::ShaderReadOnlyOptimal);
 
-    ASSERT_EQ(cmdBuf.retainedResources.size(), 3u);
-    EXPECT_EQ(cmdBuf.retainedResources[0].get(), existingImage.get());
-    EXPECT_EQ(cmdBuf.retainedResources[1].get(), existingView.get());
-    EXPECT_EQ(cmdBuf.retainedResources[2].get(), owner.get());
+    ASSERT_EQ(cmdBuf.retiredResources.size(), 3u);
+    EXPECT_EQ(cmdBuf.retiredResources[0].get(), existingImage.get());
+    EXPECT_EQ(cmdBuf.retiredResources[1].get(), existingView.get());
+    EXPECT_EQ(cmdBuf.retiredResources[2].get(), owner.get());
 }
 
 TEST(RenderGraphCoreTest, PassBindingContextResolvesBufferDescriptorWithDeclaredRange)
@@ -3573,8 +3573,8 @@ TEST(RenderGraphCoreTest, PassBindingContextResolvesBufferDescriptorWithDeclared
     EXPECT_EQ(resolved->buffer, backing.getHandle());
     EXPECT_EQ(resolved->offset, 64u);
     EXPECT_EQ(resolved->range, 128u);
-    ASSERT_EQ(cmdBuf.retainedResources.size(), 1u);
-    EXPECT_EQ(cmdBuf.retainedResources[0].get(), owner.get());
+    ASSERT_EQ(cmdBuf.retiredResources.size(), 1u);
+    EXPECT_EQ(cmdBuf.retiredResources[0].get(), owner.get());
 }
 
 TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedBufferKeepAliveWithoutReplacingBuffer)

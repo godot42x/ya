@@ -67,7 +67,7 @@ TEST(SceneWidgetEntryTest, OverrideAppliesToOwnAndBaseFields)
     EXPECT_TRUE(overrides.applyTo(*panel));
     auto* panelWidget = dynamic_cast<UIPanel*>(panel.get());
     ASSERT_NE(panelWidget, nullptr);
-    EXPECT_EQ(panelWidget->_color, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+    EXPECT_EQ(panelWidget->getColor(), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
     EXPECT_EQ(panelWidget->getPosition(), glm::vec2(12.0f, 34.0f));
 }
 

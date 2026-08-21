@@ -156,14 +156,12 @@ bool PointShadowCullPass::ensureCapacity(uint32_t flightIndex, uint32_t bucketCo
         IDescriptorSetHelper::writeOneStorageBuffer(flight.cullDS, 3, flight.visibleInstancesExecBuffer.get()),
     });
 
-    if (DeferredDeletionQueue::get().isInitialized()) {
-        DeferredDeletionQueue::get().retireResource(std::move(oldFrustumUpload));
-        DeferredDeletionQueue::get().retireResource(std::move(oldFrustumExec));
-        DeferredDeletionQueue::get().retireResource(std::move(oldDrawCommandsUpload));
-        DeferredDeletionQueue::get().retireResource(std::move(oldDrawCommandsExec));
-        DeferredDeletionQueue::get().retireResource(std::move(oldVisibleInstancesUpload));
-        DeferredDeletionQueue::get().retireResource(std::move(oldVisibleInstancesExec));
-    }
+    DeferredDeletionQueue::get().retire(std::move(oldFrustumUpload));
+    DeferredDeletionQueue::get().retire(std::move(oldFrustumExec));
+    DeferredDeletionQueue::get().retire(std::move(oldDrawCommandsUpload));
+    DeferredDeletionQueue::get().retire(std::move(oldDrawCommandsExec));
+    DeferredDeletionQueue::get().retire(std::move(oldVisibleInstancesUpload));
+    DeferredDeletionQueue::get().retire(std::move(oldVisibleInstancesExec));
     return true;
 }
 

@@ -1220,11 +1220,11 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(Scene* scene)
                         .output        = output,
                         .bFlipVertical = flipV,
                     });
-                    if (jobResult && !result.keepAliveResources.empty()) {
+                    if (jobResult && !result.retainedResources.empty()) {
                         auto& retained = jobResult->retainedResources;
                         retained.insert(retained.end(),
-                                        std::make_move_iterator(result.keepAliveResources.begin()),
-                                        std::make_move_iterator(result.keepAliveResources.end()));
+                                        std::make_move_iterator(result.retainedResources.begin()),
+                                        std::make_move_iterator(result.retainedResources.end()));
                     }
                     if (result.transientOutputArrayView) {
                         DeferredDeletionQueue::get().retireResource(
@@ -1618,11 +1618,11 @@ std::shared_ptr<OffscreenJobState> createEnvironmentCubemapJob(EnvironmentLighti
             .output        = output,
             .bFlipVertical = flipV,
         });
-        if (jobResult && !result.keepAliveResources.empty()) {
+        if (jobResult && !result.retainedResources.empty()) {
             auto& retained = jobResult->retainedResources;
             retained.insert(retained.end(),
-                            std::make_move_iterator(result.keepAliveResources.begin()),
-                            std::make_move_iterator(result.keepAliveResources.end()));
+                            std::make_move_iterator(result.retainedResources.begin()),
+                            std::make_move_iterator(result.retainedResources.end()));
         }
         if (result.transientOutputArrayView) {
             DeferredDeletionQueue::get().retireResource(result.transientOutputArrayView);
@@ -1661,11 +1661,11 @@ std::shared_ptr<OffscreenJobState> createEnvironmentIrradianceJob(EnvironmentLig
                     .input        = srcCubemap.get(),
                     .output       = output,
                 });
-        if (jobResult && !result.keepAliveResources.empty()) {
+        if (jobResult && !result.retainedResources.empty()) {
             auto& retained = jobResult->retainedResources;
             retained.insert(retained.end(),
-                            std::make_move_iterator(result.keepAliveResources.begin()),
-                            std::make_move_iterator(result.keepAliveResources.end()));
+                            std::make_move_iterator(result.retainedResources.begin()),
+                            std::make_move_iterator(result.retainedResources.end()));
         }
         return result.bSuccess;
     };
@@ -1707,11 +1707,11 @@ std::shared_ptr<OffscreenJobState> createEnvironmentPrefilterJob(EnvironmentLigh
             .input        = srcCubemap.get(),
             .output       = output,
         });
-        if (jobResult && !result.keepAliveResources.empty()) {
+        if (jobResult && !result.retainedResources.empty()) {
             auto& retained = jobResult->retainedResources;
             retained.insert(retained.end(),
-                            std::make_move_iterator(result.keepAliveResources.begin()),
-                            std::make_move_iterator(result.keepAliveResources.end()));
+                            std::make_move_iterator(result.retainedResources.begin()),
+                            std::make_move_iterator(result.retainedResources.end()));
         }
         if (result.transientOutputArrayView) {
             DeferredDeletionQueue::get().retireResource(result.transientOutputArrayView);

@@ -3,7 +3,7 @@
 #include "GameRuntime/App.h"
 
 #include "RHI/Render.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 
 #include <gtest/gtest.h>
 
@@ -158,7 +158,7 @@ class TestRender final : public IRender
     void* getNativeWindowHandle() const override { return nullptr; }
 };
 
-std::shared_ptr<RenderImage> makePresentationImage()
+std::shared_ptr<RenderTexture> makePresentationImage()
 {
     auto image = std::make_shared<TestImage>(ImageCreateInfo{
         .label         = "presentation",
@@ -175,11 +175,7 @@ std::shared_ptr<RenderImage> makePresentationImage()
         .aspectFlags = EImageAspect::Color,
     });
 
-    auto renderImage = std::make_shared<RenderImage>();
-    renderImage->label = "presentation";
-    renderImage->image = std::move(image);
-    renderImage->defaultView = std::move(view);
-    return renderImage;
+    return RenderTexture::wrap(std::move(image), std::move(view), "presentation");
 }
 
 } // namespace
@@ -190,7 +186,7 @@ TEST(AppScreenshotCaptureTest, PresentationRequestRetainsPresentationOwnerUntilR
     AppScreenshotCaptureState state;
 
     auto presentationImage = makePresentationImage();
-    std::weak_ptr<RenderImage> presentationWeak = presentationImage;
+    std::weak_ptr<RenderTexture> presentationWeak = presentationImage;
 
     const bool bRequested = AppScreenshotCapture::request(&render,
                                                           OffscreenJobQueueService{},

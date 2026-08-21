@@ -61,7 +61,7 @@ struct CubeMap2PBRPrefilteredEnv
     {
         bool                               bSuccess                 = false;
         stdptr<IImageView>                 transientOutputArrayView = nullptr;
-        std::vector<std::shared_ptr<void>> keepAliveResources;
+        std::vector<RetainedResource>      retainedResources;
     };
     struct ExecuteContext
     {

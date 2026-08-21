@@ -232,7 +232,7 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
         return result;
     }
     const DescriptorSetHandle descriptorSet = descriptorSets[0];
-    result.keepAliveResources.push_back(transientDescriptorPool);
+    result.retainedResources.push_back(transientDescriptorPool);
 
     _render->getDescriptorHelper()->updateDescriptorSets(
         {

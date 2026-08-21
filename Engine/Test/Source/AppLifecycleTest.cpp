@@ -1,5 +1,3 @@
-#include "GameRuntime/Lifecycle/AppLifecycle.h"
-
 #include "AppModuleTestAccess.h"
 
 #include "GameRuntime/App.h"
@@ -28,7 +26,7 @@ class PresentationTestCommandBuffer final : public ICommandBuffer
     CommandBufferHandle getTypedHandle() const override { return {}; }
     bool begin(bool = false) override { return true; }
     bool end() override { return true; }
-    void reset() override { clearRetainedResources(); }
+    void reset() override { clearRetiredResources(); }
     void bindPipeline(IGraphicsPipeline*) override {}
     void bindComputePipeline(IComputePipeline*) override {}
     void bindVertexBuffer(uint32_t, const IBuffer*, uint64_t = 0) override {}
@@ -152,7 +150,7 @@ TEST_F(AppLifecycleTest, ResolveStartupScenePrefersAutomationOverride)
     desc.defaultScenePath    = "Content/Scenes/default.scene.json";
     desc.automation.scenePath = "Content/Scenes/automation.scene.json";
 
-    EXPECT_EQ(AppLifecycle::resolveStartupScenePath(desc), "Content/Scenes/automation.scene.json");
+    EXPECT_EQ(AppModuleTestAccess::resolveStartupScenePath(desc), "Content/Scenes/automation.scene.json");
 }
 
 TEST_F(AppLifecycleTest, ResolveStartupSceneFallsBackToDefaultScene)
@@ -160,14 +158,14 @@ TEST_F(AppLifecycleTest, ResolveStartupSceneFallsBackToDefaultScene)
     AppDesc desc;
     desc.defaultScenePath = "Content/Scenes/default.scene.json";
 
-    EXPECT_EQ(AppLifecycle::resolveStartupScenePath(desc), "Content/Scenes/default.scene.json");
+    EXPECT_EQ(AppModuleTestAccess::resolveStartupScenePath(desc), "Content/Scenes/default.scene.json");
 }
 
 TEST_F(AppLifecycleTest, LoadSceneIgnoresEmptyPathWithoutCreatingFallbackScene)
 {
     EXPECT_FALSE(sceneManager->hasScene());
 
-    const bool bLoaded = AppLifecycle::loadScene(app, "");
+    const bool bLoaded = AppModuleTestAccess::loadScene(app, "");
 
     EXPECT_FALSE(bLoaded);
     EXPECT_FALSE(sceneManager->hasScene());

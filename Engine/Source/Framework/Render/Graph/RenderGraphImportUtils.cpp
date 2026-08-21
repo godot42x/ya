@@ -63,12 +63,12 @@ std::shared_ptr<ImageResource> cloneImageResourceWithView(
     clone->image       = resource->image;
     clone->defaultView = view;
     clone->retainedResources.reserve(resource->retainedResources.size() + 2);
-    clone->retainedResources.push_back(resource);
+    clone->retainedResources.emplace_back(resource, "import owner");
     clone->retainedResources.insert(
         clone->retainedResources.end(),
         resource->retainedResources.begin(),
         resource->retainedResources.end());
-    clone->retainedResources.push_back(view);
+    clone->retainedResources.emplace_back(view, "import view");
     return clone;
 }
 
@@ -216,7 +216,7 @@ RGImportedBufferDesc makeImportedBufferDesc(const std::shared_ptr<IBuffer>& buff
         .buffer            = buffer.get(),
         .initialState      = initialState,
         .finalState        = finalState,
-        .retainedResources = {buffer},
+        .retainedResources = {RetainedResource{buffer}},
     };
 }
 

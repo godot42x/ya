@@ -164,7 +164,7 @@ nlohmann::json rpcRaw(App& app, AutomationRpcClient& client, const std::string& 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     std::string line;
     while (std::chrono::steady_clock::now() < deadline) {
-        if (auto* service = app.getAutomationControlService()) {
+        if (auto* service = AppModuleTestAccess::getAutomationControlService(app)) {
             service->update(app);
         }
         if (client.tryReadLine(line, 5)) {
@@ -206,12 +206,12 @@ class AppAutomationControlJsTest : public ::testing::Test
         AppModuleTestAccess::setJSScriptingSystem(_app, &_js);
 
         _port = pickFreePort();
-        ASSERT_TRUE(_app.getAutomationControlService()->init(_port));
+        ASSERT_TRUE(AppModuleTestAccess::getAutomationControlService(_app)->init(_port));
     }
 
     void TearDown() override
     {
-        _app.getAutomationControlService()->shutdown();
+        AppModuleTestAccess::getAutomationControlService(_app)->shutdown();
         AppModuleTestAccess::setJSScriptingSystem(_app, nullptr);
         _js.shutdown();
         AppModuleTestAccess::setSceneManager(_app, nullptr);
@@ -606,10 +606,10 @@ class AppAutomationControlNoJsTest : public ::testing::Test
     void SetUp() override
     {
         _port = pickFreePort();
-        ASSERT_TRUE(_app.getAutomationControlService()->init(_port));
+        ASSERT_TRUE(AppModuleTestAccess::getAutomationControlService(_app)->init(_port));
     }
 
-    void TearDown() override { _app.getAutomationControlService()->shutdown(); }
+    void TearDown() override { AppModuleTestAccess::getAutomationControlService(_app)->shutdown(); }
 
     App      _app;
     uint16_t _port = 0;

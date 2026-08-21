@@ -168,10 +168,8 @@ bool ShadowFrameResources::ensureSkinningCapacity(uint32_t paletteCount)
     }
     _skinningCapacity = *nextCapacity;
 
-    if (DeferredDeletionQueue::get().isInitialized()) {
-        for (auto& oldBuffer : oldBuffers) {
-            DeferredDeletionQueue::get().retireResource(std::move(oldBuffer));
-        }
+    for (auto& oldBuffer : oldBuffers) {
+        DeferredDeletionQueue::get().retire(std::move(oldBuffer));
     }
     return true;
 }

@@ -71,12 +71,7 @@ FrameUploadArena::~FrameUploadArena()
         }
 
         auto backing = std::move(flight.backing);
-        if (DeferredDeletionQueue::get().isInitialized()) {
-            DeferredDeletionQueue::get().retireResource(std::move(backing));
-        }
-        else {
-            backing.reset();
-        }
+        DeferredDeletionQueue::get().retire(std::move(backing));
         flight.capacity = 0;
         flight.cursor   = 0;
     }
@@ -157,12 +152,7 @@ bool FrameUploadArena::ensureCapacity(uint32_t flightIndex, uint64_t requiredEnd
     flight.capacity = newCapacity;
 
     if (oldBacking) {
-        if (DeferredDeletionQueue::get().isInitialized()) {
-            DeferredDeletionQueue::get().retireResource(std::move(oldBacking));
-        }
-        else {
-            oldBacking.reset();
-        }
+        DeferredDeletionQueue::get().retire(std::move(oldBacking));
     }
     return true;
 }

@@ -161,14 +161,14 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
         static_cast<float>(rtExtent.height) / static_cast<float>(std::max(passDesc.logicalViewportExtent.height, 1u)),
     };
 
-    cmdBuf->retainResource(target.getImageShared());
-    cmdBuf->retainResource(target.getImageViewShared());
+    cmdBuf->retireResource(target.getImageShared());
+    cmdBuf->retireResource(target.getImageViewShared());
     cmdBuf->transitionImageLayoutAuto(target.getImage(), EImageLayout::ColorAttachmentOptimal);
 
     if (depthTarget) {
-        cmdBuf->retainResource(depthTarget->getImageShared());
-        cmdBuf->retainResource(depthTarget->getImageViewShared());
-        cmdBuf->retainResources(depthTarget->getRetainedResources());
+        cmdBuf->retireResource(depthTarget->getImageShared());
+        cmdBuf->retireResource(depthTarget->getImageViewShared());
+        cmdBuf->retireResources(depthTarget->getRetainedResources());
         cmdBuf->transitionImageLayoutAuto(depthTarget->getImage(), EImageLayout::DepthStencilAttachmentOptimal);
     }
 

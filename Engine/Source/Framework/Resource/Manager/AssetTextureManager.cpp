@@ -33,7 +33,7 @@ void AssetTextureManager::storeCachedLocked(const std::string& cacheKey, std::sh
         // RCU hot-replace in the same slot; retire the previous object so the
         // GPU is done with it before destruction.
         if (auto old = _textures.replace(it->second, std::move(texture))) {
-            DeferredDeletionQueue::get().retireResource(std::move(old));
+            DeferredDeletionQueue::get().retire(std::move(old));
         }
         return;
     }

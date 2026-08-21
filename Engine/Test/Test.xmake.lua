@@ -57,6 +57,18 @@ if get_config("ya_profile") ~= "gui" then
         add_packages("gtest")
     end
 
+    -- Render2D closure test: the 2D batching/clip layer moved out of the GUI
+    -- framework (see commit 9c24c071), so its regression guards live in the
+    -- render line, not the GUI closure.
+    target("ya-render-2d-test")
+    do
+        set_kind("binary")
+        add_files("./Source/TestEntry.cpp",
+                  "./Source/Render2DClipTest.cpp")
+        add_deps("ya-render-2d")
+        add_packages("gtest")
+    end
+
     -- Resource-runtime closure: links ONLY the resource line
     -- (foundation + RHI + backend + resource core/loader/runtime). Fails to
     -- link if resource code reaches ECS/Scene/Render3D/Host again.
@@ -89,7 +101,6 @@ end
 target("ya-gui-closure-test")
 do
     set_kind("binary")
-    add_files("./Source/Render2DClipTest.cpp")
     add_files("./Source/ToolControlsTest.cpp")
     add_files("./Source/WidgetTreeTest.cpp")
     add_files("./Source/DockNodeTest.cpp")

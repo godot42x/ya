@@ -116,7 +116,7 @@ struct YA_RHI_API Texture
     std::string _filepath;
 
     std::shared_ptr<ImageResource> resource;
-    std::vector<std::shared_ptr<void>> retainedResources;
+    std::vector<RetainedResource>   retainedResources;
 
   public:
 
@@ -193,7 +193,7 @@ struct YA_RHI_API Texture
     [[nodiscard]] std::shared_ptr<IImage> getImageShared() const { return resource ? resource->getImageShared() : nullptr; }
     [[nodiscard]] IImageView*             getImageView() const { return resource ? resource->getImageView() : nullptr; }
     [[nodiscard]] std::shared_ptr<IImageView> getImageViewShared() const { return resource ? resource->getImageViewShared() : nullptr; }
-    const std::vector<std::shared_ptr<void>>& getRetainedResources() const { return retainedResources; }
+    const std::vector<RetainedResource>& getRetainedResources() const { return retainedResources; }
 
     uint32_t   getWidth() const { return _width; }
     uint32_t   getHeight() const { return _height; }

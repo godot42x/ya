@@ -76,4 +76,7 @@ struct
 };
 
 // 包含自动生成的反射注册代码
-#include "common.generated.h"
+// 使用条件编译避免首次生成时找不到文件
+#if __has_include("common.generated.h")
+    #include "common.generated.h"
+#endif

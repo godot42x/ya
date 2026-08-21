@@ -17,7 +17,7 @@
 - `profiling`：profile 模式、automation trace、低噪音性能冒烟
 - `speedscope-analysis`：speedscope trace 抽样转文本、热点定位、交给 AI 分析
 - `vscode`：VS Code 任务、调试、clangd、compile_commands
-- `resource-system`：AssetManager、resolve、dirty queue、environment lighting
+- `resource-system`：AssetManager、resolve、dirty queue、environment lighting、GPU 资源生命周期与保活（RetainedResource / retain vs retire）
 - `material-flow`：ECS 到 runtime material 到 render consumer 的数据流
 - `render-arch`：RenderRuntime、后端边界、render pipeline、shader 生成链
 - `cpp-style`：命名、所有权、类布局、热路径风格

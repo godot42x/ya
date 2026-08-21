@@ -139,6 +139,30 @@ RenderRuntime
 2. 前者更接近 runtime state 变化驱动，后者依赖 material version。
 3. 环境贴图问题通常要同时看 `ResourceResolveSystem` 与 `RenderRuntime`。
 
+## GPU 资源生命周期与保活（RetainedResource）
+
+核心约定（2026-08 落地）：
+
+1. **不用 tracing GC**。渲染层资源有 GPU 同步约束，主流引擎（UE / filament / bgfx）
+   都用“引用计数 + 确定性延迟释放”，不引入 GC。
+2. **保活句柄用强类型 `RetainedResource`**（`Core/Common/RetainedResource.h`）：
+   `shared_ptr<void>`（保留正确析构）+ `type_index`（类型安全）+ 可选 `string_view` debugTag。
+   不要裸用 `vector<shared_ptr<void>>` 保活资源。
+3. **语义分离 `retain` vs `retire`**：
+   - `retainedResources`：外部 keep-alive 容器（资源自己持有的 owner 链）。
+   - `retiredResources` / `retireResource()`：命令缓冲 submit 时要延迟释放的资源。
+   两者不要混用同一个词。
+4. `ICommandBuffer` 不再叫 `retainResource`，统一 `retireResource<T>(shared_ptr<T>, tag={})`。
+5. **Imported 资源的跨帧身份 = 底层 `IImage` / `IImageView` 指针，不是 `ImageResource` 包装指针。**
+   `ImageResource` 是可每帧重建的 owner 聚合器；判断复用时只能比较底层身份。
+6. 资源复用时，若发现每帧都在 `replacing` / `retire`，先查身份比较是否误用了
+   每帧重建的包装指针（详见 `../../memories/rendergraph_import_reuse_wrapper_identity_regression.md`）。
+
+相关排查记忆：
+
+- `../../memories/vulkan_submit_lifecycle_debug.md`：submit 期生命周期与 keepalive。
+- `../../memories/rendergraph_import_reuse_wrapper_identity_regression.md`：import 复用失效。
+
 ## 高风险模式
 
 1. 把 topology 创建和普通 resolve 混在一起。

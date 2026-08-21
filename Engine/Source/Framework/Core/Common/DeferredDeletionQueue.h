@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/Common/RetainedResource.h"
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -101,6 +102,50 @@ class YA_CORE_API DeferredDeletionQueue
     {
         if (!resource) return;
         enqueueResource(_currentFrame, std::move(resource));
+    }
+
+    /**
+     * @brief Single entry point to retire a resource, safe before init().
+     *
+     * Collapses the repetitive `if (isInitialized()) retireResource(...) else reset()`
+     * branch that call sites (e.g. RenderGraphResourceRegistry) used to duplicate.
+     *
+     * - Initialized queue:   resource is held until the GPU is guaranteed idle, then released.
+     * - Uninitialized queue: resource is released immediately (no flush will ever run,
+     *                        so enqueuing would leak it).
+     *
+     * @tparam T  Type held by the shared_ptr.
+     */
+    template <typename T>
+    void retire(std::shared_ptr<T> resource)
+    {
+        if (!resource) return;
+        if (!_initialized) {
+            resource.reset();
+            return;
+        }
+        enqueueResource(_currentFrame, std::move(resource));
+    }
+
+    /**
+     * @brief Retire a whole retained-resource bundle (e.g. RenderGraph's retainedResources).
+     *
+     * Equivalent to retire() but for a container of type-erased shared_ptrs: the
+     * container is moved into the queue and cleared only on a safe frame, so the
+     * resources it holds stay alive until the GPU is done. When the queue is
+     * uninitialized the container is cleared immediately.
+     *
+     * @param container  Bundle of retained shared_ptrs; std::move'd into the queue.
+     */
+    void retireContainer(std::vector<RetainedResource> container)
+    {
+        if (!_initialized) {
+            container.clear();
+            return;
+        }
+        enqueue(_currentFrame, [captured = std::move(container)]() mutable {
+            captured.clear();
+        });
     }
 
     /**

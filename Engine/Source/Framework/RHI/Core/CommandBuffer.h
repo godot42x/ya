@@ -2,6 +2,7 @@
 
 #include "RHI/RenderDefines.h"
 
+#include "Core/Common/RetainedResource.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Pipeline.h"
 #include <cstdint>
@@ -232,7 +233,7 @@ struct ICommandBuffer
 #if YA_CMDBUF_RECORD_MODE
     std::vector<RenderCommand> recordedCommands;
 #endif
-    std::vector<std::shared_ptr<void>> retainedResources;
+    std::vector<RetainedResource> retiredResources;
 
   public:
     virtual ~ICommandBuffer() = default;
@@ -284,23 +285,29 @@ struct ICommandBuffer
         return false;
     }
 
-    void retainResource(std::shared_ptr<void> resource)
+    template <typename T>
+    void retireResource(std::shared_ptr<T> resource, std::string_view tag = {})
     {
         if (resource) {
-            retainedResources.push_back(std::move(resource));
+            retiredResources.emplace_back(std::move(resource), tag);
         }
     }
 
-    void retainResources(const std::vector<std::shared_ptr<void>>& resources)
+    void retireResource(RetainedResource resource)
     {
-        for (const auto& resource : resources) {
-            retainResource(resource);
+        if (resource) {
+            retiredResources.push_back(std::move(resource));
         }
     }
 
-    void clearRetainedResources()
+    void retireResources(const std::vector<RetainedResource>& resources)
     {
-        retainedResources.clear();
+        retiredResources.insert(retiredResources.end(), resources.begin(), resources.end());
+    }
+
+    void clearRetiredResources()
+    {
+        retiredResources.clear();
     }
 
 #if YA_CMDBUF_RECORD_MODE

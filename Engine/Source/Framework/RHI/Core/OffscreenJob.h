@@ -33,7 +33,7 @@ YA_RHI_API void cancelOffscreenJob(std::shared_ptr<OffscreenJobState>& job);
 struct OffscreenJobResult
 {
     std::shared_ptr<ImageResource>      outputImage        = nullptr;
-    std::vector<std::shared_ptr<void>>  retainedResources;
+    std::vector<RetainedResource>       retainedResources;
 };
 
 enum class EOffscreenJobPhase : uint8_t

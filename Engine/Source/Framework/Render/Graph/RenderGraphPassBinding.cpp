@@ -71,9 +71,9 @@ std::optional<DescriptorImageInfo> RGRenderContext::RGPassBindingContext::resolv
 
     // Keep the resolved image/view and imported owners alive until the
     // command buffer completes.
-    _cmdBuf.retainResource(texture->getImageShared());
-    _cmdBuf.retainResource(texture->getImageViewShared());
-    _cmdBuf.retainResources(texture->getRetainedResources());
+    _cmdBuf.retireResource(texture->getImageShared());
+    _cmdBuf.retireResource(texture->getImageViewShared());
+    _cmdBuf.retireResources(texture->getRetainedResources());
     return DescriptorImageInfo{
         .imageView   = texture->getImageView()->getHandle(),
         .sampler     = sampler->getHandle(),

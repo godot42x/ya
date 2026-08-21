@@ -342,13 +342,9 @@ bool ForwardFrameResourceSet::ensureSkinningCapacity(uint32_t paletteCount)
         _bindings[flightIndex].skinningBuffer        = std::move(nextBuffers[flightIndex]);
     }
 
-    if (!DeferredDeletionQueue::get().isInitialized()) {
-        return true;
-    }
-
-    DeferredDeletionQueue::get().retireResource(std::move(oldDSP));
+    DeferredDeletionQueue::get().retire(std::move(oldDSP));
     for (auto& oldBuffer : oldBuffers) {
-        DeferredDeletionQueue::get().retireResource(std::move(oldBuffer));
+        DeferredDeletionQueue::get().retire(std::move(oldBuffer));
     }
     return true;
 }

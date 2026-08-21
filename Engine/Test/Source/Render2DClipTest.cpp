@@ -3,7 +3,7 @@
 // into a pure helper so widget clip hierarchy semantics are testable without
 // a render session.
 
-#include "GUI/Draw2D/Render2D.h"
+#include "Render2D/Render2D.h"
 
 #include <gtest/gtest.h>
 

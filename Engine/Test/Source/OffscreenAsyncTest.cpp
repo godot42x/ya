@@ -39,7 +39,7 @@ class TestCommandBuffer final : public ICommandBuffer
     CommandBufferHandle getTypedHandle() const override { return {}; }
     bool begin(bool = false) override { return true; }
     bool end() override { return true; }
-    void reset() override { clearRetainedResources(); }
+    void reset() override { clearRetiredResources(); }
     void bindPipeline(IGraphicsPipeline*) override {}
     void bindComputePipeline(IComputePipeline*) override {}
     void bindVertexBuffer(uint32_t, const IBuffer*, uint64_t = 0) override {}
@@ -73,9 +73,9 @@ class TestCommandBuffer final : public ICommandBuffer
     void debugEndLabel() override {}
 };
 
-std::shared_ptr<RenderImage> makeFakeRenderImage()
+std::shared_ptr<ImageResource> makeFakeImageResource()
 {
-    return std::make_shared<RenderImage>();
+    return std::make_shared<ImageResource>();
 }
 
 std::shared_ptr<OffscreenJobState> makeJob(EOffscreenJobPhase phase = EOffscreenJobPhase::Pending)
@@ -194,8 +194,8 @@ void runSeededAsyncPlan(uint32_t seed, int jobCount)
 TEST(OffscreenAsyncTest, PhaseHelpersReflectTerminalStates)
 {
     auto pending = makeJob();
-    pending->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return nullptr; };
-    pending->executeFn      = [](ICommandBuffer*, RenderImage*) -> bool { return true; };
+    pending->createOutputFn = [](IRender*) -> std::shared_ptr<ImageResource> { return nullptr; };
+    pending->executeFn      = [](ICommandBuffer*, ImageResource*) -> bool { return true; };
 
     EXPECT_TRUE(pending->isReadyToQueue());
     EXPECT_FALSE(pending->isGpuCompleted());
@@ -305,8 +305,8 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobRecordsAndPublishesSuccessfulTask)
     TestCommandBuffer cmdBuf;
     auto              job = makeJob();
 
-    job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
-    job->executeFn      = [](ICommandBuffer*, RenderImage* output) -> bool { return output != nullptr; };
+    job->createOutputFn = [](IRender*) -> std::shared_ptr<ImageResource> { return makeFakeImageResource(); };
+    job->executeFn      = [](ICommandBuffer*, ImageResource* output) -> bool { return output != nullptr; };
 
     queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
 
@@ -332,12 +332,12 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobPublishesRecordedKeepAliveResources)
     auto              job       = makeJob();
     auto              keepAlive = std::make_shared<int>(7);
 
-    job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
-    job->executeFn      = [keepAlive](ICommandBuffer* cmdBuf, RenderImage* output) -> bool {
+    job->createOutputFn = [](IRender*) -> std::shared_ptr<ImageResource> { return makeFakeImageResource(); };
+    job->executeFn      = [keepAlive](ICommandBuffer* cmdBuf, ImageResource* output) -> bool {
         if (!cmdBuf || !output) {
             return false;
         }
-        cmdBuf->retainResource(keepAlive);
+        cmdBuf->retireResource(keepAlive);
         return true;
     };
 
@@ -362,12 +362,12 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobKeepsRecordedResourcesAliveThroughGpuC
     auto              keepAlive = std::make_shared<int>(11);
     std::weak_ptr<int> keepAliveWeak = keepAlive;
 
-    job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
-    job->executeFn      = [keepAlive](ICommandBuffer* cmdBuf, RenderImage* output) -> bool {
+    job->createOutputFn = [](IRender*) -> std::shared_ptr<ImageResource> { return makeFakeImageResource(); };
+    job->executeFn      = [keepAlive](ICommandBuffer* cmdBuf, ImageResource* output) -> bool {
         if (!cmdBuf || !output) {
             return false;
         }
-        cmdBuf->retainResource(keepAlive);
+        cmdBuf->retireResource(keepAlive);
         return true;
     };
 
@@ -394,7 +394,7 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobKeepsRecordedResourcesAliveThroughGpuC
     EXPECT_FALSE(keepAliveWeak.expired());
 
     job->executeFn = {};
-    cmdBuf.clearRetainedResources();
+    cmdBuf.clearRetiredResources();
     job->result->outputImage.reset();
     EXPECT_TRUE(keepAliveWeak.expired());
 }
@@ -405,8 +405,8 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobMarksExecutionFailure)
     TestCommandBuffer cmdBuf;
     auto              job = makeJob();
 
-    job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
-    job->executeFn      = [](ICommandBuffer*, RenderImage*) -> bool { return false; };
+    job->createOutputFn = [](IRender*) -> std::shared_ptr<ImageResource> { return makeFakeImageResource(); };
+    job->executeFn      = [](ICommandBuffer*, ImageResource*) -> bool { return false; };
 
     queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);
@@ -424,8 +424,8 @@ TEST(OffscreenAsyncTest, CancelledQueuedJobRemainsCancelledWhenQueuedWorkerRuns)
     TestCommandBuffer cmdBuf;
     auto              job = makeJob();
 
-    job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
-    job->executeFn      = [](ICommandBuffer*, RenderImage*) -> bool { return true; };
+    job->createOutputFn = [](IRender*) -> std::shared_ptr<ImageResource> { return makeFakeImageResource(); };
+    job->executeFn      = [](ICommandBuffer*, ImageResource*) -> bool { return true; };
 
     queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);

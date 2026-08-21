@@ -115,13 +115,13 @@ inline int processSDLEvent(SDL_Event &event, auto &&dispatchEvent)
     } break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     {
-        MouseButtonPressedEvent ev(event.button.button);
+        MouseButtonPressedEvent ev(EMouse::fromSDLMouseButton(event.button.button));
         dispatchEvent(ev);
 
     } break;
     case SDL_EVENT_MOUSE_BUTTON_UP:
     {
-        MouseButtonReleasedEvent ev(event.button.button);
+        MouseButtonReleasedEvent ev(EMouse::fromSDLMouseButton(event.button.button));
         dispatchEvent(ev);
 
     } break;

@@ -72,16 +72,24 @@ bool isSameImportedTextureDesc(const RGImportedTextureDesc& lhs, const RGImporte
         lhs.importDesc.initialLayout == rhs.importDesc.initialLayout &&
         lhs.importDesc.finalLayout == rhs.importDesc.finalLayout;
 
-    const bool bSameSharedImageBackedImport =
-        lhs.resource != nullptr &&
-        rhs.resource != nullptr &&
-        lhs.resource->getImage() != nullptr &&
-        rhs.resource->getImage() != nullptr &&
-        lhs.resource->getImage() == rhs.resource->getImage();
+    // Import identity is the *underlying* image/view, not the ImageResource
+    // wrapper: callers clone a fresh wrapper per frame (cloneImageResourceWithView),
+    // so comparing wrapper pointers would defeat cross-frame reuse and force a
+    // per-frame rebuild of every imported texture. Compare the stable underlying
+    // image/view identities instead (this restores the semantics that existed
+    // before the imports/exports-to-ImageResource convergence).
+    const auto lhsImage = lhs.resource ? lhs.resource->getImageShared() : nullptr;
+    const auto rhsImage = rhs.resource ? rhs.resource->getImageShared() : nullptr;
+    const auto lhsView  = lhs.resource ? lhs.resource->getImageViewShared() : nullptr;
+    const auto rhsView  = rhs.resource ? rhs.resource->getImageViewShared() : nullptr;
+    const bool bSameUnderlyingImage = lhsImage == rhsImage;
+    const bool bSameUnderlyingView  = lhsView == rhsView;
+    const bool bSameSharedImageBackedImport = bSameUnderlyingImage && lhsImage != nullptr;
 
     return isSameTextureDesc(lhs.desc, rhs.desc) &&
            bSameImportedImageIdentitySansLayout &&
-           lhs.resource.get() == rhs.resource.get() &&
+           bSameUnderlyingImage &&
+           bSameUnderlyingView &&
            bSameSubresourceRange &&
            bSameViewDesc &&
            (bSameSharedImageBackedImport || bSameLayoutContract);
@@ -114,41 +122,30 @@ void retireSharedResource(std::shared_ptr<T>& resource)
         return;
     }
 
-    auto& deletionQueue = DeferredDeletionQueue::get();
-    if (deletionQueue.isInitialized()) {
-        deletionQueue.retireResource(std::move(resource));
-        return;
-    }
-
-    resource.reset();
+    DeferredDeletionQueue::get().retire(std::move(resource));
 }
 
-void retireRetainedResources(std::vector<std::shared_ptr<void>>& retainedResources)
+void retireRetainedResources(std::vector<RetainedResource>& retainedResources)
 {
     if (retainedResources.empty()) {
         return;
     }
 
-    auto& deletionQueue = DeferredDeletionQueue::get();
-    if (deletionQueue.isInitialized()) {
-        deletionQueue.enqueue(deletionQueue.currentFrame(), [captured = std::move(retainedResources)]() mutable {
-            captured.clear();
-        });
-        return;
-    }
-
-    retainedResources.clear();
+    DeferredDeletionQueue::get().retireContainer(std::move(retainedResources));
 }
 
-bool isSameRetainedResources(const std::vector<std::shared_ptr<void>>& lhs,
-                             const std::vector<std::shared_ptr<void>>& rhs)
+bool isSameRetainedResources(const std::vector<RetainedResource>& lhs,
+                             const std::vector<RetainedResource>& rhs)
 {
     return lhs.size() == rhs.size() &&
-           std::equal(lhs.begin(), lhs.end(), rhs.begin());
+           std::equal(lhs.begin(), lhs.end(), rhs.begin(),
+                      [](const RetainedResource& a, const RetainedResource& b) {
+                          return a.resource == b.resource;
+                      });
 }
 
-void refreshRetainedResources(std::vector<std::shared_ptr<void>>& currentRetainedResources,
-                              const std::vector<std::shared_ptr<void>>& nextRetainedResources)
+void refreshRetainedResources(std::vector<RetainedResource>& currentRetainedResources,
+                              const std::vector<RetainedResource>& nextRetainedResources)
 {
     if (isSameRetainedResources(currentRetainedResources, nextRetainedResources)) {
         return;
@@ -513,12 +510,12 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
             if (texture.lifetime == ERGResourceLifetime::Imported) {
                 if (existing->second->imported.has_value()) {
                     refreshRetainedResources(existing->second->imported->retainedResources,
-                                             texture.imported ? texture.imported->retainedResources : std::vector<std::shared_ptr<void>>{});
+                                             texture.imported ? texture.imported->retainedResources : std::vector<RetainedResource>{});
                 }
                 existing->second->imported = texture.imported;
                 if (existing->second->resource && existing->second->resource->resource) {
                     refreshRetainedResources(existing->second->resource->resource->retainedResources,
-                                             texture.imported ? texture.imported->retainedResources : std::vector<std::shared_ptr<void>>{});
+                                             texture.imported ? texture.imported->retainedResources : std::vector<RetainedResource>{});
                 }
             }
             continue;
@@ -609,7 +606,7 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
             if (existing != _importedBuffers.end() && !needsImportedBufferReplacement(existing->second, buffer)) {
                 if (existing->second.imported.has_value()) {
                     refreshRetainedResources(existing->second.imported->retainedResources,
-                                             buffer.imported ? buffer.imported->retainedResources : std::vector<std::shared_ptr<void>>{});
+                                             buffer.imported ? buffer.imported->retainedResources : std::vector<RetainedResource>{});
                 }
                 existing->second.imported = buffer.imported;
                 continue;
