@@ -396,8 +396,16 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// canAcceptDrop returned true for that point).
     virtual void onDrop(const std::string& /*payload*/, const glm::vec2& /*logicalPoint*/) {}
     /// Visual feedback while the drag hovers this target (cleared on leave /
-    /// drop / cancel).
+    /// drop / cancel). Targets with a point-SENSITIVE preview (e.g. a dock
+    /// space whose highlight follows the pointer) override updateDropHover
+    /// instead.
     virtual void setDropHighlight(bool /*bHighlight*/) {}
+    /// Point-sensitive hover feedback: called with the CURRENT drag point on
+    /// every pointer move while this widget is the active drop target (the
+    /// tree calls it after setDropHighlight(true) and on each move). Default:
+    /// no-op — targets without a moving preview keep using setDropHighlight.
+    virtual void updateDropHover(const std::string& /*payload*/,
+                                 const glm::vec2& /*logicalPoint*/) {}
 
     // === Reactive dependency tracking ===
     /// Mark this widget paint-dirty (called by ReactiveBase::notifyDependents).

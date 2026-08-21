@@ -48,6 +48,9 @@ struct YA_GUI_API UIDockSpace : public UIElement
     bool canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
     void onDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
     void setDropHighlight(bool bHighlight) override;
+    /// Point-sensitive merge/split preview: resolves the highlight at the
+    /// current pointer on every drag move.
+    void updateDropHover(const std::string& payload, const glm::vec2& logicalPoint) override;
     void clearTransientInputState() override;
 
     /// Theme style key (style-system Phase 2/3). When the owning tree has a

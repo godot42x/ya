@@ -313,8 +313,25 @@ void UIDockSpace::paintChildren(UIFrameBuilder& builder)
         }
     }
     const FBrush previewFill = _preview->bMerge ? style.dropPreviewMergeColor : style.dropPreviewColor;
+    // ImGui-style docking preview: the target zone gets a translucent fill, a
+    // bright 2px accent border, and a 1px inner light edge so it reads as an
+    // elevated drop gutter (not a flat overlay). Merge = the whole leaf,
+    // split = the edge strip.
     builder.addBrush(_preview->rect, previewFill);
-    builder.addRectOutline(_preview->rect, style.dropPreviewOutlineColor, 1.5f);
+    builder.addRectOutline(_preview->rect, style.dropPreviewOutlineColor, 2.0f);
+    const Rect2D inner{_preview->rect.pos + glm::vec2{1.0f, 1.0f},
+                       _preview->rect.extent - glm::vec2{2.0f, 2.0f}};
+    builder.addRectOutline(inner, {1.0f, 1.0f, 1.0f, 0.40f}, 1.0f);
+    // Merge also marks the target tab: a bright accent underline on the leaf's
+    // tab bar signals "this panel group will absorb the dragged panel".
+    if (_preview->bMerge) {
+        const FLeafView* targetView = leafViewForLeaf(_preview->targetLeafId);
+        if (targetView && targetView->bar) {
+            const Rect2D underline{targetView->bar->_layoutRect.pos,
+                                   {targetView->bar->_layoutRect.extent.x, 2.0f}};
+            builder.addRectOutline(underline, style.dropPreviewOutlineColor, 2.0f);
+        }
+    }
 }
 
 const std::string& UIDockSpace::getDropPreviewDisabledReason() const
@@ -486,6 +503,20 @@ void UIDockSpace::setDropHighlight(bool bHighlight)
     if (!bHighlight) {
         clearPreview();
     }
+}
+
+void UIDockSpace::updateDropHover(const std::string& payload, const glm::vec2& logicalPoint)
+{
+    // Point-sensitive drop preview: canAcceptDrop only answers yes/no, so the
+    // tree feeds the CURRENT pointer here on every move of an active drag.
+    // Resolve the merge/split preview at the pointer and mark paint-dirty so
+    // the highlight follows the drag (dock regression: the preview never
+    // rendered because it was only computed into a local in canAcceptDrop).
+    DockPanelId panelId = kInvalidDockPanelId;
+    auto preview = parsePanelPayload(payload, panelId) ? resolveDropPreview(logicalPoint, panelId)
+                                                       : std::nullopt;
+    _preview = std::move(preview);
+    markPaintDirty();
 }
 
 void UIDockSpace::clearTransientInputState()

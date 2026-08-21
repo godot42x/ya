@@ -9,6 +9,8 @@
 #include "GUI/Widgets/WidgetTreeDump.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/DockSpace.h"
+#include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/Text.h"
 
@@ -1124,6 +1126,63 @@ TEST(WidgetTreeTest, DetachWhilePressedClearsButtonTransientState)
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::NotHandled);
     EXPECT_EQ(clicks, 0);
+}
+
+TEST(WidgetTreeTest, DragOverDockSetsPointSensitiveDropPreview)
+{
+    // Dock regression: dragging a dock-panel payload over the dock space must
+    // resolve the merge/split preview at the CURRENT pointer (updateDropHover
+    // per move) — before the fix, canAcceptDrop computed the preview into a
+    // local and setDropHighlight(true) never stored it, so no hint rendered.
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<UIDockWorkspace>();
+    ws->bAllowFloating = true;
+    ws->bAllowTearOff  = true;
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    dock->_anchorMin = {0.0f, 0.0f};
+    dock->_anchorMax = {1.0f, 1.0f};
+    dock->setWorkspace(ws);
+    tree.attachToLayer(WidgetTree::ELayer::Content, dock);
+
+    auto panel = std::make_shared<UIPanel>("P"); // dock panel content
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel); // keep alive
+    const DockPanelId id = ws->addPanel("Scene", panel);
+    ws->tearOffPanel(id, {120.0f, 120.0f}, {320.0f, 240.0f}); // float it
+    ASSERT_TRUE(ws->isPanelFloating(id));
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold layout
+
+    // Drag the dock-panel payload over the dock's center (merge band).
+    auto source = std::make_shared<UIPanel>("Source");
+    source->setPosition({10.0f, 10.0f});
+    source->setSize({30.0f, 30.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, source);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.beginDrag(source.get(), std::string(UIDockSpace::kDockPanelPayload) + std::to_string(id), "Scene",
+                   {}, /*bShowGhost=*/true, /*bSkipSourceInHitTest=*/true);
+    tree.updateDrag({400.0f, 300.0f}); // center -> merge preview on the leaf
+    EXPECT_TRUE(dock->hasDropPreview());
+    EXPECT_FALSE(dock->isDropPreviewDisabled());
+    EXPECT_TRUE(dock->isDropPreviewMerge());
+
+    // Moving to the leaf's WEST edge switches the preview to a split strip.
+    tree.updateDrag({40.0f, 300.0f});
+    EXPECT_TRUE(dock->hasDropPreview());
+    EXPECT_FALSE(dock->isDropPreviewMerge());
+    EXPECT_EQ(dock->getDropPreviewTargetLeafId() != kInvalidDockNodeId, true);
+
+    // The dragged SOURCE now follows the pointer (floating-window drag): the
+    // tree skips the drag-source subtree during drop-target discovery, so a
+    // window parked AT the pointer must not shadow the dock beneath it.
+    source->setPosition({390.0f, 290.0f});
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.updateDrag({400.0f, 300.0f}); // pointer over BOTH the source and the dock
+    EXPECT_TRUE(dock->hasDropPreview());
+    EXPECT_TRUE(dock->isDropPreviewMerge());
+
+    // Leaving the dock clears the preview.
+    tree.updateDrag({9000.0f, 9000.0f});
+    EXPECT_FALSE(dock->hasDropPreview());
+    tree.endDrag({9000.0f, 9000.0f}); // no target: clean finish
 }
 
 TEST(WidgetTreeTest, DragObserverReceivesEveryMoveAndTargetChanges)

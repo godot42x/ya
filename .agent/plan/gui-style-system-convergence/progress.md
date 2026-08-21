@@ -361,3 +361,75 @@ style system 最终形态：**机制单一**——UIStyleSet（泛型）+ UIThem
 1. Phase 5 实现型延伸（可选）：subtree override（带 generation Reactive）、game HUD 首个 typed style 消费（brush image/nine-patch 渲染补齐前置）；
 2. 如出现「一套主题资产跨 app 平移」需求再评估 selector/DSL；
 3. NinePatch UV 切片仍是 brush 扩展的长期待办（game UI 换肤资产管线前置）。
+
+## 2026-08-22 — dock 回归修复：floating 窗口可用标题抓取 drag&drop 重新 dock
+
+### 回归现象
+
+一个已经 floating 的窗口无法通过 drag&drop 重新 dock —— 复现（/tmp/dock_title_drag.jsonl）：tear-off 后抓浮窗**标题空白区**（header 除 tab/close 外的区域）拖向 DockSpace，窗口原地不动、不 dock。原因：只有 TabStrip 绑定了 dock-panel drag（`_onTabDragBegin`），header 空白区/窗口体无任何拖动响应；而单个面板浮窗的「标题」就是 header 空白——用户抓标题是唯一自然手势。
+
+### 修复（framework）
+
+- **UIDockFloatingWindow 增加标题抓取 drag**：header 容器存成员；按下（children 未消费 = tab/close/resize handle 之外的标题空白区）→ 捕获 pointer + 6px 阈值（与 UITabBar 同款）→ `beginTabDrag()`（dock-panel payload）。释放于 DockSpace → re-dock；释放于空白 → 移动窗口（onFinished NoTarget 既有语义，验证 FloatWindow1 (180,140)→(600,20) 且保持 floating）。
+- **assertScenarioTree 支持 `{"widget":"!Name"}` 不存在断言**：dock_redocked 现在能强断言 FloatingWindow1 已消失（此前只查 DockLeaf1 存在，弱断言任由回归溜过）。
+- dock_floating.jsonl 改为覆盖**标题抓取** re-dock 主路径 + `!FloatingWindow1` 强断言；tab-drag 路径由 dock.jsonl/dock_cardinal_split 隐含覆盖。
+
+### 验证
+
+- 复现场景（重写为验收）：tear → 标题抓取 (400,160)→(700,300) → FloatingWindow1 消失 + DockLeaf1 保留，rc=0；
+- 标题拖到空白 (600,20)：窗口移动 (180,140)→(600,20) 且保持 floating（移动语义未破坏）；
+- dock / dock_cardinal_split / dock_floating 三场景全过（4-6 asserts）；
+- widgets 136/140（5 预存）；全量场景 20/21（menus 预存）；**基线门 PASS**（dock 静态页 digest 不变）。
+
+## 2026-08-22 — dock 拖拽缺 drop 提示：target 侧连续预览缺失（重构回归）
+
+### 现象
+
+拖 floating window title/tab 到 DockSpace 上方后，dock 下方没有任何 merge/split 高亮提示——用户描述「看起来是事件没传透」。事件其实传透了（re-dock onDrop 一直可用），缺的是**预览渲染**：`UIDockSpace::setDropHighlight(true)` 是空操作，`canAcceptDrop` 把 `resolveDropPreview` 算进局部变量即弃，`_preview` 成员从未在拖拽中被赋值 → `paintChildren` 永远不画预览（对照旧版：8bd5e40b 时代预览在 tab 拖拽 observer 里计算并渲染，dock workspace 重构后丢失）。
+
+### 修复（framework）
+
+- **`UIElement` 新增 target 侧连续 hover 钩子**：`virtual void updateDropHover(payload, logicalPoint)`（默认 no-op）；树在 `WidgetTree::updateDrag` 中对当前 target **每次 move 都调用**（target 不变也调用），setDropHighlight(true) 后立即调一次；
+- **`UIDockSpace::updateDropHover`**：用当前指针 resolve merge/split 预览 → 存 `_preview` + markPaintDirty；指针移开 → findDropTarget 换 target → 旧 target setDropHighlight(false) → clearPreview（既有路径）。
+- 设计说明：canAcceptDrop 保持纯查询（不动成员）；点敏感预览走新钩子，与无点敏感 target 的 setDropHighlight 并存。
+
+### 验证
+
+- **拖拽中途快照**（--headless mid-drag dump）：
+  - 指针在 dock 中央 (700,300) → 整叶 merge 高亮（1280x615.6 半透明）；
+  - 指针在西边缘 (30,600) → 384px 左条带 split 预览（几何正确、随指针切换）；
+- **闭包回归测试** `WidgetTreeTest.DragOverDockSetsPointSensitiveDropPreview`：workspace 浮起 panel → beginDrag(dock-panel) → updateDrag 中央 → hasDropPreview && merge；移西边缘 → 变 split；移出树 → 预览清除；endDrag 干净收尾。137/140 测试通过（5 预存）；
+- 全量场景 20/21（menus 预存）；基线门 PASS。
+
+## 2026-08-22 — dock 拖拽体验优化：浮窗跟手 + ImGui 风格 drop 预览
+
+### 1) 跟手（aa4660af）
+
+现象：拖 floating window 时，指针进入 dock 区域后窗口「冻住」不跟手（旧实现：目标非空即停，让指针脱离窗口去命中 dock）。
+
+修法（op
+
+## 2026-08-22 — dock 拖拽体验优化：浮窗跟手 + ImGui 风格 drop 预览
+
+### 1) 跟手（aa4660af）
+
+现象：拖 floating window 时，指针进入 dock 区域后窗口「冻住」不跟手（旧实现：目标非空即停，让指针脱离窗口去命中 dock）。
+
+修法：
+- `WidgetTree::beginDrag` 新增 opt-in `bSkipSourceInHitTest`：开启时 drop 目标发现跳过 drag source 子树 → 浮窗**每次 move 都跟随指针**（去掉 target 冻结 + NoTarget snap），窗口下方 dock 依旧可命中、持续显示预览；
+- **必须 opt-in**：DockSpace/TreeView/SelectableRow 用容器当 source（指针从不在 source 与目标之间），无条件跳过会打挂 dock tab split（dock.jsonl 亲测失败）与 tree reorder；
+- 浮窗拖拽抑制 tree drag ghost（窗口自己就是视觉本体，ghost 会双重显示）。
+
+### 2) ImGui 风格 drop 预览（b0addd4c 预览补全 + aa4660af 收尾）
+
+- merge：整叶半透明填充 + **2px 高亮描边** + 1px 内白边 + 目标 tab bar 强调下划线；
+- split：边缘条带同款描边；预览随指针实时切换（updateDropHover，上轮已落地）。
+
+### 3) 附带修复
+
+- `UIFrameSnapshotDump`：line item 被序列化成 "text"（只有 sprite/非 sprite 二分）→ 修正为 line；**基线重生成**（digest 变化）。
+
+### 验证
+
+- 跟手：title 拖拽 mid-drag 快照窗口 (180,140)→(430,260) 跟随指针；悬停 dock 放手 re-dock 成功（skip 生效）；放空白保持 floating；
+- dock/dock_cardinal_split/dock_floating rc=0；全量 20/21（menus 预存）；137/140（5 预存）；基线门 PASS（强化后 DragOverDockSetsPointSensitiveDropPreview：source 停在指针下仍看得到 dock 预览）。

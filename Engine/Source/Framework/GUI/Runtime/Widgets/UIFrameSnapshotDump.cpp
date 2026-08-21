@@ -39,7 +39,7 @@ nlohmann::json dumpVec4(const glm::vec4& value)
 nlohmann::json dumpSemanticItem(const UIFrameDrawItem& item)
 {
     return {
-        {"kind", item.kind == UIFrameDrawItem::EKind::Sprite ? "sprite" : "text"},
+        {"kind", item.kind == UIFrameDrawItem::EKind::Line ? "line" : (item.kind == UIFrameDrawItem::EKind::Sprite ? "sprite" : "text")},
         {"clipped", item.bClipped},
         {"color", dumpVec4(item.color)},
         {"text", item.text},
@@ -53,7 +53,7 @@ nlohmann::json dumpUIFrameSnapshot(const UIFrameSnapshot& snapshot)
     nlohmann::json items = nlohmann::json::array();
     for (const UIFrameDrawItem& item : snapshot.items) {
         items.push_back({
-            {"kind", item.kind == UIFrameDrawItem::EKind::Sprite ? "sprite" : "text"},
+            {"kind", item.kind == UIFrameDrawItem::EKind::Line ? "line" : (item.kind == UIFrameDrawItem::EKind::Sprite ? "sprite" : "text")},
             {"pos", dumpVec2(item.pos)},
             {"size", dumpVec2(item.size)},
             {"color", dumpVec4(item.color)},

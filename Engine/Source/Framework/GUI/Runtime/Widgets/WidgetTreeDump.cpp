@@ -470,8 +470,20 @@ bool assertScenarioTree(const WidgetTree& tree, std::string_view assertion, std:
             error = "widget assertion selector must be a string";
             return false;
         }
-        const std::string widgetName = widgetIt->get<std::string>();
+        const std::string selector = widgetIt->get<std::string>();
+        // A leading '!' asserts ABSENCE: the widget must not exist in the
+        // tree (e.g. a floating dock window that was re-docked away).
+        const bool bExpectAbsent = !selector.empty() && selector[0] == '!';
+        const std::string widgetName = bExpectAbsent ? selector.substr(1) : selector;
         const nlohmann::json* node = findWidgetNode(treeDump, widgetName);
+        if (bExpectAbsent) {
+            if (node) {
+                error = std::format("widget '{}' expected absent but found", widgetName);
+                return false;
+            }
+            expected.erase(widgetIt);
+            return jsonContains(treeDump, expected, "tree", error);
+        }
         if (!node) {
             error = std::format("widget '{}' not found", widgetName);
             return false;

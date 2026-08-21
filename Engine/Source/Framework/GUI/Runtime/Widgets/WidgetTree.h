@@ -260,11 +260,17 @@ struct YA_GUI_API WidgetTree final
     /// presses/Esc (cancel).
     [[nodiscard]] bool isDragging() const { return !_dragPayload.empty(); }
     /// Start a drag session from `source` with a string payload; a ghost
-    /// (Panel + label) follows the pointer on the DragIme layer.
+    /// (Panel + label) follows the pointer on the DragIme layer unless
+    /// `bShowGhost` is false (the source itself follows the pointer instead,
+    /// e.g. a dock floating window). While the session is active, the drag
+    /// SOURCE subtree is skipped by the hit walk so the widgets beneath it
+    /// stay reachable as drop targets.
     void beginDrag(UIElement* source,
                    std::string payload,
                    std::string ghostLabel,
-                   DragSessionObserver observer = {});
+                   DragSessionObserver observer = {},
+                   bool bShowGhost = true,
+                   bool bSkipSourceInHitTest = false);
     /// Move the drag ghost and refresh the highlighted drop target.
     void updateDrag(const glm::vec2& logicalPoint);
     /// Release the drag: deliver `onDrop` to the topmost accepting target.
@@ -281,10 +287,13 @@ struct YA_GUI_API WidgetTree final
     /// self, returning the first (and only) hit. Mirrors UE Slate / WPF / Qt /
     /// DOM: one point resolves to exactly one widget, then routing and hover
     /// both derive from that widget's ancestor path. Returns null when nothing
-    /// is hit.
+    /// is hit. During an active drag, `skipSubtree` (the drag source) is
+    /// ignored so the widgets beneath the dragged widget remain reachable as
+    /// drop targets.
     [[nodiscard]] static UIElement* hitTestAt(UIElement* element,
                                               const glm::vec2& logicalPoint,
-                                              bool bForHover = false);
+                                              bool bForHover = false,
+                                              UIElement* skipSubtree = nullptr);
     /// Resolve the single hover owner from a hit target: walk up its ancestor
     /// chain for the first isHoverable() widget. Because the target is already
     /// the topmost hit, this is deterministic (the deepest hoverable) with no
@@ -397,6 +406,11 @@ struct YA_GUI_API WidgetTree final
     WidgetRouteTrace _lastRouteTrace;
 
     UIElement*        _dragSource   = nullptr;
+    /// When true, drop-target discovery ignores the drag source subtree
+    /// (opt-in: the dragged widget itself follows the pointer, e.g. a dock
+    /// floating window; containers like DockSpace/TreeView keep their own
+    /// subtree hittable).
+    bool               _bDragSkipSource = false;
     std::string       _dragPayload;
     glm::vec2         _dragPoint{};
     UIElement*        _dragDropTarget = nullptr;

@@ -71,8 +71,22 @@ void WidgetTree::setTheme(UITheme* theme)
     _themeGeneration->set(_themeGeneration->value() + 1);
 }
 
-UIElement* WidgetTree::hitTestAt(UIElement* element, const glm::vec2& logicalPoint, bool bForHover)
+UIElement* WidgetTree::hitTestAt(UIElement* element,
+                                 const glm::vec2& logicalPoint,
+                                 bool bForHover,
+                                 UIElement* skipSubtree)
 {
+    if (skipSubtree) {
+        // Skip the dragged source subtree: a floating window that follows
+        // the pointer must not shadow the drop targets beneath it. Opt-in
+        // only (dock/treeview/selectable containers are their own sources but
+        // the pointer never sits between them and their targets).
+        for (UIElement* node = element; node != nullptr; node = node->getParent()) {
+            if (node == skipSubtree) {
+                return nullptr;
+            }
+        }
+    }
     if (!element->isHitTestableSubtree()) {
         return nullptr;
     }
@@ -87,7 +101,7 @@ UIElement* WidgetTree::hitTestAt(UIElement* element, const glm::vec2& logicalPoi
     // the search stops at the first hit.
     const auto children = element->getChildrenInPaintOrder();
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
-        if (UIElement* hit = hitTestAt(*it, logicalPoint, bForHover)) {
+        if (UIElement* hit = hitTestAt(*it, logicalPoint, bForHover, skipSubtree)) {
             return hit;
         }
     }
@@ -822,7 +836,8 @@ void WidgetTree::onWidgetDetached(UIElement& widget)
 
 UIElement* WidgetTree::topmostHit(const glm::vec2& logicalPoint) const
 {
-    return hitTestAt(_root.get(), logicalPoint);
+    return hitTestAt(_root.get(), logicalPoint, /*bForHover=*/false,
+                     _bDragSkipSource ? _dragSource : nullptr);
 }
 
 std::vector<UIElement*> WidgetTree::buildPath(UIElement* target)
@@ -1056,7 +1071,9 @@ void WidgetTree::appendRouteTraceStep(const UIElement& widget,
 void WidgetTree::beginDrag(UIElement* source,
                            std::string payload,
                            std::string ghostLabel,
-                           DragSessionObserver observer)
+                           DragSessionObserver observer,
+                           bool bShowGhost,
+                           bool bSkipSourceInHitTest)
 {
     if (isDragging()) {
         cancelDrag();
@@ -1065,6 +1082,13 @@ void WidgetTree::beginDrag(UIElement* source,
     _dragPayload = std::move(payload);
     _dragPoint   = {};
     _dragObserver = std::move(observer);
+    _bDragSkipSource = bSkipSourceInHitTest;
+
+    if (!bShowGhost) {
+        _dragGhost = nullptr;
+        invalidateLayout();
+        return;
+    }
 
     // Ghost on the DragIme layer: visible but never hit-testable.
     auto ghost = std::make_shared<UIPanel>("DragGhost");
@@ -1120,7 +1144,14 @@ void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
         _dragDropTarget = target;
         if (_dragDropTarget) {
             _dragDropTarget->setDropHighlight(true);
+            _dragDropTarget->updateDropHover(_dragPayload, logicalPoint);
         }
+    }
+    else if (_dragDropTarget) {
+        // Hover feedback follows the pointer even when the target is unchanged
+        // (point-sensitive previews: dock spaces resolve their highlight per
+        // move via updateDropHover).
+        _dragDropTarget->updateDropHover(_dragPayload, logicalPoint);
     }
 
     const std::string currentTargetName = target ? target->_name : std::string{};
@@ -1140,6 +1171,7 @@ void WidgetTree::clearDragSession()
     }
     _dragPayload.clear();
     _dragSource = nullptr;
+    _bDragSkipSource = false;
     if (_dragGhost && _dragGhost->isAttached()) {
         detach(*_dragGhost); // payload already cleared: no recursive cancel
     }

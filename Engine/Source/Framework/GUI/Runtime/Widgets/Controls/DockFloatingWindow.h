@@ -68,6 +68,13 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer
     DockPanelId _panelId = kInvalidDockPanelId;
     std::string _title;
     std::shared_ptr<UIDockWorkspace> _ws;
+    /// Title strip container (the windows grab zone): pressing + dragging its
+    /// empty area starts the dock-panel drag (dock on a DockSpace, move on
+    /// empty space) — mirrors the tab-strip drag.
+    std::shared_ptr<UIContainer> _header;
+    /// Transient title-drag arm state (mirrors UITabBar's 6px threshold).
+    bool      _bTitlePressed = false;
+    glm::vec2 _titlePressPoint{0.0f, 0.0f};
     Rect2D _windowRect;
     std::optional<glm::vec2> _lastDragPoint;
     std::vector<std::shared_ptr<UIElement>> _resizeHandles;
