@@ -43,6 +43,24 @@ struct FBrush
 
     /// True when this brush is a solid fill (no image resource).
     [[nodiscard]] bool isSolid() const { return resource.empty(); }
+
+    /// Convenience factory: a solid brush tinted with `color` (no resource).
+    static FBrush Solid(const glm::vec4& color)
+    {
+        FBrush b;
+        b.tintColor = color;
+        return b;
+    }
+
+    /// Convenience factory: an image brush from an asset path (white tint so
+    /// the texture shows unmodulated; pass a tint to colorize it).
+    static FBrush Image(const std::string& assetPath, const glm::vec4& tint = {1.0f, 1.0f, 1.0f, 1.0f})
+    {
+        FBrush b;
+        b.resource  = assetPath;
+        b.tintColor = tint;
+        return b;
+    }
 };
 
 } // namespace ya

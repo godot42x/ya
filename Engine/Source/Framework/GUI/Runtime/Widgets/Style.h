@@ -13,6 +13,7 @@
 // ============================================================================
 
 #include "Core/Api.h"
+#include "GUI/Widgets/Brush.h"
 #include "GUI/Widgets/Reactive.h"
 
 #include <glm/glm.hpp>
@@ -69,25 +70,25 @@ struct FTextStyle
     }
 };
 
-/// Panel: solid fill. Mirrors UIPanel::getColor default.
+/// Panel: fill brush (solid color, or image later). Mirrors UIPanel default.
 struct FPanelStyle
 {
-    glm::vec4 fillColor = {0.2f, 0.2f, 0.2f, 0.8f};
+    FBrush fillColor = FBrush::Solid({0.2f, 0.2f, 0.2f, 0.8f});
 
     bool operator==(const FPanelStyle& o) const { return fillColor == o.fillColor; }
 };
 
-/// Button: one fill per state + label color + padding. Mirrors UIButton's
-/// _normal/_hovered/_pressed/_focused defaults and content padding.
+/// Button: one fill brush per state + label color + padding. Mirrors
+/// UIButton's _normal/_hovered/_pressed/_focused defaults and content padding.
 struct FButtonStyle
 {
-    glm::vec4 normalFill   = {0.8f, 0.8f, 0.8f, 1.0f};
-    glm::vec4 hoveredFill  = {0.6f, 0.6f, 0.6f, 1.0f};
-    glm::vec4 pressedFill  = {0.4f, 0.4f, 0.4f, 1.0f};
-    glm::vec4 focusedFill  = {0.26f, 0.52f, 0.90f, 1.0f};
-    glm::vec4 disabledFill = {0.5f, 0.5f, 0.5f, 1.0f};
-    glm::vec4 textColor    = {1.0f, 1.0f, 1.0f, 1.0f};
-    glm::vec2 padding      = {12.0f, 4.0f};
+    FBrush     normalFill   = FBrush::Solid({0.8f, 0.8f, 0.8f, 1.0f});
+    FBrush     hoveredFill  = FBrush::Solid({0.6f, 0.6f, 0.6f, 1.0f});
+    FBrush     pressedFill  = FBrush::Solid({0.4f, 0.4f, 0.4f, 1.0f});
+    FBrush     focusedFill  = FBrush::Solid({0.26f, 0.52f, 0.90f, 1.0f});
+    FBrush     disabledFill = FBrush::Solid({0.5f, 0.5f, 0.5f, 1.0f});
+    glm::vec4  textColor    = {1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec2  padding      = {12.0f, 4.0f};
 
     bool operator==(const FButtonStyle& o) const
     {
@@ -105,8 +106,8 @@ struct FButtonStyle
 struct FMenuBarItemStyle
 {
     glm::vec4 textColor   = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 normalFill  = {0.10f, 0.11f, 0.13f, 1.0f};
-    glm::vec4 hoveredFill = {0.20f, 0.22f, 0.27f, 1.0f};
+    FBrush    normalFill  = FBrush::Solid({0.10f, 0.11f, 0.13f, 1.0f});
+    FBrush    hoveredFill = FBrush::Solid({0.20f, 0.22f, 0.27f, 1.0f});
 
     bool operator==(const FMenuBarItemStyle& o) const
     {
@@ -116,13 +117,13 @@ struct FMenuBarItemStyle
     }
 };
 
-/// Tab strip button: per-state + accent. Mirrors UITabButton defaults.
+/// Tab strip button: per-state fill brush + accent. Mirrors UITabButton defaults.
 struct FTabStyle
 {
     glm::vec4 textColor    = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 normalFill   = {0.15f, 0.16f, 0.19f, 1.0f};
-    glm::vec4 hoveredFill  = {0.21f, 0.23f, 0.27f, 1.0f};
-    glm::vec4 selectedFill = {0.12f, 0.13f, 0.17f, 1.0f};
+    FBrush    normalFill   = FBrush::Solid({0.15f, 0.16f, 0.19f, 1.0f});
+    FBrush    hoveredFill  = FBrush::Solid({0.21f, 0.23f, 0.27f, 1.0f});
+    FBrush    selectedFill = FBrush::Solid({0.12f, 0.13f, 0.17f, 1.0f});
     glm::vec4 accentColor  = {0.30f, 0.55f, 0.92f, 1.0f};
     glm::vec2 padding      = {14.0f, 6.0f};
 
@@ -137,13 +138,13 @@ struct FTabStyle
     }
 };
 
-/// Split pane divider: one fill per state (normal / hovered / dragging).
+/// Split pane divider: one fill brush per state (normal / hovered / dragging).
 /// Mirrors UISplitPane's _dividerColor/_dividerHoveredColor/_dividerDraggingColor.
 struct FSplitPaneStyle
 {
-    glm::vec4 dividerFill         = {0.11f, 0.12f, 0.15f, 1.0f};
-    glm::vec4 dividerHoveredFill  = {0.26f, 0.31f, 0.40f, 1.0f};
-    glm::vec4 dividerDraggingFill = {0.32f, 0.55f, 0.92f, 1.0f};
+    FBrush dividerFill         = FBrush::Solid({0.11f, 0.12f, 0.15f, 1.0f});
+    FBrush dividerHoveredFill  = FBrush::Solid({0.26f, 0.31f, 0.40f, 1.0f});
+    FBrush dividerDraggingFill = FBrush::Solid({0.32f, 0.55f, 0.92f, 1.0f});
 
     bool operator==(const FSplitPaneStyle& o) const
     {
@@ -153,14 +154,14 @@ struct FSplitPaneStyle
     }
 };
 
-/// Scroll bar: track + thumb colors and thickness. Mirrors
+/// Scroll bar: track + thumb fill brushes and thickness. Mirrors
 /// UIScrollViewport's _scrollbarTrackColor/_scrollbarThumbColor/_scrollbarWidth.
 /// (_bShowScrollbar stays a widget behavior switch, not a style attribute.)
 struct FScrollBarStyle
 {
-    glm::vec4 trackColor = {0.10f, 0.11f, 0.14f, 0.9f};
-    glm::vec4 thumbColor = {0.34f, 0.38f, 0.46f, 1.0f};
-    float     width      = 8.0f;
+    FBrush trackColor = FBrush::Solid({0.10f, 0.11f, 0.14f, 0.9f});
+    FBrush thumbColor = FBrush::Solid({0.34f, 0.38f, 0.46f, 1.0f});
+    float  width      = 8.0f;
 
     bool operator==(const FScrollBarStyle& o) const
     {
@@ -174,8 +175,8 @@ struct FScrollBarStyle
 /// FSplitPaneStyle (SplitPane is a general control, not dock-specific).
 struct FDockSpaceStyle
 {
-    glm::vec4 canvasColor      = {0.075f, 0.082f, 0.10f, 1.0f};
-    glm::vec4 dropPreviewColor = {0.30f, 0.55f, 0.90f, 0.55f};
+    FBrush canvasColor      = FBrush::Solid({0.075f, 0.082f, 0.10f, 1.0f});
+    FBrush dropPreviewColor = FBrush::Solid({0.30f, 0.55f, 0.90f, 0.55f});
 
     bool operator==(const FDockSpaceStyle& o) const
     {
@@ -188,8 +189,8 @@ struct FDockSpaceStyle
 /// UIDockFloatingWindow and its resize handles.
 struct FFloatingWindowStyle
 {
-    glm::vec4 bodyFill       = {0.145f, 0.150f, 0.180f, 0.985f};
-    glm::vec4 innerFill      = {0.08f, 0.09f, 0.12f, 0.55f};
+    FBrush    bodyFill       = FBrush::Solid({0.145f, 0.150f, 0.180f, 0.985f});
+    FBrush    innerFill      = FBrush::Solid({0.08f, 0.09f, 0.12f, 0.55f});
     glm::vec4 borderColor    = {0.27f, 0.30f, 0.38f, 1.0f};
     glm::vec4 edgeAffordance = {0.40f, 0.47f, 0.62f, 0.42f};
     glm::vec4 titleTextColor = {0.90f, 0.92f, 0.95f, 1.0f};

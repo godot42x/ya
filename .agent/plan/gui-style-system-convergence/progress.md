@@ -114,3 +114,13 @@
 
 **下一刀**：typed style 字段从 `glm::vec4` 升级为 FBrush 引用（Phase 3 控件去硬编码的前置，结构性）；或先补九宫格 UV 切片渲染（暴露 uvTranslation）。
 
+## 2026-08-21 — typed style fill 字段升级 FBrush（brush 进入 style 体系）
+
+- FBrush 加 `Solid(color)` / `Image(path, tint)` 静态工厂，默认值书写简洁。
+- 9 个 typed style 的 **fill 类字段**（normalFill/hoveredFill/pressedFill/focusedFill/disabledFill/selectedFill/fillColor/dividerFill*/trackColor/thumbColor/canvasColor/dropPreviewColor/bodyFill/innerFill）从 `glm::vec4` 升级为 `FBrush`（默认值 `FBrush::Solid({...})` 保持原纯色外观，行为不变）。
+- **文字色/边框色/强调色保持 `glm::vec4`**（textColor/accentColor/borderColor/edgeAffordance/titleTextColor）——Godot 两层拆分：Color 是 primitive，StyleBox/brush 是填充复合体，文字色不需要 image。
+- FWidgetStyle（遗留通用样式）暂不动，Phase 2/3 处理其命运。
+- ya-gui-widgets + GUIWorkbench 编译通过；控件尚未接线（Phase 3），字段类型变化零行为影响。
+
+**Phase 1 brush-first 至此**：FBrush 类型 + addBrush 绘制对接 + typed style fill 字段升 brush 全部落地。剩余 Phase 1 项：NinePatch UV 切片渲染、reflect_equal（== 改反射）。
+
