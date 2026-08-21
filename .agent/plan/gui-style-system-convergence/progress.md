@@ -144,3 +144,13 @@
 
 **关键设计决策锁定**：①UIStyleSet 泛型化 = type_index 分桶存 shared_ptr<ReactiveBase>；②换 theme 失效 = `Reactive<uint64_t>` generation token（O(1) == 比较，比 Reactive<UITheme> 简单、比 invalidateSubtree 精确）；③resolve 链 = 框架 helper 机制化（控件不可绕过依赖登记）；④废弃 UIStyleSet::bindTo 的 persistent 注册，统一 paint 时 get(level)。
 
+## 2026-08-21 — Phase 2 第一刀：UIStyleSet 泛型化
+
+- Style.h 的 UIStyleSet 泛型化：`define<TStyle>(name, style)` / `find<TStyle>(name)` 模板，内部 `unordered_map<type_index, unordered_map<string, shared_ptr<ReactiveBase>>>` 按类型分桶。
+- **G4 同名 set 语义保留**：define 命中同型 handle 时 `set()` 复用（不新建 ReactiveBase），同 key 不同 type 走 type_index 分桶共存。
+- Style.cpp 删除旧的非模板 define/find（移到头文件 inline 模板），保留 bindTo（FWidgetStyle 特定，统一绑定路径刀再废弃）。
+- 消费点兼容：Gallery demo（`define("theme", kDarkTheme)` 模板推断 FWidgetStyle）+ UIFrameSnapshotTest（define/bindTo）均无需改动；find 无 <TStyle> 的旧调用不存在。
+- ya-gui-widgets + GUIWorkbench 编译通过。测试 target ya-gui-closure-test 的 Render2DClipTest.cpp 编译错误是**预存 include 路径问题**（该文件不引用 Style，与本次无关）。
+
+**Phase 2 剩余**：UITheme（组合 UIStyleSet）、WidgetTree 挂载 theme + generation token、resolveThemeStyle helper、white/dark 验收 demo。
+

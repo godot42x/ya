@@ -20,6 +20,7 @@
 
 #include <memory>
 #include <string>
+#include <typeindex>
 #include <unordered_map>
 
 namespace ya
@@ -157,20 +158,48 @@ struct FFloatingWindowStyle
 /// Named style collection. Styles are Reactive so widgets can bind them and
 /// be notified on edit. Owned by the host (or a singleton); not tied to a
 /// specific tree so one set themes many widgets/windows.
+///
+/// Generic over the style type: define<FButtonStyle>("button", ...) and
+/// define<FTabStyle>("button", ...) coexist (names are bucketed by type_index).
 class YA_GUI_API UIStyleSet
 {
 public:
-    /// Define (or replace) a named style and return its reactive handle.
-    std::shared_ptr<Reactive<FWidgetStyle>> define(std::string name, FWidgetStyle style);
+    /// Define (or replace) a named typed style and return its reactive handle.
+    /// Re-defining an existing name of the SAME type mutates the SAME handle
+    /// (G4: set() notifies dependents) instead of replacing it — a replaced
+    /// handle would silently orphan all existing bindings.
+    template <typename TStyle>
+    std::shared_ptr<Reactive<TStyle>> define(std::string name, TStyle style)
+    {
+        auto& bucket = _styles[std::type_index(typeid(TStyle))];
+        if (const auto it = bucket.find(name); it != bucket.end()) {
+            auto handle = std::static_pointer_cast<Reactive<TStyle>>(it->second);
+            handle->set(std::move(style));
+            return handle;
+        }
+        auto handle = std::make_shared<Reactive<TStyle>>(std::move(style));
+        bucket[std::move(name)] = handle;
+        return handle;
+    }
 
-    /// Find a style by name; null when undefined.
-    [[nodiscard]] std::shared_ptr<Reactive<FWidgetStyle>> find(const std::string& name) const;
+    /// Find a typed style by name; null when undefined.
+    template <typename TStyle>
+    [[nodiscard]] std::shared_ptr<Reactive<TStyle>> find(const std::string& name) const
+    {
+        const auto it = _styles.find(std::type_index(typeid(TStyle)));
+        if (it == _styles.end()) {
+            return nullptr;
+        }
+        const auto jt = it->second.find(name);
+        return jt != it->second.end() ? std::static_pointer_cast<Reactive<TStyle>>(jt->second) : nullptr;
+    }
 
     /// Bind a style to a widget. Implemented in .cpp (needs UIElement).
     void bindTo(std::shared_ptr<Reactive<FWidgetStyle>> style, struct UIElement& widget);
 
 private:
-    std::unordered_map<std::string, std::shared_ptr<Reactive<FWidgetStyle>>> _styles;
+    std::unordered_map<std::type_index,
+                       std::unordered_map<std::string, std::shared_ptr<ReactiveBase>>> _styles;
 };
 
 } // namespace ya

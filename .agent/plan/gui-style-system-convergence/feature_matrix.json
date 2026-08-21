@@ -44,7 +44,7 @@
         { "id": "ui_theme_context", "status": "planned", "notes": "WidgetTree/window/subtree theme owner" },
         { "id": "style_key_lookup", "status": "planned", "notes": "style key 命名与 lookup" },
         { "id": "resolve_chain", "status": "planned", "notes": "override -> key -> subtree -> tree/window -> fallback" },
-        { "id": "style_set_generic", "status": "planned", "notes": "UIStyleSet 泛型化为 define<TStyle>(name,style)，typed styles 复用 Reactive<T>，不另起第二套容器" },
+        { "id": "style_set_generic", "status": "pass", "notes": "UIStyleSet 泛型化为 define<TStyle>(name,style)/find<TStyle>(name)（type_index 分桶存 shared_ptr<ReactiveBase>，G4 同名同型 set 复用），typed styles 走同一容器" },
         { "id": "resolve_invalidation", "status": "planned", "notes": "resolve 上游换人失效传播：UIThemeContext 持 Reactive<UITheme> 或换 theme 走 invalidateSubtreePaint（blocker，见 plan.md 3.2.1）" },
         { "id": "theme_toggle_e2e", "status": "planned", "notes": "white/dark 切换端到端验收：同树运行时换 UITheme → 全 shell 重绘无漏标脏（用户明确验收项）" }
       ]
