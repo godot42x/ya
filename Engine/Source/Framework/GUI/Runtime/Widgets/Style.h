@@ -137,17 +137,49 @@ struct FTabStyle
     }
 };
 
-/// Dock space canvas + split divider + drop preview.
+/// Split pane divider: one fill per state (normal / hovered / dragging).
+/// Mirrors UISplitPane's _dividerColor/_dividerHoveredColor/_dividerDraggingColor.
+struct FSplitPaneStyle
+{
+    glm::vec4 dividerFill         = {0.11f, 0.12f, 0.15f, 1.0f};
+    glm::vec4 dividerHoveredFill  = {0.26f, 0.31f, 0.40f, 1.0f};
+    glm::vec4 dividerDraggingFill = {0.32f, 0.55f, 0.92f, 1.0f};
+
+    bool operator==(const FSplitPaneStyle& o) const
+    {
+        return dividerFill == o.dividerFill &&
+               dividerHoveredFill == o.dividerHoveredFill &&
+               dividerDraggingFill == o.dividerDraggingFill;
+    }
+};
+
+/// Scroll bar: track + thumb colors and thickness. Mirrors
+/// UIScrollViewport's _scrollbarTrackColor/_scrollbarThumbColor/_scrollbarWidth.
+/// (_bShowScrollbar stays a widget behavior switch, not a style attribute.)
+struct FScrollBarStyle
+{
+    glm::vec4 trackColor = {0.10f, 0.11f, 0.14f, 0.9f};
+    glm::vec4 thumbColor = {0.34f, 0.38f, 0.46f, 1.0f};
+    float     width      = 8.0f;
+
+    bool operator==(const FScrollBarStyle& o) const
+    {
+        return trackColor == o.trackColor &&
+               thumbColor == o.thumbColor &&
+               width == o.width;
+    }
+};
+
+/// Dock space canvas + drop preview. The split divider color lives in
+/// FSplitPaneStyle (SplitPane is a general control, not dock-specific).
 struct FDockSpaceStyle
 {
-    glm::vec4 canvasColor        = {0.075f, 0.082f, 0.10f, 1.0f};
-    glm::vec4 splitDividerColor  = {0.28f, 0.30f, 0.36f, 1.0f};
-    glm::vec4 dropPreviewColor   = {0.30f, 0.55f, 0.90f, 0.55f};
+    glm::vec4 canvasColor      = {0.075f, 0.082f, 0.10f, 1.0f};
+    glm::vec4 dropPreviewColor = {0.30f, 0.55f, 0.90f, 0.55f};
 
     bool operator==(const FDockSpaceStyle& o) const
     {
         return canvasColor == o.canvasColor &&
-               splitDividerColor == o.splitDividerColor &&
                dropPreviewColor == o.dropPreviewColor;
     }
 };

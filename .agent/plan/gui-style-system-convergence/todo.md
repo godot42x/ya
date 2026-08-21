@@ -29,6 +29,9 @@
 - [x] 新增 FFloatingWindowStyle
 - [x] 定义 framework fallback 默认值（成员默认即 fallback）
 - [ ] 定义状态命名约定（已定：*Fill + textColor + padding + accent，待文档化）
+- [x] **补 FSplitPaneStyle（divider 三态）** —— 已落地（dividerFill/dividerHoveredFill/dividerDraggingFill），divider 色从 FDockSpaceStyle::splitDividerColor 迁出
+- [x] **补 FScrollBarStyle** —— 已落地（trackColor/thumbColor/width），默认值从 UIScrollViewport 三字段复制
+- [ ] typed style 的 operator== 改反射生成（reflectEqual<T> 或 YA_REFLECT），禁手写
 
 ## Phase 2 — theme runtime
 
@@ -37,6 +40,10 @@
 - [ ] 设计 style key 命名规则
 - [ ] 确定 WidgetTree / GUIWindowHost 的 theme owner 边界
 - [ ] 实现 resolve 顺序：explicit override -> style key -> subtree override -> tree/window theme -> framework fallback
+- [ ] **UIStyleSet 泛型化**：`define<TStyle>(name, style)`，typed styles 复用 Reactive<T>，不另起第二套容器
+- [ ] **resolve 上游换人失效传播**：UIThemeContext 持 `Reactive<UITheme>` 或换 theme 走 `invalidateSubtreePaint()`（blocker，见 plan.md §3.2.1）
+- [ ] **token → typed style 转换**：配置代码烘焙（app 构造 theme 时用 token 初始化 typed style），framework 不做运行时 token 求值（见 plan.md §3.4）
+- [ ] **white/dark 切换端到端验收**：同树运行时换 UITheme → 全 shell 重绘无漏标脏
 
 ## Phase 3 — 第一批控件接入
 
@@ -45,8 +52,10 @@
 - [ ] UIButton -> FButtonStyle
 - [ ] UIMenuBarItem/UIMenuBar -> FMenuBarItemStyle
 - [ ] UITabButton/UITabBar -> FTabStyle
+- [ ] UISplitPane -> FSplitPaneStyle（divider 三态）
 - [ ] UIDockSpace -> FDockSpaceStyle
 - [ ] UIDockFloatingWindow -> FFloatingWindowStyle
+- [ ] **resolve 读取路径契约**：paint 属性在 paintSelf 内走 `Reactive<T>::get()`，禁止缓存 resolved style 进成员（防 layout→paint 漏标脏）
 
 ## Phase 4 — Workbench theme
 

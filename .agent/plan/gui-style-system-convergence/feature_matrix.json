@@ -29,6 +29,9 @@
         { "id": "tab_style", "status": "pass", "notes": "FTabStyle" },
         { "id": "dock_space_style", "status": "pass", "notes": "FDockSpaceStyle" },
         { "id": "floating_window_style", "status": "pass", "notes": "FFloatingWindowStyle" },
+        { "id": "split_pane_style", "status": "pass", "notes": "FSplitPaneStyle 已落地（dividerFill/dividerHoveredFill/dividerDraggingFill 三态，默认值复制 UISplitPane 三字段）；FDockSpaceStyle::splitDividerColor 已移除" },
+        { "id": "scroll_bar_style", "status": "pass", "notes": "FScrollBarStyle 已落地（trackColor/thumbColor/width，默认值复制 UIScrollViewport 三字段；_bShowScrollbar 保留为控件行为开关不入 style）" },
+        { "id": "reflect_equal", "status": "planned", "notes": "typed style 的 operator== 用反射 visit_fields 生成（reflectEqual<T>）或 YA_REFLECT，禁手写（漏改触发 Reactive == no-op 静默漏标脏）" },
         { "id": "framework_fallback_defaults", "status": "pass", "notes": "成员默认值即 framework fallback；从控件当前外观复制，迁移无变化" }
       ]
     },
@@ -39,7 +42,10 @@
         { "id": "ui_theme_object", "status": "planned", "notes": "UITheme named typed style 容器" },
         { "id": "ui_theme_context", "status": "planned", "notes": "WidgetTree/window/subtree theme owner" },
         { "id": "style_key_lookup", "status": "planned", "notes": "style key 命名与 lookup" },
-        { "id": "resolve_chain", "status": "planned", "notes": "override -> key -> subtree -> tree/window -> fallback" }
+        { "id": "resolve_chain", "status": "planned", "notes": "override -> key -> subtree -> tree/window -> fallback" },
+        { "id": "style_set_generic", "status": "planned", "notes": "UIStyleSet 泛型化为 define<TStyle>(name,style)，typed styles 复用 Reactive<T>，不另起第二套容器" },
+        { "id": "resolve_invalidation", "status": "planned", "notes": "resolve 上游换人失效传播：UIThemeContext 持 Reactive<UITheme> 或换 theme 走 invalidateSubtreePaint（blocker，见 plan.md 3.2.1）" },
+        { "id": "theme_toggle_e2e", "status": "planned", "notes": "white/dark 切换端到端验收：同树运行时换 UITheme → 全 shell 重绘无漏标脏（用户明确验收项）" }
       ]
     },
     {

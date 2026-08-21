@@ -89,3 +89,5 @@
   - UIDockSpace -> FDockSpaceStyle（canvas/预览色）
   - UIDockFloatingWindow -> FFloatingWindowStyle（body/border/edge/标题色）
 
+> ⚠ Phase 1 落地遗漏（2026-08-21 评审发现）：上表承诺的 **FSplitPaneStyle 与 FScrollBarStyle 未在 Style.h 落地**；SplitPane 的 divider 色被错误塞进 `FDockSpaceStyle::splitDividerColor`。UISplitPane 是通用控件（非 dock 场景也在用），不应从 dock style 取色，且其三个 divider 状态（`_dividerColor/_dividerHoveredColor/_dividerDraggingColor`）被压成单一静态色。Phase 2 前必须补独立 `FSplitPaneStyle`（divider 三态），从 FDockSpaceStyle 移除 splitDividerColor。
+
