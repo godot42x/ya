@@ -5,7 +5,9 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace ya
 {
@@ -28,6 +30,7 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer
     [[nodiscard]] DockPanelId getPanelId() const { return _panelId; }
     [[nodiscard]] const Rect2D& getWindowRect() const { return _windowRect; }
     void setWindowRect(const Rect2D& rect) { _windowRect = rect; }
+    void resizeTo(const glm::vec2& extent);
     /// Fired when the window is activated (title drag begins). Used by the host
     /// to bring the window to the front of the floating z-order.
     std::function<void()> _onActivated;
@@ -38,13 +41,29 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void clearTransientInputState() override;
 
+    enum class EResizeEdge : uint8_t
+    {
+        Left,
+        Right,
+        Top,
+        Bottom,
+        BottomRight,
+    };
+
+    void applyResizeFromEdge(EResizeEdge edge, const glm::vec2& pointerDelta);
+
   private:
+
     void beginTabDrag();
+    [[nodiscard]] Rect2D resizeHandleRect(EResizeEdge edge) const;
 
     DockPanelId _panelId = kInvalidDockPanelId;
     std::string _title;
     std::shared_ptr<UIDockWorkspace> _ws;
     Rect2D _windowRect;
+    std::optional<glm::vec2> _lastDragPoint;
+    std::vector<std::shared_ptr<UIElement>> _resizeHandles;
+
 };
 
 } // namespace ya
