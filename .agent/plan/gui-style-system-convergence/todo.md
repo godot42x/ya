@@ -4,7 +4,7 @@
 
 ## 当前主线
 
-- [ ] Phase 0 — style capability audit
+- [x] Phase 0 — style capability audit
 - [ ] Phase 1 — typed style structs
 - [ ] Phase 2 — theme context / resolve 链
 - [ ] Phase 3 — 核心 shell 控件去硬编码
@@ -13,21 +13,22 @@
 
 ## Phase 0 — capability audit
 
-- [ ] 审计 UIText / UIPanel / UIButton / UIMenuBarItem / UITabBar / UISplitPane / UIDockSpace / UIDockFloatingWindow 当前硬编码字段
-- [ ] 审计 UIStyleSet / FWidgetStyle 当前真实使用点
-- [ ] 列出控件 -> 目标 typed style 映射表
-- [ ] 标注哪些过渡 token 改动只应保留在 app/demo 层
+- [x] 审计核心 shell 控件现有硬编码字段
+- [x] 审计 UIStyleSet / FWidgetStyle 真实使用点
+- [x] 列出控件 -> 目标 typed style 映射表
+- [x] 标注过渡 token 改动只保留在 app/demo 层
 
 ## Phase 1 — typed style structs
 
-- [ ] 设计 FTextStyle
-- [ ] 设计 FPanelStyle
-- [ ] 设计 FButtonStyle
-- [ ] 设计 FMenuBarItemStyle
-- [ ] 设计 FTabStyle
-- [ ] 设计 FDockSpaceStyle
-- [ ] 设计 FFloatingWindowStyle
-- [ ] 定义 framework fallback 默认值
+- [x] 新增 FTextStyle
+- [x] 新增 FPanelStyle
+- [x] 新增 FButtonStyle
+- [x] 新增 FMenuBarItemStyle
+- [x] 新增 FTabStyle
+- [x] 新增 FDockSpaceStyle
+- [x] 新增 FFloatingWindowStyle
+- [x] 定义 framework fallback 默认值（成员默认即 fallback）
+- [ ] 定义状态命名约定（已定：*Fill + textColor + padding + accent，待文档化）
 
 ## Phase 2 — theme runtime
 

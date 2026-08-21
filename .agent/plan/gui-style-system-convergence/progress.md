@@ -5,35 +5,49 @@
 
 ## 2026-08-21 — 计划建立
 
+（见 7720e428：plan/progress/todo/checklist/matrix 建立）
+
+## 2026-08-21 — Phase 0 audit 完成
+
+- 明确反模式：AM-1 framework 裸颜色字段扩张、AM-2 app 临时 token header + 遍历覆写、AM-3 paint 内 magic color；
+- 建立控件 -> 目标 typed style 映射表（落盘 phase0-audit.md，a38c1d36）；
+- 弃用 style token stash（stash@{0} 已 drop），过渡文件 WorkbenchStyle.h 移至 /tmp。
+
+## 2026-08-21 — Phase 1 typed style structs 落地
+
 ### 本轮完成
 
-- 正式新建 gui-style-system-convergence 计划目录；
-- 明确 style system 的 framework/app 分层；
-- 明确第一阶段不做 CSS/QSS 解释器，而先做 typed styles + theme context + resolve 链；
-- 明确 GUIWorkbench 为第一接入宿主；
-- 明确 game UI 与 tool GUI 复用同一机制、不同主题内容。
+- 在 GUI/Widgets/Style.h 新增 typed style structs：
+  - FTextStyle（textColor/fontSize）
+  - FPanelStyle（fillColor）
+  - FButtonStyle（normal/hovered/pressed/focused/disabled fill + textColor + padding）
+  - FMenuBarItemStyle（text + normal/hovered fill）
+  - FTabStyle（text + normal/hovered/selected fill + accent + padding）
+  - FDockSpaceStyle（canvas + split divider + drop preview）
+  - FFloatingWindowStyle（body/inner/border/edge affordance/title + minSize）
+- 每种 style 的成员默认值即 framework fallback；
+- 默认值从各控件当前外观复制，保证 Phase 3 迁移行为不变；
+- 状态命名约定落定：*Fill（normal/hovered/pressed/focused/selected/disabled）+ textColor + padding + accent。
 
 ### 当前结论
 
-- 当前 UIStyleSet + Reactive<FWidgetStyle> 只能算样式原语，不是完整 style system；
-- 当前 workbench/dock 的颜色收拢只能算阶段性 token 整理，不能代替 theme runtime；
-- 后续实现主线应从继续调颜色转向建立 framework style runtime。
+- typed style 类型层已定型，framework fallback 已定义；
+- Phase 1 只加类型，未接入控件（Phase 3 才接），现有行为零变化；
+- ya-gui-widgets 编译通过。
 
 ### 当前未完成 / 风险
 
-- 当前代码工作区中已经存在一批未提交的 shell token 收拢改动；它们可能作为 Phase 0/过渡输入保留，但不能被误判为 style system 已完成；
-- WorkbenchStyle.h 当前只是过渡主题 token，不在公开 include 路径下的终局位置；
-- UIStyleSet 目前只被少数控件真正消费，typed style 体系尚未建立；
-- WidgetTree 还没有正式 theme context owner 能力。
+- 控件尚未从 typed style resolve（Phase 3）；
+- 尚无 UITheme / UIThemeContext / style key（Phase 2）；
+- FWidgetStyle 仍被 UIText 使用，与 typed styles 并存，属过渡状态。
 
 ### 下一轮直接接力点
 
-1. 先做 style capability audit；
-2. 再拍板 typed style 第一批结构；
-3. 再决定 UITheme / UIThemeContext 的 owner 挂载点。
+1. Phase 2：UITheme 容器 + UIThemeContext owner 挂载点 + style key 命名；
+2. Phase 3：第一批控件从 typed style resolve 并删除裸颜色字段。
 
 ### 本轮验证
 
-- 文档级验证：plan.md / progress.md / todo.md / session_checklist.md / feature_matrix.json 已建立；
-- 代码级验证：本轮不以实现为目标，不要求构建变化。
+- xmake b ya-gui-widgets 通过；
+- 本轮仅新增类型，不改运行时行为，无需跑 scenario。
 
