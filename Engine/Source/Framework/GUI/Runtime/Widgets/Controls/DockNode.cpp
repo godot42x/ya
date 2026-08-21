@@ -280,6 +280,20 @@ bool FDockTreeModel::removePanel(DockPanelId panelId)
     return false;
 }
 
+bool FDockTreeModel::detachFromTree(DockPanelId panelId)
+{
+    if (!findPanel(panelId) || !findLeafForPanel(panelId)) return false;
+    auto backup = cloneNode(*_root, nullptr);
+    const DockNodeId nextNodeId = _nextNodeId;
+    FDockNode* source = nullptr;
+    if (!removePanelFromLeaf(panelId, source)) return false;
+    if (source->panelIds.empty() && !source->persistentEmptyLeaf) collapseEmptyLeaf(source);
+    if (validateInvariants()) return true;
+    _root = std::move(backup);
+    _nextNodeId = nextNodeId;
+    return false;
+}
+
 bool FDockTreeModel::validateNode(const FDockNode& node, const FDockNode* expectedParent,
                                   std::unordered_map<DockPanelId, size_t>& seen, std::string* error) const
 {

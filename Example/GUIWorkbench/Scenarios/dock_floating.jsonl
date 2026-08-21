@@ -1,0 +1,19 @@
+# GUIWorkbench --start-page=Dock. Floating smoke: tear a tab out into a
+# floating window, then re-dock it back onto the dock by dragging its title.
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"DockLeaf1"}}
+{"checkpoint":"dock_initial"}
+# Tear off the Scene tab: drag it up into the toolbar (above the DockSpace) and release.
+{"drag":{"from":[40,79],"to":[300,40],"button":0,"steps":8}}
+{"frame":3}
+{"assert":{"widget":"FloatingWindow1"}}
+{"checkpoint":"dock_torn"}
+# Re-dock: drag the floating window title back onto the DockSpace content center.
+{"drag":{"from":[200,160],"to":[700,300],"button":0,"steps":8}}
+{"frame":3}
+{"checkpoint":"after_redock"}
+{"frame":3}
+{"assert":{"widget":"DockLeaf1"}}
+{"checkpoint":"dock_redocked"}
+{"frame":1}

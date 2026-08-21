@@ -62,6 +62,10 @@ struct YA_GUI_API FDockTreeModel
                    float newPanelRatio = 0.30f);
     bool splitEmptyLeaf(DockNodeId targetLeafId, EDockCardinalSide side,
                         float newPanelRatio = 0.30f, bool persistentEmptyLeaf = true);
+    /// Move a panel out of the dock tree (collapse the emptied source leaf)
+    /// while keeping its registry record, so it can be re-docked later.
+    /// Used by floating / tear-off workflows.
+    bool detachFromTree(DockPanelId panelId);
     bool removePanel(DockPanelId panelId);
     [[nodiscard]] std::vector<DockNodeId> leafIds() const;
     [[nodiscard]] bool validateInvariants(std::string* error = nullptr) const;

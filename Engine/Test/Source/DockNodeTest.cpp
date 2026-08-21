@@ -133,6 +133,29 @@ TEST(DockNodeTest, RemovePanelDeletesRegistryRecord)
     EXPECT_TRUE(model.validateInvariants());
 }
 
+TEST(DockNodeTest, DetachFromTreeKeepsRegistryForLaterRedock)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "scene");
+    registerPanel(model, 2, "inspector");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.addPanel(2));
+
+    ASSERT_TRUE(model.detachFromTree(2));
+    // Registry record survives and the panel is no longer in any leaf.
+    EXPECT_EQ(model.panelCount(), 2u);
+    EXPECT_NE(model.findPanel(2), nullptr);
+    EXPECT_EQ(model.findLeafForPanel(2), nullptr);
+    EXPECT_TRUE(model.validateInvariants());
+
+    // It can be re-docked back into a leaf.
+    ASSERT_TRUE(model.addPanel(2, model.root()->id));
+    EXPECT_NE(model.findLeafForPanel(2), nullptr);
+    EXPECT_TRUE(model.validateInvariants());
+
+    EXPECT_FALSE(model.detachFromTree(99));
+}
+
 TEST(DockNodeTest, SelectionIsOwnedByLeafModel)
 {
     FDockTreeModel model;

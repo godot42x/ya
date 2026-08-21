@@ -258,3 +258,30 @@ widget 指针。
   SinglePanelSameLeafSplitDoesNotCreateEmptyLeaf 不再调用 splitLeafCorner。
 - 现在停靠只产生 center(merge) 或 4 cardinal(split) 两种结果，不再出现因 corner 而生的
   空 leaf；模型不变量继续成立（source 被拖空才 collapse）。
+
+### 2026-08-21 — phase 5 slice B：floating host + tear-off + re-dock
+
+- FDockTreeModel 新增 detachFromTree(panelId)：把 panel 移出 dock tree（collapse 空 source
+  leaf）但保留 registry，供 floating 使用；新增 DetachFromTreeKeepsRegistryForLaterRedock
+  单测（DockNodeTest 13/13）。
+- UIDockWorkspace 拥有 floating records（FFloatingWindow）与 tearOffPanel / dockPanelHome /
+  endFloatingForPanel / isPanelFloating，以及 onDockUpdated / onFloatingUpdated 两个回调，
+  让 DockSpace 与 floating host 通过 workspace 解耦协同。
+- 新增 UIDockFloatingWindow：标题 tab（复用 UITabBar 拖拽，携带 dock-panel:<id> payload）+
+  content；NoTarget 释放时把浮窗重定位到释放点；close 按钮 dock 回 root leaf。
+- 新增 UIDockFloatingHost（挂在 Popup 层，non-modal，HitTestInvisible 空区放行到下层）：
+  从 workspace.floatingWindows() 同步浮窗、bringToFront（拖拽激活时 reparent 到顶部）。
+- DockSpace：tab drag NoTarget 且允许 tear-off/floating 时 tearOffPanel（浮窗默认位
+  180,140，避开 chrome 页签）；resolveDropPreview/onDrop 支持 floating（sourceLeaf 为空）
+  的 panel，re-dock 走 addPanel/splitLeaf 后 endFloating 并重建投影。
+- 关键修坑：
+  - 浮窗宿主最初用 SelfHitTestInvisible，会连子树一起不可命中，导致浮窗收不到输入；改
+    HitTestInvisible（自身不可命中、子窗口仍可命中）。
+  - 一开始用 delta-move 让浮窗跟随指针，导致 re-dock 释放点落在浮窗自身而非 DockSpace；
+    改为 NoTarget 释放才重定位，re-dock 更干净。
+  - DockSpace 填满整个 viewport，tear-off 释放点落在顶部 chrome（页签条）上会触发页签
+    切换；浮窗固定默认位避开之。
+- 验证：GUIWorkbench 构建通过；dock.jsonl / dock_cardinal_split.jsonl / dock_floating.jsonl
+  三个 headless smoke 全绿（dock_floating 覆盖 tear-off→FloatingWindow→re-dock→回到 dock
+  tree，最终 root=DockLeaf1 含 Scene/Inspector/Console，浮窗消失）；DockNodeTest 13/13。
+- slice B 后剩余：modal 打开时禁止激活浮窗、focus restore、单浮窗多 tab、窗口边界 clamp。

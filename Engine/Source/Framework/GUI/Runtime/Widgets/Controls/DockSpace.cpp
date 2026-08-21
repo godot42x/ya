@@ -79,6 +79,14 @@ void UIDockSpace::clearPreview()
 void UIDockSpace::setWorkspace(std::shared_ptr<UIDockWorkspace> ws)
 {
     _ws = std::move(ws);
+    if (_ws) {
+        _ws->setOnDockUpdated([this]()
+        {
+            if (getTree()) {
+                rebuildProjection();
+            }
+        });
+    }
     if (getTree() && !getChildren().empty()) {
         rebuildProjection();
     }
@@ -224,9 +232,19 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
             {
                 clearPreview();
             };
-            observer.onFinished = [this](EDragFinishResult, const glm::vec2&, std::string_view)
+            observer.onFinished = [this, panelId](EDragFinishResult result, const glm::vec2& logicalPoint, std::string_view)
             {
                 clearPreview();
+                if (result == EDragFinishResult::NoTarget && _ws && _ws->bAllowTearOff && _ws->bAllowFloating) {
+                    // Tear-off: pull the panel out of the dock tree into a
+                    // floating window at a clear default position (not the
+                    // arbitrary release point, which may sit in chrome). Detach
+                    // the panel from this leaf first (reproject), then let the
+                    // host mount the floating window.
+                    _ws->tearOffPanel(panelId, {180.0f, 140.0f}, {320.0f, 240.0f});
+                    rebuildProjection();
+                    _ws->fireFloatingUpdated();
+                }
             };
             tree->beginDrag(this, std::string(kDockPanelPayload) + std::to_string(panelId), label, std::move(observer));
         }
@@ -311,7 +329,8 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
         return std::nullopt;
     }
     const FDockNode* sourceLeaf = _ws->dockModel().findLeafForPanel(panelId);
-    if (!sourceLeaf) {
+    const bool bFloating = _ws->isPanelFloating(panelId);
+    if (!sourceLeaf && !bFloating) {
         return std::nullopt;
     }
     const FLeafView* targetView = nullptr;
@@ -325,7 +344,7 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     if (!targetView || !targetView->root) {
         return std::nullopt;
     }
-    const bool bSameLeaf = sourceLeaf->id == targetView->leafId;
+    const bool bSameLeaf = sourceLeaf && sourceLeaf->id == targetView->leafId;
 
     const bool bOverTabBar = targetView->bar && pointInRect(logicalPoint, targetView->bar->_layoutRect);
 
@@ -420,14 +439,19 @@ void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoi
     }
 
     const FDockNode* sourceLeaf = _ws->dockModel().findLeafForPanel(panelId);
-    if (!sourceLeaf) {
+    const bool bWasFloating = _ws->isPanelFloating(panelId);
+    if (!sourceLeaf && !bWasFloating) {
         return;
     }
 
     bool bChanged = false;
     if (preview->bMerge) {
-        if (sourceLeaf->id != preview->targetLeafId) {
+        if (sourceLeaf && sourceLeaf->id != preview->targetLeafId) {
             bChanged = _ws->dockModel().movePanel(panelId, preview->targetLeafId, SIZE_MAX, true);
+        }
+        else if (!sourceLeaf) {
+            // Re-dock a floating panel by merging it into the target leaf.
+            bChanged = _ws->dockModel().addPanel(panelId, preview->targetLeafId);
         }
     }
     else {
@@ -435,6 +459,9 @@ void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoi
     }
 
     if (bChanged) {
+        if (bWasFloating) {
+            _ws->endFloatingForPanel(panelId);
+        }
         rebuildProjection();
     }
 }

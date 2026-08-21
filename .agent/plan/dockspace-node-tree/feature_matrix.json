@@ -40,8 +40,8 @@
         },
         {
           "id": "n5_floating_panel",
-          "status": "planned",
-          "notes": "Popup layer 普通 DockFloatingHost + 多实例 FloatingDockWindow；NoTarget release tear-off、re-dock、z-order 与 focus restore，不复用 UIPopupOverlay"
+          "status": "in_progress",
+          "notes": "slice B 已落地：UIDockWorkspace 拥有 floating records + 策略开关；新增 UIDockFloatingHost（Popup 层、non-modal、HitTestInvisible 仅子可命中）与 UIDockFloatingWindow（标题 tab 可拖拽 + close→dock-home）；拖 DockSpace tab 到 NoTarget 触发 tear-off（默认位 180,140），浮窗标题拖到 DockSpace 即 re-dock；dock_floating smoke 验证 tear-off→FloatingWindow→re-dock→回到 dock tree。尚有 z-order(bringToFront 已接 onActivated)、modal 阻塞、focus restore 与多 tab 浮窗未完全验证。"
         },
         {
           "id": "n6_port_persistence_boundary",

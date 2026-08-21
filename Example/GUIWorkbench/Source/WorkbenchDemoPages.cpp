@@ -10,6 +10,7 @@
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Dialog.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
+#include "GUI/Widgets/Controls/DockFloatingHost.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Controls/DragDrop.h"
 #include "GUI/Widgets/Controls/Image.h"
@@ -1355,11 +1356,17 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
                    const std::function<void(const std::string&)>& log)
 {
     auto dockWs = std::make_shared<ya::UIDockWorkspace>();
+    dockWs->bAllowFloating = true;
+    dockWs->bAllowTearOff  = true;
     auto dock = std::make_shared<ya::UIDockSpace>("DemoDock");
     dock->_anchorMin = {0.0f, 0.0f};
     dock->_anchorMax = {1.0f, 1.0f};
     dock->setWorkspace(dockWs);
     tree.attach(parent, dock);
+
+    auto floatHost = std::make_shared<ya::UIDockFloatingHost>("DemoFloatingHost");
+    floatHost->bindWorkspace(dockWs);
+    tree.attachToLayer(ya::WidgetTree::ELayer::Popup, floatHost);
 
     const auto makePanel = [](const std::string& name, const std::string& text)
     {
