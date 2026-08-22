@@ -1,0 +1,1465 @@
+{
+  "layers": {
+    "Content": {
+      "captured": false,
+      "children": [
+        {
+          "captured": false,
+          "children": [
+            {
+              "captured": false,
+              "children": [
+                {
+                  "captured": false,
+                  "children": [],
+                  "focusPolicy": 1,
+                  "focused": false,
+                  "hitFilter": 1,
+                  "hovered": false,
+                  "name": "MenuBar_File",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                },
+                {
+                  "captured": false,
+                  "children": [],
+                  "focusPolicy": 1,
+                  "focused": false,
+                  "hitFilter": 1,
+                  "hovered": false,
+                  "name": "MenuBar_Edit",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                },
+                {
+                  "captured": false,
+                  "children": [],
+                  "focusPolicy": 1,
+                  "focused": false,
+                  "hitFilter": 1,
+                  "hovered": false,
+                  "name": "MenuBar_View",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                },
+                {
+                  "captured": false,
+                  "children": [],
+                  "focusPolicy": 1,
+                  "focused": false,
+                  "hitFilter": 1,
+                  "hovered": false,
+                  "name": "MenuBar_Help",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                }
+              ],
+              "focusPolicy": 0,
+              "focused": false,
+              "hitFilter": 0,
+              "hovered": false,
+              "name": "MainMenu",
+              "rect": {
+                "h": 0.0,
+                "w": 0.0,
+                "x": 0.0,
+                "y": 0.0
+              },
+              "typeId": "",
+              "visibility": 0,
+              "zOrder": 0
+            },
+            {
+              "captured": false,
+              "children": [
+                {
+                  "captured": false,
+                  "children": [
+                    {
+                      "captured": false,
+                      "children": [
+                        {
+                          "captured": false,
+                          "children": [],
+                          "focusPolicy": 0,
+                          "focused": false,
+                          "hitFilter": 0,
+                          "hovered": false,
+                          "name": "Scroll viewport + split pane — drag the divider_Label",
+                          "rect": {
+                            "h": 0.0,
+                            "w": 0.0,
+                            "x": 0.0,
+                            "y": 0.0
+                          },
+                          "typeId": "",
+                          "visibility": 0,
+                          "zOrder": 0
+                        },
+                        {
+                          "captured": false,
+                          "children": [],
+                          "focusPolicy": 0,
+                          "focused": false,
+                          "hitFilter": 0,
+                          "hovered": false,
+                          "name": "The split stretches with the window; hover the divider to grab it._Body",
+                          "rect": {
+                            "h": 0.0,
+                            "w": 0.0,
+                            "x": 0.0,
+                            "y": 0.0
+                          },
+                          "typeId": "",
+                          "visibility": 0,
+                          "zOrder": 0
+                        },
+                        {
+                          "captured": false,
+                          "children": [
+                            {
+                              "captured": false,
+                              "children": [
+                                {
+                                  "captured": false,
+                                  "children": [
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 1_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow0",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 2_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow1",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 3_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow2",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 4_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow3",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 5_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow4",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 6_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow5",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 7_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow6",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 8_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow7",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 9_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow8",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 10_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow9",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 11_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow10",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 12_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow11",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 13_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow12",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 14_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow13",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 15_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow14",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 16_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow15",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 17_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow16",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 18_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow17",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 19_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow18",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 20_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow19",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 21_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow20",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 22_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow21",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 23_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow22",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    },
+                                    {
+                                      "captured": false,
+                                      "children": [
+                                        {
+                                          "captured": false,
+                                          "children": [],
+                                          "focusPolicy": 0,
+                                          "focused": false,
+                                          "hitFilter": 0,
+                                          "hovered": false,
+                                          "name": "Scrollable entry 24_Body",
+                                          "rect": {
+                                            "h": 0.0,
+                                            "w": 0.0,
+                                            "x": 0.0,
+                                            "y": 0.0
+                                          },
+                                          "typeId": "",
+                                          "visibility": 0,
+                                          "zOrder": 0
+                                        }
+                                      ],
+                                      "focusPolicy": 0,
+                                      "focused": false,
+                                      "hitFilter": 0,
+                                      "hovered": false,
+                                      "name": "ScrollRow23",
+                                      "rect": {
+                                        "h": 0.0,
+                                        "w": 0.0,
+                                        "x": 0.0,
+                                        "y": 0.0
+                                      },
+                                      "typeId": "",
+                                      "visibility": 0,
+                                      "zOrder": 0
+                                    }
+                                  ],
+                                  "focusPolicy": 0,
+                                  "focused": false,
+                                  "hitFilter": 0,
+                                  "hovered": false,
+                                  "name": "DemoScrollList",
+                                  "rect": {
+                                    "h": 0.0,
+                                    "w": 0.0,
+                                    "x": 0.0,
+                                    "y": 0.0
+                                  },
+                                  "typeId": "",
+                                  "visibility": 0,
+                                  "zOrder": 0
+                                }
+                              ],
+                              "focusPolicy": 0,
+                              "focused": false,
+                              "hitFilter": 1,
+                              "hovered": false,
+                              "name": "DemoScroll",
+                              "rect": {
+                                "h": 0.0,
+                                "w": 0.0,
+                                "x": 0.0,
+                                "y": 0.0
+                              },
+                              "typeId": "",
+                              "visibility": 0,
+                              "zOrder": 0
+                            },
+                            {
+                              "captured": false,
+                              "children": [
+                                {
+                                  "captured": false,
+                                  "children": [],
+                                  "focusPolicy": 0,
+                                  "focused": false,
+                                  "hitFilter": 0,
+                                  "hovered": false,
+                                  "name": "Drag the divider between panes\nWheel scrolls the list_Body",
+                                  "rect": {
+                                    "h": 0.0,
+                                    "w": 0.0,
+                                    "x": 0.0,
+                                    "y": 0.0
+                                  },
+                                  "typeId": "",
+                                  "visibility": 0,
+                                  "zOrder": 0
+                                }
+                              ],
+                              "focusPolicy": 0,
+                              "focused": false,
+                              "hitFilter": 0,
+                              "hovered": false,
+                              "name": "DemoSplitRight",
+                              "rect": {
+                                "h": 0.0,
+                                "w": 0.0,
+                                "x": 0.0,
+                                "y": 0.0
+                              },
+                              "typeId": "",
+                              "visibility": 0,
+                              "zOrder": 0
+                            }
+                          ],
+                          "focusPolicy": 0,
+                          "focused": false,
+                          "hitFilter": 1,
+                          "hovered": false,
+                          "name": "DemoSplit",
+                          "rect": {
+                            "h": 0.0,
+                            "w": 0.0,
+                            "x": 0.0,
+                            "y": 0.0
+                          },
+                          "typeId": "",
+                          "visibility": 0,
+                          "zOrder": 0
+                        }
+                      ],
+                      "focusPolicy": 0,
+                      "focused": false,
+                      "hitFilter": 0,
+                      "hovered": false,
+                      "name": "ScrollSplitLayout",
+                      "rect": {
+                        "h": 0.0,
+                        "w": 0.0,
+                        "x": 0.0,
+                        "y": 0.0
+                      },
+                      "typeId": "",
+                      "visibility": 0,
+                      "zOrder": 0
+                    }
+                  ],
+                  "focusPolicy": 0,
+                  "focused": false,
+                  "hitFilter": 0,
+                  "hovered": false,
+                  "name": "ScrollSplitDemo",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                }
+              ],
+              "focusPolicy": 0,
+              "focused": false,
+              "hitFilter": 0,
+              "hovered": false,
+              "name": "DemoHost",
+              "rect": {
+                "h": 0.0,
+                "w": 0.0,
+                "x": 0.0,
+                "y": 0.0
+              },
+              "typeId": "",
+              "visibility": 0,
+              "zOrder": 0
+            },
+            {
+              "captured": false,
+              "children": [
+                {
+                  "captured": false,
+                  "children": [],
+                  "focusPolicy": 1,
+                  "focused": false,
+                  "hitFilter": 1,
+                  "hovered": false,
+                  "name": "Tab_Render",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                },
+                {
+                  "captured": false,
+                  "children": [],
+                  "focusPolicy": 1,
+                  "focused": false,
+                  "hitFilter": 1,
+                  "hovered": false,
+                  "name": "Tab_Widgets",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                },
+                {
+                  "captured": false,
+                  "children": [],
+                  "focusPolicy": 1,
+                  "focused": false,
+                  "hitFilter": 1,
+                  "hovered": false,
+                  "name": "Tab_Layout",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                },
+                {
+                  "captured": false,
+                  "children": [],
+                  "focusPolicy": 1,
+                  "focused": false,
+                  "hitFilter": 1,
+                  "hovered": false,
+                  "name": "Tab_Menus",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                },
+                {
+                  "captured": false,
+                  "children": [],
+                  "focusPolicy": 1,
+                  "focused": false,
+                  "hitFilter": 1,
+                  "hovered": false,
+                  "name": "Tab_DragDrop",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                },
+                {
+                  "captured": false,
+                  "children": [],
+                  "focusPolicy": 1,
+                  "focused": false,
+                  "hitFilter": 1,
+                  "hovered": false,
+                  "name": "Tab_Modal",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                },
+                {
+                  "captured": false,
+                  "children": [],
+                  "focusPolicy": 1,
+                  "focused": false,
+                  "hitFilter": 1,
+                  "hovered": false,
+                  "name": "Tab_ScrollSplit",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                },
+                {
+                  "captured": false,
+                  "children": [],
+                  "focusPolicy": 1,
+                  "focused": false,
+                  "hitFilter": 1,
+                  "hovered": false,
+                  "name": "Tab_Editor",
+                  "rect": {
+                    "h": 0.0,
+                    "w": 0.0,
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "typeId": "",
+                  "visibility": 0,
+                  "zOrder": 0
+                }
+              ],
+              "focusPolicy": 0,
+              "focused": false,
+              "hitFilter": 0,
+              "hovered": false,
+              "name": "DemoTabs",
+              "rect": {
+                "h": 0.0,
+                "w": 0.0,
+                "x": 0.0,
+                "y": 0.0
+              },
+              "typeId": "",
+              "visibility": 0,
+              "zOrder": 0
+            },
+            {
+              "captured": false,
+              "children": [],
+              "focusPolicy": 0,
+              "focused": false,
+              "hitFilter": 0,
+              "hovered": false,
+              "name": "Status",
+              "rect": {
+                "h": 0.0,
+                "w": 0.0,
+                "x": 0.0,
+                "y": 0.0
+              },
+              "typeId": "",
+              "visibility": 0,
+              "zOrder": 0
+            },
+            {
+              "captured": false,
+              "children": [],
+              "focusPolicy": 0,
+              "focused": false,
+              "hitFilter": 0,
+              "hovered": false,
+              "name": "CommandResult",
+              "rect": {
+                "h": 0.0,
+                "w": 0.0,
+                "x": 0.0,
+                "y": 0.0
+              },
+              "typeId": "",
+              "visibility": 0,
+              "zOrder": 0
+            }
+          ],
+          "focusPolicy": 0,
+          "focused": false,
+          "hitFilter": 0,
+          "hovered": false,
+          "name": "WorkbenchRoot",
+          "rect": {
+            "h": 0.0,
+            "w": 0.0,
+            "x": 0.0,
+            "y": 0.0
+          },
+          "typeId": "",
+          "visibility": 0,
+          "zOrder": 0
+        }
+      ],
+      "focusPolicy": 0,
+      "focused": false,
+      "hitFilter": 0,
+      "hovered": false,
+      "name": "Layer_0",
+      "rect": {
+        "h": 0.0,
+        "w": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "typeId": "",
+      "visibility": 3,
+      "zOrder": 0
+    },
+    "DragIme": {
+      "captured": false,
+      "children": [],
+      "focusPolicy": 0,
+      "focused": false,
+      "hitFilter": 0,
+      "hovered": false,
+      "name": "Layer_3",
+      "rect": {
+        "h": 0.0,
+        "w": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "typeId": "",
+      "visibility": 3,
+      "zOrder": 3
+    },
+    "Popup": {
+      "captured": false,
+      "children": [],
+      "focusPolicy": 0,
+      "focused": false,
+      "hitFilter": 0,
+      "hovered": false,
+      "name": "Layer_1",
+      "rect": {
+        "h": 0.0,
+        "w": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "typeId": "",
+      "visibility": 3,
+      "zOrder": 1
+    },
+    "Tooltip": {
+      "captured": false,
+      "children": [],
+      "focusPolicy": 0,
+      "focused": false,
+      "hitFilter": 0,
+      "hovered": false,
+      "name": "Layer_2",
+      "rect": {
+        "h": 0.0,
+        "w": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "typeId": "",
+      "visibility": 3,
+      "zOrder": 2
+    }
+  },
+  "logicalExtent": {
+    "height": 800,
+    "width": 1280
+  }
+}

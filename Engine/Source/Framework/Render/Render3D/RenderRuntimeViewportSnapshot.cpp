@@ -9,7 +9,7 @@ RenderViewportSnapshot RenderRuntime::buildViewportSnapshot() const
     const auto debugOutputs = buildPipelineDebugOutputCatalog();
 
     RenderViewportSnapshot snapshot;
-    snapshot.bForwardPipeline       = (_renderPipeline == ERenderPipeline::Forward);
+    snapshot.bForwardPipeline       = (_pipelineCoordinator.getRenderPipeline() == ERenderPipeline::Forward);
     snapshot.bPostprocessingEnabled = debugOutputs.bPostprocessingEnabled;
     snapshot.viewportImageOwner     = getViewportDisplayImageShared();
     snapshot.viewportImageView      = snapshot.viewportImageOwner && snapshot.viewportImageOwner->getImageView()

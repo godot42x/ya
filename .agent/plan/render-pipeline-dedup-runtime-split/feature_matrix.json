@@ -1,0 +1,41 @@
+{
+  "topic": "render-pipeline-dedup-runtime-split",
+  "updated_at": "2026-08-22",
+  "capabilities": [
+    {
+      "name": "PipelineCommon 无状态工具抽取（makeShadowDebugResource）",
+      "status": "done",
+      "notes": "Phase 1 完成：Common/PipelineCommon.h/.cpp 唯一实现 + 转发头；两管线引用公共实现\n不抽 shouldSkipTick/buildShadowState 等策略方法"
+    },
+    {
+      "name": "PerFlightFrameResourceSetBase 资源机制基类",
+      "status": "done",
+      "notes": "Phase 2 完成：CRTP 基类收纳 uploadArena+skinning DSL/DSP+容量管理+prepareSkinning；\nForward/Deferred 保留各自 descriptor 集合/Binding/策略状态\nShadowFrameResources 第三份重复待后续复用"
+    },
+    {
+      "name": "PipelineCoordinator Service（协调状态，非策略抽象）",
+      "status": "done",
+      "notes": "Phase 3.1 完成：收纳管线选择/切换/重建状态与 RT format 命令队列；\n只持有 IRenderPipeline*，不为 Forward/Deferred 统一骨架"
+    },
+    {
+      "name": "PresentationGraphService",
+      "status": "done",
+      "notes": "Phase 3.2 完成：接管 presentation 图与 postprocess（executors/images/postProcessor/state）；\nswapchain recreate 监听与清理时机不变"
+    },
+    {
+      "name": "Viewport 状态收敛",
+      "status": "done",
+      "notes": "Phase 3.3 完成：ViewportStateService 收纳 rect/scale/world-scene 开关；resize 通知与首帧初始化留在编排层"
+    },
+    {
+      "name": "IBasePipeline 统一管线接口",
+      "status": "cancelled",
+      "notes": "明确不做——样本量仅 2，抽象渲染策略会锁死未来第三条管线"
+    },
+    {
+      "name": "IRenderRuntimeServices 对外签名不变",
+      "status": "done",
+      "notes": "全程约束已满足：RenderRuntime public API 与 ERenderPipeline 别名均保持兼容，App 层无感"
+    }
+  ]
+}

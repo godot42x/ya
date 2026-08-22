@@ -17,65 +17,6 @@
 namespace ya
 {
 
-namespace
-{
-
-std::shared_ptr<RenderTexture> createPresentationRenderTexture(IRender& render, VulkanSwapChain& swapchain, uint32_t imageIndex)
-{
-    const auto& swapchainCI = swapchain.getCreateInfo();
-    auto importedImage = render.getResourceFactory()->importImage(ImportedImageDesc{
-        .label         = std::format("Presentation_{}", imageIndex),
-        .nativeHandle  = static_cast<void*>(swapchain.getVkImages().at(imageIndex)),
-        .format        = swapchain.getFormat(),
-        .usage         = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment |
-                    (swapchainCI.bEnableTransferSrc ? EImageUsage::TransferSrc : EImageUsage::None)),
-        .extent        = {.width = swapchain.getExtent().width, .height = swapchain.getExtent().height, .depth = 1},
-        .initialLayout = EImageLayout::Undefined,
-        .finalLayout   = EImageLayout::PresentSrcKHR,
-    });
-    YA_CORE_ASSERT(importedImage != nullptr, "Failed to import presentation image {}", imageIndex);
-
-    auto imageView = render.getResourceFactory()->createImageView(
-        importedImage,
-        ImageViewCreateInfo{
-            .label          = std::format("Presentation_{}_View", imageIndex),
-            .viewType       = EImageViewType::View2D,
-            .aspectFlags    = EImageAspect::Color,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        });
-    YA_CORE_ASSERT(imageView != nullptr, "Failed to create presentation image view {}", imageIndex);
-
-    auto resource = std::make_shared<ImageResource>();
-    resource->label       = std::format("Presentation_{}", imageIndex);
-    resource->desc.image  = ImageCreateInfo{
-        .label   = resource->label,
-        .format  = swapchain.getFormat(),
-        .extent  = {.width = swapchain.getExtent().width, .height = swapchain.getExtent().height, .depth = 1},
-        .mipLevels   = 1,
-        .arrayLayers = 1,
-        .samples     = ESampleCount::Sample_1,
-        .usage   = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment |
-                     (swapchainCI.bEnableTransferSrc ? EImageUsage::TransferSrc : EImageUsage::None)),
-    };
-    resource->desc.defaultView = ImageViewCreateInfo{
-        .label          = std::format("Presentation_{}_View", imageIndex),
-        .viewType       = EImageViewType::View2D,
-        .aspectFlags    = EImageAspect::Color,
-        .baseMipLevel   = 0,
-        .levelCount     = 1,
-        .baseArrayLayer = 0,
-        .layerCount     = 1,
-    };
-    resource->image       = std::move(importedImage);
-    resource->defaultView = std::move(imageView);
-    return RenderTexture::adopt(std::move(resource));
-}
-
-} // namespace
-
 DescriptorSetHandle RenderRuntime::getSceneSkyboxDescriptorSet(Scene* scene)
 {
     return _sharedResourceProvider.getSceneSkyboxDescriptorSet(scene);
@@ -116,10 +57,10 @@ void RenderRuntime::initRuntimeState(const InitDesc& desc)
     _activeSceneProvider         = desc.activeSceneProvider;
 
     currentRenderAPI = ERenderAPI::Vulkan;
-    _viewportRect    = Rect2D{
+    _viewportState.setRect(Rect2D{
                  .pos    = {0.0f, 0.0f},
                  .extent = {static_cast<float>(desc.windowWidth), static_cast<float>(desc.windowHeight)},
-    };
+    });
 }
 
 void RenderRuntime::initShaderSystems()
@@ -233,72 +174,33 @@ void RenderRuntime::initSharedRenderResources()
     _shaderStorage->waitForPreload();
     _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
 
-    initActivePipeline();
+    _pipelineCoordinator.init(PipelineCoordinator::InitDesc{
+        .render                = _render,
+        .hostServices          = _hostServices,
+        .sharedResourceProvider = &_sharedResourceProvider,
+        .runtimeServices       = this,
+        .reapplyViewportSink   = [this]()
+        {
+            if (_viewportState.isRectInitialized()) {
+                onViewportResized(_viewportState.getRect());
+            }
+        },
+    });
 }
 
 void RenderRuntime::initPresentationResources()
 {
-    rebuildPresentationImages();
-
-    _presentationPostProcessor = ya::makeShared<BasicPostprocessing>();
-    _presentationPostProcessor->init(BasicPostprocessing::InitDesc{
-        .render                = _render,
-        .renderPass            = nullptr,
-        .pipelineRenderingInfo = PipelineRenderingInfo{
-            .label                   = "RuntimePresentation",
-            .viewMask                = 0,
-            .colorAttachmentFormats  = {_render->getSwapchain()->getFormat()},
-            .depthAttachmentFormat   = EFormat::Undefined,
-            .stencilAttachmentFormat = EFormat::Undefined,
+    _presentationGraphService.init(PresentationGraphService::InitDesc{
+        .render = _render,
+        .viewportDisplayImageProvider = [this]()
+        {
+            return getViewportDisplayImageShared();
         },
     });
 
-    _render->getSwapchain()->onRecreate.addLambda(
-        this,
-        [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
-        {
-            const bool bExtentChanged = (now.extent.width != old.extent.width ||
-                                         now.extent.height != old.extent.height);
-            const bool bPresentModeChanged = (old.presentMode != now.presentMode);
-
-            if (bExtentChanged || bImageRecreated || bPresentModeChanged) {
-                rebuildPresentationImages();
-            }
-        });
-
     _deleter.push("ScreenRT", [this](void*)
                   {
-        if (_presentationPostProcessor) {
-            _presentationPostProcessor->shutdown();
-            _presentationPostProcessor.reset();
-        }
-        _presentationGraphExecutors.clear();
-        _presentationImages.clear(); });
-}
-
-void RenderRuntime::rebuildPresentationImages()
-{
-    for (auto& executor : _presentationGraphExecutors) {
-        if (executor) {
-            executor->clear();
-        }
-    }
-    _presentationGraphExecutors.clear();
-
-    _presentationImages.clear();
-    if (!_render) {
-        return;
-    }
-
-    auto* swapchain = _render->getSwapchain() ? _render->getSwapchain()->as<VulkanSwapChain>() : nullptr;
-    YA_CORE_ASSERT(swapchain != nullptr, "Presentation resources currently require VulkanSwapChain");
-
-    _presentationGraphExecutors.reserve(swapchain->getImageCount());
-    _presentationImages.reserve(swapchain->getImageCount());
-    for (uint32_t imageIndex = 0; imageIndex < swapchain->getImageCount(); ++imageIndex) {
-        _presentationGraphExecutors.push_back(std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()));
-        _presentationImages.push_back(createPresentationRenderTexture(*_render, *swapchain, imageIndex));
-    }
+        _presentationGraphService.shutdown(); });
 }
 
 void RenderRuntime::initCommandResources()
@@ -349,7 +251,7 @@ void RenderRuntime::shutdown(bool bRenderAlreadyIdle)
         _render->waitIdle();
     }
 
-    shutdownActivePipeline();
+    _pipelineCoordinator.shutdown();
     // Owned derived-processing systems must release their GPU resources
     // before the render backend is destroyed.
     if (_environmentLightingProcessor) {
@@ -372,7 +274,7 @@ void RenderRuntime::shutdown(bool bRenderAlreadyIdle)
 
 void RenderRuntime::shutdownRuntimeServices()
 {
-    YA_CORE_ASSERT(_forwardPipeline == nullptr && _deferredPipeline == nullptr,
+    YA_CORE_ASSERT(!_pipelineCoordinator.hasAnyPipeline(),
                    "shutdownRuntimeServices requires active pipelines to be torn down first");
 
     AssetManager::get()->setRender(nullptr);

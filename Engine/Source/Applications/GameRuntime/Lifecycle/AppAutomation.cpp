@@ -733,14 +733,14 @@ void AppAutomation::applyRuntimeOverrides(App& app)
     }
 
     const auto& automation = app.getDesc().automation;
-    if (renderRuntime->_forwardPipeline) {
-        applyPostprocessAutomationOverrides(renderRuntime->_forwardPipeline->_postProcessStage, automation.postprocess);
+    if (auto* forward = renderRuntime->_pipelineCoordinator.getSelectedForwardPipeline()) {
+        applyPostprocessAutomationOverrides(forward->_postProcessStage, automation.postprocess);
     }
-    if (renderRuntime->_deferredPipeline) {
+    if (auto* deferred = renderRuntime->_pipelineCoordinator.getSelectedDeferredPipeline()) {
         if (automation.deferred.ssaoEnabled.has_value()) {
-            renderRuntime->_deferredPipeline->setSSAOEnabled(*automation.deferred.ssaoEnabled);
+            deferred->setSSAOEnabled(*automation.deferred.ssaoEnabled);
         }
-        applyPostprocessAutomationOverrides(renderRuntime->_deferredPipeline->_postProcessStage, automation.postprocess);
+        applyPostprocessAutomationOverrides(deferred->_postProcessStage, automation.postprocess);
     }
 }
 

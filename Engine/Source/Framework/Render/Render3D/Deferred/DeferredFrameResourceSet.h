@@ -4,6 +4,7 @@
 #include "RHI/Core/FrameUploadArena.h"
 #include "Render3D/Stage/IRenderStage.h"
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
+#include "Render3D/Common/PerFlightFrameResourceSetBase.h"
 
 #include "DeferredRender.GBufferPass_PBR.slang.h"
 #include "DeferredRender.LightPass.slang.h"
@@ -25,8 +26,9 @@ namespace ya
  * those owner-backed resources after this object has prepared the current
  * flight.
  */
-class YA_RENDER_3D_API DeferredFrameResourceSet
+class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceSetBase<DeferredFrameResourceSet>
 {
+    friend class PerFlightFrameResourceSetBase<DeferredFrameResourceSet>;
     friend class DeferredFrameResourceSetTestAccess;
 
   public:
@@ -70,7 +72,6 @@ class YA_RENDER_3D_API DeferredFrameResourceSet
     bool prepareSkybox(const RenderStageContext& ctx, const SkyboxFrameData& frameData);
 
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameAndLightDSL() const { return _frameAndLightDSL; }
-    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkinningDSL() const { return _skinningDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSSAOFrameDSL() const { return _ssaoFrameDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxFrameDSL() const { return _skyboxFrameDSL; }
     [[nodiscard]] const Binding&               getBinding(uint32_t flightIndex) const;
@@ -78,27 +79,23 @@ class YA_RENDER_3D_API DeferredFrameResourceSet
     [[nodiscard]] uint32_t getLastShadowedPointLights() const { return _lastShadowedPointLights; }
 
   private:
-    IRender* _render = nullptr;
-    std::unique_ptr<FrameUploadArena> _uploadArena;
     stdptr<IDescriptorSetLayout>      _frameAndLightDSL;
     stdptr<IDescriptorPool>           _frameAndLightDSP;
-    stdptr<IDescriptorSetLayout>      _skinningDSL;
-    stdptr<IDescriptorPool>           _skinningDSP;
     stdptr<IDescriptorSetLayout>      _ssaoFrameDSL;
     stdptr<IDescriptorPool>           _ssaoFrameDSP;
     stdptr<IDescriptorSetLayout>      _skyboxFrameDSL;
     stdptr<IDescriptorPool>           _skyboxFrameDSP;
     std::array<Binding, MAX_FLIGHTS_IN_FLIGHT> _bindings{};
     ShadowRuntimeState _shadowState{};
-    uint32_t _skinningCapacity = 0;
     uint32_t _lastShadowedPointLights = 0;
+
+    /// CRTP contract: per-flight skinning slots consumed by the shared base.
+    std::array<Binding, MAX_FLIGHTS_IN_FLIGHT>& bindings() { return _bindings; }
 
     [[nodiscard]] LightData buildLightData(const RenderFrameData& frameData) const;
     [[nodiscard]] static std::optional<uint32_t> calculateSkinningCapacity(
         uint32_t currentCapacity,
         uint32_t paletteCount);
-    bool ensureSkinningCapacity(uint32_t paletteCount);
-    bool prepareSkinning(const RenderStageContext& ctx);
     void updateDescriptorSet(uint32_t flightIndex, const Binding& binding);
     void updateSSAODescriptorSet(uint32_t flightIndex, const Binding& binding);
     void updateSkyboxDescriptorSet(uint32_t flightIndex, const Binding& binding);

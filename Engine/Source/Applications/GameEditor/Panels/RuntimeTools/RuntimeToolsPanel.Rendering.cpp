@@ -652,7 +652,10 @@ void renderPresentationSettings(App& app, RenderRuntime& runtime)
     ImGui::SameLine();
     ImGui::TextDisabled("rebuilds shaders and pipeline resources");
 
-    ImGui::DragFloat("Viewport Scale", &runtime._viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
+    float viewportScale = runtime.getViewportFrameBufferScale();
+    if (ImGui::DragFloat("Viewport Scale", &viewportScale, 0.1f, 1.0f, 10.0f)) {
+        runtime.setViewportFrameBufferScale(viewportScale);
+    }
 
     if (auto* render = app.getRenderServices().getRender()) {
         if (auto* swapchain = render->getSwapchain()) {

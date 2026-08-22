@@ -11,25 +11,16 @@
 #include "RHI/Backend/Vulkan/VulkanRender.h"
 #include "Render2D/Render2D.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
+#include "Render3D/Services/PipelineCoordinator.h"
 
 #include <limits>
 
 namespace ya
 {
 
-namespace
-{
-
-const char* toString(RenderRuntime::ERenderPipeline pipeline)
-{
-    return pipeline == RenderRuntime::ERenderPipeline::Forward ? "Forward" : "Deferred";
-}
-
-} // namespace
-
 void RenderRuntime::onViewportResized(Rect2D rect)
 {
-    _viewportRect = rect;
+    _viewportState.setRect(rect);
 
     if (auto* pipeline = getActivePipeline()) {
         pipeline->onViewportResized(rect);
@@ -44,7 +35,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     // Frame lifecycle (FG-603):
     //   1. prepareFrame: acquire swapchain image + begin command buffer (graph-external).
     //   2. renderWorldFrame: Deferred/Forward world graph via the pipeline-owned executor.
-    //   3. renderPresentationPass: per-swapchain-image presentation graph; screenshot
+    //   3. presentation graph service: per-swapchain-image presentation; screenshot
     //      readback is appended inside that graph (FG-601), never recorded outside.
     //   4. submitFrame: submit + present (graph-external).
     //
@@ -66,8 +57,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         _gameplayResourceBinding->onUpdate(input.pipeline.deltaTime);
     }
 
-    applyPendingRenderPipelineSwitch();
-    applyPendingRenderTargetFormatCommands();
+    _pipelineCoordinator.applyPendingChanges();
 
     // All Render2D pipeline changes must happen before command recording. The
     // post-process/viewport target format can differ from the initial viewport
@@ -112,7 +102,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
 
     {
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
-        if (_bWorldSceneRenderEnabled) {
+        if (_viewportState.isWorldSceneRenderEnabled()) {
             renderWorldFrame(input, cmdBuf.get());
         }
     }
@@ -141,7 +131,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     if (input.viewportCompose.recordCompose) {
         input.viewportCompose.recordCompose(cmdBuf.get());
     }
-    renderPresentationPass(input.pipeline.deltaTime, input.presentationExtensions, cmdBuf.get());
+    _presentationGraphService.render(input.pipeline.deltaTime, input.presentationExtensions, cmdBuf.get());
     {
         YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
         submitFrame(imageIndex, cmdBuf.get());
@@ -152,7 +142,7 @@ bool RenderRuntime::prepareFrame(const FrameInput& input, int32_t& imageIndex, s
 {
     YA_PROFILE_FUNCTION()
     ensureViewportRectInitialized(input);
-    _viewportFrameBufferScale = input.pipeline.viewportFrameBufferScale;
+    _viewportState.setFrameBufferScale(input.pipeline.viewportFrameBufferScale);
     return beginFrameCommandBuffer(imageIndex, cmdBuf);
 }
 
@@ -165,19 +155,7 @@ void RenderRuntime::renderWorldFrame(const FrameInput& input, ICommandBuffer* cm
 
 IRenderPipeline* RenderRuntime::getActivePipeline() const
 {
-    if (auto* pipeline = getSelectedForwardPipeline()) {
-        return pipeline;
-    }
-    if (auto* pipeline = getSelectedDeferredPipeline()) {
-        return pipeline;
-    }
-    if (_forwardPipeline) {
-        return _forwardPipeline.get();
-    }
-    if (_deferredPipeline) {
-        return _deferredPipeline.get();
-    }
-    return nullptr;
+    return _pipelineCoordinator.getActivePipeline();
 }
 
 uint64_t RenderRuntime::getFrameIndex() const
@@ -231,10 +209,10 @@ std::shared_ptr<ImageResource> RenderRuntime::getShadowPointFaceDepthResource(ui
 
 std::shared_ptr<RenderTexture> RenderRuntime::getPostprocessOutputImageShared() const
 {
-    if (auto* pipeline = getSelectedForwardPipeline()) {
+    if (auto* pipeline = _pipelineCoordinator.getSelectedForwardPipeline()) {
         return pipeline->getPostprocessOutputImageShared();
     }
-    if (auto* pipeline = getSelectedDeferredPipeline()) {
+    if (auto* pipeline = _pipelineCoordinator.getSelectedDeferredPipeline()) {
         return pipeline->getPostprocessOutputImageShared();
     }
     return nullptr;
@@ -242,31 +220,7 @@ std::shared_ptr<RenderTexture> RenderRuntime::getPostprocessOutputImageShared() 
 
 std::shared_ptr<RenderTexture> RenderRuntime::getPresentationImageShared() const
 {
-    return getCurrentPresentationImageShared();
-}
-
-std::shared_ptr<RenderTexture> RenderRuntime::getCurrentPresentationImageShared() const
-{
-    const auto imageIndex = getCurrentPresentationImageIndex();
-    if (imageIndex >= _presentationImages.size()) {
-        return nullptr;
-    }
-
-    return _presentationImages[imageIndex];
-}
-
-uint32_t RenderRuntime::getCurrentPresentationImageIndex() const
-{
-    if (!_render) {
-        return std::numeric_limits<uint32_t>::max();
-    }
-
-    auto* swapchain = _render->getSwapchain();
-    if (!swapchain) {
-        return std::numeric_limits<uint32_t>::max();
-    }
-
-    return swapchain->getCurImageIndex();
+    return _presentationGraphService.getCurrentPresentationImageShared();
 }
 
 bool RenderRuntime::isPostprocessingEnabled() const
@@ -290,7 +244,7 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
     catalog.viewportDepthImageOwner = pipeline->getViewportDepthImageShared();
     catalog.bPostprocessingEnabled = pipeline->isPostprocessingEnabled();
 
-    if (auto* selectedForward = getSelectedForwardPipeline()) {
+    if (auto* selectedForward = _pipelineCoordinator.getSelectedForwardPipeline()) {
         catalog.viewportOutputImageOwner    = selectedForward->getViewportOutputImageShared();
         catalog.postprocessOutputImageOwner = selectedForward->getPostprocessOutputImageShared();
         catalog.bloomExtractOwner           = selectedForward->getBloomExtractImageShared();
@@ -299,7 +253,7 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
         return catalog;
     }
 
-    if (auto* selectedDeferred = getSelectedDeferredPipeline()) {
+    if (auto* selectedDeferred = _pipelineCoordinator.getSelectedDeferredPipeline()) {
         catalog.viewportOutputImageOwner    = selectedDeferred->getViewportOutputImageShared();
         catalog.postprocessOutputImageOwner = selectedDeferred->getPostprocessOutputImageShared();
         catalog.bloomExtractOwner           = selectedDeferred->getBloomExtractImageShared();
@@ -315,15 +269,15 @@ Extent2D RenderRuntime::getViewportExtent() const
     if (auto* pipeline = getActivePipeline()) {
         return pipeline->getViewportExtent();
     }
-    if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {
-        return Extent2D::fromVec2(_viewportRect.extent);
+    if (_viewportState.getRect().extent.x > 0 && _viewportState.getRect().extent.y > 0) {
+        return Extent2D::fromVec2(_viewportState.getRect().extent);
     }
     return {};
 }
 
 DeferredPipelineDebugViews RenderRuntime::getDeferredPipelineDebugViews() const
 {
-    if (auto* pipeline = getSelectedDeferredPipeline()) {
+    if (auto* pipeline = _pipelineCoordinator.getSelectedDeferredPipeline()) {
         return pipeline->buildDebugViews();
     }
     return {};
@@ -333,7 +287,7 @@ RenderTargetCatalog RenderRuntime::buildRenderTargetCatalog() const
 {
     RenderTargetCatalog catalog{};
 
-    if (auto presentationImage = getCurrentPresentationImageShared()) {
+    if (auto presentationImage = _presentationGraphService.getCurrentPresentationImageShared()) {
         catalog.entries.push_back({
             .label            = "Presentation",
             .owner            = RenderTargetCatalog::Entry::EOwner::Presentation,
@@ -354,135 +308,12 @@ RenderTargetCatalog RenderRuntime::buildRenderTargetCatalog() const
 
 void RenderRuntime::requestRenderTargetFormat(const RenderTargetFormatCommand& command)
 {
-    if (command.format == EFormat::Undefined || command.owner == RenderTargetCatalog::Entry::EOwner::Presentation) {
-        return;
-    }
-
-    _pendingRenderTargetFormatCommands.push_back(command);
-}
-
-void RenderRuntime::applyPendingRenderTargetFormatCommands()
-{
-    if (_pendingRenderTargetFormatCommands.empty()) {
-        return;
-    }
-
-    auto* pipeline = getActivePipeline();
-    if (!pipeline) {
-        _pendingRenderTargetFormatCommands.clear();
-        return;
-    }
-
-    for (const auto& command : _pendingRenderTargetFormatCommands) {
-        if (command.attachment == RenderTargetFormatCommand::EAttachment::Depth) {
-            pipeline->setRenderTargetDepthFormat(command.owner, command.format);
-        }
-        else {
-            pipeline->setRenderTargetColorFormat(command.owner, command.colorAttachmentIndex, command.format);
-        }
-    }
-    _pendingRenderTargetFormatCommands.clear();
+    _pipelineCoordinator.requestRenderTargetFormat(command);
 }
 
 DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const
 {
     return DebugRenderSystem::get();
-}
-
-ForwardRenderPipeline* RenderRuntime::getSelectedForwardPipeline() const
-{
-    if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {
-        return _forwardPipeline.get();
-    }
-    return nullptr;
-}
-
-DeferredRenderPipeline* RenderRuntime::getSelectedDeferredPipeline() const
-{
-    if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
-        return _deferredPipeline.get();
-    }
-    return nullptr;
-}
-
-void RenderRuntime::initActivePipeline()
-{
-    int windowWidth = 0;
-    int windowHeight = 0;
-    _render->getWindowSize(windowWidth, windowHeight);
-
-    if (_renderPipeline == ERenderPipeline::Forward) {
-        initForwardPipeline(windowWidth, windowHeight);
-    }
-    else {
-        initDeferredPipeline(windowWidth, windowHeight);
-    }
-
-    if (auto* pipeline = getActivePipeline()) {
-        Render2D::init(_render, pipeline->getViewportColorFormat(), pipeline->getViewportDepthFormat());
-    }
-}
-
-void RenderRuntime::initForwardPipeline(int windowWidth, int windowHeight)
-{
-    _forwardPipeline = ya::makeShared<ForwardRenderPipeline>();
-    _forwardPipeline->init(ForwardRenderPipeline::InitDesc{
-        .render                       = _render,
-        .windowW                      = windowWidth,
-        .windowH                      = windowHeight,
-        .shadowSettings               = _hostServices ? _hostServices->getShadowSettings() : nullptr,
-        .runtimeServices              = this,
-    });
-}
-
-void RenderRuntime::initDeferredPipeline(int windowWidth, int windowHeight)
-{
-    _deferredPipeline = ya::makeShared<DeferredRenderPipeline>();
-    _deferredPipeline->init(DeferredRenderPipeline::InitDesc{
-        .render                   = _render,
-        .windowW                  = windowWidth,
-        .windowH                  = windowHeight,
-        .shadowSettings           = _hostServices ? _hostServices->getShadowSettings() : nullptr,
-        .automationShadowOverrides = _hostServices ? _hostServices->getAutomationShadowOverrides() : nullptr,
-        .environmentLightingDSL = _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(),
-        .runtimeServices          = this,
-    });
-}
-
-void RenderRuntime::shutdownActivePipeline()
-{
-    Render2D::destroy();
-
-    if (_forwardPipeline) {
-        _forwardPipeline->shutdown();
-        _forwardPipeline.reset();
-    }
-    if (_deferredPipeline) {
-        _deferredPipeline->shutdown();
-        _deferredPipeline.reset();
-    }
-}
-
-void RenderRuntime::applyPendingRenderPipelineSwitch()
-{
-    if (_pendingRenderPipeline == _renderPipeline && !_pendingActivePipelineReload) {
-        return;
-    }
-    YA_PROFILE_FUNCTION_LOG();
-
-    YA_CORE_INFO("{} render pipeline: {} -> {}",
-                 _pendingActivePipelineReload ? "Reloading" : "Switching",
-                 toString(_renderPipeline),
-                 toString(_pendingRenderPipeline));
-
-    shutdownActivePipeline();
-    _renderPipeline = _pendingRenderPipeline;
-    _pendingActivePipelineReload = false;
-    initActivePipeline();
-
-    if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {
-        onViewportResized(_viewportRect);
-    }
 }
 
 } // namespace ya

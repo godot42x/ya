@@ -17,7 +17,8 @@ void DeferredFrameResourceSet::init(IRender* render)
     YA_CORE_ASSERT(render != nullptr, "DeferredFrameResourceSet requires a render backend");
     YA_CORE_ASSERT(render->getResourceFactory() != nullptr, "DeferredFrameResourceSet requires a resource factory");
 
-    _render = render;
+    initSkinnedUploadArena(render, "Deferred", "Deferred_Skinning_DSL", 3, "Deferred.FrameUpload");
+
     _frameAndLightDSL = IDescriptorSetLayout::create(
         _render,
         {DescriptorSetLayoutDesc{
@@ -35,14 +36,6 @@ void DeferredFrameResourceSet::init(IRender* render)
             .label     = "Deferred_Frame_And_Light_DSP",
             .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
             .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * 2}},
-        });
-
-    _skinningDSL = IDescriptorSetLayout::create(
-        _render,
-        DescriptorSetLayoutDesc{
-            .label    = "Deferred_Skinning_DSL",
-            .set      = 3,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
         });
 
     _ssaoFrameDSL = IDescriptorSetLayout::create(
@@ -77,13 +70,6 @@ void DeferredFrameResourceSet::init(IRender* render)
             .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
         });
 
-    _uploadArena = std::make_unique<FrameUploadArena>(
-        *render->getResourceFactory(),
-        MAX_FLIGHTS_IN_FLIGHT,
-        64u * 1024u,
-        EBufferUsage::UniformBuffer,
-        "Deferred.FrameUpload");
-
     for (uint32_t flightIndex = 0; flightIndex < MAX_FLIGHTS_IN_FLIGHT; ++flightIndex) {
         _bindings[flightIndex] = Binding{
             .frameAndLightDescriptorSet = _frameAndLightDSP->allocateDescriptorSets(_frameAndLightDSL),
@@ -98,9 +84,7 @@ void DeferredFrameResourceSet::init(IRender* render)
 void DeferredFrameResourceSet::destroy()
 {
     _bindings = {};
-    _uploadArena.reset();
-    _skinningDSP.reset();
-    _skinningDSL.reset();
+    destroySkinnedUploadArena();
     _ssaoFrameDSP.reset();
     _ssaoFrameDSL.reset();
     _skyboxFrameDSP.reset();
@@ -108,9 +92,7 @@ void DeferredFrameResourceSet::destroy()
     _frameAndLightDSP.reset();
     _frameAndLightDSL.reset();
     _shadowState = {};
-    _skinningCapacity = 0;
     _lastShadowedPointLights = 0;
-    _render = nullptr;
 }
 
 DeferredFrameResourceSet::LightData DeferredFrameResourceSet::buildLightData(const RenderFrameData& frameData) const
@@ -158,120 +140,11 @@ std::optional<uint32_t> DeferredFrameResourceSet::calculateSkinningCapacity(
     uint32_t currentCapacity,
     uint32_t paletteCount)
 {
-    constexpr uint32_t maxPaletteCount = std::numeric_limits<uint32_t>::max() / sizeof(RenderSkinningPalette);
-    const uint32_t requiredCount = std::max(1u, paletteCount);
-    if (requiredCount > maxPaletteCount) {
-        return std::nullopt;
-    }
-
-    uint32_t nextCapacity = currentCapacity == 0 ? 16u : currentCapacity;
-    if (nextCapacity > maxPaletteCount) {
-        return std::nullopt;
-    }
-    while (nextCapacity < requiredCount) {
-        if (nextCapacity > maxPaletteCount / 2u) {
-            nextCapacity = requiredCount;
-            break;
-        }
-        nextCapacity *= 2u;
-    }
-    return nextCapacity;
-}
-
-bool DeferredFrameResourceSet::ensureSkinningCapacity(uint32_t paletteCount)
-{
-    if (_skinningDSP && std::max(1u, paletteCount) <= _skinningCapacity) {
-        return true;
-    }
-
-    const auto nextCapacity = calculateSkinningCapacity(_skinningCapacity, paletteCount);
-    if (!nextCapacity.has_value()) {
-        YA_CORE_ERROR("Deferred skinning palette count {} exceeds buffer size limit", paletteCount);
-        return false;
-    }
-
-    auto nextDSP = IDescriptorPool::create(
-        _render,
-        DescriptorPoolCreateInfo{
-            .label     = "Deferred_Skinning_DSP",
-            .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
-            .poolSizes = {{.type = EPipelineDescriptorType::StorageBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
-        });
-    if (!nextDSP) {
-        YA_CORE_ERROR("DeferredFrameResourceSet failed to create skinning descriptor pool");
-        return false;
-    }
-
-    const uint32_t bufferSize = *nextCapacity * sizeof(RenderSkinningPalette);
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT> nextBuffers{};
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> nextDescriptorSets{};
-    for (uint32_t flightIndex = 0; flightIndex < MAX_FLIGHTS_IN_FLIGHT; ++flightIndex) {
-        nextBuffers[flightIndex] = _render->getResourceFactory()->createBuffer(
-            BufferCreateInfo{
-                .label       = std::format("Deferred_Skinning_SSBO_{}", flightIndex),
-                .usage       = EBufferUsage::StorageBuffer,
-                .size        = bufferSize,
-                .memoryUsage = EMemoryUsage::CpuToGpu,
-            });
-        if (!nextBuffers[flightIndex]) {
-            YA_CORE_ERROR("DeferredFrameResourceSet failed to create skinning buffer for flight {}", flightIndex);
-            return false;
-        }
-
-        nextDescriptorSets[flightIndex] = nextDSP->allocateDescriptorSets(_skinningDSL);
-        if (!nextDescriptorSets[flightIndex]) {
-            YA_CORE_ERROR("DeferredFrameResourceSet failed to allocate skinning descriptor set for flight {}", flightIndex);
-            return false;
-        }
-
-        _render->getDescriptorHelper()->updateDescriptorSets(
-            {IDescriptorSetHelper::genSingleBufferWrite(
-                nextDescriptorSets[flightIndex],
-                0,
-                EPipelineDescriptorType::StorageBuffer,
-                nextBuffers[flightIndex].get())},
-            {});
-    }
-
-    auto oldDSP = std::move(_skinningDSP);
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT> oldBuffers{};
-    for (uint32_t flightIndex = 0; flightIndex < MAX_FLIGHTS_IN_FLIGHT; ++flightIndex) {
-        oldBuffers[flightIndex] = std::move(_bindings[flightIndex].skinningBuffer);
-    }
-
-    _skinningDSP      = std::move(nextDSP);
-    _skinningCapacity = *nextCapacity;
-    for (uint32_t flightIndex = 0; flightIndex < MAX_FLIGHTS_IN_FLIGHT; ++flightIndex) {
-        _bindings[flightIndex].skinningDescriptorSet = nextDescriptorSets[flightIndex];
-        _bindings[flightIndex].skinningBuffer        = std::move(nextBuffers[flightIndex]);
-    }
-
-    DeferredDeletionQueue::get().retire(std::move(oldDSP));
-    for (auto& oldBuffer : oldBuffers) {
-        DeferredDeletionQueue::get().retire(std::move(oldBuffer));
-    }
-    return true;
-}
-
-bool DeferredFrameResourceSet::prepareSkinning(const RenderStageContext& ctx)
-{
-    YA_CORE_ASSERT(ctx.frameData != nullptr, "Deferred skinning prepare requires frame data");
-    const auto& palettes = ctx.frameData->skinningPalettes;
-    if (palettes.size() > std::numeric_limits<uint32_t>::max()) {
-        YA_CORE_ERROR("Deferred skinning palette count exceeds uint32 range");
-        return false;
-    }
-    if (!ensureSkinningCapacity(static_cast<uint32_t>(palettes.size()))) {
-        return false;
-    }
-    if (palettes.empty()) {
-        return true;
-    }
-
-    auto& buffer = _bindings[ctx.flightIndex].skinningBuffer;
-    YA_CORE_ASSERT(buffer != nullptr, "Deferred skinning buffer is missing for flight {}", ctx.flightIndex);
-    const uint32_t byteCount = static_cast<uint32_t>(palettes.size() * sizeof(RenderSkinningPalette));
-    return buffer->writeData(palettes.data(), byteCount, 0) && buffer->flush(byteCount, 0);
+    // Shared capacity policy lives in the resource-mechanism base; this private
+    // forward keeps the legacy test access point stable.
+    return PerFlightFrameResourceSetBase<DeferredFrameResourceSet>::calculateSkinningCapacity(
+        currentCapacity,
+        paletteCount);
 }
 
 void DeferredFrameResourceSet::updateDescriptorSet(uint32_t flightIndex, const Binding& binding)

@@ -11,6 +11,7 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "Render/Resources/TextureSlotBinding.h"
+#include "Render3D/Common/PipelineCommon.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
 #include "Graph/RenderGraphImportUtils.h"
@@ -29,27 +30,6 @@
 
 namespace ya
 {
-
-namespace
-{
-
-std::shared_ptr<ImageResource> makeShadowDebugResource(const std::shared_ptr<IImage>& image,
-                                                       const std::shared_ptr<IImageView>& view,
-                                                       std::string_view label)
-{
-    if (!image || !view) {
-        return nullptr;
-    }
-
-    auto resource         = std::make_shared<ImageResource>();
-    resource->label       = std::string(label);
-    resource->image       = image;
-    resource->defaultView = view;
-    resource->retainedResources = {RetainedResource{image}, RetainedResource{view}};
-    return resource;
-}
-
-} // namespace
 
 namespace
 {

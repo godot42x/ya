@@ -4,6 +4,7 @@
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/FrameUploadArena.h"
 #include "Render3D/Stage/IRenderStage.h"
+#include "Render3D/Common/PerFlightFrameResourceSetBase.h"
 
 #include "GLSL.Skybox.glsl.h"
 #include "PBRForward.slang.h"
@@ -27,8 +28,10 @@ struct IRender;
  * borrow the current flight's descriptor sets and build typed CPU payloads;
  * they never own the per-flight GPU buffers themselves (FG-701).
  */
-class ForwardFrameResourceSet
+class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase<ForwardFrameResourceSet>
 {
+    friend class PerFlightFrameResourceSetBase<ForwardFrameResourceSet>;
+
   public:
     using PBRFrameUBO    = slang_types::PBRForward::FrameData;
     using PBRLightUBO    = slang_types::PBRForward::LightData;
@@ -71,11 +74,13 @@ class ForwardFrameResourceSet
     void destroy();
 
     /** Upload the current frame's skinning palettes for the fence-safe flight. */
-    bool prepareSkinning(const RenderStageContext& ctx);
+    bool prepareSkinning(const RenderStageContext& ctx)
+    {
+        return PerFlightFrameResourceSetBase<ForwardFrameResourceSet>::prepareSkinning(ctx);
+    }
     /** Upload all frame/light/skybox payloads into the current flight's arena. */
     bool prepareFramePayloads(const RenderStageContext& ctx, const FramePayloads& payloads);
 
-    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkinningDSL() const { return _skinningDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getPBRFrameDSL() const { return _pbrFrameDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getPhongFrameDSL() const { return _phongFrameDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getUnlitFrameDSL() const { return _unlitFrameDSL; }
@@ -83,10 +88,6 @@ class ForwardFrameResourceSet
     [[nodiscard]] const Binding&               getBinding(uint32_t flightIndex) const;
 
   private:
-    IRender* _render = nullptr;
-    std::unique_ptr<FrameUploadArena> _uploadArena;
-    stdptr<IDescriptorSetLayout> _skinningDSL;
-    stdptr<IDescriptorPool>      _skinningDSP;
     stdptr<IDescriptorSetLayout> _pbrFrameDSL;
     stdptr<IDescriptorPool>      _pbrFrameDSP;
     stdptr<IDescriptorSetLayout> _phongFrameDSL;
@@ -96,9 +97,10 @@ class ForwardFrameResourceSet
     stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
     stdptr<IDescriptorPool>      _skyboxFrameDSP;
     std::array<Binding, MAX_FLIGHTS_IN_FLIGHT> _bindings{};
-    uint32_t _skinningCapacity = 0;
 
-    bool ensureSkinningCapacity(uint32_t paletteCount);
+    /// CRTP contract: per-flight skinning slots consumed by the shared base.
+    std::array<Binding, MAX_FLIGHTS_IN_FLIGHT>& bindings() { return _bindings; }
+
     void updatePBRFrameDescriptorSet(uint32_t flightIndex,
                                      const FrameUploadArena::Allocation& frame,
                                      const FrameUploadArena::Allocation& light);

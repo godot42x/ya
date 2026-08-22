@@ -17,7 +17,10 @@
 #include "Render3D/Common/RenderViewportSnapshot.h"
 #include "Render3D/Deferred/DeferredPipelineDebugViews.h"
 #include "Render3D/Services/OffscreenTaskService.h"
+#include "Render3D/Services/PipelineCoordinator.h"
+#include "Render3D/Services/PresentationGraphService.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
+#include "Render3D/Services/ViewportStateService.h"
 #include "Render3D/Services/RenderSharedResourceProvider.h"
 #include "Render3D/Services/GameplayResourceBinding.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
@@ -63,14 +66,11 @@ struct RenderPipelineDebugOutputCatalog
 
 struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
 {
+    using ERenderPipeline = PipelineCoordinator::ERenderPipeline;
+
     // =========================================================================
     // Public protocol
     // =========================================================================
-    enum class ERenderPipeline
-    {
-        Forward,
-        Deferred
-    };
 
     struct InitDesc
     {
@@ -96,17 +96,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     /// Presentation graph extension points recorded by the app. A single
     /// descriptor object keeps the presentation boundary explicit instead of
     /// threading several parallel callbacks through FrameInput.
-    struct PresentationExtensions
-    {
-        std::function<void(ICommandBuffer*)>                         recordBeforeExtensions;
-        std::function<void(ICommandBuffer*)>                         recordExtensions;
-        std::function<bool(RenderGraph&, RGTextureHandle, Extent2D)> appendCapture;
-
-        [[nodiscard]] bool empty() const
-        {
-            return !recordBeforeExtensions && !recordExtensions && !appendCapture;
-        }
-    };
+    using PresentationExtensions = PresentationGraphService::Extensions;
 
     struct FrameInput
     {
@@ -160,26 +150,13 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     std::shared_ptr<ShaderStorage>               _shaderStorage = nullptr;
 
     ERenderAPI::T  currentRenderAPI      = ERenderAPI::None;
-    ERenderPipeline _renderPipeline      = ERenderPipeline::Deferred;
-    ERenderPipeline _pendingRenderPipeline = ERenderPipeline::Deferred;
-
-    stdptr<ForwardRenderPipeline>  _forwardPipeline  = nullptr;
-    stdptr<DeferredRenderPipeline> _deferredPipeline = nullptr;
 
     RenderSharedResourceProvider  _sharedResourceProvider{};
     RenderDiagnosticsService     _diagnostics{};
+    PipelineCoordinator          _pipelineCoordinator{};
+    PresentationGraphService     _presentationGraphService{};
+    ViewportStateService         _viewportState{};
 
-    Rect2D _viewportRect{};
-    float  _viewportFrameBufferScale = 1.0f;
-    bool   _bWorldSceneRenderEnabled = true;
-
-    std::vector<std::unique_ptr<RenderGraphExecutor>> _presentationGraphExecutors;
-    std::vector<std::shared_ptr<RenderTexture>>       _presentationImages;
-    stdptr<BasicPostprocessing>                       _presentationPostProcessor = nullptr;
-    PostProcessingState                               _presentationPostProcessState{};
-
-    std::vector<RenderTargetFormatCommand> _pendingRenderTargetFormatCommands;
-    bool                                   _pendingActivePipelineReload = false;
     mutable size_t _viewportDebugCatalogSignature = 0;
     mutable std::shared_ptr<RenderViewportDebugCatalog> _viewportDebugCatalog = nullptr;
 
@@ -232,15 +209,15 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     [[nodiscard]] std::shared_ptr<RenderTexture> getPresentationImageShared() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
-    [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _renderPipeline; }
-    [[nodiscard]] ERenderPipeline getPendingRenderPipeline() const { return _pendingRenderPipeline; }
-    void setPendingRenderPipeline(ERenderPipeline renderPipeline) { _pendingRenderPipeline = renderPipeline; }
-    void requestActivePipelineReload() { _pendingActivePipelineReload = true; }
+    [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _pipelineCoordinator.getRenderPipeline(); }
+    [[nodiscard]] ERenderPipeline getPendingRenderPipeline() const { return _pipelineCoordinator.getPendingRenderPipeline(); }
+    void setPendingRenderPipeline(ERenderPipeline renderPipeline) { _pipelineCoordinator.setPendingRenderPipeline(renderPipeline); }
+    void requestActivePipelineReload() { _pipelineCoordinator.requestActivePipelineReload(); }
     /// Enable/disable the world scene graph for the current frame. The editor
     /// 2D canvas mode disables it: only the UI compose pass and the editor
     /// viewport panel need rendering in that mode.
-    void setWorldSceneRenderEnabled(bool bEnabled) { _bWorldSceneRenderEnabled = bEnabled; }
-    [[nodiscard]] bool isWorldSceneRenderEnabled() const { return _bWorldSceneRenderEnabled; }
+    void setWorldSceneRenderEnabled(bool bEnabled) { _viewportState.setWorldSceneRenderEnabled(bEnabled); }
+    [[nodiscard]] bool isWorldSceneRenderEnabled() const { return _viewportState.isWorldSceneRenderEnabled(); }
 
     [[nodiscard]] stdptr<IDescriptorPool>      getSkyboxDescriptorPool() const { return _sharedResourceProvider.getSkyboxDescriptorPool(); }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxDescriptorSetLayout() const { return _sharedResourceProvider.getSkyboxDescriptorSetLayout(); }
@@ -253,13 +230,14 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const override;
 
 
-    [[nodiscard]] const Rect2D& getViewportRect() const { return _viewportRect; }
-    [[nodiscard]] float         getViewportFrameBufferScale() const { return _viewportFrameBufferScale; }
+    [[nodiscard]] const Rect2D& getViewportRect() const { return _viewportState.getRect(); }
+    [[nodiscard]] float         getViewportFrameBufferScale() const { return _viewportState.getFrameBufferScale(); }
+    void                        setViewportFrameBufferScale(float scale) { _viewportState.setFrameBufferScale(scale); }
     [[nodiscard]] Extent2D      getViewportExtent() const;
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
     [[nodiscard]] RenderTargetCatalog buildRenderTargetCatalog() const;
     [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot() const;
-    [[nodiscard]] bool            isDeferredPipelineActive() const { return _renderPipeline == ERenderPipeline::Deferred; }
+    [[nodiscard]] bool            isDeferredPipelineActive() const { return _pipelineCoordinator.isDeferredPipelineActive(); }
     void requestRenderTargetFormat(const RenderTargetFormatCommand& command);
 
   private:
@@ -273,7 +251,6 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     void                   initResourceCaches();
     void                   initSharedRenderResources();
     void                   initPresentationResources();
-    void                   rebuildPresentationImages();
     void                   initCommandResources();
     void                   initFrameServices();
     void                   shutdownRuntimeServices();
@@ -287,9 +264,6 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     void                   ensureViewportRectInitialized(const FrameInput& input);
     bool                   beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf);
-    void                   renderPresentationPass(float deltaTime,
-                                                  const PresentationExtensions& presentationExtensions,
-                                                  ICommandBuffer* cmdBuf);
     /// Presentation resources (per-swapchain-image executors + imported images)
     /// are intentionally kept independent from the world-frame executor:
     /// swapchain acquire/present and recreate stay outside the world graph.
@@ -308,16 +282,6 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     // =========================================================================
     // Internal pipeline / presentation helpers
     // =========================================================================
-    void                   initActivePipeline();
-    void                   initForwardPipeline(int windowWidth, int windowHeight);
-    void                   initDeferredPipeline(int windowWidth, int windowHeight);
-    void                   shutdownActivePipeline();
-    void                   applyPendingRenderPipelineSwitch();
-    void                   applyPendingRenderTargetFormatCommands();
-    [[nodiscard]] ForwardRenderPipeline*         getSelectedForwardPipeline() const;
-    [[nodiscard]] DeferredRenderPipeline*        getSelectedDeferredPipeline() const;
-    [[nodiscard]] std::shared_ptr<RenderTexture> getCurrentPresentationImageShared() const;
-    [[nodiscard]] uint32_t                     getCurrentPresentationImageIndex() const;
 };
 
 } // namespace ya

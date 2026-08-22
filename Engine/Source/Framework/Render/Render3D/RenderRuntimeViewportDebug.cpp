@@ -165,7 +165,7 @@ void appendSkyboxDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder& 
 
 void appendForwardDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder& builder, const RenderPipelineDebugOutputCatalog& debugOutputs)
 {
-    if (!runtime._forwardPipeline) {
+    if (!runtime._pipelineCoordinator.hasForwardPipeline()) {
         return;
     }
 
@@ -199,7 +199,7 @@ void appendDeferredDebugSlots(const RenderRuntime&                    runtime,
                               const RenderPipelineDebugOutputCatalog& debugOutputs,
                               const DeferredPipelineDebugViews&       deferredViews)
 {
-    if (!runtime._deferredPipeline) {
+    if (!runtime._pipelineCoordinator.hasDeferredPipeline()) {
         return;
     }
 
@@ -486,7 +486,7 @@ void appendEnvironmentDebugSlots(const RenderRuntime& runtime, ViewportDebugBuil
 size_t RenderRuntime::buildViewportDebugCatalogSignature() const
 {
     size_t seed = 0;
-    hashCombineValue(seed, static_cast<int>(_renderPipeline));
+    hashCombineValue(seed, static_cast<int>(_pipelineCoordinator.getRenderPipeline()));
 
     const auto debugOutputs  = buildPipelineDebugOutputCatalog();
     const auto deferredViews = getDeferredPipelineDebugViews();
@@ -514,7 +514,7 @@ size_t RenderRuntime::buildViewportDebugCatalogSignature() const
     }
     hashCombineValue(seed, pointShadowFaceMask);
 
-    if (_renderPipeline == ERenderPipeline::Deferred) {
+    if (_pipelineCoordinator.getRenderPipeline() == ERenderPipeline::Deferred) {
         hashCombineValue(seed, deferredViews.gBufferResources.color[0] != nullptr);
         hashCombineValue(seed, deferredViews.gBufferResources.color[1] != nullptr);
         hashCombineValue(seed, deferredViews.gBufferResources.color[2] != nullptr);
@@ -613,7 +613,7 @@ void RenderRuntime::appendViewportDebugImages(std::vector<RenderViewportDebugIma
     const auto           deferredViews = getDeferredPipelineDebugViews();
     ViewportDebugBuilder builder{.catalog = catalog, .images = images};
 
-    if (_renderPipeline == ERenderPipeline::Forward) {
+    if (_pipelineCoordinator.getRenderPipeline() == ERenderPipeline::Forward) {
         appendForwardDebugSlots(*this, builder, debugOutputs);
     }
     else {
