@@ -4,10 +4,11 @@
 # used to do nothing; only the tab strip could start the dock-panel drag).
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
-{"assert":{"widget":"DockLeaf1"}}
+{"assert":{"widget":"DockSplit1"}}
+{"assert":{"widget":"Tab_Scene"}}
 {"checkpoint":"dock_initial"}
 # Tear off the Scene tab: drag it up into the toolbar (above the DockSpace) and release.
-{"drag":{"from":[40,79],"to":[300,40],"button":0,"steps":8}}
+{"drag":{"from":[554,66],"to":[430,20],"button":0,"steps":8}}
 {"frame":3}
 {"assert":{"widget":"FloatingWindow1"}}
 {"checkpoint":"dock_torn"}
@@ -19,6 +20,6 @@
 {"checkpoint":"after_redock"}
 {"frame":3}
 {"assert":{"widget":"!FloatingWindow1"}}
-{"assert":{"widget":"DockLeaf1"}}
+{"assert":{"widget":"DockSplit1"}}
 {"checkpoint":"dock_redocked"}
 {"frame":1}

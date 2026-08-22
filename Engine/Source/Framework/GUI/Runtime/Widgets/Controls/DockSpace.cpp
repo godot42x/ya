@@ -2,8 +2,10 @@
 
 
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TabBar.h"
+#include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -16,6 +18,17 @@ namespace ya
 namespace
 {
 constexpr float kSplitMinExtent = 120.0f;
+constexpr float kChooserBlock = 28.0f;
+constexpr float kChooserGap = 8.0f;
+
+struct FChooserRects
+{
+    Rect2D center{};
+    Rect2D left{};
+    Rect2D right{};
+    Rect2D top{};
+    Rect2D bottom{};
+};
 
 bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 {
@@ -48,6 +61,42 @@ std::pair<bool, std::string> rejectForExtent(const Rect2D& rect, const glm::vec2
     }
     return {false, {}};
 }
+
+FChooserRects makeChooserRects(const Rect2D& rect)
+{
+    const glm::vec2 center = rect.pos + rect.extent * 0.5f;
+    const float block = kChooserBlock;
+    const float gap = kChooserGap;
+    return {
+        Rect2D{glm::vec2{center.x - block * 0.5f, center.y - block * 0.5f}, glm::vec2{block, block}},
+        Rect2D{glm::vec2{center.x - block * 1.5f - gap, center.y - block * 0.5f}, glm::vec2{block, block}},
+        Rect2D{glm::vec2{center.x + block * 0.5f + gap, center.y - block * 0.5f}, glm::vec2{block, block}},
+        Rect2D{glm::vec2{center.x - block * 0.5f, center.y - block * 1.5f - gap}, glm::vec2{block, block}},
+        Rect2D{glm::vec2{center.x - block * 0.5f, center.y + block * 0.5f + gap}, glm::vec2{block, block}},
+    };
+}
+
+struct FDropChooserOverlay final : UIElement
+{
+    explicit FDropChooserOverlay(UIDockSpace* owner)
+        : UIElement("DockChooserOverlay")
+        , _owner(owner)
+    {
+        _hitFilter = EWidgetHitFilter::Stop;
+        setVisibility(EWidgetVisibility::SelfHitTestInvisible);
+        _bSelfClip = false;
+    }
+
+    [[nodiscard]] bool hitTestSelf(const glm::vec2&) const override { return false; }
+    void paintSelf(UIFrameBuilder& builder) override
+    {
+        if (_owner) {
+            _owner->paintDropPreviewOverlay(builder);
+        }
+    }
+
+    UIDockSpace* _owner = nullptr;
+};
 }
 
 UIDockSpace::UIDockSpace(std::string name)
@@ -72,8 +121,68 @@ void UIDockSpace::clearPreview()
 {
     if (_preview) {
         _preview.reset();
-        markPaintDirty();
     }
+    syncPreviewOverlay();
+    markPaintDirty();
+}
+
+void UIDockSpace::syncPreviewOverlay()
+{
+    WidgetTree* tree = getTree();
+    if (_preview && tree) {
+        if (!_previewOverlay) {
+            _previewOverlay = std::make_shared<FDropChooserOverlay>(this);
+        }
+        if (!_previewOverlay->isAttached()) {
+            tree->attachToLayer(WidgetTree::ELayer::DragIme, _previewOverlay);
+        }
+        return;
+    }
+    if (_previewOverlay && tree && _previewOverlay->isAttached()) {
+        tree->detach(*_previewOverlay);
+    }
+    _previewOverlay.reset();
+}
+
+void UIDockSpace::paintDropPreviewOverlay(UIFrameBuilder& builder) const
+{
+    if (!_preview || _preview->bDisabled) {
+        return;
+    }
+    FDockSpaceStyle style;
+    if (!_styleKey.empty()) {
+        if (const FDockSpaceStyle* themed = resolveThemeStyle<FDockSpaceStyle>(*this, _styleKey)) {
+            style = *themed;
+        }
+    }
+
+    const FLeafView* targetView = leafViewForLeaf(_preview->targetLeafId);
+    if (!targetView || !targetView->root || !targetView->bar) {
+        return;
+    }
+
+    const Rect2D barRect = targetView->bar->_layoutRect;
+    const Rect2D leafRect = targetView->root->_layoutRect;
+    const FChooserRects chooser = _preview->bHeaderZone ? makeChooserRects(barRect) : makeChooserRects(leafRect);
+
+    const auto drawChoice = [&](const Rect2D& rect, bool bActive)
+    {
+        const FBrush fillBrush = bActive ? style.dropPreviewMergeColor : style.dropPreviewColor;
+        builder.addBrush(rect, fillBrush);
+        builder.addRectOutline(rect, style.dropPreviewOutlineColor, bActive ? 2.0f : 1.0f);
+    };
+
+    builder.addRectOutline(_preview->bHeaderZone ? barRect : leafRect, style.dropPreviewOutlineColor, 1.0f);
+    if (_preview->bHeaderZone) {
+        drawChoice(chooser.center, true);
+        return;
+    }
+
+    drawChoice(chooser.center, _preview->bMerge && !_preview->bDisabled);
+    drawChoice(chooser.left, _preview->side == EDockCardinalSide::West && !_preview->bMerge && !_preview->bDisabled);
+    drawChoice(chooser.right, _preview->side == EDockCardinalSide::East && !_preview->bMerge && !_preview->bDisabled);
+    drawChoice(chooser.top, _preview->side == EDockCardinalSide::North && !_preview->bMerge && !_preview->bDisabled);
+    drawChoice(chooser.bottom, _preview->side == EDockCardinalSide::South && !_preview->bMerge && !_preview->bDisabled);
 }
 
 void UIDockSpace::setWorkspace(std::shared_ptr<UIDockWorkspace> ws)
@@ -211,8 +320,11 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     auto leaf = std::make_shared<UIContainer>(std::format("DockLeaf{}", node.id));
     leaf->setDirection(EWidgetBoxLayout::Vertical);
     leaf->setSpacing(0.0f);
+    leaf->setClipChildren(true);
     auto bar = std::make_shared<UITabBar>(std::format("DockTabBar{}", node.id));
     bar->_bDraggableTabs = true;
+    bar->_styleKey = "tab.dock";
+    bar->setClipChildren(true);
     bar->_emptyPlaceholder = std::format("{} (drop tabs here)", leaf->_name);
     bar->_onTabDragBegin = [this, leafId = node.id](int index, const std::string& label)
     {
@@ -226,6 +338,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
             observer.onMove = [this, panelId](const std::string&, const glm::vec2& logicalPoint, std::string_view)
             {
                 _preview = resolveDropPreview(logicalPoint, panelId);
+                syncPreviewOverlay();
                 markPaintDirty();
             };
             observer.onTargetChanged = [this](std::string_view, std::string_view)
@@ -251,9 +364,18 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     };
     leaf->addDetachedChild(bar);
 
+    auto body = std::make_shared<UIPanel>(std::format("DockBody{}", node.id));
+    body->_styleKey = "panel.surface";
+    leaf->addDetachedChild(body);
+
     auto content = std::make_shared<UIContainer>(std::format("DockContent{}", node.id));
+    content->_anchorMin = {0.0f, 0.0f};
+    content->_anchorMax = {1.0f, 1.0f};
+    content->setPosition({0.0f, 0.0f});
+    content->setSize({0.0f, 0.0f});
+    content->setPadding({12.0f, 12.0f});
     leaf->setStretchLastChild(true);
-    leaf->addDetachedChild(content);
+    body->addDetachedChild(content);
     content->setStretchLastChild(true);
 
     _leafViews[node.id] = {node.id, leaf.get(), bar.get(), content.get()};
@@ -300,38 +422,6 @@ void UIDockSpace::paintSelf(UIFrameBuilder& builder)
 void UIDockSpace::paintChildren(UIFrameBuilder& builder)
 {
     UIElement::paintChildren(builder);
-    if (!_preview || _preview->bDisabled) {
-        return;
-    }
-    // Theme resolution: the drop preview brushes (merge vs split states +
-    // outline) come from FDockSpaceStyle when the key resolves; otherwise
-    // the default-constructed style is the fallback (no magic literals).
-    FDockSpaceStyle style;
-    if (!_styleKey.empty()) {
-        if (const FDockSpaceStyle* themed = resolveThemeStyle<FDockSpaceStyle>(*this, _styleKey)) {
-            style = *themed;
-        }
-    }
-    const FBrush previewFill = _preview->bMerge ? style.dropPreviewMergeColor : style.dropPreviewColor;
-    // ImGui-style docking preview: the target zone gets a translucent fill, a
-    // bright 2px accent border, and a 1px inner light edge so it reads as an
-    // elevated drop gutter (not a flat overlay). Merge = the whole leaf,
-    // split = the edge strip.
-    builder.addBrush(_preview->rect, previewFill);
-    builder.addRectOutline(_preview->rect, style.dropPreviewOutlineColor, 2.0f);
-    const Rect2D inner{_preview->rect.pos + glm::vec2{1.0f, 1.0f},
-                       _preview->rect.extent - glm::vec2{2.0f, 2.0f}};
-    builder.addRectOutline(inner, {1.0f, 1.0f, 1.0f, 0.40f}, 1.0f);
-    // Merge also marks the target tab: a bright accent underline on the leaf's
-    // tab bar signals "this panel group will absorb the dragged panel".
-    if (_preview->bMerge) {
-        const FLeafView* targetView = leafViewForLeaf(_preview->targetLeafId);
-        if (targetView && targetView->bar) {
-            const Rect2D underline{targetView->bar->_layoutRect.pos,
-                                   {targetView->bar->_layoutRect.extent.x, 2.0f}};
-            builder.addRectOutline(underline, style.dropPreviewOutlineColor, 2.0f);
-        }
-    }
 }
 
 const std::string& UIDockSpace::getDropPreviewDisabledReason() const
@@ -376,69 +466,51 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     if (!targetView || !targetView->root) {
         return std::nullopt;
     }
-    const bool bSameLeaf = sourceLeaf && sourceLeaf->id == targetView->leafId;
-
     const bool bOverTabBar = targetView->bar && pointInRect(logicalPoint, targetView->bar->_layoutRect);
+    const Rect2D barRect = targetView->bar->_layoutRect;
+    const Rect2D leafRect = targetView->root->_layoutRect;
 
-    const Rect2D rect = targetView->root->_layoutRect;
-    if (rect.extent.x <= 0.0f || rect.extent.y <= 0.0f) {
+    if (bOverTabBar) {
+        const Rect2D centerRect = makeChooserRects(barRect).center;
+        return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::West, centerRect,
+                            "Dock Center", true, true, false, {}};
+    }
+
+    if (!pointInRect(logicalPoint, leafRect)) {
         return std::nullopt;
     }
-    const glm::vec2 local = (logicalPoint - rect.pos) / rect.extent;
-    if (bOverTabBar) {
-        if (bSameLeaf) {
-            return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::West, Rect2D{},
-                                false, true, "already docked in this leaf"};
-        }
-        return FDropPreview{
-            targetView->leafId,
-            panelId,
-            EDockCardinalSide::West,
-            targetView->bar->_layoutRect,
-            true,
-            false,
-            {}}
-        ;
-    }
-    const bool bMerge = local.x > 0.25f && local.x < 0.75f && local.y > 0.25f && local.y < 0.75f;
-    EDockCardinalSide side = EDockCardinalSide::West;
-    if (!bMerge) {
-        const float dx = local.x - 0.5f;
-        const float dy = local.y - 0.5f;
-        if (std::abs(dx) > std::abs(dy)) {
-            side = dx < 0.0f ? EDockCardinalSide::West : EDockCardinalSide::East;
-        }
-        else {
-            side = dy < 0.0f ? EDockCardinalSide::North : EDockCardinalSide::South;
-        }
-    }
 
-    auto [bDisabled, reason] = rejectForExtent(rect, local);
-    if (bSameLeaf) {
-        if (bMerge) {
-            bDisabled = true;
-            reason = "cannot merge a panel into its own leaf";
-        }
-        else if (sourceLeaf->panelIds.size() <= 1) {
-            bDisabled = true;
-            reason = "cannot split a single-panel leaf onto itself";
-        }
-    }
+    const FChooserRects chooser = makeChooserRects(leafRect);
+    const bool inCenter = pointInRect(logicalPoint, chooser.center);
+    const bool inLeft = pointInRect(logicalPoint, chooser.left);
+    const bool inRight = pointInRect(logicalPoint, chooser.right);
+    const bool inTop = pointInRect(logicalPoint, chooser.top);
+    const bool inBottom = pointInRect(logicalPoint, chooser.bottom);
 
-    Rect2D previewRect = rect;
-    if (!bMerge) {
-        const float stripX = rect.extent.x * 0.30f;
-        const float stripY = rect.extent.y * 0.30f;
-        switch (side) {
-        case EDockCardinalSide::West: previewRect = Rect2D{glm::vec2{rect.pos.x, rect.pos.y}, glm::vec2{stripX, rect.extent.y}}; break;
-        case EDockCardinalSide::East: previewRect = Rect2D{glm::vec2{rect.pos.x + rect.extent.x - stripX, rect.pos.y}, glm::vec2{stripX, rect.extent.y}}; break;
-        case EDockCardinalSide::North: previewRect = Rect2D{glm::vec2{rect.pos.x, rect.pos.y}, glm::vec2{rect.extent.x, stripY}}; break;
-        case EDockCardinalSide::South: previewRect = Rect2D{glm::vec2{rect.pos.x, rect.pos.y + rect.extent.y - stripY}, glm::vec2{rect.extent.x, stripY}}; break;
-        }
+    if (!inCenter && !inLeft && !inRight && !inTop && !inBottom) {
+        return std::nullopt;
     }
-
-    return FDropPreview{targetView->leafId, panelId, side, previewRect,
-                        bMerge, bDisabled, std::move(reason)};
+    if (sourceLeaf && sourceLeaf->id == targetView->leafId && bOverTabBar) {
+        return std::nullopt;
+    }
+    if (inCenter) {
+        return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::West, chooser.center,
+                            "Dock Center", true, false, false, {}};
+    }
+    if (inLeft) {
+        return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::West, chooser.left,
+                            "Left", false, false, false, {}};
+    }
+    if (inRight) {
+        return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::East, chooser.right,
+                            "Right", false, false, false, {}};
+    }
+    if (inTop) {
+        return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::North, chooser.top,
+                            "Top", false, false, false, {}};
+    }
+    return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::South, chooser.bottom,
+                        "Bottom", false, false, false, {}};
 }
 
 bool UIDockSpace::parsePanelPayload(const std::string& payload, DockPanelId& panelId) const
@@ -516,6 +588,7 @@ void UIDockSpace::updateDropHover(const std::string& payload, const glm::vec2& l
     auto preview = parsePanelPayload(payload, panelId) ? resolveDropPreview(logicalPoint, panelId)
                                                        : std::nullopt;
     _preview = std::move(preview);
+    syncPreviewOverlay();
     markPaintDirty();
 }
 

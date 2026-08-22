@@ -1343,8 +1343,12 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
     const auto makePanel = [](const std::string& name, const std::string& text)
     {
         auto panel = std::make_shared<ya::UIPanel>(name + "_Body");
-        panel->setColor({0.12f, 0.13f, 0.17f, 1.0f});
+        panel->_styleKey = "panel.canvas";
         auto label = std::make_shared<ya::UIText>(name + "_Label");
+        label->_anchorMin = {0.0f, 0.0f};
+        label->_anchorMax = {1.0f, 1.0f};
+        label->setPosition({12.0f, 12.0f});
+        label->setSize({-24.0f, -24.0f});
         label->_hAlign = ya::EWidgetAlignH::Center;
         label->_vAlign = ya::EWidgetAlignV::Center;
         label->_fontSize = 14;
@@ -1353,12 +1357,30 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
         return std::shared_ptr<ya::UIElement>(panel);
     };
 
-    dock->addPanel("Scene", makePanel("Scene", "Scene viewport"));
-    dock->addPanel("Inspector", makePanel("Inspector", "Inspector panel"));
-    dock->addPanel("Console", makePanel("Console", "Console output"));
+    const ya::DockPanelId sceneId = dockWs->addPanel("Scene", makePanel("Scene", "Scene viewport"));
+    const ya::DockPanelId hierarchyId = dockWs->addPanel("Hierarchy", makePanel("Hierarchy", "Actor hierarchy"));
+    const ya::DockPanelId inspectorId = dockWs->addPanel("Inspector", makePanel("Inspector", "Inspector panel"));
+    const ya::DockPanelId consoleId = dockWs->addPanel("Console", makePanel("Console", "Console output"));
+    const ya::DockPanelId assetsId = dockWs->addPanel("Assets", makePanel("Assets", "Asset browser"));
+
+    auto& model = dockWs->dockModel();
+    const ya::DockNodeId rootLeaf = model.root()->id;
+    model.selectPanel(sceneId);
+    model.splitLeaf(rootLeaf, ya::EDockCardinalSide::East, inspectorId, 0.74f);
+    if (ya::FDockNode* sceneLeaf = model.findLeafForPanel(sceneId)) {
+        model.splitLeaf(sceneLeaf->id, ya::EDockCardinalSide::West, hierarchyId, 0.28f);
+    }
+    if (ya::FDockNode* sceneLeaf = model.findLeafForPanel(sceneId)) {
+        model.splitLeaf(sceneLeaf->id, ya::EDockCardinalSide::South, consoleId, 0.70f);
+    }
+    if (ya::FDockNode* hierarchyLeaf = model.findLeafForPanel(hierarchyId)) {
+        model.movePanel(assetsId, hierarchyLeaf->id);
+        model.selectPanel(hierarchyId);
+    }
+    dockWs->fireDockUpdated();
+    log("Dock demo: drag tabs to split / merge, drag out to float, drag floating title to re-dock");
 
     (void)state;
-    (void)log;
 }
 
 void buildThemeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,

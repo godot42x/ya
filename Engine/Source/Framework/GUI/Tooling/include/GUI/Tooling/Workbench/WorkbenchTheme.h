@@ -82,6 +82,15 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
         auto panelStyle = ya::FPanelStyle{};
         panelStyle.fillColor = FBrush::Solid(panel);
         theme->define<ya::FPanelStyle>("panel", panelStyle);
+        auto sidebarStyle = ya::FPanelStyle{};
+        sidebarStyle.fillColor = FBrush::Solid({0.095f, 0.102f, 0.125f, 1.0f});
+        theme->define<ya::FPanelStyle>("panel.sidebar", sidebarStyle);
+        auto sidebarCardStyle = ya::FPanelStyle{};
+        sidebarCardStyle.fillColor = FBrush::Solid({0.115f, 0.122f, 0.148f, 1.0f});
+        theme->define<ya::FPanelStyle>("panel.sidebar.card", sidebarCardStyle);
+        auto surfaceStyle = ya::FPanelStyle{};
+        surfaceStyle.fillColor = FBrush::Solid({0.085f, 0.092f, 0.114f, 1.0f});
+        theme->define<ya::FPanelStyle>("panel.surface", surfaceStyle);
 
         auto text = ya::FTextStyle{};
         text.textColor = tokens::kTextColor;
@@ -108,6 +117,20 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
         tab.accentColor  = {0.30f, 0.55f, 0.92f, 1.0f};
         tab.padding      = {14.0f, 6.0f};
         theme->define<ya::FTabStyle>("tab", tab);
+        auto sideTab = tab;
+        sideTab.normalFill = FBrush::Solid({0.12f, 0.13f, 0.16f, 0.0f});
+        sideTab.hoveredFill = FBrush::Solid({0.17f, 0.19f, 0.24f, 1.0f});
+        sideTab.selectedFill = FBrush::Solid({0.18f, 0.24f, 0.38f, 1.0f});
+        sideTab.padding = {16.0f, 8.0f};
+        sideTab.separatorColor = {0.20f, 0.22f, 0.28f, 1.0f};
+        theme->define<ya::FTabStyle>("tab.sidebar", sideTab);
+        auto dockTab = tab;
+        dockTab.normalFill = FBrush::Solid({0.16f, 0.17f, 0.21f, 1.0f});
+        dockTab.hoveredFill = FBrush::Solid({0.20f, 0.22f, 0.28f, 1.0f});
+        dockTab.selectedFill = FBrush::Solid({0.18f, 0.20f, 0.25f, 1.0f});
+        dockTab.padding = {14.0f, 8.0f};
+        dockTab.separatorColor = {0.24f, 0.26f, 0.32f, 1.0f};
+        theme->define<ya::FTabStyle>("tab.dock", dockTab);
 
         auto split = ya::FSplitPaneStyle{};
         split.dividerFill         = FBrush::Solid({0.11f, 0.12f, 0.15f, 1.0f});
@@ -123,6 +146,8 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
 
         auto dock = ya::FDockSpaceStyle{};
         dock.canvasColor = FBrush::Solid({0.075f, 0.082f, 0.10f, 1.0f});
+        dock.dropPreviewColor = FBrush::Solid({0.28f, 0.52f, 0.90f, 0.16f});
+        dock.dropPreviewMergeColor = FBrush::Solid({0.28f, 0.52f, 0.90f, 0.08f});
         theme->define<ya::FDockSpaceStyle>("dock", dock);
 
         auto floating = ya::FFloatingWindowStyle{};
@@ -152,6 +177,15 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
         auto panelStyle = ya::FPanelStyle{};
         panelStyle.fillColor = FBrush::Solid(panel);
         theme->define<ya::FPanelStyle>("panel", panelStyle);
+        auto sidebarStyle = ya::FPanelStyle{};
+        sidebarStyle.fillColor = FBrush::Solid({0.90f, 0.91f, 0.94f, 1.0f});
+        theme->define<ya::FPanelStyle>("panel.sidebar", sidebarStyle);
+        auto sidebarCardStyle = ya::FPanelStyle{};
+        sidebarCardStyle.fillColor = FBrush::Solid({0.95f, 0.96f, 0.98f, 1.0f});
+        theme->define<ya::FPanelStyle>("panel.sidebar.card", sidebarCardStyle);
+        auto surfaceStyle = ya::FPanelStyle{};
+        surfaceStyle.fillColor = FBrush::Solid({0.88f, 0.89f, 0.93f, 1.0f});
+        theme->define<ya::FPanelStyle>("panel.surface", surfaceStyle);
 
         auto text = ya::FTextStyle{};
         text.textColor = tokens::kTextColorLight;
@@ -176,6 +210,20 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
         tab.separatorColor      = {0.60f, 0.62f, 0.66f, 1.0f};
         tab.placeholderTextColor = {0.45f, 0.48f, 0.55f, 1.0f};
         theme->define<ya::FTabStyle>("tab", tab);
+        auto sideTab = tab;
+        sideTab.normalFill = FBrush::Solid({0.90f, 0.91f, 0.94f, 0.0f});
+        sideTab.hoveredFill = FBrush::Solid({0.83f, 0.85f, 0.89f, 1.0f});
+        sideTab.selectedFill = FBrush::Solid({0.76f, 0.84f, 0.95f, 1.0f});
+        sideTab.padding = {16.0f, 8.0f};
+        sideTab.separatorColor = {0.72f, 0.74f, 0.78f, 1.0f};
+        theme->define<ya::FTabStyle>("tab.sidebar", sideTab);
+        auto dockTab = tab;
+        dockTab.normalFill = FBrush::Solid({0.90f, 0.91f, 0.94f, 1.0f});
+        dockTab.hoveredFill = FBrush::Solid({0.84f, 0.86f, 0.90f, 1.0f});
+        dockTab.selectedFill = FBrush::Solid({0.94f, 0.95f, 0.98f, 1.0f});
+        dockTab.padding = {14.0f, 8.0f};
+        dockTab.separatorColor = {0.70f, 0.72f, 0.76f, 1.0f};
+        theme->define<ya::FTabStyle>("tab.dock", dockTab);
 
         auto split = ya::FSplitPaneStyle{};
         split.dividerFill         = FBrush::Solid({0.70f, 0.72f, 0.76f, 1.0f});
@@ -191,6 +239,8 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
 
         auto dock = ya::FDockSpaceStyle{};
         dock.canvasColor = FBrush::Solid({0.75f, 0.77f, 0.81f, 1.0f});
+        dock.dropPreviewColor = FBrush::Solid({0.28f, 0.52f, 0.90f, 0.18f});
+        dock.dropPreviewMergeColor = FBrush::Solid({0.28f, 0.52f, 0.90f, 0.10f});
         theme->define<ya::FDockSpaceStyle>("dock", dock);
 
         auto floating = ya::FFloatingWindowStyle{};

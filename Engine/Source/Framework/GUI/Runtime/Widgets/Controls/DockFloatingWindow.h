@@ -62,7 +62,9 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer
 
   private:
 
-    void beginTabDrag();
+    void beginDockDrag();
+    void beginWindowMove();
+    void updateWindowMove(const glm::vec2& logicalPoint);
     [[nodiscard]] Rect2D resizeHandleRect(EResizeEdge edge) const;
 
     DockPanelId _panelId = kInvalidDockPanelId;
@@ -74,6 +76,7 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer
     std::shared_ptr<UIContainer> _header;
     /// Transient title-drag arm state (mirrors UITabBar's 6px threshold).
     bool      _bTitlePressed = false;
+    bool      _bTitleMoving  = false;
     glm::vec2 _titlePressPoint{0.0f, 0.0f};
     Rect2D _windowRect;
     std::optional<glm::vec2> _lastDragPoint;

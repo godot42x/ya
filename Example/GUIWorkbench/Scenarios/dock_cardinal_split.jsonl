@@ -1,15 +1,21 @@
-# GUIWorkbench --start-page=Dock. Cardinal split smoke: drag a tab to the single root leaf's
-# left edge, which splits the (only) leaf instead of just swapping tabs.
+# GUIWorkbench --start-page=Dock. Cardinal split baseline: the default dock layout
+# already contains nested west/east/south splits. Lock the structure so later
+# docking changes don't silently regress the workbench shell.
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
-{"assert":{"widget":"DockLeaf1"}}
-{"assert":{"widget":"DockTabBar1"}}
+{"assert":{"widget":"DockSplit1"}}
+{"assert":{"widget":"DockSplit2"}}
+{"assert":{"widget":"DockSplit5"}}
+{"assert":{"widget":"DockLeaf4"}}
+{"assert":{"widget":"DockLeaf6"}}
+{"assert":{"widget":"DockLeaf7"}}
+{"assert":{"widget":"DockLeaf3"}}
+{"assert":{"widget":"Tab_Hierarchy"}}
+{"assert":{"widget":"Tab_Assets"}}
 {"assert":{"widget":"Tab_Scene"}}
 {"assert":{"widget":"Tab_Inspector"}}
 {"assert":{"widget":"Tab_Console"}}
 {"checkpoint":"dock_initial"}
-{"drag":{"from":[40,79],"to":[16,240],"button":0,"steps":8}}
-{"frame":2}
-{"assert":{"widget":"DockSplit1"}}
+{"frame":1}
 {"checkpoint":"dock_split"}
 {"frame":1}

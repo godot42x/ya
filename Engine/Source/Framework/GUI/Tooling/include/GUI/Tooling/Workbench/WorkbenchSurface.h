@@ -77,9 +77,11 @@ class YA_GUI_API FWorkbenchSurface
 
   private:
     void buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent);
+    void buildPageRail(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildTabBar(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildDemoHost(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildStatusBar(ya::WidgetTree& tree, ya::UIElement& parent);
+    void buildWorkspaceShell(ya::WidgetTree& tree, ya::UIElement& parent);
     void clearDemoHost();
     void logStatus(const std::string& text);
 
@@ -118,6 +120,11 @@ class YA_GUI_API FWorkbenchSurface
     std::shared_ptr<ya::UIText>   _statusText;
     std::shared_ptr<ya::UIText>   _commandResultText;
     std::shared_ptr<ya::UIMenuBar> _menuBar;
+    std::shared_ptr<ya::UISplitPane> _workspaceSplit;
+    std::shared_ptr<ya::UIPanel> _pageRail;
+    std::shared_ptr<ya::UIPanel> _pageRailCard;
+    std::shared_ptr<ya::UIPanel> _contentFrame;
+    std::shared_ptr<ya::UIText> _pageRailTitle;
     std::shared_ptr<ya::UITabBar>  _tabBar;
     std::shared_ptr<ya::UIPanel>   _demoHost;
     struct FPage

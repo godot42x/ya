@@ -44,6 +44,7 @@ struct YA_GUI_API UIDockSpace : public UIElement
     void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
     void paintChildren(UIFrameBuilder& builder) override;
+    void paintDropPreviewOverlay(UIFrameBuilder& builder) const;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
     void onDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
@@ -79,7 +80,9 @@ private:
         DockPanelId panelId = kInvalidDockPanelId;
         EDockCardinalSide side = EDockCardinalSide::West;
         Rect2D rect{};
+        std::string prompt;
         bool bMerge = false;
+        bool bHeaderZone = false;
         bool bDisabled = false;
         std::string disabledReason;
     };
@@ -93,9 +96,11 @@ private:
                                                                  DockPanelId panelId) const;
     [[nodiscard]] bool parsePanelPayload(const std::string& payload, DockPanelId& panelId) const;
     void clearPreview();
+    void syncPreviewOverlay();
 
     std::unordered_map<DockNodeId, FLeafView> _leafViews;
     std::optional<FDropPreview> _preview;
+    std::shared_ptr<UIElement> _previewOverlay;
     std::shared_ptr<UIDockWorkspace> _ws;
 };
 

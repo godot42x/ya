@@ -173,7 +173,7 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, DockPanelId panelId
     bar->_bDraggableTabs = true;
     bar->addTab(_title);
     bar->syncSelectedTab(0);
-    bar->_onTabDragBegin = [this](int, const std::string&) { beginTabDrag(); };
+    bar->_onTabDragBegin = [this](int, const std::string&) { beginDockDrag(); };
     header->addDetachedChild(bar);
 
     auto close = std::make_shared<UIButton>(std::format("{}_Close", _name));
@@ -253,18 +253,11 @@ void UIDockFloatingWindow::paintSelf(UIFrameBuilder& builder)
         style.innerFill.tintColor, 1.0f);
 }
 
-void UIDockFloatingWindow::beginTabDrag()
+void UIDockFloatingWindow::beginDockDrag()
 {
-    if (_onActivated) {
-        _onActivated();
-    }
     if (WidgetTree* tree = getTree()) {
         DragSessionObserver observer;
-        // The window follows the pointer on EVERY move: the dragged window
-        // stays "in the hand" (ImGui-style). The tree skips the drag source
-        // subtree during drop-target discovery, so the dock beneath the
-        // window stays reachable and shows its preview at the cursor.
-        observer.onMove = [this](const std::string&, const glm::vec2& logicalPoint, std::string_view /*targetName*/)
+        observer.onMove = [this](const std::string&, const glm::vec2& logicalPoint, std::string_view)
         {
             if (!_lastDragPoint) {
                 _lastDragPoint = logicalPoint;
@@ -280,15 +273,38 @@ void UIDockFloatingWindow::beginTabDrag()
         observer.onTargetChanged = [](std::string_view, std::string_view) {};
         observer.onFinished = [this](EDragFinishResult, const glm::vec2&, std::string_view)
         {
-            // The window already tracked the pointer on every move; a
-            // NoTarget release simply keeps it where it landed (no snap).
             _lastDragPoint.reset();
         };
-        // No ghost: the floating window itself follows the pointer (the
-        // ghost panel would double-visualize the drag).
         tree->beginDrag(this, std::string(UIDockSpace::kDockPanelPayload) + std::to_string(_panelId),
                         _title, std::move(observer), /*bShowGhost=*/false,
                         /*bSkipSourceInHitTest=*/true);
+    }
+}
+
+void UIDockFloatingWindow::beginWindowMove()
+{
+    if (_onActivated) {
+        _onActivated();
+    }
+    if (WidgetTree* tree = getTree()) {
+        _bTitlePressed = false;
+        _bTitleMoving = true;
+        _lastDragPoint = tree->getPointerState().logicalPoint;
+        tree->setPointerCapture(this);
+    }
+}
+
+void UIDockFloatingWindow::updateWindowMove(const glm::vec2& logicalPoint)
+{
+    if (!_lastDragPoint) {
+        _lastDragPoint = logicalPoint;
+        return;
+    }
+    const glm::vec2 delta = logicalPoint - *_lastDragPoint;
+    _lastDragPoint = logicalPoint;
+    _windowRect.pos += delta;
+    if (WidgetTree* tree = getTree()) {
+        tree->invalidateLayout();
     }
 }
 
@@ -296,15 +312,13 @@ bool UIDockFloatingWindow::handleInputEvent(const Event& event, const WidgetEven
 {
     const EEvent::T eventType = event.getEventType();
 
-    // Title-strip drag (dock regression fix): pressing the header EMPTY area
-    // — the tab strip, close button and resize handles claim their own
-    // presses first, so bubbling reaches this handler only for the bare title
-    // strip — arms a dock-panel drag after the standard 6px threshold.
-    // Releasing over a DockSpace re-docks the panel; releasing on empty space
-    // moves the window (same drag as the tab strip).
+    // Title-strip drag moves the floating window only. Docking is driven by
+    // docked tab drag sessions elsewhere; the floating title bar is just a
+    // window mover, so it must not emit dock payloads or dock chooser previews.
     if (eventType == EEvent::MouseButtonPressed && _header &&
         pointInRect(ctx.logicalPoint, _header->_layoutRect)) {
         _bTitlePressed   = true;
+        _bTitleMoving    = false;
         _titlePressPoint = ctx.logicalPoint;
         if (WidgetTree* tree = getTree()) {
             tree->setPointerCapture(this);
@@ -313,22 +327,36 @@ bool UIDockFloatingWindow::handleInputEvent(const Event& event, const WidgetEven
     }
     if (_bTitlePressed) {
         if (eventType == EEvent::MouseMoved) {
-            if (glm::length(ctx.logicalPoint - _titlePressPoint) > 6.0f) {
-                _bTitlePressed = false;
-                if (WidgetTree* tree = getTree()) {
-                    tree->releasePointerCapture(this);
-                }
-                beginTabDrag();
+            if (!_bTitleMoving && glm::length(ctx.logicalPoint - _titlePressPoint) > 6.0f) {
+                beginWindowMove();
+                return true;
+            }
+            if (_bTitleMoving) {
+                updateWindowMove(ctx.logicalPoint);
             }
             return true;
         }
         if (eventType == EEvent::MouseButtonReleased) {
             _bTitlePressed = false;
+            _bTitleMoving = false;
+            _lastDragPoint.reset();
             if (WidgetTree* tree = getTree()) {
                 tree->releasePointerCapture(this);
             }
             return true;
         }
+    }
+    if (_bTitleMoving && eventType == EEvent::MouseMoved) {
+        updateWindowMove(ctx.logicalPoint);
+        return true;
+    }
+    if (_bTitleMoving && eventType == EEvent::MouseButtonReleased) {
+        _bTitleMoving = false;
+        _lastDragPoint.reset();
+        if (WidgetTree* tree = getTree()) {
+            tree->releasePointerCapture(this);
+        }
+        return true;
     }
 
     return UIContainer::handleInputEvent(event, ctx);
@@ -337,6 +365,7 @@ bool UIDockFloatingWindow::handleInputEvent(const Event& event, const WidgetEven
 void UIDockFloatingWindow::clearTransientInputState()
 {
     _bTitlePressed = false;
+    _bTitleMoving = false;
     _lastDragPoint.reset();
     UIContainer::clearTransientInputState();
 }

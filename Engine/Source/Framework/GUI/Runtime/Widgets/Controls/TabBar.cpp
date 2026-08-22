@@ -1,4 +1,5 @@
 #include "GUI/Widgets/Controls/TabBar.h"
+#include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include "Core/KeyCode.h"
@@ -34,7 +35,13 @@ void UITabButton::paintSelf(UIFrameBuilder& builder)
         // the fill inside this button and let the bar's bottom rule separate
         // the strip from content.
         builder.addBrush(_layoutRect, style.selectedFill);
-        const Rect2D accent{_layoutRect.pos, {_layoutRect.extent.x, 2.0f}};
+        const bool vertical = dynamic_cast<const UIContainer*>(getParent()) &&
+                              dynamic_cast<const UIContainer*>(getParent())->getDirection() == EWidgetBoxLayout::Vertical;
+        const Rect2D accent = vertical
+                                  ? Rect2D{glm::vec2{_layoutRect.pos.x, _layoutRect.pos.y},
+                                           glm::vec2{2.0f, _layoutRect.extent.y}}
+                                  : Rect2D{glm::vec2{_layoutRect.pos.x, _layoutRect.pos.y},
+                                           glm::vec2{_layoutRect.extent.x, 2.0f}};
         builder.addBrush(accent, FBrush::Solid(style.accentColor));
     }
     else {
@@ -78,11 +85,13 @@ bool UITabButton::handleInputEvent(const Event& event, const WidgetEventContext&
         }
         switch (keyEvent._keyCode) {
         case EKey::Left:
+        case EKey::Up:
             if (_onNavigate) {
                 _onNavigate(-1);
             }
             return true;
         case EKey::Right:
+        case EKey::Down:
             if (_onNavigate) {
                 _onNavigate(1);
             }
@@ -152,6 +161,9 @@ UITabButton* UITabBar::addTab(const std::string& label)
     auto button = std::make_shared<UITabButton>(std::format("Tab_{}", label));
     button->_label     = label;
     button->_bAutoSize = true;
+    if (!_styleKey.empty()) {
+        button->_styleKey = _styleKey;
+    }
 
     const int index = static_cast<int>(_tabs.size());
     button->_onActivated = [this, index]() { selectTab(index); };

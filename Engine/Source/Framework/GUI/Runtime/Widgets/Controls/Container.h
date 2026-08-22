@@ -21,6 +21,7 @@ struct YA_GUI_API UIContainer : public UIElement
     [[nodiscard]] UIBoxLayout& getBoxLayout() { return _boxLayout; }
     [[nodiscard]] const UIBoxLayout& getBoxLayout() const { return _boxLayout; }
     void setDirection(EWidgetBoxLayout value) { _boxLayout.setDirection(value); }
+    [[nodiscard]] EWidgetBoxLayout getDirection() const { return _boxLayout.getDirection(); }
     void setSpacing(float value) { _boxLayout.setSpacing(value); }
     void setPadding(glm::vec2 value) { _boxLayout.setPadding(value); }
     void setMainAxisAlignment(EWidgetMainAxisAlignment value) { _boxLayout.setMainAxisAlignment(value); }

@@ -105,10 +105,7 @@ void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
     tree.attachToLayer(ya::WidgetTree::ELayer::Content, _root);
 
     buildMenuBar(tree, *_root);
-    // The demo host must exist before the tab bar selects its first page:
-    // selectTab() fires the page-switch callback synchronously.
-    buildDemoHost(tree, *_root);
-    buildTabBar(tree, *_root);
+    buildWorkspaceShell(tree, *_root);
     buildStatusBar(tree, *_root);
 
     selectPage(_initialPageIndex);
@@ -197,9 +194,13 @@ void FWorkbenchSurface::buildTabBar(ya::WidgetTree& tree, ya::UIElement& parent)
 {
     _tabBar = std::make_shared<ya::UITabBar>("DemoTabs");
     _tabBar->_anchorMin = {0.0f, 0.0f};
-    _tabBar->_anchorMax = {1.0f, 0.0f};
-    _tabBar->setPosition({0.0f, 34.0f});
-    _tabBar->setSize({0.0f, 30.0f});
+    _tabBar->_anchorMax = {1.0f, 1.0f};
+    _tabBar->setPosition({0.0f, 0.0f});
+    _tabBar->setSize({0.0f, 0.0f});
+    _tabBar->setDirection(ya::EWidgetBoxLayout::Vertical);
+    _tabBar->setSpacing(4.0f);
+    _tabBar->setPadding({10.0f, 10.0f});
+    _tabBar->_styleKey = "tab.sidebar";
     tree.attach(parent, _tabBar);
 
     for (const FPage& page : _pages) {
@@ -210,14 +211,72 @@ void FWorkbenchSurface::buildTabBar(ya::WidgetTree& tree, ya::UIElement& parent)
     _tabBar->_onTabSelected = [this](int index) { selectPage(index); };
 }
 
+void FWorkbenchSurface::buildWorkspaceShell(ya::WidgetTree& tree, ya::UIElement& parent)
+{
+    _workspaceSplit = std::make_shared<ya::UISplitPane>("WorkbenchShellSplit");
+    _workspaceSplit->_anchorMin = {0.0f, 0.0f};
+    _workspaceSplit->_anchorMax = {1.0f, 1.0f};
+    _workspaceSplit->setPosition({0.0f, 34.0f});
+    _workspaceSplit->setSize({0.0f, -38.0f});
+    _workspaceSplit->setSplitRatio(0.23f);
+    _workspaceSplit->setMinFirstExtent(208.0f);
+    _workspaceSplit->setMinSecondExtent(520.0f);
+    tree.attach(parent, _workspaceSplit);
+
+    buildPageRail(tree, *_workspaceSplit);
+    // The demo host must exist before the tab bar selects its first page:
+    // selectTab() fires the page-switch callback synchronously.
+    buildDemoHost(tree, *_workspaceSplit);
+}
+
+void FWorkbenchSurface::buildPageRail(ya::WidgetTree& tree, ya::UIElement& parent)
+{
+    _pageRail = std::make_shared<ya::UIPanel>("FeatureRail");
+    _pageRail->_anchorMin = {0.0f, 0.0f};
+    _pageRail->_anchorMax = {1.0f, 1.0f};
+    _pageRail->setPosition({0.0f, 0.0f});
+    _pageRail->setSize({0.0f, 0.0f});
+    _pageRail->_styleKey = "panel.sidebar";
+    tree.attach(parent, _pageRail);
+
+    _pageRailTitle = std::make_shared<ya::UIText>("FeatureRailTitle");
+    _pageRailTitle->_anchorMin = {0.0f, 0.0f};
+    _pageRailTitle->_anchorMax = {1.0f, 0.0f};
+    _pageRailTitle->setPosition({16.0f, 14.0f});
+    _pageRailTitle->setSize({-32.0f, 18.0f});
+    _pageRailTitle->_fontSize = 10;
+    _pageRailTitle->_color = kHeaderColor;
+    _pageRailTitle->setText("FEATURE GALLERY");
+    tree.attach(*_pageRail, _pageRailTitle);
+
+    _pageRailCard = std::make_shared<ya::UIPanel>("FeatureRailCard");
+    _pageRailCard->_anchorMin = {0.0f, 0.0f};
+    _pageRailCard->_anchorMax = {1.0f, 1.0f};
+    _pageRailCard->setPosition({10.0f, 46.0f});
+    _pageRailCard->setSize({-20.0f, -12.0f});
+    _pageRailCard->_styleKey = "panel.sidebar.card";
+    tree.attach(*_pageRail, _pageRailCard);
+
+    buildTabBar(tree, *_pageRailCard);
+}
+
 void FWorkbenchSurface::buildDemoHost(ya::WidgetTree& tree, ya::UIElement& parent)
 {
+    _contentFrame = std::make_shared<ya::UIPanel>("DemoContentFrame");
+    _contentFrame->_anchorMin = {0.0f, 0.0f};
+    _contentFrame->_anchorMax = {1.0f, 1.0f};
+    _contentFrame->setPosition({0.0f, 0.0f});
+    _contentFrame->setSize({0.0f, 0.0f});
+    _contentFrame->_styleKey = "panel.window";
+    tree.attach(parent, _contentFrame);
+
     _demoHost = std::make_shared<ya::UIPanel>("DemoHost");
-    _demoHost->_anchorMin = {0.0f, 0.085f};
-    _demoHost->_anchorMax = {1.0f, 0.94f};
-    // Theme-driven shell chrome (Phase 4): same window key as the root.
-    _demoHost->_styleKey = "panel.window";
-    tree.attach(parent, _demoHost);
+    _demoHost->_anchorMin = {0.0f, 0.0f};
+    _demoHost->_anchorMax = {1.0f, 1.0f};
+    _demoHost->setPosition({14.0f, 12.0f});
+    _demoHost->setSize({-28.0f, -24.0f});
+    _demoHost->_styleKey = "panel.surface";
+    tree.attach(*_contentFrame, _demoHost);
 }
 
 void FWorkbenchSurface::buildStatusBar(ya::WidgetTree& tree, ya::UIElement& parent)
@@ -226,7 +285,7 @@ void FWorkbenchSurface::buildStatusBar(ya::WidgetTree& tree, ya::UIElement& pare
     _statusText->_anchorMin = {0.0f, 1.0f};
     _statusText->_anchorMax = {0.0f, 1.0f};
     _statusText->setPosition({12.0f, -30.0f});
-    _statusText->setSize({420.0f, 24.0f});
+    _statusText->setSize({520.0f, 24.0f});
     _statusText->_fontSize  = 13;
     _statusText->setText("Tab: switch demo | Click / drag / keyboard to explore");
     _statusText->_color     = kHeaderColor;
