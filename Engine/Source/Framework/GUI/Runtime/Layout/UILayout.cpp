@@ -171,6 +171,7 @@ void UILayout::invalidateMeasure() const
 void UILayout::invalidateArrange() const
 {
     invalidateMeasure();
+    invalidateSubtreePaint();
 }
 
 void UILayout::invalidateSubtreePaint() const
