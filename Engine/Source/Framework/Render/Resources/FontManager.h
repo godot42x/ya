@@ -3,12 +3,15 @@
 #include "Core/Base.h"
 #include "Core/FName.h"
 #include "Core/ResourceRegistry.h"
+#include "DynamicFontAtlas.h"
+#include "IFontRasterizer.h"
 #include "RHI/Core/Texture.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 namespace ya
@@ -101,12 +104,31 @@ struct GlyphDesc
 
 struct Character
 {
-    glm::vec4                uvRect;                      // UV rect: (offsetU, offsetV, scaleU, scaleV) for drawSubTexture
-    glm::ivec2               size;                        // Size of glyph in pixels
-    glm::ivec2               bearing;                     // Offset from baseline to left/top of glyph
-    glm::vec2                advance;                     // Horizontal offset to advance to next glyph
-    std::shared_ptr<Texture> standaloneTexture = nullptr; // Individual texture for special characters
-    bool                     bInAtlas          = true;    // True if character is in atlas, false if standalone
+    glm::vec4                uvRect;    // UV rect: (offsetU, offsetV, scaleU, scaleV) for drawSubTexture
+    glm::ivec2               size;      // Size of glyph in pixels
+    glm::ivec2               bearing;   // Offset from baseline to left/top of glyph
+    glm::vec2                advance;   // Horizontal offset to advance to next glyph
+    uint32_t                 atlasSlot = ~0u;  // DynamicFontAtlas slot (UVs re-read after repack)
+    uint16_t                 atlasIndex = 0;  // 0 = primary atlas, 1.. = fallback face atlas (font stack)
+    uint32_t                 designSize = 0;  // rasterization size this glyph was captured at (0 = primary base size)
+    bool                     bColor     = false; // Color glyph (emoji): draw with white tint, no text-color modulation
+    bool                     bInAtlas   = true;  // All glyphs live in the dynamic atlas (standalone path removed)
+};
+
+class IFontRasterizer;
+
+/// One fallback face in a font stack (plan Phase 3): CJK / emoji / ... Each
+/// entry owns its own rasterizer + atlas (color emoji needs a separate RGBA
+/// atlas; CJK uses a smaller SDF base to bound memory). Metrics stay
+/// primary-face-driven; fallback glyphs contribute their own advance/bearing.
+struct FFontStackEntry
+{
+    std::string                      fontPath;
+    EFontRenderMode                  renderMode = EFontRenderMode::Bitmap;
+    uint32_t                         baseSize   = 64;  // rasterization size for this face
+    std::shared_ptr<DynamicFontAtlas> atlas      = nullptr;
+    std::shared_ptr<IFontRasterizer>  rasterizer = nullptr;
+    std::shared_ptr<Texture>          atlasTexture = nullptr;
 };
 
 /**
@@ -115,16 +137,40 @@ struct Character
 struct Font
 {
     std::unordered_map<uint32_t, Character> characters;
+    /// Codepoints the whole font stack FAILED to rasterize (e.g. emoji
+    /// variation selectors): requesting them again every frame would re-run
+    /// capture + atlas upload forever (per-frame texture churn). They render
+    /// as the '?' fallback.
+    std::unordered_set<uint32_t>            missing;
+    EFontRenderMode                         renderMode = EFontRenderMode::Bitmap;
     float                                   fontSize   = 0;
     float                                   lineHeight = 0;         // Line height (ascender - descender + line gap)
     float                                   ascent     = 0;         // Distance from baseline to top of tallest glyph
     float                                   descent    = 0;         // Distance from baseline to bottom of lowest glyph
-    std::string                             fontPath;               // Path to font file
-    std::shared_ptr<Texture>                atlasTexture = nullptr; // Single texture atlas (optional)
+    std::string                             fontPath;               // Path to font file (primary face)
+    std::shared_ptr<Texture>                atlasTexture = nullptr; // Primary atlas texture (optional)
+    std::shared_ptr<DynamicFontAtlas>       atlas        = nullptr; // Primary growable atlas (host-loaded fonts)
+    std::shared_ptr<IFontRasterizer>        rasterizer   = nullptr; // Primary glyph flavor rasterizer
+    std::vector<FFontStackEntry>            fallbacks;              // Ordered fallback chain (CJK/emoji/...)
     /// Scaled view over a base font: shares the atlas texture; metrics are
     /// pre-scaled to fontSize. baseFont is null for the base font itself.
     std::shared_ptr<Font> baseFont;
     float                 scale = 1.0f;
+
+    /// Atlas texture for a character (primary or fallback face). Reads the
+    /// LIVE atlas handle so repack/upload updates propagate to scaled views
+    /// that share the fallback chain — the cached atlasTexture fields on a
+    /// scaled view are copies from view creation and go stale after any
+    /// upload (page switches capture new glyphs -> upload -> stale pointer
+    /// -> whole-text garbage).
+    [[nodiscard]] std::shared_ptr<Texture> atlasTextureFor(const Character& ch) const
+    {
+        if (ch.atlasIndex == 0 || ch.atlasIndex > fallbacks.size()) {
+            return atlas ? atlas->texture() : atlasTexture;
+        }
+        const auto& fbAtlas = fallbacks[ch.atlasIndex - 1].atlas;
+        return fbAtlas ? fbAtlas->texture() : fallbacks[ch.atlasIndex - 1].atlasTexture;
+    }
 
     [[nodiscard]] bool isView() const { return baseFont != nullptr; }
 
@@ -191,6 +237,10 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
     // Base font per name (single atlas, metrics at the rasterization size).
     std::unordered_map<FName, stdptr<Font>>       _baseFontCache;
     FontAtlasTextureSink                           _fontAtlasTextureSink;
+    // Missing glyphs awaiting safe-point capture (Core Rule 6): base-font ptr
+    // -> codepoints. Flushed by flushPendingGlyphs at a frame boundary.
+    std::unordered_map<Font*, std::unordered_set<uint32_t>> _pendingGlyphs;
+    bool _bNewGlyphsCaptured = false;
 
   public:
     static FontManager *get();
@@ -210,9 +260,26 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
      * @param fontSize Font size in pixels
      * @return Shared pointer to loaded font, or nullptr on failure
      */
-    std::shared_ptr<Font> loadFont(IRender& render, const std::string &fontPath, const FName &fontName, uint32_t fontSize);
+    /// Load a font rasterized in `renderMode`. Bitmap = grayscale coverage
+    /// (legacy); SDF = FreeType distance field (scale-free, crisp at any
+    /// size — the GUI default once enabled by the host).
+    std::shared_ptr<Font> loadFont(IRender& render, const std::string &fontPath, const FName &fontName, uint32_t fontSize,
+                                   EFontRenderMode renderMode = EFontRenderMode::Bitmap);
 
     std::shared_ptr<Font> getFont(const FName &fontName, uint32_t fontSize);
+
+    /// Append a fallback face to the font stack (plan Phase 3): glyphs the
+    /// primary face cannot render resolve through the fallbacks in order
+    /// (e.g. CJK via a system font, emoji via a color font). Each fallback
+    /// gets its own rasterizer + atlas. Must be called after loadFont.
+    bool addFontFallback(IRender& render, const FName& fontName, const std::string& fontPath,
+                         EFontRenderMode renderMode, uint32_t baseSize);
+
+    /// Shared font-stack candidates (plan Phase 3): engine-bundled or
+    /// platform CJK fonts, in preference order. Used by GUI + game hosts.
+    static std::vector<std::string> findCjkFontCandidates();
+    /// Bundled color-emoji font (seguiemj.ttf) when present.
+    static std::string findEmojiFontPath();
 
     /// Pre-register a font under `name:size` so getFont() returns it without
     /// loading (rasterizer + GPU not needed). Hosts that pre-build glyph data
@@ -239,6 +306,23 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
                                           uint32_t           referenceHeight = 1080);
 
     void ensureGlyphs(IRender& render, Font& font, std::string_view text);
+
+    /// Register missing glyphs of `text` for lazy capture (no GPU work). The
+    /// host calls flushPendingGlyphs at a safe frame point (after snapshot
+    /// build, before command recording — Core Rule 6). Missing glyphs render
+    /// as '?' until the next flush (standard 1-frame latency).
+    /// Returns true when NEW glyphs were registered (i.e. some codepoint was
+    /// missing): the caller should invalidate layout — text measured against
+    /// the '?' fallback is stale until the next flush + re-measure.
+    bool requestGlyphs(Font& font, std::string_view text);
+    /// Rasterize + add all pending glyphs into their font's dynamic atlas
+    /// (grow/repack as needed). Safe-point only. Sets an internal flag when
+    /// glyphs were actually captured; consumeNewGlyphCapture() reports it.
+    void flushPendingGlyphs(IRender& render);
+    /// True when the last flush captured new glyphs (and clears the flag):
+    /// text items measured/rendered against the '?' fallback are stale — the
+    /// host should invalidate layout + paint so they re-measure/re-paint.
+    bool consumeNewGlyphCapture();
 
     // TODO: optimize key generation
     static std::string makeCacheKey(const FName &fontName, uint32_t fontSize)

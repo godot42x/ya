@@ -1,6 +1,10 @@
 #include "FontManager.h"
+#include "BitmapFontRasterizer.h"
+#include "ColorFontRasterizer.h"
 #include "Core/Profiling/Instrumentor.h"
+#include "SDFFontRasterizer.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "DynamicFontAtlas.h"
 #include "freetype/freetype.h"
 
 #include <algorithm>
@@ -19,63 +23,33 @@ constexpr std::array<uint32_t, 95> BASE_GLYPH_CODEPOINTS = [] {
     }
     return codePoints;
 }();
-
-Character makeGlyphCharacter(FT_GlyphSlot glyph)
-{
-    Character character{
-        .size    = glm::ivec2(glyph->bitmap.width, glyph->bitmap.rows),
-        .bearing = glm::ivec2(glyph->bitmap_left, glyph->bitmap_top),
-        .advance = glm::vec2(static_cast<float>(glyph->advance.x) / 64.0f,
-                             static_cast<float>(glyph->advance.y) / 64.0f),
-    };
-    return character;
-}
-
-bool appendStandaloneGlyph(IRender& render, Font& font, FT_Face face, uint32_t codePoint)
-{
-    if (font.characters.contains(codePoint)) {
-        return true;
-    }
-    if (FT_Load_Char(face, static_cast<FT_ULong>(codePoint), FT_LOAD_RENDER)) {
-        YA_CORE_WARN("Failed to load glyph U+{:04X} from '{}'", codePoint, font.fontPath);
-        return false;
-    }
-
-    FT_GlyphSlot glyph = face->glyph;
-    Character    character = makeGlyphCharacter(glyph);
-    character.bInAtlas = false;
-
-    if (glyph->bitmap.width > 0 && glyph->bitmap.rows > 0) {
-        std::vector<ColorU8_t> glyphPixels(static_cast<size_t>(glyph->bitmap.width) * glyph->bitmap.rows,
-                                           ColorU8_t{.r = 0, .g = 0, .b = 0, .a = 0});
-        for (uint32_t row = 0; row < glyph->bitmap.rows; ++row) {
-            for (uint32_t col = 0; col < glyph->bitmap.width; ++col) {
-                const size_t srcIdx = static_cast<size_t>(row) * glyph->bitmap.width + col;
-                const size_t dstIdx = static_cast<size_t>(row) * glyph->bitmap.width + col;
-                const uint8_t gray = glyph->bitmap.buffer[srcIdx];
-                glyphPixels[dstIdx] = ColorRGBA<uint8_t>{.r = 255, .g = 255, .b = 255, .a = gray};
-            }
-        }
-
-        character.standaloneTexture = Texture::fromData(render,
-                                                        glyph->bitmap.width,
-                                                        glyph->bitmap.rows,
-                                                        glyphPixels.data(),
-                                                        glyphPixels.size() * sizeof(ColorU8_t),
-                                                        EFormat::R8G8B8A8_UNORM,
-                                                        std::format("FontGlyph_{:X}_{}", codePoint, font.fontSize));
-    }
-
-    font.characters[codePoint] = std::move(character);
-    return true;
-}
 } // namespace
 
 namespace
 {
 
-void rescaleCharacter(Character& out, const Character& in, float scale)
+std::shared_ptr<IFontRasterizer> makeRasterizer(EFontRenderMode mode)
 {
+    switch (mode) {
+    case EFontRenderMode::SDF:
+        return std::make_shared<SDFFontRasterizer>();
+    case EFontRenderMode::Color:
+        return std::make_shared<ColorFontRasterizer>();
+    case EFontRenderMode::Bitmap:
+    case EFontRenderMode::MSDF:
+    default:
+        return std::make_shared<BitmapFontRasterizer>();
+    }
+}
+
+void rescaleCharacter(Character& out, const Character& in, float viewFontSize)
+{
+    // Fallback glyphs (CJK/emoji) are rasterized at their own base size; the
+    // view scale must use THAT size as the denominator, not the primary
+    // base size (otherwise a 64px-captured CJK glyph drawn at a 13px view
+    // from a 128px primary base would render at 6.5px).
+    const float scale = (in.designSize > 0) ? (viewFontSize / static_cast<float>(in.designSize))
+                                            : 1.0f;
     out           = in;
     out.size      = glm::ivec2(static_cast<int>(std::lround(in.size.x * scale)),
                                static_cast<int>(std::lround(in.size.y * scale)));
@@ -94,13 +68,21 @@ std::shared_ptr<Font> makeScaledView(const std::shared_ptr<Font>& base, uint32_t
     view->ascent      = base->ascent * scale;
     view->descent     = base->descent * scale;
     view->fontPath    = base->fontPath;
+    view->renderMode  = base->renderMode;
     view->atlasTexture = base->atlasTexture;
+    view->atlas        = base->atlas;
+    view->rasterizer   = base->rasterizer;
+    // Share the fallback chain (CJK/emoji): entries hold shared atlas +
+    // rasterizer handles, so views resolve fallback glyphs against the SAME
+    // atlases as the base font (fixes fallback UVs sampled from the wrong
+    // texture when the view had an empty chain).
+    view->fallbacks    = base->fallbacks;
     view->baseFont    = base;
     view->scale       = scale;
     view->characters.reserve(base->characters.size());
     for (const auto& [cp, ch] : base->characters) {
         Character c;
-        rescaleCharacter(c, ch, scale);
+        rescaleCharacter(c, ch, view->fontSize);
         view->characters.emplace(cp, std::move(c));
     }
     return view;
@@ -115,7 +97,7 @@ void refreshScaledView(Font& view)
     view.characters.clear();
     for (const auto& [cp, ch] : base->characters) {
         Character c;
-        rescaleCharacter(c, ch, view.scale);
+        rescaleCharacter(c, ch, view.fontSize);
         view.characters.emplace(cp, std::move(c));
     }
 }
@@ -174,10 +156,12 @@ void FontManager::clearCache()
 {
     _fontCache.clear();
     _baseFontCache.clear();
+    _pendingGlyphs.clear();
     YA_CORE_INFO("Cleared all font cache");
 }
 
-std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &fontPath, const FName &fontName, uint32_t fontSize)
+std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &fontPath, const FName &fontName, uint32_t fontSize,
+                                            EFontRenderMode renderMode)
 {
     YA_PROFILE_FUNCTION_LOG();
     // Idempotent: one name -> one base atlas. Callers that loop over sizes
@@ -190,8 +174,6 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
         YA_CORE_ERROR("Failed to initialize FreeType library");
         return nullptr;
     }
-    // VirtualFileSystem::get().get
-    // FT_New_Face()
 
     FT_Face face{};
     if (FT_New_Face(ft, fontPath.c_str(), 0, &face)) {
@@ -222,30 +204,29 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
         maxGlyphHeight      = std::max(maxGlyphHeight, glyph->bitmap.rows);
     }
 
+    // Seed atlas sized for the base ASCII run (16 glyphs/row + padding, pow2).
     constexpr uint32_t glyphsPerRow = 16;
     uint32_t           atlasWidth   = glyphsPerRow * (maxGlyphWidth + 2);
+    const uint32_t     totalGlyphs  = static_cast<uint32_t>(BASE_GLYPH_CODEPOINTS.size());
+    uint32_t           numRows      = (totalGlyphs + glyphsPerRow - 1) / glyphsPerRow;
+    uint32_t           atlasHeight  = numRows * (maxGlyphHeight + 2);
 
-    const uint32_t totalGlyphs  = static_cast<uint32_t>(BASE_GLYPH_CODEPOINTS.size());
-    uint32_t       numRows      = (totalGlyphs + glyphsPerRow - 1) / glyphsPerRow;
-    uint32_t       atlasHeight  = numRows * (maxGlyphHeight + 2);
-
-    // 将尺寸向上取整到2的幂次方，以提高GPU兼容性和性能
-    // 例如：300 -> 512, 100 -> 128
     auto nextPow2 = [](uint32_t v) -> uint32_t {
-        v--;          // 减1，避免本身就是2的幂时被翻倍
-        v |= v >> 1;  // 将最高位的1向右扩散
-        v |= v >> 2;  // 继续扩散，填充所有低位为1
-        v |= v >> 4;  // 例如：00100000 -> 00111111
-        v |= v >> 8;  // 通过按位或运算逐步填充
-        v |= v >> 16; // 最终得到全1的低位
-        v++;          // 加1后得到下一个2的幂次方
+        v--;
+        v |= v >> 1;
+        v |= v >> 2;
+        v |= v >> 4;
+        v |= v >> 8;
+        v |= v >> 16;
+        v++;
         return v;
     };
 
-    atlasWidth  = nextPow2(atlasWidth);  // 将宽度调整为2的幂次方
-    atlasHeight = nextPow2(atlasHeight); // 将高度调整为2的幂次方
+    atlasWidth  = nextPow2(atlasWidth);
+    atlasHeight = nextPow2(atlasHeight);
+    const uint32_t seedSize = std::max(atlasWidth, atlasHeight);
 
-    YA_CORE_INFO("Font atlas dimensions of {}: {}x{} (maxGlyph={}x{}), fontSize: {}",
+    YA_CORE_INFO("Font atlas seed dimensions of {}: {}x{} (maxGlyph={}x{}), fontSize: {}",
                  fontName.toString(),
                  atlasWidth,
                  atlasHeight,
@@ -253,76 +234,63 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
                  maxGlyphHeight,
                  fontSize);
 
-    // Create atlas pixel data (RGBA)
-    std::vector<ColorU8_t> atlasData(static_cast<size_t>(atlasWidth * atlasHeight),
-                                     ColorU8_t{.r = 0, .g = 0, .b = 0, .a = 0});
-
-    // Second pass: pack glyphs into atlas using simple row-based packing
-    uint32_t penX      = 1; // Start with 1px padding
-    uint32_t penY      = 1;
-    uint32_t rowHeight = 0;
-
-    for (uint32_t codePoint : BASE_GLYPH_CODEPOINTS) {
-        if (FT_Load_Char(face, static_cast<FT_ULong>(codePoint), FT_LOAD_RENDER)) {
-            YA_CORE_WARN("Failed to load glyph U+{:04X}", codePoint);
-            continue;
-        }
-
-        FT_GlyphSlot &glyph  = face->glyph;
-        FT_Bitmap    &bitmap = glyph->bitmap;
-
-        // Check if we need to move to next row
-        if (penX + bitmap.width + 1 > atlasWidth) {
-            penX = 1;
-            penY += rowHeight + 1; // Move to next row with padding
-            rowHeight = 0;
-        }
-
-        // Check if we've run out of vertical space
-        if (penY + bitmap.rows > atlasHeight) {
-            YA_CORE_ERROR("Font atlas too small! Need to increase atlas size.");
-            break;
-        }
-
-        // Copy glyph bitmap to atlas at (offsetX, offsetY)
-        for (uint32_t row = 0; row < bitmap.rows; row++) {
-            for (uint32_t col = 0; col < bitmap.width; col++) {
-                uint8_t gray      = bitmap.buffer[row * bitmap.width + col];
-                size_t  dstIdx    = ((penY + row) * atlasWidth) + (penX + col);
-                atlasData[dstIdx] = ColorRGBA<uint8_t>{.r = 255, .g = 255, .b = 255, .a = gray};
+    // Rasterizer + growable atlas (single texture; repack on growth).
+    // SDF mode: FreeType distance field, scale-free (crisp at any size).
+    if (renderMode == EFontRenderMode::SDF) {
+        font->rasterizer = std::make_shared<SDFFontRasterizer>();
+        font->renderMode = EFontRenderMode::SDF;
+    }
+    else {
+        font->rasterizer = std::make_shared<BitmapFontRasterizer>();
+        font->renderMode = EFontRenderMode::Bitmap;
+    }
+    const std::string atlasLabel = font->renderMode == EFontRenderMode::SDF
+                                       ? "SDFFontAtlas_RuntimeDefault"
+                                       : "FontAtlas_RuntimeDefault";
+    font->atlas      = std::make_shared<DynamicFontAtlas>(render, font->rasterizer->getAtlasFormat(), seedSize, atlasLabel);
+    font->atlasTexture = font->atlas->texture();
+    // NOTE: capture the base font by RAW pointer — the atlas is owned by the
+    // font, so the font outlives the atlas; capturing a shared_ptr here would
+    // create a Font -> atlas -> lambda -> Font reference cycle (leak).
+    font->atlas->setOnRepack([this, rawFont = font.get()]() {
+        // Repack moved every glyph: refresh the base characters' UVs (views
+        // are refreshed lazily via refreshScaledView on next ensureGlyphs).
+        for (auto& [cp, ch] : rawFont->characters) {
+            if (ch.atlasSlot != ~0u) {
+                ch.uvRect = rawFont->atlas->getUv(ch.atlasSlot);
             }
         }
+        rawFont->atlasTexture = rawFont->atlas->texture();
+        if (_fontAtlasTextureSink) {
+            _fontAtlasTextureSink(FName("RuntimeDefault"), static_cast<uint32_t>(rawFont->fontSize), rawFont->atlasTexture);
+        }
+    });
 
-        // Calculate UV coordinates (offset + scale format for drawSubTexture)
-        float uOffset = static_cast<float>(penX) / static_cast<float>(atlasWidth);
-        float uScale  = static_cast<float>(bitmap.width) / static_cast<float>(atlasWidth);
-        float vOffset = static_cast<float>(penY) / static_cast<float>(atlasHeight);
-        float vScale  = static_cast<float>(bitmap.rows) / static_cast<float>(atlasHeight);
-
-        Character character = makeGlyphCharacter(glyph);
-        character.uvRect = glm::vec4(uOffset, vOffset, uScale, vScale);
-
-        // 'e' bitmap_left=3, bitmap_top=27
-        // 'H' bitmap_left=4, bitmap_top=35, bitmap.size=21x35
-
+    // Second pass: rasterize the base ASCII run into the dynamic atlas.
+    for (uint32_t codePoint : BASE_GLYPH_CODEPOINTS) {
+        GlyphBitmap glyph = font->rasterizer->rasterize(face, codePoint, fontSize);
+        Character   character;
+        character.size       = {static_cast<int>(glyph.width), static_cast<int>(glyph.height)};
+        character.bearing    = glyph.bearing;
+        character.advance    = glyph.advance;
+        character.designSize = fontSize;
+        if (glyph.width > 0 && glyph.height > 0) {
+            character.atlasSlot = font->atlas->addGlyph(glyph.width, glyph.height, glyph.pixels.data());
+            character.uvRect    = font->atlas->getUv(character.atlasSlot);
+        }
+        else {
+            character.atlasSlot = ~0u;
+        }
         font->characters[codePoint] = character;
-
-        // Update row tracking
-        rowHeight = std::max(rowHeight, bitmap.rows);
-        penX += bitmap.width + 1; // +1 for padding
     }
 
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
 
-    // Create atlas texture
-    font->atlasTexture = Texture::fromData(render,
-                                           atlasWidth,
-                                           atlasHeight,
-                                           atlasData.data(),
-                                           atlasData.size() * sizeof(ColorU8_t),
-                                           EFormat::R8G8B8A8_UNORM,
-                                           std::format("FontAtlas_{}_{}", fontName.toString(), fontSize));
+    // Upload the seed atlas at a safe point (right now: font load happens at
+    // host init, outside any recording).
+    font->atlas->upload();
+    font->atlasTexture = font->atlas->texture();
     if (_fontAtlasTextureSink) {
         _fontAtlasTextureSink(fontName, fontSize, font->atlasTexture);
     }
@@ -332,56 +300,220 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
     _fontCache[makeCacheKey(fontName, fontSize)] = font;
 
     YA_CORE_INFO("Loaded font '{}' (size: {}, atlas: {}x{})", fontName.toString(), fontSize, atlasWidth, atlasHeight);
-    YA_CORE_INFO("Memory used for font atlas: {:.2f} KB", ((float)atlasWidth * atlasHeight * sizeof(ColorU8_t)) / 1024.0f);
-
     return font;
+}
+
+bool FontManager::addFontFallback(IRender& render, const FName& fontName, const std::string& fontPath,
+                                EFontRenderMode renderMode, uint32_t baseSize)
+{
+    auto baseIt = _baseFontCache.find(fontName);
+    if (baseIt == _baseFontCache.end() || !baseIt->second) {
+        YA_CORE_WARN("addFontFallback: font '{}' not loaded yet", fontName.toString());
+        return false;
+    }
+    Font& font = *baseIt->second;
+    FFontStackEntry entry;
+    entry.fontPath   = fontPath;
+    entry.renderMode = renderMode;
+    entry.baseSize   = baseSize;
+    entry.rasterizer = makeRasterizer(renderMode);
+    // Color emoji needs its own atlas (opaque RGBA); CJK SDF gets its own
+    // atlas at a smaller base size (bounded memory).
+    const std::string label = renderMode == EFontRenderMode::Color ? "ColorFontAtlas"
+                                                                   : "SDFFontAtlas_Fallback";
+    entry.atlas = std::make_shared<DynamicFontAtlas>(render, entry.rasterizer->getAtlasFormat(), 256, label);
+    entry.atlas->upload();
+    entry.atlasTexture = entry.atlas->texture();
+    font.fallbacks.push_back(std::move(entry));
+    YA_CORE_INFO("Font '{}' fallback added: '{}' (mode={})", fontName.toString(), fontPath, (int)renderMode);
+    return true;
+}
+
+std::vector<std::string> FontManager::findCjkFontCandidates()
+{
+    return {
+        "Engine/Content/Fonts/NotoSansSC-Regular.otf",
+        "Engine/Content/Fonts/SourceHanSansSC-Regular.otf",
+        "C:/Windows/Fonts/msyh.ttc",
+        "C:/Windows/Fonts/msyh.ttf",
+        "C:/Windows/Fonts/simhei.ttf",
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/System/Library/Fonts/STHeiti Medium.ttc",
+        "/System/Library/Fonts/Supplemental/Songti.ttc",
+        "/Library/Fonts/Arial Unicode.ttf",
+    };
+}
+
+std::string FontManager::findEmojiFontPath()
+{
+    constexpr const char* kEmojiPath = "Engine/Content/Fonts/seguiemj.ttf";
+    return std::filesystem::exists(kEmojiPath) ? std::string(kEmojiPath) : std::string{};
 }
 
 void FontManager::ensureGlyphs(IRender& render, Font& font, std::string_view text)
 {
-    // Missing glyphs are rasterized into the base atlas (at its size), then
-    // the scaled view is refreshed so its metrics stay consistent.
+    // Legacy entry point: register + flush immediately. Kept for callers that
+    // load glyphs eagerly outside a recording; GUI draw paths must use
+    // requestGlyphs + flushPendingGlyphs (Core Rule 6).
+    requestGlyphs(font, text);
+    flushPendingGlyphs(render);
+}
+
+bool FontManager::requestGlyphs(Font& font, std::string_view text)
+{
     Font& target = font.isView() ? *font.baseFont : font;
-    std::vector<uint32_t> missing;
+    if (!target.rasterizer || !target.atlas || target.fontPath.empty()) {
+        return false; // synthetic/registered fonts own their glyph set; nothing to capture
+    }
+    bool bNew = false;
     for (uint32_t codePoint : utf8::decode(text)) {
         if (codePoint == '\r' || codePoint == '\n' || codePoint == '\t') {
             continue;
         }
-        if (target.characters.contains(codePoint)) {
+        if (target.characters.contains(codePoint) || target.missing.contains(codePoint)) {
             continue;
         }
-        if (std::find(missing.begin(), missing.end(), codePoint) == missing.end()) {
-            missing.push_back(codePoint);
-        }
+        bNew = _pendingGlyphs[&target].insert(codePoint).second || bNew;
     }
+    return bNew;
+}
 
-    if (missing.empty()) {
+bool FontManager::consumeNewGlyphCapture()
+{
+    const bool b = _bNewGlyphsCaptured;
+    _bNewGlyphsCaptured = false;
+    return b;
+}
+
+void FontManager::flushPendingGlyphs(IRender& render)
+{
+    if (_pendingGlyphs.empty()) {
         return;
     }
-
+    _bNewGlyphsCaptured = true;
     FT_Library ft{};
     if (FT_Err_Ok != FT_Init_FreeType(&ft)) {
         YA_CORE_ERROR("Failed to initialize FreeType library for glyph fallback");
         return;
     }
 
-    FT_Face face{};
-    if (FT_New_Face(ft, target.fontPath.c_str(), 0, &face)) {
-        YA_CORE_ERROR("Failed to load font face for glyph fallback: {}", target.fontPath);
-        FT_Done_FreeType(ft);
-        return;
+    for (auto& [fontPtr, codePoints] : _pendingGlyphs) {
+        Font& font = *fontPtr;
+        if (!font.rasterizer || !font.atlas || font.fontPath.empty()) {
+            continue;
+        }
+
+        // Resolve each missing codepoint through the font stack: primary face
+        // first, then each fallback (CJK / emoji) in order. The first face
+        // that has the glyph rasterizes it into its own atlas.
+        auto captureInto = [&](FT_Face face, IFontRasterizer& rasterizer, DynamicFontAtlas& atlas,
+                               uint32_t codePoint, uint32_t pixelSize, uint16_t atlasIndex) {
+            GlyphBitmap glyph = rasterizer.rasterize(face, codePoint, pixelSize);
+            if (glyph.width == 0 && glyph.height == 0) {
+                return false; // face has no renderable glyph for this cp
+            }
+            Character character;
+            character.size       = {static_cast<int>(glyph.width), static_cast<int>(glyph.height)};
+            character.bearing    = glyph.bearing;
+            character.advance    = glyph.advance;
+            character.atlasIndex = atlasIndex;
+            character.designSize = pixelSize;
+            character.bColor     = glyph.bColor;
+            if (glyph.width > 0 && glyph.height > 0) {
+                character.atlasSlot = atlas.addGlyph(glyph.width, glyph.height, glyph.pixels.data());
+                character.uvRect    = atlas.getUv(character.atlasSlot);
+            }
+            else {
+                character.atlasSlot = ~0u;
+            }
+            font.characters[codePoint] = character;
+            return true;
+        };
+
+        std::vector<uint32_t> remaining;
+        FT_Face face{};
+        const bool bPrimaryFace = FT_New_Face(ft, font.fontPath.c_str(), 0, &face) == 0;
+        for (uint32_t codePoint : codePoints) {
+            if (font.characters.contains(codePoint)) {
+                continue;
+            }
+            // Presence probe BEFORE rasterizing: FT_Load_Char happily loads
+            // the .notdef glyph for missing codepoints, which would capture
+            // tofu boxes instead of falling through the font stack.
+            if (bPrimaryFace && FT_Get_Char_Index(face, static_cast<FT_ULong>(codePoint)) != 0 &&
+                captureInto(face, *font.rasterizer, *font.atlas, codePoint,
+                            static_cast<uint32_t>(font.fontSize), 0)) {
+                continue;
+            }
+            remaining.push_back(codePoint);
+        }
+        if (bPrimaryFace) {
+            FT_Done_Face(face);
+        }
+
+        // Fallback chain: try each fallback face for the still-missing cps.
+        for (size_t i = 0; i < font.fallbacks.size() && !remaining.empty(); ++i) {
+            FFontStackEntry& fb = font.fallbacks[i];
+            FT_Face fbFace{};
+            if (FT_New_Face(ft, fb.fontPath.c_str(), 0, &fbFace)) {
+                continue;
+            }
+            std::vector<uint32_t> stillMissing;
+            for (uint32_t codePoint : remaining) {
+                if (font.characters.contains(codePoint)) {
+                    continue;
+                }
+                // FT_Get_Char_Index: cheap presence probe before rasterizing.
+                if (FT_Get_Char_Index(fbFace, static_cast<FT_ULong>(codePoint)) == 0) {
+                    stillMissing.push_back(codePoint);
+                    continue;
+                }
+                if (captureInto(fbFace, *fb.rasterizer, *fb.atlas, codePoint, fb.baseSize,
+                                static_cast<uint16_t>(i + 1))) {
+                    continue;
+                }
+                stillMissing.push_back(codePoint);
+            }
+            remaining = std::move(stillMissing);
+            FT_Done_Face(fbFace);
+        }
+        // Glyphs no face could rasterize are permanently missing: never
+        // re-request them (would re-run capture + atlas upload EVERY frame).
+        for (uint32_t codePoint : remaining) {
+            font.missing.insert(codePoint);
+        }
     }
 
-    FT_Set_Pixel_Sizes(face, 0, static_cast<uint32_t>(target.fontSize));
-    for (uint32_t codePoint : missing) {
-        appendStandaloneGlyph(render, target, face, codePoint);
-    }
-
-    FT_Done_Face(face);
     FT_Done_FreeType(ft);
-    if (&target != &font) {
-        refreshScaledView(font);
+
+    // Re-upload every touched atlas (primary + fallbacks). Repack (if any)
+    // fired onRepack already; the upload happens at this safe point.
+    for (auto& [fontPtr, codePoints] : _pendingGlyphs) {
+        (void)codePoints;
+        Font& font = *fontPtr;
+        if (font.atlas) {
+            font.atlas->upload();
+            font.atlasTexture = font.atlas->texture();
+        }
+        for (FFontStackEntry& fb : font.fallbacks) {
+            if (fb.atlas) {
+                fb.atlas->upload();
+                fb.atlasTexture = fb.atlas->texture();
+            }
+        }
     }
+
+    // Refresh all materialized scaled views so their characters match the
+    // (possibly repacked) base atlas + fallbacks.
+    for (const auto& [key, viewPtr] : _fontCache) {
+        (void)key;
+        if (viewPtr && viewPtr->isView()) {
+            refreshScaledView(*viewPtr);
+        }
+    }
+
+    _pendingGlyphs.clear();
 }
 
 std::shared_ptr<Font> FontManager::getAdaptiveFont(IRender&            render,

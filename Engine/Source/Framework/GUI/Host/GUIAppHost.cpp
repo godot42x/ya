@@ -649,8 +649,34 @@ bool GUIWindowHost::init()
     // 4. Builtin textures/samplers and the runtime fonts (one atlas entry per
     //    configured size; UIText resolves fonts by exact name+size).
     TextureLibrary::get().init(render);
-    if (!FontManager::get()->loadFont(*render, config.fontPath, DEFAULT_RUNTIME_FONT_NAME, DEFAULT_RUNTIME_FONT_SIZE)) {
+    // SDF flavor by default (font-framework plan Phase 2): FreeType distance
+    // field, scale-free — fixes the blurry scaled-bitmap small text. The
+    // rasterizer seam lets MSDF swap in later without touching this call.
+    // SDF base rasterized at 96px (2x the legacy 48): with FreeType's 8px
+    // spread the distance gradient is ~1 screen px at 13px text — crisp small
+    // text instead of the blurry scaled-bitmap path. Scaled views rescale
+    // metrics from this base (flat memory preserved).
+    // SDF base rasterized at 128px: with FreeType's 8px spread the distance
+    // gradient is ~1.6 screen px at 13px text (vs 2.2px at 96px) — crisper
+    // small text. Scaled views rescale metrics from this base (flat memory).
+    if (!FontManager::get()->loadFont(*render, config.fontPath, DEFAULT_RUNTIME_FONT_NAME, 128,
+                                      EFontRenderMode::SDF)) {
         YA_CORE_WARN("GUIAppHost: failed to load runtime font '{}'; text drawing disabled", config.fontPath);
+    }
+    // Font stack (plan Phase 3): CJK + color-emoji fallbacks resolve glyphs
+    // the primary Latin face cannot render. CJK via the shared candidate
+    // list (bundled Noto -> platform PingFang/msyh), emoji via the bundled
+    // color font. Metrics stay primary-driven; fallbacks contribute glyphs.
+    for (const std::string& cjkPath : FontManager::findCjkFontCandidates()) {
+        if (std::filesystem::exists(cjkPath)) {
+            FontManager::get()->addFontFallback(*render, DEFAULT_RUNTIME_FONT_NAME, cjkPath,
+                                                EFontRenderMode::SDF, 64);
+            break;
+        }
+    }
+    if (const std::string emojiPath = FontManager::findEmojiFontPath(); !emojiPath.empty()) {
+        FontManager::get()->addFontFallback(*render, DEFAULT_RUNTIME_FONT_NAME, emojiPath,
+                                            EFontRenderMode::Color, 32);
     }
 
     // 5. GUI Draw2D renderer (screen-space sprites, depth-less pipeline),
@@ -1111,6 +1137,9 @@ void GUIWindowHost::onTick(float /*dt*/)
             .offset          = {0.0f, 0.0f},
             .textureResolver = resolveBuiltinTexture,
         });
+        // Safe-point glyph flush (Core Rule 6): this path never records
+        // commands, so pending glyph capture can run here too.
+        FontManager::get()->flushPendingGlyphs(*_impl->render);
         ++_impl->frameCount;
         return;
     }
@@ -1203,6 +1232,21 @@ void GUIWindowHost::onTick(float /*dt*/)
     auto cmdBuf = _impl->commandBuffers[static_cast<size_t>(imageIndex)];
     cmdBuf->reset();
     cmdBuf->begin();
+
+    // Flush pending glyph captures at a SAFE point (Core Rule 6): after the
+    // snapshot build registered missing glyphs, before any command recording
+    // touches them. Texture creation/repack only happens here.
+    FontManager::get()->flushPendingGlyphs(*_impl->render);
+    // New glyphs captured (e.g. CJK/emoji resolved via the font stack): text
+    // measured against the '?' fallback is stale. markLayoutDirty inside the
+    // paint walk is cleared at the end of paint, so invalidate from here —
+    // layout + full paint (rect may be stretch-fixed, so paint must rerun).
+    if (FontManager::get()->consumeNewGlyphCapture()) {
+        _impl->tree->invalidateLayout();
+        if (UIElement* root = _impl->tree->getRoot()) {
+            root->invalidateSubtree(EUIInvalidationReason::InheritedPaintContext);
+        }
+    }
 
     cmdBuf->retireResource(renderImage->getImageShared());
     cmdBuf->retireResource(renderImage->getImageViewShared());

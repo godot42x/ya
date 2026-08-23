@@ -59,28 +59,15 @@ namespace
 {
 std::string findRuntimeDefaultFontPath()
 {
-    static constexpr const char* fontCandidates[] = {
-        "Engine/Content/Fonts/NotoSansSC-Regular.otf",
-        "Engine/Content/Fonts/SourceHanSansSC-Regular.otf",
-        // Windows system fonts
-        "C:/Windows/Fonts/msyh.ttc",
-        "C:/Windows/Fonts/msyh.ttf",
-        "C:/Windows/Fonts/simhei.ttf",
-        // macOS system fonts (CJK-capable)
-        "/System/Library/Fonts/PingFang.ttc",
-        "/System/Library/Fonts/Hiragino Sans GB.ttc",
-        "/System/Library/Fonts/STHeiti Medium.ttc",
-        "/System/Library/Fonts/Supplemental/Songti.ttc",
-        "/Library/Fonts/Arial Unicode.ttf",
-        "Engine/Content/Fonts/JetBrainsMono-Medium.ttf",
-    };
-
-    for (const char* candidate : fontCandidates) {
+    // Shared CJK candidate list (font-framework plan Phase 3): the game
+    // runtime prefers a CJK-capable primary font so UI text renders Chinese
+    // out of the box; JetBrainsMono is the final Latin fallback.
+    for (const std::string& candidate : FontManager::findCjkFontCandidates()) {
         if (std::filesystem::exists(candidate)) {
             return candidate;
         }
     }
-    return {};
+    return "Engine/Content/Fonts/JetBrainsMono-Medium.ttf";
 }
 
 std::string resolveProjectScenePath(const App& app, const std::string& requestedPath)

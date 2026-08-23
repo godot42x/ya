@@ -584,4 +584,85 @@ TEST(WidgetLayoutTest, AutoSizeTextComputeDesiredSizeUsesResolvedText)
     EXPECT_FLOAT_EQ(label->computeDesiredSize().x, 88.0f);
 }
 
+// --- Font-stack regression tests (font-framework plan Phase 3) --------------
+
+TEST(WidgetLayoutTest, ScaledViewScalesFallbackGlyphsByOwnDesignSize)
+{
+    // Fallback glyphs (CJK) are rasterized at their own base size (e.g. 64)
+    // while the primary base is 128. A 13px view must scale them by 13/64,
+    // NOT by the primary 13/128 — otherwise a 64px CJK glyph renders at 6.5px.
+    auto base = std::make_shared<Font>();
+    base->fontSize = 128.0f;
+    base->lineHeight = 160.0f;
+    base->ascent = 128.0f;
+    base->descent = 32.0f;
+    // Primary-style glyph captured at 128px.
+    Character latin;
+    latin.size       = {80, 100};
+    latin.bearing    = {10, 100};
+    latin.advance    = {100.0f, 0.0f};
+    latin.designSize = 128;
+    latin.atlasIndex = 0;
+    base->characters['A'] = latin;
+    // Fallback-style glyph captured at 64px (CJK).
+    Character cjk;
+    cjk.size       = {64, 64};
+    cjk.bearing    = {0, 64};
+    cjk.advance    = {64.0f, 0.0f};
+    cjk.designSize = 64;
+    cjk.atlasIndex = 1;
+    base->characters[static_cast<uint32_t>(0x4F60)] = cjk;
+
+    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 128, base);
+    auto view = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 13);
+    ASSERT_NE(view, nullptr);
+    ASSERT_TRUE(view->isView());
+
+    // Latin: 13/128 scale.
+    const Character& vLatin = view->getCharacter('A');
+    EXPECT_EQ(vLatin.advance.x, 100.0f * 13.0f / 128.0f);
+    EXPECT_EQ(vLatin.size.x, std::lround(80.0f * 13.0f / 128.0f));
+    // Fallback: 13/64 scale (the regression: 13/128 would halve it to 6.5).
+    const Character& vCjk = view->getCharacter(static_cast<uint32_t>(0x4F60));
+    EXPECT_FLOAT_EQ(vCjk.advance.x, 64.0f * 13.0f / 64.0f);
+    EXPECT_EQ(vCjk.size.x, std::lround(64.0f * 13.0f / 64.0f));
+    EXPECT_EQ(vCjk.size.y, std::lround(64.0f * 13.0f / 64.0f));
+    EXPECT_EQ(vCjk.atlasIndex, 1u);
+    FontManager::get()->clearCache();
+}
+
+TEST(WidgetLayoutTest, MeasureTextUsesResolvedFallbackGlyphAdvances)
+{
+    // After the stack resolves a CJK glyph, measureText must use its REAL
+    // advance (13px at a 13px view), not the '?' fallback advance.
+    auto base = std::make_shared<Font>();
+    base->fontSize = 128.0f;
+    base->lineHeight = 160.0f;
+    base->ascent = 128.0f;
+    base->descent = 32.0f;
+    // '?' at 128px design: advance 80.
+    Character question;
+    question.size = {70, 100};
+    question.bearing = {10, 100};
+    question.advance = {80.0f, 0.0f};
+    question.designSize = 128;
+    base->characters['?'] = question;
+    // CJK at 64px design: advance 64 (a 13px view should give 13px/char).
+    Character cjk;
+    cjk.size = {64, 64};
+    cjk.bearing = {0, 64};
+    cjk.advance = {64.0f, 0.0f};
+    cjk.designSize = 64;
+    base->characters[static_cast<uint32_t>(0x4F60)] = cjk;
+    // Two CJK glyphs: text of 2 chars = 2 * 13px, NOT 2 * 8.125 (the '?'
+    // advance at 13px would be 80*13/128 = 8.125).
+    base->characters[static_cast<uint32_t>(0x597D)] = cjk; // 好
+
+    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 128, base);
+    auto view = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 13);
+    ASSERT_NE(view, nullptr);
+    const std::string text = "\xE4\xBD\xA0\xE5\xA5\xBD"; // 你好 (UTF-8)
+    EXPECT_FLOAT_EQ(view->measureText(text), 2.0f * 64.0f * 13.0f / 64.0f);
+    FontManager::get()->clearCache();
+}
 } // namespace ya

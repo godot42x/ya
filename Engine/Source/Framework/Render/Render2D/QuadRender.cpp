@@ -84,7 +84,7 @@ ya::Ptr<Sampler> resolveSamplerForTexture(Texture* texture)
     }
 
     const std::string& label = texture->getLabel();
-    if (label.starts_with("FontAtlas_") || label.starts_with("FontGlyph_")) {
+    if (label.starts_with("FontAtlas_") || label.starts_with("SDFFontAtlas_") || label.starts_with("FontGlyph_")) {
         return TextureLibrary::get().getClampLinearSampler();
     }
 
@@ -763,8 +763,9 @@ void FQuadRender::updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer,
                                  const glm::mat4&          view)
 {
     FrameUBO ubo{
-        .viewProj = viewProj,
-        .view     = view,
+        .viewProj    = viewProj,
+        .view        = view,
+        .sdfSlotMask = _textureSdfMask,
     };
     uboBuffer->writeData(&ubo, sizeof(ubo), 0);
 
@@ -836,6 +837,16 @@ uint32_t FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture)
         auto it = _textureLabel2Idx.find(texture->getLabel());
         if (it != _textureLabel2Idx.end()) {
             textureIdx = it->second;
+            // The dynamic font atlas REPACKS under the same label (grow
+            // creates a new texture): the descriptor must follow the new
+            // texture this frame — otherwise glyphs sample a stale atlas
+            // (random CJK garbage after every repack). Bump the resource
+            // version; flushScreen re-uploads the descriptor after the batch
+            // has been drawn.
+            if (_textureBindings[textureIdx].texture != texture) {
+                _textureBindings[textureIdx].texture = texture;
+                ++_resourceVersion;
+            }
         }
         else {
             if (_textureBindings.size() >= TEXTURE_SET_SIZE) {
@@ -849,6 +860,11 @@ uint32_t FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture)
             _textureLabel2Idx[texture->getLabel()] = idx;
             textureIdx                             = idx;
             _lastPushTextureSlot                   = static_cast<int>(idx);
+            // SDF glyph atlases are sampled as distance fields (see the
+            // shader's sdfSlotMask branch): mark the slot for the frame UBO.
+            if (texture->getLabel().starts_with("SDFFontAtlas_")) {
+                _textureSdfMask |= (1u << idx);
+            }
             ++_resourceVersion;
         }
     }
@@ -990,8 +1006,9 @@ void FQuadRender::drawText(const std::string& text,
 
     YA_CORE_ASSERT(font != nullptr, "TODO: font is null in Render2D::drawText, should make a default font");
     YA_CORE_ASSERT(_render, "Render2D requires a render backend");
-    FontManager::get()->ensureGlyphs(*_render, *font, text);
-
+    // Glyph capture is deferred to a safe frame point (requestGlyphs at
+    // snapshot build + flushPendingGlyphs before recording — Core Rule 6).
+    // Missing glyphs resolve to '?' here and render correctly next frame.
     const auto codePoints = utf8::decode(text);
     for (uint32_t codePoint : codePoints) {
         if (codePoint == '\r') {
@@ -1015,19 +1032,25 @@ void FQuadRender::drawText(const std::string& text,
 
         float xpos = cursorX + static_cast<float>(character.bearing.x) * scale.x;
         float ypos = cursorY + static_cast<float>(font->ascent - character.bearing.y) * scale.y;
+        // Pixel-snap glyph quads: subpixel positions cause uneven stroke
+        // weight and a wavy baseline (the "blurry / misaligned" look). Snap
+        // the DRAW position to device pixels; the advance stays fractional
+        // so inter-glyph spacing keeps its accumulated precision.
+        xpos = std::round(xpos);
+        ypos = std::round(ypos);
         glm::vec3 pos  = glm::vec3(xpos, ypos, position.z);
         const glm::vec2 scaledGlyphSize = glm::vec2(character.size) * scale;
 
-        if (!character.bInAtlas) {
-            if (character.standaloneTexture) {
-                drawTexture(pos, scaledGlyphSize, character.standaloneTexture, color);
-            }
-        }
-        else {
+        // Glyphs live in the dynamic atlas of their face (primary or
+        // fallback, font-framework plan Phase 3). Color glyphs (emoji) draw
+        // with a WHITE tint so the bitmap's own colors show through; coverage
+        // and SDF glyphs use the text color as before.
+        const auto atlasTexture = font->atlasTextureFor(character);
+        if (atlasTexture) {
             drawSubTexture(pos,
                            scaledGlyphSize,
-                           font->atlasTexture,
-                           color,
+                           atlasTexture,
+                           character.bColor ? glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) : color,
                            character.uvRect);
         }
 

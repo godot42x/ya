@@ -109,6 +109,11 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
             _tree->setTheme((bDark ? _darkTheme : _lightTheme).get());
         });
     });
+    // Appended LAST so existing scenario coordinates stay stable.
+    surface.addPage("Unicode", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildUnicodeDemo(t, p, demoState, status);
+    });
 
     applyStartPage();
 

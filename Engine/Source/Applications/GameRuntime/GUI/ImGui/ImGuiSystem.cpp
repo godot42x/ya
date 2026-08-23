@@ -1,4 +1,5 @@
 #include "GameRuntime/GUI/ImGui/ImGuiSystem.h"
+#include "Render/Resources/FontManager.h"
 
 #include "Core/Profiling/Instrumentor.h"
 
@@ -193,15 +194,16 @@ void ImGuiManager::initImGuiCore()
         style._NextFrameFontSizeBase = mainFont->LegacySize;
     }
 
-    static constexpr std::array<const char*, 6> cjkFontCandidates = {
-        "Engine/Content/Fonts/NotoSansSC-Regular.otf",
-        "Engine/Content/Fonts/SourceHanSansSC-Regular.otf",
-        "C:/Windows/Fonts/msyh.ttc",
-        "C:/Windows/Fonts/msyh.ttf",
-        "C:/Windows/Fonts/simhei.ttf",
-        "C:/Windows/Fonts/simsun.ttc",
-    };
-    addMergedFont(io, cjkFontCandidates, 16.0f, io->Fonts->GetGlyphRangesChineseFull(), false, "CJK");
+    // Shared CJK candidate list (font-framework plan Phase 3): bundled
+    // Noto/Source Han first, then platform fonts (msyh/PingFang/...). The
+    // list lives in FontManager so GUI + game + ImGui resolve the same stack.
+    const std::vector<std::string> cjkCandidates = ya::FontManager::findCjkFontCandidates();
+    std::vector<const char*> cjkPaths;
+    cjkPaths.reserve(cjkCandidates.size());
+    for (const auto& path : cjkCandidates) {
+        cjkPaths.push_back(path.c_str());
+    }
+    addMergedFont(io, cjkPaths, 16.0f, io->Fonts->GetGlyphRangesChineseFull(), false, "CJK");
 
     static constexpr std::array<const char*, 1> emojiFontCandidates = {
         "Engine/Content/Fonts/seguiemj.ttf",

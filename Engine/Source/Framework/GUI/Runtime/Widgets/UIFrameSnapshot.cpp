@@ -69,6 +69,18 @@ void UIFrameBuilder::addText(const Rect2D& logicalRect,
     if (!font || text.empty()) {
         return;
     }
+    // Register missing glyphs at PAINT time (no GPU work): the host flushes
+    // the pending set at a safe frame point (Core Rule 6 — never create
+    // textures during command recording). Missing glyphs render as '?' for
+    // one frame until the flush lands.
+    if (FontManager::get()->requestGlyphs(*font, text)) {
+        // New glyphs were registered: text measured against the '?' fallback
+        // this frame is stale (e.g. CJK advance vs tofu). Re-measure next
+        // frame by invalidating the current paint widget's layout.
+        if (UIElement* widget = currentPaintWidget()) {
+            widget->markLayoutDirty();
+        }
+    }
 
     const glm::vec2 pos  = toPx(logicalRect.pos);
     const glm::vec2 size = logicalRect.extent * _ctx.uiScale;

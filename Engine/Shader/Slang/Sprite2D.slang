@@ -8,6 +8,10 @@ struct FrameData
 {
     float4x4 viewProj;
     float4x4 view;
+    // Bitmask: bit i = texture slot i holds an SDF glyph atlas (distance in
+    // .r, sampled with a smoothstep around the 0.5 boundary). Std140: the
+    // uint lands at offset 128 with 16-byte alignment.
+    uint sdfSlotMask;
 };
 
 [[vk::binding(0, 0)]] ConstantBuffer<FrameData, Std140DataLayout> uFrame;
@@ -35,6 +39,23 @@ struct VertexOutput
 
 float4 sampleTexturedSprite(VertexOutput input)
 {
+    // SDF glyph atlas (bit set in sdfSlotMask): the R channel carries the
+    // signed distance (128 = boundary, FreeType FT_RENDER_MODE_SDF). Convert
+    // to coverage with SCREEN-SPACE AA: the transition width is one screen
+    // pixel regardless of scale (fwidth measures d's change per pixel), so
+    // text stays crisp at any size (replaces the blurry scaled-bitmap path).
+    if ((uFrame.sdfSlotMask & (1u << input.textureIdx)) != 0u) {
+        float d = uTextures[input.textureIdx].Sample(input.texCoord).r;
+        // HALF-pixel AA: fwidth(d) is d's change per screen pixel; spanning
+        // +-0.25*fwidth gives a 0.5px transition. A 1px stroke then keeps a
+        // bright core (a full-pixel AA span would swallow the whole stroke
+        // and render thin stems washed out — the "blurry letters" look).
+        float alpha = smoothstep(0.5 - fwidth(d) * 0.25, 0.5 + fwidth(d) * 0.25, d);
+        // Light contrast boost: SDF thin strokes read slightly lighter than
+        // hinted bitmaps at small sizes; a mild power curve restores weight.
+        alpha = pow(alpha, 0.72);
+        return float4(input.color.rgb, input.color.a * alpha);
+    }
     float4 texColor = uTextures[input.textureIdx].Sample(input.texCoord);
     if (texColor.a < 0.01) { discard; }
     return texColor * input.color;

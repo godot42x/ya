@@ -1,0 +1,194 @@
+{
+  "plan": "font-framework-convergence",
+  "updated_at": "2026-08-23",
+  "legend": {
+    "planned": "尚未开始",
+    "in_progress": "推进中",
+    "pass": "已验证",
+    "fail": "回归",
+    "blocked": "阻塞"
+  },
+  "tracks": [
+    {
+      "id": "phase1_bitmap_backend",
+      "title": "Phase 1 - Rasterizer 抽象 + 动态图集（Bitmap 后端）",
+      "items": [
+        {
+          "id": "data_structures",
+          "status": "pass",
+          "notes": "EFontRenderMode / Character 统一（删 standaloneTexture）/ Font.renderMode"
+        },
+        {
+          "id": "dynamic_atlas",
+          "status": "pass",
+          "notes": "DynamicFontAtlas：shelf packing + 单纹理 repack 扩容（槽预算 TEXTURE_SET_SIZE 16）"
+        },
+        {
+          "id": "rasterizer_abstraction",
+          "status": "pass",
+          "notes": "IFontRasterizer + BitmapFontRasterizer（迁移 FT_LOAD_RENDER）"
+        },
+        {
+          "id": "fontmanager_rewrite",
+          "status": "pass",
+          "notes": "loadFont/ensureGlyphs 进动态图集；scaled view 保留（flat memory 不回退）"
+        },
+        {
+          "id": "pending_flush_rule6",
+          "status": "pass",
+          "notes": "pending glyph 队列 + flushPendingGlyphs；GUIAppHost 帧边界安全点（修既有 Rule 6 违规）"
+        },
+        {
+          "id": "repack_uv_sync",
+          "status": "pass",
+          "notes": "repack 后 scaled view uvRect 同步 + FontAtlasTextureSink 重触发"
+        },
+        {
+          "id": "shader_zero_change",
+          "status": "planned",
+          "notes": "首期 RGBA8 零改动；R8 可选子任务（文本管线变体，独立验收，不通过回退）"
+        },
+        {
+          "id": "quadrender_simplify",
+          "status": "pass",
+          "notes": "drawText 去 bInAtlas 分支、去录制期 ensureGlyphs"
+        },
+        {
+          "id": "cjk_e2e",
+          "status": "pass",
+          "notes": "CJK(简中/日/韩)+emoji 经 fallback 链端到端渲染（SDF@64 CJK + Color emoji）；Unicode 验收页"
+        }
+      ]
+    },
+    {
+      "id": "phase2_msdf",
+      "title": "Phase 2 - MSDF 后端（预留）",
+      "items": [
+        {
+          "id": "msdfgen_vendor",
+          "status": "planned",
+          "notes": "msdfgen core + freetype bridge（MIT）；cross-platform MSVC/Clang 门禁"
+        },
+        {
+          "id": "msdf_rasterizer",
+          "status": "planned",
+          "notes": "MSDFFontRasterizer：FT_LOAD_NO_BITMAP outline → edgeColoring → 64px/pxRange8 栅格化"
+        },
+        {
+          "id": "msdf_shader",
+          "status": "planned",
+          "notes": "median-of-3 + smoothstep；接缝：generateDistanceGlyph + 采样函数"
+        }
+      ]
+    },
+    {
+      "id": "phase3_sdf_fx",
+      "title": "Phase 3 - SDF 后端 + 特效（预留）",
+      "items": [
+        {
+          "id": "sdf_rasterizer",
+          "status": "in_progress",
+          "notes": "FreeType 原生 FT_RENDER_MODE_SDF 已落地（msdfgen 网络不可达；MSDF 升级为两接缝替换）"
+        },
+        {
+          "id": "text_effects",
+          "status": "planned",
+          "notes": "描边/发光 shader 特效"
+        }
+      ]
+    },
+    {
+      "id": "phase4_auto_mode",
+      "title": "Phase 4 - 自动模式选择（预留）",
+      "items": [
+        {
+          "id": "usage_marks",
+          "status": "planned",
+          "notes": "TextComponent.usage（EditorBody/GameUI/WorldText/Display）→ renderMode 自动选择"
+        }
+      ]
+    },
+    {
+      "id": "phase2b_sdf_first",
+      "title": "Phase 2 first cut - FreeType native SDF (blur fix)",
+      "items": [
+        {
+          "id": "sdf_rasterizer_done",
+          "status": "pass",
+          "notes": "SDFFontRasterizer（FT_LOAD_NO_BITMAP + FT_RENDER_MODE_SDF → RGBA8 距离-R）"
+        },
+        {
+          "id": "sdf_shader_done",
+          "status": "pass",
+          "notes": "sdfSlotMask + fwidth 1px 屏空间 AA（修复固定 smoothstep 过宽的坑）"
+        },
+        {
+          "id": "sdf_quadrender_done",
+          "status": "pass",
+          "notes": "FrameUBO.sdfSlotMask（Std140）+ 描述符 Vertex|Fragment + label 标记"
+        },
+        {
+          "id": "sdf_host_default",
+          "status": "pass",
+          "notes": "GUIAppHost 默认 SDF + 96px 基分辨率（13px 渐变 ~1px）"
+        },
+        {
+          "id": "msdf_upgrade_path",
+          "status": "planned",
+          "notes": "msdfgen 网络可用后两接缝替换（rasterizer + shader median-of-3）"
+        }
+      ]
+    },
+    {
+      "id": "phase3_font_stack",
+      "title": "Phase 3 - Font stack (CJK/Unicode/emoji)",
+      "items": [
+        {
+          "id": "font_stack_struct",
+          "status": "pass",
+          "notes": "FFontStackEntry + Character.atlasIndex/designSize/bColor"
+        },
+        {
+          "id": "color_rasterizer",
+          "status": "pass",
+          "notes": "ColorFontRasterizer（FT_LOAD_COLOR BGRA→RGBA）+ EFontRenderMode::Color"
+        },
+        {
+          "id": "fallback_chain_resolve",
+          "status": "pass",
+          "notes": "flush 按链解析（FT_Get_Char_Index 探针修 .notdef 坑）；addFontFallback 独立 atlas"
+        },
+        {
+          "id": "scaled_view_stack",
+          "status": "pass",
+          "notes": "designSize 缩放修正 + makeScaledView 共享 fallback + atlasTextureFor 活句柄"
+        },
+        {
+          "id": "capture_invalidation",
+          "status": "pass",
+          "notes": "flush 后 host 级 invalidateLayout+全树 paint 失效（修 paint 缓存旧 font 指针）"
+        },
+        {
+          "id": "host_font_stack",
+          "status": "pass",
+          "notes": "GUIAppHost：Latin SDF@128 + CJK SDF@64 + emoji Color@32；共享候选 helper"
+        },
+        {
+          "id": "unicode_acceptance_page",
+          "status": "pass",
+          "notes": "Unicode 验收页（简中/日/韩/emoji/混排/大字号）——snapshot 273px + GPU 字形/彩色验证"
+        },
+        {
+          "id": "shared_candidates",
+          "status": "pass",
+          "notes": "AppLifecycle/ImGuiSystem/GUIAppHost 统一 FontManager::findCjkFontCandidates"
+        },
+        {
+          "id": "closure_tests",
+          "status": "pass",
+          "notes": "designSize 缩放 + fallback advance measure 两个闭包回归测试（166 过）"
+        }
+      ]
+    }
+  ]
+}

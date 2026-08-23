@@ -1437,4 +1437,29 @@ void buildThemeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
     (void)state;
 }
 
+void buildUnicodeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                      const std::function<void(const std::string&)>& log)
+{
+    auto form = std::make_shared<ya::UIContainer>("UnicodeForm");
+    form->setDirection(ya::EWidgetBoxLayout::Vertical);
+    form->setSpacing(8.0f);
+    form->setPadding({12.0f, 12.0f});
+    form->_bAutoSize = true;
+    tree.attach(parent, form);
+
+    tree.attach(*form, makeLabel("Unicode — CJK + emoji through the font stack (SDF fallback + color atlas)"));
+
+    tree.attach(*form, makeBodyText("简体中文：你好，世界！这是一个字体栈测试。"));
+    tree.attach(*form, makeBodyText("日本語：こんにちは、世界。"));
+    tree.attach(*form, makeBodyText("한국어：안녕하세요, 세계."));
+    tree.attach(*form, makeBodyText("Emoji: 😀 🎉 🚀 ❤️ 🍕 ✅"));
+    tree.attach(*form, makeBodyText("Mixed: 中文 + Latin + 123 + emoji 🎈"));
+
+    tree.attach(*form, makeLabel("Large CJK title", 20.0f));
+    tree.attach(*form, makeBodyText("大字号中文标题：字体渲染验收"));
+
+    (void)state;
+    (void)log;
+}
+
 } // namespace guiworkbench

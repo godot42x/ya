@@ -139,4 +139,10 @@ void buildThemeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                     const std::function<void(const std::string&)>& log,
                     const std::function<void(bool bDark)>& onToggleTheme);
 
+/// Unicode page (font-framework plan Phase 3 acceptance): CJK text through
+/// the fallback chain (SDF), color emoji through the color atlas — both
+/// resolved at runtime via requestGlyphs/flushPendingGlyphs.
+void buildUnicodeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                      const std::function<void(const std::string&)>& log);
+
 } // namespace guiworkbench

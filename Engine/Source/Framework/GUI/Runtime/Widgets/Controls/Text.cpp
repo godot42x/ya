@@ -124,7 +124,8 @@ glm::vec2 UIText::computeDesiredSize() const
         const auto  lines    = wrapText(resolvedText(ReactiveBase::EDirtyLevel::Layout), font, maxWidth);
         return {maxWidth, static_cast<float>(lines.size()) * font->lineHeight};
     }
-    return {font->measureText(resolvedText(ReactiveBase::EDirtyLevel::Layout)), font->lineHeight};
+    const float w = font->measureText(resolvedText(ReactiveBase::EDirtyLevel::Layout));
+    return {w, font->lineHeight};
 }
 
 } // namespace ya
