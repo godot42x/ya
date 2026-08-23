@@ -145,4 +145,11 @@ void buildThemeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
 void buildUnicodeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                       const std::function<void(const std::string&)>& log);
 
+/// Chinese-only scene (font-framework CJK-fallback acceptance): a run of pure
+/// Chinese at multiple sizes plus a continuous paragraph, so per-glyph
+/// brightness / edge blur from a mixed fallback face is easy to eyeball. A
+/// slider drives the live size.
+void buildChineseTest(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                      const std::function<void(const std::string&)>& log);
+
 } // namespace guiworkbench

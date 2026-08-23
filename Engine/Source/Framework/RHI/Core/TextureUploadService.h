@@ -38,6 +38,38 @@ struct TextureUploadRequest
     std::string                    label;
 };
 
+/// Incremental update of a sub-rectangle of an ALREADY-UPLOADED image.
+///
+/// Reuses the existing VkImage (must have TransferDst usage, which fromData/
+/// initFromData always set). Does NOT recreate the image and does NOT generate
+/// mipmaps — callers that need mip regeneration must re-upload fully. Intended
+/// for append-mostly atlases (font glyphs) where only a few cells changed.
+struct TextureRegionUpdateRequest
+{
+    std::shared_ptr<IImage> image{};
+    std::shared_ptr<IBuffer> staging{};
+    BufferImageCopy          region{}; // single sub-rectangle, offset = top-left
+    EImageLayout::T          currentLayout = EImageLayout::ShaderReadOnlyOptimal;
+    std::string              label;
+};
+
+/// Batched incremental update of MULTIPLE sub-rectangles of an ALREADY-UPLOADED
+/// image, using ONE staging buffer and ONE isolate submit.
+///
+/// `regions` must be tightly backed by `staging`: each region's bufferOffset
+/// points at that sub-rectangle's pixels inside the single buffer. The whole
+/// batch shares one ShaderReadOnlyOptimal -> TransferDst -> ShaderReadOnlyOptimal
+/// transition, so callers appending many glyphs per frame should batch instead
+/// of calling updateRegion() per glyph (avoids N staging buffers + N submits).
+struct TextureRegionUpdateBatch
+{
+    std::shared_ptr<IImage>  image{};
+    std::shared_ptr<IBuffer> staging{};
+    std::vector<BufferImageCopy> regions{}; // multiple sub-rectangles
+    EImageLayout::T          currentLayout = EImageLayout::ShaderReadOnlyOptimal;
+    std::string              label;
+};
+
 /// Owns texture upload command recording and submission.
 ///
 /// Explicitly depends on IRender for the resource factory and isolate-command
@@ -53,6 +85,17 @@ struct YA_RHI_API TextureUploadService
     /// and outMipLevels (when provided) receives 1. Otherwise outMipLevels
     /// receives the image's mip level count.
     bool upload(IRender& render, const TextureUploadRequest& request, uint32_t* outMipLevels = nullptr);
+
+    /// Records and submits a single sub-rectangle copy into an existing image.
+    /// Transitions currentLayout -> TransferDst -> ShaderReadOnlyOptimal inline.
+    /// Returns false if the command scope cannot be opened or recording fails.
+    bool updateRegion(IRender& render, const TextureRegionUpdateRequest& request);
+
+    /// Batched variant: `batch.regions` are all copied in a single isolate
+    /// submit with one TransferDst-layout transition. Returns false if the
+    /// batch is empty or malformed; never partial — either the whole batch
+    /// lands or nothing is copied.
+    bool updateRegions(IRender& render, const TextureRegionUpdateBatch& batch);
 };
 
 } // namespace ya

@@ -8,7 +8,7 @@
 // replaced by a distance field sampled at ANY size.
 //
 // The atlas stores the distance in the R channel (RGBA8, G/B/A = 255); the
-// sprite shader branches per texture slot (sdfSlotMask) and converts the
+// sprite shader branches per draw (textureIdx high-bit flag) and converts the
 // stored value to coverage with screen-space AA (fwidth).
 //
 // Upgrade path: when msdfgen becomes vendorable, MSDFFontRasterizer swaps in

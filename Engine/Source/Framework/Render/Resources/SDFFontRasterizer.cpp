@@ -3,6 +3,8 @@
 #include "Core/Log.h"
 #include "freetype/freetype.h"
 
+#include <cstdlib>
+
 namespace ya
 {
 
@@ -45,10 +47,18 @@ GlyphBitmap SDFFontRasterizer::rasterize(FT_Face face, uint32_t codepoint, uint3
     // FreeType SDF bitmap: 8-bit distance, 128 = boundary, 0..255.
     // Store into RGBA8 with the distance in R (G/B/A = 255); the shader
     // reads .r and converts to coverage (smoothstep around the boundary).
+    //
+    // Use bitmap.pitch as the source row stride, not bitmap.width: FreeType
+    // may pad rows or return a top-down bitmap with negative pitch.
     out.pixels.resize(static_cast<size_t>(bitmap.width) * bitmap.rows * 4);
+    const int32_t srcPitch   = bitmap.pitch;
+    const uint32_t rowStride = static_cast<uint32_t>(std::abs(srcPitch));
+    const uint8_t* srcBase   = srcPitch >= 0 ? bitmap.buffer
+                                               : bitmap.buffer + (bitmap.rows - 1) * srcPitch;
     for (uint32_t row = 0; row < bitmap.rows; ++row) {
+        const uint8_t* srcRow = srcBase + static_cast<int32_t>(row) * srcPitch;
         for (uint32_t col = 0; col < bitmap.width; ++col) {
-            const uint8_t dist = bitmap.buffer[static_cast<size_t>(row) * bitmap.width + col];
+            const uint8_t dist = srcRow[col];
             uint8_t* dst = out.pixels.data() +
                            (static_cast<size_t>(row) * bitmap.width + col) * 4;
             dst[0] = dist;

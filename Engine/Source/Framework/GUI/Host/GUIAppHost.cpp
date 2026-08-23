@@ -649,34 +649,41 @@ bool GUIWindowHost::init()
     // 4. Builtin textures/samplers and the runtime fonts (one atlas entry per
     //    configured size; UIText resolves fonts by exact name+size).
     TextureLibrary::get().init(render);
-    // SDF flavor by default (font-framework plan Phase 2): FreeType distance
-    // field, scale-free — fixes the blurry scaled-bitmap small text. The
-    // rasterizer seam lets MSDF swap in later without touching this call.
-    // SDF base rasterized at 96px (2x the legacy 48): with FreeType's 8px
-    // spread the distance gradient is ~1 screen px at 13px text — crisp small
-    // text instead of the blurry scaled-bitmap path. Scaled views rescale
-    // metrics from this base (flat memory preserved).
-    // SDF base rasterized at 128px: with FreeType's 8px spread the distance
-    // gradient is ~1.6 screen px at 13px text (vs 2.2px at 96px) — crisper
-    // small text. Scaled views rescale metrics from this base (flat memory).
-    if (!FontManager::get()->loadFont(*render, config.fontPath, DEFAULT_RUNTIME_FONT_NAME, 128,
-                                      EFontRenderMode::SDF)) {
+    // Size-driven flavor split (font-framework plan §1): the primary font is
+    // loaded WITHOUT a forced mode, so getFont()/getAdaptiveFont() pick bitmap
+    // for small text (hinted, no SDF bite-out) and SDF for large text. No
+    // face-level hard SDF, so 13px glyphs keep their thin strokes. The 128px
+    // load here simply pre-warms the SDF flavor; small sizes are lazily built
+    // as bitmap bases on first request.
+    if (!FontManager::get()->loadFont(*render, config.fontPath, DEFAULT_RUNTIME_FONT_NAME, 128)) {
         YA_CORE_WARN("GUIAppHost: failed to load runtime font '{}'; text drawing disabled", config.fontPath);
     }
     // Font stack (plan Phase 3): CJK + color-emoji fallbacks resolve glyphs
-    // the primary Latin face cannot render. CJK via the shared candidate
-    // list (bundled Noto -> platform PingFang/msyh), emoji via the bundled
-    // color font. Metrics stay primary-driven; fallbacks contribute glyphs.
+    // the primary Latin face cannot render. Register EXACTLY ONE CJK fallback:
+    // the first existing candidate (findCjkFontCandidates returns best-first,
+    // full-coverage faces like PingFang/msyh). Multiple CJK fallbacks are
+    // intentionally avoided — different faces hint at the same px with
+    // different stem weights, making adjacent Chinese glyphs look
+    // brighter/darker than each other. The fallback inherits the base's
+    // flavor via attachFallbackToBase (small sizes stay bitmap -> crisp;
+    // large sizes SDF), so we don't force a mode here. Emoji uses the bundled
+    // color font.
     for (const std::string& cjkPath : FontManager::findCjkFontCandidates()) {
         if (std::filesystem::exists(cjkPath)) {
-            FontManager::get()->addFontFallback(*render, DEFAULT_RUNTIME_FONT_NAME, cjkPath,
-                                                EFontRenderMode::SDF, 64);
-            break;
+            FontManager::get()->addFontFallback(*render,
+                                                DEFAULT_RUNTIME_FONT_NAME,
+                                                cjkPath,
+                                                EFontRenderMode::Bitmap,
+                                                13);
+            break; // single CJK fallback only
         }
     }
     if (const std::string emojiPath = FontManager::findEmojiFontPath(); !emojiPath.empty()) {
-        FontManager::get()->addFontFallback(*render, DEFAULT_RUNTIME_FONT_NAME, emojiPath,
-                                            EFontRenderMode::Color, 32);
+        FontManager::get()->addFontFallback(*render,
+                                            DEFAULT_RUNTIME_FONT_NAME,
+                                            emojiPath,
+                                            EFontRenderMode::Color,
+                                            32);
     }
 
     // 5. GUI Draw2D renderer (screen-space sprites, depth-less pipeline),
@@ -1132,6 +1139,7 @@ void GUIWindowHost::onTick(float /*dt*/)
         // layout + paint + the G2 validation frame, nothing is submitted.
         _impl->tree->setLogicalExtent(queryWindowLogicalExtent(*_impl->render));
         _impl->delegate->updateUI();
+        FontManager::get()->setActiveDpiScale(1.0f);
         _impl->tree->buildSnapshot(UIFrameBuildContext{
             .uiScale         = {1.0f, 1.0f},
             .offset          = {0.0f, 0.0f},
@@ -1182,11 +1190,14 @@ void GUIWindowHost::onTick(float /*dt*/)
     renderSurface->prepare(FRender2DComposePassDesc{
         .kind = ERender2DComposePassKind::RuntimeUIComposite,
     });
+    const float uiScaleX = static_cast<float>(presentExtent.width) / static_cast<float>(std::max(logicalExtent.width, 1u));
+    const float uiScaleY = static_cast<float>(presentExtent.height) / static_cast<float>(std::max(logicalExtent.height, 1u));
+    // Bitmap glyphs must be rasterized at the device resolution (ImGui bakes
+    // at RasterizerDensity). The host is the only place that knows the real
+    // DPI, so publish it to FontManager before building the frame.
+    FontManager::get()->setActiveDpiScale(uiScaleX);
     UIFrameSnapshot snapshot = _impl->tree->buildSnapshot(UIFrameBuildContext{
-        .uiScale = {
-            static_cast<float>(presentExtent.width) / static_cast<float>(std::max(logicalExtent.width, 1u)),
-            static_cast<float>(presentExtent.height) / static_cast<float>(std::max(logicalExtent.height, 1u)),
-        },
+        .uiScale = {uiScaleX, uiScaleY},
         .offset = {0.0f, 0.0f},
         .textureResolver = resolveBuiltinTexture,
     });

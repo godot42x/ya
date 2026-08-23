@@ -3,6 +3,8 @@
 #include "Core/Log.h"
 #include "freetype/freetype.h"
 
+#include <cstdlib>
+
 namespace ya
 {
 
@@ -37,10 +39,19 @@ GlyphBitmap BitmapFontRasterizer::rasterize(FT_Face face, uint32_t codepoint, ui
 
     // FreeType grayscale coverage -> RGBA8 (white + alpha), matching the
     // legacy atlas encoding so sampling/alpha behavior is unchanged.
+    //
+    // Respect bitmap.pitch: FreeType pads gray rows and may use negative
+    // pitch for bottom-up bitmaps. Striding by bitmap.width caused torn glyphs.
     out.pixels.resize(static_cast<size_t>(bitmap.width) * bitmap.rows * 4);
+    const int32_t srcPitch   = bitmap.pitch;
+    const uint32_t rowStride = static_cast<uint32_t>(std::abs(srcPitch));
+    (void)rowStride;
+    const uint8_t* srcBase   = srcPitch >= 0 ? bitmap.buffer
+                                               : bitmap.buffer + (bitmap.rows - 1) * srcPitch;
     for (uint32_t row = 0; row < bitmap.rows; ++row) {
+        const uint8_t* srcRow = srcBase + static_cast<int32_t>(row) * srcPitch;
         for (uint32_t col = 0; col < bitmap.width; ++col) {
-            const uint8_t gray = bitmap.buffer[static_cast<size_t>(row) * bitmap.width + col];
+            const uint8_t gray = srcRow[col];
             uint8_t* dst = out.pixels.data() +
                            (static_cast<size_t>(row) * bitmap.width + col) * 4;
             dst[0] = 255;

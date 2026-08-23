@@ -852,6 +852,163 @@ void Texture::initCubeMapFromMemory(IRender& render, const CubeMapMemoryCreateIn
     YA_CORE_INFO("Created cubemap: {} ({}x{}x{})", _label, _width, _height, static_cast<int>(CubeFace_Count));
 }
 
+bool Texture::updateRegion(IRender&   render,
+                            uint32_t   x,
+                            uint32_t   y,
+                            uint32_t   w,
+                            uint32_t   h,
+                            const void* pixels,
+                            uint32_t   baseArrayLayer,
+                            uint32_t   layerCount)
+{
+    if (!isValid()) {
+        YA_CORE_ERROR("Texture::updateRegion({}): texture not valid", _label);
+        return false;
+    }
+    if (x + w > _width || y + h > _height) {
+        YA_CORE_ERROR("Texture::updateRegion({}): rect {}x{}+{}x{} out of bounds {}x{}",
+                      _label, x, y, w, h, _width, _height);
+        return false;
+    }
+    if (layerCount == 0) {
+        YA_CORE_ERROR("Texture::updateRegion({}): layerCount must be >= 1", _label);
+        return false;
+    }
+    const uint32_t arrayLayers = getImage() ? getImage()->getArrayLayers() : 1;
+    if (baseArrayLayer + layerCount > arrayLayers) {
+        YA_CORE_ERROR("Texture::updateRegion({}): layers [{}..{}) exceed image arrayLayers {}",
+                      _label, baseArrayLayer, baseArrayLayer + layerCount, arrayLayers);
+        return false;
+    }
+    if (!pixels || w == 0 || h == 0) {
+        return false;
+    }
+
+    const size_t pixelSize = EFormat::getPixelSize(_format);
+    const size_t rowBytes  = static_cast<size_t>(w) * pixelSize;
+    const size_t dataSize  = rowBytes * h;
+    const std::vector<uint8_t> stagingData(static_cast<const uint8_t*>(pixels),
+                                           static_cast<const uint8_t*>(pixels) + dataSize);
+
+    auto& resourceFactory = getResourceFactory(render);
+    auto staging = resourceFactory.createBuffer(ya::BufferCreateInfo{
+        .label  = std::format("StagingBuffer_Region_{}:{}x{}+{}x{}", _label, x, y, w, h),
+        .usage  = EBufferUsage::TransferSrc,
+        .data   = const_cast<void*>(static_cast<const void*>(stagingData.data())),
+        .size   = static_cast<uint32_t>(dataSize),
+    });
+    if (!staging || !staging->getHandle()) {
+        YA_CORE_ERROR("Texture::updateRegion({}): failed to create staging buffer", _label);
+        return false;
+    }
+
+    const BufferImageCopy region{
+        .bufferOffset      = 0,
+        .bufferRowLength   = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource  = {
+             .aspectMask     = EImageAspect::Color,
+             .mipLevel       = 0,
+             .baseArrayLayer = baseArrayLayer,
+             .layerCount     = layerCount,
+        },
+        .imageOffsetX      = static_cast<int32_t>(x),
+        .imageOffsetY      = static_cast<int32_t>(y),
+        .imageOffsetZ      = 0,
+        .imageExtentWidth  = w,
+        .imageExtentHeight = h,
+        .imageExtentDepth  = 1,
+    };
+
+    TextureUploadService uploadService;
+    return uploadService.updateRegion(render, TextureRegionUpdateRequest{
+                                                 .image    = getImageShared(),
+                                                 .staging  = staging,
+                                                 .region   = region,
+                                                 .label    = std::format("{}:{}x{}+{}x{}", _label, x, y, w, h),
+                                             });
+}
+
+bool Texture::updateRegions(IRender& render, const void* pixels, std::span<const RegionUpdate> regions)
+{
+    if (!isValid()) {
+        YA_CORE_ERROR("Texture::updateRegions({}): texture not valid", _label);
+        return false;
+    }
+    if (regions.empty()) {
+        return false;
+    }
+    if (!pixels) {
+        return false;
+    }
+
+    const uint32_t arrayLayers = getImage() ? getImage()->getArrayLayers() : 1;
+    std::vector<BufferImageCopy> bics;
+    bics.reserve(regions.size());
+    for (const auto& r : regions) {
+        if (r.w == 0 || r.h == 0) {
+            continue;
+        }
+        if (r.x + r.w > _width || r.y + r.h > _height) {
+            YA_CORE_ERROR("Texture::updateRegions({}): rect {}x{}+{}x{} out of bounds {}x{}",
+                          _label, r.x, r.y, r.w, r.h, _width, _height);
+            return false;
+        }
+        if (r.layerCount == 0 || r.baseArrayLayer + r.layerCount > arrayLayers) {
+            YA_CORE_ERROR("Texture::updateRegions({}): layers [{}..{}) exceed arrayLayers {}",
+                          _label, r.baseArrayLayer, r.baseArrayLayer + r.layerCount, arrayLayers);
+            return false;
+        }
+        bics.push_back(BufferImageCopy{
+            .bufferOffset      = static_cast<uint32_t>(r.offset),
+            .bufferRowLength   = 0,
+            .bufferImageHeight = 0,
+            .imageSubresource  = {
+                 .aspectMask     = EImageAspect::Color,
+                 .mipLevel       = 0,
+                 .baseArrayLayer = r.baseArrayLayer,
+                 .layerCount     = r.layerCount,
+            },
+            .imageOffsetX      = static_cast<int32_t>(r.x),
+            .imageOffsetY      = static_cast<int32_t>(r.y),
+            .imageOffsetZ      = 0,
+            .imageExtentWidth  = r.w,
+            .imageExtentHeight = r.h,
+            .imageExtentDepth  = 1,
+        });
+    }
+    if (bics.empty()) {
+        return false;
+    }
+
+    // Staging size only needs to cover the last byte referenced by any region.
+    const size_t pixelSize = EFormat::getPixelSize(_format);
+    size_t maxEnd = 0;
+    for (const auto& r : regions) {
+        const size_t end = r.offset + static_cast<size_t>(r.w) * r.h * pixelSize;
+        maxEnd = std::max(maxEnd, end);
+    }
+    auto& resourceFactory = getResourceFactory(render);
+    auto staging = resourceFactory.createBuffer(ya::BufferCreateInfo{
+        .label  = std::format("StagingBuffer_Regions_{}", _label),
+        .usage  = EBufferUsage::TransferSrc,
+        .data   = const_cast<void*>(pixels),
+        .size   = static_cast<uint32_t>(maxEnd),
+    });
+    if (!staging || !staging->getHandle()) {
+        YA_CORE_ERROR("Texture::updateRegions({}): failed to create staging buffer", _label);
+        return false;
+    }
+
+    TextureUploadService uploadService;
+    return uploadService.updateRegions(render, TextureRegionUpdateBatch{
+                                                    .image    = getImageShared(),
+                                                    .staging  = staging,
+                                                    .regions  = std::move(bics),
+                                                    .label    = std::format("{}:regions[{}]", _label, regions.size()),
+                                                });
+}
+
 ImageViewHandle TextureBinding::getImageViewHandle() const
 {
     if (texture && texture->getImageView()) {

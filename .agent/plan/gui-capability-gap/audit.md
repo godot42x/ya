@@ -1,5 +1,7 @@
 # GUI 能力盘点与差距分析（对照 Slate / Qt / Flutter / Godot）
 
+> **Re-audit note (2026-08-24):** 本文建立于 2026-08-15，部分“当前能力”结论已过时。当前代码已经存在 UITheme、typed Style、Brush、TreeView、TableGrid、Reactive、UIDocument 和 WidgetTree 增量 snapshot；阅读本文时应以代码为准，并把本文视为差距历史记录。下一轮正式重构前需要先刷新本 audit，尤其是样式、控件、数据流和 DSL 部分。
+
 > 建立日期：2026-08-15
 > 作用：盘点当前引擎 `GUI/Runtime` 的实际能力，对照 UE Slate / Qt / Flutter / Godot 的基础容器/控件/样式/数据/输入，蒸馏出「当前最需要」的功能清单。这是「GUI 功能可用性最小闭环」的调研前置。
 

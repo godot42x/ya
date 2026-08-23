@@ -216,6 +216,7 @@ void FWorkbenchSurface::buildWorkspaceShell(ya::WidgetTree& tree, ya::UIElement&
     _workspaceSplit = std::make_shared<ya::UISplitPane>("WorkbenchShellSplit");
     _workspaceSplit->_anchorMin = {0.0f, 0.0f};
     _workspaceSplit->_anchorMax = {1.0f, 1.0f};
+    // TODO: remove hardcode postion
     _workspaceSplit->setPosition({0.0f, 34.0f});
     _workspaceSplit->setSize({0.0f, -38.0f});
     _workspaceSplit->setSplitRatio(0.23f);

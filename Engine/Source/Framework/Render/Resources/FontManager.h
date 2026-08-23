@@ -4,18 +4,47 @@
 #include "Core/FName.h"
 #include "Core/ResourceRegistry.h"
 #include "DynamicFontAtlas.h"
+#include "FontAtlasBank.h"
 #include "IFontRasterizer.h"
 #include "RHI/Core/Texture.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string_view>
 #include <unordered_set>
 #include <vector>
 
 namespace ya
 {
+
+/// Size threshold (px) for the bitmap / SDF split (font-framework plan §1).
+/// Glyphs rendered at or below this size use FreeType's hinted grayscale
+/// bitmap (crisp at small sizes, no SDF under-sampling bite-out); larger
+/// glyphs use the distance field (scale-free, rotation-stable). 20px is the
+/// Pixel-size ceiling for the hinted grayscale bitmap flavor. Below/at it a
+/// single-channel 8-bit SDF cannot preserve thin strokes (the internal solid
+/// band collapses under linear sampling and bites strokes out). GUI text is
+/// drawn at a fixed logical size and barely scaled, so bitmap stays crisp here.
+/// Only genuinely large glyphs (headings / scalable art) benefit from SDF's
+/// scale freedom, and at those sizes the 64px SDF base has enough distance-field
+/// headroom to not bite. 48px keeps the common 13-40px UI text on the bitmap
+/// path, which is also what FreeType hinting is tuned for.
+constexpr uint32_t kBitmapMaxSize = 48;
+
+/// Rasterization base size for SDF glyphs. SDF needs headroom around each
+/// stroke to encode a usable distance field; rasterizing at the target size
+/// (e.g. 13px) leaves no band and collapses thin strokes. 64px base + a
+/// scaled view keeps the field well-sampled while staying memory-bounded.
+constexpr uint32_t kSdfBaseSize = 64;
+
+/// Picks the rasterization flavor for a requested pixel size. Pure function so
+/// the split stays consistent across loadFont / getAdaptiveFont / fallback.
+inline EFontRenderMode chooseModeForSize(uint32_t sizePx)
+{
+    return sizePx <= kBitmapMaxSize ? EFontRenderMode::Bitmap : EFontRenderMode::SDF;
+}
 
 struct IRender;
 
@@ -24,6 +53,22 @@ inline constexpr uint32_t    DEFAULT_RUNTIME_FONT_SIZE = 48;
 
 namespace utf8
 {
+// UTF-8 byte layout constants (RFC 3629).
+inline constexpr uint32_t UTF8_1BYTE_MAX     = 0x80;   // Lead byte < 0x80 decodes to a single ASCII code point.
+inline constexpr uint32_t UTF8_CONTINUATION_MASK  = 0xC0; // Top 2 bits of a continuation byte.
+inline constexpr uint32_t UTF8_CONTINUATION_MARK = 0x80; // Continuation bytes are 10xxxxxx (0x80..0xBF).
+inline constexpr uint32_t UTF8_CONTINUATION_DATA  = 0x3F; // Low 6 bits carry the payload of a continuation byte.
+inline constexpr uint32_t UTF8_2BYTE_MASK    = 0xE0;  // Lead mask for 2-byte sequences.
+inline constexpr uint32_t UTF8_2BYTE_MARK    = 0xC0;  // 110xxxxx lead.
+inline constexpr uint32_t UTF8_2BYTE_DATA    = 0x1F;  // Low 5 bits of a 2-byte lead.
+inline constexpr uint32_t UTF8_3BYTE_MASK    = 0xF0;  // Lead mask for 3-byte sequences.
+inline constexpr uint32_t UTF8_3BYTE_MARK    = 0xE0;  // 1110xxxx lead.
+inline constexpr uint32_t UTF8_3BYTE_DATA    = 0x0F;  // Low 4 bits of a 3-byte lead.
+inline constexpr uint32_t UTF8_4BYTE_MASK    = 0xF8;  // Lead mask for 4-byte sequences.
+inline constexpr uint32_t UTF8_4BYTE_MARK    = 0xF0;  // 11110xxx lead.
+inline constexpr uint32_t UTF8_4BYTE_DATA    = 0x07;  // Low 3 bits of a 4-byte lead.
+inline constexpr uint32_t UNICODE_REPLACEMENT = 0xFFFD; // U+FFFD replacement character for invalid sequences.
+
 inline bool decodeNext(std::string_view text, size_t& offset, uint32_t& codePoint)
 {
     if (offset >= text.size()) {
@@ -31,7 +76,7 @@ inline bool decodeNext(std::string_view text, size_t& offset, uint32_t& codePoin
     }
 
     const unsigned char lead = static_cast<unsigned char>(text[offset++]);
-    if (lead < 0x80) {
+    if (lead < UTF8_1BYTE_MAX) {
         codePoint = lead;
         return true;
     }
@@ -41,43 +86,43 @@ inline bool decodeNext(std::string_view text, size_t& offset, uint32_t& codePoin
             return false;
         }
         const unsigned char ch = static_cast<unsigned char>(text[offset]);
-        if ((ch & 0xC0) != 0x80) {
+        if ((ch & UTF8_CONTINUATION_MASK) != UTF8_CONTINUATION_MARK) {
             return false;
         }
         ++offset;
-        value = (value << 6) | (ch & 0x3F);
+        value = (value << 6) | (ch & UTF8_CONTINUATION_DATA);
         return true;
     };
 
-    if ((lead & 0xE0) == 0xC0) {
-        uint32_t value = lead & 0x1F;
+    if ((lead & UTF8_2BYTE_MASK) == UTF8_2BYTE_MARK) {
+        uint32_t value = lead & UTF8_2BYTE_DATA;
         if (!readContinuation(value)) {
-            codePoint = 0xFFFD;
+            codePoint = UNICODE_REPLACEMENT;
             return true;
         }
         codePoint = value;
         return true;
     }
-    if ((lead & 0xF0) == 0xE0) {
-        uint32_t value = lead & 0x0F;
+    if ((lead & UTF8_3BYTE_MASK) == UTF8_3BYTE_MARK) {
+        uint32_t value = lead & UTF8_3BYTE_DATA;
         if (!readContinuation(value) || !readContinuation(value)) {
-            codePoint = 0xFFFD;
+            codePoint = UNICODE_REPLACEMENT;
             return true;
         }
         codePoint = value;
         return true;
     }
-    if ((lead & 0xF8) == 0xF0) {
-        uint32_t value = lead & 0x07;
+    if ((lead & UTF8_4BYTE_MASK) == UTF8_4BYTE_MARK) {
+        uint32_t value = lead & UTF8_4BYTE_DATA;
         if (!readContinuation(value) || !readContinuation(value) || !readContinuation(value)) {
-            codePoint = 0xFFFD;
+            codePoint = UNICODE_REPLACEMENT;
             return true;
         }
         codePoint = value;
         return true;
     }
 
-    codePoint = 0xFFFD;
+    codePoint = UNICODE_REPLACEMENT;
     return true;
 }
 
@@ -95,6 +140,23 @@ inline std::vector<uint32_t> decode(std::string_view text)
     }
     return codePoints;
 }
+
+inline bool isIgnorableFormatCodePoint(uint32_t codePoint)
+{
+    switch (codePoint) {
+    case 0x200B:  // ZERO WIDTH SPACE 零宽空格
+    case 0x200C:  // ZERO WIDTH NON-JOINER 零宽非连字
+    case 0x200D:  // ZERO WIDTH JOINER 零宽连字（emoji 组合用，如 ‍👨‍👩‍👧）
+    case 0x2060:  // WORD JOINER 词连接符
+    case 0xFE0E:  // VARIATION SELECTOR-15 变体选择符（强制文本呈现）
+    case 0xFE0F:  // VARIATION SELECTOR-16 变体选择符（强制 emoji 呈现）
+        return true;
+    default:
+        return false;
+    }
+}
+
+
 } // namespace utf8
 
 struct GlyphDesc
@@ -126,9 +188,9 @@ struct FFontStackEntry
     std::string                      fontPath;
     EFontRenderMode                  renderMode = EFontRenderMode::Bitmap;
     uint32_t                         baseSize   = 64;  // rasterization size for this face
-    std::shared_ptr<DynamicFontAtlas> atlas      = nullptr;
+    std::shared_ptr<FontAtlasBank>   atlas      = nullptr; // paged atlas (one per fallback face)
     std::shared_ptr<IFontRasterizer>  rasterizer = nullptr;
-    std::shared_ptr<Texture>          atlasTexture = nullptr;
+    std::shared_ptr<Texture>          atlasTexture = nullptr; // deprecated mirror; use bank
 };
 
 /**
@@ -137,19 +199,14 @@ struct FFontStackEntry
 struct Font
 {
     std::unordered_map<uint32_t, Character> characters;
-    /// Codepoints the whole font stack FAILED to rasterize (e.g. emoji
-    /// variation selectors): requesting them again every frame would re-run
-    /// capture + atlas upload forever (per-frame texture churn). They render
-    /// as the '?' fallback.
-    std::unordered_set<uint32_t>            missing;
     EFontRenderMode                         renderMode = EFontRenderMode::Bitmap;
     float                                   fontSize   = 0;
     float                                   lineHeight = 0;         // Line height (ascender - descender + line gap)
     float                                   ascent     = 0;         // Distance from baseline to top of tallest glyph
     float                                   descent    = 0;         // Distance from baseline to bottom of lowest glyph
     std::string                             fontPath;               // Path to font file (primary face)
-    std::shared_ptr<Texture>                atlasTexture = nullptr; // Primary atlas texture (optional)
-    std::shared_ptr<DynamicFontAtlas>       atlas        = nullptr; // Primary growable atlas (host-loaded fonts)
+    std::shared_ptr<Texture>                atlasTexture = nullptr; // deprecated mirror; use atlas (bank)
+    std::shared_ptr<FontAtlasBank>          atlas        = nullptr; // Primary paged atlas (host-loaded fonts)
     std::shared_ptr<IFontRasterizer>        rasterizer   = nullptr; // Primary glyph flavor rasterizer
     std::vector<FFontStackEntry>            fallbacks;              // Ordered fallback chain (CJK/emoji/...)
     /// Scaled view over a base font: shares the atlas texture; metrics are
@@ -166,10 +223,10 @@ struct Font
     [[nodiscard]] std::shared_ptr<Texture> atlasTextureFor(const Character& ch) const
     {
         if (ch.atlasIndex == 0 || ch.atlasIndex > fallbacks.size()) {
-            return atlas ? atlas->texture() : atlasTexture;
+            return atlas ? atlas->textureForSlot(ch.atlasSlot) : atlasTexture;
         }
         const auto& fbAtlas = fallbacks[ch.atlasIndex - 1].atlas;
-        return fbAtlas ? fbAtlas->texture() : fallbacks[ch.atlasIndex - 1].atlasTexture;
+        return fbAtlas ? fbAtlas->textureForSlot(ch.atlasSlot) : fallbacks[ch.atlasIndex - 1].atlasTexture;
     }
 
     [[nodiscard]] bool isView() const { return baseFont != nullptr; }
@@ -215,6 +272,9 @@ struct Font
                 width += tabWidth;
                 continue;
             }
+            if (utf8::isIgnorableFormatCodePoint(codePoint)) {
+                continue;
+            }
             width += getCharacter(codePoint).advance.x;
         }
         return std::max(maxWidth, width);
@@ -232,15 +292,43 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
     using FontAtlasTextureSink = std::function<void(const FName& fontName, uint32_t fontSize, const std::shared_ptr<Texture>& atlasTexture)>;
 
   private:
-    // Key: "fontName:fontSize" -> Font
+    // Key: "fontName:fontSize" -> Font (base or scaled view).
     std::unordered_map<std::string, stdptr<Font>> _fontCache;
-    // Base font per name (single atlas, metrics at the rasterization size).
-    std::unordered_map<FName, stdptr<Font>>       _baseFontCache;
+    // Base font per (name, size). A single font family can have multiple
+    // rasterization bases (e.g. SDF at 16/32/64 px) so getFont() can pick the
+    // closest base instead of scaling one huge atlas down to tiny sizes.
+    std::unordered_map<std::string, stdptr<Font>> _baseFontCache;
+    // Fast lookup of the available base sizes registered for each font name.
+    std::unordered_map<FName, std::vector<uint32_t>> _baseSizes;
     FontAtlasTextureSink                           _fontAtlasTextureSink;
+    // Captured from the first loadFont so getFont() can lazily materialize a
+    // base in the correct flavor when none is preloaded (e.g. a 13px request
+    // with only a 128px SDF base cached — it must build a bitmap base, never
+    // scale a tiny glyph from a huge SDF base).
+    IRender*                                        _render = nullptr;
+    std::unordered_map<FName, std::string>           _fontPaths;
+    // Font-name-level fallback definitions. Recorded by addFontFallback so a
+    // fallback face is attached not only to preloaded bases but also to bases
+    // lazily materialized later (e.g. a small bitmap base auto-built for a 13px
+    // request) — otherwise the late base would have an empty font stack and
+    // render every non-base codepoint as tofu ('?').
+    struct FFallbackDef { std::string path; EFontRenderMode mode; };
+    std::unordered_map<FName, std::vector<FFallbackDef>> _fallbackDefs;
     // Missing glyphs awaiting safe-point capture (Core Rule 6): base-font ptr
     // -> codepoints. Flushed by flushPendingGlyphs at a frame boundary.
     std::unordered_map<Font*, std::unordered_set<uint32_t>> _pendingGlyphs;
     bool _bNewGlyphsCaptured = false;
+    // Host-provided device-pixel scale (GUI uiScale). Bitmap glyphs are baked
+    // at round(size * _activeDpiScale) so they map 1:1 to screen pixels on
+    // Retina/HiDPI. SDF ignores it. Defaults to 1.0 (logical pixels).
+    float _activeDpiScale = 1.0f;
+
+    [[nodiscard]] std::shared_ptr<Font> findBestBase(const FName& fontName, uint32_t fontSize) const;
+
+    // Attaches a recorded fallback face to a single base font (builds its atlas
+    // + repack callback). Shared by addFontFallback (existing bases) and
+    // loadFont (lazily built bases) so every base carries the full font stack.
+    void attachFallbackToBase(IRender& render, Font& font, const FFallbackDef& def);
 
   public:
     static FontManager *get();
@@ -260,13 +348,29 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
      * @param fontSize Font size in pixels
      * @return Shared pointer to loaded font, or nullptr on failure
      */
-    /// Load a font rasterized in `renderMode`. Bitmap = grayscale coverage
-    /// (legacy); SDF = FreeType distance field (scale-free, crisp at any
-    /// size — the GUI default once enabled by the host).
+    /// Load a font rasterized in `renderMode` at `fontSize`. When `mode` is
+    /// nullopt the manager auto-selects per the size split (font-framework
+    /// plan §1): small sizes use the hinted grayscale bitmap, larger sizes
+    /// use the SDF distance field. Small glyphs never go through SDF — its
+    /// 8-bit field cannot preserve thin strokes at tiny pixel sizes.
     std::shared_ptr<Font> loadFont(IRender& render, const std::string &fontPath, const FName &fontName, uint32_t fontSize,
-                                   EFontRenderMode renderMode = EFontRenderMode::Bitmap);
+                                   std::optional<EFontRenderMode> mode = std::nullopt, float dpiScale = 1.0f);
 
-    std::shared_ptr<Font> getFont(const FName &fontName, uint32_t fontSize);
+    /// @param dpiScale Device-pixel scale (e.g. GUI uiScale on Retina). Bitmap
+    /// glyphs are rasterized at round(fontSize * dpiScale) so texels map 1:1 to
+    /// screen pixels (no fractional minification under Nearest sampling — ImGui
+    /// bakes at RasterizerDensity for the same reason). SDF is scale-free and
+    /// ignores dpiScale. Defaults to 1.0 (logical pixels). When omitted, the
+    /// manager uses the active DPI scale set by the host (setActiveDpiScale) —
+    /// bitmap glyphs must be baked at the device resolution, which the host
+    /// knows, not the widget.
+    std::shared_ptr<Font> getFont(const FName &fontName, uint32_t fontSize, float dpiScale = 1.0f);
+
+    /// Host sets the device-pixel scale (GUI uiScale) once per frame so bitmap
+    /// glyphs are rasterized at the correct device resolution. Widgets call
+    /// getFont(name, size) without dpiScale; the active scale is applied here.
+    void setActiveDpiScale(float dpiScale) { _activeDpiScale = dpiScale; }
+    float getActiveDpiScale() const { return _activeDpiScale; }
 
     /// Append a fallback face to the font stack (plan Phase 3): glyphs the
     /// primary face cannot render resolve through the fallbacks in order
@@ -304,8 +408,6 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
                                           uint32_t           baseSize,
                                           uint32_t           windowHeight,
                                           uint32_t           referenceHeight = 1080);
-
-    void ensureGlyphs(IRender& render, Font& font, std::string_view text);
 
     /// Register missing glyphs of `text` for lazy capture (no GPU work). The
     /// host calls flushPendingGlyphs at a safe frame point (after snapshot

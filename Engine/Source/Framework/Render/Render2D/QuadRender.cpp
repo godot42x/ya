@@ -84,8 +84,18 @@ ya::Ptr<Sampler> resolveSamplerForTexture(Texture* texture)
     }
 
     const std::string& label = texture->getLabel();
-    if (label.starts_with("FontAtlas_") || label.starts_with("SDFFontAtlas_") || label.starts_with("FontGlyph_")) {
+    if (label.starts_with("SDFFontAtlas_")) {
+        // Distance-field glyphs are rasterized once and drawn at many sizes.
+        // Linear sampling interpolates the signed-distance field; screen-space
+        // fwidth() in the shader gives crisp, scale-independent edges.
         return TextureLibrary::get().getClampLinearSampler();
+    }
+    if (label.starts_with("FontAtlas_") || label.starts_with("FontGlyph_")) {
+        // Coverage/bitmap glyphs are rasterized at the exact display size.
+        // Nearest filtering snaps texels to integer screen pixels so strokes
+        // stay crisp; the transparent border baked around each glyph prevents
+        // atlas neighbor bleed. Linear here would blur 1px strokes into gray.
+        return TextureLibrary::get().getClampNearestSampler();
     }
 
     return TextureLibrary::get().getDefaultSampler();
@@ -739,7 +749,7 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
 void FQuadRender::resetTextureBatch()
 {
     _textureBindings.clear();
-    _textureLabel2Idx.clear();
+    _texturePtr2Idx.clear();
     _textureBindings.push_back(TextureBinding{
         .texture = TextureLibrary::get().getWhiteTexture(),
         .sampler = TextureLibrary::get().getDefaultSampler(),
@@ -763,9 +773,8 @@ void FQuadRender::updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer,
                                  const glm::mat4&          view)
 {
     FrameUBO ubo{
-        .viewProj    = viewProj,
-        .view        = view,
-        .sdfSlotMask = _textureSdfMask,
+        .viewProj = viewProj,
+        .view     = view,
     };
     uboBuffer->writeData(&ubo, sizeof(ubo), 0);
 
@@ -834,15 +843,13 @@ uint32_t FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture)
 {
     uint32_t textureIdx = 0;
     if (texture) {
-        auto it = _textureLabel2Idx.find(texture->getLabel());
-        if (it != _textureLabel2Idx.end()) {
+        const bool bSdfAtlas = texture->getLabel().starts_with("SDFFontAtlas_");
+        auto it = _texturePtr2Idx.find(texture.get());
+        if (it != _texturePtr2Idx.end()) {
             textureIdx = it->second;
-            // The dynamic font atlas REPACKS under the same label (grow
-            // creates a new texture): the descriptor must follow the new
-            // texture this frame — otherwise glyphs sample a stale atlas
-            // (random CJK garbage after every repack). Bump the resource
-            // version; flushScreen re-uploads the descriptor after the batch
-            // has been drawn.
+            // Atlas repacks replace the texture object even when the label is
+            // unchanged; a pointer-keyed cache keeps each live atlas on its
+            // own slot and only refreshes the binding when the object changes.
             if (_textureBindings[textureIdx].texture != texture) {
                 _textureBindings[textureIdx].texture = texture;
                 ++_resourceVersion;
@@ -856,16 +863,17 @@ uint32_t FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture)
                 .texture = texture,
                 .sampler = resolveSamplerForTexture(texture.get()),
             });
-            auto idx                               = static_cast<uint32_t>(_textureBindings.size() - 1);
-            _textureLabel2Idx[texture->getLabel()] = idx;
-            textureIdx                             = idx;
-            _lastPushTextureSlot                   = static_cast<int>(idx);
-            // SDF glyph atlases are sampled as distance fields (see the
-            // shader's sdfSlotMask branch): mark the slot for the frame UBO.
-            if (texture->getLabel().starts_with("SDFFontAtlas_")) {
-                _textureSdfMask |= (1u << idx);
-            }
+            auto idx                        = static_cast<uint32_t>(_textureBindings.size() - 1);
+            _texturePtr2Idx[texture.get()]   = idx;
+            textureIdx                       = idx;
+            _lastPushTextureSlot             = static_cast<int>(idx);
             ++_resourceVersion;
+        }
+        // SDF glyph atlases are sampled as distance fields (see the shader's
+        // textureIdx flag decode): flag the returned index per draw so the
+        // flavor survives mid-frame slot recycling.
+        if (bSdfAtlas) {
+            textureIdx |= kSdfTextureFlag;
         }
     }
     return textureIdx;
@@ -1019,6 +1027,9 @@ void FQuadRender::drawText(const std::string& text,
             cursorY += font->lineHeight * scale.y;
             continue;
         }
+        if (utf8::isIgnorableFormatCodePoint(codePoint)) {
+            continue;
+        }
 
         const Character& character = font->getCharacter(codePoint);
         if (codePoint == ' ') {
@@ -1027,6 +1038,16 @@ void FQuadRender::drawText(const std::string& text,
         }
         if (codePoint == '\t') {
             cursorX += font->getCharacter(' ').advance.x * 4.0f * scale.x;
+            continue;
+        }
+
+        // Skip glyphs that haven't been captured yet (atlasSlot == ~0u): the
+        // first frame after a new codepoint is requested renders the previous
+        // frame's fallback instead of a degenerate quad that would sample a
+        // single texel and look like a stray block. Deferred capture lives in
+        // FontManager::flushPendingGlyphs (Core Rule 6).
+        if (character.atlasSlot == ~0u || character.size.x <= 0 || character.size.y <= 0) {
+            cursorX += character.advance.x * scale.x;
             continue;
         }
 
@@ -1039,7 +1060,13 @@ void FQuadRender::drawText(const std::string& text,
         xpos = std::round(xpos);
         ypos = std::round(ypos);
         glm::vec3 pos  = glm::vec3(xpos, ypos, position.z);
-        const glm::vec2 scaledGlyphSize = glm::vec2(character.size) * scale;
+
+        // Snap the glyph quad to an integer device-pixel footprint (ImGui's
+        // pixel-perfect RenderText). The atlas texel count equals
+        // round(size * dpiScale), so an integer quad gives Nearest sampling an
+        // exact texel->pixel map — no fractional minification, hence no per-glyph
+        // brightness/edge-blur variance. SDF is unaffected (scale-free, Linear).
+        const glm::vec2 scaledGlyphSize = glm::round(glm::vec2(character.size) * scale);
 
         // Glyphs live in the dynamic atlas of their face (primary or
         // fallback, font-framework plan Phase 3). Color glyphs (emoji) draw

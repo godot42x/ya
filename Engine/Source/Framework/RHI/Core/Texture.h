@@ -9,6 +9,7 @@
 #include "TextureCreateInfo.h"
 
 #include <array>
+#include <span>
 #include <vector>
 
 namespace ya
@@ -206,6 +207,48 @@ struct YA_RHI_API Texture
     Extent2D           getExtent() const { return Extent2D{.width = _width, .height = _height}; }
 
     bool isValid() const { return resource && resource->isValid() && _width > 0 && _height > 0; }
+
+    /**
+     * @brief Upload a sub-rectangle of pixels into the existing image, in place.
+     *
+     * Does NOT recreate the GPU image (unlike fromData). Pixels must be tightly
+     * packed rows of (w * pixelSize(format)) bytes. Used by append-mostly
+     * atlases (font glyphs) to avoid re-uploading the whole texture on every
+     * added glyph. Returns false if the image lacks TransferDst usage or the
+     * copy cannot be recorded. Mipmaps are NOT regenerated.
+     *
+     * @param baseArrayLayer  Target array layer (0 for single-layer 2D images).
+     * @param layerCount      Number of array layers written by this update (must be 1
+     *                        for non-array textures). Passed through to the RHI copy;
+     *                        never hardcoded, so callers updating array textures hit
+     *                        the correct layer instead of silently writing layer 0.
+     */
+    bool updateRegion(IRender&             render,
+                      uint32_t             x,
+                      uint32_t             y,
+                      uint32_t             w,
+                      uint32_t             h,
+                      const void*          pixels,
+                      uint32_t             baseArrayLayer = 0,
+                      uint32_t             layerCount     = 1);
+
+    /// Batched variant of @ref updateRegion. Each entry's rect is copied from
+    /// `pixels` (contiguous RGBA8) at `entry.offset` (byte offset of that
+    /// sub-rectangle inside `pixels`). All entries share one staging buffer,
+    /// one layout transition and one submit — call this when appending many
+    /// glyphs per frame instead of looping updateRegion(), which would allocate
+    /// N staging buffers and issue N submits.
+    struct RegionUpdate
+    {
+        uint32_t x               = 0;
+        uint32_t y               = 0;
+        uint32_t w               = 0;
+        uint32_t h               = 0;
+        size_t   offset          = 0; // byte offset of this rect's pixels within `pixels`
+        uint32_t baseArrayLayer  = 0;
+        uint32_t layerCount      = 1;
+    };
+    bool updateRegions(IRender& render, const void* pixels, std::span<const RegionUpdate> regions);
 
 };
 

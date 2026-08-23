@@ -54,6 +54,7 @@ xmake project -k compile_commands
 - RenderRuntime、后端边界、shader 生成链：`./.agent/skills/render-arch/SKILL.md`
 - C++ 风格、所有权、类布局：`./.agent/skills/cpp-style/SKILL.md`
 - 文件拆分、目录重组：`./.agent/skills/code-reorganize/SKILL.md`
+- 字体栈（FontManager/Atlas/Bitmap+SDF/flavor split/CJK fallback）：`./.agent/skills/font-rendering/SKILL.md`
 - 崩溃排查、review、自检：`./.agent/skills/debug-review/SKILL.md`
 
 ## Core Rules

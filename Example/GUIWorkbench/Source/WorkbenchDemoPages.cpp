@@ -1462,4 +1462,54 @@ void buildUnicodeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     (void)log;
 }
 
+void buildChineseTest(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                      const std::function<void(const std::string&)>& log)
+{
+    auto form = std::make_shared<ya::UIContainer>("ChineseTestForm");
+    form->setDirection(ya::EWidgetBoxLayout::Vertical);
+    form->setSpacing(8.0f);
+    form->setPadding({12.0f, 12.0f});
+    form->_bAutoSize = true;
+    tree.attach(parent, form);
+
+    tree.attach(*form, makeLabel("中文测试 — 单一 CJK fallback 字重一致性验收"));
+    tree.attach(*form, makeBodyText(
+        "本页只渲染中文，用于核对相邻字亮度/粗细是否一致、边缘是否发虚。"
+        "若字体栈把中文分散到多个 fallback 字体，相邻字会忽明忽暗、边缘发虚。"));
+
+    // Multiple fixed sizes side-by-side: the eye compares weight/edge across
+    // px without any live rebuild. 13px is the reported problem size.
+    struct Row { float px; const char* tag; };
+    static constexpr Row kRows[] = {
+        {9.0f,  "小字"},
+        {11.0f, "小字"},
+        {13.0f, "正文"},
+        {16.0f, "中字"},
+        {20.0f, "大字"},
+        {24.0f, "大字"},
+        {32.0f, "特大"},
+        {40.0f, "特大"},
+    };
+    for (const auto& r : kRows) {
+        tree.attach(*form, makeLabel(
+            std::format("{} {:.0f}px：字体渲染验收测试中文连续文本", r.tag, r.px), r.px));
+    }
+
+    tree.attach(*form, makeLabel("纯中文段落（连续文本）", 13.0f));
+    tree.attach(*form, makeBodyText(
+        "渲染引擎字体子系统负责把缺失字形从中文备用字体解析出来，保证同一段中文来自"
+        "同一个字体面孔，从而相邻字符的笔画粗细与亮度保持一致，避免出现一个字亮一个字"
+        "暗、边缘发虚的问题。这是中文渲染质量的验收段落，请观察每个字的黑白对比是否均匀。"));
+
+    tree.attach(*form, makeLabel("标点与字混合（逗号句号叹号括号问号）", 13.0f));
+    tree.attach(*form, makeLabel("中文，中文。中文！（中文）中文？中文；中文：中文、中文——", 13.0f));
+
+    tree.attach(*form, makeLabel("逐字黑白对比验收（一字一格，便于发现忽明忽暗）", 13.0f));
+    tree.attach(*form, makeLabel(
+        "日 本 语 言 学 中 文 字 体 测 试 标 题 验 收 简 体 繁 体 汉 字 笔 画 粗 细 亮 度 边 缘", 13.0f));
+
+    state.statusText = "中文测试页面已构建（单一 CJK fallback：PingFang / msyh 优先）";
+    (void)state;
+}
+
 } // namespace guiworkbench

@@ -101,6 +101,21 @@ void TextureLibrary::createSamplers(IRender* render)
             .maxAnisotropy = 1.0f,
         });
 
+    _clampNearestSampler = resourceFactory->createSampler(
+        SamplerDesc{
+            .label            = "nearest_clamp",
+            .minFilter        = EFilter::Nearest,
+            .magFilter        = EFilter::Nearest,
+            .mipmapMode       = ESamplerMipmapMode::Nearest,
+            .addressModeU     = ESamplerAddressMode::ClampToEdge,
+            .addressModeV     = ESamplerAddressMode::ClampToEdge,
+            .addressModeW     = ESamplerAddressMode::ClampToEdge,
+            .mipLodBias       = 0.0f,
+            .anisotropyEnable = false,
+            .maxAnisotropy    = 1.0f,
+            .maxLod           = 1000.0f,
+        });
+
     _defaultSampler = _linearSampler;
 }
 
@@ -186,6 +201,12 @@ ya::Ptr<Sampler> TextureLibrary::getNearestSampler()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
     return ya::Ptr<Sampler>(_nearestSampler);
+}
+
+ya::Ptr<Sampler> TextureLibrary::getClampNearestSampler()
+{
+    YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
+    return ya::Ptr<Sampler>(_clampNearestSampler);
 }
 
 } // namespace ya

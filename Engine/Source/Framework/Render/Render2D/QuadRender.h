@@ -80,8 +80,6 @@ struct YA_RENDER_2D_API FQuadRender
     {
         glm::mat4  viewProj = glm::mat4(1.0f);
         glm::mat4  view     = glm::mat4(1.0f);
-        uint32_t   sdfSlotMask = 0;  // bit i = texture slot i holds an SDF glyph atlas
-        float      padding[3] = {0.0f, 0.0f, 0.0f};  // Std140: uint is 16-byte aligned
     };
 
     IRender* _render = nullptr;
@@ -179,9 +177,12 @@ struct YA_RENDER_2D_API FQuadRender
     bool                _frameUboUploaded = false;
     bool                _worldFrameUboUploaded = false;
     std::vector<TextureBinding>                _textureBindings;
-    std::unordered_map<std::string, uint32_t>  _textureLabel2Idx;
-    /// Bit i = texture slot i holds an SDF glyph atlas (shader sdfSlotMask).
-    uint32_t                                   _textureSdfMask = 0;
+    std::unordered_map<const Texture*, uint32_t> _texturePtr2Idx;
+    /// High bit of the per-vertex textureIdx marks an SDF glyph atlas; the
+    /// shader decodes it to pick the distance-field branch. Per-draw (rather
+    /// than a per-slot UBO mask) because slots are recycled by mid-frame
+    /// overflow flushes while the frame UBO is written only once per frame.
+    static constexpr uint32_t                  kSdfTextureFlag = 0x80000000u;
     static constexpr size_t                    TEXTURE_SET_SIZE     = 16;
     static constexpr uint32_t                  RESOURCE_DS_POOL_SIZE = 64;
     int                                        _lastPushTextureSlot = -1;

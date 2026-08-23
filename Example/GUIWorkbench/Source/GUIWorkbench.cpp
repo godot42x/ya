@@ -114,6 +114,13 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     {
         buildUnicodeDemo(t, p, demoState, status);
     });
+    // Dedicated Chinese-only scene to eyeball per-glyph brightness / edge blur
+    // (CJK fallback now resolves from a single face, so a run of Chinese should
+    // keep uniform weight — this page is the acceptance surface for that).
+    surface.addPage("中文测试", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildChineseTest(t, p, demoState, status);
+    });
 
     applyStartPage();
 

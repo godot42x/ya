@@ -42,10 +42,18 @@ public:
     DynamicFontAtlas(const DynamicFontAtlas&) = delete;
     DynamicFontAtlas& operator=(const DynamicFontAtlas&) = delete;
 
-    /// Append a glyph bitmap (atlas format, tightly packed rows). Triggers a
-    /// grow+repack when the shelf is full; fires onRepack afterwards so
-    /// callers re-read every glyph's UV. Returns the slot index.
+    /// Append a glyph bitmap (atlas format, tightly packed rows). When
+    /// allowGrow() is true (default), the atlas doubles + repacks on overflow
+    /// (single-atlas mode). When false (paged mode, used by FontAtlasBank),
+    /// addGlyph returns ~0u once the fixed page is full so the bank can open a
+    /// new page. Fires onRepack after any repack so callers re-read UVs.
     uint32_t addGlyph(uint32_t width, uint32_t height, const uint8_t* pixels);
+
+    /// When false, addGlyph never grows — it returns ~0u on overflow so a
+    /// paged owner (FontAtlasBank) can append a fresh page (Core Rule: single
+    /// atlas has a hard size ceiling; paging scales without bound).
+    void setAllowGrow(bool allow) { _allowGrow = allow; }
+    [[nodiscard]] bool allowGrow() const { return _allowGrow; }
 
     /// UV rect (offsetU, offsetV, scaleU, scaleV) for a slot.
     [[nodiscard]] glm::vec4 getUv(uint32_t slotIndex) const;
@@ -62,7 +70,14 @@ public:
 
     /// (Re)create the GPU texture from the retained CPU pixels. Must run at a
     /// safe frame point — never during command recording (Core Rule 6).
+    /// The first call creates the texture; later calls push only glyphs added
+    /// since the previous upload via in-place sub-region copies.
     void upload();
+
+    /// Hand the active texture to the DeferredDeletionQueue and clear it. Call
+    /// BEFORE destroying the atlas (e.g. FontAtlasBank evicting a page) so the
+    /// VkImage outlives in-flight submissions that referenced it (Core Rule 7).
+    void retire();
 
 private:
     struct FShelf
@@ -74,6 +89,11 @@ private:
     bool tryPack(uint32_t width, uint32_t height, uint32_t& outX, uint32_t& outY);
     void grow(); // double size, re-pack all slots into the CPU buffer
 
+    /// Swap in `next` as the active texture, retiring the previous one via
+    /// DeferredDeletionQueue so its VkImage outlives in-flight submissions
+    /// (Core Rule 7). Used on first upload, full rebuild, and repack.
+    void replaceTexture(std::shared_ptr<Texture> next);
+
     IRender&                  _render;
     EFormat::T                _format;
     std::string               _label;
@@ -84,6 +104,9 @@ private:
     uint32_t                  _rowHeight = 0;           // current shelf height
     std::shared_ptr<Texture>  _texture;
     std::function<void()>     _onRepack;
+    bool                      _allowGrow = true;        // false => paged mode (FontAtlasBank)
+    bool                      _uploaded = false;        // texture created at least once
+    std::vector<FSlot>        _dirtyRects;              // glyphs added since last upload()
 };
 
 } // namespace ya

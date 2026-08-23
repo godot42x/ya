@@ -86,6 +86,14 @@ class YA_RHI_BACKEND_API TextureLibrary : public IResourceCache, public IBuiltin
      */
     ya::Ptr<Sampler> getNearestSampler();
 
+    /**
+     * @brief Clamp-to-edge nearest sampler for pixel-aligned bitmap/coverage font
+     * atlases. Bitmap glyphs are rasterized at display size and should snap to
+     * integer pixels; nearest filtering keeps strokes crisp, while the border
+     * baked around each glyph prevents atlas neighbor bleed.
+     */
+    ya::Ptr<Sampler> getClampNearestSampler();
+
   public:
     TextureLibrary()  = default;
     ~TextureLibrary() = default;
@@ -108,6 +116,7 @@ class YA_RHI_BACKEND_API TextureLibrary : public IResourceCache, public IBuiltin
     std::shared_ptr<Sampler> _linearSampler;
     std::shared_ptr<Sampler> _clampLinearSampler;
     std::shared_ptr<Sampler> _nearestSampler;
+    std::shared_ptr<Sampler> _clampNearestSampler;
 
     bool _initialized = false;
 };

@@ -68,4 +68,63 @@ bool TextureUploadService::upload(IRender& render, const TextureUploadRequest& r
     return true;
 }
 
+bool TextureUploadService::updateRegion(IRender& render, const TextureRegionUpdateRequest& request)
+{
+    if (!request.image || !request.image->getHandle()) {
+        YA_CORE_ERROR("TextureUploadService: updateRegion for '{}' has no valid image", request.label);
+        return false;
+    }
+    if (!request.staging) {
+        YA_CORE_ERROR("TextureUploadService: updateRegion for '{}' has no staging buffer", request.label);
+        return false;
+    }
+
+    ICommandBuffer* cmdBuf = render.beginIsolateCommands(
+        request.label.empty() ? "TextureUpdateRegion" : std::format("TextureUpdateRegion:{}", request.label));
+    if (!cmdBuf) {
+        YA_CORE_ERROR("TextureUploadService: failed to open isolate command scope for '{}'", request.label);
+        return false;
+    }
+
+    // ShaderReadOnlyOptimal -> TransferDst -> ShaderReadOnlyOptimal. No mipmaps.
+    cmdBuf->transitionImageLayout(request.image.get(), request.currentLayout, EImageLayout::TransferDst);
+    cmdBuf->copyBufferToImage(request.staging.get(), request.image.get(), EImageLayout::TransferDst, {request.region});
+    cmdBuf->transitionImageLayout(request.image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal);
+
+    render.endIsolateCommands(cmdBuf);
+    return true;
+}
+
+bool TextureUploadService::updateRegions(IRender& render, const TextureRegionUpdateBatch& batch)
+{
+    if (!batch.image || !batch.image->getHandle()) {
+        YA_CORE_ERROR("TextureUploadService: updateRegions for '{}' has no valid image", batch.label);
+        return false;
+    }
+    if (!batch.staging) {
+        YA_CORE_ERROR("TextureUploadService: updateRegions for '{}' has no staging buffer", batch.label);
+        return false;
+    }
+    if (batch.regions.empty()) {
+        return false; // nothing to do; not an error
+    }
+
+    ICommandBuffer* cmdBuf = render.beginIsolateCommands(
+        batch.label.empty() ? "TextureUpdateRegions" : std::format("TextureUpdateRegions:{}", batch.label));
+    if (!cmdBuf) {
+        YA_CORE_ERROR("TextureUploadService: failed to open isolate command scope for '{}'", batch.label);
+        return false;
+    }
+
+    // One layout transition for the whole batch, then all copies in a single
+    // submit. Callers that know they changed many cells should always batch
+    // instead of calling updateRegion() per cell.
+    cmdBuf->transitionImageLayout(batch.image.get(), batch.currentLayout, EImageLayout::TransferDst);
+    cmdBuf->copyBufferToImage(batch.staging.get(), batch.image.get(), EImageLayout::TransferDst, batch.regions);
+    cmdBuf->transitionImageLayout(batch.image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal);
+
+    render.endIsolateCommands(cmdBuf);
+    return true;
+}
+
 } // namespace ya

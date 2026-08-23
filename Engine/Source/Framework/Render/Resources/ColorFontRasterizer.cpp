@@ -39,13 +39,20 @@ GlyphBitmap ColorFontRasterizer::rasterize(FT_Face face, uint32_t codepoint, uin
 
     // FT_LOAD_COLOR bitmaps are BGRA (FT_PIXEL_MODE_BGRA); convert to RGBA.
     // Non-color fallback (grayscale) is converted to white+alpha like Bitmap.
+    //
+    // Source stride is bitmap.pitch, not bitmap.width * 4 / width: FreeType may
+    // pad rows or return a negative-pitch top-down bitmap.
     out.pixels.resize(static_cast<size_t>(bitmap.width) * bitmap.rows * 4);
+    const int32_t srcPitch   = bitmap.pitch;
+    const uint8_t* srcBase   = srcPitch >= 0 ? bitmap.buffer
+                                               : bitmap.buffer + (bitmap.rows - 1) * srcPitch;
+
     if (bitmap.pixel_mode == FT_PIXEL_MODE_BGRA) {
         out.bColor = true;
         for (uint32_t row = 0; row < bitmap.rows; ++row) {
+            const uint8_t* srcRow = srcBase + static_cast<int32_t>(row) * srcPitch;
             for (uint32_t col = 0; col < bitmap.width; ++col) {
-                const uint8_t* src = bitmap.buffer +
-                                     (static_cast<size_t>(row) * bitmap.width + col) * 4;
+                const uint8_t* src = srcRow + col * 4;
                 uint8_t* dst = out.pixels.data() +
                                (static_cast<size_t>(row) * bitmap.width + col) * 4;
                 dst[0] = src[2]; // B -> R
@@ -58,8 +65,9 @@ GlyphBitmap ColorFontRasterizer::rasterize(FT_Face face, uint32_t codepoint, uin
     else {
         out.bColor = false;
         for (uint32_t row = 0; row < bitmap.rows; ++row) {
+            const uint8_t* srcRow = srcBase + static_cast<int32_t>(row) * srcPitch;
             for (uint32_t col = 0; col < bitmap.width; ++col) {
-                const uint8_t gray = bitmap.buffer[static_cast<size_t>(row) * bitmap.width + col];
+                const uint8_t gray = srcRow[col];
                 uint8_t* dst = out.pixels.data() +
                                (static_cast<size_t>(row) * bitmap.width + col) * 4;
                 dst[0] = 255;
