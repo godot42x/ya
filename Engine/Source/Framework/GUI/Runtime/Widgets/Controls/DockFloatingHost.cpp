@@ -34,10 +34,9 @@ void UIDockFloatingHost::syncFromWorkspace()
     }
     WidgetTree* tree = getTree();
 
-    // Drop windows whose panel is no longer floating.
+    // Drop windows whose floating record no longer exists.
     for (auto it = _windows.begin(); it != _windows.end();) {
-        const DockPanelId panelId = it->first;
-        if (!_ws->isPanelFloating(panelId)) {
+        if (!_ws->findFloatingById(it->first)) {
             if (tree && it->second) {
                 tree->detach(*it->second);
             }
@@ -50,19 +49,18 @@ void UIDockFloatingHost::syncFromWorkspace()
 
     // Create / refresh windows for current floating records.
     for (const auto& record : _ws->floatingWindows()) {
-        auto it = _windows.find(record.panelId);
+        auto it = _windows.find(record.id);
         if (it != _windows.end()) {
             it->second->setWindowRect({record.pos, record.size});
+            it->second->refreshFromWorkspace();
             continue;
         }
-        const std::string title = _ws->findPanel(record.panelId)
-                                      ? _ws->findPanel(record.panelId)->name : std::string{};
         auto window = std::make_shared<UIDockFloatingWindow>(
-            std::format("FloatingWindow{}", record.panelId), record.panelId, title, _ws);
+            std::format("FloatingWindow{}", record.id), record.id, _ws);
         window->setWindowRect({record.pos, record.size});
-        window->_onActivated = [this, panelId = record.panelId]()
+        window->_onActivated = [this, floatingId = record.id]()
         {
-            auto found = _windows.find(panelId);
+            auto found = _windows.find(floatingId);
             if (found != _windows.end()) {
                 bringToFront(found->second);
             }
@@ -70,7 +68,7 @@ void UIDockFloatingHost::syncFromWorkspace()
         if (tree) {
             tree->attach(*this, window);
         }
-        _windows.emplace(record.panelId, window);
+        _windows.emplace(record.id, window);
     }
 
     if (tree) {

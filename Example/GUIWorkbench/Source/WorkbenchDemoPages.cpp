@@ -1364,7 +1364,7 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
     const ya::DockPanelId assetsId = dockWs->addPanel("Assets", makePanel("Assets", "Asset browser"));
 
     auto& model = dockWs->dockModel();
-    const ya::DockNodeId rootLeaf = model.root()->id;
+    const ya::DockNodeId rootLeaf = model.getRootNode()->id;
     model.selectPanel(sceneId);
     model.splitLeaf(rootLeaf, ya::EDockCardinalSide::East, inspectorId, 0.74f);
     if (ya::FDockNode* sceneLeaf = model.findLeafForPanel(sceneId)) {

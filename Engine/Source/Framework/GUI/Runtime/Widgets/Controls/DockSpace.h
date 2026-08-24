@@ -53,6 +53,9 @@ struct YA_GUI_API UIDockSpace : public UIElement
     /// current pointer on every drag move.
     void updateDropHover(const std::string& payload, const glm::vec2& logicalPoint) override;
     void clearTransientInputState() override;
+    /// Clear the active drop-preview (chooser) and detach the overlay. Used when
+    /// an external drag source (e.g. a floating window tab) ends its session.
+    void clearDropPreview();
 
     /// Theme style key (style-system Phase 2/3). When the owning tree has a
     /// theme that defines this key as an FDockSpaceStyle, paintSelf resolves
@@ -62,9 +65,47 @@ struct YA_GUI_API UIDockSpace : public UIElement
 
     [[nodiscard]] bool hasDropPreview() const { return _preview.has_value(); }
     [[nodiscard]] bool isDropPreviewDisabled() const { return _preview.has_value() && _preview->bDisabled; }
+    [[nodiscard]] bool isDropPreviewChooser() const { return _preview.has_value() && _preview->bChooser; }
     [[nodiscard]] DockNodeId getDropPreviewTargetLeafId() const { return _preview ? _preview->targetLeafId : kInvalidDockNodeId; }
     [[nodiscard]] const std::string& getDropPreviewDisabledReason() const;
     [[nodiscard]] bool isDropPreviewMerge() const { return _preview.has_value() && _preview->bMerge; }
+    /// Copy of the current drop-preview (nullopt if none). Used by external drag
+    /// sources (floating window tab) to persist the last valid chooser.
+    /// Drop-preview resolved at the current pointer: either a specific chooser
+    /// block (bMerge / side) or the dimmed chooser mode (bChooser) shown while
+    /// the pointer is over a leaf but not yet on a block.
+    struct FDropPreview
+    {
+        DockNodeId targetLeafId = kInvalidDockNodeId;
+        /// When set, the drop targets a floating window (merge as a new tab)
+        /// rather than a dock-tree leaf. Valid only when bMerge is true.
+        FDockFloatingWindowId targetFloatingId = kInvalidFloatingWindowId;
+        DockPanelId panelId = kInvalidDockPanelId;
+        EDockCardinalSide side = EDockCardinalSide::West;
+        Rect2D rect{};
+        std::string prompt;
+        bool bMerge = false;
+        /// When true (with bMerge), the drop merges the panel into the target
+        /// leaf's TAB GROUP (imgui-style "drop on a tab to merge"), rather than
+        /// the center merge band. The overlay highlights the leaf's tab bar.
+        bool bTabBar = false;
+        /// True while the pointer is over the target leaf but not yet over a
+        /// specific chooser block: render the chooser blocks (center + 4
+        /// cardinals) without activating any side. Once the pointer enters a
+        /// block, bChooser is cleared and the matching side/merge is active.
+        bool bChooser = false;
+        bool bDisabled = false;
+        std::string disabledReason;
+    };
+
+    [[nodiscard]] std::optional<FDropPreview> dropPreview() const { return _preview; }
+    /// Replace the current drop-preview without re-resolving (e.g. to keep the
+    /// last chooser visible while the pointer is over empty space).
+    void setDropPreview(const FDropPreview& preview);
+    /// Resolve the drop-preview for a payload at a point (used by external drop
+    /// targets such as floating windows to decide whether a drop is accepted).
+    [[nodiscard]] std::optional<FDropPreview> dropPreviewFor(const std::string& payload,
+                                                             const glm::vec2& logicalPoint) const;
 
 private:
     struct FLeafView
@@ -74,18 +115,7 @@ private:
         UITabBar* bar = nullptr;
         UIContainer* content = nullptr;
     };
-    struct FDropPreview
-    {
-        DockNodeId targetLeafId = kInvalidDockNodeId;
-        DockPanelId panelId = kInvalidDockPanelId;
-        EDockCardinalSide side = EDockCardinalSide::West;
-        Rect2D rect{};
-        std::string prompt;
-        bool bMerge = false;
-        bool bHeaderZone = false;
-        bool bDisabled = false;
-        std::string disabledReason;
-    };
+
 
     void rebuildProjection();
     void rebuildLeaf(DockNodeId leafId);

@@ -14,6 +14,7 @@ namespace ya
 
 struct UIElement;
 struct UIDockFloatingHost;
+struct UIDockSpace;
 using FDockFloatingWindowId = uint64_t;
 inline constexpr FDockFloatingWindowId kInvalidFloatingWindowId = 0;
 
@@ -32,10 +33,11 @@ struct YA_GUI_API UIDockWorkspace
 
     struct FFloatingWindow
     {
-        FDockFloatingWindowId id    = kInvalidFloatingWindowId;
-        DockPanelId           panelId = kInvalidDockPanelId;
-        glm::vec2             pos    {0.0f, 0.0f};
-        glm::vec2             size   {320.0f, 240.0f};
+        FDockFloatingWindowId      id         = kInvalidFloatingWindowId;
+        std::vector<DockPanelId>   panelIds;      ///< All tabs hosted by this floating window.
+        DockPanelId                activePanelId = kInvalidDockPanelId; ///< Currently visible tab.
+        glm::vec2                  pos  {0.0f, 0.0f};
+        glm::vec2                  size {320.0f, 240.0f};
     };
 
     /// Dock policy switches (central on/off for the whole workspace).
@@ -52,9 +54,19 @@ struct YA_GUI_API UIDockWorkspace
     void setFloatingHost(UIDockFloatingHost* host) { _floatingHost = host; }
     [[nodiscard]] UIDockFloatingHost* floatingHost() const { return _floatingHost; }
 
+    /// Bind the DockSpace that projects this workspace's dock tree. Used by
+    /// floating-window tab drags to drive the dock drop-preview (chooser),
+    /// since the DockSpace lives on a different layer than the floating host.
+    void setDockSpace(UIDockSpace* space) { _dockSpace = space; }
+    [[nodiscard]] UIDockSpace* dockSpace() const { return _dockSpace; }
+
     /// Tear a panel out of the dock tree into a floating window (if allowed).
     /// Returns the floating window id (kInvalidFloatingWindowId on failure).
     FDockFloatingWindowId tearOffPanel(DockPanelId panelId, const glm::vec2& pos, const glm::vec2& size);
+    /// Add an existing panel as a new tab into an existing floating window,
+    /// detaching it from the dock tree first (no-op if the panel is the source
+    /// window's active tab). Returns true on success.
+    bool addPanelToFloating(FDockFloatingWindowId targetId, DockPanelId panelId);
     /// Re-dock a floating panel back to the dock tree's root leaf.
     bool dockPanelHome(DockPanelId panelId);
     /// End the floating window for a panel (no-op if not floating). Does not
@@ -62,7 +74,10 @@ struct YA_GUI_API UIDockWorkspace
     void endFloatingForPanel(DockPanelId panelId);
     [[nodiscard]] bool isPanelFloating(DockPanelId panelId) const;
     [[nodiscard]] const FFloatingWindow* findFloatingByPanel(DockPanelId panelId) const;
+    [[nodiscard]] const FFloatingWindow* findFloatingById(FDockFloatingWindowId id) const;
     [[nodiscard]] const std::vector<FFloatingWindow>& floatingWindows() const { return _floating; }
+    /// Update a floating window's on-screen position (called as the window moves).
+    void setFloatingWindowPos(FDockFloatingWindowId id, const glm::vec2& pos);
 
     /// The DockSpace re-projects its tree when panels move into/out of dock.
     void setOnDockUpdated(std::function<void()> cb) { _onDockUpdated = std::move(cb); }
@@ -83,6 +98,7 @@ private:
     DockPanelId _nextPanelId = 1;
     FDockFloatingWindowId _nextFloatingWindowId = 1;
     UIDockFloatingHost* _floatingHost = nullptr;
+    UIDockSpace* _dockSpace = nullptr;
     std::function<void()> _onDockUpdated;
     std::function<void()> _onFloatingUpdated;
 };

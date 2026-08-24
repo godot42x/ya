@@ -28,13 +28,13 @@ TEST(DockNodeTest, CardinalSplitCreatesStableBinaryTree)
     registerPanel(model, 1, "scene");
     registerPanel(model, 2, "inspector");
     ASSERT_TRUE(model.addPanel(1));
-    const DockNodeId rootId = model.root()->id;
+    const DockNodeId rootId = model.getRoot()->id;
 
     ASSERT_TRUE(model.splitLeaf(rootId, EDockCardinalSide::East, 2));
-    ASSERT_EQ(model.root()->kind, EDockNodeKind::Split);
-    ASSERT_EQ(model.root()->child[0]->parent, model.root());
-    ASSERT_EQ(model.root()->child[1]->parent, model.root());
-    EXPECT_EQ(model.root()->orientation, EDockSplitOrientation::Vertical);
+    ASSERT_EQ(model.getRoot()->kind, EDockNodeKind::Split);
+    ASSERT_EQ(model.getRoot()->child[0]->parent, model.getRoot());
+    ASSERT_EQ(model.getRoot()->child[1]->parent, model.getRoot());
+    EXPECT_EQ(model.getRoot()->orientation, EDockSplitOrientation::Vertical);
     EXPECT_EQ(model.findLeafForPanel(2)->panelIds, std::vector<DockPanelId>({2}));
     EXPECT_EQ(model.findLeafForPanel(1)->panelIds, std::vector<DockPanelId>({1}));
     EXPECT_TRUE(model.validateInvariants());
@@ -47,7 +47,7 @@ TEST(DockNodeTest, MoveCollapsesEmptySourceAndPreservesTargetOrder)
     registerPanel(model, 2, "inspector");
     registerPanel(model, 3, "console");
     ASSERT_TRUE(model.addPanel(1));
-    ASSERT_TRUE(model.splitLeaf(model.root()->id, EDockCardinalSide::West, 2));
+    ASSERT_TRUE(model.splitLeaf(model.getRoot()->id, EDockCardinalSide::West, 2));
     auto* target = model.findLeafForPanel(1);
     auto* source = model.findLeafForPanel(2);
     ASSERT_NE(target, nullptr);
@@ -56,9 +56,9 @@ TEST(DockNodeTest, MoveCollapsesEmptySourceAndPreservesTargetOrder)
     ASSERT_TRUE(model.addPanel(3, target->id));
 
     ASSERT_TRUE(model.movePanel(2, target->id, 1));
-    EXPECT_EQ(model.root()->kind, EDockNodeKind::Leaf);
-    EXPECT_EQ(model.root()->panelIds, (std::vector<DockPanelId>{1, 2, 3}));
-    EXPECT_EQ(model.root()->selectedPanel, 2);
+    EXPECT_EQ(model.getRoot()->kind, EDockNodeKind::Leaf);
+    EXPECT_EQ(model.getRoot()->panelIds, (std::vector<DockPanelId>{1, 2, 3}));
+    EXPECT_EQ(model.getRoot()->selectedPanel, 2);
     EXPECT_TRUE(model.validateInvariants());
 }
 
@@ -68,12 +68,12 @@ TEST(DockNodeTest, InvalidMutationDoesNotChangeModel)
     registerPanel(model, 1, "scene");
     registerPanel(model, 2, "inspector");
     ASSERT_TRUE(model.addPanel(1));
-    const DockNodeId rootId = model.root()->id;
+    const DockNodeId rootId = model.getRoot()->id;
 
     EXPECT_FALSE(model.movePanel(2, rootId));
     EXPECT_FALSE(model.splitLeaf(rootId, EDockCardinalSide::North, 99));
-    EXPECT_EQ(model.root()->kind, EDockNodeKind::Leaf);
-    EXPECT_EQ(model.root()->panelIds, std::vector<DockPanelId>({1}));
+    EXPECT_EQ(model.getRoot()->kind, EDockNodeKind::Leaf);
+    EXPECT_EQ(model.getRoot()->panelIds, std::vector<DockPanelId>({1}));
     EXPECT_TRUE(model.validateInvariants());
 }
 
@@ -97,9 +97,9 @@ TEST(DockNodeTest, SplitClampsRatioAndValidatesGeometry)
     registerPanel(model, 1, "scene");
     registerPanel(model, 2, "inspector");
     ASSERT_TRUE(model.addPanel(1));
-    ASSERT_TRUE(model.splitLeaf(model.root()->id, EDockCardinalSide::South, 2, 4.0f));
-    EXPECT_FLOAT_EQ(model.root()->ratio, 1.0f);
-    model.root()->minExtent[0] = -1.0f;
+    ASSERT_TRUE(model.splitLeaf(model.getRoot()->id, EDockCardinalSide::South, 2, 4.0f));
+    EXPECT_FLOAT_EQ(model.getRoot()->ratio, 1.0f);
+    model.getRoot()->minExtent[0] = -1.0f;
     std::string error;
     EXPECT_FALSE(model.validateInvariants(&error));
     EXPECT_FALSE(error.empty());
@@ -110,7 +110,7 @@ TEST(DockNodeTest, SplitEmptyLeafKeepsPersistentPlaceholder)
     FDockTreeModel model;
     registerPanel(model, 1, "scene");
     ASSERT_TRUE(model.addPanel(1));
-    const DockNodeId rootId = model.root()->id;
+    const DockNodeId rootId = model.getRoot()->id;
     ASSERT_TRUE(model.splitEmptyLeaf(rootId, EDockCardinalSide::East));
     const auto leaves = model.leafIds();
     ASSERT_EQ(leaves.size(), 2u);
@@ -129,7 +129,7 @@ TEST(DockNodeTest, RemovePanelDeletesRegistryRecord)
     ASSERT_TRUE(model.removePanel(1));
     EXPECT_EQ(model.panelCount(), 0u);
     EXPECT_EQ(model.findPanel(1), nullptr);
-    EXPECT_TRUE(model.root()->panelIds.empty());
+    EXPECT_TRUE(model.getRoot()->panelIds.empty());
     EXPECT_TRUE(model.validateInvariants());
 }
 
@@ -149,7 +149,7 @@ TEST(DockNodeTest, DetachFromTreeKeepsRegistryForLaterRedock)
     EXPECT_TRUE(model.validateInvariants());
 
     // It can be re-docked back into a leaf.
-    ASSERT_TRUE(model.addPanel(2, model.root()->id));
+    ASSERT_TRUE(model.addPanel(2, model.getRoot()->id));
     EXPECT_NE(model.findLeafForPanel(2), nullptr);
     EXPECT_TRUE(model.validateInvariants());
 
@@ -174,12 +174,12 @@ TEST(DockNodeTest, SplitRatioMutationIsClampedAndAtomic)
     FDockTreeModel model;
     registerPanel(model, 1, "scene");
     ASSERT_TRUE(model.addPanel(1));
-    ASSERT_TRUE(model.splitEmptyLeaf(model.root()->id, EDockCardinalSide::East));
-    const DockNodeId splitId = model.root()->id;
+    ASSERT_TRUE(model.splitEmptyLeaf(model.getRoot()->id, EDockCardinalSide::East));
+    const DockNodeId splitId = model.getRoot()->id;
     ASSERT_TRUE(model.setSplitRatio(splitId, 1.5f));
-    EXPECT_FLOAT_EQ(model.root()->ratio, 1.0f);
+    EXPECT_FLOAT_EQ(model.getRoot()->ratio, 1.0f);
     EXPECT_TRUE(model.setSplitRatio(splitId, 0.25f));
-    EXPECT_FLOAT_EQ(model.root()->ratio, 0.25f);
+    EXPECT_FLOAT_EQ(model.getRoot()->ratio, 0.25f);
     EXPECT_FALSE(model.setSplitRatio(9999, 0.5f));
     EXPECT_TRUE(model.validateInvariants());
 }
@@ -191,12 +191,12 @@ TEST(DockNodeTest, SameLeafSplitKeepsOtherPanelsInPlace)
     registerPanel(model, 2, "inspector");
     ASSERT_TRUE(model.addPanel(1));
     ASSERT_TRUE(model.addPanel(2));
-    const DockNodeId rootId = model.root()->id;
+    const DockNodeId rootId = model.getRoot()->id;
 
     ASSERT_TRUE(model.splitLeaf(rootId, EDockCardinalSide::West, 2));
-    ASSERT_EQ(model.root()->kind, EDockNodeKind::Split);
-    EXPECT_EQ(model.root()->child[0]->panelIds, (std::vector<DockPanelId>{2}));
-    EXPECT_EQ(model.root()->child[1]->panelIds, (std::vector<DockPanelId>{1}));
+    ASSERT_EQ(model.getRoot()->kind, EDockNodeKind::Split);
+    EXPECT_EQ(model.getRoot()->child[0]->panelIds, (std::vector<DockPanelId>{2}));
+    EXPECT_EQ(model.getRoot()->child[1]->panelIds, (std::vector<DockPanelId>{1}));
     EXPECT_TRUE(model.validateInvariants());
 }
 
@@ -205,13 +205,13 @@ TEST(DockNodeTest, SinglePanelSameLeafSplitDoesNotCreateEmptyLeaf)
     FDockTreeModel model;
     registerPanel(model, 1, "scene");
     ASSERT_TRUE(model.addPanel(1));
-    const DockNodeId rootId = model.root()->id;
+    const DockNodeId rootId = model.getRoot()->id;
 
     // A one-panel leaf cannot split its only panel out onto its own edge:
     // that would leave an empty (non-persistent) half.
     EXPECT_FALSE(model.splitLeaf(rootId, EDockCardinalSide::East, 1));
-    ASSERT_EQ(model.root()->kind, EDockNodeKind::Leaf);
-    EXPECT_EQ(model.root()->panelIds, std::vector<DockPanelId>({1}));
+    ASSERT_EQ(model.getRoot()->kind, EDockNodeKind::Leaf);
+    EXPECT_EQ(model.getRoot()->panelIds, std::vector<DockPanelId>({1}));
     EXPECT_EQ(model.leafIds().size(), 1u);
     EXPECT_TRUE(model.validateInvariants());
 }

@@ -2,6 +2,7 @@
 
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/Controls/DockNode.h"
+#include "GUI/Widgets/Controls/DockWorkspace.h"
 
 #include <memory>
 #include <unordered_map>
@@ -9,7 +10,6 @@
 namespace ya
 {
 
-struct UIDockWorkspace;
 struct UIDockFloatingWindow;
 
 /// Non-modal floating-window host (Phase 5). Lives on the Popup layer, renders
@@ -34,7 +34,7 @@ struct YA_GUI_API UIDockFloatingHost : public UIElement
 
   private:
     std::shared_ptr<UIDockWorkspace> _ws;
-    std::unordered_map<DockPanelId, std::shared_ptr<UIDockFloatingWindow>> _windows;
+    std::unordered_map<FDockFloatingWindowId, std::shared_ptr<UIDockFloatingWindow>> _windows;
     Rect2D _hostRect;
 };
 

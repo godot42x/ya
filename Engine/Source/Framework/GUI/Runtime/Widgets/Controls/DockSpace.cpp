@@ -17,6 +17,8 @@ namespace ya
 {
 namespace
 {
+using glm::vec2;
+
 constexpr float kSplitMinExtent = 120.0f;
 constexpr float kChooserBlock = 28.0f;
 constexpr float kChooserGap = 8.0f;
@@ -39,7 +41,7 @@ bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 DockPanelId parsePanelId(const std::string& payload)
 {
     const std::string prefix = UIDockSpace::kDockPanelPayload;
-    if (payload.rfind(prefix, 0) != 0) {
+    if (!payload.starts_with(prefix)) {
         return kInvalidDockPanelId;
     }
     return static_cast<DockPanelId>(std::strtoull(payload.c_str() + prefix.size(), nullptr, 10));
@@ -65,14 +67,29 @@ std::pair<bool, std::string> rejectForExtent(const Rect2D& rect, const glm::vec2
 FChooserRects makeChooserRects(const Rect2D& rect)
 {
     const glm::vec2 center = rect.pos + rect.extent * 0.5f;
-    const float block = kChooserBlock;
-    const float gap = kChooserGap;
+    const float     block  = kChooserBlock;
+    const float     gap    = kChooserGap;
     return {
-        Rect2D{glm::vec2{center.x - block * 0.5f, center.y - block * 0.5f}, glm::vec2{block, block}},
-        Rect2D{glm::vec2{center.x - block * 1.5f - gap, center.y - block * 0.5f}, glm::vec2{block, block}},
-        Rect2D{glm::vec2{center.x + block * 0.5f + gap, center.y - block * 0.5f}, glm::vec2{block, block}},
-        Rect2D{glm::vec2{center.x - block * 0.5f, center.y - block * 1.5f - gap}, glm::vec2{block, block}},
-        Rect2D{glm::vec2{center.x - block * 0.5f, center.y + block * 0.5f + gap}, glm::vec2{block, block}},
+        .center = Rect2D{
+            {vec2{center.x - block * 0.5f, center.y - block * 0.5f}},
+            vec2{block, block},
+        },
+        .left = Rect2D{
+            {glm::vec2{center.x - block * 1.5f - gap, center.y - block * 0.5f}},
+            glm::vec2{block, block},
+        },
+        .right = Rect2D{
+            {glm::vec2{center.x + block * 0.5f + gap, center.y - block * 0.5f}},
+            glm::vec2{block, block},
+        },
+        .top = Rect2D{
+            {glm::vec2{center.x - block * 0.5f, center.y - block * 1.5f - gap}},
+            glm::vec2{block, block},
+        },
+        .bottom = Rect2D{
+            {glm::vec2{center.x - block * 0.5f, center.y + block * 0.5f + gap}},
+            glm::vec2{block, block},
+        },
     };
 }
 
@@ -97,7 +114,7 @@ struct FDropChooserOverlay final : UIElement
 
     UIDockSpace* _owner = nullptr;
 };
-}
+} // namespace
 
 UIDockSpace::UIDockSpace(std::string name)
     : UIElement(std::move(name))
@@ -126,16 +143,38 @@ void UIDockSpace::clearPreview()
     markPaintDirty();
 }
 
+void UIDockSpace::clearDropPreview()
+{
+    if (!_preview) {
+        return;
+    }
+    _preview.reset();
+    syncPreviewOverlay();
+    markPaintDirty();
+}
+
+void UIDockSpace::setDropPreview(const FDropPreview& preview)
+{
+    _preview = preview;
+    syncPreviewOverlay();
+    markPaintDirty();
+}
+
 void UIDockSpace::syncPreviewOverlay()
 {
     WidgetTree* tree = getTree();
     if (_preview && tree) {
         if (!_previewOverlay) {
             _previewOverlay = std::make_shared<FDropChooserOverlay>(this);
+            _previewOverlay->_anchorMin = {0.0f, 0.0f};
+            _previewOverlay->_anchorMax = {1.0f, 1.0f};
+            _previewOverlay->setPosition({0.0f, 0.0f});
+            _previewOverlay->setSize({0.0f, 0.0f});
         }
         if (!_previewOverlay->isAttached()) {
             tree->attachToLayer(WidgetTree::ELayer::DragIme, _previewOverlay);
         }
+        _previewOverlay->markPaintDirty();
         return;
     }
     if (_previewOverlay && tree && _previewOverlay->isAttached()) {
@@ -156,14 +195,21 @@ void UIDockSpace::paintDropPreviewOverlay(UIFrameBuilder& builder) const
         }
     }
 
+    // Floating-window target: highlight the whole window as a "merge as tab"
+    // drop zone (targetLeafId is kInvalidDockNodeId for these previews).
+    if (_preview->targetFloatingId != kInvalidFloatingWindowId) {
+        builder.addBrush(_preview->rect, style.dropPreviewMergeColor);
+        builder.addRectOutline(_preview->rect, style.dropPreviewOutlineColor, 2.0f);
+        return;
+    }
+
     const FLeafView* targetView = leafViewForLeaf(_preview->targetLeafId);
     if (!targetView || !targetView->root || !targetView->bar) {
         return;
     }
 
-    const Rect2D barRect = targetView->bar->_layoutRect;
     const Rect2D leafRect = targetView->root->_layoutRect;
-    const FChooserRects chooser = _preview->bHeaderZone ? makeChooserRects(barRect) : makeChooserRects(leafRect);
+    const FChooserRects chooser = makeChooserRects(leafRect);
 
     const auto drawChoice = [&](const Rect2D& rect, bool bActive)
     {
@@ -172,23 +218,51 @@ void UIDockSpace::paintDropPreviewOverlay(UIFrameBuilder& builder) const
         builder.addRectOutline(rect, style.dropPreviewOutlineColor, bActive ? 2.0f : 1.0f);
     };
 
-    builder.addRectOutline(_preview->bHeaderZone ? barRect : leafRect, style.dropPreviewOutlineColor, 1.0f);
-    if (_preview->bHeaderZone) {
-        drawChoice(chooser.center, true);
+    builder.addRectOutline(leafRect, style.dropPreviewOutlineColor, 1.0f);
+
+    // Chooser mode: pointer is over the leaf but not over a specific block yet.
+    // Render all blocks dimmed so the user can see the drop targets.
+    if (_preview->bChooser) {
+        drawChoice(chooser.center, false);
+        drawChoice(chooser.left, false);
+        drawChoice(chooser.right, false);
+        drawChoice(chooser.top, false);
+        drawChoice(chooser.bottom, false);
         return;
     }
 
-    drawChoice(chooser.center, _preview->bMerge && !_preview->bDisabled);
-    drawChoice(chooser.left, _preview->side == EDockCardinalSide::West && !_preview->bMerge && !_preview->bDisabled);
-    drawChoice(chooser.right, _preview->side == EDockCardinalSide::East && !_preview->bMerge && !_preview->bDisabled);
-    drawChoice(chooser.top, _preview->side == EDockCardinalSide::North && !_preview->bMerge && !_preview->bDisabled);
-    drawChoice(chooser.bottom, _preview->side == EDockCardinalSide::South && !_preview->bMerge && !_preview->bDisabled);
+    // Active drop mode: only the selected block is highlighted, so the
+    // preview of where the panel will land is unambiguous.
+    if (_preview->bMerge) {
+        // ImGui-style tab merge: highlight the tab bar strip, not the body
+        // center block, so the user sees the tab becomes the drop target.
+        if (_preview->bTabBar) {
+            builder.addBrush(_preview->rect, style.dropPreviewMergeColor);
+            builder.addRectOutline(_preview->rect, style.dropPreviewOutlineColor, 2.0f);
+            return;
+        }
+        drawChoice(chooser.center, !_preview->bDisabled);
+        return;
+    }
+    if (_preview->side == EDockCardinalSide::West) {
+        drawChoice(chooser.left, !_preview->bDisabled);
+    }
+    else if (_preview->side == EDockCardinalSide::East) {
+        drawChoice(chooser.right, !_preview->bDisabled);
+    }
+    else if (_preview->side == EDockCardinalSide::North) {
+        drawChoice(chooser.top, !_preview->bDisabled);
+    }
+    else if (_preview->side == EDockCardinalSide::South) {
+        drawChoice(chooser.bottom, !_preview->bDisabled);
+    }
 }
 
 void UIDockSpace::setWorkspace(std::shared_ptr<UIDockWorkspace> ws)
 {
     _ws = std::move(ws);
     if (_ws) {
+        _ws->setDockSpace(this);
         _ws->setOnDockUpdated([this]()
         {
             if (getTree()) {
@@ -214,7 +288,7 @@ void UIDockSpace::rebuildProjection()
         }
     }
     _leafViews.clear();
-    addDetachedChild(materializeNode(*_ws->dockModel().root()));
+    addDetachedChild(materializeNode(*_ws->dockModel().getRootNode()));
     markLayoutDirty();
     markPaintDirty();
 }
@@ -350,11 +424,12 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
                 clearPreview();
                 if (result == EDragFinishResult::NoTarget && _ws && _ws->bAllowTearOff && _ws->bAllowFloating) {
                     // Tear-off: pull the panel out of the dock tree into a
-                    // floating window at a clear default position (not the
-                    // arbitrary release point, which may sit in chrome). Detach
-                    // the panel from this leaf first (reproject), then let the
-                    // host mount the floating window.
-                    _ws->tearOffPanel(panelId, {180.0f, 140.0f}, {320.0f, 240.0f});
+                    // floating window positioned at the actual drop point so the
+                    // window appears where the user released the tab. Detach the
+                    // panel from this leaf first (reproject), then let the host
+                    // mount the floating window.
+                    const glm::vec2 size{320.0f, 240.0f};
+                    _ws->tearOffPanel(panelId, logicalPoint, size);
                     rebuildProjection();
                     _ws->fireFloatingUpdated();
                 }
@@ -441,7 +516,7 @@ void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> w
         return;
     }
     if (getTree() && !getChildren().empty()) {
-        rebuildLeaf(_ws->dockModel().root()->id);
+        rebuildLeaf(_ws->dockModel().getRootNode()->id);
     }
 }
 
@@ -455,29 +530,87 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     if (!sourceLeaf && !bFloating) {
         return std::nullopt;
     }
-    const FLeafView* targetView = nullptr;
+    // Floating windows are drop targets too: hovering over another floating
+    // window merges the dragged panel in as a new tab. It takes precedence over
+    // the dock leaves beneath, since floating windows render above the content.
+    // The panel's own floating window is excluded (you cannot merge into itself).
+    const UIDockWorkspace::FFloatingWindow* sourceFloating = bFloating ? _ws->findFloatingByPanel(panelId) : nullptr;
+    for (const UIDockWorkspace::FFloatingWindow& fw : _ws->floatingWindows()) {
+        if (sourceFloating && sourceFloating->id == fw.id) {
+            continue;
+        }
+        Rect2D fwRect;
+        fwRect.pos = fw.pos;
+        fwRect.extent = fw.size;
+        if (pointInRect(logicalPoint, fwRect)) {
+            return FDropPreview{
+                .targetLeafId     = kInvalidDockNodeId,
+                .targetFloatingId = fw.id,
+                .panelId          = panelId,
+                .side             = EDockCardinalSide::West,
+                .rect             = fwRect,
+                .prompt           = "Add Tab",
+                .bMerge           = true,
+                .bChooser         = false,
+                .bDisabled        = false,
+                .disabledReason   = {},
+            };
+        }
+    }
+    // Focus leaf: the leaf under the pointer, or — when the pointer is over
+    // empty space / the tab bar — the dragged panel's own leaf. Keeping the
+    // source leaf as focus means the chooser stays visible for the entire drag
+    // instead of vanishing the moment the cursor leaves a leaf's content rect.
+    const FLeafView* focus = nullptr;
     for (const auto& [leafId, view] : _leafViews) {
         (void)leafId;
         if (view.root && pointInRect(logicalPoint, view.root->_layoutRect)) {
-            targetView = &view;
+            focus = &view;
             break;
         }
     }
-    if (!targetView || !targetView->root) {
+    if (!focus && sourceLeaf) {
+        focus = leafViewForLeaf(sourceLeaf->id);
+    }
+    if (!focus || !focus->root) {
         return std::nullopt;
     }
-    const bool bOverTabBar = targetView->bar && pointInRect(logicalPoint, targetView->bar->_layoutRect);
-    const Rect2D barRect = targetView->bar->_layoutRect;
-    const Rect2D leafRect = targetView->root->_layoutRect;
+    const Rect2D leafRect = focus->root->_layoutRect;
 
-    if (bOverTabBar) {
-        const Rect2D centerRect = makeChooserRects(barRect).center;
-        return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::West, centerRect,
-                            "Dock Center", true, true, false, {}};
+    // ImGui-style "drop on a tab": hovering a leaf's tab bar merges the dragged
+    // panel into that tab group. This is a real dock (bMerge, not bChooser), so
+    // the tab bar highlights and a drop there adds the panel as a new tab.
+    if (focus->bar && pointInRect(logicalPoint, focus->bar->_layoutRect)) {
+        return FDropPreview{
+            .targetLeafId     = focus->leafId,
+            .targetFloatingId = kInvalidFloatingWindowId,
+            .panelId          = panelId,
+            .side             = EDockCardinalSide::West,
+            .rect             = focus->bar->_layoutRect,
+            .prompt           = "Add Tab",
+            .bMerge           = true,
+            .bTabBar          = true,
+            .bChooser         = false,
+            .bDisabled        = false,
+            .disabledReason   = {},
+        };
     }
 
+    // Pointer outside this leaf's content (over empty space): render the
+    // chooser dimmed, but never dock here — a drop in these regions becomes a
+    // floating window. See canAcceptDrop() / onFinished().
     if (!pointInRect(logicalPoint, leafRect)) {
-        return std::nullopt;
+        return FDropPreview{
+            .targetLeafId   = focus->leafId,
+            .panelId        = panelId,
+            .side           = EDockCardinalSide::West,
+            .rect           = leafRect,
+            .prompt         = {},
+            .bMerge         = false,
+            .bChooser       = true,
+            .bDisabled      = false,
+            .disabledReason = {},
+        };
     }
 
     const FChooserRects chooser = makeChooserRects(leafRect);
@@ -487,30 +620,79 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     const bool inTop = pointInRect(logicalPoint, chooser.top);
     const bool inBottom = pointInRect(logicalPoint, chooser.bottom);
 
+    // Chooser mode: pointer is over the leaf content but not over a specific
+    // block yet. Render all blocks dimmed so the drop targets are visible.
     if (!inCenter && !inLeft && !inRight && !inTop && !inBottom) {
-        return std::nullopt;
-    }
-    if (sourceLeaf && sourceLeaf->id == targetView->leafId && bOverTabBar) {
-        return std::nullopt;
+        return FDropPreview{
+            .targetLeafId   = focus->leafId,
+            .panelId        = panelId,
+            .side           = EDockCardinalSide::West,
+            .rect           = leafRect,
+            .prompt         = {},
+            .bMerge         = false,
+            .bChooser       = true,
+            .bDisabled      = false,
+            .disabledReason = {},
+        };
     }
     if (inCenter) {
-        return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::West, chooser.center,
-                            "Dock Center", true, false, false, {}};
+        return FDropPreview{
+            .targetLeafId   = focus->leafId,
+            .panelId        = panelId,
+            .side           = EDockCardinalSide::West,
+            .rect           = chooser.center,
+            .prompt         = "Dock Center",
+            .bMerge         = true,
+            .bDisabled      = false,
+            .disabledReason = {},
+        };
     }
     if (inLeft) {
-        return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::West, chooser.left,
-                            "Left", false, false, false, {}};
+        return FDropPreview{
+            .targetLeafId   = focus->leafId,
+            .panelId        = panelId,
+            .side           = EDockCardinalSide::West,
+            .rect           = chooser.left,
+            .prompt         = "Left",
+            .bMerge         = false,
+            .bDisabled      = false,
+            .disabledReason = {},
+        };
     }
     if (inRight) {
-        return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::East, chooser.right,
-                            "Right", false, false, false, {}};
+        return FDropPreview{
+            .targetLeafId   = focus->leafId,
+            .panelId        = panelId,
+            .side           = EDockCardinalSide::East,
+            .rect           = chooser.right,
+            .prompt         = "Right",
+            .bMerge         = false,
+            .bDisabled      = false,
+            .disabledReason = {},
+        };
     }
     if (inTop) {
-        return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::North, chooser.top,
-                            "Top", false, false, false, {}};
+        return FDropPreview{
+            .targetLeafId   = focus->leafId,
+            .panelId        = panelId,
+            .side           = EDockCardinalSide::North,
+            .rect           = chooser.top,
+            .prompt         = "Top",
+            .bMerge         = false,
+            .bDisabled      = false,
+            .disabledReason = {},
+        };
     }
-    return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::South, chooser.bottom,
-                        "Bottom", false, false, false, {}};
+    return FDropPreview{
+        .targetLeafId   = focus->leafId,
+        .panelId        = panelId,
+        .side           = EDockCardinalSide::South,
+        .rect           = chooser.bottom,
+        .prompt         = "Bottom",
+        .bMerge         = false,
+        .bDisabled      = false,
+        .disabledReason = {},
+    };
 }
 
 bool UIDockSpace::parsePanelPayload(const std::string& payload, DockPanelId& panelId) const
@@ -519,11 +701,24 @@ bool UIDockSpace::parsePanelPayload(const std::string& payload, DockPanelId& pan
     return panelId != kInvalidDockPanelId;
 }
 
+std::optional<UIDockSpace::FDropPreview> UIDockSpace::dropPreviewFor(const std::string& payload,
+                                                                     const glm::vec2& logicalPoint) const
+{
+    DockPanelId panelId = kInvalidDockPanelId;
+    if (!parsePanelPayload(payload, panelId)) {
+        return std::nullopt;
+    }
+    return resolveDropPreview(logicalPoint, panelId);
+}
+
 bool UIDockSpace::canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint)
 {
     DockPanelId panelId = kInvalidDockPanelId;
     auto preview = parsePanelPayload(payload, panelId) ? resolveDropPreview(logicalPoint, panelId) : std::nullopt;
-    return preview.has_value() && !preview->bDisabled;
+    // Only a concrete chooser block (center / cardinal) is a real dock target.
+    // The dimmed chooser-mode preview (bChooser) and any disabled preview mean
+    // "no dock here", so the drag falls through to a floating window.
+    return preview.has_value() && !preview->bDisabled && !preview->bChooser;
 }
 
 void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoint)
@@ -538,7 +733,7 @@ void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoi
     if (!preview) {
         return;
     }
-    if (preview->bDisabled) {
+    if (preview->bDisabled || preview->bChooser) {
         return;
     }
 
@@ -549,7 +744,11 @@ void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoi
     }
 
     bool bChanged = false;
-    if (preview->bMerge) {
+    if (preview->targetFloatingId != kInvalidFloatingWindowId) {
+        // Merge the dragged panel into the target floating window as a new tab.
+        bChanged = _ws->addPanelToFloating(preview->targetFloatingId, panelId);
+    }
+    else if (preview->bMerge) {
         if (sourceLeaf && sourceLeaf->id != preview->targetLeafId) {
             bChanged = _ws->dockModel().movePanel(panelId, preview->targetLeafId, SIZE_MAX, true);
         }
@@ -563,7 +762,7 @@ void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoi
     }
 
     if (bChanged) {
-        if (bWasFloating) {
+        if (bWasFloating && preview->targetFloatingId == kInvalidFloatingWindowId) {
             _ws->endFloatingForPanel(panelId);
         }
         rebuildProjection();
@@ -585,8 +784,9 @@ void UIDockSpace::updateDropHover(const std::string& payload, const glm::vec2& l
     // the highlight follows the drag (dock regression: the preview never
     // rendered because it was only computed into a local in canAcceptDrop).
     DockPanelId panelId = kInvalidDockPanelId;
-    auto preview = parsePanelPayload(payload, panelId) ? resolveDropPreview(logicalPoint, panelId)
-                                                       : std::nullopt;
+    auto        preview = parsePanelPayload(payload, panelId)
+                            ? resolveDropPreview(logicalPoint, panelId)
+                            : std::nullopt;
     _preview = std::move(preview);
     syncPreviewOverlay();
     markPaintDirty();

@@ -2,6 +2,7 @@
 
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockNode.h"
+#include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Theme.h"
 
 #include <functional>
@@ -18,20 +19,26 @@ struct UIContainer;
 struct UIButton;
 struct UIDockWorkspace;
 
-/// A single floating dock window (Phase 5). Holds one panel's title bar and
-/// content, is positioned absolutely inside a UIDockFloatingHost, and:
-///   - dragging its tab (dock-panel payload) re-docks onto a DockSpace or
-///     moves the window when released in empty space;
-///   - the close button re-docks the panel back to the dock tree's root leaf.
+/// A floating dock window (Phase 5). Presents one workspace floating record as a
+/// titled window that may host several tabs (panels). It is positioned
+/// absolutely inside a UIDockFloatingHost, and:
+///   - dragging any of its tabs (dock-panel payload) projects the dock chooser
+///     and either re-docks onto a DockSpace / another floating window or moves
+///     the window when released in empty space;
+///   - the close button re-docks the active tab back to the dock tree's root.
 struct YA_GUI_API UIDockFloatingWindow : public UIContainer
 {
-    explicit UIDockFloatingWindow(std::string name, DockPanelId panelId, std::string title,
+    explicit UIDockFloatingWindow(std::string name, FDockFloatingWindowId floatingId,
                                   std::shared_ptr<UIDockWorkspace> ws);
 
-    [[nodiscard]] DockPanelId getPanelId() const { return _panelId; }
+    [[nodiscard]] DockPanelId getActivePanelId() const { return _panelId; }
+    [[nodiscard]] FDockFloatingWindowId getFloatingId() const { return _floatingId; }
     [[nodiscard]] const Rect2D& getWindowRect() const { return _windowRect; }
     void setWindowRect(const Rect2D& rect) { _windowRect = rect; }
     void resizeTo(const glm::vec2& extent);
+    /// Rebuild the window's tab bar + content to match the workspace's current
+    /// floating record for this window (called by the host on floating updates).
+    void refreshFromWorkspace();
     /// Fired when the window is activated (title drag begins). Used by the host
     /// to bring the window to the front of the floating z-order.
     std::function<void()> _onActivated;
@@ -41,6 +48,11 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void clearTransientInputState() override;
+
+    /// Accept dock-panel drops that would merge a tab into this window.
+    bool canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
+    /// Delegate the actual merge to the workspace's DockSpace.
+    void onDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
 
     /// Theme style key (style-system Phase 2/3). When the owning tree has a
     /// theme that defines this key as an FFloatingWindowStyle, paintSelf
@@ -65,11 +77,15 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer
     void beginDockDrag();
     void beginWindowMove();
     void updateWindowMove(const glm::vec2& logicalPoint);
+    void rebuildContent();
     [[nodiscard]] Rect2D resizeHandleRect(EResizeEdge edge) const;
 
-    DockPanelId _panelId = kInvalidDockPanelId;
+    FDockFloatingWindowId _floatingId = kInvalidFloatingWindowId;
+    DockPanelId _panelId = kInvalidDockPanelId; ///< Active (selected) tab.
     std::string _title;
     std::shared_ptr<UIDockWorkspace> _ws;
+    std::shared_ptr<UITabBar> _tabBar;
+    std::shared_ptr<UIContainer> _content;
     /// Title strip container (the windows grab zone): pressing + dragging its
     /// empty area starts the dock-panel drag (dock on a DockSpace, move on
     /// empty space) — mirrors the tab-strip drag.
@@ -77,6 +93,11 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer
     /// Transient title-drag arm state (mirrors UITabBar's 6px threshold).
     bool      _bTitlePressed = false;
     bool      _bTitleMoving  = false;
+    /// True while an active dock-panel drag session owns this window. While set,
+    /// the header's window-move path is bypassed so the drag session is the sole
+    /// mover (otherwise both would double-move the window and fight for the
+    /// pointer).
+    bool      _bDockDragging = false;
     glm::vec2 _titlePressPoint{0.0f, 0.0f};
     Rect2D _windowRect;
     std::optional<glm::vec2> _lastDragPoint;

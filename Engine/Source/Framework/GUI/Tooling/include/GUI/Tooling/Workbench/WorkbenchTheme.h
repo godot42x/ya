@@ -147,7 +147,7 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
         auto dock = ya::FDockSpaceStyle{};
         dock.canvasColor = FBrush::Solid({0.075f, 0.082f, 0.10f, 1.0f});
         dock.dropPreviewColor = FBrush::Solid({0.28f, 0.52f, 0.90f, 0.16f});
-        dock.dropPreviewMergeColor = FBrush::Solid({0.28f, 0.52f, 0.90f, 0.08f});
+        dock.dropPreviewMergeColor = FBrush::Solid({0.26f, 0.76f, 0.46f, 0.45f});
         theme->define<ya::FDockSpaceStyle>("dock", dock);
 
         auto floating = ya::FFloatingWindowStyle{};
@@ -240,7 +240,7 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
         auto dock = ya::FDockSpaceStyle{};
         dock.canvasColor = FBrush::Solid({0.75f, 0.77f, 0.81f, 1.0f});
         dock.dropPreviewColor = FBrush::Solid({0.28f, 0.52f, 0.90f, 0.18f});
-        dock.dropPreviewMergeColor = FBrush::Solid({0.28f, 0.52f, 0.90f, 0.10f});
+        dock.dropPreviewMergeColor = FBrush::Solid({0.26f, 0.76f, 0.46f, 0.50f});
         theme->define<ya::FDockSpaceStyle>("dock", dock);
 
         auto floating = ya::FFloatingWindowStyle{};
