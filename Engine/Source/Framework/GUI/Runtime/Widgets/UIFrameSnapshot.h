@@ -35,9 +35,16 @@ struct Font;
 /// Build context: how tree-local logical pixels map to render-target pixels.
 /// The host owns the mapping (viewport rect, framebuffer scale, editor preview
 /// offset/scale); widgets never see ImGui or window coordinates.
+///
+/// `uiScale` is the USER ZOOM (app/settings-level magnification, default 1.0).
+/// It is orthogonal to the device-pixel-ratio DPI mapping, which WidgetTree
+/// carries separately (setDpiScale) and folds in internally to produce the
+/// final logical->target-pixel factor (= uiScale * dpiScale). Keeping the two
+/// apart means a DPI change on monitor move never depends on, or mutates, the
+/// user's chosen zoom, and vice-versa.
 struct UIFrameBuildContext
 {
-    glm::vec2 uiScale = {1.0f, 1.0f}; // logical px -> render-target px
+    glm::vec2 uiScale = {1.0f, 1.0f}; // user zoom: logical px -> (pre-DPI) target px
     glm::vec2 offset  = {0.0f, 0.0f}; // render-target px origin of logical (0,0)
 
     /// Host-provided monotonic generation token: bump whenever the coordinate

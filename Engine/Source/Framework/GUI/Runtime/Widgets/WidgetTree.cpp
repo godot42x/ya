@@ -487,6 +487,12 @@ bool WidgetTree::contains(const UIElement& widget) const
 
 // === Frame passes ===
 
+void WidgetTree::setDpiScale(float scale)
+{
+    if (scale <= 0.0f) scale = 1.0f;
+    _dpiScale = scale;
+}
+
 void WidgetTree::invalidateLayout()
 {
     _bLayoutDirty = true;
@@ -506,14 +512,16 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 
     _perfStats = GuiPerfStats{};
 
-    // Build-context validity (GI-002): cached draw-item segments hold final
-    // target-pixel coordinates and resolved textures, so a changed mapping
-    // (uiScale/offset) or host generation must drop both cache buffers and
-    // force a full rebuild. First build has no prior context to compare.
+    // Final target-pixel scale = user zoom (ctx.uiScale) * DPI mapping
+    // (_dpiScale). They are orthogonal: uiScale is the app/user zoom, dpiScale
+    // maps logical canvas points to framebuffer pixels. The cached draw-item
+    // segments hold final target-pixel coordinates, so any change to either
+    // factor (or offset/generation) must drop both cache buffers.
+    const glm::vec2 effectiveScale = ctx.uiScale * _dpiScale;
     const bool bContextChanged =
         _bHasBuildContext &&
         (ctx.generation != _lastGeneration ||
-         ctx.uiScale != _lastUiScale ||
+         effectiveScale != _lastUiScale ||
          ctx.offset != _lastOffset);
     if (bContextChanged) {
         _itemCache[0].clear();
@@ -523,8 +531,14 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     }
     _bHasBuildContext = true;
     _lastGeneration   = ctx.generation;
-    _lastUiScale      = ctx.uiScale;
+    _lastUiScale      = effectiveScale;
     _lastOffset       = ctx.offset;
+
+    // Pass the DPI-folded scale to the builder: uiScale is the single
+    // logical->target-pixel factor it reads. User zoom (ctx.uiScale) and DPI
+    // (_dpiScale) stay decoupled up to this point.
+    UIFrameBuildContext effectiveCtx = ctx;
+    effectiveCtx.uiScale = effectiveScale;
 
     std::chrono::steady_clock::duration layoutDur{};
     if (_bLayoutDirty) {
@@ -538,7 +552,7 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 
     const auto paintStart = clock_t::now();
     _itemCache[_cacheIndex ^ 1].clear();
-    UIFrameBuilder builder(ctx);
+    UIFrameBuilder builder(effectiveCtx);
     builder.bindCache(&_itemCache[_cacheIndex], &_itemCache[_cacheIndex ^ 1]);
     _root->paint(builder);
     _cacheIndex ^= 1;
@@ -557,7 +571,7 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     // widget changed paint-relevant state without marking itself dirty —
     // caught here in development instead of shipping a stale frame.
     if ((++_frameCounter % 60) == 0) {
-        UIFrameBuilder fullBuilder(ctx); // unbound: hasCachedItems() == false
+        UIFrameBuilder fullBuilder(effectiveCtx); // unbound: hasCachedItems() == false
         _root->paint(fullBuilder);
         const UIFrameSnapshot fullSnapshot = fullBuilder.build(_logicalExtent);
         const auto& incItems  = snapshot.items;

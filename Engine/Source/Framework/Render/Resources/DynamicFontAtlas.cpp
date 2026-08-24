@@ -180,6 +180,16 @@ glm::vec4 DynamicFontAtlas::getUv(uint32_t slotIndex) const
 /// command buffer is still reading it -> VK_ERROR_DEVICE_LOST.
 void DynamicFontAtlas::replaceTexture(std::shared_ptr<Texture> next)
 {
+    // Declare the sampler category ONCE at creation (not per-frame). The label
+    // prefix encodes the flavor chosen by FontManager: SDF atlases want linear
+    // clamp (lerp the distance field); bitmap/coverage atlases want nearest
+    // clamp (snap texels, keep 1px strokes crisp). QuadRender reads this field
+    // instead of string-matching the label on every glyph draw.
+    if (_label.starts_with("SDFFontAtlas_")) {
+        next->setSamplerCategory(ESamplerCategory::ClampLinear);
+    } else if (_label.starts_with("FontAtlas_") || _label.starts_with("FontGlyph_")) {
+        next->setSamplerCategory(ESamplerCategory::ClampNearest);
+    }
     std::shared_ptr<Texture> old = std::move(_texture);
     _texture = std::move(next);
     DeferredDeletionQueue::get().retire(std::move(old));

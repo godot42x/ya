@@ -39,6 +39,8 @@
 namespace ya
 {
 
+struct IRender; // forward decl: only used as a pointer param in refreshDevicePixelRatio
+
 struct FGUIWindowHostConfig
 {
     std::string title      = "YA GUI App";
@@ -153,6 +155,11 @@ private:
     void rebuildPresentationResources(bool bWaitForGpu = true);
     /// Apply the hovered widget's requested cursor (system cursor, deduped).
     void updateCursor();
+
+    /// Acquire the system device-pixel-ratio (real HiDPI value from the
+    /// window-system, not an extent ratio) and publish it to FontManager.
+    /// Called at startup and on every resize / monitor move. Returns the ratio.
+    float refreshDevicePixelRatio(IRender* render = nullptr);
 
     struct FImpl;
     std::unique_ptr<FImpl> _impl;

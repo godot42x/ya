@@ -45,6 +45,13 @@ struct INativeWindow
 
     [[nodiscard]] void *getNativeWindowHandle() const { return nativeWindowHandle; }
 
+    /// Device pixel ratio (content scale) of the display the window lives on.
+    /// Set by the backend at create/resize time from the window-system DPI
+    /// (SDL_GetWindowDisplayScale), NOT derived from present/logical extent —
+    /// that avoids the classic "DPI assumed 1.0" pitfall on HiDPI monitors.
+    /// Defaults to 1.0 when no native window exists (headless/scenario).
+    [[nodiscard]] float getDpiScale() const { return dpiScale; }
+
     // TODO: support multiple windows
     virtual bool init()                               = 0;
     virtual void destroy()                            = 0;
@@ -90,6 +97,11 @@ class YA_RHI_API SDLNativeWindow final : public INativeWindow
 
     void getWindowSize(int &width, int &height) override;
     bool setWindowSize(int width, int height) override;
+
+    /// Re-read the window's display content scale. Called at create time and
+    /// whenever the window moves to a different monitor (Qt's per-monitor DPI
+    /// trap: a stale scale makes text blurry or tiny after dragging screens).
+    void refreshDpiScale();
 
 #if USE_VULKAN
     bool onCreateVkSurface(VkInstance instance, VkSurfaceKHR *surface) override;

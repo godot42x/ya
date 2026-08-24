@@ -544,6 +544,16 @@ struct GUIWindowHost::FImpl
     bool    bScenarioMode        = false;
     bool    bScenarioFailed      = false;
 
+    // Real device pixel ratio from the window-system DPI (set at init + on
+    // every resize/monitor move). This is the logical->framebuffer mapping
+    // only; it is published to WidgetTree::setDpiScale, NOT used as the UI
+    // zoom. Keeping it separate from uiUserScale is what avoids the classic
+    // Qt DPI trap (DPI change leaking into user zoom and vice-versa).
+    // Defaults to 1.0 (no native window: scenario/headless).
+    float devicePixelRatio = 1.0f;
+    // App/settings-level UI zoom, orthogonal to devicePixelRatio. Default 1.0.
+    float uiUserScale = 1.0f;
+
     // Mouse cursor state (system cursors created lazily in init()).
     ECursorType activeCursor       = ECursorType::Arrow;
     SDL_Cursor* sdlArrowCursor     = nullptr;
@@ -685,6 +695,12 @@ bool GUIWindowHost::init()
                                             EFontRenderMode::Color,
                                             32);
     }
+
+    // Acquire the system DPI scale ONCE at startup (real device pixel ratio
+    // from the window-system, not an extent ratio) and publish it to the font
+    // manager before any glyph is rasterized. Refreshed again on resize /
+    // monitor move (see onResize).
+    refreshDevicePixelRatio(render);
 
     // 5. GUI Draw2D renderer (screen-space sprites, depth-less pipeline),
     //    matching the swapchain's real surface format.
@@ -921,6 +937,19 @@ void GUIWindowHost::onEvent(const Event& event)
         const auto& resize = static_cast<const WindowResizeEvent&>(event);
         _impl->bWindowMinimized = resize.GetWidth() == 0 || resize.GetHeight() == 0;
         _impl->bSwapchainRecreatePending = true;
+        // Per-monitor DPI: a window dragged to a different display keeps its
+        // old scale until refreshed. Re-read the window-system content scale
+        // and republish so fonts re-raster at the new device resolution.
+        _impl->window.refreshDpiScale();
+        refreshDevicePixelRatio(_impl->render);
+        return;
+    }
+    case EEvent::WindowMoved: {
+        // Monitor move without a size change: SDL does not always emit
+        // WindowResize here, so re-read the display scale explicitly to keep
+        // DPI / font raster in sync with the new monitor (Qt-style trap).
+        _impl->window.refreshDpiScale();
+        refreshDevicePixelRatio(_impl->render);
         return;
     }
     case EEvent::WindowMinimize:
@@ -959,6 +988,31 @@ void GUIWindowHost::onEvent(const Event& event)
     default:
         return;
     }
+}
+
+float GUIWindowHost::refreshDevicePixelRatio(IRender* render)
+{
+    float scale = _impl->window.getDpiScale();
+    if (scale <= 0.0f) {
+        scale = 1.0f;
+    }
+    // Sanity fallback: if the window API gave nothing but we have a present
+    // surface, the device/logical ratio still reflects the active scale.
+    if (render != nullptr && scale <= 0.0f + 1e-3f) {
+        const Extent2D logical   = _impl->tree ? _impl->tree->getLogicalExtent() : Extent2D{};
+        const auto*     swapchain = render->getSwapchain();
+        if (swapchain && logical.width > 0 && logical.height > 0) {
+            const Extent2D present = swapchain->getExtent();
+            const float    ratioX  = static_cast<float>(present.width) / static_cast<float>(logical.width);
+            const float    ratioY  = static_cast<float>(present.height) / static_cast<float>(logical.height);
+            if (ratioX > 0.0f && std::abs(ratioX - ratioY) < 0.01f) {
+                scale = ratioX;
+            }
+        }
+    }
+    _impl->devicePixelRatio = scale;
+    FontManager::get()->setActiveDpiScale(scale);
+    return scale;
 }
 
 bool GUIWindowHost::shouldClose() const
@@ -1139,9 +1193,14 @@ void GUIWindowHost::onTick(float /*dt*/)
         // layout + paint + the G2 validation frame, nothing is submitted.
         _impl->tree->setLogicalExtent(queryWindowLogicalExtent(*_impl->render));
         _impl->delegate->updateUI();
-        FontManager::get()->setActiveDpiScale(1.0f);
+        // Scenario frames have no presentable swapchain, but still use the
+        // window's device-pixel-ratio (1.0 when headless) as the DPI mapping so
+        // font scale matches the runtime path — no ad-hoc magic constant. The
+        // user zoom stays separate (uiUserScale, default 1.0).
+        FontManager::get()->setActiveDpiScale(_impl->devicePixelRatio);
+        _impl->tree->setDpiScale(_impl->devicePixelRatio);
         _impl->tree->buildSnapshot(UIFrameBuildContext{
-            .uiScale         = {1.0f, 1.0f},
+            .uiScale         = {_impl->uiUserScale, _impl->uiUserScale},
             .offset          = {0.0f, 0.0f},
             .textureResolver = resolveBuiltinTexture,
         });
@@ -1186,18 +1245,20 @@ void GUIWindowHost::onTick(float /*dt*/)
     const auto& renderSurface = presentation->renderSurface;
     const auto& renderImage   = renderSurface->getRenderImage();
     const Extent2D presentExtent = renderImage->getExtent();
-    const Extent2D logicalExtent = _impl->tree->getLogicalExtent();
     renderSurface->prepare(FRender2DComposePassDesc{
         .kind = ERender2DComposePassKind::RuntimeUIComposite,
     });
-    const float uiScaleX = static_cast<float>(presentExtent.width) / static_cast<float>(std::max(logicalExtent.width, 1u));
-    const float uiScaleY = static_cast<float>(presentExtent.height) / static_cast<float>(std::max(logicalExtent.height, 1u));
-    // Bitmap glyphs must be rasterized at the device resolution (ImGui bakes
-    // at RasterizerDensity). The host is the only place that knows the real
-    // DPI, so publish it to FontManager before building the frame.
-    FontManager::get()->setActiveDpiScale(uiScaleX);
+
+    // devicePixelRatio is the system DPI (logical points -> framebuffer pixels),
+    // published to the tree as the DPI mapping (NOT the user zoom). The user
+    // zoom (_impl->uiUserScale, default 1.0) lives separately in the build
+    // context, so a monitor-move DPI change never disturbs the user's chosen
+    // zoom, and vice-versa. Font raster DPI reads the same devicePixelRatio.
+    const float dpiScale = _impl->devicePixelRatio;
+    FontManager::get()->setActiveDpiScale(dpiScale); // idempotent; ensures consistency
+    _impl->tree->setDpiScale(dpiScale);
     UIFrameSnapshot snapshot = _impl->tree->buildSnapshot(UIFrameBuildContext{
-        .uiScale = {uiScaleX, uiScaleY},
+        .uiScale = {_impl->uiUserScale, _impl->uiUserScale},
         .offset = {0.0f, 0.0f},
         .textureResolver = resolveBuiltinTexture,
     });

@@ -35,7 +35,12 @@ inline int processSDLEvent(SDL_Event &event, auto &&dispatchEvent)
     case SDL_EVENT_WINDOW_HIDDEN:
     case SDL_EVENT_WINDOW_EXPOSED:
     case SDL_EVENT_WINDOW_MOVED:
-        break;
+    {
+        // Monitor move without a size change: dispatch so hosts can refresh
+        // per-display DPI (font raster / UI scale) — the Qt-style trap where a
+        // window dragged to a different-density display keeps the old scale.
+        dispatchEvent(WindowMovedEvent(event.window.windowID, event.window.data1, event.window.data2));
+    } break;
     case SDL_EVENT_WINDOW_RESIZED:
     {
         dispatchEvent(WindowResizeEvent(event.window.windowID, event.window.data1, event.window.data2));

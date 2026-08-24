@@ -105,6 +105,17 @@ struct CubeMapMemoryCreateInfo
     }
 };
 
+/// Declares the default sampler a texture wants to be sampled with, set once
+/// at creation (NOT inferred per-frame from the label string — see
+/// QuadRender::resolveSamplerForTexture). This keeps glyph atlas sampling
+/// decisions off the hot draw path.
+enum class ESamplerCategory : uint8_t
+{
+    Default      = 0, // linear + repeat (general color textures)
+    ClampLinear,      // SDF glyph atlas: lerp distance field, clamp to edge
+    ClampNearest,     // bitmap/coverage glyph atlas: snap texels, clamp to edge
+};
+
 struct YA_RHI_API Texture
 {
     EFormat::T _format    = EFormat::R8G8B8A8_UNORM;
@@ -118,6 +129,8 @@ struct YA_RHI_API Texture
 
     std::shared_ptr<ImageResource> resource;
     std::vector<RetainedResource>   retainedResources;
+
+    ESamplerCategory _samplerCategory = ESamplerCategory::Default;
 
   public:
 
@@ -204,6 +217,11 @@ struct YA_RHI_API Texture
     void               setLabel(const std::string& label);
     const std::string& getLabel() const { return _label; }
     const std::string& getFilepath() const { return _filepath; }
+
+    /// Sampler category declared at creation (see ESamplerCategory). Drives
+    /// QuadRender::resolveSamplerForTexture without per-frame label matching.
+    void             setSamplerCategory(ESamplerCategory cat) { _samplerCategory = cat; }
+    [[nodiscard]] ESamplerCategory getSamplerCategory() const { return _samplerCategory; }
     Extent2D           getExtent() const { return Extent2D{.width = _width, .height = _height}; }
 
     bool isValid() const { return resource && resource->isValid() && _width > 0 && _height > 0; }

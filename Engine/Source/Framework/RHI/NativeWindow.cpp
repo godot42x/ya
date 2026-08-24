@@ -30,7 +30,10 @@ bool SDLNativeWindow::init()
 
 bool SDLNativeWindow::recreate(const WindowCreateInfo &ci)
 {
-    dpiScale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+    // Per-window content scale (== device pixel ratio on this display). Use
+    // the window's own display, not the primary one — otherwise a window on a
+    // secondary HiDPI monitor would wrongly inherit the primary's scale.
+    refreshDpiScale();
     YA_CORE_INFO("system scale: {}, ci scale: {}, input size: {}x{}", dpiScale, ci.scale, ci.width, ci.height);
 
     int flags = 0;
@@ -76,6 +79,18 @@ uint32_t SDLNativeWindow::getWindowID() const
 void SDLNativeWindow::getWindowSize(int &width, int &height)
 {
     SDL_GetWindowSize(static_cast<SDL_Window *>(nativeWindowHandle), &width, &height);
+}
+
+void SDLNativeWindow::refreshDpiScale()
+{
+    if (!nativeWindowHandle) {
+        dpiScale = 1.0f;
+        return;
+    }
+    // SDL3: content scale == device pixel ratio for the window's current
+    // display. Returns 1.0 on standard-DPI monitors, 2.0 / 1.5x on Retina etc.
+    const float scale = SDL_GetWindowDisplayScale(static_cast<SDL_Window *>(nativeWindowHandle));
+    dpiScale          = (scale > 0.0f) ? scale : 1.0f;
 }
 
 bool SDLNativeWindow::setWindowSize(int width, int height)

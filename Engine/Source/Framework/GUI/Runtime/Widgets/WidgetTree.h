@@ -154,6 +154,14 @@ struct YA_GUI_API WidgetTree final
     void setLogicalExtent(Extent2D extent);
     [[nodiscard]] Extent2D getLogicalExtent() const { return _logicalExtent; }
 
+    /// Device-pixel-ratio mapping: logical canvas points -> framebuffer pixels.
+    /// The host publishes the real window-system DPI (SDL_GetWindowDisplayScale)
+    /// here on init / resize / monitor move. It is orthogonal to the user zoom
+    /// carried by UIFrameBuildContext::uiScale; the final target-pixel size is
+    /// logical * dpiScale * uiScale. Defaults to 1.0 (headless / unscaled).
+    void setDpiScale(float scale);
+    [[nodiscard]] float getDpiScale() const { return _dpiScale; }
+
     // === Theme (style-system Phase 2) ===
     /// Mount the tree-level theme (app/game provides the content). Switching
     /// bumps the generation token, which repaints every widget that resolved
@@ -351,6 +359,7 @@ struct YA_GUI_API WidgetTree final
     UIElementRef _root;
     std::array<UIElementRef, static_cast<size_t>(ELayer::Count)> _layers;
     Extent2D      _logicalExtent{};
+    float         _dpiScale = 1.0f; // logical points -> framebuffer pixels
     bool          _bLayoutDirty = true;
     GuiPerfStats  _perfStats;
 

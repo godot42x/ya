@@ -83,22 +83,17 @@ ya::Ptr<Sampler> resolveSamplerForTexture(Texture* texture)
         return TextureLibrary::get().getDefaultSampler();
     }
 
-    const std::string& label = texture->getLabel();
-    if (label.starts_with("SDFFontAtlas_")) {
-        // Distance-field glyphs are rasterized once and drawn at many sizes.
-        // Linear sampling interpolates the signed-distance field; screen-space
-        // fwidth() in the shader gives crisp, scale-independent edges.
-        return TextureLibrary::get().getClampLinearSampler();
+    // Sampler category is declared once at atlas creation (DynamicFontAtlas::
+    // replaceTexture), NOT string-matched here on the hot draw path.
+    switch (texture->getSamplerCategory()) {
+        case ESamplerCategory::ClampLinear:
+            return TextureLibrary::get().getClampLinearSampler();
+        case ESamplerCategory::ClampNearest:
+            return TextureLibrary::get().getClampNearestSampler();
+        case ESamplerCategory::Default:
+        default:
+            return TextureLibrary::get().getDefaultSampler();
     }
-    if (label.starts_with("FontAtlas_") || label.starts_with("FontGlyph_")) {
-        // Coverage/bitmap glyphs are rasterized at the exact display size.
-        // Nearest filtering snaps texels to integer screen pixels so strokes
-        // stay crisp; the transparent border baked around each glyph prevents
-        // atlas neighbor bleed. Linear here would blur 1px strokes into gray.
-        return TextureLibrary::get().getClampNearestSampler();
-    }
-
-    return TextureLibrary::get().getDefaultSampler();
 }
 
 bool shouldReverseWorldViewport(IRender* render)

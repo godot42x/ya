@@ -1,6 +1,7 @@
 #include "OpenGLSwapchain.h"
 #include "Core/Log.h"
 #include "OpenGLRender.h"
+#include <cmath>
 
 namespace ya
 {
@@ -93,10 +94,18 @@ void OpenGLSwapchain::updateExtent()
     }
 
 #if USE_SDL
-    int width, height;
-    SDL_GetWindowSize(static_cast<SDL_Window *>(_nativeWindow->getNativeWindowHandle()), &width, &height);
-    _extent.width  = static_cast<uint32_t>(width);
-    _extent.height = static_cast<uint32_t>(height);
+    // SDL_GetWindowSize returns logical window points, not physical pixels.
+    // The default framebuffer actually spans width*displayScale x
+    // height*displayScale (e.g. 2x on Retina). Without this, UI drawn at
+    // logical*dpiScale overflows the too-small framebuffer. GLFW's
+    // GetFramebufferSize already returns physical pixels, so it needs no fix.
+    SDL_Window* w = static_cast<SDL_Window *>(_nativeWindow->getNativeWindowHandle());
+    int width = 0, height = 0;
+    SDL_GetWindowSize(w, &width, &height);
+    const float scale = SDL_GetWindowDisplayScale(w);
+    const float s = scale > 0.0f ? scale : 1.0f;
+    _extent.width  = static_cast<uint32_t>(std::llround(static_cast<float>(width)  * s));
+    _extent.height = static_cast<uint32_t>(std::llround(static_cast<float>(height) * s));
 #elif USE_GLFW
     int width, height;
     glfwGetFramebufferSize(static_cast<GLFWwindow *>(_nativeWindow->getNativeWindowHandle()), &width, &height);
