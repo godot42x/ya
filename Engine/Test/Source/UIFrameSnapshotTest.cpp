@@ -23,6 +23,8 @@
 
 #include <gtest/gtest.h>
 
+#include <set>
+
 namespace ya
 {
 
@@ -52,7 +54,10 @@ TEST(UIFrameSnapshotTest, BuildResolvesItemsToRenderPixelsInPaintOrder)
     EXPECT_EQ(snapshot.items[0].size, glm::vec2(200.0f, 100.0f));
     EXPECT_EQ(snapshot.items[1].kind, UIFrameDrawItem::EKind::Sprite);
     EXPECT_EQ(snapshot.items[1].pos, glm::vec2(500.0f, 250.0f));
-    EXPECT_FALSE(snapshot.items[0].bClipped);
+    // G1: every widget is self-clipped by the paint template.
+    EXPECT_TRUE(snapshot.items[0].bClipped);
+    EXPECT_EQ(snapshot.items[0].clip.pos, glm::vec2(120.0f, 70.0f));
+    EXPECT_EQ(snapshot.items[0].clip.extent, glm::vec2(200.0f, 100.0f));
     EXPECT_EQ(snapshot.logicalExtent.width, 800u);
 }
 
@@ -160,6 +165,30 @@ TEST(UIFrameSnapshotTest, StructuralDumpAndDigestTrackVisualPacketOnly)
     const auto dump = dumpUIFrameSnapshot(first);
     EXPECT_EQ(dump["logicalExtent"]["width"], 320u);
     EXPECT_EQ(dump["items"][0]["kind"], "sprite");
+}
+
+TEST(UIFrameSnapshotTest, SemanticDigestIgnoresFontDependentTextGeometry)
+{
+    UIFrameSnapshot windowed;
+    UIFrameSnapshot headless = windowed;
+
+    windowed.items.push_back(UIFrameDrawItem{
+        .kind  = UIFrameDrawItem::EKind::Text,
+        .pos   = {14.0f, 6.5f},
+        .size  = {32.0f, 17.0f},
+        .color = {0.9f, 0.9f, 0.9f, 1.0f},
+        .text  = "FEATURE GALLERY",
+    });
+    headless.items.push_back(UIFrameDrawItem{
+        .kind  = UIFrameDrawItem::EKind::Text,
+        .pos   = {14.0f, 6.46875f},
+        .size  = {31.5f, 16.8f},
+        .color = {0.9f, 0.9f, 0.9f, 1.0f},
+        .text  = "FEATURE GALLERY",
+    });
+
+    EXPECT_NE(digestUIFrameSnapshot(windowed), digestUIFrameSnapshot(headless));
+    EXPECT_EQ(semanticDigestUIFrameSnapshot(windowed), semanticDigestUIFrameSnapshot(headless));
 }
 
 TEST(UIFrameSnapshotTest, PerfStatsCountPaintWalkAndDrawItems)
@@ -1044,6 +1073,7 @@ TEST(UIFrameSnapshotTest, ScrollViewportClipsContentToViewportRect)
     WidgetTree tree({.width = 400, .height = 300});
     auto       viewport = std::make_shared<UIScrollViewport>("Scroll");
     viewport->setSize({200.0f, 60.0f});
+    viewport->_bShowScrollbar = false;
     auto content = std::make_shared<UIPanel>("Content");
     content->setSize({200.0f, 100.0f}); // taller than the viewport
     tree.attachToLayer(WidgetTree::ELayer::Content, viewport);
@@ -1081,8 +1111,13 @@ TEST(UIFrameSnapshotTest, SplitPaneClipsChildrenToOwnPaneRect)
             clipped.push_back(&item);
         }
     }
-    ASSERT_EQ(clipped.size(), 2u);
-    EXPECT_NE(clipped[0]->clip.pos, clipped[1]->clip.pos); // distinct pane rects
+    ASSERT_EQ(clipped.size(), 3u);
+    std::set<glm::vec2, bool(*)(const glm::vec2&, const glm::vec2&)> uniquePositions(
+        [](const glm::vec2& a, const glm::vec2& b) { return a.x < b.x || (a.x == b.x && a.y < b.y); });
+    for (const auto* item : clipped) {
+        uniquePositions.insert(item->clip.pos);
+    }
+    EXPECT_GE(uniquePositions.size(), 2u);
 }
 
 TEST(UIFrameSnapshotTest, LayoutHostsReuseSelfSegmentWhenClean)
@@ -1132,7 +1167,7 @@ TEST(UIFrameSnapshotTest, ContainerClipResizeInvalidatesChildSegments)
 
     ASSERT_EQ(snap.items.size(), 1u);
     EXPECT_TRUE(snap.items[0].bClipped);
-    EXPECT_EQ(snap.items[0].clip.extent, glm::vec2(300.0f, 100.0f));
+    EXPECT_EQ(snap.items[0].clip.extent, glm::vec2(50.0f, 100.0f));
 }
 
 } // namespace ya

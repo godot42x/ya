@@ -1164,8 +1164,8 @@ TEST(WidgetTreeTest, DragOverDockSetsPointSensitiveDropPreview)
     EXPECT_FALSE(dock->isDropPreviewDisabled());
     EXPECT_TRUE(dock->isDropPreviewMerge());
 
-    // Moving to the leaf's WEST edge switches the preview to a split strip.
-    tree.updateDrag({40.0f, 300.0f});
+    // Moving to the leaf's WEST chooser block switches the preview to a split strip.
+    tree.updateDrag({360.0f, 300.0f});
     EXPECT_TRUE(dock->hasDropPreview());
     EXPECT_FALSE(dock->isDropPreviewMerge());
     EXPECT_EQ(dock->getDropPreviewTargetLeafId() != kInvalidDockNodeId, true);

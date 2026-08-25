@@ -54,6 +54,8 @@ Framework 提供 WidgetTree、UIElement、Layout、Input、UIFrameBuilder、Brus
 
 第一版吸收 React 的 render function、keyed children、单向 state -> description 数据流，以及 EUI-NEO 的链式 builder；保留现有 retained tree 和 immutable snapshot。第一版必须支持 stable key、条件子树、列表 keyed children、属性绑定、事件绑定、slot/layout props 和显式 state ownership。
 
+公共 API 采用控件专属 builder/factory 加共享内部节点契约的分层：基础层只管 identity、children、通用 metadata；Text/Button/TextField/Container 等各自暴露自己的语义字段。不要让一个通用 builder 承载未来所有控件的属性，这会把后续重构锁死在最宽松的最小公分母上。
+
 第一版不承诺 XML/CSS 语法、Virtual DOM 全量替代 WidgetTree、自动双向数据绑定、任意 lambda 捕获 live widget 裸指针，或在 command recording 期执行 render function。
 
 ### Phase -1 实施顺序
@@ -61,9 +63,10 @@ Framework 提供 WidgetTree、UIElement、Layout、Input、UIFrameBuilder、Brus
 #### -1A：契约冻结（只读设计与测试，不迁移业务）
 
 1. 定义 UIBuilder/UIDescription 节点模型和 stable key 规则。
-2. 定义 builder props：layout、appearance、text/value、event、children、visibility。
-3. 定义 mount/update/remove/reorder/detach 的生命周期和 callback 安全边界。
-4. 定义 state ownership：外部 state、widget transient state、derived state 的边界。
+2. 定义 builder 分层：公共 node contract、控件专属 builder、共享属性注入点。
+3. 定义 builder props：layout、appearance、text/value、event、children、visibility。
+4. 定义 mount/update/remove/reorder/detach 的生命周期和 callback 安全边界。
+5. 定义 state ownership：外部 state、widget transient state、derived state 的边界。
 
 退出条件：设计文档、重复 key/缺失 key 诊断、最小契约测试全部明确；没有未决的 identity/lifecycle 语义问题。
 

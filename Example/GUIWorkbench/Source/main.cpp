@@ -72,7 +72,10 @@ int main(int argc, char** argv)
     config.title     = "YA GUI Workbench";
     config.width     = 1280;
     config.height    = 800;
-    config.fontSizes = {12, 13, 14, 15, 16};
+    // Keep the headless synthetic font cache wide enough for every registered
+    // gallery page. Windowed mode lazily materializes these sizes; headless
+    // must pre-register them because it has no rasterization backend.
+    config.fontSizes = {9, 10, 11, 12, 13, 14, 15, 16, 20, 24, 32, 40};
     // Escape belongs to focused menus/modals/text interactions in the feature
     // gallery. Window close remains the standalone host exit path.
     config.bEscapeQuits = false;

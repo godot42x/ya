@@ -3,7 +3,7 @@
 
 This is intentionally a small local-runner harness, not a second build
 system. It configures the macOS Vulkan SDK via `ya.py cfg`, validates the
-closure/headless/minimal GUI paths, checks exact ScrollSplit
+closure/headless/minimal GUI paths, checks semantic ScrollSplit
 windowed/headless snapshot identity, and rebuilds a macOS-local zero-diff
 GUIWorkbench page matrix.
 """
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -59,6 +60,14 @@ def repo_relative(path: Path) -> str:
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def snapshot_digest(path: Path, field: str) -> int:
+    document = json.loads(path.read_text(encoding="utf-8"))
+    value = document.get(field)
+    if not isinstance(value, int):
+        raise RuntimeError(f"snapshot {path} has no integer {field}")
+    return value
 
 
 def run_gui_cross_path_smoke(output_dir: Path) -> None:
@@ -111,8 +120,12 @@ def run_scrollsplit_snapshot_parity(output_dir: Path) -> None:
         output_dir / "headless-snapshot.log",
         require_clean_gui_log=True,
     )
-    if sha256(windowed_json) != sha256(headless_json):
-        raise RuntimeError("windowed/headless ScrollSplit snapshot JSON differs")
+    windowed = json.loads(windowed_json.read_text(encoding="utf-8"))
+    headless = json.loads(headless_json.read_text(encoding="utf-8"))
+    if len(windowed.get("items", [])) != len(headless.get("items", [])):
+        raise RuntimeError("windowed/headless ScrollSplit draw-item count differs")
+    if snapshot_digest(windowed_json, "semanticDigest") != snapshot_digest(headless_json, "semanticDigest"):
+        raise RuntimeError("windowed/headless ScrollSplit semantic snapshot differs")
 
 
 def run_workbench_page_matrix(output_dir: Path) -> None:

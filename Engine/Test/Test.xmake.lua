@@ -110,6 +110,7 @@ do
     add_files("./Source/GuiEventDriverTest.cpp")
     add_files("./Source/BmpDiffTest.cpp")
     add_files("./Source/AppKernelTest.cpp")
+    add_files("./Source/DeclarativeContractTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-framework")
@@ -131,8 +132,24 @@ do
     add_files("./Source/UIDocumentTest.cpp")
     add_files("./Source/UIFrameSnapshotTest.cpp")
     add_files("./Source/ToolControlsTest.cpp")
+    add_files("./Source/DeclarativeContractTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
+    add_deps("ya-gui-widgets", "ya-render-resources")
+    add_packages("gtest")
+
+    if is_plat("windows") then
+        add_cxxflags("/utf-8")
+    end
+end
+
+-- Phase -1A contract gate: keeps the declarative UI prerequisites isolated
+-- from legacy widget tests while the retained framework is being migrated.
+target("ya-gui-declarative-contract-test")
+do
+    set_kind("binary")
+    add_files("./Source/DeclarativeContractTest.cpp")
+    add_files("./Source/TestEntry.cpp")
     add_deps("ya-gui-widgets", "ya-render-resources")
     add_packages("gtest")
 

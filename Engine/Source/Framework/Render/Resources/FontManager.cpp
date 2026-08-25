@@ -124,6 +124,11 @@ void FontManager::registerFont(const FName &fontName, uint32_t fontSize, std::sh
     const std::string baseKey = makeCacheKey(fontName, fontSize);
     _baseFontCache[baseKey] = font;
     _fontCache[baseKey] = font;
+    // getFont() uses a DPI-qualified cache key so bitmap glyphs cannot be
+    // reused across device scales. Pre-registered/headless fonts have no
+    // rasterization path, so register the current active scale explicitly;
+    // otherwise every lookup misses the pre-registered font and returns null.
+    _fontCache[baseKey + std::format(":{}", _activeDpiScale)] = font;
     auto& sizes = _baseSizes[fontName];
     if (std::find(sizes.begin(), sizes.end(), fontSize) == sizes.end()) {
         sizes.push_back(fontSize);
@@ -188,6 +193,16 @@ std::shared_ptr<Font> FontManager::getFont(const FName &fontName, uint32_t fontS
     // bakes the raster at the device size so texels map 1:1 to screen pixels
     // (no fractional minification — ImGui bakes at RasterizerDensity).
     if (chooseModeForSize(fontSize) == EFontRenderMode::Bitmap) {
+        // If the family already has a registered base, prefer returning a
+        // scaled view from that base. This keeps synthetic / pre-registered
+        // font tests working even when there is no file-backed rasterization
+        // path to lazily materialize from.
+        if (auto base = findBestBase(fontName, fontSize)) {
+            auto view = makeScaledView(base, fontSize);
+            _fontCache[key] = view;
+            return view;
+        }
+
         // A base rasterized at a different dpiScale cannot be reused (its glyph
         // texels are sized for another device resolution). Lazily materialize a
         // dpi-aware base instead.

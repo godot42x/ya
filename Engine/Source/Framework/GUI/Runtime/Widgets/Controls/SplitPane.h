@@ -33,6 +33,7 @@ struct YA_GUI_API UISplitPane : public UIElement
     explicit UISplitPane(std::string name = "SplitPane") : UIElement(std::move(name))
     {
         _hitFilter = EWidgetHitFilter::Stop;
+        _focusPolicy = EWidgetFocusPolicy::Focusable;
         _splitLayout.setOwner(*this);
     }
 

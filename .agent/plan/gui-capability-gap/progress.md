@@ -3,6 +3,27 @@
 > 主线：`gui-capability-gap` 第二阶段——GameEditor ImGui 替换前置（GUI App 线全量补齐）。
 > 记录：每轮完成内容、验证结果、剩余问题。
 
+## 2026-08-25 — Dock preview 回归收口（本轮）
+
+**完成**：
+- 全量 widgets 回归发现 WidgetTreeTest.DragOverDockSetsPointSensitiveDropPreview 的旧测试坐标落在 leaf 外部，不再命中当前 chooser block。
+- 将测试点修正到实际 WEST chooser 区，保留对 merge → split → merge → leave 的完整生命周期断言。
+
+**验证**：xmake r ya-gui-widgets-test 通过（156/156）。
+
+**剩余问题**：无。
+
+## 2026-08-25 — 框架收口回归修正（本轮）
+
+**完成**：
+- DockNodeTest 全面切到现有 getRootNode() API，清掉旧 getRoot() 残留。
+- FontManager::getFont() 在 bitmap 路径下优先复用已注册 base 的 scaled view，保住合成字体 / 预注册字体闭包测试。
+- UIFrameSnapshotTest 断言同步到当前框架契约：self-clip、scroll viewport、split pane clip 以及 resize invalidation。
+
+**验证**：xmake r ya-gui-widgets-test --gtest_filter="DockNodeTest.*:UIFrameSnapshotTest.*" 通过（59/59）。
+
+**剩余问题**：无。
+
 ## 2026-08-18 — 调研 + 计划定稿（本轮）
 
 **完成**：

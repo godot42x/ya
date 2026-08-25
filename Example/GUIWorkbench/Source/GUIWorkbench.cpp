@@ -331,7 +331,12 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
     }
     case 20: {
         const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[7].get()); // Editor tab
+        const int editorIndex = surface.getEditorPageIndex();
+        if (editorIndex < 0 || static_cast<size_t>(editorIndex) >= tabs.size()) {
+            surface.failSmoke("Demo automation: Editor tab index is out of range");
+            return true;
+        }
+        click(tabs[static_cast<size_t>(editorIndex)].get()); // Editor tab
         if (surface.getCurrentPageIndex() != surface.getEditorPageIndex()) {
             surface.failSmoke("Demo automation: tab switch to Editor failed");
         }
