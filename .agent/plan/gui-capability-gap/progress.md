@@ -3,6 +3,182 @@
 > 主线：`gui-capability-gap` 第二阶段——GameEditor ImGui 替换前置（GUI App 线全量补齐）。
 > 记录：每轮完成内容、验证结果、剩余问题。
 
+## 2026-08-25 — 静态 DSL 与函数式 compose 分层（本轮）
+
+**完成**：
+- `child(UIDescription)` / `children(UIDescription...)` 明确为底层静态 DSL，不接收 factory。
+- 新增 `compose(factory)` / `composeChildren(factories...)` 作为函数式组合扩展；factory 立即生成稳定的 `UIDescription`，不进入 description/runtime state。
+- `content(factory)` 暂时保留为兼容别名，后续新代码统一使用 `compose` 命名。
+- 旧 contract 调用已迁移到分层 API，静态节点与函数式组合语义不再混用。
+
+**验证**：DeclarativeContractTest 通过（29/29）。
+
+**下一刀**：继续清理旧 `content` 调用，并单独设计 component/props/state/lifecycle 扩展，不把这些概念塞回静态 builder。
+
+## 2026-08-25 — typed description common children 收口（本轮）
+
+**完成**：
+- `UIDescription::build()` / conversion 现在会先同步 common block，避免 common/legacy 不一致。
+- `TUIChildrenBuilder` 的 `content()/children()/when()` 统一同步 `common.children`，公共 children 真正成为 reconciler 可读来源。
+- `UIReconciler` 现在优先读 `common.children`，并保留 legacy children 作为兼容 fallback。
+- 新增 contract：`content/children` 会同步 common children；仅填 `common.children` 的描述也能正常 reconcile。
+
+**验证**：DeclarativeContractTest 通过（29/29）。
+
+**下一刀**：继续删冗余 flat fields 的写入口，优先把 shared property 写入收成更少的 helper。
+
+## 2026-08-25 — typed description helper 化（本轮）
+
+**完成**：
+- `UIDescription` 的公共块继续收束：`UICommonDescription` 负责 identity / layout / children；builder 侧 shared fields 通过 helper 统一同步。
+- 现有 typed payload（Panel / Text / Button / TextField）继续保留，adapter 仍优先读取 common/payload，旧 flat fields fallback 不变。
+- 这一步主要是为后续删 flat fields 降低机械重复。
+
+**验证**：相关 typed payload contract 通过（4/4）。
+
+**下一刀**：继续收缩 flat fields，优先把公共字段的写入/读取完全收进 helper/payload。
+
+## 2026-08-25 — P8 typed description 迁移第四刀：Button/TextField payload（本轮）
+
+**完成**：
+- 新增 `UIButtonDescription` 与 `UITextFieldDescription` typed payload。
+- `UIButtonBuilder` / `UITextFieldBuilder` 同步写入 typed payload；adapter 优先读取 payload。
+- 保留旧平面字段作为 fallback，现有按钮 label / textfield focus 语义不变。
+- 增加 payload contract，覆盖 button text/onClick 与 textfield text/fontSize。
+
+**验证**：DeclarativeContractTest 通过（27/27）。
+
+**下一刀**：继续收缩 flat fields，优先把公共字段迁移向只读兼容层，并考虑移除冗余旧字段。
+
+## 2026-08-25 — P8 typed description 迁移第三刀：公共 description 抽取（本轮）
+
+**完成**：
+- 新增 `UICommonDescription`，把 identity / children / layout / interaction 统一收束到公共块。
+- `UIDescription` 保留兼容 flat fields，但 builder 已开始同步写入 `common`。
+- adapter 优先读取 `common`，旧字段作为 fallback，避免一次性打断现有 DSL。
+- 增加公共 description contract，验证 shared fields 能正确保存。
+
+**验证**：DeclarativeContractTest 通过（26/26）。
+
+**下一刀**：迁移 `UIButtonDescription` / `UITextFieldDescription` 的 typed payload，并继续收缩 flat fields。
+
+## 2026-08-25 — P8 typed description 迁移第二刀：UITextDescription（本轮）
+
+**完成**：
+- 新增 `UITextDescription` typed payload，覆盖 text / fontSize / color 的 authored optional 语义。
+- `UITextBuilder` 保持现有 API，setter 同步写入 typed payload。
+- adapter 优先读取 typed text payload，旧平面字段继续作为兼容 fallback。
+- 增加 typed payload contract，验证 text 的三类属性完整保存。
+
+**验证**：DeclarativeContractTest 通过（25/25）。
+
+**下一刀**：提取公共 description（identity/layout/interaction/children），再迁移 Button/TextField payload，逐步删除旧 flat fields。
+
+## 2026-08-25 — P8 typed description 迁移第一刀：UIPanelDescription（本轮）
+
+**完成**：
+- 新增 `UIPanelDescription` typed payload，panel builder 的 `setColor` 同步写入 payload。
+- adapter 优先读取 typed payload，旧平面字段暂时保留，确保现有 DSL 调用和兼容描述不受影响。
+- 增加 payload contract，验证 typed panel description 的 authored color 数据。
+
+**验证**：DeclarativeContractTest 通过（24/24）。
+
+**下一刀**：提取公共 description，并迁移 `UITextDescription`，继续保持旧 builder API 与 retained reconcile 行为兼容。
+
+## 2026-08-25 — P8 架构决策：typed description 取代 god UIDescription（本轮）
+
+**决策**：
+- 参考 Slate 的控件专属 arguments、React 的 type/key/children、Flutter 的 immutable configuration/runtime state 分离、QML 的 per-type properties。
+- `UIDescription` 不再继续扩展为包含所有控件字段的 god struct。
+- 目标是公共 description + 控件专属 typed payload；实现优先考虑 variant + 间接递归层，保留值语义和清晰 ownership。
+
+**后续约束**：
+- `UIReconciler` 只管 identity/lifecycle/children order。
+- `UIDeclarativeNodeAdapter` 按 typed payload 分发。
+- 每种控件继续使用自己的 builder。
+- authored/default 使用 optional/明确标志；runtime focus/capture/edit/callback 状态不进入 description。
+
+**下一刀**：提取公共 description，并迁移 `UITextDescription`，继续保持旧 builder API 做兼容迁移。
+
+## 2026-08-25 — P8 DSL 第七刀：callback 与 authored 语义（本轮）
+
+**完成**：
+- `UIDescription` 增加 `_bHasOnClick` authored 标志；`UIButtonBuilder::onClick` 显式设置该标志。
+- adapter 仅在 callback 被声明式 authored 时覆盖 `_onClick`，避免普通 reconcile 把应用层/运行态 callback 清空或替换。
+- contract 覆盖：未 authored 时保留 runtime callback；再次 authored 时才切换到声明式 callback。
+
+**验证**：DeclarativeContractTest 通过（23/23）。
+
+**下一刀**：继续审计其它 authored-vs-default 字段，并考虑把属性应用进一步按 widget kind 拆成可扩展 handlers。
+
+## 2026-08-25 — P8 DSL 第六刀：Button/TextField typed property contracts（本轮）
+
+**完成**：
+- `UIButton.setText` contract：验证生成的 `action__label` 子节点在文本更新时保持实例复用，只更新 label 内容。
+- `UITextField.setText/setFontSize` contract：验证字段属性更新保持 retained identity，并保留当前 focus。
+- 与既有 adapter 边界一致，未向 `Declarative.cpp` 增加控件属性分支。
+
+**验证**：DeclarativeContractTest 通过（22/22）。
+
+**下一刀**：继续审计 builder/adapter 的属性表达方式，优先补齐 callback 与 authored-vs-default 属性语义，避免 DSL 更新时意外覆盖控件运行态。
+
+## 2026-08-25 — Declarative 重构前置：reconciler 轻壳化（本轮）
+
+**完成**：
+- 新增 `UIDeclarativeNodeAdapter`，集中承载节点创建 / 属性应用 / kind 匹配。
+- `UIReconciler` 仅保留验证、identity、children reconcile 与 tree lifecycle。
+- 这次拆分不改行为，contract tests 仍全过。
+
+**验证**：`ya-gui-widgets-test` 构建通过；`DeclarativeContractTest` 通过（19/19）。
+
+**下一刀**：在 adapter 边界继续补容器属性矩阵，避免 `Declarative.cpp` 再增长成事实上的 god class。
+
+## 2026-08-25 — P8 DSL 第四刀：外观属性矩阵 contract（本轮）
+
+**完成**：
+- 增加 `panel.setColor` 与 `text.setFontSize` 的 retained reconcile contract tests。
+- 属性更新均验证 stable key 下复用原 widget 实例，不把声明式属性更新误变成 subtree replacement。
+- 将 P8 typed property surface 从 enabled/focusPolicy 扩展到外观属性，形成后续属性矩阵测试基线。
+
+**验证**：DeclarativeContractTest 通过（19/19）。
+
+**下一刀**：补齐容器属性（spacing/padding/clipChildren/stretchLastChild）的 reconcile contract，并验证布局属性更新会触发正确的 layout invalidation。
+
+## 2026-08-25 — P8 DSL 第三刀：typed focusPolicy surface（本轮）
+
+**完成**：
+- 为 typed builder 补 `setFocusPolicy(EWidgetFocusPolicy)`，继续保持每种控件自己的 builder，不引入通用 fat UIBuilder。
+- reconciler 将 focusPolicy 直接回写 retained widget，属性更新不触发 widget 替换。
+- contract test 覆盖 focusPolicy 从 Focusable → None 的稳定 key / 实例复用。
+
+**验证**：DeclarativeContractTest 通过（17/17）。
+
+**下一刀**：继续补现有框架已支持的 typed 属性 surface（优先容器/文本类的剩余公开字段），并把 declarative contract test 扩展为属性矩阵。
+
+## 2026-08-25 — P8 DSL 第二刀：children/when 与 factory 约束（本轮）
+
+**完成**：
+- typed builder 增加 children(factory...) 多子节点组合。
+- 增加 when(condition, factory) 条件节点组合，条件切换由既有 reconciler 清理 stale subtree。
+- 增加 UIDescriptionFactory C++20 concept，编译期限制 factory 必须返回 UIDescription 或专属 builder。
+- contract tests 覆盖条件节点移除、稳定 key sibling 复用，以及合法/非法 factory 的 static_assert。
+
+**验证**：DeclarativeContractTest 通过（15/15）。
+
+**下一刀**：将条件/列表组合抽成无副作用的描述辅助函数，并开始为 UI 控件补齐 typed property surface。
+
+## 2026-08-25 — P8 DSL 第一刀：typed builder content factory（本轮）
+
+**完成**：
+- 在保留控件专属 builder 的前提下，为所有 child-capable builder 增加 content(factory)。
+- factory 可返回 UIDescription 或可隐式转换为 UIDescription 的专属 builder，支持 React/EUI-NEO 风格的函数组合。
+- 不改 WidgetTree、snapshot、reconciler 生命周期和 identity 规则。
+- 新增 BuilderContentFactoryComposesTypedSubtree contract test，覆盖 column → row → button 与 sibling text 组合。
+
+**验证**：DeclarativeContractTest 通过（14/14）。
+
+**下一刀**：多子节点/条件节点组合语义 + builder API 编译期约束测试。
+
 ## 2026-08-25 — Dock preview 回归收口（本轮）
 
 **完成**：

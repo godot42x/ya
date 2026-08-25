@@ -6,6 +6,7 @@
 #include "GUI/Declarative/Declarative.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
@@ -16,6 +17,9 @@
 
 namespace ya
 {
+
+static_assert(ui::UIDescriptionFactory<decltype([] { return ui::text("compile-time"); })>);
+static_assert(!ui::UIDescriptionFactory<decltype([] { return 42; })>);
 
 TEST(DeclarativeContractTest, NoThemeStillRendersAuthoredAppearance)
 {
@@ -136,6 +140,439 @@ TEST(DeclarativeContractTest, DeclarativeSnapshotIsStableAcrossRepeatedBuilds)
         EXPECT_EQ(first.items[index].color, second.items[index].color);
         EXPECT_EQ(first.items[index].text, second.items[index].text);
     }
+}
+
+TEST(DeclarativeContractTest, FunctionalComposeBuildsTypedSubtree)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    ui::UIReconciler reconciler(tree);
+
+    const auto description = ui::column("root", "Root")
+        .setSize({240.0f, 120.0f})
+        .compose([] {
+            return ui::row("toolbar", "Toolbar")
+                .setSpacing(8.0f)
+                .compose([] {
+                    return ui::button("save", "Save")
+                        .setText("Save")
+                        .setSize({80.0f, 28.0f});
+                });
+        })
+            .compose([] {
+            return ui::text("status", "Status").setText("Ready");
+        });
+
+    auto root = reconciler.reconcile(description.build());
+    ASSERT_NE(root, nullptr);
+    ASSERT_EQ(root->getChildren().size(), 2u);
+    auto* toolbar = dynamic_cast<UIContainer*>(root->getChildren()[0].get());
+    ASSERT_NE(toolbar, nullptr);
+    ASSERT_EQ(toolbar->getChildren().size(), 1u);
+    EXPECT_NE(dynamic_cast<UIButton*>(toolbar->getChildren()[0].get()), nullptr);
+    EXPECT_NE(dynamic_cast<UIText*>(root->getChildren()[1].get()), nullptr);
+}
+
+TEST(DeclarativeContractTest, FunctionalComposeChildrenAndWhenComposeStableConditionalSiblings)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    ui::UIReconciler reconciler(tree);
+
+    const bool showDetails = true;
+    auto first = reconciler.reconcile(
+        ui::column("root")
+            .composeChildren(
+                [] { return ui::text("title").setText("Title"); },
+                [&] {
+                    return ui::panel("details")
+                        .when(showDetails, [] { return ui::text("body").setText("Details"); });
+                })
+            .when(false, [] { return ui::text("hidden").setText("Hidden"); }));
+
+    ASSERT_NE(first, nullptr);
+    ASSERT_EQ(first->getChildren().size(), 2u);
+    EXPECT_EQ(first->getChildren()[0]->_stableKey, "title");
+    EXPECT_EQ(first->getChildren()[1]->_stableKey, "details");
+    ASSERT_EQ(first->getChildren()[1]->getChildren().size(), 1u);
+    EXPECT_EQ(first->getChildren()[1]->getChildren()[0]->_stableKey, "body");
+
+    auto second = reconciler.reconcile(
+        ui::column("root")
+            .composeChildren(
+                [] { return ui::text("title").setText("Title v2"); },
+                [] { return ui::text("footer").setText("Footer"); }));
+
+    ASSERT_EQ(second.get(), first.get());
+    ASSERT_EQ(second->getChildren().size(), 2u);
+    EXPECT_EQ(second->getChildren()[0]->_stableKey, "title");
+    EXPECT_EQ(second->getChildren()[1]->_stableKey, "footer");
+}
+
+TEST(DeclarativeContractTest, TypedEnabledPropertyReconcilesWithoutReplacingWidget)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    ui::UIReconciler reconciler(tree);
+
+    auto first = reconciler.reconcile(
+        ui::column("root")
+            .child(ui::button("action").setText("Action").setEnabled(false)));
+    ASSERT_NE(first, nullptr);
+    ASSERT_EQ(first->getChildren().size(), 1u);
+    auto* button = dynamic_cast<UIButton*>(first->getChildren()[0].get());
+    ASSERT_NE(button, nullptr);
+    EXPECT_FALSE(button->isEnabled());
+
+    auto second = reconciler.reconcile(
+        ui::column("root")
+            .child(ui::button("action").setText("Action").setEnabled(true)));
+    ASSERT_EQ(second.get(), first.get());
+    ASSERT_EQ(second->getChildren().size(), 1u);
+    EXPECT_EQ(second->getChildren()[0].get(), button);
+    EXPECT_TRUE(button->isEnabled());
+}
+
+TEST(DeclarativeContractTest, TypedFocusPolicyReconcilesWithoutReplacingWidget)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    ui::UIReconciler reconciler(tree);
+
+    auto first = reconciler.reconcile(
+        ui::column("root")
+            .child(ui::button("action")
+                .setText("Action")
+                .setFocusPolicy(EWidgetFocusPolicy::Focusable)));
+    ASSERT_NE(first, nullptr);
+    ASSERT_EQ(first->getChildren().size(), 1u);
+    auto* button = dynamic_cast<UIButton*>(first->getChildren()[0].get());
+    ASSERT_NE(button, nullptr);
+    EXPECT_EQ(button->_focusPolicy, EWidgetFocusPolicy::Focusable);
+
+    auto second = reconciler.reconcile(
+        ui::column("root")
+            .child(ui::button("action")
+                .setText("Action")
+                .setFocusPolicy(EWidgetFocusPolicy::None)));
+    ASSERT_EQ(second.get(), first.get());
+    ASSERT_EQ(second->getChildren().size(), 1u);
+    EXPECT_EQ(second->getChildren()[0].get(), button);
+    EXPECT_EQ(button->_focusPolicy, EWidgetFocusPolicy::None);
+}
+
+TEST(DeclarativeContractTest, TypedColorPropertyReconcilesWithoutReplacingWidget)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    ui::UIReconciler reconciler(tree);
+
+    auto first = reconciler.reconcile(
+        ui::panel("root").setColor({0.2f, 0.3f, 0.4f, 1.0f}));
+    ASSERT_NE(first, nullptr);
+    auto* panel = dynamic_cast<UIPanel*>(first.get());
+    ASSERT_NE(panel, nullptr);
+    EXPECT_EQ(panel->getColor(), glm::vec4(0.2f, 0.3f, 0.4f, 1.0f));
+
+    auto second = reconciler.reconcile(
+        ui::panel("root").setColor({0.5f, 0.6f, 0.7f, 1.0f}));
+    ASSERT_EQ(second.get(), first.get());
+    EXPECT_EQ(panel->getColor(), glm::vec4(0.5f, 0.6f, 0.7f, 1.0f));
+}
+
+TEST(DeclarativeContractTest, PanelBuilderStoresTypedDescriptionPayload)
+{
+    const auto builder = ui::panel("panel").setColor({0.2f, 0.3f, 0.4f, 1.0f});
+    const ui::UIDescription description = builder.build();
+
+    ASSERT_TRUE(description._panel.has_value());
+    ASSERT_TRUE(description._panel->color.has_value());
+    EXPECT_EQ(*description._panel->color, glm::vec4(0.2f, 0.3f, 0.4f, 1.0f));
+}
+
+TEST(DeclarativeContractTest, TextBuilderStoresTypedDescriptionPayload)
+{
+    const auto builder = ui::text("label")
+        .setText("Hello")
+        .setFontSize(24)
+        .setColor({0.3f, 0.4f, 0.5f, 1.0f});
+    const ui::UIDescription description = builder.build();
+
+    ASSERT_TRUE(description._textDescription.has_value());
+    ASSERT_TRUE(description._textDescription->text.has_value());
+    ASSERT_TRUE(description._textDescription->fontSize.has_value());
+    ASSERT_TRUE(description._textDescription->color.has_value());
+    EXPECT_EQ(*description._textDescription->text, "Hello");
+    EXPECT_EQ(*description._textDescription->fontSize, 24u);
+    EXPECT_EQ(*description._textDescription->color, glm::vec4(0.3f, 0.4f, 0.5f, 1.0f));
+}
+
+TEST(DeclarativeContractTest, ButtonAndTextFieldBuilderStoreTypedPayloads)
+{
+    const ui::UIDescription button = ui::button("action")
+        .setText("Save")
+        .onClick([] {})
+        .build();
+    ASSERT_TRUE(button._button.has_value());
+    ASSERT_TRUE(button._button->text.has_value());
+    ASSERT_TRUE(button._button->onClick.has_value());
+    EXPECT_EQ(*button._button->text, "Save");
+
+    const ui::UIDescription field = ui::textField("editor")
+        .setText("hello")
+        .setFontSize(18)
+        .build();
+    ASSERT_TRUE(field._textField.has_value());
+    ASSERT_TRUE(field._textField->text.has_value());
+    ASSERT_TRUE(field._textField->fontSize.has_value());
+    EXPECT_EQ(*field._textField->text, "hello");
+    EXPECT_EQ(*field._textField->fontSize, 18u);
+}
+
+TEST(DeclarativeContractTest, CommonDescriptionStoresSharedFields)
+{
+    const auto description = ui::column("root", "Root")
+        .setPosition({10.0f, 20.0f})
+        .setSize({100.0f, 40.0f})
+        .setEnabled(false)
+        .setFocusPolicy(EWidgetFocusPolicy::Focusable)
+        .child(ui::text("label").setText("Hello"))
+        .build();
+
+    EXPECT_EQ(description.common.key.value(), "root");
+    EXPECT_EQ(description.common.displayName.value(), "Root");
+    ASSERT_TRUE(description.common.position.has_value());
+    ASSERT_TRUE(description.common.size.has_value());
+    ASSERT_TRUE(description.common.enabled.has_value());
+    ASSERT_TRUE(description.common.focusPolicy.has_value());
+    ASSERT_EQ(description.common.children.size(), 1u);
+    EXPECT_EQ(description.common.position.value(), glm::vec2(10.0f, 20.0f));
+    EXPECT_EQ(description.common.size.value(), glm::vec2(100.0f, 40.0f));
+    EXPECT_FALSE(description.common.enabled.value());
+    EXPECT_EQ(description.common.focusPolicy.value(), EWidgetFocusPolicy::Focusable);
+}
+
+TEST(DeclarativeContractTest, StaticChildrenAndFunctionalComposeSyncCommonChildren)
+{
+    const auto description = ui::column("root")
+        .compose([] { return ui::text("title").setText("Title"); })
+        .children(
+            ui::panel("left").setColor({0.1f, 0.2f, 0.3f, 1.0f}),
+            ui::panel("right").setColor({0.4f, 0.5f, 0.6f, 1.0f}))
+        .build();
+
+    ASSERT_EQ(description.children.size(), 3u);
+    ASSERT_EQ(description.common.children.size(), 3u);
+    EXPECT_EQ(description.common.children[0].key, "title");
+    EXPECT_EQ(description.common.children[1].key, "left");
+    EXPECT_EQ(description.common.children[2].key, "right");
+}
+
+TEST(DeclarativeContractTest, CommonChildrenCanDriveReconciliation)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    ui::UIReconciler reconciler(tree);
+
+    ui::UIDescription description;
+    description.kind = ui::EWidgetKind::Column;
+    description.key = "root";
+    description.displayName = "Root";
+    description.common.key = description.key;
+    description.common.displayName = description.displayName;
+    description.common.children.push_back(ui::text("title").setText("Title").build());
+
+    auto live = reconciler.reconcile(description);
+    ASSERT_NE(live, nullptr);
+    ASSERT_EQ(live->getChildren().size(), 1u);
+    EXPECT_EQ(live->getChildren()[0]->_stableKey, "title");
+}
+
+TEST(DeclarativeContractTest, TypedFontSizePropertyReconcilesWithoutReplacingWidget)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    ui::UIReconciler reconciler(tree);
+
+    auto first = reconciler.reconcile(
+        ui::text("root").setFontSize(42));
+    ASSERT_NE(first, nullptr);
+    auto* text = dynamic_cast<UIText*>(first.get());
+    ASSERT_NE(text, nullptr);
+    EXPECT_EQ(text->_fontSize, 42u);
+
+    auto second = reconciler.reconcile(
+        ui::text("root").setFontSize(24));
+    ASSERT_EQ(second.get(), first.get());
+    EXPECT_EQ(text->_fontSize, 24u);
+}
+
+TEST(DeclarativeContractTest, TypedButtonTextReconcilesGeneratedLabelWithoutReplacingSubtree)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    ui::UIReconciler reconciler(tree);
+
+    auto first = reconciler.reconcile(
+        ui::button("action").setText("Save").setSize({120.0f, 30.0f}));
+    ASSERT_NE(first, nullptr);
+    auto* button = dynamic_cast<UIButton*>(first.get());
+    ASSERT_NE(button, nullptr);
+    ASSERT_EQ(button->getChildren().size(), 1u);
+    auto* label = dynamic_cast<UIText*>(button->getChildren()[0].get());
+    ASSERT_NE(label, nullptr);
+    EXPECT_EQ(label->_stableKey, "action__label");
+    EXPECT_EQ(label->getText(), "Save");
+
+    auto second = reconciler.reconcile(
+        ui::button("action").setText("Save As").setSize({120.0f, 30.0f}));
+    ASSERT_EQ(second.get(), first.get());
+    ASSERT_EQ(second->getChildren().size(), 1u);
+    EXPECT_EQ(second->getChildren()[0].get(), label);
+    EXPECT_EQ(label->getText(), "Save As");
+}
+
+TEST(DeclarativeContractTest, TypedTextFieldPropertiesPreserveIdentityAndFocus)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    ui::UIReconciler reconciler(tree);
+
+    auto first = reconciler.reconcile(
+        ui::textField("editor")
+            .setText("hello")
+            .setFontSize(18)
+            .setSize({180.0f, 28.0f}));
+    ASSERT_NE(first, nullptr);
+    auto* field = dynamic_cast<UITextField*>(first.get());
+    ASSERT_NE(field, nullptr);
+    EXPECT_EQ(field->_text, "hello");
+    EXPECT_EQ(field->_fontSize, 18u);
+
+    tree.setFocus(field);
+    ASSERT_EQ(tree.getFocused(), field);
+
+    auto second = reconciler.reconcile(
+        ui::textField("editor")
+            .setText("world")
+            .setFontSize(22)
+            .setSize({180.0f, 28.0f}));
+    ASSERT_EQ(second.get(), first.get());
+    EXPECT_EQ(second.get(), field);
+    EXPECT_EQ(field->_text, "world");
+    EXPECT_EQ(field->_fontSize, 22u);
+    EXPECT_EQ(tree.getFocused(), field);
+}
+
+TEST(DeclarativeContractTest, TypedButtonOnClickPreservesRuntimeCallbackUnlessAuthored)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    ui::UIReconciler reconciler(tree);
+    int runtimeClickCount = 0;
+    int authoredClickCount = 0;
+
+    auto first = reconciler.reconcile(
+        ui::button("action").setText("Action").onClick([&] { authoredClickCount += 1; }));
+    ASSERT_NE(first, nullptr);
+    auto* button = dynamic_cast<UIButton*>(first.get());
+    ASSERT_NE(button, nullptr);
+
+    button->_onClick = [&] { runtimeClickCount += 1; };
+    ASSERT_EQ(runtimeClickCount, 0);
+    ASSERT_EQ(authoredClickCount, 0);
+
+    auto second = reconciler.reconcile(
+        ui::button("action").setText("Action"));
+    ASSERT_EQ(second.get(), first.get());
+    ASSERT_EQ(button->_onClick != nullptr, true);
+    button->_onClick();
+    EXPECT_EQ(runtimeClickCount, 1);
+    EXPECT_EQ(authoredClickCount, 0);
+
+    auto third = reconciler.reconcile(
+        ui::button("action").setText("Action").onClick([&] { authoredClickCount += 1; }));
+    ASSERT_EQ(third.get(), first.get());
+    ASSERT_EQ(button->_onClick != nullptr, true);
+    button->_onClick();
+    EXPECT_EQ(runtimeClickCount, 1);
+    EXPECT_EQ(authoredClickCount, 1);
+}
+
+TEST(DeclarativeContractTest, TypedContainerPropertiesPreserveIdentityAndInvalidationScope)
+{
+    WidgetTree treeA({.width = 640, .height = 360});
+    ui::UIReconciler reconcilerA(treeA);
+
+    auto first = reconcilerA.reconcile(
+        ui::row("root")
+            .setSpacing(4.0f)
+            .setPadding({2.0f, 3.0f})
+            .setClipChildren(false)
+            .setStretchLastChild(false)
+            .child(ui::panel("left").setSize({20.0f, 10.0f}))
+            .child(ui::panel("right").setSize({30.0f, 10.0f})));
+    ASSERT_NE(first, nullptr);
+    auto* container = dynamic_cast<UIContainer*>(first.get());
+    ASSERT_NE(container, nullptr);
+    EXPECT_EQ(container->getBoxLayout().getDirection(), EWidgetBoxLayout::Horizontal);
+    EXPECT_FLOAT_EQ(container->getBoxLayout().getSpacing(), 4.0f);
+    EXPECT_EQ(container->getBoxLayout().getPadding(), glm::vec2(2.0f, 3.0f));
+    EXPECT_FALSE(container->getBoxLayout().clipsChildren());
+    EXPECT_FALSE(container->getBoxLayout().stretchesLastChild());
+    ASSERT_EQ(first->getChildren().size(), 2u);
+    auto* left = dynamic_cast<UIPanel*>(first->getChildren()[0].get());
+    auto* right = dynamic_cast<UIPanel*>(first->getChildren()[1].get());
+    ASSERT_NE(left, nullptr);
+    ASSERT_NE(right, nullptr);
+
+    const UIFrameSnapshot firstSnapshot = treeA.buildSnapshot({});
+    ASSERT_GE(firstSnapshot.items.size(), 2u);
+    EXPECT_FLOAT_EQ(left->_layoutRect.pos.x, 2.0f);
+    EXPECT_FLOAT_EQ(right->_layoutRect.pos.x, 26.0f);
+    EXPECT_EQ(left->_layoutRect.extent.x, 20.0f);
+    EXPECT_EQ(right->_layoutRect.extent.x, 30.0f);
+
+    auto second = reconcilerA.reconcile(
+        ui::row("root")
+            .setSpacing(12.0f)
+            .setPadding({8.0f, 9.0f})
+            .setClipChildren(true)
+            .setStretchLastChild(true)
+            .child(ui::panel("left").setSize({20.0f, 10.0f}))
+            .child(ui::panel("right").setSize({30.0f, 10.0f})));
+    ASSERT_EQ(second.get(), first.get());
+    EXPECT_EQ(second->getChildren().size(), 2u);
+    container = dynamic_cast<UIContainer*>(second.get());
+    ASSERT_NE(container, nullptr);
+    EXPECT_FLOAT_EQ(container->getBoxLayout().getSpacing(), 12.0f);
+    EXPECT_EQ(container->getBoxLayout().getPadding(), glm::vec2(8.0f, 9.0f));
+    EXPECT_TRUE(container->getBoxLayout().clipsChildren());
+    EXPECT_TRUE(container->getBoxLayout().stretchesLastChild());
+    const UIFrameSnapshot secondSnapshot = treeA.buildSnapshot({});
+    ASSERT_GE(secondSnapshot.items.size(), 2u);
+    auto* leftB = dynamic_cast<UIPanel*>(second->getChildren()[0].get());
+    auto* rightB = dynamic_cast<UIPanel*>(second->getChildren()[1].get());
+    ASSERT_NE(leftB, nullptr);
+    ASSERT_NE(rightB, nullptr);
+    EXPECT_FLOAT_EQ(leftB->_layoutRect.pos.x, 8.0f);
+    EXPECT_FLOAT_EQ(rightB->_layoutRect.pos.x, 40.0f);
+    EXPECT_EQ(rightB->_layoutRect.extent.x, 52.0f);
+
+    WidgetTree clipTreeA({.width = 640, .height = 360});
+    ui::UIReconciler clipReconcilerA(clipTreeA);
+    auto clipped = clipReconcilerA.reconcile(
+        ui::row("clip_root")
+            .setSize({50.0f, 20.0f})
+            .setClipChildren(false)
+            .child(ui::panel("overflow").setSize({80.0f, 10.0f})));
+    ASSERT_NE(clipped, nullptr);
+    auto* overflow = dynamic_cast<UIPanel*>(clipped->getChildren()[0].get());
+    ASSERT_NE(overflow, nullptr);
+    const UIFrameSnapshot unclippedSnapshot = clipTreeA.buildSnapshot({});
+    ASSERT_GE(unclippedSnapshot.items.size(), 1u);
+    EXPECT_EQ(overflow->_layoutRect.extent.x, 80.0f);
+
+    auto clippedAgain = clipReconcilerA.reconcile(
+        ui::row("clip_root")
+            .setSize({50.0f, 20.0f})
+            .setClipChildren(true)
+            .child(ui::panel("overflow").setSize({80.0f, 10.0f})));
+    ASSERT_EQ(clippedAgain.get(), clipped.get());
+    const UIFrameSnapshot clippedSnapshot = clipTreeA.buildSnapshot({});
+    ASSERT_GE(clippedSnapshot.items.size(), 1u);
+    EXPECT_TRUE(clippedSnapshot.items[0].bClipped);
+    EXPECT_EQ(clippedSnapshot.items[0].clip.extent.x, 50.0f);
 }
 
 TEST(DeclarativeContractTest, DetachClearsFocusAndPointerCapture)

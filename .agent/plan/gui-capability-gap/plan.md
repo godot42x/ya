@@ -124,6 +124,96 @@
 
 P1 → P2 → P3 → P4 → **G-A → G-B** → P5 → **G-C** → P6 → P7。每期 = 1 个自洽 commit（代码 + 工件更新 + scenario 同 commit）。
 
+## 6.1 P8 声明式 DSL 第一刀（P7 后，控件专属 builder）
+
+P1-P7 收口后，进入统一 GUI / Game UI / Editor 的声明式入口建设。第一步只扩展描述组合能力，不重写 WidgetTree、snapshot 或 reconciler：
+
+- 保持每种控件自己的 builder（column/row/panel/text/button/textField），不引入一个拥有所有事件成员的通用 UIBuilder。
+- 在拥有 child slot 的 builder 上提供 .content(factory)；factory 返回一个 UIDescription 或可隐式转换为它的专属 builder。
+- 组合语法必须保持 key identity、reconcile 复用、focus/capture 生命周期不变。
+- 第一阶段只做 C++ 内嵌 DSL，不做 XML/脚本编译器，不做 immediate API，不做 theme DSL。
+    - 已落地：content / children / when / UIDescriptionFactory / setEnabled / setFocusPolicy / panel.setColor / text.setFontSize / button.setText / textField.setText / textField.setFontSize。
+    - 容器属性 contract 已落地：spacing / padding / clipChildren / stretchLastChild。
+    - 已落地 callback authored 语义：未声明 callback 时保留运行态回调，显式 `onClick` 时才覆盖。
+    - 下一刀：继续审计其它 authored-vs-default 字段，并考虑把属性应用进一步按 widget kind 拆成可扩展 handlers。
+    - 结构前置：继续把可扩展的节点映射留在 `UIDeclarativeNodeAdapter`，让 `UIReconciler` 保持轻壳，只管生命周期/identity/顺序。
+
+### 6.2 P8 typed description 架构重构（新增设计，先于继续扩展属性）
+
+当前单一 `UIDescription` 已出现 god struct 趋势：所有控件的字段和 `_bHasXxx` authored 标志集中在一个平面结构中，后续每增加控件都会同时膨胀 description、builder 和 adapter 分支。下一阶段必须先完成 typed description 重构，再继续扩展属性。
+
+#### 设计来源与取舍
+
+- **React**：保留统一节点外壳的 `type/key/children` identity 语义；reconcile 继续按 key + kind 复用 retained widget。
+- **Slate**：每种控件拥有自己的 typed arguments/builder/slot，不把所有事件和属性塞进通用 builder。
+- **Flutter**：description 是不可变配置，Element/WidgetTree 承载长期 identity，focus/capture/编辑缓冲等 runtime state 不进入 description。
+- **QML**：属性归属于具体 type，后续可在具体属性上增加 binding，而不是使用无类型属性字典。
+
+#### 目标数据模型
+
+```text
+Common description
+  identity: key / displayName
+  layout: position / size / enabled / focusPolicy
+  children
+
+Typed description payload
+  Column/Row: spacing / padding / clipChildren / stretchLastChild
+  Panel: color
+  Text: text / fontSize / color
+  Button: text / onClick
+  TextField: text / fontSize
+```
+
+推荐实现为“公共部分 + typed payload”：
+
+```cpp
+struct UIElementDescription {
+    UIIdentityDescription identity;
+    UILayoutDescription layout;
+    UIInteractionDescription interaction;
+    std::vector<UIDescription> children;
+};
+
+struct UIButtonDescription : UIElementDescription {
+    std::string text;
+    std::optional<std::function<void()>> onClick;
+};
+
+using UIDescription = std::variant<
+    UIColumnDescription, UIRowDescription, UIPanelDescription,
+    UITextDescription, UIButtonDescription, UITextFieldDescription>;
+```
+
+实现时需要处理 C++ 递归 variant 的间接层；可以使用 `UIDescriptionRef` 或内部 node indirection 保持 description 值语义，避免直接递归类型导致编译和 ownership 复杂化。最终选择以最小 ownership 复杂度为准，不引入 premature XML/脚本 AST。
+
+#### 必须保持的边界
+
+1. `UIReconciler` 只处理 identity、生命周期、children order、stale subtree cleanup，不知道具体控件属性。
+2. `UIDeclarativeNodeAdapter` 改为按 typed payload 分发（优先 `std::visit`/typed handlers），不再继续堆叠 `dynamic_cast + _bHasXxx`。
+3. 每种控件保留自己的 builder；builder 只暴露该控件合法的成员和 slot。
+4. authored 属性使用 `std::optional<T>` 或等价明确标志表达；未 authored 时不得覆盖 retained widget 的运行态。
+5. description 不持有 runtime state：focus、pointer capture、编辑态、caret、drag session、Reactive dependency、WidgetTree pointer 均留在 retained widget/tree。
+6. `children` 仍使用统一组合入口，但 child 的具体属性由 typed description 自己拥有。
+
+#### 分步迁移
+
+1. 已开始 typed payload 兼容迁移：`UIPanelDescription`、`UITextDescription`、`UIButtonDescription`、`UITextFieldDescription` 已落地；公共 description `UICommonDescription` 已抽出并 helper 化，下一步继续收缩 flat fields。
+2. 建立 `UIColumnDescription`、`UIRowDescription`、`UIPanelDescription`、`UITextDescription`、`UIButtonDescription`、`UITextFieldDescription`。
+3. 保留当前 builder 调用语法，内部改写为 typed description；先做兼容转换，不一次性改调用方。
+4. 将 `UIDeclarativeNodeAdapter` 改为 typed handler/`std::visit` 分发。
+5. 将 authored/default contract 迁移到 `std::optional` 语义，删除旧 `_bHasXxx` 平面字段。
+6. 删除旧 god `UIDescription` 字段，并保留 stable key、focus/capture、callback、stale cleanup contract tests。
+7. 最后再扩展新控件和更复杂属性。
+
+#### 验收门槛
+
+- 现有 DSL 调用语法不变或仅有机械迁移。
+- `DeclarativeContractTest` 覆盖 identity reuse、focus preservation、runtime callback preservation、authored override、children/when、stale cleanup。
+- typed description 不引入通用 fat `UIBuilder`，不把 theme DSL、binding DSL 和 runtime state 混入本阶段。
+- `Declarative.cpp` 不重新承载控件属性分支；新增控件的扩展面限于 description、builder、typed adapter handler 和 contract tests。
+
 ## 7. 修订记录
 
 - **2026-08-18 首版**：ImGui 调研 → 范围拍板（上述全部 + DockSpace）→ Plan agent 设计 → 定稿。
+- **2026-08-25**：根据 Slate / React / Flutter / QML 对比，新增 P8 typed description 架构重构：公共 description + 控件专属 payload，先解决 `UIDescription` god struct，再继续扩展 DSL。

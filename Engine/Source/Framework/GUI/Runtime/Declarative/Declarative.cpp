@@ -1,10 +1,6 @@
 #include "GUI/Declarative/Declarative.h"
+#include "GUI/Declarative/DeclarativeNodeAdapter.h"
 
-#include "GUI/Widgets/Controls/Button.h"
-#include "GUI/Widgets/Controls/Container.h"
-#include "GUI/Widgets/Controls/Panel.h"
-#include "GUI/Widgets/Controls/Text.h"
-#include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
@@ -91,7 +87,7 @@ UIElementRef UIReconciler::findCompatibleChild(UIElement& parent, const UIDescri
             continue;
         }
         const std::string childKey = child->_stableKey.empty() ? child->_name : child->_stableKey;
-        if (childKey == key && sameKind(*child, node.kind)) {
+        if (childKey == key && UIDeclarativeNodeAdapter::sameKind(*child, node.kind)) {
             used.insert(child.get());
             return child;
         }
@@ -99,87 +95,9 @@ UIElementRef UIReconciler::findCompatibleChild(UIElement& parent, const UIDescri
     return nullptr;
 }
 
-UIElementRef UIReconciler::createNode(const UIDescription& node) const
-{
-    switch (node.kind) {
-    case EWidgetKind::Column:
-    case EWidgetKind::Row:
-        return std::make_shared<UIContainer>(node.displayName.empty() ? node.key : node.displayName);
-    case EWidgetKind::Panel:
-        return std::make_shared<UIPanel>(node.displayName.empty() ? node.key : node.displayName);
-    case EWidgetKind::Text:
-        return std::make_shared<UIText>(node.displayName.empty() ? node.key : node.displayName);
-    case EWidgetKind::Button:
-        return std::make_shared<UIButton>(node.displayName.empty() ? node.key : node.displayName);
-    case EWidgetKind::TextField:
-        return std::make_shared<UITextField>(node.displayName.empty() ? node.key : node.displayName);
-    }
-    return nullptr;
-}
-
 void UIReconciler::applyNodeProperties(UIElement& widget, const UIDescription& node) const
 {
-    widget._stableKey = identityKey(node);
-    widget._name = node.displayName.empty() ? widget._stableKey : node.displayName;
-
-    if (node._bHasPosition) {
-        widget.setPosition(node._position);
-    }
-    if (node._bHasSize) {
-        widget.setSize(node._size);
-    }
-
-    if (auto* container = dynamic_cast<UIContainer*>(&widget)) {
-        if (node.kind == EWidgetKind::Row) {
-            container->setDirection(EWidgetBoxLayout::Horizontal);
-        }
-        else {
-            container->setDirection(EWidgetBoxLayout::Vertical);
-        }
-        if (node._bHasSpacing) {
-            container->setSpacing(node._spacing);
-        }
-        if (node._bHasPadding) {
-            container->setPadding(node._padding);
-        }
-        if (node._bHasClipChildren) {
-            container->setClipChildren(node._bClipChildren);
-        }
-        if (node._bHasStretchLastChild) {
-            container->setStretchLastChild(node._bStretchLastChild);
-        }
-    }
-
-    if (auto* panel = dynamic_cast<UIPanel*>(&widget)) {
-        if (node._bHasColor) {
-            panel->setColor(node._color);
-        }
-    }
-
-    if (auto* text = dynamic_cast<UIText*>(&widget)) {
-        if (node._bHasColor) {
-            text->_color = node._color;
-        }
-        if (node._bHasFontSize) {
-            text->_fontSize = node._fontSize;
-        }
-        if (node._bHasText) {
-            text->setText(node._text);
-        }
-    }
-
-    if (auto* button = dynamic_cast<UIButton*>(&widget)) {
-        button->_onClick = node._onClick;
-    }
-
-    if (auto* textField = dynamic_cast<UITextField*>(&widget)) {
-        if (node._bHasFontSize) {
-            textField->_fontSize = node._fontSize;
-        }
-        if (node._bHasText) {
-            textField->setText(node._text);
-        }
-    }
+    UIDeclarativeNodeAdapter::apply(widget, node);
 }
 
 void UIReconciler::reconcileChildren(UIElement& widget, const UIDescription& node)
@@ -209,7 +127,7 @@ void UIReconciler::reconcileChildren(UIElement& widget, const UIDescription& nod
     for (const auto& childDesc : effectiveChildren) {
         UIElementRef child = findCompatibleChild(widget, childDesc, used);
         if (!child) {
-            child = createNode(childDesc);
+            child = UIDeclarativeNodeAdapter::create(childDesc);
             YA_CORE_ASSERT(child, "UIReconciler::reconcileChildren: failed to create child");
             _tree.reparent(widget, child);
             used.insert(child.get());
@@ -246,7 +164,7 @@ UIElementRef UIReconciler::reconcileNode(UIElement& parent, const UIDescription&
     std::unordered_set<UIElement*> used;
     UIElementRef live = findCompatibleChild(parent, node, used);
     if (!live) {
-        live = createNode(node);
+        live = UIDeclarativeNodeAdapter::create(node);
         YA_CORE_ASSERT(live, "UIReconciler::reconcileNode: failed to create node");
         _tree.reparent(parent, live);
     }
@@ -256,35 +174,9 @@ UIElementRef UIReconciler::reconcileNode(UIElement& parent, const UIDescription&
     return live;
 }
 
-bool UIReconciler::sameKind(const UIElement& widget, EWidgetKind kind)
-{
-    switch (kind) {
-    case EWidgetKind::Column:
-    case EWidgetKind::Row: return dynamic_cast<const UIContainer*>(&widget) != nullptr;
-    case EWidgetKind::Panel: return dynamic_cast<const UIPanel*>(&widget) != nullptr;
-    case EWidgetKind::Text: return dynamic_cast<const UIText*>(&widget) != nullptr;
-    case EWidgetKind::Button: return dynamic_cast<const UIButton*>(&widget) != nullptr;
-    case EWidgetKind::TextField: return dynamic_cast<const UITextField*>(&widget) != nullptr;
-    }
-    return false;
-}
-
 std::string UIReconciler::identityKey(const UIDescription& node)
 {
     return !node.key.empty() ? node.key : node.displayName;
-}
-
-const char* UIReconciler::kindName(EWidgetKind kind)
-{
-    switch (kind) {
-    case EWidgetKind::Column: return "Column";
-    case EWidgetKind::Row: return "Row";
-    case EWidgetKind::Panel: return "Panel";
-    case EWidgetKind::Text: return "Text";
-    case EWidgetKind::Button: return "Button";
-    case EWidgetKind::TextField: return "TextField";
-    }
-    return "Unknown";
 }
 
 bool UIReconciler::isLastChild(const UIElement& parent, const UIElement& child)
