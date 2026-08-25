@@ -5,7 +5,6 @@
 #include "GameEditor/EditorLayer.h"
 
 
-#include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component.h"
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Systems/Components/LuaScriptComponent.h"
@@ -280,7 +279,7 @@ void SceneHierarchyPanel::sceneTree()
             ImGui::TreePop();
         }
 
-        // === 2D section: Game UI nodes (references to .yaui documents). ===
+        // === 2D section: Game UI entries (inline authoring documents). ===
         if (ImGui::TreeNodeEx("##SceneHierarchySection2D", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow, "2D (Game UI)")) {
             drawWidgetEntries();
             // Deferred document reparents (queued by the UI entry drag-drop)
@@ -335,9 +334,7 @@ void SceneHierarchyPanel::drawWidgetEntries()
             const std::shared_ptr<UIDocument>& openDoc = designer.getOpenDocument();
             bool bReferenced = false;
             for (const auto& entry : entries) {
-                if ((entry.inlineDocument && entry.inlineDocument == openDoc) ||
-                    (!entry.documentPath.empty() && !designer.getDocumentPath().empty() &&
-                     entry.documentPath == designer.getDocumentPath())) {
+                if (entry.inlineDocument && entry.inlineDocument == openDoc) {
                     bReferenced = true;
                     break;
                 }
@@ -456,11 +453,6 @@ void SceneHierarchyPanel::drawWidgetEntryRow(SceneWidgetEntry& entry, size_t ind
 
     const bool bSelected = _owner->getSelectedWidgetEntryId() == entry.entryId;
     std::shared_ptr<UIDocument> document = entry.inlineDocument;
-    if (!document && !entry.documentPath.empty()) {
-        if (App* app = App::get(); app && app->getGameUIHost()) {
-            document = app->getGameUIHost()->getDocumentResolver().load(entry.documentPath);
-        }
-    }
     // UMG-style live mirror: when the UI Designer is editing this entry's
     // document, show the designer's live tree so palette adds / deletes /
     // drag-drops appear in the hierarchy immediately (no save required).
@@ -468,13 +460,9 @@ void SceneHierarchyPanel::drawWidgetEntryRow(SceneWidgetEntry& entry, size_t ind
         if (entry.inlineDocument && designer.getOpenDocument() == entry.inlineDocument) {
             document = designer.getOpenDocument();
         }
-        else if (!entry.documentPath.empty() && designer.getDocumentPath() == entry.documentPath) {
-            document = designer.getOpenDocument();
-        }
     }
     const bool        bLeaf   = !document || document->children.empty();
-    const std::string typeId  = document ? document->typeId
-                                         : (entry.documentPath.empty() ? "<invalid>" : entry.documentPath);
+    const std::string typeId  = document ? document->typeId : "<invalid>";
 
     char label[512];
     std::snprintf(label, sizeof(label), "%s  [%s]  z=%d%s",
@@ -504,8 +492,7 @@ void SceneHierarchyPanel::drawWidgetEntryRow(SceneWidgetEntry& entry, size_t ind
 
     // Drag the entry root (whole document). Same pattern as the 3D node tree.
     publishUIDragSource(index, {});
-    // Drop target: Into = become this entry's child. Registered for every
-    // entry (inline and file-backed); file targets persist the .yaui.
+    // Drop target: Into = become this entry's child. Registered for every entry.
     publishUIDragTarget(ImGui::GetID(&entry), index, {}, itemMin, itemMax);
 
     if (ImGui::BeginPopupContextItem()) {
@@ -626,9 +613,6 @@ void SceneHierarchyPanel::openEntryWidgetInDesigner(SceneWidgetEntry& entry, con
     UIDesignerPanel& designer = _owner->getUIDesignerPanel();
     if (entry.inlineDocument) {
         designer.openSceneEntry(*_context, entry);
-    }
-    else if (!entry.documentPath.empty()) {
-        designer.openDocumentPath(entry.documentPath);
     }
     designer.selectByChildPath(childPath);
 }
@@ -767,18 +751,6 @@ bool SceneHierarchyPanel::canParentNode(Node* dragged, Node* target) const
     return true;
 }
 
-std::shared_ptr<UIDocument> SceneHierarchyPanel::resolveUIDocumentPath(const std::string& path) const
-{
-    UIDesignerPanel& designer = _owner->getUIDesignerPanel();
-    if (designer.hasDocument() && designer.getDocumentPath() == path && designer.getOpenDocument()) {
-        return designer.getOpenDocument();
-    }
-    if (App* app = App::get(); app && app->getGameUIHost()) {
-        return app->getGameUIHost()->getDocumentResolver().load(path);
-    }
-    return nullptr;
-}
-
 bool SceneHierarchyPanel::canAcceptUIEntryDrop(const UIEntryDragPayload&  src,
                                                size_t                     dstEntryIndex,
                                                const std::vector<size_t>& dstPath,
@@ -791,8 +763,7 @@ bool SceneHierarchyPanel::canAcceptUIEntryDrop(const UIEntryDragPayload&  src,
                                       srcPath,
                                       dstEntryIndex,
                                       dstPath,
-                                      static_cast<EWidgetEntryDropPosition>(position),
-                                      [this](const std::string& file) { return resolveUIDocumentPath(file); });
+                                      static_cast<EWidgetEntryDropPosition>(position));
 }
 
 void SceneHierarchyPanel::queueUIDrag(const UIEntryDragPayload&  payload,
@@ -837,36 +808,13 @@ void SceneHierarchyPanel::flushUIDrag()
     const bool bSrcIsEntryRoot = req.srcPath.empty();
     const bool bDstIsEntryRoot = req.dstPath.empty();
 
-    // documentPath entries participate through the shared host resolver; when
-    // the UI Designer has the file open, its live document wins (unsaved edits
-    // are the truth for the move and for the file persist below).
-    std::vector<std::string> changedFiles;
     if (!moveWidgetEntryDocument(entries,
                                  req.srcEntryIndex,
                                  req.srcPath,
                                  req.dstEntryIndex,
                                  req.dstPath,
-                                 static_cast<EWidgetEntryDropPosition>(req.position),
-                                 [this](const std::string& file) { return resolveUIDocumentPath(file); },
-                                 &changedFiles)) {
+                                 static_cast<EWidgetEntryDropPosition>(req.position))) {
         return;
-    }
-
-    // Persist file-backed documents the move mutated and refresh caches.
-    for (const std::string& file : changedFiles) {
-        std::shared_ptr<UIDocument> doc = resolveUIDocumentPath(file);
-        if (!doc || !VirtualFileSystem::get()) {
-            continue;
-        }
-        VirtualFileSystem::get()->saveToFile(file, doc->toJson().dump(4));
-        if (App* app = App::get(); app && app->getGameUIHost()) {
-            app->getGameUIHost()->getDocumentResolver().invalidate(file);
-        }
-        // If the UI Designer has this .yaui open, re-open it from disk so its
-        // preview and Save target the updated document.
-        if (_owner->getUIDesignerPanel().getDocumentPath() == file) {
-            _owner->getUIDesignerPanel().reloadCurrentDocument();
-        }
     }
 
     // Keep the drop target open so the restructured tree is visible.
@@ -915,9 +863,9 @@ void SceneHierarchyPanel::drawAddEntryMenu()
             continue;
         }
 
-        // UMG-style workflow: the main scene only REFERENCES .yaui files; the
-        // file is created here (default document of the picked type) under the
-        // project's Content/UI and the entry stores the reference path.
+        // UMG-style workflow: a new entry carries an inline document of the
+        // picked widget type; the document is authored inline in the scene
+        // (and mirrored live in the UI Designer) — no standalone file format.
         std::string entryId = shortName(typeId);
         int         suffix  = 1;
         const auto& entries = _context->getWidgetEntries();
@@ -929,24 +877,19 @@ void SceneHierarchyPanel::drawAddEntryMenu()
             }
             return false;
         };
-        while (bTaken(entryId) ||
-               (VirtualFileSystem::get() && VirtualFileSystem::get()->isFileExists("Content/UI/" + entryId + ".yaui"))) {
+        while (bTaken(entryId)) {
             entryId = shortName(typeId) + "_" + std::to_string(suffix++);
         }
 
         auto document    = std::make_shared<UIDocument>();
         document->typeId = typeId;
         document->fields = nlohmann::json::object();
-        const std::string vfsPath = "Content/UI/" + entryId + ".yaui";
-        if (VirtualFileSystem::get()) {
-            VirtualFileSystem::get()->saveToFile(vfsPath, document->toJson().dump(4));
-        }
 
         SceneWidgetEntry entry;
-        entry.entryId        = entryId;
-        entry.documentPath   = vfsPath;
-        entry.zOrder         = 0;
-        entry.autoMount      = true;
+        entry.entryId       = entryId;
+        entry.inlineDocument = std::move(document);
+        entry.zOrder        = 0;
+        entry.autoMount     = true;
         _context->addWidgetEntry(std::move(entry));
         _owner->setSelectedWidgetEntryId(entryId);
         ImGui::CloseCurrentPopup();

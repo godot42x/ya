@@ -121,6 +121,11 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     {
         buildChineseTest(t, p, demoState, status);
     });
+    // Rounded-rect capability demo: app-pended after the stable scenario pages.
+    surface.addPage("RoundedRect", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildRoundedRectDemo(t, p, demoState, status);
+    });
 
     applyStartPage();
 

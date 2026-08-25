@@ -212,9 +212,6 @@ class EditorViewportCompositor
     std::shared_ptr<IImage>      _sourceViewportImage     = nullptr;
     std::shared_ptr<IImageView>  _sourceViewportImageView = nullptr;
 
-    /// `.yaui` resolve cache for the scene-entries canvas preview (same
-    /// resolver rules as the runtime host / UI designer).
-    UIDocumentResolver _scenePreviewResolver;
     /// Last reported scene-preview mount errors (dedupe: log on change only).
     std::string        _scenePreviewErrors;
 
@@ -225,7 +222,6 @@ class EditorViewportCompositor
         _sourceViewportTexture.reset();
         _sourceViewportImage.reset();
         _sourceViewportImageView.reset();
-        _scenePreviewResolver.clearCache();
         _scenePreviewErrors.clear();
     }
 
@@ -247,7 +243,7 @@ class EditorViewportCompositor
         WidgetTree  previewTree(logicalExtent);
         std::string errors;
         const auto  attachments =
-            mountSceneAutoMountEntries(scene, previewTree, _scenePreviewResolver,
+            mountSceneAutoMountEntries(scene, previewTree,
                                        [&errors](std::string_view message) {
                                            errors.append(message);
                                            errors.push_back('\n');

@@ -45,6 +45,11 @@ struct YA_RENDER_2D_API FQuadRender
         glm::vec3 worldCenter;
         glm::vec3 worldDirection;
         glm::vec2 worldSize;
+        // Rounded-rect SDF params (screen quads only; world quads leave these 0).
+        // cornerRadius = corner radius in target px; cornerSize = quad size in
+        // target px. A positive cornerRadius routes the fragment shader into the
+        // SDF round-rect alpha branch (no texture needed).
+        glm::vec3 corner;
     };
 
     static constexpr const std::array<glm::vec4, 4> vertices        = {{
@@ -240,6 +245,14 @@ struct YA_RENDER_2D_API FQuadRender
                         const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                         const glm::vec4& uvRect  = glm::vec4(0.0f));
 
+    // Draws a filled rounded rectangle. cornerRadius is in target px; the shader
+    // derives the SDF round-rect alpha from the quad size (passed via corner attr).
+    // No texture sampling is required.
+    void drawRoundedRect(const glm::vec3& position,
+                        const glm::vec2& size,
+                        const glm::vec4& tint,
+                        float            cornerRadius);
+
     void drawText(const std::string& text,
                   const glm::vec3&   position,
                   const glm::vec4&   color,
@@ -253,7 +266,8 @@ struct YA_RENDER_2D_API FQuadRender
                              uint32_t textureIdx,
                              const glm::vec3 tint,
                              const glm::vec2& uvScale,
-                             const glm::vec2& uvTranslation = {0, 0});
+                             const glm::vec2& uvTranslation = {0, 0},
+                             const glm::vec3& corner        = {0.0f, 0.0f, 0.0f});
 
     void drawWorldTextureInternal(const glm::vec3& center,
                                   const glm::vec3& direction,

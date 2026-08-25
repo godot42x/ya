@@ -373,7 +373,8 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
 
     // ========================================================================
     // Scene tree (world nodes, path-addressed). Game UI authoring uses the
-    // ui.* service (WidgetTree); the legacy Node2D UI paths were removed.
+    // ui.* service (WidgetTree); documents are authored inline (no file
+    // format) and mounted through SceneWidgetEntry.
     // ========================================================================
 
     registry.registerFunction(
@@ -537,31 +538,6 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
                 tree->detach(*widget);
             }
             return Json{{"handle", args.at("handle").get<uint64_t>()}, {"detached", true}};
-        });
-
-    registry.registerFunction(
-        "ui.instantiate",
-        "Instantiates a .yaui document from the VFS (same resolver rules as the "
-        "editor and runtime). Returns a script widget handle. "
-        "Args: {path}.",
-        Json{{"path", {{"type", "string"}}}},
-        [](const Json& args) -> Json {
-            const std::string path = args.at("path").get<std::string>();
-            App* app = App::get();
-            if (!app || !app->getGameUIHost()) {
-                throw Error("ui.instantiate: no game UI host");
-            }
-            auto document = app->getGameUIHost()->getDocumentResolver().load(path);
-            if (!document) {
-                throw Error(std::format("ui.instantiate: failed to resolve '{}'", path));
-            }
-            UIElementRef widget = document->instantiate();
-            if (!widget) {
-                throw Error(std::format("ui.instantiate: failed to instantiate '{}'", path));
-            }
-            const ScriptWidgetHandle handle = nextScriptWidgetHandle();
-            scriptWidgets().emplace(handle, widget);
-            return Json{{"handle", handle}, {"type", widget->_typeId}, {"name", widget->_name}};
         });
 
     registry.registerFunction(

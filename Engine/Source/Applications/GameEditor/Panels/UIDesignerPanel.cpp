@@ -1,7 +1,6 @@
 #include "GameEditor/Panels/UIDesignerPanel.h"
 
 #include "Core/Log.h"
-#include "Core/System/VirtualFileSystem.h"
 
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/Inspector/TypeRenderer.h"
@@ -94,14 +93,13 @@ UIDesignerPanel::UIDesignerPanel(EditorLayer* owner) : _owner(owner)
 
 UIDesignerPanel::~UIDesignerPanel() = default;
 
-void UIDesignerPanel::openDocument(const std::shared_ptr<UIDocument>& document, const std::string& path)
+void UIDesignerPanel::openDocument(const std::shared_ptr<UIDocument>& document)
 {
     if (!document) {
         YA_CORE_WARN("UIDesignerPanel::openDocument: null document");
         return;
     }
     _document     = document;
-    _documentPath = path;
     _entryScene   = nullptr;
     _entryId.clear();
 
@@ -118,21 +116,12 @@ void UIDesignerPanel::openDocument(const std::shared_ptr<UIDocument>& document, 
     _selected = _previewRoot.get();
 }
 
-void UIDesignerPanel::openDocumentPath(const std::string& path)
-{
-    // Same resolve entry as the runtime (UIDocumentResolver): identical
-    // schema/version/typeId rules for preview and PIE/runtime.
-    if (auto document = _documentResolver.load(path)) {
-        openDocument(document, path);
-    }
-}
-
 void UIDesignerPanel::newDocument(const std::string& typeId)
 {
     auto document     = std::make_shared<UIDocument>();
     document->typeId  = typeId;
     document->fields  = nlohmann::json::object();
-    openDocument(document, {});
+    openDocument(document);
 }
 
 void UIDesignerPanel::openSceneEntry(Scene& scene, SceneWidgetEntry& entry)
@@ -143,7 +132,7 @@ void UIDesignerPanel::openSceneEntry(Scene& scene, SceneWidgetEntry& entry)
     }
     _entryScene = &scene;
     _entryId    = entry.entryId;
-    openDocument(entry.inlineDocument, {});
+    openDocument(entry.inlineDocument);
 }
 
 void UIDesignerPanel::rebuildDocumentFromPreview()
@@ -176,27 +165,9 @@ bool UIDesignerPanel::saveDocument()
         return false;
     }
 
-    std::string path = _documentPath;
-    if (path.empty()) {
-        path = _savePathBuffer;
-    }
-    if (path.empty()) {
-        YA_CORE_WARN("UIDesignerPanel::saveDocument: no save path (use Save As...)");
-        return false;
-    }
-    if (!VirtualFileSystem::get()) {
-        YA_CORE_ERROR("UIDesignerPanel::saveDocument: virtual file system unavailable");
-        return false;
-    }
-    VirtualFileSystem::get()->saveToFile(path, _document->toJson().dump(4));
-    _documentPath = path;
-    // The runtime/PIE and hierarchy resolvers must re-read the updated file
-    // (they cache by path; the designer held the live document).
-    _documentResolver.invalidate(path);
-    if (App* app = App::get(); app && app->getGameUIHost()) {
-        app->getGameUIHost()->getDocumentResolver().invalidate(path);
-    }
-    YA_CORE_INFO("UIDesignerPanel: saved document to '{}'", path);
+    // Standalone document: the rebuilt document is held in `_document`; callers
+    // (e.g. scene-entry open) consume it from getOpenDocument(). No file format.
+    YA_CORE_INFO("UIDesignerPanel: rebuilt document '{}'", _document->typeId);
     return true;
 }
 
@@ -247,22 +218,12 @@ void UIDesignerPanel::selectByChildPath(const std::vector<size_t>& path)
 void UIDesignerPanel::clearDocument()
 {
     _document.reset();
-    _documentPath.clear();
     _previewTree.reset();
     _previewRoot.reset();
     _selected   = nullptr;
     _entryScene = nullptr;
     _entryId.clear();
     endDrag();
-}
-
-void UIDesignerPanel::reloadCurrentDocument()
-{
-    if (_documentPath.empty() || !_document) {
-        return;
-    }
-    _documentResolver.invalidate(_documentPath);
-    openDocumentPath(_documentPath);
 }
 
 void UIDesignerPanel::syncPreviewToDocument()
@@ -278,8 +239,6 @@ void UIDesignerPanel::syncPreviewToDocument()
 
     // Inline scene-entry mode: write back to the entry so the Scene
     // Hierarchy's Game UI Entries tree reflects the edit immediately.
-    // documentPath mode is picked up by the hierarchy through the
-    // live-document path override (see drawWidgetEntryRow).
     if (_entryScene && !_entryId.empty()) {
         for (auto& entry : _entryScene->getWidgetEntries()) {
             if (entry.entryId == _entryId) {
@@ -538,18 +497,8 @@ void UIDesignerPanel::drawToolbar()
         ImGui::OpenPopup("UIDesignerNewType");
     }
     ImGui::SameLine();
-    if (ImGui::Button("Open .yaui")) {
-        _filePicker.open("Open UI Document", {}, {".yaui"}, [this](const std::string& path) {
-            openDocumentPath(path);
-        });
-    }
-    ImGui::SameLine();
     if (ImGui::Button("Save") && hasDocument()) {
         saveDocument();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Save As...")) {
-        ImGui::OpenPopup("UIDesignerSaveAs");
     }
 
     if (ImGui::BeginPopup("UIDesignerNewType")) {
@@ -561,23 +510,10 @@ void UIDesignerPanel::drawToolbar()
         }
         ImGui::EndPopup();
     }
-    if (ImGui::BeginPopup("UIDesignerSaveAs")) {
-        ImGui::InputText("Path", _savePathBuffer, sizeof(_savePathBuffer));
-        if (ImGui::Button("Save")) {
-            if (std::strlen(_savePathBuffer) > 0) {
-                _documentPath = _savePathBuffer;
-                saveDocument();
-                ImGui::CloseCurrentPopup();
-            }
-        }
-        ImGui::EndPopup();
-    }
 
     if (hasDocument()) {
         ImGui::SameLine();
-        ImGui::TextDisabled("%s%s",
-                            shortTypeName(_document->typeId).c_str(),
-                            _documentPath.empty() ? " (untitled)" : "");
+        ImGui::TextDisabled("%s", shortTypeName(_document->typeId).c_str());
     }
 }
 
@@ -725,10 +661,9 @@ void UIDesignerPanel::onImGuiRender()
     drawToolbar();
 
     if (!hasDocument()) {
-        ImGui::TextWrapped("Create a document with New (pick a widget type), open a .yaui "
-                           "file, or open a SceneWidgetEntry from the Scene Hierarchy.");
+        ImGui::TextWrapped("Create a document with New (pick a widget type), or open a "
+                           "SceneWidgetEntry from the Scene Hierarchy.");
         ImGui::End();
-        _filePicker.render();
         return;
     }
 
@@ -746,7 +681,6 @@ void UIDesignerPanel::onImGuiRender()
     drawInspector();
 
     ImGui::End();
-    _filePicker.render();
 }
 
 } // namespace ya

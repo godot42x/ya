@@ -2,7 +2,7 @@
 
 // ============================================================================
 // UIDocument - reusable Game UI authoring data (ui-widget-tree-refactor
-// Phase 2). Saved as `.yaui`:
+// Phase 2).
 //
 //   {
 //     "version": 1,
@@ -33,7 +33,6 @@ namespace ya
 struct YA_GUI_API UIDocument
 {
     static constexpr uint32_t kFormatVersion = 1;
-    static constexpr const char* kFileExtension = ".yaui";
 
     /// Stable registry type ID of the root widget (required).
     std::string typeId;
@@ -50,10 +49,10 @@ struct YA_GUI_API UIDocument
     /// diagnostic log) when the type ID is unknown or fields fail to apply.
     [[nodiscard]] UIElementRef instantiate() const;
 
-    /// Serialize the document to its `.yaui` JSON form.
+    /// Serialize the document to its JSON form.
     [[nodiscard]] nlohmann::json toJson() const;
-    /// Parse a `.yaui` JSON form. Returns nullptr for unknown versions or a
-    /// malformed document.
+    /// Parse a JSON form. Returns nullptr for unknown versions or a malformed
+    /// document.
     [[nodiscard]] static std::shared_ptr<UIDocument> fromJson(const nlohmann::json& json);
 };
 

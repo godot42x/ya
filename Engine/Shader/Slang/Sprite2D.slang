@@ -23,6 +23,7 @@ struct VertexInput
     [[vk::location(4)]] float3 worldCenter : TEXCOORD_WORLD_CENTER;
     [[vk::location(5)]] float3 worldDirection : TEXCOORD_WORLD_DIR;
     [[vk::location(6)]] float2 worldSize   : TEXCOORD_WORLD_SIZE;
+    [[vk::location(7)]] float3 corner     : TEXCOORD_CORNER;
 };
 
 struct VertexOutput
@@ -31,6 +32,9 @@ struct VertexOutput
     float4 color       : COLOR0;
     float2 texCoord    : TEXCOORD;
     nointerpolation uint textureIdx : TEXCOORD_TEXTURE_IDX;
+    // corner = (radiusPx, quadW, quadH); radiusPx > 0 routes the fragment into
+    // the SDF round-rect alpha branch (screen quads only).
+    nointerpolation float3 corner : TEXCOORD_CORNER;
 };
 
 float4 sampleTexturedSprite(VertexOutput input)
@@ -78,6 +82,7 @@ VertexOutput vertMain(VertexInput input)
     output.color       = input.color;
     output.texCoord    = input.texCoord;
     output.textureIdx  = input.textureIdx;
+    output.corner      = input.corner;
     return output;
 }
 
@@ -97,8 +102,29 @@ VertexOutput vertWorldMain(VertexInput input)
     return output;
 }
 
+// SDF round-rect alpha for a screen-space quad. corner = (radiusPx, quadW, quadH).
+// Builds the local signed distance in px from uv in [0,1], then AA's the
+// boundary with fwidth so the rounded corners stay crisp at any resolution.
+float roundedRectAlpha(float3 corner, float2 uv)
+{
+    // local position in px, origin at quad center.
+    float2 p = (uv - 0.5) * corner.yz;
+    // half-size minus the corner radius.
+    float2 half = corner.yz * 0.5 - corner.x;
+    float2 q = abs(p) - half;
+    float dist = length(max(q, float2(0.0, 0.0))) + min(max(q.x, q.y), 0.0) - corner.x;
+    // AA with screen-space derivative (px per fragment).
+    float aa = fwidth(dist) * 0.75 + 1e-4;
+    return 1.0 - smoothstep(-aa, aa, dist);
+}
+
 [shader("fragment")]
 float4 fragMain(VertexOutput input) : SV_Target
 {
+    if (input.corner.x > 0.0) {
+        float4 src = sampleTexturedSprite(input);
+        float a = roundedRectAlpha(input.corner, input.texCoord);
+        return float4(src.rgb, src.a * a);
+    }
     return sampleTexturedSprite(input);
 }

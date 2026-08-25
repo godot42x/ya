@@ -4,8 +4,8 @@
 // FWorkbenchApp - GUIWorkbench presenter (gui-app-bootstrap Phase 3).
 //
 // Retain-mode shell built entirely from GUI framework controls (no ImGui,
-// no Scene, no .yaui). The app owns the demo content and registers it into
-// the framework workbench shell:
+// no Scene, no UI documents). The app owns the demo content and registers it
+// into the framework workbench shell:
 //
 //   FWorkbenchSurface  - framework shell: menu bar / tabs / status bar,
 //                        built-in Editor reference page + automation

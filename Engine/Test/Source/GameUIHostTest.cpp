@@ -9,13 +9,9 @@
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UITypeRegistry.h"
-#include "Core/System/VirtualFileSystem.h"
 #include "Scene/Core/Scene.h"
 
 #include <gtest/gtest.h>
-
-#include <filesystem>
-#include <fstream>
 
 namespace ya
 {
@@ -181,33 +177,17 @@ TEST(GameUIHostTest, BuildSnapshotComposesMountedWidgets)
     EXPECT_EQ(snapshot.logicalExtent.width, 800u);
 }
 
-TEST(GameUIHostTest, DocumentPathEntriesResolveOnActivation)
+TEST(GameUIHostTest, InlineDocumentFieldsApplyOnActivation)
 {
-    VirtualFileSystem::init();
-    ASSERT_NE(VirtualFileSystem::get(), nullptr);
-
-    // A standalone `.yaui` document on disk (absolute path; VFS passes
-    // absolute paths through).
-    const std::filesystem::path docPath =
-        std::filesystem::temp_directory_path() /
-        std::format("ya_ui_host_test_{}.yaui", static_cast<unsigned long>(::getpid()));
-    {
-        nlohmann::json doc;
-        doc["version"]  = UIDocument::kFormatVersion;
-        doc["typeId"]   = "engine.panel";
-        doc["fields"]   = nlohmann::json{{"_color", {0.1, 0.2, 0.3, 0.9}}};
-        doc["children"] = nlohmann::json::array();
-        std::ofstream out(docPath);
-        out << doc.dump();
-    }
-
     GameUIHost host;
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
 
     Scene scene("World");
     SceneWidgetEntry entry;
     entry.entryId        = "HUD";
-    entry.documentPath   = docPath.generic_string();
+    entry.inlineDocument = std::make_shared<UIDocument>();
+    entry.inlineDocument->typeId  = "engine.panel";
+    entry.inlineDocument->fields  = nlohmann::json{{"_color", {0.1, 0.2, 0.3, 0.9}}};
     entry.autoMount      = true;
     scene.addWidgetEntry(std::move(entry));
 
@@ -219,8 +199,6 @@ TEST(GameUIHostTest, DocumentPathEntriesResolveOnActivation)
     auto* panel = dynamic_cast<UIPanel*>(content->getChildren()[0].get());
     ASSERT_NE(panel, nullptr);
     EXPECT_EQ(panel->getColor(), glm::vec4(0.1f, 0.2f, 0.3f, 0.9f));
-
-    std::filesystem::remove(docPath);
 }
 
 TEST(GameUIHostTest, PersistentWidgetSurvivesSceneSwitch)
@@ -284,36 +262,22 @@ TEST(GameUIHostTest, PieRestartDoesNotAccumulateWidgets)
     EXPECT_EQ(host.getTree().getLayer(WidgetTree::ELayer::Content)->getChildren().size(), 1u);
 }
 
-TEST(GameUIHostTest, DocumentPathEntrySurvivesCloneAndResolves)
+TEST(GameUIHostTest, InlineDocumentEntrySurvivesClone)
 {
-    VirtualFileSystem::init();
-    ASSERT_NE(VirtualFileSystem::get(), nullptr);
-
-    const std::filesystem::path docPath =
-        std::filesystem::temp_directory_path() /
-        std::format("ya_ui_host_clone_{}.yaui", static_cast<unsigned long>(::getpid()));
-    {
-        nlohmann::json doc;
-        doc["version"]  = UIDocument::kFormatVersion;
-        doc["typeId"]   = "engine.text";
-        doc["fields"]   = nlohmann::json{{"_text", "Cloned UI"}};
-        doc["children"] = nlohmann::json::array();
-        std::ofstream out(docPath);
-        out << doc.dump();
-    }
-
     GameUIHost host;
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
 
     Scene scene("Authoring");
     SceneWidgetEntry entry;
-    entry.entryId      = "HUD";
-    entry.documentPath = docPath.generic_string();
-    entry.autoMount    = true;
+    entry.entryId        = "HUD";
+    entry.inlineDocument = std::make_shared<UIDocument>();
+    entry.inlineDocument->typeId  = "engine.text";
+    entry.inlineDocument->fields  = nlohmann::json{{"_text", "Cloned UI"}};
+    entry.autoMount      = true;
     scene.addWidgetEntry(std::move(entry));
 
-    // PIE clones the authoring scene; the clone's documentPath entry must
-    // resolve through the same runtime controller path.
+    // PIE clones the authoring scene; the clone's inline entry must mount
+    // through the same runtime controller path.
     stdptr<Scene> play = scene.clone();
     ASSERT_NE(play, nullptr);
     host.onSceneActivated(*play);
@@ -321,8 +285,6 @@ TEST(GameUIHostTest, DocumentPathEntrySurvivesCloneAndResolves)
     UIElement* content = host.getTree().getLayer(WidgetTree::ELayer::Content);
     ASSERT_EQ(content->getChildren().size(), 1u);
     EXPECT_EQ(content->getChildren()[0]->_typeId, "engine.text");
-
-    std::filesystem::remove(docPath);
 }
 
 } // namespace ya

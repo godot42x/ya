@@ -3,9 +3,10 @@
 // ============================================================================
 // UIDesignerPanel - Game UI authoring (ui-widget-tree-refactor Phase 5).
 //
-// Edits one UIDocument (`.yaui`) through a live PREVIEW WidgetTree that is
-// strictly separate from the runtime tree: PIE mounts fresh instances from
-// the scene entries, so preview and PIE state never pollute each other.
+// Edits one UIDocument (inline authoring data) through a live PREVIEW
+// WidgetTree that is strictly separate from the runtime tree: PIE mounts fresh
+// instances from the scene entries, so preview and PIE state never pollute
+// each other.
 //   - palette:      registered widget types (UITypeRegistry, stable IDs)
 //   - tree:         the preview tree's widget hierarchy
 //   - inspector:    reflected fields of the selected preview widget
@@ -13,10 +14,6 @@
 // The editor shell stays fully ImGui; the preview can also be composited
 // into the 2D canvas via buildPreviewSnapshot().
 // ============================================================================
-
-#include "GameEditor/FilePicker.h"
-
-#include "GameRuntime/GUI/GameUI/UIDocumentResolver.h"
 
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
@@ -44,19 +41,19 @@ struct UIDesignerPanel
 
     // === Document lifecycle ===
     [[nodiscard]] bool hasDocument() const { return _document != nullptr; }
-    [[nodiscard]] const std::string& getDocumentPath() const { return _documentPath; }
 
-    /// Open a document standalone (from a `.yaui` file or a new palette type).
-    void openDocument(const std::shared_ptr<UIDocument>& document, const std::string& path);
-    /// Open a `.yaui` file from disk (parse + instantiate preview).
-    void openDocumentPath(const std::string& path);
+    /// Open a document standalone (from a palette type or an externally built
+    /// document).
+    void openDocument(const std::shared_ptr<UIDocument>& document);
     /// Create a fresh document with the given root type.
     void newDocument(const std::string& typeId);
     /// Open the inline document of a scene entry; saving writes back to the
     /// entry instead of a file.
     void openSceneEntry(Scene& scene, SceneWidgetEntry& entry);
-    /// Rebuild + persist the document (file or scene entry). Returns false
-    /// (with diagnostics) when nothing is open or the document is invalid.
+    /// Rebuild + persist the document. In scene-entry mode the inline document
+    /// is written back to the entry; otherwise it is held for the next
+    /// save/open. Returns false (with diagnostics) when nothing is open or the
+    /// document is invalid.
     bool saveDocument();
     /// The currently open document (shared with the scene entry it came from
     /// when opened via openSceneEntry). Used to detect stale designer state
@@ -66,13 +63,8 @@ struct UIDesignerPanel
     void clearDocument();
     /// Rebuild the document from the preview after a structural edit and
     /// propagate it (scene-entry mode writes back to the entry's inline
-    /// document; documentPath mode is picked up by the hierarchy via the
-    /// live-document path override). Keeps the left hierarchy in sync.
+    /// document). Keeps the left hierarchy in sync.
     void syncPreviewToDocument();
-    /// Re-open the current documentPath (if any) from disk after an external
-    /// edit (e.g. a hierarchy drag-drop that rewrote the .yaui). No-op for
-    /// inline scene entries and untitled documents.
-    void reloadCurrentDocument();
 
     // === Preview (independent WidgetTree, never shared with the runtime) ===
     /// Build the immutable preview frame. `uiScale`/`offset` map tree-local
@@ -147,7 +139,6 @@ struct UIDesignerPanel
     EditorLayer* _owner = nullptr;
 
     std::shared_ptr<UIDocument> _document;
-    std::string                 _documentPath;
     std::unique_ptr<WidgetTree> _previewTree;
     UIElementRef                _previewRoot;
     UIElement*                  _selected = nullptr;
@@ -155,12 +146,6 @@ struct UIDesignerPanel
     /// Scene-entry edit mode (save writes back to the entry).
     Scene*    _entryScene = nullptr;
     std::string _entryId;
-
-    /// Preview resolver: same rules as the runtime host resolver.
-    UIDocumentResolver _documentResolver;
-
-    char    _savePathBuffer[512] = "";
-    FilePicker _filePicker;
 
     /// Widget row kept open while a designer-tree drag hovers it.
     UIElement* _dragHoverTarget = nullptr;

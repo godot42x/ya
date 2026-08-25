@@ -9,10 +9,7 @@
 // instantiates autoMount entries into the active WidgetTree when the scene
 // activates and unmounts them on deactivate.
 //
-// `documentPath` and `inlineDocument` are mutually exclusive:
-//   - documentPath  - reference to a `.yaui` asset (resolution happens in the
-//                     resource/host layer, Phase 3)
-//   - inlineDocument - inline UIDocument definition
+// An entry carries an `inlineDocument` (inline UIDocument definition).
 // ============================================================================
 
 #include "GUI/Widgets/UIDocument.h"
@@ -48,9 +45,7 @@ struct YA_SCENE_CORE_API SceneWidgetEntry
 {
     /// Stable within a Scene; used by editor selection and overrides.
     std::string entryId;
-    /// `.yaui` document reference (mutually exclusive with inlineDocument).
-    std::string documentPath;
-    /// Inline UIDocument definition (mutually exclusive with documentPath).
+    /// Inline UIDocument definition.
     std::shared_ptr<UIDocument> inlineDocument;
     /// Paint/hit order among entries in the content layer.
     int32_t zOrder = 0;
@@ -84,11 +79,6 @@ enum class EWidgetEntryDropPosition : uint8_t
 /// keeps its visual position: the position fields are converted from
 /// canvas-relative to parent-relative (both must be point-anchored).
 ///
-/// `resolveFile` lets documentPath entries participate: their documents are
-/// loaded on demand (the editor passes the host UIDocumentResolver). File-
-/// backed documents mutated by the move are reported in `changedFiles` so the
-/// caller can persist them.
-///
 /// Returns true on success; mutates `entries` in place. Fails (with a
 /// diagnostic) on unresolvable paths, cycles, non-inline targets, or when a
 /// nested widget would need to become a top-level entry.
@@ -97,9 +87,7 @@ YA_SCENE_CORE_API bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& en
                                                const std::vector<size_t>& srcPath,
                                                size_t                    dstEntryIndex,
                                                const std::vector<size_t>& dstPath,
-                                               EWidgetEntryDropPosition  position,
-                                               const std::function<std::shared_ptr<UIDocument>(const std::string&)>& resolveFile = {},
-                                               std::vector<std::string>* changedFiles = nullptr);
+                                               EWidgetEntryDropPosition  position);
 
 /// Validation-only preview of moveWidgetEntryDocument: runs the same rules
 /// (documents resolvable, not a self-drop, no cycle, nested-into-entry-root
@@ -111,7 +99,6 @@ YA_SCENE_CORE_API bool canMoveWidgetEntryDocument(std::vector<SceneWidgetEntry>&
                                                   const std::vector<size_t>& srcPath,
                                                   size_t                    dstEntryIndex,
                                                   const std::vector<size_t>& dstPath,
-                                                  EWidgetEntryDropPosition  position,
-                                                  const std::function<std::shared_ptr<UIDocument>(const std::string&)>& resolveFile = {});
+                                                  EWidgetEntryDropPosition  position);
 
 } // namespace ya

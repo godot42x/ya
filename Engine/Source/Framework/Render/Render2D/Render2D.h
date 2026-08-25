@@ -183,6 +183,17 @@ struct YA_RENDER_2D_API Render2D
     {
         quadRender()->drawText(text, position, color, font, scale);
     }
+
+    /// Draw a filled rounded rectangle. `cornerRadius` is in target px; the
+    /// shader derives the SDF round-rect alpha from the quad size. No texture
+    /// is sampled (a white sprite is used as the fill).
+    static void drawRoundedRect(const glm::vec3& position,
+                                const glm::vec2& size,
+                                const glm::vec4& tint,
+                                float            cornerRadius)
+    {
+        quadRender()->drawRoundedRect(position, size, tint, cornerRadius);
+    }
 };
 
 } // namespace ya

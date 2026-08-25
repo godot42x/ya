@@ -277,6 +277,11 @@ struct WindowMovedEvent : public WindowEvent
     uint32_t _x, _y;
 
   public:
+    WindowMovedEvent(uint32_t windowID, uint32_t x, uint32_t y)
+        : WindowEvent(windowID), _x(x), _y(y)
+    {
+    }
+
     EVENT_CLASS_CATEGORY(EEventCategory::Application)
     EVENT_CLASS_TYPE(WindowMoved)
 

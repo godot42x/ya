@@ -140,6 +140,31 @@ TEST(UIFrameSnapshotTest, LayoutRunsWhenDirtyDuringSnapshot)
     EXPECT_EQ(snapshot.items[0].size, glm::vec2(50.0f, 25.0f));
 }
 
+TEST(UIFrameSnapshotTest, PanelCornerRadiusScalesIntoDrawItem)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    panel->setPosition({10.0f, 10.0f});
+    panel->setSize({100.0f, 50.0f});
+    panel->setColor({1.0f, 0.0f, 0.0f, 1.0f});
+    panel->setCornerRadius(8.0f);
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+
+    const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{
+        .uiScale = {2.0f, 2.0f},
+    });
+
+    ASSERT_EQ(snapshot.items.size(), 1u);
+    // Rounded rect carries the corner radius scaled into target px.
+    EXPECT_EQ(snapshot.items[0].kind, UIFrameDrawItem::EKind::Sprite);
+    EXPECT_FLOAT_EQ(snapshot.items[0].cornerRadius, 16.0f);
+    // Sharp (default) panel produces no corner radius.
+    panel->setCornerRadius(0.0f);
+    const UIFrameSnapshot sharp = tree.buildSnapshot(UIFrameBuildContext{.uiScale = {2.0f, 2.0f}});
+    ASSERT_EQ(sharp.items.size(), 1u);
+    EXPECT_FLOAT_EQ(sharp.items[0].cornerRadius, 0.0f);
+}
+
 TEST(UIFrameSnapshotTest, StructuralDumpAndDigestTrackVisualPacketOnly)
 {
     UIFrameSnapshot first;

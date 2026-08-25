@@ -1,5 +1,5 @@
 // Phase 2a regression guards for UIDocument (ui-widget-tree-refactor): the
-// `.yaui` schema, independent instantiation, JSON roundtrip, and detached
+// UIDocument schema, independent instantiation, JSON roundtrip, and detached
 // subtree authoring — all without a Scene or WidgetTree.
 
 #include "GUI/Widgets/UIDocument.h"

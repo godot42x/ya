@@ -83,6 +83,8 @@ struct UIFrameDrawItem
     // Sprite: null texture = white. Strong reference resolved at snapshot
     // build time: the packet keeps the texture alive through queue submit.
     std::shared_ptr<Texture> texture;
+    // Corner radius in target px for the SDF round-rect alpha branch (0 = sharp).
+    float     cornerRadius = 0.0f;
     // Text:
     std::shared_ptr<Font> font;
     std::string           text;
@@ -115,6 +117,11 @@ class YA_GUI_API UIFrameBuilder
     /// Record a sprite. `logicalRect` in tree-local logical pixels; null
     /// texture draws the white texture.
     void addSprite(const Rect2D& logicalRect, const glm::vec4& color, const std::shared_ptr<Texture>& texture);
+
+    /// Record a filled rounded rectangle. `cornerRadius` is in tree-local
+    /// logical px (scaled to target px at compose time). Drawn via the shader's
+    /// SDF round-rect alpha branch (no texture needed).
+    void addRoundedRect(const Rect2D& logicalRect, const glm::vec4& color, float cornerRadius);
 
     /// Record a brush (solid color / image / nine-patch). A solid brush has an
     /// empty resource and its tint colors the white sprite; an image brush

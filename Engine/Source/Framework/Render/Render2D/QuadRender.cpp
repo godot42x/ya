@@ -161,6 +161,12 @@ std::vector<VertexAttribute> buildQuadVertexAttributes()
             .format     = EVertexAttributeFormat::Float2,
             .offset     = offsetof(FQuadRender::Vertex, worldSize),
         },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 7,
+            .format     = EVertexAttributeFormat::Float3,
+            .offset     = offsetof(FQuadRender::Vertex, corner),
+        },
     };
 }
 
@@ -878,7 +884,8 @@ void FQuadRender::drawTextureInternal(const glm::mat4& transform,
                                       uint32_t         textureIdx,
                                       const glm::vec3  tint,
                                       const glm::vec2& uvScale,
-                                      const glm::vec2& uvTranslation)
+                                      const glm::vec2& uvTranslation,
+                                      const glm::vec3& corner)
 {
     for (int i = 0; i < 4; i++) {
         *vertexPtr = FQuadRender::Vertex{
@@ -889,12 +896,35 @@ void FQuadRender::drawTextureInternal(const glm::mat4& transform,
             .worldCenter = glm::vec3(0.0f),
             .worldDirection = glm::vec3(0.0f, 0.0f, -1.0f),
             .worldSize   = glm::vec2(0.0f),
+            .corner      = corner,
         };
         ++vertexPtr;
     }
 
     vertexCount += 4;
     indexCount += 6;
+}
+
+void FQuadRender::drawRoundedRect(const glm::vec3& position,
+                                  const glm::vec2& size,
+                                  const glm::vec4& tint,
+                                  float            cornerRadius)
+{
+    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
+                   "Render2D draw called outside a begin()/end() recording session");
+    if (vertexCount >= MaxVertexCount - 4) {
+        flush(Render2D::session.curCmdBuf);
+    }
+
+    glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
+                      glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
+
+    // No texture: the white sprite fills the quad, the SDF round-rect branch in
+    // the shader carves the corners from the quad's alpha. corner = (radius, w, h)
+    // so the fragment shader can build the local-space signed distance.
+    uint32_t textureIdx = findOrAddTexture(nullptr);
+    drawTextureInternal(model, textureIdx, tint, {1.0f, 1.0f}, {0.0f, 0.0f},
+                        {cornerRadius, size.x, size.y});
 }
 
 void FQuadRender::drawWorldTextureInternal(const glm::vec3&            center,

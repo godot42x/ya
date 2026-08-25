@@ -170,8 +170,6 @@ struct SceneHierarchyPanel
                                             size_t                   dstEntryIndex,
                                             const std::vector<size_t>& dstPath,
                                             ENodeDropPosition         position) const;
-    /// Resolve a .yaui path, preferring the UI Designer's live document.
-    [[nodiscard]] std::shared_ptr<UIDocument> resolveUIDocumentPath(const std::string& path) const;
     void queueUIDrag(const UIEntryDragPayload& payload,
                      size_t                   dstEntryIndex,
                      const std::vector<size_t>& dstPath,

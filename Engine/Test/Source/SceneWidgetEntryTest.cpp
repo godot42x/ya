@@ -38,22 +38,6 @@ TEST(SceneWidgetEntryTest, EntryJsonRoundtripWithInlineDocumentAndOverrides)
     EXPECT_EQ(reloaded.overrides.fieldOverrides.at("_color")[0], 1.0);
 }
 
-TEST(SceneWidgetEntryTest, DocumentPathReferenceRoundtripsWithoutResolution)
-{
-    SceneWidgetEntry entry;
-    entry.entryId      = "Menu";
-    entry.documentPath = "Content/UI/Menu.yaui";
-    entry.autoMount    = true;
-
-    const nlohmann::json json = entry.toJson();
-    EXPECT_EQ(json["document"], "Content/UI/Menu.yaui");
-    EXPECT_FALSE(json.contains("inline"));
-
-    const SceneWidgetEntry reloaded = SceneWidgetEntry::fromJson(json);
-    EXPECT_EQ(reloaded.documentPath, "Content/UI/Menu.yaui");
-    EXPECT_EQ(reloaded.inlineDocument, nullptr);
-}
-
 TEST(SceneWidgetEntryTest, OverrideAppliesToOwnAndBaseFields)
 {
     auto& registry = UITypeRegistry::instance();

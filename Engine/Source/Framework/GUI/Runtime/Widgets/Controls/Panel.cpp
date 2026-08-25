@@ -22,7 +22,12 @@ void UIPanel::paintSelf(UIFrameBuilder& builder)
     // Framework fallback: authoring fill + optional authored image
     // (unchanged behavior).
     if (!_image.isLoaded()) {
-        builder.addSprite(_layoutRect, _color, nullptr);
+        if (_cornerRadius > 0.0f) {
+            builder.addRoundedRect(_layoutRect, _color, _cornerRadius);
+        }
+        else {
+            builder.addSprite(_layoutRect, _color, nullptr);
+        }
         return;
     }
     // Strong lifetime: the builder resolves the texture through the host's

@@ -292,7 +292,7 @@ void SceneSerializer::deserialize(const nlohmann::json& j)
                     continue;
                 }
                 SceneWidgetEntry entry = SceneWidgetEntry::fromJson(entryJson);
-                if (!entry.entryId.empty() || entry.inlineDocument || !entry.documentPath.empty()) {
+                if (!entry.entryId.empty() || entry.inlineDocument) {
                     _scene->addWidgetEntry(std::move(entry));
                 }
             }

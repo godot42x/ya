@@ -85,6 +85,10 @@ void UIDeclarativeNodeAdapter::apply(UIElement& widget, const UIDescription& nod
         }
     }
 
+    if (auto* panel = dynamic_cast<UIPanel*>(&widget); panel && node._panel && node._panel->cornerRadius) {
+        panel->setCornerRadius(*node._panel->cornerRadius);
+    }
+
     if (auto* text = dynamic_cast<UIText*>(&widget)) {
         const auto& payload = node._textDescription;
         if (payload && payload->color) {

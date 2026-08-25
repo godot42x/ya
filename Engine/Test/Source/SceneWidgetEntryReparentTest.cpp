@@ -7,8 +7,6 @@
 
 #include <gtest/gtest.h>
 
-#include <unordered_map>
-
 namespace ya
 {
 
@@ -189,13 +187,14 @@ TEST(SceneWidgetEntryReparentTest, RejectsCycle)
     ASSERT_EQ(entries[0].inlineDocument->children.size(), 1u);
 }
 
-// documentPath entries cannot receive children (no inline container).
-TEST(SceneWidgetEntryReparentTest, RejectsDocumentPathTarget)
+// Entries without an inline document cannot receive children (nothing to
+// attach into).
+TEST(SceneWidgetEntryReparentTest, RejectsEntryWithoutInlineDocument)
 {
     ensureReflectionReady();
     std::vector<SceneWidgetEntry> entries = {
         makeEntry("A", makeDoc("engine.panel", posFields(0.0, 0.0))),
-        SceneWidgetEntry{.entryId = "B", .documentPath = "Content/UI/B.yaui"},
+        SceneWidgetEntry{.entryId = "B"},
     };
 
     EXPECT_FALSE(moveWidgetEntryDocument(entries, 0, {}, 1, {}, EWidgetEntryDropPosition::Into));
@@ -246,84 +245,6 @@ TEST(SceneWidgetEntryReparentTest, FlattenedHudRebuildsNestingByDragDrop)
     EXPECT_EQ(entries[0].inlineDocument->children[2]->typeId, "engine.button");
 }
 
-// File-backed (documentPath) entries participate through the resolve callback:
-// the destination .yaui gains the moved document and is reported for persist.
-TEST(SceneWidgetEntryReparentTest, FileBackedTargetAcceptsChildAndReportsChangedFile)
-{
-    ensureReflectionReady();
-    auto panelDoc = makeDoc("engine.panel", posFields(20.0, 20.0, 300.0, 120.0));
-    auto overlayDoc = makeDoc("engine.panel", posFields(0.0, 0.0));
-
-    std::vector<SceneWidgetEntry> entries = {
-        makeEntry("Panel", panelDoc),
-        SceneWidgetEntry{.entryId = "Overlay", .documentPath = "Content/UI/Overlay.yaui"},
-    };
-    // The resolver map stands in for the host UIDocumentResolver cache.
-    std::unordered_map<std::string, std::shared_ptr<UIDocument>> files{{"Content/UI/Overlay.yaui", overlayDoc}};
-    const auto resolve = [&](const std::string& path) -> std::shared_ptr<UIDocument> {
-        const auto it = files.find(path);
-        return it == files.end() ? nullptr : it->second;
-    };
-    std::vector<std::string> changedFiles;
-
-    // Drag the inline Panel entry Into the file-backed Overlay entry.
-    ASSERT_TRUE(moveWidgetEntryDocument(entries, 0, {}, 1, {}, EWidgetEntryDropPosition::Into,
-                                        resolve, &changedFiles));
-
-    // The Panel entry is gone; Overlay's document gained the Panel child.
-    ASSERT_EQ(entries.size(), 1u);
-    EXPECT_EQ(entries[0].documentPath, "Content/UI/Overlay.yaui");
-    ASSERT_EQ(overlayDoc->children.size(), 1u);
-    EXPECT_EQ(overlayDoc->children[0]->typeId, "engine.panel");
-
-    ASSERT_EQ(changedFiles.size(), 1u);
-    EXPECT_EQ(changedFiles[0], "Content/UI/Overlay.yaui");
-}
-
-// Moving a nested node OUT of a file-backed entry reports that file too.
-TEST(SceneWidgetEntryReparentTest, FileBackedSourceNodeRemovalReportsChangedFile)
-{
-    ensureReflectionReady();
-    auto menuDoc = makeDoc("engine.container", {}, {makeDoc("engine.text", posFields(0.0, 0.0))});
-    auto overlayDoc = makeDoc("engine.panel", posFields(0.0, 0.0));
-
-    std::vector<SceneWidgetEntry> entries = {
-        SceneWidgetEntry{.entryId = "Menu", .documentPath = "Content/UI/Menu.yaui"},
-        makeEntry("Overlay", overlayDoc),
-    };
-    std::unordered_map<std::string, std::shared_ptr<UIDocument>> files{{"Content/UI/Menu.yaui", menuDoc}};
-    const auto resolve = [&](const std::string& path) -> std::shared_ptr<UIDocument> {
-        const auto it = files.find(path);
-        return it == files.end() ? nullptr : it->second;
-    };
-    std::vector<std::string> changedFiles;
-
-    // Move Menu's text child (src path [0]) Into the Overlay entry.
-    ASSERT_TRUE(moveWidgetEntryDocument(entries, 0, {0}, 1, {}, EWidgetEntryDropPosition::Into,
-                                        resolve, &changedFiles));
-
-    EXPECT_TRUE(menuDoc->children.empty());
-    ASSERT_EQ(overlayDoc->children.size(), 1u);
-    EXPECT_EQ(overlayDoc->children[0]->typeId, "engine.text");
-    ASSERT_EQ(changedFiles.size(), 1u);
-    EXPECT_EQ(changedFiles[0], "Content/UI/Menu.yaui");
-}
-
-// A file entry whose document cannot be resolved is rejected (not silent).
-TEST(SceneWidgetEntryReparentTest, FileBackedUnresolvableRejected)
-{
-    ensureReflectionReady();
-    std::vector<SceneWidgetEntry> entries = {
-        makeEntry("Panel", makeDoc("engine.panel", posFields(0.0, 0.0))),
-        SceneWidgetEntry{.entryId = "Missing", .documentPath = "Content/UI/Missing.yaui"},
-    };
-    const auto resolve = [](const std::string&) -> std::shared_ptr<UIDocument> { return nullptr; };
-
-    EXPECT_FALSE(moveWidgetEntryDocument(entries, 0, {}, 1, {}, EWidgetEntryDropPosition::Into,
-                                         resolve, nullptr));
-    ASSERT_EQ(entries.size(), 2u);
-}
-
 // Validation-only preview: valid moves report true WITHOUT mutating entries.
 TEST(SceneWidgetEntryReparentTest, CanMoveReportsValidWithoutMutating)
 {
@@ -351,8 +272,8 @@ TEST(SceneWidgetEntryReparentTest, CanMoveRejectsSelfAndCycle)
     EXPECT_FALSE(canMoveWidgetEntryDocument(entries, 0, {}, 0, {}, EWidgetEntryDropPosition::Into));
     // Cycle: Panel Into its own child.
     EXPECT_FALSE(canMoveWidgetEntryDocument(entries, 0, {}, 0, {0}, EWidgetEntryDropPosition::Into));
-    // Unresolvable target (documentPath without a resolver).
-    entries.push_back(SceneWidgetEntry{.entryId = "Missing", .documentPath = "Content/UI/Missing.yaui"});
+    // Unresolvable target (entry without an inline document).
+    entries.push_back(SceneWidgetEntry{.entryId = "Missing"});
     EXPECT_FALSE(canMoveWidgetEntryDocument(entries, 0, {}, 2, {}, EWidgetEntryDropPosition::Into));
     // Nested source cannot become a top-level entry via Before/After.
     EXPECT_FALSE(canMoveWidgetEntryDocument(entries, 0, {0}, 1, {}, EWidgetEntryDropPosition::Before));

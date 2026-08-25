@@ -44,6 +44,23 @@ void UIFrameBuilder::addSprite(const Rect2D& logicalRect, const glm::vec4& color
     _items.push_back(std::move(item));
 }
 
+void UIFrameBuilder::addRoundedRect(const Rect2D& logicalRect, const glm::vec4& color, float cornerRadius)
+{
+    UIFrameDrawItem item;
+    item.kind         = UIFrameDrawItem::EKind::Sprite;
+    item.pos          = toPx(logicalRect.pos);
+    item.size         = logicalRect.extent * _ctx.uiScale;
+    item.color        = color;
+    item.cornerRadius = cornerRadius * _ctx.uiScale.x;
+    if (!_clipStack.empty()) {
+        item.bClipped = true;
+        const Rect2D& clip = _clipStack.back();
+        item.clip.pos     = toPx(clip.pos);
+        item.clip.extent  = clip.extent * _ctx.uiScale;
+    }
+    _items.push_back(std::move(item));
+}
+
 void UIFrameBuilder::addBrush(const Rect2D& logicalRect, const FBrush& brush)
 {
     std::shared_ptr<Texture> texture;

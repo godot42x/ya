@@ -117,14 +117,11 @@ nlohmann::json SceneWidgetEntry::toJson() const
     j["entryId"]   = entryId;
     j["zOrder"]    = zOrder;
     j["autoMount"] = autoMount;
-    if (!documentPath.empty()) {
-        j["document"] = documentPath;
-    }
-    else if (inlineDocument) {
+    if (inlineDocument) {
         j["inline"] = inlineDocument->toJson();
     }
     else {
-        YA_CORE_ERROR("SceneWidgetEntry::toJson: entry '{}' has neither document nor inline definition",
+        YA_CORE_ERROR("SceneWidgetEntry::toJson: entry '{}' has no inline document definition",
                       entryId);
     }
     j["overrides"] = overrides.toJson();
@@ -143,10 +140,7 @@ SceneWidgetEntry SceneWidgetEntry::fromJson(const nlohmann::json& json)
     if (json.contains("autoMount")) {
         entry.autoMount = json["autoMount"].get<bool>();
     }
-    if (json.contains("document")) {
-        entry.documentPath = json["document"].get<std::string>();
-    }
-    else if (json.contains("inline")) {
+    if (json.contains("inline")) {
         entry.inlineDocument = UIDocument::fromJson(json["inline"]);
         if (!entry.inlineDocument) {
             YA_CORE_ERROR("SceneWidgetEntry::fromJson: entry '{}' has an invalid inline document",
@@ -154,7 +148,7 @@ SceneWidgetEntry SceneWidgetEntry::fromJson(const nlohmann::json& json)
         }
     }
     else {
-        YA_CORE_ERROR("SceneWidgetEntry::fromJson: entry '{}' has neither document nor inline definition",
+        YA_CORE_ERROR("SceneWidgetEntry::fromJson: entry '{}' has no inline document definition",
                       entry.entryId);
     }
     if (json.contains("overrides")) {
@@ -169,13 +163,9 @@ namespace
 {
 
 std::shared_ptr<UIDocument> resolveEntryNode(const SceneWidgetEntry& entry,
-                                             const std::vector<size_t>& path,
-                                             const std::function<std::shared_ptr<UIDocument>(const std::string&)>& resolveFile)
+                                             const std::vector<size_t>& path)
 {
     std::shared_ptr<UIDocument> doc = entry.inlineDocument;
-    if (!doc && !entry.documentPath.empty() && resolveFile) {
-        doc = resolveFile(entry.documentPath);
-    }
     for (const size_t index : path) {
         if (!doc || index >= doc->children.size()) {
             return nullptr;
@@ -208,8 +198,7 @@ bool canMoveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
                                 const std::vector<size_t>& srcPath,
                                 size_t                    dstEntryIndex,
                                 const std::vector<size_t>& dstPath,
-                                EWidgetEntryDropPosition  position,
-                                const std::function<std::shared_ptr<UIDocument>(const std::string&)>& resolveFile)
+                                EWidgetEntryDropPosition  position)
 {
     if (srcEntryIndex >= entries.size() || dstEntryIndex >= entries.size()) {
         return false;
@@ -219,8 +208,8 @@ bool canMoveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
     const bool bSrcIsEntryRoot = srcPath.empty();
     const bool bDstIsEntryRoot = dstPath.empty();
 
-    std::shared_ptr<UIDocument> srcDoc = resolveEntryNode(srcEntry, srcPath, resolveFile);
-    std::shared_ptr<UIDocument> dstDoc = resolveEntryNode(dstEntry, dstPath, resolveFile);
+    std::shared_ptr<UIDocument> srcDoc = resolveEntryNode(srcEntry, srcPath);
+    std::shared_ptr<UIDocument> dstDoc = resolveEntryNode(dstEntry, dstPath);
     if (!srcDoc || !dstDoc) {
         return false;
     }
@@ -244,9 +233,7 @@ bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
                              const std::vector<size_t>& srcPath,
                              size_t                    dstEntryIndex,
                              const std::vector<size_t>& dstPath,
-                             EWidgetEntryDropPosition  position,
-                             const std::function<std::shared_ptr<UIDocument>(const std::string&)>& resolveFile,
-                             std::vector<std::string>* changedFiles)
+                             EWidgetEntryDropPosition  position)
 {
     if (srcEntryIndex >= entries.size() || dstEntryIndex >= entries.size()) {
         YA_CORE_WARN("moveWidgetEntryDocument: stale entry index");
@@ -257,20 +244,14 @@ bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
 
     const bool bSrcIsEntryRoot = srcPath.empty();
     const bool bDstIsEntryRoot = dstPath.empty();
-    const bool bSrcIsFile      = !srcEntry.inlineDocument && !srcEntry.documentPath.empty();
-    const bool bDstIsFile      = !dstEntry.inlineDocument && !dstEntry.documentPath.empty();
-    // Capture the file paths BEFORE any mutation: `srcEntry`/`dstEntry` are
-    // references into `entries` and the entry-vector erase invalidates them.
-    const std::string srcFilePath = srcEntry.documentPath;
-    const std::string dstFilePath = dstEntry.documentPath;
 
     // --- Resolve every document BEFORE any mutation (shared_ptrs survive
     // entry-vector reallocation and entry removal) ---
-    std::shared_ptr<UIDocument> srcDoc = resolveEntryNode(srcEntry, srcPath, resolveFile);
-    std::shared_ptr<UIDocument> dstDoc = resolveEntryNode(dstEntry, dstPath, resolveFile);
+    std::shared_ptr<UIDocument> srcDoc = resolveEntryNode(srcEntry, srcPath);
+    std::shared_ptr<UIDocument> dstDoc = resolveEntryNode(dstEntry, dstPath);
     if (!srcDoc || !dstDoc) {
         YA_CORE_WARN("moveWidgetEntryDocument: unresolvable source/target "
-                     "(inline or file-resolved documents required)");
+                     "(inline documents required)");
         return false;
     }
     if (srcDoc.get() == dstDoc.get()) {
@@ -292,7 +273,7 @@ bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
     std::shared_ptr<UIDocument> srcParentDoc;
     size_t srcSiblingIndex = 0;
     if (!bSrcIsEntryRoot) {
-        srcParentDoc = resolveEntryNode(srcEntry, std::vector<size_t>(srcPath.begin(), srcPath.end() - 1), resolveFile);
+        srcParentDoc = resolveEntryNode(srcEntry, std::vector<size_t>(srcPath.begin(), srcPath.end() - 1));
         srcSiblingIndex = srcPath.back();
         if (!srcParentDoc || srcSiblingIndex >= srcParentDoc->children.size()) {
             return false;
@@ -301,7 +282,7 @@ bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
     std::shared_ptr<UIDocument> dstParentDoc;
     size_t dstSiblingIndex = 0;
     if (!bDstIsEntryRoot) {
-        dstParentDoc = resolveEntryNode(dstEntry, std::vector<size_t>(dstPath.begin(), dstPath.end() - 1), resolveFile);
+        dstParentDoc = resolveEntryNode(dstEntry, std::vector<size_t>(dstPath.begin(), dstPath.end() - 1));
         dstSiblingIndex = dstPath.back();
         if (!dstParentDoc || dstSiblingIndex >= dstParentDoc->children.size()) {
             return false;
@@ -351,17 +332,6 @@ bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
         dstParentDoc->children.insert(dstParentDoc->children.begin() + insertAt, srcDoc);
     }
 
-    // Report file-backed documents that changed so the caller can persist
-    // them (and invalidate resolvers): the destination gained a child/sibling,
-    // and a nested source removed a node from its file.
-    if (changedFiles) {
-        if (bDstIsFile && !dstFilePath.empty()) {
-            changedFiles->push_back(dstFilePath);
-        }
-        if (bSrcIsFile && !bSrcIsEntryRoot && !srcFilePath.empty()) {
-            changedFiles->push_back(srcFilePath);
-        }
-    }
     return true;
 }
 

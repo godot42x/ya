@@ -1512,4 +1512,87 @@ void buildChineseTest(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     (void)state;
 }
 
+void buildRoundedRectDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                          const std::function<void(const std::string&)>& log)
+{
+    // Showcases the SDF round-rect capability added to UIPanel: a single corner
+    // radius (tree-local logical px) routes the panel fill through the shader's
+    // SDF round-rect alpha branch. No texture is sampled for the corners.
+    auto panel = std::make_shared<ya::UIPanel>("RoundedRectDemo");
+    panel->_anchorMin = {0.0f, 0.0f};
+    panel->_anchorMax = {1.0f, 1.0f};
+    panel->setColor(kPanelColor);
+    tree.attach(parent, panel);
+
+    auto form = std::make_shared<ya::UIContainer>("RoundedForm");
+    form->_anchorMin = {0.0f, 0.0f};
+    form->_anchorMax = {1.0f, 1.0f};
+    form->setPadding({16.0f, 12.0f});
+    form->setSize({0.0f, 0.0f});
+    form->setDirection(ya::EWidgetBoxLayout::Vertical);
+    form->setSpacing(12.0f);
+    tree.attach(*panel, form);
+
+    tree.attach(*form, makeLabel("Rounded Rect — SDF corner radius (UIPanel.setCornerRadius)"));
+    tree.attach(*form, makeBodyText(
+        "Each card below is a solid-color UIPanel with a corner radius. The radius is a single "
+        "tree-local logical-px value; the compose pass scales it to target px and the shader carves "
+        "the corners via a signed-distance field (no texture, no atlas)."));
+
+    // Row of cards at increasing radii to eyeball curve continuity / AA.
+    auto grid = std::make_shared<ya::UIContainer>("RoundedGrid");
+    grid->setDirection(ya::EWidgetBoxLayout::Horizontal);
+    grid->setSpacing(12.0f);
+    grid->setSize({0.0f, 96.0f});
+    tree.attach(*form, grid);
+
+    struct Card { const char* name; const char* label; glm::vec4 color; float radius; };
+    static constexpr Card kCards[] = {
+        {"Round0",  "0px",  {0.37f, 0.18f, 0.18f, 1.0f}, 0.0f},
+        {"Round8",  "8px",  {0.18f, 0.33f, 0.24f, 1.0f}, 8.0f},
+        {"Round16", "16px", {0.18f, 0.25f, 0.38f, 1.0f}, 16.0f},
+        {"Round32", "32px", {0.36f, 0.30f, 0.14f, 1.0f}, 32.0f},
+    };
+    for (const auto& c : kCards) {
+        auto card = std::make_shared<ya::UIPanel>(c.name);
+        card->setSize({120.0f, 96.0f});
+        card->setColor(c.color);
+        card->setCornerRadius(c.radius);
+        tree.attach(*grid, card);
+
+        auto text = makeBodyText(std::format("r={}", c.label));
+        text->_anchorMin = {0.0f, 0.0f};
+        text->_anchorMax = {1.0f, 1.0f};
+        text->_hAlign    = ya::EWidgetAlignH::Center;
+        text->_vAlign    = ya::EWidgetAlignV::Center;
+        tree.attach(*card, text);
+    }
+
+    // Nested example: a rounded card that contains a sharp inner panel, proving
+    // the rounded alpha is per-widget (children are clipped to their own rect).
+    auto nestedCard = std::make_shared<ya::UIPanel>("RoundedNested");
+    nestedCard->setSize({280.0f, 110.0f});
+    nestedCard->setColor({0.16f, 0.20f, 0.28f, 1.0f});
+    nestedCard->setCornerRadius(20.0f);
+    tree.attach(*form, nestedCard);
+
+    auto inner = makeLabel("Rounded container with a sharp inner panel", 13.0f);
+    inner->_anchorMin = {0.10f, 0.20f};
+    inner->_anchorMax = {0.90f, 0.45f};
+    tree.attach(*nestedCard, inner);
+
+    auto sharp = std::make_shared<ya::UIPanel>("RoundedNestedInner");
+    sharp->setColor({0.55f, 0.60f, 0.68f, 1.0f});
+    sharp->_anchorMin = {0.10f, 0.55f};
+    sharp->_anchorMax = {0.90f, 0.85f};
+    tree.attach(*nestedCard, sharp);
+
+    tree.attach(*form, makeBodyText(
+        "Expected: top-left card is a sharp rectangle; the others show progressively rounder corners. "
+        "The nested card keeps its rounded outer alpha while the inner panel stays sharp."));
+
+    state.statusText = "Rounded Rect demo built";
+    (void)log;
+}
+
 } // namespace guiworkbench

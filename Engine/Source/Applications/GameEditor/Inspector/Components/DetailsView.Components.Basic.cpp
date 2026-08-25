@@ -150,26 +150,6 @@ void DetailsView::drawWidgetEntry(Scene& scene, SceneWidgetEntry& entry)
             _owner->getUIDesignerPanel().openSceneEntry(scene, entry);
         }
     }
-    else if (!entry.documentPath.empty()) {
-        ImGui::Text("Document");
-        ImGui::SameLine();
-        ImGui::TextUnformatted(entry.documentPath.c_str());
-        App* app = App::get();
-        const bool bResolved = app && app->getGameUIHost() &&
-                               app->getGameUIHost()->getDocumentResolver().isResolved(entry.documentPath);
-        ImGui::SameLine();
-        ImGui::TextDisabled(bResolved ? "(resolved)" : "(not resolved)");
-        if (ImGui::SmallButton("Open in UI Designer")) {
-            _owner->getUIDesignerPanel().openDocumentPath(entry.documentPath);
-        }
-        ImGui::SameLine();
-        if (ImGui::SmallButton("Reload")) {
-            if (app && app->getGameUIHost()) {
-                app->getGameUIHost()->getDocumentResolver().invalidate(entry.documentPath);
-                app->getGameUIHost()->reloadMountedSceneUI();
-            }
-        }
-    }
     else {
         ImGui::TextDisabled("<invalid: no document>");
     }
@@ -177,15 +157,10 @@ void DetailsView::drawWidgetEntry(Scene& scene, SceneWidgetEntry& entry)
     ImGui::DragInt("zOrder", &entry.zOrder, 1, -1000, 1000);
     ImGui::Checkbox("autoMount", &entry.autoMount);
 
-    std::string documentPath = entry.documentPath;
-    if (drawPathInput("Document Path", documentPath, DETAILS_SCRIPT_INPUT_BUFFER_SIZE)) {
-        entry.documentPath = documentPath;
-    }
-
     // Scene-level transform editing: position/size written as instance
     // overrides (the runtime and the 2D canvas preview apply them via
     // UIInstanceOverrideSet::applyTo) — "manipulate the UI node in the scene"
-    // without touching the .yaui template.
+    // without touching the authored document template.
     drawEntryTransform(entry);
 
     drawEntryOverrides(entry);
@@ -199,11 +174,6 @@ void DetailsView::drawWidgetEntry(Scene& scene, SceneWidgetEntry& entry)
 void DetailsView::drawEntryTransform(SceneWidgetEntry& entry)
 {
     std::shared_ptr<UIDocument> document = entry.inlineDocument;
-    if (!document && !entry.documentPath.empty()) {
-        if (App* app = App::get(); app && app->getGameUIHost()) {
-            document = app->getGameUIHost()->getDocumentResolver().load(entry.documentPath);
-        }
-    }
     if (!document) {
         return;
     }
@@ -246,11 +216,6 @@ void DetailsView::drawEntryOverrides(SceneWidgetEntry& entry)
     // (cached per typeId for the editor session).
     static std::unordered_map<std::string, std::vector<std::string>> editableFieldsCache;
     std::shared_ptr<UIDocument> document = entry.inlineDocument;
-    if (!document && !entry.documentPath.empty()) {
-        if (App* app = App::get(); app && app->getGameUIHost()) {
-            document = app->getGameUIHost()->getDocumentResolver().load(entry.documentPath);
-        }
-    }
     const std::string typeId = document ? document->typeId : std::string();
     const std::vector<std::string>* editable = nullptr;
     if (!typeId.empty()) {

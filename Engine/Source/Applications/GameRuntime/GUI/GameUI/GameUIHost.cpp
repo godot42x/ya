@@ -128,7 +128,6 @@ std::shared_ptr<Texture> resolveGameUITexture(const std::string& assetPath)
 
 std::vector<WidgetAttachment> mountSceneAutoMountEntries(Scene&                                       scene,
                                                          WidgetTree&                                  tree,
-                                                         UIDocumentResolver&                          resolver,
                                                          const std::function<void(std::string_view)>& onError)
 {
     const auto report = [&onError](const std::string& message) {
@@ -146,12 +145,8 @@ std::vector<WidgetAttachment> mountSceneAutoMountEntries(Scene&                 
             continue;
         }
         std::shared_ptr<UIDocument> document = entry.inlineDocument;
-        if (!document && !entry.documentPath.empty()) {
-            document = resolver.load(entry.documentPath);
-        }
         if (!document) {
-            report(std::format("SceneWidgetEntry '{}' has no resolvable document (path '{}')",
-                               entry.entryId, entry.documentPath));
+            report(std::format("SceneWidgetEntry '{}' has no inline document", entry.entryId));
             continue;
         }
 

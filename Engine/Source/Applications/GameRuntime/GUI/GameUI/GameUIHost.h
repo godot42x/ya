@@ -24,7 +24,6 @@
 #include "GUI/Widgets/WidgetTree.h"
 
 #include "GameRuntime/GUI/GameUI/IGameUIController.h"
-#include "GameRuntime/GUI/GameUI/UIDocumentResolver.h"
 
 #include <functional>
 #include <memory>
@@ -57,14 +56,11 @@ struct YA_GAME_RUNTIME_API GameUIHost
     void setController(std::unique_ptr<IGameUIController> controller);
     [[nodiscard]] IGameUIController* getController() const { return _controller.get(); }
 
-    /// Shared `.yaui` resolver (one resolve entry for Editor/PIE/Runtime).
-    [[nodiscard]] UIDocumentResolver& getDocumentResolver() { return _documentResolver; }
-
     /// The host's tree is only presented while a scene is mounted.
     [[nodiscard]] Scene* getMountedScene() const { return _mountedScene; }
 
-    /// Unmount + remount the currently presented scene (picks up resolver
-    /// changes after a document reload).
+    /// Unmount + remount the currently presented scene (picks up entry/document
+    /// changes after an edit).
     void reloadMountedSceneUI();
 
     // === Scene lifecycle ===
@@ -89,7 +85,6 @@ struct YA_GAME_RUNTIME_API GameUIHost
   private:
     WidgetTree                     _tree;
     std::unique_ptr<IGameUIController> _controller;
-    UIDocumentResolver             _documentResolver;
     Scene*                         _mountedScene = nullptr;
     Rect2D                         _viewportPx{};
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};
@@ -106,12 +101,11 @@ struct YA_GAME_RUNTIME_API GameUIHost
 /// applied). Single mount path shared by the default controller (keeps the
 /// returned attachments for scene-lifecycle tracking) and the editor canvas
 /// preview (stateless per-frame rebuild, drops them after the snapshot).
-/// Errors go to `onError` (entryId + documentPath included); a null sink
-/// logs through YA_CORE_ERROR.
+/// Errors go to `onError` (entryId included); a null sink logs through
+/// YA_CORE_ERROR.
 [[nodiscard]] YA_GAME_RUNTIME_API std::vector<WidgetAttachment>
 mountSceneAutoMountEntries(Scene&                                       scene,
                            WidgetTree&                                  tree,
-                           UIDocumentResolver&                          resolver,
                            const std::function<void(std::string_view)>& onError = {});
 
 } // namespace ya

@@ -233,10 +233,20 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
                 Render2D::pushClipRect(item.clip);
             }
             if (item.kind == UIFrameDrawItem::EKind::Sprite) {
-                Render2D::makeSprite(glm::vec3(item.pos, 0.0f),
-                                     item.size,
-                                     item.texture,
-                                     item.color);
+                if (item.cornerRadius > 0.0f && !item.texture) {
+                    // Rounded rect: carve the corners via the shader's SDF
+                    // branch (no texture sampling needed).
+                    Render2D::drawRoundedRect(glm::vec3(item.pos, 0.0f),
+                                              item.size,
+                                              item.color,
+                                              item.cornerRadius);
+                }
+                else {
+                    Render2D::makeSprite(glm::vec3(item.pos, 0.0f),
+                                         item.size,
+                                         item.texture,
+                                         item.color);
+                }
             }
             else if (item.kind == UIFrameDrawItem::EKind::Line) {
                 // Line = a rotated thin quad along the segment. The unit quad
