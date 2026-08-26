@@ -1048,6 +1048,12 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _layer->onImGuiRender();
         GuiSystem::get().endFrame();
         GuiSystem::get().render();
+        // Compose the YA_GUI-backed editor panels (e.g. Frame Stats) into their
+        // offscreen surfaces before the ImGui pass submits, so the bridged
+        // textures are ready for ImGui::Image().
+        if (auto* render = app.getRenderServices().getRender()) {
+            _layer->composeFrameStats(*render, commandBuffer);
+        }
         GuiSystem::get().submit(commandBuffer);
     }
 };

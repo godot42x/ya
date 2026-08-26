@@ -461,13 +461,10 @@ void EditorLayer::renderGraphWindow()
 
 void EditorLayer::statsWindow()
 {
-    if (!ImGui::Begin("Frame Stats")){
-        ImGui::End();
-        return;
-    }
-
-    renderFrameStatsContent(*_app, _lastDeltaTime);
-    ImGui::End();
+    // The Frame Stats panel is now rendered with the YA_GUI framework (retained
+    // widget tree composed into an offscreen surface, bridged back here via
+    // ImGui::Image). The panel owns its ImGui window shell.
+    _frameStatsPanel.onImGuiRender(*_app, _lastDeltaTime);
 }
 
 void EditorLayer::renderAuxiliaryUi()

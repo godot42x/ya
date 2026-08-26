@@ -6,6 +6,7 @@
 #include "GameEditor/Panels/ContentBrowserPanel.h"
 #include "GameEditor/Panels/RuntimeToolsPanel.h"
 #include "GameEditor/Panels/GUIWorkbenchPanel.h"
+#include "GameEditor/Panels/FrameStatsPanel.h"
 #include "Core/Base.h"
 
 #include "Core/Camera/Camera.h"
@@ -69,6 +70,7 @@ struct EditorLayer
     RuntimeToolsPanel   _runtimeToolsPanel;
     UIDesignerPanel     _uiDesignerPanel;
     GUIWorkbenchPanel   _guiWorkbenchPanel;
+    FrameStatsPanel     _frameStatsPanel{this};
 
     // ImGui Docking state
     ImGuiDockNodeFlags _dockspaceFlags = ImGuiDockNodeFlags_None;
@@ -429,6 +431,8 @@ struct EditorLayer
     const std::vector<Entity*>& getSelections() const { return _selections; }
     [[nodiscard]] UIDesignerPanel& getUIDesignerPanel() { return _uiDesignerPanel; }
     [[nodiscard]] GUIWorkbenchPanel& getGUIWorkbenchPanel() { return _guiWorkbenchPanel; }
+    /// Compose the YA_GUI-backed frame-stats panel into its offscreen surface.
+    void composeFrameStats(IRender& render, ICommandBuffer& commandBuffer);
     Entity*                     getSelectedEntity() const { return _selections.empty() ? nullptr : _selections.front(); }
     uint64_t                    getSelectedEntityUUID() const { return _selectedEntityUUID; }
     /// Active scene used for viewport interaction. In the 2D workspace this is
