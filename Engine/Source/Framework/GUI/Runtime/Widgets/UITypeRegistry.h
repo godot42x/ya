@@ -16,6 +16,7 @@
 // ============================================================================
 
 #include "GUI/Widgets/UIElement.h"
+#include "GUI/Widgets/UITypeIds.h"
 
 #include <cstdint>
 #include <functional>
@@ -66,7 +67,8 @@ class YA_GUI_API UITypeRegistry
     // === Type registration ===
     /// Register a widget type with an explicit factory. Replaces any existing
     /// registration with the same typeId (after logging).
-    void registerType(const UITypeRegisterInfo& info, std::function<UIElementRef()> factory);
+    void registerType(const UITypeRegisterInfo& info,
+                      std::function<UIElementRef()> factory);
     void unregisterType(const std::string& typeId);
 
     // === Instantiation ===
@@ -87,9 +89,9 @@ class YA_GUI_API UITypeRegistry
   private:
     struct Entry
     {
-        UITypeRegisterInfo             info;
-        std::function<UIElementRef()>  factory;
-        std::weak_ptr<UITypeModule>    module;
+        UITypeRegisterInfo                       info;
+        std::function<UIElementRef()>            factory;
+        std::weak_ptr<UITypeModule>              module;
     };
 
     std::unordered_map<std::string, Entry>                       _types;

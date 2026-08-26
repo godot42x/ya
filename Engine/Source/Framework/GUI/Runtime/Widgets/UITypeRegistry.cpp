@@ -1,6 +1,7 @@
 #include "GUI/Widgets/UITypeRegistry.h"
 
 #include "Core/Log.h"
+#include "GUI/Widgets/UITypeIds.h"
 
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
@@ -51,35 +52,35 @@ void UITypeRegistry::ensureBuiltinTypesRegistered()
     }
     _bBuiltinsRegistered = true;
 
-    registerType({.typeId = "engine.panel", .displayName = "Panel", .category = "Basic"},
+    registerType({.typeId = kTypeIdPanel, .displayName = "Panel", .category = "Basic"},
                  [] { return std::make_shared<UIPanel>("Panel"); });
-    registerType({.typeId = "engine.text", .displayName = "Text", .category = "Basic"},
+    registerType({.typeId = kTypeIdText, .displayName = "Text", .category = "Basic"},
                  [] { return std::make_shared<UIText>("Text"); });
-    registerType({.typeId = "engine.button", .displayName = "Button", .category = "Basic"},
+    registerType({.typeId = kTypeIdButton, .displayName = "Button", .category = "Basic"},
                  [] { return std::make_shared<UIButton>("Button"); });
-    registerType({.typeId = "engine.container", .displayName = "Container", .category = "Basic"},
+    registerType({.typeId = kTypeIdContainer, .displayName = "Container", .category = "Basic"},
                  [] { return std::make_shared<UIContainer>("Container"); });
-    registerType({.typeId = "engine.split_pane", .displayName = "Split Pane", .category = "Layout"},
+    registerType({.typeId = kTypeIdSplitPane, .displayName = "Split Pane", .category = "Layout"},
                  [] { return std::make_shared<UISplitPane>("SplitPane"); });
-    registerType({.typeId = "engine.scroll_viewport", .displayName = "Scroll Viewport", .category = "Layout"},
+    registerType({.typeId = kTypeIdScrollViewport, .displayName = "Scroll Viewport", .category = "Layout"},
                  [] { return std::make_shared<UIScrollViewport>("ScrollViewport"); });
-    registerType({.typeId = "engine.selectable_row", .displayName = "Selectable Row", .category = "Selection"},
+    registerType({.typeId = kTypeIdSelectableRow, .displayName = "Selectable Row", .category = "Selection"},
                  [] { return std::make_shared<UISelectableRow>("Row"); });
-    registerType({.typeId = "engine.text_field", .displayName = "Text Field", .category = "Input"},
+    registerType({.typeId = kTypeIdTextField, .displayName = "Text Field", .category = "Input"},
                  [] { return std::make_shared<UITextField>("TextField"); });
-    registerType({.typeId = "engine.check_box", .displayName = "Check Box", .category = "Input"},
+    registerType({.typeId = kTypeIdCheckBox, .displayName = "Check Box", .category = "Input"},
                  [] { return std::make_shared<UICheckBox>("CheckBox"); });
-    registerType({.typeId = "engine.slider", .displayName = "Slider", .category = "Input"},
+    registerType({.typeId = kTypeIdSlider, .displayName = "Slider", .category = "Input"},
                  [] { return std::make_shared<UISlider>("Slider"); });
-    registerType({.typeId = "engine.combo_box", .displayName = "Combo Box", .category = "Input"},
+    registerType({.typeId = kTypeIdComboBox, .displayName = "Combo Box", .category = "Input"},
                  [] { return std::make_shared<UIComboBox>("ComboBox"); });
-    registerType({.typeId = "engine.image", .displayName = "Image", .category = "Basic"},
+    registerType({.typeId = kTypeIdImage, .displayName = "Image", .category = "Basic"},
                  [] { return std::make_shared<UIImage>("Image"); });
-    registerType({.typeId = "engine.menu_bar", .displayName = "Menu Bar", .category = "Basic"},
+    registerType({.typeId = kTypeIdMenuBar, .displayName = "Menu Bar", .category = "Basic"},
                  [] { return std::make_shared<UIMenuBar>("MenuBar"); });
-    registerType({.typeId = "engine.menu", .displayName = "Menu", .category = "Basic"},
+    registerType({.typeId = kTypeIdMenu, .displayName = "Menu", .category = "Basic"},
                  [] { return std::make_shared<UIMenu>("Menu"); });
-    registerType({.typeId = "engine.tab_bar", .displayName = "Tab Bar", .category = "Layout"},
+    registerType({.typeId = kTypeIdTabBar, .displayName = "Tab Bar", .category = "Layout"},
                  [] { return std::make_shared<UITabBar>("TabBar"); });
 }
 
@@ -120,7 +121,8 @@ bool UITypeRegistry::endModule(const std::shared_ptr<UITypeModule>& module)
     return true;
 }
 
-void UITypeRegistry::registerType(const UITypeRegisterInfo& info, std::function<UIElementRef()> factory)
+void UITypeRegistry::registerType(const UITypeRegisterInfo& info,
+                                  std::function<UIElementRef()> factory)
 {
     if (info.typeId.empty()) {
         YA_CORE_ERROR("UITypeRegistry::registerType: empty typeId");

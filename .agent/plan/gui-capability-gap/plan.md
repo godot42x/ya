@@ -124,19 +124,42 @@
 
 P1 → P2 → P3 → P4 → **G-A → G-B** → P5 → **G-C** → P6 → P7。每期 = 1 个自洽 commit（代码 + 工件更新 + scenario 同 commit）。
 
-## 6.1 P8 声明式 DSL 第一刀（P7 后，控件专属 builder）
+## 6.1 P8 UI 分层目标（P7 后，先定边界再扩展）
 
-P1-P7 收口后，进入统一 GUI / Game UI / Editor 的声明式入口建设。第一步只扩展描述组合能力，不重写 WidgetTree、snapshot 或 reconciler：
+P1-P7 收口后，进入统一 GUI / Game UI / Editor 的 UI 入口建设。整体分为三层，依赖方向必须保持自上而下：
+
+```text
+Dynamic UI / Script UI
+  Component / Props / State / Binding / Reconcile
+                ↓
+Static UI Builder / Static DSL
+  Slate / EUI-NEO 风格强类型组合
+                ↓
+Retained UI Runtime
+  UIElement / WidgetTree / Layout / Event / Paint
+```
+
+第一步只稳定 retained runtime 与静态 DSL，不把动态 component、脚本字段或 JSON bucket 渗透进底层：
 
 - 保持每种控件自己的 builder（column/row/panel/text/button/textField），不引入一个拥有所有事件成员的通用 UIBuilder。
-- 在拥有 child slot 的 builder 上提供 .content(factory)；factory 返回一个 UIDescription 或可隐式转换为它的专属 builder。
+- `child(UIDescription)` / `children(UIDescription...)` 是静态 DSL 的基础契约；child 必须是已经构造好的强类型节点。
+- `compose/composeChildren/when` 属于上层函数式扩展，不是静态 builder 的基础依赖。
 - 组合语法必须保持 key identity、reconcile 复用、focus/capture 生命周期不变。
-- 第一阶段只做 C++ 内嵌 DSL，不做 XML/脚本编译器，不做 immediate API，不做 theme DSL。
-    - 已落地：content / children / when / UIDescriptionFactory / setEnabled / setFocusPolicy / panel.setColor / text.setFontSize / button.setText / textField.setText / textField.setFontSize。
+- 静态 builder 必须可以脱离 `UIRenderController` 和动态 component 独立构建基础 UI；动态层不得成为 standalone GUI、game runtime、editor 的硬依赖。
+- 第一阶段只做 C++ 内嵌静态 DSL，不做 XML/脚本编译器、不做 immediate API、不做 theme DSL、不做 JSON 属性 bucket。
+    - 已落地：静态 `children`、函数式 `compose/composeChildren/when`、`UIComponent` / `UIComponentFactory`、setEnabled / setFocusPolicy / panel.setColor / text.setFontSize / button.setText / textField.setText / textField.setFontSize。
     - 容器属性 contract 已落地：spacing / padding / clipChildren / stretchLastChild。
     - 已落地 callback authored 语义：未声明 callback 时保留运行态回调，显式 `onClick` 时才覆盖。
-    - 下一刀：继续审计其它 authored-vs-default 字段，并考虑把属性应用进一步按 widget kind 拆成可扩展 handlers。
-    - 结构前置：继续把可扩展的节点映射留在 `UIDeclarativeNodeAdapter`，让 `UIReconciler` 保持轻壳，只管生命周期/identity/顺序。
+    - 下一刀：继续审计其它 authored-vs-default 字段，并把静态 builder 的创建/应用路径从动态 reconcile 中独立出来。
+    - 结构前置：继续把可扩展的节点映射留在 `UIDeclarativeNodeAdapter`，让 `UIReconciler` 只服务动态描述，保持轻壳，只管生命周期/identity/顺序。
+
+### 三层职责边界
+
+1. **Retained UI Runtime**：只持有 widget/tree/layout/event/paint 运行态；不依赖 JSON、反射、component 或脚本。
+2. **Static Builder / DSL**：每个控件强类型 builder 与 typed description；不使用字段字典；可直接创建 retained widget，也可生成静态 description。
+3. **Dynamic UI / Script**：负责 component、props、state、binding、条件/循环和 keyed reconcile；脚本/JSON/反射只能在这一层转换为 typed description。
+
+JSON bucket、反射属性查找、脚本 schema 都是边界适配机制，不得进入 retained runtime 的热路径。
 
 ### 6.2 P8 typed description 架构重构（新增设计，先于继续扩展属性）
 
@@ -194,17 +217,19 @@ using UIDescription = std::variant<
 3. 每种控件保留自己的 builder；builder 只暴露该控件合法的成员和 slot。
 4. authored 属性使用 `std::optional<T>` 或等价明确标志表达；未 authored 时不得覆盖 retained widget 的运行态。
 5. description 不持有 runtime state：focus、pointer capture、编辑态、caret、drag session、Reactive dependency、WidgetTree pointer 均留在 retained widget/tree。
-6. `children` 仍使用统一组合入口，但 child 的具体属性由 typed description 自己拥有。
+6. 静态 DSL 与函数式 composition 分层：`child(UIDescription)` / `children(UIDescription...)` 是基础契约；`compose/composeChildren/when` 是建立在静态 DSL 之上的扩展。
+7. `UIComponent` 只负责生成 `UIDescription`，不直接持有或修改 WidgetTree，也不把 factory 存入 description。
 
 #### 分步迁移
 
-1. 已开始 typed payload 兼容迁移：`UIPanelDescription`、`UITextDescription`、`UIButtonDescription`、`UITextFieldDescription` 已落地；公共 description `UICommonDescription` 已抽出并 helper 化，下一步继续收缩 flat fields。
+1. 已开始 typed payload 兼容迁移：`UIPanelDescription`、`UITextDescription`、`UIButtonDescription`、`UITextFieldDescription` 已落地；公共 description `UICommonDescription` 已抽出并 helper 化，静态 `children()` 与函数式 `compose()` 已分层，下一步继续收缩 flat fields。
 2. 建立 `UIColumnDescription`、`UIRowDescription`、`UIPanelDescription`、`UITextDescription`、`UIButtonDescription`、`UITextFieldDescription`。
-3. 保留当前 builder 调用语法，内部改写为 typed description；先做兼容转换，不一次性改调用方。
+3. 保留当前静态 builder 调用语法，内部改写为 typed description；先做兼容转换，不一次性改调用方。
 4. 将 `UIDeclarativeNodeAdapter` 改为 typed handler/`std::visit` 分发。
 5. 将 authored/default contract 迁移到 `std::optional` 语义，删除旧 `_bHasXxx` 平面字段。
 6. 删除旧 god `UIDescription` 字段，并保留 stable key、focus/capture、callback、stale cleanup contract tests。
-7. 最后再扩展新控件和更复杂属性。
+7. 在静态 DSL 稳定后，增加独立 `UIComponent` 扩展：先无参 description factory，再设计 `ComposeContext/Props`，最后才讨论 state/binding/lifecycle。
+8. 最后再扩展新控件和更复杂属性。
 
 #### 验收门槛
 
@@ -212,8 +237,11 @@ using UIDescription = std::variant<
 - `DeclarativeContractTest` 覆盖 identity reuse、focus preservation、runtime callback preservation、authored override、children/when、stale cleanup。
 - typed description 不引入通用 fat `UIBuilder`，不把 theme DSL、binding DSL 和 runtime state 混入本阶段。
 - `Declarative.cpp` 不重新承载控件属性分支；新增控件的扩展面限于 description、builder、typed adapter handler 和 contract tests。
+- 静态 DSL 不依赖 component 扩展；component 扩展必须可被禁用/替换，不影响 standalone GUI、game runtime、editor 的基础描述构建。
 
 ## 7. 修订记录
 
 - **2026-08-18 首版**：ImGui 调研 → 范围拍板（上述全部 + DockSpace）→ Plan agent 设计 → 定稿。
 - **2026-08-25**：根据 Slate / React / Flutter / QML 对比，新增 P8 typed description 架构重构：公共 description + 控件专属 payload，先解决 `UIDescription` god struct，再继续扩展 DSL。
+- **2026-08-25**：明确静态 Slate 风格 DSL 是基础层，React 风格 `UIComponent`/`compose` 是上层扩展；移除 `content()` 兼容入口，禁止两种语义继续混用。
+- **2026-08-25**：进一步定案为三层架构：retained runtime → 强类型静态 builder/DSL → dynamic component/script；JSON bucket、反射与脚本 schema 只允许存在于动态边界，不进入底层热路径。

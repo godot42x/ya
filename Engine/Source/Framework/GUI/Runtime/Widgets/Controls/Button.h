@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"

@@ -1,37 +1,43 @@
-# Phase -1A：React-style DSL 最小契约
+# Phase -1A：Retained 基础与静态强类型 DSL 最小契约
 
-状态：核心契约已实现并通过独立契约测试；后续仍需补齐完整生命周期/keep-alive 语义。
+状态：核心契约已实现并通过独立契约测试。2026-08-26 起默认构建路径改为 **DSL 直接物化 live widget**；下文中与 Description/reconcile 相关的条款只约束那条可选边界路径，不再约束静态 DSL。
 
 ## 目标
 
-定义 React-style C++ UI function、UIDescription 和 retained WidgetTree 之间的最小稳定边界。此文档只冻结语义，不承诺最终 API 拼写，也不引入 XML/CSS。公共 API 预期是控件专属 builder/factory；UIDescription 只负责承载统一的内部节点契约。
+定义 retained runtime、Slate/EUI-NEO 风格静态强类型 builder 与 live WidgetTree 之间的最小稳定边界。此文档只冻结语义，不承诺最终 API 拼写，也不引入 XML/CSS。静态 builder 不依赖 component、脚本、JSON、反射或 `UIDescription`。
 
 ## 描述树与 live tree
 
-render(state, props) -> immutable UIDescription -> Reconciler -> retained UIElement/WidgetTree -> layout / input / UIFrameSnapshot
+**默认：** static typed builder → 直接物化 retained UIElement/WidgetTree → layout / input / UIFrameSnapshot。
 
-UIBuilder 只是当前过渡实现里的一个名称，后续更稳妥的 API 允许不同控件暴露各自的 builder/factory；但无论外部形态如何，进入 reconcile 的都必须是统一的 description 节点。
+**边界（document/script）：** 外部 schema → 短生命周期 typed spec → registry 工厂实例化一次 → 同一棵 live tree。此后更新与静态路径相同（绑定 + live API）。
 
-UIDescription 是一次 render 的纯描述；它不能持有 live UIElement、WidgetTree、GPU resource 的裸指针，也不能在 command recording 期生成。Reconciler 是唯一允许根据 description 创建、更新、移动和 detach live widget 的组件。现有手写 retain API 在迁移期继续存在，但 DSL 不得绕过 Reconciler 修改同一棵树的结构。
+**可选（变长 keyed 集合）：** 列表/repeater 控件读取 `ReactiveList`，自己拥有行的创建/复用/销毁。应用层不维护一棵与 live 树平行的 Description。
+
+每个控件暴露自己的 typed builder；builder 的产品是对应的 `UIElement` 子类，不是通用 Description 节点。`UIDescription` 不是 GUI 基础对象。
+
+`UIDescription` / `UIReconciler` / `UIRenderController` 已删除。静态 DSL 直接 `attach`。结构变化走 live API 或列表控件，不存在平行 Description 树。
 
 ## Identity
 
-每个 description node 的身份是：`(parent identity, type identity, stable key)`。
+Live widget 的身份是 tree membership + type +（可选）`_stableKey`。列表行的 key 属于**拥有这些行的列表控件**，不是全局 Description 身份体系。
+
+Document/script 实例化只发生一次；实例之后的身份与静态路径相同。
 
 - type identity 是控件类型，不能用 display name 代替。
 - stable key 是同一父节点下的业务身份；列表 reorder 时状态跟随 key，不跟随 index。
-- display name 只用于诊断、可访问性和调试，不参与 reconcile identity。
-- 同一 parent 下重复 key 是 description 错误，必须报告稳定的节点路径和 key。
+- display name 只用于诊断、可访问性和调试，不参与 identity。
+- 同一 parent 下重复 key 是错误，必须报告稳定的节点路径和 key。
 - 没有 key 的节点只允许作为明确的 positional child；第一版不为无 key 列表提供状态保留保证。
 - key 作用域默认是直接 parent；跨 parent 移动视为 remove + insert，不隐式迁移 focus、capture 或 transient state。
 
 ## Lifecycle
 
-Reconciler 顺序固定为：validate -> match -> update props -> reconcile children -> remove stale -> finalize invalidation。
+直接构建路径：Construct → `attach`/`reparent` → 使用中靠 setter/绑定失效 → `detach` 清理 tree-owned focus/capture/hover/popup/drag。
 
-- mount：首次生成 live widget。
-- update：同 identity 更新 props，不得无条件重置 transient state。
-- reorder：同 parent 下 child 顺序变化，keyed child 保留 live widget。
+- mount：Construct 后 `attach`。
+- update：setter / `Reactive` 绑定；不得无条件重置 transient state。
+- reorder：已知结构用 live child API；变长集合由列表控件内部 keyed reuse。
 - remove：先清理 tree-owned focus/capture/hover/popup/drag，再 detach。
 - unmount：widget 不再属于 tree，任何 callback/依赖不得继续访问它。
 
@@ -39,50 +45,56 @@ Reconciler 顺序固定为：validate -> match -> update props -> reconcile chil
 
 ## State ownership
 
-| 类型 | 示例 | owner | render 是否覆盖 |
+| 类型 | 示例 | owner | 构建是否覆盖 |
 |---|---|---|---|
-| 外部 model state | selected id、document value、open flag | app/project/editor model | 通过 props 更新 |
-| widget transient state | focus、pressed、caret、hover、pointer capture | WidgetTree / widget | 不因普通 update 重置 |
-| derived state | filtered rows、desired size、resolved visual state | description/reconciler/layout | 可由输入重新计算 |
+| 外部 model state | selected id、document value、open flag | app/project/editor model | 通过 `Reactive<T>` 或显式 setter |
+| widget transient state | focus、pressed、caret、hover、pointer capture | WidgetTree / widget | 不因绑定/setter 重置 |
+| derived state | filtered rows、desired size、resolved visual state | widget/layout | 可由输入重新计算 |
 
-render function 不得把 widget transient state 镜像回外部 model，除非通过明确事件或 controller API。props 更新不得重置 focus/caret/scroll 等 transient state。
+静态构建不得把 widget transient state 镜像回外部 model，除非通过明确事件。绑定更新不得重置 focus/caret/scroll 等 transient state。
 
 ## Data flow
 
-第一版采用单向数据流：
+默认单向数据流（无 Description）：
 
-external state -> render function -> description props -> reconciler -> widget
-widget event -> callback/controller -> external state update -> next render
+external state (`Reactive<T>`) → widget paint/layout 读取并登记依赖
+widget event → 写回 external state / `Reactive::set()` → 仅依赖该值的 widget 失效
 
-- render 读取 state/props，不直接修改 model；
-- event callback 可以请求 model mutation，但不能在 callback 中重建整棵 WidgetTree；
-- model transaction 结束后由 host 触发一次 reconcile；
-- 相同值 props 不产生额外 widget mutation 或 dirty transition；
-- Reactive 先复用现有依赖追踪和 invalidation，computed、自动双向 binding、异步 effect 后置。
+- 构建函数读初始 state，物化 live 树；之后不重跑。
+- event callback 可以请求 model mutation，但不能在 callback 中重建整棵 WidgetTree。
+- 相同值 `Reactive::set` 不产生额外 dirty transition。
+- command recording 期不读取 live model，只读 snapshot。
+
+禁止恢复 `UIRenderController` / per-frame `render()` / Description diff 循环。
 
 ## Appearance、事件和资源
 
-description authored appearance 不依赖 UITheme，优先级为：explicit description prop > widget-local authored default > optional theme/style lookup > framework neutral fallback。
+authored appearance 不依赖 UITheme，优先级为：explicit property > widget-local authored default > optional theme/style lookup > framework neutral fallback。
 
-callback 必须捕获稳定的 model/controller handle，不得长期捕获 render 临时对象或裸 widget 指针。remove/unmount 后旧 callback 不得再被 dispatch。description 只保存可复制的 resource reference/brush data；resolved texture/font 由 snapshot build context 解析；GPU resource 由 snapshot 保持到 queue submit 完成；reconcile 不创建 GPU resource。
+callback 必须捕获稳定的 model/`Reactive` handle，不得长期捕获构建临时对象或裸 widget 指针。Construct/事件期可以把 live widget 作为参数注入；remove/unmount 后旧 callback 不得再被 dispatch。GPU resource 由 snapshot 保持到 queue submit 完成；构建不在 command recording 期创建 GPU resource。
 
 ## 第一版契约测试
 
-1. duplicate key 报告稳定 parent path + key；
-2. same key 两次 render 复用同一 live widget identity；
-3. display name change 不触发 remove/insert；
-4. keyed reorder 保持 live widget identity；
-5. conditional remove 清理 focus/capture/hover/popup/drag；
-6. TextField focus/caret 不因 props update 丢失；
-7. same-value props 不产生额外 dirty transition；
-8. no theme 时 authored appearance 可独立渲染；
-9. unmount 后旧 callback 不再触发；
-10. description/reconcile 不在 command recording 期访问 live model。
+静态直接构建（新增方向）：
 
-## 进入 Phase -1B 的条件
+1. `ui::build`（或等价 API）不经 Description 能 attach column/text/button；
+2. `bindText` 的 `set()` 更新可见文本且不重建 widget；
+3. detach/切页后旧 callback 不再触发。
 
-- 本文契约完成 review；
-- 上述测试至少有测试骨架和失败语义；
-- 无未决的 key 作用域、state owner、remove 清理顺序问题；
-- 现有 WidgetTree、GUIWorkbench、GameUIHost 测试继续通过；
-- 不引入 XML/CSS parser，不迁移 Editor panel。
+Live-tree 契约（Description 路径已删除）：
+
+1. `ui::build` 创建的 widget 携带 registry typeId；
+2. same-value setter 不产生额外 dirty transition；
+3. no theme 时 authored appearance 可独立渲染；
+4. TextField `setText` 不丢失 focus；
+5. detach 清理 focus/capture，旧 callback 不再触发；
+6. 构建与绑定不在 command recording 期访问 live model。
+
+## 当前出口
+
+G1.5 与 Description 删除已完成：
+
+- `ui::build` 是静态 DSL 的唯一出口；
+- Workbench DSL 页走直接构建 + `Reactive`；
+- `UIDocument::instantiate()` 仍是 document/script 边界；
+- 不引入 XML/CSS parser。G2 补 `UIScreen` unmount detach 与 parent-scoped mount。

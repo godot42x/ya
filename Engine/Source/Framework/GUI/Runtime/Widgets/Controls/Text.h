@@ -63,6 +63,22 @@ struct YA_GUI_API UIText : public UIElement
         _text = value;
         invalidateProperty(_bAutoSize ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
     }
+    void setFontSize(uint32_t value)
+    {
+        if (_fontSize == value) {
+            return;
+        }
+        _fontSize = value;
+        invalidateProperty(_bAutoSize ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
+    }
+    void setColor(const glm::vec4& value)
+    {
+        if (_color == value) {
+            return;
+        }
+        _color = value;
+        invalidateProperty(EUIPropertyImpact::Paint);
+    }
     [[nodiscard]] const std::string& getText() const { return _text; }
     // SizeToContent: set base UIElement::_bAutoSize to measure the layout
     // rect from the text (desired = text width x lineHeight).

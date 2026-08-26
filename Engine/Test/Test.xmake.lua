@@ -149,6 +149,7 @@ target("ya-gui-declarative-contract-test")
 do
     set_kind("binary")
     add_files("./Source/DeclarativeContractTest.cpp")
+    add_files("./Source/ScreenStackContractTest.cpp")
     add_files("./Source/TestEntry.cpp")
     add_deps("ya-gui-widgets", "ya-render-resources")
     add_packages("gtest")

@@ -192,9 +192,8 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
 
     // === Identity ===
     std::string _name;
-    /// Declarative reconcile key (React-style key / business identity).
-    /// Empty for legacy hand-authored widgets; the DSL sets this to preserve
-    /// transient state across same-key updates and reorder.
+    /// Optional stable identity for dumps and list-row reuse. Empty for
+    /// hand-authored widgets; `ui::build` copies the builder key here.
     std::string _stableKey;
     /// Stable registry type ID, set by UITypeRegistry::createInstance (empty
     /// for framework-internal / direct make_shared instances).

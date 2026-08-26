@@ -323,8 +323,9 @@ void FWorkbenchSurface::selectPage(int index)
         buildEditorDemo(*_tree, *_demoHost);
     }
     else {
+        FPage& page = _pages[static_cast<size_t>(index)];
         const auto log = [this](const std::string& text) { logStatus(text); };
-        _pages[static_cast<size_t>(index)].build(*_tree, *_demoHost, log);
+        page.build(*_tree, *_demoHost, log);
     }
 
     if (_tree) {

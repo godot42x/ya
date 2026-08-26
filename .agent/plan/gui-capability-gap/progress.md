@@ -3,6 +3,18 @@
 > 主线：`gui-capability-gap` 第二阶段——GameEditor ImGui 替换前置（GUI App 线全量补齐）。
 > 记录：每轮完成内容、验证结果、剩余问题。
 
+## 2026-08-25 — 移除 content 兼容入口，建立 UIComponent 类型边界（本轮）
+
+**完成**：
+- 仓库内已无 `.content(factory)` 调用，移除兼容别名，避免静态 DSL 与函数式扩展重复命名。
+- 新增 `UIComponent = std::function<UIDescription()>`，并以 `UIComponentFactory` 作为 compose/when 的概念边界。
+- 保留 `UIDescriptionFactory` 兼容概念别名，暂不破坏外部模板代码。
+- 增加 UIComponent alias contract，确认 component 仍然只生成静态 description，不进入 runtime state。
+
+**验证**：DeclarativeContractTest 通过（30/30）。
+
+**下一刀**：把 component 从“无参 factory”扩展为带明确 compose context/props 的上层 API，但保持静态 builder 与 `UIDescription` 不变。
+
 ## 2026-08-25 — 静态 DSL 与函数式 compose 分层（本轮）
 
 **完成**：

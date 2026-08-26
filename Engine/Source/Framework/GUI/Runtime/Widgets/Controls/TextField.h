@@ -57,6 +57,15 @@ struct YA_GUI_API UITextField : public UIElement
         invalidateProperty(EUIPropertyImpact::Paint);
     }
 
+    void setFontSize(uint32_t value)
+    {
+        if (_fontSize == value) {
+            return;
+        }
+        _fontSize = value;
+        invalidateProperty(EUIPropertyImpact::Paint);
+    }
+
     /// Fired on every edit (insert / delete / caret-independent text change).
     std::function<void(const std::string& text)> _onTextChanged;
     /// Fired on Enter and on focus loss (commit the buffer).

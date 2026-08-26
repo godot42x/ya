@@ -129,8 +129,8 @@ class YA_GUI_API FWorkbenchSurface
     std::shared_ptr<ya::UIPanel>   _demoHost;
     struct FPage
     {
-        std::string  name;
-        FPageBuilder build;
+        std::string    name;
+        FPageBuilder   build;
     };
     std::vector<FPage> _pages;
     int                _editorPageIndex = -1;
