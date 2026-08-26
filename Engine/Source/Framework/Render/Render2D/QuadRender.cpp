@@ -567,6 +567,8 @@ void FQuadRender::begin(Render2DPassSlot passSlot, const Extent2D& extent)
 
 void FQuadRender::end()
 {
+    // Leftover drain only. Cross-pipeline draw order is owned by
+    // Render2D::flushPending(); do not use this as the session-end path.
     flushWorld(Render2D::session.curCmdBuf);
     flush(Render2D::session.curCmdBuf);
 }
@@ -763,8 +765,17 @@ void FQuadRender::resetTextureBatch()
 
 void FQuadRender::flushForTextureOverflow(ICommandBuffer* cmdBuf)
 {
-    flushWorld(cmdBuf);
-    flush(cmdBuf);
+    // Texture slots are shared by screen and world quads. The session batcher
+    // keeps at most one of those backends pending, so this must not impose a
+    // world-then-screen drain order.
+    YA_CORE_ASSERT(!(vertexCount > 0 && worldVertexCount > 0),
+                   "Render2D texture overflow while both screen and world quads are pending");
+    if (worldVertexCount > 0) {
+        flushWorld(cmdBuf);
+    }
+    if (vertexCount > 0) {
+        flush(cmdBuf);
+    }
     resetTextureBatch();
 }
 

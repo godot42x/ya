@@ -1,0 +1,29 @@
+#pragma once
+
+#include "GUI/Widgets/UIElement.h"
+
+namespace ya
+{
+
+/// Stateful composition root, analogous to Slate's SCompoundWidget.
+///
+/// A compound widget is still an ordinary UIElement in the retained tree. Its
+/// internal children are constructed once, from the static DSL, immediately
+/// before first attachment. WidgetTree owns lifecycle and frame driving; the
+/// compound widget never runs its own loop.
+struct YA_GUI_API UICompoundWidget : public UIElement
+{
+    using UIElement::UIElement;
+
+    void prepareForAttach() override;
+    bool wantsTick() const override { return _bTickEnabled; }
+
+protected:
+    virtual void construct() = 0;
+    bool _bTickEnabled = false;
+    bool _bConstructed = false;
+
+    void enableTick(bool enabled = true) { _bTickEnabled = enabled; }
+};
+
+} // namespace ya

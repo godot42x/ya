@@ -18,6 +18,7 @@
 #include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/UIBehavior.h"
 
 #include <gtest/gtest.h>
 
@@ -161,6 +162,112 @@ struct DragDetectWidget final : public UIElement
     bool detected = false;
 };
 
+struct TestBehavior final : public UIBehavior
+{
+    int attached = 0;
+    int detached = 0;
+    int previewHits = 0;
+    int targetHits = 0;
+    int bubbleHits = 0;
+    int tickHits = 0;
+    bool bHandlePreview = false;
+    bool bHandleTarget = false;
+    bool bHandleBubble = false;
+    bool bTick = false;
+
+    void onAttached(UIElement& owner) override
+    {
+        UIBehavior::onAttached(owner);
+        ++attached;
+    }
+
+    void onDetached(UIElement& owner) override
+    {
+        ++detached;
+        UIBehavior::onDetached(owner);
+    }
+
+    [[nodiscard]] bool wantsTick() const override { return bTick; }
+
+    void tick(UIElement& owner, float deltaSeconds) override
+    {
+        (void)owner;
+        (void)deltaSeconds;
+        ++tickHits;
+    }
+
+    bool previewInputEvent(UIElement& owner, const Event& event, const WidgetEventContext& ctx) override
+    {
+        (void)owner;
+        (void)event;
+        (void)ctx;
+        ++previewHits;
+        return bHandlePreview;
+    }
+
+    bool handleInputEvent(UIElement& owner, const Event& event, const WidgetEventContext& ctx) override
+    {
+        (void)owner;
+        (void)event;
+        (void)ctx;
+        ++targetHits;
+        return bHandleTarget;
+    }
+
+    bool bubbleInputEvent(UIElement& owner, const Event& event, const WidgetEventContext& ctx) override
+    {
+        (void)owner;
+        (void)event;
+        (void)ctx;
+        ++bubbleHits;
+        return bHandleBubble;
+    }
+
+    void requestPaint() { invalidateOwnerPaint(); }
+};
+
+struct TestDragBehavior final : public UIBehavior
+{
+    bool bSource = false;
+    bool bAccept = false;
+    bool detected = false;
+    bool dropped = false;
+    int highlightChanges = 0;
+    std::string payload;
+
+    UIDragDropOperationRef onDragDetected(UIElement& owner, const FDragDetectedEvent& event) override
+    {
+        (void)owner;
+        detected = event.currentPoint.x >= event.startPoint.x;
+        if (!bSource) {
+            return nullptr;
+        }
+        auto op = std::make_shared<UIDragDropOperation>();
+        op->typeId = "behavior.payload";
+        op->payload = payload.empty() ? "behavior.payload.1" : payload;
+        op->ghostLabel = "Behavior";
+        return op;
+    }
+
+    bool canAcceptDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint) override
+    {
+        (void)owner; (void)logicalPoint;
+        return bAccept && operation.typeId == "behavior.payload";
+    }
+
+    void onDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint) override
+    {
+        (void)owner; (void)logicalPoint;
+        dropped = operation.payload == (payload.empty() ? "behavior.payload.1" : payload);
+    }
+
+    void setDropHighlight(UIElement& owner, bool bHighlight) override
+    {
+        (void)owner; (void)bHighlight;
+        ++highlightChanges;
+    }
+};
+
 } // namespace
 
 // === WidgetTreeDump ===
@@ -285,6 +392,101 @@ TEST(WidgetTreeTest, DragDetectionInvokesWidgetCallbackWithoutDragSourceControl)
     ASSERT_NE(tree.getDragOperation(), nullptr);
     EXPECT_EQ(tree.getDragOperation()->typeId, "test.detected");
     tree.cancelDrag();
+}
+
+TEST(WidgetTreeTest, BehaviorLifecycleTickAndInvalidationFollowOwner)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto panel = std::make_shared<UIPanel>("BehaviorHost");
+    panel->setSize({120.0f, 60.0f});
+    auto behavior = std::make_shared<TestBehavior>();
+    behavior->bTick = true;
+    panel->addBehavior(behavior);
+
+    EXPECT_EQ(behavior->attached, 0);
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, panel).valid());
+    EXPECT_EQ(behavior->attached, 1);
+    EXPECT_TRUE(panel->hasBehavior(*behavior));
+
+    (void)tree.buildSnapshot({});
+    const GuiPerfStats before = tree.getPerfStats();
+    behavior->requestPaint();
+    (void)tree.buildSnapshot({});
+    EXPECT_GT(tree.getPerfStats().paintDirtyTransitions, before.paintDirtyTransitions);
+
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(behavior->tickHits, 1);
+
+    tree.detach(*panel);
+    EXPECT_EQ(behavior->detached, 1);
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(behavior->tickHits, 1);
+}
+
+TEST(WidgetTreeTest, BehaviorParticipatesInPreviewTargetAndBubbleRouting)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto root = std::make_shared<UIPanel>("Root");
+    root->setPosition({20.0f, 20.0f});
+    root->setSize({200.0f, 160.0f});
+    root->_hitFilter = EWidgetHitFilter::Stop;
+    auto child = std::make_shared<UIPanel>("Child");
+    child->setPosition({10.0f, 10.0f});
+    child->setSize({80.0f, 40.0f});
+    child->_hitFilter = EWidgetHitFilter::Pass;
+    root->addDetachedChild(child);
+
+    auto rootBehavior = std::make_shared<TestBehavior>();
+    auto childBehavior = std::make_shared<TestBehavior>();
+    root->addBehavior(rootBehavior);
+    child->addBehavior(childBehavior);
+
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, root).valid());
+    tree.layout();
+
+    rootBehavior->bHandleBubble = true;
+    childBehavior->bHandleTarget = true;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_GE(rootBehavior->previewHits, 1);
+    EXPECT_GE(childBehavior->targetHits, 1);
+    EXPECT_GE(rootBehavior->bubbleHits, 1);
+}
+
+TEST(WidgetTreeTest, BehaviorCanActAsDragSourceAndDropTargetWithoutDedicatedWidgetSubclass)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto source = std::make_shared<UIPanel>("BehaviorSource");
+    source->setPosition({20.0f, 20.0f});
+    source->setSize({120.0f, 60.0f});
+    source->_hitFilter = EWidgetHitFilter::Stop;
+    auto target = std::make_shared<UIPanel>("BehaviorTarget");
+    target->setPosition({220.0f, 20.0f});
+    target->setSize({120.0f, 60.0f});
+    target->_hitFilter = EWidgetHitFilter::Stop;
+
+    auto sourceBehavior = std::make_shared<TestDragBehavior>();
+    sourceBehavior->bSource = true;
+    auto targetBehavior = std::make_shared<TestDragBehavior>();
+    targetBehavior->bAccept = true;
+    targetBehavior->payload = "behavior.payload.1";
+    source->addBehavior(sourceBehavior);
+    target->addBehavior(targetBehavior);
+
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, source).valid());
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, target).valid());
+    tree.layout();
+
+    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f));
+    tree.dispatchEvent(MouseMoveEvent(80.0f, 40.0f), pointAt(80.0f, 40.0f));
+    EXPECT_TRUE(sourceBehavior->detected);
+    ASSERT_TRUE(tree.isDragging());
+    tree.dispatchEvent(MouseMoveEvent(260.0f, 40.0f), pointAt(260.0f, 40.0f));
+    tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(260.0f, 40.0f));
+
+    EXPECT_TRUE(targetBehavior->dropped);
+    EXPECT_GT(targetBehavior->highlightChanges, 0);
+    EXPECT_FALSE(tree.isDragging());
 }
 
 TEST(WidgetTreeTest, RouteStateTracksPointerCaptureAndFocusPaths)

@@ -15,9 +15,11 @@
 #include "ECS/Systems/TransformSystem.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/EditorPlaySession.h"
+#include "GameEditor/EditorChrome.h"
 #include "GameEditor/EditorProfilingSettings.h"
 #include "GameEditor/EditorRuntimeSettings.h"
 #include "GameEditor/Input/EditorInputNode.h"
+#include "GameEditor/UI/EditorSurface.h"
 #include "GameEditor/Inspector/TypeRenderer.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "Render3D/Debug/PhysicsDebugDraw.h"
@@ -34,6 +36,8 @@
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "GUI/Compose/Render2DComposePass.h"
 #include "GUI/Compose/GUIRenderSurface.h"
+#include "RHI/Core/Swapchain.h"
+#include "RHI/NativeWindow.h"
 #include "GameEditor/Panels/GUIWorkbenchPanel.h"
 #include "Render3D/RenderRuntime.h"
 #include "Scene/Core/Scene.h"
@@ -552,8 +556,10 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     FreeCameraController           _cameraController;
     EditorViewportCompositor       _viewportCompositor;
     EditorToolSurfaceCompositor    _guiWorkbenchCompositor;
+    EditorSurface                  _editorSurface;
     EditorInputNode                _inputNode;
     InputRouter::FNodeRegistration _inputNodeRegistration;
+    EEditorChromeHost              _chromeHost      = EEditorChromeHost::ImGui;
     bool                           _bWasRunning     = false;
     std::optional<EViewportMode>   _viewportModeBeforePlay;
 
@@ -761,6 +767,18 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                 desc.defaultScenePath = path;
             }
         }
+
+        _chromeHost = EEditorChromeHost::ImGui;
+        const std::string fromConfig = ConfigManager::get().getOr<std::string>("editor", "chrome.host", "imgui");
+        if (!tryParseEditorChromeHost(fromConfig, _chromeHost)) {
+            YA_CORE_WARN("Ignoring invalid editor.chrome.host '{}', using imgui", fromConfig);
+            _chromeHost = EEditorChromeHost::ImGui;
+        }
+        if (desc.editorChrome) {
+            if (!tryParseEditorChromeHost(*desc.editorChrome, _chromeHost)) {
+                YA_CORE_WARN("Ignoring invalid --editor-chrome '{}'", *desc.editorChrome);
+            }
+        }
     }
 
     void onAttach(App& app) override
@@ -777,11 +795,18 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         initializeEditorCamera(app, *_layer);
         _layer->setCurrentScenePath(app.getDesc().defaultScenePath.value_or(std::string{}));
         _layer->onAttach();
-        _inputNode.bind(app, *_layer);
+        if (_chromeHost == EEditorChromeHost::WidgetTree) {
+            _editorSurface.bind(*_layer);
+            _inputNode.bind(app, *_layer, &_editorSurface);
+        }
+        else {
+            _inputNode.bind(app, *_layer, nullptr);
+        }
         _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);
         gEditorLayer           = _layer.get();
         registerEditorPresets();
         registerEditorScriptApis();
+        YA_CORE_INFO("Editor chrome host: {}", editorChromeHostName(_chromeHost));
     }
 
     void* queryInterface(FInterfaceId interfaceId) override
@@ -839,6 +864,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         app.getInputRouter().cancelInput(EInputCancelReason::ModuleDetached);
         _inputNodeRegistration.reset();
         _inputNode.unbind();
+        _editorSurface.shutdown();
         _playSession.shutdown(app);
         gEditorAuthoringScene = nullptr;
         app.getRenderServices().clearExtensionRenderFrameState();
@@ -854,6 +880,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         }
         gEditorLayer = nullptr;
         GuiSystem::get().shutdown();
+        // WidgetTree chrome lazily built RuntimeDefault atlas textures; drop
+        // them after the surface (snapshot/widget Font refs) is already gone.
+        if (FontManager::get()) {
+            FontManager::get()->clearCache();
+        }
     }
 
     bool onBeforeAppStateChange(App& app, AppState previousState, AppState nextState) override
@@ -975,11 +1006,24 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                     },
                     EFormat::R16G16B16A16_SFLOAT);
             }
-            prepareRender2DComposePassPipeline(
-                FRender2DComposePassDesc{
-                    .kind = ERender2DComposePassKind::EditorToolSurface,
-                },
-                EFormat::R16G16B16A16_SFLOAT);
+            if (_chromeHost == EEditorChromeHost::ImGui) {
+                prepareRender2DComposePassPipeline(
+                    FRender2DComposePassDesc{
+                        .kind = ERender2DComposePassKind::EditorToolSurface,
+                    },
+                    EFormat::R16G16B16A16_SFLOAT);
+            }
+            if (_chromeHost == EEditorChromeHost::WidgetTree) {
+                EFormat::T chromeFormat = EFormat::B8G8R8A8_UNORM;
+                if (auto* render = renderServices.getRender(); render && render->getSwapchain()) {
+                    chromeFormat = render->getSwapchain()->getFormat();
+                }
+                prepareRender2DComposePassPipeline(
+                    FRender2DComposePassDesc{
+                        .kind = ERender2DComposePassKind::EditorToolSurface,
+                    },
+                    chromeFormat);
+            }
         }
 
         _layer->onUpdate(dt);
@@ -1024,17 +1068,36 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                                     *_layer,
                                     app.getRenderServices().getRenderFrameState(),
                                     canvasTargetExtent);
-        _guiWorkbenchCompositor.compose(*render, commandBuffer, _layer->getGUIWorkbenchPanel());
+        if (_chromeHost == EEditorChromeHost::ImGui) {
+            _guiWorkbenchCompositor.compose(*render, commandBuffer, _layer->getGUIWorkbenchPanel());
+        }
         // Keep the last valid frame instead of clobbering the display with a
         // transiently null output (startup / mode-switch / resize gaps).
         if (auto output = _viewportCompositor.getOutputImage();
             output && output->isValid() && output->getImageView()) {
             _layer->setViewportDisplayImage(std::move(output));
         }
-        if (auto output = _guiWorkbenchCompositor.getOutputImage();
-            output && output->isValid() && output->getImageView()) {
-            _layer->getGUIWorkbenchPanel().setDisplayImage(std::move(output));
+        if (_chromeHost == EEditorChromeHost::ImGui) {
+            if (auto output = _guiWorkbenchCompositor.getOutputImage();
+                output && output->isValid() && output->getImageView()) {
+                _layer->getGUIWorkbenchPanel().setDisplayImage(std::move(output));
+            }
         }
+    }
+
+    void onBeforePresentation(App& app, ICommandBuffer& commandBuffer, float dt) override
+    {
+        (void)app;
+        (void)commandBuffer;
+        (void)dt;
+        if (!_layer || _chromeHost != EEditorChromeHost::ImGui) {
+            return;
+        }
+
+        GuiSystem::get().beginFrame();
+        _layer->onImGuiRender();
+        GuiSystem::get().endFrame();
+        (void)GuiSystem::get().render();
     }
 
     void onPresentation(App& app, ICommandBuffer& commandBuffer, float dt) override
@@ -1044,16 +1107,21 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             return;
         }
 
-        GuiSystem::get().beginFrame();
-        _layer->onImGuiRender();
-        GuiSystem::get().endFrame();
-        GuiSystem::get().render();
-        // Compose the YA_GUI-backed editor panels (e.g. Frame Stats) into their
-        // offscreen surfaces before the ImGui pass submits, so the bridged
-        // textures are ready for ImGui::Image().
-        if (auto* render = app.getRenderServices().getRender()) {
-            _layer->composeFrameStats(*render, commandBuffer);
+        if (_chromeHost == EEditorChromeHost::WidgetTree) {
+            auto* render = app.getRenderServices().getRender();
+            if (!render) {
+                return;
+            }
+            _editorSurface.tick(app, dt);
+            const UIFrameSnapshot& snapshot = _editorSurface.snapshot();
+            const Extent2D targetExtent{
+                .width  = render->getSwapchainWidth(),
+                .height = render->getSwapchainHeight(),
+            };
+            replayUIFrameSnapshot(&commandBuffer, snapshot, targetExtent, ERender2DComposePassKind::EditorToolSurface);
+            return;
         }
+
         GuiSystem::get().submit(commandBuffer);
     }
 };

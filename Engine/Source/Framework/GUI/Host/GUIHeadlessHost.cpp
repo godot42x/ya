@@ -153,8 +153,9 @@ void GUIHeadlessHost::onEvent(const Event& event)
     }
 }
 
-void GUIHeadlessHost::onTick(float /*dt*/)
+void GUIHeadlessHost::onTick(float dt)
 {
+    _impl->tree.tick(dt);
     _impl->delegate->updateUI();
     _impl->lastSnapshot = _impl->tree.buildSnapshot(_impl->config.frameBuildContext);
     if (!_impl->bLoggedFirstSnapshot) {

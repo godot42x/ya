@@ -23,6 +23,7 @@
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -36,6 +37,9 @@ template<typename T>
 concept UIWidgetBuilder = requires(T&& builder) {
     { std::forward<T>(builder).release() } -> std::convertible_to<UIElementRef>;
 };
+
+template<typename T>
+concept UICompoundWidgetType = std::derived_from<T, UICompoundWidget>;
 
 template<typename TWidget>
 [[nodiscard]] std::shared_ptr<TWidget> makeLiveWidget(const char* typeId,
@@ -57,6 +61,11 @@ class TUIWidgetBuilder
   public:
     explicit TUIWidgetBuilder(const char* typeId, std::string key, std::string displayName = {})
         : _widget(makeLiveWidget<TWidget>(typeId, std::move(key), std::move(displayName)))
+    {
+    }
+
+    explicit TUIWidgetBuilder(std::shared_ptr<TWidget> widget)
+        : _widget(std::move(widget))
     {
     }
 
@@ -108,6 +117,18 @@ class TUIWidgetBuilder
     [[nodiscard]] TDerived&& setEnabled(bool value) &&
     {
         _widget->setEnabled(value);
+        return std::move(derived());
+    }
+
+    [[nodiscard]] TDerived& setVisibility(EWidgetVisibility value) &
+    {
+        _widget->setVisibility(value);
+        return derived();
+    }
+
+    [[nodiscard]] TDerived&& setVisibility(EWidgetVisibility value) &&
+    {
+        _widget->setVisibility(value);
         return std::move(derived());
     }
 
@@ -214,6 +235,31 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     {
         (child(std::forward<TChildren>(nodes)), ...);
         return std::move(this->derived());
+    }
+};
+
+template<UICompoundWidgetType TWidget>
+class TUICompoundWidgetBuilder final : public TUIWidgetBuilder<TWidget, TUICompoundWidgetBuilder<TWidget>>
+{
+  public:
+    template<typename... TArgs>
+    explicit TUICompoundWidgetBuilder(std::string key, std::string displayName, TArgs&&... args)
+        : TUIWidgetBuilder<TWidget, TUICompoundWidgetBuilder<TWidget>>(makeCompoundWidget(std::move(key), std::move(displayName), std::forward<TArgs>(args)...))
+    {
+    }
+
+  private:
+    template<typename... TArgs>
+    [[nodiscard]] static std::shared_ptr<TWidget> makeCompoundWidget(std::string key,
+                                                                     std::string displayName,
+                                                                     TArgs&&... args)
+    {
+        const std::string resolvedName = displayName.empty() ? key : displayName;
+        auto widget = std::make_shared<TWidget>(resolvedName, std::forward<TArgs>(args)...);
+        widget->_stableKey = std::move(key);
+        widget->_name = resolvedName;
+        widget->_bAutoSize = true;
+        return widget;
     }
 };
 
@@ -764,6 +810,18 @@ class UIImageWidgetBuilder final : public TUIWidgetBuilder<UIImage, UIImageWidge
         _widget->_assetPath = std::move(value);
         return std::move(*this);
     }
+
+    [[nodiscard]] UIImageWidgetBuilder& setTexture(std::shared_ptr<Texture> value) &
+    {
+        _widget->setTexture(std::move(value));
+        return *this;
+    }
+
+    [[nodiscard]] UIImageWidgetBuilder&& setTexture(std::shared_ptr<Texture> value) &&
+    {
+        _widget->setTexture(std::move(value));
+        return std::move(*this);
+    }
 };
 
 class UISplitPaneWidgetBuilder final : public TUIWidgetChildrenBuilder<UISplitPane, UISplitPaneWidgetBuilder>
@@ -807,6 +865,18 @@ class UISplitPaneWidgetBuilder final : public TUIWidgetChildrenBuilder<UISplitPa
     [[nodiscard]] UISplitPaneWidgetBuilder&& setMinSecondExtent(float value) &&
     {
         _widget->setMinSecondExtent(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISplitPaneWidgetBuilder& setPadding(glm::vec2 value) &
+    {
+        _widget->setPadding(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISplitPaneWidgetBuilder&& setPadding(glm::vec2 value) &&
+    {
+        _widget->setPadding(value);
         return std::move(*this);
     }
 
@@ -1030,6 +1100,16 @@ class UISizeBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UISizeBox, 
 [[nodiscard]] inline UISizeBoxWidgetBuilder sizeBox(std::string key, std::string displayName = {})
 {
     return UISizeBoxWidgetBuilder{std::move(key), std::move(displayName)};
+}
+
+template<UICompoundWidgetType TWidget, typename... TArgs>
+[[nodiscard]] inline TUICompoundWidgetBuilder<TWidget> compound(std::string key,
+                                                                std::string displayName = {},
+                                                                TArgs&&... args)
+{
+    return TUICompoundWidgetBuilder<TWidget>{std::move(key),
+                                             std::move(displayName),
+                                             std::forward<TArgs>(args)...};
 }
 
 /// Attach a constructed builder to `parent`. Assemble the builder first,

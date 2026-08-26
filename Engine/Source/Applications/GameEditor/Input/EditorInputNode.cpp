@@ -1,8 +1,12 @@
 #include "GameEditor/Input/EditorInputNode.h"
 
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/UI/EditorSurface.h"
 #include "GameRuntime/App.h"
 #include "GameRuntime/GUI/GuiSystem.h"
+#include "GUI/Widgets/WidgetTree.h"
+
+#include <glm/glm.hpp>
 
 namespace ya
 {
@@ -12,24 +16,46 @@ namespace
 
 struct FEditorInputSnapshot
 {
-    EventProcessState guiProcessState = EventProcessState::Continue;
-    FGuiInputClaim    guiClaim{};
-    bool              pointerEvent     = false;
-    bool              keyboardEvent    = false;
-    bool              viewportMouse    = false;
-    bool              viewportKeyboard = false;
+    EWidgetRouteResult chromeResult     = EWidgetRouteResult::NotHandled;
+    EventProcessState  guiProcessState  = EventProcessState::Continue;
+    FGuiInputClaim     guiClaim{};
+    bool               pointerEvent     = false;
+    bool               keyboardEvent    = false;
+    bool               viewportMouse    = false;
+    bool               viewportKeyboard = false;
+    bool               textInput        = false;
+    bool               widgetTreeChrome = false;
 };
 
-FEditorInputSnapshot buildSnapshot(EditorLayer& layer, const FInputEvent& event)
+FEditorInputSnapshot buildSnapshot(App& app, EditorLayer& layer, EditorSurface* surface, const FInputEvent& event)
 {
     FEditorInputSnapshot snapshot;
-    snapshot.guiProcessState = GuiSystem::get().processEvent(event);
-    snapshot.guiClaim        = GuiSystem::get().describeInputClaim(event);
-    snapshot.pointerEvent    = event.isInCategory(EEventCategory::Mouse) ||
+    snapshot.pointerEvent  = event.isInCategory(EEventCategory::Mouse) ||
                             event.isInCategory(EEventCategory::MouseButton);
-    snapshot.keyboardEvent   = event.isInCategory(EEventCategory::Keyboard);
-    snapshot.viewportMouse   = layer.isViewportHovered() || layer.isViewportFocused();
-    snapshot.viewportKeyboard = layer.isViewportFocused();
+    snapshot.keyboardEvent = event.isInCategory(EEventCategory::Keyboard);
+
+    glm::vec2 windowPoint = app.getLastMousePos();
+    if (event.getEventType() == EEvent::MouseMoved) {
+        const auto& move = static_cast<const MouseMoveEvent&>(event);
+        windowPoint      = {move.getX(), move.getY()};
+    }
+
+    if (surface) {
+        snapshot.widgetTreeChrome = true;
+        snapshot.chromeResult     = surface->dispatchEvent(event, windowPoint);
+        snapshot.textInput        = surface->wantsTextInput();
+        snapshot.viewportMouse =
+            surface->isViewportHovered() || surface->isViewportFocused() ||
+            layer.isViewportHovered() || layer.isViewportFocused();
+        snapshot.viewportKeyboard = surface->isViewportFocused() || layer.isViewportFocused();
+    }
+    else {
+        snapshot.guiProcessState = GuiSystem::get().processEvent(event);
+        snapshot.guiClaim        = GuiSystem::get().describeInputClaim(event);
+        snapshot.textInput       = snapshot.guiClaim.text;
+        snapshot.viewportMouse   = layer.isViewportHovered() || layer.isViewportFocused();
+        snapshot.viewportKeyboard = layer.isViewportFocused();
+    }
     return snapshot;
 }
 
@@ -57,7 +83,24 @@ FInputReply routeCommandInput(FInputRouteContext& context, const FInputEvent& ev
 
 FInputReply routeGuiInput(const FEditorInputSnapshot& snapshot, const FInputEvent& event)
 {
+    if (snapshot.widgetTreeChrome) {
+        return {};
+    }
     if (snapshot.guiProcessState != EventProcessState::Continue || snapshot.guiClaim.wantsEvent(event)) {
+        return FInputReply{.handled = true};
+    }
+    return {};
+}
+
+FInputReply routeChromeInput(const FEditorInputSnapshot& snapshot)
+{
+    if (!snapshot.widgetTreeChrome) {
+        return {};
+    }
+    if (snapshot.textInput && snapshot.keyboardEvent) {
+        return FInputReply{.handled = true};
+    }
+    if (snapshot.chromeResult == EWidgetRouteResult::HandledExclusive && !snapshot.viewportMouse) {
         return FInputReply{.handled = true};
     }
     return {};
@@ -94,7 +137,7 @@ FInputReply routeViewportToolInput(
 
     if (layer.isViewportMode2D()) {
         if ((snapshot.pointerEvent && snapshot.viewportMouse) ||
-            (snapshot.keyboardEvent && snapshot.viewportKeyboard && !snapshot.guiClaim.text)) {
+            (snapshot.keyboardEvent && snapshot.viewportKeyboard && !snapshot.textInput)) {
             return FInputReply{.handled = true};
         }
         return {};
@@ -105,7 +148,7 @@ FInputReply routeViewportToolInput(
         return FInputReply{.handled = true};
     }
 
-    if (snapshot.keyboardEvent && snapshot.viewportKeyboard && !snapshot.guiClaim.text) {
+    if (snapshot.keyboardEvent && snapshot.viewportKeyboard && !snapshot.textInput) {
         app.getInputManager().processEvent(event);
         return FInputReply{.handled = true};
     }
@@ -145,7 +188,7 @@ FInputReply routeGameplayViewportInput(
         };
     }
 
-    if (snapshot.keyboardEvent && snapshot.viewportKeyboard && !snapshot.guiClaim.text) {
+    if (snapshot.keyboardEvent && snapshot.viewportKeyboard && !snapshot.textInput) {
         app.getInputManager().processEvent(event);
         return FInputReply{.handled = true};
     }
@@ -184,16 +227,18 @@ bool shouldStopRouting(const FInputReply& reply)
 
 } // namespace
 
-void EditorInputNode::bind(App& app, EditorLayer& layer)
+void EditorInputNode::bind(App& app, EditorLayer& layer, EditorSurface* surface)
 {
-    _app   = &app;
-    _layer = &layer;
+    _app     = &app;
+    _layer   = &layer;
+    _surface = surface;
 }
 
 void EditorInputNode::unbind()
 {
-    _layer = nullptr;
-    _app   = nullptr;
+    _surface = nullptr;
+    _layer   = nullptr;
+    _app     = nullptr;
 }
 
 FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEvent& event)
@@ -202,13 +247,18 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
         return {};
     }
 
-    const FEditorInputSnapshot snapshot = buildSnapshot(*_layer, event);
+    const FEditorInputSnapshot snapshot = buildSnapshot(*_app, *_layer, _surface, event);
     FInputReply reply = routeCommandInput(context, event);
     if (shouldStopRouting(reply)) {
         return reply;
     }
 
     reply = routeCapturedViewportInput(*_app, *_layer, context, event);
+    if (shouldStopRouting(reply)) {
+        return reply;
+    }
+
+    reply = routeChromeInput(snapshot);
     if (shouldStopRouting(reply)) {
         return reply;
     }

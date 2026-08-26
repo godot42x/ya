@@ -4,6 +4,7 @@
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
 
+#include "GUI/Declarative/Construct.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
@@ -37,42 +38,6 @@ namespace
 // mounted theme.
 constexpr glm::vec4 kHeaderColor = guiworkbench::tokens::kHeaderColor;
 
-std::shared_ptr<ya::UIButton> makeToolButton(const std::string& name, const std::string& label, float width = 0.0f)
-{
-    auto button = std::make_shared<ya::UIButton>(name);
-    if (width > 0.0f) {
-        // Explicit control (inspector form): keep the fixed width.
-        button->setSize({width, 24.0f});
-    }
-    else {
-        // SizeToContent: the label text sizes the button (toolbar row).
-        button->_bAutoSize      = true;
-        button->setContentPadding({10.0f, 4.0f});
-    }
-
-    auto text = std::make_shared<ya::UIText>(name + "_Label");
-    text->_bAutoSize = true;
-    text->setVisibility(ya::EWidgetVisibility::SelfHitTestInvisible);
-    text->_fontSize  = 14;
-    text->setText(label);
-    // No authored color: the label resolves the theme "text" style, so a
-    // light theme flips button labels to dark text (style-system Phase 4).
-    text->_hAlign    = ya::EWidgetAlignH::Center;
-    text->_vAlign    = ya::EWidgetAlignV::Center;
-    button->addDetachedChild(text);
-    return button;
-}
-
-std::shared_ptr<ya::UIText> makeHeaderText(const std::string& text)
-{
-    auto label = std::make_shared<ya::UIText>(text + "_Header");
-    label->setSize({200.0f, 20.0f});
-    label->_fontSize = 13;
-    label->setText(text);
-    label->_color    = kHeaderColor;
-    return label;
-}
-
 void logWorkbenchRectOnce(const char* label, const ya::UIElement* element)
 {
     static int sLoggedFrames = 0;
@@ -91,6 +56,14 @@ void logWorkbenchRectOnce(const char* label, const ya::UIElement* element)
 
 } // namespace
 
+void FWorkbenchSurface::assembleChrome(ya::WidgetTree& tree, ya::UIElement& parent)
+{
+    buildMenuBar(tree, parent);
+    buildWorkspaceShell(tree, parent);
+    buildStatusBar(tree, parent);
+    selectPage(_initialPageIndex);
+}
+
 void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
 {
     _tree = &tree;
@@ -104,11 +77,20 @@ void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
     _root->_styleKey = "panel.window";
     tree.attachToLayer(ya::WidgetTree::ELayer::Content, _root);
 
-    buildMenuBar(tree, *_root);
-    buildWorkspaceShell(tree, *_root);
-    buildStatusBar(tree, *_root);
+    assembleChrome(tree, *_root);
+}
 
-    selectPage(_initialPageIndex);
+void FWorkbenchSurface::buildUI(ya::WidgetTree& tree, ya::UIElement& parent)
+{
+    _tree = &tree;
+
+    _root = std::make_shared<ya::UIPanel>("WorkbenchRoot");
+    _root->_anchorMin = {0.0f, 0.0f};
+    _root->_anchorMax = {1.0f, 1.0f};
+    _root->_styleKey = "panel.window";
+    tree.attach(parent, _root);
+
+    assembleChrome(tree, *_root);
 }
 
 int FWorkbenchSurface::findPageIndexByName(const std::string& name) const
@@ -363,217 +345,181 @@ const std::string& FWorkbenchSurface::getStatusText() const
 
 void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& parent)
 {
-    auto editorPanel = std::make_shared<ya::UIPanel>("EditorDemo");
-    editorPanel->_anchorMin = {0.0f, 0.0f};
-    editorPanel->_anchorMax = {1.0f, 1.0f};
-    // Theme-driven shell chrome (Phase 4): window key.
-    editorPanel->_styleKey = "panel.window";
-    tree.attach(parent, editorPanel);
+    auto toolButton = [](std::string name, const std::string& label, float width = 0.0f)
+    {
+        auto button = ya::ui::button(name).child(
+            ya::ui::text(name + "_Label")
+                .setText(label)
+                .setFontSize(14)
+                .setVisibility(ya::EWidgetVisibility::SelfHitTestInvisible)
+                .setHAlign(ya::EWidgetAlignH::Center)
+                .setVAlign(ya::EWidgetAlignV::Center));
+        if (width > 0.0f) {
+            return std::move(button).setSize({width, 24.0f});
+        }
+        return std::move(button).setContentPadding({10.0f, 4.0f});
+    };
+    auto headerText = [](const std::string& text)
+    {
+        return ya::ui::text(text + "_Header")
+            .setText(text)
+            .setFontSize(13)
+            .setColor(kHeaderColor)
+            .setSize({200.0f, 20.0f});
+    };
 
-    buildToolbar(tree, *editorPanel);
+    auto addButton = toolButton("Add", "Add").setOnClick([this] { cmdAdd(); });
+    _addButton     = addButton.share();
+    auto removeButton = toolButton("Remove", "Remove").setOnClick([this] { cmdRemove(); });
+    _removeButton     = removeButton.share();
+    auto renameButton = toolButton("Rename", "Rename").setOnClick([this] { cmdRename(); });
+    _renameButton     = renameButton.share();
+    auto resetButton  = toolButton("ResetLayout", "Reset Layout").setOnClick([this] { cmdResetLayout(); });
+    _resetButton      = resetButton.share();
 
-    _mainSplit = std::make_shared<ya::UISplitPane>("MainSplit");
-    _mainSplit->_anchorMin       = {0.0f, 0.0f};
-    _mainSplit->_anchorMax       = {1.0f, 1.0f};
-    _mainSplit->setPadding({0.0f, 42.0f});
-    _mainSplit->setSize({0.0f, 0.0f});
-    _mainSplit->setSplitRatio(0.24f);
-    _mainSplit->setMinFirstExtent(180.0f);
-    _mainSplit->setMinSecondExtent(420.0f);
-    tree.attach(*editorPanel, _mainSplit);
+    auto toolbar = ya::ui::row("Toolbar")
+                       .setAnchors({0.0f, 0.0f}, {1.0f, 0.0f})
+                       .setPosition({0.0f, 6.0f})
+                       .setSize({0.0f, 32.0f})
+                       .setSpacing(8.0f)
+                       .setPadding({8.0f, 4.0f})
+                       .children(std::move(addButton),
+                                 std::move(removeButton),
+                                 std::move(renameButton),
+                                 std::move(resetButton));
 
-    buildDocumentList(tree, *_mainSplit);
+    auto rowList = ya::ui::column("RowList").fillParent().setPadding({8.0f, 8.0f}).setSpacing(2.0f);
+    _rowList     = rowList.share();
+    auto scroll  = ya::ui::scroll("ItemScroll")
+                      .fillParent()
+                      .setPosition({0.0f, 34.0f})
+                      .setSize({0.0f, 0.0f})
+                      .child(std::move(rowList));
+    _rowScroll = scroll.share();
+    auto listPanel = ya::ui::panel("ItemList")
+                         .fillParent()
+                         .setStyleKey("panel")
+                         .child(headerText("ITEMS").setPosition({10.0f, 8.0f}))
+                         .child(std::move(scroll));
+    _listPanel = listPanel.share();
 
-    _rightSplit = std::make_shared<ya::UISplitPane>("RightSplit");
-    _rightSplit->_anchorMin       = {0.0f, 0.0f};
-    _rightSplit->_anchorMax       = {1.0f, 1.0f};
-    _rightSplit->setSplitRatio(0.66f);
-    _rightSplit->setMinFirstExtent(240.0f);
-    _rightSplit->setMinSecondExtent(220.0f);
-    tree.attach(*_mainSplit, _rightSplit);
+    auto previewName = ya::ui::text("PreviewName")
+                           .setText("(no selection)")
+                           .setFontSize(15)
+                           .setColor({0.95f, 0.96f, 0.98f, 1.0f})
+                           .setHAlign(ya::EWidgetAlignH::Center)
+                           .setPosition({0.0f, 0.0f})
+                           .setSize({400.0f, 24.0f});
+    _previewName = previewName.share();
+    auto highlight = ya::ui::panel("SelectionHighlight")
+                         .setAnchors({0.5f, 0.5f}, {0.5f, 0.5f})
+                         .setPosition({-70.0f, -45.0f})
+                         .setSize({140.0f, 90.0f})
+                         .setColor({0.35f, 0.55f, 0.90f, 1.0f})
+                         .child(std::move(previewName));
+    _highlightPanel = highlight.share();
+    auto canvas     = ya::ui::panel("PreviewCanvas")
+                      .fillParent()
+                      .setStyleKey("panel.canvas")
+                      .child(headerText("PREVIEW").setPosition({10.0f, 8.0f}))
+                      .child(std::move(highlight));
+    _canvasPanel = canvas.share();
 
-    buildCanvas(tree, *_rightSplit);
-    buildInspector(tree, *_rightSplit);
+    auto nameField = ya::ui::textField("NameField")
+                         .setSize({220.0f, 26.0f})
+                         .setFontSize(14)
+                         .setOnCommit(
+                             [this](const std::string& text)
+                             {
+                                 workspace.renameSelected(text);
+                                 setCommandResult(workspace.commandResult);
+                             });
+    _nameField         = nameField.share();
+    auto visibleToggle = toolButton("VisibleToggle", "Visible: on", 110.0f)
+                             .setOnClick(
+                                 [this]
+                                 {
+                                     workspace.toggleSelectedVisible();
+                                     setCommandResult(workspace.commandResult);
+                                 });
+    _visibleToggle = visibleToggle.share();
+    auto colorCycle = toolButton("ColorCycle", "Cycle Color", 110.0f)
+                          .setOnClick(
+                              [this]
+                              {
+                                  workspace.cycleSelectedColor();
+                                  setCommandResult(workspace.commandResult);
+                              });
+    _colorCycle = colorCycle.share();
+    auto colorValue = ya::ui::text("ColorValue").setSize({220.0f, 14.0f}).setFontSize(12).setText("").setColor(kHeaderColor);
+    _colorValue     = colorValue.share();
+    auto sizeGrow   = toolButton("SizeGrow", "Grow +20", 90.0f)
+                        .setOnClick(
+                            [this]
+                            {
+                                workspace.stepSelectedSize({20.0f, 20.0f});
+                                setCommandResult(workspace.commandResult);
+                            });
+    _sizeGrow    = sizeGrow.share();
+    auto sizeShrink = toolButton("SizeShrink", "Shrink -20", 100.0f)
+                          .setOnClick(
+                              [this]
+                              {
+                                  workspace.stepSelectedSize({-20.0f, -20.0f});
+                                  setCommandResult(workspace.commandResult);
+                              });
+    _sizeShrink = sizeShrink.share();
+    auto sizeValue = ya::ui::text("SizeValue").setSize({220.0f, 14.0f}).setFontSize(12).setText("").setColor(kHeaderColor);
+    _sizeValue     = sizeValue.share();
+
+    auto inspector = ya::ui::panel("Inspector")
+                         .fillParent()
+                         .setStyleKey("panel")
+                         .child(ya::ui::column("InspectorForm")
+                                    .fillParent()
+                                    .setSize({0.0f, 0.0f})
+                                    .setPadding({10.0f, 8.0f})
+                                    .setSpacing(4.0f)
+                                    .children(headerText("INSPECTOR"),
+                                              headerText("Name"),
+                                              std::move(nameField),
+                                              headerText("Visible"),
+                                              std::move(visibleToggle),
+                                              headerText("Color"),
+                                              std::move(colorCycle),
+                                              std::move(colorValue),
+                                              headerText("Size"),
+                                              ya::ui::row("SizeRow")
+                                                  .setSpacing(6.0f)
+                                                  .children(std::move(sizeGrow), std::move(sizeShrink)),
+                                              std::move(sizeValue)));
+
+    auto rightSplit = ya::ui::splitPane("RightSplit")
+                          .fillParent()
+                          .setSplitRatio(0.66f)
+                          .setMinFirstExtent(240.0f)
+                          .setMinSecondExtent(220.0f)
+                          .children(std::move(canvas), std::move(inspector));
+    _rightSplit = rightSplit.share();
+
+    auto mainSplit = ya::ui::splitPane("MainSplit")
+                         .fillParent()
+                         .setSize({0.0f, 0.0f})
+                         .setPadding({0.0f, 42.0f})
+                         .setSplitRatio(0.24f)
+                         .setMinFirstExtent(180.0f)
+                         .setMinSecondExtent(420.0f)
+                         .children(std::move(listPanel), std::move(rightSplit));
+    _mainSplit = mainSplit.share();
+
+    auto page = ya::ui::panel("EditorDemo")
+                    .fillParent()
+                    .setStyleKey("panel.window")
+                    .children(std::move(toolbar), std::move(mainSplit));
+    ya::ui::build(tree, parent, std::move(page));
 
     workspace.resetLayout();
     _bRowsDirty = true;
-}
-
-void FWorkbenchSurface::buildToolbar(ya::WidgetTree& tree, ya::UIElement& parent)
-{
-    auto toolbar = std::make_shared<ya::UIContainer>("Toolbar");
-    toolbar->_anchorMin = {0.0f, 0.0f};
-    toolbar->_anchorMax = {1.0f, 0.0f};
-    toolbar->setPosition({0.0f, 6.0f});
-    toolbar->setSize({0.0f, 32.0f});
-    toolbar->setDirection(ya::EWidgetBoxLayout::Horizontal);
-    toolbar->setSpacing(8.0f);
-    toolbar->setPadding({8.0f, 4.0f});
-    tree.attach(parent, toolbar);
-
-    _addButton    = makeToolButton("Add", "Add");
-    _removeButton = makeToolButton("Remove", "Remove");
-    _renameButton = makeToolButton("Rename", "Rename");
-    _resetButton  = makeToolButton("ResetLayout", "Reset Layout");
-    _addButton->_onClick    = [this] { cmdAdd(); };
-    _removeButton->_onClick = [this] { cmdRemove(); };
-    _renameButton->_onClick = [this] { cmdRename(); };
-    _resetButton->_onClick  = [this] { cmdResetLayout(); };
-    tree.attach(*toolbar, _addButton);
-    tree.attach(*toolbar, _removeButton);
-    tree.attach(*toolbar, _renameButton);
-    tree.attach(*toolbar, _resetButton);
-}
-
-void FWorkbenchSurface::buildDocumentList(ya::WidgetTree& tree, ya::UIElement& parent)
-{
-    _listPanel = std::make_shared<ya::UIPanel>("ItemList");
-    _listPanel->_anchorMin = {0.0f, 0.0f};
-    _listPanel->_anchorMax = {1.0f, 1.0f};
-    // Theme-driven shell chrome (Phase 4): the generic panel key.
-    _listPanel->_styleKey = "panel";
-    tree.attach(parent, _listPanel);
-
-    auto header = makeHeaderText("ITEMS");
-    header->setPosition({10.0f, 8.0f});
-    tree.attach(*_listPanel, header);
-
-    auto scroll = std::make_shared<ya::UIScrollViewport>("ItemScroll");
-    scroll->_anchorMin = {0.0f, 0.0f};
-    scroll->_anchorMax = {1.0f, 1.0f};
-    scroll->setPosition({0.0f, 34.0f});
-    scroll->setSize({0.0f, 0.0f});
-    tree.attach(*_listPanel, scroll);
-    _rowScroll = scroll;
-
-    _rowList = std::make_shared<ya::UIContainer>("RowList");
-    _rowList->_anchorMin = {0.0f, 0.0f};
-    _rowList->_anchorMax = {1.0f, 1.0f};
-    _rowList->setPadding({8.0f, 8.0f});
-    _rowList->setDirection(ya::EWidgetBoxLayout::Vertical);
-    _rowList->setSpacing(2.0f);
-    tree.attach(*scroll, _rowList);
-}
-
-void FWorkbenchSurface::buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent)
-{
-    _canvasPanel = std::make_shared<ya::UIPanel>("PreviewCanvas");
-    _canvasPanel->_anchorMin = {0.0f, 0.0f};
-    _canvasPanel->_anchorMax = {1.0f, 1.0f};
-    // Theme-driven shell chrome (Phase 4): the canvas key.
-    _canvasPanel->_styleKey = "panel.canvas";
-    tree.attach(parent, _canvasPanel);
-
-    auto header = makeHeaderText("PREVIEW");
-    header->setPosition({10.0f, 8.0f});
-    tree.attach(*_canvasPanel, header);
-
-    _highlightPanel = std::make_shared<ya::UIPanel>("SelectionHighlight");
-    _highlightPanel->_anchorMin = {0.5f, 0.5f};
-    _highlightPanel->_anchorMax = {0.5f, 0.5f};
-    _highlightPanel->setPosition({-70.0f, -45.0f});
-    _highlightPanel->setSize({140.0f, 90.0f});
-    _highlightPanel->setColor({0.35f, 0.55f, 0.90f, 1.0f});
-    tree.attach(*_canvasPanel, _highlightPanel);
-
-    _previewName = std::make_shared<ya::UIText>("PreviewName");
-    _previewName->setPosition({0.0f, 0.0f});
-    _previewName->setSize({400.0f, 24.0f});
-    _previewName->_fontSize = 15;
-    _previewName->setText("(no selection)");
-    _previewName->_color    = {0.95f, 0.96f, 0.98f, 1.0f};
-    _previewName->_hAlign   = ya::EWidgetAlignH::Center;
-    tree.attach(*_highlightPanel, _previewName);
-}
-
-void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& parent)
-{
-    auto inspectorPanel = std::make_shared<ya::UIPanel>("Inspector");
-    inspectorPanel->_anchorMin = {0.0f, 0.0f};
-    inspectorPanel->_anchorMax = {1.0f, 1.0f};
-    // Theme-driven shell chrome (Phase 4): the generic panel key.
-    inspectorPanel->_styleKey = "panel";
-    tree.attach(parent, inspectorPanel);
-
-    auto form = std::make_shared<ya::UIContainer>("InspectorForm");
-    form->_anchorMin = {0.0f, 0.0f};
-    form->_anchorMax = {1.0f, 1.0f};
-    form->setPadding({10.0f, 8.0f});
-    form->setSize({0.0f, 0.0f});
-    form->setDirection(ya::EWidgetBoxLayout::Vertical);
-    form->setSpacing(4.0f);
-    tree.attach(*inspectorPanel, form);
-
-    auto header = makeHeaderText("INSPECTOR");
-    tree.attach(*form, header);
-
-    auto nameLabel = makeHeaderText("Name");
-    tree.attach(*form, nameLabel);
-
-    _nameField = std::make_shared<ya::UITextField>("NameField");
-    _nameField->setSize({220.0f, 26.0f});
-    _nameField->_fontSize = 14;
-    _nameField->_onCommit = [this](const std::string& text) {
-        workspace.renameSelected(text);
-        setCommandResult(workspace.commandResult);
-    };
-    tree.attach(*form, _nameField);
-
-    auto visibleLabel = makeHeaderText("Visible");
-    tree.attach(*form, visibleLabel);
-
-    _visibleToggle = makeToolButton("VisibleToggle", "Visible: on", 110.0f);
-    _visibleToggle->_onClick = [this] {
-        workspace.toggleSelectedVisible();
-        setCommandResult(workspace.commandResult);
-    };
-    tree.attach(*form, _visibleToggle);
-
-    auto colorLabel = makeHeaderText("Color");
-    tree.attach(*form, colorLabel);
-
-    _colorCycle = makeToolButton("ColorCycle", "Cycle Color", 110.0f);
-    _colorCycle->_onClick = [this] {
-        workspace.cycleSelectedColor();
-        setCommandResult(workspace.commandResult);
-    };
-    tree.attach(*form, _colorCycle);
-
-    _colorValue = std::make_shared<ya::UIText>("ColorValue");
-    _colorValue->setSize({220.0f, 14.0f});
-    _colorValue->_fontSize = 12;
-    _colorValue->setText("");
-    _colorValue->_color    = kHeaderColor;
-    tree.attach(*form, _colorValue);
-
-    auto sizeLabel = makeHeaderText("Size");
-    tree.attach(*form, sizeLabel);
-
-    auto sizeRow = std::make_shared<ya::UIContainer>("SizeRow");
-    sizeRow->setDirection(ya::EWidgetBoxLayout::Horizontal);
-    sizeRow->setSpacing(6.0f);
-    tree.attach(*form, sizeRow);
-
-    _sizeGrow = makeToolButton("SizeGrow", "Grow +20", 90.0f);
-    _sizeGrow->_onClick = [this] {
-        workspace.stepSelectedSize({20.0f, 20.0f});
-        setCommandResult(workspace.commandResult);
-    };
-    tree.attach(*sizeRow, _sizeGrow);
-
-    _sizeShrink = makeToolButton("SizeShrink", "Shrink -20", 100.0f);
-    _sizeShrink->_onClick = [this] {
-        workspace.stepSelectedSize({-20.0f, -20.0f});
-        setCommandResult(workspace.commandResult);
-    };
-    tree.attach(*sizeRow, _sizeShrink);
-
-    _sizeValue = std::make_shared<ya::UIText>("SizeValue");
-    _sizeValue->setSize({220.0f, 14.0f});
-    _sizeValue->_fontSize = 12;
-    _sizeValue->setText("");
-    _sizeValue->_color    = kHeaderColor;
-    tree.attach(*form, _sizeValue);
 }
 
 void FWorkbenchSurface::rebuildItemRows()
@@ -719,6 +665,11 @@ void FWorkbenchSurface::setCommandResult(const std::string& text)
 
 void FWorkbenchSurface::updateUI()
 {
+    if (!_root || !_root->isAttached()) {
+        ++_frame;
+        return;
+    }
+
     syncPresentationState();
     logWorkbenchRectOnce("PreviewCanvas", _canvasPanel.get());
     logWorkbenchRectOnce("SelectionHighlight", _highlightPanel.get());

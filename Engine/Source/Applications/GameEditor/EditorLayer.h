@@ -199,6 +199,26 @@ struct EditorLayer
     void setEditableScene(Scene* scene);
     void setCurrentScenePath(std::string scenePath) { _currentScenePath = std::move(scenePath); }
     [[nodiscard]] const std::string& getCurrentScenePath() const { return _currentScenePath; }
+    [[nodiscard]] bool isProjectLoaded() const { return hasProjectLoaded(); }
+    [[nodiscard]] const std::shared_ptr<RenderTexture>& getViewportDisplayImage() const
+    {
+        return _viewportDisplayImage;
+    }
+    void notifyViewportWidgetRect(const Rect2D& rect);
+    void setViewportHoverFocus(bool hovered, bool focused);
+    [[nodiscard]] const std::vector<std::string>& getDiscoveredProjects() const
+    {
+        return _discoveredProjects;
+    }
+    [[nodiscard]] int getProjectBrowserSelection() const { return _projectBrowserSelection; }
+    void setProjectBrowserSelection(int index) { _projectBrowserSelection = index; }
+    [[nodiscard]] const std::string& getProjectBrowserError() const { return _projectBrowserError; }
+    void requestRefreshProjectBrowser() { refreshProjectBrowser(); }
+    bool requestOpenProject(const std::string& projectPath) { return openProjectInPlace(projectPath); }
+    void cmdNewScene();
+    void cmdSaveScene();
+    void cmdSaveSceneAs();
+    [[nodiscard]] Scene* getHierarchyScene() const { return getSceneHierarchyContext(); }
     void setSceneContext(Scene* scene)
     {
         _sceneHierarchyPanel.setContext(scene);

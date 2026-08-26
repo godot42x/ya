@@ -207,6 +207,10 @@ struct YA_GUI_API WidgetTree final
     /// Full layout pass: root fills the logical extent, layers fill in layer
     /// order, content children sort by zOrder.
     void layout();
+    /// Drive frame lifecycle for attached widgets that opt into ticking.
+    /// Events are dispatched before this call; snapshot/layout/paint happen
+    /// after it.
+    void tick(float deltaSeconds);
     [[nodiscard]] bool isLayoutValid() const { return !_bLayoutDirty; }
 
     /// Layout (if dirty) + paint the whole tree into an immutable frame
@@ -317,6 +321,10 @@ struct YA_GUI_API WidgetTree final
     /// Assign tree membership to a widget and its whole subtree (invariant:
     /// attached iff every descendant is a member of the same tree).
     static void markSubtreeMembership(UIElement* widget, WidgetTree* tree);
+    static void prepareSubtree(UIElement* widget);
+    static void notifyAttachedSubtree(UIElement* widget);
+    static void notifyDetachedSubtree(UIElement* widget);
+    static void tickSubtree(UIElement* widget, float deltaSeconds);
     /// Collect attached, visible, focusable widgets in stable paint order
     /// (layers bottom -> top, children zOrder ascending) for Tab traversal.
     void collectFocusables(std::vector<UIElement*>& outFocusables) const;

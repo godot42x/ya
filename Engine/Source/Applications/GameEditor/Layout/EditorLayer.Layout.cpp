@@ -96,26 +96,7 @@ void EditorLayer::menuBar()
     {
         if (ImGui::MenuItem("New Scene", "Ctrl+N"))
         {
-            // TODO: New scene
-            App::get()->getTaskManager().registerFrameTask([this]() {
-                auto* app = App::get();
-                if (!app) {
-                    return;
-                }
-
-                auto* sceneManager = app->getSceneServices().getSceneManager();
-                if (sceneManager && sceneManager->hasScene()) {
-                    if (auto* render = app->getRenderServices().getRender()) {
-                        render->waitIdle();
-                    }
-                }
-                auto scene = makeShared<Scene>();
-                if (sceneManager) {
-                    sceneManager->unloadScene();
-                    sceneManager->activateScene(scene);
-                }
-                _currentScenePath.clear();
-            });
+            cmdNewScene();
         }
         if (ImGui::MenuItem("Open Scene", "Ctrl+O"))
         {
@@ -123,77 +104,11 @@ void EditorLayer::menuBar()
         }
         if (ImGui::MenuItem("Save Scene", "Ctrl+S"))
         {
-            // Save to current path if available, otherwise open Save As dialog
-            if (!_currentScenePath.empty())
-            {
-                if (_app && _app->getSceneServices().getSceneManager())
-                {
-                    auto* scene = getEditableScene();
-                    if (scene)
-                    {
-                        _app->getSceneServices().saveScene(_currentScenePath);
-                        YA_CORE_INFO("Scene saved to: {}", _currentScenePath);
-                    }
-                }
-            }
-            else
-            {
-                // No current path, open Save As dialog with scene save picker
-                std::string defaultName = "NewScene";
-                if (_app && _app->getSceneServices().getSceneManager())
-                {
-                    auto* scene = getEditableScene();
-                    if (scene && !scene->getName().empty())
-                    {
-                        defaultName = scene->getName();
-                    }
-                }
-
-                _filePicker.openSceneSavePicker(
-                    defaultName,
-                    [this](const std::string& selectedDir, const std::string& sceneName) {
-                        _currentScenePath = selectedDir + "/" + sceneName + ".scene.json";
-                        if (_app && _app->getSceneServices().getSceneManager())
-                        {
-                            auto* scene = getEditableScene();
-                            if (scene)
-                            {
-                                scene->setName(sceneName);
-                                _app->getSceneServices().saveScene(_currentScenePath);
-                                YA_CORE_INFO("Scene saved to: {}", _currentScenePath);
-                            }
-                        }
-                    });
-            }
+            cmdSaveScene();
         }
         if (ImGui::MenuItem("Save Scene As", "Ctrl+Shift+S"))
         {
-            // Open scene save picker with name input and mount point selection
-            std::string defaultName = "NewScene";
-            if (_app && _app->getSceneServices().getSceneManager())
-            {
-                auto* scene = getEditableScene();
-                if (scene && !scene->getName().empty())
-                {
-                    defaultName = scene->getName();
-                }
-            }
-
-            _filePicker.openSceneSavePicker(
-                defaultName,
-                [this](const std::string& selectedDir, const std::string& sceneName) {
-                    _currentScenePath = selectedDir + "/" + sceneName + ".scene.json";
-                    if (_app && _app->getSceneServices().getSceneManager())
-                    {
-                        auto* scene = getEditableScene();
-                        if (scene)
-                        {
-                            scene->setName(sceneName);
-                            _app->getSceneServices().saveScene(_currentScenePath);
-                            YA_CORE_INFO("Scene saved to: {}", _currentScenePath);
-                        }
-                    }
-                });
+            cmdSaveSceneAs();
         }
 
         ImGui::Separator();

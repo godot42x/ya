@@ -21,6 +21,7 @@
 #include "Core/Common/Types.h"
 #include "Core/Event.h"
 #include "Core/Reflection/Reflection.h"
+#include "GUI/Widgets/UIBehavior.h"
 
 #include <glm/glm.hpp>
 
@@ -203,6 +204,23 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     UIElement(const UIElement&)            = delete;
     UIElement& operator=(const UIElement&) = delete;
 
+    /// Lifecycle hook invoked by WidgetTree immediately before this widget
+    /// (and its subtree) is attached. Compound widgets use it to construct
+    /// their internal DSL exactly once.
+    virtual void prepareForAttach() {}
+    /// Lifecycle hook invoked after this widget has joined a WidgetTree.
+    virtual void onAttached() {}
+    /// Lifecycle hook invoked before this widget leaves its WidgetTree.
+    virtual void onDetached() {}
+    /// Optional frame-driven lifecycle. WidgetTree invokes this once per
+    /// frame for attached widgets that opt in through wantsTick().
+    virtual void tick(float deltaSeconds);
+    [[nodiscard]] virtual bool wantsTick() const;
+
+    void addBehavior(const UIBehaviorRef& behavior);
+    void removeBehavior(const UIBehavior& behavior);
+    [[nodiscard]] bool hasBehavior(const UIBehavior& behavior) const;
+
     // === Identity ===
     std::string _name;
     /// Optional stable identity for dumps and list-row reuse. Empty for
@@ -321,6 +339,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     [[nodiscard]] bool       isAttached() const { return _tree != nullptr; }
     /// Children in attachment order (paint order = getChildrenInPaintOrder).
     [[nodiscard]] const std::vector<UIElementRef>& getChildren() const { return _children; }
+    [[nodiscard]] const std::vector<UIBehaviorRef>& getBehaviors() const { return _behaviors; }
     /// Children stably sorted by _zOrder ascending.
     [[nodiscard]] std::vector<UIElement*> getChildrenInPaintOrder() const;
     /// Active parent-child edge object, or null only for the internal root /
@@ -356,18 +375,10 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Root-to-target route hook. The default is deliberately passive:
     /// existing controls retain their target behavior until they explicitly
     /// opt into preview semantics.
-    virtual bool previewInputEvent(const Event& event, const WidgetEventContext& ctx)
-    {
-        (void)event;
-        (void)ctx;
-        return false;
-    }
+    virtual bool previewInputEvent(const Event& event, const WidgetEventContext& ctx);
     /// Target-to-root route hook. The default preserves the established
     /// parent handling behavior for controls such as nested scroll viewports.
-    virtual bool bubbleInputEvent(const Event& event, const WidgetEventContext& ctx)
-    {
-        return handleInputEvent(event, ctx);
-    }
+    virtual bool bubbleInputEvent(const Event& event, const WidgetEventContext& ctx);
     /// Whether this widget presents hover feedback and is therefore an
     /// eligible hover target for the tree's hover tracking. Plain text,
     /// containers and popup shields are NOT hoverable (their children/other
@@ -413,25 +424,25 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     // === Drag & drop target hooks (gui-app-bootstrap Phase 4) ===
     /// Whether this widget accepts a drag payload at `logicalPoint` (the
     /// tree highlights it as a valid drop target during a drag session).
-    [[nodiscard]] virtual bool canAcceptDrop(const std::string& /*payload*/,
-                                             const glm::vec2& /*logicalPoint*/) { return false; }
+    [[nodiscard]] virtual bool canAcceptDrop(const std::string& payload,
+                                             const glm::vec2& logicalPoint);
     [[nodiscard]] virtual bool canAcceptDrop(const UIDragDropOperation& operation,
                                              const glm::vec2& logicalPoint);
     /// Called when a drag session is released over this target (only after
     /// canAcceptDrop returned true for that point).
-    virtual void onDrop(const std::string& /*payload*/, const glm::vec2& /*logicalPoint*/) {}
+    virtual void onDrop(const std::string& payload, const glm::vec2& logicalPoint);
     virtual void onDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
     /// Visual feedback while the drag hovers this target (cleared on leave /
     /// drop / cancel). Targets with a point-SENSITIVE preview (e.g. a dock
     /// space whose highlight follows the pointer) override updateDropHover
     /// instead.
-    virtual void setDropHighlight(bool /*bHighlight*/) {}
+    virtual void setDropHighlight(bool bHighlight);
     /// Point-sensitive hover feedback: called with the CURRENT drag point on
     /// every pointer move while this widget is the active drop target (the
     /// tree calls it after setDropHighlight(true) and on each move). Default:
     /// no-op — targets without a moving preview keep using setDropHighlight.
-    virtual void updateDropHover(const std::string& /*payload*/,
-                                 const glm::vec2& /*logicalPoint*/) {}
+    virtual void updateDropHover(const std::string& payload,
+                                 const glm::vec2& logicalPoint);
     virtual void updateDropHover(const UIDragDropOperation& operation,
                                  const glm::vec2& logicalPoint);
     /// Start an operation owned by the widget tree. Any UIElement may invoke
@@ -439,7 +450,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     bool beginDragOperation(UIDragDropOperationRef operation,
                             bool bShowGhost = true,
                             bool bSkipSourceInHitTest = false);
-    virtual UIDragDropOperationRef onDragDetected(const FDragDetectedEvent&) { return nullptr; }
+    virtual UIDragDropOperationRef onDragDetected(const FDragDetectedEvent& event);
 
     // === Reactive dependency tracking ===
     /// Mark this widget paint-dirty (called by ReactiveBase::notifyDependents).
@@ -622,6 +633,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Visual parent / tree hold strong references to children; the child
     /// points back with a raw (non-owning) pointer.
     std::vector<UIElementRef> _children;
+    std::vector<UIBehaviorRef> _behaviors;
     std::vector<std::unique_ptr<UISlot>> _childSlots;
     UIElement*                _parent = nullptr;
     WidgetTree*               _tree   = nullptr;

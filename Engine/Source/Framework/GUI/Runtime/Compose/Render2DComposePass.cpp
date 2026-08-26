@@ -89,6 +89,58 @@ const char* composePassLabel(ERender2DComposePassKind kind)
     return "Render2D Compose";
 }
 
+void replaySnapshotItems(const UIFrameSnapshot& snapshot)
+{
+    for (const auto& item : snapshot.items) {
+        if (item.bClipped) {
+            Render2D::pushClipRect(item.clip);
+        }
+        if (item.kind == UIFrameDrawItem::EKind::Sprite) {
+            if (item.cornerRadius > 0.0f && !item.texture) {
+                Render2D::drawRoundedRect(glm::vec3(item.pos, 0.0f),
+                                          item.size,
+                                          item.color,
+                                          item.cornerRadius);
+            }
+            else {
+                Render2D::makeSprite(glm::vec3(item.pos, 0.0f),
+                                     item.size,
+                                     item.texture,
+                                     item.color);
+            }
+        }
+        else if (item.kind == UIFrameDrawItem::EKind::Line) {
+            const glm::vec2 delta = item.lineTo - item.lineFrom;
+            const float     len   = glm::length(delta);
+            if (len <= 1e-4f) {
+                const glm::vec2 t = glm::vec2(item.lineThickness);
+                Render2D::makeSprite(glm::vec3(item.lineFrom - t * 0.5f, 0.0f),
+                                     t, nullptr, item.color);
+            }
+            else {
+                const glm::vec2 dir = delta / len;
+                const glm::vec2 nrm = glm::vec2(-dir.y, dir.x);
+                const glm::mat4 transform(
+                    glm::vec4(dir.x * len, dir.y * len, 0.0f, 0.0f),
+                    glm::vec4(nrm.x * item.lineThickness, nrm.y * item.lineThickness, 0.0f, 0.0f),
+                    glm::vec4(0.0f, 0.0f, 1.0f, 0.0f),
+                    glm::vec4(item.lineFrom.x, item.lineFrom.y, 0.0f, 1.0f));
+                Render2D::makeSprite(transform, nullptr, item.color);
+            }
+        }
+        else {
+            Render2D::makeText(item.text,
+                               glm::vec3(item.pos, 0.0f),
+                               item.color,
+                               item.font.get(),
+                               item.textScale);
+        }
+        if (item.bClipped) {
+            Render2D::popClipRect();
+        }
+    }
+}
+
 void drawEditorCanvasGrid(const Extent2D& rtExtent, const glm::vec2& uiScale, const glm::vec2& canvasPan, float canvasZoom)
 {
     // Canvas grid is authored in logical pixels and transformed by the
@@ -228,62 +280,7 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
     }
     if (uiFrameSnapshot) {
         logSnapshotItemsOnce(uiFrameSnapshot);
-        for (const auto& item : uiFrameSnapshot->items) {
-            if (item.bClipped) {
-                Render2D::pushClipRect(item.clip);
-            }
-            if (item.kind == UIFrameDrawItem::EKind::Sprite) {
-                if (item.cornerRadius > 0.0f && !item.texture) {
-                    // Rounded rect: carve the corners via the shader's SDF
-                    // branch (no texture sampling needed).
-                    Render2D::drawRoundedRect(glm::vec3(item.pos, 0.0f),
-                                              item.size,
-                                              item.color,
-                                              item.cornerRadius);
-                }
-                else {
-                    Render2D::makeSprite(glm::vec3(item.pos, 0.0f),
-                                         item.size,
-                                         item.texture,
-                                         item.color);
-                }
-            }
-            else if (item.kind == UIFrameDrawItem::EKind::Line) {
-                // Line = a rotated thin quad along the segment. The unit quad
-                // spans [0,1]^2 with its origin at the top-left, so column 0
-                // maps the x-axis onto the segment direction and column 1 maps
-                // the y-axis onto its normal; the translation column anchors
-                // the origin at `from`.
-                const glm::vec2 delta = item.lineTo - item.lineFrom;
-                const float     len   = glm::length(delta);
-                if (len <= 1e-4f) {
-                    // Degenerate segment: draw a small axis-aligned dot.
-                    const glm::vec2 t = glm::vec2(item.lineThickness);
-                    Render2D::makeSprite(glm::vec3(item.lineFrom - t * 0.5f, 0.0f),
-                                         t, nullptr, item.color);
-                }
-                else {
-                    const glm::vec2 dir = delta / len;
-                    const glm::vec2 nrm = glm::vec2(-dir.y, dir.x);
-                    const glm::mat4 transform(
-                        glm::vec4(dir.x * len, dir.y * len, 0.0f, 0.0f),
-                        glm::vec4(nrm.x * item.lineThickness, nrm.y * item.lineThickness, 0.0f, 0.0f),
-                        glm::vec4(0.0f, 0.0f, 1.0f, 0.0f),
-                        glm::vec4(item.lineFrom.x, item.lineFrom.y, 0.0f, 1.0f));
-                    Render2D::makeSprite(transform, nullptr, item.color);
-                }
-            }
-            else {
-                Render2D::makeText(item.text,
-                                   glm::vec3(item.pos, 0.0f),
-                                   item.color,
-                                   item.font.get(),
-                                   item.textScale);
-            }
-            if (item.bClipped) {
-                Render2D::popClipRect();
-            }
-        }
+        replaySnapshotItems(*uiFrameSnapshot);
     }
     if (extraContent) {
         extraContent();
@@ -295,6 +292,42 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
     if (depthTarget) {
         cmdBuf->transitionImageLayoutAuto(depthTarget->getImage(), EImageLayout::ShaderReadOnlyOptimal);
     }
+}
+
+void replayUIFrameSnapshot(ICommandBuffer*          cmdBuf,
+                           const UIFrameSnapshot&   snapshot,
+                           Extent2D                 targetExtent,
+                           ERender2DComposePassKind kind)
+{
+    if (!cmdBuf || targetExtent.width == 0 || targetExtent.height == 0) {
+        return;
+    }
+
+    for (const auto& item : snapshot.items) {
+        if (!item.texture) {
+            continue;
+        }
+        if (auto image = item.texture->getImageShared()) {
+            cmdBuf->retireResource(std::move(image));
+        }
+        if (auto view = item.texture->getImageViewShared()) {
+            cmdBuf->retireResource(std::move(view));
+        }
+    }
+
+    FRender2dContext render2dCtx{
+        .cmdBuf         = cmdBuf,
+        .windowWidth    = targetExtent.width,
+        .windowHeight   = targetExtent.height,
+        .passSlot       = composePassSlot(kind),
+        .view           = glm::mat4(1.0f),
+        .viewProjection = glm::mat4(1.0f),
+    };
+
+    Render2D::begin(render2dCtx);
+    logSnapshotItemsOnce(&snapshot);
+    replaySnapshotItems(snapshot);
+    Render2D::end();
 }
 
 } // namespace ya

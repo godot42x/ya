@@ -248,6 +248,62 @@ void WidgetTree::markSubtreeMembership(UIElement* widget, WidgetTree* tree)
     }
 }
 
+void WidgetTree::prepareSubtree(UIElement* widget)
+{
+    if (!widget) {
+        return;
+    }
+    widget->prepareForAttach();
+    for (const auto& child : widget->_children) {
+        prepareSubtree(child.get());
+    }
+}
+
+void WidgetTree::notifyAttachedSubtree(UIElement* widget)
+{
+    if (!widget) {
+        return;
+    }
+    for (const UIBehaviorRef& behavior : widget->getBehaviors()) {
+        if (behavior) {
+            behavior->onAttached(*widget);
+        }
+    }
+    widget->onAttached();
+    for (const auto& child : widget->_children) {
+        notifyAttachedSubtree(child.get());
+    }
+}
+
+void WidgetTree::notifyDetachedSubtree(UIElement* widget)
+{
+    if (!widget) {
+        return;
+    }
+    for (const UIBehaviorRef& behavior : widget->getBehaviors()) {
+        if (behavior) {
+            behavior->onDetached(*widget);
+        }
+    }
+    widget->onDetached();
+    for (const auto& child : widget->_children) {
+        notifyDetachedSubtree(child.get());
+    }
+}
+
+void WidgetTree::tickSubtree(UIElement* widget, float deltaSeconds)
+{
+    if (!widget || !widget->isVisibleInTree()) {
+        return;
+    }
+    if (widget->wantsTick()) {
+        widget->tick(deltaSeconds);
+    }
+    for (const auto& child : widget->getChildren()) {
+        tickSubtree(child.get(), deltaSeconds);
+    }
+}
+
 namespace
 {
 
@@ -334,8 +390,10 @@ WidgetAttachment WidgetTree::attach(UIElement& parent, const UIElementRef& widge
         return {};
     }
 
+    prepareSubtree(widget.get());
     markSubtreeMembership(widget.get(), this);
     parent.appendChildEdge(widget);
+    notifyAttachedSubtree(widget.get());
     invalidateLayout();
     return WidgetAttachment{.tree = this, .widget = widget};
 }
@@ -379,8 +437,15 @@ void WidgetTree::reparent(UIElement& newParent, const UIElementRef& widget)
         }
     }
 
+    const bool bWasAttached = widget->isAttached();
+    if (!bWasAttached) {
+        prepareSubtree(widget.get());
+    }
     markSubtreeMembership(widget.get(), this);
     newParent.appendChildEdge(widget);
+    if (!bWasAttached) {
+        notifyAttachedSubtree(widget.get());
+    }
     invalidateLayout();
 }
 
@@ -420,8 +485,15 @@ void WidgetTree::reparentRelativeTo(WidgetTree& tree, UIElement& sibling, const 
     const size_t siblingIndex = static_cast<size_t>(std::distance(parent->_children.begin(), it));
     const size_t insertAt = bAfter ? siblingIndex + 1 : siblingIndex;
 
+    const bool bWasAttached = widget->isAttached();
+    if (!bWasAttached) {
+        tree.prepareSubtree(widget.get());
+    }
     tree.markSubtreeMembership(widget.get(), &tree);
     parent->insertChildEdge(insertAt, widget);
+    if (!bWasAttached) {
+        tree.notifyAttachedSubtree(widget.get());
+    }
     tree.invalidateLayout();
 }
 
@@ -464,6 +536,7 @@ void WidgetTree::detach(UIElement& widget)
         oldParent->removeChildEdge(widget);
     }
 
+    notifyDetachedSubtree(&widget);
     // Recursively clear tree membership for the whole subtree; internal
     // parent links inside the subtree remain valid (parents own children).
     std::vector<UIElement*> pending{&widget};
@@ -496,6 +569,13 @@ void WidgetTree::setDpiScale(float scale)
 void WidgetTree::invalidateLayout()
 {
     _bLayoutDirty = true;
+}
+
+void WidgetTree::tick(float deltaSeconds)
+{
+    for (const auto& layer : _layers) {
+        tickSubtree(layer.get(), deltaSeconds);
+    }
 }
 
 void WidgetTree::layout()

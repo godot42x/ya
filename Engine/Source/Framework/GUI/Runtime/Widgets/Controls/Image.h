@@ -2,14 +2,18 @@
 
 #include "GUI/Widgets/UIElement.h"
 
+#include <memory>
+
 namespace ya
 {
 
-/// Image element: draws a texture resolved through the frame build context's
-/// textureResolver (host-provided), stretched to the layout rect.
+struct Texture;
+
+/// Image element: draws a texture stretched to the layout rect.
 ///
-/// Without a resolver or on a cache miss the element draws a translucent
-/// placeholder block (documented limitation for resolver-less hosts), so
+/// Resolution order: a live `_texture` (editor viewport / composed RT) wins;
+/// otherwise `_assetPath` is resolved through the frame build context's
+/// textureResolver. Without either, a translucent placeholder is drawn so
 /// layout and hit testing stay visible in any host.
 struct YA_GUI_API UIImage : public UIElement
 {
@@ -29,7 +33,16 @@ struct YA_GUI_API UIImage : public UIElement
     /// Drawn when the texture cannot be resolved.
     glm::vec4   _placeholderColor = {0.24f, 0.26f, 0.31f, 1.0f};
 
+    /// Host-owned live GPU image (viewport RT). The snapshot retains this
+    /// shared_ptr through queue submit. Takes precedence over `_assetPath`.
+    void setTexture(std::shared_ptr<Texture> texture);
+    [[nodiscard]] const std::shared_ptr<Texture>& getTexture() const { return _texture; }
+
     void paintSelf(UIFrameBuilder& builder) override;
+    [[nodiscard]] bool isHoverable() const override { return true; }
+
+  private:
+    std::shared_ptr<Texture> _texture;
 };
 
 } // namespace ya

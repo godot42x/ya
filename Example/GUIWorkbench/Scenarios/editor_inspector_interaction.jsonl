@@ -1,23 +1,27 @@
 # GUIWorkbench --start-page=Editor. Exercises the reusable tree -> inspector
 # -> preview binding without putting editor demo behavior in Framework widgets.
+# Coordinates assume 1280x800 with current workbench chrome (DemoHost x≈311,
+# top≈46). Hits Row_item.sphere, VisibleToggle, then NameField (right side so
+# the caret is after "Sphere") before typing 2 + Enter.
+{"window_size":{"width":1280,"height":800}}
 {"frame":3}
 {"assert":{"widget":"NameField","control":{"type":"textField","text":"Cube"}}}
 {"assert":{"widget":"PreviewName","control":{"type":"text","text":"Cube"}}}
 {"checkpoint":"initial"}
-{"event":"mouse_press","x":150,"y":187,"button":0}
-{"event":"mouse_release","x":150,"y":187,"button":0}
+{"event":"mouse_press","x":428,"y":165,"button":0}
+{"event":"mouse_release","x":428,"y":165,"button":0}
 {"frame":2}
 {"assert":{"widget":"NameField","control":{"type":"textField","text":"Sphere"}}}
 {"assert":{"widget":"PreviewName","control":{"type":"text","text":"Sphere"}}}
 {"checkpoint":"sphere_selected"}
-{"event":"mouse_press","x":1116,"y":232,"button":0}
-{"event":"mouse_release","x":1116,"y":232,"button":0}
+{"event":"mouse_press","x":1169,"y":210,"button":0}
+{"event":"mouse_release","x":1169,"y":210,"button":0}
 {"frame":2}
 {"assert":{"widget":"VisibleToggle_Label","control":{"type":"text","text":"Visible: off"}}}
 {"assert":{"widget":"PreviewName","control":{"type":"text","text":"Sphere (hidden)"}}}
 {"checkpoint":"visibility_toggled"}
-{"event":"mouse_press","x":1120,"y":179,"button":0}
-{"event":"mouse_release","x":1120,"y":179,"button":0}
+{"event":"mouse_press","x":1240,"y":157,"button":0}
+{"event":"mouse_release","x":1240,"y":157,"button":0}
 {"event":"key_typed","text":"2"}
 {"event":"key_press","key":"Enter"}
 {"frame":3}

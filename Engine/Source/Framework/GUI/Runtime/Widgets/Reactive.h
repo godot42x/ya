@@ -196,6 +196,12 @@ public:
         notifyDependents();
     }
 
+    void replace(std::vector<T> items)
+    {
+        _items = std::move(items);
+        notifyDependents();
+    }
+
 private:
     std::vector<T> _items;
 };

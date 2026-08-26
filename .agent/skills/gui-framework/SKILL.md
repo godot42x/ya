@@ -78,7 +78,7 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 ## 静态 DSL（live construct）
 
-- 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/panel/splitPane/scroll/overlay/sizeBox/...` 组好 builder，再单独 `ui::build(tree, parent, std::move(page))` 物化 live `UIElement`（Slate `SNew`）。不要把整棵 DSL 包进 `ui::build(...)`。`setAnchors` / `fillParent` / panel `setCornerRadius` / `setStyleKey` / container `childFill` 与 `child(node, FBoxSlotArgs)` / overlay `child(node, FOverlaySlotArgs)` 在 Construct 时写到 live widget。`setTooltip` 写在 base builder；Text `setWrap` / `setMaxWrapWidth` 控制折行。`ui::button` 没有 `setText`；文字走内部 `UIText` 子 widget。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。自定义 / 复杂 demo widget（MenuBar、TreeView、TableGrid、InputExtras、DragSource/DropTarget、DockSpace）用 `child(UIElementRef)` 挂进 DSL 壳，不要为此扩 Construct。Gallery / Interactions / Dock 已是一次 `ui::build`。弹层（Menu / Modal / Dialog）仍在点击时 live 组装。Dock floating host 仍 `attachToLayer(Popup)`。Render 仍是 raw retained 对照。未迁：Editor ImGui。
+- 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/panel/splitPane/scroll/overlay/sizeBox/...` 组好 builder，再单独 `ui::build(tree, parent, std::move(page))` 物化 live `UIElement`（Slate `SNew`）。不要把整棵 DSL 包进 `ui::build(...)`。`setAnchors` / `fillParent` / panel `setCornerRadius` / `setStyleKey` / container `childFill` 与 `child(node, FBoxSlotArgs)` / overlay `child(node, FOverlaySlotArgs)` 在 Construct 时写到 live widget。`setTooltip` 写在 base builder；Text `setWrap` / `setMaxWrapWidth` 控制折行；base `setVisibility`；split `setPadding`。`ui::button` 没有 `setText`；文字走内部 `UIText` 子 widget。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。自定义 / 复杂 demo widget（MenuBar、TreeView、TableGrid、InputExtras、DragSource/DropTarget、DockSpace、SelectableRow）用 `child(UIElementRef)` 挂进 DSL 壳，不要为此扩 Construct。Gallery / Interactions / Dock / Workbench 内置 Editor demo（`FWorkbenchSurface::buildEditorDemo`）已是一次 `ui::build`。Editor 的 `rebuildItemRows()` 仍是事件期 live attach/detach `UISelectableRow`。弹层（Menu / Modal / Dialog）仍在点击时 live 组装。Dock floating host 仍 `attachToLayer(Popup)`。Render 仍是 raw retained 对照。GameEditor chrome 已切到 `EditorSurface`（整窗 WidgetTree，不是 ImGui 内嵌 panel）。
 - `UIDescription` / `UIReconciler` / `UIRenderController` / apply hook **已删除**。不要恢复 Description → apply → widget 转发层。
 - Document/script：`UIDocument::instantiate()`（registry factory）只实例化一次。变长集合走列表控件 + `ReactiveList`，不是整页 re-run。
 - `UIScreen` 是挂卸 / z-order / input blocking，不是每帧 `render()` owner。Gallery / Editor 不使用它；接到游戏多表面（HUD/模态）之前保持搁置。
@@ -88,13 +88,22 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 - `Render2D` 不认识 game/editor pass；调用方经 `Render2D::acquirePassSlot()` 获取不透明
   `Render2DPassSlot`（每进程静态递增，上限 `FQuadRender::kMaxPassSlots = 8`），资源按 slot
   懒分配（GUI app 只用自己需要的 slot）。
-- 映射位置：`Render2DComposePass::composePassSlot(kind)`（4 个 compose kind 各占一个 slot）、
+- 映射位置：`Render2DComposePass::composePassSlot(kind)`（compose kind 各占一个 slot）、
   `RenderOverlay::viewportOverlayPassSlot()`。
 - 管线 prep 必须在录制前：depthless（depthFormat==Undefined → uiPipeline）与 depth 变体
   （screenPipeline）按目标附件格式缓存。**运行时 UI 复合管线必须在首帧 world 渲染前 prep**
   （display image 在帧图执行期才创建；见 memory：first-frame prep 时序坑）。
 - 单帧多批次 flush 共享一块 host-visible 顶点缓冲：每批次写不同区域 + `vertexOffset` 定位，
   容量 `MaxVertexCount × kFrameFlushSlots`，超限 assert（见 memory：multi-flush 覆盖坑）。
+  kind 切换也算一次该 backend 的 flush，连续同类仍合批。
+- Session 是 state-change batcher：`pendingKind ∈ {None, ScreenQuad, WorldQuad, Line}`。
+  `makeSprite` / `makeText` / `drawRoundedRect` → ScreenQuad，`makeWorldSprite` → WorldQuad，
+  `makeWorldLine` / wire → Line。kind 一变先 `flushPending()` 再切换，GPU draw 顺序 = emit
+  顺序。禁止在 `end()` 里按 world→screen→line 固定倒空。clip 改栈 flush 的是 pending
+  kind（三条 backend），不是只 flush screen quad。
+- GUI snapshot 的 Line 仍 tessellate 成 sprite，不走 `FLineRender`。`FLineRender` 只用于
+  对场景 depth 的 debug 线。2D 半透明叠放靠 painter’s algorithm，不要用 `pos.z` / depth
+  解决 chrome 遮盖。
 - clip 栈改动必须"先 flush 再改栈"；scissor 防御性 clamp 到窗口边界。
 
 ## GUI render surface
@@ -115,6 +124,40 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   可在同一 command buffer 中把**同一 snapshot**录制到 windowed 和 offscreen target，
   不复用 vertex/descriptor frame resources。`GUIAppHost` 的
   `--gpu-shot` + `--offscreen-shot` + `--offscreen-diff` 是零容差 parity 门禁。
+- `replayUIFrameSnapshot` 把 snapshot 画进**已经 begin 的 raster pass**（不
+  `beginRendering` / 不转 layout）。WidgetTree chrome 走这条路径：presentation
+  pass 已经打开，WidgetTree 覆盖整个 swapchain，3D viewport RT 只作为 `UIImage`
+  采样。管线 prep 用 **swapchain format**，slot 用 `EditorToolSurface`。不要把
+  `GUIRenderSurface::record()` 塞进 presentation（它会自己 begin pass）。
+
+## GameEditor chrome
+
+- 启动时二选一，**同帧不能混画**（两边都要占 swapchain overlay）：
+  - 默认 **`imgui`**：`GuiSystem` begin / `EditorLayer::onImGuiRender` / submit；
+    Workbench 仍离屏合成再 `ImGui::Image`。
+  - **`widgettree`**：整窗 `EditorSurface` + `replayUIFrameSnapshot`；3D 仍离屏
+    compose，树只采样那张 RT。不要再做「ImGui 窗口里 Image + 事件转发」的渐进内嵌。
+- 选择顺序：`--editor-chrome=imgui|widgettree` >
+  `editor.chrome.host`（`Engine/Saved/Config/Editor.json`）> 默认 `imgui`。
+  进程生命周期内不可热切。
+- WidgetTree 输入：`EditorInputNode` → `WidgetTree::dispatchEvent`。ImGui 输入：
+  同一 node 走 `GuiSystem::processEvent`。
+- ImGui 路径：`onBeforePresentation` 只做 `beginFrame` / `onImGuiRender`（CPU）；
+  `onPresentation` 只 `GuiSystem::submit`（已打开的 presentation pass）。Workbench
+  离屏合成留在 `onViewportCompose`。不要在 presentation pass 里 `GUIRenderSurface::record()`
+  （会再 beginRendering）。Frame Stats 的 WidgetTree 离屏合成仍与 ToolSurface 抢同一
+  Render2D slot，暂不在 ImGui 路径录制。
+- Workbench 作为 WidgetTree dock panel 嵌入时用 `FWorkbenchSurface::buildUI(tree, parent)`，
+  不要 `attachToLayer(Content)` 盖掉 editor root。Dock 只把**当前选中 tab** 的
+  panel widget `addDetachedChild` 进树；未选中的 panel 是 detached subtree。
+  因此 `buildUI` 前要把 host 临时 `attach` 到 editor tree，建完再 `detach`，
+  交给 workspace 之后再 graft。未挂上时 `updateUI` 不能再 `tree.attach`。
+- WidgetTree chrome teardown：`EditorSurface::shutdown` 必须在 compositor / VMA
+  之前丢掉 tree、snapshot、viewport wrap；随后 `FontManager::clearCache()`，
+  否则 RuntimeDefault atlas 会以 dedicated allocation 活过 allocator Destroy。
+- 原 ImGui editor 文件先留着编译，等 TypeRenderer / Content Browser / FilePicker /
+  ImGuizmo / Runtime Tools / UI Designer / debug images 迁完再删、再摘
+  `imgui-local`。`IGuiBackend` 仍是 ImGui 形，不要强迫 EditorSurface 走它。
 
 ## Host（ya-gui-app-host）
 
@@ -136,12 +179,12 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   command buffers、presentation targets）必须在 `delete render`（VMA 销毁）前释放
   （见 memory：VMA teardown 顺序坑）。
 
-## 编辑器内嵌
+## 编辑器内嵌（已废弃）
 
-- `Editor/Panels/GUIWorkbenchPanel`：ImGui 窗口承载 workbench surface；`buildSnapshot` 每次
-  同步 logical extent；事件经 ImGui 坐标换算后走同一 WidgetTree。
-- `EditorModule` 的 `EditorToolSurfaceCompositor` 在离屏 target 合成 panel 快照；
-  `onDetach` 必须 `shutdown()` 释放 composed image（早于 render teardown）。
+- 旧路径 `GUIWorkbenchPanel` / `FrameStatsPanel` 把 WidgetTree 合成到离屏 RT 再
+  `ImGui::Image`。GameEditor chrome 已切到整窗 `EditorSurface`，不要再扩这条桥。
+- `EditorToolSurfaceCompositor` 仍保留 shutdown，但 presentation 不再 compose
+  workbench 离屏图。
 
 ## 构建 / 测试
 

@@ -80,4 +80,12 @@ YA_GUI_API void recordRender2DComposePass(ICommandBuffer*                  cmdBu
                                           const FRender2DComposePassDesc&  passDesc,
                                           const std::function<void()>&     extraContent = {});
 
+/// Replay a UI snapshot into an already-open raster pass. Does not begin or
+/// end rendering and does not transition the target. Used by the editor
+/// shell, which draws into the presentation pass the same way ImGui used to.
+YA_GUI_API void replayUIFrameSnapshot(ICommandBuffer*                cmdBuf,
+                                      const UIFrameSnapshot&         snapshot,
+                                      Extent2D                       targetExtent,
+                                      ERender2DComposePassKind       kind);
+
 } // namespace ya

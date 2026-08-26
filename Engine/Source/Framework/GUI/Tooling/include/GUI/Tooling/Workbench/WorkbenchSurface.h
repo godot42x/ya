@@ -61,6 +61,10 @@ class YA_GUI_API FWorkbenchSurface
     FWorkbenchWorkspace workspace;
 
     void buildUI(ya::WidgetTree& tree);
+    /// Build the workbench chrome under an existing parent instead of the
+    /// Content layer. Used when the editor shell hosts the workbench as a
+    /// dock panel rather than as the window root.
+    void buildUI(ya::WidgetTree& tree, ya::UIElement& parent);
     void updateUI();
     void onRoutedEvent(const ya::Event& event, ya::EWidgetRouteResult result);
 
@@ -82,16 +86,12 @@ class YA_GUI_API FWorkbenchSurface
     void buildDemoHost(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildStatusBar(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildWorkspaceShell(ya::WidgetTree& tree, ya::UIElement& parent);
+    void assembleChrome(ya::WidgetTree& tree, ya::UIElement& parent);
     void clearDemoHost();
     void logStatus(const std::string& text);
 
     // Editor demo page (the original workbench editor loop).
     void buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& parent);
-    void buildToolbar(ya::WidgetTree& tree, ya::UIElement& parent);
-    void buildDocumentList(ya::WidgetTree& tree, ya::UIElement& parent);
-    void buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent);
-    void buildInspector(ya::WidgetTree& tree, ya::UIElement& parent);
-
     void rebuildItemRows();
     void syncPresentationState();
 

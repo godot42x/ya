@@ -23,6 +23,17 @@ namespace ya
 struct IRender;
 struct Font;
 
+/// Which Render2D backend currently holds unflushed geometry. The session
+/// keeps at most one of these live so GPU submit order matches emit order
+/// across screen quads, world quads, and debug lines.
+enum class ERender2dBatchKind : uint8_t
+{
+    None = 0,
+    ScreenQuad,
+    WorldQuad,
+    Line,
+};
+
 /// Diagnostics state adjusted live from the runtime tools panel. These are
 /// draw-time parameters only; they are not part of a recording session.
 struct FRender2dDebugState
@@ -55,6 +66,7 @@ struct FRender2dSession
     // Active screen-space clip rects (top-left origin, Y down). The top entry
     // is applied as the scissor on the next screen-batch flush.
     std::vector<Rect2D> clipStack;
+    ERender2dBatchKind  pendingKind       = ERender2dBatchKind::None;
     uint32_t            debugClipLogCount = 0;
     uint32_t            debugScreenFlushCount = 0;
     uint32_t            debugWorldFlushCount = 0;
@@ -95,9 +107,17 @@ struct YA_RENDER_2D_API Render2D
     [[nodiscard]] static Render2DPassSlot acquirePassSlot();
 
     /// Push a clip rect (intersected with the current clip). Changes are applied
-    /// as a command-level scissor on the next screen batch flush.
+    /// as a command-level scissor on the next screen batch flush. Any pending
+    /// backend is flushed first so already-recorded geometry keeps the current
+    /// scissor / draw-order slot.
     static void pushClipRect(const Rect2D& rect);
     static void popClipRect();
+
+    /// Bind the session to `kind`. Flushes the previous backend if the kind
+    /// changed so GPU submit order matches emit order across pipelines.
+    static void beginBatch(ERender2dBatchKind kind);
+    /// Flush the currently pending backend without changing kind.
+    static void flushPending();
 
     /// Pure clip intersection used by the clip stack: `rect` clipped to the
     /// current `parentClip` (empty extent when disjoint). Extracted so the
@@ -133,6 +153,7 @@ struct YA_RENDER_2D_API Render2D
                            const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                            const glm::vec2& uvScale = {1.0f, 1.0f})
     {
+        beginBatch(ERender2dBatchKind::ScreenQuad);
         quadRender()->drawTexture(position, size, texture, tint, uvScale);
     }
 
@@ -141,6 +162,7 @@ struct YA_RENDER_2D_API Render2D
                            const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                            const glm::vec2& uvScale = {1.0f, 1.0f})
     {
+        beginBatch(ERender2dBatchKind::ScreenQuad);
         quadRender()->drawTexture(transform, texture, tint, uvScale);
     }
 
@@ -151,6 +173,7 @@ struct YA_RENDER_2D_API Render2D
                                 const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                                 const glm::vec2& uvScale = {1.0f, 1.0f})
     {
+        beginBatch(ERender2dBatchKind::WorldQuad);
         quadRender()->drawWorldTexture(worldCenter, worldDirection, worldSize, texture, tint, uvScale);
     }
 
@@ -158,6 +181,7 @@ struct YA_RENDER_2D_API Render2D
                               const glm::vec3& to,
                               const glm::vec4& color = {1.0f, 1.0f, 1.0f, 1.0f})
     {
+        beginBatch(ERender2dBatchKind::Line);
         lineRender()->addLine(from, to, color);
     }
 
@@ -165,6 +189,7 @@ struct YA_RENDER_2D_API Render2D
                             const glm::vec3& halfExtent,
                             const glm::vec4& color = {0.2f, 0.9f, 0.3f, 1.0f})
     {
+        beginBatch(ERender2dBatchKind::Line);
         lineRender()->addWireBox(model, halfExtent, color);
     }
 
@@ -172,6 +197,7 @@ struct YA_RENDER_2D_API Render2D
                                float            radius,
                                const glm::vec4& color = {0.3f, 0.6f, 1.0f, 1.0f})
     {
+        beginBatch(ERender2dBatchKind::Line);
         lineRender()->addWireSphere(center, radius, color);
     }
 
@@ -181,6 +207,7 @@ struct YA_RENDER_2D_API Render2D
                          Font*              font,
                          const glm::vec2&   scale = glm::vec2(1.0f))
     {
+        beginBatch(ERender2dBatchKind::ScreenQuad);
         quadRender()->drawText(text, position, color, font, scale);
     }
 
@@ -192,6 +219,7 @@ struct YA_RENDER_2D_API Render2D
                                 const glm::vec4& tint,
                                 float            cornerRadius)
     {
+        beginBatch(ERender2dBatchKind::ScreenQuad);
         quadRender()->drawRoundedRect(position, size, tint, cornerRadius);
     }
 };

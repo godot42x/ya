@@ -58,7 +58,8 @@ void Render2D::begin(const FRender2dContext& ctx)
     session.windowWidth   = ctx.windowWidth;
     session.passSlot      = ctx.passSlot;
     session.clipStack.clear();
-    session.debugClipLogCount    = 0;
+    session.pendingKind           = ERender2dBatchKind::None;
+    session.debugClipLogCount     = 0;
     session.debugScreenFlushCount = 0;
     session.debugWorldFlushCount  = 0;
     if (debug.bLogSessionLifecycle) {
@@ -76,8 +77,15 @@ void Render2D::begin(const FRender2dContext& ctx)
 
 void Render2D::end()
 {
-    quadData->end();
-    lineData->flush(session.curCmdBuf, session.viewProjection);
+    flushPending();
+    session.pendingKind = ERender2dBatchKind::None;
+    YA_CORE_ASSERT(quadData->vertexCount == 0 && quadData->worldVertexCount == 0,
+                   "Render2D end() left unflushed quads (screen={} world={})",
+                   quadData->vertexCount,
+                   quadData->worldVertexCount);
+    YA_CORE_ASSERT(lineData->vertexCount == 0,
+                   "Render2D end() left unflushed lines (count={})",
+                   lineData->vertexCount);
 
     if (debug.bLogSessionLifecycle) {
         YA_CORE_INFO("Render2D end: passSlot={} screenFlushes={} worldFlushes={} remainingClipDepth={}",
@@ -120,11 +128,11 @@ void Render2D::pushClipRect(const Rect2D& rect)
     const bool bClipChanged = session.clipStack.empty() ||
                               session.clipStack.back().pos != clipped.pos ||
                               session.clipStack.back().extent != clipped.extent;
-    if (bClipChanged && quadData && session.curCmdBuf) {
-        // Flush pending quads with the CURRENT scissor BEFORE switching to the
-        // new clip; otherwise content recorded outside the clip gets culled by
-        // the incoming clip rect.
-        quadData->flush(session.curCmdBuf);
+    if (bClipChanged && session.curCmdBuf) {
+        // Flush whichever backend is pending with the CURRENT scissor / draw
+        // slot BEFORE switching clip; otherwise already-recorded geometry is
+        // either culled by the incoming scissor or submitted after later draws.
+        flushPending();
     }
     session.clipStack.push_back(clipped);
     if (debug.bLogClipStack && session.debugClipLogCount < debug.maxClipLogsPerFrame) {
@@ -158,10 +166,10 @@ void Render2D::popClipRect()
         return;
     }
     const Rect2D currentClip = session.clipStack.back();
-    if (quadData && session.curCmdBuf) {
-        // Flush pending quads with the CURRENT (inner) scissor BEFORE popping;
-        // otherwise content recorded inside the clip escapes it.
-        quadData->flush(session.curCmdBuf);
+    if (session.curCmdBuf) {
+        // Flush the pending backend with the CURRENT (inner) scissor BEFORE
+        // popping; otherwise content recorded inside the clip escapes it.
+        flushPending();
     }
     session.clipStack.pop_back();
     if (debug.bLogClipStack && session.debugClipLogCount < debug.maxClipLogsPerFrame) {
@@ -173,6 +181,40 @@ void Render2D::popClipRect()
                      currentClip.extent.x,
                      currentClip.extent.y);
     }
+}
+
+void Render2D::flushPending()
+{
+    switch (session.pendingKind) {
+    case ERender2dBatchKind::ScreenQuad:
+        if (quadData) {
+            quadData->flush(session.curCmdBuf);
+        }
+        break;
+    case ERender2dBatchKind::WorldQuad:
+        if (quadData) {
+            quadData->flushWorld(session.curCmdBuf);
+        }
+        break;
+    case ERender2dBatchKind::Line:
+        if (lineData) {
+            lineData->flush(session.curCmdBuf, session.viewProjection);
+        }
+        break;
+    case ERender2dBatchKind::None:
+        break;
+    }
+}
+
+void Render2D::beginBatch(ERender2dBatchKind kind)
+{
+    YA_CORE_ASSERT(session.curCmdBuf != nullptr,
+                   "Render2D draw called outside a begin()/end() recording session");
+    if (session.pendingKind == kind) {
+        return;
+    }
+    flushPending();
+    session.pendingKind = kind;
 }
 
 } // namespace ya

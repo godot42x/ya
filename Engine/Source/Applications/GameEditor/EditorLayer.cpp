@@ -131,4 +131,91 @@ void EditorLayer::composeFrameStats(IRender& render, ICommandBuffer& commandBuff
     _frameStatsPanel.compose(render, commandBuffer);
 }
 
+void EditorLayer::notifyViewportWidgetRect(const Rect2D& rect)
+{
+    _viewportBounds[0] = rect.pos;
+    _viewportBounds[1] = rect.pos + rect.extent;
+    viewportRect       = rect;
+    _viewportMouseRect = rect;
+    _viewportMouseCenter = {
+        rect.pos.x + rect.extent.x * 0.5f,
+        rect.pos.y + rect.extent.y * 0.5f,
+    };
+
+    const bool bMouseCaptured = _app && _app->getInputRouter().isMouseCaptured();
+    if (!bMouseCaptured &&
+        (_viewportSize.x != rect.extent.x || _viewportSize.y != rect.extent.y) &&
+        rect.extent.x > 0.0f && rect.extent.y > 0.0f) {
+        _viewportSize = rect.extent;
+        queueViewportResize(rect);
+    }
+}
+
+void EditorLayer::setViewportHoverFocus(bool hovered, bool focused)
+{
+    bViewportHovered = hovered;
+    bViewportFocused = focused;
+}
+
+void EditorLayer::cmdNewScene()
+{
+    App::get()->getTaskManager().registerFrameTask([this]() {
+        auto* app = App::get();
+        if (!app) {
+            return;
+        }
+
+        auto* sceneManager = app->getSceneServices().getSceneManager();
+        if (sceneManager && sceneManager->hasScene()) {
+            if (auto* render = app->getRenderServices().getRender()) {
+                render->waitIdle();
+            }
+        }
+        auto scene = makeShared<Scene>();
+        if (sceneManager) {
+            sceneManager->unloadScene();
+            sceneManager->activateScene(scene);
+        }
+        _currentScenePath.clear();
+    });
+}
+
+void EditorLayer::cmdSaveScene()
+{
+    if (!_currentScenePath.empty()) {
+        if (_app && _app->getSceneServices().getSceneManager()) {
+            if (auto* scene = getEditableScene()) {
+                (void)scene;
+                _app->getSceneServices().saveScene(_currentScenePath);
+                YA_CORE_INFO("Scene saved to: {}", _currentScenePath);
+            }
+        }
+        return;
+    }
+    cmdSaveSceneAs();
+}
+
+void EditorLayer::cmdSaveSceneAs()
+{
+    std::string defaultName = "NewScene";
+    if (_app && _app->getSceneServices().getSceneManager()) {
+        if (auto* scene = getEditableScene(); scene && !scene->getName().empty()) {
+            defaultName = scene->getName();
+        }
+    }
+
+    _filePicker.openSceneSavePicker(
+        defaultName,
+        [this](const std::string& selectedDir, const std::string& sceneName) {
+            _currentScenePath = selectedDir + "/" + sceneName + ".scene.json";
+            if (_app && _app->getSceneServices().getSceneManager()) {
+                if (auto* scene = getEditableScene()) {
+                    scene->setName(sceneName);
+                    _app->getSceneServices().saveScene(_currentScenePath);
+                    YA_CORE_INFO("Scene saved to: {}", _currentScenePath);
+                }
+            }
+        });
+}
+
 } // namespace ya

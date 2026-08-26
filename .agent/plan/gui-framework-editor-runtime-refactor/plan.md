@@ -12,6 +12,49 @@ Framework 提供 retained WidgetTree、UIElement、Layout、Input、UIFrameBuild
 
 外观解析优先级固定为：explicit runtime/authored property > widget-local authored default > optional scoped/theme style > framework neutral fallback。Game UI 不要求挂载 theme。
 
+补充原则（2026-08-27）：`UICompoundWidget` 只是 native retained composition primitive，不是唯一 declarative/component model。未来 React-like / HTML-CSS-JS / script/document adapter 应建立在 runtime kernel 之上，而不是反过来让 kernel 绑定某一种 authoring 方式。
+
+补充原则（2026-08-27）：runtime 架构按四层收口：
+
+1. UI Runtime Kernel：`UIElement`、`WidgetTree`、layout / paint / input / focus / dragdrop / invalidate、snapshot / host bridge。
+2. Native Retained Widget Layer：leaf / compound widget、原生 C++ 控件、Slate 风格静态 DSL。
+3. Declarative Adapter Layer：React-like、HTML-CSS-JS、editor-authored document、script/project schema。
+4. Product Layer：standalone app、game runtime UI、editor。
+
+补充原则（2026-08-27）：`Reactive` 可以保留，但不应继续被视为 `Runtime/Widgets` kernel 本体。kernel 必须允许多种状态来源并存：imperative setter、widget transient state、behavior state、reactive binding、future adapter patch。
+
+补充原则（2026-08-27）：behavior 是一级横切组合层。drag/drop、tooltip、shortcut、accessibility、editor interaction affordance 等能力应收敛到 behavior，而不是继续膨胀基础控件。
+
+补充原则（2026-08-27）：`Declarative/Construct.h` 只是 native DSL surface，不是未来所有声明式 authoring 的统一底座；上层 adapter 可以投影到 runtime kernel，而不必共享 builder API。
+
+补充原则（2026-08-26）：`UICompoundWidget` 与新底层的关系必须按迁移桥接契约收口：
+
+1. `UICompoundWidget` 明确属于 Native Retained Widget Layer，不属于 Runtime Kernel。
+2. Runtime Kernel 只负责 `UIElement` / `WidgetTree` / layout / input / focus / invalidate / snapshot / host bridge，不承载 editor/game 复合控件语义。
+3. 横切能力优先进入 `UIBehavior`，而不是继续塞进 `UICompoundWidget` 基类，更不能反向污染 `UIButton` / `UIText` 等 leaf widget。
+4. `UICompoundWidget` 只承担局部 composition root 职责：一次性 `construct()`、内部 retained 子树组装、局部状态/生命周期、必要时的复杂输入策略或自定义 paint；不引入第二套 tree、reconciler 或 adapter host。
+5. 现有 editor/game 复合控件迁移时必须三分：无局部状态的收敛为普通 builder helper；有局部 retained 状态/生命周期的收敛为 `UICompoundWidget`；drag/drop、tooltip、shortcut、editor affordance 等横切能力收敛为 `UIBehavior`。
+6. future React-like / HTML-CSS-JS / script/document adapter 直接投影到 Runtime Kernel，不得把 `UICompoundWidget` 作为唯一 component 宿主或 authoring 底座。
+
+补充现状（2026-08-26）：仓库当前**还没有任何实际控件继承 `UICompoundWidget`**。现阶段只有 `UICompoundWidget` 基类与 `ui::compound<T>()` builder 入口落地；业务层仍主要分布在两类结构里：
+
+- specialized native retained control：如 `UITreeView` / `UITableGrid` / `UIDockSpace` / `UIMenuBar`，直接继承 `UIElement`，自己承担数据投影、命中、paint、局部子树或 slot 编排；
+- demo / editor ad-hoc widget：如 `FDemoDragItem` / `FDemoDropZone`，先用临时 `UIElement` 包装交互，再挂进 DSL 壳。
+
+因此 G4.3 的目标不是“把现有复杂控件一把梭全部改成 `UICompoundWidget`”，而是先把它们分流到正确归宿。
+
+### G4.3 第一版迁移判定表（2026-08-26）
+
+| 现有对象 | 当前形态 | 目标归宿 | 说明 |
+|---|---|---|---|
+| `FDemoDragItem` / `FDemoDropZone` | GUIWorkbench demo 专用 `UIElement` | 普通 retained widget / builder 壳 + `UIBehavior` | 它们的长期价值是 drag source / drop target 交互，不是保留 demo 专用 widget 类型。 |
+| `UISelectableRow` | leaf-like `UIElement` primitive | 保留 leaf primitive，逐步剥离横切能力到 `UIBehavior` | 行的职责应保持在 selection / activation / presentation surface；drag/drop 高亮、editor affordance 不应继续膨胀。 |
+| `UITreeView` / `UITableGrid` | specialized native retained control | 继续保留 specialized control，不强制改写成 `UICompoundWidget` | 它们自己拥有数据投影、hit test、flatten/layout、paint 与选择状态；本质上不是“由现成控件简单拼装”的局部 composition root。 |
+| `UIMenuBar` / `UIMenu` / `UIDialog` | retained control + popup/menu 生命周期 | 先保留 native control；复用交互逐步外提到 `UIBehavior` | 菜单/弹出有明确路由与生命周期要求，短期不应用 `UICompoundWidget` 包一层再套回基础控件。 |
+| `UIDockSpace` / `UIDockFloatingWindow` / `UIDockFloatingHost` | projection-heavy retained control | 继续保留 specialized control，不强制迁到 `UICompoundWidget` | Dock 是 workspace/model → 投影视图树的复杂控制器，问题重点在 behavior 与 projection seam，不在 compound 化。 |
+| Workbench / Editor 中纯组合 panel、toolbar group、inspector section | 多为 DSL + live attach/detach | 优先收敛为 builder helper；有局部状态时再升到 `UICompoundWidget` | 没有局部生命周期和自定义输入时，不需要为了“组件化”先引入 compound 基类。 |
+| future editor composite widget（如带局部状态的 property section、search panel、tool palette） | 尚未统一 | `UICompoundWidget` 优先归宿 | 这类对象天然符合“一次 construct + retained 子树 + 局部状态/生命周期”的 compound 定位。 |
+
 不在本计划中恢复 ImGui、强制 Game UI 使用 UITheme、一次性重写全部控件，或把 project-specific tokens 放入 framework。
 
 ### 默认构建路径：DSL 直接物化 live widget（2026-08-26）

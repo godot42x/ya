@@ -18,6 +18,7 @@
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UITypeIds.h"
 #include "Render/Resources/FontManager.h"
@@ -30,6 +31,30 @@ namespace ya
 
 namespace
 {
+struct FTestCompoundWidget final : UICompoundWidget
+{
+    explicit FTestCompoundWidget(std::string name) : UICompoundWidget(std::move(name))
+    {
+        enableTick();
+    }
+
+    int constructCount = 0;
+    int tickCount = 0;
+    float accumulatedDelta = 0.0f;
+
+    void construct() override
+    {
+        ++constructCount;
+        addDetachedChild(std::make_shared<UIText>("compound_label"));
+    }
+
+    void tick(float deltaSeconds) override
+    {
+        ++tickCount;
+        accumulatedDelta += deltaSeconds;
+    }
+};
+
 UIElement* findChildByKey(UIElement* parent, const char* key)
 {
     for (const auto& c : parent->getChildren()) {
@@ -336,6 +361,48 @@ TEST(DeclarativeContractTest, DirectConstructAttachesLiveWidgetsWithoutDescripti
     EXPECT_EQ(dynamic_cast<UIText*>(root->getChildren()[1]->getChildren()[0].get())->getText(), "Go");
 }
 
+TEST(DeclarativeContractTest, CompoundWidgetConstructsOnceAndTicksOnlyWhileAttached)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    auto compound = std::make_shared<FTestCompoundWidget>("compound");
+
+    EXPECT_EQ(compound->constructCount, 0);
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, compound).valid());
+    EXPECT_EQ(compound->constructCount, 1);
+    ASSERT_EQ(compound->getChildren().size(), 1u);
+
+    tree.tick(0.25f);
+    tree.tick(0.5f);
+    EXPECT_EQ(compound->tickCount, 2);
+    EXPECT_FLOAT_EQ(compound->accumulatedDelta, 0.75f);
+
+    tree.detach(*compound);
+    tree.tick(1.0f);
+    EXPECT_EQ(compound->tickCount, 2);
+
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, compound).valid());
+    EXPECT_EQ(compound->constructCount, 1);
+    tree.tick(1.0f);
+    EXPECT_EQ(compound->tickCount, 3);
+}
+
+TEST(DeclarativeContractTest, CompoundWidgetBuilderBuildsTypedLiveWidget)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    UIElement* host = tree.getLayer(WidgetTree::ELayer::Content);
+
+    auto builder = ui::compound<FTestCompoundWidget>("compound_builder");
+    auto ref = builder.share();
+    UIElementRef root = ui::build(tree, *host, std::move(builder));
+
+    ASSERT_NE(root, nullptr);
+    ASSERT_NE(ref, nullptr);
+    EXPECT_EQ(root.get(), ref.get());
+    EXPECT_EQ(root->_stableKey, "compound_builder");
+    EXPECT_EQ(root->_name, "compound_builder");
+    EXPECT_EQ(ref->constructCount, 1);
+}
+
 TEST(DeclarativeContractTest, DirectConstructBindTextUpdatesWithoutRebuild)
 {
     WidgetTree tree({.width = 320, .height = 200});
@@ -429,6 +496,7 @@ TEST(DeclarativeContractTest, DirectConstructSplitScrollAndFillSlot)
     auto split = ui::splitPane("split")
                      .setSize({0.0f, 80.0f})
                      .setSplitRatio(0.4f)
+                     .setPadding({0.0f, 8.0f})
                      .children(
                          ui::scroll("scroll").child(ui::panel("content").setSize({20.0f, 40.0f})),
                          ui::panel("right").setSize({20.0f, 40.0f}));
@@ -443,6 +511,7 @@ TEST(DeclarativeContractTest, DirectConstructSplitScrollAndFillSlot)
     ASSERT_NE(pane, nullptr);
     EXPECT_EQ(pane->_typeId, kTypeIdSplitPane);
     EXPECT_FLOAT_EQ(pane->getSplitRatio(), 0.4f);
+    EXPECT_EQ(pane->getSplitLayout().getPadding(), glm::vec2(0.0f, 8.0f));
     auto* slot = column->getBoxSlot(*pane);
     ASSERT_NE(slot, nullptr);
     EXPECT_EQ(slot->getSizeRule(), EUIBoxSlotSizeRule::Fill);

@@ -1020,14 +1020,16 @@ bool GUIWindowHost::shouldClose() const
     return _impl->bQuitRequested || _impl->delegate->shouldRequestClose();
 }
 
-void GUIWindowHost::onTick(float /*dt*/)
+void GUIWindowHost::onTick(float dt)
 {
     // Events are delivered by the kernel event phase (via onEvent) before
-    // this tick; here we only process commands and render one frame.
+    // this tick. Drive live widget lifecycle before application-level state
+    // synchronization and snapshot generation.
     if (_impl->bQuitRequested) {
         return;
     }
     ++_impl->frameCount;
+    _impl->tree->tick(dt);
 
     for (auto& request : _impl->automationServer.consumePendingRequests()) {
         if (request->method == "ping") {

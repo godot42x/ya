@@ -114,6 +114,9 @@ struct YA_GAME_RUNTIME_API AppDesc
     std::optional<std::string> projectRoot;
     std::optional<std::string> executablePath;
     bool                       bEditor = false;
+    /// Editor chrome host: `imgui` (default) or `widgettree`. Empty means the
+    /// editor module falls back to `editor.chrome.host` / ImGui.
+    std::optional<std::string> editorChrome;
 
     bool                     bEnableRenderDoc           = false;
     bool                     bRenderDocOutputOverridden = false;
