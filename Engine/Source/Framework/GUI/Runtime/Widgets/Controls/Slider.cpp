@@ -11,6 +11,15 @@
 namespace ya
 {
 
+void UISlider::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const
+{
+    node["control"] = {
+        {"type", "slider"},
+        {"value", _value},
+        {"step", _step},
+    };
+}
+
 void UISlider::setValue(float value)
 {
     const float clamped = std::clamp(value, 0.0f, 1.0f);

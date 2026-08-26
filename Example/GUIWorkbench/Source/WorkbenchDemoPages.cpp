@@ -2,16 +2,14 @@
 
 #include "Core/Log.h"
 
-#include "Render/Resources/FontManager.h"
 #include "GUI/Declarative/Construct.h"
-#include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Dialog.h"
-#include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DockFloatingHost.h"
+#include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Controls/DragDrop.h"
 #include "GUI/Widgets/Controls/Image.h"
@@ -29,6 +27,8 @@
 #include "GUI/Widgets/Controls/TreeView.h"
 #include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/Style.h"
+#include "GUI/Widgets/WidgetTree.h"
+#include "Render/Resources/FontManager.h"
 
 #include <algorithm>
 #include <format>
@@ -39,29 +39,29 @@ namespace guiworkbench
 namespace
 {
 
-constexpr glm::vec4 kPanelColor   = {0.11f, 0.12f, 0.15f, 1.0f};
-constexpr glm::vec4 kHeaderColor  = {0.55f, 0.60f, 0.68f, 1.0f};
+constexpr glm::vec4 kPanelColor  = {0.11f, 0.12f, 0.15f, 1.0f};
+constexpr glm::vec4 kHeaderColor = {0.55f, 0.60f, 0.68f, 1.0f};
 // Button fills come from the mounted WorkbenchTheme ("button" key); these
 // scaffold values were the pre-theme source and are retired (Phase 4).
-constexpr glm::vec4 kTextColor    = {0.88f, 0.90f, 0.94f, 1.0f};
+constexpr glm::vec4 kTextColor = {0.88f, 0.90f, 0.94f, 1.0f};
 
 std::shared_ptr<ya::UIText> makeLabel(const std::string& text, float fontSize = 13.0f)
 {
-    auto label = std::make_shared<ya::UIText>(text + "_Label");
+    auto label        = std::make_shared<ya::UIText>(text + "_Label");
     label->_bAutoSize = true;
     label->_fontSize  = static_cast<uint32_t>(fontSize);
     label->setText(text);
-    label->_color     = kHeaderColor;
+    label->_color = kHeaderColor;
     return label;
 }
 
 std::shared_ptr<ya::UIText> makeBodyText(const std::string& text)
 {
-    auto label = std::make_shared<ya::UIText>(text + "_Body");
+    auto label        = std::make_shared<ya::UIText>(text + "_Body");
     label->_bAutoSize = true;
     label->_fontSize  = 13;
     label->setText(text);
-    label->_color     = kTextColor;
+    label->_color = kTextColor;
     return label;
 }
 
@@ -72,18 +72,18 @@ std::shared_ptr<ya::UIButton> makeDemoButton(const std::string& name, const std:
         button->setSize({width, 26.0f});
     }
     else {
-        button->_bAutoSize      = true;
+        button->_bAutoSize = true;
         button->setContentPadding({12.0f, 4.0f});
     }
 
-    auto text = std::make_shared<ya::UIText>(name + "_Label");
+    auto text        = std::make_shared<ya::UIText>(name + "_Label");
     text->_bAutoSize = true;
     text->_fontSize  = 13;
     text->setText(label);
     // No authored color: the label resolves the theme "text" style, so a
     // light theme flips button labels to dark text (style-system Phase 4).
-    text->_hAlign    = ya::EWidgetAlignH::Center;
-    text->_vAlign    = ya::EWidgetAlignV::Center;
+    text->_hAlign = ya::EWidgetAlignH::Center;
+    text->_vAlign = ya::EWidgetAlignV::Center;
     button->addDetachedChild(text);
     return button;
 }
@@ -106,8 +106,8 @@ struct FDemoDragItem : public ya::UIElement
         _hitFilter = ya::EWidgetHitFilter::Stop;
     }
 
-    std::string _payload;
-    std::string _label;
+    std::string           _payload;
+    std::string           _label;
     std::function<void()> _onDropped;
 
     void paintSelf(ya::UIFrameBuilder& builder) override
@@ -115,8 +115,7 @@ struct FDemoDragItem : public ya::UIElement
         builder.addSprite(_layoutRect, {0.20f, 0.22f, 0.27f, 1.0f}, nullptr);
         auto font = ya::FontManager::get()->getFont(ya::DEFAULT_RUNTIME_FONT_NAME, 13);
         if (font) {
-            builder.addText(_layoutRect, _label, {0.92f, 0.94f, 0.97f, 1.0f}, font,
-                            ya::EWidgetAlignH::Center, ya::EWidgetAlignV::Center);
+            builder.addText(_layoutRect, _label, {0.92f, 0.94f, 0.97f, 1.0f}, font, ya::EWidgetAlignH::Center, ya::EWidgetAlignV::Center);
         }
     }
 
@@ -128,8 +127,8 @@ struct FDemoDragItem : public ya::UIElement
         }
         switch (eventType) {
         case ya::EEvent::MouseButtonPressed:
-            _bPressed    = true;
-            _pressPoint  = ctx.logicalPoint;
+            _bPressed   = true;
+            _pressPoint = ctx.logicalPoint;
             if (ya::WidgetTree* tree = getTree()) {
                 tree->setPointerCapture(this);
             }
@@ -159,7 +158,7 @@ struct FDemoDragItem : public ya::UIElement
     void clearTransientInputState() override { _bPressed = false; }
 
   private:
-    bool     _bPressed = false;
+    bool      _bPressed = false;
     glm::vec2 _pressPoint{};
 };
 
@@ -171,7 +170,7 @@ struct FDemoDropZone : public ya::UIElement
         _hitFilter = ya::EWidgetHitFilter::Stop;
     }
 
-    std::string _label;
+    std::string                                     _label;
     std::function<void(const std::string& payload)> _onDropped;
 
     bool canAcceptDrop(const std::string& payload, const glm::vec2&) override
@@ -198,14 +197,10 @@ struct FDemoDropZone : public ya::UIElement
 
     void paintSelf(ya::UIFrameBuilder& builder) override
     {
-        builder.addSprite(_layoutRect, _bHighlighted ? glm::vec4{0.24f, 0.46f, 0.82f, 0.85f}
-                                                     : glm::vec4{0.13f, 0.15f, 0.19f, 1.0f},
-                          nullptr);
+        builder.addSprite(_layoutRect, _bHighlighted ? glm::vec4{0.24f, 0.46f, 0.82f, 0.85f} : glm::vec4{0.13f, 0.15f, 0.19f, 1.0f}, nullptr);
         auto font = ya::FontManager::get()->getFont(ya::DEFAULT_RUNTIME_FONT_NAME, 13);
         if (font) {
-            builder.addText(_layoutRect, _bHighlighted ? "DROP HERE" : _label,
-                            {0.90f, 0.92f, 0.95f, 1.0f}, font,
-                            ya::EWidgetAlignH::Center, ya::EWidgetAlignV::Center);
+            builder.addText(_layoutRect, _bHighlighted ? "DROP HERE" : _label, {0.90f, 0.92f, 0.95f, 1.0f}, font, ya::EWidgetAlignH::Center, ya::EWidgetAlignV::Center);
         }
     }
 
@@ -241,7 +236,9 @@ struct FVectorDemoCanvas : public ya::UIElement
                                o + glm::vec2(310.0f, -20.0f),
                                o + glm::vec2(360.0f, 140.0f),
                                o + glm::vec2(400.0f, 30.0f),
-                               {0.90f, 0.45f, 0.70f, 1.0f}, 2.0f, 32);
+                               {0.90f, 0.45f, 0.70f, 1.0f},
+                               2.0f,
+                               32);
     }
 };
 
@@ -250,13 +247,13 @@ struct FVectorDemoCanvas : public ya::UIElement
 void buildRenderDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                      const std::function<void(const std::string&)>& log)
 {
-    auto panel = std::make_shared<ya::UIPanel>("RenderDemo");
+    auto panel        = std::make_shared<ya::UIPanel>("RenderDemo");
     panel->_anchorMin = {0.0f, 0.0f};
     panel->_anchorMax = {1.0f, 1.0f};
     panel->setColor(kPanelColor);
     tree.attach(parent, panel);
 
-    auto form = std::make_shared<ya::UIContainer>("RenderForm");
+    auto form        = std::make_shared<ya::UIContainer>("RenderForm");
     form->_anchorMin = {0.0f, 0.0f};
     form->_anchorMax = {1.0f, 1.0f};
     form->setPadding({16.0f, 12.0f});
@@ -281,7 +278,7 @@ void buildRenderDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
         cell->setColor(color);
         tree.attach(*markerRow, cell);
 
-        auto text = makeBodyText(label);
+        auto text        = makeBodyText(label);
         text->_anchorMin = {0.0f, 0.0f};
         text->_anchorMax = {1.0f, 1.0f};
         text->_hAlign    = ya::EWidgetAlignH::Center;
@@ -300,7 +297,7 @@ void buildRenderDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
     image->_assetPath = "builtin/checkerboard";
     tree.attach(*imageRow, image);
 
-    state.renderProbeButton = makeDemoButton("RenderProbe", "Render Probe", 160.0f);
+    state.renderProbeButton           = makeDemoButton("RenderProbe", "Render Probe", 160.0f);
     state.renderProbeButton->_onClick = [&state, log]
     {
         ++state.renderProbeClicks;
@@ -328,31 +325,28 @@ void buildWidgetsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
                        .setText(std::format("Clicked {} times", state.clickCount))
                        .setSize({180.0f, 26.0f})
                        .setOnClick([&state, log]
-                       {
+                                   {
                            ++state.clickCount;
                            state.widgetLog = std::format("Button clicked (total {})", state.clickCount);
-                           log(state.widgetLog);
-                       });
+                           log(state.widgetLog); });
     state.counterButton = counter.share();
 
     auto checkA = ya::ui::checkBox("CheckA")
                       .setChecked(state.bCheckA)
                       .child(body("CheckA_Body", "Show grid lines"))
                       .setOnChanged([&state, log](bool bChecked)
-                      {
+                                    {
                           state.bCheckA = bChecked;
-                          log(std::format("CheckBox '{}' -> {}", "CheckA", bChecked ? "on" : "off"));
-                      });
+                          log(std::format("CheckBox '{}' -> {}", "CheckA", bChecked ? "on" : "off")); });
     state.checkA = checkA.share();
 
     auto slider = ya::ui::slider("BrightnessSlider")
                       .setSize({260.0f, 22.0f})
                       .setValue(state.sliderValue)
                       .setOnValueChanged([&state, log](float value)
-                      {
+                                         {
                           state.sliderValue = value;
-                          log(std::format("Slider -> {:.2f}", value));
-                      });
+                          log(std::format("Slider -> {:.2f}", value)); });
     state.slider = slider.share();
 
     auto combo = ya::ui::comboBox("ApiCombo")
@@ -362,15 +356,14 @@ void buildWidgetsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
                       .setSelectedIndex(std::clamp(
                           state.comboIndex, 0, static_cast<int>(combo.share()->_items.size()) - 1))
                       .setOnSelectionChanged([&state, log](int index)
-                      {
+                                             {
                           state.comboIndex = index;
                           if (state.combo) {
                               log(std::format("ComboBox -> {}", state.combo->currentLabel()));
-                          }
-                      })
+                          } })
                       .share();
 
-    ya::ui::build(
+    auto page =
         ya::ui::panel("WidgetsDemo")
             .fillParent()
             .setColor(kPanelColor)
@@ -389,18 +382,16 @@ void buildWidgetsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
                             .setChecked(state.bCheckB)
                             .child(body("CheckB_Body", "Enable shadows"))
                             .setOnChanged([&state, log](bool bChecked)
-                            {
-                                state.bCheckB = bChecked;
-                                log(std::format("CheckBox '{}' -> {}", "CheckB", bChecked ? "on" : "off"));
-                            }),
+                                          {
+                                        state.bCheckB = bChecked;
+                                        log(std::format("CheckBox '{}' -> {}", "CheckB", bChecked ? "on" : "off")); }),
                         ya::ui::checkBox("CheckC")
                             .setChecked(state.bCheckC)
                             .child(body("CheckC_Body", "VSync"))
                             .setOnChanged([&state, log](bool bChecked)
-                            {
-                                state.bCheckC = bChecked;
-                                log(std::format("CheckBox '{}' -> {}", "CheckC", bChecked ? "on" : "off"));
-                            }),
+                                          {
+                                        state.bCheckC = bChecked;
+                                        log(std::format("CheckBox '{}' -> {}", "CheckC", bChecked ? "on" : "off")); }),
                         ya::ui::row("Row")
                             .setSpacing(8.0f)
                             .children(
@@ -427,12 +418,10 @@ void buildWidgetsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
                                     .setFontSize(13)
                                     .setText(state.textFieldValue)
                                     .setOnCommit([&state, log](const std::string& text)
-                                    {
-                                        state.textFieldValue = text;
-                                        log(std::format("TextField committed: '{}'", text));
-                                    })))),
-        tree,
-        parent);
+                                                 {
+                                                state.textFieldValue = text;
+                                                log(std::format("TextField committed: '{}'", text)); }))));
+    ya::ui::build(tree, parent, std::move(page));
 }
 
 void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
@@ -483,7 +472,7 @@ void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
     }
 
     auto hboxRef = hbox.share();
-    ya::ui::build(
+    auto page =
         ya::ui::panel("LayoutDemo")
             .fillParent()
             .setColor(kPanelColor)
@@ -510,15 +499,13 @@ void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                                     .setSize({220.0f, 22.0f})
                                     .setValue(state.layoutSpacing / 24.0f)
                                     .setOnValueChanged([&state, log, hboxRef](float value)
-                                    {
-                                        state.layoutSpacing = value * 24.0f;
-                                        if (hboxRef) {
-                                            hboxRef->setSpacing(state.layoutSpacing);
-                                        }
-                                        log(std::format("Spacing -> {:.1f}px", state.layoutSpacing));
-                                    })))),
-        tree,
-        parent);
+                                                       {
+                                                state.layoutSpacing = value * 24.0f;
+                                                if (hboxRef) {
+                                                    hboxRef->setSpacing(state.layoutSpacing);
+                                                }
+                                                log(std::format("Spacing -> {:.1f}px", state.layoutSpacing)); }))));
+    ya::ui::build(tree, parent, std::move(page));
 }
 
 void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
@@ -533,7 +520,7 @@ void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
         return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kTextColor);
     };
 
-    ya::ui::build(
+    auto page =
         ya::ui::panel("MenusDemo")
             .fillParent()
             .setColor(kPanelColor)
@@ -552,52 +539,50 @@ void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                             .setText("Open popup menu...")
                             .setSize({180.0f, 26.0f})
                             .setOnClick([&tree, &state, log]
-                            {
-                                auto menu = ya::UIMenu::create({
-                                    {"New Document",
-                                     [&state, log]
-                                     {
-                                         state.menuLog = "Menu: New Document";
-                                         log(state.menuLog);
-                                     }},
-                                    {"Open File...",
-                                     [&state, log]
-                                     {
-                                         state.menuLog = "Menu: Open File...";
-                                         log(state.menuLog);
-                                     }},
-                                    {"Save",
-                                     [&state, log]
-                                     {
-                                         state.menuLog = "Menu: Save";
-                                         log(state.menuLog);
-                                     }},
-                                    {"---", nullptr},
-                                    {"Quit",
-                                     [&state, log]
-                                     {
-                                         state.menuLog = "Menu: Quit";
-                                         log(state.menuLog);
-                                     }},
-                                });
-                                menu->openAt(tree, {300.0f, 220.0f});
-                            }),
+                                        {
+                                        auto menu = ya::UIMenu::create({
+                                            {"New Document",
+                                             [&state, log]
+                                             {
+                                                 state.menuLog = "Menu: New Document";
+                                                 log(state.menuLog);
+                                             }},
+                                            {"Open File...",
+                                             [&state, log]
+                                             {
+                                                 state.menuLog = "Menu: Open File...";
+                                                 log(state.menuLog);
+                                             }},
+                                            {"Save",
+                                             [&state, log]
+                                             {
+                                                 state.menuLog = "Menu: Save";
+                                                 log(state.menuLog);
+                                             }},
+                                            {"---", nullptr},
+                                            {"Quit",
+                                             [&state, log]
+                                             {
+                                                 state.menuLog = "Menu: Quit";
+                                                 log(state.menuLog);
+                                             }},
+                                        });
+                                        menu->openAt(tree, {300.0f, 220.0f}); }),
                         body("MenusKeys",
-                             "Keyboard: Up/Down move, Enter activates, Esc closes."))),
-        tree,
-        parent);
+                             "Keyboard: Up/Down move, Enter activates, Esc closes.")));
+    ya::ui::build(tree, parent, std::move(page));
 }
 
 void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                        const std::function<void(const std::string&)>& log)
 {
-    auto panel = std::make_shared<ya::UIPanel>("DragDropDemo");
+    auto panel        = std::make_shared<ya::UIPanel>("DragDropDemo");
     panel->_anchorMin = {0.0f, 0.0f};
     panel->_anchorMax = {1.0f, 1.0f};
     panel->setColor(kPanelColor);
     tree.attach(parent, panel);
 
-    auto form = std::make_shared<ya::UIContainer>("DragDropForm");
+    auto form        = std::make_shared<ya::UIContainer>("DragDropForm");
     form->_anchorMin = {0.0f, 0.0f};
     form->_anchorMax = {1.0f, 1.0f};
     form->setPadding({16.0f, 12.0f});
@@ -608,8 +593,8 @@ void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& 
 
     tree.attach(*form, makeLabel("Drag & drop — press an item, drag onto the zone"));
 
-    auto sourceRow = makeRow(tree, *form);
-    const std::vector<std::string> payloads = {"asset.texture.diffuse", "asset.mesh.cube", "asset.material.pbr"};
+    auto                           sourceRow = makeRow(tree, *form);
+    const std::vector<std::string> payloads  = {"asset.texture.diffuse", "asset.mesh.cube", "asset.material.pbr"};
     for (const std::string& payload : payloads) {
         auto item = std::make_shared<FDemoDragItem>("Drag_" + payload);
         item->setSize({160.0f, 30.0f});
@@ -621,7 +606,7 @@ void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& 
         }
     }
 
-    auto zone = std::make_shared<FDemoDropZone>("DropZone");
+    auto zone        = std::make_shared<FDemoDropZone>("DropZone");
     zone->_anchorMin = {0.0f, 0.0f};
     zone->_anchorMax = {1.0f, 0.0f};
     zone->setPosition({0.0f, 12.0f});
@@ -639,13 +624,13 @@ void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& 
 void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log)
 {
-    auto panel = std::make_shared<ya::UIPanel>("ModalDemo");
+    auto panel        = std::make_shared<ya::UIPanel>("ModalDemo");
     panel->_anchorMin = {0.0f, 0.0f};
     panel->_anchorMax = {1.0f, 1.0f};
     panel->setColor(kPanelColor);
     tree.attach(parent, panel);
 
-    auto form = std::make_shared<ya::UIContainer>("ModalForm");
+    auto form        = std::make_shared<ya::UIContainer>("ModalForm");
     form->_anchorMin = {0.0f, 0.0f};
     form->_anchorMax = {1.0f, 1.0f};
     form->setPadding({16.0f, 12.0f});
@@ -656,7 +641,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
 
     tree.attach(*form, makeLabel("Popup dialog — a transparent shield swallows outside clicks, no dimming"));
 
-    state.openModalButton = makeDemoButton("OpenModal", "Open dialog...", 180.0f);
+    state.openModalButton           = makeDemoButton("OpenModal", "Open dialog...", 180.0f);
     state.openModalButton->_onClick = [&tree, &state, log]
     {
         if (state.bModalOpen) {
@@ -675,7 +660,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
         dialog->setColor({0.16f, 0.18f, 0.22f, 1.0f});
         overlay->addDetachedChild(dialog);
 
-        auto stack = std::make_shared<ya::UIContainer>("ModalStack");
+        auto stack        = std::make_shared<ya::UIContainer>("ModalStack");
         stack->_anchorMin = {0.0f, 0.0f};
         stack->_anchorMax = {1.0f, 1.0f};
         // Inset via box padding, not position: an anchor span stretches to the
@@ -708,7 +693,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
         buttons->setSpacing(8.0f);
         stack->addDetachedChild(buttons);
 
-        auto okButton = makeDemoButton("ModalOK", "OK", 80.0f);
+        auto okButton      = makeDemoButton("ModalOK", "OK", 80.0f);
         okButton->_onClick = [&state, overlay, nameField, log]
         {
             state.modalName = nameField->_text;
@@ -717,7 +702,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
         };
         buttons->addDetachedChild(okButton);
 
-        auto cancelButton = makeDemoButton("ModalCancel", "Cancel", 80.0f);
+        auto cancelButton      = makeDemoButton("ModalCancel", "Cancel", 80.0f);
         cancelButton->_onClick = [&state, overlay, log]
         {
             log("Modal cancelled");
@@ -725,7 +710,8 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
         };
         buttons->addDetachedChild(cancelButton);
 
-        overlay->_onDismiss = [&state]() { state.bModalOpen = false; };
+        overlay->_onDismiss = [&state]()
+        { state.bModalOpen = false; };
         overlay->open(tree);
     };
     tree.attach(*form, state.openModalButton);
@@ -736,7 +722,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
 void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                           const std::function<void(const std::string&)>& log)
 {
-    auto panel = std::make_shared<ya::UIPanel>("ScrollSplitDemo");
+    auto panel        = std::make_shared<ya::UIPanel>("ScrollSplitDemo");
     panel->_anchorMin = {0.0f, 0.0f};
     panel->_anchorMax = {1.0f, 1.0f};
     panel->setColor(kPanelColor);
@@ -745,9 +731,9 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
     // Structural layout: one vertical container holds the header rows and
     // the split; the split is the stretch-last child that fills the remaining
     // content area, so no magic top padding / fixed header band is needed.
-    auto layout = std::make_shared<ya::UIContainer>("ScrollSplitLayout");
-    layout->_anchorMin        = {0.0f, 0.0f};
-    layout->_anchorMax        = {1.0f, 1.0f};
+    auto layout        = std::make_shared<ya::UIContainer>("ScrollSplitLayout");
+    layout->_anchorMin = {0.0f, 0.0f};
+    layout->_anchorMax = {1.0f, 1.0f};
     layout->setSize({0.0f, 0.0f});
     layout->setDirection(ya::EWidgetBoxLayout::Vertical);
     layout->setSpacing(10.0f);
@@ -770,7 +756,7 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
     // Left: scrollable list.
     auto scroll = std::make_shared<ya::UIScrollViewport>("DemoScroll");
     tree.attach(*split, scroll);
-    auto list = std::make_shared<ya::UIContainer>("DemoScrollList");
+    auto list        = std::make_shared<ya::UIContainer>("DemoScrollList");
     list->_anchorMin = {0.0f, 0.0f};
     list->_anchorMax = {1.0f, 1.0f};
     list->setDirection(ya::EWidgetBoxLayout::Vertical);
@@ -782,11 +768,11 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
         row->setSize({0.0f, 24.0f});
         row->setColor({0.18f + (i % 3) * 0.04f, 0.20f, 0.24f, 1.0f});
         tree.attach(*list, row);
-        auto text = makeBodyText(std::format("Scrollable entry {}", i + 1));
+        auto text        = makeBodyText(std::format("Scrollable entry {}", i + 1));
         text->_anchorMin = {0.0f, 0.0f};
         text->_anchorMax = {1.0f, 1.0f};
         text->setSize({0.0f, 0.0f});
-        text->_vAlign    = ya::EWidgetAlignV::Center;
+        text->_vAlign = ya::EWidgetAlignV::Center;
         text->setPosition({8.0f, 0.0f});
         tree.attach(*row, text);
     }
@@ -795,20 +781,20 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
     auto rightPane = std::make_shared<ya::UIPanel>("DemoSplitRight");
     rightPane->setColor({0.24f, 0.30f, 0.40f, 1.0f});
     tree.attach(*split, rightPane);
-    auto rightText = makeBodyText("Drag the divider between panes\nWheel scrolls the list");
+    auto rightText        = makeBodyText("Drag the divider between panes\nWheel scrolls the list");
     rightText->_anchorMin = {0.0f, 0.0f};
     rightText->_anchorMax = {1.0f, 1.0f};
     rightText->setSize({0.0f, 0.0f});
-    rightText->_hAlign    = ya::EWidgetAlignH::Center;
-    rightText->_vAlign    = ya::EWidgetAlignV::Center;
+    rightText->_hAlign = ya::EWidgetAlignH::Center;
+    rightText->_vAlign = ya::EWidgetAlignV::Center;
     tree.attach(*rightPane, rightText);
 }
 
 void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                       const std::function<void(const std::string&)>& log,
-                      const std::function<void(bool bDark)>& onToggleTheme)
+                      const std::function<void(bool bDark)>&         onToggleTheme)
 {
-    auto panel = std::make_shared<ya::UIPanel>("GalleryDemo");
+    auto panel        = std::make_shared<ya::UIPanel>("GalleryDemo");
     panel->_anchorMin = {0.0f, 0.0f};
     panel->_anchorMax = {1.0f, 1.0f};
     panel->setColor(kPanelColor);
@@ -817,12 +803,12 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     // The gallery content is taller than the viewport: wrap the form in a
     // scroll viewport so every section stays reachable and nothing paints
     // over the status bar.
-    auto scroll = std::make_shared<ya::UIScrollViewport>("GalleryScroll");
+    auto scroll        = std::make_shared<ya::UIScrollViewport>("GalleryScroll");
     scroll->_anchorMin = {0.0f, 0.0f};
     scroll->_anchorMax = {1.0f, 1.0f};
     tree.attach(*panel, scroll);
 
-    auto form = std::make_shared<ya::UIContainer>("GalleryForm");
+    auto form        = std::make_shared<ya::UIContainer>("GalleryForm");
     form->_bAutoSize = true;
     form->_anchorMin = {0.0f, 0.0f};
     form->_anchorMax = {1.0f, 0.0f};
@@ -842,15 +828,15 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     // Counter: a Reactive<int> feeds a bound label; the button mutates the
     // ref, not the widget — the text re-paints automatically.
-    auto counterRef = std::make_shared<ya::Reactive<int>>(0);
-    auto boundCounter = std::make_shared<ya::UIText>("GalleryBoundCounter");
+    auto counterRef          = std::make_shared<ya::Reactive<int>>(0);
+    auto boundCounter        = std::make_shared<ya::UIText>("GalleryBoundCounter");
     boundCounter->_bAutoSize = true;
     boundCounter->_fontSize  = 14;
-    auto counterStrRef = std::make_shared<ya::Reactive<std::string>>("Count: 0");
+    auto counterStrRef       = std::make_shared<ya::Reactive<std::string>>("Count: 0");
     boundCounter->bindText(counterStrRef);
     tree.attach(*form, boundCounter);
 
-    auto incButton = makeDemoButton("GalleryInc", "Increment (reactive)", 200.0f);
+    auto incButton      = makeDemoButton("GalleryInc", "Increment (reactive)", 200.0f);
     incButton->_onClick = [counterRef, counterStrRef, log]
     {
         const int next = counterRef->value() + 1;
@@ -862,12 +848,12 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     // Enabled flag: a Reactive<bool> drives a second button's enabled state
     // through UIButton::bindEnabled (paint-dirty on change).
-    auto enabledRef = std::make_shared<ya::Reactive<bool>>(true);
+    auto enabledRef      = std::make_shared<ya::Reactive<bool>>(true);
     auto dependentButton = makeDemoButton("GalleryDependent", "Enabled by reactive flag", 220.0f);
     dependentButton->bindEnabled(enabledRef);
     tree.attach(*form, dependentButton);
 
-    auto toggleButton = makeDemoButton("GalleryToggle", "Toggle enabled flag", 220.0f);
+    auto toggleButton      = makeDemoButton("GalleryToggle", "Toggle enabled flag", 220.0f);
     toggleButton->_onClick = [enabledRef, log]
     {
         const bool next = !enabledRef->value();
@@ -880,13 +866,13 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     // single-direction view <- model). Demonstrates the binding added for the
     // menu bar alongside the global shell menu.
     auto menuLabelRef = std::make_shared<ya::Reactive<std::string>>("Dynamic Item");
-    auto localBar = std::make_shared<ya::UIMenuBar>("GalleryMenuBar");
+    auto localBar     = std::make_shared<ya::UIMenuBar>("GalleryMenuBar");
     localBar->setSize({0.0f, 28.0f});
     auto dynItem = localBar->addItem("Dynamic Item", nullptr);
     dynItem->bindLabel(menuLabelRef);
     tree.attach(*form, localBar);
 
-    auto renameButton = makeDemoButton("GalleryRename", "Rename menu item (reactive)", 260.0f);
+    auto renameButton      = makeDemoButton("GalleryRename", "Rename menu item (reactive)", 260.0f);
     renameButton->_onClick = [menuLabelRef, log]
     {
         const std::string next = menuLabelRef->value() == "Dynamic Item" ? "Renamed!" : "Dynamic Item";
@@ -897,7 +883,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     // Split ratio driven by a Reactive<float> (UIStyleSplitPane::bindSplitRatio).
     auto ratioRef = std::make_shared<ya::Reactive<float>>(0.45f);
-    auto split = std::make_shared<ya::UISplitPane>("GallerySplit");
+    auto split    = std::make_shared<ya::UISplitPane>("GallerySplit");
     split->setSize({0.0f, 120.0f});
     split->bindSplitRatio(ratioRef);
     split->setMinFirstExtent(80.0f);
@@ -916,7 +902,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     tree.attach(*split, leftPane);
     tree.attach(*split, rightPane2);
 
-    auto leftText = makeBodyText("ratio <- reactive");
+    auto leftText        = makeBodyText("ratio <- reactive");
     leftText->_anchorMin = {0.0f, 0.0f};
     leftText->_anchorMax = {1.0f, 1.0f};
     leftText->setSize({0.0f, 0.0f});
@@ -924,7 +910,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     leftText->_vAlign = ya::EWidgetAlignV::Center;
     tree.attach(*leftPane, leftText);
 
-    auto rightText2 = makeBodyText("drag divider");
+    auto rightText2        = makeBodyText("drag divider");
     rightText2->_anchorMin = {0.0f, 0.0f};
     rightText2->_anchorMax = {1.0f, 1.0f};
     rightText2->setSize({0.0f, 0.0f});
@@ -932,7 +918,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     rightText2->_vAlign = ya::EWidgetAlignV::Center;
     tree.attach(*rightPane2, rightText2);
 
-    auto ratioButton = makeDemoButton("GalleryRatio", "Set ratio 0.25 (reactive)", 240.0f);
+    auto ratioButton      = makeDemoButton("GalleryRatio", "Set ratio 0.25 (reactive)", 240.0f);
     ratioButton->_onClick = [ratioRef, log]
     {
         ratioRef->set(0.25f);
@@ -948,18 +934,26 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     tree.attach(*form, makeLabel("2. TreeView (data-driven widget) + reactive selection"));
 
     auto roots = std::make_shared<ya::ReactiveList<ya::UITreeView::FNode>>();
-    roots->push({"root", "Scene Root", {
-        {"mesh", "Mesh", {}},
-        {"light", "Light", {
-            {"point", "Point Light", {}},
-            {"spot", "Spot Light", {}},
-        }},
-        {"camera", "Camera", {}},
-    }});
-    roots->push({"ui", "UI", {
-        {"hud", "HUD", {}},
-        {"menu", "Menu", {}},
-    }});
+    roots->push({
+        .id       = "root",
+        .label    = "Scene Root",
+        .children = {
+            {"mesh", "Mesh", {}},
+            {"light", "Light", {
+                                   {"point", "Point Light", {}},
+                                   {"spot", "Spot Light", {}},
+                               }},
+            {"camera", "Camera", {}},
+        },
+    });
+    roots->push({
+        .id       = "ui",
+        .label    = "UI",
+        .children = {
+            {"hud", "HUD", {}},
+            {"menu", "Menu", {}},
+        },
+    });
 
     auto treeView = std::make_shared<ya::UITreeView>("GalleryTree");
     // AutoSize: the tree grows/shrinks with the expanded-row count, so
@@ -970,7 +964,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     treeView->bindData(roots);
     treeView->setExpanded("root", true);
     treeView->_bReorderable = true;
-    treeView->_onReorder = [roots, log](const std::string& fromId, const std::string& toId, int mode)
+    treeView->_onReorder    = [roots, log](const std::string& fromId, const std::string& toId, int mode)
     {
         // Minimal demo reorder: move `fromId` within the ROOT list only
         // (before / after a root, or into a root as its child). The host
@@ -983,8 +977,8 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
             snapshot.push_back(roots->get(i));
         }
         // Find and remove `from` at the root level.
-        ya::UITreeView::FNode moved;
-        bool bFound = false;
+        ya::UITreeView::FNode              moved;
+        bool                               bFound = false;
         std::vector<ya::UITreeView::FNode> rebuilt;
         for (auto& n : snapshot) {
             if (n.id == fromId) {
@@ -1062,7 +1056,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     tree.attach(*filterRow, makeBodyText("Filter"));
     auto filterField = std::make_shared<ya::UITextField>("GalleryTreeFilter");
     filterField->setSize({160.0f, 24.0f});
-    filterField->_fontSize = 13;
+    filterField->_fontSize      = 13;
     filterField->_onTextChanged = [treeFilterRef](const std::string& text)
     {
         treeFilterRef->set(text);
@@ -1070,10 +1064,10 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     tree.attach(*filterRow, filterField);
 
     // Selected id mirror: a bound label subscribes to the tree's selection ref.
-    auto selectedLabel = std::make_shared<ya::UIText>("GallerySelected");
+    auto selectedLabel        = std::make_shared<ya::UIText>("GallerySelected");
     selectedLabel->_bAutoSize = true;
     selectedLabel->_fontSize  = 13;
-    auto selStrRef = std::make_shared<ya::Reactive<std::string>>("(none)");
+    auto selStrRef            = std::make_shared<ya::Reactive<std::string>>("(none)");
     // Mirror the tree's selection into a string ref the label binds to, so
     // the label re-paints through the reactive layer on every selection.
     selectedLabel->bindText(selStrRef);
@@ -1093,13 +1087,13 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     // ---------------------------------------------------------------------
     tree.attach(*form, makeLabel("3. Style system — tree theme restyles the group"));
 
-    auto styledText = std::make_shared<ya::UIText>("GalleryStyledText");
+    auto styledText        = std::make_shared<ya::UIText>("GalleryStyledText");
     styledText->_bAutoSize = true;
     styledText->setText("Styled text (themed)");
     styledText->_bFillBackground = true;
     tree.attach(*form, styledText);
 
-    auto styledCaption = std::make_shared<ya::UIText>("GalleryStyledCaption");
+    auto styledCaption        = std::make_shared<ya::UIText>("GalleryStyledCaption");
     styledCaption->_bAutoSize = true;
     styledCaption->setText("Another themed text resolving the same \"text\" key");
     styledCaption->_bFillBackground = true;
@@ -1108,7 +1102,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     // Buttons outlive this builder function: capture only values/shared_ptrs.
     auto bDarkRef = std::make_shared<bool>(true);
 
-    auto themeButton = makeDemoButton("GalleryTheme", "Toggle theme (dark/white)", 260.0f);
+    auto themeButton      = makeDemoButton("GalleryTheme", "Toggle theme (dark/white)", 260.0f);
     themeButton->_onClick = [bDarkRef, onToggleTheme, log]
     {
         *bDarkRef = !*bDarkRef;
@@ -1147,7 +1141,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     auto tableGrid = std::make_shared<ya::UITableGrid>("GalleryTableGrid");
     tableGrid->setSize({400.0f, 0.0f});
-    tableGrid->_bAutoSize = true;
+    tableGrid->_bAutoSize    = true;
     tableGrid->_columnWidths = {140.0f, 100.0f, 0.0f, 0.0f}; // last two stretch
     tableGrid->bindData(tableRows);
     auto tableSelRef = std::make_shared<ya::Reactive<int>>(1);
@@ -1184,29 +1178,31 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     tree.attach(*dragRow, makeBodyText("DragFloat"));
     auto dragFloat = std::make_shared<ya::UIDragFloat>("GalleryDragFloat");
     dragFloat->setSize({120.0f, 24.0f});
-    dragFloat->_value = 3.5f;
-    dragFloat->_onValueChanged = [log](float v) { log(std::format("DragFloat -> {:.2f}", v)); };
+    dragFloat->_value          = 3.5f;
+    dragFloat->_onValueChanged = [log](float v)
+    { log(std::format("DragFloat -> {:.2f}", v)); };
     tree.attach(*dragRow, dragFloat);
 
     auto spinRow = makeRow(tree, *form);
     tree.attach(*spinRow, makeBodyText("SpinBox"));
     auto spinBox = std::make_shared<ya::UISpinBox>("GallerySpinBox");
     spinBox->setSize({120.0f, 24.0f});
-    spinBox->_value = 8.0f;
-    spinBox->_step  = 1.0f;
-    spinBox->_onValueChanged = [log](float v) { log(std::format("SpinBox -> {:.2f}", v)); };
+    spinBox->_value          = 8.0f;
+    spinBox->_step           = 1.0f;
+    spinBox->_onValueChanged = [log](float v)
+    { log(std::format("SpinBox -> {:.2f}", v)); };
     tree.attach(*spinRow, spinBox);
 
     auto radioRow = makeRow(tree, *form);
     tree.attach(*radioRow, makeBodyText("Radio"));
-    auto groupValue = std::make_shared<int>(0);
-    auto radios = std::make_shared<std::vector<std::shared_ptr<ya::UIRadioButton>>>();
+    auto                           groupValue  = std::make_shared<int>(0);
+    auto                           radios      = std::make_shared<std::vector<std::shared_ptr<ya::UIRadioButton>>>();
     const std::vector<std::string> radioLabels = {"Shadow", "CSM", "None"};
     for (size_t i = 0; i < radioLabels.size(); ++i) {
         auto radio = std::make_shared<ya::UIRadioButton>(std::format("GalleryRadio{}", i));
         radio->setSize({90.0f, 22.0f});
-        radio->_label     = radioLabels[i];
-        radio->_bChecked  = static_cast<int>(i) == *groupValue;
+        radio->_label    = radioLabels[i];
+        radio->_bChecked = static_cast<int>(i) == *groupValue;
         // Capture shared_ptr by value: the button outlives this builder.
         radio->_onSelect = [radios, log, label = radioLabels[i]](ya::UIRadioButton* self)
         {
@@ -1223,7 +1219,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     tree.attach(*colorRow, makeBodyText("ColorEdit"));
     auto colorEdit = std::make_shared<ya::UIColorEdit>("GalleryColorEdit");
     colorEdit->setSize({170.0f, 28.0f});
-    colorEdit->_color = {0.24f, 0.46f, 0.82f, 1.0f};
+    colorEdit->_color          = {0.24f, 0.46f, 0.82f, 1.0f};
     colorEdit->_onColorChanged = [log](const glm::vec4& c)
     {
         log(std::format("Color -> ({:.2f}, {:.2f}, {:.2f}, {:.2f})", c.r, c.g, c.b, c.a));
@@ -1234,9 +1230,10 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     tree.attach(*searchRow, makeBodyText("SearchCombo"));
     auto searchCombo = std::make_shared<ya::UISearchComboBox>("GallerySearchCombo");
     searchCombo->setSize({180.0f, 24.0f});
-    searchCombo->_items = {"Cube", "Sphere", "Capsule", "Plane", "Cone", "Torus"};
-    searchCombo->_selectedIndex = 0;
-    searchCombo->_onSelectionChanged = [log](int index) { log(std::format("SearchCombo -> {}", index)); };
+    searchCombo->_items              = {"Cube", "Sphere", "Capsule", "Plane", "Cone", "Torus"};
+    searchCombo->_selectedIndex      = 0;
+    searchCombo->_onSelectionChanged = [log](int index)
+    { log(std::format("SearchCombo -> {}", index)); };
     tree.attach(*searchRow, searchCombo);
 
     // ---------------------------------------------------------------------
@@ -1249,23 +1246,25 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     for (int i = 0; i < 3; ++i) {
         auto source = std::make_shared<ya::UIDragSource>(std::format("GalleryDragSrc{}", i));
         source->setSize({110.0f, 26.0f});
-        source->_label = std::format("Item {}", i + 1);
-        source->_makePayload = [i] { return std::format("payload.{}", i + 1); };
+        source->_label       = std::format("Item {}", i + 1);
+        source->_makePayload = [i]
+        { return std::format("payload.{}", i + 1); };
         tree.attach(*dragDemoRow, source);
     }
 
-    auto dropRow = makeRow(tree, *form);
-    auto dropResult = std::make_shared<ya::Reactive<std::string>>("(drop something here)");
-    auto dropLabel = std::make_shared<ya::UIText>("GalleryDropResult");
+    auto dropRow          = makeRow(tree, *form);
+    auto dropResult       = std::make_shared<ya::Reactive<std::string>>("(drop something here)");
+    auto dropLabel        = std::make_shared<ya::UIText>("GalleryDropResult");
     dropLabel->_bAutoSize = true;
-    dropLabel->_fontSize = 13;
+    dropLabel->_fontSize  = 13;
     dropLabel->bindText(dropResult);
     tree.attach(*dropRow, dropLabel);
 
     auto dropZoneA = std::make_shared<ya::UIDropTarget>("GalleryDropA");
     dropZoneA->setSize({180.0f, 60.0f});
-    dropZoneA->_label = "Zone A: accepts any";
-    dropZoneA->_accept = [](const std::string&) { return true; };
+    dropZoneA->_label  = "Zone A: accepts any";
+    dropZoneA->_accept = [](const std::string&)
+    { return true; };
     dropZoneA->_onDrop = [dropResult, log](const std::string& payload, const glm::vec2&)
     {
         dropResult->set(std::format("Zone A <- {}", payload));
@@ -1278,7 +1277,8 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     dropZoneB->_label = "Zone B: only payload.2";
     // Zone B demonstrates the accept predicate: it only accepts payload.2
     // (the hover highlight appears only for the matching item).
-    dropZoneB->_accept = [](const std::string& payload) { return payload == "payload.2"; };
+    dropZoneB->_accept = [](const std::string& payload)
+    { return payload == "payload.2"; };
     dropZoneB->_onDrop = [dropResult, log](const std::string& payload, const glm::vec2&)
     {
         dropResult->set(std::format("Zone B <- {}", payload));
@@ -1294,13 +1294,13 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                            const std::function<void(const std::string&)>& log)
 {
-    auto panel = std::make_shared<ya::UIPanel>("InteractionsDemo");
+    auto panel        = std::make_shared<ya::UIPanel>("InteractionsDemo");
     panel->_anchorMin = {0.0f, 0.0f};
     panel->_anchorMax = {1.0f, 1.0f};
     panel->setColor(kPanelColor);
     tree.attach(parent, panel);
 
-    auto form = std::make_shared<ya::UIContainer>("InteractionsForm");
+    auto form        = std::make_shared<ya::UIContainer>("InteractionsForm");
     form->_anchorMin = {0.0f, 0.0f};
     form->_anchorMax = {1.0f, 1.0f};
     form->setPadding({16.0f, 12.0f});
@@ -1311,16 +1311,16 @@ void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoSta
 
     tree.attach(*form, makeLabel("Tooltip & wrapped text (editor-parity P6)"));
 
-    auto tipRow = makeRow(tree, *form);
+    auto tipRow        = makeRow(tree, *form);
     auto tooltipButton = makeDemoButton("TooltipBtn", "Hover me (tooltip)", 200.0f);
     tooltipButton->setTooltip("This tooltip appears after a 0.5s hover dwell.");
     tree.attach(*tipRow, tooltipButton);
 
-    auto wrappedText = std::make_shared<ya::UIText>("WrappedText");
-    wrappedText->_bWrap = true;
+    auto wrappedText           = std::make_shared<ya::UIText>("WrappedText");
+    wrappedText->_bWrap        = true;
     wrappedText->_maxWrapWidth = 360.0f;
-    wrappedText->_bAutoSize = true;
-    wrappedText->_fontSize = 13;
+    wrappedText->_bAutoSize    = true;
+    wrappedText->_fontSize     = 13;
     wrappedText->setText(
         "This paragraph demonstrates automatic text wrapping. Long content breaks onto "
         "multiple lines instead of overflowing its box, matching the editor's TextWrapped "
@@ -1336,15 +1336,17 @@ void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoSta
     group->setDirection(ya::EWidgetBoxLayout::Horizontal);
     group->setSpacing(8.0f);
     tree.attach(*form, group);
-    auto groupBtnA = makeDemoButton("GroupBtnA", "Group button A", 140.0f);
-    groupBtnA->_onClick = [log] { log("Group button A clicked"); };
+    auto groupBtnA      = makeDemoButton("GroupBtnA", "Group button A", 140.0f);
+    groupBtnA->_onClick = [log]
+    { log("Group button A clicked"); };
     tree.attach(*group, groupBtnA);
-    auto groupBtnB = makeDemoButton("GroupBtnB", "Group button B", 140.0f);
-    groupBtnB->_onClick = [log] { log("Group button B clicked"); };
+    auto groupBtnB      = makeDemoButton("GroupBtnB", "Group button B", 140.0f);
+    groupBtnB->_onClick = [log]
+    { log("Group button B clicked"); };
     tree.attach(*group, groupBtnB);
 
-    auto bGroupEnabled = std::make_shared<bool>(true);
-    auto toggleBtn = makeDemoButton("ToggleGroupBtn", "Toggle group enabled", 200.0f);
+    auto bGroupEnabled  = std::make_shared<bool>(true);
+    auto toggleBtn      = makeDemoButton("ToggleGroupBtn", "Toggle group enabled", 200.0f);
     toggleBtn->_onClick = [group, bGroupEnabled, log]
     {
         *bGroupEnabled = !*bGroupEnabled;
@@ -1356,15 +1358,15 @@ void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoSta
 
     // Modal dialog.
     tree.attach(*form, makeLabel("Modal dialog"));
-    auto openDialogBtn = makeDemoButton("OpenDialogBtn", "Open dialog...", 180.0f);
+    auto openDialogBtn      = makeDemoButton("OpenDialogBtn", "Open dialog...", 180.0f);
     openDialogBtn->_onClick = [&tree, log]
     {
-        auto content = std::make_shared<ya::UIText>("DialogContent");
+        auto content        = std::make_shared<ya::UIText>("DialogContent");
         content->_bAutoSize = true;
         content->_fontSize  = 13;
         content->_color     = {0.88f, 0.90f, 0.94f, 1.0f};
         content->setText("This is a modal dialog built on UIPopupOverlay's modal role.");
-        auto dialog = ya::UIDialog::create("Confirm", content);
+        auto dialog       = ya::UIDialog::create("Confirm", content);
         dialog->_onClosed = [log](bool bConfirmed)
         {
             const std::string result = bConfirmed ? "confirmed" : "cancelled";
@@ -1380,12 +1382,12 @@ void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoSta
 void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                    const std::function<void(const std::string&)>& log)
 {
-    auto dockWs = std::make_shared<ya::UIDockWorkspace>();
+    auto dockWs            = std::make_shared<ya::UIDockWorkspace>();
     dockWs->bAllowFloating = true;
     dockWs->bAllowTearOff  = true;
-    auto dock = std::make_shared<ya::UIDockSpace>("DemoDock");
-    dock->_anchorMin = {0.0f, 0.0f};
-    dock->_anchorMax = {1.0f, 1.0f};
+    auto dock              = std::make_shared<ya::UIDockSpace>("DemoDock");
+    dock->_anchorMin       = {0.0f, 0.0f};
+    dock->_anchorMax       = {1.0f, 1.0f};
     dock->setWorkspace(dockWs);
     tree.attach(parent, dock);
 
@@ -1395,28 +1397,28 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
 
     const auto makePanel = [](const std::string& name, const std::string& text)
     {
-        auto panel = std::make_shared<ya::UIPanel>(name + "_Body");
-        panel->_styleKey = "panel.canvas";
-        auto label = std::make_shared<ya::UIText>(name + "_Label");
+        auto panel        = std::make_shared<ya::UIPanel>(name + "_Body");
+        panel->_styleKey  = "panel.canvas";
+        auto label        = std::make_shared<ya::UIText>(name + "_Label");
         label->_anchorMin = {0.0f, 0.0f};
         label->_anchorMax = {1.0f, 1.0f};
         label->setPosition({12.0f, 12.0f});
         label->setSize({-24.0f, -24.0f});
-        label->_hAlign = ya::EWidgetAlignH::Center;
-        label->_vAlign = ya::EWidgetAlignV::Center;
+        label->_hAlign   = ya::EWidgetAlignH::Center;
+        label->_vAlign   = ya::EWidgetAlignV::Center;
         label->_fontSize = 14;
         label->setText(text);
         panel->addDetachedChild(label);
         return std::shared_ptr<ya::UIElement>(panel);
     };
 
-    const ya::DockPanelId sceneId = dockWs->addPanel("Scene", makePanel("Scene", "Scene viewport"));
+    const ya::DockPanelId sceneId     = dockWs->addPanel("Scene", makePanel("Scene", "Scene viewport"));
     const ya::DockPanelId hierarchyId = dockWs->addPanel("Hierarchy", makePanel("Hierarchy", "Actor hierarchy"));
     const ya::DockPanelId inspectorId = dockWs->addPanel("Inspector", makePanel("Inspector", "Inspector panel"));
-    const ya::DockPanelId consoleId = dockWs->addPanel("Console", makePanel("Console", "Console output"));
-    const ya::DockPanelId assetsId = dockWs->addPanel("Assets", makePanel("Assets", "Asset browser"));
+    const ya::DockPanelId consoleId   = dockWs->addPanel("Console", makePanel("Console", "Console output"));
+    const ya::DockPanelId assetsId    = dockWs->addPanel("Assets", makePanel("Assets", "Asset browser"));
 
-    auto& model = dockWs->dockModel();
+    auto&                model    = dockWs->dockModel();
     const ya::DockNodeId rootLeaf = model.getRootNode()->id;
     model.selectPanel(sceneId);
     model.splitLeaf(rootLeaf, ya::EDockCardinalSide::East, inspectorId, 0.74f);
@@ -1438,7 +1440,7 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
 
 void buildThemeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log,
-                    const std::function<void(bool bDark)>& onToggleTheme)
+                    const std::function<void(bool bDark)>&         onToggleTheme)
 {
     auto header = [](std::string key, const std::string& text, uint32_t fontSize = 13)
     {
@@ -1459,30 +1461,27 @@ void buildThemeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
     // Value-captured so the callback outlives this builder without dangling.
     auto bDark = std::make_shared<bool>(true);
 
-    ya::ui::build(
-        ya::ui::column("ThemeForm")
-            .setPadding({12.0f, 12.0f})
-            .setSpacing(8.0f)
-            .children(
-                header("ThemeTitle",
-                       "Theme — white/dark toggle drives the tree-level UITheme"),
-                header("ThemeHint",
-                       "Buttons below use style key \"button\"; toggling swaps the tree theme",
-                       12),
-                themedButton("ThemeToggle", "Toggle theme (dark/white)", 240.0f)
-                    .setOnClick([bDark, onToggleTheme, log]
-                    {
-                        *bDark = !*bDark;
-                        onToggleTheme(*bDark);
-                        log(std::format("Theme -> {}", *bDark ? "dark" : "white"));
-                    }),
-                themedButton("ThemeShowButton", "Themed button", 180.0f),
-                themedButton("ThemeShowButton2", "Another themed button", 180.0f),
-                header("ThemeButtonHint", "(both buttons share style key \"button\")", 11),
-                ya::ui::panel("ThemeShowPanel").setSize({180.0f, 40.0f}),
-                header("ThemeShowCaption", "Panel resolves style key \"panel\"", 11)),
-        tree,
-        parent);
+    auto page = ya::ui::column("ThemeForm")
+                    .setPadding({12.0f, 12.0f})
+                    .setSpacing(8.0f)
+                    .children(
+                        header("ThemeTitle",
+                               "Theme — white/dark toggle drives the tree-level UITheme"),
+                        header("ThemeHint",
+                               "Buttons below use style key \"button\"; toggling swaps the tree theme",
+                               12),
+                        themedButton("ThemeToggle", "Toggle theme (dark/white)", 240.0f)
+                            .setOnClick([bDark, onToggleTheme, log]
+                                        {
+                                *bDark = !*bDark;
+                                onToggleTheme(*bDark);
+                                log(std::format("Theme -> {}", *bDark ? "dark" : "white")); }),
+                        themedButton("ThemeShowButton", "Themed button", 180.0f),
+                        themedButton("ThemeShowButton2", "Another themed button", 180.0f),
+                        header("ThemeButtonHint", "(both buttons share style key \"button\")", 11),
+                        ya::ui::panel("ThemeShowPanel").setSize({180.0f, 40.0f}),
+                        header("ThemeShowCaption", "Panel resolves style key \"panel\"", 11));
+    ya::ui::build(tree, parent, std::move(page));
 
     (void)state;
 }
@@ -1499,7 +1498,7 @@ void buildUnicodeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
         return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kTextColor);
     };
 
-    ya::ui::build(
+    auto page =
         ya::ui::column("UnicodeForm")
             .setPadding({12.0f, 12.0f})
             .setSpacing(8.0f)
@@ -1512,9 +1511,8 @@ void buildUnicodeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
                 body("UnicodeEmoji", "Emoji: 😀 🎉 🚀 ❤️ 🍕 ✅"),
                 body("UnicodeMixed", "Mixed: 中文 + Latin + 123 + emoji 🎈"),
                 header("UnicodeLargeTitle", "Large CJK title", 20),
-                body("UnicodeLargeBody", "大字号中文标题：字体渲染验收")),
-        tree,
-        parent);
+                body("UnicodeLargeBody", "大字号中文标题：字体渲染验收"));
+    ya::ui::build(tree, parent, std::move(page));
 
     (void)state;
     (void)log;
@@ -1540,16 +1538,20 @@ void buildChineseTest(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     // Multiple fixed sizes: the eye compares weight/edge across px without
     // any live rebuild. 13px is the reported problem size.
-    struct Row { uint32_t px; const char* tag; };
+    struct Row
+    {
+        uint32_t    px;
+        const char* tag;
+    };
     static constexpr Row kRows[] = {
-        {9,  "小字"},
-        {11, "小字"},
-        {13, "正文"},
-        {16, "中字"},
-        {20, "大字"},
-        {24, "大字"},
-        {32, "特大"},
-        {40, "特大"},
+        {.px = 9, .tag = "小字"},
+        {.px = 11, .tag = "小字"},
+        {.px = 13, .tag = "正文"},
+        {.px = 16, .tag = "中字"},
+        {.px = 20, .tag = "大字"},
+        {.px = 24, .tag = "大字"},
+        {.px = 32, .tag = "特大"},
+        {.px = 40, .tag = "特大"},
     };
     for (const auto& r : kRows) {
         form.child(header(std::format("CjkRow{}", r.px),
@@ -1568,7 +1570,7 @@ void buildChineseTest(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     form.child(header("ChineseGrid",
                       "日 本 语 言 学 中 文 字 体 测 试 标 题 验 收 简 体 繁 体 汉 字 笔 画 粗 细 亮 度 边 缘"));
 
-    ya::ui::build(std::move(form), tree, parent);
+    ya::ui::build(tree, parent, std::move(form));
     state.statusText = "中文测试页面已构建（单一 CJK fallback：PingFang / msyh 优先）";
     (void)log;
 }
@@ -1579,13 +1581,13 @@ void buildRoundedRectDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
     // Showcases the SDF round-rect capability added to UIPanel: a single corner
     // radius (tree-local logical px) routes the panel fill through the shader's
     // SDF round-rect alpha branch. No texture is sampled for the corners.
-    auto panel = std::make_shared<ya::UIPanel>("RoundedRectDemo");
+    auto panel        = std::make_shared<ya::UIPanel>("RoundedRectDemo");
     panel->_anchorMin = {0.0f, 0.0f};
     panel->_anchorMax = {1.0f, 1.0f};
     panel->setColor(kPanelColor);
     tree.attach(parent, panel);
 
-    auto form = std::make_shared<ya::UIContainer>("RoundedForm");
+    auto form        = std::make_shared<ya::UIContainer>("RoundedForm");
     form->_anchorMin = {0.0f, 0.0f};
     form->_anchorMax = {1.0f, 1.0f};
     form->setPadding({16.0f, 12.0f});
@@ -1595,10 +1597,9 @@ void buildRoundedRectDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
     tree.attach(*panel, form);
 
     tree.attach(*form, makeLabel("Rounded Rect — SDF corner radius (UIPanel.setCornerRadius)"));
-    tree.attach(*form, makeBodyText(
-        "Each card below is a solid-color UIPanel with a corner radius. The radius is a single "
-        "tree-local logical-px value; the compose pass scales it to target px and the shader carves "
-        "the corners via a signed-distance field (no texture, no atlas)."));
+    tree.attach(*form, makeBodyText("Each card below is a solid-color UIPanel with a corner radius. The radius is a single "
+                                    "tree-local logical-px value; the compose pass scales it to target px and the shader carves "
+                                    "the corners via a signed-distance field (no texture, no atlas)."));
 
     // Row of cards at increasing radii to eyeball curve continuity / AA.
     auto grid = std::make_shared<ya::UIContainer>("RoundedGrid");
@@ -1607,10 +1608,16 @@ void buildRoundedRectDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
     grid->setSize({0.0f, 96.0f});
     tree.attach(*form, grid);
 
-    struct Card { const char* name; const char* label; glm::vec4 color; float radius; };
+    struct Card
+    {
+        const char* name;
+        const char* label;
+        glm::vec4   color;
+        float       radius;
+    };
     static constexpr Card kCards[] = {
-        {"Round0",  "0px",  {0.37f, 0.18f, 0.18f, 1.0f}, 0.0f},
-        {"Round8",  "8px",  {0.18f, 0.33f, 0.24f, 1.0f}, 8.0f},
+        {"Round0", "0px", {0.37f, 0.18f, 0.18f, 1.0f}, 0.0f},
+        {"Round8", "8px", {0.18f, 0.33f, 0.24f, 1.0f}, 8.0f},
         {"Round16", "16px", {0.18f, 0.25f, 0.38f, 1.0f}, 16.0f},
         {"Round32", "32px", {0.36f, 0.30f, 0.14f, 1.0f}, 32.0f},
     };
@@ -1621,7 +1628,7 @@ void buildRoundedRectDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
         card->setCornerRadius(c.radius);
         tree.attach(*grid, card);
 
-        auto text = makeBodyText(std::format("r={}", c.label));
+        auto text        = makeBodyText(std::format("r={}", c.label));
         text->_anchorMin = {0.0f, 0.0f};
         text->_anchorMax = {1.0f, 1.0f};
         text->_hAlign    = ya::EWidgetAlignH::Center;
@@ -1637,7 +1644,7 @@ void buildRoundedRectDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
     nestedCard->setCornerRadius(20.0f);
     tree.attach(*form, nestedCard);
 
-    auto inner = makeLabel("Rounded container with a sharp inner panel", 13.0f);
+    auto inner        = makeLabel("Rounded container with a sharp inner panel", 13.0f);
     inner->_anchorMin = {0.10f, 0.20f};
     inner->_anchorMax = {0.90f, 0.45f};
     tree.attach(*nestedCard, inner);
@@ -1648,9 +1655,8 @@ void buildRoundedRectDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
     sharp->_anchorMax = {0.90f, 0.85f};
     tree.attach(*nestedCard, sharp);
 
-    tree.attach(*form, makeBodyText(
-        "Expected: top-left card is a sharp rectangle; the others show progressively rounder corners. "
-        "The nested card keeps its rounded outer alpha while the inner panel stays sharp."));
+    tree.attach(*form, makeBodyText("Expected: top-left card is a sharp rectangle; the others show progressively rounder corners. "
+                                    "The nested card keeps its rounded outer alpha while the inner panel stays sharp."));
 
     state.statusText = "Rounded Rect demo built";
     (void)log;

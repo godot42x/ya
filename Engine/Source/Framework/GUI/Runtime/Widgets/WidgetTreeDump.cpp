@@ -140,15 +140,8 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
         }
         node["slot"] = std::move(slotNode);
     }
-    if (const auto* button = dynamic_cast<const UIButton*>(&element)) {
-        node["control"] = {
-            {"type", "button"},
-            {"hovered", button->_bHovered.get()},
-            {"pressed", button->_bPressed.get()},
-            {"focused", button->_bFocused.get()},
-        };
-    }
-    else if (const auto* checkBox = dynamic_cast<const UICheckBox*>(&element)) {
+    element.appendRuntimeDiagnostics(node, tree);
+    if (const auto* checkBox = dynamic_cast<const UICheckBox*>(&element)) {
         node["control"] = {
             {"type", "checkBox"},
             {"checked", checkBox->_bChecked},
@@ -168,19 +161,7 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
             {"label", combo->currentLabel()},
         };
     }
-    else if (const auto* textField = dynamic_cast<const UITextField*>(&element)) {
-        node["control"] = {
-            {"type", "textField"},
-            {"text", textField->_text},
-            {"cursor", textField->getCursorIndex()},
-        };
-    }
-    else if (const auto* text = dynamic_cast<const UIText*>(&element)) {
-        node["control"] = {
-            {"type", "text"},
-            {"text", text->getText()},
-        };
-    }
+
     else if (const auto* scroll = dynamic_cast<const UIScrollViewport*>(&element)) {
         node["control"] = {
             {"type", "scrollViewport"},

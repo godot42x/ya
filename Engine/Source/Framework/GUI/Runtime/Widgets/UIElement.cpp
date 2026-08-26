@@ -364,6 +364,12 @@ void UIElement::deserializeFields(const nlohmann::json& fields)
     invalidateProperty(EUIPropertyImpact::Layout);
 }
 
+void UIElement::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const
+{
+    (void)node;
+    (void)tree;
+}
+
 } // namespace ya
 
 // Enum reflection for serialization (must register at global scope; the

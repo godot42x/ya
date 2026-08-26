@@ -12,6 +12,15 @@
 namespace ya
 {
 
+void UIComboBox::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const
+{
+    node["control"] = {
+        {"type", "comboBox"},
+        {"selectedIndex", _selectedIndex},
+        {"label", currentLabel()},
+    };
+}
+
 void UIComboBox::select(int index)
 {
     if (index < 0 || index >= static_cast<int>(_items.size()) || index == _selectedIndex) {

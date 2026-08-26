@@ -78,6 +78,7 @@ struct YA_GUI_API UITextField : public UIElement
     void clampCursor() { _cursorIndex = std::min(_cursorIndex, _text.size()); }
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override { return _size; }
     void onFocusGained(bool /*bFromKeyboard*/) override { _bFocused = true; }

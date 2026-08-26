@@ -71,7 +71,7 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 ## 静态 DSL（live construct）
 
-- 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/...` + `ui::build(builder, tree, parent)` 在 Construct 时物化 live `UIElement`（Slate `SNew`）。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。
+- 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/...` 组好 builder，再单独 `ui::build(tree, parent, std::move(page))` 物化 live `UIElement`（Slate `SNew`）。不要把整棵 DSL 包进 `ui::build(...)`。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。
 - `UIDescription` / `UIReconciler` / `UIRenderController` / apply hook **已删除**。不要恢复 Description → apply → widget 转发层。
 - Document/script：`UIDocument::instantiate()`（registry factory）只实例化一次。变长集合走列表控件 + `ReactiveList`，不是整页 re-run。
 - `UIScreen` 是挂卸 / z-order / input blocking，不是每帧 `render()` owner。Gallery / Editor 不使用它；接到游戏多表面（HUD/模态）之前保持搁置。

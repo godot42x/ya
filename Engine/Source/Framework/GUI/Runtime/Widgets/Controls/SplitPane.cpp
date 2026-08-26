@@ -8,6 +8,22 @@
 namespace ya
 {
 
+void UISplitPane::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const
+{
+    const Rect2D divider = getDividerRect();
+    node["control"] = {
+        {"type", "splitPane"},
+        {"ratio", getSplitRatio()},
+        {"divider",
+         {
+             {"x", divider.pos.x},
+             {"y", divider.pos.y},
+             {"w", divider.extent.x},
+             {"h", divider.extent.y},
+         }},
+    };
+}
+
 namespace
 {
 

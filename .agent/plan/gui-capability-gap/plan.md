@@ -245,3 +245,4 @@ using UIDescription = std::variant<
 - **2026-08-25**：根据 Slate / React / Flutter / QML 对比，新增 P8 typed description 架构重构：公共 description + 控件专属 payload，先解决 `UIDescription` god struct，再继续扩展 DSL。
 - **2026-08-25**：明确静态 Slate 风格 DSL 是基础层，React 风格 `UIComponent`/`compose` 是上层扩展；移除 `content()` 兼容入口，禁止两种语义继续混用。
 - **2026-08-25**：进一步定案为三层架构：retained runtime → 强类型静态 builder/DSL → dynamic component/script；JSON bucket、反射与脚本 schema 只允许存在于动态边界，不进入底层热路径。
+- **2026-08-26 现状刷新（audit §5.5）**：对照实际代码，plan §3 规划的控件骨架（DockSpace / TableGrid / TreeView / DragDrop / ColorEdit / Menu / Dialog / Tooltip / TextWrap / Enabled）**多数已落地**，不再需要从零实现。真实剩余缺口收敛为：(1) P1 矢量绘制 `FLineRender` screen 路径（唯一零基础能力）；(2) TreeView/TableGrid/DragDrop 编辑链路成熟度 + `ImageCache` 纹理桥接 + 输入控件扩列（DragFloat/SpinBox/Radio/SearchComboBox）；(3) 每 feature 的 Gallery/Dock demo + `Scenarios/*.jsonl` 断言验证闭环。执行顺序不变（P1→…→P7 + 护栏插序），但各期工作性质从「实现控件」转为「补成熟度 + 写 demo/scenario」。

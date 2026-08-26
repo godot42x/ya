@@ -47,6 +47,15 @@ void UIText::paintSelf(UIFrameBuilder& builder)
     builder.addText(_layoutRect, text, style.textColor, font, _hAlign, _vAlign);
 }
 
+void UIText::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const
+{
+    (void)tree;
+    node["control"] = {
+        {"type", "text"},
+        {"text", getText()},
+    };
+}
+
 std::vector<std::string> UIText::wrapText(const std::string& text,
                                           const std::shared_ptr<Font>& font,
                                           float maxWidth)

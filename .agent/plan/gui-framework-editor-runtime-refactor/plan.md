@@ -38,7 +38,7 @@ builder → UIDescription（std::any payload + 双份 children）→ Reconciler.
 
 #### 硬规则（防止再走错）
 
-1. **默认 API 必须能直接建树。** 形态是 `UIElementRef root = ui::build(ui::column("root").children(...), tree, parent);` 或等价的 eager construct。Builder 在表达式求值结束时物化 widget；callback 在 Construct 时绑到 live `UIButton&`，不经过 Description 中转。
+1. **默认 API 必须能直接建树。** 形态是先组 builder，再 `UIElementRef root = ui::build(tree, parent, std::move(page));`。不要把整棵 DSL 包进 `ui::build(...)`。Builder 在表达式求值结束时物化 widget；callback 在 Construct 时绑到 live `UIButton&`，不经过 Description 中转。
 2. **禁止把 Description 树当静态页的宿主协议。** Workbench / Editor 的 DSL 页不得再以 `FPageRenderFn → UIRenderController → reconcile` 为默认。现有这条路是过渡实现，下一刀切到直接构建。
 3. **禁止继续给 `UIDescription` 加职责。** 不再往它里面堆 callback、dirty、auto-size 策略、每帧属性值。Apply hook 是 Description 路径的适配器，不是控件的主 API。
 4. **Apply 层不是架构必需品。** 它存在只因为 Description 是 type-erased 的延迟构造规格（`typeId` + `std::any`）。直接构建路径调用的是 `UIText::setText` / `bindText` / `UIButton::_onClick = ...`，没有 apply。
@@ -76,7 +76,7 @@ Document/script 形态：外部 schema → 一次性 typed spec → registry 工
 
 变长列表形态：`ReactiveList` → 列表/repeater 控件拥有行的创建与复用（内部可有 keyed diff，但不暴露为应用层 Description 树）。
 
-示意 API：`ui::build(ui::column("settings").children(ui::text("title").setText("Title"), ui::button("save").setText("Save")), tree, parent)` 是基础静态 DSL。不存在「函数每次重新返回 builder / Description」的默认循环；值更新走绑定。
+示意 API：`auto page = ui::column("settings").children(...); ui::build(tree, parent, std::move(page));` 是基础静态 DSL。不存在「函数每次重新返回 builder / Description」的默认循环；值更新走绑定。
 
 ### 渐进式实施原则
 

@@ -143,28 +143,26 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
 
     surface.addPage("DSL", [dslModel](ya::WidgetTree& tree, ya::UIElement& parent, const std::function<void(const std::string&)>&)
     {
-        ya::ui::build(
-            ya::ui::column("dsl-root")
-                .setDirection(ya::EWidgetBoxLayout::Vertical)
-                .setPadding(glm::vec2(16.0f))
-                .setSpacing(8.0f)
-                .children(
-                    ya::ui::text("dsl-title").setText("DSL Page (live construct)"),
-                    ya::ui::text("dsl-sub").setText("Typed builders attach real widgets; values bind through Reactive."),
-                    ya::ui::button("dsl-button")
-                        .child(ya::ui::text("dsl-button-label").bindText(dslModel->pressLabel))
-                        .setOnClick([dslModel]
-                        {
-                            ++dslModel->pressCount;
-                            dslModel->pressLabel->set("Pressed: " + std::to_string(dslModel->pressCount));
-                        }),
-                    ya::ui::row("dsl-row")
+        auto page = ya::ui::column("dsl-root")
+                        .setDirection(ya::EWidgetBoxLayout::Vertical)
+                        .setPadding(glm::vec2(16.0f))
                         .setSpacing(8.0f)
                         .children(
-                            ya::ui::text("dsl-cell-a").setText("cell A"),
-                            ya::ui::text("dsl-cell-b").setText("cell B"))),
-            tree,
-            parent);
+                            ya::ui::text("dsl-title").setText("DSL Page (live construct)"),
+                            ya::ui::text("dsl-sub").setText("Typed builders attach real widgets; values bind through Reactive."),
+                            ya::ui::button("dsl-button")
+                                .child(ya::ui::text("dsl-button-label").bindText(dslModel->pressLabel))
+                                .setOnClick([dslModel]
+                                {
+                                    ++dslModel->pressCount;
+                                    dslModel->pressLabel->set("Pressed: " + std::to_string(dslModel->pressCount));
+                                }),
+                            ya::ui::row("dsl-row")
+                                .setSpacing(8.0f)
+                                .children(
+                                    ya::ui::text("dsl-cell-a").setText("cell A"),
+                                    ya::ui::text("dsl-cell-b").setText("cell B")));
+        ya::ui::build(tree, parent, std::move(page));
     });
 
     applyStartPage();

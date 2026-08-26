@@ -39,6 +39,8 @@ WidgetTree、布局、输入、snapshot、compose 和 host 边界可继续作为
 
 JSON bucket、反射字段查找、脚本 schema 只允许作为 UIDocument/Script 到 typed description 的边界适配，不能进入 retained runtime 或静态 DSL 热路径。
 
+新增诊断边界：`UIElement::serializeFields()` 继续由反射负责 authored/UIDocument 持久化；`WidgetTreeDump::serializeNode()` 保留 WidgetTree 拓扑、slot/layout、focus/hover/capture 和其他 runtime 诊断。控件专属 runtime 诊断通过 `UIElement::appendRuntimeDiagnostics()` 扩展，不能混入 authored serialization。首批已迁移 UIButton、UIText、UITextField，JSON schema 保持不变。
+
 ## 下一步
 
 当前新增决策：第一阶段先稳定 retained runtime 与静态强类型 DSL；DSL 默认直接构建 live 树。UIComponent/render function、reconciler 不是默认路径。不先做 XML，也不让动态层替代 WidgetTree。
@@ -81,6 +83,8 @@ JSON bucket、反射字段查找、脚本 schema 只允许作为 UIDocument/Scri
 
 2026-08-26 checkpoint：G1 类型收口切片 1 完成。DeclarativeNodeAdapter 的 create/sameKind/kindName 改为通过 UITypeRegistry 解析 typeId（Column/Row→engine.container；Panel→engine.panel；Text→engine.text；Button→engine.button；TextField→engine.text_field），DSL 创建的 widget 现在携带正确的 _typeId（此前为空，破坏 type-id 查询）。EWidgetKind 仍作 DSL 作者侧枚举，registry 成为类型单一事实源。行为不变：ya-gui-declarative-contract-test 31/31（含新增 DslCreatedWidgetsCarryRegistryTypeId）、ya-gui-headless-host-test 13/13、ya-gui-widgets-test 174/174、ya-game-editor 编译通过。
 架构修订：G1 切片 2 不再把 UIDescription 改造成 typeId/stableKey/fields/children 的 JSON/反射字段桶。下一步改为：保留 typeId 收口，建立 typed static description/common/payload 的 adapter handlers；UIDocument/脚本反射只在动态边界转换到 typed description，静态 builder 与 retained runtime 不依赖反射。
+
+2026-08-26 checkpoint：runtime diagnostics 第一刀完成。新增 `UIElement::appendRuntimeDiagnostics()` 虚拟扩展点，将 Button/Text/TextField 的控制态 dump 从中央 `WidgetTreeDump.cpp` 下沉到控件自身；保留其余控件兼容分支，确保渐进迁移。`ya-gui-widgets-test` 164/164 通过。
 
 2026-08-26 checkpoint：G1 完成（刀1 enum→typeId 收口 + 刀2 typed builder/payload/apply hook 下沉 + G1收尾 typeId 常量单一事实源）。G1 门禁四项满足：重复应用不重建、未知 typeId 有诊断、静态 builder 不依赖反射、DeclarativeContractTest 31/31 全绿。
 

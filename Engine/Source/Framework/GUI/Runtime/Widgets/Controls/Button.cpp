@@ -65,6 +65,17 @@ void UIButton::paintSelf(UIFrameBuilder& builder)
     builder.addBrush(_layoutRect, fill);
 }
 
+void UIButton::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const
+{
+    (void)tree;
+    node["control"] = {
+        {"type", "button"},
+        {"hovered", _bHovered.get()},
+        {"pressed", _bPressed.get()},
+        {"focused", _bFocused.get()},
+    };
+}
+
 bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
     const EEvent::T eventType = event.getEventType();

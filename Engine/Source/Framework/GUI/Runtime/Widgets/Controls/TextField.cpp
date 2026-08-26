@@ -87,6 +87,16 @@ void UITextField::onFocusLost()
     }
 }
 
+void UITextField::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const
+{
+    (void)tree;
+    node["control"] = {
+        {"type", "textField"},
+        {"text", _text},
+        {"cursor", getCursorIndex()},
+    };
+}
+
 bool UITextField::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
     const EEvent::T eventType = event.getEventType();

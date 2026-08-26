@@ -8,7 +8,12 @@
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/WidgetTreeDump.h"
 #include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/CheckBox.h"
+#include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/ScrollViewport.h"
+#include "GUI/Widgets/Controls/Slider.h"
+#include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
@@ -155,6 +160,60 @@ TEST(WidgetTreeTest, DumpTreeCapturesRectAndTransientState)
     EXPECT_TRUE((*pressedNode)["hovered"]);
     EXPECT_TRUE((*pressedNode)["focused"]);
     EXPECT_TRUE((*pressedNode)["captured"]);
+}
+
+TEST(WidgetTreeTest, DumpUsesPerControlRuntimeDiagnosticsHooks)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+
+    auto checkBox = std::make_shared<UICheckBox>("Check");
+    checkBox->_bChecked = true;
+    auto slider = std::make_shared<UISlider>("Slider");
+    slider->_value = 0.75f;
+    slider->_step = 0.1f;
+    auto combo = std::make_shared<UIComboBox>("Combo");
+    combo->_items = {"One", "Two"};
+    combo->_selectedIndex = 1;
+    auto scroll = std::make_shared<UIScrollViewport>("Scroll");
+    auto split = std::make_shared<UISplitPane>("Split");
+    split->setSplitRatio(0.35f);
+
+    tree.attachToLayer(WidgetTree::ELayer::Content, checkBox);
+    tree.attachToLayer(WidgetTree::ELayer::Content, slider);
+    tree.attachToLayer(WidgetTree::ELayer::Content, combo);
+    tree.attachToLayer(WidgetTree::ELayer::Content, scroll);
+    tree.attachToLayer(WidgetTree::ELayer::Content, split);
+    tree.layout();
+
+    const nlohmann::json dump = dumpWidgetTree(tree);
+
+    const nlohmann::json* checkNode = findWidgetNode(dump, "Check");
+    ASSERT_NE(checkNode, nullptr);
+    EXPECT_EQ((*checkNode)["control"]["type"], "checkBox");
+    EXPECT_TRUE((*checkNode)["control"]["checked"]);
+
+    const nlohmann::json* sliderNode = findWidgetNode(dump, "Slider");
+    ASSERT_NE(sliderNode, nullptr);
+    EXPECT_EQ((*sliderNode)["control"]["type"], "slider");
+    EXPECT_FLOAT_EQ((*sliderNode)["control"]["value"], 0.75f);
+    EXPECT_FLOAT_EQ((*sliderNode)["control"]["step"], 0.1f);
+
+    const nlohmann::json* comboNode = findWidgetNode(dump, "Combo");
+    ASSERT_NE(comboNode, nullptr);
+    EXPECT_EQ((*comboNode)["control"]["type"], "comboBox");
+    EXPECT_EQ((*comboNode)["control"]["selectedIndex"], 1);
+    EXPECT_EQ((*comboNode)["control"]["label"], "Two");
+
+    const nlohmann::json* scrollNode = findWidgetNode(dump, "Scroll");
+    ASSERT_NE(scrollNode, nullptr);
+    EXPECT_EQ((*scrollNode)["control"]["type"], "scrollViewport");
+    EXPECT_FLOAT_EQ((*scrollNode)["control"]["offset"], 0.0f);
+
+    const nlohmann::json* splitNode = findWidgetNode(dump, "Split");
+    ASSERT_NE(splitNode, nullptr);
+    EXPECT_EQ((*splitNode)["control"]["type"], "splitPane");
+    EXPECT_FLOAT_EQ((*splitNode)["control"]["ratio"], 0.35f);
+    EXPECT_TRUE((*splitNode)["control"].contains("divider"));
 }
 
 TEST(WidgetTreeTest, RouteStateTracksPointerCaptureAndFocusPaths)

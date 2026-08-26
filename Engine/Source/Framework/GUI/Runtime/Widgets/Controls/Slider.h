@@ -47,6 +47,7 @@ struct YA_GUI_API UISlider : public UIElement
     std::function<void(float value)> _onValueChanged;
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void clearTransientInputState() override { _bDragging = false; }
 

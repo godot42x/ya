@@ -11,6 +11,14 @@
 namespace ya
 {
 
+void UICheckBox::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const
+{
+    node["control"] = {
+        {"type", "checkBox"},
+        {"checked", _bChecked},
+    };
+}
+
 namespace
 {
 

@@ -210,6 +210,12 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Restore reflected fields from a JSON object (base + own).
     void deserializeFields(const nlohmann::json& fields);
 
+    /// Append transient/runtime-only diagnostics for WidgetTreeDump. This is
+    /// intentionally separate from serializeFields(): diagnostics include
+    /// live control state and must never become authoring persistence.
+    virtual void appendRuntimeDiagnostics(nlohmann::json& node,
+                                          const WidgetTree& tree) const;
+
     // === Visual / layout / input properties ===
   protected:
     // Runtime mutable visual/layout properties (GI-202): encapsulated behind

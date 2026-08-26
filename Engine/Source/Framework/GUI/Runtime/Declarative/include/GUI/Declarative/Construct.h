@@ -632,8 +632,10 @@ class UIImageWidgetBuilder final : public TUIWidgetBuilder<UIImage, UIImageWidge
     return UIImageWidgetBuilder{std::move(key), std::move(displayName)};
 }
 
+/// Attach a constructed builder to `parent`. Assemble the builder first,
+/// then call this as its own statement — do not wrap the DSL in `build(...)`.
 template<UIWidgetBuilder TBuilder>
-UIElementRef build(TBuilder&& builder, WidgetTree& tree, UIElement& parent)
+UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder)
 {
     UIElementRef root = std::forward<TBuilder>(builder).release();
     YA_CORE_ASSERT(root, "ui::build: empty root");

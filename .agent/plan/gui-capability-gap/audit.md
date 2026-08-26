@@ -312,3 +312,45 @@ TextDisabled 68、SameLine 64、Text 63、TreePop 52、Button 47、Checkbox 46�
 ### 5.4 嵌合迁移跳板（已验证）
 
 GUIWorkbenchPanel 与 UIDesignerPanel 已实现「retain UI 渲染到 RenderTexture → ImGui 面板内 Image 展示 + 输入转发」——迁移第一步不是换控件，而是把面板内容迁到自有控件、ImGui 继续做壳。
+
+### 5.5 现状刷新（2026-08-26，对照实际代码）
+
+> 自 2026-08-18 调研以来，GUI/Runtime 已自发落地 plan §3 大部分控件骨架。§5.3 缺口表的「完全缺失」结论已过时，本段以代码事实重排。
+
+#### 5.5.1 已落地（从缺口划除，无需从零实现）
+
+| 原 §5.3 缺口 | 当前代码事实 | 落地状态 |
+|---|---|---|
+| DockSpace（P0） | `UIDockSpace` + `UIDockWorkspace`（`Controls/DockSpace.h` / `DockWorkspace.h`） | ✅ 控件已落地 |
+| DragDrop（P0） | `UIDragSource` + `UIDropTarget`（`Controls/DragDrop.h`），复用 WidgetTree drag 会话 | ✅ 控件已落地 |
+| Table（P0） | `UITableGrid`（`Controls/TableGrid.h`，继承 UIElement） | ✅ 控件已落地（需补 header/row 编辑 API） |
+| TreeView 编辑（P0） | `UITreeView`（`Controls/TreeView.h`）完整控件 | ✅ 骨架已升级为控件（需补重排/右键/过滤三能力） |
+| 输入控件 DragFloat/SpinBox/RadioButton/ColorEdit（P0） | `UIColorEdit`（`Controls/InputExtras.h`）、`UISlider`/`UITextField`/`UICheckBox`/`UIComboBox` | ✅ ColorEdit 已落地；DragFloat/SpinBox/Radio 仍需补 |
+| 模态对话框（P1） | `UIDialog` 基于 `UIPopupOverlay`（Modal 角色） | ✅ 壳已落地 |
+| tooltip（P1） | `UIElement::setTooltip` + `_tooltipHost`（`UIElement.h` / `WidgetTree.h`） | ✅ 挂载机制已落地 |
+| TextWrapped（P1） | `UIText::_bWrap`（`Controls/Text.h`） | ✅ 换行标志已落地（需确认分行 paint 完整） |
+| BeginDisabled（P1） | `UIElement::_bEnabled` + `setEnabled` + `isEnabledInTree`（`UIElement.h`） | ✅ 子树禁用已落地 |
+| Menu/MenuBar（P0-P1） | `UIMenu` / `UIMenuItem` / `UIMenuBar`（`Controls/Menu.h` / `MenuBar.h`） | ✅ 已落地 |
+| TabBar / SplitPane / ScrollViewport / Image | `UITabBar` / `UISplitPane` / `UIScrollViewport` / `UIImage` | ✅ 已落地 |
+
+#### 5.5.2 真实剩余缺口（按替换 GameEditor ImGui 的阻塞度）
+
+| 优先级 | 缺口 | 说明 |
+|:---:|---|---|
+| P0 | **ImDrawList 矢量绘制**（AddRect/AddLine/AddBezierCubic） | 自定义曲线、debug 覆盖层、gizmo helper 线。plan P1 已设计 `FLineRender` screen 路径，未落地 |
+| P0 | **纹理管理桥接**（ImTextureID → 自研 ImageCache + 8 帧 GC） | `UIImage` 是否接全局纹理缓存 + 延迟 GC 未核实；ImGui 的 `AddTexture` 等价物 |
+| P0 | **IME / 剪贴板桥接** | 范围原定排除，但若要完全剔除 ImGui 输入层，TextField 中文输入与复制粘贴需宿主桥接 |
+| P1 | **DragFloat / SpinBox / RadioButton / SearchComboBox** | plan P3 规划的新输入控件，仅 ColorEdit 已落地 |
+| P1 | **TreeView 三能力成熟度**：拖拽重排 / 右键菜单 / 过滤搜索 | `UITreeView` 控件在，但编辑链路未验证 |
+| P1 | **TableGrid 编辑 API**：header/列定义/单元格编辑/选中 | `UITableGrid` 控件在，但 `setHeader/addRow/onCellEdited` 未在头文件暴露 |
+| P2 | **样式栈 / StyleSet 成熟度** | `UIStyleSet::define` 同名语义（plan G-A G4）已设计，需验证 |
+| P2 | **PushID 作用域** | 自研 `_name/_typeId` 身份体系基本天然覆盖，降级为验证项 |
+| 排除 | ImGuizmo（3D gizmo）/ 字体 CJK+emoji 回退链 | 非 GUI App 线，按原范围不做 |
+
+#### 5.5.3 刷新结论
+
+- 「能力补齐」主线（plan §3 的 P1-P7）**不需要从零实现控件**，绝大多数骨架已存在；真实工作收敛为三块：
+  1. **绘制层**：P1 矢量 draw item + `FLineRender` screen 路径（唯一未动工的基础能力）。
+  2. **成熟度 + API 暴露**：TreeView/TableGrid/DragDrop 的编辑链路补完、`ImageCache` 桥接、输入控件扩列。
+  3. **验证闭环**：每个 feature 在 `GUIWorkbench` Gallery/Dock 页写 demo + `Scenarios/*.jsonl` 断言（plan 已规划 scenario 验收）。
+- 下一步建议（见 plan.md 修订）：从 **P1 矢量绘制** 开刀（唯一零基础的能力），再沿 P2→P3→P4→P5→P6→P7 补成熟度与 scenario，护栏 G-A/G-B/G-C 按原插序保留。

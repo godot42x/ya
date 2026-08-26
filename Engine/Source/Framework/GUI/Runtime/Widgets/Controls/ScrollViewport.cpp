@@ -9,6 +9,15 @@
 namespace ya
 {
 
+void UIScrollViewport::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const
+{
+    node["control"] = {
+        {"type", "scrollViewport"},
+        {"offset", getScrollOffset()},
+        {"maxOffset", getMaxScrollOffset()},
+    };
+}
+
 void UIScrollViewport::layout(const Rect2D& parentRect)
 {
     layoutAssigned(computeAnchorRect(parentRect));

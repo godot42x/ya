@@ -55,6 +55,7 @@ struct YA_GUI_API UIComboBox : public UIElement
     }
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
     void resetHoverState() override { _bHovered = false; }
