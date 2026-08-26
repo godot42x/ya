@@ -1,4 +1,5 @@
 #include "GUI/Widgets/UIElement.h"
+#include "GUI/Widgets/WidgetTree.h"
 
 #include "Core/Log.h"
 #include "Core/Reflection/ReflectionSerializer.h"
@@ -368,6 +369,37 @@ void UIElement::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&
 {
     (void)node;
     (void)tree;
+}
+
+bool UIElement::canAcceptDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+{
+    return canAcceptDrop(operation.payload, logicalPoint);
+}
+
+void UIElement::onDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+{
+    onDrop(operation.payload, logicalPoint);
+}
+
+void UIElement::updateDropHover(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+{
+    updateDropHover(operation.payload, logicalPoint);
+}
+
+bool UIElement::beginDragOperation(UIDragDropOperationRef operation,
+                                   bool bShowGhost,
+                                   bool bSkipSourceInHitTest)
+{
+    if (!_tree || !operation) {
+        return false;
+    }
+    _tree->beginDrag(this, std::move(operation), {}, bShowGhost, bSkipSourceInHitTest);
+    return true;
+}
+
+void UIElement::appendRuntimeLayoutDiagnostics(nlohmann::json& node) const
+{
+    (void)node;
 }
 
 } // namespace ya

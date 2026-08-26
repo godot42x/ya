@@ -130,6 +130,37 @@ struct TestDropTarget final : public UIElement
     }
 };
 
+struct OperationDropTarget final : public UIElement
+{
+    explicit OperationDropTarget(std::string name) : UIElement(std::move(name)) {}
+    bool accepted = false;
+    std::string receivedType;
+    bool canAcceptDrop(const UIDragDropOperation& operation, const glm::vec2&) override
+    {
+        receivedType = operation.typeId;
+        return operation.typeId == "test.asset";
+    }
+    void onDrop(const UIDragDropOperation& operation, const glm::vec2&) override
+    {
+        accepted = operation.payload == "asset:42";
+    }
+};
+
+struct DragDetectWidget final : public UIElement
+{
+    explicit DragDetectWidget(std::string name) : UIElement(std::move(name)) {}
+    UIDragDropOperationRef onDragDetected(const FDragDetectedEvent& event) override
+    {
+        detected = event.currentPoint.x > event.startPoint.x;
+        auto op = std::make_shared<UIDragDropOperation>();
+        op->typeId = "test.detected";
+        op->payload = "detected";
+        op->ghostLabel = "Detected";
+        return op;
+    }
+    bool detected = false;
+};
+
 } // namespace
 
 // === WidgetTreeDump ===
@@ -214,6 +245,46 @@ TEST(WidgetTreeTest, DumpUsesPerControlRuntimeDiagnosticsHooks)
     EXPECT_EQ((*splitNode)["control"]["type"], "splitPane");
     EXPECT_FLOAT_EQ((*splitNode)["control"]["ratio"], 0.35f);
     EXPECT_TRUE((*splitNode)["control"].contains("divider"));
+}
+
+TEST(WidgetTreeTest, DragOperationReachesTypedDropTarget)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto target = std::make_shared<OperationDropTarget>("Target");
+    target->setPosition({40.0f, 40.0f});
+    target->setSize({160.0f, 100.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, target);
+    tree.layout();
+
+    auto operation = std::make_shared<UIDragDropOperation>();
+    operation->typeId = "test.asset";
+    operation->payload = "asset:42";
+    operation->ghostLabel = "Asset";
+    tree.beginDrag(nullptr, operation, {}, false);
+    tree.updateDrag({80.0f, 80.0f});
+    EXPECT_EQ(target->receivedType, "test.asset");
+    tree.endDrag({80.0f, 80.0f});
+    EXPECT_TRUE(target->accepted);
+    EXPECT_FALSE(tree.isDragging());
+}
+
+TEST(WidgetTreeTest, DragDetectionInvokesWidgetCallbackWithoutDragSourceControl)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto source = std::make_shared<DragDetectWidget>("Source");
+    source->setPosition({20.0f, 20.0f});
+    source->setSize({120.0f, 80.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, source);
+    tree.layout();
+
+    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f));
+    tree.dispatchEvent(MouseMoveEvent(60.0f, 40.0f), pointAt(60.0f, 40.0f));
+
+    EXPECT_TRUE(source->detected);
+    ASSERT_TRUE(tree.isDragging());
+    ASSERT_NE(tree.getDragOperation(), nullptr);
+    EXPECT_EQ(tree.getDragOperation()->typeId, "test.detected");
+    tree.cancelDrag();
 }
 
 TEST(WidgetTreeTest, RouteStateTracksPointerCaptureAndFocusPaths)

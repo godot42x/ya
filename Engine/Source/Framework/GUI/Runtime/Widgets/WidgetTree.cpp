@@ -742,6 +742,29 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
         dispatchRoute(target, event, ctx, classifyPointerRoute(buildPath(target)),
                       /*bAppendTrace=*/false);
 
+    if (eventType == EEvent::MouseButtonPressed) {
+        _dragCandidate = target;
+        _dragCandidateStart = ctx.logicalPoint;
+    }
+    else if (eventType == EEvent::MouseMoved && _dragCandidate && !_dragCandidate->isAttached()) {
+        _dragCandidate = nullptr;
+    }
+    if (eventType == EEvent::MouseMoved && _dragCandidate && !isDragging()) {
+        if (glm::length(ctx.logicalPoint - _dragCandidateStart) > 6.0f) {
+            UIElementRef candidate = _dragCandidate->shared_from_this();
+            auto operation = candidate->onDragDetected({_dragCandidateStart, ctx.logicalPoint});
+            _dragCandidate = nullptr;
+            if (operation) {
+                beginDrag(candidate.get(), std::move(operation));
+                setRouteTrace(EWidgetRoutePolicy::DragSession, candidate.get());
+                return EWidgetRouteResult::HandledExclusive;
+            }
+        }
+    }
+    if (eventType == EEvent::MouseButtonReleased) {
+        _dragCandidate = nullptr;
+    }
+
     // Pressing a non-focusable widget (or empty space) releases focus, so an
     // in-place edit never keeps swallowing keys after the user clicked away.
     if (eventType == EEvent::MouseButtonPressed &&
@@ -1089,11 +1112,27 @@ void WidgetTree::beginDrag(UIElement* source,
                            bool bShowGhost,
                            bool bSkipSourceInHitTest)
 {
+    auto operation = std::make_shared<UIDragDropOperation>();
+    operation->payload = std::move(payload);
+    operation->ghostLabel = std::move(ghostLabel);
+    beginDrag(source, std::move(operation), std::move(observer), bShowGhost, bSkipSourceInHitTest);
+}
+
+void WidgetTree::beginDrag(UIElement* source,
+                           UIDragDropOperationRef operation,
+                           DragSessionObserver observer,
+                           bool bShowGhost,
+                           bool bSkipSourceInHitTest)
+{
     if (isDragging()) {
         cancelDrag();
     }
+    if (!operation) {
+        return;
+    }
     _dragSource  = source;
-    _dragPayload = std::move(payload);
+    _dragOperation = std::move(operation);
+    _dragPayload = _dragOperation->payload;
     _dragPoint   = {};
     _dragObserver = std::move(observer);
     _bDragSkipSource = bSkipSourceInHitTest;
@@ -1112,7 +1151,7 @@ void WidgetTree::beginDrag(UIElement* source,
     ghost->setSize({160.0f, 24.0f});
 
     auto label = std::make_shared<UIText>("DragGhostLabel");
-    label->setText(std::move(ghostLabel));
+    label->setText(_dragOperation->ghostLabel);
     label->_fontSize = 13;
     label->_color    = {0.95f, 0.96f, 0.98f, 1.0f};
     label->_anchorMin = {0.0f, 0.0f};
@@ -1130,7 +1169,7 @@ void WidgetTree::beginDrag(UIElement* source,
 UIElement* WidgetTree::findDropTarget(const glm::vec2& logicalPoint) const
 {
     for (UIElement* node = topmostHit(logicalPoint); node != nullptr; node = node->getParent()) {
-        if (node->canAcceptDrop(_dragPayload, logicalPoint)) {
+        if (_dragOperation && node->canAcceptDrop(*_dragOperation, logicalPoint)) {
             return node;
         }
     }
@@ -1158,14 +1197,14 @@ void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
         _dragDropTarget = target;
         if (_dragDropTarget) {
             _dragDropTarget->setDropHighlight(true);
-            _dragDropTarget->updateDropHover(_dragPayload, logicalPoint);
+            _dragDropTarget->updateDropHover(*_dragOperation, logicalPoint);
         }
     }
     else if (_dragDropTarget) {
         // Hover feedback follows the pointer even when the target is unchanged
         // (point-sensitive previews: dock spaces resolve their highlight per
         // move via updateDropHover).
-        _dragDropTarget->updateDropHover(_dragPayload, logicalPoint);
+        _dragDropTarget->updateDropHover(*_dragOperation, logicalPoint);
     }
 
     const std::string currentTargetName = target ? target->_name : std::string{};
@@ -1184,7 +1223,9 @@ void WidgetTree::clearDragSession()
         _dragDropTarget = nullptr;
     }
     _dragPayload.clear();
+    _dragOperation.reset();
     _dragSource = nullptr;
+    _dragCandidate = nullptr;
     _bDragSkipSource = false;
     if (_dragGhost && _dragGhost->isAttached()) {
         detach(*_dragGhost); // payload already cleared: no recursive cancel
@@ -1199,12 +1240,15 @@ void WidgetTree::endDrag(const glm::vec2& logicalPoint)
     }
     UIElement*       target  = findDropTarget(logicalPoint);
     UIElementRef      targetKeepAlive = target ? target->shared_from_this() : nullptr;
+    UIDragDropOperationRef operation = _dragOperation;
     const std::string payload = _dragPayload;
     const std::string targetName = target ? target->_name : std::string{};
     DragSessionObserver observer = std::move(_dragObserver);
     clearDragSession();
     if (target) {
-        targetKeepAlive->onDrop(payload, logicalPoint);
+        if (operation) {
+            targetKeepAlive->onDrop(*operation, logicalPoint);
+        }
     }
     if (observer.onFinished) {
         observer.onFinished(target ? EDragFinishResult::Dropped : EDragFinishResult::NoTarget,

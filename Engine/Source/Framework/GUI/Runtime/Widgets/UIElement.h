@@ -103,6 +103,19 @@ enum class ECursorType : uint8_t
 };
 
 struct WidgetTree;
+struct UIDragDropOperation
+{
+    std::string typeId = "text";
+    std::string payload;
+    std::string ghostLabel;
+};
+using UIDragDropOperationRef = std::shared_ptr<UIDragDropOperation>;
+struct FDragDetectedEvent
+{
+    glm::vec2 startPoint{};
+    glm::vec2 currentPoint{};
+};
+struct DragSessionObserver;
 struct WidgetAttachment;
 struct UIElement;
 class UISlot;
@@ -215,6 +228,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// live control state and must never become authoring persistence.
     virtual void appendRuntimeDiagnostics(nlohmann::json& node,
                                           const WidgetTree& tree) const;
+    virtual void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const;
 
     // === Visual / layout / input properties ===
   protected:
@@ -401,9 +415,12 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// tree highlights it as a valid drop target during a drag session).
     [[nodiscard]] virtual bool canAcceptDrop(const std::string& /*payload*/,
                                              const glm::vec2& /*logicalPoint*/) { return false; }
+    [[nodiscard]] virtual bool canAcceptDrop(const UIDragDropOperation& operation,
+                                             const glm::vec2& logicalPoint);
     /// Called when a drag session is released over this target (only after
     /// canAcceptDrop returned true for that point).
     virtual void onDrop(const std::string& /*payload*/, const glm::vec2& /*logicalPoint*/) {}
+    virtual void onDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
     /// Visual feedback while the drag hovers this target (cleared on leave /
     /// drop / cancel). Targets with a point-SENSITIVE preview (e.g. a dock
     /// space whose highlight follows the pointer) override updateDropHover
@@ -415,6 +432,14 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// no-op — targets without a moving preview keep using setDropHighlight.
     virtual void updateDropHover(const std::string& /*payload*/,
                                  const glm::vec2& /*logicalPoint*/) {}
+    virtual void updateDropHover(const UIDragDropOperation& operation,
+                                 const glm::vec2& logicalPoint);
+    /// Start an operation owned by the widget tree. Any UIElement may invoke
+    /// this; UIDragSource is only the default pointer-gesture helper.
+    bool beginDragOperation(UIDragDropOperationRef operation,
+                            bool bShowGhost = true,
+                            bool bSkipSourceInHitTest = false);
+    virtual UIDragDropOperationRef onDragDetected(const FDragDetectedEvent&) { return nullptr; }
 
     // === Reactive dependency tracking ===
     /// Mark this widget paint-dirty (called by ReactiveBase::notifyDependents).

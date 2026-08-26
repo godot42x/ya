@@ -6,10 +6,11 @@
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
-#include "GUI/Widgets/Controls/DragDrop.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
+#include "GUI/Widgets/Controls/Overlay.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
+#include "GUI/Widgets/Controls/SizeBox.h"
 #include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TableGrid.h"
@@ -63,6 +64,27 @@ nlohmann::json routeResultName(EWidgetRouteResult result)
     return "unknown";
 }
 
+nlohmann::json marginJson(const FMargin& margin)
+{
+    return {
+        {"left", margin.left},
+        {"top", margin.top},
+        {"right", margin.right},
+        {"bottom", margin.bottom},
+    };
+}
+
+const char* overlayAlignName(EUIOverlayAlignment align)
+{
+    switch (align) {
+    case EUIOverlayAlignment::Fill: return "fill";
+    case EUIOverlayAlignment::Start: return "start";
+    case EUIOverlayAlignment::Center: return "center";
+    case EUIOverlayAlignment::End: return "end";
+    }
+    return "unknown";
+}
+
 nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
 {
     nlohmann::json node;
@@ -82,185 +104,13 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
     node["hovered"]     = tree.getHovered() == &element;
     node["captured"]    = tree.getPointerCapture() == &element;
 
-    if (const auto* box = dynamic_cast<const UIContainer*>(&element)) {
-        const UIBoxLayout& layout = box->getBoxLayout();
-        node["layout"] = {
-            {"type", "box"},
-            {"direction", layout.getDirection() == EWidgetBoxLayout::Horizontal ? "horizontal" : "vertical"},
-            {"spacing", layout.getSpacing()},
-            {"padding", {{"x", layout.getPadding().x}, {"y", layout.getPadding().y}}},
-            {"mainAxisAlignment", static_cast<int>(layout.getMainAxisAlignment())},
-            {"clipsChildren", layout.clipsChildren()},
-            {"stretchLastChild", layout.stretchesLastChild()},
-        };
-    }
-    else if (const auto* button = dynamic_cast<const UIButton*>(&element)) {
-        node["layout"] = {
-            {"type", "singleChild"},
-            {"padding",
-             {
-                 {"x", button->getContentPadding().x},
-                 {"y", button->getContentPadding().y},
-             }},
-        };
-    }
-    else if (const auto* split = dynamic_cast<const UISplitPane*>(&element)) {
-        const UISplitLayout& layout = split->getSplitLayout();
-        node["layout"] = {
-            {"type", "split"},
-            {"orientation", layout.getOrientation() == ESplitOrientation::Vertical ? "vertical" : "horizontal"},
-            {"ratio", layout.getSplitRatio()},
-            {"dividerThickness", layout.getDividerThickness()},
-            {"minFirstExtent", layout.getMinFirstExtent()},
-            {"minSecondExtent", layout.getMinSecondExtent()},
-        };
-    }
-    else if (const auto* scroll = dynamic_cast<const UIScrollViewport*>(&element)) {
-        const UIScrollLayout& layout = scroll->getScrollLayout();
-        node["layout"] = {
-            {"type", "scroll"},
-            {"axis", layout.getAxis() == EScrollAxis::Vertical ? "vertical" : "horizontal"},
-            {"offset", layout.getScrollOffset()},
-            {"maxOffset", layout.getMaxScrollOffset()},
-            {"step", layout.getScrollStep()},
-        };
-    }
+    element.appendRuntimeLayoutDiagnostics(node["layout"]);
     if (const UISlot* slot = element.getSlot()) {
-        nlohmann::json slotNode = {
-            {"parent", slot->getParent()._name},
-            {"type", "base"},
-        };
-        if (const auto* boxSlot = dynamic_cast<const UIBoxSlot*>(slot)) {
-            slotNode["type"] = "box";
-            slotNode["sizeRule"] = boxSlot->getSizeRule() == EUIBoxSlotSizeRule::Fill ? "fill" : "auto";
-            slotNode["weight"] = boxSlot->getWeight();
-            slotNode["margin"] = {{"x", boxSlot->getMargin().x}, {"y", boxSlot->getMargin().y}};
-            slotNode["crossAlignment"] = static_cast<int>(boxSlot->getCrossAlignment());
-            slotNode["participatesInLayout"] = boxSlot->participatesInLayout();
-        }
+        nlohmann::json slotNode = {{"parent", slot->getParent()._name}};
+        slot->appendRuntimeDiagnostics(slotNode);
         node["slot"] = std::move(slotNode);
     }
     element.appendRuntimeDiagnostics(node, tree);
-    if (const auto* checkBox = dynamic_cast<const UICheckBox*>(&element)) {
-        node["control"] = {
-            {"type", "checkBox"},
-            {"checked", checkBox->_bChecked},
-        };
-    }
-    else if (const auto* slider = dynamic_cast<const UISlider*>(&element)) {
-        node["control"] = {
-            {"type", "slider"},
-            {"value", slider->_value},
-            {"step", slider->_step},
-        };
-    }
-    else if (const auto* combo = dynamic_cast<const UIComboBox*>(&element)) {
-        node["control"] = {
-            {"type", "comboBox"},
-            {"selectedIndex", combo->_selectedIndex},
-            {"label", combo->currentLabel()},
-        };
-    }
-
-    else if (const auto* scroll = dynamic_cast<const UIScrollViewport*>(&element)) {
-        node["control"] = {
-            {"type", "scrollViewport"},
-            {"offset", scroll->getScrollOffset()},
-            {"maxOffset", scroll->getMaxScrollOffset()},
-        };
-    }
-    else if (const auto* split = dynamic_cast<const UISplitPane*>(&element)) {
-        const Rect2D divider = split->getDividerRect();
-        node["control"] = {
-            {"type", "splitPane"},
-            {"ratio", split->getSplitRatio()},
-            {"divider",
-             {
-                 {"x", divider.pos.x},
-                 {"y", divider.pos.y},
-                 {"w", divider.extent.x},
-                 {"h", divider.extent.y},
-             }},
-        };
-    }
-    else if (const auto* table = dynamic_cast<const UITableGrid*>(&element)) {
-        node["control"] = {
-            {"type", "tableGrid"},
-            {"selected", table->getSelection() ? table->getSelection()->value() : -1},
-        };
-    }
-    else if (const auto* drag = dynamic_cast<const UIDragFloat*>(&element)) {
-        node["control"] = {
-            {"type", "dragFloat"},
-            {"value", drag->_value},
-        };
-    }
-    else if (const auto* spin = dynamic_cast<const UISpinBox*>(&element)) {
-        node["control"] = {
-            {"type", "spinBox"},
-            {"value", spin->_value},
-        };
-    }
-    else if (const auto* radio = dynamic_cast<const UIRadioButton*>(&element)) {
-        node["control"] = {
-            {"type", "radioButton"},
-            {"checked", radio->_bChecked},
-        };
-    }
-    else if (const auto* colorEdit = dynamic_cast<const UIColorEdit*>(&element)) {
-        node["control"] = {
-            {"type", "colorEdit"},
-            {"color", {colorEdit->_color.r, colorEdit->_color.g, colorEdit->_color.b, colorEdit->_color.a}},
-            {"activeChannel", colorEdit->_activeChannel},
-        };
-    }
-    else if (const auto* searchCombo = dynamic_cast<const UISearchComboBox*>(&element)) {
-        node["control"] = {
-            {"type", "searchComboBox"},
-            {"selectedIndex", searchCombo->_selectedIndex},
-            {"filter", searchCombo->_filter},
-        };
-    }
-    else if (const auto* dragSource = dynamic_cast<const UIDragSource*>(&element)) {
-        node["control"] = {
-            {"type", "dragSource"},
-            {"label", dragSource->_label},
-        };
-    }
-    else if (const auto* dropTarget = dynamic_cast<const UIDropTarget*>(&element)) {
-        node["control"] = {
-            {"type", "dropTarget"},
-        };
-    }
-    else if (const auto* treeView = dynamic_cast<const UITreeView*>(&element)) {
-        node["control"] = {
-            {"type", "treeView"},
-            {"visibleRows", treeView->getVisibleRowCount()},
-            {"selected", treeView->getSelection() ? treeView->getSelection()->value() : std::string{}},
-        };
-    }
-    else if (const auto* dockSpace = dynamic_cast<const UIDockSpace*>(&element)) {
-        nlohmann::json preview = {
-            {"active", dockSpace->hasDropPreview()},
-            {"disabled", dockSpace->isDropPreviewDisabled()},
-            {"targetLeafId", dockSpace->getDropPreviewTargetLeafId()},
-            {"kind", dockSpace->isDropPreviewMerge() ? "merge" : "cardinal"},
-            {"disabledReason", dockSpace->getDropPreviewDisabledReason()},
-        };
-        if (!dockSpace->hasDropPreview()) {
-            preview["kind"] = "none";
-        }
-        node["control"] = {
-            {"type", "dockSpace"},
-            {"preview", std::move(preview)},
-        };
-    }
-    else if (const auto* overlay = dynamic_cast<const UIPopupOverlay*>(&element)) {
-        node["control"] = {
-            {"type", "popupOverlay"},
-            {"modal", overlay->_bModal},
-        };
-    }
 
     nlohmann::json children = nlohmann::json::array();
     for (UIElement* child : element.getChildrenInPaintOrder()) {
