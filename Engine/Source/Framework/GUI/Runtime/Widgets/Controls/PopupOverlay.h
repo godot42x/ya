@@ -69,6 +69,9 @@ struct YA_GUI_API UIPopupOverlay : public UIElement
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
+        node["control"] = {{"type", "popupOverlay"}, {"modal", _bModal}};
+    }
     /// A non-modal popup shield is invisible to the user: it swallows presses
     /// (dismiss) but is transparent to hover, so the menu bar item underneath
     /// keeps its hover-switch. A modal shield is drawn (dimming) and blocks

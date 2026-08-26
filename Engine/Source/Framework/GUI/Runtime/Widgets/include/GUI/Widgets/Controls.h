@@ -13,6 +13,8 @@
 #include "../../../Controls/TabBar.h"
 #include "../../../Controls/SplitPane.h"
 #include "../../../Controls/ScrollViewport.h"
+#include "../../../Controls/Overlay.h"
+#include "../../../Controls/SizeBox.h"
 #include "../../../Controls/SelectableRow.h"
 #include "../../../Controls/TextField.h"
 #include "../../../Controls/TreeView.h"

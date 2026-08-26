@@ -191,7 +191,7 @@ review 中另外查出的、与本决策独立的既存缺陷（待修）：
 
 - Layout 页改为一次 `ui::build`；`DemoHBox` / `DemoVBox` / `SpacingSlider` 名称保留。`Construct.h` 补 `setClipChildren` / `setMainAxisAlignment` / Text `setHAlign`/`setVAlign`。HBox 经 `share()` 在 slider 回调里改 spacing。
 - Menus / Theme / Unicode / 中文测试 同样改为 `ui::build`。Theme 页仍不给 `ThemeShowPanel` 上 authored color，toggle 继续换 tree-level UITheme。Popup 菜单仍在点击时 `UIMenu::create`（事件期 live API）。
-- Render 页仍是 raw retained 对照。未迁：DragDrop / Modal / ScrollSplit / Gallery / Interactions / Dock / RoundedRect / Editor。
+- Render 页仍是 raw retained 对照。未迁：DragDrop / ScrollSplit / Gallery / Interactions / Dock / Editor。
 
 验证：`ya-gui-declarative-contract-test` 21/21（含 DirectConstructContainerClipAndMainAxisAlignment）；headless
 - `layout_spacing_interaction.jsonl`：spacing 8 → `$gt` 16，route `SpacingSlider`
@@ -200,4 +200,88 @@ review 中另外查出的、与本决策独立的既存缺陷（待修）：
 
 scenario 点击按当前 chrome 对齐；旧坐标会打到左侧页签（例如 Layout 的 `{250,507}` 打到 `Tab_Unicode`）。
 
-下一步：RoundedRect（panel `setCornerRadius` + 自定义 anchor）；然后 DragDrop / Modal / ScrollSplit。Gallery mega-page、Dock、Editor ImGui 仍不进入本切片。G2 `UIScreen` 继续搁置。
+## 2026-08-27 checkpoint：RoundedRect + Modal 迁到 live construct
+
+- `Construct.h` 补 `setAnchors` 与 panel `setCornerRadius`。`ui::build(tree, parent, builder)`：先组 builder，再单独 attach。
+- RoundedRect 页一次 `ui::build`；卡片名 Round0/8/16/32、`RoundedNested` / `RoundedNestedInner` 保留。
+- Modal 页壳迁到 `ui::build`（`OpenModal` 仍 `share()` 给 automation）；弹层仍在点击时 live 组装 `UIPopupOverlay`（与 Menus 的 `UIMenu::create` 同类）。
+
+验证：`ya-gui-declarative-contract-test` 22/22（含 DirectConstructPanelCornerRadiusAndAnchors）；`modal_interaction.jsonl` headless 全 checkpoint 通过。OpenModal 点击对齐到 `{803,98}`。
+
+下一步：DragDrop（页壳 DSL + `FDemoDragItem`/`FDemoDropZone` 经 `child(UIElementRef)`）；ScrollSplit（需要 split/scroll builder + Fill slot）。Gallery mega-page、Dock、Editor ImGui 仍不进入本切片。G2 `UIScreen` 继续搁置。
+
+## 2026-08-27 checkpoint：DragDrop + ScrollSplit 迁到 live construct
+
+- `Construct.h` 补 `ui::splitPane` / `ui::scroll` 与 container `childFill`（split 不是唯一 child，不能靠 stretch-last）。
+- DragDrop 页壳一次 `ui::build`；`FDemoDragItem` / `FDemoDropZone` 经 `child(UIElementRef)` 挂入。名称保留 `Drag_asset.texture.diffuse` / `DropZone`。
+- ScrollSplit 一次 `ui::build`：`DemoSplit` / `DemoScroll` / `DemoScrollList` / `ScrollRow{i}` / `DemoSplitRight` 保留。列表改为 40 行，使默认 1280x800 下 `maxOffset > 0`（原先 24 行在 Fill split 里装得下，wheel 断言永不触发）。
+- Render 页仍是 raw retained 对照。未迁：Gallery mega-page / Interactions / Dock / Editor ImGui。
+
+验证：`ya-gui-declarative-contract-test` 23/23（含 DirectConstructSplitScrollAndFillSlot）；headless
+- `dragdrop_interaction.jsonl`：`Drag_asset.texture.diffuse` → `DropZone`，lastRoute `dragSession`
+- `resize_scrollsplit_interaction_stress.jsonl`：四次 resize 间 divider 真的拖动（ratio 0.38 → ~0.69），wheel 打在 `DemoScroll` 内
+
+scenario 点击按当前 chrome 对齐；旧 `{96,122}` / `{180,360}` 落在左侧页列表。800 宽会抬高 shell split 的 min-first clamp，回到 1280 后 DemoHost x 不再是初始的 ≈311。
+
+下一步：Gallery mega-page（仍不要和 Dock / Interactions / Editor ImGui 绑在同一切片）。G2 `UIScreen` 继续搁置。
+
+## 2026-08-27 checkpoint：Box 四边 margin + Overlay + SizeBox
+
+- `FMargin`（四边 inset）收口 box slot / overlay slot / `UISingleChildLayout` padding。`glm::vec2` 仍表示左右/上下对称。`FMargin` 带四参数构造，避免 `{x,y}` 被当成 left/top。
+- Box arrange 用主轴 before/after margin，不再 `margin * 2`。Construct：`column.child(node, FBoxSlotArgs{...})`；`childFill` 仍是 Fill 简写。
+- `UIOverlay` + `UIOverlayLayout` / `UIOverlaySlot`：每个 child 在同一父 rect 内独立 Fill/Start/Center/End + padding。不是 `UIPopupOverlay`。DSL：`ui::overlay`。
+- `UISizeBox`：单 child 约束盒（padding + 可选宽/高 override + min/max），复用 `UISingleChildLayout`。DSL：`ui::sizeBox`。
+- dump：`layout.type` = `overlay` / `sizeBox`；box/overlay slot margin、padding 输出四边。
+
+验证：`ya-gui-declarative-contract-test` 24/24（含 DirectConstructBoxSlotOverlayAndSizeBox）；`WidgetLayoutTest` 新增四边 margin / Overlay / SizeBox 全绿。
+`WidgetLayoutTest.ScaledViewScalesFallbackGlyphsByOwnDesignSize` 仍失败（font fallback 缩放，与本切片无关）。
+
+未做：wrap / flow Grid / AspectRatio（后置）。未迁：Gallery mega-page / Interactions / Dock / Editor ImGui。G2 `UIScreen` 继续搁置。
+
+下一步：Gallery mega-page（仍不要和 Dock / Interactions / Editor ImGui 绑在同一切片）。
+
+## 2026-08-27 checkpoint：Gallery mega-page 迁到 live construct
+
+- `buildGalleryDemo` 一次 `ui::build`：`panel("GalleryDemo").fillParent()` → `scroll("GalleryScroll")` → `column("GalleryForm")`。
+- Construct 只补本页已有控件真正用到的 setter：Text `setFillBackground`、Button `bindEnabled` / `setContentPadding`、TextField `setOnTextChanged`、Split `bindSplitRatio`。不新增 TreeView / TableGrid / MenuBar / InputExtras builder。
+- 复杂控件经 `child(UIElementRef)` 挂入：`UIMenuBar`、`UITreeView`、`UITableGrid`、`FVectorDemoCanvas`、DragFloat/SpinBox/Radio/ColorEdit/SearchCombo、DragSource/DropTarget。Table cell 按钮先 `demoButton` → `share()` → `addDetachedChild` + `getCellSlot()->setCell(3, 2)`。
+- scenario 控件名全部保留。点击坐标按当前 chrome（1280×720，DemoHost x≈311）重对准；旧 x≈151 会打到左侧页列表。
+
+验证：headless `--start-page Gallery`
+- `gallery_vector.jsonl` / `gallery_table.jsonl` / `gallery_inputs.jsonl` / `gallery_drop.jsonl` 存在性断言
+- `gallery_tree_edit.jsonl`：filter `Li` → `visibleRows:4`，折叠 Light → `visibleRows:2`
+- `gallery_acceptance.jsonl`：滚到底后 DragFloat=1.5、SpinBox=4、ColorEdit channel 3、palette 开合、SearchCombo `To` 选挑
+
+`gallery_p1.jsonl` 属于 Interactions 页，不在本切片。未迁：Interactions / Dock / Editor ImGui。G2 `UIScreen` 继续搁置。
+
+下一步：Interactions（tooltip / wrap / disable / dialog），仍不要和 Dock / Editor ImGui 绑在同一切片。
+
+## 2026-08-27 checkpoint：Interactions 迁到 live construct
+
+- `buildInteractionsDemo` 一次 `ui::build`。名称保留：`TooltipBtn` / `WrappedText` / `DisableGroup` / `GroupBtnA` / `GroupBtnB` / `ToggleGroupBtn` / `OpenDialogBtn`。
+- Construct 补 base `setTooltip`、Text `setWrap` / `setMaxWrapWidth`。DisableGroup 经 `share()` 给 toggle 回调 `setEnabled`。
+- WrappedText 用 `FBoxSlotArgs{.crossAlignment = Start}`，否则 cross stretch 会把 wrap 宽度撑满 form（scenario 锁 `w:360`）。
+- Dialog 仍在点击时 `UIDialog::create` + `open(tree)`（与 Menus / Modal 同类：事件期 live 组装）。
+
+验证：`ya-gui-declarative-contract-test` 25/25（含 DirectConstructTooltipAndWrap）；headless `--start-page Interactions` `gallery_p1.jsonl` 全 checkpoint 通过（tooltip dwell、subtree disable `notHandled`、DialogOK 关弹层）。点击按当前 chrome 对齐；旧 tooltip `(100,115)` / GroupBtnA `(86,280)` 落在左侧页列表。
+
+未迁：Dock / Editor ImGui。G2 `UIScreen` 继续搁置。
+
+下一步：Dock（`UIDockSpace` / floating host 经 `child(UIElementRef)` + `attachToLayer`），不要和 Editor ImGui 绑在同一切片。
+
+## 2026-08-27 checkpoint：Dock 迁到 live construct
+
+- `buildDockDemo` 一次 `ui::build`：`column("DockDemo").fillParent().childFill(DemoDock)`。`UIDockSpace` / `UIDockFloatingHost` 不进 Construct。
+- Panel body 走 DSL：`ui::panel(name+"_Body").setStyleKey("panel.canvas")` + fillParent label。名称保留 `DemoDock` / `DemoFloatingHost` / `Scene_Body` 等。
+- Floating host 仍 `attachToLayer(Popup)`；model split 仍事件期之前的 live API。
+- `beginDockDrag` 的 `lastPreview` 改为 `shared_ptr` 捕获（原先栈引用在 observer 回调里 UAF）。
+- `dock_floating.jsonl`：re-dock 走浮动窗口的 `Tab_Scene`（title-empty 只移动窗口）；tear-off 后 Console 占中心叶，drop 必须打在 chooser 中心块（≈776,406），不能只丢在 leaf 内容上。
+
+验证：`ya-gui-declarative-contract-test` DirectConstructPanelCornerRadiusAndAnchors 含 `setStyleKey`；headless `--start-page Dock`
+- `dock_cardinal_split.jsonl` 结构锁
+- `dock.jsonl`：Console tab 拖进 Scene，`!DockLeaf7`
+- `dock_floating.jsonl`：tear-off → `FloatingWindow1` → tab 拖回 chooser → `!FloatingWindow1`
+
+未迁：Editor ImGui。G2 `UIScreen` 继续搁置。Render 仍是 raw retained 对照。
+
+下一步：Editor ImGui 替换（单独切片，先做 feature gap 而不是整页硬切）。

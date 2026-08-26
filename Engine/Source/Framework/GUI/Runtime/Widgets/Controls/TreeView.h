@@ -103,6 +103,14 @@ struct YA_GUI_API UITreeView : public UIElement
     void setDropHighlight(bool bHighlight) override;
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override
+    {
+        node["control"] = {
+            {"type", "treeView"},
+            {"visibleRows", getVisibleRowCount()},
+            {"selected", _selectedId ? _selectedId->value() : std::string{}},
+        };
+    }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     [[nodiscard]] bool isHoverable() const override { return true; }

@@ -15,8 +15,12 @@
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Image.h"
+#include "GUI/Widgets/Controls/Overlay.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/ScrollViewport.h"
+#include "GUI/Widgets/Controls/SizeBox.h"
 #include "GUI/Widgets/Controls/Slider.h"
+#include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/UITypeRegistry.h"
@@ -107,6 +111,18 @@ class TUIWidgetBuilder
         return std::move(derived());
     }
 
+    [[nodiscard]] TDerived& setTooltip(std::string value) &
+    {
+        _widget->setTooltip(std::move(value));
+        return derived();
+    }
+
+    [[nodiscard]] TDerived&& setTooltip(std::string value) &&
+    {
+        _widget->setTooltip(std::move(value));
+        return std::move(derived());
+    }
+
     [[nodiscard]] TDerived& setFocusPolicy(EWidgetFocusPolicy value) &
     {
         _widget->_focusPolicy = value;
@@ -130,6 +146,20 @@ class TUIWidgetBuilder
     {
         _widget->_anchorMin = {0.0f, 0.0f};
         _widget->_anchorMax = {1.0f, 1.0f};
+        return std::move(derived());
+    }
+
+    [[nodiscard]] TDerived& setAnchors(const glm::vec2& min, const glm::vec2& max) &
+    {
+        _widget->_anchorMin = min;
+        _widget->_anchorMax = max;
+        return derived();
+    }
+
+    [[nodiscard]] TDerived&& setAnchors(const glm::vec2& min, const glm::vec2& max) &&
+    {
+        _widget->_anchorMin = min;
+        _widget->_anchorMax = max;
         return std::move(derived());
     }
 
@@ -266,6 +296,42 @@ class UITextWidgetBuilder final : public TUIWidgetBuilder<UIText, UITextWidgetBu
         _widget->_vAlign = value;
         return std::move(*this);
     }
+
+    [[nodiscard]] UITextWidgetBuilder& setFillBackground(bool value) &
+    {
+        _widget->_bFillBackground = value;
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& setFillBackground(bool value) &&
+    {
+        _widget->_bFillBackground = value;
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextWidgetBuilder& setWrap(bool value) &
+    {
+        _widget->_bWrap = value;
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& setWrap(bool value) &&
+    {
+        _widget->_bWrap = value;
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextWidgetBuilder& setMaxWrapWidth(float value) &
+    {
+        _widget->_maxWrapWidth = value;
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& setMaxWrapWidth(float value) &&
+    {
+        _widget->_maxWrapWidth = value;
+        return std::move(*this);
+    }
 };
 
 class UIButtonWidgetBuilder final : public TUIWidgetChildrenBuilder<UIButton, UIButtonWidgetBuilder>
@@ -274,18 +340,6 @@ class UIButtonWidgetBuilder final : public TUIWidgetChildrenBuilder<UIButton, UI
     explicit UIButtonWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdButton, std::move(key), std::move(displayName))
     {
-    }
-
-    [[nodiscard]] UIButtonWidgetBuilder& setText(const std::string& value) &
-    {
-        child(UITextWidgetBuilder{_widget->_stableKey + "__label"}.setText(value));
-        return *this;
-    }
-
-    [[nodiscard]] UIButtonWidgetBuilder&& setText(const std::string& value) &&
-    {
-        child(UITextWidgetBuilder{_widget->_stableKey + "__label"}.setText(value));
-        return std::move(*this);
     }
 
     [[nodiscard]] UIButtonWidgetBuilder& setOnClick(std::function<void()> value) &
@@ -297,6 +351,30 @@ class UIButtonWidgetBuilder final : public TUIWidgetChildrenBuilder<UIButton, UI
     [[nodiscard]] UIButtonWidgetBuilder&& setOnClick(std::function<void()> value) &&
     {
         _widget->_onClick = std::move(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIButtonWidgetBuilder& bindEnabled(std::shared_ptr<Reactive<bool>> ref) &
+    {
+        _widget->bindEnabled(std::move(ref));
+        return *this;
+    }
+
+    [[nodiscard]] UIButtonWidgetBuilder&& bindEnabled(std::shared_ptr<Reactive<bool>> ref) &&
+    {
+        _widget->bindEnabled(std::move(ref));
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIButtonWidgetBuilder& setContentPadding(glm::vec2 value) &
+    {
+        _widget->setContentPadding(value);
+        return *this;
+    }
+
+    [[nodiscard]] UIButtonWidgetBuilder&& setContentPadding(glm::vec2 value) &&
+    {
+        _widget->setContentPadding(value);
         return std::move(*this);
     }
 };
@@ -318,6 +396,30 @@ class UIPanelWidgetBuilder final : public TUIWidgetChildrenBuilder<UIPanel, UIPa
     [[nodiscard]] UIPanelWidgetBuilder&& setColor(const glm::vec4& value) &&
     {
         _widget->setColor(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIPanelWidgetBuilder& setCornerRadius(float value) &
+    {
+        _widget->setCornerRadius(value);
+        return *this;
+    }
+
+    [[nodiscard]] UIPanelWidgetBuilder&& setCornerRadius(float value) &&
+    {
+        _widget->setCornerRadius(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIPanelWidgetBuilder& setStyleKey(std::string value) &
+    {
+        _widget->_styleKey = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UIPanelWidgetBuilder&& setStyleKey(std::string value) &&
+    {
+        _widget->_styleKey = std::move(value);
         return std::move(*this);
     }
 };
@@ -391,6 +493,76 @@ class UIContainerWidgetBuilder final : public TUIWidgetChildrenBuilder<UIContain
         _widget->setMainAxisAlignment(value);
         return std::move(*this);
     }
+
+    using TUIWidgetChildrenBuilder::child;
+
+    UIContainerWidgetBuilder& child(UIElementRef node, const FBoxSlotArgs& slot) &
+    {
+        applyChildSlot(std::move(node), slot);
+        return *this;
+    }
+
+    UIContainerWidgetBuilder&& child(UIElementRef node, const FBoxSlotArgs& slot) &&
+    {
+        applyChildSlot(std::move(node), slot);
+        return std::move(*this);
+    }
+
+    template<UIWidgetBuilder TChild>
+    UIContainerWidgetBuilder& child(TChild&& builder, const FBoxSlotArgs& slot) &
+    {
+        applyChildSlot(std::forward<TChild>(builder).release(), slot);
+        return *this;
+    }
+
+    template<UIWidgetBuilder TChild>
+    UIContainerWidgetBuilder&& child(TChild&& builder, const FBoxSlotArgs& slot) &&
+    {
+        applyChildSlot(std::forward<TChild>(builder).release(), slot);
+        return std::move(*this);
+    }
+
+    /// After `addDetachedChild`, mark the new child's box slot Fill so it
+    /// takes leftover main-axis space (e.g. a split under header labels).
+    UIContainerWidgetBuilder& childFill(UIElementRef node) &
+    {
+        applyChildSlot(std::move(node), FBoxSlotArgs{.sizeRule = EUIBoxSlotSizeRule::Fill});
+        return *this;
+    }
+
+    UIContainerWidgetBuilder&& childFill(UIElementRef node) &&
+    {
+        applyChildSlot(std::move(node), FBoxSlotArgs{.sizeRule = EUIBoxSlotSizeRule::Fill});
+        return std::move(*this);
+    }
+
+    template<UIWidgetBuilder TChild>
+    UIContainerWidgetBuilder& childFill(TChild&& builder) &
+    {
+        applyChildSlot(std::forward<TChild>(builder).release(),
+                       FBoxSlotArgs{.sizeRule = EUIBoxSlotSizeRule::Fill});
+        return *this;
+    }
+
+    template<UIWidgetBuilder TChild>
+    UIContainerWidgetBuilder&& childFill(TChild&& builder) &&
+    {
+        applyChildSlot(std::forward<TChild>(builder).release(),
+                       FBoxSlotArgs{.sizeRule = EUIBoxSlotSizeRule::Fill});
+        return std::move(*this);
+    }
+
+  private:
+    void applyChildSlot(UIElementRef node, const FBoxSlotArgs& slot)
+    {
+        UIElement* live = node.get();
+        this->_widget->addDetachedChild(std::move(node));
+        if (live) {
+            if (auto* boxSlot = this->_widget->getBoxSlot(*live)) {
+                boxSlot->apply(slot);
+            }
+        }
+    }
 };
 
 class UITextFieldWidgetBuilder final : public TUIWidgetBuilder<UITextField, UITextFieldWidgetBuilder>
@@ -434,6 +606,18 @@ class UITextFieldWidgetBuilder final : public TUIWidgetBuilder<UITextField, UITe
     [[nodiscard]] UITextFieldWidgetBuilder&& setOnCommit(std::function<void(const std::string&)> value) &&
     {
         _widget->_onCommit = std::move(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextFieldWidgetBuilder& setOnTextChanged(std::function<void(const std::string&)> value) &
+    {
+        _widget->_onTextChanged = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UITextFieldWidgetBuilder&& setOnTextChanged(std::function<void(const std::string&)> value) &&
+    {
+        _widget->_onTextChanged = std::move(value);
         return std::move(*this);
     }
 };
@@ -582,6 +766,202 @@ class UIImageWidgetBuilder final : public TUIWidgetBuilder<UIImage, UIImageWidge
     }
 };
 
+class UISplitPaneWidgetBuilder final : public TUIWidgetChildrenBuilder<UISplitPane, UISplitPaneWidgetBuilder>
+{
+  public:
+    explicit UISplitPaneWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetChildrenBuilder(kTypeIdSplitPane, std::move(key), std::move(displayName))
+    {
+    }
+
+    [[nodiscard]] UISplitPaneWidgetBuilder& setSplitRatio(float value) &
+    {
+        _widget->setSplitRatio(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISplitPaneWidgetBuilder&& setSplitRatio(float value) &&
+    {
+        _widget->setSplitRatio(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISplitPaneWidgetBuilder& setMinFirstExtent(float value) &
+    {
+        _widget->setMinFirstExtent(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISplitPaneWidgetBuilder&& setMinFirstExtent(float value) &&
+    {
+        _widget->setMinFirstExtent(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISplitPaneWidgetBuilder& setMinSecondExtent(float value) &
+    {
+        _widget->setMinSecondExtent(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISplitPaneWidgetBuilder&& setMinSecondExtent(float value) &&
+    {
+        _widget->setMinSecondExtent(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISplitPaneWidgetBuilder& bindSplitRatio(std::shared_ptr<Reactive<float>> ref) &
+    {
+        _widget->bindSplitRatio(std::move(ref));
+        return *this;
+    }
+
+    [[nodiscard]] UISplitPaneWidgetBuilder&& bindSplitRatio(std::shared_ptr<Reactive<float>> ref) &&
+    {
+        _widget->bindSplitRatio(std::move(ref));
+        return std::move(*this);
+    }
+};
+
+class UIScrollViewportWidgetBuilder final : public TUIWidgetChildrenBuilder<UIScrollViewport, UIScrollViewportWidgetBuilder>
+{
+  public:
+    explicit UIScrollViewportWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetChildrenBuilder(kTypeIdScrollViewport, std::move(key), std::move(displayName))
+    {
+    }
+};
+
+class UIOverlayWidgetBuilder final : public TUIWidgetChildrenBuilder<UIOverlay, UIOverlayWidgetBuilder>
+{
+  public:
+    explicit UIOverlayWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetChildrenBuilder(kTypeIdOverlay, std::move(key), std::move(displayName))
+    {
+    }
+
+    using TUIWidgetChildrenBuilder::child;
+
+    UIOverlayWidgetBuilder& child(UIElementRef node, const FOverlaySlotArgs& slot) &
+    {
+        applyChildSlot(std::move(node), slot);
+        return *this;
+    }
+
+    UIOverlayWidgetBuilder&& child(UIElementRef node, const FOverlaySlotArgs& slot) &&
+    {
+        applyChildSlot(std::move(node), slot);
+        return std::move(*this);
+    }
+
+    template<UIWidgetBuilder TChild>
+    UIOverlayWidgetBuilder& child(TChild&& builder, const FOverlaySlotArgs& slot) &
+    {
+        applyChildSlot(std::forward<TChild>(builder).release(), slot);
+        return *this;
+    }
+
+    template<UIWidgetBuilder TChild>
+    UIOverlayWidgetBuilder&& child(TChild&& builder, const FOverlaySlotArgs& slot) &&
+    {
+        applyChildSlot(std::forward<TChild>(builder).release(), slot);
+        return std::move(*this);
+    }
+
+  private:
+    void applyChildSlot(UIElementRef node, const FOverlaySlotArgs& slot)
+    {
+        UIElement* live = node.get();
+        this->_widget->addDetachedChild(std::move(node));
+        if (live) {
+            if (auto* overlaySlot = this->_widget->getOverlaySlot(*live)) {
+                overlaySlot->apply(slot);
+            }
+        }
+    }
+};
+
+class UISizeBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UISizeBox, UISizeBoxWidgetBuilder>
+{
+  public:
+    explicit UISizeBoxWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetChildrenBuilder(kTypeIdSizeBox, std::move(key), std::move(displayName))
+    {
+    }
+
+    [[nodiscard]] UISizeBoxWidgetBuilder& setPadding(FMargin value) &
+    {
+        _widget->setPadding(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISizeBoxWidgetBuilder&& setPadding(FMargin value) &&
+    {
+        _widget->setPadding(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISizeBoxWidgetBuilder& setPadding(glm::vec2 value) &
+    {
+        _widget->setPadding(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISizeBoxWidgetBuilder&& setPadding(glm::vec2 value) &&
+    {
+        _widget->setPadding(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISizeBoxWidgetBuilder& setWidth(float value) &
+    {
+        _widget->setWidthOverride(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISizeBoxWidgetBuilder&& setWidth(float value) &&
+    {
+        _widget->setWidthOverride(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISizeBoxWidgetBuilder& setHeight(float value) &
+    {
+        _widget->setHeightOverride(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISizeBoxWidgetBuilder&& setHeight(float value) &&
+    {
+        _widget->setHeightOverride(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISizeBoxWidgetBuilder& setMinSize(glm::vec2 value) &
+    {
+        _widget->setMinSize(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISizeBoxWidgetBuilder&& setMinSize(glm::vec2 value) &&
+    {
+        _widget->setMinSize(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISizeBoxWidgetBuilder& setMaxSize(glm::vec2 value) &
+    {
+        _widget->setMaxSize(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISizeBoxWidgetBuilder&& setMaxSize(glm::vec2 value) &&
+    {
+        _widget->setMaxSize(value);
+        return std::move(*this);
+    }
+};
+
 [[nodiscard]] inline UITextWidgetBuilder text(std::string key, std::string displayName = {})
 {
     return UITextWidgetBuilder{std::move(key), std::move(displayName)};
@@ -630,6 +1010,26 @@ class UIImageWidgetBuilder final : public TUIWidgetBuilder<UIImage, UIImageWidge
 [[nodiscard]] inline UIImageWidgetBuilder image(std::string key, std::string displayName = {})
 {
     return UIImageWidgetBuilder{std::move(key), std::move(displayName)};
+}
+
+[[nodiscard]] inline UISplitPaneWidgetBuilder splitPane(std::string key, std::string displayName = {})
+{
+    return UISplitPaneWidgetBuilder{std::move(key), std::move(displayName)};
+}
+
+[[nodiscard]] inline UIScrollViewportWidgetBuilder scroll(std::string key, std::string displayName = {})
+{
+    return UIScrollViewportWidgetBuilder{std::move(key), std::move(displayName)};
+}
+
+[[nodiscard]] inline UIOverlayWidgetBuilder overlay(std::string key, std::string displayName = {})
+{
+    return UIOverlayWidgetBuilder{std::move(key), std::move(displayName)};
+}
+
+[[nodiscard]] inline UISizeBoxWidgetBuilder sizeBox(std::string key, std::string displayName = {})
+{
+    return UISizeBoxWidgetBuilder{std::move(key), std::move(displayName)};
 }
 
 /// Attach a constructed builder to `parent`. Assemble the builder first,

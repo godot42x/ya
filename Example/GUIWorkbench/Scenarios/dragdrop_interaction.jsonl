@@ -1,9 +1,11 @@
-# GUIWorkbench --start-page=DragDrop. Coordinates target the first source row
-# and the center of DropZone at the stable 1280x800 logical extent.
+# GUIWorkbench --start-page=DragDrop. Coordinates are window-space including
+# the workbench chrome (shell split ~0.23, DemoHost x≈311, top≈46 at 1280x800).
+# Hits: Drag_asset.texture.diffuse center → DropZone center.
+{"window_size":{"width":1280,"height":800}}
 {"frame":2}
 {"assert":{"widget":"Drag_asset.texture.diffuse","rect":{"w":160.0,"h":30.0}}}
 {"checkpoint":"initial"}
-{"drag":{"from":[96,122],"to":[640,207],"steps":8}}
+{"drag":{"from":[407,100],"to":[803,185],"steps":8}}
 {"frame":2}
 {"assert":{"lastRoute":{"policyName":"dragSession","target":"DropZone"}}}
 {"assert":{"layers":{"DragIme":{"children":[]}}}}

@@ -10,9 +10,11 @@
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
+#include "GUI/Widgets/Controls/Overlay.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
+#include "GUI/Widgets/Controls/SizeBox.h"
 #include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TabBar.h"
@@ -82,6 +84,10 @@ void UITypeRegistry::ensureBuiltinTypesRegistered()
                  [] { return std::make_shared<UIMenu>("Menu"); });
     registerType({.typeId = kTypeIdTabBar, .displayName = "Tab Bar", .category = "Layout"},
                  [] { return std::make_shared<UITabBar>("TabBar"); });
+    registerType({.typeId = kTypeIdOverlay, .displayName = "Overlay", .category = "Layout"},
+                 [] { return std::make_shared<UIOverlay>("Overlay"); });
+    registerType({.typeId = kTypeIdSizeBox, .displayName = "Size Box", .category = "Layout"},
+                 [] { return std::make_shared<UISizeBox>("SizeBox"); });
 }
 
 std::shared_ptr<UITypeModule> UITypeRegistry::beginModule(const std::string& moduleId)

@@ -1,11 +1,12 @@
-# GUIWorkbench --start-page=Modal. Open the popup dialog (transparent
-# shield, no dimming), prove its route state, type a long value into the
-# name field (must stay inside the dialog border), then dismiss via Escape.
+# GUIWorkbench --start-page=Modal. Coordinates are window-space including
+# the workbench chrome (left page list ~238px, top bar ~46px). Hits OpenModal,
+# then the ModalName field inside the popup dialog, then Escape to dismiss.
+{"window_size":{"width":1280,"height":800}}
 {"frame":2}
 {"assert":{"widget":"OpenModal","control":{"type":"button","pressed":false}}}
 {"checkpoint":"initial"}
-{"event":"mouse_press","x":640,"y":120,"button":0}
-{"event":"mouse_release","x":640,"y":120,"button":0}
+{"event":"mouse_press","x":803,"y":98,"button":0}
+{"event":"mouse_release","x":803,"y":98,"button":0}
 {"frame":1}
 {"assert":{"widget":"ModalOverlay","control":{"type":"popupOverlay","modal":false}}}
 {"assert":{"focusPath":["TreeRoot","Layer_1","ModalOverlay"]}}

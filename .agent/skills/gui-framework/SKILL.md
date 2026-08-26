@@ -46,32 +46,39 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   `anchor span（stretch）> AutoSize（computeDesiredSize 递归聚合子内容）> _size`。
 - `UIText`：AutoSize 时 desired = `font.measureText(text) × lineHeight`；字体经
   FontManager 解析，closure 测试用 `registerFont` 注入合成字体。
-- `UIButton`（Content-Slot）：`_contentPadding` + 内容子节点填入内缩 rect（`layoutAssigned`，
-  非 anchor 数学）；AutoSize 时 desired = 首可见内容子节点 + padding×2；显式 `_size` 在容器内
-  也优先（`computeDesiredSize` 返回 `_size`）。
+- `UIButton`（Content-Slot）：单 child 容器，没有 `setText`。标签是内容槽里的 `UIText`
+  子节点（DSL：`.child(ui::text(...).setText(...))`）。`_contentPadding` + 内容子节点填入
+  内缩 rect（`layoutAssigned`，非 anchor 数学）；AutoSize 时 desired = 首可见内容子节点 +
+  padding×2；显式 `_size` 在容器内也优先（`computeDesiredSize` 返回 `_size`）。
 - 布局正式分为 `UIElement / UILayout / UISlot`：`UIContainer` 只是第一个 layout host，
   持有 `UIBoxLayout`；它不再持有 `_direction/_spacing/_padding/...` 这类 box 字段。
   `UILayout` 只负责 measure/arrange，`UISlot` 是 parent-owned parent-child 边对象。
-- `UIBoxSlot` 承载每 child 的 `Auto/Fill`、weight、margin、cross alignment、
+- `UIBoxSlot` 承载每 child 的 `Auto/Fill`、weight、**四边 `FMargin`**、cross alignment、
   min/max/preferred size 与 layout participation；slot setter 会使所属 tree 的 layout 失效。
   Fill 按权重分配剩余主轴空间且遵守 max size；Hidden 默认保留空间，可由 slot 明确关闭。
+  Construct：`column.child(node, FBoxSlotArgs{.sizeRule = EUIBoxSlotSizeRule::Fill, .margin = FMargin::all(8)})`；
+  `childFill` 仍是只标 Fill 的简写。`setMargin({x, y})` 走 `glm::vec2` → 左右/上下对称
+  （`FMargin` 不是 aggregate，两元素列表不会变成 left/top、right/bottom=0）。
 - child 用 `getSlot()` 读取当前边，parent 用 `getSlotForChild()` / `UIContainer::getBoxSlot()`
   查询；reparent/detach 时旧 parent 销毁旧 slot，新 parent 创建默认 slot。不要缓存 slot
   裸指针跨越 reparent/detach。
 - `UIBoxLayout` 主轴按 desired/slot 排列，cross 轴默认 stretch；`computeDesiredSize` 聚合
   child + margin + spacing + padding。scroll/split 仍读取内容 desired，specialized layout
-  已收口为 `UIScrollLayout` / `UISplitLayout`；`UIButton` 使用
-  `UISingleChildLayout`。specialized widget 只保留 paint/input transient state，不能再把
+  已收口为 `UIScrollLayout` / `UISplitLayout` / `UIOverlayLayout`；`UIButton` 与 `UISizeBox`
+  使用 `UISingleChildLayout`。specialized widget 只保留 paint/input transient state，不能再把
   ratio/offset/padding 等几何状态塞回 widget 字段。
+- `UIOverlay` 是叠放 host（不是 `UIPopupOverlay`）：每个 child 经 `UIOverlaySlot` 在同一父
+  rect 内独立 Fill/Start/Center/End + 四边 padding。child 的 canvas anchor 被忽略。
+- `UISizeBox` 是单 child 约束盒：padding + 可选宽/高 override + min/max。
 - `UISplitLayout` 管 orientation/ratio/min extent/divider/padding + first-two-child arrange；
   `UIScrollLayout` 管 axis/offset/step/max offset + first-child arrange；scroll 到边界必须
   返回未处理，以便 route bubble 到外层。tree dump 的 `layout.type` 统一输出
-  `box/singleChild/split/scroll`。
+  `box/singleChild/split/scroll/overlay/sizeBox`。
 - 布局 rect 尺寸永远 clamp ≥0（负尺寸会传染进 clip/scissor）。
 
 ## 静态 DSL（live construct）
 
-- 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/...` 组好 builder，再单独 `ui::build(tree, parent, std::move(page))` 物化 live `UIElement`（Slate `SNew`）。不要把整棵 DSL 包进 `ui::build(...)`。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。
+- 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/panel/splitPane/scroll/overlay/sizeBox/...` 组好 builder，再单独 `ui::build(tree, parent, std::move(page))` 物化 live `UIElement`（Slate `SNew`）。不要把整棵 DSL 包进 `ui::build(...)`。`setAnchors` / `fillParent` / panel `setCornerRadius` / `setStyleKey` / container `childFill` 与 `child(node, FBoxSlotArgs)` / overlay `child(node, FOverlaySlotArgs)` 在 Construct 时写到 live widget。`setTooltip` 写在 base builder；Text `setWrap` / `setMaxWrapWidth` 控制折行。`ui::button` 没有 `setText`；文字走内部 `UIText` 子 widget。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。自定义 / 复杂 demo widget（MenuBar、TreeView、TableGrid、InputExtras、DragSource/DropTarget、DockSpace）用 `child(UIElementRef)` 挂进 DSL 壳，不要为此扩 Construct。Gallery / Interactions / Dock 已是一次 `ui::build`。弹层（Menu / Modal / Dialog）仍在点击时 live 组装。Dock floating host 仍 `attachToLayer(Popup)`。Render 仍是 raw retained 对照。未迁：Editor ImGui。
 - `UIDescription` / `UIReconciler` / `UIRenderController` / apply hook **已删除**。不要恢复 Description → apply → widget 转发层。
 - Document/script：`UIDocument::instantiate()`（registry factory）只实例化一次。变长集合走列表控件 + `ReactiveList`，不是整页 re-run。
 - `UIScreen` 是挂卸 / z-order / input blocking，不是每帧 `render()` owner。Gallery / Editor 不使用它；接到游戏多表面（HUD/模态）之前保持搁置。

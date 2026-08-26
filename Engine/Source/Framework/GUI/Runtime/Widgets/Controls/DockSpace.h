@@ -43,6 +43,17 @@ struct YA_GUI_API UIDockSpace : public UIElement
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
+        nlohmann::json preview = {
+            {"active", hasDropPreview()},
+            {"disabled", isDropPreviewDisabled()},
+            {"targetLeafId", getDropPreviewTargetLeafId()},
+            {"kind", isDropPreviewMerge() ? "merge" : "cardinal"},
+            {"disabledReason", getDropPreviewDisabledReason()},
+        };
+        if (!hasDropPreview()) preview["kind"] = "none";
+        node["control"] = {{"type", "dockSpace"}, {"preview", std::move(preview)}};
+    }
     void paintChildren(UIFrameBuilder& builder) override;
     void paintDropPreviewOverlay(UIFrameBuilder& builder) const;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;

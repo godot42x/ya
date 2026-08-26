@@ -1,7 +1,8 @@
 # GUIWorkbench --start-page=Dock. Floating smoke: tear a tab out into a
-# floating window, then re-dock it back onto the dock by GRABBING THE WINDOW
-# BY ITS TITLE (header empty area — the dock regression: grabbing the title
-# used to do nothing; only the tab strip could start the dock-panel drag).
+# floating window, then re-dock it by dragging the floating window's tab
+# onto the DockSpace. Title-empty currently only moves the window;
+# beginDockDrag is armed from the tab strip (_onTabDragBegin).
+# Coordinates assume 1280x720 with current workbench chrome (DemoHost x≈311).
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
 {"assert":{"widget":"DockSplit1"}}
@@ -12,10 +13,10 @@
 {"frame":3}
 {"assert":{"widget":"FloatingWindow1"}}
 {"checkpoint":"dock_torn"}
-# Re-dock by the floating window's TITLE at x=400 (beyond the tab strip,
-# which ends at ~255, and the close button at ~355): dragging it onto the
-# DockSpace content center must re-dock the panel.
-{"drag":{"from":[400,160],"to":[700,300],"button":0,"steps":8}}
+# Window lands at the release point (430,20 320x240). Floating Tab_Scene is
+# ≈(434,24) 67x42. After tear-off, Console fills the center leaf (DockLeaf7
+# ≈517,46 518x720); drop on that leaf's chooser center to merge.
+{"drag":{"from":[468,45],"to":[776,406],"button":0,"steps":8}}
 {"frame":3}
 {"checkpoint":"after_redock"}
 {"frame":3}

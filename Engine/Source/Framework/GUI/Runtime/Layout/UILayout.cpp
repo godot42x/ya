@@ -43,10 +43,16 @@ bool participatesInBox(const UIElement& parent, const UIElement& child)
             (child.getVisibility() != EWidgetVisibility::Hidden || slot->reservesSpaceWhenHidden()));
 }
 
-glm::vec2 slotMargin(const UIElement& parent, const UIElement& child)
+FMargin slotMargin(const UIElement& parent, const UIElement& child)
 {
     if (const UIBoxSlot* slot = getBoxSlot(parent, child)) {
-        return glm::max(slot->getMargin(), glm::vec2(0.0f));
+        const FMargin m = slot->getMargin();
+        return {
+            std::max(m.left, 0.0f),
+            std::max(m.top, 0.0f),
+            std::max(m.right, 0.0f),
+            std::max(m.bottom, 0.0f),
+        };
     }
     return {};
 }
@@ -57,6 +63,11 @@ UISlot::UISlot(UIElement& parent, UIElement& child)
     : _parent(&parent)
     , _child(&child)
 {
+}
+
+void UISlot::appendRuntimeDiagnostics(nlohmann::json& node) const
+{
+    node["type"] = "base";
 }
 
 void UISlot::invalidateMeasure() const
@@ -76,6 +87,16 @@ UIBoxSlot::UIBoxSlot(UIElement& parent, UIElement& child)
 {
 }
 
+void UIBoxSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
+{
+    node["type"] = "box";
+    node["sizeRule"] = _sizeRule == EUIBoxSlotSizeRule::Fill ? "fill" : "auto";
+    node["weight"] = _weight;
+    node["margin"] = {{"left", _margin.left}, {"top", _margin.top}, {"right", _margin.right}, {"bottom", _margin.bottom}};
+    node["crossAlignment"] = static_cast<int>(_crossAlignment);
+    node["participatesInLayout"] = _bParticipatesInLayout;
+}
+
 void UIBoxSlot::setSizeRule(EUIBoxSlotSizeRule value)
 {
     if (_sizeRule != value) {
@@ -93,13 +114,24 @@ void UIBoxSlot::setWeight(float value)
     }
 }
 
-void UIBoxSlot::setMargin(glm::vec2 value)
+void UIBoxSlot::setMargin(FMargin value)
 {
-    value = glm::max(value, glm::vec2(0.0f));
+    value.left   = std::max(value.left, 0.0f);
+    value.top    = std::max(value.top, 0.0f);
+    value.right  = std::max(value.right, 0.0f);
+    value.bottom = std::max(value.bottom, 0.0f);
     if (_margin != value) {
         _margin = value;
         invalidateMeasure();
     }
+}
+
+void UIBoxSlot::apply(const FBoxSlotArgs& args)
+{
+    setSizeRule(args.sizeRule);
+    setWeight(args.weight);
+    setMargin(args.margin);
+    setCrossAlignment(args.crossAlignment);
 }
 
 void UIBoxSlot::setCrossAlignment(EUIBoxSlotCrossAlignment value)
@@ -250,9 +282,9 @@ glm::vec2 UIBoxLayout::measure(const UIElement& parent) const
             continue;
         }
         const glm::vec2 desired = resolveDesiredSize(parent, child);
-        const glm::vec2 margin  = slotMargin(parent, child);
-        main += (bHorizontal ? desired.x : desired.y) + (bHorizontal ? margin.x : margin.y) * 2.0f;
-        cross = std::max(cross, (bHorizontal ? desired.y : desired.x) + (bHorizontal ? margin.y : margin.x) * 2.0f);
+        const FMargin   margin  = slotMargin(parent, child);
+        main += (bHorizontal ? desired.x : desired.y) + (bHorizontal ? margin.horizontal() : margin.vertical());
+        cross = std::max(cross, (bHorizontal ? desired.y : desired.x) + (bHorizontal ? margin.vertical() : margin.horizontal()));
         ++count;
     }
     if (count > 1) {
@@ -278,7 +310,7 @@ void UIBoxLayout::arrange(UIElement& parent, const Rect2D& rect) const
         UIElement*       child = nullptr;
         const UIBoxSlot* slot  = nullptr;
         glm::vec2        desired{};
-        glm::vec2        margin{};
+        FMargin          margin{};
         float            mainExtent = 0.0f;
         float            maxMain = std::numeric_limits<float>::max();
         float            weight = 0.0f;
@@ -311,9 +343,9 @@ void UIBoxLayout::arrange(UIElement& parent, const Rect2D& rect) const
     float packedMain = entries.empty() ? 0.0f : static_cast<float>(entries.size() - 1) * _spacing;
     for (FEntry& entry : entries) {
         const float desiredMain = bHorizontal ? entry.desired.x : entry.desired.y;
-        const float marginMain  = bHorizontal ? entry.margin.x : entry.margin.y;
+        const float marginMain  = bHorizontal ? entry.margin.horizontal() : entry.margin.vertical();
         entry.mainExtent = entry.bFill ? entry.mainExtent : desiredMain;
-        packedMain += entry.mainExtent + marginMain * 2.0f;
+        packedMain += entry.mainExtent + marginMain;
     }
 
     float remainder = std::max(0.0f, contentMain - packedMain);
@@ -358,12 +390,14 @@ void UIBoxLayout::arrange(UIElement& parent, const Rect2D& rect) const
     }
 
     for (FEntry& entry : entries) {
-        const float marginMain  = bHorizontal ? entry.margin.x : entry.margin.y;
-        const float marginCross = bHorizontal ? entry.margin.y : entry.margin.x;
+        const float marginBefore = bHorizontal ? entry.margin.left : entry.margin.top;
+        const float marginAfter  = bHorizontal ? entry.margin.right : entry.margin.bottom;
+        const float marginCrossBefore = bHorizontal ? entry.margin.top : entry.margin.left;
+        const float marginCross       = bHorizontal ? entry.margin.vertical() : entry.margin.horizontal();
         const float desiredCross = bHorizontal ? entry.desired.y : entry.desired.x;
-        const float availableCross = std::max(0.0f, contentCross - marginCross * 2.0f);
+        const float availableCross = std::max(0.0f, contentCross - marginCross);
         float crossExtent = availableCross;
-        float crossPos = (bHorizontal ? content.pos.y : content.pos.x) + marginCross;
+        float crossPos = (bHorizontal ? content.pos.y : content.pos.x) + marginCrossBefore;
 
         const EUIBoxSlotCrossAlignment crossAlignment =
             entry.slot ? entry.slot->getCrossAlignment() : EUIBoxSlotCrossAlignment::Stretch;
@@ -378,7 +412,7 @@ void UIBoxLayout::arrange(UIElement& parent, const Rect2D& rect) const
             }
         }
 
-        cursor += marginMain;
+        cursor += marginBefore;
         Rect2D childRect;
         if (bHorizontal) {
             childRect = {
@@ -393,13 +427,16 @@ void UIBoxLayout::arrange(UIElement& parent, const Rect2D& rect) const
             };
         }
         entry.child->layoutAssigned(childRect);
-        cursor += entry.mainExtent + marginMain + _spacing;
+        cursor += entry.mainExtent + marginAfter + _spacing;
     }
 }
 
-void UISingleChildLayout::setPadding(glm::vec2 value)
+void UISingleChildLayout::setPadding(FMargin value)
 {
-    value = glm::max(value, glm::vec2(0.0f));
+    value.left   = std::max(value.left, 0.0f);
+    value.top    = std::max(value.top, 0.0f);
+    value.right  = std::max(value.right, 0.0f);
+    value.bottom = std::max(value.bottom, 0.0f);
     if (_padding != value) {
         _padding = value;
         invalidateMeasure();
@@ -410,22 +447,160 @@ glm::vec2 UISingleChildLayout::measure(const UIElement& parent) const
 {
     for (UIElement* child : parent.getChildrenInPaintOrder()) {
         if (child->participatesInLayout()) {
-            return glm::max(child->computeDesiredSize() + _padding * 2.0f, glm::vec2(0.0f));
+            return glm::max(child->computeDesiredSize() + _padding.size(), glm::vec2(0.0f));
         }
     }
-    return _padding * 2.0f;
+    return glm::max(_padding.size(), glm::vec2(0.0f));
 }
 
 void UISingleChildLayout::arrange(UIElement& parent, const Rect2D& rect) const
 {
     Rect2D contentRect = rect;
-    contentRect.pos += _padding;
-    contentRect.extent = glm::max(contentRect.extent - _padding * 2.0f, glm::vec2(0.0f));
+    contentRect.pos += _padding.minOffset();
+    contentRect.extent = glm::max(contentRect.extent - _padding.size(), glm::vec2(0.0f));
     for (UIElement* child : parent.getChildrenInPaintOrder()) {
         if (child->participatesInLayout()) {
             child->layoutAssigned(contentRect);
             return;
         }
+    }
+}
+
+UIOverlaySlot::UIOverlaySlot(UIElement& parent, UIElement& child)
+    : UISlot(parent, child)
+{
+}
+
+void UIOverlaySlot::appendRuntimeDiagnostics(nlohmann::json& node) const
+{
+    auto alignmentName = [](EUIOverlayAlignment value) {
+        switch (value) {
+        case EUIOverlayAlignment::Fill: return "fill";
+        case EUIOverlayAlignment::Start: return "start";
+        case EUIOverlayAlignment::Center: return "center";
+        case EUIOverlayAlignment::End: return "end";
+        }
+        return "unknown";
+    };
+    node["type"] = "overlay";
+    node["hAlign"] = alignmentName(_hAlign);
+    node["vAlign"] = alignmentName(_vAlign);
+    node["padding"] = {{"left", _padding.left}, {"top", _padding.top}, {"right", _padding.right}, {"bottom", _padding.bottom}};
+}
+
+void UIOverlaySlot::setHAlign(EUIOverlayAlignment value)
+{
+    if (_hAlign != value) {
+        _hAlign = value;
+        invalidateArrange();
+    }
+}
+
+void UIOverlaySlot::setVAlign(EUIOverlayAlignment value)
+{
+    if (_vAlign != value) {
+        _vAlign = value;
+        invalidateArrange();
+    }
+}
+
+void UIOverlaySlot::setPadding(FMargin value)
+{
+    value.left   = std::max(value.left, 0.0f);
+    value.top    = std::max(value.top, 0.0f);
+    value.right  = std::max(value.right, 0.0f);
+    value.bottom = std::max(value.bottom, 0.0f);
+    if (_padding != value) {
+        _padding = value;
+        invalidateMeasure();
+    }
+}
+
+void UIOverlaySlot::apply(const FOverlaySlotArgs& args)
+{
+    setHAlign(args.hAlign);
+    setVAlign(args.vAlign);
+    setPadding(args.padding);
+}
+
+std::unique_ptr<UISlot> UIOverlayLayout::createSlot(UIElement& parent, UIElement& child) const
+{
+    return std::make_unique<UIOverlaySlot>(parent, child);
+}
+
+namespace
+{
+
+const UIOverlaySlot* getOverlaySlot(const UIElement& parent, const UIElement& child)
+{
+    return dynamic_cast<const UIOverlaySlot*>(parent.getSlotForChild(child));
+}
+
+float overlayAxis(float start, float available, float desired, EUIOverlayAlignment align)
+{
+    if (align == EUIOverlayAlignment::Fill) {
+        return start;
+    }
+    const float extent = std::min(desired, available);
+    if (align == EUIOverlayAlignment::Center) {
+        return start + std::max(0.0f, (available - extent) * 0.5f);
+    }
+    if (align == EUIOverlayAlignment::End) {
+        return start + std::max(0.0f, available - extent);
+    }
+    return start;
+}
+
+float overlayExtent(float available, float desired, EUIOverlayAlignment align)
+{
+    if (align == EUIOverlayAlignment::Fill) {
+        return std::max(0.0f, available);
+    }
+    return std::max(0.0f, std::min(desired, available));
+}
+
+} // namespace
+
+glm::vec2 UIOverlayLayout::measure(const UIElement& parent) const
+{
+    glm::vec2 desired{};
+    for (UIElement* child : parent.getChildrenInPaintOrder()) {
+        if (!child->participatesInLayout()) {
+            continue;
+        }
+        glm::vec2 childDesired = child->computeDesiredSize();
+        if (const UIOverlaySlot* slot = getOverlaySlot(parent, *child)) {
+            childDesired += slot->getPadding().size();
+        }
+        desired = glm::max(desired, childDesired);
+    }
+    return glm::max(desired, glm::vec2(0.0f));
+}
+
+void UIOverlayLayout::arrange(UIElement& parent, const Rect2D& rect) const
+{
+    for (UIElement* child : parent.getChildrenInPaintOrder()) {
+        if (!child->participatesInLayout()) {
+            continue;
+        }
+        FMargin padding{};
+        EUIOverlayAlignment hAlign = EUIOverlayAlignment::Fill;
+        EUIOverlayAlignment vAlign = EUIOverlayAlignment::Fill;
+        if (const UIOverlaySlot* slot = getOverlaySlot(parent, *child)) {
+            padding = slot->getPadding();
+            hAlign  = slot->getHAlign();
+            vAlign  = slot->getVAlign();
+        }
+        Rect2D inner = rect;
+        inner.pos += padding.minOffset();
+        inner.extent = glm::max(inner.extent - padding.size(), glm::vec2(0.0f));
+        const glm::vec2 desired = child->computeDesiredSize();
+        Rect2D childRect;
+        childRect.pos.x    = overlayAxis(inner.pos.x, inner.extent.x, desired.x, hAlign);
+        childRect.pos.y    = overlayAxis(inner.pos.y, inner.extent.y, desired.y, vAlign);
+        childRect.extent.x = overlayExtent(inner.extent.x, desired.x, hAlign);
+        childRect.extent.y = overlayExtent(inner.extent.y, desired.y, vAlign);
+        child->layoutAssigned(childRect);
     }
 }
 
@@ -835,4 +1010,3 @@ YA_REFLECT_ENUM_BEGIN(ya::EScrollAxis)
 YA_REFLECT_ENUM_VALUE(Vertical)
 YA_REFLECT_ENUM_VALUE(Horizontal)
 YA_REFLECT_ENUM_END()
-

@@ -11,8 +11,10 @@
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Overlay.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
+#include "GUI/Widgets/Controls/SizeBox.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
@@ -467,7 +469,7 @@ TEST(WidgetLayoutTest, BoxSlotsKeepEdgeStateLocalAcrossNestedReparent)
     EXPECT_EQ(child->getSlot(), childSlot);
     EXPECT_EQ(&childSlot->getParent(), inner.get());
     EXPECT_EQ(childSlot->getSizeRule(), EUIBoxSlotSizeRule::Fill);
-    EXPECT_EQ(childSlot->getMargin(), glm::vec2(3.0f, 2.0f));
+    EXPECT_EQ(childSlot->getMargin(), FMargin::hv(3.0f, 2.0f));
 
     tree.reparent(*outer, child);
     auto* reparentedSlot = outer->getBoxSlot(*child);
@@ -476,7 +478,7 @@ TEST(WidgetLayoutTest, BoxSlotsKeepEdgeStateLocalAcrossNestedReparent)
     EXPECT_EQ(&reparentedSlot->getParent(), outer.get());
     EXPECT_EQ(inner->getBoxSlot(*child), nullptr);
     EXPECT_EQ(reparentedSlot->getSizeRule(), EUIBoxSlotSizeRule::Auto);
-    EXPECT_EQ(reparentedSlot->getMargin(), glm::vec2(0.0f, 0.0f));
+    EXPECT_EQ(reparentedSlot->getMargin(), FMargin{});
 
     reparentedSlot->setSizeRule(EUIBoxSlotSizeRule::Fill);
     reparentedSlot->setWeight(1.0f);
@@ -664,5 +666,91 @@ TEST(WidgetLayoutTest, MeasureTextUsesResolvedFallbackGlyphAdvances)
     const std::string text = "\xE4\xBD\xA0\xE5\xA5\xBD"; // 你好 (UTF-8)
     EXPECT_FLOAT_EQ(view->measureText(text), 2.0f * 64.0f * 13.0f / 64.0f);
     FontManager::get()->clearCache();
+}
+
+TEST(WidgetLayoutTest, BoxSlotFourSideMarginIsNotSymmetric)
+{
+    WidgetTree tree({.width = 200, .height = 80});
+    auto box = std::make_shared<UIContainer>("Box");
+    box->setSize({200.0f, 80.0f});
+    box->setDirection(EWidgetBoxLayout::Horizontal);
+    box->setPadding({0.0f, 0.0f});
+    box->setSpacing(0.0f);
+    tree.attachToLayer(WidgetTree::ELayer::Content, box);
+
+    auto left = std::make_shared<UIPanel>("Left");
+    left->setSize({40.0f, 20.0f});
+    auto right = std::make_shared<UIPanel>("Right");
+    right->setSize({40.0f, 20.0f});
+    tree.attach(*box, left);
+    tree.attach(*box, right);
+    box->getBoxSlot(*right)->setMargin(FMargin{10.0f, 5.0f, 2.0f, 1.0f});
+
+    tree.layout();
+    EXPECT_FLOAT_EQ(left->_layoutRect.pos.x, 0.0f);
+    EXPECT_FLOAT_EQ(right->_layoutRect.pos.x, 50.0f); // 40 + left margin 10
+    EXPECT_FLOAT_EQ(right->_layoutRect.pos.y, 5.0f);
+    EXPECT_FLOAT_EQ(right->_layoutRect.extent.x, 40.0f);
+}
+
+TEST(WidgetLayoutTest, OverlaySlotAlignsWithoutChildAnchors)
+{
+    WidgetTree tree({.width = 200, .height = 100});
+    auto overlay = std::make_shared<UIOverlay>("Host");
+    overlay->setSize({200.0f, 100.0f});
+    overlay->_bAutoSize = false;
+    tree.attachToLayer(WidgetTree::ELayer::Content, overlay);
+
+    auto fill = std::make_shared<UIPanel>("Fill");
+    fill->setSize({10.0f, 10.0f});
+    auto badge = std::make_shared<UIPanel>("Badge");
+    badge->setSize({20.0f, 12.0f});
+    tree.attach(*overlay, fill);
+    tree.attach(*overlay, badge);
+    overlay->getOverlaySlot(*badge)->apply(FOverlaySlotArgs{
+        .hAlign  = EUIOverlayAlignment::End,
+        .vAlign  = EUIOverlayAlignment::Start,
+        .padding = FMargin::all(8.0f),
+    });
+
+    tree.layout();
+    EXPECT_FLOAT_EQ(fill->_layoutRect.pos.x, 0.0f);
+    EXPECT_FLOAT_EQ(fill->_layoutRect.extent.x, 200.0f);
+    EXPECT_FLOAT_EQ(fill->_layoutRect.extent.y, 100.0f);
+    EXPECT_FLOAT_EQ(badge->_layoutRect.extent.x, 20.0f);
+    EXPECT_FLOAT_EQ(badge->_layoutRect.extent.y, 12.0f);
+    EXPECT_FLOAT_EQ(badge->_layoutRect.pos.x, 172.0f); // 8 + (184 - 20)
+    EXPECT_FLOAT_EQ(badge->_layoutRect.pos.y, 8.0f);
+
+    const auto dump = dumpWidgetTree(tree);
+    const auto* hostNode = findWidgetNode(dump, "Host");
+    const auto* badgeNode = findWidgetNode(dump, "Badge");
+    ASSERT_NE(hostNode, nullptr);
+    ASSERT_NE(badgeNode, nullptr);
+    EXPECT_EQ((*hostNode)["layout"]["type"], "overlay");
+    EXPECT_EQ((*badgeNode)["slot"]["type"], "overlay");
+    EXPECT_EQ((*badgeNode)["slot"]["hAlign"], "end");
+}
+
+TEST(WidgetLayoutTest, SizeBoxPadsChildAndHonorsWidthOverride)
+{
+    WidgetTree tree({.width = 120, .height = 80});
+    auto box = std::make_shared<UISizeBox>("Box");
+    box->_bAutoSize = true;
+    box->setPadding(FMargin{8.0f, 2.0f, 8.0f, 2.0f});
+    box->setWidthOverride(40.0f);
+    tree.attachToLayer(WidgetTree::ELayer::Content, box);
+
+    auto child = std::make_shared<UIPanel>("Inner");
+    child->setSize({10.0f, 10.0f});
+    tree.attach(*box, child);
+
+    tree.layout();
+    EXPECT_FLOAT_EQ(box->_layoutRect.extent.x, 40.0f);
+    EXPECT_FLOAT_EQ(box->_layoutRect.extent.y, 14.0f); // 10 + 2 + 2
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.x, 8.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.y, 2.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 24.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 10.0f);
 }
 } // namespace ya

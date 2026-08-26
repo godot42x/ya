@@ -50,6 +50,9 @@ struct YA_GUI_API UIDragFloat : public UIElement
     void setValue(float value);
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
+        node["control"] = {{"type", "dragFloat"}, {"value", _value}};
+    }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void onFocusLost() override;
     void clearTransientInputState() override
@@ -113,6 +116,9 @@ struct YA_GUI_API UISpinBox : public UIElement
     void setValue(float value);
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
+        node["control"] = {{"type", "spinBox"}, {"value", _value}};
+    }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void onFocusLost() override;
     void clearTransientInputState() override
@@ -187,6 +193,9 @@ struct YA_GUI_API UIRadioButton : public UIElement
     }
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
+        node["control"] = {{"type", "radioButton"}, {"checked", _bChecked}};
+    }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
     void onPointerEnter() override { _bHovered = true; }
@@ -228,6 +237,11 @@ struct YA_GUI_API UIColorEdit : public UIElement
     void setColor(const glm::vec4& value);
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
+        node["control"] = {{"type", "colorEdit"},
+                               {"color", {_color.r, _color.g, _color.b, _color.a}},
+                               {"activeChannel", _activeChannel}};
+    }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void clearTransientInputState() override
     {
@@ -282,6 +296,11 @@ struct YA_GUI_API UISearchComboBox : public UIElement
     }
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
+        node["control"] = {{"type", "searchComboBox"},
+                               {"selectedIndex", _selectedIndex},
+                               {"filter", _filter}};
+    }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void onFocusGained(bool /*bFromKeyboard*/) override { _bFocused = true; }
     void onFocusLost() override { _bFocused = false; }

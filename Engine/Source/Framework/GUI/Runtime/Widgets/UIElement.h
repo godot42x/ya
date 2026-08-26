@@ -435,7 +435,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     virtual void updateDropHover(const UIDragDropOperation& operation,
                                  const glm::vec2& logicalPoint);
     /// Start an operation owned by the widget tree. Any UIElement may invoke
-    /// this; UIDragSource is only the default pointer-gesture helper.
+    /// this; drag-source widget subclasses are not required.
     bool beginDragOperation(UIDragDropOperationRef operation,
                             bool bShowGhost = true,
                             bool bSkipSourceInHitTest = false);

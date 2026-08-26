@@ -346,8 +346,8 @@ void UIDockFloatingWindow::beginDockDrag()
         // window, endDrag() already calls DockSpace::onDrop. Re-dropping here
         // would double-dock and corrupt the dock model (crash). So onFinished
         // only clears the preview.
-        std::optional<UIDockSpace::FDropPreview> lastPreview;
-        observer.onMove = [this, payload, &lastPreview](const std::string&, const glm::vec2& logicalPoint, std::string_view)
+        auto lastPreview = std::make_shared<std::optional<UIDockSpace::FDropPreview>>();
+        observer.onMove = [this, payload, lastPreview](const std::string&, const glm::vec2& logicalPoint, std::string_view)
         {
             // Follow the pointer: move the floating window with the drag while
             // simultaneously projecting the dock chooser onto the DockSpace
@@ -371,12 +371,12 @@ void UIDockFloatingWindow::beginDockDrag()
             if (space->hasDropPreview()) {
                 // A leaf is under the pointer: remember the chooser so it can be
                 // restored while the pointer is over empty canvas.
-                lastPreview = space->dropPreview();
+                *lastPreview = space->dropPreview();
             }
-            else if (lastPreview) {
+            else if (*lastPreview) {
                 // Pointer over empty space / the floating window itself: keep the
                 // last chooser visible instead of letting it vanish.
-                space->setDropPreview(*lastPreview);
+                space->setDropPreview(**lastPreview);
             }
         };
         observer.onTargetChanged = [](std::string_view, std::string_view) {};

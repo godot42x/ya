@@ -35,6 +35,15 @@ struct YA_GUI_API UIScrollViewport : public UIElement
 
     [[nodiscard]] UIScrollLayout& getScrollLayout() { return _scrollLayout; }
     [[nodiscard]] const UIScrollLayout& getScrollLayout() const { return _scrollLayout; }
+    void                                appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override
+    {
+        const auto& l     = _scrollLayout;
+        node["type"]      = "scroll";
+        node["axis"]      = l.getAxis() == EScrollAxis::Vertical ? "vertical" : "horizontal";
+        node["offset"]    = l.getScrollOffset();
+        node["maxOffset"] = l.getMaxScrollOffset();
+        node["step"]      = l.getScrollStep();
+    }
     void setAxis(EScrollAxis value) { _scrollLayout.setAxis(value); }
     void setScrollOffset(float value)
     {

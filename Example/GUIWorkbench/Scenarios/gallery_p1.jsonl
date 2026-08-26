@@ -1,11 +1,13 @@
 # GUIWorkbench --start-page=Interactions --scenario-render. P6: tooltip
 # dwell, wrapped text, subtree disable and the modal dialog. (The tooltip
 # dwell counts rendered frames, so this scenario needs --scenario-render.)
+# Coordinates assume 1280x720 with current workbench chrome (DemoHost x≈311).
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
 {"assert":{"widget":"WrappedText","rect":{"w":360.0,"h":85.3125}}}
 {"checkpoint":"wrapped_text"}
-{"event":"mouse_move","x":100,"y":115}
+# Hover TooltipBtn center (≈327,87 200x26).
+{"event":"mouse_move","x":427,"y":100}
 {"frame":35}
 {"assert":{"widget":"TooltipHost"}}
 {"checkpoint":"tooltip_shown"}
@@ -13,22 +15,22 @@
 {"frame":2}
 {"assert":{"layers":{"Tooltip":{"children":[]}}}}
 {"checkpoint":"tooltip_cleared"}
-# Subtree disable: toggle the group off, a press on GroupBtnA must not
-# route anywhere (disabled subtree is input-inert).
-{"event":"mouse_press","x":640,"y":318,"button":0}
-{"event":"mouse_release","x":640,"y":318,"button":0}
+# Subtree disable: toggle the group off (ToggleGroupBtn ≈327,289), then a
+# press on GroupBtnA (≈327,251 140x26) must not route (input-inert).
+{"event":"mouse_press","x":427,"y":302,"button":0}
+{"event":"mouse_release","x":427,"y":302,"button":0}
 {"frame":2}
-{"event":"mouse_press","x":86,"y":280,"button":0}
-{"event":"mouse_release","x":86,"y":280,"button":0}
+{"event":"mouse_press","x":397,"y":264,"button":0}
+{"event":"mouse_release","x":397,"y":264,"button":0}
 {"frame":2}
 {"assert":{"lastRoute":{"resultName":"notHandled"}}}
 {"checkpoint":"group_disabled"}
-{"event":"mouse_press","x":640,"y":318,"button":0}
-{"event":"mouse_release","x":640,"y":318,"button":0}
+{"event":"mouse_press","x":427,"y":302,"button":0}
+{"event":"mouse_release","x":427,"y":302,"button":0}
 {"frame":2}
-# Modal dialog: open, then confirm through OK; the popup layer empties.
-{"event":"mouse_press","x":640,"y":385,"button":0}
-{"event":"mouse_release","x":640,"y":385,"button":0}
+# Modal dialog: OpenDialogBtn ≈327,356; DialogOK center ≈(705,389).
+{"event":"mouse_press","x":427,"y":370,"button":0}
+{"event":"mouse_release","x":427,"y":370,"button":0}
 {"frame":2}
 {"assert":{"widget":"Dialog","control":{"type":"popupOverlay","modal":true}}}
 {"checkpoint":"dialog_open"}

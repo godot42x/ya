@@ -72,6 +72,9 @@ struct YA_GUI_API UITableGrid : public UIElement
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
+        node["control"] = {{"type", "tableGrid"}, {"selected", _selectedIndex ? _selectedIndex->value() : -1}};
+    }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     [[nodiscard]] bool isHoverable() const override { return true; }

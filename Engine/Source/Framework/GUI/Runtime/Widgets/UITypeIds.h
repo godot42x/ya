@@ -30,5 +30,7 @@ inline constexpr const char* kTypeIdImage          = "engine.image";
 inline constexpr const char* kTypeIdMenuBar        = "engine.menu_bar";
 inline constexpr const char* kTypeIdMenu           = "engine.menu";
 inline constexpr const char* kTypeIdTabBar         = "engine.tab_bar";
+inline constexpr const char* kTypeIdOverlay        = "engine.overlay";
+inline constexpr const char* kTypeIdSizeBox        = "engine.size_box";
 
 } // namespace ya

@@ -12,8 +12,10 @@
 namespace ya
 {
 
-/// Button: panel style with hover/pressed/focused states (gui-app-bootstrap
-/// Phase 2 focus contract).
+/// Button: single-child content control (Slate ContentControl). It has no
+/// text property; a typical label is a UIText child constructed into the
+/// content slot. Hover/pressed/focused states follow the Phase 2 focus
+/// contract.
 ///
 /// Input semantics:
 ///   - pointer press requests tree focus and starts a pointer capture
@@ -46,23 +48,33 @@ struct YA_GUI_API UIButton : public UIElement
     /// no bare per-state color fields anymore (Phase 3 cleanup).
     std::string _styleKey = "button";
 
-    [[nodiscard]] UISingleChildLayout& getContentLayout() { return _contentLayout; }
+    [[nodiscard]] UISingleChildLayout&       getContentLayout() { return _contentLayout; }
     [[nodiscard]] const UISingleChildLayout& getContentLayout() const { return _contentLayout; }
-    void setContentPadding(glm::vec2 value) { _contentLayout.setPadding(value); }
-    [[nodiscard]] const glm::vec2& getContentPadding() const { return _contentLayout.getPadding(); }
+    void                                     setContentPadding(glm::vec2 value) { _contentLayout.setPadding(value); }
+    [[nodiscard]] glm::vec2                  getContentPadding() const
+    {
+        const FMargin& padding = _contentLayout.getPadding();
+        return {padding.left, padding.top};
+    }
+    void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override
+    {
+        node["type"]    = "singleChild";
+        node["padding"] = {{"x", getContentPadding().x}, {"y", getContentPadding().y}};
+    }
 
     // Runtime-only state (not serialized). VisualFlag auto-marks the button
     // paint-dirty on change, so hover/pressed/focused re-paint immediately.
-    VisualFlag           _bHovered{*this};
-    VisualFlag           _bPressed{*this};
-    VisualFlag           _bFocused{*this};
+    VisualFlag            _bHovered{*this};
+    VisualFlag            _bPressed{*this};
+    VisualFlag            _bFocused{*this};
     std::function<void()> _onClick;
 
     /// Reactive enabled binding (paint-dirty). Disabled dims the fill color.
-    void bindEnabled(std::shared_ptr<Reactive<bool>> ref) { _enabledBinding = std::move(ref); }
+    void               bindEnabled(std::shared_ptr<Reactive<bool>> ref) { _enabledBinding = std::move(ref); }
     [[nodiscard]] bool resolvedEnabled() const { return _enabledBinding ? _enabledBinding->get() : true; }
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
     void onPointerEnter() override { _bHovered = true; }
@@ -77,12 +89,12 @@ struct YA_GUI_API UIButton : public UIElement
     // UISingleChildLayout. With
     // base _bAutoSize set, desired size = first visible content child's
     // desired size + padding, so a text/image label sizes the button.
-    void layout(const Rect2D& parentRect) override;
-    void layoutAssigned(const Rect2D& rect) override;
+    void                    layout(const Rect2D& parentRect) override;
+    void                    layoutAssigned(const Rect2D& rect) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 
-private:
-    UISingleChildLayout _contentLayout;
+  private:
+    UISingleChildLayout             _contentLayout;
     std::shared_ptr<Reactive<bool>> _enabledBinding;
 };
 

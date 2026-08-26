@@ -1,23 +1,23 @@
 # GUIWorkbench --start-page=Gallery. TreeView editing capabilities: filter
 # narrows the visible rows; the table grid hosts a real button widget in a
-# cell. Coordinates assume the window size below with the gallery scrolled.
+# cell. Coordinates assume 1280x720 with current workbench chrome
+# (DemoHost x≈311). Filter field is on-screen without scrolling.
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
 {"assert":{"widget":"GalleryTree","control":{"type":"treeView"}}}
 {"assert":{"widget":"GalleryCellButton","control":{"type":"button"}}}
 {"checkpoint":"editing_widgets"}
-# Click the filter field (page top, ~ (151, 604)) and type 'Li': only the
-# Light chain stays visible (light + point + spot = 3 rows).
-{"event":"mouse_press","x":151,"y":604,"button":0}
-{"event":"mouse_release","x":151,"y":604,"button":0}
+# Click GalleryTreeFilter (≈383,575 160x24) and type 'Li': Scene Root +
+# Light chain stay visible (4 rows).
+{"event":"mouse_press","x":463,"y":587,"button":0}
+{"event":"mouse_release","x":463,"y":587,"button":0}
 {"event":"key_typed","text":"Li"}
 {"frame":2}
 {"assert":{"widget":"GalleryTree","control":{"type":"treeView","visibleRows":4}}}
 {"checkpoint":"tree_filtered"}
-# Manual collapse still works while the filter is active (the filter
-# expands matching chains once, then manual toggles stay authoritative).
-{"event":"mouse_press","x":43,"y":495,"button":0}
-{"event":"mouse_release","x":43,"y":495,"button":0}
+# Collapse Light (row 1, depth-1 arrow) while the filter is active.
+{"event":"mouse_press","x":354,"y":479,"button":0}
+{"event":"mouse_release","x":354,"y":479,"button":0}
 {"frame":2}
 {"assert":{"widget":"GalleryTree","control":{"type":"treeView","visibleRows":2}}}
 {"checkpoint":"collapse_while_filtered"}

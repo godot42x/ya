@@ -6,7 +6,7 @@
 {"frame":3}
 {"assert":{"widget":"GalleryScroll","control":{"type":"scrollViewport"}}}
 {"checkpoint":"scroll_exists"}
-# Scroll to the bottom: 26 wheel steps x 40px >= maxOffset (~782), clamped.
+# Scroll to the bottom: 26 wheel steps x 40px >= maxOffset (~710), clamped.
 {"event":"mouse_wheel","x":640,"y":300,"dy":-1}
 {"event":"mouse_wheel","x":640,"y":300,"dy":-1}
 {"event":"mouse_wheel","x":640,"y":300,"dy":-1}
@@ -35,50 +35,46 @@
 {"event":"mouse_wheel","x":640,"y":300,"dy":-1}
 {"frame":2}
 {"checkpoint":"scrolled_bottom"}
-# Double-click DragFloat (scrolled position ~ (155, 339)) and type 1.5.
-{"event":"mouse_press","x":155,"y":339,"button":0}
-{"event":"mouse_release","x":155,"y":339,"button":0}
-{"event":"mouse_press","x":155,"y":339,"button":0}
-{"event":"mouse_release","x":155,"y":339,"button":0}
+# After clamp, maxOffset≈710. Widget screen y = layoutY - offset.
+# DragFloat ≈ (406,416) 120x24; double-click center and type 1.5.
+{"event":"mouse_press","x":466,"y":428,"button":0}
+{"event":"mouse_release","x":466,"y":428,"button":0}
+{"event":"mouse_press","x":466,"y":428,"button":0}
+{"event":"mouse_release","x":466,"y":428,"button":0}
 {"event":"key_typed","text":"1.5"}
 {"event":"key_press","key":"Enter"}
 {"frame":2}
 {"assert":{"widget":"GalleryDragFloat","control":{"type":"dragFloat","value":1.5}}}
 {"checkpoint":"dragfloat_edited"}
-# Single-click the SpinBox middle value area (scrolled position ~ (139, 375))
-# enters edit mode directly; type 4.
-{"event":"mouse_press","x":139,"y":375,"button":0}
-{"event":"mouse_release","x":139,"y":375,"button":0}
+# SpinBox ≈ (390,452) 120x24; middle value area (not +/-) enters edit; type 4.
+{"event":"mouse_press","x":450,"y":464,"button":0}
+{"event":"mouse_release","x":450,"y":464,"button":0}
 {"event":"key_typed","text":"4"}
 {"event":"key_press","key":"Enter"}
 {"frame":2}
 {"assert":{"widget":"GallerySpinBox","control":{"type":"spinBox","value":4.0}}}
 {"checkpoint":"spinbox_edited"}
-# Click the ColorEdit alpha channel cell (scrolled position ~ (222, 447))
-# to select channel 3; the swatch drag path is visually verified by hand.
-{"event":"mouse_press","x":222,"y":447,"button":0}
-{"event":"mouse_release","x":222,"y":447,"button":0}
+# ColorEdit ≈ (406,522) 170x28. Alpha channel cell (ch 3) is the 4th 26px strip.
+{"event":"mouse_press","x":533,"y":536,"button":0}
+{"event":"mouse_release","x":533,"y":536,"button":0}
 {"frame":2}
 {"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","activeChannel":3}}}
 {"checkpoint":"color_channel_selected"}
-# Click the swatch (scrolled position ~ (107, 446)): the preset palette
-# popup opens below it.
-{"event":"mouse_press","x":107,"y":446,"button":0}
-{"event":"mouse_release","x":107,"y":446,"button":0}
+# Swatch at ColorEdit+4; palette opens below it.
+{"event":"mouse_press","x":419,"y":536,"button":0}
+{"event":"mouse_release","x":419,"y":536,"button":0}
 {"frame":2}
 {"assert":{"widget":"ColorPaletteOverlay","control":{"type":"popupOverlay","modal":false}}}
 {"checkpoint":"palette_open"}
-# Pick the first palette cell (scrolled position ~ (110, 472)): the overlay
-# closes itself after the pick.
-{"event":"mouse_press","x":110,"y":472,"button":0}
-{"event":"mouse_release","x":110,"y":472,"button":0}
+# First palette cell (22px) at overlay origin.
+{"event":"mouse_press","x":421,"y":561,"button":0}
+{"event":"mouse_release","x":421,"y":561,"button":0}
 {"frame":2}
 {"assert":{"layers":{"Popup":{"children":[]}}}}
 {"checkpoint":"palette_picked"}
-# SearchCombo: click (scrolled position ~ (200, 485)) opens the filtered
-# menu; type 'To' narrows to Torus; pick the first item and the menu closes.
-{"event":"mouse_press","x":200,"y":485,"button":0}
-{"event":"mouse_release","x":200,"y":485,"button":0}
+# SearchCombo ≈ (422,562) 180x24; type 'To' then pick Torus.
+{"event":"mouse_press","x":512,"y":574,"button":0}
+{"event":"mouse_release","x":512,"y":574,"button":0}
 {"frame":2}
 {"assert":{"widget":"GallerySearchCombo","control":{"type":"searchComboBox"}}}
 {"checkpoint":"search_menu_open"}
@@ -86,8 +82,8 @@
 {"frame":2}
 {"assert":{"widget":"GallerySearchCombo","control":{"type":"searchComboBox","filter":"To"}}}
 {"checkpoint":"search_filtered"}
-{"event":"mouse_press","x":150,"y":508,"button":0}
-{"event":"mouse_release","x":150,"y":508,"button":0}
+{"event":"mouse_press","x":472,"y":600,"button":0}
+{"event":"mouse_release","x":472,"y":600,"button":0}
 {"frame":2}
 {"assert":{"layers":{"Popup":{"children":[]}}}}
 {"checkpoint":"search_picked"}

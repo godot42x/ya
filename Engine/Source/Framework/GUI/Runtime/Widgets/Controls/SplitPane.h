@@ -41,6 +41,16 @@ struct YA_GUI_API UISplitPane : public UIElement
 
     [[nodiscard]] UISplitLayout& getSplitLayout() { return _splitLayout; }
     [[nodiscard]] const UISplitLayout& getSplitLayout() const { return _splitLayout; }
+    void                               appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override
+    {
+        const auto& l            = _splitLayout;
+        node["type"]             = "split";
+        node["orientation"]      = l.getOrientation() == ESplitOrientation::Vertical ? "vertical" : "horizontal";
+        node["ratio"]            = l.getSplitRatio();
+        node["dividerThickness"] = l.getDividerThickness();
+        node["minFirstExtent"]   = l.getMinFirstExtent();
+        node["minSecondExtent"]  = l.getMinSecondExtent();
+    }
     void setOrientation(ESplitOrientation value) { _splitLayout.setOrientation(value); }
     void setSplitRatio(float value) { _splitLayout.setSplitRatio(value); }
     void setMinFirstExtent(float value) { _splitLayout.setMinFirstExtent(value); }

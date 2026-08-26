@@ -25,6 +25,7 @@ public:
 
     [[nodiscard]] UIElement& getParent() const { return *_parent; }
     [[nodiscard]] UIElement& getChild() const { return *_child; }
+    virtual void appendRuntimeDiagnostics(nlohmann::json& node) const;
 
 protected:
     void invalidateMeasure() const;
@@ -33,6 +34,40 @@ protected:
 private:
     UIElement* _parent = nullptr;
     UIElement* _child  = nullptr;
+};
+
+/// Four-side inset used by box/overlay slots and single-child padding.
+/// `glm::vec2` overloads mean uniform horizontal / vertical (left=right, top=bottom).
+/// Not an aggregate: `{x, y}` must not silently become left/top with zero right/bottom.
+struct FMargin
+{
+    float left   = 0.0f;
+    float top    = 0.0f;
+    float right  = 0.0f;
+    float bottom = 0.0f;
+
+    FMargin() = default;
+    constexpr FMargin(float left_, float top_, float right_, float bottom_)
+        : left(left_)
+        , top(top_)
+        , right(right_)
+        , bottom(bottom_)
+    {
+    }
+
+    [[nodiscard]] static FMargin all(float value) { return {value, value, value, value}; }
+    [[nodiscard]] static FMargin hv(float horizontal, float vertical)
+    {
+        return {horizontal, vertical, horizontal, vertical};
+    }
+    [[nodiscard]] static FMargin hv(glm::vec2 value) { return hv(value.x, value.y); }
+
+    [[nodiscard]] float horizontal() const { return left + right; }
+    [[nodiscard]] float vertical() const { return top + bottom; }
+    [[nodiscard]] glm::vec2 size() const { return {horizontal(), vertical()}; }
+    [[nodiscard]] glm::vec2 minOffset() const { return {left, top}; }
+
+    friend bool operator==(const FMargin&, const FMargin&) = default;
 };
 
 enum class EUIBoxSlotSizeRule : uint8_t
@@ -57,7 +92,7 @@ public:
 
     [[nodiscard]] EUIBoxSlotSizeRule getSizeRule() const { return _sizeRule; }
     [[nodiscard]] float getWeight() const { return _weight; }
-    [[nodiscard]] const glm::vec2& getMargin() const { return _margin; }
+    [[nodiscard]] const FMargin& getMargin() const { return _margin; }
     [[nodiscard]] EUIBoxSlotCrossAlignment getCrossAlignment() const { return _crossAlignment; }
     [[nodiscard]] const glm::vec2& getMinSize() const { return _minSize; }
     [[nodiscard]] const glm::vec2& getMaxSize() const { return _maxSize; }
@@ -67,24 +102,37 @@ public:
 
     void setSizeRule(EUIBoxSlotSizeRule value);
     void setWeight(float value);
-    void setMargin(glm::vec2 value);
+    void setMargin(FMargin value);
+    void setMargin(glm::vec2 value) { setMargin(FMargin::hv(value)); }
     void setCrossAlignment(EUIBoxSlotCrossAlignment value);
     void setMinSize(glm::vec2 value);
     void setMaxSize(glm::vec2 value);
     void setPreferredSize(glm::vec2 value);
     void setParticipatesInLayout(bool value);
     void setReserveSpaceWhenHidden(bool value);
+    void apply(const struct FBoxSlotArgs& args);
+    void appendRuntimeDiagnostics(nlohmann::json& node) const override;
 
 private:
     EUIBoxSlotSizeRule        _sizeRule = EUIBoxSlotSizeRule::Auto;
     float                     _weight   = 1.0f;
-    glm::vec2                 _margin  = {0.0f, 0.0f};
+    FMargin                   _margin{};
     EUIBoxSlotCrossAlignment  _crossAlignment = EUIBoxSlotCrossAlignment::Stretch;
     glm::vec2                 _minSize = {0.0f, 0.0f};
     glm::vec2                 _maxSize = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
     glm::vec2                 _preferredSize = {0.0f, 0.0f};
     bool                      _bParticipatesInLayout = true;
     bool                      _bReserveSpaceWhenHidden = true;
+};
+
+/// Construct-time box slot intent. Applied after the child is attached so the
+/// parent-owned UIBoxSlot already exists.
+struct FBoxSlotArgs
+{
+    EUIBoxSlotSizeRule       sizeRule        = EUIBoxSlotSizeRule::Auto;
+    float                    weight          = 1.0f;
+    FMargin                  margin          = {};
+    EUIBoxSlotCrossAlignment crossAlignment  = EUIBoxSlotCrossAlignment::Stretch;
 };
 
 /// Parent-owned layout algorithm. Layout owns measure/arrange only; visual
@@ -143,19 +191,70 @@ private:
 };
 
 /// Layout for a single content child that fills an inset content rect.
-/// Buttons are the first consumer; popup/content controls can reuse it
-/// instead of each reimplementing "parent rect minus padding".
+/// Buttons and SizeBox reuse this instead of each reimplementing
+/// "parent rect minus padding".
 class YA_GUI_API UISingleChildLayout final : public UILayout
 {
 public:
-    [[nodiscard]] const glm::vec2& getPadding() const { return _padding; }
-    void setPadding(glm::vec2 value);
+    [[nodiscard]] const FMargin& getPadding() const { return _padding; }
+    void setPadding(FMargin value);
+    void setPadding(glm::vec2 value) { setPadding(FMargin::hv(value)); }
 
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
     void arrange(UIElement& parent, const Rect2D& rect) const override;
 
 private:
-    glm::vec2 _padding = {0.0f, 0.0f};
+    FMargin _padding{};
+};
+
+enum class EUIOverlayAlignment : uint8_t
+{
+    Fill,
+    Start,
+    Center,
+    End,
+};
+
+/// Overlay slot: one child independently aligned inside the parent rect
+/// (UMG Overlay / stacked Control). Fill stretches that axis; otherwise the
+/// child keeps its desired size and Start/Center/End place it.
+class YA_GUI_API UIOverlaySlot final : public UISlot
+{
+public:
+    UIOverlaySlot(UIElement& parent, UIElement& child);
+
+    [[nodiscard]] EUIOverlayAlignment getHAlign() const { return _hAlign; }
+    [[nodiscard]] EUIOverlayAlignment getVAlign() const { return _vAlign; }
+    [[nodiscard]] const FMargin& getPadding() const { return _padding; }
+
+    void setHAlign(EUIOverlayAlignment value);
+    void setVAlign(EUIOverlayAlignment value);
+    void setPadding(FMargin value);
+    void setPadding(glm::vec2 value) { setPadding(FMargin::hv(value)); }
+    void apply(const struct FOverlaySlotArgs& args);
+    void appendRuntimeDiagnostics(nlohmann::json& node) const override;
+
+private:
+    EUIOverlayAlignment _hAlign  = EUIOverlayAlignment::Fill;
+    EUIOverlayAlignment _vAlign  = EUIOverlayAlignment::Fill;
+    FMargin             _padding{};
+};
+
+struct FOverlaySlotArgs
+{
+    EUIOverlayAlignment hAlign  = EUIOverlayAlignment::Fill;
+    EUIOverlayAlignment vAlign  = EUIOverlayAlignment::Fill;
+    FMargin             padding = {};
+};
+
+/// Stacked children sharing one parent rect. Each child is arranged through
+/// its UIOverlaySlot; child canvas anchors are ignored (layoutAssigned).
+class YA_GUI_API UIOverlayLayout final : public UILayout
+{
+public:
+    [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
+    [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
+    void arrange(UIElement& parent, const Rect2D& rect) const override;
 };
 
 enum class ESplitOrientation : uint8_t
