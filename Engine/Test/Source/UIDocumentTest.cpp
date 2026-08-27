@@ -4,6 +4,8 @@
 
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UITypeRegistry.h"
+#include "GUI/Widgets/UIFrameSnapshot.h"
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
@@ -55,7 +57,7 @@ TEST(UIDocumentTest, FromWidgetRoundtripsFieldsAndChildren)
     titleWidget->setPosition({10.0f, 20.0f});
     titleWidget->setText("Hello Doc");
     titleWidget->_fontSize = 24;
-    titleWidget->_color    = {1.0f, 0.0f, 0.0f, 1.0f};
+    titleWidget->setColor({1.0f, 0.0f, 0.0f, 1.0f});
     titleWidget->setStyleKey("text.header");
     ok->setPosition({100.0f, 200.0f});
     ok->setSize({80.0f, 32.0f});
@@ -85,6 +87,7 @@ TEST(UIDocumentTest, FromWidgetRoundtripsFieldsAndChildren)
     EXPECT_EQ(textA->getText(), "Hello Doc");
     EXPECT_EQ(textA->_fontSize, 24u);
     EXPECT_EQ(textA->_color, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+    EXPECT_TRUE(textA->hasAuthoredStyle());
     EXPECT_EQ(textA->_styleKey, "text.header");
 
     // Mutating A must not leak into B.
@@ -106,6 +109,7 @@ TEST(UIDocumentTest, JsonRoundtrip)
     auto* panelWidget  = dynamic_cast<UIPanel*>(panel.get());
     ASSERT_NE(panelWidget, nullptr);
     panelWidget->setColor({0.12f, 0.14f, 0.22f, 0.88f});
+    EXPECT_TRUE(panelWidget->hasAuthoredStyle());
     panelWidget->_zOrder   = 5;
     panelWidget->setPosition({20.0f, 20.0f});
     auto label       = registry.createInstance("test.doc_text");
@@ -138,6 +142,88 @@ TEST(UIDocumentTest, JsonRoundtrip)
     EXPECT_EQ(textInstance->getText(), "JSON UI");
     EXPECT_EQ(panelInstance->_styleKey, "panel");
     EXPECT_TRUE(panelInstance->hasExplicitFill());
+    EXPECT_TRUE(panelInstance->hasAuthoredStyle());
+    ASSERT_TRUE(json["fields"].contains("_authoredStyle"));
+    EXPECT_TRUE(json["fields"]["_authoredStyle"].is_object());
+}
+
+TEST(UIDocumentTest, AuthoredButtonStyleJsonRoundtrip)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+
+    auto button = registry.createInstance("test.doc_button");
+    auto* widget = dynamic_cast<UIButton*>(button.get());
+    ASSERT_NE(widget, nullptr);
+    FButtonStyle authored;
+    authored.normalFill = FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f});
+    widget->setStyle(authored);
+
+    auto document = UIDocument::fromWidget(*button);
+    ASSERT_NE(document, nullptr);
+    const nlohmann::json json = document->toJson();
+    ASSERT_TRUE(json["fields"].contains("_authoredStyle"));
+    EXPECT_TRUE(json["fields"]["_authoredStyle"].is_object());
+
+    auto reloaded = UIDocument::fromJson(json);
+    ASSERT_NE(reloaded, nullptr);
+    auto instance = reloaded->instantiate();
+    auto* restored = dynamic_cast<UIButton*>(instance.get());
+    ASSERT_NE(restored, nullptr);
+    ASSERT_TRUE(restored->hasAuthoredStyle());
+    EXPECT_EQ(restored->_authoredStyle->normalFill, FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f}));
+}
+
+TEST(UIDocumentTest, AuthoredPanelFillSurvivesThemeAfterReload)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+
+    auto panel = registry.createInstance("test.doc_panel");
+    auto* panelWidget = dynamic_cast<UIPanel*>(panel.get());
+    ASSERT_NE(panelWidget, nullptr);
+    panelWidget->setSize({100.0f, 50.0f});
+    panelWidget->setColor({0.12f, 0.14f, 0.22f, 0.88f});
+
+    auto document = UIDocument::fromWidget(*panel);
+    ASSERT_NE(document, nullptr);
+    auto instance = UIDocument::fromJson(document->toJson())->instantiate();
+    auto* restored = dynamic_cast<UIPanel*>(instance.get());
+    ASSERT_NE(restored, nullptr);
+    EXPECT_TRUE(restored->hasAuthoredStyle());
+
+    WidgetTree tree({.width = 320, .height = 200});
+    auto theme = std::make_shared<UITheme>();
+    FPanelStyle themed;
+    themed.fillColor = FBrush::Solid({0.7f, 0.1f, 0.2f, 1.0f});
+    theme->define<FPanelStyle>("panel", themed);
+    tree.setTheme(theme.get());
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, instance).valid());
+
+    const UIFrameSnapshot snap = tree.buildSnapshot({});
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_EQ(snap.items.front().color, glm::vec4(0.12f, 0.14f, 0.22f, 0.88f));
+}
+
+TEST(UIDocumentTest, LegacyExplicitFillPromotesToAuthoredStyle)
+{
+    ensureTestTypesRegistered();
+    nlohmann::json json;
+    json["version"] = UIDocument::kFormatVersion;
+    json["typeId"]  = "test.doc_panel";
+    json["fields"]  = {
+        {"_color", {0.5f, 0.4f, 0.3f, 1.0f}},
+        {"_bExplicitFill", true},
+    };
+    json["children"] = nlohmann::json::array();
+
+    auto document = UIDocument::fromJson(json);
+    ASSERT_NE(document, nullptr);
+    auto instance = document->instantiate();
+    auto* panel = dynamic_cast<UIPanel*>(instance.get());
+    ASSERT_NE(panel, nullptr);
+    EXPECT_TRUE(panel->hasAuthoredStyle());
+    EXPECT_EQ(panel->getColor(), glm::vec4(0.5f, 0.4f, 0.3f, 1.0f));
 }
 
 TEST(UIDocumentTest, UnknownTypeIdReportsDiagnostic)

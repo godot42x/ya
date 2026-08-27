@@ -25,6 +25,8 @@ struct YA_GUI_API UIScrollViewport : public UIElement, public UIStyledWidget<UIS
     YA_REFLECT_BEGIN(UIScrollViewport, UIElement)
     YA_REFLECT_END()
 
+    YA_GUI_AUTHORED_STYLE_IO(FScrollBarStyle)
+
     explicit UIScrollViewport(std::string name = "ScrollViewport") : UIElement(std::move(name), "scrollbar")
     {
         _hitFilter = EWidgetHitFilter::Stop;

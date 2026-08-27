@@ -20,6 +20,8 @@ struct YA_GUI_API UITabButton : public UIElement, public UIStyledWidget<UITabBut
     YA_REFLECT_FIELD(_fontSize, .instanceEditable())
     YA_REFLECT_END()
 
+    YA_GUI_AUTHORED_STYLE_IO(FTabStyle)
+
     explicit UITabButton(std::string name = "TabButton") : UIElement(std::move(name), "tab")
     {
         _hitFilter   = EWidgetHitFilter::Stop;
@@ -62,6 +64,8 @@ struct YA_GUI_API UITabButton : public UIElement, public UIStyledWidget<UITabBut
 /// Left / Right on a focused tab moves focus + selection (wrap-around).
 struct YA_GUI_API UITabBar : public UIContainer, public UIStyledWidget<UITabBar, FTabStyle>
 {
+    YA_GUI_AUTHORED_STYLE_IO(FTabStyle)
+
     explicit UITabBar(std::string name = "TabBar") : UIContainer(std::move(name), "tab")
     {
         setDirection(EWidgetBoxLayout::Horizontal);

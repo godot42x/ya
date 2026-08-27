@@ -25,6 +25,8 @@ struct YA_GUI_API UIDragFloat : public UIElement, public UIStyledWidget<UIDragFl
     YA_REFLECT_FIELD(_decimals, .instanceEditable())
     YA_REFLECT_END()
 
+    YA_GUI_AUTHORED_STYLE_IO(FDragFloatStyle)
+
     explicit UIDragFloat(std::string name = "DragFloat") : UIElement(std::move(name), "dragfloat")
     {
         _hitFilter   = EWidgetHitFilter::Stop;
@@ -88,6 +90,8 @@ struct YA_GUI_API UISpinBox : public UIElement, public UIStyledWidget<UISpinBox,
     YA_REFLECT_FIELD(_min, .instanceEditable())
     YA_REFLECT_FIELD(_max, .instanceEditable())
     YA_REFLECT_END()
+
+    YA_GUI_AUTHORED_STYLE_IO(FSpinBoxStyle)
 
     explicit UISpinBox(std::string name = "SpinBox") : UIElement(std::move(name), "spinbox")
     {
@@ -155,6 +159,8 @@ struct YA_GUI_API UIRadioButton : public UIElement, public UIStyledWidget<UIRadi
     YA_REFLECT_FIELD(_label, .instanceEditable())
     YA_REFLECT_END()
 
+    YA_GUI_AUTHORED_STYLE_IO(FRadioButtonStyle)
+
     explicit UIRadioButton(std::string name = "RadioButton") : UIElement(std::move(name), "radio")
     {
         _hitFilter   = EWidgetHitFilter::Stop;
@@ -204,6 +210,8 @@ struct YA_GUI_API UIColorEdit : public UIElement, public UIStyledWidget<UIColorE
     YA_REFLECT_FIELD(_color, .instanceEditable())
     YA_REFLECT_END()
 
+    YA_GUI_AUTHORED_STYLE_IO(FColorEditStyle)
+
     explicit UIColorEdit(std::string name = "ColorEdit") : UIElement(std::move(name), "coloredit")
     {
         _hitFilter   = EWidgetHitFilter::Stop;
@@ -252,6 +260,8 @@ struct YA_GUI_API UISearchComboBox : public UIElement, public UIStyledWidget<UIS
     YA_REFLECT_BEGIN(UISearchComboBox, UIElement)
     YA_REFLECT_FIELD(_selectedIndex, .instanceEditable())
     YA_REFLECT_END()
+
+    YA_GUI_AUTHORED_STYLE_IO(FSearchComboStyle)
 
     explicit UISearchComboBox(std::string name = "SearchComboBox") : UIElement(std::move(name), "searchcombo")
     {

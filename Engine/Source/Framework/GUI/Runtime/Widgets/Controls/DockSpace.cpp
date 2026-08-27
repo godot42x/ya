@@ -115,7 +115,52 @@ struct FDropChooserOverlay final : UIElement
     UIDockSpace* _owner = nullptr;
 };
 
+template <typename TBehavior>
+TBehavior* findBehavior(UIElement& owner)
+{
+    for (const UIBehaviorRef& behavior : owner.getBehaviors()) {
+        if (auto* typed = dynamic_cast<TBehavior*>(behavior.get())) {
+            return typed;
+        }
+    }
+    return nullptr;
+}
+
 } // namespace
+
+struct FDockSpacePanelDragBehavior final : public UIBehavior
+{
+    void beginPanelDrag(UIDockSpace& owner, DockPanelId panelId, std::string label)
+    {
+        WidgetTree* tree = owner.getTree();
+        if (!tree) {
+            return;
+        }
+
+        DragSessionObserver observer;
+        observer.onMove = [&owner, panelId](const std::string&, const glm::vec2& logicalPoint, std::string_view)
+        {
+            owner._preview = owner.resolveDropPreview(logicalPoint, panelId);
+            owner.syncPreviewOverlay();
+            owner.markPaintDirty();
+        };
+        observer.onTargetChanged = [&owner](std::string_view, std::string_view)
+        {
+            owner.clearPreview();
+        };
+        observer.onFinished = [&owner, panelId](EDragFinishResult result, const glm::vec2& logicalPoint, std::string_view)
+        {
+            owner.clearPreview();
+            if (result == EDragFinishResult::NoTarget && owner._ws && owner._ws->bAllowTearOff && owner._ws->bAllowFloating) {
+                const glm::vec2 size{320.0f, 240.0f};
+                owner._ws->tearOffPanel(panelId, logicalPoint, size);
+                owner.rebuildProjection();
+                owner._ws->fireFloatingUpdated();
+            }
+        };
+        tree->beginDrag(&owner, std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelId), std::move(label), std::move(observer));
+    }
+};
 
 struct FDockSpaceDropTargetBehavior final : public UIDropTargetBehavior
 {
@@ -214,6 +259,7 @@ UIDockSpace::UIDockSpace(std::string name)
     : UIElement(std::move(name), "dock")
 {
     _hitFilter = EWidgetHitFilter::Stop;
+    addBehavior(std::make_shared<FDockSpacePanelDragBehavior>());
     addBehavior(std::make_shared<FDockSpaceDropTargetBehavior>());
 }
 
@@ -497,34 +543,8 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
             return;
         }
         const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
-        if (WidgetTree* tree = getTree()) {
-            DragSessionObserver observer;
-            observer.onMove = [this, panelId](const std::string&, const glm::vec2& logicalPoint, std::string_view)
-            {
-                _preview = resolveDropPreview(logicalPoint, panelId);
-                syncPreviewOverlay();
-                markPaintDirty();
-            };
-            observer.onTargetChanged = [this](std::string_view, std::string_view)
-            {
-                clearPreview();
-            };
-            observer.onFinished = [this, panelId](EDragFinishResult result, const glm::vec2& logicalPoint, std::string_view)
-            {
-                clearPreview();
-                if (result == EDragFinishResult::NoTarget && _ws && _ws->bAllowTearOff && _ws->bAllowFloating) {
-                    // Tear-off: pull the panel out of the dock tree into a
-                    // floating window positioned at the actual drop point so the
-                    // window appears where the user released the tab. Detach the
-                    // panel from this leaf first (reproject), then let the host
-                    // mount the floating window.
-                    const glm::vec2 size{320.0f, 240.0f};
-                    _ws->tearOffPanel(panelId, logicalPoint, size);
-                    rebuildProjection();
-                    _ws->fireFloatingUpdated();
-                }
-            };
-            tree->beginDrag(this, std::string(kDockPanelPayload) + std::to_string(panelId), label, std::move(observer));
+        if (auto* behavior = findBehavior<FDockSpacePanelDragBehavior>(*this)) {
+            behavior->beginPanelDrag(*this, panelId, label);
         }
     };
     leaf->addDetachedChild(bar);
@@ -683,7 +703,8 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
 
     // Pointer outside this leaf's content (over empty space): render the
     // chooser dimmed, but never dock here — a drop in these regions becomes a
-    // floating window. See canAcceptDrop() / onFinished().
+    // floating window. The actual tear-off happens in the dock-panel drag
+    // session's finish observer, not in a widget-level drop override.
     if (!pointInRect(logicalPoint, leafRect)) {
         return FDropPreview{
             .targetLeafId   = focus->leafId,

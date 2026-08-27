@@ -2,10 +2,10 @@
 
 ## 当前优先级（按顺序推进）
 
-- [ ] G3.1 引入 `UIBehavior` 最小模型：先定义 attach / detach / tick / input hook / invalidate bridge，作为 drag/drop、tooltip、shortcut、editor interaction 的统一横切能力入口。
+- [x] G3.1 引入 `UIBehavior` 最小模型：先定义 attach / detach / tick / input hook / invalidate bridge，作为 drag/drop、tooltip、shortcut、editor interaction 的统一横切能力入口。
 - [x] G3.2 用 `UIBehavior` 重构 Workbench drag/drop demo：移除 `FDemoDragItem` / `FDemoDropZone` 作为长期模型，改为普通 retained widget / 静态 DSL + behavior。
-- [ ] G3.3 收敛 drag/drop runtime 边界：`WidgetTree` 继续拥有 gesture / session / routing；widget 只暴露 capability hook；behavior 承载可复用交互逻辑。
-- [ ] G4.1 将 `Runtime/Widgets/Reactive.h` 拆到中性的 `Runtime/Binding/` 或 `Runtime/Dataflow/`，明确 Reactive 是绑定层能力，不是 widget kernel 本体。
+- [x] G3.3 收敛 drag/drop runtime 边界：`WidgetTree` 继续拥有 gesture / session / routing；widget 只暴露 capability hook；behavior 承载可复用交互逻辑。
+- [x] G4.1 将 `Runtime/Widgets/Reactive.h` 拆到中性的 `Runtime/Binding/` 或 `Runtime/Dataflow/`，明确 Reactive 是绑定层能力，不是 widget kernel 本体。
 - [ ] G4.2 抽薄 invalidation / binding 稳定契约：底层必须并存 imperative setter、widget transient state、behavior state、reactive binding、future adapter patch。
 - [ ] G4.3 补齐 `UICompoundWidget` 迁移桥接契约：明确 kernel / behavior / compound / adapter 四者边界，并为现有 editor/game compound controls 建立迁移判定表。
 - [ ] G4.3a 基于现状盘点第一批对象：`FDemoDragItem` / `FDemoDropZone` / `UISelectableRow` / `UITreeView` / `UITableGrid` / `UIMenuBar` / `UIDockSpace`，逐个判定 builder helper / specialized control / `UICompoundWidget` / `UIBehavior` 归宿。

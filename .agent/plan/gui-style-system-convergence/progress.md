@@ -466,3 +466,13 @@ CheckBox / ComboBox / Slider / TableGrid / SpinBox / Radio / ColorEdit chrome / 
 
 - `xmake b ya-gui-widgets` / `ya-gui-widgets-test` / `ya-gui-tooling` 通过；
 - `ya-gui-widgets-test` 179/179。
+
+## 2026-08-27 — authored TStyle 序列化 + setColor 收口
+
+`FBrush` 与全部 `F*Style` 进入反射。Mixin 的 `_authoredStyle` 不能 `YA_REFLECT_FIELD`（`serializeFields` 拿到的是 `UIElement*`，第二基类偏移错误，JSON 会写成 null）。改走 `UIElement::serializeAuthoredStyle` / `deserializeAuthoredStyle`，子类用 `YA_GUI_AUTHORED_STYLE_IO(TStyle)` 展开。
+
+Text/Panel `setColor` 写入 authored `FTextStyle` / `FPanelStyle`（Paint 粒度，GI-202 每帧改色不 layout），去掉「非默认白」和 `_bExplicitFill` 第二条 override 路径。旧 JSON 的 `_bExplicitFill: true` / 非白 `_color` 在 deserialize 时提升为 authored。直写 `UIText::_color` 的 GUI 调用点改为 `setColor()`。
+
+### 验证
+
+- `xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test` — 184/184 PASSED（含 JsonRoundtrip / AuthoredButtonStyleJsonRoundtrip / AuthoredPanelFillSurvivesThemeAfterReload / LegacyExplicitFillPromotesToAuthoredStyle）

@@ -23,6 +23,8 @@ struct YA_GUI_API UISlider : public UIElement, public UIStyledWidget<UISlider, F
     YA_REFLECT_FIELD(_thumbSize, .instanceEditable())
     YA_REFLECT_END()
 
+    YA_GUI_AUTHORED_STYLE_IO(FSliderStyle)
+
     explicit UISlider(std::string name = "Slider") : UIElement(std::move(name), "slider")
     {
         _hitFilter   = EWidgetHitFilter::Stop;

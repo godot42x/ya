@@ -13,6 +13,8 @@
 #include "GUI/Widgets/Style.h"
 #include "GUI/Widgets/WidgetTree.h"
 
+#include "Core/Reflection/ReflectionSerializer.h"
+
 #include <optional>
 #include <utility>
 
@@ -71,10 +73,11 @@ const TStyle* resolveThemeStyle(const UIElement&        widget,
     return nullptr;
 }
 
-/// Full resolve chain (plan §3.2): instance authored TStyle > style key in
+/// Full resolve chain: instance authored TStyle > style key in
 /// the tree theme > default-constructed TStyle. Authored wins without
 /// registering a theme-generation edge, so a theme switch does not clobber
 /// an instance override. `key` defaults to `widget._styleKey`.
+/// Text/Panel `setColor` writes this authored slot (paint-only).
 template <typename TStyle>
 TStyle resolveWidgetStyle(const UIElement&                 widget,
                           const std::string&               key,
@@ -109,14 +112,14 @@ struct UIStyledWidget
 {
     std::optional<TStyle> _authoredStyle;
 
-    void setStyle(TStyle style)
+    void setStyle(TStyle style, EUIPropertyImpact impact = EUIPropertyImpact::Layout)
     {
         auto& self = static_cast<TWidget&>(*this);
         if (_authoredStyle.has_value() && *_authoredStyle == style) {
             return;
         }
         _authoredStyle = std::move(style);
-        self.invalidateProperty(EUIPropertyImpact::Layout);
+        self.invalidateProperty(impact);
     }
 
     void clearAuthoredStyle()
@@ -131,5 +134,28 @@ struct UIStyledWidget
 
     [[nodiscard]] bool hasAuthoredStyle() const { return _authoredStyle.has_value(); }
 };
+
+/// Persist `_authoredStyle` through UIElement's virtual serialize hook.
+/// Mixin fields cannot be YA_REFLECT_FIELD'd from a UIElement* (MI offset).
+#define YA_GUI_AUTHORED_STYLE_IO(TStyle)                                                                          \
+    [[nodiscard]] nlohmann::json serializeAuthoredStyle() const override                                          \
+    {                                                                                                             \
+        ensureGuiStyleReflection();                                                                               \
+        if (!_authoredStyle.has_value()) {                                                                        \
+            return nullptr;                                                                                       \
+        }                                                                                                         \
+        return ReflectionSerializer::serializeByRuntimeReflection(*_authoredStyle);                               \
+    }                                                                                                             \
+    void deserializeAuthoredStyle(const nlohmann::json& j) override                                               \
+    {                                                                                                             \
+        ensureGuiStyleReflection();                                                                               \
+        if (j.is_null() || !j.is_object()) {                                                                      \
+            _authoredStyle.reset();                                                                               \
+            return;                                                                                               \
+        }                                                                                                         \
+        TStyle style{};                                                                                           \
+        ReflectionSerializer::deserializeByRuntimeReflection(style, j, "");                                       \
+        _authoredStyle = std::move(style);                                                                        \
+    }
 
 } // namespace ya

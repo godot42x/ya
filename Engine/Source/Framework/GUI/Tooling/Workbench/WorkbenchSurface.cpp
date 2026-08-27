@@ -228,7 +228,7 @@ void FWorkbenchSurface::buildPageRail(ya::WidgetTree& tree, ya::UIElement& paren
     _pageRailTitle->setPosition({16.0f, 14.0f});
     _pageRailTitle->setSize({-32.0f, 18.0f});
     _pageRailTitle->_fontSize = 10;
-    _pageRailTitle->_color = kHeaderColor;
+    _pageRailTitle->setColor(kHeaderColor);
     _pageRailTitle->setText("FEATURE GALLERY");
     tree.attach(*_pageRail, _pageRailTitle);
 
@@ -271,7 +271,7 @@ void FWorkbenchSurface::buildStatusBar(ya::WidgetTree& tree, ya::UIElement& pare
     _statusText->setSize({520.0f, 24.0f});
     _statusText->_fontSize  = 13;
     _statusText->setText("Tab: switch demo | Click / drag / keyboard to explore");
-    _statusText->_color     = kHeaderColor;
+    _statusText->setColor(kHeaderColor);
     tree.attach(parent, _statusText);
 
     _commandResultText = std::make_shared<ya::UIText>("CommandResult");
@@ -283,7 +283,7 @@ void FWorkbenchSurface::buildStatusBar(ya::WidgetTree& tree, ya::UIElement& pare
     _commandResultText->setSize({0.0f, 24.0f});
     _commandResultText->_fontSize  = 13;
     _commandResultText->setText("Ready");
-    _commandResultText->_color     = {0.60f, 0.80f, 0.62f, 1.0f};
+    _commandResultText->setColor({0.60f, 0.80f, 0.62f, 1.0f});
     _commandResultText->_hAlign    = ya::EWidgetAlignH::Right;
     tree.attach(parent, _commandResultText);
 }
@@ -565,7 +565,7 @@ void FWorkbenchSurface::rebuildItemRows()
         label->setSize({240.0f, 22.0f});
         label->_fontSize = 13;
         label->setText(item.bVisible ? item.name : item.name + " (hidden)");
-        label->_color    = {0.88f, 0.90f, 0.94f, 1.0f};
+        label->setColor({0.88f, 0.90f, 0.94f, 1.0f});
         label->_vAlign   = ya::EWidgetAlignV::Center;
         // Tree indentation: one level per parent depth.
         label->setPosition({static_cast<float>(workspace.getDepth(item.id)) * 14.0f, 0.0f});

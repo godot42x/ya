@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Style.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
@@ -22,6 +22,8 @@ struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FText
     YA_REFLECT_FIELD(_hAlign, .instanceEditable())
     YA_REFLECT_FIELD(_vAlign, .instanceEditable())
     YA_REFLECT_END()
+
+    YA_GUI_AUTHORED_STYLE_IO(FTextStyle)
 
     explicit UIText(std::string name = "Text") : UIElement(std::move(name), "text") {}
 
@@ -69,15 +71,25 @@ struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FText
             return;
         }
         _fontSize = value;
+        if (_authoredStyle) {
+            _authoredStyle->fontSize = value;
+        }
         invalidateProperty(_bAutoSize ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
     }
+    /// Degenerate authored FTextStyle: writes textColor + solid fillColor and
+    /// keeps `_color` in sync for getColor / GI-202. Paint-only so presenters
+    /// can recolor every frame without a layout pass.
     void setColor(const glm::vec4& value)
     {
         if (_color == value) {
             return;
         }
         _color = value;
-        invalidateProperty(EUIPropertyImpact::Paint);
+        FTextStyle next = _authoredStyle.value_or(FTextStyle{});
+        next.textColor  = value;
+        next.fillColor  = FBrush::Solid(value);
+        next.fontSize   = _fontSize;
+        setStyle(std::move(next), EUIPropertyImpact::Paint);
     }
     [[nodiscard]] const std::string& getText() const { return _text; }
     // SizeToContent: set base UIElement::_bAutoSize to measure the layout
@@ -91,11 +103,12 @@ struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FText
         return _textBinding ? _textBinding->get(level) : _text;
     }
 
-    /// Resolved text style: authored TStyle > setColor degenerate override >
-    /// theme key > authoring fields. Never cache the result (would detach
-    /// from the reactive dependency graph).
+    /// Resolved text style: authored TStyle (including setColor) > theme key >
+    /// authoring fields. Never cache the result (would detach from the
+    /// reactive dependency graph).
     [[nodiscard]] FTextStyle resolvedStyle(ReactiveBase::EDirtyLevel level = ReactiveBase::EDirtyLevel::Paint) const;
 
+    void deserializeFields(const nlohmann::json& fields) override;
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;

@@ -1,5 +1,83 @@
 # GUI Framework / Editor / Game UI 重构进度
 
+## 2026-08-27 checkpoint：继续推进 G4.2，锁住 behavior state 与 presenter state 并存
+
+- `BindingContractTest.BehaviorDropHighlightDoesNotOverwritePresenterSelectionState` 新增后，把 `UISelectableRow` 的两类状态来源明确钉住：presenter 写入的 `_bSelected` 与 behavior 写入的 `_bDropHighlighted` 可以并存，拖放高亮的进入/退出不能把 presenter selection 覆盖或清掉。
+- 这条契约和前面的 `TextBindingSurvivesImperativeFallbackWriteUntilUnbound`、`WidgetEnabledGateRemainsAuthoritativeOverButtonDisplayBinding`、`DisablingPressedButtonStillClearsPressSessionOnRelease` 一起，把 `G4.2` 从“binding 迁移后还能工作”推进到了“多种状态来源在同一 widget 上如何稳定共存”的更具体层面。
+- 当前已经有三类共存边界被自动化覆盖：
+  1. reactive binding + imperative fallback (`UIText`)
+  2. reactive display binding + tree gate / transient press (`UIButton`)
+  3. behavior state + presenter selection (`UISelectableRow`)
+- 验证：`xmake b ya-gui-widgets-test`、`xmake r ya-gui-widgets-test -- --gtest_filter='BindingContractTest.BehaviorDropHighlightDoesNotOverwritePresenterSelectionState'`、`xmake r ya-gui-widgets-test -- --gtest_filter='BindingContractTest.*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：修复 mid-press disable 遗留 capture / pressed 状态的 G4.2 bug
+
+- `BindingContractTest.DisablingPressedButtonStillClearsPressSessionOnRelease` 暴露了一个真实问题：按钮已经按下并持有 pointer capture 后，如果中途被 `setEnabled(false)`，随后的 release 会因为 disabled subtree gate 被路由层直接丢弃，导致 `_bPressed` 与 pointer capture 残留。
+- `WidgetTree::dispatchCapturedPointerEvent()` 现在对这条边界做了显式收口：当 captured widget 在 release 到来前已经处于 disabled subtree 中时，tree 会先清掉 capture，再让该 widget 丢弃自己的 transient input state，然后返回 `NotHandled`。
+- 这保证了 `disabled subtree is input-inert` 与 `transient press/capture state never survives a disabled transition` 两条契约可以同时成立，不需要把“禁用后的 release 仍然正常业务处理”误当成默认语义。
+- 同时把这条回归补进 `BindingContractTest`，让 `G4.2` 不只覆盖“binding 与 fallback 并存”，也开始覆盖“tree gate 与 transient state 并存”的框架级边界。
+- 验证：`xmake r ya-gui-widgets-test -- --gtest_filter='BindingContractTest.DisablingPressedButtonStillClearsPressSessionOnRelease'`、`xmake r ya-gui-widgets-test -- --gtest_filter='BindingContractTest.*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：继续推进 G4.2，锁住 reactive binding 与 imperative fallback / tree gate 并存
+
+- `BindingContractTest.cpp` 继续补 `G4.2` 契约，不再只覆盖 persistent edge 的 detach / reattach，而是明确 reactive binding 与其他状态来源并存时的稳定边界。
+- `BindingContractTest.TextBindingSurvivesImperativeFallbackWriteUntilUnbound` 锁住 `UIText` 的 fallback 语义：`bindText()` 生效后，`setText()` 继续维护 authored fallback，但不会打断当前 binding；解绑后回到最近一次 imperative 文本。
+- `BindingContractTest.WidgetEnabledGateRemainsAuthoritativeOverButtonDisplayBinding` 锁住 `UIButton` 的双层 enabled 语义：`bindEnabled()` 只负责显示态/样式选择，而 `UIElement::setEnabled(false)` 代表 tree-level 输入门禁，binding 的值变化不能把它重新打开。
+- 这一步进一步落实了 plan 里“imperative setter、widget transient state、behavior state、reactive binding 可以并存”的方向：现在至少在 Text / Button 这两个高频基础件上，binding 与 imperative fallback 的边界已经被自动化固定下来。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake r ya-gui-widgets-test -- --gtest_filter='BindingContractTest.*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：补 G4.2 契约回归，锁住 imperative setter / reactive binding 并存语义
+
+- 在 `BindingContractTest.cpp` 新增两条 `G4.2` 回归，明确 binding contract 的目标不是“只留一种状态来源”，而是允许 imperative fallback 与 reactive binding 并存且边界稳定。
+- `BindingContractTest.TextBindingSurvivesImperativeFallbackWriteUntilUnbound` 锁住 `UIText` 的双轨语义：`bindText()` 激活后，`setText()` 继续维护 authored fallback，但不打断当前 binding；解绑后则回到最近一次 imperative 文本。
+- `BindingContractTest.WidgetEnabledGateRemainsAuthoritativeOverButtonDisplayBinding` 锁住 `UIButton` 的两层 enabled 语义：`bindEnabled()` 只负责显示态/样式选择，而 `UIElement::setEnabled(false)` 的 tree-level 输入门禁仍然是权威，不会被 reactive 值写回偷偷重新打开。
+- 这一步把 `G4.2` 从“Reactive 已经搬家”往前推进到“不同状态来源如何稳定共存”的第一批自动化契约，后续可以继续围绕 behavior state / adapter patch / transient widget state 增补同类回归。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake r ya-gui-widgets-test -- --gtest_filter='BindingContractTest.*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：Reactive include 迁移线收尾到只剩兼容桥
+
+- 继续清理后，仓库内对旧 `GUI/Widgets/Reactive.h` 的真实代码依赖已经清零；剩下的只是不影响语义的兼容桥本身以及迁移说明文字。
+- 这意味着 `Runtime/Binding` 现在不仅是 `Reactive` 的事实源，也已经成为 framework / tests / workbench demo 的直接包含路径；旧 widgets 路径不再承担生产消费入口，只保留向后兼容职责。
+- 因此，`G4.1` 可以按完成态理解：后续若要继续动 binding 线，重点已经从“搬家/改 include”切换到 `G4.2` 的契约细化，而不是继续追逐旧路径 consumer。
+
+## 2026-08-27 checkpoint：收尾清理首批 behavior / binding 迁移遗留项
+
+- `DockFloatingWindow` 的 tab-drag 入口不再保留只有一层转发意义的 `beginDockDrag()` wrapper；`UITabBar::_onTabDragBegin` 现在直接委托给 `FDockFloatingWindowPanelDragBehavior`，与 `DockSpace` 的 source behavior 入口保持一致。
+- `DockSpace.cpp` 中关于“空白区域 drop 变成 floating window”的注释也同步改成当前事实：真正的 tear-off 发生在 drag session finish observer，而不是旧式 widget-level drop override。
+- `todo.md` 同步收口：`G3.3`（drag/drop runtime 边界收敛）与 `G4.1`（Reactive 下沉到 Binding 层）在当前计划语义下已经完成，后续剩余工作进入 `G4.2` 的 binding contract 细化与更广泛 consumer 清理，不再继续把这两条保持为进行中。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：收尾首批旧 Reactive include consumer 到 Binding 路径
+
+- 在 `Reactive` 已下沉到 `Runtime/Binding`、`GUI/Widgets/Reactive.h` 已退成兼容桥之后，本刀继续把最后一批仍显式依赖旧 widgets 路径、且当前工作区干净的 consumer 切到 `GUI/Binding/Reactive.h`：`Button.h`、`MenuBar.h`、`SplitPane.h`、`Text.h`、`UIFrameSnapshotTest.cpp`、`WorkbenchDemoPages.cpp`。
+- 这样 framework 的常用 leaf/container/control 与现有 binding tests/workbench demo 都已经直接消费新的 binding 路径；旧 `GUI/Widgets/Reactive.h` 继续保留，但当前只承担向后兼容桥职责，不再有真实代码 consumer。
+- 这一步没有扩展 binding 语义，只是在 G4.1 的基础上继续降低旧 widgets 路径的直接消费者数量，让后续删除或进一步瘦身兼容桥时有更小、更可控的落点。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake b GUIWorkbench`、`xmake r ya-gui-widgets-test -- --gtest_filter='BindingContractTest.*'`、`xmake r ya-gui-widgets-test -- --gtest_filter='UIFrameSnapshotTest.TreeView*'` 通过。
+
+## 2026-08-27 checkpoint：补 Binding contract tests，锁住 persistent edge 的 detach / reattach 语义
+
+- 新增 `Engine/Test/Source/BindingContractTest.cpp`，直接用新 public 路径 `GUI/Binding/Reactive.h` 建立 binding 层回归，而不是继续把所有 binding 语义都挂靠在旧 `UIFrameSnapshotTest.cpp` 上。
+- `BindingContractTest.PersistentLayoutBindingOnDetachedWidgetDoesNotInvalidateTree` 锁住 persistent layout binding 在 detached widget 上的安全语义：ratio 写回可以继续打到 widget，但不得把已经脱树的控件重新拖回 live tree 的 layout invalidation。
+- `BindingContractTest.PersistentLayoutBindingSurvivesDetachAndReattach` 锁住同一 persistent binding 在 detach / reattach 后仍然继续生效，证明 binding 语义属于 retained object，而不是“一次挂树生命周期内的临时副产品”。
+- `Engine/Test/Test.xmake.lua` 已把这份新测试接进 `ya-gui-widgets-test` 与 `ya-gui-closure-test`，确保后续继续清理旧 `GUI/Widgets/Reactive.h` consumer 时，这条契约会一直被自动化守住。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake r ya-gui-widgets-test -- --gtest_filter='BindingContractTest.*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：Dock panel drag source / observer 收口到 behavior
+
+- `Engine/Source/Framework/GUI/Runtime/Widgets/Controls/DockSpace.cpp` 新增局部 `FDockSpacePanelDragBehavior`，把 docked tab drag 的 payload 生成、preview observer、NoTarget tear-off 以及 `WidgetTree::beginDrag()` 全部从 `UITabBar::_onTabDragBegin` 的内联 lambda 收口到 behavior。`DockSpace` 本体只保留 dock tree 投影与 preview/dock model 语义。
+- `Engine/Source/Framework/GUI/Runtime/Widgets/Controls/DockFloatingWindow.cpp` 新增局部 `FDockFloatingWindowPanelDragBehavior`，把 floating tab drag 的 payload、跟随指针移动、chooser 持续显示、session finish 清理与 refresh 收口到 behavior；`beginDockDrag()` 现在只负责委托。
+- 这一步把 Dock 线上剩余的 source/observer 半边也拉进了 behavior seam：到现在 Dock 的 drop target（DockSpace / FloatingWindow）和 drag source（DockSpace / FloatingWindow）都不再把 drag/drop runtime 协议散落在 widget-level override 或 ad-hoc lambda 里。
+- 新增 `WidgetTreeTest.DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget` 与 `WidgetTreeTest.FloatingWindowTabDragBehaviorStartsDockPanelSession`，直接锁住 tab bar 触发的 source/observer 路径；并复跑 floating merge regression，确保 source 行为化没有破坏之前的 drop target seam。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake r ya-gui-widgets-test -- --gtest_filter='WidgetTreeTest.DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget'`、`xmake r ya-gui-widgets-test -- --gtest_filter='WidgetTreeTest.FloatingWindowTabDragBehaviorStartsDockPanelSession'`、`xmake r ya-gui-widgets-test -- --gtest_filter='WidgetTreeTest.DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTarget'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：Reactive 下沉到 Binding 层并保留 Widgets 兼容桥
+
+- 新增 `Engine/Source/Framework/GUI/Runtime/Binding/Reactive.h/.cpp` 与 public 头 `include/GUI/Binding/Reactive.h`，把 `Reactive` / `ReactiveList` / `Computed` / paint dependency stack 的事实源从 `Runtime/Widgets` 下沉到更中性的 binding 层，兑现 G4.1 的第一步。
+- `Runtime/Widgets/Reactive.h` 与 `include/GUI/Widgets/Reactive.h` 现在都退为兼容桥：旧 include 路径继续可用，但只转发到新的 binding 路径；旧 `Runtime/Widgets/Reactive.cpp` 退成空兼容 translation unit，避免和新的 binding 实现重复定义。
+- `Runtime/Widgets/xmake.lua` 补进 `../Binding/*.cpp` 与 `../Binding/include`，保证 binding 层属于同一个 `ya-gui-widgets` closure，而不是新的独立宿主或平行框架。
+- 首批 framework/core consumer 已切到 `GUI/Binding/Reactive.h`：`WidgetTree.h`、`UIElement.cpp`、`Style.h`、`TreeView.h`、`TableGrid.h`、`SplitPane.cpp`、`ScrollViewport.cpp`、`Container.cpp`、`GUIHeadlessHost.cpp`、`EditorSurface.h` 等；后续补刀已把剩余干净 consumer 一并迁完，旧路径当前只剩兼容桥自身。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake b GUIWorkbench`、`xmake r ya-gui-widgets-test -- --gtest_filter='UIFrameSnapshotTest.TreeView*'` 通过。
+
 ## 2026-08-27 checkpoint：DockFloatingWindow drop target 收口到 behavior
 
 - `Engine/Source/Framework/GUI/Runtime/Widgets/Controls/DockFloatingWindow.cpp` 新增局部 `FDockFloatingWindowDropTargetBehavior`，把 floating window 对 dock-panel payload 的 accept / drop 协议收口到 behavior；浮窗本体继续保留 title drag、window move、resize 与 dock-drag observer 这类窗口语义。

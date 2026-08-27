@@ -1,7 +1,7 @@
 #pragma once
 
 #include "GUI/Layout/UILayout.h"
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
@@ -29,6 +29,8 @@ struct YA_GUI_API UISplitPane : public UIElement, public UIStyledWidget<UISplitP
 {
     YA_REFLECT_BEGIN(UISplitPane, UIElement)
     YA_REFLECT_END()
+
+    YA_GUI_AUTHORED_STYLE_IO(FSplitPaneStyle)
 
     explicit UISplitPane(std::string name = "SplitPane") : UIElement(std::move(name), "split")
     {

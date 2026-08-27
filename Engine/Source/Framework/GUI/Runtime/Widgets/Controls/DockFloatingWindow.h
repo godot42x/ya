@@ -28,6 +28,8 @@ struct UIDockWorkspace;
 ///   - the close button re-docks the active tab back to the dock tree's root.
 struct YA_GUI_API UIDockFloatingWindow : public UIContainer, public UIStyledWidget<UIDockFloatingWindow, FFloatingWindowStyle>
 {
+    YA_GUI_AUTHORED_STYLE_IO(FFloatingWindowStyle)
+
     explicit UIDockFloatingWindow(std::string name, FDockFloatingWindowId floatingId,
                                   std::shared_ptr<UIDockWorkspace> ws);
 
@@ -62,8 +64,8 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer, public UIStyledWidg
 
   private:
     friend struct FDockFloatingWindowDropTargetBehavior;
+    friend struct FDockFloatingWindowPanelDragBehavior;
 
-    void beginDockDrag();
     void beginWindowMove();
     void updateWindowMove(const glm::vec2& logicalPoint);
     void rebuildContent();

@@ -50,14 +50,14 @@ void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
     demo.title->setSize({308.0f, 30.0f});
     demo.title->_fontSize = 20;
     demo.title->setText("YA Minimal GUI Host");
-    demo.title->_color    = {1.0f, 1.0f, 1.0f, 1.0f};
+    demo.title->setColor({1.0f, 1.0f, 1.0f, 1.0f});
 
     demo.counter = std::make_shared<UIText>("Counter");
     demo.counter->setPosition({16.0f, 58.0f});
     demo.counter->setSize({308.0f, 26.0f});
     demo.counter->_fontSize = 16;
     demo.counter->setText("Clicked: 0");
-    demo.counter->_color    = {0.85f, 0.87f, 0.90f, 1.0f};
+    demo.counter->setColor({0.85f, 0.87f, 0.90f, 1.0f});
 
     demo.button = std::make_shared<UIButton>("ClickButton");
     demo.button->setPosition({16.0f, 100.0f});
@@ -69,7 +69,7 @@ void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
     demo.buttonLabel->setSize({150.0f, 44.0f});
     demo.buttonLabel->_fontSize = 16;
     demo.buttonLabel->setText("Click me");
-    demo.buttonLabel->_color    = {1.0f, 1.0f, 1.0f, 1.0f};
+    demo.buttonLabel->setColor({1.0f, 1.0f, 1.0f, 1.0f});
     demo.buttonLabel->_hAlign   = EWidgetAlignH::Center;
     demo.buttonLabel->_vAlign   = EWidgetAlignV::Center;
 

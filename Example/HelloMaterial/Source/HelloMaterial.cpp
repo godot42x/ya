@@ -88,7 +88,7 @@ void HelloMaterialModule::createUIDemo(ya::App& app, ya::Scene* scene)
     title->setSize({260.0f, 26.0f});
     static_cast<ya::UIText*>(title.get())->setText("Game UI (WidgetTree)");
     static_cast<ya::UIText*>(title.get())->_fontSize = 16;
-    static_cast<ya::UIText*>(title.get())->_color    = {1.0f, 0.85f, 0.4f, 1.0f};
+    static_cast<ya::UIText*>(title.get())->setColor({1.0f, 0.85f, 0.4f, 1.0f});
     gameUIHost->addToWorld(*scene, title);
 
     auto label = registry.createInstance("engine.text");

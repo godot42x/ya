@@ -24,7 +24,7 @@
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/Controls/TreeView.h"
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Style.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "Render/Resources/FontManager.h"
@@ -50,7 +50,7 @@ std::shared_ptr<ya::UIText> makeLabel(const std::string& text, float fontSize = 
     label->_bAutoSize = true;
     label->_fontSize  = static_cast<uint32_t>(fontSize);
     label->setText(text);
-    label->_color = kHeaderColor;
+    label->setColor(kHeaderColor);
     return label;
 }
 
@@ -60,7 +60,7 @@ std::shared_ptr<ya::UIText> makeBodyText(const std::string& text)
     label->_bAutoSize = true;
     label->_fontSize  = 13;
     label->setText(text);
-    label->_color = kTextColor;
+    label->setColor(kTextColor);
     return label;
 }
 

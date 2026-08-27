@@ -18,6 +18,7 @@
 #include "GUI/Widgets/Controls/DockFloatingWindow.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
+#include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/UIBehavior.h"
 
@@ -38,6 +39,23 @@ WidgetEventContext pointAt(float x, float y)
     WidgetEventContext ctx;
     ctx.logicalPoint = {x, y};
     return ctx;
+}
+
+template <typename T>
+T* findDescendantOfType(UIElement& root)
+{
+    if (auto* typed = dynamic_cast<T*>(&root)) {
+        return typed;
+    }
+    for (const UIElementRef& child : root.getChildren()) {
+        if (!child) {
+            continue;
+        }
+        if (auto* typed = findDescendantOfType<T>(*child)) {
+            return typed;
+        }
+    }
+    return nullptr;
 }
 
 std::shared_ptr<UIButton> makeButton(const std::string& name, glm::vec2 pos, glm::vec2 size)
@@ -1562,6 +1580,78 @@ TEST(WidgetTreeTest, DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTa
     EXPECT_EQ(record->activePanelId, panelBId);
     EXPECT_TRUE(std::find(record->panelIds.begin(), record->panelIds.end(), panelAId) != record->panelIds.end());
     EXPECT_TRUE(std::find(record->panelIds.begin(), record->panelIds.end(), panelBId) != record->panelIds.end());
+}
+
+TEST(WidgetTreeTest, DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget)
+{
+    WidgetTree tree({.width = 1000, .height = 700});
+    auto       ws = std::make_shared<UIDockWorkspace>();
+    ws->bAllowFloating = true;
+    ws->bAllowTearOff  = true;
+
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    dock->_anchorMin = {0.0f, 0.0f};
+    dock->_anchorMax = {1.0f, 1.0f};
+    dock->setWorkspace(ws);
+    tree.attachToLayer(WidgetTree::ELayer::Content, dock);
+
+    auto panel = std::make_shared<UIPanel>("Panel");
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    const DockPanelId panelId = ws->addPanel("Scene", panel);
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    UITabBar* tabBar = findDescendantOfType<UITabBar>(*dock);
+    ASSERT_NE(tabBar, nullptr);
+    ASSERT_TRUE(static_cast<bool>(tabBar->_onTabDragBegin));
+
+    tabBar->_onTabDragBegin(0, "Scene");
+    ASSERT_TRUE(tree.isDragging());
+    EXPECT_EQ(tree.getDragSource(), dock.get());
+    EXPECT_EQ(tree.getDragPayload(), std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelId));
+
+    tree.endDrag({520.0f, 410.0f});
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_TRUE(ws->isPanelFloating(panelId));
+    const auto* floating = ws->findFloatingByPanel(panelId);
+    ASSERT_NE(floating, nullptr);
+    EXPECT_EQ(floating->pos, glm::vec2(520.0f, 410.0f));
+}
+
+TEST(WidgetTreeTest, FloatingWindowTabDragBehaviorStartsDockPanelSession)
+{
+    WidgetTree tree({.width = 1000, .height = 700});
+    auto       ws = std::make_shared<UIDockWorkspace>();
+    ws->bAllowFloating = true;
+    ws->bAllowTearOff  = true;
+
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    dock->_anchorMin = {0.0f, 0.0f};
+    dock->_anchorMax = {1.0f, 1.0f};
+    dock->setWorkspace(ws);
+    tree.attachToLayer(WidgetTree::ELayer::Content, dock);
+
+    auto panel = std::make_shared<UIPanel>("Panel");
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    const DockPanelId panelId = ws->addPanel("Scene", panel);
+    const FDockFloatingWindowId floatingId = ws->tearOffPanel(panelId, {120.0f, 120.0f}, {320.0f, 240.0f});
+    ASSERT_NE(floatingId, kInvalidFloatingWindowId);
+
+    auto floating = std::make_shared<UIDockFloatingWindow>("Floating", floatingId, ws);
+    tree.attachToLayer(WidgetTree::ELayer::Popup, floating);
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    UITabBar* tabBar = findDescendantOfType<UITabBar>(*floating);
+    ASSERT_NE(tabBar, nullptr);
+    ASSERT_TRUE(static_cast<bool>(tabBar->_onTabDragBegin));
+
+    tabBar->_onTabDragBegin(0, "Scene");
+    ASSERT_TRUE(tree.isDragging());
+    EXPECT_EQ(tree.getDragSource(), floating.get());
+    EXPECT_EQ(tree.getDragPayload(), std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelId));
+
+    tree.endDrag({9000.0f, 9000.0f});
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_TRUE(ws->isPanelFloating(panelId));
 }
 
 TEST(WidgetTreeTest, DragObserverReceivesEveryMoveAndTargetChanges)

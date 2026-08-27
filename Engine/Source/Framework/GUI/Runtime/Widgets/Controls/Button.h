@@ -2,7 +2,7 @@
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Text.h"
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
@@ -30,6 +30,8 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
 {
     YA_REFLECT_BEGIN(UIButton, UIElement)
     YA_REFLECT_END()
+
+    YA_GUI_AUTHORED_STYLE_IO(FButtonStyle)
 
     explicit UIButton(std::string name = "Button") : UIElement(std::move(name), "button")
     {

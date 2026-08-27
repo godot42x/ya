@@ -36,7 +36,7 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     auto titleText = std::make_shared<UIText>("DialogTitle");
     titleText->_bAutoSize = true;
     titleText->_fontSize  = 14;
-    titleText->_color     = {0.88f, 0.90f, 0.94f, 1.0f};
+    titleText->setColor({0.88f, 0.90f, 0.94f, 1.0f});
     titleText->setText(std::move(title));
     stack->addDetachedChild(titleText);
 

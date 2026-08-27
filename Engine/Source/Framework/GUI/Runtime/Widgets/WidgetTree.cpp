@@ -181,7 +181,7 @@ void WidgetTree::updateTooltip()
     label->setSize({0.0f, 0.0f});
     label->setPosition({8.0f, 4.0f});
     label->_fontSize  = 12;
-    label->_color     = {0.95f, 0.96f, 0.98f, 1.0f};
+    label->setColor({0.95f, 0.96f, 0.98f, 1.0f});
     label->setText(_hovered->_tooltip);
     host->addDetachedChild(label);
 
@@ -217,6 +217,20 @@ EWidgetRouteResult WidgetTree::dispatchCapturedPointerEvent(const Event& event,
     }
     if (!_captured->isAttached()) {
         _captured = nullptr;
+        return EWidgetRouteResult::NotHandled;
+    }
+
+    // A widget may become disabled while it owns pointer capture (for example
+    // a presenter flips its enabled gate during an active press session).
+    // Disabled subtrees are input-inert, so the normal route executor would
+    // drop the release before the widget can clear its transient pressed /
+    // capture state. On release, clear that stale session explicitly.
+    if (!_captured->isEnabledInTree()) {
+        if (eventType == EEvent::MouseButtonReleased) {
+            UIElement* captured = _captured;
+            _captured = nullptr;
+            captured->clearTransientInputState();
+        }
         return EWidgetRouteResult::NotHandled;
     }
 
@@ -1233,7 +1247,7 @@ void WidgetTree::beginDrag(UIElement* source,
     auto label = std::make_shared<UIText>("DragGhostLabel");
     label->setText(_dragOperation->ghostLabel);
     label->_fontSize = 13;
-    label->_color    = {0.95f, 0.96f, 0.98f, 1.0f};
+    label->setColor({0.95f, 0.96f, 0.98f, 1.0f});
     label->_anchorMin = {0.0f, 0.0f};
     label->_anchorMax = {1.0f, 1.0f};
     label->setSize({0.0f, 0.0f});

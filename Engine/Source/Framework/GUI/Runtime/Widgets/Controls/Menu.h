@@ -21,6 +21,8 @@ struct YA_GUI_API UIMenuItem : public UIElement, public UIStyledWidget<UIMenuIte
     YA_REFLECT_FIELD(_fontSize, .instanceEditable())
     YA_REFLECT_END()
 
+    YA_GUI_AUTHORED_STYLE_IO(FMenuStyle)
+
     explicit UIMenuItem(std::string name = "MenuItem") : UIElement(std::move(name), "menu")
     {
         _hitFilter = EWidgetHitFilter::Stop;
@@ -48,6 +50,8 @@ struct YA_GUI_API UIMenuItem : public UIElement, public UIStyledWidget<UIMenuIte
 /// of the menu at `pos`. Selecting an item runs its action and closes.
 struct YA_GUI_API UIMenu : public UIPopupOverlay, public UIStyledWidget<UIMenu, FMenuStyle>
 {
+    YA_GUI_AUTHORED_STYLE_IO(FMenuStyle)
+
     struct FItem
     {
         std::string              label;

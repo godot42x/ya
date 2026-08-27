@@ -2,7 +2,7 @@
 
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Menu.h"
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Theme.h"
 
 #include <functional>
@@ -19,6 +19,8 @@ struct YA_GUI_API UIMenuBarItem : public UIElement, public UIStyledWidget<UIMenu
     YA_REFLECT_FIELD(_label, .instanceEditable())
     YA_REFLECT_FIELD(_fontSize, .instanceEditable())
     YA_REFLECT_END()
+
+    YA_GUI_AUTHORED_STYLE_IO(FMenuBarItemStyle)
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIMenuBarItem>; }
 

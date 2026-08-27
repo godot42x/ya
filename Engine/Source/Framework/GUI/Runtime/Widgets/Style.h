@@ -15,7 +15,7 @@
 
 #include "Core/Api.h"
 #include "GUI/Widgets/Brush.h"
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 
 #include <glm/glm.hpp>
 
@@ -366,5 +366,11 @@ private:
     std::unordered_map<std::type_index,
                        std::unordered_map<std::string, std::shared_ptr<ReactiveBase>>> _styles;
 };
+
+/// Flush style-type reflection + optional<TStyle> serializer hooks. Safe to
+/// call more than once; UIDocument serialize/deserialize invokes it so hooks
+/// are live even when this TU's static registrars ran after the global
+/// DeferredInitializerQueue flush.
+YA_GUI_API void ensureGuiStyleReflection();
 
 } // namespace ya

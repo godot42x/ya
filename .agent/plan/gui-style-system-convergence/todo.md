@@ -43,7 +43,7 @@
 - [ ] 设计 UIThemeContext —— WidgetTree 已挂树级 theme（setTheme/getTheme）；subtree override 留后续
 - [ ] 设计 style key 命名规则 —— resolveThemeStyle<TStyle>(key, level) helper 已落地，key 命名约定待 Phase 4 定
 - [x] 确定 WidgetTree / GUIWindowHost 的 theme owner 边界 —— 挂 WidgetTree（树级资源）
-- [x] 实现 resolve 顺序：explicit override -> style key -> subtree override -> tree/window theme -> framework fallback —— authored TStyle + setColor 退化 + style key + fallback 已落地；subtree override 仍留后续
+- [x] 实现 resolve 顺序：explicit override -> style key -> subtree override -> tree/window theme -> framework fallback —— authored TStyle（含 setColor 写入）+ style key + fallback 已落地；subtree override 仍留后续
 - [x] **UIStyleSet 泛型化**：`define<TStyle>(name, style)`，typed styles 复用 Reactive<T>，不另起第二套容器
 - [x] **resolve 上游换人失效传播**：WidgetTree 持 `Reactive<uint64_t>` generation token，setTheme 时 +1 触发依赖控件重绘
 - [ ] **token → typed style 转换**：配置代码烘焙（app 构造 theme 时用 token 初始化 typed style），framework 不做运行时 token 求值（见 plan.md §3.4）

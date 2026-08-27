@@ -1047,7 +1047,7 @@ TEST(ToolControlsTest, SelectableRowWithLabelChildHoverStillHighlightsRow)
     label->setSize({240.0f, 22.0f});
     label->_fontSize = 13;
     label->setText("Item 1");
-    label->_color    = {0.9f, 0.9f, 0.9f, 1.0f};
+    label->setColor({0.9f, 0.9f, 0.9f, 1.0f});
     tree.attach(*row, label);
     tree.layout();
     tree.buildSnapshot(UIFrameBuildContext{});

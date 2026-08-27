@@ -23,6 +23,8 @@ struct YA_GUI_API UIComboBox : public UIElement, public UIStyledWidget<UIComboBo
     YA_REFLECT_FIELD(_fontSize, .instanceEditable())
     YA_REFLECT_END()
 
+    YA_GUI_AUTHORED_STYLE_IO(FComboBoxStyle)
+
     explicit UIComboBox(std::string name = "ComboBox") : UIElement(std::move(name), "combobox")
     {
         _hitFilter   = EWidgetHitFilter::Stop;

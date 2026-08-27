@@ -1,6 +1,6 @@
 #include "GUI/Widgets/Controls/Container.h"
 
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
 namespace ya

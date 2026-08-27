@@ -29,6 +29,8 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
     YA_REFLECT_FIELD(_maxLength, .instanceEditable())
     YA_REFLECT_END()
 
+    YA_GUI_AUTHORED_STYLE_IO(FTextFieldStyle)
+
     explicit UITextField(std::string name = "TextField") : UIElement(std::move(name), "textfield")
     {
         _hitFilter   = EWidgetHitFilter::Stop;

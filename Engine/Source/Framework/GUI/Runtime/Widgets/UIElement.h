@@ -243,7 +243,13 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Serialize reflected fields (base + own) into a JSON object.
     [[nodiscard]] nlohmann::json serializeFields() const;
     /// Restore reflected fields from a JSON object (base + own).
-    void deserializeFields(const nlohmann::json& fields);
+    virtual void deserializeFields(const nlohmann::json& fields);
+
+    /// Authored TStyle lives on UIStyledWidget (second base). Reflection
+    /// member pointers cannot address that subobject from a UIElement*, so
+    /// persistence goes through this virtual instead of YA_REFLECT_FIELD.
+    [[nodiscard]] virtual nlohmann::json serializeAuthoredStyle() const { return nullptr; }
+    virtual void deserializeAuthoredStyle(const nlohmann::json&) {}
 
     /// Append transient/runtime-only diagnostics for WidgetTreeDump. This is
     /// intentionally separate from serializeFields(): diagnostics include

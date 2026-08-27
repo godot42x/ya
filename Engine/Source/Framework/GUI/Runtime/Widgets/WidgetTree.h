@@ -17,7 +17,7 @@
 // Project code cannot override system layers through ordinary child zOrder.
 // ============================================================================
 
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetAttachment.h"

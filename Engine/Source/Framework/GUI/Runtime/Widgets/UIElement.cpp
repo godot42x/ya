@@ -1,10 +1,11 @@
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "GUI/Widgets/Style.h"
 
 #include "Core/Log.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "GUI/Layout/UILayout.h"
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
@@ -427,20 +428,36 @@ void UIElement::removeChildEdge(UIElement& child)
 
 nlohmann::json UIElement::serializeFields() const
 {
+    ensureGuiStyleReflection();
     auto* cls = ClassRegistry::instance().getClass(getTypeIndex());
     if (!cls) {
         return nlohmann::json();
     }
-    return ReflectionSerializer::serializeByRuntimeReflection(this, getTypeIndex(), cls->getName());
+    nlohmann::json j = ReflectionSerializer::serializeByRuntimeReflection(this, getTypeIndex(), cls->getName());
+    nlohmann::json authored = serializeAuthoredStyle();
+    if (!authored.is_null()) {
+        j["_authoredStyle"] = std::move(authored);
+    }
+    return j;
 }
 
 void UIElement::deserializeFields(const nlohmann::json& fields)
 {
-    auto* cls = ClassRegistry::instance().getClass(getTypeIndex());
-    if (!cls) {
-        return;
+    ensureGuiStyleReflection();
+    nlohmann::json rest = fields;
+    nlohmann::json authored;
+    const bool bHasAuthored = rest.contains("_authoredStyle");
+    if (bHasAuthored) {
+        authored = rest["_authoredStyle"];
+        rest.erase("_authoredStyle");
     }
-    ReflectionSerializer::deserializeByRuntimeReflection(this, getTypeIndex(), fields, cls->getName());
+    auto* cls = ClassRegistry::instance().getClass(getTypeIndex());
+    if (cls) {
+        ReflectionSerializer::deserializeByRuntimeReflection(this, getTypeIndex(), rest, cls->getName());
+    }
+    if (bHasAuthored) {
+        deserializeAuthoredStyle(authored);
+    }
 
     // Mutation transaction boundary (GI-201): reflection writes bypass the
     // changed-only setters (direct memory access), so no per-field invalidation

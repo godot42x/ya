@@ -2,27 +2,37 @@
 
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
+#include <nlohmann/json.hpp>
+
 namespace ya
 {
 
 void UIPanel::paintSelf(UIFrameBuilder& builder)
 {
-    // Resolve chain (plan §3.2): authored FPanelStyle > setColor degenerate
-    // override > theme key > authoring fill/image. Presenters that recolor
-    // via setColor keep working under any mounted theme.
-    if (_authoredStyle.has_value()) {
-        builder.addBrush(_layoutRect, _authoredStyle->fillColor);
+    // Resolve chain: authored FPanelStyle (setStyle / setColor) > theme key >
+    // authoring fill/image. An image binding is content, not chrome: it wins
+    // over an authored solid fill so GI-202 recolor + image stays the
+    // pre-fold setColor fallback. Theme still wins over image when the
+    // panel has no authored style (same as before _bExplicitFill).
+    auto paintFill = [&](const FBrush& fill) {
+        if (_cornerRadius > 0.0f && fill.isSolid()) {
+            builder.addRoundedRect(_layoutRect, fill.tintColor, _cornerRadius);
+            return;
+        }
+        builder.addBrush(_layoutRect, fill);
+    };
+
+    if (_authoredStyle.has_value() && !_image.isLoaded()) {
+        paintFill(_authoredStyle->fillColor);
         return;
     }
-    if (!_styleKey.empty() && !_bExplicitFill) {
+    if (!_authoredStyle.has_value() && !_styleKey.empty()) {
         if (const FPanelStyle* style = resolveThemeStyle<FPanelStyle>(*this, _styleKey)) {
-            builder.addBrush(_layoutRect, style->fillColor);
+            paintFill(style->fillColor);
             return;
         }
     }
 
-    // Framework fallback: authoring fill + optional authored image
-    // (unchanged behavior).
     if (!_image.isLoaded()) {
         if (_cornerRadius > 0.0f) {
             builder.addRoundedRect(_layoutRect, _color, _cornerRadius);
@@ -32,9 +42,20 @@ void UIPanel::paintSelf(UIFrameBuilder& builder)
         }
         return;
     }
-    // Strong lifetime: the builder resolves the texture through the host's
-    // resolver; the snapshot retains it until queue submit completes.
     builder.addSprite(_layoutRect, _color, builder.resolveTexture(_image.getPath()));
+}
+
+void UIPanel::deserializeFields(const nlohmann::json& fields)
+{
+    nlohmann::json rest = fields;
+    const bool bLegacyExplicit = rest.contains("_bExplicitFill") && rest["_bExplicitFill"] == true;
+    rest.erase("_bExplicitFill");
+    UIElement::deserializeFields(rest);
+    if (bLegacyExplicit && !_authoredStyle) {
+        FPanelStyle style;
+        style.fillColor = FBrush::Solid(_color);
+        _authoredStyle  = std::move(style);
+    }
 }
 
 } // namespace ya

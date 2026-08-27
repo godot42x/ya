@@ -13,12 +13,13 @@ struct YA_GUI_API UIPanel : public UIElement, public UIStyledWidget<UIPanel, FPa
 {
     YA_REFLECT_BEGIN(UIPanel, UIElement)
     YA_REFLECT_FIELD(_color, .instanceEditable())
-    YA_REFLECT_FIELD(_bExplicitFill, .instanceEditable())
     YA_REFLECT_FIELD(_image, .instanceEditable())
     YA_REFLECT_FIELD(_bNineSlice, .instanceEditable())
     YA_REFLECT_FIELD(_nineSliceBorder, .instanceEditable())
     YA_REFLECT_FIELD(_cornerRadius, .instanceEditable())
     YA_REFLECT_END()
+
+    YA_GUI_AUTHORED_STYLE_IO(FPanelStyle)
 
     explicit UIPanel(std::string name = "Panel") : UIElement(std::move(name), "panel") {}
 
@@ -29,13 +30,6 @@ struct YA_GUI_API UIPanel : public UIElement, public UIStyledWidget<UIPanel, FPa
     /// changed-only setter and a getter.
   protected:
     glm::vec4 _color = {0.2f, 0.2f, 0.2f, 0.8f};
-    /// True once setColor() authored an explicit fill. Explicit authoring is
-    /// the widget-level override in the resolve chain (plan §3.2) and wins
-    /// over the theme's "panel" style; a panel WITHOUT an authored fill is
-    /// theme-driven. This keeps presenters that recolor panels per frame
-    /// (GI-202) immune to theme changes until they deliberately hand the
-    /// appearance to the theme.
-    bool _bExplicitFill = false;
   public:
     // Authoring-only (GI-202 exception list): set once at construction /
     // deserialization; no runtime business write path yet. To be encapsulated
@@ -48,18 +42,23 @@ struct YA_GUI_API UIPanel : public UIElement, public UIStyledWidget<UIPanel, FPa
     /// brush; the compose pass routes the SDF round-rect shader branch.
     float _cornerRadius = 0.0f;
 
-    /// Changed-only color setter (GI-105): repaint only on a real change.
+    /// Degenerate authored FPanelStyle: writes a solid fillColor and keeps
+    /// `_color` in sync for getColor / GI-202. Paint-only so presenters can
+    /// recolor every frame without a layout pass.
     void setColor(const glm::vec4& value)
     {
         if (_color == value) {
             return;
         }
-        _color         = value;
-        _bExplicitFill = true;
-        invalidateProperty(EUIPropertyImpact::Paint);
+        _color = value;
+        FPanelStyle next;
+        next.fillColor = FBrush::Solid(value);
+        setStyle(std::move(next), EUIPropertyImpact::Paint);
     }
     [[nodiscard]] const glm::vec4& getColor() const { return _color; }
-    [[nodiscard]] bool hasExplicitFill() const { return _bExplicitFill; }
+    [[nodiscard]] bool hasExplicitFill() const { return hasAuthoredStyle(); }
+
+    void deserializeFields(const nlohmann::json& fields) override;
 
     /// Corner radius setter (changed-only). Routes the panel fill through the
     /// SDF round-rect shader branch when radius > 0.

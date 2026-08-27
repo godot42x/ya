@@ -16,6 +16,16 @@ namespace ya
 
 namespace
 {
+template <typename TBehavior>
+TBehavior* findBehavior(UIElement& owner)
+{
+    for (const UIBehaviorRef& behavior : owner.getBehaviors()) {
+        if (auto* typed = dynamic_cast<TBehavior*>(behavior.get())) {
+            return typed;
+        }
+    }
+    return nullptr;
+}
 
 bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 {
@@ -25,6 +35,8 @@ bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 
 constexpr float kResizeThickness = 6.0f;
 constexpr float kCornerGripSize  = 14.0f;
+
+} // namespace
 
 struct FDockFloatingWindowDropTargetBehavior final : public UIDropTargetBehavior
 {
@@ -53,6 +65,62 @@ struct FDockFloatingWindowDropTargetBehavior final : public UIDropTargetBehavior
         };
     }
 };
+
+struct FDockFloatingWindowPanelDragBehavior final : public UIBehavior
+{
+    void beginPanelDrag(UIDockFloatingWindow& owner, DockPanelId panelId, std::string label)
+    {
+        WidgetTree* tree = owner.getTree();
+        if (!tree) {
+            return;
+        }
+
+        owner._bDockDragging = true;
+        owner._bTitlePressed = false;
+        owner._bTitleMoving  = false;
+        const std::string payload = std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelId);
+        DragSessionObserver observer;
+        auto lastPreview = std::make_shared<std::optional<UIDockSpace::FDropPreview>>();
+        observer.onMove = [&owner, payload, lastPreview](const std::string&, const glm::vec2& logicalPoint, std::string_view)
+        {
+            if (owner._lastDragPoint) {
+                owner._windowRect.pos += logicalPoint - *owner._lastDragPoint;
+                if (owner._ws) {
+                    owner._ws->setFloatingWindowPos(owner._floatingId, owner._windowRect.pos);
+                }
+            }
+            owner._lastDragPoint = logicalPoint;
+            if (WidgetTree* tree = owner.getTree()) {
+                tree->invalidateLayout();
+            }
+            UIDockSpace* space = owner._ws ? owner._ws->dockSpace() : nullptr;
+            if (!space) {
+                return;
+            }
+            space->updateDropHover(payload, logicalPoint);
+            if (space->hasDropPreview()) {
+                *lastPreview = space->dropPreview();
+            }
+            else if (*lastPreview) {
+                space->setDropPreview(**lastPreview);
+            }
+        };
+        observer.onTargetChanged = [](std::string_view, std::string_view) {};
+        observer.onFinished = [&owner](EDragFinishResult, const glm::vec2&, std::string_view)
+        {
+            owner._lastDragPoint.reset();
+            owner._bDockDragging = false;
+            if (UIDockSpace* space = owner._ws ? owner._ws->dockSpace() : nullptr) {
+                space->clearDropPreview();
+            }
+            owner.refreshFromWorkspace();
+        };
+        tree->beginDrag(&owner, payload, std::move(label), std::move(observer), false, true);
+    }
+};
+
+namespace
+{
 
 struct FResizeHandle final : UIElement
 {
@@ -187,6 +255,7 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
     setSpacing(0.0f);
     setClipChildren(true);
     _hitFilter = EWidgetHitFilter::Stop;
+    addBehavior(std::make_shared<FDockFloatingWindowPanelDragBehavior>());
     addBehavior(std::make_shared<FDockFloatingWindowDropTargetBehavior>());
 
     auto header = std::make_shared<UIContainer>(std::format("{}_Header", _name));
@@ -207,7 +276,9 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
                 _title = _ws->findPanel(_panelId) ? _ws->findPanel(_panelId)->name : std::string{};
             }
         }
-        beginDockDrag();
+        if (auto* behavior = findBehavior<FDockFloatingWindowPanelDragBehavior>(*this)) {
+            behavior->beginPanelDrag(*this, _panelId, _title);
+        }
     };
     header->addDetachedChild(_tabBar);
 
@@ -346,76 +417,6 @@ void UIDockFloatingWindow::paintSelf(UIFrameBuilder& builder)
     builder.addRectOutline(
         Rect2D{_layoutRect.pos + glm::vec2{1.0f, 1.0f}, _layoutRect.extent - glm::vec2{2.0f, 2.0f}},
         style.innerFill.tintColor, 1.0f);
-}
-
-void UIDockFloatingWindow::beginDockDrag()
-{
-    if (WidgetTree* tree = getTree()) {
-        // This drag session now owns the window: bypass the header's own
-        // window-move path so it can't double-move the window.
-        _bDockDragging = true;
-        _bTitlePressed = false;
-        _bTitleMoving  = false;
-        const std::string payload =
-            std::string(UIDockSpace::kDockPanelPayload) + std::to_string(_panelId);
-        DragSessionObserver observer;
-        // A floating window's tab drag is a docking intent: it projects the dock
-        // chooser onto the DockSpace. The actual dock is performed by the
-        // DockSpace itself — because bSkipSourceInHitTest lets WidgetTree's
-        // findDropTarget fall through to the DockSpace beneath the floating
-        // window, endDrag() already calls DockSpace::onDrop. Re-dropping here
-        // would double-dock and corrupt the dock model (crash). So onFinished
-        // only clears the preview.
-        auto lastPreview = std::make_shared<std::optional<UIDockSpace::FDropPreview>>();
-        observer.onMove = [this, payload, lastPreview](const std::string&, const glm::vec2& logicalPoint, std::string_view)
-        {
-            // Follow the pointer: move the floating window with the drag while
-            // simultaneously projecting the dock chooser onto the DockSpace
-            // beneath it. bSkipSourceInHitTest keeps this window from eating the
-            // drop, so WidgetTree still routes the drop to the DockSpace.
-            if (_lastDragPoint) {
-                _windowRect.pos += logicalPoint - *_lastDragPoint;
-                if (_ws) {
-                    _ws->setFloatingWindowPos(_floatingId, _windowRect.pos);
-                }
-            }
-            _lastDragPoint = logicalPoint;
-            if (WidgetTree* tree = getTree()) {
-                tree->invalidateLayout();
-            }
-            UIDockSpace* space = _ws ? _ws->dockSpace() : nullptr;
-            if (!space) {
-                return;
-            }
-            space->updateDropHover(payload, logicalPoint);
-            if (space->hasDropPreview()) {
-                // A leaf is under the pointer: remember the chooser so it can be
-                // restored while the pointer is over empty canvas.
-                *lastPreview = space->dropPreview();
-            }
-            else if (*lastPreview) {
-                // Pointer over empty space / the floating window itself: keep the
-                // last chooser visible instead of letting it vanish.
-                space->setDropPreview(**lastPreview);
-            }
-        };
-        observer.onTargetChanged = [](std::string_view, std::string_view) {};
-        observer.onFinished = [this](EDragFinishResult, const glm::vec2&, std::string_view)
-        {
-            _lastDragPoint.reset();
-            _bDockDragging = false;
-            if (UIDockSpace* space = _ws ? _ws->dockSpace() : nullptr) {
-                space->clearDropPreview();
-            }
-            // The dragged tab's panelId was captured as _panelId during the
-            // drag; restore the workspace's active panel so the window shows the
-            // correct tab if it stayed floating (a successful dock already
-            // removed the panel and refreshed this window via the host).
-            refreshFromWorkspace();
-        };
-        tree->beginDrag(this, payload, _title, std::move(observer), /*bShowGhost=*/false,
-                        /*bSkipSourceInHitTest=*/true);
-    }
 }
 
 void UIDockFloatingWindow::beginWindowMove()

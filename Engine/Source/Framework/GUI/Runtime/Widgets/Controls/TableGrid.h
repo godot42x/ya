@@ -1,7 +1,7 @@
 #pragma once
 
 #include "GUI/Layout/UILayout.h"
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
@@ -24,6 +24,8 @@ namespace ya
 /// itself on top of the cell (the row text for that cell is suppressed).
 struct YA_GUI_API UITableGrid : public UIElement, public UIStyledWidget<UITableGrid, FTableGridStyle>
 {
+    YA_GUI_AUTHORED_STYLE_IO(FTableGridStyle)
+
     /// One table row (value type owned by the data source).
     struct FTableRow
     {

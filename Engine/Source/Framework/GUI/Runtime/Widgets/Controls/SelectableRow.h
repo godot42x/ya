@@ -29,6 +29,8 @@ struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISe
     YA_REFLECT_FIELD(_bSelected, .instanceEditable())
     YA_REFLECT_END()
 
+    YA_GUI_AUTHORED_STYLE_IO(FSelectableRowStyle)
+
     explicit UISelectableRow(std::string name = "Row");
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UISelectableRow>; }

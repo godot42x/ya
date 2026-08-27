@@ -25,6 +25,8 @@ struct YA_GUI_API UICheckBox : public UIElement, public UIStyledWidget<UICheckBo
     YA_REFLECT_FIELD(_labelSpacing, .instanceEditable())
     YA_REFLECT_END()
 
+    YA_GUI_AUTHORED_STYLE_IO(FCheckBoxStyle)
+
     explicit UICheckBox(std::string name = "CheckBox") : UIElement(std::move(name), "checkbox")
     {
         _hitFilter   = EWidgetHitFilter::Stop;

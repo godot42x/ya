@@ -1,7 +1,7 @@
 #include "GUI/Host/GUIHeadlessHost.h"
 
 #include "Core/Log.h"
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 
 namespace ya
 {

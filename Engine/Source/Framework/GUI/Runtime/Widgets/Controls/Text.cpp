@@ -3,6 +3,8 @@
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
+#include <nlohmann/json.hpp>
+
 namespace ya
 {
 
@@ -89,15 +91,14 @@ std::vector<std::string> UIText::wrapText(const std::string& text,
 
 FTextStyle UIText::resolvedStyle(ReactiveBase::EDirtyLevel level) const
 {
-    // Resolve chain (plan §3.2): authored TStyle > setColor degenerate
-    // override > theme key > authoring fields. Theme lookup registers the
-    // generation + style Reactive edges; an authored TStyle does not, so a
-    // theme switch cannot clobber an instance override.
+    // Resolve chain: authored TStyle (setStyle / setColor) > theme key >
+    // authoring fields. Theme lookup registers the generation + style
+    // Reactive edges; an authored TStyle does not, so a theme switch cannot
+    // clobber an instance override.
     if (_authoredStyle.has_value()) {
         return *_authoredStyle;
     }
-    const bool bAuthoredColor = !(_color == glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
-    if (!_styleKey.empty() && !bAuthoredColor) {
+    if (!_styleKey.empty()) {
         if (const FTextStyle* themed = resolveThemeStyle<FTextStyle>(*this, _styleKey, level)) {
             return *themed;
         }
@@ -107,6 +108,22 @@ FTextStyle UIText::resolvedStyle(ReactiveBase::EDirtyLevel level) const
     style.textColor = _color;
     style.fontSize  = _fontSize;
     return style;
+}
+
+void UIText::deserializeFields(const nlohmann::json& fields)
+{
+    UIElement::deserializeFields(fields);
+    // Legacy documents stored a non-default `_color` without `_authoredStyle`.
+    // Promote that color into the authored slot so a mounted theme cannot
+    // clobber the saved appearance. Default white stays un-authored.
+    static const glm::vec4 kDefaultTextColor{1.0f, 1.0f, 1.0f, 1.0f};
+    if (!_authoredStyle && _color != kDefaultTextColor) {
+        FTextStyle style;
+        style.textColor = _color;
+        style.fillColor = FBrush::Solid(_color);
+        style.fontSize  = _fontSize;
+        _authoredStyle  = std::move(style);
+    }
 }
 
 glm::vec2 UIText::computeDesiredSize() const

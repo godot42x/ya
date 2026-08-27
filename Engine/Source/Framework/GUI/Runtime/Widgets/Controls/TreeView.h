@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
@@ -29,6 +29,8 @@ namespace ya
 /// virtualization, no per-row child widgets — the smallest closed loop.
 struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeView, FTreeViewStyle>
 {
+    YA_GUI_AUTHORED_STYLE_IO(FTreeViewStyle)
+
     /// One tree node (value type owned by the data source). `children` is a
     /// static subtree for now; dynamic child mutation is a later milestone.
     struct FNode

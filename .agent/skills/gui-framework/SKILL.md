@@ -166,9 +166,9 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 - 机制在 framework：`UITheme` + `resolveThemeStyle` + generation token。值在 app：
   WorkbenchTheme（demo 壳）/ EditorTheme（GameEditor chrome）。
-- Resolve：实例 authored `TStyle`（`setStyle`）> `setColor` 退化覆盖（Text/Panel）> theme key > 默认构造的 typed style。
+- Resolve：实例 authored `TStyle`（`setStyle` / Text·Panel `setColor`）> theme key > 默认构造的 typed style。
 - 高频路径是实例 `setStyle` / `setStyleKey`（DSL 基类 builder 已暴露）；切 theme 是低频目录切换。
-- `_styleKey` 在 `UIElement` 上反射；authored `TStyle` 尚未进反射（optional 类型后续补 hook）。
+- `_styleKey` 在 `UIElement` 上反射；authored `TStyle` 经 `YA_GUI_AUTHORED_STYLE_IO` 虚函数写入 UIDocument（mixin 字段不能 `YA_REFLECT_FIELD`，MI 偏移不对）。`FBrush`/`F*Style` 走运行时反射。
 - 族 key：`panel` / `button` / `text` / `menubar` / `tab` / `split` / `scrollbar` /
   `dock` / `floating`。角色 key：`panel.window` / `panel.canvas` / `panel.sidebar` /
   `tab.dock` / `tab.sidebar` / `text.header` / `text.muted` / `text.error` /
@@ -180,7 +180,7 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   表单控件（TreeView/TextField/Menu/SelectableRow/DragFloat/CheckBox/ComboBox/
   Slider/TableGrid/SpinBox/Radio/ColorEdit chrome/SearchCombo）paint 时
   `resolveWidgetStyle`；几何（rowHeight/indent/thumbSize）留在 widget。
-  实例覆盖走 `setStyle(TStyle)`；Text/Panel 的 `setColor` 仍是单色退化覆盖。
+  实例覆盖走 `setStyle(TStyle)`；Text/Panel 的 `setColor` 写入同一 authored 槽（Paint 粒度）。
 
 ## Host（ya-gui-app-host）
 

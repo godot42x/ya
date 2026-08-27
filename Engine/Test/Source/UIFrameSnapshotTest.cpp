@@ -8,7 +8,7 @@
 
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Style.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -1226,6 +1226,51 @@ TEST(UIFrameSnapshotTest, AuthoredButtonStyleWinsOverThemeAndIgnoresThemeSwitch)
     tree.setTheme(other.get());
     tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+    const UIFrameSnapshot after = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_FALSE(after.items.empty());
+    EXPECT_EQ(after.items.front().color, glm::vec4(0.9f, 0.2f, 0.1f, 1.0f));
+}
+
+TEST(UIFrameSnapshotTest, SetColorWritesAuthoredStyleAndBeatsTheme)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto theme = std::make_shared<UITheme>();
+    FPanelStyle panelThemed;
+    panelThemed.fillColor = FBrush::Solid({0.1f, 0.2f, 0.9f, 1.0f});
+    theme->define<FPanelStyle>("panel", panelThemed);
+    FTextStyle textThemed;
+    textThemed.textColor = {0.1f, 0.9f, 0.2f, 1.0f};
+    theme->define<FTextStyle>("text", textThemed);
+    tree.setTheme(theme.get());
+
+    auto panel = std::make_shared<UIPanel>("P");
+    panel->setPosition({10.0f, 10.0f});
+    panel->setSize({100.0f, 50.0f});
+    panel->setColor({0.9f, 0.2f, 0.1f, 1.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+
+    auto text = std::make_shared<UIText>("T");
+    text->setColor({0.2f, 0.3f, 0.8f, 1.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, text);
+
+    EXPECT_TRUE(panel->hasAuthoredStyle());
+    EXPECT_TRUE(text->hasAuthoredStyle());
+    EXPECT_EQ(text->resolvedStyle().textColor, glm::vec4(0.2f, 0.3f, 0.8f, 1.0f));
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_FALSE(snap.items.empty());
+    EXPECT_EQ(snap.items.front().color, glm::vec4(0.9f, 0.2f, 0.1f, 1.0f));
+
+    auto other = std::make_shared<UITheme>();
+    FPanelStyle panelThemed2;
+    panelThemed2.fillColor = FBrush::Solid({0.0f, 1.0f, 0.0f, 1.0f});
+    other->define<FPanelStyle>("panel", panelThemed2);
+    FTextStyle textThemed2;
+    textThemed2.textColor = {1.0f, 1.0f, 0.0f, 1.0f};
+    other->define<FTextStyle>("text", textThemed2);
+    tree.setTheme(other.get());
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(text->resolvedStyle().textColor, glm::vec4(0.2f, 0.3f, 0.8f, 1.0f));
     const UIFrameSnapshot after = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_FALSE(after.items.empty());
     EXPECT_EQ(after.items.front().color, glm::vec4(0.9f, 0.2f, 0.1f, 1.0f));

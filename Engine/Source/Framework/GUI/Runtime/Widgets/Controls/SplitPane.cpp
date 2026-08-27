@@ -1,7 +1,7 @@
 #include "GUI/Widgets/Controls/SplitPane.h"
 
 #include "Core/Log.h"
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 

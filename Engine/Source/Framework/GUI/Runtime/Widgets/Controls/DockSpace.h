@@ -26,6 +26,8 @@ struct UIDockWorkspace;
 /// No floating windows or persistence yet.
 struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSpace, FDockSpaceStyle>
 {
+    YA_GUI_AUTHORED_STYLE_IO(FDockSpaceStyle)
+
     explicit UIDockSpace(std::string name = "DockSpace");
     /// Bind the shared workspace this dock reads its model / registry / policy from.
     void setWorkspace(std::shared_ptr<UIDockWorkspace> ws);
@@ -107,6 +109,7 @@ struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSp
                                                              const glm::vec2& logicalPoint) const;
 
 private:
+    friend struct FDockSpacePanelDragBehavior;
     friend struct FDockSpaceDropTargetBehavior;
     struct FLeafView
     {
