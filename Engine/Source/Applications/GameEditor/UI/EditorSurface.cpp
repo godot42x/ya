@@ -5,9 +5,11 @@
 #include "Core/Log.h"
 #include "ECS/Entity.h"
 #include "ECS/Component.h"
+#include "ECS/ECSRegistry.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Tooling/Workbench/WorkbenchSurface.h"
 #include "GameEditor/UI/EditorTheme.h"
+#include "GameEditor/UI/EditorTabRegistry.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
@@ -180,6 +182,7 @@ EditorSurface::~EditorSurface() = default;
 void EditorSurface::shutdown()
 {
     _workbench.reset();
+    _tabRegistry.reset();
     clearSceneSaveDialog();
     _tree.reset();
     _theme.reset();
@@ -192,10 +195,8 @@ void EditorSurface::shutdown()
     _viewportImage.reset();
     _hierarchyView.reset();
     _hierarchyRoots.reset();
-    _nameField.reset();
-    _inspectorEmpty.reset();
+    _inspectorTab.reset();
     _statsText.reset();
-    _transformDrags = {};
     _contentExplorer.reset();
     _contentPathText.reset();
     _contentMountList.reset();
@@ -206,7 +207,6 @@ void EditorSurface::shutdown()
     _viewportImageResource.reset();
     _viewportImageView.reset();
     _hierarchyFingerprint.clear();
-    _inspectorBoundId.clear();
     _layer = nullptr;
 }
 
@@ -237,11 +237,10 @@ void EditorSurface::rebuild(App& app)
     _viewportImage.reset();
     _hierarchyView.reset();
     _hierarchyRoots.reset();
-    _nameField.reset();
-    _inspectorEmpty.reset();
+    _inspectorTab.reset();
     _statsText.reset();
-    _transformDrags = {};
     _workbench.reset();
+    _tabRegistry = std::make_unique<EditorTabRegistry>();
     _contentExplorer.reset();
     _contentPathText.reset();
     _contentMountList.reset();
@@ -250,7 +249,6 @@ void EditorSurface::rebuild(App& app)
     _bContentRowsDirty = true;
     clearSceneSaveDialog();
     _hierarchyFingerprint.clear();
-    _inspectorBoundId.clear();
 
     int windowW = 0;
     int windowH = 0;
@@ -457,80 +455,8 @@ void EditorSurface::buildEditorChrome(App& app)
                              .setStyleKey("panel.canvas")
                              .child(hierarchyView);
 
-    auto nameField = ui::textField("InspectorName").setSize({220.0f, 26.0f}).setFontSize(14);
-    _nameField     = nameField.share();
-    _nameField->_onCommit = [this](const std::string& text) {
-        if (Entity* entity = _layer->getSelectedEntity()) {
-            if (Scene* scene = _layer->getHierarchyScene()) {
-                if (Node* node = scene->getNodeByEntity(entity)) {
-                    node->setName(text);
-                }
-            }
-        }
-    };
-
-    auto empty = ui::text("InspectorEmpty")
-                     .setText("No selection")
-                     .setStyleKey("text.muted");
-    _inspectorEmpty = empty.share();
-
-    auto inspectorForm = ui::column("InspectorForm")
-                             .fillParent()
-                             .setPadding({10.0f, 8.0f})
-                             .setSpacing(6.0f)
-                             .child(ui::text("InspectorTitle").setText("INSPECTOR").setStyleKey("text.eyebrow"))
-                             .child(ui::text("NameLabel").setText("Name").setFontSize(12))
-                             .child(std::move(nameField))
-                             .child(std::move(empty))
-                             .child(ui::text("TransformLabel").setText("Transform").setFontSize(12));
-
-    const char* kDragNames[9] = {
-        "PosX", "PosY", "PosZ", "RotX", "RotY", "RotZ", "SclX", "SclY", "SclZ",
-    };
-    const float kSpeeds[9] = {0.1f, 0.1f, 0.1f, 0.5f, 0.5f, 0.5f, 0.01f, 0.01f, 0.01f};
-    auto transformRow = ui::column("TransformRows").setSpacing(4.0f);
-    for (int axisGroup = 0; axisGroup < 3; ++axisGroup) {
-        auto row = ui::row(std::format("TransformRow{}", axisGroup)).setSpacing(4.0f);
-        for (int axis = 0; axis < 3; ++axis) {
-            const int index = axisGroup * 3 + axis;
-            auto drag = std::make_shared<UIDragFloat>(kDragNames[index]);
-            drag->setSize({72.0f, 22.0f});
-            drag->_speed = kSpeeds[index];
-            drag->_onValueChanged = [this, index](float value) {
-                Entity* entity = _layer->getSelectedEntity();
-                if (!entity) {
-                    return;
-                }
-                auto* tc = entity->getComponent<TransformComponent>();
-                if (!tc) {
-                    return;
-                }
-                glm::vec3 pos = tc->getPosition();
-                glm::vec3 rot = tc->getRotation();
-                glm::vec3 scl = tc->getScale();
-                if (index < 3) {
-                    pos[index] = value;
-                    tc->setPosition(pos);
-                }
-                else if (index < 6) {
-                    rot[index - 3] = value;
-                    tc->setRotation(rot);
-                }
-                else {
-                    scl[index - 6] = value;
-                    tc->setScale(scl);
-                }
-            };
-            _transformDrags[static_cast<size_t>(index)] = drag;
-            row.child(drag);
-        }
-        transformRow.child(std::move(row));
-    }
-    inspectorForm.child(std::move(transformRow));
-    auto inspectorBody = ui::panel("InspectorBody")
-                             .fillParent()
-                             .setStyleKey("panel")
-                             .child(std::move(inspectorForm));
+    _inspectorTab = std::make_unique<EditorInspectorTab>(*_layer);
+    auto inspectorBody = _inspectorTab->build(*_tree);
 
     auto statsText = ui::text("FrameStatsBody")
                          .setText("Frame Stats")
@@ -558,13 +484,34 @@ void EditorSurface::buildEditorChrome(App& app)
 
     const DockPanelId viewportId  = _dockWorkspace->addPanel("Viewport", viewportBody.release());
     const DockPanelId hierarchyId = _dockWorkspace->addPanel("Hierarchy", hierarchyBody.release());
-    const DockPanelId inspectorId = _dockWorkspace->addPanel("Inspector", inspectorBody.release());
+    const DockPanelId inspectorId = _dockWorkspace->addPanel("Inspector", inspectorBody);
     const DockPanelId contentId   = _dockWorkspace->addPanel("Content Browser", buildContentBrowser());
     const DockPanelId statsId     = _dockWorkspace->addPanel("Frame Stats", statsBody.release());
     const DockPanelId workbenchId = _dockWorkspace->addPanel("GUI Workbench", workbenchHost);
-    const DockPanelId runtimeId   = _dockWorkspace->addPanel("Runtime Tools", makePlaceholderPanel("RuntimeTools", "Runtime Tools — pending"));
-    const DockPanelId designerId  = _dockWorkspace->addPanel("UI Designer", makePlaceholderPanel("UIDesigner", "UI Designer — pending"));
-    const DockPanelId assetsId    = _dockWorkspace->addPanel("Asset Inspector", makePlaceholderPanel("Assets", "Asset Inspector — pending"));
+    _tabRegistry->registerTab({
+        .id = "runtime-tools",
+        .title = "Runtime Tools",
+        .build = [](EditorLayer&, WidgetTree&) { return makePlaceholderPanel("RuntimeTools", "Runtime Tools — pending"); },
+    });
+    _tabRegistry->registerTab({
+        .id = "ui-designer",
+        .title = "UI Designer",
+        .build = [](EditorLayer&, WidgetTree&) { return makePlaceholderPanel("UIDesigner", "UI Designer — pending"); },
+    });
+    _tabRegistry->registerTab({
+        .id = "asset-inspector",
+        .title = "Asset Inspector",
+        .build = [](EditorLayer&, WidgetTree&) { return makePlaceholderPanel("Assets", "Asset Inspector — pending"); },
+    });
+    DockPanelId runtimeId = kInvalidDockPanelId;
+    DockPanelId designerId = kInvalidDockPanelId;
+    DockPanelId assetsId = kInvalidDockPanelId;
+    for (const auto& tab : _tabRegistry->tabs()) {
+        const DockPanelId id = _dockWorkspace->addPanel(tab.title, tab.build(*_layer, *_tree));
+        if (tab.id == "runtime-tools") runtimeId = id;
+        else if (tab.id == "ui-designer") designerId = id;
+        else if (tab.id == "asset-inspector") assetsId = id;
+    }
 
     auto& model = _dockWorkspace->dockModel();
     model.selectPanel(viewportId);
@@ -733,10 +680,19 @@ void EditorSurface::syncPresentation(App& app, float dt)
 
     syncViewportTexture();
     syncHierarchy();
-    syncInspector();
+    if (_inspectorTab) {
+        _inspectorTab->sync(*_tree);
+    }
     syncToolbar(app);
     syncContentBrowser();
     syncSceneSaveDialog();
+    if (_tabRegistry) {
+        for (const auto& tab : _tabRegistry->tabs()) {
+            if (tab.sync) {
+                tab.sync(*_layer, *_tree);
+            }
+        }
+    }
     if (_statsText) {
         const float fps = dt > 0.0f ? 1.0f / dt : 0.0f;
         _statsText->setText(std::format(
@@ -833,49 +789,6 @@ void EditorSurface::syncHierarchy()
         }
     }
     _hierarchyRoots->replace(std::move(roots));
-}
-
-void EditorSurface::syncInspector()
-{
-    Entity* entity = _layer ? _layer->getSelectedEntity() : nullptr;
-    const std::string boundId = entity ? entityIdKey(
-                                    entity->getComponent<IDComponent>() ? entity->getComponent<IDComponent>()->_id.value : 0)
-                                : std::string{};
-    const bool bHasSelection = entity != nullptr;
-    if (_inspectorEmpty) {
-        _inspectorEmpty->setVisibility(bHasSelection ? EWidgetVisibility::Hidden : EWidgetVisibility::Visible);
-    }
-    if (!bHasSelection) {
-        _inspectorBoundId.clear();
-        return;
-    }
-
-    UIElement* focused = _tree->getFocused();
-    const bool bNameBusy = focused == _nameField.get();
-    if (_nameField && !bNameBusy) {
-        if (Scene* scene = _layer->getHierarchyScene()) {
-            if (Node* node = scene->getNodeByEntity(entity)) {
-                _nameField->setText(node->getName());
-            }
-        }
-    }
-
-    auto* tc = entity->getComponent<TransformComponent>();
-    if (!tc) {
-        return;
-    }
-    const float values[9] = {
-        tc->getPosition().x, tc->getPosition().y, tc->getPosition().z,
-        tc->getRotation().x, tc->getRotation().y, tc->getRotation().z,
-        tc->getScale().x,    tc->getScale().y,    tc->getScale().z,
-    };
-    for (size_t i = 0; i < _transformDrags.size(); ++i) {
-        if (!_transformDrags[i] || focused == _transformDrags[i].get()) {
-            continue;
-        }
-        _transformDrags[i]->setValue(values[i]);
-    }
-    _inspectorBoundId = boundId;
 }
 
 void EditorSurface::syncToolbar(App& app)
@@ -1432,7 +1345,7 @@ bool EditorSurface::wantsTextInput() const
     }
     UIElement* focused = _tree->getFocused();
     return dynamic_cast<UITextField*>(focused) != nullptr ||
-           dynamic_cast<UIDragFloat*>(focused) != nullptr;
+           (_inspectorTab && _inspectorTab->wantsTextInput(*_tree));
 }
 
 } // namespace ya

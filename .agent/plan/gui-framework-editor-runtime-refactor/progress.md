@@ -1,5 +1,33 @@
 # GUI Framework / Editor / Game UI 重构进度
 
+## 2026-08-27 checkpoint：G6.1 Inspector 独立 tab owner
+
+- 新增 `EditorInspectorTab`，把 Inspector 的 retained widget 构造、Name/Transform 编辑状态、实体/组件摘要同步和 text-input 判断从 `EditorSurface.cpp` 移出。
+- `EditorSurface` 现在只负责创建 Inspector tab、挂载到 `UIDockWorkspace`，以及在每帧转发 tab sync；不再继续膨胀为 editor god file。
+- `EditorTabRegistry` 继续承载可注册 tab 的 build/sync seam，后续 Runtime Tools、UI Designer、Asset Inspector 可按同一模式逐个替换。
+- 同时修正 `EditorTabRegistry::registerTab()` 原先返回无效 `end()` 地址的实现契约。
+- 验证：`xmake b ya-game-editor` 通过。
+
+## 2026-08-28 checkpoint：修正 EditorTabRegistry 注册契约
+
+- `EditorTabRegistry::registerTab()` 收口为无返回值注册 API，修复原实现返回 `end()` 无效地址的 bug。
+- 保持当前 `EditorSurface` 的 tab build/sync 生命周期不变，下一刀再将 Inspector 完整拆成独立 tab owner。
+- 验证：`xmake b ya-game-editor` 通过。
+
+## 2026-08-28 checkpoint：G6.1 建立 UE 风格 EditorTabRegistry seam
+
+- 新增 `EditorTabRegistry`，tab 以 `id/title/build/sync` 自注册；`EditorSurface` 只负责 registry 生命周期、生成 tab widget 并交给 `UIDockWorkspace`。
+- `Runtime Tools`、`UI Designer`、`Asset Inspector` 首批切到 registry 生成，后续可逐个替换为独立 tab owner，不再继续把所有 panel 构造堆进 `EditorSurface.cpp`。
+- 当前只落 tab seam，Inspector 具体控件迁移仍按单 tab 继续推进。
+- 验证：`xmake b ya-game-editor` 通过。
+
+## 2026-08-28 checkpoint：G6.1 Inspector retained 第一刀
+
+- `EditorSurface` 的 Inspector 不再只是 Name/Transform 占位：新增 retained 的实体 ID 与已挂载组件摘要，组件枚举复用 `ECSRegistry` 的类型注册和当前 Scene registry，不引入第二套 inspector model。
+- 保留现有 retained Name/Transform 编辑路径，先把“选择实体 -> Inspector 显示稳定摘要”闭环落地；通用 `TypeRenderer` 反射字段编辑留到下一刀，避免把旧 ImGui renderer 直接嵌回 WidgetTree。
+- 旧 `DetailsView` / `TypeRenderer` 仍只服务旧 ImGui host，`EditorSurface` 不再为其增加兼容转发。
+- 验证：`xmake b ya-game-editor` 通过。
+
 ## 2026-08-27 checkpoint：G6.1 首个面板切片 —— Content Browser 迁进 EditorSurface
 
 - 恢复 G6.1（GameEditor 剩余 ImGui feature migration），本轮先迁 Content Browser：

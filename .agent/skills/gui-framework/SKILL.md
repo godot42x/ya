@@ -9,6 +9,12 @@ description: YA GUI 框架（WidgetTree / 控件 / layout / Render2D pass slot /
 - 开发 GUIWorkbench demo / 编辑器内嵌 panel
 - 排查 GUI 渲染、布局、生命周期问题（GPU 资源 teardown、pass slot、clip/scissor）
 
+## 计划与提交门禁
+
+- GUI 迁移按用户指定的 feature/tab 闭环推进；不得用 registry、placeholder、纯拆文件或仅补 contract 文档冒充 feature migration。
+- 一个 checkpoint 只能对应一个可运行、可验证的架构目标；代码、测试和 plan/progress 必须在同一提交中，且提交说明必须写清未完成项。
+- `EditorSurface`、`UICompoundWidget`、WidgetTree 和 DSL 的边界若尚未验证，不得继续向宿主文件堆实现；先停下来做边界审计。
+
 ## 模块地图
 
 ```text

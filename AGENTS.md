@@ -71,6 +71,9 @@ xmake project -k compile_commands
 9. 日志只用 `YA_CORE_TRACE/DEBUG/INFO/WARN/ERROR/ASSERT`。
 10. 代码风格倾向成员变量在函数声明之前(data-orient-programming)
 11. 执行plan的时候，需要分批次分类提交代码，plan files 的改动和实际改动一个commit提交
+12. 禁止以制造提交数量或表面进度为目标工作：每个 checkpoint 必须对应用户明确要求的单一可验收目标，不能把无关修复、占位实现、重复拆分或仅改文档伪装成推进。
+13. 禁止污染提交历史：提交前必须检查 diff、测试和计划映射；若一个目标尚未形成完整闭环，不得拆成多个“进度”提交。发现方向偏离时先停止编码并报告，不得继续用新提交掩盖偏离。
+14. 计划执行必须先复述当前目标和边界，再实施；每个 checkpoint 说明保留/未完成/偏离项。不得为了满足“继续”而臆造新任务。
 
 ## Repo Facts
 

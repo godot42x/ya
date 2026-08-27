@@ -7,6 +7,8 @@
 #include "GUI/Widgets/Controls/TreeView.h"
 
 #include "GameEditor/FileExplorer.h"
+#include "GameEditor/UI/EditorTabRegistry.h"
+#include "GameEditor/UI/EditorInspectorTab.h"
 
 #include <array>
 #include <memory>
@@ -25,7 +27,6 @@ struct EditorLayer;
 struct Texture;
 struct UIDockSpace;
 struct UIDockWorkspace;
-struct UIDragFloat;
 struct UIElement;
 struct UIContainer;
 struct UIButton;
@@ -34,7 +35,6 @@ struct UIMenuBar;
 struct UIPanel;
 struct UIPopupOverlay;
 struct UIText;
-struct UITextField;
 struct UITheme;
 struct UITreeView;
 struct WidgetTree;
@@ -62,11 +62,10 @@ struct EditorSurface
     std::shared_ptr<UIImage>         _viewportImage;
     std::shared_ptr<UITreeView>      _hierarchyView;
     std::shared_ptr<ReactiveList<UITreeView::FNode>> _hierarchyRoots;
-    std::shared_ptr<UITextField>     _nameField;
-    std::shared_ptr<UIText>          _inspectorEmpty;
     std::shared_ptr<UIText>          _statsText;
-    std::array<std::shared_ptr<UIDragFloat>, 9> _transformDrags{};
+    std::unique_ptr<EditorInspectorTab> _inspectorTab;
     std::unique_ptr<guiworkbench::FWorkbenchSurface> _workbench;
+    std::unique_ptr<EditorTabRegistry> _tabRegistry;
 
     // Content Browser (WidgetTree chrome). FileExplorer keeps the mount /
     // directory / filter state; the rows below are the retained view.
@@ -94,7 +93,6 @@ struct EditorSurface
     std::shared_ptr<IImageView> _viewportImageView;
 
     std::string _hierarchyFingerprint;
-    std::string _inspectorBoundId;
 
   public:
     EditorSurface() = default;
@@ -121,7 +119,6 @@ struct EditorSurface
     void syncPresentation(App& app, float dt);
     void syncViewportTexture();
     void syncHierarchy();
-    void syncInspector();
     void syncToolbar(App& app);
     std::shared_ptr<UIElement> buildContentBrowser();
     void syncContentBrowser();
