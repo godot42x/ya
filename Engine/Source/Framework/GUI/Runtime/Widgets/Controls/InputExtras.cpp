@@ -722,16 +722,17 @@ void UISearchComboBox::openFilteredMenu()
     std::vector<UIMenu::FItem> entries;
     entries.reserve(indices.size());
     for (int index : indices) {
-        entries.push_back({_items[index], [this, index]
-                           {
-                               _selectedIndex = index;
-                               _filter.clear();
-                               invalidateProperty(EUIPropertyImpact::Paint);
-                               if (_onSelectionChanged) {
-                                   _onSelectionChanged(index);
-                               }
-                               closeMenu();
-                           }});
+        entries.push_back(UIMenu::FItem{.label = _items[index],
+                                        .action = [this, index]
+                                        {
+                                            _selectedIndex = index;
+                                            _filter.clear();
+                                            invalidateProperty(EUIPropertyImpact::Paint);
+                                            if (_onSelectionChanged) {
+                                                _onSelectionChanged(index);
+                                            }
+                                            closeMenu();
+                                        }});
     }
     auto menu = UIMenu::create(std::move(entries));
     menu->_onDismiss = [this]()

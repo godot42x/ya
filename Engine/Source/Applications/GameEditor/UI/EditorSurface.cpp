@@ -309,11 +309,11 @@ void EditorSurface::buildEditorChrome(App& app)
 
     _menuBar->addItem("File", [this]() {
         return UIMenu::create({
-            {"New Scene", [this]() { _layer->cmdNewScene(); }},
-            {"Save Scene", [this]() { _layer->cmdSaveScene(); }},
-            {"Save Scene As", [this]() { _layer->cmdSaveSceneAs(); }},
-            {"---", nullptr},
-            {"Exit", []() {
+            UIMenu::FItem{.label = "New Scene", .action = [this]() { _layer->cmdNewScene(); }},
+            UIMenu::FItem{.label = "Save Scene", .action = [this]() { _layer->cmdSaveScene(); }},
+            UIMenu::FItem{.label = "Save Scene As", .action = [this]() { _layer->cmdSaveSceneAs(); }},
+            UIMenu::FItem::Separator(),
+            UIMenu::FItem{.label = "Exit", .action = []() {
                  if (auto* app = App::get()) {
                      app->requestQuit();
                  }
@@ -322,8 +322,8 @@ void EditorSurface::buildEditorChrome(App& app)
     });
     _menuBar->addItem("View", [this]() {
         return UIMenu::create({
-            {"Viewport 3D", [this]() { _layer->setViewportMode(EViewportMode::Mode3D); }},
-            {"Viewport 2D", [this]() { _layer->setViewportMode(EViewportMode::Mode2D); }},
+            UIMenu::FItem{.label = "Viewport 3D", .action = [this]() { _layer->setViewportMode(EViewportMode::Mode3D); }},
+            UIMenu::FItem{.label = "Viewport 2D", .action = [this]() { _layer->setViewportMode(EViewportMode::Mode2D); }},
         });
     });
 

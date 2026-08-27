@@ -863,7 +863,8 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
     // in-place edit never keeps swallowing keys after the user clicked away.
     if (eventType == EEvent::MouseButtonPressed &&
         (!target || target->_focusPolicy == EWidgetFocusPolicy::None) &&
-        _focused != nullptr) {
+        _focused != nullptr &&
+        !isDescendantOf(target, _focused)) {
         setFocus(nullptr);
     }
 

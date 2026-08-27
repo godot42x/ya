@@ -132,37 +132,37 @@ void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent
     _menuBar->addItem("File", [this, log]
     {
         return ya::UIMenu::create({
-            {"New Document", [log] { log("Menu: New Document"); }},
-            {"Open File...", [log] { log("Menu: Open File..."); }},
-            {"Save", [log] { log("Menu: Save"); }},
-            {"Save As...", [log] { log("Menu: Save As..."); }},
-            {"---", nullptr},
-            {"Exit", [log] { log("Menu: Exit"); }},
+            ya::UIMenu::FItem{.label = "New Document", .action = [log] { log("Menu: New Document"); }},
+            ya::UIMenu::FItem{.label = "Open File...", .action = [log] { log("Menu: Open File..."); }},
+            ya::UIMenu::FItem{.label = "Save", .action = [log] { log("Menu: Save"); }},
+            ya::UIMenu::FItem{.label = "Save As...", .action = [log] { log("Menu: Save As..."); }},
+            ya::UIMenu::FItem::Separator(),
+            ya::UIMenu::FItem{.label = "Exit", .action = [log] { log("Menu: Exit"); }},
         });
     });
     _menuBar->addItem("Edit", [log]
     {
         return ya::UIMenu::create({
-            {"Undo", [log] { log("Menu: Undo"); }},
-            {"Redo", [log] { log("Menu: Redo"); }},
-            {"---", nullptr},
-            {"Copy", [log] { log("Menu: Copy"); }},
-            {"Paste", [log] { log("Menu: Paste"); }},
+            ya::UIMenu::FItem{.label = "Undo", .action = [log] { log("Menu: Undo"); }},
+            ya::UIMenu::FItem{.label = "Redo", .action = [log] { log("Menu: Redo"); }},
+            ya::UIMenu::FItem::Separator(),
+            ya::UIMenu::FItem{.label = "Copy", .action = [log] { log("Menu: Copy"); }},
+            ya::UIMenu::FItem{.label = "Paste", .action = [log] { log("Menu: Paste"); }},
         });
     });
     _menuBar->addItem("View", [log]
     {
         return ya::UIMenu::create({
-            {"Show Grid", [log] { log("Menu: Show Grid"); }},
-            {"Show FPS", [log] { log("Menu: Show FPS"); }},
-            {"Fullscreen", [log] { log("Menu: Fullscreen"); }},
+            ya::UIMenu::FItem{.label = "Show Grid", .action = [log] { log("Menu: Show Grid"); }},
+            ya::UIMenu::FItem{.label = "Show FPS", .action = [log] { log("Menu: Show FPS"); }},
+            ya::UIMenu::FItem{.label = "Fullscreen", .action = [log] { log("Menu: Fullscreen"); }},
         });
     });
     _menuBar->addItem("Help", [log]
     {
         return ya::UIMenu::create({
-            {"About", [log] { log("Menu: About"); }},
-            {"Documentation", [log] { log("Menu: Documentation"); }},
+            ya::UIMenu::FItem{.label = "About", .action = [log] { log("Menu: About"); }},
+            ya::UIMenu::FItem{.label = "Documentation", .action = [log] { log("Menu: Documentation"); }},
         });
     });
 

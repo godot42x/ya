@@ -64,6 +64,7 @@ UIElement* findChildByKey(UIElement* parent, const char* key)
     }
     return nullptr;
 }
+
 } // namespace
 
 TEST(DeclarativeContractTest, NoThemeStillRendersAuthoredAppearance)
@@ -282,6 +283,149 @@ TEST(DeclarativeContractTest, DirectConstructTextFieldKeepsFocusAcrossSetText)
     EXPECT_EQ(root.get(), field);
     EXPECT_EQ(field->_text, "world");
     EXPECT_EQ(tree.getFocused(), field);
+}
+
+TEST(DeclarativeContractTest, DirectConstructExternalPatchClampsFocusedTextFieldCursorWithoutCommit)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    int commits = 0;
+    auto page = ui::textField("editor")
+                    .setText("hello world")
+                    .setSize({180.0f, 28.0f})
+                    .setOnCommit([&](const std::string&) { ++commits; });
+    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page));
+
+    auto* field = dynamic_cast<UITextField*>(root.get());
+    ASSERT_NE(field, nullptr);
+    tree.setFocus(field);
+    ASSERT_EQ(tree.getFocused(), field);
+
+    KeyPressedEvent endEvent;
+    endEvent._keyCode = EKey::End;
+    WidgetEventContext ctx;
+    ctx.logicalPoint = {0.0f, 0.0f};
+    EXPECT_EQ(tree.dispatchEvent(endEvent, ctx), EWidgetRouteResult::HandledExclusive);
+    ASSERT_EQ(field->getCursorIndex(), std::string("hello world").size());
+
+    field->setText("hi");
+    EXPECT_EQ(root.get(), field);
+    EXPECT_EQ(tree.getFocused(), field);
+    EXPECT_EQ(commits, 0);
+    EXPECT_EQ(field->_text, "hi");
+    EXPECT_EQ(field->getCursorIndex(), field->_text.size());
+}
+
+TEST(DeclarativeContractTest, DirectConstructExternalPatchKeepsPressedButtonSession)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    int clicks = 0;
+    auto page = ui::button("action")
+                    .child(ui::text("action_Label").setText("Save"))
+                    .setSize({120.0f, 32.0f})
+                    .setOnClick([&] { ++clicks; });
+    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page));
+
+    auto* button = dynamic_cast<UIButton*>(root.get());
+    ASSERT_NE(button, nullptr);
+    ASSERT_EQ(button->getChildren().size(), 1u);
+    auto* label = dynamic_cast<UIText*>(button->getChildren()[0].get());
+    ASSERT_NE(label, nullptr);
+    const UIElement* buttonIdentity = button;
+    const UIElement* labelIdentity = label;
+
+    tree.layout();
+    WidgetEventContext ctx;
+    ctx.logicalPoint = button->_layoutRect.pos + button->_layoutRect.extent * 0.5f;
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), ctx),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_TRUE(button->_bPressed.get());
+    ASSERT_EQ(tree.getPointerCapture(), button);
+
+    label->setText("Patched While Pressed");
+    EXPECT_EQ(root.get(), buttonIdentity);
+    EXPECT_EQ(button->getChildren()[0].get(), labelIdentity);
+    EXPECT_TRUE(button->_bPressed.get());
+    EXPECT_EQ(tree.getPointerCapture(), button);
+    EXPECT_EQ(label->getText(), "Patched While Pressed");
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), ctx),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(button->_bPressed.get());
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+    EXPECT_EQ(clicks, 1);
+}
+
+TEST(DeclarativeContractTest, DirectConstructExternalPatchCanReplaceButtonLabelSubtreeMidPress)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    int clicks = 0;
+    auto page = ui::button("action")
+                    .child(ui::text("action_Label").setText("Save"))
+                    .setSize({120.0f, 32.0f})
+                    .setOnClick([&] { ++clicks; });
+    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page));
+
+    auto* button = dynamic_cast<UIButton*>(root.get());
+    ASSERT_NE(button, nullptr);
+    ASSERT_EQ(button->getChildren().size(), 1u);
+    auto* oldLabel = dynamic_cast<UIText*>(button->getChildren()[0].get());
+    ASSERT_NE(oldLabel, nullptr);
+    const UIElement* buttonIdentity = button;
+
+    tree.layout();
+    WidgetEventContext ctx;
+    ctx.logicalPoint = button->_layoutRect.pos + button->_layoutRect.extent * 0.5f;
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), ctx),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_TRUE(button->_bPressed.get());
+    ASSERT_EQ(tree.getPointerCapture(), button);
+
+    tree.detach(*oldLabel);
+    auto newLabel = std::make_shared<UIText>("action_Label_Patched");
+    newLabel->setText("Patched Child");
+    ASSERT_TRUE(tree.attach(*button, newLabel).valid());
+
+    EXPECT_EQ(root.get(), buttonIdentity);
+    ASSERT_EQ(button->getChildren().size(), 1u);
+    auto* patchedLabel = dynamic_cast<UIText*>(button->getChildren()[0].get());
+    ASSERT_NE(patchedLabel, nullptr);
+    EXPECT_EQ(patchedLabel->getText(), "Patched Child");
+    EXPECT_TRUE(button->_bPressed.get());
+    EXPECT_EQ(tree.getPointerCapture(), button);
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), ctx),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(button->_bPressed.get());
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+    EXPECT_EQ(clicks, 1);
+}
+
+TEST(DeclarativeContractTest, DirectConstructExternalPatchOnlyChangesFallbackUnderBinding)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    auto label = std::make_shared<Reactive<std::string>>("Bound");
+    auto page = ui::column("root").child(ui::text("caption").setText("Fallback").bindText(label));
+    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page));
+
+    auto* text = dynamic_cast<UIText*>(root->getChildren()[0].get());
+    ASSERT_NE(text, nullptr);
+    const UIElement* identity = text;
+
+    EXPECT_EQ(text->getText(), "Fallback");
+    EXPECT_EQ(text->resolvedText(), "Bound");
+
+    text->setText("Patched Fallback");
+    EXPECT_EQ(root->getChildren()[0].get(), identity);
+    EXPECT_EQ(text->getText(), "Patched Fallback");
+    EXPECT_EQ(text->resolvedText(), "Bound");
+
+    label->set("Bound Next");
+    EXPECT_EQ(text->resolvedText(), "Bound Next");
+
+    text->bindText(nullptr);
+    EXPECT_EQ(text->resolvedText(), "Patched Fallback");
 }
 
 TEST(DeclarativeContractTest, DirectConstructContainerLayoutHonorsAuthoredSizeAndClip)

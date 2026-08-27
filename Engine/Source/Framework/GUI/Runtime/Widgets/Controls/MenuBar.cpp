@@ -33,6 +33,11 @@ void UIMenuBarItem::paintSelf(UIFrameBuilder& builder)
     // style IS the framework fallback (Phase 3 cleanup: no bare fields).
     const FMenuBarItemStyle style = resolveWidgetStyle<FMenuBarItemStyle>(*this, _authoredStyle);
     builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.normalFill);
+    const float separatorY = _layoutRect.pos.y + _layoutRect.extent.y - 0.5f;
+    builder.addLine({_layoutRect.pos.x, separatorY},
+                    {_layoutRect.pos.x + _layoutRect.extent.x, separatorY},
+                    style.separatorColor,
+                    1.0f);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {
         builder.addText(_layoutRect, label, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);

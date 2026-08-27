@@ -1,5 +1,59 @@
 # GUI Framework / Editor / Game UI 重构进度
 
+## 2026-08-27 checkpoint：继续推进 G4.2，锁住 TextField patch 与焦点/commit/cursor 并存契约
+
+- \`DeclarativeContractTest.DirectConstructExternalPatchClampsFocusedTextFieldCursorWithoutCommit\` 新增，补上 \`UITextField\` 这条最容易被 presenter / future adapter patch 打断的编辑态 contract：外部 \`setText()\` patch 发生在 focused field 上时，控件 identity 与 tree focus 必须保持，不能顺手触发 commit，同时 caret 要被 clamp 到新 buffer 的合法范围内。
+- \`UITextField::setText()\` 现在在真实文本变更后会立即 \`clampCursor()\`，把 caret 合法化和 buffer 替换收敛成同一个 retained setter 事实源，而不是把“外部 patch 后记得再手工修 cursor”推给上层 presenter / adapter。
+- 这条回归补齐了 G4.2 在输入控件上的一块关键空白：此前已经锁住了 Text/Button/MenuBar/Table/TreeView/behavior transient 的并存关系，但 TextField 这种既有 focused edit session、又有 commit 语义、还带 cursor transient 的控件，需要单独证明 patch 不会把内部编辑态打坏。
+- 验证：\`xmake b -r ya-gui-widgets-test\`、\`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='DeclarativeContractTest.DirectConstructExternalPatchClampsFocusedTextFieldCursorWithoutCommit'\` 通过。
+
+## 2026-08-27 checkpoint：先补齐 MenuBar / Menu 的基础 affordance（separator / submenu / icon）
+
+- `UIMenuBarItem` 现在会按 `FMenuBarItemStyle::separatorColor` 在底部画一条 strip separator，menubar 不再只是一排浮在内容上方的 fill/button。
+- `UIMenu` / `UIMenuItem` 补上了三块缺失的基础能力：leading icon、trailing submenu arrow、hover-open submenu 链；submenu 作为同一个 popup chain 管理，点击叶子项或 Esc / 外部点击会整体关闭，不会留下孤儿子菜单。
+- popup menu 的 separator 也收口成正式 API：`UIMenu::FItem::Separator()`。调用方不再手写 `"---"` 之类的哨兵字符串；运行时也不再依赖 label 特判，而是显式 `bSeparator` 语义。
+- 现有 Workbench / GUIWorkbench demo / EditorSurface / SearchCombo 菜单调用点已同步切到显式 `UIMenu::FItem{...}` / `UIMenu::FItem::Separator()`，避免新字段扩展后继续靠 aggregate 顺序和“缺字段默认值”撑着。
+- 新增回归：
+  - `ToolControlsTest.MenuBarPaintsBottomSeparator`
+  - `ToolControlsTest.MenuSupportsIconsAndHoverOpenedSubmenus`
+  - `ToolControlsTest.MenuSeparatorUsesDedicatedApiAndPaintsRule`
+- 验证：`xmake b ya-gui-widgets-test`、`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='ToolControlsTest.Menu*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：补齐 submenu 键盘导航闭环
+
+- `UIMenu` 的键盘导航现在不只支持 `Up/Down/Enter/Esc`，还补上了 submenu 场景下真正闭合的一组行为：`Right` 打开当前高亮项的子菜单，`Left` 关闭当前子菜单并把键盘 focus 还给父菜单。
+- 这一步顺手把 separator 行的键盘契约也钉住了：`Up/Down` 会跳过 `UIMenu::FItem::Separator()`，不会把分割线当成可选中项。
+- `ToolControlsTest.MenuKeyboardNavigatesSubmenuAndSkipsSeparators` 新增，直接锁住“separator skip + submenu open + parent-focus restore”这一整段交互链，避免后续继续加 shortcut/checkmark 等菜单 affordance 时又把焦点留在已关闭子菜单上。
+- 验证：`xmake b ya-gui-widgets-test`、`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='ToolControlsTest.Menu*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：补齐 disabled / checkmark / shortcut 三个菜单槽位
+
+- `UIMenu::FItem` 现在补齐了三块 editor/menu 常用语义：`bEnabled`、`bChecked`、`shortcut`。这几项都作为显式 item model 字段进入 retained menu，而不是继续借 label/icon 文本做编码。
+- `FMenuStyle` 同步补上 `checkmarkColor`、`shortcutColor`、`disabledTextColor`、`disabledIconColor`，因此 disabled/checkmark/shortcut 都继续走 theme/style 系统，不在控件里写死颜色。
+- 布局上菜单现在会按整列预留 checkmark / icon / shortcut / submenu arrow 空间，保证同一面板里的 label、快捷键和右箭头稳定对齐；disabled 项不会高亮、不会激活，键盘 `Up/Down` 也会跳过 disabled 和 separator。
+- 这一步同时补了一个 tree-level 焦点边界：点击当前 focused popup/menu 的非 focusable 子项时，不再错误清空 owner focus；否则 disabled menu item 之类的 leaf 会把后续键盘导航直接打断。
+- 新增回归：
+  - `ToolControlsTest.MenuDisabledItemsDoNotActivateAndAreSkippedByKeyboard`
+  - `ToolControlsTest.MenuReservesColumnsForCheckmarkIconAndShortcut`
+- 验证：`xmake b ya-gui-widgets-test`、`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='ToolControlsTest.Menu*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：为 future adapter patch 补第一批 coexistence contract
+
+- 这一步没有先引入 adapter host，而是先把“future adapter patch”收敛成 live retained tree 上可验证的最小语义：外部 patch 只是对既有 widget 做增量 mutate，不能借机打断 transient session，也不能偷换 binding authority。
+- `DeclarativeContractTest.DirectConstructExternalPatchKeepsPressedButtonSession` 新增，锁住一条很关键的 G4.2 边界：button 在 press/capture 会话中被外部 patch 更新其 label child 时，widget identity、pressed state 和 capture owner 都必须保持；release 之后点击仍然正确完成。
+- `DeclarativeContractTest.DirectConstructExternalPatchOnlyChangesFallbackUnderBinding` 新增，锁住另一条 G4.2 边界：外部 patch `UIText::setText()` 只改 authored fallback，不能覆盖 `bindText(Reactive<std::string>)` 的 display authority；解绑之后才回落到 patch 写入的 fallback。
+- 这两条测试故意落在 direct-construct live tree 上，而不是先造 adapter mock：目的就是先证明未来 React-like / document / script adapter 只要把 patch 落成对 retained widget 的增量 mutate，就能复用现有 kernel / binding / transient contract，而不需要发明第二套生命周期。
+- 这一步没有触发实现修改，说明当前 runtime kernel 在这两类 patch coexistence 上已经满足第一批 contract；接下来 G4.2 可以继续往更明确的 patch surface / authored-vs-patch 优先级语义收束，而不是先扩 editor 功能。
+- 验证：`xmake b ya-gui-widgets-test`、`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='DeclarativeContractTest.DirectConstructExternalPatch*:DeclarativeContractTest.DirectConstructBindTextUpdatesWithoutRebuild:BindingContractTest.TextBindingSurvivesImperativeFallbackWriteUntilUnbound'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：补 adapter patch 与 behavior transient 的逆向并存契约
+
+- 在前一刀已经锁住“behavior/transient 不能覆盖 presenter/binding authority”之后，这一步补上逆向约束：presenter / future adapter patch 也不能在交互会话中把 behavior transient 直接抹掉。
+- `DeclarativeContractTest.DirectConstructExternalPatchCanReplaceButtonLabelSubtreeMidPress` 新增，进一步把 patch 场景从“改同一 child 的文本”扩成“中途替换按钮 label 子树”；contract 仍然是：button 的 pressed/capture 会话必须保持，release 后点击仍然正确完成。这里故意不钉死 child identity 是否变化，只钉死 session 与显示结果，因为后者才是 future adapter patch 真正需要的稳定面。
+- `BindingContractTest.PresenterSelectionPatchDoesNotClearBehaviorDropHighlight` 新增，和已有的 `BehaviorDropHighlightDoesNotOverwritePresenterSelectionState` 组成双向门禁：行为层的 drop highlight 不能覆盖 presenter selection，而 presenter 的 `setSelected()` patch 也不能在 drag session 进行中把当前 behavior highlight 清掉。
+- 这让 G4.2 在“patch / presenter state”与“behavior transient”之间不再只有单向 contract，而是形成了更接近事实源的双向并存约束。
+- 验证：`xmake b ya-gui-widgets-test`、`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='BindingContractTest.PresenterSelectionPatchDoesNotClearBehaviorDropHighlight:BindingContractTest.BehaviorDropHighlightDoesNotOverwritePresenterSelectionState:DeclarativeContractTest.DirectConstructExternalPatch*'`、`xmake b GUIWorkbench` 通过。
+
 ## 2026-08-27 checkpoint：继续推进 G4.2，补 MenuBar label binding 与 hover/open lifecycle 并存契约
 
 - `BindingContractTest.MenuBarLabelBindingSurvivesOpenMenuAndHoverRouting` 新增，补上 `UIMenuBarItem` 这条菜单入口控件的并存边界：外部 `bindLabel(Reactive<std::string>)` 继续作为权威 display source，而 hover 状态、menu open/close 生命周期、hover-routing 切换只负责 transient/lifecycle 行为，不能打断或覆盖 label binding。

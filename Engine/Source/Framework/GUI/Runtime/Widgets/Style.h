@@ -85,6 +85,7 @@ struct FMenuBarItemStyle
     glm::vec4 textColor   = {0.90f, 0.92f, 0.95f, 1.0f};
     FBrush    normalFill  = FBrush::Solid({0.10f, 0.11f, 0.13f, 1.0f});
     FBrush    hoveredFill = FBrush::Solid({0.20f, 0.22f, 0.27f, 1.0f});
+    glm::vec4 separatorColor = {0.28f, 0.30f, 0.36f, 1.0f};
 
     bool operator==(const FMenuBarItemStyle&) const = default;
 };
@@ -197,6 +198,13 @@ struct FMenuStyle
     FBrush    itemNormalFill  = FBrush::Solid({0.13f, 0.14f, 0.17f, 1.0f});
     FBrush    itemHoveredFill = FBrush::Solid({0.22f, 0.42f, 0.78f, 1.0f});
     glm::vec4 textColor       = {0.90f, 0.92f, 0.95f, 1.0f};
+    glm::vec4 iconColor       = {0.78f, 0.82f, 0.88f, 1.0f};
+    glm::vec4 checkmarkColor  = {0.30f, 0.76f, 0.46f, 1.0f};
+    glm::vec4 shortcutColor   = {0.60f, 0.65f, 0.72f, 1.0f};
+    glm::vec4 disabledTextColor = {0.46f, 0.50f, 0.58f, 1.0f};
+    glm::vec4 disabledIconColor = {0.42f, 0.46f, 0.54f, 1.0f};
+    glm::vec4 separatorColor  = {0.28f, 0.30f, 0.36f, 1.0f};
+    glm::vec4 submenuArrowColor = {0.60f, 0.65f, 0.72f, 1.0f};
     uint32_t  fontSize        = 13;
 
     bool operator==(const FMenuStyle&) const = default;

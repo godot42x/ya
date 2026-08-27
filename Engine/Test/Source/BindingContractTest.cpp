@@ -158,6 +158,7 @@ TEST(BindingContractTest, BehaviorDropHighlightDoesNotOverwritePresenterSelectio
     source->_itemId = "source";
     target->_itemId = "target";
     source->setDraggable(true);
+    target->setDraggable(true);
     source->setDragPayload("payload.source");
     target->setDraggable(true);
     target->setSelected(true);
@@ -185,6 +186,49 @@ TEST(BindingContractTest, BehaviorDropHighlightDoesNotOverwritePresenterSelectio
     EXPECT_FALSE(tree.isDragging());
     EXPECT_FALSE(target->_bDropHighlighted.get());
     EXPECT_TRUE(target->_bSelected);
+}
+
+TEST(BindingContractTest, PresenterSelectionPatchDoesNotClearBehaviorDropHighlight)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       source = std::make_shared<UISelectableRow>("Source");
+    auto       target = std::make_shared<UISelectableRow>("Target");
+    source->_itemId = "source";
+    target->_itemId = "target";
+    source->setDraggable(true);
+    target->setDraggable(true);
+    source->setDragPayload("payload.source");
+    source->setPosition({20.0f, 20.0f});
+    source->setSize({160.0f, 24.0f});
+    target->setPosition({220.0f, 20.0f});
+    target->setSize({160.0f, 24.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, source);
+    tree.attachToLayer(WidgetTree::ELayer::Content, target);
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 32.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(80.0f, 32.0f), pointAt(80.0f, 32.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_TRUE(tree.isDragging());
+
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(260.0f, 32.0f), pointAt(260.0f, 32.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_TRUE(target->_bDropHighlighted.get());
+
+    target->setSelected(true);
+    EXPECT_TRUE(target->_bSelected);
+    EXPECT_TRUE(target->_bDropHighlighted.get());
+
+    target->setSelected(false);
+    EXPECT_FALSE(target->_bSelected);
+    EXPECT_TRUE(target->_bDropHighlighted.get());
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(260.0f, 32.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_FALSE(target->_bDropHighlighted.get());
+    EXPECT_FALSE(target->_bSelected);
 }
 
 TEST(BindingContractTest, TreeFilterBindingAndManualExpansionCoexistWithoutStickyReexpand)

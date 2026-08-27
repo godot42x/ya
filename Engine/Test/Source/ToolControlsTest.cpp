@@ -1011,6 +1011,251 @@ TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
     EXPECT_EQ(bar->getOpenMenu(), nullptr);
 }
 
+TEST(ToolControlsTest, MenuBarPaintsBottomSeparator)
+{
+    registerMenuFont(13.0f, 8.0f);
+
+    WidgetTree tree({.width = 320, .height = 120});
+    auto       bar = std::make_shared<UIMenuBar>("Bar");
+    bar->setPosition({12.0f, 8.0f});
+    bar->setSize({100.0f, 26.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, bar);
+
+    auto* item = bar->addItem("File", nullptr);
+    item->setSize({52.0f, 26.0f});
+
+    auto theme = std::make_shared<UITheme>();
+    auto style = FMenuBarItemStyle{};
+    style.separatorColor = {0.91f, 0.21f, 0.37f, 1.0f};
+    theme->define<FMenuBarItemStyle>("menubar", style);
+    tree.setTheme(theme.get());
+
+    tree.layout();
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+
+    bool bFoundSeparator = false;
+    for (const auto& draw : snap.items) {
+        if (draw.kind != UIFrameDrawItem::EKind::Line) {
+            continue;
+        }
+        if (std::abs(draw.lineFrom.x - 16.0f) > 0.01f ||
+            std::abs(draw.lineTo.x - 68.0f) > 0.01f ||
+            std::abs(draw.lineFrom.y - 29.5f) > 0.01f ||
+            std::abs(draw.lineTo.y - 29.5f) > 0.01f) {
+            continue;
+        }
+        EXPECT_EQ(draw.color, style.separatorColor);
+        bFoundSeparator = true;
+        break;
+    }
+    EXPECT_TRUE(bFoundSeparator);
+}
+
+TEST(ToolControlsTest, MenuSupportsIconsAndHoverOpenedSubmenus)
+{
+    registerMenuFont(13.0f, 8.0f);
+
+    bool bLeafActivated = false;
+    WidgetTree tree({.width = 480, .height = 320});
+    auto       menu = UIMenu::create({
+        UIMenu::FItem{
+            .label = "Recent",
+            .action = nullptr,
+            .icon = "~",
+            .submenuFactory = [&bLeafActivated] {
+                return UIMenu::create({
+                    UIMenu::FItem{.label = "Nested", .action = [&bLeafActivated]() { bLeafActivated = true; }},
+                });
+            },
+        },
+        UIMenu::FItem{.label = "Save", .action = [] {}},
+    });
+    menu->openAt(tree, {10.0f, 20.0f});
+    tree.layout();
+
+    const auto items = menu->menuItems();
+    ASSERT_EQ(items.size(), 2u);
+    const Rect2D& panelRect = menu->getChildren()[0]->_layoutRect;
+    EXPECT_FLOAT_EQ(panelRect.extent.x, 48.0f + 20.0f + 22.0f + 18.0f + 8.0f);
+    EXPECT_FLOAT_EQ(items[0]->_layoutRect.extent.x, 48.0f + 20.0f + 22.0f + 18.0f);
+
+    const UIFrameSnapshot beforeHover = tree.buildSnapshot(UIFrameBuildContext{});
+    bool bFoundIconText = false;
+    bool bFoundArrowText = false;
+    for (const auto& draw : beforeHover.items) {
+        if (draw.kind != UIFrameDrawItem::EKind::Text) {
+            continue;
+        }
+        bFoundIconText = bFoundIconText || draw.text == "~";
+        bFoundArrowText = bFoundArrowText || draw.text == ">";
+    }
+    EXPECT_TRUE(bFoundIconText);
+    EXPECT_TRUE(bFoundArrowText);
+
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(24.0f, 30.0f), pointAt(24.0f, 30.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    tree.layout();
+
+    UIElement* submenuHit = tree.pickAt({132.0f, 30.0f});
+    ASSERT_NE(submenuHit, nullptr);
+    auto* submenuItem = dynamic_cast<UIMenuItem*>(submenuHit);
+    ASSERT_NE(submenuItem, nullptr);
+    EXPECT_EQ(submenuItem->_label, "Nested");
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(132.0f, 30.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_TRUE(bLeafActivated);
+    EXPECT_EQ(tree.pickAt({132.0f, 30.0f}), nullptr);
+}
+
+TEST(ToolControlsTest, MenuSeparatorUsesDedicatedApiAndPaintsRule)
+{
+    registerMenuFont(13.0f, 8.0f);
+
+    WidgetTree tree({.width = 320, .height = 180});
+    auto       menu = UIMenu::create({
+        UIMenu::FItem{.label = "Open", .action = [] {}},
+        UIMenu::FItem::Separator(),
+        UIMenu::FItem{.label = "Quit", .action = [] {}},
+    });
+    menu->openAt(tree, {10.0f, 20.0f});
+    tree.layout();
+
+    const auto items = menu->menuItems();
+    ASSERT_EQ(items.size(), 3u);
+    EXPECT_TRUE(items[1]->_bSeparator);
+    EXPECT_FLOAT_EQ(items[1]->_layoutRect.extent.y, UIMenu::kSeparatorHeight);
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    bool bFoundSeparatorLine = false;
+    bool bRenderedLiteralDashes = false;
+    for (const auto& draw : snap.items) {
+        if (draw.kind == UIFrameDrawItem::EKind::Line) {
+            bFoundSeparatorLine = true;
+        }
+        if (draw.kind == UIFrameDrawItem::EKind::Text && draw.text == "---") {
+            bRenderedLiteralDashes = true;
+        }
+    }
+    EXPECT_TRUE(bFoundSeparatorLine);
+    EXPECT_FALSE(bRenderedLiteralDashes);
+}
+
+TEST(ToolControlsTest, MenuKeyboardNavigatesSubmenuAndSkipsSeparators)
+{
+    registerMenuFont(13.0f, 8.0f);
+
+    WidgetTree tree({.width = 480, .height = 320});
+    auto       menu = UIMenu::create({
+        UIMenu::FItem::Separator(),
+        UIMenu::FItem{
+            .label = "Recent",
+            .submenuFactory = []() {
+                return UIMenu::create({
+                    UIMenu::FItem{.label = "Nested A", .action = [] {}},
+                    UIMenu::FItem{.label = "Nested B", .action = [] {}},
+                });
+            },
+        },
+        UIMenu::FItem{.label = "Quit", .action = [] {}},
+    });
+    menu->openAt(tree, {10.0f, 20.0f});
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Down), pointAt(0.0f, 0.0f)), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(menu->getHighlightIndex(), 1);
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Right), pointAt(0.0f, 0.0f)), EWidgetRouteResult::HandledExclusive);
+    tree.layout();
+    UIElement* nestedHit = tree.pickAt({132.0f, 40.0f});
+    ASSERT_NE(nestedHit, nullptr);
+    auto* nestedItem = dynamic_cast<UIMenuItem*>(nestedHit);
+    ASSERT_NE(nestedItem, nullptr);
+    EXPECT_EQ(nestedItem->_label, "Nested A");
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Left), pointAt(0.0f, 0.0f)), EWidgetRouteResult::HandledExclusive);
+    tree.layout();
+    UIElement* afterCloseHit = tree.pickAt({132.0f, 40.0f});
+    EXPECT_TRUE(afterCloseHit == nullptr || dynamic_cast<UIMenuItem*>(afterCloseHit) == nullptr ||
+                dynamic_cast<UIMenuItem*>(afterCloseHit)->_label != "Nested A");
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Down), pointAt(0.0f, 0.0f)), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(menu->getHighlightIndex(), 2);
+}
+
+TEST(ToolControlsTest, MenuDisabledItemsDoNotActivateAndAreSkippedByKeyboard)
+{
+    registerMenuFont(13.0f, 8.0f);
+
+    bool bDisabledActivated = false;
+    bool bEnabledActivated  = false;
+    WidgetTree tree({.width = 400, .height = 260});
+    auto       menu = UIMenu::create({
+        UIMenu::FItem{.label = "Disabled", .action = [&]() { bDisabledActivated = true; }, .bEnabled = false},
+        UIMenu::FItem{.label = "Enabled", .action = [&]() { bEnabledActivated = true; }},
+    });
+    menu->openAt(tree, {10.0f, 20.0f});
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(24.0f, 30.0f), pointAt(24.0f, 30.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(24.0f, 30.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(bDisabledActivated);
+    ASSERT_NE(menu->getTree(), nullptr);
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Down), pointAt(0.0f, 0.0f)), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(menu->getHighlightIndex(), 1);
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f)), EWidgetRouteResult::HandledExclusive);
+    EXPECT_TRUE(bEnabledActivated);
+}
+
+TEST(ToolControlsTest, MenuReservesColumnsForCheckmarkIconAndShortcut)
+{
+    const auto font = registerMenuFont(13.0f, 8.0f);
+
+    WidgetTree tree({.width = 480, .height = 320});
+    auto       menu = UIMenu::create({
+        UIMenu::FItem{
+            .label = "Recent",
+            .icon = "~",
+            .shortcut = "Cmd+R",
+            .bChecked = true,
+            .submenuFactory = []() { return UIMenu::create({UIMenu::FItem{.label = "Nested", .action = [] {}}}); },
+        },
+        UIMenu::FItem{.label = "Save", .action = [] {}},
+    });
+    menu->openAt(tree, {10.0f, 20.0f});
+    tree.layout();
+
+    const auto items = menu->menuItems();
+    ASSERT_EQ(items.size(), 2u);
+    const float labelWidth = font->measureText("Recent");
+    const float shortcutWidth = font->measureText("Cmd+R");
+    const float expectedRowWidth = UIMenu::kItemHorizontalPadding * 2.0f +
+                                   (UIMenu::kCheckmarkColumnWidth + UIMenu::kCheckmarkColumnGap) +
+                                   (UIMenu::kIconColumnWidth + UIMenu::kIconColumnGap) +
+                                   labelWidth +
+                                   (UIMenu::kShortcutColumnGap + shortcutWidth) +
+                                   (UIMenu::kSubmenuColumnGap + UIMenu::kSubmenuColumnWidth);
+    EXPECT_FLOAT_EQ(items[0]->_layoutRect.extent.x, expectedRowWidth);
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    bool bFoundCheck = false;
+    bool bFoundIcon = false;
+    bool bFoundShortcut = false;
+    for (const auto& draw : snap.items) {
+        if (draw.kind != UIFrameDrawItem::EKind::Text) {
+            continue;
+        }
+        bFoundCheck = bFoundCheck || draw.text == "v";
+        bFoundIcon = bFoundIcon || draw.text == "~";
+        bFoundShortcut = bFoundShortcut || draw.text == "Cmd+R";
+    }
+    EXPECT_TRUE(bFoundCheck);
+    EXPECT_TRUE(bFoundIcon);
+    EXPECT_TRUE(bFoundShortcut);
+}
+
 TEST(ToolControlsTest, SelectableRowHoverRepaintsWithHoveredColor)
 {
     WidgetTree tree({.width = 400, .height = 300});

@@ -51,6 +51,7 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
             return;
         }
         _text = value;
+        clampCursor();
         invalidateProperty(EUIPropertyImpact::Paint);
     }
 

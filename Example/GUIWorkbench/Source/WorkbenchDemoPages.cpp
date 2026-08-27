@@ -538,27 +538,27 @@ void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                             .setOnClick([&tree, &state, log]
                                         {
                                         auto menu = ya::UIMenu::create({
-                                            {"New Document",
-                                             [&state, log]
+                                            ya::UIMenu::FItem{.label = "New Document",
+                                             .action = [&state, log]
                                              {
                                                  state.menuLog = "Menu: New Document";
                                                  log(state.menuLog);
                                              }},
-                                            {"Open File...",
-                                             [&state, log]
+                                            ya::UIMenu::FItem{.label = "Open File...",
+                                             .action = [&state, log]
                                              {
                                                  state.menuLog = "Menu: Open File...";
                                                  log(state.menuLog);
                                              }},
-                                            {"Save",
-                                             [&state, log]
+                                            ya::UIMenu::FItem{.label = "Save",
+                                             .action = [&state, log]
                                              {
                                                  state.menuLog = "Menu: Save";
                                                  log(state.menuLog);
                                              }},
-                                            {"---", nullptr},
-                                            {"Quit",
-                                             [&state, log]
+                                            ya::UIMenu::FItem::Separator(),
+                                            ya::UIMenu::FItem{.label = "Quit",
+                                             .action = [&state, log]
                                              {
                                                  state.menuLog = "Menu: Quit";
                                                  log(state.menuLog);

@@ -113,6 +113,17 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
     menu.itemNormalFill  = FBrush::Solid(menuItem);
     menu.itemHoveredFill = FBrush::Solid(selected);
     menu.textColor       = text;
+    menu.iconColor       = muted;
+    menu.checkmarkColor  = bDark ? glm::vec4{0.34f, 0.80f, 0.52f, 1.0f}
+                                   : glm::vec4{0.18f, 0.60f, 0.34f, 1.0f};
+    menu.shortcutColor   = muted;
+    menu.disabledTextColor = bDark ? glm::vec4{0.42f, 0.46f, 0.54f, 1.0f}
+                                      : glm::vec4{0.56f, 0.59f, 0.65f, 1.0f};
+    menu.disabledIconColor = bDark ? glm::vec4{0.38f, 0.42f, 0.50f, 1.0f}
+                                      : glm::vec4{0.60f, 0.63f, 0.69f, 1.0f};
+    menu.separatorColor  = bDark ? glm::vec4{0.26f, 0.28f, 0.34f, 1.0f}
+                                   : glm::vec4{0.76f, 0.78f, 0.82f, 1.0f};
+    menu.submenuArrowColor = muted;
     theme.define<ya::FMenuStyle>("menu", menu);
 
     auto menuPanel = ya::FPanelStyle{};
@@ -255,6 +266,7 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
         menubar.textColor   = tokens::kTextColor;
         menubar.normalFill  = FBrush::Solid({0.16f, 0.18f, 0.22f, 1.0f});
         menubar.hoveredFill = FBrush::Solid({0.30f, 0.33f, 0.40f, 1.0f});
+        menubar.separatorColor = {0.24f, 0.26f, 0.32f, 1.0f};
         theme->define<ya::FMenuBarItemStyle>("menubar", menubar);
 
         auto tab = ya::FTabStyle{};
@@ -346,6 +358,7 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
         menubar.textColor   = tokens::kTextColorLight;
         menubar.normalFill  = FBrush::Solid({0.84f, 0.86f, 0.89f, 1.0f});
         menubar.hoveredFill = FBrush::Solid({0.78f, 0.80f, 0.85f, 1.0f});
+        menubar.separatorColor = {0.70f, 0.72f, 0.76f, 1.0f};
         theme->define<ya::FMenuBarItemStyle>("menubar", menubar);
 
         auto tab = ya::FTabStyle{};
