@@ -13,7 +13,7 @@ namespace ya
 {
 
 /// One menu-bar entry: label button that opens its menu below the bar.
-struct YA_GUI_API UIMenuBarItem : public UIElement
+struct YA_GUI_API UIMenuBarItem : public UIElement, public UIStyledWidget<UIMenuBarItem, FMenuBarItemStyle>
 {
     YA_REFLECT_BEGIN(UIMenuBarItem, UIElement)
     YA_REFLECT_FIELD(_label, .instanceEditable())
@@ -24,13 +24,6 @@ struct YA_GUI_API UIMenuBarItem : public UIElement
 
     std::string _label;
     uint32_t    _fontSize = 13;
-
-    /// Theme style key (style-system Phase 2/3). paintSelf resolves
-    /// FMenuBarItemStyle by this key (normal/hovered fill brushes + label
-    /// color) from the tree theme; an empty key or absent theme falls back to
-    /// the default-constructed style — the framework fallback (Phase 3
-    /// cleanup: no bare color fields).
-    std::string _styleKey = "menubar";
 
     /// Fired on click / Space / Enter (the bar opens the menu).
     std::function<void()> _onActivate;

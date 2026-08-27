@@ -9,17 +9,75 @@
 namespace ya
 {
 
+struct FSelectableRowDragDropBehavior final : public UIDragSourceBehavior
+{
+    FSelectableRowDragDropBehavior()
+    {
+        bCapturePointerOnPress = true;
+        bBeginDragFromCapturedMove = true;
+        setPressedState = [](UIElement& owner, bool bPressed)
+        {
+            if (auto* row = dynamic_cast<UISelectableRow*>(&owner)) {
+                row->_bPressed = bPressed;
+            }
+        };
+        operationFactory = [](UIElement& owner) -> UIDragDropOperationRef
+        {
+            auto* row = dynamic_cast<UISelectableRow*>(&owner);
+            if (!row || !row->_bDraggable) {
+                return nullptr;
+            }
+            auto operation = std::make_shared<UIDragDropOperation>();
+            operation->typeId = "selectable-row";
+            operation->payload = row->_dragPayload.empty() ? row->_itemId : row->_dragPayload;
+            operation->ghostLabel = row->_dragGhostLabel.empty() ? row->_itemId : row->_dragGhostLabel;
+            return operation;
+        };
+    }
+};
+
+struct FSelectableRowDropTargetBehavior final : public UIDropTargetBehavior
+{
+    FSelectableRowDropTargetBehavior()
+    {
+        acceptPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        {
+            auto* row = dynamic_cast<UISelectableRow*>(&owner);
+            return row && row->_bDraggable && owner.hitTestLayoutRect(logicalPoint) && !payload.empty() && payload != row->_itemId;
+        };
+        handleDroppedPayload = [](UIElement& owner, const std::string& payload, const glm::vec2&)
+        {
+            if (auto* row = dynamic_cast<UISelectableRow*>(&owner)) {
+                if (row->_onDropped) {
+                    row->_onDropped(payload);
+                }
+            }
+        };
+        setHighlightState = [](UIElement& owner, bool bHighlight)
+        {
+            if (auto* row = dynamic_cast<UISelectableRow*>(&owner)) {
+                row->_bDropHighlighted = bHighlight;
+            }
+        };
+    }
+};
+
+UISelectableRow::UISelectableRow(std::string name) : UIElement(std::move(name), "selectable")
+{
+    _hitFilter  = EWidgetHitFilter::Stop;
+    _focusPolicy = EWidgetFocusPolicy::Focusable;
+    addBehavior(std::make_shared<FSelectableRowDragDropBehavior>());
+    addBehavior(std::make_shared<FSelectableRowDropTargetBehavior>());
+}
+
 void UISelectableRow::paintSelf(UIFrameBuilder& builder)
 {
-    if (_bDropHighlighted) {
-        builder.addSprite(_layoutRect, _selectedHoveredColor, nullptr);
-        return;
-    }
-    const glm::vec4 color = _bSelected
-                                ? (_bHovered ? _selectedHoveredColor : _selectedColor)
-                                : (_bHovered ? _hoveredColor : _normalColor);
-    if (color.a > 0.0f) {
-        builder.addSprite(_layoutRect, color, nullptr);
+    const FSelectableRowStyle style = resolveWidgetStyle<FSelectableRowStyle>(*this, _authoredStyle);
+    const FBrush& fill = _bDropHighlighted ? style.selectedHoveredFill
+                         : _bSelected      ? (_bHovered ? style.selectedHoveredFill : style.selectedFill)
+                                           : (_bHovered ? style.hoveredFill : style.normalFill);
+    if (fill.tintColor.a > 0.0f) {
+        builder.addBrush(_layoutRect, fill);
     }
 }
 
@@ -53,27 +111,15 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
             tree->setFocus(this);
             tree->setPointerCapture(this);
         }
+        (void)UIElement::handleInputEvent(event, ctx);
         // Select on press: immediate feedback for pointer-driven navigation.
         if (_onSelect) {
             _onSelect(_itemId);
         }
         return true;
     case EEvent::MouseMoved:
-        // Drag initiation: press then move past a small threshold. The row
-        // hands the session to the tree (which owns the ghost + drop target
-        // from here on) and releases its own capture.
-        if (_bDraggable && _bPressed && getTree() && !getTree()->isDragging()) {
-            const float dist = glm::length(ctx.logicalPoint - _pressPoint);
-            if (dist > 6.0f) {
-                WidgetTree* tree = getTree();
-                tree->releasePointerCapture(this);
-                tree->beginDrag(this,
-                                _dragPayload.empty() ? _itemId : _dragPayload,
-                                _dragGhostLabel.empty() ? _itemId : _dragGhostLabel);
-                _bPressed = false;
-            }
-        }
         _bHovered = bPointInside;
+        (void)UIElement::handleInputEvent(event, ctx);
         return true;
     case EEvent::MouseButtonReleased:
         if (!_bPressed) {
@@ -83,6 +129,7 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
         if (WidgetTree* tree = getTree()) {
             tree->releasePointerCapture(this);
         }
+        (void)UIElement::handleInputEvent(event, ctx);
         if (bPointInside || ctx.bViaCapture) {
             if (_onActivate) {
                 _onActivate(_itemId);
@@ -91,19 +138,6 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
         return true;
     default:
         return false;
-    }
-}
-
-bool UISelectableRow::canAcceptDrop(const std::string& payload, const glm::vec2&)
-{
-    return _bDraggable && !payload.empty() && payload != _itemId;
-}
-
-void UISelectableRow::onDrop(const std::string& payload, const glm::vec2&)
-{
-    _bDropHighlighted = false;
-    if (_onDropped) {
-        _onDropped(payload);
     }
 }
 

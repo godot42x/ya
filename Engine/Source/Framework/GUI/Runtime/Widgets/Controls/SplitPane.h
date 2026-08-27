@@ -25,12 +25,12 @@ namespace ya
 ///   - dragging only invalidates layout: the next snapshot re-lays out both
 ///     panes; GPU state is never touched by the drag;
 ///   - no dock / tab stack / floating windows in this primitive.
-struct YA_GUI_API UISplitPane : public UIElement
+struct YA_GUI_API UISplitPane : public UIElement, public UIStyledWidget<UISplitPane, FSplitPaneStyle>
 {
     YA_REFLECT_BEGIN(UISplitPane, UIElement)
     YA_REFLECT_END()
 
-    explicit UISplitPane(std::string name = "SplitPane") : UIElement(std::move(name))
+    explicit UISplitPane(std::string name = "SplitPane") : UIElement(std::move(name), "split")
     {
         _hitFilter = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
@@ -63,13 +63,6 @@ struct YA_GUI_API UISplitPane : public UIElement
     [[nodiscard]] float getMinFirstExtent() const { return _splitLayout.getMinFirstExtent(); }
     [[nodiscard]] float getMinSecondExtent() const { return _splitLayout.getMinSecondExtent(); }
     [[nodiscard]] float getDividerThickness() const { return _splitLayout.getDividerThickness(); }
-
-    /// Theme style key (style-system Phase 2/3). paintSelf resolves
-    /// FSplitPaneStyle by this key (per-state divider brush) from the tree
-    /// theme; an empty key or absent theme falls back to the
-    /// default-constructed style — the framework fallback (Phase 3 cleanup:
-    /// no bare color fields).
-    std::string _styleKey = "split";
 
     // Drag session state (runtime only, not serialized)
     VisualFlag _bDraggingDivider{*this};

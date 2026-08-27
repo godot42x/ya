@@ -6,7 +6,7 @@
 #include "ECS/Component.h"
 #include "GUI/Declarative/Construct.h"
 #include "GUI/Tooling/Workbench/WorkbenchSurface.h"
-#include "GUI/Tooling/Workbench/WorkbenchTheme.h"
+#include "GameEditor/UI/EditorTheme.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
@@ -220,7 +220,7 @@ void EditorSurface::rebuild(App& app)
         .width  = static_cast<uint32_t>(std::max(windowW, 1)),
         .height = static_cast<uint32_t>(std::max(windowH, 1)),
     });
-    _theme = guiworkbench::buildWorkbenchTheme(true);
+    _theme = buildEditorTheme(true);
     _tree->setTheme(_theme.get());
 
     if (_layer->isProjectLoaded()) {
@@ -238,14 +238,10 @@ void EditorSurface::buildProjectBrowser(App& app)
     (void)app;
     _layer->requestRefreshProjectBrowser();
 
-    auto title = ui::text("ProjectTitle")
-                     .setText("YA Editor")
-                     .setFontSize(28)
-                     .setColor({0.90f, 0.92f, 0.95f, 1.0f});
+    auto title = ui::text("ProjectTitle").setText("YA Editor").setStyleKey("text.header");
     auto blurb = ui::text("ProjectBlurb")
                      .setText("Select a project to open. The WidgetTree chrome stays isolated until a project is loaded.")
-                     .setFontSize(14)
-                     .setColor({0.70f, 0.74f, 0.80f, 1.0f})
+                     .setStyleKey("text.muted")
                      .setSize({720.0f, 40.0f});
 
     auto refresh = labeledButton("RefreshProjects", "Refresh Projects", 160.0f)
@@ -279,7 +275,7 @@ void EditorSurface::buildProjectBrowser(App& app)
                            }
                        });
 
-    auto errorText = ui::text("ProjectError").setFontSize(13).setColor({1.0f, 0.45f, 0.35f, 1.0f});
+    auto errorText = ui::text("ProjectError").setStyleKey("text.error");
     _statsText     = errorText.share();
 
     auto page = ui::column("ProjectBrowser")
@@ -434,15 +430,14 @@ void EditorSurface::buildEditorChrome(App& app)
 
     auto empty = ui::text("InspectorEmpty")
                      .setText("No selection")
-                     .setFontSize(13)
-                     .setColor({0.62f, 0.66f, 0.72f, 1.0f});
+                     .setStyleKey("text.muted");
     _inspectorEmpty = empty.share();
 
     auto inspectorForm = ui::column("InspectorForm")
                              .fillParent()
                              .setPadding({10.0f, 8.0f})
                              .setSpacing(6.0f)
-                             .child(ui::text("InspectorTitle").setText("INSPECTOR").setFontSize(11))
+                             .child(ui::text("InspectorTitle").setText("INSPECTOR").setStyleKey("text.eyebrow"))
                              .child(ui::text("NameLabel").setText("Name").setFontSize(12))
                              .child(std::move(nameField))
                              .child(std::move(empty))

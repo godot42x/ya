@@ -2,6 +2,7 @@
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Reactive.h"
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <memory>
@@ -21,7 +22,7 @@ namespace ya
 /// widget: attach a widget and set its UITableSlot cell (row/col) — the
 /// table layout arranges it into the cell rect and the widget paints
 /// itself on top of the cell (the row text for that cell is suppressed).
-struct YA_GUI_API UITableGrid : public UIElement
+struct YA_GUI_API UITableGrid : public UIElement, public UIStyledWidget<UITableGrid, FTableGridStyle>
 {
     /// One table row (value type owned by the data source).
     struct FTableRow
@@ -55,14 +56,8 @@ struct YA_GUI_API UITableGrid : public UIElement
     // === Visuals ===
     /// Column widths; 0 = stretch (shares the remaining width).
     std::vector<float> _columnWidths;
-    float              _rowHeight       = 22.0f;
-    uint32_t           _fontSize        = 13;
-    glm::vec4          _textColor       = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4          _headerTextColor = {0.62f, 0.66f, 0.72f, 1.0f};
-    glm::vec4          _selectedColor   = {0.22f, 0.42f, 0.78f, 1.0f};
-    glm::vec4          _hoveredColor    = {0.24f, 0.26f, 0.31f, 1.0f};
-    glm::vec4          _gridColor       = {0.20f, 0.22f, 0.27f, 1.0f};
-    glm::vec4          _backgroundColor = {0.12f, 0.13f, 0.16f, 1.0f};
+    float              _rowHeight = 22.0f;
+    uint32_t           _fontSize  = 13;
     /// When true the first data row is drawn with the header text color.
     bool               _bHeaderRow = true;
 

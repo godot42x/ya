@@ -550,17 +550,16 @@ void FWorkbenchSurface::rebuildItemRows()
             setCommandResult("List: activated '" + id + "'");
         };
         // Drag & drop reparent: rows are both sources and drop targets.
-        row->_bDraggable     = true;
-        row->_dragPayload    = item.id;
-        row->_dragGhostLabel = item.name;
+        row->setDraggable(true);
+        row->setDragPayload(item.id);
+        row->setDragGhostLabel(item.name);
         const std::string targetId = item.id;
-        row->_onDropped = [this, targetId](const std::string& droppedId)
-        {
+        row->setOnDropHandler([this, targetId](const std::string& droppedId) {
             if (workspace.reparent(droppedId, targetId)) {
                 _bRowsDirty = true;
                 setCommandResult(workspace.commandResult);
             }
-        };
+        });
 
         auto label = std::make_shared<ya::UIText>("RowLabel_" + item.id);
         label->setSize({240.0f, 22.0f});

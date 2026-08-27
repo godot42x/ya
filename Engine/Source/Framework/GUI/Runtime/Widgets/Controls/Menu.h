@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Widgets/Controls/PopupOverlay.h"
+#include "GUI/Widgets/Theme.h"
 
 #include <functional>
 #include <string>
@@ -13,17 +14,14 @@ struct UIMenu;
 
 /// One popup menu entry. Hover highlighting is driven by the owning UIMenu
 /// (single highlight, keyboard sync); the item only reports hover enters.
-struct YA_GUI_API UIMenuItem : public UIElement
+struct YA_GUI_API UIMenuItem : public UIElement, public UIStyledWidget<UIMenuItem, FMenuStyle>
 {
     YA_REFLECT_BEGIN(UIMenuItem, UIElement)
     YA_REFLECT_FIELD(_label, .instanceEditable())
     YA_REFLECT_FIELD(_fontSize, .instanceEditable())
-    YA_REFLECT_FIELD(_textColor, .instanceEditable())
-    YA_REFLECT_FIELD(_normalColor, .instanceEditable())
-    YA_REFLECT_FIELD(_hoveredColor, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UIMenuItem(std::string name = "MenuItem") : UIElement(std::move(name))
+    explicit UIMenuItem(std::string name = "MenuItem") : UIElement(std::move(name), "menu")
     {
         _hitFilter = EWidgetHitFilter::Stop;
     }
@@ -32,9 +30,6 @@ struct YA_GUI_API UIMenuItem : public UIElement
 
     std::string _label;
     uint32_t    _fontSize    = 13;
-    glm::vec4   _textColor   = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4   _normalColor = {0.13f, 0.14f, 0.17f, 1.0f};
-    glm::vec4   _hoveredColor = {0.22f, 0.42f, 0.78f, 1.0f};
     VisualFlag  _bHighlighted{*this};
 
     /// Fired on click. The owning UIMenu closes itself after the action.
@@ -51,7 +46,7 @@ struct YA_GUI_API UIMenuItem : public UIElement
 ///
 /// Build via create(); open via openAt(tree, pos) which anchors the top-left
 /// of the menu at `pos`. Selecting an item runs its action and closes.
-struct YA_GUI_API UIMenu : public UIPopupOverlay
+struct YA_GUI_API UIMenu : public UIPopupOverlay, public UIStyledWidget<UIMenu, FMenuStyle>
 {
     struct FItem
     {
@@ -59,7 +54,7 @@ struct YA_GUI_API UIMenu : public UIPopupOverlay
         std::function<void()>    action;
     };
 
-    explicit UIMenu(std::string name = "Menu") : UIPopupOverlay(std::move(name)) {}
+    explicit UIMenu(std::string name = "Menu") : UIPopupOverlay(std::move(name), "menu") {}
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIMenu>; }
 
@@ -67,7 +62,6 @@ struct YA_GUI_API UIMenu : public UIPopupOverlay
     float       _itemHeight = 26.0f;
     float       _panelPadding = 4.0f;
     uint32_t    _fontSize = 13;
-    glm::vec4   _panelColor = {0.13f, 0.14f, 0.17f, 1.0f};
 
     /// Create a menu with `items`; the returned menu is detached until open().
     static std::shared_ptr<UIMenu> create(const std::vector<FItem>& items);

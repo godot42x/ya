@@ -10,7 +10,7 @@ namespace ya
 {
 
 UITableGrid::UITableGrid(std::string name)
-    : UIElement(std::move(name))
+    : UIElement(std::move(name), "table")
 {
     _hitFilter     = EWidgetHitFilter::Stop;
     _selectedIndex = std::make_shared<Reactive<int>>(-1);
@@ -125,7 +125,8 @@ int UITableGrid::hitRowIndex(const glm::vec2& point) const
 void UITableGrid::paintSelf(UIFrameBuilder& builder)
 {
     // (Guardrail G1: the base paint template clips this widget's own rect.)
-    builder.addSprite(_layoutRect, _backgroundColor, nullptr);
+    const FTableGridStyle style = resolveWidgetStyle<FTableGridStyle>(*this, _authoredStyle);
+    builder.addBrush(_layoutRect, style.backgroundFill);
 
     // Resolve the selection first so the dependency is recorded even when no
     // font is available.
@@ -146,14 +147,14 @@ void UITableGrid::paintSelf(UIFrameBuilder& builder)
         };
 
         if (static_cast<int>(row) == selectedIndex) {
-            builder.addSprite(rowRect, _selectedColor, nullptr);
+            builder.addBrush(rowRect, style.selectedFill);
         }
         else if (static_cast<int>(row) == _hoveredRow) {
-            builder.addSprite(rowRect, _hoveredColor, nullptr);
+            builder.addBrush(rowRect, style.hoveredFill);
         }
 
         if (font) {
-            const glm::vec4 textColor = (_bHeaderRow && row == 0) ? _headerTextColor : _textColor;
+            const glm::vec4 textColor = (_bHeaderRow && row == 0) ? style.headerTextColor : style.textColor;
             for (size_t col = 0; col < colRects.size() && col < data.cells.size(); ++col) {
                 if (cellHasWidget(static_cast<int>(row), static_cast<int>(col))) {
                     continue; // a child widget paints this cell
@@ -174,13 +175,13 @@ void UITableGrid::paintSelf(UIFrameBuilder& builder)
     for (size_t col = 1; col < colRects.size(); ++col) {
         builder.addLine({colRects[col].pos.x, _layoutRect.pos.y},
                         {colRects[col].pos.x, bottomY},
-                        _gridColor, 1.0f);
+                        style.gridColor, 1.0f);
     }
     // Row separators.
     for (size_t row = 1; row <= rowCount; ++row) {
         const float y = _layoutRect.pos.y + static_cast<float>(row) * _rowHeight;
         builder.addLine({_layoutRect.pos.x, y}, {_layoutRect.pos.x + _layoutRect.extent.x, y},
-                        _gridColor, 1.0f);
+                        style.gridColor, 1.0f);
     }
 }
 

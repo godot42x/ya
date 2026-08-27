@@ -20,12 +20,12 @@ namespace ya
 ///   - wheel is consumed by the innermost scrollable viewport; when the
 ///     content fits (or the scroll is already at its limit) the event is
 ///     not consumed and bubbles outward through the tree walk.
-struct YA_GUI_API UIScrollViewport : public UIElement
+struct YA_GUI_API UIScrollViewport : public UIElement, public UIStyledWidget<UIScrollViewport, FScrollBarStyle>
 {
     YA_REFLECT_BEGIN(UIScrollViewport, UIElement)
     YA_REFLECT_END()
 
-    explicit UIScrollViewport(std::string name = "ScrollViewport") : UIElement(std::move(name))
+    explicit UIScrollViewport(std::string name = "ScrollViewport") : UIElement(std::move(name), "scrollbar")
     {
         _hitFilter = EWidgetHitFilter::Stop;
         _scrollLayout.setOwner(*this);
@@ -70,14 +70,6 @@ struct YA_GUI_API UIScrollViewport : public UIElement
     /// Draw a vertical scrollbar along the right edge when the content
     /// overflows (configurable style; set _bShowScrollbar = false to hide).
     bool _bShowScrollbar = true;
-
-    /// Theme style key (style-system Phase 2/3). paintSelf resolves
-    /// FScrollBarStyle by this key (track/thumb brushes + width) from the
-    /// tree theme; an empty key or absent theme falls back to the
-    /// default-constructed style — the framework fallback (Phase 3 cleanup:
-    /// no bare fields). _bShowScrollbar stays a behavior switch, not a style
-    /// attribute.
-    std::string _styleKey = "scrollbar";
 
     /// Whether the content can scroll at all (after the last layout).
     [[nodiscard]] bool isScrollable() const { return _scrollLayout.isScrollable(); }

@@ -96,109 +96,106 @@ std::shared_ptr<ya::UIContainer> makeRow(ya::WidgetTree& tree, ya::UIElement& pa
     return row;
 }
 
-/// Drag source list item. WidgetTree owns threshold detection; this widget
-/// only creates the operation once dragging is actually detected.
-struct FDemoDragItem : public ya::UIElement
+struct FDemoDragDropTile : public ya::UIElement
 {
-    FDemoDragItem(std::string name) : ya::UIElement(std::move(name))
+    enum class EKind : uint8_t
+    {
+        DragSource,
+        DropTarget,
+    };
+
+    FDemoDragDropTile(std::string name, EKind kind) : ya::UIElement(std::move(name)), _kind(kind)
     {
         _hitFilter = ya::EWidgetHitFilter::Stop;
     }
 
-    std::string           _payload;
-    std::string           _label;
-    std::function<void()> _onDropped;
+    std::string _label;
+    std::string _highlightLabel = "DROP HERE";
+
+    void setPressed(bool pressed) { _bPressed = pressed; }
+    void setHighlighted(bool highlighted) { _bHighlighted = highlighted; }
 
     void paintSelf(ya::UIFrameBuilder& builder) override
     {
-        builder.addSprite(_layoutRect, {0.20f, 0.22f, 0.27f, 1.0f}, nullptr);
+        const glm::vec4 fill = (_kind == EKind::DropTarget)
+            ? (_bHighlighted ? glm::vec4{0.24f, 0.46f, 0.82f, 0.85f}
+                             : glm::vec4{0.13f, 0.15f, 0.19f, 1.0f})
+            : (_bPressed ? glm::vec4{0.18f, 0.24f, 0.34f, 1.0f}
+                         : glm::vec4{0.20f, 0.22f, 0.27f, 1.0f});
+        builder.addSprite(_layoutRect, fill, nullptr);
         auto font = ya::FontManager::get()->getFont(ya::DEFAULT_RUNTIME_FONT_NAME, 13);
         if (font) {
-            builder.addText(_layoutRect, _label, {0.92f, 0.94f, 0.97f, 1.0f}, font, ya::EWidgetAlignH::Center, ya::EWidgetAlignV::Center);
+            const std::string& text = (_kind == EKind::DropTarget && _bHighlighted) ? _highlightLabel : _label;
+            builder.addText(_layoutRect, text, {0.90f, 0.92f, 0.95f, 1.0f}, font, ya::EWidgetAlignH::Center, ya::EWidgetAlignV::Center);
         }
     }
 
-    ya::UIDragDropOperationRef onDragDetected(const ya::FDragDetectedEvent&) override
+    void clearTransientInputState() override
     {
+        _bPressed = false;
+        _bHighlighted = false;
+    }
+
+  private:
+    EKind _kind;
+    ya::VisualFlag _bPressed{*this};
+    ya::VisualFlag _bHighlighted{*this};
+};
+
+std::shared_ptr<FDemoDragDropTile> makeDemoDragSource(std::string name,
+                                                      std::string label,
+                                                      std::string payload)
+{
+    auto tile = std::make_shared<FDemoDragDropTile>(std::move(name), FDemoDragDropTile::EKind::DragSource);
+    tile->_label = std::move(label);
+    auto behavior = std::make_shared<ya::UIDragSourceBehavior>();
+    behavior->bCapturePointerOnPress = true;
+    behavior->setPressedState = [](ya::UIElement& owner, bool bPressed)
+    {
+        if (auto* tile = dynamic_cast<FDemoDragDropTile*>(&owner)) {
+            tile->setPressed(bPressed);
+        }
+    };
+    const std::string behaviorPayload = std::move(payload);
+    behavior->operationFactory = [behaviorPayload, ghostLabel = tile->_label](ya::UIElement&) {
         auto operation = std::make_shared<ya::UIDragDropOperation>();
         operation->typeId = "workbench.payload";
-        operation->payload = _payload;
-        operation->ghostLabel = _label;
+        operation->payload = behaviorPayload;
+        operation->ghostLabel = ghostLabel.empty() ? behaviorPayload : ghostLabel;
         return operation;
-    }
+    };
+    tile->addBehavior(behavior);
+    return tile;
+}
 
-    bool handleInputEvent(const ya::Event& event, const ya::WidgetEventContext& ctx) override
-    {
-        const ya::EEvent::T eventType = event.getEventType();
-        if (!ctx.bViaCapture && !hitTestLayoutRect(ctx.logicalPoint)) {
-            return false;
-        }
-        switch (eventType) {
-        case ya::EEvent::MouseButtonPressed:
-            _bPressed   = true;
-            return true;
-        case ya::EEvent::MouseMoved:
-            return true;
-        case ya::EEvent::MouseButtonReleased:
-            _bPressed = false;
-            return true;
-        default:
-            return false;
-        }
-    }
-
-    void clearTransientInputState() override { _bPressed = false; }
-
-  private:
-    bool      _bPressed = false;
-};
-
-/// Drop target: highlights during a valid hover, logs the drop.
-struct FDemoDropZone : public ya::UIElement
+std::shared_ptr<FDemoDragDropTile> makeDemoDropTarget(
+    std::string name,
+    std::string label,
+    std::function<bool(const std::string& payload)> accept,
+    std::function<void(const std::string& payload)> onDropped)
 {
-    FDemoDropZone(std::string name) : ya::UIElement(std::move(name))
+    auto tile = std::make_shared<FDemoDragDropTile>(std::move(name), FDemoDragDropTile::EKind::DropTarget);
+    tile->_label = std::move(label);
+    auto behavior = std::make_shared<ya::UIDropTargetBehavior>();
+    behavior->acceptPayload = [accept = std::move(accept)](ya::UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
     {
-        _hitFilter = ya::EWidgetHitFilter::Stop;
-    }
-
-    std::string                                     _label;
-    std::function<bool(const std::string& payload)> _accept;
-    std::function<void(const std::string& payload)> _onDropped;
-
-    bool canAcceptDrop(const std::string& payload, const glm::vec2&) override
+        return owner.hitTestLayoutRect(logicalPoint) && (accept ? accept(payload) : !payload.empty());
+    };
+    behavior->handleDroppedPayload = [onDropped = std::move(onDropped)](ya::UIElement&, const std::string& payload, const glm::vec2&)
     {
-        return _accept ? _accept(payload) : !payload.empty();
-    }
-    void onDrop(const std::string& payload, const glm::vec2&) override
-    {
-        _bHighlighted = false;
-        invalidateProperty(ya::EUIPropertyImpact::Paint);
-        if (_onDropped) {
-            _onDropped(payload);
+        if (onDropped) {
+            onDropped(payload);
         }
-    }
-    void setDropHighlight(bool bHighlight) override
+    };
+    behavior->setHighlightState = [](ya::UIElement& owner, bool bHighlight)
     {
-        // The highlight is a paint attribute: without marking paint-dirty the
-        // incremental paint cache keeps showing the pre-highlight draw items,
-        // so the zone would never visibly light up (same contract as every
-        // transient visual state in the framework).
-        _bHighlighted = bHighlight;
-        invalidateProperty(ya::EUIPropertyImpact::Paint);
-    }
-
-    void paintSelf(ya::UIFrameBuilder& builder) override
-    {
-        builder.addSprite(_layoutRect, _bHighlighted ? glm::vec4{0.24f, 0.46f, 0.82f, 0.85f} : glm::vec4{0.13f, 0.15f, 0.19f, 1.0f}, nullptr);
-        auto font = ya::FontManager::get()->getFont(ya::DEFAULT_RUNTIME_FONT_NAME, 13);
-        if (font) {
-            builder.addText(_layoutRect, _bHighlighted ? "DROP HERE" : _label, {0.90f, 0.92f, 0.95f, 1.0f}, font, ya::EWidgetAlignH::Center, ya::EWidgetAlignV::Center);
+        if (auto* tile = dynamic_cast<FDemoDragDropTile*>(&owner)) {
+            tile->setHighlighted(bHighlight);
         }
-    }
-
-  private:
-    bool _bHighlighted = false;
-};
+    };
+    tile->addBehavior(behavior);
+    return tile;
+}
 
 /// Vector primitives showcase: lines (any angle, any thickness), a rectangle
 /// outline and a cubic bezier, all drawn through the UIFrameBuilder vector
@@ -584,27 +581,23 @@ void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& 
     auto sourceRow = ya::ui::row("DragSourceRow").setSpacing(8.0f);
     const std::vector<std::string> payloads = {"asset.texture.diffuse", "asset.mesh.cube", "asset.material.pbr"};
     for (const std::string& payload : payloads) {
-        auto item = std::make_shared<FDemoDragItem>("Drag_" + payload);
+        auto item = makeDemoDragSource("Drag_" + payload, payload, payload);
         item->setSize({160.0f, 30.0f});
-        item->_payload = payload;
-        item->_label   = payload;
         sourceRow.child(item);
         if (payload == payloads[0]) {
             state.dragItem = item;
         }
     }
 
-    auto zone        = std::make_shared<FDemoDropZone>("DropZone");
+    auto zone        = makeDemoDropTarget("DropZone", "Drop zone", {}, [&state, log](const std::string& payload)
+    {
+        state.dropLog = std::format("Dropped '{}'", payload);
+        log(state.dropLog);
+    });
     zone->_anchorMin = {0.0f, 0.0f};
     zone->_anchorMax = {1.0f, 0.0f};
     zone->setPosition({0.0f, 12.0f});
     zone->setSize({0.0f, 120.0f});
-    zone->_label     = "Drop zone";
-    zone->_onDropped = [&state, log](const std::string& payload)
-    {
-        state.dropLog = std::format("Dropped '{}'", payload);
-        log(state.dropLog);
-    };
     state.dropZone = zone;
 
     auto page = ya::ui::panel("DragDropDemo")
@@ -940,8 +933,8 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     treeView->setSize({0.0f, 0.0f});
     treeView->bindData(roots);
     treeView->setExpanded("root", true);
-    treeView->_bReorderable = true;
-    treeView->_onReorder    = [roots, log](const std::string& fromId, const std::string& toId, int mode)
+    treeView->setReorderable(true);
+    treeView->setOnReorderHandler([roots, log](const std::string& fromId, const std::string& toId, int mode)
     {
         // Minimal demo reorder: move `fromId` within the ROOT list only
         // (before / after a root, or into a root as its child). The host
@@ -1007,7 +1000,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
             roots->push(n);
         }
         log(std::format("Tree reorder '{}' {} '{}'", fromId, mode == 0 ? "before" : (mode == 1 ? "into" : "after"), toId));
-    };
+    });
     treeView->_onToggleExpanded = [log](const std::string& id, bool bExpanded)
     {
         log(std::format("Tree toggle '{}' -> {}", id, bExpanded ? "expanded" : "collapsed"));
@@ -1168,32 +1161,33 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     auto dragDemoRow = ya::ui::row("GalleryDragSrcRow").setSpacing(8.0f);
     for (int i = 0; i < 3; ++i) {
-        auto source = std::make_shared<FDemoDragItem>(std::format("GalleryDragSrc{}", i));
+        auto source = makeDemoDragSource(std::format("GalleryDragSrc{}", i),
+                                         std::format("Item {}", i + 1),
+                                         std::format("payload.{}", i + 1));
         source->setSize({110.0f, 26.0f});
-        source->_label   = std::format("Item {}", i + 1);
-        source->_payload = std::format("payload.{}", i + 1);
         dragDemoRow.child(source);
     }
     form.child(std::move(dragDemoRow));
 
     auto dropResult = std::make_shared<ya::Reactive<std::string>>("(drop something here)");
-    auto dropZoneA  = std::make_shared<FDemoDropZone>("GalleryDropA");
+    auto dropZoneA  = makeDemoDropTarget("GalleryDropA",
+                                         "Zone A: accepts any",
+                                         {},
+                                         [dropResult, log](const std::string& payload)
+                                         {
+                                             dropResult->set(std::format("Zone A <- {}", payload));
+                                             log(std::format("Dropped '{}' on Zone A", payload));
+                                         });
     dropZoneA->setSize({180.0f, 60.0f});
-    dropZoneA->_label  = "Zone A: accepts any";
-    dropZoneA->_onDropped = [dropResult, log](const std::string& payload)
-    {
-        dropResult->set(std::format("Zone A <- {}", payload));
-        log(std::format("Dropped '{}' on Zone A", payload));
-    };
-    auto dropZoneB = std::make_shared<FDemoDropZone>("GalleryDropB");
+    auto dropZoneB = makeDemoDropTarget("GalleryDropB",
+                                        "Zone B: only payload.2",
+                                        [](const std::string& payload) { return payload == "payload.2"; },
+                                        [dropResult, log](const std::string& payload)
+                                        {
+                                            dropResult->set(std::format("Zone B <- {}", payload));
+                                            log(std::format("Dropped '{}' on Zone B", payload));
+                                        });
     dropZoneB->setSize({180.0f, 60.0f});
-    dropZoneB->_label = "Zone B: only payload.2";
-    dropZoneB->_accept = [](const std::string& payload) { return payload == "payload.2"; };
-    dropZoneB->_onDropped = [dropResult, log](const std::string& payload)
-    {
-        dropResult->set(std::format("Zone B <- {}", payload));
-        log(std::format("Dropped '{}' on Zone B", payload));
-    };
     form.child(ya::ui::row("GalleryDropRow")
                    .setSpacing(8.0f)
                    .children(

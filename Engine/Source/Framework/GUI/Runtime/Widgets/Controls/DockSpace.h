@@ -24,7 +24,7 @@ struct UIDockWorkspace;
 /// model is a single root leaf holding all registered panels, and dragging a
 /// tab splits into cardinal sub-leaves or merges into another leaf.
 /// No floating windows or persistence yet.
-struct YA_GUI_API UIDockSpace : public UIElement
+struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSpace, FDockSpaceStyle>
 {
     explicit UIDockSpace(std::string name = "DockSpace");
     /// Bind the shared workspace this dock reads its model / registry / policy from.
@@ -57,22 +57,10 @@ struct YA_GUI_API UIDockSpace : public UIElement
     void paintChildren(UIFrameBuilder& builder) override;
     void paintDropPreviewOverlay(UIFrameBuilder& builder) const;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
-    bool canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
-    void onDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
-    void setDropHighlight(bool bHighlight) override;
-    /// Point-sensitive merge/split preview: resolves the highlight at the
-    /// current pointer on every drag move.
-    void updateDropHover(const std::string& payload, const glm::vec2& logicalPoint) override;
     void clearTransientInputState() override;
     /// Clear the active drop-preview (chooser) and detach the overlay. Used when
     /// an external drag source (e.g. a floating window tab) ends its session.
     void clearDropPreview();
-
-    /// Theme style key (style-system Phase 2/3). When the owning tree has a
-    /// theme that defines this key as an FDockSpaceStyle, paintSelf resolves
-    /// the canvas + drop-preview brushes from it; otherwise the literals in
-    /// paintSelf are the fallback. Empty key disables theme resolution.
-    std::string _styleKey = "dock";
 
     [[nodiscard]] bool hasDropPreview() const { return _preview.has_value(); }
     [[nodiscard]] bool isDropPreviewDisabled() const { return _preview.has_value() && _preview->bDisabled; }
@@ -119,6 +107,7 @@ struct YA_GUI_API UIDockSpace : public UIElement
                                                              const glm::vec2& logicalPoint) const;
 
 private:
+    friend struct FDockSpaceDropTargetBehavior;
     struct FLeafView
     {
         DockNodeId  leafId = kInvalidDockNodeId;

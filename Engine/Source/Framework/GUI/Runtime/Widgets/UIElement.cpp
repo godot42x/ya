@@ -12,7 +12,10 @@
 namespace ya
 {
 
-UIElement::UIElement(std::string name) : _name(std::move(name)) {}
+UIElement::UIElement(std::string name, std::string styleKey)
+    : _name(std::move(name))
+    , _styleKey(std::move(styleKey))
+{}
 
 bool UIElement::wantsTick() const
 {

@@ -433,3 +433,36 @@ style system 最终形态：**机制单一**——UIStyleSet（泛型）+ UIThem
 
 - 跟手：title 拖拽 mid-drag 快照窗口 (180,140)→(430,260) 跟随指针；悬停 dock 放手 re-dock 成功（skip 生效）；放空白保持 floating；
 - dock/dock_cardinal_split/dock_floating rc=0；全量 20/21（menus 预存）；137/140（5 预存）；基线门 PASS（强化后 DragOverDockSetsPointSensitiveDropPreview：source 停在指针下仍看得到 dock 预览）。
+
+## 2026-08-27 — 表单控件 theme 接线 + EditorTheme
+
+不重做 style runtime。把 chrome 已经在用的表单控件接到 typed style，并把值从 app theme 烘焙进去。
+
+- Style.h 新增 `FTreeViewStyle` / `FTextFieldStyle` / `FMenuStyle` / `FSelectableRowStyle` / `FDragFloatStyle`；TreeView / TextField / Menu / SelectableRow / DragFloat 删除裸颜色字段，paint 走 `resolveThemeStyle`（几何仍在 widget）。
+- WorkbenchTheme 烘焙 `text.header|muted|error|eyebrow` 与 `tree` / `textfield` / `menu` / `menu.panel` / `selectable` / `dragfloat`，light 不再落到 dark fallback。
+- GameEditor 新增 `buildEditorTheme`；`EditorSurface` 不再直接调 `buildWorkbenchTheme`。Chrome 文案改 `setStyleKey`，去掉 `setColor` 字面量。Text DSL 补 `setStyleKey`。
+- `ToolControlsTest.SelectableRowHover*` 改断言 theme fallback；新增 `SelectableRowHoverUsesThemeFill`。
+
+### 验证
+
+- `xmake b ya-gui-widgets` / `ya-gui-widgets-test` / `ya-game-editor` 通过；
+- `ToolControlsTest.SelectableRow*` 7/7（widgets-test + closure-test）；
+- WidgetTree chrome 冒烟：`run-editor HelloMaterial --editor-chrome=widgettree --exit-after-frame=30` rc=0。
+
+## 2026-08-27 — 剩余表单控件 theme 接线
+
+CheckBox / ComboBox / Slider / TableGrid / SpinBox / Radio / ColorEdit chrome / SearchCombo 删除散装颜色字段，paint 走 typed style + key。ColorEdit 的 `_color` 仍是业务值。WorkbenchTheme 烘焙对应 key。Text/Panel 的 `setColor` 实例覆盖保留。剩余裸色：Image `_placeholderColor`、PopupOverlay `_modalColor`。
+
+### 验证
+
+- `xmake b ya-gui-widgets` / `ya-gui-widgets-test` / `ya-gui-tooling` 通过；
+- `ya-gui-widgets-test` 174/175；失败项 `SelectableRowDraggableRowsUseBehaviorBackedDragDrop` 是 drag-behavior 路径，与本轮 style 接线无关。
+
+## 2026-08-27 — 实例 authored TStyle
+
+高频路径落地：`UIStyledWidget<TWidget, TStyle>` 持 optional authored style；`resolveWidgetStyle` 顺序为 authored > theme key > fallback。`_styleKey` 收到 `UIElement` 并反射。DSL 基类暴露 `setStyle` / `setStyleKey`。Text/Panel 的 `setColor` 仍是单色退化覆盖。Panel `_bExplicitFill` 进入反射，避免反序列化后 theme 盖掉显式色。
+
+### 验证
+
+- `xmake b ya-gui-widgets` / `ya-gui-widgets-test` / `ya-gui-tooling` 通过；
+- `ya-gui-widgets-test` 179/179。

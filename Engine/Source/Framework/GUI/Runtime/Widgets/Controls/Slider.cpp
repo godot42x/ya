@@ -47,14 +47,15 @@ void UISlider::paintSelf(UIFrameBuilder& builder)
     Rect2D      track = _layoutRect;
     track.pos.y += (_layoutRect.extent.y - trackHeight) * 0.5f;
     track.extent = {_layoutRect.extent.x, trackHeight};
-    builder.addSprite(track, _trackColor, nullptr);
+    const FSliderStyle style = resolveWidgetStyle<FSliderStyle>(*this, _authoredStyle);
+    builder.addBrush(track, style.trackFill);
 
     // Fill up to the thumb center.
     const float thumbCenterX = _layoutRect.pos.x + _value * _layoutRect.extent.x;
     Rect2D      fill = track;
     fill.extent.x = std::max(0.0f, thumbCenterX - track.pos.x);
     if (fill.extent.x > 0.0f) {
-        builder.addSprite(fill, _fillColor, nullptr);
+        builder.addBrush(fill, style.valueFill);
     }
 
     Rect2D thumb{
@@ -62,7 +63,7 @@ void UISlider::paintSelf(UIFrameBuilder& builder)
                    _layoutRect.pos.y + (_layoutRect.extent.y - _thumbSize.y) * 0.5f},
         .extent = _thumbSize,
     };
-    builder.addSprite(thumb, _thumbColor, nullptr);
+    builder.addBrush(thumb, style.thumbFill);
 }
 
 bool UISlider::handleInputEvent(const Event& event, const WidgetEventContext& ctx)

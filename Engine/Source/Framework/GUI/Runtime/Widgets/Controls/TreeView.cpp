@@ -8,10 +8,123 @@
 namespace ya
 {
 
-UITreeView::UITreeView(std::string name) : UIElement(std::move(name))
+struct FTreeViewReorderDragBehavior final : public UIDragSourceBehavior
+{
+    FTreeViewReorderDragBehavior()
+    {
+        bCapturePointerOnPress = true;
+        bBeginDragFromCapturedMove = true;
+        setPressedState = [](UIElement& owner, bool bPressed)
+        {
+            if (auto* tree = dynamic_cast<UITreeView*>(&owner)) {
+                tree->_bPressArmed = bPressed;
+            }
+        };
+        operationFactory = [](UIElement& owner) -> UIDragDropOperationRef
+        {
+            auto* tree = dynamic_cast<UITreeView*>(&owner);
+            if (!tree || !tree->_bReorderable || tree->_pressRowId.empty()) {
+                return nullptr;
+            }
+            auto operation = std::make_shared<UIDragDropOperation>();
+            operation->typeId = "tree.reorder";
+            operation->payload = std::string(UITreeView::kReorderPayloadPrefix) + tree->_pressRowId;
+            operation->ghostLabel = tree->_pressRowId;
+            tree->_pressRowId.clear();
+            return operation;
+        };
+    }
+
+    void onDetached(UIElement& owner) override
+    {
+        if (auto* tree = dynamic_cast<UITreeView*>(&owner)) {
+            tree->_bPressArmed = false;
+            tree->_pressRowId.clear();
+        }
+        UIDragSourceBehavior::onDetached(owner);
+    }
+};
+
+struct FTreeViewReorderDropBehavior final : public UIDropTargetBehavior
+{
+    FTreeViewReorderDropBehavior()
+    {
+        acceptPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        {
+            auto* tree = dynamic_cast<UITreeView*>(&owner);
+            if (!tree || !tree->_bReorderable || payload.rfind(UITreeView::kReorderPayloadPrefix, 0) != 0) {
+                return false;
+            }
+            int rowIndex = -1;
+            int mode     = 0;
+            return tree->dropPosition(logicalPoint, rowIndex, mode);
+        };
+        handleDroppedPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        {
+            auto* tree = dynamic_cast<UITreeView*>(&owner);
+            if (!tree) {
+                return;
+            }
+            tree->_dropRowIndex = -1;
+            tree->markPaintDirty();
+            const std::string fromId = payload.substr(std::char_traits<char>::length(UITreeView::kReorderPayloadPrefix));
+            int               rowIndex = -1;
+            int               mode     = 0;
+            if (!tree->dropPosition(logicalPoint, rowIndex, mode)) {
+                return;
+            }
+            const auto rows = tree->flattenVisible();
+            if (rowIndex >= static_cast<int>(rows.size())) {
+                return;
+            }
+            if (tree->_onReorder) {
+                tree->_onReorder(fromId, rows[static_cast<size_t>(rowIndex)].node->id, mode);
+            }
+        };
+        setHighlightState = [](UIElement& owner, bool bHighlight)
+        {
+            if (auto* tree = dynamic_cast<UITreeView*>(&owner)) {
+                if (bHighlight) {
+                    tree->markPaintDirty();
+                }
+                else if (tree->_dropRowIndex >= 0) {
+                    tree->_dropRowIndex = -1;
+                    tree->markPaintDirty();
+                }
+            }
+        };
+        updateHoverState = [](UIElement& owner, const std::string&, const glm::vec2& logicalPoint)
+        {
+            auto* tree = dynamic_cast<UITreeView*>(&owner);
+            if (!tree) {
+                return;
+            }
+            int dropRow = -1;
+            int dropMode = 0;
+            if (tree->dropPosition(logicalPoint, dropRow, dropMode) &&
+                (dropRow != tree->_dropRowIndex || dropMode != tree->_dropMode)) {
+                tree->_dropRowIndex = dropRow;
+                tree->_dropMode     = dropMode;
+                tree->markPaintDirty();
+            }
+        };
+    }
+
+    void onDetached(UIElement& owner) override
+    {
+        if (auto* tree = dynamic_cast<UITreeView*>(&owner)) {
+            tree->_dropRowIndex = -1;
+        }
+        UIDropTargetBehavior::onDetached(owner);
+    }
+};
+
+UITreeView::UITreeView(std::string name) : UIElement(std::move(name), "tree")
 {
     _hitFilter  = EWidgetHitFilter::Stop;
     _selectedId = std::make_shared<Reactive<std::string>>();
+    addBehavior(std::make_shared<FTreeViewReorderDragBehavior>());
+    addBehavior(std::make_shared<FTreeViewReorderDropBehavior>());
 }
 
 void UITreeView::bindData(std::shared_ptr<ReactiveList<FNode>> roots)
@@ -50,48 +163,6 @@ bool UITreeView::dropPosition(const glm::vec2& point, int& outRowIndex, int& out
     }
     outRowIndex = rowIndex;
     return true;
-}
-
-bool UITreeView::canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint)
-{
-    if (!_bReorderable || payload.rfind(kReorderPayloadPrefix, 0) != 0) {
-        return false;
-    }
-    int rowIndex = -1;
-    int mode     = 0;
-    return dropPosition(logicalPoint, rowIndex, mode);
-}
-
-void UITreeView::onDrop(const std::string& payload, const glm::vec2& logicalPoint)
-{
-    _dropRowIndex = -1;
-    markPaintDirty();
-    const std::string fromId = payload.substr(std::char_traits<char>::length(kReorderPayloadPrefix));
-    int               rowIndex = -1;
-    int               mode     = 0;
-    if (!dropPosition(logicalPoint, rowIndex, mode)) {
-        return;
-    }
-    const auto rows = flattenVisible();
-    if (rowIndex >= static_cast<int>(rows.size())) {
-        return;
-    }
-    if (_onReorder) {
-        _onReorder(fromId, rows[static_cast<size_t>(rowIndex)].node->id, mode);
-    }
-}
-
-void UITreeView::setDropHighlight(bool bHighlight)
-{
-    if (bHighlight) {
-        // The active drop position is resolved on each drag move; the flag
-        // only enables the highlight paint.
-        markPaintDirty();
-    }
-    else if (_dropRowIndex >= 0) {
-        _dropRowIndex = -1;
-        markPaintDirty();
-    }
 }
 
 void UITreeView::bindSelection(std::shared_ptr<Reactive<std::string>> selectedId)
@@ -291,7 +362,8 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
     applyFilterExpansion();
 
     const auto rows = flattenVisible();
-    auto       font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    const FTreeViewStyle style = resolveWidgetStyle<FTreeViewStyle>(*this, _authoredStyle);
+    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
 
     // Resolve the selection first so the dependency is recorded even when no
     // font is available (mirrors UIText::resolvedText ordering).
@@ -305,10 +377,10 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
         };
 
         if (row.node->id == selectedId) {
-            builder.addSprite(rowRect, _selectedColor, nullptr);
+            builder.addBrush(rowRect, style.selectedFill);
         }
         else if (static_cast<int>(i) == _hoveredRow) {
-            builder.addSprite(rowRect, _hoveredColor, nullptr);
+            builder.addBrush(rowRect, style.hoveredFill);
         }
 
         float x = rowRect.pos.x + static_cast<float>(row.depth) * _indentWidth;
@@ -317,11 +389,10 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
             const bool     expanded  = isExpanded(row.node->id);
             const Rect2D   arrowRect = arrowButtonRect(x, rowRect.pos.y);
             if (row.node->id == _hoveredArrowId) {
-                // Hover highlight signals the arrow is a clickable button.
-                builder.addSprite(arrowRect, _arrowHoveredColor, nullptr);
+                builder.addBrush(arrowRect, style.arrowHoveredFill);
             }
             if (font) {
-                builder.addText(arrowRect, expanded ? "v" : ">", _arrowColor, font,
+                builder.addText(arrowRect, expanded ? "v" : ">", style.arrowColor, font,
                                 EWidgetAlignH::Center, EWidgetAlignV::Center);
             }
             x += _arrowWidth;
@@ -332,7 +403,7 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
                 .pos    = {x, rowRect.pos.y},
                 .extent = {rowRect.pos.x + rowRect.extent.x - x, _rowHeight},
             };
-            builder.addText(labelRect, row.node->label, _textColor, font,
+            builder.addText(labelRect, row.node->label, style.textColor, font,
                             EWidgetAlignH::Left, EWidgetAlignV::Center);
         }
     }
@@ -344,13 +415,13 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
         if (_dropMode == 1) {
             builder.addRectOutline(Rect2D{.pos = {_layoutRect.pos.x, y},
                                           .extent = {_layoutRect.extent.x, _rowHeight}},
-                                   _selectedColor, 2.0f);
+                                   style.selectedFill.tintColor, 2.0f);
         }
         else {
             const float lineY = y + (_dropMode == 0 ? 0.0f : _rowHeight);
             builder.addLine({_layoutRect.pos.x, lineY},
                             {_layoutRect.pos.x + _layoutRect.extent.x, lineY},
-                            _selectedColor, 2.0f);
+                            style.selectedFill.tintColor, 2.0f);
         }
     }
 }
@@ -379,27 +450,7 @@ bool UITreeView::handleInputEvent(const Event& event, const WidgetEventContext& 
             _hoveredArrowId = std::move(newArrowHover);
             markPaintDirty();
         }
-        // Reorder drag: a press on a reorderable row armed a drag session;
-        // crossing the threshold starts it, and while it runs the drop
-        // highlight follows the pointer.
-        if (_bReorderable && _bPressArmed && !_pressRowId.empty() && getTree() && !getTree()->isDragging()) {
-            if (glm::length(ctx.logicalPoint - _pressPoint) > 6.0f) {
-                WidgetTree* tree = getTree();
-                tree->releasePointerCapture(this);
-                tree->beginDrag(this, std::string(kReorderPayloadPrefix) + _pressRowId, _pressRowId);
-                _bPressArmed = false;
-            }
-        }
-        if (getTree() && getTree()->isDragging()) {
-            int dropRow = -1;
-            int dropMode = 0;
-            if (dropPosition(ctx.logicalPoint, dropRow, dropMode) &&
-                (dropRow != _dropRowIndex || dropMode != _dropMode)) {
-                _dropRowIndex = dropRow;
-                _dropMode     = dropMode;
-                markPaintDirty();
-            }
-        }
+        (void)UIElement::handleInputEvent(event, ctx);
         return row >= 0;
     }
 
@@ -430,24 +481,17 @@ bool UITreeView::handleInputEvent(const Event& event, const WidgetEventContext& 
             if (_onSelectionChanged) {
                 _onSelectionChanged(row.node->id);
             }
-            // Arm a reorder drag (starts after a 6px move threshold).
             if (_bReorderable) {
-                _bPressArmed = true;
                 _pressRowId  = row.node->id;
-                _pressPoint  = ctx.logicalPoint;
-                if (WidgetTree* tree = getTree()) {
-                    tree->setPointerCapture(this);
-                }
+                (void)UIElement::handleInputEvent(event, ctx);
             }
         }
         return true;
     }
 
     if (eventType == EEvent::MouseButtonReleased) {
-        _bPressArmed = false;
-        if (WidgetTree* tree = getTree()) {
-            tree->releasePointerCapture(this);
-        }
+        _pressRowId.clear();
+        (void)UIElement::handleInputEvent(event, ctx);
         return true;
     }
 
@@ -473,6 +517,7 @@ void UITreeView::clearTransientInputState()
     _bPressArmed = false;
     _pressRowId.clear();
     _dropRowIndex = -1;
+    _dropMode = 0;
 }
 
 glm::vec2 UITreeView::computeDesiredSize() const

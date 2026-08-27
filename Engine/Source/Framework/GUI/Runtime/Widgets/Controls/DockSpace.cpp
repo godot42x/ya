@@ -114,12 +114,107 @@ struct FDropChooserOverlay final : UIElement
 
     UIDockSpace* _owner = nullptr;
 };
+
 } // namespace
 
+struct FDockSpaceDropTargetBehavior final : public UIDropTargetBehavior
+{
+    FDockSpaceDropTargetBehavior()
+    {
+        acceptPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        {
+            auto* dock = dynamic_cast<UIDockSpace*>(&owner);
+            if (!dock) {
+                return false;
+            }
+            DockPanelId panelId = kInvalidDockPanelId;
+            auto preview = dock->parsePanelPayload(payload, panelId) ? dock->resolveDropPreview(logicalPoint, panelId) : std::nullopt;
+            return preview.has_value() && !preview->bDisabled && !preview->bChooser;
+        };
+        handleDroppedPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        {
+            auto* dock = dynamic_cast<UIDockSpace*>(&owner);
+            if (!dock) {
+                return;
+            }
+            DockPanelId panelId = kInvalidDockPanelId;
+            if (!dock->parsePanelPayload(payload, panelId)) {
+                dock->clearPreview();
+                return;
+            }
+            auto preview = dock->resolveDropPreview(logicalPoint, panelId);
+            dock->clearPreview();
+            if (!preview || preview->bDisabled || preview->bChooser) {
+                return;
+            }
+
+            const FDockNode* sourceLeaf = dock->_ws->dockModel().findLeafForPanel(panelId);
+            const bool bWasFloating = dock->_ws->isPanelFloating(panelId);
+            if (!sourceLeaf && !bWasFloating) {
+                return;
+            }
+
+            bool bChanged = false;
+            if (preview->targetFloatingId != kInvalidFloatingWindowId) {
+                bChanged = dock->_ws->addPanelToFloating(preview->targetFloatingId, panelId);
+            }
+            else if (preview->bMerge) {
+                if (sourceLeaf && sourceLeaf->id != preview->targetLeafId) {
+                    bChanged = dock->_ws->dockModel().movePanel(panelId, preview->targetLeafId, SIZE_MAX, true);
+                }
+                else if (!sourceLeaf) {
+                    bChanged = dock->_ws->dockModel().addPanel(panelId, preview->targetLeafId);
+                }
+            }
+            else {
+                bChanged = dock->_ws->dockModel().splitLeaf(preview->targetLeafId, preview->side, panelId);
+            }
+
+            if (bChanged) {
+                if (bWasFloating && preview->targetFloatingId == kInvalidFloatingWindowId) {
+                    dock->_ws->endFloatingForPanel(panelId);
+                }
+                dock->rebuildProjection();
+            }
+        };
+        setHighlightState = [](UIElement& owner, bool bHighlight)
+        {
+            if (!bHighlight) {
+                if (auto* dock = dynamic_cast<UIDockSpace*>(&owner)) {
+                    dock->clearPreview();
+                }
+            }
+        };
+        updateHoverState = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        {
+            auto* dock = dynamic_cast<UIDockSpace*>(&owner);
+            if (!dock) {
+                return;
+            }
+            DockPanelId panelId = kInvalidDockPanelId;
+            auto        preview = dock->parsePanelPayload(payload, panelId)
+                                    ? dock->resolveDropPreview(logicalPoint, panelId)
+                                    : std::nullopt;
+            dock->_preview = std::move(preview);
+            dock->syncPreviewOverlay();
+            dock->markPaintDirty();
+        };
+    }
+
+    void onDetached(UIElement& owner) override
+    {
+        if (auto* dock = dynamic_cast<UIDockSpace*>(&owner)) {
+            dock->clearPreview();
+        }
+        UIDropTargetBehavior::onDetached(owner);
+    }
+};
+
 UIDockSpace::UIDockSpace(std::string name)
-    : UIElement(std::move(name))
+    : UIElement(std::move(name), "dock")
 {
     _hitFilter = EWidgetHitFilter::Stop;
+    addBehavior(std::make_shared<FDockSpaceDropTargetBehavior>());
 }
 
 UIDockSpace::FLeafView* UIDockSpace::leafViewForLeaf(DockNodeId leafId)
@@ -188,12 +283,7 @@ void UIDockSpace::paintDropPreviewOverlay(UIFrameBuilder& builder) const
     if (!_preview || _preview->bDisabled) {
         return;
     }
-    FDockSpaceStyle style;
-    if (!_styleKey.empty()) {
-        if (const FDockSpaceStyle* themed = resolveThemeStyle<FDockSpaceStyle>(*this, _styleKey)) {
-            style = *themed;
-        }
-    }
+    const FDockSpaceStyle style = resolveWidgetStyle<FDockSpaceStyle>(*this, _authoredStyle);
 
     // Floating-window target: highlight the whole window as a "merge as tab"
     // drop zone (targetLeafId is kInvalidDockNodeId for these previews).
@@ -485,12 +575,7 @@ void UIDockSpace::paintSelf(UIFrameBuilder& builder)
     // FDockSpaceStyle (darker than any panel so the tabs/content read as
     // stacked surfaces instead of floating rectangles). Absent key/theme →
     // default-constructed style is the fallback (no magic literals here).
-    FDockSpaceStyle style;
-    if (!_styleKey.empty()) {
-        if (const FDockSpaceStyle* themed = resolveThemeStyle<FDockSpaceStyle>(*this, _styleKey)) {
-            style = *themed;
-        }
-    }
+    const FDockSpaceStyle style = resolveWidgetStyle<FDockSpaceStyle>(*this, _authoredStyle);
     builder.addBrush(_layoutRect, style.canvasColor);
 }
 
@@ -709,87 +794,6 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::dropPreviewFor(const std::
         return std::nullopt;
     }
     return resolveDropPreview(logicalPoint, panelId);
-}
-
-bool UIDockSpace::canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint)
-{
-    DockPanelId panelId = kInvalidDockPanelId;
-    auto preview = parsePanelPayload(payload, panelId) ? resolveDropPreview(logicalPoint, panelId) : std::nullopt;
-    // Only a concrete chooser block (center / cardinal) is a real dock target.
-    // The dimmed chooser-mode preview (bChooser) and any disabled preview mean
-    // "no dock here", so the drag falls through to a floating window.
-    return preview.has_value() && !preview->bDisabled && !preview->bChooser;
-}
-
-void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoint)
-{
-    DockPanelId panelId = kInvalidDockPanelId;
-    if (!parsePanelPayload(payload, panelId)) {
-        clearPreview();
-        return;
-    }
-    auto preview = resolveDropPreview(logicalPoint, panelId);
-    clearPreview();
-    if (!preview) {
-        return;
-    }
-    if (preview->bDisabled || preview->bChooser) {
-        return;
-    }
-
-    const FDockNode* sourceLeaf = _ws->dockModel().findLeafForPanel(panelId);
-    const bool bWasFloating = _ws->isPanelFloating(panelId);
-    if (!sourceLeaf && !bWasFloating) {
-        return;
-    }
-
-    bool bChanged = false;
-    if (preview->targetFloatingId != kInvalidFloatingWindowId) {
-        // Merge the dragged panel into the target floating window as a new tab.
-        bChanged = _ws->addPanelToFloating(preview->targetFloatingId, panelId);
-    }
-    else if (preview->bMerge) {
-        if (sourceLeaf && sourceLeaf->id != preview->targetLeafId) {
-            bChanged = _ws->dockModel().movePanel(panelId, preview->targetLeafId, SIZE_MAX, true);
-        }
-        else if (!sourceLeaf) {
-            // Re-dock a floating panel by merging it into the target leaf.
-            bChanged = _ws->dockModel().addPanel(panelId, preview->targetLeafId);
-        }
-    }
-    else {
-        bChanged = _ws->dockModel().splitLeaf(preview->targetLeafId, preview->side, panelId);
-    }
-
-    if (bChanged) {
-        if (bWasFloating && preview->targetFloatingId == kInvalidFloatingWindowId) {
-            _ws->endFloatingForPanel(panelId);
-        }
-        rebuildProjection();
-    }
-}
-
-void UIDockSpace::setDropHighlight(bool bHighlight)
-{
-    if (!bHighlight) {
-        clearPreview();
-    }
-}
-
-void UIDockSpace::updateDropHover(const std::string& payload, const glm::vec2& logicalPoint)
-{
-    // Point-sensitive drop preview: canAcceptDrop only answers yes/no, so the
-    // tree feeds the CURRENT pointer here on every move of an active drag.
-    // Resolve the merge/split preview at the pointer and mark paint-dirty so
-    // the highlight follows the drag (dock regression: the preview never
-    // rendered because it was only computed into a local in canAcceptDrop).
-    DockPanelId panelId = kInvalidDockPanelId;
-    auto        preview = parsePanelPayload(payload, panelId)
-                            ? resolveDropPreview(logicalPoint, panelId)
-                            : std::nullopt;
-    _preview = std::move(preview);
-    syncPreviewOverlay();
-    markPaintDirty();
 }
 
 void UIDockSpace::clearTransientInputState()

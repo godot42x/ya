@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <functional>
@@ -16,18 +17,15 @@ namespace ya
 ///   - Space / Enter on the focused box toggles;
 ///   - the first visible content child (label text) is arranged right of the
 ///     box; with _bAutoSize the desired size = box + spacing + content.
-struct YA_GUI_API UICheckBox : public UIElement
+struct YA_GUI_API UICheckBox : public UIElement, public UIStyledWidget<UICheckBox, FCheckBoxStyle>
 {
     YA_REFLECT_BEGIN(UICheckBox, UIElement)
     YA_REFLECT_FIELD(_bChecked, .instanceEditable())
     YA_REFLECT_FIELD(_boxSize, .instanceEditable())
-    YA_REFLECT_FIELD(_boxColor, .instanceEditable())
-    YA_REFLECT_FIELD(_checkedColor, .instanceEditable())
-    YA_REFLECT_FIELD(_hoveredColor, .instanceEditable())
     YA_REFLECT_FIELD(_labelSpacing, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UICheckBox(std::string name = "CheckBox") : UIElement(std::move(name))
+    explicit UICheckBox(std::string name = "CheckBox") : UIElement(std::move(name), "checkbox")
     {
         _hitFilter   = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
@@ -39,11 +37,6 @@ struct YA_GUI_API UICheckBox : public UIElement
     /// Box edge length (logical px). The box is square.
     float _boxSize      = 16.0f;
     float _labelSpacing = 8.0f;
-
-    glm::vec4 _boxColor      = {0.55f, 0.60f, 0.68f, 1.0f};
-    glm::vec4 _checkedColor  = {0.24f, 0.46f, 0.82f, 1.0f};
-    glm::vec4 _hoveredColor  = {0.34f, 0.38f, 0.46f, 1.0f};
-    glm::vec4 _checkColor    = {0.95f, 0.96f, 0.98f, 1.0f};
 
     /// Fired on every toggle with the new state.
     std::function<void(bool bChecked)> _onChanged;

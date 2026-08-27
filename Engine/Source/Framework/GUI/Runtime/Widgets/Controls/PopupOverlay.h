@@ -32,7 +32,8 @@ struct YA_GUI_API UIPopupOverlay : public UIElement
     YA_REFLECT_FIELD(_contentPos, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UIPopupOverlay(std::string name = "PopupOverlay") : UIElement(std::move(name))
+    explicit UIPopupOverlay(std::string name = "PopupOverlay", std::string styleKey = {})
+        : UIElement(std::move(name), std::move(styleKey))
     {
         _hitFilter   = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;

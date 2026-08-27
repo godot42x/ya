@@ -4,6 +4,7 @@
 
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/WidgetTreeDump.h"
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Menu.h"
@@ -14,6 +15,7 @@
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/Controls/TreeView.h"
 #include "Render/Resources/FontManager.h"
 
 #include <gtest/gtest.h>
@@ -698,6 +700,89 @@ TEST(ToolControlsTest, SelectableRowParticipatesInTabTraversal)
     EXPECT_EQ(tree.getFocused(), second.get());
 }
 
+TEST(ToolControlsTest, SelectableRowDraggableRowsUseBehaviorBackedDragDrop)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       source = std::make_shared<UISelectableRow>("Source");
+    auto       target = std::make_shared<UISelectableRow>("Target");
+    source->_itemId = "item.source";
+    target->_itemId = "item.target";
+    source->_bDraggable = true;
+    source->_dragPayload = "payload.source";
+    source->_dragGhostLabel = "Source Ghost";
+    target->_bDraggable = true;
+    source->setPosition({0.0f, 0.0f});
+    target->setPosition({220.0f, 0.0f});
+    source->setSize({180.0f, 24.0f});
+    target->setSize({180.0f, 24.0f});
+    std::string droppedPayload;
+    target->_onDropped = [&](const std::string& payload) { droppedPayload = payload; };
+    tree.attachToLayer(WidgetTree::ELayer::Content, source);
+    tree.attachToLayer(WidgetTree::ELayer::Content, target);
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 12.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getPointerCapture(), source.get());
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(80.0f, 12.0f), pointAt(80.0f, 12.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_TRUE(tree.isDragging());
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+    EXPECT_EQ(tree.getDragPayload(), "payload.source");
+
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(260.0f, 12.0f), pointAt(260.0f, 12.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(260.0f, 12.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(droppedPayload, "payload.source");
+    EXPECT_FALSE(tree.isDragging());
+}
+
+TEST(ToolControlsTest, TreeViewReorderUsesBehaviorBackedDragDrop)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       view = std::make_shared<UITreeView>("Tree");
+    view->setPosition({20.0f, 20.0f});
+    view->setSize({220.0f, 96.0f});
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    roots->push({.id = "node.1", .label = "Node 1"});
+    roots->push({.id = "node.2", .label = "Node 2"});
+    view->bindData(roots);
+    view->setReorderable(true);
+
+    std::string fromId;
+    std::string toId;
+    int         mode = -1;
+    view->setOnReorderHandler([&](const std::string& from, const std::string& to, int dropMode)
+    {
+        fromId = from;
+        toId   = to;
+        mode   = dropMode;
+    });
+
+    tree.attachToLayer(WidgetTree::ELayer::Content, view);
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(80.0f, 32.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getPointerCapture(), view.get());
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(88.0f, 32.0f), pointAt(88.0f, 32.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_TRUE(tree.isDragging());
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+    EXPECT_EQ(tree.getDragPayload(), "tree-node:node.1");
+
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(80.0f, 48.0f), pointAt(80.0f, 48.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(80.0f, 48.0f)),
+              EWidgetRouteResult::HandledExclusive);
+
+    EXPECT_EQ(fromId, "node.1");
+    EXPECT_EQ(toId, "node.2");
+    EXPECT_EQ(mode, 0);
+    EXPECT_FALSE(tree.isDragging());
+}
+
 // === Text field ===
 
 TEST(ToolControlsTest, TextFieldTypedTextAppendsAndFiresChanged)
@@ -940,7 +1025,7 @@ TEST(ToolControlsTest, SelectableRowHoverRepaintsWithHoveredColor)
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_EQ(snap.items.size(), 1u);
-    EXPECT_EQ(snap.items[0].color, row->_hoveredColor);
+    EXPECT_EQ(snap.items[0].color, FSelectableRowStyle{}.hoveredFill.tintColor);
 
     // Leave: the tree hover lifecycle clears the flag, back to transparent.
     tree.dispatchEvent(MouseMoveEvent(300.0f, 200.0f), pointAt(300.0f, 200.0f));
@@ -974,7 +1059,27 @@ TEST(ToolControlsTest, SelectableRowWithLabelChildHoverStillHighlightsRow)
     // The row sprite must carry the hovered color (the label may add a text
     // item after it when a font is available).
     ASSERT_GE(snap.items.size(), 1u);
-    EXPECT_EQ(snap.items[0].color, row->_hoveredColor);
+    EXPECT_EQ(snap.items[0].color, FSelectableRowStyle{}.hoveredFill.tintColor);
+}
+
+TEST(ToolControlsTest, SelectableRowHoverUsesThemeFill)
+{
+    auto theme = std::make_shared<UITheme>();
+    FSelectableRowStyle style;
+    style.hoveredFill = FBrush::Solid({1.0f, 0.2f, 0.1f, 1.0f});
+    theme->define<FSelectableRowStyle>("selectable", style);
+
+    WidgetTree tree({.width = 400, .height = 300});
+    tree.setTheme(theme.get());
+    auto row = std::make_shared<UISelectableRow>("Row");
+    row->setSize({240.0f, 22.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, row);
+    tree.layout();
+
+    tree.dispatchEvent(MouseMoveEvent(120.0f, 11.0f), pointAt(120.0f, 11.0f));
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_EQ(snap.items[0].color, glm::vec4(1.0f, 0.2f, 0.1f, 1.0f));
 }
 
 

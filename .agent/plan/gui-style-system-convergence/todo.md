@@ -43,7 +43,7 @@
 - [ ] 设计 UIThemeContext —— WidgetTree 已挂树级 theme（setTheme/getTheme）；subtree override 留后续
 - [ ] 设计 style key 命名规则 —— resolveThemeStyle<TStyle>(key, level) helper 已落地，key 命名约定待 Phase 4 定
 - [x] 确定 WidgetTree / GUIWindowHost 的 theme owner 边界 —— 挂 WidgetTree（树级资源）
-- [ ] 实现 resolve 顺序：explicit override -> style key -> subtree override -> tree/window theme -> framework fallback —— 第一刀只做 style key -> fallback
+- [x] 实现 resolve 顺序：explicit override -> style key -> subtree override -> tree/window theme -> framework fallback —— authored TStyle + setColor 退化 + style key + fallback 已落地；subtree override 仍留后续
 - [x] **UIStyleSet 泛型化**：`define<TStyle>(name, style)`，typed styles 复用 Reactive<T>，不另起第二套容器
 - [x] **resolve 上游换人失效传播**：WidgetTree 持 `Reactive<uint64_t>` generation token，setTheme 时 +1 触发依赖控件重绘
 - [ ] **token → typed style 转换**：配置代码烘焙（app 构造 theme 时用 token 初始化 typed style），framework 不做运行时 token 求值（见 plan.md §3.4）
@@ -61,10 +61,22 @@
 - [x] UIDockSpace -> FDockSpaceStyle（_styleKey="dock"，canvas+preview）
 - [x] UIDockFloatingWindow -> FFloatingWindowStyle（_styleKey="floating"，body/border/minSize/resize affordance）
 - [x] **resolve 读取路径契约**：paint 属性在 paintSelf 内走 `Reactive<T>::get()`，禁止缓存 resolved style 进成员（TabButton/SplitPane/ScrollViewport/Dock/Floating 均已按此接线；UIText 沿用 _bAutoSize 粒度判据）
+- [x] UITreeView -> FTreeViewStyle（_styleKey="tree"）
+- [x] UITextField -> FTextFieldStyle（_styleKey="textfield"）
+- [x] UIMenu/UIMenuItem -> FMenuStyle（_styleKey="menu"，panel 走 menu.panel FPanelStyle）
+- [x] UISelectableRow -> FSelectableRowStyle（_styleKey="selectable"）
+- [x] UIDragFloat -> FDragFloatStyle（_styleKey="dragfloat"）
+- [x] UICheckBox -> FCheckBoxStyle（_styleKey="checkbox"）
+- [x] UIComboBox -> FComboBoxStyle（_styleKey="combobox"）
+- [x] UISlider -> FSliderStyle（_styleKey="slider"）
+- [x] UITableGrid -> FTableGridStyle（_styleKey="table"）
+- [x] UISpinBox / UIRadioButton / UIColorEdit chrome / UISearchComboBox -> typed styles
 
 ## Phase 4 — Workbench theme
 
 - [x] 定义 WorkbenchTheme（WorkbenchTheme.h：tokens 层 + buildWorkbenchTheme(dark/light)，全部 canonical key 配置期烘焙）
+- [x] 补表单/文案角色 key（tree/textfield/menu/selectable/dragfloat + checkbox/combobox/slider/table/spinbox/radio/coloredit/searchcombo + text.header/muted/error/eyebrow），避免 light theme 落到 dark fallback
+- [x] GameEditor `buildEditorTheme` 挂 EditorSurface；chrome 去掉 setColor 字面量
 - [x] FWorkbenchSurface 改用 theme key（壳层 chrome 交回 panel.window/panel.canvas/panel；highlight 保留显式色；toolbar label 走 text key）
 - [x] Dock demo / Editor demo / 通用 gallery 页统一接入 theme（canonical key 全部经 WorkbenchTheme；Gallery Section 3 迁移到 tree theme，FWidgetStyle/bindStyle app 消费点清零）
 - [x] 产出截图与回归基线（Script/gui_style_baseline.py 5 页 headless digest 基线归档）

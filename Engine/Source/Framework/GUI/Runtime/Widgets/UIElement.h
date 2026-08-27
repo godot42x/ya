@@ -196,9 +196,10 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     YA_REFLECT_FIELD(_hitFilter, .instanceEditable())
     YA_REFLECT_FIELD(_focusPolicy, .instanceEditable())
     YA_REFLECT_FIELD(_bAutoSize, .instanceEditable())
+    YA_REFLECT_FIELD(_styleKey, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UIElement(std::string name = "Widget");
+    explicit UIElement(std::string name = "Widget", std::string styleKey = {});
     virtual ~UIElement();
 
     UIElement(const UIElement&)            = delete;
@@ -229,6 +230,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Stable registry type ID, set by UITypeRegistry::createInstance (empty
     /// for framework-internal / direct make_shared instances).
     std::string _typeId;
+    /// Theme catalog key. Empty disables theme lookup. Styled subclasses pass
+    /// their family default through the constructor ("button", "panel", ...).
+    std::string _styleKey;
 
     /// Runtime type identity for reflection-based field serialization
     /// (UIDocument). Registry owns the authoring type ID; this is the C++
@@ -493,6 +497,15 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
             return;
         }
         _position = value;
+        invalidateProperty(EUIPropertyImpact::Layout);
+    }
+
+    void setStyleKey(std::string value)
+    {
+        if (_styleKey == value) {
+            return;
+        }
+        _styleKey = std::move(value);
         invalidateProperty(EUIPropertyImpact::Layout);
     }
 

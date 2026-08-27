@@ -163,6 +163,166 @@ struct FFloatingWindowStyle
     bool operator==(const FFloatingWindowStyle&) const = default;
 };
 
+/// Hierarchy / project tree: row fills + label + expand arrow. Geometry
+/// (rowHeight / indent / arrow width) stays on the widget — those are layout
+/// behavior, not look.
+struct FTreeViewStyle
+{
+    glm::vec4 textColor         = {0.90f, 0.92f, 0.95f, 1.0f};
+    FBrush    selectedFill      = FBrush::Solid({0.22f, 0.42f, 0.78f, 1.0f});
+    FBrush    hoveredFill       = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
+    glm::vec4 arrowColor        = {0.60f, 0.65f, 0.70f, 1.0f};
+    FBrush    arrowHoveredFill  = FBrush::Solid({0.32f, 0.36f, 0.44f, 1.0f});
+    uint32_t  fontSize          = 14;
+
+    bool operator==(const FTreeViewStyle&) const = default;
+};
+
+/// Single-line text field: fill, caret, text. Authoring fontSize on the
+/// widget is layout/behavior; look comes from this style when themed.
+struct FTextFieldStyle
+{
+    FBrush    backgroundFill = FBrush::Solid({0.08f, 0.09f, 0.12f, 1.0f});
+    glm::vec4 textColor      = {1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec4 caretColor     = {0.90f, 0.92f, 0.95f, 1.0f};
+    uint32_t  fontSize       = 16;
+
+    bool operator==(const FTextFieldStyle&) const = default;
+};
+
+/// Popup menu panel + item rows. Items resolve this key at paint; the panel
+/// uses `menu.panel` as an FPanelStyle so it stays a regular panel.
+struct FMenuStyle
+{
+    FBrush    itemNormalFill  = FBrush::Solid({0.13f, 0.14f, 0.17f, 1.0f});
+    FBrush    itemHoveredFill = FBrush::Solid({0.22f, 0.42f, 0.78f, 1.0f});
+    glm::vec4 textColor       = {0.90f, 0.92f, 0.95f, 1.0f};
+    uint32_t  fontSize        = 13;
+
+    bool operator==(const FMenuStyle&) const = default;
+};
+
+/// List / tree row chrome. Normal fill defaults to transparent so a row on
+/// a themed panel does not stamp a second surface.
+struct FSelectableRowStyle
+{
+    FBrush normalFill          = FBrush::Solid({0.16f, 0.17f, 0.20f, 0.0f});
+    FBrush hoveredFill         = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
+    FBrush selectedFill        = FBrush::Solid({0.22f, 0.42f, 0.78f, 1.0f});
+    FBrush selectedHoveredFill = FBrush::Solid({0.30f, 0.50f, 0.86f, 1.0f});
+
+    bool operator==(const FSelectableRowStyle&) const = default;
+};
+
+/// Inspector numeric drag: fill, dragging fill, text, outline.
+struct FDragFloatStyle
+{
+    FBrush    backgroundFill = FBrush::Solid({0.17f, 0.19f, 0.24f, 1.0f});
+    FBrush    draggingFill   = FBrush::Solid({0.18f, 0.24f, 0.34f, 1.0f});
+    glm::vec4 textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
+    glm::vec4 borderColor    = {0.30f, 0.33f, 0.40f, 1.0f};
+    uint32_t  fontSize       = 13;
+
+    bool operator==(const FDragFloatStyle&) const = default;
+};
+
+/// Check box: unchecked / hovered / checked fill + the check-mark tint.
+/// Box edge length stays on the widget.
+struct FCheckBoxStyle
+{
+    FBrush    boxFill      = FBrush::Solid({0.55f, 0.60f, 0.68f, 1.0f});
+    FBrush    hoveredFill  = FBrush::Solid({0.34f, 0.38f, 0.46f, 1.0f});
+    FBrush    checkedFill  = FBrush::Solid({0.24f, 0.46f, 0.82f, 1.0f});
+    glm::vec4 checkColor   = {0.95f, 0.96f, 0.98f, 1.0f};
+
+    bool operator==(const FCheckBoxStyle&) const = default;
+};
+
+/// Collapsed combo field. The popup list is a UIMenu and uses FMenuStyle.
+struct FComboBoxStyle
+{
+    FBrush    fieldFill   = FBrush::Solid({0.16f, 0.18f, 0.22f, 1.0f});
+    FBrush    hoveredFill = FBrush::Solid({0.22f, 0.25f, 0.30f, 1.0f});
+    glm::vec4 textColor   = {0.90f, 0.92f, 0.95f, 1.0f};
+    glm::vec4 arrowColor  = {0.68f, 0.72f, 0.78f, 1.0f};
+    uint32_t  fontSize    = 13;
+
+    bool operator==(const FComboBoxStyle&) const = default;
+};
+
+/// Horizontal slider track / value fill / thumb. Thumb size stays on the widget.
+struct FSliderStyle
+{
+    FBrush trackFill = FBrush::Solid({0.14f, 0.16f, 0.20f, 1.0f});
+    FBrush valueFill = FBrush::Solid({0.24f, 0.46f, 0.82f, 1.0f});
+    FBrush thumbFill = FBrush::Solid({0.88f, 0.90f, 0.94f, 1.0f});
+
+    bool operator==(const FSliderStyle&) const = default;
+};
+
+/// Table / grid chrome. Row height and column widths stay on the widget.
+struct FTableGridStyle
+{
+    FBrush    backgroundFill  = FBrush::Solid({0.12f, 0.13f, 0.16f, 1.0f});
+    FBrush    selectedFill    = FBrush::Solid({0.22f, 0.42f, 0.78f, 1.0f});
+    FBrush    hoveredFill     = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
+    glm::vec4 textColor       = {0.90f, 0.92f, 0.95f, 1.0f};
+    glm::vec4 headerTextColor = {0.62f, 0.66f, 0.72f, 1.0f};
+    glm::vec4 gridColor       = {0.20f, 0.22f, 0.27f, 1.0f};
+    uint32_t  fontSize        = 13;
+
+    bool operator==(const FTableGridStyle&) const = default;
+};
+
+/// Spin box: field + step buttons.
+struct FSpinBoxStyle
+{
+    FBrush    backgroundFill    = FBrush::Solid({0.17f, 0.19f, 0.24f, 1.0f});
+    FBrush    buttonFill        = FBrush::Solid({0.22f, 0.24f, 0.30f, 1.0f});
+    FBrush    buttonHoveredFill = FBrush::Solid({0.30f, 0.33f, 0.40f, 1.0f});
+    glm::vec4 textColor         = {0.90f, 0.92f, 0.95f, 1.0f};
+    glm::vec4 borderColor       = {0.30f, 0.33f, 0.40f, 1.0f};
+    uint32_t  fontSize          = 13;
+
+    bool operator==(const FSpinBoxStyle&) const = default;
+};
+
+/// Radio: hover row fill + outer/inner dots + label.
+struct FRadioButtonStyle
+{
+    FBrush    hoveredFill = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
+    glm::vec4 dotColor    = {0.88f, 0.90f, 0.94f, 1.0f};
+    glm::vec4 dotFillColor = {0.24f, 0.46f, 0.82f, 1.0f};
+    glm::vec4 textColor   = {0.90f, 0.92f, 0.95f, 1.0f};
+    uint32_t  fontSize    = 13;
+
+    bool operator==(const FRadioButtonStyle&) const = default;
+};
+
+/// Color edit chrome (swatch background / channel highlight). The edited
+/// `_color` is the control value, not a style field.
+struct FColorEditStyle
+{
+    FBrush    backgroundFill    = FBrush::Solid({0.12f, 0.13f, 0.17f, 1.0f});
+    glm::vec4 textColor         = {0.90f, 0.92f, 0.95f, 1.0f};
+    glm::vec4 channelHighlight  = {0.24f, 0.46f, 0.82f, 1.0f};
+    uint32_t  fontSize          = 13;
+
+    bool operator==(const FColorEditStyle&) const = default;
+};
+
+/// Search combo collapsed field. The popup is a UIMenu (FMenuStyle).
+struct FSearchComboStyle
+{
+    FBrush    backgroundFill = FBrush::Solid({0.12f, 0.13f, 0.17f, 1.0f});
+    FBrush    hoveredFill    = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
+    glm::vec4 textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
+    glm::vec4 caretColor     = {0.90f, 0.92f, 0.95f, 1.0f};
+    uint32_t  fontSize       = 13;
+
+    bool operator==(const FSearchComboStyle&) const = default;
+};
+
 /// Named style collection. Styles are Reactive so widgets can bind them and
 /// be notified on edit. Owned by the host (or a singleton); not tied to a
 /// specific tree so one set themes many widgets/windows.

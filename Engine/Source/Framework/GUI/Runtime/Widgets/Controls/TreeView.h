@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Widgets/Reactive.h"
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <functional>
@@ -26,7 +27,7 @@ namespace ya
 /// The widget flattens visible rows at paint (indent + arrow + label +
 /// selection/hover highlight) and hit-tests the same flatten at input. No
 /// virtualization, no per-row child widgets — the smallest closed loop.
-struct YA_GUI_API UITreeView : public UIElement
+struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeView, FTreeViewStyle>
 {
     /// One tree node (value type owned by the data source). `children` is a
     /// static subtree for now; dynamic child mutation is a later milestone.
@@ -64,14 +65,6 @@ struct YA_GUI_API UITreeView : public UIElement
     float     _indentWidth   = 16.0f;
     /// Width of the expand/collapse arrow button (also its hover/hit area).
     float     _arrowWidth    = 22.0f;
-    uint32_t  _fontSize      = 14;
-    glm::vec4 _textColor     = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 _selectedColor = {0.22f, 0.42f, 0.78f, 1.0f};
-    glm::vec4 _hoveredColor  = {0.24f, 0.26f, 0.31f, 1.0f};
-    glm::vec4 _arrowColor    = {0.60f, 0.65f, 0.70f, 1.0f};
-    /// Background of the arrow button while the pointer hovers it, signaling
-    /// that the arrow is clickable (it toggles the node's expand state).
-    glm::vec4 _arrowHoveredColor = {0.32f, 0.36f, 0.44f, 1.0f};
 
     /// Fired after a row is selected (with the node id).
     std::function<void(const std::string& id)> _onSelectionChanged;
@@ -81,6 +74,12 @@ struct YA_GUI_API UITreeView : public UIElement
     /// Visible row count under the current expand/filter state (dump /
     /// scenario assertions).
     [[nodiscard]] int getVisibleRowCount() const { return static_cast<int>(flattenVisible().size()); }
+
+    void setReorderable(bool value) { _bReorderable = value; }
+    void setOnReorderHandler(std::function<void(const std::string& fromId, const std::string& toId, int mode)> handler)
+    {
+        _onReorder = std::move(handler);
+    }
 
     // === Editing (editor-parity P5) ===
     /// When true a press on a row (not the arrow) starts a tree drag
@@ -98,10 +97,6 @@ struct YA_GUI_API UITreeView : public UIElement
     /// matching chains are shown expanded.
     void bindFilter(std::shared_ptr<Reactive<std::string>> ref);
 
-    bool canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
-    void onDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
-    void setDropHighlight(bool bHighlight) override;
-
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override
     {
@@ -118,6 +113,8 @@ struct YA_GUI_API UITreeView : public UIElement
     void clearTransientInputState() override;
 
   private:
+    friend struct FTreeViewReorderDragBehavior;
+    friend struct FTreeViewReorderDropBehavior;
     struct VisibleRow
     {
         const FNode* node  = nullptr;

@@ -28,7 +28,8 @@ std::shared_ptr<Font> runtimeFont(uint32_t fontSize)
 
 void UIMenuItem::paintSelf(UIFrameBuilder& builder)
 {
-    builder.addSprite(_layoutRect, _bHighlighted ? _hoveredColor : _normalColor, nullptr);
+    const FMenuStyle style = resolveWidgetStyle<FMenuStyle>(*this, _authoredStyle);
+    builder.addBrush(_layoutRect, _bHighlighted ? style.itemHoveredFill : style.itemNormalFill);
     auto font = runtimeFont(_fontSize);
     if (font) {
         Rect2D textRect = _layoutRect;
@@ -36,7 +37,7 @@ void UIMenuItem::paintSelf(UIFrameBuilder& builder)
         // measureText(), so label + 20px fits exactly with 10px each side.
         textRect.pos.x += 10.0f;
         textRect.extent.x = std::max(0.0f, textRect.extent.x - 20.0f);
-        builder.addText(textRect, _label, _textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
+        builder.addText(textRect, _label, style.textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
     }
 }
 
@@ -76,7 +77,7 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
 {
     // Content panel: colored backdrop sized to the items.
     auto panel = std::make_shared<UIPanel>("MenuPanel");
-    panel->setColor(_panelColor);
+    panel->_styleKey = "menu.panel";
     addDetachedChild(panel);
 
     auto list = std::make_shared<UIContainer>("MenuList");
@@ -110,6 +111,7 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
         auto menuItem = std::make_shared<UIMenuItem>(std::format("Menu{}", i));
         menuItem->_label    = items[i].label;
         menuItem->_fontSize = _fontSize;
+        menuItem->_styleKey = _styleKey;
         menuItem->setSize({maxLabelWidth + 20.0f, _itemHeight});
         // Raw `this` capture is safe: the items are owned by the menu
         // (subtree), so the menu outlives every item lambda.

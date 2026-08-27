@@ -26,12 +26,12 @@ namespace ya
 ///   - detach while pressed clears all transient state (tree + widget).
 /// Click callback is runtime-only (not serialized); hit testing is driven by
 /// the tree walker.
-struct YA_GUI_API UIButton : public UIElement
+struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, FButtonStyle>
 {
     YA_REFLECT_BEGIN(UIButton, UIElement)
     YA_REFLECT_END()
 
-    explicit UIButton(std::string name = "Button") : UIElement(std::move(name))
+    explicit UIButton(std::string name = "Button") : UIElement(std::move(name), "button")
     {
         _hitFilter = EWidgetHitFilter::Stop;
         // Buttons take part in Tab traversal (focus contract, Phase 2).
@@ -40,13 +40,6 @@ struct YA_GUI_API UIButton : public UIElement
     }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIButton>; }
-
-    /// Theme style key (style-system Phase 2/3). paintSelf resolves
-    /// FButtonStyle by this key (per-state FBrush incl. disabledFill) from
-    /// the tree theme; an empty key or an absent theme falls back to the
-    /// default-constructed FButtonStyle — the framework fallback. There are
-    /// no bare per-state color fields anymore (Phase 3 cleanup).
-    std::string _styleKey = "button";
 
     [[nodiscard]] UISingleChildLayout&       getContentLayout() { return _contentLayout; }
     [[nodiscard]] const UISingleChildLayout& getContentLayout() const { return _contentLayout; }

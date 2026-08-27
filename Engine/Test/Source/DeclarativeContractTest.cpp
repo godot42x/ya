@@ -166,6 +166,25 @@ TEST(DeclarativeContractTest, AppearanceModesCoverNoThemeAuthoredAndThemeOnly)
     EXPECT_EQ(themedSnapshot.items.front().color, glm::vec4(0.7f, 0.1f, 0.2f, 1.0f));
 }
 
+TEST(DeclarativeContractTest, DslSetStyleOverridesTheme)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    auto       theme = std::make_shared<UITheme>();
+    FButtonStyle themed;
+    themed.normalFill = FBrush::Solid({0.1f, 0.2f, 0.9f, 1.0f});
+    theme->define<FButtonStyle>("button", themed);
+    tree.setTheme(theme.get());
+
+    FButtonStyle authored;
+    authored.normalFill = FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f});
+    auto page = ui::button("go").setSize({80.0f, 32.0f}).setStyle(authored);
+    (void)ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page));
+
+    const UIFrameSnapshot snap = tree.buildSnapshot({});
+    ASSERT_FALSE(snap.items.empty());
+    EXPECT_EQ(snap.items.front().color, glm::vec4(0.9f, 0.2f, 0.1f, 1.0f));
+}
+
 TEST(DeclarativeContractTest, SnapshotDoesNotDependOnLiveWidgetAfterDetach)
 {
     WidgetTree tree({.width = 320, .height = 200});

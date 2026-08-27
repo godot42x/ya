@@ -13,6 +13,9 @@
 #include "GUI/Widgets/Style.h"
 #include "GUI/Widgets/WidgetTree.h"
 
+#include <optional>
+#include <utility>
+
 namespace ya
 {
 
@@ -67,5 +70,66 @@ const TStyle* resolveThemeStyle(const UIElement&        widget,
     }
     return nullptr;
 }
+
+/// Full resolve chain (plan §3.2): instance authored TStyle > style key in
+/// the tree theme > default-constructed TStyle. Authored wins without
+/// registering a theme-generation edge, so a theme switch does not clobber
+/// an instance override. `key` defaults to `widget._styleKey`.
+template <typename TStyle>
+TStyle resolveWidgetStyle(const UIElement&                 widget,
+                          const std::string&               key,
+                          const std::optional<TStyle>&     authored,
+                          ReactiveBase::EDirtyLevel        level = ReactiveBase::EDirtyLevel::Paint)
+{
+    if (authored.has_value()) {
+        return *authored;
+    }
+    if (!key.empty()) {
+        if (const TStyle* themed = resolveThemeStyle<TStyle>(widget, key, level)) {
+            return *themed;
+        }
+    }
+    return TStyle{};
+}
+
+template <typename TStyle>
+TStyle resolveWidgetStyle(const UIElement&             widget,
+                          const std::optional<TStyle>& authored,
+                          ReactiveBase::EDirtyLevel    level = ReactiveBase::EDirtyLevel::Paint)
+{
+    return resolveWidgetStyle<TStyle>(widget, widget._styleKey, authored, level);
+}
+
+/// Per-widget authored typed style. High-frequency DSL / MVC / designer
+/// path: `setStyle(TStyle)` overrides the theme catalog for this instance.
+/// Theme switch is the low-frequency path and only applies when this slot
+/// is empty.
+template <typename TWidget, typename TStyle>
+struct UIStyledWidget
+{
+    std::optional<TStyle> _authoredStyle;
+
+    void setStyle(TStyle style)
+    {
+        auto& self = static_cast<TWidget&>(*this);
+        if (_authoredStyle.has_value() && *_authoredStyle == style) {
+            return;
+        }
+        _authoredStyle = std::move(style);
+        self.invalidateProperty(EUIPropertyImpact::Layout);
+    }
+
+    void clearAuthoredStyle()
+    {
+        auto& self = static_cast<TWidget&>(*this);
+        if (!_authoredStyle.has_value()) {
+            return;
+        }
+        _authoredStyle.reset();
+        self.invalidateProperty(EUIPropertyImpact::Layout);
+    }
+
+    [[nodiscard]] bool hasAuthoredStyle() const { return _authoredStyle.has_value(); }
+};
 
 } // namespace ya

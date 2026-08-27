@@ -55,6 +55,31 @@ Framework 提供 retained WidgetTree、UIElement、Layout、Input、UIFrameBuild
 | Workbench / Editor 中纯组合 panel、toolbar group、inspector section | 多为 DSL + live attach/detach | 优先收敛为 builder helper；有局部状态时再升到 `UICompoundWidget` | 没有局部生命周期和自定义输入时，不需要为了“组件化”先引入 compound 基类。 |
 | future editor composite widget（如带局部状态的 property section、search panel、tool palette） | 尚未统一 | `UICompoundWidget` 优先归宿 | 这类对象天然符合“一次 construct + retained 子树 + 局部状态/生命周期”的 compound 定位。 |
 
+### G4.3a 逐文件迁移清单（2026-08-26）
+
+1. `Example/GUIWorkbench/Source/WorkbenchDemoPages.cpp`
+   - `FDemoDragItem` / `FDemoDropZone`：列为第一批行为化目标；后续应拆成“展示 widget + drag/drop behavior”，不再作为长期 demo widget 类型保留。
+   - `FVectorDemoCanvas`：保留为 demo/raw retained 对照，不纳入 `UICompoundWidget` 迁移线。它体现的是自定义 paint primitive，不是局部组合根。
+   - 页面中的纯组合区块（toolbar row、inspector section、property group）：优先继续收敛为 builder helper；只在引入局部 retained 状态/生命周期后才升级为 `UICompoundWidget`。
+2. `Engine/Source/Framework/GUI/Runtime/Widgets/Controls/SelectableRow.h/.cpp`
+   - 保持 leaf primitive 定位；下一刀优先审视 drag/drop 高亮、draggable payload、editor affordance，能外提的先外提到 `UIBehavior`。
+   - 不把 row presenter/model 责任反向吸回控件本体。
+3. `Engine/Source/Framework/GUI/Runtime/Widgets/Controls/TreeView.h/.cpp`
+   - 继续视为 specialized native retained control；不进入第一批 compound 化。
+   - 下一步关注点是把可复用的 reorder / drop affordance 从 widget 自身实现里抽出 behavior seam，而不是把 flatten / paint / hit-test 改写成 compound 组装。
+4. `Engine/Source/Framework/GUI/Runtime/Widgets/Controls/TableGrid.h/.cpp`
+   - 继续视为 specialized native retained control；不进入第一批 compound 化。
+   - 如后续出现复用型表格交互（selection helpers、editor affordance、drag handle），优先评估 behavior seam。
+5. `Engine/Source/Framework/GUI/Runtime/Widgets/Controls/MenuBar.h/.cpp`、`Menu.h/.cpp`、`Dialog.h/.cpp`
+   - 继续保留 native control；菜单、弹出、dismiss、focus 清理等生命周期仍由 retained control + tree route 明确负责。
+   - 若有可复用快捷键/tooltip/search/filter 交互，再单独抽 behavior，不先做 compound 包装。
+6. `Engine/Source/Framework/GUI/Runtime/Widgets/Controls/DockSpace.h/.cpp`、`DockFloatingWindow.h/.cpp`、`DockFloatingHost.h/.cpp`
+   - 明确排除出第一批 `UICompoundWidget` 迁移对象。
+   - Dock 的重心仍是 workspace/model projection、drop preview、floating 生命周期与 route/popup seam；这里需要的是 projection/behavior 收口，不是 compound 化。
+7. `Engine/Source/Framework/GUI/Runtime/Widgets/include/GUI/Widgets/CompoundWidget.h` 与 `Runtime/Declarative/include/GUI/Declarative/Construct.h`
+   - 当前只提供机制和入口，不代表现有复杂控件都应被倒入这条抽象。
+   - 下一步应优先拿未来 editor composite widget 试点，而不是回头把 specialized control 大规模改写成 `UICompoundWidget`。
+
 不在本计划中恢复 ImGui、强制 Game UI 使用 UITheme、一次性重写全部控件，或把 project-specific tokens 放入 framework。
 
 ### 默认构建路径：DSL 直接物化 live widget（2026-08-26）

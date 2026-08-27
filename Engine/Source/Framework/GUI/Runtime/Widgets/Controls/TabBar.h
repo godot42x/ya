@@ -12,7 +12,7 @@ namespace ya
 
 /// One tab strip button. Selection is owned by the parent UITabBar; the
 /// button reports clicks and keyboard navigation requests.
-struct YA_GUI_API UITabButton : public UIElement
+struct YA_GUI_API UITabButton : public UIElement, public UIStyledWidget<UITabButton, FTabStyle>
 {
     YA_REFLECT_BEGIN(UITabButton, UIElement)
     YA_REFLECT_FIELD(_label, .instanceEditable())
@@ -20,7 +20,7 @@ struct YA_GUI_API UITabButton : public UIElement
     YA_REFLECT_FIELD(_fontSize, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UITabButton(std::string name = "TabButton") : UIElement(std::move(name))
+    explicit UITabButton(std::string name = "TabButton") : UIElement(std::move(name), "tab")
     {
         _hitFilter   = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
@@ -35,13 +35,6 @@ struct YA_GUI_API UITabButton : public UIElement
     std::string _label;
     bool        _bSelected = false;
     uint32_t    _fontSize  = 13;
-
-    /// Theme style key (style-system Phase 2/3). paintSelf/measure resolve
-    /// FTabStyle by this key (fills + accent + text + padding) from the tree
-    /// theme; an empty key or absent theme falls back to the
-    /// default-constructed style — the framework fallback (Phase 3 cleanup:
-    /// no bare color fields).
-    std::string _styleKey = "tab";
 
     /// Fired when this tab is activated (click / Enter / Space).
     std::function<void()> _onActivated;
@@ -67,9 +60,9 @@ struct YA_GUI_API UITabButton : public UIElement
 /// Tab strip (imgui-demo-style page switcher, gui-app-bootstrap Phase 4).
 /// Owns the selected index; addTab() wires buttons that select themselves.
 /// Left / Right on a focused tab moves focus + selection (wrap-around).
-struct YA_GUI_API UITabBar : public UIContainer
+struct YA_GUI_API UITabBar : public UIContainer, public UIStyledWidget<UITabBar, FTabStyle>
 {
-    explicit UITabBar(std::string name = "TabBar") : UIContainer(std::move(name))
+    explicit UITabBar(std::string name = "TabBar") : UIContainer(std::move(name), "tab")
     {
         setDirection(EWidgetBoxLayout::Horizontal);
         setSpacing(2.0f);
@@ -98,10 +91,6 @@ struct YA_GUI_API UITabBar : public UIContainer
     std::function<void(int index, const std::string& label)> _onTabDragBegin;
 
     std::function<void(int selectedIndex)> _onTabSelected;
-
-    /// Theme style key for the strip's own chrome (bottom separator rule,
-    /// empty-zone placeholder); shares the "tab" key with UITabButton.
-    std::string _styleKey = "tab";
 
     /// When the bar has no tabs, draw this placeholder text (and keep a
     /// header-sized height) so an empty zone is still a visible drop target

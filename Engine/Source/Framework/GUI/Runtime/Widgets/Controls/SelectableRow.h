@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <functional>
@@ -21,22 +22,14 @@ namespace ya
 ///     inside completes an activation;
 ///   - Enter / Space on the focused row activates;
 ///   - detach while pressed clears all transient state.
-struct YA_GUI_API UISelectableRow : public UIElement
+struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISelectableRow, FSelectableRowStyle>
 {
     YA_REFLECT_BEGIN(UISelectableRow, UIElement)
     YA_REFLECT_FIELD(_itemId, .instanceEditable())
     YA_REFLECT_FIELD(_bSelected, .instanceEditable())
-    YA_REFLECT_FIELD(_normalColor, .instanceEditable())
-    YA_REFLECT_FIELD(_hoveredColor, .instanceEditable())
-    YA_REFLECT_FIELD(_selectedColor, .instanceEditable())
-    YA_REFLECT_FIELD(_selectedHoveredColor, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UISelectableRow(std::string name = "Row") : UIElement(std::move(name))
-    {
-        _hitFilter  = EWidgetHitFilter::Stop;
-        _focusPolicy = EWidgetFocusPolicy::Focusable;
-    }
+    explicit UISelectableRow(std::string name = "Row");
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UISelectableRow>; }
 
@@ -59,6 +52,14 @@ struct YA_GUI_API UISelectableRow : public UIElement
     /// Visual drop-target feedback, written by the tree drag session.
     VisualFlag _bDropHighlighted{*this};
 
+    void setDraggable(bool value) { _bDraggable = value; }
+    void setDragPayload(std::string value) { _dragPayload = std::move(value); }
+    void setDragGhostLabel(std::string value) { _dragGhostLabel = std::move(value); }
+    void setOnDropHandler(std::function<void(const std::string& payload)> handler)
+    {
+        _onDropped = std::move(handler);
+    }
+
     /// Enable drag initiation: press then move past a threshold starts a
     /// tree drag session with `_dragPayload` (defaults to _itemId) and a
     /// ghost labelled `_dragGhostLabel` (defaults to _itemId).
@@ -66,21 +67,12 @@ struct YA_GUI_API UISelectableRow : public UIElement
     std::string _dragPayload;
     std::string _dragGhostLabel;
 
-    glm::vec4 _normalColor         = {0.16f, 0.17f, 0.20f, 0.0f}; // transparent by default
-    glm::vec4 _hoveredColor        = {0.24f, 0.26f, 0.31f, 1.0f};
-    glm::vec4 _selectedColor       = {0.22f, 0.42f, 0.78f, 1.0f};
-    glm::vec4 _selectedHoveredColor = {0.30f, 0.50f, 0.86f, 1.0f};
-
     std::function<void(const std::string& itemId)> _onSelect;
     std::function<void(const std::string& itemId)> _onActivate;
     /// Fired when this row is the drop target of a completed drag (payload
     /// = the dragged row's payload). The row stays selected as-is; the
     /// presenter owns the model mutation (e.g. reparent).
     std::function<void(const std::string& payload)> _onDropped;
-
-    bool canAcceptDrop(const std::string& payload, const glm::vec2&) override;
-    void onDrop(const std::string& payload, const glm::vec2&) override;
-    void setDropHighlight(bool bHighlight) override { _bDropHighlighted = bHighlight; }
 
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
@@ -90,6 +82,7 @@ struct YA_GUI_API UISelectableRow : public UIElement
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 
   private:
+    friend struct FSelectableRowDragDropBehavior;
     VisualFlag _bPressed{*this};
     VisualFlag _bHovered{*this};
     glm::vec2  _pressPoint{};

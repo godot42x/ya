@@ -13,7 +13,7 @@ namespace ya
 struct Font;
 
 /// Text element rendered through the font atlas.
-struct YA_GUI_API UIText : public UIElement
+struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FTextStyle>
 {
     YA_REFLECT_BEGIN(UIText, UIElement)
     YA_REFLECT_FIELD(_text, .instanceEditable())
@@ -23,7 +23,7 @@ struct YA_GUI_API UIText : public UIElement
     YA_REFLECT_FIELD(_vAlign, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UIText(std::string name = "Text") : UIElement(std::move(name)) {}
+    explicit UIText(std::string name = "Text") : UIElement(std::move(name), "text") {}
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIText>; }
 
@@ -91,19 +91,10 @@ struct YA_GUI_API UIText : public UIElement
         return _textBinding ? _textBinding->get(level) : _text;
     }
 
-    /// Resolved text style (theme key first when un-authored, then the
-    /// authoring fields). Paint attributes only — never cache the result in
-    /// a member (would detach from the reactive dependency graph). The
-    /// legacy FWidgetStyle bindStyle path was removed with the Phase 3
-    /// cleanup (unified binding path: resolveThemeStyle paint-time get()).
+    /// Resolved text style: authored TStyle > setColor degenerate override >
+    /// theme key > authoring fields. Never cache the result (would detach
+    /// from the reactive dependency graph).
     [[nodiscard]] FTextStyle resolvedStyle(ReactiveBase::EDirtyLevel level = ReactiveBase::EDirtyLevel::Paint) const;
-
-    /// Theme style key (style-system Phase 2/3). When the owning tree has a
-    /// theme that defines this key as an FTextStyle AND the text has no
-    /// authored color (default white — e.g. button labels), resolvedStyle
-    /// reads from it; authored _color wins over the theme (explicit override
-    /// first in the resolve chain). Empty key disables theme resolution.
-    std::string _styleKey = "text";
 
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;

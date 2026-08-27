@@ -44,7 +44,8 @@ size_t nextCodePoint(const std::string& text, size_t byteIndex)
 
 void UITextField::paintSelf(UIFrameBuilder& builder)
 {
-    builder.addSprite(_layoutRect, _backgroundColor, nullptr);
+    const FTextFieldStyle style = resolveWidgetStyle<FTextFieldStyle>(*this, _authoredStyle);
+    builder.addBrush(_layoutRect, style.backgroundFill);
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (!font) {
@@ -70,12 +71,12 @@ void UITextField::paintSelf(UIFrameBuilder& builder)
     // (Guardrail G1: the base paint template clips this widget's own rect.)
     Rect2D textRect = _layoutRect;
     textRect.pos.x -= _scrollX;
-    builder.addText(textRect, _text, _textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
+    builder.addText(textRect, _text, style.textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
     if (_bFocused) {
         const float caretX = _layoutRect.pos.x + caretOffset - _scrollX;
         const float caretY = _layoutRect.pos.y + (_layoutRect.extent.y - font->lineHeight) * 0.5f;
         builder.addSprite(Rect2D{.pos = {caretX, caretY}, .extent = {1.0f, font->lineHeight}},
-                          _caretColor, nullptr);
+                          style.caretColor, nullptr);
     }
 }
 

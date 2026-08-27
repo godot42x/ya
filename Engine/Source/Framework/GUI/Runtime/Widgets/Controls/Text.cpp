@@ -89,24 +89,19 @@ std::vector<std::string> UIText::wrapText(const std::string& text,
 
 FTextStyle UIText::resolvedStyle(ReactiveBase::EDirtyLevel level) const
 {
-    // Preferred path (style-system Phase 3/4): the tree theme resolves an
-    // FTextStyle by key. resolveThemeStyle registers both the theme-generation
-    // edge and the style Reactive edge, so a theme switch OR an edit to this
-    // text's style repaints (and, at Layout level, re-measures) it.
-    //
-    // Explicit authoring wins over the theme (resolve chain "widget explicit
-    // override" first, plan §3.2): a text with a non-default authored _color
-    // keeps it under any mounted theme, so headers/status/body hierarchy
-    // stays stable in every look. Only un-authored text (default white) is
-    // theme-driven — e.g. button labels follow the theme's text color.
+    // Resolve chain (plan §3.2): authored TStyle > setColor degenerate
+    // override > theme key > authoring fields. Theme lookup registers the
+    // generation + style Reactive edges; an authored TStyle does not, so a
+    // theme switch cannot clobber an instance override.
+    if (_authoredStyle.has_value()) {
+        return *_authoredStyle;
+    }
     const bool bAuthoredColor = !(_color == glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
     if (!_styleKey.empty() && !bAuthoredColor) {
         if (const FTextStyle* themed = resolveThemeStyle<FTextStyle>(*this, _styleKey, level)) {
             return *themed;
         }
     }
-    // Fallback: authoring fields (this text has an explicit authored color,
-    // or no theme defines its key). Paint attributes only.
     FTextStyle style;
     style.fillColor = FBrush::Solid(_color);
     style.textColor = _color;

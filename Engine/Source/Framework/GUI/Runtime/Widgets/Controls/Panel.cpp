@@ -7,11 +7,13 @@ namespace ya
 
 void UIPanel::paintSelf(UIFrameBuilder& builder)
 {
-    // Theme resolution (style-system Phase 3): a panel WITHOUT an explicitly
-    // authored fill (setColor never called) draws its fill brush from
-    // FPanelStyle. Explicit authoring wins over the theme (resolve chain
-    // "widget explicit override" first, plan §3.2), so presenters that
-    // recolor panels keep working under any mounted theme.
+    // Resolve chain (plan §3.2): authored FPanelStyle > setColor degenerate
+    // override > theme key > authoring fill/image. Presenters that recolor
+    // via setColor keep working under any mounted theme.
+    if (_authoredStyle.has_value()) {
+        builder.addBrush(_layoutRect, _authoredStyle->fillColor);
+        return;
+    }
     if (!_styleKey.empty() && !_bExplicitFill) {
         if (const FPanelStyle* style = resolveThemeStyle<FPanelStyle>(*this, _styleKey)) {
             builder.addBrush(_layoutRect, style->fillColor);

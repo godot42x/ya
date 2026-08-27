@@ -98,10 +98,13 @@ void UICheckBox::paintSelf(UIFrameBuilder& builder)
     boxRect.extent = glm::vec2(_boxSize);
     boxRect.pos.y += std::max(0.0f, (_layoutRect.extent.y - _boxSize) * 0.5f);
 
-    const glm::vec4 boxColor = _bChecked ? _checkedColor : (_bHovered ? _hoveredColor : _boxColor);
-    builder.addSprite(boxRect, boxColor, nullptr);
+    const FCheckBoxStyle style = resolveWidgetStyle<FCheckBoxStyle>(*this, _authoredStyle);
+    const FBrush& fill = _bChecked ? style.checkedFill
+                         : _bHovered ? style.hoveredFill
+                                     : style.boxFill;
+    builder.addBrush(boxRect, fill);
     if (_bChecked) {
-        paintCheckMark(builder, boxRect, _checkColor);
+        paintCheckMark(builder, boxRect, style.checkColor);
     }
 }
 

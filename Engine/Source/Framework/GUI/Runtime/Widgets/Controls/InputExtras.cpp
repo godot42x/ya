@@ -154,20 +154,21 @@ void UIDragFloat::onFocusLost()
 
 void UIDragFloat::paintSelf(UIFrameBuilder& builder)
 {
-    builder.addSprite(_layoutRect, _bDragging ? _draggingColor : _backgroundColor, nullptr);
-    builder.addRectOutline(_layoutRect, _borderColor, 1.0f);
+    const FDragFloatStyle style = resolveWidgetStyle<FDragFloatStyle>(*this, _authoredStyle);
+    builder.addBrush(_layoutRect, _bDragging ? style.draggingFill : style.backgroundFill);
+    builder.addRectOutline(_layoutRect, style.borderColor, 1.0f);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (!font) {
         return;
     }
     const std::string shown = _bEditing ? _editBuffer : std::format("{:.{}f}", _value, _decimals);
-    builder.addText(_layoutRect, shown, _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    builder.addText(_layoutRect, shown, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     if (_bEditing) {
         const float textW  = font->measureText(shown);
         const float caretX = _layoutRect.pos.x + (_layoutRect.extent.x + textW) * 0.5f + 1.0f;
         const float caretY = _layoutRect.pos.y + (_layoutRect.extent.y - font->lineHeight) * 0.5f;
         builder.addSprite(Rect2D{.pos = {caretX, caretY}, .extent = {1.0f, font->lineHeight}},
-                          _textColor, nullptr);
+                          style.textColor, nullptr);
     }
 }
 
@@ -337,29 +338,30 @@ int UISpinBox::zoneFromPointer(float localX) const
 
 void UISpinBox::paintSelf(UIFrameBuilder& builder)
 {
-    builder.addSprite(_layoutRect, _backgroundColor, nullptr);
-    builder.addRectOutline(_layoutRect, _borderColor, 1.0f);
+    const FSpinBoxStyle style = resolveWidgetStyle<FSpinBoxStyle>(*this, _authoredStyle);
+    builder.addBrush(_layoutRect, style.backgroundFill);
+    builder.addRectOutline(_layoutRect, style.borderColor, 1.0f);
     const float zoneWidth = 26.0f;
     const Rect2D minusRect{.pos = _layoutRect.pos, .extent = {zoneWidth, _layoutRect.extent.y}};
     const Rect2D plusRect{.pos = {_layoutRect.pos.x + _layoutRect.extent.x - zoneWidth, _layoutRect.pos.y},
                           .extent = {zoneWidth, _layoutRect.extent.y}};
-    builder.addSprite(minusRect, _hoveredZone == 0 ? _buttonHoverColor : _buttonColor, nullptr);
-    builder.addSprite(plusRect, _hoveredZone == 1 ? _buttonHoverColor : _buttonColor, nullptr);
+    builder.addBrush(minusRect, _hoveredZone == 0 ? style.buttonHoveredFill : style.buttonFill);
+    builder.addBrush(plusRect, _hoveredZone == 1 ? style.buttonHoveredFill : style.buttonFill);
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (!font) {
         return;
     }
-    builder.addText(minusRect, "-", _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
-    builder.addText(plusRect, "+", _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    builder.addText(minusRect, "-", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    builder.addText(plusRect, "+", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     const std::string shown = _bEditing ? _editBuffer : std::format("{:.2f}", _value);
-    builder.addText(_layoutRect, shown, _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    builder.addText(_layoutRect, shown, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     if (_bEditing) {
         const float textW  = font->measureText(shown);
         const float caretX = _layoutRect.pos.x + (_layoutRect.extent.x + textW) * 0.5f + 1.0f;
         const float caretY = _layoutRect.pos.y + (_layoutRect.extent.y - font->lineHeight) * 0.5f;
         builder.addSprite(Rect2D{.pos = {caretX, caretY}, .extent = {1.0f, font->lineHeight}},
-                          _textColor, nullptr);
+                          style.textColor, nullptr);
     }
 }
 
@@ -465,8 +467,9 @@ bool UISpinBox::handleInputEvent(const Event& event, const WidgetEventContext& c
 
 void UIRadioButton::paintSelf(UIFrameBuilder& builder)
 {
+    const FRadioButtonStyle style = resolveWidgetStyle<FRadioButtonStyle>(*this, _authoredStyle);
     if (_bHovered) {
-        builder.addSprite(_layoutRect, _hoveredColor, nullptr);
+        builder.addBrush(_layoutRect, style.hoveredFill);
     }
 
     const float dotSize = 14.0f;
@@ -474,11 +477,11 @@ void UIRadioButton::paintSelf(UIFrameBuilder& builder)
         .pos    = {_layoutRect.pos.x + 4.0f, _layoutRect.pos.y + (_layoutRect.extent.y - dotSize) * 0.5f},
         .extent = {dotSize, dotSize},
     };
-    builder.addSprite(dotRect, _dotColor, nullptr);
+    builder.addSprite(dotRect, style.dotColor, nullptr);
     if (_bChecked) {
         const float inset = 4.0f;
         builder.addSprite(Rect2D{.pos = dotRect.pos + glm::vec2(inset), .extent = dotRect.extent - glm::vec2(inset * 2.0f)},
-                          _dotFillColor, nullptr);
+                          style.dotFillColor, nullptr);
     }
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
@@ -487,7 +490,7 @@ void UIRadioButton::paintSelf(UIFrameBuilder& builder)
             .pos    = {_layoutRect.pos.x + 24.0f, _layoutRect.pos.y},
             .extent = {_layoutRect.extent.x - 24.0f, _layoutRect.extent.y},
         };
-        builder.addText(labelRect, _label, _textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
+        builder.addText(labelRect, _label, style.textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
     }
 }
 
@@ -580,7 +583,8 @@ void UIColorEdit::closePalette()
 
 void UIColorEdit::paintSelf(UIFrameBuilder& builder)
 {
-    builder.addSprite(_layoutRect, _backgroundColor, nullptr);
+    const FColorEditStyle style = resolveWidgetStyle<FColorEditStyle>(*this, _authoredStyle);
+    builder.addBrush(_layoutRect, style.backgroundFill);
     builder.addSprite(swatchRect(), _color, nullptr);
 
     // Channel strip: four cells, the active one highlighted.
@@ -596,13 +600,13 @@ void UIColorEdit::paintSelf(UIFrameBuilder& builder)
             .extent = {cellW, cellH},
         };
         if (ch == _activeChannel) {
-            builder.addSprite(cell, _channelHighlight, nullptr);
+            builder.addSprite(cell, style.channelHighlight, nullptr);
         }
         else {
             builder.addSprite(cell, _color * glm::vec4(0.4f, 0.4f, 0.4f, 1.0f), nullptr);
         }
         if (font) {
-            builder.addText(cell, kNames[ch], _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+            builder.addText(cell, kNames[ch], style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
         }
     }
 }
@@ -775,19 +779,20 @@ void UISearchComboBox::clearTransientInputState()
 
 void UISearchComboBox::paintSelf(UIFrameBuilder& builder)
 {
-    builder.addSprite(_layoutRect, _bHovered ? _hoveredColor : _backgroundColor, nullptr);
+    const FSearchComboStyle style = resolveWidgetStyle<FSearchComboStyle>(*this, _authoredStyle);
+    builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.backgroundFill);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (!font) {
         return;
     }
     const std::string shown = _bFocused ? (_filter.empty() ? "(type to filter)" : _filter)
                                         : currentLabel();
-    builder.addText(_layoutRect, shown, _textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
+    builder.addText(_layoutRect, shown, style.textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
     if (_bFocused) {
         const float caretX = _layoutRect.pos.x + 4.0f + font->measureText(shown);
         const float caretY = _layoutRect.pos.y + (_layoutRect.extent.y - font->lineHeight) * 0.5f;
         builder.addSprite(Rect2D{.pos = {caretX, caretY}, .extent = {1.0f, font->lineHeight}},
-                          _caretColor, nullptr);
+                          style.caretColor, nullptr);
     }
 }
 

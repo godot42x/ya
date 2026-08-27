@@ -14,7 +14,7 @@ struct YA_GUI_API UIContainer : public UIElement
     YA_REFLECT_BEGIN(UIContainer, UIElement)
     YA_REFLECT_END()
 
-    explicit UIContainer(std::string name = "Container");
+    explicit UIContainer(std::string name = "Container", std::string styleKey = {});
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIContainer>; }
 

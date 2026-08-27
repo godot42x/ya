@@ -6,8 +6,8 @@
 namespace ya
 {
 
-UIContainer::UIContainer(std::string name)
-    : UIElement(std::move(name))
+UIContainer::UIContainer(std::string name, std::string styleKey)
+    : UIElement(std::move(name), std::move(styleKey))
 {
     _boxLayout.setOwner(*this);
 }

@@ -26,7 +26,7 @@ struct UIDockWorkspace;
 ///     and either re-docks onto a DockSpace / another floating window or moves
 ///     the window when released in empty space;
 ///   - the close button re-docks the active tab back to the dock tree's root.
-struct YA_GUI_API UIDockFloatingWindow : public UIContainer
+struct YA_GUI_API UIDockFloatingWindow : public UIContainer, public UIStyledWidget<UIDockFloatingWindow, FFloatingWindowStyle>
 {
     explicit UIDockFloatingWindow(std::string name, FDockFloatingWindowId floatingId,
                                   std::shared_ptr<UIDockWorkspace> ws);
@@ -49,18 +49,6 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void clearTransientInputState() override;
 
-    /// Accept dock-panel drops that would merge a tab into this window.
-    bool canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
-    /// Delegate the actual merge to the workspace's DockSpace.
-    void onDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
-
-    /// Theme style key (style-system Phase 2/3). When the owning tree has a
-    /// theme that defines this key as an FFloatingWindowStyle, paintSelf
-    /// resolves body/inner/border + the resize-handle edge affordance from it,
-    /// and resize clamps read minSize from it. Empty key disables theme
-    /// resolution (framework fallback = FFloatingWindowStyle defaults).
-    std::string _styleKey = "floating";
-
     enum class EResizeEdge : uint8_t
     {
         Left,
@@ -73,6 +61,7 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer
     void applyResizeFromEdge(EResizeEdge edge, const glm::vec2& pointerDelta);
 
   private:
+    friend struct FDockFloatingWindowDropTargetBehavior;
 
     void beginDockDrag();
     void beginWindowMove();

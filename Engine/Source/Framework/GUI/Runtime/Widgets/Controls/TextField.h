@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <algorithm>
@@ -20,18 +21,15 @@ namespace ya
 ///     loss — the workspace owns the text fact source, the field only edits
 ///     its own buffer;
 ///   - detach clears all transient state via the tree contract.
-struct YA_GUI_API UITextField : public UIElement
+struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextField, FTextFieldStyle>
 {
     YA_REFLECT_BEGIN(UITextField, UIElement)
     YA_REFLECT_FIELD(_text, .instanceEditable())
     YA_REFLECT_FIELD(_fontSize, .instanceEditable())
-    YA_REFLECT_FIELD(_textColor, .instanceEditable())
-    YA_REFLECT_FIELD(_backgroundColor, .instanceEditable())
-    YA_REFLECT_FIELD(_caretColor, .instanceEditable())
     YA_REFLECT_FIELD(_maxLength, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UITextField(std::string name = "TextField") : UIElement(std::move(name))
+    explicit UITextField(std::string name = "TextField") : UIElement(std::move(name), "textfield")
     {
         _hitFilter   = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
@@ -41,9 +39,6 @@ struct YA_GUI_API UITextField : public UIElement
 
     std::string _text            = "";
     uint32_t    _fontSize        = 16;
-    glm::vec4   _textColor       = {1.0f, 1.0f, 1.0f, 1.0f};
-    glm::vec4   _backgroundColor = {0.08f, 0.09f, 0.12f, 1.0f};
-    glm::vec4   _caretColor      = {0.90f, 0.92f, 0.95f, 1.0f};
     uint32_t    _maxLength       = 256;
 
     /// Changed-only text setter (GI-105): repaint on a real change. Presenters

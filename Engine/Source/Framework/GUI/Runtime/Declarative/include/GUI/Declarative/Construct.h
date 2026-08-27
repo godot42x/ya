@@ -184,6 +184,34 @@ class TUIWidgetBuilder
         return std::move(derived());
     }
 
+    [[nodiscard]] TDerived& setStyleKey(std::string value) &
+    {
+        _widget->setStyleKey(std::move(value));
+        return derived();
+    }
+
+    [[nodiscard]] TDerived&& setStyleKey(std::string value) &&
+    {
+        _widget->setStyleKey(std::move(value));
+        return std::move(derived());
+    }
+
+    template <typename TStyle>
+    [[nodiscard]] TDerived& setStyle(TStyle style) &
+        requires requires(TWidget& w, TStyle&& s) { w.setStyle(std::forward<TStyle>(s)); }
+    {
+        _widget->setStyle(std::move(style));
+        return derived();
+    }
+
+    template <typename TStyle>
+    [[nodiscard]] TDerived&& setStyle(TStyle style) &&
+        requires requires(TWidget& w, TStyle&& s) { w.setStyle(std::forward<TStyle>(s)); }
+    {
+        _widget->setStyle(std::move(style));
+        return std::move(derived());
+    }
+
   protected:
     std::shared_ptr<TWidget> _widget;
 
@@ -454,18 +482,6 @@ class UIPanelWidgetBuilder final : public TUIWidgetChildrenBuilder<UIPanel, UIPa
     [[nodiscard]] UIPanelWidgetBuilder&& setCornerRadius(float value) &&
     {
         _widget->setCornerRadius(value);
-        return std::move(*this);
-    }
-
-    [[nodiscard]] UIPanelWidgetBuilder& setStyleKey(std::string value) &
-    {
-        _widget->_styleKey = std::move(value);
-        return *this;
-    }
-
-    [[nodiscard]] UIPanelWidgetBuilder&& setStyleKey(std::string value) &&
-    {
-        _widget->_styleKey = std::move(value);
         return std::move(*this);
     }
 };

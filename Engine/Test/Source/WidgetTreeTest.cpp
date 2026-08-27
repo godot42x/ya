@@ -15,6 +15,7 @@
 #include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
+#include "GUI/Widgets/Controls/DockFloatingWindow.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -1515,6 +1516,52 @@ TEST(WidgetTreeTest, DragOverDockSetsPointSensitiveDropPreview)
     tree.updateDrag({9000.0f, 9000.0f});
     EXPECT_FALSE(dock->hasDropPreview());
     tree.endDrag({9000.0f, 9000.0f}); // no target: clean finish
+}
+
+TEST(WidgetTreeTest, DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTarget)
+{
+    WidgetTree tree({.width = 1000, .height = 700});
+    auto       ws = std::make_shared<UIDockWorkspace>();
+    ws->bAllowFloating = true;
+    ws->bAllowTearOff  = true;
+
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    dock->_anchorMin = {0.0f, 0.0f};
+    dock->_anchorMax = {1.0f, 1.0f};
+    dock->setWorkspace(ws);
+    tree.attachToLayer(WidgetTree::ELayer::Content, dock);
+
+    auto panelA = std::make_shared<UIPanel>("PanelA");
+    auto panelB = std::make_shared<UIPanel>("PanelB");
+    tree.attachToLayer(WidgetTree::ELayer::Content, panelA);
+    tree.attachToLayer(WidgetTree::ELayer::Content, panelB);
+    const DockPanelId panelAId = ws->addPanel("SceneA", panelA);
+    const DockPanelId panelBId = ws->addPanel("SceneB", panelB);
+
+    const FDockFloatingWindowId floatingId = ws->tearOffPanel(panelAId, {120.0f, 120.0f}, {320.0f, 240.0f});
+    ASSERT_NE(floatingId, kInvalidFloatingWindowId);
+    auto floating = std::make_shared<UIDockFloatingWindow>("Floating", floatingId, ws);
+    tree.attachToLayer(WidgetTree::ELayer::Popup, floating);
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    auto source = std::make_shared<UIPanel>("Source");
+    source->setPosition({20.0f, 20.0f});
+    source->setSize({30.0f, 30.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, source);
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    tree.beginDrag(source.get(), std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelBId), "SceneB",
+                   {}, /*bShowGhost=*/true, /*bSkipSourceInHitTest=*/true);
+    tree.updateDrag({180.0f, 180.0f});
+    ASSERT_TRUE(tree.isDragging());
+    tree.endDrag({180.0f, 180.0f});
+
+    const auto* record = ws->findFloatingById(floatingId);
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->panelIds.size(), 2u);
+    EXPECT_EQ(record->activePanelId, panelBId);
+    EXPECT_TRUE(std::find(record->panelIds.begin(), record->panelIds.end(), panelAId) != record->panelIds.end());
+    EXPECT_TRUE(std::find(record->panelIds.begin(), record->panelIds.end(), panelBId) != record->panelIds.end());
 }
 
 TEST(WidgetTreeTest, DragObserverReceivesEveryMoveAndTargetChanges)

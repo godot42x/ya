@@ -5,6 +5,7 @@
 #include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/UIBehavior.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -24,6 +25,34 @@ bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 
 constexpr float kResizeThickness = 6.0f;
 constexpr float kCornerGripSize  = 14.0f;
+
+struct FDockFloatingWindowDropTargetBehavior final : public UIDropTargetBehavior
+{
+    FDockFloatingWindowDropTargetBehavior()
+    {
+        acceptPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        {
+            auto* window = dynamic_cast<UIDockFloatingWindow*>(&owner);
+            UIDockSpace* space = window && window->_ws ? window->_ws->dockSpace() : nullptr;
+            if (!space) {
+                return false;
+            }
+            const auto preview = space->dropPreviewFor(payload, logicalPoint);
+            return preview.has_value() && preview->bMerge &&
+                   preview->targetFloatingId == window->_floatingId && !preview->bDisabled;
+        };
+        handleDroppedPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        {
+            auto* window = dynamic_cast<UIDockFloatingWindow*>(&owner);
+            if (!window) {
+                return;
+            }
+            if (UIDockSpace* space = window->_ws ? window->_ws->dockSpace() : nullptr) {
+                space->onDrop(payload, logicalPoint);
+            }
+        };
+    }
+};
 
 struct FResizeHandle final : UIElement
 {
@@ -64,13 +93,9 @@ struct FResizeHandle final : UIElement
         // Theme resolution (style-system Phase 3): the edge affordance color
         // comes from the owner window's FFloatingWindowStyle when its key
         // resolves (same tree; the handle registers its own generation edge).
-        FFloatingWindowStyle style;
-        if (_owner && !_owner->_styleKey.empty()) {
-            if (const FFloatingWindowStyle* themed =
-                    resolveThemeStyle<FFloatingWindowStyle>(*this, _owner->_styleKey)) {
-                style = *themed;
-            }
-        }
+        const FFloatingWindowStyle style =
+            _owner ? resolveWidgetStyle<FFloatingWindowStyle>(*this, _owner->_styleKey, _owner->_authoredStyle)
+                   : FFloatingWindowStyle{};
         const glm::vec4 edgeColor = style.edgeAffordance;
         switch (_edge) {
         case UIDockFloatingWindow::EResizeEdge::Left:
@@ -154,7 +179,7 @@ struct FResizeHandle final : UIElement
 
 UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindowId floatingId,
                                            std::shared_ptr<UIDockWorkspace> ws)
-    : UIContainer(std::move(name))
+    : UIContainer(std::move(name), "floating")
     , _floatingId(floatingId)
     , _ws(std::move(ws))
 {
@@ -162,6 +187,7 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
     setSpacing(0.0f);
     setClipChildren(true);
     _hitFilter = EWidgetHitFilter::Stop;
+    addBehavior(std::make_shared<FDockFloatingWindowDropTargetBehavior>());
 
     auto header = std::make_shared<UIContainer>(std::format("{}_Header", _name));
     header->setDirection(EWidgetBoxLayout::Horizontal);
@@ -314,13 +340,7 @@ void UIDockFloatingWindow::paintSelf(UIFrameBuilder& builder)
     // default-constructed style is the fallback (no magic literals). Pure
     // visual, Paint level (minSize is consumed by the resize interaction
     // path, not layout).
-    FFloatingWindowStyle style;
-    if (!_styleKey.empty()) {
-        if (const FFloatingWindowStyle* themed =
-                resolveThemeStyle<FFloatingWindowStyle>(*this, _styleKey)) {
-            style = *themed;
-        }
-    }
+    const FFloatingWindowStyle style = resolveWidgetStyle<FFloatingWindowStyle>(*this, _authoredStyle);
     builder.addBrush(_layoutRect, style.bodyFill);
     builder.addRectOutline(_layoutRect, style.borderColor, 1.0f);
     builder.addRectOutline(
@@ -484,25 +504,6 @@ bool UIDockFloatingWindow::handleInputEvent(const Event& event, const WidgetEven
     return UIContainer::handleInputEvent(event, ctx);
 }
 
-bool UIDockFloatingWindow::canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint)
-{
-    UIDockSpace* space = _ws ? _ws->dockSpace() : nullptr;
-    if (!space) {
-        return false;
-    }
-    const auto preview = space->dropPreviewFor(payload, logicalPoint);
-    // Only accept a merge that targets THIS floating window as a new tab.
-    return preview.has_value() && preview->bMerge &&
-           preview->targetFloatingId == _floatingId && !preview->bDisabled;
-}
-
-void UIDockFloatingWindow::onDrop(const std::string& payload, const glm::vec2& logicalPoint)
-{
-    if (UIDockSpace* space = _ws ? _ws->dockSpace() : nullptr) {
-        space->onDrop(payload, logicalPoint);
-    }
-}
-
 void UIDockFloatingWindow::clearTransientInputState()
 {
     _bTitlePressed = false;
@@ -518,13 +519,7 @@ void UIDockFloatingWindow::clearTransientInputState()
 /// edge is registered by paintSelf.
 static glm::vec2 floatingMinSize(const UIDockFloatingWindow& window)
 {
-    if (!window._styleKey.empty()) {
-        if (const FFloatingWindowStyle* style =
-                resolveThemeStyle<FFloatingWindowStyle>(window, window._styleKey)) {
-            return style->minSize;
-        }
-    }
-    return {220.0f, 160.0f};
+    return resolveWidgetStyle<FFloatingWindowStyle>(window, window._authoredStyle).minSize;
 }
 
 void UIDockFloatingWindow::resizeTo(const glm::vec2& extent)

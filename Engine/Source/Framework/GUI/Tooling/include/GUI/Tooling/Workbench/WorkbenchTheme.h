@@ -10,8 +10,10 @@
 // The shell (FWorkbenchSurface) and the demo pages resolve every canonical
 // typed-style key ("button"/"panel"/"menubar"/"tab"/"split"/"scrollbar"/
 // "dock"/"floating"/"text") plus per-role shell keys ("panel.window",
-// "panel.canvas") from the mounted WorkbenchTheme, so swapping the theme
-// restyles the whole shell at once.
+// "panel.canvas", "text.header", "text.muted") and form-widget keys
+// ("tree"/"textfield"/"menu"/"selectable"/"dragfloat"/"checkbox"/"combobox"/
+// "slider"/"table"/"spinbox"/"radio"/"coloredit"/"searchcombo") from the mounted
+// WorkbenchTheme, so swapping the theme restyles the whole shell at once.
 // ============================================================================
 
 #include "GUI/Widgets/Style.h"
@@ -51,6 +53,152 @@ constexpr glm::vec4 kButtonHoveredLight = {0.84f, 0.86f, 0.90f, 1.0f};
 constexpr glm::vec4 kButtonPressedLight = {0.72f, 0.74f, 0.80f, 1.0f};
 constexpr glm::vec4 kButtonFocusedLight = {0.55f, 0.75f, 0.95f, 1.0f};
 } // namespace tokens
+
+/// Form widgets + text roles used by chrome (tree, fields, menus, hierarchy
+/// labels). Baked once so the light look does not fall back to dark defaults.
+inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
+{
+    using ya::FBrush;
+    const glm::vec4 text     = bDark ? tokens::kTextColor : tokens::kTextColorLight;
+    const glm::vec4 header   = bDark ? tokens::kHeaderColor : tokens::kHeaderColorLight;
+    const glm::vec4 muted    = bDark ? glm::vec4{0.70f, 0.74f, 0.80f, 1.0f}
+                                     : glm::vec4{0.38f, 0.42f, 0.48f, 1.0f};
+    const glm::vec4 error    = bDark ? glm::vec4{1.0f, 0.45f, 0.35f, 1.0f}
+                                     : glm::vec4{0.78f, 0.18f, 0.12f, 1.0f};
+    const glm::vec4 selected = bDark ? glm::vec4{0.22f, 0.42f, 0.78f, 1.0f}
+                                     : glm::vec4{0.32f, 0.55f, 0.90f, 1.0f};
+    const glm::vec4 hovered  = bDark ? glm::vec4{0.24f, 0.26f, 0.31f, 1.0f}
+                                     : glm::vec4{0.84f, 0.86f, 0.90f, 1.0f};
+    const glm::vec4 fieldBg  = bDark ? glm::vec4{0.08f, 0.09f, 0.12f, 1.0f}
+                                     : glm::vec4{0.98f, 0.99f, 1.00f, 1.0f};
+    const glm::vec4 menuItem = bDark ? glm::vec4{0.13f, 0.14f, 0.17f, 1.0f}
+                                     : glm::vec4{0.93f, 0.94f, 0.96f, 1.0f};
+
+    auto headerStyle = ya::FTextStyle{};
+    headerStyle.textColor = bDark ? glm::vec4{0.90f, 0.92f, 0.95f, 1.0f} : text;
+    headerStyle.fontSize  = 28;
+    theme.define<ya::FTextStyle>("text.header", headerStyle);
+
+    auto mutedStyle = ya::FTextStyle{};
+    mutedStyle.textColor = muted;
+    mutedStyle.fontSize  = 14;
+    theme.define<ya::FTextStyle>("text.muted", mutedStyle);
+
+    auto errorStyle = ya::FTextStyle{};
+    errorStyle.textColor = error;
+    errorStyle.fontSize  = 13;
+    theme.define<ya::FTextStyle>("text.error", errorStyle);
+
+    auto eyebrow = ya::FTextStyle{};
+    eyebrow.textColor = header;
+    eyebrow.fontSize  = 11;
+    theme.define<ya::FTextStyle>("text.eyebrow", eyebrow);
+
+    auto tree = ya::FTreeViewStyle{};
+    tree.textColor        = text;
+    tree.selectedFill     = FBrush::Solid(selected);
+    tree.hoveredFill      = FBrush::Solid(hovered);
+    tree.arrowColor       = muted;
+    tree.arrowHoveredFill = FBrush::Solid(bDark ? glm::vec4{0.32f, 0.36f, 0.44f, 1.0f}
+                                                : glm::vec4{0.78f, 0.80f, 0.85f, 1.0f});
+    theme.define<ya::FTreeViewStyle>("tree", tree);
+
+    auto field = ya::FTextFieldStyle{};
+    field.backgroundFill = FBrush::Solid(fieldBg);
+    field.textColor      = text;
+    field.caretColor     = text;
+    theme.define<ya::FTextFieldStyle>("textfield", field);
+
+    auto menu = ya::FMenuStyle{};
+    menu.itemNormalFill  = FBrush::Solid(menuItem);
+    menu.itemHoveredFill = FBrush::Solid(selected);
+    menu.textColor       = text;
+    theme.define<ya::FMenuStyle>("menu", menu);
+
+    auto menuPanel = ya::FPanelStyle{};
+    menuPanel.fillColor = FBrush::Solid(menuItem);
+    theme.define<ya::FPanelStyle>("menu.panel", menuPanel);
+
+    auto selectable = ya::FSelectableRowStyle{};
+    selectable.hoveredFill         = FBrush::Solid(hovered);
+    selectable.selectedFill        = FBrush::Solid(selected);
+    selectable.selectedHoveredFill = FBrush::Solid(bDark ? glm::vec4{0.30f, 0.50f, 0.86f, 1.0f}
+                                                         : glm::vec4{0.40f, 0.62f, 0.94f, 1.0f});
+    theme.define<ya::FSelectableRowStyle>("selectable", selectable);
+
+    auto drag = ya::FDragFloatStyle{};
+    drag.backgroundFill = FBrush::Solid(bDark ? glm::vec4{0.17f, 0.19f, 0.24f, 1.0f}
+                                              : glm::vec4{0.94f, 0.95f, 0.97f, 1.0f});
+    drag.draggingFill   = FBrush::Solid(bDark ? glm::vec4{0.18f, 0.24f, 0.34f, 1.0f}
+                                              : glm::vec4{0.84f, 0.88f, 0.95f, 1.0f});
+    drag.textColor      = text;
+    drag.borderColor    = bDark ? glm::vec4{0.30f, 0.33f, 0.40f, 1.0f}
+                                : glm::vec4{0.70f, 0.72f, 0.76f, 1.0f};
+    theme.define<ya::FDragFloatStyle>("dragfloat", drag);
+
+    auto checkbox = ya::FCheckBoxStyle{};
+    checkbox.boxFill     = FBrush::Solid(bDark ? glm::vec4{0.55f, 0.60f, 0.68f, 1.0f}
+                                               : glm::vec4{0.70f, 0.73f, 0.78f, 1.0f});
+    checkbox.hoveredFill = FBrush::Solid(hovered);
+    checkbox.checkedFill = FBrush::Solid(selected);
+    checkbox.checkColor  = bDark ? glm::vec4{0.95f, 0.96f, 0.98f, 1.0f} : glm::vec4{1.0f, 1.0f, 1.0f, 1.0f};
+    theme.define<ya::FCheckBoxStyle>("checkbox", checkbox);
+
+    auto combo = ya::FComboBoxStyle{};
+    combo.fieldFill   = FBrush::Solid(fieldBg);
+    combo.hoveredFill = FBrush::Solid(hovered);
+    combo.textColor   = text;
+    combo.arrowColor  = muted;
+    theme.define<ya::FComboBoxStyle>("combobox", combo);
+
+    auto slider = ya::FSliderStyle{};
+    slider.trackFill = FBrush::Solid(bDark ? glm::vec4{0.14f, 0.16f, 0.20f, 1.0f}
+                                           : glm::vec4{0.78f, 0.80f, 0.84f, 1.0f});
+    slider.valueFill = FBrush::Solid(selected);
+    slider.thumbFill = FBrush::Solid(bDark ? glm::vec4{0.88f, 0.90f, 0.94f, 1.0f} : text);
+    theme.define<ya::FSliderStyle>("slider", slider);
+
+    auto table = ya::FTableGridStyle{};
+    table.backgroundFill  = FBrush::Solid(fieldBg);
+    table.selectedFill    = FBrush::Solid(selected);
+    table.hoveredFill     = FBrush::Solid(hovered);
+    table.textColor       = text;
+    table.headerTextColor = muted;
+    table.gridColor       = bDark ? glm::vec4{0.20f, 0.22f, 0.27f, 1.0f}
+                                  : glm::vec4{0.70f, 0.72f, 0.76f, 1.0f};
+    theme.define<ya::FTableGridStyle>("table", table);
+
+    auto spin = ya::FSpinBoxStyle{};
+    spin.backgroundFill    = FBrush::Solid(bDark ? glm::vec4{0.17f, 0.19f, 0.24f, 1.0f}
+                                                 : glm::vec4{0.94f, 0.95f, 0.97f, 1.0f});
+    spin.buttonFill        = FBrush::Solid(bDark ? glm::vec4{0.22f, 0.24f, 0.30f, 1.0f}
+                                                 : glm::vec4{0.86f, 0.88f, 0.92f, 1.0f});
+    spin.buttonHoveredFill = FBrush::Solid(hovered);
+    spin.textColor         = text;
+    spin.borderColor       = bDark ? glm::vec4{0.30f, 0.33f, 0.40f, 1.0f}
+                                   : glm::vec4{0.70f, 0.72f, 0.76f, 1.0f};
+    theme.define<ya::FSpinBoxStyle>("spinbox", spin);
+
+    auto radio = ya::FRadioButtonStyle{};
+    radio.hoveredFill  = FBrush::Solid(hovered);
+    radio.dotColor     = bDark ? glm::vec4{0.88f, 0.90f, 0.94f, 1.0f} : text;
+    radio.dotFillColor = selected;
+    radio.textColor    = text;
+    theme.define<ya::FRadioButtonStyle>("radio", radio);
+
+    auto colorEdit = ya::FColorEditStyle{};
+    colorEdit.backgroundFill   = FBrush::Solid(fieldBg);
+    colorEdit.textColor        = text;
+    colorEdit.channelHighlight = selected;
+    theme.define<ya::FColorEditStyle>("coloredit", colorEdit);
+
+    auto search = ya::FSearchComboStyle{};
+    search.backgroundFill = FBrush::Solid(fieldBg);
+    search.hoveredFill    = FBrush::Solid(hovered);
+    search.textColor      = text;
+    search.caretColor     = text;
+    theme.define<ya::FSearchComboStyle>("searchcombo", search);
+}
 
 /// Build the tree-level UITheme for a look (`bDark`). The theme defines every
 /// canonical typed-style key the framework controls resolve, so mounting it
@@ -251,6 +399,7 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
         floating.titleTextColor = tokens::kTextColorLight;
         theme->define<ya::FFloatingWindowStyle>("floating", floating);
     }
+    defineWorkbenchContentStyles(*theme, bDark);
     return theme;
 }
 

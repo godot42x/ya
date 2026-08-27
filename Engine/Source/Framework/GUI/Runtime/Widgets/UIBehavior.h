@@ -2,6 +2,7 @@
 
 #include "Core/Common/Types.h"
 
+#include <functional>
 #include <memory>
 
 namespace ya
@@ -46,6 +47,37 @@ struct YA_GUI_API UIBehavior
   private:
     friend struct UIElement;
     UIElement* _owner = nullptr;
+};
+
+struct YA_GUI_API UIDragSourceBehavior : public UIBehavior
+{
+    std::function<UIDragDropOperationRef(UIElement& owner)> operationFactory;
+    std::function<void(UIElement& owner, bool bPressed)> setPressedState;
+    bool  bCapturePointerOnPress = false;
+    bool  bBeginDragFromCapturedMove = false;
+    float dragThreshold = 6.0f;
+
+    bool handleInputEvent(UIElement& owner, const Event& event, const WidgetEventContext& ctx) override;
+    UIDragDropOperationRef onDragDetected(UIElement& owner, const FDragDetectedEvent& event) override;
+    void onDetached(UIElement& owner) override;
+
+  private:
+    bool      _bPressed = false;
+    glm::vec2 _pressPoint{0.0f, 0.0f};
+};
+
+struct YA_GUI_API UIDropTargetBehavior : public UIBehavior
+{
+    std::function<bool(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)> acceptPayload;
+    std::function<void(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)> handleDroppedPayload;
+    std::function<void(UIElement& owner, bool bHighlight)> setHighlightState;
+    std::function<void(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)> updateHoverState;
+
+    bool canAcceptDrop(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint) override;
+    void onDrop(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint) override;
+    void setDropHighlight(UIElement& owner, bool bHighlight) override;
+    void updateDropHover(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint) override;
+    void onDetached(UIElement& owner) override;
 };
 
 using UIBehaviorRef = std::shared_ptr<UIBehavior>;

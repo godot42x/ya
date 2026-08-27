@@ -13,7 +13,7 @@ namespace ya
 {
 
 UIMenuBarItem::UIMenuBarItem(std::string name)
-    : UIElement(std::move(name))
+    : UIElement(std::move(name), "menubar")
 {
     _hitFilter   = EWidgetHitFilter::Stop;
     _focusPolicy = EWidgetFocusPolicy::Focusable;
@@ -31,12 +31,7 @@ void UIMenuBarItem::paintSelf(UIFrameBuilder& builder)
     // is explicitly sized by UIMenuBar (fontSize is not auto-measured), so
     // Paint level. When the key/theme is absent, the default-constructed
     // style IS the framework fallback (Phase 3 cleanup: no bare fields).
-    FMenuBarItemStyle style;
-    if (!_styleKey.empty()) {
-        if (const FMenuBarItemStyle* themed = resolveThemeStyle<FMenuBarItemStyle>(*this, _styleKey)) {
-            style = *themed;
-        }
-    }
+    const FMenuBarItemStyle style = resolveWidgetStyle<FMenuBarItemStyle>(*this, _authoredStyle);
     builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.normalFill);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {

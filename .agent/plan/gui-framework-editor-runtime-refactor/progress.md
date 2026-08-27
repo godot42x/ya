@@ -1,5 +1,53 @@
 # GUI Framework / Editor / Game UI 重构进度
 
+## 2026-08-27 checkpoint：DockFloatingWindow drop target 收口到 behavior
+
+- `Engine/Source/Framework/GUI/Runtime/Widgets/Controls/DockFloatingWindow.cpp` 新增局部 `FDockFloatingWindowDropTargetBehavior`，把 floating window 对 dock-panel payload 的 accept / drop 协议收口到 behavior；浮窗本体继续保留 title drag、window move、resize 与 dock-drag observer 这类窗口语义。
+- `DockFloatingWindow.h` 不再继续暴露 `canAcceptDrop/onDrop` 这组 widget-level override，保持“浮窗是 drop target”这一能力与“浮窗如何移动/缩放/重建内容”解耦，和 `TreeView` / `DockSpace` 的 seam 方向对齐。
+- 新增 `WidgetTreeTest.DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTarget`，验证 docked panel 的 payload 经过 floating window 命中后，仍会正确通过 workspace 合并成新 tab；同时复跑 dock preview regression，确认这刀没有破坏 DockSpace 的点敏感 preview。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake r ya-gui-widgets-test -- --gtest_filter='WidgetTreeTest.DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTarget'`、`xmake r ya-gui-widgets-test -- --gtest_filter='WidgetTreeTest.DragOverDockSetsPointSensitiveDropPreview'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-26 checkpoint：DockSpace drop target 收口到 behavior
+
+- `Engine/Source/Framework/GUI/Runtime/Widgets/Controls/DockSpace.cpp` 新增局部 `FDockSpaceDropTargetBehavior`，把 dock-panel payload 的 accept / drop / highlight-clear / hover-preview 协议收口到 behavior；`UIDockSpace` 本体继续保留 dock model 投影、preview 求解与 overlay 绘制。
+- `UIDockSpace` 构造时默认挂上该 behavior，控件头文件不再继续暴露 `canAcceptDrop/onDrop/setDropHighlight/updateDropHover` 这一整组 widget-level override，保持 Dock 的业务语义和拖放协议 seam 解耦。
+- 这一步与 `TreeView` 的 reorder 行为化对齐：`WidgetTree` 继续拥有 drag session / target routing，DockSpace 只通过 behavior 暴露 drop capability，point-sensitive preview 仍通过 framework 级 `updateDropHover` seam 驱动。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake r ya-gui-widgets-test -- --gtest_filter='WidgetTreeTest.DragOverDockSetsPointSensitiveDropPreview'`、`xmake r ya-gui-widgets-test -- --gtest_filter='WidgetTreeTest.BehaviorCanActAsDragSourceAndDropTargetWithoutDedicatedWidgetSubclass'`、`xmake r ya-gui-widgets-test -- --gtest_filter='ToolControlsTest.TreeView*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-26 checkpoint：TreeView reorder drag/drop 外提到 behavior seam
+
+- `Engine/Source/Framework/GUI/Runtime/Widgets/Controls/TreeView.cpp` 新增局部 `FTreeViewReorderDragBehavior` / `FTreeViewReorderDropBehavior`，把 TreeView reorder 的 press-capture、阈值起拖、payload 生成、drop hover、drop 回调全部收口到 behavior，而不是继续由 `UITreeView` 本体手写一整段私有协议。
+- `UITreeView` 构造时默认挂上这两个 behavior；控件本体保留 tree row 的命中、selection、expand/collapse、paint 与 reorder 回调落点，不再 override `canAcceptDrop/onDrop/setDropHighlight`。
+- `UIBehavior` / `UIDropTargetBehavior` 补 `updateDropHover` 委托，框架级 drop target seam 现在既能承载“静态高亮”，也能承载 TreeView / Dock 这类“跟随指针更新预览位置”的点敏感拖放目标。
+- `TreeView.h` 增加 `setReorderable` / `setOnReorderHandler`，`Example/GUIWorkbench/Source/WorkbenchDemoPages.cpp` 的 Gallery tree demo 已切到这组 runtime setter，不再继续从上层直接写 `_bReorderable` / `_onReorder`。
+- 新增 `ToolControlsTest.TreeViewReorderUsesBehaviorBackedDragDrop`，验证 TreeView 行 reorder 仍保留原有 capture -> threshold -> drag session -> drop callback 契约；同时复跑 `SelectableRow` 与 framework behavior drag/drop 合同，确保这次 seam 扩张没有破坏前一批行为化结果。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake r ya-gui-widgets-test -- --gtest_filter='ToolControlsTest.TreeView*'`、`xmake r ya-gui-widgets-test -- --gtest_filter='ToolControlsTest.SelectableRow*'`、`xmake r ya-gui-widgets-test -- --gtest_filter='WidgetTreeTest.BehaviorCanActAsDragSourceAndDropTargetWithoutDedicatedWidgetSubclass'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-26 checkpoint：drag/drop behavior 收口为 framework 级可复用基础件
+
+- `Engine/Source/Framework/GUI/Runtime/Widgets/UIBehavior.h/.cpp` 新增 `UIDragSourceBehavior` 与 `UIDropTargetBehavior`，把通用 drag source / drop target 协议（press 状态、阈值起拖、payload factory、highlight/drop handler）收口到 framework 层。
+- `UISelectableRow` 的内置拖放逻辑改为基于这两个 framework behavior 组装：row 不再自己持有一整段私有拖放协议实现，只保留 row 自身的 selection / activation / hover / pressed 语义。
+- `Example/GUIWorkbench/Source/WorkbenchDemoPages.cpp` 的 demo drag/drop 也迁到了这两个 framework behavior，上层只提供 tile 的 pressed/highlight 显示和 payload/drop 回调，不再各自复制一套协议代码。
+- 这一步把前两刀的“局部 behavior”进一步上提成 runtime seam，本质上是在兑现 G3.3：`WidgetTree` 继续拥有 drag session / routing，widget 只暴露能力落点，可复用协议收口到 behavior。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake r ya-gui-widgets-test -- --gtest_filter='ToolControlsTest.SelectableRow*'`、`xmake r ya-gui-widgets-test -- --gtest_filter='WidgetTreeTest.BehaviorCanActAsDragSourceAndDropTargetWithoutDedicatedWidgetSubclass'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-26 checkpoint：SelectableRow 将拖放协议外提到内置 behavior
+
+- `Engine/Source/Framework/GUI/Runtime/Widgets/Controls/SelectableRow.h/.cpp` 现在把 drag source / drop target / highlight / drop callback 收敛到内置 `FSelectableRowDragDropBehavior`；row 本体保留 selection / activation / hover / pressed 这些 leaf 语义。
+- 为了兼容现有 pointer-capture 语义，起拖阈值也放进了该 behavior 的 `handleInputEvent(MouseMoved)`，不再让 row 本体手动 `beginDrag()`；拖放协议继续存在，但不再和 leaf 表现层耦在一起。
+- 外部调用面保持兼容：`_bDraggable` / `_dragPayload` / `_dragGhostLabel` / `_onDropped` 现阶段仍可继续被 Workbench/Tooling 写入，先完成“协议外提”，不在这一刀强推 API 迁移。
+- 进一步收口调用面：`UISelectableRow` 新增 `setDraggable` / `setDragPayload` / `setDragGhostLabel` / `setOnDropHandler`；`WorkbenchSurface::rebuildItemRows()` 已改为走这些 runtime setter，不再继续直接写 row 的拖放字段。
+- 新增 `ToolControlsTest.SelectableRowDraggableRowsUseBehaviorBackedDragDrop`，验证 draggable row 仍可在 capture 语义下起拖、跨 row drop，并保留原有选择/激活/hover 契约测试全绿。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake r ya-gui-widgets-test -- --gtest_filter='ToolControlsTest.SelectableRow*'`、`xmake b GUIWorkbench` 均通过。
+
+## 2026-08-26 checkpoint：Workbench drag/drop demo 完成第一刀行为化
+
+- `Example/GUIWorkbench/Source/WorkbenchDemoPages.cpp` 已移除 `FDemoDragItem` / `FDemoDropZone` 两个 demo 专用拖放 widget，改为局部展示 widget `FDemoDragDropTile` + `FDemoDragSourceBehavior` / `FDemoDropTargetBehavior`。
+- drag source 的 press / release / drag-detect 责任现在归 `UIBehavior`：按下时只维护 pressed visual 与 capture，真正超过阈值后仍由 `WidgetTree` 调 `onDragDetected()` 启动 drag session；行为里主动清 pressed/capture，避免旧 demo source 自己背拖放协议。
+- drop target 的 accept / highlight / drop 回调也迁到 `UIBehavior`；展示 widget 只保留 label/highlight paint，不再自己实现 drop 协议。
+- Gallery 的 drag/drop section 与独立 DragDrop 页都切到了这套局部 behavior，用法保持 `child(UIElementRef)` 挂进 DSL 壳，不扩 `Construct.h`。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake r ya-gui-widgets-test -- --gtest_filter='WidgetTreeTest.BehaviorCanActAsDragSourceAndDropTargetWithoutDedicatedWidgetSubclass'`、`xmake b GUIWorkbench`、`xmake r GUIWorkbench -- --start-page DragDrop --scenario Example/GUIWorkbench/Scenarios/dragdrop_interaction.jsonl --scenario-dump-dir /tmp/ya_dragdrop_scenario` 均通过。
+
 ## 2026-08-26 checkpoint：补齐 CompoundWidget 与新底层的迁移桥接契约
 
 - 计划层正式补齐 `UICompoundWidget` 与 Runtime Kernel / `UIBehavior` / future adapter 的关系，避免后续迁移只停留在“它不是唯一 component model”的抽象口号。
@@ -8,6 +56,8 @@
 - editor/game 现有复合控件的迁移判定规则正式固定为三分：无局部状态 → builder helper；有局部 retained 状态/生命周期 → `UICompoundWidget`；横切交互能力 → `UIBehavior`。
 - future React-like / HTML-CSS-JS / script/document adapter 的接入点也随之钉死：它们直接投影到 Runtime Kernel，不得把 `UICompoundWidget` 当成唯一宿主、唯一 component 模型或 adapter host。
 - 现状盘点同时确认：截至 2026-08-26，仓库里还没有任何实际控件继承 `UICompoundWidget`；当前只有基类和 `ui::compound<T>()` 入口。第一版迁移判定表已补进 plan，用于把 demo widget、specialized control、future compound 三类分流。
+- 进一步补齐了 G4.3a 的逐文件迁移清单：先从 `Example/GUIWorkbench/Source/WorkbenchDemoPages.cpp` 的 drag/drop demo 行为化入手；`SelectableRow` 做 leaf 减负；`TreeView` / `TableGrid` / `Menu` / `Dock` 明确不进入第一批 compound 化。
+- 日期说明：今天是 2026-08-26。`progress.md` 中既有的 `2026-08-27 checkpoint` 条目按当前时间属于未来计划/预填记录，不应被解读为今天已经完成的事实。
 
 ## 2026-08-27 checkpoint：UIBehavior 最小运行时 seam 落地（第一刀）
 

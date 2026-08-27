@@ -1195,4 +1195,61 @@ TEST(UIFrameSnapshotTest, ContainerClipResizeInvalidatesChildSegments)
     EXPECT_EQ(snap.items[0].clip.extent, glm::vec2(50.0f, 100.0f));
 }
 
+TEST(UIFrameSnapshotTest, AuthoredButtonStyleWinsOverThemeAndIgnoresThemeSwitch)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       button = std::make_shared<UIButton>("B");
+    button->setPosition({10.0f, 10.0f});
+    button->setSize({80.0f, 32.0f});
+    FButtonStyle authored;
+    authored.normalFill = FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f});
+    button->setStyle(authored);
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+
+    auto theme = std::make_shared<UITheme>();
+    FButtonStyle themed;
+    themed.normalFill = FBrush::Solid({0.1f, 0.2f, 0.9f, 1.0f});
+    theme->define<FButtonStyle>("button", themed);
+    tree.setTheme(theme.get());
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_FALSE(snap.items.empty());
+    EXPECT_EQ(snap.items.front().color, glm::vec4(0.9f, 0.2f, 0.1f, 1.0f));
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    auto other = std::make_shared<UITheme>();
+    FButtonStyle themed2;
+    themed2.normalFill = FBrush::Solid({0.0f, 1.0f, 0.0f, 1.0f});
+    other->define<FButtonStyle>("button", themed2);
+    tree.setTheme(other.get());
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+    const UIFrameSnapshot after = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_FALSE(after.items.empty());
+    EXPECT_EQ(after.items.front().color, glm::vec4(0.9f, 0.2f, 0.1f, 1.0f));
+}
+
+TEST(UIFrameSnapshotTest, SameAuthoredStyleDoesNotDirty)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       button = std::make_shared<UIButton>("B");
+    button->setPosition({10.0f, 10.0f});
+    button->setSize({80.0f, 32.0f});
+    FButtonStyle style;
+    style.normalFill = FBrush::Solid({0.2f, 0.3f, 0.4f, 1.0f});
+    button->setStyle(style);
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{});
+    const GuiPerfStats before = tree.getPerfStats();
+
+    button->setStyle(style);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, before.layoutDirtyTransitions);
+    EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, before.paintDirtyTransitions);
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+}
+
 } // namespace ya

@@ -37,14 +37,15 @@ void UIComboBox::select(int index)
 
 void UIComboBox::paintSelf(UIFrameBuilder& builder)
 {
-    builder.addSprite(_layoutRect, _bHovered ? _hoveredColor : _fieldColor, nullptr);
+    const FComboBoxStyle style = resolveWidgetStyle<FComboBoxStyle>(*this, _authoredStyle);
+    builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.fieldFill);
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {
         Rect2D textRect = _layoutRect;
         textRect.pos.x += 10.0f;
         textRect.extent.x = std::max(0.0f, textRect.extent.x - 24.0f);
-        builder.addText(textRect, currentLabel(), _textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
+        builder.addText(textRect, currentLabel(), style.textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
 
         // Dropdown arrow: two stacked triangles approximated with two rows of
         // squares, drawn at the right edge.
@@ -52,9 +53,8 @@ void UIComboBox::paintSelf(UIFrameBuilder& builder)
         const float arrowX = _layoutRect.pos.x + _layoutRect.extent.x - arrowW - 8.0f;
         const float centerY = _layoutRect.pos.y + _layoutRect.extent.y * 0.5f;
         const float s = 2.2f;
-        const glm::vec4 arrowColor{0.68f, 0.72f, 0.78f, 1.0f};
-        builder.addSprite(Rect2D{.pos = {arrowX + s, centerY - s}, .extent = {s * 3.0f, s}}, arrowColor, nullptr);
-        builder.addSprite(Rect2D{.pos = {arrowX + s * 2.0f, centerY}, .extent = {s, s}}, arrowColor, nullptr);
+        builder.addSprite(Rect2D{.pos = {arrowX + s, centerY - s}, .extent = {s * 3.0f, s}}, style.arrowColor, nullptr);
+        builder.addSprite(Rect2D{.pos = {arrowX + s * 2.0f, centerY}, .extent = {s, s}}, style.arrowColor, nullptr);
     }
 }
 

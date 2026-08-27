@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <format>
@@ -14,7 +15,7 @@ namespace ya
 /// pointer press starts a capture drag session; horizontal delta adjusts the
 /// value by `_speed` per logical pixel, clamped to [_min, _max]. Keyboard
 /// Left/Right step by `_speed` * 10 on the focused control.
-struct YA_GUI_API UIDragFloat : public UIElement
+struct YA_GUI_API UIDragFloat : public UIElement, public UIStyledWidget<UIDragFloat, FDragFloatStyle>
 {
     YA_REFLECT_BEGIN(UIDragFloat, UIElement)
     YA_REFLECT_FIELD(_value, .instanceEditable())
@@ -24,7 +25,7 @@ struct YA_GUI_API UIDragFloat : public UIElement
     YA_REFLECT_FIELD(_decimals, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UIDragFloat(std::string name = "DragFloat") : UIElement(std::move(name))
+    explicit UIDragFloat(std::string name = "DragFloat") : UIElement(std::move(name), "dragfloat")
     {
         _hitFilter   = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
@@ -37,11 +38,7 @@ struct YA_GUI_API UIDragFloat : public UIElement
     float     _min      = -1000000.0f;
     float     _max      = 1000000.0f;
     int       _decimals = 2;
-    uint32_t  _fontSize = 13;
-    glm::vec4 _textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 _backgroundColor = {0.17f, 0.19f, 0.24f, 1.0f};
-    glm::vec4 _draggingColor  = {0.18f, 0.24f, 0.34f, 1.0f};
-    glm::vec4 _borderColor    = {0.30f, 0.33f, 0.40f, 1.0f};
+    uint32_t    _fontSize = 13;
 
     /// Fired on every value change.
     std::function<void(float value)> _onValueChanged;
@@ -83,7 +80,7 @@ struct YA_GUI_API UIDragFloat : public UIElement
 /// Spin box (ImGui InputInt/InputFloat step equivalent, minimal): three
 /// zones — left "-" steps down, right "+" steps up, center shows the value.
 /// Clicking a zone repeats on hold (frame-independent via drag capture).
-struct YA_GUI_API UISpinBox : public UIElement
+struct YA_GUI_API UISpinBox : public UIElement, public UIStyledWidget<UISpinBox, FSpinBoxStyle>
 {
     YA_REFLECT_BEGIN(UISpinBox, UIElement)
     YA_REFLECT_FIELD(_value, .instanceEditable())
@@ -92,7 +89,7 @@ struct YA_GUI_API UISpinBox : public UIElement
     YA_REFLECT_FIELD(_max, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UISpinBox(std::string name = "SpinBox") : UIElement(std::move(name))
+    explicit UISpinBox(std::string name = "SpinBox") : UIElement(std::move(name), "spinbox")
     {
         _hitFilter   = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
@@ -104,12 +101,7 @@ struct YA_GUI_API UISpinBox : public UIElement
     float     _step  = 1.0f;
     float     _min   = -1000000.0f;
     float     _max   = 1000000.0f;
-    uint32_t  _fontSize = 13;
-    glm::vec4 _textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 _backgroundColor = {0.17f, 0.19f, 0.24f, 1.0f};
-    glm::vec4 _buttonColor    = {0.22f, 0.24f, 0.30f, 1.0f};
-    glm::vec4 _buttonHoverColor = {0.30f, 0.33f, 0.40f, 1.0f};
-    glm::vec4 _borderColor    = {0.30f, 0.33f, 0.40f, 1.0f};
+    uint32_t    _fontSize = 13;
 
     std::function<void(float value)> _onValueChanged;
 
@@ -156,14 +148,14 @@ struct YA_GUI_API UISpinBox : public UIElement
 /// Radio button (minimal): dot + label; selection is managed by the host
 /// (like ImGui's shared int*), the control only reports presses and renders
 /// its checked state.
-struct YA_GUI_API UIRadioButton : public UIElement
+struct YA_GUI_API UIRadioButton : public UIElement, public UIStyledWidget<UIRadioButton, FRadioButtonStyle>
 {
     YA_REFLECT_BEGIN(UIRadioButton, UIElement)
     YA_REFLECT_FIELD(_bChecked, .instanceEditable())
     YA_REFLECT_FIELD(_label, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UIRadioButton(std::string name = "RadioButton") : UIElement(std::move(name))
+    explicit UIRadioButton(std::string name = "RadioButton") : UIElement(std::move(name), "radio")
     {
         _hitFilter   = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
@@ -174,10 +166,6 @@ struct YA_GUI_API UIRadioButton : public UIElement
     bool        _bChecked = false;
     std::string _label;
     uint32_t    _fontSize = 13;
-    glm::vec4   _textColor    = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4   _dotColor     = {0.88f, 0.90f, 0.94f, 1.0f};
-    glm::vec4   _dotFillColor = {0.24f, 0.46f, 0.82f, 1.0f};
-    glm::vec4   _hoveredColor = {0.24f, 0.26f, 0.31f, 1.0f};
 
     /// Fired on click / Space / Enter (the host flips the group's selection).
     std::function<void(UIRadioButton* self)> _onSelect;
@@ -210,13 +198,13 @@ struct YA_GUI_API UIRadioButton : public UIElement
 /// Color edit (minimal): a color swatch; clicking the swatch cycles the
 /// active channel (R/G/B/A), dragging adjusts it. The 4 channels are shown
 /// as a compact strip under the swatch. Full picker is a later step.
-struct YA_GUI_API UIColorEdit : public UIElement
+struct YA_GUI_API UIColorEdit : public UIElement, public UIStyledWidget<UIColorEdit, FColorEditStyle>
 {
     YA_REFLECT_BEGIN(UIColorEdit, UIElement)
     YA_REFLECT_FIELD(_color, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UIColorEdit(std::string name = "ColorEdit") : UIElement(std::move(name))
+    explicit UIColorEdit(std::string name = "ColorEdit") : UIElement(std::move(name), "coloredit")
     {
         _hitFilter   = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
@@ -224,13 +212,10 @@ struct YA_GUI_API UIColorEdit : public UIElement
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIColorEdit>; }
 
-    glm::vec4 _color     = {1.0f, 1.0f, 1.0f, 1.0f};
-    int       _activeChannel = 0; // 0=R 1=G 2=B 3=A
-    uint32_t  _fontSize  = 13;
-    glm::vec4 _textColor = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 _backgroundColor = {0.12f, 0.13f, 0.17f, 1.0f};
-    glm::vec4 _channelHighlight = {0.24f, 0.46f, 0.82f, 1.0f};
-    float     _swatchSize = 18.0f;
+    glm::vec4   _color          = {1.0f, 1.0f, 1.0f, 1.0f};
+    int         _activeChannel  = 0; // 0=R 1=G 2=B 3=A
+    uint32_t    _fontSize       = 13;
+    float       _swatchSize     = 18.0f;
 
     std::function<void(const glm::vec4& color)> _onColorChanged;
 
@@ -262,13 +247,13 @@ struct YA_GUI_API UIColorEdit : public UIElement
 /// Search combo (minimal): a combo whose popup list is filtered by typed
 /// text. Focus + KeyTyped updates the filter and re-opens the filtered menu;
 /// clicking an entry selects it. The host supplies the items.
-struct YA_GUI_API UISearchComboBox : public UIElement
+struct YA_GUI_API UISearchComboBox : public UIElement, public UIStyledWidget<UISearchComboBox, FSearchComboStyle>
 {
     YA_REFLECT_BEGIN(UISearchComboBox, UIElement)
     YA_REFLECT_FIELD(_selectedIndex, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UISearchComboBox(std::string name = "SearchComboBox") : UIElement(std::move(name))
+    explicit UISearchComboBox(std::string name = "SearchComboBox") : UIElement(std::move(name), "searchcombo")
     {
         _hitFilter   = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
@@ -279,11 +264,7 @@ struct YA_GUI_API UISearchComboBox : public UIElement
     std::vector<std::string> _items;
     int      _selectedIndex = -1;
     std::string _filter;
-    uint32_t _fontSize = 13;
-    glm::vec4 _textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 _backgroundColor = {0.12f, 0.13f, 0.17f, 1.0f};
-    glm::vec4 _hoveredColor   = {0.24f, 0.26f, 0.31f, 1.0f};
-    glm::vec4 _caretColor     = {0.90f, 0.92f, 0.95f, 1.0f};
+    uint32_t    _fontSize = 13;
 
     std::function<void(int index)> _onSelectionChanged;
 

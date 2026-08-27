@@ -56,6 +56,7 @@ TEST(UIDocumentTest, FromWidgetRoundtripsFieldsAndChildren)
     titleWidget->setText("Hello Doc");
     titleWidget->_fontSize = 24;
     titleWidget->_color    = {1.0f, 0.0f, 0.0f, 1.0f};
+    titleWidget->setStyleKey("text.header");
     ok->setPosition({100.0f, 200.0f});
     ok->setSize({80.0f, 32.0f});
     container->addDetachedChild(title);
@@ -84,6 +85,7 @@ TEST(UIDocumentTest, FromWidgetRoundtripsFieldsAndChildren)
     EXPECT_EQ(textA->getText(), "Hello Doc");
     EXPECT_EQ(textA->_fontSize, 24u);
     EXPECT_EQ(textA->_color, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+    EXPECT_EQ(textA->_styleKey, "text.header");
 
     // Mutating A must not leak into B.
     textA->setText("Changed");
@@ -134,6 +136,8 @@ TEST(UIDocumentTest, JsonRoundtrip)
     auto* textInstance = dynamic_cast<UIText*>(instance->getChildren()[0].get());
     ASSERT_NE(textInstance, nullptr);
     EXPECT_EQ(textInstance->getText(), "JSON UI");
+    EXPECT_EQ(panelInstance->_styleKey, "panel");
+    EXPECT_TRUE(panelInstance->hasExplicitFill());
 }
 
 TEST(UIDocumentTest, UnknownTypeIdReportsDiagnostic)

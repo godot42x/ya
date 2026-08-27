@@ -51,12 +51,7 @@ void UIButton::paintSelf(UIFrameBuilder& builder)
     // resolveThemeStyle, so a theme switch OR a style edit repaints this
     // button. When the key/theme is absent, the default-constructed style IS
     // the framework fallback (Phase 3 cleanup: no bare color fields).
-    FButtonStyle style;
-    if (!_styleKey.empty()) {
-        if (const FButtonStyle* themed = resolveThemeStyle<FButtonStyle>(*this, _styleKey)) {
-            style = *themed;
-        }
-    }
+    const FButtonStyle style = resolveWidgetStyle<FButtonStyle>(*this, _authoredStyle);
     const FBrush& fill = !bEnabled   ? style.disabledFill
                          : _bPressed ? style.pressedFill
                          : _bHovered ? style.hoveredFill
