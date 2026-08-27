@@ -92,7 +92,7 @@ void UISplitPane::paintSelf(UIFrameBuilder& builder)
     // per-state brush (normal / hovered / dragging) from FSplitPaneStyle.
     // Pure color, Paint level. Absent key/theme → default-constructed style
     // is the framework fallback (Phase 3 cleanup: no bare fields).
-    const FSplitPaneStyle style = resolveWidgetStyle<FSplitPaneStyle>(*this, _authoredStyle);
+    const FSplitPaneStyle& style = resolvedStyle();
     const FBrush& fill = _bDraggingDivider
                              ? style.dividerDraggingFill
                              : (_bHoveredDivider ? style.dividerHoveredFill : style.dividerFill);

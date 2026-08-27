@@ -12,6 +12,9 @@
 // UIFrameBuildContext::textureResolver (widgets never reach the asset layer).
 // ============================================================================
 
+#include "Core/Base.h"
+#include "Core/Common/Types.h"
+
 #include <glm/glm.hpp>
 
 #include <string>
@@ -58,6 +61,48 @@ struct FBrush
         b.tintColor = tint;
         return b;
     }
+
+    /// Nine-patch: corners keep `margin` texture px, edges/center stretch.
+    /// `margin` is left/top/right/bottom in texture pixels (1 tex px = 1 logical px).
+    static FBrush NinePatch(const std::string& assetPath,
+                            const glm::vec4&   margin,
+                            const glm::vec4&   tint = {1.0f, 1.0f, 1.0f, 1.0f})
+    {
+        FBrush b;
+        b.drawType  = EDrawType::NinePatch;
+        b.resource  = assetPath;
+        b.margin    = margin;
+        b.tintColor = tint;
+        return b;
+    }
+
+    /// Border: nine-patch without the center fill (frame only).
+    static FBrush Border(const std::string& assetPath,
+                         const glm::vec4&   margin,
+                         const glm::vec4&   tint = {1.0f, 1.0f, 1.0f, 1.0f})
+    {
+        FBrush b;
+        b.drawType  = EDrawType::Border;
+        b.resource  = assetPath;
+        b.margin    = margin;
+        b.tintColor = tint;
+        return b;
+    }
 };
+
+/// One nine-patch / image cell: destination in logical px, UV origin + size.
+struct FBrushSlice
+{
+    Rect2D    dest{};
+    glm::vec2 uvOffset{0.0f, 0.0f};
+    glm::vec2 uvScale{1.0f, 1.0f};
+};
+
+inline constexpr int kMaxBrushSlices = 9;
+
+/// Slice `dest` into Image (1) / NinePatch (up to 9) / Border (up to 8) cells.
+/// `texturePx` is the resource size in texture pixels; zero or a solid brush
+/// yields a single full-rect slice (stretch / solid fill).
+YA_GUI_API int sliceBrush(const FBrush& brush, const Rect2D& dest, glm::vec2 texturePx, FBrushSlice out[kMaxBrushSlices]);
 
 } // namespace ya

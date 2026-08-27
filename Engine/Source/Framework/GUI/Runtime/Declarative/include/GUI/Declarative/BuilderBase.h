@@ -191,6 +191,26 @@ class TUIWidgetBuilder
         return std::move(derived());
     }
 
+    template <typename TValue>
+    [[nodiscard]] TDerived& setStyleField(std::string name, TValue value) &
+        requires requires(TWidget& w, std::string n, TValue&& v) {
+            w.setStyleField(std::move(n), std::forward<TValue>(v));
+        }
+    {
+        _widget->setStyleField(std::move(name), std::move(value));
+        return derived();
+    }
+
+    template <typename TValue>
+    [[nodiscard]] TDerived&& setStyleField(std::string name, TValue value) &&
+        requires requires(TWidget& w, std::string n, TValue&& v) {
+            w.setStyleField(std::move(n), std::forward<TValue>(v));
+        }
+    {
+        _widget->setStyleField(std::move(name), std::move(value));
+        return std::move(derived());
+    }
+
   protected:
     std::shared_ptr<TWidget> _widget;
 

@@ -970,7 +970,8 @@ void FQuadRender::drawTexture(const glm::vec3& position,
                               const glm::vec2& size,
                               ya::Ptr<Texture> texture,
                               const glm::vec4& tint,
-                              const glm::vec2& uvScale)
+                              const glm::vec2& uvScale,
+                              const glm::vec2& uvTranslation)
 {
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
@@ -982,13 +983,14 @@ void FQuadRender::drawTexture(const glm::vec3& position,
                       glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
 
     uint32_t textureIdx = findOrAddTexture(texture);
-    drawTextureInternal(model, textureIdx, tint, uvScale);
+    drawTextureInternal(model, textureIdx, tint, uvScale, uvTranslation);
 }
 
 void FQuadRender::drawTexture(const glm::mat4& transform,
                               ya::Ptr<Texture> texture,
                               const glm::vec4& tint,
-                              const glm::vec2& uvScale)
+                              const glm::vec2& uvScale,
+                              const glm::vec2& uvTranslation)
 {
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
@@ -997,7 +999,7 @@ void FQuadRender::drawTexture(const glm::mat4& transform,
     }
 
     uint32_t textureIdx = findOrAddTexture(texture);
-    drawTextureInternal(transform, textureIdx, tint, {uvScale.x, uvScale.y});
+    drawTextureInternal(transform, textureIdx, tint, {uvScale.x, uvScale.y}, uvTranslation);
 }
 
 void FQuadRender::drawWorldTexture(const glm::vec3&            center,

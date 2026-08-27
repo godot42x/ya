@@ -151,19 +151,21 @@ struct YA_RENDER_2D_API Render2D
                            const glm::vec2& size,
                            ya::Ptr<Texture> texture = nullptr,
                            const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                           const glm::vec2& uvScale = {1.0f, 1.0f})
+                           const glm::vec2& uvScale = {1.0f, 1.0f},
+                           const glm::vec2& uvOffset = {0.0f, 0.0f})
     {
         beginBatch(ERender2dBatchKind::ScreenQuad);
-        quadRender()->drawTexture(position, size, texture, tint, uvScale);
+        quadRender()->drawTexture(position, size, texture, tint, uvScale, uvOffset);
     }
 
     static void makeSprite(const glm::mat4& transform,
                            ya::Ptr<Texture> texture = nullptr,
                            const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                           const glm::vec2& uvScale = {1.0f, 1.0f})
+                           const glm::vec2& uvScale = {1.0f, 1.0f},
+                           const glm::vec2& uvOffset = {0.0f, 0.0f})
     {
         beginBatch(ERender2dBatchKind::ScreenQuad);
-        quadRender()->drawTexture(transform, texture, tint, uvScale);
+        quadRender()->drawTexture(transform, texture, tint, uvScale, uvOffset);
     }
 
     static void makeWorldSprite(const glm::vec3& worldCenter,

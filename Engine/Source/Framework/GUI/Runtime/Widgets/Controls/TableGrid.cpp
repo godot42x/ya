@@ -125,7 +125,7 @@ int UITableGrid::hitRowIndex(const glm::vec2& point) const
 void UITableGrid::paintSelf(UIFrameBuilder& builder)
 {
     // (Guardrail G1: the base paint template clips this widget's own rect.)
-    const FTableGridStyle style = resolveWidgetStyle<FTableGridStyle>(*this, _authoredStyle);
+    const FTableGridStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, style.backgroundFill);
 
     // Resolve the selection first so the dependency is recorded even when no

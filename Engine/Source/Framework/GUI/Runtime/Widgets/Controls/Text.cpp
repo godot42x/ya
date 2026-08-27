@@ -89,40 +89,41 @@ std::vector<std::string> UIText::wrapText(const std::string& text,
     return lines;
 }
 
-FTextStyle UIText::resolvedStyle(ReactiveBase::EDirtyLevel level) const
+const FTextStyle& UIText::resolvedStyle(ReactiveBase::EDirtyLevel level, bool bTrackDependencies) const
 {
-    // Resolve chain: authored TStyle (setStyle / setColor) > theme key >
-    // authoring fields. Theme lookup registers the generation + style
-    // Reactive edges; an authored TStyle does not, so a theme switch cannot
-    // clobber an instance override.
-    if (_authoredStyle.has_value()) {
-        return *_authoredStyle;
-    }
-    if (!_styleKey.empty()) {
-        if (const FTextStyle* themed = resolveThemeStyle<FTextStyle>(*this, _styleKey, level)) {
-            return *themed;
-        }
-    }
-    FTextStyle style;
-    style.fillColor = FBrush::Solid(_color);
-    style.textColor = _color;
-    style.fontSize  = _fontSize;
-    return style;
+    return resolvedStyleCache(*this, level,
+                              [this](FTextStyle& style) {
+                                  const bool bThemed = !_styleKey.empty() && getTree() && getTree()->getTheme()
+                                                       && getTree()->getTheme()->find<FTextStyle>(_styleKey);
+                                  if (bThemed) {
+                                      return;
+                                  }
+                                  const bool bHasFontSize = _authoredStyle.is_object() && _authoredStyle.contains("fontSize");
+                                  const bool bHasTextColor = _authoredStyle.is_object() && _authoredStyle.contains("textColor");
+                                  const bool bHasFillColor = _authoredStyle.is_object() && _authoredStyle.contains("fillColor");
+                                  if (!bHasFontSize) {
+                                      style.fontSize = _fontSize;
+                                  }
+                                  if (!bHasTextColor) {
+                                      style.textColor = _color;
+                                  }
+                                  if (!bHasFillColor) {
+                                      style.fillColor = FBrush::Solid(_color);
+                                  }
+                              },
+                              bTrackDependencies);
 }
 
 void UIText::deserializeFields(const nlohmann::json& fields)
 {
     UIElement::deserializeFields(fields);
     // Legacy documents stored a non-default `_color` without `_authoredStyle`.
-    // Promote that color into the authored slot so a mounted theme cannot
+    // Promote that color as a sparse overlay so a mounted theme cannot
     // clobber the saved appearance. Default white stays un-authored.
     static const glm::vec4 kDefaultTextColor{1.0f, 1.0f, 1.0f, 1.0f};
-    if (!_authoredStyle && _color != kDefaultTextColor) {
-        FTextStyle style;
-        style.textColor = _color;
-        style.fillColor = FBrush::Solid(_color);
-        style.fontSize  = _fontSize;
-        _authoredStyle  = std::move(style);
+    if (!hasAuthoredStyle() && _color != kDefaultTextColor) {
+        setStyleField("textColor", _color, EUIPropertyImpact::Paint);
+        setStyleField("fillColor", FBrush::Solid(_color), EUIPropertyImpact::Paint);
     }
 }
 
@@ -135,7 +136,7 @@ glm::vec2 UIText::computeDesiredSize() const
     // exactly when a binding is active. (Measure runs during layout, before
     // the paint walk, so get() here does not register a dependency; the Layout
     // edge is instead established by paintSelf at the same level.)
-    const FTextStyle style = resolvedStyle(ReactiveBase::EDirtyLevel::Layout);
+    const FTextStyle& style = resolvedStyle(ReactiveBase::EDirtyLevel::Layout, false);
     auto               font  = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (!font) {
         return _size;

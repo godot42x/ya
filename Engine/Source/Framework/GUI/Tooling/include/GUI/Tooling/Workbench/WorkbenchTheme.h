@@ -12,7 +12,8 @@
 // "dock"/"floating"/"text") plus per-role shell keys ("panel.window",
 // "panel.canvas", "text.header", "text.muted") and form-widget keys
 // ("tree"/"textfield"/"menu"/"selectable"/"dragfloat"/"checkbox"/"combobox"/
-// "slider"/"table"/"spinbox"/"radio"/"coloredit"/"searchcombo") from the mounted
+// "slider"/"table"/"spinbox"/"radio"/"coloredit"/"searchcombo") plus drag
+// chrome ("drag.source"/"drag.target"/"drag.ghost") from the mounted
 // WorkbenchTheme, so swapping the theme restyles the whole shell at once.
 // ============================================================================
 
@@ -101,6 +102,7 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
     tree.arrowColor       = muted;
     tree.arrowHoveredFill = FBrush::Solid(bDark ? glm::vec4{0.32f, 0.36f, 0.44f, 1.0f}
                                                 : glm::vec4{0.78f, 0.80f, 0.85f, 1.0f});
+    tree.dropIndicator    = selected;
     theme.define<ya::FTreeViewStyle>("tree", tree);
 
     auto field = ya::FTextFieldStyle{};
@@ -229,6 +231,22 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
     ghost.fillColor = FBrush::Solid(bDark ? glm::vec4{0.24f, 0.46f, 0.82f, 0.75f}
                                           : glm::vec4{0.32f, 0.55f, 0.90f, 0.75f});
     theme.define<ya::FPanelStyle>("drag.ghost", ghost);
+
+    auto dragSource = ya::FDragDropStyle{};
+    dragSource.normalFill = FBrush::Solid(bDark ? glm::vec4{0.20f, 0.22f, 0.27f, 1.0f}
+                                                : glm::vec4{0.86f, 0.88f, 0.92f, 1.0f});
+    dragSource.activeFill = FBrush::Solid(bDark ? glm::vec4{0.18f, 0.24f, 0.34f, 1.0f}
+                                                : glm::vec4{0.76f, 0.82f, 0.92f, 1.0f});
+    dragSource.textColor  = text;
+    theme.define<ya::FDragDropStyle>("drag.source", dragSource);
+
+    auto dragTarget = ya::FDragDropStyle{};
+    dragTarget.normalFill = FBrush::Solid(bDark ? glm::vec4{0.13f, 0.15f, 0.19f, 1.0f}
+                                                : glm::vec4{0.90f, 0.91f, 0.93f, 1.0f});
+    dragTarget.activeFill = FBrush::Solid(bDark ? glm::vec4{0.24f, 0.46f, 0.82f, 0.85f}
+                                                : glm::vec4{0.32f, 0.55f, 0.90f, 0.75f});
+    dragTarget.textColor  = text;
+    theme.define<ya::FDragDropStyle>("drag.target", dragTarget);
 }
 
 /// Build the tree-level UITheme for a look (`bDark`). The theme defines every

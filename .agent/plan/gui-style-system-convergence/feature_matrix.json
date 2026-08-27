@@ -81,8 +81,8 @@
         },
         {
           "id": "brush_abstraction",
-          "status": "in_progress",
-          "notes": "FBrush 类型已落地（drawType/tintColor/resource/margin）+ UIFrameBuilder::addBrush 对接（Image 型复用 addSprite，纯色=无 resource 退化）；NinePatch/Border 渲染降级为整张拉伸，UV 子区域切片待做（drawTextureInternal 已有 uvTranslation 未暴露）"
+          "status": "pass",
+          "notes": "FBrush 类型已落地（drawType/tintColor/resource/margin）+ UIFrameBuilder::addBrush；NinePatch/Border 经 sliceBrush 切成 UV 子矩形 sprite，compose 透传 uvScale/uvOffset；无纹理尺寸时退回整张拉伸"
         },
         {
           "id": "reflect_equal",
@@ -319,7 +319,7 @@
         {
           "id": "game_hud_brush_extension",
           "status": "planned",
-          "notes": "game HUD 首个 typed style 消费（image/nine-patch brush）——前置为 NinePatch UV 切片渲染（长期待办）"
+          "notes": "game HUD 首个 typed style 消费（image/nine-patch brush）；NinePatch UV 切片已落地，待 HUD 内容接入"
         }
       ]
     }

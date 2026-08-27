@@ -37,7 +37,7 @@
 ## 当前下一刀
 
 1. （可选实现延伸）subtree override（带 generation Reactive）——需要时再做
-2. （可选）game HUD 首个 typed style 消费（前置：NinePatch UV 切片渲染）
+2. （可选）game HUD 首个 typed style 消费（NinePatch UV 切片已落地，可用 image brush 接 HUD）
 3. 长期观察：跨 app 主题资产平移需求出现时再评估 selector/DSL
 
 ## 已完成里程碑

@@ -42,18 +42,17 @@ struct YA_GUI_API UIPanel : public UIElement, public UIStyledWidget<UIPanel, FPa
     /// brush; the compose pass routes the SDF round-rect shader branch.
     float _cornerRadius = 0.0f;
 
-    /// Degenerate authored FPanelStyle: writes a solid fillColor and keeps
-    /// `_color` in sync for getColor / GI-202. Paint-only so presenters can
-    /// recolor every frame without a layout pass.
+    /// Overlay fillColor on the theme; keeps `_color` in sync for getColor /
+    /// GI-202. Paint-only so presenters can recolor every frame without a
+    /// layout pass. FPanelStyle currently has only fillColor, so this is also
+    /// a complete freeze of that type.
     void setColor(const glm::vec4& value)
     {
         if (_color == value) {
             return;
         }
         _color = value;
-        FPanelStyle next;
-        next.fillColor = FBrush::Solid(value);
-        setStyle(std::move(next), EUIPropertyImpact::Paint);
+        setStyleField("fillColor", FBrush::Solid(value), EUIPropertyImpact::Paint);
     }
     [[nodiscard]] const glm::vec4& getColor() const { return _color; }
     [[nodiscard]] bool hasExplicitFill() const { return hasAuthoredStyle(); }

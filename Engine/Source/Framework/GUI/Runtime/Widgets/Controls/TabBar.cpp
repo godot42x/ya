@@ -20,7 +20,7 @@ void UITabButton::paintSelf(UIFrameBuilder& builder)
     // re-measure (a Paint-only edge would leave the old geometry). Absent
     // key/theme → default-constructed FTabStyle is the framework fallback
     // (Phase 3 cleanup: no bare fields).
-    const FTabStyle style = resolveWidgetStyle<FTabStyle>(*this, _authoredStyle, ReactiveBase::EDirtyLevel::Layout);
+    const FTabStyle& style = resolvedStyle(ReactiveBase::EDirtyLevel::Layout);
 
     if (_bSelected) {
         // Selected tab reads as "connected to the content below": the fill is
@@ -57,8 +57,8 @@ glm::vec2 UITabButton::computeDesiredSize() const
     // paintSelf; resolve here is a pure read, no dependency registration
     // outside the paint walk). Absent key/theme → default-constructed
     // FTabStyle padding is the framework fallback.
-    const FTabStyle style = resolveWidgetStyle<FTabStyle>(*this, _authoredStyle, ReactiveBase::EDirtyLevel::Layout);
-    auto            font    = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    const FTabStyle& style = resolvedStyle(ReactiveBase::EDirtyLevel::Layout, false);
+    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     const float textWidth = font ? font->measureText(_label) : static_cast<float>(_label.size()) * 7.0f;
     return {textWidth + style.padding.x * 2.0f, style.padding.y * 2.0f + (font ? font->lineHeight : 14.0f)};
 }
@@ -264,7 +264,7 @@ void UITabBar::paintSelf(UIFrameBuilder& builder)
     // empty-zone placeholder) comes from FTabStyle when the key resolves.
     // Resolve unconditionally so the theme-generation edge is registered even
     // when only the rule branch paints.
-    const FTabStyle style = resolveWidgetStyle<FTabStyle>(*this, _authoredStyle);
+    const FTabStyle& style = resolvedStyle();
     if (!_tabs.empty()) {
         // Bottom rule separating the strip from the content host below it.
         const float y = _layoutRect.pos.y + _layoutRect.extent.y - 1.0f;

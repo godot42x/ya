@@ -565,7 +565,7 @@ void FWorkbenchSurface::rebuildItemRows()
         label->setSize({240.0f, 22.0f});
         label->_fontSize = 13;
         label->setText(item.bVisible ? item.name : item.name + " (hidden)");
-        label->setColor({0.88f, 0.90f, 0.94f, 1.0f});
+        label->setStyleKey("text");
         label->_vAlign   = ya::EWidgetAlignV::Center;
         // Tree indentation: one level per parent depth.
         label->setPosition({static_cast<float>(workspace.getDepth(item.id)) * 14.0f, 0.0f});

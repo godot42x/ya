@@ -72,7 +72,7 @@ UISelectableRow::UISelectableRow(std::string name) : UIElement(std::move(name), 
 
 void UISelectableRow::paintSelf(UIFrameBuilder& builder)
 {
-    const FSelectableRowStyle style = resolveWidgetStyle<FSelectableRowStyle>(*this, _authoredStyle);
+    const FSelectableRowStyle& style = resolvedStyle();
     const FBrush& fill = _bDropHighlighted ? style.selectedHoveredFill
                          : _bSelected      ? (_bHovered ? style.selectedHoveredFill : style.selectedFill)
                                            : (_bHovered ? style.hoveredFill : style.normalFill);

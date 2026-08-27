@@ -4,9 +4,10 @@
 
 // ============================================================================
 // Authored TStyle persistence: FBrush + every F*Style is a reflected value
-// type so UIDocument can round-trip an authored TStyle object. Widgets persist
-// the slot via UIElement's virtual serializeAuthoredStyle (mixin MI offset).
-// Empty authored serializes as omitted/null; an object reconstitutes TStyle.
+// type so UIDocument can round-trip a sparse `_authoredStyle` patch (or a
+// legacy full TStyle object, which is a freeze). Widgets persist the slot
+// via UIElement's virtual serializeAuthoredStyle (mixin MI offset).
+// Empty authored serializes as omitted/null; an object reconstitutes the patch.
 // ============================================================================
 
 YA_REFLECT_ENUM_BEGIN(ya::FBrush::EDrawType)
@@ -95,6 +96,7 @@ YA_REFLECT_FIELD(selectedFill)
 YA_REFLECT_FIELD(hoveredFill)
 YA_REFLECT_FIELD(arrowColor)
 YA_REFLECT_FIELD(arrowHoveredFill)
+YA_REFLECT_FIELD(dropIndicator)
 YA_REFLECT_FIELD(fontSize)
 YA_REFLECT_END_EXTERNAL()
 
@@ -203,4 +205,11 @@ YA_REFLECT_END_EXTERNAL()
 
 YA_REFLECT_BEGIN_EXTERNAL(ya::FPopupStyle)
 YA_REFLECT_FIELD(modalFill)
+YA_REFLECT_END_EXTERNAL()
+
+YA_REFLECT_BEGIN_EXTERNAL(ya::FDragDropStyle)
+YA_REFLECT_FIELD(normalFill)
+YA_REFLECT_FIELD(activeFill)
+YA_REFLECT_FIELD(textColor)
+YA_REFLECT_FIELD(fontSize)
 YA_REFLECT_END_EXTERNAL()

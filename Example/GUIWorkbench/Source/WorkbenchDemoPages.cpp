@@ -11,6 +11,7 @@
 #include "GUI/Widgets/Controls/DockFloatingHost.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/DragDrop.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/Menu.h"
@@ -96,63 +97,17 @@ std::shared_ptr<ya::UIContainer> makeRow(ya::WidgetTree& tree, ya::UIElement& pa
     return row;
 }
 
-struct FDemoDragDropTile : public ya::UIElement
+std::shared_ptr<ya::UIDragDropTile> makeDemoDragSource(std::string name,
+                                                       std::string label,
+                                                       std::string payload)
 {
-    enum class EKind : uint8_t
-    {
-        DragSource,
-        DropTarget,
-    };
-
-    FDemoDragDropTile(std::string name, EKind kind) : ya::UIElement(std::move(name)), _kind(kind)
-    {
-        _hitFilter = ya::EWidgetHitFilter::Stop;
-    }
-
-    std::string _label;
-    std::string _highlightLabel = "DROP HERE";
-
-    void setPressed(bool pressed) { _bPressed = pressed; }
-    void setHighlighted(bool highlighted) { _bHighlighted = highlighted; }
-
-    void paintSelf(ya::UIFrameBuilder& builder) override
-    {
-        const glm::vec4 fill = (_kind == EKind::DropTarget)
-            ? (_bHighlighted ? glm::vec4{0.24f, 0.46f, 0.82f, 0.85f}
-                             : glm::vec4{0.13f, 0.15f, 0.19f, 1.0f})
-            : (_bPressed ? glm::vec4{0.18f, 0.24f, 0.34f, 1.0f}
-                         : glm::vec4{0.20f, 0.22f, 0.27f, 1.0f});
-        builder.addSprite(_layoutRect, fill, nullptr);
-        auto font = ya::FontManager::get()->getFont(ya::DEFAULT_RUNTIME_FONT_NAME, 13);
-        if (font) {
-            const std::string& text = (_kind == EKind::DropTarget && _bHighlighted) ? _highlightLabel : _label;
-            builder.addText(_layoutRect, text, {0.90f, 0.92f, 0.95f, 1.0f}, font, ya::EWidgetAlignH::Center, ya::EWidgetAlignV::Center);
-        }
-    }
-
-    void clearTransientInputState() override
-    {
-        _bPressed = false;
-        _bHighlighted = false;
-    }
-
-  private:
-    EKind _kind;
-    ya::VisualFlag _bPressed{*this};
-    ya::VisualFlag _bHighlighted{*this};
-};
-
-std::shared_ptr<FDemoDragDropTile> makeDemoDragSource(std::string name,
-                                                      std::string label,
-                                                      std::string payload)
-{
-    auto tile = std::make_shared<FDemoDragDropTile>(std::move(name), FDemoDragDropTile::EKind::DragSource);
+    auto tile = std::make_shared<ya::UIDragDropTile>(std::move(name), ya::UIDragDropTile::EKind::Source);
     tile->_label = std::move(label);
     auto behavior = std::make_shared<ya::UIDragSourceBehavior>();
     behavior->bCapturePointerOnPress = true;
     behavior->setPressedState = [](ya::UIElement& owner, bool bPressed)
     {
-        if (auto* tile = dynamic_cast<FDemoDragDropTile*>(&owner)) {
+        if (auto* tile = dynamic_cast<ya::UIDragDropTile*>(&owner)) {
             tile->setPressed(bPressed);
         }
     };
@@ -168,13 +123,13 @@ std::shared_ptr<FDemoDragDropTile> makeDemoDragSource(std::string name,
     return tile;
 }
 
-std::shared_ptr<FDemoDragDropTile> makeDemoDropTarget(
+std::shared_ptr<ya::UIDragDropTile> makeDemoDropTarget(
     std::string name,
     std::string label,
     std::function<bool(const std::string& payload)> accept,
     std::function<void(const std::string& payload)> onDropped)
 {
-    auto tile = std::make_shared<FDemoDragDropTile>(std::move(name), FDemoDragDropTile::EKind::DropTarget);
+    auto tile = std::make_shared<ya::UIDragDropTile>(std::move(name), ya::UIDragDropTile::EKind::Target);
     tile->_label = std::move(label);
     auto behavior = std::make_shared<ya::UIDropTargetBehavior>();
     behavior->acceptPayload = [accept = std::move(accept)](ya::UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
@@ -189,7 +144,7 @@ std::shared_ptr<FDemoDragDropTile> makeDemoDropTarget(
     };
     behavior->setHighlightState = [](ya::UIElement& owner, bool bHighlight)
     {
-        if (auto* tile = dynamic_cast<FDemoDragDropTile*>(&owner)) {
+        if (auto* tile = dynamic_cast<ya::UIDragDropTile*>(&owner)) {
             tile->setHighlighted(bHighlight);
         }
     };

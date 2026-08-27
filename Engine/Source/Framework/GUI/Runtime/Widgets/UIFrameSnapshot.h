@@ -83,6 +83,10 @@ struct UIFrameDrawItem
     // Sprite: null texture = white. Strong reference resolved at snapshot
     // build time: the packet keeps the texture alive through queue submit.
     std::shared_ptr<Texture> texture;
+    // Sprite UV: default (offset 0, scale 1) stretches the whole resource.
+    // Nine-patch cells set a sub-rect in UV space.
+    glm::vec2 uvOffset = {0.0f, 0.0f};
+    glm::vec2 uvScale  = {1.0f, 1.0f};
     // Corner radius in target px for the SDF round-rect alpha branch (0 = sharp).
     float     cornerRadius = 0.0f;
     // Text:
@@ -115,20 +119,24 @@ class YA_GUI_API UIFrameBuilder
     void popClip();
 
     /// Record a sprite. `logicalRect` in tree-local logical pixels; null
-    /// texture draws the white texture.
-    void addSprite(const Rect2D& logicalRect, const glm::vec4& color, const std::shared_ptr<Texture>& texture);
+    /// texture draws the white texture. `uvOffset`/`uvScale` select a UV
+    /// sub-rect (default = whole texture).
+    void addSprite(const Rect2D&                    logicalRect,
+                   const glm::vec4&                 color,
+                   const std::shared_ptr<Texture>&  texture,
+                   glm::vec2                        uvOffset = {0.0f, 0.0f},
+                   glm::vec2                        uvScale  = {1.0f, 1.0f});
 
     /// Record a filled rounded rectangle. `cornerRadius` is in tree-local
     /// logical px (scaled to target px at compose time). Drawn via the shader's
     /// SDF round-rect alpha branch (no texture needed).
     void addRoundedRect(const Rect2D& logicalRect, const glm::vec4& color, float cornerRadius);
 
-    /// Record a brush (solid color / image / nine-patch). A solid brush has an
-    /// empty resource and its tint colors the white sprite; an image brush
-    /// resolves `resource` through the build context's texture resolver.
-    /// NinePatch/Border currently degrade to a whole-resource stretch: UV
-    /// sub-region slicing needs `uvTranslation` exposed on the public draw
-    /// path (drawTextureInternal already carries it) — see Brush.h.
+    /// Record a brush (solid color / image / nine-patch / border). A solid
+    /// brush has an empty resource and its tint colors the white sprite; an
+    /// image brush resolves `resource` through the build context's texture
+    /// resolver. NinePatch/Border slice into UV sub-rects (1 tex px = 1
+    /// logical px); missing texture size falls back to a whole-resource stretch.
     void addBrush(const Rect2D& logicalRect, const FBrush& brush);
 
     /// Record text aligned inside `logicalRect` (h/v align via measured text).

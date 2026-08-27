@@ -44,7 +44,7 @@ size_t nextCodePoint(const std::string& text, size_t byteIndex)
 
 void UITextField::paintSelf(UIFrameBuilder& builder)
 {
-    const FTextFieldStyle style = resolveWidgetStyle<FTextFieldStyle>(*this, _authoredStyle);
+    const FTextFieldStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, style.backgroundFill);
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);

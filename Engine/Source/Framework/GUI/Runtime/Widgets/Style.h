@@ -174,6 +174,7 @@ struct FTreeViewStyle
     FBrush    hoveredFill       = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
     glm::vec4 arrowColor        = {0.60f, 0.65f, 0.70f, 1.0f};
     FBrush    arrowHoveredFill  = FBrush::Solid({0.32f, 0.36f, 0.44f, 1.0f});
+    glm::vec4 dropIndicator     = {0.22f, 0.42f, 0.78f, 1.0f};
     uint32_t  fontSize          = 14;
 
     bool operator==(const FTreeViewStyle&) const = default;
@@ -346,6 +347,18 @@ struct FPopupStyle
     FBrush modalFill = FBrush::Solid({0.0f, 0.0f, 0.0f, 0.45f});
 
     bool operator==(const FPopupStyle&) const = default;
+};
+
+/// Drag source / drop target chrome. Sources use key `drag.source`, targets
+/// `drag.target`. `activeFill` is pressed (source) or drop-highlight (target).
+struct FDragDropStyle
+{
+    FBrush    normalFill = FBrush::Solid({0.20f, 0.22f, 0.27f, 1.0f});
+    FBrush    activeFill = FBrush::Solid({0.18f, 0.24f, 0.34f, 1.0f});
+    glm::vec4 textColor  = {0.90f, 0.92f, 0.95f, 1.0f};
+    uint32_t  fontSize   = 13;
+
+    bool operator==(const FDragDropStyle&) const = default;
 };
 
 /// Named style collection. Styles are Reactive so widgets can bind them and

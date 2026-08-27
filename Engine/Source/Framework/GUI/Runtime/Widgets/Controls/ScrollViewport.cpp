@@ -45,7 +45,7 @@ void UIScrollViewport::paintSelf(UIFrameBuilder& builder)
     // from FScrollBarStyle. Paint-only (the width does not inset content).
     // Absent key/theme → default-constructed style is the fallback (Phase 3
     // cleanup: no bare fields).
-    const FScrollBarStyle style = resolveWidgetStyle<FScrollBarStyle>(*this, _authoredStyle);
+    const FScrollBarStyle& style = resolvedStyle();
 
     const float  trackX = _layoutRect.pos.x + _layoutRect.extent.x - style.width;
     const Rect2D track{

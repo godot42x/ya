@@ -1,5 +1,6 @@
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
+#include "RHI/Core/Texture.h"
 #include "Render/Resources/FontManager.h"
 
 #include <algorithm>
@@ -27,14 +28,20 @@ void UIFrameBuilder::popClip()
     }
 }
 
-void UIFrameBuilder::addSprite(const Rect2D& logicalRect, const glm::vec4& color, const std::shared_ptr<Texture>& texture)
+void UIFrameBuilder::addSprite(const Rect2D&                   logicalRect,
+                               const glm::vec4&                color,
+                               const std::shared_ptr<Texture>& texture,
+                               glm::vec2                       uvOffset,
+                               glm::vec2                       uvScale)
 {
     UIFrameDrawItem item;
-    item.kind    = UIFrameDrawItem::EKind::Sprite;
-    item.pos     = toPx(logicalRect.pos);
-    item.size    = logicalRect.extent * _ctx.uiScale;
-    item.color   = color;
-    item.texture = texture;
+    item.kind     = UIFrameDrawItem::EKind::Sprite;
+    item.pos      = toPx(logicalRect.pos);
+    item.size     = logicalRect.extent * _ctx.uiScale;
+    item.color    = color;
+    item.texture  = texture;
+    item.uvOffset = uvOffset;
+    item.uvScale  = uvScale;
     if (!_clipStack.empty()) {
         item.bClipped = true;
         const Rect2D& clip = _clipStack.back();
@@ -64,16 +71,22 @@ void UIFrameBuilder::addRoundedRect(const Rect2D& logicalRect, const glm::vec4& 
 void UIFrameBuilder::addBrush(const Rect2D& logicalRect, const FBrush& brush)
 {
     std::shared_ptr<Texture> texture;
+    glm::vec2                texturePx{0.0f, 0.0f};
     if (!brush.resource.empty()) {
         texture = resolveTexture(brush.resource);
+        if (texture) {
+            texturePx = {static_cast<float>(texture->getWidth()), static_cast<float>(texture->getHeight())};
+        }
     }
     // Solid fill (no resource) and image (resource + tint) both go through
     // addSprite: null texture draws the white sprite, so tint colors it. This
     // is the "solid color is the degenerate brush form" grounding.
-    // NinePatch/Border degrade to a whole-resource stretch until UV sub-region
-    // slicing lands (drawTextureInternal already carries uvTranslation; the
-    // public drawTexture/makeSprite path does not expose it yet).
-    addSprite(logicalRect, brush.tintColor, texture);
+    // NinePatch/Border emit one sprite per UV cell (see sliceBrush).
+    FBrushSlice slices[kMaxBrushSlices];
+    const int   count = sliceBrush(brush, logicalRect, texturePx, slices);
+    for (int i = 0; i < count; ++i) {
+        addSprite(slices[i].dest, brush.tintColor, texture, slices[i].uvOffset, slices[i].uvScale);
+    }
 }
 
 void UIFrameBuilder::addText(const Rect2D& logicalRect,

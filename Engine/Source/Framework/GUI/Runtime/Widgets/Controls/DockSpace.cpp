@@ -340,7 +340,7 @@ void UIDockSpace::paintDropPreviewOverlay(UIFrameBuilder& builder) const
     if (!_preview || _preview->bDisabled) {
         return;
     }
-    const FDockSpaceStyle style = resolveWidgetStyle<FDockSpaceStyle>(*this, _authoredStyle);
+    const FDockSpaceStyle& style = resolvedStyle();
 
     // Floating-window target: highlight the whole window as a "merge as tab"
     // drop zone (targetLeafId is kInvalidDockNodeId for these previews).
@@ -618,7 +618,7 @@ void UIDockSpace::paintSelf(UIFrameBuilder& builder)
     // FDockSpaceStyle (darker than any panel so the tabs/content read as
     // stacked surfaces instead of floating rectangles). Absent key/theme →
     // default-constructed style is the fallback (no magic literals here).
-    const FDockSpaceStyle style = resolveWidgetStyle<FDockSpaceStyle>(*this, _authoredStyle);
+    const FDockSpaceStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, style.canvasColor);
 }
 

@@ -362,7 +362,7 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
     // gone — the framework guarantees it.)
 
     const auto rows = flattenVisible();
-    const FTreeViewStyle style = resolveWidgetStyle<FTreeViewStyle>(*this, _authoredStyle);
+    const FTreeViewStyle& style = resolvedStyle();
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
 
     // Resolve the selection first so the dependency is recorded even when no
@@ -415,13 +415,13 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
         if (_dropMode == 1) {
             builder.addRectOutline(Rect2D{.pos = {_layoutRect.pos.x, y},
                                           .extent = {_layoutRect.extent.x, _rowHeight}},
-                                   style.selectedFill.tintColor, 2.0f);
+                                   style.dropIndicator, 2.0f);
         }
         else {
             const float lineY = y + (_dropMode == 0 ? 0.0f : _rowHeight);
             builder.addLine({_layoutRect.pos.x, lineY},
                             {_layoutRect.pos.x + _layoutRect.extent.x, lineY},
-                            style.selectedFill.tintColor, 2.0f);
+                            style.dropIndicator, 2.0f);
         }
     }
 }

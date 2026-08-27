@@ -187,6 +187,31 @@ TEST(DeclarativeContractTest, DslSetStyleOverridesTheme)
     EXPECT_EQ(snap.items.front().color, glm::vec4(0.9f, 0.2f, 0.1f, 1.0f));
 }
 
+TEST(DeclarativeContractTest, DslSetStyleFieldInheritsUnpatchedThemeFields)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    auto       theme = std::make_shared<UITheme>();
+    FButtonStyle themed;
+    themed.normalFill  = FBrush::Solid({0.1f, 0.2f, 0.9f, 1.0f});
+    themed.hoveredFill = FBrush::Solid({0.2f, 0.9f, 0.2f, 1.0f});
+    theme->define<FButtonStyle>("button", themed);
+    tree.setTheme(theme.get());
+
+    auto page = ui::button("go")
+                    .setSize({80.0f, 32.0f})
+                    .setStyleField("normalFill", FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f}));
+    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page));
+    auto* button = dynamic_cast<UIButton*>(root.get());
+    ASSERT_NE(button, nullptr);
+
+    const UIFrameSnapshot snap = tree.buildSnapshot({});
+    ASSERT_FALSE(snap.items.empty());
+    EXPECT_EQ(snap.items.front().color, glm::vec4(0.9f, 0.2f, 0.1f, 1.0f));
+    const FButtonStyle resolved = resolveWidgetStyle<FButtonStyle>(*button, button->_authoredStyle);
+    EXPECT_EQ(resolved.normalFill, FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f}));
+    EXPECT_EQ(resolved.hoveredFill, FBrush::Solid({0.2f, 0.9f, 0.2f, 1.0f}));
+}
+
 TEST(DeclarativeContractTest, SnapshotDoesNotDependOnLiveWidgetAfterDetach)
 {
     WidgetTree tree({.width = 320, .height = 200});

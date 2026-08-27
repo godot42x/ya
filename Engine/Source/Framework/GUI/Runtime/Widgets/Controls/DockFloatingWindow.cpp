@@ -158,13 +158,19 @@ struct FResizeHandle final : UIElement
 
     void paintSelf(UIFrameBuilder& builder) override
     {
-        // Theme resolution (style-system Phase 3): the edge affordance color
-        // comes from the owner window's FFloatingWindowStyle when its key
-        // resolves (same tree; the handle registers its own generation edge).
-        const FFloatingWindowStyle style =
-            _owner ? resolveWidgetStyle<FFloatingWindowStyle>(*this, _owner->_styleKey, _owner->_authoredStyle)
-                   : FFloatingWindowStyle{};
-        const glm::vec4 edgeColor = style.edgeAffordance;
+        // Theme values come from the owner's computed-style cache. The handle
+        // is not a UIStyledWidget, so it still registers its own theme edges —
+        // otherwise a theme switch would leave the handle's paint items cached
+        // while the window body updated.
+        glm::vec4 edgeColor = FFloatingWindowStyle{}.edgeAffordance;
+        if (_owner) {
+            const FFloatingWindowStyle& ownerStyle =
+                _owner->resolvedStyle(ReactiveBase::EDirtyLevel::Paint, false);
+            if (stylePatchUsesThemeBase<FFloatingWindowStyle>(_owner->_styleKey, _owner->_authoredStyle)) {
+                (void)resolveThemeStyle<FFloatingWindowStyle>(*this, _owner->_styleKey);
+            }
+            edgeColor = ownerStyle.edgeAffordance;
+        }
         switch (_edge) {
         case UIDockFloatingWindow::EResizeEdge::Left:
             builder.addSprite({_layoutRect.pos, {1.0f, _layoutRect.extent.y}}, edgeColor, nullptr);
@@ -411,7 +417,7 @@ void UIDockFloatingWindow::paintSelf(UIFrameBuilder& builder)
     // default-constructed style is the fallback (no magic literals). Pure
     // visual, Paint level (minSize is consumed by the resize interaction
     // path, not layout).
-    const FFloatingWindowStyle style = resolveWidgetStyle<FFloatingWindowStyle>(*this, _authoredStyle);
+    const FFloatingWindowStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, style.bodyFill);
     builder.addRectOutline(_layoutRect, style.borderColor, 1.0f);
     builder.addRectOutline(
@@ -520,7 +526,7 @@ void UIDockFloatingWindow::clearTransientInputState()
 /// edge is registered by paintSelf.
 static glm::vec2 floatingMinSize(const UIDockFloatingWindow& window)
 {
-    return resolveWidgetStyle<FFloatingWindowStyle>(window, window._authoredStyle).minSize;
+    return window.resolvedStyle(ReactiveBase::EDirtyLevel::Paint, false).minSize;
 }
 
 void UIDockFloatingWindow::resizeTo(const glm::vec2& extent)

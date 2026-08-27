@@ -225,12 +225,14 @@ struct YA_RENDER_2D_API FQuadRender
                      const glm::vec2& size,
                      ya::Ptr<Texture> texture = nullptr,
                      const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                     const glm::vec2& uvScale = {1.0f, 1.0f});
+                     const glm::vec2& uvScale = {1.0f, 1.0f},
+                     const glm::vec2& uvTranslation = {0.0f, 0.0f});
 
     void drawTexture(const glm::mat4& transform,
                      ya::Ptr<Texture> texture = nullptr,
                      const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                     const glm::vec2& uvScale = {1.0f, 1.0f});
+                     const glm::vec2& uvScale = {1.0f, 1.0f},
+                     const glm::vec2& uvTranslation = {0.0f, 0.0f});
 
     void drawWorldTexture(const glm::vec3& center,
                           const glm::vec3& direction,

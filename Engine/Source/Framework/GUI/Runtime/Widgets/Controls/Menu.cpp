@@ -63,7 +63,7 @@ int nextSelectableMenuIndex(const std::vector<UIMenuItem*>& items, int currentIn
 
 void UIMenuItem::paintSelf(UIFrameBuilder& builder)
 {
-    const FMenuStyle style = resolveWidgetStyle<FMenuStyle>(*this, _authoredStyle);
+    const FMenuStyle& style = resolvedStyle();
     if (_bSeparator) {
         const float y = _layoutRect.pos.y + _layoutRect.extent.y * 0.5f;
         builder.addLine({_layoutRect.pos.x + UIMenu::kItemHorizontalPadding, y},

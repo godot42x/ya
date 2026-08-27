@@ -98,7 +98,7 @@ void UICheckBox::paintSelf(UIFrameBuilder& builder)
     boxRect.extent = glm::vec2(_boxSize);
     boxRect.pos.y += std::max(0.0f, (_layoutRect.extent.y - _boxSize) * 0.5f);
 
-    const FCheckBoxStyle style = resolveWidgetStyle<FCheckBoxStyle>(*this, _authoredStyle);
+    const FCheckBoxStyle& style = resolvedStyle();
     const FBrush& fill = _bChecked ? style.checkedFill
                          : _bHovered ? style.hoveredFill
                                      : style.boxFill;

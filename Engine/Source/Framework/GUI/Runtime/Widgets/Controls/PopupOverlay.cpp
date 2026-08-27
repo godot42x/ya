@@ -101,7 +101,7 @@ void UIPopupOverlay::paintSelf(UIFrameBuilder& builder)
     if (!isModal()) {
         return;
     }
-    const FPopupStyle style = resolveWidgetStyle<FPopupStyle>(*this, _authoredStyle);
+    const FPopupStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, style.modalFill);
 }
 
@@ -109,10 +109,8 @@ void UIPopupOverlay::deserializeFields(const nlohmann::json& fields)
 {
     UIElement::deserializeFields(fields);
     static const glm::vec4 kDefaultModal{0.0f, 0.0f, 0.0f, 0.45f};
-    if (!_authoredStyle && _modalColor != kDefaultModal) {
-        FPopupStyle style;
-        style.modalFill = FBrush::Solid(_modalColor);
-        _authoredStyle  = std::move(style);
+    if (!hasAuthoredStyle() && _modalColor != kDefaultModal) {
+        setStyleField("modalFill", FBrush::Solid(_modalColor), EUIPropertyImpact::Paint);
     }
 }
 

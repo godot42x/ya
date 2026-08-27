@@ -495,3 +495,46 @@ Text/Panel `setColor` 写入 authored `FTextStyle` / `FPanelStyle`（Paint 粒�
 ### 验证
 
 - `xmake b ya-testing && xmake r ya-testing --gtest_filter=ContainerSerializationTest.OptionalNullAndValueRoundtrip` — PASSED
+
+## 2026-08-27 — tree / list / dragdrop chrome
+
+- TreeView drop 指示改走 `FTreeViewStyle.dropIndicator`（不再借用 selectedFill）。
+- Workbench 列表行标签去掉 `setColor` 冻色，走 `text` key。
+- Demo drag/drop tile 升为 `UIDragDropTile` + `FDragDropStyle`，key `drag.source` / `drag.target`。
+
+### 验证
+
+- `xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test` — 212/212 PASSED（含 TreeViewSelectionFollowsTheme / DragDropTilesFollowTheme）
+
+## 2026-08-27 — sparse style overlay
+
+实例层从整份 `optional<TStyle>` freeze 改成稀疏 JSON patch（键 = 反射字段名）。`resolveWidgetStyle` 在 patch 未盖满全部字段时登记 theme 边并 `deserializeProperty` merge；`setStyle(TStyle)` 仍写全键 freeze。Text/Panel `setColor` / `setFontSize` 与 Image/Popup legacy promote 改为单键 overlay。DSL 基类加 `setStyleField`。
+
+### 验证
+
+- `xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test` — 215/215 PASSED（含 AuthoredButtonStyleWinsOverThemeAndIgnoresThemeSwitch / SparseStyleFieldInheritsUnpatchedFieldsOnThemeSwitch / SetColorOverlaysColorAndInheritsThemeFontSize / DslSetStyleFieldInheritsUnpatchedThemeFields）
+- `xmake b GUIWorkbench` 通过
+
+## 2026-08-27 — computed style cache
+
+把 theme + 稀疏 patch merge 移出 paint 热路径。Mixin 持 dense `_resolvedStyleCache`（generation / key / tree / dirty-level 快照）；`setStyle` / `setStyleField` / deserialize 使 cache 失效。recompute 条件：cache invalid/dirty、需要更强 Layout 粒度、widget paint-dirty（style Reactive `set()` 不 bump generation）、inherit 控件的 generation/tree/key 变化。cache hit 时 inherit 控件仍 `resolveThemeStyle` 登记 reactive 边。cache 不落盘。
+
+- 公开 `UIStyledWidget::resolvedStyle()`；Text/Panel/Button 及剩余 styled 控件的 `paintSelf` / TabButton measure 改读 cache。
+- TabButton paint 走 Layout；`computeDesiredSize` 走 Layout + `bTrackDependencies=false`（与 Text 一致）。
+- Floating resize handle 不是 `UIStyledWidget`：读 owner cache，自己登记 theme 边。ColorEdit 色板同理，仍走无缓存 `resolveWidgetStyle`。
+- 测试仍用 `resolveWidgetStyle` 断言 merge 语义。几何（rowHeight / indent / `_bAutoSize`）仍在 widget。不做 subtree theme override，也不在 WidgetTree 加 style phase。
+- 新增 `ThemeAttachAfterUnthemedBuildRepaintsKeyedButton`。
+
+### 验证
+
+- `xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test` — 216/216 PASSED
+- `xmake b GUIWorkbench` 通过
+
+## 2026-08-27 — FBrush NinePatch/Border UV 切片
+
+Phase 1 遗留的九宫格渲染落地。`sliceBrush` 把 dest 切成 Image(1) / NinePatch(最多 9) / Border(最多 8) 单元格；`UIFrameBuilder::addBrush` 每格一个 sprite，带 `uvOffset`/`uvScale`。compose 经 `Render2D::makeSprite` 把 UV 传到已有的 `drawTextureInternal`。margin 为纹理 px（1 tex px = 1 logical px）；dest 小于左右/上下 margin 时等比压缩；无纹理尺寸退回整张拉伸。dump 只在非默认 UV 时写出，不扰动既有 digest。
+
+### 验证
+
+- `xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test` — 222/222 PASSED（含 SliceBrushNinePatchEmitsNineCells / SliceBrushBorderOmitsCenter / SliceBrushScalesMarginsWhenDestIsSmaller / AddBrushNinePatchWithoutTextureStretches）
+- `xmake b GUIWorkbench` 通过

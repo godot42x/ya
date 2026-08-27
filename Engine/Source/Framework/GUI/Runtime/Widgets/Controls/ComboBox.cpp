@@ -37,7 +37,7 @@ void UIComboBox::select(int index)
 
 void UIComboBox::paintSelf(UIFrameBuilder& builder)
 {
-    const FComboBoxStyle style = resolveWidgetStyle<FComboBoxStyle>(*this, _authoredStyle);
+    const FComboBoxStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.fieldFill);
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);

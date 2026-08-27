@@ -31,7 +31,7 @@ void UIMenuBarItem::paintSelf(UIFrameBuilder& builder)
     // is explicitly sized by UIMenuBar (fontSize is not auto-measured), so
     // Paint level. When the key/theme is absent, the default-constructed
     // style IS the framework fallback (Phase 3 cleanup: no bare fields).
-    const FMenuBarItemStyle style = resolveWidgetStyle<FMenuBarItemStyle>(*this, _authoredStyle);
+    const FMenuBarItemStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.normalFill);
     const float separatorY = _layoutRect.pos.y + _layoutRect.extent.y - 0.5f;
     builder.addLine({_layoutRect.pos.x, separatorY},

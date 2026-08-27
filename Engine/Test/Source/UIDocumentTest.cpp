@@ -172,7 +172,8 @@ TEST(UIDocumentTest, AuthoredButtonStyleJsonRoundtrip)
     auto* restored = dynamic_cast<UIButton*>(instance.get());
     ASSERT_NE(restored, nullptr);
     ASSERT_TRUE(restored->hasAuthoredStyle());
-    EXPECT_EQ(restored->_authoredStyle->normalFill, FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f}));
+    EXPECT_EQ(resolveWidgetStyle<FButtonStyle>(*restored, restored->_authoredStyle).normalFill,
+              FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f}));
 }
 
 TEST(UIDocumentTest, AuthoredPanelFillSurvivesThemeAfterReload)

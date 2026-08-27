@@ -106,7 +106,9 @@ void replaySnapshotItems(const UIFrameSnapshot& snapshot)
                 Render2D::makeSprite(glm::vec3(item.pos, 0.0f),
                                      item.size,
                                      item.texture,
-                                     item.color);
+                                     item.color,
+                                     item.uvScale,
+                                     item.uvOffset);
             }
         }
         else if (item.kind == UIFrameDrawItem::EKind::Line) {

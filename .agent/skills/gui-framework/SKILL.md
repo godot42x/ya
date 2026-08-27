@@ -78,7 +78,7 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 ## 静态 DSL（live construct）
 
-- 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/panel/splitPane/scroll/overlay/sizeBox/...` 组好 builder，再单独 `ui::build(tree, parent, std::move(page))` 物化 live `UIElement`（Slate `SNew`）。不要把整棵 DSL 包进 `ui::build(...)`。`setAnchors` / `fillParent` / panel `setCornerRadius` / panel+text `setStyleKey` / container `childFill` 与 `child(node, FBoxSlotArgs)` / overlay `child(node, FOverlaySlotArgs)` 在 Construct 时写到 live widget。`setTooltip` 写在 base builder；Text `setWrap` / `setMaxWrapWidth` 控制折行；base `setVisibility`；split `setPadding`。`ui::button` 没有 `setText`；文字走内部 `UIText` 子 widget。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。自定义 / 复杂 demo widget（MenuBar、TreeView、TableGrid、InputExtras、DragSource/DropTarget、DockSpace、SelectableRow）用 `child(UIElementRef)` 挂进 DSL 壳，不要为此扩 Construct。Gallery / Interactions / Dock / Workbench 内置 Editor demo（`FWorkbenchSurface::buildEditorDemo`）已是一次 `ui::build`。Editor 的 `rebuildItemRows()` 仍是事件期 live attach/detach `UISelectableRow`。弹层（Menu / Modal / Dialog）仍在点击时 live 组装。Dock floating host 仍 `attachToLayer(Popup)`。Render 仍是 raw retained 对照。GameEditor chrome 已切到 `EditorSurface`（整窗 WidgetTree，不是 ImGui 内嵌 panel）。
+- 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/panel/splitPane/scroll/overlay/sizeBox/...` 组好 builder，再单独 `ui::build(tree, parent, std::move(page))` 物化 live `UIElement`（Slate `SNew`）。不要把整棵 DSL 包进 `ui::build(...)`。`setAnchors` / `fillParent` / panel `setCornerRadius` / panel+text `setStyleKey` / `setStyle`（freeze）/ `setStyleField`（单键 inherit）/ container `childFill` 与 `child(node, FBoxSlotArgs)` / overlay `child(node, FOverlaySlotArgs)` 在 Construct 时写到 live widget。`setTooltip` 写在 base builder；Text `setWrap` / `setMaxWrapWidth` 控制折行；base `setVisibility`；split `setPadding`。`ui::button` 没有 `setText`；文字走内部 `UIText` 子 widget。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。自定义 / 复杂 demo widget（MenuBar、TreeView、TableGrid、InputExtras、UIDragDropTile、DockSpace、SelectableRow）用 `child(UIElementRef)` 挂进 DSL 壳，不要为此扩 Construct。Gallery / Interactions / Dock / Workbench 内置 Editor demo（`FWorkbenchSurface::buildEditorDemo`）已是一次 `ui::build`。Editor 的 `rebuildItemRows()` 仍是事件期 live attach/detach `UISelectableRow`。弹层（Menu / Modal / Dialog）仍在点击时 live 组装。Dock floating host 仍 `attachToLayer(Popup)`。Render 仍是 raw retained 对照。GameEditor chrome 已切到 `EditorSurface`（整窗 WidgetTree，不是 ImGui 内嵌 panel）。
 - `UIDescription` / `UIReconciler` / `UIRenderController` / apply hook **已删除**。不要恢复 Description → apply → widget 转发层。
 - Document/script：`UIDocument::instantiate()`（registry factory）只实例化一次。变长集合走列表控件 + `ReactiveList`，不是整页 re-run。
 - `UIScreen` 是挂卸 / z-order / input blocking，不是每帧 `render()` owner。Gallery / Editor 不使用它；接到游戏多表面（HUD/模态）之前保持搁置。
@@ -166,22 +166,25 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 - 机制在 framework：`UITheme` + `resolveThemeStyle` + generation token。值在 app：
   WorkbenchTheme（demo 壳）/ EditorTheme（GameEditor chrome）。
-- Resolve：实例 authored `TStyle`（`setStyle` / Text·Panel `setColor`）> theme key > 默认构造的 typed style。
-- 高频路径是实例 `setStyle` / `setStyleKey`（DSL 基类 builder 已暴露）；切 theme 是低频目录切换。
-- `_styleKey` 在 `UIElement` 上反射；authored `TStyle` 经 `YA_GUI_AUTHORED_STYLE_IO` 虚函数写入 UIDocument（mixin 字段不能 `YA_REFLECT_FIELD`，MI 偏移不对）。空 optional ↔ JSON null 由 typed serializer 的 `is_optional` 偏特化解包。`FBrush`/`F*Style` 走运行时反射。
+- Resolve：稀疏 patch（JSON 键 = 反射字段名）overlay 到 theme 的 dense `TStyle`。`setStyle(TStyle)` 写全字段 = full freeze（不登记 theme 边）；`setStyleField` / Text·Panel `setColor` 只盖出现过的键，其余 inherit，**必须**登记 generation + style Reactive。空 / null / `{}` = 无覆盖。
+- 控件 paint/layout 读 `UIStyledWidget::resolvedStyle()`（dense cache）。merge（theme base + 稀疏 patch）在 dirty/recompute 时发生，不在每帧 paint 热路径。`resolveWidgetStyle` 仍是无缓存计算路径，给测试断言和非 `UIStyledWidget` 节点（如 ColorEdit 色板）用。cache 不落盘。
+- 高频路径是实例 `setStyle` / `setStyleField` / `setStyleKey`（DSL 基类 builder 已暴露）；切 theme 是低频目录切换。未盖满的控件在切皮肤时未覆写字段跟着变。
+- `_styleKey` 在 `UIElement` 上反射；稀疏 patch 经 `YA_GUI_AUTHORED_STYLE_IO` 虚函数写入 UIDocument 的 `_authoredStyle`（mixin 字段不能 `YA_REFLECT_FIELD`，MI 偏移不对）。缺键 = inherit；旧文档的全字段对象仍是 freeze。`FBrush`/`F*Style` 走运行时反射，merge 用 `deserializeProperty`。
+- `FBrush`：纯色 = 无 resource + tint；Image 整张拉伸；NinePatch/Border 按 `margin`（纹理 px，1 tex px = 1 logical px）切成最多 9/8 个 snapshot sprite，compose 经 `uvScale`/`uvOffset` 透传。无纹理尺寸时退回整张拉伸。`sliceBrush` 是纯函数。
 - 族 key：`panel` / `button` / `text` / `menubar` / `tab` / `split` / `scrollbar` /
   `dock` / `floating` / `image` / `popup`。角色 key：`panel.window` / `panel.canvas` / `panel.sidebar` /
   `tab.dock` / `tab.sidebar` / `text.header` / `text.muted` / `text.error` /
-  `text.eyebrow` / `menu.panel` / `tooltip` / `drag.ghost`。表单 key：`tree` / `textfield` / `menu` /
+  `text.eyebrow` / `menu.panel` / `tooltip` / `drag.ghost` / `drag.source` /
+  `drag.target`。表单 key：`tree` / `textfield` / `menu` /
   `selectable` / `dragfloat` / `checkbox` / `combobox` / `slider` / `table` /
   `spinbox` / `radio` / `coloredit` / `searchcombo`。
 - `editor.*` 前缀只用于 GameEditor 显式覆盖，不是第二套词汇。
 - Shell 控件（Panel/Button/Text/MenuBar/Tab/Split/Scroll/Dock/Floating）和已接线的
   表单控件（TreeView/TextField/Menu/SelectableRow/DragFloat/CheckBox/ComboBox/
   Slider/TableGrid/SpinBox/Radio/ColorEdit chrome/SearchCombo）以及 Image 占位 /
-  Popup 遮罩 paint 时 `resolveWidgetStyle`；几何（rowHeight/indent/thumbSize）留在 widget。
-  实例覆盖走 `setStyle(TStyle)`；Text/Panel 的 `setColor` 写入同一 authored 槽（Paint 粒度）。
-  布局宿主（Container/Overlay/SizeBox/DockFloatingHost）无 chrome paint。
+  Popup 遮罩 / DragDrop tile paint 时读 `resolvedStyle()`；几何（rowHeight/indent/thumbSize）留在 widget。
+  实例覆盖走 `setStyle(TStyle)`（freeze）或 `setStyleField`（单键 inherit）；Text/Panel 的 `setColor` 只 overlay 颜色（Paint 粒度），字号等跟 theme。
+  列表行标签走 `text` key，不要 `setColor` 冻色。布局宿主（Container/Overlay/SizeBox/DockFloatingHost）无 chrome paint。
 
 ## Host（ya-gui-app-host）
 

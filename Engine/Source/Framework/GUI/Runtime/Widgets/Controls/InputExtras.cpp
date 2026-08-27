@@ -60,7 +60,10 @@ public:
 
     void paintSelf(UIFrameBuilder& builder) override
     {
-        const FColorEditStyle style = resolveWidgetStyle<FColorEditStyle>(*this, std::nullopt);
+        // Nested helper, not UIStyledWidget: no sparse patch / resolved-style
+        // cache. Key "coloredit" still registers theme edges via the uncached
+        // helper so a theme switch repaints the palette.
+        const FColorEditStyle style = resolveWidgetStyle<FColorEditStyle>(*this);
         builder.addBrush(_layoutRect, style.backgroundFill);
         for (size_t i = 0; i < _colors.size(); ++i) {
             const int col = static_cast<int>(i) % _cols;
@@ -155,7 +158,7 @@ void UIDragFloat::onFocusLost()
 
 void UIDragFloat::paintSelf(UIFrameBuilder& builder)
 {
-    const FDragFloatStyle style = resolveWidgetStyle<FDragFloatStyle>(*this, _authoredStyle);
+    const FDragFloatStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, _bDragging ? style.draggingFill : style.backgroundFill);
     builder.addRectOutline(_layoutRect, style.borderColor, 1.0f);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
@@ -339,7 +342,7 @@ int UISpinBox::zoneFromPointer(float localX) const
 
 void UISpinBox::paintSelf(UIFrameBuilder& builder)
 {
-    const FSpinBoxStyle style = resolveWidgetStyle<FSpinBoxStyle>(*this, _authoredStyle);
+    const FSpinBoxStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, style.backgroundFill);
     builder.addRectOutline(_layoutRect, style.borderColor, 1.0f);
     const float zoneWidth = 26.0f;
@@ -468,7 +471,7 @@ bool UISpinBox::handleInputEvent(const Event& event, const WidgetEventContext& c
 
 void UIRadioButton::paintSelf(UIFrameBuilder& builder)
 {
-    const FRadioButtonStyle style = resolveWidgetStyle<FRadioButtonStyle>(*this, _authoredStyle);
+    const FRadioButtonStyle& style = resolvedStyle();
     if (_bHovered) {
         builder.addBrush(_layoutRect, style.hoveredFill);
     }
@@ -585,7 +588,7 @@ void UIColorEdit::closePalette()
 
 void UIColorEdit::paintSelf(UIFrameBuilder& builder)
 {
-    const FColorEditStyle style = resolveWidgetStyle<FColorEditStyle>(*this, _authoredStyle);
+    const FColorEditStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, style.backgroundFill);
     builder.addSprite(swatchRect(), _color, nullptr);
 
@@ -782,7 +785,7 @@ void UISearchComboBox::clearTransientInputState()
 
 void UISearchComboBox::paintSelf(UIFrameBuilder& builder)
 {
-    const FSearchComboStyle style = resolveWidgetStyle<FSearchComboStyle>(*this, _authoredStyle);
+    const FSearchComboStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.backgroundFill);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (!font) {

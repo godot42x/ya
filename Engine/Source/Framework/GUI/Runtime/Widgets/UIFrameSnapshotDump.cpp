@@ -66,6 +66,12 @@ nlohmann::json dumpUIFrameSnapshot(const UIFrameSnapshot& snapshot)
             {"text", item.text},
             {"textScale", dumpVec2(item.textScale)},
         });
+        if (item.kind == UIFrameDrawItem::EKind::Sprite &&
+            (item.uvOffset.x != 0.0f || item.uvOffset.y != 0.0f ||
+             item.uvScale.x != 1.0f || item.uvScale.y != 1.0f)) {
+            items.back()["uvOffset"] = dumpVec2(item.uvOffset);
+            items.back()["uvScale"]  = dumpVec2(item.uvScale);
+        }
     }
 
     return {

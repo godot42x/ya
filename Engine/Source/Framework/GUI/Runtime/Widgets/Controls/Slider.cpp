@@ -47,7 +47,7 @@ void UISlider::paintSelf(UIFrameBuilder& builder)
     Rect2D      track = _layoutRect;
     track.pos.y += (_layoutRect.extent.y - trackHeight) * 0.5f;
     track.extent = {_layoutRect.extent.x, trackHeight};
-    const FSliderStyle style = resolveWidgetStyle<FSliderStyle>(*this, _authoredStyle);
+    const FSliderStyle& style = resolvedStyle();
     builder.addBrush(track, style.trackFill);
 
     // Fill up to the thumb center.

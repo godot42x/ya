@@ -27,7 +27,7 @@ void UIImage::paintSelf(UIFrameBuilder& builder)
         builder.addSprite(_layoutRect, _tint, texture);
         return;
     }
-    const FImageStyle style = resolveWidgetStyle<FImageStyle>(*this, _authoredStyle);
+    const FImageStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, style.placeholderFill);
 }
 
@@ -35,10 +35,8 @@ void UIImage::deserializeFields(const nlohmann::json& fields)
 {
     UIElement::deserializeFields(fields);
     static const glm::vec4 kDefaultPlaceholder{0.24f, 0.26f, 0.31f, 1.0f};
-    if (!_authoredStyle && _placeholderColor != kDefaultPlaceholder) {
-        FImageStyle style;
-        style.placeholderFill = FBrush::Solid(_placeholderColor);
-        _authoredStyle        = std::move(style);
+    if (!hasAuthoredStyle() && _placeholderColor != kDefaultPlaceholder) {
+        setStyleField("placeholderFill", FBrush::Solid(_placeholderColor), EUIPropertyImpact::Paint);
     }
 }
 
