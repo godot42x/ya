@@ -10,7 +10,7 @@
 - [ ] G4.3 补齐 `UICompoundWidget` 迁移桥接契约：明确 kernel / behavior / compound / adapter 四者边界，并为现有 editor/game compound controls 建立迁移判定表。
 - [ ] G4.3a 基于现状盘点第一批对象：`FDemoDragItem` / `FDemoDropZone` / `UISelectableRow` / `UITreeView` / `UITableGrid` / `UIMenuBar` / `UIDockSpace`，逐个判定 builder helper / specialized control / `UICompoundWidget` / `UIBehavior` 归宿。
 - [ ] G4.3b 形成第一批逐文件实施顺序：先 `WorkbenchDemoPages.cpp`（drag/drop demo 行为化），再 `SelectableRow`，Tree/Table/Menu/Dock 仅补边界与 seam，不做 compound 化改写。
-- [ ] G5.1 拆分 `Declarative/Construct.h`，至少收敛为 `BuilderBase` / `ControlBuilders` / `LayoutBuilders` / `CompoundBuilder` / `Build` 一类边界，停止继续扩张 god file。
+- [x] G5.1 拆分 `Declarative/Construct.h`，至少收敛为 `BuilderBase` / `ControlBuilders` / `LayoutBuilders` / `CompoundBuilder` / `Build` 一类边界，停止继续扩张 god file。
 - [ ] G5.2 明确 native retained DSL 与 future adapter 的关系：native DSL 只是原生 authoring API，不是 React-like / HTML-CSS-JS / script UI 的唯一底座。
 - [ ] G6.1 在 behavior / binding / declarative 分层稳定后，再继续推进 GameEditor 剩余 ImGui feature migration，避免 editor 功能反向锁死底层。
 - [ ] G6.2 预留 adapter seam：定义最小 document/component adapter host 边界，保证未来接 React-like、HTML-CSS-JS、脚本 UI 时，只新增 adapter，不推翻 `UIElement` / `WidgetTree` / invalidate / layout / input kernel。

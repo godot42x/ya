@@ -1,0 +1,391 @@
+#pragma once
+
+#include "GUI/Declarative/BuilderBase.h"
+
+#include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/CheckBox.h"
+#include "GUI/Widgets/Controls/ComboBox.h"
+#include "GUI/Widgets/Controls/Image.h"
+#include "GUI/Widgets/Controls/Slider.h"
+#include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/Controls/TextField.h"
+
+namespace ya::ui
+{
+
+class UITextWidgetBuilder final : public TUIWidgetBuilder<UIText, UITextWidgetBuilder>
+{
+  public:
+    explicit UITextWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetBuilder(kTypeIdText, std::move(key), std::move(displayName))
+    {
+    }
+
+    [[nodiscard]] UITextWidgetBuilder& setText(const std::string& value) &
+    {
+        _widget->setText(value);
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& setText(const std::string& value) &&
+    {
+        _widget->setText(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextWidgetBuilder& bindText(std::shared_ptr<Reactive<std::string>> ref) &
+    {
+        _widget->bindText(std::move(ref));
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& bindText(std::shared_ptr<Reactive<std::string>> ref) &&
+    {
+        _widget->bindText(std::move(ref));
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextWidgetBuilder& setFontSize(uint32_t value) &
+    {
+        _widget->setFontSize(value);
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& setFontSize(uint32_t value) &&
+    {
+        _widget->setFontSize(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextWidgetBuilder& setColor(const glm::vec4& value) &
+    {
+        _widget->setColor(value);
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& setColor(const glm::vec4& value) &&
+    {
+        _widget->setColor(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextWidgetBuilder& setHAlign(EWidgetAlignH value) &
+    {
+        _widget->_hAlign = value;
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& setHAlign(EWidgetAlignH value) &&
+    {
+        _widget->_hAlign = value;
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextWidgetBuilder& setVAlign(EWidgetAlignV value) &
+    {
+        _widget->_vAlign = value;
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& setVAlign(EWidgetAlignV value) &&
+    {
+        _widget->_vAlign = value;
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextWidgetBuilder& setFillBackground(bool value) &
+    {
+        _widget->_bFillBackground = value;
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& setFillBackground(bool value) &&
+    {
+        _widget->_bFillBackground = value;
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextWidgetBuilder& setWrap(bool value) &
+    {
+        _widget->_bWrap = value;
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& setWrap(bool value) &&
+    {
+        _widget->_bWrap = value;
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextWidgetBuilder& setMaxWrapWidth(float value) &
+    {
+        _widget->_maxWrapWidth = value;
+        return *this;
+    }
+
+    [[nodiscard]] UITextWidgetBuilder&& setMaxWrapWidth(float value) &&
+    {
+        _widget->_maxWrapWidth = value;
+        return std::move(*this);
+    }
+};
+
+class UIButtonWidgetBuilder final : public TUIWidgetChildrenBuilder<UIButton, UIButtonWidgetBuilder>
+{
+  public:
+    explicit UIButtonWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetChildrenBuilder(kTypeIdButton, std::move(key), std::move(displayName))
+    {
+    }
+
+    [[nodiscard]] UIButtonWidgetBuilder& setOnClick(std::function<void()> value) &
+    {
+        _widget->_onClick = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UIButtonWidgetBuilder&& setOnClick(std::function<void()> value) &&
+    {
+        _widget->_onClick = std::move(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIButtonWidgetBuilder& bindEnabled(std::shared_ptr<Reactive<bool>> ref) &
+    {
+        _widget->bindEnabled(std::move(ref));
+        return *this;
+    }
+
+    [[nodiscard]] UIButtonWidgetBuilder&& bindEnabled(std::shared_ptr<Reactive<bool>> ref) &&
+    {
+        _widget->bindEnabled(std::move(ref));
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIButtonWidgetBuilder& setContentPadding(glm::vec2 value) &
+    {
+        _widget->setContentPadding(value);
+        return *this;
+    }
+
+    [[nodiscard]] UIButtonWidgetBuilder&& setContentPadding(glm::vec2 value) &&
+    {
+        _widget->setContentPadding(value);
+        return std::move(*this);
+    }
+};
+
+class UITextFieldWidgetBuilder final : public TUIWidgetBuilder<UITextField, UITextFieldWidgetBuilder>
+{
+  public:
+    explicit UITextFieldWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetBuilder(kTypeIdTextField, std::move(key), std::move(displayName))
+    {
+    }
+
+    [[nodiscard]] UITextFieldWidgetBuilder& setText(const std::string& value) &
+    {
+        _widget->setText(value);
+        return *this;
+    }
+
+    [[nodiscard]] UITextFieldWidgetBuilder&& setText(const std::string& value) &&
+    {
+        _widget->setText(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextFieldWidgetBuilder& setFontSize(uint32_t value) &
+    {
+        _widget->setFontSize(value);
+        return *this;
+    }
+
+    [[nodiscard]] UITextFieldWidgetBuilder&& setFontSize(uint32_t value) &&
+    {
+        _widget->setFontSize(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextFieldWidgetBuilder& setOnCommit(std::function<void(const std::string&)> value) &
+    {
+        _widget->_onCommit = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UITextFieldWidgetBuilder&& setOnCommit(std::function<void(const std::string&)> value) &&
+    {
+        _widget->_onCommit = std::move(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITextFieldWidgetBuilder& setOnTextChanged(std::function<void(const std::string&)> value) &
+    {
+        _widget->_onTextChanged = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UITextFieldWidgetBuilder&& setOnTextChanged(std::function<void(const std::string&)> value) &&
+    {
+        _widget->_onTextChanged = std::move(value);
+        return std::move(*this);
+    }
+};
+
+class UICheckBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UICheckBox, UICheckBoxWidgetBuilder>
+{
+  public:
+    explicit UICheckBoxWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetChildrenBuilder(kTypeIdCheckBox, std::move(key), std::move(displayName))
+    {
+    }
+
+    [[nodiscard]] UICheckBoxWidgetBuilder& setChecked(bool value) &
+    {
+        _widget->_bChecked = value;
+        return *this;
+    }
+
+    [[nodiscard]] UICheckBoxWidgetBuilder&& setChecked(bool value) &&
+    {
+        _widget->_bChecked = value;
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UICheckBoxWidgetBuilder& setText(const std::string& value) &
+    {
+        child(UITextWidgetBuilder{_widget->_stableKey + "__label"}.setText(value));
+        return *this;
+    }
+
+    [[nodiscard]] UICheckBoxWidgetBuilder&& setText(const std::string& value) &&
+    {
+        child(UITextWidgetBuilder{_widget->_stableKey + "__label"}.setText(value));
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UICheckBoxWidgetBuilder& setOnChanged(std::function<void(bool)> value) &
+    {
+        _widget->_onChanged = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UICheckBoxWidgetBuilder&& setOnChanged(std::function<void(bool)> value) &&
+    {
+        _widget->_onChanged = std::move(value);
+        return std::move(*this);
+    }
+};
+
+class UISliderWidgetBuilder final : public TUIWidgetBuilder<UISlider, UISliderWidgetBuilder>
+{
+  public:
+    explicit UISliderWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetBuilder(kTypeIdSlider, std::move(key), std::move(displayName))
+    {
+    }
+
+    [[nodiscard]] UISliderWidgetBuilder& setValue(float value) &
+    {
+        _widget->setValue(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISliderWidgetBuilder&& setValue(float value) &&
+    {
+        _widget->setValue(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISliderWidgetBuilder& setOnValueChanged(std::function<void(float)> value) &
+    {
+        _widget->_onValueChanged = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISliderWidgetBuilder&& setOnValueChanged(std::function<void(float)> value) &&
+    {
+        _widget->_onValueChanged = std::move(value);
+        return std::move(*this);
+    }
+};
+
+class UIComboBoxWidgetBuilder final : public TUIWidgetBuilder<UIComboBox, UIComboBoxWidgetBuilder>
+{
+  public:
+    explicit UIComboBoxWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetBuilder(kTypeIdComboBox, std::move(key), std::move(displayName))
+    {
+    }
+
+    [[nodiscard]] UIComboBoxWidgetBuilder& setItems(std::vector<std::string> value) &
+    {
+        _widget->_items = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UIComboBoxWidgetBuilder&& setItems(std::vector<std::string> value) &&
+    {
+        _widget->_items = std::move(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIComboBoxWidgetBuilder& setSelectedIndex(int value) &
+    {
+        _widget->_selectedIndex = value;
+        return *this;
+    }
+
+    [[nodiscard]] UIComboBoxWidgetBuilder&& setSelectedIndex(int value) &&
+    {
+        _widget->_selectedIndex = value;
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIComboBoxWidgetBuilder& setOnSelectionChanged(std::function<void(int)> value) &
+    {
+        _widget->_onSelectionChanged = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UIComboBoxWidgetBuilder&& setOnSelectionChanged(std::function<void(int)> value) &&
+    {
+        _widget->_onSelectionChanged = std::move(value);
+        return std::move(*this);
+    }
+};
+
+class UIImageWidgetBuilder final : public TUIWidgetBuilder<UIImage, UIImageWidgetBuilder>
+{
+  public:
+    explicit UIImageWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetBuilder(kTypeIdImage, std::move(key), std::move(displayName))
+    {
+    }
+
+    [[nodiscard]] UIImageWidgetBuilder& setAssetPath(std::string value) &
+    {
+        _widget->_assetPath = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UIImageWidgetBuilder&& setAssetPath(std::string value) &&
+    {
+        _widget->_assetPath = std::move(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIImageWidgetBuilder& setTexture(std::shared_ptr<Texture> value) &
+    {
+        _widget->setTexture(std::move(value));
+        return *this;
+    }
+
+    [[nodiscard]] UIImageWidgetBuilder&& setTexture(std::shared_ptr<Texture> value) &&
+    {
+        _widget->setTexture(std::move(value));
+        return std::move(*this);
+    }
+};
+
+} // namespace ya::ui

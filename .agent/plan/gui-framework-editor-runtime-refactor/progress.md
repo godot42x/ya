@@ -1,5 +1,40 @@
 # GUI Framework / Editor / Game UI 重构进度
 
+## 2026-08-27 checkpoint：启动 G5.2，把 native DSL / future adapter 边界写回公开头
+
+- 在 `Build.h`、`CompoundBuilder.h`、`Declarative.h` 的文件头注释里补回当前已经形成的架构事实：native retained DSL 是直接物化 live widget 的原生 authoring API，但不是 future React-like / HTML-CSS-JS / script/document adapter 的唯一入口。
+- 这一步没有引入 adapter host，也没有恢复 description/reconciler 中间层；目标只是先把 `G5.2` 的最核心边界从 plan 文档落回公开头附近，避免后续新 consumer 误把 `Build.h` / `compound()` 当成所有声明式 authoring 的强制底座。
+- 同时明确 `UICompoundWidget` 仍属于 native retained composition primitive：它可以作为局部组合根，但不承担 adapter host 或统一 component model 的职责。
+- 验证：`xmake b ya-gui-declarative-contract-test`、`xmake r ya-gui-declarative-contract-test -- --gtest_filter='DeclarativeContractTest.*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：收 G5.1 尾，把 declarative consumer 逐步切到细粒度头
+
+- `Construct.h` 已经退成兼容聚合头后，这一刀继续把明确只依赖 authoring 入口的 consumer 改为直接 include 更细粒度头：`GUIWorkbench.cpp`、`WorkbenchDemoPages.cpp`、`WorkbenchSurface.cpp`、`EditorSurface.cpp` 改为 `Build.h`，`Declarative.h` 改为显式聚合 `Build.h + CompoundBuilder.h`。
+- 这样 `Construct.h` 的职责进一步收窄为“向后兼容入口”，而不再继续承担当前主路径 consumer 的直接依赖；plan 中 `G5.1` 所要求的五类 declarative 边界不仅落了文件，也开始落到真实 include 面。
+- `todo.md` 同步把 `G5.1` 标为完成，表示当前阶段的 `Construct.h` 拆分主目标已经达到；后续若继续精修 declarative 线，应转入 `G5.2` 的 native DSL / future adapter 边界，而不是继续把 `G5.1` 长期挂成进行中。
+- 验证：`xmake b ya-gui-declarative-contract-test`、`xmake r ya-gui-declarative-contract-test -- --gtest_filter='DeclarativeContractTest.*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：继续推进 G5.1，把 authoring 入口从 Construct.h 拆到 Build / CompoundBuilder
+
+- 新增 `Build.h` 与 `CompoundBuilder.h`，把 `text/button/panel/...`、`build()`、`compound<T>()` 这些 authoring 入口从 `Construct.h` 中抽出，和前一刀拆出的 `ControlBuilders.h` / `LayoutBuilders.h` 形成更清晰的 declarative 头部分层。
+- `Construct.h` 现在退成纯兼容聚合头，只负责保留长期稳定 include 路径；具体 builder 类、compound 入口、attach build 入口都已经各自落到独立职责文件，不再继续把所有 declarative authoring 面堆在一个 god header 里。
+- 这样 G5.1 至少已经把 plan 里要求的 `BuilderBase / ControlBuilders / LayoutBuilders / CompoundBuilder / Build` 五类边界都显式落到了文件层，后续如果继续精修，会更多是命名、include 依赖和 consumer 渐进收口，而不是继续做大块结构拆分。
+- 验证：`xmake b ya-gui-declarative-contract-test`、`xmake r ya-gui-declarative-contract-test -- --gtest_filter='DeclarativeContractTest.*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：继续推进 G5.1，把具体 builders 再拆成 control / layout 两层
+
+- 在 `BuilderBase.h` 之上继续落第二刀：新增 `ControlBuilders.h` 与 `LayoutBuilders.h`，把 `Construct.h` 中的具体 builder 定义按职责拆开。前者承载 `Text/Button/TextField/CheckBox/Slider/ComboBox/Image`，后者承载 `Panel/Container/Split/Scroll/Overlay/SizeBox`。
+- `Construct.h` 现在进一步收窄成 authoring-facing 聚合入口：只 re-export 两类 builder 头，并保留 `text/button/panel/...`、`compound<T>()`、`build()` 这些 DSL 入口函数，不再同时承担所有具体 builder 类定义。
+- 这一步继续遵守既有决策：native retained DSL 仍然直接物化 live widget，没有恢复 description/reconciler 中间层；这里只是在 G5.1 下把 declarative 头部分层从“公共模板基座”继续推进到“具体控件 builder 分类”。
+- 验证：`xmake b ya-gui-declarative-contract-test`、`xmake r ya-gui-declarative-contract-test -- --gtest_filter='DeclarativeContractTest.*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：推进 G5.1，先把通用 builder 基座从 Construct.h 拆出
+
+- 新增 Engine/Source/Framework/GUI/Runtime/Declarative/include/GUI/Declarative/BuilderBase.h，把 declarative DSL 的公共基座统一收口到一个独立边界：UIWidgetBuilder / UICompoundWidgetType concept、makeLiveWidget()、TUIWidgetBuilder、TUIWidgetChildrenBuilder、TUICompoundWidgetBuilder 不再继续堆在 Construct.h 顶部。
+- Construct.h 现在只保留具体控件/布局 builder、ui::compound<T>() 与 ui::build() 这类 authoring-facing 入口；通用模板层与具体控件层不再混成一个越来越难读的 header，为后续继续拆 ControlBuilders / LayoutBuilders / Build 留出落点。
+- 这一步还没有改变 DSL 语义，也没有引入新的 declarative 中间层；目标只是先收紧 G5.1 的最上层公共模板面，避免 Construct.h 继续同时承担 runtime glue、template base 与所有具体 builder 三种职责。
+- 验证：xmake b ya-gui-declarative-contract-test、xmake r ya-gui-declarative-contract-test -- --gtest_filter='DeclarativeContractTest.*'、xmake b GUIWorkbench 通过。
+
 ## 2026-08-27 checkpoint：继续推进 G4.2，锁住 behavior state 与 presenter state 并存
 
 - `BindingContractTest.BehaviorDropHighlightDoesNotOverwritePresenterSelectionState` 新增后，把 `UISelectableRow` 的两类状态来源明确钉住：presenter 写入的 `_bSelected` 与 behavior 写入的 `_bDropHighlighted` 可以并存，拖放高亮的进入/退出不能把 presenter selection 覆盖或清掉。

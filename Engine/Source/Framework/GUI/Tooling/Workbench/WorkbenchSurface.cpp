@@ -4,7 +4,7 @@
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
 
-#include "GUI/Declarative/Construct.h"
+#include "GUI/Declarative/Build.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"

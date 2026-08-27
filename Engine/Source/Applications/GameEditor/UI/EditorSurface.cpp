@@ -4,7 +4,7 @@
 #include "Core/Log.h"
 #include "ECS/Entity.h"
 #include "ECS/Component.h"
-#include "GUI/Declarative/Construct.h"
+#include "GUI/Declarative/Build.h"
 #include "GUI/Tooling/Workbench/WorkbenchSurface.h"
 #include "GameEditor/UI/EditorTheme.h"
 #include "GUI/Widgets/Controls/Button.h"
