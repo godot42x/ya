@@ -108,6 +108,33 @@ class FileExplorer
      */
     const MountPoint *getActiveMountPoint() const { return _activeMountPoint; }
 
+    /// WidgetTree 视图接入点：返回全部挂载点（用于左侧 mount 列表）。
+    [[nodiscard]] const std::vector<MountPoint> &getMountPoints() const { return _mountPoints; }
+
+    /// WidgetTree 视图接入点：切换激活挂载点（等价于点击左侧列表项）。
+    void selectMountPoint(const MountPoint &mp);
+
+    /// 当前目录的一个条目（供 WidgetTree 列表渲染）。
+    struct FEntry
+    {
+        std::filesystem::path path;
+        std::string           name;
+        bool                  bIsDirectory = false;
+    };
+
+    /// 枚举并排序当前目录可见条目（应用扩展名 / 搜索过滤）。view-agnostic：
+    /// ImGui 渲染与 WidgetTree 视图共享同一份目录枚举结果。
+    void collectEntries(std::vector<FEntry> &outEntries) const;
+
+    /// 返回上一级目录（保持在激活挂载点内）。
+    [[nodiscard]] bool navigateBack();
+
+    /// 进入一个子目录（校验存在性 + 目录类型）。
+    [[nodiscard]] bool navigateInto(const std::filesystem::path &directory);
+
+    /// 设置搜索过滤（替换 ImGui buffer 并保留原语义）。
+    void setSearchText(std::string_view text);
+
     /**
      * @brief 设置扩展名过滤
      */

@@ -6,6 +6,8 @@
 #include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Controls/TreeView.h"
 
+#include "GameEditor/FileExplorer.h"
+
 #include <array>
 #include <memory>
 #include <string>
@@ -25,6 +27,7 @@ struct UIDockSpace;
 struct UIDockWorkspace;
 struct UIDragFloat;
 struct UIElement;
+struct UIContainer;
 struct UIImage;
 struct UIMenuBar;
 struct UIPanel;
@@ -63,6 +66,15 @@ struct EditorSurface
     std::array<std::shared_ptr<UIDragFloat>, 9> _transformDrags{};
     std::unique_ptr<guiworkbench::FWorkbenchSurface> _workbench;
 
+    // Content Browser (WidgetTree chrome). FileExplorer keeps the mount /
+    // directory / filter state; the rows below are the retained view.
+    std::shared_ptr<FileExplorer>  _contentExplorer;
+    std::shared_ptr<UIText>        _contentPathText;
+    std::shared_ptr<UIContainer>   _contentMountList;
+    std::shared_ptr<UIContainer>   _contentEntryList;
+    std::string                    _contentFingerprint;
+    bool                           _bContentRowsDirty = true;
+
     std::shared_ptr<Texture>    _viewportTexture;
     std::shared_ptr<IImage>     _viewportImageResource;
     std::shared_ptr<IImageView> _viewportImageView;
@@ -97,6 +109,10 @@ struct EditorSurface
     void syncHierarchy();
     void syncInspector();
     void syncToolbar(App& app);
+    std::shared_ptr<UIElement> buildContentBrowser();
+    void syncContentBrowser();
+    void rebuildContentRows();
+    void activateContentItem(const std::filesystem::path& path, bool bIsDirectory);
     void publishViewportRect();
     void applyWindowMetrics(App& app);
 };

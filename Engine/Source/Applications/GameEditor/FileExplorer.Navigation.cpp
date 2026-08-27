@@ -1,5 +1,7 @@
 #include "GameEditor/FileExplorerInternal.h"
 
+#include <cstring>
+
 namespace ya
 {
 
@@ -15,6 +17,94 @@ void FileExplorer::switchToMountPoint(MountPoint* mp)
     _activeMountPoint->isActive = true;
     _currentDirectory           = _activeMountPoint->path;
     _selectedPath.clear();
+}
+
+void FileExplorer::selectMountPoint(const MountPoint& mp)
+{
+    for (auto& candidate : _mountPoints) {
+        if (candidate.name == mp.name && candidate.path == mp.path) {
+            switchToMountPoint(&candidate);
+            saveConfig();
+            return;
+        }
+    }
+}
+
+void FileExplorer::collectEntries(std::vector<FEntry>& outEntries) const
+{
+    outEntries.clear();
+    if (!std::filesystem::exists(_currentDirectory)) {
+        return;
+    }
+    try {
+        for (const auto& entry : std::filesystem::directory_iterator(_currentDirectory)) {
+            const auto& path     = entry.path();
+            std::string filename = path_utils::pathToUtf8String(path.filename());
+            if (!filename.empty() && filename[0] == '.') {
+                continue;
+            }
+            if (!matchesSearch(filename)) {
+                continue;
+            }
+            if (entry.is_directory()) {
+                if (_filterMode != FilterMode::Files) {
+                    outEntries.push_back(FEntry{.path = path, .name = filename, .bIsDirectory = true});
+                }
+            }
+            else if (entry.is_regular_file()) {
+                if (_filterMode != FilterMode::Directories && matchesExtension(path)) {
+                    outEntries.push_back(FEntry{.path = path, .name = filename, .bIsDirectory = false});
+                }
+            }
+        }
+        std::sort(outEntries.begin(), outEntries.end(),
+                  [](const FEntry& a, const FEntry& b) {
+                      if (a.bIsDirectory != b.bIsDirectory) {
+                          return a.bIsDirectory;
+                      }
+                      return a.name < b.name;
+                  });
+    }
+    catch (const std::exception&) {
+        outEntries.clear();
+    }
+}
+
+bool FileExplorer::navigateBack()
+{
+    if (!_activeMountPoint) {
+        return false;
+    }
+    const std::filesystem::path parent = _currentDirectory.parent_path();
+    if (!isPathWithinActiveMountPoint(parent) && parent != _activeMountPoint->path) {
+        return false;
+    }
+    if (parent.empty() || parent == _currentDirectory) {
+        return false;
+    }
+    _currentDirectory = parent;
+    _selectedPath.clear();
+    saveConfig();
+    return true;
+}
+
+bool FileExplorer::navigateInto(const std::filesystem::path& directory)
+{
+    std::error_code ec;
+    if (!std::filesystem::is_directory(directory, ec)) {
+        return false;
+    }
+    _currentDirectory = directory;
+    _selectedPath.clear();
+    saveConfig();
+    return true;
+}
+
+void FileExplorer::setSearchText(std::string_view text)
+{
+    const size_t length = std::min(text.size(), sizeof(_searchBuffer) - 1);
+    std::memcpy(_searchBuffer, text.data(), length);
+    _searchBuffer[length] = '\0';
 }
 
 bool FileExplorer::isPathWithinActiveMountPoint(const std::filesystem::path& path) const

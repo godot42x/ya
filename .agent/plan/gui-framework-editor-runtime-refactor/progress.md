@@ -1,5 +1,24 @@
 # GUI Framework / Editor / Game UI 重构进度
 
+## 2026-08-27 checkpoint：G6.1 首个面板切片 —— Content Browser 迁进 EditorSurface
+
+- 恢复 G6.1（GameEditor 剩余 ImGui feature migration），本轮先迁 Content Browser：
+  底层 behavior / binding / declarative 已稳定，不再被"先稳底层"前置条件阻塞。
+- FileExplorer 新增一组 view-agnostic API（getMountPoints / selectMountPoint /
+  collectEntries / navigateBack / navigateInto / setSearchText）：状态、导航、
+  过滤逻辑仍归 FileExplorer，ImGui render 与 WidgetTree 视图共享同一份目录枚举结果。
+- EditorSurface 新增 WidgetTree Content Browser 面板（mount 列表 + 目录/文件条目
+  列表 + back/path/search 顶栏），替换原 Content Browser pending 占位；
+  目录单击激活进入、scene 文件激活走 App 的 loadScene（对齐旧 ContentBrowserPanel）。
+- 行重建沿用 Workbench rebuildItemRows 模式：fingerprint 变化才 detach/attach 行，
+  面板 detached（未选中 tab）时只标记 dirty，attach 后再重建，避免在未挂树容器上
+  误用 tree API。
+- FilePicker 等仍走 ImGui FileExplorer render；摘 imgui-local 前保留旧路径。
+- 验证：ya-game-editor、ya-gui-widgets-test 编译通过。
+
+下一步：按面板继续（反射 TypeRenderer / FilePicker / Runtime Tools / UI Designer /
+debug image viewer / Render Graph），迁完再删 ImGui editor 文件并摘 imgui-local。
+
 ## 2026-08-27 checkpoint：正式收口 G6.2
 
 - 到这一步，G6.2 已具备完整的最小闭环：公开的 UIAdapterHost 提供 mount/patch/unmount seam；DeclarativeContractTest 证明 future adapter 不必共享 native DSL 也能直接复用 retained kernel；UIDocumentTest 进一步证明 document/spec 边界可以先 instantiate-once，再挂入同一 host 并继续走 live patch。

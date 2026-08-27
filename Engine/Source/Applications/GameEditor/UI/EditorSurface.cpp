@@ -16,12 +16,15 @@
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/ScrollViewport.h"
+#include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/Controls/TreeView.h"
 #include "GUI/Widgets/WidgetAttachment.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/EditorLayer.h"
+#include "Core/System/PathUtils.h"
 #include "GameRuntime/App.h"
 #include "Hierarchy/Node.h"
 #include "RHI/Core/Texture.h"
@@ -121,6 +124,28 @@ std::shared_ptr<UIElement> makePlaceholderPanel(const std::string& name, const s
                    .setHAlign(EWidgetAlignH::Center)
                    .setVAlign(EWidgetAlignV::Center))
         .release();
+}
+
+std::shared_ptr<UISelectableRow> makeContentRow(const std::string& key,
+                                                const std::string& label,
+                                                const std::string& itemId,
+                                                std::function<void(const std::string&)> onSelect,
+                                                std::function<void(const std::string&)> onActivate)
+{
+    auto row = std::make_shared<UISelectableRow>(key);
+    row->_itemId = itemId;
+    row->setSize({0.0f, 22.0f});
+    row->_onSelect   = std::move(onSelect);
+    row->_onActivate = std::move(onActivate);
+
+    auto text = std::make_shared<UIText>(key + "_Label");
+    text->_fontSize = 13;
+    text->setSize({0.0f, 22.0f});
+    text->setText(label);
+    text->setPosition({10.0f, 0.0f});
+    text->_vAlign = EWidgetAlignV::Center;
+    row->addDetachedChild(text);
+    return row;
 }
 
 ui::UIButtonWidgetBuilder labeledButton(std::string key, const std::string& label, float width, float height = 26.0f)
@@ -518,7 +543,7 @@ void EditorSurface::buildEditorChrome(App& app)
     const DockPanelId viewportId  = _dockWorkspace->addPanel("Viewport", viewportBody.release());
     const DockPanelId hierarchyId = _dockWorkspace->addPanel("Hierarchy", hierarchyBody.release());
     const DockPanelId inspectorId = _dockWorkspace->addPanel("Inspector", inspectorBody.release());
-    const DockPanelId contentId   = _dockWorkspace->addPanel("Content Browser", makePlaceholderPanel("Content", "Content Browser — file explorer pending"));
+    const DockPanelId contentId   = _dockWorkspace->addPanel("Content Browser", buildContentBrowser());
     const DockPanelId statsId     = _dockWorkspace->addPanel("Frame Stats", statsBody.release());
     const DockPanelId workbenchId = _dockWorkspace->addPanel("GUI Workbench", workbenchHost);
     const DockPanelId runtimeId   = _dockWorkspace->addPanel("Runtime Tools", makePlaceholderPanel("RuntimeTools", "Runtime Tools — pending"));
@@ -579,6 +604,96 @@ void EditorSurface::applyWindowMetrics(App& app)
     }
 }
 
+std::shared_ptr<UIElement> EditorSurface::buildContentBrowser()
+{
+    _contentExplorer = std::make_shared<FileExplorer>();
+    _contentExplorer->setConfigScope("editorContentBrowser");
+    _contentExplorer->initFromVFS();
+    _contentExplorer->setFilterMode(FileExplorer::FilterMode::Both);
+    _contentExplorer->setSelectionMode(FileExplorer::SelectionMode::File);
+    _contentExplorer->setLeftPanelWidth(180.0f);
+
+    auto root = std::make_shared<UIContainer>("ContentBrowserRoot");
+    root->setDirection(EWidgetBoxLayout::Vertical);
+    root->setSpacing(2.0f);
+    root->setPadding({4.0f, 4.0f});
+
+    // Header: back / path / search.
+    auto back = std::make_shared<UIButton>("ContentBack");
+    back->setSize({52.0f, 22.0f});
+    {
+        auto label = std::make_shared<UIText>("ContentBack_Label");
+        label->setText("< Back");
+        label->setFontSize(12);
+        label->_hAlign = EWidgetAlignH::Center;
+        label->_vAlign = EWidgetAlignV::Center;
+        back->addDetachedChild(label);
+    }
+    back->_onClick = [this]() {
+        if (_contentExplorer) {
+            _contentExplorer->navigateBack();
+        }
+    };
+
+    auto pathText = std::make_shared<UIText>("ContentPath");
+    pathText->_fontSize = 12;
+    pathText->_vAlign   = EWidgetAlignV::Center;
+    _contentPathText    = pathText;
+
+    auto search = std::make_shared<UITextField>("ContentSearch");
+    search->setSize({140.0f, 22.0f});
+    search->_onTextChanged = [this](const std::string& text) {
+        if (_contentExplorer) {
+            _contentExplorer->setSearchText(text);
+        }
+    };
+
+    auto header = std::make_shared<UIContainer>("ContentHeader");
+    header->setDirection(EWidgetBoxLayout::Horizontal);
+    header->setSpacing(6.0f);
+    header->setSize({0.0f, 26.0f});
+    header->addDetachedChild(back);
+    header->addDetachedChild(pathText);
+    header->addDetachedChild(search);
+    root->addDetachedChild(header);
+
+    // Body: mount list (fixed width) + entry list (fill).
+    auto body = std::make_shared<UIContainer>("ContentBody");
+    body->setDirection(EWidgetBoxLayout::Horizontal);
+    body->setSpacing(4.0f);
+
+    _contentMountList = std::make_shared<UIContainer>("ContentMounts");
+    _contentMountList->setDirection(EWidgetBoxLayout::Vertical);
+    _contentMountList->setSpacing(2.0f);
+    _contentMountList->setSize({180.0f, 0.0f});
+
+    _contentEntryList = std::make_shared<UIContainer>("ContentEntries");
+    _contentEntryList->setDirection(EWidgetBoxLayout::Vertical);
+    _contentEntryList->setSpacing(2.0f);
+    _contentEntryList->_anchorMin = {0.0f, 0.0f};
+    _contentEntryList->_anchorMax = {1.0f, 1.0f};
+    _contentEntryList->setSize({0.0f, 0.0f});
+
+    // Scroll hosts keep long directory listings from overflowing and give
+    // wheel navigation; each host owns exactly the one list container.
+    auto mountScroll = std::make_shared<UIScrollViewport>("ContentMountScroll");
+    mountScroll->setAxis(EScrollAxis::Vertical);
+    mountScroll->setSize({180.0f, 0.0f});
+    mountScroll->addDetachedChild(_contentMountList);
+
+    auto entryScroll = std::make_shared<UIScrollViewport>("ContentEntryScroll");
+    entryScroll->setAxis(EScrollAxis::Vertical);
+    entryScroll->_anchorMin = {0.0f, 0.0f};
+    entryScroll->_anchorMax = {1.0f, 1.0f};
+    entryScroll->setSize({0.0f, 0.0f});
+    entryScroll->addDetachedChild(_contentEntryList);
+
+    body->addDetachedChild(mountScroll);
+    body->addDetachedChild(entryScroll);
+    root->addDetachedChild(body);
+    return root;
+}
+
 void EditorSurface::syncPresentation(App& app, float dt)
 {
     if (_bBuiltAsProjectBrowser) {
@@ -604,6 +719,7 @@ void EditorSurface::syncPresentation(App& app, float dt)
     syncHierarchy();
     syncInspector();
     syncToolbar(app);
+    syncContentBrowser();
     if (_statsText) {
         const float fps = dt > 0.0f ? 1.0f / dt : 0.0f;
         _statsText->setText(std::format(
@@ -754,6 +870,145 @@ void EditorSurface::syncToolbar(App& app)
                         : app.isSimulationMode() ? "SIMULATING"
                                                  : "EDIT";
     _toolbarModeText->setText(label);
+}
+
+void EditorSurface::syncContentBrowser()
+{
+    if (!_contentExplorer || !_contentPathText || !_tree) {
+        return;
+    }
+
+    // Fingerprint: mount list identity + active mount + current directory +
+    // entry summary. Rows are only rebuilt when one of these actually changed,
+    // so typing in the search field or walking directories does not detach/
+    // re-attach rows every frame.
+    std::string fingerprint;
+    if (const FileExplorer::MountPoint* active = _contentExplorer->getActiveMountPoint()) {
+        fingerprint += active->name;
+        fingerprint += '|';
+    }
+    fingerprint += _contentExplorer->getCurrentDirectory().string();
+    fingerprint += '|';
+
+    std::vector<FileExplorer::FEntry> entries;
+    _contentExplorer->collectEntries(entries);
+    for (const auto& entry : entries) {
+        fingerprint += entry.name;
+        fingerprint += entry.bIsDirectory ? "/" : ";";
+    }
+    fingerprint += "|search:";
+    if (const auto* active = _contentExplorer->getActiveMountPoint()) {
+        fingerprint += active->name;
+    }
+
+    if (fingerprint != _contentFingerprint) {
+        _contentFingerprint = std::move(fingerprint);
+        _bContentRowsDirty = true;
+    }
+    if (_bContentRowsDirty && _contentMountList && _contentEntryList &&
+        _contentMountList->isAttached() && _contentEntryList->isAttached()) {
+        rebuildContentRows();
+        _bContentRowsDirty = false;
+    }
+}
+
+void EditorSurface::rebuildContentRows()
+{
+    if (!_contentExplorer || !_tree || !_contentMountList || !_contentEntryList) {
+        return;
+    }
+
+    const FileExplorer::MountPoint* active = _contentExplorer->getActiveMountPoint();
+
+    // Mount rows.
+    auto mountChildren = _contentMountList->getChildrenInPaintOrder();
+    for (UIElement* child : mountChildren) {
+        if (child && child->isAttached()) {
+            _tree->detach(*child);
+        }
+    }
+    for (const auto& mp : _contentExplorer->getMountPoints()) {
+        auto row = makeContentRow(
+            "ContentMount_" + mp.name,
+            mp.name,
+            mp.name,
+            /*onSelect=*/[this](const std::string& itemId) {
+                if (_contentExplorer) {
+                    for (const auto& candidate : _contentExplorer->getMountPoints()) {
+                        if (candidate.name == itemId) {
+                            _contentExplorer->selectMountPoint(candidate);
+                            break;
+                        }
+                    }
+                }
+            },
+            /*onActivate=*/[this](const std::string& itemId) {
+                if (_contentExplorer) {
+                    for (const auto& candidate : _contentExplorer->getMountPoints()) {
+                        if (candidate.name == itemId) {
+                            _contentExplorer->selectMountPoint(candidate);
+                            break;
+                        }
+                    }
+                }
+            });
+        row->setSelected(active != nullptr && active->name == mp.name);
+        _tree->attach(*_contentMountList, row);
+    }
+
+    // Entry rows.
+    auto entryChildren = _contentEntryList->getChildrenInPaintOrder();
+    for (UIElement* child : entryChildren) {
+        if (child && child->isAttached()) {
+            _tree->detach(*child);
+        }
+    }
+    std::vector<FileExplorer::FEntry> entries;
+    _contentExplorer->collectEntries(entries);
+    for (const auto& entry : entries) {
+        const std::filesystem::path path = entry.path;
+        const bool                  bDir = entry.bIsDirectory;
+        auto row = makeContentRow(
+            "ContentEntry_" + entry.name,
+            entry.bIsDirectory ? entry.name + "/" : entry.name,
+            entry.name,
+            /*onSelect=*/[this](const std::string&) {},
+            /*onActivate=*/[this, path, bDir](const std::string&) {
+                activateContentItem(path, bDir);
+            });
+        _tree->attach(*_contentEntryList, row);
+    }
+
+    if (_contentPathText) {
+        std::string pathText = _contentExplorer->getCurrentDirectory().string();
+        if (active) {
+            pathText = active->name + ": " + pathText;
+        }
+        _contentPathText->setText(pathText);
+    }
+}
+
+void EditorSurface::activateContentItem(const std::filesystem::path& path, bool bIsDirectory)
+{
+    if (!_contentExplorer) {
+        return;
+    }
+    if (bIsDirectory) {
+        _contentExplorer->navigateInto(path);
+        return;
+    }
+    // File activation mirrors the ImGui ContentBrowserPanel item action:
+    // scene files open through the scene services (frame task so the open
+    // lands outside the input dispatch), everything else just selects.
+    std::string utf8Path = path_utils::pathToUtf8String(path);
+    if (utf8Path.ends_with(".scene.json")) {
+        if (App* app = App::get()) {
+            const std::string scenePath = std::move(utf8Path);
+            app->getTaskManager().registerFrameTask([scenePath]() {
+                App::get()->getSceneServices().loadScene(scenePath);
+            });
+        }
+    }
 }
 
 void EditorSurface::publishViewportRect()
