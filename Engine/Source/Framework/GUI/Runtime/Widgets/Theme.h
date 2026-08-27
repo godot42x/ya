@@ -16,6 +16,7 @@
 #include "Core/Reflection/ReflectionSerializer.h"
 
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 namespace ya
@@ -137,25 +138,17 @@ struct UIStyledWidget
 
 /// Persist `_authoredStyle` through UIElement's virtual serialize hook.
 /// Mixin fields cannot be YA_REFLECT_FIELD'd from a UIElement* (MI offset).
+/// Empty optional <-> JSON null is handled by ReflectionSerializer's
+/// `is_optional` unwrap (partial specialization of std::optional<T>).
 #define YA_GUI_AUTHORED_STYLE_IO(TStyle)                                                                          \
     [[nodiscard]] nlohmann::json serializeAuthoredStyle() const override                                          \
     {                                                                                                             \
-        ensureGuiStyleReflection();                                                                               \
-        if (!_authoredStyle.has_value()) {                                                                        \
-            return nullptr;                                                                                       \
-        }                                                                                                         \
-        return ReflectionSerializer::serializeByRuntimeReflection(*_authoredStyle);                               \
+        static_assert(std::is_same_v<std::remove_cvref_t<decltype(_authoredStyle)>, std::optional<TStyle>>);      \
+        return ReflectionSerializer::serializeByRuntimeReflection(_authoredStyle);                                \
     }                                                                                                             \
     void deserializeAuthoredStyle(const nlohmann::json& j) override                                               \
     {                                                                                                             \
-        ensureGuiStyleReflection();                                                                               \
-        if (j.is_null() || !j.is_object()) {                                                                      \
-            _authoredStyle.reset();                                                                               \
-            return;                                                                                               \
-        }                                                                                                         \
-        TStyle style{};                                                                                           \
-        ReflectionSerializer::deserializeByRuntimeReflection(style, j, "");                                       \
-        _authoredStyle = std::move(style);                                                                        \
+        ReflectionSerializer::deserializeByRuntimeReflection(_authoredStyle, j, "");                              \
     }
 
 } // namespace ya

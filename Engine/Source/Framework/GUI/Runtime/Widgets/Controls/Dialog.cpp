@@ -22,7 +22,7 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     const float panelH   = 14.0f + titleH + 12.0f + contentH + 12.0f + buttonH + 14.0f;
     auto panel = std::make_shared<UIPanel>("DialogPanel");
     panel->setSize({360.0f, panelH});
-    panel->setColor({0.16f, 0.18f, 0.22f, 1.0f});
+    panel->setStyleKey("panel");
 
     auto stack = std::make_shared<UIContainer>("DialogStack");
     stack->_anchorMin = {0.0f, 0.0f};
@@ -36,7 +36,6 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     auto titleText = std::make_shared<UIText>("DialogTitle");
     titleText->_bAutoSize = true;
     titleText->_fontSize  = 14;
-    titleText->setColor({0.88f, 0.90f, 0.94f, 1.0f});
     titleText->setText(std::move(title));
     stack->addDetachedChild(titleText);
 

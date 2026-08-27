@@ -168,19 +168,20 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   WorkbenchTheme（demo 壳）/ EditorTheme（GameEditor chrome）。
 - Resolve：实例 authored `TStyle`（`setStyle` / Text·Panel `setColor`）> theme key > 默认构造的 typed style。
 - 高频路径是实例 `setStyle` / `setStyleKey`（DSL 基类 builder 已暴露）；切 theme 是低频目录切换。
-- `_styleKey` 在 `UIElement` 上反射；authored `TStyle` 经 `YA_GUI_AUTHORED_STYLE_IO` 虚函数写入 UIDocument（mixin 字段不能 `YA_REFLECT_FIELD`，MI 偏移不对）。`FBrush`/`F*Style` 走运行时反射。
+- `_styleKey` 在 `UIElement` 上反射；authored `TStyle` 经 `YA_GUI_AUTHORED_STYLE_IO` 虚函数写入 UIDocument（mixin 字段不能 `YA_REFLECT_FIELD`，MI 偏移不对）。空 optional ↔ JSON null 由 typed serializer 的 `is_optional` 偏特化解包。`FBrush`/`F*Style` 走运行时反射。
 - 族 key：`panel` / `button` / `text` / `menubar` / `tab` / `split` / `scrollbar` /
-  `dock` / `floating`。角色 key：`panel.window` / `panel.canvas` / `panel.sidebar` /
+  `dock` / `floating` / `image` / `popup`。角色 key：`panel.window` / `panel.canvas` / `panel.sidebar` /
   `tab.dock` / `tab.sidebar` / `text.header` / `text.muted` / `text.error` /
-  `text.eyebrow` / `menu.panel`。表单 key：`tree` / `textfield` / `menu` /
+  `text.eyebrow` / `menu.panel` / `tooltip` / `drag.ghost`。表单 key：`tree` / `textfield` / `menu` /
   `selectable` / `dragfloat` / `checkbox` / `combobox` / `slider` / `table` /
   `spinbox` / `radio` / `coloredit` / `searchcombo`。
 - `editor.*` 前缀只用于 GameEditor 显式覆盖，不是第二套词汇。
 - Shell 控件（Panel/Button/Text/MenuBar/Tab/Split/Scroll/Dock/Floating）和已接线的
   表单控件（TreeView/TextField/Menu/SelectableRow/DragFloat/CheckBox/ComboBox/
-  Slider/TableGrid/SpinBox/Radio/ColorEdit chrome/SearchCombo）paint 时
-  `resolveWidgetStyle`；几何（rowHeight/indent/thumbSize）留在 widget。
+  Slider/TableGrid/SpinBox/Radio/ColorEdit chrome/SearchCombo）以及 Image 占位 /
+  Popup 遮罩 paint 时 `resolveWidgetStyle`；几何（rowHeight/indent/thumbSize）留在 widget。
   实例覆盖走 `setStyle(TStyle)`；Text/Panel 的 `setColor` 写入同一 authored 槽（Paint 粒度）。
+  布局宿主（Container/Overlay/SizeBox/DockFloatingHost）无 chrome paint。
 
 ## Host（ya-gui-app-host）
 

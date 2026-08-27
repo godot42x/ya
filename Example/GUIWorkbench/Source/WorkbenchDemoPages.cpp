@@ -650,7 +650,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
 
                              auto dialog = std::make_shared<ya::UIPanel>("ModalDialog");
                              dialog->setSize({360.0f, 170.0f});
-                             dialog->setColor({0.16f, 0.18f, 0.22f, 1.0f});
+                             dialog->setStyleKey("panel");
                              overlay->addDetachedChild(dialog);
 
                              auto stack        = std::make_shared<ya::UIContainer>("ModalStack");

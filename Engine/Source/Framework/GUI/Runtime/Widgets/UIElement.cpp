@@ -1,12 +1,11 @@
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetTree.h"
-#include "GUI/Widgets/Style.h"
 
 #include "Core/Log.h"
+#include "Core/Reflection/DeferredInitializer.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Binding/Reactive.h"
-#include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
 
@@ -428,7 +427,7 @@ void UIElement::removeChildEdge(UIElement& child)
 
 nlohmann::json UIElement::serializeFields() const
 {
-    ensureGuiStyleReflection();
+    ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
     auto* cls = ClassRegistry::instance().getClass(getTypeIndex());
     if (!cls) {
         return nlohmann::json();
@@ -443,7 +442,7 @@ nlohmann::json UIElement::serializeFields() const
 
 void UIElement::deserializeFields(const nlohmann::json& fields)
 {
-    ensureGuiStyleReflection();
+    ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
     nlohmann::json rest = fields;
     nlohmann::json authored;
     const bool bHasAuthored = rest.contains("_authoredStyle");

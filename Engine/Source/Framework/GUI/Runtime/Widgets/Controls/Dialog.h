@@ -15,7 +15,7 @@ namespace ya
 /// through _onClosed(bConfirmed).
 struct YA_GUI_API UIDialog : public UIPopupOverlay
 {
-    explicit UIDialog(std::string name = "Dialog") : UIPopupOverlay(std::move(name)) {}
+    explicit UIDialog(std::string name = "Dialog") : UIPopupOverlay(std::move(name), "popup") {}
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIDialog>; }
 

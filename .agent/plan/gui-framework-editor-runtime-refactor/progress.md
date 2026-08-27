@@ -1,5 +1,26 @@
 # GUI Framework / Editor / Game UI 重构进度
 
+## 2026-08-27 checkpoint：正式收口 G6.2
+
+- 到这一步，G6.2 已具备完整的最小闭环：公开的 UIAdapterHost 提供 mount/patch/unmount seam；DeclarativeContractTest 证明 future adapter 不必共享 native DSL 也能直接复用 retained kernel；UIDocumentTest 进一步证明 document/spec 边界可以先 instantiate-once，再挂入同一 host 并继续走 live patch。
+- 关键的是这条 seam 仍然保持薄：没有恢复 UIDescription -> controller -> reconciler 循环，没有引入第二套 tree，也没有把 adapter host 反向塞进 UICompoundWidget。未来 React-like / HTML-CSS-JS / script UI 只需要补自己的 diff/patch 生产侧。
+- 因此 todo.md 现在把 G6.2 标为完成；剩余主线只留 G6.1，也就是在这些底层边界稳定后，再回到 GameEditor 的剩余 ImGui feature migration。
+
+## 2026-08-27 checkpoint：继续推进 G6.2，锁住 document/spec 通过 adapter host 挂载到同一 kernel
+
+- \`UIDocumentTest.DocumentInstanceCanMountThroughAdapterHostAndPatchLiveRoot\` 新增，明确 document/script 这类 spec 边界的默认路线是：先 \`UIDocument::instantiate()\` 一次，得到独立 retained subtree，再通过 \`UIAdapterHost\` 挂到同一 \`WidgetTree\`，后续 patch 直接落到 live root，而不是再引入第二套 render/controller 循环。
+- \`UIDocumentTest.RemountReplacesPreviousAdapterRootCleanly\` 新增，锁住 adapter host 的另一个关键 teardown 语义：重新 mount 新 root 时，旧 root 必须先按 tree contract detach 掉，focus/capture 等 live kernel 状态也必须跟着清掉，避免 future adapter 在切页/换组件根时留下悬挂会话。
+- 这一步让 \`G6.2\` 从“只有一个薄 host 类型”继续推进到了真实边界合同：document/spec instantiate、adapter host mount/unmount、live root patch 三者已经形成同一条验证链，未来接 React-like / HTML-CSS-JS / script UI 时，只需要补自己的 diff/patch 生产侧，而不用回头重写 retained kernel。
+- 验证：\`xmake b -r ya-gui-widgets-test\`、\`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='UIDocumentTest.DocumentInstanceCanMountThroughAdapterHostAndPatchLiveRoot:UIDocumentTest.RemountReplacesPreviousAdapterRootCleanly'\`、\`xmake b GUIWorkbench\` 通过。
+
+## 2026-08-27 checkpoint：收口 G4.2 / G5.2，并落第一版最小 adapter host seam
+
+- 新增公开头 \`GUI/Widgets/UIAdapterHost.h\`，提供一条刻意很薄的 future adapter 边界：\`mount(UIElementRef)\`、\`patch(fn)\`、\`unmount()\`。它只桥接到既有 \`WidgetTree::attach/detach\` 和 live retained widget patch，不引入第二套 tree、controller 或 reconciler。
+- \`DeclarativeContractTest.AdapterHostPatchClampsFocusedTextFieldCursorWithoutDsl\` 新增，直接用 \`UIAdapterHost + UITextField\` 证明一件事：future adapter 即使完全不走 native DSL，也可以把 live root 挂进同一 kernel，然后通过 changed-only patch 复用既有的 focus / transient / commit / invalidation contract。
+- 结合此前已经落下的 Button/Text/MenuBar/Table/TreeView/behavior/TextField 一组 coexistence guards，现在可以把 \`G4.2\` 正式视为完成：imperative setter、widget transient state、behavior state、reactive binding、future adapter patch 都已经至少有一条自动化门禁覆盖到真实 retained 路径。
+- \`G5.2\` 也随这一步一起收口：公开头注释已经说明 native retained DSL 只是原生 authoring API，而 \`UIAdapterHost\` 进一步把“future adapter 可直接投影到 runtime kernel、无需共享 builder API”落成了代码事实，而不只是文档口号。
+- 验证：\`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='DeclarativeContractTest.DirectConstructExternalPatchClampsFocusedTextFieldCursorWithoutCommit:DeclarativeContractTest.AdapterHostPatchClampsFocusedTextFieldCursorWithoutDsl'\`、\`xmake b GUIWorkbench\` 通过。
+
 ## 2026-08-27 checkpoint：继续推进 G4.2，锁住 TextField patch 与焦点/commit/cursor 并存契约
 
 - \`DeclarativeContractTest.DirectConstructExternalPatchClampsFocusedTextFieldCursorWithoutCommit\` 新增，补上 \`UITextField\` 这条最容易被 presenter / future adapter patch 打断的编辑态 contract：外部 \`setText()\` patch 发生在 focused field 上时，控件 identity 与 tree focus 必须保持，不能顺手触发 commit，同时 caret 要被 clamp 到新 buffer 的合法范围内。

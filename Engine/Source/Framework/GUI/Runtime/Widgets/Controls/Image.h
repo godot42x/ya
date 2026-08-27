@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <memory>
@@ -13,9 +14,9 @@ struct Texture;
 ///
 /// Resolution order: a live `_texture` (editor viewport / composed RT) wins;
 /// otherwise `_assetPath` is resolved through the frame build context's
-/// textureResolver. Without either, a translucent placeholder is drawn so
+/// textureResolver. Without either, the themed placeholder fill is drawn so
 /// layout and hit testing stay visible in any host.
-struct YA_GUI_API UIImage : public UIElement
+struct YA_GUI_API UIImage : public UIElement, public UIStyledWidget<UIImage, FImageStyle>
 {
     YA_REFLECT_BEGIN(UIImage, UIElement)
     YA_REFLECT_FIELD(_assetPath, .instanceEditable())
@@ -23,14 +24,17 @@ struct YA_GUI_API UIImage : public UIElement
     YA_REFLECT_FIELD(_placeholderColor, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UIImage(std::string name = "Image") : UIElement(std::move(name)) {}
+    YA_GUI_AUTHORED_STYLE_IO(FImageStyle)
+
+    explicit UIImage(std::string name = "Image") : UIElement(std::move(name), "image") {}
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIImage>; }
 
     /// Asset path resolved through UIFrameBuildContext::textureResolver.
     std::string _assetPath;
     glm::vec4   _tint = {1.0f, 1.0f, 1.0f, 1.0f};
-    /// Drawn when the texture cannot be resolved.
+    /// Legacy JSON / authoring field. Paint reads FImageStyle; a non-default
+    /// value is promoted to authored style on deserialize.
     glm::vec4   _placeholderColor = {0.24f, 0.26f, 0.31f, 1.0f};
 
     /// Host-owned live GPU image (viewport RT). The snapshot retains this
@@ -39,6 +43,7 @@ struct YA_GUI_API UIImage : public UIElement
     [[nodiscard]] const std::shared_ptr<Texture>& getTexture() const { return _texture; }
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void deserializeFields(const nlohmann::json& fields) override;
     [[nodiscard]] bool isHoverable() const override { return true; }
 
   private:

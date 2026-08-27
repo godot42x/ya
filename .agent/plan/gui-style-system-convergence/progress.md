@@ -476,3 +476,22 @@ Text/Panel `setColor` 写入 authored `FTextStyle` / `FPanelStyle`（Paint 粒�
 ### 验证
 
 - `xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test` — 184/184 PASSED（含 JsonRoundtrip / AuthoredButtonStyleJsonRoundtrip / AuthoredPanelFillSurvivesThemeAfterReload / LegacyExplicitFillPromotesToAuthoredStyle）
+
+## 2026-08-27 — 剩余 chrome 控件 theme 接管
+
+审计后仍未走 theme 的 paint 路径：UIImage `_placeholderColor`、UIPopupOverlay `_modalColor`、UIDialog::create / Workbench 演示模态的 `setColor`、ColorEdit 色板 magic fill、WidgetTree tooltip/ghost 字面量。布局宿主（Container/Overlay/SizeBox/DockFloatingHost）无 chrome。
+
+- 新增 `FImageStyle` / `FPopupStyle`；Image/Popup 默认 key `image` / `popup`。UIMenu 不再挂第二套 mixin（overlay 继承 FPopupStyle，item 仍是 FMenuStyle）。
+- Dialog 工厂与 tooltip/ghost 改 `setStyleKey`，不再 authored 冻色。WorkbenchTheme 烘焙 `image` / `popup` / `tooltip` / `drag.ghost`。
+
+### 验证
+
+- `xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test` — 204/204 PASSED（含 ImagePlaceholderAndModalPopupFollowTheme）
+
+## 2026-08-27 — typed serializer 解包 std::optional
+
+`ensureGuiStyleReflection()` 按 `optional<F*Style>` 逐个注册 custom hook 已无必要：authored 槽走 typed `serializeByRuntimeReflection`，inner type 在编译期已知。`std::is_same` 无法判断「任意 optional」；改为 `is_optional<std::optional<T>>` 偏特化，空值 ↔ JSON null。`DeferredInitializerQueue::executeAll()` 仍由 `UIElement::serializeFields` 冲刷 `FBrush`/`F*Style` 反射。
+
+### 验证
+
+- `xmake b ya-testing && xmake r ya-testing --gtest_filter=ContainerSerializationTest.OptionalNullAndValueRoundtrip` — PASSED

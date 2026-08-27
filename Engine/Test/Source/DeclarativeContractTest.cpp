@@ -18,6 +18,7 @@
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Widgets/UIAdapterHost.h"
 #include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UITypeIds.h"
@@ -313,6 +314,47 @@ TEST(DeclarativeContractTest, DirectConstructExternalPatchClampsFocusedTextField
     EXPECT_EQ(commits, 0);
     EXPECT_EQ(field->_text, "hi");
     EXPECT_EQ(field->getCursorIndex(), field->_text.size());
+}
+
+TEST(DeclarativeContractTest, AdapterHostPatchClampsFocusedTextFieldCursorWithoutDsl)
+{
+    WidgetTree tree({.width = 640, .height = 360});
+    UIAdapterHost adapterHost(tree, *tree.getLayer(WidgetTree::ELayer::Content));
+
+    auto fieldRef = std::make_shared<UITextField>("AdapterField");
+    fieldRef->setText("hello world");
+    fieldRef->setSize({180.0f, 28.0f});
+
+    int commits = 0;
+    fieldRef->_onCommit = [&](const std::string&) { ++commits; };
+
+    auto* field = dynamic_cast<UITextField*>(&adapterHost.mount(fieldRef));
+    ASSERT_NE(field, nullptr);
+
+    tree.setFocus(field);
+    ASSERT_EQ(tree.getFocused(), field);
+
+    KeyPressedEvent endEvent;
+    endEvent._keyCode = EKey::End;
+    WidgetEventContext ctx;
+    ctx.logicalPoint = {0.0f, 0.0f};
+    EXPECT_EQ(tree.dispatchEvent(endEvent, ctx), EWidgetRouteResult::HandledExclusive);
+    ASSERT_EQ(field->getCursorIndex(), std::string("hello world").size());
+
+    adapterHost.patch([](UIElement& root) {
+        auto& textField = static_cast<UITextField&>(root);
+        textField.setText("hi");
+    });
+
+    EXPECT_EQ(adapterHost.getRoot(), field);
+    EXPECT_EQ(tree.getFocused(), field);
+    EXPECT_EQ(commits, 0);
+    EXPECT_EQ(field->_text, "hi");
+    EXPECT_EQ(field->getCursorIndex(), field->_text.size());
+
+    adapterHost.unmount();
+    EXPECT_EQ(adapterHost.getRoot(), nullptr);
+    EXPECT_EQ(tree.getFocused(), nullptr);
 }
 
 TEST(DeclarativeContractTest, DirectConstructExternalPatchKeepsPressedButtonSession)

@@ -7,6 +7,7 @@
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
+#include <nlohmann/json.hpp>
 
 namespace ya
 {
@@ -97,8 +98,21 @@ const Rect2D* UIPopupOverlay::contentLayoutRect() const
 
 void UIPopupOverlay::paintSelf(UIFrameBuilder& builder)
 {
-    if (isModal()) {
-        builder.addSprite(_layoutRect, _modalColor, nullptr);
+    if (!isModal()) {
+        return;
+    }
+    const FPopupStyle style = resolveWidgetStyle<FPopupStyle>(*this, _authoredStyle);
+    builder.addBrush(_layoutRect, style.modalFill);
+}
+
+void UIPopupOverlay::deserializeFields(const nlohmann::json& fields)
+{
+    UIElement::deserializeFields(fields);
+    static const glm::vec4 kDefaultModal{0.0f, 0.0f, 0.0f, 0.45f};
+    if (!_authoredStyle && _modalColor != kDefaultModal) {
+        FPopupStyle style;
+        style.modalFill = FBrush::Solid(_modalColor);
+        _authoredStyle  = std::move(style);
     }
 }
 

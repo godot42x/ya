@@ -209,6 +209,26 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
     search.textColor      = text;
     search.caretColor     = text;
     theme.define<ya::FSearchComboStyle>("searchcombo", search);
+
+    auto image = ya::FImageStyle{};
+    image.placeholderFill = FBrush::Solid(bDark ? glm::vec4{0.24f, 0.26f, 0.31f, 1.0f}
+                                                : glm::vec4{0.78f, 0.80f, 0.84f, 1.0f});
+    theme.define<ya::FImageStyle>("image", image);
+
+    auto popup = ya::FPopupStyle{};
+    popup.modalFill = FBrush::Solid(bDark ? glm::vec4{0.0f, 0.0f, 0.0f, 0.45f}
+                                          : glm::vec4{0.12f, 0.13f, 0.16f, 0.28f});
+    theme.define<ya::FPopupStyle>("popup", popup);
+
+    auto tooltip = ya::FPanelStyle{};
+    tooltip.fillColor = FBrush::Solid(bDark ? glm::vec4{0.14f, 0.15f, 0.18f, 0.97f}
+                                            : glm::vec4{0.98f, 0.98f, 0.99f, 0.97f});
+    theme.define<ya::FPanelStyle>("tooltip", tooltip);
+
+    auto ghost = ya::FPanelStyle{};
+    ghost.fillColor = FBrush::Solid(bDark ? glm::vec4{0.24f, 0.46f, 0.82f, 0.75f}
+                                          : glm::vec4{0.32f, 0.55f, 0.90f, 0.75f});
+    theme.define<ya::FPanelStyle>("drag.ghost", ghost);
 }
 
 /// Build the tree-level UITheme for a look (`bDark`). The theme defines every

@@ -9,6 +9,8 @@
 #include "reflects-core/lib.h"
 #include <functional>
 #include <nlohmann/json.hpp>
+#include <optional>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -21,6 +23,17 @@ namespace ya
 namespace reflection::detail
 {
 struct JsonMethodInvoker;
+
+template <typename T>
+struct is_optional : std::false_type
+{};
+
+template <typename T>
+struct is_optional<std::optional<T>> : std::true_type
+{};
+
+template <typename T>
+inline constexpr bool is_optional_v = is_optional<std::remove_cvref_t<T>>::value;
 }
 
 
@@ -79,12 +92,28 @@ struct YA_CORE_API ReflectionSerializer
     template <typename T>
     static nlohmann::json serializeByRuntimeReflection(const T& obj, std::string className)
     {
-        return serializeByRuntimeReflection(&obj, ya::type_index_v<T>, className);
+        if constexpr (::ya::reflection::detail::is_optional_v<T>) {
+            if (!obj.has_value()) {
+                return nullptr;
+            }
+            return serializeByRuntimeReflection(*obj, std::move(className));
+        }
+        else {
+            return serializeByRuntimeReflection(&obj, ya::type_index_v<T>, className);
+        }
     }
     template <typename T>
     static nlohmann::json serializeByRuntimeReflection(const T& obj)
     {
-        return serializeByRuntimeReflection(&obj, ya::type_index_v<T>);
+        if constexpr (::ya::reflection::detail::is_optional_v<T>) {
+            if (!obj.has_value()) {
+                return nullptr;
+            }
+            return serializeByRuntimeReflection(*obj);
+        }
+        else {
+            return serializeByRuntimeReflection(&obj, ya::type_index_v<T>);
+        }
     }
 
     static nlohmann::json serializeByRuntimeReflection(const void* obj, type_index_t typeIndex, const std::string& typeName = "");
@@ -99,8 +128,21 @@ struct YA_CORE_API ReflectionSerializer
     template <typename T>
     static void deserializeByRuntimeReflection(T& obj, const nlohmann::json& j, const std::string& className)
     {
-        auto typeIndex = ya::type_index_v<T>;
-        return deserializeByRuntimeReflection(&obj, typeIndex, j, className);
+        if constexpr (::ya::reflection::detail::is_optional_v<T>) {
+            if (j.is_null()) {
+                obj.reset();
+                return;
+            }
+            using Inner = typename std::remove_cvref_t<T>::value_type;
+            Inner inner{};
+            deserializeByRuntimeReflection(inner, j, className);
+            obj = std::move(inner);
+            return;
+        }
+        else {
+            auto typeIndex = ya::type_index_v<T>;
+            return deserializeByRuntimeReflection(&obj, typeIndex, j, className);
+        }
     }
 
     static void deserializeProperty(const Property& prop, void* obj, const nlohmann::json& j);

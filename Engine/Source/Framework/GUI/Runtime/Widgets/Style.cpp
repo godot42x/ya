@@ -1,11 +1,6 @@
 #include "GUI/Widgets/Style.h"
 
-#include "Core/Math/GLM.h"
-#include "Core/Reflection/DeferredInitializer.h"
 #include "Core/Reflection/Reflection.h"
-#include "Core/Reflection/ReflectionSerializer.h"
-
-#include <optional>
 
 // ============================================================================
 // Authored TStyle persistence: FBrush + every F*Style is a reflected value
@@ -202,72 +197,10 @@ YA_REFLECT_FIELD(caretColor)
 YA_REFLECT_FIELD(fontSize)
 YA_REFLECT_END_EXTERNAL()
 
-namespace ya
-{
+YA_REFLECT_BEGIN_EXTERNAL(ya::FImageStyle)
+YA_REFLECT_FIELD(placeholderFill)
+YA_REFLECT_END_EXTERNAL()
 
-namespace
-{
-
-template <typename TStyle>
-nlohmann::json serializeOptionalStyle(const std::optional<TStyle>& value)
-{
-    if (!value.has_value()) {
-        return nullptr;
-    }
-    return ReflectionSerializer::serializeByRuntimeReflection(*value);
-}
-
-template <typename TStyle>
-void deserializeOptionalStyle(std::optional<TStyle>& value, const nlohmann::json& j)
-{
-    if (j.is_null() || !j.is_object()) {
-        value.reset();
-        return;
-    }
-    TStyle style{};
-    ReflectionSerializer::deserializeByRuntimeReflection(style, j, "");
-    value = std::move(style);
-}
-
-template <typename TStyle>
-void registerOptionalStyleHook()
-{
-    ReflectionSerializer::registerCustomTypeHook<std::optional<TStyle>>(
-        serializeOptionalStyle<TStyle>, deserializeOptionalStyle<TStyle>);
-}
-
-} // namespace
-
-void ensureGuiStyleReflection()
-{
-    static bool registered = false;
-    ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
-    if (registered) {
-        return;
-    }
-    registered = true;
-    registerOptionalStyleHook<FTextStyle>();
-    registerOptionalStyleHook<FPanelStyle>();
-    registerOptionalStyleHook<FButtonStyle>();
-    registerOptionalStyleHook<FMenuBarItemStyle>();
-    registerOptionalStyleHook<FTabStyle>();
-    registerOptionalStyleHook<FSplitPaneStyle>();
-    registerOptionalStyleHook<FScrollBarStyle>();
-    registerOptionalStyleHook<FDockSpaceStyle>();
-    registerOptionalStyleHook<FFloatingWindowStyle>();
-    registerOptionalStyleHook<FTreeViewStyle>();
-    registerOptionalStyleHook<FTextFieldStyle>();
-    registerOptionalStyleHook<FMenuStyle>();
-    registerOptionalStyleHook<FSelectableRowStyle>();
-    registerOptionalStyleHook<FDragFloatStyle>();
-    registerOptionalStyleHook<FCheckBoxStyle>();
-    registerOptionalStyleHook<FComboBoxStyle>();
-    registerOptionalStyleHook<FSliderStyle>();
-    registerOptionalStyleHook<FTableGridStyle>();
-    registerOptionalStyleHook<FSpinBoxStyle>();
-    registerOptionalStyleHook<FRadioButtonStyle>();
-    registerOptionalStyleHook<FColorEditStyle>();
-    registerOptionalStyleHook<FSearchComboStyle>();
-}
-
-} // namespace ya
+YA_REFLECT_BEGIN_EXTERNAL(ya::FPopupStyle)
+YA_REFLECT_FIELD(modalFill)
+YA_REFLECT_END_EXTERNAL()

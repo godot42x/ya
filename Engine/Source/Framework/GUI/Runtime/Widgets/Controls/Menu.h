@@ -58,10 +58,8 @@ struct YA_GUI_API UIMenuItem : public UIElement, public UIStyledWidget<UIMenuIte
 ///
 /// Build via create(); open via openAt(tree, pos) which anchors the top-left
 /// of the menu at `pos`. Selecting an item runs its action and closes.
-struct YA_GUI_API UIMenu : public UIPopupOverlay, public UIStyledWidget<UIMenu, FMenuStyle>
+struct YA_GUI_API UIMenu : public UIPopupOverlay
 {
-    YA_GUI_AUTHORED_STYLE_IO(FMenuStyle)
-
     struct FItem
     {
         std::string                                  label;

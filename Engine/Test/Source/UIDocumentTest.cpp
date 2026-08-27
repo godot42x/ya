@@ -5,6 +5,7 @@
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
+#include "GUI/Widgets/UIAdapterHost.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
@@ -276,6 +277,75 @@ TEST(UIDocumentTest, InstantiatedSubtreeCanAttachToTree)
     // Subtree members carry the same tree membership.
     EXPECT_EQ(instance->getChildren()[0]->getTree(), &tree);
     EXPECT_TRUE(instance->getChildren()[0]->isAttached());
+}
+
+TEST(UIDocumentTest, DocumentInstanceCanMountThroughAdapterHostAndPatchLiveRoot)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+
+    auto source = registry.createInstance("test.doc_text");
+    auto* sourceText = dynamic_cast<UIText*>(source.get());
+    ASSERT_NE(sourceText, nullptr);
+    sourceText->setText("Doc Title");
+    sourceText->setColor({0.4f, 0.5f, 0.6f, 1.0f});
+
+    auto document = UIDocument::fromWidget(*source);
+    ASSERT_NE(document, nullptr);
+
+    WidgetTree tree({.width = 800, .height = 600});
+    UIAdapterHost adapterHost(tree, *tree.getLayer(WidgetTree::ELayer::Content));
+
+    UIElementRef instance = document->instantiate();
+    ASSERT_NE(instance, nullptr);
+    auto* mounted = dynamic_cast<UIText*>(&adapterHost.mount(instance));
+    ASSERT_NE(mounted, nullptr);
+    EXPECT_EQ(adapterHost.getRoot(), mounted);
+    EXPECT_TRUE(tree.contains(*mounted));
+    EXPECT_EQ(mounted->resolvedText(), "Doc Title");
+    EXPECT_EQ(mounted->_color, glm::vec4(0.4f, 0.5f, 0.6f, 1.0f));
+
+    adapterHost.patch([](UIElement& root) {
+        auto& text = static_cast<UIText&>(root);
+        text.setText("Patched Title");
+    });
+    EXPECT_EQ(mounted->resolvedText(), "Patched Title");
+
+    adapterHost.unmount();
+    EXPECT_EQ(adapterHost.getRoot(), nullptr);
+    EXPECT_FALSE(tree.contains(*mounted));
+}
+
+TEST(UIDocumentTest, RemountReplacesPreviousAdapterRootCleanly)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+
+    auto first = registry.createInstance("test.doc_text");
+    auto second = registry.createInstance("test.doc_text");
+    auto* firstText = dynamic_cast<UIText*>(first.get());
+    auto* secondText = dynamic_cast<UIText*>(second.get());
+    ASSERT_NE(firstText, nullptr);
+    ASSERT_NE(secondText, nullptr);
+    firstText->setText("First");
+    secondText->setText("Second");
+
+    WidgetTree tree({.width = 800, .height = 600});
+    UIAdapterHost adapterHost(tree, *tree.getLayer(WidgetTree::ELayer::Content));
+
+    auto* firstMounted = dynamic_cast<UIText*>(&adapterHost.mount(first));
+    ASSERT_NE(firstMounted, nullptr);
+    tree.setFocus(firstMounted);
+    ASSERT_EQ(tree.getFocused(), firstMounted);
+
+    auto* secondMounted = dynamic_cast<UIText*>(&adapterHost.mount(second));
+    ASSERT_NE(secondMounted, nullptr);
+    EXPECT_NE(secondMounted, firstMounted);
+    EXPECT_EQ(adapterHost.getRoot(), secondMounted);
+    EXPECT_FALSE(tree.contains(*firstMounted));
+    EXPECT_TRUE(tree.contains(*secondMounted));
+    EXPECT_EQ(tree.getFocused(), nullptr);
+    EXPECT_EQ(secondMounted->resolvedText(), "Second");
 }
 
 TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)

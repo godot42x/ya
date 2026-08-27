@@ -331,6 +331,23 @@ struct FSearchComboStyle
     bool operator==(const FSearchComboStyle&) const = default;
 };
 
+/// Image placeholder (unresolved asset / empty live texture). `_tint` on
+/// UIImage is content, not chrome.
+struct FImageStyle
+{
+    FBrush placeholderFill = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
+
+    bool operator==(const FImageStyle&) const = default;
+};
+
+/// Popup/modal shield. Non-modal popups paint nothing; modal uses modalFill.
+struct FPopupStyle
+{
+    FBrush modalFill = FBrush::Solid({0.0f, 0.0f, 0.0f, 0.45f});
+
+    bool operator==(const FPopupStyle&) const = default;
+};
+
 /// Named style collection. Styles are Reactive so widgets can bind them and
 /// be notified on edit. Owned by the host (or a singleton); not tied to a
 /// specific tree so one set themes many widgets/windows.
@@ -374,11 +391,5 @@ private:
     std::unordered_map<std::type_index,
                        std::unordered_map<std::string, std::shared_ptr<ReactiveBase>>> _styles;
 };
-
-/// Flush style-type reflection + optional<TStyle> serializer hooks. Safe to
-/// call more than once; UIDocument serialize/deserialize invokes it so hooks
-/// are live even when this TU's static registrars ran after the global
-/// DeferredInitializerQueue flush.
-YA_GUI_API void ensureGuiStyleReflection();
 
 } // namespace ya

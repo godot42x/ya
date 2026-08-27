@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <functional>
@@ -24,7 +25,7 @@ namespace ya
 ///
 /// Lifecycle: created via make_shared, opened with open() and closed with
 /// close() / dismiss. The overlay detaches itself on close.
-struct YA_GUI_API UIPopupOverlay : public UIElement
+struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPopupOverlay, FPopupStyle>
 {
     YA_REFLECT_BEGIN(UIPopupOverlay, UIElement)
     YA_REFLECT_FIELD(_bModal, .instanceEditable())
@@ -32,7 +33,9 @@ struct YA_GUI_API UIPopupOverlay : public UIElement
     YA_REFLECT_FIELD(_contentPos, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UIPopupOverlay(std::string name = "PopupOverlay", std::string styleKey = {})
+    YA_GUI_AUTHORED_STYLE_IO(FPopupStyle)
+
+    explicit UIPopupOverlay(std::string name = "PopupOverlay", std::string styleKey = "popup")
         : UIElement(std::move(name), std::move(styleKey))
     {
         _hitFilter   = EWidgetHitFilter::Stop;
@@ -52,7 +55,8 @@ struct YA_GUI_API UIPopupOverlay : public UIElement
     [[nodiscard]] bool isModal() const { return getRole() == EOverlayRole::Modal; }
 
     bool    _bModal     = false;
-    /// Dimming shield color (only when _bModal).
+    /// Legacy JSON / authoring field. Paint reads FPopupStyle; a non-default
+    /// value is promoted to authored style on deserialize.
     glm::vec4 _modalColor = {0.0f, 0.0f, 0.0f, 0.45f};
     /// Content child origin in tree-local logical pixels.
     glm::vec2 _contentPos = {0.0f, 0.0f};
@@ -70,6 +74,7 @@ struct YA_GUI_API UIPopupOverlay : public UIElement
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
+    void deserializeFields(const nlohmann::json& fields) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
         node["control"] = {{"type", "popupOverlay"}, {"modal", _bModal}};
     }

@@ -42,7 +42,7 @@ glm::vec4 hsvToRgb(float h, float s, float v)
 class FColorPalette : public UIElement
 {
 public:
-    explicit FColorPalette(std::string name) : UIElement(std::move(name))
+    explicit FColorPalette(std::string name) : UIElement(std::move(name), "coloredit")
     {
         _hitFilter = EWidgetHitFilter::Stop;
         // 4 rows x 8 columns: hue ring + value steps.
@@ -60,7 +60,8 @@ public:
 
     void paintSelf(UIFrameBuilder& builder) override
     {
-        builder.addSprite(_layoutRect, {0.10f, 0.11f, 0.14f, 1.0f}, nullptr);
+        const FColorEditStyle style = resolveWidgetStyle<FColorEditStyle>(*this, std::nullopt);
+        builder.addBrush(_layoutRect, style.backgroundFill);
         for (size_t i = 0; i < _colors.size(); ++i) {
             const int col = static_cast<int>(i) % _cols;
             const int row = static_cast<int>(i) / _cols;
@@ -552,6 +553,7 @@ void UIColorEdit::openPalette()
 {
     closePalette();
     auto overlay = std::make_shared<UIPopupOverlay>("ColorPaletteOverlay");
+    overlay->setStyleKey("popup");
     overlay->_bModal     = false; // transparent shield: click outside closes
     overlay->_contentPos = {swatchRect().pos.x, swatchRect().pos.y + swatchRect().extent.y + 4.0f};
 

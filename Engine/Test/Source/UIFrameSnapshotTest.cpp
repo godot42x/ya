@@ -14,7 +14,9 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -1295,6 +1297,48 @@ TEST(UIFrameSnapshotTest, SameAuthoredStyleDoesNotDirty)
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, before.layoutDirtyTransitions);
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, before.paintDirtyTransitions);
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+}
+
+TEST(UIFrameSnapshotTest, ImagePlaceholderAndModalPopupFollowTheme)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto theme = std::make_shared<UITheme>();
+    FImageStyle imageStyle;
+    imageStyle.placeholderFill = FBrush::Solid({0.1f, 0.2f, 0.3f, 1.0f});
+    theme->define<FImageStyle>("image", imageStyle);
+    FPopupStyle popupStyle;
+    popupStyle.modalFill = FBrush::Solid({0.4f, 0.0f, 0.0f, 0.5f});
+    theme->define<FPopupStyle>("popup", popupStyle);
+    tree.setTheme(theme.get());
+
+    auto image = std::make_shared<UIImage>("Img");
+    image->setPosition({10.0f, 10.0f});
+    image->setSize({40.0f, 40.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, image);
+
+    auto overlay = std::make_shared<UIPopupOverlay>("Modal");
+    overlay->_bModal = true;
+    tree.attachToLayer(WidgetTree::ELayer::Popup, overlay);
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_GE(snap.items.size(), 2u);
+    EXPECT_EQ(snap.items[0].color, glm::vec4(0.1f, 0.2f, 0.3f, 1.0f));
+    EXPECT_EQ(snap.items.back().color, glm::vec4(0.4f, 0.0f, 0.0f, 0.5f));
+    EXPECT_FALSE(image->hasAuthoredStyle());
+    EXPECT_FALSE(overlay->hasAuthoredStyle());
+
+    auto other = std::make_shared<UITheme>();
+    FImageStyle imageStyle2;
+    imageStyle2.placeholderFill = FBrush::Solid({0.9f, 0.8f, 0.1f, 1.0f});
+    other->define<FImageStyle>("image", imageStyle2);
+    FPopupStyle popupStyle2;
+    popupStyle2.modalFill = FBrush::Solid({0.0f, 0.5f, 0.0f, 0.4f});
+    other->define<FPopupStyle>("popup", popupStyle2);
+    tree.setTheme(other.get());
+    const UIFrameSnapshot after = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_GE(after.items.size(), 2u);
+    EXPECT_EQ(after.items[0].color, glm::vec4(0.9f, 0.8f, 0.1f, 1.0f));
+    EXPECT_EQ(after.items.back().color, glm::vec4(0.0f, 0.5f, 0.0f, 0.4f));
 }
 
 } // namespace ya

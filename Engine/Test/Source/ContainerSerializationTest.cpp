@@ -16,6 +16,7 @@
 #include <chrono>
 #include <gtest/gtest.h>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -661,4 +662,24 @@ TEST_F(ContainerSerializationTest, LargeContainers_Performance)
 
     EXPECT_EQ(result.intVector.size(), 1000);
     EXPECT_LT(deserializeTime.count(), 100); // 应该在 100ms 内完成
+}
+
+TEST_F(ContainerSerializationTest, OptionalNullAndValueRoundtrip)
+{
+    std::optional<TestData> empty;
+    EXPECT_TRUE(ReflectionSerializer::serializeByRuntimeReflection(empty).is_null());
+
+    std::optional<TestData> value = TestData{7, "opt", 3.5f};
+    const nlohmann::json    json  = ReflectionSerializer::serializeByRuntimeReflection(value);
+    ASSERT_TRUE(json.is_object());
+
+    std::optional<TestData> restored;
+    ReflectionSerializer::deserializeByRuntimeReflection(restored, json, "");
+    ASSERT_TRUE(restored.has_value());
+    EXPECT_EQ(restored->id, 7);
+    EXPECT_EQ(restored->name, "opt");
+
+    std::optional<TestData> cleared = TestData{1, "x", 1.0f};
+    ReflectionSerializer::deserializeByRuntimeReflection(cleared, nlohmann::json(nullptr), "");
+    EXPECT_FALSE(cleared.has_value());
 }

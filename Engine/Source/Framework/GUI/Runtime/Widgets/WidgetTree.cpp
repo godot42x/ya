@@ -173,7 +173,7 @@ void WidgetTree::updateTooltip()
 
     auto host = std::make_shared<UIPanel>("TooltipHost");
     host->setSize({textW + 16.0f, lineH + 8.0f});
-    host->setColor({0.14f, 0.15f, 0.18f, 0.97f});
+    host->setStyleKey("tooltip");
 
     auto label = std::make_shared<UIText>("TooltipLabel");
     label->_anchorMin = {0.0f, 0.0f};
@@ -181,7 +181,6 @@ void WidgetTree::updateTooltip()
     label->setSize({0.0f, 0.0f});
     label->setPosition({8.0f, 4.0f});
     label->_fontSize  = 12;
-    label->setColor({0.95f, 0.96f, 0.98f, 1.0f});
     label->setText(_hovered->_tooltip);
     host->addDetachedChild(label);
 
@@ -1243,7 +1242,7 @@ void WidgetTree::beginDrag(UIElement* source,
 
     // Ghost on the DragIme layer: visible but never hit-testable.
     auto ghost = std::make_shared<UIPanel>("DragGhost");
-    ghost->setColor({0.24f, 0.46f, 0.82f, 0.75f});
+    ghost->setStyleKey("drag.ghost");
     ghost->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
     ghost->setPosition({0.0f, 0.0f});
     ghost->setSize({160.0f, 24.0f});
@@ -1251,7 +1250,6 @@ void WidgetTree::beginDrag(UIElement* source,
     auto label = std::make_shared<UIText>("DragGhostLabel");
     label->setText(_dragOperation->ghostLabel);
     label->_fontSize = 13;
-    label->setColor({0.95f, 0.96f, 0.98f, 1.0f});
     label->_anchorMin = {0.0f, 0.0f};
     label->_anchorMax = {1.0f, 1.0f};
     label->setSize({0.0f, 0.0f});
