@@ -43,6 +43,8 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
     uint32_t    _fontSize        = 16;
     uint32_t    _maxLength       = 256;
 
+  public:
+    const std::string& getText() const { return _text; }
     /// Changed-only text setter (GI-105): repaint on a real change. Presenters
     /// replace the buffer from the workspace; a same-value sync is a no-op.
     void setText(const std::string& value)

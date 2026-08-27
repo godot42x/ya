@@ -117,12 +117,11 @@ bool FileExplorer::isPathWithinActiveMountPoint(const std::filesystem::path& pat
 
 void FileExplorer::setSelectedPath(const std::filesystem::path& path)
 {
-    _selectedPath = path;
-
     for (auto& mp : _mountPoints) {
         auto relativePath = std::filesystem::relative(path, mp.path);
         if (!relativePath.empty() && !relativePath.string().starts_with("..")) {
             switchToMountPoint(&mp);
+            _selectedPath = path;
             if (std::filesystem::is_directory(path)) {
                 _currentDirectory = path;
             }

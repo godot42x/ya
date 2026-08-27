@@ -2,26 +2,26 @@
 
 #include "Core/Common/FWD.h"
 
+#include "Core/Base.h"
 #include "GameEditor/Panels/AssetInspectorPanel.h"
 #include "GameEditor/Panels/ContentBrowserPanel.h"
-#include "GameEditor/Panels/RuntimeToolsPanel.h"
-#include "GameEditor/Panels/GUIWorkbenchPanel.h"
 #include "GameEditor/Panels/FrameStatsPanel.h"
-#include "Core/Base.h"
+#include "GameEditor/Panels/GUIWorkbenchPanel.h"
+#include "GameEditor/Panels/RuntimeToolsPanel.h"
 
 #include "Core/Camera/Camera.h"
 
 #include "Core/Event.h"
 #include "Core/Profiling/Instrumentor.h"
-#include "GameEditor/Inspector/DetailsView.h"
 #include "GameEditor/FilePicker.h"
 #include "GameEditor/ImGui/ImGuiHelper.h"
-#include "Render3D/Common/RenderOverlay.h"
-#include "RHI/Core/Image.h"
-#include "RHI/Core/RenderTexture.h"
-#include "Render3D/Common/RenderViewportSnapshot.h"
+#include "GameEditor/Inspector/DetailsView.h"
 #include "GameEditor/Panels/SceneHierarchyPanel.h"
 #include "GameEditor/Panels/UIDesignerPanel.h"
+#include "RHI/Core/Image.h"
+#include "RHI/Core/RenderTexture.h"
+#include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/RenderViewportSnapshot.h"
 #include <imgui.h>
 
 #include "GameEditor/EditorCommon.h"
@@ -54,69 +54,69 @@ enum class EViewportMode : uint8_t
 
 struct EditorLayer
 {
-    friend class  EditorViewportCompositor;
+    friend class EditorViewportCompositor;
 
   private:
     App*                 _app                = nullptr;
     uint64_t             _selectedEntityUUID = 0;
     std::vector<Entity*> _selections;
-    std::string          _selectedWidgetEntryId;    // Mutually exclusive with the above
+    std::string          _selectedWidgetEntryId; // Mutually exclusive with the above
 
     // Editor panels
     SceneHierarchyPanel _sceneHierarchyPanel;
     DetailsView         _detailsView;
     ContentBrowserPanel _contentBrowserPanel;
     AssetInspectorPanel _assetInspectorPanel;
+    FrameStatsPanel     _frameStatsPanel{this};
     RuntimeToolsPanel   _runtimeToolsPanel;
     UIDesignerPanel     _uiDesignerPanel;
     GUIWorkbenchPanel   _guiWorkbenchPanel;
-    FrameStatsPanel     _frameStatsPanel{this};
 
     // ImGui Docking state
     ImGuiDockNodeFlags _dockspaceFlags = ImGuiDockNodeFlags_None;
     ImGuiWindowFlags   _windowFlags    = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
 
     // Window state
-    bool bFullscreen     = true;
-    bool bPadding        = true;
-    bool bShowDemoWindow = false;
+    bool bFullscreen            = true;
+    bool bPadding               = true;
+    bool bShowDemoWindow        = false;
     bool bShowRenderGraphWindow = false;
     // bool bShowSettingsWindow = true;
     // bool bShowRenderStats    = true;
 
     // Viewport state
-    glm::vec2 _viewportSize = {1280.f, 720.f};
-    glm::vec2 _viewportBounds[2]; // Min and max bounds
-    Rect2D    viewportRect;
-    Rect2D    _viewportMouseRect;
-    glm::vec2 _viewportMouseCenter = {0.0f, 0.0f};
-    bool      bViewportFocused     = false;
-    bool      bViewportHovered     = false;
-    bool      _bRightMouseDragging = false; // Track right mouse drag for camera rotation
-    glm::vec2 _rightMousePressPos  = {};    // Position when right mouse was pressed
-    int       _projectBrowserSelection = -1;
+    glm::vec2                _viewportSize = {1280.f, 720.f};
+    glm::vec2                _viewportBounds[2]; // Min and max bounds
+    Rect2D                   viewportRect;
+    Rect2D                   _viewportMouseRect;
+    glm::vec2                _viewportMouseCenter     = {0.0f, 0.0f};
+    bool                     bViewportFocused         = false;
+    bool                     bViewportHovered         = false;
+    bool                     _bRightMouseDragging     = false; // Track right mouse drag for camera rotation
+    glm::vec2                _rightMousePressPos      = {};    // Position when right mouse was pressed
+    int                      _projectBrowserSelection = -1;
     std::vector<std::string> _discoveredProjects;
     std::string              _projectBrowserError;
 
     // 2D canvas preview state (Mode2D): pan in viewport pixels, zoom scale
     // around the viewport center. Lightweight navigation state - no camera
     // entity (Unity Scene-view 2D mode semantics).
-    EViewportMode _viewportMode = EViewportMode::Mode3D;
-    glm::vec2     _canvasPan    = {0.0f, 0.0f};
-    float         _canvasZoom   = 1.0f;
-    bool          _bCanvasPanning = false;
+    EViewportMode _viewportMode       = EViewportMode::Mode3D;
+    glm::vec2     _canvasPan          = {0.0f, 0.0f};
+    float         _canvasZoom         = 1.0f;
+    bool          _bCanvasPanning     = false;
     glm::vec2     _canvasPanLastMouse = {0.0f, 0.0f};
 
     // 2D canvas widget direct manipulation (designer preview). The drag
     // session itself (snapshots + delta application) lives in the UI
     // Designer panel; this layer owns the mouse mapping and handle hit test.
-    UIElement* _canvasPressHit   = nullptr;       // widget the press hit (drag target)
-    glm::vec2  _canvasPressPoint = {0.0f, 0.0f};  // canvas logical point at press
-    bool       _bCanvasPressActive = false;       // press handled selection/drag this gesture
+    UIElement* _canvasPressHit     = nullptr;      // widget the press hit (drag target)
+    glm::vec2  _canvasPressPoint   = {0.0f, 0.0f}; // canvas logical point at press
+    bool       _bCanvasPressActive = false;        // press handled selection/drag this gesture
 
     // Editor settings
-    glm::vec4 _clearColor = {0.1f, 0.1f, 0.1f, 1.0f};
-    float     _debugFloat = 0.0f;
+    glm::vec4 _clearColor                  = {0.1f, 0.1f, 0.1f, 1.0f};
+    float     _debugFloat                  = 0.0f;
     char      _defaultScenePathBuffer[512] = {};
     bool      _bDefaultScenePathDirty      = false;
     bool      _bShowViewportCameraOverlay  = true;
@@ -186,40 +186,37 @@ struct EditorLayer
     void inspectAsset(const std::string& relativePath) { _assetInspectorPanel.inspectTexture(relativePath); }
 
     // Set viewport render context before ImGui render - called from App each frame
-    void setViewportContext(const EditorViewportContext& ctx) { _viewportCtx = ctx; }
-    void setViewportDisplayImage(std::shared_ptr<RenderTexture> image) { _viewportDisplayImage = std::move(image); }
-    void setEntityIdPickImage(std::shared_ptr<RenderTexture> image) { _entityIdPickImage = std::move(image); }
+    void                                                setViewportContext(const EditorViewportContext& ctx) { _viewportCtx = ctx; }
+    void                                                setViewportDisplayImage(std::shared_ptr<RenderTexture> image) { _viewportDisplayImage = std::move(image); }
+    void                                                setEntityIdPickImage(std::shared_ptr<RenderTexture> image) { _entityIdPickImage = std::move(image); }
     [[nodiscard]] const std::shared_ptr<RenderTexture>& getEntityIdPickImage() const { return _entityIdPickImage; }
-    [[nodiscard]] FreeCamera& getCamera() { return _camera; }
-    [[nodiscard]] const FreeCamera& getCamera() const { return _camera; }
-    [[nodiscard]] std::vector<RenderOverlayText2D> buildViewportCameraOverlayTexts() const;
+    [[nodiscard]] FreeCamera&                           getCamera() { return _camera; }
+    [[nodiscard]] const FreeCamera&                     getCamera() const { return _camera; }
+    [[nodiscard]] std::vector<RenderOverlayText2D>      buildViewportCameraOverlayTexts() const;
 
-    void onUpdate(float dt);
-    void setCameraController(FreeCameraController* controller) { _runtimeToolsPanel.setCameraController(controller); }
-    void setEditableScene(Scene* scene);
-    void setCurrentScenePath(std::string scenePath) { _currentScenePath = std::move(scenePath); }
-    [[nodiscard]] const std::string& getCurrentScenePath() const { return _currentScenePath; }
-    [[nodiscard]] bool isProjectLoaded() const { return hasProjectLoaded(); }
+    void                                                onUpdate(float dt);
+    void                                                setCameraController(FreeCameraController* controller) { _runtimeToolsPanel.setCameraController(controller); }
+    void                                                setEditableScene(Scene* scene);
+    void                                                setCurrentScenePath(std::string scenePath) { _currentScenePath = std::move(scenePath); }
+    [[nodiscard]] const std::string&                    getCurrentScenePath() const { return _currentScenePath; }
+    [[nodiscard]] bool                                  isProjectLoaded() const { return hasProjectLoaded(); }
     [[nodiscard]] const std::shared_ptr<RenderTexture>& getViewportDisplayImage() const
     {
         return _viewportDisplayImage;
     }
-    void notifyViewportWidgetRect(const Rect2D& rect);
-    void setViewportHoverFocus(bool hovered, bool focused);
+    void                                          notifyViewportWidgetRect(const Rect2D& rect);
+    void                                          setViewportHoverFocus(bool hovered, bool focused);
     [[nodiscard]] const std::vector<std::string>& getDiscoveredProjects() const
     {
         return _discoveredProjects;
     }
-    [[nodiscard]] int getProjectBrowserSelection() const { return _projectBrowserSelection; }
-    void setProjectBrowserSelection(int index) { _projectBrowserSelection = index; }
+    [[nodiscard]] int                getProjectBrowserSelection() const { return _projectBrowserSelection; }
+    void                             setProjectBrowserSelection(int index) { _projectBrowserSelection = index; }
     [[nodiscard]] const std::string& getProjectBrowserError() const { return _projectBrowserError; }
-    void requestRefreshProjectBrowser() { refreshProjectBrowser(); }
-    bool requestOpenProject(const std::string& projectPath) { return openProjectInPlace(projectPath); }
-    void cmdNewScene();
-    void cmdSaveScene();
-    void cmdSaveSceneAs();
-    [[nodiscard]] Scene* getHierarchyScene() const { return getSceneHierarchyContext(); }
-    void setSceneContext(Scene* scene)
+    void                             requestRefreshProjectBrowser() { refreshProjectBrowser(); }
+    bool                             requestOpenProject(const std::string& projectPath) { return openProjectInPlace(projectPath); }
+    [[nodiscard]] Scene*             getHierarchyScene() const { return getSceneHierarchyContext(); }
+    void                             setSceneContext(Scene* scene)
     {
         _sceneHierarchyPanel.setContext(scene);
     }
@@ -281,13 +278,13 @@ struct EditorLayer
     }
 
     // === 2D canvas preview mode ===
-    [[nodiscard]] EViewportMode getViewportMode() const { return _viewportMode; }
-    void setViewportMode(EViewportMode mode, bool bPersist = true);
-    [[nodiscard]] bool isViewportMode2D() const { return _viewportMode == EViewportMode::Mode2D; }
+    [[nodiscard]] EViewportMode    getViewportMode() const { return _viewportMode; }
+    void                           setViewportMode(EViewportMode mode, bool bPersist = true);
+    [[nodiscard]] bool             isViewportMode2D() const { return _viewportMode == EViewportMode::Mode2D; }
     [[nodiscard]] const glm::vec2& getCanvasPan() const { return _canvasPan; }
     [[nodiscard]] float            getCanvasZoom() const { return _canvasZoom; }
-    void setCanvasPan(const glm::vec2& pan) { _canvasPan = pan; }
-    void setCanvasZoom(float zoom) { _canvasZoom = std::clamp(zoom, 0.1f, 16.0f); }
+    void                           setCanvasPan(const glm::vec2& pan) { _canvasPan = pan; }
+    void                           setCanvasZoom(float zoom) { _canvasZoom = std::clamp(zoom, 0.1f, 16.0f); }
     /// Map a viewport-local pixel to canvas logical pixels under the current
     /// 2D pan/zoom transform. Returns false when the point is outside the
     /// visible canvas region.
@@ -373,13 +370,14 @@ struct EditorLayer
         return getOrCreateImGuiTextureID(imageView, sampler);
     }
 
+  public:
+    Scene* getEditableScene() const;
 
   private:
-    Scene* getEditableScene() const;
-    Scene* getSceneHierarchyContext() const;
-    void   syncEditorSettingsFromConfig();
+    Scene*             getSceneHierarchyContext() const;
+    void               syncEditorSettingsFromConfig();
     [[nodiscard]] bool hasProjectLoaded() const;
-    void refreshProjectBrowser();
+    void               refreshProjectBrowser();
     [[nodiscard]] bool openProjectInPlace(const std::string& projectPath);
 
     // UI Methods
@@ -397,20 +395,20 @@ struct EditorLayer
     void editorSettings();
 
     // --
-    void debugWindow();
-    bool renderDebugImageGroup(const EditorViewportDebugCatalog::Group& group,
-                               int                                           groupIndex,
-                               const ImVec2&                                 panelSize,
-                               bool                                          bUseCollapsingHeader = true,
-                               float                                         maxPreviewSize       = 0.0f);
-    void renderDebugImageGroups(const ImVec2& panelSize, int categoryFilter = -1);
-    void renderDebugImageGroupsGrid(const ImVec2& panelSize, int categoryFilter, float maxPreviewSize = 0.0f);
-    void renderDebugImageSlots(const ImVec2& panelSize, int categoryFilter = -1);
-    void syncDebugSlotState(const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state);
-    bool renderDebugSlotMaskControls(const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state);
-    void updateDebugSlotImageView(uint32_t slotIndex, const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state, bool bForceRefresh = false);
-    void renderDebugSlotImage(uint32_t slotIndex, const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state, float width, float height, Sampler* sampler);
-    [[nodiscard]] const EditorViewportDebugCatalog& getDebugCatalog() const;
+    void                                              debugWindow();
+    bool                                              renderDebugImageGroup(const EditorViewportDebugCatalog::Group& group,
+                                                                            int                                      groupIndex,
+                                                                            const ImVec2&                            panelSize,
+                                                                            bool                                     bUseCollapsingHeader = true,
+                                                                            float                                    maxPreviewSize       = 0.0f);
+    void                                              renderDebugImageGroups(const ImVec2& panelSize, int categoryFilter = -1);
+    void                                              renderDebugImageGroupsGrid(const ImVec2& panelSize, int categoryFilter, float maxPreviewSize = 0.0f);
+    void                                              renderDebugImageSlots(const ImVec2& panelSize, int categoryFilter = -1);
+    void                                              syncDebugSlotState(const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state);
+    bool                                              renderDebugSlotMaskControls(const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state);
+    void                                              updateDebugSlotImageView(uint32_t slotIndex, const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state, bool bForceRefresh = false);
+    void                                              renderDebugSlotImage(uint32_t slotIndex, const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state, float width, float height, Sampler* sampler);
+    [[nodiscard]] const EditorViewportDebugCatalog&   getDebugCatalog() const;
     [[nodiscard]] const RenderViewportDebugImageSlot* getDebugSlotFrame(uint32_t slotIndex) const;
 
     // Helpers
@@ -441,25 +439,28 @@ struct EditorLayer
 
   public:
     // Public getters
-    glm::vec2                   getViewportSize() const { return _viewportSize; }
-    bool                        isViewportFocused() const { return bViewportFocused; }
-    bool                        isViewportHovered() const { return bViewportHovered; }
-    const Rect2D&               getViewportMouseRect() const { return _viewportMouseRect; }
-    const glm::vec2&            getViewportMouseCenter() const { return _viewportMouseCenter; }
-    bool                        isGizmoActive() const; // Check if ImGuizmo is being used or hovered
-    bool                        isRightMouseDragging() const { return _bRightMouseDragging; }
-    const std::vector<Entity*>& getSelections() const { return _selections; }
-    [[nodiscard]] UIDesignerPanel& getUIDesignerPanel() { return _uiDesignerPanel; }
+    glm::vec2                        getViewportSize() const { return _viewportSize; }
+    bool                             isViewportFocused() const { return bViewportFocused; }
+    bool                             isViewportHovered() const { return bViewportHovered; }
+    const Rect2D&                    getViewportMouseRect() const { return _viewportMouseRect; }
+    const glm::vec2&                 getViewportMouseCenter() const { return _viewportMouseCenter; }
+    bool                             isGizmoActive() const; // Check if ImGuizmo is being used or hovered
+    bool                             isRightMouseDragging() const { return _bRightMouseDragging; }
+    const std::vector<Entity*>&      getSelections() const { return _selections; }
+    [[nodiscard]] UIDesignerPanel&   getUIDesignerPanel() { return _uiDesignerPanel; }
     [[nodiscard]] GUIWorkbenchPanel& getGUIWorkbenchPanel() { return _guiWorkbenchPanel; }
-    /// Compose the YA_GUI-backed frame-stats panel into its offscreen surface.
-    void composeFrameStats(IRender& render, ICommandBuffer& commandBuffer);
-    Entity*                     getSelectedEntity() const { return _selections.empty() ? nullptr : _selections.front(); }
-    uint64_t                    getSelectedEntityUUID() const { return _selectedEntityUUID; }
+
+    Entity*  getSelectedEntity() const { return _selections.empty() ? nullptr : _selections.front(); }
+    uint64_t getSelectedEntityUUID() const { return _selectedEntityUUID; }
     /// Active scene used for viewport interaction. In the 2D workspace this is
     /// always the authoring scene so runtime UI editing never mutates the play
     /// clone. In the 3D workspace it follows the active scene.
     Scene* getViewportInteractionScene() const;
     // void      setViewportImage(stdptr<IImageView> image) { _viewportImage = getOrCreateImGuiTextureID(image); }
+
+    void cmdNewScene();
+    void cmdSaveScene();
+    void cmdSaveSceneAs();
 };
 
 } // namespace ya

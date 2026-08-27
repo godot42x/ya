@@ -1,6 +1,7 @@
 #include "GameEditor/UI/EditorSurface.h"
 
 #include "Core/Event.h"
+#include "Core/Config/ConfigManager.h"
 #include "Core/Log.h"
 #include "ECS/Entity.h"
 #include "ECS/Component.h"
@@ -16,6 +17,7 @@
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -178,6 +180,7 @@ EditorSurface::~EditorSurface() = default;
 void EditorSurface::shutdown()
 {
     _workbench.reset();
+    clearSceneSaveDialog();
     _tree.reset();
     _theme.reset();
     _snapshot = {};
@@ -193,6 +196,12 @@ void EditorSurface::shutdown()
     _inspectorEmpty.reset();
     _statsText.reset();
     _transformDrags = {};
+    _contentExplorer.reset();
+    _contentPathText.reset();
+    _contentMountList.reset();
+    _contentEntryList.reset();
+    _contentFingerprint.clear();
+    _bContentRowsDirty = true;
     _viewportTexture.reset();
     _viewportImageResource.reset();
     _viewportImageView.reset();
@@ -233,6 +242,13 @@ void EditorSurface::rebuild(App& app)
     _statsText.reset();
     _transformDrags = {};
     _workbench.reset();
+    _contentExplorer.reset();
+    _contentPathText.reset();
+    _contentMountList.reset();
+    _contentEntryList.reset();
+    _contentFingerprint.clear();
+    _bContentRowsDirty = true;
+    clearSceneSaveDialog();
     _hierarchyFingerprint.clear();
     _inspectorBoundId.clear();
 
@@ -336,7 +352,7 @@ void EditorSurface::buildEditorChrome(App& app)
         return UIMenu::create({
             UIMenu::FItem{.label = "New Scene", .action = [this]() { _layer->cmdNewScene(); }},
             UIMenu::FItem{.label = "Save Scene", .action = [this]() { _layer->cmdSaveScene(); }},
-            UIMenu::FItem{.label = "Save Scene As", .action = [this]() { _layer->cmdSaveSceneAs(); }},
+            UIMenu::FItem{.label = "Save Scene As", .action = [this]() { openSceneSaveDialog(); }},
             UIMenu::FItem::Separator(),
             UIMenu::FItem{.label = "Exit", .action = []() {
                  if (auto* app = App::get()) {
@@ -720,6 +736,7 @@ void EditorSurface::syncPresentation(App& app, float dt)
     syncInspector();
     syncToolbar(app);
     syncContentBrowser();
+    syncSceneSaveDialog();
     if (_statsText) {
         const float fps = dt > 0.0f ? 1.0f / dt : 0.0f;
         _statsText->setText(std::format(
@@ -997,8 +1014,7 @@ void EditorSurface::activateContentItem(const std::filesystem::path& path, bool 
         _contentExplorer->navigateInto(path);
         return;
     }
-    // File activation mirrors the ImGui ContentBrowserPanel item action:
-    // scene files open through the scene services (frame task so the open
+    // Scene files open through the scene services (frame task so the open
     // lands outside the input dispatch), everything else just selects.
     std::string utf8Path = path_utils::pathToUtf8String(path);
     if (utf8Path.ends_with(".scene.json")) {
@@ -1008,6 +1024,373 @@ void EditorSurface::activateContentItem(const std::filesystem::path& path, bool 
                 App::get()->getSceneServices().loadScene(scenePath);
             });
         }
+    }
+}
+
+void EditorSurface::openSceneSaveDialog()
+{
+    if (!_tree || !_root || !_layer) {
+        return;
+    }
+    if (_sceneSaveOverlay && _sceneSaveOverlay->isAttached()) {
+        _tree->setFocus(_sceneSaveNameField.get());
+        return;
+    }
+
+    clearSceneSaveDialog();
+
+    std::string defaultName = "NewScene";
+    if (Scene* scene = _layer->getHierarchyScene(); scene && !scene->getName().empty()) {
+        defaultName = scene->getName();
+    }
+
+    _sceneSaveExplorer = std::make_shared<FileExplorer>();
+    _sceneSaveExplorer->setConfigScope("sceneSaveDialog");
+    _sceneSaveExplorer->initFromVFS();
+    _sceneSaveExplorer->setExtensions({});
+    _sceneSaveExplorer->setFilterMode(FileExplorer::FilterMode::Directories);
+    _sceneSaveExplorer->setSelectionMode(FileExplorer::SelectionMode::Directory);
+    _sceneSaveExplorer->setLeftPanelWidth(180.0f);
+
+    if (!_layer->getCurrentScenePath().empty()) {
+        _sceneSaveExplorer->setSelectedPath(std::filesystem::path(_layer->getCurrentScenePath()).parent_path());
+    }
+    else {
+        const std::string lastSaveDirectory = ConfigManager::get().getOr<std::string>("editor",
+                                                                                      "sceneSaveDialog.lastDirectory",
+                                                                                      "");
+        if (!lastSaveDirectory.empty()) {
+            _sceneSaveExplorer->setSelectedPath(path_utils::pathFromUtf8String(lastSaveDirectory));
+        }
+    }
+
+    _sceneSaveOverlay = std::make_shared<UIPopupOverlay>("SceneSaveOverlay");
+    _sceneSaveOverlay->setRole(UIPopupOverlay::EOverlayRole::Modal);
+    _sceneSaveOverlay->_onDismiss = [this]() { clearSceneSaveDialog(); };
+
+    auto panel = std::make_shared<UIPanel>("SceneSavePanel");
+    panel->setSize({720.0f, 520.0f});
+    panel->setStyleKey("panel.window");
+    _sceneSavePanel = panel;
+
+    auto root = std::make_shared<UIContainer>("SceneSaveRoot");
+    root->_anchorMin = {0.0f, 0.0f};
+    root->_anchorMax = {1.0f, 1.0f};
+    root->setSize({0.0f, 0.0f});
+    root->setDirection(EWidgetBoxLayout::Vertical);
+    root->setSpacing(8.0f);
+    root->setPadding({12.0f, 12.0f});
+    panel->addDetachedChild(root);
+
+    auto title = std::make_shared<UIText>("SceneSaveTitle");
+    title->setText("Save Scene");
+    title->setStyleKey("text.header");
+    title->setFontSize(14);
+    root->addDetachedChild(title);
+
+    auto nameRow = std::make_shared<UIContainer>("SceneSaveNameRow");
+    nameRow->setDirection(EWidgetBoxLayout::Horizontal);
+    nameRow->setSpacing(6.0f);
+    nameRow->setStretchLastChild(true);
+    nameRow->setSize({0.0f, 26.0f});
+
+    auto nameLabel = std::make_shared<UIText>("SceneSaveNameLabel");
+    nameLabel->setText("Scene Name");
+    nameLabel->setFontSize(12);
+    nameLabel->setSize({90.0f, 26.0f});
+    nameLabel->_vAlign = EWidgetAlignV::Center;
+    nameRow->addDetachedChild(nameLabel);
+
+    auto nameField = std::make_shared<UITextField>("SceneSaveName");
+    nameField->setSize({0.0f, 26.0f});
+    nameField->setText(defaultName);
+    _sceneSaveNameField = nameField;
+    nameRow->addDetachedChild(nameField);
+    root->addDetachedChild(nameRow);
+
+    auto pathText = std::make_shared<UIText>("SceneSavePath");
+    pathText->setFontSize(12);
+    pathText->setStyleKey("text.muted");
+    _sceneSavePathText = pathText;
+    root->addDetachedChild(pathText);
+
+    auto search = std::make_shared<UITextField>("SceneSaveSearch");
+    search->setSize({0.0f, 24.0f});
+    search->_onTextChanged = [this](const std::string& text) {
+        if (_sceneSaveExplorer) {
+            _sceneSaveExplorer->setSearchText(text);
+            _bSceneSaveRowsDirty = true;
+        }
+    };
+    root->addDetachedChild(search);
+
+    auto body = std::make_shared<UIContainer>("SceneSaveBody");
+    body->setDirection(EWidgetBoxLayout::Horizontal);
+    body->setSpacing(6.0f);
+    body->setStretchLastChild(true);
+    body->setSize({0.0f, 360.0f});
+
+    _sceneSaveMountList = std::make_shared<UIContainer>("SceneSaveMounts");
+    _sceneSaveMountList->setDirection(EWidgetBoxLayout::Vertical);
+    _sceneSaveMountList->setSpacing(2.0f);
+    _sceneSaveMountList->setSize({180.0f, 0.0f});
+    auto mountScroll = std::make_shared<UIScrollViewport>("SceneSaveMountScroll");
+    mountScroll->setAxis(EScrollAxis::Vertical);
+    mountScroll->setSize({180.0f, 0.0f});
+    mountScroll->addDetachedChild(_sceneSaveMountList);
+
+    _sceneSaveEntryList = std::make_shared<UIContainer>("SceneSaveEntries");
+    _sceneSaveEntryList->setDirection(EWidgetBoxLayout::Vertical);
+    _sceneSaveEntryList->setSpacing(2.0f);
+    _sceneSaveEntryList->setSize({0.0f, 0.0f});
+    auto entryScroll = std::make_shared<UIScrollViewport>("SceneSaveEntryScroll");
+    entryScroll->setAxis(EScrollAxis::Vertical);
+    entryScroll->_anchorMin = {0.0f, 0.0f};
+    entryScroll->_anchorMax = {1.0f, 1.0f};
+    entryScroll->setSize({0.0f, 0.0f});
+    entryScroll->addDetachedChild(_sceneSaveEntryList);
+
+    body->addDetachedChild(mountScroll);
+    body->addDetachedChild(entryScroll);
+    root->addDetachedChild(body);
+
+    auto preview = std::make_shared<UIText>("SceneSavePreview");
+    preview->setFontSize(12);
+    _sceneSavePreviewText = preview;
+    root->addDetachedChild(preview);
+
+    auto actions = std::make_shared<UIContainer>("SceneSaveActions");
+    actions->setDirection(EWidgetBoxLayout::Horizontal);
+    actions->setSpacing(8.0f);
+    actions->getBoxLayout().setMainAxisAlignment(EWidgetMainAxisAlignment::End);
+
+    auto back = labeledButton("SceneSaveBack", "Back", 72.0f, 26.0f).share();
+    back->_onClick = [this]() {
+        if (_sceneSaveExplorer && _sceneSaveExplorer->navigateBack()) {
+            _bSceneSaveRowsDirty = true;
+        }
+    };
+    actions->addDetachedChild(back);
+
+    auto save = labeledButton("SceneSaveConfirm", "Save", 84.0f, 26.0f).share();
+    save->_onClick = [this]() { confirmSceneSaveDialog(); };
+    _sceneSaveSaveButton = save;
+    actions->addDetachedChild(save);
+
+    auto cancel = labeledButton("SceneSaveCancel", "Cancel", 84.0f, 26.0f).share();
+    cancel->_onClick = [this]() {
+        if (_sceneSaveOverlay) {
+            _sceneSaveOverlay->close();
+        }
+    };
+    actions->addDetachedChild(cancel);
+    root->addDetachedChild(actions);
+
+    _sceneSaveOverlay->addDetachedChild(panel);
+    _sceneSaveFingerprint.clear();
+    _bSceneSaveRowsDirty = true;
+    _sceneSaveOverlay->open(*_tree);
+    _tree->setFocus(_sceneSaveNameField.get());
+}
+
+void EditorSurface::clearSceneSaveDialog()
+{
+    _sceneSaveOverlay.reset();
+    _sceneSavePanel.reset();
+    _sceneSaveExplorer.reset();
+    _sceneSavePathText.reset();
+    _sceneSavePreviewText.reset();
+    _sceneSaveNameField.reset();
+    _sceneSaveSaveButton.reset();
+    _sceneSaveMountList.reset();
+    _sceneSaveEntryList.reset();
+    _sceneSaveFingerprint.clear();
+    _bSceneSaveRowsDirty = true;
+}
+
+void EditorSurface::syncSceneSaveDialog()
+{
+    if (!_sceneSaveOverlay || !_sceneSaveExplorer || !_sceneSavePanel || !_tree) {
+        return;
+    }
+
+    std::string fingerprint;
+    if (const FileExplorer::MountPoint* active = _sceneSaveExplorer->getActiveMountPoint()) {
+        fingerprint += active->name;
+        fingerprint += '|';
+    }
+    fingerprint += _sceneSaveExplorer->getCurrentDirectory().string();
+    fingerprint += '|';
+    fingerprint += _sceneSaveExplorer->getSelectedPath().string();
+
+    std::vector<FileExplorer::FEntry> entries;
+    _sceneSaveExplorer->collectEntries(entries);
+    for (const auto& entry : entries) {
+        fingerprint += entry.name;
+        fingerprint += ';';
+    }
+    if (_sceneSaveNameField) {
+        fingerprint += "|name:";
+        fingerprint += _sceneSaveNameField->getText();
+    }
+
+    if (fingerprint != _sceneSaveFingerprint) {
+        _sceneSaveFingerprint = std::move(fingerprint);
+        _bSceneSaveRowsDirty = true;
+    }
+
+    if (_bSceneSaveRowsDirty && _sceneSaveMountList && _sceneSaveEntryList &&
+        _sceneSaveMountList->isAttached() && _sceneSaveEntryList->isAttached()) {
+        rebuildSceneSaveRows();
+        _bSceneSaveRowsDirty = false;
+    }
+
+    const Extent2D logicalExtent = _tree->getLogicalExtent();
+    const glm::vec2 extent = {static_cast<float>(logicalExtent.width), static_cast<float>(logicalExtent.height)};
+    const glm::vec2 desired = _sceneSavePanel->computeDesiredSize();
+    _sceneSaveOverlay->_contentPos = {
+        std::max(0.0f, (extent.x - desired.x) * 0.5f),
+        std::max(0.0f, (extent.y - desired.y) * 0.5f),
+    };
+
+    const std::filesystem::path targetDir = !_sceneSaveExplorer->getSelectedPath().empty()
+                                                ? _sceneSaveExplorer->getSelectedPath()
+                                                : _sceneSaveExplorer->getCurrentDirectory();
+    if (_sceneSavePathText) {
+        std::string pathText = targetDir.string();
+        if (const FileExplorer::MountPoint* active = _sceneSaveExplorer->getActiveMountPoint()) {
+            pathText = active->name + ": " + pathText;
+        }
+        _sceneSavePathText->setText(pathText);
+    }
+
+    const std::string sceneName = _sceneSaveNameField ? _sceneSaveNameField->getText() : std::string{};
+    const bool bCanSave = !sceneName.empty() && !targetDir.empty();
+    if (_sceneSaveSaveButton) {
+        _sceneSaveSaveButton->setEnabled(bCanSave);
+    }
+    if (_sceneSavePreviewText) {
+        if (bCanSave) {
+            _sceneSavePreviewText->setStyleKey("text.muted");
+            _sceneSavePreviewText->setText(std::format("Will save to: {}", (targetDir / (sceneName + ".scene.json")).string()));
+        }
+        else {
+            _sceneSavePreviewText->setStyleKey("text.error");
+            _sceneSavePreviewText->setText("Enter a scene name and choose a directory.");
+        }
+    }
+}
+
+void EditorSurface::rebuildSceneSaveRows()
+{
+    if (!_sceneSaveExplorer || !_tree || !_sceneSaveMountList || !_sceneSaveEntryList) {
+        return;
+    }
+
+    const FileExplorer::MountPoint* active = _sceneSaveExplorer->getActiveMountPoint();
+    const std::filesystem::path selectedPath = _sceneSaveExplorer->getSelectedPath();
+
+    for (UIElement* child : _sceneSaveMountList->getChildrenInPaintOrder()) {
+        if (child && child->isAttached()) {
+            _tree->detach(*child);
+        }
+    }
+    for (const auto& mp : _sceneSaveExplorer->getMountPoints()) {
+        auto row = makeContentRow(
+            "SceneSaveMount_" + mp.name,
+            mp.name,
+            mp.name,
+            [this](const std::string& itemId) {
+                if (!_sceneSaveExplorer) {
+                    return;
+                }
+                for (const auto& candidate : _sceneSaveExplorer->getMountPoints()) {
+                    if (candidate.name == itemId) {
+                        _sceneSaveExplorer->selectMountPoint(candidate);
+                        _bSceneSaveRowsDirty = true;
+                        break;
+                    }
+                }
+            },
+            [this](const std::string& itemId) {
+                if (!_sceneSaveExplorer) {
+                    return;
+                }
+                for (const auto& candidate : _sceneSaveExplorer->getMountPoints()) {
+                    if (candidate.name == itemId) {
+                        _sceneSaveExplorer->selectMountPoint(candidate);
+                        _bSceneSaveRowsDirty = true;
+                        break;
+                    }
+                }
+            });
+        row->setSelected(active != nullptr && active->name == mp.name);
+        _tree->attach(*_sceneSaveMountList, row);
+    }
+
+    for (UIElement* child : _sceneSaveEntryList->getChildrenInPaintOrder()) {
+        if (child && child->isAttached()) {
+            _tree->detach(*child);
+        }
+    }
+    std::vector<FileExplorer::FEntry> entries;
+    _sceneSaveExplorer->collectEntries(entries);
+    for (const auto& entry : entries) {
+        const std::filesystem::path path = entry.path;
+        auto row = makeContentRow(
+            "SceneSaveEntry_" + entry.name,
+            entry.name + "/",
+            entry.name,
+            [this, path](const std::string&) {
+                if (_sceneSaveExplorer) {
+                    _sceneSaveExplorer->setSelectedPath(path);
+                    _bSceneSaveRowsDirty = true;
+                }
+            },
+            [this, path](const std::string&) { activateSceneSaveItem(path, true); });
+        row->setSelected(selectedPath == path);
+        _tree->attach(*_sceneSaveEntryList, row);
+    }
+}
+
+void EditorSurface::activateSceneSaveItem(const std::filesystem::path& path, bool bIsDirectory)
+{
+    if (!_sceneSaveExplorer || !bIsDirectory) {
+        return;
+    }
+    if (_sceneSaveExplorer->navigateInto(path)) {
+        _bSceneSaveRowsDirty = true;
+    }
+}
+
+void EditorSurface::confirmSceneSaveDialog()
+{
+    if (!_sceneSaveExplorer || !_sceneSaveNameField || !_layer) {
+        return;
+    }
+
+    const std::string sceneName = _sceneSaveNameField->getText();
+    const std::filesystem::path targetDir = !_sceneSaveExplorer->getSelectedPath().empty()
+                                                ? _sceneSaveExplorer->getSelectedPath()
+                                                : _sceneSaveExplorer->getCurrentDirectory();
+    if (sceneName.empty() || targetDir.empty()) {
+        return;
+    }
+
+    const std::string targetDirUtf8 = path_utils::pathToUtf8String(targetDir);
+    ConfigManager::Editor("editor").set("sceneSaveDialog.lastDirectory", targetDirUtf8).flush();
+    const std::string scenePath = targetDirUtf8 + "/" + sceneName + ".scene.json";
+    _layer->setCurrentScenePath(scenePath);
+    if (Scene* scene = _layer->getEditableScene()) {
+        scene->setName(sceneName);
+    }
+    if (App* app = App::get()) {
+        app->getSceneServices().saveScene(scenePath);
+    }
+    YA_CORE_INFO("Scene saved to: {}", scenePath);
+
+    if (_sceneSaveOverlay) {
+        _sceneSaveOverlay->close();
     }
 }
 

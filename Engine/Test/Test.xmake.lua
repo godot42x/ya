@@ -16,7 +16,7 @@ if get_config("ya_profile") ~= "gui" then
         set_kind("binary")
         add_files("./Source/**.cpp")
 
-        add_deps("ya-engine", "ya-module-fixture")
+        add_deps("ya-engine", "ya-module-fixture", "ya-game-editor")
         add_packages("gtest")
         add_packages("quickjs-ng")
         add_packages("asio")

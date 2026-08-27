@@ -28,9 +28,11 @@ struct UIDockWorkspace;
 struct UIDragFloat;
 struct UIElement;
 struct UIContainer;
+struct UIButton;
 struct UIImage;
 struct UIMenuBar;
 struct UIPanel;
+struct UIPopupOverlay;
 struct UIText;
 struct UITextField;
 struct UITheme;
@@ -75,6 +77,18 @@ struct EditorSurface
     std::string                    _contentFingerprint;
     bool                           _bContentRowsDirty = true;
 
+    std::shared_ptr<UIPopupOverlay> _sceneSaveOverlay;
+    std::shared_ptr<UIPanel>        _sceneSavePanel;
+    std::shared_ptr<FileExplorer>   _sceneSaveExplorer;
+    std::shared_ptr<UIText>         _sceneSavePathText;
+    std::shared_ptr<UIText>         _sceneSavePreviewText;
+    std::shared_ptr<UITextField>    _sceneSaveNameField;
+    std::shared_ptr<UIButton>       _sceneSaveSaveButton;
+    std::shared_ptr<UIContainer>    _sceneSaveMountList;
+    std::shared_ptr<UIContainer>    _sceneSaveEntryList;
+    std::string                     _sceneSaveFingerprint;
+    bool                            _bSceneSaveRowsDirty = true;
+
     std::shared_ptr<Texture>    _viewportTexture;
     std::shared_ptr<IImage>     _viewportImageResource;
     std::shared_ptr<IImageView> _viewportImageView;
@@ -113,6 +127,12 @@ struct EditorSurface
     void syncContentBrowser();
     void rebuildContentRows();
     void activateContentItem(const std::filesystem::path& path, bool bIsDirectory);
+    void openSceneSaveDialog();
+    void clearSceneSaveDialog();
+    void syncSceneSaveDialog();
+    void rebuildSceneSaveRows();
+    void activateSceneSaveItem(const std::filesystem::path& path, bool bIsDirectory);
+    void confirmSceneSaveDialog();
     void publishViewportRect();
     void applyWindowMetrics(App& app);
 };

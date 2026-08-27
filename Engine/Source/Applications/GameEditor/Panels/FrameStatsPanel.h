@@ -10,9 +10,11 @@ namespace ya
 {
 
 struct EditorLayer;
+struct App;
 struct IRender;
 struct ICommandBuffer;
 struct RenderTexture;
+struct UIText;
 
 /// Frame Stats panel rendered with the YA_GUI framework instead of ImGui
 /// immediate-mode calls. The panel owns a small retained widget tree (four

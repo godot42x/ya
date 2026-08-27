@@ -8,6 +8,7 @@ EditorLayer::EditorLayer(App* app)
       _detailsView(this),
       _contentBrowserPanel(this),
       _assetInspectorPanel(this),
+      _frameStatsPanel(this),
       _runtimeToolsPanel(this),
       _uiDesignerPanel(this),
       _guiWorkbenchPanel(this)
@@ -126,10 +127,6 @@ glm::vec2 EditorLayer::canvasToViewport(const glm::vec2& canvasPoint) const
     return canvasPoint * _canvasZoom + _canvasPan;
 }
 
-void EditorLayer::composeFrameStats(IRender& render, ICommandBuffer& commandBuffer)
-{
-    _frameStatsPanel.compose(render, commandBuffer);
-}
 
 void EditorLayer::notifyViewportWidgetRect(const Rect2D& rect)
 {
