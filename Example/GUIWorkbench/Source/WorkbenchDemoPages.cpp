@@ -1302,6 +1302,15 @@ void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoSta
 void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                    const std::function<void(const std::string&)>& log)
 {
+    // The floating host lives on the tree's Popup layer, outside the demo
+    // content host, so a page rebuild never tears it down automatically.
+    // Detach the previous instance explicitly, otherwise every re-entry into
+    // the Dock page accumulates a host + workspace under the Popup layer.
+    if (state.dockFloatingHost && state.dockFloatingHost->getTree() == &tree) {
+        tree.detach(*state.dockFloatingHost);
+    }
+    state.dockFloatingHost.reset();
+
     auto dockWs            = std::make_shared<ya::UIDockWorkspace>();
     dockWs->bAllowFloating = true;
     dockWs->bAllowTearOff  = true;
@@ -1320,6 +1329,7 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
     const ya::WidgetAttachment floatingAttached =
         tree.attachToLayer(ya::WidgetTree::ELayer::Popup, floatHost);
     YA_CORE_ASSERT(floatingAttached.valid(), "Dock floating host attach failed");
+    state.dockFloatingHost = floatHost;
 
     const auto makePanel = [](const std::string& name, const std::string& text)
     {

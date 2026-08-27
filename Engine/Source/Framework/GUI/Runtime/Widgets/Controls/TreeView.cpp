@@ -213,6 +213,11 @@ std::vector<UITreeView::VisibleRow> UITreeView::flattenVisible() const
     if (!_roots) {
         return rows;
     }
+    // A filter-text change must expand matching chains before ANY structural
+    // consumer (layout, paint, hit test, diagnostics) reads the visible rows.
+    // If this stayed paint-only, the first layout/input pass after a binding
+    // update would still see the stale collapsed structure.
+    const_cast<UITreeView*>(this)->applyFilterExpansion();
     // A data-source mutation (push/removeAt/clear) changes the visible-row
     // count and therefore this widget's desired size: Layout granularity.
     const size_t count = _roots->size(ReactiveBase::EDirtyLevel::Layout);
@@ -227,7 +232,7 @@ bool UITreeView::matchesFilter(const FNode& node) const
     if (!_filterBinding) {
         return true;
     }
-    const std::string& filter = _filterBinding->get();
+    const std::string& filter = _filterBinding->get(ReactiveBase::EDirtyLevel::Layout);
     if (filter.empty()) {
         return true;
     }
@@ -262,7 +267,7 @@ void UITreeView::flattenNode(const FNode& node, int depth, std::vector<VisibleRo
     }
     // A filter hides every node outside the matching chains (a node shows
     // only when it matches or one of its descendants does).
-    if (_filterBinding && !_filterBinding->value().empty() && !matchesFilter(node)) {
+    if (_filterBinding && !_filterBinding->get(ReactiveBase::EDirtyLevel::Layout).empty() && !matchesFilter(node)) {
         return;
     }
     rows.push_back({&node, depth});
@@ -285,7 +290,7 @@ void UITreeView::applyFilterExpansion()
         _lastFilterApplied.clear();
         return;
     }
-    const std::string current = _filterBinding->value();
+    const std::string current = _filterBinding->get(ReactiveBase::EDirtyLevel::Layout);
     if (current == _lastFilterApplied) {
         return;
     }
@@ -294,9 +299,9 @@ void UITreeView::applyFilterExpansion()
         return; // clearing the filter never collapses anything
     }
     // One-shot: expand every matching chain so the user sees the results.
-    const size_t count = _roots->size();
+    const size_t count = _roots->size(ReactiveBase::EDirtyLevel::Layout);
     for (size_t i = 0; i < count; ++i) {
-        expandMatchingChain(_roots->get(i), current);
+        expandMatchingChain(_roots->get(i, ReactiveBase::EDirtyLevel::Layout), current);
     }
 }
 
@@ -355,11 +360,6 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
     // (Guardrail G1: the base paint template now clips every widget to its
     // own rect, so the manual pushClip that used to guard overflow rows is
     // gone — the framework guarantees it.)
-
-    // One-shot filter expansion: when the filter text changed since the
-    // last paint, expand the matching chains once (manual toggles stay
-    // authoritative afterwards).
-    applyFilterExpansion();
 
     const auto rows = flattenVisible();
     const FTreeViewStyle style = resolveWidgetStyle<FTreeViewStyle>(*this, _authoredStyle);

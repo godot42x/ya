@@ -1225,6 +1225,9 @@ void WidgetTree::beginDrag(UIElement* source,
         return;
     }
     _dragSource  = source;
+    // Keep the source alive through the whole session: onDrop may destroy the
+    // source subtree (dock floating-window re-sync) before onFinished runs.
+    _dragSourceKeepAlive = source ? source->shared_from_this() : nullptr;
     _dragOperation = std::move(operation);
     _dragPayload = _dragOperation->payload;
     _dragPoint   = {};
@@ -1338,6 +1341,10 @@ void WidgetTree::endDrag(const glm::vec2& logicalPoint)
     const std::string payload = _dragPayload;
     const std::string targetName = target ? target->_name : std::string{};
     DragSessionObserver observer = std::move(_dragObserver);
+    // Hold the source alive through onDrop + onFinished: the drop handler can
+    // destroy the source widget (dock re-sync) while the finish observer still
+    // references it. Released together with the local below on return.
+    UIElementRef sourceKeepAlive = std::move(_dragSourceKeepAlive);
     clearDragSession();
     if (target) {
         if (operation) {
@@ -1357,6 +1364,7 @@ void WidgetTree::cancelDrag()
     }
     const glm::vec2 logicalPoint = _dragPoint;
     DragSessionObserver observer = std::move(_dragObserver);
+    UIElementRef sourceKeepAlive = std::move(_dragSourceKeepAlive);
     clearDragSession();
     if (observer.onFinished) {
         observer.onFinished(EDragFinishResult::Cancelled, logicalPoint, {});

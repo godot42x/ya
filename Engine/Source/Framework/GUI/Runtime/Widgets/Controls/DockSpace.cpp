@@ -263,6 +263,17 @@ UIDockSpace::UIDockSpace(std::string name)
     addBehavior(std::make_shared<FDockSpaceDropTargetBehavior>());
 }
 
+UIDockSpace::~UIDockSpace()
+{
+    // Detach from the workspace so a workspace that outlives this widget (the
+    // floating host keeps it alive) never serves a dangling UIDockSpace* via
+    // dockSpace(). The drag-drop completion path resolves UIDockSpace through
+    // exactly this pointer, so a stale value is a use-after-free.
+    if (_ws && _ws->dockSpace() == this) {
+        _ws->setDockSpace(nullptr);
+    }
+}
+
 UIDockSpace::FLeafView* UIDockSpace::leafViewForLeaf(DockNodeId leafId)
 {
     auto it = _leafViews.find(leafId);
@@ -396,13 +407,25 @@ void UIDockSpace::paintDropPreviewOverlay(UIFrameBuilder& builder) const
 
 void UIDockSpace::setWorkspace(std::shared_ptr<UIDockWorkspace> ws)
 {
+    // Rebind: the old workspace must not keep pointing back at us (a floating
+    // host may keep it alive long after this widget is replaced).
+    if (_ws && _ws != ws && _ws->dockSpace() == this) {
+        _ws->setDockSpace(nullptr);
+    }
     _ws = std::move(ws);
     if (_ws) {
         _ws->setDockSpace(this);
-        _ws->setOnDockUpdated([this]()
+        // Weak self: the workspace may fire dock-updated after this widget is
+        // destroyed (it is kept alive by the floating host), so the callback
+        // must never dereference a stale 'this'.
+        std::weak_ptr<UIDockSpace> weakSelf =
+            std::static_pointer_cast<UIDockSpace>(shared_from_this());
+        _ws->setOnDockUpdated([weakSelf]()
         {
-            if (getTree()) {
-                rebuildProjection();
+            if (auto self = weakSelf.lock()) {
+                if (self->getTree()) {
+                    self->rebuildProjection();
+                }
             }
         });
     }

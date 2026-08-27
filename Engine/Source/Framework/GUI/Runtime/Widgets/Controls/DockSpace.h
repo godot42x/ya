@@ -29,6 +29,9 @@ struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSp
     YA_GUI_AUTHORED_STYLE_IO(FDockSpaceStyle)
 
     explicit UIDockSpace(std::string name = "DockSpace");
+    /// Unregister the workspace back-pointer (UIDockWorkspace::_dockSpace) so a
+    /// workspace that outlives this widget never hands out a dangling pointer.
+    ~UIDockSpace() override;
     /// Bind the shared workspace this dock reads its model / registry / policy from.
     void setWorkspace(std::shared_ptr<UIDockWorkspace> ws);
     [[nodiscard]] UIDockWorkspace* workspace() const { return _ws.get(); }

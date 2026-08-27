@@ -5,6 +5,10 @@
 // the framework provides the controls and the workbench shell, apps assemble
 // their own pages. One builder per gallery section; each section has its own
 // scenario file under Example/GUIWorkbench/Scenarios/.
+//
+// These pages are intentionally a mix of static DSL builder helpers and a few
+// specialized retained widgets used as examples. They are not a mandate that
+// every composite UI surface must become a UICompoundWidget.
 
 #include <glm/glm.hpp>
 
@@ -22,6 +26,7 @@ struct UIMenuBar;
 struct UISlider;
 struct UITabBar;
 struct UITreeView;
+struct UIDockFloatingHost;
 class  UIStyleSet;
 struct WidgetTree;
 } // namespace ya
@@ -74,6 +79,11 @@ struct FDemoState
     std::shared_ptr<ya::UIElement>   dragItem;
     std::shared_ptr<ya::UIElement>   dropZone;
     std::shared_ptr<ya::UIButton>    openModalButton;
+
+    /// Dock page owns its floating host on the tree's Popup layer (outside the
+    /// demo content host). Kept across page rebuilds so a re-entered Dock page
+    /// can detach the previous host instead of accumulating host + workspace.
+    std::shared_ptr<ya::UIDockFloatingHost> dockFloatingHost;
 
     /// Drop stale page handles (called by the app before rebuilding a page)
     /// so detached demo widgets can be destroyed.

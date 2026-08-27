@@ -1,5 +1,44 @@
 # GUI Framework / Editor / Game UI 重构进度
 
+## 2026-08-27 checkpoint：继续推进 G4.2，补 MenuBar label binding 与 hover/open lifecycle 并存契约
+
+- `BindingContractTest.MenuBarLabelBindingSurvivesOpenMenuAndHoverRouting` 新增，补上 `UIMenuBarItem` 这条菜单入口控件的并存边界：外部 `bindLabel(Reactive<std::string>)` 继续作为权威 display source，而 hover 状态、menu open/close 生命周期、hover-routing 切换只负责 transient/lifecycle 行为，不能打断或覆盖 label binding。
+- 这条回归覆盖了一个和 `UIText` 不同的场景：binding 生效时，menu item 仍然要能在点击后打开菜单、在 move/hover 路由中保持 open 状态，并允许 binding 值在菜单已打开时继续更新；解绑后则回到 authored fallback label，但不会顺手把当前 open menu 生命周期打断。
+- 这一步没有触发实现修改，说明 `MenuBar` 当前已经满足“display binding 与 transient hover/open state 并存”的 contract；把它独立钉住后，后续若继续给 menu bar 增加快捷键、搜索、最近文件之类的 editor affordance，也不容易把交互生命周期和 label source 再搅回一起。
+- 这样 `G4.2` 的覆盖面继续扩大：除了 Text/Button/SelectableRow/TreeView/TableGrid，现在菜单入口这条常见 editor chrome 路径也进入了自动化门禁。
+- 验证：`xmake b ya-gui-widgets-test`、`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='BindingContractTest.MenuBarLabelBindingSurvivesOpenMenuAndHoverRouting'`、`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='BindingContractTest.*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：继续推进 G4.2，补 TableGrid selection binding 与 hover transient 并存契约
+
+- `BindingContractTest.TableSelectionBindingCoexistsWithHoverTransientState` 新增，补上 `UITableGrid` 这条 data-driven 基础件的并存边界：外部 `bindSelection(Reactive<int>)` 负责权威选中行，控件内部 `_hoveredRow` 只负责 transient hover 反馈，两者互不覆盖。
+- 这条回归同时锁住两类方向：一是 hover/move/clearTransientInputState 这类临时视觉状态不能偷偷改写 selection binding；二是外部 selection binding 的写回与用户点击选中仍然继续共享同一个 reactive 事实源。
+- 这一步没有触发实现修改，说明 `UITableGrid` 当前已经满足这条 coexistence contract；但把它单独落成回归之后，后续若再给 table 加 editor affordance、drag handle 或 richer row chrome，就不会轻易把 transient state 和 selection source 搅回一起。
+- 这也让 `G4.2` 的覆盖面从 `Text/Button/SelectableRow/TreeView` 再扩到另一个 data-driven 控件：现在至少 Text、Button、SelectableRow、TreeView、TableGrid 五条高频路径都有“多状态来源并存”的自动化门禁。
+- 验证：`xmake b ya-gui-widgets-test`、`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='BindingContractTest.TableSelectionBindingCoexistsWithHoverTransientState'`、`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='BindingContractTest.*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：继续推进 G4.2，锁住 TreeView filter binding 与 expansion state 并存
+
+- `BindingContractTest.TreeFilterBindingAndManualExpansionCoexistWithoutStickyReexpand` 新增，明确 `UITreeView` 上三类状态来源必须稳定共存：外部 `bindFilter()` reactive binding、控件自有的 per-node expand-state reactive、以及用户/宿主的 imperative `toggleExpanded()`。
+- 这条回归锁住的语义是：filter 文本变化时，matching chain 应在第一次结构读取前展开；但在同一 filter 生命周期内，用户随后手动 collapse 仍然保持权威，不会被“每帧重新套用 filter expansion”偷偷顶回去；当 filter 再次变更时，新的匹配链才重新 one-shot 展开。
+- 为了让这条契约真正成立，`UITreeView` 的 filter 读取从 `value()` 收口到 `get(Layout)`，使 filter binding 正式成为 layout 级依赖；同时 matching-chain expansion 前移到 `flattenVisible()` 的第一次结构读取路径，而不再只藏在 `paintSelf()` 里。否则 `filterRef->set(...)` 后树可能根本不脏，`buildSnapshot()` 会复用旧结构，绑定和结构状态实际上没有并起来。
+- 这一步把 `G4.2` 从 Text/Button/SelectableRow 的状态并存进一步推进到了 data-driven widget：不仅有 display binding 和 transient state，也开始覆盖“外部结构 binding + 控件内部 retained state + imperative override”三者共存。
+- 验证：`xmake b ya-gui-widgets-test`、`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='BindingContractTest.TreeFilterBindingAndManualExpansionCoexistWithoutStickyReexpand'`、`./build/macosx/arm64/debug/ya-gui-widgets-test --gtest_filter='BindingContractTest.*'`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：清理阻塞 G4.2 回归的现有 GUI 编译问题
+
+- 在补 `G4.2` 合约回归时，先撞到了工作区里已有的三处 GUI 编译阻塞，并顺手最小收口：`WidgetTree.h` 的 `_dragSourceKeepAlive` 重复声明被整理回单一定义；`DockFloatingHost.cpp` 与 `DockSpace.cpp` 的 workspace 回调 weak-self 绑定都从 `shared_from_this()` 的基类返回值改成了显式 typed cast。
+- 这几处都不是新功能，而是现有 retained/dock 生命周期收口时留下的半成品：前两者会直接阻塞 `ya-gui-widgets-test` 编译，后两者还会让“workspace 持有回调，但 widget 已销毁”的防悬空策略在 Clang 下过不了类型检查。
+- 这一步的目的只是恢复当前 GUI closure 的可验证状态，为后续继续补 binding/behavior coexistence contract 提供稳定门禁。
+- 验证：`xmake b ya-gui-widgets-test`、`xmake b GUIWorkbench` 通过。
+
+## 2026-08-27 checkpoint：收口 G4.3，把 compound 迁移桥接契约落到事实源
+
+- `G4.3 / G4.3a / G4.3b` 这一轮正式按完成态收口：计划里已经明确了 kernel / behavior / compound / future adapter 的四层边界，第一批对象的归宿判定表已经成形，而对应的首批实施顺序也已经兑现到实际改动上——`WorkbenchDemoPages.cpp` 的 demo drag/drop 已行为化，`UISelectableRow`、`UITreeView`、Dock 线都走了“保留 retained control / leaf primitive，本体减负、横切交互外提”的路线。
+- `UICompoundWidget` 公开头现在也补上了这条边界：它属于 native retained widget layer，用于局部 composition root 与 retained state/lifecycle；它不是 runtime kernel，也不是 behavior registry、document host 或 future adapter 的统一宿主。
+- `WorkbenchDemoPages.h` 同步注明：example 页面的纯组合区块继续优先走 builder helper，少量 bespoke retained widget 只是 demo / specialized control 示例，不代表 framework 要把所有复合 UI 都升成 `UICompoundWidget`。
+- `todo.md` 因此把 `G4.3`、`G4.3a`、`G4.3b` 一并标为完成；后续若继续推进这条线，重点应转向真正的 future editor composite widget 试点或 `G5.2/G6.2` 的 adapter seam，而不是回头强推一轮“万物 compound 化”。
+- 这一步只收口契约与迁移判定事实源，没有改变运行时行为。
+
 ## 2026-08-27 checkpoint：启动 G5.2，把 native DSL / future adapter 边界写回公开头
 
 - 在 `Build.h`、`CompoundBuilder.h`、`Declarative.h` 的文件头注释里补回当前已经形成的架构事实：native retained DSL 是直接物化 live widget 的原生 authoring API，但不是 future React-like / HTML-CSS-JS / script/document adapter 的唯一入口。

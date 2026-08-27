@@ -429,6 +429,13 @@ struct YA_GUI_API WidgetTree final
     WidgetRouteTrace _lastRouteTrace;
 
     UIElement*        _dragSource   = nullptr;
+    /// Strong hold on the drag source for the duration of the session. A drop
+    /// handler (onDrop) may detach/destroy the source subtree before the
+    /// session's onFinished observer runs (dock floating-window re-sync does
+    /// exactly this), so the source must stay alive until the finish callbacks
+    /// complete. Released when endDrag/cancelDrag return; this member never
+    /// outlives the session, so no permanent retention.
+    UIElementRef      _dragSourceKeepAlive;
     UIElement*        _dragCandidate = nullptr;
     glm::vec2         _dragCandidateStart{};
     /// When true, drop-target discovery ignores the drag source subtree

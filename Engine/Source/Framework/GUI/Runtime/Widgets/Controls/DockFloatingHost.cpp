@@ -18,12 +18,32 @@ UIDockFloatingHost::UIDockFloatingHost(std::string name)
     setVisibility(EWidgetVisibility::HitTestInvisible);
 }
 
+UIDockFloatingHost::~UIDockFloatingHost()
+{
+    if (_ws && _ws->floatingHost() == this) {
+        _ws->setFloatingHost(nullptr);
+    }
+}
+
 void UIDockFloatingHost::bindWorkspace(std::shared_ptr<UIDockWorkspace> ws)
 {
+    if (_ws && _ws != ws && _ws->floatingHost() == this) {
+        _ws->setFloatingHost(nullptr);
+    }
     _ws = std::move(ws);
     if (_ws) {
         _ws->setFloatingHost(this);
-        _ws->setOnFloatingUpdated([this]() { syncFromWorkspace(); });
+        // Weak self: the workspace may fire floating-updated after this widget
+        // is destroyed (another host re-binds the same workspace), so the
+        // callback must never dereference a stale 'this'.
+        std::weak_ptr<UIDockFloatingHost> weakSelf =
+            std::static_pointer_cast<UIDockFloatingHost>(shared_from_this());
+        _ws->setOnFloatingUpdated([weakSelf]()
+        {
+            if (auto self = weakSelf.lock()) {
+                self->syncFromWorkspace();
+            }
+        });
     }
 }
 

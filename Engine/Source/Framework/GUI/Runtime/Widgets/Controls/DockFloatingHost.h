@@ -19,6 +19,10 @@ struct UIDockFloatingWindow;
 struct YA_GUI_API UIDockFloatingHost : public UIElement
 {
     explicit UIDockFloatingHost(std::string name = "DockFloatingHost");
+    /// Unregister the workspace back-pointer (UIDockWorkspace::_floatingHost)
+    /// so a workspace that outlives this widget never hands out a dangling
+    /// pointer.
+    ~UIDockFloatingHost() override;
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIDockFloatingHost>; }
 
