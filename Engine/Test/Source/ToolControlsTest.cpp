@@ -1115,7 +1115,7 @@ TEST(ToolControlsTest, MenuSeparatorUsesDedicatedApiAndPaintsRule)
     WidgetTree tree({.width = 320, .height = 180});
     auto       menu = UIMenu::create({
         UIMenu::FItem{.label = "Open", .action = [] {}},
-        UIMenu::FItem::Separator(),
+        UIMenu::FItem::separator(),
         UIMenu::FItem{.label = "Quit", .action = [] {}},
     });
     menu->openAt(tree, {10.0f, 20.0f});
@@ -1147,7 +1147,7 @@ TEST(ToolControlsTest, MenuKeyboardNavigatesSubmenuAndSkipsSeparators)
 
     WidgetTree tree({.width = 480, .height = 320});
     auto       menu = UIMenu::create({
-        UIMenu::FItem::Separator(),
+        UIMenu::FItem::separator(),
         UIMenu::FItem{
             .label = "Recent",
             .submenuFactory = []() {
@@ -1311,7 +1311,7 @@ TEST(ToolControlsTest, SelectableRowHoverUsesThemeFill)
 {
     auto theme = std::make_shared<UITheme>();
     FSelectableRowStyle style;
-    style.hoveredFill = FBrush::Solid({1.0f, 0.2f, 0.1f, 1.0f});
+    style.hoveredFill = FBrush::solid({1.0f, 0.2f, 0.1f, 1.0f});
     theme->define<FSelectableRowStyle>("selectable", style);
 
     WidgetTree tree({.width = 400, .height = 300});

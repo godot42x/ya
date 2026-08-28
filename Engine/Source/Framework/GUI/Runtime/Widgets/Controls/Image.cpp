@@ -36,7 +36,7 @@ void UIImage::deserializeFields(const nlohmann::json& fields)
     UIElement::deserializeFields(fields);
     static const glm::vec4 kDefaultPlaceholder{0.24f, 0.26f, 0.31f, 1.0f};
     if (!hasAuthoredStyle() && _placeholderColor != kDefaultPlaceholder) {
-        setStyleField("placeholderFill", FBrush::Solid(_placeholderColor), EUIPropertyImpact::Paint);
+        setStyleField("placeholderFill", FBrush::solid(_placeholderColor), EUIPropertyImpact::Paint);
     }
 }
 

@@ -3082,7 +3082,7 @@ TEST(RenderGraphCoreTest, ExecutorCanBeginDeclaredRasterRenderingFromCompiledPas
                 .layerCount = 1,
                 .colors = {{
                     .color       = color,
-                    .clearValue  = ClearValue::Black(),
+                    .clearValue  = ClearValue::black(),
                     .loadOp      = EAttachmentLoadOp::Clear,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,

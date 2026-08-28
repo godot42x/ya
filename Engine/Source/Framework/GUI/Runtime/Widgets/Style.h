@@ -50,7 +50,7 @@ struct FTextStyle
 {
     glm::vec4 textColor = {1.0f, 1.0f, 1.0f, 1.0f};
     uint32_t  fontSize  = 16;
-    FBrush    fillColor = FBrush::Solid({0.8f, 0.8f, 0.8f, 1.0f});
+    FBrush    fillColor = FBrush::solid({0.8f, 0.8f, 0.8f, 1.0f});
     glm::vec2 padding   = {0.0f, 0.0f};
 
     bool operator==(const FTextStyle&) const = default;
@@ -59,7 +59,7 @@ struct FTextStyle
 /// Panel: fill brush (solid color, or image later). Mirrors UIPanel default.
 struct FPanelStyle
 {
-    FBrush fillColor = FBrush::Solid({0.2f, 0.2f, 0.2f, 0.8f});
+    FBrush fillColor = FBrush::solid({0.2f, 0.2f, 0.2f, 0.8f});
 
     bool operator==(const FPanelStyle&) const = default;
 };
@@ -68,11 +68,11 @@ struct FPanelStyle
 /// UIButton's _normal/_hovered/_pressed/_focused defaults and content padding.
 struct FButtonStyle
 {
-    FBrush     normalFill   = FBrush::Solid({0.8f, 0.8f, 0.8f, 1.0f});
-    FBrush     hoveredFill  = FBrush::Solid({0.6f, 0.6f, 0.6f, 1.0f});
-    FBrush     pressedFill  = FBrush::Solid({0.4f, 0.4f, 0.4f, 1.0f});
-    FBrush     focusedFill  = FBrush::Solid({0.26f, 0.52f, 0.90f, 1.0f});
-    FBrush     disabledFill = FBrush::Solid({0.5f, 0.5f, 0.5f, 1.0f});
+    FBrush     normalFill   = FBrush::solid({0.8f, 0.8f, 0.8f, 1.0f});
+    FBrush     hoveredFill  = FBrush::solid({0.6f, 0.6f, 0.6f, 1.0f});
+    FBrush     pressedFill  = FBrush::solid({0.4f, 0.4f, 0.4f, 1.0f});
+    FBrush     focusedFill  = FBrush::solid({0.26f, 0.52f, 0.90f, 1.0f});
+    FBrush     disabledFill = FBrush::solid({0.5f, 0.5f, 0.5f, 1.0f});
     glm::vec4  textColor    = {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec2  padding      = {12.0f, 4.0f};
 
@@ -83,8 +83,8 @@ struct FButtonStyle
 struct FMenuBarItemStyle
 {
     glm::vec4 textColor   = {0.90f, 0.92f, 0.95f, 1.0f};
-    FBrush    normalFill  = FBrush::Solid({0.10f, 0.11f, 0.13f, 1.0f});
-    FBrush    hoveredFill = FBrush::Solid({0.20f, 0.22f, 0.27f, 1.0f});
+    FBrush    normalFill  = FBrush::solid({0.10f, 0.11f, 0.13f, 1.0f});
+    FBrush    hoveredFill = FBrush::solid({0.20f, 0.22f, 0.27f, 1.0f});
     glm::vec4 separatorColor = {0.28f, 0.30f, 0.36f, 1.0f};
 
     bool operator==(const FMenuBarItemStyle&) const = default;
@@ -96,9 +96,9 @@ struct FMenuBarItemStyle
 struct FTabStyle
 {
     glm::vec4 textColor    = {0.90f, 0.92f, 0.95f, 1.0f};
-    FBrush    normalFill   = FBrush::Solid({0.15f, 0.16f, 0.19f, 1.0f});
-    FBrush    hoveredFill  = FBrush::Solid({0.21f, 0.23f, 0.27f, 1.0f});
-    FBrush    selectedFill = FBrush::Solid({0.12f, 0.13f, 0.17f, 1.0f});
+    FBrush    normalFill   = FBrush::solid({0.15f, 0.16f, 0.19f, 1.0f});
+    FBrush    hoveredFill  = FBrush::solid({0.21f, 0.23f, 0.27f, 1.0f});
+    FBrush    selectedFill = FBrush::solid({0.12f, 0.13f, 0.17f, 1.0f});
     glm::vec4 accentColor  = {0.30f, 0.55f, 0.92f, 1.0f};
     glm::vec2 padding      = {14.0f, 6.0f};
     /// Bottom rule separating the strip from the content host below it.
@@ -115,9 +115,9 @@ struct FTabStyle
     /// deleted in the Phase 3 cleanup).
 struct FSplitPaneStyle
 {
-    FBrush dividerFill         = FBrush::Solid({0.11f, 0.12f, 0.15f, 1.0f});
-    FBrush dividerHoveredFill  = FBrush::Solid({0.26f, 0.31f, 0.40f, 1.0f});
-    FBrush dividerDraggingFill = FBrush::Solid({0.32f, 0.55f, 0.92f, 1.0f});
+    FBrush dividerFill         = FBrush::solid({0.11f, 0.12f, 0.15f, 1.0f});
+    FBrush dividerHoveredFill  = FBrush::solid({0.26f, 0.31f, 0.40f, 1.0f});
+    FBrush dividerDraggingFill = FBrush::solid({0.32f, 0.55f, 0.92f, 1.0f});
 
     bool operator==(const FSplitPaneStyle&) const = default;
 };
@@ -129,8 +129,8 @@ struct FSplitPaneStyle
 /// (_bShowScrollbar stays a widget behavior switch, not a style attribute.)
 struct FScrollBarStyle
 {
-    FBrush trackColor = FBrush::Solid({0.10f, 0.11f, 0.14f, 0.9f});
-    FBrush thumbColor = FBrush::Solid({0.34f, 0.38f, 0.46f, 1.0f});
+    FBrush trackColor = FBrush::solid({0.10f, 0.11f, 0.14f, 0.9f});
+    FBrush thumbColor = FBrush::solid({0.34f, 0.38f, 0.46f, 1.0f});
     float  width      = 8.0f;
 
     bool operator==(const FScrollBarStyle&) const = default;
@@ -141,10 +141,10 @@ struct FScrollBarStyle
 /// control, not dock-specific).
 struct FDockSpaceStyle
 {
-    FBrush canvasColor          = FBrush::Solid({0.075f, 0.082f, 0.10f, 1.0f});
-    FBrush dropPreviewColor     = FBrush::Solid({0.28f, 0.52f, 0.90f, 0.28f});
+    FBrush canvasColor          = FBrush::solid({0.075f, 0.082f, 0.10f, 1.0f});
+    FBrush dropPreviewColor     = FBrush::solid({0.28f, 0.52f, 0.90f, 0.28f});
     /// Preview highlight when the drop merges into an existing leaf.
-    FBrush dropPreviewMergeColor = FBrush::Solid({0.26f, 0.76f, 0.46f, 0.28f});
+    FBrush dropPreviewMergeColor = FBrush::solid({0.26f, 0.76f, 0.46f, 0.28f});
     glm::vec4 dropPreviewOutlineColor = {0.34f, 0.60f, 0.96f, 1.0f};
 
     bool operator==(const FDockSpaceStyle&) const = default;
@@ -154,8 +154,8 @@ struct FDockSpaceStyle
 /// UIDockFloatingWindow and its resize handles.
 struct FFloatingWindowStyle
 {
-    FBrush    bodyFill       = FBrush::Solid({0.145f, 0.150f, 0.180f, 0.985f});
-    FBrush    innerFill      = FBrush::Solid({0.08f, 0.09f, 0.12f, 0.55f});
+    FBrush    bodyFill       = FBrush::solid({0.145f, 0.150f, 0.180f, 0.985f});
+    FBrush    innerFill      = FBrush::solid({0.08f, 0.09f, 0.12f, 0.55f});
     glm::vec4 borderColor    = {0.27f, 0.30f, 0.38f, 1.0f};
     glm::vec4 edgeAffordance = {0.40f, 0.47f, 0.62f, 0.42f};
     glm::vec4 titleTextColor = {0.90f, 0.92f, 0.95f, 1.0f};
@@ -170,10 +170,10 @@ struct FFloatingWindowStyle
 struct FTreeViewStyle
 {
     glm::vec4 textColor         = {0.90f, 0.92f, 0.95f, 1.0f};
-    FBrush    selectedFill      = FBrush::Solid({0.22f, 0.42f, 0.78f, 1.0f});
-    FBrush    hoveredFill       = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
+    FBrush    selectedFill      = FBrush::solid({0.22f, 0.42f, 0.78f, 1.0f});
+    FBrush    hoveredFill       = FBrush::solid({0.24f, 0.26f, 0.31f, 1.0f});
     glm::vec4 arrowColor        = {0.60f, 0.65f, 0.70f, 1.0f};
-    FBrush    arrowHoveredFill  = FBrush::Solid({0.32f, 0.36f, 0.44f, 1.0f});
+    FBrush    arrowHoveredFill  = FBrush::solid({0.32f, 0.36f, 0.44f, 1.0f});
     glm::vec4 dropIndicator     = {0.22f, 0.42f, 0.78f, 1.0f};
     uint32_t  fontSize          = 14;
 
@@ -184,7 +184,7 @@ struct FTreeViewStyle
 /// widget is layout/behavior; look comes from this style when themed.
 struct FTextFieldStyle
 {
-    FBrush    backgroundFill = FBrush::Solid({0.08f, 0.09f, 0.12f, 1.0f});
+    FBrush    backgroundFill = FBrush::solid({0.08f, 0.09f, 0.12f, 1.0f});
     glm::vec4 textColor      = {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec4 caretColor     = {0.90f, 0.92f, 0.95f, 1.0f};
     uint32_t  fontSize       = 16;
@@ -196,8 +196,8 @@ struct FTextFieldStyle
 /// uses `menu.panel` as an FPanelStyle so it stays a regular panel.
 struct FMenuStyle
 {
-    FBrush    itemNormalFill  = FBrush::Solid({0.13f, 0.14f, 0.17f, 1.0f});
-    FBrush    itemHoveredFill = FBrush::Solid({0.22f, 0.42f, 0.78f, 1.0f});
+    FBrush    itemNormalFill  = FBrush::solid({0.13f, 0.14f, 0.17f, 1.0f});
+    FBrush    itemHoveredFill = FBrush::solid({0.22f, 0.42f, 0.78f, 1.0f});
     glm::vec4 textColor       = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 iconColor       = {0.78f, 0.82f, 0.88f, 1.0f};
     glm::vec4 checkmarkColor  = {0.30f, 0.76f, 0.46f, 1.0f};
@@ -215,10 +215,10 @@ struct FMenuStyle
 /// a themed panel does not stamp a second surface.
 struct FSelectableRowStyle
 {
-    FBrush normalFill          = FBrush::Solid({0.16f, 0.17f, 0.20f, 0.0f});
-    FBrush hoveredFill         = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
-    FBrush selectedFill        = FBrush::Solid({0.22f, 0.42f, 0.78f, 1.0f});
-    FBrush selectedHoveredFill = FBrush::Solid({0.30f, 0.50f, 0.86f, 1.0f});
+    FBrush normalFill          = FBrush::solid({0.16f, 0.17f, 0.20f, 0.0f});
+    FBrush hoveredFill         = FBrush::solid({0.24f, 0.26f, 0.31f, 1.0f});
+    FBrush selectedFill        = FBrush::solid({0.22f, 0.42f, 0.78f, 1.0f});
+    FBrush selectedHoveredFill = FBrush::solid({0.30f, 0.50f, 0.86f, 1.0f});
 
     bool operator==(const FSelectableRowStyle&) const = default;
 };
@@ -226,8 +226,8 @@ struct FSelectableRowStyle
 /// Inspector numeric drag: fill, dragging fill, text, outline.
 struct FDragFloatStyle
 {
-    FBrush    backgroundFill = FBrush::Solid({0.17f, 0.19f, 0.24f, 1.0f});
-    FBrush    draggingFill   = FBrush::Solid({0.18f, 0.24f, 0.34f, 1.0f});
+    FBrush    backgroundFill = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f});
+    FBrush    draggingFill   = FBrush::solid({0.18f, 0.24f, 0.34f, 1.0f});
     glm::vec4 textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 borderColor    = {0.30f, 0.33f, 0.40f, 1.0f};
     uint32_t  fontSize       = 13;
@@ -239,9 +239,9 @@ struct FDragFloatStyle
 /// Box edge length stays on the widget.
 struct FCheckBoxStyle
 {
-    FBrush    boxFill      = FBrush::Solid({0.55f, 0.60f, 0.68f, 1.0f});
-    FBrush    hoveredFill  = FBrush::Solid({0.34f, 0.38f, 0.46f, 1.0f});
-    FBrush    checkedFill  = FBrush::Solid({0.24f, 0.46f, 0.82f, 1.0f});
+    FBrush    boxFill      = FBrush::solid({0.55f, 0.60f, 0.68f, 1.0f});
+    FBrush    hoveredFill  = FBrush::solid({0.34f, 0.38f, 0.46f, 1.0f});
+    FBrush    checkedFill  = FBrush::solid({0.24f, 0.46f, 0.82f, 1.0f});
     glm::vec4 checkColor   = {0.95f, 0.96f, 0.98f, 1.0f};
 
     bool operator==(const FCheckBoxStyle&) const = default;
@@ -250,8 +250,8 @@ struct FCheckBoxStyle
 /// Collapsed combo field. The popup list is a UIMenu and uses FMenuStyle.
 struct FComboBoxStyle
 {
-    FBrush    fieldFill   = FBrush::Solid({0.16f, 0.18f, 0.22f, 1.0f});
-    FBrush    hoveredFill = FBrush::Solid({0.22f, 0.25f, 0.30f, 1.0f});
+    FBrush    fieldFill   = FBrush::solid({0.16f, 0.18f, 0.22f, 1.0f});
+    FBrush    hoveredFill = FBrush::solid({0.22f, 0.25f, 0.30f, 1.0f});
     glm::vec4 textColor   = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 arrowColor  = {0.68f, 0.72f, 0.78f, 1.0f};
     uint32_t  fontSize    = 13;
@@ -262,9 +262,9 @@ struct FComboBoxStyle
 /// Horizontal slider track / value fill / thumb. Thumb size stays on the widget.
 struct FSliderStyle
 {
-    FBrush trackFill = FBrush::Solid({0.14f, 0.16f, 0.20f, 1.0f});
-    FBrush valueFill = FBrush::Solid({0.24f, 0.46f, 0.82f, 1.0f});
-    FBrush thumbFill = FBrush::Solid({0.88f, 0.90f, 0.94f, 1.0f});
+    FBrush trackFill = FBrush::solid({0.14f, 0.16f, 0.20f, 1.0f});
+    FBrush valueFill = FBrush::solid({0.24f, 0.46f, 0.82f, 1.0f});
+    FBrush thumbFill = FBrush::solid({0.88f, 0.90f, 0.94f, 1.0f});
 
     bool operator==(const FSliderStyle&) const = default;
 };
@@ -272,9 +272,9 @@ struct FSliderStyle
 /// Table / grid chrome. Row height and column widths stay on the widget.
 struct FTableGridStyle
 {
-    FBrush    backgroundFill  = FBrush::Solid({0.12f, 0.13f, 0.16f, 1.0f});
-    FBrush    selectedFill    = FBrush::Solid({0.22f, 0.42f, 0.78f, 1.0f});
-    FBrush    hoveredFill     = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
+    FBrush    backgroundFill  = FBrush::solid({0.12f, 0.13f, 0.16f, 1.0f});
+    FBrush    selectedFill    = FBrush::solid({0.22f, 0.42f, 0.78f, 1.0f});
+    FBrush    hoveredFill     = FBrush::solid({0.24f, 0.26f, 0.31f, 1.0f});
     glm::vec4 textColor       = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 headerTextColor = {0.62f, 0.66f, 0.72f, 1.0f};
     glm::vec4 gridColor       = {0.20f, 0.22f, 0.27f, 1.0f};
@@ -286,9 +286,9 @@ struct FTableGridStyle
 /// Spin box: field + step buttons.
 struct FSpinBoxStyle
 {
-    FBrush    backgroundFill    = FBrush::Solid({0.17f, 0.19f, 0.24f, 1.0f});
-    FBrush    buttonFill        = FBrush::Solid({0.22f, 0.24f, 0.30f, 1.0f});
-    FBrush    buttonHoveredFill = FBrush::Solid({0.30f, 0.33f, 0.40f, 1.0f});
+    FBrush    backgroundFill    = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f});
+    FBrush    buttonFill        = FBrush::solid({0.22f, 0.24f, 0.30f, 1.0f});
+    FBrush    buttonHoveredFill = FBrush::solid({0.30f, 0.33f, 0.40f, 1.0f});
     glm::vec4 textColor         = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 borderColor       = {0.30f, 0.33f, 0.40f, 1.0f};
     uint32_t  fontSize          = 13;
@@ -299,7 +299,7 @@ struct FSpinBoxStyle
 /// Radio: hover row fill + outer/inner dots + label.
 struct FRadioButtonStyle
 {
-    FBrush    hoveredFill = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
+    FBrush    hoveredFill = FBrush::solid({0.24f, 0.26f, 0.31f, 1.0f});
     glm::vec4 dotColor    = {0.88f, 0.90f, 0.94f, 1.0f};
     glm::vec4 dotFillColor = {0.24f, 0.46f, 0.82f, 1.0f};
     glm::vec4 textColor   = {0.90f, 0.92f, 0.95f, 1.0f};
@@ -312,7 +312,7 @@ struct FRadioButtonStyle
 /// `_color` is the control value, not a style field.
 struct FColorEditStyle
 {
-    FBrush    backgroundFill    = FBrush::Solid({0.12f, 0.13f, 0.17f, 1.0f});
+    FBrush    backgroundFill    = FBrush::solid({0.12f, 0.13f, 0.17f, 1.0f});
     glm::vec4 textColor         = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 channelHighlight  = {0.24f, 0.46f, 0.82f, 1.0f};
     uint32_t  fontSize          = 13;
@@ -323,8 +323,8 @@ struct FColorEditStyle
 /// Search combo collapsed field. The popup is a UIMenu (FMenuStyle).
 struct FSearchComboStyle
 {
-    FBrush    backgroundFill = FBrush::Solid({0.12f, 0.13f, 0.17f, 1.0f});
-    FBrush    hoveredFill    = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
+    FBrush    backgroundFill = FBrush::solid({0.12f, 0.13f, 0.17f, 1.0f});
+    FBrush    hoveredFill    = FBrush::solid({0.24f, 0.26f, 0.31f, 1.0f});
     glm::vec4 textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 caretColor     = {0.90f, 0.92f, 0.95f, 1.0f};
     uint32_t  fontSize       = 13;
@@ -336,7 +336,7 @@ struct FSearchComboStyle
 /// UIImage is content, not chrome.
 struct FImageStyle
 {
-    FBrush placeholderFill = FBrush::Solid({0.24f, 0.26f, 0.31f, 1.0f});
+    FBrush placeholderFill = FBrush::solid({0.24f, 0.26f, 0.31f, 1.0f});
 
     bool operator==(const FImageStyle&) const = default;
 };
@@ -344,7 +344,7 @@ struct FImageStyle
 /// Popup/modal shield. Non-modal popups paint nothing; modal uses modalFill.
 struct FPopupStyle
 {
-    FBrush modalFill = FBrush::Solid({0.0f, 0.0f, 0.0f, 0.45f});
+    FBrush modalFill = FBrush::solid({0.0f, 0.0f, 0.0f, 0.45f});
 
     bool operator==(const FPopupStyle&) const = default;
 };
@@ -353,8 +353,8 @@ struct FPopupStyle
 /// `drag.target`. `activeFill` is pressed (source) or drop-highlight (target).
 struct FDragDropStyle
 {
-    FBrush    normalFill = FBrush::Solid({0.20f, 0.22f, 0.27f, 1.0f});
-    FBrush    activeFill = FBrush::Solid({0.18f, 0.24f, 0.34f, 1.0f});
+    FBrush    normalFill = FBrush::solid({0.20f, 0.22f, 0.27f, 1.0f});
+    FBrush    activeFill = FBrush::solid({0.18f, 0.24f, 0.34f, 1.0f});
     glm::vec4 textColor  = {0.90f, 0.92f, 0.95f, 1.0f};
     uint32_t  fontSize   = 13;
 

@@ -83,7 +83,7 @@ struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FText
         }
         _color = value;
         setStyleField("textColor", value, EUIPropertyImpact::Paint);
-        setStyleField("fillColor", FBrush::Solid(value), EUIPropertyImpact::Paint);
+        setStyleField("fillColor", FBrush::solid(value), EUIPropertyImpact::Paint);
     }
     [[nodiscard]] const std::string& getText() const { return _text; }
     // SizeToContent: set base UIElement::_bAutoSize to measure the layout

@@ -1172,7 +1172,7 @@ void DeferredRenderPipeline::prepareShadowPass(RenderStageContext& stageCtx)
         return;
     }
 
-    PerfState::Get().clearMetric(perf::sample::deferredShadow(), perf::metric::cpuTimeMs());
+    PerfState::get().clearMetric(perf::sample::deferredShadow(), perf::metric::cpuTimeMs());
 }
 
 void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH)

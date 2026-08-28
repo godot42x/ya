@@ -53,7 +53,7 @@ void UIPanel::deserializeFields(const nlohmann::json& fields)
     rest.erase("_bExplicitFill");
     UIElement::deserializeFields(rest);
     if (bLegacyExplicit && !hasAuthoredStyle()) {
-        setStyleField("fillColor", FBrush::Solid(_color), EUIPropertyImpact::Paint);
+        setStyleField("fillColor", FBrush::solid(_color), EUIPropertyImpact::Paint);
     }
 }
 

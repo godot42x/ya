@@ -109,8 +109,8 @@ TEST(GUIHeadlessHostTest, MenuBarItemHoverRepaintsWithHoveredColor)
             // background (0.075) and widen the gap so hover is visible.
             theme             = std::make_shared<ya::UITheme>();
             auto style        = ya::FMenuBarItemStyle{};
-            style.normalFill  = ya::FBrush::Solid({0.16f, 0.18f, 0.22f, 1.0f});
-            style.hoveredFill = ya::FBrush::Solid({0.30f, 0.33f, 0.40f, 1.0f});
+            style.normalFill  = ya::FBrush::solid({0.16f, 0.18f, 0.22f, 1.0f});
+            style.hoveredFill = ya::FBrush::solid({0.30f, 0.33f, 0.40f, 1.0f});
             theme->define<ya::FMenuBarItemStyle>("menubar", style);
             tree.setTheme(theme.get());
         }

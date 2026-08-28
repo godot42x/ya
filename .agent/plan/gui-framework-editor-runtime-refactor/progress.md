@@ -1,5 +1,102 @@
 # GUI Framework / Editor / Game UI 重构进度
 
+## 2026-08-28 checkpoint：Transform compound 改为 selection-driven binding
+
+- EditorTransformSection 现在记录当前 bound entity；选中实体变化时，只 detach/replace 内部 EditorAutoPropertySection，外层 compound identity 保持不变。
+- 新实体的 PropertyGraph 与 Transform setter mutation policy 会重新构建，避免控件继续读写旧实体；未选中或无 Transform 时内部 section 保持为空。
+- 这一步解决了 retained Inspector 最关键的 selection 生命周期问题，没有重建整个 Inspector，也没有引入第二棵 WidgetTree。
+- 验证：xmake b ya-game-editor 通过。
+
+## 2026-08-28 checkpoint：修正自动 bool 属性同步的 retained invalidation 语义
+
+- UICheckBox 新增 changed-only setChecked() / isChecked()，外部属性同步不再直接写内部字段。
+- EditorAutoPropertySection::sync() 改用 setter，保证反射属性变化触发 retained paint invalidation，同时不打断 focused 控件状态。
+- 验证：xmake b ya-game-editor 通过。
+
+## 2026-08-28 checkpoint：修正自动 bool 属性同步的 retained invalidation 语义
+
+- UICheckBox 新增 changed-only setChecked() / isChecked()，外部属性同步不再直接写内部字段。
+- EditorAutoPropertySection::sync() 改用 setter，保证反射属性变化触发 retained paint invalidation，同时不打断 focused 控件状态。
+- 这是自动 property editor 接入后的真实 runtime 修复；未扩展到新的属性类型或 ImGui 路径。
+- 验证：待 xmake b ya-game-editor 完成后记录。
+
+## 2026-08-28 checkpoint：建立首个 PropertyProjection registry consumer
+
+- 新增 PropertyProjectionRegistry 与内置 Transform projection；projection 只修改属性图的显示语义，不创建 widget、不持有 ECS/editor 生命周期。
+- EditorTransformSection 已通过 registry 应用 Transform projection，再将 setter mutation policy 注入 binding，自动属性 editor 继续消费同一 graph。
+- contract 新增 projection registry 测试，锁住 custom projection 不改变 graph shape，只覆盖指定显示语义。
+- 验证：xmake b ya-testing 通过；运行测试时当前构建环境缺少 `libya-gui-framework.dylib` rpath，未将运行结果宣称为通过。
+
+## 2026-08-28 checkpoint：Transform custom section 合流 retained 自动属性 editor
+
+- EditorTransformSection 现在只负责 Transform 语义组合和 setter mutation policy；具体 vec3 三轴控件由 EditorAutoPropertySection 从 PropertyGraph 自动生成。
+- 这条路径验证了 custom projection 与 auto property editor 可以在同一 retained compound 中共存，同时保留 Transform dirty/children notification。
+- contract 覆盖自动 section attach、detach、reattach、vec3 行生成；customization registry 和 selection-driven component sections 仍未完成。
+- 验证：xmake b ya-testing、xmake r ya-testing -- --gtest_filter='EditorPropertyGraphTest.*' 通过（3/3）。
+
+## 2026-08-28 checkpoint：新增 retained 自动属性 section 原型并锁定生命周期
+
+- 新增 EditorAutoPropertySection，依据 PropertyGraph 自动生成 vec3/float/bool/string 属性行；控件树和同步状态属于 compound，不依赖 DetailsView 宿主。
+- 新增 contract：挂载/卸载/重新挂载不会重复构造属性行，Transform graph 会生成稳定的 vec3 三轴编辑器。
+- 当前自动 section 尚未替换 Transform custom section；setter mutation policy 注入和更多真实组件接入放在下一步，避免本轮把 custom 与 auto 的边界混在一起。
+- 验证：xmake b ya-game-editor、xmake b ya-testing、xmake r ya-testing -- --gtest_filter='EditorPropertyGraphTest.*' 通过。
+
+## 2026-08-28 checkpoint：为 PropertyGraph 建立 GameEditor contract 测试
+
+- 新增 EditorPropertyGraphTest，锁住 Transform 反射字段的声明顺序、显示名、编辑权限、multi-instance mixed 判断和批量写回。
+- 测试目标显式链接 ya-game-editor，但只验证中性 PropertyGraph/PropertyHandle，不依赖 ImGui 绘制路径。
+- 这一步为 retained 自动属性行提供先行数据契约；自动 row widget 仍未接入，不能宣称完成自动 DetailsView。
+- 验证：xmake b ya-testing、xmake r ya-testing -- --gtest_filter='EditorPropertyGraphTest.*' 通过。
+
+## 2026-08-28 checkpoint：收口自动属性投影的 mixed / visibility 语义
+
+- PropertyHandle::isMixed() 现在覆盖 glm::vec3、float、bool、std::string，为多选自动 editor 提供统一 mixed 判断。
+- PropertyGraph 不再把 Transient / NotSerialized 反射字段投影进 DetailsView；节点保留显式可见性和编辑能力标志。
+- 这一步仍未创建自动属性 widget；它先冻结 auto projection 必须依赖的数据语义，避免后续 UI 层自行猜测字段状态。
+- 验证：xmake b ya-game-editor 通过。
+
+## 2026-08-28 checkpoint：扩展 PropertyHandle 的基础 scalar binding 能力
+
+- `PropertyHandle` 现在除了 `glm::vec3` 外，提供 `float`、`bool`、`std::string` 的 typed get/set，供后续 retained auto property editor 复用。
+- Transform 的 mutation policy 仍保持显式 setter 路径；scalar 默认写入只适用于无额外 setter policy 的反射字段，不能替代组件级语义 mutation。
+- 本轮只完成 binding 基础面，不宣称自动属性行已接入；下一步仍需实现 `UIPropertyRow` / `UIAutoPropertyEditor` 和相应 contract。
+- 验证：`xmake b ya-game-editor` 通过。
+
+## 2026-08-28 checkpoint：落地反射 PropertyGraph 并接入 Transform compound
+
+- 新增 PropertyGraph / PropertyNode，从反射 Class::propertyOrder 与 metadata 生成有序、带显示名/分类/编辑权限的属性节点。
+- PropertyGraph 只负责 DetailsView 的属性投影输入，不依赖 ImGui、WidgetTree 或具体控件；每个节点携带统一 PropertyHandle binding。
+- EditorTransformSection 现在通过 graph 查找 _position / _rotation / _scale，不再直接查询 Class::properties；写回仍经过 Transform setter mutation policy，保留 dirty 通知。
+- 验证：xmake b ya-game-editor 通过。自动 property row、custom projection registry、通用事务仍未完成。
+
+## 2026-08-27 checkpoint：建立 DetailsView PropertyGraph/Projection 重构计划并落第一条 Binding seam
+
+- 新增 `details-view-property-projection.md`，明确 retained DetailsView 的目标分层：`PropertyGraph/Binding`、`PropertyProjection`、custom `UICompoundWidget` 与 auto property editor；不再以 ImGui `TypeRenderer` 为未来基础。
+- `PropertyHandle` 作为第一条中性 binding seam 已接入 `EditorTransformSection`，Transform 的 retained 控件通过反射属性地址读写。
+- 本 checkpoint 只完成 vec3/single-instance 基础能力；通用 PropertyGraph、事务、完整 mixed value、自动属性行和 custom projection registry 仍未完成，不能宣称 DetailsView 迁移完成。
+- 验证：`xmake b ya-game-editor` 通过。
+
+## 2026-08-27 checkpoint：为 retained Inspector 建立反射 PropertyHandle 边界
+
+- 新增 `PropertyHandle` / `PropertyHandleFactory`，以反射 `Property` 为事实源，统一手写 customization 与未来自动属性编辑器的读写入口；不依赖 ImGui、WidgetTree 或 ECS 宿主。
+- `EditorTransformSection` 已改为通过反射字段 `_position` / `_rotation` / `_scale` 读取和写回，不再直接调用 `TransformComponent` setter 作为 Inspector 数据访问协议。
+- 当前 handle 第一批只覆盖 `glm::vec3`，事务、混合值的完整通用实现和自动属性行仍未完成；本 checkpoint 不宣称完成 DetailsView 迁移。
+- 验证：`xmake b ya-game-editor` 通过。
+
+## 2026-08-27 checkpoint：Inspector Transform 区域落地为局部 UICompoundWidget
+
+- 新增 `EditorTransformSection`，继承 `UICompoundWidget`，在 `construct()` 中一次性物化 Transform 标题、三行九个 `UIDragFloat`；重复 attach 不会重复构造。
+- `EditorTransformSection` 自己负责从选中实体同步数值，以及把拖拽写回 `TransformComponent`；不拥有 tab registry、dock workspace 或 editor host 生命周期。
+- `EditorInspectorTab` 只负责创建/挂载该 compound，并转发 `sync()` / `wantsTextInput()`，不再直接持有九个 transform 控件。
+- 验证：`xmake b ya-game-editor` 通过；既有 `DeclarativeContractTest.CompoundWidgetConstructsOnceAndTicksOnlyWhileAttached` 与 `CompoundWidgetBuilderBuildsTypedLiveWidget` 继续覆盖 compound 生命周期和 DSL 入口。
+
+## 2026-08-27 checkpoint：Inspector 独立 tab owner 接入 registry
+
+- `EditorInspectorTab` 已从 `EditorSurface.cpp` 独立出来，负责 retained Inspector 的 widget 构造、Name/Transform 编辑、实体/组件摘要同步与 text-input 判断。
+- `EditorSurface` 仅负责创建 tab、挂载 Dock，并转发同步；不会继续承担 Inspector 的控件状态。
+- 这一层与 `UICompoundWidget` 保持边界：compound 只用于 tab 内局部组合，不拥有 editor tab 注册、workspace policy 或 future adapter seam。
+- 验证：`xmake b ya-game-editor` 通过。
+
 ## 2026-08-27 checkpoint：G6.1 Inspector 独立 tab owner
 
 - 新增 `EditorInspectorTab`，把 Inspector 的 retained widget 构造、Name/Transform 编辑状态、实体/组件摘要同步和 text-input 判断从 `EditorSurface.cpp` 移出。

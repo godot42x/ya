@@ -108,7 +108,7 @@ const FTextStyle& UIText::resolvedStyle(ReactiveBase::EDirtyLevel level, bool bT
                                       style.textColor = _color;
                                   }
                                   if (!bHasFillColor) {
-                                      style.fillColor = FBrush::Solid(_color);
+                                      style.fillColor = FBrush::solid(_color);
                                   }
                               },
                               bTrackDependencies);
@@ -123,7 +123,7 @@ void UIText::deserializeFields(const nlohmann::json& fields)
     static const glm::vec4 kDefaultTextColor{1.0f, 1.0f, 1.0f, 1.0f};
     if (!hasAuthoredStyle() && _color != kDefaultTextColor) {
         setStyleField("textColor", _color, EUIPropertyImpact::Paint);
-        setStyleField("fillColor", FBrush::Solid(_color), EUIPropertyImpact::Paint);
+        setStyleField("fillColor", FBrush::solid(_color), EUIPropertyImpact::Paint);
     }
 }
 

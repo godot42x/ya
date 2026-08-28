@@ -351,7 +351,7 @@ void EditorSurface::buildEditorChrome(App& app)
             UIMenu::FItem{.label = "New Scene", .action = [this]() { _layer->cmdNewScene(); }},
             UIMenu::FItem{.label = "Save Scene", .action = [this]() { _layer->cmdSaveScene(); }},
             UIMenu::FItem{.label = "Save Scene As", .action = [this]() { openSceneSaveDialog(); }},
-            UIMenu::FItem::Separator(),
+            UIMenu::FItem::separator(),
             UIMenu::FItem{.label = "Exit", .action = []() {
                  if (auto* app = App::get()) {
                      app->requestQuit();

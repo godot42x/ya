@@ -110,7 +110,7 @@ void UIPopupOverlay::deserializeFields(const nlohmann::json& fields)
     UIElement::deserializeFields(fields);
     static const glm::vec4 kDefaultModal{0.0f, 0.0f, 0.0f, 0.45f};
     if (!hasAuthoredStyle() && _modalColor != kDefaultModal) {
-        setStyleField("modalFill", FBrush::Solid(_modalColor), EUIPropertyImpact::Paint);
+        setStyleField("modalFill", FBrush::solid(_modalColor), EUIPropertyImpact::Paint);
     }
 }
 

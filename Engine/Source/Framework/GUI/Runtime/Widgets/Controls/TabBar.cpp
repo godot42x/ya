@@ -37,7 +37,7 @@ void UITabButton::paintSelf(UIFrameBuilder& builder)
                                            glm::vec2{2.0f, _layoutRect.extent.y}}
                                   : Rect2D{glm::vec2{_layoutRect.pos.x, _layoutRect.pos.y},
                                            glm::vec2{_layoutRect.extent.x, 2.0f}};
-        builder.addBrush(accent, FBrush::Solid(style.accentColor));
+        builder.addBrush(accent, FBrush::solid(style.accentColor));
     }
     else {
         builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.normalFill);

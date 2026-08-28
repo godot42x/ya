@@ -243,7 +243,7 @@ void PresentationGraphService::render(float                              deltaTi
                 .layerCount  = 1,
                 .colors = {{
                     .color       = output,
-                    .clearValue  = ClearValue::Black(),
+                    .clearValue  = ClearValue::black(),
                     .finalLayout = EImageLayout::PresentSrcKHR,
                 }},
             });

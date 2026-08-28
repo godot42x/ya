@@ -60,7 +60,7 @@ void recordAverageSample(PerfMetricState& metric, float value)
 
 } // namespace
 
-PerfState& PerfState::Get()
+PerfState& PerfState::get()
 {
     static PerfState instance;
     return instance;
@@ -199,27 +199,27 @@ size_t PerfState::getAverageWindowSize() const
 }
 
 PerfScopeTimer::PerfScopeTimer(FName sampleKey, FName metricKey, FName domainKey)
-    : _token(PerfState::Get().beginSample(sampleKey, metricKey, domainKey))
+    : _token(PerfState::get().beginSample(sampleKey, metricKey, domainKey))
 {
 }
 
 PerfScopeTimer::~PerfScopeTimer()
 {
-    PerfState::Get().endSample(&_token);
+    PerfState::get().endSample(&_token);
 }
 
 PerfScopeTimerConditional::PerfScopeTimerConditional(bool bEnabled, FName sampleKey, FName metricKey, FName domainKey)
     : _bEnabled(bEnabled)
 {
     if (_bEnabled) {
-        _token = PerfState::Get().beginSample(sampleKey, metricKey, domainKey);
+        _token = PerfState::get().beginSample(sampleKey, metricKey, domainKey);
     }
 }
 
 PerfScopeTimerConditional::~PerfScopeTimerConditional()
 {
     if (_bEnabled) {
-        PerfState::Get().endSample(&_token);
+        PerfState::get().endSample(&_token);
     }
 }
 
@@ -238,7 +238,7 @@ PerfFrameScopeTimerConditional::PerfFrameScopeTimerConditional(bool bEnabled,
     std::copy_n(accountedSampleKeys.begin(), _accountedSampleCount, _accountedSampleKeys.begin());
 
     if (_bEnabled) {
-        _token = PerfState::Get().beginSample(frameSampleKey, metricKey, domainKey);
+        _token = PerfState::get().beginSample(frameSampleKey, metricKey, domainKey);
     }
 }
 
@@ -248,7 +248,7 @@ PerfFrameScopeTimerConditional::~PerfFrameScopeTimerConditional()
         return;
     }
 
-    auto& perf = PerfState::Get();
+    auto& perf = PerfState::get();
     perf.endSample(&_token);
 
     float accountedValue = 0.0f;
@@ -362,12 +362,12 @@ void setStaticInitEnabled(bool enabled)
 
 Instrumentor& cpuTrace()
 {
-    return Instrumentor::Get();
+    return Instrumentor::get();
 }
 
 PerfState& metrics()
 {
-    return PerfState::Get();
+    return PerfState::get();
 }
 
 } // namespace ya::profiling

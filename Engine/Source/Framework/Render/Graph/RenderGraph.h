@@ -194,7 +194,7 @@ struct RGColorAttachmentDesc
     RGTextureHandle          color;
     RGTextureHandle          resolve{};
     EResolveMode::T          resolveMode = EResolveMode::None;
-    ClearValue               clearValue = ClearValue::Black();
+    ClearValue               clearValue = ClearValue::black();
     EAttachmentLoadOp::T     loadOp     = EAttachmentLoadOp::Clear;
     EAttachmentStoreOp::T    storeOp    = EAttachmentStoreOp::Store;
     EImageLayout::T          finalLayout = EImageLayout::ColorAttachmentOptimal;
@@ -474,7 +474,7 @@ class RGRenderContext
     {
         RGTextureHandle          color;
         Rect2D                   renderArea{};
-        ClearValue               clearValue = ClearValue::Black();
+        ClearValue               clearValue = ClearValue::black();
         uint32_t                 layerCount = 1;
         EAttachmentLoadOp::T     loadOp     = EAttachmentLoadOp::Clear;
         EAttachmentStoreOp::T    storeOp    = EAttachmentStoreOp::Store;

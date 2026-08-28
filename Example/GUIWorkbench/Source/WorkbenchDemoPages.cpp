@@ -511,7 +511,7 @@ void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                                                  state.menuLog = "Menu: Save";
                                                  log(state.menuLog);
                                              }},
-                                            ya::UIMenu::FItem::Separator(),
+                                            ya::UIMenu::FItem::separator(),
                                             ya::UIMenu::FItem{.label = "Quit",
                                              .action = [&state, log]
                                              {

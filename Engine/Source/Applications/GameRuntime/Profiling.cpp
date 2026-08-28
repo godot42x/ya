@@ -575,7 +575,7 @@ void beginRuntimeSession(const AppDesc& appDesc)
     }
     YA_PERF_SET_ENABLED(true);
 
-    if (cpuTrace().IsSessionActive()) {
+    if (cpuTrace().isSessionActive()) {
         return;
     }
 
@@ -584,13 +584,13 @@ void beginRuntimeSession(const AppDesc& appDesc)
         return;
     }
 
-    cpuTrace().BeginSession(appDesc.profiling.profileSessionName, cpuProfilePath);
+    cpuTrace().beginSession(appDesc.profiling.profileSessionName, cpuProfilePath);
 }
 
 void endRuntimeSession()
 {
-    if (cpuTrace().IsSessionActive()) {
-        cpuTrace().EndSession();
+    if (cpuTrace().isSessionActive()) {
+        cpuTrace().endSession();
     }
 
     flushRuntimeArtifactsInternal(EArtifactFlushMode::Sync);

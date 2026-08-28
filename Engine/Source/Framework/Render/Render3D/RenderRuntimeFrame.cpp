@@ -167,7 +167,7 @@ void RenderRuntime::submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf)
 
     if (YA_PERF_IS_ENABLED()) {
         YA_PROFILE_SCOPE("RenderRuntime::publishGpuMetrics");
-        PerfState::Get().setValue(
+        PerfState::get().setValue(
             perf::sample::renderFrame(),
             perf::metric::gpuTimeMs(),
             _render->getLastCompletedFrameGpuTimeMs(),

@@ -112,7 +112,7 @@ struct ClearValue
     explicit ClearValue(float r, float g, float b, float a) : isDepthStencil(false), color{r, g, b, a} {}
     explicit ClearValue(float depth, uint32_t stencil = 0) : isDepthStencil(true), depthStencil{depth, stencil} {}
 
-    static ClearValue Black() { return ClearValue(0.0f, 0.0f, 0.0f, 1.0f); }
+    [[nodiscard]] static ClearValue black() { return ClearValue(0.0f, 0.0f, 0.0f, 1.0f); }
 };
 
 
@@ -1479,13 +1479,13 @@ struct ComponentMapping
     }
 
     // Extract RGB channels, force alpha to 1 (opaque)
-    static ComponentMapping RGBOnly()
+    [[nodiscard]] static ComponentMapping rgbOnly()
     {
         return {EComponentSwizzle::R, EComponentSwizzle::G, EComponentSwizzle::B, EComponentSwizzle::One};
     }
 
     // Extract alpha channel as grayscale (A → R,G,B), alpha = 1
-    static ComponentMapping AlphaToGrayscale()
+    [[nodiscard]] static ComponentMapping alphaToGrayscale()
     {
         return {.r = EComponentSwizzle::A, .g = EComponentSwizzle::A, .b = EComponentSwizzle::A, .a = EComponentSwizzle::One};
     }

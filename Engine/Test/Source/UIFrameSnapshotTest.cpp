@@ -498,11 +498,11 @@ TEST(UIFrameSnapshotTest, PanelResolvesThemeStyleAndRepaintsOnThemeSwitch)
     // theme and must repaint when the theme is swapped (generation token).
     auto dark  = std::make_shared<UITheme>();
     auto darkStyle = FPanelStyle{};
-    darkStyle.fillColor = FBrush::Solid({0.16f, 0.18f, 0.22f, 1.0f});
+    darkStyle.fillColor = FBrush::solid({0.16f, 0.18f, 0.22f, 1.0f});
     dark->define<FPanelStyle>("panel", darkStyle);
     auto light = std::make_shared<UITheme>();
     auto lightStyle = FPanelStyle{};
-    lightStyle.fillColor = FBrush::Solid({0.94f, 0.95f, 0.97f, 1.0f});
+    lightStyle.fillColor = FBrush::solid({0.94f, 0.95f, 0.97f, 1.0f});
     light->define<FPanelStyle>("panel", lightStyle);
 
     tree.setTheme(dark.get());
@@ -958,7 +958,7 @@ TEST(UIFrameSnapshotTest, PaintRebuildReCollectsStyleEdgeAfterForcedRebuild)
 
     const uint64_t paintBefore = tree.getPerfStats().paintDirtyTransitions;
     FPanelStyle    changed;
-    changed.fillColor = FBrush::Solid({1.0f, 0.0f, 0.0f, 1.0f});
+    changed.fillColor = FBrush::solid({1.0f, 0.0f, 0.0f, 1.0f});
     style->set(changed);
     tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);
@@ -1206,13 +1206,13 @@ TEST(UIFrameSnapshotTest, AuthoredButtonStyleWinsOverThemeAndIgnoresThemeSwitch)
     button->setPosition({10.0f, 10.0f});
     button->setSize({80.0f, 32.0f});
     FButtonStyle authored;
-    authored.normalFill = FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f});
+    authored.normalFill = FBrush::solid({0.9f, 0.2f, 0.1f, 1.0f});
     button->setStyle(authored);
     tree.attachToLayer(WidgetTree::ELayer::Content, button);
 
     auto theme = std::make_shared<UITheme>();
     FButtonStyle themed;
-    themed.normalFill = FBrush::Solid({0.1f, 0.2f, 0.9f, 1.0f});
+    themed.normalFill = FBrush::solid({0.1f, 0.2f, 0.9f, 1.0f});
     theme->define<FButtonStyle>("button", themed);
     tree.setTheme(theme.get());
 
@@ -1225,7 +1225,7 @@ TEST(UIFrameSnapshotTest, AuthoredButtonStyleWinsOverThemeAndIgnoresThemeSwitch)
 
     auto other = std::make_shared<UITheme>();
     FButtonStyle themed2;
-    themed2.normalFill = FBrush::Solid({0.0f, 1.0f, 0.0f, 1.0f});
+    themed2.normalFill = FBrush::solid({0.0f, 1.0f, 0.0f, 1.0f});
     other->define<FButtonStyle>("button", themed2);
     tree.setTheme(other.get());
     tree.buildSnapshot(UIFrameBuildContext{});
@@ -1249,7 +1249,7 @@ TEST(UIFrameSnapshotTest, ThemeAttachAfterUnthemedBuildRepaintsKeyedButton)
 
     auto         theme = std::make_shared<UITheme>();
     FButtonStyle themed;
-    themed.normalFill = FBrush::Solid({0.1f, 0.2f, 0.9f, 1.0f});
+    themed.normalFill = FBrush::solid({0.1f, 0.2f, 0.9f, 1.0f});
     theme->define<FButtonStyle>("button", themed);
     tree.setTheme(theme.get());
 
@@ -1265,7 +1265,7 @@ TEST(UIFrameSnapshotTest, SetColorWritesAuthoredStyleAndBeatsTheme)
     WidgetTree tree({.width = 800, .height = 600});
     auto theme = std::make_shared<UITheme>();
     FPanelStyle panelThemed;
-    panelThemed.fillColor = FBrush::Solid({0.1f, 0.2f, 0.9f, 1.0f});
+    panelThemed.fillColor = FBrush::solid({0.1f, 0.2f, 0.9f, 1.0f});
     theme->define<FPanelStyle>("panel", panelThemed);
     FTextStyle textThemed;
     textThemed.textColor = {0.1f, 0.9f, 0.2f, 1.0f};
@@ -1292,7 +1292,7 @@ TEST(UIFrameSnapshotTest, SetColorWritesAuthoredStyleAndBeatsTheme)
 
     auto other = std::make_shared<UITheme>();
     FPanelStyle panelThemed2;
-    panelThemed2.fillColor = FBrush::Solid({0.0f, 1.0f, 0.0f, 1.0f});
+    panelThemed2.fillColor = FBrush::solid({0.0f, 1.0f, 0.0f, 1.0f});
     other->define<FPanelStyle>("panel", panelThemed2);
     FTextStyle textThemed2;
     textThemed2.textColor = {1.0f, 1.0f, 0.0f, 1.0f};
@@ -1312,7 +1312,7 @@ TEST(UIFrameSnapshotTest, SameAuthoredStyleDoesNotDirty)
     button->setPosition({10.0f, 10.0f});
     button->setSize({80.0f, 32.0f});
     FButtonStyle style;
-    style.normalFill = FBrush::Solid({0.2f, 0.3f, 0.4f, 1.0f});
+    style.normalFill = FBrush::solid({0.2f, 0.3f, 0.4f, 1.0f});
     button->setStyle(style);
     tree.attachToLayer(WidgetTree::ELayer::Content, button);
     tree.buildSnapshot(UIFrameBuildContext{});
@@ -1332,13 +1332,13 @@ TEST(UIFrameSnapshotTest, SparseStyleFieldInheritsUnpatchedFieldsOnThemeSwitch)
     auto       button = std::make_shared<UIButton>("B");
     button->setPosition({10.0f, 10.0f});
     button->setSize({80.0f, 32.0f});
-    button->setStyleField("normalFill", FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f}));
+    button->setStyleField("normalFill", FBrush::solid({0.9f, 0.2f, 0.1f, 1.0f}));
     tree.attachToLayer(WidgetTree::ELayer::Content, button);
 
     auto         theme = std::make_shared<UITheme>();
     FButtonStyle themed;
-    themed.normalFill  = FBrush::Solid({0.1f, 0.2f, 0.9f, 1.0f});
-    themed.hoveredFill = FBrush::Solid({0.2f, 0.9f, 0.2f, 1.0f});
+    themed.normalFill  = FBrush::solid({0.1f, 0.2f, 0.9f, 1.0f});
+    themed.hoveredFill = FBrush::solid({0.2f, 0.9f, 0.2f, 1.0f});
     theme->define<FButtonStyle>("button", themed);
     tree.setTheme(theme.get());
 
@@ -1347,8 +1347,8 @@ TEST(UIFrameSnapshotTest, SparseStyleFieldInheritsUnpatchedFieldsOnThemeSwitch)
     EXPECT_EQ(snap.items.front().color, glm::vec4(0.9f, 0.2f, 0.1f, 1.0f));
     {
         const FButtonStyle resolved = resolveWidgetStyle<FButtonStyle>(*button, button->_authoredStyle);
-        EXPECT_EQ(resolved.normalFill, FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f}));
-        EXPECT_EQ(resolved.hoveredFill, FBrush::Solid({0.2f, 0.9f, 0.2f, 1.0f}));
+        EXPECT_EQ(resolved.normalFill, FBrush::solid({0.9f, 0.2f, 0.1f, 1.0f}));
+        EXPECT_EQ(resolved.hoveredFill, FBrush::solid({0.2f, 0.9f, 0.2f, 1.0f}));
     }
 
     tree.buildSnapshot(UIFrameBuildContext{});
@@ -1356,8 +1356,8 @@ TEST(UIFrameSnapshotTest, SparseStyleFieldInheritsUnpatchedFieldsOnThemeSwitch)
 
     auto         other = std::make_shared<UITheme>();
     FButtonStyle themed2;
-    themed2.normalFill  = FBrush::Solid({0.0f, 1.0f, 0.0f, 1.0f});
-    themed2.hoveredFill = FBrush::Solid({0.1f, 0.1f, 0.8f, 1.0f});
+    themed2.normalFill  = FBrush::solid({0.0f, 1.0f, 0.0f, 1.0f});
+    themed2.hoveredFill = FBrush::solid({0.1f, 0.1f, 0.8f, 1.0f});
     other->define<FButtonStyle>("button", themed2);
     tree.setTheme(other.get());
     tree.buildSnapshot(UIFrameBuildContext{});
@@ -1367,8 +1367,8 @@ TEST(UIFrameSnapshotTest, SparseStyleFieldInheritsUnpatchedFieldsOnThemeSwitch)
     ASSERT_FALSE(after.items.empty());
     EXPECT_EQ(after.items.front().color, glm::vec4(0.9f, 0.2f, 0.1f, 1.0f));
     const FButtonStyle resolved = resolveWidgetStyle<FButtonStyle>(*button, button->_authoredStyle);
-    EXPECT_EQ(resolved.normalFill, FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f}));
-    EXPECT_EQ(resolved.hoveredFill, FBrush::Solid({0.1f, 0.1f, 0.8f, 1.0f}));
+    EXPECT_EQ(resolved.normalFill, FBrush::solid({0.9f, 0.2f, 0.1f, 1.0f}));
+    EXPECT_EQ(resolved.hoveredFill, FBrush::solid({0.1f, 0.1f, 0.8f, 1.0f}));
 }
 
 TEST(UIFrameSnapshotTest, SetColorOverlaysColorAndInheritsThemeFontSize)
@@ -1409,10 +1409,10 @@ TEST(UIFrameSnapshotTest, ImagePlaceholderAndModalPopupFollowTheme)
     WidgetTree tree({.width = 800, .height = 600});
     auto theme = std::make_shared<UITheme>();
     FImageStyle imageStyle;
-    imageStyle.placeholderFill = FBrush::Solid({0.1f, 0.2f, 0.3f, 1.0f});
+    imageStyle.placeholderFill = FBrush::solid({0.1f, 0.2f, 0.3f, 1.0f});
     theme->define<FImageStyle>("image", imageStyle);
     FPopupStyle popupStyle;
-    popupStyle.modalFill = FBrush::Solid({0.4f, 0.0f, 0.0f, 0.5f});
+    popupStyle.modalFill = FBrush::solid({0.4f, 0.0f, 0.0f, 0.5f});
     theme->define<FPopupStyle>("popup", popupStyle);
     tree.setTheme(theme.get());
 
@@ -1434,10 +1434,10 @@ TEST(UIFrameSnapshotTest, ImagePlaceholderAndModalPopupFollowTheme)
 
     auto other = std::make_shared<UITheme>();
     FImageStyle imageStyle2;
-    imageStyle2.placeholderFill = FBrush::Solid({0.9f, 0.8f, 0.1f, 1.0f});
+    imageStyle2.placeholderFill = FBrush::solid({0.9f, 0.8f, 0.1f, 1.0f});
     other->define<FImageStyle>("image", imageStyle2);
     FPopupStyle popupStyle2;
-    popupStyle2.modalFill = FBrush::Solid({0.0f, 0.5f, 0.0f, 0.4f});
+    popupStyle2.modalFill = FBrush::solid({0.0f, 0.5f, 0.0f, 0.4f});
     other->define<FPopupStyle>("popup", popupStyle2);
     tree.setTheme(other.get());
     const UIFrameSnapshot after = tree.buildSnapshot(UIFrameBuildContext{});
@@ -1451,7 +1451,7 @@ TEST(UIFrameSnapshotTest, TreeViewSelectionFollowsTheme)
     WidgetTree tree({.width = 800, .height = 600});
     auto theme = std::make_shared<UITheme>();
     FTreeViewStyle treeStyle;
-    treeStyle.selectedFill = FBrush::Solid({0.1f, 0.2f, 0.3f, 1.0f});
+    treeStyle.selectedFill = FBrush::solid({0.1f, 0.2f, 0.3f, 1.0f});
     theme->define<FTreeViewStyle>("tree", treeStyle);
     tree.setTheme(theme.get());
 
@@ -1470,7 +1470,7 @@ TEST(UIFrameSnapshotTest, TreeViewSelectionFollowsTheme)
 
     auto other = std::make_shared<UITheme>();
     FTreeViewStyle treeStyle2;
-    treeStyle2.selectedFill = FBrush::Solid({0.9f, 0.1f, 0.2f, 1.0f});
+    treeStyle2.selectedFill = FBrush::solid({0.9f, 0.1f, 0.2f, 1.0f});
     other->define<FTreeViewStyle>("tree", treeStyle2);
     tree.setTheme(other.get());
     const UIFrameSnapshot after = tree.buildSnapshot(UIFrameBuildContext{});
@@ -1483,10 +1483,10 @@ TEST(UIFrameSnapshotTest, DragDropTilesFollowTheme)
     WidgetTree tree({.width = 800, .height = 600});
     auto theme = std::make_shared<UITheme>();
     FDragDropStyle sourceStyle;
-    sourceStyle.normalFill = FBrush::Solid({0.1f, 0.2f, 0.3f, 1.0f});
+    sourceStyle.normalFill = FBrush::solid({0.1f, 0.2f, 0.3f, 1.0f});
     theme->define<FDragDropStyle>("drag.source", sourceStyle);
     FDragDropStyle targetStyle;
-    targetStyle.normalFill = FBrush::Solid({0.4f, 0.0f, 0.0f, 1.0f});
+    targetStyle.normalFill = FBrush::solid({0.4f, 0.0f, 0.0f, 1.0f});
     theme->define<FDragDropStyle>("drag.target", targetStyle);
     tree.setTheme(theme.get());
 
@@ -1520,10 +1520,10 @@ TEST(UIFrameSnapshotTest, DragDropTilesFollowTheme)
 
     auto other = std::make_shared<UITheme>();
     FDragDropStyle sourceStyle2;
-    sourceStyle2.normalFill = FBrush::Solid({0.9f, 0.8f, 0.1f, 1.0f});
+    sourceStyle2.normalFill = FBrush::solid({0.9f, 0.8f, 0.1f, 1.0f});
     other->define<FDragDropStyle>("drag.source", sourceStyle2);
     FDragDropStyle targetStyle2;
-    targetStyle2.normalFill = FBrush::Solid({0.0f, 0.5f, 0.0f, 1.0f});
+    targetStyle2.normalFill = FBrush::solid({0.0f, 0.5f, 0.0f, 1.0f});
     other->define<FDragDropStyle>("drag.target", targetStyle2);
     tree.setTheme(other.get());
     const UIFrameSnapshot after = tree.buildSnapshot(UIFrameBuildContext{});
@@ -1537,13 +1537,13 @@ TEST(UIFrameSnapshotTest, SliceBrushImageIsSingleFullRect)
 {
     const Rect2D dest{.pos = {10.0f, 20.0f}, .extent = {100.0f, 50.0f}};
     FBrushSlice  slices[kMaxBrushSlices];
-    EXPECT_EQ(sliceBrush(FBrush::Solid({1.0f, 0.0f, 0.0f, 1.0f}), dest, {32.0f, 32.0f}, slices), 1);
+    EXPECT_EQ(sliceBrush(FBrush::solid({1.0f, 0.0f, 0.0f, 1.0f}), dest, {32.0f, 32.0f}, slices), 1);
     EXPECT_EQ(slices[0].dest.pos, dest.pos);
     EXPECT_EQ(slices[0].dest.extent, dest.extent);
     EXPECT_EQ(slices[0].uvOffset, glm::vec2(0.0f, 0.0f));
     EXPECT_EQ(slices[0].uvScale, glm::vec2(1.0f, 1.0f));
 
-    auto image = FBrush::Image("tex");
+    auto image = FBrush::image("tex");
     EXPECT_EQ(sliceBrush(image, dest, {32.0f, 32.0f}, slices), 1);
     EXPECT_EQ(slices[0].uvScale, glm::vec2(1.0f, 1.0f));
 }
@@ -1552,7 +1552,7 @@ TEST(UIFrameSnapshotTest, SliceBrushNinePatchEmitsNineCells)
 {
     const Rect2D dest{.pos = {0.0f, 0.0f}, .extent = {100.0f, 50.0f}};
     FBrushSlice  slices[kMaxBrushSlices];
-    const auto   brush = FBrush::NinePatch("panel", {8.0f, 8.0f, 8.0f, 8.0f});
+    const auto   brush = FBrush::ninePatch("panel", {8.0f, 8.0f, 8.0f, 8.0f});
     ASSERT_EQ(sliceBrush(brush, dest, {32.0f, 32.0f}, slices), 9);
 
     EXPECT_EQ(slices[0].dest.pos, glm::vec2(0.0f, 0.0f));
@@ -1575,7 +1575,7 @@ TEST(UIFrameSnapshotTest, SliceBrushBorderOmitsCenter)
 {
     const Rect2D dest{.pos = {0.0f, 0.0f}, .extent = {100.0f, 50.0f}};
     FBrushSlice  slices[kMaxBrushSlices];
-    const auto   brush = FBrush::Border("frame", {8.0f, 8.0f, 8.0f, 8.0f});
+    const auto   brush = FBrush::border("frame", {8.0f, 8.0f, 8.0f, 8.0f});
     ASSERT_EQ(sliceBrush(brush, dest, {32.0f, 32.0f}, slices), 8);
     for (int i = 0; i < 8; ++i) {
         EXPECT_FALSE(slices[i].dest.pos.x == 8.0f && slices[i].dest.pos.y == 8.0f &&
@@ -1587,7 +1587,7 @@ TEST(UIFrameSnapshotTest, SliceBrushScalesMarginsWhenDestIsSmaller)
 {
     const Rect2D dest{.pos = {0.0f, 0.0f}, .extent = {10.0f, 10.0f}};
     FBrushSlice  slices[kMaxBrushSlices];
-    const auto   brush = FBrush::NinePatch("panel", {8.0f, 8.0f, 8.0f, 8.0f});
+    const auto   brush = FBrush::ninePatch("panel", {8.0f, 8.0f, 8.0f, 8.0f});
     ASSERT_EQ(sliceBrush(brush, dest, {32.0f, 32.0f}, slices), 4);
     EXPECT_EQ(slices[0].dest.extent, glm::vec2(5.0f, 5.0f));
     EXPECT_EQ(slices[3].dest.pos, glm::vec2(5.0f, 5.0f));
@@ -1598,7 +1598,7 @@ TEST(UIFrameSnapshotTest, AddBrushSolidStaysOneSprite)
 {
     UIFrameBuilder builder(UIFrameBuildContext{});
     builder.addBrush(Rect2D{.pos = {10.0f, 10.0f}, .extent = {40.0f, 20.0f}},
-                     FBrush::Solid({0.2f, 0.3f, 0.4f, 1.0f}));
+                     FBrush::solid({0.2f, 0.3f, 0.4f, 1.0f}));
     const UIFrameSnapshot snap = builder.build({.width = 800, .height = 600});
     ASSERT_EQ(snap.items.size(), 1u);
     EXPECT_EQ(snap.items[0].kind, UIFrameDrawItem::EKind::Sprite);
@@ -1610,7 +1610,7 @@ TEST(UIFrameSnapshotTest, AddBrushNinePatchWithoutTextureStretches)
 {
     UIFrameBuilder builder(UIFrameBuildContext{});
     builder.addBrush(Rect2D{.pos = {0.0f, 0.0f}, .extent = {100.0f, 50.0f}},
-                     FBrush::NinePatch("missing", {8.0f, 8.0f, 8.0f, 8.0f}));
+                     FBrush::ninePatch("missing", {8.0f, 8.0f, 8.0f, 8.0f}));
     const UIFrameSnapshot snap = builder.build({.width = 800, .height = 600});
     ASSERT_EQ(snap.items.size(), 1u);
     EXPECT_EQ(snap.items[0].uvScale, glm::vec2(1.0f, 1.0f));

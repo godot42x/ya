@@ -157,7 +157,7 @@ TEST(UIDocumentTest, AuthoredButtonStyleJsonRoundtrip)
     auto* widget = dynamic_cast<UIButton*>(button.get());
     ASSERT_NE(widget, nullptr);
     FButtonStyle authored;
-    authored.normalFill = FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f});
+    authored.normalFill = FBrush::solid({0.9f, 0.2f, 0.1f, 1.0f});
     widget->setStyle(authored);
 
     auto document = UIDocument::fromWidget(*button);
@@ -173,7 +173,7 @@ TEST(UIDocumentTest, AuthoredButtonStyleJsonRoundtrip)
     ASSERT_NE(restored, nullptr);
     ASSERT_TRUE(restored->hasAuthoredStyle());
     EXPECT_EQ(resolveWidgetStyle<FButtonStyle>(*restored, restored->_authoredStyle).normalFill,
-              FBrush::Solid({0.9f, 0.2f, 0.1f, 1.0f}));
+              FBrush::solid({0.9f, 0.2f, 0.1f, 1.0f}));
 }
 
 TEST(UIDocumentTest, AuthoredPanelFillSurvivesThemeAfterReload)
@@ -197,7 +197,7 @@ TEST(UIDocumentTest, AuthoredPanelFillSurvivesThemeAfterReload)
     WidgetTree tree({.width = 320, .height = 200});
     auto theme = std::make_shared<UITheme>();
     FPanelStyle themed;
-    themed.fillColor = FBrush::Solid({0.7f, 0.1f, 0.2f, 1.0f});
+    themed.fillColor = FBrush::solid({0.7f, 0.1f, 0.2f, 1.0f});
     theme->define<FPanelStyle>("panel", themed);
     tree.setTheme(theme.get());
     ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, instance).valid());

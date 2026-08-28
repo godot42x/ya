@@ -136,7 +136,7 @@ void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent
             ya::UIMenu::FItem{.label = "Open File...", .action = [log] { log("Menu: Open File..."); }},
             ya::UIMenu::FItem{.label = "Save", .action = [log] { log("Menu: Save"); }},
             ya::UIMenu::FItem{.label = "Save As...", .action = [log] { log("Menu: Save As..."); }},
-            ya::UIMenu::FItem::Separator(),
+            ya::UIMenu::FItem::separator(),
             ya::UIMenu::FItem{.label = "Exit", .action = [log] { log("Menu: Exit"); }},
         });
     });
@@ -145,7 +145,7 @@ void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent
         return ya::UIMenu::create({
             ya::UIMenu::FItem{.label = "Undo", .action = [log] { log("Menu: Undo"); }},
             ya::UIMenu::FItem{.label = "Redo", .action = [log] { log("Menu: Redo"); }},
-            ya::UIMenu::FItem::Separator(),
+            ya::UIMenu::FItem::separator(),
             ya::UIMenu::FItem{.label = "Copy", .action = [log] { log("Menu: Copy"); }},
             ya::UIMenu::FItem{.label = "Paste", .action = [log] { log("Menu: Paste"); }},
         });

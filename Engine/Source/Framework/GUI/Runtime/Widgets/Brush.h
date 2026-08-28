@@ -45,7 +45,7 @@ struct FBrush
     [[nodiscard]] bool isSolid() const { return resource.empty(); }
 
     /// Convenience factory: a solid brush tinted with `color` (no resource).
-    static FBrush Solid(const glm::vec4& color)
+    [[nodiscard]] static FBrush solid(const glm::vec4& color)
     {
         FBrush b;
         b.tintColor = color;
@@ -54,7 +54,8 @@ struct FBrush
 
     /// Convenience factory: an image brush from an asset path (white tint so
     /// the texture shows unmodulated; pass a tint to colorize it).
-    static FBrush Image(const std::string& assetPath, const glm::vec4& tint = {1.0f, 1.0f, 1.0f, 1.0f})
+    [[nodiscard]] static FBrush image(const std::string& assetPath,
+                                      const glm::vec4&   tint = {1.0f, 1.0f, 1.0f, 1.0f})
     {
         FBrush b;
         b.resource  = assetPath;
@@ -64,9 +65,9 @@ struct FBrush
 
     /// Nine-patch: corners keep `margin` texture px, edges/center stretch.
     /// `margin` is left/top/right/bottom in texture pixels (1 tex px = 1 logical px).
-    static FBrush NinePatch(const std::string& assetPath,
-                            const glm::vec4&   margin,
-                            const glm::vec4&   tint = {1.0f, 1.0f, 1.0f, 1.0f})
+    [[nodiscard]] static FBrush ninePatch(const std::string& assetPath,
+                                          const glm::vec4&   margin,
+                                          const glm::vec4&   tint = {1.0f, 1.0f, 1.0f, 1.0f})
     {
         FBrush b;
         b.drawType  = EDrawType::NinePatch;
@@ -77,9 +78,9 @@ struct FBrush
     }
 
     /// Border: nine-patch without the center fill (frame only).
-    static FBrush Border(const std::string& assetPath,
-                         const glm::vec4&   margin,
-                         const glm::vec4&   tint = {1.0f, 1.0f, 1.0f, 1.0f})
+    [[nodiscard]] static FBrush border(const std::string& assetPath,
+                                       const glm::vec4&   margin,
+                                       const glm::vec4&   tint = {1.0f, 1.0f, 1.0f, 1.0f})
     {
         FBrush b;
         b.drawType  = EDrawType::Border;

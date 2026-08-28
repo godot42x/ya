@@ -71,7 +71,7 @@ struct YA_GUI_API UIMenu : public UIPopupOverlay
         bool                                         bEnabled = true;
         bool                                         bSeparator = false;
 
-        static FItem Separator()
+        [[nodiscard]] static FItem separator()
         {
             FItem item;
             item.bSeparator = true;

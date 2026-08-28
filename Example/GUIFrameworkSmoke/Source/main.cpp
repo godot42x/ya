@@ -99,9 +99,9 @@ struct FSmokeApp final : IGUIAppDelegate
         // (WidgetTree stores a raw pointer).
         theme = std::make_shared<ya::UITheme>();
         auto style       = ya::FButtonStyle{};
-        style.normalFill = ya::FBrush::Solid({0.22f, 0.48f, 0.86f, 1.0f});
-        style.hoveredFill = ya::FBrush::Solid({0.32f, 0.58f, 0.96f, 1.0f});
-        style.pressedFill = ya::FBrush::Solid({0.14f, 0.34f, 0.66f, 1.0f});
+        style.normalFill = ya::FBrush::solid({0.22f, 0.48f, 0.86f, 1.0f});
+        style.hoveredFill = ya::FBrush::solid({0.32f, 0.58f, 0.96f, 1.0f});
+        style.pressedFill = ya::FBrush::solid({0.14f, 0.34f, 0.66f, 1.0f});
         theme->define<ya::FButtonStyle>("button", style);
         tree.setTheme(theme.get());
 

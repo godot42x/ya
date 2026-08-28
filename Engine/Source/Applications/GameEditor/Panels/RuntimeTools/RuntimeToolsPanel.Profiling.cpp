@@ -20,7 +20,7 @@ void renderProfilingContent(App& app)
 
     const auto paths     = profiling::getRuntimeSessionPaths();
     const auto& cpuTrace = profiling::cpuTrace();
-    ImGui::Text("CPU Trace Session: %s", cpuTrace.IsSessionActive() ? "Active" : "Idle");
+    ImGui::Text("CPU Trace Session: %s", cpuTrace.isSessionActive() ? "Active" : "Idle");
     if (!paths.sessionName.empty()) {
         ImGui::TextWrapped("Session: %s", paths.sessionName.c_str());
     }

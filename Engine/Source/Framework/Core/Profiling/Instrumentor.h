@@ -81,9 +81,9 @@ struct ProfilerConfig
  * @brief Thread-safe profiler that outputs speedscope-compatible JSON
  *
  * Usage:
- *   1. Call BeginSession() at program start
+ *   1. Call beginSession() at program start
  *   2. Use YA_PROFILE_SCOPE/YA_PROFILE_FUNCTION macros in code
- *   3. Call EndSession() at program end
+ *   3. Call endSession() at program end
  *   4. Open the .json file in https://www.speedscope.app/
  *
  * The output JSON conforms to the speedscope file format specification:
@@ -93,37 +93,37 @@ struct YA_CORE_API Instrumentor
 {
   private:
     // Session state
-    bool          m_SessionActive = false;
-    std::string   m_SessionName;
-    std::ofstream m_OutputStream;
+    bool          _sessionActive = false;
+    std::string   _sessionName;
+    std::ofstream _outputStream;
 
     // Thread safety
-    mutable std::mutex m_Mutex;
+    mutable std::mutex _mutex;
 
     // Event storage (buffered for batch writing)
-    std::vector<SpeedscopeEvent> m_Events;
-    std::vector<SpeedscopeFrame> m_Frames;
+    std::vector<SpeedscopeEvent> _events;
+    std::vector<SpeedscopeFrame> _frames;
     std::filesystem::path        _outputPath;
 
     // Frame deduplication: name -> frame index
-    std::unordered_map<std::string, int> m_FrameIndexMap;
+    std::unordered_map<std::string, int> _frameIndexMap;
 
     // Timing
-    std::chrono::steady_clock::time_point m_SessionStartTime;
+    std::chrono::steady_clock::time_point _sessionStartTime;
 
     // Configuration
-    ProfilerConfig m_Config;
+    ProfilerConfig _config;
 
     // Statistics
-    std::atomic<size_t> m_EventCount{0};
-    std::atomic<size_t> m_DroppedEvents{0};
+    std::atomic<size_t> _eventCount{0};
+    std::atomic<size_t> _droppedEvents{0};
 
   public:
     Instrumentor() = default;
     ~Instrumentor()
     {
-        if (m_SessionActive) {
-            EndSession();
+        if (_sessionActive) {
+            endSession();
         }
     }
 
@@ -134,14 +134,14 @@ struct YA_CORE_API Instrumentor
     /**
      * @brief Get the singleton instance
      */
-    static Instrumentor &Get()
+    static Instrumentor &get()
     {
         static Instrumentor instance;
         return instance;
     }
 
-    void BeginSession(const std::string &name, const std::string &filepath = "profile.speedscope.json");
-    void EndSession();
+    void beginSession(const std::string &name, const std::string &filepath = "profile.speedscope.json");
+    void endSession();
 
     /**
      * @brief Record a begin event for a scope/function
@@ -149,35 +149,35 @@ struct YA_CORE_API Instrumentor
      * @param name Scope/function name
      * @param file Source file (optional)
      * @param line Source line (optional)
-     * @return Frame index for use with WriteEndEvent
+     * @return Frame index for use with writeEndEvent
      */
-    uint32_t WriteBeginEvent(const std::string &name, const std::string &file = "", int line = 0)
+    uint32_t writeBeginEvent(const std::string &name, const std::string &file = "", int line = 0)
     {
-        if (!m_SessionActive) {
+        if (!_sessionActive) {
             return static_cast<uint32_t>(-1);
         }
 
-        std::lock_guard<std::mutex> lock(m_Mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
 
-        uint32_t frameIndex = GetOrCreateFrame(name, file, line);
+        uint32_t frameIndex = getOrCreateFrame(name, file, line);
 
         // Calculate time since session start in microseconds
         auto   now      = std::chrono::steady_clock::now();
-        auto   duration = std::chrono::duration_cast<std::chrono::microseconds>(now - m_SessionStartTime);
+        auto   duration = std::chrono::duration_cast<std::chrono::microseconds>(now - _sessionStartTime);
         double timeUs   = static_cast<double>(duration.count());
 
         // Get thread ID as string
         std::string tid = std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id()));
 
         // Record event
-        m_Events.push_back({
+        _events.push_back({
             .type       = SpeedscopeEvent::Type::Open,
             .frameIndex = frameIndex,
             .at         = timeUs,
             .tid        = tid,
         });
 
-        m_EventCount++;
+        _eventCount++;
 
         return frameIndex;
     }
@@ -185,35 +185,35 @@ struct YA_CORE_API Instrumentor
     /**
      * @brief Record an end event for a scope/function (no console output)
      *
-     * @param frameIndex Frame index returned by WriteBeginEvent
+     * @param frameIndex Frame index returned by writeBeginEvent
      */
-    void WriteEndEvent(uint32_t frameIndex)
+    void writeEndEvent(uint32_t frameIndex)
     {
-        WriteEndEventInternal(frameIndex);
+        writeEndEventInternal(frameIndex);
     }
 
     /**
      * @brief Record an end event and ALWAYS print to console
      *
-     * @param frameIndex Frame index returned by WriteBeginEvent
+     * @param frameIndex Frame index returned by writeBeginEvent
      * @param durationNs Duration in nanoseconds
      * @param name Name for console output
      */
-    void WriteEndEventLog(int frameIndex, long long durationNs, const std::string &name)
+    void writeEndEventLog(int frameIndex, long long durationNs, const std::string &name)
     {
         // Always print to console regardless of config
         if (!name.empty() && durationNs > 0) {
-            PrintToConsole(name, durationNs);
+            printToConsole(name, durationNs);
         }
 
-        WriteEndEventInternal(frameIndex);
+        writeEndEventInternal(frameIndex);
     }
 
   private:
     /**
      * @brief Print timing info to console
      */
-    void PrintToConsole(const std::string &name, long long durationNs)
+    void printToConsole(const std::string &name, long long durationNs)
     {
         float ms = static_cast<float>(durationNs) / 1000000.0f;
         YA_CORE_DEBUG("[Profile] {}: {:.3f}ms ({} ns)", name, ms, durationNs);
@@ -222,31 +222,31 @@ struct YA_CORE_API Instrumentor
     /**
      * @brief Internal end event recording (without console output)
      */
-    void WriteEndEventInternal(uint32_t frameIndex)
+    void writeEndEventInternal(uint32_t frameIndex)
     {
-        if (!m_SessionActive || frameIndex < 0) {
+        if (!_sessionActive || frameIndex < 0) {
             return;
         }
 
-        std::lock_guard<std::mutex> lock(m_Mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
 
         // Calculate time since session start in microseconds
         auto   now      = std::chrono::steady_clock::now();
-        auto   duration = std::chrono::duration_cast<std::chrono::microseconds>(now - m_SessionStartTime);
+        auto   duration = std::chrono::duration_cast<std::chrono::microseconds>(now - _sessionStartTime);
         double timeUs   = static_cast<double>(duration.count());
 
         // Get thread ID as string
         std::string tid = std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id()));
 
         // Record event
-        m_Events.push_back({
+        _events.push_back({
             .type       = SpeedscopeEvent::Type::Close,
             .frameIndex = frameIndex,
             .at         = timeUs,
             .tid        = tid,
         });
 
-        m_EventCount++;
+        _eventCount++;
     }
 
   public:
@@ -254,37 +254,37 @@ struct YA_CORE_API Instrumentor
     /**
      * @brief Configure profiler options
      */
-    void SetConfig(const ProfilerConfig &config)
+    void setConfig(const ProfilerConfig &config)
     {
-        std::lock_guard<std::mutex> lock(m_Mutex);
-        m_Config = config;
+        std::lock_guard<std::mutex> lock(_mutex);
+        _config = config;
     }
 
     /**
      * @brief Get current configuration
      */
-    ProfilerConfig GetConfig() const
+    ProfilerConfig getConfig() const
     {
-        std::lock_guard<std::mutex> lock(m_Mutex);
-        return m_Config;
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _config;
     }
 
     /**
      * @brief Get profiling statistics
      */
-    void GetStats(size_t &eventCount, size_t &droppedEvents) const
+    void getStats(size_t &eventCount, size_t &droppedEvents) const
     {
-        eventCount    = m_EventCount.load();
-        droppedEvents = m_DroppedEvents.load();
+        eventCount    = _eventCount.load();
+        droppedEvents = _droppedEvents.load();
     }
 
     /**
      * @brief Check if a session is currently active
      */
-    bool IsSessionActive() const
+    bool isSessionActive() const
     {
-        std::lock_guard<std::mutex> lock(m_Mutex);
-        return m_SessionActive;
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _sessionActive;
     }
 
   private:
@@ -292,11 +292,11 @@ struct YA_CORE_API Instrumentor
     /**
      * @brief Get or create a frame index for a given name
      */
-    int GetOrCreateFrame(const std::string &name, const std::string &file, int line)
+    int getOrCreateFrame(const std::string &name, const std::string &file, int line)
     {
         // Build full frame name
         std::string fullName = name;
-        if (m_Config.bIncludeSourceInfo && !file.empty()) {
+        if (_config.bIncludeSourceInfo && !file.empty()) {
             fullName = std::format("{}:{} ({})",
                                    std::filesystem::path(file).filename().string(),
                                    line,
@@ -304,15 +304,15 @@ struct YA_CORE_API Instrumentor
         }
 
         // Check if frame already exists
-        auto it = m_FrameIndexMap.find(fullName);
-        if (it != m_FrameIndexMap.end()) {
+        auto it = _frameIndexMap.find(fullName);
+        if (it != _frameIndexMap.end()) {
             return it->second;
         }
 
         // Create new frame
-        int index                 = static_cast<int>(m_Frames.size());
-        m_FrameIndexMap[fullName] = index;
-        m_Frames.push_back({
+        int index                = static_cast<int>(_frames.size());
+        _frameIndexMap[fullName] = index;
+        _frames.push_back({
             .name = fullName,
             .file = file,
             .line = line,
@@ -324,7 +324,7 @@ struct YA_CORE_API Instrumentor
     /**
      * @brief End session (internal, assumes lock is held)
      */
-    void EndSessionInternal();
+    void endSessionInternal();
 
     /**
      * @brief Write events in speedscope JSON format
@@ -332,86 +332,86 @@ struct YA_CORE_API Instrumentor
      * Format specification:
      * https://github.com/jlfwong/speedscope/wiki/Importing-from-custom-sources
      */
-    void WriteSpeedscopeJson()
+    void writeSpeedscopeJson()
     {
         // Group events by thread
         std::unordered_map<std::string, std::vector<const SpeedscopeEvent *>> eventsByThread;
-        for (const auto &event : m_Events) {
+        for (const auto &event : _events) {
             eventsByThread[event.tid].push_back(&event);
         }
 
-        m_OutputStream << "{\n";
+        _outputStream << "{\n";
 
         // Schema version
-        m_OutputStream << "  \"$schema\": \"https://www.speedscope.app/file-format-schema.json\",\n";
+        _outputStream << "  \"$schema\": \"https://www.speedscope.app/file-format-schema.json\",\n";
 
         // Shared frames
-        m_OutputStream << "  \"shared\": {\n";
-        m_OutputStream << "    \"frames\": [\n";
-        for (size_t i = 0; i < m_Frames.size(); i++) {
-            const auto &frame = m_Frames[i];
-            m_OutputStream << "      {\"name\": \"" << EscapeJson(frame.name) << "\"}";
-            if (i < m_Frames.size() - 1) {
-                m_OutputStream << ",";
+        _outputStream << "  \"shared\": {\n";
+        _outputStream << "    \"frames\": [\n";
+        for (size_t i = 0; i < _frames.size(); i++) {
+            const auto &frame = _frames[i];
+            _outputStream << "      {\"name\": \"" << escapeJson(frame.name) << "\"}";
+            if (i < _frames.size() - 1) {
+                _outputStream << ",";
             }
-            m_OutputStream << "\n";
+            _outputStream << "\n";
         }
-        m_OutputStream << "    ]\n";
-        m_OutputStream << "  },\n";
+        _outputStream << "    ]\n";
+        _outputStream << "  },\n";
 
         // Profiles (one per thread)
-        m_OutputStream << "  \"profiles\": [\n";
+        _outputStream << "  \"profiles\": [\n";
 
         size_t threadIndex = 0;
         for (const auto &[tid, events] : eventsByThread) {
-            m_OutputStream << "    {\n";
-            m_OutputStream << "      \"type\": \"evented\",\n";
-            m_OutputStream << "      \"name\": \"" << m_SessionName << " (Thread " << tid << ")\",\n";
-            m_OutputStream << "      \"unit\": \"microseconds\",\n";
+            _outputStream << "    {\n";
+            _outputStream << "      \"type\": \"evented\",\n";
+            _outputStream << "      \"name\": \"" << _sessionName << " (Thread " << tid << ")\",\n";
+            _outputStream << "      \"unit\": \"microseconds\",\n";
 
             // Find start and end times for this thread
             double startTime = events.empty() ? 0.0 : events.front()->at;
             double endTime   = events.empty() ? 0.0 : events.back()->at;
-            m_OutputStream << "      \"startValue\": " << std::fixed << startTime << ",\n";
-            m_OutputStream << "      \"endValue\": " << std::fixed << endTime << ",\n";
+            _outputStream << "      \"startValue\": " << std::fixed << startTime << ",\n";
+            _outputStream << "      \"endValue\": " << std::fixed << endTime << ",\n";
 
             // Events
-            m_OutputStream << "      \"events\": [\n";
+            _outputStream << "      \"events\": [\n";
             for (size_t i = 0; i < events.size(); i++) {
                 const auto *event = events[i];
-                m_OutputStream << "        {";
-                m_OutputStream << "\"type\": \"" << static_cast<char>(event->type) << "\", ";
-                m_OutputStream << "\"frame\": " << event->frameIndex << ", ";
-                m_OutputStream << "\"at\": " << std::fixed << event->at;
-                m_OutputStream << "}";
+                _outputStream << "        {";
+                _outputStream << "\"type\": \"" << static_cast<char>(event->type) << "\", ";
+                _outputStream << "\"frame\": " << event->frameIndex << ", ";
+                _outputStream << "\"at\": " << std::fixed << event->at;
+                _outputStream << "}";
                 if (i < events.size() - 1) {
-                    m_OutputStream << ",";
+                    _outputStream << ",";
                 }
-                m_OutputStream << "\n";
+                _outputStream << "\n";
             }
-            m_OutputStream << "      ]\n";
-            m_OutputStream << "    }";
+            _outputStream << "      ]\n";
+            _outputStream << "    }";
 
             threadIndex++;
             if (threadIndex < eventsByThread.size()) {
-                m_OutputStream << ",";
+                _outputStream << ",";
             }
-            m_OutputStream << "\n";
+            _outputStream << "\n";
         }
 
-        m_OutputStream << "  ],\n";
+        _outputStream << "  ],\n";
 
         // Metadata
-        m_OutputStream << "  \"name\": \"" << EscapeJson(m_SessionName) << "\",\n";
-        m_OutputStream << "  \"exporter\": \"Neon Engine Instrumentor\"\n";
+        _outputStream << "  \"name\": \"" << escapeJson(_sessionName) << "\",\n";
+        _outputStream << "  \"exporter\": \"Neon Engine Instrumentor\"\n";
 
-        m_OutputStream << "}\n";
+        _outputStream << "}\n";
     }
 
     /**
      * @brief Escape special characters for JSON string
      */
-    static std::string EscapeJson(const std::string &str)
+    static std::string escapeJson(const std::string &str)
     {
         std::string result;
         result.reserve(str.size() + 10);
@@ -458,8 +458,8 @@ struct InstrumentationTimer
     using clock_t = std::chrono::steady_clock;
 
   private:
-    uint32_t m_FrameIndex;
-    bool     m_Stopped = false;
+    uint32_t _frameIndex;
+    bool     _stopped = false;
 
   public:
     /**
@@ -477,13 +477,13 @@ struct InstrumentationTimer
     explicit InstrumentationTimer(const char          *name,
                                   std::source_location loc = std::source_location::current())
     {
-        m_FrameIndex = Instrumentor::Get().WriteBeginEvent(name, loc.file_name(), static_cast<int>(loc.line()));
+        _frameIndex = Instrumentor::get().writeBeginEvent(name, loc.file_name(), static_cast<int>(loc.line()));
     }
 
     ~InstrumentationTimer()
     {
-        if (!m_Stopped) {
-            Stop();
+        if (!_stopped) {
+            stop();
         }
     }
 
@@ -496,15 +496,15 @@ struct InstrumentationTimer
     /**
      * @brief Manually stop the timer (useful for early exit)
      */
-    void Stop()
+    void stop()
     {
-        if (m_Stopped) {
+        if (_stopped) {
             return;
         }
 
-        Instrumentor::Get().WriteEndEvent(m_FrameIndex);
+        Instrumentor::get().writeEndEvent(_frameIndex);
 
-        m_Stopped = true;
+        _stopped = true;
     }
 };
 
@@ -526,12 +526,12 @@ struct InstrumentationTimerLog
     using clock_t = std::chrono::steady_clock;
 
   private:
-    std::string                      m_Name;
-    std::string                      m_File;
-    int                              m_Line;
-    std::chrono::time_point<clock_t> m_StartTime;
-    int                              m_FrameIndex;
-    bool                             m_Stopped = false;
+    std::string                      _name;
+    std::string                      _file;
+    int                              _line;
+    std::chrono::time_point<clock_t> _startTime;
+    int                              _frameIndex;
+    bool                             _stopped = false;
 
   public:
     /**
@@ -548,15 +548,15 @@ struct InstrumentationTimerLog
      */
     explicit InstrumentationTimerLog(const char          *name,
                                      std::source_location loc = std::source_location::current())
-        : m_Name(name), m_File(loc.file_name()), m_Line(static_cast<int>(loc.line())), m_StartTime(clock_t::now())
+        : _name(name), _file(loc.file_name()), _line(static_cast<int>(loc.line())), _startTime(clock_t::now())
     {
-        m_FrameIndex = Instrumentor::Get().WriteBeginEvent(m_Name, m_File, m_Line);
+        _frameIndex = Instrumentor::get().writeBeginEvent(_name, _file, _line);
     }
 
     ~InstrumentationTimerLog()
     {
-        if (!m_Stopped) {
-            Stop();
+        if (!_stopped) {
+            stop();
         }
     }
 
@@ -569,24 +569,24 @@ struct InstrumentationTimerLog
     /**
      * @brief Manually stop the timer (useful for early exit)
      */
-    void Stop()
+    void stop()
     {
-        if (m_Stopped) {
+        if (_stopped) {
             return;
         }
 
         auto      now        = clock_t::now();
-        auto      duration   = std::chrono::duration_cast<std::chrono::nanoseconds>(now - m_StartTime);
+        auto      duration   = std::chrono::duration_cast<std::chrono::nanoseconds>(now - _startTime);
         long long durationNs = duration.count();
 
         std::string displayName = std::format("{}:{} ({})",
-                                              std::filesystem::path(m_File).filename().string(),
-                                              m_Line,
-                                              m_Name);
+                                              std::filesystem::path(_file).filename().string(),
+                                              _line,
+                                              _name);
 
-        Instrumentor::Get().WriteEndEventLog(m_FrameIndex, durationNs, displayName);
+        Instrumentor::get().writeEndEventLog(_frameIndex, durationNs, displayName);
 
-        m_Stopped = true;
+        _stopped = true;
     }
 };
 
@@ -605,9 +605,9 @@ struct InstrumentationTimerConditional
     using clock_t = std::chrono::steady_clock;
 
   private:
-    int  m_FrameIndex = -1;
-    bool m_Enabled    = false;
-    bool m_Stopped    = false;
+    int  _frameIndex = -1;
+    bool _enabled    = false;
+    bool _stopped    = false;
 
   public:
     /**
@@ -626,17 +626,17 @@ struct InstrumentationTimerConditional
     explicit InstrumentationTimerConditional(bool                 enabled,
                                              const char          *name,
                                              std::source_location loc = std::source_location::current())
-        : m_Enabled(enabled)
+        : _enabled(enabled)
     {
-        if (m_Enabled) {
-            m_FrameIndex = Instrumentor::Get().WriteBeginEvent(name, loc.file_name(), static_cast<int>(loc.line()));
+        if (_enabled) {
+            _frameIndex = Instrumentor::get().writeBeginEvent(name, loc.file_name(), static_cast<int>(loc.line()));
         }
     }
 
     ~InstrumentationTimerConditional()
     {
-        if (!m_Stopped) {
-            Stop();
+        if (!_stopped) {
+            stop();
         }
     }
 
@@ -646,17 +646,17 @@ struct InstrumentationTimerConditional
     InstrumentationTimerConditional(InstrumentationTimerConditional &&)                 = delete;
     InstrumentationTimerConditional &operator=(InstrumentationTimerConditional &&)      = delete;
 
-    void Stop()
+    void stop()
     {
-        if (m_Stopped) {
+        if (_stopped) {
             return;
         }
 
-        if (m_Enabled && m_FrameIndex >= 0) {
-            Instrumentor::Get().WriteEndEvent(m_FrameIndex);
+        if (_enabled && _frameIndex >= 0) {
+            Instrumentor::get().writeEndEvent(_frameIndex);
         }
 
-        m_Stopped = true;
+        _stopped = true;
     }
 };
 
@@ -676,12 +676,12 @@ struct InstrumentationTimerConsoleOnly
     using clock_t = std::chrono::steady_clock;
 
   private:
-    std::string                      m_Name;
-    std::string                      m_File;
-    int                              m_Line;
-    std::chrono::time_point<clock_t> m_StartTime;
-    bool                             m_Stopped = false;
-    bool                             bEnable   = false;
+    std::string                      _name;
+    std::string                      _file;
+    int                              _line;
+    std::chrono::time_point<clock_t> _startTime;
+    bool                             _stopped = false;
+    bool                             bEnable  = false;
 
   public:
     explicit InstrumentationTimerConsoleOnly(const std::string   &name,
@@ -694,17 +694,17 @@ struct InstrumentationTimerConsoleOnly
     explicit InstrumentationTimerConsoleOnly(const char          *name,
                                              std::source_location loc     = std::source_location::current(),
                                              bool                 bEnable = true)
-        : m_Name(name), m_File(loc.file_name()), m_Line(static_cast<int>(loc.line())), bEnable(bEnable)
+        : _name(name), _file(loc.file_name()), _line(static_cast<int>(loc.line())), bEnable(bEnable)
     {
         if (bEnable) {
-            m_StartTime = clock_t::now();
+            _startTime = clock_t::now();
         }
     }
 
     ~InstrumentationTimerConsoleOnly()
     {
-        if (!m_Stopped) {
-            Stop();
+        if (!_stopped) {
+            stop();
         }
     }
 
@@ -714,27 +714,27 @@ struct InstrumentationTimerConsoleOnly
     InstrumentationTimerConsoleOnly(InstrumentationTimerConsoleOnly &&)                 = delete;
     InstrumentationTimerConsoleOnly &operator=(InstrumentationTimerConsoleOnly &&)      = delete;
 
-    void Stop()
+    void stop()
     {
-        if (m_Stopped || !bEnable) {
+        if (_stopped || !bEnable) {
             return;
         }
 
         auto      now        = clock_t::now();
-        auto      duration   = std::chrono::duration_cast<std::chrono::nanoseconds>(now - m_StartTime);
+        auto      duration   = std::chrono::duration_cast<std::chrono::nanoseconds>(now - _startTime);
         long long durationNs = duration.count();
 
         // Build display name with source location
         std::string displayName = std::format("{}:{} ({})",
-                                              std::filesystem::path(m_File).filename().string(),
-                                              m_Line,
-                                              m_Name);
+                                              std::filesystem::path(_file).filename().string(),
+                                              _line,
+                                              _name);
 
         // Print to console only (no file output)
         float ms = static_cast<float>(durationNs) / 1000000.0f;
         YA_CORE_DEBUG("[Profile] {}: {:.3f}ms ({} ns)", displayName, ms, durationNs);
 
-        m_Stopped = true;
+        _stopped = true;
     }
 };
 
@@ -744,14 +744,15 @@ struct InstrumentationTimerConsoleOnly
 
 struct ProfileResult
 {
-    std::string Name;
-    long long   Start, End;
-    uint32_t    ThreadID;
+    std::string name;
+    long long   start;
+    long long   end;
+    uint32_t    threadId;
 };
 
 struct InstrumentationSession
 {
-    std::string Name;
+    std::string name;
 };
 
 } // namespace ya
@@ -789,12 +790,12 @@ struct InstrumentationSession
 
     #define YA_PROFILE_BEGIN_SESSION_IMPL(session_name, filepath)                                        \
         do {                                                                                             \
-            if (::ya::profiling::isCpuTraceEnabled()) ::ya::Instrumentor::Get().BeginSession(session_name, filepath); \
+            if (::ya::profiling::isCpuTraceEnabled()) ::ya::Instrumentor::get().beginSession(session_name, filepath); \
         } while (0)
 
     #define YA_PROFILE_END_SESSION_IMPL()                                        \
         do {                                                                     \
-            if (::ya::profiling::isCpuTraceEnabled()) ::ya::Instrumentor::Get().EndSession();  \
+            if (::ya::profiling::isCpuTraceEnabled()) ::ya::Instrumentor::get().endSession();  \
         } while (0)
 
     #define YA_PROFILE_SCOPE_IMPL(name) \
@@ -809,10 +810,10 @@ struct InstrumentationSession
     #define YA_PROFILE_IS_ENABLED() (true)
 
     #define YA_PROFILE_BEGIN_SESSION_IMPL(session_name, filepath) \
-        ::ya::Instrumentor::Get().BeginSession(session_name, filepath)
+        ::ya::Instrumentor::get().beginSession(session_name, filepath)
 
     #define YA_PROFILE_END_SESSION_IMPL() \
-        ::ya::Instrumentor::Get().EndSession()
+        ::ya::Instrumentor::get().endSession()
 
     #define YA_PROFILE_SCOPE_IMPL(name) \
         ::ya::InstrumentationTimer YA_CONCAT(ya_timer_, __LINE__)(name);

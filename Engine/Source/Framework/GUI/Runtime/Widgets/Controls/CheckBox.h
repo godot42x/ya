@@ -36,6 +36,13 @@ struct YA_GUI_API UICheckBox : public UIElement, public UIStyledWidget<UICheckBo
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UICheckBox>; }
 
     bool _bChecked = false;
+    void setChecked(bool value)
+    {
+        if (_bChecked == value) return;
+        _bChecked = value;
+        invalidateProperty(EUIPropertyImpact::Paint);
+    }
+    [[nodiscard]] bool isChecked() const { return _bChecked; }
     /// Box edge length (logical px). The box is square.
     float _boxSize      = 16.0f;
     float _labelSpacing = 8.0f;

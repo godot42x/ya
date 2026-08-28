@@ -1,8 +1,8 @@
 #include "GameEditor/UI/EditorInspectorTab.h"
+#include "GameEditor/UI/EditorTransformSection.h"
 
 #include "ECS/ECSRegistry.h"
 #include "GUI/Declarative/Build.h"
-#include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
@@ -10,7 +10,6 @@
 #include "GameEditor/EditorLayer.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
-#include "Scene3D/TransformComponent.h"
 
 #include <algorithm>
 #include <format>
@@ -51,34 +50,8 @@ std::shared_ptr<UIElement> EditorInspectorTab::build(WidgetTree&)
                     .child(std::move(empty))
                     .child(ui::text("TransformLabel").setText("Transform").setFontSize(12));
 
-    const char* names[9] = {"PosX", "PosY", "PosZ", "RotX", "RotY", "RotZ", "SclX", "SclY", "SclZ"};
-    const float speeds[9] = {0.1f, 0.1f, 0.1f, 0.5f, 0.5f, 0.5f, 0.01f, 0.01f, 0.01f};
-    auto rows = ui::column("TransformRows").setSpacing(4.0f);
-    for (int group = 0; group < 3; ++group) {
-        auto row = ui::row(std::format("TransformRow{}", group)).setSpacing(4.0f);
-        for (int axis = 0; axis < 3; ++axis) {
-            const int index = group * 3 + axis;
-            auto drag = std::make_shared<UIDragFloat>(names[index]);
-            drag->setSize({72.0f, 22.0f});
-            drag->_speed = speeds[index];
-            drag->_onValueChanged = [this, index](float value) {
-                if (!_layer) return;
-                Entity* entity = _layer->getSelectedEntity();
-                auto* tc = entity ? entity->getComponent<TransformComponent>() : nullptr;
-                if (!tc) return;
-                auto pos = tc->getPosition();
-                auto rot = tc->getRotation();
-                auto scl = tc->getScale();
-                if (index < 3) { pos[index] = value; tc->setPosition(pos); }
-                else if (index < 6) { rot[index - 3] = value; tc->setRotation(rot); }
-                else { scl[index - 6] = value; tc->setScale(scl); }
-            };
-            _transformDrags[static_cast<size_t>(index)] = drag;
-            row.child(drag);
-        }
-        rows.child(std::move(row));
-    }
-    form.child(std::move(rows));
+    _transformSection = std::make_shared<EditorTransformSection>("InspectorTransform", *_layer);
+    form.child(_transformSection);
     return ui::panel("InspectorBody").fillParent().setStyleKey("panel").child(std::move(form)).release();
 }
 
@@ -111,21 +84,13 @@ void EditorInspectorTab::sync(WidgetTree& tree)
             if (Node* node = scene->getNodeByEntity(entity)) _nameField->setText(node->getName());
         }
     }
-    auto* tc = entity ? entity->getComponent<TransformComponent>() : nullptr;
-    if (!tc) return;
-    const float values[9] = {tc->getPosition().x, tc->getPosition().y, tc->getPosition().z,
-                             tc->getRotation().x, tc->getRotation().y, tc->getRotation().z,
-                             tc->getScale().x, tc->getScale().y, tc->getScale().z};
-    for (size_t i = 0; i < _transformDrags.size(); ++i) {
-        if (_transformDrags[i] && focused != _transformDrags[i].get()) _transformDrags[i]->setValue(values[i]);
-    }
+    if (_transformSection) _transformSection->sync(tree);
 }
 
 bool EditorInspectorTab::wantsTextInput(WidgetTree& tree) const
 {
     UIElement* focused = tree.getFocused();
-    return focused == _nameField.get() ||
-           std::ranges::any_of(_transformDrags, [focused](const auto& drag) { return focused == drag.get(); });
+    return focused == _nameField.get() || (_transformSection && _transformSection->wantsTextInput(tree));
 }
 
 void EditorInspectorTab::reset()
@@ -134,7 +99,7 @@ void EditorInspectorTab::reset()
     _entityText.reset();
     _componentsText.reset();
     _emptyText.reset();
-    _transformDrags = {};
+    _transformSection.reset();
 }
 
 } // namespace ya

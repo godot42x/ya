@@ -59,7 +59,7 @@ struct YA_CORE_API PerfState
     uint64_t                                   _revision = 0;
 
   public:
-    static PerfState& Get();
+    static PerfState& get();
 
     void setEnabled(bool bEnabled);
     bool isEnabled() const;

@@ -11,6 +11,7 @@ struct UIElement;
 struct UIText;
 struct UITextField;
 struct UIDragFloat;
+class EditorTransformSection;
 struct WidgetTree;
 
 /// Retained Inspector tab. The editor surface hosts this tab but does not own
@@ -31,7 +32,7 @@ class EditorInspectorTab
     std::shared_ptr<UIText> _entityText;
     std::shared_ptr<UIText> _componentsText;
     std::shared_ptr<UIText> _emptyText;
-    std::array<std::shared_ptr<UIDragFloat>, 9> _transformDrags{};
+    std::shared_ptr<EditorTransformSection> _transformSection;
 };
 
 } // namespace ya

@@ -52,7 +52,7 @@ struct YA_GUI_API UIPanel : public UIElement, public UIStyledWidget<UIPanel, FPa
             return;
         }
         _color = value;
-        setStyleField("fillColor", FBrush::Solid(value), EUIPropertyImpact::Paint);
+        setStyleField("fillColor", FBrush::solid(value), EUIPropertyImpact::Paint);
     }
     [[nodiscard]] const glm::vec4& getColor() const { return _color; }
     [[nodiscard]] bool hasExplicitFill() const { return hasAuthoredStyle(); }

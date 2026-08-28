@@ -15,6 +15,9 @@ do -- grab all cpp file under test folder as a target
             set_group("test")
             set_kind("binary")
             add_deps("ya-engine")
+            if filepath:find("EditorPropertyGraphTest", 1, true) then
+                add_deps("ya-game-editor")
+            end
             add_files(filepath)
             target_end()
         end

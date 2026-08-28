@@ -170,7 +170,7 @@ void appendOpaquePass(RenderGraph& graph,
                 .layerCount = params.layerCount,
                 .colors = {{
                     .color       = params.viewportColor,
-                    .clearValue  = ClearValue::Black(),
+                    .clearValue  = ClearValue::black(),
                     .loadOp      = resources.colorAttachment.loadOp,
                     .storeOp     = resources.colorAttachment.storeOp,
                     .finalLayout = params.finalLayout,
