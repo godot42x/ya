@@ -22,6 +22,9 @@ struct YA_GUI_API UICompoundWidget : public UIElement
     using UIElement::UIElement;
 
     void prepareForAttach() override;
+    void layout(const Rect2D& parentRect) override;
+    void layoutAssigned(const Rect2D& rect) override;
+    [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     bool wantsTick() const override { return _bTickEnabled; }
 
 protected:

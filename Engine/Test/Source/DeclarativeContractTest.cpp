@@ -46,7 +46,9 @@ struct FTestCompoundWidget final : UICompoundWidget
     void construct() override
     {
         ++constructCount;
-        addDetachedChild(std::make_shared<UIText>("compound_label"));
+        auto panel = std::make_shared<UIPanel>("compound_root");
+        panel->setSize({123.0f, 45.0f});
+        addDetachedChild(std::move(panel));
     }
 
     void tick(float deltaSeconds) override
@@ -631,6 +633,23 @@ TEST(DeclarativeContractTest, CompoundWidgetBuilderBuildsTypedLiveWidget)
     EXPECT_EQ(root->_stableKey, "compound_builder");
     EXPECT_EQ(root->_name, "compound_builder");
     EXPECT_EQ(ref->constructCount, 1);
+}
+
+TEST(DeclarativeContractTest, CompoundWidgetForwardsDesiredSizeAndLayoutToCompositionRoot)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    auto compound = std::make_shared<FTestCompoundWidget>("compound_layout");
+
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, compound).valid());
+    ASSERT_EQ(compound->getChildren().size(), 1u);
+
+    EXPECT_EQ(compound->computeDesiredSize(), glm::vec2(123.0f, 45.0f));
+
+    tree.layout();
+    const UIElement* contentRoot = compound->getChildren().front().get();
+    ASSERT_NE(contentRoot, nullptr);
+    EXPECT_EQ(contentRoot->_layoutRect.pos, compound->_layoutRect.pos);
+    EXPECT_EQ(contentRoot->_layoutRect.extent, compound->_layoutRect.extent);
 }
 
 TEST(DeclarativeContractTest, DirectConstructBindTextUpdatesWithoutRebuild)

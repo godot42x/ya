@@ -1,5 +1,13 @@
 # GUI Framework / Editor / Game UI 重构进度
 
+## 2026-08-28 checkpoint：修正 UICompoundWidget 的 layout / desired-size 转发契约
+
+- UICompoundWidget 不再停留在 UIElement 的空壳默认布局：现在会把 assigned rect 转发给内部 composition root，并把 computeDesiredSize() 委托给首个子节点。
+- 这次修复直接对应 retained Inspector 的回归根因：EditorTransformSection / EditorAutoPropertySection 的控件树虽然构造出来了，但 compound 自身以前没有把布局和期望尺寸向内传递，导致属性值编辑器可能被压成 0 尺寸。
+- 新增 DeclarativeContractTest.CompoundWidgetForwardsDesiredSizeAndLayoutToCompositionRoot，锁住 compound 的两个基本事实：desired size 来自 composition root，layout assigned 后内层 host 会收到同一 rect。
+- 这是 DetailsView retained 迁移中的 runtime bugfix，不扩展新面板，也不引入新的兼容层。
+- 验证：xmake b ya-game-editor、xmake b ya-testing、xmake r ya-testing -- --gtest_filter="DeclarativeContractTest.CompoundWidget*" 通过。
+
 ## 2026-08-28 checkpoint：Transform compound 改为 selection-driven binding
 
 - EditorTransformSection 现在记录当前 bound entity；选中实体变化时，只 detach/replace 内部 EditorAutoPropertySection，外层 compound identity 保持不变。
