@@ -563,6 +563,13 @@ TEST(WidgetTreeTest, ChildAddedToAttachedParentJoinsItsTree)
 
     auto child = makeButton("LateChild", {20.0f, 20.0f}, {80.0f, 32.0f});
     parent->addDetachedChild(child);
+    // Placement lives on the parent->child edge, not on the child's own
+    // geometry: the canvas host resolves the rect from this slot offset.
+    if (auto* slot = dynamic_cast<UICanvasSlot*>(parent->getSlotForChild(*child))) {
+        FCanvasSlotArgs slotArgs;
+        slotArgs.offset = {20.0f, 20.0f};
+        slot->apply(slotArgs);
+    }
     EXPECT_TRUE(child->isAttached());
     EXPECT_EQ(child->getTree(), &tree);
     EXPECT_EQ(child->getParent(), parent.get());

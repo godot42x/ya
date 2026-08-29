@@ -15,7 +15,6 @@
 #include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Controls/Image.h"
-#include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/Panel.h"
@@ -119,37 +118,34 @@ std::shared_ptr<UIElement> makePlaceholderPanel(const std::string& name, const s
 {
     return ui::panel(name + "_Body")
         .setStyleKey("panel.canvas")
-        .child(ui::text(name + "_Label")
+        [ui::layout().fill().offsets({12.0f, 12.0f}) >> ui::text(name + "_Label")
                    .setText(text)
                    .setFontSize(13)
-                   .fillParent()
-                   .setPosition({12.0f, 12.0f})
                    .setSize({-24.0f, -24.0f})
                    .setHAlign(EWidgetAlignH::Center)
-                   .setVAlign(EWidgetAlignV::Center))
+                   .setVAlign(EWidgetAlignV::Center)]
         .release();
 }
 
-std::shared_ptr<UISelectableRow> makeContentRow(const std::string& key,
-                                                const std::string& label,
-                                                const std::string& itemId,
-                                                std::function<void(const std::string&)> onSelect,
-                                                std::function<void(const std::string&)> onActivate)
+/// One file-browser row: UISelectableRow host + a UIText label in its content
+/// slot. Shared by the Content Browser and the Save Scene dialog, which both
+/// rebuild their rows from a FileExplorer fingerprint.
+ui::UISelectableRowWidgetBuilder contentRow(const std::string& key,
+                                            const std::string& label,
+                                            const std::string& itemId,
+                                            std::function<void(const std::string&)> onSelect,
+                                            std::function<void(const std::string&)> onActivate)
 {
-    auto row = std::make_shared<UISelectableRow>(key);
-    row->_itemId = itemId;
-    row->setSize({0.0f, 22.0f});
-    row->_onSelect   = std::move(onSelect);
-    row->_onActivate = std::move(onActivate);
-
-    auto text = std::make_shared<UIText>(key + "_Label");
-    text->_fontSize = 13;
-    text->setSize({0.0f, 22.0f});
-    text->setText(label);
-    text->setPosition({10.0f, 0.0f});
-    text->_vAlign = EWidgetAlignV::Center;
-    row->addDetachedChild(text);
-    return row;
+    return ui::selectableRow(key)
+        .setItemId(itemId)
+        .setSize({0.0f, 22.0f})
+        .setOnSelect(std::move(onSelect))
+        .setOnActivate(std::move(onActivate))
+        .child(ui::text(key + "_Label")
+                   .setText(label)
+                   .setFontSize(13)
+                   .setPosition({10.0f, 0.0f})
+                   .setVAlign(EWidgetAlignV::Center));
 }
 
 ui::UIButtonWidgetBuilder labeledButton(std::string key, const std::string& label, float width, float height = 26.0f)
@@ -160,7 +156,6 @@ ui::UIButtonWidgetBuilder labeledButton(std::string key, const std::string& labe
         .child(ui::text(std::move(labelKey))
                    .setText(label)
                    .setFontSize(13)
-                   .fillParent()
                    .setHAlign(EWidgetAlignH::Center)
                    .setVAlign(EWidgetAlignV::Center));
 }
@@ -292,18 +287,18 @@ void EditorSurface::buildProjectBrowser(App& app)
                            }
                        });
 
-    auto list = std::make_shared<UITreeView>("ProjectList");
-    list->setSize({720.0f, 320.0f});
-    _hierarchyView = list;
     _hierarchyRoots = std::make_shared<ReactiveList<UITreeView::FNode>>();
-    list->bindData(_hierarchyRoots);
-    list->_onSelectionChanged = [this](const std::string& id) {
-        int index = 0;
-        if (auto [ptr, ec] = std::from_chars(id.data(), id.data() + id.size(), index);
-            ec == std::errc{} && ptr == id.data() + id.size()) {
-            _layer->setProjectBrowserSelection(index);
-        }
-    };
+    auto list = ui::treeView("ProjectList")
+                    .setSize({720.0f, 320.0f})
+                    .bindData(_hierarchyRoots)
+                    .setOnSelectionChanged([this](const std::string& id) {
+                        int index = 0;
+                        if (auto [ptr, ec] = std::from_chars(id.data(), id.data() + id.size(), index);
+                            ec == std::errc{} && ptr == id.data() + id.size()) {
+                            _layer->setProjectBrowserSelection(index);
+                        }
+                    });
+    _hierarchyView = list.share();
 
     auto openBtn = labeledButton("OpenProject", "Open Project", 160.0f)
                        .setOnClick([this]() {
@@ -318,7 +313,6 @@ void EditorSurface::buildProjectBrowser(App& app)
     _statsText     = errorText.share();
 
     auto page = ui::column("ProjectBrowser")
-                    .fillParent()
                     .setPadding({48.0f, 48.0f})
                     .setSpacing(12.0f)
                     .children(std::move(title),
@@ -326,25 +320,24 @@ void EditorSurface::buildProjectBrowser(App& app)
                               ui::row("ProjectActions")
                                   .setSpacing(8.0f)
                                   .children(std::move(refresh), std::move(exitBtn)),
-                              list,
+                              std::move(list),
                               std::move(openBtn),
                               std::move(errorText));
-    ui::build(*_tree, *_tree->getLayer(WidgetTree::ELayer::Content), std::move(page));
+    ui::build(*_tree, *_tree->getLayer(WidgetTree::ELayer::Content), std::move(page), ui::layout().fill());
 }
 
 void EditorSurface::buildEditorChrome(App& app)
 {
     (void)app;
-    _root = ui::panel("EditorRoot").fillParent().setStyleKey("panel.window").share();
+    _root = ui::panel("EditorRoot").setStyleKey("panel.window").share();
     const WidgetAttachment attached = _tree->attachToLayer(WidgetTree::ELayer::Content, _root);
     YA_CORE_ASSERT(attached.valid(), "EditorSurface: failed to attach editor root");
+    ui::attachLayout(*_tree->getLayer(WidgetTree::ELayer::Content), *_root, ui::layout().fill().args());
 
-    _menuBar = std::make_shared<UIMenuBar>("EditorMenu");
-    _menuBar->_anchorMin = {0.0f, 0.0f};
-    _menuBar->_anchorMax = {1.0f, 0.0f};
-    _menuBar->setPosition({0.0f, 0.0f});
-    _menuBar->setSize({0.0f, kMenuHeight});
-    _tree->attach(*_root, _menuBar);
+    _menuBar = ui::buildAs<UIMenuBar>(*_tree,
+                                      *_root,
+                                      ui::menuBar("EditorMenu").setSize({0.0f, kMenuHeight}),
+                                      ui::layout().anchor({0.0f, 0.0f}, {1.0f, 0.0f}).offsets({0.0f, 0.0f}));
 
     _menuBar->addItem("File", [this]() {
         return UIMenu::create({
@@ -397,80 +390,65 @@ void EditorSurface::buildEditorChrome(App& app)
     auto modeText = ui::text("ToolbarMode").setFontSize(13).setText("EDIT").setSize({88.0f, 20.0f});
     _toolbarModeText = modeText.share();
 
-    auto toolbar = ui::row("EditorToolbar")
-                       .setSpacing(8.0f)
-                       .setPadding({8.0f, 4.0f})
-                       .children(std::move(play),
-                                 std::move(simulate),
-                                 std::move(stop),
-                                 std::move(mode3d),
-                                 std::move(mode2d),
-                                 std::move(modeText));
-    auto toolbarWidget = toolbar.share();
-    toolbarWidget->_anchorMin = {0.0f, 0.0f};
-    toolbarWidget->_anchorMax = {1.0f, 0.0f};
-    toolbarWidget->setPosition({0.0f, kMenuHeight});
-    toolbarWidget->setSize({0.0f, kToolbarHeight});
-    ui::build(*_tree, *_root, std::move(toolbar));
+    ui::build(*_tree,
+              *_root,
+              ui::row("EditorToolbar")
+                  .setSize({0.0f, kToolbarHeight})
+                  .setSpacing(8.0f)
+                  .setPadding({8.0f, 4.0f})
+                  .children(std::move(play),
+                            std::move(simulate),
+                            std::move(stop),
+                            std::move(mode3d),
+                            std::move(mode2d),
+                            std::move(modeText)),
+              ui::layout().anchor({0.0f, 0.0f}, {1.0f, 0.0f}).offsets({0.0f, kMenuHeight}));
 
     _dockWorkspace = std::make_shared<UIDockWorkspace>();
-    _dockSpace     = std::make_shared<UIDockSpace>("EditorDock");
-    _dockSpace->setWorkspace(_dockWorkspace);
-    _dockSpace->_anchorMin = {0.0f, 0.0f};
-    _dockSpace->_anchorMax = {1.0f, 1.0f};
-    _dockSpace->setPosition({0.0f, kChromeTop});
-    _dockSpace->setSize({0.0f, -kChromeTop});
-    _tree->attach(*_root, _dockSpace);
+    _dockSpace = ui::buildAs<UIDockSpace>(*_tree,
+                                          *_root,
+                                          ui::dockSpace("EditorDock").setWorkspace(_dockWorkspace),
+                                          ui::layout().anchor({0.0f, 0.0f}, {1.0f, 1.0f}).offsets({0.0f, kChromeTop}));
 
-    auto viewportImage = ui::image("ViewportImage").fillParent();
+    auto viewportImage = ui::image("ViewportImage");
     _viewportImage     = viewportImage.share();
     _viewportImage->_hitFilter = EWidgetHitFilter::Stop;
     auto viewportBody = ui::panel("ViewportBody")
-                            .fillParent()
                             .setStyleKey("panel.canvas")
-                            .child(std::move(viewportImage));
+                            [ui::layout().fill() >> std::move(viewportImage)];
 
-    auto hierarchyView = std::make_shared<UITreeView>("HierarchyTree");
-    hierarchyView->_anchorMin = {0.0f, 0.0f};
-    hierarchyView->_anchorMax = {1.0f, 1.0f};
-    hierarchyView->setPosition({4.0f, 4.0f});
-    hierarchyView->setSize({-8.0f, -8.0f});
-    _hierarchyView  = hierarchyView;
     _hierarchyRoots = std::make_shared<ReactiveList<UITreeView::FNode>>();
-    hierarchyView->bindData(_hierarchyRoots);
-    hierarchyView->_onSelectionChanged = [this](const std::string& id) {
-        uint64_t uuid = 0;
-        std::string entryId;
-        if (parseEntityIdKey(id, uuid)) {
-            if (Scene* scene = _layer->getHierarchyScene()) {
-                _layer->setSelectedEntity(scene->getEntityByUUID(uuid));
-            }
-        }
-        else if (parseWidgetEntryKey(id, entryId)) {
-            _layer->setSelectedWidgetEntryId(entryId);
-        }
-    };
+    _hierarchyView  = ui::treeView("HierarchyTree")
+                         .bindData(_hierarchyRoots)
+                         .setOnSelectionChanged([this](const std::string& id) {
+                             uint64_t uuid = 0;
+                             std::string entryId;
+                             if (parseEntityIdKey(id, uuid)) {
+                                 if (Scene* scene = _layer->getHierarchyScene()) {
+                                     _layer->setSelectedEntity(scene->getEntityByUUID(uuid));
+                                 }
+                             }
+                             else if (parseWidgetEntryKey(id, entryId)) {
+                                 _layer->setSelectedWidgetEntryId(entryId);
+                             }
+                         })
+                         .share();
     auto hierarchyBody = ui::panel("HierarchyBody")
-                             .fillParent()
                              .setStyleKey("panel.canvas")
-                             .child(hierarchyView);
+                             [ui::layout().anchor({0.0f, 0.0f}, {1.0f, 1.0f}).offsets({4.0f, 4.0f}) >> _hierarchyView];
 
     _inspectorTab = std::make_unique<EditorInspectorTab>(*_layer);
     auto inspectorBody = _inspectorTab->build(*_tree);
 
     auto statsText = ui::text("FrameStatsBody")
                          .setText("Frame Stats")
-                         .setFontSize(13)
-                         .fillParent()
-                         .setPosition({12.0f, 12.0f})
-                         .setSize({-24.0f, -24.0f});
+                         .setFontSize(13);
     _statsText = statsText.share();
     auto statsBody = ui::panel("FrameStatsPanel")
-                         .fillParent()
                          .setStyleKey("panel.canvas")
-                         .child(std::move(statsText));
+                         [ui::layout().fill().offsets({12.0f, 12.0f}) >> std::move(statsText)];
 
-    auto workbenchHost = ui::panel("WorkbenchHost").fillParent().setStyleKey("panel.window").share();
+    auto workbenchHost = ui::panel("WorkbenchHost").setStyleKey("panel.window").share();
     // Dock panel bodies are detached until their tab is selected. WorkbenchSurface
     // authors with tree.attach, so mount the host long enough to build, then
     // detach the intact subtree for the workspace to graft later.
@@ -576,85 +554,66 @@ std::shared_ptr<UIElement> EditorSurface::buildContentBrowser()
     _contentExplorer->setSelectionMode(FileExplorer::SelectionMode::File);
     _contentExplorer->setLeftPanelWidth(180.0f);
 
-    auto root = std::make_shared<UIContainer>("ContentBrowserRoot");
-    root->setDirection(EWidgetBoxLayout::Vertical);
-    root->setSpacing(2.0f);
-    root->setPadding({4.0f, 4.0f});
+    auto pathText = ui::text("ContentPath").setFontSize(12).setVAlign(EWidgetAlignV::Center);
+    _contentPathText = pathText.share();
 
-    // Header: back / path / search.
-    auto back = std::make_shared<UIButton>("ContentBack");
-    back->setSize({52.0f, 22.0f});
-    {
-        auto label = std::make_shared<UIText>("ContentBack_Label");
-        label->setText("< Back");
-        label->setFontSize(12);
-        label->_hAlign = EWidgetAlignH::Center;
-        label->_vAlign = EWidgetAlignV::Center;
-        back->addDetachedChild(label);
-    }
-    back->_onClick = [this]() {
-        if (_contentExplorer) {
-            _contentExplorer->navigateBack();
-        }
-    };
+    // Row lists are only rebuilt when the directory fingerprint changes
+    // (rebuildContentRows), so both list containers are retained for attach.
+    _contentMountList = ui::column("ContentMounts").setSpacing(2.0f).setSize({180.0f, 0.0f}).share();
+    _contentEntryList = ui::column("ContentEntries")
+                            .setSpacing(2.0f)
+                            .setSize({0.0f, 0.0f})
+                            .share();
 
-    auto pathText = std::make_shared<UIText>("ContentPath");
-    pathText->_fontSize = 12;
-    pathText->_vAlign   = EWidgetAlignV::Center;
-    _contentPathText    = pathText;
+    auto backButton = ui::button("ContentBack")
+                          .setSize({52.0f, 22.0f})
+                          .setOnClick([this]() {
+                              if (_contentExplorer) {
+                                  _contentExplorer->navigateBack();
+                              }
+                          })
+                          .child(ui::text("ContentBack_Label")
+                                     .setText("< Back")
+                                     .setFontSize(12)
+                                     .setHAlign(EWidgetAlignH::Center)
+                                     .setVAlign(EWidgetAlignV::Center));
 
-    auto search = std::make_shared<UITextField>("ContentSearch");
-    search->setSize({140.0f, 22.0f});
-    search->_onTextChanged = [this](const std::string& text) {
-        if (_contentExplorer) {
-            _contentExplorer->setSearchText(text);
-        }
-    };
+    auto searchField = ui::textField("ContentSearch")
+                           .setSize({140.0f, 22.0f})
+                           .setOnTextChanged([this](const std::string& text) {
+                               if (_contentExplorer) {
+                                   _contentExplorer->setSearchText(text);
+                               }
+                           });
 
-    auto header = std::make_shared<UIContainer>("ContentHeader");
-    header->setDirection(EWidgetBoxLayout::Horizontal);
-    header->setSpacing(6.0f);
-    header->setSize({0.0f, 26.0f});
-    header->addDetachedChild(back);
-    header->addDetachedChild(pathText);
-    header->addDetachedChild(search);
-    root->addDetachedChild(header);
+    // Header: back / current path / name filter.
+    auto header = ui::row("ContentBrowser.ContainerHeader", "Header")
+                      .setSpacing(6.0f)
+                      .setSize({0.0f, 26.0f})
+                      .child(std::move(backButton))
+                      .child(std::move(pathText))
+                      .child(std::move(searchField));
 
-    // Body: mount list (fixed width) + entry list (fill).
-    auto body = std::make_shared<UIContainer>("ContentBody");
-    body->setDirection(EWidgetBoxLayout::Horizontal);
-    body->setSpacing(4.0f);
+    // Body: mount list (fixed width) + entry list (fill). Scroll hosts keep
+    // long directory listings from overflowing and give wheel navigation;
+    // each host owns exactly the one list container.
+    auto mountScroll = ui::scroll("ContentMountScroll")
+                           .setSize({180.0f, 0.0f})
+                           .child(_contentMountList);
+    auto entryScroll = ui::scroll("ContentEntryScroll")
+                           .setSize({0.0f, 0.0f})
+                           .child(_contentEntryList);
+    auto body = ui::row("ContentBody")
+                    .setSpacing(4.0f)
+                    .child(std::move(mountScroll))
+                    .child(std::move(entryScroll), ui::boxSlot().fill());
 
-    _contentMountList = std::make_shared<UIContainer>("ContentMounts");
-    _contentMountList->setDirection(EWidgetBoxLayout::Vertical);
-    _contentMountList->setSpacing(2.0f);
-    _contentMountList->setSize({180.0f, 0.0f});
-
-    _contentEntryList = std::make_shared<UIContainer>("ContentEntries");
-    _contentEntryList->setDirection(EWidgetBoxLayout::Vertical);
-    _contentEntryList->setSpacing(2.0f);
-    _contentEntryList->_anchorMin = {0.0f, 0.0f};
-    _contentEntryList->_anchorMax = {1.0f, 1.0f};
-    _contentEntryList->setSize({0.0f, 0.0f});
-
-    // Scroll hosts keep long directory listings from overflowing and give
-    // wheel navigation; each host owns exactly the one list container.
-    auto mountScroll = std::make_shared<UIScrollViewport>("ContentMountScroll");
-    mountScroll->setAxis(EScrollAxis::Vertical);
-    mountScroll->setSize({180.0f, 0.0f});
-    mountScroll->addDetachedChild(_contentMountList);
-
-    auto entryScroll = std::make_shared<UIScrollViewport>("ContentEntryScroll");
-    entryScroll->setAxis(EScrollAxis::Vertical);
-    entryScroll->_anchorMin = {0.0f, 0.0f};
-    entryScroll->_anchorMax = {1.0f, 1.0f};
-    entryScroll->setSize({0.0f, 0.0f});
-    entryScroll->addDetachedChild(_contentEntryList);
-
-    body->addDetachedChild(mountScroll);
-    body->addDetachedChild(entryScroll);
-    root->addDetachedChild(body);
-    return root;
+    auto root = ui::column("ContentBrowserRoot")
+                    .setSpacing(2.0f)
+                    .setPadding({4.0f, 4.0f})
+                    .child(std::move(header))
+                    .child(std::move(body), ui::boxSlot().fill());
+    return root.release();
 }
 
 void EditorSurface::syncPresentation(App& app, float dt)
@@ -858,32 +817,14 @@ void EditorSurface::rebuildContentRows()
         }
     }
     for (const auto& mp : _contentExplorer->getMountPoints()) {
-        auto row = makeContentRow(
-            "ContentMount_" + mp.name,
-            mp.name,
-            mp.name,
-            /*onSelect=*/[this](const std::string& itemId) {
-                if (_contentExplorer) {
-                    for (const auto& candidate : _contentExplorer->getMountPoints()) {
-                        if (candidate.name == itemId) {
-                            _contentExplorer->selectMountPoint(candidate);
-                            break;
-                        }
-                    }
-                }
-            },
-            /*onActivate=*/[this](const std::string& itemId) {
-                if (_contentExplorer) {
-                    for (const auto& candidate : _contentExplorer->getMountPoints()) {
-                        if (candidate.name == itemId) {
-                            _contentExplorer->selectMountPoint(candidate);
-                            break;
-                        }
-                    }
-                }
-            });
-        row->setSelected(active != nullptr && active->name == mp.name);
-        _tree->attach(*_contentMountList, row);
+        ui::build(*_tree,
+                  *_contentMountList,
+                  contentRow("ContentMount_" + mp.name,
+                             mp.name,
+                             mp.name,
+                             [this](const std::string& itemId) { selectContentMount(itemId); },
+                             [this](const std::string& itemId) { selectContentMount(itemId); })
+                      .setSelected(active != nullptr && active->name == mp.name));
     }
 
     // Entry rows.
@@ -898,15 +839,13 @@ void EditorSurface::rebuildContentRows()
     for (const auto& entry : entries) {
         const std::filesystem::path path = entry.path;
         const bool                  bDir = entry.bIsDirectory;
-        auto row = makeContentRow(
-            "ContentEntry_" + entry.name,
-            entry.bIsDirectory ? entry.name + "/" : entry.name,
-            entry.name,
-            /*onSelect=*/[this](const std::string&) {},
-            /*onActivate=*/[this, path, bDir](const std::string&) {
-                activateContentItem(path, bDir);
-            });
-        _tree->attach(*_contentEntryList, row);
+        ui::build(*_tree,
+                  *_contentEntryList,
+                  contentRow("ContentEntry_" + entry.name,
+                             bDir ? entry.name + "/" : entry.name,
+                             entry.name,
+                             [](const std::string&) {},
+                             [this, path, bDir](const std::string&) { activateContentItem(path, bDir); }));
     }
 
     if (_contentPathText) {
@@ -915,6 +854,19 @@ void EditorSurface::rebuildContentRows()
             pathText = active->name + ": " + pathText;
         }
         _contentPathText->setText(pathText);
+    }
+}
+
+void EditorSurface::selectContentMount(const std::string& itemId)
+{
+    if (!_contentExplorer) {
+        return;
+    }
+    for (const auto& candidate : _contentExplorer->getMountPoints()) {
+        if (candidate.name == itemId) {
+            _contentExplorer->selectMountPoint(candidate);
+            break;
+        }
     }
 }
 
@@ -977,129 +929,87 @@ void EditorSurface::openSceneSaveDialog()
         }
     }
 
-    _sceneSaveOverlay = std::make_shared<UIPopupOverlay>("SceneSaveOverlay");
-    _sceneSaveOverlay->setRole(UIPopupOverlay::EOverlayRole::Modal);
-    _sceneSaveOverlay->_onDismiss = [this]() { clearSceneSaveDialog(); };
+    auto nameField = ui::textField("SceneSaveName").setSize({0.0f, 26.0f}).setText(defaultName);
+    _sceneSaveNameField = nameField.share();
 
-    auto panel = std::make_shared<UIPanel>("SceneSavePanel");
-    panel->setSize({720.0f, 520.0f});
-    panel->setStyleKey("panel.window");
-    _sceneSavePanel = panel;
+    auto pathText = ui::text("SceneSavePath").setFontSize(12).setStyleKey("text.muted");
+    _sceneSavePathText = pathText.share();
 
-    auto root = std::make_shared<UIContainer>("SceneSaveRoot");
-    root->_anchorMin = {0.0f, 0.0f};
-    root->_anchorMax = {1.0f, 1.0f};
-    root->setSize({0.0f, 0.0f});
-    root->setDirection(EWidgetBoxLayout::Vertical);
-    root->setSpacing(8.0f);
-    root->setPadding({12.0f, 12.0f});
-    panel->addDetachedChild(root);
+    auto previewText = ui::text("SceneSavePreview").setFontSize(12);
+    _sceneSavePreviewText = previewText.share();
 
-    auto title = std::make_shared<UIText>("SceneSaveTitle");
-    title->setText("Save Scene");
-    title->setStyleKey("text.header");
-    title->setFontSize(14);
-    root->addDetachedChild(title);
+    _sceneSaveMountList = ui::column("SceneSaveMounts").setSpacing(2.0f).setSize({180.0f, 0.0f}).share();
+    _sceneSaveEntryList = ui::column("SceneSaveEntries").setSpacing(2.0f).setSize({0.0f, 0.0f}).share();
 
-    auto nameRow = std::make_shared<UIContainer>("SceneSaveNameRow");
-    nameRow->setDirection(EWidgetBoxLayout::Horizontal);
-    nameRow->setSpacing(6.0f);
-    nameRow->setStretchLastChild(true);
-    nameRow->setSize({0.0f, 26.0f});
+    _sceneSaveSaveButton = labeledButton("SceneSaveConfirm", "Save", 84.0f, 26.0f)
+                               .setOnClick([this]() { confirmSceneSaveDialog(); })
+                               .share();
 
-    auto nameLabel = std::make_shared<UIText>("SceneSaveNameLabel");
-    nameLabel->setText("Scene Name");
-    nameLabel->setFontSize(12);
-    nameLabel->setSize({90.0f, 26.0f});
-    nameLabel->_vAlign = EWidgetAlignV::Center;
-    nameRow->addDetachedChild(nameLabel);
+    auto dialogPanel =
+        ui::panel("SceneSavePanel")
+            .setSize({720.0f, 520.0f})
+            .setStyleKey("panel.window")
+            [ui::layout().anchor({0.0f, 0.0f}, {1.0f, 1.0f}) >> ui::column("SceneSaveRoot")
+                       .setSize({0.0f, 0.0f})
+                       .setSpacing(8.0f)
+                       .setPadding({12.0f, 12.0f})
+                       .child(ui::text("SceneSaveTitle").setText("Save Scene").setStyleKey("text.header").setFontSize(14))
+                       .child(ui::row("SceneSaveNameRow")
+                                  .setSpacing(6.0f)
+                                  .setStretchLastChild(true)
+                                  .setSize({0.0f, 26.0f})
+                                  .child(ui::text("SceneSaveNameLabel")
+                                             .setText("Scene Name")
+                                             .setFontSize(12)
+                                             .setSize({90.0f, 26.0f})
+                                             .setVAlign(EWidgetAlignV::Center))
+                                  .child(std::move(nameField)))
+                       .child(std::move(pathText))
+                       .child(ui::textField("SceneSaveSearch")
+                                  .setSize({0.0f, 24.0f})
+                                  .setOnTextChanged([this](const std::string& text) {
+                                      if (_sceneSaveExplorer) {
+                                          _sceneSaveExplorer->setSearchText(text);
+                                          _bSceneSaveRowsDirty = true;
+                                      }
+                                  }))
+                       .child(ui::row("SceneSaveBody")
+                                  .setSpacing(6.0f)
+                                  .setStretchLastChild(true)
+                                  .setSize({0.0f, 360.0f})
+                                  .child(ui::scroll("SceneSaveMountScroll")
+                                             .setAxis(EScrollAxis::Vertical)
+                                             .setSize({180.0f, 0.0f})
+                                             .child(_sceneSaveMountList))
+                                  .child(ui::scroll("SceneSaveEntryScroll")
+                                             .setAxis(EScrollAxis::Vertical)
+                                             .setSize({0.0f, 0.0f})
+                                             .child(_sceneSaveEntryList)))
+                       .child(std::move(previewText))
+                       .child(ui::row("SceneSaveActions")
+                                  .setSpacing(8.0f)
+                                  .setMainAxisAlignment(EWidgetMainAxisAlignment::End)
+                                  .child(labeledButton("SceneSaveBack", "Back", 72.0f, 26.0f)
+                                             .setOnClick([this]() {
+                                                 if (_sceneSaveExplorer && _sceneSaveExplorer->navigateBack()) {
+                                                     _bSceneSaveRowsDirty = true;
+                                                 }
+                                             }))
+                                  .child(_sceneSaveSaveButton)
+                                  .child(labeledButton("SceneSaveCancel", "Cancel", 84.0f, 26.0f)
+                                             .setOnClick([this]() {
+                                                 if (_sceneSaveOverlay) {
+                                                     _sceneSaveOverlay->close();
+                                                 }
+                                             })))];
 
-    auto nameField = std::make_shared<UITextField>("SceneSaveName");
-    nameField->setSize({0.0f, 26.0f});
-    nameField->setText(defaultName);
-    _sceneSaveNameField = nameField;
-    nameRow->addDetachedChild(nameField);
-    root->addDetachedChild(nameRow);
+    _sceneSavePanel = dialogPanel.share();
+    _sceneSaveOverlay = ui::popupOverlay("SceneSaveOverlay")
+                            .setRole(UIPopupOverlay::EOverlayRole::Modal)
+                            .setOnDismiss([this]() { clearSceneSaveDialog(); })
+                            .child(std::move(dialogPanel))
+                            .share();
 
-    auto pathText = std::make_shared<UIText>("SceneSavePath");
-    pathText->setFontSize(12);
-    pathText->setStyleKey("text.muted");
-    _sceneSavePathText = pathText;
-    root->addDetachedChild(pathText);
-
-    auto search = std::make_shared<UITextField>("SceneSaveSearch");
-    search->setSize({0.0f, 24.0f});
-    search->_onTextChanged = [this](const std::string& text) {
-        if (_sceneSaveExplorer) {
-            _sceneSaveExplorer->setSearchText(text);
-            _bSceneSaveRowsDirty = true;
-        }
-    };
-    root->addDetachedChild(search);
-
-    auto body = std::make_shared<UIContainer>("SceneSaveBody");
-    body->setDirection(EWidgetBoxLayout::Horizontal);
-    body->setSpacing(6.0f);
-    body->setStretchLastChild(true);
-    body->setSize({0.0f, 360.0f});
-
-    _sceneSaveMountList = std::make_shared<UIContainer>("SceneSaveMounts");
-    _sceneSaveMountList->setDirection(EWidgetBoxLayout::Vertical);
-    _sceneSaveMountList->setSpacing(2.0f);
-    _sceneSaveMountList->setSize({180.0f, 0.0f});
-    auto mountScroll = std::make_shared<UIScrollViewport>("SceneSaveMountScroll");
-    mountScroll->setAxis(EScrollAxis::Vertical);
-    mountScroll->setSize({180.0f, 0.0f});
-    mountScroll->addDetachedChild(_sceneSaveMountList);
-
-    _sceneSaveEntryList = std::make_shared<UIContainer>("SceneSaveEntries");
-    _sceneSaveEntryList->setDirection(EWidgetBoxLayout::Vertical);
-    _sceneSaveEntryList->setSpacing(2.0f);
-    _sceneSaveEntryList->setSize({0.0f, 0.0f});
-    auto entryScroll = std::make_shared<UIScrollViewport>("SceneSaveEntryScroll");
-    entryScroll->setAxis(EScrollAxis::Vertical);
-    entryScroll->_anchorMin = {0.0f, 0.0f};
-    entryScroll->_anchorMax = {1.0f, 1.0f};
-    entryScroll->setSize({0.0f, 0.0f});
-    entryScroll->addDetachedChild(_sceneSaveEntryList);
-
-    body->addDetachedChild(mountScroll);
-    body->addDetachedChild(entryScroll);
-    root->addDetachedChild(body);
-
-    auto preview = std::make_shared<UIText>("SceneSavePreview");
-    preview->setFontSize(12);
-    _sceneSavePreviewText = preview;
-    root->addDetachedChild(preview);
-
-    auto actions = std::make_shared<UIContainer>("SceneSaveActions");
-    actions->setDirection(EWidgetBoxLayout::Horizontal);
-    actions->setSpacing(8.0f);
-    actions->getBoxLayout().setMainAxisAlignment(EWidgetMainAxisAlignment::End);
-
-    auto back = labeledButton("SceneSaveBack", "Back", 72.0f, 26.0f).share();
-    back->_onClick = [this]() {
-        if (_sceneSaveExplorer && _sceneSaveExplorer->navigateBack()) {
-            _bSceneSaveRowsDirty = true;
-        }
-    };
-    actions->addDetachedChild(back);
-
-    auto save = labeledButton("SceneSaveConfirm", "Save", 84.0f, 26.0f).share();
-    save->_onClick = [this]() { confirmSceneSaveDialog(); };
-    _sceneSaveSaveButton = save;
-    actions->addDetachedChild(save);
-
-    auto cancel = labeledButton("SceneSaveCancel", "Cancel", 84.0f, 26.0f).share();
-    cancel->_onClick = [this]() {
-        if (_sceneSaveOverlay) {
-            _sceneSaveOverlay->close();
-        }
-    };
-    actions->addDetachedChild(cancel);
-    root->addDetachedChild(actions);
-
-    _sceneSaveOverlay->addDetachedChild(panel);
     _sceneSaveFingerprint.clear();
     _bSceneSaveRowsDirty = true;
     _sceneSaveOverlay->open(*_tree);
@@ -1209,36 +1119,14 @@ void EditorSurface::rebuildSceneSaveRows()
         }
     }
     for (const auto& mp : _sceneSaveExplorer->getMountPoints()) {
-        auto row = makeContentRow(
-            "SceneSaveMount_" + mp.name,
-            mp.name,
-            mp.name,
-            [this](const std::string& itemId) {
-                if (!_sceneSaveExplorer) {
-                    return;
-                }
-                for (const auto& candidate : _sceneSaveExplorer->getMountPoints()) {
-                    if (candidate.name == itemId) {
-                        _sceneSaveExplorer->selectMountPoint(candidate);
-                        _bSceneSaveRowsDirty = true;
-                        break;
-                    }
-                }
-            },
-            [this](const std::string& itemId) {
-                if (!_sceneSaveExplorer) {
-                    return;
-                }
-                for (const auto& candidate : _sceneSaveExplorer->getMountPoints()) {
-                    if (candidate.name == itemId) {
-                        _sceneSaveExplorer->selectMountPoint(candidate);
-                        _bSceneSaveRowsDirty = true;
-                        break;
-                    }
-                }
-            });
-        row->setSelected(active != nullptr && active->name == mp.name);
-        _tree->attach(*_sceneSaveMountList, row);
+        ui::build(*_tree,
+                  *_sceneSaveMountList,
+                  contentRow("SceneSaveMount_" + mp.name,
+                             mp.name,
+                             mp.name,
+                             [this](const std::string& itemId) { selectSceneSaveMount(itemId); },
+                             [this](const std::string& itemId) { selectSceneSaveMount(itemId); })
+                      .setSelected(active != nullptr && active->name == mp.name));
     }
 
     for (UIElement* child : _sceneSaveEntryList->getChildrenInPaintOrder()) {
@@ -1250,19 +1138,33 @@ void EditorSurface::rebuildSceneSaveRows()
     _sceneSaveExplorer->collectEntries(entries);
     for (const auto& entry : entries) {
         const std::filesystem::path path = entry.path;
-        auto row = makeContentRow(
-            "SceneSaveEntry_" + entry.name,
-            entry.name + "/",
-            entry.name,
-            [this, path](const std::string&) {
-                if (_sceneSaveExplorer) {
-                    _sceneSaveExplorer->setSelectedPath(path);
-                    _bSceneSaveRowsDirty = true;
-                }
-            },
-            [this, path](const std::string&) { activateSceneSaveItem(path, true); });
-        row->setSelected(selectedPath == path);
-        _tree->attach(*_sceneSaveEntryList, row);
+        ui::build(*_tree,
+                  *_sceneSaveEntryList,
+                  contentRow("SceneSaveEntry_" + entry.name,
+                             entry.name + "/",
+                             entry.name,
+                             [this, path](const std::string&) {
+                                 if (_sceneSaveExplorer) {
+                                     _sceneSaveExplorer->setSelectedPath(path);
+                                     _bSceneSaveRowsDirty = true;
+                                 }
+                             },
+                             [this, path](const std::string&) { activateSceneSaveItem(path, true); })
+                      .setSelected(selectedPath == path));
+    }
+}
+
+void EditorSurface::selectSceneSaveMount(const std::string& itemId)
+{
+    if (!_sceneSaveExplorer) {
+        return;
+    }
+    for (const auto& candidate : _sceneSaveExplorer->getMountPoints()) {
+        if (candidate.name == itemId) {
+            _sceneSaveExplorer->selectMountPoint(candidate);
+            _bSceneSaveRowsDirty = true;
+            break;
+        }
     }
 }
 

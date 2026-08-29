@@ -1,0 +1,57 @@
+{
+  "scenarios": [
+    {
+      "scenario": "UIElement authored geometry",
+      "before": "UIElement 持有 anchor/position/size/min/max/autosize",
+      "after": "字段、setter、反射和序列化全部删除；layout 只输出 layoutRect",
+      "status": "planned"
+    },
+    {
+      "scenario": "Canvas absolute layout",
+      "before": "child 自写 anchor，父节点调用 anchor math",
+      "after": "UICanvasLayout 消费 UICanvasSlot，四边 offsets/alignment/size rules 均在 edge",
+      "status": "planned"
+    },
+    {
+      "scenario": "Box / Overlay / SingleChild",
+      "before": "各 path 可能忽略 child anchor",
+      "after": "每种 layout 只接受对应 typed slot 并负责 measure/arrange",
+      "status": "planned"
+    },
+    {
+      "scenario": "默认 child 组合",
+      "before": "裸 child 依赖隐含 parent 行为",
+      "after": "child(node) 是新布局系统的正式 default slot，不是 legacy 兼容",
+      "status": "planned"
+    },
+    {
+      "scenario": "Reparent / detach",
+      "before": "child geometry 可能携带旧 parent 语义",
+      "after": "旧 slot 销毁，新 parent 创建 typed slot，child 不携带 authored layout",
+      "status": "planned"
+    },
+    {
+      "scenario": "旧文档与旧 schema",
+      "before": "运行时读取旧 geometry 字段",
+      "after": "旧字段删除；如需迁移仅提供一次性离线转换器",
+      "status": "planned"
+    },
+    {
+      "scenario": "统一 layout modifier",
+      "before": "不同 parent 暴露不同 child 添加 API，或显式构造 slot",
+      "after": "统一 child(widget.layout(intent))，modifier 类型携带 layout capability",
+      "status": "planned"
+    },
+    {
+      "scenario": "错误 layout 参数",
+      "before": "anchor/grow/grid 参数可能进入错误 parent，运行期才发现",
+      "after": "parent child() concept 按 capability 在编译期拒绝不兼容 intent",
+      "status": "planned"
+    }
+  ],
+  "status_legend": {
+    "planned": "已规划，未实施",
+    "done": "已实施并验证",
+    "wip": "实施中"
+  }
+}

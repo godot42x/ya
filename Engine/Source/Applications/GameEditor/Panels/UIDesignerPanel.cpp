@@ -5,6 +5,7 @@
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/Inspector/TypeRenderer.h"
 
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
@@ -344,6 +345,22 @@ glm::vec2 clampMinSize(glm::vec2 size, float minExtent = 1.0f)
     return size;
 }
 
+/// Read a widget's current anchor intent. The intent lives on the parent->child
+/// slot edge, so a canvas-host parent is the source of truth; the element's own
+/// anchor fields are only the legacy fallback for non-host parents.
+void readAnchorIntent(const UIElement& widget, glm::vec2& outMin, glm::vec2& outMax)
+{
+    if (const UIElement* parent = widget.getParent()) {
+        if (const auto* slot = dynamic_cast<const UICanvasSlot*>(parent->getSlotForChild(widget))) {
+            outMin = slot->getAnchorMin();
+            outMax = slot->getAnchorMax();
+            return;
+        }
+    }
+    outMin = widget._anchorMin;
+    outMax = widget._anchorMax;
+}
+
 } // namespace
 
 void UIDesignerPanel::beginMove(UIElement* widget, const glm::vec2& canvasPoint)
@@ -356,8 +373,7 @@ void UIDesignerPanel::beginMove(UIElement* widget, const glm::vec2& canvasPoint)
     _resizeMask      = 0;
     _dragStartPos    = widget->getPosition();
     _dragStartSize   = widget->getSize();
-    _dragStartAnchorMin = widget->_anchorMin;
-    _dragStartAnchorMax = widget->_anchorMax;
+    readAnchorIntent(*widget, _dragStartAnchorMin, _dragStartAnchorMax);
     _dragStartParentExtent = widget->getParent() ? widget->getParent()->_layoutRect.extent : glm::vec2(0.0f);
     _bDragMoved      = false;
     (void)canvasPoint;
@@ -373,8 +389,7 @@ void UIDesignerPanel::beginResize(UIElement* widget, const glm::vec2& canvasPoin
     _resizeMask      = resizeMask;
     _dragStartPos    = widget->getPosition();
     _dragStartSize   = widget->getSize();
-    _dragStartAnchorMin = widget->_anchorMin;
-    _dragStartAnchorMax = widget->_anchorMax;
+    readAnchorIntent(*widget, _dragStartAnchorMin, _dragStartAnchorMax);
     _dragStartParentExtent = widget->getParent() ? widget->getParent()->_layoutRect.extent : glm::vec2(0.0f);
     _bDragMoved      = false;
     (void)canvasPoint;
@@ -463,6 +478,21 @@ bool UIDesignerPanel::applyDragDelta(const glm::vec2& canvasDelta)
 
         widget->setPosition(pos);
         widget->setSize(size);
+
+        // Layout intent lives on the parent->child slot edge. When the parent is
+        // a canvas host the anchors must be written to that slot, otherwise the
+        // host arranges from the default slot and the drag result is lost.
+        if (UIElement* parent = widget->getParent()) {
+            if (auto* slot = dynamic_cast<UICanvasSlot*>(parent->getSlotForChild(*widget))) {
+                FCanvasSlotArgs args;
+                args.anchorMin = anchorMin;
+                args.anchorMax = anchorMax;
+                args.offset    = pos;
+                slot->apply(args);
+                invalidatePreview();
+                return true;
+            }
+        }
         widget->_anchorMin  = anchorMin;
         widget->_anchorMax  = anchorMax;
     }

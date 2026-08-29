@@ -199,13 +199,18 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
     list->setDirection(EWidgetBoxLayout::Vertical);
     list->setSpacing(0.0f);
     list->setPadding(glm::vec2(_panelPadding));
-    // Fill the panel rect: the panel is assigned the menu's own content
-    // size by layoutAssigned(), so the list must span it (not keep its
-    // default fixed size) for rows to receive the full menu width.
-    list->_anchorMin = {0.0f, 0.0f};
-    list->_anchorMax = {1.0f, 1.0f};
     list->setSize({0.0f, 0.0f});
     panel->addDetachedChild(list);
+    // Fill the panel rect: the panel is assigned the menu's own content size by
+    // layoutAssigned(), so the list must span it (not keep its default fixed
+    // size) for rows to receive the full menu width. Stretch intent lives on
+    // the parent->child slot edge, never on the child.
+    if (auto* slot = dynamic_cast<UICanvasSlot*>(panel->getSlotForChild(*list))) {
+        FCanvasSlotArgs fillArgs;
+        fillArgs.anchorMin = {0.0f, 0.0f};
+        fillArgs.anchorMax = {1.0f, 1.0f};
+        slot->apply(fillArgs);
+    }
 
     float maxLabelWidth = 0.0f;
     bool  bAnyIcon = false;

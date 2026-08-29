@@ -16,6 +16,7 @@
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SizeBox.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
+#include "GUI/Declarative/Build.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "Render/Resources/FontManager.h"
@@ -593,8 +594,17 @@ TEST(WidgetLayoutTest, ScaledViewScalesFallbackGlyphsByOwnDesignSize)
     // Fallback glyphs (CJK) are rasterized at their own base size (e.g. 64)
     // while the primary base is 128. A 13px view must scale them by 13/64,
     // NOT by the primary 13/128 — otherwise a 64px CJK glyph renders at 6.5px.
+    // FontManager is a process-wide singleton shared across every test suite;
+    // drop any bases left by earlier suites (e.g. a real 16px bitmap base) so
+    // findBestBase resolves the 13px (Bitmap flavor) request through THIS base.
+    FontManager::get()->clearCache();
     auto base = std::make_shared<Font>();
     base->fontSize = 128.0f;
+    // 13px resolves through a Bitmap base (kBitmapMaxSize = 48), so this
+    // hand-built base must advertise Bitmap flavor — findBestBase only matches
+    // bases of the requested flavor, otherwise a stale smaller bitmap base
+    // would be selected instead of this one.
+    base->renderMode = EFontRenderMode::Bitmap;
     base->lineHeight = 160.0f;
     base->ascent = 128.0f;
     base->descent = 32.0f;
@@ -637,8 +647,11 @@ TEST(WidgetLayoutTest, MeasureTextUsesResolvedFallbackGlyphAdvances)
 {
     // After the stack resolves a CJK glyph, measureText must use its REAL
     // advance (13px at a 13px view), not the '?' fallback advance.
+    // Isolate from any bases left by earlier suites (FontManager is shared).
+    FontManager::get()->clearCache();
     auto base = std::make_shared<Font>();
     base->fontSize = 128.0f;
+    base->renderMode = EFontRenderMode::Bitmap; // matches the 13px Bitmap request flavor
     base->lineHeight = 160.0f;
     base->ascent = 128.0f;
     base->descent = 32.0f;
@@ -752,5 +765,320 @@ TEST(WidgetLayoutTest, SizeBoxPadsChildAndHonorsWidthOverride)
     EXPECT_FLOAT_EQ(child->_layoutRect.pos.y, 2.0f);
     EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 24.0f);
     EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 10.0f);
+}
+
+// === Child-stated intent: where a modifier lands ===
+//
+// "ui::panel().child(x).fillWidth()" is ambiguous on paper: child() returns the
+// PARENT builder, so a modifier chained after it lands on the panel, not on the
+// child. These cases pin that down so the DSL contract stays obvious.
+
+// === Layout intent lives on the parent->child edge ===
+//
+// A child can no longer author its own stretch geometry (fillWidth() and friends
+// are gone): intent is always a value on the edge, so the old ambiguity about
+// "did this modifier land on the child or on the parent?" cannot occur.
+
+TEST(WidgetLayoutTest, EdgeLayoutSpecAppliesToTheChildNotTheParent)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto panel = ui::panel("Panel")
+                     .setSize({400.0f, 200.0f})
+                     [ui::layout().fill() >> ui::text("Label").setText("Hi")]
+                     .release();
+
+    WidgetTree tree({.width = 400, .height = 200});
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.layout();
+
+    const UIElement* child = panel->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    // The canvas host resolves the child from the edge, so it stretches.
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 400.0f);
+    // The parent keeps its own authored size: intent never leaks upward.
+    EXPECT_FLOAT_EQ(panel->_layoutRect.extent.x, 400.0f);
+    EXPECT_FLOAT_EQ(panel->_layoutRect.extent.y, 200.0f);
+}
+
+// === Single-child slot intent (path-A hosts that own both axes) ===
+//
+// Scroll viewport / size box own both axes, so a child's own anchors are
+// ignored. Intent is carried by the parent-child edge via singleChildSlot(),
+// where Fill reproduces the historical stretch and align() opts out.
+
+TEST(WidgetLayoutTest, SingleChildSlotDefaultsToFillReproducingStretch)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto box = ui::sizeBox("Box")
+                   .setSize({200.0f, 100.0f})
+                   .child(ui::text("Label").setText("Hi"))
+                   .release();
+
+    WidgetTree tree({.width = 200, .height = 100});
+    tree.attachToLayer(WidgetTree::ELayer::Content, box);
+    tree.layout();
+
+    const UIElement* child = box->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    // No slot args given: Fill/Fill must reproduce the pre-slot behaviour.
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 200.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 100.0f);
+}
+
+TEST(WidgetLayoutTest, SingleChildSlotAlignKeepsDesiredSizeAndCenters)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto box = ui::sizeBox("Box")
+                   .setSize({200.0f, 100.0f})
+                   .child(ui::text("Label").setText("Hi"),
+                          ui::singleChildSlot().align(EUIOverlayAlignment::Center, EUIOverlayAlignment::Center))
+                   .release();
+
+    WidgetTree tree({.width = 200, .height = 100});
+    tree.attachToLayer(WidgetTree::ELayer::Content, box);
+    tree.layout();
+
+    const UIElement* child = box->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    // Desired size, not stretched: the slot is what makes this expressible.
+    EXPECT_LT(child->_layoutRect.extent.x, 200.0f);
+    EXPECT_LT(child->_layoutRect.extent.y, 100.0f);
+    // Centred inside the 200x100 content box.
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.x,
+                    (200.0f - child->_layoutRect.extent.x) * 0.5f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.y,
+                    (100.0f - child->_layoutRect.extent.y) * 0.5f);
+}
+
+// === Path A: intent belongs to the slot, not to the child's anchors ===
+//
+// A box container owns arrangement, so stretch anchors on its child would be
+// dead code (and are rejected outright). The slot is the supported way to say
+// "fill the main axis".
+
+TEST(WidgetLayoutTest, PathAFillIsExpressedOnTheSlotNotTheChild)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    // "Fill" in a column means the main axis (Y): the text takes the space the
+    // label does not.
+    auto column = ui::column("Column")
+                      .setSize({300.0f, 200.0f})
+                      .child(ui::text("Label").setText("Hi"))
+                      .child(ui::text("Filled").setText("Hi"), ui::boxSlot().fill())
+                      .release();
+
+    WidgetTree tree({.width = 300, .height = 200});
+    tree.attachToLayer(WidgetTree::ELayer::Content, column);
+    tree.layout();
+
+    const auto children = column->getChildrenInPaintOrder();
+    ASSERT_EQ(children.size(), 2u);
+    const UIElement* label  = children[0];
+    const UIElement* filled = children[1];
+
+    EXPECT_FALSE(filled->hasStretchAnchors()) << "intent is on the slot, not the child";
+    // The label keeps its desired height; the filled child absorbs the rest.
+    EXPECT_LT(label->_layoutRect.extent.y, 200.0f);
+    EXPECT_GT(filled->_layoutRect.extent.y, label->_layoutRect.extent.y);
+    // Both stretch across the cross axis via the slot's default.
+    EXPECT_FLOAT_EQ(label->_layoutRect.extent.x, 300.0f);
+    EXPECT_FLOAT_EQ(filled->_layoutRect.extent.x, 300.0f);
+}
+
+TEST(WidgetLayoutTest, CanvasPivotCentresAChildOnItsAnchoredPosition)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto panel = ui::panel("Panel")
+                     .setSize({300.0f, 200.0f})
+                     [ui::layout().anchor({0.5f, 0.5f}, {0.5f, 0.5f}).pivot({0.5f, 0.5f}) >>
+                      ui::text("Inner").setText("Hi").setSize({80.0f, 24.0f})]
+                     .release();
+
+    WidgetTree tree({.width = 300, .height = 200});
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.layout();
+
+    const UIElement* child = panel->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    // Centre of the child lands on the centre of the parent.
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.x + child->_layoutRect.extent.x * 0.5f, 150.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.y + child->_layoutRect.extent.y * 0.5f, 100.0f);
+}
+
+TEST(WidgetLayoutTest, CanvasPreferredSizeDrivesAnAutoAxis)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto panel = ui::panel("Panel")
+                     .setSize({300.0f, 200.0f})
+                     [ui::layout().widthSizeMode(EWidgetSizeMode::Auto)
+                          .heightSizeMode(EWidgetSizeMode::Auto)
+                          .preferredSize({123.0f, 45.0f}) >> ui::text("Inner").setText("Hi")]
+                     .release();
+
+    WidgetTree tree({.width = 300, .height = 200});
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.layout();
+
+    const UIElement* child = panel->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    // The slot's preferred size, not the measured text size, drives both axes.
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 123.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 45.0f);
+}
+
+TEST(WidgetLayoutTest, CanvasHostIsNotBoundToThePanelVisuals)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    // ui::canvas() carries the anchor layout without a panel's own visuals.
+    auto host = ui::canvas("Host")
+                    .setSize({200.0f, 100.0f})
+                    [ui::layout().fill() >> ui::text("Inner").setText("Hi")]
+                    .release();
+
+    WidgetTree tree({.width = 200, .height = 100});
+    tree.attachToLayer(WidgetTree::ELayer::Content, host);
+    tree.layout();
+
+    const UIElement* child = host->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    EXPECT_EQ(host->_styleKey, "canvas");
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 200.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 100.0f);
+}
+
+// === Capability isolation (compile time) ===
+//
+// Layout intent is a capability set carried in the TYPE, so a host that cannot
+// honour an intent rejects it while compiling instead of silently dropping it.
+// These are the checks the plan requires; they must be static_asserts because
+// the wrong code must fail to build, not fail at runtime.
+
+// A box host shares space along the main axis: it honours grow but not anchors
+// or grid cells.
+static_assert(LayoutCapsCompatible<EUILayoutCap::Grow, kBoxHostCaps>);
+static_assert(!LayoutCapsCompatible<EUILayoutCap::Anchor, kBoxHostCaps>);
+static_assert(!LayoutCapsCompatible<EUILayoutCap::Cell, kBoxHostCaps>);
+
+// A canvas host positions by anchor rects and edge insets: it honours anchors
+// but not main-axis sharing or grid cells.
+static_assert(LayoutCapsCompatible<EUILayoutCap::Anchor, kCanvasHostCaps>);
+static_assert(LayoutCapsCompatible<EUILayoutCap::Offsets, kCanvasHostCaps>);
+static_assert(!LayoutCapsCompatible<EUILayoutCap::Grow, kCanvasHostCaps>);
+static_assert(!LayoutCapsCompatible<EUILayoutCap::Cell, kCanvasHostCaps>);
+
+// A grid host places children in cells and nothing else positional.
+static_assert(LayoutCapsCompatible<EUILayoutCap::Cell, kGridHostCaps>);
+static_assert(!LayoutCapsCompatible<EUILayoutCap::Grow, kGridHostCaps>);
+static_assert(!LayoutCapsCompatible<EUILayoutCap::Anchor, kGridHostCaps>);
+
+// Fill / alignment / spacing are understood everywhere.
+static_assert(LayoutCapsCompatible<EUILayoutCap::Fill, kBoxHostCaps>);
+static_assert(LayoutCapsCompatible<EUILayoutCap::Fill, kCanvasHostCaps>);
+static_assert(LayoutCapsCompatible<EUILayoutCap::Align, kGridHostCaps>);
+
+// The builder type carries the union of every capability applied to it, so the
+// host check sees the whole intent (not just the last modifier).
+static_assert(decltype(ui::layout().grow(1.0f))::caps() == EUILayoutCap::Grow);
+static_assert(decltype(ui::layout().anchor({0.0f, 0.0f}, {1.0f, 1.0f}))::caps() ==
+              EUILayoutCap::Anchor);
+static_assert(decltype(ui::layout().cell(0, 1))::caps() == EUILayoutCap::Cell);
+static_assert((decltype(ui::layout().fill().align(EWidgetAlignH::Center))::caps() &
+               EUILayoutCap::Fill) != EUILayoutCap::None);
+static_assert((decltype(ui::layout().fill().align(EWidgetAlignH::Center))::caps() &
+               EUILayoutCap::Align) != EUILayoutCap::None);
+
+// The concrete rejections the plan calls out: an anchor intent cannot be
+// attached to a column (box host), and a grow intent cannot be attached to a
+// panel (canvas host).
+// The same check bound to the actual host types: operator[] is constrained by
+// LayoutCapsCompatible against the host's declared set, so these are exactly the
+// accept/reject decisions the compiler makes at every attach site. (The
+// end-to-end proof is that `column[ui::layout().anchor(...) >> w]` fails to
+// build - it was caught in WorkbenchDemoPages and had to be expressed in box
+// terms instead.)
+static_assert(LayoutCapsCompatible<ya::EUILayoutCap::Grow, ui::UIContainerWidgetBuilder::kAllowedLayoutCaps>);
+static_assert(!LayoutCapsCompatible<ya::EUILayoutCap::Anchor, ui::UIContainerWidgetBuilder::kAllowedLayoutCaps>);
+static_assert(!LayoutCapsCompatible<ya::EUILayoutCap::Cell, ui::UIContainerWidgetBuilder::kAllowedLayoutCaps>);
+static_assert(LayoutCapsCompatible<ya::EUILayoutCap::Anchor, ui::UIPanelWidgetBuilder::kAllowedLayoutCaps>);
+static_assert(LayoutCapsCompatible<ya::EUILayoutCap::Offsets, ui::UIPanelWidgetBuilder::kAllowedLayoutCaps>);
+static_assert(!LayoutCapsCompatible<ya::EUILayoutCap::Grow, ui::UIPanelWidgetBuilder::kAllowedLayoutCaps>);
+static_assert(!LayoutCapsCompatible<ya::EUILayoutCap::Cell, ui::UIPanelWidgetBuilder::kAllowedLayoutCaps>);
+
+// === Canvas layout capabilities ===
+//
+// Canvas is an ordinary layout a host installs; these cover the capabilities its
+// slot carries: per-edge insets, per-axis size mode and alignment.
+
+TEST(WidgetLayoutTest, CanvasFourSideOffsetsInsetTheChildWithoutAnExplicitSize)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto panel = ui::panel("Panel")
+                     .setSize({300.0f, 200.0f})
+                     [ui::layout().fill().offsets(10.0f, 20.0f, 30.0f, 40.0f) >> ui::text("Inner").setText("Hi")]
+                     .release();
+
+    WidgetTree tree({.width = 300, .height = 200});
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.layout();
+
+    const UIElement* child = panel->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    // Fill minus insets: no hand-computed size is needed.
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 300.0f - 10.0f - 30.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 200.0f - 20.0f - 40.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.x, 10.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.y, 20.0f);
+}
+
+TEST(WidgetLayoutTest, CanvasAutoSizeModeUsesMeasuredContentNotTheParent)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto panel = ui::panel("Panel")
+                     .setSize({300.0f, 200.0f})
+                     [ui::layout().fill().widthSizeMode(EWidgetSizeMode::Auto) >>
+                      ui::text("Inner").setText("Hi")]
+                     .release();
+
+    WidgetTree tree({.width = 300, .height = 200});
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.layout();
+
+    const UIElement* child = panel->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    // Width follows the content (SizeToContent), height still stretches.
+    EXPECT_LT(child->_layoutRect.extent.x, 300.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 200.0f);
+}
+
+TEST(WidgetLayoutTest, CanvasAlignmentPlacesAFixedSizeChildInsideTheArea)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto panel = ui::panel("Panel")
+                     .setSize({300.0f, 200.0f})
+                     [ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Bottom) >>
+                      ui::text("Inner").setText("Hi").setSize({80.0f, 24.0f})]
+                     .release();
+
+    WidgetTree tree({.width = 300, .height = 200});
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.layout();
+
+    const UIElement* child = panel->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    // Fixed size is preserved, then placed inside the parent's area.
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 80.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 24.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.x, (300.0f - 80.0f) * 0.5f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.y, 200.0f - 24.0f);
 }
 } // namespace ya

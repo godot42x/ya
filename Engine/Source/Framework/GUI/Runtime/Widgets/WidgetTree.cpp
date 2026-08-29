@@ -176,13 +176,18 @@ void WidgetTree::updateTooltip()
     host->setStyleKey("tooltip");
 
     auto label = std::make_shared<UIText>("TooltipLabel");
-    label->_anchorMin = {0.0f, 0.0f};
-    label->_anchorMax = {1.0f, 1.0f};
     label->setSize({0.0f, 0.0f});
-    label->setPosition({8.0f, 4.0f});
     label->_fontSize  = 12;
     label->setText(_hovered->_tooltip);
     host->addDetachedChild(label);
+    // The host is a canvas host: fill + inset live on the parent->child slot.
+    if (auto* slot = dynamic_cast<UICanvasSlot*>(host->getSlotForChild(*label))) {
+        FCanvasSlotArgs args;
+        args.anchorMin = {0.0f, 0.0f};
+        args.anchorMax = {1.0f, 1.0f};
+        args.offset    = {8.0f, 4.0f};
+        slot->apply(args);
+    }
 
     // Anchor below the hovered widget's rect (clamped into the window).
     const Rect2D& target = _hovered->_layoutRect;
@@ -1250,12 +1255,17 @@ void WidgetTree::beginDrag(UIElement* source,
     auto label = std::make_shared<UIText>("DragGhostLabel");
     label->setText(_dragOperation->ghostLabel);
     label->_fontSize = 13;
-    label->_anchorMin = {0.0f, 0.0f};
-    label->_anchorMax = {1.0f, 1.0f};
     label->setSize({0.0f, 0.0f});
     label->_hAlign    = EWidgetAlignH::Center;
     label->_vAlign    = EWidgetAlignV::Center;
     ghost->addDetachedChild(label);
+    // The ghost is a canvas host: fill lives on the parent->child slot edge.
+    if (auto* slot = dynamic_cast<UICanvasSlot*>(ghost->getSlotForChild(*label))) {
+        FCanvasSlotArgs args;
+        args.anchorMin = {0.0f, 0.0f};
+        args.anchorMax = {1.0f, 1.0f};
+        slot->apply(args);
+    }
 
     attachToLayer(ELayer::DragIme, ghost);
     _dragGhost = ghost;

@@ -2,6 +2,8 @@
 
 #include "Core/Log.h"
 
+#include "GUI/Declarative/LayoutSpec.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -21,6 +23,25 @@ concept UIWidgetBuilder = requires(T&& builder) {
 
 template<typename T>
 concept UICompoundWidgetType = std::derived_from<T, UICompoundWidget>;
+
+/// Forward declaration: a layout spec bound to a child (defined below).
+/// The capability set is part of the type so hosts can reject unsupported
+/// intent at compile time.
+template<EUILayoutCap Caps, typename TChild>
+struct TUILayoutAttachment;
+
+/// Take a UIElementRef from either a builder (via release()) or an already-built
+/// shared_ptr, so `spec >> widget` accepts both forms.
+template<typename TChild>
+[[nodiscard]] inline UIElementRef takeElementRef(TChild&& child)
+{
+    if constexpr (requires { std::forward<TChild>(child).release(); }) {
+        return std::forward<TChild>(child).release();
+    }
+    else {
+        return std::forward<TChild>(child);
+    }
+}
 
 template<typename TWidget>
 [[nodiscard]] std::shared_ptr<TWidget> makeLiveWidget(const char* typeId,
@@ -58,6 +79,10 @@ class TUIWidgetBuilder
         YA_CORE_ASSERT(_widget, "ui builder already released");
         return std::move(_widget);
     }
+    [[nodiscard]] UIElementRef take()
+    {
+        return release();
+    }
 
     [[nodiscard]] std::shared_ptr<TWidget> share() const { return _widget; }
 
@@ -84,6 +109,28 @@ class TUIWidgetBuilder
     {
         _widget->_bAutoSize = false;
         _widget->setSize(value);
+        return std::move(derived());
+    }
+
+    /// Explicit SizeToContent switch, independent of setSize()'s side effect.
+    ///
+    /// DSL-created widgets start AutoSize. setSize() turns AutoSize off, so a
+    /// chain like `.setSize(...).setAutoSize(true)` restores measuring: on an
+    /// axis with no anchor span the size comes from computeDesiredSize() and
+    /// `_size` is ignored entirely (it is not a minimum — see
+    /// UIElement::computeAnchorRect).
+    ///
+    /// Because this is the only API that writes the flag without touching the
+    /// size, the last call in a chain always wins regardless of order.
+    [[nodiscard]] TDerived& setAutoSize(bool value) &
+    {
+        _widget->_bAutoSize = value;
+        return derived();
+    }
+
+    [[nodiscard]] TDerived&& setAutoSize(bool value) &&
+    {
+        _widget->_bAutoSize = value;
         return std::move(derived());
     }
 
@@ -132,34 +179,6 @@ class TUIWidgetBuilder
     [[nodiscard]] TDerived&& setFocusPolicy(EWidgetFocusPolicy value) &&
     {
         _widget->_focusPolicy = value;
-        return std::move(derived());
-    }
-
-    [[nodiscard]] TDerived& fillParent() &
-    {
-        _widget->_anchorMin = {0.0f, 0.0f};
-        _widget->_anchorMax = {1.0f, 1.0f};
-        return derived();
-    }
-
-    [[nodiscard]] TDerived&& fillParent() &&
-    {
-        _widget->_anchorMin = {0.0f, 0.0f};
-        _widget->_anchorMax = {1.0f, 1.0f};
-        return std::move(derived());
-    }
-
-    [[nodiscard]] TDerived& setAnchors(const glm::vec2& min, const glm::vec2& max) &
-    {
-        _widget->_anchorMin = min;
-        _widget->_anchorMax = max;
-        return derived();
-    }
-
-    [[nodiscard]] TDerived&& setAnchors(const glm::vec2& min, const glm::vec2& max) &&
-    {
-        _widget->_anchorMin = min;
-        _widget->_anchorMax = max;
         return std::move(derived());
     }
 
@@ -263,7 +282,100 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
         (child(std::forward<TChildren>(nodes)), ...);
         return std::move(this->derived());
     }
+
+  protected:
+    /// Attach a child and apply its single-child slot intent. Parents that own
+    /// both axes (button / scroll / size box / split pane ...) must route their
+    /// child(node, slot) overloads through here so intent lands on the edge
+    /// instead of on the child's ignored anchors.
+    void applySingleChildSlot(UIElementRef node, const FSingleChildSlotArgs& slot)
+    {
+        UIElement* live = node.get();
+        this->_widget->addDetachedChild(std::move(node));
+        if (live == nullptr) {
+            return;
+        }
+        if (auto* childSlot = dynamic_cast<UISingleChildSlot*>(this->_widget->getSlotForChild(*live))) {
+            childSlot->apply(slot);
+        }
+    }
+
+    /// Attach a child and apply its canvas slot intent. The anchor geometry
+    /// lives on this edge, never on the child's ignored anchors.
+    void applyCanvasSlot(UIElementRef node, const FCanvasSlotArgs& slot)
+    {
+        UIElement* live = node.get();
+        this->_widget->addDetachedChild(std::move(node));
+        if (live == nullptr) {
+            return;
+        }
+        if (auto* childSlot = dynamic_cast<UICanvasSlot*>(this->_widget->getSlotForChild(*live))) {
+            childSlot->apply(slot);
+        }
+    }
+
+    /// Attach a child with a unified layout spec. The host consumes the
+    /// capabilities it implements and reports the rest, so intent is never
+    /// silently dropped.
+    void applyLayout(UIElementRef node, const FUILayoutSpec& spec)
+    {
+        UIElement* live = node.get();
+        this->_widget->addDetachedChild(std::move(node));
+        if (live == nullptr) {
+            return;
+        }
+        applyLayoutSpec(*live, spec);
+    }
+
+  public:
+    /// Unified attach: `parent[ui::layout().fill() >> widget]`.
+    ///
+    /// The capability set is checked against the host's declared set at compile
+    /// time, so an intent the host cannot honour never compiles instead of being
+    /// silently dropped. Hosts declare their set via `kAllowedLayoutCaps`;
+    /// builders without one stay permissive until migrated.
+    template<EUILayoutCap Caps, typename TChild>
+        requires LayoutCapsCompatible<Caps, allowedLayoutCaps<TDerived>()>
+    TDerived& operator[](TUILayoutAttachment<Caps, TChild> attachment) &
+    {
+        applyLayout(takeElementRef(std::move(attachment.child)), attachment.spec);
+        return static_cast<TDerived&>(*this);
+    }
+
+    template<EUILayoutCap Caps, typename TChild>
+        requires LayoutCapsCompatible<Caps, allowedLayoutCaps<TDerived>()>
+    TDerived&& operator[](TUILayoutAttachment<Caps, TChild> attachment) &&
+    {
+        applyLayout(takeElementRef(std::move(attachment.child)), attachment.spec);
+        return std::move(static_cast<TDerived&>(*this));
+    }
+
+    /// Apply a spec to an already-attached child (the host resolution step).
+    void applyLayoutSpec(UIElement& child, const FUILayoutSpec& spec)
+    {
+        if (UISlot* slot = this->_widget->getSlotForChild(child)) {
+            applyLayoutSpecToSlot(*slot, child, spec);
+        }
+    }
 };
+
+/// A layout spec bound to a child: the result of `ui::layout().fill() >> widget`.
+template<EUILayoutCap Caps, typename TChild>
+struct TUILayoutAttachment
+{
+    FUILayoutSpec spec{};
+    TChild        child{};
+};
+
+/// `layoutSpec >> widget` binds intent to a child for `parent[...]`.
+template<EUILayoutCap Caps, typename TChild>
+[[nodiscard]] inline TUILayoutAttachment<Caps, TChild> operator>>(const FUILayoutSpec& spec, TChild&& child)
+{
+    return TUILayoutAttachment<Caps, TChild>{spec, std::forward<TChild>(child)};
+}
+
+// NOTE: the `FUILayoutSpecBuilder >> widget` overload lives in SlotBuilders.h,
+// next to the builder type it binds.
 
 template<UICompoundWidgetType TWidget>
 class TUICompoundWidgetBuilder final : public TUIWidgetBuilder<TWidget, TUICompoundWidgetBuilder<TWidget>>

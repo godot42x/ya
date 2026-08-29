@@ -16,6 +16,37 @@ const UIBoxSlot* getBoxSlot(const UIElement& parent, const UIElement& child)
     return dynamic_cast<const UIBoxSlot*>(parent.getSlotForChild(child));
 }
 
+/// Per-axis placement inside a box the parent already owns: Fill stretches,
+/// anything else keeps the child's desired size and places it. Shared by the
+/// overlay and single-child layouts, which answer the same question per axis.
+float overlayAxis(float start, float available, float desired, EUIOverlayAlignment align)
+{
+    if (align == EUIOverlayAlignment::Fill) {
+        return start;
+    }
+    const float extent = std::min(desired, available);
+    if (align == EUIOverlayAlignment::Center) {
+        return start + std::max(0.0f, (available - extent) * 0.5f);
+    }
+    if (align == EUIOverlayAlignment::End) {
+        return start + std::max(0.0f, available - extent);
+    }
+    return start;
+}
+
+float overlayExtent(float available, float desired, EUIOverlayAlignment align)
+{
+    if (align == EUIOverlayAlignment::Fill) {
+        return std::max(0.0f, available);
+    }
+    return std::max(0.0f, std::min(desired, available));
+}
+
+const UISingleChildSlot* getSingleChildSlot(const UIElement& parent, const UIElement& child)
+{
+    return dynamic_cast<const UISingleChildSlot*>(parent.getSlotForChild(child));
+}
+
 glm::vec2 resolveDesiredSize(const UIElement& parent, const UIElement& child)
 {
     glm::vec2 desired = child.computeDesiredSize();
@@ -30,6 +61,32 @@ glm::vec2 resolveDesiredSize(const UIElement& parent, const UIElement& child)
         desired = glm::clamp(desired, slot->getMinSize(), slot->getMaxSize());
     }
     return glm::max(desired, glm::vec2(0.0f));
+}
+
+/// Re-place one axis of an already-computed child rect according to the child's
+/// single-child slot. Used by parents that own the other axis themselves
+/// (split owns the main axis via the ratio, scroll owns it via the content
+/// extent): `bCrossIsY` selects which component is the cross axis.
+Rect2D applyCrossAlign(const UIElement& parent, const UIElement& child, const Rect2D& rect, bool bCrossIsY)
+{
+    EUIOverlayAlignment crossAlign = EUIOverlayAlignment::Fill;
+    if (const UISingleChildSlot* slot = getSingleChildSlot(parent, child)) {
+        crossAlign = bCrossIsY ? slot->getVAlign() : slot->getHAlign();
+    }
+    if (crossAlign == EUIOverlayAlignment::Fill) {
+        return rect;
+    }
+    const glm::vec2 desired = resolveDesiredSize(parent, child);
+    Rect2D          result  = rect;
+    if (bCrossIsY) {
+        result.pos.y    = overlayAxis(rect.pos.y, rect.extent.y, desired.y, crossAlign);
+        result.extent.y = overlayExtent(rect.extent.y, desired.y, crossAlign);
+    }
+    else {
+        result.pos.x    = overlayAxis(rect.pos.x, rect.extent.x, desired.x, crossAlign);
+        result.extent.x = overlayExtent(rect.extent.x, desired.x, crossAlign);
+    }
+    return result;
 }
 
 bool participatesInBox(const UIElement& parent, const UIElement& child)
@@ -74,6 +131,260 @@ void UISlot::invalidateMeasure() const
 {
     if (WidgetTree* tree = _parent->getTree()) {
         tree->invalidateLayout();
+    }
+}
+
+UICanvasSlot::UICanvasSlot(UIElement& parent, UIElement& child)
+    : UISlot(parent, child)
+{
+}
+
+void UICanvasSlot::setAnchorMin(glm::vec2 value)
+{
+    if (_anchorMin == value) {
+        return;
+    }
+    _anchorMin = value;
+    invalidateArrange();
+}
+
+void UICanvasSlot::setAnchorMax(glm::vec2 value)
+{
+    if (_anchorMax == value) {
+        return;
+    }
+    _anchorMax = value;
+    invalidateArrange();
+}
+
+void UICanvasSlot::setOffset(glm::vec2 value)
+{
+    if (_offset == value) {
+        return;
+    }
+    _offset = value;
+    invalidateArrange();
+}
+
+void UICanvasSlot::setMinSize(glm::vec2 value)
+{
+    if (_minSize == value) {
+        return;
+    }
+    _minSize = value;
+    invalidateArrange();
+}
+
+void UICanvasSlot::setMaxSize(glm::vec2 value)
+{
+    if (_maxSize == value) {
+        return;
+    }
+    _maxSize = value;
+    invalidateArrange();
+}
+
+void UICanvasSlot::setOffsets(FMargin value)
+{
+    if (_offsets == value) {
+        return;
+    }
+    _offsets = value;
+    invalidateArrange();
+}
+
+void UICanvasSlot::setAlignmentH(EWidgetAlignH value)
+{
+    if (_alignmentH == value) {
+        return;
+    }
+    _alignmentH = value;
+    invalidateArrange();
+}
+
+void UICanvasSlot::setAlignmentV(EWidgetAlignV value)
+{
+    if (_alignmentV == value) {
+        return;
+    }
+    _alignmentV = value;
+    invalidateArrange();
+}
+
+void UICanvasSlot::setWidthSizeMode(EWidgetSizeMode value)
+{
+    if (_widthSizeMode == value) {
+        return;
+    }
+    _widthSizeMode = value;
+    invalidateMeasure();
+}
+
+void UICanvasSlot::setHeightSizeMode(EWidgetSizeMode value)
+{
+    if (_heightSizeMode == value) {
+        return;
+    }
+    _heightSizeMode = value;
+    invalidateMeasure();
+}
+
+void UICanvasSlot::setPivot(glm::vec2 value)
+{
+    if (_pivot == value) {
+        return;
+    }
+    _pivot = value;
+    invalidateArrange();
+}
+
+void UICanvasSlot::setPreferredSize(glm::vec2 value)
+{
+    if (_preferredSize == value) {
+        return;
+    }
+    _preferredSize = value;
+    invalidateMeasure();
+}
+
+void UICanvasSlot::apply(const FCanvasSlotArgs& args)
+{
+    setAnchorMin(args.anchorMin);
+    setAnchorMax(args.anchorMax);
+    setOffset(args.offset);
+    setMinSize(args.minSize);
+    setMaxSize(args.maxSize);
+    setOffsets(args.offsets);
+    setAlignmentH(args.alignmentH);
+    setAlignmentV(args.alignmentV);
+    setWidthSizeMode(args.widthSizeMode);
+    setHeightSizeMode(args.heightSizeMode);
+    setPivot(args.pivot);
+    setPreferredSize(args.preferredSize);
+}
+
+void UICanvasSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
+{
+    node["type"] = "canvas";
+    node["anchorMin"] = {_anchorMin.x, _anchorMin.y};
+    node["anchorMax"] = {_anchorMax.x, _anchorMax.y};
+    node["offset"]    = {_offset.x, _offset.y};
+    node["minSize"]   = {_minSize.x, _minSize.y};
+    node["maxSize"]   = {_maxSize.x, _maxSize.y};
+}
+
+Rect2D UICanvasLayout::resolveChildRect(const UIElement& child, const UICanvasSlot& slot,
+                                        const Rect2D& contentRect)
+{
+    // 1. Anchor area: shared anchor math, so the canvas layout and the legacy
+    //    self-positioned path cannot drift.
+    const Rect2D anchorRect =
+        child.resolveCanvasRect(contentRect, slot.getAnchorMin(), slot.getAnchorMax(),
+                                slot.getOffset(), slot.getMinSize(), slot.getMaxSize());
+
+    // 2. Per-edge insets shrink the available area. An inset on an axis also
+    //    makes that axis stretch, so "all four edges" means "fill minus insets"
+    //    instead of requiring a hand-computed size.
+    const FMargin& insets = slot.getOffsets();
+    const glm::vec2 insetH{insets.left + insets.right, insets.top + insets.bottom};
+
+    const glm::vec2 anchorSpan =
+        (glm::clamp(slot.getAnchorMax(), 0.0f, 1.0f) - glm::clamp(slot.getAnchorMin(), 0.0f, 1.0f)) *
+        contentRect.extent;
+    const glm::vec2 stretchAxis{anchorSpan.x != 0.0f || insetH.x != 0.0f ? 1.0f : 0.0f,
+                                anchorSpan.y != 0.0f || insetH.y != 0.0f ? 1.0f : 0.0f};
+
+    // The area a child may occupy: a stretching axis is bounded by the anchor
+    // span, a non-stretching axis keeps the whole parent extent so that
+    // alignment has room to move a fixed-size child within it.
+    Rect2D area = anchorRect;
+    area.pos += glm::vec2{insets.left, insets.top};
+    area.extent = glm::max(
+        glm::vec2{stretchAxis.x != 0.0f ? anchorRect.extent.x : contentRect.extent.x,
+                  stretchAxis.y != 0.0f ? anchorRect.extent.y : contentRect.extent.y} -
+            insetH,
+        glm::vec2{0.0f, 0.0f});
+
+    // 3. Size resolution per axis: Auto uses the measured desired size, a
+    //    stretching axis takes the (inset) area, otherwise the element's own
+    //    authored size is kept.
+    const glm::vec2 desired = child.computeDesiredSize();
+    // A non-zero preferred size on an axis overrides the measured size.
+    const glm::vec2 preferred = slot.getPreferredSize();
+    glm::vec2       size       = anchorRect.extent;
+    size.x = slot.getWidthSizeMode() == EWidgetSizeMode::Auto
+                 ? (preferred.x != 0.0f ? preferred.x : desired.x)
+             : stretchAxis.x != 0.0f ? area.extent.x
+                                     : anchorRect.extent.x;
+    size.y = slot.getHeightSizeMode() == EWidgetSizeMode::Auto
+                 ? (preferred.y != 0.0f ? preferred.y : desired.y)
+             : stretchAxis.y != 0.0f ? area.extent.y
+                                     : anchorRect.extent.y;
+    size = glm::clamp(size, slot.getMinSize(), slot.getMaxSize());
+
+    // 4. Alignment within the available area, then pivot: the resolved position
+    //    is where the child's pivot point lands.
+    glm::vec2 pos = area.pos;
+    switch (slot.getAlignmentH())
+    {
+        case EWidgetAlignH::Center: pos.x += (area.extent.x - size.x) * 0.5f; break;
+        case EWidgetAlignH::Right:  pos.x += area.extent.x - size.x; break;
+        case EWidgetAlignH::Left:   break;
+    }
+    switch (slot.getAlignmentV())
+    {
+        case EWidgetAlignV::Center: pos.y += (area.extent.y - size.y) * 0.5f; break;
+        case EWidgetAlignV::Bottom: pos.y += area.extent.y - size.y; break;
+        case EWidgetAlignV::Top:    break;
+    }
+    pos -= slot.getPivot() * size;
+    return Rect2D{.pos = pos, .extent = size};
+}
+
+void UICanvasLayout::setPadding(glm::vec2 value)
+{
+    if (_padding == value) {
+        return;
+    }
+    _padding = value;
+    invalidateArrange();
+}
+
+std::unique_ptr<UISlot> UICanvasLayout::createSlot(UIElement& parent, UIElement& child) const
+{
+    return std::make_unique<UICanvasSlot>(parent, child);
+}
+
+glm::vec2 UICanvasLayout::measure(const UIElement& parent) const
+{
+    glm::vec2 contentExtent = {0.0f, 0.0f};
+    for (const auto& child : parent.getChildren()) {
+        if (child == nullptr) {
+            continue;
+        }
+        const glm::vec2 desired = child->computeDesiredSize();
+        contentExtent           = glm::max(contentExtent, desired);
+    }
+    return contentExtent + _padding * 2.0f;
+}
+
+void UICanvasLayout::arrange(UIElement& parent, const Rect2D& rect) const
+{
+    const Rect2D contentRect{.pos = rect.pos + _padding,
+                             .extent = glm::max(rect.extent - _padding * 2.0f, glm::vec2{0.0f, 0.0f})};
+    for (const auto& childRef : parent.getChildren()) {
+        UIElement* child = childRef.get();
+        if (child == nullptr) {
+            continue;
+        }
+        if (const UICanvasSlot* slot = dynamic_cast<const UICanvasSlot*>(parent.getSlotForChild(*child))) {
+            const Rect2D childRect = resolveChildRect(*child, *slot, contentRect);
+            child->layoutAssigned(childRect);
+            continue;
+        }
+        // No canvas edge (host that installs this layout but attached a child
+        // outside of it): fall back to the legacy self-positioned path.
+        child->layout(contentRect);
     }
 }
 
@@ -211,6 +522,12 @@ void UILayout::invalidateSubtreePaint() const
     if (_owner) {
         _owner->invalidateSubtree();
     }
+}
+
+void UILayout::assignChildRect(UIElement& child, const Rect2D& rect) const
+{
+    child.reportStretchAnchorsIgnored();
+    child.layoutAssigned(rect);
 }
 
 void UIBoxLayout::setDirection(EWidgetBoxLayout value)
@@ -426,7 +743,7 @@ void UIBoxLayout::arrange(UIElement& parent, const Rect2D& rect) const
                 .extent = {crossExtent, entry.mainExtent},
             };
         }
-        entry.child->layoutAssigned(childRect);
+        assignChildRect(*entry.child, childRect);
         cursor += entry.mainExtent + marginAfter + _spacing;
     }
 }
@@ -453,17 +770,74 @@ glm::vec2 UISingleChildLayout::measure(const UIElement& parent) const
     return glm::max(_padding.size(), glm::vec2(0.0f));
 }
 
+std::unique_ptr<UISlot> UISingleChildLayout::createSlot(UIElement& parent, UIElement& child) const
+{
+    return std::make_unique<UISingleChildSlot>(parent, child);
+}
+
 void UISingleChildLayout::arrange(UIElement& parent, const Rect2D& rect) const
 {
     Rect2D contentRect = rect;
     contentRect.pos += _padding.minOffset();
     contentRect.extent = glm::max(contentRect.extent - _padding.size(), glm::vec2(0.0f));
     for (UIElement* child : parent.getChildrenInPaintOrder()) {
-        if (child->participatesInLayout()) {
-            child->layoutAssigned(contentRect);
-            return;
+        if (!child->participatesInLayout()) {
+            continue;
         }
+        // Fill/Fill is the default and reproduces the pre-slot behaviour
+        // exactly; only an explicit align() switches an axis to the child's
+        // desired size.
+        EUIOverlayAlignment hAlign = EUIOverlayAlignment::Fill;
+        EUIOverlayAlignment vAlign = EUIOverlayAlignment::Fill;
+        if (const UISingleChildSlot* slot = getSingleChildSlot(parent, *child)) {
+            hAlign = slot->getHAlign();
+            vAlign = slot->getVAlign();
+        }
+        const glm::vec2 desired = resolveDesiredSize(parent, *child);
+        Rect2D          childRect;
+        childRect.pos.x    = overlayAxis(contentRect.pos.x, contentRect.extent.x, desired.x, hAlign);
+        childRect.pos.y    = overlayAxis(contentRect.pos.y, contentRect.extent.y, desired.y, vAlign);
+        childRect.extent.x = overlayExtent(contentRect.extent.x, desired.x, hAlign);
+        childRect.extent.y = overlayExtent(contentRect.extent.y, desired.y, vAlign);
+        assignChildRect(*child, childRect);
+        return;
     }
+}
+
+UISingleChildSlot::UISingleChildSlot(UIElement& parent, UIElement& child)
+    : UISlot(parent, child)
+{
+}
+
+void UISingleChildSlot::setAlign(EUIOverlayAlignment hAlign, EUIOverlayAlignment vAlign)
+{
+    if (_hAlign == hAlign && _vAlign == vAlign) {
+        return;
+    }
+    _hAlign = hAlign;
+    _vAlign = vAlign;
+    invalidateArrange();
+}
+
+void UISingleChildSlot::apply(const FSingleChildSlotArgs& args)
+{
+    setAlign(args.hAlign, args.vAlign);
+}
+
+void UISingleChildSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
+{
+    auto alignName = [](EUIOverlayAlignment value) {
+        switch (value) {
+        case EUIOverlayAlignment::Fill: return "fill";
+        case EUIOverlayAlignment::Start: return "start";
+        case EUIOverlayAlignment::Center: return "center";
+        case EUIOverlayAlignment::End: return "end";
+        }
+        return "unknown";
+    };
+    node["type"]   = "singleChild";
+    node["hAlign"] = alignName(_hAlign);
+    node["vAlign"] = alignName(_vAlign);
 }
 
 UIOverlaySlot::UIOverlaySlot(UIElement& parent, UIElement& child)
@@ -536,28 +910,7 @@ const UIOverlaySlot* getOverlaySlot(const UIElement& parent, const UIElement& ch
     return dynamic_cast<const UIOverlaySlot*>(parent.getSlotForChild(child));
 }
 
-float overlayAxis(float start, float available, float desired, EUIOverlayAlignment align)
-{
-    if (align == EUIOverlayAlignment::Fill) {
-        return start;
-    }
-    const float extent = std::min(desired, available);
-    if (align == EUIOverlayAlignment::Center) {
-        return start + std::max(0.0f, (available - extent) * 0.5f);
-    }
-    if (align == EUIOverlayAlignment::End) {
-        return start + std::max(0.0f, available - extent);
-    }
-    return start;
-}
 
-float overlayExtent(float available, float desired, EUIOverlayAlignment align)
-{
-    if (align == EUIOverlayAlignment::Fill) {
-        return std::max(0.0f, available);
-    }
-    return std::max(0.0f, std::min(desired, available));
-}
 
 } // namespace
 
@@ -600,7 +953,7 @@ void UIOverlayLayout::arrange(UIElement& parent, const Rect2D& rect) const
         childRect.pos.y    = overlayAxis(inner.pos.y, inner.extent.y, desired.y, vAlign);
         childRect.extent.x = overlayExtent(inner.extent.x, desired.x, hAlign);
         childRect.extent.y = overlayExtent(inner.extent.y, desired.y, vAlign);
-        child->layoutAssigned(childRect);
+        assignChildRect(*child, childRect);
     }
 }
 
@@ -738,6 +1091,11 @@ glm::vec2 UISplitLayout::measure(const UIElement& parent) const
     return desired + _padding * 2.0f;
 }
 
+std::unique_ptr<UISlot> UISplitLayout::createSlot(UIElement& parent, UIElement& child) const
+{
+    return std::make_unique<UISingleChildSlot>(parent, child);
+}
+
 void UISplitLayout::arrange(UIElement& parent, const Rect2D& rect) const
 {
     _contentRect = rect;
@@ -765,9 +1123,24 @@ void UISplitLayout::arrange(UIElement& parent, const Rect2D& rect) const
             std::max(0.0f, _contentRect.pos.y + _contentRect.extent.y - secondRect.pos.y);
     }
 
-    children[0]->layoutAssigned(firstRect);
+    // The split owns the main axis (that is what the ratio and divider decide);
+    // only the cross axis honours the pane's slot alignment.
+    if (_orientation == ESplitOrientation::Vertical) {
+        firstRect  = applyCrossAlign(parent, *children[0], firstRect, false);
+        if (children.size() >= 2) {
+            secondRect = applyCrossAlign(parent, *children[1], secondRect, false);
+        }
+    }
+    else {
+        firstRect = applyCrossAlign(parent, *children[0], firstRect, true);
+        if (children.size() >= 2) {
+            secondRect = applyCrossAlign(parent, *children[1], secondRect, true);
+        }
+    }
+
+    assignChildRect(*children[0], firstRect);
     if (children.size() >= 2) {
-        children[1]->layoutAssigned(secondRect);
+        assignChildRect(*children[1], secondRect);
     }
 }
 
@@ -844,6 +1217,8 @@ void UIScrollLayout::arrange(UIElement& parent, const Rect2D& rect) const
         invalidateSubtreePaint();
     }
 
+    // Only the cross axis honours the slot alignment: the main axis must stay
+    // at the full content extent or scrolling would clip the content.
     Rect2D contentRect = rect;
     if (bVertical) {
         contentRect.pos.y -= _scrollOffset;
@@ -853,7 +1228,7 @@ void UIScrollLayout::arrange(UIElement& parent, const Rect2D& rect) const
         contentRect.pos.x -= _scrollOffset;
         contentRect.extent = {contentMain, rect.extent.y};
     }
-    children[0]->layoutAssigned(contentRect);
+    assignChildRect(*children[0], applyCrossAlign(parent, *children[0], contentRect, !bVertical));
 }
 
 
@@ -997,7 +1372,7 @@ void UITableLayout::arrange(UIElement& parent, const Rect2D& rect) const
             .pos    = {_columnRects[col].pos.x, contentPos.y + static_cast<float>(slot->getRow()) * _rowHeight},
             .extent = {_columnRects[col].extent.x, _rowHeight},
         };
-        child->layoutAssigned(cell);
+        assignChildRect(*child, cell);
     }
 }
 } // namespace ya

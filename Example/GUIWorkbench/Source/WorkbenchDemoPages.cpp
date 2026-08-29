@@ -191,20 +191,18 @@ struct FVectorDemoCanvas : public ya::UIElement
 void buildRenderDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                      const std::function<void(const std::string&)>& log)
 {
-    auto panel        = std::make_shared<ya::UIPanel>("RenderDemo");
-    panel->_anchorMin = {0.0f, 0.0f};
-    panel->_anchorMax = {1.0f, 1.0f};
+    auto panel = std::make_shared<ya::UIPanel>("RenderDemo");
     panel->setColor(kPanelColor);
     tree.attach(parent, panel);
+    ya::ui::attachLayout(parent, *panel, ya::ui::layout().fill());
 
-    auto form        = std::make_shared<ya::UIContainer>("RenderForm");
-    form->_anchorMin = {0.0f, 0.0f};
-    form->_anchorMax = {1.0f, 1.0f};
+    auto form = std::make_shared<ya::UIContainer>("RenderForm");
     form->setPadding({16.0f, 12.0f});
     form->setSize({0.0f, 0.0f});
     form->setDirection(ya::EWidgetBoxLayout::Vertical);
     form->setSpacing(10.0f);
     tree.attach(*panel, form);
+    ya::ui::attachLayout(*panel, *form, ya::ui::layout().fill());
 
     tree.attach(*form, makeLabel("Render — correctness baseline (text, button, image, edge markers)"));
     tree.attach(*form, makeBodyText("Use this page as the first-frame render sanity target before deeper layout/event refactors."));
@@ -221,12 +219,11 @@ void buildRenderDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
         cell->setSize({180.0f, 84.0f});
         cell->setColor(color);
         tree.attach(*markerRow, cell);
+        ya::ui::attachLayout(*markerRow, *cell, ya::ui::layout().fill());
 
-        auto text        = makeBodyText(label);
-        text->_anchorMin = {0.0f, 0.0f};
-        text->_anchorMax = {1.0f, 1.0f};
-        text->_hAlign    = ya::EWidgetAlignH::Center;
-        text->_vAlign    = ya::EWidgetAlignV::Center;
+        auto text = makeBodyText(label);
+        text->_hAlign = ya::EWidgetAlignH::Center;
+        text->_vAlign = ya::EWidgetAlignV::Center;
         tree.attach(*cell, text);
     };
 
@@ -313,11 +310,9 @@ void buildWidgetsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     auto page =
         ya::ui::panel("WidgetsDemo")
-            .fillParent()
             .setColor(kPanelColor)
-            .child(
+            [ya::ui::layout().fill() >>
                 ya::ui::column("WidgetsForm")
-                    .fillParent()
                     .setSize({0.0f, 0.0f})
                     .setPadding({16.0f, 12.0f})
                     .setSpacing(10.0f)
@@ -368,8 +363,8 @@ void buildWidgetsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
                                     .setOnCommit([&state, log](const std::string& text)
                                                  {
                                                 state.textFieldValue = text;
-                                                log(std::format("TextField committed: '{}'", text)); }))));
-    ya::ui::build(tree, parent, std::move(page));
+                                                log(std::format("TextField committed: '{}'", text)); })))];
+    ya::ui::build(tree, parent, std::move(page), ya::ui::layout().fill());
 }
 
 void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
@@ -386,7 +381,6 @@ void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
     auto cellLabel = [&](std::string key, const std::string& text)
     {
         return body(std::move(key), text)
-            .fillParent()
             .setSize({0.0f, 0.0f})
             .setHAlign(ya::EWidgetAlignH::Center)
             .setVAlign(ya::EWidgetAlignV::Center);
@@ -422,11 +416,9 @@ void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
     auto hboxRef = hbox.share();
     auto page =
         ya::ui::panel("LayoutDemo")
-            .fillParent()
             .setColor(kPanelColor)
-            .child(
+            [ya::ui::layout().fill() >>
                 ya::ui::column("LayoutForm")
-                    .fillParent()
                     .setSize({0.0f, 0.0f})
                     .setPadding({16.0f, 12.0f})
                     .setSpacing(10.0f)
@@ -452,8 +444,8 @@ void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                                                 if (hboxRef) {
                                                     hboxRef->setSpacing(state.layoutSpacing);
                                                 }
-                                                log(std::format("Spacing -> {:.1f}px", state.layoutSpacing)); }))));
-    ya::ui::build(tree, parent, std::move(page));
+                                                log(std::format("Spacing -> {:.1f}px", state.layoutSpacing)); })))];
+    ya::ui::build(tree, parent, std::move(page), ya::ui::layout().fill());
 }
 
 void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
@@ -470,11 +462,9 @@ void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
 
     auto page =
         ya::ui::panel("MenusDemo")
-            .fillParent()
             .setColor(kPanelColor)
-            .child(
+            [ya::ui::layout().fill() >>
                 ya::ui::column("MenusForm")
-                    .fillParent()
                     .setSize({0.0f, 0.0f})
                     .setPadding({16.0f, 12.0f})
                     .setSpacing(10.0f)
@@ -521,8 +511,8 @@ void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                                         });
                                         menu->openAt(tree, {300.0f, 220.0f}); }),
                         body("MenusKeys",
-                             "Keyboard: Up/Down move, Enter activates, Esc closes.")));
-    ya::ui::build(tree, parent, std::move(page));
+                             "Keyboard: Up/Down move, Enter activates, Esc closes."))];
+    ya::ui::build(tree, parent, std::move(page), ya::ui::layout().fill());
 }
 
 void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
@@ -549,26 +539,19 @@ void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& 
         state.dropLog = std::format("Dropped '{}'", payload);
         log(state.dropLog);
     });
-    zone->_anchorMin = {0.0f, 0.0f};
-    zone->_anchorMax = {1.0f, 0.0f};
-    zone->setPosition({0.0f, 12.0f});
     zone->setSize({0.0f, 120.0f});
     state.dropZone = zone;
 
     auto page = ya::ui::panel("DragDropDemo")
-                    .fillParent()
                     .setColor(kPanelColor)
-                    .child(
+                    [ya::ui::layout().fill() >>
                         ya::ui::column("DragDropForm")
-                            .fillParent()
                             .setSize({0.0f, 0.0f})
                             .setPadding({16.0f, 12.0f})
                             .setSpacing(10.0f)
-                            .children(
-                                header("DragDropTitle", "Drag & drop — press an item, drag onto the zone"),
-                                std::move(sourceRow),
-                                zone));
-    ya::ui::build(tree, parent, std::move(page));
+                            .child(std::move(sourceRow))
+                            [ya::ui::layout().size({0.0f, 120.0f}) >> std::move(zone)]];
+    ya::ui::build(tree, parent, std::move(page), ya::ui::layout().fill());
 }
 
 void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
@@ -608,9 +591,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                              dialog->setStyleKey("panel");
                              overlay->addDetachedChild(dialog);
 
-                             auto stack        = std::make_shared<ya::UIContainer>("ModalStack");
-                             stack->_anchorMin = {0.0f, 0.0f};
-                             stack->_anchorMax = {1.0f, 1.0f};
+                             auto stack = std::make_shared<ya::UIContainer>("ModalStack");
                              // Inset via box padding, not position: an anchor span stretches to the
                              // parent's full size, so position offsets on top overflow the dialog's
                              // right/bottom edges. Padding shrinks the content rect instead.
@@ -620,6 +601,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                              stack->setSpacing(12.0f);
                              stack->setClipChildren(true);
                              dialog->addDetachedChild(stack);
+                             ya::ui::attachLayout(*dialog, *stack, ya::ui::layout().fill());
 
                              auto title = makeLabel("About / New Project", 14.0f);
                              stack->addDetachedChild(title);
@@ -665,11 +647,9 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
     state.openModalButton = openModal.share();
 
     auto page = ya::ui::panel("ModalDemo")
-                    .fillParent()
                     .setColor(kPanelColor)
-                    .child(
+                    [ya::ui::layout().fill() >>
                         ya::ui::column("ModalForm")
-                            .fillParent()
                             .setSize({0.0f, 0.0f})
                             .setPadding({16.0f, 12.0f})
                             .setSpacing(10.0f)
@@ -678,8 +658,8 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                                        "Popup dialog — a transparent shield swallows outside clicks, no dimming"),
                                 std::move(openModal),
                                 body("ModalHint",
-                                     "Esc or clicking outside the dialog closes it; the page behind stays visible.")));
-    ya::ui::build(tree, parent, std::move(page));
+                                     "Esc or clicking outside the dialog closes it; the page behind stays visible."))];
+    ya::ui::build(tree, parent, std::move(page), ya::ui::layout().fill());
 }
 
 void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
@@ -695,7 +675,6 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
     };
 
     auto list = ya::ui::column("DemoScrollList")
-                    .fillParent()
                     .setSpacing(2.0f)
                     .setPadding({6.0f, 6.0f});
     // Enough rows to overflow the left pane at the default 1280x800 host
@@ -706,11 +685,10 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
             ya::ui::panel(std::format("ScrollRow{}", i))
                 .setSize({0.0f, 24.0f})
                 .setColor({0.18f + (i % 3) * 0.04f, 0.20f, 0.24f, 1.0f})
-                .child(body(std::format("ScrollRow{}_Body", i), std::format("Scrollable entry {}", i + 1))
-                           .fillParent()
+                [ya::ui::layout().fill() >> body(std::format("ScrollRow{}_Body", i), std::format("Scrollable entry {}", i + 1))
                            .setSize({0.0f, 0.0f})
                            .setVAlign(ya::EWidgetAlignV::Center)
-                           .setPosition({8.0f, 0.0f})));
+                           .setPosition({8.0f, 0.0f})]);
     }
 
     auto split = ya::ui::splitPane("DemoSplit")
@@ -722,14 +700,12 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
                          ya::ui::scroll("DemoScroll").child(std::move(list)),
                          ya::ui::panel("DemoSplitRight")
                              .setColor({0.24f, 0.30f, 0.40f, 1.0f})
-                             .child(body("DemoSplitRight_Body", "Drag the divider between panes\nWheel scrolls the list")
-                                        .fillParent()
+                             [ya::ui::layout().fill() >> body("DemoSplitRight_Body", "Drag the divider between panes\nWheel scrolls the list")
                                         .setSize({0.0f, 0.0f})
                                         .setHAlign(ya::EWidgetAlignH::Center)
-                                        .setVAlign(ya::EWidgetAlignV::Center)));
+                                        .setVAlign(ya::EWidgetAlignV::Center)]);
 
     auto layout = ya::ui::column("ScrollSplitLayout")
-                      .fillParent()
                       .setSize({0.0f, 0.0f})
                       .setPadding({16.0f, 12.0f})
                       .setSpacing(10.0f)
@@ -737,13 +713,12 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
                           header("ScrollSplitTitle", "Scroll viewport + split pane — drag the divider"),
                           body("ScrollSplitHint",
                                "The split stretches with the window; hover the divider to grab it."));
-    layout.childFill(std::move(split));
+    layout.child(std::move(split), ya::ui::boxSlot().fill());
 
     auto page = ya::ui::panel("ScrollSplitDemo")
-                    .fillParent()
                     .setColor(kPanelColor)
-                    .child(std::move(layout));
-    ya::ui::build(tree, parent, std::move(page));
+                    [ya::ui::layout().fill() >> std::move(layout)];
+    ya::ui::build(tree, parent, std::move(page), ya::ui::layout().fill());
     (void)state;
     (void)log;
 }
@@ -763,7 +738,6 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     auto paneLabel = [&](std::string key, const std::string& text)
     {
         return body(std::move(key), text)
-            .fillParent()
             .setHAlign(ya::EWidgetAlignH::Center)
             .setVAlign(ya::EWidgetAlignV::Center);
     };
@@ -1153,10 +1127,9 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
                     "Expected: incrementing, toggling, renaming, resizing, selecting and theming all update their targets without the page rebuilding."));
 
     auto page = ya::ui::panel("GalleryDemo")
-                    .fillParent()
                     .setColor(kPanelColor)
-                    .child(ya::ui::scroll("GalleryScroll").fillParent().child(std::move(form)));
-    ya::ui::build(tree, parent, std::move(page));
+                    [ya::ui::layout().fill() >> ya::ui::scroll("GalleryScroll").child(std::move(form))];
+    ya::ui::build(tree, parent, std::move(page), ya::ui::layout().fill());
     (void)state;
 }
 
@@ -1184,7 +1157,6 @@ void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoSta
     };
 
     auto form = ya::ui::column("InteractionsForm")
-                    .fillParent()
                     .setSize({0.0f, 0.0f})
                     .setPadding({16.0f, 12.0f})
                     .setSpacing(12.0f);
@@ -1245,10 +1217,9 @@ void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoSta
                        }));
 
     auto page = ya::ui::panel("InteractionsDemo")
-                    .fillParent()
                     .setColor(kPanelColor)
-                    .child(std::move(form));
-    ya::ui::build(tree, parent, std::move(page));
+                    [ya::ui::layout().fill() >> std::move(form)];
+    ya::ui::build(tree, parent, std::move(page), ya::ui::layout().fill());
     (void)state;
 }
 
@@ -1271,13 +1242,11 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
     dockWs->bAllowTearOff  = true;
 
     auto dock        = std::make_shared<ya::UIDockSpace>("DemoDock");
-    dock->_anchorMin = {0.0f, 0.0f};
-    dock->_anchorMax = {1.0f, 1.0f};
     dock->setWorkspace(dockWs);
 
-    auto page = ya::ui::column("DockDemo").fillParent().setSize({0.0f, 0.0f});
-    page.childFill(dock);
-    ya::ui::build(tree, parent, std::move(page));
+    auto page = ya::ui::column("DockDemo").setSize({0.0f, 0.0f});
+    page.child(dock, ya::ui::boxSlot().fill());
+    ya::ui::build(tree, parent, std::move(page), ya::ui::layout().fill());
 
     auto floatHost = std::make_shared<ya::UIDockFloatingHost>("DemoFloatingHost");
     floatHost->bindWorkspace(dockWs);
@@ -1290,14 +1259,11 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
     {
         return ya::ui::panel(name + "_Body")
             .setStyleKey("panel.canvas")
-            .child(ya::ui::text(name + "_Label")
+            [ya::ui::layout().fill().offsets({12.0f, 12.0f}) >> ya::ui::text(name + "_Label")
                        .setText(text)
                        .setFontSize(14)
-                       .fillParent()
-                       .setPosition({12.0f, 12.0f})
-                       .setSize({-24.0f, -24.0f})
                        .setHAlign(ya::EWidgetAlignH::Center)
-                       .setVAlign(ya::EWidgetAlignV::Center))
+                       .setVAlign(ya::EWidgetAlignV::Center)]
             .release();
     };
 
@@ -1496,18 +1462,15 @@ void buildRoundedRectDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
                 .setSize({120.0f, 96.0f})
                 .setColor(c.color)
                 .setCornerRadius(c.radius)
-                .child(body(std::format("{}_Body", c.name), std::format("r={}", c.label))
-                           .fillParent()
+                [ya::ui::layout().fill() >> body(std::format("{}_Body", c.name), std::format("r={}", c.label))
                            .setHAlign(ya::EWidgetAlignH::Center)
-                           .setVAlign(ya::EWidgetAlignV::Center)));
+                           .setVAlign(ya::EWidgetAlignV::Center)]);
     }
 
     auto page = ya::ui::panel("RoundedRectDemo")
-                    .fillParent()
                     .setColor(kPanelColor)
-                    .child(
+                    [ya::ui::layout().fill() >>
                         ya::ui::column("RoundedForm")
-                            .fillParent()
                             .setSize({0.0f, 0.0f})
                             .setPadding({16.0f, 12.0f})
                             .setSpacing(12.0f)
@@ -1523,17 +1486,16 @@ void buildRoundedRectDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
                                     .setSize({280.0f, 110.0f})
                                     .setColor({0.16f, 0.20f, 0.28f, 1.0f})
                                     .setCornerRadius(20.0f)
-                                    .children(
-                                        header("RoundedNestedCaption",
-                                               "Rounded container with a sharp inner panel")
-                                            .setAnchors({0.10f, 0.20f}, {0.90f, 0.45f}),
-                                        ya::ui::panel("RoundedNestedInner")
-                                            .setColor({0.55f, 0.60f, 0.68f, 1.0f})
-                                            .setAnchors({0.10f, 0.55f}, {0.90f, 0.85f})),
+                                    [ya::ui::layout().anchor({0.10f, 0.20f}, {0.90f, 0.45f}) >>
+                                           header("RoundedNestedCaption",
+                                                  "Rounded container with a sharp inner panel")]
+                                    [ya::ui::layout().anchor({0.10f, 0.55f}, {0.90f, 0.85f}) >>
+                                           ya::ui::panel("RoundedNestedInner")
+                                            .setColor({0.55f, 0.60f, 0.68f, 1.0f})],
                                 body("RoundedExpected",
                                      "Expected: top-left card is a sharp rectangle; the others show progressively rounder corners. "
-                                     "The nested card keeps its rounded outer alpha while the inner panel stays sharp.")));
-    ya::ui::build(tree, parent, std::move(page));
+                                     "The nested card keeps its rounded outer alpha while the inner panel stays sharp."))];
+    ya::ui::build(tree, parent, std::move(page), ya::ui::layout().fill());
     state.statusText = "Rounded Rect demo built";
     (void)log;
 }

@@ -1,5 +1,12 @@
 # GUI Framework / Editor / Game UI 重构进度
 
+## 2026-08-28 checkpoint：修正 dock panel 根节点的 path-A / stretch contract
+
+- GameEditor 的 dock/floating panel root 现在不再给自己加 fillParent()：ViewportBody、HierarchyBody、FrameStatsPanel、WorkbenchHost 交给 dock 宿主的 path-A slot 负责尺寸，避免 child 自己声明 stretch anchors 却被父容器忽略。
+- 这次修复直接消掉了启动 widgettree chrome 时的 HierarchyBody stretch-anchor contract 违例；原始错误 child HierarchyBody declares stretch anchors ... 已不再复现。
+- 仍然保留 panel 内部内容的布局意图（例如 viewport image、stats text、hierarchy tree 继续在各自 panel 内部 fill），只是把“根 panel 归父宿主安排”的边界收紧到位。
+- 验证：xmake b ya-game-editor 通过；xmake r ya-runtime --editor --editor-chrome=widgettree ... | grep -F declares stretch anchors 无输出。
+
 ## 2026-08-28 checkpoint：修正 UICompoundWidget 的 layout / desired-size 转发契约
 
 - UICompoundWidget 不再停留在 UIElement 的空壳默认布局：现在会把 assigned rect 转发给内部 composition root，并把 computeDesiredSize() 委托给首个子节点。

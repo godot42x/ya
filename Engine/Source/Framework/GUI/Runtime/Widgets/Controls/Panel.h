@@ -2,6 +2,7 @@
 
 #include "Core/Common/AssetRef.h"
 
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
@@ -21,7 +22,13 @@ struct YA_GUI_API UIPanel : public UIElement, public UIStyledWidget<UIPanel, FPa
 
     YA_GUI_AUTHORED_STYLE_IO(FPanelStyle)
 
-    explicit UIPanel(std::string name = "Panel") : UIElement(std::move(name), "panel") {}
+    explicit UIPanel(std::string name = "Panel") : UIElement(std::move(name), "panel")
+    {
+        // A panel is the default visual carrier of the canvas layout. Canvas is
+        // a LAYOUT, not a panel feature: any element can install it via
+        // installLayout(); UIPanel simply does so by default.
+        installLayout(std::make_unique<UICanvasLayout>());
+    }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIPanel>; }
 
@@ -72,6 +79,21 @@ struct YA_GUI_API UIPanel : public UIElement, public UIStyledWidget<UIPanel, FPa
     [[nodiscard]] float getCornerRadius() const { return _cornerRadius; }
 
     void paintSelf(UIFrameBuilder& builder) override;
+
+    // —— Canvas layout host ——
+    // Children are positioned by anchor rects (the historical "path-B"
+    // behaviour), now expressed on the canvas slot edge.
+    [[nodiscard]] UICanvasLayout* getCanvasLayout() const
+    {
+        return dynamic_cast<UICanvasLayout*>(getLayout());
+    }
+    [[nodiscard]] UICanvasSlot* getCanvasSlot(const UIElement& child) const
+    {
+        return dynamic_cast<UICanvasSlot*>(getSlotForChild(child));
+    }
+
+  protected:
+    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 };
 
 } // namespace ya

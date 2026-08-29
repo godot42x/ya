@@ -295,12 +295,13 @@ bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
     if (bSrcIsEntryRoot && bDstIsEntryRoot && position == EWidgetEntryDropPosition::Into) {
         if (auto srcWidget = srcDoc->instantiate()) {
             if (auto dstWidget = dstDoc->instantiate()) {
-                if (srcWidget->_anchorMin == glm::vec2(0.0f) && srcWidget->_anchorMax == glm::vec2(0.0f) &&
-                    dstWidget->_anchorMin == glm::vec2(0.0f) && dstWidget->_anchorMax == glm::vec2(0.0f)) {
-                    srcWidget->setPosition(srcWidget->getPosition() - dstWidget->getPosition());
-                    if (auto adjusted = UIDocument::fromWidget(*srcWidget)) {
-                        srcDoc = std::move(adjusted);
-                    }
+                // Stretch intent lives on the parent->child slot edge, never on
+                // the widget, so an instantiated entry root is always placed by
+                // its own position: the parent-relative adjustment always
+                // applies rather than only for "point-anchored" widgets.
+                srcWidget->setPosition(srcWidget->getPosition() - dstWidget->getPosition());
+                if (auto adjusted = UIDocument::fromWidget(*srcWidget)) {
+                    srcDoc = std::move(adjusted);
                 }
             }
         }

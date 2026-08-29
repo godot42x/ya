@@ -6,6 +6,7 @@
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
 #include <limits>
 #include <memory>
 
@@ -13,6 +14,15 @@ namespace ya
 {
 
 struct WidgetTree;
+
+/// How a child resolves its own size on an axis when its rect is computed.
+/// Defined here (not in UILayoutIntent.h) because UILayout needs it and
+/// UILayoutIntent includes UILayout.
+enum class EWidgetSizeMode : uint8_t
+{
+    Fixed, // honor the element's own size (explicit authored size)
+    Auto,  // resolve from computeDesiredSize() (SizeToContent)
+};
 
 /// Parent-owned child edge. A slot exists while its child belongs to its
 /// visual parent; WidgetTree destroys the old edge before reparent/detach and
@@ -26,6 +36,13 @@ public:
     [[nodiscard]] UIElement& getParent() const { return *_parent; }
     [[nodiscard]] UIElement& getChild() const { return *_child; }
     virtual void appendRuntimeDiagnostics(nlohmann::json& node) const;
+
+    /// Typed access to a concrete slot subclass. Returns nullptr when the edge
+    /// is not of type T.
+    template <typename T>
+    [[nodiscard]] T* as() { return dynamic_cast<T*>(this); }
+    template <typename T>
+    [[nodiscard]] const T* as() const { return dynamic_cast<const T*>(this); }
 
 protected:
     void invalidateMeasure() const;
@@ -154,6 +171,15 @@ protected:
     /// without re-running measure/arrange.
     void invalidateSubtreePaint() const;
 
+    /// The single entry point for path-A child rect assignment.
+    ///
+    /// Every arrange() must route child rects through here instead of calling
+    /// child.layoutAssigned() directly: this is what makes the "path-A parents
+    /// ignore child anchors" contract observable, so an author who wrote
+    /// setAnchors()/fillWidth() on a child of a box/scroll/split/overlay gets a
+    /// diagnostic instead of a silently dropped intent.
+    void assignChildRect(UIElement& child, const Rect2D& rect) const;
+
 private:
     UIElement* _owner = nullptr;
 };
@@ -193,6 +219,52 @@ private:
 /// Layout for a single content child that fills an inset content rect.
 /// Buttons and SizeBox reuse this instead of each reimplementing
 /// "parent rect minus padding".
+/// How a child is placed on one axis inside a box the parent already owns.
+/// Fill stretches that axis; otherwise the child keeps its desired size and
+/// Start/Center/End place it. Shared by UIOverlaySlot (multiple stacked
+/// children) and UISingleChildSlot (scroll / size box / split / button ...),
+/// which answer the same question per axis.
+enum class EUIOverlayAlignment : uint8_t
+{
+    Fill,
+    Start,
+    Center,
+    End,
+};
+
+/// Layout data carried by one UISingleChildLayout parent-child edge.
+///
+/// Single-child hosts (scroll viewport / size box / split pane / button ...)
+/// own both axes, so the only intent left is whether the child is stretched to
+/// the content box or keeps its desired size and is aligned inside it. That is
+/// exactly the overlay question, so the alignment type is shared with
+/// UIOverlaySlot.
+class YA_GUI_API UISingleChildSlot final : public UISlot
+{
+public:
+    UISingleChildSlot(UIElement& parent, UIElement& child);
+
+    [[nodiscard]] EUIOverlayAlignment getHAlign() const { return _hAlign; }
+    [[nodiscard]] EUIOverlayAlignment getVAlign() const { return _vAlign; }
+
+    void setAlign(EUIOverlayAlignment hAlign, EUIOverlayAlignment vAlign);
+    void apply(const struct FSingleChildSlotArgs& args);
+    void appendRuntimeDiagnostics(nlohmann::json& node) const override;
+
+private:
+    EUIOverlayAlignment _hAlign = EUIOverlayAlignment::Fill;
+    EUIOverlayAlignment _vAlign = EUIOverlayAlignment::Fill;
+};
+
+/// Construct-time single-child slot intent. Defaults to Fill on both axes,
+/// which is the historical behaviour of every single-child host, so adopting
+/// the slot changes nothing for existing call sites.
+struct FSingleChildSlotArgs
+{
+    EUIOverlayAlignment hAlign = EUIOverlayAlignment::Fill;
+    EUIOverlayAlignment vAlign = EUIOverlayAlignment::Fill;
+};
+
 class YA_GUI_API UISingleChildLayout final : public UILayout
 {
 public:
@@ -200,19 +272,12 @@ public:
     void setPadding(FMargin value);
     void setPadding(glm::vec2 value) { setPadding(FMargin::hv(value)); }
 
+    [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
     void arrange(UIElement& parent, const Rect2D& rect) const override;
 
 private:
     FMargin _padding{};
-};
-
-enum class EUIOverlayAlignment : uint8_t
-{
-    Fill,
-    Start,
-    Center,
-    End,
 };
 
 /// Overlay slot: one child independently aligned inside the parent rect
@@ -285,6 +350,9 @@ public:
     void setDividerThickness(float value);
     void setPadding(glm::vec2 value);
 
+    /// Both panes get their rect from the split, so a pane's child intent is
+    /// carried by a single-child slot (fill by default).
+    [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
     void arrange(UIElement& parent, const Rect2D& rect) const override;
 
@@ -300,6 +368,126 @@ private:
     float              _dividerThickness = 6.0f;
     glm::vec2          _padding = {0.0f, 0.0f};
     mutable Rect2D     _contentRect{};
+};
+
+struct FCanvasSlotArgs;
+
+/// Canvas slot: the anchor-owning parent-child edge. The child's rect is
+/// resolved from `anchorMin/anchorMax` against the parent rect, plus an offset
+/// and optional min/max clamps. This replaces the historical
+/// "child authors its own _anchorMin/_anchorMax/_position/_minSize/_maxSize"
+/// pattern: anchor intent lives on the parent->child edge, so a non-canvas
+/// parent (which never reads this slot) cannot silently drop it.
+///
+/// Canvas is a LAYOUT, not a widget: any host that installs UICanvasLayout
+/// (UIPanel today) can carry these edges.
+class YA_GUI_API UICanvasSlot final : public UISlot
+{
+public:
+    UICanvasSlot(UIElement& parent, UIElement& child);
+
+    [[nodiscard]] const glm::vec2& getAnchorMin() const { return _anchorMin; }
+    [[nodiscard]] const glm::vec2& getAnchorMax() const { return _anchorMax; }
+    [[nodiscard]] const glm::vec2& getOffset() const { return _offset; }
+    [[nodiscard]] const glm::vec2& getMinSize() const { return _minSize; }
+    [[nodiscard]] const glm::vec2& getMaxSize() const { return _maxSize; }
+
+    /// Per-edge insets, applied after the anchor rect is resolved. When all four
+    /// edges are set the child stretches to the anchor rect minus the insets, so
+    /// an inset layout does not need a hand-computed size.
+    [[nodiscard]] const FMargin& getOffsets() const { return _offsets; }
+    [[nodiscard]] EWidgetAlignH  getAlignmentH() const { return _alignmentH; }
+    [[nodiscard]] EWidgetAlignV  getAlignmentV() const { return _alignmentV; }
+    [[nodiscard]] EWidgetSizeMode getWidthSizeMode() const { return _widthSizeMode; }
+    [[nodiscard]] EWidgetSizeMode getHeightSizeMode() const { return _heightSizeMode; }
+
+    /// The point of the child that lands on the resolved anchor position, in
+    /// normalized child space (0,0 = top-left, 0.5,0.5 = centre). Lets a child be
+    /// centred or right/bottom-anchored without recomputing its position.
+    [[nodiscard]] const glm::vec2& getPivot() const { return _pivot; }
+    /// Size the child would like to be when its size mode is Auto on that axis.
+    /// A zero component means "ask the child" (computeDesiredSize()).
+    [[nodiscard]] const glm::vec2& getPreferredSize() const { return _preferredSize; }
+
+    void setAnchorMin(glm::vec2 value);
+    void setAnchorMax(glm::vec2 value);
+    void setOffset(glm::vec2 value);
+    void setMinSize(glm::vec2 value);
+    void setMaxSize(glm::vec2 value);
+    void setOffsets(FMargin value);
+    void setAlignmentH(EWidgetAlignH value);
+    void setAlignmentV(EWidgetAlignV value);
+    void setWidthSizeMode(EWidgetSizeMode value);
+    void setHeightSizeMode(EWidgetSizeMode value);
+    void setPivot(glm::vec2 value);
+    void setPreferredSize(glm::vec2 value);
+    void apply(const FCanvasSlotArgs& args);
+    void appendRuntimeDiagnostics(nlohmann::json& node) const override;
+
+private:
+    glm::vec2       _anchorMin = {0.0f, 0.0f};
+    glm::vec2       _anchorMax = {0.0f, 0.0f};
+    glm::vec2       _offset    = {0.0f, 0.0f};
+    glm::vec2       _minSize   = {0.0f, 0.0f};
+    glm::vec2       _maxSize   = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
+    FMargin         _offsets{};
+    EWidgetAlignH   _alignmentH    = EWidgetAlignH::Left;
+    EWidgetAlignV   _alignmentV    = EWidgetAlignV::Top;
+    EWidgetSizeMode _widthSizeMode  = EWidgetSizeMode::Fixed;
+    EWidgetSizeMode _heightSizeMode = EWidgetSizeMode::Fixed;
+    glm::vec2       _pivot         = {0.0f, 0.0f};
+    glm::vec2       _preferredSize = {0.0f, 0.0f};
+};
+
+/// Construct-time canvas slot intent. Defaults to the historical absolute
+/// behaviour (anchorMin/anchorMax {0,0}): the child sits at the parent's
+/// top-left with its own size. Use fill (anchorMax {1,1}) to stretch.
+struct FCanvasSlotArgs
+{
+    glm::vec2 anchorMin = {0.0f, 0.0f};
+    glm::vec2 anchorMax = {0.0f, 0.0f};
+    glm::vec2 offset    = {0.0f, 0.0f};
+    glm::vec2 minSize   = {0.0f, 0.0f};
+    glm::vec2 maxSize   = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
+
+    /// Per-edge insets (all four edges => stretch to the anchor rect minus the
+    /// insets). Kept separately from `offset` so both can coexist.
+    FMargin         offsets{};
+    EWidgetAlignH   alignmentH     = EWidgetAlignH::Left;
+    EWidgetAlignV   alignmentV     = EWidgetAlignV::Top;
+    EWidgetSizeMode widthSizeMode  = EWidgetSizeMode::Fixed;
+    EWidgetSizeMode heightSizeMode = EWidgetSizeMode::Fixed;
+    glm::vec2       pivot          = {0.0f, 0.0f};
+    glm::vec2       preferredSize  = {0.0f, 0.0f};
+};
+
+/// Transitional alias: the old Panel-bound naming. The canvas edge is a layout
+/// concern now, so call sites move to UICanvasSlot / FCanvasSlotArgs.
+using FCanvasPanelSlotArgs = FCanvasSlotArgs;
+using UICanvasPanelSlot    = UICanvasSlot;
+
+/// Canvas layout: children are positioned by anchor rects against the parent
+/// content rect. This is the layout form of the historical "path-B" panel
+/// behaviour; it is NOT bound to UIPanel - any host may install it.
+class YA_GUI_API UICanvasLayout final : public UILayout
+{
+public:
+    [[nodiscard]] const glm::vec2& getPadding() const { return _padding; }
+    void setPadding(glm::vec2 value);
+
+    [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
+    [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
+    void arrange(UIElement& parent, const Rect2D& rect) const override;
+
+    /// Resolve one child rect from its canvas slot against the parent content
+    /// rect. Delegates to UIElement::resolveCanvasRect() so the canvas layout
+    /// and the legacy self-positioned path agree on anchor math.
+    [[nodiscard]] static Rect2D resolveChildRect(const UIElement&    child,
+                                                 const UICanvasSlot& slot,
+                                                 const Rect2D&       contentRect);
+
+private:
+    glm::vec2 _padding = {0.0f, 0.0f};
 };
 
 enum class EScrollAxis : uint8_t

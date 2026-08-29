@@ -577,13 +577,18 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     leaf->addDetachedChild(body);
 
     auto content = std::make_shared<UIContainer>(std::format("DockContent{}", node.id));
-    content->_anchorMin = {0.0f, 0.0f};
-    content->_anchorMax = {1.0f, 1.0f};
-    content->setPosition({0.0f, 0.0f});
     content->setSize({0.0f, 0.0f});
     content->setPadding({12.0f, 12.0f});
     leaf->setStretchLastChild(true);
     body->addDetachedChild(content);
+    // Stretch intent lives on the parent->child edge: the body is a canvas host,
+    // so the fill is expressed through its slot rather than on the container.
+    if (auto* slot = dynamic_cast<UICanvasSlot*>(body->getSlotForChild(*content))) {
+        FCanvasSlotArgs fillArgs;
+        fillArgs.anchorMin = {0.0f, 0.0f};
+        fillArgs.anchorMax = {1.0f, 1.0f};
+        slot->apply(fillArgs);
+    }
     content->setStretchLastChild(true);
 
     _leafViews[node.id] = {node.id, leaf.get(), bar.get(), content.get()};

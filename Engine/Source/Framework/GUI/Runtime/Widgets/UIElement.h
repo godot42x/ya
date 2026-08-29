@@ -120,6 +120,7 @@ struct DragSessionObserver;
 struct WidgetAttachment;
 struct UIElement;
 class UISlot;
+class UILayout;
 class ReactiveBase;
 
 using UIElementRef = std::shared_ptr<UIElement>;
@@ -188,8 +189,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     YA_REFLECT_FIELD(_size, .instanceEditable())
     YA_REFLECT_FIELD(_visibility, .instanceEditable())
     YA_REFLECT_FIELD(_zOrder, .instanceEditable())
-    YA_REFLECT_FIELD(_anchorMin, .instanceEditable())
-    YA_REFLECT_FIELD(_anchorMax, .instanceEditable())
+    // _anchorMin/_anchorMax are no longer authorable: stretch geometry lives on
+    // the parent->child slot edge (UICanvasPanelSlot), never on the child. They
+    // remain runtime-only layout I/O consumed via the slot.
     // _pivot is reserved (rotation/scale not implemented): authorable but not
     // per-instance overridable yet.
     YA_REFLECT_FIELD(_pivot)
@@ -290,6 +292,11 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// rect (anchor layout) or when a parent assigns an auto-sized slot.
     bool _bAutoSize = false;
 
+    /// One-shot guard for reportStretchAnchorsIgnored(): a path-A parent
+    /// already reported that this child's stretch anchors are being dropped.
+    /// Mutable because the report happens during a const measure/arrange pass.
+    mutable bool _bStretchAnchorsWarned = false;
+
     /// Volatile (Slate-style): re-run this widget's paintSelf every frame,
     /// bypassing the draw-item cache, regardless of dirty state. The
     /// consistency backstop for widgets whose presentation state is written
@@ -341,6 +348,12 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// layout pass. Not serialized.
     Rect2D _layoutRect{};
 
+    /// The layout this element hosts, or nullptr for a non-host element (which
+    /// keeps the legacy self-positioned behaviour). Owned here when installed
+    /// via installLayout(); never serialized.
+    UILayout* _layout = nullptr;
+    std::unique_ptr<UILayout> _ownedLayout;
+
     // === Tree membership (managed by WidgetTree only) ===
     /// Owning tree, or nullptr while detached.
     [[nodiscard]] WidgetTree* getTree() const { return _tree; }
@@ -359,6 +372,27 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     [[nodiscard]] UISlot* getSlotForChild(const UIElement& child) const;
 
     // === Layout (top-down, called by WidgetTree::layout) ===
+    //
+    // Two contracts decide a child's size, and which one applies is decided by
+    // the PARENT, not the child:
+    //
+    //   Path A - parent owns arrangement (box / scroll / split / overlay /
+    //            size box / button ...). The parent overrides layoutAssigned()
+    //            and assigns every child rect itself from slot data. The
+    //            child's anchors are IGNORED. Child intent lives in the slot.
+    //
+    //   Path B - child self-positions (panel / selectable row / plain
+    //            elements). The parent keeps the base layoutChildren(), which
+    //            calls child->layout(parentRect) and lets the child run its
+    //            own anchor math. The base UISlot carries no layout data, so
+    //            there is nothing for the parent to honour.
+    //
+    // The two paths are mutually exclusive on purpose: a child never has two
+    // competing stretch mechanisms. A parent that arranges children MUST route
+    // those rect assignments through UILayout::assignChildRect() (or report
+    // via reportStretchAnchorsIgnored()) so dropped anchor intent is reported
+    // instead of silently discarded.
+    //
     /// Compute this element's rect within `parentRect` (anchor math), store it
     /// in `_layoutRect`, then lay out children in paint order.
     virtual void layout(const Rect2D& parentRect);
@@ -372,6 +406,31 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Desired size for container arrangement (leaf = _size; auto-size text =
     /// measured text; containers aggregate children).
     [[nodiscard]] virtual glm::vec2 computeDesiredSize() const;
+
+    // —— Layout host hook ——
+    //
+    // Any element can install a layout. When one is installed, this element is a
+    // HOST: it arranges its children through that layout (and measures through
+    // it) instead of falling back to the legacy self-positioned path. This is
+    // what removes the path-A / path-B split: "has a layout" is the only
+    // distinction, and Canvas is just one layout among Box / Split / Table ...
+    [[nodiscard]] UILayout* getLayout() const { return _layout; }
+
+    /// Install a layout owned by this element (transfers ownership).
+    void installLayout(std::unique_ptr<UILayout> layout);
+
+    /// True when the anchors declare a stretch intent (min != max on either
+    /// axis). Non-zero anchor span is one of only two things that stretch a
+    /// widget; a zero component in `_size` is NOT one of them.
+    [[nodiscard]] bool hasStretchAnchors() const
+    {
+        return _anchorMin.x != _anchorMax.x || _anchorMin.y != _anchorMax.y;
+    }
+
+    /// Path-A parents call this before assigning a rect: if the child declared
+    /// stretch anchors that path A ignores by contract, report it once.
+    /// const because layout algorithms run against a const parent state.
+    void reportStretchAnchorsIgnored() const;
 
     // === Paint (after layout; records resolved draw items into the frame) ===
     /// Records this element and its subtree into `builder`. Runs before the
@@ -623,6 +682,21 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Anchor math: rect.min = parent.pos + parent.size*anchorMin + _position;
     /// rect.max = parent.pos + parent.size*anchorMax + _position + _size.
     [[nodiscard]] Rect2D computeAnchorRect(const Rect2D& parentRect) const;
+
+  public:
+    /// Resolve this element's rect from a parent-provided canvas slot (anchor
+    /// Min/Max + offset + min/max clamps) against `parentRect`. Size resolution
+    /// keeps the historical contract: an axis with an anchor span stretches to
+    /// the parent, an AutoSize axis uses computeDesiredSize(), otherwise the
+    /// axis keeps this element's own size.
+    [[nodiscard]] Rect2D resolveCanvasRect(const Rect2D&    parentRect,
+                                           const glm::vec2& anchorMin,
+                                           const glm::vec2& anchorMax,
+                                           const glm::vec2& offset,
+                                           const glm::vec2& minSize,
+                                           const glm::vec2& maxSize) const;
+
+  protected:
     /// Lay out direct children within `layoutRect` (paint order).
     void layoutChildren(const Rect2D& layoutRect);
     /// Recursively paint children in paint order. Virtual so layout hosts

@@ -153,14 +153,30 @@ bool UIElement::hitTestLayoutRect(const glm::vec2& logicalPoint) const
 
 Rect2D UIElement::computeAnchorRect(const Rect2D& parentRect) const
 {
-    const glm::vec2 anchorMin = glm::clamp(_anchorMin, 0.0f, 1.0f);
-    const glm::vec2 anchorMax = glm::clamp(_anchorMax, 0.0f, 1.0f);
-    const glm::vec2 rectMin   = parentRect.pos + parentRect.extent * anchorMin + _position;
+    // Legacy self-positioning: resolve from this element's own runtime-only
+    // anchor fields. Layout hosts that install UICanvasLayout resolve their
+    // children from the canvas slot via resolveCanvasRect() instead.
+    return resolveCanvasRect(parentRect, _anchorMin, _anchorMax, _position,
+                             glm::vec2{0.0f, 0.0f},
+                             glm::vec2{std::numeric_limits<float>::max(),
+                                       std::numeric_limits<float>::max()});
+}
+
+Rect2D UIElement::resolveCanvasRect(const Rect2D&    parentRect,
+                                    const glm::vec2& anchorMinIn,
+                                    const glm::vec2& anchorMaxIn,
+                                    const glm::vec2& offset,
+                                    const glm::vec2& minSize,
+                                    const glm::vec2& maxSize) const
+{
+    const glm::vec2 anchorMin = glm::clamp(anchorMinIn, 0.0f, 1.0f);
+    const glm::vec2 anchorMax = glm::clamp(anchorMaxIn, 0.0f, 1.0f);
+    const glm::vec2 rectMin   = parentRect.pos + parentRect.extent * anchorMin + offset;
 
     // Per-axis size resolution (SizeToContent contract): an axis with an
     // anchor span stretches to the parent; an AutoSize axis resolves from
     // computeDesiredSize(); otherwise the axis keeps _size (default {0,0}
-    // anchors = legacy absolute layout).
+    // anchors = legacy absolute layout). The slot's min/max clamp the result.
     const glm::vec2 span    = (anchorMax - anchorMin) * parentRect.extent;
     const glm::vec2 desired = _bAutoSize ? computeDesiredSize() : _size;
     glm::vec2       size    = _size;
@@ -176,19 +192,64 @@ Rect2D UIElement::computeAnchorRect(const Rect2D& parentRect) const
     else if (_bAutoSize) {
         size.y = desired.y;
     }
+    size = glm::clamp(size, minSize, maxSize);
     return Rect2D{.pos = rectMin, .extent = size};
+}
+
+void UIElement::installLayout(std::unique_ptr<UILayout> layout)
+{
+    _ownedLayout = std::move(layout);
+    _layout      = _ownedLayout.get();
+    if (_layout != nullptr) {
+        _layout->setOwner(*this);
+    }
 }
 
 void UIElement::layout(const Rect2D& parentRect)
 {
+    // A host that installs a layout arranges its children through it (Canvas,
+    // Box, Split ...). Elements without one keep the legacy self-positioned
+    // behaviour, where children resolve from their own runtime-only anchors.
     setLayoutRect(computeAnchorRect(parentRect));
+    if (_layout != nullptr) {
+        _layout->arrange(*this, _layoutRect);
+        return;
+    }
     layoutChildren(_layoutRect);
 }
 
 void UIElement::layoutAssigned(const Rect2D& rect)
 {
     setLayoutRect(rect);
+    if (_layout != nullptr) {
+        _layout->arrange(*this, _layoutRect);
+        return;
+    }
     layoutChildren(_layoutRect);
+}
+
+void UIElement::reportStretchAnchorsIgnored() const
+{
+    if (!hasStretchAnchors() || _bStretchAnchorsWarned) {
+        return;
+    }
+    _bStretchAnchorsWarned = true;
+    // Only one mechanism may decide a child's size, and for path-A parents that
+    // mechanism is the slot. Letting an author write stretch anchors here would
+    // look like it works (the cross axis often stretches anyway by the slot
+    // default) while silently doing nothing — so reject it instead.
+    YA_CORE_ASSERT(false,
+                   "UIElement: child '{}' declares stretch anchors ({}, {})-({}, {}) but its "
+                   "parent '{}' owns child arrangement (path A) and ignores them. Express the "
+                   "intent on the parent's slot instead (child(node, ui::boxSlot().fill()) for a "
+                   "box, ui::singleChildSlot() otherwise), or move the child under a path-B "
+                   "parent (panel / plain element) where anchor math runs.",
+                   _name,
+                   _anchorMin.x,
+                   _anchorMin.y,
+                   _anchorMax.x,
+                   _anchorMax.y,
+                   _parent != nullptr ? _parent->_name : std::string("<detached>"));
 }
 
 void UIElement::layoutChildren(const Rect2D& layoutRect)
@@ -202,6 +263,12 @@ void UIElement::layoutChildren(const Rect2D& layoutRect)
 
 glm::vec2 UIElement::computeDesiredSize() const
 {
+    // A host measures through its layout; otherwise the element's own size.
+    if (_layout != nullptr) {
+        const glm::vec2 content = _layout->measure(*this);
+        return glm::vec2(_size.x != 0.0f ? _size.x : content.x,
+                         _size.y != 0.0f ? _size.y : content.y);
+    }
     return _size;
 }
 

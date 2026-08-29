@@ -25,13 +25,19 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     panel->setStyleKey("panel");
 
     auto stack = std::make_shared<UIContainer>("DialogStack");
-    stack->_anchorMin = {0.0f, 0.0f};
-    stack->_anchorMax = {1.0f, 1.0f};
     stack->setSize({0.0f, 0.0f});
     stack->setDirection(EWidgetBoxLayout::Vertical);
     stack->setSpacing(12.0f);
     stack->setPadding({16.0f, 14.0f});
     panel->addDetachedChild(stack);
+    // The panel is a canvas host: fill is expressed on the parent->child slot
+    // edge, not by authoring anchors on the child.
+    if (auto* slot = dynamic_cast<UICanvasSlot*>(panel->getSlotForChild(*stack))) {
+        FCanvasSlotArgs fillArgs;
+        fillArgs.anchorMin = {0.0f, 0.0f};
+        fillArgs.anchorMax = {1.0f, 1.0f};
+        slot->apply(fillArgs);
+    }
 
     auto titleText = std::make_shared<UIText>("DialogTitle");
     titleText->_bAutoSize = true;

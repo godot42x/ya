@@ -725,9 +725,7 @@ TEST(DeclarativeContractTest, DirectConstructPanelCornerRadiusAndAnchors)
                     .setColor({0.2f, 0.3f, 0.4f, 1.0f})
                     .setCornerRadius(8.0f)
                     .setStyleKey("panel.canvas")
-                    .child(ui::text("caption")
-                               .setText("r=8")
-                               .setAnchors({0.1f, 0.2f}, {0.9f, 0.8f}));
+                    [ui::layout().anchor({0.1f, 0.2f}, {0.9f, 0.8f}) >> ui::text("caption").setText("r=8")];
     const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page));
 
     auto* panel = dynamic_cast<UIPanel*>(root.get());
@@ -735,8 +733,11 @@ TEST(DeclarativeContractTest, DirectConstructPanelCornerRadiusAndAnchors)
     EXPECT_FLOAT_EQ(panel->getCornerRadius(), 8.0f);
     EXPECT_EQ(panel->_styleKey, "panel.canvas");
     ASSERT_EQ(panel->getChildren().size(), 1u);
-    EXPECT_EQ(panel->getChildren()[0]->_anchorMin, glm::vec2(0.1f, 0.2f));
-    EXPECT_EQ(panel->getChildren()[0]->_anchorMax, glm::vec2(0.9f, 0.8f));
+    // Anchor intent lives on the parent->child slot edge, not on the child.
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(panel->getSlotForChild(*panel->getChildren()[0]));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getAnchorMin(), glm::vec2(0.1f, 0.2f));
+    EXPECT_EQ(slot->getAnchorMax(), glm::vec2(0.9f, 0.8f));
 }
 
 TEST(DeclarativeContractTest, DirectConstructSplitScrollAndFillSlot)
@@ -750,7 +751,7 @@ TEST(DeclarativeContractTest, DirectConstructSplitScrollAndFillSlot)
                          ui::scroll("scroll").child(ui::panel("content").setSize({20.0f, 40.0f})),
                          ui::panel("right").setSize({20.0f, 40.0f}));
     auto page = ui::column("root").setSize({200.0f, 120.0f}).child(ui::text("title").setText("h"));
-    page.childFill(std::move(split));
+    page.child(std::move(split), ui::boxSlot().fill());
     const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page));
 
     auto* column = dynamic_cast<UIContainer*>(root.get());

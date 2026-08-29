@@ -39,7 +39,6 @@ std::shared_ptr<UIElement> EditorInspectorTab::build(WidgetTree&)
     _componentsText = componentsText.share();
 
     auto form = ui::column("InspectorForm")
-                    .fillParent()
                     .setPadding({10.0f, 8.0f})
                     .setSpacing(6.0f)
                     .child(ui::text("InspectorTitle").setText("INSPECTOR").setStyleKey("text.eyebrow"))
@@ -52,7 +51,10 @@ std::shared_ptr<UIElement> EditorInspectorTab::build(WidgetTree&)
 
     _transformSection = std::make_shared<EditorTransformSection>("InspectorTransform", *_layer);
     form.child(_transformSection);
-    return ui::panel("InspectorBody").fillParent().setStyleKey("panel").child(std::move(form)).release();
+    return ui::panel("InspectorBody")
+        .setStyleKey("panel")
+        [ui::layout().fill() >> std::move(form)]
+        .release();
 }
 
 void EditorInspectorTab::sync(WidgetTree& tree)

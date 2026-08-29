@@ -7,6 +7,16 @@
 namespace ya
 {
 
+std::unique_ptr<UISlot> UIPanel::createSlotForChild(UIElement& child)
+{
+    // Slots come from the installed canvas layout; the base hook routes
+    // layout()/layoutAssigned()/computeDesiredSize() through it as well.
+    if (const UICanvasLayout* canvas = getCanvasLayout()) {
+        return canvas->createSlot(const_cast<UIPanel&>(*this), child);
+    }
+    return UIElement::createSlotForChild(child);
+}
+
 void UIPanel::paintSelf(UIFrameBuilder& builder)
 {
     // Sparse overlay on the theme. An image binding is content, not chrome:
