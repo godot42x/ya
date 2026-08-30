@@ -71,9 +71,6 @@ void UICheckBox::layoutAssigned(const Rect2D& rect)
 
 glm::vec2 UICheckBox::computeDesiredSize() const
 {
-    if (!_bAutoSize) {
-        return _size;
-    }
     glm::vec2 measured = _contentLayout.measure(*this);
     return {measured.x, std::max(_boxSize, measured.y)};
 }

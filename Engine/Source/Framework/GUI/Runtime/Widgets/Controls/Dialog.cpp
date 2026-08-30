@@ -17,7 +17,11 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     // child desired sizes, so measure the content by hand.
     const float titleH   = 18.0f;
     const float buttonH  = 26.0f;
-    const float contentH = content ? std::max(content->computeDesiredSize().y, 0.0f) : 0.0f;
+    const float contentH = content
+                               ? std::max(content->hasAuthoredSize() ? content->getSize().y
+                                                                     : content->computeDesiredSize().y,
+                                          0.0f)
+                               : 0.0f;
     const float panelH   = 14.0f + titleH + 12.0f + contentH + 12.0f + buttonH + 14.0f;
     auto panel = std::make_shared<UIPanel>("DialogPanel");
     panel->setStyleKey("panel");

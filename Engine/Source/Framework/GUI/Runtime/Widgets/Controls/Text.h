@@ -107,6 +107,7 @@ struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FText
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
+    [[nodiscard]] glm::vec2 computeIntrinsicSize() const override;
 
     /// Greedy wrap: break `text` into lines no wider than `maxWidth`
     /// (measured px). Breaks at whitespace when possible, falls back to

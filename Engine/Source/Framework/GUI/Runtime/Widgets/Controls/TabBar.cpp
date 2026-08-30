@@ -50,9 +50,6 @@ void UITabButton::paintSelf(UIFrameBuilder& builder)
 
 glm::vec2 UITabButton::computeDesiredSize() const
 {
-    if (!_bAutoSize) {
-        return _size;
-    }
     // Theme padding drives the measure (the Layout edge is established by
     // paintSelf; resolve here is a pure read, no dependency registration
     // outside the paint walk). Absent key/theme → default-constructed

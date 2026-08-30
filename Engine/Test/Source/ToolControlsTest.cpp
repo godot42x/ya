@@ -65,6 +65,24 @@ std::shared_ptr<Font> registerMenuFont(float fontSize = 13.0f, float advance = 8
     return font;
 }
 
+void attachPreferredSize(UIElement& parent, const UIElementRef& child, glm::vec2 size)
+{
+    parent.addDetachedChild(child, [size](UIElement&, UISlot& slot) {
+        if (auto* box = dynamic_cast<UIBoxSlot*>(&slot)) {
+            box->setPreferredSize(size);
+        }
+        else if (auto* overlay = dynamic_cast<UIOverlaySlot*>(&slot)) {
+            overlay->setPreferredSize(size);
+        }
+        else if (auto* single = dynamic_cast<UISingleChildSlot*>(&slot)) {
+            single->setPreferredSize(size);
+        }
+        else if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
+            canvas->setFixedSize(size);
+        }
+    });
+}
+
 } // namespace
 
 // === Stack (UIContainer) ===
@@ -84,8 +102,8 @@ TEST(ToolControlsTest, StackLaysOutChildrenWithGapAndPadding)
     auto b = std::make_shared<UIPanel>("B");
     b->setSize({120.0f, 30.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, stack);
-    tree.attach(*stack, a);
-    tree.attach(*stack, b);
+    attachPreferredSize(*stack, a, {100.0f, 20.0f});
+    attachPreferredSize(*stack, b, {120.0f, 30.0f});
     tree.layout();
 
     // Content starts at (30, 30); children pack vertically with 8px gap.
@@ -113,9 +131,9 @@ TEST(ToolControlsTest, StackCollapsedSkipsSpaceHiddenKeepsSpace)
     visible->setSize({100.0f, 20.0f});
 
     tree.attachToLayer(WidgetTree::ELayer::Content, stack);
-    tree.attach(*stack, collapsed);
-    tree.attach(*stack, hidden);
-    tree.attach(*stack, visible);
+    attachPreferredSize(*stack, collapsed, {100.0f, 20.0f});
+    attachPreferredSize(*stack, hidden, {100.0f, 20.0f});
+    attachPreferredSize(*stack, visible, {100.0f, 20.0f});
     tree.layout();
 
     // Collapsed takes no layout slot; Hidden keeps its slot (but does not
@@ -138,8 +156,8 @@ TEST(ToolControlsTest, StackMainAxisAlignmentOffsetsThePack)
         auto b = std::make_shared<UIPanel>("B");
         b->setSize({100.0f, 20.0f});
         tree.attachToLayer(WidgetTree::ELayer::Content, stack);
-        tree.attach(*stack, a);
-        tree.attach(*stack, b);
+        attachPreferredSize(*stack, a, {100.0f, 20.0f});
+        attachPreferredSize(*stack, b, {100.0f, 20.0f});
         return std::make_pair(stack, a);
     };
 
@@ -175,8 +193,8 @@ TEST(ToolControlsTest, StackDesiredSizeAggregatesChildren)
     a->setSize({100.0f, 20.0f});
     auto b = std::make_shared<UIPanel>("B");
     b->setSize({120.0f, 30.0f});
-    stack->addDetachedChild(a);
-    stack->addDetachedChild(b);
+    attachPreferredSize(*stack, a, {100.0f, 20.0f});
+    attachPreferredSize(*stack, b, {120.0f, 30.0f});
 
     // Vertical stack: width = cross max (120) + 2*padding, height = packed
     // main axis (20+4+30) + 2*padding.
@@ -197,8 +215,8 @@ TEST(ToolControlsTest, ContainerStretchLastChildFillsRemainingSpace)
     header->setSize({0.0f, 30.0f});
     auto content = std::make_shared<UIPanel>("Content");
     content->setSize({0.0f, 50.0f});
-    tree.attach(*box, header);
-    tree.attach(*box, content);
+    attachPreferredSize(*box, header, {200.0f, 30.0f});
+    attachPreferredSize(*box, content, {200.0f, 50.0f});
     tree.layout();
 
     // Header keeps its 30px; content absorbs the remainder (200 - 30 - 4).
@@ -286,7 +304,7 @@ TEST(ToolControlsTest, SplitPanePressOnPaneFallsThroughToChild)
     tree.attachToLayer(WidgetTree::ELayer::Content, split);
     tree.attach(*split, left);
     tree.attach(*split, right);
-    tree.attach(*left, button);
+    attachPreferredSize(*left, button, {60.0f, 24.0f});
     tree.layout();
 
     int clicks = 0;
@@ -373,8 +391,8 @@ TEST(ToolControlsTest, ToolbarSiblingHoverSwitchesAndClears)
     remove->setSize({60.0f, 24.0f});
 
     tree.attachToLayer(WidgetTree::ELayer::Content, toolbar);
-    tree.attach(*toolbar, add);
-    tree.attach(*toolbar, remove);
+    attachPreferredSize(*toolbar, add, {44.0f, 24.0f});
+    attachPreferredSize(*toolbar, remove, {60.0f, 24.0f});
     tree.layout();
 
     // Hover Add (content origin 18,14; Add spans x[18,62]).
@@ -519,7 +537,7 @@ TEST(ToolControlsTest, ScrollViewportShiftsContentByOffset)
     auto content = std::make_shared<UIPanel>("Content");
     content->setSize({200.0f, 100.0f}); // taller than the viewport
     tree.attachToLayer(WidgetTree::ELayer::Content, viewport);
-    tree.attach(*viewport, content);
+    attachPreferredSize(*viewport, content, {200.0f, 100.0f});
     tree.layout();
 
     EXPECT_EQ(content->_layoutRect.pos, glm::vec2(0.0f, -30.0f));
@@ -537,7 +555,7 @@ TEST(ToolControlsTest, ScrollViewportWheelConsumesWhenScrollableBubblesAtLimit)
     auto content = std::make_shared<UIPanel>("Content");
     content->setSize({200.0f, 100.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, viewport);
-    tree.attach(*viewport, content);
+    attachPreferredSize(*viewport, content, {200.0f, 100.0f});
     tree.layout();
 
     const auto at = pointAt(100.0f, 30.0f);

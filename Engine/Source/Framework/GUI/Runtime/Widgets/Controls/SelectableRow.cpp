@@ -162,15 +162,7 @@ void UISelectableRow::layoutAssigned(const Rect2D& rect)
 
 glm::vec2 UISelectableRow::computeDesiredSize() const
 {
-    if (!_bAutoSize) {
-        return _size;
-    }
-    for (UIElement* child : getChildrenInPaintOrder()) {
-        if (child->participatesInLayout()) {
-            return _contentLayout.measure(*this);
-        }
-    }
-    return _size;
+    return _contentLayout.measure(*this);
 }
 
 std::unique_ptr<UISlot> UISelectableRow::createSlotForChild(UIElement& child)

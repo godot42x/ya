@@ -47,6 +47,10 @@ struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSp
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
+    void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override
+    {
+        node["type"] = "singleChild";
+    }
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
         nlohmann::json preview = {

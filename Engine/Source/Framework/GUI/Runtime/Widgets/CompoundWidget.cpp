@@ -27,7 +27,7 @@ glm::vec2 UICompoundWidget::computeDesiredSize() const
 {
     const auto& children = getChildren();
     if (children.empty() || !children.front()) {
-        return _size;
+        return computeIntrinsicSize();
     }
     return _contentLayout.measure(*this);
 }

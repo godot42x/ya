@@ -2,6 +2,7 @@
 
 #include "GUI/Widgets/Controls/DockFloatingWindow.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
@@ -14,6 +15,7 @@ UIDockFloatingHost::UIDockFloatingHost(std::string name)
 {
     // Non-modal: empty areas of the host pass input (and drag-drop) through to
     // the content below, while its child floating windows stay hittable.
+    installLayout(std::make_unique<UICanvasLayout>());
     _hitFilter = EWidgetHitFilter::Pass;
     setVisibility(EWidgetVisibility::HitTestInvisible);
 }
@@ -87,6 +89,7 @@ void UIDockFloatingHost::syncFromWorkspace()
         };
         if (tree) {
             tree->attach(*this, window);
+            window->setWindowRect({record.pos, record.size});
         }
         _windows.emplace(record.id, window);
     }
@@ -106,27 +109,6 @@ void UIDockFloatingHost::bringToFront(const std::shared_ptr<UIDockFloatingWindow
         tree->reparent(*this, window);
         tree->invalidateLayout();
     }
-}
-
-void UIDockFloatingHost::layout(const Rect2D& parentRect)
-{
-    layoutAssigned(parentRect);
-}
-
-void UIDockFloatingHost::layoutAssigned(const Rect2D& rect)
-{
-    _hostRect = rect;
-    setLayoutRect(rect);
-    for (UIElement* child : getChildrenInPaintOrder()) {
-        if (child && child->participatesInLayout()) {
-            child->layoutAssigned(rect);
-        }
-    }
-}
-
-bool UIDockFloatingHost::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
-{
-    return UIElement::handleInputEvent(event, ctx);
 }
 
 } // namespace ya

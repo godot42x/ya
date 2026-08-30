@@ -32,14 +32,14 @@ struct YA_GUI_API UIDockFloatingHost : public UIElement
     /// Move a window to the top of the floating z-order.
     void bringToFront(const std::shared_ptr<UIDockFloatingWindow>& window);
 
-    void layout(const Rect2D& parentRect) override;
-    void layoutAssigned(const Rect2D& rect) override;
-    bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
+    void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override
+    {
+        node["type"] = "canvas";
+    }
 
   private:
     std::shared_ptr<UIDockWorkspace> _ws;
     std::unordered_map<FDockFloatingWindowId, std::shared_ptr<UIDockFloatingWindow>> _windows;
-    Rect2D _hostRect;
 };
 
 } // namespace ya

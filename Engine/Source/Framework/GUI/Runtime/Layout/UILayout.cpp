@@ -16,6 +16,16 @@ const UIBoxSlot* getBoxSlot(const UIElement& parent, const UIElement& child)
     return dynamic_cast<const UIBoxSlot*>(parent.getSlotForChild(child));
 }
 
+const UIOverlaySlot* getOverlaySlot(const UIElement& parent, const UIElement& child)
+{
+    return dynamic_cast<const UIOverlaySlot*>(parent.getSlotForChild(child));
+}
+
+const UICanvasSlot* getCanvasSlot(const UIElement& parent, const UIElement& child)
+{
+    return dynamic_cast<const UICanvasSlot*>(parent.getSlotForChild(child));
+}
+
 /// Per-axis placement inside a box the parent already owns: Fill stretches,
 /// anything else keeps the child's desired size and places it. Shared by the
 /// overlay and single-child layouts, which answer the same question per axis.
@@ -50,14 +60,29 @@ const UISingleChildSlot* getSingleChildSlot(const UIElement& parent, const UIEle
 glm::vec2 resolveDesiredSize(const UIElement& parent, const UIElement& child)
 {
     glm::vec2 desired = child.computeDesiredSize();
+    auto overlayAuthored = [&](const glm::vec2& authored) {
+        if (authored.x > 0.0f) {
+            desired.x = authored.x;
+        }
+        if (authored.y > 0.0f) {
+            desired.y = authored.y;
+        }
+    };
     if (const UIBoxSlot* slot = getBoxSlot(parent, child)) {
+        overlayAuthored(slot->getPreferredSize());
+        desired = glm::clamp(desired, slot->getMinSize(), slot->getMaxSize());
+    }
+    else if (const UIOverlaySlot* slot = getOverlaySlot(parent, child)) {
+        overlayAuthored(slot->getPreferredSize());
+    }
+    else if (const UISingleChildSlot* slot = getSingleChildSlot(parent, child)) {
+        overlayAuthored(slot->getPreferredSize());
+    }
+    else if (const UICanvasSlot* slot = getCanvasSlot(parent, child)) {
+        const glm::vec2 fixed     = slot->getFixedSize();
         const glm::vec2 preferred = slot->getPreferredSize();
-        if (preferred.x > 0.0f) {
-            desired.x = preferred.x;
-        }
-        if (preferred.y > 0.0f) {
-            desired.y = preferred.y;
-        }
+        overlayAuthored({fixed.x != 0.0f ? fixed.x : preferred.x,
+                         fixed.y != 0.0f ? fixed.y : preferred.y});
         desired = glm::clamp(desired, slot->getMinSize(), slot->getMaxSize());
     }
     return glm::max(desired, glm::vec2(0.0f));
@@ -270,7 +295,9 @@ void UICanvasSlot::apply(const FCanvasSlotArgs& args)
     setHeightSizeMode(args.heightSizeMode);
     setPivot(args.pivot);
     setPreferredSize(args.preferredSize);
-    setFixedSize(args.fixedSize);
+    if (args.fixedSize.x != 0.0f || args.fixedSize.y != 0.0f) {
+        setFixedSize(args.fixedSize);
+    }
 }
 
 void UICanvasSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
@@ -287,41 +314,19 @@ void UICanvasSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
 Rect2D UICanvasLayout::resolveChildRect(const UIElement& child, const UICanvasSlot& slot,
                                         const Rect2D& contentRect)
 {
-    // 1. Anchor area.  Canvas-host arrangement is parent-owned: resolve the
-    //    anchor span and the non-stretch fallback from the slot first.  Only
-    //    the final fallback (no slot fixed/preferred size) consults the child
-    //    geometry bridge, which is retained for non-migrated absolute widgets.
-    const glm::vec2 anchorMin = glm::clamp(slot.getAnchorMin(), 0.0f, 1.0f);
-    const glm::vec2 anchorMax = glm::clamp(slot.getAnchorMax(), 0.0f, 1.0f);
-    const glm::vec2 anchorSpan = (anchorMax - anchorMin) * contentRect.extent;
-    const glm::vec2 rectMin = contentRect.pos + contentRect.extent * anchorMin + slot.getOffset();
-    const glm::vec2 desired = child.computeDesiredSize();
+    const glm::vec2 fixed     = slot.getFixedSize();
     const glm::vec2 preferred = slot.getPreferredSize();
-    const glm::vec2 fixed = slot.getFixedSize();
-    glm::vec2 fallbackSize = child.getSize(); // legacy bridge; removed in CP2.
-    if (preferred.x != 0.0f) {
-        fallbackSize.x = preferred.x;
-    }
-    if (preferred.y != 0.0f) {
-        fallbackSize.y = preferred.y;
-    }
-    if (slot.getWidthSizeMode() == EWidgetSizeMode::Auto && preferred.x == 0.0f) {
-        fallbackSize.x = desired.x;
-    }
-    if (slot.getHeightSizeMode() == EWidgetSizeMode::Auto && preferred.y == 0.0f) {
-        fallbackSize.y = desired.y;
-    }
-    if (fixed.x != 0.0f) {
-        fallbackSize.x = fixed.x;
-    }
-    if (fixed.y != 0.0f) {
-        fallbackSize.y = fixed.y;
-    }
-    const Rect2D anchorRect{.pos = rectMin,
-                            .extent = glm::clamp(glm::vec2{
-                                                       anchorSpan.x != 0.0f ? anchorSpan.x : fallbackSize.x,
-                                                       anchorSpan.y != 0.0f ? anchorSpan.y : fallbackSize.y},
-                                               slot.getMinSize(), slot.getMaxSize())};
+    const glm::bvec2 autoAxis{slot.getWidthSizeMode() == EWidgetSizeMode::Auto,
+                              slot.getHeightSizeMode() == EWidgetSizeMode::Auto};
+    const glm::vec2 authored{autoAxis.x ? 0.0f : (fixed.x != 0.0f ? fixed.x : preferred.x),
+                             autoAxis.y ? 0.0f : (fixed.y != 0.0f ? fixed.y : preferred.y)};
+
+    // 1. Anchor area: shared anchor math, so the canvas layout and the legacy
+    //    self-positioned path cannot drift. Authored size comes from the slot.
+    const Rect2D anchorRect =
+        child.resolveCanvasRect(contentRect, slot.getAnchorMin(), slot.getAnchorMax(),
+                                slot.getOffset(), slot.getMinSize(), slot.getMaxSize(),
+                                authored, autoAxis);
 
     // 2. Per-edge insets shrink the available area. An inset on an axis also
     //    makes that axis stretch, so "all four edges" means "fill minus insets"
@@ -329,6 +334,9 @@ Rect2D UICanvasLayout::resolveChildRect(const UIElement& child, const UICanvasSl
     const FMargin& insets = slot.getOffsets();
     const glm::vec2 insetH{insets.left + insets.right, insets.top + insets.bottom};
 
+    const glm::vec2 anchorSpan =
+        (glm::clamp(slot.getAnchorMax(), 0.0f, 1.0f) - glm::clamp(slot.getAnchorMin(), 0.0f, 1.0f)) *
+        contentRect.extent;
     const glm::vec2 stretchAxis{anchorSpan.x != 0.0f || insetH.x != 0.0f ? 1.0f : 0.0f,
                                 anchorSpan.y != 0.0f || insetH.y != 0.0f ? 1.0f : 0.0f};
 
@@ -344,16 +352,20 @@ Rect2D UICanvasLayout::resolveChildRect(const UIElement& child, const UICanvasSl
         glm::vec2{0.0f, 0.0f});
 
     // 3. Size resolution per axis: Auto uses the measured desired size, a
-    //    stretching axis takes the (inset) area, otherwise the element's own
-    //    authored size is kept.
-    // A non-zero preferred size on an axis overrides the measured size.
+    //    stretching axis takes the (inset) area, otherwise the slot's authored
+    //    size is kept.
+    const glm::vec2 desired = child.computeDesiredSize();
     glm::vec2       size       = anchorRect.extent;
     size.x = slot.getWidthSizeMode() == EWidgetSizeMode::Auto
-                 ? (preferred.x != 0.0f ? preferred.x : desired.x)
+                 ? (preferred.x != 0.0f ? preferred.x
+                    : fixed.x != 0.0f   ? fixed.x
+                                        : desired.x)
              : stretchAxis.x != 0.0f ? area.extent.x
                                      : (fixed.x != 0.0f ? fixed.x : anchorRect.extent.x);
     size.y = slot.getHeightSizeMode() == EWidgetSizeMode::Auto
-                 ? (preferred.y != 0.0f ? preferred.y : desired.y)
+                 ? (preferred.y != 0.0f ? preferred.y
+                    : fixed.y != 0.0f   ? fixed.y
+                                        : desired.y)
              : stretchAxis.y != 0.0f ? area.extent.y
                                      : (fixed.y != 0.0f ? fixed.y : anchorRect.extent.y);
     size = glm::clamp(size, slot.getMinSize(), slot.getMaxSize());
@@ -398,7 +410,7 @@ glm::vec2 UICanvasLayout::measure(const UIElement& parent) const
         if (child == nullptr) {
             continue;
         }
-        const glm::vec2 desired = child->computeDesiredSize();
+        const glm::vec2 desired = resolveDesiredSize(parent, *child);
         contentExtent           = glm::max(contentExtent, desired);
     }
     return contentExtent + _padding * 2.0f;
@@ -565,7 +577,6 @@ void UILayout::invalidateSubtreePaint() const
 
 void UILayout::assignChildRect(UIElement& child, const Rect2D& rect) const
 {
-    child.reportStretchAnchorsIgnored();
     child.layoutAssigned(rect);
 }
 
@@ -803,7 +814,7 @@ glm::vec2 UISingleChildLayout::measure(const UIElement& parent) const
 {
     for (UIElement* child : parent.getChildrenInPaintOrder()) {
         if (child->participatesInLayout()) {
-            return glm::max(child->computeDesiredSize() + _padding.size(), glm::vec2(0.0f));
+            return glm::max(resolveDesiredSize(parent, *child) + _padding.size(), glm::vec2(0.0f));
         }
     }
     return glm::max(_padding.size(), glm::vec2(0.0f));
@@ -861,6 +872,18 @@ void UISingleChildSlot::setAlign(EUIOverlayAlignment hAlign, EUIOverlayAlignment
 void UISingleChildSlot::apply(const FSingleChildSlotArgs& args)
 {
     setAlign(args.hAlign, args.vAlign);
+    if (args.preferredSize.x != 0.0f || args.preferredSize.y != 0.0f) {
+        setPreferredSize(args.preferredSize);
+    }
+}
+
+void UISingleChildSlot::setPreferredSize(glm::vec2 value)
+{
+    value = glm::max(value, glm::vec2(0.0f));
+    if (_preferredSize != value) {
+        _preferredSize = value;
+        invalidateMeasure();
+    }
 }
 
 void UISingleChildSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
@@ -877,6 +900,7 @@ void UISingleChildSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
     node["type"]   = "singleChild";
     node["hAlign"] = alignName(_hAlign);
     node["vAlign"] = alignName(_vAlign);
+    node["preferredSize"] = {_preferredSize.x, _preferredSize.y};
 }
 
 UIOverlaySlot::UIOverlaySlot(UIElement& parent, UIElement& child)
@@ -899,6 +923,7 @@ void UIOverlaySlot::appendRuntimeDiagnostics(nlohmann::json& node) const
     node["hAlign"] = alignmentName(_hAlign);
     node["vAlign"] = alignmentName(_vAlign);
     node["padding"] = {{"left", _padding.left}, {"top", _padding.top}, {"right", _padding.right}, {"bottom", _padding.bottom}};
+    node["preferredSize"] = {_preferredSize.x, _preferredSize.y};
 }
 
 void UIOverlaySlot::setHAlign(EUIOverlayAlignment value)
@@ -934,24 +959,24 @@ void UIOverlaySlot::apply(const FOverlaySlotArgs& args)
     setHAlign(args.hAlign);
     setVAlign(args.vAlign);
     setPadding(args.padding);
+    if (args.preferredSize.x != 0.0f || args.preferredSize.y != 0.0f) {
+        setPreferredSize(args.preferredSize);
+    }
+}
+
+void UIOverlaySlot::setPreferredSize(glm::vec2 value)
+{
+    value = glm::max(value, glm::vec2(0.0f));
+    if (_preferredSize != value) {
+        _preferredSize = value;
+        invalidateMeasure();
+    }
 }
 
 std::unique_ptr<UISlot> UIOverlayLayout::createSlot(UIElement& parent, UIElement& child) const
 {
     return std::make_unique<UIOverlaySlot>(parent, child);
 }
-
-namespace
-{
-
-const UIOverlaySlot* getOverlaySlot(const UIElement& parent, const UIElement& child)
-{
-    return dynamic_cast<const UIOverlaySlot*>(parent.getSlotForChild(child));
-}
-
-
-
-} // namespace
 
 glm::vec2 UIOverlayLayout::measure(const UIElement& parent) const
 {
@@ -960,7 +985,7 @@ glm::vec2 UIOverlayLayout::measure(const UIElement& parent) const
         if (!child->participatesInLayout()) {
             continue;
         }
-        glm::vec2 childDesired = child->computeDesiredSize();
+        glm::vec2 childDesired = resolveDesiredSize(parent, *child);
         if (const UIOverlaySlot* slot = getOverlaySlot(parent, *child)) {
             childDesired += slot->getPadding().size();
         }
@@ -986,7 +1011,7 @@ void UIOverlayLayout::arrange(UIElement& parent, const Rect2D& rect) const
         Rect2D inner = rect;
         inner.pos += padding.minOffset();
         inner.extent = glm::max(inner.extent - padding.size(), glm::vec2(0.0f));
-        const glm::vec2 desired = child->computeDesiredSize();
+        const glm::vec2 desired = resolveDesiredSize(parent, *child);
         Rect2D childRect;
         childRect.pos.x    = overlayAxis(inner.pos.x, inner.extent.x, desired.x, hAlign);
         childRect.pos.y    = overlayAxis(inner.pos.y, inner.extent.y, desired.y, vAlign);
@@ -1108,7 +1133,7 @@ glm::vec2 UISplitLayout::measure(const UIElement& parent) const
         if (!child->participatesInLayout()) {
             continue;
         }
-        const glm::vec2 childDesired = child->computeDesiredSize();
+        const glm::vec2 childDesired = resolveDesiredSize(parent, *child);
         if (_orientation == ESplitOrientation::Vertical) {
             desired.x += childDesired.x;
             desired.y = std::max(desired.y, childDesired.y);
@@ -1243,7 +1268,7 @@ void UIScrollLayout::arrange(UIElement& parent, const Rect2D& rect) const
         return;
     }
 
-    const glm::vec2 desired = children[0]->computeDesiredSize();
+    const glm::vec2 desired = resolveDesiredSize(parent, *children[0]);
     const bool bVertical = _axis == EScrollAxis::Vertical;
     const float contentMain = bVertical ? std::max(desired.y, rect.extent.y)
                                         : std::max(desired.x, rect.extent.x);

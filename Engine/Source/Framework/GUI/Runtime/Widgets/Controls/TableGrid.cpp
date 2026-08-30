@@ -233,11 +233,15 @@ void UITableGrid::clearTransientInputState()
 glm::vec2 UITableGrid::computeDesiredSize() const
 {
     if (!_bAutoSize) {
-        return _size;
+        return computeIntrinsicSize();
     }
-    const float width = _size.x > 0.0f ? _size.x : 320.0f;
     const size_t rowCount = _rows ? _rows->size() : 0;
-    return {width, static_cast<float>(std::max<size_t>(rowCount, 1)) * _rowHeight};
+    return {320.0f, static_cast<float>(std::max<size_t>(rowCount, 1)) * _rowHeight};
+}
+
+glm::vec2 UITableGrid::computeIntrinsicSize() const
+{
+    return _size;
 }
 
 } // namespace ya

@@ -48,19 +48,21 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 ## 布局契约（SizeToContent）
 
-- `UIElement::_bAutoSize`（SizeToContent / Slate DesiredSize 模型）：每轴解析优先级
-  `anchor span（stretch）> AutoSize（computeDesiredSize 递归聚合子内容）> _size`。
-- `UIText`：AutoSize 时 desired = `font.measureText(text) × lineHeight`；字体经
-  FontManager 解析，closure 测试用 `registerFont` 注入合成字体。
+- `UIElement::_bAutoSize`（SizeToContent / Slate DesiredSize 模型）：canvas 在 attach 时把 Auto 种到 `UICanvasSlot` size mode。每轴解析优先级
+  `anchor span（stretch）> Auto（computeDesiredSize 内容测量）> slot authored size（fixedSize / preferredSize）`。
+  child `_size` 不再是 layout 输入；`computeDesiredSize` / `computeIntrinsicSize` 只报告内容。path-B `computeAnchorRect` 仍读 child 字段直到 CP2。
+- `UIText`：desired / intrinsic = `font.measureText(text) × lineHeight`（与 AutoSize 无关）；字体经
+  FontManager 解析，closure 测试用 `registerFont` 注入合成字体。显式尺寸在 parent-owned slot 上。
 - `UIButton` / `UISelectableRow` / `UICheckBox`（Content-Slot）：单 child 容器。标签是内容槽里的 `UIText`
   子节点（DSL：`.child(ui::text(...).setText(...))`）。`UISingleChildLayout` padding + 内容子节点填入
   内缩 rect（`layoutAssigned`，非 child `setPosition`）。CheckBox 的左 padding = `_boxSize + _labelSpacing`。
-  AutoSize 时 desired = 首可见内容子节点 + padding；显式 `_size` 在容器内也优先。行缩进用
+  desired = 内容子节点 + padding；显式尺寸在 parent slot 上。行缩进用
   `setContentPadding(FMargin{indent, 0, 0, 0})`。
 - `UICompoundWidget` 是 single-child host：`construct()` 挂上的第一个 child 经 `UISingleChildSlot` 填满 compound rect，不再手写 `layoutAssigned`。
 - 布局正式分为 `UIElement / UILayout / UISlot`：`UIContainer` 只是第一个 layout host，
   持有 `UIBoxLayout`；它不再持有 `_direction/_spacing/_padding/...` 这类 box 字段。
   `UILayout` 只负责 measure/arrange，`UISlot` 是 parent-owned parent-child 边对象。
+  `installLayout()` 的 host 由 `UIElement::createSlotForChild()` 直接问 layout 要 typed slot，不必再覆写工厂（Panel / TreeRoot / DockSpace / DockFloatingHost）。成员持有 layout 的 host（Button / CheckBox / Compound / SizeBox / Split / Scroll / Overlay / Container）仍自己转发 `createSlot`。
 - `UIBoxSlot` 承载每 child 的 `Auto/Fill`、weight、**四边 `FMargin`**、cross alignment、
   min/max/preferred size 与 layout participation；slot setter 会使所属 tree 的 layout 失效。
   Fill 按权重分配剩余主轴空间且遵守 max size；Hidden 默认保留空间，可由 slot 明确关闭。
@@ -68,27 +70,32 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   `childFill` 仍是只标 Fill 的简写。`setMargin({x, y})` 走 `glm::vec2` → 左右/上下对称
   （`FMargin` 不是 aggregate，两元素列表不会变成 left/top、right/bottom=0）。
   `FBoxSlotArgs::preferredSize` 非零轴覆盖 child desired；`ui::boxSlot().preferredSize({w,h})` 是 construct-time 写法。
-- `UIElement::setSize()` 在 child 已挂 canvas host 时桥接到 `UICanvasSlot::fixedSize`；已挂 box host 时桥接到 `UIBoxSlot::preferredSize`。这是 CP2 前的过渡桥，不是 child 继续拥有几何。
+- `UIElement::setSize()` 在 child 已挂 typed host 时桥接到该 edge：canvas → `fixedSize`，box / overlay / single-child → `preferredSize`。这是 CP2 前的过渡桥，不是 child 继续拥有几何。
+- attach（`insertChildEdge`）会把 **authored** child `setSize`/`setPosition` 种到新 edge：box / overlay / single-child → `preferredSize`，canvas → `fixedSize`/`offset`。`_bAutoSize` 种为 canvas size mode Auto，且 **不会** 把 authored size 种成 fixed/preferred（否则会盖住内容测量）。随后的 layout spec / typed slot args 覆盖种子。默认构造的 100×50 / 0,0 **不会** 种上去。DSL `.setSize()` 先写 child 再 attach 的路径因此在 CP2 前就是 slot 真值。
 - `UIPopupOverlay::_contentExtent` 是 popup-owned canvas edge 的内容尺寸；基类 Auto + preferredSize，Menu 覆盖为 fixedSize，Dialog 走 preferredSize。不要再 `content->setSize()`。
-  查询；reparent/detach 时旧 parent 销毁旧 slot，新 parent 创建默认 slot。不要缓存 slot
+- child 用 `getSlot()` 读取当前边，parent 用 `getSlotForChild()` 查询；reparent/detach 时旧 parent 销毁旧 slot，新 parent 创建默认 slot。不要缓存 slot
   裸指针跨越 reparent/detach。
 - `UIBoxLayout` 主轴按 desired/slot 排列，cross 轴默认 stretch；`computeDesiredSize` 聚合
   child + margin + spacing + padding。scroll/split 仍读取内容 desired，specialized layout
   已收口为 `UIScrollLayout` / `UISplitLayout` / `UIOverlayLayout`；`UIButton`、`UISelectableRow`、`UICheckBox`、`UICompoundWidget` 与 `UISizeBox`
-  使用 `UISingleChildLayout`。specialized widget 只保留 paint/input transient state，不能再把
-  ratio/offset/padding 等几何状态塞回 widget 字段。
+  使用 `UISingleChildLayout`。`UIDockSpace` 也是 single-child host：投影根填满 dock。
+  `UIDockFloatingHost` 是 canvas host；floating window 的位置/尺寸写在 host-owned `UICanvasSlot`，
+  `setWindowRect` 经 `setPosition`/`setSize` 桥到这条 edge。窗口本身是 overlay host：chrome
+  box Fill，resize handle 走 overlay Start/End+Fill，不再在 box arrange 之后手写 handle rect。
+  `UIPopupOverlay` 安装 `UICanvasLayout`；每帧把 `resolveContentSlotArgs()` 写进 content slot，再交给 canvas arrange。
+  specialized widget 只保留 paint/input transient state，不能再把 ratio/offset/padding 等几何状态塞回 widget 字段。
 - `UIOverlay` 是叠放 host（不是 `UIPopupOverlay`）：每个 child 经 `UIOverlaySlot` 在同一父
-  rect 内独立 Fill/Start/Center/End + 四边 padding。child 的 canvas anchor 被忽略。
+  rect 内独立 Fill/Start/Center/End + 四边 padding + **preferredSize**。child 的 canvas anchor 被忽略。
 - `UISizeBox` 是单 child 约束盒：padding + 可选宽/高 override + min/max。
 - `UISplitLayout` 管 orientation/ratio/min extent/divider/padding + first-two-child arrange；
   `UIScrollLayout` 管 axis/offset/step/max offset + first-child arrange；scroll 到边界必须
   返回未处理，以便 route bubble 到外层。tree dump 的 `layout.type` 统一输出
-  `box/singleChild/split/scroll/overlay/sizeBox`。
+  `box/singleChild/split/scroll/overlay/sizeBox/canvas`。
 - 布局 rect 尺寸永远 clamp ≥0（负尺寸会传染进 clip/scissor）。
 
 ## 静态 DSL（live construct）
 
-- 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/panel/splitPane/scroll/overlay/sizeBox/...` 组好 builder，再单独 `ui::build(tree, parent, std::move(page))` 物化 live `UIElement`（Slate `SNew`）。不要把整棵 DSL 包进 `ui::build(...)`。`setAnchors` / `fillParent` / panel `setCornerRadius` / panel+text `setStyleKey` / `setStyle`（freeze）/ `setStyleField`（单键 inherit）/ container `childFill` 与 `child(node, FBoxSlotArgs)` / overlay `child(node, FOverlaySlotArgs)` 在 Construct 时写到 live widget。`setTooltip` 写在 base builder；Text `setWrap` / `setMaxWrapWidth` 控制折行；base `setVisibility`；split `setPadding`。`ui::button` 没有 `setText`；文字走内部 `UIText` 子 widget。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。自定义 / 复杂 demo widget（MenuBar、TreeView、TableGrid、InputExtras、UIDragDropTile、DockSpace、SelectableRow）用 `child(UIElementRef)` 挂进 DSL 壳，不要为此扩 Construct。Gallery / Interactions / Dock / Workbench 内置 Editor demo（`FWorkbenchSurface::buildEditorDemo`）已是一次 `ui::build`。Editor 的 `rebuildItemRows()` 仍是事件期 live attach/detach `UISelectableRow`。弹层（Menu / Modal / Dialog）仍在点击时 live 组装。Dock floating host 仍 `attachToLayer(Popup)`。Render 仍是 raw retained 对照。GameEditor chrome 已切到 `EditorSurface`（整窗 WidgetTree，不是 ImGui 内嵌 panel）。
+- 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/panel/splitPane/scroll/overlay/sizeBox/...` 组好 builder，再单独 `ui::build(tree, parent, std::move(page))` 物化 live `UIElement`（Slate `SNew`）。不要把整棵 DSL 包进 `ui::build(...)`。`setAnchors` / `fillParent` / panel `setCornerRadius` / panel+text `setStyleKey` / `setStyle`（freeze）/ `setStyleField`（单键 inherit）/ container `childFill` 与 `child(node, FBoxSlotArgs)` / overlay `child(node, FOverlaySlotArgs)` 在 Construct 时写到 live widget。`setTooltip` 写在 base builder；Text `setWrap` / `setMaxWrapWidth` 控制折行；base `setVisibility`；split `setPadding`。`ui::button` 没有 `setText`；文字走内部 `UIText` 子 widget。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。自定义 / 复杂 demo widget（MenuBar、TreeView、TableGrid、InputExtras、UIDragDropTile、DockSpace、SelectableRow）用 `child(UIElementRef)` 挂进 DSL 壳，不要为此扩 Construct。Gallery / Interactions / Dock / Workbench 内置 Editor demo（`FWorkbenchSurface::buildEditorDemo`）已是一次 `ui::build`。Editor 的 `rebuildItemRows()` 仍是事件期 live attach/detach `UISelectableRow`。弹层（Menu / Modal / Dialog）仍在点击时 live 组装。Dock floating host 仍 `attachToLayer(Popup, host, fill canvas args)`。Render 仍是 raw retained 对照。GameEditor chrome 已切到 `EditorSurface`（整窗 WidgetTree，不是 ImGui 内嵌 panel）。
 - `UIDescription` / `UIReconciler` / `UIRenderController` / apply hook **已删除**。不要恢复 Description → apply → widget 转发层。
 - Document/script：`UIDocument::instantiate()`（registry factory）只实例化一次。变长集合走列表控件 + `ReactiveList`，不是整页 re-run。
 - `UIScreen` 是挂卸 / z-order / input blocking，不是每帧 `render()` owner。Gallery / Editor 不使用它；接到游戏多表面（HUD/模态）之前保持搁置。

@@ -1,5 +1,50 @@
 # GUI layout unified 进度
 
+## 2026-08-30 — CP2 纠偏：authored size 从 child `_size` 迁到 parent-owned slot
+
+- 用户纠偏：所有布局相关属于 slot。child `_size` 不再是 layout 输入；`computeDesiredSize` / `computeIntrinsicSize` 只报告内容（默认 intrinsic `{0,0}`，默认构造 100×50 不是内容尺寸）。
+- 收口方式：
+  - `resolveCanvasRect` 接收 slot 传入的 `authoredSize` / `autoAxis`；canvas arrange 仍走它，不重复已回滚的绕过；
+  - attach 把 `_bAutoSize` 种成 canvas size mode Auto，且 AutoSize 时不把 authored size 种成 fixed/preferred；
+  - overlay / single-child 补 `preferredSize`，`setSize` 桥接，measure/arrange 经 `resolveDesiredSize` 覆盖；
+  - `attachToLayer` 对 AutoSize child 写 Auto size mode，不再把 `getSize()` 抄成 fixedSize。
+- 未改：path-B `computeAnchorRect` 仍读 child 字段；text wrap 仍用 `_size.x` 做 maxWidth fallback；`_size`/`setSize`/`getSize` 字段仍在（CP2 全量删除）。
+- 验证：
+  - `python3 Script/ya.py test --target ya --filter WidgetLayoutTest`
+
+## 2026-08-30 — CP4/CP5 大步：Popup 与 floating window 不再手写 child rect
+
+- 审计结论：`UIPopupOverlay` 虽已创建 canvas slot，仍自己 `resolveChildRect` + 还有 `_contentPos` fallback；`UIDockFloatingWindow` 是 box host，resize handle 先被 box 打包再被手写覆盖。这两处是剩余的 widget 级 child `layoutAssigned`。
+- 收口方式：
+  - Popup 安装 `UICanvasLayout`；layoutAssigned 只把 `resolveContentSlotArgs()` 写进 content slot，arrange 交给 layout；删除非 canvas fallback；
+  - Floating window 改为 overlay host：chrome box Fill，五条 handle 用 overlay Start/End+Fill；窗口几何仍由 host canvas slot 决定。
+- 验证：
+  - `python3 Script/ya.py test --target ya --filter WidgetTreeTest.PopupOverlayUsesACanvasSlotForItsContentChild:WidgetTreeTest.PopupOverlayContentExtentLivesOnTheCanvasSlot:WidgetTreeTest.DialogCentresContentThroughThePopupCanvasSlot:ToolControlsTest.MenuSizesPanelFromItemLabels:WidgetLayoutTest.FloatingWindowGeometryLivesOnTheHostCanvasSlot:WidgetLayoutTest.FloatingWindowResizeHandlesLiveOnOverlaySlots:WidgetTreeTest.FloatingWindowTabDragBehaviorStartsDockPanelSession`
+
+## 2026-08-30 — CP4/CP5 大步：Dock 收成 typed host，installLayout 真正拥有 slot 工厂
+
+- 审计结论：`installLayout()` 只接管 measure/arrange，`createSlotForChild()` 仍造 base `UISlot`，所以 Panel/TreeRoot 必须各自覆写工厂。`UIDockSpace` 手写把第一个 child 赋成 fill rect；`UIDockFloatingHost` 把整块 host rect 派给所有窗口，窗口再无视 assigned rect 用自己的 `_windowRect`。这是剩余最集中的 child-owned 几何。
+- 收口方式：
+  - `UIElement::createSlotForChild()` 在已安装 layout 时问它要 typed slot；TreeRoot / Panel 的重复工厂删除；
+  - `UIDockSpace` 安装 `UISingleChildLayout`，投影根走 Fill single-child slot；
+  - `UIDockFloatingHost` 安装 `UICanvasLayout`；`setWindowRect` 写 `setPosition`/`setSize`，attach 后尺寸在 host-owned canvas slot 上；`layoutAssigned` 消费 assigned rect；
+  - Popup 上的 floating host 以 fill canvas edge 挂层，不再默认 100×50。
+- 未改：floating window 内部 resize handle 仍在 box arrange 之后手写覆盖（overlay 化留到下一步）。Canvas arrange 仍走 `resolveCanvasRect()`，不重复已回滚的 slot-only 解析。
+- 验证：
+  - `python3 Script/ya.py test --target ya --filter WidgetLayoutTest.DockSpaceArrangesProjectionThroughTheSingleChildSlot:WidgetLayoutTest.FloatingWindowGeometryLivesOnTheHostCanvasSlot:WidgetTreeTest.DragOverDockSetsPointSensitiveDropPreview:WidgetTreeTest.DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTarget:WidgetTreeTest.DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget:WidgetTreeTest.FloatingWindowTabDragBehaviorStartsDockPanelSession`
+
+## 2026-08-30 — CP4/CP5 大步：attach 把 authored child 几何种到 typed slot
+
+- 审计结论：DSL `.setSize()` / `.setPosition()` 发生在 attach 之前，所以 canvas/box 的 setter 桥接用不上。Editor/Workbench 里大量 `.setSize()` 仍然只写 child `_size`，CP2 删字段后会静默丢尺寸。逐个改调用点不是这一层该做的事；attach 才是唯一建 edge 的地方。
+- 收口方式：
+  - `setSize` / `setPosition` 打上 `_bAuthoredSize` / `_bAuthoredPosition`；默认构造几何不算 authored；
+  - `insertChildEdge` 在 slot init 之前，把 authored size/position 种到 `UIBoxSlot::preferredSize` 或 `UICanvasSlot::fixedSize/offset`；
+  - 随后的 layout spec / `FBoxSlotArgs` 覆盖种子。
+- 未改：Editor/Workbench 调用点仍可写 `.setSize()`，但 attach 后尺寸已经在 edge 上。layer `attachToLayer()` 仍按显式 args 复制（含未 authored 的当前值），本批不改 layer 契约。
+- 验证：
+  - `python3 Script/ya.py test --target ya --filter WidgetLayoutTest.AttachSeedsAuthoredChildSizeOntoTheBoxSlot:WidgetLayoutTest.AttachDoesNotSeedDefaultChildSizeOntoTheBoxSlot:WidgetLayoutTest.AttachSeedsAuthoredChildGeometryOntoTheCanvasSlot:WidgetLayoutTest.LayoutSpecPreferredSizeWinsOverAuthoredChildSize:WidgetLayoutTest.BoxSlotArgsPreferredSizeLivesOnTheEdge:WidgetLayoutTest.BoxHostSetSizeBridgesToTheBoxSlotPreferredSize:WidgetLayoutTest.CanvasHostSetSizeBridgesToTheCanvasSlotFixedSize:WidgetLayoutTest.BuildWithLayoutAttachmentInitializesTheBoxSlot`
+  - `python3 Script/ya.py test --target ya --filter WidgetLayoutTest.SelectableRowArrangesLabelThroughTheSingleChildSlot:WidgetLayoutTest.CheckBoxArrangesLabelThroughTheSingleChildSlot:WidgetLayoutTest.UnifiedLayoutSpecAppliesToSelectableRowSingleChildSlot:DeclarativeContractTest.CompoundWidgetForwardsDesiredSizeAndLayoutToCompositionRoot:ToolControlsTest.SelectableRowWithLabelChildHoverStillHighlightsRow:EditorPropertyGraphTest.AutoPropertySectionMaterializesVec3RowsOnce`
+
 ## 2026-08-30 — CP4/CP5 大步：Compound/CheckBox 收成 single-child host，box preferredSize 进 FBoxSlotArgs
 
 - 审计结论：`UICompoundWidget` 仍手写把第一个 child 赋成 fill rect；`UICheckBox` 用手写 contentRect 把 label 推到 box 右侧；inspector 行仍 `setSize()` 写 child。这些都不是 typed slot。

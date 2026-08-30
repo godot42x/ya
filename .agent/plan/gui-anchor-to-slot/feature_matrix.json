@@ -27,7 +27,7 @@
     {
       "scenario": "Box / Overlay / SingleChild",
       "before": "各 path 可能忽略 child anchor",
-      "after": "每种 layout 只接受对应 typed slot 并负责 measure/arrange；SelectableRow / CheckBox / CompoundWidget 已是 single-child host",
+      "after": "每种 layout 只接受对应 typed slot 并负责 measure/arrange；SelectableRow / CheckBox / CompoundWidget / DockSpace 已是 single-child host，DockFloatingHost 已是 canvas host",
       "status": "wip"
     },
     {

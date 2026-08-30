@@ -3,8 +3,13 @@
 - [x] CP1 冻结 UIConstraints + size mode + UILayoutIntent 协议
 - [x] CP3 新增 UICanvasLayout + UICanvasSlot；UIPanel 改为 Canvas layout host
 - [x] CP3 public DSL：`ui::layout()` 能力化 + `parent[spec >> widget]` + 全量调用点迁移
+- [x] CP2 前置分层：新增 `computeIntrinsicSize()`，显式区分 widget 自身固有尺寸与 layout 聚合 desired size
+- [x] CP2 intrinsic 迁移：补齐 `UITextField::computeIntrinsicSize()`，文本/字号变化改为触发布局失效
+- [x] CP2 intrinsic 迁移：`UITreeView` / `UITableGrid` 非 AutoSize 路径改由显式 intrinsic contract 提供 authored fallback
+- [x] CP2 intrinsic 迁移：`UIText` wrapping 无显式宽度时不再借用 child `_size.x`，改由 intrinsic 单行宽度与 assigned slot rect 分工
+- [x] CP2 纠偏：layout 从 slot 读 authored size，不再把 child `_size` 当布局输入；`resolveCanvasRect` 仍是 canvas 锚点入口（传入 slot authored size / Auto）；`computeDesiredSize` 只报告内容。`_size`/`setSize` 字段仍在，待全量删除
 - [ ] CP2 从 UIElement 全量移除 authored geometry（`_anchorMin/_anchorMax/_position/_size/_min/_max/_bAutoSize`、`setPosition/setSize/getPosition/getSize`、`computeAnchorRect`、`reportStretchAnchorsIgnored`）
-- [x] CP2 分批迁移：Canvas host arrange 已改为优先消费 parent-owned slot 的 anchor/offset/fixed/preferred/auto 数据；仅保留 `child.getSize()` 作为显式 legacy fallback，待其它 host/Designer 路径完成后删除
+- [x] CP2 parent-owned arrange 收口：`UILayout::assignChildRect()` 不再读取 child anchors，删除 `reportStretchAnchorsIgnored()` / `hasStretchAnchors()` 死桥
 - [x] CP3 Canvas slot 补全：四边 `FMargin` offsets、alignment、width/height size mode（min/max 已有）
 - [x] CP3 收尾纠偏：删除过渡 public API（`ui::panelSlot()` / `FCanvasPanelSlotBuilder` / 旧 canvas-panel 命名）
 - [x] CP3/§3.4 capability 编译期隔离（`column[anchor(...) >> w]` 已编译失败）
@@ -16,7 +21,7 @@
 - [x] CP4/CP5 纠偏：删除 `applyLayoutSpecToSlot(box)` 对 child `setSize()` 的回写，避免继续依赖 child-authored geometry
 - [x] CP4 纠偏：补齐并验证 unified `ui::layout()` 对 `UISingleChildSlot` / `UIOverlaySlot` 的运行时消费
 - [x] CP5 纠偏：TreeRoot 改为 canvas host，system layer fill 迁到 root->layer `UICanvasSlot`
-- [ ] CP5 设计前置：定义 layer 本身的 typed host/edge 契约，再决定 `attachToLayer()` 是否允许显式 layout intent（当前明确不能先暴露 unified spec 入口）
+- [x] CP5 设计前置：layer typed host/edge 契约已落地，`attachToLayer(layer, widget, FCanvasSlotArgs)` 可显式表达 edge intent
 - [x] CP5 纠偏：system layer 升为 canvas host，`attachToLayer()` 自动桥接 child canvas geometry -> `UICanvasSlot`，`setPosition()` 桥接到 slot offset
 - [x] CP5 纠偏：`attachToLayer()` / `setSize()` / Designer drag 补齐 canvas edge `fixedSize` 桥接，layer child 不再只迁移 position
 - [x] CP5 收口：`PopupOverlay` 作为独立 full-screen host，content edge 改为 popup-owned `UICanvasSlot`；Menu/Dialog 不再手写 `layoutAssigned()`
@@ -25,9 +30,15 @@
 - [x] CP5 纠偏：Workbench/Editor chrome 固定高度与 preview highlight 几何改由 canvas slot 持有
 - [x] CP4/CP5 纠偏：`UISelectableRow` 收成 single-child host；box `setSize` 桥 `preferredSize`；popup `_contentExtent` 提到 overlay；`ui::build(spec >> widget)` 在 attach 时写 edge
 - [x] CP4/CP5 纠偏：`UICompoundWidget` / `UICheckBox` 收成 single-child host；`FBoxSlotArgs::preferredSize` 补齐；inspector 行尺寸写 box edge
+- [x] CP4/CP5 纠偏：attach 把 authored child `setSize`/`setPosition` 种到 box preferredSize / canvas fixedSize+offset；layout spec 覆盖种子
+- [x] CP4/CP5 纠偏：`installLayout` host 的 `createSlotForChild` 走 layout 工厂；`UIDockSpace` 收成 single-child host；`UIDockFloatingHost` 收成 canvas host，window rect 落到 host-owned canvas slot
+- [x] CP4/CP5 纠偏：`UIPopupOverlay` 安装 canvas layout 并删掉手写 content rect；`UIDockFloatingWindow` 收成 overlay host，resize handle 走 overlay slot
 - [x] CP5 纠偏：Dock preview overlay 删除 dead child-authored anchors/position/zero-size
 - [x] CP5 审计纠偏：测试直写多数保留为合法夹具/absolute/layer-child 语义；tree/layer 路径中已失效的 child-owned zero-size 写入已清理
-- [x] CP5 收口：`attachToLayer(layer, widget, FCanvasSlotArgs)` 允许 layer-child 直接表达 edge intent（仍同步 legacy 字段）
+- [x] CP5 收口：`attachToLayer(layer, widget, FCanvasSlotArgs)` 直接写 parent-owned canvas slot；explicit path 不再回写 child 几何，Designer 读取 slot 作为真值
+- [x] CP5 纠偏：EditorSurface / UIDesignerPanel / GameUIHost / DefaultGameUIController 的挂载入口改为显式 canvas args，不再依赖 no-arg legacy attach 作为运行时主路径
+- [x] CP2/CP5 纠偏：subtree attach 不再把 child authored geometry 种到 slot；相关 snapshot / routing / popup 测试改成显式 slot 初始化
+- [x] CP2/CP5 纠偏：已知 canvas host 的 Workbench highlight / drag ghost 删除 child-geometry fallback；ToolControls 测试夹具统一改为显式 slot intent
 - [x] CP6 序列化侧旧锚点清理（`SceneWidgetEntry` 死条件、过期 `smoke.yaui`）；`serializeFields` 早已不输出锚点，无旧 schema 文件残留
 - [ ] CP6 剩余：Designer inspector / 快照 dump 中若出现新 slot 字段需同步（当前无残留）
 - [x] 既有故障（非本计划引入）：`UIDocument::instantiate` 传 null fields 时 `deserializeFields` 需容错（`type_error.307`）；已修复并恢复 `GameUIHostTest` 5 项用例

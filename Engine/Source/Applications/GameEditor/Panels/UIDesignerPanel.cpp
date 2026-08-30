@@ -113,7 +113,12 @@ void UIDesignerPanel::openDocument(const std::shared_ptr<UIDocument>& document)
         _document.reset();
         return;
     }
-    const WidgetAttachment attachment = _previewTree->attachToLayer(WidgetTree::ELayer::Content, _previewRoot);
+    FCanvasSlotArgs fillArgs;
+    fillArgs.anchorMin = {0.0f, 0.0f};
+    fillArgs.anchorMax = {1.0f, 1.0f};
+    const WidgetAttachment attachment = _previewTree->attachToLayer(WidgetTree::ELayer::Content,
+                                                                     _previewRoot,
+                                                                     fillArgs);
     YA_CORE_ASSERT(attachment.valid(), "UIDesignerPanel: failed to attach preview root");
     _selected = _previewRoot.get();
 }
@@ -359,12 +364,6 @@ void readCanvasIntent(const UIElement& widget,
         if (const auto* slot = dynamic_cast<const UICanvasSlot*>(parent->getSlotForChild(widget))) {
             outPos = slot->getOffset();
             outSize = slot->getFixedSize();
-            if (outSize.x == 0.0f) {
-                outSize.x = widget.getSize().x;
-            }
-            if (outSize.y == 0.0f) {
-                outSize.y = widget.getSize().y;
-            }
             outMin = slot->getAnchorMin();
             outMax = slot->getAnchorMax();
             return;

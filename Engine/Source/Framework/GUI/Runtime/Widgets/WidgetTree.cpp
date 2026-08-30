@@ -30,15 +30,6 @@ struct FTreeCanvasRoot final : UIElement
         installLayout(std::make_unique<UICanvasLayout>());
         setVisibility(EWidgetVisibility::HitTestInvisible);
     }
-
-  protected:
-    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override
-    {
-        if (const auto* canvas = dynamic_cast<const UICanvasLayout*>(getLayout())) {
-            return canvas->createSlot(*this, child);
-        }
-        return UIElement::createSlotForChild(child);
-    }
 };
 
 UIElementRef makeCanvasRoot(std::string name)
@@ -453,7 +444,17 @@ WidgetAttachment WidgetTree::attachToLayer(ELayer layer, const UIElementRef& wid
     args.anchorMin = widget->_anchorMin;
     args.anchorMax = widget->_anchorMax;
     args.offset    = widget->getPosition();
-    args.fixedSize = widget->getSize();
+    if (widget->_bAutoSize) {
+        if (widget->_anchorMin.x == widget->_anchorMax.x) {
+            args.widthSizeMode = EWidgetSizeMode::Auto;
+        }
+        if (widget->_anchorMin.y == widget->_anchorMax.y) {
+            args.heightSizeMode = EWidgetSizeMode::Auto;
+        }
+    }
+    else {
+        args.fixedSize = widget->getSize();
+    }
     return attachToLayer(layer, widget, args);
 }
 
@@ -464,12 +465,6 @@ WidgetAttachment WidgetTree::attachToLayer(ELayer layer,
     if (!widget) {
         return {};
     }
-    // Keep authored geometry in sync for detached widgets.
-    widget->_anchorMin = args.anchorMin;
-    widget->_anchorMax = args.anchorMax;
-    widget->setPosition(args.offset);
-    widget->setSize(args.fixedSize);
-
     WidgetAttachment attachment = attach(*getLayer(layer), widget);
     if (!attachment.valid()) {
         return attachment;
@@ -1404,8 +1399,7 @@ void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
                 slot->setOffset(logicalPoint + glm::vec2(10.0f, 10.0f));
             }
             else {
-                _dragGhost->setPosition(logicalPoint + glm::vec2(10.0f, 10.0f));
-                invalidateLayout();
+                YA_CORE_ERROR("WidgetTree drag ghost is missing its canvas slot");
             }
         }
     }

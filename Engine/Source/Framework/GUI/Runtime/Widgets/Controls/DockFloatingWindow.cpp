@@ -5,6 +5,7 @@
 #include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/UIBehavior.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -84,9 +85,11 @@ struct FDockFloatingWindowPanelDragBehavior final : public UIBehavior
         observer.onMove = [&owner, payload, lastPreview](const std::string&, const glm::vec2& logicalPoint, std::string_view)
         {
             if (owner._lastDragPoint) {
-                owner._windowRect.pos += logicalPoint - *owner._lastDragPoint;
+                Rect2D moved = owner.getWindowRect();
+                moved.pos += logicalPoint - *owner._lastDragPoint;
+                owner.setWindowRect(moved);
                 if (owner._ws) {
-                    owner._ws->setFloatingWindowPos(owner._floatingId, owner._windowRect.pos);
+                    owner._ws->setFloatingWindowPos(owner._floatingId, moved.pos);
                 }
             }
             owner._lastDragPoint = logicalPoint;
@@ -253,16 +256,21 @@ struct FResizeHandle final : UIElement
 
 UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindowId floatingId,
                                            std::shared_ptr<UIDockWorkspace> ws)
-    : UIContainer(std::move(name), "floating")
+    : UIElement(std::move(name), "floating")
     , _floatingId(floatingId)
     , _ws(std::move(ws))
 {
-    setDirection(EWidgetBoxLayout::Vertical);
-    setSpacing(0.0f);
-    setClipChildren(true);
+    installLayout(std::make_unique<UIOverlayLayout>());
     _hitFilter = EWidgetHitFilter::Stop;
     addBehavior(std::make_shared<FDockFloatingWindowPanelDragBehavior>());
     addBehavior(std::make_shared<FDockFloatingWindowDropTargetBehavior>());
+
+    auto chrome = std::make_shared<UIContainer>(std::format("{}_Chrome", _name));
+    chrome->setDirection(EWidgetBoxLayout::Vertical);
+    chrome->setSpacing(0.0f);
+    chrome->setClipChildren(true);
+    chrome->setStretchLastChild(true);
+    _chrome = chrome;
 
     auto header = std::make_shared<UIContainer>(std::format("{}_Header", _name));
     header->setDirection(EWidgetBoxLayout::Horizontal);
@@ -302,24 +310,62 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
         }
     };
     header->addDetachedChild(close);
-    addDetachedChild(header);
 
     _content = std::make_shared<UIContainer>(std::format("{}_Content", _name));
     _content->setClipChildren(true);
     _content->setStretchLastChild(true);
-    addDetachedChild(_content);
-    setStretchLastChild(true);
+    chrome->addDetachedChild(header);
+    chrome->addDetachedChild(_content);
+    addDetachedChild(chrome);
 
     refreshFromWorkspace();
 
-    for (const EResizeEdge edge : {EResizeEdge::Left, EResizeEdge::Right, EResizeEdge::Top,
-                                   EResizeEdge::Bottom, EResizeEdge::BottomRight}) {
+    const auto addHandle = [this](EResizeEdge edge, EUIOverlayAlignment hAlign,
+                                  EUIOverlayAlignment vAlign, glm::vec2 desired)
+    {
         auto handle = std::make_shared<FResizeHandle>(this, edge);
-        _resizeHandles.push_back(handle);
-        addDetachedChild(handle);
-    }
+        handle->setSize(desired);
+        addDetachedChild(handle, [hAlign, vAlign, desired](UIElement&, UISlot& slot)
+        {
+            if (auto* overlay = dynamic_cast<UIOverlaySlot*>(&slot)) {
+                overlay->apply(FOverlaySlotArgs{
+                    .hAlign        = hAlign,
+                    .vAlign        = vAlign,
+                    .preferredSize = desired,
+                });
+            }
+        });
+        _resizeHandles.push_back(std::move(handle));
+    };
+    addHandle(EResizeEdge::Left, EUIOverlayAlignment::Start, EUIOverlayAlignment::Fill,
+              {kResizeThickness, kResizeThickness});
+    addHandle(EResizeEdge::Right, EUIOverlayAlignment::End, EUIOverlayAlignment::Fill,
+              {kResizeThickness, kResizeThickness});
+    addHandle(EResizeEdge::Top, EUIOverlayAlignment::Fill, EUIOverlayAlignment::Start,
+              {kResizeThickness, kResizeThickness});
+    addHandle(EResizeEdge::Bottom, EUIOverlayAlignment::Fill, EUIOverlayAlignment::End,
+              {kResizeThickness, kResizeThickness});
+    addHandle(EResizeEdge::BottomRight, EUIOverlayAlignment::End, EUIOverlayAlignment::End,
+              {kCornerGripSize, kCornerGripSize});
 
     _windowRect = {glm::vec2{120.0f, 120.0f}, glm::vec2{360.0f, 260.0f}};
+    setWindowRect(_windowRect);
+}
+
+void UIDockFloatingWindow::setWindowRect(const Rect2D& rect)
+{
+    _windowRect = rect;
+    if (UIElement* parent = getParent()) {
+        if (auto* slot = dynamic_cast<UICanvasSlot*>(parent->getSlotForChild(*this))) {
+            FCanvasSlotArgs args;
+            args.offset    = rect.pos;
+            args.fixedSize = rect.extent;
+            slot->apply(args);
+            return;
+        }
+    }
+    setPosition(rect.pos);
+    setSize(rect.extent);
 }
 
 void UIDockFloatingWindow::refreshFromWorkspace()
@@ -400,14 +446,8 @@ void UIDockFloatingWindow::layout(const Rect2D& parentRect)
 
 void UIDockFloatingWindow::layoutAssigned(const Rect2D& rect)
 {
-    (void)rect;
-    setLayoutRect(_windowRect);
-    UIContainer::layoutAssigned(_windowRect);
-    const EResizeEdge edges[] = {EResizeEdge::Left, EResizeEdge::Right, EResizeEdge::Top,
-                                 EResizeEdge::Bottom, EResizeEdge::BottomRight};
-    for (size_t i = 0; i < _resizeHandles.size() && i < std::size(edges); ++i) {
-        _resizeHandles[i]->layoutAssigned(resizeHandleRect(edges[i]));
-    }
+    _windowRect = rect;
+    UIElement::layoutAssigned(rect);
 }
 
 void UIDockFloatingWindow::paintSelf(UIFrameBuilder& builder)
@@ -446,7 +486,9 @@ void UIDockFloatingWindow::updateWindowMove(const glm::vec2& logicalPoint)
     }
     const glm::vec2 delta = logicalPoint - *_lastDragPoint;
     _lastDragPoint = logicalPoint;
-    _windowRect.pos += delta;
+    Rect2D moved = _windowRect;
+    moved.pos += delta;
+    setWindowRect(moved);
     if (WidgetTree* tree = getTree()) {
         tree->invalidateLayout();
     }
@@ -508,7 +550,7 @@ bool UIDockFloatingWindow::handleInputEvent(const Event& event, const WidgetEven
         }
     }
 
-    return UIContainer::handleInputEvent(event, ctx);
+    return UIElement::handleInputEvent(event, ctx);
 }
 
 void UIDockFloatingWindow::clearTransientInputState()
@@ -517,7 +559,7 @@ void UIDockFloatingWindow::clearTransientInputState()
     _bTitleMoving = false;
     _bDockDragging = false;
     _lastDragPoint.reset();
-    UIContainer::clearTransientInputState();
+    UIElement::clearTransientInputState();
 }
 
 /// Resolve the window's min size from its theme style (fallback = the
@@ -532,31 +574,10 @@ static glm::vec2 floatingMinSize(const UIDockFloatingWindow& window)
 void UIDockFloatingWindow::resizeTo(const glm::vec2& extent)
 {
     const glm::vec2 minSize = floatingMinSize(*this);
-    _windowRect.extent.x    = std::max(minSize.x, extent.x);
-    _windowRect.extent.y    = std::max(minSize.y, extent.y);
-}
-
-Rect2D UIDockFloatingWindow::resizeHandleRect(EResizeEdge edge) const
-{
-    switch (edge) {
-    case EResizeEdge::Left:
-        return Rect2D{_windowRect.pos, glm::vec2{kResizeThickness, _windowRect.extent.y}};
-    case EResizeEdge::Right:
-        return Rect2D{glm::vec2{_windowRect.pos.x + _windowRect.extent.x - kResizeThickness,
-                                _windowRect.pos.y},
-                      glm::vec2{kResizeThickness, _windowRect.extent.y}};
-    case EResizeEdge::Top:
-        return Rect2D{_windowRect.pos, glm::vec2{_windowRect.extent.x, kResizeThickness}};
-    case EResizeEdge::Bottom:
-        return Rect2D{glm::vec2{_windowRect.pos.x,
-                                _windowRect.pos.y + _windowRect.extent.y - kResizeThickness},
-                      glm::vec2{_windowRect.extent.x, kResizeThickness}};
-    case EResizeEdge::BottomRight:
-        return Rect2D{glm::vec2{_windowRect.pos.x + _windowRect.extent.x - kCornerGripSize,
-                                _windowRect.pos.y + _windowRect.extent.y - kCornerGripSize},
-                      glm::vec2{kCornerGripSize, kCornerGripSize}};
-    }
-    return _windowRect;
+    Rect2D next = _windowRect;
+    next.extent.x = std::max(minSize.x, extent.x);
+    next.extent.y = std::max(minSize.y, extent.y);
+    setWindowRect(next);
 }
 
 void UIDockFloatingWindow::applyResizeFromEdge(EResizeEdge edge, const glm::vec2& pointerDelta)
@@ -564,31 +585,33 @@ void UIDockFloatingWindow::applyResizeFromEdge(EResizeEdge edge, const glm::vec2
     const float     right   = _windowRect.pos.x + _windowRect.extent.x;
     const float     bottom  = _windowRect.pos.y + _windowRect.extent.y;
     const glm::vec2 minSize = floatingMinSize(*this);
+    Rect2D          next    = _windowRect;
 
     switch (edge) {
     case EResizeEdge::Left: {
-        const float nextLeft = std::min(_windowRect.pos.x + pointerDelta.x, right - minSize.x);
-        _windowRect.pos.x    = nextLeft;
-        _windowRect.extent.x = right - nextLeft;
+        const float nextLeft = std::min(next.pos.x + pointerDelta.x, right - minSize.x);
+        next.pos.x    = nextLeft;
+        next.extent.x = right - nextLeft;
         break;
     }
     case EResizeEdge::Right:
-        _windowRect.extent.x = std::max(minSize.x, _windowRect.extent.x + pointerDelta.x);
+        next.extent.x = std::max(minSize.x, next.extent.x + pointerDelta.x);
         break;
     case EResizeEdge::Top: {
-        const float nextTop = std::min(_windowRect.pos.y + pointerDelta.y, bottom - minSize.y);
-        _windowRect.pos.y   = nextTop;
-        _windowRect.extent.y = bottom - nextTop;
+        const float nextTop = std::min(next.pos.y + pointerDelta.y, bottom - minSize.y);
+        next.pos.y    = nextTop;
+        next.extent.y = bottom - nextTop;
         break;
     }
     case EResizeEdge::Bottom:
-        _windowRect.extent.y = std::max(minSize.y, _windowRect.extent.y + pointerDelta.y);
+        next.extent.y = std::max(minSize.y, next.extent.y + pointerDelta.y);
         break;
     case EResizeEdge::BottomRight:
-        _windowRect.extent.x = std::max(minSize.x, _windowRect.extent.x + pointerDelta.x);
-        _windowRect.extent.y = std::max(minSize.y, _windowRect.extent.y + pointerDelta.y);
+        next.extent.x = std::max(minSize.x, next.extent.x + pointerDelta.x);
+        next.extent.y = std::max(minSize.y, next.extent.y + pointerDelta.y);
         break;
     }
+    setWindowRect(next);
 }
 
 } // namespace ya

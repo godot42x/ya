@@ -476,10 +476,15 @@ TEST(WidgetTreeTest, BehaviorParticipatesInPreviewTargetAndBubbleRouting)
     root->setSize({200.0f, 160.0f});
     root->_hitFilter = EWidgetHitFilter::Stop;
     auto child = std::make_shared<UIPanel>("Child");
-    child->setPosition({10.0f, 10.0f});
-    child->setSize({80.0f, 40.0f});
     child->_hitFilter = EWidgetHitFilter::Pass;
-    root->addDetachedChild(child);
+    root->addDetachedChild(child, [](UIElement&, UISlot& slot) {
+        if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
+            FCanvasSlotArgs args;
+            args.offset    = {10.0f, 10.0f};
+            args.fixedSize = {80.0f, 40.0f};
+            canvas->apply(args);
+        }
+    });
 
     auto rootBehavior = std::make_shared<TestBehavior>();
     auto childBehavior = std::make_shared<TestBehavior>();
@@ -542,7 +547,14 @@ TEST(WidgetTreeTest, RouteStateTracksPointerCaptureAndFocusPaths)
     panel->setSize({160.0f, 80.0f});
     auto button = makeButton("Button", {20.0f, 10.0f}, {80.0f, 32.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);
-    tree.attach(*panel, button);
+    panel->addDetachedChild(button, [](UIElement&, UISlot& slot) {
+        if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
+            FCanvasSlotArgs args;
+            args.offset    = {20.0f, 10.0f};
+            args.fixedSize = {80.0f, 32.0f};
+            canvas->apply(args);
+        }
+    });
     tree.layout();
 
     tree.dispatchEvent(MouseMoveEvent(130.0f, 100.0f), pointAt(130.0f, 100.0f));
@@ -588,7 +600,14 @@ TEST(WidgetTreeTest, ChildAddedToAttachedParentJoinsItsTree)
     tree.attachToLayer(WidgetTree::ELayer::Content, parent);
 
     auto child = makeButton("LateChild", {20.0f, 20.0f}, {80.0f, 32.0f});
-    parent->addDetachedChild(child);
+    parent->addDetachedChild(child, [](UIElement&, UISlot& slot) {
+        if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
+            FCanvasSlotArgs slotArgs;
+            slotArgs.offset    = {20.0f, 20.0f};
+            slotArgs.fixedSize = {80.0f, 32.0f};
+            canvas->apply(slotArgs);
+        }
+    });
     // Placement lives on the parent->child edge, not on the child's own
     // geometry: the canvas host resolves the rect from this slot offset.
     if (auto* slot = dynamic_cast<UICanvasSlot*>(parent->getSlotForChild(*child))) {
@@ -775,9 +794,17 @@ TEST(WidgetTreeTest, PopupOverlayUsesACanvasSlotForItsContentChild)
     WidgetTree tree({.width = 400, .height = 300});
     auto       overlay = std::make_shared<UIPopupOverlay>("Overlay");
     auto       panel   = std::make_shared<UIPanel>("Content");
-    panel->setSize({80.0f, 36.0f});
     overlay->_contentPos = {24.0f, 18.0f};
-    overlay->addDetachedChild(panel);
+    overlay->addDetachedChild(panel, [](UIElement&, UISlot& slot) {
+        if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
+            FCanvasSlotArgs args;
+            args.offset         = {24.0f, 18.0f};
+            args.fixedSize      = {80.0f, 36.0f};
+            args.widthSizeMode  = EWidgetSizeMode::Fixed;
+            args.heightSizeMode = EWidgetSizeMode::Fixed;
+            canvas->apply(args);
+        }
+    });
 
     overlay->open(tree);
     tree.layout();
@@ -1111,7 +1138,14 @@ TEST(WidgetTreeTest, WeakPointerPathsSurviveDetachWithoutDangling)
     panel->setSize({160.0f, 80.0f});
     auto       button = makeButton("Button", {20.0f, 10.0f}, {80.0f, 32.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);
-    tree.attach(*panel, button);
+    panel->addDetachedChild(button, [](UIElement&, UISlot& slot) {
+        if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
+            FCanvasSlotArgs args;
+            args.offset    = {20.0f, 10.0f};
+            args.fixedSize = {80.0f, 32.0f};
+            canvas->apply(args);
+        }
+    });
     tree.setFocus(button.get());
     tree.layout();
     tree.dispatchEvent(MouseMoveEvent(130.0f, 100.0f), pointAt(130.0f, 100.0f));

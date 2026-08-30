@@ -80,6 +80,15 @@ void UITextField::paintSelf(UIFrameBuilder& builder)
     }
 }
 
+glm::vec2 UITextField::computeIntrinsicSize() const
+{
+    const auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    if (!font) {
+        return {0.0f, 0.0f};
+    }
+    return {font->measureText(_text), font->lineHeight};
+}
+
 void UITextField::onFocusLost()
 {
     _bFocused = false;

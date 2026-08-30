@@ -523,10 +523,15 @@ void UITreeView::clearTransientInputState()
 glm::vec2 UITreeView::computeDesiredSize() const
 {
     if (!_bAutoSize) {
-        return _size;
+        return computeIntrinsicSize();
     }
     const auto rows = flattenVisible();
-    return {_size.x, static_cast<float>(rows.size()) * _rowHeight};
+    return {0.0f, static_cast<float>(rows.size()) * _rowHeight};
+}
+
+glm::vec2 UITreeView::computeIntrinsicSize() const
+{
+    return _size;
 }
 
 } // namespace ya

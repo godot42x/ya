@@ -20,7 +20,7 @@ struct WidgetTree;
 /// UILayoutIntent includes UILayout.
 enum class EWidgetSizeMode : uint8_t
 {
-    Fixed, // honor the element's own size (explicit authored size)
+    Fixed, // honor the slot's authored size (fixedSize / preferredSize)
     Auto,  // resolve from computeDesiredSize() (SizeToContent)
 };
 
@@ -248,14 +248,17 @@ public:
 
     [[nodiscard]] EUIOverlayAlignment getHAlign() const { return _hAlign; }
     [[nodiscard]] EUIOverlayAlignment getVAlign() const { return _vAlign; }
+    [[nodiscard]] const glm::vec2& getPreferredSize() const { return _preferredSize; }
 
     void setAlign(EUIOverlayAlignment hAlign, EUIOverlayAlignment vAlign);
+    void setPreferredSize(glm::vec2 value);
     void apply(const struct FSingleChildSlotArgs& args);
     void appendRuntimeDiagnostics(nlohmann::json& node) const override;
 
 private:
     EUIOverlayAlignment _hAlign = EUIOverlayAlignment::Fill;
     EUIOverlayAlignment _vAlign = EUIOverlayAlignment::Fill;
+    glm::vec2           _preferredSize = {0.0f, 0.0f};
 };
 
 /// Construct-time single-child slot intent. Defaults to Fill on both axes,
@@ -265,6 +268,8 @@ struct FSingleChildSlotArgs
 {
     EUIOverlayAlignment hAlign = EUIOverlayAlignment::Fill;
     EUIOverlayAlignment vAlign = EUIOverlayAlignment::Fill;
+    /// Non-zero on an axis overrides the child's desired size for that axis.
+    glm::vec2           preferredSize = {0.0f, 0.0f};
 };
 
 class YA_GUI_API UISingleChildLayout final : public UILayout
@@ -293,10 +298,12 @@ public:
     [[nodiscard]] EUIOverlayAlignment getHAlign() const { return _hAlign; }
     [[nodiscard]] EUIOverlayAlignment getVAlign() const { return _vAlign; }
     [[nodiscard]] const FMargin& getPadding() const { return _padding; }
+    [[nodiscard]] const glm::vec2& getPreferredSize() const { return _preferredSize; }
 
     void setHAlign(EUIOverlayAlignment value);
     void setVAlign(EUIOverlayAlignment value);
     void setPadding(FMargin value);
+    void setPreferredSize(glm::vec2 value);
     void setPadding(glm::vec2 value) { setPadding(FMargin::hv(value)); }
     void apply(const struct FOverlaySlotArgs& args);
     void appendRuntimeDiagnostics(nlohmann::json& node) const override;
@@ -305,6 +312,7 @@ private:
     EUIOverlayAlignment _hAlign  = EUIOverlayAlignment::Fill;
     EUIOverlayAlignment _vAlign  = EUIOverlayAlignment::Fill;
     FMargin             _padding{};
+    glm::vec2           _preferredSize = {0.0f, 0.0f};
 };
 
 struct FOverlaySlotArgs
@@ -312,6 +320,8 @@ struct FOverlaySlotArgs
     EUIOverlayAlignment hAlign  = EUIOverlayAlignment::Fill;
     EUIOverlayAlignment vAlign  = EUIOverlayAlignment::Fill;
     FMargin             padding = {};
+    /// Non-zero on an axis overrides the child's desired size for that axis.
+    glm::vec2           preferredSize = {0.0f, 0.0f};
 };
 
 /// Stacked children sharing one parent rect. Each child is arranged through
@@ -483,8 +493,8 @@ public:
     void arrange(UIElement& parent, const Rect2D& rect) const override;
 
     /// Resolve one child rect from its canvas slot against the parent content
-    /// rect. Delegates to UIElement::resolveCanvasRect() so the canvas layout
-    /// and the legacy self-positioned path agree on anchor math.
+    /// rect. Delegates to UIElement::resolveCanvasRect() with slot-authored
+    /// size so the canvas layout never reads child `_size`.
     [[nodiscard]] static Rect2D resolveChildRect(const UIElement&    child,
                                                  const UICanvasSlot& slot,
                                                  const Rect2D&       contentRect);

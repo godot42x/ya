@@ -73,11 +73,12 @@ TEST(UIFrameSnapshotTest, ContainerClipResolvesOnChildren)
     clip->setSize({200.0f, 100.0f});
     clip->setClipChildren(true);
     auto child = std::make_shared<UIPanel>("Child");
-    // Box layout places the child at the content origin with its desired
-    // size: 300px wide inside a 200px clip -> the item is half outside.
-    child->setSize({300.0f, 100.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, clip);
-    tree.attach(*clip, child);
+    clip->addDetachedChild(child, [](UIElement&, UISlot& slot) {
+        if (auto* box = dynamic_cast<UIBoxSlot*>(&slot)) {
+            box->setPreferredSize({300.0f, 100.0f});
+        }
+    });
 
     const UIFrameSnapshot snapshot = tree.buildSnapshot({});
 
@@ -1104,9 +1105,12 @@ TEST(UIFrameSnapshotTest, ScrollViewportClipsContentToViewportRect)
     viewport->setSize({200.0f, 60.0f});
     viewport->_bShowScrollbar = false;
     auto content = std::make_shared<UIPanel>("Content");
-    content->setSize({200.0f, 100.0f}); // taller than the viewport
     tree.attachToLayer(WidgetTree::ELayer::Content, viewport);
-    tree.attach(*viewport, content);
+    viewport->addDetachedChild(content, [](UIElement&, UISlot& slot) {
+        if (auto* single = dynamic_cast<UISingleChildSlot*>(&slot)) {
+            single->setPreferredSize({200.0f, 100.0f});
+        }
+    });
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
 
@@ -1180,9 +1184,12 @@ TEST(UIFrameSnapshotTest, ContainerClipResizeInvalidatesChildSegments)
     clip->setClipChildren(true);
     clip->setSize({200.0f, 100.0f});
     auto child = std::make_shared<UIPanel>("Child");
-    child->setSize({50.0f, 25.0f}); // fixed: box layout does not stretch it
     tree.attachToLayer(WidgetTree::ELayer::Content, clip);
-    tree.attach(*clip, child);
+    clip->addDetachedChild(child, [](UIElement&, UISlot& slot) {
+        if (auto* box = dynamic_cast<UIBoxSlot*>(&slot)) {
+            box->setPreferredSize({50.0f, 25.0f});
+        }
+    });
 
     tree.buildSnapshot(UIFrameBuildContext{}); // cold start
     tree.buildSnapshot(UIFrameBuildContext{}); // clean: child reuses its segment

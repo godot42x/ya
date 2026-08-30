@@ -81,9 +81,8 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
 
     // Content-slot layout (Slate ContentControl model): the button resolves
     // its own rect (anchor math) and delegates its only child to
-    // UISingleChildLayout. With
-    // base _bAutoSize set, desired size = first visible content child's
-    // desired size + padding, so a text/image label sizes the button.
+    // UISingleChildLayout. Desired size is content + padding; authored size
+    // lives on the parent-owned slot.
     void                    layout(const Rect2D& parentRect) override;
     void                    layoutAssigned(const Rect2D& rect) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;

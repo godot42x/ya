@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockNode.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
@@ -21,12 +22,13 @@ struct UIDockWorkspace;
 
 /// A floating dock window (Phase 5). Presents one workspace floating record as a
 /// titled window that may host several tabs (panels). It is positioned
-/// absolutely inside a UIDockFloatingHost, and:
+/// absolutely inside a UIDockFloatingHost via the host-owned UICanvasSlot:
+///   - `setWindowRect` writes that edge (and seeds it at attach);
 ///   - dragging any of its tabs (dock-panel payload) projects the dock chooser
 ///     and either re-docks onto a DockSpace / another floating window or moves
 ///     the window when released in empty space;
 ///   - the close button re-docks the active tab back to the dock tree's root.
-struct YA_GUI_API UIDockFloatingWindow : public UIContainer, public UIStyledWidget<UIDockFloatingWindow, FFloatingWindowStyle>
+struct YA_GUI_API UIDockFloatingWindow : public UIElement, public UIStyledWidget<UIDockFloatingWindow, FFloatingWindowStyle>
 {
     YA_GUI_AUTHORED_STYLE_IO(FFloatingWindowStyle)
 
@@ -36,7 +38,7 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer, public UIStyledWidg
     [[nodiscard]] DockPanelId getActivePanelId() const { return _panelId; }
     [[nodiscard]] FDockFloatingWindowId getFloatingId() const { return _floatingId; }
     [[nodiscard]] const Rect2D& getWindowRect() const { return _windowRect; }
-    void setWindowRect(const Rect2D& rect) { _windowRect = rect; }
+    void setWindowRect(const Rect2D& rect);
     void resizeTo(const glm::vec2& extent);
     /// Rebuild the window's tab bar + content to match the workspace's current
     /// floating record for this window (called by the host on floating updates).
@@ -47,6 +49,7 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer, public UIStyledWidg
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
+    void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override { node["type"] = "overlay"; }
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void clearTransientInputState() override;
@@ -69,7 +72,6 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer, public UIStyledWidg
     void beginWindowMove();
     void updateWindowMove(const glm::vec2& logicalPoint);
     void rebuildContent();
-    [[nodiscard]] Rect2D resizeHandleRect(EResizeEdge edge) const;
 
     FDockFloatingWindowId _floatingId = kInvalidFloatingWindowId;
     DockPanelId _panelId = kInvalidDockPanelId; ///< Active (selected) tab.
@@ -77,6 +79,7 @@ struct YA_GUI_API UIDockFloatingWindow : public UIContainer, public UIStyledWidg
     std::shared_ptr<UIDockWorkspace> _ws;
     std::shared_ptr<UITabBar> _tabBar;
     std::shared_ptr<UIContainer> _content;
+    std::shared_ptr<UIContainer> _chrome;
     /// Title strip container (the windows grab zone): pressing + dragging its
     /// empty area starts the dock-panel drag (dock on a DockSpace, move on
     /// empty space) — mirrors the tab-strip drag.

@@ -91,9 +91,6 @@ struct YA_GUI_API UIPanel : public UIElement, public UIStyledWidget<UIPanel, FPa
     {
         return dynamic_cast<UICanvasSlot*>(getSlotForChild(child));
     }
-
-  protected:
-    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 };
 
 } // namespace ya

@@ -1250,8 +1250,11 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
 
     auto floatHost = std::make_shared<ya::UIDockFloatingHost>("DemoFloatingHost");
     floatHost->bindWorkspace(dockWs);
+    ya::FCanvasSlotArgs hostFill;
+    hostFill.anchorMin = {0.0f, 0.0f};
+    hostFill.anchorMax = {1.0f, 1.0f};
     const ya::WidgetAttachment floatingAttached =
-        tree.attachToLayer(ya::WidgetTree::ELayer::Popup, floatHost);
+        tree.attachToLayer(ya::WidgetTree::ELayer::Popup, floatHost, hostFill);
     YA_CORE_ASSERT(floatingAttached.valid(), "Dock floating host attach failed");
     state.dockFloatingHost = floatHost;
 

@@ -117,8 +117,8 @@ class TUIWidgetBuilder
     /// DSL-created widgets start AutoSize. setSize() turns AutoSize off, so a
     /// chain like `.setSize(...).setAutoSize(true)` restores measuring: on an
     /// axis with no anchor span the size comes from computeDesiredSize() and
-    /// `_size` is ignored entirely (it is not a minimum — see
-    /// UIElement::computeAnchorRect).
+    /// the slot's authored size is ignored (it is not a minimum — see
+    /// UIElement::resolveCanvasRect).
     ///
     /// Because this is the only API that writes the flag without touching the
     /// size, the last call in a chain always wins regardless of order.

@@ -159,7 +159,9 @@ Rect2D UIElement::computeAnchorRect(const Rect2D& parentRect) const
     return resolveCanvasRect(parentRect, _anchorMin, _anchorMax, _position,
                              glm::vec2{0.0f, 0.0f},
                              glm::vec2{std::numeric_limits<float>::max(),
-                                       std::numeric_limits<float>::max()});
+                                       std::numeric_limits<float>::max()},
+                             _size,
+                             glm::bvec2{_bAutoSize, _bAutoSize});
 }
 
 Rect2D UIElement::resolveCanvasRect(const Rect2D&    parentRect,
@@ -167,29 +169,31 @@ Rect2D UIElement::resolveCanvasRect(const Rect2D&    parentRect,
                                     const glm::vec2& anchorMaxIn,
                                     const glm::vec2& offset,
                                     const glm::vec2& minSize,
-                                    const glm::vec2& maxSize) const
+                                    const glm::vec2& maxSize,
+                                    const glm::vec2& authoredSize,
+                                    glm::bvec2       autoAxis) const
 {
     const glm::vec2 anchorMin = glm::clamp(anchorMinIn, 0.0f, 1.0f);
     const glm::vec2 anchorMax = glm::clamp(anchorMaxIn, 0.0f, 1.0f);
     const glm::vec2 rectMin   = parentRect.pos + parentRect.extent * anchorMin + offset;
 
     // Per-axis size resolution (SizeToContent contract): an axis with an
-    // anchor span stretches to the parent; an AutoSize axis resolves from
-    // computeDesiredSize(); otherwise the axis keeps _size (default {0,0}
-    // anchors = legacy absolute layout). The slot's min/max clamp the result.
+    // anchor span stretches to the parent; an Auto axis resolves from
+    // computeDesiredSize(); otherwise the axis keeps authoredSize from the
+    // parent-owned slot (path-B still passes `_size` through computeAnchorRect).
     const glm::vec2 span    = (anchorMax - anchorMin) * parentRect.extent;
-    const glm::vec2 desired = _bAutoSize ? computeDesiredSize() : _size;
-    glm::vec2       size    = _size;
+    const glm::vec2 desired = (autoAxis.x || autoAxis.y) ? computeDesiredSize() : authoredSize;
+    glm::vec2       size    = authoredSize;
     if (span.x != 0.0f) {
         size.x = span.x;
     }
-    else if (_bAutoSize) {
+    else if (autoAxis.x) {
         size.x = desired.x;
     }
     if (span.y != 0.0f) {
         size.y = span.y;
     }
-    else if (_bAutoSize) {
+    else if (autoAxis.y) {
         size.y = desired.y;
     }
     size = glm::clamp(size, minSize, maxSize);
@@ -228,30 +232,6 @@ void UIElement::layoutAssigned(const Rect2D& rect)
     layoutChildren(_layoutRect);
 }
 
-void UIElement::reportStretchAnchorsIgnored() const
-{
-    if (!hasStretchAnchors() || _bStretchAnchorsWarned) {
-        return;
-    }
-    _bStretchAnchorsWarned = true;
-    // Only one mechanism may decide a child's size, and for path-A parents that
-    // mechanism is the slot. Letting an author write stretch anchors here would
-    // look like it works (the cross axis often stretches anyway by the slot
-    // default) while silently doing nothing — so reject it instead.
-    YA_CORE_ASSERT(false,
-                   "UIElement: child '{}' declares stretch anchors ({}, {})-({}, {}) but its "
-                   "parent '{}' owns child arrangement (path A) and ignores them. Express the "
-                   "intent on the parent's slot instead (child(node, ui::boxSlot().fill()) for a "
-                   "box, ui::singleChildSlot() otherwise), or move the child under a path-B "
-                   "parent (panel / plain element) where anchor math runs.",
-                   _name,
-                   _anchorMin.x,
-                   _anchorMin.y,
-                   _anchorMax.x,
-                   _anchorMax.y,
-                   _parent != nullptr ? _parent->_name : std::string("<detached>"));
-}
-
 void UIElement::layoutChildren(const Rect2D& layoutRect)
 {
     for (UIElement* child : getChildrenInPaintOrder()) {
@@ -263,13 +243,17 @@ void UIElement::layoutChildren(const Rect2D& layoutRect)
 
 glm::vec2 UIElement::computeDesiredSize() const
 {
-    // A host measures through its layout; otherwise the element's own size.
+    // A host measures through its layout; a leaf reports intrinsic content.
+    // Authored size is parent-owned slot state, not a child layout input.
     if (_layout != nullptr) {
-        const glm::vec2 content = _layout->measure(*this);
-        return glm::vec2(_size.x != 0.0f ? _size.x : content.x,
-                         _size.y != 0.0f ? _size.y : content.y);
+        return _layout->measure(*this);
     }
-    return _size;
+    return computeIntrinsicSize();
+}
+
+glm::vec2 UIElement::computeIntrinsicSize() const
+{
+    return {0.0f, 0.0f};
 }
 
 // === Paint ===
@@ -378,32 +362,48 @@ void UIElement::invalidateProperty(EUIPropertyImpact impact)
 
 void UIElement::setPosition(const glm::vec2& value)
 {
-    if (_position == value) {
-        return;
+    _bAuthoredPosition = true;
+    const bool bUnchanged = (_position == value);
+    if (!bUnchanged) {
+        _position = value;
     }
-    _position = value;
     if (auto* canvasSlot = dynamic_cast<UICanvasSlot*>(getSlot())) {
         canvasSlot->setOffset(value);
         return;
     }
-    invalidateProperty(EUIPropertyImpact::Layout);
+    if (!bUnchanged) {
+        invalidateProperty(EUIPropertyImpact::Layout);
+    }
 }
 
 void UIElement::setSize(const glm::vec2& value)
 {
-    if (_size == value) {
-        return;
+    _bAuthoredSize = true;
+    const bool bUnchanged = (_size == value);
+    if (!bUnchanged) {
+        _size = value;
     }
-    _size = value;
     if (auto* canvasSlot = dynamic_cast<UICanvasSlot*>(getSlot())) {
         canvasSlot->setFixedSize(value);
+        canvasSlot->setWidthSizeMode(EWidgetSizeMode::Fixed);
+        canvasSlot->setHeightSizeMode(EWidgetSizeMode::Fixed);
         return;
     }
     if (auto* boxSlot = dynamic_cast<UIBoxSlot*>(getSlot())) {
         boxSlot->setPreferredSize(value);
         return;
     }
-    invalidateProperty(EUIPropertyImpact::Layout);
+    if (auto* overlaySlot = dynamic_cast<UIOverlaySlot*>(getSlot())) {
+        overlaySlot->setPreferredSize(value);
+        return;
+    }
+    if (auto* singleSlot = dynamic_cast<UISingleChildSlot*>(getSlot())) {
+        singleSlot->setPreferredSize(value);
+        return;
+    }
+    if (!bUnchanged) {
+        invalidateProperty(EUIPropertyImpact::Layout);
+    }
 }
 
 void UIElement::paintChildren(UIFrameBuilder& builder)
@@ -493,6 +493,12 @@ void UIElement::initializeChildSlot(UIElement& child, FChildSlotInitializer init
 
 std::unique_ptr<UISlot> UIElement::createSlotForChild(UIElement& child)
 {
+    // The installed layout owns the edge type. Hosts that only install a
+    // layout must not have to repeat this factory, otherwise they silently
+    // get a base UISlot and arrange cannot see typed intent.
+    if (_layout != nullptr) {
+        return _layout->createSlot(*this, child);
+    }
     return std::make_unique<UISlot>(*this, child);
 }
 

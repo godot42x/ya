@@ -74,6 +74,7 @@ struct YA_GUI_API UITableGrid : public UIElement, public UIStyledWidget<UITableG
     }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
+    [[nodiscard]] glm::vec2 computeIntrinsicSize() const override;
     [[nodiscard]] bool isHoverable() const override { return true; }
     void onPointerLeave() override;
     void clearTransientInputState() override;

@@ -96,7 +96,7 @@ inline constexpr EUILayoutCap kGridHostCaps =
 /// Single-child hosts (scroll viewport / size box / button / selectable row):
 /// the child fills the host, optionally with alignment.
 inline constexpr EUILayoutCap kSingleChildHostCaps =
-    EUILayoutCap::Fill | EUILayoutCap::Align;
+    EUILayoutCap::Fill | EUILayoutCap::Align | EUILayoutCap::Size;
 
 /// Split hosts: two panes, positioned by ratio.
 inline constexpr EUILayoutCap kSplitHostCaps =
@@ -104,7 +104,7 @@ inline constexpr EUILayoutCap kSplitHostCaps =
 
 /// Overlay hosts: layered children with alignment.
 inline constexpr EUILayoutCap kOverlayHostCaps =
-    EUILayoutCap::Fill | EUILayoutCap::Align;
+    EUILayoutCap::Fill | EUILayoutCap::Align | EUILayoutCap::Size;
 
 /// True when every capability in `caps` is allowed by `allowed`.
 template<EUILayoutCap Caps, EUILayoutCap Allowed>
@@ -184,10 +184,48 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
 {
     (void)child;
     if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
-        // Canvas fixed-size intent now lives on the slot edge as well; a
-        // canvas child no longer needs its own `_size` mutated for
-        // `ui::layout().size(...)` to take effect.
-        canvas->apply(spec.toCanvasArgs());
+        // Only write capabilities the spec actually carries, so an align-only
+        // spec cannot wipe a seeded fixedSize / Auto size mode.
+        if (spec.has(EUILayoutCap::Fill) || spec.has(EUILayoutCap::Anchor)) {
+            canvas->setAnchorMin(spec.anchorMin);
+            canvas->setAnchorMax(spec.anchorMax);
+            // fill() is stretch, not SizeToContent. Seeded Auto from a DSL
+            // child must not keep Auto on a fill edge unless the spec says so.
+            if (spec.has(EUILayoutCap::Fill) && !spec.has(EUILayoutCap::SizeMode)) {
+                canvas->setWidthSizeMode(EWidgetSizeMode::Fixed);
+                canvas->setHeightSizeMode(EWidgetSizeMode::Fixed);
+            }
+        }
+        if (spec.has(EUILayoutCap::Offsets)) {
+            canvas->setOffset(spec.offset);
+            canvas->setOffsets(spec.offsets);
+        }
+        if (spec.has(EUILayoutCap::Align)) {
+            canvas->setAlignmentH(spec.alignH);
+            canvas->setAlignmentV(spec.alignV);
+        }
+        if (spec.has(EUILayoutCap::Pivot)) {
+            canvas->setPivot(spec.pivot);
+        }
+        if (spec.has(EUILayoutCap::SizeMode)) {
+            canvas->setWidthSizeMode(spec.widthSizeMode);
+            canvas->setHeightSizeMode(spec.heightSizeMode);
+        }
+        if (spec.has(EUILayoutCap::Size)) {
+            canvas->setFixedSize(spec.size);
+            canvas->setPreferredSize(spec.preferredSize);
+            if (!spec.has(EUILayoutCap::SizeMode)) {
+                canvas->setWidthSizeMode(EWidgetSizeMode::Fixed);
+                canvas->setHeightSizeMode(EWidgetSizeMode::Fixed);
+            }
+        }
+        if (spec.minSize != glm::vec2{0.0f, 0.0f}) {
+            canvas->setMinSize(spec.minSize);
+        }
+        if (spec.maxSize != glm::vec2{std::numeric_limits<float>::max(),
+                                      std::numeric_limits<float>::max()}) {
+            canvas->setMaxSize(spec.maxSize);
+        }
         return;
     }
     if (auto* box = dynamic_cast<UIBoxSlot*>(&slot)) {
@@ -232,7 +270,13 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
                 : spec.alignV == EWidgetAlignV::Bottom ? EUIOverlayAlignment::End
                 : EUIOverlayAlignment::Start;
         }
-        single->setAlign(h, v);
+        FSingleChildSlotArgs args;
+        args.hAlign = h;
+        args.vAlign = v;
+        if (spec.has(EUILayoutCap::Size)) {
+            args.preferredSize = spec.size;
+        }
+        single->apply(args);
         return;
     }
     if (auto* overlay = dynamic_cast<UIOverlaySlot*>(&slot)) {
@@ -249,6 +293,9 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
         FOverlaySlotArgs args;
         args.hAlign = h;
         args.vAlign = v;
+        if (spec.has(EUILayoutCap::Size)) {
+            args.preferredSize = spec.size;
+        }
         overlay->apply(args);
         return;
     }

@@ -271,6 +271,10 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     // mutation transaction (deserializeFields).
     glm::vec2         _position   = {0.0f, 0.0f}; // Offset (px) from the anchor point within the parent rect
     glm::vec2         _size       = {100.0f, 50.0f};
+    /// True after an explicit setPosition/setSize. Default constructed
+    /// geometry is not copied onto a new parent-owned slot at attach.
+    bool              _bAuthoredPosition = false;
+    bool              _bAuthoredSize     = false;
     EWidgetVisibility _visibility = EWidgetVisibility::Visible;
   public:
     // Authoring-only configuration (GI-202 exception list): no runtime
@@ -284,20 +288,13 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Keyboard focus participation (Tab traversal). Default None: plain
     /// widgets never take focus.
     EWidgetFocusPolicy _focusPolicy = EWidgetFocusPolicy::None;
-    /// SizeToContent (Slate DesiredSize model): when set, the final size on
-    /// each axis resolves from computeDesiredSize() (recursively aggregated
-    /// from content children) instead of _size. Resolution precedence per
-    /// axis: anchor stretch (anchorMin/Max span) > AutoSize > _size. Default
-    /// off so existing explicit-size widgets are unaffected. Container packing
-    /// always uses desired size for the main axis regardless of this flag;
-    /// the flag only governs the widget's own size when it resolves its own
-    /// rect (anchor layout) or when a parent assigns an auto-sized slot.
+    /// SizeToContent (Slate DesiredSize model). On a canvas edge this is
+    /// seeded onto `UICanvasSlot` size mode Auto; the flag remains on the
+    /// child until CP2 deletes it. Path-B `computeAnchorRect` still reads it.
+    /// Resolution precedence per axis: anchor stretch > Auto (desired) >
+    /// slot authored size. Default off so explicit-size widgets are unaffected.
     bool _bAutoSize = false;
 
-    /// One-shot guard for reportStretchAnchorsIgnored(): a path-A parent
-    /// already reported that this child's stretch anchors are being dropped.
-    /// Mutable because the report happens during a const measure/arrange pass.
-    mutable bool _bStretchAnchorsWarned = false;
 
     /// Volatile (Slate-style): re-run this widget's paintSelf every frame,
     /// bypassing the draw-item cache, regardless of dirty state. The
@@ -390,10 +387,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     //            there is nothing for the parent to honour.
     //
     // The two paths are mutually exclusive on purpose: a child never has two
-    // competing stretch mechanisms. A parent that arranges children MUST route
-    // those rect assignments through UILayout::assignChildRect() (or report
-    // via reportStretchAnchorsIgnored()) so dropped anchor intent is reported
-    // instead of silently discarded.
+    // competing stretch mechanisms. A parent that arranges children routes
+    // rect assignments through UILayout::assignChildRect(); child anchors are
+    // not consulted on this parent-owned path.
     //
     /// Compute this element's rect within `parentRect` (anchor math), store it
     /// in `_layoutRect`, then lay out children in paint order.
@@ -405,9 +401,14 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// scroll viewports keep their custom layout when they receive an
     /// assigned rect from a parent container.
     virtual void layoutAssigned(const Rect2D& rect);
-    /// Desired size for container arrangement (leaf = _size; auto-size text =
-    /// measured text; containers aggregate children).
+    /// Content measure for packing: layout hosts aggregate children through
+    /// their layout; leaves return computeIntrinsicSize(). Authored size lives
+    /// on the parent-owned slot (preferredSize / fixedSize), not on `_size`.
     [[nodiscard]] virtual glm::vec2 computeDesiredSize() const;
+    /// Widget-owned content size (glyph measure, padding, row height, ...).
+    /// Default is {0,0}: the constructed 100x50 `_size` is not intrinsic.
+    /// Layout overlays slot preferred/fixed size on top of this.
+    [[nodiscard]] virtual glm::vec2 computeIntrinsicSize() const;
 
     // —— Layout host hook ——
     //
@@ -420,19 +421,6 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
 
     /// Install a layout owned by this element (transfers ownership).
     void installLayout(std::unique_ptr<UILayout> layout);
-
-    /// True when the anchors declare a stretch intent (min != max on either
-    /// axis). Non-zero anchor span is one of only two things that stretch a
-    /// widget; a zero component in `_size` is NOT one of them.
-    [[nodiscard]] bool hasStretchAnchors() const
-    {
-        return _anchorMin.x != _anchorMax.x || _anchorMin.y != _anchorMax.y;
-    }
-
-    /// Path-A parents call this before assigning a rect: if the child declared
-    /// stretch anchors that path A ignores by contract, report it once.
-    /// const because layout algorithms run against a const parent state.
-    void reportStretchAnchorsIgnored() const;
 
     // === Paint (after layout; records resolved draw items into the frame) ===
     /// Records this element and its subtree into `builder`. Runs before the
@@ -556,6 +544,8 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     // protected (GI-202): external readers use the getters.
     [[nodiscard]] const glm::vec2& getPosition() const { return _position; }
     [[nodiscard]] const glm::vec2& getSize() const { return _size; }
+    [[nodiscard]] bool hasAuthoredPosition() const { return _bAuthoredPosition; }
+    [[nodiscard]] bool hasAuthoredSize() const { return _bAuthoredSize; }
     [[nodiscard]] EWidgetVisibility getVisibility() const { return _visibility; }
 
     void setPosition(const glm::vec2& value);
@@ -674,17 +664,20 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     [[nodiscard]] Rect2D computeAnchorRect(const Rect2D& parentRect) const;
 
   public:
-    /// Resolve this element's rect from a parent-provided canvas slot (anchor
-    /// Min/Max + offset + min/max clamps) against `parentRect`. Size resolution
-    /// keeps the historical contract: an axis with an anchor span stretches to
-    /// the parent, an AutoSize axis uses computeDesiredSize(), otherwise the
-    /// axis keeps this element's own size.
+    /// Resolve this element's rect from parent-owned canvas edge data against
+    /// `parentRect`. Size resolution does not read `_size`: an axis with an
+    /// anchor span stretches to the parent, an Auto axis uses
+    /// computeDesiredSize(), otherwise the axis keeps `authoredSize` from the
+    /// slot (or from `_size` only on the remaining path-B self-positioned
+    /// call through computeAnchorRect).
     [[nodiscard]] Rect2D resolveCanvasRect(const Rect2D&    parentRect,
                                            const glm::vec2& anchorMin,
                                            const glm::vec2& anchorMax,
                                            const glm::vec2& offset,
                                            const glm::vec2& minSize,
-                                           const glm::vec2& maxSize) const;
+                                           const glm::vec2& maxSize,
+                                           const glm::vec2& authoredSize,
+                                           glm::bvec2       autoAxis) const;
 
   protected:
     /// Lay out direct children within `layoutRect` (paint order).
@@ -704,8 +697,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// on unbind/rebind/destruction, not on paint re-collection. Implemented in
     /// .cpp.
     void clearPersistentDependencies();
-    /// Factory for one parent-owned child edge. Generic elements create a
-    /// plain UISlot; layout hosts override with a concrete slot type.
+    /// Factory for one parent-owned child edge. An installed layout supplies
+    /// its typed slot; generic elements create a plain UISlot. Hosts that
+    /// hold a layout as a member still override this to call that layout.
     [[nodiscard]] virtual std::unique_ptr<UISlot> createSlotForChild(UIElement& child);
 
   private:

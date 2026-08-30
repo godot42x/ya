@@ -43,6 +43,7 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     explicit UIPopupOverlay(std::string name = "PopupOverlay", std::string styleKey = "popup")
         : UIElement(std::move(name), std::move(styleKey))
     {
+        installLayout(std::make_unique<UICanvasLayout>());
         _hitFilter   = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
     }
@@ -81,9 +82,9 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     /// Same as close(); used by shield/Esc handling.
     void dismiss() { close(); }
 
-    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
+    void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override { node["type"] = "canvas"; }
     void paintSelf(UIFrameBuilder& builder) override;
     void deserializeFields(const nlohmann::json& fields) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {

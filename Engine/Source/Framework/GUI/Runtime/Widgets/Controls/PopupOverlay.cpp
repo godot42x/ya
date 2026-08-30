@@ -69,11 +69,6 @@ void UIPopupOverlay::close()
     }
 }
 
-std::unique_ptr<UISlot> UIPopupOverlay::createSlotForChild(UIElement& child)
-{
-    return std::make_unique<UICanvasSlot>(*this, child);
-}
-
 void UIPopupOverlay::layout(const Rect2D& parentRect)
 {
     layoutAssigned(parentRect);
@@ -87,21 +82,15 @@ void UIPopupOverlay::layoutAssigned(const Rect2D& rect)
         if (!child->participatesInLayout()) {
             continue;
         }
-        // Popup content now has a formal parent-owned canvas edge instead of a
-        // handwritten rect assignment. Derived popups still control placement
-        // by overriding resolveContentSlotArgs().
+        // Policy for this edge is popup-owned; write it onto the slot before
+        // the installed canvas layout arranges from that edge.
         if (auto* slot = dynamic_cast<UICanvasSlot*>(getSlotForChild(*child))) {
             slot->apply(resolveContentSlotArgs(*child));
-            child->layoutAssigned(UICanvasLayout::resolveChildRect(*child, *slot, rect));
-        }
-        else {
-            const glm::vec2 desired = child->computeDesiredSize();
-            child->layoutAssigned(Rect2D{
-                .pos    = _contentPos,
-                .extent = desired,
-            });
         }
         break;
+    }
+    if (UILayout* layout = getLayout()) {
+        layout->arrange(*this, _layoutRect);
     }
 }
 

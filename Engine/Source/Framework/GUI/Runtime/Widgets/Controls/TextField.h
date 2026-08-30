@@ -54,7 +54,7 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
         }
         _text = value;
         clampCursor();
-        invalidateProperty(EUIPropertyImpact::Paint);
+        invalidateProperty(EUIPropertyImpact::Layout);
     }
 
     void setFontSize(uint32_t value)
@@ -63,7 +63,7 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
             return;
         }
         _fontSize = value;
-        invalidateProperty(EUIPropertyImpact::Paint);
+        invalidateProperty(EUIPropertyImpact::Layout);
     }
 
     /// Fired on every edit (insert / delete / caret-independent text change).
@@ -80,7 +80,8 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
-    [[nodiscard]] glm::vec2 computeDesiredSize() const override { return _size; }
+    [[nodiscard]] glm::vec2 computeDesiredSize() const override { return computeIntrinsicSize(); }
+    [[nodiscard]] glm::vec2 computeIntrinsicSize() const override;
     void onFocusGained(bool /*bFromKeyboard*/) override { _bFocused = true; }
     void onFocusLost() override;
     void clearTransientInputState() override { _bFocused = false; }

@@ -127,11 +127,8 @@ void UIText::deserializeFields(const nlohmann::json& fields)
     }
 }
 
-glm::vec2 UIText::computeDesiredSize() const
+glm::vec2 UIText::computeIntrinsicSize() const
 {
-    if (!_bAutoSize) {
-        return _size;
-    }
     // Measure from the resolved text/style so the desired size matches paint
     // exactly when a binding is active. (Measure runs during layout, before
     // the paint walk, so get() here does not register a dependency; the Layout
@@ -139,15 +136,25 @@ glm::vec2 UIText::computeDesiredSize() const
     const FTextStyle& style = resolvedStyle(ReactiveBase::EDirtyLevel::Layout, false);
     auto               font  = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (!font) {
-        return _size;
+        return {0.0f, 0.0f};
     }
     if (_bWrap) {
-        const float maxWidth = _maxWrapWidth > 0.0f ? _maxWrapWidth : _size.x;
-        const auto  lines    = wrapText(resolvedText(ReactiveBase::EDirtyLevel::Layout), font, maxWidth);
+        // An explicit max width is a content constraint. With no explicit
+        // constraint, intrinsic measurement stays single-line; the assigned
+        // slot rect controls wrapping during paint. Do not use child `_size`
+        // as an implicit wrap width.
+        const std::string text = resolvedText(ReactiveBase::EDirtyLevel::Layout);
+        const float maxWidth = _maxWrapWidth > 0.0f ? _maxWrapWidth : font->measureText(text);
+        const auto  lines    = wrapText(text, font, maxWidth);
         return {maxWidth, static_cast<float>(lines.size()) * font->lineHeight};
     }
     const float w = font->measureText(resolvedText(ReactiveBase::EDirtyLevel::Layout));
     return {w, font->lineHeight};
+}
+
+glm::vec2 UIText::computeDesiredSize() const
+{
+    return computeIntrinsicSize();
 }
 
 } // namespace ya

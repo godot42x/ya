@@ -5,6 +5,7 @@
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TabBar.h"
+#include "GUI/Layout/UILayout.h"
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -258,6 +259,7 @@ struct FDockSpaceDropTargetBehavior final : public UIDropTargetBehavior
 UIDockSpace::UIDockSpace(std::string name)
     : UIElement(std::move(name), "dock")
 {
+    installLayout(std::make_unique<UISingleChildLayout>());
     _hitFilter = EWidgetHitFilter::Stop;
     addBehavior(std::make_shared<FDockSpacePanelDragBehavior>());
     addBehavior(std::make_shared<FDockSpaceDropTargetBehavior>());
@@ -605,11 +607,8 @@ void UIDockSpace::layoutAssigned(const Rect2D& rect)
         rebuildProjection();
     }
 
-    for (UIElement* child : getChildrenInPaintOrder()) {
-        if (child->participatesInLayout()) {
-            child->layoutAssigned(rect);
-            break;
-        }
+    if (UILayout* layout = getLayout()) {
+        layout->arrange(*this, _layoutRect);
     }
 }
 

@@ -597,8 +597,7 @@ void FWorkbenchSurface::syncPresentationState()
             slot->setOffset(-selected->size * 0.5f);
         }
         else {
-            _highlightPanel->setSize(selected->size);
-            _highlightPanel->setPosition(-selected->size * 0.5f);
+            YA_CORE_ERROR("Workbench preview highlight is missing its canvas slot");
         }
         _highlightPanel->setColor(selected->color);
         _previewName->setText(selected->bVisible ? selected->name : selected->name + " (hidden)");

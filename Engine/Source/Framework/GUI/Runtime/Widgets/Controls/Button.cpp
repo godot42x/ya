@@ -25,18 +25,7 @@ void UIButton::layoutAssigned(const Rect2D& rect)
 
 glm::vec2 UIButton::computeDesiredSize() const
 {
-    // Container packing always asks for the desired size; honor the explicit
-    // size unless SizeToContent is enabled. With auto, size to the first
-    // visible content child plus padding (Slate ContentControl).
-    if (!_bAutoSize) {
-        return _size;
-    }
-    for (UIElement* child : getChildrenInPaintOrder()) {
-        if (child->participatesInLayout()) {
-            return _contentLayout.measure(*this);
-        }
-    }
-    return _size;
+    return _contentLayout.measure(*this);
 }
 
 std::unique_ptr<UISlot> UIButton::createSlotForChild(UIElement& child)
