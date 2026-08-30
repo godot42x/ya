@@ -34,6 +34,7 @@ namespace ya
 {
 
 struct UITheme;
+struct FCanvasSlotArgs;
 
 /// Result of one game-UI event route pass. Named distinctly from the legacy
 /// EWidgetRouteResult while the old GUI/Scene module still exists (Phase 6 merge).
@@ -187,6 +188,12 @@ struct YA_GUI_API WidgetTree final
     [[maybe_unused]] WidgetAttachment attach(UIElement& parent, const UIElementRef& widget);
     /// Attach `widget` to a system layer (Content by default for game UI).
     [[nodiscard]] WidgetAttachment attachToLayer(ELayer layer, const UIElementRef& widget);
+    /// Attach `widget` to a system layer with explicit canvas edge intent.
+    /// Keeps the legacy geometry fields in sync so detach/reattach semantics
+    /// remain stable while CP2 authored-geometry removal is still pending.
+    [[nodiscard]] WidgetAttachment attachToLayer(ELayer layer,
+                                                const UIElementRef& widget,
+                                                const FCanvasSlotArgs& args);
     /// Explicit move: detach from the current parent (if any) and attach under
     /// `newParent`. The widget may come from any tree, including detached.
     void reparent(UIElement& newParent, const UIElementRef& widget);

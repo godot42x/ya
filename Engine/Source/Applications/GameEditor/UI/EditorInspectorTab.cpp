@@ -20,7 +20,7 @@ namespace ya
 
 std::shared_ptr<UIElement> EditorInspectorTab::build(WidgetTree&)
 {
-    auto nameField = ui::textField("InspectorName").setSize({220.0f, 26.0f}).setFontSize(14);
+    auto nameField = ui::textField("InspectorName").setFontSize(14);
     _nameField = nameField.share();
     _nameField->_onCommit = [this](const std::string& text) {
         if (!_layer) return;
@@ -45,7 +45,7 @@ std::shared_ptr<UIElement> EditorInspectorTab::build(WidgetTree&)
                     .child(std::move(entityText))
                     .child(std::move(componentsText))
                     .child(ui::text("NameLabel").setText("Name").setFontSize(12))
-                    .child(std::move(nameField))
+                    .child(std::move(nameField), FBoxSlotArgs{.preferredSize = {220.0f, 26.0f}})
                     .child(std::move(empty))
                     .child(ui::text("TransformLabel").setText("Transform").setFontSize(12));
 

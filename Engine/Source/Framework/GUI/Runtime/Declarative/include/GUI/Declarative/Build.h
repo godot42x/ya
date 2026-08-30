@@ -125,17 +125,17 @@ UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder)
     return root;
 }
 
-/// Path-B (anchor-owning) parent variant: the child's stretch geometry is carried
-/// on the parent->child slot edge, never authored on the child.
+/// Canvas parent variant: the child's stretch geometry is carried on the
+/// parent->child slot edge, never authored on the child.
 template<UIWidgetBuilder TBuilder>
-UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, const FCanvasPanelSlotArgs& slot)
+UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, const FCanvasSlotArgs& slot)
 {
     UIElementRef root = std::forward<TBuilder>(builder).release();
     YA_CORE_ASSERT(root, "ui::build: empty root");
     const WidgetAttachment attached = tree.attach(parent, root);
     YA_CORE_ASSERT(attached.valid(), "ui::build: attach failed for '{}'", root->_name);
     if (auto* s = parent.getSlotForChild(*root)) {
-        if (auto* canvas = dynamic_cast<UICanvasPanelSlot*>(s)) {
+        if (auto* canvas = dynamic_cast<UICanvasSlot*>(s)) {
             canvas->apply(slot);
         }
     }
@@ -155,14 +155,14 @@ std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&&
 }
 
 template<typename TWidget, typename TBuilder>
-std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&& builder, const FCanvasPanelSlotArgs& slot)
+std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&& builder, const FCanvasSlotArgs& slot)
 {
     auto widget = std::dynamic_pointer_cast<TWidget>(std::forward<TBuilder>(builder).release());
     YA_CORE_ASSERT(widget, "ui::buildAs: builder produced the wrong widget class");
     const WidgetAttachment attached = tree.attach(parent, widget);
     YA_CORE_ASSERT(attached.valid(), "ui::buildAs: attach failed for '{}'", widget->_name);
     if (auto* s = parent.getSlotForChild(*widget)) {
-        if (auto* canvas = dynamic_cast<UICanvasPanelSlot*>(s)) {
+        if (auto* canvas = dynamic_cast<UICanvasSlot*>(s)) {
             canvas->apply(slot);
         }
     }
@@ -190,9 +190,9 @@ UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, cons
     YA_CORE_ASSERT(root, "ui::build: empty root");
     const WidgetAttachment attached = tree.attach(parent, root);
     YA_CORE_ASSERT(attached.valid(), "ui::build: attach failed for '{}'", root->_name);
-    if (UISlot* s = parent.getSlotForChild(*root)) {
-        applyLayoutSpecToSlot(*s, *root, spec);
-    }
+    parent.initializeChildSlot(*root, [&spec](UIElement& child, UISlot& slot) {
+        applyLayoutSpecToSlot(slot, child, spec);
+    });
     return root;
 }
 
@@ -203,18 +203,26 @@ std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&&
     YA_CORE_ASSERT(widget, "ui::buildAs: builder produced the wrong widget class");
     const WidgetAttachment attached = tree.attach(parent, widget);
     YA_CORE_ASSERT(attached.valid(), "ui::buildAs: attach failed for '{}'", widget->_name);
-    if (UISlot* s = parent.getSlotForChild(*widget)) {
-        applyLayoutSpecToSlot(*s, *widget, spec);
-    }
+    parent.initializeChildSlot(*widget, [&spec](UIElement& child, UISlot& slot) {
+        applyLayoutSpecToSlot(slot, child, spec);
+    });
     return widget;
 }
 
 /// Apply a unified layout spec to an already-attached child.
 inline void attachLayout(UIElement& parent, UIElement& child, const FUILayoutSpec& spec)
 {
-    if (UISlot* s = parent.getSlotForChild(child)) {
-        applyLayoutSpecToSlot(*s, child, spec);
-    }
+    parent.initializeChildSlot(child, [&spec](UIElement& live, UISlot& slot) {
+        applyLayoutSpecToSlot(slot, live, spec);
+    });
+}
+
+/// `ui::build(tree, parent, ui::layout().size({0, 22}) >> widget)`: the spec
+/// lands on the parent-owned edge at attach time.
+template<EUILayoutCap Caps, UIWidgetBuilder TChild>
+UIElementRef build(WidgetTree& tree, UIElement& parent, TUILayoutAttachment<Caps, TChild> attachment)
+{
+    return build(tree, parent, std::move(attachment.child), attachment.spec);
 }
 
 } // namespace ya::ui

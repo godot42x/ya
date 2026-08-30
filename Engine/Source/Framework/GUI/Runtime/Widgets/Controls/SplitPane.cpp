@@ -178,4 +178,9 @@ glm::vec2 UISplitPane::computeDesiredSize() const
     return _splitLayout.measure(*this);
 }
 
+std::unique_ptr<UISlot> UISplitPane::createSlotForChild(UIElement& child)
+{
+    return _splitLayout.createSlot(*this, child);
+}
+
 } // namespace ya

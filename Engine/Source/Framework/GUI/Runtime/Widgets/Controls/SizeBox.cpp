@@ -67,4 +67,9 @@ glm::vec2 UISizeBox::computeDesiredSize() const
     return glm::clamp(desired, _minSize, _maxSize);
 }
 
+std::unique_ptr<UISlot> UISizeBox::createSlotForChild(UIElement& child)
+{
+    return _contentLayout.createSlot(*this, child);
+}
+
 } // namespace ya

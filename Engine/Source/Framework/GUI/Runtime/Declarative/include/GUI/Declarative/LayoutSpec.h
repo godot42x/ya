@@ -75,6 +75,8 @@ inline constexpr EUILayoutCap kAllLayoutCaps = static_cast<EUILayoutCap>(0xFFFFu
 // cannot happen: `column[ui::layout().anchor(...) >> w]` does not compile.
 
 /// Box hosts (row / column / container): share space along the main axis.
+/// `size()` resolves through UIBoxSlot::preferredSize rather than mutating the
+/// child, so layout intent stays on the edge.
 inline constexpr EUILayoutCap kBoxHostCaps =
     EUILayoutCap::Fill | EUILayoutCap::Grow | EUILayoutCap::Align | EUILayoutCap::Margin |
     EUILayoutCap::Size | EUILayoutCap::SizeMode;
@@ -84,26 +86,25 @@ inline constexpr EUILayoutCap kCanvasHostCaps =
     EUILayoutCap::Fill | EUILayoutCap::Anchor | EUILayoutCap::Offsets | EUILayoutCap::Align |
     EUILayoutCap::Margin | EUILayoutCap::Size | EUILayoutCap::SizeMode | EUILayoutCap::Pivot;
 
-/// Grid hosts: place a child in a cell.
+/// Grid hosts: today only place a child in a cell. Until the table slot grows
+/// its own align/margin/size contract, the declarative capability set must stay
+/// cell-only so future builder exposure cannot promise more than runtime
+/// actually consumes.
 inline constexpr EUILayoutCap kGridHostCaps =
-    EUILayoutCap::Cell | EUILayoutCap::Align | EUILayoutCap::Margin | EUILayoutCap::Size |
-    EUILayoutCap::SizeMode;
+    EUILayoutCap::Cell;
 
-/// Single-child hosts (scroll viewport / size box / button ...): the child fills
-/// the host, optionally with spacing.
+/// Single-child hosts (scroll viewport / size box / button / selectable row):
+/// the child fills the host, optionally with alignment.
 inline constexpr EUILayoutCap kSingleChildHostCaps =
-    EUILayoutCap::Fill | EUILayoutCap::Align | EUILayoutCap::Margin | EUILayoutCap::Size |
-    EUILayoutCap::SizeMode;
+    EUILayoutCap::Fill | EUILayoutCap::Align;
 
 /// Split hosts: two panes, positioned by ratio.
 inline constexpr EUILayoutCap kSplitHostCaps =
-    EUILayoutCap::Fill | EUILayoutCap::Align | EUILayoutCap::Margin | EUILayoutCap::Size |
-    EUILayoutCap::SizeMode;
+    EUILayoutCap::Fill | EUILayoutCap::Align;
 
 /// Overlay hosts: layered children with alignment.
 inline constexpr EUILayoutCap kOverlayHostCaps =
-    EUILayoutCap::Fill | EUILayoutCap::Align | EUILayoutCap::Margin | EUILayoutCap::Size |
-    EUILayoutCap::SizeMode;
+    EUILayoutCap::Fill | EUILayoutCap::Align;
 
 /// True when every capability in `caps` is allowed by `allowed`.
 template<EUILayoutCap Caps, EUILayoutCap Allowed>
@@ -171,6 +172,7 @@ struct FUILayoutSpec
         args.heightSizeMode = heightSizeMode;
         args.pivot          = pivot;
         args.preferredSize  = preferredSize;
+        args.fixedSize      = size;
         return args;
     }
 };
@@ -182,6 +184,9 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
 {
     (void)child;
     if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
+        // Canvas fixed-size intent now lives on the slot edge as well; a
+        // canvas child no longer needs its own `_size` mutated for
+        // `ui::layout().size(...)` to take effect.
         canvas->apply(spec.toCanvasArgs());
         return;
     }
@@ -203,12 +208,48 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
                                       ? EUIBoxSlotCrossAlignment::Center
                                       : EUIBoxSlotCrossAlignment::Stretch;
         }
-        box->apply(args);
-        // `size()` is a real capability, not a no-op: honour it on the child so
-        // the intent is never silently dropped.
         if (spec.has(EUILayoutCap::Size)) {
-            child.setSize(spec.size);
+            args.preferredSize = spec.size;
         }
+        box->apply(args);
+        if (spec.minSize != glm::vec2{0.0f, 0.0f}) {
+            box->setMinSize(spec.minSize);
+        }
+        if (spec.maxSize != glm::vec2{std::numeric_limits<float>::max(),
+                                      std::numeric_limits<float>::max()}) {
+            box->setMaxSize(spec.maxSize);
+        }
+        return;
+    }
+    if (auto* single = dynamic_cast<UISingleChildSlot*>(&slot)) {
+        EUIOverlayAlignment h = EUIOverlayAlignment::Fill;
+        EUIOverlayAlignment v = EUIOverlayAlignment::Fill;
+        if (spec.has(EUILayoutCap::Align)) {
+            h = spec.alignH == EWidgetAlignH::Center ? EUIOverlayAlignment::Center
+                : spec.alignH == EWidgetAlignH::Right ? EUIOverlayAlignment::End
+                : EUIOverlayAlignment::Start;
+            v = spec.alignV == EWidgetAlignV::Center ? EUIOverlayAlignment::Center
+                : spec.alignV == EWidgetAlignV::Bottom ? EUIOverlayAlignment::End
+                : EUIOverlayAlignment::Start;
+        }
+        single->setAlign(h, v);
+        return;
+    }
+    if (auto* overlay = dynamic_cast<UIOverlaySlot*>(&slot)) {
+        EUIOverlayAlignment h = EUIOverlayAlignment::Fill;
+        EUIOverlayAlignment v = EUIOverlayAlignment::Fill;
+        if (spec.has(EUILayoutCap::Align)) {
+            h = spec.alignH == EWidgetAlignH::Center ? EUIOverlayAlignment::Center
+                : spec.alignH == EWidgetAlignH::Right ? EUIOverlayAlignment::End
+                : EUIOverlayAlignment::Start;
+            v = spec.alignV == EWidgetAlignV::Center ? EUIOverlayAlignment::Center
+                : spec.alignV == EWidgetAlignV::Bottom ? EUIOverlayAlignment::End
+                : EUIOverlayAlignment::Start;
+        }
+        FOverlaySlotArgs args;
+        args.hAlign = h;
+        args.vAlign = v;
+        overlay->apply(args);
         return;
     }
     if (auto* table = dynamic_cast<UITableSlot*>(&slot)) {

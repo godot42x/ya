@@ -102,6 +102,9 @@ struct YA_GUI_API UISplitPane : public UIElement, public UIStyledWidget<UISplitP
     }
     void clearTransientInputState() override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
+    /// Each pane owns its box via UISplitLayout, so a pane's child intent
+    /// lives on the edge: fill (default) or align at desired size.
+    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 
     /// Divider rect in tree-local logical pixels (depends on UISplitLayout's
     /// last arrangement).

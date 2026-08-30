@@ -10,10 +10,12 @@
 #include "GUI/Widgets/WidgetTreeDump.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Overlay.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
+#include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/SizeBox.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Declarative/Build.h"
@@ -491,6 +493,44 @@ TEST(WidgetLayoutTest, BoxSlotsKeepEdgeStateLocalAcrossNestedReparent)
     EXPECT_EQ((*childNode)["slot"]["sizeRule"], "fill");
 }
 
+TEST(WidgetLayoutTest, SameParentReorderPreservesExistingBoxSlotState)
+{
+    WidgetTree tree({.width = 320, .height = 180});
+    auto box = std::make_shared<UIContainer>("Box");
+    box->setSize({320.0f, 180.0f});
+    box->setDirection(EWidgetBoxLayout::Horizontal);
+    tree.attachToLayer(WidgetTree::ELayer::Content, box);
+
+    auto first  = std::make_shared<UIPanel>("First");
+    auto moved  = std::make_shared<UIPanel>("Moved");
+    auto third  = std::make_shared<UIPanel>("Third");
+    first->setSize({20.0f, 20.0f});
+    moved->setSize({20.0f, 20.0f});
+    third->setSize({20.0f, 20.0f});
+    tree.attach(*box, first);
+    tree.attach(*box, moved);
+    tree.attach(*box, third);
+
+    auto* movedSlot = box->getBoxSlot(*moved);
+    ASSERT_NE(movedSlot, nullptr);
+    movedSlot->setSizeRule(EUIBoxSlotSizeRule::Fill);
+    movedSlot->setWeight(2.0f);
+    movedSlot->setMargin({3.0f, 2.0f});
+    movedSlot->setCrossAlignment(EUIBoxSlotCrossAlignment::Center);
+
+    tree.reparentAfter(*third, moved);
+
+    EXPECT_EQ(box->getChildren()[0].get(), first.get());
+    EXPECT_EQ(box->getChildren()[1].get(), third.get());
+    EXPECT_EQ(box->getChildren()[2].get(), moved.get());
+    EXPECT_EQ(box->getBoxSlot(*moved), movedSlot);
+    EXPECT_EQ(moved->getSlot(), movedSlot);
+    EXPECT_EQ(movedSlot->getSizeRule(), EUIBoxSlotSizeRule::Fill);
+    EXPECT_EQ(movedSlot->getWeight(), 2.0f);
+    EXPECT_EQ(movedSlot->getMargin(), FMargin::hv(3.0f, 2.0f));
+    EXPECT_EQ(movedSlot->getCrossAlignment(), EUIBoxSlotCrossAlignment::Center);
+}
+
 TEST(WidgetLayoutTest, BoxSlotsControlHiddenParticipationAndFillBounds)
 {
     WidgetTree tree({.width = 200, .height = 120});
@@ -520,6 +560,36 @@ TEST(WidgetLayoutTest, BoxSlotsControlHiddenParticipationAndFillBounds)
     tree.layout();
     EXPECT_FLOAT_EQ(fill->_layoutRect.extent.y, 40.0f);
     EXPECT_FLOAT_EQ(fill->_layoutRect.pos.y, 80.0f);
+}
+
+TEST(WidgetLayoutTest, BoxLayoutSpecSizeUsesTheSlotRatherThanMutatingChildGeometry)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto zone = ui::text("Zone").setText("Hi").release();
+    UIElement* const zoneRaw = zone.get();
+    ASSERT_NE(zoneRaw, nullptr);
+    const glm::vec2 originalSize = zoneRaw->getSize();
+
+    auto column = ui::column("Column")
+                      .setSize({300.0f, 200.0f})
+                      [ui::layout().size({0.0f, 120.0f}) >> zone]
+                      .release();
+
+    WidgetTree tree({.width = 300, .height = 200});
+    tree.attachToLayer(WidgetTree::ELayer::Content, column);
+    tree.layout();
+
+    const UIElement* child = column->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    const auto* slot = dynamic_cast<const UIBoxSlot*>(column->getSlotForChild(*child));
+    ASSERT_NE(slot, nullptr);
+
+    EXPECT_EQ(slot->getPreferredSize(), glm::vec2(0.0f, 120.0f));
+    EXPECT_EQ(zoneRaw->getSize(), originalSize)
+        << "box layout intent must stay on the slot, not overwrite the child geometry";
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 120.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 300.0f);
 }
 
 // === GI-103: UIText resolved measure/paint + AutoSize Layout edge ===
@@ -853,6 +923,61 @@ TEST(WidgetLayoutTest, SingleChildSlotAlignKeepsDesiredSizeAndCenters)
                     (100.0f - child->_layoutRect.extent.y) * 0.5f);
 }
 
+TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToSingleChildSlot)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto box = ui::sizeBox("Box")
+                   .setSize({200.0f, 100.0f})
+                   [ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Center) >>
+                    ui::text("Label").setText("Hi")]
+                   .release();
+
+    WidgetTree tree({.width = 200, .height = 100});
+    tree.attachToLayer(WidgetTree::ELayer::Content, box);
+    tree.layout();
+
+    const UIElement* child = box->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    const auto* slot = dynamic_cast<const UISingleChildSlot*>(box->getSlotForChild(*child));
+    ASSERT_NE(slot, nullptr);
+
+    EXPECT_EQ(slot->getHAlign(), EUIOverlayAlignment::Center);
+    EXPECT_EQ(slot->getVAlign(), EUIOverlayAlignment::Center);
+    EXPECT_LT(child->_layoutRect.extent.x, 200.0f);
+    EXPECT_LT(child->_layoutRect.extent.y, 100.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.x,
+                    (200.0f - child->_layoutRect.extent.x) * 0.5f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.y,
+                    (100.0f - child->_layoutRect.extent.y) * 0.5f);
+}
+
+TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToScrollViewportSingleChildSlot)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto viewport = ui::scroll("Viewport")
+                        .setSize({200.0f, 100.0f})
+                        [ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Top) >>
+                         ui::text("Label").setText("Hi").setSize({40.0f, 160.0f})]
+                        .release();
+
+    WidgetTree tree({.width = 200, .height = 100});
+    tree.attachToLayer(WidgetTree::ELayer::Content, viewport);
+    tree.layout();
+
+    const UIElement* child = viewport->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    const auto* slot = dynamic_cast<const UISingleChildSlot*>(viewport->getSlotForChild(*child));
+    ASSERT_NE(slot, nullptr);
+
+    EXPECT_EQ(slot->getHAlign(), EUIOverlayAlignment::Center);
+    EXPECT_EQ(slot->getVAlign(), EUIOverlayAlignment::Start);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 40.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 160.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.x, 80.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.y, 0.0f);
+}
 // === Path A: intent belongs to the slot, not to the child's anchors ===
 //
 // A box container owns arrangement, so stretch anchors on its child would be
@@ -887,6 +1012,43 @@ TEST(WidgetLayoutTest, PathAFillIsExpressedOnTheSlotNotTheChild)
     // Both stretch across the cross axis via the slot's default.
     EXPECT_FLOAT_EQ(label->_layoutRect.extent.x, 300.0f);
     EXPECT_FLOAT_EQ(filled->_layoutRect.extent.x, 300.0f);
+}
+
+TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToOverlaySlot)
+{
+    auto overlay = ui::overlay("Host")
+                       .setSize({200.0f, 100.0f})
+                       [ui::layout().fill() >> ui::panel("Fill").setSize({10.0f, 10.0f})]
+                       [ui::layout().align(EWidgetAlignH::Right, EWidgetAlignV::Top) >>
+                        ui::panel("Badge").setSize({20.0f, 12.0f})]
+                       .release();
+
+    WidgetTree tree({.width = 200, .height = 100});
+    tree.attachToLayer(WidgetTree::ELayer::Content, overlay);
+    tree.layout();
+
+    const auto children = overlay->getChildrenInPaintOrder();
+    ASSERT_EQ(children.size(), 2u);
+    const UIElement* fill = children[0];
+    const UIElement* badge = children[1];
+    ASSERT_NE(fill, nullptr);
+    ASSERT_NE(badge, nullptr);
+
+    const auto* fillSlot = dynamic_cast<const UIOverlaySlot*>(overlay->getSlotForChild(*fill));
+    const auto* badgeSlot = dynamic_cast<const UIOverlaySlot*>(overlay->getSlotForChild(*badge));
+    ASSERT_NE(fillSlot, nullptr);
+    ASSERT_NE(badgeSlot, nullptr);
+
+    EXPECT_EQ(fillSlot->getHAlign(), EUIOverlayAlignment::Fill);
+    EXPECT_EQ(fillSlot->getVAlign(), EUIOverlayAlignment::Fill);
+    EXPECT_EQ(badgeSlot->getHAlign(), EUIOverlayAlignment::End);
+    EXPECT_EQ(badgeSlot->getVAlign(), EUIOverlayAlignment::Start);
+    EXPECT_FLOAT_EQ(fill->_layoutRect.extent.x, 200.0f);
+    EXPECT_FLOAT_EQ(fill->_layoutRect.extent.y, 100.0f);
+    EXPECT_FLOAT_EQ(badge->_layoutRect.extent.x, 20.0f);
+    EXPECT_FLOAT_EQ(badge->_layoutRect.extent.y, 12.0f);
+    EXPECT_FLOAT_EQ(badge->_layoutRect.pos.x, 180.0f);
+    EXPECT_FLOAT_EQ(badge->_layoutRect.pos.y, 0.0f);
 }
 
 TEST(WidgetLayoutTest, CanvasPivotCentresAChildOnItsAnchoredPosition)
@@ -932,6 +1094,172 @@ TEST(WidgetLayoutTest, CanvasPreferredSizeDrivesAnAutoAxis)
     EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 45.0f);
 }
 
+TEST(WidgetLayoutTest, CanvasLayoutSpecSizeUsesTheSlotRatherThanMutatingChildGeometry)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto child = ui::text("Inner").setText("Hi").release();
+    UIElement* const childRaw = child.get();
+    ASSERT_NE(childRaw, nullptr);
+    const glm::vec2 originalSize = childRaw->getSize();
+
+    auto panel = ui::panel("Panel")
+                     .setSize({300.0f, 200.0f})
+                     [ui::layout().size({120.0f, 32.0f}) >> child]
+                     .release();
+
+    WidgetTree tree({.width = 300, .height = 200});
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.layout();
+
+    const UIElement* liveChild = panel->getChildrenInPaintOrder().front();
+    ASSERT_NE(liveChild, nullptr);
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(panel->getSlotForChild(*liveChild));
+    ASSERT_NE(slot, nullptr);
+
+    EXPECT_EQ(slot->getFixedSize(), glm::vec2(120.0f, 32.0f));
+    EXPECT_EQ(childRaw->getSize(), originalSize)
+        << "canvas layout intent must stay on the slot, not overwrite child geometry";
+    EXPECT_FLOAT_EQ(liveChild->_layoutRect.extent.x, 120.0f);
+    EXPECT_FLOAT_EQ(liveChild->_layoutRect.extent.y, 32.0f);
+}
+
+TEST(WidgetLayoutTest, StretchXFixedHeightChromeLivesOnTheCanvasSlot)
+{
+    auto host = ui::panel("Host").setSize({400.0f, 300.0f}).release();
+    auto bar  = ui::panel("Bar").release();
+
+    WidgetTree tree({.width = 400, .height = 300});
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, host).valid());
+    host->addDetachedChild(bar);
+    ui::attachLayout(*host, *bar,
+                    ui::layout().anchor({0.0f, 0.0f}, {1.0f, 0.0f}).size({0.0f, 30.0f}).args());
+    tree.layout();
+
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(host->getSlotForChild(*bar));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getAnchorMin(), glm::vec2(0.0f, 0.0f));
+    EXPECT_EQ(slot->getAnchorMax(), glm::vec2(1.0f, 0.0f));
+    EXPECT_EQ(slot->getFixedSize(), glm::vec2(0.0f, 30.0f));
+    EXPECT_FLOAT_EQ(bar->_layoutRect.extent.x, 400.0f);
+    EXPECT_FLOAT_EQ(bar->_layoutRect.extent.y, 30.0f);
+}
+
+TEST(WidgetLayoutTest, CanvasSlotOffsetAndFixedSizeCanBeUpdatedAfterAttach)
+{
+    auto host  = ui::panel("Host").setSize({400.0f, 300.0f}).release();
+    auto child = ui::panel("Child").release();
+
+    WidgetTree tree({.width = 400, .height = 300});
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, host).valid());
+    host->addDetachedChild(child);
+    ui::attachLayout(*host, *child,
+                    ui::layout()
+                        .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
+                        .offsets({-70.0f, -45.0f})
+                        .size({140.0f, 90.0f})
+                        .args());
+
+    auto* slot = dynamic_cast<UICanvasSlot*>(host->getSlotForChild(*child));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getOffset(), glm::vec2(-70.0f, -45.0f));
+    EXPECT_EQ(slot->getFixedSize(), glm::vec2(140.0f, 90.0f));
+
+    const glm::vec2 nextSize{180.0f, 120.0f};
+    slot->setFixedSize(nextSize);
+    slot->setOffset(-nextSize * 0.5f);
+    tree.layout();
+
+    EXPECT_EQ(slot->getOffset(), glm::vec2(-90.0f, -60.0f));
+    EXPECT_EQ(slot->getFixedSize(), nextSize);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 180.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 120.0f);
+}
+
+TEST(WidgetLayoutTest, DeclarativeBracketAndAttachLayoutProduceEquivalentCanvasSlots)
+{
+    const auto specBuilder = ui::layout()
+                                 .anchor({0.25f, 0.5f}, {0.25f, 0.5f})
+                                 .offsets(glm::vec2{11.0f, 13.0f})
+                                 .offsets(2.0f, 4.0f, 6.0f, 8.0f)
+                                 .align(EWidgetAlignH::Center, EWidgetAlignV::Bottom)
+                                 .widthSizeMode(EWidgetSizeMode::Auto)
+                                 .heightSizeMode(EWidgetSizeMode::Fixed)
+                                 .pivot({0.5f, 1.0f})
+                                 .size({70.0f, 30.0f});
+    const FUILayoutSpec spec = specBuilder.args();
+
+    auto declarative = ui::panel("Declarative")
+                           [specBuilder >> ui::text("DeclarativeChild").setText("Hi")]
+                           .release();
+    auto imperative      = ui::panel("Imperative").release();
+    auto imperativeChild = ui::text("ImperativeChild").setText("Hi").release();
+    imperative->addDetachedChild(imperativeChild);
+    ui::attachLayout(*imperative, *imperativeChild, spec);
+
+    ASSERT_EQ(declarative->getChildren().size(), 1u);
+    const UIElement* declarativeChild = declarative->getChildren()[0].get();
+    ASSERT_NE(declarativeChild, nullptr);
+    const auto* declarativeSlot = dynamic_cast<const UICanvasSlot*>(declarative->getSlotForChild(*declarativeChild));
+    const auto* imperativeSlot  = dynamic_cast<const UICanvasSlot*>(imperative->getSlotForChild(*imperativeChild));
+    ASSERT_NE(declarativeSlot, nullptr);
+    ASSERT_NE(imperativeSlot, nullptr);
+
+    EXPECT_EQ(declarativeSlot->getAnchorMin(), imperativeSlot->getAnchorMin());
+    EXPECT_EQ(declarativeSlot->getAnchorMax(), imperativeSlot->getAnchorMax());
+    EXPECT_EQ(declarativeSlot->getOffset(), imperativeSlot->getOffset());
+    EXPECT_EQ(declarativeSlot->getOffsets(), imperativeSlot->getOffsets());
+    EXPECT_EQ(declarativeSlot->getAlignmentH(), imperativeSlot->getAlignmentH());
+    EXPECT_EQ(declarativeSlot->getAlignmentV(), imperativeSlot->getAlignmentV());
+    EXPECT_EQ(declarativeSlot->getWidthSizeMode(), imperativeSlot->getWidthSizeMode());
+    EXPECT_EQ(declarativeSlot->getHeightSizeMode(), imperativeSlot->getHeightSizeMode());
+    EXPECT_EQ(declarativeSlot->getPivot(), imperativeSlot->getPivot());
+    EXPECT_EQ(declarativeSlot->getFixedSize(), imperativeSlot->getFixedSize());
+}
+
+TEST(WidgetLayoutTest, BuildWithLayoutSpecInitializesTheCanvasSlot)
+{
+    WidgetTree tree({.width = 300, .height = 200});
+    auto       panel = ui::panel("Panel").setSize({300.0f, 200.0f}).release();
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, panel).valid());
+
+    const FUILayoutSpec spec = ui::layout()
+                                   .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
+                                   .pivot({0.5f, 0.5f})
+                                   .size({80.0f, 24.0f})
+                                   .args();
+    const UIElementRef child = ui::build(tree, *panel, ui::text("BuiltChild").setText("Hi"), spec);
+    ASSERT_NE(child, nullptr);
+
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(panel->getSlotForChild(*child));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getAnchorMin(), glm::vec2(0.5f, 0.5f));
+    EXPECT_EQ(slot->getAnchorMax(), glm::vec2(0.5f, 0.5f));
+    EXPECT_EQ(slot->getPivot(), glm::vec2(0.5f, 0.5f));
+    EXPECT_EQ(slot->getFixedSize(), glm::vec2(80.0f, 24.0f));
+}
+
+TEST(WidgetLayoutTest, CanvasHostSetSizeBridgesToTheCanvasSlotFixedSize)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto panel = ui::panel("Panel").setSize({300.0f, 200.0f}).release();
+    auto child = ui::text("Inner").setText("Hi").release();
+
+    WidgetTree tree({.width = 300, .height = 200});
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    panel->addDetachedChild(child);
+
+    child->setSize({90.0f, 28.0f});
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(panel->getSlotForChild(*child));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getFixedSize(), glm::vec2(90.0f, 28.0f));
+
+    tree.layout();
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 90.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 28.0f);
+}
+
 TEST(WidgetLayoutTest, CanvasHostIsNotBoundToThePanelVisuals)
 {
     registerSyntheticFont(16, 8.0f);
@@ -951,6 +1279,77 @@ TEST(WidgetLayoutTest, CanvasHostIsNotBoundToThePanelVisuals)
     EXPECT_EQ(host->_styleKey, "canvas");
     EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 200.0f);
     EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 100.0f);
+}
+
+// === Reparent / detach rebuilds the slot edge ===
+//
+// The slot belongs to the parent->child EDGE, not to the child. Moving a child
+// between hosts must therefore rebuild it with the new host's slot type, and
+// detaching must leave the child with no slot at all.
+
+TEST(WidgetLayoutTest, ReparentingBetweenHostsRebuildsTheSlotForTheNewHost)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    WidgetTree tree({.width = 200, .height = 100});
+    auto       panelHost = ui::panel("PanelHost").setSize({200.0f, 100.0f}).release();
+    auto       boxHost   = ui::column("BoxHost").setSize({200.0f, 100.0f}).release();
+    auto       child     = ui::text("Child").setText("Hi").setSize({50.0f, 20.0f}).release();
+
+    // Both hosts must be in the tree before the child is attached, so that
+    // reparent() has a target the tree owns.
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, panelHost).valid());
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, boxHost).valid());
+    panelHost->addDetachedChild(child);
+
+    // Under a canvas host the edge is a canvas slot.
+    ASSERT_NE(dynamic_cast<UICanvasSlot*>(panelHost->getSlotForChild(*child)), nullptr);
+    ASSERT_EQ(dynamic_cast<UIBoxSlot*>(panelHost->getSlotForChild(*child)), nullptr);
+
+    // Move it to a box host: the edge must be rebuilt as a box slot and the old
+    // canvas edge must be gone.
+    tree.reparent(*boxHost, child);
+    EXPECT_EQ(panelHost->getSlotForChild(*child), nullptr) << "old host keeps no edge";
+    EXPECT_NE(dynamic_cast<UIBoxSlot*>(child->getSlot()), nullptr);
+    EXPECT_EQ(dynamic_cast<UICanvasSlot*>(child->getSlot()), nullptr);
+
+    // Detaching entirely leaves the child with no edge at all.
+    tree.detach(*child);
+    EXPECT_EQ(child->getSlot(), nullptr);
+}
+
+TEST(WidgetLayoutTest, ReparentingAcrossHostsDoesNotLeakTheOldHostIntent)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    WidgetTree tree({.width = 200, .height = 100});
+    auto       panelHost = ui::panel("PanelHost").setSize({200.0f, 100.0f}).release();
+    auto       boxHost   = ui::column("BoxHost").setSize({200.0f, 100.0f}).release();
+    auto       child     = ui::text("Child").setText("Hi").setSize({50.0f, 20.0f}).release();
+
+    // Anchor intent is a canvas capability and applies while under the panel.
+    FCanvasSlotArgs fillArgs;
+    fillArgs.anchorMin = {0.0f, 0.0f};
+    fillArgs.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, panelHost).valid());
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, boxHost).valid());
+    panelHost->addDetachedChild(child);
+    if (auto* slot = dynamic_cast<UICanvasSlot*>(panelHost->getSlotForChild(*child))) {
+        slot->apply(fillArgs);
+    }
+    tree.layout();
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 200.0f) << "canvas host fills the child";
+
+    // The old canvas fill gave the child the parent's full height (100). After
+    // moving to a box host that intent must be gone: the height comes from the
+    // child's own size (20). The width follows the box host's own cross-axis
+    // stretch, which is box behaviour, not leaked anchor intent.
+    tree.reparent(*boxHost, child);
+    tree.layout();
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 20.0f)
+        << "the old canvas fill intent must not leak into the new box edge";
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 200.0f)
+        << "width follows the box host's cross-axis stretch, not the old anchor";
 }
 
 // === Capability isolation (compile time) ===
@@ -977,11 +1376,12 @@ static_assert(!LayoutCapsCompatible<EUILayoutCap::Cell, kCanvasHostCaps>);
 static_assert(LayoutCapsCompatible<EUILayoutCap::Cell, kGridHostCaps>);
 static_assert(!LayoutCapsCompatible<EUILayoutCap::Grow, kGridHostCaps>);
 static_assert(!LayoutCapsCompatible<EUILayoutCap::Anchor, kGridHostCaps>);
+static_assert(!LayoutCapsCompatible<EUILayoutCap::Align, kGridHostCaps>);
 
 // Fill / alignment / spacing are understood everywhere.
 static_assert(LayoutCapsCompatible<EUILayoutCap::Fill, kBoxHostCaps>);
 static_assert(LayoutCapsCompatible<EUILayoutCap::Fill, kCanvasHostCaps>);
-static_assert(LayoutCapsCompatible<EUILayoutCap::Align, kGridHostCaps>);
+static_assert(LayoutCapsCompatible<EUILayoutCap::Align, kSingleChildHostCaps>);
 
 // The builder type carries the union of every capability applied to it, so the
 // host check sees the whole intent (not just the last modifier).
@@ -1080,5 +1480,154 @@ TEST(WidgetLayoutTest, CanvasAlignmentPlacesAFixedSizeChildInsideTheArea)
     EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 24.0f);
     EXPECT_FLOAT_EQ(child->_layoutRect.pos.x, (300.0f - 80.0f) * 0.5f);
     EXPECT_FLOAT_EQ(child->_layoutRect.pos.y, 200.0f - 24.0f);
+}
+
+TEST(WidgetLayoutTest, BoxHostSetSizeBridgesToTheBoxSlotPreferredSize)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto column = ui::column("Column").setSize({240.0f, 100.0f}).release();
+    auto child  = ui::text("Inner").setText("Hi").release();
+
+    WidgetTree tree({.width = 240, .height = 100});
+    tree.attachToLayer(WidgetTree::ELayer::Content, column);
+    column->addDetachedChild(child);
+
+    child->setSize({90.0f, 28.0f});
+    const auto* slot = dynamic_cast<const UIBoxSlot*>(column->getSlotForChild(*child));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getPreferredSize(), glm::vec2(90.0f, 28.0f));
+
+    tree.layout();
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 28.0f);
+}
+
+TEST(WidgetLayoutTest, SelectableRowArrangesLabelThroughTheSingleChildSlot)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto row = std::make_shared<UISelectableRow>("Row");
+    row->setSize({240.0f, 22.0f});
+    row->setContentPadding(FMargin{28.0f, 0.0f, 0.0f, 0.0f});
+    auto label = std::make_shared<UIText>("Label");
+    label->setText("Item");
+    label->_fontSize = 13;
+    label->_vAlign   = EWidgetAlignV::Center;
+
+    WidgetTree tree({.width = 400, .height = 300});
+    tree.attachToLayer(WidgetTree::ELayer::Content, row);
+    tree.attach(*row, label);
+    tree.layout();
+
+    const auto* slot = dynamic_cast<const UISingleChildSlot*>(row->getSlotForChild(*label));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getHAlign(), EUIOverlayAlignment::Fill);
+    EXPECT_EQ(slot->getVAlign(), EUIOverlayAlignment::Fill);
+    EXPECT_FLOAT_EQ(label->_layoutRect.pos.x, 28.0f);
+    EXPECT_FLOAT_EQ(label->_layoutRect.extent.x, 212.0f);
+    EXPECT_FLOAT_EQ(label->_layoutRect.extent.y, 22.0f);
+
+    const auto dump = dumpWidgetTree(tree);
+    const auto* rowNode = findWidgetNode(dump, "Row");
+    ASSERT_NE(rowNode, nullptr);
+    EXPECT_EQ((*rowNode)["layout"]["type"], "singleChild");
+    EXPECT_EQ((*rowNode)["layout"]["padding"]["left"], 28.0f);
+}
+
+TEST(WidgetLayoutTest, BuildWithLayoutAttachmentInitializesTheBoxSlot)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto column = ui::column("Column").setSize({240.0f, 100.0f}).release();
+    WidgetTree tree({.width = 240, .height = 100});
+    tree.attachToLayer(WidgetTree::ELayer::Content, column);
+
+    ui::build(tree,
+              *column,
+              ui::layout().size({0.0f, 22.0f}) >> ui::selectableRow("Row").setItemId("a"));
+    tree.layout();
+
+    ASSERT_FALSE(column->getChildrenInPaintOrder().empty());
+    UIElement* row = column->getChildrenInPaintOrder().front();
+    ASSERT_NE(row, nullptr);
+    const auto* slot = dynamic_cast<const UIBoxSlot*>(column->getSlotForChild(*row));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getPreferredSize(), glm::vec2(0.0f, 22.0f));
+    EXPECT_FLOAT_EQ(row->_layoutRect.extent.y, 22.0f);
+    EXPECT_NE(row->getSize(), glm::vec2(0.0f, 22.0f))
+        << "row height must live on the parent box slot, not the child";
+}
+
+TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToSelectableRowSingleChildSlot)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto row = ui::selectableRow("Row")
+                     .setSize({200.0f, 40.0f})
+                     [ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Center) >>
+                      ui::text("Label").setText("Hi").setSize({40.0f, 16.0f})]
+                     .release();
+
+    WidgetTree tree({.width = 200, .height = 100});
+    tree.attachToLayer(WidgetTree::ELayer::Content, row);
+    tree.layout();
+
+    const UIElement* child = row->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    const auto* slot = dynamic_cast<const UISingleChildSlot*>(row->getSlotForChild(*child));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getHAlign(), EUIOverlayAlignment::Center);
+    EXPECT_EQ(slot->getVAlign(), EUIOverlayAlignment::Center);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.x, 40.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 16.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.x, 80.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.y, 12.0f);
+}
+
+TEST(WidgetLayoutTest, CheckBoxArrangesLabelThroughTheSingleChildSlot)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto box = std::make_shared<UICheckBox>("Check");
+    box->setSize({200.0f, 24.0f});
+    auto label = std::make_shared<UIText>("Label");
+    label->setText("On");
+    label->_fontSize = 13;
+
+    WidgetTree tree({.width = 400, .height = 100});
+    tree.attachToLayer(WidgetTree::ELayer::Content, box);
+    tree.attach(*box, label);
+    tree.layout();
+
+    const auto* slot = dynamic_cast<const UISingleChildSlot*>(box->getSlotForChild(*label));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getHAlign(), EUIOverlayAlignment::Fill);
+    EXPECT_FLOAT_EQ(label->_layoutRect.pos.x, 24.0f);
+    EXPECT_FLOAT_EQ(label->_layoutRect.extent.x, 176.0f);
+    EXPECT_FLOAT_EQ(label->_layoutRect.extent.y, 24.0f);
+}
+
+TEST(WidgetLayoutTest, BoxSlotArgsPreferredSizeLivesOnTheEdge)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto column = ui::column("Column")
+                       .setSize({240.0f, 100.0f})
+                       .child(ui::text("Inner").setText("Hi"),
+                              FBoxSlotArgs{.preferredSize = {90.0f, 28.0f}})
+                       .release();
+
+    WidgetTree tree({.width = 240, .height = 100});
+    tree.attachToLayer(WidgetTree::ELayer::Content, column);
+    tree.layout();
+
+    const UIElement* child = column->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    const auto* slot = dynamic_cast<const UIBoxSlot*>(column->getSlotForChild(*child));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getPreferredSize(), glm::vec2(90.0f, 28.0f));
+    EXPECT_NE(child->getSize(), glm::vec2(90.0f, 28.0f))
+        << "box preferred size must live on the slot, not the child";
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 28.0f);
 }
 } // namespace ya

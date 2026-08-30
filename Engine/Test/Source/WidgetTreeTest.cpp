@@ -14,6 +14,7 @@
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
+#include "GUI/Widgets/Controls/Dialog.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DockFloatingWindow.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
@@ -413,6 +414,31 @@ TEST(WidgetTreeTest, DragDetectionInvokesWidgetCallbackWithoutDragSourceControl)
     tree.cancelDrag();
 }
 
+TEST(WidgetTreeTest, DragGhostLabelUsesCanvasSlotInsteadOfChildZeroSize)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       source = std::make_shared<UIPanel>("Source");
+    source->setPosition({20.0f, 20.0f});
+    source->setSize({120.0f, 80.0f});
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, source).valid());
+
+    auto operation = std::make_shared<UIDragDropOperation>();
+    operation->typeId = "test.asset";
+    operation->payload = "asset:42";
+    operation->ghostLabel = "Ghost";
+    tree.beginDrag(source.get(), operation, {}, true);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+
+    const nlohmann::json dump = dumpWidgetTree(tree);
+    const auto* labelNode = findWidgetNode(dump, "DragGhostLabel");
+    ASSERT_NE(labelNode, nullptr);
+    EXPECT_EQ((*labelNode)["slot"]["type"], "canvas");
+    EXPECT_GT((*labelNode)["rect"]["w"].get<float>(), 0.0f);
+    EXPECT_GT((*labelNode)["rect"]["h"].get<float>(), 0.0f);
+
+    tree.cancelDrag();
+}
+
 TEST(WidgetTreeTest, BehaviorLifecycleTickAndInvalidationFollowOwner)
 {
     WidgetTree tree({.width = 400, .height = 300});
@@ -578,6 +604,72 @@ TEST(WidgetTreeTest, ChildAddedToAttachedParentJoinsItsTree)
     EXPECT_EQ(tree.pickAt({80.0f, 80.0f}), child.get());
 }
 
+TEST(WidgetTreeTest, TreeRootUsesCanvasSlotsToStretchSystemLayers)
+{
+    WidgetTree tree({.width = 320, .height = 180});
+
+    UIElement* root = tree.getRoot();
+    ASSERT_NE(root, nullptr);
+    ASSERT_NE(dynamic_cast<UICanvasLayout*>(root->getLayout()), nullptr);
+
+    for (int i = 0; i < static_cast<int>(WidgetTree::ELayer::Count); ++i) {
+        UIElement* layer = tree.getLayer(static_cast<WidgetTree::ELayer>(i));
+        ASSERT_NE(layer, nullptr);
+        const auto* slot = dynamic_cast<const UICanvasSlot*>(root->getSlotForChild(*layer));
+        ASSERT_NE(slot, nullptr);
+        EXPECT_EQ(slot->getAnchorMin(), glm::vec2(0.0f, 0.0f));
+        EXPECT_EQ(slot->getAnchorMax(), glm::vec2(1.0f, 1.0f));
+    }
+
+    tree.layout();
+    for (int i = 0; i < static_cast<int>(WidgetTree::ELayer::Count); ++i) {
+        UIElement* layer = tree.getLayer(static_cast<WidgetTree::ELayer>(i));
+        EXPECT_EQ(layer->_layoutRect.pos, glm::vec2(0.0f, 0.0f));
+        EXPECT_EQ(layer->_layoutRect.extent, glm::vec2(320.0f, 180.0f));
+    }
+}
+
+TEST(WidgetTreeTest, AttachToLayerKeepsChildAbsoluteGeometrySemantics)
+{
+    WidgetTree tree({.width = 320, .height = 180});
+    auto panel = std::make_shared<UIPanel>("Panel");
+    panel->setPosition({24.0f, 18.0f});
+    panel->setSize({90.0f, 40.0f});
+
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, panel).valid());
+    tree.layout();
+
+    EXPECT_EQ(panel->_layoutRect.pos, glm::vec2(24.0f, 18.0f));
+    EXPECT_EQ(panel->_layoutRect.extent, glm::vec2(90.0f, 40.0f));
+    EXPECT_EQ(panel->getParent(), tree.getLayer(WidgetTree::ELayer::Content));
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(tree.getLayer(WidgetTree::ELayer::Content)->getSlotForChild(*panel));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getOffset(), glm::vec2(24.0f, 18.0f));
+    EXPECT_EQ(slot->getFixedSize(), glm::vec2(90.0f, 40.0f));
+    EXPECT_EQ(slot->getAnchorMin(), glm::vec2(0.0f, 0.0f));
+    EXPECT_EQ(slot->getAnchorMax(), glm::vec2(0.0f, 0.0f));
+}
+
+TEST(WidgetTreeTest, LayerCanvasSlotTracksPositionUpdatesAfterAttach)
+{
+    WidgetTree tree({.width = 320, .height = 180});
+    auto panel = std::make_shared<UIPanel>("Panel");
+    panel->setPosition({24.0f, 18.0f});
+    panel->setSize({90.0f, 40.0f});
+
+    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Tooltip, panel).valid());
+    panel->setPosition({40.0f, 22.0f});
+    panel->setSize({96.0f, 44.0f});
+    tree.layout();
+
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(tree.getLayer(WidgetTree::ELayer::Tooltip)->getSlotForChild(*panel));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getOffset(), glm::vec2(40.0f, 22.0f));
+    EXPECT_EQ(slot->getFixedSize(), glm::vec2(96.0f, 44.0f));
+    EXPECT_EQ(panel->_layoutRect.pos, glm::vec2(40.0f, 22.0f));
+    EXPECT_EQ(panel->_layoutRect.extent, glm::vec2(96.0f, 44.0f));
+}
+
 TEST(WidgetTreeTest, PointerRouteDeliversPreviewTargetThenBubble)
 {
     std::vector<std::string> deliveries;
@@ -676,6 +768,77 @@ TEST(WidgetTreeTest, ModalOverlayConsumesDismissClickBeforeUnderlyingContent)
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(170.0f, 130.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(clicks, 1);
+}
+
+TEST(WidgetTreeTest, PopupOverlayUsesACanvasSlotForItsContentChild)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       overlay = std::make_shared<UIPopupOverlay>("Overlay");
+    auto       panel   = std::make_shared<UIPanel>("Content");
+    panel->setSize({80.0f, 36.0f});
+    overlay->_contentPos = {24.0f, 18.0f};
+    overlay->addDetachedChild(panel);
+
+    overlay->open(tree);
+    tree.layout();
+
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(overlay->getSlotForChild(*panel));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getOffset(), glm::vec2(24.0f, 18.0f));
+    EXPECT_EQ(slot->getWidthSizeMode(), EWidgetSizeMode::Auto);
+    EXPECT_EQ(slot->getHeightSizeMode(), EWidgetSizeMode::Auto);
+    EXPECT_EQ(panel->_layoutRect.pos, glm::vec2(24.0f, 18.0f));
+    EXPECT_EQ(panel->_layoutRect.extent, glm::vec2(80.0f, 36.0f));
+}
+
+TEST(WidgetTreeTest, PopupOverlayContentExtentLivesOnTheCanvasSlot)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       overlay = std::make_shared<UIPopupOverlay>("Overlay");
+    auto       panel   = std::make_shared<UIPanel>("Content");
+    overlay->_contentPos    = {16.0f, 12.0f};
+    overlay->_contentExtent = {120.0f, 48.0f};
+    overlay->addDetachedChild(panel);
+
+    overlay->open(tree);
+    tree.layout();
+
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(overlay->getSlotForChild(*panel));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getPreferredSize(), glm::vec2(120.0f, 48.0f));
+    EXPECT_NE(panel->getSize(), glm::vec2(120.0f, 48.0f))
+        << "popup content extent must live on the canvas slot, not the child";
+    EXPECT_EQ(panel->_layoutRect.pos, glm::vec2(16.0f, 12.0f));
+    EXPECT_EQ(panel->_layoutRect.extent, glm::vec2(120.0f, 48.0f));
+}
+
+TEST(WidgetTreeTest, DialogCentresContentThroughThePopupCanvasSlot)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       content = std::make_shared<UIPanel>("Body");
+    content->setSize({120.0f, 40.0f});
+    auto dialog = UIDialog::create("Confirm", content);
+
+    dialog->open(tree);
+    tree.layout();
+
+    ASSERT_EQ(dialog->getChildren().size(), 1u);
+    UIElement* panel = dialog->getChildren()[0].get();
+    ASSERT_NE(panel, nullptr);
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(dialog->getSlotForChild(*panel));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getAnchorMin(), glm::vec2(0.5f, 0.5f));
+    EXPECT_EQ(slot->getAnchorMax(), glm::vec2(0.5f, 0.5f));
+    EXPECT_EQ(slot->getPivot(), glm::vec2(0.5f, 0.5f));
+    EXPECT_EQ(slot->getWidthSizeMode(), EWidgetSizeMode::Auto);
+    EXPECT_EQ(slot->getHeightSizeMode(), EWidgetSizeMode::Auto);
+    EXPECT_EQ(slot->getPreferredSize(), glm::vec2(360.0f, 136.0f));
+    EXPECT_NE(panel->getSize(), glm::vec2(360.0f, 136.0f))
+        << "dialog panel size must live on the popup canvas slot, not the child";
+    EXPECT_FLOAT_EQ(panel->_layoutRect.pos.x, 20.0f);
+    EXPECT_FLOAT_EQ(panel->_layoutRect.pos.y, 82.0f);
+    EXPECT_FLOAT_EQ(panel->_layoutRect.extent.x, 360.0f);
+    EXPECT_FLOAT_EQ(panel->_layoutRect.extent.y, 136.0f);
 }
 
 // === Attach / reparent / detach ===
@@ -1521,6 +1684,11 @@ TEST(WidgetTreeTest, DragOverDockSetsPointSensitiveDropPreview)
     EXPECT_TRUE(dock->hasDropPreview());
     EXPECT_FALSE(dock->isDropPreviewDisabled());
     EXPECT_TRUE(dock->isDropPreviewMerge());
+
+    const nlohmann::json dump = dumpWidgetTree(tree);
+    const auto* overlayNode = findWidgetNode(dump, "DockChooserOverlay");
+    ASSERT_NE(overlayNode, nullptr);
+    EXPECT_EQ((*overlayNode)["slot"]["type"], "canvas");
 
     // Moving to the leaf's WEST chooser block switches the preview to a split strip.
     tree.updateDrag({360.0f, 300.0f});

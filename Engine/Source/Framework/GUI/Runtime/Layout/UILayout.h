@@ -150,6 +150,8 @@ struct FBoxSlotArgs
     float                    weight          = 1.0f;
     FMargin                  margin          = {};
     EUIBoxSlotCrossAlignment crossAlignment  = EUIBoxSlotCrossAlignment::Stretch;
+    /// Non-zero on an axis overrides the child's desired size for that axis.
+    glm::vec2                preferredSize  = {0.0f, 0.0f};
 };
 
 /// Parent-owned layout algorithm. Layout owns measure/arrange only; visual
@@ -408,6 +410,9 @@ public:
     /// Size the child would like to be when its size mode is Auto on that axis.
     /// A zero component means "ask the child" (computeDesiredSize()).
     [[nodiscard]] const glm::vec2& getPreferredSize() const { return _preferredSize; }
+    /// Explicit fixed size for non-stretch, non-auto axes. This keeps canvas
+    /// edge-owned size intent out of the child geometry state.
+    [[nodiscard]] const glm::vec2& getFixedSize() const { return _fixedSize; }
 
     void setAnchorMin(glm::vec2 value);
     void setAnchorMax(glm::vec2 value);
@@ -421,6 +426,7 @@ public:
     void setHeightSizeMode(EWidgetSizeMode value);
     void setPivot(glm::vec2 value);
     void setPreferredSize(glm::vec2 value);
+    void setFixedSize(glm::vec2 value);
     void apply(const FCanvasSlotArgs& args);
     void appendRuntimeDiagnostics(nlohmann::json& node) const override;
 
@@ -437,6 +443,7 @@ private:
     EWidgetSizeMode _heightSizeMode = EWidgetSizeMode::Fixed;
     glm::vec2       _pivot         = {0.0f, 0.0f};
     glm::vec2       _preferredSize = {0.0f, 0.0f};
+    glm::vec2       _fixedSize     = {0.0f, 0.0f};
 };
 
 /// Construct-time canvas slot intent. Defaults to the historical absolute
@@ -459,12 +466,8 @@ struct FCanvasSlotArgs
     EWidgetSizeMode heightSizeMode = EWidgetSizeMode::Fixed;
     glm::vec2       pivot          = {0.0f, 0.0f};
     glm::vec2       preferredSize  = {0.0f, 0.0f};
+    glm::vec2       fixedSize      = {0.0f, 0.0f};
 };
-
-/// Transitional alias: the old Panel-bound naming. The canvas edge is a layout
-/// concern now, so call sites move to UICanvasSlot / FCanvasSlotArgs.
-using FCanvasPanelSlotArgs = FCanvasSlotArgs;
-using UICanvasPanelSlot    = UICanvasSlot;
 
 /// Canvas layout: children are positioned by anchor rects against the parent
 /// content rect. This is the layout form of the historical "path-B" panel
@@ -568,6 +571,11 @@ public:
     /// Applies the pointer wheel delta along the configured axis. Returns
     /// true only if the offset changed; callers then consume the route.
     bool scroll(const glm::vec2& wheelDelta);
+
+    /// The viewport owns the scrolling axis extent itself; the child edge only
+    /// carries cross-axis placement (fill by default, or align at desired
+    /// size), so scroll content uses the shared single-child slot contract.
+    [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
 
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
     void arrange(UIElement& parent, const Rect2D& rect) const override;

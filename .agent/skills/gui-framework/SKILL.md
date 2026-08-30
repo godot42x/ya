@@ -52,25 +52,29 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   `anchor span（stretch）> AutoSize（computeDesiredSize 递归聚合子内容）> _size`。
 - `UIText`：AutoSize 时 desired = `font.measureText(text) × lineHeight`；字体经
   FontManager 解析，closure 测试用 `registerFont` 注入合成字体。
-- `UIButton`（Content-Slot）：单 child 容器，没有 `setText`。标签是内容槽里的 `UIText`
-  子节点（DSL：`.child(ui::text(...).setText(...))`）。`_contentPadding` + 内容子节点填入
-  内缩 rect（`layoutAssigned`，非 anchor 数学）；AutoSize 时 desired = 首可见内容子节点 +
-  padding×2；显式 `_size` 在容器内也优先（`computeDesiredSize` 返回 `_size`）。
+- `UIButton` / `UISelectableRow` / `UICheckBox`（Content-Slot）：单 child 容器。标签是内容槽里的 `UIText`
+  子节点（DSL：`.child(ui::text(...).setText(...))`）。`UISingleChildLayout` padding + 内容子节点填入
+  内缩 rect（`layoutAssigned`，非 child `setPosition`）。CheckBox 的左 padding = `_boxSize + _labelSpacing`。
+  AutoSize 时 desired = 首可见内容子节点 + padding；显式 `_size` 在容器内也优先。行缩进用
+  `setContentPadding(FMargin{indent, 0, 0, 0})`。
+- `UICompoundWidget` 是 single-child host：`construct()` 挂上的第一个 child 经 `UISingleChildSlot` 填满 compound rect，不再手写 `layoutAssigned`。
 - 布局正式分为 `UIElement / UILayout / UISlot`：`UIContainer` 只是第一个 layout host，
   持有 `UIBoxLayout`；它不再持有 `_direction/_spacing/_padding/...` 这类 box 字段。
   `UILayout` 只负责 measure/arrange，`UISlot` 是 parent-owned parent-child 边对象。
 - `UIBoxSlot` 承载每 child 的 `Auto/Fill`、weight、**四边 `FMargin`**、cross alignment、
   min/max/preferred size 与 layout participation；slot setter 会使所属 tree 的 layout 失效。
   Fill 按权重分配剩余主轴空间且遵守 max size；Hidden 默认保留空间，可由 slot 明确关闭。
-  Construct：`column.child(node, FBoxSlotArgs{.sizeRule = EUIBoxSlotSizeRule::Fill, .margin = FMargin::all(8)})`；
+  Construct：`column.child(node, FBoxSlotArgs{.sizeRule = EUIBoxSlotSizeRule::Fill, .margin = FMargin::all(8), .preferredSize = {120, 22}})`；
   `childFill` 仍是只标 Fill 的简写。`setMargin({x, y})` 走 `glm::vec2` → 左右/上下对称
   （`FMargin` 不是 aggregate，两元素列表不会变成 left/top、right/bottom=0）。
-- child 用 `getSlot()` 读取当前边，parent 用 `getSlotForChild()` / `UIContainer::getBoxSlot()`
+  `FBoxSlotArgs::preferredSize` 非零轴覆盖 child desired；`ui::boxSlot().preferredSize({w,h})` 是 construct-time 写法。
+- `UIElement::setSize()` 在 child 已挂 canvas host 时桥接到 `UICanvasSlot::fixedSize`；已挂 box host 时桥接到 `UIBoxSlot::preferredSize`。这是 CP2 前的过渡桥，不是 child 继续拥有几何。
+- `UIPopupOverlay::_contentExtent` 是 popup-owned canvas edge 的内容尺寸；基类 Auto + preferredSize，Menu 覆盖为 fixedSize，Dialog 走 preferredSize。不要再 `content->setSize()`。
   查询；reparent/detach 时旧 parent 销毁旧 slot，新 parent 创建默认 slot。不要缓存 slot
   裸指针跨越 reparent/detach。
 - `UIBoxLayout` 主轴按 desired/slot 排列，cross 轴默认 stretch；`computeDesiredSize` 聚合
   child + margin + spacing + padding。scroll/split 仍读取内容 desired，specialized layout
-  已收口为 `UIScrollLayout` / `UISplitLayout` / `UIOverlayLayout`；`UIButton` 与 `UISizeBox`
+  已收口为 `UIScrollLayout` / `UISplitLayout` / `UIOverlayLayout`；`UIButton`、`UISelectableRow`、`UICheckBox`、`UICompoundWidget` 与 `UISizeBox`
   使用 `UISingleChildLayout`。specialized widget 只保留 paint/input transient state，不能再把
   ratio/offset/padding 等几何状态塞回 widget 字段。
 - `UIOverlay` 是叠放 host（不是 `UIPopupOverlay`）：每个 child 经 `UIOverlaySlot` 在同一父

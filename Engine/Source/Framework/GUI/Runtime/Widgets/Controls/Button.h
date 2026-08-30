@@ -87,6 +87,9 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
     void                    layout(const Rect2D& parentRect) override;
     void                    layoutAssigned(const Rect2D& rect) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
+    /// The button owns its content box via UISingleChildLayout, so the label's
+    /// intent lives on the edge: fill (default) or align at desired size.
+    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 
   private:
     UISingleChildLayout             _contentLayout;

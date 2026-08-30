@@ -199,7 +199,6 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
     list->setDirection(EWidgetBoxLayout::Vertical);
     list->setSpacing(0.0f);
     list->setPadding(glm::vec2(_panelPadding));
-    list->setSize({0.0f, 0.0f});
     panel->addDetachedChild(list);
     // Fill the panel rect: the panel is assigned the menu's own content size by
     // layoutAssigned(), so the list must span it (not keep its default fixed
@@ -264,7 +263,6 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
         menuItem->_reservedIconExtent = _iconColumnExtent;
         menuItem->_reservedShortcutExtent = _shortcutColumnExtent;
         menuItem->_reservedSubmenuExtent = _submenuColumnExtent;
-        menuItem->setSize({rowWidth, bSeparator ? kSeparatorHeight : _itemHeight});
         // Raw `this` capture is safe: the items are owned by the menu
         // (subtree), so the menu outlives every item lambda.
         menuItem->_onAction = [item = items[i].action, menu = this]()
@@ -296,6 +294,9 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
             }
         };
         list->addDetachedChild(menuItem);
+        if (auto* slot = dynamic_cast<UIBoxSlot*>(list->getSlotForChild(*menuItem))) {
+            slot->setPreferredSize({rowWidth, bSeparator ? kSeparatorHeight : _itemHeight});
+        }
         _items.push_back(menuItem.get());
     }
 }
@@ -307,23 +308,13 @@ void UIMenu::openAt(WidgetTree& tree, const glm::vec2& pos)
     open(tree);
 }
 
-void UIMenu::layoutAssigned(const Rect2D& rect)
+FCanvasSlotArgs UIMenu::resolveContentSlotArgs(const UIElement& child) const
 {
-    setLayoutRect(rect); // full screen
-
-    for (UIElement* child : getChildrenInPaintOrder()) {
-        if (!child->participatesInLayout()) {
-            continue;
-        }
-        // The panel is the menu's content: assign it the size derived from
-        // the rows (computed in rebuildContent), anchored at _contentPos.
-        // Never trust the panel's default fixed size here.
-        child->layoutAssigned(Rect2D{
-            .pos    = _contentPos,
-            .extent = _contentExtent,
-        });
-        break;
-    }
+    (void)child;
+    FCanvasSlotArgs args;
+    args.offset    = _contentPos;
+    args.fixedSize = _contentExtent;
+    return args;
 }
 
 std::vector<UIMenuItem*> UIMenu::menuItems() const

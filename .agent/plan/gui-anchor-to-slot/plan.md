@@ -224,6 +224,23 @@ ui::canvas("Root")[
 
 ## 4. 实施 checkpoint
 
+### 当前审计结论（2026-08-29）
+
+- CP3 的 DSL/capability/canvas 主体能力已存在，但 public 过渡 API 仍残留，不能视为完全收尾。
+- CP5 目前只是引入 layout-host hook；`UIElement` 的 legacy self-positioned fallback 仍在，因此不能宣称运行期二分已消失。
+- root/layer 路径需要分两步收口：先把 `TreeRoot` 自身改为正式 canvas host、用 root->layer slot 表达 system layer fill；再迁移 layer 下业务 child 的默认 attach 语义。不能直接把 layer 升成 canvas host，否则会把 `attachToLayer()` 现有几何语义静默打坏。
+- 进一步审计结论：在 layer 尚未成为 typed layout host 之前，**不能**先给 `attachToLayer()` 暴露统一 `layout spec` 入口。否则 API 会看起来统一，但 layer->child edge 仍只能生成 base slot，intent 无法被正确消费，等于制造新的“能写不能兑现”的过渡层。
+- 新审计结论：layer 升级为 canvas host 本身并非不可行，关键在于 **attach 时必须把 child 当前 authored canvas geometry 立即迁入 parent-owned `UICanvasSlot`，且后续 `setPosition()` 必须桥接到该 slot**。若缺少这两步，升级 layer host 仍会静默破坏既有语义。
+- 当前实现存在一条明确架构偏差：`applyLayoutSpecToSlot(box)` 仍通过 `child.setSize()` 兑现 `size()`，这让 Box host 的一部分布局意图继续写回 child geometry，而不是完全留在 slot/layout 上。
+- 当前实现曾存在另一条明确偏差：capability 编译期约束已覆盖 single-child / overlay 宿主，但 unified `ui::layout()` 的运行时 slot 消费未完全覆盖，导致“能编译但 intent 可能静默丢失”。该问题现已纠正并补测试验证。
+- 当前实现又发现一条同类偏差：`UIScrollViewport` 已公开 single-child 能力与 DSL 入口，但 `UIScrollLayout` 一度未创建 `UISingleChildSlot`，形成“接口统一、runtime 仍是 base slot”的假统一。后续凡是宣称支持 typed slot 的宿主，都必须先核实 `createSlotForChild()/UILayout::createSlot()` 的实际闭环，再允许对外暴露对应 capability。
+- 新审计结论：`PopupOverlay` 需要的是**独立 full-screen host 语义**，但不必为此再发明一套平行 slot 类型。更合理的收口是让 popup 自己拥有 shield/full-screen contract，同时复用通用 `UICanvasSlot` 承载 content edge；Menu / Dialog 通过覆盖 content slot args 表达“固定尺寸定位”与“居中 Auto 尺寸”。
+- 审计补充：`CP5` 末尾不应把“测试里仍出现 `setPosition/setSize`”本身视为误差。剩余大量调用其实是在定义 absolute 几何、layer-child attach 语义或测试夹具初始条件；真正需要清理的是那些**runtime 已完全由 parent-owned slot 决定**、child 再写 `size/anchor/position` 只剩历史噪声的 dead write。
+- 新审计结论：`reparent` 不能把“edge 属于 parent->child”误解成“同父重排时也应该销毁 edge”。跨父迁移当然要重建 slot，但 `reparentBefore/After` 在**同一个 parent** 下只是调整顺序，必须移动原 slot，而不是重建默认 slot，否则 box/canvas/overlay/table 的 edge state 会在 reorder 时蒸发。
+- 新审计结论：`Grid/Table` 当前还**没有** declarative builder 正式暴露 unified `ui::layout()` 附着面，因此眼前更大的风险不是 runtime 掉 intent，而是 capability 常量先把未来承诺说宽了。`UITableSlot` 目前只有 `cell(row,col)` 事实契约，在它真正长出 align/margin/sizeMode 等 slot 数据前，grid capability 应保持 `cell-only`，避免再次制造“声明先于兑现”的假统一。
+- 新审计结论：`[]` 应继续只作为 child attach 的语法糖，`TUILayoutAttachment` 只是 builder 层临时运输 `spec + child` 的壳，不应变成运行时 ownership 模型。正确的收口不是“让 widget 持有 slot”，而是让 **parent 在创建 edge 时立即初始化 slot**，从而把 declarative `[]`、`child(slotArgs)`、`ui::build(..., spec)`、`attachLayout(...)` 收到同一条 parent-owned slot 初始化路径。
+- 后续推进时，每个 checkpoint 必须先判断是“补计划中缺口”还是“纠正已落地偏差”；若偏差比计划更明显，优先纠偏，不继续在过渡层上叠功能。
+
 ### CP1 — 冻结新布局协议
 - 新增 UIConstraints、measure/arrange contract、size mode 和布局结果定义。
 - 明确各 layout 的 default slot 与 measure 优先级。

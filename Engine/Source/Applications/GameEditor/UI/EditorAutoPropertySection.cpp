@@ -23,7 +23,8 @@ void EditorAutoPropertySection::construct()
     for (const PropertyNode& node : _graph.getNodes()) {
         if (!node.bVisible) continue;
         auto row = ui::row("PropertyRow_" + node.name).setSpacing(6.0f);
-        row.child(ui::text("PropertyLabel_" + node.name).setText(node.displayName).setSize({100.0f, 22.0f}));
+        row.child(ui::text("PropertyLabel_" + node.name).setText(node.displayName),
+                  FBoxSlotArgs{.preferredSize = {100.0f, 22.0f}});
 
         EditorSlot slot;
         slot.node = &node;
@@ -31,7 +32,6 @@ void EditorAutoPropertySection::construct()
             slot.kind = EditorSlot::Kind::Vec3;
             for (int axis = 0; axis < 3; ++axis) {
                 auto drag = std::make_shared<UIDragFloat>(node.name + std::to_string(axis));
-                drag->setSize({72.0f, 22.0f});
                 drag->_onValueChanged = [this, index = _editors.size(), axis](float value) {
                     glm::vec3 vector{};
                     if (!_editors[index].node->binding.tryGetVec3(vector)) return;
@@ -39,15 +39,14 @@ void EditorAutoPropertySection::construct()
                     _editors[index].node->binding.setVec3(vector);
                 };
                 slot.vec3.push_back(drag);
-                row.child(drag);
+                row.child(drag, FBoxSlotArgs{.preferredSize = {72.0f, 22.0f}});
             }
         }
         else if (node.valueType == refl::type_index_v<float>) {
             slot.kind = EditorSlot::Kind::Float;
             slot.scalar = std::make_shared<UIDragFloat>(node.name);
-            slot.scalar->setSize({110.0f, 22.0f});
             slot.scalar->_onValueChanged = [this, index = _editors.size()](float value) { _editors[index].node->binding.setFloat(value); };
-            row.child(slot.scalar);
+            row.child(slot.scalar, FBoxSlotArgs{.preferredSize = {110.0f, 22.0f}});
         }
         else if (node.valueType == refl::type_index_v<bool>) {
             slot.kind = EditorSlot::Kind::Bool;
@@ -58,9 +57,8 @@ void EditorAutoPropertySection::construct()
         else if (node.valueType == refl::type_index_v<std::string>) {
             slot.kind = EditorSlot::Kind::String;
             slot.string = std::make_shared<UITextField>(node.name);
-            slot.string->setSize({160.0f, 22.0f});
             slot.string->_onCommit = [this, index = _editors.size()](const std::string& value) { _editors[index].node->binding.setString(value); };
-            row.child(slot.string);
+            row.child(slot.string, FBoxSlotArgs{.preferredSize = {160.0f, 22.0f}});
         }
         else {
             continue;

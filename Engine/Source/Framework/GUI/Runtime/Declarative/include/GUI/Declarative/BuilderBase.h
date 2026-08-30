@@ -245,27 +245,27 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
 
     TDerived& child(UIElementRef node) &
     {
-        this->_widget->addDetachedChild(std::move(node));
+        attachChild(std::move(node));
         return this->derived();
     }
 
     TDerived&& child(UIElementRef node) &&
     {
-        this->_widget->addDetachedChild(std::move(node));
+        attachChild(std::move(node));
         return std::move(this->derived());
     }
 
     template<UIWidgetBuilder TChild>
     TDerived& child(TChild&& builder) &
     {
-        this->_widget->addDetachedChild(std::forward<TChild>(builder).release());
+        attachChild(std::forward<TChild>(builder).release());
         return this->derived();
     }
 
     template<UIWidgetBuilder TChild>
     TDerived&& child(TChild&& builder) &&
     {
-        this->_widget->addDetachedChild(std::forward<TChild>(builder).release());
+        attachChild(std::forward<TChild>(builder).release());
         return std::move(this->derived());
     }
 
@@ -284,34 +284,39 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     }
 
   protected:
+    void attachChild(UIElementRef node)
+    {
+        this->_widget->addDetachedChild(std::move(node), [](UIElement&, UISlot&) {});
+    }
+
+    template<typename TSlotInit>
+    void attachChild(UIElementRef node, TSlotInit&& init)
+    {
+        this->_widget->addDetachedChild(std::move(node), std::forward<TSlotInit>(init));
+    }
+
     /// Attach a child and apply its single-child slot intent. Parents that own
-    /// both axes (button / scroll / size box / split pane ...) must route their
-    /// child(node, slot) overloads through here so intent lands on the edge
-    /// instead of on the child's ignored anchors.
+    /// both axes (button / selectable row / scroll / size box / split pane ...)
+    /// must route their child(node, slot) overloads through here so intent lands
+    /// on the edge instead of on the child's ignored anchors.
     void applySingleChildSlot(UIElementRef node, const FSingleChildSlotArgs& slot)
     {
-        UIElement* live = node.get();
-        this->_widget->addDetachedChild(std::move(node));
-        if (live == nullptr) {
-            return;
-        }
-        if (auto* childSlot = dynamic_cast<UISingleChildSlot*>(this->_widget->getSlotForChild(*live))) {
-            childSlot->apply(slot);
-        }
+        attachChild(std::move(node), [&slot](UIElement&, UISlot& childSlot) {
+            if (auto* typedSlot = dynamic_cast<UISingleChildSlot*>(&childSlot)) {
+                typedSlot->apply(slot);
+            }
+        });
     }
 
     /// Attach a child and apply its canvas slot intent. The anchor geometry
     /// lives on this edge, never on the child's ignored anchors.
     void applyCanvasSlot(UIElementRef node, const FCanvasSlotArgs& slot)
     {
-        UIElement* live = node.get();
-        this->_widget->addDetachedChild(std::move(node));
-        if (live == nullptr) {
-            return;
-        }
-        if (auto* childSlot = dynamic_cast<UICanvasSlot*>(this->_widget->getSlotForChild(*live))) {
-            childSlot->apply(slot);
-        }
+        attachChild(std::move(node), [&slot](UIElement&, UISlot& childSlot) {
+            if (auto* typedSlot = dynamic_cast<UICanvasSlot*>(&childSlot)) {
+                typedSlot->apply(slot);
+            }
+        });
     }
 
     /// Attach a child with a unified layout spec. The host consumes the
@@ -319,12 +324,9 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     /// silently dropped.
     void applyLayout(UIElementRef node, const FUILayoutSpec& spec)
     {
-        UIElement* live = node.get();
-        this->_widget->addDetachedChild(std::move(node));
-        if (live == nullptr) {
-            return;
-        }
-        applyLayoutSpec(*live, spec);
+        attachChild(std::move(node), [&spec](UIElement& child, UISlot& slot) {
+            applyLayoutSpecToSlot(slot, child, spec);
+        });
     }
 
   public:
@@ -353,9 +355,9 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     /// Apply a spec to an already-attached child (the host resolution step).
     void applyLayoutSpec(UIElement& child, const FUILayoutSpec& spec)
     {
-        if (UISlot* slot = this->_widget->getSlotForChild(child)) {
-            applyLayoutSpecToSlot(*slot, child, spec);
-        }
+        this->_widget->initializeChildSlot(child, [&spec](UIElement& live, UISlot& slot) {
+            applyLayoutSpecToSlot(slot, live, spec);
+        });
     }
 };
 

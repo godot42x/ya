@@ -25,6 +25,7 @@
 
 #include <glm/glm.hpp>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -124,6 +125,7 @@ class UILayout;
 class ReactiveBase;
 
 using UIElementRef = std::shared_ptr<UIElement>;
+using FChildSlotInitializer = std::function<void(UIElement&, UISlot&)>;
 
 class UIFrameBuilder;
 
@@ -190,7 +192,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     YA_REFLECT_FIELD(_visibility, .instanceEditable())
     YA_REFLECT_FIELD(_zOrder, .instanceEditable())
     // _anchorMin/_anchorMax are no longer authorable: stretch geometry lives on
-    // the parent->child slot edge (UICanvasPanelSlot), never on the child. They
+    // the parent->child slot edge (UICanvasSlot), never on the child. They
     // remain runtime-only layout I/O consumed via the slot.
     // _pivot is reserved (rotation/scale not implemented): authorable but not
     // per-instance overridable yet.
@@ -556,14 +558,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     [[nodiscard]] const glm::vec2& getSize() const { return _size; }
     [[nodiscard]] EWidgetVisibility getVisibility() const { return _visibility; }
 
-    void setPosition(const glm::vec2& value)
-    {
-        if (_position == value) {
-            return;
-        }
-        _position = value;
-        invalidateProperty(EUIPropertyImpact::Layout);
-    }
+    void setPosition(const glm::vec2& value);
 
     void setStyleKey(std::string value)
     {
@@ -574,14 +569,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
         invalidateProperty(EUIPropertyImpact::Layout);
     }
 
-    void setSize(const glm::vec2& value)
-    {
-        if (_size == value) {
-            return;
-        }
-        _size = value;
-        invalidateProperty(EUIPropertyImpact::Layout);
-    }
+    void setSize(const glm::vec2& value);
 
     void setVisibility(EWidgetVisibility value)
     {
@@ -653,6 +641,8 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// instantiate). The child must not be attached anywhere; tree membership
     /// is assigned when the subtree root is attached to a WidgetTree.
     void addDetachedChild(const UIElementRef& child);
+    void addDetachedChild(const UIElementRef& child, FChildSlotInitializer init);
+    void initializeChildSlot(UIElement& child, FChildSlotInitializer init);
 
   protected:
     /// Called when setLayoutRect detects a rect change (GI-304). Clip hosts
@@ -751,8 +741,11 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     std::unordered_set<ReactiveBase*> _persistentDependencies;
 
     void appendChildEdge(const UIElementRef& child);
+    void appendChildEdge(const UIElementRef& child, FChildSlotInitializer init);
     void insertChildEdge(size_t index, const UIElementRef& child);
+    void insertChildEdge(size_t index, const UIElementRef& child, FChildSlotInitializer init);
     void removeChildEdge(UIElement& child);
+    void finalizeInsertedChild(const UIElementRef& child);
 };
 
 /// A paint-affecting boolean flag whose only write path marks the owning

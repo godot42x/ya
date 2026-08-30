@@ -470,11 +470,11 @@ TEST(ToolControlsTest, SplitPaneDoesNotStealHoverFromOverlappingButton)
     panel->_anchorMin = {0.0f, 0.0f};
     panel->_anchorMax = {1.0f, 1.0f};
 
+    // The parent is a box container (path A), so child intent goes on the slot:
+    // stretch across the cross axis at the container's own main extent. The
+    // anchors and position this used to set were dropped by the box layout.
     auto toolbar = std::make_shared<UIContainer>("Toolbar");
     toolbar->setDirection(EWidgetBoxLayout::Horizontal);
-    toolbar->_anchorMin = {0.0f, 0.0f};
-    toolbar->_anchorMax = {1.0f, 0.0f};
-    toolbar->setPosition({0.0f, 10.0f});
     toolbar->setSize({0.0f, 32.0f});
     toolbar->setSpacing(8.0f);
     toolbar->setPadding({8.0f, 4.0f});
@@ -482,9 +482,9 @@ TEST(ToolControlsTest, SplitPaneDoesNotStealHoverFromOverlappingButton)
     auto add    = std::make_shared<UIButton>("Add");
     add->setSize({45.0f, 24.0f});
 
+    // Auto size rule (the box default) is what this pane actually got: the
+    // stretch anchors were ignored under a path-A parent.
     auto split = std::make_shared<UISplitPane>("Split");
-    split->_anchorMin = {0.0f, 0.0f};
-    split->_anchorMax = {1.0f, 1.0f};
     split->setPadding({0.0f, 42.0f}); // top padding overlaps the toolbar strip
 
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);
@@ -919,7 +919,11 @@ TEST(ToolControlsTest, MenuSizesPanelFromItemLabels)
     const auto items = menu->menuItems();
     ASSERT_EQ(items.size(), 2u);
     EXPECT_EQ(menu->getChildren().size(), 1u);
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(menu->getSlotForChild(*menu->getChildren()[0]));
+    ASSERT_NE(slot, nullptr);
     const Rect2D& panelRect = menu->getChildren()[0]->_layoutRect;
+    EXPECT_EQ(slot->getOffset(), glm::vec2(10.0f, 20.0f));
+    EXPECT_EQ(slot->getFixedSize(), glm::vec2(96.0f + 20.0f + 8.0f, 2.0f * 26.0f + 8.0f));
     EXPECT_FLOAT_EQ(panelRect.pos.x, 10.0f);
     EXPECT_FLOAT_EQ(panelRect.pos.y, 20.0f);
     EXPECT_FLOAT_EQ(panelRect.extent.x, 96.0f + 20.0f + 8.0f);
@@ -931,6 +935,13 @@ TEST(ToolControlsTest, MenuSizesPanelFromItemLabels)
     EXPECT_FLOAT_EQ(row.pos.y, 24.0f);
     EXPECT_FLOAT_EQ(row.extent.x, 96.0f + 20.0f);
     EXPECT_FLOAT_EQ(row.extent.y, 26.0f);
+    const UIElement* list = items[0]->getParent();
+    ASSERT_NE(list, nullptr);
+    const auto* rowSlot = dynamic_cast<const UIBoxSlot*>(list->getSlotForChild(*items[0]));
+    ASSERT_NE(rowSlot, nullptr);
+    EXPECT_EQ(rowSlot->getPreferredSize(), glm::vec2(96.0f + 20.0f, 26.0f));
+    EXPECT_NE(items[0]->getSize(), glm::vec2(96.0f + 20.0f, 26.0f))
+        << "menu row size must live on the box slot, not the child";
     // The label fits inside the row's 10px side padding.
     EXPECT_GE(row.extent.x - 20.0f, font->measureText("New Document"));
     // Second row packs directly below (no spacing between menu rows).
@@ -1022,7 +1033,9 @@ TEST(ToolControlsTest, MenuBarPaintsBottomSeparator)
     tree.attachToLayer(WidgetTree::ELayer::Content, bar);
 
     auto* item = bar->addItem("File", nullptr);
-    item->setSize({52.0f, 26.0f});
+    if (auto* slot = dynamic_cast<UIBoxSlot*>(bar->getSlotForChild(*item))) {
+        slot->setPreferredSize({52.0f, 26.0f});
+    }
 
     auto theme = std::make_shared<UITheme>();
     auto style = FMenuBarItemStyle{};

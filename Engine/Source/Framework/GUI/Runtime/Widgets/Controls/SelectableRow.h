@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
@@ -16,6 +17,10 @@ namespace ya
 /// The selection set, current selection and business-object lookup belong to
 /// the ToolWorkspace / presenter, never to the row. This primitive does no
 /// virtualization and owns no item list.
+///
+/// Content lives in a single-child slot (same contract as UIButton): the
+/// label's indent/fill intent is padding + UISingleChildSlot, not child
+/// `setPosition` / `setSize`.
 ///
 /// Input semantics (same capture contract as UIButton):
 ///   - pointer press selects (requests focus + pointer capture); release
@@ -34,6 +39,21 @@ struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISe
     explicit UISelectableRow(std::string name = "Row");
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UISelectableRow>; }
+
+    [[nodiscard]] UISingleChildLayout&       getContentLayout() { return _contentLayout; }
+    [[nodiscard]] const UISingleChildLayout& getContentLayout() const { return _contentLayout; }
+    void                                     setContentPadding(FMargin value) { _contentLayout.setPadding(value); }
+    void                                     setContentPadding(glm::vec2 value) { _contentLayout.setPadding(value); }
+    [[nodiscard]] const FMargin&            getContentPadding() const { return _contentLayout.getPadding(); }
+    void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override
+    {
+        const FMargin& padding = getContentPadding();
+        node["type"]    = "singleChild";
+        node["padding"] = {{"left", padding.left},
+                           {"top", padding.top},
+                           {"right", padding.right},
+                           {"bottom", padding.bottom}};
+    }
 
     /// Stable item ID reported to the workspace (selection/activation).
     std::string _itemId;
@@ -81,10 +101,14 @@ struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISe
     bool isHoverable() const override { return true; }
     void resetHoverState() override { _bHovered = false; }
     void clearTransientInputState() override;
+    void layout(const Rect2D& parentRect) override;
+    void layoutAssigned(const Rect2D& rect) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
+    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 
   private:
     friend struct FSelectableRowDragDropBehavior;
+    UISingleChildLayout _contentLayout;
     VisualFlag _bPressed{*this};
     VisualFlag _bHovered{*this};
     glm::vec2  _pressPoint{};

@@ -247,6 +247,15 @@ void UICanvasSlot::setPreferredSize(glm::vec2 value)
     invalidateMeasure();
 }
 
+void UICanvasSlot::setFixedSize(glm::vec2 value)
+{
+    if (_fixedSize == value) {
+        return;
+    }
+    _fixedSize = value;
+    invalidateArrange();
+}
+
 void UICanvasSlot::apply(const FCanvasSlotArgs& args)
 {
     setAnchorMin(args.anchorMin);
@@ -261,6 +270,7 @@ void UICanvasSlot::apply(const FCanvasSlotArgs& args)
     setHeightSizeMode(args.heightSizeMode);
     setPivot(args.pivot);
     setPreferredSize(args.preferredSize);
+    setFixedSize(args.fixedSize);
 }
 
 void UICanvasSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
@@ -271,16 +281,47 @@ void UICanvasSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
     node["offset"]    = {_offset.x, _offset.y};
     node["minSize"]   = {_minSize.x, _minSize.y};
     node["maxSize"]   = {_maxSize.x, _maxSize.y};
+    node["fixedSize"] = {_fixedSize.x, _fixedSize.y};
 }
 
 Rect2D UICanvasLayout::resolveChildRect(const UIElement& child, const UICanvasSlot& slot,
                                         const Rect2D& contentRect)
 {
-    // 1. Anchor area: shared anchor math, so the canvas layout and the legacy
-    //    self-positioned path cannot drift.
-    const Rect2D anchorRect =
-        child.resolveCanvasRect(contentRect, slot.getAnchorMin(), slot.getAnchorMax(),
-                                slot.getOffset(), slot.getMinSize(), slot.getMaxSize());
+    // 1. Anchor area.  Canvas-host arrangement is parent-owned: resolve the
+    //    anchor span and the non-stretch fallback from the slot first.  Only
+    //    the final fallback (no slot fixed/preferred size) consults the child
+    //    geometry bridge, which is retained for non-migrated absolute widgets.
+    const glm::vec2 anchorMin = glm::clamp(slot.getAnchorMin(), 0.0f, 1.0f);
+    const glm::vec2 anchorMax = glm::clamp(slot.getAnchorMax(), 0.0f, 1.0f);
+    const glm::vec2 anchorSpan = (anchorMax - anchorMin) * contentRect.extent;
+    const glm::vec2 rectMin = contentRect.pos + contentRect.extent * anchorMin + slot.getOffset();
+    const glm::vec2 desired = child.computeDesiredSize();
+    const glm::vec2 preferred = slot.getPreferredSize();
+    const glm::vec2 fixed = slot.getFixedSize();
+    glm::vec2 fallbackSize = child.getSize(); // legacy bridge; removed in CP2.
+    if (preferred.x != 0.0f) {
+        fallbackSize.x = preferred.x;
+    }
+    if (preferred.y != 0.0f) {
+        fallbackSize.y = preferred.y;
+    }
+    if (slot.getWidthSizeMode() == EWidgetSizeMode::Auto && preferred.x == 0.0f) {
+        fallbackSize.x = desired.x;
+    }
+    if (slot.getHeightSizeMode() == EWidgetSizeMode::Auto && preferred.y == 0.0f) {
+        fallbackSize.y = desired.y;
+    }
+    if (fixed.x != 0.0f) {
+        fallbackSize.x = fixed.x;
+    }
+    if (fixed.y != 0.0f) {
+        fallbackSize.y = fixed.y;
+    }
+    const Rect2D anchorRect{.pos = rectMin,
+                            .extent = glm::clamp(glm::vec2{
+                                                       anchorSpan.x != 0.0f ? anchorSpan.x : fallbackSize.x,
+                                                       anchorSpan.y != 0.0f ? anchorSpan.y : fallbackSize.y},
+                                               slot.getMinSize(), slot.getMaxSize())};
 
     // 2. Per-edge insets shrink the available area. An inset on an axis also
     //    makes that axis stretch, so "all four edges" means "fill minus insets"
@@ -288,9 +329,6 @@ Rect2D UICanvasLayout::resolveChildRect(const UIElement& child, const UICanvasSl
     const FMargin& insets = slot.getOffsets();
     const glm::vec2 insetH{insets.left + insets.right, insets.top + insets.bottom};
 
-    const glm::vec2 anchorSpan =
-        (glm::clamp(slot.getAnchorMax(), 0.0f, 1.0f) - glm::clamp(slot.getAnchorMin(), 0.0f, 1.0f)) *
-        contentRect.extent;
     const glm::vec2 stretchAxis{anchorSpan.x != 0.0f || insetH.x != 0.0f ? 1.0f : 0.0f,
                                 anchorSpan.y != 0.0f || insetH.y != 0.0f ? 1.0f : 0.0f};
 
@@ -308,18 +346,16 @@ Rect2D UICanvasLayout::resolveChildRect(const UIElement& child, const UICanvasSl
     // 3. Size resolution per axis: Auto uses the measured desired size, a
     //    stretching axis takes the (inset) area, otherwise the element's own
     //    authored size is kept.
-    const glm::vec2 desired = child.computeDesiredSize();
     // A non-zero preferred size on an axis overrides the measured size.
-    const glm::vec2 preferred = slot.getPreferredSize();
     glm::vec2       size       = anchorRect.extent;
     size.x = slot.getWidthSizeMode() == EWidgetSizeMode::Auto
                  ? (preferred.x != 0.0f ? preferred.x : desired.x)
              : stretchAxis.x != 0.0f ? area.extent.x
-                                     : anchorRect.extent.x;
+                                     : (fixed.x != 0.0f ? fixed.x : anchorRect.extent.x);
     size.y = slot.getHeightSizeMode() == EWidgetSizeMode::Auto
                  ? (preferred.y != 0.0f ? preferred.y : desired.y)
              : stretchAxis.y != 0.0f ? area.extent.y
-                                     : anchorRect.extent.y;
+                                     : (fixed.y != 0.0f ? fixed.y : anchorRect.extent.y);
     size = glm::clamp(size, slot.getMinSize(), slot.getMaxSize());
 
     // 4. Alignment within the available area, then pivot: the resolved position
@@ -443,6 +479,9 @@ void UIBoxSlot::apply(const FBoxSlotArgs& args)
     setWeight(args.weight);
     setMargin(args.margin);
     setCrossAlignment(args.crossAlignment);
+    if (args.preferredSize.x != 0.0f || args.preferredSize.y != 0.0f) {
+        setPreferredSize(args.preferredSize);
+    }
 }
 
 void UIBoxSlot::setCrossAlignment(EUIBoxSlotCrossAlignment value)
@@ -1183,6 +1222,11 @@ bool UIScrollLayout::scroll(const glm::vec2& wheelDelta)
     _scrollOffset = newOffset;
     invalidateArrange();
     return true;
+}
+
+std::unique_ptr<UISlot> UIScrollLayout::createSlot(UIElement& parent, UIElement& child) const
+{
+    return std::make_unique<UISingleChildSlot>(parent, child);
 }
 
 glm::vec2 UIScrollLayout::measure(const UIElement& parent) const

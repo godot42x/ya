@@ -376,6 +376,36 @@ void UIElement::invalidateProperty(EUIPropertyImpact impact)
     }
 }
 
+void UIElement::setPosition(const glm::vec2& value)
+{
+    if (_position == value) {
+        return;
+    }
+    _position = value;
+    if (auto* canvasSlot = dynamic_cast<UICanvasSlot*>(getSlot())) {
+        canvasSlot->setOffset(value);
+        return;
+    }
+    invalidateProperty(EUIPropertyImpact::Layout);
+}
+
+void UIElement::setSize(const glm::vec2& value)
+{
+    if (_size == value) {
+        return;
+    }
+    _size = value;
+    if (auto* canvasSlot = dynamic_cast<UICanvasSlot*>(getSlot())) {
+        canvasSlot->setFixedSize(value);
+        return;
+    }
+    if (auto* boxSlot = dynamic_cast<UIBoxSlot*>(getSlot())) {
+        boxSlot->setPreferredSize(value);
+        return;
+    }
+    invalidateProperty(EUIPropertyImpact::Layout);
+}
+
 void UIElement::paintChildren(UIFrameBuilder& builder)
 {
     for (UIElement* child : getChildrenInPaintOrder()) {
@@ -432,6 +462,11 @@ void UIElement::tick(float deltaSeconds)
 
 void UIElement::addDetachedChild(const UIElementRef& child)
 {
+    addDetachedChild(child, [](UIElement&, UISlot&) {});
+}
+
+void UIElement::addDetachedChild(const UIElementRef& child, FChildSlotInitializer init)
+{
     if (!child) {
         YA_CORE_ERROR("UIElement::addDetachedChild: null child");
         return;
@@ -446,7 +481,14 @@ void UIElement::addDetachedChild(const UIElementRef& child)
                       child->_name);
         return;
     }
-    appendChildEdge(child);
+    appendChildEdge(child, std::move(init));
+}
+
+void UIElement::initializeChildSlot(UIElement& child, FChildSlotInitializer init)
+{
+    if (UISlot* slot = getSlotForChild(child)) {
+        init(child, *slot);
+    }
 }
 
 std::unique_ptr<UISlot> UIElement::createSlotForChild(UIElement& child)
@@ -456,20 +498,34 @@ std::unique_ptr<UISlot> UIElement::createSlotForChild(UIElement& child)
 
 void UIElement::appendChildEdge(const UIElementRef& child)
 {
-    child->_parent = this;
-    _children.push_back(child);
-    _childSlots.push_back(createSlotForChild(*child));
-    if (_tree) {
-        WidgetTree::markSubtreeMembership(child.get(), _tree);
-    }
+    appendChildEdge(child, [](UIElement&, UISlot&) {});
+}
+
+void UIElement::appendChildEdge(const UIElementRef& child, FChildSlotInitializer init)
+{
+    insertChildEdge(_children.size(), child, std::move(init));
 }
 
 void UIElement::insertChildEdge(size_t index, const UIElementRef& child)
 {
+    insertChildEdge(index, child, [](UIElement&, UISlot&) {});
+}
+
+void UIElement::insertChildEdge(size_t index, const UIElementRef& child, FChildSlotInitializer init)
+{
     child->_parent = this;
+    std::unique_ptr<UISlot> slot = createSlotForChild(*child);
+    if (slot) {
+        init(*child, *slot);
+    }
     const size_t insertAt = std::min(index, _children.size());
     _children.insert(_children.begin() + static_cast<std::ptrdiff_t>(insertAt), child);
-    _childSlots.insert(_childSlots.begin() + static_cast<std::ptrdiff_t>(insertAt), createSlotForChild(*child));
+    _childSlots.insert(_childSlots.begin() + static_cast<std::ptrdiff_t>(insertAt), std::move(slot));
+    finalizeInsertedChild(child);
+}
+
+void UIElement::finalizeInsertedChild(const UIElementRef& child)
+{
     if (_tree) {
         WidgetTree::markSubtreeMembership(child.get(), _tree);
     }
@@ -510,7 +566,7 @@ nlohmann::json UIElement::serializeFields() const
 void UIElement::deserializeFields(const nlohmann::json& fields)
 {
     ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
-    nlohmann::json rest = fields;
+    nlohmann::json rest = fields.is_object() ? fields : nlohmann::json::object();
     nlohmann::json authored;
     const bool bHasAuthored = rest.contains("_authoredStyle");
     if (bHasAuthored) {

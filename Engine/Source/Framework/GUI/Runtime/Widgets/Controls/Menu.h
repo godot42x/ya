@@ -109,10 +109,10 @@ struct YA_GUI_API UIMenu : public UIPopupOverlay
     [[nodiscard]] int getHighlightIndex() const { return _highlightIndex; }
     [[nodiscard]] std::vector<UIMenuItem*> menuItems() const;
 
-    void layoutAssigned(const Rect2D& rect) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
 
   private:
+    [[nodiscard]] FCanvasSlotArgs resolveContentSlotArgs(const UIElement& child) const override;
     void rebuildContent(const std::vector<FItem>& items);
     void activateHighlighted();
     void openSubmenuFor(UIMenuItem* item, std::function<std::shared_ptr<UIMenu>()> submenuFactory);
@@ -120,10 +120,6 @@ struct YA_GUI_API UIMenu : public UIPopupOverlay
     void closeMenuChain();
 
     int _highlightIndex = -1;
-    /// Menu content size (panel rect extent) derived from the item rows in
-    /// rebuildContent: row width = maxLabelWidth + 20, height = N x
-    /// _itemHeight, plus the panel padding on both axes.
-    glm::vec2 _contentExtent = {0.0f, 0.0f};
     std::vector<UIMenuItem*> _items;
     UIMenu* _parentMenu = nullptr;
     std::shared_ptr<UIMenu> _openSubmenu;

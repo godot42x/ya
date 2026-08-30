@@ -20,6 +20,7 @@
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/UIAdapterHost.h"
 #include "GUI/Widgets/CompoundWidget.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UITypeIds.h"
 #include "Render/Resources/FontManager.h"
@@ -648,6 +649,10 @@ TEST(DeclarativeContractTest, CompoundWidgetForwardsDesiredSizeAndLayoutToCompos
     tree.layout();
     const UIElement* contentRoot = compound->getChildren().front().get();
     ASSERT_NE(contentRoot, nullptr);
+    const auto* slot = dynamic_cast<const UISingleChildSlot*>(compound->getSlotForChild(*contentRoot));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getHAlign(), EUIOverlayAlignment::Fill);
+    EXPECT_EQ(slot->getVAlign(), EUIOverlayAlignment::Fill);
     EXPECT_EQ(contentRoot->_layoutRect.pos, compound->_layoutRect.pos);
     EXPECT_EQ(contentRoot->_layoutRect.extent, compound->_layoutRect.extent);
 }

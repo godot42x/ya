@@ -66,6 +66,7 @@ UISelectableRow::UISelectableRow(std::string name) : UIElement(std::move(name), 
 {
     _hitFilter  = EWidgetHitFilter::Stop;
     _focusPolicy = EWidgetFocusPolicy::Focusable;
+    _contentLayout.setOwner(*this);
     addBehavior(std::make_shared<FSelectableRowDragDropBehavior>());
     addBehavior(std::make_shared<FSelectableRowDropTargetBehavior>());
 }
@@ -148,9 +149,33 @@ void UISelectableRow::clearTransientInputState()
     _bDropHighlighted = false;
 }
 
+void UISelectableRow::layout(const Rect2D& parentRect)
+{
+    layoutAssigned(computeAnchorRect(parentRect));
+}
+
+void UISelectableRow::layoutAssigned(const Rect2D& rect)
+{
+    setLayoutRect(rect);
+    _contentLayout.arrange(*this, _layoutRect);
+}
+
 glm::vec2 UISelectableRow::computeDesiredSize() const
 {
+    if (!_bAutoSize) {
+        return _size;
+    }
+    for (UIElement* child : getChildrenInPaintOrder()) {
+        if (child->participatesInLayout()) {
+            return _contentLayout.measure(*this);
+        }
+    }
     return _size;
+}
+
+std::unique_ptr<UISlot> UISelectableRow::createSlotForChild(UIElement& child)
+{
+    return _contentLayout.createSlot(*this, child);
 }
 
 } // namespace ya

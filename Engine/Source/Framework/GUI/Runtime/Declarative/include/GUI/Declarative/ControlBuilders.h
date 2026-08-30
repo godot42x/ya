@@ -6,6 +6,7 @@
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Image.h"
+#include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
@@ -138,6 +139,35 @@ class UIButtonWidgetBuilder final : public TUIWidgetChildrenBuilder<UIButton, UI
     {
     }
 
+    // The button owns its content box, so the label's intent is how it sits in
+    // that box: fill (default) or align at desired size. The using keeps the
+    // plain child(node) overloads visible.
+    using TUIWidgetChildrenBuilder::child;
+
+    UIButtonWidgetBuilder& child(UIElementRef node, const FSingleChildSlotArgs& slot) &
+    {
+        this->applySingleChildSlot(std::move(node), slot);
+        return *this;
+    }
+    UIButtonWidgetBuilder&& child(UIElementRef node, const FSingleChildSlotArgs& slot) &&
+    {
+        this->applySingleChildSlot(std::move(node), slot);
+        return std::move(*this);
+    }
+
+    template<UIWidgetBuilder TChild>
+    UIButtonWidgetBuilder& child(TChild&& builder, const FSingleChildSlotArgs& slot) &
+    {
+        this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        return *this;
+    }
+    template<UIWidgetBuilder TChild>
+    UIButtonWidgetBuilder&& child(TChild&& builder, const FSingleChildSlotArgs& slot) &&
+    {
+        this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        return std::move(*this);
+    }
+
     [[nodiscard]] UIButtonWidgetBuilder& setOnClick(std::function<void()> value) &
     {
         _widget->_onClick = std::move(value);
@@ -235,9 +265,37 @@ class UITextFieldWidgetBuilder final : public TUIWidgetBuilder<UITextField, UITe
 class UICheckBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UICheckBox, UICheckBoxWidgetBuilder>
 {
   public:
+    static constexpr EUILayoutCap kAllowedLayoutCaps = kSingleChildHostCaps;
+
     explicit UICheckBoxWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdCheckBox, std::move(key), std::move(displayName))
     {
+    }
+
+    using TUIWidgetChildrenBuilder::child;
+
+    UICheckBoxWidgetBuilder& child(UIElementRef node, const FSingleChildSlotArgs& slot) &
+    {
+        this->applySingleChildSlot(std::move(node), slot);
+        return *this;
+    }
+    UICheckBoxWidgetBuilder&& child(UIElementRef node, const FSingleChildSlotArgs& slot) &&
+    {
+        this->applySingleChildSlot(std::move(node), slot);
+        return std::move(*this);
+    }
+
+    template<UIWidgetBuilder TChild>
+    UICheckBoxWidgetBuilder& child(TChild&& builder, const FSingleChildSlotArgs& slot) &
+    {
+        this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        return *this;
+    }
+    template<UIWidgetBuilder TChild>
+    UICheckBoxWidgetBuilder&& child(TChild&& builder, const FSingleChildSlotArgs& slot) &&
+    {
+        this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        return std::move(*this);
     }
 
     [[nodiscard]] UICheckBoxWidgetBuilder& setChecked(bool value) &
@@ -273,6 +331,119 @@ class UICheckBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UICheckBox
     [[nodiscard]] UICheckBoxWidgetBuilder&& setOnChanged(std::function<void(bool)> value) &&
     {
         _widget->_onChanged = std::move(value);
+        return std::move(*this);
+    }
+};
+
+/// List row: a stable item id + select/activate callbacks, plus one content
+/// child (usually a UIText label). The row paints its own selection state, so
+/// the DSL exposes the callbacks rather than a text property. The row owns
+/// a single-child content box; indent/fill live on that edge.
+class UISelectableRowWidgetBuilder final : public TUIWidgetChildrenBuilder<UISelectableRow, UISelectableRowWidgetBuilder>
+{
+  public:
+    static constexpr EUILayoutCap kAllowedLayoutCaps = kSingleChildHostCaps;
+
+    explicit UISelectableRowWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetChildrenBuilder(kTypeIdSelectableRow, std::move(key), std::move(displayName))
+    {
+    }
+
+    using TUIWidgetChildrenBuilder::child;
+
+    UISelectableRowWidgetBuilder& child(UIElementRef node, const FSingleChildSlotArgs& slot) &
+    {
+        this->applySingleChildSlot(std::move(node), slot);
+        return *this;
+    }
+    UISelectableRowWidgetBuilder&& child(UIElementRef node, const FSingleChildSlotArgs& slot) &&
+    {
+        this->applySingleChildSlot(std::move(node), slot);
+        return std::move(*this);
+    }
+
+    template<UIWidgetBuilder TChild>
+    UISelectableRowWidgetBuilder& child(TChild&& builder, const FSingleChildSlotArgs& slot) &
+    {
+        this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        return *this;
+    }
+    template<UIWidgetBuilder TChild>
+    UISelectableRowWidgetBuilder&& child(TChild&& builder, const FSingleChildSlotArgs& slot) &&
+    {
+        this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder& setItemId(std::string value) &
+    {
+        _widget->_itemId = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder&& setItemId(std::string value) &&
+    {
+        _widget->_itemId = std::move(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder& setSelected(bool value) &
+    {
+        _widget->setSelected(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder&& setSelected(bool value) &&
+    {
+        _widget->setSelected(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder& setOnSelect(std::function<void(const std::string&)> value) &
+    {
+        _widget->_onSelect = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder&& setOnSelect(std::function<void(const std::string&)> value) &&
+    {
+        _widget->_onSelect = std::move(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder& setOnActivate(std::function<void(const std::string&)> value) &
+    {
+        _widget->_onActivate = std::move(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder&& setOnActivate(std::function<void(const std::string&)> value) &&
+    {
+        _widget->_onActivate = std::move(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder& setContentPadding(FMargin value) &
+    {
+        _widget->setContentPadding(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder&& setContentPadding(FMargin value) &&
+    {
+        _widget->setContentPadding(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder& setContentPadding(glm::vec2 value) &
+    {
+        _widget->setContentPadding(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISelectableRowWidgetBuilder&& setContentPadding(glm::vec2 value) &&
+    {
+        _widget->setContentPadding(value);
         return std::move(*this);
     }
 };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
@@ -19,9 +20,12 @@ namespace ya
 ///     dismissed;
 ///   - Esc dismisses; opening takes keyboard focus (the overlay owns the
 ///     focus until closed, which matches modal semantics);
-///   - the first visible content child is laid out at `_contentPos` with its
-///     desired size; children are hit-tested BEFORE the overlay (topmost
-///     first), so interactive content receives events first.
+///   - the first visible content child is laid out through a popup-owned
+///     canvas slot; the base popup places it at `_contentPos` and sizes it
+///     from `_contentExtent` when set, otherwise the child's desired size.
+///     Derived classes may override the slot args (e.g. centred dialogs,
+///     fixed-size menus). Children are hit-tested BEFORE the overlay
+///     (topmost first), so interactive content receives events first.
 ///
 /// Lifecycle: created via make_shared, opened with open() and closed with
 /// close() / dismiss. The overlay detaches itself on close.
@@ -31,6 +35,7 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     YA_REFLECT_FIELD(_bModal, .instanceEditable())
     YA_REFLECT_FIELD(_modalColor, .instanceEditable())
     YA_REFLECT_FIELD(_contentPos, .instanceEditable())
+    YA_REFLECT_FIELD(_contentExtent, .instanceEditable())
     YA_REFLECT_END()
 
     YA_GUI_AUTHORED_STYLE_IO(FPopupStyle)
@@ -60,6 +65,11 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     glm::vec4 _modalColor = {0.0f, 0.0f, 0.0f, 0.45f};
     /// Content child origin in tree-local logical pixels.
     glm::vec2 _contentPos = {0.0f, 0.0f};
+    /// Optional content extent for the popup-owned canvas slot. When non-zero
+    /// on an axis, the base popup sizes that axis from this value (preferred
+    /// size under Auto) instead of the child's desired size. Menu still
+    /// overrides with fixedSize; Dialog uses the same field via preferredSize.
+    glm::vec2 _contentExtent = {0.0f, 0.0f};
 
     /// Fired when the overlay is dismissed by shield click / Esc / close().
     std::function<void()> _onDismiss;
@@ -71,6 +81,7 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     /// Same as close(); used by shield/Esc handling.
     void dismiss() { close(); }
 
+    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
@@ -88,6 +99,10 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
   protected:
     /// Content rect (first visible child) resolved by the last layout.
     [[nodiscard]] const Rect2D* contentLayoutRect() const;
+    /// Resolve the popup-owned canvas slot args for the visible content child.
+    /// The base popup anchors top-left at `_contentPos` and sizes from
+    /// `_contentExtent` when set, otherwise the child's desired size.
+    [[nodiscard]] virtual FCanvasSlotArgs resolveContentSlotArgs(const UIElement& child) const;
 
   private:
     /// Self-hold while open: the overlay is created via make_shared and the

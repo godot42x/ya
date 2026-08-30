@@ -22,12 +22,34 @@ namespace
 
 constexpr float kCanvasMinSize = 1.0f;
 
-/// Make an element fill its parent rect (stretch anchors, no offset).
-UIElementRef makeFillElement(std::string name)
+struct FTreeCanvasRoot final : UIElement
 {
-    auto element = std::make_shared<UIElement>(std::move(name));
-    element->_anchorMin = {0.0f, 0.0f};
-    element->_anchorMax = {1.0f, 1.0f};
+    explicit FTreeCanvasRoot(std::string name)
+        : UIElement(std::move(name))
+    {
+        installLayout(std::make_unique<UICanvasLayout>());
+        setVisibility(EWidgetVisibility::HitTestInvisible);
+    }
+
+  protected:
+    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override
+    {
+        if (const auto* canvas = dynamic_cast<const UICanvasLayout*>(getLayout())) {
+            return canvas->createSlot(*this, child);
+        }
+        return UIElement::createSlotForChild(child);
+    }
+};
+
+UIElementRef makeCanvasRoot(std::string name)
+{
+    auto element = std::make_shared<FTreeCanvasRoot>(std::move(name));
+    return element;
+}
+
+UIElementRef makeLayerElement(std::string name)
+{
+    auto element = std::make_shared<FTreeCanvasRoot>(std::move(name));
     // Structural containers (root/layers) are not hit targets themselves;
     // their children are (HitTestInvisible semantics).
     element->setVisibility(EWidgetVisibility::HitTestInvisible);
@@ -48,13 +70,18 @@ bool isDescendantOf(const UIElement* candidate, const UIElement* ancestor)
 
 WidgetTree::WidgetTree(Extent2D logicalExtent) : _logicalExtent(logicalExtent)
 {
-    _root = makeFillElement("TreeRoot");
+    _root = makeCanvasRoot("TreeRoot");
+    _root->_tree = this;
     for (size_t i = 0; i < _layers.size(); ++i) {
-        const auto layer = static_cast<ELayer>(i);
-        _layers[i]       = makeFillElement("Layer_" + std::to_string(i));
+        _layers[i]       = makeLayerElement("Layer_" + std::to_string(i));
         _layers[i]->_zOrder = static_cast<int>(i);
-        _layers[i]->_tree   = this;
         _root->appendChildEdge(_layers[i]);
+        if (auto* slot = dynamic_cast<UICanvasSlot*>(_root->getSlotForChild(*_layers[i]))) {
+            FCanvasSlotArgs fillArgs;
+            fillArgs.anchorMin = {0.0f, 0.0f};
+            fillArgs.anchorMax = {1.0f, 1.0f};
+            slot->apply(fillArgs);
+        }
     }
 }
 
@@ -170,13 +197,12 @@ void WidgetTree::updateTooltip()
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 12);
     const float textW = font ? font->measureText(_hovered->_tooltip) : 80.0f;
     const float lineH = font ? font->lineHeight : 16.0f;
+    const glm::vec2 hostSize{textW + 16.0f, lineH + 8.0f};
 
     auto host = std::make_shared<UIPanel>("TooltipHost");
-    host->setSize({textW + 16.0f, lineH + 8.0f});
     host->setStyleKey("tooltip");
 
     auto label = std::make_shared<UIText>("TooltipLabel");
-    label->setSize({0.0f, 0.0f});
     label->_fontSize  = 12;
     label->setText(_hovered->_tooltip);
     host->addDetachedChild(label);
@@ -191,8 +217,10 @@ void WidgetTree::updateTooltip()
 
     // Anchor below the hovered widget's rect (clamped into the window).
     const Rect2D& target = _hovered->_layoutRect;
-    host->setPosition({target.pos.x, target.pos.y + target.extent.y + 4.0f});
-    attachToLayer(ELayer::Tooltip, host);
+    FCanvasSlotArgs hostArgs;
+    hostArgs.offset    = {target.pos.x, target.pos.y + target.extent.y + 4.0f};
+    hostArgs.fixedSize = hostSize;
+    attachToLayer(ELayer::Tooltip, host, hostArgs);
     _tooltipHost = host;
     _bTooltipShown = true;
 }
@@ -418,7 +446,39 @@ WidgetAttachment WidgetTree::attach(UIElement& parent, const UIElementRef& widge
 
 WidgetAttachment WidgetTree::attachToLayer(ELayer layer, const UIElementRef& widget)
 {
-    return attach(*getLayer(layer), widget);
+    if (!widget) {
+        return {};
+    }
+    FCanvasSlotArgs args;
+    args.anchorMin = widget->_anchorMin;
+    args.anchorMax = widget->_anchorMax;
+    args.offset    = widget->getPosition();
+    args.fixedSize = widget->getSize();
+    return attachToLayer(layer, widget, args);
+}
+
+WidgetAttachment WidgetTree::attachToLayer(ELayer layer,
+                                          const UIElementRef& widget,
+                                          const FCanvasSlotArgs& args)
+{
+    if (!widget) {
+        return {};
+    }
+    // Keep authored geometry in sync for detached widgets.
+    widget->_anchorMin = args.anchorMin;
+    widget->_anchorMax = args.anchorMax;
+    widget->setPosition(args.offset);
+    widget->setSize(args.fixedSize);
+
+    WidgetAttachment attachment = attach(*getLayer(layer), widget);
+    if (!attachment.valid()) {
+        return attachment;
+    }
+    UIElement* layerHost = getLayer(layer);
+    if (auto* slot = dynamic_cast<UICanvasSlot*>(layerHost->getSlotForChild(*widget))) {
+        slot->apply(args);
+    }
+    return attachment;
 }
 
 void WidgetTree::reparent(UIElement& newParent, const UIElementRef& widget)
@@ -438,6 +498,25 @@ void WidgetTree::reparent(UIElement& newParent, const UIElementRef& widget)
     if (isDescendantOf(&newParent, widget.get())) {
         YA_CORE_ERROR("WidgetTree::reparent: cannot reparent '{}' under its own descendant '{}'",
                       widget->_name, newParent._name);
+        return;
+    }
+
+    if (widget->isAttached() && widget->_tree == this && widget->_parent == &newParent) {
+        const auto it = std::find_if(newParent._children.begin(), newParent._children.end(),
+                                     [&](const UIElementRef& ref) { return ref.get() == widget.get(); });
+        const size_t fromIndex =
+            it == newParent._children.end() ? newParent._children.size()
+                                            : static_cast<size_t>(std::distance(newParent._children.begin(), it));
+        if (fromIndex == newParent._children.size()) {
+            return;
+        }
+        UIElementRef            childRef = std::move(newParent._children[fromIndex]);
+        std::unique_ptr<UISlot> slot     = std::move(newParent._childSlots[fromIndex]);
+        newParent._children.erase(newParent._children.begin() + static_cast<std::ptrdiff_t>(fromIndex));
+        newParent._childSlots.erase(newParent._childSlots.begin() + static_cast<std::ptrdiff_t>(fromIndex));
+        newParent._children.push_back(std::move(childRef));
+        newParent._childSlots.push_back(std::move(slot));
+        invalidateLayout();
         return;
     }
 
@@ -480,6 +559,37 @@ void WidgetTree::reparentRelativeTo(WidgetTree& tree, UIElement& sibling, const 
     UIElement* parent = sibling._parent;
     if (!parent) {
         YA_CORE_ERROR("WidgetTree::reparentRelativeTo: sibling '{}' has no parent", sibling._name);
+        return;
+    }
+
+    if (widget->isAttached() && widget->_tree == &tree && widget->_parent == parent) {
+        const auto fromIt = std::find_if(parent->_children.begin(), parent->_children.end(),
+                                         [&](const UIElementRef& ref) { return ref.get() == widget.get(); });
+        const auto siblingIt = std::find_if(parent->_children.begin(), parent->_children.end(),
+                                            [&](const UIElementRef& ref) { return ref.get() == &sibling; });
+        const size_t fromIndex =
+            fromIt == parent->_children.end() ? parent->_children.size()
+                                              : static_cast<size_t>(std::distance(parent->_children.begin(), fromIt));
+        size_t siblingIndex =
+            siblingIt == parent->_children.end() ? parent->_children.size()
+                                                 : static_cast<size_t>(std::distance(parent->_children.begin(), siblingIt));
+        if (fromIndex == parent->_children.size() || siblingIndex == parent->_children.size()) {
+            return;
+        }
+        if (fromIndex < siblingIndex) {
+            --siblingIndex;
+        }
+        const size_t insertAt = bAfter ? siblingIndex + 1 : siblingIndex;
+        UIElementRef            childRef = std::move(parent->_children[fromIndex]);
+        std::unique_ptr<UISlot> slot     = std::move(parent->_childSlots[fromIndex]);
+        parent->_children.erase(parent->_children.begin() + static_cast<std::ptrdiff_t>(fromIndex));
+        parent->_childSlots.erase(parent->_childSlots.begin() + static_cast<std::ptrdiff_t>(fromIndex));
+        const size_t clampedInsertAt = std::min(insertAt, parent->_children.size());
+        parent->_children.insert(parent->_children.begin() + static_cast<std::ptrdiff_t>(clampedInsertAt),
+                                 std::move(childRef));
+        parent->_childSlots.insert(parent->_childSlots.begin() + static_cast<std::ptrdiff_t>(clampedInsertAt),
+                                   std::move(slot));
+        tree.invalidateLayout();
         return;
     }
 
@@ -600,7 +710,7 @@ void WidgetTree::layout()
 {
     const float width  = std::max(static_cast<float>(_logicalExtent.width), kCanvasMinSize);
     const float height = std::max(static_cast<float>(_logicalExtent.height), kCanvasMinSize);
-    _root->layout(Rect2D{.pos = {0.0f, 0.0f}, .extent = {width, height}});
+    _root->layoutAssigned(Rect2D{.pos = {0.0f, 0.0f}, .extent = {width, height}});
     _bLayoutDirty = false;
 }
 
@@ -1249,13 +1359,13 @@ void WidgetTree::beginDrag(UIElement* source,
     auto ghost = std::make_shared<UIPanel>("DragGhost");
     ghost->setStyleKey("drag.ghost");
     ghost->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
-    ghost->setPosition({0.0f, 0.0f});
-    ghost->setSize({160.0f, 24.0f});
+    FCanvasSlotArgs ghostArgs;
+    ghostArgs.offset    = {0.0f, 0.0f};
+    ghostArgs.fixedSize = {160.0f, 24.0f};
 
     auto label = std::make_shared<UIText>("DragGhostLabel");
     label->setText(_dragOperation->ghostLabel);
     label->_fontSize = 13;
-    label->setSize({0.0f, 0.0f});
     label->_hAlign    = EWidgetAlignH::Center;
     label->_vAlign    = EWidgetAlignV::Center;
     ghost->addDetachedChild(label);
@@ -1267,7 +1377,7 @@ void WidgetTree::beginDrag(UIElement* source,
         slot->apply(args);
     }
 
-    attachToLayer(ELayer::DragIme, ghost);
+    attachToLayer(ELayer::DragIme, ghost, ghostArgs);
     _dragGhost = ghost;
     invalidateLayout();
 }
@@ -1289,8 +1399,15 @@ void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
     }
     _dragPoint = logicalPoint;
     if (_dragGhost) {
-        _dragGhost->setPosition(logicalPoint + glm::vec2(10.0f, 10.0f));
-        invalidateLayout();
+        if (UIElement* layerHost = getLayer(ELayer::DragIme)) {
+            if (auto* slot = dynamic_cast<UICanvasSlot*>(layerHost->getSlotForChild(*_dragGhost))) {
+                slot->setOffset(logicalPoint + glm::vec2(10.0f, 10.0f));
+            }
+            else {
+                _dragGhost->setPosition(logicalPoint + glm::vec2(10.0f, 10.0f));
+                invalidateLayout();
+            }
+        }
     }
 
     UIElement* target = findDropTarget(logicalPoint);

@@ -14,7 +14,7 @@
 //
 // A child therefore never carries its own anchor geometry. UILayoutIntent is
 // the merged "which layout + its slot" value; concrete widget slots
-// (FBoxSlotArgs, FCanvasPanelSlotArgs, ...) are the per-layout parameter shapes.
+// (FBoxSlotArgs, FCanvasSlotArgs, ...) are the per-layout parameter shapes.
 // ============================================================================
 
 #include "GUI/Layout/UILayout.h"
@@ -44,7 +44,7 @@ struct UIConstraints
 struct UILayoutIntent
 {
     EWidgetSizeMode    sizeMode = EWidgetSizeMode::Fixed;
-    FCanvasPanelSlotArgs canvas{};
+    FCanvasSlotArgs canvas{};
 };
 
 } // namespace ya

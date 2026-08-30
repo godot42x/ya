@@ -20,19 +20,21 @@ void UICompoundWidget::layout(const Rect2D& parentRect)
 void UICompoundWidget::layoutAssigned(const Rect2D& rect)
 {
     setLayoutRect(rect);
-    // A compound is a local composition root. Its first child is the
-    // composition host and receives the same assigned rect; the host then
-    // arranges its own descendants using the normal layout contract.
-    const auto& children = getChildren();
-    if (!children.empty() && children.front()) {
-        children.front()->layoutAssigned(_layoutRect);
-    }
+    _contentLayout.arrange(*this, _layoutRect);
 }
 
 glm::vec2 UICompoundWidget::computeDesiredSize() const
 {
     const auto& children = getChildren();
-    return children.empty() || !children.front() ? _size : children.front()->computeDesiredSize();
+    if (children.empty() || !children.front()) {
+        return _size;
+    }
+    return _contentLayout.measure(*this);
+}
+
+std::unique_ptr<UISlot> UICompoundWidget::createSlotForChild(UIElement& child)
+{
+    return _contentLayout.createSlot(*this, child);
 }
 
 } // namespace ya

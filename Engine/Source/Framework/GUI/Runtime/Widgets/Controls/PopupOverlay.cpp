@@ -39,7 +39,14 @@ void UIPopupOverlay::open(WidgetTree& tree)
     }
     g_retiredOverlays.clear(); // previous overlays are done unwinding
     _selfHold = shared_from_this();
-    tree.attachToLayer(WidgetTree::ELayer::Popup, shared_from_this());
+    FCanvasSlotArgs fillArgs;
+    fillArgs.anchorMin = {0.0f, 0.0f};
+    fillArgs.anchorMax = {1.0f, 1.0f};
+    const WidgetAttachment attachment =
+        tree.attachToLayer(WidgetTree::ELayer::Popup, shared_from_this(), fillArgs);
+    if (!attachment.valid()) {
+        return;
+    }
     tree.setFocus(this);
 }
 
@@ -62,6 +69,11 @@ void UIPopupOverlay::close()
     }
 }
 
+std::unique_ptr<UISlot> UIPopupOverlay::createSlotForChild(UIElement& child)
+{
+    return std::make_unique<UICanvasSlot>(*this, child);
+}
+
 void UIPopupOverlay::layout(const Rect2D& parentRect)
 {
     layoutAssigned(parentRect);
@@ -75,13 +87,20 @@ void UIPopupOverlay::layoutAssigned(const Rect2D& rect)
         if (!child->participatesInLayout()) {
             continue;
         }
-        // First visible content child sits at _contentPos with its desired
-        // size; the panel itself arranges its internals.
-        const glm::vec2 desired = child->computeDesiredSize();
-        child->layoutAssigned(Rect2D{
-            .pos    = _contentPos,
-            .extent = desired,
-        });
+        // Popup content now has a formal parent-owned canvas edge instead of a
+        // handwritten rect assignment. Derived popups still control placement
+        // by overriding resolveContentSlotArgs().
+        if (auto* slot = dynamic_cast<UICanvasSlot*>(getSlotForChild(*child))) {
+            slot->apply(resolveContentSlotArgs(*child));
+            child->layoutAssigned(UICanvasLayout::resolveChildRect(*child, *slot, rect));
+        }
+        else {
+            const glm::vec2 desired = child->computeDesiredSize();
+            child->layoutAssigned(Rect2D{
+                .pos    = _contentPos,
+                .extent = desired,
+            });
+        }
         break;
     }
 }
@@ -112,6 +131,19 @@ void UIPopupOverlay::deserializeFields(const nlohmann::json& fields)
     if (!hasAuthoredStyle() && _modalColor != kDefaultModal) {
         setStyleField("modalFill", FBrush::solid(_modalColor), EUIPropertyImpact::Paint);
     }
+}
+
+FCanvasSlotArgs UIPopupOverlay::resolveContentSlotArgs(const UIElement& child) const
+{
+    (void)child;
+    FCanvasSlotArgs args;
+    args.offset          = _contentPos;
+    args.widthSizeMode   = EWidgetSizeMode::Auto;
+    args.heightSizeMode  = EWidgetSizeMode::Auto;
+    if (_contentExtent.x != 0.0f || _contentExtent.y != 0.0f) {
+        args.preferredSize = _contentExtent;
+    }
+    return args;
 }
 
 bool UIPopupOverlay::handleInputEvent(const Event& event, const WidgetEventContext& ctx)

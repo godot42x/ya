@@ -561,8 +561,8 @@ void UIColorEdit::openPalette()
     overlay->_contentPos = {swatchRect().pos.x, swatchRect().pos.y + swatchRect().extent.y + 4.0f};
 
     auto palette = std::make_shared<FColorPalette>("ColorPaletteGrid");
-    palette->setSize({palette->_cellSize * static_cast<float>(palette->_cols),
-                      palette->_cellSize * 4.0f});
+    overlay->_contentExtent = {palette->_cellSize * static_cast<float>(palette->_cols),
+                               palette->_cellSize * 4.0f};
     palette->_onPick = [this, overlay](const glm::vec4& picked)
     {
         setColor(picked);

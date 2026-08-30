@@ -27,11 +27,8 @@ struct YA_GUI_API UIDialog : public UIPopupOverlay
     /// shield click. Set before open().
     std::function<void(bool bConfirmed)> _onClosed;
 
-    /// Center the content child on the full-screen overlay rect (overrides
-    /// the popup's _contentPos anchoring).
-    void layoutAssigned(const Rect2D& rect) override;
-
   protected:
+    [[nodiscard]] FCanvasSlotArgs resolveContentSlotArgs(const UIElement& child) const override;
     /// Dismiss paths (Cancel / Esc / shield) report false through _onClosed.
     void closeWithResult(bool bConfirmed);
 };

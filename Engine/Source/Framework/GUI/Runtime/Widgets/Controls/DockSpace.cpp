@@ -318,13 +318,10 @@ void UIDockSpace::syncPreviewOverlay()
     if (_preview && tree) {
         if (!_previewOverlay) {
             _previewOverlay = std::make_shared<FDropChooserOverlay>(this);
-            _previewOverlay->_anchorMin = {0.0f, 0.0f};
-            _previewOverlay->_anchorMax = {1.0f, 1.0f};
-            _previewOverlay->setPosition({0.0f, 0.0f});
-            _previewOverlay->setSize({0.0f, 0.0f});
         }
         if (!_previewOverlay->isAttached()) {
-            tree->attachToLayer(WidgetTree::ELayer::DragIme, _previewOverlay);
+            const WidgetAttachment attachment = tree->attachToLayer(WidgetTree::ELayer::DragIme, _previewOverlay);
+            YA_CORE_ASSERT(attachment.valid(), "UIDockSpace: failed to attach preview overlay");
         }
         _previewOverlay->markPaintDirty();
         return;
@@ -577,7 +574,6 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     leaf->addDetachedChild(body);
 
     auto content = std::make_shared<UIContainer>(std::format("DockContent{}", node.id));
-    content->setSize({0.0f, 0.0f});
     content->setPadding({12.0f, 12.0f});
     leaf->setStretchLastChild(true);
     body->addDetachedChild(content);

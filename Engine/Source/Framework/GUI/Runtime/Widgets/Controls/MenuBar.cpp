@@ -27,10 +27,8 @@ void UIMenuBarItem::paintSelf(UIFrameBuilder& builder)
     const std::string& label = resolvedLabel(ReactiveBase::EDirtyLevel::Paint);
 
     // Theme resolution (style-system Phase 3): the item draws its normal /
-    // hovered fill brushes + the label color from FMenuBarItemStyle. The item
-    // is explicitly sized by UIMenuBar (fontSize is not auto-measured), so
-    // Paint level. When the key/theme is absent, the default-constructed
-    // style IS the framework fallback (Phase 3 cleanup: no bare fields).
+    // hovered fill brushes + the label color from FMenuBarItemStyle. Row
+    // extent comes from the parent-owned box slot, not child geometry.
     const FMenuBarItemStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.normalFill);
     const float separatorY = _layoutRect.pos.y + _layoutRect.extent.y - 0.5f;
@@ -93,7 +91,10 @@ UIMenuBarItem* UIMenuBar::addItem(const std::string& label, std::function<std::s
     // Size from the same font measurement the menu items use, so bar labels
     // never overflow their button and stay consistent with the menus.
     const auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, item->_fontSize);
-    item->setSize({(font ? font->measureText(label) : static_cast<float>(label.size()) * 7.0f) + 20.0f, 26.0f});
+    const glm::vec2 itemSize{
+        (font ? font->measureText(label) : static_cast<float>(label.size()) * 7.0f) + 20.0f,
+        26.0f,
+    };
     item->_onActivate = [this, item, menuFactory]()
     {
         // A press on a menu-bar item while a menu is open is dismissed by
@@ -138,6 +139,9 @@ UIMenuBarItem* UIMenuBar::addItem(const std::string& label, std::function<std::s
         }
     };
     addDetachedChild(item);
+    if (auto* slot = dynamic_cast<UIBoxSlot*>(getSlotForChild(*item))) {
+        slot->setPreferredSize(itemSize);
+    }
     return item.get();
 }
 

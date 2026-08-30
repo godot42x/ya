@@ -11,8 +11,7 @@ namespace ya
 std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UIElement> content)
 {
     auto dialog = std::make_shared<UIDialog>("Dialog");
-    dialog->_bModal     = true; // dimming shield + focus ownership + Esc
-    dialog->_contentPos = {0.0f, 0.0f}; // centered by the layout below
+    dialog->_bModal = true; // dimming shield + focus ownership + Esc
 
     // Panel: title bar + content + button row. UIPanel does not aggregate
     // child desired sizes, so measure the content by hand.
@@ -21,11 +20,10 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     const float contentH = content ? std::max(content->computeDesiredSize().y, 0.0f) : 0.0f;
     const float panelH   = 14.0f + titleH + 12.0f + contentH + 12.0f + buttonH + 14.0f;
     auto panel = std::make_shared<UIPanel>("DialogPanel");
-    panel->setSize({360.0f, panelH});
     panel->setStyleKey("panel");
+    dialog->_contentExtent = {360.0f, panelH};
 
     auto stack = std::make_shared<UIContainer>("DialogStack");
-    stack->setSize({0.0f, 0.0f});
     stack->setDirection(EWidgetBoxLayout::Vertical);
     stack->setSpacing(12.0f);
     stack->setPadding({16.0f, 14.0f});
@@ -94,19 +92,17 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     return dialog;
 }
 
-void UIDialog::layoutAssigned(const Rect2D& rect)
+FCanvasSlotArgs UIDialog::resolveContentSlotArgs(const UIElement& child) const
 {
-    setLayoutRect(rect); // full screen (shield)
-
-    for (UIElement* child : getChildrenInPaintOrder()) {
-        if (!child->participatesInLayout()) {
-            continue;
-        }
-        const glm::vec2 desired = child->computeDesiredSize();
-        const glm::vec2 pos     = rect.pos + (rect.extent - desired) * 0.5f;
-        child->layoutAssigned(Rect2D{.pos = pos, .extent = desired});
-        break;
-    }
+    (void)child;
+    FCanvasSlotArgs args;
+    args.anchorMin      = {0.5f, 0.5f};
+    args.anchorMax      = {0.5f, 0.5f};
+    args.pivot          = {0.5f, 0.5f};
+    args.widthSizeMode  = EWidgetSizeMode::Auto;
+    args.heightSizeMode = EWidgetSizeMode::Auto;
+    args.preferredSize   = _contentExtent;
+    return args;
 }
 
 void UIDialog::closeWithResult(bool bConfirmed)

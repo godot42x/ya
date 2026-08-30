@@ -42,6 +42,9 @@ struct YA_GUI_API UISizeBox : public UIElement
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
+    /// The size box owns both axes, so child intent is carried by a
+    /// single-child slot (Fill by default, or align at desired size).
+    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 
   private:
     UISingleChildLayout _contentLayout;

@@ -4,14 +4,33 @@
 - [x] CP3 新增 UICanvasLayout + UICanvasSlot；UIPanel 改为 Canvas layout host
 - [x] CP3 public DSL：`ui::layout()` 能力化 + `parent[spec >> widget]` + 全量调用点迁移
 - [ ] CP2 从 UIElement 全量移除 authored geometry（`_anchorMin/_anchorMax/_position/_size/_min/_max/_bAutoSize`、`setPosition/setSize/getPosition/getSize`、`computeAnchorRect`、`reportStretchAnchorsIgnored`）
+- [x] CP2 分批迁移：Canvas host arrange 已改为优先消费 parent-owned slot 的 anchor/offset/fixed/preferred/auto 数据；仅保留 `child.getSize()` 作为显式 legacy fallback，待其它 host/Designer 路径完成后删除
 - [x] CP3 Canvas slot 补全：四边 `FMargin` offsets、alignment、width/height size mode（min/max 已有）
-- [x] CP3 收尾：pivot、preferred size、`ui::canvas()` 宿主 DSL（CP3 全部完成）
+- [x] CP3 收尾纠偏：删除过渡 public API（`ui::panelSlot()` / `FCanvasPanelSlotBuilder` / 旧 canvas-panel 命名）
 - [x] CP3/§3.4 capability 编译期隔离（`column[anchor(...) >> w]` 已编译失败）
-- [ ] CP4 所有 layout host 统一 typed slot arrange（Box/Overlay/SingleChild/Split/Scroll/Grid/Canvas）+ reparent/detach slot 重建
-- [x] CP5 部分：`UIElement` layout-host 钩子（消除运行期 path-A/path-B 二分）+ panel 子节点与 designer 回归修复
-- [ ] CP5 剩余：tree root/layers 改 canvas host（影响 217 处 `attachToLayer`，需整体迁移）、DockSpace `_previewOverlay`、Popup、测试直写
+- [ ] CP4 所有 layout host 统一 typed slot arrange（Box/Overlay/SingleChild/Split/Scroll/Grid/Canvas）+ reparent/detach slot 重建（ScrollViewport 的 fake-unified single-child slot 已纠偏；SelectableRow 已收成 single-child host）
+- [x] CP4 纠偏：same-parent `reparentBefore/After/reparent(parent, child)` 改为移动原 edge，保留 slot 状态
+- [x] CP4 计划纠偏：`Grid/Table` capability 暂收窄为 `cell-only`；待 `UITableSlot` 具备更多 runtime contract 后再开放
+- [x] CP3/CP4 收口：Declarative edge attach 改为 inline slot init，`[]` 保持 child 语法糖，slot ownership 仍归 parent
+- [x] CP5 部分：`UIElement` layout-host 钩子 + panel 子节点与 designer 回归修复
+- [x] CP4/CP5 纠偏：删除 `applyLayoutSpecToSlot(box)` 对 child `setSize()` 的回写，避免继续依赖 child-authored geometry
+- [x] CP4 纠偏：补齐并验证 unified `ui::layout()` 对 `UISingleChildSlot` / `UIOverlaySlot` 的运行时消费
+- [x] CP5 纠偏：TreeRoot 改为 canvas host，system layer fill 迁到 root->layer `UICanvasSlot`
+- [ ] CP5 设计前置：定义 layer 本身的 typed host/edge 契约，再决定 `attachToLayer()` 是否允许显式 layout intent（当前明确不能先暴露 unified spec 入口）
+- [x] CP5 纠偏：system layer 升为 canvas host，`attachToLayer()` 自动桥接 child canvas geometry -> `UICanvasSlot`，`setPosition()` 桥接到 slot offset
+- [x] CP5 纠偏：`attachToLayer()` / `setSize()` / Designer drag 补齐 canvas edge `fixedSize` 桥接，layer child 不再只迁移 position
+- [x] CP5 收口：`PopupOverlay` 作为独立 full-screen host，content edge 改为 popup-owned `UICanvasSlot`；Menu/Dialog 不再手写 `layoutAssigned()`
+- [x] CP5 纠偏：`UIDesigner` 连续拖拽从 canvas slot 读取起始 `offset/fixedSize/anchor`，不再混用陈旧 child 字段
+- [x] CP5 纠偏：Menu 行 / MenuBar 项 / Dialog 面板尺寸改由 typed slot 持有（box preferredSize / popup canvas preferredSize）
+- [x] CP5 纠偏：Workbench/Editor chrome 固定高度与 preview highlight 几何改由 canvas slot 持有
+- [x] CP4/CP5 纠偏：`UISelectableRow` 收成 single-child host；box `setSize` 桥 `preferredSize`；popup `_contentExtent` 提到 overlay；`ui::build(spec >> widget)` 在 attach 时写 edge
+- [x] CP4/CP5 纠偏：`UICompoundWidget` / `UICheckBox` 收成 single-child host；`FBoxSlotArgs::preferredSize` 补齐；inspector 行尺寸写 box edge
+- [x] CP5 纠偏：Dock preview overlay 删除 dead child-authored anchors/position/zero-size
+- [x] CP5 审计纠偏：测试直写多数保留为合法夹具/absolute/layer-child 语义；tree/layer 路径中已失效的 child-owned zero-size 写入已清理
+- [x] CP5 收口：`attachToLayer(layer, widget, FCanvasSlotArgs)` 允许 layer-child 直接表达 edge intent（仍同步 legacy 字段）
 - [x] CP6 序列化侧旧锚点清理（`SceneWidgetEntry` 死条件、过期 `smoke.yaui`）；`serializeFields` 早已不输出锚点，无旧 schema 文件残留
 - [ ] CP6 剩余：Designer inspector / 快照 dump 中若出现新 slot 字段需同步（当前无残留）
-- [ ] 既有故障（非本计划引入，待你决定）：`UIDocument::instantiate` 传 null fields 给 `UIPanel::deserializeFields` 抛 `type_error.307`，致 5 个 `GameUIHostTest` 失败
+- [x] 既有故障（非本计划引入）：`UIDocument::instantiate` 传 null fields 时 `deserializeFields` 需容错（`type_error.307`）；已修复并恢复 `GameUIHostTest` 5 项用例
 - [ ] CP7 编译期断言 + 几何测试（intrinsic measure、constraints、Canvas 四边 offsets、anchor span、alignment、min/max、reparent）+ snapshot parity
-- [ ] 清理过渡物：`ui::panelSlot()`/`FCanvasPanelSlotBuilder`、别名 `FCanvasPanelSlotArgs`/`UICanvasPanelSlot`、legacy `child(node)` 默认重载
+- [ ] 清理过渡物：legacy `child(node)` 默认重载
+- [ ] 计划状态纠偏：CP3 改为“主体完成但仍有过渡物”；CP5 改为“引入 layout-host hook，但 legacy self-positioned fallback 仍在”

@@ -52,6 +52,11 @@ void paintCheckMark(UIFrameBuilder& builder, const Rect2D& boxRect, const glm::v
 
 } // namespace
 
+void UICheckBox::syncContentPadding()
+{
+    _contentLayout.setPadding(FMargin{_boxSize + _labelSpacing, 0.0f, 0.0f, 0.0f});
+}
+
 void UICheckBox::layout(const Rect2D& parentRect)
 {
     layoutAssigned(computeAnchorRect(parentRect));
@@ -60,19 +65,8 @@ void UICheckBox::layout(const Rect2D& parentRect)
 void UICheckBox::layoutAssigned(const Rect2D& rect)
 {
     setLayoutRect(rect);
-
-    Rect2D boxRect = _layoutRect;
-    boxRect.extent = glm::vec2(_boxSize);
-    boxRect.pos.y += std::max(0.0f, (_layoutRect.extent.y - _boxSize) * 0.5f);
-
-    Rect2D contentRect = _layoutRect;
-    contentRect.pos.x = boxRect.pos.x + _boxSize + _labelSpacing;
-    contentRect.extent.x = std::max(0.0f, _layoutRect.pos.x + _layoutRect.extent.x - contentRect.pos.x);
-    for (UIElement* child : getChildrenInPaintOrder()) {
-        if (child->participatesInLayout()) {
-            child->layoutAssigned(contentRect);
-        }
-    }
+    syncContentPadding();
+    _contentLayout.arrange(*this, _layoutRect);
 }
 
 glm::vec2 UICheckBox::computeDesiredSize() const
@@ -80,16 +74,13 @@ glm::vec2 UICheckBox::computeDesiredSize() const
     if (!_bAutoSize) {
         return _size;
     }
-    glm::vec2 content{0.0f, _boxSize};
-    for (UIElement* child : getChildrenInPaintOrder()) {
-        if (!child->participatesInLayout()) {
-            continue;
-        }
-        const glm::vec2 desired = child->computeDesiredSize();
-        content.x = std::max(content.x, desired.x);
-        content.y = std::max(content.y, desired.y);
-    }
-    return {_boxSize + _labelSpacing + content.x, std::max(_boxSize, content.y)};
+    glm::vec2 measured = _contentLayout.measure(*this);
+    return {measured.x, std::max(_boxSize, measured.y)};
+}
+
+std::unique_ptr<UISlot> UICheckBox::createSlotForChild(UIElement& child)
+{
+    return _contentLayout.createSlot(*this, child);
 }
 
 void UICheckBox::paintSelf(UIFrameBuilder& builder)

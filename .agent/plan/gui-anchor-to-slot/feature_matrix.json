@@ -10,13 +10,25 @@
       "scenario": "Canvas absolute layout",
       "before": "child 自写 anchor，父节点调用 anchor math",
       "after": "UICanvasLayout 消费 UICanvasSlot，四边 offsets/alignment/size rules 均在 edge",
-      "status": "planned"
+      "status": "wip"
+    },
+    {
+      "scenario": "Popup full-screen host",
+      "before": "popup shield 与 content rect 由控件重写 layoutAssigned() 手写分配",
+      "after": "UIPopupOverlay 自己拥有 full-screen host 语义，content edge 走 popup-owned UICanvasSlot；Menu/Dialog 只覆盖 slot args",
+      "status": "done"
+    },
+    {
+      "scenario": "Designer direct manipulation",
+      "before": "canvas-host 子节点拖拽写 slot，但下一次拖拽仍可能从 child 字段读起始状态",
+      "after": "UIDesigner direct-manip session 统一从 canvas slot 读取 offset/fixedSize/anchor，连续拖拽按最新 edge intent 累积",
+      "status": "done"
     },
     {
       "scenario": "Box / Overlay / SingleChild",
       "before": "各 path 可能忽略 child anchor",
-      "after": "每种 layout 只接受对应 typed slot 并负责 measure/arrange",
-      "status": "planned"
+      "after": "每种 layout 只接受对应 typed slot 并负责 measure/arrange；SelectableRow / CheckBox / CompoundWidget 已是 single-child host",
+      "status": "wip"
     },
     {
       "scenario": "默认 child 组合",
@@ -28,7 +40,7 @@
       "scenario": "Reparent / detach",
       "before": "child geometry 可能携带旧 parent 语义",
       "after": "旧 slot 销毁，新 parent 创建 typed slot，child 不携带 authored layout",
-      "status": "planned"
+      "status": "wip"
     },
     {
       "scenario": "旧文档与旧 schema",

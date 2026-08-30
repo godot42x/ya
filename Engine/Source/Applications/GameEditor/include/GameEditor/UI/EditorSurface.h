@@ -123,11 +123,13 @@ struct EditorSurface
     std::shared_ptr<UIElement> buildContentBrowser();
     void syncContentBrowser();
     void rebuildContentRows();
+    void selectContentMount(const std::string& itemId);
     void activateContentItem(const std::filesystem::path& path, bool bIsDirectory);
     void openSceneSaveDialog();
     void clearSceneSaveDialog();
     void syncSceneSaveDialog();
     void rebuildSceneSaveRows();
+    void selectSceneSaveMount(const std::string& itemId);
     void activateSceneSaveItem(const std::filesystem::path& path, bool bIsDirectory);
     void confirmSceneSaveDialog();
     void publishViewportRect();

@@ -91,6 +91,19 @@ class FBoxSlotBuilder final
         return std::move(*this);
     }
 
+    /// Preferred size on an Auto box edge. A zero component still asks the
+    /// child. This is the construct-time form of UIBoxSlot::setPreferredSize.
+    FBoxSlotBuilder& preferredSize(glm::vec2 value) &
+    {
+        _args.preferredSize = value;
+        return *this;
+    }
+    FBoxSlotBuilder&& preferredSize(glm::vec2 value) &&
+    {
+        _args.preferredSize = value;
+        return std::move(*this);
+    }
+
     [[nodiscard]] const FBoxSlotArgs& args() const { return _args; }
     operator const FBoxSlotArgs&() const { return _args; }
 
@@ -99,7 +112,7 @@ class FBoxSlotBuilder final
 };
 
 /// Layout intent for a UISingleChildLayout edge (scroll viewport / size box /
-/// split pane / button ...).
+/// split pane / button / selectable row / check box / compound widget ...).
 ///
 /// These parents own both axes, so the only useful intent is how the child sits
 /// inside the content box: stretch it (Fill, the default) or keep its desired
@@ -169,85 +182,6 @@ class FSingleChildSlotBuilder final
 [[nodiscard]] inline FBoxSlotBuilder boxSlot() { return {}; }
 
 [[nodiscard]] inline FSingleChildSlotBuilder singleChildSlot() { return {}; }
-
-/// Layout intent for a canvas-panel (path-B, anchor-owning) parent edge
-/// (panel / column / popupOverlay ...). Anchor intent lives on the parent-child
-/// edge, so "fillParent()" on the child is dead code there too; the parent picks
-/// this slot via child(node, ui::panelSlot().fill()).
-///
-///     ui::panel("X")[ui::layout().fill() >> node]                  // old .fillParent()
-///     ui::panel("X")[ui::layout().anchor({0,0},{1,1}) >> node]     // old .setAnchors
-///     ui::panel("X")[ui::layout().fill().offsets(8,8,8,8) >> node]
-class FCanvasPanelSlotBuilder
-{
-  public:
-    FCanvasPanelSlotBuilder& fill() &
-    {
-        _args.anchorMin = {0.0f, 0.0f};
-        _args.anchorMax = {1.0f, 1.0f};
-        return *this;
-    }
-    FCanvasPanelSlotBuilder&& fill() &&
-    {
-        _args.anchorMin = {0.0f, 0.0f};
-        _args.anchorMax = {1.0f, 1.0f};
-        return std::move(*this);
-    }
-
-    FCanvasPanelSlotBuilder& anchors(glm::vec2 min, glm::vec2 max) &
-    {
-        _args.anchorMin = min;
-        _args.anchorMax = max;
-        return *this;
-    }
-    FCanvasPanelSlotBuilder&& anchors(glm::vec2 min, glm::vec2 max) &&
-    {
-        _args.anchorMin = min;
-        _args.anchorMax = max;
-        return std::move(*this);
-    }
-
-    FCanvasPanelSlotBuilder& offset(glm::vec2 value) &
-    {
-        _args.offset = value;
-        return *this;
-    }
-    FCanvasPanelSlotBuilder&& offset(glm::vec2 value) &&
-    {
-        _args.offset = value;
-        return std::move(*this);
-    }
-
-    FCanvasPanelSlotBuilder& minSize(glm::vec2 value) &
-    {
-        _args.minSize = value;
-        return *this;
-    }
-    FCanvasPanelSlotBuilder&& minSize(glm::vec2 value) &&
-    {
-        _args.minSize = value;
-        return std::move(*this);
-    }
-
-    FCanvasPanelSlotBuilder& maxSize(glm::vec2 value) &
-    {
-        _args.maxSize = value;
-        return *this;
-    }
-    FCanvasPanelSlotBuilder&& maxSize(glm::vec2 value) &&
-    {
-        _args.maxSize = value;
-        return std::move(*this);
-    }
-
-    [[nodiscard]] const FCanvasPanelSlotArgs& args() const { return _args; }
-    operator const FCanvasPanelSlotArgs&() const { return _args; }
-
-  private:
-    FCanvasPanelSlotArgs _args{};
-};
-
-[[nodiscard]] inline FCanvasPanelSlotBuilder panelSlot() { return {}; }
 
 /// The public layout-intent builder: `ui::layout()` starts a spec and each
 /// method ADDS A CAPABILITY TO THE TYPE.

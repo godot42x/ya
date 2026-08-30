@@ -68,38 +68,38 @@ class UIPanelWidgetBuilder final : public TUIWidgetChildrenBuilder<UIPanel, UIPa
     template<UIWidgetBuilder TChild>
     UIPanelWidgetBuilder& child(TChild&& builder) &
     {
-        applyCanvasSlot(std::forward<TChild>(builder).release(), FCanvasPanelSlotArgs{});
+        applyCanvasSlot(std::forward<TChild>(builder).release(), FCanvasSlotArgs{});
         return *this;
     }
 
     template<UIWidgetBuilder TChild>
     UIPanelWidgetBuilder&& child(TChild&& builder) &&
     {
-        applyCanvasSlot(std::forward<TChild>(builder).release(), FCanvasPanelSlotArgs{});
+        applyCanvasSlot(std::forward<TChild>(builder).release(), FCanvasSlotArgs{});
         return std::move(*this);
     }
 
-    UIPanelWidgetBuilder& child(UIElementRef node, const FCanvasPanelSlotArgs& slot) &
+    UIPanelWidgetBuilder& child(UIElementRef node, const FCanvasSlotArgs& slot) &
     {
         applyCanvasSlot(std::move(node), slot);
         return *this;
     }
 
-    UIPanelWidgetBuilder&& child(UIElementRef node, const FCanvasPanelSlotArgs& slot) &&
+    UIPanelWidgetBuilder&& child(UIElementRef node, const FCanvasSlotArgs& slot) &&
     {
         applyCanvasSlot(std::move(node), slot);
         return std::move(*this);
     }
 
     template<UIWidgetBuilder TChild>
-    UIPanelWidgetBuilder& child(TChild&& builder, const FCanvasPanelSlotArgs& slot) &
+    UIPanelWidgetBuilder& child(TChild&& builder, const FCanvasSlotArgs& slot) &
     {
         applyCanvasSlot(std::forward<TChild>(builder).release(), slot);
         return *this;
     }
 
     template<UIWidgetBuilder TChild>
-    UIPanelWidgetBuilder&& child(TChild&& builder, const FCanvasPanelSlotArgs& slot) &&
+    UIPanelWidgetBuilder&& child(TChild&& builder, const FCanvasSlotArgs& slot) &&
     {
         applyCanvasSlot(std::forward<TChild>(builder).release(), slot);
         return std::move(*this);
@@ -224,13 +224,11 @@ class UIContainerWidgetBuilder final : public TUIWidgetChildrenBuilder<UIContain
   private:
     void applyChildSlot(UIElementRef node, const FBoxSlotArgs& slot)
     {
-        UIElement* live = node.get();
-        this->_widget->addDetachedChild(std::move(node));
-        if (live) {
-            if (auto* boxSlot = this->_widget->getBoxSlot(*live)) {
+        this->attachChild(std::move(node), [&slot](UIElement&, UISlot& childSlot) {
+            if (auto* boxSlot = dynamic_cast<UIBoxSlot*>(&childSlot)) {
                 boxSlot->apply(slot);
             }
-        }
+        });
     }
 };
 
@@ -430,13 +428,11 @@ class UIOverlayWidgetBuilder final : public TUIWidgetChildrenBuilder<UIOverlay, 
   private:
     void applyChildSlot(UIElementRef node, const FOverlaySlotArgs& slot)
     {
-        UIElement* live = node.get();
-        this->_widget->addDetachedChild(std::move(node));
-        if (live) {
-            if (auto* overlaySlot = this->_widget->getOverlaySlot(*live)) {
+        this->attachChild(std::move(node), [&slot](UIElement&, UISlot& childSlot) {
+            if (auto* overlaySlot = dynamic_cast<UIOverlaySlot*>(&childSlot)) {
                 overlaySlot->apply(slot);
             }
-        }
+        });
     }
 };
 

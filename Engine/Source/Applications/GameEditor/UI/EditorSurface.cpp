@@ -10,6 +10,7 @@
 #include "GUI/Tooling/Workbench/WorkbenchSurface.h"
 #include "GameEditor/UI/EditorTheme.h"
 #include "GameEditor/UI/EditorTabRegistry.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
@@ -138,13 +139,12 @@ ui::UISelectableRowWidgetBuilder contentRow(const std::string& key,
 {
     return ui::selectableRow(key)
         .setItemId(itemId)
-        .setSize({0.0f, 22.0f})
+        .setContentPadding(FMargin{10.0f, 0.0f, 0.0f, 0.0f})
         .setOnSelect(std::move(onSelect))
         .setOnActivate(std::move(onActivate))
         .child(ui::text(key + "_Label")
                    .setText(label)
                    .setFontSize(13)
-                   .setPosition({10.0f, 0.0f})
                    .setVAlign(EWidgetAlignV::Center));
 }
 
@@ -330,14 +330,20 @@ void EditorSurface::buildEditorChrome(App& app)
 {
     (void)app;
     _root = ui::panel("EditorRoot").setStyleKey("panel.window").share();
-    const WidgetAttachment attached = _tree->attachToLayer(WidgetTree::ELayer::Content, _root);
+    FCanvasSlotArgs fillArgs;
+    fillArgs.anchorMin = {0.0f, 0.0f};
+    fillArgs.anchorMax = {1.0f, 1.0f};
+    fillArgs.offset    = _root->getPosition();
+    fillArgs.fixedSize = _root->getSize();
+    const WidgetAttachment attached = _tree->attachToLayer(WidgetTree::ELayer::Content, _root, fillArgs);
     YA_CORE_ASSERT(attached.valid(), "EditorSurface: failed to attach editor root");
-    ui::attachLayout(*_tree->getLayer(WidgetTree::ELayer::Content), *_root, ui::layout().fill().args());
 
     _menuBar = ui::buildAs<UIMenuBar>(*_tree,
                                       *_root,
-                                      ui::menuBar("EditorMenu").setSize({0.0f, kMenuHeight}),
-                                      ui::layout().anchor({0.0f, 0.0f}, {1.0f, 0.0f}).offsets({0.0f, 0.0f}));
+                                      ui::menuBar("EditorMenu"),
+                                      ui::layout()
+                                          .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
+                                          .size({0.0f, kMenuHeight}));
 
     _menuBar->addItem("File", [this]() {
         return UIMenu::create({
@@ -393,7 +399,6 @@ void EditorSurface::buildEditorChrome(App& app)
     ui::build(*_tree,
               *_root,
               ui::row("EditorToolbar")
-                  .setSize({0.0f, kToolbarHeight})
                   .setSpacing(8.0f)
                   .setPadding({8.0f, 4.0f})
                   .children(std::move(play),
@@ -402,7 +407,10 @@ void EditorSurface::buildEditorChrome(App& app)
                             std::move(mode3d),
                             std::move(mode2d),
                             std::move(modeText)),
-              ui::layout().anchor({0.0f, 0.0f}, {1.0f, 0.0f}).offsets({0.0f, kMenuHeight}));
+              ui::layout()
+                  .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
+                  .offsets({0.0f, kMenuHeight})
+                  .size({0.0f, kToolbarHeight}));
 
     _dockWorkspace = std::make_shared<UIDockWorkspace>();
     _dockSpace = ui::buildAs<UIDockSpace>(*_tree,
@@ -819,12 +827,13 @@ void EditorSurface::rebuildContentRows()
     for (const auto& mp : _contentExplorer->getMountPoints()) {
         ui::build(*_tree,
                   *_contentMountList,
-                  contentRow("ContentMount_" + mp.name,
-                             mp.name,
-                             mp.name,
-                             [this](const std::string& itemId) { selectContentMount(itemId); },
-                             [this](const std::string& itemId) { selectContentMount(itemId); })
-                      .setSelected(active != nullptr && active->name == mp.name));
+                  ui::layout().size({0.0f, 22.0f}) >>
+                      contentRow("ContentMount_" + mp.name,
+                                 mp.name,
+                                 mp.name,
+                                 [this](const std::string& itemId) { selectContentMount(itemId); },
+                                 [this](const std::string& itemId) { selectContentMount(itemId); })
+                          .setSelected(active != nullptr && active->name == mp.name));
     }
 
     // Entry rows.
@@ -841,11 +850,12 @@ void EditorSurface::rebuildContentRows()
         const bool                  bDir = entry.bIsDirectory;
         ui::build(*_tree,
                   *_contentEntryList,
-                  contentRow("ContentEntry_" + entry.name,
-                             bDir ? entry.name + "/" : entry.name,
-                             entry.name,
-                             [](const std::string&) {},
-                             [this, path, bDir](const std::string&) { activateContentItem(path, bDir); }));
+                  ui::layout().size({0.0f, 22.0f}) >>
+                      contentRow("ContentEntry_" + entry.name,
+                                 bDir ? entry.name + "/" : entry.name,
+                                 entry.name,
+                                 [](const std::string&) {},
+                                 [this, path, bDir](const std::string&) { activateContentItem(path, bDir); }));
     }
 
     if (_contentPathText) {
@@ -1121,11 +1131,12 @@ void EditorSurface::rebuildSceneSaveRows()
     for (const auto& mp : _sceneSaveExplorer->getMountPoints()) {
         ui::build(*_tree,
                   *_sceneSaveMountList,
-                  contentRow("SceneSaveMount_" + mp.name,
-                             mp.name,
-                             mp.name,
-                             [this](const std::string& itemId) { selectSceneSaveMount(itemId); },
-                             [this](const std::string& itemId) { selectSceneSaveMount(itemId); })
+                  ui::layout().size({0.0f, 22.0f}) >>
+                      contentRow("SceneSaveMount_" + mp.name,
+                                 mp.name,
+                                 mp.name,
+                                 [this](const std::string& itemId) { selectSceneSaveMount(itemId); },
+                                 [this](const std::string& itemId) { selectSceneSaveMount(itemId); })
                       .setSelected(active != nullptr && active->name == mp.name));
     }
 
@@ -1140,7 +1151,8 @@ void EditorSurface::rebuildSceneSaveRows()
         const std::filesystem::path path = entry.path;
         ui::build(*_tree,
                   *_sceneSaveEntryList,
-                  contentRow("SceneSaveEntry_" + entry.name,
+                  ui::layout().size({0.0f, 22.0f}) >>
+                      contentRow("SceneSaveEntry_" + entry.name,
                              entry.name + "/",
                              entry.name,
                              [this, path](const std::string&) {

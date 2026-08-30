@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
@@ -15,8 +16,10 @@ namespace ya
 ///   - pointer press requests focus and starts a pointer capture session;
 ///     release completes the toggle;
 ///   - Space / Enter on the focused box toggles;
-///   - the first visible content child (label text) is arranged right of the
-///     box; with _bAutoSize the desired size = box + spacing + content.
+///   - the first visible content child (label text) fills the content box to
+///     the right of the check mark; indent is content padding
+///     (`_boxSize + _labelSpacing`), not child `setPosition`. With `_bAutoSize`
+///     the desired size = box + spacing + content.
 struct YA_GUI_API UICheckBox : public UIElement, public UIStyledWidget<UICheckBox, FCheckBoxStyle>
 {
     YA_REFLECT_BEGIN(UICheckBox, UIElement)
@@ -31,9 +34,23 @@ struct YA_GUI_API UICheckBox : public UIElement, public UIStyledWidget<UICheckBo
     {
         _hitFilter   = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
+        _contentLayout.setOwner(*this);
+        syncContentPadding();
     }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UICheckBox>; }
+
+    [[nodiscard]] UISingleChildLayout&       getContentLayout() { return _contentLayout; }
+    [[nodiscard]] const UISingleChildLayout& getContentLayout() const { return _contentLayout; }
+    void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override
+    {
+        const FMargin& padding = _contentLayout.getPadding();
+        node["type"]    = "singleChild";
+        node["padding"] = {{"left", padding.left},
+                           {"top", padding.top},
+                           {"right", padding.right},
+                           {"bottom", padding.bottom}};
+    }
 
     bool _bChecked = false;
     void setChecked(bool value)
@@ -60,9 +77,12 @@ struct YA_GUI_API UICheckBox : public UIElement, public UIStyledWidget<UICheckBo
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
+    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 
   private:
     void toggle();
+    void syncContentPadding();
+    UISingleChildLayout _contentLayout;
     VisualFlag _bHovered{*this};
     VisualFlag _bPressed{*this};
 };

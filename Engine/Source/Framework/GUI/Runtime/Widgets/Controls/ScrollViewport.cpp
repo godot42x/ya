@@ -97,4 +97,9 @@ glm::vec2 UIScrollViewport::computeDesiredSize() const
     return _scrollLayout.measure(*this);
 }
 
+std::unique_ptr<UISlot> UIScrollViewport::createSlotForChild(UIElement& child)
+{
+    return _scrollLayout.createSlot(*this, child);
+}
+
 } // namespace ya

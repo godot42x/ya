@@ -37,6 +37,9 @@ struct YA_GUI_API UIScrollViewport : public UIElement, public UIStyledWidget<UIS
 
     [[nodiscard]] UIScrollLayout& getScrollLayout() { return _scrollLayout; }
     [[nodiscard]] const UIScrollLayout& getScrollLayout() const { return _scrollLayout; }
+    /// The viewport owns both axes, so child intent is carried by a
+    /// single-child slot (Fill by default, or align at desired size).
+    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
     void                                appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override
     {
         const auto& l     = _scrollLayout;

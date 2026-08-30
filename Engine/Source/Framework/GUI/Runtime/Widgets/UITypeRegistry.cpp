@@ -7,11 +7,13 @@
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/Overlay.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/SizeBox.h"
@@ -20,6 +22,7 @@
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Widgets/Controls/TreeView.h"
 
 #include <algorithm>
 
@@ -88,6 +91,12 @@ void UITypeRegistry::ensureBuiltinTypesRegistered()
                  [] { return std::make_shared<UIOverlay>("Overlay"); });
     registerType({.typeId = kTypeIdSizeBox, .displayName = "Size Box", .category = "Layout"},
                  [] { return std::make_shared<UISizeBox>("SizeBox"); });
+    registerType({.typeId = kTypeIdTreeView, .displayName = "Tree View", .category = "Basic"},
+                 [] { return std::make_shared<UITreeView>("TreeView"); });
+    registerType({.typeId = kTypeIdDockSpace, .displayName = "Dock Space", .category = "Layout"},
+                 [] { return std::make_shared<UIDockSpace>("DockSpace"); });
+    registerType({.typeId = kTypeIdPopupOverlay, .displayName = "Popup Overlay", .category = "Layout"},
+                 [] { return std::make_shared<UIPopupOverlay>("PopupOverlay"); });
 }
 
 std::shared_ptr<UITypeModule> UITypeRegistry::beginModule(const std::string& moduleId)

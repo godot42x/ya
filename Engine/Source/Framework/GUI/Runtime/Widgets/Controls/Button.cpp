@@ -39,6 +39,11 @@ glm::vec2 UIButton::computeDesiredSize() const
     return _size;
 }
 
+std::unique_ptr<UISlot> UIButton::createSlotForChild(UIElement& child)
+{
+    return _contentLayout.createSlot(*this, child);
+}
+
 void UIButton::paintSelf(UIFrameBuilder& builder)
 {
     // Resolve the (possibly reactive) enabled flag first so the dependency is
