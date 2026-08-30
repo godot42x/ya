@@ -27,6 +27,8 @@ TEST(SceneWidgetEntryTest, EntryJsonRoundtripWithInlineDocumentAndOverrides)
     EXPECT_EQ(json["zOrder"].get<int32_t>(), 7);
     EXPECT_FALSE(json["autoMount"].get<bool>());
     EXPECT_EQ(json["inline"]["typeId"], "engine.panel");
+    ASSERT_TRUE(json["rootSlot"].is_object());
+    EXPECT_EQ(json["rootSlot"]["anchorMax"][0], 1.0f);
     EXPECT_FALSE(json.contains("document"));
 
     const SceneWidgetEntry reloaded = SceneWidgetEntry::fromJson(json);
@@ -35,6 +37,8 @@ TEST(SceneWidgetEntryTest, EntryJsonRoundtripWithInlineDocumentAndOverrides)
     EXPECT_FALSE(reloaded.autoMount);
     ASSERT_NE(reloaded.inlineDocument, nullptr);
     EXPECT_EQ(reloaded.inlineDocument->typeId, "engine.panel");
+    EXPECT_EQ(reloaded.rootSlot.anchorMin, glm::vec2(0.0f, 0.0f));
+    EXPECT_EQ(reloaded.rootSlot.anchorMax, glm::vec2(1.0f, 1.0f));
     EXPECT_EQ(reloaded.overrides.fieldOverrides.at("_color")[0], 1.0);
 }
 

@@ -187,8 +187,6 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
 {
     YA_REFLECT_BEGIN(UIElement)
     YA_REFLECT_FIELD(_name)
-    YA_REFLECT_FIELD(_position, .instanceEditable())
-    YA_REFLECT_FIELD(_size, .instanceEditable())
     YA_REFLECT_FIELD(_visibility, .instanceEditable())
     YA_REFLECT_FIELD(_zOrder, .instanceEditable())
     // _anchorMin/_anchorMax are no longer authorable: stretch geometry lives on
@@ -199,7 +197,6 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     YA_REFLECT_FIELD(_pivot)
     YA_REFLECT_FIELD(_hitFilter, .instanceEditable())
     YA_REFLECT_FIELD(_focusPolicy, .instanceEditable())
-    YA_REFLECT_FIELD(_bAutoSize, .instanceEditable())
     YA_REFLECT_FIELD(_styleKey, .instanceEditable())
     YA_REFLECT_END()
 
@@ -369,6 +366,11 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// child, and are recreated on reparent.
     [[nodiscard]] UISlot* getSlot() const;
     [[nodiscard]] UISlot* getSlotForChild(const UIElement& child) const;
+
+    /// Whether this element's current parent edge resolves any axis from its
+    /// desired/intrinsic content. Parent-owned slots are authoritative; the
+    /// widget flag is consulted only while detached as a standalone root.
+    [[nodiscard]] bool isAutoSizeActive() const;
 
     // === Layout (top-down, called by WidgetTree::layout) ===
     //

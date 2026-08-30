@@ -16,8 +16,8 @@ void UIText::paintSelf(UIFrameBuilder& builder)
     // AutoSize text: a text/fontSize change alters the desired size, so those
     // reads are Layout edges (a write must re-run measure+arrange). Fixed-size
     // text only repaints: Paint edges.
-    const ReactiveBase::EDirtyLevel level = _bAutoSize ? ReactiveBase::EDirtyLevel::Layout
-                                                       : ReactiveBase::EDirtyLevel::Paint;
+    const ReactiveBase::EDirtyLevel level = isAutoSizeActive() ? ReactiveBase::EDirtyLevel::Layout
+                                                               : ReactiveBase::EDirtyLevel::Paint;
     const std::string&               text  = resolvedText(level);
     const FTextStyle                style = resolvedStyle(level);
     auto                             font  = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);

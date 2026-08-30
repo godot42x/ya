@@ -8,6 +8,7 @@
 #include "GUI/Widgets/UITypeIds.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Layout/UILayout.h"
 
 #include <gtest/gtest.h>
 
@@ -24,9 +25,14 @@ TEST(UIDesignerPanelTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceOfTruth)
     root->_name  = "Root";
     child->_name = "Child";
     root->setSize({300.0f, 200.0f});
-    child->setPosition({20.0f, 30.0f});
-    child->setSize({80.0f, 40.0f});
-    root->addDetachedChild(child);
+    root->addDetachedChild(child, [](UIElement&, UISlot& edge) {
+        auto* slot = edge.as<UICanvasSlot>();
+        ASSERT_NE(slot, nullptr);
+        FCanvasSlotArgs args;
+        args.offset = {20.0f, 30.0f};
+        args.fixedSize = {80.0f, 40.0f};
+        slot->apply(args);
+    });
 
     auto document = UIDocument::fromWidget(*root);
     ASSERT_NE(document, nullptr);

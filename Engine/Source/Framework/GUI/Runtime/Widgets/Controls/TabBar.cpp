@@ -146,7 +146,6 @@ UITabButton* UITabBar::addTab(const std::string& label)
 {
     auto button = std::make_shared<UITabButton>(std::format("Tab_{}", label));
     button->_label     = label;
-    button->_bAutoSize = true;
     if (!_styleKey.empty()) {
         button->_styleKey = _styleKey;
     }

@@ -82,6 +82,9 @@ TEST(GameUIHostTest, ActivateMountsAutoMountEntriesByZOrder)
     EXPECT_EQ(content->getChildren()[1]->_typeId, "engine.button");
     EXPECT_EQ(content->getChildren()[1]->_zOrder, 10);
     EXPECT_EQ(host.getMountedScene(), &scene);
+    const auto* rootSlot = dynamic_cast<const UICanvasSlot*>(content->getSlotForChild(*content->getChildren()[0]));
+    ASSERT_NE(rootSlot, nullptr);
+    EXPECT_EQ(rootSlot->getAnchorMax(), glm::vec2(1.0f, 1.0f));
 }
 
 TEST(GameUIHostTest, SceneSwitchUnmountsPreviousAndMountsNext)

@@ -42,7 +42,6 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     }
 
     auto titleText = std::make_shared<UIText>("DialogTitle");
-    titleText->_bAutoSize = true;
     titleText->_fontSize  = 14;
     titleText->setText(std::move(title));
     stack->addDetachedChild(titleText);
@@ -60,12 +59,10 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     const auto makeButton = [](const std::string& name, const std::string& label)
     {
         auto button = std::make_shared<UIButton>(name);
-        button->_bAutoSize = true;
         button->setContentPadding({12.0f, 4.0f});
         // Dialog buttons resolve the "button"/"text" style keys from the
         // mounted tree theme (style-system Phase 3 cleanup: no bare fields).
         auto text = std::make_shared<UIText>(name + "_Label");
-        text->_bAutoSize = true;
         text->_fontSize  = 13;
         text->_hAlign    = EWidgetAlignH::Center;
         text->_vAlign    = EWidgetAlignV::Center;

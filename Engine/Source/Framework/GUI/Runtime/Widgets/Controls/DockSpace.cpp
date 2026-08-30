@@ -322,7 +322,11 @@ void UIDockSpace::syncPreviewOverlay()
             _previewOverlay = std::make_shared<FDropChooserOverlay>(this);
         }
         if (!_previewOverlay->isAttached()) {
-            const WidgetAttachment attachment = tree->attachToLayer(WidgetTree::ELayer::DragIme, _previewOverlay);
+            FCanvasSlotArgs fillArgs;
+            fillArgs.anchorMin = {0.0f, 0.0f};
+            fillArgs.anchorMax = {1.0f, 1.0f};
+            const WidgetAttachment attachment =
+                tree->attachToLayer(WidgetTree::ELayer::DragIme, _previewOverlay, fillArgs);
             YA_CORE_ASSERT(attachment.valid(), "UIDockSpace: failed to attach preview overlay");
         }
         _previewOverlay->markPaintDirty();

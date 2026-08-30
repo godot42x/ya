@@ -13,6 +13,7 @@
 // ============================================================================
 
 #include "GUI/Widgets/UIDocument.h"
+#include "GUI/Layout/UILayout.h"
 
 #include <cstdint>
 #include <string>
@@ -47,6 +48,8 @@ struct YA_SCENE_CORE_API SceneWidgetEntry
     std::string entryId;
     /// Inline UIDocument definition.
     std::shared_ptr<UIDocument> inlineDocument;
+    /// Parent-owned Canvas edge from the scene content layer to this root.
+    FCanvasSlotArgs rootSlot{.anchorMin = {0.0f, 0.0f}, .anchorMax = {1.0f, 1.0f}};
     /// Paint/hit order among entries in the content layer.
     int32_t zOrder = 0;
     /// Whether the default controller auto-instantiates on scene activation.
@@ -76,8 +79,7 @@ enum class EWidgetEntryDropPosition : uint8_t
 ///                 paths are empty this reorders the entries themselves)
 ///
 /// A top-level (empty srcPath) source nested into another top-level entry
-/// keeps its visual position: the position fields are converted from
-/// canvas-relative to parent-relative (both must be point-anchored).
+/// transfers its parent-owned root slot to the destination document edge.
 ///
 /// Returns true on success; mutates `entries` in place. Fails (with a
 /// diagnostic) on unresolvable paths, cycles, non-inline targets, or when a

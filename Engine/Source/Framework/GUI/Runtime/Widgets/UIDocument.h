@@ -32,7 +32,7 @@ namespace ya
 
 struct YA_GUI_API UIDocument
 {
-    static constexpr uint32_t kFormatVersion = 1;
+    static constexpr uint32_t kFormatVersion = 2;
 
     /// Stable registry type ID of the root widget (required).
     std::string typeId;
@@ -40,6 +40,9 @@ struct YA_GUI_API UIDocument
     nlohmann::json fields;
     /// Child documents, attached as children of the instantiated root.
     std::vector<std::shared_ptr<UIDocument>> children;
+    /// Parent-owned slot intent for each child, kept index-aligned with
+    /// `children`.  Slot data belongs to the parent edge, never the child.
+    std::vector<nlohmann::json> childSlots;
 
     /// Capture a detached widget subtree into a document. The widget must
     /// carry a registry type ID (created via UITypeRegistry).

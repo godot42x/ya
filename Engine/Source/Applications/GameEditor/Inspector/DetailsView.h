@@ -56,7 +56,7 @@ struct DetailsView
     void drawComponents(Entity &entity);
     /// Game UI entry inspector (SceneWidgetEntry authoring data).
     void drawWidgetEntry(Scene &scene, SceneWidgetEntry &entry);
-    /// Scene-level transform quick edit (position/size as instance overrides).
+    /// Scene-level transform quick edit on the parent-owned entry root slot.
     void drawEntryTransform(SceneWidgetEntry &entry);
     /// InstanceEditable-filtered override editor for a widget type.
     void drawEntryOverrides(SceneWidgetEntry &entry);

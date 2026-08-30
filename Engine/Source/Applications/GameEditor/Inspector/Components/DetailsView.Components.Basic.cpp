@@ -157,10 +157,8 @@ void DetailsView::drawWidgetEntry(Scene& scene, SceneWidgetEntry& entry)
     ImGui::DragInt("zOrder", &entry.zOrder, 1, -1000, 1000);
     ImGui::Checkbox("autoMount", &entry.autoMount);
 
-    // Scene-level transform editing: position/size written as instance
-    // overrides (the runtime and the 2D canvas preview apply them via
-    // UIInstanceOverrideSet::applyTo) — "manipulate the UI node in the scene"
-    // without touching the authored document template.
+    // Scene-level transform editing writes the scene->entry parent-owned
+    // canvas edge. It never creates widget geometry overrides.
     drawEntryTransform(entry);
 
     drawEntryOverrides(entry);
@@ -173,27 +171,10 @@ void DetailsView::drawWidgetEntry(Scene& scene, SceneWidgetEntry& entry)
 
 void DetailsView::drawEntryTransform(SceneWidgetEntry& entry)
 {
-    std::shared_ptr<UIDocument> document = entry.inlineDocument;
-    if (!document) {
-        return;
-    }
-    auto widget = document->instantiate();
-    if (!widget) {
-        return;
-    }
+    glm::vec2 pos = entry.rootSlot.offset;
+    glm::vec2 size = entry.rootSlot.fixedSize;
 
-    // Current value = instance override if present, else the document default.
-    const auto readVec2 = [&entry](const char* field, const glm::vec2& fallback) -> glm::vec2 {
-        const auto it = entry.overrides.fieldOverrides.find(field);
-        if (it != entry.overrides.fieldOverrides.end() && it->second.is_array() && it->second.size() == 2) {
-            return {it->second[0].get<float>(), it->second[1].get<float>()};
-        }
-        return fallback;
-    };
-    glm::vec2 pos  = readVec2("_position", widget->getPosition());
-    glm::vec2 size = readVec2("_size", widget->getSize());
-
-    ImGui::SeparatorText("Scene Transform (override)");
+    ImGui::SeparatorText("Scene Transform");
     bool bChanged = false;
     if (ImGui::DragFloat2("Position", glm::value_ptr(pos), 1.0f)) {
         bChanged = true;
@@ -202,8 +183,8 @@ void DetailsView::drawEntryTransform(SceneWidgetEntry& entry)
         bChanged = true;
     }
     if (bChanged) {
-        entry.overrides.fieldOverrides["_position"] = nlohmann::json::array({pos.x, pos.y});
-        entry.overrides.fieldOverrides["_size"]     = nlohmann::json::array({size.x, size.y});
+        entry.rootSlot.offset = pos;
+        entry.rootSlot.fixedSize = size;
     }
 }
 

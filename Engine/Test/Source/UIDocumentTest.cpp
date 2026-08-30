@@ -12,6 +12,10 @@
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/Controls/Overlay.h"
+#include "GUI/Widgets/Controls/SizeBox.h"
+#include "GUI/Widgets/Controls/TableGrid.h"
+#include "GUI/Layout/UILayout.h"
 
 #include <gtest/gtest.h>
 
@@ -36,6 +40,12 @@ void ensureTestTypesRegistered()
                           [] { return std::make_shared<UIButton>("Button"); });
     registry.registerType({.typeId = "test.doc_container", .displayName = "Doc Container"},
                           [] { return std::make_shared<UIContainer>("Container"); });
+    registry.registerType({.typeId = "test.doc_overlay", .displayName = "Doc Overlay"},
+                          [] { return std::make_shared<UIOverlay>("Overlay"); });
+    registry.registerType({.typeId = "test.doc_size_box", .displayName = "Doc SizeBox"},
+                          [] { return std::make_shared<UISizeBox>("SizeBox"); });
+    registry.registerType({.typeId = "test.doc_table", .displayName = "Doc Table"},
+                          [] { return std::make_shared<UITableGrid>("Table"); });
 }
 
 } // namespace
@@ -76,8 +86,11 @@ TEST(UIDocumentTest, FromWidgetRoundtripsFieldsAndChildren)
     ASSERT_NE(instanceA, nullptr);
     ASSERT_NE(instanceB, nullptr);
 
-    EXPECT_EQ(instanceA->getSize(), glm::vec2(300.0f, 120.0f));
-    EXPECT_EQ(instanceB->getSize(), glm::vec2(300.0f, 120.0f));
+    // Root geometry is not part of a UIDocument; it is supplied by the
+    // parent-owned edge (SceneWidgetEntry::rootSlot or another child slot).
+    EXPECT_EQ(instanceA->getSize(), glm::vec2(100.0f, 50.0f));
+    EXPECT_EQ(instanceB->getSize(), glm::vec2(100.0f, 50.0f));
+    EXPECT_FALSE(document->fields["__base__"]["UIElement"].contains("_size"));
     ASSERT_EQ(instanceA->getChildren().size(), 2u);
     ASSERT_EQ(instanceB->getChildren().size(), 2u);
 
@@ -128,6 +141,9 @@ TEST(UIDocumentTest, JsonRoundtrip)
     EXPECT_TRUE(json["fields"].is_object());
     ASSERT_TRUE(json["children"].is_array());
     EXPECT_EQ(json["children"].size(), 1u);
+    ASSERT_TRUE(json["childSlots"].is_array());
+    ASSERT_EQ(json["childSlots"].size(), 1u);
+    EXPECT_EQ(json["childSlots"][0]["type"], "canvas");
 
     auto reloaded = UIDocument::fromJson(json);
     ASSERT_NE(reloaded, nullptr);
@@ -146,6 +162,172 @@ TEST(UIDocumentTest, JsonRoundtrip)
     EXPECT_TRUE(panelInstance->hasAuthoredStyle());
     ASSERT_TRUE(json["fields"].contains("_authoredStyle"));
     EXPECT_TRUE(json["fields"]["_authoredStyle"].is_object());
+}
+
+TEST(UIDocumentTest, BoxSlotIntentRoundtripsOnParentEdge)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+    auto container = registry.createInstance("test.doc_container");
+    auto child = registry.createInstance("test.doc_text");
+    ASSERT_NE(container, nullptr);
+    ASSERT_NE(child, nullptr);
+    container->addDetachedChild(child, [](UIElement&, UISlot& edge) {
+        auto* slot = edge.as<UIBoxSlot>();
+        ASSERT_NE(slot, nullptr);
+        slot->setSizeRule(EUIBoxSlotSizeRule::Fill);
+        slot->setWeight(2.5f);
+        slot->setMargin(FMargin(3.0f, 4.0f, 5.0f, 6.0f));
+        slot->setCrossAlignment(EUIBoxSlotCrossAlignment::Center);
+        slot->setPreferredSize({120.0f, 22.0f});
+        slot->setMinSize({40.0f, 10.0f});
+        slot->setMaxSize({240.0f, 80.0f});
+        slot->setParticipatesInLayout(false);
+        slot->setReserveSpaceWhenHidden(false);
+    });
+
+    auto document = UIDocument::fromWidget(*container);
+    ASSERT_NE(document, nullptr);
+    ASSERT_EQ(document->childSlots.size(), 1u);
+    EXPECT_EQ(document->childSlots[0]["type"], "box");
+    auto restored = document->instantiate();
+    ASSERT_NE(restored, nullptr);
+    ASSERT_EQ(restored->getChildren().size(), 1u);
+    auto* slot = restored->getSlotForChild(*restored->getChildren()[0])->as<UIBoxSlot>();
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getSizeRule(), EUIBoxSlotSizeRule::Fill);
+    EXPECT_FLOAT_EQ(slot->getWeight(), 2.5f);
+    EXPECT_EQ(slot->getMargin(), FMargin(3.0f, 4.0f, 5.0f, 6.0f));
+    EXPECT_EQ(slot->getCrossAlignment(), EUIBoxSlotCrossAlignment::Center);
+    EXPECT_EQ(slot->getPreferredSize(), glm::vec2(120.0f, 22.0f));
+    EXPECT_EQ(slot->getMinSize(), glm::vec2(40.0f, 10.0f));
+    EXPECT_EQ(slot->getMaxSize(), glm::vec2(240.0f, 80.0f));
+    EXPECT_FALSE(slot->participatesInLayout());
+    EXPECT_FALSE(slot->reservesSpaceWhenHidden());
+}
+
+TEST(UIDocumentTest, CanvasSlotIntentRoundtripsAnchorAndInsets)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+    auto panel = registry.createInstance("test.doc_panel");
+    auto child = registry.createInstance("test.doc_text");
+    ASSERT_NE(panel, nullptr);
+    ASSERT_NE(child, nullptr);
+    panel->addDetachedChild(child, [](UIElement&, UISlot& edge) {
+        auto* slot = edge.as<UICanvasSlot>();
+        ASSERT_NE(slot, nullptr);
+        FCanvasSlotArgs args;
+        args.anchorMin = {0.25f, 0.1f};
+        args.anchorMax = {0.9f, 0.8f};
+        args.offset = {7.0f, 8.0f};
+        args.offsets = FMargin(1.0f, 2.0f, 3.0f, 4.0f);
+        args.minSize = {20.0f, 12.0f};
+        args.maxSize = {500.0f, 300.0f};
+        args.alignmentH = EWidgetAlignH::Center;
+        args.alignmentV = EWidgetAlignV::Bottom;
+        args.widthSizeMode = EWidgetSizeMode::Auto;
+        args.heightSizeMode = EWidgetSizeMode::Fixed;
+        args.pivot = {0.5f, 1.0f};
+        args.preferredSize = {90.0f, 30.0f};
+        args.fixedSize = {140.0f, 30.0f};
+        slot->apply(args);
+    });
+
+    auto reloaded = UIDocument::fromJson(UIDocument::fromWidget(*panel)->toJson());
+    ASSERT_NE(reloaded, nullptr);
+    auto restored = reloaded->instantiate();
+    ASSERT_NE(restored, nullptr);
+    auto* slot = restored->getSlotForChild(*restored->getChildren()[0])->as<UICanvasSlot>();
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getAnchorMin(), glm::vec2(0.25f, 0.1f));
+    EXPECT_EQ(slot->getAnchorMax(), glm::vec2(0.9f, 0.8f));
+    EXPECT_EQ(slot->getOffset(), glm::vec2(7.0f, 8.0f));
+    EXPECT_EQ(slot->getOffsets(), FMargin(1.0f, 2.0f, 3.0f, 4.0f));
+    EXPECT_EQ(slot->getMinSize(), glm::vec2(20.0f, 12.0f));
+    EXPECT_EQ(slot->getMaxSize(), glm::vec2(500.0f, 300.0f));
+    EXPECT_EQ(slot->getAlignmentH(), EWidgetAlignH::Center);
+    EXPECT_EQ(slot->getAlignmentV(), EWidgetAlignV::Bottom);
+    EXPECT_EQ(slot->getWidthSizeMode(), EWidgetSizeMode::Auto);
+    EXPECT_EQ(slot->getHeightSizeMode(), EWidgetSizeMode::Fixed);
+    EXPECT_EQ(slot->getPivot(), glm::vec2(0.5f, 1.0f));
+    EXPECT_EQ(slot->getPreferredSize(), glm::vec2(90.0f, 30.0f));
+    EXPECT_EQ(slot->getFixedSize(), glm::vec2(140.0f, 30.0f));
+}
+
+TEST(UIDocumentTest, OverlaySlotIntentRoundtrips)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+    auto parent = registry.createInstance("test.doc_overlay");
+    auto child = registry.createInstance("test.doc_text");
+    ASSERT_NE(parent, nullptr);
+    ASSERT_NE(child, nullptr);
+    parent->addDetachedChild(child, [](UIElement&, UISlot& edge) {
+        auto* slot = edge.as<UIOverlaySlot>();
+        ASSERT_NE(slot, nullptr);
+        FOverlaySlotArgs args;
+        args.hAlign = EUIOverlayAlignment::End;
+        args.vAlign = EUIOverlayAlignment::Center;
+        args.padding = FMargin(2.0f, 3.0f, 5.0f, 7.0f);
+        args.preferredSize = {160.0f, 28.0f};
+        slot->apply(args);
+    });
+    auto restored = UIDocument::fromJson(UIDocument::fromWidget(*parent)->toJson())->instantiate();
+    ASSERT_NE(restored, nullptr);
+    auto* slot = restored->getSlotForChild(*restored->getChildren()[0])->as<UIOverlaySlot>();
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getHAlign(), EUIOverlayAlignment::End);
+    EXPECT_EQ(slot->getVAlign(), EUIOverlayAlignment::Center);
+    EXPECT_EQ(slot->getPadding(), FMargin(2.0f, 3.0f, 5.0f, 7.0f));
+    EXPECT_EQ(slot->getPreferredSize(), glm::vec2(160.0f, 28.0f));
+}
+
+TEST(UIDocumentTest, SingleChildSlotIntentRoundtrips)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+    auto parent = registry.createInstance("test.doc_size_box");
+    auto child = registry.createInstance("test.doc_text");
+    ASSERT_NE(parent, nullptr);
+    ASSERT_NE(child, nullptr);
+    parent->addDetachedChild(child, [](UIElement&, UISlot& edge) {
+        auto* slot = edge.as<UISingleChildSlot>();
+        ASSERT_NE(slot, nullptr);
+        FSingleChildSlotArgs args;
+        args.hAlign = EUIOverlayAlignment::Center;
+        args.vAlign = EUIOverlayAlignment::End;
+        args.preferredSize = {90.0f, 24.0f};
+        slot->apply(args);
+    });
+    auto restored = UIDocument::fromJson(UIDocument::fromWidget(*parent)->toJson())->instantiate();
+    ASSERT_NE(restored, nullptr);
+    auto* slot = restored->getSlotForChild(*restored->getChildren()[0])->as<UISingleChildSlot>();
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getHAlign(), EUIOverlayAlignment::Center);
+    EXPECT_EQ(slot->getVAlign(), EUIOverlayAlignment::End);
+    EXPECT_EQ(slot->getPreferredSize(), glm::vec2(90.0f, 24.0f));
+}
+
+TEST(UIDocumentTest, TableSlotIntentRoundtripsCell)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+    auto parent = registry.createInstance("test.doc_table");
+    auto child = registry.createInstance("test.doc_text");
+    ASSERT_NE(parent, nullptr);
+    ASSERT_NE(child, nullptr);
+    parent->addDetachedChild(child, [](UIElement&, UISlot& edge) {
+        auto* slot = edge.as<UITableSlot>();
+        ASSERT_NE(slot, nullptr);
+        slot->setCell(3, 4);
+    });
+    auto restored = UIDocument::fromJson(UIDocument::fromWidget(*parent)->toJson())->instantiate();
+    ASSERT_NE(restored, nullptr);
+    auto* slot = restored->getSlotForChild(*restored->getChildren()[0])->as<UITableSlot>();
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getRow(), 3);
+    EXPECT_EQ(slot->getColumn(), 4);
 }
 
 TEST(UIDocumentTest, AuthoredButtonStyleJsonRoundtrip)
@@ -247,6 +429,22 @@ TEST(UIDocumentTest, UnsupportedVersionIsRejected)
     nlohmann::json json;
     json["version"] = UIDocument::kFormatVersion + 1;
     json["typeId"]  = "test.doc_panel";
+    EXPECT_EQ(UIDocument::fromJson(json), nullptr);
+}
+
+TEST(UIDocumentTest, ChildSlotCountMustMatchChildren)
+{
+    ensureTestTypesRegistered();
+    nlohmann::json json;
+    json["version"] = UIDocument::kFormatVersion;
+    json["typeId"] = "test.doc_panel";
+    json["fields"] = nlohmann::json::object();
+    json["children"] = nlohmann::json::array({
+        {{"version", UIDocument::kFormatVersion}, {"typeId", "test.doc_text"},
+         {"fields", nlohmann::json::object()}, {"children", nlohmann::json::array()},
+         {"childSlots", nlohmann::json::array()}},
+    });
+    json["childSlots"] = nlohmann::json::array();
     EXPECT_EQ(UIDocument::fromJson(json), nullptr);
 }
 
@@ -376,7 +574,7 @@ TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)
     target->deserializeFields(doc->fields);
     tree.buildSnapshot(UIFrameBuildContext{});
 
-    EXPECT_EQ(target->getSize(), glm::vec2(300.0f, 120.0f));
+    EXPECT_EQ(target->getSize(), glm::vec2(100.0f, 50.0f));
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
 }
 

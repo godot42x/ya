@@ -5,6 +5,66 @@
 
 #include <functional>
 
+namespace
+{
+using namespace ya;
+
+nlohmann::json vec2Json(glm::vec2 value) { return {value.x, value.y}; }
+glm::vec2 vec2FromJson(const nlohmann::json& value, glm::vec2 fallback)
+{
+    return value.is_array() && value.size() == 2
+               ? glm::vec2(value[0].get<float>(), value[1].get<float>())
+               : fallback;
+}
+nlohmann::json marginJson(const FMargin& value)
+{
+    return {{"left", value.left}, {"top", value.top},
+            {"right", value.right}, {"bottom", value.bottom}};
+}
+FMargin marginFromJson(const nlohmann::json& value, FMargin fallback = {})
+{
+    return value.is_object()
+               ? FMargin(value.value("left", fallback.left), value.value("top", fallback.top),
+                         value.value("right", fallback.right), value.value("bottom", fallback.bottom))
+               : fallback;
+}
+nlohmann::json canvasSlotToJson(const FCanvasSlotArgs& args)
+{
+    return {{"type", "canvas"},
+            {"anchorMin", vec2Json(args.anchorMin)},
+            {"anchorMax", vec2Json(args.anchorMax)},
+            {"offset", vec2Json(args.offset)},
+            {"minSize", vec2Json(args.minSize)},
+            {"maxSize", vec2Json(args.maxSize)},
+            {"offsets", marginJson(args.offsets)},
+            {"alignmentH", static_cast<int>(args.alignmentH)},
+            {"alignmentV", static_cast<int>(args.alignmentV)},
+            {"widthSizeMode", static_cast<int>(args.widthSizeMode)},
+            {"heightSizeMode", static_cast<int>(args.heightSizeMode)},
+            {"pivot", vec2Json(args.pivot)},
+            {"preferredSize", vec2Json(args.preferredSize)},
+            {"fixedSize", vec2Json(args.fixedSize)}};
+}
+bool canvasSlotFromJson(const nlohmann::json& value, FCanvasSlotArgs& args)
+{
+    if (!value.is_object() || value.value("type", std::string{}) != "canvas") return false;
+    args.anchorMin = vec2FromJson(value["anchorMin"], args.anchorMin);
+    args.anchorMax = vec2FromJson(value["anchorMax"], args.anchorMax);
+    args.offset = vec2FromJson(value["offset"], args.offset);
+    args.minSize = vec2FromJson(value["minSize"], args.minSize);
+    args.maxSize = vec2FromJson(value["maxSize"], args.maxSize);
+    args.offsets = marginFromJson(value["offsets"], args.offsets);
+    args.alignmentH = static_cast<EWidgetAlignH>(value.value("alignmentH", static_cast<int>(args.alignmentH)));
+    args.alignmentV = static_cast<EWidgetAlignV>(value.value("alignmentV", static_cast<int>(args.alignmentV)));
+    args.widthSizeMode = static_cast<EWidgetSizeMode>(value.value("widthSizeMode", static_cast<int>(args.widthSizeMode)));
+    args.heightSizeMode = static_cast<EWidgetSizeMode>(value.value("heightSizeMode", static_cast<int>(args.heightSizeMode)));
+    args.pivot = vec2FromJson(value["pivot"], args.pivot);
+    args.preferredSize = vec2FromJson(value["preferredSize"], args.preferredSize);
+    args.fixedSize = vec2FromJson(value["fixedSize"], args.fixedSize);
+    return true;
+}
+}
+
 namespace ya
 {
 
@@ -119,6 +179,7 @@ nlohmann::json SceneWidgetEntry::toJson() const
     j["autoMount"] = autoMount;
     if (inlineDocument) {
         j["inline"] = inlineDocument->toJson();
+        j["rootSlot"] = canvasSlotToJson(rootSlot);
     }
     else {
         YA_CORE_ERROR("SceneWidgetEntry::toJson: entry '{}' has no inline document definition",
@@ -150,6 +211,11 @@ SceneWidgetEntry SceneWidgetEntry::fromJson(const nlohmann::json& json)
     else {
         YA_CORE_ERROR("SceneWidgetEntry::fromJson: entry '{}' has no inline document definition",
                       entry.entryId);
+    }
+    if (!json.contains("rootSlot") || !canvasSlotFromJson(json["rootSlot"], entry.rootSlot)) {
+        YA_CORE_ERROR("SceneWidgetEntry::fromJson: entry '{}' has no valid rootSlot", entry.entryId);
+        entry.inlineDocument.reset();
+        return entry;
     }
     if (json.contains("overrides")) {
         entry.overrides = UIInstanceOverrideSet::fromJson(json["overrides"]);
@@ -189,6 +255,38 @@ bool documentContains(const std::shared_ptr<UIDocument>& root, const UIDocument*
         }
     }
     return false;
+}
+
+struct FDocumentChildEdge
+{
+    std::shared_ptr<UIDocument> document;
+    nlohmann::json slot;
+};
+
+FDocumentChildEdge takeChildEdge(UIDocument& parent, size_t index)
+{
+    FDocumentChildEdge edge;
+    edge.document = std::move(parent.children[index]);
+    if (index < parent.childSlots.size()) {
+        edge.slot = std::move(parent.childSlots[index]);
+    }
+    parent.children.erase(parent.children.begin() + static_cast<std::ptrdiff_t>(index));
+    if (index < parent.childSlots.size()) {
+        parent.childSlots.erase(parent.childSlots.begin() + static_cast<std::ptrdiff_t>(index));
+    }
+    return edge;
+}
+
+void insertChildEdge(UIDocument& parent, size_t index, FDocumentChildEdge edge)
+{
+    const size_t at = std::min(index, parent.children.size());
+    parent.children.insert(parent.children.begin() + static_cast<std::ptrdiff_t>(at),
+                           std::move(edge.document));
+    const nlohmann::json slot = edge.slot.is_object() ? std::move(edge.slot) : nlohmann::json{};
+    if (parent.childSlots.size() < at) {
+        parent.childSlots.resize(at);
+    }
+    parent.childSlots.insert(parent.childSlots.begin() + static_cast<std::ptrdiff_t>(at), slot);
 }
 
 } // namespace
@@ -272,6 +370,9 @@ bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
 
     std::shared_ptr<UIDocument> srcParentDoc;
     size_t srcSiblingIndex = 0;
+    FDocumentChildEdge movedEdge;
+    bool bMovedNestedEdge = false;
+    nlohmann::json movedRootSlot;
     if (!bSrcIsEntryRoot) {
         srcParentDoc = resolveEntryNode(srcEntry, std::vector<size_t>(srcPath.begin(), srcPath.end() - 1));
         srcSiblingIndex = srcPath.back();
@@ -289,27 +390,10 @@ bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
         }
     }
 
-    // --- Keep the visual position for the common case: a top-level widget
-    // nested into another top-level widget (both point-anchored). The child's
-    // position becomes parent-relative, so subtract the parent's origin. ---
-    if (bSrcIsEntryRoot && bDstIsEntryRoot && position == EWidgetEntryDropPosition::Into) {
-        if (auto srcWidget = srcDoc->instantiate()) {
-            if (auto dstWidget = dstDoc->instantiate()) {
-                // Stretch intent lives on the parent->child slot edge, never on
-                // the widget, so an instantiated entry root is always placed by
-                // its own position: the parent-relative adjustment always
-                // applies rather than only for "point-anchored" widgets.
-                srcWidget->setPosition(srcWidget->getPosition() - dstWidget->getPosition());
-                if (auto adjusted = UIDocument::fromWidget(*srcWidget)) {
-                    srcDoc = std::move(adjusted);
-                }
-            }
-        }
-    }
-
     // --- Detach the source ---
     if (bSrcIsEntryRoot) {
         SceneWidgetEntry srcEntryCopy = std::move(entries[srcEntryIndex]);
+        movedRootSlot = canvasSlotToJson(srcEntryCopy.rootSlot);
         entries.erase(entries.begin() + srcEntryIndex);
         if (bDstIsEntryRoot && position != EWidgetEntryDropPosition::Into) {
             // Plain reorder at the entry level (Before/After on entry rows).
@@ -321,16 +405,30 @@ bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
         (void)srcEntryCopy; // the document moved into the target; the entry is gone
     }
     else {
-        srcParentDoc->children.erase(srcParentDoc->children.begin() + srcSiblingIndex);
+        movedEdge = takeChildEdge(*srcParentDoc, srcSiblingIndex);
+        bMovedNestedEdge = true;
     }
 
     // --- Attach under the target ---
     if (position == EWidgetEntryDropPosition::Into) {
-        dstDoc->children.push_back(srcDoc);
+        if (bMovedNestedEdge) {
+            dstDoc->children.push_back(std::move(movedEdge.document));
+            dstDoc->childSlots.push_back(std::move(movedEdge.slot));
+        }
+        else {
+            dstDoc->children.push_back(srcDoc);
+            dstDoc->childSlots.push_back(std::move(movedRootSlot));
+        }
     }
     else {
         const size_t insertAt = dstSiblingIndex + (position == EWidgetEntryDropPosition::After ? 1 : 0);
-        dstParentDoc->children.insert(dstParentDoc->children.begin() + insertAt, srcDoc);
+        if (bMovedNestedEdge) {
+            insertChildEdge(*dstParentDoc, insertAt, std::move(movedEdge));
+        }
+        else {
+            dstParentDoc->children.insert(dstParentDoc->children.begin() + insertAt, srcDoc);
+            dstParentDoc->childSlots.insert(dstParentDoc->childSlots.begin() + insertAt, nlohmann::json{});
+        }
     }
 
     return true;

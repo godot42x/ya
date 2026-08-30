@@ -27,6 +27,30 @@ bool UIElement::wantsTick() const
     return false;
 }
 
+bool UIElement::isAutoSizeActive() const
+{
+    UISlot* slot = getSlot();
+    if (!slot) {
+        return _bAutoSize;
+    }
+    if (const auto* canvas = dynamic_cast<const UICanvasSlot*>(slot)) {
+        return canvas->getWidthSizeMode() == EWidgetSizeMode::Auto ||
+               canvas->getHeightSizeMode() == EWidgetSizeMode::Auto;
+    }
+    if (const auto* box = dynamic_cast<const UIBoxSlot*>(slot)) {
+        return box->getSizeRule() == EUIBoxSlotSizeRule::Auto;
+    }
+    if (const auto* single = dynamic_cast<const UISingleChildSlot*>(slot)) {
+        return single->getHAlign() != EUIOverlayAlignment::Fill ||
+               single->getVAlign() != EUIOverlayAlignment::Fill;
+    }
+    if (const auto* overlay = dynamic_cast<const UIOverlaySlot*>(slot)) {
+        return overlay->getHAlign() != EUIOverlayAlignment::Fill ||
+               overlay->getVAlign() != EUIOverlayAlignment::Fill;
+    }
+    return _bAutoSize;
+}
+
 UIElement::~UIElement()
 {
     // A widget must never be destroyed while it still belongs to a live tree

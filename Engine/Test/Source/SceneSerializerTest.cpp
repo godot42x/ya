@@ -195,9 +195,10 @@ TEST(SceneSerializerTest, EntriesAndWorldTreeRoundtrip)
             .fields = nlohmann::json{
                 {"_text", "Hello UI"},
                 {"_fontSize", 24},
-                {"__base__", nlohmann::json{{"UIElement", nlohmann::json{{"_position", {10.0, 20.0}}, {"_zOrder", 3}}}}},
+                {"__base__", nlohmann::json{{"UIElement", nlohmann::json{{"_zOrder", 3}}}}},
             },
         }),
+        .rootSlot = FCanvasSlotArgs{.offset = {10.0f, 20.0f}},
         .zOrder   = 3,
         .autoMount = true,
     });
@@ -206,9 +207,10 @@ TEST(SceneSerializerTest, EntriesAndWorldTreeRoundtrip)
         .inlineDocument = std::make_shared<UIDocument>(UIDocument{
             .typeId = "engine.button",
             .fields = nlohmann::json{
-                {"__base__", nlohmann::json{{"UIElement", nlohmann::json{{"_hitFilter", "Stop"}, {"_size", {80.0, 32.0}}}}}},
+                {"__base__", nlohmann::json{{"UIElement", nlohmann::json{{"_hitFilter", "Stop"}}}}},
             },
         }),
+        .rootSlot = FCanvasSlotArgs{.fixedSize = {80.0f, 32.0f}},
     });
 
     // A 3D entity sibling to verify mixed-tree serialization.
@@ -247,11 +249,12 @@ TEST(SceneSerializerTest, EntriesAndWorldTreeRoundtrip)
     EXPECT_EQ((*titleJson)["entryId"], "Title");
     EXPECT_EQ((*titleJson)["zOrder"].get<int32_t>(), 3);
     EXPECT_TRUE((*titleJson)["autoMount"].get<bool>());
-    EXPECT_EQ((*titleJson)["inline"]["fields"]["__base__"]["UIElement"]["_position"][0], 10.0);
+    EXPECT_TRUE((*titleJson).contains("rootSlot"));
+    EXPECT_FALSE((*titleJson)["inline"]["fields"]["__base__"]["UIElement"].contains("_position"));
     EXPECT_EQ((*titleJson)["inline"]["fields"]["_text"], "Hello UI");
     EXPECT_EQ((*titleJson)["inline"]["fields"]["_fontSize"], 24);
     EXPECT_EQ((*okJson)["inline"]["fields"]["__base__"]["UIElement"]["_hitFilter"], "Stop");
-    EXPECT_EQ((*okJson)["inline"]["fields"]["__base__"]["UIElement"]["_size"][1], 32.0);
+    EXPECT_FALSE((*okJson)["inline"]["fields"]["__base__"]["UIElement"].contains("_size"));
 
     Scene loadedScene("LoadedUIScene");
     SceneSerializer loadedSerializer(&loadedScene);
@@ -325,13 +328,12 @@ TEST(SceneSerializerTest, WidgetEntriesSurviveClone)
                 nlohmann::json f;
                 f["__base__"]           = nlohmann::json::object();
                 f["__base__"]["UIElement"] = nlohmann::json{
-                    {"_position", {50.0f, 60.0f}},
-                    {"_size", {120.0f, 40.0f}},
                     {"_zOrder", 5},
                 };
                 return f;
             }(),
         }),
+        .rootSlot = FCanvasSlotArgs{.offset = {50.0f, 60.0f}, .fixedSize = {120.0f, 40.0f}},
         .zOrder   = 5,
         .autoMount = true,
     });
@@ -349,7 +351,7 @@ TEST(SceneSerializerTest, WidgetEntriesSurviveClone)
     ASSERT_NE(clonedEntry.inlineDocument, nullptr);
     EXPECT_EQ(clonedEntry.inlineDocument->typeId, "engine.button");
     EXPECT_EQ(clonedEntry.zOrder, 5);
-    EXPECT_EQ(clonedEntry.inlineDocument->fields["__base__"]["UIElement"]["_position"][0], 50.0);
+    EXPECT_EQ(clonedEntry.rootSlot.offset, glm::vec2(50.0f, 60.0f));
 
     Node* clonedRoot = cloned->getRootNode();
     ASSERT_NE(clonedRoot, nullptr);

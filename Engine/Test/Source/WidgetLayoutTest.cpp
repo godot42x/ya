@@ -152,6 +152,39 @@ TEST(WidgetLayoutTest, SpecializedViewsExposeExplicitIntrinsicSize)
     EXPECT_EQ(table->computeIntrinsicSize(), glm::vec2(320.0f, 120.0f));
 }
 
+TEST(WidgetLayoutTest, AttachedSpecializedViewsReportContentToParentSlot)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+
+    auto treeView = std::make_shared<UITreeView>("Tree");
+    treeView->setSize({240.0f, 180.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, treeView);
+    EXPECT_FLOAT_EQ(treeView->computeDesiredSize().y, 0.0f);
+
+    auto table = std::make_shared<UITableGrid>("Table");
+    table->setSize({320.0f, 120.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, table);
+    EXPECT_FLOAT_EQ(table->computeDesiredSize().x, 320.0f);
+    EXPECT_FLOAT_EQ(table->computeDesiredSize().y, table->_rowHeight);
+}
+
+TEST(WidgetLayoutTest, AutoSizeActivityComesFromTheParentSlot)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto label = std::make_shared<UIText>("Label");
+    EXPECT_FALSE(label->isAutoSizeActive());
+
+    auto column = std::make_shared<UIContainer>("Column");
+    tree.attachToLayer(WidgetTree::ELayer::Content, column);
+    column->addDetachedChild(label);
+    EXPECT_TRUE(label->isAutoSizeActive());
+
+    if (auto* slot = dynamic_cast<UIBoxSlot*>(column->getSlotForChild(*label))) {
+        slot->setSizeRule(EUIBoxSlotSizeRule::Fill);
+    }
+    EXPECT_FALSE(label->isAutoSizeActive());
+}
+
 TEST(WidgetLayoutTest, WrappedTextWithoutExplicitWidthKeepsIntrinsicWidth)
 {
     registerSyntheticFont(16, 8.0f);

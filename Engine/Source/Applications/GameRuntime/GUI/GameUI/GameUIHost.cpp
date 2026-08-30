@@ -16,31 +16,6 @@
 namespace ya
 {
 
-namespace
-{
-
-FCanvasSlotArgs makeCanvasAttachArgsFromWidget_GameUIHost(const UIElement& widget)
-{
-    FCanvasSlotArgs args;
-    args.anchorMin = widget._anchorMin;
-    args.anchorMax = widget._anchorMax;
-    args.offset    = widget.getPosition();
-    if (widget._bAutoSize) {
-        if (widget._anchorMin.x == widget._anchorMax.x) {
-            args.widthSizeMode = EWidgetSizeMode::Auto;
-        }
-        if (widget._anchorMin.y == widget._anchorMax.y) {
-            args.heightSizeMode = EWidgetSizeMode::Auto;
-        }
-    }
-    else {
-        args.fixedSize = widget.getSize();
-    }
-    return args;
-}
-
-} // namespace
-
 GameUIHost::GameUIHost() : _controller(std::make_unique<DefaultGameUIController>())
 {
 }
@@ -185,9 +160,7 @@ std::vector<WidgetAttachment> mountSceneAutoMountEntries(Scene&                 
         widget->_zOrder = entry.zOrder;
         entry.overrides.applyTo(*widget);
 
-        WidgetAttachment attachment = tree.attachToLayer(WidgetTree::ELayer::Content,
-                                                         widget,
-                                                         makeCanvasAttachArgsFromWidget_GameUIHost(*widget));
+        WidgetAttachment attachment = tree.attachToLayer(WidgetTree::ELayer::Content, widget, entry.rootSlot);
         if (attachment.valid()) {
             attachments.push_back(std::move(attachment));
         }

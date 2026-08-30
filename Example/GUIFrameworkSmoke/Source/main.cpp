@@ -82,7 +82,12 @@ void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
         YA_CORE_INFO("Minimal host button clicked (count {})", *clickCount);
     };
 
-    tree.attachToLayer(WidgetTree::ELayer::Content, demo.panel);
+    FCanvasSlotArgs panelSlot;
+    panelSlot.anchorMin = {0.0f, 0.0f};
+    panelSlot.anchorMax = {0.0f, 0.0f};
+    panelSlot.offset = demo.panel->getPosition();
+    panelSlot.fixedSize = demo.panel->getSize();
+    tree.attachToLayer(WidgetTree::ELayer::Content, demo.panel, panelSlot);
     tree.attach(*demo.panel, demo.title);
     tree.attach(*demo.panel, demo.counter);
     tree.attach(*demo.panel, demo.button);

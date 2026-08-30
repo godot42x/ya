@@ -63,7 +63,7 @@ struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FText
             return;
         }
         _text = value;
-        invalidateProperty(_bAutoSize ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
+        invalidateProperty(isAutoSizeActive() ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
     }
     void setFontSize(uint32_t value)
     {
@@ -71,7 +71,7 @@ struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FText
             return;
         }
         _fontSize = value;
-        setStyleField("fontSize", value, _bAutoSize ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
+        setStyleField("fontSize", value, isAutoSizeActive() ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
     }
     /// Overlay textColor + fillColor (badge) on the theme; other FTextStyle
     /// fields inherit. Keeps `_color` in sync for getColor / GI-202. Paint-only

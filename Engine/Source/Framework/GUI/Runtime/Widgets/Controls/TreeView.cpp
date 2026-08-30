@@ -522,7 +522,10 @@ void UITreeView::clearTransientInputState()
 
 glm::vec2 UITreeView::computeDesiredSize() const
 {
-    if (!_bAutoSize) {
+    // Once parent-owned, the slot decides fixed versus auto sizing. The
+    // widget always reports its content extent to the parent; only a detached
+    // standalone root keeps the legacy authored-size fallback.
+    if (!getSlot() && !_bAutoSize) {
         return computeIntrinsicSize();
     }
     const auto rows = flattenVisible();

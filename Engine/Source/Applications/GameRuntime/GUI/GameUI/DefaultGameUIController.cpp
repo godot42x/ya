@@ -11,31 +11,6 @@
 namespace ya
 {
 
-namespace
-{
-
-FCanvasSlotArgs makeCanvasAttachArgsFromWidget_DefaultGameUIController(const UIElement& widget)
-{
-    FCanvasSlotArgs args;
-    args.anchorMin = widget._anchorMin;
-    args.anchorMax = widget._anchorMax;
-    args.offset    = widget.getPosition();
-    if (widget._bAutoSize) {
-        if (widget._anchorMin.x == widget._anchorMax.x) {
-            args.widthSizeMode = EWidgetSizeMode::Auto;
-        }
-        if (widget._anchorMin.y == widget._anchorMax.y) {
-            args.heightSizeMode = EWidgetSizeMode::Auto;
-        }
-    }
-    else {
-        args.fixedSize = widget.getSize();
-    }
-    return args;
-}
-
-} // namespace
-
 void DefaultGameUIController::onSceneActivated(Scene& scene, GameUIHost& host)
 {
     auto& attachments = _sceneAttachments[&scene];
@@ -71,9 +46,12 @@ WidgetAttachment DefaultGameUIController::addToWorld(Scene& world, const UIEleme
         YA_CORE_ERROR("DefaultGameUIController::addToWorld: null widget");
         return {};
     }
+    FCanvasSlotArgs rootSlot{
+        .anchorMin = {0.0f, 0.0f},
+        .anchorMax = {1.0f, 1.0f},
+    };
     WidgetAttachment attachment = host.getTree().attachToLayer(WidgetTree::ELayer::Content,
-                                                                widget,
-                                                                makeCanvasAttachArgsFromWidget_DefaultGameUIController(*widget));
+                                                                widget, rootSlot);
     if (attachment.valid()) {
         // World-scoped: unmounted with the scene lifecycle, so re-entering a
         // world never accumulates widgets.

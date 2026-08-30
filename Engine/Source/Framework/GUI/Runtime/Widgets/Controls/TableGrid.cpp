@@ -232,7 +232,9 @@ void UITableGrid::clearTransientInputState()
 
 glm::vec2 UITableGrid::computeDesiredSize() const
 {
-    if (!_bAutoSize) {
+    // Parent-owned slots override the widget's size mode; report content
+    // intrinsic size whenever this grid participates in a layout edge.
+    if (!getSlot() && !_bAutoSize) {
         return computeIntrinsicSize();
     }
     const size_t rowCount = _rows ? _rows->size() : 0;

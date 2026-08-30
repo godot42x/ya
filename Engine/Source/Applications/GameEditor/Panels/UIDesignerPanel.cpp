@@ -351,10 +351,10 @@ glm::vec2 clampMinSize(glm::vec2 size, float minExtent = 1.0f)
     return size;
 }
 
-/// Read a widget's current canvas-intent geometry. When the parent is a canvas
-/// host the slot edge is the source of truth; the element's own geometry
-/// fields are only the legacy fallback for non-host parents.
-void readCanvasIntent(const UIElement& widget,
+/// Read a widget's current canvas-intent geometry. Direct manipulation is
+/// defined only for a parent-owned canvas edge; other layout hosts must be
+/// edited through their typed slot controls.
+bool readCanvasIntent(const UIElement& widget,
                       glm::vec2&       outPos,
                       glm::vec2&       outSize,
                       glm::vec2&       outMin,
@@ -366,13 +366,10 @@ void readCanvasIntent(const UIElement& widget,
             outSize = slot->getFixedSize();
             outMin = slot->getAnchorMin();
             outMax = slot->getAnchorMax();
-            return;
+            return true;
         }
     }
-    outPos = widget.getPosition();
-    outSize = widget.getSize();
-    outMin = widget._anchorMin;
-    outMax = widget._anchorMax;
+    return false;
 }
 
 } // namespace
@@ -385,7 +382,13 @@ void UIDesignerPanel::beginMove(UIElement* widget, const glm::vec2& canvasPoint)
     _dragMode        = EDragMode::Move;
     _dragWidget      = widget;
     _resizeMask      = 0;
-    readCanvasIntent(*widget, _dragStartPos, _dragStartSize, _dragStartAnchorMin, _dragStartAnchorMax);
+    if (!readCanvasIntent(*widget, _dragStartPos, _dragStartSize, _dragStartAnchorMin, _dragStartAnchorMax)) {
+        YA_CORE_WARN("UIDesignerPanel::beginMove: widget '{}' is not attached through a canvas slot",
+                     widget->_name);
+        _dragMode = EDragMode::None;
+        _dragWidget = nullptr;
+        return;
+    }
     _dragStartParentExtent = widget->getParent() ? widget->getParent()->_layoutRect.extent : glm::vec2(0.0f);
     _bDragMoved      = false;
     (void)canvasPoint;
@@ -399,7 +402,13 @@ void UIDesignerPanel::beginResize(UIElement* widget, const glm::vec2& canvasPoin
     _dragMode        = EDragMode::Resize;
     _dragWidget      = widget;
     _resizeMask      = resizeMask;
-    readCanvasIntent(*widget, _dragStartPos, _dragStartSize, _dragStartAnchorMin, _dragStartAnchorMax);
+    if (!readCanvasIntent(*widget, _dragStartPos, _dragStartSize, _dragStartAnchorMin, _dragStartAnchorMax)) {
+        YA_CORE_WARN("UIDesignerPanel::beginResize: widget '{}' is not attached through a canvas slot",
+                     widget->_name);
+        _dragMode = EDragMode::None;
+        _dragWidget = nullptr;
+        return;
+    }
     _dragStartParentExtent = widget->getParent() ? widget->getParent()->_layoutRect.extent : glm::vec2(0.0f);
     _bDragMoved      = false;
     (void)canvasPoint;
@@ -428,10 +437,11 @@ bool UIDesignerPanel::applyDragDelta(const glm::vec2& canvasDelta)
                 return true;
             }
         }
-        _dragWidget->setPosition(_dragStartPos + canvasDelta);
+        YA_CORE_ERROR("UIDesignerPanel::applyDragDelta: move lost its parent canvas slot");
+        endDrag();
+        return false;
     }
     else {
-        UIElement* widget = _dragWidget;
         const float parentW = std::max(_dragStartParentExtent.x, 1.0f);
         const float parentH = std::max(_dragStartParentExtent.y, 1.0f);
         const bool bStretchX = _dragStartAnchorMax.x != _dragStartAnchorMin.x;
@@ -496,8 +506,8 @@ bool UIDesignerPanel::applyDragDelta(const glm::vec2& canvasDelta)
         // Layout intent lives on the parent->child slot edge. When the parent is
         // a canvas host the anchors must be written to that slot, otherwise the
         // host arranges from the default slot and the drag result is lost.
-        if (UIElement* parent = widget->getParent()) {
-            if (auto* slot = dynamic_cast<UICanvasSlot*>(parent->getSlotForChild(*widget))) {
+        if (UIElement* parent = _dragWidget->getParent()) {
+            if (auto* slot = dynamic_cast<UICanvasSlot*>(parent->getSlotForChild(*_dragWidget))) {
                 FCanvasSlotArgs args;
                 args.anchorMin = anchorMin;
                 args.anchorMax = anchorMax;
@@ -509,10 +519,9 @@ bool UIDesignerPanel::applyDragDelta(const glm::vec2& canvasDelta)
             }
         }
 
-        widget->setPosition(pos);
-        widget->setSize(size);
-        widget->_anchorMin  = anchorMin;
-        widget->_anchorMax  = anchorMax;
+        YA_CORE_ERROR("UIDesignerPanel::applyDragDelta: canvas drag lost its parent canvas slot");
+        endDrag();
+        return false;
     }
 
     invalidatePreview();

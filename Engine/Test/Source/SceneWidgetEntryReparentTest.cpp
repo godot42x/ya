@@ -1,6 +1,6 @@
 // Game UI hierarchy drag-drop reparenting tests: moveWidgetEntryDocument()
 // (scene-core). Covers entry nesting/reorder, nested-node moves, cycle
-// guards, non-inline targets, and the top-level position adjustment.
+// guards, non-inline targets, and parent-owned root-slot transfer.
 
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Scene/Core/SceneWidgetEntry.h"
@@ -24,50 +24,50 @@ void ensureReflectionReady()
 
 std::shared_ptr<UIDocument> makeDoc(std::string typeId,
                                     nlohmann::json fields,
-                                    std::vector<std::shared_ptr<UIDocument>> children = {})
+                                    std::vector<std::shared_ptr<UIDocument>> children = {},
+                                    std::vector<nlohmann::json> childSlots = {})
 {
     auto document  = std::make_shared<UIDocument>();
     document->typeId = std::move(typeId);
     document->fields = std::move(fields);
     document->children = std::move(children);
+    document->childSlots = std::move(childSlots);
     return document;
 }
 
-/// Absolute-position fields (UIElement base block, canvas-relative).
 nlohmann::json posFields(double x, double y, double w = 100.0, double h = 50.0)
 {
-    return nlohmann::json{
-        {"__base__", nlohmann::json{{"UIElement",
-                                     nlohmann::json{{"_position", {x, y}}, {"_size", {w, h}}}}}},
-    };
+    return nlohmann::json{{"__base__", nlohmann::json{{"UIElement",
+        nlohmann::json{{"_position", {x, y}}, {"_size", {w, h}}}}}}};
 }
 
-SceneWidgetEntry makeEntry(std::string entryId, std::shared_ptr<UIDocument> document)
+SceneWidgetEntry makeEntry(std::string entryId, std::shared_ptr<UIDocument> document,
+                           glm::vec2 offset = {}, glm::vec2 fixedSize = {})
 {
     SceneWidgetEntry entry;
     entry.entryId        = std::move(entryId);
     entry.inlineDocument = std::move(document);
+    entry.rootSlot.offset = offset;
+    entry.rootSlot.fixedSize = fixedSize;
     entry.autoMount      = true;
     return entry;
 }
 
 std::vector<SceneWidgetEntry> makeFlatHudEntries()
 {
-    // Mirrors the legacy Canvas > (Panel, Title, Label, Click Me) migration.
+    // New authoring data stores geometry on the scene->entry edge.
     return {
-        makeEntry("Panel", makeDoc("engine.panel", posFields(20.0, 20.0, 300.0, 120.0))),
-        makeEntry("Title", makeDoc("engine.text", posFields(36.0, 30.0))),
-        makeEntry("Label", makeDoc("engine.text", posFields(36.0, 66.0))),
-        makeEntry("Click Me", makeDoc("engine.button", posFields(36.0, 96.0))),
+        makeEntry("Panel", makeDoc("engine.panel", {}), {20.0f, 20.0f}, {300.0f, 120.0f}),
+        makeEntry("Title", makeDoc("engine.text", {}), {36.0f, 30.0f}, {260.0f, 26.0f}),
+        makeEntry("Label", makeDoc("engine.text", {}), {36.0f, 66.0f}, {260.0f, 20.0f}),
+        makeEntry("Click Me", makeDoc("engine.button", {}), {36.0f, 96.0f}, {140.0f, 30.0f}),
     };
 }
 
 } // namespace
 
-// Nesting a top-level entry into another top-level entry (the core
-// "flat -> nested" fix): the source entry disappears and its document becomes
-// a child; the position converts from canvas-relative to parent-relative so
-// the runtime layout does not shift.
+// Nesting a top-level entry into another top-level entry transfers the source
+// root edge intent to the destination document's child edge.
 TEST(SceneWidgetEntryReparentTest, NestTopLevelEntryIntoEntryAdjustsPosition)
 {
     ensureReflectionReady();
@@ -83,30 +83,34 @@ TEST(SceneWidgetEntryReparentTest, NestTopLevelEntryIntoEntryAdjustsPosition)
     ASSERT_EQ(entries[0].inlineDocument->children.size(), 1u);
     ASSERT_EQ(entries[0].inlineDocument->children[0]->typeId, "engine.text");
 
-    // Title was at canvas (36,30); Panel is at (20,20) => parent-relative (16,10).
-    auto title = entries[0].inlineDocument->children[0]->instantiate();
-    ASSERT_NE(title, nullptr);
-    EXPECT_NEAR(title->getPosition().x, 16.0, 1e-3);
-    EXPECT_NEAR(title->getPosition().y, 10.0, 1e-3);
+    ASSERT_EQ(entries[0].inlineDocument->childSlots.size(), 1u);
+    EXPECT_EQ(entries[0].inlineDocument->childSlots[0]["offset"], nlohmann::json({36.0, 30.0}));
 
     // Remaining entries are Label and Click Me (in order).
     EXPECT_EQ(entries[1].entryId, "Label");
     EXPECT_EQ(entries[2].entryId, "Click Me");
 }
 
-// Nesting preserves the original position when the parent sits at the origin.
+TEST(SceneWidgetEntryReparentTest, NestTopLevelEntryCarriesRootSlotIntoChildEdge)
+{
+    ensureReflectionReady();
+    auto entries = makeFlatHudEntries();
+    ASSERT_TRUE(moveWidgetEntryDocument(entries, 1, {}, 0, {}, EWidgetEntryDropPosition::Into));
+    ASSERT_EQ(entries[0].inlineDocument->childSlots.size(), 1u);
+    EXPECT_EQ(entries[0].inlineDocument->childSlots[0]["offset"], nlohmann::json({36.0f, 30.0f}));
+    EXPECT_EQ(entries[0].inlineDocument->childSlots[0]["fixedSize"], nlohmann::json({260.0f, 26.0f}));
+}
+
+// Nesting under an origin parent preserves the source root edge intent.
 TEST(SceneWidgetEntryReparentTest, NestUnderOriginKeepsPosition)
 {
     ensureReflectionReady();
     auto entries = makeFlatHudEntries();
-    entries[0].inlineDocument->fields =
-        posFields(0.0, 0.0, 300.0, 120.0); // Panel at origin
+    entries[0].rootSlot.offset = {0.0f, 0.0f}; // Panel at origin
 
     ASSERT_TRUE(moveWidgetEntryDocument(entries, 1, {}, 0, {}, EWidgetEntryDropPosition::Into));
-    auto title = entries[0].inlineDocument->children[0]->instantiate();
-    ASSERT_NE(title, nullptr);
-    EXPECT_NEAR(title->getPosition().x, 36.0, 1e-3);
-    EXPECT_NEAR(title->getPosition().y, 30.0, 1e-3);
+    ASSERT_EQ(entries[0].inlineDocument->childSlots.size(), 1u);
+    EXPECT_EQ(entries[0].inlineDocument->childSlots[0]["offset"], nlohmann::json({36.0, 30.0}));
 }
 
 // Entry-level reorder (Before / After on entry rows).
@@ -173,6 +177,26 @@ TEST(SceneWidgetEntryReparentTest, NestedSiblingReorder)
     EXPECT_EQ(entries[0].inlineDocument->children[2]->fields["__base__"]["UIElement"]["_position"][1], 30.0);
 }
 
+TEST(SceneWidgetEntryReparentTest, NestedReparentMovesSlotIntentWithChild)
+{
+    ensureReflectionReady();
+    const nlohmann::json firstSlot = {{"type", "canvas"}, {"offset", {11.0, 22.0}}};
+    const nlohmann::json secondSlot = {{"type", "canvas"}, {"offset", {33.0, 44.0}}};
+    auto menu = makeDoc("engine.panel", {},
+                        {makeDoc("engine.text", {}), makeDoc("engine.text", {})},
+                        {firstSlot, secondSlot});
+    auto overlay = makeDoc("engine.panel", {});
+    std::vector<SceneWidgetEntry> entries = {makeEntry("Menu", menu), makeEntry("Overlay", overlay)};
+
+    ASSERT_TRUE(moveWidgetEntryDocument(entries, 0, {1}, 1, {}, EWidgetEntryDropPosition::Into));
+    ASSERT_EQ(entries[0].inlineDocument->children.size(), 1u);
+    ASSERT_EQ(entries[0].inlineDocument->childSlots.size(), 1u);
+    EXPECT_EQ(entries[0].inlineDocument->childSlots[0], firstSlot);
+    ASSERT_EQ(entries[1].inlineDocument->children.size(), 1u);
+    ASSERT_EQ(entries[1].inlineDocument->childSlots.size(), 1u);
+    EXPECT_EQ(entries[1].inlineDocument->childSlots[0], secondSlot);
+}
+
 // Dropping an entry into its own subtree must be rejected (cycle).
 TEST(SceneWidgetEntryReparentTest, RejectsCycle)
 {
@@ -232,13 +256,13 @@ TEST(SceneWidgetEntryReparentTest, FlattenedHudRebuildsNestingByDragDrop)
     ASSERT_EQ(entries[0].entryId, "Panel");
     ASSERT_EQ(entries[0].inlineDocument->children.size(), 3u);
 
-    // Positions stay visually identical (panel origin 20,20 subtracted).
-    const double expected[3][2] = {{16.0, 10.0}, {16.0, 46.0}, {16.0, 76.0}};
+    // Parent-owned edge intent stays visually identical; no widget geometry
+    // fields are rewritten during the structural move.
+    const double expected[3][2] = {{36.0, 30.0}, {36.0, 66.0}, {36.0, 96.0}};
     for (size_t i = 0; i < 3; ++i) {
-        auto widget = entries[0].inlineDocument->children[i]->instantiate();
-        ASSERT_NE(widget, nullptr);
-        EXPECT_NEAR(widget->getPosition().x, expected[i][0], 1e-3);
-        EXPECT_NEAR(widget->getPosition().y, expected[i][1], 1e-3);
+        ASSERT_TRUE(entries[0].inlineDocument->childSlots[i].contains("offset"));
+        EXPECT_NEAR(entries[0].inlineDocument->childSlots[i]["offset"][0].get<double>(), expected[i][0], 1e-3);
+        EXPECT_NEAR(entries[0].inlineDocument->childSlots[i]["offset"][1].get<double>(), expected[i][1], 1e-3);
     }
     EXPECT_EQ(entries[0].inlineDocument->children[0]->typeId, "engine.text");
     EXPECT_EQ(entries[0].inlineDocument->children[1]->typeId, "engine.text");
