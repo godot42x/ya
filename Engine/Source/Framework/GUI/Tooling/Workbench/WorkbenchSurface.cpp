@@ -77,8 +77,6 @@ void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
     ya::FCanvasSlotArgs fillArgs;
     fillArgs.anchorMin = {0.0f, 0.0f};
     fillArgs.anchorMax = {1.0f, 1.0f};
-    fillArgs.offset    = _root->getPosition();
-    fillArgs.fixedSize = _root->getSize();
     const ya::WidgetAttachment attached = tree.attachToLayer(ya::WidgetTree::ELayer::Content, _root, fillArgs);
     YA_CORE_ASSERT(attached.valid(), "WorkbenchSurface: failed to attach WorkbenchRoot");
 

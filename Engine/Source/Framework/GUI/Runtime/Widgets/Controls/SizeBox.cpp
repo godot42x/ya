@@ -46,7 +46,7 @@ void UISizeBox::setMaxSize(glm::vec2 value)
 
 void UISizeBox::layout(const Rect2D& parentRect)
 {
-    layoutAssigned(computeAnchorRect(parentRect));
+    layoutAssigned(parentRect);
 }
 
 void UISizeBox::layoutAssigned(const Rect2D& rect)

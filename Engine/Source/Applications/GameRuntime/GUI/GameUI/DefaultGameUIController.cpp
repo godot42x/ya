@@ -60,4 +60,20 @@ WidgetAttachment DefaultGameUIController::addToWorld(Scene& world, const UIEleme
     return attachment;
 }
 
+WidgetAttachment DefaultGameUIController::addToWorld(Scene& world,
+                                                      const UIElementRef& widget,
+                                                      const FCanvasSlotArgs& args,
+                                                      GameUIHost& host)
+{
+    if (!widget) {
+        YA_CORE_ERROR("DefaultGameUIController::addToWorld: null widget");
+        return {};
+    }
+    WidgetAttachment attachment = host.getTree().attachToLayer(WidgetTree::ELayer::Content, widget, args);
+    if (attachment.valid()) {
+        _sceneAttachments[&world].push_back(attachment);
+    }
+    return attachment;
+}
+
 } // namespace ya

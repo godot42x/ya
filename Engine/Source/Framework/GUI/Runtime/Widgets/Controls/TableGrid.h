@@ -50,15 +50,30 @@ struct YA_GUI_API UITableGrid : public UIElement, public UIStyledWidget<UITableG
     void setColumnCount(int count) { _tableLayout.setColumnCount(count); }
     void setColumnWidth(int column, float width) { _tableLayout.setColumnWidth(column, width); }
     void setRowHeight(float height);
+    void setIntrinsicSize(glm::vec2 value)
+    {
+        value = glm::max(value, glm::vec2(0.0f));
+        if (_intrinsicSize == value) {
+            return;
+        }
+        _intrinsicSize = value;
+        invalidateProperty(EUIPropertyImpact::Layout);
+    }
     [[nodiscard]] UITableSlot* getCellSlot(const UIElement& child)
     {
-        return dynamic_cast<UITableSlot*>(getSlotForChild(child));
+        if (UISlot* edge = getSlotForChild(child)) {
+            return edge->as<UITableSlot>();
+        }
+        return nullptr;
     }
 
     // === Visuals ===
     /// Column widths; 0 = stretch (shares the remaining width).
     std::vector<float> _columnWidths;
     float              _rowHeight = 22.0f;
+    /// Explicit intrinsic extent used only when measured without a parent
+    /// edge (for example a designer preview root).
+    glm::vec2          _intrinsicSize = {0.0f, 0.0f};
     uint32_t           _fontSize  = 13;
     /// When true the first data row is drawn with the header text color.
     bool               _bHeaderRow = true;

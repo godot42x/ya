@@ -89,7 +89,10 @@ struct YA_GUI_API UIPanel : public UIElement, public UIStyledWidget<UIPanel, FPa
     }
     [[nodiscard]] UICanvasSlot* getCanvasSlot(const UIElement& child) const
     {
-        return dynamic_cast<UICanvasSlot*>(getSlotForChild(child));
+        if (UISlot* edge = getSlotForChild(child)) {
+            return edge->as<UICanvasSlot>();
+        }
+        return nullptr;
     }
 };
 

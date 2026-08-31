@@ -88,9 +88,6 @@ nlohmann::json slotToJson(const UISlot& slot)
     } else if (auto* s = slot.as<const UIOverlaySlot>()) {
         j["type"] = "overlay"; j["hAlign"] = static_cast<int>(s->getHAlign()); j["vAlign"] = static_cast<int>(s->getVAlign());
         j["padding"] = marginJson(s->getPadding()); j["preferredSize"] = vecJson(s->getPreferredSize());
-    } else if (auto* s = slot.as<const UISingleChildSlot>()) {
-        j["type"] = "singleChild"; j["hAlign"] = static_cast<int>(s->getHAlign()); j["vAlign"] = static_cast<int>(s->getVAlign());
-        j["preferredSize"] = vecJson(s->getPreferredSize());
     } else if (auto* s = slot.as<const UITableSlot>()) {
         j["type"] = "table"; j["row"] = s->getRow(); j["column"] = s->getColumn();
     } else {
@@ -105,7 +102,6 @@ void applySlotJson(UISlot& slot, const nlohmann::json& j)
     if (auto* s = slot.as<UICanvasSlot>()) { FCanvasSlotArgs a; a.anchorMin=vecFromJson(j["anchorMin"]); a.anchorMax=vecFromJson(j["anchorMax"]); a.offset=vecFromJson(j["offset"]); a.minSize=vecFromJson(j["minSize"]); a.maxSize=vecFromJson(j["maxSize"], a.maxSize); a.offsets=marginFromJson(j["offsets"]); a.alignmentH=static_cast<EWidgetAlignH>(j.value("alignmentH",0)); a.alignmentV=static_cast<EWidgetAlignV>(j.value("alignmentV",0)); a.widthSizeMode=static_cast<EWidgetSizeMode>(j.value("widthSizeMode",0)); a.heightSizeMode=static_cast<EWidgetSizeMode>(j.value("heightSizeMode",0)); a.pivot=vecFromJson(j["pivot"]); a.preferredSize=vecFromJson(j["preferredSize"]); a.fixedSize=vecFromJson(j["fixedSize"]); s->apply(a); }
     else if (auto* s = slot.as<UIBoxSlot>()) { FBoxSlotArgs a; a.sizeRule=static_cast<EUIBoxSlotSizeRule>(j.value("sizeRule",0)); a.weight=j.value("weight",1.0f); a.margin=marginFromJson(j["margin"]); a.crossAlignment=static_cast<EUIBoxSlotCrossAlignment>(j.value("crossAlignment",0)); a.preferredSize=vecFromJson(j["preferredSize"]); s->apply(a); s->setMinSize(vecFromJson(j["minSize"])); s->setMaxSize(vecFromJson(j["maxSize"], s->getMaxSize())); s->setParticipatesInLayout(j.value("participatesInLayout",true)); s->setReserveSpaceWhenHidden(j.value("reserveSpaceWhenHidden",true)); }
     else if (auto* s = slot.as<UIOverlaySlot>()) { FOverlaySlotArgs a; a.hAlign=static_cast<EUIOverlayAlignment>(j.value("hAlign",0)); a.vAlign=static_cast<EUIOverlayAlignment>(j.value("vAlign",0)); a.padding=marginFromJson(j["padding"]); a.preferredSize=vecFromJson(j["preferredSize"]); s->apply(a); }
-    else if (auto* s = slot.as<UISingleChildSlot>()) { FSingleChildSlotArgs a; a.hAlign=static_cast<EUIOverlayAlignment>(j.value("hAlign",0)); a.vAlign=static_cast<EUIOverlayAlignment>(j.value("vAlign",0)); a.preferredSize=vecFromJson(j["preferredSize"]); s->apply(a); }
     else if (auto* s = slot.as<UITableSlot>()) s->setCell(j.value("row",0), j.value("column",0));
 }
 }

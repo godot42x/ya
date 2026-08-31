@@ -1,3 +1,4 @@
+#include "GUITestLayoutHelpers.h"
 // Phase 2a regression guards for UIDocument (ui-widget-tree-refactor): the
 // UIDocument schema, independent instantiation, JSON roundtrip, and detached
 // subtree authoring — all without a Scene or WidgetTree.
@@ -62,16 +63,16 @@ TEST(UIDocumentTest, FromWidgetRoundtripsFieldsAndChildren)
     ASSERT_NE(title, nullptr);
     ASSERT_NE(ok, nullptr);
 
-    container->setSize({300.0f, 120.0f});
+    authorSlotSize(*container, {300.0f, 120.0f});
     auto* titleWidget = dynamic_cast<UIText*>(title.get());
     ASSERT_NE(titleWidget, nullptr);
-    titleWidget->setPosition({10.0f, 20.0f});
+    authorSlotPosition(*titleWidget, {10.0f, 20.0f});
     titleWidget->setText("Hello Doc");
     titleWidget->_fontSize = 24;
     titleWidget->setColor({1.0f, 0.0f, 0.0f, 1.0f});
     titleWidget->setStyleKey("text.header");
-    ok->setPosition({100.0f, 200.0f});
-    ok->setSize({80.0f, 32.0f});
+    authorSlotPosition(*ok, {100.0f, 200.0f});
+    authorSlotSize(*ok, {80.0f, 32.0f});
     container->addDetachedChild(title);
     container->addDetachedChild(ok);
 
@@ -88,8 +89,6 @@ TEST(UIDocumentTest, FromWidgetRoundtripsFieldsAndChildren)
 
     // Root geometry is not part of a UIDocument; it is supplied by the
     // parent-owned edge (SceneWidgetEntry::rootSlot or another child slot).
-    EXPECT_EQ(instanceA->getSize(), glm::vec2(100.0f, 50.0f));
-    EXPECT_EQ(instanceB->getSize(), glm::vec2(100.0f, 50.0f));
     EXPECT_FALSE(document->fields["__base__"]["UIElement"].contains("_size"));
     ASSERT_EQ(instanceA->getChildren().size(), 2u);
     ASSERT_EQ(instanceB->getChildren().size(), 2u);
@@ -125,7 +124,7 @@ TEST(UIDocumentTest, JsonRoundtrip)
     panelWidget->setColor({0.12f, 0.14f, 0.22f, 0.88f});
     EXPECT_TRUE(panelWidget->hasAuthoredStyle());
     panelWidget->_zOrder   = 5;
-    panelWidget->setPosition({20.0f, 20.0f});
+    authorSlotPosition(*panelWidget, {20.0f, 20.0f});
     auto label       = registry.createInstance("test.doc_text");
     auto* labelWidget = dynamic_cast<UIText*>(label.get());
     ASSERT_NE(labelWidget, nullptr);
@@ -292,9 +291,9 @@ TEST(UIDocumentTest, SingleChildSlotIntentRoundtrips)
     ASSERT_NE(parent, nullptr);
     ASSERT_NE(child, nullptr);
     parent->addDetachedChild(child, [](UIElement&, UISlot& edge) {
-        auto* slot = edge.as<UISingleChildSlot>();
+        auto* slot = edge.as<UIOverlaySlot>();
         ASSERT_NE(slot, nullptr);
-        FSingleChildSlotArgs args;
+        FOverlaySlotArgs args;
         args.hAlign = EUIOverlayAlignment::Center;
         args.vAlign = EUIOverlayAlignment::End;
         args.preferredSize = {90.0f, 24.0f};
@@ -302,7 +301,7 @@ TEST(UIDocumentTest, SingleChildSlotIntentRoundtrips)
     });
     auto restored = UIDocument::fromJson(UIDocument::fromWidget(*parent)->toJson())->instantiate();
     ASSERT_NE(restored, nullptr);
-    auto* slot = restored->getSlotForChild(*restored->getChildren()[0])->as<UISingleChildSlot>();
+    auto* slot = restored->getSlotForChild(*restored->getChildren()[0])->as<UIOverlaySlot>();
     ASSERT_NE(slot, nullptr);
     EXPECT_EQ(slot->getHAlign(), EUIOverlayAlignment::Center);
     EXPECT_EQ(slot->getVAlign(), EUIOverlayAlignment::End);
@@ -366,7 +365,7 @@ TEST(UIDocumentTest, AuthoredPanelFillSurvivesThemeAfterReload)
     auto panel = registry.createInstance("test.doc_panel");
     auto* panelWidget = dynamic_cast<UIPanel*>(panel.get());
     ASSERT_NE(panelWidget, nullptr);
-    panelWidget->setSize({100.0f, 50.0f});
+    authorSlotSize(*panelWidget, {100.0f, 50.0f});
     panelWidget->setColor({0.12f, 0.14f, 0.22f, 0.88f});
 
     auto document = UIDocument::fromWidget(*panel);
@@ -382,7 +381,9 @@ TEST(UIDocumentTest, AuthoredPanelFillSurvivesThemeAfterReload)
     themed.fillColor = FBrush::solid({0.7f, 0.1f, 0.2f, 1.0f});
     theme->define<FPanelStyle>("panel", themed);
     tree.setTheme(theme.get());
-    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, instance).valid());
+    FCanvasSlotArgs slotArgs;
+    slotArgs.fixedSize = {100.0f, 50.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), instance, slotArgs).valid());
 
     const UIFrameSnapshot snap = tree.buildSnapshot({});
     ASSERT_EQ(snap.items.size(), 1u);
@@ -470,7 +471,7 @@ TEST(UIDocumentTest, InstantiatedSubtreeCanAttachToTree)
     auto instance = document->instantiate();
     ASSERT_NE(instance, nullptr);
 
-    auto attachment = tree.attachToLayer(WidgetTree::ELayer::Content, instance);
+    auto attachment = tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), instance);
     EXPECT_TRUE(attachment.valid());
     EXPECT_TRUE(tree.contains(*instance));
     // Subtree members carry the same tree membership.
@@ -556,7 +557,7 @@ TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)
     auto source = registry.createInstance("test.doc_panel");
     auto* sourcePanel = dynamic_cast<UIPanel*>(source.get());
     ASSERT_NE(sourcePanel, nullptr);
-    sourcePanel->setSize({300.0f, 120.0f});
+    authorSlotSize(*sourcePanel, {300.0f, 120.0f});
     sourcePanel->setColor({0.5f, 0.5f, 0.5f, 1.0f});
     auto doc = UIDocument::fromWidget(*source);
     ASSERT_NE(doc, nullptr);
@@ -564,7 +565,7 @@ TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)
     // A live target attached to a tree.
     auto target = registry.createInstance("test.doc_panel");
     WidgetTree tree({.width = 800, .height = 600});
-    EXPECT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, target).valid());
+    EXPECT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target).valid());
     tree.buildSnapshot(UIFrameBuildContext{}); // cold start
     tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
     const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
@@ -574,7 +575,6 @@ TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)
     target->deserializeFields(doc->fields);
     tree.buildSnapshot(UIFrameBuildContext{});
 
-    EXPECT_EQ(target->getSize(), glm::vec2(100.0f, 50.0f));
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
 }
 

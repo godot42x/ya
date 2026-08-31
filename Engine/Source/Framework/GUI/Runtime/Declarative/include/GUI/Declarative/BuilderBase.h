@@ -53,7 +53,6 @@ template<typename TWidget>
     YA_CORE_ASSERT(widget, "ui::makeLiveWidget: registry type '{}' produced the wrong widget class", typeId);
     widget->_stableKey = std::move(key);
     widget->_name      = displayName.empty() ? widget->_stableKey : std::move(displayName);
-    widget->_bAutoSize = true;
     return widget;
 }
 
@@ -86,51 +85,49 @@ class TUIWidgetBuilder
 
     [[nodiscard]] std::shared_ptr<TWidget> share() const { return _widget; }
 
+    /// Move construction-time edge intent out of the builder at materialization.
+    /// Detached layout intent never needs to be stored on the live widget.
+    [[nodiscard]] FChildSlotInitializer takeSlotInitializer()
+    {
+        return std::move(_slotInitializer);
+    }
+
     [[nodiscard]] TDerived& setPosition(const glm::vec2& value) &
     {
-        _widget->setPosition(value);
+        applyPendingPosition(value);
         return derived();
     }
 
     [[nodiscard]] TDerived&& setPosition(const glm::vec2& value) &&
     {
-        _widget->setPosition(value);
+        applyPendingPosition(value);
         return std::move(derived());
     }
 
     [[nodiscard]] TDerived& setSize(const glm::vec2& value) &
     {
-        _widget->_bAutoSize = false;
-        _widget->setSize(value);
+        applyPendingSize(value);
         return derived();
     }
 
     [[nodiscard]] TDerived&& setSize(const glm::vec2& value) &&
     {
-        _widget->_bAutoSize = false;
-        _widget->setSize(value);
+        applyPendingSize(value);
         return std::move(derived());
     }
 
-    /// Explicit SizeToContent switch, independent of setSize()'s side effect.
-    ///
-    /// DSL-created widgets start AutoSize. setSize() turns AutoSize off, so a
-    /// chain like `.setSize(...).setAutoSize(true)` restores measuring: on an
-    /// axis with no anchor span the size comes from computeDesiredSize() and
-    /// the slot's authored size is ignored (it is not a minimum — see
-    /// UIElement::resolveCanvasRect).
-    ///
-    /// Because this is the only API that writes the flag without touching the
-    /// size, the last call in a chain always wins regardless of order.
+    /// Set the parent-edge SizeToContent mode. Detached widgets retain no
+    /// independent auto-size state; the pending initializer is consumed when
+    /// the widget is attached and the typed slot exists.
     [[nodiscard]] TDerived& setAutoSize(bool value) &
     {
-        _widget->_bAutoSize = value;
+        applyPendingAutoSize(value);
         return derived();
     }
 
     [[nodiscard]] TDerived&& setAutoSize(bool value) &&
     {
-        _widget->_bAutoSize = value;
+        applyPendingAutoSize(value);
         return std::move(derived());
     }
 
@@ -232,6 +229,73 @@ class TUIWidgetBuilder
 
   protected:
     std::shared_ptr<TWidget> _widget;
+    FChildSlotInitializer _slotInitializer;
+
+    void applyToCurrentOrPendingSlot(FChildSlotInitializer init)
+    {
+        if (UISlot* slot = _widget->getSlot()) {
+            init(*_widget, *slot);
+            return;
+        }
+        if (!_slotInitializer) {
+            _slotInitializer = std::move(init);
+            return;
+        }
+        FChildSlotInitializer previous = std::move(_slotInitializer);
+        _slotInitializer = [previous = std::move(previous), init = std::move(init)](UIElement& child,
+                                                                                     UISlot& slot) mutable {
+            previous(child, slot);
+            init(child, slot);
+        };
+    }
+
+    void applyPendingPosition(const glm::vec2& value)
+    {
+        applyToCurrentOrPendingSlot([value](UIElement&, UISlot& slot) {
+            if (auto* canvas = slot.as<UICanvasSlot>()) {
+                canvas->setOffset(value);
+            }
+        });
+    }
+
+    void applyPendingSize(const glm::vec2& value)
+    {
+        applyToCurrentOrPendingSlot([value](UIElement&, UISlot& slot) {
+            if (auto* canvas = slot.as<UICanvasSlot>()) {
+                canvas->setFixedSize(value);
+                canvas->setWidthSizeMode(EWidgetSizeMode::Fixed);
+                canvas->setHeightSizeMode(EWidgetSizeMode::Fixed);
+            }
+            else if (auto* box = slot.as<UIBoxSlot>()) {
+                box->setPreferredSize(value);
+            }
+            else if (auto* overlay = slot.as<UIOverlaySlot>()) {
+                overlay->setPreferredSize(value);
+            }
+        });
+    }
+
+    void applyPendingAutoSize(bool value)
+    {
+        applyToCurrentOrPendingSlot([value](UIElement&, UISlot& slot) {
+            if (auto* canvas = slot.as<UICanvasSlot>()) {
+                const EWidgetSizeMode mode = value ? EWidgetSizeMode::Auto : EWidgetSizeMode::Fixed;
+                canvas->setWidthSizeMode(mode);
+                canvas->setHeightSizeMode(mode);
+                if (value) {
+                    canvas->setFixedSize({0.0f, 0.0f});
+                }
+            }
+            else if (auto* box = slot.as<UIBoxSlot>()) {
+                box->setSizeRule(value ? EUIBoxSlotSizeRule::Auto : EUIBoxSlotSizeRule::Fill);
+            }
+            else if (auto* overlay = slot.as<UIOverlaySlot>()) {
+                const EUIOverlayAlignment align = value ? EUIOverlayAlignment::Start : EUIOverlayAlignment::Fill;
+                overlay->setHAlign(align);
+                overlay->setVAlign(align);
+            }
+        });
+    }
 
     [[nodiscard]] TDerived& derived() & { return static_cast<TDerived&>(*this); }
     [[nodiscard]] TDerived&& derived() && { return static_cast<TDerived&&>(*this); }
@@ -258,14 +322,16 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     template<UIWidgetBuilder TChild>
     TDerived& child(TChild&& builder) &
     {
-        attachChild(std::forward<TChild>(builder).release());
+        auto slotInit = builder.takeSlotInitializer();
+        attachChild(std::forward<TChild>(builder).release(), std::move(slotInit));
         return this->derived();
     }
 
     template<UIWidgetBuilder TChild>
     TDerived&& child(TChild&& builder) &&
     {
-        attachChild(std::forward<TChild>(builder).release());
+        auto slotInit = builder.takeSlotInitializer();
+        attachChild(std::forward<TChild>(builder).release(), std::move(slotInit));
         return std::move(this->derived());
     }
 
@@ -292,6 +358,12 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     template<typename TSlotInit>
     void attachChild(UIElementRef node, TSlotInit&& init)
     {
+        if constexpr (std::is_same_v<std::decay_t<TSlotInit>, FChildSlotInitializer>) {
+            if (!init) {
+                this->_widget->addDetachedChild(std::move(node));
+                return;
+            }
+        }
         this->_widget->addDetachedChild(std::move(node), std::forward<TSlotInit>(init));
     }
 
@@ -299,10 +371,10 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     /// both axes (button / selectable row / scroll / size box / split pane ...)
     /// must route their child(node, slot) overloads through here so intent lands
     /// on the edge instead of on the child's ignored anchors.
-    void applySingleChildSlot(UIElementRef node, const FSingleChildSlotArgs& slot)
+    void applySingleChildSlot(UIElementRef node, const FOverlaySlotArgs& slot)
     {
         attachChild(std::move(node), [&slot](UIElement&, UISlot& childSlot) {
-            if (auto* typedSlot = dynamic_cast<UISingleChildSlot*>(&childSlot)) {
+            if (auto* typedSlot = childSlot.as<UIOverlaySlot>()) {
                 typedSlot->apply(slot);
             }
         });
@@ -313,7 +385,7 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     void applyCanvasSlot(UIElementRef node, const FCanvasSlotArgs& slot)
     {
         attachChild(std::move(node), [&slot](UIElement&, UISlot& childSlot) {
-            if (auto* typedSlot = dynamic_cast<UICanvasSlot*>(&childSlot)) {
+            if (auto* typedSlot = childSlot.as<UICanvasSlot>()) {
                 typedSlot->apply(slot);
             }
         });
@@ -399,7 +471,6 @@ class TUICompoundWidgetBuilder final : public TUIWidgetBuilder<TWidget, TUICompo
         auto widget = std::make_shared<TWidget>(resolvedName, std::forward<TArgs>(args)...);
         widget->_stableKey = std::move(key);
         widget->_name = resolvedName;
-        widget->_bAutoSize = true;
         return widget;
     }
 };

@@ -1,3 +1,4 @@
+#include "GUITestLayoutHelpers.h"
 #include "GUI/Host/GUIHeadlessHost.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
@@ -31,9 +32,9 @@ struct HeadlessDelegate final : IGUIAppDelegate
     void buildUI(WidgetTree& tree) override
     {
         auto panel = std::make_shared<UIPanel>("HeadlessPanel");
-        panel->setPosition({8.0f, 12.0f});
-        panel->setSize({96.0f, 48.0f});
-        tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+        authorSlotPosition(*panel, {8.0f, 12.0f});
+        authorSlotSize(*panel, {96.0f, 48.0f});
+        tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
     }
 
     void updateUI() override
@@ -99,10 +100,9 @@ TEST(GUIHeadlessHostTest, MenuBarItemHoverRepaintsWithHoveredColor)
         void buildUI(ya::WidgetTree& tree) override
         {
             auto barOwned   = std::make_shared<ya::UIMenuBar>("TestMenuBar");
-            barOwned->_anchorMin = {0.0f, 0.0f};
-            barOwned->_anchorMax = {1.0f, 0.0f};
-            barOwned->setSize({0.0f, 30.0f});
-            tree.attachToLayer(ya::WidgetTree::ELayer::Content, barOwned);
+            authorSlotAnchors(*barOwned, {0.0f, 0.0f}, {1.0f, 0.0f});
+            authorSlotSize(*barOwned, {0.0f, 30.0f});
+            tree.attach(*tree.getLayer(ya::WidgetTree::ELayer::Content), barOwned);
             barOwned->addItem("File", [] { return ya::UIMenu::create({{"New", nullptr}}); });
 
             // Mirror the workbench theme: lift both stops above the window

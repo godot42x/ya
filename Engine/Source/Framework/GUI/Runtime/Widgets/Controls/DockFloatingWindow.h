@@ -49,6 +49,7 @@ struct YA_GUI_API UIDockFloatingWindow : public UIElement, public UIStyledWidget
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
+    void onAttached() override;
     void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override { node["type"] = "overlay"; }
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;

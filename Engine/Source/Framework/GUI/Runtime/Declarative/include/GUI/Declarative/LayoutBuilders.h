@@ -225,7 +225,7 @@ class UIContainerWidgetBuilder final : public TUIWidgetChildrenBuilder<UIContain
     void applyChildSlot(UIElementRef node, const FBoxSlotArgs& slot)
     {
         this->attachChild(std::move(node), [&slot](UIElement&, UISlot& childSlot) {
-            if (auto* boxSlot = dynamic_cast<UIBoxSlot*>(&childSlot)) {
+            if (auto* boxSlot = childSlot.as<UIBoxSlot>()) {
                 boxSlot->apply(slot);
             }
         });
@@ -247,25 +247,25 @@ class UISplitPaneWidgetBuilder final : public TUIWidgetChildrenBuilder<UISplitPa
     // its cross-axis placement. The using keeps plain child(node) visible.
     using TUIWidgetChildrenBuilder::child;
 
-    UISplitPaneWidgetBuilder& child(UIElementRef node, const FSingleChildSlotArgs& slot) &
+    UISplitPaneWidgetBuilder& child(UIElementRef node, const FOverlaySlotArgs& slot) &
     {
         this->applySingleChildSlot(std::move(node), slot);
         return *this;
     }
-    UISplitPaneWidgetBuilder&& child(UIElementRef node, const FSingleChildSlotArgs& slot) &&
+    UISplitPaneWidgetBuilder&& child(UIElementRef node, const FOverlaySlotArgs& slot) &&
     {
         this->applySingleChildSlot(std::move(node), slot);
         return std::move(*this);
     }
 
     template<UIWidgetBuilder TChild>
-    UISplitPaneWidgetBuilder& child(TChild&& builder, const FSingleChildSlotArgs& slot) &
+    UISplitPaneWidgetBuilder& child(TChild&& builder, const FOverlaySlotArgs& slot) &
     {
         this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
-    UISplitPaneWidgetBuilder&& child(TChild&& builder, const FSingleChildSlotArgs& slot) &&
+    UISplitPaneWidgetBuilder&& child(TChild&& builder, const FOverlaySlotArgs& slot) &&
     {
         this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
         return std::move(*this);
@@ -356,30 +356,30 @@ class UIScrollViewportWidgetBuilder final : public TUIWidgetChildrenBuilder<UISc
     }
 
     // A scroll viewport owns both axes, so child intent is how the content sits
-    // in the content box: ui::scroll("S").child(node, ui::singleChildSlot().fill()).
+    // in the content box: ui::scroll("S").child(node, ui::overlaySlot().fill()).
     // The using keeps the plain child(node) overloads visible, since declaring
     // any child() here would otherwise hide the base set.
     using TUIWidgetChildrenBuilder::child;
 
-    UIScrollViewportWidgetBuilder& child(UIElementRef node, const FSingleChildSlotArgs& slot) &
+    UIScrollViewportWidgetBuilder& child(UIElementRef node, const FOverlaySlotArgs& slot) &
     {
         this->applySingleChildSlot(std::move(node), slot);
         return *this;
     }
-    UIScrollViewportWidgetBuilder&& child(UIElementRef node, const FSingleChildSlotArgs& slot) &&
+    UIScrollViewportWidgetBuilder&& child(UIElementRef node, const FOverlaySlotArgs& slot) &&
     {
         this->applySingleChildSlot(std::move(node), slot);
         return std::move(*this);
     }
 
     template<UIWidgetBuilder TChild>
-    UIScrollViewportWidgetBuilder& child(TChild&& builder, const FSingleChildSlotArgs& slot) &
+    UIScrollViewportWidgetBuilder& child(TChild&& builder, const FOverlaySlotArgs& slot) &
     {
         this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
-    UIScrollViewportWidgetBuilder&& child(TChild&& builder, const FSingleChildSlotArgs& slot) &&
+    UIScrollViewportWidgetBuilder&& child(TChild&& builder, const FOverlaySlotArgs& slot) &&
     {
         this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
         return std::move(*this);
@@ -429,7 +429,7 @@ class UIOverlayWidgetBuilder final : public TUIWidgetChildrenBuilder<UIOverlay, 
     void applyChildSlot(UIElementRef node, const FOverlaySlotArgs& slot)
     {
         this->attachChild(std::move(node), [&slot](UIElement&, UISlot& childSlot) {
-            if (auto* overlaySlot = dynamic_cast<UIOverlaySlot*>(&childSlot)) {
+            if (auto* overlaySlot = childSlot.as<UIOverlaySlot>()) {
                 overlaySlot->apply(slot);
             }
         });
@@ -521,29 +521,29 @@ class UISizeBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UISizeBox, 
 
     // A size box owns both axes (width/height overrides + padding), so child
     // intent is only how the content sits in the resulting box:
-    // ui::sizeBox("B").child(node, ui::singleChildSlot().align(Center, Center)).
+    // ui::sizeBox("B").child(node, ui::overlaySlot().align(Center, Center)).
     // The using keeps the plain child(node) overloads visible.
     using TUIWidgetChildrenBuilder::child;
 
-    UISizeBoxWidgetBuilder& child(UIElementRef node, const FSingleChildSlotArgs& slot) &
+    UISizeBoxWidgetBuilder& child(UIElementRef node, const FOverlaySlotArgs& slot) &
     {
         this->applySingleChildSlot(std::move(node), slot);
         return *this;
     }
-    UISizeBoxWidgetBuilder&& child(UIElementRef node, const FSingleChildSlotArgs& slot) &&
+    UISizeBoxWidgetBuilder&& child(UIElementRef node, const FOverlaySlotArgs& slot) &&
     {
         this->applySingleChildSlot(std::move(node), slot);
         return std::move(*this);
     }
 
     template<UIWidgetBuilder TChild>
-    UISizeBoxWidgetBuilder& child(TChild&& builder, const FSingleChildSlotArgs& slot) &
+    UISizeBoxWidgetBuilder& child(TChild&& builder, const FOverlaySlotArgs& slot) &
     {
         this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
-    UISizeBoxWidgetBuilder&& child(TChild&& builder, const FSingleChildSlotArgs& slot) &&
+    UISizeBoxWidgetBuilder&& child(TChild&& builder, const FOverlaySlotArgs& slot) &&
     {
         this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
         return std::move(*this);

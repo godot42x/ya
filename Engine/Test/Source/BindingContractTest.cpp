@@ -1,3 +1,4 @@
+#include "GUITestLayoutHelpers.h"
 // Binding-layer regression guards (G4.1/G4.2): Reactive now lives under
 // GUI/Binding rather than GUI/Widgets. These tests lock the persistent edge
 // contract at the binding layer boundary instead of piggybacking only on the
@@ -36,7 +37,7 @@ TEST(BindingContractTest, PersistentLayoutBindingOnDetachedWidgetDoesNotInvalida
     auto       split = std::make_shared<UISplitPane>("Split");
     auto       ratio = std::make_shared<Reactive<float>>(0.5f);
     split->bindSplitRatio(ratio);
-    tree.attachToLayer(WidgetTree::ELayer::Content, split);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
 
     tree.buildSnapshot(UIFrameBuildContext{});
     tree.buildSnapshot(UIFrameBuildContext{});
@@ -55,11 +56,11 @@ TEST(BindingContractTest, PersistentLayoutBindingSurvivesDetachAndReattach)
     auto       split = std::make_shared<UISplitPane>("Split");
     auto       ratio = std::make_shared<Reactive<float>>(0.5f);
     split->bindSplitRatio(ratio);
-    tree.attachToLayer(WidgetTree::ELayer::Content, split);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
 
     tree.buildSnapshot(UIFrameBuildContext{});
     tree.detach(*split);
-    tree.attachToLayer(WidgetTree::ELayer::Content, split);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
     tree.buildSnapshot(UIFrameBuildContext{});
     tree.buildSnapshot(UIFrameBuildContext{});
 
@@ -76,7 +77,7 @@ TEST(BindingContractTest, TextBindingSurvivesImperativeFallbackWriteUntilUnbound
     auto       text = std::make_shared<UIText>("Text");
     auto       ref  = std::make_shared<Reactive<std::string>>("bound");
     text->bindText(ref);
-    tree.attachToLayer(WidgetTree::ELayer::Content, text);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
 
     tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(text->resolvedText(), "bound");
@@ -98,13 +99,13 @@ TEST(BindingContractTest, WidgetEnabledGateRemainsAuthoritativeOverButtonDisplay
     WidgetTree tree({.width = 800, .height = 600});
     auto       button  = std::make_shared<UIButton>("Button");
     auto       enabled = std::make_shared<Reactive<bool>>(true);
-    button->setPosition({20.0f, 20.0f});
-    button->setSize({120.0f, 40.0f});
+    authorSlotPosition(*button, {20.0f, 20.0f});
+    authorSlotSize(*button, {120.0f, 40.0f});
     button->bindEnabled(enabled);
     button->setEnabled(false);
     int clicks = 0;
     button->_onClick = [&]() { ++clicks; };
-    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f)),
@@ -131,10 +132,10 @@ TEST(BindingContractTest, DisablingPressedButtonStillClearsPressSessionOnRelease
     WidgetTree tree({.width = 800, .height = 600});
     auto       button = std::make_shared<UIButton>("Button");
     int        clicks = 0;
-    button->setPosition({20.0f, 20.0f});
-    button->setSize({120.0f, 40.0f});
+    authorSlotPosition(*button, {20.0f, 20.0f});
+    authorSlotSize(*button, {120.0f, 40.0f});
     button->_onClick = [&]() { ++clicks; };
-    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f)),
@@ -162,12 +163,12 @@ TEST(BindingContractTest, BehaviorDropHighlightDoesNotOverwritePresenterSelectio
     source->setDragPayload("payload.source");
     target->setDraggable(true);
     target->setSelected(true);
-    source->setPosition({20.0f, 20.0f});
-    source->setSize({160.0f, 24.0f});
-    target->setPosition({220.0f, 20.0f});
-    target->setSize({160.0f, 24.0f});
-    tree.attachToLayer(WidgetTree::ELayer::Content, source);
-    tree.attachToLayer(WidgetTree::ELayer::Content, target);
+    authorSlotPosition(*source, {20.0f, 20.0f});
+    authorSlotSize(*source, {160.0f, 24.0f});
+    authorSlotPosition(*target, {220.0f, 20.0f});
+    authorSlotSize(*target, {160.0f, 24.0f});
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 32.0f)),
@@ -198,12 +199,12 @@ TEST(BindingContractTest, PresenterSelectionPatchDoesNotClearBehaviorDropHighlig
     source->setDraggable(true);
     target->setDraggable(true);
     source->setDragPayload("payload.source");
-    source->setPosition({20.0f, 20.0f});
-    source->setSize({160.0f, 24.0f});
-    target->setPosition({220.0f, 20.0f});
-    target->setSize({160.0f, 24.0f});
-    tree.attachToLayer(WidgetTree::ELayer::Content, source);
-    tree.attachToLayer(WidgetTree::ELayer::Content, target);
+    authorSlotPosition(*source, {20.0f, 20.0f});
+    authorSlotSize(*source, {160.0f, 24.0f});
+    authorSlotPosition(*target, {220.0f, 20.0f});
+    authorSlotSize(*target, {160.0f, 24.0f});
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 32.0f)),
@@ -243,11 +244,11 @@ TEST(BindingContractTest, TreeFilterBindingAndManualExpansionCoexistWithoutStick
 
     auto filterRef = std::make_shared<Reactive<std::string>>("");
     auto treeView  = std::make_shared<UITreeView>("Tree");
-    treeView->setPosition({20.0f, 20.0f});
-    treeView->setSize({240.0f, 120.0f});
+    authorSlotPosition(*treeView, {20.0f, 20.0f});
+    authorSlotSize(*treeView, {240.0f, 120.0f});
     treeView->bindData(roots);
     treeView->bindFilter(filterRef);
-    tree.attachToLayer(WidgetTree::ELayer::Content, treeView);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView);
 
     tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(treeView->isExpanded("root"));
@@ -288,11 +289,11 @@ TEST(BindingContractTest, TableSelectionBindingCoexistsWithHoverTransientState)
 
     auto       selected = std::make_shared<Reactive<int>>(1);
     auto       table    = std::make_shared<UITableGrid>("Table");
-    table->setPosition({20.0f, 20.0f});
-    table->setSize({220.0f, 96.0f});
+    authorSlotPosition(*table, {20.0f, 20.0f});
+    authorSlotSize(*table, {220.0f, 96.0f});
     table->bindData(rows);
     table->bindSelection(selected);
-    tree.attachToLayer(WidgetTree::ELayer::Content, table);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), table);
     tree.layout();
 
     tree.buildSnapshot(UIFrameBuildContext{});
@@ -318,10 +319,9 @@ TEST(BindingContractTest, MenuBarLabelBindingSurvivesOpenMenuAndHoverRouting)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       bar = std::make_shared<UIMenuBar>("Bar");
-    bar->_anchorMin = {0.0f, 0.0f};
-    bar->_anchorMax = {1.0f, 0.0f};
-    bar->setSize({0.0f, 30.0f});
-    tree.attachToLayer(WidgetTree::ELayer::Content, bar);
+    authorSlotAnchors(*bar, {0.0f, 0.0f}, {1.0f, 0.0f});
+    authorSlotSize(*bar, {0.0f, 30.0f});
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar);
 
     auto label = std::make_shared<Reactive<std::string>>("File");
     auto* item = bar->addItem("Fallback", [] { return UIMenu::create({{"Open", [] {}}, {"Save", [] {}}}); });

@@ -40,7 +40,10 @@ struct YA_GUI_API UIContainer : public UIElement
     void                           setStretchLastChild(bool value) { _boxLayout.setStretchLastChild(value); }
     [[nodiscard]] UIBoxSlot*       getBoxSlot(const UIElement& child) const
     {
-        return dynamic_cast<UIBoxSlot*>(getSlotForChild(child));
+        if (UISlot* edge = getSlotForChild(child)) {
+            return edge->as<UIBoxSlot>();
+        }
+        return nullptr;
     }
 
     void                    layout(const Rect2D& parentRect) override;

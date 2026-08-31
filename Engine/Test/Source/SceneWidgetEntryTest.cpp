@@ -50,13 +50,11 @@ TEST(SceneWidgetEntryTest, OverrideAppliesToOwnAndBaseFields)
 
     UIInstanceOverrideSet overrides;
     overrides.fieldOverrides["_color"]   = nlohmann::json{1.0, 0.0, 0.0, 1.0};
-    overrides.fieldOverrides["_position"] = nlohmann::json{12.0, 34.0};
 
     EXPECT_TRUE(overrides.applyTo(*panel));
     auto* panelWidget = dynamic_cast<UIPanel*>(panel.get());
     ASSERT_NE(panelWidget, nullptr);
     EXPECT_EQ(panelWidget->getColor(), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
-    EXPECT_EQ(panelWidget->getPosition(), glm::vec2(12.0f, 34.0f));
 }
 
 TEST(SceneWidgetEntryTest, UnknownOverrideFieldIsRejected)

@@ -20,7 +20,7 @@ void UIScrollViewport::appendRuntimeDiagnostics(nlohmann::json& node, const Widg
 
 void UIScrollViewport::layout(const Rect2D& parentRect)
 {
-    layoutAssigned(computeAnchorRect(parentRect));
+    layoutAssigned(parentRect);
 }
 
 void UIScrollViewport::layoutAssigned(const Rect2D& rect)

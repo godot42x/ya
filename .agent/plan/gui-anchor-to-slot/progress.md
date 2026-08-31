@@ -1,5 +1,75 @@
 # GUI layout unified 进度
 
+## 2026-08-30 — CP3/CP5 纠偏 checkpoint：Canvas Auto 优先级、Popup content slot 与 detached pending bridge
+
+- 误差审计确认：Canvas Auto 轴若回读 `fixedSize`，会让 Auto 意图被旧 authored 尺寸遮蔽；Popup 测试若把内容尺寸写到 child slot，也会越过 popup-owned content contract。
+- 收口方式：Auto 轴只解析 slot `preferredSize` 或 child desired/intrinsic；PopupOverlay 统一由 `_contentExtent` 写入 popup-owned `UICanvasSlot`；detached `setPosition/setSize` 只排队 parent-edge initializer，attach 时消费 typed slot，不新增 child geometry 写入。
+- 首版边界：本 checkpoint 不引入任何 legacy 兼容语义；旧字段仍只是待删除 shadow，不能作为新的布局输入。
+- 验证：`xmake b GUIWorkbench`；`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test`（315/315 通过）。
+- 未完成：no-arg `attachToLayer`、UIElement geometry 字段/API 与其他 pending bridge 仍需在后续 CP 中删除；本 checkpoint 不宣称 CP2/最终兼容清零完成。
+
+## 2026-08-30 — CP5 生产清理：Workbench demo 删除 child `_bAutoSize` 写入
+
+- 误差审计：Workbench demo 仍直接设置 `UIText/UIButton::_bAutoSize`，与“SizeToContent 由 parent-owned slot size mode 决定”的契约冲突。
+- 收口方式：删除 4 处 widget-owned AutoSize 写入；文本由 intrinsic/desired measurement 提供尺寸，按钮由其 box/single-child slot 的默认 Auto/Fill 规则决定尺寸。
+- 验证：`xmake b GUIWorkbench`；`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test`（315/315 通过）。
+- 未完成：WidgetTree no-arg layer attach 与 UIElement geometry API 仍是待删除过渡物。
+
+## 2026-08-30 — CP5 纠偏 checkpoint：no-arg layer attach 停止推断 child geometry
+
+- 误差审计：`attachToLayer(layer, widget)` 仍从 `_anchorMin/_anchorMax/_position/_size/_bAutoSize` 反推 canvas slot，形成运行时 legacy self-positioning 入口。
+- 收口方式：no-arg attach 现在只创建 layer 的 default canvas slot，不读取 child geometry；需要 placement 的调用点改为显式 `FCanvasSlotArgs` 或已排队的 typed-slot initializer。显式 args 仍在 attach 时写入 parent-owned slot。
+- 测试夹具同步：Auto/Fill、固定尺寸、Dock full-screen、snapshot 与 document reload 用例改为显式 slot intent；不再以 child `_bAutoSize` 或直接 anchor 字段驱动 attach。
+- 验证：目标组合 73/73 通过（含全部 `WidgetLayoutTest`、Dock drag、UIDocument style reload、snapshot theme/repaint）。
+- 未完成：no-arg overload 本身、UIElement geometry 字段/API、剩余 detached bridge 仍需最终删除；本 checkpoint 不宣称 legacy 清零。
+
+## 2026-08-30 — CP4/CP5 基础设施 checkpoint：UIElement O(1) slot 回指与 kind-tag cast
+
+- 误差审计：child `getSlot()` 每次都通过 parent 扫描 `_childSlots`；布局/DSL 代码也重复使用裸 `dynamic_cast<UISlot*>`。
+- 收口方式：UIElement 新增 non-owning `_slot` 回指，插入后绑定、remove/detach/tree teardown 前清空、跨父 reparent 后重绑；same-parent reorder 只移动 slot ownership，不重建 edge。
+- 类型识别：UISlot 子类增加稳定 `ESlotKind`，`UISlot::as<T>()` 改为 checked kind + static cast；布局/声明式/控件 slot 热路径改用该接口，widget RTTI 暂不混入。
+- 同步纠偏：no-arg layer attach 只创建 default canvas edge，不再读取 child geometry；相关测试夹具改为显式 slot intent。
+- 验证：`xmake b ya-gui-closure-test`；`xmake r ya-gui-closure-test`（315/315 通过）。
+- 未完成：仍有少量 layout 类型/Widget 类型 RTTI，以及 no-arg API、UIElement geometry 字段/API 和 pending bridge 待后续完整 checkpoint 删除。
+
+## 2026-08-30 — 方向纠偏：移除 `ESlotKind` 与 `UISingleChildSlot`
+
+- 用户审计指出：engine-owned `ESlotKind` 把新增 slot 类型绑定到核心枚举，用户扩展必须修改底层；`UISingleChildSlot` 与 `UIOverlaySlot` 的 edge 数据完全重叠，没有独立语义。
+- 收口方式：删除 `ESlotKind` 及所有 `kSlotKind/getKind`；`UISlot::as<T>()` 恢复开放的 RTTI checked cast。删除 `UISingleChildSlot` / `FSingleChildSlotArgs`，single-child layout 统一创建并消费 `UIOverlaySlot`，声明式 builder 改用 `overlaySlot()` / `FOverlaySlotArgs`。
+- 序列化与测试同步：single-child edge 统一按 overlay slot 写入/恢复；保留 `UISingleChildLayout` 作为父级 measure/arrange 策略，而不是 slot 类型。
+- 验证：`xmake b ya-gui-closure-test`；`xmake r ya-gui-closure-test`（315/315 通过）。
+- 未完成：UIElement authored geometry 字段/API、no-arg attach、pending bridge 仍待后续最终删除；本轮不引入任何 legacy 兼容。
+
+## 2026-08-30 — CP2/CP5 API 收口：移除 UIElement 几何 setter 转发层
+
+- 误差审计确认：`UIElement::setPosition/setSize` 虽已把值转发到 slot，但仍让调用方误以为 child 拥有布局；这与“调用方显式取得 slot、直接修改 edge”不一致。
+- 收口方式：删除 UIElement 的 `setPosition/setSize`；GUI 测试夹具改用显式 edge initializer，Workbench/GUIFrameworkSmoke 使用 pending slot initializer，HelloMaterial 通过 `GameUIHost::addToWorld(..., FCanvasSlotArgs)` 直接表达 root edge。
+- Game UI API：增加带 `FCanvasSlotArgs` 的 `addToWorld` 重载，默认 controller 直接挂载到 content layer 的 canvas edge；旧无参入口仍只代表 default fill attach，不再承载 child geometry 推断。
+- 验证：`xmake b ya-gui-closure-test`、`xmake r ya-gui-closure-test`（315/315）；`xmake b GUIWorkbench`；`xmake b ya-gui-minimal-host` 均通过。
+- 未完成：`UIElement::getPosition/getSize` 与 authored geometry 字段仍待下一完整 checkpoint 删除；本轮不引入 geometry setter 兼容入口。
+
+## 2026-08-30 — CP2 geometry shadow 收口：删除 UIElement size/position getter 与字段
+
+- 误差审计确认：`_position/_size/_bAuthoredPosition/_bAuthoredSize` 已不再参与布局，只是旧 authored shadow；继续保留会形成第二套几何真值。
+- 收口方式：删除上述字段及 `getPosition/getSize/hasAuthoredPosition/hasAuthoredSize`；布局输出使用 `_layoutRect`，跨模块读取通过 `getLayoutRect()`；UILayout measure 不再依赖 child geometry。
+- 测试/生产迁移：Smoke 使用显式 root `FCanvasSlotArgs`，EditorSurface root fill 不再读取 widget geometry；旧 child geometry 断言改为 slot/layout rect 断言，SceneWidgetEntry 不再接受 `_position` override。
+- 验证：`xmake b/r ya-gui-closure-test`（315/315）、`xmake b GUIWorkbench`、`xmake b ya-gui-minimal-host`、`xmake b ya-runtime` 均通过。
+- 未完成：`_anchorMin/_anchorMax/_bAutoSize`、no-arg attach、pending bridge 与旧 schema 负向审计仍待后续 checkpoint。
+
+## 2026-08-30 — CP2 SizeToContent shadow 收口：删除 UIElement `_bAutoSize`
+
+- 误差审计确认：`isAutoSizeActive()` 已完全从 parent-owned slot 推导，`_bAutoSize` 只剩测试/注释中的旧 shadow，不应继续存在。
+- 收口方式：删除 UIElement `_bAutoSize`，更新 Text/CheckBox 的契约注释与测试；Auto/Fill/desired 行为全部由 Canvas/Box/Overlay slot size mode/alignment 表达。
+- 验证：`xmake b/r ya-gui-closure-test`（315/315）、`xmake b GUIWorkbench`、`xmake b ya-gui-minimal-host`、`xmake b ya-runtime` 均通过。
+- 未完成：`_anchorMin/_anchorMax`、no-arg attach、pending bridge 与旧 schema 负向审计仍待后续 checkpoint。
+
+## 2026-08-30 — CP2 anchor shadow 收口：删除 UIElement `_anchorMin/_anchorMax`
+
+- 误差审计确认：生产布局已经只读取 `UICanvasSlot` anchor；剩余 child anchor 写入全部是测试夹具，属于旧 shadow。
+- 收口方式：新增显式 `authorSlotAnchors` 测试 helper，迁移 dock/toolbar/bar 测试到 pending canvas-slot initializer，删除 UIElement anchor 字段及相关旧注释。
+- 验证：`xmake b/r ya-gui-closure-test`（315/315）、`xmake b GUIWorkbench`、`xmake b ya-gui-minimal-host`、`xmake b ya-runtime` 均通过。
+- 未完成：`computeAnchorRect`/self-positioned fallback、no-arg attach、pending bridge 与旧 schema 负向审计仍待后续 checkpoint。
+
 ## 2026-08-30 — CP2 纠偏：authored size 从 child `_size` 迁到 parent-owned slot
 
 - 用户纠偏：所有布局相关属于 slot。child `_size` 不再是 layout 输入；`computeDesiredSize` / `computeIntrinsicSize` 只报告内容（默认 intrinsic `{0,0}`，默认构造 100×50 不是内容尺寸）。
@@ -419,3 +489,26 @@ C++ exception: [json.exception.type_error.307] cannot use erase() with null
 ## 仍存在的过渡物（plan 明确要求删除，尚未删）
 
 - `child(node)` 默认重载（plan：只能是新布局系统的 default slot，不是 legacy 兼容）。
+## 2026-08-31 — CP2/CP5 root attach 收口：删除 no-arg `attachToLayer`
+
+- 误差审计确认：无参 `attachToLayer(layer, widget)` 已不再承担 geometry 推断，只是 `attach(*getLayer(layer), widget)` 的隐式糖衣；继续保留会违反“root/layer attach 必须显式选择 parent edge”的首版契约。
+- 收口方式：所有测试和默认 controller 调用改为显式 `attach(*tree.getLayer(layer), widget)`；新增通用 `attach(parent, widget, FCanvasSlotArgs)`，显式 edge 参数不再绑定到 layer API。系统层的显式 args wrapper 暂时保留，作为 layer 命名空间便捷入口。
+- 验证：`xmake b/r ya-gui-closure-test`（315/315）、`xmake b GUIWorkbench`、`xmake b ya-gui-minimal-host`、`xmake b ya-runtime` 均通过。
+- 未完成：pending slot initializer、builder `.child()` 默认重载、旧 schema 负向清零与最终 self-positioned fallback 审计仍待后续 checkpoint。
+
+## 2026-08-31 — CP2 builder edge intent 收口：detached builder 不再写入 live UIElement
+
+- 误差审计确认：`UIElement` 的 authored geometry 已删除；剩余 pending initializer 只被 Declarative builder、少量 imperative detached helper 和 floating window 使用。将其全部一次删除会误伤仍未迁移的 imperative detached 构造，因此本 checkpoint 只收口 builder 链路。
+- `TUIWidgetBuilder` 现在在 builder 内保存组合后的 `FChildSlotInitializer`；`.setPosition/.setSize/.setAutoSize` 在 detached 阶段只累积 edge intent，已挂载 builder 则直接修改当前 slot。
+- `.child(builder)` 和 `ui::build/buildAs` 在 parent materialization 时取出 initializer，直接调用 parent 的 `initializeChildSlot` / detached child edge；空 initializer 使用默认 slot，不触发 `std::function` 空调用。
+- `WidgetLayoutTest.BuilderGeometryIntentIsConsumedByTheCanvasSlot` 已改为通过 `ui::build` 物化 builder，锁定 intent 只在 parent-owned canvas slot 生效。
+- 验证：`xmake b ya-gui-closure-test` 通过；定向运行 `WidgetLayoutTest.BuilderGeometryIntentIsConsumedByTheCanvasSlot` 与全部 `DeclarativeContractTest`，32/33 通过。唯一失败是既有 `CompoundWidgetForwardsDesiredSizeAndLayoutToCompositionRoot` baseline，与本 checkpoint 无关。
+- 未完成：imperative detached pending bridge、`child(node)` 默认重载、旧 schema 负向清零和最终 self-positioned fallback。
+
+## 2026-08-31 — CP2 floating-window edge intent 收口：删除 detached pending 依赖
+
+- 误差审计确认：浮动窗口的矩形本来就由 `UIDockFloatingHost` 的 canvas edge 所有；detached 阶段把 initializer 暂存在 `UIElement` 只是施工桥。
+- `UIDockFloatingWindow::setWindowRect()` detached 时仅更新 `_windowRect`，挂载生命周期通过 `onAttached()` 重新将矩形写入 parent-owned `UICanvasSlot`。
+- 保持首次 attach 的语义：`onAttached()` 在 tree membership 建立后执行，slot 已创建，可在第一次 layout 前完成 host edge 初始化。
+- 验证：floating window geometry / resize-handle / dock merge 定向测试全部通过；`xmake b ya-gui-closure-test` 通过。
+- 未完成：示例中的 imperative `setPendingSlotInitializer` helper、`child(node)` 默认重载、旧 schema 负向清零和最终 self-positioned fallback。

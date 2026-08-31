@@ -204,7 +204,8 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
     // layoutAssigned(), so the list must span it (not keep its default fixed
     // size) for rows to receive the full menu width. Stretch intent lives on
     // the parent->child slot edge, never on the child.
-    if (auto* slot = dynamic_cast<UICanvasSlot*>(panel->getSlotForChild(*list))) {
+    if (UISlot* edge = panel->getSlotForChild(*list); edge && edge->as<UICanvasSlot>()) {
+        auto* slot = edge->as<UICanvasSlot>();
         FCanvasSlotArgs fillArgs;
         fillArgs.anchorMin = {0.0f, 0.0f};
         fillArgs.anchorMax = {1.0f, 1.0f};
@@ -294,7 +295,8 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
             }
         };
         list->addDetachedChild(menuItem);
-        if (auto* slot = dynamic_cast<UIBoxSlot*>(list->getSlotForChild(*menuItem))) {
+        if (UISlot* edge = list->getSlotForChild(*menuItem); edge && edge->as<UIBoxSlot>()) {
+            auto* slot = edge->as<UIBoxSlot>();
             slot->setPreferredSize({rowWidth, bSeparator ? kSeparatorHeight : _itemHeight});
         }
         _items.push_back(menuItem.get());

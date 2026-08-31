@@ -324,10 +324,9 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
                                   EUIOverlayAlignment vAlign, glm::vec2 desired)
     {
         auto handle = std::make_shared<FResizeHandle>(this, edge);
-        handle->setSize(desired);
         addDetachedChild(handle, [hAlign, vAlign, desired](UIElement&, UISlot& slot)
         {
-            if (auto* overlay = dynamic_cast<UIOverlaySlot*>(&slot)) {
+            if (auto* overlay = slot.as<UIOverlaySlot>()) {
                 overlay->apply(FOverlaySlotArgs{
                     .hAlign        = hAlign,
                     .vAlign        = vAlign,
@@ -355,17 +354,22 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
 void UIDockFloatingWindow::setWindowRect(const Rect2D& rect)
 {
     _windowRect = rect;
-    if (UIElement* parent = getParent()) {
-        if (auto* slot = dynamic_cast<UICanvasSlot*>(parent->getSlotForChild(*this))) {
+    const FChildSlotInitializer applyRect = [rect](UIElement&, UISlot& edge) {
+        if (auto* slot = edge.as<UICanvasSlot>()) {
             FCanvasSlotArgs args;
             args.offset    = rect.pos;
             args.fixedSize = rect.extent;
             slot->apply(args);
-            return;
         }
+    };
+    if (UIElement* parent = getParent()) {
+        parent->initializeChildSlot(*this, applyRect);
     }
-    setPosition(rect.pos);
-    setSize(rect.extent);
+}
+
+void UIDockFloatingWindow::onAttached()
+{
+    setWindowRect(_windowRect);
 }
 
 void UIDockFloatingWindow::refreshFromWorkspace()

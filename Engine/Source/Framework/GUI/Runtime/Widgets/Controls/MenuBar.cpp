@@ -139,7 +139,8 @@ UIMenuBarItem* UIMenuBar::addItem(const std::string& label, std::function<std::s
         }
     };
     addDetachedChild(item);
-    if (auto* slot = dynamic_cast<UIBoxSlot*>(getSlotForChild(*item))) {
+    if (UISlot* edge = getSlotForChild(*item); edge && edge->as<UIBoxSlot>()) {
+        auto* slot = edge->as<UIBoxSlot>();
         slot->setPreferredSize(itemSize);
     }
     return item.get();

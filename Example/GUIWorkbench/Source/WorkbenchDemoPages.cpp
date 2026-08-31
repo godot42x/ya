@@ -45,10 +45,26 @@ constexpr glm::vec4 kHeaderColor = {0.55f, 0.60f, 0.68f, 1.0f};
 // scaffold values were the pre-theme source and are retired (Phase 4).
 constexpr glm::vec4 kTextColor = {0.88f, 0.90f, 0.94f, 1.0f};
 
+void setPendingSlotSize(ya::UIElement& widget, glm::vec2 value)
+{
+    widget.setPendingSlotInitializer([value](ya::UIElement&, ya::UISlot& edge) {
+        if (auto* canvas = edge.as<ya::UICanvasSlot>()) {
+            canvas->setFixedSize(value);
+            canvas->setWidthSizeMode(ya::EWidgetSizeMode::Fixed);
+            canvas->setHeightSizeMode(ya::EWidgetSizeMode::Fixed);
+        }
+        else if (auto* box = edge.as<ya::UIBoxSlot>()) {
+            box->setPreferredSize(value);
+        }
+        else if (auto* overlay = edge.as<ya::UIOverlaySlot>()) {
+            overlay->setPreferredSize(value);
+        }
+    });
+}
+
 std::shared_ptr<ya::UIText> makeLabel(const std::string& text, float fontSize = 13.0f)
 {
     auto label        = std::make_shared<ya::UIText>(text + "_Label");
-    label->_bAutoSize = true;
     label->_fontSize  = static_cast<uint32_t>(fontSize);
     label->setText(text);
     label->setColor(kHeaderColor);
@@ -58,7 +74,6 @@ std::shared_ptr<ya::UIText> makeLabel(const std::string& text, float fontSize = 
 std::shared_ptr<ya::UIText> makeBodyText(const std::string& text)
 {
     auto label        = std::make_shared<ya::UIText>(text + "_Body");
-    label->_bAutoSize = true;
     label->_fontSize  = 13;
     label->setText(text);
     label->setColor(kTextColor);
@@ -69,15 +84,13 @@ std::shared_ptr<ya::UIButton> makeDemoButton(const std::string& name, const std:
 {
     auto button = std::make_shared<ya::UIButton>(name);
     if (width > 0.0f) {
-        button->setSize({width, 26.0f});
+        setPendingSlotSize(*button, {width, 26.0f});
     }
     else {
-        button->_bAutoSize = true;
         button->setContentPadding({12.0f, 4.0f});
     }
 
     auto text        = std::make_shared<ya::UIText>(name + "_Label");
-    text->_bAutoSize = true;
     text->_fontSize  = 13;
     text->setText(label);
     // No authored color: the label resolves the theme "text" style, so a
@@ -198,7 +211,7 @@ void buildRenderDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
 
     auto form = std::make_shared<ya::UIContainer>("RenderForm");
     form->setPadding({16.0f, 12.0f});
-    form->setSize({0.0f, 0.0f});
+    setPendingSlotSize(*form, {0.0f, 0.0f});
     form->setDirection(ya::EWidgetBoxLayout::Vertical);
     form->setSpacing(10.0f);
     tree.attach(*panel, form);
@@ -210,13 +223,13 @@ void buildRenderDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
     auto markerRow = std::make_shared<ya::UIContainer>("RenderMarkers");
     markerRow->setDirection(ya::EWidgetBoxLayout::Horizontal);
     markerRow->setSpacing(8.0f);
-    markerRow->setSize({0.0f, 84.0f});
+    setPendingSlotSize(*markerRow, {0.0f, 84.0f});
     tree.attach(*form, markerRow);
 
     const auto addMarker = [&](const std::string& name, const std::string& label, const glm::vec4& color)
     {
         auto cell = std::make_shared<ya::UIPanel>(name);
-        cell->setSize({180.0f, 84.0f});
+        setPendingSlotSize(*cell, {180.0f, 84.0f});
         cell->setColor(color);
         tree.attach(*markerRow, cell);
         ya::ui::attachLayout(*markerRow, *cell, ya::ui::layout().fill());
@@ -234,7 +247,7 @@ void buildRenderDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
     auto imageRow = makeRow(tree, *form);
     tree.attach(*imageRow, makeBodyText("Image placeholder"));
     auto image = std::make_shared<ya::UIImage>("RenderProbeImage");
-    image->setSize({128.0f, 96.0f});
+    setPendingSlotSize(*image, {128.0f, 96.0f});
     image->_assetPath = "builtin/checkerboard";
     tree.attach(*imageRow, image);
 
@@ -527,7 +540,7 @@ void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& 
     const std::vector<std::string> payloads = {"asset.texture.diffuse", "asset.mesh.cube", "asset.material.pbr"};
     for (const std::string& payload : payloads) {
         auto item = makeDemoDragSource("Drag_" + payload, payload, payload);
-        item->setSize({160.0f, 30.0f});
+        setPendingSlotSize(*item, {160.0f, 30.0f});
         sourceRow.child(item);
         if (payload == payloads[0]) {
             state.dragItem = item;
@@ -539,7 +552,7 @@ void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& 
         state.dropLog = std::format("Dropped '{}'", payload);
         log(state.dropLog);
     });
-    zone->setSize({0.0f, 120.0f});
+    setPendingSlotSize(*zone, {0.0f, 120.0f});
     state.dropZone = zone;
 
     auto page = ya::ui::panel("DragDropDemo")
@@ -587,7 +600,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                              overlay->_contentPos = {440.0f, 300.0f};
 
                              auto dialog = std::make_shared<ya::UIPanel>("ModalDialog");
-                             dialog->setSize({360.0f, 170.0f});
+                             setPendingSlotSize(*dialog, {360.0f, 170.0f});
                              dialog->setStyleKey("panel");
                              overlay->addDetachedChild(dialog);
 
@@ -596,7 +609,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                              // parent's full size, so position offsets on top overflow the dialog's
                              // right/bottom edges. Padding shrinks the content rect instead.
                              stack->setPadding({16.0f, 14.0f});
-                             stack->setSize({0.0f, 0.0f});
+                             setPendingSlotSize(*stack, {0.0f, 0.0f});
                              stack->setDirection(ya::EWidgetBoxLayout::Vertical);
                              stack->setSpacing(12.0f);
                              stack->setClipChildren(true);
@@ -607,7 +620,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                              stack->addDetachedChild(title);
 
                              auto nameField = std::make_shared<ya::UITextField>("ModalName");
-                             nameField->setSize({320.0f, 26.0f});
+                             setPendingSlotSize(*nameField, {320.0f, 26.0f});
                              nameField->_fontSize = 13;
                              nameField->setText(state.modalName);
                              stack->addDetachedChild(nameField);
@@ -791,7 +804,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     auto menuLabelRef = std::make_shared<ya::Reactive<std::string>>("Dynamic Item");
     auto localBar     = std::make_shared<ya::UIMenuBar>("GalleryMenuBar");
-    localBar->setSize({0.0f, 28.0f});
+    setPendingSlotSize(*localBar, {0.0f, 28.0f});
     auto* dynItem = localBar->addItem("Dynamic Item", nullptr);
     dynItem->bindLabel(menuLabelRef);
     form.child(localBar);
@@ -855,11 +868,6 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     });
 
     auto treeView = std::make_shared<ya::UITreeView>("GalleryTree");
-    // AutoSize: the tree grows/shrinks with the expanded-row count, so
-    // expanding never overflows the widget rect (the framework also clips
-    // the tree's own paint to its rect as a backstop).
-    treeView->_bAutoSize = true;
-    treeView->setSize({0.0f, 0.0f});
     treeView->bindData(roots);
     treeView->setExpanded("root", true);
     treeView->setReorderable(true);
@@ -946,7 +954,9 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
         selStrRef->set(id.empty() ? "(none)" : id);
         log(std::format("Tree selection -> '{}'", id));
     };
-    form.child(treeView);
+    // Size-to-content is an edge decision owned by the form's box slot; the
+    // tree itself only reports its data-driven desired extent.
+    form.child(treeView, ya::FBoxSlotArgs{.sizeRule = ya::EUIBoxSlotSizeRule::Auto});
     form.child(ya::ui::row("GalleryFilterRow")
                    .setSpacing(8.0f)
                    .children(
@@ -986,7 +996,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     // ---------------------------------------------------------------------
     form.child(header("GallerySection4", "4. Vector primitives — lines, outline, bezier"));
     auto vectorCanvas = std::make_shared<FVectorDemoCanvas>("GalleryVectorCanvas");
-    vectorCanvas->setSize({430.0f, 110.0f});
+    setPendingSlotSize(*vectorCanvas, {430.0f, 110.0f});
     form.child(vectorCanvas,
                ya::FBoxSlotArgs{.crossAlignment = ya::EUIBoxSlotCrossAlignment::Start});
 
@@ -1004,8 +1014,6 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     tableRows->push({"r4", {"Material", "Asset", "8", "yes"}});
 
     auto tableGrid = std::make_shared<ya::UITableGrid>("GalleryTableGrid");
-    tableGrid->setSize({400.0f, 0.0f});
-    tableGrid->_bAutoSize    = true;
     tableGrid->_columnWidths = {140.0f, 100.0f, 0.0f, 0.0f}; // last two stretch
     tableGrid->bindData(tableRows);
     auto tableSelRef = std::make_shared<ya::Reactive<int>>(1);
@@ -1020,7 +1028,9 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     if (auto* cellSlot = tableGrid->getCellSlot(*cellLive)) {
         cellSlot->setCell(3, 2);
     }
-    form.child(tableGrid, ya::FBoxSlotArgs{.crossAlignment = ya::EUIBoxSlotCrossAlignment::Start});
+    form.child(tableGrid, ya::FBoxSlotArgs{.sizeRule = ya::EUIBoxSlotSizeRule::Auto,
+                                           .crossAlignment = ya::EUIBoxSlotCrossAlignment::Start,
+                                           .preferredSize = {400.0f, 0.0f}});
     form.child(body("GalleryTableCaption_Body",
                     "Click a row to select (reactive selection ref); row 3 / col 2 holds a real button widget."));
 
@@ -1032,14 +1042,14 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     form.child(header("GallerySection6", "6. Input controls — drag, spin, radio, color, search combo"));
 
     auto dragFloat = std::make_shared<ya::UIDragFloat>("GalleryDragFloat");
-    dragFloat->setSize({120.0f, 24.0f});
+    setPendingSlotSize(*dragFloat, {120.0f, 24.0f});
     dragFloat->_value          = 3.5f;
     dragFloat->_onValueChanged = [log](float v)
     { log(std::format("DragFloat -> {:.2f}", v)); };
     form.child(ya::ui::row("GalleryDragRow").setSpacing(8.0f).children(body("GalleryDragFloat_Body", "DragFloat"), dragFloat));
 
     auto spinBox = std::make_shared<ya::UISpinBox>("GallerySpinBox");
-    spinBox->setSize({120.0f, 24.0f});
+    setPendingSlotSize(*spinBox, {120.0f, 24.0f});
     spinBox->_value          = 8.0f;
     spinBox->_step           = 1.0f;
     spinBox->_onValueChanged = [log](float v)
@@ -1051,7 +1061,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     const std::vector<std::string> radioLabels = {"Shadow", "CSM", "None"};
     for (size_t i = 0; i < radioLabels.size(); ++i) {
         auto radio = std::make_shared<ya::UIRadioButton>(std::format("GalleryRadio{}", i));
-        radio->setSize({90.0f, 22.0f});
+        setPendingSlotSize(*radio, {90.0f, 22.0f});
         radio->_label    = radioLabels[i];
         radio->_bChecked = i == 0;
         radio->_onSelect = [radios, log, label = radioLabels[i]](ya::UIRadioButton* self)
@@ -1067,7 +1077,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     form.child(std::move(radioRow));
 
     auto colorEdit = std::make_shared<ya::UIColorEdit>("GalleryColorEdit");
-    colorEdit->setSize({170.0f, 28.0f});
+    setPendingSlotSize(*colorEdit, {170.0f, 28.0f});
     colorEdit->_color          = {0.24f, 0.46f, 0.82f, 1.0f};
     colorEdit->_onColorChanged = [log](const glm::vec4& c)
     {
@@ -1076,7 +1086,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     form.child(ya::ui::row("GalleryColorRow").setSpacing(8.0f).children(body("GalleryColorEdit_Body", "ColorEdit"), colorEdit));
 
     auto searchCombo = std::make_shared<ya::UISearchComboBox>("GallerySearchCombo");
-    searchCombo->setSize({180.0f, 24.0f});
+    setPendingSlotSize(*searchCombo, {180.0f, 24.0f});
     searchCombo->_items              = {"Cube", "Sphere", "Capsule", "Plane", "Cone", "Torus"};
     searchCombo->_selectedIndex      = 0;
     searchCombo->_onSelectionChanged = [log](int index)
@@ -1093,7 +1103,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
         auto source = makeDemoDragSource(std::format("GalleryDragSrc{}", i),
                                          std::format("Item {}", i + 1),
                                          std::format("payload.{}", i + 1));
-        source->setSize({110.0f, 26.0f});
+        setPendingSlotSize(*source, {110.0f, 26.0f});
         dragDemoRow.child(source);
     }
     form.child(std::move(dragDemoRow));
@@ -1107,7 +1117,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
                                              dropResult->set(std::format("Zone A <- {}", payload));
                                              log(std::format("Dropped '{}' on Zone A", payload));
                                          });
-    dropZoneA->setSize({180.0f, 60.0f});
+    setPendingSlotSize(*dropZoneA, {180.0f, 60.0f});
     auto dropZoneB = makeDemoDropTarget("GalleryDropB",
                                         "Zone B: only payload.2",
                                         [](const std::string& payload) { return payload == "payload.2"; },
@@ -1116,7 +1126,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
                                             dropResult->set(std::format("Zone B <- {}", payload));
                                             log(std::format("Dropped '{}' on Zone B", payload));
                                         });
-    dropZoneB->setSize({180.0f, 60.0f});
+    setPendingSlotSize(*dropZoneB, {180.0f, 60.0f});
     form.child(ya::ui::row("GalleryDropRow")
                    .setSpacing(8.0f)
                    .children(

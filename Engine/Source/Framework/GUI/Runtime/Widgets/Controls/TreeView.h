@@ -65,6 +65,9 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     // === Visuals ===
     float     _rowHeight     = 24.0f;
     float     _indentWidth   = 16.0f;
+    /// Explicit intrinsic extent used only when measured without a parent
+    /// edge (for example a designer preview root).
+    glm::vec2 _intrinsicSize = {0.0f, 0.0f};
     /// Width of the expand/collapse arrow button (also its hover/hit area).
     float     _arrowWidth    = 22.0f;
 
@@ -78,6 +81,15 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     [[nodiscard]] int getVisibleRowCount() const { return static_cast<int>(flattenVisible().size()); }
 
     void setReorderable(bool value) { _bReorderable = value; }
+    void setIntrinsicSize(glm::vec2 value)
+    {
+        value = glm::max(value, glm::vec2(0.0f));
+        if (_intrinsicSize == value) {
+            return;
+        }
+        _intrinsicSize = value;
+        invalidateProperty(EUIPropertyImpact::Layout);
+    }
     void setOnReorderHandler(std::function<void(const std::string& fromId, const std::string& toId, int mode)> handler)
     {
         _onReorder = std::move(handler);

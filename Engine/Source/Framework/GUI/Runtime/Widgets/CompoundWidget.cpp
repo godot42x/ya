@@ -14,7 +14,7 @@ void UICompoundWidget::prepareForAttach()
 
 void UICompoundWidget::layout(const Rect2D& parentRect)
 {
-    layoutAssigned(computeAnchorRect(parentRect));
+    layoutAssigned(parentRect);
 }
 
 void UICompoundWidget::layoutAssigned(const Rect2D& rect)

@@ -59,7 +59,7 @@ void UICheckBox::syncContentPadding()
 
 void UICheckBox::layout(const Rect2D& parentRect)
 {
-    layoutAssigned(computeAnchorRect(parentRect));
+    layoutAssigned(parentRect);
 }
 
 void UICheckBox::layoutAssigned(const Rect2D& rect)

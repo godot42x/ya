@@ -78,35 +78,39 @@ void HelloMaterialModule::createUIDemo(ya::App& app, ya::Scene* scene)
 
     auto& registry = ya::UITypeRegistry::instance();
     auto  panel    = registry.createInstance("engine.panel");
-    panel->setPosition({20.0f, 20.0f});
-    panel->setSize({300.0f, 120.0f});
     static_cast<ya::UIPanel*>(panel.get())->setColor({0.12f, 0.14f, 0.22f, 0.88f});
-    gameUIHost->addToWorld(*scene, panel);
+    ya::FCanvasSlotArgs panelSlot;
+    panelSlot.offset = {20.0f, 20.0f};
+    panelSlot.fixedSize = {300.0f, 120.0f};
+    gameUIHost->addToWorld(*scene, panel, panelSlot);
 
     auto title = registry.createInstance("engine.text");
-    title->setPosition({36.0f, 30.0f});
-    title->setSize({260.0f, 26.0f});
     static_cast<ya::UIText*>(title.get())->setText("Game UI (WidgetTree)");
     static_cast<ya::UIText*>(title.get())->_fontSize = 16;
     static_cast<ya::UIText*>(title.get())->setColor({1.0f, 0.85f, 0.4f, 1.0f});
-    gameUIHost->addToWorld(*scene, title);
+    ya::FCanvasSlotArgs titleSlot;
+    titleSlot.offset = {36.0f, 30.0f};
+    titleSlot.fixedSize = {260.0f, 26.0f};
+    gameUIHost->addToWorld(*scene, title, titleSlot);
 
     auto label = registry.createInstance("engine.text");
-    label->setPosition({36.0f, 66.0f});
-    label->setSize({260.0f, 20.0f});
     static_cast<ya::UIText*>(label.get())->setText("Click the button below");
     static_cast<ya::UIText*>(label.get())->_fontSize = 16;
-    gameUIHost->addToWorld(*scene, label);
+    ya::FCanvasSlotArgs labelSlot;
+    labelSlot.offset = {36.0f, 66.0f};
+    labelSlot.fixedSize = {260.0f, 20.0f};
+    gameUIHost->addToWorld(*scene, label, labelSlot);
 
     auto button = registry.createInstance("engine.button");
-    button->setPosition({36.0f, 96.0f});
-    button->setSize({140.0f, 30.0f});
     auto* buttonWidget = static_cast<ya::UIButton*>(button.get());
     buttonWidget->_onClick = [label]() {
         auto* text = static_cast<ya::UIText*>(label.get());
         text->setText((text->getText() == "Button clicked!") ? "Click the button below" : "Button clicked!");
     };
-    gameUIHost->addToWorld(*scene, button);
+    ya::FCanvasSlotArgs buttonSlot;
+    buttonSlot.offset = {36.0f, 96.0f};
+    buttonSlot.fixedSize = {140.0f, 30.0f};
+    gameUIHost->addToWorld(*scene, button, buttonSlot);
 }
 
 void HelloMaterialModule::createCubeMesh()

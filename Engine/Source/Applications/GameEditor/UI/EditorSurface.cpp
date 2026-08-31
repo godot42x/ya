@@ -333,8 +333,6 @@ void EditorSurface::buildEditorChrome(App& app)
     FCanvasSlotArgs fillArgs;
     fillArgs.anchorMin = {0.0f, 0.0f};
     fillArgs.anchorMax = {1.0f, 1.0f};
-    fillArgs.offset    = _root->getPosition();
-    fillArgs.fixedSize = _root->getSize();
     const WidgetAttachment attached = _tree->attachToLayer(WidgetTree::ELayer::Content, _root, fillArgs);
     YA_CORE_ASSERT(attached.valid(), "EditorSurface: failed to attach editor root");
 

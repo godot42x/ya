@@ -1,3 +1,4 @@
+#include "GUITestLayoutHelpers.h"
 // GUI input driver regression (shared app foundation). The driver is
 // Foundation-only: it emits Core Events through IGuiEventSink, so it needs no
 // WidgetTree / RHI to verify parse + execution semantics.
@@ -133,13 +134,13 @@ TEST(GuiEventDriverTest, ScenarioDrivesWidgetTreeAndDumpAssertsHoverContract)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       a = std::make_shared<UIButton>("A");
-    a->setPosition({10.0f, 10.0f});
-    a->setSize({60.0f, 24.0f});
+    authorSlotPosition(*a, {10.0f, 10.0f});
+    authorSlotSize(*a, {60.0f, 24.0f});
     auto b = std::make_shared<UIButton>("B");
-    b->setPosition({120.0f, 10.0f});
-    b->setSize({60.0f, 24.0f});
-    tree.attachToLayer(WidgetTree::ELayer::Content, a);
-    tree.attachToLayer(WidgetTree::ELayer::Content, b);
+    authorSlotPosition(*b, {120.0f, 10.0f});
+    authorSlotSize(*b, {60.0f, 24.0f});
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), a);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), b);
     tree.layout();
 
     TreeSink sink{tree};

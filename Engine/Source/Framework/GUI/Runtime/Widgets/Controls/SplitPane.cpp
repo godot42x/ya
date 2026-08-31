@@ -37,7 +37,7 @@ bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 
 void UISplitPane::layout(const Rect2D& parentRect)
 {
-    layoutAssigned(computeAnchorRect(parentRect));
+    layoutAssigned(parentRect);
 }
 
 void UISplitPane::layoutAssigned(const Rect2D& rect)

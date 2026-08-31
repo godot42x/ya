@@ -183,7 +183,7 @@ struct FUILayoutSpec
 inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayoutSpec& spec)
 {
     (void)child;
-    if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
+    if (auto* canvas = slot.as<UICanvasSlot>()) {
         // Only write capabilities the spec actually carries, so an align-only
         // spec cannot wipe a seeded fixedSize / Auto size mode.
         if (spec.has(EUILayoutCap::Fill) || spec.has(EUILayoutCap::Anchor)) {
@@ -228,7 +228,7 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
         }
         return;
     }
-    if (auto* box = dynamic_cast<UIBoxSlot*>(&slot)) {
+    if (auto* box = slot.as<UIBoxSlot>()) {
         FBoxSlotArgs args;
         if (spec.has(EUILayoutCap::Grow) || spec.has(EUILayoutCap::Fill)) {
             args.sizeRule = EUIBoxSlotSizeRule::Fill;
@@ -259,7 +259,7 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
         }
         return;
     }
-    if (auto* single = dynamic_cast<UISingleChildSlot*>(&slot)) {
+    if (auto* single = slot.as<UIOverlaySlot>()) {
         EUIOverlayAlignment h = EUIOverlayAlignment::Fill;
         EUIOverlayAlignment v = EUIOverlayAlignment::Fill;
         if (spec.has(EUILayoutCap::Align)) {
@@ -270,7 +270,7 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
                 : spec.alignV == EWidgetAlignV::Bottom ? EUIOverlayAlignment::End
                 : EUIOverlayAlignment::Start;
         }
-        FSingleChildSlotArgs args;
+        FOverlaySlotArgs args;
         args.hAlign = h;
         args.vAlign = v;
         if (spec.has(EUILayoutCap::Size)) {
@@ -279,7 +279,7 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
         single->apply(args);
         return;
     }
-    if (auto* overlay = dynamic_cast<UIOverlaySlot*>(&slot)) {
+    if (auto* overlay = slot.as<UIOverlaySlot>()) {
         EUIOverlayAlignment h = EUIOverlayAlignment::Fill;
         EUIOverlayAlignment v = EUIOverlayAlignment::Fill;
         if (spec.has(EUILayoutCap::Align)) {
@@ -299,7 +299,7 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
         overlay->apply(args);
         return;
     }
-    if (auto* table = dynamic_cast<UITableSlot*>(&slot)) {
+    if (auto* table = slot.as<UITableSlot>()) {
         if (spec.has(EUILayoutCap::Cell)) {
             table->setCell(spec.row, spec.column);
         }

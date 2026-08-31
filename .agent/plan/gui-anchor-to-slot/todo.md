@@ -1,6 +1,6 @@
 # GUI layout unified todo
 
-## 架构结论（2026-08-31 修正）
+## 架构结论（2026-08-30 修正）
 
 - **不是把所有“布局相关代码/状态”机械搬到 slot。** 正确边界是：每个 child 的 authored placement/layout intent 唯一归属 parent-owned `UISlot`；anchor、offset、margin、alignment、size rule、preferred/fixed size、min/max、grid cell 以及 parent 内 z-order 都放在 slot。
 - `UILayout` 仍是父节点的布局算法与策略唯一归属，负责 measure/arrange 以及容器级配置：方向、spacing、padding、split ratio、scroll offset、overlay policy、轨道/行列规则等不得下沉到 slot。slot 是 parent-child edge 的数据与约束，不是第二套 layout 算法。
@@ -8,6 +8,15 @@
 - 不照搬 Slate 的 DSL，也不把 slot 暴露成必须显式书写的第二个节点。保留 YA 的 `ui::layout() >> child` / `parent[...]` 能力化语法：layout spec 在 child builder 上声明，attach 时由 parent 根据 capability 创建/消费 typed slot；DSL 表达的是 edge intent，所有权仍归 parent。builder 的 `.setSize/.setPosition` 只能作为过渡 sugar，最终必须转换为 parent edge intent，不能写入 widget geometry。
 - standalone root 也必须拥有 host/layer-owned root slot；不得以 child `_anchor*` / `_position` / `_size` / `_bAutoSize` 作为长期 root 布局真值。
 - SizeToContent 由 slot size mode 决定：Canvas 按轴 Auto、Box 的 Auto/Fill、SingleChild/Overlay 的 Fill 或 desired 对齐；widget 只报告 intrinsic/desired size。
+- **首版不保留任何 legacy 兼容语义。** 旧 widget geometry 字段、旧 builder/attach 重载、旧 self-positioned fallback、旧 serialized widget 文件都不作为兼容路径；未定版文件直接删除，代码迁移完成后删除过渡 API 与字段，不以双写、自动推断或静默回退延长旧模型寿命。
+
+### 首版范围硬约束（用户确认，2026-08-30）
+
+- 本计划按“一步到位”的全量重构执行：不设计、不实现、不测试任何 legacy 兼容模式。
+- 旧 widget serialized file 不迁移、不转换、不兼容读取；未定版资产/fixture 直接删除，首版只生成和读取新 schema。
+- 旧 geometry 字段、旧 builder/attach 重载、self-positioned fallback、deprecated alias、双写/自动推断/静默降级都不是过渡目标；它们只能作为待删除的内部桥接，并且必须在最终 checkpoint 前移除。
+- 任一阶段若发现只能依赖兼容 shim 才能继续，视为架构偏差：暂停该阶段，先调整 slot/root-slot contract 与调用点，而不是扩大兼容面。
+- 最终验收必须包含负向检查：代码、反射 schema、序列化读取、测试 fixture 和示例中均不存在旧布局真值或 legacy 读取分支。
 
 ### 该边界带来的 API/编译期约束
 
@@ -21,6 +30,7 @@
 - CP2 的最终验收不是“把所有布局字段搬到 slot”，而是“所有 child authored placement 在 slot、父级算法在 layout、内容测量在 widget”；不得以把容器策略塞进 slot 的方式达成表面覆盖。
 - CP2 删除 UIElement authored geometry 前，必须先完成 root slot contract 与 builder pending edge intent；否则会误伤独立 root 的合法入口。
 - `_bAutoSize`、`setSize()`、`setPosition()` 目前只能保留为过渡桥，禁止新增运行时依赖；删除前需完成所有消费者迁移与 root slot 化。
+- 过渡桥不是对外兼容承诺：每个 bridge 都必须有明确的删除 checkpoint；最终状态不得同时维护 child geometry 与 slot geometry 两套真值。
 - CP7 增加 root-slot、builder-to-slot、slot size-mode 驱动 invalidation，以及 widget intrinsic 不携带 authored geometry 的断言。
 
 - [x] CP1 冻结 UIConstraints + size mode + UILayoutIntent 协议
@@ -31,7 +41,9 @@
 - [x] CP2 intrinsic 迁移：`UITreeView` / `UITableGrid` 非 AutoSize 路径改由显式 intrinsic contract 提供 authored fallback
 - [x] CP2 intrinsic 迁移：`UIText` wrapping 无显式宽度时不再借用 child `_size.x`，改由 intrinsic 单行宽度与 assigned slot rect 分工
 - [x] CP2 纠偏：layout 从 slot 读 authored size，不再把 child `_size` 当布局输入；`resolveCanvasRect` 仍是 canvas 锚点入口（传入 slot authored size / Auto）；`computeDesiredSize` 只报告内容。`_size`/`setSize` 字段仍在，待全量删除
-- [ ] CP2 从 UIElement 全量移除 authored geometry（`_anchorMin/_anchorMax/_position/_size/_bAutoSize`、`setPosition/setSize/getPosition/getSize`、`computeAnchorRect`、`reportStretchAnchorsIgnored`）；`min/max` 约束只保留在 typed slot
+- [ ] CP2 从 UIElement 全量移除 authored geometry（`computeAnchorRect`、`reportStretchAnchorsIgnored`）；`min/max` 约束只保留在 typed slot
+- [x] CP2 anchor shadow 收口：删除 UIElement `_anchorMin/_anchorMax`，所有 anchor intent 通过 `UICanvasSlot` 表达
+- [x] CP2 SizeToContent shadow 收口：删除 UIElement `_bAutoSize`；Auto/desired 仅由 parent-owned slot size mode/alignment 决定
 - [x] CP2 运行时入口纠偏：GameUIHost/DefaultGameUIController 删除从 widget 几何反推 layer slot 的死辅助；scene entry 只使用显式 rootSlot
 - [x] CP2 前置缺口：SceneWidgetEntry 顶层 entry→root 已改为独立的 parent-owned root slot；UIElement 根节点 geometry 删除仍待 CP2 全量清理
 - [x] CP2 前置收口：SceneWidgetEntry 根节点使用 parent-owned `rootSlot`；旧 widget serialized files 不迁移，直接删除；新 schema 缺少 rootSlot/childSlots 时严格拒绝
@@ -40,16 +52,20 @@
 - [x] CP6 slot coverage：UIDocument round-trip 覆盖 Overlay / SingleChild / Table typed slot intent
 - [x] CP6 纠偏：SceneWidgetEntry nested document reparent/reorder 原子搬运 childSlots，避免 parent-edge intent 与 child 文档错位
 - [x] CP2 parent-owned arrange 收口：`UILayout::assignChildRect()` 不再读取 child anchors，删除 `reportStretchAnchorsIgnored()` / `hasStretchAnchors()` 死桥
+- [x] CP2 base layout 收口：删除 `UIElement::computeAnchorRect()`；普通 `layout/layoutChildren` 只接受 parent-assigned rect，`UICanvasLayout` 缺少 typed canvas slot 时拒绝并记录错误，不再静默回退 self-positioning
+- [x] CP2 detached auto-size 收口：`UIElement::isAutoSizeActive()` 不再回读 detached `_bAutoSize`；只有已存在的 parent-owned slot 能决定 SizeToContent/invalidation 语义
 - [x] CP3 Canvas slot 补全：四边 `FMargin` offsets、alignment、width/height size mode（min/max 已有）
+- [x] CP3 Canvas Auto 优先级纠偏：Auto 轴只解析 slot `preferredSize` 或 child desired/intrinsic，绝不回读 fixedSize；PopupOverlay content extent 统一写入 popup-owned canvas slot
 - [x] CP3 收尾纠偏：删除过渡 public API（`ui::panelSlot()` / `FCanvasPanelSlotBuilder` / 旧 canvas-panel 命名）
 - [x] CP3/§3.4 capability 编译期隔离（`column[anchor(...) >> w]` 已编译失败）
-- [ ] CP4 所有 layout host 统一 typed slot arrange（Box/Overlay/SingleChild/Split/Scroll/Grid/Canvas）+ reparent/detach slot 重建（ScrollViewport 的 fake-unified single-child slot 已纠偏；SelectableRow 已收成 single-child host）
+- [ ] CP4 所有 layout host 统一 typed slot arrange（Box/Overlay/Split/Scroll/Grid/Canvas；single-child host 复用 Overlay slot）+ reparent/detach slot 重建
+- [x] CP4 host entry 收口：已安装 typed layout 的 host（Compound/Button/CheckBox/Container/DockSpace/Overlay/Scroll/SelectableRow/SizeBox/Split/Table）`layout()` 只接受 parent-assigned rect，不再执行 child-owned anchor 自定位
 - [x] CP4 纠偏：same-parent `reparentBefore/After/reparent(parent, child)` 改为移动原 edge，保留 slot 状态
 - [x] CP4 计划纠偏：`Grid/Table` capability 暂收窄为 `cell-only`；待 `UITableSlot` 具备更多 runtime contract 后再开放
 - [x] CP3/CP4 收口：Declarative edge attach 改为 inline slot init，`[]` 保持 child 语法糖，slot ownership 仍归 parent
 - [x] CP5 部分：`UIElement` layout-host 钩子 + panel 子节点与 designer 回归修复
 - [x] CP4/CP5 纠偏：删除 `applyLayoutSpecToSlot(box)` 对 child `setSize()` 的回写，避免继续依赖 child-authored geometry
-- [x] CP4 纠偏：补齐并验证 unified `ui::layout()` 对 `UISingleChildSlot` / `UIOverlaySlot` 的运行时消费
+- [x] CP4 纠偏：补齐并验证 unified `ui::layout()` 对 single-child host 的 Overlay slot 运行时消费
 - [x] CP5 纠偏：TreeRoot 改为 canvas host，system layer fill 迁到 root->layer `UICanvasSlot`
 - [x] CP5 设计前置：layer typed host/edge 契约已落地，`attachToLayer(layer, widget, FCanvasSlotArgs)` 可显式表达 edge intent
 - [x] CP5 纠偏：system layer 升为 canvas host，`attachToLayer()` 自动桥接 child canvas geometry -> `UICanvasSlot`，`setPosition()` 桥接到 slot offset
@@ -66,6 +82,7 @@
 - [x] CP5 纠偏：Dock preview overlay 删除 dead child-authored anchors/position/zero-size
 - [x] CP5 审计纠偏：测试直写多数保留为合法夹具/absolute/layer-child 语义；tree/layer 路径中已失效的 child-owned zero-size 写入已清理
 - [x] CP5 收口：`attachToLayer(layer, widget, FCanvasSlotArgs)` 直接写 parent-owned canvas slot；explicit path 不再回写 child 几何，Designer 读取 slot 作为真值
+- [x] CP5 生产入口清理：`WorkbenchSurface` 的 root fill attach 不再读取 `_position/_size`，显式 `FCanvasSlotArgs` 成为 WorkbenchRoot 的唯一几何输入
 - [x] CP5 纠偏：EditorSurface / UIDesignerPanel / GameUIHost / DefaultGameUIController 的挂载入口改为显式 canvas args，不再依赖 no-arg legacy attach 作为运行时主路径
 - [x] CP5 运行时入口收口：GUIFrameworkSmoke 与 DockSpace drag-preview 改用显式 parent-owned canvas args，生产代码不再新增 no-arg layer attach 依赖
 - [x] CP2/CP5 纠偏：subtree attach 不再把 child authored geometry 种到 slot；相关 snapshot / routing / popup 测试改成显式 slot 初始化
@@ -76,11 +93,29 @@
 - [x] CP6 Designer direct manipulation：非 Canvas parent 不再回退写 UIElement 几何，改为显式拒绝并要求 typed slot 编辑
 - [x] CP2 序列化边界：新生成 UIDocument v2 fields 剔除 UIElement `_position/_size/_bAutoSize`；旧 geometry fixture 直接删除并改用 root/child slot
 - [x] CP2 内部控件迁移：Dialog / TabBar 不再通过 UIElement `_bAutoSize` 表达 parent-owned 内容尺寸，改由 typed slot desired-size contract 承接
+- [x] CP2 内部构造迁移：Dialog 内容尺寸从 stack 的 `UIBoxSlot` / intrinsic 读取；compound composition root 与 floating resize handle 不再直接写 child size
+- [x] CP2 floating window bridge 收口：`UIDockFloatingWindow::setWindowRect()` detached 阶段只保留窗口模型矩形，`onAttached()` 时写入 host-owned `UICanvasSlot`；不再依赖 `UIElement` pending initializer
 - [x] CP2 specialized intrinsic 迁移：TreeView / TableGrid 在已挂载 parent slot 时始终报告内容尺寸， authored fallback 仅保留给 detached root
+- [x] CP2 specialized intrinsic 收口：Workbench TreeView/TableGrid 不再直接写 `_bAutoSize` 或 child size，Auto/preferred size 改由 `FBoxSlotArgs` edge intent 表达；`computeDesiredSize` 的 fixed/auto 解析完全由 parent slot 决定
 - [x] CP2 SizeToContent 语义收口：新增 \`UIElement::isAutoSizeActive()\`，UIText 的 invalidation/paint 按 parent slot size mode 判定，detached root 才回退 \`_bAutoSize\`
 - [x] CP2 authoring 边界收口：UIElement 反射/authoring schema 不再暴露 \`_position/_size/_bAutoSize\`；运行时过渡字段仅待 root-slot 化后删除
 - [x] 既有故障（非本计划引入）：`UIDocument::instantiate` 传 null fields 时 `deserializeFields` 需容错（`type_error.307`）；已修复并恢复 `GameUIHostTest` 5 项用例
+- [x] CP2/CP4 pending edge intent：builder 的 `.setPosition/.setSize/.setAutoSize` 在 detached 阶段只排队 parent-edge initializer，attach 时先消费、再由显式 `layout()` 覆盖；不再新增 child geometry 写入
+- [x] CP2 builder bridge 收口：Declarative builder 不再写入 `_bAutoSize`；`setSize/setAutoSize` 只生成 pending/current typed-slot intent，builder 默认不携带 widget-owned auto-size 真值
+- [x] CP5 生产清理：Workbench demo 删除直接 `_bAutoSize` 写入，SizeToContent 仅由 parent-owned slot 与 intrinsic measurement 决定
+- [x] CP5 纠偏：`attachToLayer(layer, widget)` 不再从 child geometry 推断 slot；无参路径仅创建 default canvas edge，调用点显式表达 Auto/Fill/Fixed intent
+- [x] CP4 基础设施：UIElement 持有 parent-owned `UISlot*` non-owning 回指，插入/删除/reparent 生命周期严格维护，`getSlot()` O(1)
+- [x] CP4 基础设施纠偏：移除 engine-owned `ESlotKind` 与 `UISingleChildSlot`；single-child host 复用 `UIOverlaySlot`，slot 查询保持开放 `UISlot::as<T>()`
+- [x] CP2/CP5 API 收口：删除 `UIElement::setPosition/setSize` 转发层；运行时调用点改为显式 slot 操作，Game UI 动态挂载支持显式 `FCanvasSlotArgs`
+- [x] CP2 geometry shadow 收口：删除 `UIElement::getPosition/getSize/hasAuthored*` 与 `_position/_size/_bAuthored*`；布局输出统一通过 `_layoutRect`/`getLayoutRect()`，生产入口不再读取 child authored geometry
+- [ ] 提交治理：后续只提交完整语义 checkpoint；已有碎片提交在发布前统一整理，未经授权不改写共享分支历史
+- [x] CP2 imperative pending bridge：detached `UIElement::setPosition/setSize` 同时排队 parent-edge initializer，attach 时优先消费 typed slot；旧字段仅保留为待删除 shadow，不能作为新布局输入
+- [x] CP2 builder pending bridge 收口：Declarative builder 将 detached edge intent 保存在 builder，`ui::build`/`.child(builder)` 物化时直接初始化 parent-owned slot；不再把 builder intent 写入 live `UIElement`。
+- [ ] CP2 pending bridge 收尾：imperative detached edge intent 与 compound construct 仍需迁移到显式 root/child slot contract，完成后才能删除过渡 geometry 字段与 API
+- [x] CP2 root attach bridge 收尾：删除 no-arg `attachToLayer(layer, widget)`；默认层挂载改用显式 `attach(*tree.getLayer(layer), widget)`，带 root 几何时使用 `attach(parent, widget, FCanvasSlotArgs)`
 - [ ] CP7 编译期断言 + 几何测试（intrinsic measure、constraints、Canvas 四边 offsets、anchor span、alignment、min/max、reparent）+ snapshot parity
 - [ ] 清理过渡物：legacy `child(node)` 默认重载
+- [ ] 首版兼容清零：删除所有 legacy geometry/attach/builder API、self-positioned fallback 与旧 schema 读取分支；禁止新增兼容 shim、双写或静默降级
 - [ ] 计划状态纠偏：CP3 改为“主体完成但仍有过渡物”；CP5 改为“引入 layout-host hook，但 legacy self-positioned fallback 仍在”
+- [x] 已知 baseline 收口：compound desired-size 与 Dialog content 测试夹具已改用 builder pending / parent-owned slot intent，不再依赖 imperative child `setSize`
 - [x] 计划政策纠偏：旧 widget serialized file 不纳入迁移范围；示例中的未定版 `widgetEntries` 已删除，后续只生成新 schema 文件

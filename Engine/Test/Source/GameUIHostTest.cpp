@@ -1,3 +1,4 @@
+#include "GUITestLayoutHelpers.h"
 // Phase 3 regression guards for the GameUIHost: scene lifecycle mounts/
 // unmounts authoring entries, addToWorld attaches dynamic widgets, input
 // routes into the presentation tree, and presentation mapping is exact.
@@ -44,7 +45,7 @@ struct TestPersistentController : public IGameUIController
             persistent = UITypeRegistry::instance().createInstance("engine.panel");
             persistent->_name = "Persistent";
             ++mounts;
-            host.getTree().attachToLayer(WidgetTree::ELayer::Content, persistent);
+            host.getTree().attach(*host.getTree().getLayer(WidgetTree::ELayer::Content), persistent);
         }
     }
 
@@ -58,7 +59,7 @@ struct TestPersistentController : public IGameUIController
     [[nodiscard]] WidgetAttachment addToWorld(Scene& world, const UIElementRef& widget, GameUIHost& host) override
     {
         (void)world;
-        return host.getTree().attachToLayer(WidgetTree::ELayer::Content, widget);
+        return host.getTree().attach(*host.getTree().getLayer(WidgetTree::ELayer::Content), widget);
     }
 };
 
@@ -142,8 +143,8 @@ TEST(GameUIHostTest, InputRoutesThroughPresentationMapping)
     host.onSceneActivated(scene);
 
     auto button = std::make_shared<UIButton>("OK");
-    button->setPosition({100.0f, 100.0f}); // logical
-    button->setSize({80.0f, 32.0f});
+    authorSlotPosition(*button, {100.0f, 100.0f}); // logical
+    authorSlotSize(*button, {80.0f, 32.0f});
     host.addToWorld(scene, button);
 
     int clicks = 0;

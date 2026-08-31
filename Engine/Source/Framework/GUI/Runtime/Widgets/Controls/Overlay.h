@@ -23,7 +23,10 @@ struct YA_GUI_API UIOverlay : public UIElement
     void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override { node["type"] = "overlay"; }
     [[nodiscard]] UIOverlaySlot* getOverlaySlot(const UIElement& child) const
     {
-        return dynamic_cast<UIOverlaySlot*>(getSlotForChild(child));
+        if (UISlot* edge = getSlotForChild(child)) {
+            return edge->as<UIOverlaySlot>();
+        }
+        return nullptr;
     }
 
     void layout(const Rect2D& parentRect) override;

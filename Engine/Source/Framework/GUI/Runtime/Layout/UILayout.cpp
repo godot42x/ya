@@ -13,17 +13,20 @@ namespace
 
 const UIBoxSlot* getBoxSlot(const UIElement& parent, const UIElement& child)
 {
-    return dynamic_cast<const UIBoxSlot*>(parent.getSlotForChild(child));
+    const UISlot* edge = parent.getSlotForChild(child);
+    return edge ? edge->as<UIBoxSlot>() : nullptr;
 }
 
 const UIOverlaySlot* getOverlaySlot(const UIElement& parent, const UIElement& child)
 {
-    return dynamic_cast<const UIOverlaySlot*>(parent.getSlotForChild(child));
+    const UISlot* edge = parent.getSlotForChild(child);
+    return edge ? edge->as<UIOverlaySlot>() : nullptr;
 }
 
 const UICanvasSlot* getCanvasSlot(const UIElement& parent, const UIElement& child)
 {
-    return dynamic_cast<const UICanvasSlot*>(parent.getSlotForChild(child));
+    const UISlot* edge = parent.getSlotForChild(child);
+    return edge ? edge->as<UICanvasSlot>() : nullptr;
 }
 
 /// Per-axis placement inside a box the parent already owns: Fill stretches,
@@ -52,9 +55,10 @@ float overlayExtent(float available, float desired, EUIOverlayAlignment align)
     return std::max(0.0f, std::min(desired, available));
 }
 
-const UISingleChildSlot* getSingleChildSlot(const UIElement& parent, const UIElement& child)
+const UIOverlaySlot* getSingleChildSlot(const UIElement& parent, const UIElement& child)
 {
-    return dynamic_cast<const UISingleChildSlot*>(parent.getSlotForChild(child));
+    const UISlot* edge = parent.getSlotForChild(child);
+    return edge ? edge->as<UIOverlaySlot>() : nullptr;
 }
 
 glm::vec2 resolveDesiredSize(const UIElement& parent, const UIElement& child)
@@ -75,7 +79,7 @@ glm::vec2 resolveDesiredSize(const UIElement& parent, const UIElement& child)
     else if (const UIOverlaySlot* slot = getOverlaySlot(parent, child)) {
         overlayAuthored(slot->getPreferredSize());
     }
-    else if (const UISingleChildSlot* slot = getSingleChildSlot(parent, child)) {
+    else if (const UIOverlaySlot* slot = getSingleChildSlot(parent, child)) {
         overlayAuthored(slot->getPreferredSize());
     }
     else if (const UICanvasSlot* slot = getCanvasSlot(parent, child)) {
@@ -95,7 +99,7 @@ glm::vec2 resolveDesiredSize(const UIElement& parent, const UIElement& child)
 Rect2D applyCrossAlign(const UIElement& parent, const UIElement& child, const Rect2D& rect, bool bCrossIsY)
 {
     EUIOverlayAlignment crossAlign = EUIOverlayAlignment::Fill;
-    if (const UISingleChildSlot* slot = getSingleChildSlot(parent, child)) {
+    if (const UIOverlaySlot* slot = getSingleChildSlot(parent, child)) {
         crossAlign = bCrossIsY ? slot->getVAlign() : slot->getHAlign();
     }
     if (crossAlign == EUIOverlayAlignment::Fill) {
@@ -358,13 +362,11 @@ Rect2D UICanvasLayout::resolveChildRect(const UIElement& child, const UICanvasSl
     glm::vec2       size       = anchorRect.extent;
     size.x = slot.getWidthSizeMode() == EWidgetSizeMode::Auto
                  ? (preferred.x != 0.0f ? preferred.x
-                    : fixed.x != 0.0f   ? fixed.x
                                         : desired.x)
              : stretchAxis.x != 0.0f ? area.extent.x
                                      : (fixed.x != 0.0f ? fixed.x : anchorRect.extent.x);
     size.y = slot.getHeightSizeMode() == EWidgetSizeMode::Auto
                  ? (preferred.y != 0.0f ? preferred.y
-                    : fixed.y != 0.0f   ? fixed.y
                                         : desired.y)
              : stretchAxis.y != 0.0f ? area.extent.y
                                      : (fixed.y != 0.0f ? fixed.y : anchorRect.extent.y);
@@ -425,14 +427,13 @@ void UICanvasLayout::arrange(UIElement& parent, const Rect2D& rect) const
         if (child == nullptr) {
             continue;
         }
-        if (const UICanvasSlot* slot = dynamic_cast<const UICanvasSlot*>(parent.getSlotForChild(*child))) {
+        const UISlot* edge = parent.getSlotForChild(*child);
+        if (const UICanvasSlot* slot = edge ? edge->as<UICanvasSlot>() : nullptr) {
             const Rect2D childRect = resolveChildRect(*child, *slot, contentRect);
             child->layoutAssigned(childRect);
             continue;
         }
-        // No canvas edge (host that installs this layout but attached a child
-        // outside of it): fall back to the legacy self-positioned path.
-        child->layout(contentRect);
+        YA_CORE_ERROR("UICanvasLayout: child '{}' has no canvas slot edge", child->_name);
     }
 }
 
@@ -822,7 +823,7 @@ glm::vec2 UISingleChildLayout::measure(const UIElement& parent) const
 
 std::unique_ptr<UISlot> UISingleChildLayout::createSlot(UIElement& parent, UIElement& child) const
 {
-    return std::make_unique<UISingleChildSlot>(parent, child);
+    return std::make_unique<UIOverlaySlot>(parent, child);
 }
 
 void UISingleChildLayout::arrange(UIElement& parent, const Rect2D& rect) const
@@ -839,7 +840,7 @@ void UISingleChildLayout::arrange(UIElement& parent, const Rect2D& rect) const
         // desired size.
         EUIOverlayAlignment hAlign = EUIOverlayAlignment::Fill;
         EUIOverlayAlignment vAlign = EUIOverlayAlignment::Fill;
-        if (const UISingleChildSlot* slot = getSingleChildSlot(parent, *child)) {
+        if (const UIOverlaySlot* slot = getSingleChildSlot(parent, *child)) {
             hAlign = slot->getHAlign();
             vAlign = slot->getVAlign();
         }
@@ -852,55 +853,6 @@ void UISingleChildLayout::arrange(UIElement& parent, const Rect2D& rect) const
         assignChildRect(*child, childRect);
         return;
     }
-}
-
-UISingleChildSlot::UISingleChildSlot(UIElement& parent, UIElement& child)
-    : UISlot(parent, child)
-{
-}
-
-void UISingleChildSlot::setAlign(EUIOverlayAlignment hAlign, EUIOverlayAlignment vAlign)
-{
-    if (_hAlign == hAlign && _vAlign == vAlign) {
-        return;
-    }
-    _hAlign = hAlign;
-    _vAlign = vAlign;
-    invalidateArrange();
-}
-
-void UISingleChildSlot::apply(const FSingleChildSlotArgs& args)
-{
-    setAlign(args.hAlign, args.vAlign);
-    if (args.preferredSize.x != 0.0f || args.preferredSize.y != 0.0f) {
-        setPreferredSize(args.preferredSize);
-    }
-}
-
-void UISingleChildSlot::setPreferredSize(glm::vec2 value)
-{
-    value = glm::max(value, glm::vec2(0.0f));
-    if (_preferredSize != value) {
-        _preferredSize = value;
-        invalidateMeasure();
-    }
-}
-
-void UISingleChildSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
-{
-    auto alignName = [](EUIOverlayAlignment value) {
-        switch (value) {
-        case EUIOverlayAlignment::Fill: return "fill";
-        case EUIOverlayAlignment::Start: return "start";
-        case EUIOverlayAlignment::Center: return "center";
-        case EUIOverlayAlignment::End: return "end";
-        }
-        return "unknown";
-    };
-    node["type"]   = "singleChild";
-    node["hAlign"] = alignName(_hAlign);
-    node["vAlign"] = alignName(_vAlign);
-    node["preferredSize"] = {_preferredSize.x, _preferredSize.y};
 }
 
 UIOverlaySlot::UIOverlaySlot(UIElement& parent, UIElement& child)
@@ -1124,7 +1076,7 @@ glm::vec2 UISplitLayout::measure(const UIElement& parent) const
 {
     const auto children = parent.getChildrenInPaintOrder();
     if (children.empty()) {
-        return parent.getSize();
+        return parent.getLayoutRect().extent;
     }
 
     glm::vec2 desired{};
@@ -1157,7 +1109,7 @@ glm::vec2 UISplitLayout::measure(const UIElement& parent) const
 
 std::unique_ptr<UISlot> UISplitLayout::createSlot(UIElement& parent, UIElement& child) const
 {
-    return std::make_unique<UISingleChildSlot>(parent, child);
+    return std::make_unique<UIOverlaySlot>(parent, child);
 }
 
 void UISplitLayout::arrange(UIElement& parent, const Rect2D& rect) const
@@ -1251,12 +1203,12 @@ bool UIScrollLayout::scroll(const glm::vec2& wheelDelta)
 
 std::unique_ptr<UISlot> UIScrollLayout::createSlot(UIElement& parent, UIElement& child) const
 {
-    return std::make_unique<UISingleChildSlot>(parent, child);
+    return std::make_unique<UIOverlaySlot>(parent, child);
 }
 
 glm::vec2 UIScrollLayout::measure(const UIElement& parent) const
 {
-    return parent.getSize();
+    return parent.getLayoutRect().extent;
 }
 
 void UIScrollLayout::arrange(UIElement& parent, const Rect2D& rect) const
@@ -1392,7 +1344,8 @@ glm::vec2 UITableLayout::measure(const UIElement& parent) const
         if (!child->participatesInLayout() || child->getVisibility() == EWidgetVisibility::Hidden) {
             continue;
         }
-        const auto* slot = dynamic_cast<const UITableSlot*>(parent.getSlotForChild(*child));
+        const UISlot* edge = parent.getSlotForChild(*child);
+        const auto* slot = edge ? edge->as<UITableSlot>() : nullptr;
         if (slot) {
             maxRow = std::max(maxRow, slot->getRow() + 1);
         }
@@ -1432,7 +1385,8 @@ void UITableLayout::arrange(UIElement& parent, const Rect2D& rect) const
         if (!child->participatesInLayout() || child->getVisibility() == EWidgetVisibility::Hidden) {
             continue;
         }
-        const auto* slot = dynamic_cast<const UITableSlot*>(parent.getSlotForChild(*child));
+        const UISlot* edge = parent.getSlotForChild(*child);
+        const auto* slot = edge ? edge->as<UITableSlot>() : nullptr;
         if (!slot) {
             continue;
         }

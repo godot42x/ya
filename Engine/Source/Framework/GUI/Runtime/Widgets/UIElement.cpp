@@ -31,24 +31,20 @@ bool UIElement::isAutoSizeActive() const
 {
     UISlot* slot = getSlot();
     if (!slot) {
-        return _bAutoSize;
+        return false;
     }
-    if (const auto* canvas = dynamic_cast<const UICanvasSlot*>(slot)) {
+    if (const auto* canvas = slot->as<UICanvasSlot>()) {
         return canvas->getWidthSizeMode() == EWidgetSizeMode::Auto ||
                canvas->getHeightSizeMode() == EWidgetSizeMode::Auto;
     }
-    if (const auto* box = dynamic_cast<const UIBoxSlot*>(slot)) {
+    if (const auto* box = slot->as<UIBoxSlot>()) {
         return box->getSizeRule() == EUIBoxSlotSizeRule::Auto;
     }
-    if (const auto* single = dynamic_cast<const UISingleChildSlot*>(slot)) {
-        return single->getHAlign() != EUIOverlayAlignment::Fill ||
-               single->getVAlign() != EUIOverlayAlignment::Fill;
-    }
-    if (const auto* overlay = dynamic_cast<const UIOverlaySlot*>(slot)) {
+    if (const auto* overlay = slot->as<UIOverlaySlot>()) {
         return overlay->getHAlign() != EUIOverlayAlignment::Fill ||
                overlay->getVAlign() != EUIOverlayAlignment::Fill;
     }
-    return _bAutoSize;
+    return false;
 }
 
 UIElement::~UIElement()
@@ -126,7 +122,7 @@ std::vector<UIElement*> UIElement::getChildrenInPaintOrder() const
 
 UISlot* UIElement::getSlot() const
 {
-    return _parent ? _parent->getSlotForChild(*this) : nullptr;
+    return _slot;
 }
 
 UISlot* UIElement::getSlotForChild(const UIElement& child) const
@@ -175,19 +171,6 @@ bool UIElement::hitTestLayoutRect(const glm::vec2& logicalPoint) const
 
 // === Layout ===
 
-Rect2D UIElement::computeAnchorRect(const Rect2D& parentRect) const
-{
-    // Legacy self-positioning: resolve from this element's own runtime-only
-    // anchor fields. Layout hosts that install UICanvasLayout resolve their
-    // children from the canvas slot via resolveCanvasRect() instead.
-    return resolveCanvasRect(parentRect, _anchorMin, _anchorMax, _position,
-                             glm::vec2{0.0f, 0.0f},
-                             glm::vec2{std::numeric_limits<float>::max(),
-                                       std::numeric_limits<float>::max()},
-                             _size,
-                             glm::bvec2{_bAutoSize, _bAutoSize});
-}
-
 Rect2D UIElement::resolveCanvasRect(const Rect2D&    parentRect,
                                     const glm::vec2& anchorMinIn,
                                     const glm::vec2& anchorMaxIn,
@@ -204,7 +187,7 @@ Rect2D UIElement::resolveCanvasRect(const Rect2D&    parentRect,
     // Per-axis size resolution (SizeToContent contract): an axis with an
     // anchor span stretches to the parent; an Auto axis resolves from
     // computeDesiredSize(); otherwise the axis keeps authoredSize from the
-    // parent-owned slot (path-B still passes `_size` through computeAnchorRect).
+    // parent-owned slot.
     const glm::vec2 span    = (anchorMax - anchorMin) * parentRect.extent;
     const glm::vec2 desired = (autoAxis.x || autoAxis.y) ? computeDesiredSize() : authoredSize;
     glm::vec2       size    = authoredSize;
@@ -235,10 +218,9 @@ void UIElement::installLayout(std::unique_ptr<UILayout> layout)
 
 void UIElement::layout(const Rect2D& parentRect)
 {
-    // A host that installs a layout arranges its children through it (Canvas,
-    // Box, Split ...). Elements without one keep the legacy self-positioned
-    // behaviour, where children resolve from their own runtime-only anchors.
-    setLayoutRect(computeAnchorRect(parentRect));
+    // All geometry is assigned by the parent edge or the tree root. A plain
+    // element therefore accepts the supplied rect verbatim.
+    setLayoutRect(parentRect);
     if (_layout != nullptr) {
         _layout->arrange(*this, _layoutRect);
         return;
@@ -260,7 +242,7 @@ void UIElement::layoutChildren(const Rect2D& layoutRect)
 {
     for (UIElement* child : getChildrenInPaintOrder()) {
         if (child->participatesInLayout()) {
-            child->layout(layoutRect);
+            child->layoutAssigned(layoutRect);
         }
     }
 }
@@ -384,52 +366,6 @@ void UIElement::invalidateProperty(EUIPropertyImpact impact)
     }
 }
 
-void UIElement::setPosition(const glm::vec2& value)
-{
-    _bAuthoredPosition = true;
-    const bool bUnchanged = (_position == value);
-    if (!bUnchanged) {
-        _position = value;
-    }
-    if (auto* canvasSlot = dynamic_cast<UICanvasSlot*>(getSlot())) {
-        canvasSlot->setOffset(value);
-        return;
-    }
-    if (!bUnchanged) {
-        invalidateProperty(EUIPropertyImpact::Layout);
-    }
-}
-
-void UIElement::setSize(const glm::vec2& value)
-{
-    _bAuthoredSize = true;
-    const bool bUnchanged = (_size == value);
-    if (!bUnchanged) {
-        _size = value;
-    }
-    if (auto* canvasSlot = dynamic_cast<UICanvasSlot*>(getSlot())) {
-        canvasSlot->setFixedSize(value);
-        canvasSlot->setWidthSizeMode(EWidgetSizeMode::Fixed);
-        canvasSlot->setHeightSizeMode(EWidgetSizeMode::Fixed);
-        return;
-    }
-    if (auto* boxSlot = dynamic_cast<UIBoxSlot*>(getSlot())) {
-        boxSlot->setPreferredSize(value);
-        return;
-    }
-    if (auto* overlaySlot = dynamic_cast<UIOverlaySlot*>(getSlot())) {
-        overlaySlot->setPreferredSize(value);
-        return;
-    }
-    if (auto* singleSlot = dynamic_cast<UISingleChildSlot*>(getSlot())) {
-        singleSlot->setPreferredSize(value);
-        return;
-    }
-    if (!bUnchanged) {
-        invalidateProperty(EUIPropertyImpact::Layout);
-    }
-}
-
 void UIElement::paintChildren(UIFrameBuilder& builder)
 {
     for (UIElement* child : getChildrenInPaintOrder()) {
@@ -508,6 +444,24 @@ void UIElement::addDetachedChild(const UIElementRef& child, FChildSlotInitialize
     appendChildEdge(child, std::move(init));
 }
 
+void UIElement::setPendingSlotInitializer(FChildSlotInitializer init)
+{
+    if (!init) {
+        return;
+    }
+    if (!_pendingSlotInitializer) {
+        _pendingSlotInitializer = std::move(init);
+        return;
+    }
+
+    FChildSlotInitializer previous = std::move(_pendingSlotInitializer);
+    _pendingSlotInitializer = [previous = std::move(previous), init = std::move(init)](UIElement& child,
+                                                                                         UISlot&  slot) mutable {
+        previous(child, slot);
+        init(child, slot);
+    };
+}
+
 void UIElement::initializeChildSlot(UIElement& child, FChildSlotInitializer init)
 {
     if (UISlot* slot = getSlotForChild(child)) {
@@ -545,7 +499,12 @@ void UIElement::insertChildEdge(size_t index, const UIElementRef& child, FChildS
 {
     child->_parent = this;
     std::unique_ptr<UISlot> slot = createSlotForChild(*child);
+    child->_slot = slot.get();
     if (slot) {
+        if (child->_pendingSlotInitializer) {
+            FChildSlotInitializer pending = std::move(child->_pendingSlotInitializer);
+            pending(*child, *slot);
+        }
         init(*child, *slot);
     }
     const size_t insertAt = std::min(index, _children.size());
@@ -574,6 +533,7 @@ void UIElement::removeChildEdge(UIElement& child)
         _childSlots.erase(_childSlots.begin() + static_cast<std::ptrdiff_t>(index));
     }
     child._parent = nullptr;
+    child._slot   = nullptr;
 }
 
 // === Field serialization ===

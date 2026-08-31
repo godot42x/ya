@@ -189,9 +189,6 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     YA_REFLECT_FIELD(_name)
     YA_REFLECT_FIELD(_visibility, .instanceEditable())
     YA_REFLECT_FIELD(_zOrder, .instanceEditable())
-    // _anchorMin/_anchorMax are no longer authorable: stretch geometry lives on
-    // the parent->child slot edge (UICanvasSlot), never on the child. They
-    // remain runtime-only layout I/O consumed via the slot.
     // _pivot is reserved (rotation/scale not implemented): authorable but not
     // per-instance overridable yet.
     YA_REFLECT_FIELD(_pivot)
@@ -261,36 +258,17 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
 
     // === Visual / layout / input properties ===
   protected:
-    // Runtime mutable visual/layout properties (GI-202): encapsulated behind
-    // changed-only setters setPosition/setSize/setVisibility. Subclasses read
-    // these freely in paint/layout/computeDesiredSize; external runtime writes
-    // must go through the setters. Authoring/reflection writes go through the
-    // mutation transaction (deserializeFields).
-    glm::vec2         _position   = {0.0f, 0.0f}; // Offset (px) from the anchor point within the parent rect
-    glm::vec2         _size       = {100.0f, 50.0f};
-    /// True after an explicit setPosition/setSize. Default constructed
-    /// geometry is not copied onto a new parent-owned slot at attach.
-    bool              _bAuthoredPosition = false;
-    bool              _bAuthoredSize     = false;
     EWidgetVisibility _visibility = EWidgetVisibility::Visible;
   public:
     // Authoring-only configuration (GI-202 exception list): no runtime
     // business write path yet; kept public for authoring/reflection. To be
     // encapsulated when they gain a changed-only setter.
     int               _zOrder     = 0;
-    glm::vec2         _anchorMin  = {0.0f, 0.0f}; // Fraction of the parent rect (clamped 0..1)
-    glm::vec2         _anchorMax  = {0.0f, 0.0f};
     glm::vec2         _pivot      = {0.5f, 0.5f}; // Reserved; unused until rotation/scale exists
     EWidgetHitFilter  _hitFilter  = EWidgetHitFilter::Pass;
     /// Keyboard focus participation (Tab traversal). Default None: plain
     /// widgets never take focus.
     EWidgetFocusPolicy _focusPolicy = EWidgetFocusPolicy::None;
-    /// SizeToContent (Slate DesiredSize model). On a canvas edge this is
-    /// seeded onto `UICanvasSlot` size mode Auto; the flag remains on the
-    /// child until CP2 deletes it. Path-B `computeAnchorRect` still reads it.
-    /// Resolution precedence per axis: anchor stretch > Auto (desired) >
-    /// slot authored size. Default off so explicit-size widgets are unaffected.
-    bool _bAutoSize = false;
 
 
     /// Volatile (Slate-style): re-run this widget's paintSelf every frame,
@@ -355,6 +333,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     [[nodiscard]] WidgetTree* getTree() const { return _tree; }
     /// Visual parent (non-owning), or nullptr while detached.
     [[nodiscard]] UIElement* getParent() const { return _parent; }
+    /// Final rect assigned by the owning layout pass. This is runtime output,
+    /// never authored layout input.
+    [[nodiscard]] const Rect2D& getLayoutRect() const { return _layoutRect; }
     [[nodiscard]] bool       isAttached() const { return _tree != nullptr; }
     /// Children in attachment order (paint order = getChildrenInPaintOrder).
     [[nodiscard]] const std::vector<UIElementRef>& getChildren() const { return _children; }
@@ -368,8 +349,8 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     [[nodiscard]] UISlot* getSlotForChild(const UIElement& child) const;
 
     /// Whether this element's current parent edge resolves any axis from its
-    /// desired/intrinsic content. Parent-owned slots are authoritative; the
-    /// widget flag is consulted only while detached as a standalone root.
+    /// desired/intrinsic content. Parent-owned slots are authoritative; a
+    /// detached element has no layout contract until it is attached.
     [[nodiscard]] bool isAutoSizeActive() const;
 
     // === Layout (top-down, called by WidgetTree::layout) ===
@@ -382,33 +363,31 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     //            and assigns every child rect itself from slot data. The
     //            child's anchors are IGNORED. Child intent lives in the slot.
     //
-    //   Path B - child self-positions (panel / selectable row / plain
-    //            elements). The parent keeps the base layoutChildren(), which
-    //            calls child->layout(parentRect) and lets the child run its
-    //            own anchor math. The base UISlot carries no layout data, so
-    //            there is nothing for the parent to honour.
+    //   Path B - no independent child-owned positioning. Plain elements take
+    //            the rect assigned by their parent, while a typed layout host
+    //            computes child rects from its parent-owned slots.
     //
     // The two paths are mutually exclusive on purpose: a child never has two
     // competing stretch mechanisms. A parent that arranges children routes
     // rect assignments through UILayout::assignChildRect(); child anchors are
     // not consulted on this parent-owned path.
     //
-    /// Compute this element's rect within `parentRect` (anchor math), store it
-    /// in `_layoutRect`, then lay out children in paint order.
+    /// Accept a parent-assigned rect, store it in `_layoutRect`, then lay out
+    /// children in paint order. There is no child-owned anchor fallback.
     virtual void layout(const Rect2D& parentRect);
     /// Container-assigned layout: take `rect` verbatim (no anchor math) and
     /// run this element's own arrangement (containers re-arrange children,
     /// scroll viewports shift their content, plain elements lay children out
-    /// with anchor math). Virtual so nested containers / split panes /
+    /// with the assigned rect). Virtual so nested containers / split panes /
     /// scroll viewports keep their custom layout when they receive an
     /// assigned rect from a parent container.
     virtual void layoutAssigned(const Rect2D& rect);
     /// Content measure for packing: layout hosts aggregate children through
     /// their layout; leaves return computeIntrinsicSize(). Authored size lives
-    /// on the parent-owned slot (preferredSize / fixedSize), not on `_size`.
+    /// on the parent-owned slot (preferredSize / fixedSize).
     [[nodiscard]] virtual glm::vec2 computeDesiredSize() const;
     /// Widget-owned content size (glyph measure, padding, row height, ...).
-    /// Default is {0,0}: the constructed 100x50 `_size` is not intrinsic.
+    /// Default is {0,0}; intrinsic size is never an authored layout fallback.
     /// Layout overlays slot preferred/fixed size on top of this.
     [[nodiscard]] virtual glm::vec2 computeIntrinsicSize() const;
 
@@ -538,19 +517,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void invalidateProperty(EUIPropertyImpact impact);
 
     // === Changed-only property setters / getters (GI-105 / GI-202) ===
-    // Presenters call these instead of writing the backing field directly, so
-    // a same-value write is a no-op and only a real change invalidates at the
-    // property's declared impact. `_position`/`_size` are layout inputs
-    // (Layout); `_visibility` is SubtreePaintContext unless the Collapsed
-    // transition changes whether layout space is kept. The backing fields are
-    // protected (GI-202): external readers use the getters.
-    [[nodiscard]] const glm::vec2& getPosition() const { return _position; }
-    [[nodiscard]] const glm::vec2& getSize() const { return _size; }
-    [[nodiscard]] bool hasAuthoredPosition() const { return _bAuthoredPosition; }
-    [[nodiscard]] bool hasAuthoredSize() const { return _bAuthoredSize; }
+    // Layout geometry is exclusively parent-owned slot state. UIElement only
+    // exposes visual state setters; the final rect is produced by layout.
     [[nodiscard]] EWidgetVisibility getVisibility() const { return _visibility; }
-
-    void setPosition(const glm::vec2& value);
 
     void setStyleKey(std::string value)
     {
@@ -560,8 +529,6 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
         _styleKey = std::move(value);
         invalidateProperty(EUIPropertyImpact::Layout);
     }
-
-    void setSize(const glm::vec2& value);
 
     void setVisibility(EWidgetVisibility value)
     {
@@ -634,6 +601,11 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// is assigned when the subtree root is attached to a WidgetTree.
     void addDetachedChild(const UIElementRef& child);
     void addDetachedChild(const UIElementRef& child, FChildSlotInitializer init);
+    /// Queue a construction-time initializer for the parent-owned edge that
+    /// will be created when this detached widget is attached. This is a
+    /// transient builder bridge: it is consumed by insertChildEdge(), never
+    /// serialized, and does not make the child the owner of layout intent.
+    void setPendingSlotInitializer(FChildSlotInitializer init);
     void initializeChildSlot(UIElement& child, FChildSlotInitializer init);
 
   protected:
@@ -661,17 +633,12 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
         _layoutRect = clamped;
     }
 
-    /// Anchor math: rect.min = parent.pos + parent.size*anchorMin + _position;
-    /// rect.max = parent.pos + parent.size*anchorMax + _position + _size.
-    [[nodiscard]] Rect2D computeAnchorRect(const Rect2D& parentRect) const;
-
   public:
     /// Resolve this element's rect from parent-owned canvas edge data against
-    /// `parentRect`. Size resolution does not read `_size`: an axis with an
+    /// `parentRect`. Size resolution does not read child-authored geometry: an axis with an
     /// anchor span stretches to the parent, an Auto axis uses
     /// computeDesiredSize(), otherwise the axis keeps `authoredSize` from the
-    /// slot (or from `_size` only on the remaining path-B self-positioned
-    /// call through computeAnchorRect).
+    /// parent-owned slot.
     [[nodiscard]] Rect2D resolveCanvasRect(const Rect2D&    parentRect,
                                            const glm::vec2& anchorMin,
                                            const glm::vec2& anchorMax,
@@ -714,7 +681,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     std::vector<UIElementRef> _children;
     std::vector<UIBehaviorRef> _behaviors;
     std::vector<std::unique_ptr<UISlot>> _childSlots;
+    FChildSlotInitializer _pendingSlotInitializer;
     UIElement*                _parent = nullptr;
+    UISlot*                   _slot   = nullptr;
     WidgetTree*               _tree   = nullptr;
 
     /// Module-owner lease set by UITypeRegistry::createInstance: keeps the

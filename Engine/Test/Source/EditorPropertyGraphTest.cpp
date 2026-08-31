@@ -44,12 +44,12 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionMaterializesVec3RowsOnce)
     auto section = std::make_shared<EditorAutoPropertySection>("AutoTransform", std::move(graph));
     WidgetTree tree({.width = 320, .height = 200});
 
-    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, section).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
     ASSERT_EQ(section->getChildren().size(), 1u);
     EXPECT_EQ(section->getChildren()[0]->getChildren().size(), 3u);
 
     tree.detach(*section);
-    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, section).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
     EXPECT_EQ(section->getChildren().size(), 1u);
     EXPECT_EQ(section->getChildren()[0]->getChildren().size(), 3u);
 }

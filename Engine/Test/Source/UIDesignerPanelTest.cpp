@@ -1,3 +1,4 @@
+#include "GUITestLayoutHelpers.h"
 // Regression guards for UIDesignerPanel's direct-manipulation path: when a
 // preview child lives under a canvas host, drag edits must read/write the
 // parent-owned slot edge consistently across multiple drags.
@@ -24,7 +25,7 @@ TEST(UIDesignerPanelTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceOfTruth)
     ASSERT_NE(child, nullptr);
     root->_name  = "Root";
     child->_name = "Child";
-    root->setSize({300.0f, 200.0f});
+    authorSlotSize(*root, {300.0f, 200.0f});
     root->addDetachedChild(child, [](UIElement&, UISlot& edge) {
         auto* slot = edge.as<UICanvasSlot>();
         ASSERT_NE(slot, nullptr);

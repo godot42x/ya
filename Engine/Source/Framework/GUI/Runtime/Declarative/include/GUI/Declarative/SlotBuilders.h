@@ -117,18 +117,18 @@ class FBoxSlotBuilder final
 /// These parents own both axes, so the only useful intent is how the child sits
 /// inside the content box: stretch it (Fill, the default) or keep its desired
 /// size and place it.
-class FSingleChildSlotBuilder final
+class FOverlaySlotBuilder final
 {
   public:
     /// Stretch both axes. Default, and the historical behaviour of every
     /// single-child host.
-    FSingleChildSlotBuilder& fill() &
+    FOverlaySlotBuilder& fill() &
     {
         _args.hAlign = EUIOverlayAlignment::Fill;
         _args.vAlign = EUIOverlayAlignment::Fill;
         return *this;
     }
-    FSingleChildSlotBuilder&& fill() &&
+    FOverlaySlotBuilder&& fill() &&
     {
         _args.hAlign = EUIOverlayAlignment::Fill;
         _args.vAlign = EUIOverlayAlignment::Fill;
@@ -137,51 +137,51 @@ class FSingleChildSlotBuilder final
 
     /// Keep the child's desired size on both axes, placed inside the content
     /// box. Overrides any earlier fill().
-    FSingleChildSlotBuilder& align(EUIOverlayAlignment hAlign, EUIOverlayAlignment vAlign) &
+    FOverlaySlotBuilder& align(EUIOverlayAlignment hAlign, EUIOverlayAlignment vAlign) &
     {
         _args.hAlign = hAlign;
         _args.vAlign = vAlign;
         return *this;
     }
-    FSingleChildSlotBuilder&& align(EUIOverlayAlignment hAlign, EUIOverlayAlignment vAlign) &&
+    FOverlaySlotBuilder&& align(EUIOverlayAlignment hAlign, EUIOverlayAlignment vAlign) &&
     {
         _args.hAlign = hAlign;
         _args.vAlign = vAlign;
         return std::move(*this);
     }
 
-    FSingleChildSlotBuilder& hAlign(EUIOverlayAlignment value) &
+    FOverlaySlotBuilder& hAlign(EUIOverlayAlignment value) &
     {
         _args.hAlign = value;
         return *this;
     }
-    FSingleChildSlotBuilder&& hAlign(EUIOverlayAlignment value) &&
+    FOverlaySlotBuilder&& hAlign(EUIOverlayAlignment value) &&
     {
         _args.hAlign = value;
         return std::move(*this);
     }
 
-    FSingleChildSlotBuilder& vAlign(EUIOverlayAlignment value) &
+    FOverlaySlotBuilder& vAlign(EUIOverlayAlignment value) &
     {
         _args.vAlign = value;
         return *this;
     }
-    FSingleChildSlotBuilder&& vAlign(EUIOverlayAlignment value) &&
+    FOverlaySlotBuilder&& vAlign(EUIOverlayAlignment value) &&
     {
         _args.vAlign = value;
         return std::move(*this);
     }
 
-    [[nodiscard]] const FSingleChildSlotArgs& args() const { return _args; }
-    operator const FSingleChildSlotArgs&() const { return _args; }
+    [[nodiscard]] const FOverlaySlotArgs& args() const { return _args; }
+    operator const FOverlaySlotArgs&() const { return _args; }
 
   private:
-    FSingleChildSlotArgs _args{};
+    FOverlaySlotArgs _args{};
 };
 
 [[nodiscard]] inline FBoxSlotBuilder boxSlot() { return {}; }
 
-[[nodiscard]] inline FSingleChildSlotBuilder singleChildSlot() { return {}; }
+[[nodiscard]] inline FOverlaySlotBuilder overlaySlot() { return {}; }
 
 /// The public layout-intent builder: `ui::layout()` starts a spec and each
 /// method ADDS A CAPABILITY TO THE TYPE.

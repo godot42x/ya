@@ -11,7 +11,7 @@ UIOverlay::UIOverlay(std::string name)
 
 void UIOverlay::layout(const Rect2D& parentRect)
 {
-    layoutAssigned(computeAnchorRect(parentRect));
+    layoutAssigned(parentRect);
 }
 
 void UIOverlay::layoutAssigned(const Rect2D& rect)

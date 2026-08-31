@@ -86,8 +86,8 @@ struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FText
         setStyleField("fillColor", FBrush::solid(value), EUIPropertyImpact::Paint);
     }
     [[nodiscard]] const std::string& getText() const { return _text; }
-    // SizeToContent: set base UIElement::_bAutoSize to measure the layout
-    // rect from the text (desired = text width x lineHeight).
+    // SizeToContent is controlled by the parent-owned slot; this widget only
+    // reports intrinsic text size.
 
     /// Reactive text binding. When set, paint reads the reactive value (and
     /// records the dependency); set() on the reactive marks this text dirty.

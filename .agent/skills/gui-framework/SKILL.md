@@ -48,7 +48,7 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 ## 布局契约（SizeToContent）
 
-- `UIElement::_bAutoSize`（SizeToContent / Slate DesiredSize 模型）：canvas 在 attach 时把 Auto 种到 `UICanvasSlot` size mode。每轴解析优先级
+- SizeToContent / Slate DesiredSize 模型完全由 parent-owned slot 表达：canvas 在 attach 时把 Auto 种到 `UICanvasSlot` size mode。每轴解析优先级
   `anchor span（stretch）> Auto（computeDesiredSize 内容测量）> slot authored size（fixedSize / preferredSize）`。
   child `_size` 不再是 layout 输入；`computeDesiredSize` / `computeIntrinsicSize` 只报告内容。path-B `computeAnchorRect` 仍读 child 字段直到 CP2。
 - `UIText`：desired / intrinsic = `font.measureText(text) × lineHeight`（与 AutoSize 无关）；字体经
@@ -70,17 +70,17 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   `childFill` 仍是只标 Fill 的简写。`setMargin({x, y})` 走 `glm::vec2` → 左右/上下对称
   （`FMargin` 不是 aggregate，两元素列表不会变成 left/top、right/bottom=0）。
   `FBoxSlotArgs::preferredSize` 非零轴覆盖 child desired；`ui::boxSlot().preferredSize({w,h})` 是 construct-time 写法。
-- `UIElement::setSize()` 在 child 已挂 typed host 时桥接到该 edge：canvas → `fixedSize`，box / overlay / single-child → `preferredSize`。这是 CP2 前的过渡桥，不是 child 继续拥有几何。
-- attach（`insertChildEdge`）会把 **authored** child `setSize`/`setPosition` 种到新 edge：box / overlay / single-child → `preferredSize`，canvas → `fixedSize`/`offset`。`_bAutoSize` 种为 canvas size mode Auto，且 **不会** 把 authored size 种成 fixed/preferred（否则会盖住内容测量）。随后的 layout spec / typed slot args 覆盖种子。默认构造的 100×50 / 0,0 **不会** 种上去。DSL `.setSize()` 先写 child 再 attach 的路径因此在 CP2 前就是 slot 真值。
-- `UIPopupOverlay::_contentExtent` 是 popup-owned canvas edge 的内容尺寸；基类 Auto + preferredSize，Menu 覆盖为 fixedSize，Dialog 走 preferredSize。不要再 `content->setSize()`。
-- child 用 `getSlot()` 读取当前边，parent 用 `getSlotForChild()` 查询；reparent/detach 时旧 parent 销毁旧 slot，新 parent 创建默认 slot。不要缓存 slot
+- UIElement 不提供 `setSize/setPosition/getSize/getPosition` 或 authored geometry shadow；运行时与 imperative 构造代码必须先取得当前 `UISlot`，再显式修改 `UICanvasSlot/ UIBoxSlot/ UIOverlaySlot`；detached 构造使用 `addDetachedChild(..., slotInitializer)` 或 builder 的 pending edge intent。最终 rect 通过 `getLayoutRect()` 读取。
+- attach 不再从 child geometry 推断 slot；显式 `FCanvasSlotArgs` / typed slot initializer 才是 edge 的唯一 authored placement 来源。默认构造尺寸不是布局输入。
+- `UIPopupOverlay::_contentExtent` 是 popup-owned canvas edge 的内容尺寸；基类 Auto + preferredSize，Menu 覆盖为 fixedSize，Dialog 走 preferredSize。不要再通过 child geometry API 写内容尺寸。
+- child 用 `getSlot()` 读取当前边，parent 用 `getSlotForChild()` 查询；reparent/detach 时旧 parent 销毁旧 slot，新 parent 创建默认 slot。不要缓存 slot。层挂载默认使用 `attach(*tree.getLayer(layer), widget)`；带几何意图使用 `attach(parent, widget, FCanvasSlotArgs)` 或显式 layer args。
   裸指针跨越 reparent/detach。
 - `UIBoxLayout` 主轴按 desired/slot 排列，cross 轴默认 stretch；`computeDesiredSize` 聚合
   child + margin + spacing + padding。scroll/split 仍读取内容 desired，specialized layout
   已收口为 `UIScrollLayout` / `UISplitLayout` / `UIOverlayLayout`；`UIButton`、`UISelectableRow`、`UICheckBox`、`UICompoundWidget` 与 `UISizeBox`
   使用 `UISingleChildLayout`。`UIDockSpace` 也是 single-child host：投影根填满 dock。
   `UIDockFloatingHost` 是 canvas host；floating window 的位置/尺寸写在 host-owned `UICanvasSlot`，
-  `setWindowRect` 经 `setPosition`/`setSize` 桥到这条 edge。窗口本身是 overlay host：chrome
+  `setWindowRect` 直接更新 host-owned `UICanvasSlot`。窗口本身是 overlay host：chrome
   box Fill，resize handle 走 overlay Start/End+Fill，不再在 box arrange 之后手写 handle rect。
   `UIPopupOverlay` 安装 `UICanvasLayout`；每帧把 `resolveContentSlotArgs()` 写进 content slot，再交给 canvas arrange。
   specialized widget 只保留 paint/input transient state，不能再把 ratio/offset/padding 等几何状态塞回 widget 字段。

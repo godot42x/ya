@@ -14,18 +14,12 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     dialog->_bModal = true; // dimming shield + focus ownership + Esc
 
     // Panel: title bar + content + button row. UIPanel does not aggregate
-    // child desired sizes, so measure the content by hand.
+    // child desired sizes, so measure the content from its parent-owned edge
+    // after attaching it to the stack.
     const float titleH   = 18.0f;
     const float buttonH  = 26.0f;
-    const float contentH = content
-                               ? std::max(content->hasAuthoredSize() ? content->getSize().y
-                                                                     : content->computeDesiredSize().y,
-                                          0.0f)
-                               : 0.0f;
-    const float panelH   = 14.0f + titleH + 12.0f + contentH + 12.0f + buttonH + 14.0f;
     auto panel = std::make_shared<UIPanel>("DialogPanel");
     panel->setStyleKey("panel");
-    dialog->_contentExtent = {360.0f, panelH};
 
     auto stack = std::make_shared<UIContainer>("DialogStack");
     stack->setDirection(EWidgetBoxLayout::Vertical);
@@ -34,7 +28,8 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     panel->addDetachedChild(stack);
     // The panel is a canvas host: fill is expressed on the parent->child slot
     // edge, not by authoring anchors on the child.
-    if (auto* slot = dynamic_cast<UICanvasSlot*>(panel->getSlotForChild(*stack))) {
+    if (UISlot* edge = panel->getSlotForChild(*stack); edge && edge->as<UICanvasSlot>()) {
+        auto* slot = edge->as<UICanvasSlot>();
         FCanvasSlotArgs fillArgs;
         fillArgs.anchorMin = {0.0f, 0.0f};
         fillArgs.anchorMax = {1.0f, 1.0f};
@@ -49,6 +44,19 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     if (content) {
         stack->addDetachedChild(content);
     }
+
+    float contentH = 0.0f;
+    if (content) {
+        if (const UISlot* edge = stack->getSlotForChild(*content); edge && edge->as<UIBoxSlot>()) {
+            const auto* contentSlot = edge->as<UIBoxSlot>();
+            contentH = contentSlot->getPreferredSize().y;
+        }
+        if (contentH <= 0.0f) {
+            contentH = content->computeDesiredSize().y;
+        }
+    }
+    const float panelH = 14.0f + titleH + 12.0f + std::max(contentH, 0.0f) + 12.0f + buttonH + 14.0f;
+    dialog->_contentExtent = {360.0f, panelH};
 
     auto buttons = std::make_shared<UIContainer>("DialogButtons");
     buttons->setDirection(EWidgetBoxLayout::Horizontal);

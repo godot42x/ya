@@ -71,6 +71,9 @@ struct YA_GAME_RUNTIME_API GameUIHost
     /// "Join this world's Game UI": resolve `world` through the controller and
     /// attach the widget to the content layer. Explicit world, no ambiguity.
     [[nodiscard]] WidgetAttachment addToWorld(Scene& world, const UIElementRef& widget);
+    [[nodiscard]] WidgetAttachment addToWorld(Scene& world,
+                                              const UIElementRef& widget,
+                                              const FCanvasSlotArgs& args);
 
     // === Input ===
     /// Dispatch a window-coordinate event into the tree (top-left origin,

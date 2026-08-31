@@ -1,3 +1,4 @@
+#include "GUITestLayoutHelpers.h"
 // Snapshot draw-resource lifetime (engine suite; needs the RHI Texture type):
 // the immutable frame packet holds STRONG texture references resolved at
 // snapshot build time, so the asset cache may unload/clear/reload afterwards
@@ -35,8 +36,8 @@ TEST(UIFrameTextureLifetimeTest, SnapshotRetainsTextureAfterCacheClear)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    panel->setPosition({10.0f, 10.0f});
-    panel->setSize({100.0f, 50.0f});
+    authorSlotPosition(*panel, {10.0f, 10.0f});
+    authorSlotSize(*panel, {100.0f, 50.0f});
 
     // Fake asset cache (AssetManager's textureManager behaves the same:
     // path -> strong ref; unloading/clearing drops the cache's reference).
@@ -45,7 +46,7 @@ TEST(UIFrameTextureLifetimeTest, SnapshotRetainsTextureAfterCacheClear)
     cache["Engine:Content/TestTextures/face.png"] = texture;
     panel->_image = TextureRef("Engine:Content/TestTextures/face.png", ya::Ptr<Texture>(texture.get()));
 
-    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
 
     UIFrameBuildContext ctx;
     ctx.textureResolver = [&](const std::string& path) {
@@ -72,11 +73,11 @@ TEST(UIFrameTextureLifetimeTest, ResolverMissAndMissingResolverFallBackToWhite)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    panel->setPosition({10.0f, 10.0f});
-    panel->setSize({100.0f, 50.0f});
+    authorSlotPosition(*panel, {10.0f, 10.0f});
+    authorSlotSize(*panel, {100.0f, 50.0f});
     panel->_image    = TextureRef("Engine:Content/TestTextures/face.png",
                                   ya::Ptr<Texture>(makeFakeTexture().get()));
-    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
 
     // Resolver present but cache miss: white sprite (null texture).
     UIFrameBuildContext missCtx;

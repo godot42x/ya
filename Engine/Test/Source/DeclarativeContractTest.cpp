@@ -1,3 +1,4 @@
+#include "GUITestLayoutHelpers.h"
 // Contract guards for the static live-construct DSL (Slate Construct / SNew).
 // Builders materialize UIElement directly. There is no UIDescription,
 // UIReconciler, or UIRenderController.
@@ -47,8 +48,7 @@ struct FTestCompoundWidget final : UICompoundWidget
     void construct() override
     {
         ++constructCount;
-        auto panel = std::make_shared<UIPanel>("compound_root");
-        panel->setSize({123.0f, 45.0f});
+        auto panel = ui::panel("compound_root").setSize({123.0f, 45.0f}).release();
         addDetachedChild(std::move(panel));
     }
 
@@ -75,9 +75,9 @@ TEST(DeclarativeContractTest, NoThemeStillRendersAuthoredAppearance)
 {
     WidgetTree tree({.width = 320, .height = 200});
     auto panel = std::make_shared<UIPanel>("AuthoredPanel");
-    panel->setSize({120.0f, 60.0f});
+    authorSlotSize(*panel, {120.0f, 60.0f});
     panel->setColor({0.12f, 0.24f, 0.36f, 1.0f});
-    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, panel).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel).valid());
 
     const UIFrameSnapshot snapshot = tree.buildSnapshot({});
     ASSERT_EQ(snapshot.items.size(), 1u);
@@ -123,14 +123,18 @@ TEST(DeclarativeContractTest, SameValuePropertyMutationDoesNotDirtyTree)
 {
     WidgetTree tree({.width = 320, .height = 200});
     auto panel = std::make_shared<UIPanel>("StablePanel");
-    panel->setSize({120.0f, 60.0f});
-    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, panel).valid());
+    authorSlotSize(*panel, {120.0f, 60.0f});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel).valid());
 
     (void)tree.buildSnapshot({});
     (void)tree.buildSnapshot({});
     const GuiPerfStats before = tree.getPerfStats();
 
-    panel->setSize(panel->getSize());
+    auto* content = tree.getLayer(WidgetTree::ELayer::Content);
+    auto* slot = dynamic_cast<UICanvasSlot*>(content->getSlotForChild(*panel));
+    ASSERT_NE(slot, nullptr);
+    const glm::vec2 authoredSize = slot->getFixedSize();
+    authorSlotSize(*panel, authoredSize);
     panel->setColor(panel->getColor());
     (void)tree.buildSnapshot({});
 
@@ -143,16 +147,16 @@ TEST(DeclarativeContractTest, AppearanceModesCoverNoThemeAuthoredAndThemeOnly)
 {
     WidgetTree noTheme({.width = 320, .height = 200});
     auto fallback = std::make_shared<UIPanel>("Fallback");
-    fallback->setSize({120.0f, 60.0f});
-    ASSERT_TRUE(noTheme.attachToLayer(WidgetTree::ELayer::Content, fallback).valid());
+    authorSlotSize(*fallback, {120.0f, 60.0f});
+    ASSERT_TRUE(noTheme.attach(*noTheme.getLayer(WidgetTree::ELayer::Content), fallback).valid());
     const auto fallbackSnapshot = noTheme.buildSnapshot({});
     ASSERT_EQ(fallbackSnapshot.items.size(), 1u);
 
     WidgetTree authored({.width = 320, .height = 200});
     auto authoredPanel = std::make_shared<UIPanel>("Authored");
-    authoredPanel->setSize({120.0f, 60.0f});
+    authorSlotSize(*authoredPanel, {120.0f, 60.0f});
     authoredPanel->setColor({0.1f, 0.2f, 0.3f, 1.0f});
-    ASSERT_TRUE(authored.attachToLayer(WidgetTree::ELayer::Content, authoredPanel).valid());
+    ASSERT_TRUE(authored.attach(*authored.getLayer(WidgetTree::ELayer::Content), authoredPanel).valid());
     const auto authoredSnapshot = authored.buildSnapshot({});
     ASSERT_EQ(authoredSnapshot.items.size(), 1u);
     EXPECT_EQ(authoredSnapshot.items.front().color, glm::vec4(0.1f, 0.2f, 0.3f, 1.0f));
@@ -164,8 +168,8 @@ TEST(DeclarativeContractTest, AppearanceModesCoverNoThemeAuthoredAndThemeOnly)
     theme->define<FPanelStyle>("panel", panelStyle);
     themed.setTheme(theme.get());
     auto themedPanel = std::make_shared<UIPanel>("Themed");
-    themedPanel->setSize({120.0f, 60.0f});
-    ASSERT_TRUE(themed.attachToLayer(WidgetTree::ELayer::Content, themedPanel).valid());
+    authorSlotSize(*themedPanel, {120.0f, 60.0f});
+    ASSERT_TRUE(themed.attach(*themed.getLayer(WidgetTree::ELayer::Content), themedPanel).valid());
     const auto themedSnapshot = themed.buildSnapshot({});
     ASSERT_EQ(themedSnapshot.items.size(), 1u);
     EXPECT_EQ(themedSnapshot.items.front().color, glm::vec4(0.7f, 0.1f, 0.2f, 1.0f));
@@ -219,8 +223,8 @@ TEST(DeclarativeContractTest, SnapshotDoesNotDependOnLiveWidgetAfterDetach)
 {
     WidgetTree tree({.width = 320, .height = 200});
     auto panel = std::make_shared<UIPanel>("SnapshotPanel");
-    panel->setSize({120.0f, 60.0f});
-    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, panel).valid());
+    authorSlotSize(*panel, {120.0f, 60.0f});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel).valid());
 
     UIFrameSnapshot snapshot = tree.buildSnapshot({});
     ASSERT_EQ(snapshot.items.size(), 1u);
@@ -351,7 +355,7 @@ TEST(DeclarativeContractTest, AdapterHostPatchClampsFocusedTextFieldCursorWithou
 
     auto fieldRef = std::make_shared<UITextField>("AdapterField");
     fieldRef->setText("hello world");
-    fieldRef->setSize({180.0f, 28.0f});
+    authorSlotSize(*fieldRef, {180.0f, 28.0f});
 
     int commits = 0;
     fieldRef->_onCommit = [&](const std::string&) { ++commits; };
@@ -555,8 +559,8 @@ TEST(DeclarativeContractTest, DetachClearsFocusAndPointerCapture)
 {
     WidgetTree tree({.width = 320, .height = 200});
     auto button = std::make_shared<UIButton>("TransientButton");
-    button->setSize({120.0f, 60.0f});
-    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, button).valid());
+    authorSlotSize(*button, {120.0f, 60.0f});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button).valid());
     tree.layout();
 
     tree.setFocus(button.get());
@@ -585,7 +589,10 @@ TEST(DeclarativeContractTest, DirectConstructAttachesLiveWidgetsWithoutDescripti
     ASSERT_NE(root, nullptr);
     EXPECT_EQ(root->_typeId, kTypeIdContainer);
     EXPECT_EQ(root->_stableKey, "root");
-    EXPECT_TRUE(root->_bAutoSize);
+    // Builder defaults do not write widget-owned geometry; the root's edge is
+    // the only layout authority once it is attached to the canvas layer.
+    ASSERT_NE(root->getSlot(), nullptr);
+    EXPECT_NE(dynamic_cast<UICanvasSlot*>(root->getSlot()), nullptr);
     ASSERT_EQ(root->getChildren().size(), 2u);
     EXPECT_EQ(root->getChildren()[0]->_typeId, kTypeIdText);
     EXPECT_EQ(root->getChildren()[1]->_typeId, kTypeIdButton);
@@ -594,13 +601,27 @@ TEST(DeclarativeContractTest, DirectConstructAttachesLiveWidgetsWithoutDescripti
     EXPECT_EQ(dynamic_cast<UIText*>(root->getChildren()[1]->getChildren()[0].get())->getText(), "Go");
 }
 
+TEST(DeclarativeContractTest, BuilderAutoSizeIsStoredOnParentCanvasSlot)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    UIElement* host = tree.getLayer(WidgetTree::ELayer::Content);
+
+    const UIElementRef label = ui::build(tree, *host, ui::text("auto").setText("Hello").setAutoSize(true));
+    ASSERT_NE(label, nullptr);
+
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(label->getSlot());
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getWidthSizeMode(), EWidgetSizeMode::Auto);
+    EXPECT_EQ(slot->getHeightSizeMode(), EWidgetSizeMode::Auto);
+}
+
 TEST(DeclarativeContractTest, CompoundWidgetConstructsOnceAndTicksOnlyWhileAttached)
 {
     WidgetTree tree({.width = 320, .height = 200});
     auto compound = std::make_shared<FTestCompoundWidget>("compound");
 
     EXPECT_EQ(compound->constructCount, 0);
-    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, compound).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), compound).valid());
     EXPECT_EQ(compound->constructCount, 1);
     ASSERT_EQ(compound->getChildren().size(), 1u);
 
@@ -613,7 +634,7 @@ TEST(DeclarativeContractTest, CompoundWidgetConstructsOnceAndTicksOnlyWhileAttac
     tree.tick(1.0f);
     EXPECT_EQ(compound->tickCount, 2);
 
-    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, compound).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), compound).valid());
     EXPECT_EQ(compound->constructCount, 1);
     tree.tick(1.0f);
     EXPECT_EQ(compound->tickCount, 3);
@@ -641,7 +662,7 @@ TEST(DeclarativeContractTest, CompoundWidgetForwardsDesiredSizeAndLayoutToCompos
     WidgetTree tree({.width = 320, .height = 200});
     auto compound = std::make_shared<FTestCompoundWidget>("compound_layout");
 
-    ASSERT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, compound).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), compound).valid());
     ASSERT_EQ(compound->getChildren().size(), 1u);
 
     EXPECT_EQ(compound->computeDesiredSize(), glm::vec2(123.0f, 45.0f));
@@ -649,7 +670,7 @@ TEST(DeclarativeContractTest, CompoundWidgetForwardsDesiredSizeAndLayoutToCompos
     tree.layout();
     const UIElement* contentRoot = compound->getChildren().front().get();
     ASSERT_NE(contentRoot, nullptr);
-    const auto* slot = dynamic_cast<const UISingleChildSlot*>(compound->getSlotForChild(*contentRoot));
+    const auto* slot = dynamic_cast<const UIOverlaySlot*>(compound->getSlotForChild(*contentRoot));
     ASSERT_NE(slot, nullptr);
     EXPECT_EQ(slot->getHAlign(), EUIOverlayAlignment::Fill);
     EXPECT_EQ(slot->getVAlign(), EUIOverlayAlignment::Fill);

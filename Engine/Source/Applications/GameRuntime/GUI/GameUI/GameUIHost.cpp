@@ -95,6 +95,19 @@ WidgetAttachment GameUIHost::addToWorld(Scene& world, const UIElementRef& widget
     return _controller->addToWorld(world, widget, *this);
 }
 
+WidgetAttachment GameUIHost::addToWorld(Scene& world,
+                                        const UIElementRef& widget,
+                                        const FCanvasSlotArgs& args)
+{
+    if (_mountedScene != &world) {
+        YA_CORE_ERROR("GameUIHost::addToWorld: world '{}' is not the presented scene; "
+                      "refusing to mount to another tree",
+                      world.getName());
+        return {};
+    }
+    return _controller->addToWorld(world, widget, args, *this);
+}
+
 EWidgetRouteResult GameUIHost::dispatchEvent(const Event& event, const glm::vec2& windowPoint)
 {
     const glm::vec2 max = _viewportPx.pos + _viewportPx.extent;

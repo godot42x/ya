@@ -21,6 +21,27 @@
 - 不继续维护 path-A/path-B 双轨布局协议；统一为 layout host + typed slot。
 - .child(node) 若保留，只能表示新布局系统定义的 default slot，不是 legacy 兼容。
 
+### 首版兼容政策（硬约束）
+
+本计划的首版目标是一次性完成全量重构，**不保留任何 legacy 兼容语义**。这里的“无兼容”不仅指不对外承诺旧 API，还包括运行时、序列化和测试资产都不得继续解释旧模型：
+
+- 旧 widget serialized file 不迁移、不转换、不兼容读取；未定版文件和旧 fixture 直接删除，首版只生成/读取新 schema。
+- 旧 geometry 字段、旧 builder/attach 重载、child-owned self-positioned fallback、deprecated alias、双写、自动推断和静默降级均不得成为长期或隐式路径。
+- 现阶段残留的 bridge 只能作为明确标注、可删除的内部施工措施；不得新增依赖，不得把 bridge 包装成兼容 API。每个 bridge 必须在计划中绑定删除 checkpoint。
+- 任一阶段若只能依赖兼容 shim 才能继续，必须先暂停编码并修正 root-slot / typed-slot contract 与调用点；不得扩大兼容面或以兼容层掩盖架构缺口。
+- 最终验收包含负向检查：代码、反射 schema、序列化读取分支、示例、测试 fixture 和公开头文件中均不存在旧布局真值或 legacy 兼容入口。
+
+### Edge 查询与类型识别约束
+
+- `UISlot` 的 ownership 仍属于 parent；为避免 child 每次通过 parent 扫描查询 edge，`UIElement` 持有一个 non-owning `UISlot*` 回指。插入 edge 后立即绑定，detach/reparent 销毁旧 edge 前先清空，创建新 edge 后重新绑定；same-parent reorder 只移动 `unique_ptr`，不得重建或清空 slot。
+- `getSlot()` 必须是 O(1) 回指；`getSlotForChild()` 仅作为 parent 侧按 child 查询和诊断接口保留。slot 指针不得跨 detach/reparent 缓存到业务对象。
+- slot 类型保持开放扩展，不引入 engine-owned `ESlotKind` 枚举；typed slot 查询只在 slot 边界使用 `UISlot::as<T>()`，避免把用户扩展绑定到核心枚举。widget 类型的 RTTI 清理另列 checkpoint，不与 edge ownership 混杂。
+
+### Checkpoint 提交政策
+
+- 一个 checkpoint 必须对应一个完整、可运行、可验证的架构目标，至少同时包含实现、测试和计划/进度映射；禁止以单行修复、占位、纯文档或重复拆分制造表面进度。
+- 当前历史中已有若干过细的布局提交；后续不再新增同类碎片。发布/合并前应将本计划相关提交整理为语义 checkpoint；在未获明确授权前不直接改写共享分支历史。
+
 ## 1. 最终架构契约
 
 ~~~text
@@ -49,6 +70,8 @@ reportStretchAnchorsIgnored
 ~~~
 
 _layoutRect、setLayoutRect()、layoutAssigned() 保留，但仅作为布局结果通道。
+
+当前进度：`_position/_size/_bAuthoredPosition/_bAuthoredSize` 及其 getter、`_anchorMin/_anchorMax`、`_bAutoSize` 与 no-arg layer attach 已完成删除；Declarative builder 的 detached edge intent 已移入 builder/materialization 阶段，不再依赖 widget pending bridge。imperative detached pending bridge、builder 默认 child 重载、旧 schema 负向清零与剩余 self-positioned bridge 仍按后续 checkpoint 清理。
 
 ## 3. 目标 DSL 与内部模型
 
@@ -230,10 +253,10 @@ ui::canvas("Root")[
 - CP5 目前只是引入 layout-host hook；`UIElement` 的 legacy self-positioned fallback 仍在，因此不能宣称运行期二分已消失。
 - root/layer 路径需要分两步收口：先把 `TreeRoot` 自身改为正式 canvas host、用 root->layer slot 表达 system layer fill；再迁移 layer 下业务 child 的默认 attach 语义。不能直接把 layer 升成 canvas host，否则会把 `attachToLayer()` 现有几何语义静默打坏。
 - 进一步审计结论：在 layer 尚未成为 typed layout host 之前，**不能**先给 `attachToLayer()` 暴露统一 `layout spec` 入口。否则 API 会看起来统一，但 layer->child edge 仍只能生成 base slot，intent 无法被正确消费，等于制造新的“能写不能兑现”的过渡层。
-- 新审计结论：layer 升级为 canvas host 本身并非不可行，关键在于 **attach 时必须把 child 当前 authored canvas geometry 立即迁入 parent-owned `UICanvasSlot`，且后续 `setPosition()` 必须桥接到该 slot**。若缺少这两步，升级 layer host 仍会静默破坏既有语义。
+- 新审计结论：layer 已是 canvas host 后，运行时不得再通过 `UIElement::setPosition/setSize` 隐式桥接；layer child 必须在 attach 时传入显式 `FCanvasSlotArgs`，后续直接更新该 edge。
 - 当前实现存在一条明确架构偏差：`applyLayoutSpecToSlot(box)` 仍通过 `child.setSize()` 兑现 `size()`，这让 Box host 的一部分布局意图继续写回 child geometry，而不是完全留在 slot/layout 上。
 - 当前实现曾存在另一条明确偏差：capability 编译期约束已覆盖 single-child / overlay 宿主，但 unified `ui::layout()` 的运行时 slot 消费未完全覆盖，导致“能编译但 intent 可能静默丢失”。该问题现已纠正并补测试验证。
-- 当前实现又发现一条同类偏差：`UIScrollViewport` 已公开 single-child 能力与 DSL 入口，但 `UIScrollLayout` 一度未创建 `UISingleChildSlot`，形成“接口统一、runtime 仍是 base slot”的假统一。后续凡是宣称支持 typed slot 的宿主，都必须先核实 `createSlotForChild()/UILayout::createSlot()` 的实际闭环，再允许对外暴露对应 capability。
+- 纠偏结论：single-child 不是一种独立 slot 数据模型；Button/SizeBox/Split/Scroll 等宿主复用 `UIOverlaySlot` 的 align/preferred-size edge 数据，`UISingleChildLayout` 只保留父级 measure/arrange 策略。这样用户扩展新 slot 类型无需修改核心枚举。
 - 新审计结论：`PopupOverlay` 需要的是**独立 full-screen host 语义**，但不必为此再发明一套平行 slot 类型。更合理的收口是让 popup 自己拥有 shield/full-screen contract，同时复用通用 `UICanvasSlot` 承载 content edge；Menu / Dialog 通过覆盖 content slot args 表达“固定尺寸定位”与“居中 Auto 尺寸”。
 - 审计补充：`CP5` 末尾不应把“测试里仍出现 `setPosition/setSize`”本身视为误差。剩余大量调用其实是在定义 absolute 几何、layer-child attach 语义或测试夹具初始条件；真正需要清理的是那些**runtime 已完全由 parent-owned slot 决定**、child 再写 `size/anchor/position` 只剩历史噪声的 dead write。
 - 新审计结论：`reparent` 不能把“edge 属于 parent->child”误解成“同父重排时也应该销毁 edge”。跨父迁移当然要重建 slot，但 `reparentBefore/After` 在**同一个 parent** 下只是调整顺序，必须移动原 slot，而不是重建默认 slot，否则 box/canvas/overlay/table 的 edge state 会在 reorder 时蒸发。
@@ -264,7 +287,7 @@ ui::canvas("Root")[
 - reparent/detach 时销毁并重建 slot。
 
 ### CP5 — 全仓 API / runtime 迁移
-- 迁移所有 setPosition/setSize/fillParent/setAnchors。
+- 迁移所有旧 geometry setter/getter；布局修改只能显式读取并更新 parent-owned slot，builder 的 `.setSize/.setPosition` 仅作为构造期 edge intent。
 - 迁移 WidgetTree、DockSpace、Popup、UIDesigner、Workbench、Editor 和测试中的直接字段写入。
 - PopupOverlay 单独定义 full-screen host 与 content slot，不假设等同于普通 Panel。
 
@@ -306,7 +329,7 @@ final geometry belongs to the layout result
 - 全仓不存在 UI 布局用途的旧 geometry 字段、setter 和 builder modifier。
 - 所有布局输入可从 typed slot + layout diagnostics 观察。
 - 不存在 path-A/path-B 双轨或“anchor 被忽略”运行期兜底。
-- Canvas、Box、Overlay、Grid、SingleChild slot 不可混用。
+- Canvas、Box、Overlay、Grid slot 不可混用；single-child layout 使用 Overlay slot edge，不再存在独立 SingleChild slot。
 - reparent 后不会泄漏旧 parent 的布局状态。
 - measure → arrange → layoutRect → snapshot 是唯一几何链路。
 - closure tests、GUIWorkbench、GameEditor、headless 和 macOS convergence gate 全部通过。

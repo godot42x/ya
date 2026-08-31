@@ -84,7 +84,8 @@ void UIPopupOverlay::layoutAssigned(const Rect2D& rect)
         }
         // Policy for this edge is popup-owned; write it onto the slot before
         // the installed canvas layout arranges from that edge.
-        if (auto* slot = dynamic_cast<UICanvasSlot*>(getSlotForChild(*child))) {
+        if (UISlot* edge = getSlotForChild(*child); edge && edge->as<UICanvasSlot>()) {
+            auto* slot = edge->as<UICanvasSlot>();
             slot->apply(resolveContentSlotArgs(*child));
         }
         break;

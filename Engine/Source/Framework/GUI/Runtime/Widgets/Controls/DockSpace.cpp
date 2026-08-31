@@ -585,7 +585,8 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     body->addDetachedChild(content);
     // Stretch intent lives on the parent->child edge: the body is a canvas host,
     // so the fill is expressed through its slot rather than on the container.
-    if (auto* slot = dynamic_cast<UICanvasSlot*>(body->getSlotForChild(*content))) {
+    if (UISlot* edge = body->getSlotForChild(*content); edge && edge->as<UICanvasSlot>()) {
+        auto* slot = edge->as<UICanvasSlot>();
         FCanvasSlotArgs fillArgs;
         fillArgs.anchorMin = {0.0f, 0.0f};
         fillArgs.anchorMax = {1.0f, 1.0f};
@@ -600,7 +601,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
 
 void UIDockSpace::layout(const Rect2D& parentRect)
 {
-    layoutAssigned(computeAnchorRect(parentRect));
+    layoutAssigned(parentRect);
 }
 
 void UIDockSpace::layoutAssigned(const Rect2D& rect)

@@ -14,7 +14,7 @@ UIContainer::UIContainer(std::string name, std::string styleKey)
 
 void UIContainer::layout(const Rect2D& parentRect)
 {
-    layoutAssigned(computeAnchorRect(parentRect));
+    layoutAssigned(parentRect);
 }
 
 void UIContainer::layoutAssigned(const Rect2D& rect)

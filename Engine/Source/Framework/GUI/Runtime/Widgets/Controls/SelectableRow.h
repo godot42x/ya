@@ -19,7 +19,7 @@ namespace ya
 /// virtualization and owns no item list.
 ///
 /// Content lives in a single-child slot (same contract as UIButton): the
-/// label's indent/fill intent is padding + UISingleChildSlot, not child
+/// label's indent/fill intent is padding + UIOverlaySlot, not child
 /// `setPosition` / `setSize`.
 ///
 /// Input semantics (same capture contract as UIButton):

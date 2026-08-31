@@ -186,11 +186,10 @@ struct YA_GUI_API WidgetTree final
     /// attached anywhere — reparent() is the explicit move operation. The
     /// widget keeps its own _zOrder (set it before attaching).
     [[maybe_unused]] WidgetAttachment attach(UIElement& parent, const UIElementRef& widget);
-    /// Attach `widget` to a system layer (Content by default for game UI).
-    [[nodiscard]] WidgetAttachment attachToLayer(ELayer layer, const UIElementRef& widget);
-    /// Attach `widget` to a system layer with explicit canvas edge intent.
-    /// Keeps the legacy geometry fields in sync so detach/reattach semantics
-    /// remain stable while CP2 authored-geometry removal is still pending.
+    /// Attach `widget` under `parent` with explicit canvas edge intent.
+    [[nodiscard]] WidgetAttachment attach(UIElement& parent,
+                                          const UIElementRef& widget,
+                                          const FCanvasSlotArgs& args);
     [[nodiscard]] WidgetAttachment attachToLayer(ELayer layer,
                                                 const UIElementRef& widget,
                                                 const FCanvasSlotArgs& args);

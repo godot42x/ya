@@ -18,7 +18,7 @@ namespace ya
 ///   - Space / Enter on the focused box toggles;
 ///   - the first visible content child (label text) fills the content box to
 ///     the right of the check mark; indent is content padding
-///     (`_boxSize + _labelSpacing`), not child `setPosition`. With `_bAutoSize`
+///     (`_boxSize + _labelSpacing`), not child geometry. With an Auto slot,
 ///     the desired size = box + spacing + content.
 struct YA_GUI_API UICheckBox : public UIElement, public UIStyledWidget<UICheckBox, FCheckBoxStyle>
 {

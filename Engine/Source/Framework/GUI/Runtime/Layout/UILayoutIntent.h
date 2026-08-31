@@ -4,7 +4,7 @@
 // UILayoutIntent - the unified parent->child layout contract.
 //
 // The historical model let a CHILD author its own stretch geometry
-// (TUIWidgetBuilder::fillParent/setAnchors writing _anchorMin/_anchorMax), which
+// (TUIWidgetBuilder::fillParent/setAnchors writing child anchors), which
 // a path-A parent silently dropped. The unified model moves ALL layout intent
 // onto the parent->child edge:
 //

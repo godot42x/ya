@@ -37,8 +37,8 @@ public:
     [[nodiscard]] UIElement& getChild() const { return *_child; }
     virtual void appendRuntimeDiagnostics(nlohmann::json& node) const;
 
-    /// Typed access to a concrete slot subclass. Returns nullptr when the edge
-    /// is not of type T.
+    /// Typed access remains open to user-defined UISlot subclasses; adding a
+    /// slot type does not require editing an engine-owned enum.
     template <typename T>
     [[nodiscard]] T* as() { return dynamic_cast<T*>(this); }
     template <typename T>
@@ -224,7 +224,7 @@ private:
 /// How a child is placed on one axis inside a box the parent already owns.
 /// Fill stretches that axis; otherwise the child keeps its desired size and
 /// Start/Center/End place it. Shared by UIOverlaySlot (multiple stacked
-/// children) and UISingleChildSlot (scroll / size box / split / button ...),
+/// children) and UISingleChildLayout (scroll / size box / split / button ...),
 /// which answer the same question per axis.
 enum class EUIOverlayAlignment : uint8_t
 {
@@ -232,44 +232,6 @@ enum class EUIOverlayAlignment : uint8_t
     Start,
     Center,
     End,
-};
-
-/// Layout data carried by one UISingleChildLayout parent-child edge.
-///
-/// Single-child hosts (scroll viewport / size box / split pane / button ...)
-/// own both axes, so the only intent left is whether the child is stretched to
-/// the content box or keeps its desired size and is aligned inside it. That is
-/// exactly the overlay question, so the alignment type is shared with
-/// UIOverlaySlot.
-class YA_GUI_API UISingleChildSlot final : public UISlot
-{
-public:
-    UISingleChildSlot(UIElement& parent, UIElement& child);
-
-    [[nodiscard]] EUIOverlayAlignment getHAlign() const { return _hAlign; }
-    [[nodiscard]] EUIOverlayAlignment getVAlign() const { return _vAlign; }
-    [[nodiscard]] const glm::vec2& getPreferredSize() const { return _preferredSize; }
-
-    void setAlign(EUIOverlayAlignment hAlign, EUIOverlayAlignment vAlign);
-    void setPreferredSize(glm::vec2 value);
-    void apply(const struct FSingleChildSlotArgs& args);
-    void appendRuntimeDiagnostics(nlohmann::json& node) const override;
-
-private:
-    EUIOverlayAlignment _hAlign = EUIOverlayAlignment::Fill;
-    EUIOverlayAlignment _vAlign = EUIOverlayAlignment::Fill;
-    glm::vec2           _preferredSize = {0.0f, 0.0f};
-};
-
-/// Construct-time single-child slot intent. Defaults to Fill on both axes,
-/// which is the historical behaviour of every single-child host, so adopting
-/// the slot changes nothing for existing call sites.
-struct FSingleChildSlotArgs
-{
-    EUIOverlayAlignment hAlign = EUIOverlayAlignment::Fill;
-    EUIOverlayAlignment vAlign = EUIOverlayAlignment::Fill;
-    /// Non-zero on an axis overrides the child's desired size for that axis.
-    glm::vec2           preferredSize = {0.0f, 0.0f};
 };
 
 class YA_GUI_API UISingleChildLayout final : public UILayout
@@ -387,7 +349,7 @@ struct FCanvasSlotArgs;
 /// Canvas slot: the anchor-owning parent-child edge. The child's rect is
 /// resolved from `anchorMin/anchorMax` against the parent rect, plus an offset
 /// and optional min/max clamps. This replaces the historical
-/// "child authors its own _anchorMin/_anchorMax/_position/_minSize/_maxSize"
+/// Child placement is authored on the parent-owned slot edge.
 /// pattern: anchor intent lives on the parent->child edge, so a non-canvas
 /// parent (which never reads this slot) cannot silently drop it.
 ///

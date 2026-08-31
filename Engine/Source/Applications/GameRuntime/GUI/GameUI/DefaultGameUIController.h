@@ -22,6 +22,10 @@ struct DefaultGameUIController : public IGameUIController
     [[nodiscard]] WidgetAttachment addToWorld(Scene& world,
                                               const UIElementRef& widget,
                                               GameUIHost& host) override;
+    [[nodiscard]] WidgetAttachment addToWorld(Scene& world,
+                                              const UIElementRef& widget,
+                                              const FCanvasSlotArgs& args,
+                                              GameUIHost& host) override;
 
   private:
     /// Per-scene attachments created by this controller (auto-mounted entries).

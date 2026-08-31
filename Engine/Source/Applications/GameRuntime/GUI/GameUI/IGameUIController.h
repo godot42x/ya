@@ -14,6 +14,7 @@
 
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetAttachment.h"
+#include "GUI/Layout/UILayout.h"
 
 #include <memory>
 
@@ -41,6 +42,26 @@ struct IGameUIController
     [[nodiscard]] virtual WidgetAttachment addToWorld(Scene& world,
                                                       const UIElementRef& widget,
                                                       GameUIHost& host) = 0;
+
+    /// Explicit parent-owned canvas edge intent for dynamic widgets. The
+    /// default implementation preserves custom controller policies while
+    /// applying the args to the newly-created edge.
+    [[nodiscard]] virtual WidgetAttachment addToWorld(Scene& world,
+                                                      const UIElementRef& widget,
+                                                      const FCanvasSlotArgs& args,
+                                                      GameUIHost& host)
+    {
+        WidgetAttachment attachment = addToWorld(world, widget, host);
+        if (!attachment.valid() || !widget) {
+            return attachment;
+        }
+        if (UISlot* edge = widget->getSlot()) {
+            if (auto* canvas = edge->as<UICanvasSlot>()) {
+                canvas->apply(args);
+            }
+        }
+        return attachment;
+    }
 };
 
 } // namespace ya

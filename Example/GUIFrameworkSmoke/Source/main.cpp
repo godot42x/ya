@@ -26,6 +26,32 @@ using namespace ya;
 namespace
 {
 
+void setPendingSlotPosition(UIElement& widget, glm::vec2 value)
+{
+    widget.setPendingSlotInitializer([value](UIElement&, UISlot& edge) {
+        if (auto* canvas = edge.as<UICanvasSlot>()) {
+            canvas->setOffset(value);
+        }
+    });
+}
+
+void setPendingSlotSize(UIElement& widget, glm::vec2 value)
+{
+    widget.setPendingSlotInitializer([value](UIElement&, UISlot& edge) {
+        if (auto* canvas = edge.as<UICanvasSlot>()) {
+            canvas->setFixedSize(value);
+            canvas->setWidthSizeMode(EWidgetSizeMode::Fixed);
+            canvas->setHeightSizeMode(EWidgetSizeMode::Fixed);
+        }
+        else if (auto* box = edge.as<UIBoxSlot>()) {
+            box->setPreferredSize(value);
+        }
+        else if (auto* overlay = edge.as<UIOverlaySlot>()) {
+            overlay->setPreferredSize(value);
+        }
+    });
+}
+
 /// Interactive demo content: a panel with a title, a click counter label and
 /// a button. The button label is a Pass-filtered child text so hover/press
 /// still reach the button underneath.
@@ -41,32 +67,32 @@ struct FMinimalUIDemo
 void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
 {
     demo.panel = std::make_shared<UIPanel>("DemoPanel");
-    demo.panel->setPosition({64.0f, 64.0f});
-    demo.panel->setSize({340.0f, 200.0f});
+    setPendingSlotPosition(*demo.panel, {64.0f, 64.0f});
+    setPendingSlotSize(*demo.panel, {340.0f, 200.0f});
     demo.panel->setColor({0.13f, 0.14f, 0.17f, 0.96f});
 
     demo.title = std::make_shared<UIText>("Title");
-    demo.title->setPosition({16.0f, 14.0f});
-    demo.title->setSize({308.0f, 30.0f});
+    setPendingSlotPosition(*demo.title, {16.0f, 14.0f});
+    setPendingSlotSize(*demo.title, {308.0f, 30.0f});
     demo.title->_fontSize = 20;
     demo.title->setText("YA Minimal GUI Host");
     demo.title->setColor({1.0f, 1.0f, 1.0f, 1.0f});
 
     demo.counter = std::make_shared<UIText>("Counter");
-    demo.counter->setPosition({16.0f, 58.0f});
-    demo.counter->setSize({308.0f, 26.0f});
+    setPendingSlotPosition(*demo.counter, {16.0f, 58.0f});
+    setPendingSlotSize(*demo.counter, {308.0f, 26.0f});
     demo.counter->_fontSize = 16;
     demo.counter->setText("Clicked: 0");
     demo.counter->setColor({0.85f, 0.87f, 0.90f, 1.0f});
 
     demo.button = std::make_shared<UIButton>("ClickButton");
-    demo.button->setPosition({16.0f, 100.0f});
-    demo.button->setSize({150.0f, 44.0f});
+    setPendingSlotPosition(*demo.button, {16.0f, 100.0f});
+    setPendingSlotSize(*demo.button, {150.0f, 44.0f});
     // Button fills come from the mounted theme ("button" key) — style-system
     // Phase 3 cleanup removed the bare color fields (see FSmokeApp::buildUI).
 
     demo.buttonLabel = std::make_shared<UIText>("ButtonLabel");
-    demo.buttonLabel->setSize({150.0f, 44.0f});
+    setPendingSlotSize(*demo.buttonLabel, {150.0f, 44.0f});
     demo.buttonLabel->_fontSize = 16;
     demo.buttonLabel->setText("Click me");
     demo.buttonLabel->setColor({1.0f, 1.0f, 1.0f, 1.0f});
@@ -85,8 +111,8 @@ void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
     FCanvasSlotArgs panelSlot;
     panelSlot.anchorMin = {0.0f, 0.0f};
     panelSlot.anchorMax = {0.0f, 0.0f};
-    panelSlot.offset = demo.panel->getPosition();
-    panelSlot.fixedSize = demo.panel->getSize();
+    panelSlot.offset = {64.0f, 64.0f};
+    panelSlot.fixedSize = {340.0f, 200.0f};
     tree.attachToLayer(WidgetTree::ELayer::Content, demo.panel, panelSlot);
     tree.attach(*demo.panel, demo.title);
     tree.attach(*demo.panel, demo.counter);

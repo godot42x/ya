@@ -67,7 +67,11 @@ WidgetTree::WidgetTree(Extent2D logicalExtent) : _logicalExtent(logicalExtent)
         _layers[i]       = makeLayerElement("Layer_" + std::to_string(i));
         _layers[i]->_zOrder = static_cast<int>(i);
         _root->appendChildEdge(_layers[i]);
-        if (auto* slot = dynamic_cast<UICanvasSlot*>(_root->getSlotForChild(*_layers[i]))) {
+        if (UISlot* edge = _root->getSlotForChild(*_layers[i])) {
+            auto* slot = edge->as<UICanvasSlot>();
+            if (!slot) {
+                continue;
+            }
             FCanvasSlotArgs fillArgs;
             fillArgs.anchorMin = {0.0f, 0.0f};
             fillArgs.anchorMax = {1.0f, 1.0f};
@@ -198,7 +202,11 @@ void WidgetTree::updateTooltip()
     label->setText(_hovered->_tooltip);
     host->addDetachedChild(label);
     // The host is a canvas host: fill + inset live on the parent->child slot.
-    if (auto* slot = dynamic_cast<UICanvasSlot*>(host->getSlotForChild(*label))) {
+    if (UISlot* edge = host->getSlotForChild(*label)) {
+        auto* slot = edge->as<UICanvasSlot>();
+        if (!slot) {
+            return;
+        }
         FCanvasSlotArgs args;
         args.anchorMin = {0.0f, 0.0f};
         args.anchorMax = {1.0f, 1.0f};
@@ -379,12 +387,14 @@ WidgetTree::~WidgetTree()
         pending.pop_back();
         node->_tree   = nullptr;
         node->_parent = nullptr;
+        node->_slot   = nullptr;
         for (const auto& child : node->_children) {
             pending.push_back(child.get());
         }
     }
     _root->_tree   = nullptr;
     _root->_parent = nullptr;
+    _root->_slot   = nullptr;
     _root->_children.clear();
     _root->_childSlots.clear();
 }
@@ -435,45 +445,32 @@ WidgetAttachment WidgetTree::attach(UIElement& parent, const UIElementRef& widge
     return WidgetAttachment{.tree = this, .widget = widget};
 }
 
-WidgetAttachment WidgetTree::attachToLayer(ELayer layer, const UIElementRef& widget)
+WidgetAttachment WidgetTree::attach(UIElement& parent,
+                                    const UIElementRef& widget,
+                                    const FCanvasSlotArgs& args)
 {
     if (!widget) {
         return {};
     }
-    FCanvasSlotArgs args;
-    args.anchorMin = widget->_anchorMin;
-    args.anchorMax = widget->_anchorMax;
-    args.offset    = widget->getPosition();
-    if (widget->_bAutoSize) {
-        if (widget->_anchorMin.x == widget->_anchorMax.x) {
-            args.widthSizeMode = EWidgetSizeMode::Auto;
-        }
-        if (widget->_anchorMin.y == widget->_anchorMax.y) {
-            args.heightSizeMode = EWidgetSizeMode::Auto;
-        }
+    WidgetAttachment attachment = attach(parent, widget);
+    if (!attachment.valid()) {
+        return attachment;
     }
-    else {
-        args.fixedSize = widget->getSize();
+    if (UISlot* edge = parent.getSlotForChild(*widget)) {
+        auto* slot = edge->as<UICanvasSlot>();
+        if (!slot) {
+            return attachment;
+        }
+        slot->apply(args);
     }
-    return attachToLayer(layer, widget, args);
+    return attachment;
 }
 
 WidgetAttachment WidgetTree::attachToLayer(ELayer layer,
                                           const UIElementRef& widget,
                                           const FCanvasSlotArgs& args)
 {
-    if (!widget) {
-        return {};
-    }
-    WidgetAttachment attachment = attach(*getLayer(layer), widget);
-    if (!attachment.valid()) {
-        return attachment;
-    }
-    UIElement* layerHost = getLayer(layer);
-    if (auto* slot = dynamic_cast<UICanvasSlot*>(layerHost->getSlotForChild(*widget))) {
-        slot->apply(args);
-    }
-    return attachment;
+    return attach(*getLayer(layer), widget, args);
 }
 
 void WidgetTree::reparent(UIElement& newParent, const UIElementRef& widget)
@@ -1365,7 +1362,11 @@ void WidgetTree::beginDrag(UIElement* source,
     label->_vAlign    = EWidgetAlignV::Center;
     ghost->addDetachedChild(label);
     // The ghost is a canvas host: fill lives on the parent->child slot edge.
-    if (auto* slot = dynamic_cast<UICanvasSlot*>(ghost->getSlotForChild(*label))) {
+    if (UISlot* edge = ghost->getSlotForChild(*label)) {
+        auto* slot = edge->as<UICanvasSlot>();
+        if (!slot) {
+            return;
+        }
         FCanvasSlotArgs args;
         args.anchorMin = {0.0f, 0.0f};
         args.anchorMax = {1.0f, 1.0f};
@@ -1395,7 +1396,8 @@ void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
     _dragPoint = logicalPoint;
     if (_dragGhost) {
         if (UIElement* layerHost = getLayer(ELayer::DragIme)) {
-            if (auto* slot = dynamic_cast<UICanvasSlot*>(layerHost->getSlotForChild(*_dragGhost))) {
+            if (UISlot* edge = layerHost->getSlotForChild(*_dragGhost); edge && edge->as<UICanvasSlot>()) {
+                auto* slot = edge->as<UICanvasSlot>();
                 slot->setOffset(logicalPoint + glm::vec2(10.0f, 10.0f));
             }
             else {

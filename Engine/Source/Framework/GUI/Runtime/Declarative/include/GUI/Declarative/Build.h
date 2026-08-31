@@ -118,10 +118,14 @@ namespace ya::ui
 template<UIWidgetBuilder TBuilder>
 UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder)
 {
+    auto slotInit = builder.takeSlotInitializer();
     UIElementRef root = std::forward<TBuilder>(builder).release();
     YA_CORE_ASSERT(root, "ui::build: empty root");
     const WidgetAttachment attached = tree.attach(parent, root);
     YA_CORE_ASSERT(attached.valid(), "ui::build: attach failed for '{}'", root->_name);
+    if (slotInit) {
+        parent.initializeChildSlot(*root, std::move(slotInit));
+    }
     return root;
 }
 
@@ -130,12 +134,16 @@ UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder)
 template<UIWidgetBuilder TBuilder>
 UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, const FCanvasSlotArgs& slot)
 {
+    auto slotInit = builder.takeSlotInitializer();
     UIElementRef root = std::forward<TBuilder>(builder).release();
     YA_CORE_ASSERT(root, "ui::build: empty root");
     const WidgetAttachment attached = tree.attach(parent, root);
     YA_CORE_ASSERT(attached.valid(), "ui::build: attach failed for '{}'", root->_name);
+    if (slotInit) {
+        parent.initializeChildSlot(*root, std::move(slotInit));
+    }
     if (auto* s = parent.getSlotForChild(*root)) {
-        if (auto* canvas = dynamic_cast<UICanvasSlot*>(s)) {
+        if (auto* canvas = s ? s->template as<UICanvasSlot>() : nullptr) {
             canvas->apply(slot);
         }
     }
@@ -147,22 +155,30 @@ UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, cons
 template<typename TWidget, typename TBuilder>
 std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&& builder)
 {
+    auto slotInit = builder.takeSlotInitializer();
     auto widget = std::dynamic_pointer_cast<TWidget>(std::forward<TBuilder>(builder).release());
     YA_CORE_ASSERT(widget, "ui::buildAs: builder produced the wrong widget class");
     const WidgetAttachment attached = tree.attach(parent, widget);
     YA_CORE_ASSERT(attached.valid(), "ui::buildAs: attach failed for '{}'", widget->_name);
+    if (slotInit) {
+        parent.initializeChildSlot(*widget, std::move(slotInit));
+    }
     return widget;
 }
 
 template<typename TWidget, typename TBuilder>
 std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&& builder, const FCanvasSlotArgs& slot)
 {
+    auto slotInit = builder.takeSlotInitializer();
     auto widget = std::dynamic_pointer_cast<TWidget>(std::forward<TBuilder>(builder).release());
     YA_CORE_ASSERT(widget, "ui::buildAs: builder produced the wrong widget class");
     const WidgetAttachment attached = tree.attach(parent, widget);
     YA_CORE_ASSERT(attached.valid(), "ui::buildAs: attach failed for '{}'", widget->_name);
+    if (slotInit) {
+        parent.initializeChildSlot(*widget, std::move(slotInit));
+    }
     if (auto* s = parent.getSlotForChild(*widget)) {
-        if (auto* canvas = dynamic_cast<UICanvasSlot*>(s)) {
+        if (auto* canvas = s ? s->template as<UICanvasSlot>() : nullptr) {
             canvas->apply(slot);
         }
     }
@@ -174,7 +190,7 @@ std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&&
 inline void attachCanvasSlot(UIElement& parent, UIElement& child, const FCanvasSlotArgs& slot)
 {
     if (auto* s = parent.getSlotForChild(child)) {
-        if (auto* canvas = dynamic_cast<UICanvasSlot*>(s)) {
+        if (auto* canvas = s ? s->as<UICanvasSlot>() : nullptr) {
             canvas->apply(slot);
         }
     }
@@ -186,10 +202,14 @@ inline void attachCanvasSlot(UIElement& parent, UIElement& child, const FCanvasS
 template<UIWidgetBuilder TBuilder>
 UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, const FUILayoutSpec& spec)
 {
+    auto slotInit = builder.takeSlotInitializer();
     UIElementRef root = std::forward<TBuilder>(builder).release();
     YA_CORE_ASSERT(root, "ui::build: empty root");
     const WidgetAttachment attached = tree.attach(parent, root);
     YA_CORE_ASSERT(attached.valid(), "ui::build: attach failed for '{}'", root->_name);
+    if (slotInit) {
+        parent.initializeChildSlot(*root, std::move(slotInit));
+    }
     parent.initializeChildSlot(*root, [&spec](UIElement& child, UISlot& slot) {
         applyLayoutSpecToSlot(slot, child, spec);
     });
@@ -199,10 +219,14 @@ UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, cons
 template<typename TWidget, typename TBuilder>
 std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&& builder, const FUILayoutSpec& spec)
 {
+    auto slotInit = builder.takeSlotInitializer();
     auto widget = std::dynamic_pointer_cast<TWidget>(std::forward<TBuilder>(builder).release());
     YA_CORE_ASSERT(widget, "ui::buildAs: builder produced the wrong widget class");
     const WidgetAttachment attached = tree.attach(parent, widget);
     YA_CORE_ASSERT(attached.valid(), "ui::buildAs: attach failed for '{}'", widget->_name);
+    if (slotInit) {
+        parent.initializeChildSlot(*widget, std::move(slotInit));
+    }
     parent.initializeChildSlot(*widget, [&spec](UIElement& child, UISlot& slot) {
         applyLayoutSpecToSlot(slot, child, spec);
     });

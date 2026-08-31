@@ -13,7 +13,7 @@ namespace ya
 
 void UIButton::layout(const Rect2D& parentRect)
 {
-    layoutAssigned(computeAnchorRect(parentRect));
+    layoutAssigned(parentRect);
 }
 
 void UIButton::layoutAssigned(const Rect2D& rect)

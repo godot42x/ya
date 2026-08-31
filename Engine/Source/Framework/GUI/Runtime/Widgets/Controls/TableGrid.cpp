@@ -45,7 +45,7 @@ std::unique_ptr<UISlot> UITableGrid::createSlotForChild(UIElement& child)
 
 void UITableGrid::layout(const Rect2D& parentRect)
 {
-    layoutAssigned(computeAnchorRect(parentRect));
+    layoutAssigned(parentRect);
 }
 
 void UITableGrid::layoutAssigned(const Rect2D& rect)
@@ -68,7 +68,8 @@ bool UITableGrid::cellHasWidget(int row, int col) const
         if (!child->participatesInLayout()) {
             continue;
         }
-        const auto* slot = dynamic_cast<const UITableSlot*>(getSlotForChild(*child));
+        const UISlot* edge = getSlotForChild(*child);
+        const auto* slot = edge ? edge->as<UITableSlot>() : nullptr;
         if (slot && slot->getRow() == row && slot->getColumn() == col) {
             return true;
         }
@@ -232,18 +233,15 @@ void UITableGrid::clearTransientInputState()
 
 glm::vec2 UITableGrid::computeDesiredSize() const
 {
-    // Parent-owned slots override the widget's size mode; report content
-    // intrinsic size whenever this grid participates in a layout edge.
-    if (!getSlot() && !_bAutoSize) {
-        return computeIntrinsicSize();
-    }
+    // Parent-owned slots decide fixed versus auto sizing; report the current
+    // data-driven content extent regardless of the edge state.
     const size_t rowCount = _rows ? _rows->size() : 0;
     return {320.0f, static_cast<float>(std::max<size_t>(rowCount, 1)) * _rowHeight};
 }
 
 glm::vec2 UITableGrid::computeIntrinsicSize() const
 {
-    return _size;
+    return _intrinsicSize;
 }
 
 } // namespace ya
