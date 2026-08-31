@@ -1,4 +1,3 @@
-#include "GUITestLayoutHelpers.h"
 // Phase 2a regression guards for UIDocument (ui-widget-tree-refactor): the
 // UIDocument schema, independent instantiation, JSON roundtrip, and detached
 // subtree authoring — all without a Scene or WidgetTree.
@@ -63,18 +62,22 @@ TEST(UIDocumentTest, FromWidgetRoundtripsFieldsAndChildren)
     ASSERT_NE(title, nullptr);
     ASSERT_NE(ok, nullptr);
 
-    authorSlotSize(*container, {300.0f, 120.0f});
     auto* titleWidget = dynamic_cast<UIText*>(title.get());
     ASSERT_NE(titleWidget, nullptr);
-    authorSlotPosition(*titleWidget, {10.0f, 20.0f});
     titleWidget->setText("Hello Doc");
     titleWidget->_fontSize = 24;
     titleWidget->setColor({1.0f, 0.0f, 0.0f, 1.0f});
     titleWidget->setStyleKey("text.header");
-    authorSlotPosition(*ok, {100.0f, 200.0f});
-    authorSlotSize(*ok, {80.0f, 32.0f});
-    container->addDetachedChild(title);
-    container->addDetachedChild(ok);
+    container->addDetachedChild(title, [](UIElement&, UISlot& edge) {
+        if (auto* slot = edge.as<UIBoxSlot>()) {
+            slot->setPreferredSize({120.0f, 24.0f});
+        }
+    });
+    container->addDetachedChild(ok, [](UIElement&, UISlot& edge) {
+        if (auto* slot = edge.as<UIBoxSlot>()) {
+            slot->setPreferredSize({80.0f, 32.0f});
+        }
+    });
 
     auto document = UIDocument::fromWidget(*container);
     ASSERT_NE(document, nullptr);
@@ -124,7 +127,6 @@ TEST(UIDocumentTest, JsonRoundtrip)
     panelWidget->setColor({0.12f, 0.14f, 0.22f, 0.88f});
     EXPECT_TRUE(panelWidget->hasAuthoredStyle());
     panelWidget->_zOrder   = 5;
-    authorSlotPosition(*panelWidget, {20.0f, 20.0f});
     auto label       = registry.createInstance("test.doc_text");
     auto* labelWidget = dynamic_cast<UIText*>(label.get());
     ASSERT_NE(labelWidget, nullptr);
@@ -365,7 +367,6 @@ TEST(UIDocumentTest, AuthoredPanelFillSurvivesThemeAfterReload)
     auto panel = registry.createInstance("test.doc_panel");
     auto* panelWidget = dynamic_cast<UIPanel*>(panel.get());
     ASSERT_NE(panelWidget, nullptr);
-    authorSlotSize(*panelWidget, {100.0f, 50.0f});
     panelWidget->setColor({0.12f, 0.14f, 0.22f, 0.88f});
 
     auto document = UIDocument::fromWidget(*panel);
@@ -557,7 +558,6 @@ TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)
     auto source = registry.createInstance("test.doc_panel");
     auto* sourcePanel = dynamic_cast<UIPanel*>(source.get());
     ASSERT_NE(sourcePanel, nullptr);
-    authorSlotSize(*sourcePanel, {300.0f, 120.0f});
     sourcePanel->setColor({0.5f, 0.5f, 0.5f, 1.0f});
     auto doc = UIDocument::fromWidget(*source);
     ASSERT_NE(doc, nullptr);

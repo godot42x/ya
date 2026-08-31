@@ -1,4 +1,3 @@
-#include "GUITestLayoutHelpers.h"
 // Contract guards for the static live-construct DSL (Slate Construct / SNew).
 // Builders materialize UIElement directly. There is no UIDescription,
 // UIReconciler, or UIRenderController.
@@ -79,9 +78,9 @@ TEST(DeclarativeContractTest, NoThemeStillRendersAuthoredAppearance)
 {
     WidgetTree tree({.width = 320, .height = 200});
     auto panel = std::make_shared<UIPanel>("AuthoredPanel");
-    authorSlotSize(*panel, {120.0f, 60.0f});
+    FCanvasSlotArgs panelSlot; panelSlot.fixedSize = {120.0f, 60.0f};
     panel->setColor({0.12f, 0.24f, 0.36f, 1.0f});
-    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot).valid());
 
     const UIFrameSnapshot snapshot = tree.buildSnapshot({});
     ASSERT_EQ(snapshot.items.size(), 1u);
@@ -150,8 +149,8 @@ TEST(DeclarativeContractTest, SameValuePropertyMutationDoesNotDirtyTree)
 {
     WidgetTree tree({.width = 320, .height = 200});
     auto panel = std::make_shared<UIPanel>("StablePanel");
-    authorSlotSize(*panel, {120.0f, 60.0f});
-    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel).valid());
+    FCanvasSlotArgs panelSlot; panelSlot.fixedSize = {120.0f, 60.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot).valid());
 
     (void)tree.buildSnapshot({});
     (void)tree.buildSnapshot({});
@@ -161,7 +160,7 @@ TEST(DeclarativeContractTest, SameValuePropertyMutationDoesNotDirtyTree)
     auto* slot = dynamic_cast<UICanvasSlot*>(content->getSlotForChild(*panel));
     ASSERT_NE(slot, nullptr);
     const glm::vec2 authoredSize = slot->getFixedSize();
-    authorSlotSize(*panel, authoredSize);
+    slot->setFixedSize(authoredSize);
     panel->setColor(panel->getColor());
     (void)tree.buildSnapshot({});
 
@@ -174,16 +173,16 @@ TEST(DeclarativeContractTest, AppearanceModesCoverNoThemeAuthoredAndThemeOnly)
 {
     WidgetTree noTheme({.width = 320, .height = 200});
     auto fallback = std::make_shared<UIPanel>("Fallback");
-    authorSlotSize(*fallback, {120.0f, 60.0f});
-    ASSERT_TRUE(noTheme.attach(*noTheme.getLayer(WidgetTree::ELayer::Content), fallback).valid());
+    FCanvasSlotArgs fallbackSlot; fallbackSlot.fixedSize = {120.0f, 60.0f};
+    ASSERT_TRUE(noTheme.attach(*noTheme.getLayer(WidgetTree::ELayer::Content), fallback, fallbackSlot).valid());
     const auto fallbackSnapshot = noTheme.buildSnapshot({});
     ASSERT_EQ(fallbackSnapshot.items.size(), 1u);
 
     WidgetTree authored({.width = 320, .height = 200});
     auto authoredPanel = std::make_shared<UIPanel>("Authored");
-    authorSlotSize(*authoredPanel, {120.0f, 60.0f});
+    FCanvasSlotArgs authoredSlot; authoredSlot.fixedSize = {120.0f, 60.0f};
     authoredPanel->setColor({0.1f, 0.2f, 0.3f, 1.0f});
-    ASSERT_TRUE(authored.attach(*authored.getLayer(WidgetTree::ELayer::Content), authoredPanel).valid());
+    ASSERT_TRUE(authored.attach(*authored.getLayer(WidgetTree::ELayer::Content), authoredPanel, authoredSlot).valid());
     const auto authoredSnapshot = authored.buildSnapshot({});
     ASSERT_EQ(authoredSnapshot.items.size(), 1u);
     EXPECT_EQ(authoredSnapshot.items.front().color, glm::vec4(0.1f, 0.2f, 0.3f, 1.0f));
@@ -195,8 +194,8 @@ TEST(DeclarativeContractTest, AppearanceModesCoverNoThemeAuthoredAndThemeOnly)
     theme->define<FPanelStyle>("panel", panelStyle);
     themed.setTheme(theme.get());
     auto themedPanel = std::make_shared<UIPanel>("Themed");
-    authorSlotSize(*themedPanel, {120.0f, 60.0f});
-    ASSERT_TRUE(themed.attach(*themed.getLayer(WidgetTree::ELayer::Content), themedPanel).valid());
+    FCanvasSlotArgs themedSlot; themedSlot.fixedSize = {120.0f, 60.0f};
+    ASSERT_TRUE(themed.attach(*themed.getLayer(WidgetTree::ELayer::Content), themedPanel, themedSlot).valid());
     const auto themedSnapshot = themed.buildSnapshot({});
     ASSERT_EQ(themedSnapshot.items.size(), 1u);
     EXPECT_EQ(themedSnapshot.items.front().color, glm::vec4(0.7f, 0.1f, 0.2f, 1.0f));
@@ -252,8 +251,8 @@ TEST(DeclarativeContractTest, SnapshotDoesNotDependOnLiveWidgetAfterDetach)
 {
     WidgetTree tree({.width = 320, .height = 200});
     auto panel = std::make_shared<UIPanel>("SnapshotPanel");
-    authorSlotSize(*panel, {120.0f, 60.0f});
-    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel).valid());
+    FCanvasSlotArgs panelSlot; panelSlot.fixedSize = {120.0f, 60.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot).valid());
 
     UIFrameSnapshot snapshot = tree.buildSnapshot({});
     ASSERT_EQ(snapshot.items.size(), 1u);
@@ -390,13 +389,18 @@ TEST(DeclarativeContractTest, AdapterHostPatchClampsFocusedTextFieldCursorWithou
 
     auto fieldRef = std::make_shared<UITextField>("AdapterField");
     fieldRef->setText("hello world");
-    authorSlotSize(*fieldRef, {180.0f, 28.0f});
+    FCanvasSlotArgs fieldSlot; fieldSlot.fixedSize = {180.0f, 28.0f};
 
     int commits = 0;
     fieldRef->_onCommit = [&](const std::string&) { ++commits; };
 
     auto* field = dynamic_cast<UITextField*>(&adapterHost.mount(fieldRef));
     ASSERT_NE(field, nullptr);
+    if (auto* slot = adapterHost.getParent().getSlotForChild(*field)) {
+        if (auto* canvas = slot->as<UICanvasSlot>()) {
+            canvas->apply(fieldSlot);
+        }
+    }
 
     tree.setFocus(field);
     ASSERT_EQ(tree.getFocused(), field);
@@ -598,8 +602,8 @@ TEST(DeclarativeContractTest, DetachClearsFocusAndPointerCapture)
 {
     WidgetTree tree({.width = 320, .height = 200});
     auto button = std::make_shared<UIButton>("TransientButton");
-    authorSlotSize(*button, {120.0f, 60.0f});
-    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button).valid());
+    FCanvasSlotArgs buttonSlot; buttonSlot.fixedSize = {120.0f, 60.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot).valid());
     tree.layout();
 
     tree.setFocus(button.get());

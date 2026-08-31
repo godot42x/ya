@@ -1,4 +1,3 @@
-#include "GUITestLayoutHelpers.h"
 // Phase 4 regression guards for the immutable UI frame packet: the tree is
 // laid out and painted BEFORE the render graph, items carry resolved
 // transforms/clips, and the snapshot is widget-independent (widgets may be

@@ -1,4 +1,3 @@
-#include "GUITestLayoutHelpers.h"
 // GUI input driver regression (shared app foundation). The driver is
 // Foundation-only: it emits Core Events through IGuiEventSink, so it needs no
 // WidgetTree / RHI to verify parse + execution semantics.

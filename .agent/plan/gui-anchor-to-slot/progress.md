@@ -769,3 +769,136 @@ C++ exception: [json.exception.type_error.307] cannot use erase() with null
 - 迁移方式：三组 fixture 使用显式 `FCanvasSlotArgs` attach；GameUIHost 复用 `addToWorld(..., args)`，事件按钮分别持有各自 offset/fixedSize，纹理生命周期测试保持 resolver/strong-reference 断言不变。
 - 验证：`xmake b ya-gui-closure-test` 通过；`GuiEventDriverTest.ScenarioDrivesWidgetTreeAndDumpAssertsHoverContract` 通过（其余筛选目标未发现编译/链接问题，后续全量回归覆盖）。
 - 未完成：Declarative/WidgetTree/UIDocument/UIDesigner 等文件仍有 helper/pending 调用。
+
+## 2026-08-31 — CP2 DeclarativeContract edge cleanup
+
+- 误差审计确认：该文件中的剩余 helper 都是 Content layer 根节点或 adapter mount 后的当前 parent slot；没有需要保留 child-owned geometry 的特殊情况。
+- 迁移方式：NoTheme/Appearance/Snapshot/Detach 等根 fixture 使用显式 `FCanvasSlotArgs` attach；同值 dirty 测试直接写当前 `UICanvasSlot`；adapter fixture 在 mount 后通过 `getSlotForChild` 应用 typed args。
+- 验证：相关 5 项回归测试全部通过，且 `DeclarativeContractTest.cpp` 已不再调用 `authorSlot*`。
+- 未完成：`GUITestLayoutHelpers.h` 仍被其他测试文件使用，pending bridge 尚不能删除。
+
+## 2026-08-31 — CP2 UIDesigner detached-root audit
+
+- 误差审计确认：`UIDesignerPanelTest` 中 root 在 `UIDocument::fromWidget` 前是 detached，且 Designer `openDocument` 会以 fill canvas edge 挂载预览根；root 的 pending 尺寸既不会进入文档，也不是预览布局输入。保留它会制造错误的 detached geometry 语义。
+- 迁移方式：删除 UIDesigner 测试 root 的 `authorSlotSize`；child 的初始位置/尺寸继续通过 `addDetachedChild` 写入 parent-owned `UICanvasSlot`，由 Designer resize path 读取和更新。
+- 验证：`xmake b ya-gui-closure-test` 编译通过；该测试源不在 closure test 注册列表中，需由对应 editor test target 单独执行。
+- 未完成：WidgetLayout/WidgetTree/UIDocument 仍有大量 helper 调用，继续按语义分批清理。
+
+## 2026-08-31 — CP2 UIDocument layout edges
+
+- 误差审计确认：`FromWidgetRoundtripsFieldsAndChildren` 中 container 与 child 的 detached geometry 若不经 parent edge attach 不会进入 UIDocument；container root 和 JsonRoundtrip panel position、AuthoredPanel root size、Deserialize source root size 均不是文档布局输入。
+- 迁移方式：删除这些无效 pending helper；box container 的 child 尺寸改在 `addDetachedChild` initializer 中写入 `UIBoxSlot.preferredSize`，保持文档 `childSlots` roundtrip 仍验证 parent-owned intent。
+- 验证：`xmake b ya-gui-closure-test` 通过；UIDocument 关键回归 `FromWidgetRoundtripsFieldsAndChildren`、`JsonRoundtrip`、`AuthoredPanelFillSurvivesThemeAfterReload`、`DeserializeOnAttachedWidgetAggregatesSingleInvalidation` 4/4 通过。
+- 未完成：`UIDocumentTest.cpp` 已无 `authorSlot*` 调用；WidgetLayout/WidgetTree 仍待大批量迁移。
+
+## 2026-08-31 — CP2 WidgetLayout basic size/box edges
+
+- 误差审计确认：`TextWithoutAutoSizeStillMeasuresGlyphs` 的 detached helper 不参与 desired-size 测量；`AnchorLayoutResolvesStretchOverAutoOverSize` 的 999 尺寸被显式 Auto slot 覆盖；toolbar/row 根尺寸由已有 `FCanvasSlotArgs` 提供；button box child 尺寸已由 `UIBoxSlot.preferredSize` initializer 提供。
+- 迁移方式：删除这些无效或重复的 `authorSlot*` 调用，没有把 geometry 写回 UIElement；保留 parent-owned canvas/box slot 断言和 layout 行为。
+- 验证：`xmake b ya-gui-closure-test`；`TextWithoutAutoSizeStillMeasuresGlyphs`、`AnchorLayoutResolvesStretchOverAutoOverSize`、`ButtonAutoSizeInContainerPacksAndFills`、`ButtonExplicitSizeInContainerKeepsItsWidth`、`ButtonExplicitSizeIgnoresContentWidth` 5/5 通过。
+- 未完成：WidgetLayout 中段及 WidgetTree 仍有大量 helper，需要继续按父布局语义分组。
+
+## 2026-08-31 — CP2 WidgetLayout container/box edge ownership
+
+- 误差审计确认：NestedContainers 的 spacer、BoxSlot reparent/reorder、fill/margin/hidden fixtures 中，root 尺寸应由 layer-owned canvas slot 提供，child 尺寸应由 parent-owned box slot 或 desired size 提供；detached child 上的 `authorSlotSize` 不会成为 box layout 输入。
+- 迁移方式：删除重复/无效 child helper；需要固定 root 几何的 First/Second/Box/Outer 使用显式 `FCanvasSlotArgs` attach；box child 继续通过 `UIBoxSlot.preferredSize` initializer 或 attach 后 slot setter 表达。
+- 验证：`xmake b ya-gui-closure-test`；`NestedContainersPropagateDesiredSizes`、`BoxSlotsAreParentOwnedAndRecreatedOnReparent`、`BoxSlotFillMarginAndCrossAlignmentArrangeWithoutContainerFields`、`BoxSlotsKeepEdgeStateLocalAcrossNestedReparent`、`SameParentReorderPreservesExistingBoxSlotState`、`BoxSlotsControlHiddenParticipationAndFillBounds` 6/6 通过。
+- 未完成：WidgetLayout overlay/specialized 后段及 WidgetTree 大量 helper 仍待迁移。
+
+## 2026-08-31 — CP2 WidgetLayout overlay/single-child edges
+
+- 误差审计确认：overlay Host root 几何属于 Content layer canvas edge；Fill/Badge 与 SizeBox Inner 的尺寸由 parent-owned `UIOverlaySlot` 承担；Box 四边 margin 测试中的 left/right detached 尺寸由 box slot preferred size 承担。
+- 迁移方式：删除 child `authorSlotSize`；overlay/size-box root 使用显式 `FCanvasSlotArgs`，保留 typed slot alignment/preferredSize 与 edge layout spec 断言。
+- 验证：`xmake b ya-gui-closure-test`；`BoxSlotFourSideMarginIsNotSymmetric`、`OverlaySlotAlignsWithoutChildAnchors`、`SizeBoxPadsChildAndHonorsWidthOverride`、`EdgeLayoutSpecAppliesToTheChildNotTheParent` 4/4 通过。
+- 未完成：WidgetLayout specialized 后段和 WidgetTree 仍待迁移。
+
+## 2026-08-31 — CP2 WidgetLayout slot-proof/specialized edges
+
+- 误差审计确认：fixed text binding 的固定尺寸必须来自 layer canvas slot；corrupted child size 测试应只验证 attach 后 parent-owned typed slot，不应再预置 child geometry；SelectableRow/CheckBox/Dock projection 的根尺寸同样来自显式 canvas edge。
+- 迁移方式：移除 WidgetLayout 后段剩余 `authorSlot*` 调用；fixed binding 使用 `FCanvasSlotArgs` attach；box/overlay corrupted-size fixture 保留 typed slot initializer；SelectableRow、CheckBox、Overlay、Dock root 使用显式 canvas args。
+- 验证：`xmake b ya-gui-closure-test`；fixed binding、canvas/box/overlay slot-proof、single-child 与 dock projection 共 9/9 通过；`WidgetLayoutTest.cpp` 已无 `authorSlot*` 调用。
+- 未完成：WidgetTree 的 `makeButton` helper 仍封装 pending slot initializer，需下一批整体改为纯 widget 工厂 + 显式 attach args，随后才能删除测试 helper/pending bridge。
+
+## 2026-08-31 — CP2 WidgetTree drag/behavior edges
+
+- 误差审计确认：拖拽目标/source、ghost source、behavior host、preview/bubble route、behavior drag source/target 的几何均属于 Content layer root canvas edge；child route 的局部几何已经通过 parent-owned canvas initializer 表达。
+- 迁移方式：删除这些 fixture 的 `authorSlotPosition/authorSlotSize`，改用显式 `FCanvasSlotArgs` attach；没有改变 drag session、capture、focus 或 route policy。
+- 验证：`xmake b ya-gui-closure-test`；6 个 WidgetTree 回归（drag target/source/ghost、behavior lifecycle/route/drag-drop）6/6 通过。
+- 未完成：WidgetTree 仍有大量 helper，尤其 focus/capture、层级、dock/drag-drop 后段，需继续分组迁移。
+
+## 2026-08-31 — CP2 WidgetTree focus/capture/route edges
+
+- 误差审计确认：`ChildAddedToAttachedParentJoinsItsTree`、`AttachToLayerKeepsChildAbsoluteGeometrySemantics`、`LayerCanvasSlotTracksPositionUpdatesAfterAttach` 与 `PointerRouteDeliversPreviewTargetThenBubble` 的 root 几何都属于 parent-owned canvas edge；attached child 的局部位置通过 `addDetachedChild/attach` 的 edge initializer 表达。
+- 迁移方式：root 使用显式 `FCanvasSlotArgs` attach；运行时位置更新直接修改当前 `UICanvasSlot`；route child 不再通过 child geometry helper 暂存。没有改变 focus/capture/route 逻辑。
+- 验证：`xmake b ya-gui-closure-test`；上述 4 项 WidgetTree 回归 4/4 通过。
+- 未完成：WidgetTree helper 仍集中在 focus/capture、层级、dock 与后段 drag-drop fixture；`makeButton` 测试辅助仍需后续拆为显式 attach 参数。
+
+## 2026-08-31 — CP2 WidgetTree detach/path edges
+
+- 误差审计确认：`DetachedWidgetDoesNotParticipate` 的 detached root 几何没有任何布局消费者，应直接删除；`WeakPointerPathsSurviveDetachWithoutDangling` 的 panel root 位置/尺寸属于 Content layer canvas edge，child 局部几何继续由 parent-owned canvas initializer 提供。
+- 迁移方式：删除 detached fixture 的 pending helper；weak path fixture 使用显式 `FCanvasSlotArgs` attach，并保留 detach 后 focus/pointer path 清理断言。
+- 验证：`xmake b ya-gui-closure-test`；`DetachedWidgetDoesNotParticipate`、`WeakPointerPathsSurviveDetachWithoutDangling` 2/2 通过。
+- 未完成：`makeButton` helper 仍将位置/尺寸暂存在 pending bridge，后续需整体替换为显式 attach 参数或局部 slot initializer。
+
+## 2026-08-31 — CP2 WidgetTree dock/drag observer edges
+
+- 误差审计确认：DockSpace 根、拖拽 source、observer target 的几何均是 Content layer parent-owned canvas edge；source 在拖拽期间移动也应修改当前 canvas slot，而不是 child geometry。
+- 迁移方式：dock root 使用显式 anchor canvas args；source/target 使用显式 offset/fixedSize attach；拖拽跟随指针通过当前 slot 更新。
+- 验证：`xmake b ya-gui-closure-test`；Dock preview/merge、floating-window session、tab tear-off、drag observer 6/6 通过。测试中已有的 `addDetachedChild` 日志来自 DockWorkspace 对已挂载 panel 的既有装配路径，本批未扩大该行为范围，后续应单独修复为明确的 reparent/ownership API。
+- 未完成：WidgetTree `makeButton` helper、focus/capture 后段及 dock 既有装配日志仍待处理。
+
+## 2026-08-31 — CP2 WidgetTree layer/hit/capture edges
+
+- 误差审计确认：z-order、system layer precedence、pass/hidden hit policy 与 pointer capture 测试中的几何都是 layer-owned canvas edge；这些用例不需要 detached widget 自带 geometry。
+- 迁移方式：移除 `makeButton` 在本组用例中的 pending 几何，改为直接构造 `UIButton` 并在各 layer attach 时传入显式 `FCanvasSlotArgs`；保留层级、命中、capture 行为断言。
+- 验证：`xmake b ya-gui-closure-test`；`ZOrderDefinesHitOrderWithinLayer`、system layer click/hover、pass、hidden、pointer capture 共 6/6 通过。
+- 未完成：WidgetTree 仍有大量 `makeButton` 使用，后续继续迁移 focus traversal、popup/modal 与 drag-drop 后段。
+
+## 2026-08-31 — CP2 WidgetTree route-state root edge
+
+- 误差审计确认：`RouteStateTracksPointerCaptureAndFocusPaths` 的 panel 几何是 Content layer canvas edge；button 局部 edge 已通过 `addDetachedChild` initializer 表达。
+- 迁移方式：panel root 使用显式 `FCanvasSlotArgs` attach，未改变 pointer/focus route trace 契约。
+- 验证：`xmake b ya-gui-closure-test`；`RouteStateTracksPointerCaptureAndFocusPaths` 通过。
+- 未完成：`makeButton` 仍是其他 focus traversal/popup fixture 的 pending 来源，后续继续批量替换。
+
+## 2026-08-31 — CP2 WidgetTree makeButton migration
+
+- 误差审计确认：测试辅助 `makeButton(name,pos,size)` 将 parent-owned geometry 错误地暂存在 detached child，是 pending bridge 的主要残留来源；位置/尺寸只有在 attach 到 layer 时才有意义。
+- 迁移方式：`makeButton` 改为纯 widget 工厂，新增 `makeButtonSlot(pos,size)` 返回 `FCanvasSlotArgs`；Dump、Modal、Tab、Button press/drag/focus、DragObserver 等 10 个命中/布局 fixture 在 attach 时显式传入 slot。
+- 验证：`xmake b ya-gui-closure-test`；上述 10 项回归 10/10 通过。
+- 未完成：WidgetTreeTest 中仍有少量 makeButton 用于 parent child edge 或其他后段 fixture，需继续迁移后才能删除 `GUITestLayoutHelpers.h`。
+
+## 2026-08-31 — CP2 ToolControls split child edge
+
+- 误差审计确认：`SplitPanePressOnPaneFallsThroughToChild` 的 split root 几何属于 Content layer canvas edge；button 的尺寸属于 left pane 自身 child edge，应写入 `UIBoxSlot.preferredSize`，位置不应写入 child geometry。
+- 迁移方式：split 使用显式 `FCanvasSlotArgs` attach；button 改为 `addDetachedChild` + typed box slot initializer，删除 `authorSlotPosition/authorSlotSize`。
+- 验证：`xmake b ya-gui-closure-test`；`ToolControlsTest.SplitPanePressOnPaneFallsThroughToChild` 通过。
+- 未完成：`ToolControlsTest.cpp` 已无直接 `authorSlot*` 之外的残留将继续审计；`GUITestLayoutHelpers.h` 仍被 WidgetTree/其他测试使用。
+
+## 2026-08-31 — CP2 remove obsolete test geometry helper
+
+- 误差审计确认：全局搜索显示所有测试源已不再调用 `authorSlotPosition/authorSlotSize/authorSlotAnchors`；helper 仅剩 include，删除不会移除任何测试语义。
+- 迁移方式：删除 `Engine/Test/Source/GUITestLayoutHelpers.h` 及全部 include；测试布局意图现在只通过显式 `FCanvasSlotArgs`、typed slot initializer 或当前 slot setter 表达。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test`，全量 317/317 通过。
+- 未完成：生产 DSL builder 仍有 `_pendingSlotInitializer` 过渡桥及 `.setSize/.setPosition/.setAutoSize` 几何 sugar；需要继续迁移所有 `release()` 外部 attach 后才能删除。
+
+## 2026-08-31 — CP2 WidgetLayout builder root edges
+
+- 误差审计确认：WidgetLayout 中 5 组 layout contract 的 builder `.setSize` 只是在设置 root host 几何；真正的 child intent 已位于 `ui::layout()`/typed slot。将 root 尺寸迁移到 layer-owned `FCanvasSlotArgs` 不改变 layout contract。
+- 迁移方式：移除 `PathAFill`、Overlay、Canvas pivot/Auto、Box layout spec 等测试 root `.setSize`，改显式 canvas attach；未删除仍用于验证 reparent bridge 的 child builder `.setSize`。
+- 验证：`xmake b ya-gui-closure-test`；`BoxLayoutSpecSizeUsesTheSlotRatherThanMutatingChildGeometry`、`PathAFillIsExpressedOnTheSlotNotTheChild`、`UnifiedLayoutSpecAppliesToOverlaySlot`、`CanvasPivotCentresAChildOnItsAnchoredPosition`、`CanvasPreferredSizeDrivesAnAutoAxis` 5/5 通过。
+- 未完成：生产/示例中仍有大量 builder geometry sugar；需继续按 attach 生命周期分组迁移。
+
+## 2026-08-31 — CP2 WidgetLayout canvas/box capability roots
+
+- 误差审计确认：剩余 Canvas offsets/Auto/alignment、Box slot preferred-size 与 corrupted-size contract 中的 root `.setSize()` 仍只是 host 几何；保留它会继续掩盖 root-slot contract。
+- 迁移方式：root host 统一通过显式 `FCanvasSlotArgs.fixedSize` attach；child `.setSize()` 仅保留在专门验证 authored-size bridge / layout-spec 覆盖的测试。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test`，全量 317/317 通过。
+- 未完成：生产/示例中仍有大量 builder geometry sugar；pending slot bridge 仍待所有外部调用迁移后删除。
+
+## 2026-08-31 — CP2 WidgetTree attach/reparent/detach edges
+
+- 误差审计确认：AttachTwice/CrossTree/Reparent/Sibling/Detach 语义测试只验证树归属与生命周期；大量 `makeButton(..., {}, {})` 的 detached 几何没有布局消费者，应移除 pending helper。需要命中/hover 的按钮则改显式 layer canvas args。
+- 迁移方式：基础 attach/reparent/sibling/detach fixture 改为直接构造 widget，并在需要时通过 `FCanvasSlotArgs` attach；ButtonText/PopupShield/DetachFocus 等命中测试保留明确 root canvas 几何。
+- 验证：`xmake b ya-gui-closure-test`；attach、cross-tree、reparent、detach、hover、tree destruction 共 15/15 通过。
+- 未完成：`makeButton` helper 仍被命中测试大量使用，需后续改为返回 widget + 显式 args，最终删除 `GUITestLayoutHelpers` pending bridge。

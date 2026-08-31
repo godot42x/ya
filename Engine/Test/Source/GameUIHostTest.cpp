@@ -1,4 +1,3 @@
-#include "GUITestLayoutHelpers.h"
 // Phase 3 regression guards for the GameUIHost: scene lifecycle mounts/
 // unmounts authoring entries, addToWorld attaches dynamic widgets, input
 // routes into the presentation tree, and presentation mapping is exact.

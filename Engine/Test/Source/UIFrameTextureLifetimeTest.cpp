@@ -1,4 +1,3 @@
-#include "GUITestLayoutHelpers.h"
 // Snapshot draw-resource lifetime (engine suite; needs the RHI Texture type):
 // the immutable frame packet holds STRONG texture references resolved at
 // snapshot build time, so the asset cache may unload/clear/reload afterwards

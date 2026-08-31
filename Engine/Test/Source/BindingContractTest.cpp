@@ -1,4 +1,3 @@
-#include "GUITestLayoutHelpers.h"
 // Binding-layer regression guards (G4.1/G4.2): Reactive now lives under
 // GUI/Binding rather than GUI/Widgets. These tests lock the persistent edge
 // contract at the binding layer boundary instead of piggybacking only on the

@@ -1,4 +1,3 @@
-#include "GUITestLayoutHelpers.h"
 // Tool-GUI primitive regression tests (gui-app-bootstrap Phase 2). The
 // target links ONLY the GUI closure, proving the stack/split/scroll/row
 // primitives have no Scene/ECS/Render3D/Host dependency.
@@ -289,17 +288,17 @@ TEST(ToolControlsTest, SplitPanePressOnPaneFallsThroughToChild)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       split = std::make_shared<UISplitPane>("Split");
-    authorSlotSize(*split, {300.0f, 200.0f});
+    FCanvasSlotArgs splitSlot; splitSlot.fixedSize = {300.0f, 200.0f};
     split->setSplitRatio(0.5f);
     auto left = std::make_shared<UIContainer>("Left");
     auto button = std::make_shared<UIButton>("Button");
-    authorSlotPosition(*button, {10.0f, 10.0f});
-    authorSlotSize(*button, {60.0f, 24.0f});
     auto right = std::make_shared<UIPanel>("Right");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
     tree.attach(*split, left);
     tree.attach(*split, right);
-    attachPreferredSize(*left, button, {60.0f, 24.0f});
+    left->addDetachedChild(button, [](UIElement&, UISlot& edge) {
+        if (auto* slot = edge.as<UIBoxSlot>()) slot->setPreferredSize({60.0f, 24.0f});
+    });
     tree.layout();
 
     int clicks = 0;

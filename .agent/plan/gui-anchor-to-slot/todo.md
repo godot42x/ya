@@ -128,6 +128,25 @@
 - [x] DSL ergonomics：节点默认匿名，只有需要稳定定位/调试/复用时显式提供 key/displayName；匿名节点保留注册类型名用于 dump/诊断，不生成伪稳定 key
 - [x] CP2 ToolControls split-overlap/specialized dump edges：重叠 hover 与 specialized layout dump fixture 移除 pending helper，改 parent-owned canvas/box slot
 - [x] CP2 host/event/texture fixture edges：GameUIHost、GuiEventDriver、UIFrameTextureLifetime 测试移除 pending helper，改显式 canvas attach
+- [x] CP2 DeclarativeContract edge cleanup：声明式契约测试剩余根/适配器几何改为显式 canvas/当前 slot 操作
+- [x] CP2 UIDesigner detached-root audit：移除无效的 detached root pending 尺寸，预览 attach 的 fill edge 作为 root 几何来源
+- [x] CP2 UIDocument layout edges：文档 roundtrip/style/invalidation fixtures 移除 detached root helper；box child authored size 直接写 parent-owned slot
+- [x] CP2 WidgetLayout basic size/box edges：基础文本、anchor、toolbar、button box fixture 移除 pending helper，保留显式 root/typed slot 作为唯一布局输入
+- [x] CP2 WidgetLayout container/box edge ownership：容器 desired-size、reparent、fill/margin/hidden 参与度 fixture 改显式 root canvas 与 parent-owned box slot
+- [x] CP2 WidgetLayout overlay/single-child edges：overlay、size-box、四边 margin 与 edge layout spec fixture 清除 detached child geometry helper
+- [x] CP2 WidgetLayout slot-proof/specialized edges：fixed binding、corrupted child size、selectable/check box、dock projection fixture 完成 helper 清理
+- [x] CP2 WidgetTree drag/behavior edges：拖拽、ghost、behavior 生命周期与 route fixture 改显式 root canvas slot
+- [x] CP2 WidgetTree focus/capture/route edges：attached child、layer position update、pointer route fixture 改显式 canvas slot
+- [x] CP2 WidgetTree detach/path edges：detached widget 与 weak focus/pointer path fixture 清除无效 root helper，改显式 layer canvas attach
+- [x] CP2 WidgetTree dock/drag observer edges：dock root/source/observer target fixture 改显式 canvas slot
+- [x] CP2 WidgetTree attach/reparent/detach edges：基础 attach、cross-tree reparent、sibling reorder、detach/hover fixture 清除无效 helper
+- [x] CP2 WidgetTree layer/hit/capture edges：z-order、system layer、pass/hidden、pointer capture fixture 改显式 canvas slot
+- [x] CP2 WidgetTree route-state root edge：pointer/focus path fixture 的 panel root 改显式 canvas attach
+- [x] CP2 WidgetTree makeButton migration：makeButton 不再写 pending geometry，命中/焦点/拖拽用例改显式 canvas args
+- [x] CP2 ToolControls split child edge：split pane child press fixture 移除 pending helper，button 尺寸落 left-owned box slot
+- [x] CP2 remove obsolete test geometry helper：所有测试已改显式 attach/typed slot，删除 GUITestLayoutHelpers.h
+- [x] CP2 WidgetLayout builder root edges：layout contract 测试 root `.setSize` 改为显式 canvas attach，child 尺寸保留在 layout/typed slot
+- [x] CP2 WidgetLayout canvas/box capability roots：剩余 root `.setSize` 改为显式 root canvas slot，测试不再依赖 builder root geometry bridge
 - [x] CP2 GUIHeadlessHostTest：顶层 panel/menu bar 改用显式 `FCanvasSlotArgs` attach，移除该 fixture 对测试 pending helper 的依赖
 - [x] CP2 UIFrameSnapshotTest 基础 paint-order fixture：layer child 几何改用显式 `FCanvasSlotArgs` attach
 - [x] CP2 UIFrameSnapshotTest clip fixture：clip container 几何改用显式 `FCanvasSlotArgs` attach
