@@ -247,14 +247,14 @@ ui::canvas("Root")[
 
 ## 4. 实施 checkpoint
 
-### 当前审计结论（2026-08-29）
+### 当前审计结论（2026-08-31）
 
-- CP3 的 DSL/capability/canvas 主体能力已存在，但 public 过渡 API 仍残留，不能视为完全收尾。
-- CP5 目前只是引入 layout-host hook；`UIElement` 的 legacy self-positioned fallback 仍在，因此不能宣称运行期二分已消失。
+- CP3 的 DSL/capability/canvas 主体能力已完成，`canvasSlot()`、旧 panel-slot builder 与旧 canvas-panel 命名均已删除。
+- CP5 的 layout-host、root/layer、popup、designer、Workbench、Editor 与测试调用点已完成迁移；运行期不再保留 child-owned self-positioned fallback。
 - root/layer 路径需要分两步收口：先把 `TreeRoot` 自身改为正式 canvas host、用 root->layer slot 表达 system layer fill；再迁移 layer 下业务 child 的默认 attach 语义。不能直接把 layer 升成 canvas host，否则会把 `attachToLayer()` 现有几何语义静默打坏。
 - 进一步审计结论：在 layer 尚未成为 typed layout host 之前，**不能**先给 `attachToLayer()` 暴露统一 `layout spec` 入口。否则 API 会看起来统一，但 layer->child edge 仍只能生成 base slot，intent 无法被正确消费，等于制造新的“能写不能兑现”的过渡层。
 - 新审计结论：layer 已是 canvas host 后，运行时不得再通过 `UIElement::setPosition/setSize` 隐式桥接；layer child 必须在 attach 时传入显式 `FCanvasSlotArgs`，后续直接更新该 edge。
-- 当前实现存在一条明确架构偏差：`applyLayoutSpecToSlot(box)` 仍通过 `child.setSize()` 兑现 `size()`，这让 Box host 的一部分布局意图继续写回 child geometry，而不是完全留在 slot/layout 上。
+- 当前实现不存在 `applyLayoutSpecToSlot(box)` 回写 child geometry 的路径；Box 尺寸意图统一落在 parent-owned `UIBoxSlot`。
 - 当前实现曾存在另一条明确偏差：capability 编译期约束已覆盖 single-child / overlay 宿主，但 unified `ui::layout()` 的运行时 slot 消费未完全覆盖，导致“能编译但 intent 可能静默丢失”。该问题现已纠正并补测试验证。
 - 纠偏结论：single-child 不是一种独立 slot 数据模型；Button/SizeBox/Split/Scroll 等宿主复用 `UIOverlaySlot` 的 align/preferred-size edge 数据，`UISingleChildLayout` 只保留父级 measure/arrange 策略。这样用户扩展新 slot 类型无需修改核心枚举。
 - 新审计结论：`PopupOverlay` 需要的是**独立 full-screen host 语义**，但不必为此再发明一套平行 slot 类型。更合理的收口是让 popup 自己拥有 shield/full-screen contract，同时复用通用 `UICanvasSlot` 承载 content edge；Menu / Dialog 通过覆盖 content slot args 表达“固定尺寸定位”与“居中 Auto 尺寸”。
@@ -262,7 +262,7 @@ ui::canvas("Root")[
 - 新审计结论：`reparent` 不能把“edge 属于 parent->child”误解成“同父重排时也应该销毁 edge”。跨父迁移当然要重建 slot，但 `reparentBefore/After` 在**同一个 parent** 下只是调整顺序，必须移动原 slot，而不是重建默认 slot，否则 box/canvas/overlay/table 的 edge state 会在 reorder 时蒸发。
 - 新审计结论：`Grid/Table` 当前还**没有** declarative builder 正式暴露 unified `ui::layout()` 附着面，因此眼前更大的风险不是 runtime 掉 intent，而是 capability 常量先把未来承诺说宽了。`UITableSlot` 目前只有 `cell(row,col)` 事实契约，在它真正长出 align/margin/sizeMode 等 slot 数据前，grid capability 应保持 `cell-only`，避免再次制造“声明先于兑现”的假统一。
 - 新审计结论：`[]` 应继续只作为 child attach 的语法糖，`TUILayoutAttachment` 只是 builder 层临时运输 `spec + child` 的壳，不应变成运行时 ownership 模型。正确的收口不是“让 widget 持有 slot”，而是让 **parent 在创建 edge 时立即初始化 slot**，从而把 declarative `[]`、`child(slotArgs)`、`ui::build(..., spec)`、`attachLayout(...)` 收到同一条 parent-owned slot 初始化路径。
-- 后续推进时，每个 checkpoint 必须先判断是“补计划中缺口”还是“纠正已落地偏差”；若偏差比计划更明显，优先纠偏，不继续在过渡层上叠功能。
+- 当前只剩 CP7 最终门禁：按验收矩阵执行 closure、宿主构建、snapshot/offscreen parity 与全仓负向审计。
 
 ### CP1 — 冻结新布局协议
 - 新增 UIConstraints、measure/arrange contract、size mode 和布局结果定义。
@@ -270,28 +270,28 @@ ui::canvas("Root")[
 - 冻结 UILayoutIntent modifier 词汇、组合规则和 parent 解析规则。
 - 增加 layout contract 文档和纯 CPU 几何测试。
 
-### CP2 — 移除 UIElement authored geometry
+### CP2 — 移除 UIElement authored geometry（已完成）
 - 删除字段、setter、反射字段、序列化字段和 computeAnchorRect。
 - 将 leaf/container desired-size 逻辑迁移到 measureContent / layout。
 - 删除 reportStretchAnchorsIgnored 及相关诊断字段。
 
-### CP3 — 新增 UICanvasLayout / UICanvasSlot
+### CP3 — 新增 UICanvasLayout / UICanvasSlot（已完成）
 - 实现四边 offsets、anchor span、alignment/pivot、preferred/min/max 和 Auto/Fixed/Stretch 语义。
 - Panel 改为 Canvas layout host。
 - 不创建绑定视觉控件的 FCanvasPanelSlot 命名。
 - public DSL 使用 layout().anchor()/offsets()/fill()，不暴露 canvasSlot() 工厂。
 
-### CP4 — 统一所有 layout host 的 slot 消费
+### CP4 — 统一所有 layout host 的 slot 消费（已完成）
 - Box、Overlay、SingleChild、Split、Scroll、Grid、Canvas 全部通过 typed slot arrange。
 - layoutSpec >> widget 形成 placed-child，在 materialization 时转换为 typed slot；不写 child geometry。
 - reparent/detach 时销毁并重建 slot。
 
-### CP5 — 全仓 API / runtime 迁移
+### CP5 — 全仓 API / runtime 迁移（已完成）
 - 迁移所有旧 geometry setter/getter；布局修改只能显式读取并更新 parent-owned slot，builder 的 `.setSize/.setPosition` 仅作为构造期 edge intent。
 - 迁移 WidgetTree、DockSpace、Popup、UIDesigner、Workbench、Editor 和测试中的直接字段写入。
 - PopupOverlay 单独定义 full-screen host 与 content slot，不假设等同于普通 Panel。
 
-### CP6 — 反射、文档和资源格式迁移
+### CP6 — 反射、文档和资源格式迁移（已完成）
 - 删除旧 JSON 字段和旧 schema。
 - 更新 UIDocument、Designer inspector、脚本绑定和快照 dump。
 - 旧文档不做兼容读取；若需要迁移工具，只做一次性离线转换器，不进入 runtime。

@@ -550,8 +550,8 @@ TEST(DeclarativeContractTest, DirectConstructContainerLayoutHonorsAuthoredSizeAn
                     .setSpacing(4.0f)
                     .setPadding({2.0f, 3.0f})
                     .children(
-                        ui::panel("left").setSize({20.0f, 10.0f}),
-                        ui::panel("right").setSize({30.0f, 10.0f}));
+                        ui::layout().size({20.0f, 10.0f}) >> ui::panel("left"),
+                        ui::layout().size({30.0f, 10.0f}) >> ui::panel("right"));
     FCanvasSlotArgs rootSlot;
     rootSlot.fixedSize = {100.0f, 20.0f};
     const UIElementRef first = ui::build(treeA, *treeA.getLayer(WidgetTree::ELayer::Content), std::move(page), rootSlot);
@@ -649,7 +649,10 @@ TEST(DeclarativeContractTest, BuilderAutoSizeIsStoredOnParentCanvasSlot)
     WidgetTree tree({.width = 320, .height = 200});
     UIElement* host = tree.getLayer(WidgetTree::ELayer::Content);
 
-    const UIElementRef label = ui::build(tree, *host, ui::text("auto").setText("Hello").setAutoSize(true));
+    FCanvasSlotArgs autoSlot;
+    autoSlot.widthSizeMode  = EWidgetSizeMode::Auto;
+    autoSlot.heightSizeMode = EWidgetSizeMode::Auto;
+    const UIElementRef label = ui::build(tree, *host, ui::text("auto").setText("Hello"), autoSlot);
     ASSERT_NE(label, nullptr);
 
     const auto* slot = dynamic_cast<const UICanvasSlot*>(label->getSlot());
@@ -857,11 +860,12 @@ TEST(DeclarativeContractTest, DirectConstructBoxSlotOverlayAndSizeBox)
     auto page = ui::column("root");
     FCanvasSlotArgs rootSlot;
     rootSlot.fixedSize = {200.0f, 80.0f};
-    page.child(ui::panel("fixed").setSize({20.0f, 10.0f}),
+    page.child(ui::panel("fixed"),
                FBoxSlotArgs{
                    .sizeRule = EUIBoxSlotSizeRule::Auto,
                    .weight   = 1.0f,
                    .margin   = FMargin::hv(4.0f, 0.0f),
+                   .preferredSize = {20.0f, 10.0f},
                });
     page.child(std::move(stack), FBoxSlotArgs{.sizeRule = EUIBoxSlotSizeRule::Fill});
     page.child(ui::sizeBox("pad")

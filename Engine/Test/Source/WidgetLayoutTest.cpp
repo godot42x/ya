@@ -1424,7 +1424,7 @@ TEST(WidgetLayoutTest, ReparentingBetweenHostsRebuildsTheSlotForTheNewHost)
     WidgetTree tree({.width = 200, .height = 100});
     auto       panelHost = ui::panel("PanelHost").release();
     auto       boxHost   = ui::column("BoxHost").release();
-    auto       child     = ui::text("Child").setText("Hi").setSize({50.0f, 20.0f}).release();
+    auto       child     = ui::text("Child").setText("Hi").release();
     FCanvasSlotArgs hostSlot;
     hostSlot.fixedSize = {200.0f, 100.0f};
 
@@ -1457,7 +1457,7 @@ TEST(WidgetLayoutTest, ReparentingAcrossHostsDoesNotLeakTheOldHostIntent)
     WidgetTree tree({.width = 200, .height = 100});
     auto       panelHost = ui::panel("PanelHost").release();
     auto       boxHost   = ui::column("BoxHost").release();
-    auto       child     = ui::text("Child").setText("Hi").setSize({50.0f, 20.0f}).release();
+    auto       child     = ui::text("Child").setText("Hi").release();
     FCanvasSlotArgs hostSlot;
     hostSlot.fixedSize = {200.0f, 100.0f};
 
@@ -1841,12 +1841,12 @@ TEST(WidgetLayoutTest, LayoutSpecPreferredSizeWinsOverAuthoredChildSize)
     registerSyntheticFont(16, 8.0f);
 
     auto column = ui::column("Column")
-                       .setSize({240.0f, 100.0f})
-                       [ui::layout().size({0.0f, 22.0f}) >> ui::text("Inner").setText("Hi").setSize({90.0f, 28.0f})]
+                       [ui::layout().size({0.0f, 22.0f}) >> ui::text("Inner").setText("Hi")]
                        .release();
 
     WidgetTree tree({.width = 240, .height = 100});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column);
+    FCanvasSlotArgs columnSlot; columnSlot.fixedSize = {240.0f, 100.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
     tree.layout();
 
     const UIElement* child = column->getChildrenInPaintOrder().front();

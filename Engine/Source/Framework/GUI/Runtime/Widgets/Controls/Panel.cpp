@@ -48,13 +48,7 @@ void UIPanel::paintSelf(UIFrameBuilder& builder)
 
 void UIPanel::deserializeFields(const nlohmann::json& fields)
 {
-    nlohmann::json rest = fields.is_object() ? fields : nlohmann::json::object();
-    const bool bLegacyExplicit = rest.contains("_bExplicitFill") && rest["_bExplicitFill"] == true;
-    rest.erase("_bExplicitFill");
-    UIElement::deserializeFields(rest);
-    if (bLegacyExplicit && !hasAuthoredStyle()) {
-        setStyleField("fillColor", FBrush::solid(_color), EUIPropertyImpact::Paint);
-    }
+    UIElement::deserializeFields(fields);
 }
 
 } // namespace ya

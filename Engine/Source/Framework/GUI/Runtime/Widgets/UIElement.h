@@ -13,9 +13,8 @@
 //   - layout/paint/input properties keep the proven Node2D semantics:
 //     anchor math, visibility axes, zOrder paint order, Pass/Stop hit filter.
 //
-// Naming note: this module intentionally uses EWidget* enum names while the
-// legacy GUI/Scene module still exports EUI* names; Phase 6 removes the legacy
-// module and renames back to the short form.
+// Naming note: this module intentionally uses EWidget* enum names to keep
+// widget-tree concepts distinct from unrelated scene/UI enum families.
 // ============================================================================
 
 #include "Core/Common/Types.h"
@@ -322,8 +321,8 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// layout pass. Not serialized.
     Rect2D _layoutRect{};
 
-    /// The layout this element hosts, or nullptr for a non-host element (which
-    /// keeps the legacy self-positioned behaviour). Owned here when installed
+    /// The layout this element hosts, or nullptr for a non-host element. Owned
+    /// here when installed
     /// via installLayout(); never serialized.
     UILayout* _layout = nullptr;
     std::unique_ptr<UILayout> _ownedLayout;
@@ -395,7 +394,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     //
     // Any element can install a layout. When one is installed, this element is a
     // HOST: it arranges its children through that layout (and measures through
-    // it) instead of falling back to the legacy self-positioned path. This is
+    // it); non-host elements consume the rect assigned by their parent. This is
     // what removes the path-A / path-B split: "has a layout" is the only
     // distinction, and Canvas is just one layout among Box / Split / Table ...
     [[nodiscard]] UILayout* getLayout() const { return _layout; }
@@ -601,11 +600,6 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// is assigned when the subtree root is attached to a WidgetTree.
     void addDetachedChild(const UIElementRef& child);
     void addDetachedChild(const UIElementRef& child, FChildSlotInitializer init);
-    /// Queue a construction-time initializer for the parent-owned edge that
-    /// will be created when this detached widget is attached. This is a
-    /// transient builder bridge: it is consumed by insertChildEdge(), never
-    /// serialized, and does not make the child the owner of layout intent.
-    void setPendingSlotInitializer(FChildSlotInitializer init);
     void initializeChildSlot(UIElement& child, FChildSlotInitializer init);
 
   protected:
@@ -681,7 +675,6 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     std::vector<UIElementRef> _children;
     std::vector<UIBehaviorRef> _behaviors;
     std::vector<std::unique_ptr<UISlot>> _childSlots;
-    FChildSlotInitializer _pendingSlotInitializer;
     UIElement*                _parent = nullptr;
     UISlot*                   _slot   = nullptr;
     WidgetTree*               _tree   = nullptr;

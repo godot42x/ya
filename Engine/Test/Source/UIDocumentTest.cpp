@@ -391,27 +391,6 @@ TEST(UIDocumentTest, AuthoredPanelFillSurvivesThemeAfterReload)
     EXPECT_EQ(snap.items.front().color, glm::vec4(0.12f, 0.14f, 0.22f, 0.88f));
 }
 
-TEST(UIDocumentTest, LegacyExplicitFillPromotesToAuthoredStyle)
-{
-    ensureTestTypesRegistered();
-    nlohmann::json json;
-    json["version"] = UIDocument::kFormatVersion;
-    json["typeId"]  = "test.doc_panel";
-    json["fields"]  = {
-        {"_color", {0.5f, 0.4f, 0.3f, 1.0f}},
-        {"_bExplicitFill", true},
-    };
-    json["children"] = nlohmann::json::array();
-
-    auto document = UIDocument::fromJson(json);
-    ASSERT_NE(document, nullptr);
-    auto instance = document->instantiate();
-    auto* panel = dynamic_cast<UIPanel*>(instance.get());
-    ASSERT_NE(panel, nullptr);
-    EXPECT_TRUE(panel->hasAuthoredStyle());
-    EXPECT_EQ(panel->getColor(), glm::vec4(0.5f, 0.4f, 0.3f, 1.0f));
-}
-
 TEST(UIDocumentTest, UnknownTypeIdReportsDiagnostic)
 {
     ensureTestTypesRegistered();

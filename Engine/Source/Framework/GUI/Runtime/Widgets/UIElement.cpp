@@ -444,24 +444,6 @@ void UIElement::addDetachedChild(const UIElementRef& child, FChildSlotInitialize
     appendChildEdge(child, std::move(init));
 }
 
-void UIElement::setPendingSlotInitializer(FChildSlotInitializer init)
-{
-    if (!init) {
-        return;
-    }
-    if (!_pendingSlotInitializer) {
-        _pendingSlotInitializer = std::move(init);
-        return;
-    }
-
-    FChildSlotInitializer previous = std::move(_pendingSlotInitializer);
-    _pendingSlotInitializer = [previous = std::move(previous), init = std::move(init)](UIElement& child,
-                                                                                         UISlot&  slot) mutable {
-        previous(child, slot);
-        init(child, slot);
-    };
-}
-
 void UIElement::initializeChildSlot(UIElement& child, FChildSlotInitializer init)
 {
     if (UISlot* slot = getSlotForChild(child)) {
@@ -501,10 +483,6 @@ void UIElement::insertChildEdge(size_t index, const UIElementRef& child, FChildS
     std::unique_ptr<UISlot> slot = createSlotForChild(*child);
     child->_slot = slot.get();
     if (slot) {
-        if (child->_pendingSlotInitializer) {
-            FChildSlotInitializer pending = std::move(child->_pendingSlotInitializer);
-            pending(*child, *slot);
-        }
         init(*child, *slot);
     }
     const size_t insertAt = std::min(index, _children.size());

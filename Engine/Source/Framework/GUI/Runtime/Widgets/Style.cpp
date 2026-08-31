@@ -5,7 +5,7 @@
 // ============================================================================
 // Authored TStyle persistence: FBrush + every F*Style is a reflected value
 // type so UIDocument can round-trip a sparse `_authoredStyle` patch (or a
-// legacy full TStyle object, which is a freeze). Widgets persist the slot
+// full TStyle object, which is a freeze). Widgets persist the slot
 // via UIElement's virtual serializeAuthoredStyle (mixin MI offset).
 // Empty authored serializes as omitted/null; an object reconstitutes the patch.
 // ============================================================================

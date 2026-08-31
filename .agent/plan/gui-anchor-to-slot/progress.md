@@ -896,9 +896,142 @@ C++ exception: [json.exception.type_error.307] cannot use erase() with null
 - 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test`，全量 317/317 通过。
 - 未完成：生产/示例中仍有大量 builder geometry sugar；pending slot bridge 仍待所有外部调用迁移后删除。
 
+## 2026-08-31 — CP5 Workbench editor demo edge migration
+
+- 误差审计确认：`FWorkbenchSurface::buildEditorDemo()` 中按钮、标题、输入框和值文本的 `.setSize()` 全部描述 parent-child edge intent；继续保留 builder geometry 会延长 pending bridge，且无法体现匿名/能力化 DSL 的最终边界。
+- 迁移方式：移除 `toolButton` 的尺寸参数；Inspector 的固定宽高改用 `ui::layout().size(...) >> child`，标题/文本/输入框/按钮尺寸均落到 Inspector 的 `UIBoxSlot`。Toolbar 按内容和 padding 测量，不再由 widget builder 写尺寸。
+- 验证：`xmake b GUIWorkbench`；`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='ToolControlsTest.*:DeclarativeContractTest.*'`，72/72 通过。
+- 未完成：`WorkbenchSurface` 其他页面、`EditorSurface` 与 `GUIWorkbench` demo 页面仍有 geometry sugar；pending slot bridge 不能在调用点清零前删除。
+
+## 2026-08-31 — CP5 EditorSurface content browser edges
+
+- 误差审计确认：`EditorSurface::buildContentBrowser()` 中 mount/entry list、header、back/search 控件和 scroll host 的尺寸都是 parent-child edge intent；widget builder 的 `.setSize()` 不应继续作为布局输入。
+- 迁移方式：列表容器保持匿名尺寸-free builder；header/body/root 与 back/search、mount/entry scroll 的尺寸分别通过 `ui::layout().size(...)` / `ui::layout().fill()` 落到父节点 typed slot，动态行重建仍只操作已挂载列表。
+- 验证：`xmake b ya-runtime` 通过；编译输出仅包含既有 logger/Vulkan/Jolt 警告。
+- 未完成：`EditorSurface` 的 project browser、scene-save dialog、placeholder/labeledButton helper 仍有 geometry sugar，下一批按完整函数继续迁移。
+
+## 2026-08-31 — CP5 EditorSurface project browser/toolbar/scene-save edges
+
+- 误差审计确认：`EditorSurface` 剩余 `.setSize()` 均为 parent-child edge intent；`labeledButton(width,height)` 是把 edge 数据藏进 child builder 的错误抽象，不应继续保留。
+- 迁移方式：`labeledButton` 改为纯控件工厂；项目浏览器、编辑器工具栏、场景保存对话框的按钮、列表、行、scroll、placeholder 文本尺寸改用 `ui::layout().size(...)` / `fill()`；删除负尺寸 placeholder geometry。
+- 验证：`xmake b ya-runtime`；`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='ToolControlsTest.*:WidgetTreeTest.*:DeclarativeContractTest.*'`，135/135 通过。
+- 未完成：`Example/GUIWorkbench/Source/WorkbenchDemoPages.cpp` 仍有大量 builder geometry sugar；pending slot bridge 仍不能删除。
+
+## 2026-08-31 — CP5 GUIWorkbench widgets demo edges
+
+- 误差审计确认：`buildWidgetsDemo()` 中按钮、slider、combo、image、textfield、HBox/VBox 单元格尺寸均属于 parent-owned edge intent；WidgetsForm 的 host 不应持有 builder geometry。
+- 迁移方式：移除该页面所有 `.setSize()`，通过 `ui::layout().size(...) >> child` 在表单/row/container 边上表达固定尺寸；checkbox 等 intrinsic 控件保持内容测量与 slot 默认策略。
+- 验证：`xmake b GUIWorkbench` 通过；既有 GUI closure 相关测试保持通过。
+- 未完成：`WorkbenchDemoPages.cpp` 的 Layout/Dock/Theme/Rounded 等页面仍有 geometry sugar，pending slot bridge 仍不能删除。
+
+## 2026-08-31 — CP5 GUIWorkbench layout demo edges
+
+- 误差审计确认：Layout 页面 HBox/VBox 容器、彩色 cell、cell label 与 spacing slider 的尺寸均为 parent-child edge intent；container 的 spacing/padding/alignment 仍是 layout-host 策略，不能下沉到 slot。
+- 迁移方式：HBox/VBox 与 cell 已使用 `ui::layout().size(...) >> child`；spacing slider 同样改为 row-owned typed slot，移除 layout demo 对 builder geometry 的依赖。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 备注：HBox/VBox/cell 的迁移与上一 checkpoint 同一文件批次落地，本 checkpoint 补齐该页面最后一个 slider edge。
+- 未完成：`WorkbenchDemoPages.cpp` 的 Menus/DragDrop/Modal/Dock/Theme/Rounded 等页面仍有 geometry sugar，pending slot bridge 仍不能删除。
+
+## 2026-08-31 — CP5 GUIWorkbench menus demo edges
+
+- 误差审计确认：Menus 页面 `MenusForm` 的 host 尺寸和 PopupButton 固定尺寸均属于 parent-owned edge intent；弹出菜单的 popup-owned canvas slot 逻辑不受影响。
+- 迁移方式：移除 `MenusForm.setSize()` 与 PopupButton builder `.setSize()`，改用 `ui::layout().size({180,26}) >> button`。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 未完成：DragDrop/Modal/Dock/Theme/Rounded 等页面仍有 geometry sugar，pending slot bridge 仍不能删除。
+
+## 2026-08-31 — CP5 GUIWorkbench drag-drop demo edges
+
+- 误差审计确认：DragDrop 页面 `DragDropForm` 的零尺寸 builder 只是 host 几何；source item 已经通过 `ui::layout().size(...)` 表达，drop zone 已通过显式 canvas/box edge 表达。
+- 迁移方式：移除 `DragDropForm.setSize()`，保留 source row item 与 drop zone 的 parent-owned layout intent，不引入新的 widget geometry。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 未完成：Modal/ScrollSplit/Gallery/Dock/Theme/Rounded 等页面仍有 geometry sugar，pending slot bridge 仍不能删除。
+
+## 2026-08-31 — CP5 GUIWorkbench modal demo edges
+
+- 误差审计确认：Modal 页面静态 `OpenModal` 按钮与 `ModalForm` 容器的尺寸属于 parent-child edge intent；动态弹窗 content/dialog/name/buttons 已经通过 popup/box typed slot initializer 表达，不应改回 builder geometry。
+- 迁移方式：移除静态按钮与表单 `.setSize()`，按钮尺寸改为 `ui::layout().size(...) >> child`；修正一次 DSL 误用，保持需要 `.share()` 的对象仍为纯 builder，edge attachment 只在父节点 children 处生成。
+- 验证：`xmake b GUIWorkbench` 通过；编译期间仅有既有 logger warning。
+- 未完成：ScrollSplit/Gallery/Dock/Theme/Rounded 等页面仍有 geometry sugar，pending slot bridge 仍不能删除。
+
+## 2026-08-31 — CP5 GUIWorkbench gallery edge migration
+
+- 误差审计确认：Gallery 页面中 `demoButton(width)`、GallerySplit、TreeFilter 等尺寸均是 parent-child edge intent；Reactive/TreeView/Theme/Table/DnD 控件本身没有 authored geometry 责任。
+- 迁移方式：将 `demoButton` 改为纯 builder，所有固定宽度调用显式使用 `ui::layout().size(...)`；split、filter field 迁移到 parent edge，保留 Table/Grid 的 `cell-only` capability 约束。
+- 验证：`xmake b GUIWorkbench` 通过；期间修正了 attachment 与 `FBoxSlotArgs` 重复组合的编译错误，确认 DSL 编译期隔离按计划生效。
+- 未完成：Interactions/Dock/Theme/Unicode/Chinese/Rounded 等页面仍可能有 geometry sugar，pending slot bridge 仍不能删除。
+
+## 2026-08-31 — CP5 GUIWorkbench interactions demo edges
+
+- 误差审计确认：Interactions 页面 `demoButton(width)` 与 `InteractionsForm` 的尺寸均为 parent-child edge intent；Tooltip、disable、dialog 的行为状态不属于布局字段。
+- 迁移方式：将本页 helper 改为纯 builder，Tooltip/disable/modal 入口按钮统一通过 `ui::layout().size(...)` 附着；form 零尺寸 builder 删除。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 未完成：Dock/Theme/Unicode/Chinese/Rounded 等页面仍可能有 geometry sugar，pending slot bridge 仍不能删除。
+
+## 2026-08-31 — CP5 GUIWorkbench dock demo root edge
+
+- 误差审计确认：Dock demo 的 `DockDemo` root 零尺寸只是 root host geometry；dock child 已有 `boxSlot().fill()`，floating host 已有显式 popup canvas args。
+- 迁移方式：删除 DockDemo root `.setSize({0,0})`，不改变 dock workspace、reparent 或 floating host 生命周期。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 未完成：Theme/Unicode/Chinese/Rounded 等页面仍可能有 geometry sugar，pending slot bridge 仍不能删除。
+
+## 2026-08-31 — CP5 GUIWorkbench theme/rounded demo edges
+
+- 误差审计确认：Theme 页面 `themedButton(width)`、示例 panel，以及 Rounded 页面 grid/card/nested panel 的尺寸均是 parent-child edge intent；theme key、corner radius 和颜色仍属于 widget visual state。
+- 迁移方式：移除 Theme helper 的 width 参数；按钮、panel、grid、card、nested panel 统一使用 `ui::layout().size(...) >> child`，不改变主题切换或 SDF 圆角行为。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 未完成：需继续做全仓库 geometry sugar 负向审计，并在所有外部调用清零后删除 pending slot bridge 与 builder geometry API。
+
+## 2026-08-31 — CP2 builder pending bridge 删除
+
+- 误差审计确认：全仓库 GUI 生产代码与示例中的 `.setSize/.setPosition/.setAutoSize` 已清零，剩余命中仅为非 GUI 场景 API 或 bridge 专用测试；继续保留 pending bridge 已无架构收益。
+- 收口方式：删除 `UIElement::setPendingSlotInitializer`、`_pendingSlotInitializer` 及 builder 的 `setPosition/setSize/setAutoSize`；测试改用 `ui::layout()`、`FCanvasSlotArgs`、`FBoxSlotArgs` 或显式 root/child slot。
+- 方向修正：`UIDialog` 回归测试原先依赖 content builder 尺寸，改为显式 child slot 的 `ui::column` 内容，保持 dialog preferred-size contract，不恢复兼容桥。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test`，全量 317/317 通过。
+- 未完成：仍需做最终 negative audit、构建 `GUIWorkbench/ya-gui-minimal-host/ya-runtime`，并检查是否存在旧 serialized widget 文件或 legacy schema 分支。
+
+## 2026-08-31 — CP6 legacy style schema cleanup
+
+- 误差审计确认：布局 bridge 删除后，GUI 仍有 3 个真实旧 schema promotion 分支（Panel `_bExplicitFill`、Image `_placeholderColor`、Popup `_modalColor`），继续保留会违反首版无 legacy 兼容语义。
+- 收口方式：删除旧字段的反射暴露、运行时成员与 `deserializeFields()` promotion 逻辑；删除 `UIDocumentTest.LegacyExplicitFillPromotesToAuthoredStyle` 旧 serialized fixture，新 authored style 仅通过 `UITheme`/稀疏 style schema 读取。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test`，全量 316/316 通过（删除 1 个 legacy fixture）。
+- 未完成：需完成最终全仓库负向审计，并构建 `GUIWorkbench`、`ya-gui-minimal-host`、`ya-runtime`。
+
+## 2026-08-31 — CP6 legacy style promotion cleanup
+
+- 误差审计确认：`UIText::deserializeFields()` 仍把旧文档 `_color` 自动 promotion 到 authored style，属于首版明确禁止的旧 schema 读取分支。
+- 收口方式：删除 UIText promotion override 与声明；新文档只通过 authored style sparse patch / theme 解析颜色，不再从旧 `_color` 推断样式。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test`，全量 316/316 通过。
+- 未完成：需再次执行最终负向搜索并确认宿主构建结果已记录到计划。
+
+## 2026-08-31 — CP6 compatibility entry cleanup
+
+- 误差审计确认：GUI 仍存在无调用者的旧路径转发头 `GUI/Widgets/Reactive.h` 与 `GUIAppHost`/`FGUIAppHostConfig` 类型别名；这些属于实际可包含/可编译的兼容入口，违反首版无 legacy 兼容语义。
+- 收口方式：删除转发头与旧类型别名，所有当前调用点继续使用 `GUI/Binding/Reactive.h`、`GUIApp`、`GUIWindowHost`。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test`，316/316 通过。
+- 未完成：宿主目标重建与最终负向审计仍待完成。
+
+## 2026-08-31 — DSL child syntax direction correction
+
+- 误差审计确认：`child(node)` 是当前匿名节点 DSL 的核心纯语法糖，负责表达“已知 parent 的 child attach”，不是 legacy geometry API；删除它会破坏已确定的简洁 DSL。
+- 计划修正：保留 `child(node)` / `children(...)`，只禁止其隐式 geometry、自动 slot 推断和 self-positioned fallback；typed layout 继续通过 `ui::layout() >> child` 或 typed slot args 表达。
+
+## 2026-08-31 — CP5 GUIWorkbench scroll-split demo edges
+
+- 误差审计确认：ScrollSplit 页面列表行高度、正文内缩、split/layout host 的尺寸均为 edge intent；`setPosition({8,0})` 是 child-owned 几何残留，应由 canvas slot offset 表达。
+- 迁移方式：列表 row/cell 改用 `ui::layout().size(...)`，正文改用 `offsets(...)`，删除 split 与外层 layout 的零尺寸 builder 字段；scroll/split 的 axis、ratio、padding 等仍保留在各自 layout host。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 未完成：Gallery/Dock/Theme/Rounded 等页面仍有 geometry sugar，pending slot bridge 仍不能删除。
+
 ## 2026-08-31 — CP2 WidgetTree attach/reparent/detach edges
 
 - 误差审计确认：AttachTwice/CrossTree/Reparent/Sibling/Detach 语义测试只验证树归属与生命周期；大量 `makeButton(..., {}, {})` 的 detached 几何没有布局消费者，应移除 pending helper。需要命中/hover 的按钮则改显式 layer canvas args。
 - 迁移方式：基础 attach/reparent/sibling/detach fixture 改为直接构造 widget，并在需要时通过 `FCanvasSlotArgs` attach；ButtonText/PopupShield/DetachFocus 等命中测试保留明确 root canvas 几何。
 - 验证：`xmake b ya-gui-closure-test`；attach、cross-tree、reparent、detach、hover、tree destruction 共 15/15 通过。
 - 未完成：`makeButton` helper 仍被命中测试大量使用，需后续改为返回 widget + 显式 args，最终删除 `GUITestLayoutHelpers` pending bridge。
+## 2026-08-31 — 计划对账与兼容入口最终清理
+
+- 误差审计：实现已经完成 CP2–CP6 的主体目标，但计划与 feature matrix 仍把部分条目标为 wip/planned；同时发现两个无调用者的兼容文件：`Runtime/Widgets/Reactive.cpp` 与 `Declarative/Construct.h`。
+- 收口方式：删除上述兼容 translation unit / umbrella；清理 UIElement、UILayout、Style、GUI host 中仍暗示 legacy self-positioned / legacy schema 的过时注释。未修改正常的 fallback（theme/glyph）语义。
+- 计划同步：CP2–CP6、Designer/snapshot schema guard、提交治理和首版兼容清零均按当前证据标记完成；feature matrix 全部已完成场景标记为 `done`。CP7 保留为唯一未完成项，等待最终门禁执行。
+- 验证：`xmake b ya-gui-closure-test` 通过；`xmake r ya-gui-closure-test` 全量 316/316 通过；`xmake b GUIWorkbench` 通过；`xmake b ya-gui-minimal-host` 通过；`xmake b ya-runtime` 通过。并行 XMake 首次运行出现共享临时 stats 目录竞争，改串行后全部通过。
+- 当前未完成：CP7 的最终 snapshot/offscreen parity 与场景级 GUIWorkbench 冒烟尚未执行；不应在此之前宣称计划整体完成。

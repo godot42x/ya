@@ -103,7 +103,6 @@ struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FText
     [[nodiscard]] const FTextStyle& resolvedStyle(ReactiveBase::EDirtyLevel level = ReactiveBase::EDirtyLevel::Paint,
                                                   bool bTrackDependencies = true) const;
 
-    void deserializeFields(const nlohmann::json& fields) override;
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;

@@ -325,8 +325,8 @@ Rect2D UICanvasLayout::resolveChildRect(const UIElement& child, const UICanvasSl
     const glm::vec2 authored{autoAxis.x ? 0.0f : (fixed.x != 0.0f ? fixed.x : preferred.x),
                              autoAxis.y ? 0.0f : (fixed.y != 0.0f ? fixed.y : preferred.y)};
 
-    // 1. Anchor area: shared anchor math, so the canvas layout and the legacy
-    //    self-positioned path cannot drift. Authored size comes from the slot.
+    // 1. Anchor area: canvas anchor math is resolved exclusively from the
+    //    parent-owned slot. Authored size comes from the slot.
     const Rect2D anchorRect =
         child.resolveCanvasRect(contentRect, slot.getAnchorMin(), slot.getAnchorMax(),
                                 slot.getOffset(), slot.getMinSize(), slot.getMaxSize(),

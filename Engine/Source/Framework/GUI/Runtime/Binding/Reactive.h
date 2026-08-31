@@ -4,8 +4,7 @@
 // Reactive - event-driven reactive value binding (Vue semantics, minimal).
 //
 // Binding-layer fact source (G4.1): Reactive belongs to GUI dataflow/binding,
-// not the widget kernel itself. `GUI/Widgets/Reactive.h` remains as a
-// compatibility bridge while callers migrate to `GUI/Binding/Reactive.h`.
+// not the widget kernel itself.
 // ============================================================================
 
 #include "Core/Api.h"

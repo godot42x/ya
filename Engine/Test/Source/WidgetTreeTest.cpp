@@ -859,7 +859,9 @@ TEST(WidgetTreeTest, PopupOverlayContentExtentLivesOnTheCanvasSlot)
 TEST(WidgetTreeTest, DialogCentresContentThroughThePopupCanvasSlot)
 {
     WidgetTree tree({.width = 400, .height = 300});
-    auto       content = ui::panel("Body").setSize({120.0f, 40.0f}).release();
+    auto       content = ui::column("Body")
+                              [ui::layout().size({120.0f, 40.0f}) >> ui::panel("Inner")]
+                              .release();
     auto dialog = UIDialog::create("Confirm", content);
 
     dialog->open(tree);

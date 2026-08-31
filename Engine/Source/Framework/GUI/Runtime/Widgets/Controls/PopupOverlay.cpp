@@ -114,15 +114,6 @@ void UIPopupOverlay::paintSelf(UIFrameBuilder& builder)
     builder.addBrush(_layoutRect, style.modalFill);
 }
 
-void UIPopupOverlay::deserializeFields(const nlohmann::json& fields)
-{
-    UIElement::deserializeFields(fields);
-    static const glm::vec4 kDefaultModal{0.0f, 0.0f, 0.0f, 0.45f};
-    if (!hasAuthoredStyle() && _modalColor != kDefaultModal) {
-        setStyleField("modalFill", FBrush::solid(_modalColor), EUIPropertyImpact::Paint);
-    }
-}
-
 FCanvasSlotArgs UIPopupOverlay::resolveContentSlotArgs(const UIElement& child) const
 {
     (void)child;

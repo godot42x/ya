@@ -341,7 +341,7 @@ const std::string& FWorkbenchSurface::getStatusText() const
 
 void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& parent)
 {
-    auto toolButton = [](std::string name, const std::string& label, float width = 0.0f)
+    auto toolButton = [](std::string name, const std::string& label)
     {
         auto button = ya::ui::button(name).child(
             ya::ui::text(name + "_Label")
@@ -350,9 +350,6 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                 .setVisibility(ya::EWidgetVisibility::SelfHitTestInvisible)
                 .setHAlign(ya::EWidgetAlignH::Center)
                 .setVAlign(ya::EWidgetAlignV::Center));
-        if (width > 0.0f) {
-            return std::move(button).setSize({width, 24.0f});
-        }
         return std::move(button).setContentPadding({10.0f, 4.0f});
     };
     auto headerText = [](const std::string& text)
@@ -360,8 +357,7 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
         return ya::ui::text(text + "_Header")
             .setText(text)
             .setFontSize(13)
-            .setColor(kHeaderColor)
-            .setSize({200.0f, 20.0f});
+            .setColor(kHeaderColor);
     };
 
     auto addButton = toolButton("Add", "Add").setOnClick([this] { cmdAdd(); });
@@ -415,7 +411,6 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
     _canvasPanel = canvas.share();
 
     auto nameField = ya::ui::textField("NameField")
-                         .setSize({220.0f, 26.0f})
                          .setFontSize(14)
                          .setOnCommit(
                              [this](const std::string& text)
@@ -424,7 +419,7 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                                  setCommandResult(workspace.commandResult);
                              });
     _nameField         = nameField.share();
-    auto visibleToggle = toolButton("VisibleToggle", "Visible: on", 110.0f)
+    auto visibleToggle = toolButton("VisibleToggle", "Visible: on")
                              .setOnClick(
                                  [this]
                                  {
@@ -432,7 +427,7 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                                      setCommandResult(workspace.commandResult);
                                  });
     _visibleToggle = visibleToggle.share();
-    auto colorCycle = toolButton("ColorCycle", "Cycle Color", 110.0f)
+    auto colorCycle = toolButton("ColorCycle", "Cycle Color")
                           .setOnClick(
                               [this]
                               {
@@ -440,9 +435,9 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                                   setCommandResult(workspace.commandResult);
                               });
     _colorCycle = colorCycle.share();
-    auto colorValue = ya::ui::text("ColorValue").setSize({220.0f, 14.0f}).setFontSize(12).setText("").setColor(kHeaderColor);
+    auto colorValue = ya::ui::text("ColorValue").setFontSize(12).setText("").setColor(kHeaderColor);
     _colorValue     = colorValue.share();
-    auto sizeGrow   = toolButton("SizeGrow", "Grow +20", 90.0f)
+    auto sizeGrow   = toolButton("SizeGrow", "Grow +20")
                         .setOnClick(
                             [this]
                             {
@@ -450,7 +445,7 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                                 setCommandResult(workspace.commandResult);
                             });
     _sizeGrow    = sizeGrow.share();
-    auto sizeShrink = toolButton("SizeShrink", "Shrink -20", 100.0f)
+    auto sizeShrink = toolButton("SizeShrink", "Shrink -20")
                           .setOnClick(
                               [this]
                               {
@@ -458,7 +453,7 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                                   setCommandResult(workspace.commandResult);
                               });
     _sizeShrink = sizeShrink.share();
-    auto sizeValue = ya::ui::text("SizeValue").setSize({220.0f, 14.0f}).setFontSize(12).setText("").setColor(kHeaderColor);
+    auto sizeValue = ya::ui::text("SizeValue").setFontSize(12).setText("").setColor(kHeaderColor);
     _sizeValue     = sizeValue.share();
 
     auto inspector = ya::ui::panel("Inspector")
@@ -466,19 +461,20 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                          [ya::ui::layout().fill() >> ya::ui::column("InspectorForm")
                                     .setPadding({10.0f, 8.0f})
                                     .setSpacing(4.0f)
-                                    .children(headerText("INSPECTOR"),
-                                              headerText("Name"),
-                                              std::move(nameField),
-                                              headerText("Visible"),
-                                              std::move(visibleToggle),
-                                              headerText("Color"),
-                                              std::move(colorCycle),
-                                              std::move(colorValue),
-                                              headerText("Size"),
+                                    .children(ya::ui::layout().size({200.0f, 20.0f}) >> headerText("INSPECTOR"),
+                                              ya::ui::layout().size({200.0f, 20.0f}) >> headerText("Name"),
+                                              ya::ui::layout().size({220.0f, 26.0f}) >> std::move(nameField),
+                                              ya::ui::layout().size({200.0f, 20.0f}) >> headerText("Visible"),
+                                              ya::ui::layout().size({110.0f, 24.0f}) >> std::move(visibleToggle),
+                                              ya::ui::layout().size({200.0f, 20.0f}) >> headerText("Color"),
+                                              ya::ui::layout().size({110.0f, 24.0f}) >> std::move(colorCycle),
+                                              ya::ui::layout().size({220.0f, 14.0f}) >> std::move(colorValue),
+                                              ya::ui::layout().size({200.0f, 20.0f}) >> headerText("Size"),
                                               ya::ui::row("SizeRow")
                                                   .setSpacing(6.0f)
-                                                  .children(std::move(sizeGrow), std::move(sizeShrink)),
-                                              std::move(sizeValue))];
+                                                  .children(ya::ui::layout().size({90.0f, 24.0f}) >> std::move(sizeGrow),
+                                                            ya::ui::layout().size({100.0f, 24.0f}) >> std::move(sizeShrink)),
+                                              ya::ui::layout().size({220.0f, 14.0f}) >> std::move(sizeValue))];
 
     auto rightSplit = ya::ui::splitPane("RightSplit")
                           .setSplitRatio(0.66f)

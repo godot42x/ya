@@ -125,45 +125,6 @@ class TUIWidgetBuilder
         return std::move(derived());
     }
 
-    [[nodiscard]] TDerived& setPosition(const glm::vec2& value) &
-    {
-        applyPendingPosition(value);
-        return derived();
-    }
-
-    [[nodiscard]] TDerived&& setPosition(const glm::vec2& value) &&
-    {
-        applyPendingPosition(value);
-        return std::move(derived());
-    }
-
-    [[nodiscard]] TDerived& setSize(const glm::vec2& value) &
-    {
-        applyPendingSize(value);
-        return derived();
-    }
-
-    [[nodiscard]] TDerived&& setSize(const glm::vec2& value) &&
-    {
-        applyPendingSize(value);
-        return std::move(derived());
-    }
-
-    /// Set the parent-edge SizeToContent mode. Detached widgets retain no
-    /// independent auto-size state; the pending initializer is consumed when
-    /// the widget is attached and the typed slot exists.
-    [[nodiscard]] TDerived& setAutoSize(bool value) &
-    {
-        applyPendingAutoSize(value);
-        return derived();
-    }
-
-    [[nodiscard]] TDerived&& setAutoSize(bool value) &&
-    {
-        applyPendingAutoSize(value);
-        return std::move(derived());
-    }
-
     [[nodiscard]] TDerived& setEnabled(bool value) &
     {
         _widget->setEnabled(value);
@@ -263,63 +224,6 @@ class TUIWidgetBuilder
   protected:
     std::shared_ptr<TWidget> _widget;
 
-
-    void applyToCurrentOrPendingSlot(FChildSlotInitializer init)
-    {
-        if (UISlot* slot = _widget->getSlot()) {
-            init(*_widget, *slot);
-            return;
-        }
-        _widget->setPendingSlotInitializer(std::move(init));
-    }
-
-    void applyPendingPosition(const glm::vec2& value)
-    {
-        applyToCurrentOrPendingSlot([value](UIElement&, UISlot& slot) {
-            if (auto* canvas = slot.as<UICanvasSlot>()) {
-                canvas->setOffset(value);
-            }
-        });
-    }
-
-    void applyPendingSize(const glm::vec2& value)
-    {
-        applyToCurrentOrPendingSlot([value](UIElement&, UISlot& slot) {
-            if (auto* canvas = slot.as<UICanvasSlot>()) {
-                canvas->setFixedSize(value);
-                canvas->setWidthSizeMode(EWidgetSizeMode::Fixed);
-                canvas->setHeightSizeMode(EWidgetSizeMode::Fixed);
-            }
-            else if (auto* box = slot.as<UIBoxSlot>()) {
-                box->setPreferredSize(value);
-            }
-            else if (auto* overlay = slot.as<UIOverlaySlot>()) {
-                overlay->setPreferredSize(value);
-            }
-        });
-    }
-
-    void applyPendingAutoSize(bool value)
-    {
-        applyToCurrentOrPendingSlot([value](UIElement&, UISlot& slot) {
-            if (auto* canvas = slot.as<UICanvasSlot>()) {
-                const EWidgetSizeMode mode = value ? EWidgetSizeMode::Auto : EWidgetSizeMode::Fixed;
-                canvas->setWidthSizeMode(mode);
-                canvas->setHeightSizeMode(mode);
-                if (value) {
-                    canvas->setFixedSize({0.0f, 0.0f});
-                }
-            }
-            else if (auto* box = slot.as<UIBoxSlot>()) {
-                box->setSizeRule(value ? EUIBoxSlotSizeRule::Auto : EUIBoxSlotSizeRule::Fill);
-            }
-            else if (auto* overlay = slot.as<UIOverlaySlot>()) {
-                const EUIOverlayAlignment align = value ? EUIOverlayAlignment::Start : EUIOverlayAlignment::Fill;
-                overlay->setHAlign(align);
-                overlay->setVAlign(align);
-            }
-        });
-    }
 
     [[nodiscard]] TDerived& derived() & { return static_cast<TDerived&>(*this); }
     [[nodiscard]] TDerived&& derived() && { return static_cast<TDerived&&>(*this); }

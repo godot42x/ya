@@ -122,7 +122,6 @@ std::shared_ptr<UIElement> makePlaceholderPanel(const std::string& name, const s
         [ui::layout().fill().offsets({12.0f, 12.0f}) >> ui::text(name + "_Label")
                    .setText(text)
                    .setFontSize(13)
-                   .setSize({-24.0f, -24.0f})
                    .setHAlign(EWidgetAlignH::Center)
                    .setVAlign(EWidgetAlignV::Center)]
         .release();
@@ -148,11 +147,10 @@ ui::UISelectableRowWidgetBuilder contentRow(const std::string& key,
                    .setVAlign(EWidgetAlignV::Center));
 }
 
-ui::UIButtonWidgetBuilder labeledButton(std::string key, const std::string& label, float width, float height = 26.0f)
+ui::UIButtonWidgetBuilder labeledButton(std::string key, const std::string& label)
 {
     std::string labelKey = key + "_Label";
     return ui::button(std::move(key))
-        .setSize({width, height})
         .child(ui::text(std::move(labelKey))
                    .setText(label)
                    .setFontSize(13)
@@ -275,12 +273,11 @@ void EditorSurface::buildProjectBrowser(App& app)
     auto title = ui::text("ProjectTitle").setText("YA Editor").setStyleKey("text.header");
     auto blurb = ui::text("ProjectBlurb")
                      .setText("Select a project to open. The WidgetTree chrome stays isolated until a project is loaded.")
-                     .setStyleKey("text.muted")
-                     .setSize({720.0f, 40.0f});
+                     .setStyleKey("text.muted");
 
-    auto refresh = labeledButton("RefreshProjects", "Refresh Projects", 160.0f)
+    auto refresh = labeledButton("RefreshProjects", "Refresh Projects")
                        .setOnClick([this]() { _layer->requestRefreshProjectBrowser(); });
-    auto exitBtn = labeledButton("ExitEditor", "Exit Editor", 160.0f)
+    auto exitBtn = labeledButton("ExitEditor", "Exit Editor")
                        .setOnClick([]() {
                            if (auto* app = App::get()) {
                                app->requestQuit();
@@ -289,7 +286,6 @@ void EditorSurface::buildProjectBrowser(App& app)
 
     _hierarchyRoots = std::make_shared<ReactiveList<UITreeView::FNode>>();
     auto list = ui::treeView("ProjectList")
-                    .setSize({720.0f, 320.0f})
                     .bindData(_hierarchyRoots)
                     .setOnSelectionChanged([this](const std::string& id) {
                         int index = 0;
@@ -300,7 +296,7 @@ void EditorSurface::buildProjectBrowser(App& app)
                     });
     _hierarchyView = list.share();
 
-    auto openBtn = labeledButton("OpenProject", "Open Project", 160.0f)
+    auto openBtn = labeledButton("OpenProject", "Open Project")
                        .setOnClick([this]() {
                            const auto& projects = _layer->getDiscoveredProjects();
                            const int   index    = _layer->getProjectBrowserSelection();
@@ -316,12 +312,13 @@ void EditorSurface::buildProjectBrowser(App& app)
                     .setPadding({48.0f, 48.0f})
                     .setSpacing(12.0f)
                     .children(std::move(title),
-                              std::move(blurb),
+                              ui::layout().size({720.0f, 40.0f}) >> std::move(blurb),
                               ui::row("ProjectActions")
                                   .setSpacing(8.0f)
-                                  .children(std::move(refresh), std::move(exitBtn)),
-                              std::move(list),
-                              std::move(openBtn),
+                                  .children(ui::layout().size({160.0f, 26.0f}) >> std::move(refresh),
+                                            ui::layout().size({160.0f, 26.0f}) >> std::move(exitBtn)),
+                              ui::layout().size({720.0f, 320.0f}) >> std::move(list),
+                              ui::layout().size({160.0f, 26.0f}) >> std::move(openBtn),
                               std::move(errorText));
     ui::build(*_tree, *_tree->getLayer(WidgetTree::ELayer::Content), std::move(page), ui::layout().fill());
 }
@@ -363,17 +360,17 @@ void EditorSurface::buildEditorChrome(App& app)
         });
     });
 
-    auto play = labeledButton("Play", "Play", 72.0f, 28.0f).setOnClick([]() {
+    auto play = labeledButton("Play", "Play").setOnClick([]() {
         if (auto* app = App::get()) {
             app->getTaskManager().registerFrameTask([app]() { app->startRuntime(); });
         }
     });
-    auto simulate = labeledButton("Simulate", "Simulate", 88.0f, 28.0f).setOnClick([]() {
+    auto simulate = labeledButton("Simulate", "Simulate").setOnClick([]() {
         if (auto* app = App::get()) {
             app->getTaskManager().registerFrameTask([app]() { app->startSimulation(); });
         }
     });
-    auto stop = labeledButton("Stop", "Stop", 72.0f, 28.0f).setOnClick([]() {
+    auto stop = labeledButton("Stop", "Stop").setOnClick([]() {
         if (auto* app = App::get()) {
             app->getTaskManager().registerFrameTask([app]() {
                 if (app->isRuntimeMode()) {
@@ -385,13 +382,13 @@ void EditorSurface::buildEditorChrome(App& app)
             });
         }
     });
-    auto mode3d = labeledButton("Mode3D", "3D", 44.0f, 28.0f).setOnClick([this]() {
+    auto mode3d = labeledButton("Mode3D", "3D").setOnClick([this]() {
         _layer->setViewportMode(EViewportMode::Mode3D);
     });
-    auto mode2d = labeledButton("Mode2D", "2D", 44.0f, 28.0f).setOnClick([this]() {
+    auto mode2d = labeledButton("Mode2D", "2D").setOnClick([this]() {
         _layer->setViewportMode(EViewportMode::Mode2D);
     });
-    auto modeText = ui::text("ToolbarMode").setFontSize(13).setText("EDIT").setSize({88.0f, 20.0f});
+    auto modeText = ui::text("ToolbarMode").setFontSize(13).setText("EDIT");
     _toolbarModeText = modeText.share();
 
     ui::build(*_tree,
@@ -399,12 +396,12 @@ void EditorSurface::buildEditorChrome(App& app)
               ui::row("EditorToolbar")
                   .setSpacing(8.0f)
                   .setPadding({8.0f, 4.0f})
-                  .children(std::move(play),
-                            std::move(simulate),
-                            std::move(stop),
-                            std::move(mode3d),
-                            std::move(mode2d),
-                            std::move(modeText)),
+                  .children(ui::layout().size({72.0f, 28.0f}) >> std::move(play),
+                            ui::layout().size({88.0f, 28.0f}) >> std::move(simulate),
+                            ui::layout().size({72.0f, 28.0f}) >> std::move(stop),
+                            ui::layout().size({44.0f, 28.0f}) >> std::move(mode3d),
+                            ui::layout().size({44.0f, 28.0f}) >> std::move(mode2d),
+                            ui::layout().size({88.0f, 20.0f}) >> std::move(modeText)),
               ui::layout()
                   .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
                   .offsets({0.0f, kMenuHeight})
@@ -565,14 +562,10 @@ std::shared_ptr<UIElement> EditorSurface::buildContentBrowser()
 
     // Row lists are only rebuilt when the directory fingerprint changes
     // (rebuildContentRows), so both list containers are retained for attach.
-    _contentMountList = ui::column("ContentMounts").setSpacing(2.0f).setSize({180.0f, 0.0f}).share();
-    _contentEntryList = ui::column("ContentEntries")
-                            .setSpacing(2.0f)
-                            .setSize({0.0f, 0.0f})
-                            .share();
+    _contentMountList = ui::column("ContentMounts").setSpacing(2.0f).share();
+    _contentEntryList = ui::column("ContentEntries").setSpacing(2.0f).share();
 
     auto backButton = ui::button("ContentBack")
-                          .setSize({52.0f, 22.0f})
                           .setOnClick([this]() {
                               if (_contentExplorer) {
                                   _contentExplorer->navigateBack();
@@ -585,7 +578,6 @@ std::shared_ptr<UIElement> EditorSurface::buildContentBrowser()
                                      .setVAlign(EWidgetAlignV::Center));
 
     auto searchField = ui::textField("ContentSearch")
-                           .setSize({140.0f, 22.0f})
                            .setOnTextChanged([this](const std::string& text) {
                                if (_contentExplorer) {
                                    _contentExplorer->setSearchText(text);
@@ -595,29 +587,26 @@ std::shared_ptr<UIElement> EditorSurface::buildContentBrowser()
     // Header: back / current path / name filter.
     auto header = ui::row("ContentBrowser.ContainerHeader", "Header")
                       .setSpacing(6.0f)
-                      .setSize({0.0f, 26.0f})
-                      .child(std::move(backButton))
+                      .child(ui::layout().size({52.0f, 22.0f}) >> std::move(backButton))
                       .child(std::move(pathText))
-                      .child(std::move(searchField));
+                      .child(ui::layout().size({140.0f, 22.0f}) >> std::move(searchField));
 
     // Body: mount list (fixed width) + entry list (fill). Scroll hosts keep
     // long directory listings from overflowing and give wheel navigation;
     // each host owns exactly the one list container.
     auto mountScroll = ui::scroll("ContentMountScroll")
-                           .setSize({180.0f, 0.0f})
-                           .child(_contentMountList);
+                           .child(ui::layout().size({180.0f, 0.0f}) >> _contentMountList);
     auto entryScroll = ui::scroll("ContentEntryScroll")
-                           .setSize({0.0f, 0.0f})
-                           .child(_contentEntryList);
+                           .child(ui::layout().fill() >> _contentEntryList);
     auto body = ui::row("ContentBody")
                     .setSpacing(4.0f)
-                    .child(std::move(mountScroll))
+                    .child(ui::layout().size({180.0f, 0.0f}) >> std::move(mountScroll))
                     .child(std::move(entryScroll), ui::boxSlot().fill());
 
     auto root = ui::column("ContentBrowserRoot")
                     .setSpacing(2.0f)
                     .setPadding({4.0f, 4.0f})
-                    .child(std::move(header))
+                    .child(ui::layout().size({0.0f, 26.0f}) >> std::move(header))
                     .child(std::move(body), ui::boxSlot().fill());
     return root.release();
 }
@@ -937,7 +926,7 @@ void EditorSurface::openSceneSaveDialog()
         }
     }
 
-    auto nameField = ui::textField("SceneSaveName").setSize({0.0f, 26.0f}).setText(defaultName);
+    auto nameField = ui::textField("SceneSaveName").setText(defaultName);
     _sceneSaveNameField = nameField.share();
 
     auto pathText = ui::text("SceneSavePath").setFontSize(12).setStyleKey("text.muted");
@@ -946,65 +935,57 @@ void EditorSurface::openSceneSaveDialog()
     auto previewText = ui::text("SceneSavePreview").setFontSize(12);
     _sceneSavePreviewText = previewText.share();
 
-    _sceneSaveMountList = ui::column("SceneSaveMounts").setSpacing(2.0f).setSize({180.0f, 0.0f}).share();
-    _sceneSaveEntryList = ui::column("SceneSaveEntries").setSpacing(2.0f).setSize({0.0f, 0.0f}).share();
+    _sceneSaveMountList = ui::column("SceneSaveMounts").setSpacing(2.0f).share();
+    _sceneSaveEntryList = ui::column("SceneSaveEntries").setSpacing(2.0f).share();
 
-    _sceneSaveSaveButton = labeledButton("SceneSaveConfirm", "Save", 84.0f, 26.0f)
+    _sceneSaveSaveButton = labeledButton("SceneSaveConfirm", "Save")
                                .setOnClick([this]() { confirmSceneSaveDialog(); })
                                .share();
 
     auto dialogPanel =
         ui::panel("SceneSavePanel")
-            .setSize({720.0f, 520.0f})
             .setStyleKey("panel.window")
             [ui::layout().anchor({0.0f, 0.0f}, {1.0f, 1.0f}) >> ui::column("SceneSaveRoot")
-                       .setSize({0.0f, 0.0f})
                        .setSpacing(8.0f)
                        .setPadding({12.0f, 12.0f})
                        .child(ui::text("SceneSaveTitle").setText("Save Scene").setStyleKey("text.header").setFontSize(14))
-                       .child(ui::row("SceneSaveNameRow")
+                       .child(ui::layout().size({0.0f, 26.0f}) >> ui::row("SceneSaveNameRow")
                                   .setSpacing(6.0f)
                                   .setStretchLastChild(true)
-                                  .setSize({0.0f, 26.0f})
-                                  .child(ui::text("SceneSaveNameLabel")
+                                  .child(ui::layout().size({90.0f, 26.0f}) >> ui::text("SceneSaveNameLabel")
                                              .setText("Scene Name")
                                              .setFontSize(12)
-                                             .setSize({90.0f, 26.0f})
                                              .setVAlign(EWidgetAlignV::Center))
-                                  .child(std::move(nameField)))
+                                  .child(ui::layout().fill() >> std::move(nameField)))
                        .child(std::move(pathText))
-                       .child(ui::textField("SceneSaveSearch")
-                                  .setSize({0.0f, 24.0f})
+                       .child(ui::layout().size({0.0f, 24.0f}) >> ui::textField("SceneSaveSearch")
                                   .setOnTextChanged([this](const std::string& text) {
                                       if (_sceneSaveExplorer) {
                                           _sceneSaveExplorer->setSearchText(text);
                                           _bSceneSaveRowsDirty = true;
                                       }
                                   }))
-                       .child(ui::row("SceneSaveBody")
+                       .child(ui::layout().size({0.0f, 360.0f}) >> ui::row("SceneSaveBody")
                                   .setSpacing(6.0f)
                                   .setStretchLastChild(true)
-                                  .setSize({0.0f, 360.0f})
-                                  .child(ui::scroll("SceneSaveMountScroll")
+                                  .child(ui::layout().size({180.0f, 0.0f}) >> ui::scroll("SceneSaveMountScroll")
                                              .setAxis(EScrollAxis::Vertical)
-                                             .setSize({180.0f, 0.0f})
-                                             .child(_sceneSaveMountList))
-                                  .child(ui::scroll("SceneSaveEntryScroll")
+                                             .child(ui::layout().fill() >> _sceneSaveMountList))
+                                  .child(ui::layout().fill() >> ui::scroll("SceneSaveEntryScroll")
                                              .setAxis(EScrollAxis::Vertical)
-                                             .setSize({0.0f, 0.0f})
-                                             .child(_sceneSaveEntryList)))
+                                             .child(ui::layout().fill() >> _sceneSaveEntryList)))
                        .child(std::move(previewText))
                        .child(ui::row("SceneSaveActions")
                                   .setSpacing(8.0f)
                                   .setMainAxisAlignment(EWidgetMainAxisAlignment::End)
-                                  .child(labeledButton("SceneSaveBack", "Back", 72.0f, 26.0f)
+                                  .child(ui::layout().size({72.0f, 26.0f}) >> labeledButton("SceneSaveBack", "Back")
                                              .setOnClick([this]() {
                                                  if (_sceneSaveExplorer && _sceneSaveExplorer->navigateBack()) {
                                                      _bSceneSaveRowsDirty = true;
                                                  }
                                              }))
-                                  .child(_sceneSaveSaveButton)
-                                  .child(labeledButton("SceneSaveCancel", "Cancel", 84.0f, 26.0f)
+                                  .child(ui::layout().size({84.0f, 26.0f}) >> _sceneSaveSaveButton)
+                                  .child(ui::layout().size({84.0f, 26.0f}) >> labeledButton("SceneSaveCancel", "Cancel")
                                              .setOnClick([this]() {
                                                  if (_sceneSaveOverlay) {
                                                      _sceneSaveOverlay->close();

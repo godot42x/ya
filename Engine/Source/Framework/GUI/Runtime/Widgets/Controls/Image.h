@@ -21,7 +21,6 @@ struct YA_GUI_API UIImage : public UIElement, public UIStyledWidget<UIImage, FIm
     YA_REFLECT_BEGIN(UIImage, UIElement)
     YA_REFLECT_FIELD(_assetPath, .instanceEditable())
     YA_REFLECT_FIELD(_tint, .instanceEditable())
-    YA_REFLECT_FIELD(_placeholderColor, .instanceEditable())
     YA_REFLECT_END()
 
     YA_GUI_AUTHORED_STYLE_IO(FImageStyle)
@@ -33,17 +32,12 @@ struct YA_GUI_API UIImage : public UIElement, public UIStyledWidget<UIImage, FIm
     /// Asset path resolved through UIFrameBuildContext::textureResolver.
     std::string _assetPath;
     glm::vec4   _tint = {1.0f, 1.0f, 1.0f, 1.0f};
-    /// Legacy JSON / authoring field. Paint reads FImageStyle; a non-default
-    /// value is promoted to authored style on deserialize.
-    glm::vec4   _placeholderColor = {0.24f, 0.26f, 0.31f, 1.0f};
-
     /// Host-owned live GPU image (viewport RT). The snapshot retains this
     /// shared_ptr through queue submit. Takes precedence over `_assetPath`.
     void setTexture(std::shared_ptr<Texture> texture);
     [[nodiscard]] const std::shared_ptr<Texture>& getTexture() const { return _texture; }
 
     void paintSelf(UIFrameBuilder& builder) override;
-    void deserializeFields(const nlohmann::json& fields) override;
     [[nodiscard]] bool isHoverable() const override { return true; }
 
   private:

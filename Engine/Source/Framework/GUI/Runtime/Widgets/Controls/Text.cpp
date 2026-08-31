@@ -114,19 +114,6 @@ const FTextStyle& UIText::resolvedStyle(ReactiveBase::EDirtyLevel level, bool bT
                               bTrackDependencies);
 }
 
-void UIText::deserializeFields(const nlohmann::json& fields)
-{
-    UIElement::deserializeFields(fields);
-    // Legacy documents stored a non-default `_color` without `_authoredStyle`.
-    // Promote that color as a sparse overlay so a mounted theme cannot
-    // clobber the saved appearance. Default white stays un-authored.
-    static const glm::vec4 kDefaultTextColor{1.0f, 1.0f, 1.0f, 1.0f};
-    if (!hasAuthoredStyle() && _color != kDefaultTextColor) {
-        setStyleField("textColor", _color, EUIPropertyImpact::Paint);
-        setStyleField("fillColor", FBrush::solid(_color), EUIPropertyImpact::Paint);
-    }
-}
-
 glm::vec2 UIText::computeIntrinsicSize() const
 {
     // Measure from the resolved text/style so the desired size matches paint

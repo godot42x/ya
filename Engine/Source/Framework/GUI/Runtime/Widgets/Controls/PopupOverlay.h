@@ -13,7 +13,7 @@ namespace ya
 /// (gui-app-bootstrap Phase 4).
 ///
 /// One shared detach-safe mechanism behind popup-like surfaces, with an
-/// explicit role API on top of the legacy `_bModal` storage:
+/// explicit role API backed by the modal role flag:
 ///   - Popup role draws a transparent shield: clicks outside the content child
 ///     dismiss the overlay, lower layers never see them;
 ///   - Modal role draws a dimming shield and blocks the whole app until
@@ -33,7 +33,6 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
 {
     YA_REFLECT_BEGIN(UIPopupOverlay, UIElement)
     YA_REFLECT_FIELD(_bModal, .instanceEditable())
-    YA_REFLECT_FIELD(_modalColor, .instanceEditable())
     YA_REFLECT_FIELD(_contentPos, .instanceEditable())
     YA_REFLECT_FIELD(_contentExtent, .instanceEditable())
     YA_REFLECT_END()
@@ -61,9 +60,6 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     [[nodiscard]] bool isModal() const { return getRole() == EOverlayRole::Modal; }
 
     bool    _bModal     = false;
-    /// Legacy JSON / authoring field. Paint reads FPopupStyle; a non-default
-    /// value is promoted to authored style on deserialize.
-    glm::vec4 _modalColor = {0.0f, 0.0f, 0.0f, 0.45f};
     /// Content child origin in tree-local logical pixels.
     glm::vec2 _contentPos = {0.0f, 0.0f};
     /// Optional content extent for the popup-owned canvas slot. When non-zero
@@ -86,7 +82,6 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     void layoutAssigned(const Rect2D& rect) override;
     void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override { node["type"] = "canvas"; }
     void paintSelf(UIFrameBuilder& builder) override;
-    void deserializeFields(const nlohmann::json& fields) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
         node["control"] = {{"type", "popupOverlay"}, {"modal", _bModal}};
     }
