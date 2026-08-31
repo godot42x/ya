@@ -625,6 +625,29 @@ TEST(WidgetTreeTest, ChildAddedToAttachedParentJoinsItsTree)
     EXPECT_EQ(tree.pickAt({80.0f, 80.0f}), child.get());
 }
 
+TEST(WidgetTreeTest, AttachWithEdgeInitializerConfiguresParentOwnedSlot)
+{
+    WidgetTree tree({.width = 200, .height = 100});
+    auto panel = std::make_shared<UIPanel>("Panel");
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel).valid());
+
+    auto child = std::make_shared<UIText>("Child");
+    const WidgetAttachment attached = tree.attach(*panel, child, [](UIElement&, UISlot& edge) {
+        if (auto* slot = edge.as<UICanvasSlot>()) {
+            slot->setOffset({12.0f, 8.0f});
+            slot->setFixedSize({80.0f, 24.0f});
+            slot->setWidthSizeMode(EWidgetSizeMode::Fixed);
+            slot->setHeightSizeMode(EWidgetSizeMode::Fixed);
+        }
+    });
+    ASSERT_TRUE(attached.valid());
+
+    const auto* slot = dynamic_cast<const UICanvasSlot*>(panel->getSlotForChild(*child));
+    ASSERT_NE(slot, nullptr);
+    EXPECT_EQ(slot->getOffset(), glm::vec2(12.0f, 8.0f));
+    EXPECT_EQ(slot->getFixedSize(), glm::vec2(80.0f, 24.0f));
+}
+
 TEST(WidgetTreeTest, TreeRootUsesCanvasSlotsToStretchSystemLayers)
 {
     WidgetTree tree({.width = 320, .height = 180});

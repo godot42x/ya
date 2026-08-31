@@ -496,14 +496,91 @@ C++ exception: [json.exception.type_error.307] cannot use erase() with null
 - 验证：`xmake b/r ya-gui-closure-test`（315/315）、`xmake b GUIWorkbench`、`xmake b ya-gui-minimal-host`、`xmake b ya-runtime` 均通过。
 - 未完成：pending slot initializer、builder `.child()` 默认重载、旧 schema 负向清零与最终 self-positioned fallback 审计仍待后续 checkpoint。
 
-## 2026-08-31 — CP2 builder edge intent 收口：detached builder 不再写入 live UIElement
+## 2026-08-31 — 方向纠偏：builder pending bridge 不能局部删除
 
-- 误差审计确认：`UIElement` 的 authored geometry 已删除；剩余 pending initializer 只被 Declarative builder、少量 imperative detached helper 和 floating window 使用。将其全部一次删除会误伤仍未迁移的 imperative detached 构造，因此本 checkpoint 只收口 builder 链路。
-- `TUIWidgetBuilder` 现在在 builder 内保存组合后的 `FChildSlotInitializer`；`.setPosition/.setSize/.setAutoSize` 在 detached 阶段只累积 edge intent，已挂载 builder 则直接修改当前 slot。
-- `.child(builder)` 和 `ui::build/buildAs` 在 parent materialization 时取出 initializer，直接调用 parent 的 `initializeChildSlot` / detached child edge；空 initializer 使用默认 slot，不触发 `std::function` 空调用。
-- `WidgetLayoutTest.BuilderGeometryIntentIsConsumedByTheCanvasSlot` 已改为通过 `ui::build` 物化 builder，锁定 intent 只在 parent-owned canvas slot 生效。
-- 验证：`xmake b ya-gui-closure-test` 通过；定向运行 `WidgetLayoutTest.BuilderGeometryIntentIsConsumedByTheCanvasSlot` 与全部 `DeclarativeContractTest`，32/33 通过。唯一失败是既有 `CompoundWidgetForwardsDesiredSizeAndLayoutToCompositionRoot` baseline，与本 checkpoint 无关。
-- 未完成：imperative detached pending bridge、`child(node)` 默认重载、旧 schema 负向清零和最终 self-positioned fallback。
+- 误差审计确认：尝试把 pending initializer 从 `UIElement` 局部移入 builder 会破坏大量现有 `builder.release()` 后再 `tree.attach()` 的调用点，导致 builder 几何意图丢失并触发 19 个布局测试回归。
+- 该方向已回退，未保留错误的局部迁移；`xmake b/r ya-gui-closure-test` 恢复为 **315/315**。
+- 正确方向：先批量迁移 release→外部 attach 的调用点到 `ui::build` / `parent.child(builder)` / 显式 slot attach，形成全量 materialization 闭环，再删除 `UIElement::_pendingSlotInitializer`。
+- floating window 不受此问题影响，已独立通过 `onAttached()` 将 `_windowRect` 写入 host-owned `UICanvasSlot`。
+
+## 2026-08-31 — CP2 示例迁移：GUIFrameworkSmoke 删除 pending slot helper
+
+- 误差审计确认：GUIFrameworkSmoke 的父节点关系在 `buildDemoContent()` 内全部已知，不需要把几何意图暂存到 child。
+- 删除 `setPendingSlotPosition/setPendingSlotSize`，新增局部 `attachCanvasChild()`：先显式 attach，再通过 parent `initializeChildSlot()` 配置 `UICanvasSlot`。
+- panel 根节点继续使用显式 `attachToLayer(..., FCanvasSlotArgs)`；标题、计数器、按钮及按钮文字均由各自 parent edge 配置。
+- 验证：`xmake b ya-gui-minimal-host` 通过。
+- 未完成：GUIWorkbench 与测试 helper 的 pending bridge、builder release 外部 attach 全量迁移，以及最终删除 `UIElement::_pendingSlotInitializer`。
+
+## 2026-08-31 — CP2 Workbench render demo edge intent 迁移
+
+- 误差审计确认：`buildRenderDemo()` 中 form、marker row、marker cell、image 的 parent 关系在构造时已确定，继续调用 pending helper 只是在延迟写入已知 parent edge。
+- marker row / cell / image 改为 attach 后调用 `ui::attachLayout(..., ui::layout().size(...))`，尺寸直接落到 `UIBoxSlot`；form 的零尺寸 pending 写入删除。
+- 未触及仍被多个页面共享的 `makeDemoButton()` 与动态 drag/input 控件 helper，避免把不完整的局部迁移伪装成全量完成。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 未完成：GUIWorkbench 其余 pending helper、测试 helper、builder release 外部 attach 全量迁移，以及最终删除 `UIElement::_pendingSlotInitializer`。
+
+## 2026-08-31 — CP2 Workbench modal edges 迁移
+
+- 误差审计确认：modal 的 dialog、stack、nameField parent 关系均在同一构造闭包内确定；dialog canvas size 与 nameField box preferred size 不需要 child pending 状态。
+- dialog 改为 `overlay->addDetachedChild(dialog, initializer)`，nameField 改为 `stack->addDetachedChild(nameField, initializer)`；stack 本身继续由 dialog `attachLayout(...fill())` 管理。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 未完成：`makeDemoButton()` 及其余动态控件 helper、测试 helper、builder release 外部 attach 全量迁移，最终删除 `UIElement::_pendingSlotInitializer`。
+
+## 2026-08-31 — CP2 Workbench drag/drop edges 迁移
+
+- 误差审计确认：drag source row 与 drop zone 都在同一 DSL 构造段中拥有确定 parent，source tile 不应先把尺寸暂存到 child。
+- source tile 改为 `sourceRow[ui::layout().size(...) >> item]`；drop zone 删除 pending helper，继续由 column 的显式 size spec 管理。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 未完成：共享按钮工厂、动态输入控件 helper、测试 helper、builder release 外部 attach 全量迁移，以及最终删除 `UIElement::_pendingSlotInitializer`。
+
+## 2026-08-31 — CP2 child() 直接消费 placed-child attachment
+
+- 误差审计确认：输入控件的 parent 在 row builder 内已确定，继续让裸 shared_ptr 依赖 child pending size 是 DSL 表达能力不足，而不是业务需要。
+- `TUIWidgetChildrenBuilder::child()` 新增 `TUILayoutAttachment` 重载，复用既有 `applyLayout()`，保持 `parent[spec >> child]` 与 `.child(spec >> child)` 语义一致。
+- Gallery 的 DragFloat、SpinBox、RadioButton、ColorEdit、SearchComboBox 改用 `ui::layout().size(...) >> widget`，删除对应 pending size helper 调用。
+- 验证：`xmake b/r ya-gui-closure-test`（315/315）与 `xmake b GUIWorkbench` 均通过。
+- 未完成：共享按钮工厂、测试 helper、builder release 外部 attach 全量迁移，以及最终删除 `UIElement::_pendingSlotInitializer`。
+
+## 2026-08-31 — CP2 Workbench button factory edge 迁移
+
+- 误差审计确认：`makeDemoButton()` 的 width 参数只是调用点 parent edge 的尺寸意图，不应由按钮工厂暂存到 child。
+- 工厂删除 pending size 写入；RenderProbe 由 form canvas/box edge 显式配置，Modal OK/Cancel 由 buttons box slots 显式配置。
+- width<=0 的按钮仍保留 content padding 语义，不混入布局迁移。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 未完成：Interactions 内部 builder helper、测试 helper、剩余动态控件 pending 调用，以及最终删除 `UIElement::_pendingSlotInitializer`。
+
+## 2026-08-31 — CP2 Workbench gallery drag/input edges 迁移
+
+- 误差审计确认：Gallery drag source row 与 drop result row 的 parent 都由同一 DSL 构造段确定，pending size 没有必要。
+- source / drop zone 全部改为 `child(ui::layout().size(...) >> widget)`，WorkBenchDemoPages 中只剩 helper 定义本身，不再有调用点。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 未完成：清理无调用的 Workbench pending helper、测试 helper、Interactions 内部 builder bridge，以及最终删除 `UIElement::_pendingSlotInitializer`。
+
+## 2026-08-31 — CP2 统一 attach edge initializer contract
+
+- 误差审计确认：现有 `attach()` 后再 `initializeChildSlot()` 会让不同 materialization 路径各自实现 edge 初始化，后续删除 pending bridge 时容易产生分叉。
+- 新增 `WidgetTree::attach(parent, widget, FChildSlotInitializer)`，统一表达“attach 并配置 parent-owned slot”；实现复用现有单 parent 校验和 slot 回指生命周期。
+- 新增 `WidgetTreeTest.AttachWithEdgeInitializerConfiguresParentOwnedSlot`，验证 initializer 直接落到 typed canvas slot。
+- 验证：`xmake b ya-gui-closure-test` 与定向测试通过。
+- 未完成：迁移 builder `release()` 外部 attach、测试 helper 和最终删除 UIElement pending bridge。
+
+## 2026-08-31 — CP2 smoke 迁移到统一 attach initializer
+
+- GUIFrameworkSmoke 的 canvas child helper 改为直接调用 `WidgetTree::attach(parent, child, initializer)`，删除 attach 后重复 `initializeChildSlot`。
+- 验证：`xmake b ya-gui-minimal-host` 通过。
+
+## 2026-08-31 — CP2 清理 Workbench pending helper 死代码
+
+- 误差审计确认：`WorkbenchDemoPages.cpp` 中 `setPendingSlotSize()` 已无任何调用点，继续保留会误导后续迁移并扩大 legacy 表面。
+- 删除无调用 helper；不改变剩余测试 helper 与 UIElement pending bridge。
+- 验证：`xmake b GUIWorkbench` 通过。
+
+## 2026-08-31 — CP2 Workbench gallery menu/vector edges 迁移
+
+- 误差审计确认：Gallery menu bar 与 vector canvas 均由 `form` 直接承载，尺寸不需要 child pending 状态。
+- menu bar 改为 `form.child(ui::layout().size(...) >> localBar)`；vector canvas 使用现有 `FBoxSlotArgs.preferredSize`。
+- 验证：`xmake b GUIWorkbench` 通过。
+- 未完成：共享按钮工厂、测试 helper、builder release 外部 attach 全量迁移，以及最终删除 `UIElement::_pendingSlotInitializer`。
 
 ## 2026-08-31 — CP2 floating-window edge intent 收口：删除 detached pending 依赖
 

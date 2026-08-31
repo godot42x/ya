@@ -85,13 +85,6 @@ class TUIWidgetBuilder
 
     [[nodiscard]] std::shared_ptr<TWidget> share() const { return _widget; }
 
-    /// Move construction-time edge intent out of the builder at materialization.
-    /// Detached layout intent never needs to be stored on the live widget.
-    [[nodiscard]] FChildSlotInitializer takeSlotInitializer()
-    {
-        return std::move(_slotInitializer);
-    }
-
     [[nodiscard]] TDerived& setPosition(const glm::vec2& value) &
     {
         applyPendingPosition(value);
@@ -229,7 +222,7 @@ class TUIWidgetBuilder
 
   protected:
     std::shared_ptr<TWidget> _widget;
-    FChildSlotInitializer _slotInitializer;
+
 
     void applyToCurrentOrPendingSlot(FChildSlotInitializer init)
     {
@@ -237,16 +230,7 @@ class TUIWidgetBuilder
             init(*_widget, *slot);
             return;
         }
-        if (!_slotInitializer) {
-            _slotInitializer = std::move(init);
-            return;
-        }
-        FChildSlotInitializer previous = std::move(_slotInitializer);
-        _slotInitializer = [previous = std::move(previous), init = std::move(init)](UIElement& child,
-                                                                                     UISlot& slot) mutable {
-            previous(child, slot);
-            init(child, slot);
-        };
+        _widget->setPendingSlotInitializer(std::move(init));
     }
 
     void applyPendingPosition(const glm::vec2& value)
@@ -322,16 +306,28 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     template<UIWidgetBuilder TChild>
     TDerived& child(TChild&& builder) &
     {
-        auto slotInit = builder.takeSlotInitializer();
-        attachChild(std::forward<TChild>(builder).release(), std::move(slotInit));
+        attachChild(std::forward<TChild>(builder).release());
         return this->derived();
     }
 
     template<UIWidgetBuilder TChild>
     TDerived&& child(TChild&& builder) &&
     {
-        auto slotInit = builder.takeSlotInitializer();
-        attachChild(std::forward<TChild>(builder).release(), std::move(slotInit));
+        attachChild(std::forward<TChild>(builder).release());
+        return std::move(this->derived());
+    }
+
+    template<EUILayoutCap Caps, typename TChild>
+    TDerived& child(TUILayoutAttachment<Caps, TChild> attachment) &
+    {
+        applyLayout(takeElementRef(std::move(attachment.child)), attachment.spec);
+        return this->derived();
+    }
+
+    template<EUILayoutCap Caps, typename TChild>
+    TDerived&& child(TUILayoutAttachment<Caps, TChild> attachment) &&
+    {
+        applyLayout(takeElementRef(std::move(attachment.child)), attachment.spec);
         return std::move(this->derived());
     }
 
@@ -358,12 +354,6 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     template<typename TSlotInit>
     void attachChild(UIElementRef node, TSlotInit&& init)
     {
-        if constexpr (std::is_same_v<std::decay_t<TSlotInit>, FChildSlotInitializer>) {
-            if (!init) {
-                this->_widget->addDetachedChild(std::move(node));
-                return;
-            }
-        }
         this->_widget->addDetachedChild(std::move(node), std::forward<TSlotInit>(init));
     }
 

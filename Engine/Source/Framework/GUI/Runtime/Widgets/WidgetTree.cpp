@@ -447,6 +447,17 @@ WidgetAttachment WidgetTree::attach(UIElement& parent, const UIElementRef& widge
 
 WidgetAttachment WidgetTree::attach(UIElement& parent,
                                     const UIElementRef& widget,
+                                    FChildSlotInitializer init)
+{
+    WidgetAttachment attachment = attach(parent, widget);
+    if (attachment.valid() && init) {
+        parent.initializeChildSlot(*widget, std::move(init));
+    }
+    return attachment;
+}
+
+WidgetAttachment WidgetTree::attach(UIElement& parent,
+                                    const UIElementRef& widget,
                                     const FCanvasSlotArgs& args)
 {
     if (!widget) {

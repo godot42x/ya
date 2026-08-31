@@ -71,7 +71,7 @@ reportStretchAnchorsIgnored
 
 _layoutRect、setLayoutRect()、layoutAssigned() 保留，但仅作为布局结果通道。
 
-当前进度：`_position/_size/_bAuthoredPosition/_bAuthoredSize` 及其 getter、`_anchorMin/_anchorMax`、`_bAutoSize` 与 no-arg layer attach 已完成删除；Declarative builder 的 detached edge intent 已移入 builder/materialization 阶段，不再依赖 widget pending bridge。imperative detached pending bridge、builder 默认 child 重载、旧 schema 负向清零与剩余 self-positioned bridge 仍按后续 checkpoint 清理。
+当前进度：`_position/_size/_bAuthoredPosition/_bAuthoredSize` 及其 getter、`_anchorMin/_anchorMax`、`_bAutoSize` 与 no-arg layer attach 已完成删除；floating window 已改为 attach 生命周期写入 parent-owned slot。Declarative builder 仍暂时依赖 pending bridge，因为仓库中大量 `builder.release()` 后外部 attach 的调用点尚未全量迁移；必须先完成这些调用点迁移，才能安全删除该 bridge。
 
 ## 3. 目标 DSL 与内部模型
 

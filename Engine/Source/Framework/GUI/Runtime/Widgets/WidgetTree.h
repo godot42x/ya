@@ -186,6 +186,11 @@ struct YA_GUI_API WidgetTree final
     /// attached anywhere — reparent() is the explicit move operation. The
     /// widget keeps its own _zOrder (set it before attaching).
     [[maybe_unused]] WidgetAttachment attach(UIElement& parent, const UIElementRef& widget);
+    /// Attach `widget` and initialize its parent-owned edge atomically from
+    /// the caller's typed-slot intent.
+    [[nodiscard]] WidgetAttachment attach(UIElement& parent,
+                                          const UIElementRef& widget,
+                                          FChildSlotInitializer init);
     /// Attach `widget` under `parent` with explicit canvas edge intent.
     [[nodiscard]] WidgetAttachment attach(UIElement& parent,
                                           const UIElementRef& widget,

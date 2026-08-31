@@ -110,7 +110,17 @@
 - [x] CP2 geometry shadow 收口：删除 `UIElement::getPosition/getSize/hasAuthored*` 与 `_position/_size/_bAuthored*`；布局输出统一通过 `_layoutRect`/`getLayoutRect()`，生产入口不再读取 child authored geometry
 - [ ] 提交治理：后续只提交完整语义 checkpoint；已有碎片提交在发布前统一整理，未经授权不改写共享分支历史
 - [x] CP2 imperative pending bridge：detached `UIElement::setPosition/setSize` 同时排队 parent-edge initializer，attach 时优先消费 typed slot；旧字段仅保留为待删除 shadow，不能作为新布局输入
-- [x] CP2 builder pending bridge 收口：Declarative builder 将 detached edge intent 保存在 builder，`ui::build`/`.child(builder)` 物化时直接初始化 parent-owned slot；不再把 builder intent 写入 live `UIElement`。
+- [ ] CP2 builder pending bridge 收口：先迁移所有 `builder.release()` 后外部 attach 的调用点，再将 detached edge intent 直接传入 parent-owned slot；在此之前不得删除 pending bridge
+- [x] CP2 attach contract：新增 `WidgetTree::attach(parent, widget, FChildSlotInitializer)`，为 builder/imperative materialization 提供统一 parent-edge 初始化入口
+- [x] CP2 示例迁移（GUIFrameworkSmoke）：移除 `setPendingSlotInitializer` helper，所有 demo geometry 在已知 parent 上通过显式 `initializeChildSlot` 写入 typed canvas slot
+- [x] CP2 Workbench render demo 迁移：marker row、marker cell、image edge 的尺寸改由 parent `layout().size()` 写入 typed box slot，移除该段 pending helper 依赖
+- [x] CP2 Workbench modal demo 迁移：dialog canvas edge 与 name field box edge 改由 `addDetachedChild(..., initializer)` 显式配置，删除该段 pending helper 依赖
+- [x] CP2 Workbench drag/drop demo 迁移：source tile 尺寸通过 `sourceRow[layout().size() >> item]` 表达，drop zone 使用已有 column slot spec
+- [x] CP2 DSL child attachment：`TUIWidgetChildrenBuilder::child()` 支持 `TUILayoutAttachment`，输入控件可直接在 parent edge 声明 size，不再需要 pending helper
+- [x] CP2 Workbench gallery edges：menu bar 与 vector canvas 尺寸改为 parent child spec / `FBoxSlotArgs.preferredSize`
+- [x] CP2 Workbench button factory：`makeDemoButton()` 不再写 child pending size；render/modal 调用点改由 parent canvas/box slot 显式配置
+- [x] CP2 Workbench gallery drag/input edges：source/drop 控件尺寸全部改为 `child(layout().size() >> widget)`，删除 Workbench pending helper 的最后调用点
+- [x] CP2 清理 Workbench pending helper 死代码
 - [ ] CP2 pending bridge 收尾：imperative detached edge intent 与 compound construct 仍需迁移到显式 root/child slot contract，完成后才能删除过渡 geometry 字段与 API
 - [x] CP2 root attach bridge 收尾：删除 no-arg `attachToLayer(layer, widget)`；默认层挂载改用显式 `attach(*tree.getLayer(layer), widget)`，带 root 几何时使用 `attach(parent, widget, FCanvasSlotArgs)`
 - [ ] CP7 编译期断言 + 几何测试（intrinsic measure、constraints、Canvas 四边 offsets、anchor span、alignment、min/max、reparent）+ snapshot parity

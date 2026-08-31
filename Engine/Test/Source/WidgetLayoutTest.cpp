@@ -1809,12 +1809,12 @@ TEST(WidgetLayoutTest, BuilderGeometryIntentIsConsumedByTheCanvasSlot)
 {
     registerSyntheticFont(16, 8.0f);
 
-    auto panelBuilder = ui::panel("Panel").setSize({300.0f, 200.0f});
-    auto childBuilder = ui::text("Inner").setText("Hi").setPosition({12.0f, 8.0f}).setSize({80.0f, 24.0f});
+    auto panel = ui::panel("Panel").setSize({300.0f, 200.0f}).release();
+    auto child = ui::text("Inner").setText("Hi").setPosition({12.0f, 8.0f}).setSize({80.0f, 24.0f}).release();
 
     WidgetTree tree({.width = 300, .height = 200});
-    auto panel = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(panelBuilder));
-    auto child = ui::build(tree, *panel, std::move(childBuilder));
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    panel->addDetachedChild(child);
 
     const auto* slot = dynamic_cast<const UICanvasSlot*>(panel->getSlotForChild(*child));
     ASSERT_NE(slot, nullptr);

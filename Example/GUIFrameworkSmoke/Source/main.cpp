@@ -26,30 +26,18 @@ using namespace ya;
 namespace
 {
 
-void setPendingSlotPosition(UIElement& widget, glm::vec2 value)
+void attachCanvasChild(WidgetTree& tree, UIElement& parent, const UIElementRef& child,
+                       glm::vec2 position, glm::vec2 size)
 {
-    widget.setPendingSlotInitializer([value](UIElement&, UISlot& edge) {
+    const WidgetAttachment attached = tree.attach(parent, child, [position, size](UIElement&, UISlot& edge) {
         if (auto* canvas = edge.as<UICanvasSlot>()) {
-            canvas->setOffset(value);
-        }
-    });
-}
-
-void setPendingSlotSize(UIElement& widget, glm::vec2 value)
-{
-    widget.setPendingSlotInitializer([value](UIElement&, UISlot& edge) {
-        if (auto* canvas = edge.as<UICanvasSlot>()) {
-            canvas->setFixedSize(value);
+            canvas->setOffset(position);
+            canvas->setFixedSize(size);
             canvas->setWidthSizeMode(EWidgetSizeMode::Fixed);
             canvas->setHeightSizeMode(EWidgetSizeMode::Fixed);
         }
-        else if (auto* box = edge.as<UIBoxSlot>()) {
-            box->setPreferredSize(value);
-        }
-        else if (auto* overlay = edge.as<UIOverlaySlot>()) {
-            overlay->setPreferredSize(value);
-        }
     });
+    YA_CORE_ASSERT(attached.valid(), "GUIFrameworkSmoke: failed to attach '{}'", child->_name);
 }
 
 /// Interactive demo content: a panel with a title, a click counter label and
@@ -67,32 +55,23 @@ struct FMinimalUIDemo
 void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
 {
     demo.panel = std::make_shared<UIPanel>("DemoPanel");
-    setPendingSlotPosition(*demo.panel, {64.0f, 64.0f});
-    setPendingSlotSize(*demo.panel, {340.0f, 200.0f});
     demo.panel->setColor({0.13f, 0.14f, 0.17f, 0.96f});
 
     demo.title = std::make_shared<UIText>("Title");
-    setPendingSlotPosition(*demo.title, {16.0f, 14.0f});
-    setPendingSlotSize(*demo.title, {308.0f, 30.0f});
     demo.title->_fontSize = 20;
     demo.title->setText("YA Minimal GUI Host");
     demo.title->setColor({1.0f, 1.0f, 1.0f, 1.0f});
 
     demo.counter = std::make_shared<UIText>("Counter");
-    setPendingSlotPosition(*demo.counter, {16.0f, 58.0f});
-    setPendingSlotSize(*demo.counter, {308.0f, 26.0f});
     demo.counter->_fontSize = 16;
     demo.counter->setText("Clicked: 0");
     demo.counter->setColor({0.85f, 0.87f, 0.90f, 1.0f});
 
     demo.button = std::make_shared<UIButton>("ClickButton");
-    setPendingSlotPosition(*demo.button, {16.0f, 100.0f});
-    setPendingSlotSize(*demo.button, {150.0f, 44.0f});
     // Button fills come from the mounted theme ("button" key) — style-system
     // Phase 3 cleanup removed the bare color fields (see FSmokeApp::buildUI).
 
     demo.buttonLabel = std::make_shared<UIText>("ButtonLabel");
-    setPendingSlotSize(*demo.buttonLabel, {150.0f, 44.0f});
     demo.buttonLabel->_fontSize = 16;
     demo.buttonLabel->setText("Click me");
     demo.buttonLabel->setColor({1.0f, 1.0f, 1.0f, 1.0f});
@@ -114,10 +93,10 @@ void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
     panelSlot.offset = {64.0f, 64.0f};
     panelSlot.fixedSize = {340.0f, 200.0f};
     tree.attachToLayer(WidgetTree::ELayer::Content, demo.panel, panelSlot);
-    tree.attach(*demo.panel, demo.title);
-    tree.attach(*demo.panel, demo.counter);
-    tree.attach(*demo.panel, demo.button);
-    tree.attach(*demo.button, demo.buttonLabel);
+    attachCanvasChild(tree, *demo.panel, demo.title, {16.0f, 14.0f}, {308.0f, 30.0f});
+    attachCanvasChild(tree, *demo.panel, demo.counter, {16.0f, 58.0f}, {308.0f, 26.0f});
+    attachCanvasChild(tree, *demo.panel, demo.button, {16.0f, 100.0f}, {150.0f, 44.0f});
+    attachCanvasChild(tree, *demo.button, demo.buttonLabel, {0.0f, 0.0f}, {150.0f, 44.0f});
 }
 
 struct FSmokeApp final : IGUIAppDelegate
