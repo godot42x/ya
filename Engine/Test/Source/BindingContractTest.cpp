@@ -99,13 +99,14 @@ TEST(BindingContractTest, WidgetEnabledGateRemainsAuthoritativeOverButtonDisplay
     WidgetTree tree({.width = 800, .height = 600});
     auto       button  = std::make_shared<UIButton>("Button");
     auto       enabled = std::make_shared<Reactive<bool>>(true);
-    authorSlotPosition(*button, {20.0f, 20.0f});
-    authorSlotSize(*button, {120.0f, 40.0f});
+    FCanvasSlotArgs buttonSlot;
+    buttonSlot.offset = {20.0f, 20.0f};
+    buttonSlot.fixedSize = {120.0f, 40.0f};
     button->bindEnabled(enabled);
     button->setEnabled(false);
     int clicks = 0;
     button->_onClick = [&]() { ++clicks; };
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f)),
@@ -132,10 +133,11 @@ TEST(BindingContractTest, DisablingPressedButtonStillClearsPressSessionOnRelease
     WidgetTree tree({.width = 800, .height = 600});
     auto       button = std::make_shared<UIButton>("Button");
     int        clicks = 0;
-    authorSlotPosition(*button, {20.0f, 20.0f});
-    authorSlotSize(*button, {120.0f, 40.0f});
+    FCanvasSlotArgs buttonSlot;
+    buttonSlot.offset = {20.0f, 20.0f};
+    buttonSlot.fixedSize = {120.0f, 40.0f};
     button->_onClick = [&]() { ++clicks; };
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f)),
@@ -163,12 +165,14 @@ TEST(BindingContractTest, BehaviorDropHighlightDoesNotOverwritePresenterSelectio
     source->setDragPayload("payload.source");
     target->setDraggable(true);
     target->setSelected(true);
-    authorSlotPosition(*source, {20.0f, 20.0f});
-    authorSlotSize(*source, {160.0f, 24.0f});
-    authorSlotPosition(*target, {220.0f, 20.0f});
-    authorSlotSize(*target, {160.0f, 24.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target);
+    FCanvasSlotArgs sourceSlot;
+    sourceSlot.offset = {20.0f, 20.0f};
+    sourceSlot.fixedSize = {160.0f, 24.0f};
+    FCanvasSlotArgs targetSlot;
+    targetSlot.offset = {220.0f, 20.0f};
+    targetSlot.fixedSize = {160.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 32.0f)),
@@ -199,12 +203,14 @@ TEST(BindingContractTest, PresenterSelectionPatchDoesNotClearBehaviorDropHighlig
     source->setDraggable(true);
     target->setDraggable(true);
     source->setDragPayload("payload.source");
-    authorSlotPosition(*source, {20.0f, 20.0f});
-    authorSlotSize(*source, {160.0f, 24.0f});
-    authorSlotPosition(*target, {220.0f, 20.0f});
-    authorSlotSize(*target, {160.0f, 24.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target);
+    FCanvasSlotArgs sourceSlot;
+    sourceSlot.offset = {20.0f, 20.0f};
+    sourceSlot.fixedSize = {160.0f, 24.0f};
+    FCanvasSlotArgs targetSlot;
+    targetSlot.offset = {220.0f, 20.0f};
+    targetSlot.fixedSize = {160.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
     tree.layout();
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 32.0f)),
@@ -244,11 +250,12 @@ TEST(BindingContractTest, TreeFilterBindingAndManualExpansionCoexistWithoutStick
 
     auto filterRef = std::make_shared<Reactive<std::string>>("");
     auto treeView  = std::make_shared<UITreeView>("Tree");
-    authorSlotPosition(*treeView, {20.0f, 20.0f});
-    authorSlotSize(*treeView, {240.0f, 120.0f});
+    FCanvasSlotArgs treeViewSlot;
+    treeViewSlot.offset = {20.0f, 20.0f};
+    treeViewSlot.fixedSize = {240.0f, 120.0f};
     treeView->bindData(roots);
     treeView->bindFilter(filterRef);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView, treeViewSlot);
 
     tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_FALSE(treeView->isExpanded("root"));
@@ -289,11 +296,12 @@ TEST(BindingContractTest, TableSelectionBindingCoexistsWithHoverTransientState)
 
     auto       selected = std::make_shared<Reactive<int>>(1);
     auto       table    = std::make_shared<UITableGrid>("Table");
-    authorSlotPosition(*table, {20.0f, 20.0f});
-    authorSlotSize(*table, {220.0f, 96.0f});
+    FCanvasSlotArgs tableSlot;
+    tableSlot.offset = {20.0f, 20.0f};
+    tableSlot.fixedSize = {220.0f, 96.0f};
     table->bindData(rows);
     table->bindSelection(selected);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), table);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), table, tableSlot);
     tree.layout();
 
     tree.buildSnapshot(UIFrameBuildContext{});
@@ -319,9 +327,11 @@ TEST(BindingContractTest, MenuBarLabelBindingSurvivesOpenMenuAndHoverRouting)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       bar = std::make_shared<UIMenuBar>("Bar");
-    authorSlotAnchors(*bar, {0.0f, 0.0f}, {1.0f, 0.0f});
-    authorSlotSize(*bar, {0.0f, 30.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar);
+    FCanvasSlotArgs barSlot;
+    barSlot.anchorMin = {0.0f, 0.0f};
+    barSlot.anchorMax = {1.0f, 0.0f};
+    barSlot.fixedSize = {0.0f, 30.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, barSlot);
 
     auto label = std::make_shared<Reactive<std::string>>("File");
     auto* item = bar->addItem("Fallback", [] { return UIMenu::create({{"Open", [] {}}, {"Save", [] {}}}); });

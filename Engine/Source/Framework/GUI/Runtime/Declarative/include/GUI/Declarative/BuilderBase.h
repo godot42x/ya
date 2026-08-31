@@ -52,7 +52,17 @@ template<typename TWidget>
     auto widget = std::dynamic_pointer_cast<TWidget>(raw);
     YA_CORE_ASSERT(widget, "ui::makeLiveWidget: registry type '{}' produced the wrong widget class", typeId);
     widget->_stableKey = std::move(key);
-    widget->_name      = displayName.empty() ? widget->_stableKey : std::move(displayName);
+    // Anonymous DSL nodes intentionally have no stable identity.  Registry
+    // factories already seed a useful type label (Text, Panel, ...), so keep
+    // that label for diagnostics unless the author opts into a key or a
+    // display name.  A display name is presentation/debug text; it never
+    // implicitly becomes a stable key.
+    if (!displayName.empty()) {
+        widget->_name = std::move(displayName);
+    }
+    else if (!widget->_stableKey.empty()) {
+        widget->_name = widget->_stableKey;
+    }
     return widget;
 }
 
@@ -84,6 +94,36 @@ class TUIWidgetBuilder
     }
 
     [[nodiscard]] std::shared_ptr<TWidget> share() const { return _widget; }
+
+    [[nodiscard]] TDerived& key(std::string value) &
+    {
+        _widget->_stableKey = std::move(value);
+        if (!_widget->_stableKey.empty()) {
+            _widget->_name = _widget->_stableKey;
+        }
+        return derived();
+    }
+
+    [[nodiscard]] TDerived&& key(std::string value) &&
+    {
+        _widget->_stableKey = std::move(value);
+        if (!_widget->_stableKey.empty()) {
+            _widget->_name = _widget->_stableKey;
+        }
+        return std::move(derived());
+    }
+
+    [[nodiscard]] TDerived& displayName(std::string value) &
+    {
+        _widget->_name = std::move(value);
+        return derived();
+    }
+
+    [[nodiscard]] TDerived&& displayName(std::string value) &&
+    {
+        _widget->_name = std::move(value);
+        return std::move(derived());
+    }
 
     [[nodiscard]] TDerived& setPosition(const glm::vec2& value) &
     {

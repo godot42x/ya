@@ -143,9 +143,10 @@ TEST(GameUIHostTest, InputRoutesThroughPresentationMapping)
     host.onSceneActivated(scene);
 
     auto button = std::make_shared<UIButton>("OK");
-    authorSlotPosition(*button, {100.0f, 100.0f}); // logical
-    authorSlotSize(*button, {80.0f, 32.0f});
-    host.addToWorld(scene, button);
+    FCanvasSlotArgs buttonSlot;
+    buttonSlot.offset = {100.0f, 100.0f};
+    buttonSlot.fixedSize = {80.0f, 32.0f};
+    host.addToWorld(scene, button, buttonSlot);
 
     int clicks = 0;
     button->_onClick = [&] { ++clicks; };

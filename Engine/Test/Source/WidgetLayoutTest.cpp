@@ -971,12 +971,13 @@ TEST(WidgetLayoutTest, EdgeLayoutSpecAppliesToTheChildNotTheParent)
     registerSyntheticFont(16, 8.0f);
 
     auto panel = ui::panel("Panel")
-                     .setSize({400.0f, 200.0f})
                      [ui::layout().fill() >> ui::text("Label").setText("Hi")]
                      .release();
 
     WidgetTree tree({.width = 400, .height = 200});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    FCanvasSlotArgs panelSlot;
+    panelSlot.fixedSize = {400.0f, 200.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     tree.layout();
 
     const UIElement* child = panel->getChildrenInPaintOrder().front();
@@ -999,12 +1000,13 @@ TEST(WidgetLayoutTest, SingleChildSlotDefaultsToFillReproducingStretch)
     registerSyntheticFont(16, 8.0f);
 
     auto box = ui::sizeBox("Box")
-                   .setSize({200.0f, 100.0f})
                    .child(ui::text("Label").setText("Hi"))
                    .release();
 
     WidgetTree tree({.width = 200, .height = 100});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box);
+    FCanvasSlotArgs boxSlot;
+    boxSlot.fixedSize = {200.0f, 100.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
     tree.layout();
 
     const UIElement* child = box->getChildrenInPaintOrder().front();
@@ -1019,13 +1021,14 @@ TEST(WidgetLayoutTest, SingleChildSlotAlignKeepsDesiredSizeAndCenters)
     registerSyntheticFont(16, 8.0f);
 
     auto box = ui::sizeBox("Box")
-                   .setSize({200.0f, 100.0f})
                    .child(ui::text("Label").setText("Hi"),
                           ui::overlaySlot().align(EUIOverlayAlignment::Center, EUIOverlayAlignment::Center))
                    .release();
 
     WidgetTree tree({.width = 200, .height = 100});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box);
+    FCanvasSlotArgs boxSlot;
+    boxSlot.fixedSize = {200.0f, 100.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
     tree.layout();
 
     const UIElement* child = box->getChildrenInPaintOrder().front();
@@ -1045,13 +1048,14 @@ TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToSingleChildSlot)
     registerSyntheticFont(16, 8.0f);
 
     auto box = ui::sizeBox("Box")
-                   .setSize({200.0f, 100.0f})
                    [ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Center) >>
                     ui::text("Label").setText("Hi")]
                    .release();
 
     WidgetTree tree({.width = 200, .height = 100});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box);
+    FCanvasSlotArgs boxSlot;
+    boxSlot.fixedSize = {200.0f, 100.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, boxSlot);
     tree.layout();
 
     const UIElement* child = box->getChildrenInPaintOrder().front();
@@ -1074,13 +1078,14 @@ TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToScrollViewportSingleChildSlot)
     registerSyntheticFont(16, 8.0f);
 
     auto viewport = ui::scroll("Viewport")
-                        .setSize({200.0f, 100.0f})
                         [ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Top).size({40.0f, 160.0f}) >>
                          ui::text("Label").setText("Hi")]
                         .release();
 
     WidgetTree tree({.width = 200, .height = 100});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport);
+    FCanvasSlotArgs viewportSlot;
+    viewportSlot.fixedSize = {200.0f, 100.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
     tree.layout();
 
     const UIElement* child = viewport->getChildrenInPaintOrder().front();
@@ -1220,12 +1225,13 @@ TEST(WidgetLayoutTest, CanvasLayoutSpecSizeUsesTheSlotRatherThanMutatingChildGeo
     ASSERT_NE(childRaw, nullptr);
 
     auto panel = ui::panel("Panel")
-                     .setSize({300.0f, 200.0f})
                      [ui::layout().size({120.0f, 32.0f}) >> child]
                      .release();
 
     WidgetTree tree({.width = 300, .height = 200});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    FCanvasSlotArgs panelSlot;
+    panelSlot.fixedSize = {300.0f, 200.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     tree.layout();
 
     const UIElement* liveChild = panel->getChildrenInPaintOrder().front();
@@ -1240,11 +1246,13 @@ TEST(WidgetLayoutTest, CanvasLayoutSpecSizeUsesTheSlotRatherThanMutatingChildGeo
 
 TEST(WidgetLayoutTest, StretchXFixedHeightChromeLivesOnTheCanvasSlot)
 {
-    auto host = ui::panel("Host").setSize({400.0f, 300.0f}).release();
+    auto host = ui::panel("Host").release();
     auto bar  = ui::panel("Bar").release();
 
     WidgetTree tree({.width = 400, .height = 300});
-    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host).valid());
+    FCanvasSlotArgs hostSlot;
+    hostSlot.fixedSize = {400.0f, 300.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, hostSlot).valid());
     host->addDetachedChild(bar);
     ui::attachLayout(*host, *bar,
                     ui::layout().anchor({0.0f, 0.0f}, {1.0f, 0.0f}).size({0.0f, 30.0f}).args());
@@ -1261,11 +1269,13 @@ TEST(WidgetLayoutTest, StretchXFixedHeightChromeLivesOnTheCanvasSlot)
 
 TEST(WidgetLayoutTest, CanvasSlotOffsetAndFixedSizeCanBeUpdatedAfterAttach)
 {
-    auto host  = ui::panel("Host").setSize({400.0f, 300.0f}).release();
+    auto host  = ui::panel("Host").release();
     auto child = ui::panel("Child").release();
 
     WidgetTree tree({.width = 400, .height = 300});
-    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host).valid());
+    FCanvasSlotArgs hostSlot;
+    hostSlot.fixedSize = {400.0f, 300.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, hostSlot).valid());
     host->addDetachedChild(child);
     ui::attachLayout(*host, *child,
                     ui::layout()
@@ -1361,8 +1371,10 @@ TEST(WidgetLayoutTest, DeclarativeBracketAndAttachLayoutProduceEquivalentCanvasS
 TEST(WidgetLayoutTest, BuildWithLayoutSpecInitializesTheCanvasSlot)
 {
     WidgetTree tree({.width = 300, .height = 200});
-    auto       panel = ui::panel("Panel").setSize({300.0f, 200.0f}).release();
-    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel).valid());
+    auto       panel = ui::panel("Panel").release();
+    FCanvasSlotArgs panelSlot;
+    panelSlot.fixedSize = {300.0f, 200.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot).valid());
 
     const FUILayoutSpec spec = ui::layout()
                                    .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
@@ -1384,11 +1396,13 @@ TEST(WidgetLayoutTest, CanvasHostSetSizeBridgesToTheCanvasSlotFixedSize)
 {
     registerSyntheticFont(16, 8.0f);
 
-    auto panel = ui::panel("Panel").setSize({300.0f, 200.0f}).release();
+    auto panel = ui::panel("Panel").release();
     auto child = ui::text("Inner").setText("Hi").release();
 
     WidgetTree tree({.width = 300, .height = 200});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    FCanvasSlotArgs panelSlot;
+    panelSlot.fixedSize = {300.0f, 200.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     panel->addDetachedChild(child);
 
     authorSlotSize(*child, {90.0f, 28.0f});
@@ -1407,12 +1421,13 @@ TEST(WidgetLayoutTest, CanvasHostIsNotBoundToThePanelVisuals)
 
     // ui::canvas() carries the anchor layout without a panel's own visuals.
     auto host = ui::canvas("Host")
-                    .setSize({200.0f, 100.0f})
                     [ui::layout().fill() >> ui::text("Inner").setText("Hi")]
                     .release();
 
     WidgetTree tree({.width = 200, .height = 100});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host);
+    FCanvasSlotArgs hostSlot;
+    hostSlot.fixedSize = {200.0f, 100.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, hostSlot);
     tree.layout();
 
     const UIElement* child = host->getChildrenInPaintOrder().front();
@@ -1433,14 +1448,16 @@ TEST(WidgetLayoutTest, ReparentingBetweenHostsRebuildsTheSlotForTheNewHost)
     registerSyntheticFont(16, 8.0f);
 
     WidgetTree tree({.width = 200, .height = 100});
-    auto       panelHost = ui::panel("PanelHost").setSize({200.0f, 100.0f}).release();
-    auto       boxHost   = ui::column("BoxHost").setSize({200.0f, 100.0f}).release();
+    auto       panelHost = ui::panel("PanelHost").release();
+    auto       boxHost   = ui::column("BoxHost").release();
     auto       child     = ui::text("Child").setText("Hi").setSize({50.0f, 20.0f}).release();
+    FCanvasSlotArgs hostSlot;
+    hostSlot.fixedSize = {200.0f, 100.0f};
 
     // Both hosts must be in the tree before the child is attached, so that
     // reparent() has a target the tree owns.
-    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panelHost).valid());
-    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), boxHost).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panelHost, hostSlot).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), boxHost, hostSlot).valid());
     panelHost->addDetachedChild(child);
 
     // Under a canvas host the edge is a canvas slot.
@@ -1464,16 +1481,18 @@ TEST(WidgetLayoutTest, ReparentingAcrossHostsDoesNotLeakTheOldHostIntent)
     registerSyntheticFont(16, 8.0f);
 
     WidgetTree tree({.width = 200, .height = 100});
-    auto       panelHost = ui::panel("PanelHost").setSize({200.0f, 100.0f}).release();
-    auto       boxHost   = ui::column("BoxHost").setSize({200.0f, 100.0f}).release();
+    auto       panelHost = ui::panel("PanelHost").release();
+    auto       boxHost   = ui::column("BoxHost").release();
     auto       child     = ui::text("Child").setText("Hi").setSize({50.0f, 20.0f}).release();
+    FCanvasSlotArgs hostSlot;
+    hostSlot.fixedSize = {200.0f, 100.0f};
 
     // Anchor intent is a canvas capability and applies while under the panel.
     FCanvasSlotArgs fillArgs;
     fillArgs.anchorMin = {0.0f, 0.0f};
     fillArgs.anchorMax = {1.0f, 1.0f};
-    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panelHost).valid());
-    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), boxHost).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panelHost, hostSlot).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), boxHost, hostSlot).valid());
     panelHost->addDetachedChild(child);
     if (auto* slot = dynamic_cast<UICanvasSlot*>(panelHost->getSlotForChild(*child))) {
         slot->apply(fillArgs);
@@ -1627,11 +1646,13 @@ TEST(WidgetLayoutTest, BoxHostSetSizeBridgesToTheBoxSlotPreferredSize)
 {
     registerSyntheticFont(16, 8.0f);
 
-    auto column = ui::column("Column").setSize({240.0f, 100.0f}).release();
+    auto column = ui::column("Column").release();
     auto child  = ui::text("Inner").setText("Hi").release();
 
     WidgetTree tree({.width = 240, .height = 100});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column);
+    FCanvasSlotArgs columnSlot;
+    columnSlot.fixedSize = {240.0f, 100.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
     column->addDetachedChild(child);
 
     authorSlotSize(*child, {90.0f, 28.0f});
@@ -1679,9 +1700,11 @@ TEST(WidgetLayoutTest, BuildWithLayoutAttachmentInitializesTheBoxSlot)
 {
     registerSyntheticFont(16, 8.0f);
 
-    auto column = ui::column("Column").setSize({240.0f, 100.0f}).release();
+    auto column = ui::column("Column").release();
     WidgetTree tree({.width = 240, .height = 100});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column);
+    FCanvasSlotArgs columnSlot;
+    columnSlot.fixedSize = {240.0f, 100.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
 
     ui::build(tree,
               *column,
@@ -1702,13 +1725,14 @@ TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToSelectableRowSingleChildSlot)
     registerSyntheticFont(16, 8.0f);
 
     auto row = ui::selectableRow("Row")
-                     .setSize({200.0f, 40.0f})
                      [ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Center).size({40.0f, 16.0f}) >>
                       ui::text("Label").setText("Hi")]
                      .release();
 
     WidgetTree tree({.width = 200, .height = 100});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row);
+    FCanvasSlotArgs rowSlot;
+    rowSlot.fixedSize = {200.0f, 40.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
     tree.layout();
 
     const UIElement* child = row->getChildrenInPaintOrder().front();
@@ -1793,11 +1817,13 @@ TEST(WidgetLayoutTest, AttachDoesNotSeedDefaultChildSizeOntoTheBoxSlot)
 {
     registerSyntheticFont(16, 8.0f);
 
-    auto column = ui::column("Column").setSize({240.0f, 100.0f}).release();
+    auto column = ui::column("Column").release();
     auto child  = ui::text("Inner").setText("Hi").release();
 
     WidgetTree tree({.width = 240, .height = 100});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column);
+    FCanvasSlotArgs columnSlot;
+    columnSlot.fixedSize = {240.0f, 100.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, columnSlot);
     column->addDetachedChild(child);
 
     const auto* slot = dynamic_cast<const UIBoxSlot*>(column->getSlotForChild(*child));
@@ -1805,16 +1831,24 @@ TEST(WidgetLayoutTest, AttachDoesNotSeedDefaultChildSizeOntoTheBoxSlot)
     EXPECT_EQ(slot->getPreferredSize(), glm::vec2(0.0f, 0.0f));
 }
 
-TEST(WidgetLayoutTest, BuilderGeometryIntentIsConsumedByTheCanvasSlot)
+TEST(WidgetLayoutTest, ExplicitCanvasEdgeIntentIsConsumedByTheCanvasSlot)
 {
     registerSyntheticFont(16, 8.0f);
 
-    auto panel = ui::panel("Panel").setSize({300.0f, 200.0f}).release();
-    auto child = ui::text("Inner").setText("Hi").setPosition({12.0f, 8.0f}).setSize({80.0f, 24.0f}).release();
+    auto panel = std::make_shared<UIPanel>("Panel");
+    auto child = std::make_shared<UIText>("Inner");
+    child->setText("Hi");
 
     WidgetTree tree({.width = 300, .height = 200});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
-    panel->addDetachedChild(child);
+    FCanvasSlotArgs panelSlot;
+    panelSlot.fixedSize = {300.0f, 200.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    panel->addDetachedChild(child, [](UIElement&, UISlot& edge) {
+        auto* canvas = edge.as<UICanvasSlot>();
+        ASSERT_NE(canvas, nullptr);
+        canvas->setOffset({12.0f, 8.0f});
+        canvas->setFixedSize({80.0f, 24.0f});
+    });
 
     const auto* slot = dynamic_cast<const UICanvasSlot*>(panel->getSlotForChild(*child));
     ASSERT_NE(slot, nullptr);
@@ -1874,11 +1908,13 @@ TEST(WidgetLayoutTest, BoxLayoutIgnoresCorruptedChildSizeAfterAttach)
 
 TEST(WidgetLayoutTest, CanvasLayoutIgnoresCorruptedChildSizeAfterAttach)
 {
-    auto panel = ui::panel("Panel").setSize({300.0f, 200.0f}).release();
+    auto panel = ui::panel("Panel").release();
     auto child = std::make_shared<UIPanel>("Inner");
 
     WidgetTree tree({.width = 300, .height = 200});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    FCanvasSlotArgs panelSlot;
+    panelSlot.fixedSize = {300.0f, 200.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
     panel->addDetachedChild(child, [](UIElement&, UISlot& slot) {
         if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
             canvas->setFixedSize({80.0f, 24.0f});

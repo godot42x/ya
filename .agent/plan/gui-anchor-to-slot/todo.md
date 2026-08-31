@@ -111,6 +111,32 @@
 - [ ] 提交治理：后续只提交完整语义 checkpoint；已有碎片提交在发布前统一整理，未经授权不改写共享分支历史
 - [x] CP2 imperative pending bridge：detached `UIElement::setPosition/setSize` 同时排队 parent-edge initializer，attach 时优先消费 typed slot；旧字段仅保留为待删除 shadow，不能作为新布局输入
 - [ ] CP2 builder pending bridge 收口：先迁移所有 `builder.release()` 后外部 attach 的调用点，再将 detached edge intent 直接传入 parent-owned slot；在此之前不得删除 pending bridge
+- [x] CP2 BindingContract fixture：TreeView/TableGrid/MenuBar/drag-drop 测试改用显式 `FCanvasSlotArgs` attach，移除测试 pending geometry helper
+- [x] CP2 WidgetLayout fixture：将 builder geometry intent 测试改为显式 parent-owned canvas edge initializer
+- [x] CP2 WidgetLayout single-child host fixtures：root 尺寸改为显式 `FCanvasSlotArgs` attach，突出 typed slot 语义
+- [x] CP2 WidgetLayout root host edges：canvas/box/selectable-row/reparent fixtures 改用显式 root canvas slot attach
+- [x] CP2 Declarative root edge build contract：root `.setSize()` 迁到 `ui::build(..., FCanvasSlotArgs)`，保留 child slot 语义测试
+- [x] CP2 Declarative child edge intent：可迁移的 child `.setSize()` 改为 `ui::layout().size(...) >> child`，Overlay typed args 保持单一 edge API
+- [x] CP2 Compound composition root edge：compound 测试 root 尺寸改由 parent-owned overlay slot preferredSize 承担
+- [x] CP2 ToolControls stack edges：Stack/Container root 改显式 canvas attach，child preferred size 直接落 box slot
+- [x] CP2 ToolControls split root edges：split divider fixtures 改显式 root canvas attach
+- [x] CP2 ToolControls toolbar root edges：button/toolbar hover fixtures 改显式 canvas attach
+- [x] CP2 ToolControls scroll edges：viewport/content fixtures 改显式 canvas/typed slot attach
+- [x] CP2 ToolControls selectable-row edges：row/label/drag fixtures 改显式 canvas/overlay slot attach
+- [x] CP2 ToolControls TreeView/TextField edges：reorder/input fixtures 改显式 canvas attach
+- [x] CP2 ToolControls Menu/MenuBar edges：MenuBar root fixtures 改显式 canvas attach，Menu popup slot 保持原 contract
+- [x] DSL ergonomics：节点默认匿名，只有需要稳定定位/调试/复用时显式提供 key/displayName；匿名节点保留注册类型名用于 dump/诊断，不生成伪稳定 key
+- [x] CP2 ToolControls split-overlap/specialized dump edges：重叠 hover 与 specialized layout dump fixture 移除 pending helper，改 parent-owned canvas/box slot
+- [x] CP2 host/event/texture fixture edges：GameUIHost、GuiEventDriver、UIFrameTextureLifetime 测试移除 pending helper，改显式 canvas attach
+- [x] CP2 GUIHeadlessHostTest：顶层 panel/menu bar 改用显式 `FCanvasSlotArgs` attach，移除该 fixture 对测试 pending helper 的依赖
+- [x] CP2 UIFrameSnapshotTest 基础 paint-order fixture：layer child 几何改用显式 `FCanvasSlotArgs` attach
+- [x] CP2 UIFrameSnapshotTest clip fixture：clip container 几何改用显式 `FCanvasSlotArgs` attach
+- [x] CP2 UIFrameSnapshotTest basic geometry fixtures：SnapshotSurvivesImmediateDetach/TextItems/LayoutDirty/PanelCornerRadius 改用显式 canvas attach
+- [x] CP2 UIFrameSnapshotTest perf/theme/mutation fixtures：顶层 panel/button 使用显式 canvas slot，运行时移动直接修改当前 slot
+- [x] CP2 UIFrameSnapshot cache fixtures：offset/uiScale/generation 变化用显式 canvas slot，移除 pending helper
+- [x] CP2 UIFrameSnapshot layout-host fixtures：scroll/split/container clip 的顶层与 child 尺寸改为显式 typed slot
+- [x] CP2 UIFrameSnapshot style fixtures：按钮/面板主题与 authored-style 用例改用显式 canvas slot
+- [x] CP2 UIFrameSnapshot interaction fixtures：Image/TreeView/DragDrop 顶层 geometry 改用显式 canvas slot
 - [x] CP2 attach contract：新增 `WidgetTree::attach(parent, widget, FChildSlotInitializer)`，为 builder/imperative materialization 提供统一 parent-edge 初始化入口
 - [x] CP2 示例迁移（GUIFrameworkSmoke）：移除 `setPendingSlotInitializer` helper，所有 demo geometry 在已知 parent 上通过显式 `initializeChildSlot` 写入 typed canvas slot
 - [x] CP2 Workbench render demo 迁移：marker row、marker cell、image edge 的尺寸改由 parent `layout().size()` 写入 typed box slot，移除该段 pending helper 依赖

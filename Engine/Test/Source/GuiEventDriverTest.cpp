@@ -134,13 +134,15 @@ TEST(GuiEventDriverTest, ScenarioDrivesWidgetTreeAndDumpAssertsHoverContract)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       a = std::make_shared<UIButton>("A");
-    authorSlotPosition(*a, {10.0f, 10.0f});
-    authorSlotSize(*a, {60.0f, 24.0f});
     auto b = std::make_shared<UIButton>("B");
-    authorSlotPosition(*b, {120.0f, 10.0f});
-    authorSlotSize(*b, {60.0f, 24.0f});
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), a);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), b);
+    FCanvasSlotArgs aSlot;
+    aSlot.offset = {10.0f, 10.0f};
+    aSlot.fixedSize = {60.0f, 24.0f};
+    FCanvasSlotArgs bSlot;
+    bSlot.offset = {120.0f, 10.0f};
+    bSlot.fixedSize = {60.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), a, aSlot);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), b, bSlot);
     tree.layout();
 
     TreeSink sink{tree};

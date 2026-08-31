@@ -36,8 +36,9 @@ TEST(UIFrameTextureLifetimeTest, SnapshotRetainsTextureAfterCacheClear)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    authorSlotPosition(*panel, {10.0f, 10.0f});
-    authorSlotSize(*panel, {100.0f, 50.0f});
+    FCanvasSlotArgs panelSlot;
+    panelSlot.offset = {10.0f, 10.0f};
+    panelSlot.fixedSize = {100.0f, 50.0f};
 
     // Fake asset cache (AssetManager's textureManager behaves the same:
     // path -> strong ref; unloading/clearing drops the cache's reference).
@@ -46,7 +47,7 @@ TEST(UIFrameTextureLifetimeTest, SnapshotRetainsTextureAfterCacheClear)
     cache["Engine:Content/TestTextures/face.png"] = texture;
     panel->_image = TextureRef("Engine:Content/TestTextures/face.png", ya::Ptr<Texture>(texture.get()));
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
 
     UIFrameBuildContext ctx;
     ctx.textureResolver = [&](const std::string& path) {
@@ -73,11 +74,12 @@ TEST(UIFrameTextureLifetimeTest, ResolverMissAndMissingResolverFallBackToWhite)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    authorSlotPosition(*panel, {10.0f, 10.0f});
-    authorSlotSize(*panel, {100.0f, 50.0f});
+    FCanvasSlotArgs panelSlot;
+    panelSlot.offset = {10.0f, 10.0f};
+    panelSlot.fixedSize = {100.0f, 50.0f};
     panel->_image    = TextureRef("Engine:Content/TestTextures/face.png",
                                   ya::Ptr<Texture>(makeFakeTexture().get()));
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
 
     // Resolver present but cache miss: white sprite (null texture).
     UIFrameBuildContext missCtx;

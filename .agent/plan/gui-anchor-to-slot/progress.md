@@ -575,6 +575,60 @@ C++ exception: [json.exception.type_error.307] cannot use erase() with null
 - 删除无调用 helper；不改变剩余测试 helper 与 UIElement pending bridge。
 - 验证：`xmake b GUIWorkbench` 通过。
 
+## 2026-08-31 — CP2 GUIHeadlessHostTest 显式 canvas attach
+
+- 误差审计确认：HeadlessHost fixture 的 layer parent 在 `buildUI()` 中明确可得，panel/menu bar 不需要先 detached 暂存几何。
+- 两个 fixture 改为直接构造 `FCanvasSlotArgs` 并调用显式 canvas attach；移除 `GUITestLayoutHelpers.h` 依赖。
+- 验证：closure target 构建通过。
+- 未完成：其余测试 helper 仍有大量 detached 构造，需继续按 fixture parent 分组迁移。
+
+## 2026-08-31 — CP2 UIFrameSnapshot paint-order fixture 迁移
+
+- 误差审计确认：paint-order 用例的 behind/front 都直接挂到 Content layer，几何 parent 明确。
+- 删除该用例的 `authorSlotPosition/authorSlotSize` 调用，改为两个显式 `FCanvasSlotArgs` attach。
+- 验证：`UIFrameSnapshotTest.BuildResolvesItemsToRenderPixelsInPaintOrder` 通过，closure target 构建通过。
+
+## 2026-08-31 — CP2 UIFrameSnapshot clip fixture 迁移
+
+- `ContainerClipResolvesOnChildren` 的 clip container 改为显式 `FCanvasSlotArgs` attach；child 原有 box slot initializer 保持 parent-owned。
+- 验证：定向测试通过，closure target 构建通过。
+
+## 2026-08-31 — CP2 UIFrameSnapshot 基础 geometry fixtures 批量迁移
+
+- 误差审计确认：四个基础 snapshot 用例的 widget 都直接挂 Content layer，parent 与 canvas edge 明确。
+- `SnapshotSurvivesImmediateDetach`、`TextItemsCarryFontAndText`、`LayoutRunsWhenDirtyDuringSnapshot`、`PanelCornerRadiusScalesIntoDrawItem` 删除测试 helper pending 写入，改用显式 `FCanvasSlotArgs` attach。
+- 验证：`UIFrameSnapshotTest.*` 62/62 通过，closure target 构建通过。
+
+## 2026-08-31 — CP2 UIFrameSnapshot perf/theme/mutation fixtures 迁移
+
+- 误差审计确认：三个用例中的顶层 widget 都直接挂 Content layer，且移动测试在 attach 后已有稳定 slot。
+- `PerfStatsCountPaintWalkAndDrawItems`、`PanelResolvesThemeStyleAndRepaintsOnThemeSwitch` 改用显式 `FCanvasSlotArgs`；`LayoutChangeRebuildsMovedWidgetDrawItems` 的移动改为直接更新当前 `UICanvasSlot`。
+- 验证：三个定向测试通过，closure target 构建通过。
+
+## 2026-08-31 — CP2 UIFrameSnapshot cache fixtures 迁移
+
+- `CleanTreeOffsetChangeRebuildsResolvedItems`、`CleanTreeUiScaleChangeRebuildsResolvedItems`、`CleanTreeGenerationChangeDropsCache` 的 panel geometry 改为显式 `FCanvasSlotArgs` attach。
+- 保持测试关注点在 cache invalidation，不再通过测试 pending helper 设定顶层 authored geometry。
+- 验证：3 个定向测试通过，closure target 构建通过。
+
+## 2026-08-31 — CP2 UIFrameSnapshot layout-host fixtures 迁移
+
+- 误差审计确认：scroll viewport、split pane、clip container 的 parent edge 在各用例中明确；child 尺寸也可直接写入 box/overlay slot。
+- 迁移 `ScrollViewportClipsContentToViewportRect`、`SplitPaneClipsChildrenToOwnPaneRect`、`LayoutHostsReuseSelfSegmentWhenClean`、`ContainerClipResizeInvalidatesChildSegments`，运行时 resize 改为直接更新 `UICanvasSlot`。
+- 验证：4 个定向测试通过，closure target 构建通过。
+
+## 2026-08-31 — CP2 UIFrameSnapshot style fixtures 迁移
+
+- 误差审计确认：主题/style 用例的按钮与面板均直接挂 Content layer，位置和尺寸属于 layer-owned canvas edge。
+- `AuthoredButtonStyleWinsOverThemeAndIgnoresThemeSwitch`、`ThemeAttachAfterUnthemedBuildRepaintsKeyedButton`、`SetColorWritesAuthoredStyleAndBeatsTheme`、`SameAuthoredStyleDoesNotDirty`、`SparseStyleFieldInheritsUnpatchedFieldsOnThemeSwitch` 改用显式 `FCanvasSlotArgs` attach。
+- 验证：5 个定向测试通过，closure target 构建通过。
+
+## 2026-08-31 — CP2 UIFrameSnapshot interaction fixtures 迁移
+
+- 误差审计确认：Image、TreeView、DragDrop source/target 均直接挂 Content layer，parent edge 明确。
+- `ImagePlaceholderAndModalPopupFollowTheme`、`TreeViewSelectionFollowsTheme`、`DragDropTilesFollowTheme` 删除测试 pending helper，改用显式 `FCanvasSlotArgs` attach。
+- 验证：`UIFrameSnapshotTest.*` 62/62 通过，closure target 构建通过。
+
 ## 2026-08-31 — CP2 Workbench gallery menu/vector edges 迁移
 
 - 误差审计确认：Gallery menu bar 与 vector canvas 均由 `form` 直接承载，尺寸不需要 child pending 状态。
@@ -589,3 +643,129 @@ C++ exception: [json.exception.type_error.307] cannot use erase() with null
 - 保持首次 attach 的语义：`onAttached()` 在 tree membership 建立后执行，slot 已创建，可在第一次 layout 前完成 host edge 初始化。
 - 验证：floating window geometry / resize-handle / dock merge 定向测试全部通过；`xmake b ya-gui-closure-test` 通过。
 - 未完成：示例中的 imperative `setPendingSlotInitializer` helper、`child(node)` 默认重载、旧 schema 负向清零和最终 self-positioned fallback。
+
+## 2026-08-31 — CP2 BindingContract fixture edge migration
+
+- 误差审计确认：BindingContract 中 TreeView、TableGrid、MenuBar 以及 drag/drop source/target 都有明确的 Content layer parent；继续通过测试 helper 暂存 child geometry 没有必要。
+- 迁移方式：删除 `authorSlotPosition/authorSlotSize/authorSlotAnchors` 调用，直接构造 `FCanvasSlotArgs` 并在 `WidgetTree::attach(parent, child, args)` 时初始化 parent-owned canvas edge。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='BindingContractTest.*'`，10/10 通过。
+- 未完成：builder `.setSize/.setPosition/.setAutoSize` 与 pending bridge 仍待 release→external attach 全量迁移后删除。
+
+## 2026-08-31 — CP2 WidgetLayout explicit canvas edge fixture
+
+- 误差审计确认：`BuilderGeometryIntentIsConsumedByTheCanvasSlot` 实际测试的是 detached child 的 pending builder bridge，而不是 UIElement 几何 API 本身；在删除 builder bridge 前应先把 fixture 改成明确的 parent-owned edge contract。
+- 迁移方式：panel root 使用显式 `FCanvasSlotArgs` 挂到 Content layer，child 使用 `addDetachedChild(..., initializer)` 直接设置 `UICanvasSlot` offset/fixedSize；测试重命名为 `ExplicitCanvasEdgeIntentIsConsumedByTheCanvasSlot`。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='WidgetLayoutTest.ExplicitCanvasEdgeIntentIsConsumedByTheCanvasSlot'` 通过。
+- 未完成：其余 `builder.release()` 外部 attach fixture 仍待按 parent 分组迁移；builder 几何 sugar 暂不能删除。
+
+## 2026-08-31 — CP2 WidgetLayout single-child host root edges
+
+- 误差审计确认：这一组 `WidgetLayoutTest` 的关注点是 `SizeBox/ScrollViewport` 的 single-child slot 与 unified layout spec，而不是 host root 通过 builder `.setSize()` 暂存几何。继续保留 builder root size 只会掩盖 parent-owned root edge contract。
+- 迁移方式：`EdgeLayoutSpecAppliesToTheChildNotTheParent`、`SingleChildSlotDefaultsToFillReproducingStretch`、`SingleChildSlotAlignKeepsDesiredSizeAndCenters`、`UnifiedLayoutSpecAppliesToSingleChildSlot`、`UnifiedLayoutSpecAppliesToScrollViewportSingleChildSlot` 改为在 attach 到 Content layer 时显式传入 `FCanvasSlotArgs.fixedSize`。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='WidgetLayoutTest.EdgeLayoutSpecAppliesToTheChildNotTheParent:WidgetLayoutTest.SingleChildSlotDefaultsToFillReproducingStretch:WidgetLayoutTest.SingleChildSlotAlignKeepsDesiredSizeAndCenters:WidgetLayoutTest.UnifiedLayoutSpecAppliesToSingleChildSlot:WidgetLayoutTest.UnifiedLayoutSpecAppliesToScrollViewportSingleChildSlot'` 通过。
+- 未完成：仍有更多 `WidgetLayoutTest` / `DeclarativeContractTest` 使用 builder `.setSize()` 作为 detached root 或 child edge bridge，需要继续按语义分组迁移。
+
+## 2026-08-31 — CP2 WidgetLayout root host edges (canvas/box/selectable-row)
+
+- 误差审计确认：这一组 `WidgetLayoutTest` 的断言对象是 canvas slot、box slot、single-child slot、reparent rebuild 与 layout spec 初始化；host 自身通过 builder `.setSize()` 获得根尺寸并不是测试目标，只是旧 root edge 入口。
+- 迁移方式：将 host root 的 `setSize()` 改为 `WidgetTree::attach(parent, host, FCanvasSlotArgs{.fixedSize=...})`，覆盖 panel/canvas/column/selectable-row 以及 reparent host 场景；保留 child `.setSize()` 的少数用例，仅限那些仍在验证 pending bridge 或 spec override 的语义。
+- 覆盖用例：`CanvasLayoutSpecSizeUsesTheSlotRatherThanMutatingChildGeometry`、`StretchXFixedHeightChromeLivesOnTheCanvasSlot`、`CanvasSlotOffsetAndFixedSizeCanBeUpdatedAfterAttach`、`BuildWithLayoutSpecInitializesTheCanvasSlot`、`CanvasHostSetSizeBridgesToTheCanvasSlotFixedSize`、`CanvasHostIsNotBoundToThePanelVisuals`、`ReparentingBetweenHostsRebuildsTheSlotForTheNewHost`、`ReparentingAcrossHostsDoesNotLeakTheOldHostIntent`、`BoxHostSetSizeBridgesToTheBoxSlotPreferredSize`、`BuildWithLayoutAttachmentInitializesTheBoxSlot`、`UnifiedLayoutSpecAppliesToSelectableRowSingleChildSlot`、`AttachDoesNotSeedDefaultChildSizeOntoTheBoxSlot`、`CanvasLayoutIgnoresCorruptedChildSizeAfterAttach`。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='WidgetLayoutTest.CanvasLayoutSpecSizeUsesTheSlotRatherThanMutatingChildGeometry:WidgetLayoutTest.StretchXFixedHeightChromeLivesOnTheCanvasSlot:WidgetLayoutTest.CanvasSlotOffsetAndFixedSizeCanBeUpdatedAfterAttach:WidgetLayoutTest.BuildWithLayoutSpecInitializesTheCanvasSlot:WidgetLayoutTest.CanvasHostSetSizeBridgesToTheCanvasSlotFixedSize:WidgetLayoutTest.CanvasHostIsNotBoundToThePanelVisuals:WidgetLayoutTest.ReparentingBetweenHostsRebuildsTheSlotForTheNewHost:WidgetLayoutTest.ReparentingAcrossHostsDoesNotLeakTheOldHostIntent:WidgetLayoutTest.BoxHostSetSizeBridgesToTheBoxSlotPreferredSize:WidgetLayoutTest.BuildWithLayoutAttachmentInitializesTheBoxSlot:WidgetLayoutTest.UnifiedLayoutSpecAppliesToSelectableRowSingleChildSlot:WidgetLayoutTest.AttachDoesNotSeedDefaultChildSizeOntoTheBoxSlot:WidgetLayoutTest.CanvasLayoutIgnoresCorruptedChildSizeAfterAttach'` 通过。
+- 未完成：`DeclarativeContractTest` 与剩余 child builder `.setSize/.setAutoSize` 仍是删除 pending bridge 前的主要收口对象。
+
+## 2026-08-31 — CP2 Declarative root edge build contract
+
+- 误差审计确认：这一批 `DeclarativeContractTest` 的核心断言是 declarative live-construct 的 widget identity、theme/style、focus/capture、container/split/overlay contract；builder 上的 root `.setSize()` 只是旧的 layer root 几何入口。
+- 迁移方式：对 root 尺寸明确的 DSL 页面，改为 `ui::build(tree, parent, builder, FCanvasSlotArgs)`，让 root geometry 直接落在 parent-owned canvas edge；保留 child `.setSize()` 用于仍在验证 child slot/preferred-size 行为的用例。
+- 覆盖用例：`DslSetStyleOverridesTheme`、`DslSetStyleFieldInheritsUnpatchedThemeFields`、`DirectConstructSnapshotIsStableAcrossRepeatedBuilds`、`DirectConstructButtonLabelIsContentChild`、`DirectConstructTextFieldKeepsFocusAcrossSetText`、`DirectConstructExternalPatchClampsFocusedTextFieldCursorWithoutCommit`、`DirectConstructExternalPatchKeepsPressedButtonSession`、`DirectConstructExternalPatchCanReplaceButtonLabelSubtreeMidPress`、`DirectConstructContainerLayoutHonorsAuthoredSizeAndClip`、`DirectConstructContainerClipAndMainAxisAlignment`、`DirectConstructPanelCornerRadiusAndAnchors`、`DirectConstructSplitScrollAndFillSlot`、`DirectConstructBoxSlotOverlayAndSizeBox`、`DirectConstructDetachStopsButtonClicks`。
+- 额外审计：`FTestCompoundWidget::construct()` 中 composition root 的 builder `.setSize()` 已删除，避免 compound 内部继续制造 detached geometry 真值。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='DeclarativeContractTest.DslSetStyleOverridesTheme:DeclarativeContractTest.DslSetStyleFieldInheritsUnpatchedThemeFields:DeclarativeContractTest.DirectConstructSnapshotIsStableAcrossRepeatedBuilds:DeclarativeContractTest.DirectConstructButtonLabelIsContentChild:DeclarativeContractTest.DirectConstructTextFieldKeepsFocusAcrossSetText:DeclarativeContractTest.DirectConstructExternalPatchClampsFocusedTextFieldCursorWithoutCommit:DeclarativeContractTest.DirectConstructExternalPatchKeepsPressedButtonSession:DeclarativeContractTest.DirectConstructExternalPatchCanReplaceButtonLabelSubtreeMidPress:DeclarativeContractTest.DirectConstructContainerLayoutHonorsAuthoredSizeAndClip:DeclarativeContractTest.DirectConstructContainerClipAndMainAxisAlignment:DeclarativeContractTest.DirectConstructPanelCornerRadiusAndAnchors:DeclarativeContractTest.DirectConstructSplitScrollAndFillSlot:DeclarativeContractTest.DirectConstructBoxSlotOverlayAndSizeBox:DeclarativeContractTest.DirectConstructDetachStopsButtonClicks'` 通过。
+- 未完成：`DeclarativeContractTest` 里仍有不少 child `.setSize()` 用例，它们大多在验证 child preferred/fixed size contract，不能和 root edge 清理混为一谈；删除 builder pending bridge 之前还需继续分组审计。
+
+## 2026-08-31 — CP2 Declarative child edge intent migration
+
+- 误差审计确认：本批剩余 child `.setSize()` 中，部分确实是 parent->child edge intent，继续保留会让 builder bridge 看起来像布局真值；应改为统一 `ui::layout().size(...) >> child`。
+- 迁移方式：`DirectConstructSnapshotIsStableAcrossRepeatedBuilds`、`DirectConstructContainerLayoutHonorsAuthoredSizeAndClip`、`DirectConstructInputWidgetsCarryRegistryTypeId`、`DirectConstructContainerClipAndMainAxisAlignment`、`DirectConstructSplitScrollAndFillSlot`、`DirectConstructBoxSlotOverlayAndSizeBox` 改用 layout attachment；Overlay badge 的 alignment/padding/size 使用 `FOverlaySlotArgs.preferredSize`，因为当前 overlay builder 没有 attachment 与 typed args 的组合重载。
+- 方向修正：没有为单个缺口新增平行 DSL；能力不完整之处记录为待后续统一扩展，而不是通过隐式回写或兼容桥绕过。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='DeclarativeContractTest.DirectConstructSnapshotIsStableAcrossRepeatedBuilds:DeclarativeContractTest.DirectConstructContainerLayoutHonorsAuthoredSizeAndClip:DeclarativeContractTest.DirectConstructInputWidgetsCarryRegistryTypeId:DeclarativeContractTest.DirectConstructContainerClipAndMainAxisAlignment:DeclarativeContractTest.DirectConstructSplitScrollAndFillSlot:DeclarativeContractTest.DirectConstructBoxSlotOverlayAndSizeBox'`，6/6 通过。
+- 未完成：仍有 child `.setSize()` 出现在 `DeclarativeContractTest` 的 box/overlay 内容测试中；需要继续判断是否应直接写 typed args，并同步推进匿名节点默认命名的 DSL 设计。
+
+## 2026-08-31 — CP2 Declarative child edge completion and compound correction
+
+- 误差审计确认：child edge 迁移后全量 `DeclarativeContractTest.*` 首次回归暴露 `FTestCompoundWidget` composition root desired-size 丢失；原因是删除 builder `.setSize()` 时未同步把尺寸写入 compound-owned `UIOverlaySlot`。
+- 纠偏方式：`FTestCompoundWidget::construct()` 使用 `addDetachedChild(..., initializer)`，将 `{123,45}` 写入 composition root 的 overlay slot `preferredSize`，恢复 compound desired-size contract；没有恢复 child geometry 或扩大兼容桥。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='DeclarativeContractTest.*'`，32/32 通过。
+- 未完成：`DeclarativeContractTest` 中剩余少量 child `.setSize()` 仅作为测试 builder bridge/typed edge 语义的候选点；匿名节点默认命名仍是独立 DSL ergonomics 任务。
+
+## 2026-08-31 — CP2 ToolControls stack edge migration
+
+- 误差审计确认：Stack/Container 四个用例中的 root `authorSlot*` 是已知 Content layer edge，child 尺寸则由 `UIBoxSlot::preferredSize` initializer 承担；测试目标是 spacing/padding/visibility/main-axis/stretch，不需要测试 pending geometry helper。
+- 迁移方式：stack/box root 改为显式 `FCanvasSlotArgs` attach；移除对应 child `authorSlotSize`，继续使用 `attachPreferredSize` 直接初始化 parent-owned box slot。首个带位置的 stack 用 root canvas `offset={20,20}` 保持原坐标。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='ToolControlsTest.StackLaysOutChildrenWithGapAndPadding:ToolControlsTest.StackCollapsedSkipsSpaceHiddenKeepsSpace:ToolControlsTest.StackMainAxisAlignmentOffsetsThePack:ToolControlsTest.ContainerStretchLastChildFillsRemainingSpace'`，4/4 通过。
+- 未完成：ToolControls 剩余 split/toolbar/scroll/row/menu fixtures 仍有大量 helper 调用；需继续按 parent edge 语义分组迁移。
+
+## 2026-08-31 — CP2 ToolControls split root edge migration
+
+- 误差审计确认：split pane divider layout/drag/hover 三个用例只依赖 split root 的 Content layer canvas edge；divider ratio、capture、cursor 行为不是 child geometry bridge。
+- 迁移方式：删除 split root 的 `authorSlotPosition/authorSlotSize`，改为 `FCanvasSlotArgs.fixedSize` 在 `WidgetTree::attach()` 时初始化 parent-owned root edge。
+- 覆盖用例：`SplitPaneLaysOutTwoPanesAroundDivider`、`SplitPaneDividerDragChangesRatioAndEndsSession`、`SplitPaneDividerHoverRequestsResizeCursor`。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='ToolControlsTest.SplitPaneLaysOutTwoPanesAroundDivider:ToolControlsTest.SplitPaneDividerDragChangesRatioAndEndsSession:ToolControlsTest.SplitPaneDividerHoverRequestsResizeCursor'`，3/3 通过。
+- 未完成：split pane 的 child/button edge、toolbar、scroll、row、menu fixtures 仍待分组迁移。
+
+## 2026-08-31 — CP2 ToolControls toolbar root edges
+
+- 误差审计确认：toolbar hover 用例的绝对位置、横向 box、stretch canvas 三种 root 几何都属于 Content layer parent-owned canvas edge；按钮尺寸由 toolbar-owned `UIBoxSlot` preferredSize 承担，hover/cursor 断言不依赖 child geometry。
+- 迁移方式：`ButtonHoverClearsOnPointerLeave` 使用显式 button canvas args；`ToolbarSiblingHoverSwitchesAndClears` 使用 offset/fixedSize canvas root；`ToolbarAutoSizeButtonWithLabelHoverClears` 使用 anchor/offset/fixedSize canvas root，保留 toolbar child attach 的 typed box/autosize 语义。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='ToolControlsTest.ButtonHoverClearsOnPointerLeave:ToolControlsTest.ToolbarSiblingHoverSwitchesAndClears:ToolControlsTest.ToolbarAutoSizeButtonWithLabelHoverClears'`，3/3 通过。
+- 未完成：ToolControls 剩余 split overlap、scroll、row、menu fixtures 仍有 helper 调用。
+
+## 2026-08-31 — CP2 ToolControls scroll edge migration
+
+- 误差审计确认：scroll viewport 的 root 尺寸属于 Content layer canvas edge，content extent 属于 scroll-owned child slot；scroll offset/clamp/hit culling/nested split 是布局行为，不应继续依赖 detached geometry helper。
+- 迁移方式：`ScrollViewportShiftsContentByOffset`、`ScrollViewportWheelConsumesWhenScrollableBubblesAtLimit`、`ScrollViewportCullsChildHitsOutsideViewport`、`ScrollViewportNestedInsideSplitKeepsCustomLayout` 改用显式 viewport `FCanvasSlotArgs`；content 使用 `attachPreferredSize` 或由 split typed edge 接管。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='ToolControlsTest.ScrollViewportShiftsContentByOffset:ToolControlsTest.ScrollViewportWheelConsumesWhenScrollableBubblesAtLimit:ToolControlsTest.ScrollViewportCullsChildHitsOutsideViewport:ToolControlsTest.ScrollViewportNestedInsideSplitKeepsCustomLayout'`，4/4 通过。
+- 未完成：ToolControls 剩余 split overlap、row、menu fixtures 仍有 helper 调用。
+
+## 2026-08-31 — CP2 ToolControls selectable-row edge migration
+
+- 误差审计确认：selectable-row press/keyboard/tab/drag/hover/theme 用例的 root row 几何属于 Content layer canvas edge；label child 几何属于 row-owned overlay slot，不应继续由测试 helper 暂存。
+- 迁移方式：顶层 row/source/target 改显式 `FCanvasSlotArgs` attach；row label 使用 `addDetachedChild(..., UIOverlaySlot preferredSize)`，保留 row 的 single-child layout 与输入行为。
+- 覆盖用例：`SelectableRowPressSelectsReleaseActivates`、`SelectableRowEnterActivatesFocusedRow`、`SelectableRowParticipatesInTabTraversal`、`SelectableRowDraggableRowsUseBehaviorBackedDragDrop`、`SelectableRowHoverRepaintsWithHoveredColor`、`SelectableRowWithLabelChildHoverStillHighlightsRow`、`SelectableRowHoverUsesThemeFill`。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='ToolControlsTest.SelectableRowPressSelectsReleaseActivates:ToolControlsTest.SelectableRowEnterActivatesFocusedRow:ToolControlsTest.SelectableRowParticipatesInTabTraversal:ToolControlsTest.SelectableRowDraggableRowsUseBehaviorBackedDragDrop:ToolControlsTest.SelectableRowHoverRepaintsWithHoveredColor:ToolControlsTest.SelectableRowWithLabelChildHoverStillHighlightsRow:ToolControlsTest.SelectableRowHoverUsesThemeFill'`，7/7 通过。
+- 未完成：ToolControls 剩余 split overlap、TreeView/TextField/Menu/MenuBar fixtures 仍有 helper 调用。
+
+## 2026-08-31 — CP2 ToolControls TreeView/TextField root edges
+
+- 误差审计确认：TreeView reorder 与 TextField 输入/焦点/光标/提交用例的几何都属于 Content layer root canvas edge；测试目标不依赖 child-owned geometry。
+- 迁移方式：TreeView 使用显式 offset/fixedSize canvas attach；五个 TextField fixture 使用显式 fixedSize canvas attach，删除 root 的 `authorSlotPosition/authorSlotSize` pending helper 调用。
+- 覆盖用例：`TreeViewReorderUsesBehaviorBackedDragDrop`、`TextFieldTypedTextAppendsAndFiresChanged`、`TextFieldBackspaceAndCursorNavigation`、`TextFieldEnterAndFocusLossCommit`、`TextFieldPressRequestsFocusAndPlacesCaret`、`TextFieldDoesNotConsumeForeignKeys`。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='ToolControlsTest.TreeViewReorderUsesBehaviorBackedDragDrop:ToolControlsTest.TextFieldTypedTextAppendsAndFiresChanged:ToolControlsTest.TextFieldBackspaceAndCursorNavigation:ToolControlsTest.TextFieldEnterAndFocusLossCommit:ToolControlsTest.TextFieldPressRequestsFocusAndPlacesCaret:ToolControlsTest.TextFieldDoesNotConsumeForeignKeys'`，6/6 通过。
+- 未完成：ToolControls 剩余 split overlap、menu/menu bar 以及少量 specialized fixture helper 调用。
+
+## 2026-08-31 — CP2 ToolControls Menu/MenuBar root edges
+
+- 误差审计确认：Menu popup content 的尺寸已由 menu-owned canvas slot 负责，本批只处理 MenuBar 测试 root edge，不重复实现菜单尺寸逻辑。
+- 迁移方式：`MenuBarHoverSwitchesOpenMenu` 使用 anchor/fixedSize `FCanvasSlotArgs`；`MenuBarPaintsBottomSeparator` 使用 offset/fixedSize `FCanvasSlotArgs`；`MenuSizesPanelFromItemLabels` 保持现有 popup-owned slot 断言。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='ToolControlsTest.MenuSizesPanelFromItemLabels:ToolControlsTest.MenuBarHoverSwitchesOpenMenu:ToolControlsTest.MenuBarPaintsBottomSeparator'`，3/3 通过。
+- 未完成：ToolControls 剩余 split overlap、以及其他测试文件中的 helper/pending 调用仍待审计。
+
+## 2026-08-31 — CP2 DSL anonymous node identity
+
+- 误差审计确认：匿名节点只应省略用户身份，不应生成自动 stable key；否则会把诊断标签错误地升级为 reconciliation identity，并与 slot-owned layout 无关地引入隐藏状态。
+- 迁移方式：所有内置 DSL 工厂增加无参匿名入口；registry 默认类型名保留为 `_name`，`_stableKey` 保持为空。builder 新增 `.key(...)` 与 `.displayName(...)`，分别表达稳定定位和显示/诊断标签；显式 key 未指定 displayName 时仍作为 name。
+- 验证：新增 `DeclarativeContractTest.DslNodesAreAnonymousUnlessIdentityIsRequested`，确认匿名 root/child、显式 displayName、显式 key 的身份字段契约；`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='DeclarativeContractTest.DslNodesAreAnonymousUnlessIdentityIsRequested'` 通过。
+- 未完成：compound 自定义 builder 的匿名便捷入口、匿名节点在 dump/LSP 中的专门标记仍可按实际工具需求补充；本批不制造自动 key 或 legacy identity 兼容层。
+
+## 2026-08-31 — CP2 ToolControls split-overlap/specialized dump edges
+
+- 误差审计确认：`SplitPaneDoesNotStealHoverFromOverlappingButton` 的 panel 根几何属于 Content layer canvas edge；toolbar/add 尺寸属于 panel/toolbar-owned `UIBoxSlot`，不能继续用 detached pending helper。`SpecializedLayoutsAppearInTreeDump` 的 split 根和 scroll content 尺寸同样应落在 parent-owned typed slot。
+- 迁移方式：panel/split 使用显式 `FCanvasSlotArgs` attach；toolbar/add 使用 `UIBoxSlot.preferredSize`；scroll content 使用 typed `UICanvasSlot` fixed size。没有恢复 child geometry 或隐式 fallback。
+- 验证：`xmake b ya-gui-closure-test && xmake r ya-gui-closure-test --gtest_filter='ToolControlsTest.SplitPaneDoesNotStealHoverFromOverlappingButton:ToolControlsTest.SpecializedLayoutsAppearInTreeDump'`，2/2 通过。
+- 未完成：其他测试文件仍可能有 helper/pending 调用，需继续按文件和语义分组审计。
+
+## 2026-08-31 — CP2 host/event/texture fixture edges
+
+- 误差审计确认：GameUIHost 输入映射、GuiEventDriver hover route、UIFrameTextureLifetime snapshot retention 的根几何都是 Content layer parent-owned canvas edge，不依赖 child geometry。
+- 迁移方式：三组 fixture 使用显式 `FCanvasSlotArgs` attach；GameUIHost 复用 `addToWorld(..., args)`，事件按钮分别持有各自 offset/fixedSize，纹理生命周期测试保持 resolver/strong-reference 断言不变。
+- 验证：`xmake b ya-gui-closure-test` 通过；`GuiEventDriverTest.ScenarioDrivesWidgetTreeAndDumpAssertsHoverContract` 通过（其余筛选目标未发现编译/链接问题，后续全量回归覆盖）。
+- 未完成：Declarative/WidgetTree/UIDocument/UIDesigner 等文件仍有 helper/pending 调用。

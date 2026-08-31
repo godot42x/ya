@@ -12,20 +12,26 @@
 namespace ya::ui
 {
 
+#define YA_UI_ANONYMOUS_FACTORY(name, builder) \
+    [[nodiscard]] inline builder name() { return builder{std::string{}}; }
+
 [[nodiscard]] inline UITextWidgetBuilder text(std::string key, std::string displayName = {})
 {
     return UITextWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(text, UITextWidgetBuilder)
 
 [[nodiscard]] inline UIButtonWidgetBuilder button(std::string key, std::string displayName = {})
 {
     return UIButtonWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(button, UIButtonWidgetBuilder)
 
 [[nodiscard]] inline UIPanelWidgetBuilder panel(std::string key, std::string displayName = {})
 {
     return UIPanelWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(panel, UIPanelWidgetBuilder)
 
 /// A canvas host: the same anchor layout a panel carries, but without a panel's
 /// own visuals (no background, no corner radius). Canvas is a LAYOUT TYPE, so it
@@ -34,86 +40,108 @@ namespace ya::ui
 {
     return panel(std::move(key), std::move(displayName)).setStyleKey("canvas");
 }
+[[nodiscard]] inline UIPanelWidgetBuilder canvas()
+{
+    return panel().setStyleKey("canvas");
+}
 
 [[nodiscard]] inline UIContainerWidgetBuilder column(std::string key, std::string displayName = {})
 {
     return UIContainerWidgetBuilder{std::move(key), std::move(displayName), EWidgetBoxLayout::Vertical};
 }
+YA_UI_ANONYMOUS_FACTORY(column, UIContainerWidgetBuilder)
 
 [[nodiscard]] inline UIContainerWidgetBuilder row(std::string key, std::string displayName = {})
 {
     return UIContainerWidgetBuilder{std::move(key), std::move(displayName), EWidgetBoxLayout::Horizontal};
 }
+YA_UI_ANONYMOUS_FACTORY(row, UIContainerWidgetBuilder)
 
 [[nodiscard]] inline UITextFieldWidgetBuilder textField(std::string key, std::string displayName = {})
 {
     return UITextFieldWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(textField, UITextFieldWidgetBuilder)
 
 [[nodiscard]] inline UICheckBoxWidgetBuilder checkBox(std::string key, std::string displayName = {})
 {
     return UICheckBoxWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(checkBox, UICheckBoxWidgetBuilder)
 
 [[nodiscard]] inline UISliderWidgetBuilder slider(std::string key, std::string displayName = {})
 {
     return UISliderWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(slider, UISliderWidgetBuilder)
 
 [[nodiscard]] inline UISelectableRowWidgetBuilder selectableRow(std::string key, std::string displayName = {})
 {
     return UISelectableRowWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(selectableRow, UISelectableRowWidgetBuilder)
 
 [[nodiscard]] inline UIComboBoxWidgetBuilder comboBox(std::string key, std::string displayName = {})
 {
     return UIComboBoxWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(comboBox, UIComboBoxWidgetBuilder)
 
 [[nodiscard]] inline UIImageWidgetBuilder image(std::string key, std::string displayName = {})
 {
     return UIImageWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(image, UIImageWidgetBuilder)
 
 [[nodiscard]] inline UISplitPaneWidgetBuilder splitPane(std::string key, std::string displayName = {})
 {
     return UISplitPaneWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(splitPane, UISplitPaneWidgetBuilder)
 
 [[nodiscard]] inline UIScrollViewportWidgetBuilder scroll(std::string key, std::string displayName = {})
 {
     return UIScrollViewportWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(scroll, UIScrollViewportWidgetBuilder)
 
 [[nodiscard]] inline UIOverlayWidgetBuilder overlay(std::string key, std::string displayName = {})
 {
     return UIOverlayWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(overlay, UIOverlayWidgetBuilder)
 
 [[nodiscard]] inline UISizeBoxWidgetBuilder sizeBox(std::string key, std::string displayName = {})
 {
     return UISizeBoxWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(sizeBox, UISizeBoxWidgetBuilder)
 
 [[nodiscard]] inline UIMenuBarWidgetBuilder menuBar(std::string key, std::string displayName = {})
 {
     return UIMenuBarWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(menuBar, UIMenuBarWidgetBuilder)
 
 [[nodiscard]] inline UITreeViewWidgetBuilder treeView(std::string key, std::string displayName = {})
 {
     return UITreeViewWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(treeView, UITreeViewWidgetBuilder)
 
 [[nodiscard]] inline UIDockSpaceWidgetBuilder dockSpace(std::string key, std::string displayName = {})
 {
     return UIDockSpaceWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(dockSpace, UIDockSpaceWidgetBuilder)
 
 [[nodiscard]] inline UIPopupOverlayWidgetBuilder popupOverlay(std::string key, std::string displayName = {})
 {
     return UIPopupOverlayWidgetBuilder{std::move(key), std::move(displayName)};
 }
+YA_UI_ANONYMOUS_FACTORY(popupOverlay, UIPopupOverlayWidgetBuilder)
+
+#undef YA_UI_ANONYMOUS_FACTORY
 
 template<UIWidgetBuilder TBuilder>
 UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder)
