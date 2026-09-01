@@ -28,6 +28,17 @@ void UIDragDropTile::paintSelf(UIFrameBuilder& builder)
     builder.addText(_layoutRect, text, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
 }
 
+void UIDragDropTile::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const
+{
+    node["control"] = {
+        {"type", _kind == EKind::Target ? "dropTarget" : "dragSource"},
+        {"label", _label},
+        {"highlightLabel", _highlightLabel},
+        {"pressed", _bPressed.get()},
+        {"highlighted", _bHighlighted.get()},
+    };
+}
+
 void UIDragDropTile::clearTransientInputState()
 {
     _bPressed     = false;

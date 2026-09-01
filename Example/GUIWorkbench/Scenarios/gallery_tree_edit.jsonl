@@ -7,17 +7,17 @@
 {"assert":{"widget":"GalleryTree","control":{"type":"treeView"}}}
 {"assert":{"widget":"GalleryCellButton","control":{"type":"button"}}}
 {"checkpoint":"editing_widgets"}
-# Click GalleryTreeFilter (≈383,575 160x24) and type 'Li': Scene Root +
+# Click GalleryTreeFilter (current center ≈463,653) and type 'Li': Scene Root +
 # Light chain stay visible (4 rows).
-{"event":"mouse_press","x":463,"y":587,"button":0}
-{"event":"mouse_release","x":463,"y":587,"button":0}
+{"event":"mouse_press","x":463,"y":653,"button":0}
+{"event":"mouse_release","x":463,"y":653,"button":0}
 {"event":"key_typed","text":"Li"}
 {"frame":2}
 {"assert":{"widget":"GalleryTree","control":{"type":"treeView","visibleRows":4}}}
 {"checkpoint":"tree_filtered"}
-# Collapse Light (row 1, depth-1 arrow) while the filter is active.
-{"event":"mouse_press","x":354,"y":479,"button":0}
-{"event":"mouse_release","x":354,"y":479,"button":0}
+# Collapse Light (filtered row 1, depth-1 arrow; current hit ≈354,544) while the filter is active.
+{"event":"mouse_press","x":354,"y":544,"button":0}
+{"event":"mouse_release","x":354,"y":544,"button":0}
 {"frame":2}
 {"assert":{"widget":"GalleryTree","control":{"type":"treeView","visibleRows":2}}}
 {"checkpoint":"collapse_while_filtered"}

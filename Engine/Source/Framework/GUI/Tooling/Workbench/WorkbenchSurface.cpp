@@ -39,22 +39,6 @@ namespace
 // mounted theme.
 constexpr glm::vec4 kHeaderColor = guiworkbench::tokens::kHeaderColor;
 
-void logWorkbenchRectOnce(const char* label, const ya::UIElement* element)
-{
-    static int sLoggedFrames = 0;
-    if (!element || sLoggedFrames >= 6) {
-        return;
-    }
-    const auto& rect = element->_layoutRect;
-    YA_CORE_INFO("Workbench {} rect: pos=({}, {}), extent=({}, {})",
-                 label,
-                 rect.pos.x,
-                 rect.pos.y,
-                 rect.extent.x,
-                 rect.extent.y);
-    ++sLoggedFrames;
-}
-
 } // namespace
 
 void FWorkbenchSurface::assembleChrome(ya::WidgetTree& tree, ya::UIElement& parent)
@@ -499,7 +483,11 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                          .size({0.0f, 32.0f}) >>
                      std::move(toolbar)]
                     [ya::ui::layout().fill() >> std::move(mainSplit)];
-    ya::ui::build(tree, parent, std::move(page));
+    // The editor page is mounted into DemoHost, whose default layout is a
+    // canvas host. The page root therefore must declare its own fill edge at
+    // attach time; otherwise the default canvas slot leaves the whole editor
+    // subtree at 0x0 and later children can still spill over the toolbar.
+    ya::ui::build(tree, parent, std::move(page), ya::ui::layout().fill());
 
     workspace.resetLayout();
     _bRowsDirty = true;
@@ -658,10 +646,12 @@ void FWorkbenchSurface::updateUI()
         return;
     }
 
+    // Page switches and dynamic row rebuilds happen during the preceding
+    // input/update phase. Resolve the new parent-owned slot geometry before
+    // syncing presentation state or running automation in this same update
+    // boundary; the later snapshot pass may still reuse the clean result.
+    _tree->layout();
     syncPresentationState();
-    logWorkbenchRectOnce("PreviewCanvas", _canvasPanel.get());
-    logWorkbenchRectOnce("SelectionHighlight", _highlightPanel.get());
-    logWorkbenchRectOnce("PreviewName", _previewName.get());
     ++_frame;
     if (_bSmokeActions && !_bAutomationDone) {
         runAutomation();

@@ -1,5 +1,56 @@
 # GUI layout unified 进度
 
+## 2026-09-01 — 回归 checkpoint：补齐 Gallery drag-drop diagnostics，并修正 Layout / GalleryTree 场景坐标漂移
+
+- 误差审计：批量复扫官方 headless scenarios 后，剩余 3 个失败点分成两类：
+  - `gallery_drop.jsonl` 不是交互失败，而是 `GalleryDragSrc0/GalleryDropA/GalleryDropB` 在 tree dump 里缺少 `control` 字段，scenario 无法锁定 wrapper 控件类型；
+  - `layout_spacing_interaction.jsonl` 与 `gallery_tree_edit.jsonl` 都是旧点击坐标漂移：`SpacingSlider` 的真实 rect 已移到 `y≈390`，`GalleryTreeFilter` 的真实 rect 已移到 `y≈640`，旧点击点没有命中交互控件。
+- 收口方式：
+  - 为 `UIDragDropTile` 增加 runtime diagnostics，输出 `dragSource/dropTarget`、label、pressed/highlighted，恢复 gallery wrapper 场景的可断言性；
+  - 把 Layout 场景的 slider 点击点修到当前 track 命中点 `(566,401)`；
+  - 把 Gallery Tree 场景的 filter 点击点修到 `(463,653)`，并把过滤后折叠 `Light` 箭头的点击点修到 `(354,544)`。
+- 结论：这批剩余失败里只有一条是 runtime diagnostics 缺口；其余两条仍是 scenario 资产漂移，不是布局/TreeView 逻辑回退。
+- 验证：
+  - `xmake r GUIWorkbench --headless --start-page Layout --scenario Example/GUIWorkbench/Scenarios/layout_spacing_interaction.jsonl --scenario-render`（PASS）
+  - `xmake r GUIWorkbench --headless --start-page Gallery --scenario Example/GUIWorkbench/Scenarios/gallery_drop.jsonl --scenario-render`（PASS）
+  - `xmake r GUIWorkbench --headless --start-page Gallery --scenario Example/GUIWorkbench/Scenarios/gallery_tree_edit.jsonl --scenario-render`（PASS）
+  - 辅助取证：probe 证明 Layout slider 的有效命中点是 `(566,401)`；GalleryTree 在输入 `Li` 后确实收敛到 4 行，随后折叠 `Light` 后收敛到 2 行。
+
+## 2026-09-01 — 回归 checkpoint：修正 RenderProbe headless scenario 的过期点击坐标
+
+- 误差审计：`render_probe_interaction.jsonl` 仍点击旧点 `(640,347)`，而当前 `RenderProbe` 按钮 rect 为 `x≈327..1278, y≈312..338`，真实中心约 `(803,325)`；因此按钮存在但点击未发生，`CommandResult` 一直停在 `Ready`。
+- 收口方式：把场景点击点改到当前按钮中心，并在注释中写明当前 chrome 下的命中坐标；保留原有 end-to-end 断言：状态文本必须变成 `Render probe clicked (1)`，且最后一路 release 仍走 `pointerCapture -> RenderProbe`。
+- 结论：这是第二条 headless regression asset 漂移，不是 Render 页 runtime 回归。
+- 验证：
+  - `xmake r GUIWorkbench --headless --start-page Render --scenario Example/GUIWorkbench/Scenarios/render_probe_interaction.jsonl --scenario-render`（PASS）
+  - 辅助取证：`initial` tree dump 证明修复前 `RenderProbe` 的真实中心已变为约 `(803,325)`。
+
+## 2026-09-01 — 回归 checkpoint：修正 DragDrop headless scenario 的过期坐标基线
+
+- 误差审计：`Example/GUIWorkbench/Scenarios/dragdrop_interaction.jsonl` 仍使用旧命中坐标 `from=(407,100) -> to=(803,185)`；在当前布局下，source tile 实际 rect 为 `x≈327..487, y≈58..88`，旧起点已经落在 `DropZone` 上，因此 scenario 从未在 source 上按下，`lastRoute.policyName` 才会一直是 `hitTest`。
+- 收口方式：把场景坐标修回当前真实中心点，更新注释为 `Drag_asset.texture.diffuse center (~407,73) -> DropZone center (~803,158)`；保留原有断言 `lastRoute.policyName == dragSession` 与 `target == DropZone`，继续验证真正的拖拽会话而不是弱化断言。
+- 结论：这不是新的 runtime 回归，而是 headless regression asset 自身漂移；修的是测试基线，不是规避问题。
+- 验证：
+  - `xmake r GUIWorkbench --headless --start-page DragDrop --scenario Example/GUIWorkbench/Scenarios/dragdrop_interaction.jsonl --scenario-render`（PASS）
+  - 辅助取证：step-by-step probe dump 证明旧坐标在 `after_press` 时 pointer path 已经命中 `DropZone`，不存在 drag session。
+
+## 2026-09-01 — 回归 checkpoint：修复 GUIWorkbench smoke 的 DragDrop 句柄时序与 Editor root fill 漏配
+
+- 误差审计：这轮 smoke 失败不再是 framework 基础布局契约损坏，而是两个 demo/workbench 侧真实回归：
+  - DragDrop 页把 `item` 先交给 builder child attach，再把句柄写入 `state.dragItem`，导致保存的是空引用；
+  - Workbench 内置 Editor 页通过 `ui::build(tree, parent, std::move(page))` 直接挂到 `DemoHost` 这个 canvas host，缺少 root fill slot，`EditorDemo/MainSplit/PreviewCanvas` 整页退成 `0x0`，随后 `SelectionHighlight` 仍按自身 canvas slot 绝对排布并遮住 Add 按钮。
+- 收口方式：
+  - DragDrop 先保存 `state.dragItem`，再执行 child attach；
+  - Editor 页 root 改为 `ui::build(tree, parent, std::move(page), ui::layout().fill())`，让 page root 的几何意图在 attach 时直接落到 parent-owned canvas slot；
+  - 保留 `updateUI()` 里先 `_tree->layout()` 再 `syncPresentationState()` 的同帧 layout 收口，并删除本轮一次性 rect 诊断日志。
+- 结论：当前阻塞是 demo/shell 调用点误差，不应回退到“所有问题都归咎于 anchor-to-slot 基础框架”。
+- 验证：
+  - `xmake r GUIWorkbench --smoke-actions --exit-after-frame=180`（PASS）
+  - `xmake b/r ya-gui-closure-test`（316/316 通过）
+  - `xmake b/r ya-gui-minimal-host --exit-after-frame=30`（PASS）
+  - `xmake b ya-runtime`（PASS）
+  - 额外取证：headless tree dump 证明修复前 `EditorDemo` 挂在 `DemoHost` 下时 rect 为 `0x0`，问题在 root slot 漏配而非 split route。
+
 ## 2026-08-30 — CP3/CP5 纠偏 checkpoint：Canvas Auto 优先级、Popup content slot 与 detached pending bridge
 
 - 误差审计确认：Canvas Auto 轴若回读 `fixedSize`，会让 Auto 意图被旧 authored 尺寸遮蔽；Popup 测试若把内容尺寸写到 child slot，也会越过 popup-owned content contract。

@@ -503,10 +503,10 @@ void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& 
     const std::vector<std::string> payloads = {"asset.texture.diffuse", "asset.mesh.cube", "asset.material.pbr"};
     for (const std::string& payload : payloads) {
         auto item = makeDemoDragSource("Drag_" + payload, payload, payload);
-        sourceRow[ya::ui::layout().size({160.0f, 30.0f}) >> item];
         if (payload == payloads[0]) {
             state.dragItem = item;
         }
+        sourceRow[ya::ui::layout().size({160.0f, 30.0f}) >> item];
     }
 
     auto zone        = makeDemoDropTarget("DropZone", "Drop zone", {}, [&state, log](const std::string& payload)
