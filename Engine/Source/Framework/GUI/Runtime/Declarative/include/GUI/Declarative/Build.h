@@ -52,6 +52,9 @@ inline void exposeImplicitCanvasBuild(const char* apiName, UIElement& parent, UI
 
 } // namespace detail
 
+template<UISlotBuilder TSlotBuilder>
+inline void attachSlot(UIElement& parent, UIElement& child, TSlotBuilder&& slotBuilder);
+
 [[nodiscard]] inline UITextWidgetBuilder text(std::string key, std::string displayName = {})
 {
     return UITextWidgetBuilder{std::move(key), std::move(displayName)};
@@ -209,10 +212,14 @@ UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, cons
 }
 
 template<UIWidgetBuilder TBuilder, UISlotBuilder TSlotBuilder>
-    requires std::same_as<std::remove_cvref_t<decltype(std::declval<const std::remove_reference_t<TSlotBuilder>&>().args())>, FCanvasSlotArgs>
 UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, TSlotBuilder&& slotBuilder)
 {
-    return build(tree, parent, std::forward<TBuilder>(builder), slotBuilder.args());
+    UIElementRef root = std::forward<TBuilder>(builder).release();
+    YA_CORE_ASSERT(root, "ui::build: empty root");
+    const WidgetAttachment attached = tree.attach(parent, root);
+    YA_CORE_ASSERT(attached.valid(), "ui::build: attach failed for '{}'", root->_name);
+    attachSlot(parent, *root, std::forward<TSlotBuilder>(slotBuilder));
+    return root;
 }
 
 /// Same as build(), but keeps the concrete widget type so the host can retain
@@ -240,6 +247,17 @@ std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&&
             canvas->apply(slot);
         }
     }
+    return widget;
+}
+
+template<typename TWidget, UIWidgetBuilder TBuilder, UISlotBuilder TSlotBuilder>
+std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&& builder, TSlotBuilder&& slotBuilder)
+{
+    auto widget = std::dynamic_pointer_cast<TWidget>(std::forward<TBuilder>(builder).release());
+    YA_CORE_ASSERT(widget, "ui::buildAs: builder produced the wrong widget class");
+    const WidgetAttachment attached = tree.attach(parent, widget);
+    YA_CORE_ASSERT(attached.valid(), "ui::buildAs: attach failed for '{}'", widget->_name);
+    attachSlot(parent, *widget, std::forward<TSlotBuilder>(slotBuilder));
     return widget;
 }
 

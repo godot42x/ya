@@ -1,5 +1,60 @@
 # GUI layout unified 进度
 
+## 2026-09-02 — CP3/CP4 生产迁移：EditorSurface Scene Save 对话框改用 slot-first
+
+- Scene Save panel/root、name row、search、mount/entry scroll body、preview 与 action buttons 全部改为显式 canvas/box/overlay slot builder。
+- 保持原对话框尺寸、列表宽度、按钮尺寸与回调行为；不再使用 layout spec attachment。
+- 验证：xmake b ya-runtime 通过。
+- 未完成：EditorSurface 仍有少量旧调用，测试夹具和 Declarative 内部旧 API 仍待最终清除。
+
+## 2026-09-02 — CP3/CP4 生产迁移：EditorSurface hierarchy/stats chrome 改用 slot-first
+
+- Editor menu root、HierarchyBody→HierarchyView、FrameStatsPanel→StatsText 改为显式 canvas slot。
+- ya-runtime 构建通过。
+- 未完成：Scene Save 对话框、EditorSurface 其余静态构造和测试/旧 DSL 实现仍待迁移。
+
+## 2026-09-02 — CP3/CP4 生产迁移：EditorSurface Content Browser 构造树改用 slot-first
+
+- ContentBrowser header、mount/entry scroll host、body/root 的全部 child edge 改为 box/overlay slot builder。
+- 保持 mount 固定宽度、entry fill、header 固定高度和滚动行为。
+- 验证：xmake b ya-runtime 通过。
+- 未完成：EditorSurface hierarchy/stats/scene-save 复杂静态树和测试调用点仍待迁移。
+
+## 2026-09-02 — CP3/CP4 生产迁移：EditorSurface 动态内容/场景列表改用 typed build slot
+
+- Content Browser 与 Scene Save 的 mount/entry 动态行从 layout spec attachment 改为 ui::build(..., ui::boxSlot().preferredSize(...))。
+- 保持原 22px 行高、选择与激活回调；不再通过 ui::layout() 表达动态列表边缘。
+- 验证：xmake b ya-runtime 通过。
+- 未完成：EditorSurface scene-save 静态构造、hierarchy/stats、测试调用点及声明式旧 API 仍待清除。
+
+## 2026-09-02 — CP3/CP4 生产迁移：EditorSurface toolbar/viewport edge 改用 slot-first
+
+- Editor toolbar 子控件尺寸改为 boxSlot，toolbar root 改为 canvasSlot。
+- EditorDock root、ViewportBody→ViewportImage 改为显式 canvas slot。
+- 新增 buildAs(..., typed slotBuilder) 通用入口，支持保持具体 widget 类型的 slot-first root build。
+- 验证：xmake b ya-runtime 通过。
+- 未完成：EditorSurface hierarchy/stats/content browser/scene-save 动态列表仍待迁移。
+
+## 2026-09-02 — CP3/CP4 生产迁移：EditorSurface 项目浏览器基础块改用 slot-first
+
+- makePlaceholderPanel、ProjectBrowser 页面及其 action/list 子项改为显式 canvas/box slot builder。
+- ui::build 的 ProjectBrowser root 使用 canvasSlot().fill()；保留原项目浏览器尺寸与行为。
+- 验证：xmake b ya-runtime 通过。
+- 未完成：EditorSurface toolbar、viewport、hierarchy、scene-save 与动态列表仍有大量旧 ui::layout()，下一批继续迁移。
+
+## 2026-09-02 — CP3/CP4 DSL 接口扩展：build 支持任意 typed slot builder
+
+- 新增 ui::build(tree, parent, builder, slotBuilder) 通用入口，按 Canvas/Box/Overlay args 类型把 root edge 写入 parent-owned slot。
+- 该入口为后续 EditorSurface 动态列表迁移提供 typed boxSlot() build 能力；未保留 layout spec 兼容逻辑。
+- GUIWorkbench 构建通过。
+- 未完成：EditorSurface 生产调用点、测试调用点和旧 FUILayoutSpec/ui::layout() API 仍待最终清除。
+
+## 2026-09-02 — CP3/CP4 生产迁移：EditorInspectorTab 单子树改用 slot-first
+
+- InspectorBody→InspectorForm 从旧 bracket/layout authoring 改为显式 overlaySlot().fill()。
+- ya-runtime 构建通过。
+- 未完成：EditorSurface 其余大量 editor chrome 调用仍需迁移；测试与声明式旧 API 尚未删除。
+
 ## 2026-09-02 — CP3/CP4 生产迁移：Unicode/中文/圆角示例 root 与嵌套边缘改用 slot-first
 
 - Unicode、中文测试页面 root build 改为 canvasSlot().fill()。

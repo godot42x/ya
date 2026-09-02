@@ -53,7 +53,7 @@ std::shared_ptr<UIElement> EditorInspectorTab::build(WidgetTree&)
     form.child(_transformSection);
     return ui::panel("InspectorBody")
         .setStyleKey("panel")
-        [ui::layout().fill() >> std::move(form)]
+        .child(std::move(form), ui::overlaySlot().fill())
         .release();
 }
 
