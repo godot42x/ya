@@ -61,6 +61,28 @@ const UIOverlaySlot* getSingleChildSlot(const UIElement& parent, const UIElement
     return edge ? edge->as<UIOverlaySlot>() : nullptr;
 }
 
+FMargin overlaySlotPadding(const UIElement& parent, const UIElement& child)
+{
+    if (const UIOverlaySlot* slot = getSingleChildSlot(parent, child)) {
+        const FMargin padding = slot->getPadding();
+        return {
+            std::max(padding.left, 0.0f),
+            std::max(padding.top, 0.0f),
+            std::max(padding.right, 0.0f),
+            std::max(padding.bottom, 0.0f),
+        };
+    }
+    return {};
+}
+
+Rect2D insetRectByPadding(const Rect2D& rect, FMargin padding)
+{
+    Rect2D inner = rect;
+    inner.pos += padding.minOffset();
+    inner.extent = glm::max(inner.extent - padding.size(), glm::vec2(0.0f));
+    return inner;
+}
+
 glm::vec2 resolveDesiredSize(const UIElement& parent, const UIElement& child)
 {
     glm::vec2 desired = child.computeDesiredSize();
@@ -98,22 +120,23 @@ glm::vec2 resolveDesiredSize(const UIElement& parent, const UIElement& child)
 /// extent): `bCrossIsY` selects which component is the cross axis.
 Rect2D applyCrossAlign(const UIElement& parent, const UIElement& child, const Rect2D& rect, bool bCrossIsY)
 {
+    const Rect2D paddedRect = insetRectByPadding(rect, overlaySlotPadding(parent, child));
     EUIOverlayAlignment crossAlign = EUIOverlayAlignment::Fill;
     if (const UIOverlaySlot* slot = getSingleChildSlot(parent, child)) {
         crossAlign = bCrossIsY ? slot->getVAlign() : slot->getHAlign();
     }
     if (crossAlign == EUIOverlayAlignment::Fill) {
-        return rect;
+        return paddedRect;
     }
     const glm::vec2 desired = resolveDesiredSize(parent, child);
-    Rect2D          result  = rect;
+    Rect2D          result  = paddedRect;
     if (bCrossIsY) {
-        result.pos.y    = overlayAxis(rect.pos.y, rect.extent.y, desired.y, crossAlign);
-        result.extent.y = overlayExtent(rect.extent.y, desired.y, crossAlign);
+        result.pos.y    = overlayAxis(paddedRect.pos.y, paddedRect.extent.y, desired.y, crossAlign);
+        result.extent.y = overlayExtent(paddedRect.extent.y, desired.y, crossAlign);
     }
     else {
-        result.pos.x    = overlayAxis(rect.pos.x, rect.extent.x, desired.x, crossAlign);
-        result.extent.x = overlayExtent(rect.extent.x, desired.x, crossAlign);
+        result.pos.x    = overlayAxis(paddedRect.pos.x, paddedRect.extent.x, desired.x, crossAlign);
+        result.extent.x = overlayExtent(paddedRect.extent.x, desired.x, crossAlign);
     }
     return result;
 }
@@ -278,11 +301,17 @@ void UICanvasSlot::setPreferredSize(glm::vec2 value)
 
 void UICanvasSlot::setFixedSize(glm::vec2 value)
 {
-    if (_fixedSize == value) {
-        return;
-    }
+    const bool sizeChanged = _fixedSize != value;
     _fixedSize = value;
-    invalidateArrange();
+    if (_widthSizeMode != EWidgetSizeMode::Fixed) {
+        _widthSizeMode = EWidgetSizeMode::Fixed;
+    }
+    if (_heightSizeMode != EWidgetSizeMode::Fixed) {
+        _heightSizeMode = EWidgetSizeMode::Fixed;
+    }
+    if (sizeChanged) {
+        invalidateArrange();
+    }
 }
 
 void UICanvasSlot::apply(const FCanvasSlotArgs& args)
@@ -301,6 +330,12 @@ void UICanvasSlot::apply(const FCanvasSlotArgs& args)
     setPreferredSize(args.preferredSize);
     if (args.fixedSize.x != 0.0f || args.fixedSize.y != 0.0f) {
         setFixedSize(args.fixedSize);
+        // setFixedSize() is also the imperative convenience API and promotes
+        // the slot to Fixed. Construct-time args, however, may intentionally
+        // combine fixedSize storage with an Auto axis, so restore the authored
+        // per-axis modes after applying the payload.
+        setWidthSizeMode(args.widthSizeMode);
+        setHeightSizeMode(args.heightSizeMode);
     }
 }
 
@@ -815,7 +850,8 @@ glm::vec2 UISingleChildLayout::measure(const UIElement& parent) const
 {
     for (UIElement* child : parent.getChildrenInPaintOrder()) {
         if (child->participatesInLayout()) {
-            return glm::max(resolveDesiredSize(parent, *child) + _padding.size(), glm::vec2(0.0f));
+            return glm::max(resolveDesiredSize(parent, *child) + _padding.size() + overlaySlotPadding(parent, *child).size(),
+                            glm::vec2(0.0f));
         }
     }
     return glm::max(_padding.size(), glm::vec2(0.0f));
@@ -844,12 +880,13 @@ void UISingleChildLayout::arrange(UIElement& parent, const Rect2D& rect) const
             hAlign = slot->getHAlign();
             vAlign = slot->getVAlign();
         }
+        const Rect2D innerRect = insetRectByPadding(contentRect, overlaySlotPadding(parent, *child));
         const glm::vec2 desired = resolveDesiredSize(parent, *child);
         Rect2D          childRect;
-        childRect.pos.x    = overlayAxis(contentRect.pos.x, contentRect.extent.x, desired.x, hAlign);
-        childRect.pos.y    = overlayAxis(contentRect.pos.y, contentRect.extent.y, desired.y, vAlign);
-        childRect.extent.x = overlayExtent(contentRect.extent.x, desired.x, hAlign);
-        childRect.extent.y = overlayExtent(contentRect.extent.y, desired.y, vAlign);
+        childRect.pos.x    = overlayAxis(innerRect.pos.x, innerRect.extent.x, desired.x, hAlign);
+        childRect.pos.y    = overlayAxis(innerRect.pos.y, innerRect.extent.y, desired.y, vAlign);
+        childRect.extent.x = overlayExtent(innerRect.extent.x, desired.x, hAlign);
+        childRect.extent.y = overlayExtent(innerRect.extent.y, desired.y, vAlign);
         assignChildRect(*child, childRect);
         return;
     }

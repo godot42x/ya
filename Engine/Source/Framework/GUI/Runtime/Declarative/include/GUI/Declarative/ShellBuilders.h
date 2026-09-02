@@ -92,6 +92,12 @@ class UIDockSpaceWidgetBuilder final : public TUIWidgetBuilder<UIDockSpace, UIDo
 class UIPopupOverlayWidgetBuilder final : public TUIWidgetChildrenBuilder<UIPopupOverlay, UIPopupOverlayWidgetBuilder>
 {
   public:
+    // Popup content layout is popup-owned at runtime (resolveContentSlotArgs +
+    // canvas arrange). Generic child layout attachments would promise author
+    // control that the popup later overwrites, so declarative popup content is
+    // limited to bare child insertion for now.
+    static constexpr EUILayoutCap kAllowedLayoutCaps = EUILayoutCap::None;
+
     explicit UIPopupOverlayWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdPopupOverlay, std::move(key), std::move(displayName))
     {

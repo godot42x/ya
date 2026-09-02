@@ -5,9 +5,11 @@
 - **不是把所有“布局相关代码/状态”机械搬到 slot。** 正确边界是：每个 child 的 authored placement/layout intent 唯一归属 parent-owned `UISlot`；anchor、offset、margin、alignment、size rule、preferred/fixed size、min/max、grid cell 以及 parent 内 z-order 都放在 slot。
 - `UILayout` 仍是父节点的布局算法与策略唯一归属，负责 measure/arrange 以及容器级配置：方向、spacing、padding、split ratio、scroll offset、overlay policy、轨道/行列规则等不得下沉到 slot。slot 是 parent-child edge 的数据与约束，不是第二套 layout 算法。
 - `UIElement/Widget` 只提供 intrinsic/content measurement、baseline、控件内部视觉状态；最终 `_layoutRect`、clip、snapshot 几何属于 runtime，不是 authored 字段。
-- 不照搬 Slate 的 DSL，也不把 slot 暴露成必须显式书写的第二个节点。保留 YA 的 `ui::layout() >> child` / `parent[...]` 能力化语法：layout spec 在 child builder 上声明，attach 时由 parent 根据 capability 创建/消费 typed slot；DSL 表达的是 edge intent，所有权仍归 parent。builder 的 `.setSize/.setPosition` 只能作为过渡 sugar，最终必须转换为 parent edge intent，不能写入 widget geometry。
+- 不照搬 Slate 的 DSL，也不把所有 authoring 都塞进 `ui::layout()`。public DSL 改为 slot-first：直接显式书写 `ui::canvasSlot()/boxSlot()/overlaySlot()/tableSlot()`，让布局归属在调用点一眼可见；`ui::layout()` 若保留也只能是极薄辅助层，不再作为主路径，更不保留任何 legacy 兼容入口。builder 的 `.setSize/.setPosition` 只能作为过渡 sugar，最终必须转换为 parent edge intent，不能写入 widget geometry。
 - standalone root 也必须拥有 host/layer-owned root slot；不得以 child `_anchor*` / `_position` / `_size` / `_bAutoSize` 作为长期 root 布局真值。
 - SizeToContent 由 slot size mode 决定：Canvas 按轴 Auto、Box 的 Auto/Fill、SingleChild/Overlay 的 Fill 或 desired 对齐；widget 只报告 intrinsic/desired size。
+- 无 layout 参数时的默认 slot 语义必须稳定且可预期：Canvas 默认 Auto/Auto + 左上角锚点；Box 默认主轴 Auto / 交叉轴 Stretch；SingleChild/Overlay/Scroll/Split 的内容槽默认 Fill/Fill；Table 默认 cell(0,0) 仅作构造占位，不鼓励业务依赖。
+- default slot 和 guardrail 必须分层：default slot 负责“无参也有合理几何”，guardrail 只负责报错/诊断误用，不能长期靠 guardrail 把 Fixed 0x0 补救成可见布局。Canvas 的最终目标应是 slot 默认值本身改为 Auto/Auto，build() 上的当前补救逻辑退回纯诊断。
 - **首版不保留任何 legacy 兼容语义。** 旧 widget geometry 字段、旧 builder/attach 重载、旧 self-positioned fallback、旧 serialized widget 文件都不作为兼容路径；未定版文件直接删除，代码迁移完成后删除过渡 API 与字段，不以双写、自动推断或静默回退延长旧模型寿命。
 
 ### 首版范围硬约束（用户确认，2026-08-30）
@@ -20,8 +22,7 @@
 
 ### 该边界带来的 API/编译期约束
 
-- child builder 可以携带 layout intent，但不能携带任意 parent 专属字段；`column[anchor(...) >> child]`、`canvas[weight(...)]` 等无能力匹配的组合必须在模板实例化期失败，LSP/编译器据此提示可用参数。
-- 不同 parent 继续拥有不同 typed slot（Canvas/Box/Overlay/SingleChild/Table 等），但调用入口统一为 `parent[layoutSpec >> child]` / `.child(child, args)`；不要求用户手写 `canvasSlot()`，也不为每种 parent 维护一套平行 DSL。
+- child widget 不应再承载一层独立 layout-spec 主路径；不同 parent 继续拥有不同 typed slot（Canvas/Box/Overlay/SingleChild/Table 等），public 调用入口直接收敛为 `.child(child, xxxSlot())` / 默认 `.child(child)`。错误组合应在 slot 类型不匹配处被 LSP/编译器直接拒绝。
 - `UISlot` 不承担 child 的 intrinsic measurement，也不保存运行时 rect；`UILayout` 不反向写回 widget authored geometry。任何需要跨 parent 复用的字段必须先证明是 edge intent，否则留在对应 layout host 或 widget。
 - 迁移完成的验收标准从“slot 字段数量覆盖率”改为职责不变量：serialized/authored child geometry 只能出现在 slot；layout 算法只能读取 slot + child intrinsic；widget geometry API 不再是生产布局输入；root/layer attach、reparent、snapshot 和 designer 都遵守同一 edge contract。
 
@@ -35,7 +36,7 @@
 
 - [x] CP1 冻结 UIConstraints + size mode + UILayoutIntent 协议
 - [x] CP3 新增 UICanvasLayout + UICanvasSlot；UIPanel 改为 Canvas layout host
-- [x] CP3 public DSL：`ui::layout()` 能力化 + `parent[spec >> widget]` + 全量调用点迁移
+- [ ] CP3 public DSL 方向修正：从 `ui::layout()` 主路径收口到 slot-first authoring（`canvasSlot/boxSlot/overlaySlot/tableSlot`），并删除 `ui::layout() >> child` 的 public 主路径，不保留任何 legacy 兼容
 - [x] CP2 前置分层：新增 `computeIntrinsicSize()`，显式区分 widget 自身固有尺寸与 layout 聚合 desired size
 - [x] CP2 intrinsic 迁移：补齐 `UITextField::computeIntrinsicSize()`，文本/字号变化改为触发布局失效
 - [x] CP2 intrinsic 迁移：`UITreeView` / `UITableGrid` 非 AutoSize 路径改由显式 intrinsic contract 提供 authored fallback
@@ -54,10 +55,10 @@
 - [x] CP2 parent-owned arrange 收口：`UILayout::assignChildRect()` 不再读取 child anchors，删除 `reportStretchAnchorsIgnored()` / `hasStretchAnchors()` 死桥
 - [x] CP2 base layout 收口：删除 `UIElement::computeAnchorRect()`；普通 `layout/layoutChildren` 只接受 parent-assigned rect，`UICanvasLayout` 缺少 typed canvas slot 时拒绝并记录错误，不再静默回退 self-positioning
 - [x] CP2 detached auto-size 收口：`UIElement::isAutoSizeActive()` 不再回读 detached `_bAutoSize`；只有已存在的 parent-owned slot 能决定 SizeToContent/invalidation 语义
-- [x] CP3 Canvas slot 补全：四边 `FMargin` offsets、alignment、width/height size mode（min/max 已有）
+- [x] CP3 Canvas slot 补全：`offset(glm::vec2)` + 四边 `insets(FMargin)`、alignment、width/height size mode（min/max 已有）
 - [x] CP3 Canvas Auto 优先级纠偏：Auto 轴只解析 slot `preferredSize` 或 child desired/intrinsic，绝不回读 fixedSize；PopupOverlay content extent 统一写入 popup-owned canvas slot
 - [x] CP3 收尾纠偏：删除过渡 public API（`ui::panelSlot()` / `FCanvasPanelSlotBuilder` / 旧 canvas-panel 命名）
-- [x] CP3/§3.4 capability 编译期隔离（`column[anchor(...) >> w]` 已编译失败）
+- [ ] CP3/§3.4 类型系统修正：public 编译期约束从 capability-spec 检查迁到 slot 类型匹配；保留 typed slot 的静态拒绝，不保留 `layout spec -> typed slot` 的 public 兼容层
 - [x] CP4 所有 layout host 统一 typed slot arrange（Box/Overlay/Split/Scroll/Grid/Canvas；single-child host 复用 Overlay slot）+ reparent/detach slot 重建
 - [x] CP4 host entry 收口：已安装 typed layout 的 host（Compound/Button/CheckBox/Container/DockSpace/Overlay/Scroll/SelectableRow/SizeBox/Split/Table）`layout()` 只接受 parent-assigned rect，不再执行 child-owned anchor 自定位
 - [x] CP4 纠偏：same-parent `reparentBefore/After/reparent(parent, child)` 改为移动原 edge，保留 slot 状态
@@ -185,7 +186,7 @@
 - [x] CP2 清理 Workbench pending helper 死代码
 - [x] CP2 pending bridge 收尾：imperative detached edge intent 与 compound construct 已迁移到显式 root/child slot contract，过渡 geometry 字段与 API 已删除
 - [x] CP2 root attach bridge 收尾：删除 no-arg `attachToLayer(layer, widget)`；默认层挂载改用显式 `attach(*tree.getLayer(layer), widget)`，带 root 几何时使用 `attach(parent, widget, FCanvasSlotArgs)`
-- [ ] CP7 编译期断言 + 几何测试（intrinsic measure、constraints、Canvas 四边 offsets、anchor span、alignment、min/max、reparent）+ snapshot parity（待最终门禁执行）
+- [ ] CP7 编译期断言 + 几何测试（intrinsic measure、constraints、Canvas `offset`/`insets`、anchor span、alignment、min/max、reparent）+ snapshot parity（待最终门禁执行）
 - [x] DSL 语义纠偏：保留纯 child(node) 匿名语法糖；其不再携带任何 legacy geometry/slot fallback 语义
 - [x] 首版兼容清零：布局相关 legacy geometry/attach/builder API、self-positioned fallback 与旧 schema 读取分支已清零；已完成全仓库最终负向审计
 - [x] 计划状态纠偏：CP3/CP5 状态已按当前实现修正为完成；不再保留“legacy self-positioned fallback 仍在”的过时描述

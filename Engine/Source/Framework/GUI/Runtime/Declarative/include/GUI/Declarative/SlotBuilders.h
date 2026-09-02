@@ -25,6 +25,43 @@
 namespace ya::ui
 {
 
+/// Explicit authoring builder for a canvas parent->child edge.
+/// This is the primary public path for canvas placement; `ui::layout()` is not.
+class FCanvasSlotBuilder final
+{
+  public:
+    FCanvasSlotBuilder& fill() & { _args.anchorMin = {0.0f, 0.0f}; _args.anchorMax = {1.0f, 1.0f}; _args.widthSizeMode = EWidgetSizeMode::Fixed; _args.heightSizeMode = EWidgetSizeMode::Fixed; return *this; }
+    FCanvasSlotBuilder&& fill() && { fill(); return std::move(*this); }
+    FCanvasSlotBuilder& anchor(glm::vec2 min, glm::vec2 max) & { _args.anchorMin = min; _args.anchorMax = max; return *this; }
+    FCanvasSlotBuilder&& anchor(glm::vec2 min, glm::vec2 max) && { _args.anchorMin = min; _args.anchorMax = max; return std::move(*this); }
+    FCanvasSlotBuilder& offset(glm::vec2 value) & { _args.offset = value; return *this; }
+    FCanvasSlotBuilder&& offset(glm::vec2 value) && { _args.offset = value; return std::move(*this); }
+    FCanvasSlotBuilder& insets(FMargin value) & { _args.offsets = value; return *this; }
+    FCanvasSlotBuilder&& insets(FMargin value) && { _args.offsets = value; return std::move(*this); }
+    FCanvasSlotBuilder& insets(glm::vec2 value) & { return insets(FMargin::hv(value)); }
+    FCanvasSlotBuilder&& insets(glm::vec2 value) && { _args.offsets = FMargin::hv(value); return std::move(*this); }
+    FCanvasSlotBuilder& alignment(EWidgetAlignH h, EWidgetAlignV v) & { _args.alignmentH = h; _args.alignmentV = v; return *this; }
+    FCanvasSlotBuilder&& alignment(EWidgetAlignH h, EWidgetAlignV v) && { _args.alignmentH = h; _args.alignmentV = v; return std::move(*this); }
+    FCanvasSlotBuilder& pivot(glm::vec2 value) & { _args.pivot = value; return *this; }
+    FCanvasSlotBuilder&& pivot(glm::vec2 value) && { _args.pivot = value; return std::move(*this); }
+    FCanvasSlotBuilder& size(glm::vec2 value) & { _args.fixedSize = value; _args.widthSizeMode = EWidgetSizeMode::Fixed; _args.heightSizeMode = EWidgetSizeMode::Fixed; return *this; }
+    FCanvasSlotBuilder&& size(glm::vec2 value) && { _args.fixedSize = value; _args.widthSizeMode = EWidgetSizeMode::Fixed; _args.heightSizeMode = EWidgetSizeMode::Fixed; return std::move(*this); }
+    FCanvasSlotBuilder& preferredSize(glm::vec2 value) & { _args.preferredSize = value; return *this; }
+    FCanvasSlotBuilder&& preferredSize(glm::vec2 value) && { _args.preferredSize = value; return std::move(*this); }
+    FCanvasSlotBuilder& minSize(glm::vec2 value) & { _args.minSize = value; return *this; }
+    FCanvasSlotBuilder&& minSize(glm::vec2 value) && { _args.minSize = value; return std::move(*this); }
+    FCanvasSlotBuilder& maxSize(glm::vec2 value) & { _args.maxSize = value; return *this; }
+    FCanvasSlotBuilder&& maxSize(glm::vec2 value) && { _args.maxSize = value; return std::move(*this); }
+    FCanvasSlotBuilder& widthSizeMode(EWidgetSizeMode value) & { _args.widthSizeMode = value; return *this; }
+    FCanvasSlotBuilder&& widthSizeMode(EWidgetSizeMode value) && { _args.widthSizeMode = value; return std::move(*this); }
+    FCanvasSlotBuilder& heightSizeMode(EWidgetSizeMode value) & { _args.heightSizeMode = value; return *this; }
+    FCanvasSlotBuilder&& heightSizeMode(EWidgetSizeMode value) && { _args.heightSizeMode = value; return std::move(*this); }
+    [[nodiscard]] const FCanvasSlotArgs& args() const { return _args; }
+    operator const FCanvasSlotArgs&() const { return _args; }
+  private:
+    FCanvasSlotArgs _args{};
+};
+
 /// Layout intent for a UIBoxLayout edge (row / column / container).
 ///
 /// fillWidth/fillHeight name the axis explicitly: in a row the main axis is X,
@@ -75,6 +112,17 @@ class FBoxSlotBuilder final
     FBoxSlotBuilder&& margin(FMargin value) &&
     {
         _args.margin = value;
+        return std::move(*this);
+    }
+
+    FBoxSlotBuilder& margin(glm::vec2 value) &
+    {
+        _args.margin = FMargin::hv(value);
+        return *this;
+    }
+    FBoxSlotBuilder&& margin(glm::vec2 value) &&
+    {
+        _args.margin = FMargin::hv(value);
         return std::move(*this);
     }
 
@@ -172,6 +220,39 @@ class FOverlaySlotBuilder final
         return std::move(*this);
     }
 
+    FOverlaySlotBuilder& inset(FMargin value) &
+    {
+        _args.padding = value;
+        return *this;
+    }
+    FOverlaySlotBuilder&& inset(FMargin value) &&
+    {
+        _args.padding = value;
+        return std::move(*this);
+    }
+
+    FOverlaySlotBuilder& inset(glm::vec2 value) &
+    {
+        _args.padding = FMargin::hv(value);
+        return *this;
+    }
+    FOverlaySlotBuilder&& inset(glm::vec2 value) &&
+    {
+        _args.padding = FMargin::hv(value);
+        return std::move(*this);
+    }
+
+    FOverlaySlotBuilder& preferredSize(glm::vec2 value) &
+    {
+        _args.preferredSize = value;
+        return *this;
+    }
+    FOverlaySlotBuilder&& preferredSize(glm::vec2 value) &&
+    {
+        _args.preferredSize = value;
+        return std::move(*this);
+    }
+
     [[nodiscard]] const FOverlaySlotArgs& args() const { return _args; }
     operator const FOverlaySlotArgs&() const { return _args; }
 
@@ -180,6 +261,7 @@ class FOverlaySlotBuilder final
 };
 
 [[nodiscard]] inline FBoxSlotBuilder boxSlot() { return {}; }
+[[nodiscard]] inline FCanvasSlotBuilder canvasSlot() { return {}; }
 
 [[nodiscard]] inline FOverlaySlotBuilder overlaySlot() { return {}; }
 
@@ -247,20 +329,36 @@ class FUILayoutSpecBuilder
         return next;
     }
 
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Margin> margin(glm::vec2 value) &&
+    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Margin> margin(FMargin value) &&
     {
         auto next         = widen<EUILayoutCap::Margin>();
         next._spec.margin = value;
         return next;
     }
 
-    /// Per-edge insets (canvas hosts). Setting an edge also makes that axis
-    /// stretch, so `offsets(all)` means "fill the parent minus these insets".
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Offsets> offsets(float left, float top,
+    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Margin> margin(glm::vec2 value) &&
+    {
+        auto next         = widen<EUILayoutCap::Margin>();
+        next._spec.margin = FMargin::hv(value);
+        return next;
+    }
+
+    /// Per-edge insets / inner padding on the parent-owned edge. On canvas this
+    /// means "fill the resolved anchor area minus these insets"; on
+    /// overlay/single-child hosts it is the child padding inside the parent
+    /// content box.
+    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Inset> insets(float left, float top,
                                                                             float right, float bottom) &&
     {
-        auto next          = widen<EUILayoutCap::Offsets>();
-        next._spec.offsets = FMargin(left, top, right, bottom);
+        auto next        = widen<EUILayoutCap::Inset>();
+        next._spec.inset = FMargin(left, top, right, bottom);
+        return next;
+    }
+
+    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Inset> insets(FMargin value) &&
+    {
+        auto next        = widen<EUILayoutCap::Inset>();
+        next._spec.inset = value;
         return next;
     }
 
@@ -279,9 +377,9 @@ class FUILayoutSpecBuilder
         return next;
     }
 
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Offsets> offsets(glm::vec2 value) &&
+    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Offset> offset(glm::vec2 value) &&
     {
-        auto next         = widen<EUILayoutCap::Offsets>();
+        auto next       = widen<EUILayoutCap::Offset>();
         next._spec.offset = value;
         return next;
     }
@@ -290,13 +388,6 @@ class FUILayoutSpecBuilder
     {
         auto next       = widen<EUILayoutCap::Size>();
         next._spec.size = value;
-        return next;
-    }
-
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::SizeMode> sizeMode(EWidgetSizeMode value) &&
-    {
-        auto next           = widen<EUILayoutCap::SizeMode>();
-        next._spec.sizeMode = value;
         return next;
     }
 
@@ -310,8 +401,9 @@ class FUILayoutSpecBuilder
         return next;
     }
 
-    /// Size the child asks for when its size mode is Auto on that axis (canvas
-    /// hosts). A zero component falls back to the measured desired size.
+    /// Host-authored preferred size. Canvas hosts use this on Auto axes;
+    /// overlay/single-child hosts use it as the desired aligned size; box hosts
+    /// use it as UIBoxSlot::preferredSize on Auto edges.
     [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Size> preferredSize(glm::vec2 value) &&
     {
         auto next              = widen<EUILayoutCap::Size>();

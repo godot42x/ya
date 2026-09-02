@@ -674,7 +674,9 @@ TEST(UIFrameSnapshotTest, ReactivePaintMutationRecordsReasonAndTransition)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       bound = std::make_shared<UIText>("Bound");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bound);
+    FCanvasSlotArgs boundSlot;
+    boundSlot.fixedSize = {160.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bound, boundSlot);
 
     auto textRef = std::make_shared<Reactive<std::string>>("hello");
     bound->bindText(textRef);

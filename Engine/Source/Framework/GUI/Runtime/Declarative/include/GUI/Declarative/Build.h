@@ -15,6 +15,43 @@ namespace ya::ui
 #define YA_UI_ANONYMOUS_FACTORY(name, builder) \
     [[nodiscard]] inline builder name() { return builder{std::string{}}; }
 
+namespace detail
+{
+
+[[nodiscard]] inline bool isImplicitDefaultCanvasSlot(const UICanvasSlot& slot)
+{
+    const glm::vec2& anchorMin = slot.getAnchorMin();
+    const glm::vec2& anchorMax = slot.getAnchorMax();
+    const glm::vec2& offset = slot.getOffset();
+    const glm::vec2& minSize = slot.getMinSize();
+    const glm::vec2& maxSize = slot.getMaxSize();
+    const glm::vec2& pivot = slot.getPivot();
+    const glm::vec2& preferredSize = slot.getPreferredSize();
+    return anchorMin.x == 0.0f && anchorMin.y == 0.0f && anchorMax.x == 0.0f && anchorMax.y == 0.0f &&
+           offset.x == 0.0f && offset.y == 0.0f && minSize.x == 0.0f && minSize.y == 0.0f &&
+           maxSize.x == std::numeric_limits<float>::max() && maxSize.y == std::numeric_limits<float>::max() &&
+           slot.getOffsets() == FMargin{} && slot.getAlignmentH() == EWidgetAlignH::Left &&
+           slot.getAlignmentV() == EWidgetAlignV::Top && slot.getWidthSizeMode() == EWidgetSizeMode::Auto &&
+           slot.getHeightSizeMode() == EWidgetSizeMode::Auto && pivot.x == 0.0f && pivot.y == 0.0f &&
+           preferredSize.x == 0.0f && preferredSize.y == 0.0f;
+}
+
+inline void exposeImplicitCanvasBuild(const char* apiName, UIElement& parent, UIElement& child)
+{
+    auto* canvas = child.getSlot() ? child.getSlot()->as<UICanvasSlot>() : nullptr;
+    if (canvas == nullptr || !isImplicitDefaultCanvasSlot(*canvas)) {
+        return;
+    }
+
+    YA_CORE_ERROR(
+        "{}: child '{}' attached to canvas host '{}' without explicit layout intent; using the default top-left Auto/Auto canvas slot. Use ui::layout().fill()/size()/anchor(...) when stronger placement is intended.",
+        apiName,
+        child._name,
+        parent._name);
+}
+
+} // namespace detail
+
 [[nodiscard]] inline UITextWidgetBuilder text(std::string key, std::string displayName = {})
 {
     return UITextWidgetBuilder{std::move(key), std::move(displayName)};
@@ -150,6 +187,7 @@ UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder)
     YA_CORE_ASSERT(root, "ui::build: empty root");
     const WidgetAttachment attached = tree.attach(parent, root);
     YA_CORE_ASSERT(attached.valid(), "ui::build: attach failed for '{}'", root->_name);
+    detail::exposeImplicitCanvasBuild("ui::build", parent, *root);
     return root;
 }
 
@@ -170,6 +208,13 @@ UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, cons
     return root;
 }
 
+template<UIWidgetBuilder TBuilder, UISlotBuilder TSlotBuilder>
+    requires std::same_as<std::remove_cvref_t<decltype(std::declval<const std::remove_reference_t<TSlotBuilder>&>().args())>, FCanvasSlotArgs>
+UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, TSlotBuilder&& slotBuilder)
+{
+    return build(tree, parent, std::forward<TBuilder>(builder), slotBuilder.args());
+}
+
 /// Same as build(), but keeps the concrete widget type so the host can retain
 /// a typed shared_ptr for later sync (instead of casting the base ref back).
 template<typename TWidget, typename TBuilder>
@@ -179,6 +224,7 @@ std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&&
     YA_CORE_ASSERT(widget, "ui::buildAs: builder produced the wrong widget class");
     const WidgetAttachment attached = tree.attach(parent, widget);
     YA_CORE_ASSERT(attached.valid(), "ui::buildAs: attach failed for '{}'", widget->_name);
+    detail::exposeImplicitCanvasBuild("ui::buildAs", parent, *widget);
     return widget;
 }
 
@@ -242,6 +288,24 @@ inline void attachLayout(UIElement& parent, UIElement& child, const FUILayoutSpe
 {
     parent.initializeChildSlot(child, [&spec](UIElement& live, UISlot& slot) {
         applyLayoutSpecToSlot(slot, live, spec);
+    });
+}
+
+template<UISlotBuilder TSlotBuilder>
+    requires requires(const std::remove_reference_t<TSlotBuilder>& builder) { builder.args(); }
+inline void attachSlot(UIElement& parent, UIElement& child, TSlotBuilder&& slotBuilder)
+{
+    using TArgs = std::remove_cvref_t<decltype(slotBuilder.args())>;
+    parent.initializeChildSlot(child, [&slotBuilder](UIElement&, UISlot& slot) {
+        if constexpr (std::same_as<TArgs, FCanvasSlotArgs>) {
+            if (auto* typed = slot.as<UICanvasSlot>()) typed->apply(slotBuilder.args());
+        }
+        else if constexpr (std::same_as<TArgs, FBoxSlotArgs>) {
+            if (auto* typed = slot.as<UIBoxSlot>()) typed->apply(slotBuilder.args());
+        }
+        else if constexpr (std::same_as<TArgs, FOverlaySlotArgs>) {
+            if (auto* typed = slot.as<UIOverlaySlot>()) typed->apply(slotBuilder.args());
+        }
     });
 }
 

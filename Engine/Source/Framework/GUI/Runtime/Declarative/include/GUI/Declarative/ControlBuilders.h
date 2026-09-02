@@ -134,6 +134,8 @@ class UITextWidgetBuilder final : public TUIWidgetBuilder<UIText, UITextWidgetBu
 class UIButtonWidgetBuilder final : public TUIWidgetChildrenBuilder<UIButton, UIButtonWidgetBuilder>
 {
   public:
+    static constexpr EUILayoutCap kAllowedLayoutCaps = kSingleChildHostCaps;
+
     explicit UIButtonWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdButton, std::move(key), std::move(displayName))
     {

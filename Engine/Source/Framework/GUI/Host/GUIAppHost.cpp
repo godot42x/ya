@@ -1497,10 +1497,12 @@ void GUIWindowHost::onTick(float dt)
         }
         if (bCaptureOffscreen && _impl->offscreenShotBuffer) {
             if (uint8_t* pixels = _impl->offscreenShotBuffer->map<uint8_t>()) {
+                const bool bOffscreenIsBgra = offscreenImage &&
+                                              offscreenImage->getFormat() == EFormat::B8G8R8A8_UNORM;
                 writeRGBAtoBMP(pixels,
                                presentExtent.width,
                                presentExtent.height,
-                               false,
+                               bOffscreenIsBgra,
                                offscreenPath);
                 _impl->offscreenShotBuffer->unmap();
                 YA_CORE_INFO("GUIAppHost wrote offscreen shot to '{}' ({}x{})",

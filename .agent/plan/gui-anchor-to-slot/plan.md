@@ -56,7 +56,47 @@ UISlot: UIBox / UIOverlay / UISingleChild / UISplit / UIScroll / UIGrid / UICanv
 
 职责边界：UISlot 是 parent-child edge 上的 authored intent；UILayout 负责 measure / arrange；UIElement::measureContent 提供 intrinsic size；_layoutRect 是最终几何结果。
 
-统一布局流程：parent constraints → layout.measure(child, slot) → layout.arrange(parent, rect, slots) → child.layoutAssigned(rect) → paint / hit-test / snapshot。
+统一布局流程：parent constraints -> layout.measure(child, slot) -> layout.arrange(parent, rect, slots) -> child.layoutAssigned(rect) -> paint / hit-test / snapshot。
+
+### 1.1 各 layout 的默认 slot 语义（不传任何 slot 参数）
+
+默认值只表达“该 parent layout 最自然、最安全的布局语义”，不能偷偷替调用方补强意图，也不能退化成 silent 0x0：
+
+- UICanvasLayout -> UICanvasSlot
+  - 默认：anchorMin=anchorMax={0,0}、offset=0、insets=0、pivot=0、alignment=Left/Top
+  - 尺寸模式默认：widthSizeMode=Auto、heightSizeMode=Auto
+  - 语义：child 以左上角为锚点，按自身 desired/intrinsic size 显示；显式 fill/size/anchor/... 才表达更强布局意图。
+  - 禁止再把 Fixed/Fixed + 0x0 作为 canvas default；guardrail 只负责诊断错误调用，不承担长期默认语义。
+
+- UIBoxLayout -> UIBoxSlot
+  - 默认：sizeRule=Auto、weight=0、margin=0、crossAlignment=Stretch、参与布局
+  - 语义：child 在主轴按 desired size 排布，在交叉轴默认拉伸到父内容区；显式 fill/grow/preferredSize/margin/... 才覆盖。
+
+- UISingleChildLayout -> 复用 UIOverlaySlot
+  - 默认：hAlign=Fill、vAlign=Fill、padding=0、preferredSize=0
+  - 语义：single-content child 默认填满宿主内容区；需要居中/贴边/保持 desired size 时再显式改 slot。
+
+- UIOverlayLayout -> UIOverlaySlot
+  - 默认：hAlign=Fill、vAlign=Fill、padding=0、preferredSize=0
+  - 语义：overlay child 默认占满父 rect；角标、浮层、角落按钮等通过显式对齐/内边距表达。
+
+- UIScrollLayout -> 内容 child 复用 single-child / overlay slot
+  - 默认：Fill/Fill
+  - 语义：viewport 内的 content host 默认占满 viewport；真正内容尺寸仍来自 child desired/intrinsic，而不是靠 slot 默认缩成左上角一块。
+
+- UISplitLayout -> 各 pane child 复用 single-child / overlay slot
+  - 默认：Fill/Fill
+  - 语义：split 分配完 pane rect 后，每个 pane child 默认填满自己的分区。
+
+- UITableLayout -> UITableSlot
+  - 默认：row=0、column=0
+  - 语义：仅作为构造期占位；table 业务不应依赖该默认 cell。后续 debug/validation 应对重复占用同一默认 cell 给出诊断，而不是把它当自然布局语义。
+
+总原则：
+
+- 默认 slot 负责“无参时仍有合理几何”；
+- 显式 typed slot 负责“强布局意图”；
+- guardrail 负责“发现看起来是误用的调用路径并报错”，而不是偷偷替用户完成布局设计。
 
 ## 2. UIElement authored geometry 删除清单
 
@@ -75,78 +115,75 @@ _layoutRect、setLayoutRect()、layoutAssigned() 保留，但仅作为布局结�
 
 ## 3. 目标 DSL 与内部模型
 
-### 3.1 Public DSL：layout spec 与 widget builder 分离
+### 3.1 Public DSL：slot-first，而不是 ui::layout() 总入口
 
-不为每种 parent 增加一套 fill/grow/place/align/cell 添加 API，也不把 UICanvasSlot 等 runtime 类型暴露给 DSL。布局 spec 与 widget builder 保持两个独立对象，通过 operator>> 组成临时 placed-child，再由 parent 的 operator[] 收集：
+public authoring 以显式 typed slot 为主路径：不同 parent 直接使用自己的 xxxSlot()，而不是把所有布局参数继续堆进 ui::layout()。ui::layout() 最多只保留为极薄的辅助命名空间，若后续确认没有独立价值，则直接删除，不保留兼容入口。
 
 ~~~cpp
-ui::canvas("Root")[
-    ui::layout()
-        .fill()
-        .offsets(FMargin{8, 8, 8, 0})
-        .height(28)
-        >> ui::text("Title").setText("Hello"),
+ui::canvas("Root")
+    .child(
+        ui::text("Title").setText("Hello"),
+        ui::canvasSlot().fill().insets(FMargin{8, 8, 8, 0}).height(28))
+    .child(
+        ui::image("Icon"),
+        ui::canvasSlot().anchor({1, 1}, {1, 1}).alignment({1, 1}).insets(FMargin{0, 0, 8, 8}).size({120, 32}));
 
-    ui::layout()
-        .anchor({1, 1}, {1, 1})
-        .alignment({1, 1})
-        .offsets(FMargin{0, 0, 8, 8})
-        .size({120, 32})
-        >> ui::image("Icon")
-];
-
-ui::column("Root")[
-    ui::text("Title"),
-    ui::layout().grow(1).margin(FMargin::all(8))
-        >> ui::panel("Body")
-];
+ui::column("Root")
+    .child(ui::text("Title"))
+    .child(ui::panel("Body"), ui::boxSlot().fill().margin(FMargin::all(8)));
 ~~~
 
-operator[] 表示 parent 收集 children；operator>> 表示 layout intent 作用于 child。UILayoutIntent 只存在于 builder/materialization 阶段；parent 收到 placed-child 后解析并转换为对应 typed UISlot，随后 intent 被消费，不进入 live UIElement。
+原则：
 
-### 3.2 Modifier 组成
+- 布局意图就是 typed slot；
+- slot 类型必须一眼可见；
+- parent-specific contract 由 slot 类型本身表达，而不是由一个越来越大的万能 builder 再去做 capability 推断；
+- .child(node) 只表示该 parent 的 default slot；.child(node, xxxSlot()) 表示显式 edge intent。
 
-通用 modifier：margin、minSize、maxSize、width、height、align。
+### 3.2 API 设计约束
 
-布局相关 modifier：grow/shrink/basis、anchor、offsets、row/column/span 等。它们可以继续链式组合；不再出现 child(node, huge slot object) 的长第二参数。
+- ui::canvasSlot()：anchor / offset / insets / alignment / pivot / widthSizeMode / heightSizeMode / preferredSize / minSize / maxSize / fixed size。
+- ui::boxSlot()：fill/grow、margin、crossAlign、preferredSize、min/max、layout participation。
+- ui::overlaySlot()：fill / align / inset(padding) / preferredSize。
+- ui::tableSlot()：row / column / span / cell-specific contract。
 
-Canvas 是 layout 类型，不以 panelSlot 命名；新增 UICanvasLayout + UICanvasSlot。UICanvasSlot 至少包含 anchorMin/anchorMax、四边 FMargin offsets、alignment/pivot、width/height size mode、preferred/min/max size。所有字段由 UICanvasLayout 消费，不能写回 child。
+- 只有语义真的跨 slot 完全一致的 helper 才允许抽公共薄层；不能再以“统一入口”为目标，把 typed slot 契约压扁成单一 ui::layout()。
+- public 头文件中不再保留 ui::layout() 作为主 authoring 入口；若迁移完成后仍留该名字，只能是别名级薄层，并且不保留 legacy 兼容语义。
 
-Box 使用 grow/shrink/basis；Overlay 使用 fill/align/padding；SingleChild 使用 align；Grid 使用 row/column/span。fillWidth/fillHeight 不再作为通用概念。
+Canvas 是 layout 类型，不以 panelSlot 命名；新增 UICanvasLayout + UICanvasSlot。所有 authored edge 字段都直接落到对应 typed slot，由宿主 layout 消费，不能写回 child。
 
-### 3.3 约束与取舍
+SingleChild 不再是独立 public slot 类型，而是明确复用 UIOverlaySlot 的 public authoring：single-child host 一律用 ui::overlaySlot()。
 
-- 统一 parent[children] 结构，降低 DSL 层级和 parent-specific 添加方法数量。
-- typed slot 仍是 runtime/layout 的唯一布局数据模型。
-- operator>> 产生的 placed-child 在 parent materialization 时负责 intent → slot 的解析。
-- 明显的结构不兼容应在 builder concept/静态检查中拒绝；无法在不制造大量 scoped API 的前提下静态表达的细节冲突，必须给出 materialization 期的确定性诊断。
-- 未包装的 widget builder 直接出现在 parent[...] 中时，使用新布局系统定义的 default slot，不是 legacy 兼容。
+### 3.3 编译期与可读性目标
 
-### 3.4 operator DSL 的类型流
+- typed slot 仍是 runtime/layout 的唯一布局数据模型，public DSL 直接暴露它，而不是再包一层统一 spec。
+- LSP/编译器的错误应该主要来自 slot 类型不匹配，而不是 capability 组合失败后再回头解释 ui::layout() 当前是哪个 parent 的语义。
+- 人眼应该在 child(node, xxxSlot()) 这一行就能看出布局归属；不能把关键布局信息藏到过深链式层级里。
+- 不保留 ui::layout() >> child 的 legacy 兼容分支；如果决定切到 slot-first，就按一步到位迁移，删除旧主路径。
+
+### 3.4 slot-first 类型流
 
 ~~~text
-ui::layout().grow(1)                 → FLayoutSpec<BoxCapability>
-ui::layout().anchor(...)             → FLayoutSpec<CanvasCapability>
-ui::layout().cell(0, 1)              → FLayoutSpec<GridCapability>
+ui::canvasSlot()   → UICanvasSlot authoring builder
+ui::boxSlot()      → UIBoxSlot authoring builder
+ui::overlaySlot()  → UIOverlaySlot authoring builder
+ui::tableSlot()    → UITableSlot authoring builder
 
-FLayoutSpec<C> >> WidgetBuilder      → FPlacedChild<C, WidgetBuilder>
-ParentBuilder.operator[](child)      requires C compatible with ParentLayout
-FPlacedChild                          → typed UISlot + UIElementRef
+parent.child(child, slotBuilder)     → typed UISlot + UIElementRef
+parent.child(child)                  → parent default slot
 ~~~
 
-错误配置在 parent 的 operator[] 约束处失败：
+错误配置在重载解析/模板约束处失败：
 
 ~~~cpp
-ui::column("Root")[
-    ui::layout().anchor({0, 0}, {1, 1}) >> ui::icon("Icon") // 编译错误
-];
+ui::column("Root")
+    .child(ui::icon("Icon"), ui::canvasSlot()); // 编译错误
 
-ui::canvas("Root")[
-    ui::layout().cell(0, 1) >> ui::panel("Cell")           // 编译错误
-];
+ui::canvas("Root")
+    .child(ui::panel("Cell"), ui::tableSlot()); // 编译错误
 ~~~
 
-该语法不让 widget builder 持有 layout，也不要求 public DSL 显式构造 slot；layout spec、placed-child、typed slot 是三个清晰阶段。
+该语法直接把 public DSL 和 runtime typed slot 对齐，不再保留一层独立 layout-spec 主路径。
 
 ### 3.5 不同 layout 的案例与 capability 隔离（历史草案，已被 3.1–3.4 的 operator DSL 取代）
 
@@ -159,17 +196,17 @@ ui::canvas("Root")
     .child(ui::text("Title")
         .layout(ui::layout()
             .fill()
-            .offsets(FMargin{8, 8, 8, 0})
+            .insets(FMargin{8, 8, 8, 0})
             .height(28)))
     .child(ui::image("Icon")
         .layout(ui::layout()
             .anchor({1, 1}, {1, 1})
             .alignment({1, 1})
-            .offsets(FMargin{0, 0, 8, 8})
+            .insets(FMargin{0, 0, 8, 8})
             .size({120, 32})));
 ~~~
 
-Canvas capability 允许：fill、anchor、offsets、alignment/pivot、width/height、preferred/min/max。
+Canvas capability 允许：fill、anchor、offset、insets、alignment/pivot、width/height、preferred/min/max。
 
 #### Box / Row / Column
 
@@ -276,10 +313,10 @@ ui::canvas("Root")[
 - 删除 reportStretchAnchorsIgnored 及相关诊断字段。
 
 ### CP3 — 新增 UICanvasLayout / UICanvasSlot（已完成）
-- 实现四边 offsets、anchor span、alignment/pivot、preferred/min/max 和 Auto/Fixed/Stretch 语义。
+- 实现 `offset(glm::vec2)`、四边 `insets(FMargin)`、anchor span、alignment/pivot、preferred/min/max 和 Auto/Fixed/Stretch 语义。
 - Panel 改为 Canvas layout host。
 - 不创建绑定视觉控件的 FCanvasPanelSlot 命名。
-- public DSL 使用 layout().anchor()/offsets()/fill()，不暴露 canvasSlot() 工厂。
+- public DSL 使用 layout().anchor()/offset()/insets()/fill()，不暴露 canvasSlot() 工厂。
 
 ### CP4 — 统一所有 layout host 的 slot 消费（已完成）
 - Box、Overlay、SingleChild、Split、Scroll、Grid、Canvas 全部通过 typed slot arrange。
@@ -299,7 +336,7 @@ ui::canvas("Root")[
 ### CP7 — 验证
 - 编译期断言：child builder 不存在任何 child-owned geometry modifier；parent[layoutSpec >> widget] 只接受兼容 capability。
 - DSL 可读性样例覆盖：layout spec 与 widget 平行可见，fill/grow/anchor 可继续链式调整。
-- 几何测试：intrinsic measure、constraints、Canvas 四边 offsets、anchor span、alignment、min/max、reparent。
+- 几何测试：intrinsic measure、constraints、Canvas `offset`/`insets`、anchor span、alignment、min/max、reparent。
 - snapshot parity、GUIWorkbench、GameEditor、headless host 全部验证。
 
 ### CP8 — 构建与提交

@@ -162,7 +162,7 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
                                 .children(
                                     ya::ui::text("dsl-cell-a").setText("cell A"),
                                     ya::ui::text("dsl-cell-b").setText("cell B")));
-        ya::ui::build(tree, parent, std::move(page));
+        ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
     });
 
     applyStartPage();

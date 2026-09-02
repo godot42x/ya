@@ -22,6 +22,13 @@ concept UIWidgetBuilder = requires(T&& builder) {
 };
 
 template<typename T>
+concept UISlotBuilder = requires(const std::remove_reference_t<T>& builder) {
+    builder.args();
+} && (std::same_as<std::remove_cvref_t<decltype(std::declval<const std::remove_reference_t<T>&>().args())>, FCanvasSlotArgs> ||
+      std::same_as<std::remove_cvref_t<decltype(std::declval<const std::remove_reference_t<T>&>().args())>, FBoxSlotArgs> ||
+      std::same_as<std::remove_cvref_t<decltype(std::declval<const std::remove_reference_t<T>&>().args())>, FOverlaySlotArgs>);
+
+template<typename T>
 concept UICompoundWidgetType = std::derived_from<T, UICompoundWidget>;
 
 /// Forward declaration: a layout spec bound to a child (defined below).
@@ -29,6 +36,9 @@ concept UICompoundWidgetType = std::derived_from<T, UICompoundWidget>;
 /// intent at compile time.
 template<EUILayoutCap Caps, typename TChild>
 struct TUILayoutAttachment;
+
+template<typename THost, EUILayoutCap Caps>
+concept LayoutAttachmentAcceptedBy = LayoutCapsCompatible<Caps, allowedLayoutCaps<THost>()>;
 
 /// Take a UIElementRef from either a builder (via release()) or an already-built
 /// shared_ptr, so `spec >> widget` accepts both forms.
@@ -261,7 +271,36 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
         return std::move(this->derived());
     }
 
+    template<UIWidgetBuilder TChild, UISlotBuilder TSlotBuilder>
+    TDerived& child(TChild&& builder, TSlotBuilder&& slotBuilder) &
+    {
+        applySlotBuilder(std::forward<TChild>(builder).release(), std::forward<TSlotBuilder>(slotBuilder));
+        return this->derived();
+    }
+
+    template<UIWidgetBuilder TChild, UISlotBuilder TSlotBuilder>
+    TDerived&& child(TChild&& builder, TSlotBuilder&& slotBuilder) &&
+    {
+        applySlotBuilder(std::forward<TChild>(builder).release(), std::forward<TSlotBuilder>(slotBuilder));
+        return std::move(this->derived());
+    }
+
+    template<UISlotBuilder TSlotBuilder>
+    TDerived& child(UIElementRef node, TSlotBuilder&& slotBuilder) &
+    {
+        applySlotBuilder(std::move(node), std::forward<TSlotBuilder>(slotBuilder));
+        return this->derived();
+    }
+
+    template<UISlotBuilder TSlotBuilder>
+    TDerived&& child(UIElementRef node, TSlotBuilder&& slotBuilder) &&
+    {
+        applySlotBuilder(std::move(node), std::forward<TSlotBuilder>(slotBuilder));
+        return std::move(this->derived());
+    }
+
     template<EUILayoutCap Caps, typename TChild>
+        requires LayoutAttachmentAcceptedBy<TDerived, Caps>
     TDerived& child(TUILayoutAttachment<Caps, TChild> attachment) &
     {
         applyLayout(takeElementRef(std::move(attachment.child)), attachment.spec);
@@ -269,6 +308,7 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     }
 
     template<EUILayoutCap Caps, typename TChild>
+        requires LayoutAttachmentAcceptedBy<TDerived, Caps>
     TDerived&& child(TUILayoutAttachment<Caps, TChild> attachment) &&
     {
         applyLayout(takeElementRef(std::move(attachment.child)), attachment.spec);
@@ -290,6 +330,25 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     }
 
   protected:
+    template<UISlotBuilder TSlotBuilder>
+    void applySlotBuilder(UIElementRef node, TSlotBuilder&& slotBuilder)
+    {
+        using TArgs = std::remove_cvref_t<decltype(slotBuilder.args())>;
+        if constexpr (std::same_as<TArgs, FCanvasSlotArgs>) {
+            applyCanvasSlot(std::move(node), slotBuilder.args());
+        }
+        else if constexpr (std::same_as<TArgs, FBoxSlotArgs>) {
+            attachChild(std::move(node), [&slotBuilder](UIElement&, UISlot& childSlot) {
+                if (auto* typedSlot = childSlot.as<UIBoxSlot>()) {
+                    typedSlot->apply(slotBuilder.args());
+                }
+            });
+        }
+        else {
+            applySingleChildSlot(std::move(node), slotBuilder.args());
+        }
+    }
+
     void attachChild(UIElementRef node)
     {
         this->_widget->addDetachedChild(std::move(node), [](UIElement&, UISlot&) {});
@@ -343,7 +402,7 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     /// silently dropped. Hosts declare their set via `kAllowedLayoutCaps`;
     /// builders without one stay permissive until migrated.
     template<EUILayoutCap Caps, typename TChild>
-        requires LayoutCapsCompatible<Caps, allowedLayoutCaps<TDerived>()>
+        requires LayoutAttachmentAcceptedBy<TDerived, Caps>
     TDerived& operator[](TUILayoutAttachment<Caps, TChild> attachment) &
     {
         applyLayout(takeElementRef(std::move(attachment.child)), attachment.spec);
@@ -351,7 +410,7 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     }
 
     template<EUILayoutCap Caps, typename TChild>
-        requires LayoutCapsCompatible<Caps, allowedLayoutCaps<TDerived>()>
+        requires LayoutAttachmentAcceptedBy<TDerived, Caps>
     TDerived&& operator[](TUILayoutAttachment<Caps, TChild> attachment) &&
     {
         applyLayout(takeElementRef(std::move(attachment.child)), attachment.spec);

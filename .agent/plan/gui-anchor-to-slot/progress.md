@@ -1,5 +1,160 @@
 # GUI layout unified 进度
 
+## 2026-09-02 — CP3/CP4 生产迁移：Unicode/中文/圆角示例 root 与嵌套边缘改用 slot-first
+
+- Unicode、中文测试页面 root build 改为 canvasSlot().fill()。
+- RoundedRect 页面卡片、嵌套 caption/inner panel、form/root 改为 box/overlay/canvas slot builder。
+- 验证：xmake b GUIWorkbench；Unicode 与 RoundedRect headless 页面通过。ChineseTest 不是当前注册的页面名，启动时回退默认页，需后续按实际注册名补验证。
+- 未完成：WorkbenchDemoPages 中已无旧 layout 调用，剩余旧调用集中在测试、EditorInspectorTab、声明式兼容实现等位置。
+
+## 2026-09-02 — CP3/CP4 生产迁移：Dock 与 Theme 页面改用 slot-first
+
+- Dock page root、dock host、dock panel 内容改为 overlay/canvas slot builder。
+- Theme page 的按钮/面板尺寸与 root 改为显式 box/canvas slot；主题切换回调保持不变。
+- 验证：xmake b GUIWorkbench 通过。
+- 未完成：Unicode/DSL/圆角嵌套示例及测试/声明式实现仍有旧 ui::layout() 调用。
+
+## 2026-09-02 — CP3/CP4 生产迁移：Gallery/Interactions 页面继续改用 slot-first
+
+- Gallery reactive、tree filter、theme、input controls、drag/drop 等剩余控件边缘完成 typed box slot 迁移。
+- Interactions 页面 tooltip、禁用组、dialog 触发按钮与 root/form 完成 box/overlay/canvas slot 迁移。
+- 修正 children() 中混入 slot builder 的错误写法，统一使用 child(widget, slotBuilder)。
+- 验证：xmake b GUIWorkbench；GUIWorkbench headless Gallery gallery_drop 场景、Interactions 页面通过。
+- 未完成：Gallery 圆角/嵌套示例、Dock、Theme 以及测试和声明式实现仍待迁移。
+
+## 2026-09-02 — CP3/CP4 生产迁移：Gallery 页面第一批改用 slot-first
+
+- Gallery 的 reactive controls、menu bar、split、tree filter、theme/input controls、drag/drop rows 与 page root 已迁移到显式 box/overlay/canvas slot。
+- 迁移过程中修正了把 slot builder 误作为 children() 独立参数的问题，统一改为 child(widget, slotBuilder)，保持类型约束有效。
+- 验证：xmake b GUIWorkbench；Gallery gallery_drop headless scenario + scenario-render 通过。
+- 未完成：Gallery 仍有少量嵌套/圆角示例 layout 调用，以及 Interactions/Dock/Theme 等页面待迁移。
+
+## 2026-09-02 — CP3/CP4 生产迁移：Modal 与 ScrollSplit 页面改用 slot-first
+
+- Modal 页面静态 root/button/form 与动态 dialog content attach 改为显式 canvas/box/overlay slot。
+- ScrollSplit 页面 40 个列表行、行内 canvas 文本、split 两侧、外层 form/root 全部改为 typed slot builder。
+- 验证：xmake b GUIWorkbench；GUIWorkbench headless Modal、ScrollSplit 页面均通过。
+- 未完成：Gallery、Interactions、Dock、Theme，以及 WorkbenchDemoPages 中剩余 layout 调用仍待迁移。
+
+## 2026-09-02 — CP3/CP4 生产迁移：Workbench shell/editor page 改用 slot-first
+
+- WorkbenchSurface 的 root、menu/status chrome、page rail、demo host、editor toolbar、preview、inspector、split children 全部迁移到显式 canvas/box/overlay slot builder。
+- GUIWorkbench DSL root 也改为 canvasSlot；Editor 页面保留原几何参数与交互语义。
+- 验证：xmake b ya-gui-tooling；xmake b GUIWorkbench；GUIWorkbench headless Editor 页面通过。
+- 未完成：WorkbenchSurface 中仍有少量旧 declarative 调用点需继续清理，GUIWorkbench Gallery/Interactions/Modal/Dock/Theme/ScrollSplit 及测试代码仍待迁移。
+
+## 2026-09-02 — CP3/CP4 生产迁移：GUIWorkbench DragDrop 页面改用 slot-first
+
+- DragDrop 页面 source row、每个拖拽 tile、drop zone、Panel/Form root 全部改为显式 box/overlay/canvas slot builder。
+- 首次验证发现新增标题改变了场景坐标，及时撤销非必要节点；最终保持原几何基线，drag-session 场景断言通过。
+- 验证：xmake b GUIWorkbench；DragDrop headless scenario + scenario-render 通过。
+- 未完成：Gallery、Interactions、Modal、Dock、Theme、ScrollSplit 等页面以及 EditorSurface 仍待迁移。
+
+## 2026-09-02 — CP3/CP4 生产迁移：GUIWorkbench Menus 页面改用 slot-first
+
+- Menus 页面 Panel/Form root、PopupButton 与静态文本已迁移到显式 canvas/overlay slot builder。
+- 删除该页面旧 layout/operator[]/>> authoring；菜单 popup 的运行时打开逻辑保持不变。
+- 验证：xmake b GUIWorkbench；GUIWorkbench --headless --start-page Menus --exit-after-frame=30 通过。
+- 未完成：Gallery、Interactions、DragDrop、Modal、Dock、Theme、ScrollSplit 等页面仍待迁移。
+
+## 2026-09-02 — CP3/CP4 生产迁移：GUIWorkbench Layout 页面改用 slot-first
+
+- Layout 页面中的 HBox/VBox cell、容器尺寸、Spacing slider、Panel/Form root 全部改为显式 box/overlay/canvas slot builder。
+- 删除该页面内部的旧 layout/operator[]/>> authoring 用法；未引入 legacy 兼容。
+- 验证：xmake b GUIWorkbench；GUIWorkbench --headless --start-page Layout --exit-after-frame=30 通过。
+- 未完成：Menus、Gallery、Interactions、Modal、Dock、Theme、ScrollSplit 等页面仍待迁移。
+
+## 2026-09-02 — CP3/CP4 生产迁移：GUIWorkbench Widgets 页面改用 slot-first
+
+- 目标：完成一个真实 demo 页面从旧 ui::layout() / parent[...] authoring 到显式 typed slot 的闭环。
+- 收口方式：Widgets 页面改为 child(widget, ui::boxSlot().preferredSize(...))，Panel→Form 改为 ui::overlaySlot().fill()，page root 改为 ui::canvasSlot().fill()；不新增兼容层。
+- 同步补齐 attachSlot(parent, child, slotBuilder)，供 imperative demo 装配直接写入 parent-owned typed slot。
+- 验证：xmake b GUIWorkbench；GUIWorkbench --headless --start-page Widgets --exit-after-frame=30 均通过。
+- 未完成：GUIWorkbench 其余页面和 EditorSurface 仍有旧 ui::layout() 调用；下一批继续按页面/模块闭环迁移，完成全部生产迁移后删除旧 public DSL。
+
+## 2026-09-02 — CP3/CP4 slot-first DSL 基础闭环：显式 typed slot builder 接入
+
+- 目标：把 public authoring 从 capability-based ui::layout() 迁移的第一步落成可编译、可运行的显式 slot API，不引入兼容包装。
+- 收口方式：
+-  - 新增 ui::canvasSlot() 工厂，与已有 boxSlot() / overlaySlot() 并列；Canvas builder 覆盖 anchor、offset、insets、alignment、pivot、size、preferred/min/max 与 per-axis size mode。
+  - TUIWidgetChildrenBuilder::child(node, slotBuilder) 增加按 args() 精确类型分派的通用入口，Canvas/Box/Overlay 分别写入 parent-owned typed slot；具体 widget 不再需要为每个 builder 重复声明 overload。
+  - ui::build(..., ui::canvasSlot()...) 增加 root edge builder 入口；旧 ui::layout() 路径本 checkpoint 尚未删除，待生产迁移批次闭环后统一移除，不作为新代码路径。
+  - 修正 slot builder 的 rvalue 链式实现，避免通过 std::move(*this).method() 递归调用自身导致运行时栈溢出。
+- 新增契约测试 DeclarativeContractTest.ExplicitSlotBuildersApplyTypedParentChildIntent，覆盖 Canvas、Box、Overlay 三种 typed slot 的参数落点。
+- 验证：xmake b ya-gui-closure-test；直接运行新增测试 PASS；完整 ya-gui-closure-test 已执行，既有测试通过，但在新增测试后进程出现一次未捕获崩溃，单测复跑确认新增测试本身 PASS，需在下一 checkpoint 继续审计完整套件的进程级稳定性。
+- 未完成：生产代码仍大量使用 ui::layout()；下一批迁移一个完整模块，并补齐错误 slot 类型的编译期拒绝测试后，才能删除旧 public API。
+
+## 2026-09-02 — 计划方向修正：public DSL 收口到 slot-first，不保留 `ui::layout()` 主路径兼容
+
+- 用户进一步明确：不建议把所有布局接口继续堆进 `ui::layout()`；`ui::layout()` 若存在，也不应成为一层越来越重的万能 spec，而应降级为命名空间级辅助层，甚至可直接删除。
+- 结论修正：public authoring 改为 slot-first——Canvas/Box/Overlay/Table 分别显式使用 `ui::canvasSlot()/boxSlot()/overlaySlot()/tableSlot()`；single-child host 继续复用 `UIOverlaySlot` 的 public authoring，而不是再定义独立 public slot 名字。
+- 设计理由：
+  - typed slot 才是 parent-owned edge intent 的真实模型，public DSL 直接暴露它更符合架构；
+  - `child(node, xxxSlot())` 能让人眼立刻看出布局归属，避免关键信息藏在深层链式 `layout()` 中；
+  - LSP/编译器的错误也应主要来自 slot 类型不匹配，而不是 capability-spec 组合失败。
+- 计划影响：此前把 `ui::layout() >> child` / `parent[...]` 作为主 authoring 路径的条目，现统一降级为待移除的过渡设计；后续实现按“一步到位”迁移，不保留任何 legacy 兼容入口。
+
+## 2026-09-02 — CP7 门禁纠偏：修复 offscreen parity capture 的通道解释，恢复 GPU/offscreen 零容差一致性
+
+- 误差审计：GUI DSL / slot / layout 全量闭包、smoke 和 headless 场景都已通过后，最终门禁仍在 `GUIWorkbench --gpu-shot + --offscreen-shot + --offscreen-diff` 处失败，差异率高达 `0.9880`。两张图尺寸完全一致，说明不是布局或 draw-item 数量分叉。
+- 根因：windowed `gpu-shot` 写 BMP 时会按 swapchain format 是否 `B8G8R8A8_UNORM` 决定 BGRA/RGBA 通道顺序，但 offscreen parity capture 虽然复用了 `renderImage->getFormat()` 创建 mirror surface，写 `offscreen-shot` 时却硬编码按 RGBA 解释 readback buffer，导致整图通道交换。
+- 收口方式：`GUIAppHost` 写 offscreen BMP 时改为读取 `offscreenImage->getFormat()`，与 GPU shot 使用同一 BGRA/RGBA 判定。
+- 验证：
+  - `xmake r GUIWorkbench --exit-after-frame=60 --gpu-shot Engine/Saved/Automation/gui_cp7/gpu.bmp --gpu-shot-frame=20 --offscreen-shot Engine/Saved/Automation/gui_cp7/offscreen.bmp --offscreen-shot-frame=20 --offscreen-diff Engine/Saved/Automation/gui_cp7/diff.bmp`（PASS，`differing=0 ratio=0.0000`）
+
+## 2026-09-02 — CP3/CP5 生产清理：EditorSurface declarative authoring 收尾迁到 unified `layout()` DSL
+
+- 误差审计：`EditorSurface` 仍残留一批旧 authoring 表达：`offsets(glm::vec2)` 和 `child(..., ui::boxSlot().fill())`。这不是 runtime contract 缺口，但会让 editor chrome 成为仓库里最后一批 public DSL 样式分叉。
+- 收口方式：
+  - `offsets({x,y})` 统一迁为 `offset({x,y})`；
+  - `ui::boxSlot().fill()` 的作者态写法统一迁为 `ui::layout().fill() >> child`；
+  - 覆盖 `makePlaceholderPanel()`、toolbar/dock root attach、Hierarchy/Stats 面板、Content Browser body/root。
+- 验证：
+  - `xmake b ya-runtime`（PASS）
+  - 负向复扫：GameEditor/UI + GUI framework + GUIWorkbench + tests 中已无运行时代码残留 `offsets(...)` / `EUILayoutCap::Offsets`；只剩 `SlotBuilders.h` 中保留的 typed helper 定义与说明。
+
+## 2026-09-02 — CP3/CP4 纠偏 checkpoint：统一 `offset/insets` 语义并补齐 single-child / split / scroll slot 消费
+
+- 误差审计：CP1C 命名迁移完成后，新增回归暴露两条真实实现偏差：
+  - `ui::layout().insets(...)` 已能写入 `UIOverlaySlot::padding`，但 `UISingleChildLayout` / `UISplitLayout` / `UIScrollLayout` 仍未统一消费该 edge padding，导致 single-child fill 内容不会真正内缩；
+  - `applyLayoutSpecToSlot(box)` 通过 `parent.getLayout()` 判 box 方向，但 `UIContainer` 的 `UIBoxLayout` 是成员而不是 installed `_layout`，所以 `align(...Bottom/Right)` 会退化成默认 Start 分支。
+- 收口方式：
+  - `UILayout.cpp` 新增共享 slot-padding 解析，single-child measure/arrange 与 split/scroll cross-align 统一先消费 `UIOverlaySlot` padding 再排布 child；
+  - `applyLayoutSpecToSlot(box)` 改为直接识别 `UIContainer` 宿主方向，确保 horizontal row 读取 `alignV`，vertical column 读取 `alignH`。
+- DSL 收尾：彻底完成 `offset(glm::vec2)` 与 `insets(FMargin)` 的语义拆分，清掉剩余 `offsets(...)` 调用、`EUILayoutCap::Offsets` 断言和 public 示例中的旧命名。
+- 新增验证：
+  - `WidgetLayoutTest.UnifiedLayoutSpecMapsBoxCrossAlignStartAndEnd`
+  - `WidgetLayoutTest.UnifiedLayoutSpecInsetsSingleChildFillEdge`
+- 验证：
+  - `xmake r ya-gui-closure-test --gtest_filter='WidgetLayoutTest.UnifiedLayoutSpecMapsBoxCrossAlignStartAndEnd:WidgetLayoutTest.UnifiedLayoutSpecInsetsSingleChildFillEdge'`（PASS）
+  - `xmake r ya-gui-closure-test`（320/320 PASS）
+  - `xmake b GUIWorkbench`（PASS）
+
+## 2026-09-01 — 默认 slot 语义 checkpoint：无参 Canvas 可见，显式 Canvas args 保持严格语义
+
+- 目标：落实“无 layout 参数也必须有合理默认几何”的规范，同时不改变显式 FCanvasSlotArgs 的含义。
+- 收口方式：运行时 UICanvasSlot 默认 width/height mode 改为 Auto/Auto，默认锚点仍为左上角；UIBoxSlot 保持 Auto + Stretch，UIOverlaySlot / single-child 内容槽保持 Fill/Fill。
+- 误差修正：首次尝试把 FCanvasSlotArgs 的字段默认也改为 Auto，导致只设置 fixedSize 的显式调用被误解释并产生 110 个回归。已恢复 FCanvasSlotArgs 的 Fixed 字段默认；无参 slot 默认与显式 args payload 明确分层。
+- 运行时边界：UICanvasSlot::setFixedSize() 作为 imperative API 会同步切换到 Fixed；UICanvasSlot::apply(FCanvasSlotArgs) 在消费完 fixedSize 后恢复 args 指定的 per-axis size mode，支持“fixedSize 存储 + Auto 轴”的合法组合。
+- Guardrail：declarative 无 spec build 现在只记录“使用了默认 Auto/Auto canvas slot”的诊断，不再额外补救几何。
+- 验证：xmake r ya-gui-closure-test（317/317 PASS）；xmake b GUIWorkbench（PASS）。
+
+## 2026-09-01 — 回归 checkpoint：无 spec root 挂到 canvas host 时不再静默 0x0 空白
+
+- 误差审计：Theme / Unicode / 中文测试 / DSL 的空白问题虽然可通过补 fill 收口，但进一步核查后确认真正的框架缺口在无 spec 的 build 入口：当 parent 是 canvas host 时，attach 会创建默认 UICanvasSlot，其 width/height mode 仍是 Fixed；没有 root slot intent 就会静默解析成 0x0，最后页面整块不可见。
+- 收口方式：在 declarative ui::build(...) / ui::buildAs(...) 的无 spec 路径增加 guardrail：若 child attach 后拿到的是未经初始化的默认 UICanvasSlot，立即记录明确错误，并把该 edge 从 Fixed/Fixed + 0x0 退化为 Auto/Auto。这样不会偷偷补成 fill 这类“正确布局”，但至少会把内容暴露出来，不再以纯空白吞掉问题。
+- 契约更新：canvas host 的正确用法仍然是显式 root layout intent（fill/size/anchor/... 或后续直接改 typed slot）；guardrail 只是防止 silent failure，不是新的隐式布局语义。
+- 验证：Declarative contract test 现在显式断言，无 spec root attach 到 canvas layer 时 UICanvasSlot 会被提升到 Auto/Auto，且 layout 后 root rect 为非零，避免再回到“附加成功但页面完全空白”的状态；同时把其余非 guardrail 用例改回显式 root fill，完整 ya-gui-closure-test 317/317 PASS。
+
+## 2026-09-01 — 回归 checkpoint：修复 Theme / Unicode / 中文测试 / DSL 页面的 root fill 漏配
+
+- 误差审计：用户反馈 Theme、Unicode、DSL、中文测试页是空白。核查后确认这 4 页虽然已注册，但都沿用了 `ui::build(tree, parent, std::move(page))` 直接挂到 `DemoHost`（canvas host）的旧写法，缺少 root fill slot；和此前 `EditorDemo` 的问题同类，页面根节点会被 parent-owned canvas edge 裁成空白面。
+- 收口方式：把这 4 个页面的 root 挂载统一改成 `ui::build(..., ui::layout().fill())`，让 root edge 在 attach 时直接写入 `DemoHost` 的 canvas slot，而不是依赖默认 slot。
+- 结论：这不是 theme/font/unicode 本身失效，而是 page root 没有显式布局意图；空白只是同类 root-slot 漏配的表现。
+- 验证：
+  - headless tree dump 证明修复后 `ThemeForm / UnicodeForm / ChineseTestForm / dsl-root` rect 均为 `982.6 x 800`（与 `DemoHost` 一致），对应标题/正文/按钮节点都有非零 rect；
+  - `xmake r GUIWorkbench --smoke-actions --exit-after-frame=60`（PASS）。
+
 ## 2026-09-01 — 回归 checkpoint：补齐 Gallery drag-drop diagnostics，并修正 Layout / GalleryTree 场景坐标漂移
 
 - 误差审计：批量复扫官方 headless scenarios 后，剩余 3 个失败点分成两类：
@@ -1086,3 +1241,14 @@ C++ exception: [json.exception.type_error.307] cannot use erase() with null
 - 计划同步：CP2–CP6、Designer/snapshot schema guard、提交治理和首版兼容清零均按当前证据标记完成；feature matrix 全部已完成场景标记为 `done`。CP7 保留为唯一未完成项，等待最终门禁执行。
 - 验证：`xmake b ya-gui-closure-test` 通过；`xmake r ya-gui-closure-test` 全量 316/316 通过；`xmake b GUIWorkbench` 通过；`xmake b ya-gui-minimal-host` 通过；`xmake b ya-runtime` 通过。并行 XMake 首次运行出现共享临时 stats 目录竞争，改串行后全部通过。
 - 当前未完成：CP7 的最终 snapshot/offscreen parity 与场景级 GUIWorkbench 冒烟尚未执行；不应在此之前宣称计划整体完成。
+
+## 2026-09-01 — CP3 §3.4 DSL capability gate and default-slot consistency
+
+- 误差审计确认：此前 capability 编译期约束只严格覆盖 operator[]，child(layout >> widget) 仍可能绕开 host gate；同时 UIPanel::child() 手动套 FCanvasSlotArgs{}，而 children(...) 走 base default slot，导致同一 host 的两种 authoring 写法默认语义不一致。
+- 收口方式：
+  - 在 TUIWidgetChildrenBuilder 上把 child(TUILayoutAttachment<...>) 与 operator[] 统一到同一 host capability 约束；
+  - UIPanel 的 bare child()/children() 回到真正的 host default canvas slot（Auto/Auto），不再显式 apply FCanvasSlotArgs{}；
+  - UIButton 显式声明 single-child host capability；
+  - UIPopupOverlay 显式声明 None capability，避免 declarative child layout 伪装成可控能力，而运行时又被 popup 自己覆盖。
+- 验证计划：补 WidgetLayoutTest 的编译期断言，覆盖 child(layout >> widget) 的 accept/reject 与 popup 拒绝 layout attachment；补 DeclarativeContractTest，验证 UIPanel::child() 与 children() 拿到相同的 default canvas slot（Auto/Auto）。
+- 未完成：本轮未触碰 ui::layout() 能力补齐、DSL 命名收口（offset/insets）和 popup 专用 content builder surface；这些仍属于后续更大的 DSL 收口 checkpoint。

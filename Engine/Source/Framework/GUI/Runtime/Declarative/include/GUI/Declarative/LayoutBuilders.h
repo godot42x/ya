@@ -52,32 +52,10 @@ class UIPanelWidgetBuilder final : public TUIWidgetChildrenBuilder<UIPanel, UIPa
     // Canvas host: child rect is resolved from the canvas slot edge.
     //   panel("X")[ui::layout().fill() >> node]             // old .fillParent()
     //   panel("X")[ui::layout().anchor(a, b) >> node]       // old .setAnchors(a,b)
-    // A bare child(node) keeps the historical absolute top-left behaviour.
-    UIPanelWidgetBuilder& child(UIElementRef node) &
-    {
-        applyCanvasSlot(std::move(node), FCanvasSlotArgs{});
-        return *this;
-    }
-
-    UIPanelWidgetBuilder&& child(UIElementRef node) &&
-    {
-        applyCanvasSlot(std::move(node), FCanvasSlotArgs{});
-        return std::move(*this);
-    }
-
-    template<UIWidgetBuilder TChild>
-    UIPanelWidgetBuilder& child(TChild&& builder) &
-    {
-        applyCanvasSlot(std::forward<TChild>(builder).release(), FCanvasSlotArgs{});
-        return *this;
-    }
-
-    template<UIWidgetBuilder TChild>
-    UIPanelWidgetBuilder&& child(TChild&& builder) &&
-    {
-        applyCanvasSlot(std::forward<TChild>(builder).release(), FCanvasSlotArgs{});
-        return std::move(*this);
-    }
+    // A bare child(node) now means the host default canvas slot itself
+    // (top-left anchor, Auto/Auto size), so child()/children()/operator[] all
+    // share one consistent default-layout surface.
+    using TUIWidgetChildrenBuilder::child;
 
     UIPanelWidgetBuilder& child(UIElementRef node, const FCanvasSlotArgs& slot) &
     {
@@ -356,7 +334,7 @@ class UIScrollViewportWidgetBuilder final : public TUIWidgetChildrenBuilder<UISc
     }
 
     // A scroll viewport owns both axes, so child intent is how the content sits
-    // in the content box: ui::scroll("S").child(node, ui::overlaySlot().fill()).
+    // in the content box: ui::scroll("S")[ui::layout().fill() >> node].
     // The using keeps the plain child(node) overloads visible, since declaring
     // any child() here would otherwise hide the base set.
     using TUIWidgetChildrenBuilder::child;
@@ -521,7 +499,7 @@ class UISizeBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UISizeBox, 
 
     // A size box owns both axes (width/height overrides + padding), so child
     // intent is only how the content sits in the resulting box:
-    // ui::sizeBox("B").child(node, ui::overlaySlot().align(Center, Center)).
+    // ui::sizeBox("B")[ui::layout().align(Center, Center) >> node].
     // The using keeps the plain child(node) overloads visible.
     using TUIWidgetChildrenBuilder::child;
 

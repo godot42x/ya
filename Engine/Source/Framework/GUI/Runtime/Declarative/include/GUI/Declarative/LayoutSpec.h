@@ -22,6 +22,7 @@
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Layout/UILayoutIntent.h"
+#include "GUI/Widgets/Controls/Container.h"
 
 #include <cstdint>
 #include <glm/glm.hpp>
@@ -40,10 +41,11 @@ enum class EUILayoutCap : uint32_t
     Cell     = 1u << 3, // grid row/column (table hosts)
     Align    = 1u << 4, // cross-axis alignment
     Margin   = 1u << 5, // outer spacing around the child
-    Offsets  = 1u << 6, // position offset from the resolved anchor/origin
-    SizeMode = 1u << 7, // Fixed vs Auto size resolution
-    Size     = 1u << 8, // explicit size
-    Pivot    = 1u << 9, // which point of the child lands on the resolved position
+    Offset   = 1u << 6, // position offset from the resolved anchor/origin
+    Inset    = 1u << 7, // per-edge shrink / inner padding on the parent-owned edge
+    SizeMode = 1u << 8, // Fixed vs Auto size resolution
+    Size     = 1u << 9, // explicit fixed size or preferred size, host-dependent
+    Pivot    = 1u << 10, // which point of the child lands on the resolved position
 };
 
 constexpr EUILayoutCap operator|(EUILayoutCap a, EUILayoutCap b)
@@ -83,7 +85,7 @@ inline constexpr EUILayoutCap kBoxHostCaps =
 
 /// Canvas hosts (panel / canvas): position by anchor rects and edge insets.
 inline constexpr EUILayoutCap kCanvasHostCaps =
-    EUILayoutCap::Fill | EUILayoutCap::Anchor | EUILayoutCap::Offsets | EUILayoutCap::Align |
+    EUILayoutCap::Fill | EUILayoutCap::Anchor | EUILayoutCap::Offset | EUILayoutCap::Inset | EUILayoutCap::Align |
     EUILayoutCap::Margin | EUILayoutCap::Size | EUILayoutCap::SizeMode | EUILayoutCap::Pivot;
 
 /// Grid hosts: today only place a child in a cell. Until the table slot grows
@@ -96,15 +98,15 @@ inline constexpr EUILayoutCap kGridHostCaps =
 /// Single-child hosts (scroll viewport / size box / button / selectable row):
 /// the child fills the host, optionally with alignment.
 inline constexpr EUILayoutCap kSingleChildHostCaps =
-    EUILayoutCap::Fill | EUILayoutCap::Align | EUILayoutCap::Size;
+    EUILayoutCap::Fill | EUILayoutCap::Align | EUILayoutCap::Inset | EUILayoutCap::Size;
 
 /// Split hosts: two panes, positioned by ratio.
 inline constexpr EUILayoutCap kSplitHostCaps =
-    EUILayoutCap::Fill | EUILayoutCap::Align;
+    EUILayoutCap::Fill | EUILayoutCap::Align | EUILayoutCap::Inset | EUILayoutCap::Size;
 
 /// Overlay hosts: layered children with alignment.
 inline constexpr EUILayoutCap kOverlayHostCaps =
-    EUILayoutCap::Fill | EUILayoutCap::Align | EUILayoutCap::Size;
+    EUILayoutCap::Fill | EUILayoutCap::Align | EUILayoutCap::Inset | EUILayoutCap::Size;
 
 /// True when every capability in `caps` is allowed by `allowed`.
 template<EUILayoutCap Caps, EUILayoutCap Allowed>
@@ -136,8 +138,8 @@ struct FUILayoutSpec
 
     // —— shared capabilities ——
     glm::vec2             offset = {0.0f, 0.0f};
-    glm::vec2             margin = {0.0f, 0.0f};
-    FMargin               offsets{};
+    FMargin               margin{};
+    FMargin               inset{};
     EWidgetSizeMode       widthSizeMode  = EWidgetSizeMode::Fixed;
     EWidgetSizeMode       heightSizeMode = EWidgetSizeMode::Fixed;
     glm::vec2             pivot          = {0.0f, 0.0f};
@@ -146,7 +148,6 @@ struct FUILayoutSpec
     glm::vec2             maxSize = {std::numeric_limits<float>::max(),
                                      std::numeric_limits<float>::max()};
     glm::vec2             size    = {0.0f, 0.0f};
-    EWidgetSizeMode       sizeMode = EWidgetSizeMode::Fixed;
     EWidgetAlignH         alignH   = EWidgetAlignH::Left;
     EWidgetAlignV         alignV   = EWidgetAlignV::Top;
     int                   row      = 0;    // table capability
@@ -165,7 +166,7 @@ struct FUILayoutSpec
         args.offset    = offset;
         args.minSize   = minSize;
         args.maxSize   = maxSize;
-        args.offsets   = offsets;
+        args.offsets   = inset;
         args.alignmentH     = alignH;
         args.alignmentV     = alignV;
         args.widthSizeMode  = widthSizeMode;
@@ -182,7 +183,6 @@ struct FUILayoutSpec
 /// UI Designer so all three agree.
 inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayoutSpec& spec)
 {
-    (void)child;
     if (auto* canvas = slot.as<UICanvasSlot>()) {
         // Only write capabilities the spec actually carries, so an align-only
         // spec cannot wipe a seeded fixedSize / Auto size mode.
@@ -196,9 +196,11 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
                 canvas->setHeightSizeMode(EWidgetSizeMode::Fixed);
             }
         }
-        if (spec.has(EUILayoutCap::Offsets)) {
+        if (spec.has(EUILayoutCap::Offset)) {
             canvas->setOffset(spec.offset);
-            canvas->setOffsets(spec.offsets);
+        }
+        if (spec.has(EUILayoutCap::Inset)) {
+            canvas->setOffsets(spec.inset);
         }
         if (spec.has(EUILayoutCap::Align)) {
             canvas->setAlignmentH(spec.alignH);
@@ -212,9 +214,15 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
             canvas->setHeightSizeMode(spec.heightSizeMode);
         }
         if (spec.has(EUILayoutCap::Size)) {
-            canvas->setFixedSize(spec.size);
-            canvas->setPreferredSize(spec.preferredSize);
-            if (!spec.has(EUILayoutCap::SizeMode)) {
+            const bool bHasFixedSize = spec.size.x != 0.0f || spec.size.y != 0.0f;
+            const bool bHasPreferredSize = spec.preferredSize.x != 0.0f || spec.preferredSize.y != 0.0f;
+            if (bHasFixedSize) {
+                canvas->setFixedSize(spec.size);
+            }
+            if (bHasPreferredSize) {
+                canvas->setPreferredSize(spec.preferredSize);
+            }
+            if (bHasFixedSize && !spec.has(EUILayoutCap::SizeMode)) {
                 canvas->setWidthSizeMode(EWidgetSizeMode::Fixed);
                 canvas->setHeightSizeMode(EWidgetSizeMode::Fixed);
             }
@@ -239,15 +247,25 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
             args.weight   = spec.weight;
         }
         if (spec.has(EUILayoutCap::Margin)) {
-            args.margin = FMargin::hv(spec.margin);
+            args.margin = spec.margin;
         }
         if (spec.has(EUILayoutCap::Align)) {
-            args.crossAlignment = (spec.alignH == EWidgetAlignH::Center)
-                                      ? EUIBoxSlotCrossAlignment::Center
-                                      : EUIBoxSlotCrossAlignment::Stretch;
+            const auto* parentBoxHost = dynamic_cast<const UIContainer*>(&slot.getParent());
+            const bool bHorizontal = parentBoxHost != nullptr &&
+                                     parentBoxHost->getDirection() == EWidgetBoxLayout::Horizontal;
+            if (bHorizontal) {
+                args.crossAlignment = spec.alignV == EWidgetAlignV::Center ? EUIBoxSlotCrossAlignment::Center
+                    : spec.alignV == EWidgetAlignV::Bottom ? EUIBoxSlotCrossAlignment::End
+                    : EUIBoxSlotCrossAlignment::Start;
+            }
+            else {
+                args.crossAlignment = spec.alignH == EWidgetAlignH::Center ? EUIBoxSlotCrossAlignment::Center
+                    : spec.alignH == EWidgetAlignH::Right ? EUIBoxSlotCrossAlignment::End
+                    : EUIBoxSlotCrossAlignment::Start;
+            }
         }
         if (spec.has(EUILayoutCap::Size)) {
-            args.preferredSize = spec.size;
+            args.preferredSize = spec.size.x != 0.0f || spec.size.y != 0.0f ? spec.size : spec.preferredSize;
         }
         box->apply(args);
         if (spec.minSize != glm::vec2{0.0f, 0.0f}) {
@@ -273,8 +291,11 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
         FOverlaySlotArgs args;
         args.hAlign = h;
         args.vAlign = v;
+        if (spec.has(EUILayoutCap::Inset)) {
+            args.padding = spec.inset;
+        }
         if (spec.has(EUILayoutCap::Size)) {
-            args.preferredSize = spec.size;
+            args.preferredSize = spec.size.x != 0.0f || spec.size.y != 0.0f ? spec.size : spec.preferredSize;
         }
         single->apply(args);
         return;
@@ -293,8 +314,11 @@ inline void applyLayoutSpecToSlot(UISlot& slot, UIElement& child, const FUILayou
         FOverlaySlotArgs args;
         args.hAlign = h;
         args.vAlign = v;
+        if (spec.has(EUILayoutCap::Inset)) {
+            args.padding = spec.inset;
+        }
         if (spec.has(EUILayoutCap::Size)) {
-            args.preferredSize = spec.size;
+            args.preferredSize = spec.size.x != 0.0f || spec.size.y != 0.0f ? spec.size : spec.preferredSize;
         }
         overlay->apply(args);
         return;

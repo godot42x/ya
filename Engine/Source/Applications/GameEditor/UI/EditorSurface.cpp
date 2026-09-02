@@ -119,7 +119,7 @@ std::shared_ptr<UIElement> makePlaceholderPanel(const std::string& name, const s
 {
     return ui::panel(name + "_Body")
         .setStyleKey("panel.canvas")
-        [ui::layout().fill().offsets({12.0f, 12.0f}) >> ui::text(name + "_Label")
+        [ui::layout().fill().offset({12.0f, 12.0f}) >> ui::text(name + "_Label")
                    .setText(text)
                    .setFontSize(13)
                    .setHAlign(EWidgetAlignH::Center)
@@ -404,14 +404,14 @@ void EditorSurface::buildEditorChrome(App& app)
                             ui::layout().size({88.0f, 20.0f}) >> std::move(modeText)),
               ui::layout()
                   .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
-                  .offsets({0.0f, kMenuHeight})
+                  .offset({0.0f, kMenuHeight})
                   .size({0.0f, kToolbarHeight}));
 
     _dockWorkspace = std::make_shared<UIDockWorkspace>();
     _dockSpace = ui::buildAs<UIDockSpace>(*_tree,
                                           *_root,
                                           ui::dockSpace("EditorDock").setWorkspace(_dockWorkspace),
-                                          ui::layout().anchor({0.0f, 0.0f}, {1.0f, 1.0f}).offsets({0.0f, kChromeTop}));
+                                          ui::layout().anchor({0.0f, 0.0f}, {1.0f, 1.0f}).offset({0.0f, kChromeTop}));
 
     auto viewportImage = ui::image("ViewportImage");
     _viewportImage     = viewportImage.share();
@@ -438,7 +438,7 @@ void EditorSurface::buildEditorChrome(App& app)
                          .share();
     auto hierarchyBody = ui::panel("HierarchyBody")
                              .setStyleKey("panel.canvas")
-                             [ui::layout().anchor({0.0f, 0.0f}, {1.0f, 1.0f}).offsets({4.0f, 4.0f}) >> _hierarchyView];
+                             [ui::layout().anchor({0.0f, 0.0f}, {1.0f, 1.0f}).offset({4.0f, 4.0f}) >> _hierarchyView];
 
     _inspectorTab = std::make_unique<EditorInspectorTab>(*_layer);
     auto inspectorBody = _inspectorTab->build(*_tree);
@@ -449,7 +449,7 @@ void EditorSurface::buildEditorChrome(App& app)
     _statsText = statsText.share();
     auto statsBody = ui::panel("FrameStatsPanel")
                          .setStyleKey("panel.canvas")
-                         [ui::layout().fill().offsets({12.0f, 12.0f}) >> std::move(statsText)];
+                         [ui::layout().fill().offset({12.0f, 12.0f}) >> std::move(statsText)];
 
     auto workbenchHost = ui::panel("WorkbenchHost").setStyleKey("panel.window").share();
     // Dock panel bodies are detached until their tab is selected. WorkbenchSurface
@@ -601,13 +601,13 @@ std::shared_ptr<UIElement> EditorSurface::buildContentBrowser()
     auto body = ui::row("ContentBody")
                     .setSpacing(4.0f)
                     .child(ui::layout().size({180.0f, 0.0f}) >> std::move(mountScroll))
-                    .child(std::move(entryScroll), ui::boxSlot().fill());
+                    .child(ui::layout().fill() >> std::move(entryScroll));
 
     auto root = ui::column("ContentBrowserRoot")
                     .setSpacing(2.0f)
                     .setPadding({4.0f, 4.0f})
                     .child(ui::layout().size({0.0f, 26.0f}) >> std::move(header))
-                    .child(std::move(body), ui::boxSlot().fill());
+                    .child(ui::layout().fill() >> std::move(body));
     return root.release();
 }
 

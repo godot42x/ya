@@ -411,16 +411,16 @@ private:
     FMargin         _offsets{};
     EWidgetAlignH   _alignmentH    = EWidgetAlignH::Left;
     EWidgetAlignV   _alignmentV    = EWidgetAlignV::Top;
-    EWidgetSizeMode _widthSizeMode  = EWidgetSizeMode::Fixed;
-    EWidgetSizeMode _heightSizeMode = EWidgetSizeMode::Fixed;
+    EWidgetSizeMode _widthSizeMode  = EWidgetSizeMode::Auto;
+    EWidgetSizeMode _heightSizeMode = EWidgetSizeMode::Auto;
     glm::vec2       _pivot         = {0.0f, 0.0f};
     glm::vec2       _preferredSize = {0.0f, 0.0f};
     glm::vec2       _fixedSize     = {0.0f, 0.0f};
 };
 
-/// Construct-time canvas slot intent. Defaults to the historical absolute
-/// behaviour (anchorMin/anchorMax {0,0}): the child sits at the parent's
-/// top-left with its own size. Use fill (anchorMax {1,1}) to stretch.
+/// Construct-time canvas slot intent. Defaults to a visible top-left child
+/// sized from desired/intrinsic content (Auto/Auto). Use fill or explicit size
+/// to express stronger placement intent.
 struct FCanvasSlotArgs
 {
     glm::vec2 anchorMin = {0.0f, 0.0f};
