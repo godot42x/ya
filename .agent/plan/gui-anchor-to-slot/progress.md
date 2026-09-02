@@ -1,5 +1,89 @@
 # GUI layout unified 进度
 
+## 2026-09-02 — CP7 全量迁移最终门禁
+
+- 全仓库旧布局符号负向审计归零（第三方 GLM 的 operator>> 除外）；Declarative 只保留 typed Canvas/Box/Overlay slot builder。
+- 修正 slot 类型收口后暴露的 Workbench 页面误差：Canvas parent 不再传 Overlay slot，Box parent 不再传 Overlay slot。
+- 验证：ya-gui-closure-test 321/321；GUIWorkbench、ya-gui-minimal-host、ya-runtime 构建通过；GUIWorkbench --smoke-actions PASS；GPU/offscreen parity differing=0 ratio=0.0000。
+- 计划状态：CP3 public DSL、CP3/§3.4 typed slot compile-time gate、CP7 最终验证均完成；不保留 unified layout/spec legacy 入口。
+
+## 2026-09-02 — CP6 物理删除 LayoutSpec 能力模型
+
+- 删除 LayoutSpec.h、EUILayoutCap、FUILayoutSpec 及统一能力解析；SlotBuilders.h 仅保留 Canvas/Box/Overlay typed slot builder。
+- host 编译期约束改为精确 SlotArgs 类型匹配，所有现有构造路径已通过 closure 编译。
+- 验证：xmake b ya-gui-closure-test 通过。
+- 未完成：清理 Declarative/测试中的旧注释与诊断文本，执行全仓库负向审计及 GUIWorkbench、minimal-host、ya-runtime 构建/冒烟。
+
+## 2026-09-02 — CP3 typed SlotArgs contract migration
+
+- 编译期 host 契约从 EUILayoutCap 能力集合改为 builder 的精确 SlotArgs 类型匹配；Canvas/Box/Overlay host 分别声明 FCanvasSlotArgs/FBoxSlotArgs/FOverlaySlotArgs，popup 不声明通用 slot。
+- 该收口发现并修正 Workbench inspector/editor demo 两处 UIPanel 错用 overlaySlot 的真实迁移误差，统一改为 canvasSlot。
+- 验证：xmake b ya-gui-closure-test 通过。
+- 未完成：物理删除 LayoutSpec.h 与 SlotBuilders 中禁用的 FUILayoutSpecBuilder，清理旧注释和最终审计。
+
+## 2026-09-02 — CP6 删除旧 attachment 类型与构建入口
+
+- TUILayoutAttachment、统一 spec 的 BuilderBase 转发已删除；Build.h 不再接受 FUILayoutSpec 或旧 attachment。
+- typed slot builder 仍是唯一可用的构造期布局入口；closure target 构建通过。
+- 未完成：SlotBuilders 中禁用的历史类与 LayoutSpec.h 能力模型仍需物理删除，随后做全仓库旧符号/注释负向审计。
+
+## 2026-09-02 — CP6 legacy unified-layout entry removal
+
+- 删除 BuilderBase 中基于 TUILayoutAttachment 的 child/operator[]/applyLayout 转发，以及 Build.h 中 FUILayoutSpec/attachLayout/build overload；SlotBuilders 的旧 ui::layout() builder 已从编译路径移除。
+- 现有生产调用与测试均走 typed slot builder；closure 构建通过。
+- 未完成：彻底删除 LayoutSpec.h、FUILayoutSpec/能力枚举及 SlotBuilders 中禁用的历史实现，清理旧注释与最终负向审计。
+
+## 2026-09-02 — CP3 typed slot host compile-time gate
+
+- child(widget, slotBuilder) 与 child(UIElementRef, slotBuilder) 现在按 host 的允许布局能力约束 Canvas/Box/Overlay typed builder；错误父子 layout 组合在编译期拒绝，不再静默落空。
+- DeclarativeContract 的 panel anchor fixture 已迁移为显式 canvasSlot()；WidgetLayout 的旧 capability static assertions 改为 typed slot builder 接受/拒绝断言。
+- 验证：xmake b ya-gui-closure-test 通过。
+- 未完成：清理剩余旧 FUILayoutSpec/ui::layout() 实现与历史注释，并迁移/删除其它测试中的旧入口。
+
+## 2026-09-02 — CP3/CP4 WidgetLayout imperative/spec fixtures迁移
+
+- StretchXFixedHeightChromeLivesOnTheCanvasSlot、Canvas offset 更新、声明式/命令式等价性、build 初始化等运行时夹具改用 canvasSlot()、attachSlot() 与 typed build(..., slotBuilder)。
+- 本批未改变布局语义；旧 ui::layout() 运行时调用已从这组 fixture 清除，剩余仅为 capability static assertions 与历史注释。
+- 回归验证：xmake b ya-gui-closure-test、xmake r ya-gui-closure-test，321/321 通过。
+- 未完成：重写/删除 capability static assertions，迁移 WidgetTree/Declarative 中剩余旧 attachment fixture，随后删除 FUILayoutSpec、ui::layout() 及 legacy operators。
+
+## 2026-09-02 — CP3/CP4 测试迁移：WidgetLayout 剩余 Canvas/Selectable/Box edge 继续收口
+
+- Canvas alignment/pivot/Auto、SelectableRow single-child、Box preferred-size、动态 selectableRow build 等夹具改用显式 typed slot。
+- ya-gui-closure-test 构建通过。
+- 未完成：WidgetLayout 中 layout spec 专项测试与 capability static assertions仍需重写/删除，Declarative 旧实现仍待拆除。
+
+## 2026-09-02 — CP3/CP4 测试迁移：WidgetLayout Canvas/Overlay 几何契约继续 slot-first
+
+- Overlay align/preferred size、Canvas pivot/anchor/Auto/Fixed size 等测试夹具改为显式 typed slot。
+- 完整 ya-gui-closure-test：321/321 通过。
+- 未完成：WidgetLayout 剩余 imperative/spec/static-assert 测试及 Declarative/Builder 旧 API 仍待删除。
+
+## 2026-09-02 — CP3/CP4 测试迁移：WidgetLayout typed slot 几何夹具继续收口
+
+- Box cross-align、Box preferred size、SizeBox/Scroll 单子节点 align、Overlay preferred size 等测试改为显式 typed slot。
+- 回归验证：xmake b ya-gui-closure-test 通过。
+- 未完成：WidgetLayoutTest 仍有 Canvas anchor/imperative layout spec 与 capability static assertions；WidgetTreeTest 和 Declarative 旧 attachment 仍需继续迁移。
+
+## 2026-09-02 — CP3/CP4 测试迁移：WidgetTree dialog fixture 改用 box slot
+
+- DialogCentresContent 测试中的 Body→Inner child edge 改为显式 boxSlot preferredSize。
+- ya-gui-closure-test 构建通过。
+- 未完成：WidgetLayoutTest 剩余 layout spec、Declarative capability static assertions及旧 DSL 实现仍待清除。
+
+## 2026-09-02 — CP3/CP4 测试迁移：DeclarativeContract typed child edge 收口
+
+- DeclarativeContractTest 中 snapshot/container/input/split/overlay/size-box 等夹具改用显式 box/overlay/canvas slot。
+- 回归发现一个容器测试因移除 authored size 导致几何变化，已补回 parent-owned boxSlot preferredSize；完整 closure 321/321 通过。
+- 未完成：WidgetLayoutTest/WidgetTreeTest 仍有大量 layout spec，Declarative 内部 FUILayoutSpec/capability API 尚未删除。
+
+## 2026-09-02 — CP3/CP4 测试迁移起步：Declarative/WidgetLayout root 与 edge 夹具改用 typed slot
+
+- 一批声明式契约和 WidgetLayout 测试的 root fill、Canvas child、Box child、Overlay child 已改为显式 canvas/box/overlay slot。
+- 迁移中发现并修正了不适用的 canvasSlot operator>>、旧 static_assert capability 断言，保证测试语义不被误改。
+- 验证：xmake b ya-gui-closure-test 通过。
+- 未完成：测试中仍有大量 layout spec 用法；WidgetTreeTest 与 Declarative/WidgetLayout 的其余夹具需继续迁移，随后才能删除旧 public DSL。
+
 ## 2026-09-02 — CP3/CP4 生产迁移：EditorSurface Scene Save 对话框改用 slot-first
 
 - Scene Save panel/root、name row、search、mount/entry scroll body、preview 与 action buttons 全部改为显式 canvas/box/overlay slot builder。

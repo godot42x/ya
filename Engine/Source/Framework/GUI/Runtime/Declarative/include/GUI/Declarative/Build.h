@@ -44,7 +44,7 @@ inline void exposeImplicitCanvasBuild(const char* apiName, UIElement& parent, UI
     }
 
     YA_CORE_ERROR(
-        "{}: child '{}' attached to canvas host '{}' without explicit layout intent; using the default top-left Auto/Auto canvas slot. Use ui::layout().fill()/size()/anchor(...) when stronger placement is intended.",
+        "{}: child '{}' attached to canvas host '{}' without explicit slot intent; using the default top-left Auto/Auto canvas slot. Use canvasSlot().fill()/size()/anchor(...) when stronger placement is intended.",
         apiName,
         child._name,
         parent._name);
@@ -275,39 +275,7 @@ inline void attachCanvasSlot(UIElement& parent, UIElement& child, const FCanvasS
 /// Build with a unified layout spec: the host consumes the capabilities it
 /// implements. This is the shared entry point for DSL-authored and
 /// imperatively-attached children alike.
-template<UIWidgetBuilder TBuilder>
-UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, const FUILayoutSpec& spec)
-{
-    UIElementRef root = std::forward<TBuilder>(builder).release();
-    YA_CORE_ASSERT(root, "ui::build: empty root");
-    const WidgetAttachment attached = tree.attach(parent, root);
-    YA_CORE_ASSERT(attached.valid(), "ui::build: attach failed for '{}'", root->_name);
-    parent.initializeChildSlot(*root, [&spec](UIElement& child, UISlot& slot) {
-        applyLayoutSpecToSlot(slot, child, spec);
-    });
-    return root;
-}
-
-template<typename TWidget, typename TBuilder>
-std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&& builder, const FUILayoutSpec& spec)
-{
-    auto widget = std::dynamic_pointer_cast<TWidget>(std::forward<TBuilder>(builder).release());
-    YA_CORE_ASSERT(widget, "ui::buildAs: builder produced the wrong widget class");
-    const WidgetAttachment attached = tree.attach(parent, widget);
-    YA_CORE_ASSERT(attached.valid(), "ui::buildAs: attach failed for '{}'", widget->_name);
-    parent.initializeChildSlot(*widget, [&spec](UIElement& child, UISlot& slot) {
-        applyLayoutSpecToSlot(slot, child, spec);
-    });
-    return widget;
-}
-
-/// Apply a unified layout spec to an already-attached child.
-inline void attachLayout(UIElement& parent, UIElement& child, const FUILayoutSpec& spec)
-{
-    parent.initializeChildSlot(child, [&spec](UIElement& live, UISlot& slot) {
-        applyLayoutSpecToSlot(slot, live, spec);
-    });
-}
+ 
 
 template<UISlotBuilder TSlotBuilder>
     requires requires(const std::remove_reference_t<TSlotBuilder>& builder) { builder.args(); }
@@ -325,14 +293,6 @@ inline void attachSlot(UIElement& parent, UIElement& child, TSlotBuilder&& slotB
             if (auto* typed = slot.as<UIOverlaySlot>()) typed->apply(slotBuilder.args());
         }
     });
-}
-
-/// `ui::build(tree, parent, ui::layout().size({0, 22}) >> widget)`: the spec
-/// lands on the parent-owned edge at attach time.
-template<EUILayoutCap Caps, UIWidgetBuilder TChild>
-UIElementRef build(WidgetTree& tree, UIElement& parent, TUILayoutAttachment<Caps, TChild> attachment)
-{
-    return build(tree, parent, std::move(attachment.child), attachment.spec);
 }
 
 } // namespace ya::ui

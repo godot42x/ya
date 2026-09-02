@@ -340,7 +340,7 @@ void buildWidgetsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
                                                     state.textFieldValue = text;
                                                     log(std::format("TextField committed: '{}'", text)); }),
                                    ya::ui::boxSlot().preferredSize({220.0f, 26.0f})));
-    auto page = ya::ui::panel("WidgetsDemo").setColor(kPanelColor).child(std::move(form), ya::ui::overlaySlot().fill());
+    auto page = ya::ui::panel("WidgetsDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
     ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
 }
 
@@ -411,7 +411,7 @@ void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                                                 }
                                                 log(std::format("Spacing -> {:.1f}px", state.layoutSpacing)); }),
                                 ya::ui::boxSlot().preferredSize({220.0f, 22.0f})));
-    auto page = ya::ui::panel("LayoutDemo").setColor(kPanelColor).child(std::move(form), ya::ui::overlaySlot().fill());
+    auto page = ya::ui::panel("LayoutDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
     ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
 }
 
@@ -469,9 +469,9 @@ void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                                              }},
                                         });
                                         menu->openAt(tree, {300.0f, 220.0f}); }),
-                        ya::ui::overlaySlot().fill())
+                        ya::ui::boxSlot().preferredSize({180.0f, 26.0f}))
                     .child(body("MenusKeys", "Keyboard: Up/Down move, Enter activates, Esc closes."));
-    auto page = ya::ui::panel("MenusDemo").setColor(kPanelColor).child(std::move(form), ya::ui::overlaySlot().fill());
+    auto page = ya::ui::panel("MenusDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
     ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
 }
 
@@ -507,7 +507,7 @@ void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& 
                     .child(std::move(zone), ya::ui::boxSlot().preferredSize({0.0f, 120.0f}));
     auto page = ya::ui::panel("DragDropDemo")
                     .setColor(kPanelColor)
-                    .child(std::move(form), ya::ui::overlaySlot().fill());
+                    .child(std::move(form), ya::ui::canvasSlot().fill());
     ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
 }
 
@@ -626,7 +626,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                             .child(body("ModalHint", "Esc or clicking outside the dialog closes it; the page behind stays visible."));
     auto page = ya::ui::panel("ModalDemo")
                     .setColor(kPanelColor)
-                    .child(std::move(form), ya::ui::overlaySlot().fill());
+                    .child(std::move(form), ya::ui::canvasSlot().fill());
     ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
 }
 
@@ -681,7 +681,7 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
 
     auto page = ya::ui::panel("ScrollSplitDemo")
                     .setColor(kPanelColor)
-                    .child(std::move(layout), ya::ui::overlaySlot().fill());
+                    .child(std::move(layout), ya::ui::canvasSlot().fill());
     ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
     (void)state;
     (void)log;
@@ -1080,7 +1080,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     auto page = ya::ui::panel("GalleryDemo")
                     .setColor(kPanelColor)
-                    .child(ya::ui::scroll("GalleryScroll").child(std::move(form)), ya::ui::overlaySlot().fill());
+                    .child(ya::ui::scroll("GalleryScroll").child(std::move(form)), ya::ui::canvasSlot().fill());
     ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
     (void)state;
 }
@@ -1168,7 +1168,7 @@ void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoSta
 
     auto page = ya::ui::panel("InteractionsDemo")
                     .setColor(kPanelColor)
-                    .child(std::move(form), ya::ui::overlaySlot().fill());
+                    .child(std::move(form), ya::ui::canvasSlot().fill());
     ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
     (void)state;
 }
@@ -1195,7 +1195,7 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
     dock->setWorkspace(dockWs);
 
     auto page = ya::ui::column("DockDemo");
-    page.child(dock, ya::ui::overlaySlot().fill());
+    page.child(dock, ya::ui::boxSlot().fill());
     ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
 
     auto floatHost = std::make_shared<ya::UIDockFloatingHost>("DemoFloatingHost");
@@ -1412,7 +1412,7 @@ void buildRoundedRectDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
                 .setCornerRadius(c.radius)
                 .child(body(std::format("{}_Body", c.name), std::format("r={}", c.label))
                            .setHAlign(ya::EWidgetAlignH::Center)
-                           .setVAlign(ya::EWidgetAlignV::Center), ya::ui::overlaySlot().fill()),
+                           .setVAlign(ya::EWidgetAlignV::Center), ya::ui::canvasSlot().fill()),
             ya::ui::boxSlot().preferredSize({120.0f, 96.0f}));
     }
 
@@ -1438,7 +1438,7 @@ void buildRoundedRectDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
                             .child(body("RoundedExpected",
                                      "Expected: top-left card is a sharp rectangle; the others show progressively rounder corners. "
                                      "The nested card keeps its rounded outer alpha while the inner panel stays sharp."));
-    auto page = ya::ui::panel("RoundedRectDemo").setColor(kPanelColor).child(std::move(form), ya::ui::overlaySlot().fill());
+    auto page = ya::ui::panel("RoundedRectDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
     ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
     state.statusText = "Rounded Rect demo built";
     (void)log;

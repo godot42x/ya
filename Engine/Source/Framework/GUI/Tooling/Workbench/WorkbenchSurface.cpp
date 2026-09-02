@@ -452,7 +452,7 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                                     .child(std::move(sizeValue), ya::ui::boxSlot().preferredSize({220.0f, 14.0f}));
     auto inspector = ya::ui::panel("Inspector")
                          .setStyleKey("panel")
-                         .child(std::move(inspectorForm), ya::ui::overlaySlot().fill());
+                         .child(std::move(inspectorForm), ya::ui::canvasSlot().fill());
 
     auto rightSplit = ya::ui::splitPane("RightSplit")
                           .setSplitRatio(0.66f)
@@ -475,7 +475,7 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                          .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
                          .offset({0.0f, 6.0f})
                          .size({0.0f, 32.0f}))
-                    .child(std::move(mainSplit), ya::ui::overlaySlot().fill());
+                    .child(std::move(mainSplit), ya::ui::canvasSlot().fill());
     // The editor page is mounted into DemoHost, whose default layout is a
     // canvas host. The page root therefore must declare its own fill edge at
     // attach time; otherwise the default canvas slot leaves the whole editor

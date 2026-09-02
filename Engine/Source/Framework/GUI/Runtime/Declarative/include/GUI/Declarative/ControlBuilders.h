@@ -134,7 +134,7 @@ class UITextWidgetBuilder final : public TUIWidgetBuilder<UIText, UITextWidgetBu
 class UIButtonWidgetBuilder final : public TUIWidgetChildrenBuilder<UIButton, UIButtonWidgetBuilder>
 {
   public:
-    static constexpr EUILayoutCap kAllowedLayoutCaps = kSingleChildHostCaps;
+    using SlotArgs = FOverlaySlotArgs;
 
     explicit UIButtonWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdButton, std::move(key), std::move(displayName))
@@ -267,7 +267,7 @@ class UITextFieldWidgetBuilder final : public TUIWidgetBuilder<UITextField, UITe
 class UICheckBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UICheckBox, UICheckBoxWidgetBuilder>
 {
   public:
-    static constexpr EUILayoutCap kAllowedLayoutCaps = kSingleChildHostCaps;
+    using SlotArgs = FOverlaySlotArgs;
 
     explicit UICheckBoxWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdCheckBox, std::move(key), std::move(displayName))
@@ -344,7 +344,7 @@ class UICheckBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UICheckBox
 class UISelectableRowWidgetBuilder final : public TUIWidgetChildrenBuilder<UISelectableRow, UISelectableRowWidgetBuilder>
 {
   public:
-    static constexpr EUILayoutCap kAllowedLayoutCaps = kSingleChildHostCaps;
+    using SlotArgs = FOverlaySlotArgs;
 
     explicit UISelectableRowWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdSelectableRow, std::move(key), std::move(displayName))

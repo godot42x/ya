@@ -15,10 +15,8 @@ namespace ya::ui
 class UIPanelWidgetBuilder final : public TUIWidgetChildrenBuilder<UIPanel, UIPanelWidgetBuilder>
 {
   public:
-    /// A panel carries the canvas layout: anchor rects and edge insets are
-    /// honoured; main-axis sharing (grow) and grid cells are not, so
-    /// `panel[ui::layout().grow(1) >> w]` is rejected at compile time.
-    static constexpr EUILayoutCap kAllowedLayoutCaps = kCanvasHostCaps;
+    /// A panel carries canvas layout through its parent-owned Canvas slot.
+    using SlotArgs = FCanvasSlotArgs;
 
     explicit UIPanelWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdPanel, std::move(key), std::move(displayName))
@@ -50,8 +48,6 @@ class UIPanelWidgetBuilder final : public TUIWidgetChildrenBuilder<UIPanel, UIPa
     }
 
     // Canvas host: child rect is resolved from the canvas slot edge.
-    //   panel("X")[ui::layout().fill() >> node]             // old .fillParent()
-    //   panel("X")[ui::layout().anchor(a, b) >> node]       // old .setAnchors(a,b)
     // A bare child(node) now means the host default canvas slot itself
     // (top-left anchor, Auto/Auto size), so child()/children()/operator[] all
     // share one consistent default-layout surface.
@@ -87,10 +83,8 @@ class UIPanelWidgetBuilder final : public TUIWidgetChildrenBuilder<UIPanel, UIPa
 class UIContainerWidgetBuilder final : public TUIWidgetChildrenBuilder<UIContainer, UIContainerWidgetBuilder>
 {
   public:
-    /// Box hosts share space along the main axis; anchor rects and grid cells
-    /// are not honoured, so `column[ui::layout().anchor(...) >> w]` is rejected
-    /// at compile time rather than silently dropped.
-    static constexpr EUILayoutCap kAllowedLayoutCaps = kBoxHostCaps;
+    /// Box hosts share space along the main axis through Box slots.
+    using SlotArgs = FBoxSlotArgs;
 
     explicit UIContainerWidgetBuilder(std::string key, std::string displayName = {},
                                       EWidgetBoxLayout direction = EWidgetBoxLayout::Vertical)
@@ -214,7 +208,7 @@ class UISplitPaneWidgetBuilder final : public TUIWidgetChildrenBuilder<UISplitPa
 {
   public:
     /// Split hosts position two panes by ratio.
-    static constexpr EUILayoutCap kAllowedLayoutCaps = kSplitHostCaps;
+    using SlotArgs = FOverlaySlotArgs;
 
     explicit UISplitPaneWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdSplitPane, std::move(key), std::move(displayName))
@@ -314,7 +308,7 @@ class UIScrollViewportWidgetBuilder final : public TUIWidgetChildrenBuilder<UISc
 {
   public:
     /// Single-child host: the content fills the viewport.
-    static constexpr EUILayoutCap kAllowedLayoutCaps = kSingleChildHostCaps;
+    using SlotArgs = FOverlaySlotArgs;
 
     explicit UIScrollViewportWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdScrollViewport, std::move(key), std::move(displayName))
@@ -333,8 +327,7 @@ class UIScrollViewportWidgetBuilder final : public TUIWidgetChildrenBuilder<UISc
         return std::move(*this);
     }
 
-    // A scroll viewport owns both axes, so child intent is how the content sits
-    // in the content box: ui::scroll("S")[ui::layout().fill() >> node].
+    // A scroll viewport owns both axes; child intent is expressed by its Overlay slot.
     // The using keeps the plain child(node) overloads visible, since declaring
     // any child() here would otherwise hide the base set.
     using TUIWidgetChildrenBuilder::child;
@@ -368,7 +361,7 @@ class UIOverlayWidgetBuilder final : public TUIWidgetChildrenBuilder<UIOverlay, 
 {
   public:
     /// Overlay host: layered children positioned by alignment.
-    static constexpr EUILayoutCap kAllowedLayoutCaps = kOverlayHostCaps;
+    using SlotArgs = FOverlaySlotArgs;
 
     explicit UIOverlayWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdOverlay, std::move(key), std::move(displayName))
@@ -418,7 +411,7 @@ class UISizeBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UISizeBox, 
 {
   public:
     /// Single-child host: the child fills the box.
-    static constexpr EUILayoutCap kAllowedLayoutCaps = kSingleChildHostCaps;
+    using SlotArgs = FOverlaySlotArgs;
 
     explicit UISizeBoxWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdSizeBox, std::move(key), std::move(displayName))
@@ -497,9 +490,7 @@ class UISizeBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UISizeBox, 
         return std::move(*this);
     }
 
-    // A size box owns both axes (width/height overrides + padding), so child
-    // intent is only how the content sits in the resulting box:
-    // ui::sizeBox("B")[ui::layout().align(Center, Center) >> node].
+    // A size box owns both axes; child intent is expressed by its Overlay slot.
     // The using keeps the plain child(node) overloads visible.
     using TUIWidgetChildrenBuilder::child;
 

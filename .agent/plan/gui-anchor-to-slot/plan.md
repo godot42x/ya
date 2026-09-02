@@ -117,7 +117,7 @@ _layoutRect、setLayoutRect()、layoutAssigned() 保留，但仅作为布局结�
 
 ### 3.1 Public DSL：slot-first，而不是 ui::layout() 总入口
 
-public authoring 以显式 typed slot 为主路径：不同 parent 直接使用自己的 xxxSlot()，而不是把所有布局参数继续堆进 ui::layout()。ui::layout() 最多只保留为极薄的辅助命名空间，若后续确认没有独立价值，则直接删除，不保留兼容入口。
+public authoring 以显式 typed slot 为唯一入口：不同 parent 直接使用自己的 xxxSlot()；ui::layout()、unified spec 和 modifier attachment 已物理删除，不保留兼容入口。
 
 ~~~cpp
 ui::canvas("Root")
@@ -148,7 +148,7 @@ ui::column("Root")
 - ui::tableSlot()：row / column / span / cell-specific contract。
 
 - 只有语义真的跨 slot 完全一致的 helper 才允许抽公共薄层；不能再以“统一入口”为目标，把 typed slot 契约压扁成单一 ui::layout()。
-- public 头文件中不再保留 ui::layout() 作为主 authoring 入口；若迁移完成后仍留该名字，只能是别名级薄层，并且不保留 legacy 兼容语义。
+- public 头文件中不再保留 ui::layout()、FUILayoutSpec 或 unified attachment operator。
 
 Canvas 是 layout 类型，不以 panelSlot 命名；新增 UICanvasLayout + UICanvasSlot。所有 authored edge 字段都直接落到对应 typed slot，由宿主 layout 消费，不能写回 child。
 
@@ -185,9 +185,9 @@ ui::canvas("Root")
 
 该语法直接把 public DSL 和 runtime typed slot 对齐，不再保留一层独立 layout-spec 主路径。
 
-### 3.5 不同 layout 的案例与 capability 隔离（历史草案，已被 3.1–3.4 的 operator DSL 取代）
+### 3.5 不同 layout 的案例与类型隔离（历史草案，已由 typed slot 实现取代）
 
-以下内容保留作 capability 设计备忘，但 public DSL 以 3.1–3.4 的 parent[layoutSpec >> widget] 为准。
+以下内容仅保留为历史设计记录；当前 public DSL 以 child(node, typedSlotBuilder) 为准。
 
 #### Canvas
 
@@ -316,11 +316,11 @@ ui::canvas("Root")[
 - 实现 `offset(glm::vec2)`、四边 `insets(FMargin)`、anchor span、alignment/pivot、preferred/min/max 和 Auto/Fixed/Stretch 语义。
 - Panel 改为 Canvas layout host。
 - 不创建绑定视觉控件的 FCanvasPanelSlot 命名。
-- public DSL 使用 layout().anchor()/offset()/insets()/fill()，不暴露 canvasSlot() 工厂。
+- public DSL 使用 canvasSlot().anchor()/offset()/insets()/fill()。
 
 ### CP4 — 统一所有 layout host 的 slot 消费（已完成）
 - Box、Overlay、SingleChild、Split、Scroll、Grid、Canvas 全部通过 typed slot arrange。
-- layoutSpec >> widget 形成 placed-child，在 materialization 时转换为 typed slot；不写 child geometry。
+- child(node, typedSlotBuilder) 在 materialization 时直接初始化 typed slot；不写 child geometry。
 - reparent/detach 时销毁并重建 slot。
 
 ### CP5 — 全仓 API / runtime 迁移（已完成）
@@ -334,7 +334,7 @@ ui::canvas("Root")[
 - 旧文档不做兼容读取；若需要迁移工具，只做一次性离线转换器，不进入 runtime。
 
 ### CP7 — 验证
-- 编译期断言：child builder 不存在任何 child-owned geometry modifier；parent[layoutSpec >> widget] 只接受兼容 capability。
+- 编译期断言：child builder 不存在任何 child-owned geometry modifier；parent child() 只接受匹配 host SlotArgs 的 typed slot。
 - DSL 可读性样例覆盖：layout spec 与 widget 平行可见，fill/grow/anchor 可继续链式调整。
 - 几何测试：intrinsic measure、constraints、Canvas `offset`/`insets`、anchor span、alignment、min/max、reparent。
 - snapshot parity、GUIWorkbench、GameEditor、headless host 全部验证。

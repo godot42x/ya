@@ -534,10 +534,8 @@ TEST(WidgetLayoutTest, UnifiedLayoutSpecMapsBoxCrossAlignStartAndEnd)
 {
     WidgetTree tree({.width = 220, .height = 100});
     auto row = ui::row("Row")
-                   .child(ui::layout().align(EWidgetAlignH::Left, EWidgetAlignV::Top).preferredSize({40.0f, 20.0f}) >>
-                          ui::panel("Top"))
-                   .child(ui::layout().align(EWidgetAlignH::Left, EWidgetAlignV::Bottom).preferredSize({40.0f, 20.0f}) >>
-                          ui::panel("Bottom"))
+                   .child(ui::panel("Top"), ui::boxSlot().preferredSize({40.0f, 20.0f}).crossAlign(EUIBoxSlotCrossAlignment::Start))
+                   .child(ui::panel("Bottom"), ui::boxSlot().preferredSize({40.0f, 20.0f}).crossAlign(EUIBoxSlotCrossAlignment::End))
                    .release();
 
     FCanvasSlotArgs rowArgs;
@@ -687,7 +685,7 @@ TEST(WidgetLayoutTest, BoxLayoutSpecSizeUsesTheSlotRatherThanMutatingChildGeomet
     ASSERT_NE(zoneRaw, nullptr);
 
     auto column = ui::column("Column")
-                      [ui::layout().size({0.0f, 120.0f}) >> zone]
+                      .child(zone, ui::boxSlot().preferredSize({0.0f, 120.0f}))
                       .release();
 
     WidgetTree tree({.width = 300, .height = 200});
@@ -977,7 +975,7 @@ TEST(WidgetLayoutTest, EdgeLayoutSpecAppliesToTheChildNotTheParent)
     registerSyntheticFont(16, 8.0f);
 
     auto panel = ui::panel("Panel")
-                     [ui::layout().fill() >> ui::text("Label").setText("Hi")]
+                     .child(ui::text("Label").setText("Hi"), ui::canvasSlot().fill())
                      .release();
 
     WidgetTree tree({.width = 400, .height = 200});
@@ -998,8 +996,8 @@ TEST(WidgetLayoutTest, EdgeLayoutSpecAppliesToTheChildNotTheParent)
 // === Single-child slot intent (path-A hosts that own both axes) ===
 //
 // Scroll viewport / size box own both axes, so a child's own anchors are
-// ignored. Intent is carried by the parent-child edge via ui::layout(),
-// where Fill reproduces the historical stretch and align() opts out.
+// ignored. Intent is carried by the parent-child edge via overlaySlot(),
+// where Fill reproduces the historical stretch and alignment opts out.
 
 TEST(WidgetLayoutTest, SingleChildSlotDefaultsToFillReproducingStretch)
 {
@@ -1027,8 +1025,7 @@ TEST(WidgetLayoutTest, SingleChildSlotAlignKeepsDesiredSizeAndCenters)
     registerSyntheticFont(16, 8.0f);
 
     auto box = ui::sizeBox("Box")
-                   [ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Center).preferredSize({80.0f, 40.0f}) >>
-                    ui::text("Label").setText("Hi")]
+                   .child(ui::text("Label").setText("Hi"), ui::overlaySlot().align(EUIOverlayAlignment::Center, EUIOverlayAlignment::Center).preferredSize({80.0f, 40.0f}))
                    .release();
 
     WidgetTree tree({.width = 200, .height = 100});
@@ -1052,7 +1049,7 @@ TEST(WidgetLayoutTest, SingleChildSlotAlignKeepsDesiredSizeAndCenters)
 TEST(WidgetLayoutTest, UnifiedLayoutSpecInsetsSingleChildFillEdge)
 {
     auto box = ui::sizeBox("Box")
-                   [ui::layout().fill().insets(8.0f, 2.0f, 6.0f, 4.0f) >> ui::panel("Inner")]
+                   .child(ui::panel("Inner"), ui::overlaySlot().fill().inset(FMargin{8.0f, 2.0f, 6.0f, 4.0f}))
                    .release();
 
     WidgetTree tree({.width = 120, .height = 60});
@@ -1077,8 +1074,7 @@ TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToSingleChildSlot)
     registerSyntheticFont(16, 8.0f);
 
     auto box = ui::sizeBox("Box")
-                   [ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Center) >>
-                    ui::text("Label").setText("Hi")]
+                   .child(ui::text("Label").setText("Hi"), ui::overlaySlot().align(EUIOverlayAlignment::Center, EUIOverlayAlignment::Center))
                    .release();
 
     WidgetTree tree({.width = 200, .height = 100});
@@ -1107,8 +1103,7 @@ TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToScrollViewportSingleChildSlot)
     registerSyntheticFont(16, 8.0f);
 
     auto viewport = ui::scroll("Viewport")
-                        [ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Top).size({40.0f, 160.0f}) >>
-                         ui::text("Label").setText("Hi")]
+                        .child(ui::text("Label").setText("Hi"), ui::overlaySlot().align(EUIOverlayAlignment::Center, EUIOverlayAlignment::Start).preferredSize({40.0f, 160.0f}))
                         .release();
 
     WidgetTree tree({.width = 200, .height = 100});
@@ -1143,7 +1138,7 @@ TEST(WidgetLayoutTest, PathAFillIsExpressedOnTheSlotNotTheChild)
     // label does not.
     auto column = ui::column("Column")
                       .child(ui::text("Label").setText("Hi"))
-                      .child(ui::layout().fill() >> ui::text("Filled").setText("Hi"))
+                      .child(ui::text("Filled").setText("Hi"), ui::boxSlot().fill())
                       .release();
 
     WidgetTree tree({.width = 300, .height = 200});
@@ -1168,9 +1163,8 @@ TEST(WidgetLayoutTest, PathAFillIsExpressedOnTheSlotNotTheChild)
 TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToOverlaySlot)
 {
     auto overlay = ui::overlay("Host")
-                       [ui::layout().fill().size({10.0f, 10.0f}) >> ui::panel("Fill")]
-                       [ui::layout().align(EWidgetAlignH::Right, EWidgetAlignV::Top).size({20.0f, 12.0f}) >>
-                        ui::panel("Badge")]
+                       .child(ui::panel("Fill"), ui::overlaySlot().fill().preferredSize({10.0f, 10.0f}))
+                       .child(ui::panel("Badge"), ui::overlaySlot().align(EUIOverlayAlignment::End, EUIOverlayAlignment::Start).preferredSize({20.0f, 12.0f}))
                        .release();
 
     WidgetTree tree({.width = 200, .height = 100});
@@ -1207,8 +1201,7 @@ TEST(WidgetLayoutTest, CanvasPivotCentresAChildOnItsAnchoredPosition)
     registerSyntheticFont(16, 8.0f);
 
     auto panel = ui::panel("Panel")
-                     [ui::layout().anchor({0.5f, 0.5f}, {0.5f, 0.5f}).pivot({0.5f, 0.5f}).size({80.0f, 24.0f}) >>
-                      ui::text("Inner").setText("Hi")]
+                     .child(ui::text("Inner").setText("Hi"), ui::canvasSlot().anchor({0.5f, 0.5f}, {0.5f, 0.5f}).pivot({0.5f, 0.5f}).size({80.0f, 24.0f}))
                      .release();
 
     WidgetTree tree({.width = 300, .height = 200});
@@ -1228,9 +1221,7 @@ TEST(WidgetLayoutTest, CanvasPreferredSizeDrivesAnAutoAxis)
     registerSyntheticFont(16, 8.0f);
 
     auto panel = ui::panel("Panel")
-                     [ui::layout().widthSizeMode(EWidgetSizeMode::Auto)
-                          .heightSizeMode(EWidgetSizeMode::Auto)
-                          .preferredSize({123.0f, 45.0f}) >> ui::text("Inner").setText("Hi")]
+                     .child(ui::text("Inner").setText("Hi"), ui::canvasSlot().widthSizeMode(EWidgetSizeMode::Auto).heightSizeMode(EWidgetSizeMode::Auto).preferredSize({123.0f, 45.0f}))
                      .release();
 
     WidgetTree tree({.width = 300, .height = 200});
@@ -1254,7 +1245,7 @@ TEST(WidgetLayoutTest, CanvasLayoutSpecSizeUsesTheSlotRatherThanMutatingChildGeo
     ASSERT_NE(childRaw, nullptr);
 
     auto panel = ui::panel("Panel")
-                     [ui::layout().size({120.0f, 32.0f}) >> child]
+                     .child(child, ui::canvasSlot().size({120.0f, 32.0f}))
                      .release();
 
     WidgetTree tree({.width = 300, .height = 200});
@@ -1283,8 +1274,8 @@ TEST(WidgetLayoutTest, StretchXFixedHeightChromeLivesOnTheCanvasSlot)
     hostSlot.fixedSize = {400.0f, 300.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, hostSlot).valid());
     host->addDetachedChild(bar);
-    ui::attachLayout(*host, *bar,
-                    ui::layout().anchor({0.0f, 0.0f}, {1.0f, 0.0f}).size({0.0f, 30.0f}).args());
+    ui::attachSlot(*host, *bar,
+                   ui::canvasSlot().anchor({0.0f, 0.0f}, {1.0f, 0.0f}).size({0.0f, 30.0f}));
     tree.layout();
 
     const auto* slot = dynamic_cast<const UICanvasSlot*>(host->getSlotForChild(*bar));
@@ -1306,12 +1297,11 @@ TEST(WidgetLayoutTest, CanvasSlotOffsetAndFixedSizeCanBeUpdatedAfterAttach)
     hostSlot.fixedSize = {400.0f, 300.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, hostSlot).valid());
     host->addDetachedChild(child);
-    ui::attachLayout(*host, *child,
-                    ui::layout()
-                        .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
-                        .offset({-70.0f, -45.0f})
-                        .size({140.0f, 90.0f})
-                        .args());
+    ui::attachSlot(*host, *child,
+                   ui::canvasSlot()
+                       .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
+                       .offset({-70.0f, -45.0f})
+                       .size({140.0f, 90.0f}));
 
     auto* slot = dynamic_cast<UICanvasSlot*>(host->getSlotForChild(*child));
     ASSERT_NE(slot, nullptr);
@@ -1355,24 +1345,22 @@ TEST(WidgetLayoutTest, ExplicitCanvasAttachDoesNotMutateChildGeometry)
 
 TEST(WidgetLayoutTest, DeclarativeBracketAndAttachLayoutProduceEquivalentCanvasSlots)
 {
-    const auto specBuilder = ui::layout()
+    const auto slotBuilder = ui::canvasSlot()
                                  .anchor({0.25f, 0.5f}, {0.25f, 0.5f})
                                  .offset(glm::vec2{11.0f, 13.0f})
-                                 .insets(2.0f, 4.0f, 6.0f, 8.0f)
-                                 .align(EWidgetAlignH::Center, EWidgetAlignV::Bottom)
+                                 .insets(FMargin{2.0f, 4.0f, 6.0f, 8.0f})
+                                 .alignment(EWidgetAlignH::Center, EWidgetAlignV::Bottom)
                                  .widthSizeMode(EWidgetSizeMode::Auto)
                                  .heightSizeMode(EWidgetSizeMode::Fixed)
                                  .pivot({0.5f, 1.0f})
                                  .size({70.0f, 30.0f});
-    const FUILayoutSpec spec = specBuilder.args();
-
     auto declarative = ui::panel("Declarative")
-                           [specBuilder >> ui::text("DeclarativeChild").setText("Hi")]
+                           .child(ui::text("DeclarativeChild").setText("Hi"), slotBuilder)
                            .release();
     auto imperative      = ui::panel("Imperative").release();
     auto imperativeChild = ui::text("ImperativeChild").setText("Hi").release();
     imperative->addDetachedChild(imperativeChild);
-    ui::attachLayout(*imperative, *imperativeChild, spec);
+    ui::attachSlot(*imperative, *imperativeChild, slotBuilder);
 
     ASSERT_EQ(declarative->getChildren().size(), 1u);
     const UIElement* declarativeChild = declarative->getChildren()[0].get();
@@ -1402,12 +1390,11 @@ TEST(WidgetLayoutTest, BuildWithLayoutSpecInitializesTheCanvasSlot)
     panelSlot.fixedSize = {300.0f, 200.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot).valid());
 
-    const FUILayoutSpec spec = ui::layout()
+    const auto slotBuilder = ui::canvasSlot()
                                    .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
                                    .pivot({0.5f, 0.5f})
-                                   .size({80.0f, 24.0f})
-                                   .args();
-    const UIElementRef child = ui::build(tree, *panel, ui::text("BuiltChild").setText("Hi"), spec);
+                                   .size({80.0f, 24.0f});
+    const UIElementRef child = ui::build(tree, *panel, ui::text("BuiltChild").setText("Hi"), slotBuilder);
     ASSERT_NE(child, nullptr);
 
     const auto* slot = dynamic_cast<const UICanvasSlot*>(panel->getSlotForChild(*child));
@@ -1449,7 +1436,7 @@ TEST(WidgetLayoutTest, CanvasHostIsNotBoundToThePanelVisuals)
 
     // ui::canvas() carries the anchor layout without a panel's own visuals.
     auto host = ui::canvas("Host")
-                    [ui::layout().fill() >> ui::text("Inner").setText("Hi")]
+                    .child(ui::text("Inner").setText("Hi"), ui::canvasSlot().fill())
                     .release();
 
     WidgetTree tree({.width = 200, .height = 100});
@@ -1549,39 +1536,16 @@ TEST(WidgetLayoutTest, ReparentingAcrossHostsDoesNotLeakTheOldHostIntent)
 
 // A box host shares space along the main axis: it honours grow but not anchors
 // or grid cells.
-static_assert(LayoutCapsCompatible<EUILayoutCap::Grow, kBoxHostCaps>);
-static_assert(!LayoutCapsCompatible<EUILayoutCap::Anchor, kBoxHostCaps>);
-static_assert(!LayoutCapsCompatible<EUILayoutCap::Cell, kBoxHostCaps>);
 
 // A canvas host positions by anchor rects and edge insets: it honours anchors
 // but not main-axis sharing or grid cells.
-static_assert(LayoutCapsCompatible<EUILayoutCap::Anchor, kCanvasHostCaps>);
-static_assert(LayoutCapsCompatible<EUILayoutCap::Offset, kCanvasHostCaps>);
-static_assert(LayoutCapsCompatible<EUILayoutCap::Inset, kCanvasHostCaps>);
-static_assert(!LayoutCapsCompatible<EUILayoutCap::Grow, kCanvasHostCaps>);
-static_assert(!LayoutCapsCompatible<EUILayoutCap::Cell, kCanvasHostCaps>);
 
 // A grid host places children in cells and nothing else positional.
-static_assert(LayoutCapsCompatible<EUILayoutCap::Cell, kGridHostCaps>);
-static_assert(!LayoutCapsCompatible<EUILayoutCap::Grow, kGridHostCaps>);
-static_assert(!LayoutCapsCompatible<EUILayoutCap::Anchor, kGridHostCaps>);
-static_assert(!LayoutCapsCompatible<EUILayoutCap::Align, kGridHostCaps>);
 
 // Fill / alignment / spacing are understood everywhere.
-static_assert(LayoutCapsCompatible<EUILayoutCap::Fill, kBoxHostCaps>);
-static_assert(LayoutCapsCompatible<EUILayoutCap::Fill, kCanvasHostCaps>);
-static_assert(LayoutCapsCompatible<EUILayoutCap::Align, kSingleChildHostCaps>);
 
 // The builder type carries the union of every capability applied to it, so the
 // host check sees the whole intent (not just the last modifier).
-static_assert(decltype(ui::layout().grow(1.0f))::caps() == EUILayoutCap::Grow);
-static_assert(decltype(ui::layout().anchor({0.0f, 0.0f}, {1.0f, 1.0f}))::caps() ==
-              EUILayoutCap::Anchor);
-static_assert(decltype(ui::layout().cell(0, 1))::caps() == EUILayoutCap::Cell);
-static_assert((decltype(ui::layout().fill().align(EWidgetAlignH::Center))::caps() &
-               EUILayoutCap::Fill) != EUILayoutCap::None);
-static_assert((decltype(ui::layout().fill().align(EWidgetAlignH::Center))::caps() &
-               EUILayoutCap::Align) != EUILayoutCap::None);
 
 // The concrete rejections the plan calls out: an anchor intent cannot be
 // attached to a column (box host), and a grow intent cannot be attached to a
@@ -1589,46 +1553,30 @@ static_assert((decltype(ui::layout().fill().align(EWidgetAlignH::Center))::caps(
 // The same check bound to the actual host types: operator[] is constrained by
 // LayoutCapsCompatible against the host's declared set, so these are exactly the
 // accept/reject decisions the compiler makes at every attach site. (The
-// end-to-end proof is that `column[ui::layout().anchor(...) >> w]` fails to
-// build - it was caught in WorkbenchDemoPages and had to be expressed in box
-// terms instead.)
-static_assert(LayoutCapsCompatible<ya::EUILayoutCap::Grow, ui::UIContainerWidgetBuilder::kAllowedLayoutCaps>);
-static_assert(!LayoutCapsCompatible<ya::EUILayoutCap::Anchor, ui::UIContainerWidgetBuilder::kAllowedLayoutCaps>);
-static_assert(!LayoutCapsCompatible<ya::EUILayoutCap::Cell, ui::UIContainerWidgetBuilder::kAllowedLayoutCaps>);
-static_assert(LayoutCapsCompatible<ya::EUILayoutCap::Anchor, ui::UIPanelWidgetBuilder::kAllowedLayoutCaps>);
-static_assert(LayoutCapsCompatible<ya::EUILayoutCap::Offset, ui::UIPanelWidgetBuilder::kAllowedLayoutCaps>);
-static_assert(LayoutCapsCompatible<ya::EUILayoutCap::Inset, ui::UIPanelWidgetBuilder::kAllowedLayoutCaps>);
-static_assert(!LayoutCapsCompatible<ya::EUILayoutCap::Grow, ui::UIPanelWidgetBuilder::kAllowedLayoutCaps>);
-static_assert(!LayoutCapsCompatible<ya::EUILayoutCap::Cell, ui::UIPanelWidgetBuilder::kAllowedLayoutCaps>);
-static_assert(LayoutCapsCompatible<ya::EUILayoutCap::Align, ui::UIButtonWidgetBuilder::kAllowedLayoutCaps>);
-static_assert(!LayoutCapsCompatible<ya::EUILayoutCap::Anchor, ui::UIButtonWidgetBuilder::kAllowedLayoutCaps>);
-static_assert(!LayoutCapsCompatible<ya::EUILayoutCap::Fill, ui::UIPopupOverlayWidgetBuilder::kAllowedLayoutCaps>);
+// Host/slot mismatches are rejected by the typed SlotArgs contract.
 
 // child(layout >> widget) and parent[layout >> widget] must share the exact
 // same capability gate; the child() form may not bypass the compile-time host
 // contract.
-static_assert(ui::LayoutAttachmentAcceptedBy<ui::UIContainerWidgetBuilder,
-                                         decltype(ui::layout().grow(1.0f))::caps()>);
-static_assert(!ui::LayoutAttachmentAcceptedBy<ui::UIContainerWidgetBuilder,
-                                          decltype(ui::layout().anchor({0.0f, 0.0f}, {1.0f, 1.0f}))::caps()>);
-static_assert(ui::LayoutAttachmentAcceptedBy<ui::UIButtonWidgetBuilder,
-                                         decltype(ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Center))::caps()>);
-static_assert(!ui::LayoutAttachmentAcceptedBy<ui::UIButtonWidgetBuilder,
-                                          decltype(ui::layout().anchor({0.0f, 0.0f}, {1.0f, 1.0f}))::caps()>);
-static_assert(!ui::LayoutAttachmentAcceptedBy<ui::UIPopupOverlayWidgetBuilder,
-                                          decltype(ui::layout().fill())::caps()>);
 
 // === Canvas layout capabilities ===
 //
 // Canvas is an ordinary layout a host installs; these cover the capabilities its
 // slot carries: per-edge insets, per-axis size mode and alignment.
 
+static_assert(ui::SlotBuilderAcceptedBy<ui::UIContainerWidgetBuilder, decltype(ui::boxSlot())>);
+static_assert(!ui::SlotBuilderAcceptedBy<ui::UIContainerWidgetBuilder, decltype(ui::canvasSlot())>);
+static_assert(ui::SlotBuilderAcceptedBy<ui::UIPanelWidgetBuilder, decltype(ui::canvasSlot())>);
+static_assert(!ui::SlotBuilderAcceptedBy<ui::UIPanelWidgetBuilder, decltype(ui::boxSlot())>);
+static_assert(ui::SlotBuilderAcceptedBy<ui::UIButtonWidgetBuilder, decltype(ui::overlaySlot())>);
+static_assert(!ui::SlotBuilderAcceptedBy<ui::UIButtonWidgetBuilder, decltype(ui::canvasSlot())>);
+
 TEST(WidgetLayoutTest, CanvasFourSideOffsetsInsetTheChildWithoutAnExplicitSize)
 {
     registerSyntheticFont(16, 8.0f);
 
     auto panel = ui::panel("Panel")
-                     [ui::layout().fill().insets(10.0f, 20.0f, 30.0f, 40.0f) >> ui::text("Inner").setText("Hi")]
+                     .child(ui::text("Inner").setText("Hi"), ui::canvasSlot().fill().insets(FMargin{10.0f, 20.0f, 30.0f, 40.0f}))
                      .release();
 
     WidgetTree tree({.width = 300, .height = 200});
@@ -1650,8 +1598,7 @@ TEST(WidgetLayoutTest, CanvasAutoSizeModeUsesMeasuredContentNotTheParent)
     registerSyntheticFont(16, 8.0f);
 
     auto panel = ui::panel("Panel")
-                     [ui::layout().fill().widthSizeMode(EWidgetSizeMode::Auto) >>
-                      ui::text("Inner").setText("Hi")]
+                     .child(ui::text("Inner").setText("Hi"), ui::canvasSlot().fill().widthSizeMode(EWidgetSizeMode::Auto))
                      .release();
 
     WidgetTree tree({.width = 300, .height = 200});
@@ -1671,8 +1618,7 @@ TEST(WidgetLayoutTest, CanvasAlignmentPlacesAFixedSizeChildInsideTheArea)
     registerSyntheticFont(16, 8.0f);
 
     auto panel = ui::panel("Panel")
-                     [ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Bottom).size({80.0f, 24.0f}) >>
-                      ui::text("Inner").setText("Hi")]
+                     .child(ui::text("Inner").setText("Hi"), ui::canvasSlot().alignment(EWidgetAlignH::Center, EWidgetAlignV::Bottom).size({80.0f, 24.0f}))
                      .release();
 
     WidgetTree tree({.width = 300, .height = 200});
@@ -1757,7 +1703,7 @@ TEST(WidgetLayoutTest, BuildWithLayoutAttachmentInitializesTheBoxSlot)
 
     ui::build(tree,
               *column,
-              ui::layout().size({0.0f, 22.0f}) >> ui::selectableRow("Row").setItemId("a"));
+              ui::selectableRow("Row").setItemId("a"), ui::boxSlot().preferredSize({0.0f, 22.0f}));
     tree.layout();
 
     ASSERT_FALSE(column->getChildrenInPaintOrder().empty());
@@ -1774,8 +1720,7 @@ TEST(WidgetLayoutTest, UnifiedLayoutSpecAppliesToSelectableRowSingleChildSlot)
     registerSyntheticFont(16, 8.0f);
 
     auto row = ui::selectableRow("Row")
-                     [ui::layout().align(EWidgetAlignH::Center, EWidgetAlignV::Center).size({40.0f, 16.0f}) >>
-                      ui::text("Label").setText("Hi")]
+                     .child(ui::text("Label").setText("Hi"), ui::overlaySlot().align(EUIOverlayAlignment::Center, EUIOverlayAlignment::Center).preferredSize({40.0f, 16.0f}))
                      .release();
 
     WidgetTree tree({.width = 200, .height = 100});
@@ -1846,7 +1791,7 @@ TEST(WidgetLayoutTest, AttachSeedsAuthoredChildSizeOntoTheBoxSlot)
     registerSyntheticFont(16, 8.0f);
 
     auto column = ui::column("Column")
-                       .child(ui::layout().preferredSize({90.0f, 28.0f}) >> ui::text("Inner").setText("Hi"))
+                       .child(ui::text("Inner").setText("Hi"), ui::boxSlot().preferredSize({90.0f, 28.0f}))
                        .release();
 
     WidgetTree tree({.width = 240, .height = 100});
@@ -1914,7 +1859,7 @@ TEST(WidgetLayoutTest, LayoutSpecPreferredSizeWinsOverAuthoredChildSize)
     registerSyntheticFont(16, 8.0f);
 
     auto column = ui::column("Column")
-                       [ui::layout().size({0.0f, 22.0f}) >> ui::text("Inner").setText("Hi")]
+                       .child(ui::text("Inner").setText("Hi"), ui::boxSlot().preferredSize({0.0f, 22.0f}))
                        .release();
 
     WidgetTree tree({.width = 240, .height = 100});

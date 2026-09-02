@@ -860,7 +860,7 @@ TEST(WidgetTreeTest, DialogCentresContentThroughThePopupCanvasSlot)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       content = ui::column("Body")
-                              [ui::layout().size({120.0f, 40.0f}) >> ui::panel("Inner")]
+                              .child(ui::panel("Inner"), ui::boxSlot().preferredSize({120.0f, 40.0f}))
                               .release();
     auto dialog = UIDialog::create("Confirm", content);
 

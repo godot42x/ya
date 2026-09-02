@@ -26,7 +26,7 @@ namespace ya::ui
 {
 
 /// Explicit authoring builder for a canvas parent->child edge.
-/// This is the primary public path for canvas placement; `ui::layout()` is not.
+/// This is the primary public path for canvas placement.
 class FCanvasSlotBuilder final
 {
   public:
@@ -81,8 +81,7 @@ class FBoxSlotBuilder final
         _args.sizeRule = EUIBoxSlotSizeRule::Fill;
         _args.weight   = weight;
         return std::move(*this);
-    }
-
+}
     /// Fill the row's main axis (X). No-op as an intent on a column: kept
     /// because most call sites read better with the axis named, and a mismatch
     /// is caught by the box's own direction, not by the builder.
@@ -264,184 +263,5 @@ class FOverlaySlotBuilder final
 [[nodiscard]] inline FCanvasSlotBuilder canvasSlot() { return {}; }
 
 [[nodiscard]] inline FOverlaySlotBuilder overlaySlot() { return {}; }
-
-/// The public layout-intent builder: `ui::layout()` starts a spec and each
-/// method ADDS A CAPABILITY TO THE TYPE.
-///
-///     ui::layout().fill()                     // BoxCapability + CanvasCapability
-///     ui::layout().anchor({0,0}, {1,0})       // CanvasCapability
-///     ui::layout().grow(1.0f)                 // BoxCapability
-///     ui::layout().cell(0, 1)                 // GridCapability
-///
-/// The capability set is part of the type, so a host can reject an unsupported
-/// intent at compile time: `column[ui::layout().anchor(...) >> w]` does not
-/// compile because a box host does not implement Anchor. Modifiers are
-/// rvalue-qualified so each one can return a builder of the widened type.
-template<EUILayoutCap Caps = EUILayoutCap::None>
-class FUILayoutSpecBuilder
-{
-  public:
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Fill> fill() &&
-    {
-        auto next          = widen<EUILayoutCap::Fill>();
-        next._spec.anchorMin = {0.0f, 0.0f};
-        next._spec.anchorMax = {1.0f, 1.0f};
-        next._spec.sizeRule  = EUIBoxSlotSizeRule::Fill;
-        return next;
-    }
-
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Anchor> anchor(glm::vec2 min, glm::vec2 max) &&
-    {
-        auto next            = widen<EUILayoutCap::Anchor>();
-        next._spec.anchorMin = min;
-        next._spec.anchorMax = max;
-        return next;
-    }
-
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Grow> grow(float weight) &&
-    {
-        auto next          = widen<EUILayoutCap::Grow>();
-        next._spec.weight   = weight;
-        next._spec.sizeRule = EUIBoxSlotSizeRule::Fill;
-        return next;
-    }
-
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Cell> cell(int rowValue, int columnValue) &&
-    {
-        auto next         = widen<EUILayoutCap::Cell>();
-        next._spec.row    = rowValue;
-        next._spec.column = columnValue;
-        return next;
-    }
-
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Align> align(EWidgetAlignH value) &&
-    {
-        auto next         = widen<EUILayoutCap::Align>();
-        next._spec.alignH = value;
-        return next;
-    }
-
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Align> align(EWidgetAlignH h, EWidgetAlignV v) &&
-    {
-        auto next         = widen<EUILayoutCap::Align>();
-        next._spec.alignH = h;
-        next._spec.alignV = v;
-        return next;
-    }
-
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Margin> margin(FMargin value) &&
-    {
-        auto next         = widen<EUILayoutCap::Margin>();
-        next._spec.margin = value;
-        return next;
-    }
-
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Margin> margin(glm::vec2 value) &&
-    {
-        auto next         = widen<EUILayoutCap::Margin>();
-        next._spec.margin = FMargin::hv(value);
-        return next;
-    }
-
-    /// Per-edge insets / inner padding on the parent-owned edge. On canvas this
-    /// means "fill the resolved anchor area minus these insets"; on
-    /// overlay/single-child hosts it is the child padding inside the parent
-    /// content box.
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Inset> insets(float left, float top,
-                                                                            float right, float bottom) &&
-    {
-        auto next        = widen<EUILayoutCap::Inset>();
-        next._spec.inset = FMargin(left, top, right, bottom);
-        return next;
-    }
-
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Inset> insets(FMargin value) &&
-    {
-        auto next        = widen<EUILayoutCap::Inset>();
-        next._spec.inset = value;
-        return next;
-    }
-
-    /// Auto = size to content on that axis; Fixed = honour the authored size.
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::SizeMode> widthSizeMode(EWidgetSizeMode value) &&
-    {
-        auto next              = widen<EUILayoutCap::SizeMode>();
-        next._spec.widthSizeMode = value;
-        return next;
-    }
-
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::SizeMode> heightSizeMode(EWidgetSizeMode value) &&
-    {
-        auto next               = widen<EUILayoutCap::SizeMode>();
-        next._spec.heightSizeMode = value;
-        return next;
-    }
-
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Offset> offset(glm::vec2 value) &&
-    {
-        auto next       = widen<EUILayoutCap::Offset>();
-        next._spec.offset = value;
-        return next;
-    }
-
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Size> size(glm::vec2 value) &&
-    {
-        auto next       = widen<EUILayoutCap::Size>();
-        next._spec.size = value;
-        return next;
-    }
-
-    /// Which point of the child lands on the resolved position (canvas hosts):
-    /// (0,0) top-left, (0.5,0.5) centre. Centring a child this way does not need
-    /// its size to be known in advance.
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Pivot> pivot(glm::vec2 value) &&
-    {
-        auto next       = widen<EUILayoutCap::Pivot>();
-        next._spec.pivot = value;
-        return next;
-    }
-
-    /// Host-authored preferred size. Canvas hosts use this on Auto axes;
-    /// overlay/single-child hosts use it as the desired aligned size; box hosts
-    /// use it as UIBoxSlot::preferredSize on Auto edges.
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | EUILayoutCap::Size> preferredSize(glm::vec2 value) &&
-    {
-        auto next              = widen<EUILayoutCap::Size>();
-        next._spec.preferredSize = value;
-        return next;
-    }
-
-    [[nodiscard]] const FUILayoutSpec& args() const { return _spec; }
-    operator const FUILayoutSpec&() const { return _spec; }
-
-    /// The capability set this builder's type carries.
-    [[nodiscard]] static constexpr EUILayoutCap caps() { return Caps; }
-
-  private:
-    template<EUILayoutCap Add>
-    [[nodiscard]] FUILayoutSpecBuilder<Caps | Add> widen() const
-    {
-        FUILayoutSpecBuilder<Caps | Add> next;
-        next._spec      = _spec;
-        next._spec.caps = Caps | Add;
-        return next;
-    }
-
-    FUILayoutSpec _spec{};
-
-    template<EUILayoutCap>
-    friend class FUILayoutSpecBuilder;
-};
-
-/// Start a layout-intent spec.
-[[nodiscard]] inline FUILayoutSpecBuilder<> layout() { return {}; }
-
-/// `ui::layout().fill() >> widget` binds the freshly built spec to a child,
-/// carrying the capability set in the type so the host can check it.
-template<EUILayoutCap Caps, typename TChild>
-[[nodiscard]] inline TUILayoutAttachment<Caps, TChild> operator>>(const FUILayoutSpecBuilder<Caps>& spec, TChild&& child)
-{
-    return TUILayoutAttachment<Caps, TChild>{spec.args(), std::forward<TChild>(child)};
-}
 
 } // namespace ya::ui

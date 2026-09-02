@@ -99,7 +99,7 @@ TEST(DeclarativeContractTest, DslCreatedWidgetsCarryRegistryTypeId)
                         ui::text("label").setText("hi"),
                         ui::button("btn").child(ui::text("btn_Label").setText("go")),
                         ui::textField("field"));
-    const UIElementRef root = ui::build(tree, *host, std::move(page), ui::layout().fill());
+    const UIElementRef root = ui::build(tree, *host, std::move(page), ui::canvasSlot().fill());
 
     ASSERT_NE(root, nullptr);
     EXPECT_EQ(root->_typeId, kTypeIdContainer);
@@ -119,7 +119,7 @@ TEST(DeclarativeContractTest, DslNodesAreAnonymousUnlessIdentityIsRequested)
                     .children(ui::text().setText("anonymous"),
                               ui::text().displayName("Title").setText("named"),
                               ui::panel().key("panel_id"));
-    const UIElementRef root = ui::build(tree, *host, std::move(page), ui::layout().fill());
+    const UIElementRef root = ui::build(tree, *host, std::move(page), ui::canvasSlot().fill());
 
     ASSERT_NE(root, nullptr);
     EXPECT_TRUE(root->_stableKey.empty());
@@ -140,13 +140,13 @@ TEST(DeclarativeContractTest, PanelChildAndChildrenShareTheSameDefaultCanvasSlot
 
     auto childPath = ui::panel("child_path")
                          .child(ui::text("label_a").setText("A"));
-    const UIElementRef childRoot = ui::build(tree, *host, std::move(childPath), ui::layout().fill());
+    const UIElementRef childRoot = ui::build(tree, *host, std::move(childPath), ui::canvasSlot().fill());
 
     tree.detach(*childRoot);
 
     auto childrenPath = ui::panel("children_path")
                             .children(ui::text("label_b").setText("B"));
-    const UIElementRef childrenRoot = ui::build(tree, *host, std::move(childrenPath), ui::layout().fill());
+    const UIElementRef childrenRoot = ui::build(tree, *host, std::move(childrenPath), ui::canvasSlot().fill());
 
     auto* childPanel = dynamic_cast<UIPanel*>(childRoot.get());
     auto* childrenPanel = dynamic_cast<UIPanel*>(childrenRoot.get());
@@ -367,8 +367,7 @@ TEST(DeclarativeContractTest, DirectConstructSnapshotIsStableAcrossRepeatedBuild
     WidgetTree tree({.width = 320, .height = 200});
     auto page = ui::column("root")
                     .children(
-                        ui::layout().size({120.0f, 60.0f}) >>
-                            ui::panel("panel").setColor({0.3f, 0.4f, 0.5f, 1.0f}),
+                        ui::panel("panel").setColor({0.3f, 0.4f, 0.5f, 1.0f}),
                         ui::text("label").setText("stable"));
     FCanvasSlotArgs rootSlot;
     rootSlot.fixedSize = {200.0f, 100.0f};
@@ -395,7 +394,7 @@ TEST(DeclarativeContractTest, DirectConstructMutatesEnabledAndFocusPolicyInPlace
             .child(ui::text("action_Label").setText("Action"))
             .setEnabled(false)
             .setFocusPolicy(EWidgetFocusPolicy::Focusable));
-    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), ui::layout().fill());
+    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), ui::canvasSlot().fill());
 
     auto* button = dynamic_cast<UIButton*>(root->getChildren()[0].get());
     ASSERT_NE(button, nullptr);
@@ -619,7 +618,7 @@ TEST(DeclarativeContractTest, DirectConstructExternalPatchOnlyChangesFallbackUnd
     WidgetTree tree({.width = 640, .height = 360});
     auto label = std::make_shared<Reactive<std::string>>("Bound");
     auto page = ui::column("root").child(ui::text("caption").setText("Fallback").bindText(label));
-    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), ui::layout().fill());
+    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), ui::canvasSlot().fill());
 
     auto* text = dynamic_cast<UIText*>(root->getChildren()[0].get());
     ASSERT_NE(text, nullptr);
@@ -646,9 +645,8 @@ TEST(DeclarativeContractTest, DirectConstructContainerLayoutHonorsAuthoredSizeAn
     auto page = ui::row("root")
                     .setSpacing(4.0f)
                     .setPadding({2.0f, 3.0f})
-                    .children(
-                        ui::layout().size({20.0f, 10.0f}) >> ui::panel("left"),
-                        ui::layout().size({30.0f, 10.0f}) >> ui::panel("right"));
+                    .child(ui::panel("left"), ui::boxSlot().preferredSize({20.0f, 10.0f}))
+                    .child(ui::panel("right"), ui::boxSlot().preferredSize({30.0f, 10.0f}));
     FCanvasSlotArgs rootSlot;
     rootSlot.fixedSize = {100.0f, 20.0f};
     const UIElementRef first = ui::build(treeA, *treeA.getLayer(WidgetTree::ELayer::Content), std::move(page), rootSlot);
@@ -682,7 +680,7 @@ TEST(DeclarativeContractTest, DirectConstructContainerLayoutHonorsAuthoredSizeAn
 
     WidgetTree clipTree({.width = 640, .height = 360});
     auto clipPage = ui::row("clip_root")
-                        .child(ui::layout().size({80.0f, 10.0f}) >> ui::panel("overflow"));
+                        .child(ui::panel("overflow"), ui::boxSlot().preferredSize({80.0f, 10.0f}));
     FCanvasSlotArgs clipRootSlot;
     clipRootSlot.fixedSize = {50.0f, 20.0f};
     const UIElementRef clipped =
@@ -768,7 +766,7 @@ TEST(DeclarativeContractTest, BuildWithoutRootSpecOnCanvasHostFallsBackToVisible
     WidgetTree tree({.width = 320, .height = 200});
     UIElement* host = tree.getLayer(WidgetTree::ELayer::Content);
 
-    auto page = ui::column("root").child(ui::layout().size({48.0f, 18.0f}) >> ui::panel("box"));
+    auto page = ui::column("root").child(ui::panel("box"), ui::boxSlot().preferredSize({48.0f, 18.0f}));
     const UIElementRef root = ui::build(tree, *host, std::move(page));
     ASSERT_NE(root, nullptr);
 
@@ -814,7 +812,7 @@ TEST(DeclarativeContractTest, CompoundWidgetBuilderBuildsTypedLiveWidget)
 
     auto builder = ui::compound<FTestCompoundWidget>("compound_builder");
     auto ref = builder.share();
-    UIElementRef root = ui::build(tree, *host, std::move(builder), ui::layout().fill());
+    UIElementRef root = ui::build(tree, *host, std::move(builder), ui::canvasSlot().fill());
 
     ASSERT_NE(root, nullptr);
     ASSERT_NE(ref, nullptr);
@@ -851,7 +849,7 @@ TEST(DeclarativeContractTest, DirectConstructBindTextUpdatesWithoutRebuild)
     auto label = std::make_shared<Reactive<std::string>>("Pressed: 0");
 
     auto page = ui::column("root").child(ui::text("counter").bindText(label));
-    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), ui::layout().fill());
+    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), ui::canvasSlot().fill());
 
     auto* text = dynamic_cast<UIText*>(root->getChildren()[0].get());
     ASSERT_NE(text, nullptr);
@@ -869,11 +867,10 @@ TEST(DeclarativeContractTest, DirectConstructInputWidgetsCarryRegistryTypeId)
     auto page = ui::column("root")
                     .children(
                         ui::checkBox("c").setChecked(true).setText("on"),
-                        ui::layout().size({100.0f, 22.0f}) >> ui::slider("s").setValue(0.4f),
-                        ui::layout().size({80.0f, 26.0f}) >>
-                            ui::comboBox("cb").setItems({"A", "B"}).setSelectedIndex(1),
-                        ui::layout().size({16.0f, 16.0f}) >> ui::image("img").setAssetPath("builtin/checkerboard"));
-    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), ui::layout().fill());
+                        ui::slider("s").setValue(0.4f),
+                        ui::comboBox("cb").setItems({"A", "B"}).setSelectedIndex(1),
+                        ui::image("img").setAssetPath("builtin/checkerboard"));
+    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), ui::canvasSlot().fill());
 
     ASSERT_EQ(root->getChildren().size(), 4u);
     auto* check = dynamic_cast<UICheckBox*>(root->getChildren()[0].get());
@@ -901,7 +898,7 @@ TEST(DeclarativeContractTest, DirectConstructContainerClipAndMainAxisAlignment)
     auto page = ui::column("root")
                     .setClipChildren(true)
                     .setMainAxisAlignment(EWidgetMainAxisAlignment::End)
-                    .child(ui::layout().size({20.0f, 10.0f}) >> ui::panel("cell"));
+                    .child(ui::panel("cell"), ui::boxSlot().preferredSize({20.0f, 10.0f}));
     FCanvasSlotArgs rootSlot;
     rootSlot.fixedSize = {80.0f, 100.0f};
     const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), rootSlot);
@@ -919,7 +916,8 @@ TEST(DeclarativeContractTest, DirectConstructPanelCornerRadiusAndAnchors)
                     .setColor({0.2f, 0.3f, 0.4f, 1.0f})
                     .setCornerRadius(8.0f)
                     .setStyleKey("panel.canvas")
-                    [ui::layout().anchor({0.1f, 0.2f}, {0.9f, 0.8f}) >> ui::text("caption").setText("r=8")];
+                    .child(ui::text("caption").setText("r=8"),
+                           ui::canvasSlot().anchor({0.1f, 0.2f}, {0.9f, 0.8f}));
     FCanvasSlotArgs rootSlot;
     rootSlot.fixedSize = {80.0f, 40.0f};
     const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), rootSlot);
@@ -943,12 +941,12 @@ TEST(DeclarativeContractTest, DirectConstructSplitScrollAndFillSlot)
                      .setSplitRatio(0.4f)
                      .setPadding({0.0f, 8.0f})
                      .children(
-                         ui::scroll("scroll").child(ui::layout().size({20.0f, 40.0f}) >> ui::panel("content")),
+                         ui::scroll("scroll").child(ui::panel("content"), ui::overlaySlot().preferredSize({20.0f, 40.0f})),
                          ui::panel("right"));
     auto page = ui::column("root").child(ui::text("title").setText("h"));
     FCanvasSlotArgs rootSlot;
     rootSlot.fixedSize = {200.0f, 120.0f};
-    page.child(ui::layout().fill() >> std::move(split));
+    page.child(std::move(split), ui::boxSlot().fill());
     const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), rootSlot);
 
     auto* column = dynamic_cast<UIContainer*>(root.get());
@@ -970,7 +968,7 @@ TEST(DeclarativeContractTest, DirectConstructBoxSlotOverlayAndSizeBox)
 {
     WidgetTree tree({.width = 320, .height = 200});
     auto stack = ui::overlay("stack")
-                     .child(ui::layout().size({8.0f, 8.0f}) >> ui::panel("bg"))
+                     .child(ui::panel("bg"), ui::overlaySlot().preferredSize({8.0f, 8.0f}))
                      .child(ui::panel("badge"),
                             FOverlaySlotArgs{
                                 .hAlign  = EUIOverlayAlignment::End,
@@ -992,7 +990,7 @@ TEST(DeclarativeContractTest, DirectConstructBoxSlotOverlayAndSizeBox)
     page.child(ui::sizeBox("pad")
                    .setPadding(FMargin::all(3.0f))
                    .setWidth(30.0f)
-                   .child(ui::layout().size({4.0f, 4.0f}) >> ui::panel("inner")));
+                   .child(ui::panel("inner"), ui::overlaySlot().preferredSize({4.0f, 4.0f})));
     const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), rootSlot);
 
     auto* column = dynamic_cast<UIContainer*>(root.get());
@@ -1025,7 +1023,7 @@ TEST(DeclarativeContractTest, DirectConstructTooltipAndWrap)
             .setTooltip("hello")
             .child(ui::text("tip_Label").setText("T")),
         ui::text("wrap").setText("long wrap").setWrap(true).setMaxWrapWidth(120.0f));
-    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), ui::layout().fill());
+    const UIElementRef root = ui::build(tree, *tree.getLayer(WidgetTree::ELayer::Content), std::move(page), ui::canvasSlot().fill());
 
     auto* column = dynamic_cast<UIContainer*>(root.get());
     ASSERT_NE(column, nullptr);

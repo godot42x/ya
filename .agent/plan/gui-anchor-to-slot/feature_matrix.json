@@ -51,7 +51,7 @@
     {
       "scenario": "统一 layout modifier",
       "before": "不同 parent 暴露不同 child 添加 API，或显式构造 slot",
-      "after": "统一 ui::layout() >> child / parent[...]，modifier 类型携带 layout capability",
+      "after": "parent.child(child, typedSlotBuilder)；host SlotArgs 类型在编译期隔离错误布局参数",
       "status": "done"
     },
     {

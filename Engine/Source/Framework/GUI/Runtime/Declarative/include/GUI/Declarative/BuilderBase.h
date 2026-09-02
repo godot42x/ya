@@ -2,7 +2,6 @@
 
 #include "Core/Log.h"
 
-#include "GUI/Declarative/LayoutSpec.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/UITypeRegistry.h"
@@ -31,14 +30,12 @@ concept UISlotBuilder = requires(const std::remove_reference_t<T>& builder) {
 template<typename T>
 concept UICompoundWidgetType = std::derived_from<T, UICompoundWidget>;
 
-/// Forward declaration: a layout spec bound to a child (defined below).
-/// The capability set is part of the type so hosts can reject unsupported
-/// intent at compile time.
-template<EUILayoutCap Caps, typename TChild>
-struct TUILayoutAttachment;
-
-template<typename THost, EUILayoutCap Caps>
-concept LayoutAttachmentAcceptedBy = LayoutCapsCompatible<Caps, allowedLayoutCaps<THost>()>;
+template<typename THost, typename TSlotBuilder>
+concept SlotBuilderAcceptedBy = UISlotBuilder<TSlotBuilder> && requires {
+    typename THost::SlotArgs;
+} && std::same_as<
+        std::remove_cvref_t<decltype(std::declval<const std::remove_reference_t<TSlotBuilder>&>().args())>,
+        typename THost::SlotArgs>;
 
 /// Take a UIElementRef from either a builder (via release()) or an already-built
 /// shared_ptr, so `spec >> widget` accepts both forms.
@@ -271,47 +268,35 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
         return std::move(this->derived());
     }
 
-    template<UIWidgetBuilder TChild, UISlotBuilder TSlotBuilder>
+    template<UIWidgetBuilder TChild, typename TSlotBuilder>
+        requires SlotBuilderAcceptedBy<TDerived, TSlotBuilder>
     TDerived& child(TChild&& builder, TSlotBuilder&& slotBuilder) &
     {
         applySlotBuilder(std::forward<TChild>(builder).release(), std::forward<TSlotBuilder>(slotBuilder));
         return this->derived();
     }
 
-    template<UIWidgetBuilder TChild, UISlotBuilder TSlotBuilder>
+    template<UIWidgetBuilder TChild, typename TSlotBuilder>
+        requires SlotBuilderAcceptedBy<TDerived, TSlotBuilder>
     TDerived&& child(TChild&& builder, TSlotBuilder&& slotBuilder) &&
     {
         applySlotBuilder(std::forward<TChild>(builder).release(), std::forward<TSlotBuilder>(slotBuilder));
         return std::move(this->derived());
     }
 
-    template<UISlotBuilder TSlotBuilder>
+    template<typename TSlotBuilder>
+        requires SlotBuilderAcceptedBy<TDerived, TSlotBuilder>
     TDerived& child(UIElementRef node, TSlotBuilder&& slotBuilder) &
     {
         applySlotBuilder(std::move(node), std::forward<TSlotBuilder>(slotBuilder));
         return this->derived();
     }
 
-    template<UISlotBuilder TSlotBuilder>
+    template<typename TSlotBuilder>
+        requires SlotBuilderAcceptedBy<TDerived, TSlotBuilder>
     TDerived&& child(UIElementRef node, TSlotBuilder&& slotBuilder) &&
     {
         applySlotBuilder(std::move(node), std::forward<TSlotBuilder>(slotBuilder));
-        return std::move(this->derived());
-    }
-
-    template<EUILayoutCap Caps, typename TChild>
-        requires LayoutAttachmentAcceptedBy<TDerived, Caps>
-    TDerived& child(TUILayoutAttachment<Caps, TChild> attachment) &
-    {
-        applyLayout(takeElementRef(std::move(attachment.child)), attachment.spec);
-        return this->derived();
-    }
-
-    template<EUILayoutCap Caps, typename TChild>
-        requires LayoutAttachmentAcceptedBy<TDerived, Caps>
-    TDerived&& child(TUILayoutAttachment<Caps, TChild> attachment) &&
-    {
-        applyLayout(takeElementRef(std::move(attachment.child)), attachment.spec);
         return std::move(this->derived());
     }
 
@@ -384,65 +369,7 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
         });
     }
 
-    /// Attach a child with a unified layout spec. The host consumes the
-    /// capabilities it implements and reports the rest, so intent is never
-    /// silently dropped.
-    void applyLayout(UIElementRef node, const FUILayoutSpec& spec)
-    {
-        attachChild(std::move(node), [&spec](UIElement& child, UISlot& slot) {
-            applyLayoutSpecToSlot(slot, child, spec);
-        });
-    }
-
-  public:
-    /// Unified attach: `parent[ui::layout().fill() >> widget]`.
-    ///
-    /// The capability set is checked against the host's declared set at compile
-    /// time, so an intent the host cannot honour never compiles instead of being
-    /// silently dropped. Hosts declare their set via `kAllowedLayoutCaps`;
-    /// builders without one stay permissive until migrated.
-    template<EUILayoutCap Caps, typename TChild>
-        requires LayoutAttachmentAcceptedBy<TDerived, Caps>
-    TDerived& operator[](TUILayoutAttachment<Caps, TChild> attachment) &
-    {
-        applyLayout(takeElementRef(std::move(attachment.child)), attachment.spec);
-        return static_cast<TDerived&>(*this);
-    }
-
-    template<EUILayoutCap Caps, typename TChild>
-        requires LayoutAttachmentAcceptedBy<TDerived, Caps>
-    TDerived&& operator[](TUILayoutAttachment<Caps, TChild> attachment) &&
-    {
-        applyLayout(takeElementRef(std::move(attachment.child)), attachment.spec);
-        return std::move(static_cast<TDerived&>(*this));
-    }
-
-    /// Apply a spec to an already-attached child (the host resolution step).
-    void applyLayoutSpec(UIElement& child, const FUILayoutSpec& spec)
-    {
-        this->_widget->initializeChildSlot(child, [&spec](UIElement& live, UISlot& slot) {
-            applyLayoutSpecToSlot(slot, live, spec);
-        });
-    }
 };
-
-/// A layout spec bound to a child: the result of `ui::layout().fill() >> widget`.
-template<EUILayoutCap Caps, typename TChild>
-struct TUILayoutAttachment
-{
-    FUILayoutSpec spec{};
-    TChild        child{};
-};
-
-/// `layoutSpec >> widget` binds intent to a child for `parent[...]`.
-template<EUILayoutCap Caps, typename TChild>
-[[nodiscard]] inline TUILayoutAttachment<Caps, TChild> operator>>(const FUILayoutSpec& spec, TChild&& child)
-{
-    return TUILayoutAttachment<Caps, TChild>{spec, std::forward<TChild>(child)};
-}
-
-// NOTE: the `FUILayoutSpecBuilder >> widget` overload lives in SlotBuilders.h,
-// next to the builder type it binds.
 
 template<UICompoundWidgetType TWidget>
 class TUICompoundWidgetBuilder final : public TUIWidgetBuilder<TWidget, TUICompoundWidgetBuilder<TWidget>>
