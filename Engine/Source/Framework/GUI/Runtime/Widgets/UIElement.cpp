@@ -8,12 +8,15 @@
 #include "GUI/Binding/Reactive.h"
 
 #include <algorithm>
+#include <atomic>
 
 namespace ya
 {
+namespace { std::atomic<uint64_t> s_nextWidgetRuntimeId{1}; }
 
 UIElement::UIElement(std::string name, std::string styleKey)
     : _name(std::move(name))
+    , _runtimeId(s_nextWidgetRuntimeId.fetch_add(1, std::memory_order_relaxed))
     , _styleKey(std::move(styleKey))
 {}
 

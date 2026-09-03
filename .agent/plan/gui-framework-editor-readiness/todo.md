@@ -9,10 +9,11 @@
 
 ## Phase 1：生命周期与缓存
 
-- [ ] 稳定 widget runtime identity / cache generation。
-- [ ] detach/destroy 清理 paint cache。
-- [ ] 完整 draw-item equality/debug hash。
-- [ ] stale cache、reparent、cross-tree、popup/drag teardown 测试。
+- [x] 稳定 widget runtime identity / cache generation。
+- [x] detach/destroy 清理 paint cache。
+- [x] 完整 draw-item equality/debug hash。
+- [x] stale cache、reparent、cross-tree 测试。
+- [x] 对象重分配、popup/drag teardown 和 snapshot build mutation policy。
 
 ## Phase 2：Invalidate / Layout
 

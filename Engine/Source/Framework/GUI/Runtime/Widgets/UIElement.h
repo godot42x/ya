@@ -227,6 +227,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Stable registry type ID, set by UITypeRegistry::createInstance (empty
     /// for framework-internal / direct make_shared instances).
     std::string _typeId;
+    const uint64_t _runtimeId;
     /// Theme catalog key. Empty disables theme lookup. Styled subclasses pass
     /// their family default through the constructor ("button", "panel", ...).
     std::string _styleKey;
@@ -235,6 +236,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// (UIDocument). Registry owns the authoring type ID; this is the C++
     /// class identity.
     [[nodiscard]] virtual type_index_t getTypeIndex() const { return ya::type_index_v<UIElement>; }
+    [[nodiscard]] uint64_t getRuntimeId() const { return _runtimeId; }
 
     // === Field serialization (UIDocument / authoring) ===
     /// Serialize reflected fields (base + own) into a JSON object.

@@ -98,6 +98,15 @@ struct UIFrameDrawItem
     glm::vec2 lineFrom      = {0.0f, 0.0f};
     glm::vec2 lineTo        = {0.0f, 0.0f};
     float     lineThickness = 1.0f;
+    bool operator==(const UIFrameDrawItem& other) const
+    {
+        return kind == other.kind && pos == other.pos && size == other.size && color == other.color &&
+               bClipped == other.bClipped && clip.pos == other.clip.pos && clip.extent == other.clip.extent &&
+               texture == other.texture && uvOffset == other.uvOffset && uvScale == other.uvScale &&
+               cornerRadius == other.cornerRadius && font == other.font && text == other.text &&
+               textScale == other.textScale && lineFrom == other.lineFrom && lineTo == other.lineTo &&
+               lineThickness == other.lineThickness;
+    }
 };
 
 /// Immutable frame packet consumed by the compose pass.
@@ -183,8 +192,8 @@ class YA_GUI_API UIFrameBuilder
     /// Bind the double-buffered per-widget draw-item caches (owned by
     /// WidgetTree). Unbound builders always re-run every widget.
     void bindCache(
-        const std::unordered_map<const UIElement*, std::vector<UIFrameDrawItem>>* readCache,
-        std::unordered_map<const UIElement*, std::vector<UIFrameDrawItem>>* writeCache)
+        const std::unordered_map<uint64_t, std::vector<UIFrameDrawItem>>* readCache,
+        std::unordered_map<uint64_t, std::vector<UIFrameDrawItem>>* writeCache)
     {
         _readCache  = readCache;
         _writeCache = writeCache;
@@ -212,8 +221,8 @@ class YA_GUI_API UIFrameBuilder
     std::vector<UIFrameDrawItem> _items;
     uint32_t                   _widgetCount = 0;
     uint32_t                   _rebuildCount = 0;
-    const std::unordered_map<const UIElement*, std::vector<UIFrameDrawItem>>* _readCache  = nullptr;
-    std::unordered_map<const UIElement*, std::vector<UIFrameDrawItem>>*       _writeCache = nullptr;
+    const std::unordered_map<uint64_t, std::vector<UIFrameDrawItem>>* _readCache  = nullptr;
+    std::unordered_map<uint64_t, std::vector<UIFrameDrawItem>>*       _writeCache = nullptr;
 };
 
 } // namespace ya

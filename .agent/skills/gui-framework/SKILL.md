@@ -44,7 +44,8 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   （`beginDrag/updateDrag/endDrag/cancelDrag`，payload 为 string）由树管理，目标控件实现
   `canAcceptDrop/onDrop/setDropHighlight`。
 - 快照：`buildSnapshot`（layout dirty 时才 layout + paint）→ 不可变 `UIFrameSnapshot`；
-  录制只消费快照。命令录制期绝不读 live tree。
+  录制只消费快照。命令录制期绝不读 live tree。业务代码不得在 paint/layout
+  回调中直接修改 tree 结构；tooltip/drag 等 framework maintenance 只在显式 pass boundary 执行。
 
 ## 布局契约（SizeToContent）
 

@@ -681,6 +681,17 @@ void WidgetTree::detach(UIElement& widget)
     }
 
     clearTransientState(widget);
+    std::vector<UIElement*> cachePending{&widget};
+    while (!cachePending.empty()) {
+        UIElement* node = cachePending.back();
+        cachePending.pop_back();
+        for (auto& cache : _itemCache) {
+            cache.erase(node->getRuntimeId());
+        }
+        for (const auto& child : node->_children) {
+            cachePending.push_back(child.get());
+        }
+    }
     invalidateLayout();
 }
 
@@ -792,12 +803,7 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
             for (size_t i = 0; i < incItems.size(); ++i) {
                 const UIFrameDrawItem& a = incItems[i];
                 const UIFrameDrawItem& b = fullItems[i];
-                if (a.kind != b.kind || a.pos != b.pos || a.size != b.size ||
-                    a.color != b.color || a.text != b.text ||
-                    a.lineFrom != b.lineFrom || a.lineTo != b.lineTo ||
-                    a.lineThickness != b.lineThickness ||
-                    a.bClipped != b.bClipped ||
-                    (a.bClipped && (a.clip.pos != b.clip.pos || a.clip.extent != b.clip.extent))) {
+                if (!(a == b)) {
                     YA_CORE_ERROR(
                         "GUI validation frame {}: draw item {} differs between incremental "
                         "(kind {} pos ({}, {}) size ({}, {})) and full repaint (kind {} pos ({}, {}) size ({}, {})) — "

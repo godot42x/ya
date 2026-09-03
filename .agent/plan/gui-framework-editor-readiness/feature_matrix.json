@@ -5,8 +5,8 @@
   "features": [
     {"id": "layout.slot_first", "status": "implemented", "phase": 0, "evidence": ["WidgetLayoutTest"]},
     {"id": "retained.widget_tree", "status": "implemented", "phase": 0, "evidence": ["WidgetTreeTest", "GUIHeadlessHostTest"]},
-    {"id": "paint_cache.detach_safety", "status": "risk", "phase": 1, "evidence": ["cache keyed by UIElement*; no explicit subtree cache purge"]},
-    {"id": "snapshot_full_validation", "status": "partial", "phase": 1, "evidence": ["G2 omits texture/UV/font/cornerRadius/textScale comparisons"]},
+    {"id": "paint_cache.detach_safety", "status": "implemented", "phase": 1, "evidence": ["runtime id keys, detach subtree purge, cross-tree reparent, destroy/reallocate, drag ghost teardown tests"]},
+    {"id": "snapshot_full_validation", "status": "implemented", "phase": 1, "evidence": ["UIFrameDrawItem full-field equality used by G2"]},
     {"id": "incremental_layout", "status": "missing", "phase": 2, "evidence": ["tree-level _bLayoutDirty"]},
     {"id": "reactive_scalar", "status": "implemented", "phase": 3, "evidence": ["Reactive<T>"]},
     {"id": "reactive_keyed_list", "status": "missing", "phase": 3, "evidence": ["ReactiveList has push/removeAt/clear/replace only"]},

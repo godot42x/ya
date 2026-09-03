@@ -634,6 +634,76 @@ TEST(UIFrameSnapshotTest, LayoutChangeRebuildsMovedWidgetDrawItems)
     EXPECT_EQ(snapshot.items[0].size, glm::vec2(50.0f, 25.0f));
 }
 
+TEST(UIFrameSnapshotTest, DetachAndReattachForcesFreshPaintCacheSegment)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    auto panel = std::make_shared<UIPanel>("CachedPanel");
+    FCanvasSlotArgs args;
+    args.fixedSize = {80.0f, 24.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, args).valid());
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    tree.detach(*panel);
+    ASSERT_FALSE(panel->isAttached());
+    ASSERT_TRUE(tree.buildSnapshot(UIFrameBuildContext{}).items.empty());
+
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, args).valid());
+    const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_EQ(snapshot.items.size(), 1u);
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
+}
+
+TEST(UIFrameSnapshotTest, CrossTreeReparentDoesNotReuseOldTreeCache)
+{
+    WidgetTree source({.width = 320, .height = 200});
+    WidgetTree destination({.width = 640, .height = 400});
+    auto panel = std::make_shared<UIPanel>("CrossTreePanel");
+    FCanvasSlotArgs sourceArgs;
+    sourceArgs.offset = {12.0f, 16.0f};
+    sourceArgs.fixedSize = {80.0f, 24.0f};
+    ASSERT_TRUE(source.attach(*source.getLayer(WidgetTree::ELayer::Content), panel, sourceArgs).valid());
+
+    source.buildSnapshot(UIFrameBuildContext{});
+    source.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(source.getPerfStats().rebuiltWidgets, 0u);
+
+    destination.reparent(*destination.getLayer(WidgetTree::ELayer::Content), panel);
+    ASSERT_TRUE(destination.contains(*panel));
+    ASSERT_FALSE(source.contains(*panel));
+
+    const UIFrameSnapshot snapshot = destination.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_EQ(snapshot.items.size(), 1u);
+    EXPECT_GT(destination.getPerfStats().rebuiltWidgets, 0u);
+    EXPECT_EQ(snapshot.items[0].pos, glm::vec2(0.0f, 0.0f));
+}
+
+TEST(UIFrameSnapshotTest, DestroyAndReallocateWidgetGetsNewRuntimeIdentity)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    uint64_t oldId = 0;
+    {
+        auto oldPanel = std::make_shared<UIPanel>("OldPanel");
+        oldId = oldPanel->getRuntimeId();
+        FCanvasSlotArgs args;
+        args.fixedSize = {64.0f, 20.0f};
+        ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), oldPanel, args).valid());
+        tree.buildSnapshot(UIFrameBuildContext{});
+        tree.detach(*oldPanel);
+    }
+
+    auto replacement = std::make_shared<UIPanel>("ReplacementPanel");
+    EXPECT_NE(replacement->getRuntimeId(), oldId);
+    FCanvasSlotArgs args;
+    args.fixedSize = {96.0f, 20.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), replacement, args).valid());
+    const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_EQ(snapshot.items.size(), 1u);
+    EXPECT_EQ(snapshot.items[0].size, glm::vec2(96.0f, 20.0f));
+}
+
 TEST(UIFrameSnapshotTest, TransientHoverAndFocusRepaintButton)
 {
     WidgetTree tree({.width = 800, .height = 600});

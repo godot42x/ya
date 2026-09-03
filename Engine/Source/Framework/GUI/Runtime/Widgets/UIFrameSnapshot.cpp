@@ -210,7 +210,7 @@ UIFrameSnapshot UIFrameBuilder::build(Extent2D logicalExtent)
 
 bool UIFrameBuilder::hasCachedItems(const UIElement* widget) const
 {
-    return _readCache && _readCache->find(widget) != _readCache->end();
+    return _readCache && _readCache->find(widget->getRuntimeId()) != _readCache->end();
 }
 
 void UIFrameBuilder::cacheItems(const UIElement* widget, size_t start)
@@ -222,7 +222,7 @@ void UIFrameBuilder::cacheItems(const UIElement* widget, size_t start)
     // items): otherwise such a widget never registers in the read cache and
     // is re-run every frame.
     std::vector<UIFrameDrawItem> segment(_items.begin() + static_cast<ptrdiff_t>(start), _items.end());
-    (*_writeCache)[widget] = std::move(segment);
+    (*_writeCache)[widget->getRuntimeId()] = std::move(segment);
 }
 
 void UIFrameBuilder::reuseCachedItems(const UIElement* widget)
@@ -230,7 +230,7 @@ void UIFrameBuilder::reuseCachedItems(const UIElement* widget)
     if (!_readCache) {
         return;
     }
-    const auto it = _readCache->find(widget);
+    const auto it = _readCache->find(widget->getRuntimeId());
     if (it == _readCache->end()) {
         return;
     }
@@ -239,7 +239,7 @@ void UIFrameBuilder::reuseCachedItems(const UIElement* widget)
     // Re-write the reused segment into the write cache so the next frame can
     // keep reusing it (the write cache is the next frame's read cache).
     if (_writeCache) {
-        (*_writeCache)[widget] = segment;
+        (*_writeCache)[widget->getRuntimeId()] = segment;
     }
 }
 

@@ -226,7 +226,10 @@ struct YA_GUI_API WidgetTree final
 
     /// Layout (if dirty) + paint the whole tree into an immutable frame
     /// snapshot. Must be called before the RenderGraph is built; command
-    /// recording only ever consumes the returned snapshot.
+    /// recording only ever consumes the returned snapshot. Business code must
+    /// not mutate tree structure from paint/layout callbacks; framework-owned
+    /// tooltip and drag-session maintenance is the only exception and runs at
+    /// explicit pass boundaries.
     [[nodiscard]] UIFrameSnapshot buildSnapshot(const UIFrameBuildContext& ctx);
 
     /// Per-frame counters from the most recent buildSnapshot() call.
@@ -406,7 +409,7 @@ struct YA_GUI_API WidgetTree final
     /// Double-buffered per-widget draw-item caches for incremental paint:
     /// index [_cacheIndex] is read (previous frame), [_cacheIndex ^ 1] is
     /// written this frame and swapped at the end of buildSnapshot.
-    std::array<std::unordered_map<const UIElement*, std::vector<UIFrameDrawItem>>, 2> _itemCache;
+    std::array<std::unordered_map<uint64_t, std::vector<UIFrameDrawItem>>, 2> _itemCache;
     int _cacheIndex = 0;
     /// Frames built since tree creation (drives the debug validation frame).
     uint32_t _frameCounter = 0;

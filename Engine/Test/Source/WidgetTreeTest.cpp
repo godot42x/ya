@@ -1372,6 +1372,25 @@ TEST(WidgetTreeTest, SystemLayersOwnHoverBeforeLowerLayers)
     EXPECT_FALSE(content->_bHovered);
 }
 
+TEST(WidgetTreeTest, DragGhostTeardownRemovesItsSnapshotItems)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    auto source = std::make_shared<UIButton>("Source");
+    FCanvasSlotArgs sourceArgs;
+    sourceArgs.offset = {20.0f, 20.0f};
+    sourceArgs.fixedSize = {80.0f, 24.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceArgs).valid());
+
+    tree.beginDrag(source.get(), std::string("payload"), std::string("Ghost"), {}, true);
+    const UIFrameSnapshot duringDrag = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_FALSE(duringDrag.items.empty());
+
+    tree.cancelDrag();
+    const UIFrameSnapshot afterCancel = tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(afterCancel.items.size(), 1u);
+    EXPECT_FALSE(tree.isDragging());
+}
+
 TEST(WidgetTreeTest, PassWidgetsRespondButDoNotBlock)
 {
     WidgetTree tree({.width = 800, .height = 600});
