@@ -3,9 +3,9 @@
 ## 当前状态
 
 - 计划建立：2026-09-03
-- 实现改动：Phase 4B visible-range contract 已完成闭环
+- 实现改动：Phase 5B style key/type catalog 已完成闭环
 - 提交：本 checkpoint 随代码一并提交
-- 当前阶段：Phase 4B（keyed visible window + Content Browser entry virtualization）
+- 当前阶段：Phase 5B（theme key + style type catalog/schema 校验）
 
 ## 已确认
 
@@ -266,3 +266,115 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - 这是均匀行高的窗口化，不是 widget pooling：滚出窗口的 key 会 detach，滚回来走 factory 重建。
 - TableGrid / TreeView 仍是 flat paint consumer；Scene Save 与 mount list 未窗口化。
 - 下一阶段可进入 Phase 5 style/resource invalidation，或把同一窗口契约接到 TableGrid/Hierarchy。
+
+## Phase 5A 当前 checkpoint
+
+- `lookupStyleFieldImpact` / `lookupStylePatchImpact` 按反射字段分类 layout/paint/resource：`FBrush` 为 Paint+Resource；`fontSize` / `padding` / `minSize` 为 Layout；`FScrollBarStyle.width` 保持 Paint-only（overlay 厚度，不是布局输入）。
+- `UIStyledWidget::setStyleField` / `setStyle` / `clearStyleField` / `clearAuthoredStyle` 默认走 catalog；`UIText::setFontSize` 仍可用显式 impact 按 AutoSize 覆盖。
+- Resource 标志只是后续异步就绪 invalidation 的 metadata，本 checkpoint 不改变 `invalidateProperty` 枚举。
+- 新增 catalog、patch union、UIText/UIButton/UIPanel dirty 回归。
+- xmake r ya-gui-closure-test 全量通过（351/351）。
+- 未完成：resource-ready invalidation、visual state matrix。
+
+### Phase 5A 边界
+
+- 没有引入 per-type 字段表，也没有做 schema key 校验或 brush/font ready 传播。
+- `FButtonStyle.padding` 当前不驱动 button content layout（仍是 widget `_contentLayout`），catalog 仍把 `padding` 标成 Layout，避免 Tab/Text badge 和后续消费者漏测。
+
+## Phase 5B 当前 checkpoint
+
+- `YA_GUI_STYLE_CATALOG` / `StyleKey::*` 是 theme key 与 `TStyle` 的单一词汇；`lookupStyleKey` 区分 Known / Empty / UnknownKey / TypeMismatch。
+- `UITheme::define`、`UIElement::setStyleKey` 和 document `deserializeFields` 走 `diagnoseStyleKey`：未知 key 与类型不匹配记诊断并 WARN，仍写入（明确诊断，不静默吞掉，也不硬拒绝）。
+- `editor.<key>` 复用同一词汇，不是 EditorTheme 第二套机制。`canvas` 登记为 FPanelStyle 角色 key，`ui::canvas()` 使用 `StyleKey::Canvas`。
+- `YA_GUI_AUTHORED_STYLE_IO` 现在报告 `getStyleTypeIndex()`，unstyled widget 为 0。
+- 新增 catalog 全量 Known、editor prefix、unknown/mismatch 诊断，以及 document deserialize 未知 key 回归。
+- xmake r ya-gui-closure-test 全量通过（354/354）。
+- 未完成：resource-ready invalidation、visual state matrix。
+
+### Phase 5B 边界
+
+- 没有做编译期 DSL 类型拒绝（builder 仍收 string）；catalog 常量提供可在 C++ 侧引用的词汇。
+- 没有要求每个 theme 必须 define 全部 catalog key；缺 key 仍 fallback 到 `TStyle{}`。
+- 构造函数直接写入的默认 family key 不走 diagnose（派生 `getStyleTypeIndex` 在基类构造期不可用）；attach 后的 setStyleKey / 文档加载会校验。
+
+## Phase 5C 当前 checkpoint
+
+- `FontManager::resourceRevision()` 在 register/load/unload/clearCache 以及 `flushPendingGlyphs` 真正捕获新字形时递增。`WidgetTree::buildSnapshot` 消费该 revision：首次只记录，之后变化则对整棵已挂载树 `markLayoutDirty(ResourceReady)`，避免嵌套 fill 容器凭 assigned-rect skip 用过期文字度量。
+- `UIFrameBuildContext.generation` 只表示 resolver identity（brush/image 纹理就绪）；scale/offset/DPI 仍是 `BuildContextChanged`。Host 继续在 snapshot 之后 `flushPendingGlyphs`（Core Rule 6），不再自己 `invalidateSubtree`。
+- 没有把 `EUIPropertyImpact::Resource` 接到 `invalidateProperty`；`bResource` 仍是字段 metadata，就绪事件在树级 revision / generation。
+- 新增 FontManager revision、嵌套文字 remasure、image resolver miss→generation bump 命中纹理的回归。
+- Theme switch / style key 仍由既有 Phase 5 测试覆盖。
+- xmake r ya-gui-closure-test 全量通过（357/357）。
+- 未完成：visual state matrix。
+
+### Phase 5C 边界
+
+- 没有把 FontManager 接到 GUI Reactive（跨层依赖）。1 帧字形延迟仍在：paint 登记缺失、flush 后下一 snapshot 才消费 revision。
+- 没有做 visual state matrix；稀疏/full freeze API freeze 与 naked color 清理不在本 checkpoint。
+
+下一 checkpoint：Phase 5 visual state matrix（normal / hovered / pressed / focused / disabled / selected / error / drop-target）。
+
+## Phase 5D 当前 checkpoint
+
+- `EWidgetVisualFlag` / `composeVisualFlags` / `FVisualChrome` / `resolveVisualFill` 冻结 exclusive fill 优先级：Disabled > DropTarget > Error > Pressed > Selected+Hovered > Selected > Hovered > Focused > Normal。
+- `UIButton` 与 `UISelectableRow` 经 `visualChrome(style)` 消费该表；Button 补 selected/error/dropTarget fill；SelectableRow 的 drop 走 `dropTargetFill`（默认等于原 selectedHovered）。
+- 没有把 hover/pressed 升到 UIElement 基类，也没有改 CheckBox/TextField/Menu/Tab/TableGrid 的本地 if/else。
+- 新增优先级矩阵、disabled 盖住 hover、row drop 盖住 selected 的回归。
+- xmake r ya-gui-closure-test 全量通过（360/360）。
+- 未完成：其余控件接入同一 matrix；稀疏/full freeze API freeze；naked color 清理；无主题/资源缺失 GPU 回归。
+
+### Phase 5D 边界
+
+- Selected+Hovered 是组合刷，不是第九个独立 exclusive 状态。
+- SelectableRow 仍不把 Pressed 送进 matrix（按下外观保持原 hover/select 语义）。
+- 新控件 paint 必须走 `resolveVisualFill`，不得再写一套优先级。
+
+下一 checkpoint：把剩余 interactive 控件接到同一 visual fill matrix，或进入 Phase 5 的 sparse/full freeze / naked-color / GPU fallback 回归。
+
+## Phase 5E 当前 checkpoint
+
+- CheckBox / ComboBox / MenuBar / Tab / MenuItem / TableGrid / TreeView 行填充改走 `visualChrome` + `resolveVisualFill`，不再各写一套 hover/selected if/else。
+- CheckBox.checked 与 Tab.selected 映射为 Selected；Selected+Hovered 回落到 Selected，保留“选中盖住 hover”。
+- Table/Tree 的 idle normal 是透明刷，paint 仍按 alpha 跳过未选中且未 hover 的行。
+- 新增 mapping、checked+hover、selected tab 回归。
+- xmake r ya-gui-closure-test 全量通过（363/363）。
+- 未完成：TextField/SpinBox/Radio/DragFloat 等非这套 chrome 的控件；稀疏/full freeze API freeze；naked color 清理；无主题/资源缺失 GPU 回归。
+
+### Phase 5E 边界
+
+- 没有把 hover/pressed 升到 UIElement 基类。
+- MenuItem 的 disabled 仍用 itemNormalFill（原行为），disabled 文案颜色仍是独立字段。
+- TreeView 展开箭头 hover 仍用 `arrowHoveredFill`，不是行 chrome。
+
+下一 checkpoint：Phase 5 稀疏/full freeze API freeze，或 naked color 清理，或无主题/资源缺失 GPU 回归。
+
+## Phase 5F 当前 checkpoint
+
+- `UIPanel` 不再在无 theme 时走 `_color` sprite 旁路；fill 只来自 `resolvedStyle()`。无 theme 且未 authored `fillColor` 时 `_color` 作为 fallback（对齐 `UIText`）。
+- Image 仍是 content：themed 且无 authored overlay 时 theme chrome 赢；authored `setColor` 给 image tint。
+- 新增 unthemed default fill 与 themed 忽略未 sync `_color` 回归。
+- xmake r ya-gui-closure-test 全量通过（365/365）。
+- 未完成：Workbench/demo `setColor` 字面量改走 theme key；TextField 等几何字段；无主题/资源缺失 GPU 回归。
+
+### Phase 5F 边界
+
+- `_color` 仍保留给 GI-202 `getColor`/`setColor` 与 document 反序列化 fallback，不是第二套 paint 路径。
+- 没有改 Workbench demo 的裸 `setColor` 调用；那是 app 层 overlay，不是 framework 旁路。
+- 0-extent panel 不再发出 draw item（`addBrush`/`sliceBrush` 跳过空 rect）。相关 snapshot 测试改为显式 `fixedSize`，而不是让空 rect 也能产出 sprite。
+
+下一 checkpoint：Phase 5 GPU/无主题 fallback 回归，或进入 Phase 6 SelectionModel。
+
+## Phase 5G 当前 checkpoint
+
+- 同一棵树覆盖：无 theme 时 panel/image 走 style 默认；theme A/B 切换跟皮肤；resolver miss 画 placeholder；generation bump 后纹理进入 snapshot。GPU compose 只消费这份 snapshot，所以契约在 snapshot/headless 层冻结。
+- `GUIHeadlessHost` 无 RHI 路径：第一帧 unthemed fallback，第二帧 theme switch 后颜色翻转。
+- xmake r ya-gui-closure-test 全量通过（366/366）；xmake r ya-gui-headless-host-test 全量通过（3/3）。
+- 未完成：Workbench/demo `setColor` 字面量；TextField 等几何字段；windowed `--gpu-shot` / `--offscreen-diff` 仍属 Phase 9。
+
+### Phase 5G 边界
+
+- 没有跑 windowed GPU/offscreen 像素 parity；那是 Phase 9 的 release gate，不是本 checkpoint 的 GPU 设备测试。
+- UIImage 命中纹理后仍用内容字段 `_tint`，不是 chrome。
+- 没有把 TextureLifetime 测试从 engine suite 搬进 closure（closure 已有 fake-texture 延迟就绪用例）。
+
+下一 checkpoint：进入 Phase 6 SelectionModel。

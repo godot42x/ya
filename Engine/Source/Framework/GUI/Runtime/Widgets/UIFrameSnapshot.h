@@ -47,11 +47,11 @@ struct UIFrameBuildContext
     glm::vec2 uiScale = {1.0f, 1.0f}; // user zoom: logical px -> (pre-DPI) target px
     glm::vec2 offset  = {0.0f, 0.0f}; // render-target px origin of logical (0,0)
 
-    /// Host-provided monotonic generation token: bump whenever the coordinate
-    /// mapping or the resource resolver changes in a way WidgetTree cannot
-    /// compare itself (e.g. viewport resize, DPI change, asset/texture reload).
-    /// WidgetTree compares this (and uiScale/offset) to drop draw-item caches
-    /// that hold now-stale target-pixel or resolved-texture data.
+    /// Host-provided monotonic generation token: bump when the texture
+    /// resolver identity changes (asset reload, brush texture became ready).
+    /// WidgetTree treats a generation bump as ResourceReady and drops draw-item
+    /// caches that hold resolved textures. Coordinate mapping changes
+    /// (uiScale/offset / DPI) are a separate BuildContextChanged path.
     uint64_t generation = 0;
 
     /// Host-provided strong-resource resolver: asset path -> strong texture

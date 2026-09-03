@@ -72,7 +72,9 @@ void UIMenuItem::paintSelf(UIFrameBuilder& builder)
                         1.0f);
         return;
     }
-    builder.addBrush(_layoutRect, (_bHighlighted && _bEnabled) ? style.itemHoveredFill : style.itemNormalFill);
+    builder.addBrush(_layoutRect,
+                     resolveVisualFill(visualChrome(style),
+                                       composeVisualFlags(_bHighlighted, false, false, !_bEnabled, false, false, false)));
     auto font = runtimeFont(_fontSize);
     if (font) {
         Rect2D textRect = _layoutRect;

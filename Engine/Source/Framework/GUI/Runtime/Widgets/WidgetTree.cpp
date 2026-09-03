@@ -752,28 +752,65 @@ void WidgetTree::layout()
     _layoutInvalidationMask = 0;
 }
 
+void WidgetTree::markSubtreeResourceReady(UIElement& element)
+{
+    element.markLayoutDirty(EUIInvalidationReason::ResourceReady);
+    for (const auto& child : element.getChildren()) {
+        if (child) {
+            markSubtreeResourceReady(*child);
+        }
+    }
+}
+
+void WidgetTree::applyFontResourceRevision()
+{
+    const uint64_t revision = FontManager::get()->resourceRevision();
+    if (!_bHasFontRevision) {
+        _lastFontRevision = revision;
+        _bHasFontRevision = true;
+        return;
+    }
+    if (revision == _lastFontRevision) {
+        return;
+    }
+    _lastFontRevision = revision;
+    if (_root) {
+        markSubtreeResourceReady(*_root);
+    }
+}
+
 UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 {
     using clock_t = std::chrono::steady_clock;
 
     _perfStats = GuiPerfStats{};
 
+    // Font atlas / glyph identity lives on FontManager so the render layer
+    // does not take a GUI Reactive dependency. Poll at snapshot start: a
+    // revision bump means text metrics or atlas pages changed and every
+    // widget must remasure (nested fill containers skip otherwise).
+    applyFontResourceRevision();
+
     // Final target-pixel scale = user zoom (ctx.uiScale) * DPI mapping
     // (_dpiScale). They are orthogonal: uiScale is the app/user zoom, dpiScale
     // maps logical canvas points to framebuffer pixels. The cached draw-item
     // segments hold final target-pixel coordinates, so any change to either
     // factor (or offset/generation) must drop both cache buffers.
+    // generation is the host token for resolver identity (texture ready);
+    // scale/offset are the coordinate mapping.
     const glm::vec2 effectiveScale = ctx.uiScale * _dpiScale;
-    const bool bContextChanged =
+    const bool bGenerationChanged =
+        _bHasBuildContext && ctx.generation != _lastGeneration;
+    const bool bMappingChanged =
         _bHasBuildContext &&
-        (ctx.generation != _lastGeneration ||
-         effectiveScale != _lastUiScale ||
-         ctx.offset != _lastOffset);
-    if (bContextChanged) {
+        (effectiveScale != _lastUiScale || ctx.offset != _lastOffset);
+    if (bGenerationChanged || bMappingChanged) {
         _itemCache[0].clear();
         _itemCache[1].clear();
         ++_cacheInvalidations;
-        _lastInvalidationReason = EUIInvalidationReason::BuildContextChanged;
+        _lastInvalidationReason = bMappingChanged
+                                      ? EUIInvalidationReason::BuildContextChanged
+                                      : EUIInvalidationReason::ResourceReady;
     }
     _bHasBuildContext = true;
     _lastGeneration   = ctx.generation;

@@ -13,16 +13,24 @@
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/CheckBox.h"
+#include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DragDrop.h"
 #include "GUI/Widgets/Controls/Image.h"
+#include "GUI/Widgets/Controls/Menu.h"
+#include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
+#include "GUI/Widgets/Controls/SelectableRow.h"
+#include "GUI/Widgets/Controls/TabBar.h"
+#include "GUI/Widgets/Controls/TableGrid.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TreeView.h"
 #include "Render/Resources/FontManager.h"
+#include "RHI/Core/Texture.h"
 
 #include <gtest/gtest.h>
 
@@ -453,7 +461,9 @@ TEST(UIFrameSnapshotTest, PerfStateBridgeRecordsTreeMetrics)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {80.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
 
     tree.buildSnapshot(UIFrameBuildContext{});
 
@@ -675,11 +685,19 @@ TEST(UIFrameSnapshotTest, CrossTreeReparentDoesNotReuseOldTreeCache)
     destination.reparent(*destination.getLayer(WidgetTree::ELayer::Content), panel);
     ASSERT_TRUE(destination.contains(*panel));
     ASSERT_FALSE(source.contains(*panel));
+    FCanvasSlotArgs destArgs;
+    destArgs.offset = {40.0f, 50.0f};
+    destArgs.fixedSize = {80.0f, 24.0f};
+    if (UISlot* edge = destination.getLayer(WidgetTree::ELayer::Content)->getSlotForChild(*panel)) {
+        if (auto* canvas = edge->as<UICanvasSlot>()) {
+            canvas->apply(destArgs);
+        }
+    }
 
     const UIFrameSnapshot snapshot = destination.buildSnapshot(UIFrameBuildContext{});
     ASSERT_EQ(snapshot.items.size(), 1u);
     EXPECT_GT(destination.getPerfStats().rebuiltWidgets, 0u);
-    EXPECT_EQ(snapshot.items[0].pos, glm::vec2(0.0f, 0.0f));
+    EXPECT_EQ(snapshot.items[0].pos, glm::vec2(40.0f, 50.0f));
 }
 
 TEST(UIFrameSnapshotTest, DestroyAndReallocateWidgetGetsNewRuntimeIdentity)
@@ -904,6 +922,7 @@ TEST(UIFrameSnapshotTest, CleanTreeGenerationChangeDropsCache)
     ASSERT_EQ(snap.items.size(), 1u);
     EXPECT_GT(tree.getPerfStats().rebuiltWidgets, 0u);
     EXPECT_EQ(tree.getPerfStats().cacheInvalidations, 1u);
+    EXPECT_EQ(tree.getLastInvalidationReason(), EUIInvalidationReason::ResourceReady);
 }
 
 TEST(UIFrameSnapshotTest, ReactiveDestroyedBeforeWidgetSeveresBackReference)
@@ -1753,6 +1772,516 @@ TEST(UIFrameSnapshotTest, AddBrushNinePatchWithoutTextureStretches)
     const UIFrameSnapshot snap = builder.build({.width = 800, .height = 600});
     ASSERT_EQ(snap.items.size(), 1u);
     EXPECT_EQ(snap.items[0].uvScale, glm::vec2(1.0f, 1.0f));
+}
+
+TEST(UIFrameSnapshotTest, StyleFieldImpactCatalogClassifiesPaintLayoutAndResource)
+{
+    const FStyleFieldImpact fontSize = lookupStyleFieldImpact<FTextStyle>("fontSize");
+    EXPECT_TRUE(fontSize.bPaint);
+    EXPECT_TRUE(fontSize.bLayout);
+    EXPECT_FALSE(fontSize.bResource);
+
+    const FStyleFieldImpact textColor = lookupStyleFieldImpact<FTextStyle>("textColor");
+    EXPECT_TRUE(textColor.bPaint);
+    EXPECT_FALSE(textColor.bLayout);
+    EXPECT_FALSE(textColor.bResource);
+
+    const FStyleFieldImpact fillColor = lookupStyleFieldImpact<FTextStyle>("fillColor");
+    EXPECT_TRUE(fillColor.bPaint);
+    EXPECT_FALSE(fillColor.bLayout);
+    EXPECT_TRUE(fillColor.bResource);
+
+    const FStyleFieldImpact buttonPadding = lookupStyleFieldImpact<FButtonStyle>("padding");
+    EXPECT_TRUE(buttonPadding.bLayout);
+    EXPECT_FALSE(buttonPadding.bResource);
+
+    const FStyleFieldImpact panelFill = lookupStyleFieldImpact<FPanelStyle>("fillColor");
+    EXPECT_TRUE(panelFill.bPaint);
+    EXPECT_FALSE(panelFill.bLayout);
+    EXPECT_TRUE(panelFill.bResource);
+
+    const FStyleFieldImpact scrollbarWidth = lookupStyleFieldImpact<FScrollBarStyle>("width");
+    EXPECT_TRUE(scrollbarWidth.bPaint);
+    EXPECT_FALSE(scrollbarWidth.bLayout);
+    EXPECT_FALSE(scrollbarWidth.bResource);
+
+    const FStyleFieldImpact minSize = lookupStyleFieldImpact<FFloatingWindowStyle>("minSize");
+    EXPECT_TRUE(minSize.bLayout);
+}
+
+TEST(UIFrameSnapshotTest, StylePatchImpactUnionsFieldMetadata)
+{
+    const FStyleFieldImpact paintOnly =
+        lookupStylePatchImpact<FTextStyle>(nlohmann::json{{"textColor", nullptr}});
+    EXPECT_TRUE(paintOnly.bPaint);
+    EXPECT_FALSE(paintOnly.bLayout);
+    EXPECT_FALSE(paintOnly.bResource);
+
+    const FStyleFieldImpact mixed = lookupStylePatchImpact<FTextStyle>(
+        nlohmann::json{{"fontSize", 24}, {"textColor", nullptr}});
+    EXPECT_TRUE(mixed.bPaint);
+    EXPECT_TRUE(mixed.bLayout);
+    EXPECT_FALSE(mixed.bResource);
+
+    const FStyleFieldImpact resource =
+        lookupStylePatchImpact<FTextStyle>(nlohmann::json{{"fillColor", nullptr}});
+    EXPECT_TRUE(resource.bResource);
+    EXPECT_FALSE(resource.bLayout);
+}
+
+TEST(UIFrameSnapshotTest, SetStyleFieldUsesCatalogImpact)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       text = std::make_shared<UIText>("T");
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_FALSE(text->isPaintDirty());
+    EXPECT_FALSE(text->isMeasureDirty());
+
+    text->setStyleField("textColor", glm::vec4{1.0f, 0.0f, 0.0f, 1.0f});
+    EXPECT_TRUE(text->isPaintDirty());
+    EXPECT_FALSE(text->isMeasureDirty());
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_FALSE(text->isPaintDirty());
+    EXPECT_FALSE(text->isMeasureDirty());
+
+    text->setStyleField("fontSize", uint32_t{24});
+    EXPECT_TRUE(text->isMeasureDirty());
+}
+
+TEST(UIFrameSnapshotTest, SetStyleUsesPatchUnionImpact)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    FCanvasSlotArgs panelSlot;
+    panelSlot.offset    = {10.0f, 10.0f};
+    panelSlot.fixedSize = {100.0f, 50.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    FPanelStyle style;
+    style.fillColor = FBrush::solid({0.9f, 0.2f, 0.1f, 1.0f});
+    panel->setStyle(style);
+    EXPECT_TRUE(panel->isPaintDirty());
+    EXPECT_FALSE(panel->isMeasureDirty());
+
+    auto button = std::make_shared<UIButton>("B");
+    FCanvasSlotArgs buttonSlot;
+    buttonSlot.offset    = {10.0f, 10.0f};
+    buttonSlot.fixedSize = {80.0f, 32.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    button->setStyleField("normalFill", FBrush::solid({0.1f, 0.2f, 0.9f, 1.0f}));
+    EXPECT_TRUE(button->isPaintDirty());
+    EXPECT_FALSE(button->isMeasureDirty());
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    button->setStyleField("padding", glm::vec2{20.0f, 8.0f});
+    EXPECT_TRUE(button->isMeasureDirty());
+}
+
+TEST(UIFrameSnapshotTest, StyleCatalogAcceptsKnownKeysAndEditorPrefix)
+{
+#define YA_GUI_STYLE_KEY_EXPECT_KNOWN(Type, Name, Str) \
+    EXPECT_EQ(lookupStyleKey(StyleKey::Name, ya::type_index_v<Type>), EStyleKeyLookup::Known);
+    YA_GUI_STYLE_CATALOG(YA_GUI_STYLE_KEY_EXPECT_KNOWN)
+#undef YA_GUI_STYLE_KEY_EXPECT_KNOWN
+
+    EXPECT_EQ(lookupStyleKey<FTextStyle>(""), EStyleKeyLookup::Empty);
+    EXPECT_EQ(lookupStyleKey<FTextStyle>("editor.text.header"), EStyleKeyLookup::Known);
+    EXPECT_EQ(lookupStyleKey<FPanelStyle>(StyleKey::Canvas), EStyleKeyLookup::Known);
+    EXPECT_EQ(lookupStyleKey<FTextStyle>("text.heder"), EStyleKeyLookup::UnknownKey);
+    EXPECT_EQ(lookupStyleKey<FTextStyle>(StyleKey::Button), EStyleKeyLookup::TypeMismatch);
+    EXPECT_EQ(lookupStyleKey<FPanelStyle>("editor.missing"), EStyleKeyLookup::UnknownKey);
+}
+
+TEST(UIFrameSnapshotTest, StyleCatalogDiagnosesUnknownAndMismatchedKeys)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       text = std::make_shared<UIText>("T");
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
+
+    const StyleCatalogDiagnostics before = getStyleCatalogDiagnostics();
+    text->setStyleKey("not.a.style");
+    EXPECT_EQ(text->_styleKey, "not.a.style");
+    EXPECT_EQ(getStyleCatalogDiagnostics().unknownKeys, before.unknownKeys + 1);
+
+    text->setStyleKey(std::string(StyleKey::Button));
+    EXPECT_EQ(text->_styleKey, StyleKey::Button);
+    EXPECT_EQ(getStyleCatalogDiagnostics().typeMismatches, before.typeMismatches + 1);
+
+    auto theme = std::make_shared<UITheme>();
+    theme->define<FPanelStyle>("panel.winodw", FPanelStyle{});
+    EXPECT_EQ(getStyleCatalogDiagnostics().unknownKeys, before.unknownKeys + 2);
+
+    text->setStyleKey(std::string(StyleKey::TextHeader));
+    EXPECT_EQ(getStyleCatalogDiagnostics().unknownKeys, before.unknownKeys + 2);
+    EXPECT_EQ(getStyleCatalogDiagnostics().typeMismatches, before.typeMismatches + 1);
+}
+
+namespace
+{
+
+std::shared_ptr<Font> makeSnapshotTestFont(float fontSize, float advancePerChar)
+{
+    auto font        = std::make_shared<Font>();
+    font->fontSize   = fontSize;
+    font->lineHeight = fontSize * 1.25f;
+    font->ascent     = fontSize;
+    font->descent    = fontSize * 0.25f;
+    for (uint32_t cp = 32; cp < 127; ++cp) {
+        Character ch;
+        ch.uvRect   = {};
+        ch.size     = {static_cast<int>(advancePerChar), static_cast<int>(fontSize)};
+        ch.bearing  = {0, 0};
+        ch.advance  = {advancePerChar, 0.0f};
+        ch.bInAtlas = true;
+        font->characters[cp] = ch;
+    }
+    return font;
+}
+
+std::shared_ptr<Texture> makeFakeTexture()
+{
+    return std::shared_ptr<Texture>(reinterpret_cast<Texture*>(static_cast<uintptr_t>(0x1)),
+                                    [](Texture*) {});
+}
+
+} // namespace
+
+TEST(UIFrameSnapshotTest, FontManagerRevisionBumpsOnRegister)
+{
+    const uint64_t before = FontManager::get()->resourceRevision();
+    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 16, makeSnapshotTestFont(16.0f, 8.0f));
+    EXPECT_GT(FontManager::get()->resourceRevision(), before);
+}
+
+TEST(UIFrameSnapshotTest, FontResourceReadyRelayoutsNestedText)
+{
+    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 16, makeSnapshotTestFont(16.0f, 8.0f));
+
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       column = std::make_shared<UIContainer>("Column");
+    column->setDirection(EWidgetBoxLayout::Vertical);
+    FCanvasSlotArgs fillSlot;
+    fillSlot.anchorMin = {0.0f, 0.0f};
+    fillSlot.anchorMax = {1.0f, 1.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, fillSlot);
+
+    auto text = std::make_shared<UIText>("Label");
+    text->setText("AB");
+    text->setFontSize(16);
+    tree.attach(*column, text);
+    if (UIBoxSlot* slot = column->getBoxSlot(*text)) {
+        slot->setCrossAlignment(EUIBoxSlotCrossAlignment::Start);
+    }
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{});
+    const float widthBefore = text->getLayoutRect().extent.x;
+    EXPECT_FLOAT_EQ(widthBefore, 16.0f);
+
+    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 16, makeSnapshotTestFont(16.0f, 20.0f));
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getLastInvalidationReason(), EUIInvalidationReason::ResourceReady);
+    EXPECT_FLOAT_EQ(text->getLayoutRect().extent.x, 40.0f);
+    EXPECT_GT(tree.getPerfStats().rebuiltWidgets, 0u);
+}
+
+TEST(UIFrameSnapshotTest, ImageResolverReadyAfterGenerationBumpPaintsTexture)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       image = std::make_shared<UIImage>("Img");
+    image->_assetPath = "tex:ready";
+    FCanvasSlotArgs slot;
+    slot.offset    = {10.0f, 10.0f};
+    slot.fixedSize = {64.0f, 64.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, slot);
+
+    UIFrameBuildContext missCtx;
+    missCtx.generation = 1;
+    missCtx.textureResolver = [](const std::string&) { return std::shared_ptr<Texture>(); };
+    const UIFrameSnapshot missSnap = tree.buildSnapshot(missCtx);
+    bool bMissHasTexture = false;
+    for (const auto& item : missSnap.items) {
+        if (item.texture) {
+            bMissHasTexture = true;
+        }
+    }
+    EXPECT_FALSE(bMissHasTexture);
+
+    auto ready = makeFakeTexture();
+    UIFrameBuildContext hitCtx;
+    hitCtx.generation = 2;
+    hitCtx.textureResolver = [&](const std::string& path) {
+        return path == "tex:ready" ? ready : std::shared_ptr<Texture>();
+    };
+    const UIFrameSnapshot hitSnap = tree.buildSnapshot(hitCtx);
+    EXPECT_EQ(tree.getLastInvalidationReason(), EUIInvalidationReason::ResourceReady);
+    bool bHitHasTexture = false;
+    for (const auto& item : hitSnap.items) {
+        if (item.texture == ready) {
+            bHitHasTexture = true;
+        }
+    }
+    EXPECT_TRUE(bHitHasTexture);
+}
+
+TEST(UIFrameSnapshotTest, VisualFillPrecedenceMatrix)
+{
+    FVisualChrome chrome;
+    chrome.normal          = FBrush::solid({0.10f, 0.10f, 0.10f, 1.0f});
+    chrome.hovered         = FBrush::solid({0.20f, 0.20f, 0.20f, 1.0f});
+    chrome.pressed         = FBrush::solid({0.30f, 0.30f, 0.30f, 1.0f});
+    chrome.focused         = FBrush::solid({0.40f, 0.40f, 0.40f, 1.0f});
+    chrome.disabled        = FBrush::solid({0.50f, 0.50f, 0.50f, 1.0f});
+    chrome.selected        = FBrush::solid({0.60f, 0.60f, 0.60f, 1.0f});
+    chrome.selectedHovered = FBrush::solid({0.70f, 0.70f, 0.70f, 1.0f});
+    chrome.error           = FBrush::solid({0.80f, 0.20f, 0.20f, 1.0f});
+    chrome.dropTarget      = FBrush::solid({0.20f, 0.80f, 0.20f, 1.0f});
+
+    EXPECT_EQ(resolveVisualFill(chrome, 0), chrome.normal);
+    EXPECT_EQ(resolveVisualFill(chrome, composeVisualFlags(true, false, false, false, false, false, false)),
+              chrome.hovered);
+    EXPECT_EQ(resolveVisualFill(chrome, composeVisualFlags(true, true, false, false, false, false, false)),
+              chrome.pressed);
+    EXPECT_EQ(resolveVisualFill(chrome, composeVisualFlags(false, false, true, false, false, false, false)),
+              chrome.focused);
+    EXPECT_EQ(resolveVisualFill(chrome, composeVisualFlags(true, true, true, true, true, true, true)),
+              chrome.disabled);
+    EXPECT_EQ(resolveVisualFill(chrome, composeVisualFlags(true, true, true, false, true, true, true)),
+              chrome.dropTarget);
+    EXPECT_EQ(resolveVisualFill(chrome, composeVisualFlags(true, true, true, false, true, true, false)),
+              chrome.error);
+    EXPECT_EQ(resolveVisualFill(chrome, composeVisualFlags(true, false, false, false, true, false, false)),
+              chrome.selectedHovered);
+    EXPECT_EQ(resolveVisualFill(chrome, composeVisualFlags(false, false, false, false, true, false, false)),
+              chrome.selected);
+    EXPECT_EQ(visualChrome(FButtonStyle{}).disabled, FButtonStyle{}.disabledFill);
+    EXPECT_EQ(visualChrome(FSelectableRowStyle{}).dropTarget, FSelectableRowStyle{}.dropTargetFill);
+}
+
+TEST(UIFrameSnapshotTest, DisabledButtonIgnoresHoverFill)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       btn = std::make_shared<UIButton>("Btn");
+    FCanvasSlotArgs buttonArgs;
+    buttonArgs.fixedSize = {100.0f, 50.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), btn, buttonArgs);
+
+    auto enabled = std::make_shared<Reactive<bool>>(false);
+    btn->bindEnabled(enabled);
+    btn->onPointerEnter();
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_EQ(snap.items[0].color, FButtonStyle{}.disabledFill.tintColor);
+}
+
+TEST(UIFrameSnapshotTest, SelectableRowDropTargetWinsOverSelection)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       row = std::make_shared<UISelectableRow>("Row");
+    row->setSelected(true);
+    FCanvasSlotArgs rowSlot;
+    rowSlot.fixedSize = {240.0f, 22.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), row, rowSlot);
+
+    row->setDropHighlight(true);
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_EQ(snap.items[0].color, FSelectableRowStyle{}.dropTargetFill.tintColor);
+}
+
+TEST(UIFrameSnapshotTest, VisualChromeMappingsForInteractiveStyles)
+{
+    EXPECT_EQ(visualChrome(FCheckBoxStyle{}).selected, FCheckBoxStyle{}.checkedFill);
+    EXPECT_EQ(visualChrome(FCheckBoxStyle{}).selectedHovered, FCheckBoxStyle{}.checkedFill);
+    EXPECT_EQ(visualChrome(FComboBoxStyle{}).normal, FComboBoxStyle{}.fieldFill);
+    EXPECT_EQ(visualChrome(FMenuBarItemStyle{}).hovered, FMenuBarItemStyle{}.hoveredFill);
+    EXPECT_EQ(visualChrome(FTabStyle{}).selectedHovered, FTabStyle{}.selectedFill);
+    EXPECT_EQ(visualChrome(FMenuStyle{}).hovered, FMenuStyle{}.itemHoveredFill);
+    EXPECT_EQ(visualChrome(FTableGridStyle{}).normal.tintColor.a, 0.0f);
+    EXPECT_EQ(visualChrome(FTableGridStyle{}).selectedHovered, FTableGridStyle{}.selectedFill);
+    EXPECT_EQ(visualChrome(FTreeViewStyle{}).hovered, FTreeViewStyle{}.hoveredFill);
+}
+
+TEST(UIFrameSnapshotTest, CheckedCheckBoxIgnoresHoverFill)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       box = std::make_shared<UICheckBox>("Check");
+    box->setChecked(true);
+    FCanvasSlotArgs slot;
+    slot.offset    = {0.0f, 0.0f};
+    slot.fixedSize = {120.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), box, slot);
+    tree.layout();
+
+    WidgetEventContext hover;
+    hover.logicalPoint = {8.0f, 12.0f};
+    tree.dispatchEvent(MouseMoveEvent(8.0f, 12.0f), hover);
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_FALSE(snap.items.empty());
+    EXPECT_EQ(snap.items[0].color, FCheckBoxStyle{}.checkedFill.tintColor);
+}
+
+TEST(UIFrameSnapshotTest, SelectedTabIgnoresHoverFill)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       tab = std::make_shared<UITabButton>("Tab");
+    tab->_label     = "Scene";
+    tab->_bSelected = true;
+    FCanvasSlotArgs slot;
+    slot.offset    = {0.0f, 0.0f};
+    slot.fixedSize = {80.0f, 28.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), tab, slot);
+    tree.layout();
+
+    WidgetEventContext hover;
+    hover.logicalPoint = {40.0f, 14.0f};
+    tree.dispatchEvent(MouseMoveEvent(40.0f, 14.0f), hover);
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_FALSE(snap.items.empty());
+    EXPECT_EQ(snap.items[0].color, FTabStyle{}.selectedFill.tintColor);
+}
+
+TEST(UIFrameSnapshotTest, UnthemedPanelPaintsFromResolvedStyleNotNakedSprite)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    FCanvasSlotArgs slot;
+    slot.offset    = {10.0f, 10.0f};
+    slot.fixedSize = {100.0f, 50.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_EQ(snap.items[0].color, FPanelStyle{}.fillColor.tintColor);
+    EXPECT_EQ(snap.items[0].kind, UIFrameDrawItem::EKind::Sprite);
+
+    // Authored fillColor is the paint source. getColor() stays on the
+    // unsynced _color field, so a leftover sprite path would still be gray.
+    const glm::vec4 authored{0.9f, 0.1f, 0.2f, 1.0f};
+    panel->setStyleField("fillColor", FBrush::solid(authored));
+    const UIFrameSnapshot authoredSnap = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_EQ(authoredSnap.items.size(), 1u);
+    EXPECT_EQ(authoredSnap.items[0].color, authored);
+    EXPECT_EQ(panel->getColor(), FPanelStyle{}.fillColor.tintColor);
+}
+
+TEST(UIFrameSnapshotTest, ThemedPanelIgnoresUnsyncedColorField)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    FCanvasSlotArgs slot;
+    slot.offset    = {10.0f, 10.0f};
+    slot.fixedSize = {100.0f, 50.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
+
+    auto theme = std::make_shared<UITheme>();
+    FPanelStyle themed;
+    themed.fillColor = FBrush::solid({0.1f, 0.8f, 0.2f, 1.0f});
+    theme->define<FPanelStyle>("panel", themed);
+    tree.setTheme(theme.get());
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_EQ(snap.items[0].color, glm::vec4(0.1f, 0.8f, 0.2f, 1.0f));
+    EXPECT_EQ(panel->getColor(), FPanelStyle{}.fillColor.tintColor);
+}
+
+TEST(UIFrameSnapshotTest, FallbackThemeSwitchAndDeferredTextureReady)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    auto       image = std::make_shared<UIImage>("Img");
+    image->_assetPath = "tex:deferred";
+    FCanvasSlotArgs panelSlot;
+    panelSlot.offset    = {10.0f, 10.0f};
+    panelSlot.fixedSize = {80.0f, 24.0f};
+    FCanvasSlotArgs imageSlot;
+    imageSlot.offset    = {100.0f, 10.0f};
+    imageSlot.fixedSize = {40.0f, 40.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
+
+    const auto findSprite = [](const UIFrameSnapshot& snap, const glm::vec2& pos) -> const UIFrameDrawItem* {
+        for (const UIFrameDrawItem& item : snap.items) {
+            if (item.kind == UIFrameDrawItem::EKind::Sprite && item.pos == pos) {
+                return &item;
+            }
+        }
+        return nullptr;
+    };
+
+    UIFrameBuildContext missCtx;
+    missCtx.generation = 1;
+    missCtx.textureResolver = [](const std::string&) { return std::shared_ptr<Texture>(); };
+    const UIFrameSnapshot unthemed = tree.buildSnapshot(missCtx);
+    const UIFrameDrawItem* unthemedPanel = findSprite(unthemed, {10.0f, 10.0f});
+    const UIFrameDrawItem* unthemedImage = findSprite(unthemed, {100.0f, 10.0f});
+    ASSERT_NE(unthemedPanel, nullptr);
+    ASSERT_NE(unthemedImage, nullptr);
+    EXPECT_EQ(unthemedPanel->color, FPanelStyle{}.fillColor.tintColor);
+    EXPECT_EQ(unthemedPanel->texture, nullptr);
+    EXPECT_EQ(unthemedImage->color, FImageStyle{}.placeholderFill.tintColor);
+    EXPECT_EQ(unthemedImage->texture, nullptr);
+
+    auto themeA = std::make_shared<UITheme>();
+    FPanelStyle panelA;
+    panelA.fillColor = FBrush::solid({0.15f, 0.16f, 0.20f, 1.0f});
+    themeA->define<FPanelStyle>("panel", panelA);
+    FImageStyle imageA;
+    imageA.placeholderFill = FBrush::solid({0.30f, 0.10f, 0.10f, 1.0f});
+    themeA->define<FImageStyle>("image", imageA);
+    tree.setTheme(themeA.get());
+
+    const UIFrameSnapshot themedA = tree.buildSnapshot(missCtx);
+    const UIFrameDrawItem* aPanel = findSprite(themedA, {10.0f, 10.0f});
+    const UIFrameDrawItem* aImage = findSprite(themedA, {100.0f, 10.0f});
+    ASSERT_NE(aPanel, nullptr);
+    ASSERT_NE(aImage, nullptr);
+    EXPECT_EQ(aPanel->color, panelA.fillColor.tintColor);
+    EXPECT_EQ(aImage->color, imageA.placeholderFill.tintColor);
+    EXPECT_EQ(aImage->texture, nullptr);
+
+    auto themeB = std::make_shared<UITheme>();
+    FPanelStyle panelB;
+    panelB.fillColor = FBrush::solid({0.94f, 0.95f, 0.97f, 1.0f});
+    themeB->define<FPanelStyle>("panel", panelB);
+    FImageStyle imageB;
+    imageB.placeholderFill = FBrush::solid({0.10f, 0.30f, 0.10f, 1.0f});
+    themeB->define<FImageStyle>("image", imageB);
+    tree.setTheme(themeB.get());
+
+    const UIFrameSnapshot themedB = tree.buildSnapshot(missCtx);
+    const UIFrameDrawItem* bPanel = findSprite(themedB, {10.0f, 10.0f});
+    const UIFrameDrawItem* bImage = findSprite(themedB, {100.0f, 10.0f});
+    ASSERT_NE(bPanel, nullptr);
+    ASSERT_NE(bImage, nullptr);
+    EXPECT_EQ(bPanel->color, panelB.fillColor.tintColor);
+    EXPECT_EQ(bImage->color, imageB.placeholderFill.tintColor);
+    EXPECT_EQ(bImage->texture, nullptr);
+
+    auto ready = makeFakeTexture();
+    UIFrameBuildContext hitCtx;
+    hitCtx.generation = 2;
+    hitCtx.textureResolver = [&](const std::string& path) {
+        return path == "tex:deferred" ? ready : std::shared_ptr<Texture>();
+    };
+    const UIFrameSnapshot hitSnap = tree.buildSnapshot(hitCtx);
+    EXPECT_EQ(tree.getLastInvalidationReason(), EUIInvalidationReason::ResourceReady);
+    const UIFrameDrawItem* hitImage = findSprite(hitSnap, {100.0f, 10.0f});
+    ASSERT_NE(hitImage, nullptr);
+    EXPECT_EQ(hitImage->texture, ready);
+    EXPECT_EQ(hitImage->color, image->_tint);
 }
 
 } // namespace ya

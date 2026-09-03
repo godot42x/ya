@@ -74,9 +74,14 @@ UISelectableRow::UISelectableRow(std::string name) : UIElement(std::move(name), 
 void UISelectableRow::paintSelf(UIFrameBuilder& builder)
 {
     const FSelectableRowStyle& style = resolvedStyle();
-    const FBrush& fill = _bDropHighlighted ? style.selectedHoveredFill
-                         : _bSelected      ? (_bHovered ? style.selectedHoveredFill : style.selectedFill)
-                                           : (_bHovered ? style.hoveredFill : style.normalFill);
+    const FBrush& fill = resolveVisualFill(visualChrome(style),
+                                           composeVisualFlags(_bHovered,
+                                                              false,
+                                                              false,
+                                                              !isEnabled(),
+                                                              _bSelected,
+                                                              false,
+                                                              _bDropHighlighted));
     if (fill.tintColor.a > 0.0f) {
         builder.addBrush(_layoutRect, fill);
     }

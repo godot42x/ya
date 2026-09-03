@@ -87,9 +87,14 @@ void UICheckBox::paintSelf(UIFrameBuilder& builder)
     boxRect.pos.y += std::max(0.0f, (_layoutRect.extent.y - _boxSize) * 0.5f);
 
     const FCheckBoxStyle& style = resolvedStyle();
-    const FBrush& fill = _bChecked ? style.checkedFill
-                         : _bHovered ? style.hoveredFill
-                                     : style.boxFill;
+    const FBrush& fill = resolveVisualFill(visualChrome(style),
+                                           composeVisualFlags(_bHovered,
+                                                              false,
+                                                              false,
+                                                              !isEnabled(),
+                                                              _bChecked,
+                                                              false,
+                                                              false));
     builder.addBrush(boxRect, fill);
     if (_bChecked) {
         paintCheckMark(builder, boxRect, style.checkColor);

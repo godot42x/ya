@@ -112,11 +112,11 @@ YA_UI_ANONYMOUS_FACTORY(panel, UIPanelWidgetBuilder)
 /// is available as its own host rather than only as a panel's behaviour.
 [[nodiscard]] inline UIPanelWidgetBuilder canvas(std::string key, std::string displayName = {})
 {
-    return panel(std::move(key), std::move(displayName)).setStyleKey("canvas");
+    return panel(std::move(key), std::move(displayName)).setStyleKey(std::string(ya::StyleKey::Canvas));
 }
 [[nodiscard]] inline UIPanelWidgetBuilder canvas()
 {
-    return panel().setStyleKey("canvas");
+    return panel().setStyleKey(std::string(ya::StyleKey::Canvas));
 }
 
 [[nodiscard]] inline UIContainerWidgetBuilder column(std::string key, std::string displayName = {})

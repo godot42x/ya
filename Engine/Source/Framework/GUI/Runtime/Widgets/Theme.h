@@ -96,6 +96,11 @@ const TStyle* peekThemeStyle(const UIElement& widget, const std::string& key)
     return patch.is_null() || !patch.is_object() || patch.empty();
 }
 
+[[nodiscard]] inline EUIPropertyImpact styleImpactToPropertyImpact(FStyleFieldImpact impact)
+{
+    return impact.bLayout ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint;
+}
+
 /// True when `patch` contains every reflected (serializable) field of TStyle.
 /// A complete patch is a full freeze: resolve skips theme edges.
 template <typename TStyle>
@@ -173,7 +178,7 @@ template <typename TStyle>
 
 /// Sparse overlay resolve: theme (when the patch does not cover every
 /// reflected field) + per-key deserializeProperty onto that base.
-/// A complete patch is a full freeze — same as historical setStyle(TStyle):
+/// A complete patch is a full freeze — same as setStyle(TStyle):
 /// no theme-generation edge, base is TStyle{}. `key` defaults to
 /// `widget._styleKey`. Uncached; widget paint/layout should use
 /// `UIStyledWidget::resolvedStyle()` instead.
@@ -205,6 +210,8 @@ TStyle resolveWidgetStyle(const UIElement&          widget,
 /// field names). Empty / null / `{}` means inherit the whole style from
 /// the theme (or TStyle{}). `setStyle(TStyle)` writes every field (full
 /// freeze). `setStyleField` writes one key and keeps theme edges.
+/// Default invalidation uses `lookupStyleFieldImpact` / patch union;
+/// the explicit-impact overloads remain for AutoSize (UIText::setFontSize).
 ///
 /// `_resolvedStyleCache` is the dense merge result. Paint/layout read
 /// `resolvedStyle()`; merge runs on dirty/recompute, not every paint.
@@ -280,7 +287,7 @@ struct UIStyledWidget
     }
 
 
-    void setStyle(TStyle style, EUIPropertyImpact impact = EUIPropertyImpact::Layout)
+    void setStyle(TStyle style, EUIPropertyImpact impact)
     {
         auto& self = static_cast<TWidget&>(*this);
         ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
@@ -296,8 +303,20 @@ struct UIStyledWidget
         self.invalidateProperty(impact);
     }
 
+    void setStyle(TStyle style)
+    {
+        ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
+        nlohmann::json next = ReflectionSerializer::serializeByRuntimeReflection(style);
+        if (!next.is_object()) {
+            next = nlohmann::json::object();
+        }
+        const EUIPropertyImpact impact =
+            styleImpactToPropertyImpact(lookupStylePatchImpact<TStyle>(next));
+        setStyle(std::move(style), impact);
+    }
+
     template <typename TValue>
-    void setStyleField(std::string name, const TValue& value, EUIPropertyImpact impact = EUIPropertyImpact::Paint)
+    void setStyleField(std::string name, const TValue& value, EUIPropertyImpact impact)
     {
         auto& self = static_cast<TWidget&>(*this);
         ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
@@ -338,7 +357,15 @@ struct UIStyledWidget
         self.invalidateProperty(impact);
     }
 
-    void clearStyleField(const std::string& name, EUIPropertyImpact impact = EUIPropertyImpact::Layout)
+    template <typename TValue>
+    void setStyleField(std::string name, const TValue& value)
+    {
+        const EUIPropertyImpact impact =
+            styleImpactToPropertyImpact(lookupStyleFieldImpact<TStyle>(name));
+        setStyleField(std::move(name), value, impact);
+    }
+
+    void clearStyleField(const std::string& name, EUIPropertyImpact impact)
     {
         auto& self = static_cast<TWidget&>(*this);
         if (!_authoredStyle.is_object() || !_authoredStyle.contains(name)) {
@@ -349,15 +376,22 @@ struct UIStyledWidget
         self.invalidateProperty(impact);
     }
 
+    void clearStyleField(const std::string& name)
+    {
+        clearStyleField(name, styleImpactToPropertyImpact(lookupStyleFieldImpact<TStyle>(name)));
+    }
+
     void clearAuthoredStyle()
     {
         auto& self = static_cast<TWidget&>(*this);
         if (isStylePatchEmpty(_authoredStyle)) {
             return;
         }
+        const EUIPropertyImpact impact =
+            styleImpactToPropertyImpact(lookupStylePatchImpact<TStyle>(_authoredStyle));
         _authoredStyle = nlohmann::json{};
         invalidateResolvedStyleCache();
-        self.invalidateProperty(EUIPropertyImpact::Layout);
+        self.invalidateProperty(impact);
     }
 
     [[nodiscard]] bool hasAuthoredStyle() const
@@ -371,6 +405,10 @@ struct UIStyledWidget
 /// Empty / null / `{}` omits the key; a JSON object is the sparse patch
 /// (missing keys inherit). Old full-object documents remain a full freeze.
 #define YA_GUI_AUTHORED_STYLE_IO(TStyle)                                                                          \
+    [[nodiscard]] type_index_t getStyleTypeIndex() const override                                                 \
+    {                                                                                                             \
+        return ya::type_index_v<TStyle>;                                                                          \
+    }                                                                                                             \
     [[nodiscard]] nlohmann::json serializeAuthoredStyle() const override                                          \
     {                                                                                                             \
         static_assert(std::is_same_v<std::remove_cvref_t<decltype(_authoredStyle)>, nlohmann::json>);              \

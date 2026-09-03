@@ -394,6 +394,11 @@ struct YA_GUI_API WidgetTree final
     [[nodiscard]] UIElement* findDropTarget(const glm::vec2& logicalPoint) const;
     /// Release ghost + highlight + payload (shared by end/cancel).
     void clearDragSession();
+    /// Poll FontManager::resourceRevision() and, on change, remasure+repaint
+    /// every attached widget so nested fill containers cannot skip stale
+    /// text metrics.
+    void applyFontResourceRevision();
+    void markSubtreeResourceReady(UIElement& element);
 
     UIElementRef _root;
     std::array<UIElementRef, static_cast<size_t>(ELayer::Count)> _layers;
@@ -434,13 +439,16 @@ struct YA_GUI_API WidgetTree final
     uint64_t _validationMismatches = 0;
 
     // Build-context validity (GI-002): draw-item segments hold final target-
-    // pixel + resolved-texture data, so a changed uiScale/offset/generation
-    // invalidates both cache buffers (conservative, correctness-first). The
-    // last-seen values detect the change across buildSnapshot calls.
+    // pixel + resolved-texture data. uiScale/offset/DPI mapping changes drop
+    // caches as BuildContextChanged; ctx.generation (resolver identity) drops
+    // caches as ResourceReady. Font atlas identity is a separate
+    // FontManager::resourceRevision poll.
     bool      _bHasBuildContext = false;
     uint64_t  _lastGeneration   = 0;
     glm::vec2 _lastUiScale      = {1.0f, 1.0f};
     glm::vec2 _lastOffset       = {0.0f, 0.0f};
+    bool      _bHasFontRevision = false;
+    uint64_t  _lastFontRevision = 0;
     UIElement*    _focused      = nullptr;
     UIElement*    _captured     = nullptr;
     UIElement*    _hovered      = nullptr;

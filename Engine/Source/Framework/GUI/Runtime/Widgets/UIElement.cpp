@@ -1,5 +1,6 @@
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "GUI/Widgets/Style.h"
 
 #include "Core/Log.h"
 #include "Core/Reflection/DeferredInitializer.h"
@@ -396,6 +397,16 @@ void UIElement::invalidateSubtree(EUIInvalidationReason reason)
     }
 }
 
+void UIElement::setStyleKey(std::string value)
+{
+    if (_styleKey == value) {
+        return;
+    }
+    diagnoseStyleKey(value, getStyleTypeIndex());
+    _styleKey = std::move(value);
+    invalidateProperty(EUIPropertyImpact::Layout);
+}
+
 void UIElement::invalidateProperty(EUIPropertyImpact impact)
 {
     switch (impact) {
@@ -595,6 +606,8 @@ void UIElement::deserializeFields(const nlohmann::json& fields)
     if (bHasAuthored) {
         deserializeAuthoredStyle(authored);
     }
+
+    diagnoseStyleKey(_styleKey, getStyleTypeIndex());
 
     // Mutation transaction boundary (GI-201): reflection writes bypass the
     // changed-only setters (direct memory access), so no per-field invalidation

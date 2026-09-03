@@ -22,6 +22,9 @@ void UITabButton::paintSelf(UIFrameBuilder& builder)
     // (Phase 3 cleanup: no bare fields).
     const FTabStyle& style = resolvedStyle(ReactiveBase::EDirtyLevel::Layout);
 
+    builder.addBrush(_layoutRect,
+                     resolveVisualFill(visualChrome(style),
+                                       composeVisualFlags(_bHovered, false, false, !isEnabled(), _bSelected, false, false)));
     if (_bSelected) {
         // Selected tab reads as "connected to the content below": the fill is
         // the editor-chrome base, with a thin accent bar along the top edge.
@@ -29,7 +32,6 @@ void UITabButton::paintSelf(UIFrameBuilder& builder)
         // above us) would look connected, but the bar clips children, so keep
         // the fill inside this button and let the bar's bottom rule separate
         // the strip from content.
-        builder.addBrush(_layoutRect, style.selectedFill);
         const bool vertical = dynamic_cast<const UIContainer*>(getParent()) &&
                               dynamic_cast<const UIContainer*>(getParent())->getDirection() == EWidgetBoxLayout::Vertical;
         const Rect2D accent = vertical
@@ -38,9 +40,6 @@ void UITabButton::paintSelf(UIFrameBuilder& builder)
                                   : Rect2D{glm::vec2{_layoutRect.pos.x, _layoutRect.pos.y},
                                            glm::vec2{_layoutRect.extent.x, 2.0f}};
         builder.addBrush(accent, FBrush::solid(style.accentColor));
-    }
-    else {
-        builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.normalFill);
     }
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {

@@ -557,6 +557,23 @@ TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
 }
 
+TEST(UIDocumentTest, DeserializeDiagnosesUnknownStyleKey)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+    auto  source   = registry.createInstance("test.doc_panel");
+    ASSERT_NE(source, nullptr);
+    source->setStyleKey("not.a.style");
+    auto doc = UIDocument::fromWidget(*source);
+    ASSERT_NE(doc, nullptr);
+
+    const StyleCatalogDiagnostics before = getStyleCatalogDiagnostics();
+    UIElementRef instance = doc->instantiate();
+    ASSERT_NE(instance, nullptr);
+    EXPECT_EQ(instance->_styleKey, "not.a.style");
+    EXPECT_EQ(getStyleCatalogDiagnostics().unknownKeys, before.unknownKeys + 1);
+}
+
 TEST(UIDocumentTest, DeserializeOnDetachedWidgetIsNoOp)
 {
     ensureTestTypesRegistered();

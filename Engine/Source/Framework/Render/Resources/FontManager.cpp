@@ -133,6 +133,7 @@ void FontManager::registerFont(const FName &fontName, uint32_t fontSize, std::sh
     if (std::find(sizes.begin(), sizes.end(), fontSize) == sizes.end()) {
         sizes.push_back(fontSize);
     }
+    bumpResourceRevision();
 }
 
 std::shared_ptr<Font> FontManager::findBestBase(const FName &fontName, uint32_t fontSize) const
@@ -252,6 +253,7 @@ void FontManager::unloadFont(const FName &fontName, uint32_t fontSize)
     if (it != _fontCache.end()) {
         _fontCache.erase(it);
         YA_CORE_INFO("Unloaded font '{}' size {}", fontName.toString(), fontSize);
+        bumpResourceRevision();
     }
 }
 
@@ -263,6 +265,7 @@ void FontManager::clearCache()
     _pendingGlyphs.clear();
     _fontPaths.clear();
     // _render is a non-owning observer; a fresh loadFont will re-capture it.
+    bumpResourceRevision();
     YA_CORE_INFO("Cleared all font cache");
 }
 
@@ -437,6 +440,7 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
     if (std::find(sizes.begin(), sizes.end(), rasterSize) == sizes.end()) {
         sizes.push_back(rasterSize);
     }
+    bumpResourceRevision();
 
     YA_CORE_INFO("Loaded font '{}' (mode={}, rasterSize: {}, atlas: {}x{})", fontName.toString(), (int)chosenMode, rasterSize, atlasWidth, atlasHeight);
 
@@ -626,6 +630,7 @@ void FontManager::flushPendingGlyphs(IRender& render)
         return;
     }
     _bNewGlyphsCaptured = true;
+    bumpResourceRevision();
     FT_Library ft{};
     if (FT_Err_Ok != FT_Init_FreeType(&ft)) {
         YA_CORE_ERROR("Failed to initialize FreeType library for glyph fallback");

@@ -14,13 +14,17 @@
 // ============================================================================
 
 #include "Core/Api.h"
+#include "Core/TypeIndex.h"
 #include "GUI/Widgets/Brush.h"
 #include "GUI/Binding/Reactive.h"
 
 #include <glm/glm.hpp>
+#include <nlohmann/json.hpp>
 
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <typeindex>
 #include <unordered_map>
 
@@ -41,6 +45,101 @@ namespace ya
 // below are copied from each control's current defaults so that migration is
 // behavior-preserving.
 // ============================================================================
+
+/// Interactive chrome flags. Widgets compose these from input/focus/enabled
+/// /selection/validation/drop; `resolveVisualFill` maps the set to one brush.
+enum class EWidgetVisualFlag : uint16_t
+{
+    Hovered    = 1u << 0,
+    Pressed    = 1u << 1,
+    Focused    = 1u << 2,
+    Disabled   = 1u << 3,
+    Selected   = 1u << 4,
+    Error      = 1u << 5,
+    DropTarget = 1u << 6,
+};
+
+using EWidgetVisualFlags = uint16_t;
+
+[[nodiscard]] constexpr bool hasVisualFlag(EWidgetVisualFlags flags, EWidgetVisualFlag bit)
+{
+    return (flags & static_cast<EWidgetVisualFlags>(bit)) != 0;
+}
+
+[[nodiscard]] constexpr EWidgetVisualFlags composeVisualFlags(bool bHovered,
+                                                              bool bPressed,
+                                                              bool bFocused,
+                                                              bool bDisabled,
+                                                              bool bSelected,
+                                                              bool bError,
+                                                              bool bDropTarget)
+{
+    EWidgetVisualFlags flags = 0;
+    if (bHovered) {
+        flags |= static_cast<EWidgetVisualFlags>(EWidgetVisualFlag::Hovered);
+    }
+    if (bPressed) {
+        flags |= static_cast<EWidgetVisualFlags>(EWidgetVisualFlag::Pressed);
+    }
+    if (bFocused) {
+        flags |= static_cast<EWidgetVisualFlags>(EWidgetVisualFlag::Focused);
+    }
+    if (bDisabled) {
+        flags |= static_cast<EWidgetVisualFlags>(EWidgetVisualFlag::Disabled);
+    }
+    if (bSelected) {
+        flags |= static_cast<EWidgetVisualFlags>(EWidgetVisualFlag::Selected);
+    }
+    if (bError) {
+        flags |= static_cast<EWidgetVisualFlags>(EWidgetVisualFlag::Error);
+    }
+    if (bDropTarget) {
+        flags |= static_cast<EWidgetVisualFlags>(EWidgetVisualFlag::DropTarget);
+    }
+    return flags;
+}
+
+/// Canonical interactive fill table. Exclusive precedence (highest first):
+/// Disabled, DropTarget, Error, Pressed, Selected+Hovered, Selected, Hovered,
+/// Focused, Normal. Selected+Hovered is a combination, not a ninth exclusive
+/// state; styles that lack a combination brush copy Selected into it.
+struct FVisualChrome
+{
+    FBrush normal;
+    FBrush hovered;
+    FBrush pressed;
+    FBrush focused;
+    FBrush disabled;
+    FBrush selected;
+    FBrush selectedHovered;
+    FBrush error;
+    FBrush dropTarget;
+
+    bool operator==(const FVisualChrome&) const = default;
+};
+
+[[nodiscard]] YA_GUI_API const FBrush& resolveVisualFill(const FVisualChrome& chrome,
+                                                         EWidgetVisualFlags    flags);
+
+struct FButtonStyle;
+struct FSelectableRowStyle;
+struct FCheckBoxStyle;
+struct FMenuBarItemStyle;
+struct FTabStyle;
+struct FComboBoxStyle;
+struct FMenuStyle;
+struct FTableGridStyle;
+struct FTreeViewStyle;
+
+[[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FButtonStyle& style);
+[[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FSelectableRowStyle& style);
+[[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FCheckBoxStyle& style);
+[[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FMenuBarItemStyle& style);
+[[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FTabStyle& style);
+[[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FComboBoxStyle& style);
+[[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FMenuStyle& style);
+[[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FTableGridStyle& style);
+[[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FTreeViewStyle& style);
 
 /// Text: color + size, plus the optional themed background (badge/chip) fill
 /// + padding. Mirrors what UIText's paint actually consumes (authoring
@@ -73,6 +172,9 @@ struct FButtonStyle
     FBrush     pressedFill  = FBrush::solid({0.4f, 0.4f, 0.4f, 1.0f});
     FBrush     focusedFill  = FBrush::solid({0.26f, 0.52f, 0.90f, 1.0f});
     FBrush     disabledFill = FBrush::solid({0.5f, 0.5f, 0.5f, 1.0f});
+    FBrush     selectedFill = FBrush::solid({0.26f, 0.52f, 0.90f, 1.0f});
+    FBrush     errorFill    = FBrush::solid({0.72f, 0.24f, 0.24f, 1.0f});
+    FBrush     dropTargetFill = FBrush::solid({0.26f, 0.52f, 0.90f, 1.0f});
     glm::vec4  textColor    = {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec2  padding      = {12.0f, 4.0f};
 
@@ -219,6 +321,9 @@ struct FSelectableRowStyle
     FBrush hoveredFill         = FBrush::solid({0.24f, 0.26f, 0.31f, 1.0f});
     FBrush selectedFill        = FBrush::solid({0.22f, 0.42f, 0.78f, 1.0f});
     FBrush selectedHoveredFill = FBrush::solid({0.30f, 0.50f, 0.86f, 1.0f});
+    FBrush dropTargetFill      = FBrush::solid({0.30f, 0.50f, 0.86f, 1.0f});
+    FBrush errorFill           = FBrush::solid({0.72f, 0.24f, 0.24f, 1.0f});
+    FBrush disabledFill        = FBrush::solid({0.16f, 0.17f, 0.20f, 0.35f});
 
     bool operator==(const FSelectableRowStyle&) const = default;
 };
@@ -361,6 +466,114 @@ struct FDragDropStyle
     bool operator==(const FDragDropStyle&) const = default;
 };
 
+/// Single vocabulary of theme keys. `X(TStyle, Name, "key")` is the source
+/// for constexpr StyleKey::* names and the runtime catalog. `editor.<key>`
+/// is the same vocabulary (GameEditor overlay), not a second catalog.
+#define YA_GUI_STYLE_CATALOG(X)                      \
+    X(FPanelStyle, Panel, "panel")                   \
+    X(FPanelStyle, PanelWindow, "panel.window")      \
+    X(FPanelStyle, PanelCanvas, "panel.canvas")      \
+    X(FPanelStyle, PanelSidebar, "panel.sidebar")    \
+    X(FPanelStyle, PanelSidebarCard, "panel.sidebar.card") \
+    X(FPanelStyle, PanelSurface, "panel.surface")    \
+    X(FPanelStyle, MenuPanel, "menu.panel")          \
+    X(FPanelStyle, Tooltip, "tooltip")               \
+    X(FPanelStyle, DragGhost, "drag.ghost")          \
+    X(FPanelStyle, Canvas, "canvas")                 \
+    X(FButtonStyle, Button, "button")                \
+    X(FTextStyle, Text, "text")                      \
+    X(FTextStyle, TextHeader, "text.header")         \
+    X(FTextStyle, TextMuted, "text.muted")           \
+    X(FTextStyle, TextError, "text.error")           \
+    X(FTextStyle, TextEyebrow, "text.eyebrow")       \
+    X(FMenuBarItemStyle, MenuBar, "menubar")         \
+    X(FTabStyle, Tab, "tab")                         \
+    X(FTabStyle, TabSidebar, "tab.sidebar")          \
+    X(FTabStyle, TabDock, "tab.dock")                 \
+    X(FSplitPaneStyle, Split, "split")               \
+    X(FScrollBarStyle, ScrollBar, "scrollbar")       \
+    X(FDockSpaceStyle, Dock, "dock")                 \
+    X(FFloatingWindowStyle, Floating, "floating")    \
+    X(FTreeViewStyle, Tree, "tree")                  \
+    X(FTextFieldStyle, TextField, "textfield")       \
+    X(FMenuStyle, Menu, "menu")                      \
+    X(FSelectableRowStyle, Selectable, "selectable") \
+    X(FDragFloatStyle, DragFloat, "dragfloat")       \
+    X(FCheckBoxStyle, CheckBox, "checkbox")          \
+    X(FComboBoxStyle, ComboBox, "combobox")          \
+    X(FSliderStyle, Slider, "slider")                \
+    X(FTableGridStyle, Table, "table")               \
+    X(FSpinBoxStyle, SpinBox, "spinbox")             \
+    X(FRadioButtonStyle, Radio, "radio")             \
+    X(FColorEditStyle, ColorEdit, "coloredit")       \
+    X(FSearchComboStyle, SearchCombo, "searchcombo") \
+    X(FImageStyle, Image, "image")                   \
+    X(FPopupStyle, Popup, "popup")                   \
+    X(FDragDropStyle, DragSource, "drag.source")     \
+    X(FDragDropStyle, DragTarget, "drag.target")
+
+namespace StyleKey
+{
+#define YA_GUI_STYLE_KEY_CONST(Type, Name, Str) inline constexpr std::string_view Name = Str;
+YA_GUI_STYLE_CATALOG(YA_GUI_STYLE_KEY_CONST)
+#undef YA_GUI_STYLE_KEY_CONST
+}
+
+enum class EStyleKeyLookup : uint8_t
+{
+    Known,
+    Empty,
+    UnknownKey,
+    TypeMismatch,
+};
+
+struct StyleCatalogDiagnostics
+{
+    uint64_t unknownKeys     = 0;
+    uint64_t typeMismatches  = 0;
+};
+
+[[nodiscard]] YA_GUI_API EStyleKeyLookup lookupStyleKey(std::string_view key, type_index_t styleType);
+[[nodiscard]] YA_GUI_API StyleCatalogDiagnostics getStyleCatalogDiagnostics();
+YA_GUI_API void diagnoseStyleKey(std::string_view key, type_index_t styleType);
+
+template <typename TStyle>
+[[nodiscard]] inline EStyleKeyLookup lookupStyleKey(std::string_view key)
+{
+    return lookupStyleKey(key, ya::type_index_v<TStyle>);
+}
+
+/// Declared invalidation metadata for one reflected TStyle field.
+/// `bPaint` is always set: a style write always needs a repaint.
+/// `bLayout` is additional (fontSize/padding/minSize). Scrollbar `width` is
+/// overlay chrome, not layout. `bResource` marks FBrush fields for later
+/// async-ready invalidation; `invalidateProperty` has no Resource case yet.
+struct FStyleFieldImpact
+{
+    bool bPaint    = true;
+    bool bLayout   = false;
+    bool bResource = false;
+
+    bool operator==(const FStyleFieldImpact&) const = default;
+};
+
+[[nodiscard]] YA_GUI_API FStyleFieldImpact lookupStyleFieldImpact(type_index_t      styleType,
+                                                                  std::string_view field);
+[[nodiscard]] YA_GUI_API FStyleFieldImpact lookupStylePatchImpact(type_index_t         styleType,
+                                                                  const nlohmann::json& patch);
+
+template <typename TStyle>
+[[nodiscard]] inline FStyleFieldImpact lookupStyleFieldImpact(std::string_view field)
+{
+    return lookupStyleFieldImpact(ya::type_index_v<TStyle>, field);
+}
+
+template <typename TStyle>
+[[nodiscard]] inline FStyleFieldImpact lookupStylePatchImpact(const nlohmann::json& patch)
+{
+    return lookupStylePatchImpact(ya::type_index_v<TStyle>, patch);
+}
+
 /// Named style collection. Styles are Reactive so widgets can bind them and
 /// be notified on edit. Owned by the host (or a singleton); not tied to a
 /// specific tree so one set themes many widgets/windows.
@@ -377,6 +590,7 @@ public:
     template <typename TStyle>
     std::shared_ptr<Reactive<TStyle>> define(std::string name, TStyle style)
     {
+        diagnoseStyleKey(name, ya::type_index_v<TStyle>);
         auto& bucket = _styles[std::type_index(typeid(TStyle))];
         if (const auto it = bucket.find(name); it != bucket.end()) {
             auto handle = std::static_pointer_cast<Reactive<TStyle>>(it->second);

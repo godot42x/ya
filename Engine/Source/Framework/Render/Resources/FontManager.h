@@ -322,6 +322,9 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
     // at round(size * _activeDpiScale) so they map 1:1 to screen pixels on
     // Retina/HiDPI. SDF ignores it. Defaults to 1.0 (logical pixels).
     float _activeDpiScale = 1.0f;
+    uint64_t _resourceRevision = 0;
+
+    void bumpResourceRevision() { ++_resourceRevision; }
 
     [[nodiscard]] std::shared_ptr<Font> findBestBase(const FName& fontName, uint32_t fontSize) const;
 
@@ -391,6 +394,12 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
     /// serves cached entries first, so production loading is unchanged.
     void registerFont(const FName &fontName, uint32_t fontSize, std::shared_ptr<Font> font);
 
+    /// Monotonic revision bumped when a font is registered/loaded/unloaded or
+    /// pending glyphs are flushed into the atlas. WidgetTree consumes this at
+    /// snapshot time so layout/paint run again when text metrics or atlas
+    /// pages become ready. Hosts only flush glyphs; they do not re-invalidate.
+    [[nodiscard]] uint64_t resourceRevision() const { return _resourceRevision; }
+
     void unloadFont(const FName &fontName, uint32_t fontSize);
 
     /**
@@ -413,17 +422,16 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
     /// host calls flushPendingGlyphs at a safe frame point (after snapshot
     /// build, before command recording — Core Rule 6). Missing glyphs render
     /// as '?' until the next flush (standard 1-frame latency).
-    /// Returns true when NEW glyphs were registered (i.e. some codepoint was
-    /// missing): the caller should invalidate layout — text measured against
-    /// the '?' fallback is stale until the next flush + re-measure.
+    /// Returns true when NEW glyphs were registered. WidgetTree remasures on
+    /// the next snapshot from resourceRevision(); hosts only flush.
     bool requestGlyphs(Font& font, std::string_view text);
     /// Rasterize + add all pending glyphs into their font's dynamic atlas
     /// (grow/repack as needed). Safe-point only. Sets an internal flag when
     /// glyphs were actually captured; consumeNewGlyphCapture() reports it.
     void flushPendingGlyphs(IRender& render);
-    /// True when the last flush captured new glyphs (and clears the flag):
-    /// text items measured/rendered against the '?' fallback are stale — the
-    /// host should invalidate layout + paint so they re-measure/re-paint.
+    /// True when the last flush captured new glyphs (and clears the flag).
+    /// WidgetTree already invalidates from resourceRevision(); this remains
+    /// for host/debug observers.
     bool consumeNewGlyphCapture();
 
     // TODO: optimize key generation

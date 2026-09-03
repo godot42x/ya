@@ -38,7 +38,9 @@ void UIComboBox::select(int index)
 void UIComboBox::paintSelf(UIFrameBuilder& builder)
 {
     const FComboBoxStyle& style = resolvedStyle();
-    builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.fieldFill);
+    builder.addBrush(_layoutRect,
+                     resolveVisualFill(visualChrome(style),
+                                       composeVisualFlags(_bHovered, false, false, !isEnabled(), false, false, false)));
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {

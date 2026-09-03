@@ -64,6 +64,12 @@ struct YA_GUI_API UIPanel : public UIElement, public UIStyledWidget<UIPanel, FPa
     [[nodiscard]] const glm::vec4& getColor() const { return _color; }
     [[nodiscard]] bool hasExplicitFill() const { return hasAuthoredStyle(); }
 
+    /// Sparse overlay on the theme, with `_color` as the no-theme fallback when
+    /// fillColor is not authored. Paint reads only this cache — never a second
+    /// `_color` sprite path.
+    [[nodiscard]] const FPanelStyle& resolvedStyle(ReactiveBase::EDirtyLevel level = ReactiveBase::EDirtyLevel::Paint,
+                                                   bool bTrackDependencies = true) const;
+
     void deserializeFields(const nlohmann::json& fields) override;
 
     /// Corner radius setter (changed-only). Routes the panel fill through the

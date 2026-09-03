@@ -46,11 +46,14 @@ void UIButton::paintSelf(UIFrameBuilder& builder)
     // button. When the key/theme is absent, the default-constructed style IS
     // the framework fallback (Phase 3 cleanup: no bare color fields).
     const FButtonStyle& style = resolvedStyle();
-    const FBrush& fill = !bEnabled   ? style.disabledFill
-                         : _bPressed ? style.pressedFill
-                         : _bHovered ? style.hoveredFill
-                         : _bFocused ? style.focusedFill
-                                     : style.normalFill;
+    const FBrush& fill = resolveVisualFill(visualChrome(style),
+                                           composeVisualFlags(_bHovered,
+                                                              _bPressed,
+                                                              _bFocused,
+                                                              !bEnabled,
+                                                              false,
+                                                              false,
+                                                              false));
     builder.addBrush(_layoutRect, fill);
 }
 

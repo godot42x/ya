@@ -163,11 +163,16 @@ void UITableGrid::paintSelf(UIFrameBuilder& builder)
             .extent = {_layoutRect.extent.x, _rowHeight},
         };
 
-        if (data.id == selectedId) {
-            builder.addBrush(rowRect, style.selectedFill);
-        }
-        else if (static_cast<int>(row) == _hoveredRow) {
-            builder.addBrush(rowRect, style.hoveredFill);
+        const FBrush& fill = resolveVisualFill(visualChrome(style),
+                                               composeVisualFlags(static_cast<int>(row) == _hoveredRow,
+                                                                  false,
+                                                                  false,
+                                                                  false,
+                                                                  data.id == selectedId,
+                                                                  false,
+                                                                  false));
+        if (fill.tintColor.a > 0.0f) {
+            builder.addBrush(rowRect, fill);
         }
 
         if (font) {

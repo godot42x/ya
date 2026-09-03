@@ -405,11 +405,16 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
             .extent = {_layoutRect.extent.x, _rowHeight},
         };
 
-        if (row.node->id == selectedId) {
-            builder.addBrush(rowRect, style.selectedFill);
-        }
-        else if (static_cast<int>(i) == _hoveredRow) {
-            builder.addBrush(rowRect, style.hoveredFill);
+        const FBrush& fill = resolveVisualFill(visualChrome(style),
+                                               composeVisualFlags(static_cast<int>(i) == _hoveredRow,
+                                                                  false,
+                                                                  false,
+                                                                  false,
+                                                                  row.node->id == selectedId,
+                                                                  false,
+                                                                  false));
+        if (fill.tintColor.a > 0.0f) {
+            builder.addBrush(rowRect, fill);
         }
 
         float x = rowRect.pos.x + static_cast<float>(row.depth) * _indentWidth;

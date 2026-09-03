@@ -44,10 +44,12 @@
 
 ## Phase 5：Style / Theme
 
-- [ ] style field impact metadata。
-- [ ] style key/type catalog。
-- [ ] resource-ready invalidation。
-- [ ] visual state matrix。
+- [x] style field impact metadata。
+- [x] style key/type catalog。
+- [x] resource-ready invalidation。
+- [x] visual state matrix。
+- [x] panel naked-color cleanup（paint 只读 fillColor；`_color` 仅 no-theme fallback）。
+- [x] 无主题 / 资源缺失 snapshot 回归（headless host 同契约；windowed GPU/offscreen 仍属 Phase 9）。
 
 ## Phase 6：Editor data
 

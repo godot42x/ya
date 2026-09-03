@@ -1,4 +1,5 @@
 #include "GUI/Host/GUIHeadlessHost.h"
+#include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Theme.h"
@@ -172,6 +173,77 @@ TEST(GUIHeadlessHostTest, ReusesAppKernelAndBuildsSnapshotsWithoutWindowOrRhi)
     EXPECT_EQ(lastExtent.width, 320u);
     EXPECT_EQ(lastExtent.height, 200u);
     EXPECT_GT(lastItemCount, 0u);
+}
+
+TEST(GUIHeadlessHostTest, UnthemedFallbackThenThemeSwitchRepaintsSnapshot)
+{
+    struct FallbackDelegate final : IGUIAppDelegate
+    {
+        WidgetTree*              tree  = nullptr;
+        std::shared_ptr<UITheme> theme;
+        int                      ticks = 0;
+
+        void buildUI(WidgetTree& inTree) override
+        {
+            tree = &inTree;
+            auto panel = std::make_shared<UIPanel>("P");
+            FCanvasSlotArgs panelSlot;
+            panelSlot.offset    = {8.0f, 8.0f};
+            panelSlot.fixedSize = {64.0f, 32.0f};
+            inTree.attach(*inTree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+
+            auto image = std::make_shared<UIImage>("Img");
+            FCanvasSlotArgs imageSlot;
+            imageSlot.offset    = {80.0f, 8.0f};
+            imageSlot.fixedSize = {32.0f, 32.0f};
+            inTree.attach(*inTree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
+        }
+
+        void updateUI() override
+        {
+            ++ticks;
+            if (ticks == 2 && tree) {
+                theme = std::make_shared<UITheme>();
+                FPanelStyle panelStyle;
+                panelStyle.fillColor = FBrush::solid({0.15f, 0.80f, 0.20f, 1.0f});
+                theme->define<FPanelStyle>("panel", panelStyle);
+                FImageStyle imageStyle;
+                imageStyle.placeholderFill = FBrush::solid({0.80f, 0.20f, 0.10f, 1.0f});
+                theme->define<FImageStyle>("image", imageStyle);
+                tree->setTheme(theme.get());
+            }
+        }
+    };
+
+    FallbackDelegate delegate;
+    glm::vec4        panelColor{0.0f};
+    glm::vec4        imageColor{0.0f};
+    uint32_t         themedFrame = 0;
+    GUIHeadlessHost  host(
+        FGUIHeadlessHostConfig{
+            .logicalExtent = {160, 80},
+            .automation    = {.exitAfterFrame = 3},
+            .onSnapshot    = [&](const UIFrameSnapshot& snap) {
+                const glm::vec4 panelSample = sampleSpriteColorAt(snap, 10.0f, 10.0f);
+                const glm::vec4 imageSample = sampleSpriteColorAt(snap, 90.0f, 10.0f);
+                if (delegate.ticks == 1) {
+                    EXPECT_EQ(panelSample, FPanelStyle{}.fillColor.tintColor);
+                    EXPECT_EQ(imageSample, FImageStyle{}.placeholderFill.tintColor);
+                }
+                if (delegate.ticks >= 2) {
+                    panelColor  = panelSample;
+                    imageColor  = imageSample;
+                    themedFrame = delegate.ticks;
+                }
+            },
+        },
+        delegate);
+
+    ASSERT_TRUE(host.init());
+    EXPECT_EQ(host.run(), 0);
+    EXPECT_GE(themedFrame, 2u);
+    EXPECT_EQ(panelColor, glm::vec4(0.15f, 0.80f, 0.20f, 1.0f));
+    EXPECT_EQ(imageColor, glm::vec4(0.80f, 0.20f, 0.10f, 1.0f));
 }
 
 } // namespace ya

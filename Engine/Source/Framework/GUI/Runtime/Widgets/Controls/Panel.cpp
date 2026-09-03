@@ -9,10 +9,7 @@ namespace ya
 
 void UIPanel::paintSelf(UIFrameBuilder& builder)
 {
-    // Sparse overlay on the theme. An image binding is content, not chrome:
-    // it wins over an authored solid fill so GI-202 recolor + image stays the
-    // pre-fold setColor fallback. Theme still wins over image when the
-    // panel has no authored style (same as before _bExplicitFill).
+    const FPanelStyle& style = resolvedStyle();
     auto paintFill = [&](const FBrush& fill) {
         if (_cornerRadius > 0.0f && fill.isSolid()) {
             builder.addRoundedRect(_layoutRect, fill.tintColor, _cornerRadius);
@@ -21,29 +18,36 @@ void UIPanel::paintSelf(UIFrameBuilder& builder)
         builder.addBrush(_layoutRect, fill);
     };
 
-    if (!_image.isLoaded()) {
-        const FPanelStyle& style = resolvedStyle();
-        const bool        bThemed = !_styleKey.empty() && getTree() && getTree()->getTheme()
+    if (_image.isLoaded()) {
+        const bool bThemed = !_styleKey.empty() && getTree() && getTree()->getTheme()
                              && getTree()->getTheme()->find<FPanelStyle>(_styleKey);
-        if (hasAuthoredStyle() || bThemed) {
+        // Image is content. A mounted theme without an authored overlay still
+        // owns chrome; GI-202 recolor (authored fillColor) tints the image.
+        if (!hasAuthoredStyle() && bThemed) {
             paintFill(style.fillColor);
             return;
         }
-        if (_cornerRadius > 0.0f) {
-            builder.addRoundedRect(_layoutRect, _color, _cornerRadius);
-        }
-        else {
-            builder.addSprite(_layoutRect, _color, nullptr);
-        }
+        builder.addSprite(_layoutRect, style.fillColor.tintColor, builder.resolveTexture(_image.getPath()));
         return;
     }
-    if (!hasAuthoredStyle() && !_styleKey.empty()) {
-        if (const FPanelStyle* style = resolveThemeStyle<FPanelStyle>(*this, _styleKey)) {
-            paintFill(style->fillColor);
-            return;
-        }
-    }
-    builder.addSprite(_layoutRect, _color, builder.resolveTexture(_image.getPath()));
+    paintFill(style.fillColor);
+}
+
+const FPanelStyle& UIPanel::resolvedStyle(ReactiveBase::EDirtyLevel level, bool bTrackDependencies) const
+{
+    return resolvedStyleCache(*this, level,
+                              [this](FPanelStyle& style) {
+                                  const bool bThemed = !_styleKey.empty() && getTree() && getTree()->getTheme()
+                                                       && getTree()->getTheme()->find<FPanelStyle>(_styleKey);
+                                  if (bThemed) {
+                                      return;
+                                  }
+                                  const bool bHasFill = _authoredStyle.is_object() && _authoredStyle.contains("fillColor");
+                                  if (!bHasFill) {
+                                      style.fillColor = FBrush::solid(_color);
+                                  }
+                              },
+                              bTrackDependencies);
 }
 
 void UIPanel::deserializeFields(const nlohmann::json& fields)

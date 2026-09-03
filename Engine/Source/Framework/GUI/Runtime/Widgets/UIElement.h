@@ -167,6 +167,7 @@ enum class EUIInvalidationReason : uint8_t
     GeometryChanged,       // setLayoutRect detected a rect move/resize
     BuildContextChanged,   // build context (scale/offset) cache invalidation
     InheritedPaintContext, // inherited paint context (clip/visibility) invalidation
+    ResourceReady,         // font atlas / brush texture became available
     Volatile,              // _bVolatile per-frame rebuild (implicit, not a transition)
 };
 
@@ -236,6 +237,8 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// (UIDocument). Registry owns the authoring type ID; this is the C++
     /// class identity.
     [[nodiscard]] virtual type_index_t getTypeIndex() const { return ya::type_index_v<UIElement>; }
+    /// Reflected TStyle identity for catalog lookup. Unstyled widgets return 0.
+    [[nodiscard]] virtual type_index_t getStyleTypeIndex() const { return 0; }
     [[nodiscard]] uint64_t getRuntimeId() const { return _runtimeId; }
 
     // === Field serialization (UIDocument / authoring) ===
@@ -526,14 +529,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     // exposes visual state setters; the final rect is produced by layout.
     [[nodiscard]] EWidgetVisibility getVisibility() const { return _visibility; }
 
-    void setStyleKey(std::string value)
-    {
-        if (_styleKey == value) {
-            return;
-        }
-        _styleKey = std::move(value);
-        invalidateProperty(EUIPropertyImpact::Layout);
-    }
+    void setStyleKey(std::string value);
 
     void setVisibility(EWidgetVisibility value)
     {

@@ -30,7 +30,9 @@ void UIMenuBarItem::paintSelf(UIFrameBuilder& builder)
     // hovered fill brushes + the label color from FMenuBarItemStyle. Row
     // extent comes from the parent-owned box slot, not child geometry.
     const FMenuBarItemStyle& style = resolvedStyle();
-    builder.addBrush(_layoutRect, _bHovered ? style.hoveredFill : style.normalFill);
+    builder.addBrush(_layoutRect,
+                     resolveVisualFill(visualChrome(style),
+                                       composeVisualFlags(_bHovered, false, false, !isEnabled(), false, false, false)));
     const float separatorY = _layoutRect.pos.y + _layoutRect.extent.y - 0.5f;
     builder.addLine({_layoutRect.pos.x, separatorY},
                     {_layoutRect.pos.x + _layoutRect.extent.x, separatorY},

@@ -185,10 +185,15 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 - 机制在 framework：`UITheme` + `resolveThemeStyle` + generation token。值在 app：
   WorkbenchTheme（demo 壳）/ EditorTheme（GameEditor chrome）。
 - Resolve：稀疏 patch（JSON 键 = 反射字段名）overlay 到 theme 的 dense `TStyle`。`setStyle(TStyle)` 写全字段 = full freeze（不登记 theme 边）；`setStyleField` / Text·Panel `setColor` 只盖出现过的键，其余 inherit，**必须**登记 generation + style Reactive。空 / null / `{}` = 无覆盖。
+- Field impact：`lookupStyleFieldImpact` / `lookupStylePatchImpact` 用反射分类字段，而不是 per-type 表。`FBrush` → Paint+Resource；`fontSize` / `padding` / `minSize` → Layout；`FScrollBarStyle.width` 是 overlay 绘制厚度，不是 Layout。`setStyle` / `setStyleField` / `clearStyleField` / `clearAuthoredStyle` 默认走 catalog；`UIText::setFontSize` 等仍可显式覆盖。`bResource` 是 metadata；异步就绪不走 `invalidateProperty`。Font 由 `FontManager::resourceRevision()` 在 `WidgetTree::buildSnapshot` 消费：revision 变化则整树 `markLayoutDirty(ResourceReady)`（嵌套 fill 容器不能 skip 过期文字度量）。Texture 由 host `UIFrameBuildContext.generation` 作为 ResourceReady 丢 paint cache。Host 只 `flushPendingGlyphs`，不要再 `invalidateSubtree`。
+- Visual fill matrix：`composeVisualFlags` + `FVisualChrome` + `resolveVisualFill` 是 exclusive 优先级（Disabled > DropTarget > Error > Pressed > Selected+Hovered > Selected > Hovered > Focused > Normal）。`visualChrome(style)` 覆盖 Button / SelectableRow / CheckBox / ComboBox / MenuBar / Tab / MenuItem / TableGrid / TreeView 行填充。CheckBox 的 checked 与 Tab 的 selected 映射为 Selected，且 Selected+Hovered 回落到 Selected（保持原“选中盖住 hover”）。Table/Tree 未选中且未 hover 的 normal 是透明刷，paint 仍按 alpha 跳过。SpinBox/Radio/TextField/DragFloat 等非这套 chrome 的控件不硬套。
+- Key catalog：`YA_GUI_STYLE_CATALOG` / `StyleKey::*` 是 theme key + `TStyle` 的单一词汇。`lookupStyleKey` 校验 `define` / `setStyleKey` / document deserialize；未知 key 与类型不匹配记入 `StyleCatalogDiagnostics` 并 `YA_CORE_WARN`，不拒绝写入。空 key 表示不查 theme。`editor.<key>` 是同一词汇的 GameEditor overlay，不是第二套机制。`canvas` 是无 chrome 的 panel 角色 key（`ui::canvas()`）。
 - 控件 paint/layout 读 `UIStyledWidget::resolvedStyle()`（dense cache）。merge（theme base + 稀疏 patch）在 dirty/recompute 时发生，不在每帧 paint 热路径。`resolveWidgetStyle` 仍是无缓存计算路径，给测试断言和非 `UIStyledWidget` 节点（如 ColorEdit 色板）用。cache 不落盘。
 - 高频路径是实例 `setStyle` / `setStyleField` / `setStyleKey`（DSL 基类 builder 已暴露）；切 theme 是低频目录切换。未盖满的控件在切皮肤时未覆写字段跟着变。
 - `_styleKey` 在 `UIElement` 上反射；稀疏 patch 经 `YA_GUI_AUTHORED_STYLE_IO` 虚函数写入 UIDocument 的 `_authoredStyle`（mixin 字段不能 `YA_REFLECT_FIELD`，MI 偏移不对）。缺键 = inherit；旧文档的全字段对象仍是 freeze。`FBrush`/`F*Style` 走运行时反射，merge 用 `deserializeProperty`。
 - `FBrush`：纯色 = 无 resource + tint；Image 整张拉伸；NinePatch/Border 按 `margin`（纹理 px，1 tex px = 1 logical px）切成最多 9/8 个 snapshot sprite，compose 经 `uvScale`/`uvOffset` 透传。无纹理尺寸时退回整张拉伸。`sliceBrush` 是纯函数。
+- `UIPanel` paint 只读 `resolvedStyle().fillColor`。无 theme 时 `_color` 是 fillColor fallback（与 `UIText` 的 `_color`/`_fontSize` 相同）；不要再走第二套 `_color` sprite。Image 是 content：无 authored overlay 的 themed panel 仍画 theme chrome。
+- 无 theme / 缺纹理 / 延迟就绪的 GPU 输入就是 snapshot：miss 时 image 画 `placeholderFill`，`UIFrameBuildContext.generation` bump 后 resolver 命中才带 texture。Headless host 与 windowed compose 消费同一份 packet；windowed `--gpu-shot` 像素门禁仍是 Phase 9。
 - 族 key：`panel` / `button` / `text` / `menubar` / `tab` / `split` / `scrollbar` /
   `dock` / `floating` / `image` / `popup`。角色 key：`panel.window` / `panel.canvas` / `panel.sidebar` /
   `tab.dock` / `tab.sidebar` / `text.header` / `text.muted` / `text.error` /
@@ -220,6 +225,7 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   `--dump-snapshot-json=path --dump-frame=N`（snapshot 几何/clip/text JSON + digest）、
   `--gpu-shot=path --gpu-shot-frame=N`（GPU readback BMP）。内置纹理 resolver
   （`builtin/white|black|multipixel|checkerboard`）供 image 控件在无资产系统时使用。
+- Glyph flush：`flushPendingGlyphs` 仍在 snapshot 之后、command recording 之前（Core Rule 6）。缺失字形的 layout/paint 由下一帧 `WidgetTree` 消费 `FontManager::resourceRevision()` 驱动，host 不要再 `invalidateSubtree`。Texture 就绪靠 bump `UIFrameBuildContext.generation`。
 - **teardown 铁律**：任何持有 GPU 资源的成员（readback buffer、shader storage、widget tree、
   command buffers、presentation targets）必须在 `delete render`（VMA 销毁）前释放
   （见 memory：VMA teardown 顺序坑）。

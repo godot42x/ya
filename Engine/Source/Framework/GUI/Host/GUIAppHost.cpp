@@ -1209,6 +1209,7 @@ void GUIWindowHost::onTick(float dt)
         // Safe-point glyph flush (Core Rule 6): this path never records
         // commands, so pending glyph capture can run here too.
         FontManager::get()->flushPendingGlyphs(*_impl->render);
+        (void)FontManager::get()->consumeNewGlyphCapture();
         ++_impl->frameCount;
         return;
     }
@@ -1311,16 +1312,10 @@ void GUIWindowHost::onTick(float dt)
     // snapshot build registered missing glyphs, before any command recording
     // touches them. Texture creation/repack only happens here.
     FontManager::get()->flushPendingGlyphs(*_impl->render);
-    // New glyphs captured (e.g. CJK/emoji resolved via the font stack): text
-    // measured against the '?' fallback is stale. markLayoutDirty inside the
-    // paint walk is cleared at the end of paint, so invalidate from here —
-    // layout + full paint (rect may be stretch-fixed, so paint must rerun).
-    if (FontManager::get()->consumeNewGlyphCapture()) {
-        _impl->tree->invalidateLayout();
-        if (UIElement* root = _impl->tree->getRoot()) {
-            root->invalidateSubtree(EUIInvalidationReason::InheritedPaintContext);
-        }
-    }
+    // Drain the capture flag. WidgetTree consumes FontManager::resourceRevision()
+    // at the next snapshot, so hosts must not re-invalidate here (that would
+    // duplicate ResourceReady and fight incremental layout skip proofs).
+    (void)FontManager::get()->consumeNewGlyphCapture();
 
     cmdBuf->retireResource(renderImage->getImageShared());
     cmdBuf->retireResource(renderImage->getImageViewShared());
