@@ -16,6 +16,15 @@ void UIImage::setTexture(std::shared_ptr<Texture> texture)
     invalidateProperty(EUIPropertyImpact::Paint);
 }
 
+void UIImage::setResourceMissing(bool missing)
+{
+    if (_bResourceMissing == missing) {
+        return;
+    }
+    _bResourceMissing = missing;
+    invalidateProperty(EUIPropertyImpact::Paint);
+}
+
 void UIImage::paintSelf(UIFrameBuilder& builder)
 {
     std::shared_ptr<Texture> texture = _texture;
@@ -27,7 +36,8 @@ void UIImage::paintSelf(UIFrameBuilder& builder)
         return;
     }
     const FImageStyle& style = resolvedStyle();
-    builder.addBrush(_layoutRect, style.placeholderFill);
+    const bool missing = _bResourceMissing || !_assetPath.empty();
+    builder.addBrush(_layoutRect, missing ? style.errorFill : style.placeholderFill);
 }
 
 } // namespace ya

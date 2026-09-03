@@ -4,6 +4,9 @@
 // older snapshot tests.
 
 #include "GUI/Binding/Reactive.h"
+#include "GUI/Binding/SelectionModel.h"
+#include "GUI/Binding/ActionMap.h"
+#include "GUI/Binding/UndoStack.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
@@ -50,6 +53,24 @@ WidgetEventContext pointAt(float x, float y)
     WidgetEventContext ctx;
     ctx.logicalPoint = {x, y};
     return ctx;
+}
+
+KeyPressedEvent makeKeyPress(EKey::T key, uint32_t mod = 0, bool bRepeat = false)
+{
+    KeyPressedEvent ev;
+    ev._keyCode = key;
+    ev._mod     = mod;
+    ev.bRepeat  = bRepeat;
+    return ev;
+}
+
+uint32_t primaryMod()
+{
+#if defined(__APPLE__)
+    return EKeyMod::LMeta;
+#else
+    return EKeyMod::LCtrl;
+#endif
 }
 
 } // namespace
@@ -862,6 +883,364 @@ TEST(BindingContractTest, MenuBarLabelBindingSurvivesOpenMenuAndHoverRouting)
     item->bindLabel(nullptr);
     EXPECT_EQ(item->resolvedLabel(), "Fallback");
     EXPECT_NE(bar->getOpenMenu(), nullptr);
+}
+
+TEST(BindingContractTest, SelectionModelSingleMultiPrimaryAndTransientRoles)
+{
+    SelectionModel model;
+    EXPECT_TRUE(model.selected().empty());
+    EXPECT_TRUE(model.primary().empty());
+
+    model.select("a");
+    EXPECT_EQ(model.selected(), (std::vector<std::string>{"a"}));
+    EXPECT_EQ(model.primary(), "a");
+    EXPECT_TRUE(model.contains("a"));
+    EXPECT_FALSE(model.contains("b"));
+
+    model.add("b");
+    EXPECT_EQ(model.selected(), (std::vector<std::string>{"a", "b"}));
+    EXPECT_EQ(model.primary(), "b");
+
+    model.add("b");
+    EXPECT_EQ(model.selected(), (std::vector<std::string>{"a", "b"}));
+    EXPECT_EQ(model.primary(), "b");
+
+    model.toggle("a");
+    EXPECT_EQ(model.selected(), (std::vector<std::string>{"b"}));
+    EXPECT_EQ(model.primary(), "b");
+
+    model.toggle("a");
+    EXPECT_EQ(model.selected(), (std::vector<std::string>{"b", "a"}));
+    EXPECT_EQ(model.primary(), "a");
+
+    model.remove("a");
+    EXPECT_EQ(model.selected(), (std::vector<std::string>{"b"}));
+    EXPECT_EQ(model.primary(), "b");
+
+    model.setHovered("h");
+    model.setActive("k");
+    model.setFocused("f");
+    EXPECT_EQ(model.hovered(), "h");
+    EXPECT_EQ(model.active(), "k");
+    EXPECT_EQ(model.focused(), "f");
+
+    model.clear();
+    EXPECT_TRUE(model.selected().empty());
+    EXPECT_TRUE(model.primary().empty());
+    EXPECT_EQ(model.hovered(), "h");
+    EXPECT_EQ(model.active(), "k");
+    EXPECT_EQ(model.focused(), "f");
+
+    model.clearTransient();
+    EXPECT_TRUE(model.hovered().empty());
+    EXPECT_TRUE(model.active().empty());
+    EXPECT_TRUE(model.focused().empty());
+
+    model.select("");
+    EXPECT_TRUE(model.selected().empty());
+}
+
+TEST(BindingContractTest, SelectionModelReplaceSetsOrderedSetAndPrimary)
+{
+    SelectionModel model;
+    model.replace({"b", "a", "b"}, "a");
+    EXPECT_EQ(model.selected(), (std::vector<std::string>{"a", "b"}));
+    EXPECT_EQ(model.primary(), "a");
+
+    model.replace({"c", "d"});
+    EXPECT_EQ(model.selected(), (std::vector<std::string>{"c", "d"}));
+    EXPECT_EQ(model.primary(), "c");
+
+    const uint64_t revision = model.revision();
+    model.replace({"c", "d"}, "c");
+    EXPECT_EQ(model.revision(), revision);
+
+    model.replace({}, "ghost");
+    EXPECT_EQ(model.selected(), (std::vector<std::string>{"ghost"}));
+    EXPECT_EQ(model.primary(), "ghost");
+
+    model.replace({});
+    EXPECT_TRUE(model.selected().empty());
+    EXPECT_TRUE(model.primary().empty());
+}
+
+TEST(BindingContractTest, SharedSelectionModelReplaceUpdatesBoundTreeViews)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    roots->push(UITreeView::FNode{.id = "a", .label = "A"});
+    roots->push(UITreeView::FNode{.id = "b", .label = "B"});
+
+    auto model = std::make_shared<SelectionModel>();
+    auto left  = std::make_shared<UITreeView>("Left");
+    auto right = std::make_shared<UITreeView>("Right");
+    left->bindData(roots);
+    right->bindData(roots);
+    left->bindSelection(model->primaryRef());
+    right->bindSelection(model->primaryRef());
+
+    FCanvasSlotArgs leftSlot;
+    leftSlot.offset    = {20.0f, 20.0f};
+    leftSlot.fixedSize = {200.0f, 80.0f};
+    FCanvasSlotArgs rightSlot;
+    rightSlot.offset    = {240.0f, 20.0f};
+    rightSlot.fixedSize = {200.0f, 80.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), left, leftSlot);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), right, rightSlot);
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    model->replace({"b", "a"}, "b");
+    EXPECT_EQ(left->getSelection()->value(), "b");
+    EXPECT_EQ(right->getSelection()->value(), "b");
+    EXPECT_EQ(model->selected(), (std::vector<std::string>{"b", "a"}));
+}
+
+TEST(BindingContractTest, SharedSelectionModelDrivesTwoTreeViews)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    roots->push(UITreeView::FNode{.id = "a", .label = "A"});
+    roots->push(UITreeView::FNode{.id = "b", .label = "B"});
+
+    auto model = std::make_shared<SelectionModel>();
+    auto left  = std::make_shared<UITreeView>("Left");
+    auto right = std::make_shared<UITreeView>("Right");
+    left->bindData(roots);
+    right->bindData(roots);
+    left->bindSelection(model->primaryRef());
+    right->bindSelection(model->primaryRef());
+    left->_onSelectionChanged  = [&](const std::string& id) { model->select(id); };
+    right->_onSelectionChanged = [&](const std::string& id) { model->select(id); };
+
+    FCanvasSlotArgs leftSlot;
+    leftSlot.offset    = {20.0f, 20.0f};
+    leftSlot.fixedSize = {200.0f, 80.0f};
+    FCanvasSlotArgs rightSlot;
+    rightSlot.offset    = {240.0f, 20.0f};
+    rightSlot.fixedSize = {200.0f, 80.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), left, leftSlot);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), right, rightSlot);
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 32.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(model->primary(), "a");
+    EXPECT_EQ(model->selected(), (std::vector<std::string>{"a"}));
+    EXPECT_EQ(left->getSelection()->value(), "a");
+    EXPECT_EQ(right->getSelection()->value(), "a");
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(260.0f, 56.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(model->primary(), "b");
+    EXPECT_EQ(left->getSelection()->value(), "b");
+    EXPECT_EQ(right->getSelection()->value(), "b");
+}
+
+TEST(BindingContractTest, ActionMapExecuteAndShortcutShareOneHandler)
+{
+    ActionMap actions;
+    int       saved = 0;
+    int       savedAs = 0;
+    ASSERT_TRUE(actions.define({
+        .id      = "scene.save",
+        .label   = "Save Scene",
+        .chord   = FActionChord::primary(EKey::K_S),
+        .execute = [&]() { ++saved; },
+    }));
+    ASSERT_TRUE(actions.define({
+        .id      = "scene.saveAs",
+        .label   = "Save Scene As",
+        .chord   = FActionChord::primary(EKey::K_S, true),
+        .execute = [&]() { ++savedAs; },
+    }));
+    EXPECT_FALSE(actions.define({
+        .id      = "scene.save",
+        .label   = "Dup",
+        .execute = []() {},
+    }));
+    EXPECT_FALSE(actions.define({
+        .id      = "other.save",
+        .label   = "Dup chord",
+        .chord   = FActionChord::primary(EKey::K_S),
+        .execute = []() {},
+    }));
+
+    EXPECT_EQ(actions.execute("scene.save"), EActionResult::Ran);
+    EXPECT_EQ(saved, 1);
+    EXPECT_EQ(actions.execute("missing"), EActionResult::Missing);
+
+    EXPECT_TRUE(actions.dispatchKey(makeKeyPress(EKey::K_S, primaryMod()), false));
+    EXPECT_EQ(saved, 2);
+    EXPECT_TRUE(actions.dispatchKey(makeKeyPress(EKey::K_S, primaryMod() | EKeyMod::Shift), false));
+    EXPECT_EQ(savedAs, 1);
+    EXPECT_EQ(saved, 2);
+
+    EXPECT_FALSE(actions.dispatchKey(makeKeyPress(EKey::K_S, primaryMod(), true), false));
+    EXPECT_FALSE(actions.dispatchKey(makeKeyPress(EKey::K_S), false));
+    EXPECT_FALSE(actions.dispatchKey(makeKeyPress(EKey::K_N, primaryMod()), false));
+}
+
+TEST(BindingContractTest, ActionMapMenuItemAndDisabledShortcutShareExecute)
+{
+    ActionMap actions;
+    int       ran = 0;
+    bool      bEnabled = true;
+    ASSERT_TRUE(actions.define({
+        .id         = "edit.undo",
+        .label      = "Undo",
+        .chord      = FActionChord::primary(EKey::K_Z),
+        .execute    = [&]() { ++ran; },
+        .canExecute = [&]() { return bEnabled; },
+    }));
+
+    UIMenu::FItem item = UIMenu::FItem::fromAction(actions, "edit.undo");
+    EXPECT_EQ(item.label, "Undo");
+    EXPECT_FALSE(item.shortcut.empty());
+    ASSERT_TRUE(item.action);
+    item.action();
+    EXPECT_EQ(ran, 1);
+
+    bEnabled = false;
+    EXPECT_EQ(actions.execute("edit.undo"), EActionResult::Disabled);
+    EXPECT_FALSE(actions.dispatchKey(makeKeyPress(EKey::K_Z, primaryMod()), false));
+    EXPECT_EQ(ran, 1);
+
+    EXPECT_FALSE(actions.dispatchKey(makeKeyPress(EKey::K_Z), true));
+    UIMenu::FItem missing = UIMenu::FItem::fromAction(actions, "edit.missing");
+    EXPECT_FALSE(missing.bEnabled);
+    EXPECT_FALSE(missing.action);
+}
+
+TEST(BindingContractTest, UndoStackPushUndoRedoAndRejectsIncompleteCommands)
+{
+    UndoStack stack;
+    int       value = 0;
+    EXPECT_FALSE(stack.canUndo());
+    EXPECT_FALSE(stack.canRedo());
+    EXPECT_FALSE(stack.push({.label = "noop"}));
+    EXPECT_TRUE(stack.push({
+        .label = "Set",
+        .undo  = [&]() { value = 0; },
+        .redo  = [&]() { value = 4; },
+    }));
+    value = 4;
+    EXPECT_TRUE(stack.canUndo());
+    EXPECT_EQ(stack.undoLabel(), "Set");
+    EXPECT_TRUE(stack.undo());
+    EXPECT_EQ(value, 0);
+    EXPECT_TRUE(stack.canRedo());
+    EXPECT_TRUE(stack.redo());
+    EXPECT_EQ(value, 4);
+    EXPECT_FALSE(stack.canRedo());
+}
+
+TEST(BindingContractTest, UndoStackMergesOnlyWithinOneDragSession)
+{
+    UndoStack stack;
+    int       value = 0;
+    auto pushValue = [&](int next) {
+        const int before = value;
+        value            = next;
+        return stack.push({
+            .label    = "Drag",
+            .mergeKey = "position.x",
+            .undo     = [&value, before]() { value = before; },
+            .redo     = [&value, next]() { value = next; },
+        });
+    };
+
+    stack.beginMerge();
+    EXPECT_TRUE(pushValue(1));
+    EXPECT_TRUE(pushValue(5));
+    EXPECT_TRUE(pushValue(9));
+    stack.endMerge();
+    EXPECT_EQ(value, 9);
+    EXPECT_EQ(stack.undoCount(), 1u);
+    EXPECT_TRUE(stack.undo());
+    EXPECT_EQ(value, 0);
+
+    stack.beginMerge();
+    EXPECT_TRUE(pushValue(2));
+    stack.endMerge();
+    EXPECT_EQ(stack.undoCount(), 1u);
+    EXPECT_EQ(value, 2);
+    EXPECT_TRUE(stack.undo());
+    EXPECT_EQ(value, 0);
+}
+
+TEST(BindingContractTest, UndoStackGroupBatchesNestedPushesAsOneStep)
+{
+    UndoStack stack;
+    int       x = 0;
+    int       y = 0;
+    {
+        UndoTransaction tx(stack, "Paste");
+        EXPECT_TRUE(stack.push({
+            .label = "X",
+            .undo  = [&]() { x = 0; },
+            .redo  = [&]() { x = 1; },
+        }));
+        x = 1;
+        EXPECT_TRUE(stack.push({
+            .label = "Y",
+            .undo  = [&]() { y = 0; },
+            .redo  = [&]() { y = 2; },
+        }));
+        y = 2;
+        EXPECT_FALSE(stack.canUndo());
+        {
+            UndoTransaction inner(stack, "Inner");
+            EXPECT_TRUE(stack.push({
+                .label = "X2",
+                .undo  = [&]() { x = 1; },
+                .redo  = [&]() { x = 3; },
+            }));
+            x = 3;
+        }
+    }
+    EXPECT_EQ(x, 3);
+    EXPECT_EQ(y, 2);
+    EXPECT_EQ(stack.undoCount(), 1u);
+    EXPECT_EQ(stack.undoLabel(), "Paste");
+    EXPECT_TRUE(stack.undo());
+    EXPECT_EQ(x, 0);
+    EXPECT_EQ(y, 0);
+    EXPECT_TRUE(stack.redo());
+    EXPECT_EQ(x, 3);
+    EXPECT_EQ(y, 2);
+}
+
+TEST(BindingContractTest, UndoStackActionMapUndoRedoShareExecute)
+{
+    UndoStack stack;
+    ActionMap actions;
+    int       value = 0;
+    ASSERT_TRUE(actions.define({
+        .id         = "edit.undo",
+        .label      = "Undo",
+        .chord      = FActionChord::primary(EKey::K_Z),
+        .execute    = [&]() { (void)stack.undo(); },
+        .canExecute = [&]() { return stack.canUndo(); },
+    }));
+    ASSERT_TRUE(actions.define({
+        .id         = "edit.redo",
+        .label      = "Redo",
+        .chord      = FActionChord::primary(EKey::K_Z, true),
+        .execute    = [&]() { (void)stack.redo(); },
+        .canExecute = [&]() { return stack.canRedo(); },
+    }));
+
+    value = 7;
+    ASSERT_TRUE(stack.push({
+        .label = "Set",
+        .undo  = [&]() { value = 0; },
+        .redo  = [&]() { value = 7; },
+    }));
+    EXPECT_EQ(actions.execute("edit.undo"), EActionResult::Ran);
+    EXPECT_EQ(value, 0);
+    EXPECT_TRUE(actions.dispatchKey(makeKeyPress(EKey::K_Z, primaryMod() | EKeyMod::Shift), false));
+    EXPECT_EQ(value, 7);
+    EXPECT_EQ(actions.execute("edit.redo"), EActionResult::Disabled);
 }
 
 } // namespace ya

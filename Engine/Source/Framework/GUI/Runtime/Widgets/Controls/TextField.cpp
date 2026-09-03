@@ -42,10 +42,19 @@ size_t nextCodePoint(const std::string& text, size_t byteIndex)
 
 } // namespace
 
+void UITextField::setError(bool error)
+{
+    if (_bError == error) {
+        return;
+    }
+    _bError = error;
+    invalidateProperty(EUIPropertyImpact::Paint);
+}
+
 void UITextField::paintSelf(UIFrameBuilder& builder)
 {
     const FTextFieldStyle& style = resolvedStyle();
-    builder.addBrush(_layoutRect, style.backgroundFill);
+    builder.addBrush(_layoutRect, _bError ? style.errorFill : style.backgroundFill);
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (!font) {

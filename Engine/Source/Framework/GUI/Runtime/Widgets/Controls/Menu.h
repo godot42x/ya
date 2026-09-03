@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Binding/ActionMap.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Theme.h"
 
@@ -77,6 +78,9 @@ struct YA_GUI_API UIMenu : public UIPopupOverlay
             item.bSeparator = true;
             return item;
         }
+
+        /// Menu row that executes `id` through `actions` (same path as shortcuts).
+        [[nodiscard]] static FItem fromAction(ActionMap& actions, std::string id);
     };
 
     explicit UIMenu(std::string name = "Menu") : UIPopupOverlay(std::move(name), "menu") {}

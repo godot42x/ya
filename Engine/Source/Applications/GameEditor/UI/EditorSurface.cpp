@@ -231,6 +231,9 @@ void EditorSurface::shutdown()
     _viewportImage.reset();
     _hierarchyView.reset();
     _hierarchyRoots.reset();
+    _selection = std::make_shared<SelectionModel>();
+    _actions   = std::make_shared<ActionMap>();
+    _undo      = std::make_shared<UndoStack>();
     _inspectorTab.reset();
     _statsText.reset();
     _contentExplorer.reset();
@@ -251,6 +254,7 @@ void EditorSurface::shutdown()
     _viewportImageResource.reset();
     _viewportImageView.reset();
     _hierarchyFingerprint.clear();
+    _syncedSelectionGeneration = ~uint64_t{0};
     _layer = nullptr;
 }
 
@@ -281,6 +285,9 @@ void EditorSurface::rebuild(App& app)
     _viewportImage.reset();
     _hierarchyView.reset();
     _hierarchyRoots.reset();
+    _selection = std::make_shared<SelectionModel>();
+    _actions   = std::make_shared<ActionMap>();
+    _undo      = std::make_shared<UndoStack>();
     _inspectorTab.reset();
     _statsText.reset();
     _workbench.reset();
@@ -301,6 +308,7 @@ void EditorSurface::rebuild(App& app)
     _bContentRowsDirty = true;
     clearSceneSaveDialog();
     _hierarchyFingerprint.clear();
+    _syncedSelectionGeneration = ~uint64_t{0};
 
     int windowW = 0;
     int windowH = 0;
@@ -346,7 +354,9 @@ void EditorSurface::buildProjectBrowser(App& app)
     _hierarchyRoots = std::make_shared<ReactiveList<UITreeView::FNode>>();
     auto list = ui::treeView("ProjectList")
                     .bindData(_hierarchyRoots)
+                    .bindSelection(_selection->primaryRef())
                     .setOnSelectionChanged([this](const std::string& id) {
+                        _selection->select(id);
                         int index = 0;
                         if (auto [ptr, ec] = std::from_chars(id.data(), id.data() + id.size(), index);
                             ec == std::errc{} && ptr == id.data() + id.size()) {
@@ -382,9 +392,111 @@ void EditorSurface::buildProjectBrowser(App& app)
     ui::build(*_tree, *_tree->getLayer(WidgetTree::ELayer::Content), std::move(page), ui::canvasSlot().fill());
 }
 
+void EditorSurface::registerEditorActions()
+{
+    auto define = [this](FAction action) {
+        if (!_actions->define(std::move(action))) {
+            YA_CORE_ERROR("EditorSurface: failed to define action");
+        }
+    };
+
+    define({
+        .id      = "scene.new",
+        .label   = "New Scene",
+        .chord   = FActionChord::primary(EKey::K_N),
+        .execute = [this]() { _layer->cmdNewScene(); },
+    });
+    define({
+        .id      = "scene.save",
+        .label   = "Save Scene",
+        .chord   = FActionChord::primary(EKey::K_S),
+        .execute = [this]() { _layer->cmdSaveScene(); },
+    });
+    define({
+        .id      = "scene.saveAs",
+        .label   = "Save Scene As",
+        .chord   = FActionChord::primary(EKey::K_S, true),
+        .execute = [this]() { openSceneSaveDialog(); },
+    });
+    define({
+        .id         = "edit.undo",
+        .label      = "Undo",
+        .chord      = FActionChord::primary(EKey::K_Z),
+        .execute    = [this]() { (void)_undo->undo(); },
+        .canExecute = [this]() { return _undo->canUndo(); },
+    });
+    const FActionChord redoChord =
+#if defined(__APPLE__)
+        FActionChord::primary(EKey::K_Z, true);
+#else
+        FActionChord::primary(EKey::K_Y);
+#endif
+    define({
+        .id         = "edit.redo",
+        .label      = "Redo",
+        .chord      = redoChord,
+        .execute    = [this]() { (void)_undo->redo(); },
+        .canExecute = [this]() { return _undo->canRedo(); },
+    });
+    define({
+        .id      = "app.exit",
+        .label   = "Exit",
+        .execute = []() {
+            if (auto* app = App::get()) {
+                app->requestQuit();
+            }
+        },
+    });
+    define({
+        .id      = "viewport.mode3d",
+        .label   = "Viewport 3D",
+        .execute = [this]() { _layer->setViewportMode(EViewportMode::Mode3D); },
+    });
+    define({
+        .id      = "viewport.mode2d",
+        .label   = "Viewport 2D",
+        .execute = [this]() { _layer->setViewportMode(EViewportMode::Mode2D); },
+    });
+    define({
+        .id      = "runtime.play",
+        .label   = "Play",
+        .execute = []() {
+            if (auto* app = App::get()) {
+                app->getTaskManager().registerFrameTask([app]() { app->startRuntime(); });
+            }
+        },
+    });
+    define({
+        .id      = "runtime.simulate",
+        .label   = "Simulate",
+        .execute = []() {
+            if (auto* app = App::get()) {
+                app->getTaskManager().registerFrameTask([app]() { app->startSimulation(); });
+            }
+        },
+    });
+    define({
+        .id      = "runtime.stop",
+        .label   = "Stop",
+        .execute = []() {
+            if (auto* app = App::get()) {
+                app->getTaskManager().registerFrameTask([app]() {
+                    if (app->isRuntimeMode()) {
+                        app->stopRuntime();
+                    }
+                    else if (app->isSimulationMode()) {
+                        app->stopSimulation();
+                    }
+                });
+            }
+        },
+    });
+}
+
 void EditorSurface::buildEditorChrome(App& app)
 {
     (void)app;
+    registerEditorActions();
     _root = ui::panel("EditorRoot").setStyleKey("panel.window").share();
     FCanvasSlotArgs fillArgs;
     fillArgs.anchorMin = {0.0f, 0.0f};
@@ -401,51 +513,40 @@ void EditorSurface::buildEditorChrome(App& app)
 
     _menuBar->addItem("File", [this]() {
         return UIMenu::create({
-            UIMenu::FItem{.label = "New Scene", .action = [this]() { _layer->cmdNewScene(); }},
-            UIMenu::FItem{.label = "Save Scene", .action = [this]() { _layer->cmdSaveScene(); }},
-            UIMenu::FItem{.label = "Save Scene As", .action = [this]() { openSceneSaveDialog(); }},
+            UIMenu::FItem::fromAction(*_actions, "scene.new"),
+            UIMenu::FItem::fromAction(*_actions, "scene.save"),
+            UIMenu::FItem::fromAction(*_actions, "scene.saveAs"),
             UIMenu::FItem::separator(),
-            UIMenu::FItem{.label = "Exit", .action = []() {
-                 if (auto* app = App::get()) {
-                     app->requestQuit();
-                 }
-             }},
+            UIMenu::FItem::fromAction(*_actions, "app.exit"),
+        });
+    });
+    _menuBar->addItem("Edit", [this]() {
+        return UIMenu::create({
+            UIMenu::FItem::fromAction(*_actions, "edit.undo"),
+            UIMenu::FItem::fromAction(*_actions, "edit.redo"),
         });
     });
     _menuBar->addItem("View", [this]() {
         return UIMenu::create({
-            UIMenu::FItem{.label = "Viewport 3D", .action = [this]() { _layer->setViewportMode(EViewportMode::Mode3D); }},
-            UIMenu::FItem{.label = "Viewport 2D", .action = [this]() { _layer->setViewportMode(EViewportMode::Mode2D); }},
+            UIMenu::FItem::fromAction(*_actions, "viewport.mode3d"),
+            UIMenu::FItem::fromAction(*_actions, "viewport.mode2d"),
         });
     });
 
-    auto play = labeledButton("Play", "Play").setOnClick([]() {
-        if (auto* app = App::get()) {
-            app->getTaskManager().registerFrameTask([app]() { app->startRuntime(); });
-        }
+    auto play = labeledButton("Play", "Play").setOnClick([this]() {
+        (void)_actions->execute("runtime.play");
     });
-    auto simulate = labeledButton("Simulate", "Simulate").setOnClick([]() {
-        if (auto* app = App::get()) {
-            app->getTaskManager().registerFrameTask([app]() { app->startSimulation(); });
-        }
+    auto simulate = labeledButton("Simulate", "Simulate").setOnClick([this]() {
+        (void)_actions->execute("runtime.simulate");
     });
-    auto stop = labeledButton("Stop", "Stop").setOnClick([]() {
-        if (auto* app = App::get()) {
-            app->getTaskManager().registerFrameTask([app]() {
-                if (app->isRuntimeMode()) {
-                    app->stopRuntime();
-                }
-                else if (app->isSimulationMode()) {
-                    app->stopSimulation();
-                }
-            });
-        }
+    auto stop = labeledButton("Stop", "Stop").setOnClick([this]() {
+        (void)_actions->execute("runtime.stop");
     });
     auto mode3d = labeledButton("Mode3D", "3D").setOnClick([this]() {
-        _layer->setViewportMode(EViewportMode::Mode3D);
+        (void)_actions->execute("viewport.mode3d");
     });
     auto mode2d = labeledButton("Mode2D", "2D").setOnClick([this]() {
-        _layer->setViewportMode(EViewportMode::Mode2D);
+        (void)_actions->execute("viewport.mode2d");
     });
     auto modeText = ui::text("ToolbarMode").setFontSize(13).setText("EDIT");
     _toolbarModeText = modeText.share();
@@ -482,7 +583,9 @@ void EditorSurface::buildEditorChrome(App& app)
     _hierarchyRoots = std::make_shared<ReactiveList<UITreeView::FNode>>();
     _hierarchyView  = ui::treeView("HierarchyTree")
                          .bindData(_hierarchyRoots)
+                         .bindSelection(_selection->primaryRef())
                          .setOnSelectionChanged([this](const std::string& id) {
+                             _selection->select(id);
                              uint64_t uuid = 0;
                              std::string entryId;
                              if (parseEntityIdKey(id, uuid)) {
@@ -499,7 +602,7 @@ void EditorSurface::buildEditorChrome(App& app)
                              .setStyleKey("panel.canvas")
                              .child(_hierarchyView, ui::canvasSlot().anchor({0.0f, 0.0f}, {1.0f, 1.0f}).offset({4.0f, 4.0f}));
 
-    _inspectorTab = std::make_unique<EditorInspectorTab>(*_layer);
+    _inspectorTab = std::make_unique<EditorInspectorTab>(*_layer, _undo.get());
     auto inspectorBody = _inspectorTab->build(*_tree);
 
     auto statsText = ui::text("FrameStatsBody")
@@ -710,6 +813,7 @@ void EditorSurface::syncPresentation(App& app, float dt)
     }
 
     syncViewportTexture();
+    syncSelectionFromLayer();
     syncHierarchy();
     if (_inspectorTab) {
         _inspectorTab->sync(*_tree);
@@ -745,8 +849,10 @@ void EditorSurface::syncViewportTexture()
         return;
     }
     const auto& display = _layer->getViewportDisplayImage();
+    const bool expectsViewport = _layer->getHierarchyScene() != nullptr;
     if (!display || !display->isValid() || !display->getImageView()) {
         _viewportImage->setTexture(nullptr);
+        _viewportImage->setResourceMissing(expectsViewport);
         _viewportTexture.reset();
         _viewportImageResource.reset();
         _viewportImageView.reset();
@@ -757,8 +863,10 @@ void EditorSurface::syncViewportTexture()
     auto sourceImageView = display->getImageViewShared();
     if (!sourceImage || !sourceImageView) {
         _viewportImage->setTexture(nullptr);
+        _viewportImage->setResourceMissing(expectsViewport);
         return;
     }
+    _viewportImage->setResourceMissing(false);
     if (_viewportTexture &&
         _viewportImageResource == sourceImage &&
         _viewportImageView == sourceImageView) {
@@ -820,6 +928,40 @@ void EditorSurface::syncHierarchy()
         }
     }
     _hierarchyRoots->replace(std::move(roots));
+}
+
+void EditorSurface::syncSelectionFromLayer()
+{
+    if (!_layer || !_selection) {
+        return;
+    }
+    const uint64_t generation = _layer->selectionGeneration();
+    if (generation == _syncedSelectionGeneration) {
+        return;
+    }
+    _syncedSelectionGeneration = generation;
+
+    std::vector<std::string> ids;
+    if (!_layer->getSelectedWidgetEntryId().empty()) {
+        ids.push_back(std::format("ui:{}", _layer->getSelectedWidgetEntryId()));
+    }
+    else {
+        ids.reserve(_layer->getSelections().size());
+        for (Entity* entity : _layer->getSelections()) {
+            if (!entity || !entity->isValid()) {
+                continue;
+            }
+            uint64_t uuid = 0;
+            if (auto* id = entity->getComponent<IDComponent>()) {
+                uuid = id->_id.value;
+            }
+            if (uuid != 0) {
+                ids.push_back(entityIdKey(uuid));
+            }
+        }
+    }
+    std::string primary = ids.empty() ? std::string{} : ids.front();
+    _selection->replace(std::move(ids), std::move(primary));
 }
 
 void EditorSurface::syncToolbar(App& app)
@@ -1343,7 +1485,15 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
     }
     WidgetEventContext ctx;
     ctx.logicalPoint = windowPoint;
-    return _tree->dispatchEvent(event, ctx);
+    const EWidgetRouteResult routed = _tree->dispatchEvent(event, ctx);
+    if (routed != EWidgetRouteResult::NotHandled) {
+        return routed;
+    }
+    if (event.getEventType() == EEvent::KeyPressed &&
+        _actions->dispatchKey(static_cast<const KeyPressedEvent&>(event), wantsTextInput())) {
+        return EWidgetRouteResult::HandledExclusive;
+    }
+    return routed;
 }
 
 bool EditorSurface::isViewportHovered() const

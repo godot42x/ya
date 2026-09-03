@@ -378,3 +378,111 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - 没有把 TextureLifetime 测试从 engine suite 搬进 closure（closure 已有 fake-texture 延迟就绪用例）。
 
 下一 checkpoint：进入 Phase 6 SelectionModel。
+
+## Phase 6A 当前 checkpoint
+
+- `SelectionModel` 是 identity 选择源：selected 有序集合 + primary（必须在集合内或空）+ 独立的 hover/active/focus。不持有 Entity/Scene 指针。
+- TreeView 通过 `primaryRef()` 共享同一模型；两棵树点击同步。EditorSurface 的 Hierarchy / ProjectList 绑定同一模型再写 EditorLayer。
+- xmake r ya-gui-closure-test 全量通过（368/368）；xmake b ya-game-editor 通过。
+- 未完成：command/action routing；undo/redo；property projection；viewport/inspector 写回同一模型；EditorLayer `_selections` Entity* 尚未替换。
+
+### Phase 6A 边界
+
+- TreeView 仍是单选写入 `primary`；多选 API（add/toggle）存在但控件还没有 modifier 手势。
+- hover/active/focus 还没有接到 viewport/hierarchy 指针与键盘；本 checkpoint 只冻结模型。
+- 没有把 EditorLayer 的 Entity* 选择向量删掉。
+
+下一 checkpoint：Phase 6 command/action routing，或把 viewport 选择写入 SelectionModel。
+
+## Phase 6B 当前 checkpoint
+
+- `ActionMap` 是 identity 命令表：`define` / `execute(id)` / `dispatchKey`。菜单、快捷键、toolbar 不再各写一份 lambda。
+- `FActionChord::primary` 在 macOS 匹配 Cmd，别处匹配 Ctrl；Shift 区分 Save / Save As。文本焦点下不匹配无 modifier 的 chord。
+- EditorSurface File/View 菜单走 `UIMenu::FItem::fromAction`；Play/Stop/viewport 按钮走同一 `execute`；未处理的 KeyPressed 才 dispatch shortcut。
+- xmake r ya-gui-closure-test 全量通过（370/370）；xmake b ya-game-editor 通过。
+- 未完成：command palette / context menu 枚举 ActionMap；undo/redo；property projection；viewport 写入 SelectionModel；ImGui `EditorLayer::menuBar` 仍是平行路径。
+
+### Phase 6B 边界
+
+- 没有做 palette UI 或 hierarchy context menu。
+- 没有把 viewport 2/3 键迁入 ActionMap（仍是 EditorLayer 在 viewport focus 时处理）。
+- ImGui 菜单栏未删除。
+
+下一 checkpoint：Phase 6 undo/redo transaction，或 viewport 选择写入 SelectionModel。
+
+## Phase 6C 当前 checkpoint
+
+- `UndoStack` 是 identity 撤销历史：`push` 记录已应用的 undo/redo 闭包（push 不调用 redo）。`beginMerge`/`endMerge` 只合并同一 merge session 且 `mergeKey` 相同的连续 push，用来收口拖动。`UndoTransaction` 把嵌套 push 收成一步。栈不持有 Entity/Scene 指针。
+- `edit.undo` / `edit.redo` 走 ActionMap；EditorSurface 增加 Edit 菜单。macOS Redo 是 Cmd+Shift+Z，别处 Ctrl+Y。
+- Inspector 变换拖动经 `UIDragFloat::_onDragBegan/Ended` 开闭 merge；键盘/commit 各成一步。`setValue(..., false)` 给 sync，避免 gizmo 刷新写入 undo。重命名按 UUID 查找 Node，不把 Node* 存进栈。
+- xmake r ya-gui-closure-test 全量通过（374/374）；xmake b ya-game-editor 通过；`xmake r ya-testing --gtest_filter=EditorPropertyGraphTest.*` 通过。
+- 未完成：property projection；multi-object / mixed value；viewport 写入 SelectionModel；gizmo 编辑未接入 UndoStack；闭包仍可能捕获 PropertyHandle 内的 void*。
+
+### Phase 6C 边界
+
+- 没有做 command palette。
+- 没有把 ImGuizmo / viewport 变换写入 UndoStack。
+- 没有把 EditorLayer Entity* 选择向量删掉。
+
+下一 checkpoint：Phase 6 property projection，或 viewport 选择写入 SelectionModel。
+
+## Phase 6D 当前 checkpoint
+
+- `PropertyGraph::project` 是反射 → editor field model 的唯一入口：`build` 之后应用 `PropertyProjectionRegistry`。
+- Transform projection 同时写入显示名和 `setPosition` / `setRotation` / `setScale`；未投影的 `build` 仍是直接字段写，不会标 dirty。
+- Inspector 不再手写 Transform section：按选中实体上的 ECS component 指纹重建，凡 `hasRetainedEditors()`（vec3/float/bool/string）的类型物化 `EditorAutoPropertySection`。
+- 删除 `EditorTransformSection`；控件仍不持有 Entity*，binding 由 projection 提供。
+- xmake b ya-game-editor 通过；`xmake r ya-testing --gtest_filter=EditorPropertyGraphTest.*` 6/6 通过。
+- 未完成：multi-object mixed UI；validation / missing resource；viewport 写入 SelectionModel；enum/color/asset 编辑器（Phase 7）。
+
+### Phase 6D 边界
+
+- 没有做 mixed-value 显示或批量提交 UI。
+- 没有把 ImGui DetailsView / TypeRenderer 删掉。
+- 没有把 viewport 选择写入 SelectionModel。
+
+下一 checkpoint：Phase 6 multi-selection / mixed value，或 viewport 选择写入 SelectionModel。
+
+## Phase 6E 当前 checkpoint
+
+- Inspector 对 `EditorLayer::getSelections()` 的 **component 交集** 调用 `PropertyGraph::project`，一份 graph 持有全部 instance。
+- `UIDragFloat` mixed 画 "—"；编辑把该轴写成相同值并清 mixed。`PropertyHandle::copy/restore*` 让 undo 恢复每个 instance 的原值，而不是用第一个覆盖全部。
+- xmake r ya-gui-closure-test 全量通过（374/374）；xmake b ya-game-editor 通过；`xmake r ya-testing --gtest_filter=EditorPropertyGraphTest.*` 7/7 通过。
+
+### Phase 6E 边界
+
+- 没有做资源缺失/校验错误 UI。
+- 没有把 Hierarchy modifier 多选接到 SelectionModel。
+- ImGui DetailsView 仍是平行路径。
+
+下一 checkpoint：Phase 6 viewport 选择写入 SelectionModel，或 validation/error state。
+
+## Phase 6F 当前 checkpoint
+
+- `SelectionModel::replace` 批量设置 selected 有序集合与 primary（去重、primary 前置、无变化不 bump）。
+- `EditorLayer::selectionGeneration` 在 `setSelections` / `setSelectedWidgetEntryId` 递增；`EditorSurface::syncSelectionFromLayer` 在 `syncPresentation` 中把 viewport/widget 选择映射为 `e:{uuid}` / `ui:{entryId}` 并 `replace` 到共享 `_selection`。
+- Hierarchy `setOnSelectionChanged` 仍写 layer（单选）；viewport 多选经 layer → generation → `replace` 同步回 TreeView primary。
+- xmake r ya-gui-closure-test 全量通过（376/376）；xmake b ya-game-editor 通过；`xmake r ya-testing --gtest_filter='BindingContractTest.SelectionModel*'` 通过。
+
+### Phase 6F 边界
+
+- 没有把 Hierarchy modifier 多选直接接到 SelectionModel（仍经 ImGui SceneHierarchyPanel → layer）。
+- ImGui DetailsView 仍是平行路径。
+- validation / missing resource error state 未做。
+
+下一 checkpoint：Phase 6 validation/error state，或 Phase 7 retained inspector primitives（enum/color/asset）。
+
+## Phase 6G 当前 checkpoint
+
+- `PropertyHandle::validationError` 读取反射 `manipulator_spec` 的 min/max；`EditorAutoPropertySection` 在 `sync` 时对 `UIDragFloat`/`UITextField` 调 `setError`，construct 时把 manipulate spec 写入 drag 的 `_min/_max/_speed`。
+- `FDragFloatStyle`/`FTextFieldStyle`/`FImageStyle` 增加 `errorFill`；`UIImage` 对非空 `_assetPath` 解析失败或 `setResourceMissing(true)` 画 error fill（与中性 placeholder 区分）。
+- `EditorSurface::syncViewportTexture` 在 scene 已加载但 viewport RT 不可用时对 viewport image 标 `setResourceMissing`。
+- xmake r ya-gui-closure-test 全量通过（377/377）；xmake b ya-game-editor 通过；`xmake r ya-testing --gtest_filter=EditorPropertyGraphTest.*` 9/9 通过。
+
+### Phase 6G 边界
+
+- 没有把 Hierarchy modifier 多选直接接到 SelectionModel。
+- ImGui DetailsView 仍是平行路径。
+- enum/color/asset retained 编辑器属 Phase 7。
+
+下一 checkpoint：Phase 7 retained inspector primitives（enum/color/asset），或 Content Browser retained controls。

@@ -2032,6 +2032,42 @@ TEST(UIFrameSnapshotTest, ImageResolverReadyAfterGenerationBumpPaintsTexture)
     EXPECT_TRUE(bHitHasTexture);
 }
 
+TEST(UIFrameSnapshotTest, ImageMissingAssetUsesErrorFill)
+{
+    WidgetTree tree({.width = 200, .height = 120});
+    auto empty = std::make_shared<UIImage>("Empty");
+    auto missing = std::make_shared<UIImage>("Missing");
+    missing->_assetPath = "tex:missing";
+    FCanvasSlotArgs emptySlot;
+    emptySlot.offset    = {10.0f, 10.0f};
+    emptySlot.fixedSize = {64.0f, 64.0f};
+    FCanvasSlotArgs missingSlot;
+    missingSlot.offset    = {90.0f, 10.0f};
+    missingSlot.fixedSize = {64.0f, 64.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), empty, emptySlot);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), missing, missingSlot);
+
+    UIFrameBuildContext ctx;
+    ctx.generation = 1;
+    ctx.textureResolver = [](const std::string&) { return std::shared_ptr<Texture>(); };
+    const UIFrameSnapshot snapshot = tree.buildSnapshot(ctx);
+
+    const UIFrameDrawItem* emptyItem = nullptr;
+    const UIFrameDrawItem* missingItem = nullptr;
+    for (const UIFrameDrawItem& item : snapshot.items) {
+        if (!item.texture && item.pos.x == 10.0f) {
+            emptyItem = &item;
+        }
+        if (!item.texture && item.pos.x == 90.0f) {
+            missingItem = &item;
+        }
+    }
+    ASSERT_NE(emptyItem, nullptr);
+    ASSERT_NE(missingItem, nullptr);
+    EXPECT_EQ(emptyItem->color, FImageStyle{}.placeholderFill.tintColor);
+    EXPECT_EQ(missingItem->color, FImageStyle{}.errorFill.tintColor);
+}
+
 TEST(UIFrameSnapshotTest, VisualFillPrecedenceMatrix)
 {
     FVisualChrome chrome;
@@ -2231,7 +2267,7 @@ TEST(UIFrameSnapshotTest, FallbackThemeSwitchAndDeferredTextureReady)
     ASSERT_NE(unthemedImage, nullptr);
     EXPECT_EQ(unthemedPanel->color, FPanelStyle{}.fillColor.tintColor);
     EXPECT_EQ(unthemedPanel->texture, nullptr);
-    EXPECT_EQ(unthemedImage->color, FImageStyle{}.placeholderFill.tintColor);
+    EXPECT_EQ(unthemedImage->color, FImageStyle{}.errorFill.tintColor);
     EXPECT_EQ(unthemedImage->texture, nullptr);
 
     auto themeA = std::make_shared<UITheme>();
@@ -2240,6 +2276,7 @@ TEST(UIFrameSnapshotTest, FallbackThemeSwitchAndDeferredTextureReady)
     themeA->define<FPanelStyle>("panel", panelA);
     FImageStyle imageA;
     imageA.placeholderFill = FBrush::solid({0.30f, 0.10f, 0.10f, 1.0f});
+    imageA.errorFill       = FBrush::solid({0.50f, 0.20f, 0.20f, 1.0f});
     themeA->define<FImageStyle>("image", imageA);
     tree.setTheme(themeA.get());
 
@@ -2249,7 +2286,7 @@ TEST(UIFrameSnapshotTest, FallbackThemeSwitchAndDeferredTextureReady)
     ASSERT_NE(aPanel, nullptr);
     ASSERT_NE(aImage, nullptr);
     EXPECT_EQ(aPanel->color, panelA.fillColor.tintColor);
-    EXPECT_EQ(aImage->color, imageA.placeholderFill.tintColor);
+    EXPECT_EQ(aImage->color, imageA.errorFill.tintColor);
     EXPECT_EQ(aImage->texture, nullptr);
 
     auto themeB = std::make_shared<UITheme>();
@@ -2258,6 +2295,7 @@ TEST(UIFrameSnapshotTest, FallbackThemeSwitchAndDeferredTextureReady)
     themeB->define<FPanelStyle>("panel", panelB);
     FImageStyle imageB;
     imageB.placeholderFill = FBrush::solid({0.10f, 0.30f, 0.10f, 1.0f});
+    imageB.errorFill       = FBrush::solid({0.20f, 0.50f, 0.20f, 1.0f});
     themeB->define<FImageStyle>("image", imageB);
     tree.setTheme(themeB.get());
 
@@ -2267,7 +2305,7 @@ TEST(UIFrameSnapshotTest, FallbackThemeSwitchAndDeferredTextureReady)
     ASSERT_NE(bPanel, nullptr);
     ASSERT_NE(bImage, nullptr);
     EXPECT_EQ(bPanel->color, panelB.fillColor.tintColor);
-    EXPECT_EQ(bImage->color, imageB.placeholderFill.tintColor);
+    EXPECT_EQ(bImage->color, imageB.errorFill.tintColor);
     EXPECT_EQ(bImage->texture, nullptr);
 
     auto ready = makeFakeTexture();

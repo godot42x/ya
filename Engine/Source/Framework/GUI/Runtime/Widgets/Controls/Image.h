@@ -36,12 +36,18 @@ struct YA_GUI_API UIImage : public UIElement, public UIStyledWidget<UIImage, FIm
     /// shared_ptr through queue submit. Takes precedence over `_assetPath`.
     void setTexture(std::shared_ptr<Texture> texture);
     [[nodiscard]] const std::shared_ptr<Texture>& getTexture() const { return _texture; }
+    /// True when a resource was expected but is unavailable (failed/missing
+    /// asset resolve or viewport texture not ready). Distinct from the neutral
+    /// placeholder shown for an intentionally empty image.
+    void setResourceMissing(bool missing);
+    [[nodiscard]] bool isResourceMissing() const { return _bResourceMissing; }
 
     void paintSelf(UIFrameBuilder& builder) override;
     [[nodiscard]] bool isHoverable() const override { return true; }
 
   private:
     std::shared_ptr<Texture> _texture;
+    bool                     _bResourceMissing = false;
 };
 
 } // namespace ya

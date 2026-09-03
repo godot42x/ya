@@ -53,11 +53,13 @@
 
 ## Phase 6：Editor data
 
-- [ ] SelectionModel。
-- [ ] Command/Action routing。
-- [ ] Undo/Redo transaction。
-- [ ] Property projection。
-- [ ] multi-selection / validation / error state。
+- [x] SelectionModel（identity 单选/多选/primary/hover/active/focus；不持有 ECS 指针）。
+- [x] Command/Action routing（ActionMap；菜单/快捷键/toolbar 共用 execute）。
+- [x] Undo/Redo transaction（UndoStack；拖动 merge；Inspector 属性/重命名接入 ActionMap）。
+- [x] Property projection（`PropertyGraph::project`；Transform setter 进 projection；Inspector 按 component 物化 AutoPropertySection）。
+- [x] multi-selection mixed value（交集 component、DragFloat "—"、批量写回、按 instance undo）。
+- [x] viewport 选择写入 SelectionModel（`EditorLayer::selectionGeneration` + `syncSelectionFromLayer`；`SelectionModel::replace`）。
+- [x] validation / missing resource error state（`PropertyHandle::validationError` + manipulate spec；`UIDragFloat`/`UITextField`/`UIImage` error fill；viewport `setResourceMissing`）。
 
 ## Phase 7-9：Editor migration and release
 

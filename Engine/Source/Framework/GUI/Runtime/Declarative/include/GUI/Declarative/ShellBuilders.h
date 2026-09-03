@@ -50,6 +50,18 @@ class UITreeViewWidgetBuilder final : public TUIWidgetBuilder<UITreeView, UITree
         return std::move(*this);
     }
 
+    [[nodiscard]] UITreeViewWidgetBuilder& bindSelection(std::shared_ptr<Reactive<std::string>> value) &
+    {
+        _widget->bindSelection(std::move(value));
+        return *this;
+    }
+
+    [[nodiscard]] UITreeViewWidgetBuilder&& bindSelection(std::shared_ptr<Reactive<std::string>> value) &&
+    {
+        _widget->bindSelection(std::move(value));
+        return std::move(*this);
+    }
+
     [[nodiscard]] UITreeViewWidgetBuilder& setOnSelectionChanged(std::function<void(const std::string&)> value) &
     {
         _widget->_onSelectionChanged = std::move(value);

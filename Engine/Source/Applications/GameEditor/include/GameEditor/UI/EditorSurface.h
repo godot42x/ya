@@ -4,6 +4,9 @@
 #include "Core/Event.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Binding/Reactive.h"
+#include "GUI/Binding/SelectionModel.h"
+#include "GUI/Binding/ActionMap.h"
+#include "GUI/Binding/UndoStack.h"
 #include "GUI/Widgets/Controls/TreeView.h"
 #include "GUI/Widgets/KeyedChildReconciler.h"
 
@@ -65,6 +68,9 @@ struct EditorSurface
     std::shared_ptr<UIImage>         _viewportImage;
     std::shared_ptr<UITreeView>      _hierarchyView;
     std::shared_ptr<ReactiveList<UITreeView::FNode>> _hierarchyRoots;
+    std::shared_ptr<SelectionModel>  _selection = std::make_shared<SelectionModel>();
+    std::shared_ptr<ActionMap>       _actions   = std::make_shared<ActionMap>();
+    std::shared_ptr<UndoStack>       _undo      = std::make_shared<UndoStack>();
     std::shared_ptr<UIText>          _statsText;
     std::unique_ptr<EditorInspectorTab> _inspectorTab;
     std::unique_ptr<guiworkbench::FWorkbenchSurface> _workbench;
@@ -106,6 +112,7 @@ struct EditorSurface
     std::shared_ptr<IImageView> _viewportImageView;
 
     std::string _hierarchyFingerprint;
+    uint64_t    _syncedSelectionGeneration = ~uint64_t{0};
 
   public:
     EditorSurface() = default;
@@ -124,14 +131,22 @@ struct EditorSurface
     [[nodiscard]] bool isViewportFocused() const;
     [[nodiscard]] bool wantsTextInput() const;
     [[nodiscard]] WidgetTree* tree() const { return _tree.get(); }
+    [[nodiscard]] SelectionModel& selection() { return *_selection; }
+    [[nodiscard]] const SelectionModel& selection() const { return *_selection; }
+    [[nodiscard]] ActionMap& actions() { return *_actions; }
+    [[nodiscard]] const ActionMap& actions() const { return *_actions; }
+    [[nodiscard]] UndoStack& undo() { return *_undo; }
+    [[nodiscard]] const UndoStack& undo() const { return *_undo; }
 
   private:
     void rebuild(App& app);
     void buildProjectBrowser(App& app);
     void buildEditorChrome(App& app);
+    void registerEditorActions();
     void syncPresentation(App& app, float dt);
     void syncViewportTexture();
     void syncHierarchy();
+    void syncSelectionFromLayer();
     void syncToolbar(App& app);
     std::shared_ptr<UIElement> buildContentBrowser();
     void syncContentBrowser();

@@ -32,9 +32,24 @@ void registerBuiltinPropertyProjections()
         PropertyProjectionRegistry::instance().registerProjection(
             type_index_v<TransformComponent>,
             [](PropertyGraph& graph) {
-                if (PropertyNode* node = graph.find("_position")) node->displayName = "Position";
-                if (PropertyNode* node = graph.find("_rotation")) node->displayName = "Rotation";
-                if (PropertyNode* node = graph.find("_scale")) node->displayName = "Scale";
+                if (PropertyNode* node = graph.find("_position")) {
+                    node->displayName = "Position";
+                    node->binding.setVec3Setter([](void* object, const glm::vec3& value) {
+                        static_cast<TransformComponent*>(object)->setPosition(value);
+                    });
+                }
+                if (PropertyNode* node = graph.find("_rotation")) {
+                    node->displayName = "Rotation";
+                    node->binding.setVec3Setter([](void* object, const glm::vec3& value) {
+                        static_cast<TransformComponent*>(object)->setRotation(value);
+                    });
+                }
+                if (PropertyNode* node = graph.find("_scale")) {
+                    node->displayName = "Scale";
+                    node->binding.setVec3Setter([](void* object, const glm::vec3& value) {
+                        static_cast<TransformComponent*>(object)->setScale(value);
+                    });
+                }
             });
     });
 }

@@ -179,6 +179,10 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 - WidgetTree chrome 的 theme 走 `buildEditorTheme`（`GameEditor/UI/EditorTheme.h`），
   不要直接调 `buildWorkbenchTheme`。Chrome 文案用 `text.header` / `text.muted` /
   `text.error` / `text.eyebrow`，不要 `setColor` 字面量（显式着色会盖掉 theme）。
+- `SelectionModel` 是 identity 选择源（`GUI/Binding/SelectionModel.h`）：selected 有序集合 + primary（空或不在集合外）+ hover/active/focus。不持有 Entity*。控件绑 `primaryRef()`；多选走 `add`/`toggle`；`replace` 批量同步 viewport 多选。Hierarchy 仍写 `EditorLayer`，`syncSelectionFromLayer` 按 `selectionGeneration` 把 layer 选择映射为 `e:{uuid}` / `ui:{entryId}` 写回共享 model。
+- `ActionMap` 是 identity 命令表（`GUI/Binding/ActionMap.h`）：菜单、快捷键、toolbar 都 `execute(id)`。`FActionChord::primary` 在 macOS 是 Cmd、别处是 Ctrl。WidgetTree 未处理的 KeyPressed 才走 shortcut；文本焦点下只匹配带 modifier 的 chord。`UIMenu::FItem::fromAction` 生成同一 execute 的菜单行。ImGui 菜单栏仍是平行路径（Phase 8 再删）。
+- `UndoStack` 是 identity 撤销历史（`GUI/Binding/UndoStack.h`）：`push` 记录已应用的 undo/redo 闭包，不在 push 时调用 redo。`beginMerge`/`endMerge` 把同一 `mergeKey` 的连续 push 收成一步（拖动）；`UndoTransaction` 把嵌套 push 收成一步。栈不持有 Entity*。`edit.undo` / `edit.redo` 走 ActionMap（macOS Redo 是 Cmd+Shift+Z，别处 Ctrl+Y）。Inspector 拖动 `UIDragFloat` 在 `_onDragBegan/Ended` 开闭 merge；`setValue(..., false)` 是 sync，不进 undo。Gizmo / viewport 选择仍未接入。
+- `PropertyGraph::project` 是反射字段 → editor field model 的入口（`build` + `PropertyProjectionRegistry`）。Transform projection 负责显示名和 `setPosition/setRotation/setScale` 写回。Inspector 对多选的 **交集** component 物化 `EditorAutoPropertySection`；`UIDragFloat` mixed 显示 "—"，编辑写回全部 instance，undo 按 instance 快照恢复。`PropertyHandle::validationError` 读 manipulate spec 范围；`UIDragFloat`/`UITextField` `setError` 画 error fill。`UIImage` 对缺失 asset / `setResourceMissing` 画 error fill（中性 placeholder 仅用于 intentionally empty）。没有 retained 可编辑字段的类型跳过。enum/color/asset 仍属 Phase 7。
 
 ## Style / Theme
 

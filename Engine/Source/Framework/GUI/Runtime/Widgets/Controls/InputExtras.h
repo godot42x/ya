@@ -44,21 +44,34 @@ struct YA_GUI_API UIDragFloat : public UIElement, public UIStyledWidget<UIDragFl
 
     /// Fired on every value change.
     std::function<void(float value)> _onValueChanged;
+    /// Pointer capture drag gesture. Undo coalescing opens and closes here,
+    /// not on every `_onValueChanged` tick.
+    std::function<void()> _onDragBegan;
+    std::function<void()> _onDragEnded;
 
-    /// Clamp + notify. Shared by pointer and keyboard paths.
-    void setValue(float value);
+    /// Clamp + notify. Shared by pointer and keyboard paths. `bNotify` is
+    /// false for presenter sync so model writes do not re-enter as user edits.
+    void setValue(float value, bool bNotify = true);
+    void setMixed(bool mixed);
+    void setError(bool error);
+    [[nodiscard]] bool isMixed() const { return _bMixed; }
+    [[nodiscard]] bool hasError() const { return _bError; }
 
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
-        node["control"] = {{"type", "dragFloat"}, {"value", _value}};
+        node["control"] = {{"type", "dragFloat"}, {"value", _value}, {"mixed", _bMixed}, {"error", _bError}};
     }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void onFocusLost() override;
     void clearTransientInputState() override
     {
+        const bool bWasDragging = _bDragging;
         _bDragging = false;
         _bEditing  = false;
         _editBuffer.clear();
+        if (bWasDragging && _onDragEnded) {
+            _onDragEnded();
+        }
     }
 
   private:
@@ -67,6 +80,8 @@ struct YA_GUI_API UIDragFloat : public UIElement, public UIStyledWidget<UIDragFl
     void commitEdit();
     void cancelEdit();
     VisualFlag _bDragging{*this};
+    bool       _bMixed = false;
+    bool       _bError = false;
     glm::vec2  _dragStart{0.0f, 0.0f};
     /// Double-click detection (event timestamps, guardrail G3): a press
     /// within 400ms of the previous one enters text edit mode.

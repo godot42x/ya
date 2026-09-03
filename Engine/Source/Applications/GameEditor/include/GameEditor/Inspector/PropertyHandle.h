@@ -2,10 +2,13 @@
 
 #include "Core/TypeIndex.h"
 
+#include "Core/Reflection/MetadataSupport.h"
+
 #include <glm/vec3.hpp>
 #include <string>
 #include <string_view>
 #include <vector>
+#include <cstdint>
 #include <functional>
 
 struct Property;
@@ -26,16 +29,30 @@ class PropertyHandle final
     [[nodiscard]] bool isValid() const;
     [[nodiscard]] bool isEditable() const;
     [[nodiscard]] bool isMixed() const;
+    [[nodiscard]] bool isMixedVec3Axis(int axis) const;
     [[nodiscard]] const std::string& getName() const;
+
+    void setVec3Setter(Vec3Setter setter) { _vec3Setter = std::move(setter); }
 
     [[nodiscard]] bool tryGetVec3(glm::vec3& value) const;
     bool setVec3(const glm::vec3& value) const;
+    [[nodiscard]] std::vector<glm::vec3> copyVec3() const;
+    bool restoreVec3(const std::vector<glm::vec3>& values) const;
     [[nodiscard]] bool tryGetFloat(float& value) const;
     bool setFloat(float value) const;
+    [[nodiscard]] std::vector<float> copyFloat() const;
+    bool restoreFloat(const std::vector<float>& values) const;
     [[nodiscard]] bool tryGetBool(bool& value) const;
     bool setBool(bool value) const;
+    [[nodiscard]] std::vector<uint8_t> copyBool() const;
+    bool restoreBool(const std::vector<uint8_t>& values) const;
     [[nodiscard]] bool tryGetString(std::string& value) const;
     bool setString(const std::string& value) const;
+    [[nodiscard]] std::vector<std::string> copyString() const;
+    bool restoreString(const std::vector<std::string>& values) const;
+
+    [[nodiscard]] std::string validationError() const;
+    [[nodiscard]] bool tryGetManipulateSpec(reflection::Meta::ManipulateSpec& spec) const;
 
   private:
     type_index_t _ownerType = 0;

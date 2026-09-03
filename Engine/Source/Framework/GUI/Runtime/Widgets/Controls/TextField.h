@@ -66,6 +66,9 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
         invalidateProperty(EUIPropertyImpact::Layout);
     }
 
+    void setError(bool error);
+    [[nodiscard]] bool hasError() const { return _bError; }
+
     /// Fired on every edit (insert / delete / caret-independent text change).
     std::function<void(const std::string& text)> _onTextChanged;
     /// Fired on Enter and on focus loss (commit the buffer).
@@ -96,6 +99,7 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
 
     size_t     _cursorIndex = 0;
     VisualFlag _bFocused{*this};
+    bool       _bError = false;
     /// Horizontal scroll offset so the caret stays visible when the text is
     /// wider than the field (recomputed during paint; derived from _text and
     /// _cursorIndex, so it never needs its own invalidation).

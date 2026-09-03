@@ -287,6 +287,7 @@ struct FTreeViewStyle
 struct FTextFieldStyle
 {
     FBrush    backgroundFill = FBrush::solid({0.08f, 0.09f, 0.12f, 1.0f});
+    FBrush    errorFill        = FBrush::solid({0.72f, 0.24f, 0.24f, 0.45f});
     glm::vec4 textColor      = {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec4 caretColor     = {0.90f, 0.92f, 0.95f, 1.0f};
     uint32_t  fontSize       = 16;
@@ -333,8 +334,10 @@ struct FDragFloatStyle
 {
     FBrush    backgroundFill = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f});
     FBrush    draggingFill   = FBrush::solid({0.18f, 0.24f, 0.34f, 1.0f});
+    FBrush    errorFill      = FBrush::solid({0.72f, 0.24f, 0.24f, 0.45f});
     glm::vec4 textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 borderColor    = {0.30f, 0.33f, 0.40f, 1.0f};
+    glm::vec4 errorBorderColor = {0.90f, 0.35f, 0.35f, 1.0f};
     uint32_t  fontSize       = 13;
 
     bool operator==(const FDragFloatStyle&) const = default;
@@ -442,6 +445,7 @@ struct FSearchComboStyle
 struct FImageStyle
 {
     FBrush placeholderFill = FBrush::solid({0.24f, 0.26f, 0.31f, 1.0f});
+    FBrush errorFill       = FBrush::solid({0.72f, 0.24f, 0.24f, 0.45f});
 
     bool operator==(const FImageStyle&) const = default;
 };

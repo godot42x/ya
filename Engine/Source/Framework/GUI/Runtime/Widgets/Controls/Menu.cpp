@@ -178,6 +178,24 @@ bool UIMenuItem::handleInputEvent(const Event& event, const WidgetEventContext& 
     }
 }
 
+UIMenu::FItem UIMenu::FItem::fromAction(ActionMap& actions, std::string id)
+{
+    FItem item;
+    const FAction* action = actions.find(id);
+    if (!action) {
+        item.label    = std::move(id);
+        item.bEnabled = false;
+        return item;
+    }
+    item.label    = action->label;
+    item.shortcut = action->chord.label();
+    item.bEnabled = actions.enabled(id);
+    item.action   = [&actions, id = std::move(id)]() {
+        (void)actions.execute(id);
+    };
+    return item;
+}
+
 std::shared_ptr<UIMenu> UIMenu::create(const std::vector<FItem>& items)
 {
     auto menu = std::make_shared<UIMenu>();

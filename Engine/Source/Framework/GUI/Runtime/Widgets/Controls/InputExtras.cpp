@@ -99,17 +99,36 @@ private:
 
 // === UIDragFloat ===
 
-void UIDragFloat::setValue(float value)
+void UIDragFloat::setValue(float value, bool bNotify)
 {
     value = clampValue(value, _min, _max);
-    if (_value == value) {
+    if (_value == value && !_bMixed) {
         return;
     }
-    _value = value;
+    _value  = value;
+    _bMixed = false;
     invalidateProperty(EUIPropertyImpact::Paint);
-    if (_onValueChanged) {
+    if (bNotify && _onValueChanged) {
         _onValueChanged(_value);
     }
+}
+
+void UIDragFloat::setMixed(bool mixed)
+{
+    if (_bMixed == mixed) {
+        return;
+    }
+    _bMixed = mixed;
+    invalidateProperty(EUIPropertyImpact::Paint);
+}
+
+void UIDragFloat::setError(bool error)
+{
+    if (_bError == error) {
+        return;
+    }
+    _bError = error;
+    invalidateProperty(EUIPropertyImpact::Paint);
 }
 
 void UIDragFloat::adjustValue(float delta)
@@ -159,13 +178,17 @@ void UIDragFloat::onFocusLost()
 void UIDragFloat::paintSelf(UIFrameBuilder& builder)
 {
     const FDragFloatStyle& style = resolvedStyle();
-    builder.addBrush(_layoutRect, _bDragging ? style.draggingFill : style.backgroundFill);
-    builder.addRectOutline(_layoutRect, style.borderColor, 1.0f);
+    const FBrush& fill = _bError ? style.errorFill
+                       : _bDragging ? style.draggingFill
+                                    : style.backgroundFill;
+    builder.addBrush(_layoutRect, fill);
+    const glm::vec4 outline = _bError ? style.errorBorderColor : style.borderColor;
+    builder.addRectOutline(_layoutRect, outline, 1.0f);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (!font) {
         return;
     }
-    const std::string shown = _bEditing ? _editBuffer : std::format("{:.{}f}", _value, _decimals);
+    const std::string shown = _bEditing ? _editBuffer : (_bMixed ? std::string("—") : std::format("{:.{}f}", _value, _decimals));
     builder.addText(_layoutRect, shown, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     if (_bEditing) {
         const float textW  = font->measureText(shown);
@@ -249,6 +272,9 @@ bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext&
             tree->setFocus(this);
             tree->setPointerCapture(this);
         }
+        if (_onDragBegan) {
+            _onDragBegan();
+        }
         return true;
     }
     case EEvent::MouseMoved:
@@ -262,6 +288,9 @@ bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext&
             _bDragging = false;
             if (WidgetTree* tree = getTree()) {
                 tree->releasePointerCapture(this);
+            }
+            if (_onDragEnded) {
+                _onDragEnded();
             }
         }
         return true;

@@ -59,6 +59,7 @@ struct EditorLayer
   private:
     App*                 _app                = nullptr;
     uint64_t             _selectedEntityUUID = 0;
+    uint64_t             _selectionGeneration = 0;
     std::vector<Entity*> _selections;
     std::string          _selectedWidgetEntryId; // Mutually exclusive with the above
 
@@ -233,6 +234,7 @@ struct EditorLayer
             _selections.clear();
             _selectedEntityUUID = 0;
         }
+        ++_selectionGeneration;
     }
     [[nodiscard]] const std::string& getSelectedWidgetEntryId() const { return _selectedWidgetEntryId; }
     /// The selected SceneWidgetEntry (nullptr when none/not found).
@@ -275,7 +277,10 @@ struct EditorLayer
         if (!_selections.empty() && isViewportMode2D()) {
             setViewportMode(EViewportMode::Mode3D, /*bPersist=*/false);
         }
+        ++_selectionGeneration;
     }
+
+    [[nodiscard]] uint64_t selectionGeneration() const { return _selectionGeneration; }
 
     // === 2D canvas preview mode ===
     [[nodiscard]] EViewportMode    getViewportMode() const { return _viewportMode; }

@@ -1,9 +1,12 @@
 #include "GameEditor/Inspector/PropertyGraph.h"
+#include "GameEditor/Inspector/PropertyProjection.h"
 
 #include "reflects-core/lib.h"
 
 #include <algorithm>
 #include <cctype>
+#include <glm/vec3.hpp>
+#include <string>
 
 namespace ya
 {
@@ -52,6 +55,30 @@ PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> in
         graph._nodes.push_back(std::move(node));
     }
     return graph;
+}
+
+PropertyGraph PropertyGraph::project(type_index_t ownerType, std::vector<void*> instances)
+{
+    registerBuiltinPropertyProjections();
+    PropertyGraph graph = build(ownerType, std::move(instances));
+    PropertyProjectionRegistry::instance().apply(ownerType, graph);
+    return graph;
+}
+
+bool PropertyGraph::hasRetainedEditors() const
+{
+    for (const PropertyNode& node : _nodes) {
+        if (!node.bVisible) {
+            continue;
+        }
+        if (node.valueType == refl::type_index_v<glm::vec3> ||
+            node.valueType == refl::type_index_v<float> ||
+            node.valueType == refl::type_index_v<bool> ||
+            node.valueType == refl::type_index_v<std::string>) {
+            return true;
+        }
+    }
+    return false;
 }
 
 PropertyNode* PropertyGraph::find(std::string_view name)
