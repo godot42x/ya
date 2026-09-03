@@ -181,8 +181,9 @@ void UISlot::appendRuntimeDiagnostics(nlohmann::json& node) const
 
 void UISlot::invalidateMeasure() const
 {
+    _parent->markLayoutDirty(EUIInvalidationReason::LayoutProperty);
     if (WidgetTree* tree = _parent->getTree()) {
-        tree->invalidateLayout();
+        tree->invalidateLayout(EWidgetLayoutInvalidation::Measure);
     }
 }
 
@@ -474,7 +475,10 @@ void UICanvasLayout::arrange(UIElement& parent, const Rect2D& rect) const
 
 void UISlot::invalidateArrange() const
 {
-    invalidateMeasure();
+    _parent->markArrangeDirty(EUIInvalidationReason::LayoutProperty);
+    if (WidgetTree* tree = getParent().getTree()) {
+        tree->invalidateLayout(EWidgetLayoutInvalidation::Arrange);
+    }
 }
 
 UIBoxSlot::UIBoxSlot(UIElement& parent, UIElement& child)
@@ -592,15 +596,15 @@ std::unique_ptr<UISlot> UILayout::createSlot(UIElement& parent, UIElement& child
 void UILayout::invalidateMeasure() const
 {
     if (_owner) {
-        if (WidgetTree* tree = _owner->getTree()) {
-            tree->invalidateLayout();
-        }
+        _owner->markLayoutDirty(EUIInvalidationReason::LayoutProperty);
     }
 }
 
 void UILayout::invalidateArrange() const
 {
-    invalidateMeasure();
+    if (_owner) {
+        _owner->markArrangeDirty(EUIInvalidationReason::LayoutProperty);
+    }
     invalidateSubtreePaint();
 }
 

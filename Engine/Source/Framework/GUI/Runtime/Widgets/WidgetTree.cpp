@@ -287,6 +287,11 @@ void WidgetTree::markSubtreeMembership(UIElement* widget, WidgetTree* tree)
         UIElement* node = pending.back();
         pending.pop_back();
         node->_tree = tree;
+        // A new tree/parent edge may use a different layout contract even if
+        // the eventual rect happens to be identical. Never reuse the old
+        // assigned-layout proof across attach/reparent boundaries.
+        ++node->_layoutRevision;
+        node->_assignedLayoutRevision = 0;
         for (const auto& child : node->_children) {
             pending.push_back(child.get());
         }
@@ -440,6 +445,7 @@ WidgetAttachment WidgetTree::attach(UIElement& parent, const UIElementRef& widge
     prepareSubtree(widget.get());
     markSubtreeMembership(widget.get(), this);
     parent.appendChildEdge(widget);
+    parent.markLayoutDirty(EUIInvalidationReason::ChildStructure);
     notifyAttachedSubtree(widget.get());
     invalidateLayout();
     return WidgetAttachment{.tree = this, .widget = widget};
@@ -543,6 +549,7 @@ void WidgetTree::reparent(UIElement& newParent, const UIElementRef& widget)
     }
     markSubtreeMembership(widget.get(), this);
     newParent.appendChildEdge(widget);
+    newParent.markLayoutDirty(EUIInvalidationReason::ChildStructure);
     if (!bWasAttached) {
         notifyAttachedSubtree(widget.get());
     }
@@ -708,8 +715,23 @@ void WidgetTree::setDpiScale(float scale)
     _dpiScale = scale;
 }
 
-void WidgetTree::invalidateLayout()
+void WidgetTree::invalidateLayout(EWidgetLayoutInvalidation scope)
 {
+    // Keep node-local skip proofs coherent with the tree-level dirty bit. The
+    // root must descend at least once; individual clean subtrees can still be
+    // pruned by UIElement::layoutAssigned().
+    _root->_layoutDirtyMask |= 3u;
+    const uint8_t bit = static_cast<uint8_t>(scope);
+    if ((_layoutInvalidationMask & bit) != 0) {
+        _bLayoutDirty = true;
+        return;
+    }
+    switch (scope) {
+    case EWidgetLayoutInvalidation::Arrange: ++_arrangeInvalidations; break;
+    case EWidgetLayoutInvalidation::Measure: ++_measureInvalidations; break;
+    case EWidgetLayoutInvalidation::Structure: ++_structureInvalidations; break;
+    }
+    _layoutInvalidationMask |= bit;
     _bLayoutDirty = true;
 }
 
@@ -725,7 +747,9 @@ void WidgetTree::layout()
     const float width  = std::max(static_cast<float>(_logicalExtent.width), kCanvasMinSize);
     const float height = std::max(static_cast<float>(_logicalExtent.height), kCanvasMinSize);
     _root->layoutAssigned(Rect2D{.pos = {0.0f, 0.0f}, .extent = {width, height}});
+    _root->clearLayoutDirtyRecursive();
     _bLayoutDirty = false;
+    _layoutInvalidationMask = 0;
 }
 
 UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
@@ -785,6 +809,7 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 
     UIFrameSnapshot snapshot = builder.build(_logicalExtent);
     _perfStats.drawItems      = static_cast<uint32_t>(snapshot.items.size());
+    _perfStats.layoutSkippedWidgets = _layoutSkippedWidgets;
 
 #ifndef NDEBUG
     // Guardrail G2 validation frame: every 60 frames, force a full repaint
@@ -833,6 +858,9 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     _perfStats.paintDirtyTransitions  = _paintDirtyTransitions;
     _perfStats.layoutDirtyTransitions = _layoutDirtyTransitions;
     _perfStats.cacheInvalidations     = _cacheInvalidations;
+    _perfStats.arrangeInvalidations   = _arrangeInvalidations;
+    _perfStats.measureInvalidations   = _measureInvalidations;
+    _perfStats.structureInvalidations = _structureInvalidations;
 
     // Bridge into the engine-wide perf metrics (aggregated per frame; the
     // per-tree GuiPerfStats stays the per-instance structural view).

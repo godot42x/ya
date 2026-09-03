@@ -57,6 +57,13 @@ enum class EWidgetRoutePolicy : uint8_t
     Modal,
 };
 
+enum class EWidgetLayoutInvalidation : uint8_t
+{
+    Arrange = 1,
+    Measure = 2,
+    Structure = 4,
+};
+
 /// Tree-owned pointer state. The host supplies the coordinate on each native
 /// pointer event; consumers read the retained value instead of forwarding
 /// stale business-level mouse positions between controls.
@@ -106,12 +113,16 @@ struct GuiPerfStats
     uint32_t paintedWidgets  = 0;    // widgets that participated in the paint walk
     uint32_t rebuiltWidgets  = 0;    // widgets that re-ran paintSelf (dirty)
     uint32_t drawItems       = 0;    // draw items in the resulting snapshot
+    uint64_t layoutSkippedWidgets = 0;
     // Invalidation diagnostics (GI-001): cumulative clean->dirty transition
     // counts observed by this tree. A "transition" is a 0->1 dirty edge, so
     // repeated marks of an already-dirty widget are not double-counted.
     uint64_t paintDirtyTransitions  = 0;
     uint64_t layoutDirtyTransitions = 0;
     uint64_t cacheInvalidations    = 0; // build/inherited context cache resets (Phase 2)
+    uint64_t arrangeInvalidations   = 0;
+    uint64_t measureInvalidations   = 0;
+    uint64_t structureInvalidations = 0;
 };
 
 /// Stable diagnostic record for the most recently resolved event route.
@@ -214,7 +225,7 @@ struct YA_GUI_API WidgetTree final
     // === Frame passes ===
     /// Mark layout dirty (called on attach/detach/property-affecting edits;
     /// the host calls layout() once per frame before snapshot).
-    void invalidateLayout();
+    void invalidateLayout(EWidgetLayoutInvalidation scope = EWidgetLayoutInvalidation::Structure);
     /// Full layout pass: root fills the logical extent, layers fill in layer
     /// order, content children sort by zOrder.
     void layout();
@@ -389,6 +400,7 @@ struct YA_GUI_API WidgetTree final
     Extent2D      _logicalExtent{};
     float         _dpiScale = 1.0f; // logical points -> framebuffer pixels
     bool          _bLayoutDirty = true;
+    uint8_t       _layoutInvalidationMask = static_cast<uint8_t>(EWidgetLayoutInvalidation::Structure);
     GuiPerfStats  _perfStats;
 
     // Tree-level theme (style-system Phase 2). _themeGeneration is a
@@ -404,6 +416,10 @@ struct YA_GUI_API WidgetTree final
     uint64_t              _paintDirtyTransitions  = 0;
     uint64_t              _layoutDirtyTransitions = 0;
     uint64_t              _cacheInvalidations    = 0;
+    uint64_t              _arrangeInvalidations   = 0;
+    uint64_t              _measureInvalidations   = 0;
+    uint64_t              _structureInvalidations = 0;
+    uint64_t              _layoutSkippedWidgets   = 0;
     EUIInvalidationReason _lastInvalidationReason = EUIInvalidationReason::None;
 
     /// Double-buffered per-widget draw-item caches for incremental paint:

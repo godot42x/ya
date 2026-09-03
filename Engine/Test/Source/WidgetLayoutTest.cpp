@@ -118,6 +118,74 @@ TEST(WidgetLayoutTest, TextAutoSizeMeasuresGlyphWidth)
     EXPECT_FLOAT_EQ(desired.y, 16.0f * 1.25f);
 }
 
+TEST(WidgetLayoutTest, ChildMeasureDirtyPropagatesToLayoutAncestors)
+{
+    registerSyntheticFont(16, 8.0f);
+    WidgetTree tree({.width = 320, .height = 160});
+    auto column = std::make_shared<UIContainer>("Column");
+    column->setDirection(EWidgetBoxLayout::Vertical);
+    auto label = makeAutoText("A");
+    column->addDetachedChild(label);
+    FCanvasSlotArgs rootArgs;
+    rootArgs.widthSizeMode = EWidgetSizeMode::Auto;
+    rootArgs.heightSizeMode = EWidgetSizeMode::Auto;
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), column, rootArgs).valid());
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_FALSE(column->isMeasureDirty());
+    EXPECT_FALSE(label->isMeasureDirty());
+
+    label->setText("Longer");
+    EXPECT_TRUE(label->isMeasureDirty());
+    EXPECT_TRUE(column->isMeasureDirty());
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_FALSE(column->isMeasureDirty());
+    EXPECT_FALSE(label->isMeasureDirty());
+}
+
+TEST(WidgetLayoutTest, SlotArrangeDirtyStaysOnOwningHost)
+{
+    WidgetTree tree({.width = 320, .height = 160});
+    auto panel = std::make_shared<UIPanel>("Panel");
+    FCanvasSlotArgs args;
+    args.fixedSize = {80.0f, 24.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, args).valid());
+    tree.buildSnapshot(UIFrameBuildContext{});
+    auto* slot = panel->getSlot()->as<UICanvasSlot>();
+    ASSERT_NE(slot, nullptr);
+    slot->setOffset({20.0f, 10.0f});
+    EXPECT_TRUE(tree.getLayer(WidgetTree::ELayer::Content)->isArrangeDirty());
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_FALSE(tree.getLayer(WidgetTree::ELayer::Content)->isArrangeDirty());
+}
+
+TEST(WidgetLayoutTest, ArrangeDirtyPropagatesAndSkipsCleanSiblingSubtree)
+{
+    WidgetTree tree({.width = 320, .height = 160});
+    auto first = std::make_shared<UIPanel>("First");
+    auto second = std::make_shared<UIPanel>("Second");
+    FCanvasSlotArgs firstArgs;
+    firstArgs.fixedSize = {40.0f, 20.0f};
+    FCanvasSlotArgs secondArgs;
+    secondArgs.offset = {80.0f, 0.0f};
+    secondArgs.fixedSize = {40.0f, 20.0f};
+    auto* layer = tree.getLayer(WidgetTree::ELayer::Content);
+    ASSERT_TRUE(tree.attach(*layer, first, firstArgs).valid());
+    ASSERT_TRUE(tree.attach(*layer, second, secondArgs).valid());
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    auto* firstSlot = first->getSlot()->as<UICanvasSlot>();
+    ASSERT_NE(firstSlot, nullptr);
+    firstSlot->setOffset({16.0f, 12.0f});
+    EXPECT_FALSE(first->isArrangeDirty());
+    EXPECT_TRUE(layer->isArrangeDirty());
+
+    const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_EQ(snapshot.items.size(), 2u);
+    EXPECT_EQ(first->getLayoutRect().pos, glm::vec2(16.0f, 12.0f));
+    EXPECT_EQ(second->getLayoutRect().pos, glm::vec2(80.0f, 0.0f));
+    EXPECT_GE(tree.getPerfStats().layoutSkippedWidgets, 1u);
+}
+
 TEST(WidgetLayoutTest, TextWithoutAutoSizeStillMeasuresGlyphs)
 {
     registerSyntheticFont(16, 8.0f);

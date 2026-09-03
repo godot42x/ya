@@ -233,12 +233,30 @@ void UIElement::layout(const Rect2D& parentRect)
 
 void UIElement::layoutAssigned(const Rect2D& rect)
 {
+    if (tryReuseAssignedLayout(rect)) {
+        return;
+    }
     setLayoutRect(rect);
     if (_layout != nullptr) {
         _layout->arrange(*this, _layoutRect);
         return;
     }
     layoutChildren(_layoutRect);
+}
+
+bool UIElement::tryReuseAssignedLayout(const Rect2D& rect)
+{
+    Rect2D clamped = rect;
+    clamped.extent = glm::max(clamped.extent, glm::vec2(0.0f));
+    if (_assignedLayoutRevision == _layoutRevision && _layoutDirtyMask == 0 &&
+        clamped.pos == _layoutRect.pos &&
+        clamped.extent == _layoutRect.extent) {
+        if (_tree) {
+            ++_tree->_layoutSkippedWidgets;
+        }
+        return true;
+    }
+    return false;
 }
 
 void UIElement::layoutChildren(const Rect2D& layoutRect)
@@ -333,14 +351,40 @@ void UIElement::markPaintDirty(EUIInvalidationReason reason)
 
 void UIElement::markLayoutDirty(EUIInvalidationReason reason)
 {
+    ++_layoutRevision;
+    _layoutDirtyMask |= 2u;
     markPaintDirty(reason);
+    for (UIElement* ancestor = _parent; ancestor != nullptr; ancestor = ancestor->_parent) {
+        ancestor->_layoutDirtyMask |= 2u;
+    }
     if (_tree) {
         // Count only the clean->dirty layout edge (the tree may already be
         // layout-dirty from an earlier mark in the same frame).
         if (!_tree->_bLayoutDirty) {
             ++_tree->_layoutDirtyTransitions;
         }
-        _tree->invalidateLayout();
+        _tree->invalidateLayout(EWidgetLayoutInvalidation::Measure);
+    }
+}
+
+void UIElement::markArrangeDirty(EUIInvalidationReason reason)
+{
+    ++_layoutRevision;
+    _layoutDirtyMask |= 1u;
+    markPaintDirty(reason);
+    for (UIElement* ancestor = _parent; ancestor != nullptr; ancestor = ancestor->_parent) {
+        ancestor->_layoutDirtyMask |= 1u;
+    }
+    if (_tree) {
+        _tree->invalidateLayout(EWidgetLayoutInvalidation::Arrange);
+    }
+}
+
+void UIElement::clearLayoutDirtyRecursive()
+{
+    _layoutDirtyMask = 0;
+    for (const auto& child : _children) {
+        child->clearLayoutDirtyRecursive();
     }
 }
 

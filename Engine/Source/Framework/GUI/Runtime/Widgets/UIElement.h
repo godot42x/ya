@@ -383,6 +383,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// scroll viewports keep their custom layout when they receive an
     /// assigned rect from a parent container.
     virtual void layoutAssigned(const Rect2D& rect);
+    [[nodiscard]] bool tryReuseAssignedLayout(const Rect2D& rect);
     /// Content measure for packing: layout hosts aggregate children through
     /// their layout; leaves return computeIntrinsicSize(). Authored size lives
     /// on the parent-owned slot (preferredSize / fixedSize).
@@ -511,6 +512,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Mark this widget layout-dirty: paint-dirty plus an invalidation of the
     /// owning tree's layout (measure + arrange). Implemented in .cpp.
     void markLayoutDirty(EUIInvalidationReason reason = EUIInvalidationReason::None);
+    void markArrangeDirty(EUIInvalidationReason reason = EUIInvalidationReason::None);
+    [[nodiscard]] bool isMeasureDirty() const { return (_layoutDirtyMask & 2u) != 0; }
+    [[nodiscard]] bool isArrangeDirty() const { return (_layoutDirtyMask & 1u) != 0; }
     /// Apply a property write's declared impact (GI-104). Setters call this
     /// instead of markPaintDirty/markLayoutDirty/invalidateSubtree directly,
     /// so a property's invalidation scope is a stable contract, not a
@@ -627,6 +631,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
             onLayoutRectChanged();
         }
         _layoutRect = clamped;
+        _assignedLayoutRevision = _layoutRevision;
     }
 
   public:
@@ -689,6 +694,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Paint-dirty flag (reactive invalidation): set by ReactiveBase::notify-
     /// Dependents, cleared after this widget re-runs its paintSelf.
     bool _bPaintDirty = false;
+    uint64_t _layoutRevision = 1;
+    uint64_t _assignedLayoutRevision = 0;
+    uint8_t _layoutDirtyMask = 0;
     /// Most recent invalidation reason recorded on this widget (diagnostics).
     /// Updated on the 0->1 dirty transition; cleared alongside _bPaintDirty
     /// after a rebuild so a clean frame reads back as None.
@@ -706,6 +714,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void insertChildEdge(size_t index, const UIElementRef& child, FChildSlotInitializer init);
     void removeChildEdge(UIElement& child);
     void finalizeInsertedChild(const UIElementRef& child);
+    void clearLayoutDirtyRecursive();
 };
 
 /// A paint-affecting boolean flag whose only write path marks the owning

@@ -17,11 +17,12 @@
 
 ## Phase 2：Invalidate / Layout
 
-- [ ] 冻结 dirty taxonomy。
-- [ ] dirty subtree。
+- [x] 冻结 dirty taxonomy。
+- [x] child desired-size propagation（UIElement measure dirty 向祖先传播）。
+- [x] dirty subtree（assigned rect proof 下的局部 layout skip）。
 - [ ] measure/arrange cache。
-- [ ] child desired-size propagation。
-- [ ] layout performance counters。
+- [x] layout proof generation / attach-reparent invalidation boundary。
+- [x] layout performance counters（tree-level scope 累计统计 + skipped widgets）。
 
 ## Phase 3：Reactive
 
