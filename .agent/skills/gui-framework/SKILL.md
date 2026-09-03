@@ -50,7 +50,7 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 - SizeToContent / Slate DesiredSize 模型完全由 parent-owned slot 表达：canvas 在 attach 时把 Auto 种到 `UICanvasSlot` size mode。每轴解析优先级
   `anchor span（stretch）> Auto（computeDesiredSize 内容测量）> slot authored size（fixedSize / preferredSize）`。
-  child `_size` 不再是 layout 输入；`computeDesiredSize` / `computeIntrinsicSize` 只报告内容。path-B `computeAnchorRect` 仍读 child 字段直到 CP2。
+  child geometry 永远不是 layout 输入；`computeDesiredSize` / `computeIntrinsicSize` 只报告内容。不存在仍读取 child authored geometry 的 path-B。
 - `UIText`：desired / intrinsic = `font.measureText(text) × lineHeight`（与 AutoSize 无关）；字体经
   FontManager 解析，closure 测试用 `registerFont` 注入合成字体。显式尺寸在 parent-owned slot 上。
 - `UIButton` / `UISelectableRow` / `UICheckBox`（Content-Slot）：单 child 容器。标签是内容槽里的 `UIText`
@@ -207,8 +207,8 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 - 顶层命名：`GUIApp` 是 standalone GUI 的装配层（当前一个 primary
   `GUIWindowHost`）；`GUIWindowHost` 是一窗口一 tree / SDL window / presenter /
-  pointer context 的真实 owner。`GUIAppHost` 仅为旧调用的 compatibility alias，新代码
-  使用前两者。
+  pointer context 的真实 owner。新代码只使用 `GUIApp` / `GUIWindowHost`，不得新增或恢复
+  `GUIAppHost` 兼容别名。
 - 生命周期：init → run（SDL event → WidgetTree dispatch → snapshot → compose → present）→
   shutdown。resize 只在帧边界重建 presentation 资源。
 - `GUIHeadlessHost` 是同一 AppKernel/WidgetTree/delegate 合同的无窗口变体：只产生

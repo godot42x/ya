@@ -1,0 +1,26 @@
+{
+  "plan": "gui-framework-editor-readiness",
+  "as_of": "2026-09-03",
+  "legacy_compatibility": false,
+  "features": [
+    {"id": "layout.slot_first", "status": "implemented", "phase": 0, "evidence": ["WidgetLayoutTest"]},
+    {"id": "retained.widget_tree", "status": "implemented", "phase": 0, "evidence": ["WidgetTreeTest", "GUIHeadlessHostTest"]},
+    {"id": "paint_cache.detach_safety", "status": "risk", "phase": 1, "evidence": ["cache keyed by UIElement*; no explicit subtree cache purge"]},
+    {"id": "snapshot_full_validation", "status": "partial", "phase": 1, "evidence": ["G2 omits texture/UV/font/cornerRadius/textScale comparisons"]},
+    {"id": "incremental_layout", "status": "missing", "phase": 2, "evidence": ["tree-level _bLayoutDirty"]},
+    {"id": "reactive_scalar", "status": "implemented", "phase": 3, "evidence": ["Reactive<T>"]},
+    {"id": "reactive_keyed_list", "status": "missing", "phase": 3, "evidence": ["ReactiveList has push/removeAt/clear/replace only"]},
+    {"id": "computed_dependency_graph", "status": "missing", "phase": 3, "evidence": ["Computed recomputes selector on every get"]},
+    {"id": "typed_static_dsl", "status": "implemented", "phase": 4, "evidence": ["Declarative builders and typed SlotArgs"]},
+    {"id": "dynamic_structure_dsl", "status": "partial", "phase": 4, "evidence": ["manual attach/detach; no general keyed repeater contract"]},
+    {"id": "typed_theme_style", "status": "implemented", "phase": 5, "evidence": ["UITheme/UIStyledWidget"]},
+    {"id": "style_schema_validation", "status": "partial", "phase": 5, "evidence": ["style keys and fields primarily runtime strings/reflection"]},
+    {"id": "editor_selection_commands", "status": "missing", "phase": 6, "evidence": ["not unified with retained GUI"]},
+    {"id": "editor_undo_redo_projection", "status": "partial", "phase": 6, "evidence": ["editor tests exist, full retained projection not complete"]},
+    {"id": "retained_inspector", "status": "missing", "phase": 7, "evidence": ["legacy ImGui TypeRenderer remains"]},
+    {"id": "retained_content_browser", "status": "missing", "phase": 7, "evidence": ["FileExplorer uses ImGui"]},
+    {"id": "retained_viewport_gizmo", "status": "partial", "phase": 7, "evidence": ["viewport host exists; ImGuizmo path remains"]},
+    {"id": "imgui_removal", "status": "blocked_by_features", "phase": 8, "evidence": ["RuntimeTools/debug/FileExplorer/TypeRenderer/ImGuizmo paths remain"]},
+    {"id": "release_quality_gates", "status": "missing", "phase": 9, "evidence": ["needs long-run, DPI, CJK, cross-platform and parity gates"]}
+  ]
+}
