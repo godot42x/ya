@@ -118,4 +118,14 @@ TEST(FileExplorerNavigationTest, SelectMountPointAndSelectedPathRetargetCurrentD
     EXPECT_EQ(explorer.getActiveMountPoint()->name, "Game");
 }
 
+TEST(FileExplorerNavigationTest, GetSearchTextRoundTripsSetSearchText)
+{
+    FileExplorer explorer;
+    explorer.setSearchText("Brick");
+    EXPECT_EQ(explorer.getSearchText(), "Brick");
+
+    explorer.setSearchText("");
+    EXPECT_TRUE(explorer.getSearchText().empty());
+}
+
 } // namespace ya

@@ -73,6 +73,44 @@ class UITreeViewWidgetBuilder final : public TUIWidgetBuilder<UITreeView, UITree
         _widget->_onSelectionChanged = std::move(value);
         return std::move(*this);
     }
+
+    [[nodiscard]] UITreeViewWidgetBuilder& bindFilter(std::shared_ptr<Reactive<std::string>> value) &
+    {
+        _widget->bindFilter(std::move(value));
+        return *this;
+    }
+
+    [[nodiscard]] UITreeViewWidgetBuilder&& bindFilter(std::shared_ptr<Reactive<std::string>> value) &&
+    {
+        _widget->bindFilter(std::move(value));
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITreeViewWidgetBuilder& setReorderable(bool value) &
+    {
+        _widget->setReorderable(value);
+        return *this;
+    }
+
+    [[nodiscard]] UITreeViewWidgetBuilder&& setReorderable(bool value) &&
+    {
+        _widget->setReorderable(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UITreeViewWidgetBuilder& setOnReorderHandler(
+        std::function<void(const std::string&, const std::string&, int)> value) &
+    {
+        _widget->setOnReorderHandler(std::move(value));
+        return *this;
+    }
+
+    [[nodiscard]] UITreeViewWidgetBuilder&& setOnReorderHandler(
+        std::function<void(const std::string&, const std::string&, int)> value) &&
+    {
+        _widget->setOnReorderHandler(std::move(value));
+        return std::move(*this);
+    }
 };
 
 /// Dock space projecting a UIDockWorkspace's dock tree. The workspace is the

@@ -135,6 +135,8 @@ class FileExplorer
     /// 设置搜索过滤（替换 ImGui buffer 并保留原语义）。
     void setSearchText(std::string_view text);
 
+    [[nodiscard]] std::string getSearchText() const;
+
     /**
      * @brief 设置扩展名过滤
      */

@@ -64,8 +64,9 @@
 ## Phase 7-9：Editor migration and release
 
 - [x] Inspector retained controls（bool/float/vec3/string/enum/color/asset-ref via `EditorAutoPropertySection` + `PropertyHandle`）。
-- [ ] Content Browser retained controls。
-- [ ] Hierarchy and virtualized lists。
+- [x] Content Browser retained controls（EditorSurface mount/entry lists、search、selection、navigate、visible-window；ImGui panel 仍平行）。
+- [x] Hierarchy virtualization（UITreeView scroll-window paint + EditorSurface HierarchyScroll）。
+- [x] Hierarchy filter + entity drag-drop reorder（`HierarchyFilter` + `bindFilter`；`setReorderable` + `EditorHierarchyOps`）。
 - [ ] Viewport/gizmo/drag-drop。
 - [ ] Remove ImGui editor paths。
 - [ ] Multi-window/docking persistence。

@@ -530,3 +530,50 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - Content Browser / Hierarchy virtualization 未做。
 
 下一 checkpoint：Content Browser retained controls，或 Hierarchy virtualization。
+
+## Phase 7D 当前 checkpoint
+
+- 修复 Content Browser fingerprint：纳入 `getSearchText()` 与 `getSelectedPath()`，搜索过滤即时刷新 entry 列表。
+- `FileExplorer::getSearchText()` 公开搜索状态；搜索框失焦时 sync 回写。
+- Content Browser entry 行支持单选高亮（`selectContentItem` → `setSelectedPath`）；纹理文件选中时调用 `inspectAsset`。
+- 抽取 `EditorListRows.h`（`contentRow` / `updateContentRow` / `makeContentRowFactory`）供 Content Browser 与 Scene Save 共用。
+- Scene Save dialog fingerprint 纳入 search text。
+- xmake r ya-gui-closure-test 全量通过（377/377）；xmake b ya-game-editor 通过；`FileExplorerNavigationTest` 4/4；`EditorListRowsTest` 1/1。
+
+### Phase 7D 边界
+
+- ImGui `ContentBrowserPanel` / `FileExplorer::render` 仍是平行路径（Phase 8 删除）。
+- Icon view / 缩略图 / view-mode toggle 未在 retained 路径实现。
+- Hierarchy virtualization 未做。
+
+下一 checkpoint：Hierarchy virtualization，或 retained Content Browser icon view。
+
+## Phase 7E 当前 checkpoint
+
+- `UITreeView` 在 `UIScrollViewport` 子节点下用 `computeKeyedVisibleWindow` 只绘制可见行窗口（overscan=2）；`getPaintedRowCount()` / diagnostics `paintedRows` 暴露绘制行数。
+- `EditorSurface` Hierarchy 面板用 `HierarchyScroll` 包裹 `HierarchyTree`，大树可滚动且 paint 不随节点数线性增长。
+- `ToolControlsTest.TreeViewVirtualizesPaintInsideScrollViewport`：50 行树在 100px viewport 下 paintedRows < visibleRows。
+- xmake r ya-gui-closure-test 全量通过（378/378）；xmake b ya-game-editor 通过。
+
+### Phase 7E 边界
+
+- flatten/hit-test 仍遍历完整可见行集；仅 paint 窗口化，不是 row widget pooling。
+- ImGui `SceneHierarchyPanel` modifier 多选 / UI entry drag-drop 未做。
+- TableGrid flat paint 仍未虚拟化。
+
+下一 checkpoint：viewport/gizmo overlay，或 Hierarchy filter + drag-drop。
+
+## Phase 7F 当前 checkpoint
+
+- `EditorHierarchyOps`：`editorHierarchyEntityIdKey` / `parseEditorHierarchyEntityIdKey` / `moveEditorHierarchyEntity`（TreeView drop mode 0/1/2 → before/into/after；拒绝 `ui:` 行）。
+- `EditorSurface` Hierarchy：`HierarchyFilter` `UITextField` + `bindFilter`；`setReorderable(true)` + `setOnReorderHandler` 经 `Scene::moveNode` 重排实体并保持选中。
+- `EditorHierarchyOpsTest`：`MoveEntityBeforeSiblingReordersChildren`、`RejectsUiEntryIds`。
+- xmake r ya-gui-closure-test 全量通过（378/378）；xmake b ya-game-editor 通过；`xmake r ya-testing --gtest_filter=EditorHierarchyOpsTest.*` 2/2 通过。
+
+### Phase 7F 边界
+
+- 仅 scene 实体（`e:{uuid}`）可拖放重排；Game UI `ui:` 条目与 ImGui `SceneHierarchyPanel` UI entry drag-drop 仍平行。
+- Hierarchy modifier 多选、context menu、viewport/gizmo overlay 未做。
+- TableGrid flat paint 仍未虚拟化。
+
+下一 checkpoint：viewport/gizmo overlay contract，或 drag-drop asset workflow。

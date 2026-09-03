@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Binding/Reactive.h"
+#include "GUI/Widgets/KeyedVisibleWindow.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
@@ -26,8 +27,9 @@ namespace ya
 ///     host via bindSelection()/getSelection().
 ///
 /// The widget flattens visible rows at paint (indent + arrow + label +
-/// selection/hover highlight) and hit-tests the same flatten at input. No
-/// virtualization, no per-row child widgets — the smallest closed loop.
+/// selection/hover highlight) and hit-tests the same flatten at input. When
+/// hosted inside a UIScrollViewport it paints only the scrolled visible window
+/// (uniform row stride); there are no per-row child widgets.
 struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeView, FTreeViewStyle>
 {
     YA_GUI_AUTHORED_STYLE_IO(FTreeViewStyle)
@@ -80,6 +82,8 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     /// Visible row count under the current expand/filter state (dump /
     /// scenario assertions).
     [[nodiscard]] int getVisibleRowCount() const { return static_cast<int>(flattenVisible().size()); }
+    /// Rows painted in the last paint pass (full count when not scroll-hosted).
+    [[nodiscard]] size_t getPaintedRowCount() const { return _lastPaintedRowCount; }
 
     void setReorderable(bool value) { _bReorderable = value; }
     void setIntrinsicSize(glm::vec2 value)
@@ -118,6 +122,7 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
         node["control"] = {
             {"type", "treeView"},
             {"visibleRows", getVisibleRowCount()},
+            {"paintedRows", _lastPaintedRowCount},
             {"selected", _selectedId ? _selectedId->value() : std::string{}},
         };
     }
@@ -189,8 +194,9 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     std::string _pressRowId;
     glm::vec2   _pressPoint{0.0f, 0.0f};
     bool        _bPressArmed = false;
-    int         _dropRowIndex = -1;
+    int _dropRowIndex = -1;
     int         _dropMode     = 0;
+    mutable size_t _lastPaintedRowCount = 0;
 };
 
 } // namespace ya

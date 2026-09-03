@@ -3,6 +3,8 @@
 #include "Core/Event.h"
 #include "Core/Config/ConfigManager.h"
 #include "Core/Log.h"
+#include "GameEditor/UI/EditorHierarchyOps.h"
+#include "GameEditor/UI/EditorListRows.h"
 #include "ECS/Entity.h"
 #include "ECS/Component.h"
 #include "ECS/ECSRegistry.h"
@@ -31,6 +33,7 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/EditorLayer.h"
 #include "Core/System/PathUtils.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "GameRuntime/App.h"
 #include "Hierarchy/Node.h"
 #include "RHI/Core/Texture.h"
@@ -56,24 +59,6 @@ namespace
 constexpr float kMenuHeight     = 30.0f;
 constexpr float kToolbarHeight  = 36.0f;
 constexpr float kChromeTop      = kMenuHeight + kToolbarHeight;
-constexpr float kEditorListRowHeight = 22.0f;
-constexpr float kEditorListRowSpacing = 2.0f;
-constexpr size_t kEditorListOverscan = 2;
-
-std::string entityIdKey(uint64_t uuid)
-{
-    return std::format("e:{}", uuid);
-}
-
-bool parseEntityIdKey(const std::string& id, uint64_t& outUuid)
-{
-    if (id.size() < 3 || id[0] != 'e' || id[1] != ':') {
-        return false;
-    }
-    const std::string_view digits{id.data() + 2, id.size() - 2};
-    auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), outUuid);
-    return ec == std::errc{} && ptr == digits.data() + digits.size();
-}
 
 bool parseWidgetEntryKey(const std::string& id, std::string& outEntryId)
 {
@@ -97,7 +82,7 @@ UITreeView::FNode buildHierarchyNode(Node* node)
             uuid = id->_id.value;
         }
     }
-    out.id    = entityIdKey(uuid);
+    out.id    = editorHierarchyEntityIdKey(uuid);
     out.label = node->getName();
     out.children.reserve(node->getChildCount());
     for (Node* child : node->getChildren()) {
@@ -131,63 +116,6 @@ std::shared_ptr<UIElement> makePlaceholderPanel(const std::string& name, const s
                    .setVAlign(EWidgetAlignV::Center),
                ui::canvasSlot().fill().offset({12.0f, 12.0f}))
         .release();
-}
-
-/// One file-browser row: UISelectableRow host + a UIText label in its content
-/// slot. Shared by the Content Browser and the Save Scene dialog, which both
-/// rebuild their rows from a FileExplorer fingerprint.
-ui::UISelectableRowWidgetBuilder contentRow(const std::string& key,
-                                            const std::string& label,
-                                            const std::string& itemId,
-                                            std::function<void(const std::string&)> onSelect,
-                                            std::function<void(const std::string&)> onActivate)
-{
-    return ui::selectableRow(key)
-        .setItemId(itemId)
-        .setContentPadding(FMargin{10.0f, 0.0f, 0.0f, 0.0f})
-        .setOnSelect(std::move(onSelect))
-        .setOnActivate(std::move(onActivate))
-        .child(ui::text(key + "_Label")
-                   .setText(label)
-                   .setFontSize(13)
-                   .setVAlign(EWidgetAlignV::Center));
-}
-
-void updateContentRow(UIElement& child,
-                      const std::string& label,
-                      const std::string& itemId,
-                      bool selected,
-                      std::function<void(const std::string&)> onSelect,
-                      std::function<void(const std::string&)> onActivate)
-{
-    auto* row = dynamic_cast<UISelectableRow*>(&child);
-    if (!row) {
-        YA_CORE_ERROR("EditorSurface: keyed content row '{}' is not a UISelectableRow", child._name);
-        return;
-    }
-    row->_itemId = itemId;
-    row->setSelected(selected);
-    row->_onSelect = std::move(onSelect);
-    row->_onActivate = std::move(onActivate);
-    if (!row->getChildren().empty()) {
-        if (auto* text = dynamic_cast<UIText*>(row->getChildren().front().get())) {
-            text->setText(label);
-        }
-    }
-}
-
-UIKeyedChildReconciler::Factory makeContentRowFactory()
-{
-    return [](const std::string& key, size_t) {
-        return contentRow(key, key, key, {}, {}).release();
-    };
-}
-
-void bindEditorListRowSlot(UISlot& slot, const std::string&, size_t)
-{
-    if (auto* box = slot.as<UIBoxSlot>()) {
-        box->setPreferredSize({0.0f, kEditorListRowHeight});
-    }
 }
 
 ui::UIButtonWidgetBuilder labeledButton(std::string key, const std::string& label)
@@ -231,6 +159,8 @@ void EditorSurface::shutdown()
     _viewportImage.reset();
     _hierarchyView.reset();
     _hierarchyRoots.reset();
+    _hierarchyFilter.reset();
+    _hierarchyFilterField.reset();
     _selection = std::make_shared<SelectionModel>();
     _actions   = std::make_shared<ActionMap>();
     _undo      = std::make_shared<UndoStack>();
@@ -238,6 +168,7 @@ void EditorSurface::shutdown()
     _statsText.reset();
     _contentExplorer.reset();
     _contentPathText.reset();
+    _contentSearchField.reset();
     _contentMountList.reset();
     _contentEntryList.reset();
     _contentEntryRows.reset();
@@ -285,6 +216,8 @@ void EditorSurface::rebuild(App& app)
     _viewportImage.reset();
     _hierarchyView.reset();
     _hierarchyRoots.reset();
+    _hierarchyFilter.reset();
+    _hierarchyFilterField.reset();
     _selection = std::make_shared<SelectionModel>();
     _actions   = std::make_shared<ActionMap>();
     _undo      = std::make_shared<UndoStack>();
@@ -294,6 +227,7 @@ void EditorSurface::rebuild(App& app)
     _tabRegistry = std::make_unique<EditorTabRegistry>();
     _contentExplorer.reset();
     _contentPathText.reset();
+    _contentSearchField.reset();
     _contentMountList.reset();
     _contentEntryList.reset();
     _contentEntryRows.reset();
@@ -580,15 +514,26 @@ void EditorSurface::buildEditorChrome(App& app)
                             .setStyleKey("panel.canvas")
                             .child(std::move(viewportImage), ui::canvasSlot().fill());
 
+    _hierarchyFilter = std::make_shared<Reactive<std::string>>("");
+    auto hierarchyFilterField = ui::textField("HierarchyFilter")
+                                    .setOnTextChanged([this](const std::string& text) {
+                                        if (_hierarchyFilter) {
+                                            _hierarchyFilter->set(text);
+                                        }
+                                    });
+    _hierarchyFilterField = hierarchyFilterField.share();
+
     _hierarchyRoots = std::make_shared<ReactiveList<UITreeView::FNode>>();
     _hierarchyView  = ui::treeView("HierarchyTree")
                          .bindData(_hierarchyRoots)
+                         .bindFilter(_hierarchyFilter)
                          .bindSelection(_selection->primaryRef())
+                         .setReorderable(true)
                          .setOnSelectionChanged([this](const std::string& id) {
                              _selection->select(id);
                              uint64_t uuid = 0;
                              std::string entryId;
-                             if (parseEntityIdKey(id, uuid)) {
+                             if (parseEditorHierarchyEntityIdKey(id, uuid)) {
                                  if (Scene* scene = _layer->getHierarchyScene()) {
                                      _layer->setSelectedEntity(scene->getEntityByUUID(uuid));
                                  }
@@ -597,10 +542,35 @@ void EditorSurface::buildEditorChrome(App& app)
                                  _layer->setSelectedWidgetEntryId(entryId);
                              }
                          })
+                         .setOnReorderHandler([this](const std::string& fromId,
+                                                     const std::string& toId,
+                                                     int dropMode) {
+                             if (!_layer) {
+                                 return;
+                             }
+                             Scene* scene = _layer->getHierarchyScene();
+                             if (!scene) {
+                                 return;
+                             }
+                             if (Entity* moved = moveEditorHierarchyEntity(*scene, fromId, toId, dropMode)) {
+                                 _layer->setSelectedEntity(moved);
+                                 _hierarchyFingerprint.clear();
+                             }
+                         })
                          .share();
+    auto hierarchyScroll = ui::scroll("HierarchyScroll")
+                               .child(_hierarchyView, ui::overlaySlot().fill());
     auto hierarchyBody = ui::panel("HierarchyBody")
                              .setStyleKey("panel.canvas")
-                             .child(_hierarchyView, ui::canvasSlot().anchor({0.0f, 0.0f}, {1.0f, 1.0f}).offset({4.0f, 4.0f}));
+                             .child(std::move(hierarchyFilterField),
+                                    ui::canvasSlot()
+                                        .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
+                                        .offset({4.0f, 4.0f})
+                                        .size({0.0f, 26.0f}))
+                             .child(std::move(hierarchyScroll),
+                                    ui::canvasSlot()
+                                        .anchor({0.0f, 0.0f}, {1.0f, 1.0f})
+                                        .offset({4.0f, 34.0f}));
 
     _inspectorTab = std::make_unique<EditorInspectorTab>(*_layer, _undo.get());
     auto inspectorBody = _inspectorTab->build(*_tree);
@@ -760,8 +730,10 @@ std::shared_ptr<UIElement> EditorSurface::buildContentBrowser()
                            .setOnTextChanged([this](const std::string& text) {
                                if (_contentExplorer) {
                                    _contentExplorer->setSearchText(text);
+                                   _bContentRowsDirty = true;
                                }
                            });
+    _contentSearchField = searchField.share();
 
     // Header: back / current path / name filter.
     auto header = ui::row("ContentBrowser.ContainerHeader", "Header")
@@ -956,7 +928,7 @@ void EditorSurface::syncSelectionFromLayer()
                 uuid = id->_id.value;
             }
             if (uuid != 0) {
-                ids.push_back(entityIdKey(uuid));
+                ids.push_back(editorHierarchyEntityIdKey(uuid));
             }
         }
     }
@@ -1000,9 +972,9 @@ void EditorSurface::syncContentBrowser()
         fingerprint += entry.bIsDirectory ? "/" : ";";
     }
     fingerprint += "|search:";
-    if (const auto* active = _contentExplorer->getActiveMountPoint()) {
-        fingerprint += active->name;
-    }
+    fingerprint += _contentExplorer->getSearchText();
+    fingerprint += "|selected:";
+    fingerprint += _contentExplorer->getSelectedPath().string();
 
     if (fingerprint != _contentFingerprint) {
         _contentFingerprint = std::move(fingerprint);
@@ -1026,6 +998,9 @@ void EditorSurface::syncContentBrowser()
         rebuildContentRows();
         _bContentRowsDirty = false;
     }
+    if (_contentSearchField && _tree->getFocused() != _contentSearchField.get()) {
+        _contentSearchField->setText(_contentExplorer->getSearchText());
+    }
 }
 
 void EditorSurface::rebuildContentRows()
@@ -1035,6 +1010,7 @@ void EditorSurface::rebuildContentRows()
     }
 
     const FileExplorer::MountPoint* active = _contentExplorer->getActiveMountPoint();
+    const std::filesystem::path selectedPath = _contentExplorer->getSelectedPath();
     std::vector<FileExplorer::FEntry> entries;
     _contentExplorer->collectEntries(entries);
 
@@ -1085,7 +1061,7 @@ void EditorSurface::rebuildContentRows()
     const std::vector<std::string> visibleKeys = sliceKeyedVisibleWindow(entryKeys, window);
     _contentEntryReconciler->reconcile(
         visibleKeys,
-        [this, &entries, window](UIElement& child, const std::string&, size_t index) {
+        [this, &entries, window, selectedPath](UIElement& child, const std::string&, size_t index) {
             const size_t itemIndex = window.first + index;
             const auto& entry = entries[itemIndex];
             const std::filesystem::path path = entry.path;
@@ -1093,8 +1069,8 @@ void EditorSurface::rebuildContentRows()
             updateContentRow(child,
                              bDir ? entry.name + "/" : entry.name,
                              entry.name,
-                             false,
-                             [](const std::string&) {},
+                             selectedPath == path,
+                             [this, path, bDir](const std::string&) { selectContentItem(path, bDir); },
                              [this, path, bDir](const std::string&) { activateContentItem(path, bDir); });
         },
         bindEditorListRowSlot);
@@ -1118,6 +1094,30 @@ void EditorSurface::selectContentMount(const std::string& itemId)
             _contentExplorer->selectMountPoint(candidate);
             break;
         }
+    }
+}
+
+void EditorSurface::selectContentItem(const std::filesystem::path& path, bool bIsDirectory)
+{
+    if (!_contentExplorer) {
+        return;
+    }
+    _contentExplorer->setSelectedPath(path);
+    _bContentRowsDirty = true;
+    if (!_layer || bIsDirectory) {
+        return;
+    }
+
+    std::string assetPath = path_utils::pathToUtf8String(path);
+    if (VirtualFileSystem* vfs = VirtualFileSystem::get()) {
+        assetPath = vfs->toVfsPath(assetPath);
+    }
+    const auto isTexturePath = [](std::string_view value) {
+        return value.ends_with(".png") || value.ends_with(".jpg") || value.ends_with(".jpeg") ||
+               value.ends_with(".tga") || value.ends_with(".bmp") || value.ends_with(".hdr");
+    };
+    if (isTexturePath(assetPath)) {
+        _layer->inspectAsset(assetPath);
     }
 }
 
@@ -1297,6 +1297,8 @@ void EditorSurface::syncSceneSaveDialog()
         fingerprint += entry.name;
         fingerprint += ';';
     }
+    fingerprint += "|search:";
+    fingerprint += _sceneSaveExplorer->getSearchText();
     if (_sceneSaveNameField) {
         fingerprint += "|name:";
         fingerprint += _sceneSaveNameField->getText();

@@ -41,6 +41,7 @@ struct UIPopupOverlay;
 struct UIScrollViewport;
 struct UISizeBox;
 struct UIText;
+struct UITextField;
 struct UITheme;
 struct UITreeView;
 struct WidgetTree;
@@ -68,6 +69,8 @@ struct EditorSurface
     std::shared_ptr<UIImage>         _viewportImage;
     std::shared_ptr<UITreeView>      _hierarchyView;
     std::shared_ptr<ReactiveList<UITreeView::FNode>> _hierarchyRoots;
+    std::shared_ptr<Reactive<std::string>>           _hierarchyFilter;
+    std::shared_ptr<UITextField>                     _hierarchyFilterField;
     std::shared_ptr<SelectionModel>  _selection = std::make_shared<SelectionModel>();
     std::shared_ptr<ActionMap>       _actions   = std::make_shared<ActionMap>();
     std::shared_ptr<UndoStack>       _undo      = std::make_shared<UndoStack>();
@@ -80,6 +83,7 @@ struct EditorSurface
     // directory / filter state; the rows below are the retained view.
     std::shared_ptr<FileExplorer>  _contentExplorer;
     std::shared_ptr<UIText>        _contentPathText;
+    std::shared_ptr<UITextField>   _contentSearchField;
     std::shared_ptr<UIContainer>   _contentMountList;
     std::shared_ptr<UIContainer>   _contentEntryList;
     std::shared_ptr<UIContainer>   _contentEntryRows;
@@ -152,6 +156,7 @@ struct EditorSurface
     void syncContentBrowser();
     void rebuildContentRows();
     void selectContentMount(const std::string& itemId);
+    void selectContentItem(const std::filesystem::path& path, bool bIsDirectory);
     void activateContentItem(const std::filesystem::path& path, bool bIsDirectory);
     void openSceneSaveDialog();
     void clearSceneSaveDialog();

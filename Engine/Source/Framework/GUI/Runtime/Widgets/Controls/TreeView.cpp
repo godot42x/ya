@@ -1,5 +1,8 @@
 #include "GUI/Widgets/Controls/TreeView.h"
 
+#include "GUI/Widgets/Controls/ScrollViewport.h"
+#include "GUI/Widgets/KeyedVisibleWindow.h"
+
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -398,7 +401,26 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
     // font is available (mirrors UIText::resolvedText ordering).
     const std::string selectedId = _selectedId ? _selectedId->get() : std::string{};
 
-    for (size_t i = 0; i < rows.size(); ++i) {
+    size_t paintBegin = 0;
+    size_t paintEnd   = rows.size();
+    if (const UIElement* parent = getParent()) {
+        if (const auto* scroll = dynamic_cast<const UIScrollViewport*>(parent)) {
+            const float viewportExtent = scroll->getLayoutRect().extent.y;
+            if (viewportExtent > 0.0f && !rows.empty()) {
+                const FKeyedVisibleWindow window = computeKeyedVisibleWindow(rows.size(),
+                                                                             _rowHeight,
+                                                                             0.0f,
+                                                                             viewportExtent,
+                                                                             scroll->getScrollOffset(),
+                                                                             2);
+                paintBegin = window.first;
+                paintEnd   = window.end();
+            }
+        }
+    }
+    _lastPaintedRowCount = paintEnd - paintBegin;
+
+    for (size_t i = paintBegin; i < paintEnd; ++i) {
         const VisibleRow& row = rows[i];
         const Rect2D      rowRect{
             .pos    = {_layoutRect.pos.x, _layoutRect.pos.y + static_cast<float>(i) * _rowHeight},

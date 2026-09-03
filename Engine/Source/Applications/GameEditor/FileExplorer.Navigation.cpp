@@ -107,6 +107,11 @@ void FileExplorer::setSearchText(std::string_view text)
     _searchBuffer[length] = '\0';
 }
 
+std::string FileExplorer::getSearchText() const
+{
+    return _searchBuffer;
+}
+
 bool FileExplorer::isPathWithinActiveMountPoint(const std::filesystem::path& path) const
 {
     if (!_activeMountPoint) return false;

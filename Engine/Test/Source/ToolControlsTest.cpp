@@ -815,6 +815,34 @@ TEST(ToolControlsTest, TreeViewReorderUsesBehaviorBackedDragDrop)
     EXPECT_FALSE(tree.isDragging());
 }
 
+TEST(ToolControlsTest, TreeViewVirtualizesPaintInsideScrollViewport)
+{
+    WidgetTree tree({.width = 200, .height = 120});
+    auto viewport = std::make_shared<UIScrollViewport>("Scroll");
+    auto view     = std::make_shared<UITreeView>("Tree");
+    view->_rowHeight = 20.0f;
+
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    for (int i = 0; i < 50; ++i) {
+        roots->push(UITreeView::FNode{
+            .id    = std::to_string(i),
+            .label = "Node " + std::to_string(i),
+        });
+    }
+    view->bindData(roots);
+
+    FCanvasSlotArgs viewportSlot;
+    viewportSlot.fixedSize = {200.0f, 100.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
+    tree.attach(*viewport, view);
+    tree.layout();
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    EXPECT_EQ(view->getVisibleRowCount(), 50);
+    EXPECT_LT(view->getPaintedRowCount(), 50u);
+    EXPECT_GE(view->getPaintedRowCount(), 5u);
+}
+
 // === Text field ===
 
 TEST(ToolControlsTest, TextFieldTypedTextAppendsAndFiresChanged)
