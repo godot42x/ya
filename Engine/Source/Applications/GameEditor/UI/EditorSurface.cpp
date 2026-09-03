@@ -22,9 +22,11 @@
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
+#include "GUI/Widgets/Controls/SizeBox.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/Controls/TreeView.h"
+#include "GUI/Widgets/KeyedVisibleWindow.h"
 #include "GUI/Widgets/WidgetAttachment.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/EditorLayer.h"
@@ -54,6 +56,9 @@ namespace
 constexpr float kMenuHeight     = 30.0f;
 constexpr float kToolbarHeight  = 36.0f;
 constexpr float kChromeTop      = kMenuHeight + kToolbarHeight;
+constexpr float kEditorListRowHeight = 22.0f;
+constexpr float kEditorListRowSpacing = 2.0f;
+constexpr size_t kEditorListOverscan = 2;
 
 std::string entityIdKey(uint64_t uuid)
 {
@@ -148,6 +153,43 @@ ui::UISelectableRowWidgetBuilder contentRow(const std::string& key,
                    .setVAlign(EWidgetAlignV::Center));
 }
 
+void updateContentRow(UIElement& child,
+                      const std::string& label,
+                      const std::string& itemId,
+                      bool selected,
+                      std::function<void(const std::string&)> onSelect,
+                      std::function<void(const std::string&)> onActivate)
+{
+    auto* row = dynamic_cast<UISelectableRow*>(&child);
+    if (!row) {
+        YA_CORE_ERROR("EditorSurface: keyed content row '{}' is not a UISelectableRow", child._name);
+        return;
+    }
+    row->_itemId = itemId;
+    row->setSelected(selected);
+    row->_onSelect = std::move(onSelect);
+    row->_onActivate = std::move(onActivate);
+    if (!row->getChildren().empty()) {
+        if (auto* text = dynamic_cast<UIText*>(row->getChildren().front().get())) {
+            text->setText(label);
+        }
+    }
+}
+
+UIKeyedChildReconciler::Factory makeContentRowFactory()
+{
+    return [](const std::string& key, size_t) {
+        return contentRow(key, key, key, {}, {}).release();
+    };
+}
+
+void bindEditorListRowSlot(UISlot& slot, const std::string&, size_t)
+{
+    if (auto* box = slot.as<UIBoxSlot>()) {
+        box->setPreferredSize({0.0f, kEditorListRowHeight});
+    }
+}
+
 ui::UIButtonWidgetBuilder labeledButton(std::string key, const std::string& label)
 {
     std::string labelKey = key + "_Label";
@@ -195,7 +237,15 @@ void EditorSurface::shutdown()
     _contentPathText.reset();
     _contentMountList.reset();
     _contentEntryList.reset();
+    _contentEntryRows.reset();
+    _contentEntryLeading.reset();
+    _contentEntryTrailing.reset();
+    _contentEntryScroll.reset();
+    _contentMountReconciler.reset();
+    _contentEntryReconciler.reset();
     _contentFingerprint.clear();
+    _contentEntryScrollOffset = 0.0f;
+    _contentEntryViewportHeight = 0.0f;
     _bContentRowsDirty = true;
     _viewportTexture.reset();
     _viewportImageResource.reset();
@@ -239,7 +289,15 @@ void EditorSurface::rebuild(App& app)
     _contentPathText.reset();
     _contentMountList.reset();
     _contentEntryList.reset();
+    _contentEntryRows.reset();
+    _contentEntryLeading.reset();
+    _contentEntryTrailing.reset();
+    _contentEntryScroll.reset();
+    _contentMountReconciler.reset();
+    _contentEntryReconciler.reset();
     _contentFingerprint.clear();
+    _contentEntryScrollOffset = 0.0f;
+    _contentEntryViewportHeight = 0.0f;
     _bContentRowsDirty = true;
     clearSceneSaveDialog();
     _hierarchyFingerprint.clear();
@@ -561,10 +619,27 @@ std::shared_ptr<UIElement> EditorSurface::buildContentBrowser()
     auto pathText = ui::text("ContentPath").setFontSize(12).setVAlign(EWidgetAlignV::Center);
     _contentPathText = pathText.share();
 
-    // Row lists are only rebuilt when the directory fingerprint changes
-    // (rebuildContentRows), so both list containers are retained for attach.
-    _contentMountList = ui::column("ContentMounts").setSpacing(2.0f).share();
-    _contentEntryList = ui::column("ContentEntries").setSpacing(2.0f).share();
+    // Row lists are only rebuilt when the directory fingerprint or the entry
+    // scroll window changes. Mounts stay fully materialized; entries use a
+    // keyed visible window plus leading/trailing spacers so scroll extent
+    // stays equal to the full directory height.
+    _contentMountList = ui::column("ContentMounts").setSpacing(kEditorListRowSpacing).share();
+    auto entryLeading = ui::sizeBox("ContentEntryLeading");
+    _contentEntryLeading = entryLeading.share();
+    auto entryRows = ui::column("ContentEntryRows").setSpacing(kEditorListRowSpacing);
+    _contentEntryRows = entryRows.share();
+    auto entryTrailing = ui::sizeBox("ContentEntryTrailing");
+    _contentEntryTrailing = entryTrailing.share();
+    _contentEntryList = ui::column("ContentEntries")
+                            .setSpacing(0.0f)
+                            .child(std::move(entryLeading))
+                            .child(std::move(entryRows))
+                            .child(std::move(entryTrailing))
+                            .share();
+    _contentMountReconciler.reset();
+    _contentEntryReconciler.reset();
+    _contentEntryScrollOffset = 0.0f;
+    _contentEntryViewportHeight = 0.0f;
 
     auto backButton = ui::button("ContentBack")
                           .setOnClick([this]() {
@@ -599,6 +674,7 @@ std::shared_ptr<UIElement> EditorSurface::buildContentBrowser()
                            .child(_contentMountList, ui::overlaySlot().fill());
     auto entryScroll = ui::scroll("ContentEntryScroll")
                            .child(_contentEntryList, ui::overlaySlot().fill());
+    _contentEntryScroll = entryScroll.share();
     auto body = ui::row("ContentBody")
                     .setSpacing(4.0f)
                     .child(std::move(mountScroll), ui::boxSlot().preferredSize({180.0f, 0.0f}))
@@ -789,9 +865,22 @@ void EditorSurface::syncContentBrowser()
     if (fingerprint != _contentFingerprint) {
         _contentFingerprint = std::move(fingerprint);
         _bContentRowsDirty = true;
+        if (_contentEntryScroll) {
+            _contentEntryScroll->setScrollOffset(0.0f);
+            _contentEntryScrollOffset = 0.0f;
+        }
     }
-    if (_bContentRowsDirty && _contentMountList && _contentEntryList &&
-        _contentMountList->isAttached() && _contentEntryList->isAttached()) {
+    if (_contentEntryScroll && _contentEntryScroll->isAttached()) {
+        const float offset = _contentEntryScroll->getScrollOffset();
+        const float viewportHeight = _contentEntryScroll->getLayoutRect().extent.y;
+        if (offset != _contentEntryScrollOffset || viewportHeight != _contentEntryViewportHeight) {
+            _contentEntryScrollOffset = offset;
+            _contentEntryViewportHeight = viewportHeight;
+            _bContentRowsDirty = true;
+        }
+    }
+    if (_bContentRowsDirty && _contentMountList && _contentEntryList && _contentEntryRows &&
+        _contentMountList->isAttached() && _contentEntryList->isAttached() && _contentEntryRows->isAttached()) {
         rebuildContentRows();
         _bContentRowsDirty = false;
     }
@@ -799,52 +888,74 @@ void EditorSurface::syncContentBrowser()
 
 void EditorSurface::rebuildContentRows()
 {
-    if (!_contentExplorer || !_tree || !_contentMountList || !_contentEntryList) {
+    if (!_contentExplorer || !_tree || !_contentMountList || !_contentEntryRows) {
         return;
     }
 
     const FileExplorer::MountPoint* active = _contentExplorer->getActiveMountPoint();
-
-    // Mount rows.
-    auto mountChildren = _contentMountList->getChildrenInPaintOrder();
-    for (UIElement* child : mountChildren) {
-        if (child && child->isAttached()) {
-            _tree->detach(*child);
-        }
-    }
-    for (const auto& mp : _contentExplorer->getMountPoints()) {
-        ui::build(*_tree,
-                  *_contentMountList,
-                  contentRow("ContentMount_" + mp.name,
-                                 mp.name,
-                                 mp.name,
-                                 [this](const std::string& itemId) { selectContentMount(itemId); },
-                                 [this](const std::string& itemId) { selectContentMount(itemId); })
-                          .setSelected(active != nullptr && active->name == mp.name),
-                  ui::boxSlot().preferredSize({0.0f, 22.0f}));
-    }
-
-    // Entry rows.
-    auto entryChildren = _contentEntryList->getChildrenInPaintOrder();
-    for (UIElement* child : entryChildren) {
-        if (child && child->isAttached()) {
-            _tree->detach(*child);
-        }
-    }
     std::vector<FileExplorer::FEntry> entries;
     _contentExplorer->collectEntries(entries);
-    for (const auto& entry : entries) {
-        const std::filesystem::path path = entry.path;
-        const bool                  bDir = entry.bIsDirectory;
-        ui::build(*_tree,
-                  *_contentEntryList,
-                  contentRow("ContentEntry_" + entry.name,
-                                 bDir ? entry.name + "/" : entry.name,
-                                 entry.name,
-                                 [](const std::string&) {},
-                                 [this, path, bDir](const std::string&) { activateContentItem(path, bDir); }),
-                  ui::boxSlot().preferredSize({0.0f, 22.0f}));
+
+    if (!_contentMountReconciler) {
+        _contentMountReconciler = std::make_unique<UIKeyedChildReconciler>(
+            *_tree, *_contentMountList, makeContentRowFactory());
     }
+    if (!_contentEntryReconciler) {
+        _contentEntryReconciler = std::make_unique<UIKeyedChildReconciler>(
+            *_tree, *_contentEntryRows, makeContentRowFactory());
+    }
+
+    std::vector<std::string> mountKeys;
+    mountKeys.reserve(_contentExplorer->getMountPoints().size());
+    for (const auto& mp : _contentExplorer->getMountPoints()) {
+        mountKeys.push_back("ContentMount_" + mp.name);
+    }
+    _contentMountReconciler->reconcile(
+        mountKeys,
+        [this, active](UIElement& child, const std::string&, size_t index) {
+            const auto& mp = _contentExplorer->getMountPoints()[index];
+            updateContentRow(child,
+                             mp.name,
+                             mp.name,
+                             active != nullptr && active->name == mp.name,
+                             [this](const std::string& itemId) { selectContentMount(itemId); },
+                             [this](const std::string& itemId) { selectContentMount(itemId); });
+        },
+        bindEditorListRowSlot);
+
+    std::vector<std::string> entryKeys;
+    entryKeys.reserve(entries.size());
+    for (const auto& entry : entries) {
+        entryKeys.push_back("ContentEntry_" + entry.name);
+    }
+    const FKeyedVisibleWindow window = computeKeyedVisibleWindow(entryKeys.size(),
+                                                                kEditorListRowHeight,
+                                                                kEditorListRowSpacing,
+                                                                _contentEntryViewportHeight,
+                                                                _contentEntryScrollOffset,
+                                                                kEditorListOverscan);
+    if (_contentEntryLeading) {
+        _contentEntryLeading->setHeightOverride(window.leadingExtent);
+    }
+    if (_contentEntryTrailing) {
+        _contentEntryTrailing->setHeightOverride(window.trailingExtent);
+    }
+    const std::vector<std::string> visibleKeys = sliceKeyedVisibleWindow(entryKeys, window);
+    _contentEntryReconciler->reconcile(
+        visibleKeys,
+        [this, &entries, window](UIElement& child, const std::string&, size_t index) {
+            const size_t itemIndex = window.first + index;
+            const auto& entry = entries[itemIndex];
+            const std::filesystem::path path = entry.path;
+            const bool bDir = entry.bIsDirectory;
+            updateContentRow(child,
+                             bDir ? entry.name + "/" : entry.name,
+                             entry.name,
+                             false,
+                             [](const std::string&) {},
+                             [this, path, bDir](const std::string&) { activateContentItem(path, bDir); });
+        },
+        bindEditorListRowSlot);
 
     if (_contentPathText) {
         std::string pathText = _contentExplorer->getCurrentDirectory().string();
@@ -938,6 +1049,8 @@ void EditorSurface::openSceneSaveDialog()
 
     _sceneSaveMountList = ui::column("SceneSaveMounts").setSpacing(2.0f).share();
     _sceneSaveEntryList = ui::column("SceneSaveEntries").setSpacing(2.0f).share();
+    _sceneSaveMountReconciler.reset();
+    _sceneSaveEntryReconciler.reset();
 
     _sceneSaveSaveButton = labeledButton("SceneSaveConfirm", "Save")
                                .setOnClick([this]() { confirmSceneSaveDialog(); })
@@ -1015,6 +1128,8 @@ void EditorSurface::clearSceneSaveDialog()
     _sceneSaveSaveButton.reset();
     _sceneSaveMountList.reset();
     _sceneSaveEntryList.reset();
+    _sceneSaveMountReconciler.reset();
+    _sceneSaveEntryReconciler.reset();
     _sceneSaveFingerprint.clear();
     _bSceneSaveRowsDirty = true;
 }
@@ -1100,48 +1215,59 @@ void EditorSurface::rebuildSceneSaveRows()
 
     const FileExplorer::MountPoint* active = _sceneSaveExplorer->getActiveMountPoint();
     const std::filesystem::path selectedPath = _sceneSaveExplorer->getSelectedPath();
-
-    for (UIElement* child : _sceneSaveMountList->getChildrenInPaintOrder()) {
-        if (child && child->isAttached()) {
-            _tree->detach(*child);
-        }
-    }
-    for (const auto& mp : _sceneSaveExplorer->getMountPoints()) {
-        ui::build(*_tree,
-                  *_sceneSaveMountList,
-                  contentRow("SceneSaveMount_" + mp.name,
-                                 mp.name,
-                                 mp.name,
-                                 [this](const std::string& itemId) { selectSceneSaveMount(itemId); },
-                                 [this](const std::string& itemId) { selectSceneSaveMount(itemId); })
-                      .setSelected(active != nullptr && active->name == mp.name),
-                  ui::boxSlot().preferredSize({0.0f, 22.0f}));
-    }
-
-    for (UIElement* child : _sceneSaveEntryList->getChildrenInPaintOrder()) {
-        if (child && child->isAttached()) {
-            _tree->detach(*child);
-        }
-    }
     std::vector<FileExplorer::FEntry> entries;
     _sceneSaveExplorer->collectEntries(entries);
+
+    if (!_sceneSaveMountReconciler) {
+        _sceneSaveMountReconciler = std::make_unique<UIKeyedChildReconciler>(
+            *_tree, *_sceneSaveMountList, makeContentRowFactory());
+    }
+    if (!_sceneSaveEntryReconciler) {
+        _sceneSaveEntryReconciler = std::make_unique<UIKeyedChildReconciler>(
+            *_tree, *_sceneSaveEntryList, makeContentRowFactory());
+    }
+
+    std::vector<std::string> mountKeys;
+    mountKeys.reserve(_sceneSaveExplorer->getMountPoints().size());
+    for (const auto& mp : _sceneSaveExplorer->getMountPoints()) {
+        mountKeys.push_back("SceneSaveMount_" + mp.name);
+    }
+    _sceneSaveMountReconciler->reconcile(
+        mountKeys,
+        [this, active](UIElement& child, const std::string&, size_t index) {
+            const auto& mp = _sceneSaveExplorer->getMountPoints()[index];
+            updateContentRow(child,
+                             mp.name,
+                             mp.name,
+                             active != nullptr && active->name == mp.name,
+                             [this](const std::string& itemId) { selectSceneSaveMount(itemId); },
+                             [this](const std::string& itemId) { selectSceneSaveMount(itemId); });
+        },
+        bindEditorListRowSlot);
+
+    std::vector<std::string> entryKeys;
+    entryKeys.reserve(entries.size());
     for (const auto& entry : entries) {
-        const std::filesystem::path path = entry.path;
-        ui::build(*_tree,
-                  *_sceneSaveEntryList,
-                  contentRow("SceneSaveEntry_" + entry.name,
+        entryKeys.push_back("SceneSaveEntry_" + entry.name);
+    }
+    _sceneSaveEntryReconciler->reconcile(
+        entryKeys,
+        [this, &entries, &selectedPath](UIElement& child, const std::string&, size_t index) {
+            const auto& entry = entries[index];
+            const std::filesystem::path path = entry.path;
+            updateContentRow(child,
                              entry.name + "/",
                              entry.name,
+                             selectedPath == path,
                              [this, path](const std::string&) {
                                  if (_sceneSaveExplorer) {
                                      _sceneSaveExplorer->setSelectedPath(path);
                                      _bSceneSaveRowsDirty = true;
                                  }
                              },
-                             [this, path](const std::string&) { activateSceneSaveItem(path, true); })
-                      .setSelected(selectedPath == path),
-                  ui::boxSlot().preferredSize({0.0f, 22.0f}));
-    }
+                             [this, path](const std::string&) { activateSceneSaveItem(path, true); });
+        },
+        bindEditorListRowSlot);
 }
 
 void EditorSurface::selectSceneSaveMount(const std::string& itemId)

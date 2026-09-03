@@ -5,6 +5,7 @@
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Controls/TreeView.h"
+#include "GUI/Widgets/KeyedChildReconciler.h"
 
 #include "GameEditor/FileExplorer.h"
 #include "GameEditor/UI/EditorTabRegistry.h"
@@ -34,6 +35,8 @@ struct UIImage;
 struct UIMenuBar;
 struct UIPanel;
 struct UIPopupOverlay;
+struct UIScrollViewport;
+struct UISizeBox;
 struct UIText;
 struct UITheme;
 struct UITreeView;
@@ -73,7 +76,15 @@ struct EditorSurface
     std::shared_ptr<UIText>        _contentPathText;
     std::shared_ptr<UIContainer>   _contentMountList;
     std::shared_ptr<UIContainer>   _contentEntryList;
+    std::shared_ptr<UIContainer>   _contentEntryRows;
+    std::shared_ptr<UISizeBox>     _contentEntryLeading;
+    std::shared_ptr<UISizeBox>     _contentEntryTrailing;
+    std::shared_ptr<UIScrollViewport> _contentEntryScroll;
+    std::unique_ptr<UIKeyedChildReconciler> _contentMountReconciler;
+    std::unique_ptr<UIKeyedChildReconciler> _contentEntryReconciler;
     std::string                    _contentFingerprint;
+    float                          _contentEntryScrollOffset = 0.0f;
+    float                          _contentEntryViewportHeight = 0.0f;
     bool                           _bContentRowsDirty = true;
 
     std::shared_ptr<UIPopupOverlay> _sceneSaveOverlay;
@@ -85,6 +96,8 @@ struct EditorSurface
     std::shared_ptr<UIButton>       _sceneSaveSaveButton;
     std::shared_ptr<UIContainer>    _sceneSaveMountList;
     std::shared_ptr<UIContainer>    _sceneSaveEntryList;
+    std::unique_ptr<UIKeyedChildReconciler> _sceneSaveMountReconciler;
+    std::unique_ptr<UIKeyedChildReconciler> _sceneSaveEntryReconciler;
     std::string                     _sceneSaveFingerprint;
     bool                            _bSceneSaveRowsDirty = true;
 

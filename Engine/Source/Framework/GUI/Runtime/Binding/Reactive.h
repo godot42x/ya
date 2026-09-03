@@ -327,6 +327,19 @@ public:
 
     [[nodiscard]] const ReactiveListDiff& lastDiff() const { return _lastDiff; }
     [[nodiscard]] bool isKeyed() const { return static_cast<bool>(_keyOf); }
+    [[nodiscard]] Key keyAt(size_t index) const
+    {
+        if (!_keyOf || index >= _items.size()) return {};
+        return _keyOf(_items[index]);
+    }
+    [[nodiscard]] size_t indexOfKey(const Key& key) const
+    {
+        if (!_keyOf || key.empty()) return _items.size();
+        for (size_t i = 0; i < _items.size(); ++i) {
+            if (_keyOf(_items[i]) == key) return i;
+        }
+        return _items.size();
+    }
 
 private:
     [[nodiscard]] bool containsKey(const Key& key) const

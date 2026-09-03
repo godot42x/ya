@@ -13,7 +13,7 @@ UITableGrid::UITableGrid(std::string name)
     : UIElement(std::move(name), "table")
 {
     _hitFilter     = EWidgetHitFilter::Stop;
-    _selectedIndex = std::make_shared<Reactive<int>>(-1);
+    _selectedId = std::make_shared<Reactive<std::string>>(std::string{});
     _tableLayout.setOwner(*this);
     _tableLayout.setColumnCount(1);
 }
@@ -21,13 +21,15 @@ UITableGrid::UITableGrid(std::string name)
 void UITableGrid::bindData(std::shared_ptr<ReactiveList<FTableRow>> rows)
 {
     _rows = std::move(rows);
+    _observedRowsRevision = std::numeric_limits<uint64_t>::max();
     _hoveredRow = -1;
     markLayoutDirty();
 }
 
-void UITableGrid::bindSelection(std::shared_ptr<Reactive<int>> selectedIndex)
+void UITableGrid::bindSelection(std::shared_ptr<Reactive<std::string>> selectedId)
 {
-    _selectedIndex = std::move(selectedIndex);
+    _selectedId = std::move(selectedId);
+    _observedRowsRevision = std::numeric_limits<uint64_t>::max();
     markPaintDirty();
 }
 
@@ -50,6 +52,13 @@ void UITableGrid::layout(const Rect2D& parentRect)
 
 void UITableGrid::layoutAssigned(const Rect2D& rect)
 {
+    if (_rows && _rows->isKeyed() && _selectedId && _observedRowsRevision != _rows->revision()) {
+        if (!_selectedId->value().empty() && _rows->indexOfKey(_selectedId->value()) >= _rows->size()) {
+            _selectedId->set({});
+        }
+        _observedRowsRevision = _rows->revision();
+        _hoveredRow = -1;
+    }
     setLayoutRect(rect);
     // Keep the layout's column widths in sync with the visual column widths.
     _tableLayout.setColumnCount(static_cast<int>(_columnWidths.empty() ? 1 : _columnWidths.size()));
@@ -126,12 +135,19 @@ int UITableGrid::hitRowIndex(const glm::vec2& point) const
 void UITableGrid::paintSelf(UIFrameBuilder& builder)
 {
     // (Guardrail G1: the base paint template clips this widget's own rect.)
+    if (_rows && _rows->isKeyed() && _selectedId && _observedRowsRevision != _rows->revision()) {
+        if (!_selectedId->value().empty() && _rows->indexOfKey(_selectedId->value()) >= _rows->size()) {
+            _selectedId->set({});
+        }
+        _observedRowsRevision = _rows->revision();
+        _hoveredRow = -1;
+    }
     const FTableGridStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, style.backgroundFill);
 
     // Resolve the selection first so the dependency is recorded even when no
     // font is available.
-    const int selectedIndex = _selectedIndex ? _selectedIndex->get() : -1;
+    const std::string selectedId = _selectedId ? _selectedId->get() : std::string{};
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     const auto colRects = columnRects();
@@ -147,7 +163,7 @@ void UITableGrid::paintSelf(UIFrameBuilder& builder)
             .extent = {_layoutRect.extent.x, _rowHeight},
         };
 
-        if (static_cast<int>(row) == selectedIndex) {
+        if (data.id == selectedId) {
             builder.addBrush(rowRect, style.selectedFill);
         }
         else if (static_cast<int>(row) == _hoveredRow) {
@@ -204,8 +220,8 @@ bool UITableGrid::handleInputEvent(const Event& event, const WidgetEventContext&
         if (row < 0) {
             return false;
         }
-        if (_selectedIndex) {
-            _selectedIndex->set(row);
+        if (_selectedId && _rows && static_cast<size_t>(row) < _rows->size()) {
+            _selectedId->set(_rows->get(static_cast<size_t>(row)).id);
         }
         if (_onSelectionChanged) {
             _onSelectionChanged(row);

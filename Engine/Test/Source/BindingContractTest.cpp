@@ -4,18 +4,25 @@
 // older snapshot tests.
 
 #include "GUI/Binding/Reactive.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
+#include "GUI/Widgets/Controls/SizeBox.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TableGrid.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TreeView.h"
+#include "GUI/Widgets/KeyedChildReconciler.h"
+#include "GUI/Widgets/KeyedVisibleWindow.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <gtest/gtest.h>
 
+#include <string>
 #include <thread>
+#include <vector>
 
 namespace ya
 {
@@ -527,7 +534,7 @@ TEST(BindingContractTest, TableSelectionBindingCoexistsWithHoverTransientState)
     rows->push(UITableGrid::FTableRow{.id = "row-a", .cells = {"A"}});
     rows->push(UITableGrid::FTableRow{.id = "row-b", .cells = {"B"}});
 
-    auto       selected = std::make_shared<Reactive<int>>(1);
+    auto       selected = std::make_shared<Reactive<std::string>>("row-a");
     auto       table    = std::make_shared<UITableGrid>("Table");
     FCanvasSlotArgs tableSlot;
     tableSlot.offset = {20.0f, 20.0f};
@@ -538,22 +545,284 @@ TEST(BindingContractTest, TableSelectionBindingCoexistsWithHoverTransientState)
     tree.layout();
 
     tree.buildSnapshot(UIFrameBuildContext{});
-    EXPECT_EQ(table->getSelection()->value(), 1);
+    EXPECT_EQ(table->getSelection()->value(), "row-a");
 
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(60.0f, 74.0f), pointAt(60.0f, 74.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(selected->value(), 1);
+    EXPECT_EQ(selected->value(), "row-a");
 
-    selected->set(2);
+    selected->set("row-b");
     tree.buildSnapshot(UIFrameBuildContext{});
-    EXPECT_EQ(table->getSelection()->value(), 2);
+    EXPECT_EQ(table->getSelection()->value(), "row-b");
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(60.0f, 52.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(selected->value(), 1);
+    EXPECT_EQ(selected->value(), "row-a");
 
     table->clearTransientInputState();
-    EXPECT_EQ(selected->value(), 1);
+    EXPECT_EQ(selected->value(), "row-a");
+}
+
+TEST(BindingContractTest, TableSelectionFollowsKeyedRowAcrossInsertMoveAndRemove)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto rows = std::make_shared<ReactiveList<UITableGrid::FTableRow>>();
+    ASSERT_TRUE(rows->replaceKeyed({
+        {.id = "a", .cells = {"A"}},
+        {.id = "b", .cells = {"B"}},
+        {.id = "c", .cells = {"C"}},
+    }, [](const UITableGrid::FTableRow& row) { return row.id; }));
+    auto selected = std::make_shared<Reactive<std::string>>("b");
+    auto table = std::make_shared<UITableGrid>("Table");
+    table->bindData(rows);
+    table->bindSelection(selected);
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {240.0f, 120.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), table, slot).valid());
+
+    tree.buildSnapshot({});
+    ASSERT_EQ(selected->value(), "b");
+    ASSERT_TRUE(rows->insertAt(0, {.id = "x", .cells = {"X"}}));
+    tree.buildSnapshot({});
+    EXPECT_EQ(selected->value(), "b");
+
+    ASSERT_TRUE(rows->move(2, 3));
+    tree.buildSnapshot({});
+    EXPECT_EQ(selected->value(), "b");
+
+    ASSERT_TRUE(rows->removeAt(3));
+    tree.buildSnapshot({});
+    EXPECT_EQ(selected->value(), "");
+}
+
+TEST(BindingContractTest, KeyedChildReconcilerPreservesInstancesAndOrder)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto parent = std::make_shared<UIContainer>("Rows");
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {320.0f, 120.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent, slot).valid());
+
+    int factoryCalls = 0;
+    UIKeyedChildReconciler reconciler(tree, *parent,
+                                      [&factoryCalls](const std::string& key, size_t) {
+                                          ++factoryCalls;
+                                          return std::make_shared<UIText>(key);
+                                      });
+    ASSERT_TRUE(reconciler.reconcile({"a", "b", "c"}));
+    ASSERT_EQ(factoryCalls, 3);
+    const UIElementRef a = reconciler.find("a");
+    const UIElementRef c = reconciler.find("c");
+
+    ASSERT_TRUE(reconciler.reconcile({"c", "a", "d"}));
+    EXPECT_EQ(factoryCalls, 4);
+    EXPECT_EQ(reconciler.find("a").get(), a.get());
+    EXPECT_EQ(reconciler.find("c").get(), c.get());
+    EXPECT_EQ(reconciler.find("b"), nullptr);
+    ASSERT_EQ(parent->getChildren().size(), 3u);
+    EXPECT_EQ(parent->getChildren()[0].get(), c.get());
+    EXPECT_EQ(parent->getChildren()[1].get(), a.get());
+    EXPECT_EQ(parent->getChildren()[2]->_stableKey, "d");
+    EXPECT_TRUE(reconciler.reconcile({"c", "a"}));
+    EXPECT_EQ(reconciler.size(), 2u);
+    EXPECT_EQ(parent->getChildren().size(), 2u);
+}
+
+TEST(BindingContractTest, KeyedChildReconcilerUpdaterRunsOnReusedInstances)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto parent = std::make_shared<UIContainer>("Rows");
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {320.0f, 120.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent, slot).valid());
+
+    int factoryCalls = 0;
+    int updaterCalls = 0;
+    UIKeyedChildReconciler reconciler(tree, *parent,
+                                      [&factoryCalls](const std::string& key, size_t) {
+                                          ++factoryCalls;
+                                          auto text = std::make_shared<UIText>(key);
+                                          text->setText("init");
+                                          return text;
+                                      });
+
+    const auto applyLabels = [&updaterCalls](UIElement& child, const std::string& key, size_t index) {
+        ++updaterCalls;
+        auto* text = dynamic_cast<UIText*>(&child);
+        ASSERT_NE(text, nullptr);
+        text->setText(key + std::to_string(index));
+    };
+
+    ASSERT_TRUE(reconciler.reconcile({"a", "b"}, applyLabels));
+    EXPECT_EQ(factoryCalls, 2);
+    EXPECT_EQ(updaterCalls, 2);
+    auto* a = dynamic_cast<UIText*>(reconciler.find("a").get());
+    auto* b = dynamic_cast<UIText*>(reconciler.find("b").get());
+    ASSERT_NE(a, nullptr);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(a->getText(), "a0");
+    EXPECT_EQ(b->getText(), "b1");
+
+    ASSERT_TRUE(reconciler.reconcile({"b", "a"}, applyLabels));
+    EXPECT_EQ(factoryCalls, 2);
+    EXPECT_EQ(updaterCalls, 4);
+    EXPECT_EQ(reconciler.find("a").get(), a);
+    EXPECT_EQ(reconciler.find("b").get(), b);
+    EXPECT_EQ(a->getText(), "a1");
+    EXPECT_EQ(b->getText(), "b0");
+    ASSERT_EQ(parent->getChildren().size(), 2u);
+    EXPECT_EQ(parent->getChildren()[0].get(), b);
+    EXPECT_EQ(parent->getChildren()[1].get(), a);
+}
+
+TEST(BindingContractTest, KeyedChildReconcilerUpdaterRefreshesSelectableState)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto parent = std::make_shared<UIContainer>("Rows");
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {320.0f, 120.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent, slot).valid());
+
+    int factoryCalls = 0;
+    UIKeyedChildReconciler reconciler(tree, *parent,
+                                      [&factoryCalls](const std::string& key, size_t) {
+                                          ++factoryCalls;
+                                          auto row = std::make_shared<UISelectableRow>(key);
+                                          row->_itemId = key;
+                                          return row;
+                                      });
+
+    const auto applySelection = [](const std::string& selected) {
+        return [selected](UIElement& child, const std::string& key, size_t) {
+            auto* row = dynamic_cast<UISelectableRow*>(&child);
+            ASSERT_NE(row, nullptr);
+            row->setSelected(key == selected);
+        };
+    };
+
+    ASSERT_TRUE(reconciler.reconcile({"dir-a", "dir-b"}, applySelection("dir-a")));
+    EXPECT_EQ(factoryCalls, 2);
+    auto* a = dynamic_cast<UISelectableRow*>(reconciler.find("dir-a").get());
+    auto* b = dynamic_cast<UISelectableRow*>(reconciler.find("dir-b").get());
+    ASSERT_NE(a, nullptr);
+    ASSERT_NE(b, nullptr);
+    EXPECT_TRUE(a->_bSelected);
+    EXPECT_FALSE(b->_bSelected);
+
+    ASSERT_TRUE(reconciler.reconcile({"dir-a", "dir-b"}, applySelection("dir-b")));
+    EXPECT_EQ(factoryCalls, 2);
+    EXPECT_EQ(reconciler.find("dir-a").get(), a);
+    EXPECT_EQ(reconciler.find("dir-b").get(), b);
+    EXPECT_FALSE(a->_bSelected);
+    EXPECT_TRUE(b->_bSelected);
+}
+
+TEST(BindingContractTest, KeyedVisibleWindowCoversViewportAndClampsOverscan)
+{
+    const FKeyedVisibleWindow empty = computeKeyedVisibleWindow(0, 22.0f, 2.0f, 80.0f, 0.0f, 2);
+    EXPECT_TRUE(empty.empty());
+    EXPECT_FLOAT_EQ(empty.contentExtent, 0.0f);
+
+    const FKeyedVisibleWindow unlaidOut = computeKeyedVisibleWindow(10, 22.0f, 2.0f, 0.0f, 0.0f, 2);
+    EXPECT_EQ(unlaidOut.first, 0u);
+    EXPECT_EQ(unlaidOut.count, 10u);
+    EXPECT_FLOAT_EQ(unlaidOut.leadingExtent, 0.0f);
+    EXPECT_FLOAT_EQ(unlaidOut.trailingExtent, 0.0f);
+    EXPECT_FLOAT_EQ(unlaidOut.contentExtent, 10.0f * 22.0f + 9.0f * 2.0f);
+
+    const FKeyedVisibleWindow firstPage = computeKeyedVisibleWindow(10, 22.0f, 2.0f, 80.0f, 0.0f, 1);
+    EXPECT_EQ(firstPage.first, 0u);
+    EXPECT_EQ(firstPage.count, 5u);
+    EXPECT_FLOAT_EQ(firstPage.leadingExtent, 0.0f);
+    EXPECT_FLOAT_EQ(firstPage.trailingExtent, 5.0f * 24.0f);
+    EXPECT_FLOAT_EQ(firstPage.leadingExtent + (5.0f * 22.0f + 4.0f * 2.0f) + firstPage.trailingExtent,
+                    firstPage.contentExtent);
+
+    const FKeyedVisibleWindow scrolled = computeKeyedVisibleWindow(10, 22.0f, 2.0f, 80.0f, 48.0f, 1);
+    EXPECT_EQ(scrolled.first, 1u);
+    EXPECT_EQ(scrolled.count, 6u);
+    EXPECT_FLOAT_EQ(scrolled.leadingExtent, 24.0f);
+    EXPECT_EQ(scrolled.end(), 7u);
+    EXPECT_FLOAT_EQ(scrolled.trailingExtent, 3.0f * 24.0f);
+
+    const std::vector<std::string> keys{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"};
+    EXPECT_EQ(sliceKeyedVisibleWindow(keys, firstPage),
+              (std::vector<std::string>{"a", "b", "c", "d", "e"}));
+    EXPECT_EQ(sliceKeyedVisibleWindow(keys, scrolled),
+              (std::vector<std::string>{"b", "c", "d", "e", "f", "g"}));
+}
+
+TEST(BindingContractTest, KeyedVisibleWindowSpacersPreserveContentExtent)
+{
+    WidgetTree tree({.width = 320, .height = 400});
+    auto leading = std::make_shared<UISizeBox>("Leading");
+    auto rows = std::make_shared<UIContainer>("Rows");
+    auto trailing = std::make_shared<UISizeBox>("Trailing");
+    auto host = std::make_shared<UIContainer>("Host");
+    host->setDirection(EWidgetBoxLayout::Vertical);
+    host->setSpacing(0.0f);
+    rows->setDirection(EWidgetBoxLayout::Vertical);
+    rows->setSpacing(2.0f);
+
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {320.0f, 400.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, slot).valid());
+    ASSERT_TRUE(tree.attach(*host, leading).valid());
+    ASSERT_TRUE(tree.attach(*host, rows).valid());
+    ASSERT_TRUE(tree.attach(*host, trailing).valid());
+
+    int factoryCalls = 0;
+    UIKeyedChildReconciler reconciler(tree, *rows,
+                                      [&factoryCalls](const std::string& key, size_t) {
+                                          ++factoryCalls;
+                                          auto row = std::make_shared<UISizeBox>(key);
+                                          row->setHeightOverride(22.0f);
+                                          return row;
+                                      });
+    const auto bindHeight = [](UISlot& edge, const std::string&, size_t) {
+        if (auto* box = edge.as<UIBoxSlot>()) {
+            box->setPreferredSize({0.0f, 22.0f});
+        }
+    };
+
+    std::vector<std::string> keys;
+    keys.reserve(10);
+    for (int i = 0; i < 10; ++i) {
+        keys.push_back(std::to_string(i));
+    }
+
+    auto applyWindow = [&](float scrollOffset) {
+        const FKeyedVisibleWindow window =
+            computeKeyedVisibleWindow(keys.size(), 22.0f, 2.0f, 80.0f, scrollOffset, 1);
+        leading->setHeightOverride(window.leadingExtent);
+        trailing->setHeightOverride(window.trailingExtent);
+        EXPECT_TRUE(reconciler.reconcile(sliceKeyedVisibleWindow(keys, window), {}, bindHeight));
+        tree.layout();
+        EXPECT_EQ(reconciler.size(), window.count);
+        EXPECT_EQ(rows->getChildren().size(), window.count);
+        const float visibleExtent = window.count == 0
+                                        ? 0.0f
+                                        : static_cast<float>(window.count) * 22.0f +
+                                              static_cast<float>(window.count - 1) * 2.0f;
+        EXPECT_FLOAT_EQ(leading->computeDesiredSize().y, window.leadingExtent);
+        EXPECT_FLOAT_EQ(trailing->computeDesiredSize().y, window.trailingExtent);
+        EXPECT_FLOAT_EQ(rows->computeDesiredSize().y, visibleExtent);
+        EXPECT_FLOAT_EQ(host->computeDesiredSize().y, window.contentExtent);
+        return window;
+    };
+
+    const FKeyedVisibleWindow first = applyWindow(0.0f);
+    EXPECT_EQ(first.first, 0u);
+    const int firstFactoryCalls = factoryCalls;
+    EXPECT_EQ(firstFactoryCalls, static_cast<int>(first.count));
+
+    const UIElementRef kept = reconciler.find("2");
+    const FKeyedVisibleWindow scrolled = applyWindow(48.0f);
+    EXPECT_GT(scrolled.first, 0u);
+    EXPECT_LT(scrolled.count, keys.size());
+    EXPECT_EQ(reconciler.find("2").get(), kept.get());
+    EXPECT_LT(factoryCalls, static_cast<int>(keys.size()));
+    EXPECT_EQ(reconciler.find("0"), nullptr);
 }
 
 TEST(BindingContractTest, MenuBarLabelBindingSurvivesOpenMenuAndHoverRouting)

@@ -8,7 +8,10 @@
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <concepts>
+#include <algorithm>
 #include <memory>
+#include <optional>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -18,6 +21,83 @@ namespace ya::ui
 template<typename T>
 concept UIWidgetBuilder = requires(T&& builder) {
     { std::forward<T>(builder).release() } -> std::convertible_to<UIElementRef>;
+};
+
+/// A fragment is a purely authoring-time group. It never becomes a runtime
+/// widget, so it cannot introduce a second tree or reconciliation layer.
+template<typename... TItems>
+class TUIChildrenFragment
+{
+  public:
+    template<typename... TArgs>
+    explicit TUIChildrenFragment(TArgs&&... items) : _items(std::forward<TArgs>(items)...)
+    {
+    }
+
+    template<typename TParent>
+    void appendTo(TParent& parent) &&
+    {
+        std::apply([&parent](auto&&... items) { (parent.child(std::forward<decltype(items)>(items)), ...); },
+                   std::move(_items));
+    }
+
+  private:
+    std::tuple<TItems...> _items;
+};
+
+template<typename T>
+concept UIChildrenFragment = requires(T&& fragment, T& parent) {
+    std::forward<T>(fragment).appendTo(parent);
+};
+
+template<typename TItem>
+class TUIConditionalChild
+{
+  public:
+    template<typename TArg>
+    TUIConditionalChild(bool condition, TArg&& item)
+        : _condition(condition), _item(std::forward<TItem>(item))
+    {
+    }
+
+    template<typename TParent>
+    void appendTo(TParent& parent) &&
+    {
+        if (_condition) {
+            parent.child(std::move(*_item));
+        }
+    }
+
+  private:
+    bool _condition = false;
+    std::optional<TItem> _item;
+};
+
+template<typename TThen, typename TElse>
+class TUIIfElseChild
+{
+  public:
+    template<typename TThenArg, typename TElseArg>
+    TUIIfElseChild(bool condition, TThenArg&& thenItem, TElseArg&& elseItem)
+        : _condition(condition), _thenItem(std::forward<TThen>(thenItem)), _elseItem(std::forward<TElse>(elseItem))
+    {
+    }
+
+    template<typename TParent>
+    void appendTo(TParent& parent) &&
+    {
+        if (_condition) {
+            parent.child(std::move(*_thenItem));
+        }
+        else {
+            parent.child(std::move(*_elseItem));
+        }
+    }
+
+  private:
+    bool _condition = false;
+    std::optional<TThen> _thenItem;
+    std::optional<TElse> _elseItem;
 };
 
 template<typename T>
@@ -254,6 +334,20 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
         return std::move(this->derived());
     }
 
+    template<UIChildrenFragment TFragment>
+    TDerived& child(TFragment&& fragment) &
+    {
+        std::forward<TFragment>(fragment).appendTo(*this);
+        return this->derived();
+    }
+
+    template<UIChildrenFragment TFragment>
+    TDerived&& child(TFragment&& fragment) &&
+    {
+        std::forward<TFragment>(fragment).appendTo(*this);
+        return std::move(this->derived());
+    }
+
     template<UIWidgetBuilder TChild>
     TDerived& child(TChild&& builder) &
     {
@@ -336,13 +430,36 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
 
     void attachChild(UIElementRef node)
     {
+        if (!acceptChildKey(node)) {
+            return;
+        }
         this->_widget->addDetachedChild(std::move(node), [](UIElement&, UISlot&) {});
     }
 
     template<typename TSlotInit>
     void attachChild(UIElementRef node, TSlotInit&& init)
     {
+        if (!acceptChildKey(node)) {
+            return;
+        }
         this->_widget->addDetachedChild(std::move(node), std::forward<TSlotInit>(init));
+    }
+
+    bool acceptChildKey(const UIElementRef& node) const
+    {
+        if (!node || node->_stableKey.empty()) {
+            return true;
+        }
+        const auto duplicate = std::find_if(this->_widget->getChildren().begin(),
+                                             this->_widget->getChildren().end(),
+                                             [&node](const UIElementRef& child) {
+                                                 return child && child->_stableKey == node->_stableKey;
+                                             });
+        if (duplicate != this->_widget->getChildren().end()) {
+            YA_CORE_ERROR("ui builder '{}': duplicate child key '{}' rejected", this->_widget->_name, node->_stableKey);
+            return false;
+        }
+        return true;
     }
 
     /// Attach a child and apply its single-child slot intent. Parents that own

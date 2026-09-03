@@ -6,6 +6,7 @@
 #include "GUI/Widgets/UIElement.h"
 
 #include <memory>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -15,7 +16,7 @@ namespace ya
 /// Data-driven table/grid (editor grid panels: debug image grids, skybox
 /// previews, two-column settings tables). Built on the same reactive
 /// data-source contract as UITreeView: bindData(ReactiveList<FTableRow>) +
-/// bindSelection(Reactive<int> row index). Paints rows flat with header /
+/// bindSelection(Reactive<string> row id). Paints rows flat with header /
 /// selected / hover states and vector-drawn separators.
 ///
 /// Cells may hold EITHER text from the row data OR an arbitrary child
@@ -41,9 +42,9 @@ struct YA_GUI_API UITableGrid : public UIElement, public UIStyledWidget<UITableG
     /// Replace the row data source (invalidates layout: row count may change).
     void bindData(std::shared_ptr<ReactiveList<FTableRow>> rows);
 
-    // === Selection (Reactive<int>, row index; -1 = none) ===
-    void bindSelection(std::shared_ptr<Reactive<int>> selectedIndex);
-    [[nodiscard]] std::shared_ptr<Reactive<int>> getSelection() const { return _selectedIndex; }
+    // === Selection (Reactive<string>, row id; empty = none) ===
+    void bindSelection(std::shared_ptr<Reactive<std::string>> selectedId);
+    [[nodiscard]] std::shared_ptr<Reactive<std::string>> getSelection() const { return _selectedId; }
 
     // === Cell widgets (arbitrary UIElement in a cell) ===
     /// Configure the column count / row height of the cell layout.
@@ -85,7 +86,7 @@ struct YA_GUI_API UITableGrid : public UIElement, public UIStyledWidget<UITableG
     void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
-        node["control"] = {{"type", "tableGrid"}, {"selected", _selectedIndex ? _selectedIndex->value() : -1}};
+        node["control"] = {{"type", "tableGrid"}, {"selected", _selectedId ? _selectedId->value() : std::string{}}};
     }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
@@ -105,7 +106,8 @@ private:
 
     UITableLayout _tableLayout;
     std::shared_ptr<ReactiveList<FTableRow>> _rows;
-    std::shared_ptr<Reactive<int>>           _selectedIndex;
+    std::shared_ptr<Reactive<std::string>>  _selectedId;
+    uint64_t                               _observedRowsRevision = std::numeric_limits<uint64_t>::max();
     int _hoveredRow = -1;
 };
 

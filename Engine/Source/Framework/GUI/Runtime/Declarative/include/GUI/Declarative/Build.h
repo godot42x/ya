@@ -12,6 +12,40 @@
 namespace ya::ui
 {
 
+/// Group children without adding a runtime widget. The parent builder still
+/// owns and type-checks every child edge, including its SlotArgs.
+template<typename... TItems>
+[[nodiscard]] auto fragment(TItems&&... items)
+{
+    return TUIChildrenFragment<std::decay_t<TItems>...>(std::forward<TItems>(items)...);
+}
+
+/// Readable alias for a fragment used to name a local group in editor pages.
+template<typename... TItems>
+[[nodiscard]] auto group(TItems&&... items)
+{
+    return fragment(std::forward<TItems>(items)...);
+}
+
+template<UIWidgetBuilder TItem>
+[[nodiscard]] auto when(bool condition, TItem&& item)
+{
+    return TUIConditionalChild<std::decay_t<TItem>>(condition, std::forward<TItem>(item));
+}
+
+template<UIWidgetBuilder TItem>
+[[nodiscard]] auto unless(bool condition, TItem&& item)
+{
+    return when(!condition, std::forward<TItem>(item));
+}
+
+template<UIWidgetBuilder TThen, UIWidgetBuilder TElse>
+[[nodiscard]] auto ifElse(bool condition, TThen&& thenItem, TElse&& elseItem)
+{
+    return TUIIfElseChild<std::decay_t<TThen>, std::decay_t<TElse>>(
+        condition, std::forward<TThen>(thenItem), std::forward<TElse>(elseItem));
+}
+
 #define YA_UI_ANONYMOUS_FACTORY(name, builder) \
     [[nodiscard]] inline builder name() { return builder{std::string{}}; }
 

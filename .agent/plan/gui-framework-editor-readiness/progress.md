@@ -3,9 +3,9 @@
 ## 当前状态
 
 - 计划建立：2026-09-03
-- 实现改动：Phase 3F 已完成一轮闭环
-- 提交：待本轮 checkpoint 创建
-- 当前阶段：Phase 3F（ReactiveList mutation/update contract）
+- 实现改动：Phase 4B visible-range contract 已完成闭环
+- 提交：本 checkpoint 随代码一并提交
+- 当前阶段：Phase 4B（keyed visible window + Content Browser entry virtualization）
 
 ## 已确认
 
@@ -165,4 +165,104 @@
 
 - 当前已具备可复用 mutation/update contract，但还没有把 TableGrid 改造成 keyed row virtualization，也没有通用 row-instance reconciler；这些属于 Phase 4/7 的动态结构与 editor primitive 工作。
 
-下一 checkpoint：Phase 4A，补齐 DSL fragment/group/helper、conditional/switcher 的可读组合能力，并保持 typed Slot 与 direct-live 架构不变。
+Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
+
+## Phase 4A 当前 checkpoint
+
+- 新增纯 authoring-time ui::fragment(...) 与可读别名 ui::group(...)；它们只在父 builder 上展开，不创建运行时 widget，不引入 Description/Reconciler。
+- 新增构造期条件组合 ui::when(...)、ui::unless(...)、ui::ifElse(...)。条件只决定本次 live construct 是否添加 child；运行时动态结构仍必须由专用控件和 ReactiveList 管理。
+- fragment/conditional 通过父 builder 的既有 child(...) 重载展开，因此每个 child edge 继续使用 parent-specific typed SlotArgs；错误的 canvas/box slot 在编译期被拒绝。
+- 新增 editor-like 组合回归，验证 fragment flatten、条件分支和匿名节点行为；新增静态 typed-slot acceptance/rejection 断言。
+- xmake b ya-gui-closure-test && xmake r ya-gui-closure-test：340/340 通过。
+
+### Phase 4A 边界
+
+- 尚未实现运行时 retained switcher，也没有把 when 误用成每帧重建机制；动态集合继续留在列表控件内部。
+- 尚未补通用 withSlot(...) fragment item 语法；当前已有的 .child(node, typedSlot) 保持唯一布局入口，避免 DSL 再造 slot 层。
+
+下一 checkpoint：Phase 4B，基于真实 editor-like 页面审计动态结构边界，先完成 keyed row-instance reconciler / virtualization 的最小闭环，再扩展 switcher 或页面级动态组合。
+
+## Phase 4A follow-up checkpoint
+
+- DSL builder 现在拒绝同一父节点下重复的显式 sibling key；匿名节点仍允许并保持无稳定 identity。
+- 拒绝发生在 child edge 加入前，避免重复 key 进入 live WidgetTree；日志提供 parent/key 诊断。
+- 新增重复 key 回归测试；closure 全量通过：341/341。
+
+下一 checkpoint仍为 Phase 4B：keyed row-instance reconciler / virtualization 最小闭环。
+
+## Phase 4B 当前 checkpoint
+
+- UITableGrid 的 selection 在 keyed ReactiveList<FTableRow> 上改为 identity-backed：控件记录选中行 key，列表发生 insert/move/remove 后按 key 重映射 index。
+- 外部直接写入 Reactive<int> 仍被视为新的 selection intent；只有列表 revision 变化时才执行旧 key 的位置恢复，避免把旧选中对象错误替换成新位置对象。
+- 被删除的选中 key 会明确落为 -1，同时清除 hover 行 transient state；非 keyed 数据源保持原有 index selection 语义。
+- 新增跨 insert/move/remove 的真实 binding 回归；closure 全量通过：342/342。
+
+### Phase 4B 边界
+
+- 当前完成的是 keyed row selection/lifecycle 基础契约，不是 row widget instance reconciler，也不是 virtualization；TableGrid 仍按数据绘制行文本。
+- 下一步仍需先定义可复用 row factory、visible range 与 transient state ownership，再引入真正的 row instance 复用。
+
+## Phase 4B identity migration checkpoint
+
+- UITableGrid 的公开 selection API 已从 Reactive<int> row index 全量迁移为 Reactive<std::string> row id；旧 index 绑定路径已删除，不保留兼容双写。
+- keyed list 发生 insert/move/remove 时，selection 直接保持 row id；被删除的 id 归为空字符串。
+- GUIWorkbench table demo 与 BindingContractTest 已迁移到 keyed selection；回归覆盖点击、外部 selection 修改及结构变更。
+- closure targeted table tests 通过；提交前需完成全量 closure。
+
+### Identity migration 边界
+
+- TableGrid 仍是 flat paint consumer，尚未引入可复用的 row widget instance、visible-range virtualization 或 row factory。
+- 下一 checkpoint 需先定义 row instance ownership / factory / slot lifecycle，再实现真正的 keyed row reconciler；不得恢复 index selection 兼容层。
+
+## Phase 4B row-instance checkpoint
+
+- 新增 UIKeyedChildReconciler，以 parent-owned child edge 为生命周期边界：按非空唯一 key 创建、复用、移除和重排 live UIElement。
+- 同 key 的 widget 实例在 reconcile 后保持原指针与 transient state；消失 key 通过 WidgetTree::detach 清理 tree membership、focus/capture/paint cache；顺序调整使用同 parent reparent，保留原 Slot。
+- 新增 factory failure、duplicate/empty key rejection 的统一诊断入口，并要求 reconciler 运行在已挂载 parent 上，避免 detached subtree 的隐式生命周期。
+- 新增真实 closure 回归，验证三轮 reconcile 的创建次数、实例复用、移除和顺序；targeted 与全量 closure 均通过：342/342。
+
+### Row-instance checkpoint 边界
+
+- 这是通用 keyed child lifecycle 基础设施，还没有把 TreeView/TableGrid 的 flat paint 改造成 row widget factory，也没有 visible-range virtualization。
+- 下一步将把该 reconciler 接入一个真正的 editor-like list consumer；在接入前先定义 row slot initializer、可见范围和滚动 offset 的契约。
+
+## Phase 4B Content Browser consumer checkpoint
+
+- EditorSurface 的 Content Browser mount list 与 entry list 已改用 UIKeyedChildReconciler；目录刷新不再先 detach 全部 rows 再重建。
+- 同名 mount/entry 在刷新时复用原 UISelectableRow 及其 label child，只更新 item id、文案、选中态和 activate callback；消失条目通过 reconciler detach，顺序变化保留原 BoxSlot。
+- UIKeyedChildReconciler 增加 optional updater：create/reuse 之后对当前 key 顺序调用，供 consumer 刷新文案和回调而不重建实例。
+- Content Browser 的两类列表仍由 FileExplorer fingerprint 驱动，未引入每帧重建；Scene Save dialog 暂不迁移，避免把两个 consumer 混入一个 checkpoint。
+- 修正 EditorInspectorTab 中 canvas parent 错用 overlaySlot 的真实 typed DSL 错误。
+- 新增 updater 复用回归；xmake r ya-gui-closure-test 全量通过（344/344）；ya-game-editor 构建通过。
+
+### Consumer checkpoint 边界
+
+- 该 consumer 已具备 keyed child instance 复用，但滚动容器仍由 UIScrollViewport 管理，尚未实现 visible-range virtualization；当前所有目录 rows 仍保留在 live tree。
+- 下一步迁移 Scene Save rows，并随后设计真正的 row factory + visible range/scroll offset contract。
+
+## Phase 4B Scene Save consumer checkpoint
+
+- EditorSurface 的 Scene Save mount list 与 entry list 已改用同一套 UIKeyedChildReconciler + updateContentRow 协议；目录刷新和选中态变化不再先 detach 全部 rows 再重建。
+- 同 key 的 Scene Save row 在选中目录变化时复用原 UISelectableRow，只更新 selected / callback；关闭对话框会 reset reconciler，避免持有已销毁 parent。
+- Content Browser 与 Scene Save 共用 row factory 与 preferred-height slot 写入，不引入第二套 list lifecycle。
+- 新增 selectable-state updater 回归，锁定“选中对象变化不重建 row instance”。
+- xmake r ya-gui-closure-test 全量通过（345/345）；ya-game-editor 构建通过。
+
+### Scene Save checkpoint 边界
+
+- 两个 editor list consumer 都已接入 keyed instance reuse，但仍没有 visible-range virtualization；大目录仍会把全部 rows 留在 live tree。
+- 下一 checkpoint 设计 row factory + visible range / scroll offset contract，再进入真正的虚拟化；不得恢复 detach-all rebuild。
+
+## Phase 4B visible-range checkpoint
+
+- 新增 FKeyedVisibleWindow / computeKeyedVisibleWindow / sliceKeyedVisibleWindow：由 itemCount、row extent、spacing、viewport、scroll offset、overscan 计算 first/count 与 leading/trailing spacer。
+- 未布局的 viewport（extent<=0）会物化全表，避免第一帧没有内容高度；过扫描在列表两端被 clamp。
+- UIKeyedChildReconciler 增加 SlotBinder，create/reuse 后按当前 key 顺序写 parent-owned slot（Content Browser / Scene Save 的 row height 走这条路径，不再在 updater 里改 slot）。
+- Content Browser entry list 改为 leading SizeBox + keyed visible rows + trailing SizeBox；滚动 offset / viewport 变化会刷新窗口，目录切换重置 scroll。Mount list 与 Scene Save 仍全量物化。
+- 新增 window/overscan 与 spacer 保高回归；xmake r ya-gui-closure-test 全量通过（347/347）；ya-game-editor 构建通过。
+
+### Visible-range checkpoint 边界
+
+- 这是均匀行高的窗口化，不是 widget pooling：滚出窗口的 key 会 detach，滚回来走 factory 重建。
+- TableGrid / TreeView 仍是 flat paint consumer；Scene Save 与 mount list 未窗口化。
+- 下一阶段可进入 Phase 5 style/resource invalidation，或把同一窗口契约接到 TableGrid/Hierarchy。

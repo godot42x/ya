@@ -35,10 +35,12 @@
 
 ## Phase 4：DSL
 
-- [ ] fragment/group/helper。
-- [ ] conditional/switcher/repeater。
-- [ ] duplicate key diagnostics。
-- [ ] all layout examples and compile-time rejection tests。
+- [x] fragment/group/helper。
+- [x] conditional construction helpers (when / unless / ifElse); runtime switcher/repeater remains pending。
+- [x] duplicate key diagnostics。
+- [x] compile-time rejection tests for canvas/box slots; broader layout examples remain pending。
+- [x] keyed child reconciler + Content Browser / Scene Save list consumers。
+- [x] Content Browser entry visible-range window + spacer scroll extent; TableGrid/TreeView virtualization remains pending。
 
 ## Phase 5：Style / Theme
 

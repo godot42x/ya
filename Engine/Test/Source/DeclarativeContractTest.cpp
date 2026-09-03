@@ -33,6 +33,24 @@ namespace ya
 
 namespace
 {
+template<typename TParent, typename TChild, typename TSlot>
+concept AcceptsTypedChildSlot = requires(TParent&& parent, TChild&& child, TSlot&& slot) {
+    std::move(parent).child(std::move(child), std::move(slot));
+};
+
+static_assert(AcceptsTypedChildSlot<ya::ui::UIPanelWidgetBuilder,
+                                    ya::ui::UITextWidgetBuilder,
+                                    ya::ui::FCanvasSlotBuilder>);
+static_assert(!AcceptsTypedChildSlot<ya::ui::UIPanelWidgetBuilder,
+                                     ya::ui::UITextWidgetBuilder,
+                                     ya::ui::FBoxSlotBuilder>);
+static_assert(AcceptsTypedChildSlot<ya::ui::UIContainerWidgetBuilder,
+                                    ya::ui::UITextWidgetBuilder,
+                                    ya::ui::FBoxSlotBuilder>);
+static_assert(!AcceptsTypedChildSlot<ya::ui::UIContainerWidgetBuilder,
+                                     ya::ui::UITextWidgetBuilder,
+                                     ya::ui::FCanvasSlotBuilder>);
+
 struct FTestCompoundWidget final : UICompoundWidget
 {
     explicit FTestCompoundWidget(std::string name) : UICompoundWidget(std::move(name))
@@ -131,6 +149,46 @@ TEST(DeclarativeContractTest, DslNodesAreAnonymousUnlessIdentityIsRequested)
     EXPECT_EQ(root->getChildren()[1]->_name, "Title");
     EXPECT_EQ(root->getChildren()[2]->_stableKey, "panel_id");
     EXPECT_EQ(root->getChildren()[2]->_name, "panel_id");
+}
+
+TEST(DeclarativeContractTest, FragmentsAndConstructionConditionalsFlattenIntoTheParent)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    UIElement* host = tree.getLayer(WidgetTree::ELayer::Content);
+
+    auto page = ui::column()
+                    .child(ui::group(ui::text().setText("A"),
+                                     ui::when(true, ui::text().setText("B")),
+                                     ui::when(false, ui::text().setText("hidden")),
+                                     ui::ifElse(false, ui::text().setText("wrong"), ui::text().setText("C"))))
+                    .child(ui::unless(true, ui::text().setText("also_hidden")));
+    const UIElementRef root = ui::build(tree, *host, std::move(page), ui::canvasSlot().fill());
+
+    ASSERT_NE(root, nullptr);
+    ASSERT_EQ(root->getChildren().size(), 3u);
+    EXPECT_EQ(root->getChildren()[0]->_typeId, kTypeIdText);
+    EXPECT_EQ(root->getChildren()[1]->_typeId, kTypeIdText);
+    EXPECT_EQ(root->getChildren()[2]->_typeId, kTypeIdText);
+    EXPECT_EQ(static_cast<UIText*>(root->getChildren()[0].get())->getText(), "A");
+    EXPECT_EQ(static_cast<UIText*>(root->getChildren()[1].get())->getText(), "B");
+    EXPECT_EQ(static_cast<UIText*>(root->getChildren()[2].get())->getText(), "C");
+}
+
+TEST(DeclarativeContractTest, DuplicateSiblingKeysAreRejected)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    UIElement* host = tree.getLayer(WidgetTree::ELayer::Content);
+
+    auto page = ui::column("root")
+                    .child(ui::text("same").setText("first"))
+                    .child(ui::text("same").setText("duplicate"))
+                    .child(ui::text().setText("anonymous"));
+    const UIElementRef root = ui::build(tree, *host, std::move(page), ui::canvasSlot().fill());
+
+    ASSERT_NE(root, nullptr);
+    ASSERT_EQ(root->getChildren().size(), 2u);
+    EXPECT_EQ(root->getChildren()[0]->_stableKey, "same");
+    EXPECT_TRUE(root->getChildren()[1]->_stableKey.empty());
 }
 
 TEST(DeclarativeContractTest, PanelChildAndChildrenShareTheSameDefaultCanvasSlot)

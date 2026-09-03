@@ -959,7 +959,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     auto tableGrid = std::make_shared<ya::UITableGrid>("GalleryTableGrid");
     tableGrid->_columnWidths = {140.0f, 100.0f, 0.0f, 0.0f}; // last two stretch
     tableGrid->bindData(tableRows);
-    auto tableSelRef = std::make_shared<ya::Reactive<int>>(1);
+    auto tableSelRef = std::make_shared<ya::Reactive<std::string>>("r1");
     tableGrid->bindSelection(tableSelRef);
     tableGrid->_onSelectionChanged = [log](int row)
     {
