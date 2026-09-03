@@ -1,9 +1,15 @@
 #include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/UI/EditorAutoPropertySection.h"
+#include "GameEditor/UI/EditorAssetPicker.h"
+#include "Core/Common/AssetRef.h"
 #include "Core/Reflection/Reflection.h"
 #include "Scene3D/TransformComponent.h"
-#include "GUI/Binding/UndoStack.h"
+#include "Physics/PhysicsBodyComponent.h"
+#include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
+#include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Binding/UndoStack.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <gtest/gtest.h>
@@ -17,6 +23,19 @@ struct ValidationTestComponent
 
     YA_REFLECT_BEGIN(ValidationTestComponent)
     YA_REFLECT_FIELD(clamped, .manipulate(0.0f, 10.0f, 0.5f))
+    YA_REFLECT_END()
+};
+
+struct ColorTestComponent
+{
+    glm::vec3 tint{1.0f, 0.0f, 0.0f};
+    glm::vec4 albedo{0.2f, 0.4f, 0.6f, 1.0f};
+    glm::vec3 offset{1.0f, 2.0f, 3.0f};
+
+    YA_REFLECT_BEGIN(ColorTestComponent)
+    YA_REFLECT_FIELD(tint, .color())
+    YA_REFLECT_FIELD(albedo, .color())
+    YA_REFLECT_FIELD(offset)
     YA_REFLECT_END()
 };
 
@@ -197,6 +216,219 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionShowsValidationErrorState)
     value.clamped = 4.0f;
     section->sync(tree);
     EXPECT_FALSE(drag->hasError());
+
+    tree.detach(*section);
+}
+
+TEST(EditorPropertyGraphTest, EnumPropertyBindsComboAndWritesAllInstances)
+{
+    PhysicsBodyComponent first;
+    PhysicsBodyComponent second;
+    second._shape = PhysicsBodyShape::Sphere;
+    auto graph = PropertyGraph::build(type_index_v<PhysicsBodyComponent>, {&first, &second});
+    const PropertyNode* shape = graph.find("_shape");
+    ASSERT_NE(shape, nullptr);
+    EXPECT_TRUE(shape->binding.isEnum());
+    EXPECT_TRUE(shape->binding.isMixed());
+    EXPECT_TRUE(graph.hasRetainedEditors());
+
+    std::vector<std::string> labels;
+    ASSERT_TRUE(shape->binding.enumLabels(labels));
+    EXPECT_EQ(labels, (std::vector<std::string>{"Box", "Sphere"}));
+
+    ASSERT_TRUE(shape->binding.setEnumByIndex(1));
+    EXPECT_EQ(first._shape, PhysicsBodyShape::Sphere);
+    EXPECT_EQ(second._shape, PhysicsBodyShape::Sphere);
+}
+
+TEST(EditorPropertyGraphTest, AutoPropertySectionEnumShowsMixedAndUndoRestoresEach)
+{
+    PhysicsBodyComponent first;
+    PhysicsBodyComponent second;
+    second._shape = PhysicsBodyShape::Sphere;
+    auto graph = PropertyGraph::build(type_index_v<PhysicsBodyComponent>, {&first, &second});
+    UndoStack stack;
+    auto section = std::make_shared<EditorAutoPropertySection>("AutoPhysics", std::move(graph), &stack);
+    WidgetTree tree({.width = 320, .height = 200});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
+    section->sync(tree);
+
+    const UIElementRef& row = section->getChildren()[0]->getChildren()[0];
+    auto* combo = dynamic_cast<UIComboBox*>(row->getChildren()[1].get());
+    ASSERT_NE(combo, nullptr);
+    EXPECT_TRUE(combo->isMixed());
+
+    combo->select(0);
+    EXPECT_EQ(first._shape, PhysicsBodyShape::Box);
+    EXPECT_EQ(second._shape, PhysicsBodyShape::Box);
+    EXPECT_FALSE(combo->isMixed());
+
+    EXPECT_TRUE(stack.undo());
+    EXPECT_EQ(first._shape, PhysicsBodyShape::Box);
+    EXPECT_EQ(second._shape, PhysicsBodyShape::Sphere);
+
+    tree.detach(*section);
+}
+
+TEST(EditorPropertyGraphTest, ColorPropertyReadsVec3AndVec4ThroughPropertyHandle)
+{
+    ColorTestComponent value;
+    auto graph = PropertyGraph::build(type_index_v<ColorTestComponent>, {&value});
+    const PropertyNode* tint = graph.find("tint");
+    const PropertyNode* albedo = graph.find("albedo");
+    const PropertyNode* offset = graph.find("offset");
+    ASSERT_NE(tint, nullptr);
+    ASSERT_NE(albedo, nullptr);
+    ASSERT_NE(offset, nullptr);
+    EXPECT_TRUE(tint->bColor);
+    EXPECT_TRUE(albedo->bColor);
+    EXPECT_FALSE(offset->bColor);
+    EXPECT_TRUE(tint->binding.isColor());
+    EXPECT_TRUE(albedo->binding.isColor());
+
+    glm::vec4 tintColor{};
+    glm::vec4 albedoColor{};
+    ASSERT_TRUE(tint->binding.tryGetColor(tintColor));
+    ASSERT_TRUE(albedo->binding.tryGetColor(albedoColor));
+    EXPECT_EQ(tintColor, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+    EXPECT_EQ(albedoColor, glm::vec4(0.2f, 0.4f, 0.6f, 1.0f));
+
+    ASSERT_TRUE(tint->binding.setColor(glm::vec4(0.0f, 1.0f, 0.0f, 1.0f)));
+    EXPECT_EQ(value.tint, glm::vec3(0.0f, 1.0f, 0.0f));
+    EXPECT_TRUE(graph.hasRetainedEditors());
+}
+
+TEST(EditorPropertyGraphTest, AutoPropertySectionColorShowsMixedAndUndoRestoresEach)
+{
+    ColorTestComponent first;
+    ColorTestComponent second;
+    second.tint = glm::vec3(0.0f, 1.0f, 0.0f);
+    auto graph = PropertyGraph::build(type_index_v<ColorTestComponent>, {&first, &second});
+    UndoStack stack;
+    auto section = std::make_shared<EditorAutoPropertySection>("AutoColor", std::move(graph), &stack);
+    WidgetTree tree({.width = 320, .height = 200});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
+    section->sync(tree);
+
+    const UIElementRef& tintRow = section->getChildren()[0]->getChildren()[0];
+    auto* tintEdit = dynamic_cast<UIColorEdit*>(tintRow->getChildren()[1].get());
+    ASSERT_NE(tintEdit, nullptr);
+    EXPECT_TRUE(tintEdit->isMixed());
+
+    tintEdit->setColor(glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+    EXPECT_EQ(first.tint, glm::vec3(0.0f, 0.0f, 1.0f));
+    EXPECT_EQ(second.tint, glm::vec3(0.0f, 0.0f, 1.0f));
+    EXPECT_FALSE(tintEdit->isMixed());
+
+    EXPECT_TRUE(stack.undo());
+    EXPECT_EQ(first.tint, glm::vec3(1.0f, 0.0f, 0.0f));
+    EXPECT_EQ(second.tint, glm::vec3(0.0f, 1.0f, 0.0f));
+
+    tree.detach(*section);
+}
+
+struct AssetRefTestComponent
+{
+    TextureRef albedo{"Content/Textures/Albedo.png"};
+    ModelRef model{"Content/Models/Test.glb"};
+
+    YA_REFLECT_BEGIN(AssetRefTestComponent)
+    YA_REFLECT_FIELD(albedo)
+    YA_REFLECT_FIELD(model)
+    YA_REFLECT_END()
+};
+
+TEST(EditorPropertyGraphTest, AssetRefPropertyHandleReadsWritesMixedAndResolveError)
+{
+    AssetRefTestComponent first;
+    AssetRefTestComponent second;
+    second.model.setPath("Content/Models/Other.glb");
+    auto graph = PropertyGraph::build(type_index_v<AssetRefTestComponent>, {&first, &second});
+    const PropertyNode* model = graph.find("model");
+    ASSERT_NE(model, nullptr);
+    EXPECT_TRUE(model->binding.isAssetRef());
+    EXPECT_EQ(model->binding.assetRefKind(), EEditorAssetPickerKind::Model);
+    EXPECT_TRUE(model->binding.isMixed());
+    EXPECT_TRUE(graph.hasRetainedEditors());
+
+    std::string path;
+    ASSERT_TRUE(model->binding.tryGetAssetPath(path));
+    EXPECT_EQ(path, "Content/Models/Test.glb");
+    ASSERT_TRUE(model->binding.setAssetPath("Content/Models/Shared.glb"));
+    EXPECT_EQ(first.model.getPath(), "Content/Models/Shared.glb");
+    EXPECT_EQ(second.model.getPath(), "Content/Models/Shared.glb");
+
+    first.albedo._resolveState = EAssetResolveState::Failed;
+    EXPECT_TRUE(graph.find("albedo")->binding.hasAssetResolveError());
+}
+
+TEST(EditorPropertyGraphTest, AutoPropertySectionAssetPathCommitBrowseAndUndo)
+{
+    AssetRefTestComponent value;
+    auto graph = PropertyGraph::build(type_index_v<AssetRefTestComponent>, {&value});
+    UndoStack stack;
+    EEditorAssetPickerKind requestedKind = EEditorAssetPickerKind::Texture;
+    std::string requestedPath;
+    auto section = std::make_shared<EditorAutoPropertySection>(
+        "AutoAsset",
+        std::move(graph),
+        &stack,
+        std::string{},
+        [&](EEditorAssetPickerKind kind, std::string currentPath, std::function<void(std::string)> onPicked) {
+            requestedKind = kind;
+            requestedPath = currentPath;
+            onPicked("Content/Textures/Picked.png");
+        });
+    WidgetTree tree({.width = 360, .height = 220});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
+    section->sync(tree);
+
+    const UIElementRef& modelRow = section->getChildren()[0]->getChildren()[1];
+    auto* pathField = dynamic_cast<UITextField*>(modelRow->getChildren()[1].get());
+    auto* browse = dynamic_cast<UIButton*>(modelRow->getChildren()[2].get());
+    ASSERT_NE(pathField, nullptr);
+    ASSERT_NE(browse, nullptr);
+    EXPECT_EQ(pathField->getText(), "Content/Models/Test.glb");
+
+    pathField->setText("Content/Models/Typed.glb");
+    if (pathField->_onCommit) {
+        pathField->_onCommit(pathField->getText());
+    }
+    EXPECT_EQ(value.model.getPath(), "Content/Models/Typed.glb");
+
+    if (browse->_onClick) {
+        browse->_onClick();
+    }
+    EXPECT_EQ(requestedKind, EEditorAssetPickerKind::Model);
+    EXPECT_EQ(requestedPath, "Content/Models/Typed.glb");
+    EXPECT_EQ(value.model.getPath(), "Content/Textures/Picked.png");
+
+    EXPECT_TRUE(stack.undo());
+    EXPECT_EQ(value.model.getPath(), "Content/Models/Typed.glb");
+    EXPECT_TRUE(stack.undo());
+    EXPECT_EQ(value.model.getPath(), "Content/Models/Test.glb");
+
+    tree.detach(*section);
+}
+
+TEST(EditorPropertyGraphTest, AutoPropertySectionAssetShowsResolveErrorState)
+{
+    AssetRefTestComponent value;
+    value.albedo._resolveState = EAssetResolveState::Failed;
+    auto graph = PropertyGraph::build(type_index_v<AssetRefTestComponent>, {&value});
+    auto section = std::make_shared<EditorAutoPropertySection>("AutoAssetError", std::move(graph));
+    WidgetTree tree({.width = 360, .height = 220});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
+    section->sync(tree);
+
+    const UIElementRef& albedoRow = section->getChildren()[0]->getChildren()[0];
+    auto* pathField = dynamic_cast<UITextField*>(albedoRow->getChildren()[1].get());
+    ASSERT_NE(pathField, nullptr);
+    EXPECT_TRUE(pathField->hasError());
+
+    value.albedo._resolveState = EAssetResolveState::Ready;
+    section->sync(tree);
+    EXPECT_FALSE(pathField->hasError());
 
     tree.detach(*section);
 }

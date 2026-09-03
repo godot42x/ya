@@ -486,3 +486,47 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - enum/color/asset retained 编辑器属 Phase 7。
 
 下一 checkpoint：Phase 7 retained inspector primitives（enum/color/asset），或 Content Browser retained controls。
+
+## Phase 7A 当前 checkpoint
+
+- `PropertyHandle` 增加 enum 读写：`isEnum`、`enumLabels`、`tryGetEnumIndex`、`setEnumByIndex`、`copyEnum`/`restoreEnum`；`isMixed` 覆盖 enum。
+- `UIComboBox` 增加 `setSelectedIndex(..., bNotify)` 与 `setMixed`（显示 "—"）。
+- `EditorAutoPropertySection` 对 enum 字段物化 `UIComboBox`，支持多选 mixed 与 undo。
+- `PropertyGraph::hasRetainedEditors` 识别 enum 类型。
+- xmake r ya-gui-closure-test 全量通过；xmake b ya-game-editor 通过；`xmake r ya-testing --gtest_filter=EditorPropertyGraphTest.*` 11/11 通过。
+
+### Phase 7A 边界
+
+- color（`glm::vec4`/`UIColorEdit`）与 asset reference 编辑器未做。
+- Content Browser / Hierarchy virtualization 未做。
+
+下一 checkpoint：Phase 7B retained color editor，或 asset reference picker。
+
+## Phase 7B 当前 checkpoint
+
+- `PropertyNode::bColor` 从反射 `Meta::Color` 元数据写入；`PropertyHandle::isColor` + `tryGetColor`/`setColor`/`copyColor`/`restoreColor` 支持 `glm::vec3`/`glm::vec4`。
+- `UIColorEdit` 增加 `setColor(..., bNotify)` 与 `setMixed`（swatch 显示 "—"）。
+- `EditorAutoPropertySection` 对 `.color()` 字段物化 `UIColorEdit`（非 color 的 vec3 仍走 DragFloat）。
+- xmake r ya-gui-closure-test 全量通过（377/377）；xmake b ya-game-editor 通过；`xmake r ya-testing --gtest_filter=EditorPropertyGraphTest.*` 13/13 通过。
+
+### Phase 7B 边界
+
+- asset reference picker 未做。
+- color 拖动连续改色未做 undo merge。
+
+下一 checkpoint：Phase 7C asset reference picker，或 Content Browser retained controls。
+
+## Phase 7C 当前 checkpoint
+
+- `PropertyHandle::isAssetRef` + `assetRefKind` + `tryGetAssetPath`/`setAssetPath`/`copyAssetPath`/`restoreAssetPath`；`hasAssetResolveError` 读 `TextureRef`/`ModelRef`/`MeshRef` resolve state；multi-select mixed 比较 path。
+- `EditorAssetPickerCallback`（`GameEditor/UI/EditorAssetPicker.h`）把 Browse 接到现有 `FilePicker`；`EditorInspectorTab` 注入，`PropertyHandle` 不依赖 editor UI。
+- `EditorAutoPropertySection` 对 asset ref 物化 `UITextField`（path commit + undo）+ `UIButton`（Browse）；resolve failed 时 `setError`。
+- xmake r ya-gui-closure-test 全量通过（377/377）；xmake b ya-game-editor 通过；`xmake r ya-testing --gtest_filter=EditorPropertyGraphTest.*` 16/16 通过。
+
+### Phase 7C 边界
+
+- ImGui `TypeRenderer` 的 `pathWrapper` 仍是平行路径（Phase 8 删除）。
+- MeshRef Browse 复用 model picker（无独立 mesh picker）。
+- Content Browser / Hierarchy virtualization 未做。
+
+下一 checkpoint：Content Browser retained controls，或 Hierarchy virtualization。

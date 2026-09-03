@@ -562,16 +562,26 @@ Rect2D UIColorEdit::swatchRect() const
     };
 }
 
-void UIColorEdit::setColor(const glm::vec4& value)
+void UIColorEdit::setColor(const glm::vec4& value, bool bNotify)
 {
-    if (_color == value) {
+    if (_color == value && !_bMixed) {
         return;
     }
-    _color = value;
+    _color  = value;
+    _bMixed = false;
     invalidateProperty(EUIPropertyImpact::Paint);
-    if (_onColorChanged) {
+    if (bNotify && _onColorChanged) {
         _onColorChanged(_color);
     }
+}
+
+void UIColorEdit::setMixed(bool mixed)
+{
+    if (_bMixed == mixed) {
+        return;
+    }
+    _bMixed = mixed;
+    invalidateProperty(EUIPropertyImpact::Paint);
 }
 
 void UIColorEdit::adjustActiveChannel(float delta)
@@ -619,7 +629,14 @@ void UIColorEdit::paintSelf(UIFrameBuilder& builder)
 {
     const FColorEditStyle& style = resolvedStyle();
     builder.addBrush(_layoutRect, style.backgroundFill);
-    builder.addSprite(swatchRect(), _color, nullptr);
+    const glm::vec4 swatchColor = _bMixed ? glm::vec4(0.45f, 0.45f, 0.45f, 1.0f) : _color;
+    builder.addSprite(swatchRect(), swatchColor, nullptr);
+
+    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 11);
+    if (_bMixed && font) {
+        builder.addText(swatchRect(), "—", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+        return;
+    }
 
     // Channel strip: four cells, the active one highlighted.
     const float stripX = swatchRect().pos.x + _swatchSize + 8.0f;
@@ -627,7 +644,6 @@ void UIColorEdit::paintSelf(UIFrameBuilder& builder)
     const float cellH  = 12.0f;
     const float cellY  = _layoutRect.pos.y + (_layoutRect.extent.y - cellH) * 0.5f;
     static const char* kNames[4] = {"R", "G", "B", "A"};
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 11);
     for (int ch = 0; ch < 4; ++ch) {
         const Rect2D cell{
             .pos    = {stripX + static_cast<float>(ch) * (cellW + 2.0f), cellY},

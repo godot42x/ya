@@ -1,5 +1,6 @@
 #include "GameEditor/Inspector/PropertyHandle.h"
 
+#include "Core/Common/AssetRef.h"
 #include "Core/Reflection/MetadataSupport.h"
 #include "reflects-core/lib.h"
 
@@ -23,6 +24,51 @@ bool readManipulateSpec(const Property* property, reflection::Meta::ManipulateSp
         return false;
     }
 }
+
+bool isAssetRefTypeIndex(type_index_t typeIndex)
+{
+    if (const IAssetRefResolver* resolver = getAssetRefResolver()) {
+        return resolver->isAssetRefType(typeIndex);
+    }
+    return typeIndex == refl::type_index_v<TextureRef> || typeIndex == refl::type_index_v<ModelRef> ||
+           typeIndex == refl::type_index_v<MeshRef>;
+}
+
+const AssetRefBase* assetRefAddress(const void* instance, const Property* property)
+{
+    if (!instance || !property || !property->addressGetter) {
+        return nullptr;
+    }
+    const void* address = property->addressGetter(instance);
+    return address ? static_cast<const AssetRefBase*>(address) : nullptr;
+}
+
+AssetRefBase* assetRefAddressMutable(void* instance, const Property* property)
+{
+    if (!instance || !property || !property->addressGetterMutable) {
+        return nullptr;
+    }
+    void* address = property->addressGetterMutable(instance);
+    return address ? static_cast<AssetRefBase*>(address) : nullptr;
+}
+
+bool assetRefHasResolveError(const Property* property, const void* instance)
+{
+    const AssetRefBase* ref = assetRefAddress(instance, property);
+    if (!ref || !ref->hasPath()) {
+        return false;
+    }
+    if (property->typeIndex == refl::type_index_v<TextureRef>) {
+        return static_cast<const TextureRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
+    }
+    if (property->typeIndex == refl::type_index_v<ModelRef>) {
+        return static_cast<const ModelRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
+    }
+    if (property->typeIndex == refl::type_index_v<MeshRef>) {
+        return static_cast<const MeshRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
+    }
+    return false;
+}
 }
 
 PropertyHandle::PropertyHandle(type_index_t ownerType, std::vector<void*> instances, const Property* property, Vec3Setter setter)
@@ -41,6 +87,49 @@ bool PropertyHandle::isEditable() const
            !_property->metadata.hasFlag(FieldFlags::EditReadOnly);
 }
 
+bool PropertyHandle::isEnum() const
+{
+    return isValid() && EnumRegistry::instance().getEnum(_property->typeIndex) != nullptr;
+}
+
+bool PropertyHandle::isColor() const
+{
+    if (!isValid()) {
+        return false;
+    }
+    if (!_property->metadata.hasMeta(reflection::Meta::Color)) {
+        return false;
+    }
+    try {
+        return _property->metadata.get<bool>(reflection::Meta::Color);
+    }
+    catch (...) {
+        return false;
+    }
+}
+
+bool PropertyHandle::isAssetRef() const
+{
+    return isValid() && isAssetRefTypeIndex(_property->typeIndex);
+}
+
+std::optional<EEditorAssetPickerKind> PropertyHandle::assetRefKind() const
+{
+    if (!isAssetRef()) {
+        return std::nullopt;
+    }
+    if (_property->typeIndex == refl::type_index_v<TextureRef>) {
+        return EEditorAssetPickerKind::Texture;
+    }
+    if (_property->typeIndex == refl::type_index_v<ModelRef>) {
+        return EEditorAssetPickerKind::Model;
+    }
+    if (_property->typeIndex == refl::type_index_v<MeshRef>) {
+        return EEditorAssetPickerKind::Mesh;
+    }
+    return std::nullopt;
+}
+
 bool PropertyHandle::isMixed() const
 {
     if (!isValid() || _instances.size() < 2 || !_property->addressGetter) {
@@ -48,14 +137,29 @@ bool PropertyHandle::isMixed() const
     }
     const void* first = _property->addressGetter(_instances.front());
     if (!first) return false;
+    if (const Enum* enumInfo = EnumRegistry::instance().getEnum(_property->typeIndex)) {
+        const int64_t firstValue = enumInfo->getValue(const_cast<void*>(first));
+        return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* instance) {
+            const void* address = _property->addressGetter(instance);
+            return !address || enumInfo->getValue(const_cast<void*>(address)) != firstValue;
+        });
+    }
     auto differs = [this, first](void* instance, auto equals) {
         const void* value = _property->addressGetter(instance);
         return !value || !equals(first, value);
     };
     if (_property->typeIndex == refl::type_index_v<glm::vec3>) return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* i) { return differs(i, [](const void* a, const void* b) { return *static_cast<const glm::vec3*>(a) == *static_cast<const glm::vec3*>(b); }); });
+    if (_property->typeIndex == refl::type_index_v<glm::vec4>) return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* i) { return differs(i, [](const void* a, const void* b) { return *static_cast<const glm::vec4*>(a) == *static_cast<const glm::vec4*>(b); }); });
     if (_property->typeIndex == refl::type_index_v<float>) return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* i) { return differs(i, [](const void* a, const void* b) { return *static_cast<const float*>(a) == *static_cast<const float*>(b); }); });
     if (_property->typeIndex == refl::type_index_v<bool>) return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* i) { return differs(i, [](const void* a, const void* b) { return *static_cast<const bool*>(a) == *static_cast<const bool*>(b); }); });
     if (_property->typeIndex == refl::type_index_v<std::string>) return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* i) { return differs(i, [](const void* a, const void* b) { return *static_cast<const std::string*>(a) == *static_cast<const std::string*>(b); }); });
+    if (isAssetRefTypeIndex(_property->typeIndex)) {
+        return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* instance) {
+            const AssetRefBase* firstRef = assetRefAddress(_instances.front(), _property);
+            const AssetRefBase* ref      = assetRefAddress(instance, _property);
+            return !firstRef || !ref || firstRef->getPath() != ref->getPath();
+        });
+    }
     return false;
 }
 
@@ -339,6 +443,294 @@ bool PropertyHandle::restoreString(const std::vector<std::string>& values) const
         changed = true;
     }
     return changed;
+}
+
+bool PropertyHandle::tryGetEnumIndex(int& index) const
+{
+    index = -1;
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(_property ? _property->typeIndex : 0);
+    if (!isValid() || !enumInfo || !_property->addressGetter) {
+        return false;
+    }
+    const void* address = _property->addressGetter(_instances.front());
+    if (!address) {
+        return false;
+    }
+    const int64_t value = enumInfo->getValue(const_cast<void*>(address));
+    for (size_t i = 0; i < enumInfo->values.size(); ++i) {
+        if (enumInfo->values[i].value == value) {
+            index = static_cast<int>(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool PropertyHandle::enumLabels(std::vector<std::string>& labels) const
+{
+    labels.clear();
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(_property ? _property->typeIndex : 0);
+    if (!enumInfo) {
+        return false;
+    }
+    labels.reserve(enumInfo->values.size());
+    for (const EnumValue& entry : enumInfo->values) {
+        labels.push_back(entry.name);
+    }
+    return true;
+}
+
+bool PropertyHandle::setEnumByIndex(int index) const
+{
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(_property ? _property->typeIndex : 0);
+    if (!isEditable() || !enumInfo || index < 0 || index >= static_cast<int>(enumInfo->values.size())) {
+        return false;
+    }
+    const int64_t value = enumInfo->values[static_cast<size_t>(index)].value;
+    bool changed = false;
+    for (void* instance : _instances) {
+        void* address = _property->addressGetterMutable(instance);
+        if (!address) {
+            continue;
+        }
+        if (enumInfo->getValue(address) == value) {
+            continue;
+        }
+        enumInfo->setValue(address, value);
+        changed = true;
+    }
+    return changed;
+}
+
+std::vector<int64_t> PropertyHandle::copyEnum() const
+{
+    std::vector<int64_t> values;
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(_property ? _property->typeIndex : 0);
+    if (!isValid() || !enumInfo || !_property->addressGetter) {
+        return values;
+    }
+    values.reserve(_instances.size());
+    for (void* instance : _instances) {
+        const void* address = _property->addressGetter(instance);
+        if (!address) {
+            return {};
+        }
+        values.push_back(enumInfo->getValue(const_cast<void*>(address)));
+    }
+    return values;
+}
+
+bool PropertyHandle::restoreEnum(const std::vector<int64_t>& values) const
+{
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(_property ? _property->typeIndex : 0);
+    if (!isEditable() || !enumInfo || values.size() != _instances.size()) {
+        return false;
+    }
+    bool changed = false;
+    for (size_t i = 0; i < _instances.size(); ++i) {
+        void* address = _property->addressGetterMutable(_instances[i]);
+        if (!address) {
+            continue;
+        }
+        if (enumInfo->getValue(address) == values[i]) {
+            continue;
+        }
+        enumInfo->setValue(address, values[i]);
+        changed = true;
+    }
+    return changed;
+}
+
+bool PropertyHandle::tryGetColor(glm::vec4& value) const
+{
+    if (!isValid() || !isColor() || !_property->addressGetter) {
+        return false;
+    }
+    const void* address = _property->addressGetter(_instances.front());
+    if (!address) {
+        return false;
+    }
+    if (_property->typeIndex == refl::type_index_v<glm::vec4>) {
+        value = *static_cast<const glm::vec4*>(address);
+        return true;
+    }
+    if (_property->typeIndex == refl::type_index_v<glm::vec3>) {
+        const glm::vec3& rgb = *static_cast<const glm::vec3*>(address);
+        value                = glm::vec4(rgb, 1.0f);
+        return true;
+    }
+    return false;
+}
+
+bool PropertyHandle::setColor(const glm::vec4& value) const
+{
+    if (!isEditable() || !isColor()) {
+        return false;
+    }
+    bool changed = false;
+    for (void* instance : _instances) {
+        void* address = _property->addressGetterMutable(instance);
+        if (!address) {
+            continue;
+        }
+        if (_property->typeIndex == refl::type_index_v<glm::vec4>) {
+            auto& current = *static_cast<glm::vec4*>(address);
+            if (current == value) {
+                continue;
+            }
+            current = value;
+            changed = true;
+        }
+        else if (_property->typeIndex == refl::type_index_v<glm::vec3>) {
+            const glm::vec3 next(value);
+            auto& current = *static_cast<glm::vec3*>(address);
+            if (current == next) {
+                continue;
+            }
+            current = next;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+std::vector<glm::vec4> PropertyHandle::copyColor() const
+{
+    std::vector<glm::vec4> values;
+    if (!isValid() || !isColor() || !_property->addressGetter) {
+        return values;
+    }
+    values.reserve(_instances.size());
+    for (void* instance : _instances) {
+        glm::vec4 value{};
+        const void* address = _property->addressGetter(instance);
+        if (!address) {
+            return {};
+        }
+        if (_property->typeIndex == refl::type_index_v<glm::vec4>) {
+            value = *static_cast<const glm::vec4*>(address);
+        }
+        else if (_property->typeIndex == refl::type_index_v<glm::vec3>) {
+            value = glm::vec4(*static_cast<const glm::vec3*>(address), 1.0f);
+        }
+        else {
+            return {};
+        }
+        values.push_back(value);
+    }
+    return values;
+}
+
+bool PropertyHandle::restoreColor(const std::vector<glm::vec4>& values) const
+{
+    if (!isEditable() || !isColor() || values.size() != _instances.size()) {
+        return false;
+    }
+    bool changed = false;
+    for (size_t i = 0; i < _instances.size(); ++i) {
+        void* address = _property->addressGetterMutable(_instances[i]);
+        if (!address) {
+            continue;
+        }
+        if (_property->typeIndex == refl::type_index_v<glm::vec4>) {
+            auto& current = *static_cast<glm::vec4*>(address);
+            if (current == values[i]) {
+                continue;
+            }
+            current = values[i];
+            changed = true;
+        }
+        else if (_property->typeIndex == refl::type_index_v<glm::vec3>) {
+            const glm::vec3 next(values[i]);
+            auto& current = *static_cast<glm::vec3*>(address);
+            if (current == next) {
+                continue;
+            }
+            current = next;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+bool PropertyHandle::tryGetAssetPath(std::string& value) const
+{
+    if (!isAssetRef()) {
+        return false;
+    }
+    const AssetRefBase* ref = assetRefAddress(_instances.front(), _property);
+    if (!ref) {
+        return false;
+    }
+    value = ref->getPath();
+    return true;
+}
+
+bool PropertyHandle::setAssetPath(const std::string& value) const
+{
+    if (!isEditable() || !isAssetRef()) {
+        return false;
+    }
+    bool changed = false;
+    for (void* instance : _instances) {
+        AssetRefBase* ref = assetRefAddressMutable(instance, _property);
+        if (!ref) {
+            continue;
+        }
+        if (ref->getPath() == value) {
+            continue;
+        }
+        ref->setPath(value);
+        changed = true;
+    }
+    return changed;
+}
+
+std::vector<std::string> PropertyHandle::copyAssetPath() const
+{
+    std::vector<std::string> values;
+    if (!isAssetRef()) {
+        return values;
+    }
+    values.reserve(_instances.size());
+    for (void* instance : _instances) {
+        const AssetRefBase* ref = assetRefAddress(instance, _property);
+        if (!ref) {
+            return {};
+        }
+        values.push_back(ref->getPath());
+    }
+    return values;
+}
+
+bool PropertyHandle::restoreAssetPath(const std::vector<std::string>& values) const
+{
+    if (!isEditable() || !isAssetRef() || values.size() != _instances.size()) {
+        return false;
+    }
+    bool changed = false;
+    for (size_t i = 0; i < _instances.size(); ++i) {
+        AssetRefBase* ref = assetRefAddressMutable(_instances[i], _property);
+        if (!ref) {
+            continue;
+        }
+        if (ref->getPath() == values[i]) {
+            continue;
+        }
+        ref->setPath(values[i]);
+        changed = true;
+    }
+    return changed;
+}
+
+bool PropertyHandle::hasAssetResolveError() const
+{
+    if (!isAssetRef()) {
+        return false;
+    }
+    return std::any_of(_instances.begin(), _instances.end(), [&](void* instance) {
+        return assetRefHasResolveError(_property, instance);
+    });
 }
 
 std::string PropertyHandle::validationError() const

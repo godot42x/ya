@@ -4,6 +4,8 @@
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
+#include "GUI/Widgets/Controls/ComboBox.h"
+#include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -31,11 +33,13 @@ void applyManipulateSpec(UIDragFloat& drag, const PropertyHandle& binding)
 EditorAutoPropertySection::EditorAutoPropertySection(std::string name,
                                                      PropertyGraph graph,
                                                      UndoStack* undo,
-                                                     std::string mergeIdentity)
+                                                     std::string mergeIdentity,
+                                                     EditorAssetPickerCallback assetPicker)
     : UICompoundWidget(std::move(name), "panel")
     , _graph(std::move(graph))
     , _undo(undo)
     , _mergeIdentity(std::move(mergeIdentity))
+    , _assetPicker(std::move(assetPicker))
 {
 }
 
@@ -57,6 +61,27 @@ void EditorAutoPropertySection::bindDragMerge(UIDragFloat& drag)
     drag._onDragEnded = [this]() { _undo->endMerge(); };
 }
 
+void EditorAutoPropertySection::commitAssetPath(size_t editorIndex, const std::string& value)
+{
+    PropertyHandle binding = _editors[editorIndex].node->binding;
+    auto before = binding.copyAssetPath();
+    if (before.empty()) {
+        return;
+    }
+    if (!binding.setAssetPath(value)) {
+        return;
+    }
+    if (!_undo) {
+        return;
+    }
+    auto after = binding.copyAssetPath();
+    (void)_undo->push({
+        .label = "Set " + _editors[editorIndex].node->displayName,
+        .undo  = [binding, before]() { binding.restoreAssetPath(before); },
+        .redo  = [binding, after]() { binding.restoreAssetPath(after); },
+    });
+}
+
 void EditorAutoPropertySection::construct()
 {
     auto rows = ui::column("AutoPropertyRows").setSpacing(4.0f);
@@ -68,7 +93,27 @@ void EditorAutoPropertySection::construct()
 
         EditorSlot slot;
         slot.node = &node;
-        if (node.valueType == refl::type_index_v<glm::vec3>) {
+        if (node.bColor && node.binding.isColor() &&
+            (node.valueType == refl::type_index_v<glm::vec3> || node.valueType == refl::type_index_v<glm::vec4>)) {
+            slot.kind = EditorSlot::Kind::Color;
+            slot.color = std::make_shared<UIColorEdit>(node.name);
+            slot.color->_onColorChanged = [this, index = _editors.size()](const glm::vec4& value) {
+                PropertyHandle binding = _editors[index].node->binding;
+                auto before = binding.copyColor();
+                if (before.empty()) return;
+                if (!binding.setColor(value)) return;
+                if (!_undo) return;
+                auto after = binding.copyColor();
+                (void)_undo->push({
+                    .label = "Set " + _editors[index].node->displayName,
+                    .undo  = [binding, before]() { binding.restoreColor(before); },
+                    .redo  = [binding, after]() { binding.restoreColor(after); },
+                });
+            };
+            row.child(slot.color, FBoxSlotArgs{.preferredSize = {180.0f, 28.0f}});
+            if (!node.bEditable) slot.color->setEnabled(false);
+        }
+        else if (node.valueType == refl::type_index_v<glm::vec3>) {
             slot.kind = EditorSlot::Kind::Vec3;
             for (int axis = 0; axis < 3; ++axis) {
                 auto drag = std::make_shared<UIDragFloat>(node.name + std::to_string(axis));
@@ -157,6 +202,59 @@ void EditorAutoPropertySection::construct()
             row.child(slot.string, FBoxSlotArgs{.preferredSize = {160.0f, 22.0f}});
             if (!node.bEditable) slot.string->setEnabled(false);
         }
+        else if (node.binding.isEnum()) {
+            slot.kind = EditorSlot::Kind::Enum;
+            slot.enumeration = std::make_shared<UIComboBox>(node.name);
+            (void)node.binding.enumLabels(slot.enumeration->_items);
+            slot.enumeration->_onSelectionChanged = [this, index = _editors.size()](int selected) {
+                PropertyHandle binding = _editors[index].node->binding;
+                auto before = binding.copyEnum();
+                if (before.empty()) return;
+                if (!binding.setEnumByIndex(selected)) return;
+                if (!_undo) return;
+                auto after = binding.copyEnum();
+                (void)_undo->push({
+                    .label = "Set " + _editors[index].node->displayName,
+                    .undo  = [binding, before]() { binding.restoreEnum(before); },
+                    .redo  = [binding, after]() { binding.restoreEnum(after); },
+                });
+            };
+            row.child(slot.enumeration, FBoxSlotArgs{.preferredSize = {160.0f, 22.0f}});
+            if (!node.bEditable) slot.enumeration->setEnabled(false);
+        }
+        else if (node.binding.isAssetRef()) {
+            slot.kind = EditorSlot::Kind::Asset;
+            slot.assetPath = std::make_shared<UITextField>(node.name + "_Path");
+            slot.assetPath->_onCommit = [this, index = _editors.size()](const std::string& value) {
+                commitAssetPath(index, value);
+            };
+            slot.browse = ui::button(node.name + "_Browse", "Browse")
+                              .setOnClick([this, index = _editors.size()]() {
+                                  if (!_assetPicker) {
+                                      return;
+                                  }
+                                  const PropertyHandle binding = _editors[index].node->binding;
+                                  const std::optional<EEditorAssetPickerKind> kind = binding.assetRefKind();
+                                  if (!kind) {
+                                      return;
+                                  }
+                                  std::string current;
+                                  if (!binding.tryGetAssetPath(current)) {
+                                      return;
+                                  }
+                                  _assetPicker(*kind, current, [this, index](std::string path) {
+                                      commitAssetPath(index, std::move(path));
+                                  });
+                              })
+                              .child(ui::text(node.name + "_BrowseLabel").setText("Browse"))
+                              .share();
+            row.child(slot.assetPath, FBoxSlotArgs{.preferredSize = {140.0f, 22.0f}});
+            row.child(slot.browse, FBoxSlotArgs{.preferredSize = {56.0f, 22.0f}});
+            if (!node.bEditable) {
+                slot.assetPath->setEnabled(false);
+                slot.browse->setEnabled(false);
+            }
+        }
         else {
             continue;
         }
@@ -204,6 +302,43 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
             if (slot.node->binding.isMixed()) continue;
             if (slot.node->binding.tryGetBool(value) && slot.boolean.get() != focused) slot.boolean->setChecked(value);
         }
+        else if (slot.kind == EditorSlot::Kind::Enum) {
+            if (slot.enumeration.get() == focused) continue;
+            if (slot.node->binding.isMixed()) {
+                slot.enumeration->setMixed(true);
+            }
+            else {
+                int enumIndex = -1;
+                slot.enumeration->setMixed(false);
+                if (slot.node->binding.tryGetEnumIndex(enumIndex)) {
+                    slot.enumeration->setSelectedIndex(enumIndex, false);
+                }
+            }
+        }
+        else if (slot.kind == EditorSlot::Kind::Color) {
+            if (slot.color.get() == focused) continue;
+            if (slot.node->binding.isMixed()) {
+                slot.color->setMixed(true);
+            }
+            else {
+                glm::vec4 value{};
+                slot.color->setMixed(false);
+                if (slot.node->binding.tryGetColor(value)) {
+                    slot.color->setColor(value, false);
+                }
+            }
+        }
+        else if (slot.kind == EditorSlot::Kind::Asset) {
+            if (slot.node->binding.isMixed()) continue;
+            if (slot.assetPath.get() != focused) {
+                const bool hasError = hasValidationError || slot.node->binding.hasAssetResolveError();
+                slot.assetPath->setError(hasError);
+            }
+            std::string value;
+            if (slot.node->binding.tryGetAssetPath(value) && slot.assetPath.get() != focused) {
+                slot.assetPath->setText(value);
+            }
+        }
         else {
             std::string value;
             if (slot.node->binding.isMixed()) continue;
@@ -218,7 +353,11 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
 bool EditorAutoPropertySection::wantsTextInput(WidgetTree& tree) const
 {
     UIElement* focused = tree.getFocused();
-    for (const EditorSlot& slot : _editors) if (slot.string.get() == focused || slot.scalar.get() == focused) return true;
+    for (const EditorSlot& slot : _editors) {
+        if (slot.string.get() == focused || slot.scalar.get() == focused || slot.assetPath.get() == focused) {
+            return true;
+        }
+    }
     return false;
 }
 

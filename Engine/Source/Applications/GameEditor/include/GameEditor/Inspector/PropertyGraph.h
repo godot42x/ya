@@ -18,6 +18,7 @@ struct PropertyNode
     bool bEditable = false;
     bool bVisible = true;
     bool bInstanceEditable = false;
+    bool bColor = false;
     PropertyHandle binding;
 };
 

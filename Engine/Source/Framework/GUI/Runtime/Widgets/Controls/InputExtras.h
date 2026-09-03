@@ -242,12 +242,15 @@ struct YA_GUI_API UIColorEdit : public UIElement, public UIStyledWidget<UIColorE
 
     std::function<void(const glm::vec4& color)> _onColorChanged;
 
-    void setColor(const glm::vec4& value);
+    void setColor(const glm::vec4& value, bool bNotify = true);
+    void setMixed(bool mixed);
+    [[nodiscard]] bool isMixed() const { return _bMixed; }
 
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
         node["control"] = {{"type", "colorEdit"},
                                {"color", {_color.r, _color.g, _color.b, _color.a}},
+                               {"mixed", _bMixed},
                                {"activeChannel", _activeChannel}};
     }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
@@ -264,6 +267,7 @@ struct YA_GUI_API UIColorEdit : public UIElement, public UIStyledWidget<UIColorE
     void closePalette();
     VisualFlag _bDragging{*this};
     glm::vec2  _dragStart{0.0f, 0.0f};
+    bool       _bMixed = false;
     std::shared_ptr<struct UIPopupOverlay> _paletteOverlay;
 };
 

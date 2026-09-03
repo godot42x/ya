@@ -1,5 +1,6 @@
 #include "GameEditor/UI/EditorInspectorTab.h"
 #include "GameEditor/UI/EditorAutoPropertySection.h"
+#include "GameEditor/UI/EditorAssetPicker.h"
 
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
@@ -100,6 +101,24 @@ std::string projectedFingerprint(const std::vector<Entity*>& entities)
         fingerprint += name;
     }
     return fingerprint;
+}
+
+EditorAssetPickerCallback makeAssetPicker(EditorLayer* layer)
+{
+    return [layer](EEditorAssetPickerKind kind, std::string currentPath, std::function<void(std::string)> onPicked) {
+        if (!layer) {
+            return;
+        }
+        switch (kind) {
+        case EEditorAssetPickerKind::Texture:
+            layer->_filePicker.openTexturePicker(currentPath, std::move(onPicked));
+            break;
+        case EEditorAssetPickerKind::Model:
+        case EEditorAssetPickerKind::Mesh:
+            layer->_filePicker.openModelPicker(currentPath, std::move(onPicked));
+            break;
+        }
+    };
 }
 
 } // namespace
@@ -222,7 +241,8 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
             "InspectorProps_" + entry.name,
             std::move(graph),
             _undo,
-            identity.empty() ? entry.name : identity + ":" + entry.name);
+            identity.empty() ? entry.name : identity + ":" + entry.name,
+            makeAssetPicker(_layer));
         if (!tree.attach(*_projectedHost, title).valid()) {
             continue;
         }

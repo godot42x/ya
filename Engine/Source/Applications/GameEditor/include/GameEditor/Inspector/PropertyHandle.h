@@ -4,7 +4,11 @@
 
 #include "Core/Reflection/MetadataSupport.h"
 
+#include "GameEditor/UI/EditorAssetPicker.h"
+
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -28,6 +32,10 @@ class PropertyHandle final
 
     [[nodiscard]] bool isValid() const;
     [[nodiscard]] bool isEditable() const;
+    [[nodiscard]] bool isEnum() const;
+    [[nodiscard]] bool isColor() const;
+    [[nodiscard]] bool isAssetRef() const;
+    [[nodiscard]] std::optional<EEditorAssetPickerKind> assetRefKind() const;
     [[nodiscard]] bool isMixed() const;
     [[nodiscard]] bool isMixedVec3Axis(int axis) const;
     [[nodiscard]] const std::string& getName() const;
@@ -50,6 +58,23 @@ class PropertyHandle final
     bool setString(const std::string& value) const;
     [[nodiscard]] std::vector<std::string> copyString() const;
     bool restoreString(const std::vector<std::string>& values) const;
+
+    [[nodiscard]] bool tryGetEnumIndex(int& index) const;
+    [[nodiscard]] bool enumLabels(std::vector<std::string>& labels) const;
+    bool setEnumByIndex(int index) const;
+    [[nodiscard]] std::vector<int64_t> copyEnum() const;
+    bool restoreEnum(const std::vector<int64_t>& values) const;
+
+    [[nodiscard]] bool tryGetColor(glm::vec4& value) const;
+    bool setColor(const glm::vec4& value) const;
+    [[nodiscard]] std::vector<glm::vec4> copyColor() const;
+    bool restoreColor(const std::vector<glm::vec4>& values) const;
+
+    [[nodiscard]] bool tryGetAssetPath(std::string& value) const;
+    bool setAssetPath(const std::string& value) const;
+    [[nodiscard]] std::vector<std::string> copyAssetPath() const;
+    bool restoreAssetPath(const std::vector<std::string>& values) const;
+    [[nodiscard]] bool hasAssetResolveError() const;
 
     [[nodiscard]] std::string validationError() const;
     [[nodiscard]] bool tryGetManipulateSpec(reflection::Meta::ManipulateSpec& spec) const;

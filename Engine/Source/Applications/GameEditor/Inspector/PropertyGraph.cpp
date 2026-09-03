@@ -1,11 +1,14 @@
 #include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/Inspector/PropertyProjection.h"
 
+#include "Core/Common/AssetRef.h"
+#include "Core/Reflection/MetadataSupport.h"
 #include "reflects-core/lib.h"
 
 #include <algorithm>
 #include <cctype>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 #include <string>
 
 namespace ya
@@ -52,6 +55,13 @@ PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> in
         node.bEditable = node.binding.isEditable();
         node.bVisible = true;
         node.bInstanceEditable = property.metadata.hasFlag(FieldFlags::InstanceEditable);
+        if (property.metadata.hasMeta(reflection::Meta::Color)) {
+            try {
+                node.bColor = property.metadata.get<bool>(reflection::Meta::Color);
+            }
+            catch (...) {
+            }
+        }
         graph._nodes.push_back(std::move(node));
     }
     return graph;
@@ -74,7 +84,10 @@ bool PropertyGraph::hasRetainedEditors() const
         if (node.valueType == refl::type_index_v<glm::vec3> ||
             node.valueType == refl::type_index_v<float> ||
             node.valueType == refl::type_index_v<bool> ||
-            node.valueType == refl::type_index_v<std::string>) {
+            node.valueType == refl::type_index_v<std::string> ||
+            (node.bColor && node.valueType == refl::type_index_v<glm::vec4>) ||
+            node.binding.isAssetRef() ||
+            EnumRegistry::instance().getEnum(node.valueType) != nullptr) {
             return true;
         }
     }

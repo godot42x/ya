@@ -42,9 +42,16 @@ struct YA_GUI_API UIComboBox : public UIElement, public UIStyledWidget<UIComboBo
 
     /// Programmatic selection (also fires the callback).
     void select(int index);
+    /// Presenter sync: optional notify so model writes do not re-enter as edits.
+    void setSelectedIndex(int index, bool bNotify = true);
+    void setMixed(bool mixed);
+    [[nodiscard]] bool isMixed() const { return _bMixed; }
     /// Current label or "" when nothing selected.
     [[nodiscard]] std::string currentLabel() const
     {
+        if (_bMixed) {
+            return "—";
+        }
         return (_selectedIndex >= 0 && _selectedIndex < static_cast<int>(_items.size()))
                    ? _items[static_cast<size_t>(_selectedIndex)]
                    : "";
@@ -61,6 +68,7 @@ struct YA_GUI_API UIComboBox : public UIElement, public UIStyledWidget<UIComboBo
     /// Open the dropdown menu below the field.
     void openDropdown();
     VisualFlag _bHovered{*this};
+    bool       _bMixed = false;
 };
 
 } // namespace ya

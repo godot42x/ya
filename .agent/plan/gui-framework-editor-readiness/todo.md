@@ -63,7 +63,7 @@
 
 ## Phase 7-9：Editor migration and release
 
-- [ ] Inspector retained controls。
+- [x] Inspector retained controls（bool/float/vec3/string/enum/color/asset-ref via `EditorAutoPropertySection` + `PropertyHandle`）。
 - [ ] Content Browser retained controls。
 - [ ] Hierarchy and virtualized lists。
 - [ ] Viewport/gizmo/drag-drop。

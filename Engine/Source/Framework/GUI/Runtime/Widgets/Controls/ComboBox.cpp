@@ -17,22 +17,42 @@ void UIComboBox::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree
     node["control"] = {
         {"type", "comboBox"},
         {"selectedIndex", _selectedIndex},
+        {"mixed", _bMixed},
         {"label", currentLabel()},
     };
 }
 
-void UIComboBox::select(int index)
+void UIComboBox::setSelectedIndex(int index, bool bNotify)
 {
-    if (index < 0 || index >= static_cast<int>(_items.size()) || index == _selectedIndex) {
+    if (index < -1 || index >= static_cast<int>(_items.size())) {
+        return;
+    }
+    if (index == _selectedIndex && !_bMixed) {
         return;
     }
     _selectedIndex = index;
-    // _selectedIndex is a reflect-ed int, not a VisualFlag: mark paint-dirty
-    // manually so the field label re-paints.
+    _bMixed        = false;
     markPaintDirty();
-    if (_onSelectionChanged) {
+    if (bNotify && index >= 0 && _onSelectionChanged) {
         _onSelectionChanged(index);
     }
+}
+
+void UIComboBox::setMixed(bool mixed)
+{
+    if (_bMixed == mixed) {
+        return;
+    }
+    _bMixed = mixed;
+    if (mixed) {
+        _selectedIndex = -1;
+    }
+    markPaintDirty();
+}
+
+void UIComboBox::select(int index)
+{
+    setSelectedIndex(index);
 }
 
 void UIComboBox::paintSelf(UIFrameBuilder& builder)
