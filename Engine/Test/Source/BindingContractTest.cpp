@@ -15,11 +15,28 @@
 
 #include <gtest/gtest.h>
 
+#include <thread>
+
 namespace ya
 {
 
 namespace
 {
+
+struct ReactiveRelay final : ReactiveBase
+{
+    Reactive<int>* target = nullptr;
+    int nextValue = 0;
+    int dirtyCalls = 0;
+
+    void markComputedDirty() override
+    {
+        ++dirtyCalls;
+        if (target) {
+            target->set(nextValue);
+        }
+    }
+};
 
 WidgetEventContext pointAt(float x, float y)
 {
@@ -29,6 +46,223 @@ WidgetEventContext pointAt(float x, float y)
 }
 
 } // namespace
+
+TEST(BindingContractTest, ReactiveTransactionCoalescesWritesAndSupportsReentrantBinding)
+{
+    WidgetTree tree({.width = 320, .height = 120});
+    auto text = std::make_shared<UIText>("Text");
+    auto value = std::make_shared<Reactive<std::string>>("a");
+    text->bindText(value);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), text);
+    tree.buildSnapshot({});
+
+    const auto before = getReactiveDiagnostics();
+    {
+        ReactiveTransaction tx;
+        value->set("b");
+        value->set("c");
+        value->set("c");
+    }
+    const auto after = getReactiveDiagnostics();
+    EXPECT_EQ(after.notifyCalls - before.notifyCalls, 1u);
+    tree.buildSnapshot({});
+    EXPECT_EQ(text->resolvedText(), "c");
+}
+
+TEST(BindingContractTest, ReactiveMutationFromForeignThreadIsRejected)
+{
+    Reactive<int> value(1);
+    value.set(2);
+    const auto before = getReactiveDiagnostics();
+    std::thread worker([&] { value.set(3); });
+    worker.join();
+    const auto after = getReactiveDiagnostics();
+    EXPECT_EQ(value.value(), 2);
+    EXPECT_EQ(after.wrongThreadMutations - before.wrongThreadMutations, 1u);
+}
+
+TEST(BindingContractTest, ReentrantReactiveMutationIsDeferredUntilOuterNotifyCompletes)
+{
+    Reactive<int> source(1);
+    Reactive<int> secondary(10);
+    ReactiveRelay relay;
+    relay.target = &secondary;
+    relay.nextValue = 20;
+    source.addComputedDependent(&relay);
+
+    const auto before = getReactiveDiagnostics();
+    source.set(2);
+    const auto after = getReactiveDiagnostics();
+
+    EXPECT_EQ(relay.dirtyCalls, 1);
+    EXPECT_EQ(secondary.value(), 20);
+    EXPECT_EQ(after.deferredReentrantNotifications - before.deferredReentrantNotifications, 1u);
+    EXPECT_EQ(after.notifyCalls - before.notifyCalls, 2u);
+}
+
+TEST(BindingContractTest, KeyedReactiveListReportsStructuralDiffAndRevision)
+{
+    struct Row { std::string id; int value = 0; };
+    ReactiveList<Row> rows;
+    EXPECT_EQ(rows.revision(), 0u);
+    ASSERT_TRUE(rows.replaceKeyed({{"a", 1}, {"b", 2}}, [](const Row& row) { return row.id; }));
+    EXPECT_EQ(rows.revision(), 1u);
+    EXPECT_EQ(rows.lastDiff().inserted.size(), 2u);
+    ASSERT_TRUE(rows.replaceKeyed({{"b", 2}, {"c", 3}}, [](const Row& row) { return row.id; }));
+    EXPECT_EQ(rows.lastDiff().removed.size(), 1u);
+    EXPECT_EQ(rows.lastDiff().inserted.size(), 1u);
+    EXPECT_EQ(rows.lastDiff().moved.size(), 1u);
+    EXPECT_EQ(rows.revision(), 2u);
+    ASSERT_FALSE(rows.replaceKeyed({{"c", 3}, {"c", 4}}, [](const Row& row) { return row.id; }));
+    EXPECT_EQ(rows.size(), 2u);
+}
+
+TEST(BindingContractTest, KeyedReactiveListMutationContractPreservesIdentity)
+{
+    struct Row { std::string id; int value = 0; };
+    ReactiveList<Row> rows;
+    ASSERT_TRUE(rows.replaceKeyed({{"a", 1}, {"b", 2}, {"c", 3}},
+                                  [](const Row& row) { return row.id; }));
+
+    ASSERT_TRUE(rows.insertAt(1, {"x", 9}));
+    ASSERT_EQ(rows.lastDiff().inserted.size(), 1u);
+    EXPECT_EQ(rows.get(1).id, "x");
+
+    ASSERT_TRUE(rows.updateAt(1, {"x", 10}));
+    ASSERT_EQ(rows.lastDiff().updated.size(), 1u);
+    EXPECT_EQ(rows.get(1).value, 10);
+    EXPECT_FALSE(rows.updateAt(1, {"renamed", 10}));
+
+    ASSERT_TRUE(rows.move(1, 3));
+    ASSERT_EQ(rows.lastDiff().moved.size(), 1u);
+    EXPECT_EQ(rows.get(3).id, "x");
+
+    EXPECT_FALSE(rows.insertAt(0, {"a", 99}));
+    EXPECT_FALSE(rows.removeAt(99));
+
+    ASSERT_TRUE(rows.replaceKeyed({{"a", 1}, {"b", 2}, {"c", 3}, {"x", 11}},
+                                  [](const Row& row) { return row.id; }));
+    EXPECT_EQ(rows.lastDiff().updated.size(), 4u);
+
+    rows.clear();
+    EXPECT_EQ(rows.lastDiff().removed.size(), 4u);
+}
+
+TEST(BindingContractTest, ComputedCachesUntilAnUpstreamChangeMarksItDirty)
+{
+    auto source = std::make_shared<Reactive<int>>(1);
+    int calls = 0;
+    Computed<int> doubled([&] {
+        ++calls;
+        return source->get() * 2;
+    });
+
+    const auto before = getReactiveDiagnostics();
+    EXPECT_EQ(doubled.get(), 2);
+    EXPECT_EQ(doubled.get(), 2);
+    EXPECT_EQ(calls, 1);
+
+    source->set(3);
+    EXPECT_EQ(calls, 1);
+    EXPECT_EQ(doubled.get(), 6);
+    EXPECT_EQ(calls, 2);
+
+    const auto after = getReactiveDiagnostics();
+    EXPECT_EQ(after.computedRecomputes - before.computedRecomputes, 2u);
+}
+
+TEST(BindingContractTest, ComputedChainsPropagateDirtyAcrossDerivedValues)
+{
+    auto source = std::make_shared<Reactive<int>>(2);
+    int firstCalls = 0;
+    int secondCalls = 0;
+    Computed<int> plusOne([&] {
+        ++firstCalls;
+        return source->get() + 1;
+    });
+    Computed<int> doubled([&] {
+        ++secondCalls;
+        return plusOne.get() * 2;
+    });
+
+    EXPECT_EQ(doubled.get(), 6);
+    EXPECT_EQ(firstCalls, 1);
+    EXPECT_EQ(secondCalls, 1);
+
+    source->set(4);
+    EXPECT_EQ(secondCalls, 1);
+    EXPECT_EQ(doubled.get(), 10);
+    EXPECT_EQ(firstCalls, 2);
+    EXPECT_EQ(secondCalls, 2);
+}
+
+TEST(BindingContractTest, ComputedCycleReportsDiagnosticsAndReturnsTheLastStableCache)
+{
+    std::shared_ptr<Computed<int>> a;
+    std::shared_ptr<Computed<int>> b;
+    a = std::make_shared<Computed<int>>([&] { return b ? b->get() + 1 : 1; });
+    b = std::make_shared<Computed<int>>([&] { return a->get() + 1; });
+
+    const auto before = getReactiveDiagnostics();
+    EXPECT_EQ(a->get(), 2);
+    const auto after = getReactiveDiagnostics();
+    EXPECT_EQ(after.computedCycles - before.computedCycles, 1u);
+}
+
+TEST(BindingContractTest, ComputedDropsUpstreamPointerWhenSourceIsDestroyedFirst)
+{
+    const auto before = getReactiveDiagnostics();
+    auto source = std::make_unique<Reactive<int>>(7);
+    auto derived = std::make_unique<Computed<int>>([&] { return source ? source->get() * 2 : 0; });
+    EXPECT_EQ(derived->get(), 14);
+    source.reset();
+    const auto after = getReactiveDiagnostics();
+    EXPECT_EQ(after.computedUpstreamUnlinks - before.computedUpstreamUnlinks, 1u);
+}
+
+TEST(BindingContractTest, TreeViewKeyedReplacePrunesRemovedExpansionState)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    ASSERT_TRUE(roots->replaceKeyed(
+        {
+            {.id = "keep", .label = "Keep", .children = {{.id = "keep.child", .label = "Keep Child"}}},
+            {.id = "drop", .label = "Drop", .children = {{.id = "drop.child", .label = "Drop Child"}}},
+        },
+        [](const UITreeView::FNode& node) { return node.id; }));
+
+    auto treeView = std::make_shared<UITreeView>("Tree");
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {240.0f, 160.0f};
+    treeView->bindData(roots);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView, slot);
+    tree.buildSnapshot({});
+
+    treeView->setExpanded("keep", true);
+    treeView->setExpanded("drop", true);
+    tree.buildSnapshot({});
+    EXPECT_EQ(treeView->getVisibleRowCount(), 4);
+
+    ASSERT_TRUE(roots->replaceKeyed(
+        {
+            {.id = "keep", .label = "Keep", .children = {{.id = "keep.child", .label = "Keep Child"}}},
+        },
+        [](const UITreeView::FNode& node) { return node.id; }));
+    tree.buildSnapshot({});
+    EXPECT_TRUE(treeView->isExpanded("keep"));
+    EXPECT_EQ(treeView->getVisibleRowCount(), 2);
+
+    ASSERT_TRUE(roots->replaceKeyed(
+        {
+            {.id = "drop", .label = "Drop", .children = {{.id = "drop.child", .label = "Drop Child"}}},
+            {.id = "keep", .label = "Keep", .children = {{.id = "keep.child", .label = "Keep Child"}}},
+        },
+        [](const UITreeView::FNode& node) { return node.id; }));
+    tree.buildSnapshot({});
+    EXPECT_FALSE(treeView->isExpanded("drop"));
+    EXPECT_TRUE(treeView->isExpanded("keep"));
+    EXPECT_EQ(treeView->getVisibleRowCount(), 3);
+}
 
 TEST(BindingContractTest, PersistentLayoutBindingOnDetachedWidgetDoesNotInvalidateTree)
 {

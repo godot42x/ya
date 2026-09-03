@@ -26,11 +26,12 @@
 
 ## Phase 3：Reactive
 
-- [ ] UI-thread 与 reentrancy contract。
-- [ ] transaction/batch。
-- [ ] keyed ReactiveList diff。
-- [ ] Computed dependency graph。
-- [ ] detach/unbind safety。
+- [x] UI-thread 与 reentrancy contract（foreign-thread reject + reentrant notify defer）。
+- [x] transaction/batch（同步嵌套事务、pending 去重、依赖快照）。
+- [x] keyed ReactiveList identity/diff baseline（revision + replaceKeyed + TreeView state prune）。
+- [x] keyed ReactiveList mutation/update contract（insert/update/move、边界拒绝、clear/replace diff）。
+- [x] Computed dependency graph（lazy cache + upstream dirty propagation + cycle diagnostics）。
+- [x] detach/unbind safety（upstream destroy -> downstream computed unlink）。
 
 ## Phase 4：DSL
 

@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <memory>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -147,6 +148,8 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     /// called outside the paint walk (input / measure) those reads are no-ops.
     [[nodiscard]] std::vector<VisibleRow> flattenVisible() const;
     void flattenNode(const FNode& node, int depth, std::vector<VisibleRow>& rows) const;
+    void collectNodeIds(const FNode& node, std::unordered_set<std::string>& ids) const;
+    void reconcileKeyedState() const;
     /// Whether `node` or any of its descendants matches the active filter.
     [[nodiscard]] bool matchesFilter(const FNode& node) const;
     [[nodiscard]] bool matchesFilterDescendants(const FNode& node, const std::string& filter, int depth) const;
@@ -172,6 +175,7 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     [[nodiscard]] bool dropPosition(const glm::vec2& point, int& outRowIndex, int& outMode) const;
 
     std::shared_ptr<ReactiveList<FNode>>     _roots;
+    mutable uint64_t _observedRootsRevision = std::numeric_limits<uint64_t>::max();
     std::shared_ptr<Reactive<std::string>>   _selectedId;
     std::shared_ptr<Reactive<std::string>>   _filterBinding;
     std::string _lastFilterApplied;

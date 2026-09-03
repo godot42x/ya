@@ -3,9 +3,9 @@
 ## 当前状态
 
 - 计划建立：2026-09-03
-- 实现改动：Phase 2D 已完成一轮闭环
+- 实现改动：Phase 3F 已完成一轮闭环
 - 提交：待本轮 checkpoint 创建
-- 当前阶段：Phase 2D（layout proof generation）
+- 当前阶段：Phase 3F（ReactiveList mutation/update contract）
 
 ## 已确认
 
@@ -93,4 +93,76 @@
 
 ## 下一 checkpoint
 
-下一 checkpoint：Phase 2E，建立可观测的 measure/arrange 计数与 cache dependency contract，再扩展到 Box/Overlay/Split/Scroll；不改变本轮已验证的 parent-owned slot 语义。
+## Phase 3A 当前 checkpoint
+
+- 新增 ReactiveTransaction，嵌套作用域只在最外层退出时 flush pending refs。
+- 同一事务内对同一 Reactive 的多次写入只遍历一次依赖；same-value 写入仍被抑制。
+- 通知时先复制 dependent 列表，允许回调期间 bind/unbind/detach，不依赖正在修改的 vector。
+- ReactiveBase 销毁会从 pending 队列移除自身，避免事务退出时访问已销毁 signal。
+- 新增 transaction coalescing 回归；全量 closure 通过（330/330）。
+
+### Phase 3A 边界
+
+- transaction 是同步 UI-side contract，不提供跨线程投递；UI-thread 约束和跨线程诊断仍待后续 checkpoint 明确。
+
+## Phase 3B 当前 checkpoint
+
+- ReactiveList 增加 revision、keyed replaceKeyed() 与结构 diff 观测面（inserted/removed/moved）。
+- keyed replace 会拒绝空 key / 重复 key，避免 list identity 模糊。
+- push/removeAt/clear/replace/replaceKeyed 现在都会推进 list revision，并保留最近一次结构 diff。
+- UITreeView 开始消费 keyed identity：根数据 revision 变化时会按 live node ids 清理 _expanded 中已移除节点的 transient state，而不是让旧状态泄漏到重新出现的同名节点。
+- 新增 keyed ReactiveList diff/revision 回归，以及 TreeView keyed replace 清理 removed expansion-state 的真实 consumer 回归。
+- 全量 xmake r ya-gui-closure-test 通过（332/332）。
+
+### Phase 3B 边界
+
+- 当前是 keyed identity/diff baseline，还不是完整 keyed list reconciler：尚未提供细粒度 update API、row instance 复用协议或 UI-thread 诊断。
+
+## Phase 3C 当前 checkpoint
+
+- Computed<T> 不再每次 get() 都重算；现在是 dirty-on-upstream-change、read-time lazy recompute。
+- selector 求值期间会收集上游 Reactive / ReactiveList / Computed 依赖，并建立 computed-to-computed / source-to-computed 传播链。
+- 上游变化会把下游 computed 标 dirty，并继续通知其下游 widgets / computeds，形成真正的 dependency graph，而不是“每次读取重跑 selector”。
+- 新增 recompute/cycle diagnostics，循环 selector 会输出错误并保留最近一次稳定 cache，而不是无限递归。
+- 新增 lazy cache、多层 computed 脏传播、cycle 检测回归；全量 xmake r ya-gui-closure-test 通过（335/335）。
+
+### Phase 3C 边界
+
+- 仍未冻结跨线程 mutation 与更严格的 reentrancy contract；ReactiveList 也还没有细粒度 update/move API。
+
+## Phase 3D 当前 checkpoint
+
+- ReactiveBase 析构时会反向通知 computed dependents 执行 unregisterUpstream(this)，不再把已析构 upstream 留在 downstream computed 的 _upstreams 里。
+- Computed 保持双向解绑：自身析构会从 upstream 的 computed-dependent 列表中移除，上游析构也会把自己从 downstream 的 upstream 列表移除。
+- 新增 upstream 先析构的回归，验证 computed upstream unlink diagnostics 触发且析构顺序安全。
+- 全量 xmake r ya-gui-closure-test 通过（336/336）。
+
+### Phase 3D 边界
+
+- 这次解决的是 detach/unbind/lifetime safety，不包含跨线程 mutation 约束；UI-thread/reentrancy contract 仍待单独冻结。
+
+## Phase 3E 当前 checkpoint
+
+- Reactive / ReactiveList 的所有 mutation 入口现在都经过统一的 UI-thread 校验；首个 mutation 线程会被冻结为 mutation owner，其他线程写入会被拒绝并记入 diagnostics。
+- notifyDependents() 期间再次触发的 mutation 不再递归立即重入通知；会被加入 pending queue，等最外层 notification/transaction 结束后再 flush。
+- 新增 foreign-thread mutation rejected 回归，以及 reentrant mutation deferred until outer notify completes 回归。
+- 全量 xmake r ya-gui-closure-test 通过（338/338）。
+
+### Phase 3E 边界
+
+- 这次冻结的是 mutation 线程与重入通知语义；尚未扩展到 keyed list 的细粒度 insert/update/move API，也没有跨线程投递队列。
+
+## Phase 3F 当前 checkpoint
+
+- ReactiveList 增加 editor 可复用的 insertAt、updateAt、move mutation API，并为 push/removeAt 增加明确的成功/失败返回语义。
+- keyed list 下插入/追加会拒绝空 key 与重复 key；updateAt 禁止改变既有 identity key；越界操作不会修改数据。
+- replaceKeyed 支持可选 value comparator；未提供 comparator 时对 retained key 保守报告 updated，避免相同 key 的内容变更静默丢通知。
+- clear 现在会完整报告 removed indices，Tree/Table consumer 可以据此清理对应行状态。
+- mutation 都推进 list revision 并更新最近一次 diff；现有 ReactiveTransaction 仍可对多次 mutation 做批量通知合并。
+- 新增 keyed mutation identity、边界拒绝、update/move/clear diff 回归；全量 xmake r ya-gui-closure-test 通过（339/339）。
+
+### Phase 3F 边界
+
+- 当前已具备可复用 mutation/update contract，但还没有把 TableGrid 改造成 keyed row virtualization，也没有通用 row-instance reconciler；这些属于 Phase 4/7 的动态结构与 editor primitive 工作。
+
+下一 checkpoint：Phase 4A，补齐 DSL fragment/group/helper、conditional/switcher 的可读组合能力，并保持 typed Slot 与 direct-live 架构不变。

@@ -134,6 +134,7 @@ void UITreeView::bindData(std::shared_ptr<ReactiveList<FNode>> roots)
     _roots = std::move(roots);
     _expanded.clear();
     _hoveredRow = -1;
+    _observedRootsRevision = std::numeric_limits<uint64_t>::max();
     markLayoutDirty();
 }
 
@@ -213,6 +214,7 @@ std::vector<UITreeView::VisibleRow> UITreeView::flattenVisible() const
     if (!_roots) {
         return rows;
     }
+    reconcileKeyedState();
     // A filter-text change must expand matching chains before ANY structural
     // consumer (layout, paint, hit test, diagnostics) reads the visible rows.
     // If this stayed paint-only, the first layout/input pass after a binding
@@ -225,6 +227,33 @@ std::vector<UITreeView::VisibleRow> UITreeView::flattenVisible() const
         flattenNode(_roots->get(i, ReactiveBase::EDirtyLevel::Layout), 0, rows);
     }
     return rows;
+}
+
+void UITreeView::collectNodeIds(const FNode& node, std::unordered_set<std::string>& ids) const
+{
+    if (node.id.empty() || !ids.insert(node.id).second) {
+        return;
+    }
+    for (const FNode& child : node.children) {
+        collectNodeIds(child, ids);
+    }
+}
+
+void UITreeView::reconcileKeyedState() const
+{
+    if (!_roots || !_roots->isKeyed() || _observedRootsRevision == _roots->revision()) {
+        return;
+    }
+    _observedRootsRevision = _roots->revision();
+    std::unordered_set<std::string> liveIds;
+    for (size_t i = 0; i < _roots->size(); ++i) {
+        collectNodeIds(_roots->get(i), liveIds);
+    }
+    auto& expanded = const_cast<UITreeView*>(this)->_expanded;
+    for (auto it = expanded.begin(); it != expanded.end();) {
+        if (!liveIds.contains(it->first)) it = expanded.erase(it);
+        else ++it;
+    }
 }
 
 bool UITreeView::matchesFilter(const FNode& node) const
