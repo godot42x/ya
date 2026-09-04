@@ -111,5 +111,8 @@
 - [x] Phase 9D：DPI、CJK fallback、键盘、IME、剪贴板、文本编辑。
 - [x] Phase 9E：snapshot digest、GPU/offscreen parity、automation route trace。
 - [x] Phase 9F：editor release checklist（macOS/Clang/Vulkan 证据入表；Windows/MSVC 与 OpenGL 为 blocker）。
+- [x] Phase 10A：compact dock chrome（矮 tab strip、左上角隐藏 title bar、dock content 不再 inset）。
+- [ ] Phase 10B：Inspector 补齐 ImGui DetailsView 类型覆盖（int/容器/嵌套/自定义 renderer）。
+- [ ] Phase 10C：自研 viewport gizmo（WidgetTree/Render2D），移除 editor 帧内 GuiSystem/ImGuizmo。
 - [ ] Windows/MSVC 组合回归（本机未跑；未通过则不得宣称 retained editor ready）。
 - [ ] OpenGL GUI/editor presentation（`GUIAppHost` 现为 Vulkan-only）。

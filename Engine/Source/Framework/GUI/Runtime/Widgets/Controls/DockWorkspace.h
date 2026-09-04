@@ -38,6 +38,7 @@ struct YA_GUI_API UIDockWorkspace
         DockPanelId                activePanelId = kInvalidDockPanelId; ///< Currently visible tab.
         glm::vec2                  pos  {0.0f, 0.0f};
         glm::vec2                  size {320.0f, 240.0f};
+        bool                       bHideTabBar = false;
     };
 
     /// Dock policy switches (central on/off for the whole workspace).
@@ -82,6 +83,7 @@ struct YA_GUI_API UIDockWorkspace
     /// Update a floating window's logical position and size without notifying listeners.
     void setFloatingWindowRect(FDockFloatingWindowId id, const glm::vec2& pos, const glm::vec2& size);
     void setFloatingWindowActivePanel(FDockFloatingWindowId id, DockPanelId panelId);
+    void setFloatingHideTabBar(FDockFloatingWindowId id, bool hide);
 
     /// Serialize the docked tree plus floating windows (stable panel keys + geometry).
     [[nodiscard]] nlohmann::json exportLayoutJson() const;

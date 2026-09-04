@@ -76,8 +76,8 @@ namespace ya
 namespace
 {
 
-constexpr float kMenuHeight     = 30.0f;
-constexpr float kToolbarHeight  = 36.0f;
+constexpr float kMenuHeight     = 24.0f;
+constexpr float kToolbarHeight  = 26.0f;
 constexpr float kChromeTop      = kMenuHeight + kToolbarHeight;
 
 bool parseWidgetEntryKey(const std::string& id, std::string& outEntryId)
@@ -848,14 +848,14 @@ void EditorSurface::buildEditorChrome(App& app)
     ui::build(*_tree,
               *_root,
               ui::row("EditorToolbar")
-                  .setSpacing(8.0f)
-                  .setPadding({8.0f, 4.0f})
-                  .child(std::move(play), ui::boxSlot().preferredSize({72.0f, 28.0f}))
-                  .child(std::move(simulate), ui::boxSlot().preferredSize({88.0f, 28.0f}))
-                  .child(std::move(stop), ui::boxSlot().preferredSize({72.0f, 28.0f}))
-                  .child(std::move(mode3d), ui::boxSlot().preferredSize({44.0f, 28.0f}))
-                  .child(std::move(mode2d), ui::boxSlot().preferredSize({44.0f, 28.0f}))
-                  .child(std::move(modeText), ui::boxSlot().preferredSize({88.0f, 20.0f})),
+                  .setSpacing(6.0f)
+                  .setPadding({6.0f, 2.0f})
+                  .child(std::move(play), ui::boxSlot().preferredSize({64.0f, 22.0f}))
+                  .child(std::move(simulate), ui::boxSlot().preferredSize({80.0f, 22.0f}))
+                  .child(std::move(stop), ui::boxSlot().preferredSize({64.0f, 22.0f}))
+                  .child(std::move(mode3d), ui::boxSlot().preferredSize({40.0f, 22.0f}))
+                  .child(std::move(mode2d), ui::boxSlot().preferredSize({40.0f, 22.0f}))
+                  .child(std::move(modeText), ui::boxSlot().preferredSize({72.0f, 18.0f})),
               ui::canvasSlot()
                   .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
                   .offset({0.0f, kMenuHeight})

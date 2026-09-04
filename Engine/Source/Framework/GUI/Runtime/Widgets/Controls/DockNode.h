@@ -56,6 +56,8 @@ struct FDockNode
     std::vector<DockPanelId>   panelIds;
     DockPanelId                selectedPanel       = kInvalidDockPanelId;
     bool                       persistentEmptyLeaf = false;
+    /// When true the leaf tab strip is collapsed; a corner affordance restores it.
+    bool                       bHideTabBar         = false;
 };
 
 /// Pure model: no WidgetTree, UIElement, or visual-control ownership.
@@ -81,6 +83,7 @@ struct YA_GUI_API FDockTreeModel
     bool selectPanel(DockPanelId panelId);
     bool movePanel(DockPanelId panelId, DockNodeId targetLeafId, size_t insertIndex = SIZE_MAX, bool collapseSource = true);
     bool setSplitRatio(DockNodeId splitId, float ratio);
+    bool setHideTabBar(DockNodeId leafId, bool hide);
     bool splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, DockPanelId panelId, float newPanelRatio = 0.30f);
     bool splitEmptyLeaf(DockNodeId targetLeafId, EDockCardinalSide side,
                         float newPanelRatio = 0.30f, bool persistentEmptyLeaf = true);

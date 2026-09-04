@@ -120,9 +120,9 @@ private:
     friend struct FDockSpaceDropTargetBehavior;
     struct FLeafView
     {
-        DockNodeId  leafId = kInvalidDockNodeId;
-        UIContainer* root   = nullptr;
-        UITabBar* bar = nullptr;
+        DockNodeId   leafId  = kInvalidDockNodeId;
+        UIElement*   root    = nullptr;
+        UITabBar*    bar     = nullptr;
         UIContainer* content = nullptr;
     };
 

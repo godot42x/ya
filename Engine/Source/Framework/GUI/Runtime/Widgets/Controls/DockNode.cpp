@@ -32,6 +32,9 @@ nlohmann::json exportNode(const FDockTreeModel& model, const FDockNode& node)
         if (node.persistentEmptyLeaf) {
             result["persistentEmpty"] = true;
         }
+        if (node.bHideTabBar) {
+            result["hideTabBar"] = true;
+        }
         return result;
     }
 
@@ -67,6 +70,7 @@ std::unique_ptr<FDockNode> FDockTreeModel::cloneNode(const FDockNode& source, FD
     result->panelIds = source.panelIds;
     result->selectedPanel = source.selectedPanel;
     result->persistentEmptyLeaf = source.persistentEmptyLeaf;
+    result->bHideTabBar = source.bHideTabBar;
     if (source.child[0]) result->child[0] = cloneNode(*source.child[0], result.get());
     if (source.child[1]) result->child[1] = cloneNode(*source.child[1], result.get());
     return result;
@@ -172,6 +176,16 @@ bool FDockTreeModel::setSplitRatio(DockNodeId splitId, float ratio)
     return true;
 }
 
+bool FDockTreeModel::setHideTabBar(DockNodeId leafId, bool hide)
+{
+    FDockNode* node = findNode(leafId);
+    if (!node || node->kind != EDockNodeKind::Leaf) {
+        return false;
+    }
+    node->bHideTabBar = hide;
+    return true;
+}
+
 bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, DockPanelId panelId, float newPanelRatio)
 {
     auto backup = cloneNode(*_root, nullptr);
@@ -183,6 +197,7 @@ bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, 
     auto oldPanels = target->panelIds;
     DockPanelId oldSelected = target->selectedPanel;
     const bool oldPersistent = target->persistentEmptyLeaf;
+    const bool oldHideTabBar = target->bHideTabBar;
     if (source == target) {
         auto it = std::find(oldPanels.begin(), oldPanels.end(), panelId);
         if (it == oldPanels.end()) return false;
@@ -205,6 +220,7 @@ bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, 
     target->panelIds.clear();
     target->selectedPanel = kInvalidDockPanelId;
     target->persistentEmptyLeaf = false;
+    target->bHideTabBar = false;
     target->child[0] = std::make_unique<FDockNode>();
     target->child[1] = std::make_unique<FDockNode>();
     target->child[0]->id = _nextNodeId++;
@@ -218,6 +234,7 @@ bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, 
     oldLeaf->panelIds = oldPanels;
     oldLeaf->selectedPanel = oldSelected;
     oldLeaf->persistentEmptyLeaf = oldPersistent;
+    oldLeaf->bHideTabBar = oldHideTabBar;
     if (source != target && source && source->panelIds.empty() && !source->persistentEmptyLeaf) collapseEmptyLeaf(source);
     if (validateInvariants()) return true;
     _root = std::move(backup);
@@ -236,6 +253,7 @@ bool FDockTreeModel::splitEmptyLeaf(DockNodeId targetLeafId, EDockCardinalSide s
     const auto oldPanels = target->panelIds;
     const DockPanelId oldSelected = target->selectedPanel;
     const bool oldPersistent = target->persistentEmptyLeaf;
+    const bool oldHideTabBar = target->bHideTabBar;
     target->kind = EDockNodeKind::Split;
     target->orientation = (side == EDockCardinalSide::West || side == EDockCardinalSide::East)
                               ? EDockSplitOrientation::Vertical : EDockSplitOrientation::Horizontal;
@@ -243,6 +261,7 @@ bool FDockTreeModel::splitEmptyLeaf(DockNodeId targetLeafId, EDockCardinalSide s
     target->panelIds.clear();
     target->selectedPanel = kInvalidDockPanelId;
     target->persistentEmptyLeaf = false;
+    target->bHideTabBar = false;
     target->child[0] = std::make_unique<FDockNode>();
     target->child[1] = std::make_unique<FDockNode>();
     target->child[0]->id = _nextNodeId++;
@@ -256,6 +275,7 @@ bool FDockTreeModel::splitEmptyLeaf(DockNodeId targetLeafId, EDockCardinalSide s
     oldLeaf->panelIds = oldPanels;
     oldLeaf->selectedPanel = oldSelected;
     oldLeaf->persistentEmptyLeaf = oldPersistent;
+    oldLeaf->bHideTabBar = oldHideTabBar;
     if (validateInvariants()) return true;
     _root = std::move(backup);
     _nextNodeId = nextNodeId;
@@ -353,6 +373,7 @@ bool FDockTreeModel::importNodeFromJson(const nlohmann::json& nodeJson, FDockNod
         node.panelIds.clear();
         node.selectedPanel = kInvalidDockPanelId;
         node.persistentEmptyLeaf = nodeJson.value("persistentEmpty", false);
+        node.bHideTabBar = nodeJson.value("hideTabBar", false);
         if (!nodeJson.contains("panels") || !nodeJson["panels"].is_array()) {
             return fail(error, "dock layout leaf is missing panels array");
         }

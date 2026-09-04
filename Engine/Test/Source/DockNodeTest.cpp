@@ -259,6 +259,50 @@ TEST(DockNodeTest, ExportImportRoundTripPreservesLayout)
     EXPECT_TRUE(restored.validateInvariants());
 }
 
+TEST(DockNodeTest, HideTabBarRoundTripsLayoutJson)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "viewport");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.setHideTabBar(model.getRootNode()->id, true));
+    EXPECT_TRUE(model.getRootNode()->bHideTabBar);
+
+    const nlohmann::json layout = model.exportLayoutJson();
+    EXPECT_TRUE(layout["root"].value("hideTabBar", false));
+
+    FDockTreeModel restored;
+    registerPanel(restored, 1, "viewport");
+    ASSERT_TRUE(restored.addPanel(1));
+    ASSERT_TRUE(restored.importLayoutJson(layout));
+    ASSERT_NE(restored.findLeafForPanel(1), nullptr);
+    EXPECT_TRUE(restored.findLeafForPanel(1)->bHideTabBar);
+}
+
+TEST(DockNodeTest, FloatingHideTabBarRoundTripsLayoutJson)
+{
+    UIDockWorkspace source;
+    source.bAllowFloating = true;
+    source.bAllowTearOff  = true;
+    const DockPanelId inspectorId = source.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody"));
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    const FDockFloatingWindowId floatingId = source.tearOffPanel(inspectorId, {180.0f, 140.0f}, {360.0f, 280.0f});
+    ASSERT_NE(floatingId, kInvalidFloatingWindowId);
+    source.setFloatingHideTabBar(floatingId, true);
+
+    const nlohmann::json layout = source.exportLayoutJson();
+    ASSERT_TRUE(layout.contains("floating"));
+    ASSERT_EQ(layout["floating"].size(), 1u);
+    EXPECT_TRUE(layout["floating"][0].value("hideTabBar", false));
+
+    UIDockWorkspace restored;
+    restored.bAllowFloating = true;
+    restored.bAllowTearOff  = true;
+    ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody2")), kInvalidDockPanelId);
+    ASSERT_TRUE(restored.importLayoutJson(layout));
+    ASSERT_EQ(restored.floatingWindows().size(), 1u);
+    EXPECT_TRUE(restored.floatingWindows().front().bHideTabBar);
+}
+
 TEST(DockNodeTest, ImportRejectsUnknownPanelKey)
 {
     FDockTreeModel model;

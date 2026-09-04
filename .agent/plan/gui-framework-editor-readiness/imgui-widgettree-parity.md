@@ -32,7 +32,7 @@
 | Project browser (no project) | `EditorLayer::projectBrowserWindow` | `EditorSurface::buildProjectBrowser` | ⚫ / ✅ | ImGui window deleted 8W |
 | Main menu | `EditorLayer::menuBar` (ImGui) | `UIMenuBar` + `ActionMap` | ⚫ / 🟡 | ImGui menu deleted 8W; see File menu gaps below |
 | Toolbar | `EditorLayer::toolbar` (icon `ImageButton`) | Text `UIButton` row | ⚫ / 🟡 | ImGui toolbar deleted 8W |
-| Dock layout | ImGui `DockSpace` | `UIDockWorkspace` + `UIDockSpace` | ✅ | Docked tree + floating geometry persist in `editor.dockLayout`; tear-off enabled on widgettree |
+| Dock layout | ImGui `DockSpace` | `UIDockWorkspace` + `UIDockSpace` | ✅ | Compact dock tab strip + leaf/floating `hideTabBar` corner; docked tree + floating geometry persist in `editor.dockLayout` |
 | Editor Settings window | `EditorLayer::editorSettings` | `EditorSurface::openEditorSettingsDialog` | ⚫ / ✅ | ImGui window deleted 8W |
 | Debug images window | `EditorLayer::debugWindow` | `EditorDebugImagesTab` dock tab | ⚫ / ✅ | ImGui window deleted 8W; cube-face button grid not retained |
 | Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | Retained popups on `EditorSurface` | ⚫ / ✅ | ImGui FilePicker modal chrome deleted 8W; `FilePicker` type remains for fallback APIs |
@@ -100,7 +100,7 @@
 | Feature | Legacy ImGui | WidgetTree | Status | Notes |
 |---------|--------------|------------|--------|-------|
 | DetailsView stack | `DetailsView` + `TypeRenderer` tree | — | ⚫ | Deleted 8N; was uncalled after 8C |
-| Entity/component fields | `TypeRenderer::renderReflectedType` | `PropertyGraph` + `EditorAutoPropertySection` | 🟡 | Reflection path; special editors TBD per component |
+| Entity/component fields | `TypeRenderer::renderReflectedType` | `PropertyGraph` + `EditorAutoPropertySection` | 🟡 | Only bool/float/vec3/string/enum/color/asset-ref; int/containers/nested/custom renderers are Phase 10B |
 | Multi-selection mixed values | DetailsView | `PropertyGraph` intersection + em-dash | ✅ | |
 | Asset path Browse | `FilePicker` | `EditorSurface` asset picker popup | ✅ | Phase 8M |
 | Game UI Entry summary | DetailsView | `EditorInspectorTab` widget entry block | ✅ | Open in UI Designer button |

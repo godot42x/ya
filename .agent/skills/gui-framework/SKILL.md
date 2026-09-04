@@ -88,9 +88,10 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   child + margin + spacing + padding。scroll/split 仍读取内容 desired，specialized layout
   已收口为 `UIScrollLayout` / `UISplitLayout` / `UIOverlayLayout`；`UIButton`、`UISelectableRow`、`UICheckBox`、`UICompoundWidget` 与 `UISizeBox`
   使用 `UISingleChildLayout`。  `UIDockSpace` 也是 single-child host：投影根填满 dock。  `FDockTreeModel::exportLayoutJson` /
-  `importLayoutJson` 按 panel `stableKey` 持久化 split/leaf 树（不持久化 NodeId）；
+  `importLayoutJson` 按 panel `stableKey` 持久化 split/leaf 树（不持久化 NodeId），leaf 可带
+  `hideTabBar`（左上角 12px 折角切换，Collapsed 掉 tab strip）。
   `UIDockWorkspace::exportLayoutJson` / `importLayoutJson` 在同一 JSON 上附加
-  `floating[]`（panel keys + pos/size + selected tab）。Editor 经
+  `floating[]`（panel keys + pos/size + selected tab + `hideTabBar`）。Editor 经
   `ConfigManager` `editor.dockLayout` 恢复，`UIDockWorkspace::appendOnDockUpdated`
   与 `appendOnFloatingUpdated` 写回。Editor chrome 打开 `bAllowFloating` /
   `bAllowTearOff`，`UIDockFloatingHost` 挂在 Popup 层。

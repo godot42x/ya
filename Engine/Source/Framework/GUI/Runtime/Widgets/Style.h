@@ -202,7 +202,7 @@ struct FTabStyle
     FBrush    hoveredFill  = FBrush::solid({0.21f, 0.23f, 0.27f, 1.0f});
     FBrush    selectedFill = FBrush::solid({0.12f, 0.13f, 0.17f, 1.0f});
     glm::vec4 accentColor  = {0.30f, 0.55f, 0.92f, 1.0f};
-    glm::vec2 padding      = {14.0f, 6.0f};
+    glm::vec2 padding      = {8.0f, 2.0f};
     /// Bottom rule separating the strip from the content host below it.
     glm::vec4 separatorColor      = {0.28f, 0.30f, 0.36f, 1.0f};
     /// Muted placeholder label when the bar hosts no tabs (empty zone hint).

@@ -26,6 +26,7 @@
 #include "GUI/Widgets/Controls/DockFloatingWindow.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/TabBar.h"
 #include "Render/Resources/FontManager.h"
 
 #include <gtest/gtest.h>
@@ -102,6 +103,22 @@ WidgetAttachment attachAutoToLayer(WidgetTree& tree, WidgetTree::ELayer layer, c
     args.widthSizeMode  = EWidgetSizeMode::Auto;
     args.heightSizeMode = EWidgetSizeMode::Auto;
     return tree.attach(*tree.getLayer(layer), widget, args);
+}
+
+UIElement* findNamedDescendant(UIElement& root, std::string_view name)
+{
+    if (root._name == name) {
+        return &root;
+    }
+    for (UIElement* child : root.getChildrenInPaintOrder()) {
+        if (!child) {
+            continue;
+        }
+        if (UIElement* found = findNamedDescendant(*child, name)) {
+            return found;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace
@@ -2103,7 +2120,7 @@ TEST(WidgetLayoutTest, FloatingWindowResizeHandlesLiveOnOverlaySlots)
     UIElement* window = host->getChildren().front().get();
     ASSERT_NE(window, nullptr);
     const auto& children = window->getChildren();
-    ASSERT_GE(children.size(), 6u);
+    ASSERT_GE(children.size(), 7u);
 
     const UIElement* chrome = children[0].get();
     const auto* chromeSlot = dynamic_cast<const UIOverlaySlot*>(window->getSlotForChild(*chrome));
@@ -2113,7 +2130,17 @@ TEST(WidgetLayoutTest, FloatingWindowResizeHandlesLiveOnOverlaySlots)
     EXPECT_EQ(chrome->_layoutRect.pos, window->_layoutRect.pos);
     EXPECT_EQ(chrome->_layoutRect.extent, window->_layoutRect.extent);
 
-    const UIElement* left = children[1].get();
+    const UIElement* hideBar = children[1].get();
+    const auto* hideSlot = dynamic_cast<const UIOverlaySlot*>(window->getSlotForChild(*hideBar));
+    ASSERT_NE(hideSlot, nullptr);
+    EXPECT_EQ(hideSlot->getHAlign(), EUIOverlayAlignment::Start);
+    EXPECT_EQ(hideSlot->getVAlign(), EUIOverlayAlignment::Start);
+    EXPECT_FLOAT_EQ(hideBar->_layoutRect.extent.x, 12.0f);
+    EXPECT_FLOAT_EQ(hideBar->_layoutRect.extent.y, 12.0f);
+    EXPECT_FLOAT_EQ(hideBar->_layoutRect.pos.x, window->_layoutRect.pos.x);
+    EXPECT_FLOAT_EQ(hideBar->_layoutRect.pos.y, window->_layoutRect.pos.y);
+
+    const UIElement* left = children[2].get();
     const auto* leftSlot = dynamic_cast<const UIOverlaySlot*>(window->getSlotForChild(*left));
     ASSERT_NE(leftSlot, nullptr);
     EXPECT_EQ(leftSlot->getHAlign(), EUIOverlayAlignment::Start);
@@ -2130,4 +2157,47 @@ TEST(WidgetLayoutTest, FloatingWindowResizeHandlesLiveOnOverlaySlots)
     EXPECT_FLOAT_EQ(corner->_layoutRect.extent.x, 14.0f);
     EXPECT_FLOAT_EQ(corner->_layoutRect.extent.y, 14.0f);
 }
+
+TEST(WidgetLayoutTest, DockLeafTabBarIsCompactAndCanHide)
+{
+    registerSyntheticFont(13, 7.0f);
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setWorkspace(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto panel = std::make_shared<UIPanel>("SceneBody");
+    ASSERT_NE(ws->addPanel("Scene", panel), kInvalidDockPanelId);
+    tree.layout();
+
+    UIElement* bar = findNamedDescendant(*dock, "DockTabBar1");
+    ASSERT_NE(bar, nullptr);
+    EXPECT_LT(bar->_layoutRect.extent.y, 26.0f);
+    EXPECT_GT(bar->_layoutRect.extent.y, 10.0f);
+
+    UIElement* hide = findNamedDescendant(*dock, "DockHideTabBar");
+    ASSERT_NE(hide, nullptr);
+    EXPECT_FLOAT_EQ(hide->_layoutRect.extent.x, 12.0f);
+    EXPECT_FLOAT_EQ(hide->_layoutRect.extent.y, 12.0f);
+
+    FDockNode* leaf = ws->dockModel().getRootNode();
+    ASSERT_NE(leaf, nullptr);
+    ASSERT_EQ(leaf->kind, EDockNodeKind::Leaf);
+    ASSERT_TRUE(ws->dockModel().setHideTabBar(leaf->id, true));
+    ws->fireDockUpdated();
+    tree.layout();
+
+    bar = findNamedDescendant(*dock, "DockTabBar1");
+    ASSERT_NE(bar, nullptr);
+    EXPECT_EQ(bar->getVisibility(), EWidgetVisibility::Collapsed);
+    EXPECT_FLOAT_EQ(bar->_layoutRect.extent.y, 0.0f);
+    hide = findNamedDescendant(*dock, "DockHideTabBar");
+    ASSERT_NE(hide, nullptr);
+    EXPECT_FLOAT_EQ(hide->_layoutRect.extent.x, 12.0f);
+}
+
 } // namespace ya

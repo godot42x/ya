@@ -9,8 +9,10 @@
 #include "GUI/Widgets/UIBehavior.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "Core/Event.h"
 
 #include <algorithm>
+#include <functional>
 
 namespace ya
 {
@@ -36,6 +38,59 @@ bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 
 constexpr float kResizeThickness = 6.0f;
 constexpr float kCornerGripSize  = 14.0f;
+constexpr float kHideTabBarSize  = 12.0f;
+
+struct FDockHideTabBarAffordance final : UIElement
+{
+    FDockHideTabBarAffordance(std::function<void()> onToggle)
+        : UIElement("FloatingHideTabBar")
+        , _onToggle(std::move(onToggle))
+    {
+        _hitFilter = EWidgetHitFilter::Stop;
+        _zOrder    = 8;
+    }
+
+    [[nodiscard]] bool hitTestSelf(const glm::vec2& logicalPoint) const override
+    {
+        return isHitTestableSelf() && hitTestLayoutRect(logicalPoint);
+    }
+
+    [[nodiscard]] bool isHoverable() const override { return true; }
+
+    void paintSelf(UIFrameBuilder& builder) override
+    {
+        const glm::vec4 color = _bHovered ? glm::vec4{0.78f, 0.82f, 0.90f, 1.0f}
+                                          : glm::vec4{0.52f, 0.56f, 0.64f, 0.95f};
+        const glm::vec2 p = _layoutRect.pos;
+        const float     s = std::min(_layoutRect.extent.x, _layoutRect.extent.y);
+        builder.addLine(p, {p.x + s, p.y}, color, 1.5f);
+        builder.addLine(p, {p.x, p.y + s}, color, 1.5f);
+        builder.addLine({p.x + s, p.y}, {p.x, p.y + s}, color, 1.5f);
+    }
+
+    bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override
+    {
+        const bool inside = hitTestLayoutRect(ctx.logicalPoint);
+        if (event.getEventType() == EEvent::MouseMoved) {
+            _bHovered = inside;
+            return inside;
+        }
+        if (event.getEventType() == EEvent::MouseButtonPressed && inside) {
+            if (_onToggle) {
+                _onToggle();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    void resetHoverState() override { _bHovered = false; }
+    void clearTransientInputState() override { _bHovered = false; }
+
+  private:
+    std::function<void()> _onToggle;
+    bool                  _bHovered = false;
+};
 
 } // namespace
 
@@ -280,6 +335,8 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
 
     _tabBar = std::make_shared<UITabBar>(std::format("{}_TabBar", _name));
     _tabBar->_bDraggableTabs = true;
+    _tabBar->setPadding({2.0f, 1.0f});
+    _tabBar->setSpacing(1.0f);
     _tabBar->_onTabDragBegin = [this](int index, const std::string&)
     {
         if (index < 0) {
@@ -298,7 +355,7 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
     header->addDetachedChild(_tabBar);
 
     auto close = std::make_shared<UIButton>(std::format("{}_Close", _name));
-    close->setContentPadding({8.0f, 4.0f});
+    close->setContentPadding({4.0f, 2.0f});
     auto closeText = std::make_shared<UIText>(std::format("{}_CloseLabel", _name));
     closeText->setText("x");
     closeText->_fontSize = 12;
@@ -318,6 +375,30 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
     chrome->addDetachedChild(header);
     chrome->addDetachedChild(_content);
     addDetachedChild(chrome);
+
+    auto hideBar = std::make_shared<FDockHideTabBarAffordance>([this]()
+    {
+        if (!_ws) {
+            return;
+        }
+        const auto* rec = _ws->findFloatingById(_floatingId);
+        if (!rec) {
+            return;
+        }
+        _ws->setFloatingHideTabBar(_floatingId, !rec->bHideTabBar);
+        _ws->fireFloatingUpdated();
+        refreshFromWorkspace();
+    });
+    addDetachedChild(hideBar, [](UIElement&, UISlot& slot)
+    {
+        if (auto* overlay = slot.as<UIOverlaySlot>()) {
+            overlay->apply(FOverlaySlotArgs{
+                .hAlign        = EUIOverlayAlignment::Start,
+                .vAlign        = EUIOverlayAlignment::Start,
+                .preferredSize = {kHideTabBarSize, kHideTabBarSize},
+            });
+        }
+    });
 
     refreshFromWorkspace();
 
@@ -403,6 +484,10 @@ void UIDockFloatingWindow::refreshFromWorkspace()
         }
     }
     _tabBar->syncSelectedTab(activeIndex);
+    if (_header) {
+        _header->setVisibility(rec->bHideTabBar ? EWidgetVisibility::Collapsed
+                                                : EWidgetVisibility::Visible);
+    }
     _tabBar->_onTabSelected = [this](int index)
     {
         if (const auto* r = _ws->findFloatingById(_floatingId)) {

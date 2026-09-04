@@ -70,7 +70,7 @@ struct YA_GUI_API UITabBar : public UIContainer, public UIStyledWidget<UITabBar,
     {
         setDirection(EWidgetBoxLayout::Horizontal);
         setSpacing(2.0f);
-        setPadding({4.0f, 4.0f});
+        setPadding({2.0f, 1.0f});
     }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UITabBar>; }

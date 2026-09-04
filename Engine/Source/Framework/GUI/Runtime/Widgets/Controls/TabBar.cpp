@@ -247,9 +247,9 @@ glm::vec2 UITabBar::computeDesiredSize() const
     // Empty bar: keep a header-sized height so the zone stays a visible
     // drop target instead of collapsing to a 0-height sliver.
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 13);
-    // Match the constructor's padding {4,4}: keep a header-sized height when
-    // the bar is empty so the zone stays a visible drop target.
-    const float headerH = 4.0f * 2.0f + (font ? font->lineHeight : 14.0f);
+    // Match the bar padding so an empty zone stays a visible drop target.
+    const glm::vec2 pad = getBoxLayout().getPadding();
+    const float headerH = pad.y * 2.0f + (font ? font->lineHeight : 14.0f);
     return {base.x, std::max(base.y, headerH)};
 }
 

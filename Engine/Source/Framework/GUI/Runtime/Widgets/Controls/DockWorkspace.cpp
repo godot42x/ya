@@ -180,6 +180,13 @@ void UIDockWorkspace::setFloatingWindowActivePanel(FDockFloatingWindowId id, Doc
     window->activePanelId = panelId;
 }
 
+void UIDockWorkspace::setFloatingHideTabBar(FDockFloatingWindowId id, bool hide)
+{
+    if (FFloatingWindow* window = findFloatingByIdMutable(id)) {
+        window->bHideTabBar = hide;
+    }
+}
+
 UIDockWorkspace::FFloatingWindow* UIDockWorkspace::findFloatingByIdMutable(FDockFloatingWindowId id)
 {
     for (FFloatingWindow& window : _floating) {
@@ -213,6 +220,9 @@ nlohmann::json UIDockWorkspace::exportLayoutJson() const
         }
         entry["pos"]  = nlohmann::json::array({window.pos.x, window.pos.y});
         entry["size"] = nlohmann::json::array({window.size.x, window.size.y});
+        if (window.bHideTabBar) {
+            entry["hideTabBar"] = true;
+        }
         floating.push_back(std::move(entry));
     }
     layout["floating"] = std::move(floating);
@@ -227,6 +237,7 @@ bool UIDockWorkspace::importLayoutJson(const nlohmann::json& layout)
         DockPanelId              activePanelId = kInvalidDockPanelId;
         glm::vec2                pos{180.0f, 140.0f};
         glm::vec2                size{320.0f, 240.0f};
+        bool                     bHideTabBar = false;
     };
 
     std::vector<FPendingFloating> pending;
@@ -268,6 +279,7 @@ bool UIDockWorkspace::importLayoutJson(const nlohmann::json& layout)
             if (entry.contains("size") && entry["size"].is_array() && entry["size"].size() == 2) {
                 window.size = {entry["size"][0].get<float>(), entry["size"][1].get<float>()};
             }
+            window.bHideTabBar = entry.value("hideTabBar", false);
             pending.push_back(std::move(window));
         }
     }
@@ -300,6 +312,7 @@ bool UIDockWorkspace::importLayoutJson(const nlohmann::json& layout)
             }
         }
         setFloatingWindowActivePanel(floatingId, window.activePanelId);
+        setFloatingHideTabBar(floatingId, window.bHideTabBar);
     }
 
     fireFloatingUpdated();

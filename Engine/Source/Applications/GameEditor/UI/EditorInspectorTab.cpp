@@ -205,8 +205,8 @@ std::shared_ptr<UIElement> EditorInspectorTab::build(WidgetTree&)
     _widgetEntryHost = widgetEntryForm.share();
 
     auto form = ui::column("InspectorForm")
-                    .setPadding({10.0f, 8.0f})
-                    .setSpacing(6.0f)
+                    .setPadding({6.0f, 4.0f})
+                    .setSpacing(4.0f)
                     .child(ui::text("InspectorTitle").setText("INSPECTOR").setStyleKey("text.eyebrow"))
                     .child(std::move(entityForm))
                     .child(std::move(widgetEntryForm));

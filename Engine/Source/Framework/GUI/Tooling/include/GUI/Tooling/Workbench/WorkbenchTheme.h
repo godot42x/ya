@@ -313,20 +313,20 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
         tab.hoveredFill  = FBrush::solid({0.21f, 0.23f, 0.27f, 1.0f});
         tab.selectedFill = FBrush::solid({0.12f, 0.13f, 0.17f, 1.0f});
         tab.accentColor  = {0.30f, 0.55f, 0.92f, 1.0f};
-        tab.padding      = {14.0f, 6.0f};
+        tab.padding      = {8.0f, 2.0f};
         theme->define<ya::FTabStyle>("tab", tab);
         auto sideTab = tab;
         sideTab.normalFill = FBrush::solid({0.12f, 0.13f, 0.16f, 0.0f});
         sideTab.hoveredFill = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f});
         sideTab.selectedFill = FBrush::solid({0.18f, 0.24f, 0.38f, 1.0f});
-        sideTab.padding = {16.0f, 8.0f};
+        sideTab.padding = {10.0f, 4.0f};
         sideTab.separatorColor = {0.20f, 0.22f, 0.28f, 1.0f};
         theme->define<ya::FTabStyle>("tab.sidebar", sideTab);
         auto dockTab = tab;
         dockTab.normalFill = FBrush::solid({0.16f, 0.17f, 0.21f, 1.0f});
         dockTab.hoveredFill = FBrush::solid({0.20f, 0.22f, 0.28f, 1.0f});
         dockTab.selectedFill = FBrush::solid({0.18f, 0.20f, 0.25f, 1.0f});
-        dockTab.padding = {14.0f, 8.0f};
+        dockTab.padding = {6.0f, 2.0f};
         dockTab.separatorColor = {0.24f, 0.26f, 0.32f, 1.0f};
         theme->define<ya::FTabStyle>("tab.dock", dockTab);
 
@@ -405,7 +405,7 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
         tab.hoveredFill  = FBrush::solid({0.80f, 0.82f, 0.86f, 1.0f});
         tab.selectedFill = FBrush::solid({0.93f, 0.94f, 0.96f, 1.0f});
         tab.accentColor  = {0.30f, 0.55f, 0.92f, 1.0f};
-        tab.padding      = {14.0f, 6.0f};
+        tab.padding      = {8.0f, 2.0f};
         tab.separatorColor      = {0.60f, 0.62f, 0.66f, 1.0f};
         tab.placeholderTextColor = {0.45f, 0.48f, 0.55f, 1.0f};
         theme->define<ya::FTabStyle>("tab", tab);
@@ -413,14 +413,14 @@ inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
         sideTab.normalFill = FBrush::solid({0.90f, 0.91f, 0.94f, 0.0f});
         sideTab.hoveredFill = FBrush::solid({0.83f, 0.85f, 0.89f, 1.0f});
         sideTab.selectedFill = FBrush::solid({0.76f, 0.84f, 0.95f, 1.0f});
-        sideTab.padding = {16.0f, 8.0f};
+        sideTab.padding = {10.0f, 4.0f};
         sideTab.separatorColor = {0.72f, 0.74f, 0.78f, 1.0f};
         theme->define<ya::FTabStyle>("tab.sidebar", sideTab);
         auto dockTab = tab;
         dockTab.normalFill = FBrush::solid({0.90f, 0.91f, 0.94f, 1.0f});
         dockTab.hoveredFill = FBrush::solid({0.84f, 0.86f, 0.90f, 1.0f});
         dockTab.selectedFill = FBrush::solid({0.94f, 0.95f, 0.98f, 1.0f});
-        dockTab.padding = {14.0f, 8.0f};
+        dockTab.padding = {6.0f, 2.0f};
         dockTab.separatorColor = {0.70f, 0.72f, 0.76f, 1.0f};
         theme->define<ya::FTabStyle>("tab.dock", dockTab);
 

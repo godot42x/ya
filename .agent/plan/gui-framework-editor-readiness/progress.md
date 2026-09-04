@@ -1076,3 +1076,16 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 
 - 本机无法提供 Windows/MSVC 或 OpenGL 运行证据；跨平台 skill 只约束编译契约，不是 XP-WIN 的替代。
 - 计划 Phase 9 步骤 3 的 Windows/OpenGL 组合仍未关闭。
+
+## Phase 10A 当前 checkpoint（2026-09-04）
+
+- Dock leaf 改为 overlay：compact `tab.dock` strip + 左上角 12px 折角切换 `FDockNode::bHideTabBar`（Collapsed tab bar，折角仍可点回来）。
+- Dock content 不再 inset 12px；viewport/panel 自己管 padding。Editor menu/toolbar 和 Inspector form 同步压密度。
+- `hideTabBar` 写入 dock/floating layout JSON；`DockNodeTest` 与 `WidgetLayoutTest::DockLeafTabBarIsCompactAndCanHide` 覆盖。
+- `xmake r ya-gui-closure-test` 全量通过（398/398）；`xmake b ya-game-editor` 通过。
+
+### Phase 10A 边界
+
+- 没有宣称 ImGui/ImGuizmo 已移除。异常 Debug 窗来自 editor 帧仍 `GuiSystem::beginFrame` + `ImGuizmo::SetDrawlist()` 打到 `Debug##Default`。
+- Inspector 类型覆盖（10B）和自研 gizmo（10C）未做。
+

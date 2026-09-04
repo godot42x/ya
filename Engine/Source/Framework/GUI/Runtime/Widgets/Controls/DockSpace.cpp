@@ -2,6 +2,7 @@
 
 
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Overlay.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TabBar.h"
@@ -9,9 +10,11 @@
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "Core/Event.h"
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <utility>
 
 namespace ya
@@ -23,6 +26,59 @@ using glm::vec2;
 constexpr float kSplitMinExtent = 120.0f;
 constexpr float kChooserBlock = 28.0f;
 constexpr float kChooserGap = 8.0f;
+constexpr float kHideTabBarSize = 12.0f;
+
+struct FDockHideTabBarAffordance final : UIElement
+{
+    FDockHideTabBarAffordance(std::function<void()> onToggle)
+        : UIElement("DockHideTabBar")
+        , _onToggle(std::move(onToggle))
+    {
+        _hitFilter = EWidgetHitFilter::Stop;
+        _zOrder    = 8;
+    }
+
+    [[nodiscard]] bool hitTestSelf(const glm::vec2& logicalPoint) const override
+    {
+        return isHitTestableSelf() && hitTestLayoutRect(logicalPoint);
+    }
+
+    [[nodiscard]] bool isHoverable() const override { return true; }
+
+    void paintSelf(UIFrameBuilder& builder) override
+    {
+        const glm::vec4 color = _bHovered ? glm::vec4{0.78f, 0.82f, 0.90f, 1.0f}
+                                          : glm::vec4{0.52f, 0.56f, 0.64f, 0.95f};
+        const glm::vec2 p = _layoutRect.pos;
+        const float     s = std::min(_layoutRect.extent.x, _layoutRect.extent.y);
+        builder.addLine(p, {p.x + s, p.y}, color, 1.5f);
+        builder.addLine(p, {p.x, p.y + s}, color, 1.5f);
+        builder.addLine({p.x + s, p.y}, {p.x, p.y + s}, color, 1.5f);
+    }
+
+    bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override
+    {
+        const bool inside = hitTestLayoutRect(ctx.logicalPoint);
+        if (event.getEventType() == EEvent::MouseMoved) {
+            _bHovered = inside;
+            return inside;
+        }
+        if (event.getEventType() == EEvent::MouseButtonPressed && inside) {
+            if (_onToggle) {
+                _onToggle();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    void resetHoverState() override { _bHovered = false; }
+    void clearTransientInputState() override { _bHovered = false; }
+
+  private:
+    std::function<void()> _onToggle;
+    bool                  _bHovered = false;
+};
 
 struct FChooserRects
 {
@@ -557,6 +613,7 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
             attachPanelContent(fp->widget);
         }
     }
+    view->bar->setVisibility(leaf->bHideTabBar ? EWidgetVisibility::Collapsed : EWidgetVisibility::Visible);
     markLayoutDirty();
 }
 
@@ -583,14 +640,17 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
         return split;
     }
 
-    auto leaf = std::make_shared<UIContainer>(std::format("DockLeaf{}", node.id));
-    leaf->setDirection(EWidgetBoxLayout::Vertical);
-    leaf->setSpacing(0.0f);
-    leaf->setClipChildren(true);
+    auto leaf = std::make_shared<UIOverlay>(std::format("DockLeaf{}", node.id));
+    auto chrome = std::make_shared<UIContainer>(std::format("DockLeafChrome{}", node.id));
+    chrome->setDirection(EWidgetBoxLayout::Vertical);
+    chrome->setSpacing(0.0f);
+    chrome->setClipChildren(true);
     auto bar = std::make_shared<UITabBar>(std::format("DockTabBar{}", node.id));
     bar->_bDraggableTabs = true;
     bar->_styleKey = "tab.dock";
     bar->setClipChildren(true);
+    bar->setPadding({2.0f, 1.0f});
+    bar->setSpacing(1.0f);
     bar->_emptyPlaceholder = std::format("{} (drop tabs here)", leaf->_name);
     bar->_onTabDragBegin = [this, leafId = node.id](int index, const std::string& label)
     {
@@ -603,15 +663,15 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
             behavior->beginPanelDrag(*this, panelId, label);
         }
     };
-    leaf->addDetachedChild(bar);
+    chrome->addDetachedChild(bar);
 
     auto body = std::make_shared<UIPanel>(std::format("DockBody{}", node.id));
     body->_styleKey = "panel.surface";
-    leaf->addDetachedChild(body);
+    chrome->addDetachedChild(body);
 
     auto content = std::make_shared<UIContainer>(std::format("DockContent{}", node.id));
-    content->setPadding({12.0f, 12.0f});
-    leaf->setStretchLastChild(true);
+    content->setPadding({0.0f, 0.0f});
+    chrome->setStretchLastChild(true);
     body->addDetachedChild(content);
     // Stretch intent lives on the parent->child edge: the body is a canvas host,
     // so the fill is expressed through its slot rather than on the container.
@@ -623,6 +683,36 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
         slot->apply(fillArgs);
     }
     content->setStretchLastChild(true);
+
+    leaf->addDetachedChild(chrome, [](UIElement&, UISlot& slot)
+    {
+        if (auto* overlay = slot.as<UIOverlaySlot>()) {
+            overlay->apply(FOverlaySlotArgs{
+                .hAlign = EUIOverlayAlignment::Fill,
+                .vAlign = EUIOverlayAlignment::Fill,
+            });
+        }
+    });
+    auto hideBar = std::make_shared<FDockHideTabBarAffordance>([this, leafId = node.id]()
+    {
+        const FDockNode* current = _ws->dockModel().findNode(leafId);
+        if (!current || current->kind != EDockNodeKind::Leaf) {
+            return;
+        }
+        if (_ws->dockModel().setHideTabBar(leafId, !current->bHideTabBar)) {
+            _ws->fireDockUpdated();
+        }
+    });
+    leaf->addDetachedChild(hideBar, [](UIElement&, UISlot& slot)
+    {
+        if (auto* overlay = slot.as<UIOverlaySlot>()) {
+            overlay->apply(FOverlaySlotArgs{
+                .hAlign        = EUIOverlayAlignment::Start,
+                .vAlign        = EUIOverlayAlignment::Start,
+                .preferredSize = {kHideTabBarSize, kHideTabBarSize},
+            });
+        }
+    });
 
     _leafViews[node.id] = {node.id, leaf.get(), bar.get(), content.get()};
     rebuildLeaf(node.id);
