@@ -98,6 +98,7 @@
 - [x] Phase 8N：删除未调用的 ImGui DetailsView 实现与 AssetInspectorPanel ImGui render 死代码。
 - [x] Phase 8O：删除 SceneHierarchyPanel ImGui sceneTree 与 RuntimeTools/RenderTarget ImGui 死代码。
 - [x] Phase 8P：删除 UIDesignerPanel 未调用的 ImGui draw helpers（保留 preview/document 数据层）。
+- [x] Phase 8Q：EditorSurface dock layout persistence（stable panel key + `editor.dockLayout` JSON）。
 - [ ] Remove remaining ImGui editor paths。
-- [ ] Multi-window/docking persistence。
+- [ ] Multi-window/docking persistence（floating geometry / coordinator）。
 - [ ] Cross-platform and long-run gates。

@@ -48,6 +48,7 @@ struct YA_GUI_API UIDockWorkspace
     /// Register a panel and dock it into the dock tree's root leaf. Returns the
     /// stable panel id (kInvalidDockPanelId on failure).
     DockPanelId addPanel(const std::string& name, std::shared_ptr<UIElement> widget);
+    DockPanelId addPanel(const std::string& stableKey, const std::string& title, std::shared_ptr<UIElement> widget);
 
     // === Floating (Phase 5) ===
     /// Bind the floating host that presents this workspace's floating windows.
@@ -81,9 +82,20 @@ struct YA_GUI_API UIDockWorkspace
 
     /// The DockSpace re-projects its tree when panels move into/out of dock.
     void setOnDockUpdated(std::function<void()> cb) { _onDockUpdated = std::move(cb); }
+    void appendOnDockUpdated(std::function<void()> cb) { _onDockUpdatedListeners.push_back(std::move(cb)); }
     /// The floating host re-syncs its window set when floating changes.
     void setOnFloatingUpdated(std::function<void()> cb) { _onFloatingUpdated = std::move(cb); }
-    void fireDockUpdated() { if (_onDockUpdated) _onDockUpdated(); }
+    void fireDockUpdated()
+    {
+        if (_onDockUpdated) {
+            _onDockUpdated();
+        }
+        for (const std::function<void()>& listener : _onDockUpdatedListeners) {
+            if (listener) {
+                listener();
+            }
+        }
+    }
     void fireFloatingUpdated() { if (_onFloatingUpdated) _onFloatingUpdated(); }
 
     [[nodiscard]] const FPanel* findPanel(DockPanelId id) const;
@@ -100,6 +112,7 @@ private:
     UIDockFloatingHost* _floatingHost = nullptr;
     UIDockSpace* _dockSpace = nullptr;
     std::function<void()> _onDockUpdated;
+    std::vector<std::function<void()>> _onDockUpdatedListeners;
     std::function<void()> _onFloatingUpdated;
 };
 

@@ -2,6 +2,8 @@
 
 #include "Core/Common/Types.h"
 
+#include <nlohmann/json.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -90,6 +92,9 @@ struct YA_GUI_API FDockTreeModel
     [[nodiscard]] std::vector<DockNodeId> leafIds() const;
     [[nodiscard]] bool                    validateInvariants(std::string* error = nullptr) const;
     [[nodiscard]] size_t                  panelCount() const { return _panels.size(); }
+    [[nodiscard]] const FDockPanelRecord* findPanelByStableKey(const std::string& stableKey) const;
+    [[nodiscard]] nlohmann::json          exportLayoutJson() const;
+    bool                                  importLayoutJson(const nlohmann::json& layout);
 
   private:
     std::unique_ptr<FDockNode> cloneNode(const FDockNode& source, FDockNode* parent) const;
@@ -101,5 +106,7 @@ struct YA_GUI_API FDockTreeModel
                                             std::unordered_map<DockPanelId, size_t>& seen,
                                             std::string*                             error) const;
     void                       collectLeafIds(const FDockNode& node, std::vector<DockNodeId>& result) const;
+    void                       collectMountedPanelIds(const FDockNode& node, std::unordered_map<DockPanelId, size_t>& seen) const;
+    bool                       importNodeFromJson(const nlohmann::json& nodeJson, FDockNode& node, std::string* error);
 };
 } // namespace ya

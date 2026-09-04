@@ -239,6 +239,9 @@ struct EditorSurface
     void publishViewportRect();
     void syncViewportHostState(App& app);
     void applyWindowMetrics(App& app);
+    void applyDefaultEditorDockLayout();
+    bool tryRestoreEditorDockLayout();
+    void persistEditorDockLayout();
 };
 
 } // namespace ya

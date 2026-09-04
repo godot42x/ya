@@ -27,6 +27,7 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
+#include "GUI/Widgets/Controls/DockNode.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Menu.h"
@@ -202,6 +203,14 @@ void collectDesignerTreeFingerprint(const UIElement& widget, std::string& out, c
     for (size_t index = 0; index < children.size(); ++index) {
         collectDesignerTreeFingerprint(*children[index], out, path + "/" + std::to_string(index));
     }
+}
+
+DockPanelId dockPanelIdForKey(const FDockTreeModel& model, const char* stableKey)
+{
+    if (const FDockPanelRecord* record = model.findPanelByStableKey(stableKey)) {
+        return record->id;
+    }
+    return kInvalidDockPanelId;
 }
 
 } // namespace
@@ -825,12 +834,12 @@ void EditorSurface::buildEditorChrome(App& app)
         _tree->detach(*workbenchHost);
     }
 
-    const DockPanelId viewportId  = _dockWorkspace->addPanel("Viewport", viewportBody.release());
-    const DockPanelId hierarchyId = _dockWorkspace->addPanel("Hierarchy", hierarchyBody.release());
-    const DockPanelId inspectorId = _dockWorkspace->addPanel("Inspector", inspectorBody);
-    const DockPanelId contentId   = _dockWorkspace->addPanel("Content Browser", buildContentBrowser());
-    const DockPanelId statsId     = _dockWorkspace->addPanel("Frame Stats", statsBody.release());
-    const DockPanelId workbenchId = _dockWorkspace->addPanel("GUI Workbench", workbenchHost);
+    _dockWorkspace->addPanel("viewport", "Viewport", viewportBody.release());
+    _dockWorkspace->addPanel("hierarchy", "Hierarchy", hierarchyBody.release());
+    _dockWorkspace->addPanel("inspector", "Inspector", inspectorBody);
+    _dockWorkspace->addPanel("content-browser", "Content Browser", buildContentBrowser());
+    _dockWorkspace->addPanel("frame-stats", "Frame Stats", statsBody.release());
+    _dockWorkspace->addPanel("gui-workbench", "GUI Workbench", workbenchHost);
     _tabRegistry->registerTab({
         .id = "runtime-tools",
         .title = "Runtime Tools",
@@ -911,38 +920,15 @@ void EditorSurface::buildEditorChrome(App& app)
             _assetInspectorPreview->setResourceMissing(false);
         },
     });
-    DockPanelId runtimeId = kInvalidDockPanelId;
-    DockPanelId designerId = kInvalidDockPanelId;
-    DockPanelId assetsId = kInvalidDockPanelId;
     for (const auto& tab : _tabRegistry->tabs()) {
-        const DockPanelId id = _dockWorkspace->addPanel(tab.title, tab.build(*_layer, *_tree));
-        if (tab.id == "runtime-tools") runtimeId = id;
-        else if (tab.id == "ui-designer") designerId = id;
-        else if (tab.id == "asset-inspector") assetsId = id;
+        _dockWorkspace->addPanel(tab.id, tab.title, tab.build(*_layer, *_tree));
     }
 
-    auto& model = _dockWorkspace->dockModel();
-    model.selectPanel(viewportId);
-    const DockNodeId rootLeaf = model.getRootNode()->id;
-    model.splitLeaf(rootLeaf, EDockCardinalSide::East, inspectorId, 0.74f);
-    if (FDockNode* viewportLeaf = model.findLeafForPanel(viewportId)) {
-        model.splitLeaf(viewportLeaf->id, EDockCardinalSide::West, hierarchyId, 0.26f);
+    if (!tryRestoreEditorDockLayout()) {
+        applyDefaultEditorDockLayout();
     }
-    if (FDockNode* viewportLeaf = model.findLeafForPanel(viewportId)) {
-        model.splitLeaf(viewportLeaf->id, EDockCardinalSide::South, contentId, 0.72f);
-    }
-    if (FDockNode* contentLeaf = model.findLeafForPanel(contentId)) {
-        model.movePanel(statsId, contentLeaf->id);
-        model.movePanel(workbenchId, contentLeaf->id);
-        model.movePanel(runtimeId, contentLeaf->id);
-        model.movePanel(designerId, contentLeaf->id);
-        model.movePanel(assetsId, contentLeaf->id);
-        model.selectPanel(contentId);
-    }
-    model.selectPanel(viewportId);
-    model.selectPanel(hierarchyId);
-    model.selectPanel(inspectorId);
     _dockWorkspace->fireDockUpdated();
+    _dockWorkspace->appendOnDockUpdated([this]() { persistEditorDockLayout(); });
 
     _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(*_layer);
     _viewportOverlayHost.setOverlay(_viewportGizmoOverlay);
@@ -977,6 +963,80 @@ void EditorSurface::applyWindowMetrics(App& app)
     if (auto* fonts = FontManager::get()) {
         fonts->setActiveDpiScale(dpiScale);
     }
+}
+
+void EditorSurface::applyDefaultEditorDockLayout()
+{
+    if (!_dockWorkspace) {
+        return;
+    }
+    FDockTreeModel& model = _dockWorkspace->dockModel();
+    const DockPanelId viewportId = dockPanelIdForKey(model, "viewport");
+    const DockPanelId hierarchyId = dockPanelIdForKey(model, "hierarchy");
+    const DockPanelId inspectorId = dockPanelIdForKey(model, "inspector");
+    const DockPanelId contentId = dockPanelIdForKey(model, "content-browser");
+    const DockPanelId statsId = dockPanelIdForKey(model, "frame-stats");
+    const DockPanelId workbenchId = dockPanelIdForKey(model, "gui-workbench");
+    const DockPanelId runtimeId = dockPanelIdForKey(model, "runtime-tools");
+    const DockPanelId designerId = dockPanelIdForKey(model, "ui-designer");
+    const DockPanelId assetsId = dockPanelIdForKey(model, "asset-inspector");
+    if (viewportId == kInvalidDockPanelId || hierarchyId == kInvalidDockPanelId || inspectorId == kInvalidDockPanelId ||
+        contentId == kInvalidDockPanelId) {
+        return;
+    }
+
+    model.selectPanel(viewportId);
+    const DockNodeId rootLeaf = model.getRootNode()->id;
+    model.splitLeaf(rootLeaf, EDockCardinalSide::East, inspectorId, 0.74f);
+    if (FDockNode* viewportLeaf = model.findLeafForPanel(viewportId)) {
+        model.splitLeaf(viewportLeaf->id, EDockCardinalSide::West, hierarchyId, 0.26f);
+    }
+    if (FDockNode* viewportLeaf = model.findLeafForPanel(viewportId)) {
+        model.splitLeaf(viewportLeaf->id, EDockCardinalSide::South, contentId, 0.72f);
+    }
+    if (FDockNode* contentLeaf = model.findLeafForPanel(contentId)) {
+        if (statsId != kInvalidDockPanelId) {
+            model.movePanel(statsId, contentLeaf->id);
+        }
+        if (workbenchId != kInvalidDockPanelId) {
+            model.movePanel(workbenchId, contentLeaf->id);
+        }
+        if (runtimeId != kInvalidDockPanelId) {
+            model.movePanel(runtimeId, contentLeaf->id);
+        }
+        if (designerId != kInvalidDockPanelId) {
+            model.movePanel(designerId, contentLeaf->id);
+        }
+        if (assetsId != kInvalidDockPanelId) {
+            model.movePanel(assetsId, contentLeaf->id);
+        }
+        model.selectPanel(contentId);
+    }
+    model.selectPanel(viewportId);
+    model.selectPanel(hierarchyId);
+    model.selectPanel(inspectorId);
+}
+
+bool EditorSurface::tryRestoreEditorDockLayout()
+{
+    if (!_dockWorkspace) {
+        return false;
+    }
+    nlohmann::json layout = nlohmann::json::object();
+    if (!ConfigManager::get().tryGet("editor", "dockLayout", layout)) {
+        return false;
+    }
+    return _dockWorkspace->dockModel().importLayoutJson(layout);
+}
+
+void EditorSurface::persistEditorDockLayout()
+{
+    if (!_dockWorkspace) {
+        return;
+    }
+    ConfigManager::Editor("editor")
+        .set("dockLayout", _dockWorkspace->dockModel().exportLayoutJson())
+        .flush();
 }
 
 std::shared_ptr<UIElement> EditorSurface::buildContentBrowser()

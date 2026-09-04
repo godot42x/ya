@@ -912,3 +912,16 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 
 - legacy ImGui chrome host 与 `FilePicker` 仍平行；UI Designer palette/field inspector 仍待 retained 绑定。
 - 下一步继续削减 imgui chrome shell、迁移 UI Designer retained palette/inspector，或推进 docking persistence。
+
+## Phase 8Q 当前 checkpoint（2026-09-04）
+
+- `FDockTreeModel::exportLayoutJson` / `importLayoutJson`：按 panel `stableKey` 序列化 split/leaf 树、ratio、tab 顺序与 selected tab；未知 key 拒绝导入；未出现在快照中的已注册 panel 挂到首个 leaf。
+- `UIDockWorkspace::addPanel(stableKey, title, widget)`；EditorSurface 全部 dock panel 使用稳定 key（`viewport`、`content-browser`、`runtime-tools` 等）。
+- Editor 启动时从 `ConfigManager` `editor.dockLayout` 恢复；dock 变更（split ratio / tab 选择 / drop）经 `appendOnDockUpdated` 写回配置。
+- `DockNodeTest` 新增 export/import round-trip、unknown key 拒绝、orphan panel 挂载测试。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（381/381）；`xmake r ya-testing --gtest_filter='DockNodeTest.*'`（16/16）；widgettree editor smoke 退出码 0。
+
+### Phase 8Q 边界
+
+- floating window geometry / 多 OS window coordinator 仍待后续 checkpoint；legacy ImGui chrome host 与 `FilePicker` 仍平行。
+- 下一步继续削减 imgui chrome shell 或推进 floating-window persistence。

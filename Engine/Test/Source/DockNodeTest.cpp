@@ -1,6 +1,7 @@
 #include "GUI/Widgets/Controls/DockNode.h"
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 namespace ya
 {
@@ -213,6 +214,79 @@ TEST(DockNodeTest, SinglePanelSameLeafSplitDoesNotCreateEmptyLeaf)
     ASSERT_EQ(model.getRootNode()->kind, EDockNodeKind::Leaf);
     EXPECT_EQ(model.getRootNode()->panelIds, std::vector<DockPanelId>({1}));
     EXPECT_EQ(model.leafIds().size(), 1u);
+    EXPECT_TRUE(model.validateInvariants());
+}
+
+TEST(DockNodeTest, ExportImportRoundTripPreservesLayout)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "viewport");
+    registerPanel(model, 2, "hierarchy");
+    registerPanel(model, 3, "inspector");
+    registerPanel(model, 4, "content-browser");
+    ASSERT_TRUE(model.addPanel(1));
+    const DockNodeId rootId = model.getRootNode()->id;
+    ASSERT_TRUE(model.splitLeaf(rootId, EDockCardinalSide::East, 3, 0.74f));
+    if (FDockNode* viewportLeaf = model.findLeafForPanel(1)) {
+        ASSERT_TRUE(model.splitLeaf(viewportLeaf->id, EDockCardinalSide::West, 2, 0.26f));
+    }
+    if (FDockNode* viewportLeaf = model.findLeafForPanel(1)) {
+        ASSERT_TRUE(model.splitLeaf(viewportLeaf->id, EDockCardinalSide::South, 4, 0.72f));
+    }
+    model.selectPanel(4);
+
+    const nlohmann::json layout = model.exportLayoutJson();
+    FDockTreeModel restored;
+    registerPanel(restored, 1, "viewport");
+    registerPanel(restored, 2, "hierarchy");
+    registerPanel(restored, 3, "inspector");
+    registerPanel(restored, 4, "content-browser");
+    ASSERT_TRUE(restored.addPanel(1));
+    ASSERT_TRUE(restored.addPanel(2));
+    ASSERT_TRUE(restored.addPanel(3));
+    ASSERT_TRUE(restored.addPanel(4));
+    ASSERT_TRUE(restored.importLayoutJson(layout));
+
+    EXPECT_EQ(restored.getRootNode()->kind, EDockNodeKind::Split);
+    EXPECT_FLOAT_EQ(restored.getRootNode()->ratio, model.getRootNode()->ratio);
+    ASSERT_NE(restored.findLeafForPanel(1), nullptr);
+    ASSERT_NE(restored.findLeafForPanel(2), nullptr);
+    ASSERT_NE(restored.findLeafForPanel(3), nullptr);
+    ASSERT_NE(restored.findLeafForPanel(4), nullptr);
+    EXPECT_EQ(restored.findLeafForPanel(4)->selectedPanel, 4u);
+    EXPECT_TRUE(restored.validateInvariants());
+}
+
+TEST(DockNodeTest, ImportRejectsUnknownPanelKey)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "viewport");
+    ASSERT_TRUE(model.addPanel(1));
+    const nlohmann::json layout = {
+        {"version", 1},
+        {"root",
+         {{"kind", "leaf"},
+          {"panels", nlohmann::json::array({"missing-panel"})}}},
+    };
+    EXPECT_FALSE(model.importLayoutJson(layout));
+    EXPECT_EQ(model.getRootNode()->panelIds, std::vector<DockPanelId>({1}));
+    EXPECT_TRUE(model.validateInvariants());
+}
+
+TEST(DockNodeTest, ImportMountsMissingPanelsOnFirstLeaf)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "viewport");
+    registerPanel(model, 2, "hierarchy");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.addPanel(2));
+    const nlohmann::json layout = {
+        {"version", 1},
+        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+    };
+    ASSERT_TRUE(model.importLayoutJson(layout));
+    ASSERT_NE(model.findLeafForPanel(1), nullptr);
+    ASSERT_NE(model.findLeafForPanel(2), nullptr);
     EXPECT_TRUE(model.validateInvariants());
 }
 

@@ -221,6 +221,7 @@ struct FDockSpaceDropTargetBehavior final : public UIDropTargetBehavior
                     dock->_ws->endFloatingForPanel(panelId);
                 }
                 dock->rebuildProjection();
+                dock->_ws->fireDockUpdated();
             }
         };
         setHighlightState = [](UIElement& owner, bool bHighlight)
@@ -507,6 +508,7 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
         }
         const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
         _ws->dockModel().selectPanel(panelId);
+        _ws->fireDockUpdated();
         if (WidgetTree* tree = getTree()) {
             auto contentChildren = currentView->content->getChildrenInPaintOrder();
             for (UIElement* child : contentChildren) {
@@ -572,6 +574,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
             if (_ws->dockModel().setSplitRatio(splitId, ratio)) {
                 markLayoutDirty();
                 markPaintDirty();
+                _ws->fireDockUpdated();
             }
         });
         if (node.child[0]) split->addDetachedChild(materializeNode(*node.child[0]));

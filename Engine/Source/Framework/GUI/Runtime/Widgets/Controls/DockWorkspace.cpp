@@ -7,12 +7,17 @@ namespace ya
 
 DockPanelId UIDockWorkspace::addPanel(const std::string& name, std::shared_ptr<UIElement> widget)
 {
+    return addPanel(name, name, std::move(widget));
+}
+
+DockPanelId UIDockWorkspace::addPanel(const std::string& stableKey, const std::string& title, std::shared_ptr<UIElement> widget)
+{
     const DockPanelId id = _nextPanelId++;
-    if (!_model.registerPanel({.id = id, .stableKey = name, .title = name}) ||
+    if (!_model.registerPanel({.id = id, .stableKey = stableKey, .title = title}) ||
         !_model.addPanel(id)) {
         return kInvalidDockPanelId;
     }
-    _panels.emplace(id, FPanel{id, name, std::move(widget)});
+    _panels.emplace(id, FPanel{id, title, std::move(widget)});
     return id;
 }
 
