@@ -10,6 +10,7 @@
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/WidgetTree.h"
 
+#include <cmath>
 #include <format>
 
 namespace ya
@@ -113,6 +114,35 @@ void EditorAutoPropertySection::construct()
             row.child(slot.color, FBoxSlotArgs{.preferredSize = {180.0f, 28.0f}});
             if (!node.bEditable) slot.color->setEnabled(false);
         }
+        else if (node.valueType == refl::type_index_v<glm::vec2>) {
+            slot.kind = EditorSlot::Kind::Vec2;
+            for (int axis = 0; axis < 2; ++axis) {
+                auto drag = std::make_shared<UIDragFloat>(node.name + std::to_string(axis));
+                bindDragMerge(*drag);
+                drag->_onValueChanged = [this, index = _editors.size(), axis](float value) {
+                    PropertyHandle binding = _editors[index].node->binding;
+                    auto before = binding.copyVec2();
+                    if (before.empty()) return;
+                    glm::vec2 patched = before.front();
+                    patched[axis] = value;
+                    if (!binding.setVec2(patched)) return;
+                    if (!_undo) return;
+                    auto after = binding.copyVec2();
+                    (void)_undo->push({
+                        .label    = "Set " + _editors[index].node->displayName,
+                        .mergeKey = mergeKey(*_editors[index].node, axis),
+                        .undo     = [binding, before]() { binding.restoreVec2(before); },
+                        .redo     = [binding, after]() { binding.restoreVec2(after); },
+                    });
+                };
+                slot.vec2.push_back(drag);
+                applyManipulateSpec(*drag, node.binding);
+                row.child(drag, FBoxSlotArgs{.preferredSize = {72.0f, 22.0f}});
+            }
+            if (!node.bEditable) {
+                for (auto& drag : slot.vec2) drag->setEnabled(false);
+            }
+        }
         else if (node.valueType == refl::type_index_v<glm::vec3>) {
             slot.kind = EditorSlot::Kind::Vec3;
             for (int axis = 0; axis < 3; ++axis) {
@@ -142,6 +172,35 @@ void EditorAutoPropertySection::construct()
                 for (auto& drag : slot.vec3) drag->setEnabled(false);
             }
         }
+        else if (node.valueType == refl::type_index_v<glm::vec4>) {
+            slot.kind = EditorSlot::Kind::Vec4;
+            for (int axis = 0; axis < 4; ++axis) {
+                auto drag = std::make_shared<UIDragFloat>(node.name + std::to_string(axis));
+                bindDragMerge(*drag);
+                drag->_onValueChanged = [this, index = _editors.size(), axis](float value) {
+                    PropertyHandle binding = _editors[index].node->binding;
+                    auto before = binding.copyVec4();
+                    if (before.empty()) return;
+                    glm::vec4 patched = before.front();
+                    patched[axis] = value;
+                    if (!binding.setVec4(patched)) return;
+                    if (!_undo) return;
+                    auto after = binding.copyVec4();
+                    (void)_undo->push({
+                        .label    = "Set " + _editors[index].node->displayName,
+                        .mergeKey = mergeKey(*_editors[index].node, axis),
+                        .undo     = [binding, before]() { binding.restoreVec4(before); },
+                        .redo     = [binding, after]() { binding.restoreVec4(after); },
+                    });
+                };
+                slot.vec4.push_back(drag);
+                applyManipulateSpec(*drag, node.binding);
+                row.child(drag, FBoxSlotArgs{.preferredSize = {54.0f, 22.0f}});
+            }
+            if (!node.bEditable) {
+                for (auto& drag : slot.vec4) drag->setEnabled(false);
+            }
+        }
         else if (node.valueType == refl::type_index_v<float>) {
             slot.kind = EditorSlot::Kind::Float;
             slot.scalar = std::make_shared<UIDragFloat>(node.name);
@@ -163,6 +222,33 @@ void EditorAutoPropertySection::construct()
             };
             row.child(slot.scalar, FBoxSlotArgs{.preferredSize = {110.0f, 22.0f}});
             if (!node.bEditable) slot.scalar->setEnabled(false);
+        }
+        else if (node.valueType == refl::type_index_v<int> ||
+                 node.valueType == refl::type_index_v<int32_t> ||
+                 node.valueType == refl::type_index_v<uint32_t>) {
+            slot.kind = EditorSlot::Kind::Integer;
+            slot.integer = std::make_shared<UIDragFloat>(node.name);
+            bindDragMerge(*slot.integer);
+            applyManipulateSpec(*slot.integer, node.binding);
+            slot.integer->_speed = slot.integer->_speed > 0.0f ? slot.integer->_speed : 1.0f;
+            slot.integer->_decimals = 0;
+            slot.integer->_onValueChanged = [this, index = _editors.size()](float value) {
+                PropertyHandle binding = _editors[index].node->binding;
+                auto before = binding.copyInteger();
+                if (before.empty()) return;
+                const int64_t rounded = static_cast<int64_t>(std::llround(value));
+                if (!binding.setInteger(rounded)) return;
+                if (!_undo) return;
+                auto after = binding.copyInteger();
+                (void)_undo->push({
+                    .label    = "Set " + _editors[index].node->displayName,
+                    .mergeKey = mergeKey(*_editors[index].node),
+                    .undo     = [binding, before]() { binding.restoreInteger(before); },
+                    .redo     = [binding, after]() { binding.restoreInteger(after); },
+                });
+            };
+            row.child(slot.integer, FBoxSlotArgs{.preferredSize = {110.0f, 22.0f}});
+            if (!node.bEditable) slot.integer->setEnabled(false);
         }
         else if (node.valueType == refl::type_index_v<bool>) {
             slot.kind = EditorSlot::Kind::Bool;
@@ -270,7 +356,22 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
     for (EditorSlot& slot : _editors) {
         if (!slot.node) continue;
         const bool hasValidationError = !slot.node->binding.validationError().empty();
-        if (slot.kind == EditorSlot::Kind::Vec3) {
+        if (slot.kind == EditorSlot::Kind::Vec2) {
+            glm::vec2 value{};
+            if (!slot.node->binding.tryGetVec2(value)) continue;
+            for (int axis = 0; axis < 2; ++axis) {
+                if (slot.vec2[axis].get() == focused) continue;
+                slot.vec2[axis]->setError(hasValidationError);
+                if (slot.node->binding.isMixedVecAxis(axis, 2)) {
+                    slot.vec2[axis]->setMixed(true);
+                }
+                else {
+                    slot.vec2[axis]->setMixed(false);
+                    slot.vec2[axis]->setValue(value[axis], false);
+                }
+            }
+        }
+        else if (slot.kind == EditorSlot::Kind::Vec3) {
             glm::vec3 value{};
             if (!slot.node->binding.tryGetVec3(value)) continue;
             for (int axis = 0; axis < 3; ++axis) {
@@ -285,6 +386,21 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
                 }
             }
         }
+        else if (slot.kind == EditorSlot::Kind::Vec4) {
+            glm::vec4 value{};
+            if (!slot.node->binding.tryGetVec4(value)) continue;
+            for (int axis = 0; axis < 4; ++axis) {
+                if (slot.vec4[axis].get() == focused) continue;
+                slot.vec4[axis]->setError(hasValidationError);
+                if (slot.node->binding.isMixedVecAxis(axis, 4)) {
+                    slot.vec4[axis]->setMixed(true);
+                }
+                else {
+                    slot.vec4[axis]->setMixed(false);
+                    slot.vec4[axis]->setValue(value[axis], false);
+                }
+            }
+        }
         else if (slot.kind == EditorSlot::Kind::Float) {
             float value = 0.0f;
             if (!slot.node->binding.tryGetFloat(value) || slot.scalar.get() == focused) continue;
@@ -295,6 +411,18 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
             else {
                 slot.scalar->setMixed(false);
                 slot.scalar->setValue(value, false);
+            }
+        }
+        else if (slot.kind == EditorSlot::Kind::Integer) {
+            int64_t value = 0;
+            if (!slot.node->binding.tryGetInteger(value) || slot.integer.get() == focused) continue;
+            slot.integer->setError(hasValidationError);
+            if (slot.node->binding.isMixed()) {
+                slot.integer->setMixed(true);
+            }
+            else {
+                slot.integer->setMixed(false);
+                slot.integer->setValue(static_cast<float>(value), false);
             }
         }
         else if (slot.kind == EditorSlot::Kind::Bool) {
@@ -354,7 +482,8 @@ bool EditorAutoPropertySection::wantsTextInput(WidgetTree& tree) const
 {
     UIElement* focused = tree.getFocused();
     for (const EditorSlot& slot : _editors) {
-        if (slot.string.get() == focused || slot.scalar.get() == focused || slot.assetPath.get() == focused) {
+        if (slot.string.get() == focused || slot.scalar.get() == focused ||
+            slot.integer.get() == focused || slot.assetPath.get() == focused) {
             return true;
         }
     }

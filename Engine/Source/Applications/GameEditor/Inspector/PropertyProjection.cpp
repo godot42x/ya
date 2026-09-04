@@ -1,12 +1,34 @@
 #include "GameEditor/Inspector/PropertyProjection.h"
 
 #include "GameEditor/Inspector/PropertyGraph.h"
+#include "Render3D/Component/Material/PBRMaterialComponent.h"
+#include "Render3D/Component/Material/PhongMaterialComponent.h"
+#include "Render3D/Component/Material/UnlitMaterialComponent.h"
 #include "Scene3D/TransformComponent.h"
 
 #include <mutex>
 
 namespace ya
 {
+
+namespace
+{
+template <typename TOwner>
+void installChangeHooks(PropertyGraph& graph)
+{
+    const std::vector<void*>& instances = graph.getRootInstances();
+    for (PropertyNode& node : graph.getNodesMutable()) {
+        const std::string path = node.name;
+        node.binding.setChangeHook([instances, path]() {
+            for (void* instance : instances) {
+                if (instance) {
+                    static_cast<TOwner*>(instance)->onPropertyChanged(path);
+                }
+            }
+        });
+    }
+}
+} // namespace
 
 PropertyProjectionRegistry& PropertyProjectionRegistry::instance()
 {
@@ -50,6 +72,21 @@ void registerBuiltinPropertyProjections()
                         static_cast<TransformComponent*>(object)->setScale(value);
                     });
                 }
+            });
+        PropertyProjectionRegistry::instance().registerProjection(
+            type_index_v<PBRMaterialComponent>,
+            [](PropertyGraph& graph) {
+                installChangeHooks<PBRMaterialComponent>(graph);
+            });
+        PropertyProjectionRegistry::instance().registerProjection(
+            type_index_v<PhongMaterialComponent>,
+            [](PropertyGraph& graph) {
+                installChangeHooks<PhongMaterialComponent>(graph);
+            });
+        PropertyProjectionRegistry::instance().registerProjection(
+            type_index_v<UnlitMaterialComponent>,
+            [](PropertyGraph& graph) {
+                installChangeHooks<UnlitMaterialComponent>(graph);
             });
     });
 }

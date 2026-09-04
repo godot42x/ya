@@ -42,10 +42,13 @@ class EditorAutoPropertySection final : public UICompoundWidget
   private:
     struct EditorSlot
     {
-        enum class Kind { Vec3, Float, Bool, String, Enum, Color, Asset } kind;
+        enum class Kind { Vec2, Vec3, Vec4, Float, Integer, Bool, String, Enum, Color, Asset } kind;
         const PropertyNode* node = nullptr;
+        std::vector<std::shared_ptr<UIDragFloat>> vec2;
         std::vector<std::shared_ptr<UIDragFloat>> vec3;
+        std::vector<std::shared_ptr<UIDragFloat>> vec4;
         std::shared_ptr<UIDragFloat> scalar;
+        std::shared_ptr<UIDragFloat> integer;
         std::shared_ptr<UICheckBox> boolean;
         std::shared_ptr<UITextField> string;
         std::shared_ptr<UIComboBox> enumeration;

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <format>
+#include <limits>
 
 namespace ya
 {
@@ -66,6 +67,79 @@ bool assetRefHasResolveError(const Property* property, const void* instance)
     }
     if (property->typeIndex == refl::type_index_v<MeshRef>) {
         return static_cast<const MeshRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
+    }
+    return false;
+}
+
+bool isIntegerTypeIndex(type_index_t typeIndex)
+{
+    return typeIndex == refl::type_index_v<int> ||
+           typeIndex == refl::type_index_v<int32_t> ||
+           typeIndex == refl::type_index_v<uint32_t>;
+}
+
+bool readIntegerFromAddress(type_index_t typeIndex, const void* address, int64_t& value)
+{
+    if (!address) {
+        return false;
+    }
+    if (typeIndex == refl::type_index_v<int>) {
+        value = *static_cast<const int*>(address);
+        return true;
+    }
+    if (typeIndex == refl::type_index_v<int32_t>) {
+        value = *static_cast<const int32_t*>(address);
+        return true;
+    }
+    if (typeIndex == refl::type_index_v<uint32_t>) {
+        value = *static_cast<const uint32_t*>(address);
+        return true;
+    }
+    return false;
+}
+
+bool writeIntegerToAddress(type_index_t typeIndex, void* address, int64_t value)
+{
+    if (!address) {
+        return false;
+    }
+    if (typeIndex == refl::type_index_v<int>) {
+        if (value < static_cast<int64_t>(std::numeric_limits<int>::min()) ||
+            value > static_cast<int64_t>(std::numeric_limits<int>::max())) {
+            return false;
+        }
+        int& current = *static_cast<int*>(address);
+        const int next = static_cast<int>(value);
+        if (current == next) {
+            return false;
+        }
+        current = next;
+        return true;
+    }
+    if (typeIndex == refl::type_index_v<int32_t>) {
+        if (value < static_cast<int64_t>(std::numeric_limits<int32_t>::min()) ||
+            value > static_cast<int64_t>(std::numeric_limits<int32_t>::max())) {
+            return false;
+        }
+        int32_t& current = *static_cast<int32_t*>(address);
+        const int32_t next = static_cast<int32_t>(value);
+        if (current == next) {
+            return false;
+        }
+        current = next;
+        return true;
+    }
+    if (typeIndex == refl::type_index_v<uint32_t>) {
+        if (value < 0 || value > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
+            return false;
+        }
+        uint32_t& current = *static_cast<uint32_t*>(address);
+        const uint32_t next = static_cast<uint32_t>(value);
+        if (current == next) {
+            return false;
+        }
+        current = next;
+        return true;
     }
     return false;
 }
@@ -148,9 +222,21 @@ bool PropertyHandle::isMixed() const
         const void* value = _property->addressGetter(instance);
         return !value || !equals(first, value);
     };
+    if (_property->typeIndex == refl::type_index_v<glm::vec2>) return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* i) { return differs(i, [](const void* a, const void* b) { return *static_cast<const glm::vec2*>(a) == *static_cast<const glm::vec2*>(b); }); });
     if (_property->typeIndex == refl::type_index_v<glm::vec3>) return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* i) { return differs(i, [](const void* a, const void* b) { return *static_cast<const glm::vec3*>(a) == *static_cast<const glm::vec3*>(b); }); });
     if (_property->typeIndex == refl::type_index_v<glm::vec4>) return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* i) { return differs(i, [](const void* a, const void* b) { return *static_cast<const glm::vec4*>(a) == *static_cast<const glm::vec4*>(b); }); });
     if (_property->typeIndex == refl::type_index_v<float>) return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* i) { return differs(i, [](const void* a, const void* b) { return *static_cast<const float*>(a) == *static_cast<const float*>(b); }); });
+    if (isIntegerTypeIndex(_property->typeIndex)) {
+        int64_t firstValue = 0;
+        if (!readIntegerFromAddress(_property->typeIndex, first, firstValue)) {
+            return false;
+        }
+        return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* instance) {
+            int64_t value = 0;
+            const void* address = _property->addressGetter(instance);
+            return !readIntegerFromAddress(_property->typeIndex, address, value) || value != firstValue;
+        });
+    }
     if (_property->typeIndex == refl::type_index_v<bool>) return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* i) { return differs(i, [](const void* a, const void* b) { return *static_cast<const bool*>(a) == *static_cast<const bool*>(b); }); });
     if (_property->typeIndex == refl::type_index_v<std::string>) return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* i) { return differs(i, [](const void* a, const void* b) { return *static_cast<const std::string*>(a) == *static_cast<const std::string*>(b); }); });
     if (isAssetRefTypeIndex(_property->typeIndex)) {
@@ -163,30 +249,133 @@ bool PropertyHandle::isMixed() const
     return false;
 }
 
-bool PropertyHandle::isMixedVec3Axis(int axis) const
+bool PropertyHandle::isMixedVecAxis(int axis, int componentCount) const
 {
-    if (axis < 0 || axis > 2 || !isValid() || _instances.size() < 2 ||
-        _property->typeIndex != refl::type_index_v<glm::vec3> || !_property->addressGetter) {
+    if (axis < 0 || axis >= componentCount || !isValid() || _instances.size() < 2 || !_property->addressGetter) {
         return false;
     }
-    const void* firstAddr = _property->addressGetter(_instances.front());
-    if (!firstAddr) {
-        return false;
-    }
-    const float first = (*static_cast<const glm::vec3*>(firstAddr))[axis];
-    for (size_t i = 1; i < _instances.size(); ++i) {
-        const void* address = _property->addressGetter(_instances[i]);
-        if (!address || (*static_cast<const glm::vec3*>(address))[axis] != first) {
-            return true;
+    if (componentCount == 2 && _property->typeIndex == refl::type_index_v<glm::vec2>) {
+        const void* firstAddr = _property->addressGetter(_instances.front());
+        if (!firstAddr) {
+            return false;
         }
+        const float first = (*static_cast<const glm::vec2*>(firstAddr))[axis];
+        for (size_t i = 1; i < _instances.size(); ++i) {
+            const void* address = _property->addressGetter(_instances[i]);
+            if (!address || (*static_cast<const glm::vec2*>(address))[axis] != first) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (componentCount == 3 && _property->typeIndex == refl::type_index_v<glm::vec3>) {
+        const void* firstAddr = _property->addressGetter(_instances.front());
+        if (!firstAddr) {
+            return false;
+        }
+        const float first = (*static_cast<const glm::vec3*>(firstAddr))[axis];
+        for (size_t i = 1; i < _instances.size(); ++i) {
+            const void* address = _property->addressGetter(_instances[i]);
+            if (!address || (*static_cast<const glm::vec3*>(address))[axis] != first) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (componentCount == 4 && _property->typeIndex == refl::type_index_v<glm::vec4>) {
+        const void* firstAddr = _property->addressGetter(_instances.front());
+        if (!firstAddr) {
+            return false;
+        }
+        const float first = (*static_cast<const glm::vec4*>(firstAddr))[axis];
+        for (size_t i = 1; i < _instances.size(); ++i) {
+            const void* address = _property->addressGetter(_instances[i]);
+            if (!address || (*static_cast<const glm::vec4*>(address))[axis] != first) {
+                return true;
+            }
+        }
+        return false;
     }
     return false;
+}
+
+bool PropertyHandle::isMixedVec3Axis(int axis) const
+{
+    return isMixedVecAxis(axis, 3);
 }
 
 const std::string& PropertyHandle::getName() const
 {
     static const std::string empty;
     return _property ? _property->name : empty;
+}
+
+bool PropertyHandle::tryGetVec2(glm::vec2& value) const
+{
+    if (!isValid() || _property->typeIndex != refl::type_index_v<glm::vec2> || !_property->addressGetter) return false;
+    const void* address = _property->addressGetter(_instances.front());
+    if (!address) return false;
+    value = *static_cast<const glm::vec2*>(address);
+    return true;
+}
+
+bool PropertyHandle::setVec2(const glm::vec2& value) const
+{
+    if (!isEditable() || _property->typeIndex != refl::type_index_v<glm::vec2>) return false;
+    bool changed = false;
+    for (void* instance : _instances) {
+        void* address = _property->addressGetterMutable(instance);
+        if (!address) continue;
+        const auto& current = *static_cast<const glm::vec2*>(address);
+        if (current == value) continue;
+        *static_cast<glm::vec2*>(address) = value;
+        changed = true;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
+    }
+    return changed;
+}
+
+std::vector<glm::vec2> PropertyHandle::copyVec2() const
+{
+    std::vector<glm::vec2> values;
+    if (!isValid() || _property->typeIndex != refl::type_index_v<glm::vec2> || !_property->addressGetter) {
+        return values;
+    }
+    values.reserve(_instances.size());
+    for (void* instance : _instances) {
+        const void* address = _property->addressGetter(instance);
+        if (!address) {
+            return {};
+        }
+        values.push_back(*static_cast<const glm::vec2*>(address));
+    }
+    return values;
+}
+
+bool PropertyHandle::restoreVec2(const std::vector<glm::vec2>& values) const
+{
+    if (!isEditable() || _property->typeIndex != refl::type_index_v<glm::vec2> ||
+        values.size() != _instances.size()) {
+        return false;
+    }
+    bool changed = false;
+    for (size_t i = 0; i < _instances.size(); ++i) {
+        void* address = _property->addressGetterMutable(_instances[i]);
+        if (!address) {
+            continue;
+        }
+        if (*static_cast<const glm::vec2*>(address) == values[i]) {
+            continue;
+        }
+        *static_cast<glm::vec2*>(address) = values[i];
+        changed = true;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
+    }
+    return changed;
 }
 
 bool PropertyHandle::tryGetVec3(glm::vec3& value) const
@@ -210,6 +399,9 @@ bool PropertyHandle::setVec3(const glm::vec3& value) const
         if (_vec3Setter) _vec3Setter(instance, value);
         else *static_cast<glm::vec3*>(address) = value;
         changed = true;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
     }
     return changed;
 }
@@ -254,6 +446,77 @@ bool PropertyHandle::restoreVec3(const std::vector<glm::vec3>& values) const
         }
         changed = true;
     }
+    if (changed && _changeHook) {
+        _changeHook();
+    }
+    return changed;
+}
+
+bool PropertyHandle::tryGetVec4(glm::vec4& value) const
+{
+    if (!isValid() || _property->typeIndex != refl::type_index_v<glm::vec4> || !_property->addressGetter) return false;
+    const void* address = _property->addressGetter(_instances.front());
+    if (!address) return false;
+    value = *static_cast<const glm::vec4*>(address);
+    return true;
+}
+
+bool PropertyHandle::setVec4(const glm::vec4& value) const
+{
+    if (!isEditable() || _property->typeIndex != refl::type_index_v<glm::vec4>) return false;
+    bool changed = false;
+    for (void* instance : _instances) {
+        void* address = _property->addressGetterMutable(instance);
+        if (!address) continue;
+        const auto& current = *static_cast<const glm::vec4*>(address);
+        if (current == value) continue;
+        *static_cast<glm::vec4*>(address) = value;
+        changed = true;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
+    }
+    return changed;
+}
+
+std::vector<glm::vec4> PropertyHandle::copyVec4() const
+{
+    std::vector<glm::vec4> values;
+    if (!isValid() || _property->typeIndex != refl::type_index_v<glm::vec4> || !_property->addressGetter) {
+        return values;
+    }
+    values.reserve(_instances.size());
+    for (void* instance : _instances) {
+        const void* address = _property->addressGetter(instance);
+        if (!address) {
+            return {};
+        }
+        values.push_back(*static_cast<const glm::vec4*>(address));
+    }
+    return values;
+}
+
+bool PropertyHandle::restoreVec4(const std::vector<glm::vec4>& values) const
+{
+    if (!isEditable() || _property->typeIndex != refl::type_index_v<glm::vec4> ||
+        values.size() != _instances.size()) {
+        return false;
+    }
+    bool changed = false;
+    for (size_t i = 0; i < _instances.size(); ++i) {
+        void* address = _property->addressGetterMutable(_instances[i]);
+        if (!address) {
+            continue;
+        }
+        if (*static_cast<const glm::vec4*>(address) == values[i]) {
+            continue;
+        }
+        *static_cast<glm::vec4*>(address) = values[i];
+        changed = true;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
+    }
     return changed;
 }
 
@@ -277,6 +540,9 @@ bool PropertyHandle::setFloat(float value) const
         if (current == value) continue;
         current = value;
         changed = true;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
     }
     return changed;
 }
@@ -316,6 +582,65 @@ bool PropertyHandle::restoreFloat(const std::vector<float>& values) const
         current = values[i];
         changed = true;
     }
+    if (changed && _changeHook) {
+        _changeHook();
+    }
+    return changed;
+}
+
+bool PropertyHandle::tryGetInteger(int64_t& value) const
+{
+    if (!isValid() || !isIntegerTypeIndex(_property->typeIndex) || !_property->addressGetter) {
+        return false;
+    }
+    const void* address = _property->addressGetter(_instances.front());
+    return readIntegerFromAddress(_property->typeIndex, address, value);
+}
+
+bool PropertyHandle::setInteger(int64_t value) const
+{
+    if (!isEditable() || !isIntegerTypeIndex(_property->typeIndex)) {
+        return false;
+    }
+    bool changed = false;
+    for (void* instance : _instances) {
+        changed = writeIntegerToAddress(_property->typeIndex, _property->addressGetterMutable(instance), value) || changed;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
+    }
+    return changed;
+}
+
+std::vector<int64_t> PropertyHandle::copyInteger() const
+{
+    std::vector<int64_t> values;
+    if (!isValid() || !isIntegerTypeIndex(_property->typeIndex) || !_property->addressGetter) {
+        return values;
+    }
+    values.reserve(_instances.size());
+    for (void* instance : _instances) {
+        int64_t value = 0;
+        if (!readIntegerFromAddress(_property->typeIndex, _property->addressGetter(instance), value)) {
+            return {};
+        }
+        values.push_back(value);
+    }
+    return values;
+}
+
+bool PropertyHandle::restoreInteger(const std::vector<int64_t>& values) const
+{
+    if (!isEditable() || !isIntegerTypeIndex(_property->typeIndex) || values.size() != _instances.size()) {
+        return false;
+    }
+    bool changed = false;
+    for (size_t i = 0; i < _instances.size(); ++i) {
+        changed = writeIntegerToAddress(_property->typeIndex, _property->addressGetterMutable(_instances[i]), values[i]) || changed;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
+    }
     return changed;
 }
 
@@ -339,6 +664,9 @@ bool PropertyHandle::setBool(bool value) const
         if (current == value) continue;
         current = value;
         changed = true;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
     }
     return changed;
 }
@@ -379,6 +707,9 @@ bool PropertyHandle::restoreBool(const std::vector<uint8_t>& values) const
         current = next;
         changed = true;
     }
+    if (changed && _changeHook) {
+        _changeHook();
+    }
     return changed;
 }
 
@@ -402,6 +733,9 @@ bool PropertyHandle::setString(const std::string& value) const
         if (current == value) continue;
         current = value;
         changed = true;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
     }
     return changed;
 }
@@ -441,6 +775,9 @@ bool PropertyHandle::restoreString(const std::vector<std::string>& values) const
         }
         current = values[i];
         changed = true;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
     }
     return changed;
 }
@@ -499,6 +836,9 @@ bool PropertyHandle::setEnumByIndex(int index) const
         enumInfo->setValue(address, value);
         changed = true;
     }
+    if (changed && _changeHook) {
+        _changeHook();
+    }
     return changed;
 }
 
@@ -537,6 +877,9 @@ bool PropertyHandle::restoreEnum(const std::vector<int64_t>& values) const
         }
         enumInfo->setValue(address, values[i]);
         changed = true;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
     }
     return changed;
 }
@@ -590,6 +933,9 @@ bool PropertyHandle::setColor(const glm::vec4& value) const
             current = next;
             changed = true;
         }
+    }
+    if (changed && _changeHook) {
+        _changeHook();
     }
     return changed;
 }
@@ -650,6 +996,9 @@ bool PropertyHandle::restoreColor(const std::vector<glm::vec4>& values) const
             changed = true;
         }
     }
+    if (changed && _changeHook) {
+        _changeHook();
+    }
     return changed;
 }
 
@@ -682,6 +1031,9 @@ bool PropertyHandle::setAssetPath(const std::string& value) const
         }
         ref->setPath(value);
         changed = true;
+    }
+    if (changed && _changeHook) {
+        _changeHook();
     }
     return changed;
 }
@@ -720,6 +1072,9 @@ bool PropertyHandle::restoreAssetPath(const std::vector<std::string>& values) co
         ref->setPath(values[i]);
         changed = true;
     }
+    if (changed && _changeHook) {
+        _changeHook();
+    }
     return changed;
 }
 
@@ -752,12 +1107,46 @@ std::string PropertyHandle::validationError() const
         }
         return {};
     }
+    if (isIntegerTypeIndex(_property->typeIndex)) {
+        int64_t value = 0;
+        if (!tryGetInteger(value)) {
+            return "Invalid value";
+        }
+        if (static_cast<double>(value) < spec.min || static_cast<double>(value) > spec.max) {
+            return std::format("Value must be between {} and {}", spec.min, spec.max);
+        }
+        return {};
+    }
+    if (_property->typeIndex == refl::type_index_v<glm::vec2>) {
+        glm::vec2 value{};
+        if (!tryGetVec2(value)) {
+            return "Invalid value";
+        }
+        for (int axis = 0; axis < 2; ++axis) {
+            if (value[axis] < spec.min || value[axis] > spec.max) {
+                return std::format("Component must be between {} and {}", spec.min, spec.max);
+            }
+        }
+        return {};
+    }
     if (_property->typeIndex == refl::type_index_v<glm::vec3>) {
         glm::vec3 value{};
         if (!tryGetVec3(value)) {
             return "Invalid value";
         }
         for (int axis = 0; axis < 3; ++axis) {
+            if (value[axis] < spec.min || value[axis] > spec.max) {
+                return std::format("Component must be between {} and {}", spec.min, spec.max);
+            }
+        }
+        return {};
+    }
+    if (_property->typeIndex == refl::type_index_v<glm::vec4>) {
+        glm::vec4 value{};
+        if (!tryGetVec4(value)) {
+            return "Invalid value";
+        }
+        for (int axis = 0; axis < 4; ++axis) {
             if (value[axis] < spec.min || value[axis] > spec.max) {
                 return std::format("Component must be between {} and {}", spec.min, spec.max);
             }

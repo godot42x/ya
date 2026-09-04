@@ -7,9 +7,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <string>
+#include <vector>
 
 namespace ya
 {
@@ -27,31 +29,101 @@ std::string makeDisplayName(std::string_view name)
     }
     return result;
 }
+
+bool isLeafEditableType(const PropertyNode& node)
+{
+    return node.valueType == refl::type_index_v<glm::vec2> ||
+           node.valueType == refl::type_index_v<glm::vec3> ||
+           node.valueType == refl::type_index_v<glm::vec4> ||
+           node.valueType == refl::type_index_v<float> ||
+           node.valueType == refl::type_index_v<int> ||
+           node.valueType == refl::type_index_v<int32_t> ||
+           node.valueType == refl::type_index_v<uint32_t> ||
+           node.valueType == refl::type_index_v<bool> ||
+           node.valueType == refl::type_index_v<std::string> ||
+           node.binding.isAssetRef() ||
+           EnumRegistry::instance().getEnum(node.valueType) != nullptr;
 }
 
-PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> instances)
+void appendGraphNodes(std::vector<PropertyNode>& outNodes,
+                      type_index_t currentType,
+                      const std::vector<void*>& instances,
+                      std::string_view pathPrefix,
+                      std::string_view displayPrefix,
+                      std::vector<type_index_t>& ancestry)
 {
-    PropertyGraph graph;
-    const Class* cls = ClassRegistry::instance().getClass(ownerType);
-    if (!cls || instances.empty()) return graph;
+    const Class* cls = ClassRegistry::instance().getClass(currentType);
+    if (!cls || instances.empty()) {
+        return;
+    }
+    ancestry.push_back(currentType);
     std::vector<std::string> names = cls->propertyOrder;
     for (const auto& [name, property] : cls->properties) {
-        if (std::find(names.begin(), names.end(), name) == names.end()) names.push_back(name);
+        if (std::find(names.begin(), names.end(), name) == names.end()) {
+            names.push_back(name);
+        }
     }
-    graph._nodes.reserve(names.size());
+
     for (const std::string& name : names) {
         auto it = cls->properties.find(name);
-        if (it == cls->properties.end()) continue;
+        if (it == cls->properties.end()) {
+            continue;
+        }
         const Property& property = it->second;
-        if (property.metadata.hasFlag(FieldFlags::NotSerialized) || property.metadata.hasFlag(FieldFlags::Transient)) continue;
+        if (property.metadata.hasFlag(FieldFlags::NotSerialized) || property.metadata.hasFlag(FieldFlags::Transient)) {
+            continue;
+        }
+
+        const std::string leafPath = pathPrefix.empty() ? property.name : std::string(pathPrefix) + "." + property.name;
+        const std::string leafDisplay = displayPrefix.empty()
+            ? makeDisplayName(property.name)
+            : std::string(displayPrefix) + " / " + makeDisplayName(property.name);
+
+        const bool bCompositeCandidate =
+            property.addressGetter &&
+            !EnumRegistry::instance().getEnum(property.typeIndex) &&
+            property.typeIndex != refl::type_index_v<glm::vec2> &&
+            property.typeIndex != refl::type_index_v<glm::vec3> &&
+            property.typeIndex != refl::type_index_v<glm::vec4> &&
+            property.typeIndex != refl::type_index_v<float> &&
+            property.typeIndex != refl::type_index_v<int> &&
+            property.typeIndex != refl::type_index_v<int32_t> &&
+            property.typeIndex != refl::type_index_v<uint32_t> &&
+            property.typeIndex != refl::type_index_v<bool> &&
+            property.typeIndex != refl::type_index_v<std::string> &&
+            !PropertyHandleFactory::make(currentType, instances, property.name).isAssetRef() &&
+            ClassRegistry::instance().getClass(property.typeIndex) != nullptr &&
+            std::find(ancestry.begin(), ancestry.end(), property.typeIndex) == ancestry.end();
+        if (bCompositeCandidate) {
+            std::vector<void*> childInstances;
+            childInstances.reserve(instances.size());
+            bool bAll = true;
+            for (void* instance : instances) {
+                void* child = property.addressGetterMutable ? property.addressGetterMutable(instance) : const_cast<void*>(property.addressGetter(instance));
+                if (!child) {
+                    bAll = false;
+                    break;
+                }
+                childInstances.push_back(child);
+            }
+            if (bAll) {
+                appendGraphNodes(outNodes, property.typeIndex, childInstances, leafPath, leafDisplay, ancestry);
+                continue;
+            }
+        }
+
         PropertyNode node;
-        node.name = property.name;
-        node.displayName = makeDisplayName(property.name);
+        node.name = leafPath;
+        node.displayName = leafDisplay;
         if (property.metadata.hasMeta("category")) {
-            try { node.category = property.metadata.get<std::string>("category"); } catch (...) {}
+            try {
+                node.category = property.metadata.get<std::string>("category");
+            }
+            catch (...) {
+            }
         }
         node.valueType = property.typeIndex;
-        node.binding = PropertyHandleFactory::make(ownerType, instances, property.name);
+        node.binding = PropertyHandleFactory::make(currentType, instances, property.name);
         node.bEditable = node.binding.isEditable();
         node.bVisible = true;
         node.bInstanceEditable = property.metadata.hasFlag(FieldFlags::InstanceEditable);
@@ -62,8 +134,19 @@ PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> in
             catch (...) {
             }
         }
-        graph._nodes.push_back(std::move(node));
+        outNodes.push_back(std::move(node));
     }
+    ancestry.pop_back();
+}
+}
+
+PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> instances)
+{
+    PropertyGraph graph;
+    graph._ownerType = ownerType;
+    graph._rootInstances = instances;
+    std::vector<type_index_t> ancestry;
+    appendGraphNodes(graph._nodes, ownerType, instances, {}, {}, ancestry);
     return graph;
 }
 
@@ -78,16 +161,7 @@ PropertyGraph PropertyGraph::project(type_index_t ownerType, std::vector<void*> 
 bool PropertyGraph::hasRetainedEditors() const
 {
     for (const PropertyNode& node : _nodes) {
-        if (!node.bVisible) {
-            continue;
-        }
-        if (node.valueType == refl::type_index_v<glm::vec3> ||
-            node.valueType == refl::type_index_v<float> ||
-            node.valueType == refl::type_index_v<bool> ||
-            node.valueType == refl::type_index_v<std::string> ||
-            (node.bColor && node.valueType == refl::type_index_v<glm::vec4>) ||
-            node.binding.isAssetRef() ||
-            EnumRegistry::instance().getEnum(node.valueType) != nullptr) {
+        if (node.bVisible && isLeafEditableType(node)) {
             return true;
         }
     }

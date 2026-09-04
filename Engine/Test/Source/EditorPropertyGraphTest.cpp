@@ -5,6 +5,8 @@
 #include "Core/Reflection/Reflection.h"
 #include "Scene3D/TransformComponent.h"
 #include "Physics/PhysicsBodyComponent.h"
+#include "Render3D/Component/Material/PBRMaterialComponent.h"
+#include "ECS/Systems/Components/TerrainComponent.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
@@ -323,6 +325,87 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionColorShowsMixedAndUndoRestoresE
     EXPECT_TRUE(stack.undo());
     EXPECT_EQ(first.tint, glm::vec3(1.0f, 0.0f, 0.0f));
     EXPECT_EQ(second.tint, glm::vec3(0.0f, 1.0f, 0.0f));
+
+    tree.detach(*section);
+}
+
+TEST(EditorPropertyGraphTest, RecursiveProjectionFlattensNestedMaterialPropertiesAndInstallsChangeHooks)
+{
+    PBRMaterialComponent material;
+
+    auto graph = PropertyGraph::project(type_index_v<PBRMaterialComponent>, {&material});
+    PropertyNode* albedo = graph.find("_params.albedo");
+    PropertyNode* metallic = graph.find("_params.metallic");
+    PropertyNode* albedoSlot = graph.find("_albedoSlot.textureRef");
+    ASSERT_NE(albedo, nullptr);
+    ASSERT_NE(metallic, nullptr);
+    ASSERT_NE(albedoSlot, nullptr);
+    EXPECT_TRUE(graph.hasRetainedEditors());
+    EXPECT_EQ(albedo->displayName, "Params / Albedo");
+    EXPECT_EQ(albedoSlot->displayName, "Albedo Slot / Texture Ref");
+
+    EXPECT_TRUE(albedo->binding.setColor(glm::vec4(0.2f, 0.3f, 0.4f, 1.0f)));
+    EXPECT_EQ(material.getParams().albedo, glm::vec3(0.2f, 0.3f, 0.4f));
+
+    int changeHookCount = 0;
+    metallic->binding.setChangeHook([&changeHookCount]() { ++changeHookCount; });
+    EXPECT_TRUE(metallic->binding.setFloat(0.7f));
+    EXPECT_FLOAT_EQ(material.getParams().metallic, 0.7f);
+    EXPECT_EQ(changeHookCount, 1);
+
+    EXPECT_TRUE(albedoSlot->binding.setAssetPath("Content/Textures/Nested.png"));
+    EXPECT_EQ(material.getTextureSlot(EPBRMaterialTextureSlot::Albedo)->textureRef.getPath(), "Content/Textures/Nested.png");
+}
+
+TEST(EditorPropertyGraphTest, TerrainVec2AndIntegerPropertiesSupportMixedEditingAndUndo)
+{
+    TerrainComponent first;
+    TerrainComponent second;
+    second._size.x = 256.0f;
+    second._gridResolution = 256;
+
+    auto graph = PropertyGraph::project(type_index_v<TerrainComponent>, {&first, &second});
+    const PropertyNode* size = graph.find("_size");
+    const PropertyNode* resolution = graph.find("_gridResolution");
+    ASSERT_NE(size, nullptr);
+    ASSERT_NE(resolution, nullptr);
+    EXPECT_TRUE(graph.hasRetainedEditors());
+    EXPECT_TRUE(size->binding.isMixedVecAxis(0, 2));
+    EXPECT_TRUE(resolution->binding.isMixed());
+
+    UndoStack stack;
+    auto section = std::make_shared<EditorAutoPropertySection>("AutoTerrain", std::move(graph), &stack);
+    WidgetTree tree({.width = 360, .height = 220});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
+    section->sync(tree);
+
+    const UIElementRef& sizeRow = section->getChildren()[0]->getChildren()[1];
+    auto* sizeX = dynamic_cast<UIDragFloat*>(sizeRow->getChildren()[1].get());
+    auto* sizeY = dynamic_cast<UIDragFloat*>(sizeRow->getChildren()[2].get());
+    ASSERT_NE(sizeX, nullptr);
+    ASSERT_NE(sizeY, nullptr);
+    EXPECT_TRUE(sizeX->isMixed());
+    EXPECT_FALSE(sizeY->isMixed());
+
+    sizeX->setValue(512.0f);
+    EXPECT_EQ(first._size.x, 512.0f);
+    EXPECT_EQ(second._size.x, 512.0f);
+    EXPECT_TRUE(stack.undo());
+    EXPECT_EQ(first._size.x, 100.0f);
+    EXPECT_EQ(second._size.x, 256.0f);
+
+    section->sync(tree);
+    const UIElementRef& resolutionRow = section->getChildren()[0]->getChildren()[4];
+    auto* resolutionDrag = dynamic_cast<UIDragFloat*>(resolutionRow->getChildren()[1].get());
+    ASSERT_NE(resolutionDrag, nullptr);
+    EXPECT_TRUE(resolutionDrag->isMixed());
+
+    resolutionDrag->setValue(384.0f);
+    EXPECT_EQ(first._gridResolution, 384u);
+    EXPECT_EQ(second._gridResolution, 384u);
+    EXPECT_TRUE(stack.undo());
+    EXPECT_EQ(first._gridResolution, 128u);
+    EXPECT_EQ(second._gridResolution, 256u);
 
     tree.detach(*section);
 }

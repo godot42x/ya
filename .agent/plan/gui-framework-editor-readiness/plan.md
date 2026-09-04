@@ -230,7 +230,7 @@ Render2D compose / window or offscreen presentation
 
 迁移顺序：
 
-1. Inspector property editors：bool、enum、flags、number、vector、color、asset reference。
+1. Inspector property editors：bool、enum、flags、number、vector、color、asset reference；nested/composite 字段必须走统一 property-path 展开，不把通用 typed read/write/copy/compare 逻辑长期留在 editor 的 `PropertyHandle`。
 2. Content Browser / File Explorer：目录树、列表/图标视图、搜索、选择、双击打开、错误态。
 3. Hierarchy / Tree：大树、过滤、展开状态、重排、拖放。
 4. Virtualized list/table：可见行复用、稳定 key、局部 dirty。

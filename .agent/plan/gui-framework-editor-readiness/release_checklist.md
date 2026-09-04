@@ -16,7 +16,7 @@ Host for recorded Pass rows: macOS 15.5, Clang, Vulkan, Apple M5. Date: 2026-09-
 | XP-WIN | Windows/MSVC compile + same tests | No Windows host in this session; designated-initializer / `YA_*_API` rules in `.agent/skills/cross-platform/SKILL.md` are the compile contract, not a substitute for a green MSVC run | **Blocker** |
 | XP-OGL | OpenGL presentation | `GUIAppHost` asserts `VulkanSwapChain`; WidgetTree chrome compose is Vulkan-only. OpenGL 3D runtime is a separate matrix and was not run | **Blocker** |
 | SOAK-HR | Multi-hour process soak | 9C is structural cycle soak (64/32), not a long-lived editor process | **Blocker** (descoped to structural soak) |
-| IMGUI | `imgui-local` removed | Native viewport gizmo no longer uses `GuiSystem` / `ImGuizmo`; `imgui-local` still remains for FilePicker/TypeRenderer legacy helpers | **Blocker** for “no ImGui in process”, not for WidgetTree-only chrome |
+| IMGUI | `imgui-local` removed | Native viewport gizmo no longer uses `GuiSystem` / `ImGuizmo`; retained inspector now covers nested/composite + vec2/int core fields, but `imgui-local` still remains for FilePicker and legacy `TypeRenderer` / `ContainerPropertyRenderer` cleanup | **Blocker** for “no ImGui in process”, not for WidgetTree-only chrome |
 
 ## Ready claim
 

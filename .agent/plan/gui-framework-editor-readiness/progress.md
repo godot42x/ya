@@ -1103,3 +1103,23 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - native gizmo 当前只覆盖轴向 translate/rotate/scale；尚未补 plane handles、uniform scale、mode switch UI。
 - 下一步：Phase 10B inspector 类型覆盖，随后做 10E shell refactor + 第二轮 density/token 收口。
 
+## Phase 10B 当前 checkpoint（2026-09-04）
+
+- `PropertyGraph::build` 不再只停在 top-level 标量字段；现在会递归展开 reflected nested/composite property，并把 leaf node 物化为 dot-path（例如 `_params.albedo`、`_albedoSlot.textureRef`）。
+- retained `EditorAutoPropertySection` 新增 `glm::vec2` / `glm::vec4` / `int` / `int32_t` / `uint32_t` 编辑能力；mixed state、undo merge、validation error 与多选写回都走同一条 `PropertyHandle` 路径。
+- 直接收益：`TerrainComponent` 的 `_size` / `_gridResolution`、材质 component 的 `_params.*` 与 `TextureSlot.textureRef` 不再因为不是 `bool/float/vec3/string/enum/color/asset-ref` 的 top-level 字段而被整个跳过。
+- `PropertyProjectionRegistry` 继续保留 editor 语义写回职责：`TransformComponent` 仍走 setter；材质类 (`PBR` / `Phong` / `Unlit`) 通过 owner change hook 保留 `onPropertyChanged(path)` 语义，不把 runtime 同步逻辑塞回 `EditorSurface`。
+- 验证：`xmake b ya-testing`；`xmake r ya-testing -- --gtest_filter='EditorPropertyGraphTest.RecursiveProjectionFlattensNestedMaterialPropertiesAndInstallsChangeHooks:EditorPropertyGraphTest.TerrainVec2AndIntegerPropertiesSupportMixedEditingAndUndo:EditorPropertyGraphTest.AutoPropertySectionAssetPathCommitBrowseAndUndo'`。
+
+### Phase 10B 架构判断
+
+- 当前 `PropertyHandle` 仍承担了不少“本应由反射层提供”的通用能力：typed read/write、copy/restore、mixed compare、validation、nested leaf binding glue。
+- 这些逻辑可以作为 Phase 10B 后半段的正式收口目标：在 `Core/Reflection` 中补出通用 `PropertyAccessor` / property-path walk / copy-compare-restore 能力，然后把 `PropertyHandle` 收瘦成 editor-specific adapter（multi-select mixed、undo glue、asset picker/error UI、owner callback）。
+- 这次 checkpoint 先保证 inspector feature 闭环，不在 `EditorSurface` 继续堆实现；后续 reflection 下沉应优先落在 `Inspector/Property*` 与 `Core/Reflection/*` 边界。
+
+### Phase 10B 边界
+
+- 容器类编辑（旧 `ContainerPropertyRenderer` 覆盖面）和 custom renderer parity 仍未迁移；当前只补“高频标量/向量 + nested/composite flatten”。
+- `TypeRenderer` / `ContainerPropertyRenderer` 现在没有 widgettree live caller，但在删除前仍要先完成 retained 容器/custom editor 替代，以及 reflection accessor 拆分，避免把 editor-specific 偶然实现固化成底层事实源。
+- 按用户约束，新增 inspector/plan 能力不继续塞进 `EditorSurface`；现阶段只允许它保留现有装配职责，系统性拆分留到 Phase 10E。
+
