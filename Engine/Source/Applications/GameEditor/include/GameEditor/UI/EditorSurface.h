@@ -15,6 +15,7 @@
 #include "GameEditor/UI/EditorFilePicker.h"
 #include "GameEditor/UI/EditorTabRegistry.h"
 #include "GameEditor/UI/EditorInspectorTab.h"
+#include "GameEditor/UI/EditorDebugImagesTab.h"
 #include "GameEditor/UI/EditorAutoPropertySection.h"
 #include "GameEditor/UI/EditorViewportHost.h"
 
@@ -93,6 +94,7 @@ struct EditorSurface
     std::shared_ptr<UndoStack>       _undo      = std::make_shared<UndoStack>();
     std::shared_ptr<UIText>          _statsText;
     std::unique_ptr<EditorInspectorTab> _inspectorTab;
+    std::unique_ptr<EditorDebugImagesTab> _debugImagesTab;
     std::unique_ptr<guiworkbench::FWorkbenchSurface> _workbench;
     std::unique_ptr<EditorTabRegistry> _tabRegistry;
     std::shared_ptr<UIText> _assetInspectorPathText;

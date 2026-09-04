@@ -1,6 +1,6 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-04 (after Phase 8T)  
+> **As of:** 2026-09-04 (after Phase 8V)  
 > **Default chrome:** `editor.chrome.host = widgettree`  
 > **Legacy chrome:** `--editor-chrome=imgui` still runs `EditorLayer::onImGuiRender()`  
 > **Purpose:** Gate deletions — do **not** remove ImGui / `imgui-local` until a row is ✅ for widgettree default path.
@@ -34,7 +34,7 @@
 | Toolbar | `EditorLayer::toolbar` (icon `ImageButton`) | Text `UIButton` row | 🟡 | Visual parity only; actions wired |
 | Dock layout | ImGui `DockSpace` | `UIDockWorkspace` + `UIDockSpace` | 🟡 | Docked tree persists (8Q); no floating geometry |
 | Editor Settings window | `EditorLayer::editorSettings` | `EditorSurface::openEditorSettingsDialog` | ✅ | View 菜单；sampler/overlay/startup scene |
-| Debug images window | `EditorLayer::debugWindow` | — | 🔴 | Viewport debug catalog, channel masks, group viewers |
+| Debug images window | `EditorLayer::debugWindow` | `EditorDebugImagesTab` dock tab | ✅ | Category combo, grouped mip/face combos, standalone RGBA + `UIImage`; cube-face button grid not retained. ImGui window remains until 8W |
 | Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | Retained popups on `EditorSurface` | 🟡 | Scene save + asset browse + generic file picker migrated |
 | Viewport display | `viewportWindow` + `ImGui::Image` | `UIImage` samples offscreen compose | ✅ | Widgettree does not call `viewportWindow` |
 | Viewport input / pick / gizmo | `EditorLayer::onEvent` + ImGuizmo | Same `onEvent` + `EditorViewportGizmoOverlay` | 🟡 | Gizmo draw/IO still ImGuizmo; overlay contract retained |
@@ -202,7 +202,7 @@
 
 1. ~~Viewport context menu (create / duplicate / delete entities)~~ ✅ Phase 8R  
 2. ~~Editor Settings (or move settings into retained UI)~~ ✅ Phase 8U  
-3. Debug images window (or drop scope)  
+3. ~~Debug images window (or drop scope)~~ ✅ Phase 8V  
 4. ~~UI Designer palette + inspector~~ ✅ Phase 8T（tree DnD 仍 🟡）  
 5. ~~Remaining `FilePicker` modes~~ ✅ Phase 8S  
 6. Floating dock persistence (if tear-off is enabled later)
@@ -214,8 +214,8 @@
 1. ~~**8R** — Viewport authoring parity: retained context menu + Delete/Duplicate actions (`ActionMap`)~~  
 2. **8S** — ~~Generalize retained file picker~~ ✅  
 3. **8T** — ~~UI Designer palette + inspector~~ ✅  
-4. **8V** — Debug window: retained panel or descope  
-5. **8W** — Remove `onImGuiRender` shell + `imgui-local` after matrix rows ✅  
+4. ~~**8V** — Debug window: retained panel or descope~~ ✅  
+5. **8W** — Remove `onImGuiRender` shell + `imgui-local` after remaining 🔴 rows are ✅ or ➖（gizmo bridge, optional imgui chrome, floating dock）  
 
 ---
 

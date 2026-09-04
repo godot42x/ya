@@ -487,6 +487,7 @@ void EditorSurface::shutdown()
     _actions   = std::make_shared<ActionMap>();
     _undo      = std::make_shared<UndoStack>();
     _inspectorTab.reset();
+    _debugImagesTab.reset();
     _statsText.reset();
     _contentExplorer.reset();
     _contentPathText.reset();
@@ -547,6 +548,7 @@ void EditorSurface::rebuild(App& app)
     _actions   = std::make_shared<ActionMap>();
     _undo      = std::make_shared<UndoStack>();
     _inspectorTab.reset();
+    _debugImagesTab.reset();
     _statsText.reset();
     _workbench.reset();
     _tabRegistry = std::make_unique<EditorTabRegistry>();
@@ -927,6 +929,7 @@ void EditorSurface::buildEditorChrome(App& app)
 
     _inspectorTab = std::make_unique<EditorInspectorTab>(*_layer, _undo.get());
     auto inspectorBody = _inspectorTab->build(*_tree);
+    _debugImagesTab = std::make_unique<EditorDebugImagesTab>(*_layer);
 
     auto statsText = ui::text("FrameStatsBody")
                          .setText("Frame Stats")
@@ -1059,6 +1062,18 @@ void EditorSurface::buildEditorChrome(App& app)
             _assetInspectorPreview->setResourceMissing(false);
         },
     });
+    _tabRegistry->registerTab({
+        .id = "debug-images",
+        .title = "Debug Images",
+        .build = [this](EditorLayer&, WidgetTree&) {
+            return _debugImagesTab ? _debugImagesTab->build(*_tree) : nullptr;
+        },
+        .sync = [this](EditorLayer&, WidgetTree& tree) {
+            if (_debugImagesTab) {
+                _debugImagesTab->sync(tree);
+            }
+        },
+    });
     for (const auto& tab : _tabRegistry->tabs()) {
         _dockWorkspace->addPanel(tab.id, tab.title, tab.build(*_layer, *_tree));
     }
@@ -1119,6 +1134,7 @@ void EditorSurface::applyDefaultEditorDockLayout()
     const DockPanelId runtimeId = dockPanelIdForKey(model, "runtime-tools");
     const DockPanelId designerId = dockPanelIdForKey(model, "ui-designer");
     const DockPanelId assetsId = dockPanelIdForKey(model, "asset-inspector");
+    const DockPanelId debugId = dockPanelIdForKey(model, "debug-images");
     if (viewportId == kInvalidDockPanelId || hierarchyId == kInvalidDockPanelId || inspectorId == kInvalidDockPanelId ||
         contentId == kInvalidDockPanelId) {
         return;
@@ -1148,6 +1164,9 @@ void EditorSurface::applyDefaultEditorDockLayout()
         }
         if (assetsId != kInvalidDockPanelId) {
             model.movePanel(assetsId, contentLeaf->id);
+        }
+        if (debugId != kInvalidDockPanelId) {
+            model.movePanel(debugId, contentLeaf->id);
         }
         model.selectPanel(contentId);
     }

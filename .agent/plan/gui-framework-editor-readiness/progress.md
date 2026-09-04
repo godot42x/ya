@@ -971,3 +971,16 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 
 - Hierarchy tree 仍无 retained drag-drop reorder UI；2D viewport 画布操纵已存在。
 - 下一步：Debug window（8V）或 ImGui shell 删除门禁（8W）。
+
+## Phase 8V 当前 checkpoint（2026-09-04）
+
+- 新增 retained `EditorDebugImagesTab` dock tab（stable key `debug-images`），默认挂在 content leaf；分类 combo、grouped mip/face combo、standalone RGBA mask 与 `UIImage` 预览。
+- Catalog 过滤与 preview slot 索引抽到可测试 helper（`EditorDebugCatalogView.h`）；mask/group 选择仍由 `EditorLayer` 持有并写回 ConfigManager。
+- `EditorLayer::getDebugSlotPreviewTexture` 把 identity/masked image view wrap 成 `Texture`，供 retained `UIImage` 使用；不在本 checkpoint 删除 `debugWindow()` / `onImGuiRender`。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（381/381）；`xmake r ya-testing --gtest_filter='EditorDebugCatalogViewTest.*'`（2/2）。
+
+### Phase 8V 边界
+
+- cube-face 按钮网格 / 多列表格布局未迁移；combo 选择覆盖核心 workflow。
+- legacy ImGui `debugWindow` 与 chrome host 仍平行，直到 8W 删除门禁。
+- 下一步：floating dock geometry，或在 parity 行达标后推进 8W（移除 `onImGuiRender` shell / `imgui-local`）。

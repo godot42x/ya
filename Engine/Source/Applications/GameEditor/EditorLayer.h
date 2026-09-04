@@ -40,6 +40,7 @@ struct App;
 struct IImageView;
 struct IImage;
 struct RenderTexture;
+struct Texture;
 class UndoStack;
 using EditorViewportContext      = RenderViewportSnapshot;
 using EditorViewportDebugCatalog = RenderViewportDebugCatalog;
@@ -154,7 +155,10 @@ struct EditorLayer
         std::string                 configKey;
         std::array<bool, 4>         channelEnabled = {true, true, true, true};
         std::shared_ptr<IImageView> maskedView;
-        IImageView*                 lastBase = nullptr;
+        std::shared_ptr<IImageView> identityView;
+        std::shared_ptr<Texture>    previewTexture;
+        IImageView*                 lastBase     = nullptr;
+        IImageView*                 previewView  = nullptr;
     };
     std::vector<ImageSlotState> _debugImageSlotStates;
 
@@ -205,6 +209,15 @@ struct EditorLayer
     {
         return _viewportDisplayImage;
     }
+    [[nodiscard]] const EditorViewportDebugCatalog& getDebugCatalog() const;
+    [[nodiscard]] const RenderViewportDebugImageSlot* getDebugSlotFrame(uint32_t slotIndex) const;
+    [[nodiscard]] std::array<bool, 4> getDebugChannelMask(uint32_t slotIndex);
+    void setDebugChannelMask(uint32_t slotIndex, std::array<bool, 4> mask);
+    [[nodiscard]] int getDebugGroupSelectedIndex(int groupIndex);
+    void setDebugGroupSelectedIndex(int groupIndex, int selectedIndex);
+    [[nodiscard]] int getDebugGroupItemSlot(int groupIndex, uint32_t itemIndex);
+    void setDebugGroupItemSlot(int groupIndex, uint32_t itemIndex, int selectedSlot);
+    [[nodiscard]] std::shared_ptr<Texture> getDebugSlotPreviewTexture(uint32_t slotIndex);
     void                                          notifyViewportWidgetRect(const Rect2D& rect);
     void                                          setViewportHoverFocus(bool hovered, bool focused);
     [[nodiscard]] const std::vector<std::string>& getDiscoveredProjects() const
@@ -412,8 +425,9 @@ struct EditorLayer
     bool                                              renderDebugSlotMaskControls(const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state);
     void                                              updateDebugSlotImageView(uint32_t slotIndex, const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state, bool bForceRefresh = false);
     void                                              renderDebugSlotImage(uint32_t slotIndex, const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state, float width, float height, Sampler* sampler);
-    [[nodiscard]] const EditorViewportDebugCatalog&   getDebugCatalog() const;
-    [[nodiscard]] const RenderViewportDebugImageSlot* getDebugSlotFrame(uint32_t slotIndex) const;
+    void                                              ensureDebugViewerState();
+    void                                              loadDebugGroupState(int groupIndex);
+    void                                              persistDebugGroupState(int groupIndex);
 
     // Helpers
     void setupDockspace();
