@@ -1,6 +1,6 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-04 (after Phase 8Q)  
+> **As of:** 2026-09-04 (after Phase 8U)  
 > **Default chrome:** `editor.chrome.host = widgettree`  
 > **Legacy chrome:** `--editor-chrome=imgui` still runs `EditorLayer::onImGuiRender()`  
 > **Purpose:** Gate deletions — do **not** remove ImGui / `imgui-local` until a row is ✅ for widgettree default path.
@@ -33,9 +33,9 @@
 | Main menu | `EditorLayer::menuBar` (ImGui) | `UIMenuBar` + `ActionMap` | 🟡 | See File menu gaps below |
 | Toolbar | `EditorLayer::toolbar` (icon `ImageButton`) | Text `UIButton` row | 🟡 | Visual parity only; actions wired |
 | Dock layout | ImGui `DockSpace` | `UIDockWorkspace` + `UIDockSpace` | 🟡 | Docked tree persists (8Q); no floating geometry |
-| Editor Settings window | `EditorLayer::editorSettings` | — | 🔴 | Sampler, camera overlay, startup scene path |
+| Editor Settings window | `EditorLayer::editorSettings` | `EditorSurface::openEditorSettingsDialog` | ✅ | View 菜单；sampler/overlay/startup scene |
 | Debug images window | `EditorLayer::debugWindow` | — | 🔴 | Viewport debug catalog, channel masks, group viewers |
-| Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | Retained popups on `EditorSurface` | 🟡 | Scene save + asset browse migrated; other picker modes not |
+| Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | Retained popups on `EditorSurface` | 🟡 | Scene save + asset browse + generic file picker migrated |
 | Viewport display | `viewportWindow` + `ImGui::Image` | `UIImage` samples offscreen compose | ✅ | Widgettree does not call `viewportWindow` |
 | Viewport input / pick / gizmo | `EditorLayer::onEvent` + ImGuizmo | Same `onEvent` + `EditorViewportGizmoOverlay` | 🟡 | Gizmo draw/IO still ImGuizmo; overlay contract retained |
 | Viewport context menu | `viewportWindow` → `ContextMenu` (ImGui) | `EditorSurface::openViewportContextMenu` (`UIMenu`) | ✅ | Uses `NodeCreateRegistry` presets + `EditorLayer` cmds |
@@ -55,7 +55,7 @@
 | Exit | File menu | `app.exit` | ✅ | |
 | Open project | Project browser | Project browser (retained) | ✅ | |
 | Content: open `.scene.json` | ImGui Content Browser (⚫) | `activateContentItem` → `loadScene` | ✅ | Retained only since 8A |
-| Default startup scene config | Editor Settings + `FilePicker` | — | 🔴 | Config key exists; no retained UI |
+| Default startup scene config | Editor Settings + `FilePicker` | Editor Settings + `openFilePickerDialog` | ✅ | Phase 8U |
 
 ---
 
@@ -161,8 +161,8 @@
 |------|--------------|------------|--------|-------|
 | Scene save | `openSceneSavePicker` | `EditorSurface` scene-save popup | ✅ | 8L |
 | Texture / model asset | `openTexturePicker` / `openModelPicker` | `openAssetPickerDialog` | ✅ | 8M |
-| Script / material / directory / generic | `FilePicker::*` | — | 🔴 | Still ImGui-only when legacy chrome runs |
-| Editor Settings browse | `FilePicker` in `editorSettings` | — | 🔴 | |
+| Script / material / directory / generic | `FilePicker::*` | `openFilePickerDialog` + `FEditorFilePickerRequest` factories | ✅ | 8S；legacy imgui chrome 仍可用 ImGui `FilePicker` |
+| Editor Settings browse | `FilePicker` in `editorSettings` | `makeSceneJsonFilePickerRequest` → retained picker | ✅ | 8U |
 
 ---
 
@@ -171,6 +171,7 @@
 | Feature | Legacy ImGui | WidgetTree | Status | Notes |
 |---------|--------------|------------|--------|-------|
 | Viewport 3D / 2D | View menu | View menu + toolbar | ✅ | |
+| Editor Settings | — (ImGui window in legacy shell) | View → Editor Settings | ✅ | Phase 8U |
 | Fullscreen | View menu checkbox | — | 🔴 | |
 | Dock padding / dock flags | View menu | — | 🔴 | Dev-only ImGui dock tuning |
 | ImGui demo window | View menu (⚫) | — | ⚫ | Removed 8K |
@@ -200,7 +201,7 @@
 **Critical 🔴 blockers before deleting legacy ImGui chrome:**
 
 1. ~~Viewport context menu (create / duplicate / delete entities)~~ ✅ Phase 8R  
-2. Editor Settings (or move settings into retained UI)  
+2. ~~Editor Settings (or move settings into retained UI)~~ ✅ Phase 8U  
 3. Debug images window (or drop scope)  
 4. UI Designer palette + inspector + preview canvas  
 5. Remaining `FilePicker` modes (or route all to retained popups)  
@@ -211,10 +212,10 @@
 ## Suggested migration order (next checkpoints)
 
 1. ~~**8R** — Viewport authoring parity: retained context menu + Delete/Duplicate actions (`ActionMap`)~~  
-2. **8S** — Generalize retained file picker (script/material/directory) or delete unused modes  
+2. **8S** — ~~Generalize retained file picker~~ ✅  
 3. **8T** — UI Designer: palette + inspector on `PropertyGraph` / widget bindings + 2D canvas host  
-4. **8U** — Editor Settings retained panel (or slim preferences in menu)  
-5. **8V** — Debug window: retained panel or explicitly descope + remove ImGui debug  
+4. **8U** — ~~Editor Settings retained panel~~ ✅  
+5. **8V** — Debug window: retained panel or descope  
 6. **8W** — Remove `onImGuiRender` shell + `imgui-local` after matrix rows ✅  
 
 ---

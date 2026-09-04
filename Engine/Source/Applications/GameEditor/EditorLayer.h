@@ -12,6 +12,7 @@
 #include "Core/Profiling/Instrumentor.h"
 #include "GameEditor/FilePicker.h"
 #include "GameEditor/UI/EditorAssetPicker.h"
+#include "GameEditor/UI/EditorFilePicker.h"
 #include "GameEditor/ImGui/ImGuiHelper.h"
 #include "GameEditor/Panels/SceneHierarchyPanel.h"
 #include "GameEditor/Panels/UIDesignerPanel.h"
@@ -172,6 +173,7 @@ struct EditorLayer
     FilePicker  _filePicker;
     std::function<void()> _saveSceneAsHandler;
     EditorAssetPickerCallback _assetPickerHandler;
+    EditorFilePickerCallback  _filePickerHandler;
     std::string _currentScenePath; // Current scene file path
     Scene*      _editableScene = nullptr;
 
@@ -301,6 +303,15 @@ struct EditorLayer
      */
     bool shouldCaptureInput() const { return bViewportFocused; }
     bool shouldShowViewportCameraOverlay() const { return _bShowViewportCameraOverlay; }
+    void setShowViewportCameraOverlay(bool enabled);
+    [[nodiscard]] int getViewportSamplerType() const { return static_cast<int>(_viewPortSamplerType); }
+    void setViewportSamplerType(int samplerType);
+    [[nodiscard]] std::string getDefaultScenePathDraft() const { return _defaultScenePathBuffer; }
+    void setDefaultScenePathDraft(std::string path);
+    [[nodiscard]] bool isDefaultScenePathDirty() const { return _bDefaultScenePathDirty; }
+    void applyDefaultScenePathDraft();
+    void resetDefaultScenePathDraft();
+    [[nodiscard]] bool defaultScenePathExists() const;
 
     // Get and clear pending viewport resize - called from App before render
     bool getPendingViewportResize(Rect2D& outRect)
@@ -466,6 +477,8 @@ struct EditorLayer
     void clearSaveSceneAsHandler() { _saveSceneAsHandler = nullptr; }
     void setAssetPickerHandler(EditorAssetPickerCallback handler) { _assetPickerHandler = std::move(handler); }
     void clearAssetPickerHandler() { _assetPickerHandler = nullptr; }
+    void setFilePickerHandler(EditorFilePickerCallback handler) { _filePickerHandler = std::move(handler); }
+    void clearFilePickerHandler() { _filePickerHandler = nullptr; }
 };
 
 } // namespace ya

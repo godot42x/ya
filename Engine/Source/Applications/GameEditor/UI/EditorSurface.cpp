@@ -1,5 +1,6 @@
 #include "GameEditor/UI/EditorSurface.h"
 #include "GameEditor/UI/EditorAssetPicker.h"
+#include "GameEditor/UI/EditorFilePicker.h"
 #include "GameEditor/UI/RuntimeDiagnosticsSection.h"
 #include "GameEditor/UI/RuntimeRenderSettingsSection.h"
 #include "GameEditor/UI/RuntimeProfilingSection.h"
@@ -25,7 +26,8 @@
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "GameRuntime/App.h"
 #include "GUI/Layout/UILayout.h"
-#include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/CheckBox.h"
+#include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DockNode.h"
@@ -164,11 +166,16 @@ FAssetPickerDialogConfig assetPickerDialogConfig(EEditorAssetPickerKind kind)
     return {"Select Asset", "assetPickerDialog.generic", {}};
 }
 
-bool isAssetPickerFile(const std::vector<FileExplorer::FEntry>& entries, const std::filesystem::path& path)
+bool isRetainedPickerSelectionValid(const std::vector<FileExplorer::FEntry>& entries,
+                                    const std::filesystem::path& selectedPath,
+                                    FileExplorer::SelectionMode mode)
 {
+    if (selectedPath.empty()) {
+        return false;
+    }
     for (const auto& entry : entries) {
-        if (entry.path == path) {
-            return !entry.bIsDirectory;
+        if (entry.path == selectedPath) {
+            return mode == FileExplorer::SelectionMode::Directory ? entry.bIsDirectory : !entry.bIsDirectory;
         }
     }
     return false;
@@ -398,6 +405,7 @@ void EditorSurface::shutdown()
     _workbench.reset();
     _tabRegistry.reset();
     clearAssetPickerDialog();
+    clearEditorSettingsDialog();
     clearSceneSaveDialog();
     _tree.reset();
     _theme.reset();
@@ -656,6 +664,11 @@ void EditorSurface::registerEditorActions()
         },
     });
     define({
+        .id      = "editor.settings",
+        .label   = "Editor Settings...",
+        .execute = [this]() { openEditorSettingsDialog(); },
+    });
+    define({
         .id      = "viewport.mode3d",
         .label   = "Viewport 3D",
         .execute = [this]() { _layer->setViewportMode(EViewportMode::Mode3D); },
@@ -741,6 +754,8 @@ void EditorSurface::buildEditorChrome(App& app)
         return UIMenu::create({
             UIMenu::FItem::fromAction(*_actions, "viewport.mode3d"),
             UIMenu::FItem::fromAction(*_actions, "viewport.mode2d"),
+            UIMenu::FItem::separator(),
+            UIMenu::FItem::fromAction(*_actions, "editor.settings"),
         });
     });
 
@@ -1239,6 +1254,7 @@ void EditorSurface::syncPresentation(App& app, float dt)
     syncContentBrowser();
     syncSceneSaveDialog();
     syncAssetPickerDialog();
+    syncEditorSettingsDialog();
     if (_tabRegistry) {
         for (const auto& tab : _tabRegistry->tabs()) {
             if (tab.sync) {
@@ -1919,36 +1935,43 @@ void EditorSurface::openAssetPickerDialog(EEditorAssetPickerKind kind,
                                           std::string currentPath,
                                           std::function<void(std::string)> onPicked)
 {
-    if (!_tree || !_root || !onPicked) {
+    const FAssetPickerDialogConfig config = assetPickerDialogConfig(kind);
+    FEditorFilePickerRequest request;
+    request.title       = config.title;
+    request.configScope = config.configScope;
+    request.extensions  = config.extensions;
+    request.currentPath = std::move(currentPath);
+    request.onPicked    = std::move(onPicked);
+    openFilePickerDialog(std::move(request));
+}
+
+void EditorSurface::openFilePickerDialog(FEditorFilePickerRequest request)
+{
+    if (!_tree || !_root || !request.onPicked) {
         return;
     }
     if (_assetPickerOverlay && _assetPickerOverlay->isAttached()) {
-        _assetPickerKind = kind;
-        _assetPickerOnPicked = std::move(onPicked);
+        _filePickerRequest = std::move(request);
         return;
     }
 
     clearAssetPickerDialog();
-
-    const FAssetPickerDialogConfig config = assetPickerDialogConfig(kind);
-    _assetPickerKind = kind;
-    _assetPickerOnPicked = std::move(onPicked);
+    _filePickerRequest = std::move(request);
 
     _assetPickerExplorer = std::make_shared<FileExplorer>();
-    _assetPickerExplorer->setConfigScope(config.configScope);
+    _assetPickerExplorer->setConfigScope(_filePickerRequest.configScope);
     _assetPickerExplorer->initFromVFS();
-    _assetPickerExplorer->setExtensions(config.extensions);
-    _assetPickerExplorer->setFilterMode(FileExplorer::FilterMode::Both);
-    _assetPickerExplorer->setSelectionMode(FileExplorer::SelectionMode::File);
+    _assetPickerExplorer->setExtensions(_filePickerRequest.extensions);
+    _assetPickerExplorer->setFilterMode(_filePickerRequest.filterMode);
+    _assetPickerExplorer->setSelectionMode(_filePickerRequest.selectionMode);
     _assetPickerExplorer->setLeftPanelWidth(180.0f);
 
-    if (!currentPath.empty()) {
-        _assetPickerExplorer->setSelectedPath(path_utils::pathFromUtf8String(currentPath));
+    if (!_filePickerRequest.currentPath.empty()) {
+        _assetPickerExplorer->setSelectedPath(path_utils::pathFromUtf8String(_filePickerRequest.currentPath));
     }
     else {
-        const std::string lastDirectory = ConfigManager::get().getOr<std::string>("editor",
-                                                                                  std::string(config.configScope) + ".lastDirectory",
-                                                                                  "");
+        const std::string lastDirectory = ConfigManager::get().getOr<std::string>(
+            "editor", _filePickerRequest.configScope + ".lastDirectory", "");
         if (!lastDirectory.empty()) {
             _assetPickerExplorer->setSelectedPath(path_utils::pathFromUtf8String(lastDirectory));
         }
@@ -1999,7 +2022,10 @@ void EditorSurface::openAssetPickerDialog(EEditorAssetPickerKind kind,
     auto pickerRoot = ui::column("AssetPickerRoot")
                           .setSpacing(8.0f)
                           .setPadding({12.0f, 12.0f})
-                          .child(ui::text("AssetPickerTitle").setText(config.title).setStyleKey("text.header").setFontSize(14))
+                          .child(ui::text("AssetPickerTitle")
+                                     .setText(_filePickerRequest.title)
+                                     .setStyleKey("text.header")
+                                     .setFontSize(14))
                           .child(std::move(pathText))
                           .child(ui::textField("AssetPickerSearch")
                                      .setOnTextChanged([this](const std::string& text) {
@@ -2040,7 +2066,7 @@ void EditorSurface::clearAssetPickerDialog()
     _assetPickerMountReconciler.reset();
     _assetPickerEntryReconciler.reset();
     _assetPickerFingerprint.clear();
-    _assetPickerOnPicked = nullptr;
+    _filePickerRequest = {};
     _bAssetPickerRowsDirty = true;
 }
 
@@ -2096,7 +2122,9 @@ void EditorSurface::syncAssetPickerDialog()
         _assetPickerPathText->setText(pathText);
     }
 
-    const bool bCanSelect = !selectedPath.empty() && isAssetPickerFile(entries, selectedPath);
+    const bool bCanSelect = isRetainedPickerSelectionValid(entries,
+                                                           selectedPath,
+                                                           _filePickerRequest.selectionMode);
     if (_assetPickerSelectButton) {
         _assetPickerSelectButton->setEnabled(bCanSelect);
     }
@@ -2107,7 +2135,9 @@ void EditorSurface::syncAssetPickerDialog()
         }
         else {
             _assetPickerPreviewText->setStyleKey("text.error");
-            _assetPickerPreviewText->setText("Select a file to continue.");
+            _assetPickerPreviewText->setText(_filePickerRequest.selectionMode == FileExplorer::SelectionMode::Directory
+                                                 ? "Select a directory to continue."
+                                                 : "Select a file to continue.");
         }
     }
 }
@@ -2212,7 +2242,7 @@ void EditorSurface::activateAssetPickerItem(const std::filesystem::path& path, b
 
 void EditorSurface::confirmAssetPickerDialog()
 {
-    if (!_assetPickerExplorer || !_assetPickerOnPicked) {
+    if (!_assetPickerExplorer || !_filePickerRequest.onPicked) {
         return;
     }
 
@@ -2223,22 +2253,207 @@ void EditorSurface::confirmAssetPickerDialog()
 
     std::vector<FileExplorer::FEntry> entries;
     _assetPickerExplorer->collectEntries(entries);
-    if (!isAssetPickerFile(entries, selectedPath)) {
+    if (!isRetainedPickerSelectionValid(entries, selectedPath, _filePickerRequest.selectionMode)) {
         return;
     }
 
-    const FAssetPickerDialogConfig config = assetPickerDialogConfig(_assetPickerKind);
     const std::string picked = path_utils::pathToUtf8String(selectedPath);
     ConfigManager::Editor("editor")
-        .set(std::string(config.configScope) + ".lastDirectory", path_utils::pathToUtf8String(selectedPath.parent_path()))
+        .set(_filePickerRequest.configScope + ".lastDirectory", path_utils::pathToUtf8String(selectedPath.parent_path()))
         .flush();
 
-    std::function<void(std::string)> callback = std::move(_assetPickerOnPicked);
+    std::function<void(std::string)> callback = std::move(_filePickerRequest.onPicked);
     if (_assetPickerOverlay) {
         _assetPickerOverlay->close();
     }
     if (callback) {
         callback(picked);
+    }
+}
+
+void EditorSurface::openEditorSettingsDialog()
+{
+    if (!_tree || !_root || !_layer) {
+        return;
+    }
+    if (_settingsOverlay && _settingsOverlay->isAttached()) {
+        return;
+    }
+
+    clearEditorSettingsDialog();
+
+    auto samplerCombo = ui::comboBox("EditorSettingsSampler")
+                            .setItems({"Linear", "Nearest"})
+                            .setSelectedIndex(_layer->getViewportSamplerType())
+                            .setOnSelectionChanged([this](int index) {
+                                if (_layer) {
+                                    _layer->setViewportSamplerType(index);
+                                }
+                            });
+    _settingsSamplerCombo = samplerCombo.share();
+
+    auto overlayCheckbox = ui::checkBox("EditorSettingsCameraOverlay")
+                               .setText("Show Viewport Camera Overlay")
+                               .setChecked(_layer->shouldShowViewportCameraOverlay())
+                               .setOnChanged([this](bool checked) {
+                                   if (_layer) {
+                                       _layer->setShowViewportCameraOverlay(checked);
+                                   }
+                               });
+    _settingsOverlayCheckbox = overlayCheckbox.share();
+
+    auto scenePathField = ui::textField("EditorSettingsScenePath")
+                              .setText(_layer->getDefaultScenePathDraft())
+                              .setOnTextChanged([this](const std::string& text) {
+                                  if (_layer) {
+                                      _layer->setDefaultScenePathDraft(text);
+                                  }
+                              });
+    _settingsScenePathField = scenePathField.share();
+
+    auto sceneStatusText = ui::text("EditorSettingsSceneStatus").setFontSize(12).setStyleKey("text.muted");
+    _settingsSceneStatusText = sceneStatusText.share();
+
+    _settingsApplyButton = labeledButton("EditorSettingsApply", "Apply Default Scene Path")
+                               .setOnClick([this]() {
+                                   if (_layer) {
+                                       _layer->applyDefaultScenePathDraft();
+                                   }
+                               })
+                               .share();
+    _settingsResetButton = labeledButton("EditorSettingsReset", "Reset")
+                               .setOnClick([this]() {
+                                   if (_layer) {
+                                       _layer->resetDefaultScenePathDraft();
+                                       if (_settingsScenePathField) {
+                                           _settingsScenePathField->setText(_layer->getDefaultScenePathDraft());
+                                       }
+                                   }
+                               })
+                               .share();
+
+    auto sceneRow = ui::row("EditorSettingsSceneRow")
+                        .setSpacing(6.0f)
+                        .setStretchLastChild(true)
+                        .child(ui::text("EditorSettingsSceneLabel")
+                                   .setText("Startup Scene")
+                                   .setFontSize(12)
+                                   .setVAlign(EWidgetAlignV::Center),
+                               ui::boxSlot().preferredSize({120.0f, 26.0f}))
+                        .child(std::move(scenePathField), ui::boxSlot().fill())
+                        .child(labeledButton("EditorSettingsBrowse", "Browse")
+                                   .setOnClick([this]() {
+                                       if (!_layer) {
+                                           return;
+                                       }
+                                       openFilePickerDialog(makeSceneJsonFilePickerRequest(
+                                           _layer->getDefaultScenePathDraft(),
+                                           [this](std::string path) {
+                                               if (_layer) {
+                                                   _layer->setDefaultScenePathDraft(std::move(path));
+                                               }
+                                               if (_settingsScenePathField) {
+                                                   _settingsScenePathField->setText(_layer->getDefaultScenePathDraft());
+                                               }
+                                           }));
+                                   }),
+                               ui::boxSlot().preferredSize({84.0f, 26.0f}));
+    auto sceneActions = ui::row("EditorSettingsSceneActions")
+                            .setSpacing(8.0f)
+                            .child(_settingsApplyButton, ui::boxSlot().preferredSize({180.0f, 26.0f}))
+                            .child(_settingsResetButton, ui::boxSlot().preferredSize({84.0f, 26.0f}));
+    auto settingsRoot = ui::column("EditorSettingsRoot")
+                            .setSpacing(10.0f)
+                            .setPadding({12.0f, 12.0f})
+                            .child(ui::text("EditorSettingsTitle")
+                                       .setText("Editor Settings")
+                                       .setStyleKey("text.header")
+                                       .setFontSize(14))
+                            .child(ui::row("EditorSettingsSamplerRow")
+                                       .setSpacing(8.0f)
+                                       .setStretchLastChild(true)
+                                       .child(ui::text("EditorSettingsSamplerLabel")
+                                                  .setText("Viewport Sampler")
+                                                  .setFontSize(12)
+                                                  .setVAlign(EWidgetAlignV::Center),
+                                              ui::boxSlot().preferredSize({140.0f, 26.0f}))
+                                       .child(std::move(samplerCombo), ui::boxSlot().preferredSize({160.0f, 26.0f})))
+                            .child(std::move(overlayCheckbox))
+                            .child(std::move(sceneRow), ui::boxSlot().preferredSize({0.0f, 26.0f}))
+                            .child(std::move(sceneStatusText))
+                            .child(std::move(sceneActions))
+                            .child(labeledButton("EditorSettingsClose", "Close")
+                                       .setOnClick([this]() {
+                                           if (_settingsOverlay) {
+                                               _settingsOverlay->close();
+                                           }
+                                       }),
+                                   ui::boxSlot().preferredSize({84.0f, 26.0f}));
+    auto dialogPanel = ui::panel("EditorSettingsPanel")
+                           .setStyleKey("panel.window")
+                           .child(std::move(settingsRoot), ui::canvasSlot().fill());
+
+    _settingsPanel = dialogPanel.share();
+    _settingsOverlay = ui::popupOverlay("EditorSettingsOverlay")
+                           .setRole(UIPopupOverlay::EOverlayRole::Modal)
+                           .setOnDismiss([this]() { clearEditorSettingsDialog(); })
+                           .child(std::move(dialogPanel))
+                           .share();
+    _settingsOverlay->open(*_tree);
+}
+
+void EditorSurface::clearEditorSettingsDialog()
+{
+    _settingsOverlay.reset();
+    _settingsPanel.reset();
+    _settingsSamplerCombo.reset();
+    _settingsOverlayCheckbox.reset();
+    _settingsScenePathField.reset();
+    _settingsSceneStatusText.reset();
+    _settingsApplyButton.reset();
+    _settingsResetButton.reset();
+}
+
+void EditorSurface::syncEditorSettingsDialog()
+{
+    if (!_settingsOverlay || !_settingsPanel || !_tree || !_layer) {
+        return;
+    }
+
+    const Extent2D logicalExtent = _tree->getLogicalExtent();
+    const glm::vec2 extent = {static_cast<float>(logicalExtent.width), static_cast<float>(logicalExtent.height)};
+    const glm::vec2 desired = _settingsPanel->computeDesiredSize();
+    _settingsOverlay->_contentPos = {
+        std::max(0.0f, (extent.x - desired.x) * 0.5f),
+        std::max(0.0f, (extent.y - desired.y) * 0.5f),
+    };
+
+    if (_settingsSamplerCombo) {
+        _settingsSamplerCombo->setSelectedIndex(_layer->getViewportSamplerType(), false);
+    }
+    if (_settingsOverlayCheckbox) {
+        _settingsOverlayCheckbox->setChecked(_layer->shouldShowViewportCameraOverlay());
+    }
+    if (_settingsApplyButton) {
+        _settingsApplyButton->setEnabled(_layer->isDefaultScenePathDirty());
+    }
+    if (_settingsResetButton) {
+        _settingsResetButton->setEnabled(_layer->isDefaultScenePathDirty());
+    }
+    if (_settingsSceneStatusText) {
+        const std::string scenePath = _layer->getDefaultScenePathDraft();
+        if (scenePath.empty()) {
+            _settingsSceneStatusText->setStyleKey("text.muted");
+            _settingsSceneStatusText->setText("Empty means startup falls back to an empty scene");
+        }
+        else if (_layer->defaultScenePathExists()) {
+            _settingsSceneStatusText->setStyleKey("text.muted");
+            _settingsSceneStatusText->setText("Used on next app start — scene exists");
+        }
+        else {
+            _settingsSceneStatusText->setStyleKey("text.error");
+            _settingsSceneStatusText->setText("Used on next app start — scene not found");
+        }
     }
 }
 

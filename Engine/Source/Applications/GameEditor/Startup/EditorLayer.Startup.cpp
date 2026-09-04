@@ -1,4 +1,5 @@
 #include "GameEditor/EditorLayerInternal.h"
+#include "GameEditor/UI/EditorFilePicker.h"
 
 #include "GameRuntime/GUI/GuiSystem.h"
 
@@ -120,6 +121,45 @@ bool EditorLayer::openProjectInPlace(const std::string& projectPath)
     }
 }
 
+void EditorLayer::setShowViewportCameraOverlay(bool enabled)
+{
+    _bShowViewportCameraOverlay = enabled;
+    ConfigManager::Editor(kEditorConfigDocument)
+        .set(kViewportCameraOverlayEnabledKey, enabled)
+        .flush();
+}
+
+void EditorLayer::setViewportSamplerType(int samplerType)
+{
+    _viewPortSamplerType = samplerType == 1 ? Nearest : Linear;
+}
+
+void EditorLayer::setDefaultScenePathDraft(std::string path)
+{
+    strncpy_s(_defaultScenePathBuffer, sizeof(_defaultScenePathBuffer), path.c_str(), _TRUNCATE);
+    _bDefaultScenePathDirty = true;
+}
+
+void EditorLayer::applyDefaultScenePathDraft()
+{
+    ConfigManager::Editor("editor").set("startup.defaultScenePath", std::string(_defaultScenePathBuffer)).flush();
+    _bDefaultScenePathDirty = false;
+}
+
+void EditorLayer::resetDefaultScenePathDraft()
+{
+    syncEditorSettingsFromConfig();
+}
+
+bool EditorLayer::defaultScenePathExists() const
+{
+    const std::string scenePath = _defaultScenePathBuffer;
+    if (scenePath.empty()) {
+        return false;
+    }
+    return VFS::get() && VirtualFileSystem::get()->isFileExists(scenePath);
+}
+
 void EditorLayer::editorSettings()
 {
     if (!ImGui::Begin("Editor Settings")) {
@@ -133,9 +173,7 @@ void EditorLayer::editorSettings()
 
     ImGui::Combo("Viewport Sampler", (int*)&_viewPortSamplerType, "Linear\0Nearest\0");
     if (ImGui::Checkbox("Show Viewport Camera Overlay", &_bShowViewportCameraOverlay)) {
-        ConfigManager::Editor(kEditorConfigDocument)
-            .set(kViewportCameraOverlayEnabledKey, _bShowViewportCameraOverlay)
-            .flush();
+        setShowViewportCameraOverlay(_bShowViewportCameraOverlay);
     }
 
     ImGui::Separator();
@@ -147,14 +185,16 @@ void EditorLayer::editorSettings()
 
     ImGui::SameLine();
     if (ImGui::Button("Browse")) {
-        _filePicker.open(
-            "Select Default Scene",
-            _defaultScenePathBuffer,
-            {".scene.json"},
-            [this](const std::string& newPath) {
-                strncpy_s(_defaultScenePathBuffer, sizeof(_defaultScenePathBuffer), newPath.c_str(), _TRUNCATE);
-                _bDefaultScenePathDirty = true;
-            });
+        auto onPicked = [this](const std::string& newPath) { setDefaultScenePathDraft(newPath); };
+        if (_filePickerHandler) {
+            _filePickerHandler(makeSceneJsonFilePickerRequest(_defaultScenePathBuffer, std::move(onPicked)));
+        }
+        else {
+            _filePicker.open("Select Default Scene",
+                             _defaultScenePathBuffer,
+                             {".scene.json"},
+                             std::move(onPicked));
+        }
     }
 
     const std::string scenePath = _defaultScenePathBuffer;
@@ -171,13 +211,12 @@ void EditorLayer::editorSettings()
 
     if (_bDefaultScenePathDirty) {
         if (ImGui::Button("Apply Default Scene Path")) {
-            ConfigManager::Editor("editor").set("startup.defaultScenePath", std::string(_defaultScenePathBuffer));
-            _bDefaultScenePathDirty = false;
+            applyDefaultScenePathDraft();
         }
 
         ImGui::SameLine();
         if (ImGui::Button("Reset")) {
-            syncEditorSettingsFromConfig();
+            resetDefaultScenePathDraft();
         }
     }
 

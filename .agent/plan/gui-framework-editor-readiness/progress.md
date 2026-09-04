@@ -936,4 +936,26 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 ### Phase 8R 边界
 
 - Hierarchy 面板本身仍无 create/delete 树 UI；创作入口在 viewport 菜单/快捷键。
-- legacy ImGui chrome host、Editor Settings、Debug window、`FilePicker` 其余模式仍平行；见 `imgui-widgettree-parity.md`。
+- legacy ImGui chrome host、Debug window 仍平行；见 `imgui-widgettree-parity.md`。
+
+## Phase 8S 当前 checkpoint（2026-09-04）
+
+- 新增 `FEditorFilePickerRequest` / `EditorFilePickerCallback`（`EditorFilePicker.h`）：统一 retained file/directory picker 请求；提供 script/material/directory/scene-json 工厂。
+- `EditorSurface::openFilePickerDialog` 为通用实现；`openAssetPickerDialog` 薄封装；支持 file/directory selection mode。
+- `EditorLayer::setFilePickerHandler`；widgettree `EditorModule` 接线；legacy `editorSettings` Browse 在 handler 存在时走 retained picker。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（381/381）。
+
+### Phase 8S 边界
+
+- ImGui `FilePicker` 类型仍在 legacy chrome 使用；widgettree 默认路径已具备等价 retained API。
+
+## Phase 8U 当前 checkpoint（2026-09-04）
+
+- `EditorSurface::openEditorSettingsDialog`：retained modal（viewport sampler、`UIComboBox`；camera overlay `UICheckBox`；startup scene path + Browse/Apply/Reset）。
+- View 菜单 `editor.settings` action；`EditorLayer` 公开 settings draft/apply API。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（381/381）。
+
+### Phase 8U 边界
+
+- legacy ImGui `editorSettings` 窗口仍在 `onImGuiRender`；widgettree 默认路径使用 retained 面板。
+- Debug images window、UI Designer palette/inspector 仍待迁移；见 `imgui-widgettree-parity.md`。

@@ -740,11 +740,15 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                                                  std::function<void(std::string)> onPicked) {
                 _editorSurface.openAssetPickerDialog(kind, std::move(currentPath), std::move(onPicked));
             });
+            _layer->setFilePickerHandler([this](FEditorFilePickerRequest request) {
+                _editorSurface.openFilePickerDialog(std::move(request));
+            });
             _inputNode.bind(app, *_layer, &_editorSurface);
         }
         else {
             _layer->clearSaveSceneAsHandler();
             _layer->clearAssetPickerHandler();
+            _layer->clearFilePickerHandler();
             _inputNode.bind(app, *_layer, nullptr);
         }
         _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);

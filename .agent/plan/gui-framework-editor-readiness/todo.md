@@ -100,6 +100,8 @@
 - [x] Phase 8P：删除 UIDesignerPanel 未调用的 ImGui draw helpers（保留 preview/document 数据层）。
 - [x] Phase 8Q：EditorSurface dock layout persistence（stable panel key + `editor.dockLayout` JSON）。
 - [x] Phase 8R：widgettree viewport 创作菜单（`EditorLayer` 命令 + retained `UIMenu` 右键 + Delete/Duplicate 快捷键）。
+- [x] Phase 8S：通用 retained file picker（`FEditorFilePickerRequest` + `EditorSurface::openFilePickerDialog`；script/material/directory/scene 工厂）。
+- [x] Phase 8U：Editor Settings retained 面板（View 菜单 + sampler/overlay/startup scene）。
 - [ ] Remove remaining ImGui editor paths（见 [`imgui-widgettree-parity.md`](./imgui-widgettree-parity.md) 删除门禁）。
 - [ ] Multi-window/docking persistence（floating geometry / coordinator）。
 - [ ] Cross-platform and long-run gates。

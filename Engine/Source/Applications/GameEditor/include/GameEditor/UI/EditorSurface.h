@@ -12,6 +12,7 @@
 
 #include "GameEditor/FileExplorer.h"
 #include "GameEditor/UI/EditorAssetPicker.h"
+#include "GameEditor/UI/EditorFilePicker.h"
 #include "GameEditor/UI/EditorTabRegistry.h"
 #include "GameEditor/UI/EditorInspectorTab.h"
 #include "GameEditor/UI/EditorViewportHost.h"
@@ -55,6 +56,8 @@ class RuntimeRenderGraphSection;
 class RuntimeRenderTargetSection;
 class RuntimeDebugPrimitivesSection;
 struct UITextField;
+struct UIComboBox;
+struct UICheckBox;
 struct UITheme;
 struct UITreeView;
 struct WidgetTree;
@@ -159,8 +162,16 @@ struct EditorSurface
     std::unique_ptr<UIKeyedChildReconciler> _assetPickerEntryReconciler;
     std::string                     _assetPickerFingerprint;
     bool                            _bAssetPickerRowsDirty = true;
-    EEditorAssetPickerKind          _assetPickerKind = EEditorAssetPickerKind::Texture;
-    std::function<void(std::string)> _assetPickerOnPicked;
+    FEditorFilePickerRequest        _filePickerRequest;
+
+    std::shared_ptr<UIPopupOverlay> _settingsOverlay;
+    std::shared_ptr<UIPanel>        _settingsPanel;
+    std::shared_ptr<UIComboBox>     _settingsSamplerCombo;
+    std::shared_ptr<UICheckBox>     _settingsOverlayCheckbox;
+    std::shared_ptr<UITextField>    _settingsScenePathField;
+    std::shared_ptr<UIText>         _settingsSceneStatusText;
+    std::shared_ptr<UIButton>       _settingsApplyButton;
+    std::shared_ptr<UIButton>       _settingsResetButton;
 
     std::shared_ptr<Texture>    _viewportTexture;
     std::shared_ptr<IImage>     _viewportImageResource;
@@ -200,9 +211,11 @@ struct EditorSurface
     [[nodiscard]] bool shouldRenderViewportGizmo() const;
     void presentViewportGizmo(ICommandBuffer& commandBuffer);
     void openSceneSaveDialog();
+    void openFilePickerDialog(FEditorFilePickerRequest request);
     void openAssetPickerDialog(EEditorAssetPickerKind kind,
                                std::string currentPath,
                                std::function<void(std::string)> onPicked);
+    void openEditorSettingsDialog();
 
   private:
     void rebuild(App& app);
@@ -236,6 +249,8 @@ struct EditorSurface
     void selectAssetPickerItem(const std::filesystem::path& path, bool bIsDirectory);
     void activateAssetPickerItem(const std::filesystem::path& path, bool bIsDirectory);
     void confirmAssetPickerDialog();
+    void clearEditorSettingsDialog();
+    void syncEditorSettingsDialog();
     void publishViewportRect();
     void syncViewportHostState(App& app);
     void applyWindowMetrics(App& app);
