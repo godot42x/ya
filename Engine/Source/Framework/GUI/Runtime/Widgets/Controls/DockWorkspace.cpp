@@ -155,12 +155,155 @@ const UIDockWorkspace::FFloatingWindow* UIDockWorkspace::findFloatingById(FDockF
 
 void UIDockWorkspace::setFloatingWindowPos(FDockFloatingWindowId id, const glm::vec2& pos)
 {
-    for (FFloatingWindow& f : _floating) {
-        if (f.id == id) {
-            f.pos = pos;
-            return;
+    if (FFloatingWindow* window = findFloatingByIdMutable(id)) {
+        window->pos = pos;
+    }
+}
+
+void UIDockWorkspace::setFloatingWindowRect(FDockFloatingWindowId id, const glm::vec2& pos, const glm::vec2& size)
+{
+    if (FFloatingWindow* window = findFloatingByIdMutable(id)) {
+        window->pos  = pos;
+        window->size = size;
+    }
+}
+
+void UIDockWorkspace::setFloatingWindowActivePanel(FDockFloatingWindowId id, DockPanelId panelId)
+{
+    FFloatingWindow* window = findFloatingByIdMutable(id);
+    if (!window) {
+        return;
+    }
+    if (std::find(window->panelIds.begin(), window->panelIds.end(), panelId) == window->panelIds.end()) {
+        return;
+    }
+    window->activePanelId = panelId;
+}
+
+UIDockWorkspace::FFloatingWindow* UIDockWorkspace::findFloatingByIdMutable(FDockFloatingWindowId id)
+{
+    for (FFloatingWindow& window : _floating) {
+        if (window.id == id) {
+            return &window;
         }
     }
+    return nullptr;
+}
+
+nlohmann::json UIDockWorkspace::exportLayoutJson() const
+{
+    nlohmann::json layout = _model.exportLayoutJson();
+    nlohmann::json floating = nlohmann::json::array();
+    for (const FFloatingWindow& window : _floating) {
+        nlohmann::json panels = nlohmann::json::array();
+        for (const DockPanelId panelId : window.panelIds) {
+            const FDockPanelRecord* record = _model.findPanel(panelId);
+            if (!record) {
+                continue;
+            }
+            panels.push_back(record->stableKey);
+        }
+        if (panels.empty()) {
+            continue;
+        }
+        nlohmann::json entry = nlohmann::json::object();
+        entry["panels"] = std::move(panels);
+        if (const FDockPanelRecord* selected = _model.findPanel(window.activePanelId)) {
+            entry["selected"] = selected->stableKey;
+        }
+        entry["pos"]  = nlohmann::json::array({window.pos.x, window.pos.y});
+        entry["size"] = nlohmann::json::array({window.size.x, window.size.y});
+        floating.push_back(std::move(entry));
+    }
+    layout["floating"] = std::move(floating);
+    return layout;
+}
+
+bool UIDockWorkspace::importLayoutJson(const nlohmann::json& layout)
+{
+    struct FPendingFloating
+    {
+        std::vector<DockPanelId> panelIds;
+        DockPanelId              activePanelId = kInvalidDockPanelId;
+        glm::vec2                pos{180.0f, 140.0f};
+        glm::vec2                size{320.0f, 240.0f};
+    };
+
+    std::vector<FPendingFloating> pending;
+    if (layout.contains("floating")) {
+        if (!layout["floating"].is_array()) {
+            return false;
+        }
+        for (const nlohmann::json& entry : layout["floating"]) {
+            if (!entry.is_object() || !entry.contains("panels") || !entry["panels"].is_array() || entry["panels"].empty()) {
+                return false;
+            }
+            FPendingFloating window;
+            for (const nlohmann::json& panelKeyJson : entry["panels"]) {
+                if (!panelKeyJson.is_string()) {
+                    return false;
+                }
+                const FDockPanelRecord* record = _model.findPanelByStableKey(panelKeyJson.get<std::string>());
+                if (!record) {
+                    return false;
+                }
+                window.panelIds.push_back(record->id);
+            }
+            if (entry.contains("selected")) {
+                if (!entry["selected"].is_string()) {
+                    return false;
+                }
+                const FDockPanelRecord* selected = _model.findPanelByStableKey(entry["selected"].get<std::string>());
+                if (!selected) {
+                    return false;
+                }
+                window.activePanelId = selected->id;
+            }
+            else {
+                window.activePanelId = window.panelIds.front();
+            }
+            if (entry.contains("pos") && entry["pos"].is_array() && entry["pos"].size() == 2) {
+                window.pos = {entry["pos"][0].get<float>(), entry["pos"][1].get<float>()};
+            }
+            if (entry.contains("size") && entry["size"].is_array() && entry["size"].size() == 2) {
+                window.size = {entry["size"][0].get<float>(), entry["size"][1].get<float>()};
+            }
+            pending.push_back(std::move(window));
+        }
+    }
+
+    const std::vector<FFloatingWindow> previousFloating = _floating;
+    const FDockFloatingWindowId previousNextId = _nextFloatingWindowId;
+    _floating.clear();
+    if (!_model.importLayoutJson(layout)) {
+        _floating = previousFloating;
+        _nextFloatingWindowId = previousNextId;
+        return false;
+    }
+
+    for (const FPendingFloating& window : pending) {
+        FDockFloatingWindowId floatingId = kInvalidFloatingWindowId;
+        for (size_t index = 0; index < window.panelIds.size(); ++index) {
+            const DockPanelId panelId = window.panelIds[index];
+            if (index == 0) {
+                floatingId = tearOffPanel(panelId, window.pos, window.size);
+                if (floatingId == kInvalidFloatingWindowId) {
+                    _floating = previousFloating;
+                    _nextFloatingWindowId = previousNextId;
+                    return false;
+                }
+            }
+            else if (!addPanelToFloating(floatingId, panelId)) {
+                _floating = previousFloating;
+                _nextFloatingWindowId = previousNextId;
+                return false;
+            }
+        }
+        setFloatingWindowActivePanel(floatingId, window.activePanelId);
+    }
+
+    fireFloatingUpdated();
+    return true;
 }
 
 } // namespace ya

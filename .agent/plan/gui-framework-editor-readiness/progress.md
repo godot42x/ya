@@ -984,3 +984,15 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - cube-face 按钮网格 / 多列表格布局未迁移；combo 选择覆盖核心 workflow。
 - legacy ImGui `debugWindow` 与 chrome host 仍平行，直到 8W 删除门禁。
 - 下一步：floating dock geometry，或在 parity 行达标后推进 8W（移除 `onImGuiRender` shell / `imgui-local`）。
+
+## Floating dock persistence 当前 checkpoint（2026-09-04）
+
+- `UIDockWorkspace::exportLayoutJson` / `importLayoutJson`：在 dock tree JSON 上附加 `floating[]`（stable panel keys、selected tab、pos/size）。缺省 `floating` 兼容 8Q 的 tree-only 快照。
+- EditorSurface 打开 tear-off（`bAllowFloating` / `bAllowTearOff`），Popup 层挂 `UIDockFloatingHost`；dock 与 floating 变更都写回 `editor.dockLayout`。
+- 浮窗 title 移动 / resize 在 pointer release 时 commit geometry；tab 选择写回 `activePanelId`。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`；`xmake r ya-testing --gtest_filter='DockNodeTest.*'`。
+
+### Floating dock 边界
+
+- 仍是同一 OS window 内的 Popup-layer 浮窗，不是 native 多窗口 coordinator。
+- 下一步：8W 仅在剩余 🔴 parity 行（gizmo bridge / optional imgui chrome）被接受或替换后删除 `onImGuiRender` / `imgui-local`。

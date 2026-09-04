@@ -40,6 +40,7 @@ struct YA_GUI_API UIDockFloatingWindow : public UIElement, public UIStyledWidget
     [[nodiscard]] const Rect2D& getWindowRect() const { return _windowRect; }
     void setWindowRect(const Rect2D& rect);
     void resizeTo(const glm::vec2& extent);
+    void commitGeometryToWorkspace(bool notify);
     /// Rebuild the window's tab bar + content to match the workspace's current
     /// floating record for this window (called by the host on floating updates).
     void refreshFromWorkspace();

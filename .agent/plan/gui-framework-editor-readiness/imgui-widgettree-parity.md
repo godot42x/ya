@@ -32,7 +32,7 @@
 | Project browser (no project) | `EditorLayer::projectBrowserWindow` | `EditorSurface::buildProjectBrowser` | ✅ | Both use same `EditorLayer` project APIs |
 | Main menu | `EditorLayer::menuBar` (ImGui) | `UIMenuBar` + `ActionMap` | 🟡 | See File menu gaps below |
 | Toolbar | `EditorLayer::toolbar` (icon `ImageButton`) | Text `UIButton` row | 🟡 | Visual parity only; actions wired |
-| Dock layout | ImGui `DockSpace` | `UIDockWorkspace` + `UIDockSpace` | 🟡 | Docked tree persists (8Q); no floating geometry |
+| Dock layout | ImGui `DockSpace` | `UIDockWorkspace` + `UIDockSpace` | ✅ | Docked tree + floating geometry persist in `editor.dockLayout`; tear-off enabled on widgettree |
 | Editor Settings window | `EditorLayer::editorSettings` | `EditorSurface::openEditorSettingsDialog` | ✅ | View 菜单；sampler/overlay/startup scene |
 | Debug images window | `EditorLayer::debugWindow` | `EditorDebugImagesTab` dock tab | ✅ | Category combo, grouped mip/face combos, standalone RGBA + `UIImage`; cube-face button grid not retained. ImGui window remains until 8W |
 | Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | Retained popups on `EditorSurface` | 🟡 | Scene save + asset browse + generic file picker migrated |
@@ -205,7 +205,7 @@
 3. ~~Debug images window (or drop scope)~~ ✅ Phase 8V  
 4. ~~UI Designer palette + inspector~~ ✅ Phase 8T（tree DnD 仍 🟡）  
 5. ~~Remaining `FilePicker` modes~~ ✅ Phase 8S  
-6. Floating dock persistence (if tear-off is enabled later)
+6. ~~Floating dock persistence (if tear-off is enabled later)~~ ✅ floating geometry in `editor.dockLayout`；native multi-window coordinator still out of scope
 
 ---
 

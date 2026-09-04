@@ -79,12 +79,22 @@ struct YA_GUI_API UIDockWorkspace
     [[nodiscard]] const std::vector<FFloatingWindow>& floatingWindows() const { return _floating; }
     /// Update a floating window's on-screen position (called as the window moves).
     void setFloatingWindowPos(FDockFloatingWindowId id, const glm::vec2& pos);
+    /// Update a floating window's logical position and size without notifying listeners.
+    void setFloatingWindowRect(FDockFloatingWindowId id, const glm::vec2& pos, const glm::vec2& size);
+    void setFloatingWindowActivePanel(FDockFloatingWindowId id, DockPanelId panelId);
+
+    /// Serialize the docked tree plus floating windows (stable panel keys + geometry).
+    [[nodiscard]] nlohmann::json exportLayoutJson() const;
+    /// Restore docked tree then floating windows. Missing `floating` is treated as empty
+    /// (backward compatible with tree-only snapshots). Unknown panel keys fail the import.
+    bool importLayoutJson(const nlohmann::json& layout);
 
     /// The DockSpace re-projects its tree when panels move into/out of dock.
     void setOnDockUpdated(std::function<void()> cb) { _onDockUpdated = std::move(cb); }
     void appendOnDockUpdated(std::function<void()> cb) { _onDockUpdatedListeners.push_back(std::move(cb)); }
     /// The floating host re-syncs its window set when floating changes.
     void setOnFloatingUpdated(std::function<void()> cb) { _onFloatingUpdated = std::move(cb); }
+    void appendOnFloatingUpdated(std::function<void()> cb) { _onFloatingUpdatedListeners.push_back(std::move(cb)); }
     void fireDockUpdated()
     {
         if (_onDockUpdated) {
@@ -96,7 +106,17 @@ struct YA_GUI_API UIDockWorkspace
             }
         }
     }
-    void fireFloatingUpdated() { if (_onFloatingUpdated) _onFloatingUpdated(); }
+    void fireFloatingUpdated()
+    {
+        if (_onFloatingUpdated) {
+            _onFloatingUpdated();
+        }
+        for (const std::function<void()>& listener : _onFloatingUpdatedListeners) {
+            if (listener) {
+                listener();
+            }
+        }
+    }
 
     [[nodiscard]] const FPanel* findPanel(DockPanelId id) const;
     [[nodiscard]] FPanel* findPanel(DockPanelId id);
@@ -114,6 +134,9 @@ private:
     std::function<void()> _onDockUpdated;
     std::vector<std::function<void()>> _onDockUpdatedListeners;
     std::function<void()> _onFloatingUpdated;
+    std::vector<std::function<void()>> _onFloatingUpdatedListeners;
+
+    [[nodiscard]] FFloatingWindow* findFloatingByIdMutable(FDockFloatingWindowId id);
 };
 
 } // namespace ya

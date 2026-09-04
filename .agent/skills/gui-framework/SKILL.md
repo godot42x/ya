@@ -79,9 +79,13 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 - `UIBoxLayout` 主轴按 desired/slot 排列，cross 轴默认 stretch；`computeDesiredSize` 聚合
   child + margin + spacing + padding。scroll/split 仍读取内容 desired，specialized layout
   已收口为 `UIScrollLayout` / `UISplitLayout` / `UIOverlayLayout`；`UIButton`、`UISelectableRow`、`UICheckBox`、`UICompoundWidget` 与 `UISizeBox`
-  使用 `UISingleChildLayout`。  `UIDockSpace` 也是 single-child host：投影根填满 dock。`FDockTreeModel::exportLayoutJson` /
-  `importLayoutJson` 按 panel `stableKey` 持久化 split/leaf 树（不持久化 NodeId）；Editor 经
-  `ConfigManager` `editor.dockLayout` 恢复，`UIDockWorkspace::appendOnDockUpdated` 写回。
+  使用 `UISingleChildLayout`。  `UIDockSpace` 也是 single-child host：投影根填满 dock。  `FDockTreeModel::exportLayoutJson` /
+  `importLayoutJson` 按 panel `stableKey` 持久化 split/leaf 树（不持久化 NodeId）；
+  `UIDockWorkspace::exportLayoutJson` / `importLayoutJson` 在同一 JSON 上附加
+  `floating[]`（panel keys + pos/size + selected tab）。Editor 经
+  `ConfigManager` `editor.dockLayout` 恢复，`UIDockWorkspace::appendOnDockUpdated`
+  与 `appendOnFloatingUpdated` 写回。Editor chrome 打开 `bAllowFloating` /
+  `bAllowTearOff`，`UIDockFloatingHost` 挂在 Popup 层。
   `UIDockFloatingHost` 是 canvas host；floating window 的位置/尺寸写在 host-owned `UICanvasSlot`，
   `setWindowRect` 直接更新 host-owned `UICanvasSlot`。窗口本身是 overlay host：chrome
   box Fill，resize handle 走 overlay Start/End+Fill，不再在 box arrange 之后手写 handle rect。

@@ -36,6 +36,7 @@
 #include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DockNode.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/DockFloatingHost.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
@@ -474,8 +475,9 @@ void EditorSurface::shutdown()
     _root.reset();
     _menuBar.reset();
     _toolbarModeText.reset();
-    _dockWorkspace.reset();
+    _dockFloatingHost.reset();
     _dockSpace.reset();
+    _dockWorkspace.reset();
     _viewportImage.reset();
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
@@ -535,8 +537,9 @@ void EditorSurface::rebuild(App& app)
     _root.reset();
     _menuBar.reset();
     _toolbarModeText.reset();
-    _dockWorkspace.reset();
+    _dockFloatingHost.reset();
     _dockSpace.reset();
+    _dockWorkspace.reset();
     _viewportImage.reset();
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
@@ -857,10 +860,19 @@ void EditorSurface::buildEditorChrome(App& app)
                   .size({0.0f, kToolbarHeight}));
 
     _dockWorkspace = std::make_shared<UIDockWorkspace>();
+    _dockWorkspace->bAllowFloating = true;
+    _dockWorkspace->bAllowTearOff  = true;
     _dockSpace = ui::buildAs<UIDockSpace>(*_tree,
                                           *_root,
                                           ui::dockSpace("EditorDock").setWorkspace(_dockWorkspace),
                                           ui::canvasSlot().anchor({0.0f, 0.0f}, {1.0f, 1.0f}).offset({0.0f, kChromeTop}));
+
+    _dockFloatingHost = std::make_shared<UIDockFloatingHost>("EditorDockFloatingHost");
+    _dockFloatingHost->bindWorkspace(_dockWorkspace);
+    FCanvasSlotArgs floatingFill;
+    floatingFill.anchorMin = {0.0f, 0.0f};
+    floatingFill.anchorMax = {1.0f, 1.0f};
+    (void)_tree->attachToLayer(WidgetTree::ELayer::Popup, _dockFloatingHost, floatingFill);
 
     auto viewportImage = ui::image("ViewportImage");
     _viewportImage     = viewportImage.share();
@@ -1083,6 +1095,7 @@ void EditorSurface::buildEditorChrome(App& app)
     }
     _dockWorkspace->fireDockUpdated();
     _dockWorkspace->appendOnDockUpdated([this]() { persistEditorDockLayout(); });
+    _dockWorkspace->appendOnFloatingUpdated([this]() { persistEditorDockLayout(); });
 
     _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(*_layer);
     _viewportOverlayHost.setOverlay(_viewportGizmoOverlay);
@@ -1184,7 +1197,7 @@ bool EditorSurface::tryRestoreEditorDockLayout()
     if (!ConfigManager::get().tryGet("editor", "dockLayout", layout)) {
         return false;
     }
-    return _dockWorkspace->dockModel().importLayoutJson(layout);
+    return _dockWorkspace->importLayoutJson(layout);
 }
 
 void EditorSurface::persistEditorDockLayout()
@@ -1193,7 +1206,7 @@ void EditorSurface::persistEditorDockLayout()
         return;
     }
     ConfigManager::Editor("editor")
-        .set("dockLayout", _dockWorkspace->dockModel().exportLayoutJson())
+        .set("dockLayout", _dockWorkspace->exportLayoutJson())
         .flush();
 }
 

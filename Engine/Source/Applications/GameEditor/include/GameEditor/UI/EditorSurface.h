@@ -41,6 +41,7 @@ class EditorViewportGizmoOverlay;
 struct Texture;
 struct UIDockSpace;
 struct UIDockWorkspace;
+struct UIDockFloatingHost;
 struct UIElement;
 struct UIContainer;
 struct UIButton;
@@ -84,6 +85,7 @@ struct EditorSurface
     std::shared_ptr<UIText>          _toolbarModeText;
     std::shared_ptr<UIDockWorkspace> _dockWorkspace;
     std::shared_ptr<UIDockSpace>     _dockSpace;
+    std::shared_ptr<UIDockFloatingHost> _dockFloatingHost;
     std::shared_ptr<UIImage>         _viewportImage;
     std::shared_ptr<UITreeView>      _hierarchyView;
     std::shared_ptr<ReactiveList<UITreeView::FNode>> _hierarchyRoots;

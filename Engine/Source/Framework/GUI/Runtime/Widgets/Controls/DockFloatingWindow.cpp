@@ -89,7 +89,7 @@ struct FDockFloatingWindowPanelDragBehavior final : public UIBehavior
                 moved.pos += logicalPoint - *owner._lastDragPoint;
                 owner.setWindowRect(moved);
                 if (owner._ws) {
-                    owner._ws->setFloatingWindowPos(owner._floatingId, moved.pos);
+                    owner._ws->setFloatingWindowRect(owner._floatingId, moved.pos, moved.extent);
                 }
             }
             owner._lastDragPoint = logicalPoint;
@@ -230,6 +230,7 @@ struct FResizeHandle final : UIElement
             }
             if (eventType == EEvent::MouseButtonReleased) {
                 _bResizing = false;
+                _owner->commitGeometryToWorkspace(true);
                 if (WidgetTree* tree = getTree()) {
                     tree->releasePointerCapture(this);
                     tree->invalidateLayout();
@@ -408,6 +409,8 @@ void UIDockFloatingWindow::refreshFromWorkspace()
             if (static_cast<size_t>(index) < r->panelIds.size()) {
                 _panelId = r->panelIds[static_cast<size_t>(index)];
                 _title = _ws->findPanel(_panelId) ? _ws->findPanel(_panelId)->name : std::string{};
+                _ws->setFloatingWindowActivePanel(_floatingId, _panelId);
+                _ws->fireFloatingUpdated();
             }
         }
         rebuildContent();
@@ -493,6 +496,7 @@ void UIDockFloatingWindow::updateWindowMove(const glm::vec2& logicalPoint)
     Rect2D moved = _windowRect;
     moved.pos += delta;
     setWindowRect(moved);
+    commitGeometryToWorkspace(false);
     if (WidgetTree* tree = getTree()) {
         tree->invalidateLayout();
     }
@@ -534,6 +538,7 @@ bool UIDockFloatingWindow::handleInputEvent(const Event& event, const WidgetEven
                 _bTitlePressed = false;
                 _bTitleMoving = false;
                 _lastDragPoint.reset();
+                commitGeometryToWorkspace(true);
                 if (WidgetTree* tree = getTree()) {
                     tree->releasePointerCapture(this);
                 }
@@ -547,6 +552,7 @@ bool UIDockFloatingWindow::handleInputEvent(const Event& event, const WidgetEven
         if (_bTitleMoving && eventType == EEvent::MouseButtonReleased) {
             _bTitleMoving = false;
             _lastDragPoint.reset();
+            commitGeometryToWorkspace(true);
             if (WidgetTree* tree = getTree()) {
                 tree->releasePointerCapture(this);
             }
@@ -616,6 +622,18 @@ void UIDockFloatingWindow::applyResizeFromEdge(EResizeEdge edge, const glm::vec2
         break;
     }
     setWindowRect(next);
+    commitGeometryToWorkspace(false);
+}
+
+void UIDockFloatingWindow::commitGeometryToWorkspace(bool notify)
+{
+    if (!_ws) {
+        return;
+    }
+    _ws->setFloatingWindowRect(_floatingId, _windowRect.pos, _windowRect.extent);
+    if (notify) {
+        _ws->fireFloatingUpdated();
+    }
 }
 
 } // namespace ya

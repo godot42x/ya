@@ -157,6 +157,7 @@ struct FDockSpacePanelDragBehavior final : public UIBehavior
                 owner._ws->tearOffPanel(panelId, logicalPoint, size);
                 owner.rebuildProjection();
                 owner._ws->fireFloatingUpdated();
+                owner._ws->fireDockUpdated();
             }
         };
         tree->beginDrag(&owner, std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelId), std::move(label), std::move(observer));

@@ -1,4 +1,6 @@
 #include "GUI/Widgets/Controls/DockNode.h"
+#include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/Panel.h"
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -288,6 +290,81 @@ TEST(DockNodeTest, ImportMountsMissingPanelsOnFirstLeaf)
     ASSERT_NE(model.findLeafForPanel(1), nullptr);
     ASSERT_NE(model.findLeafForPanel(2), nullptr);
     EXPECT_TRUE(model.validateInvariants());
+}
+
+TEST(DockNodeTest, WorkspaceExportImportRestoresFloatingGeometry)
+{
+    UIDockWorkspace source;
+    source.bAllowFloating = true;
+    source.bAllowTearOff  = true;
+    const DockPanelId viewportId = source.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody"));
+    const DockPanelId inspectorId = source.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody"));
+    const DockPanelId hierarchyId = source.addPanel("hierarchy", "Hierarchy", std::make_shared<UIPanel>("HierarchyBody"));
+    ASSERT_NE(viewportId, kInvalidDockPanelId);
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    ASSERT_NE(hierarchyId, kInvalidDockPanelId);
+    ASSERT_NE(source.tearOffPanel(inspectorId, {180.0f, 140.0f}, {360.0f, 280.0f}), kInvalidFloatingWindowId);
+    ASSERT_TRUE(source.addPanelToFloating(source.floatingWindows().front().id, hierarchyId));
+    source.setFloatingWindowActivePanel(source.floatingWindows().front().id, hierarchyId);
+    source.setFloatingWindowRect(source.floatingWindows().front().id, {180.0f, 140.0f}, {360.0f, 280.0f});
+
+    const nlohmann::json layout = source.exportLayoutJson();
+    ASSERT_TRUE(layout.contains("floating"));
+    ASSERT_EQ(layout["floating"].size(), 1u);
+
+    UIDockWorkspace restored;
+    restored.bAllowFloating = true;
+    restored.bAllowTearOff  = true;
+    ASSERT_NE(restored.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody2")), kInvalidDockPanelId);
+    ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody2")), kInvalidDockPanelId);
+    ASSERT_NE(restored.addPanel("hierarchy", "Hierarchy", std::make_shared<UIPanel>("HierarchyBody2")), kInvalidDockPanelId);
+    ASSERT_TRUE(restored.importLayoutJson(layout));
+
+    ASSERT_EQ(restored.floatingWindows().size(), 1u);
+    const auto& floating = restored.floatingWindows().front();
+    EXPECT_EQ(floating.pos, glm::vec2(180.0f, 140.0f));
+    EXPECT_EQ(floating.size, glm::vec2(360.0f, 280.0f));
+    ASSERT_EQ(floating.panelIds.size(), 2u);
+    EXPECT_TRUE(restored.isPanelFloating(restored.dockModel().findPanelByStableKey("inspector")->id));
+    EXPECT_TRUE(restored.isPanelFloating(restored.dockModel().findPanelByStableKey("hierarchy")->id));
+    EXPECT_FALSE(restored.isPanelFloating(restored.dockModel().findPanelByStableKey("viewport")->id));
+    EXPECT_EQ(floating.activePanelId, restored.dockModel().findPanelByStableKey("hierarchy")->id);
+    EXPECT_EQ(restored.dockModel().findLeafForPanel(restored.dockModel().findPanelByStableKey("inspector")->id), nullptr);
+}
+
+TEST(DockNodeTest, WorkspaceImportRejectsUnknownFloatingPanelKey)
+{
+    UIDockWorkspace workspace;
+    workspace.bAllowFloating = true;
+    const DockPanelId viewportId = workspace.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody"));
+    ASSERT_NE(viewportId, kInvalidDockPanelId);
+    const nlohmann::json layout = {
+        {"version", 1},
+        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"floating", nlohmann::json::array({nlohmann::json::object({
+            {"panels", nlohmann::json::array({"missing-panel"})},
+            {"pos", nlohmann::json::array({10.0f, 20.0f})},
+            {"size", nlohmann::json::array({100.0f, 80.0f})},
+        })})},
+    };
+    EXPECT_FALSE(workspace.importLayoutJson(layout));
+    EXPECT_TRUE(workspace.floatingWindows().empty());
+    ASSERT_NE(workspace.dockModel().findLeafForPanel(viewportId), nullptr);
+}
+
+TEST(DockNodeTest, WorkspaceImportAcceptsTreeOnlySnapshot)
+{
+    UIDockWorkspace workspace;
+    workspace.bAllowFloating = true;
+    ASSERT_NE(workspace.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody")), kInvalidDockPanelId);
+    ASSERT_NE(workspace.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody")), kInvalidDockPanelId);
+    const nlohmann::json layout = {
+        {"version", 1},
+        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport", "inspector"})}, {"selected", "viewport"}}},
+    };
+    ASSERT_TRUE(workspace.importLayoutJson(layout));
+    EXPECT_TRUE(workspace.floatingWindows().empty());
+    EXPECT_NE(workspace.dockModel().findLeafForPanel(workspace.dockModel().findPanelByStableKey("inspector")->id), nullptr);
 }
 
 } // namespace ya
