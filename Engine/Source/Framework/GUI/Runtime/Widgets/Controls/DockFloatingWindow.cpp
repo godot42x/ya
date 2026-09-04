@@ -42,9 +42,10 @@ constexpr float kHideTabBarSize  = 12.0f;
 
 struct FDockHideTabBarAffordance final : UIElement
 {
-    FDockHideTabBarAffordance(std::function<void()> onToggle)
+    FDockHideTabBarAffordance(std::function<void()> onToggle, std::function<bool()> isFolded)
         : UIElement("FloatingHideTabBar")
         , _onToggle(std::move(onToggle))
+        , _isFolded(std::move(isFolded))
     {
         _hitFilter = EWidgetHitFilter::Stop;
         _zOrder    = 8;
@@ -63,9 +64,22 @@ struct FDockHideTabBarAffordance final : UIElement
                                           : glm::vec4{0.52f, 0.56f, 0.64f, 0.95f};
         const glm::vec2 p = _layoutRect.pos;
         const float     s = std::min(_layoutRect.extent.x, _layoutRect.extent.y);
-        builder.addLine(p, {p.x + s, p.y}, color, 1.5f);
-        builder.addLine(p, {p.x, p.y + s}, color, 1.5f);
-        builder.addLine({p.x + s, p.y}, {p.x, p.y + s}, color, 1.5f);
+        const float     inset = std::max(1.0f, s * 0.18f);
+        if (_isFolded && _isFolded()) {
+            const glm::vec2 a = {p.x + inset, p.y + inset};
+            const glm::vec2 b = {p.x + inset, p.y + s - inset};
+            const glm::vec2 c = {p.x + s - inset, p.y + s * 0.5f};
+            builder.addLine(a, b, color, 1.5f);
+            builder.addLine(b, c, color, 1.5f);
+            builder.addLine(c, a, color, 1.5f);
+            return;
+        }
+        const glm::vec2 a = {p.x + inset, p.y + inset};
+        const glm::vec2 b = {p.x + s - inset, p.y + inset};
+        const glm::vec2 c = {p.x + s * 0.5f, p.y + s - inset};
+        builder.addLine(a, b, color, 1.5f);
+        builder.addLine(b, c, color, 1.5f);
+        builder.addLine(c, a, color, 1.5f);
     }
 
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override
@@ -89,6 +103,7 @@ struct FDockHideTabBarAffordance final : UIElement
 
   private:
     std::function<void()> _onToggle;
+    std::function<bool()> _isFolded;
     bool                  _bHovered = false;
 };
 
@@ -376,19 +391,25 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
     chrome->addDetachedChild(_content);
     addDetachedChild(chrome);
 
-    auto hideBar = std::make_shared<FDockHideTabBarAffordance>([this]()
-    {
-        if (!_ws) {
-            return;
-        }
-        const auto* rec = _ws->findFloatingById(_floatingId);
-        if (!rec) {
-            return;
-        }
-        _ws->setFloatingHideTabBar(_floatingId, !rec->bHideTabBar);
-        _ws->fireFloatingUpdated();
-        refreshFromWorkspace();
-    });
+    auto hideBar = std::make_shared<FDockHideTabBarAffordance>(
+        [this]()
+        {
+            if (!_ws) {
+                return;
+            }
+            const auto* rec = _ws->findFloatingById(_floatingId);
+            if (!rec) {
+                return;
+            }
+            _ws->setFloatingHideTabBar(_floatingId, !rec->bHideTabBar);
+            _ws->fireFloatingUpdated();
+            refreshFromWorkspace();
+        },
+        [this]()
+        {
+            const auto* rec = _ws ? _ws->findFloatingById(_floatingId) : nullptr;
+            return rec && rec->bHideTabBar;
+        });
     addDetachedChild(hideBar, [](UIElement&, UISlot& slot)
     {
         if (auto* overlay = slot.as<UIOverlaySlot>()) {
