@@ -69,7 +69,7 @@ TEST(EditorPropertyGraphTest, Vec3BindingReportsMixedAndWritesAllInstances)
 
     ASSERT_NE(position, nullptr);
     EXPECT_TRUE(position->binding.isMixed());
-    EXPECT_TRUE(position->binding.setVec3({4.0f, 5.0f, 6.0f}));
+    EXPECT_TRUE(position->binding.set(glm::vec3{4.0f, 5.0f, 6.0f}));
     EXPECT_EQ(first._position, glm::vec3(4.0f, 5.0f, 6.0f));
     EXPECT_EQ(second._position, glm::vec3(4.0f, 5.0f, 6.0f));
 }
@@ -108,13 +108,13 @@ TEST(EditorPropertyGraphTest, ProjectInstallsTransformSettersThatMarkDirty)
     TransformComponent transform;
     transform.clearLocalDirty();
     auto built = PropertyGraph::build(type_index_v<TransformComponent>, {&transform});
-    ASSERT_TRUE(built.find("_position")->binding.setVec3({1.0f, 2.0f, 3.0f}));
+    ASSERT_TRUE(built.find("_position")->binding.set(glm::vec3{1.0f, 2.0f, 3.0f}));
     EXPECT_EQ(transform._position, glm::vec3(1.0f, 2.0f, 3.0f));
     EXPECT_FALSE(transform.isLocalDirty());
 
     transform.clearLocalDirty();
     auto projected = PropertyGraph::project(type_index_v<TransformComponent>, {&transform});
-    ASSERT_TRUE(projected.find("_position")->binding.setVec3({4.0f, 5.0f, 6.0f}));
+    ASSERT_TRUE(projected.find("_position")->binding.set(glm::vec3{4.0f, 5.0f, 6.0f}));
     EXPECT_EQ(transform.getPosition(), glm::vec3(4.0f, 5.0f, 6.0f));
     EXPECT_TRUE(transform.isLocalDirty());
 }
@@ -354,7 +354,7 @@ TEST(EditorPropertyGraphTest, RecursiveProjectionFlattensNestedMaterialPropertie
 
     int changeHookCount = 0;
     metallic->binding.setChangeHook([&changeHookCount]() { ++changeHookCount; });
-    EXPECT_TRUE(metallic->binding.setFloat(0.7f));
+    EXPECT_TRUE(metallic->binding.set(0.7f));
     EXPECT_FLOAT_EQ(material.getParams().metallic, 0.7f);
     EXPECT_EQ(changeHookCount, 1);
 
@@ -547,9 +547,9 @@ TEST(EditorPropertyGraphTest, SequenceLeavesBindIndexedPathsAndWriteElements)
     EXPECT_FALSE(face1->binding.isMixed());
 
     std::string value;
-    ASSERT_TRUE(face0->binding.tryGetString(value));
+    ASSERT_TRUE(face0->binding.tryGet(value));
     EXPECT_EQ(value, "posx.hdr");
-    EXPECT_TRUE(face0->binding.setString("front.hdr"));
+    EXPECT_TRUE(face0->binding.set(std::string{"front.hdr"}));
     EXPECT_EQ(first.files[0], "front.hdr");
     EXPECT_EQ(second.files[0], "front.hdr");
     EXPECT_EQ(first.files[1], "negx.hdr");
@@ -604,9 +604,9 @@ TEST(EditorPropertyGraphTest, SkyboxCubemapFilesExpandAsIndexedStringLeaves)
     EXPECT_EQ(face0->displayName, "Cubemap Source / Files [0]");
 
     std::string value;
-    ASSERT_TRUE(face0->binding.tryGetString(value));
+    ASSERT_TRUE(face0->binding.tryGet(value));
     EXPECT_EQ(value, "px.hdr");
-    EXPECT_TRUE(face0->binding.setString("front.hdr"));
+    EXPECT_TRUE(face0->binding.set(std::string{"front.hdr"}));
     EXPECT_EQ(skybox.cubemapSource.files[0], "front.hdr");
     EXPECT_TRUE(skybox.cubemapSource.files[1].empty());
 }

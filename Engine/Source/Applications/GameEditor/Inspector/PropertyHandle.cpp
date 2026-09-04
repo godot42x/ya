@@ -13,13 +13,6 @@ namespace
 
 using reflection::PropertyAccessor;
 
-void notifyChanged(const PropertyHandle::ChangeHook& hook, bool changed)
-{
-    if (changed && hook) {
-        hook();
-    }
-}
-
 bool anyChanged(bool lhs, bool rhs)
 {
     return lhs || rhs;
@@ -27,34 +20,34 @@ bool anyChanged(bool lhs, bool rhs)
 
 } // namespace
 
-PropertyHandle::PropertyHandle(type_index_t ownerType, std::vector<void*> instances, const Property* property, Vec3Setter setter, reflection::FValueLoc loc)
-    : _ownerType(ownerType), _instances(std::move(instances)), _property(property), _loc(std::move(loc)), _vec3Setter(std::move(setter))
+PropertyHandle::PropertyHandle(type_index_t ownerType, std::vector<void*> instances, reflection::FPropertySlot slot)
+    : _ownerType(ownerType), _instances(std::move(instances)), _slot(std::move(slot))
 {
 }
 
 bool PropertyHandle::isValid() const
 {
-    return _property != nullptr && !_instances.empty();
+    return _slot.property != nullptr && !_instances.empty();
 }
 
 bool PropertyHandle::isEditable() const
 {
-    return isValid() && PropertyAccessor::isEditable(*_property);
+    return isValid() && PropertyAccessor::isEditable(*_slot.property);
 }
 
 bool PropertyHandle::isEnum() const
 {
-    return isValid() && PropertyAccessor::isEnum(*_property, _loc);
+    return isValid() && PropertyAccessor::isEnum(_slot);
 }
 
 bool PropertyHandle::isColor() const
 {
-    return isValid() && PropertyAccessor::isColor(*_property);
+    return isValid() && PropertyAccessor::isColor(*_slot.property);
 }
 
 bool PropertyHandle::isAssetRef() const
 {
-    return isValid() && PropertyAccessor::isAssetRefType(PropertyAccessor::valueType(*_property, _loc));
+    return isValid() && PropertyAccessor::isAssetRefType(PropertyAccessor::valueType(_slot));
 }
 
 std::optional<EEditorAssetPickerKind> PropertyHandle::assetRefKind() const
@@ -62,13 +55,14 @@ std::optional<EEditorAssetPickerKind> PropertyHandle::assetRefKind() const
     if (!isAssetRef()) {
         return std::nullopt;
     }
-    if (PropertyAccessor::valueType(*_property, _loc) == refl::type_index_v<TextureRef>) {
+    const type_index_t type = PropertyAccessor::valueType(_slot);
+    if (type == refl::type_index_v<TextureRef>) {
         return EEditorAssetPickerKind::Texture;
     }
-    if (PropertyAccessor::valueType(*_property, _loc) == refl::type_index_v<ModelRef>) {
+    if (type == refl::type_index_v<ModelRef>) {
         return EEditorAssetPickerKind::Model;
     }
-    if (PropertyAccessor::valueType(*_property, _loc) == refl::type_index_v<MeshRef>) {
+    if (type == refl::type_index_v<MeshRef>) {
         return EEditorAssetPickerKind::Mesh;
     }
     return std::nullopt;
@@ -79,13 +73,13 @@ bool PropertyHandle::isMixed() const
     if (!isValid() || _instances.size() < 2) {
         return false;
     }
-    const void* first = PropertyAccessor::address(*_property, _instances.front(), _loc);
+    const void* first = PropertyAccessor::address(_slot, _instances.front());
     if (!first) {
         return false;
     }
     return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* instance) {
-        const void* address = PropertyAccessor::address(*_property, instance, _loc);
-        return !address || !PropertyAccessor::equals(*_property, first, address, _loc);
+        const void* address = PropertyAccessor::address(_slot, instance);
+        return !address || !PropertyAccessor::equals(_slot, first, address);
     });
 }
 
@@ -94,13 +88,13 @@ bool PropertyHandle::isMixedVecAxis(int axis, int componentCount) const
     if (!isValid() || _instances.size() < 2) {
         return false;
     }
-    const void* first = PropertyAccessor::address(*_property, _instances.front(), _loc);
+    const void* first = PropertyAccessor::address(_slot, _instances.front());
     if (!first) {
         return false;
     }
     return std::any_of(_instances.begin() + 1, _instances.end(), [&](void* instance) {
-        const void* address = PropertyAccessor::address(*_property, instance, _loc);
-        return !address || !PropertyAccessor::equalsVecAxis(*_property, first, address, axis, componentCount, _loc);
+        const void* address = PropertyAccessor::address(_slot, instance);
+        return !address || !PropertyAccessor::equalsVecAxis(_slot, first, address, axis, componentCount);
     });
 }
 
@@ -112,224 +106,12 @@ bool PropertyHandle::isMixedVec3Axis(int axis) const
 const std::string& PropertyHandle::getName() const
 {
     static const std::string empty;
-    return _property ? _property->name : empty;
-}
-
-bool PropertyHandle::tryGetVec2(glm::vec2& value) const
-{
-    return isValid() && PropertyAccessor::tryGetVec2(*_property, _instances.front(), value, _loc);
-}
-
-bool PropertyHandle::setVec2(const glm::vec2& value) const
-{
-    if (!isEditable()) {
-        return false;
-    }
-    bool changed = false;
-    for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::setVec2(*_property, instance, value, _loc));
-    }
-    notifyChanged(_changeHook, changed);
-    return changed;
-}
-
-std::vector<glm::vec2> PropertyHandle::copyVec2() const
-{
-    std::vector<glm::vec2> values;
-    if (!isValid()) {
-        return values;
-    }
-    values.reserve(_instances.size());
-    for (void* instance : _instances) {
-        glm::vec2 value{};
-        if (!PropertyAccessor::tryGetVec2(*_property, instance, value, _loc)) {
-            return {};
-        }
-        values.push_back(value);
-    }
-    return values;
-}
-
-bool PropertyHandle::restoreVec2(const std::vector<glm::vec2>& values) const
-{
-    if (!isEditable() || values.size() != _instances.size()) {
-        return false;
-    }
-    bool changed = false;
-    for (size_t i = 0; i < _instances.size(); ++i) {
-        changed = anyChanged(changed, PropertyAccessor::setVec2(*_property, _instances[i], values[i], _loc));
-    }
-    notifyChanged(_changeHook, changed);
-    return changed;
-}
-
-bool PropertyHandle::tryGetVec3(glm::vec3& value) const
-{
-    return isValid() && PropertyAccessor::tryGetVec3(*_property, _instances.front(), value, _loc);
-}
-
-bool PropertyHandle::setVec3(const glm::vec3& value) const
-{
-    if (!isEditable() || PropertyAccessor::valueType(*_property, _loc) != refl::type_index_v<glm::vec3>) {
-        return false;
-    }
-    bool changed = false;
-    for (void* instance : _instances) {
-        glm::vec3 current{};
-        if (!PropertyAccessor::tryGetVec3(*_property, instance, current, _loc) || current == value) {
-            continue;
-        }
-        if (_vec3Setter) {
-            _vec3Setter(instance, value);
-        }
-        else if (!PropertyAccessor::setVec3(*_property, instance, value, _loc)) {
-            continue;
-        }
-        changed = true;
-    }
-    notifyChanged(_changeHook, changed);
-    return changed;
-}
-
-std::vector<glm::vec3> PropertyHandle::copyVec3() const
-{
-    std::vector<glm::vec3> values;
-    if (!isValid()) {
-        return values;
-    }
-    values.reserve(_instances.size());
-    for (void* instance : _instances) {
-        glm::vec3 value{};
-        if (!PropertyAccessor::tryGetVec3(*_property, instance, value, _loc)) {
-            return {};
-        }
-        values.push_back(value);
-    }
-    return values;
-}
-
-bool PropertyHandle::restoreVec3(const std::vector<glm::vec3>& values) const
-{
-    if (!isEditable() || values.size() != _instances.size()) {
-        return false;
-    }
-    bool changed = false;
-    for (size_t i = 0; i < _instances.size(); ++i) {
-        glm::vec3 current{};
-        if (!PropertyAccessor::tryGetVec3(*_property, _instances[i], current, _loc) || current == values[i]) {
-            continue;
-        }
-        if (_vec3Setter) {
-            _vec3Setter(_instances[i], values[i]);
-        }
-        else if (!PropertyAccessor::setVec3(*_property, _instances[i], values[i], _loc)) {
-            continue;
-        }
-        changed = true;
-    }
-    notifyChanged(_changeHook, changed);
-    return changed;
-}
-
-bool PropertyHandle::tryGetVec4(glm::vec4& value) const
-{
-    return isValid() && PropertyAccessor::tryGetVec4(*_property, _instances.front(), value, _loc);
-}
-
-bool PropertyHandle::setVec4(const glm::vec4& value) const
-{
-    if (!isEditable()) {
-        return false;
-    }
-    bool changed = false;
-    for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::setVec4(*_property, instance, value, _loc));
-    }
-    notifyChanged(_changeHook, changed);
-    return changed;
-}
-
-std::vector<glm::vec4> PropertyHandle::copyVec4() const
-{
-    std::vector<glm::vec4> values;
-    if (!isValid()) {
-        return values;
-    }
-    values.reserve(_instances.size());
-    for (void* instance : _instances) {
-        glm::vec4 value{};
-        if (!PropertyAccessor::tryGetVec4(*_property, instance, value, _loc)) {
-            return {};
-        }
-        values.push_back(value);
-    }
-    return values;
-}
-
-bool PropertyHandle::restoreVec4(const std::vector<glm::vec4>& values) const
-{
-    if (!isEditable() || values.size() != _instances.size()) {
-        return false;
-    }
-    bool changed = false;
-    for (size_t i = 0; i < _instances.size(); ++i) {
-        changed = anyChanged(changed, PropertyAccessor::setVec4(*_property, _instances[i], values[i], _loc));
-    }
-    notifyChanged(_changeHook, changed);
-    return changed;
-}
-
-bool PropertyHandle::tryGetFloat(float& value) const
-{
-    return isValid() && PropertyAccessor::tryGetFloat(*_property, _instances.front(), value, _loc);
-}
-
-bool PropertyHandle::setFloat(float value) const
-{
-    if (!isEditable()) {
-        return false;
-    }
-    bool changed = false;
-    for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::setFloat(*_property, instance, value, _loc));
-    }
-    notifyChanged(_changeHook, changed);
-    return changed;
-}
-
-std::vector<float> PropertyHandle::copyFloat() const
-{
-    std::vector<float> values;
-    if (!isValid()) {
-        return values;
-    }
-    values.reserve(_instances.size());
-    for (void* instance : _instances) {
-        float value = 0.0f;
-        if (!PropertyAccessor::tryGetFloat(*_property, instance, value, _loc)) {
-            return {};
-        }
-        values.push_back(value);
-    }
-    return values;
-}
-
-bool PropertyHandle::restoreFloat(const std::vector<float>& values) const
-{
-    if (!isEditable() || values.size() != _instances.size()) {
-        return false;
-    }
-    bool changed = false;
-    for (size_t i = 0; i < _instances.size(); ++i) {
-        changed = anyChanged(changed, PropertyAccessor::setFloat(*_property, _instances[i], values[i], _loc));
-    }
-    notifyChanged(_changeHook, changed);
-    return changed;
+    return _slot.property ? _slot.property->name : empty;
 }
 
 bool PropertyHandle::tryGetInteger(int64_t& value) const
 {
-    return isValid() && PropertyAccessor::tryGetInteger(*_property, _instances.front(), value, _loc);
+    return isValid() && PropertyAccessor::tryGetInteger(_slot, _instances.front(), value);
 }
 
 bool PropertyHandle::setInteger(int64_t value) const
@@ -339,9 +121,9 @@ bool PropertyHandle::setInteger(int64_t value) const
     }
     bool changed = false;
     for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::setInteger(*_property, instance, value, _loc));
+        changed = anyChanged(changed, PropertyAccessor::setInteger(_slot, instance, value));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
@@ -354,7 +136,7 @@ std::vector<int64_t> PropertyHandle::copyInteger() const
     values.reserve(_instances.size());
     for (void* instance : _instances) {
         int64_t value = 0;
-        if (!PropertyAccessor::tryGetInteger(*_property, instance, value, _loc)) {
+        if (!PropertyAccessor::tryGetInteger(_slot, instance, value)) {
             return {};
         }
         values.push_back(value);
@@ -369,27 +151,9 @@ bool PropertyHandle::restoreInteger(const std::vector<int64_t>& values) const
     }
     bool changed = false;
     for (size_t i = 0; i < _instances.size(); ++i) {
-        changed = anyChanged(changed, PropertyAccessor::setInteger(*_property, _instances[i], values[i], _loc));
+        changed = anyChanged(changed, PropertyAccessor::setInteger(_slot, _instances[i], values[i]));
     }
-    notifyChanged(_changeHook, changed);
-    return changed;
-}
-
-bool PropertyHandle::tryGetBool(bool& value) const
-{
-    return isValid() && PropertyAccessor::tryGetBool(*_property, _instances.front(), value, _loc);
-}
-
-bool PropertyHandle::setBool(bool value) const
-{
-    if (!isEditable()) {
-        return false;
-    }
-    bool changed = false;
-    for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::setBool(*_property, instance, value, _loc));
-    }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
@@ -402,7 +166,7 @@ std::vector<uint8_t> PropertyHandle::copyBool() const
     values.reserve(_instances.size());
     for (void* instance : _instances) {
         bool value = false;
-        if (!PropertyAccessor::tryGetBool(*_property, instance, value, _loc)) {
+        if (!PropertyAccessor::tryGet(_slot, instance, value)) {
             return {};
         }
         values.push_back(value ? 1 : 0);
@@ -417,68 +181,20 @@ bool PropertyHandle::restoreBool(const std::vector<uint8_t>& values) const
     }
     bool changed = false;
     for (size_t i = 0; i < _instances.size(); ++i) {
-        changed = anyChanged(changed, PropertyAccessor::setBool(*_property, _instances[i], values[i] != 0, _loc));
+        changed = anyChanged(changed, PropertyAccessor::set(_slot, _instances[i], values[i] != 0));
     }
-    notifyChanged(_changeHook, changed);
-    return changed;
-}
-
-bool PropertyHandle::tryGetString(std::string& value) const
-{
-    return isValid() && PropertyAccessor::tryGetString(*_property, _instances.front(), value, _loc);
-}
-
-bool PropertyHandle::setString(const std::string& value) const
-{
-    if (!isEditable()) {
-        return false;
-    }
-    bool changed = false;
-    for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::setString(*_property, instance, value, _loc));
-    }
-    notifyChanged(_changeHook, changed);
-    return changed;
-}
-
-std::vector<std::string> PropertyHandle::copyString() const
-{
-    std::vector<std::string> values;
-    if (!isValid()) {
-        return values;
-    }
-    values.reserve(_instances.size());
-    for (void* instance : _instances) {
-        std::string value;
-        if (!PropertyAccessor::tryGetString(*_property, instance, value, _loc)) {
-            return {};
-        }
-        values.push_back(std::move(value));
-    }
-    return values;
-}
-
-bool PropertyHandle::restoreString(const std::vector<std::string>& values) const
-{
-    if (!isEditable() || values.size() != _instances.size()) {
-        return false;
-    }
-    bool changed = false;
-    for (size_t i = 0; i < _instances.size(); ++i) {
-        changed = anyChanged(changed, PropertyAccessor::setString(*_property, _instances[i], values[i], _loc));
-    }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
 bool PropertyHandle::tryGetEnumIndex(int& index) const
 {
-    return isValid() && PropertyAccessor::tryGetEnumIndex(*_property, _instances.front(), index, _loc);
+    return isValid() && PropertyAccessor::tryGetEnumIndex(_slot, _instances.front(), index);
 }
 
 bool PropertyHandle::enumLabels(std::vector<std::string>& labels) const
 {
-    return isValid() && PropertyAccessor::enumLabels(*_property, labels, _loc);
+    return isValid() && PropertyAccessor::enumLabels(_slot, labels);
 }
 
 bool PropertyHandle::setEnumByIndex(int index) const
@@ -488,9 +204,9 @@ bool PropertyHandle::setEnumByIndex(int index) const
     }
     bool changed = false;
     for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::setEnumByIndex(*_property, instance, index, _loc));
+        changed = anyChanged(changed, PropertyAccessor::setEnumByIndex(_slot, instance, index));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
@@ -503,7 +219,7 @@ std::vector<int64_t> PropertyHandle::copyEnum() const
     values.reserve(_instances.size());
     for (void* instance : _instances) {
         int64_t value = 0;
-        if (!PropertyAccessor::tryGetEnumValue(*_property, instance, value, _loc)) {
+        if (!PropertyAccessor::tryGetEnumValue(_slot, instance, value)) {
             return {};
         }
         values.push_back(value);
@@ -518,15 +234,15 @@ bool PropertyHandle::restoreEnum(const std::vector<int64_t>& values) const
     }
     bool changed = false;
     for (size_t i = 0; i < _instances.size(); ++i) {
-        changed = anyChanged(changed, PropertyAccessor::setEnumValue(*_property, _instances[i], values[i], _loc));
+        changed = anyChanged(changed, PropertyAccessor::setEnumValue(_slot, _instances[i], values[i]));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
 bool PropertyHandle::tryGetColor(glm::vec4& value) const
 {
-    return isValid() && PropertyAccessor::tryGetColor(*_property, _instances.front(), value, _loc);
+    return isValid() && PropertyAccessor::tryGetColor(_slot, _instances.front(), value);
 }
 
 bool PropertyHandle::setColor(const glm::vec4& value) const
@@ -536,9 +252,9 @@ bool PropertyHandle::setColor(const glm::vec4& value) const
     }
     bool changed = false;
     for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::setColor(*_property, instance, value, _loc));
+        changed = anyChanged(changed, PropertyAccessor::setColor(_slot, instance, value));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
@@ -551,7 +267,7 @@ std::vector<glm::vec4> PropertyHandle::copyColor() const
     values.reserve(_instances.size());
     for (void* instance : _instances) {
         glm::vec4 value{};
-        if (!PropertyAccessor::tryGetColor(*_property, instance, value, _loc)) {
+        if (!PropertyAccessor::tryGetColor(_slot, instance, value)) {
             return {};
         }
         values.push_back(value);
@@ -566,15 +282,15 @@ bool PropertyHandle::restoreColor(const std::vector<glm::vec4>& values) const
     }
     bool changed = false;
     for (size_t i = 0; i < _instances.size(); ++i) {
-        changed = anyChanged(changed, PropertyAccessor::setColor(*_property, _instances[i], values[i], _loc));
+        changed = anyChanged(changed, PropertyAccessor::setColor(_slot, _instances[i], values[i]));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
 bool PropertyHandle::tryGetAssetPath(std::string& value) const
 {
-    return isValid() && PropertyAccessor::tryGetAssetPath(*_property, _instances.front(), value, _loc);
+    return isValid() && PropertyAccessor::tryGetAssetPath(_slot, _instances.front(), value);
 }
 
 bool PropertyHandle::setAssetPath(const std::string& value) const
@@ -584,9 +300,9 @@ bool PropertyHandle::setAssetPath(const std::string& value) const
     }
     bool changed = false;
     for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::setAssetPath(*_property, instance, value, _loc));
+        changed = anyChanged(changed, PropertyAccessor::setAssetPath(_slot, instance, value));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
@@ -599,7 +315,7 @@ std::vector<std::string> PropertyHandle::copyAssetPath() const
     values.reserve(_instances.size());
     for (void* instance : _instances) {
         std::string value;
-        if (!PropertyAccessor::tryGetAssetPath(*_property, instance, value, _loc)) {
+        if (!PropertyAccessor::tryGetAssetPath(_slot, instance, value)) {
             return {};
         }
         values.push_back(std::move(value));
@@ -614,9 +330,9 @@ bool PropertyHandle::restoreAssetPath(const std::vector<std::string>& values) co
     }
     bool changed = false;
     for (size_t i = 0; i < _instances.size(); ++i) {
-        changed = anyChanged(changed, PropertyAccessor::setAssetPath(*_property, _instances[i], values[i], _loc));
+        changed = anyChanged(changed, PropertyAccessor::setAssetPath(_slot, _instances[i], values[i]));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
@@ -626,7 +342,7 @@ bool PropertyHandle::hasAssetResolveError() const
         return false;
     }
     return std::any_of(_instances.begin(), _instances.end(), [&](void* instance) {
-        return PropertyAccessor::hasAssetResolveError(*_property, instance, _loc);
+        return PropertyAccessor::hasAssetResolveError(_slot, instance);
     });
 }
 
@@ -635,18 +351,18 @@ std::string PropertyHandle::validationError() const
     if (!isValid()) {
         return {};
     }
-    return PropertyAccessor::validationError(*_property, _instances.front(), _loc);
+    return PropertyAccessor::validationError(_slot, _instances.front());
 }
 
-    bool PropertyHandle::tryGetManipulateSpec(reflection::Meta::ManipulateSpec& spec) const
+bool PropertyHandle::tryGetManipulateSpec(reflection::Meta::ManipulateSpec& spec) const
 {
-    return isValid() && PropertyAccessor::tryGetManipulateSpec(*_property, spec);
+    return isValid() && PropertyAccessor::tryGetManipulateSpec(*_slot.property, spec);
 }
 
 bool PropertyHandle::canMutateContainer() const
 {
     return isEditable() &&
-           (PropertyAccessor::isDynamicSequence(*_property) || PropertyAccessor::isMapOfLeaves(*_property));
+           (PropertyAccessor::isDynamicSequence(*_slot.property) || PropertyAccessor::isMapOfLeaves(*_slot.property));
 }
 
 size_t PropertyHandle::containerSize() const
@@ -654,7 +370,7 @@ size_t PropertyHandle::containerSize() const
     if (!isValid()) {
         return 0;
     }
-    return PropertyAccessor::containerSize(*_property, _instances.front());
+    return PropertyAccessor::containerSize(*_slot.property, _instances.front());
 }
 
 bool PropertyHandle::appendEmpty() const
@@ -664,22 +380,22 @@ bool PropertyHandle::appendEmpty() const
     }
     bool changed = false;
     for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::appendEmpty(*_property, instance));
+        changed = anyChanged(changed, PropertyAccessor::appendEmpty(*_slot.property, instance));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
 bool PropertyHandle::removeAt() const
 {
-    if (!isEditable() || _loc.elementIndex < 0) {
+    if (!isEditable() || _slot.elementIndex < 0) {
         return false;
     }
     bool changed = false;
     for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::removeAt(*_property, instance, _loc.elementIndex));
+        changed = anyChanged(changed, PropertyAccessor::removeAt(*_slot.property, instance, _slot.elementIndex));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
@@ -690,9 +406,9 @@ bool PropertyHandle::removeAtIndex(int index) const
     }
     bool changed = false;
     for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::removeAt(*_property, instance, index));
+        changed = anyChanged(changed, PropertyAccessor::removeAt(*_slot.property, instance, index));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
@@ -703,9 +419,9 @@ bool PropertyHandle::insertEmptyAt(int index) const
     }
     bool changed = false;
     for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::insertEmptyAt(*_property, instance, index));
+        changed = anyChanged(changed, PropertyAccessor::insertEmptyAt(*_slot.property, instance, index));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
@@ -716,22 +432,22 @@ bool PropertyHandle::clearContainer() const
     }
     bool changed = false;
     for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::clearContainer(*_property, instance));
+        changed = anyChanged(changed, PropertyAccessor::clearContainer(*_slot.property, instance));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
 bool PropertyHandle::removeMapKey() const
 {
-    if (!isEditable() || _loc.mapKey.empty()) {
+    if (!isEditable() || _slot.mapKey.empty()) {
         return false;
     }
     bool changed = false;
     for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::removeMapKey(*_property, instance, _loc.mapKey));
+        changed = anyChanged(changed, PropertyAccessor::removeMapKey(*_slot.property, instance, _slot.mapKey));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
@@ -742,9 +458,9 @@ bool PropertyHandle::insertMapKey(std::string_view key) const
     }
     bool changed = false;
     for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::insertMapKey(*_property, instance, key));
+        changed = anyChanged(changed, PropertyAccessor::insertMapKey(*_slot.property, instance, key));
     }
-    notifyChanged(_changeHook, changed);
+    notifyIfChanged(changed);
     return changed;
 }
 
@@ -758,7 +474,9 @@ PropertyHandle PropertyHandleFactory::make(type_index_t ownerType, std::vector<v
     if (it == cls->properties.end()) {
         return {};
     }
-    return PropertyHandle{ownerType, std::move(instances), &it->second, std::move(setter)};
+    PropertyHandle handle{ownerType, std::move(instances), it->second};
+    handle.setVec3Setter(std::move(setter));
+    return handle;
 }
 
 } // namespace ya

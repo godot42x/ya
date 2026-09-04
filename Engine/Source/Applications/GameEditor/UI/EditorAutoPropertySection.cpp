@@ -159,18 +159,18 @@ void EditorAutoPropertySection::construct()
                 bindDragMerge(*drag);
                 drag->_onValueChanged = [this, index = _editors.size(), axis](float value) {
                     PropertyHandle binding = _editors[index].node->binding;
-                    auto before = binding.copyVec2();
+                    auto before = binding.copy<glm::vec2>();
                     if (before.empty()) return;
                     glm::vec2 patched = before.front();
                     patched[axis] = value;
-                    if (!binding.setVec2(patched)) return;
+                    if (!binding.set(patched)) return;
                     if (!_undo) return;
-                    auto after = binding.copyVec2();
+                    auto after = binding.copy<glm::vec2>();
                     (void)_undo->push({
                         .label    = "Set " + _editors[index].node->displayName,
                         .mergeKey = mergeKey(*_editors[index].node, axis),
-                        .undo     = [binding, before]() { binding.restoreVec2(before); },
-                        .redo     = [binding, after]() { binding.restoreVec2(after); },
+                        .undo     = [binding, before]() { binding.restore(before); },
+                        .redo     = [binding, after]() { binding.restore(after); },
                     });
                 };
                 slot.vec2.push_back(drag);
@@ -188,18 +188,18 @@ void EditorAutoPropertySection::construct()
                 bindDragMerge(*drag);
                 drag->_onValueChanged = [this, index = _editors.size(), axis](float value) {
                     PropertyHandle binding = _editors[index].node->binding;
-                    auto before = binding.copyVec3();
+                    auto before = binding.copy<glm::vec3>();
                     if (before.empty()) return;
                     glm::vec3 patched = before.front();
                     patched[axis] = value;
-                    if (!binding.setVec3(patched)) return;
+                    if (!binding.set(patched)) return;
                     if (!_undo) return;
-                    auto after = binding.copyVec3();
+                    auto after = binding.copy<glm::vec3>();
                     (void)_undo->push({
                         .label    = "Set " + _editors[index].node->displayName,
                         .mergeKey = mergeKey(*_editors[index].node, axis),
-                        .undo     = [binding, before]() { binding.restoreVec3(before); },
-                        .redo     = [binding, after]() { binding.restoreVec3(after); },
+                        .undo     = [binding, before]() { binding.restore(before); },
+                        .redo     = [binding, after]() { binding.restore(after); },
                     });
                 };
                 slot.vec3.push_back(drag);
@@ -217,18 +217,18 @@ void EditorAutoPropertySection::construct()
                 bindDragMerge(*drag);
                 drag->_onValueChanged = [this, index = _editors.size(), axis](float value) {
                     PropertyHandle binding = _editors[index].node->binding;
-                    auto before = binding.copyVec4();
+                    auto before = binding.copy<glm::vec4>();
                     if (before.empty()) return;
                     glm::vec4 patched = before.front();
                     patched[axis] = value;
-                    if (!binding.setVec4(patched)) return;
+                    if (!binding.set(patched)) return;
                     if (!_undo) return;
-                    auto after = binding.copyVec4();
+                    auto after = binding.copy<glm::vec4>();
                     (void)_undo->push({
                         .label    = "Set " + _editors[index].node->displayName,
                         .mergeKey = mergeKey(*_editors[index].node, axis),
-                        .undo     = [binding, before]() { binding.restoreVec4(before); },
-                        .redo     = [binding, after]() { binding.restoreVec4(after); },
+                        .undo     = [binding, before]() { binding.restore(before); },
+                        .redo     = [binding, after]() { binding.restore(after); },
                     });
                 };
                 slot.vec4.push_back(drag);
@@ -246,16 +246,16 @@ void EditorAutoPropertySection::construct()
             applyManipulateSpec(*slot.scalar, node.binding);
             slot.scalar->_onValueChanged = [this, index = _editors.size()](float value) {
                 PropertyHandle binding = _editors[index].node->binding;
-                auto before = binding.copyFloat();
+                auto before = binding.copy<float>();
                 if (before.empty()) return;
-                if (!binding.setFloat(value)) return;
+                if (!binding.set(value)) return;
                 if (!_undo) return;
-                auto after = binding.copyFloat();
+                auto after = binding.copy<float>();
                 (void)_undo->push({
                     .label    = "Set " + _editors[index].node->displayName,
                     .mergeKey = mergeKey(*_editors[index].node),
-                    .undo     = [binding, before]() { binding.restoreFloat(before); },
-                    .redo     = [binding, after]() { binding.restoreFloat(after); },
+                    .undo     = [binding, before]() { binding.restore(before); },
+                    .redo     = [binding, after]() { binding.restore(after); },
                 });
             };
             row.child(slot.scalar, FBoxSlotArgs{.preferredSize = {110.0f, 22.0f}});
@@ -295,7 +295,7 @@ void EditorAutoPropertySection::construct()
                 PropertyHandle binding = _editors[index].node->binding;
                 auto before = binding.copyBool();
                 if (before.empty()) return;
-                if (!binding.setBool(value)) return;
+                if (!binding.set(value)) return;
                 if (!_undo) return;
                 auto after = binding.copyBool();
                 (void)_undo->push({
@@ -312,15 +312,15 @@ void EditorAutoPropertySection::construct()
             slot.string = std::make_shared<UITextField>(node.name);
             slot.string->_onCommit = [this, index = _editors.size()](const std::string& value) {
                 PropertyHandle binding = _editors[index].node->binding;
-                auto before = binding.copyString();
+                auto before = binding.copy<std::string>();
                 if (before.empty()) return;
-                if (!binding.setString(value)) return;
+                if (!binding.set(value)) return;
                 if (!_undo) return;
-                auto after = binding.copyString();
+                auto after = binding.copy<std::string>();
                 (void)_undo->push({
                     .label = "Set " + _editors[index].node->displayName,
-                    .undo  = [binding, before]() { binding.restoreString(before); },
-                    .redo  = [binding, after]() { binding.restoreString(after); },
+                    .undo  = [binding, before]() { binding.restore(before); },
+                    .redo  = [binding, after]() { binding.restore(after); },
                 });
             };
             row.child(slot.string, FBoxSlotArgs{.preferredSize = {160.0f, 22.0f}});
@@ -387,16 +387,16 @@ void EditorAutoPropertySection::construct()
             continue;
         }
         if (node.kind == PropertyNode::Kind::Value && node.bEditable && node.binding.canMutateContainer() &&
-            (node.binding.loc().elementIndex >= 0 || !node.binding.loc().mapKey.empty())) {
+            (node.binding.slot().elementIndex >= 0 || !node.binding.slot().mapKey.empty())) {
             slot.remove = ui::button(node.name + "_Remove", "X")
                               .setOnClick([this, index = _editors.size()]() {
                                   PropertyHandle binding = _editors[index].node->binding;
-                                  const int elementIndex = binding.loc().elementIndex;
-                                  const std::string mapKey = binding.loc().mapKey;
+                                  const int elementIndex = binding.slot().elementIndex;
+                                  const std::string mapKey = binding.slot().mapKey;
                                   std::string previousString;
-                                  const bool hadString = binding.tryGetString(previousString);
+                                  const bool hadString = binding.tryGet(previousString);
                                   float previousFloat = 0.0f;
-                                  const bool hadFloat = binding.tryGetFloat(previousFloat);
+                                  const bool hadFloat = binding.tryGet(previousFloat);
                                   const bool removed = !mapKey.empty() ? binding.removeMapKey() : binding.removeAt();
                                   if (!removed) {
                                       return;
@@ -414,10 +414,10 @@ void EditorAutoPropertySection::construct()
                                                   return;
                                               }
                                               if (hadString) {
-                                                  (void)binding.setString(previousString);
+                                                  (void)binding.set(previousString);
                                               }
                                               else if (hadFloat) {
-                                                  (void)binding.setFloat(previousFloat);
+                                                  (void)binding.set(previousFloat);
                                               }
                                           },
                                           .redo  = [binding, mapKey]() {
@@ -483,7 +483,7 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
         const bool hasValidationError = !slot.node->binding.validationError().empty();
         if (slot.kind == EditorSlot::Kind::Vec2) {
             glm::vec2 value{};
-            if (!slot.node->binding.tryGetVec2(value)) continue;
+            if (!slot.node->binding.tryGet(value)) continue;
             for (int axis = 0; axis < 2; ++axis) {
                 if (slot.vec2[axis].get() == focused) continue;
                 slot.vec2[axis]->setError(hasValidationError);
@@ -498,7 +498,7 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
         }
         else if (slot.kind == EditorSlot::Kind::Vec3) {
             glm::vec3 value{};
-            if (!slot.node->binding.tryGetVec3(value)) continue;
+            if (!slot.node->binding.tryGet(value)) continue;
             for (int axis = 0; axis < 3; ++axis) {
                 if (slot.vec3[axis].get() == focused) continue;
                 slot.vec3[axis]->setError(hasValidationError);
@@ -513,7 +513,7 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
         }
         else if (slot.kind == EditorSlot::Kind::Vec4) {
             glm::vec4 value{};
-            if (!slot.node->binding.tryGetVec4(value)) continue;
+            if (!slot.node->binding.tryGet(value)) continue;
             for (int axis = 0; axis < 4; ++axis) {
                 if (slot.vec4[axis].get() == focused) continue;
                 slot.vec4[axis]->setError(hasValidationError);
@@ -528,7 +528,7 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
         }
         else if (slot.kind == EditorSlot::Kind::Float) {
             float value = 0.0f;
-            if (!slot.node->binding.tryGetFloat(value) || slot.scalar.get() == focused) continue;
+            if (!slot.node->binding.tryGet(value) || slot.scalar.get() == focused) continue;
             slot.scalar->setError(hasValidationError);
             if (slot.node->binding.isMixed()) {
                 slot.scalar->setMixed(true);
@@ -553,7 +553,7 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
         else if (slot.kind == EditorSlot::Kind::Bool) {
             bool value = false;
             if (slot.node->binding.isMixed()) continue;
-            if (slot.node->binding.tryGetBool(value) && slot.boolean.get() != focused) slot.boolean->setChecked(value);
+            if (slot.node->binding.tryGet(value) && slot.boolean.get() != focused) slot.boolean->setChecked(value);
         }
         else if (slot.kind == EditorSlot::Kind::Enum) {
             if (slot.enumeration.get() == focused) continue;
@@ -609,7 +609,7 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
             if (slot.string.get() != focused) {
                 slot.string->setError(hasValidationError);
             }
-            if (slot.node->binding.tryGetString(value) && slot.string.get() != focused) slot.string->setText(value);
+            if (slot.node->binding.tryGet(value) && slot.string.get() != focused) slot.string->setText(value);
         }
     }
 }

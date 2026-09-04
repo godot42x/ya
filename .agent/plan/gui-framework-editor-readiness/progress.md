@@ -1160,3 +1160,15 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - `TypeRenderer` / `ContainerPropertyRenderer` 仍无 widgettree live caller，现已可删，但 `imgui-local` 仍被 FilePicker 占用，删除死代码留到后续 chrome 收口。
 - 下一步：Phase 10E 拆分 `EditorSurface` + density/token；release gates 仍为 Windows/MSVC、OpenGL、hour-scale soak。
 
+## Phase 10B property slot / typed-access cleanup（2026-09-05）
+
+- `FValueLoc` + 构造函数末尾 `setter`/`elementIndex` 换成 `FPropertySlot`：字段用 `FPropertySlot::field`，序列用 `at(property, index)`，map 用 `at(property, key)`。`PropertyHandle` 只接收 `(ownerType, instances, slot)`；`Vec3Setter` 走 `setVec3Setter`。
+- `PropertyAccessor` 底层 POD 不再摊开 `tryGetVec2/setFloat/...`；统一 `tryGet<T>` / `set<T>`。integer/enum/color/asset 仍是语义视图，因为它们不是单一 C++ 存储类型。
+- `PropertyHandle` 作为 editor adapter：`tryGet/set/copy/restore` 模板覆盖 POD 与 `vec3` setter；bool snapshot 仍用 `copyBool`（避开 `vector<bool>`）。
+- 验证：`xmake b ya-testing`；`xmake r ya-testing -- --gtest_filter='PropertyAccessorTest.*:EditorPropertyGraphTest.*'`（30/30）。
+
+### 边界
+
+- 未改 inspector 功能面；这是 accessor/handle 边界的 API 收口。
+- 下一步仍是 Phase 10E：拆分 `EditorSurface` + density/token。
+

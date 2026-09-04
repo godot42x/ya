@@ -41,11 +41,11 @@ TEST(PropertyAccessorTest, ReadsWritesAndValidatesSingleInstance)
     const Property& enabled = cls->properties.at("enabled");
 
     bool value = false;
-    ASSERT_TRUE(reflection::PropertyAccessor::tryGetBool(enabled, &owner, value));
+    ASSERT_TRUE(reflection::PropertyAccessor::tryGet(enabled, &owner, value));
     EXPECT_TRUE(value);
-    EXPECT_TRUE(reflection::PropertyAccessor::setBool(enabled, &owner, false));
+    EXPECT_TRUE(reflection::PropertyAccessor::set(enabled, &owner, false));
     EXPECT_FALSE(owner.enabled);
-    EXPECT_FALSE(reflection::PropertyAccessor::setBool(enabled, &owner, false));
+    EXPECT_FALSE(reflection::PropertyAccessor::set(enabled, &owner, false));
 }
 
 TEST(PropertyAccessorTest, CollectLeavesFlattensNestedCompositeFields)
@@ -58,19 +58,19 @@ TEST(PropertyAccessorTest, CollectLeavesFlattensNestedCompositeFields)
     EXPECT_EQ(leaves[0].path, "enabled");
     EXPECT_EQ(leaves[1].path, "params.scale");
     EXPECT_EQ(leaves[2].path, "params.count");
-    ASSERT_NE(leaves[1].property, nullptr);
+    ASSERT_NE(leaves[1].slot.property, nullptr);
     EXPECT_EQ(leaves[1].ownerType, type_index_v<NestedParams>);
     ASSERT_EQ(leaves[1].ownerInstances.size(), 1u);
     EXPECT_EQ(leaves[1].ownerInstances.front(), static_cast<void*>(&owner.params));
 
     glm::vec2 scale{};
-    ASSERT_TRUE(reflection::PropertyAccessor::tryGetVec2(*leaves[1].property, leaves[1].ownerInstances.front(), scale));
+    ASSERT_TRUE(reflection::PropertyAccessor::tryGet(leaves[1].slot, leaves[1].ownerInstances.front(), scale));
     EXPECT_EQ(scale, glm::vec2(1.0f, 2.0f));
-    EXPECT_TRUE(reflection::PropertyAccessor::setVec2(*leaves[1].property, leaves[1].ownerInstances.front(), {4.0f, 5.0f}));
+    EXPECT_TRUE(reflection::PropertyAccessor::set(leaves[1].slot, leaves[1].ownerInstances.front(), glm::vec2{4.0f, 5.0f}));
     EXPECT_EQ(owner.params.scale, glm::vec2(4.0f, 5.0f));
 
     int64_t count = 0;
-    ASSERT_TRUE(reflection::PropertyAccessor::tryGetInteger(*leaves[2].property, leaves[2].ownerInstances.front(), count));
+    ASSERT_TRUE(reflection::PropertyAccessor::tryGetInteger(leaves[2].slot, leaves[2].ownerInstances.front(), count));
     EXPECT_EQ(count, 3);
 }
 
@@ -83,28 +83,28 @@ TEST(PropertyAccessorTest, EqualsDetectsScalarAndVectorDifferences)
 
     std::vector<reflection::PropertyAccessor::FLeaf> leaves;
     reflection::PropertyAccessor::collectLeaves(type_index_v<NestedOwner>, {&first}, leaves);
-    const Property* scale = nullptr;
-    const Property* count = nullptr;
+    reflection::FPropertySlot scale;
+    reflection::FPropertySlot count;
     for (const auto& leaf : leaves) {
         if (leaf.path == "params.scale") {
-            scale = leaf.property;
+            scale = leaf.slot;
         }
         if (leaf.path == "params.count") {
-            count = leaf.property;
+            count = leaf.slot;
         }
     }
-    ASSERT_NE(scale, nullptr);
-    ASSERT_NE(count, nullptr);
+    ASSERT_TRUE(scale.isValid());
+    ASSERT_TRUE(count.isValid());
 
-    const void* firstScale = reflection::PropertyAccessor::address(*scale, &first.params);
-    const void* secondScale = reflection::PropertyAccessor::address(*scale, &second.params);
-    EXPECT_FALSE(reflection::PropertyAccessor::equals(*scale, firstScale, secondScale));
-    EXPECT_FALSE(reflection::PropertyAccessor::equalsVecAxis(*scale, firstScale, secondScale, 0, 2));
-    EXPECT_TRUE(reflection::PropertyAccessor::equalsVecAxis(*scale, firstScale, secondScale, 1, 2));
+    const void* firstScale = reflection::PropertyAccessor::address(scale, &first.params);
+    const void* secondScale = reflection::PropertyAccessor::address(scale, &second.params);
+    EXPECT_FALSE(reflection::PropertyAccessor::equals(scale, firstScale, secondScale));
+    EXPECT_FALSE(reflection::PropertyAccessor::equalsVecAxis(scale, firstScale, secondScale, 0, 2));
+    EXPECT_TRUE(reflection::PropertyAccessor::equalsVecAxis(scale, firstScale, secondScale, 1, 2));
 
-    const void* firstCount = reflection::PropertyAccessor::address(*count, &first.params);
-    const void* secondCount = reflection::PropertyAccessor::address(*count, &second.params);
-    EXPECT_FALSE(reflection::PropertyAccessor::equals(*count, firstCount, secondCount));
+    const void* firstCount = reflection::PropertyAccessor::address(count, &first.params);
+    const void* secondCount = reflection::PropertyAccessor::address(count, &second.params);
+    EXPECT_FALSE(reflection::PropertyAccessor::equals(count, firstCount, secondCount));
 }
 
 struct SequenceOwner
@@ -131,32 +131,32 @@ TEST(PropertyAccessorTest, CollectLeavesExpandsSequenceOfLeafElements)
     EXPECT_EQ(leaves[2].role, reflection::PropertyAccessor::ELeafRole::Sequence);
     EXPECT_EQ(leaves[3].path, "weights[0]");
     EXPECT_EQ(leaves[4].path, "weights[1]");
-    EXPECT_EQ(leaves[0].loc.elementIndex, 0);
-    EXPECT_EQ(leaves[1].loc.elementIndex, 1);
-    EXPECT_EQ(reflection::PropertyAccessor::valueType(*leaves[0].property, leaves[0].loc),
+    EXPECT_EQ(leaves[0].slot.elementIndex, 0);
+    EXPECT_EQ(leaves[1].slot.elementIndex, 1);
+    EXPECT_EQ(reflection::PropertyAccessor::valueType(leaves[0].slot),
               type_index_v<std::string>);
-    EXPECT_EQ(reflection::PropertyAccessor::valueType(*leaves[3].property, leaves[3].loc),
+    EXPECT_EQ(reflection::PropertyAccessor::valueType(leaves[3].slot),
               type_index_v<float>);
 
     std::string face;
-    ASSERT_TRUE(reflection::PropertyAccessor::tryGetString(*leaves[0].property, &owner, face, leaves[0].loc));
+    ASSERT_TRUE(reflection::PropertyAccessor::tryGet(leaves[0].slot, &owner, face));
     EXPECT_EQ(face, "posx.hdr");
-    EXPECT_TRUE(reflection::PropertyAccessor::setString(*leaves[0].property, &owner, "front.hdr", leaves[0].loc));
+    EXPECT_TRUE(reflection::PropertyAccessor::set(leaves[0].slot, &owner, std::string{"front.hdr"}));
     EXPECT_EQ(owner.files[0], "front.hdr");
     EXPECT_EQ(owner.files[1], "negx.hdr");
 
     float weight = 0.0f;
-    ASSERT_TRUE(reflection::PropertyAccessor::tryGetFloat(*leaves[3].property, &owner, weight, leaves[3].loc));
+    ASSERT_TRUE(reflection::PropertyAccessor::tryGet(leaves[3].slot, &owner, weight));
     EXPECT_FLOAT_EQ(weight, 0.25f);
-    EXPECT_TRUE(reflection::PropertyAccessor::setFloat(*leaves[3].property, &owner, 0.5f, leaves[3].loc));
+    EXPECT_TRUE(reflection::PropertyAccessor::set(leaves[3].slot, &owner, 0.5f));
     EXPECT_FLOAT_EQ(owner.weights[0], 0.5f);
     EXPECT_FLOAT_EQ(owner.weights[1], 0.75f);
 
     SequenceOwner other = owner;
     other.files[0] = "other.hdr";
-    const void* first = reflection::PropertyAccessor::address(*leaves[0].property, &owner, 0);
-    const void* second = reflection::PropertyAccessor::address(*leaves[0].property, &other, 0);
-    EXPECT_FALSE(reflection::PropertyAccessor::equals(*leaves[0].property, first, second, 0));
+    const void* first = reflection::PropertyAccessor::address(leaves[0].slot, &owner);
+    const void* second = reflection::PropertyAccessor::address(leaves[0].slot, &other);
+    EXPECT_FALSE(reflection::PropertyAccessor::equals(leaves[0].slot, first, second));
 }
 
 struct MapOwner
@@ -181,14 +181,14 @@ TEST(PropertyAccessorTest, CollectLeavesExpandsMapOfLeafValuesAndMutates)
     EXPECT_EQ(leaves[2].path, "slots[\"sword\"]");
 
     int64_t sword = 0;
-    ASSERT_TRUE(reflection::PropertyAccessor::tryGetInteger(*leaves[2].property, &owner, sword, leaves[2].loc));
+    ASSERT_TRUE(reflection::PropertyAccessor::tryGetInteger(leaves[2].slot, &owner, sword));
     EXPECT_EQ(sword, 2);
-    EXPECT_TRUE(reflection::PropertyAccessor::setInteger(*leaves[2].property, &owner, 5, leaves[2].loc));
+    EXPECT_TRUE(reflection::PropertyAccessor::setInteger(leaves[2].slot, &owner, 5));
     EXPECT_EQ(owner.slots["sword"], 5);
 
-    EXPECT_TRUE(reflection::PropertyAccessor::insertMapKey(*leaves[0].property, &owner, "bow"));
+    EXPECT_TRUE(reflection::PropertyAccessor::insertMapKey(*leaves[0].slot.property, &owner, "bow"));
     EXPECT_EQ(owner.slots.count("bow"), 1u);
-    EXPECT_TRUE(reflection::PropertyAccessor::removeMapKey(*leaves[0].property, &owner, "shield"));
+    EXPECT_TRUE(reflection::PropertyAccessor::removeMapKey(*leaves[0].slot.property, &owner, "shield"));
     EXPECT_EQ(owner.slots.count("shield"), 0u);
 }
 

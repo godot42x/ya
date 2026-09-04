@@ -13,17 +13,19 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 #include <cstdint>
 #include <functional>
+#include <utility>
 
 struct Property;
 
 namespace ya
 {
 
-/// Reflection-backed access shared by handwritten and automatic property editors.
-/// This type is editor/data oriented and knows nothing about ImGui or WidgetTree.
+/// Editor adapter over a reflected slot: multi-select, undo snapshots, and UI hooks.
+/// Typed payload access is `tryGet<T>` / `set<T>` / `copy<T>` / `restore`.
 class PropertyHandle final
 {
   public:
@@ -33,9 +35,7 @@ class PropertyHandle final
 
     PropertyHandle(type_index_t ownerType,
                    std::vector<void*> instances,
-                   const Property* property,
-                   Vec3Setter setter = {},
-                   reflection::FValueLoc loc = {});
+                   reflection::FPropertySlot slot);
 
     [[nodiscard]] bool isValid() const;
     [[nodiscard]] bool isEditable() const;
@@ -48,38 +48,101 @@ class PropertyHandle final
     [[nodiscard]] bool isMixedVecAxis(int axis, int componentCount) const;
     [[nodiscard]] const std::string& getName() const;
 
-    [[nodiscard]] const reflection::FValueLoc& loc() const { return _loc; }
+    [[nodiscard]] const reflection::FPropertySlot& slot() const { return _slot; }
     void setVec3Setter(Vec3Setter setter) { _vec3Setter = std::move(setter); }
     void setChangeHook(ChangeHook hook) { _changeHook = std::move(hook); }
 
-    [[nodiscard]] bool tryGetVec2(glm::vec2& value) const;
-    bool setVec2(const glm::vec2& value) const;
-    [[nodiscard]] std::vector<glm::vec2> copyVec2() const;
-    bool restoreVec2(const std::vector<glm::vec2>& values) const;
-    [[nodiscard]] bool tryGetVec3(glm::vec3& value) const;
-    bool setVec3(const glm::vec3& value) const;
-    [[nodiscard]] std::vector<glm::vec3> copyVec3() const;
-    bool restoreVec3(const std::vector<glm::vec3>& values) const;
-    [[nodiscard]] bool tryGetVec4(glm::vec4& value) const;
-    bool setVec4(const glm::vec4& value) const;
-    [[nodiscard]] std::vector<glm::vec4> copyVec4() const;
-    bool restoreVec4(const std::vector<glm::vec4>& values) const;
-    [[nodiscard]] bool tryGetFloat(float& value) const;
-    bool setFloat(float value) const;
-    [[nodiscard]] std::vector<float> copyFloat() const;
-    bool restoreFloat(const std::vector<float>& values) const;
+    template <typename T>
+    [[nodiscard]] bool tryGet(T& value) const
+    {
+        return isValid() && reflection::PropertyAccessor::tryGet(_slot, _instances.front(), value);
+    }
+
+    template <typename T>
+    bool set(const T& value) const
+    {
+        if (!isEditable()) {
+            return false;
+        }
+        bool changed = false;
+        for (void* instance : _instances) {
+            if constexpr (std::is_same_v<T, glm::vec3>) {
+                glm::vec3 current{};
+                if (!reflection::PropertyAccessor::tryGet(_slot, instance, current) || current == value) {
+                    continue;
+                }
+                if (_vec3Setter) {
+                    _vec3Setter(instance, value);
+                    changed = true;
+                }
+                else if (reflection::PropertyAccessor::set(_slot, instance, value)) {
+                    changed = true;
+                }
+            }
+            else if (reflection::PropertyAccessor::set(_slot, instance, value)) {
+                changed = true;
+            }
+        }
+        notifyIfChanged(changed);
+        return changed;
+    }
+
+    template <typename T>
+    [[nodiscard]] std::vector<T> copy() const
+    {
+        static_assert(!std::is_same_v<T, bool>, "bool snapshots use copyBool()");
+        std::vector<T> values;
+        if (!isValid()) {
+            return values;
+        }
+        values.reserve(_instances.size());
+        for (void* instance : _instances) {
+            T value{};
+            if (!reflection::PropertyAccessor::tryGet(_slot, instance, value)) {
+                return {};
+            }
+            values.push_back(std::move(value));
+        }
+        return values;
+    }
+
+    template <typename T>
+    bool restore(const std::vector<T>& values) const
+    {
+        static_assert(!std::is_same_v<T, bool>, "bool snapshots use restoreBool()");
+        if (!isEditable() || values.size() != _instances.size()) {
+            return false;
+        }
+        bool changed = false;
+        for (size_t i = 0; i < _instances.size(); ++i) {
+            if constexpr (std::is_same_v<T, glm::vec3>) {
+                glm::vec3 current{};
+                if (!reflection::PropertyAccessor::tryGet(_slot, _instances[i], current) || current == values[i]) {
+                    continue;
+                }
+                if (_vec3Setter) {
+                    _vec3Setter(_instances[i], values[i]);
+                    changed = true;
+                }
+                else if (reflection::PropertyAccessor::set(_slot, _instances[i], values[i])) {
+                    changed = true;
+                }
+            }
+            else if (reflection::PropertyAccessor::set(_slot, _instances[i], values[i])) {
+                changed = true;
+            }
+        }
+        notifyIfChanged(changed);
+        return changed;
+    }
+
     [[nodiscard]] bool tryGetInteger(int64_t& value) const;
     bool setInteger(int64_t value) const;
     [[nodiscard]] std::vector<int64_t> copyInteger() const;
     bool restoreInteger(const std::vector<int64_t>& values) const;
-    [[nodiscard]] bool tryGetBool(bool& value) const;
-    bool setBool(bool value) const;
+
     [[nodiscard]] std::vector<uint8_t> copyBool() const;
     bool restoreBool(const std::vector<uint8_t>& values) const;
-    [[nodiscard]] bool tryGetString(std::string& value) const;
-    bool setString(const std::string& value) const;
-    [[nodiscard]] std::vector<std::string> copyString() const;
-    bool restoreString(const std::vector<std::string>& values) const;
 
     [[nodiscard]] bool tryGetEnumIndex(int& index) const;
     [[nodiscard]] bool enumLabels(std::vector<std::string>& labels) const;
@@ -112,10 +175,16 @@ class PropertyHandle final
     [[nodiscard]] bool tryGetManipulateSpec(reflection::Meta::ManipulateSpec& spec) const;
 
   private:
+    void notifyIfChanged(bool changed) const
+    {
+        if (changed && _changeHook) {
+            _changeHook();
+        }
+    }
+
     type_index_t _ownerType = 0;
     std::vector<void*> _instances;
-    const Property* _property = nullptr;
-    reflection::FValueLoc _loc;
+    reflection::FPropertySlot _slot;
     Vec3Setter _vec3Setter;
     ChangeHook _changeHook;
 };

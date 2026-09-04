@@ -1,6 +1,6 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-04 (after Phase 8W)  
+> **As of:** 2026-09-05 (after Phase 10B slot/typed-access cleanup)  
 > **Default chrome:** WidgetTree only (`EditorSurface`)  
 > **Legacy chrome:** `--editor-chrome=imgui` is ignored (WARN); `onImGuiRender` deleted  
 > **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, but legacy helpers still require it.
@@ -100,7 +100,7 @@
 | Feature | Legacy ImGui | WidgetTree | Status | Notes |
 |---------|--------------|------------|--------|-------|
 | DetailsView stack | `DetailsView` + `TypeRenderer` tree | — | ⚫ | Deleted 8N; was uncalled after 8C |
-| Entity/component fields | `TypeRenderer::renderReflectedType` | `PropertyGraph` + `EditorAutoPropertySection` | ✅ | Retained path covers scalars/vectors/enum/color/asset-ref, nested flatten, sequence-of-leaf arrays/vectors with add/remove, string-key map-of-leaf values, and TextureRef `UIImage` preview. `TypeRenderer` remains compiled with no widgettree caller |
+| Entity/component fields | `TypeRenderer::renderReflectedType` | `PropertyGraph` + `EditorAutoPropertySection` | ✅ | Retained path covers scalars/vectors/enum/color/asset-ref, nested flatten, sequence-of-leaf arrays/vectors with add/remove, string-key map-of-leaf values, and TextureRef `UIImage` preview. Access is `FPropertySlot` + `tryGet<T>`/`set<T>`; `TypeRenderer` remains compiled with no widgettree caller |
 | Multi-selection mixed values | DetailsView | `PropertyGraph` intersection + em-dash | ✅ | |
 | Asset path Browse | `FilePicker` | `EditorSurface` asset picker popup | ✅ | Phase 8M |
 | Game UI Entry summary | DetailsView | `EditorInspectorTab` widget entry block | ✅ | Open in UI Designer button |

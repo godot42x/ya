@@ -6,6 +6,9 @@
 
 #include <algorithm>
 #include <format>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 #include <limits>
 
 namespace ya::reflection
@@ -76,39 +79,6 @@ bool writeIntegerToAddress(type_index_t typeIndex, void* address, int64_t value)
     return false;
 }
 
-template <typename T>
-bool tryGetPod(const Property& property, const void* instance, T& value, const FValueLoc& loc)
-{
-    if (PropertyAccessor::valueType(property, loc) != refl::type_index_v<T>) {
-        return false;
-    }
-    const void* addr = PropertyAccessor::address(property, instance, loc);
-    if (!addr) {
-        return false;
-    }
-    value = *static_cast<const T*>(addr);
-    return true;
-}
-
-template <typename T>
-bool setPod(const Property& property, void* instance, const T& value, const FValueLoc& loc)
-{
-    if (!PropertyAccessor::isEditable(property) ||
-        PropertyAccessor::valueType(property, loc) != refl::type_index_v<T>) {
-        return false;
-    }
-    void* addr = PropertyAccessor::addressMutable(property, instance, loc);
-    if (!addr) {
-        return false;
-    }
-    T& current = *static_cast<T*>(addr);
-    if (current == value) {
-        return false;
-    }
-    current = value;
-    return true;
-}
-
 void collectLeavesImpl(type_index_t currentType,
                        const std::vector<void*>& instances,
                        std::string_view pathPrefix,
@@ -147,10 +117,11 @@ void collectLeavesImpl(type_index_t currentType,
             std::vector<void*> childInstances;
             childInstances.reserve(instances.size());
             bool bAll = true;
+            const FPropertySlot field(property);
             for (void* instance : instances) {
-                void* child = PropertyAccessor::addressMutable(property, instance);
+                void* child = PropertyAccessor::addressMutable(field, instance);
                 if (!child) {
-                    child = const_cast<void*>(PropertyAccessor::address(property, instance));
+                    child = const_cast<void*>(PropertyAccessor::address(field, instance));
                 }
                 if (!child) {
                     bAll = false;
@@ -167,16 +138,17 @@ void collectLeavesImpl(type_index_t currentType,
         if (PropertyAccessor::isMapOfLeaves(property)) {
             PropertyAccessor::FLeaf header;
             header.ownerType = currentType;
-            header.property = &property;
+            header.slot = FPropertySlot::field(property);
             header.path = leafPath;
             header.ownerInstances = instances;
             header.role = PropertyAccessor::ELeafRole::Map;
             out.push_back(std::move(header));
 
             IContainerProperty* accessor = PropertyAccessor::containerOf(property);
-            void* firstContainer = PropertyAccessor::addressMutable(property, instances.front());
+            const FPropertySlot field(property);
+            void* firstContainer = PropertyAccessor::addressMutable(field, instances.front());
             if (!firstContainer) {
-                firstContainer = const_cast<void*>(PropertyAccessor::address(property, instances.front()));
+                firstContainer = const_cast<void*>(PropertyAccessor::address(field, instances.front()));
             }
             if (accessor && firstContainer) {
                 auto iterator = accessor->createIterator(firstContainer);
@@ -202,9 +174,10 @@ void collectLeavesImpl(type_index_t currentType,
                     if (key.empty() && keyType != refl::type_index_v<std::string>) {
                         continue;
                     }
+                    const FPropertySlot valueSlot = FPropertySlot::at(property, key);
                     bool bAll = true;
                     for (void* instance : instances) {
-                        if (!PropertyAccessor::address(property, instance, FValueLoc{-1, key})) {
+                        if (!PropertyAccessor::address(valueSlot, instance)) {
                             bAll = false;
                             break;
                         }
@@ -214,12 +187,11 @@ void collectLeavesImpl(type_index_t currentType,
                     }
                     PropertyAccessor::FLeaf leaf;
                     leaf.ownerType = currentType;
-                    leaf.property = &property;
+                    leaf.slot = valueSlot;
                     leaf.path = keyType == refl::type_index_v<std::string>
                         ? leafPath + "[\"" + key + "\"]"
                         : leafPath + "[" + key + "]";
                     leaf.ownerInstances = instances;
-                    leaf.loc.mapKey = key;
                     leaf.role = PropertyAccessor::ELeafRole::Value;
                     out.push_back(std::move(leaf));
                 }
@@ -228,10 +200,11 @@ void collectLeavesImpl(type_index_t currentType,
         }
 
         if (PropertyAccessor::isSequenceOfLeaves(property)) {
+            const FPropertySlot field(property);
             if (PropertyAccessor::isDynamicSequence(property)) {
                 PropertyAccessor::FLeaf header;
                 header.ownerType = currentType;
-                header.property = &property;
+                header.slot = field;
                 header.path = leafPath;
                 header.ownerInstances = instances;
                 header.role = PropertyAccessor::ELeafRole::Sequence;
@@ -240,9 +213,9 @@ void collectLeavesImpl(type_index_t currentType,
             size_t count = 0;
             bool bSized = true;
             for (size_t i = 0; i < instances.size(); ++i) {
-                void* container = PropertyAccessor::addressMutable(property, instances[i]);
+                void* container = PropertyAccessor::addressMutable(field, instances[i]);
                 if (!container) {
-                    container = const_cast<void*>(PropertyAccessor::address(property, instances[i]));
+                    container = const_cast<void*>(PropertyAccessor::address(field, instances[i]));
                 }
                 IContainerProperty* accessor = PropertyAccessor::containerOf(property);
                 if (!container || !accessor) {
@@ -261,10 +234,9 @@ void collectLeavesImpl(type_index_t currentType,
                 for (size_t index = 0; index < count; ++index) {
                     PropertyAccessor::FLeaf leaf;
                     leaf.ownerType = currentType;
-                    leaf.property = &property;
+                    leaf.slot = FPropertySlot::at(property, static_cast<int>(index));
                     leaf.path = leafPath + "[" + std::to_string(index) + "]";
                     leaf.ownerInstances = instances;
-                    leaf.loc.elementIndex = static_cast<int>(index);
                     out.push_back(std::move(leaf));
                 }
                 continue;
@@ -273,7 +245,7 @@ void collectLeavesImpl(type_index_t currentType,
 
         PropertyAccessor::FLeaf leaf;
         leaf.ownerType = currentType;
-        leaf.property = &property;
+        leaf.slot = FPropertySlot::field(property);
         leaf.path = leafPath;
         leaf.ownerInstances = instances;
         out.push_back(std::move(leaf));
@@ -360,13 +332,16 @@ IContainerProperty* PropertyAccessor::containerOf(const Property& property)
     return extension->containerAccessor.get();
 }
 
-type_index_t PropertyAccessor::valueType(const Property& property, const FValueLoc& loc)
+type_index_t PropertyAccessor::valueType(const FPropertySlot& slot)
 {
-    if (loc.elementIndex >= 0 || !loc.mapKey.empty()) {
-        IContainerProperty* accessor = containerOf(property);
+    if (!slot.property) {
+        return 0;
+    }
+    if (slot.isSequenceElement() || slot.isMapValue()) {
+        IContainerProperty* accessor = containerOf(*slot.property);
         return accessor ? accessor->getElementTypeIndex() : 0;
     }
-    return property.typeIndex;
+    return slot.property->typeIndex;
 }
 
 bool PropertyAccessor::isEditable(const Property& property)
@@ -375,9 +350,9 @@ bool PropertyAccessor::isEditable(const Property& property)
            !property.metadata.hasFlag(FieldFlags::EditReadOnly);
 }
 
-bool PropertyAccessor::isEnum(const Property& property, const FValueLoc& loc)
+bool PropertyAccessor::isEnum(const FPropertySlot& slot)
 {
-    return EnumRegistry::instance().getEnum(valueType(property, loc)) != nullptr;
+    return EnumRegistry::instance().getEnum(valueType(slot)) != nullptr;
 }
 
 bool PropertyAccessor::isColor(const Property& property)
@@ -393,54 +368,55 @@ bool PropertyAccessor::isColor(const Property& property)
     }
 }
 
-const void* PropertyAccessor::address(const Property& property, const void* instance, const FValueLoc& loc)
+const void* PropertyAccessor::address(const FPropertySlot& slot, const void* instance)
 {
-    if (!instance) {
+    if (!slot.property || !instance) {
         return nullptr;
     }
-    if (loc.elementIndex < 0 && loc.mapKey.empty()) {
-        if (!property.addressGetter) {
+    if (slot.isField()) {
+        if (!slot.property->addressGetter) {
             return nullptr;
         }
-        return property.addressGetter(instance);
+        return slot.property->addressGetter(instance);
     }
-    IContainerProperty* accessor = containerOf(property);
-    void* container = const_cast<void*>(address(property, instance));
+    IContainerProperty* accessor = containerOf(*slot.property);
+    const void* container = address(FPropertySlot::field(*slot.property), instance);
     if (!accessor || !container) {
         return nullptr;
     }
-    if (!loc.mapKey.empty()) {
-        return accessor->getValuePtr(container, std::string(loc.mapKey));
+    void* mutableContainer = const_cast<void*>(container);
+    if (slot.isMapValue()) {
+        return accessor->getValuePtr(mutableContainer, slot.mapKey);
     }
-    if (static_cast<size_t>(loc.elementIndex) >= accessor->getSize(container)) {
+    if (static_cast<size_t>(slot.elementIndex) >= accessor->getSize(mutableContainer)) {
         return nullptr;
     }
-    return accessor->getElementPtr(container, static_cast<size_t>(loc.elementIndex));
+    return accessor->getElementPtr(mutableContainer, static_cast<size_t>(slot.elementIndex));
 }
 
-void* PropertyAccessor::addressMutable(const Property& property, void* instance, const FValueLoc& loc)
+void* PropertyAccessor::addressMutable(const FPropertySlot& slot, void* instance)
 {
-    if (!instance) {
+    if (!slot.property || !instance) {
         return nullptr;
     }
-    if (loc.elementIndex < 0 && loc.mapKey.empty()) {
-        if (!property.addressGetterMutable) {
+    if (slot.isField()) {
+        if (!slot.property->addressGetterMutable) {
             return nullptr;
         }
-        return property.addressGetterMutable(instance);
+        return slot.property->addressGetterMutable(instance);
     }
-    IContainerProperty* accessor = containerOf(property);
-    void* container = addressMutable(property, instance);
+    IContainerProperty* accessor = containerOf(*slot.property);
+    void* container = addressMutable(FPropertySlot::field(*slot.property), instance);
     if (!accessor || !container) {
         return nullptr;
     }
-    if (!loc.mapKey.empty()) {
-        return accessor->getValuePtr(container, std::string(loc.mapKey));
+    if (slot.isMapValue()) {
+        return accessor->getValuePtr(container, slot.mapKey);
     }
-    if (static_cast<size_t>(loc.elementIndex) >= accessor->getSize(container)) {
+    if (static_cast<size_t>(slot.elementIndex) >= accessor->getSize(container)) {
         return nullptr;
     }
-    return accessor->getElementPtr(container, static_cast<size_t>(loc.elementIndex));
+    return accessor->getElementPtr(container, static_cast<size_t>(slot.elementIndex));
 }
 
 namespace
@@ -448,9 +424,10 @@ namespace
 
 void* containerPtr(const Property& property, void* instance)
 {
-    void* container = PropertyAccessor::addressMutable(property, instance);
+    const FPropertySlot field(property);
+    void* container = PropertyAccessor::addressMutable(field, instance);
     if (!container) {
-        container = const_cast<void*>(PropertyAccessor::address(property, instance));
+        container = const_cast<void*>(PropertyAccessor::address(field, instance));
     }
     return container;
 }
@@ -488,7 +465,7 @@ std::string mapLeafPath(std::string_view prefix, std::string_view key, type_inde
 size_t PropertyAccessor::containerSize(const Property& property, const void* instance)
 {
     IContainerProperty* accessor = containerOf(property);
-    void* container = const_cast<void*>(address(property, instance));
+    void* container = const_cast<void*>(address(FPropertySlot::field(property), instance));
     if (!accessor || !container) {
         return 0;
     }
@@ -596,12 +573,12 @@ bool PropertyAccessor::insertMapKey(const Property& property, void* instance, st
     return accessor->getValuePtr(container, owned) != nullptr;
 }
 
-bool PropertyAccessor::equals(const Property& property, const void* a, const void* b, const FValueLoc& loc)
+bool PropertyAccessor::equals(const FPropertySlot& slot, const void* a, const void* b)
 {
     if (!a || !b) {
         return false;
     }
-    const type_index_t type = valueType(property, loc);
+    const type_index_t type = valueType(slot);
     if (const Enum* enumInfo = EnumRegistry::instance().getEnum(type)) {
         return enumInfo->getValue(const_cast<void*>(a)) == enumInfo->getValue(const_cast<void*>(b));
     }
@@ -636,17 +613,16 @@ bool PropertyAccessor::equals(const Property& property, const void* a, const voi
     return false;
 }
 
-bool PropertyAccessor::equalsVecAxis(const Property& property,
+bool PropertyAccessor::equalsVecAxis(const FPropertySlot& slot,
                                      const void* a,
                                      const void* b,
                                      int axis,
-                                     int componentCount,
-                                     const FValueLoc& loc)
+                                     int componentCount)
 {
     if (!a || !b || axis < 0 || axis >= componentCount) {
         return false;
     }
-    const type_index_t type = valueType(property, loc);
+    const type_index_t type = valueType(slot);
     if (componentCount == 2 && type == refl::type_index_v<glm::vec2>) {
         return (*static_cast<const glm::vec2*>(a))[axis] == (*static_cast<const glm::vec2*>(b))[axis];
     }
@@ -659,87 +635,27 @@ bool PropertyAccessor::equalsVecAxis(const Property& property,
     return false;
 }
 
-bool PropertyAccessor::tryGetVec2(const Property& property, const void* instance, glm::vec2& value, const FValueLoc& loc)
+bool PropertyAccessor::tryGetInteger(const FPropertySlot& slot, const void* instance, int64_t& value)
 {
-    return tryGetPod(property, instance, value, loc);
-}
-
-bool PropertyAccessor::setVec2(const Property& property, void* instance, const glm::vec2& value, const FValueLoc& loc)
-{
-    return setPod(property, instance, value, loc);
-}
-
-bool PropertyAccessor::tryGetVec3(const Property& property, const void* instance, glm::vec3& value, const FValueLoc& loc)
-{
-    return tryGetPod(property, instance, value, loc);
-}
-
-bool PropertyAccessor::setVec3(const Property& property, void* instance, const glm::vec3& value, const FValueLoc& loc)
-{
-    return setPod(property, instance, value, loc);
-}
-
-bool PropertyAccessor::tryGetVec4(const Property& property, const void* instance, glm::vec4& value, const FValueLoc& loc)
-{
-    return tryGetPod(property, instance, value, loc);
-}
-
-bool PropertyAccessor::setVec4(const Property& property, void* instance, const glm::vec4& value, const FValueLoc& loc)
-{
-    return setPod(property, instance, value, loc);
-}
-
-bool PropertyAccessor::tryGetFloat(const Property& property, const void* instance, float& value, const FValueLoc& loc)
-{
-    return tryGetPod(property, instance, value, loc);
-}
-
-bool PropertyAccessor::setFloat(const Property& property, void* instance, float value, const FValueLoc& loc)
-{
-    return setPod(property, instance, value, loc);
-}
-
-bool PropertyAccessor::tryGetInteger(const Property& property, const void* instance, int64_t& value, const FValueLoc& loc)
-{
-    if (!isIntegerType(valueType(property, loc))) {
+    if (!isIntegerType(valueType(slot))) {
         return false;
     }
-    return readIntegerFromAddress(valueType(property, loc), address(property, instance, loc), value);
+    return readIntegerFromAddress(valueType(slot), address(slot, instance), value);
 }
 
-bool PropertyAccessor::setInteger(const Property& property, void* instance, int64_t value, const FValueLoc& loc)
+bool PropertyAccessor::setInteger(const FPropertySlot& slot, void* instance, int64_t value)
 {
-    if (!isEditable(property) || !isIntegerType(valueType(property, loc))) {
+    if (!slot.property || !isEditable(*slot.property) || !isIntegerType(valueType(slot))) {
         return false;
     }
-    return writeIntegerToAddress(valueType(property, loc), addressMutable(property, instance, loc), value);
+    return writeIntegerToAddress(valueType(slot), addressMutable(slot, instance), value);
 }
 
-bool PropertyAccessor::tryGetBool(const Property& property, const void* instance, bool& value, const FValueLoc& loc)
-{
-    return tryGetPod(property, instance, value, loc);
-}
-
-bool PropertyAccessor::setBool(const Property& property, void* instance, bool value, const FValueLoc& loc)
-{
-    return setPod(property, instance, value, loc);
-}
-
-bool PropertyAccessor::tryGetString(const Property& property, const void* instance, std::string& value, const FValueLoc& loc)
-{
-    return tryGetPod(property, instance, value, loc);
-}
-
-bool PropertyAccessor::setString(const Property& property, void* instance, const std::string& value, const FValueLoc& loc)
-{
-    return setPod(property, instance, value, loc);
-}
-
-bool PropertyAccessor::tryGetEnumIndex(const Property& property, const void* instance, int& index, const FValueLoc& loc)
+bool PropertyAccessor::tryGetEnumIndex(const FPropertySlot& slot, const void* instance, int& index)
 {
     index = -1;
-    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(property, loc));
-    const void* addr = address(property, instance, loc);
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(slot));
+    const void* addr = address(slot, instance);
     if (!enumInfo || !addr) {
         return false;
     }
@@ -753,10 +669,10 @@ bool PropertyAccessor::tryGetEnumIndex(const Property& property, const void* ins
     return false;
 }
 
-bool PropertyAccessor::enumLabels(const Property& property, std::vector<std::string>& labels, const FValueLoc& loc)
+bool PropertyAccessor::enumLabels(const FPropertySlot& slot, std::vector<std::string>& labels)
 {
     labels.clear();
-    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(property, loc));
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(slot));
     if (!enumInfo) {
         return false;
     }
@@ -767,19 +683,20 @@ bool PropertyAccessor::enumLabels(const Property& property, std::vector<std::str
     return true;
 }
 
-bool PropertyAccessor::setEnumByIndex(const Property& property, void* instance, int index, const FValueLoc& loc)
+bool PropertyAccessor::setEnumByIndex(const FPropertySlot& slot, void* instance, int index)
 {
-    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(property, loc));
-    if (!isEditable(property) || !enumInfo || index < 0 || index >= static_cast<int>(enumInfo->values.size())) {
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(slot));
+    if (!slot.property || !isEditable(*slot.property) || !enumInfo ||
+        index < 0 || index >= static_cast<int>(enumInfo->values.size())) {
         return false;
     }
-    return setEnumValue(property, instance, enumInfo->values[static_cast<size_t>(index)].value, loc);
+    return setEnumValue(slot, instance, enumInfo->values[static_cast<size_t>(index)].value);
 }
 
-bool PropertyAccessor::tryGetEnumValue(const Property& property, const void* instance, int64_t& value, const FValueLoc& loc)
+bool PropertyAccessor::tryGetEnumValue(const FPropertySlot& slot, const void* instance, int64_t& value)
 {
-    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(property, loc));
-    const void* addr = address(property, instance, loc);
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(slot));
+    const void* addr = address(slot, instance);
     if (!enumInfo || !addr) {
         return false;
     }
@@ -787,11 +704,11 @@ bool PropertyAccessor::tryGetEnumValue(const Property& property, const void* ins
     return true;
 }
 
-bool PropertyAccessor::setEnumValue(const Property& property, void* instance, int64_t value, const FValueLoc& loc)
+bool PropertyAccessor::setEnumValue(const FPropertySlot& slot, void* instance, int64_t value)
 {
-    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(property, loc));
-    void* addr = addressMutable(property, instance, loc);
-    if (!isEditable(property) || !enumInfo || !addr) {
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(slot));
+    void* addr = addressMutable(slot, instance);
+    if (!slot.property || !isEditable(*slot.property) || !enumInfo || !addr) {
         return false;
     }
     if (enumInfo->getValue(addr) == value) {
@@ -801,16 +718,16 @@ bool PropertyAccessor::setEnumValue(const Property& property, void* instance, in
     return true;
 }
 
-bool PropertyAccessor::tryGetColor(const Property& property, const void* instance, glm::vec4& value, const FValueLoc& loc)
+bool PropertyAccessor::tryGetColor(const FPropertySlot& slot, const void* instance, glm::vec4& value)
 {
-    if (!isColor(property)) {
+    if (!slot.property || !isColor(*slot.property)) {
         return false;
     }
-    const void* addr = address(property, instance, loc);
+    const void* addr = address(slot, instance);
     if (!addr) {
         return false;
     }
-    const type_index_t type = valueType(property, loc);
+    const type_index_t type = valueType(slot);
     if (type == refl::type_index_v<glm::vec4>) {
         value = *static_cast<const glm::vec4*>(addr);
         return true;
@@ -822,16 +739,16 @@ bool PropertyAccessor::tryGetColor(const Property& property, const void* instanc
     return false;
 }
 
-bool PropertyAccessor::setColor(const Property& property, void* instance, const glm::vec4& value, const FValueLoc& loc)
+bool PropertyAccessor::setColor(const FPropertySlot& slot, void* instance, const glm::vec4& value)
 {
-    if (!isEditable(property) || !isColor(property)) {
+    if (!slot.property || !isEditable(*slot.property) || !isColor(*slot.property)) {
         return false;
     }
-    void* addr = addressMutable(property, instance, loc);
+    void* addr = addressMutable(slot, instance);
     if (!addr) {
         return false;
     }
-    const type_index_t type = valueType(property, loc);
+    const type_index_t type = valueType(slot);
     if (type == refl::type_index_v<glm::vec4>) {
         auto& current = *static_cast<glm::vec4*>(addr);
         if (current == value) {
@@ -852,12 +769,12 @@ bool PropertyAccessor::setColor(const Property& property, void* instance, const 
     return false;
 }
 
-bool PropertyAccessor::tryGetAssetPath(const Property& property, const void* instance, std::string& value, const FValueLoc& loc)
+bool PropertyAccessor::tryGetAssetPath(const FPropertySlot& slot, const void* instance, std::string& value)
 {
-    if (!isAssetRefType(valueType(property, loc))) {
+    if (!isAssetRefType(valueType(slot))) {
         return false;
     }
-    const void* addr = address(property, instance, loc);
+    const void* addr = address(slot, instance);
     if (!addr) {
         return false;
     }
@@ -865,12 +782,12 @@ bool PropertyAccessor::tryGetAssetPath(const Property& property, const void* ins
     return true;
 }
 
-bool PropertyAccessor::setAssetPath(const Property& property, void* instance, const std::string& value, const FValueLoc& loc)
+bool PropertyAccessor::setAssetPath(const FPropertySlot& slot, void* instance, const std::string& value)
 {
-    if (!isEditable(property) || !isAssetRefType(valueType(property, loc))) {
+    if (!slot.property || !isEditable(*slot.property) || !isAssetRefType(valueType(slot))) {
         return false;
     }
-    void* addr = addressMutable(property, instance, loc);
+    void* addr = addressMutable(slot, instance);
     if (!addr) {
         return false;
     }
@@ -882,13 +799,13 @@ bool PropertyAccessor::setAssetPath(const Property& property, void* instance, co
     return true;
 }
 
-bool PropertyAccessor::hasAssetResolveError(const Property& property, const void* instance, const FValueLoc& loc)
+bool PropertyAccessor::hasAssetResolveError(const FPropertySlot& slot, const void* instance)
 {
-    const type_index_t type = valueType(property, loc);
+    const type_index_t type = valueType(slot);
     if (!isAssetRefType(type)) {
         return false;
     }
-    const void* addr = address(property, instance, loc);
+    const void* addr = address(slot, instance);
     if (!addr) {
         return false;
     }
@@ -913,19 +830,22 @@ bool PropertyAccessor::tryGetManipulateSpec(const Property& property, Meta::Mani
     return readManipulateSpec(property, spec);
 }
 
-std::string PropertyAccessor::validationError(const Property& property, const void* instance, const FValueLoc& loc)
+std::string PropertyAccessor::validationError(const FPropertySlot& slot, const void* instance)
 {
+    if (!slot.property) {
+        return {};
+    }
     Meta::ManipulateSpec spec;
-    if (!readManipulateSpec(property, spec)) {
+    if (!readManipulateSpec(*slot.property, spec)) {
         return {};
     }
     auto outOfRange = [&](double value) {
         return value < spec.min || value > spec.max;
     };
-    const type_index_t type = valueType(property, loc);
+    const type_index_t type = valueType(slot);
     if (type == refl::type_index_v<float>) {
         float value = 0.0f;
-        if (!tryGetFloat(property, instance, value, loc)) {
+        if (!tryGet(slot, instance, value)) {
             return "Invalid value";
         }
         if (outOfRange(value)) {
@@ -935,7 +855,7 @@ std::string PropertyAccessor::validationError(const Property& property, const vo
     }
     if (isIntegerType(type)) {
         int64_t value = 0;
-        if (!tryGetInteger(property, instance, value, loc)) {
+        if (!tryGetInteger(slot, instance, value)) {
             return "Invalid value";
         }
         if (outOfRange(static_cast<double>(value))) {
@@ -945,7 +865,7 @@ std::string PropertyAccessor::validationError(const Property& property, const vo
     }
     if (type == refl::type_index_v<glm::vec2>) {
         glm::vec2 value{};
-        if (!tryGetVec2(property, instance, value, loc)) {
+        if (!tryGet(slot, instance, value)) {
             return "Invalid value";
         }
         for (int axis = 0; axis < 2; ++axis) {
@@ -957,7 +877,7 @@ std::string PropertyAccessor::validationError(const Property& property, const vo
     }
     if (type == refl::type_index_v<glm::vec3>) {
         glm::vec3 value{};
-        if (!tryGetVec3(property, instance, value, loc)) {
+        if (!tryGet(slot, instance, value)) {
             return "Invalid value";
         }
         for (int axis = 0; axis < 3; ++axis) {
@@ -969,7 +889,7 @@ std::string PropertyAccessor::validationError(const Property& property, const vo
     }
     if (type == refl::type_index_v<glm::vec4>) {
         glm::vec4 value{};
-        if (!tryGetVec4(property, instance, value, loc)) {
+        if (!tryGet(slot, instance, value)) {
             return "Invalid value";
         }
         for (int axis = 0; axis < 4; ++axis) {

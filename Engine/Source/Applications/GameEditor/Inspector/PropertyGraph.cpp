@@ -82,30 +82,30 @@ PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> in
     reflection::PropertyAccessor::collectLeaves(ownerType, instances, leaves);
     graph._nodes.reserve(leaves.size());
     for (reflection::PropertyAccessor::FLeaf& leaf : leaves) {
-        if (!leaf.property) {
+        if (!leaf.slot.property) {
             continue;
         }
         PropertyNode node;
         node.name = leaf.path;
         node.displayName = displayNameFromPath(leaf.path);
-        if (leaf.property->metadata.hasMeta("category")) {
+        if (leaf.slot.property && leaf.slot.property->metadata.hasMeta("category")) {
             try {
-                node.category = leaf.property->metadata.get<std::string>("category");
+                node.category = leaf.slot.property->metadata.get<std::string>("category");
             }
             catch (...) {
             }
         }
-        node.valueType = reflection::PropertyAccessor::valueType(*leaf.property, leaf.loc);
+        node.valueType = reflection::PropertyAccessor::valueType(leaf.slot);
         node.kind = leaf.role == reflection::PropertyAccessor::ELeafRole::Sequence
             ? PropertyNode::Kind::Sequence
             : leaf.role == reflection::PropertyAccessor::ELeafRole::Map
                 ? PropertyNode::Kind::Map
                 : PropertyNode::Kind::Value;
-        node.binding = PropertyHandle(leaf.ownerType, std::move(leaf.ownerInstances), leaf.property, {}, leaf.loc);
+        node.binding = PropertyHandle(leaf.ownerType, std::move(leaf.ownerInstances), leaf.slot);
         node.bEditable = node.binding.isEditable();
         node.bVisible = true;
-        node.bInstanceEditable = leaf.property->metadata.hasFlag(FieldFlags::InstanceEditable);
-        node.bColor = reflection::PropertyAccessor::isColor(*leaf.property);
+        node.bInstanceEditable = leaf.slot.property && leaf.slot.property->metadata.hasFlag(FieldFlags::InstanceEditable);
+        node.bColor = leaf.slot.property && reflection::PropertyAccessor::isColor(*leaf.slot.property);
         graph._nodes.push_back(std::move(node));
     }
     return graph;

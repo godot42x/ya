@@ -4,8 +4,6 @@
 #include "Core/Reflection/MetadataSupport.h"
 #include "Core/TypeIndex.h"
 
-#include <glm/vec2.hpp>
-#include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <cstdint>
 #include <string>
@@ -18,15 +16,39 @@ namespace ya::reflection
 {
 struct IContainerProperty;
 
-/// Identifies a reflected value: the property itself, a sequence element, or a map value.
-struct FValueLoc
+/// Identifies one reflected value: a field, a sequence element, or a map value.
+struct FPropertySlot
 {
-    int         elementIndex = -1;
-    std::string mapKey;
+    const Property* property     = nullptr;
+    int             elementIndex = -1;
+    std::string     mapKey;
 
-    FValueLoc() = default;
-    FValueLoc(int index) : elementIndex(index) {}
-    FValueLoc(int index, std::string key) : elementIndex(index), mapKey(std::move(key)) {}
+    FPropertySlot() = default;
+    FPropertySlot(const Property& field) : property(&field) {}
+
+    static FPropertySlot field(const Property& property)
+    {
+        return FPropertySlot(property);
+    }
+
+    static FPropertySlot at(const Property& property, int index)
+    {
+        FPropertySlot slot(property);
+        slot.elementIndex = index;
+        return slot;
+    }
+
+    static FPropertySlot at(const Property& property, std::string key)
+    {
+        FPropertySlot slot(property);
+        slot.mapKey = std::move(key);
+        return slot;
+    }
+
+    [[nodiscard]] bool isValid() const { return property != nullptr; }
+    [[nodiscard]] bool isField() const { return isValid() && elementIndex < 0 && mapKey.empty(); }
+    [[nodiscard]] bool isSequenceElement() const { return isValid() && elementIndex >= 0; }
+    [[nodiscard]] bool isMapValue() const { return isValid() && !mapKey.empty(); }
 };
 
 /// Single-instance property access owned by the reflection layer.
@@ -42,12 +64,11 @@ struct YA_CORE_API PropertyAccessor
 
     struct FLeaf
     {
-        type_index_t         ownerType = 0;
-        const Property*      property  = nullptr;
-        std::string          path;
-        std::vector<void*>   ownerInstances;
-        FValueLoc            loc;
-        ELeafRole            role = ELeafRole::Value;
+        type_index_t       ownerType = 0;
+        FPropertySlot      slot;
+        std::string        path;
+        std::vector<void*> ownerInstances;
+        ELeafRole          role = ELeafRole::Value;
     };
 
     [[nodiscard]] static bool isIntegerType(type_index_t typeIndex);
@@ -58,13 +79,13 @@ struct YA_CORE_API PropertyAccessor
     [[nodiscard]] static bool isDynamicSequence(const Property& property);
     [[nodiscard]] static bool isMapOfLeaves(const Property& property);
     [[nodiscard]] static bool isEditable(const Property& property);
-    [[nodiscard]] static bool isEnum(const Property& property, const FValueLoc& loc = {});
+    [[nodiscard]] static bool isEnum(const FPropertySlot& slot);
     [[nodiscard]] static bool isColor(const Property& property);
     [[nodiscard]] static IContainerProperty* containerOf(const Property& property);
-    [[nodiscard]] static type_index_t valueType(const Property& property, const FValueLoc& loc = {});
+    [[nodiscard]] static type_index_t valueType(const FPropertySlot& slot);
 
-    [[nodiscard]] static const void* address(const Property& property, const void* instance, const FValueLoc& loc = {});
-    [[nodiscard]] static void* addressMutable(const Property& property, void* instance, const FValueLoc& loc = {});
+    [[nodiscard]] static const void* address(const FPropertySlot& slot, const void* instance);
+    [[nodiscard]] static void* addressMutable(const FPropertySlot& slot, void* instance);
 
     [[nodiscard]] static size_t containerSize(const Property& property, const void* instance);
     static bool appendEmpty(const Property& property, void* instance);
@@ -74,45 +95,63 @@ struct YA_CORE_API PropertyAccessor
     static bool removeMapKey(const Property& property, void* instance, std::string_view key);
     static bool insertMapKey(const Property& property, void* instance, std::string_view key);
 
-    [[nodiscard]] static bool equals(const Property& property, const void* a, const void* b, const FValueLoc& loc = {});
-    [[nodiscard]] static bool equalsVecAxis(const Property& property,
+    [[nodiscard]] static bool equals(const FPropertySlot& slot, const void* a, const void* b);
+    [[nodiscard]] static bool equalsVecAxis(const FPropertySlot& slot,
                                             const void* a,
                                             const void* b,
                                             int axis,
-                                            int componentCount,
-                                            const FValueLoc& loc = {});
+                                            int componentCount);
 
-    [[nodiscard]] static bool tryGetVec2(const Property& property, const void* instance, glm::vec2& value, const FValueLoc& loc = {});
-    static bool setVec2(const Property& property, void* instance, const glm::vec2& value, const FValueLoc& loc = {});
-    [[nodiscard]] static bool tryGetVec3(const Property& property, const void* instance, glm::vec3& value, const FValueLoc& loc = {});
-    static bool setVec3(const Property& property, void* instance, const glm::vec3& value, const FValueLoc& loc = {});
-    [[nodiscard]] static bool tryGetVec4(const Property& property, const void* instance, glm::vec4& value, const FValueLoc& loc = {});
-    static bool setVec4(const Property& property, void* instance, const glm::vec4& value, const FValueLoc& loc = {});
+    template <typename T>
+    [[nodiscard]] static bool tryGet(const FPropertySlot& slot, const void* instance, T& value)
+    {
+        if (!slot.property || valueType(slot) != ya::type_index_v<T>) {
+            return false;
+        }
+        const void* addr = address(slot, instance);
+        if (!addr) {
+            return false;
+        }
+        value = *static_cast<const T*>(addr);
+        return true;
+    }
 
-    [[nodiscard]] static bool tryGetFloat(const Property& property, const void* instance, float& value, const FValueLoc& loc = {});
-    static bool setFloat(const Property& property, void* instance, float value, const FValueLoc& loc = {});
-    [[nodiscard]] static bool tryGetInteger(const Property& property, const void* instance, int64_t& value, const FValueLoc& loc = {});
-    static bool setInteger(const Property& property, void* instance, int64_t value, const FValueLoc& loc = {});
-    [[nodiscard]] static bool tryGetBool(const Property& property, const void* instance, bool& value, const FValueLoc& loc = {});
-    static bool setBool(const Property& property, void* instance, bool value, const FValueLoc& loc = {});
-    [[nodiscard]] static bool tryGetString(const Property& property, const void* instance, std::string& value, const FValueLoc& loc = {});
-    static bool setString(const Property& property, void* instance, const std::string& value, const FValueLoc& loc = {});
+    template <typename T>
+    static bool set(const FPropertySlot& slot, void* instance, const T& value)
+    {
+        if (!slot.property || !isEditable(*slot.property) || valueType(slot) != ya::type_index_v<T>) {
+            return false;
+        }
+        void* addr = addressMutable(slot, instance);
+        if (!addr) {
+            return false;
+        }
+        T& current = *static_cast<T*>(addr);
+        if (current == value) {
+            return false;
+        }
+        current = value;
+        return true;
+    }
 
-    [[nodiscard]] static bool tryGetEnumIndex(const Property& property, const void* instance, int& index, const FValueLoc& loc = {});
-    [[nodiscard]] static bool enumLabels(const Property& property, std::vector<std::string>& labels, const FValueLoc& loc = {});
-    static bool setEnumByIndex(const Property& property, void* instance, int index, const FValueLoc& loc = {});
-    [[nodiscard]] static bool tryGetEnumValue(const Property& property, const void* instance, int64_t& value, const FValueLoc& loc = {});
-    static bool setEnumValue(const Property& property, void* instance, int64_t value, const FValueLoc& loc = {});
+    [[nodiscard]] static bool tryGetInteger(const FPropertySlot& slot, const void* instance, int64_t& value);
+    static bool setInteger(const FPropertySlot& slot, void* instance, int64_t value);
 
-    [[nodiscard]] static bool tryGetColor(const Property& property, const void* instance, glm::vec4& value, const FValueLoc& loc = {});
-    static bool setColor(const Property& property, void* instance, const glm::vec4& value, const FValueLoc& loc = {});
+    [[nodiscard]] static bool tryGetEnumIndex(const FPropertySlot& slot, const void* instance, int& index);
+    [[nodiscard]] static bool enumLabels(const FPropertySlot& slot, std::vector<std::string>& labels);
+    static bool setEnumByIndex(const FPropertySlot& slot, void* instance, int index);
+    [[nodiscard]] static bool tryGetEnumValue(const FPropertySlot& slot, const void* instance, int64_t& value);
+    static bool setEnumValue(const FPropertySlot& slot, void* instance, int64_t value);
 
-    [[nodiscard]] static bool tryGetAssetPath(const Property& property, const void* instance, std::string& value, const FValueLoc& loc = {});
-    static bool setAssetPath(const Property& property, void* instance, const std::string& value, const FValueLoc& loc = {});
-    [[nodiscard]] static bool hasAssetResolveError(const Property& property, const void* instance, const FValueLoc& loc = {});
+    [[nodiscard]] static bool tryGetColor(const FPropertySlot& slot, const void* instance, glm::vec4& value);
+    static bool setColor(const FPropertySlot& slot, void* instance, const glm::vec4& value);
+
+    [[nodiscard]] static bool tryGetAssetPath(const FPropertySlot& slot, const void* instance, std::string& value);
+    static bool setAssetPath(const FPropertySlot& slot, void* instance, const std::string& value);
+    [[nodiscard]] static bool hasAssetResolveError(const FPropertySlot& slot, const void* instance);
 
     [[nodiscard]] static bool tryGetManipulateSpec(const Property& property, Meta::ManipulateSpec& spec);
-    [[nodiscard]] static std::string validationError(const Property& property, const void* instance, const FValueLoc& loc = {});
+    [[nodiscard]] static std::string validationError(const FPropertySlot& slot, const void* instance);
 
     /// Flatten serialized reflected fields, expanding nested composite types,
     /// sequence-of-leaf containers, and map-of-leaf values.

@@ -118,6 +118,7 @@
   - [x] 提炼 reflection-layer `PropertyAccessor` / path-walk / copy-compare-restore，收瘦 `PropertyHandle` 为 editor adapter。
   - [x] retained inspector 展开 sequence-of-leaf 容器（`std::array` / `std::vector` 索引 leaf，例如 Skybox `cubemapSource.files[i]`）。
   - [x] retained inspector 动态 vector 增删、map-of-leaf、TextureRef preview parity。
+  - [x] `FPropertySlot` 收口 property 定位；`PropertyAccessor`/`PropertyHandle` POD 读写改为 `tryGet<T>`/`set<T>`，去掉构造函数末尾 loc/setter 与底层 typed get/set 森林。
 - [x] Phase 10C：自研 viewport gizmo（WidgetTree/Render2D），移除 editor 帧内 GuiSystem/ImGuizmo。
 - [ ] Windows/MSVC 组合回归（本机未跑；未通过则不得宣称 retained editor ready）。
 - [ ] OpenGL GUI/editor presentation（`GUIAppHost` 现为 Vulkan-only）。
