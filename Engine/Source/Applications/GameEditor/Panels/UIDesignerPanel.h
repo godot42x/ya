@@ -126,6 +126,10 @@ struct UIDesignerPanel
     static EDropPos computeDropPos(float itemMinY, float itemMaxY, float mouseY);
     /// Apply a designer-tree drag-drop (reparent/reorder in the preview).
     void applyWidgetDrop(UIElement* dragged, UIElement& target, EDropPos position);
+    /// Add a widget from the palette under the current selection (or document root).
+    [[nodiscard]] bool addPaletteWidget(const std::string& typeId);
+    /// Display name for palette entries (`engine.button` → `button`).
+    [[nodiscard]] static std::string paletteDisplayName(const std::string& typeId);
 
   private:
     void rebuildDocumentFromPreview();

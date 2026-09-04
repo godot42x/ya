@@ -958,4 +958,16 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 ### Phase 8U 边界
 
 - legacy ImGui `editorSettings` 窗口仍在 `onImGuiRender`；widgettree 默认路径使用 retained 面板。
-- Debug images window、UI Designer palette/inspector 仍待迁移；见 `imgui-widgettree-parity.md`。
+- Debug images window、UI Designer tree DnD 仍待迁移；见 `imgui-widgettree-parity.md`。
+
+## Phase 8T 当前 checkpoint（2026-09-04）
+
+- `UIDesignerPanel::addPaletteWidget` / `paletteDisplayName`：从 registry 向选中节点（或根）添加子 widget 并 `syncPreviewToDocument`。
+- `EditorSurface` UI Designer tab：三列布局（Palette 滚动按钮列表、主列 tree/toolbar、Inspector `EditorAutoPropertySection` via `PropertyGraph::project`）。
+- 树选择与 canvas pick 双向同步（`designerSelectionPath` + `Reactive` selection）。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（381/381）；`UIDesignerPanelTest`（1/1）。
+
+### Phase 8T 边界
+
+- Hierarchy tree 仍无 retained drag-drop reorder UI；2D viewport 画布操纵已存在。
+- 下一步：Debug window（8V）或 ImGui shell 删除门禁（8W）。

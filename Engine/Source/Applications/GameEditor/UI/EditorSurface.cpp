@@ -21,8 +21,12 @@
 #include "GUI/Declarative/Build.h"
 #include "GUI/Tooling/Workbench/WorkbenchSurface.h"
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/Panels/UIDesignerPanel.h"
 #include "GameEditor/UI/EditorTheme.h"
 #include "GameEditor/UI/EditorTabRegistry.h"
+#include "GameEditor/UI/EditorAutoPropertySection.h"
+#include "GameEditor/Inspector/PropertyGraph.h"
+#include "GUI/Widgets/UITypeRegistry.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "GameRuntime/App.h"
 #include "GUI/Layout/UILayout.h"
@@ -213,6 +217,24 @@ void collectDesignerTreeFingerprint(const UIElement& widget, std::string& out, c
     }
 }
 
+std::string designerSelectionPath(const UIElement& root, const UIElement& target, const std::string& prefix = "root")
+{
+    if (&root == &target) {
+        return prefix;
+    }
+    const auto& children = root.getChildren();
+    for (size_t index = 0; index < children.size(); ++index) {
+        const std::string childPrefix = prefix + "/" + std::to_string(index);
+        if (children[index].get() == &target) {
+            return childPrefix;
+        }
+        if (std::string nested = designerSelectionPath(*children[index], target, childPrefix); !nested.empty()) {
+            return nested;
+        }
+    }
+    return {};
+}
+
 DockPanelId dockPanelIdForKey(const FDockTreeModel& model, const char* stableKey)
 {
     if (const FDockPanelRecord* record = model.findPanelByStableKey(stableKey)) {
@@ -311,17 +333,56 @@ std::shared_ptr<UIElement> EditorSurface::buildUIDesigner(EditorLayer& layer)
     _uiDesignerSaveButton = saveButton;
     _uiDesignerCloseButton = closeButton;
 
+    _uiDesignerPaletteList = [&layer]() {
+        auto palette = ui::column("UIDesignerPalette").setSpacing(4.0f);
+        for (const std::string& typeId : UITypeRegistry::instance().getTypeIds()) {
+            const std::string label = UIDesignerPanel::paletteDisplayName(typeId);
+            palette = palette.child(labeledButton("UIDesignerPalette_" + label, label)
+                                        .setOnClick([&layer, typeId]() {
+                                            (void)layer.getUIDesignerPanel().addPaletteWidget(typeId);
+                                        }),
+                                    ui::boxSlot().preferredSize({0.0f, 24.0f}));
+        }
+        return palette.share();
+    }();
+
+    _uiDesignerInspectorHost = ui::column("UIDesignerInspectorHost").setSpacing(6.0f).share();
+
+    auto mainColumn = ui::column("UIDesignerMainColumn")
+                          .setSpacing(8.0f)
+                          .child(status)
+                          .child(selection)
+                          .child(tree, FBoxSlotArgs{.preferredSize = {0.0f, 180.0f}})
+                          .child(newButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
+                          .child(saveButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
+                          .child(closeButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}});
+
     return ui::panel("UIDesignerBody")
         .setStyleKey("panel.canvas")
-        .child(ui::column("UIDesignerColumn")
+        .child(ui::row("UIDesignerLayout")
                    .setSpacing(8.0f)
-                   .child(status)
-                   .child(selection)
-                   .child(tree, FBoxSlotArgs{.preferredSize = {0.0f, 220.0f}})
-                   .child(newButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                   .child(saveButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                   .child(closeButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                   .release(),
+                   .setStretchLastChild(true)
+                   .child(ui::scroll("UIDesignerPaletteScroll")
+                              .setAxis(EScrollAxis::Vertical)
+                              .child(ui::column("UIDesignerPaletteColumn")
+                                         .setSpacing(4.0f)
+                                         .child(ui::text("UIDesignerPaletteTitle")
+                                                    .setText("Palette")
+                                                    .setStyleKey("text.eyebrow"))
+                                         .child(_uiDesignerPaletteList, ui::boxSlot().fill()),
+                                     ui::overlaySlot().fill()),
+                          ui::boxSlot().preferredSize({120.0f, 0.0f}))
+                   .child(std::move(mainColumn), ui::boxSlot().fill())
+                   .child(ui::scroll("UIDesignerInspectorScroll")
+                              .setAxis(EScrollAxis::Vertical)
+                              .child(ui::column("UIDesignerInspectorColumn")
+                                         .setSpacing(6.0f)
+                                         .child(ui::text("UIDesignerInspectorTitle")
+                                                    .setText("Inspector")
+                                                    .setStyleKey("text.eyebrow"))
+                                         .child(_uiDesignerInspectorHost, ui::boxSlot().fill()),
+                                     ui::overlaySlot().fill()),
+                          ui::boxSlot().preferredSize({220.0f, 0.0f})),
                ui::canvasSlot().fill().offset({12.0f, 12.0f}))
         .release();
 }
@@ -956,6 +1017,31 @@ void EditorSurface::buildEditorChrome(App& app)
             }
             if (_uiDesignerSaveButton) _uiDesignerSaveButton->setEnabled(document != nullptr);
             if (_uiDesignerCloseButton) _uiDesignerCloseButton->setEnabled(document != nullptr);
+            if (_tree) {
+                rebuildUIDesignerInspector(layer, *_tree, selected);
+                if (_uiDesignerInspectorSection) {
+                    _uiDesignerInspectorSection->sync(*_tree);
+                    layer.getUIDesignerPanel().invalidatePreview();
+                }
+                if (UIElement* root = designer.getPreviewRoot()) {
+                    std::string selectionPath;
+                    if (selected) {
+                        selectionPath = designerSelectionPath(*root, *selected);
+                    }
+                    if (selectionPath != _uiDesignerSelectionFingerprint) {
+                        _uiDesignerSelectionFingerprint = std::move(selectionPath);
+                        if (_uiDesignerSelection) {
+                            _uiDesignerSelection->set(_uiDesignerSelectionFingerprint);
+                        }
+                    }
+                }
+                else if (!_uiDesignerSelectionFingerprint.empty()) {
+                    _uiDesignerSelectionFingerprint.clear();
+                    if (_uiDesignerSelection) {
+                        _uiDesignerSelection->set("");
+                    }
+                }
+            }
         },
     });
     _tabRegistry->registerTab({
@@ -1603,6 +1689,42 @@ void EditorSurface::activateContentItem(const std::filesystem::path& path, bool 
             });
         }
     }
+}
+
+void EditorSurface::rebuildUIDesignerInspector(EditorLayer& /*layer*/, WidgetTree& tree, UIElement* selected)
+{
+    std::string fingerprint = "none";
+    if (selected) {
+        fingerprint = selected->_typeId + ":" + std::to_string(reinterpret_cast<uintptr_t>(selected));
+    }
+    if (fingerprint == _uiDesignerInspectorFingerprint) {
+        return;
+    }
+
+    if (_uiDesignerInspectorSection && _uiDesignerInspectorSection->isAttached()) {
+        tree.detach(*_uiDesignerInspectorSection);
+    }
+    _uiDesignerInspectorSection.reset();
+    _uiDesignerInspectorFingerprint = std::move(fingerprint);
+
+    if (!selected || !_uiDesignerInspectorHost) {
+        return;
+    }
+
+    PropertyGraph graph = PropertyGraph::project(selected->getTypeIndex(), {selected});
+    if (!graph.hasRetainedEditors()) {
+        return;
+    }
+
+    auto section = std::make_shared<EditorAutoPropertySection>(
+        "UIDesignerInspectorSection",
+        std::move(graph),
+        _undo.get(),
+        std::string("uidesigner:") + selected->_name);
+    if (!tree.attach(*_uiDesignerInspectorHost, section).valid()) {
+        return;
+    }
+    _uiDesignerInspectorSection = std::move(section);
 }
 
 void EditorSurface::openSceneSaveDialog()

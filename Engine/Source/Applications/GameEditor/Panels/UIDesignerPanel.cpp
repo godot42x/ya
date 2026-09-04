@@ -27,7 +27,6 @@ std::string shortTypeName(const std::string& typeId)
     return dot == std::string::npos ? typeId : typeId.substr(dot + 1);
 }
 
-/// Find the strong reference to `widget` inside its parent's children.
 UIElementRef refOf(UIElement* widget)
 {
     if (!widget || !widget->getParent()) {
@@ -260,6 +259,34 @@ void UIDesignerPanel::applyWidgetDrop(UIElement* dragged, UIElement& target, EDr
     // The document must follow the preview, and the hierarchy must follow
     // the document (UMG-style live editing).
     syncPreviewToDocument();
+}
+
+std::string UIDesignerPanel::paletteDisplayName(const std::string& typeId)
+{
+    return shortTypeName(typeId);
+}
+
+bool UIDesignerPanel::addPaletteWidget(const std::string& typeId)
+{
+    if (!_previewTree || !_previewRoot) {
+        newDocument(typeId);
+        return hasDocument();
+    }
+
+    UIElementRef widget = UITypeRegistry::instance().createInstance(typeId);
+    if (!widget) {
+        return false;
+    }
+    widget->_name = shortTypeName(typeId);
+
+    UIElement* parent = (_selected && _selected->isAttached()) ? _selected : _previewRoot.get();
+    if (!parent) {
+        return false;
+    }
+    _previewTree->attach(*parent, widget);
+    _selected = widget.get();
+    syncPreviewToDocument();
+    return true;
 }
 
 void UIDesignerPanel::invalidatePreview()

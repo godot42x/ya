@@ -1,6 +1,6 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-04 (after Phase 8U)  
+> **As of:** 2026-09-04 (after Phase 8T)  
 > **Default chrome:** `editor.chrome.host = widgettree`  
 > **Legacy chrome:** `--editor-chrome=imgui` still runs `EditorLayer::onImGuiRender()`  
 > **Purpose:** Gate deletions — do **not** remove ImGui / `imgui-local` until a row is ✅ for widgettree default path.
@@ -132,12 +132,12 @@
 
 | Feature | Legacy ImGui | WidgetTree | Status | Notes |
 |---------|--------------|------------|--------|-------|
-| Panel render | `UIDesignerPanel::onImGuiRender` | Retained tab shell (New/Save/Close, status, tree) | ⚫ / 🟡 | 8G; draw helpers deleted 8P |
+| Panel render | `UIDesignerPanel::onImGuiRender` | Retained tab: palette + tree + inspector | ⚫ / 🟡 | 8G shell; 8T palette/inspector |
 | Document open/save | Data layer | Same `UIDesignerPanel` APIs | ✅ | |
-| Widget palette | `drawPalette` (⚫) | — | 🔴 | |
-| Widget tree authoring | `drawWidgetTree` (⚫) | Read-only `UITreeView` of preview | 🟡 | No retained add/remove/reparent UI |
-| Field inspector | `drawInspector` + `TypeRenderer` (⚫) | — | 🔴 | |
-| Preview canvas / pick / drop | Data layer (`pickAt`, `applyWidgetDrop`) | Not wired to retained viewport canvas | 🔴 | APIs exist; UI missing |
+| Widget palette | `drawPalette` (⚫) | `UITypeRegistry` button list + `addPaletteWidget` | ✅ | Phase 8T |
+| Widget tree authoring | `drawWidgetTree` (⚫) | `UITreeView` + canvas pick sync | 🟡 | DnD reorder UI still missing |
+| Field inspector | `drawInspector` + `TypeRenderer` (⚫) | `PropertyGraph` + `EditorAutoPropertySection` | ✅ | Phase 8T |
+| Preview canvas / pick / drop | Data layer (`pickAt`, `applyWidgetDrop`) | 2D viewport mode + `EditorModule` compose | 🟡 | Canvas overlay works in 2D mode; tree DnD not retained |
 | Delete widget | Keyboard in 2D canvas mode | `UIDesignerPanel::deleteWidget` via `onEvent` | 🟡 | Works in 2D mode only |
 
 ### GUI Workbench
@@ -203,8 +203,8 @@
 1. ~~Viewport context menu (create / duplicate / delete entities)~~ ✅ Phase 8R  
 2. ~~Editor Settings (or move settings into retained UI)~~ ✅ Phase 8U  
 3. Debug images window (or drop scope)  
-4. UI Designer palette + inspector + preview canvas  
-5. Remaining `FilePicker` modes (or route all to retained popups)  
+4. ~~UI Designer palette + inspector~~ ✅ Phase 8T（tree DnD 仍 🟡）  
+5. ~~Remaining `FilePicker` modes~~ ✅ Phase 8S  
 6. Floating dock persistence (if tear-off is enabled later)
 
 ---
@@ -213,10 +213,9 @@
 
 1. ~~**8R** — Viewport authoring parity: retained context menu + Delete/Duplicate actions (`ActionMap`)~~  
 2. **8S** — ~~Generalize retained file picker~~ ✅  
-3. **8T** — UI Designer: palette + inspector on `PropertyGraph` / widget bindings + 2D canvas host  
-4. **8U** — ~~Editor Settings retained panel~~ ✅  
-5. **8V** — Debug window: retained panel or descope  
-6. **8W** — Remove `onImGuiRender` shell + `imgui-local` after matrix rows ✅  
+3. **8T** — ~~UI Designer palette + inspector~~ ✅  
+4. **8V** — Debug window: retained panel or descope  
+5. **8W** — Remove `onImGuiRender` shell + `imgui-local` after matrix rows ✅  
 
 ---
 

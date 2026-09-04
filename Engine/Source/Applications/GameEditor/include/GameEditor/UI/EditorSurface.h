@@ -15,6 +15,7 @@
 #include "GameEditor/UI/EditorFilePicker.h"
 #include "GameEditor/UI/EditorTabRegistry.h"
 #include "GameEditor/UI/EditorInspectorTab.h"
+#include "GameEditor/UI/EditorAutoPropertySection.h"
 #include "GameEditor/UI/EditorViewportHost.h"
 
 #include <functional>
@@ -106,6 +107,11 @@ struct EditorSurface
     std::shared_ptr<Reactive<std::string>> _uiDesignerSelection;
     std::shared_ptr<UITreeView> _uiDesignerTree;
     std::string _uiDesignerTreeFingerprint;
+    std::shared_ptr<UIContainer> _uiDesignerPaletteList;
+    std::shared_ptr<UIContainer> _uiDesignerInspectorHost;
+    std::shared_ptr<EditorAutoPropertySection> _uiDesignerInspectorSection;
+    std::string _uiDesignerInspectorFingerprint;
+    std::string _uiDesignerSelectionFingerprint;
     std::shared_ptr<UIText> _runtimeToolsStatusText;
     std::shared_ptr<UIText> _runtimeToolsFrameText;
     std::shared_ptr<UIButton> _runtimeToolsPlayButton;
@@ -251,6 +257,7 @@ struct EditorSurface
     void confirmAssetPickerDialog();
     void clearEditorSettingsDialog();
     void syncEditorSettingsDialog();
+    void rebuildUIDesignerInspector(EditorLayer& layer, WidgetTree& tree, UIElement* selected);
     void publishViewportRect();
     void syncViewportHostState(App& app);
     void applyWindowMetrics(App& app);
