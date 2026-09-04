@@ -242,6 +242,7 @@ struct EditorSurface
     void applyDefaultEditorDockLayout();
     bool tryRestoreEditorDockLayout();
     void persistEditorDockLayout();
+    void openViewportContextMenu(const glm::vec2& windowPoint);
 };
 
 } // namespace ya

@@ -22,6 +22,7 @@
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/UI/EditorTheme.h"
 #include "GameEditor/UI/EditorTabRegistry.h"
+#include "GameEditor/Services/NodeCreateRegistry.h"
 #include "GameRuntime/App.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
@@ -211,6 +212,22 @@ DockPanelId dockPanelIdForKey(const FDockTreeModel& model, const char* stableKey
         return record->id;
     }
     return kInvalidDockPanelId;
+}
+
+std::vector<UIMenu::FItem> makePresetMenuItems(EditorLayer& layer, const std::string& category)
+{
+    std::vector<UIMenu::FItem> items;
+    for (const editor::NodeCreateEntry& entry : editor::NodeCreateRegistry::get().presets()) {
+        if (entry.category != category) {
+            continue;
+        }
+        const std::string presetName = entry.displayName;
+        items.push_back({
+            .label  = presetName,
+            .action = [&layer, presetName]() { layer.cmdCreateNodePreset(presetName); },
+        });
+    }
+    return items;
 }
 
 } // namespace
@@ -612,6 +629,24 @@ void EditorSurface::registerEditorActions()
         .canExecute = [this]() { return _undo->canRedo(); },
     });
     define({
+        .id         = "selection.duplicate",
+        .label      = "Duplicate",
+        .chord      = FActionChord::primary(EKey::K_D),
+        .execute    = [this]() { _layer->cmdDuplicateSelection(); },
+        .canExecute = [this]() {
+            return _layer && _layer->canViewportAuthor() && !_layer->getSelections().empty();
+        },
+    });
+    define({
+        .id         = "selection.delete",
+        .label      = "Delete",
+        .chord      = {.key = EKey::Delete},
+        .execute    = [this]() { _layer->cmdDeleteSelection(); },
+        .canExecute = [this]() {
+            return _layer && _layer->canViewportAuthor() && !_layer->getSelections().empty();
+        },
+    });
+    define({
         .id      = "app.exit",
         .label   = "Exit",
         .execute = []() {
@@ -697,6 +732,9 @@ void EditorSurface::buildEditorChrome(App& app)
         return UIMenu::create({
             UIMenu::FItem::fromAction(*_actions, "edit.undo"),
             UIMenu::FItem::fromAction(*_actions, "edit.redo"),
+            UIMenu::FItem::separator(),
+            UIMenu::FItem::fromAction(*_actions, "selection.duplicate"),
+            UIMenu::FItem::fromAction(*_actions, "selection.delete"),
         });
     });
     _menuBar->addItem("View", [this]() {
@@ -1037,6 +1075,54 @@ void EditorSurface::persistEditorDockLayout()
     ConfigManager::Editor("editor")
         .set("dockLayout", _dockWorkspace->dockModel().exportLayoutJson())
         .flush();
+}
+
+void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
+{
+    if (!_tree || !_layer || !_layer->canViewportAuthor()) {
+        return;
+    }
+
+    EditorLayer& layer = *_layer;
+    std::vector<UIMenu::FItem> items;
+    items.push_back({
+        .label  = "Create Empty Node",
+        .action = [&layer]() { layer.cmdCreateEmptyNode(); },
+    });
+    items.push_back({
+        .label          = "Create 3D Object",
+        .submenuFactory = [&layer]()
+        {
+            return UIMenu::create(makePresetMenuItems(layer, "3D Object"));
+        },
+    });
+
+    for (const editor::NodeCreateEntry& entry : editor::NodeCreateRegistry::get().presets()) {
+        if (entry.category != "Light") {
+            continue;
+        }
+        const std::string presetName = entry.displayName;
+        items.push_back({
+            .label  = std::format("Create {}", presetName),
+            .action = [&layer, presetName]() { layer.cmdCreateNodePreset(presetName); },
+        });
+    }
+
+    const bool hasSelection = !layer.getSelections().empty();
+    items.push_back(UIMenu::FItem::separator());
+    items.push_back({
+        .label    = "Duplicate Selected",
+        .action   = [&layer]() { layer.cmdDuplicateSelection(); },
+        .bEnabled = hasSelection,
+    });
+    items.push_back({
+        .label    = "Delete Selected",
+        .action   = [&layer]() { layer.cmdDeleteSelection(); },
+        .bEnabled = hasSelection,
+    });
+
+    auto menu = UIMenu::create(std::move(items));
+    menu->openAt(*_tree, windowPoint);
 }
 
 std::shared_ptr<UIElement> EditorSurface::buildContentBrowser()
@@ -2197,6 +2283,14 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
         const EWidgetRouteResult overlayResult = _viewportOverlayHost.dispatchEvent(event, localPoint);
         if (overlayResult != EWidgetRouteResult::NotHandled) {
             return overlayResult;
+        }
+        if (event.getEventType() == EEvent::MouseButtonPressed) {
+            const auto& mouseEvent = static_cast<const MouseButtonPressedEvent&>(event);
+            if (mouseEvent.GetMouseButton() == EMouse::Right && _layer && _layer->canViewportAuthor() &&
+                !_layer->isRightMouseDragging()) {
+                openViewportContextMenu(windowPoint);
+                return EWidgetRouteResult::HandledExclusive;
+            }
         }
     }
 

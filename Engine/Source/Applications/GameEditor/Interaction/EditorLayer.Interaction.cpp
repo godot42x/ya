@@ -296,6 +296,15 @@ void EditorLayer::onEvent(const Event& event)
             }
         }
 
+        if (canViewportAuthor()) {
+            if (keyEvent.getKeyCode() == EKey::Delete) {
+                cmdDeleteSelection();
+            }
+            else if (keyEvent.getKeyCode() == EKey::K_D &&
+                     (keyEvent.isCtrlPressed() || keyEvent.isMetaPressed())) {
+                cmdDuplicateSelection();
+            }
+        }
 
     } break;
 

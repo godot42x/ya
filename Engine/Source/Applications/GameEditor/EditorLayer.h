@@ -457,6 +457,11 @@ struct EditorLayer
     void cmdNewScene();
     void cmdSaveScene();
     void cmdSaveSceneAs();
+    [[nodiscard]] bool canViewportAuthor() const;
+    void cmdCreateEmptyNode();
+    void cmdCreateNodePreset(const std::string& presetDisplayName);
+    void cmdDuplicateSelection();
+    void cmdDeleteSelection();
     void setSaveSceneAsHandler(std::function<void()> handler) { _saveSceneAsHandler = std::move(handler); }
     void clearSaveSceneAsHandler() { _saveSceneAsHandler = nullptr; }
     void setAssetPickerHandler(EditorAssetPickerCallback handler) { _assetPickerHandler = std::move(handler); }

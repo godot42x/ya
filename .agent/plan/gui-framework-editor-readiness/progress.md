@@ -925,3 +925,15 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 
 - floating window geometry / 多 OS window coordinator 仍待后续 checkpoint；legacy ImGui chrome host 与 `FilePicker` 仍平行。
 - 下一步继续削减 imgui chrome shell 或推进 floating-window persistence。
+
+## Phase 8R 当前 checkpoint（2026-09-04）
+
+- `EditorLayer` 新增 viewport 创作命令：`canViewportAuthor`、`cmdCreateEmptyNode`、`cmdCreateNodePreset`（`NodeCreateRegistry`）、`cmdDuplicateSelection`、`cmdDeleteSelection`。
+- ImGui viewport 右键菜单改为调用上述命令（去除重复实现）。
+- widgettree：`EditorSurface::openViewportContextMenu` 在 viewport 右键打开 retained `UIMenu`（3D presets 来自 registry）；Edit 菜单与 `ActionMap` 增加 Duplicate/Delete；`onEvent` 支持 Delete 与 Ctrl/Cmd+D。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（381/381）；widgettree editor smoke 退出码 0。
+
+### Phase 8R 边界
+
+- Hierarchy 面板本身仍无 create/delete 树 UI；创作入口在 viewport 菜单/快捷键。
+- legacy ImGui chrome host、Editor Settings、Debug window、`FilePicker` 其余模式仍平行；见 `imgui-widgettree-parity.md`。

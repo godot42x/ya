@@ -174,151 +174,55 @@ void EditorLayer::viewportWindow()
 
     // Viewport context menu - right-click on blank space
     // Only show if not dragging camera (right mouse drag)
-    if (_app && _app->isStopped() && !_bRightMouseDragging)
+    if (_app && canViewportAuthor() && !_bRightMouseDragging)
     {
         ContextMenu ctx("ViewportContextMenu", ContextMenu::Type::BlankSpace);
         if (ctx.begin())
         {
             if (ctx.menuItem("Create Empty Node"))
             {
-                if (auto scene = getEditableScene())
-                {
-                    Node* newNode = scene->createNode3D("New Node");
-                    if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
-                        setSelectedEntity(node3D->getEntity());
-                    }
-                }
+                cmdCreateEmptyNode();
             }
 
             if (ctx.beginMenu("Create 3D Object"))
             {
-                if (ctx.menuItem("Cube"))
-                {
-                    if (auto scene = getEditableScene())
-                    {
-                        Node* newNode = scene->createNode3D("Cube");
-                        if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
-                            Entity* newEntity = node3D->getEntity();
-                            auto    mc        = newEntity->addComponent<StaticMeshComponent>();
-                            mc->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
-                            newEntity->addComponent<PhongMaterialComponent>();
-                            setSelectedEntity(newEntity);
-                        }
-                    }
+                if (ctx.menuItem("Cube")) {
+                    cmdCreateNodePreset("Cube");
                 }
-                if (ctx.menuItem("Sphere"))
-                {
-                    if (auto scene = getEditableScene())
-                    {
-                        Node* newNode = scene->createNode3D("Sphere");
-                        if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
-                            Entity* newEntity = node3D->getEntity();
-                            auto    mc        = newEntity->addComponent<StaticMeshComponent>();
-                            mc->setPrimitiveGeometry(EPrimitiveGeometry::Sphere);
-                            newEntity->addComponent<PhongMaterialComponent>();
-                            setSelectedEntity(newEntity);
-                        }
-                    }
+                if (ctx.menuItem("Sphere")) {
+                    cmdCreateNodePreset("Sphere");
                 }
-                if (ctx.menuItem("Plane"))
-                {
-                    if (auto scene = getEditableScene())
-                    {
-                        Node* newNode = scene->createNode3D("Plane");
-                        if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
-                            Entity* newEntity = node3D->getEntity();
-                            auto    mc        = newEntity->addComponent<StaticMeshComponent>();
-                            mc->setPrimitiveGeometry(EPrimitiveGeometry::Quad);
-                            newEntity->addComponent<PhongMaterialComponent>();
-                            setSelectedEntity(newEntity);
-                        }
-                    }
+                if (ctx.menuItem("Plane")) {
+                    cmdCreateNodePreset("Plane");
                 }
-                if (ctx.menuItem("Terrain"))
-                {
-                    if (auto scene = getEditableScene())
-                    {
-                        Node* newNode = scene->createNode3D("Terrain");
-                        if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
-                            Entity* newEntity = node3D->getEntity();
-                            newEntity->addComponent<TerrainComponent>();
-                            newEntity->addComponent<PhongMaterialComponent>();
-                            setSelectedEntity(newEntity);
-                        }
-                    }
+                if (ctx.menuItem("Terrain")) {
+                    cmdCreateNodePreset("Terrain");
                 }
                 ctx.endMenu();
             }
 
             if (ctx.menuItem("Create Point Light"))
             {
-                if (auto scene = getEditableScene())
-                {
-                    Node* newNode = scene->createNode3D("Point Light");
-                    if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
-                        Entity* newEntity = node3D->getEntity();
-                        newEntity->addComponent<PointLightComponent>();
-                        setSelectedEntity(newEntity);
-                    }
-                }
+                cmdCreateNodePreset("Point Light");
             }
 
             if (ctx.menuItem("Create Directional Light"))
             {
-                if (auto scene = getEditableScene())
-                {
-                    Node* newNode = scene->createNode3D("Directional Light");
-                    if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
-                        Entity* newEntity = node3D->getEntity();
-                        newEntity->addComponent<DirectionalLightComponent>();
-                        setSelectedEntity(newEntity);
-                    }
-                }
+                cmdCreateNodePreset("Directional Light");
             }
 
             ctx.separator();
 
-            // Duplicate / delete the whole selection (primary first).
             const auto& selections = getSelections();
             if (!selections.empty())
             {
                 if (ctx.menuItem("Duplicate Selected"))
                 {
-                    if (auto scene = getEditableScene())
-                    {
-                        std::vector<Entity*> duplicated;
-                        for (Entity* entity : selections) {
-                            if (!entity || !entity->isValid()) {
-                                continue;
-                            }
-                            Node* node = scene->getNodeByEntity(entity);
-                            if (!node) {
-                                continue;
-                            }
-                            if (auto newNode = scene->duplicateNode(node, node->getParent())) {
-                                if (auto* newEntity = newNode->getEntity()) {
-                                    duplicated.push_back(newEntity);
-                                }
-                            }
-                        }
-                        if (!duplicated.empty()) {
-                            YA_CORE_INFO("Duplicated {} entit{}", duplicated.size(), duplicated.size() > 1 ? "ies" : "y");
-                            facade().timerManager.delayCall(
-                                1,
-                                [this, duplicated]() {
-                                    _sceneHierarchyPanel.replaceSelection(duplicated, duplicated.front());
-                                });
-                        }
-                    }
+                    cmdDuplicateSelection();
                 }
                 if (ctx.menuItem("Delete Selected"))
                 {
-                    if (auto scene = getEditableScene())
-                    {
-                        // Deferred through the hierarchy panel so destruction
-                        // never happens while the tree is rendering.
-                        _sceneHierarchyPanel.deleteSelection();
-                    }
+                    cmdDeleteSelection();
                 }
             }
 
