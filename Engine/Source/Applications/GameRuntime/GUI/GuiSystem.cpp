@@ -57,7 +57,10 @@ class ImGuiBackendAdapter final : public IGuiBackend
 
     void setViewportRect(float x, float y, float width, float height) override
     {
-        ImGuiManager::get().setGizmoRect(x, y, width, height);
+        (void)x;
+        (void)y;
+        (void)width;
+        (void)height;
     }
 
     [[nodiscard]] GuiTextureHandle addTexture(IImageView* imageView,

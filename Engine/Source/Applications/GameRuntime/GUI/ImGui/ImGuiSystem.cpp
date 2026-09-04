@@ -210,8 +210,6 @@ void ImGuiManager::initImGuiCore()
     };
     addMergedFont(io, emojiFontCandidates, 16.0f, io->Fonts->GetGlyphRangesDefault(), true, "emoji");
 
-    ImGuizmo::SetImGuiContext(ImGui::GetCurrentContext());
-
     auto colors               = ImGui::GetStyle().Colors;
     colors[ImGuiCol_WindowBg] = ImVec4{0.1f, 0.105f, 0.11f, 1.0f};
     colors[ImGuiCol_Header] = ImVec4{0.2f, 0.205f, 0.21f, 1.0f};
@@ -281,7 +279,6 @@ void ImGuiManager::beginFrame()
     ImGui_ImplSDL3_NewFrame();
     ImGui_ImplVulkan_NewFrame();
     ImGui::NewFrame();
-    ImGuizmo::BeginFrame();
 }
 
 void ImGuiManager::endFrame()
@@ -314,11 +311,10 @@ EventProcessState ImGuiManager::processEvent(const Event& event)
 FGuiInputClaim ImGuiManager::describeInputClaim(const Event& event) const
 {
     const ImGuiIO& io = ImGui::GetIO();
-    const bool bGizmoPassiveHover = ImGuizmo::IsOver() && !ImGuizmo::IsUsingAny();
 
     FGuiInputClaim claim;
-    claim.pointer   = io.WantCaptureMouse && !bGizmoPassiveHover;
-    claim.keyboard  = io.WantCaptureKeyboard && !bGizmoPassiveHover;
+    claim.pointer   = io.WantCaptureMouse;
+    claim.keyboard  = io.WantCaptureKeyboard;
     claim.text      = io.WantTextInput && event.isInCategory(EEventCategory::Keyboard);
     claim.exclusive = claim.text || ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId);
     return claim;
@@ -402,11 +398,6 @@ ImGuiManager& ImGuiManager::get()
 {
     static ImGuiManager instance;
     return instance;
-}
-
-void ImGuiManager::setGizmoRect(float x, float y, float width, float height)
-{
-    ImGuizmo::SetRect(x, y, width, height);
 }
 
 bool ImGuiManager::onRenderGUI()

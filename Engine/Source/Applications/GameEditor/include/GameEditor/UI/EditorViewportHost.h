@@ -24,7 +24,7 @@ struct FEditorViewportHostState
 
 /// Retained viewport overlay contract. Implementations (gizmo, selection
 /// marquee, drag-drop preview) consume host state and may capture pointer input
-/// while active. Painting may remain ImGui-backed until a Render2D bridge lands.
+/// while active. Rendering is owned by the editor viewport compose path.
 struct IEditorViewportOverlay
 {
     virtual ~IEditorViewportOverlay() = default;

@@ -13,14 +13,13 @@ target("ya-game-editor")
         add_deps("ya-engine")
         add_links("ya-engine")
     end
-    -- imgui/imguizmo are now single shared libraries (global ImGui state);
-    -- the editor consumes the same images as host.
-    add_deps("imgui-local", "imguizmo-local")
+    -- imgui remains shared because editor-internal legacy helpers still consume
+    -- the same global context as the runtime host.
+    add_deps("imgui-local")
     add_includedirs("../../../ThirdParty/ImGui", { public = true })
     add_includedirs("../../../ThirdParty/ImGui/Backends", { public = true })
     add_includedirs("../../../ThirdParty/ImGui/misc/cpp", { public = true })
     add_includedirs("../../../ThirdParty/ImGui/misc/freetype", { public = true })
-    add_includedirs("../../../ThirdParty/ImGuizmo", { public = true })
     if is_plat("windows") then
         add_cxxflags("/bigobj")
         add_defines("IMGUI_API=__declspec(dllimport)")

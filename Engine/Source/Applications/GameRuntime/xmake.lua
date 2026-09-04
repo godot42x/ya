@@ -13,7 +13,7 @@ target("ya-game-runtime")
     -- App.h publicly exposes IModule (addModule), so the module-system target
     -- is a public dependency of the runtime shell.
     add_deps("ya-module-manager", { public = true })
-    add_deps("ya-render-3d", "imgui-local", "imguizmo-local", { public = true })
+    add_deps("ya-render-3d", "imgui-local", { public = true })
     -- Host drives GUI fonts directly; Game UI lives in the widgets module.
     add_deps("ya-render-resources", "ya-gui-widgets")
     -- Host binds the scene lifecycle sink and drives Scene/SceneManager from

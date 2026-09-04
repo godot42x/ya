@@ -1,6 +1,7 @@
 #include "GameEditor/EditorLayerInternal.h"
 #include "GameEditor/UI/EditorTransformUndo.h"
 
+#include "Core/Math/Ray.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
@@ -9,9 +10,15 @@
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Render.h"
+#include "Render2D/Render2D.h"
 
+#include <array>
 #include <cmath>
 #include <functional>
+#include <glm/gtx/matrix_decompose.hpp>
+#include <limits>
+#include <numbers>
+#include <optional>
 
 namespace ya
 {
@@ -22,6 +29,321 @@ void resetGizmoUndoSession(bool& active, std::vector<FEditorTransformSnapshot>& 
 {
     before.clear();
     active = false;
+}
+
+constexpr float kViewportGizmoAxisPixels      = 90.0f;
+constexpr float kViewportGizmoRingPixels      = 64.0f;
+constexpr float kViewportGizmoLineHitPixels   = 10.0f;
+constexpr float kViewportGizmoHandlePixels    = 9.0f;
+constexpr float kViewportGizmoScaleMinAbs     = 0.05f;
+constexpr float kViewportGizmoTranslateSnap   = 0.5f;
+constexpr float kViewportGizmoRotateSnapDeg   = 15.0f;
+constexpr float kViewportGizmoScaleSnap       = 0.1f;
+constexpr int   kViewportGizmoRingSegments    = 48;
+
+struct FGizmoAxisFrame
+{
+    EEditorViewportGizmoAxis axis = EEditorViewportGizmoAxis::None;
+    glm::vec3                worldDir{0.0f, 0.0f, 0.0f};
+    glm::vec3                worldEnd{0.0f, 0.0f, 0.0f};
+    glm::vec2                screenEnd{0.0f, 0.0f};
+    bool                     bProjected = false;
+};
+
+struct FViewportGizmoFrame
+{
+    Entity*    entity    = nullptr;
+    uint64_t   entityUuid = 0;
+    glm::vec3  originWorld{0.0f, 0.0f, 0.0f};
+    glm::quat  rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3  scale{1.0f, 1.0f, 1.0f};
+    glm::vec3  cameraWorld{0.0f, 0.0f, 0.0f};
+    glm::vec2  originScreen{0.0f, 0.0f};
+    float      axisLengthWorld = 1.0f;
+    float      ringRadiusWorld = 1.0f;
+    std::array<FGizmoAxisFrame, 3> axes{};
+};
+
+glm::vec3 gizmoAxisBasis(EEditorViewportGizmoAxis axis)
+{
+    switch (axis) {
+    case EEditorViewportGizmoAxis::X:
+        return {1.0f, 0.0f, 0.0f};
+    case EEditorViewportGizmoAxis::Y:
+        return {0.0f, 1.0f, 0.0f};
+    case EEditorViewportGizmoAxis::Z:
+        return {0.0f, 0.0f, 1.0f};
+    case EEditorViewportGizmoAxis::None:
+    default:
+        return {0.0f, 0.0f, 0.0f};
+    }
+}
+
+size_t gizmoAxisIndex(EEditorViewportGizmoAxis axis)
+{
+    switch (axis) {
+    case EEditorViewportGizmoAxis::X:
+        return 0;
+    case EEditorViewportGizmoAxis::Y:
+        return 1;
+    case EEditorViewportGizmoAxis::Z:
+        return 2;
+    case EEditorViewportGizmoAxis::None:
+    default:
+        return 0;
+    }
+}
+
+glm::vec4 gizmoAxisColor(EEditorViewportGizmoAxis axis, bool highlighted)
+{
+    const glm::vec4 tint = highlighted ? glm::vec4(1.0f, 0.95f, 0.72f, 1.0f) : glm::vec4(1.0f);
+    switch (axis) {
+    case EEditorViewportGizmoAxis::X:
+        return glm::vec4(0.96f, 0.24f, 0.24f, 1.0f) * tint;
+    case EEditorViewportGizmoAxis::Y:
+        return glm::vec4(0.25f, 0.88f, 0.34f, 1.0f) * tint;
+    case EEditorViewportGizmoAxis::Z:
+        return glm::vec4(0.28f, 0.58f, 1.0f, 1.0f) * tint;
+    case EEditorViewportGizmoAxis::None:
+    default:
+        return highlighted ? glm::vec4(1.0f, 0.95f, 0.72f, 1.0f) : glm::vec4(0.85f, 0.85f, 0.85f, 1.0f);
+    }
+}
+
+float snapScalar(float value, float step)
+{
+    if (step <= 0.0f) {
+        return value;
+    }
+    return std::round(value / step) * step;
+}
+
+float clampScaleValue(float value)
+{
+    if (value >= 0.0f) {
+        return std::max(value, kViewportGizmoScaleMinAbs);
+    }
+    return std::min(value, -kViewportGizmoScaleMinAbs);
+}
+
+bool decomposeTrs(const glm::mat4& world, glm::vec3& position, glm::quat& rotation, glm::vec3& scale)
+{
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    if (!glm::decompose(world, scale, rotation, position, skew, perspective)) {
+        return false;
+    }
+    rotation = glm::normalize(rotation);
+    return true;
+}
+
+glm::mat4 composeTrs(const glm::vec3& position, const glm::quat& rotation, const glm::vec3& scale)
+{
+    return glm::translate(glm::mat4(1.0f), position) *
+           glm::mat4_cast(rotation) *
+           glm::scale(glm::mat4(1.0f), scale);
+}
+
+bool projectWorldToViewport(const FEditorViewportHostState& host,
+                            const glm::vec3&               world,
+                            glm::vec2&                     outScreen)
+{
+    const glm::vec4 clip = host.projection * host.view * glm::vec4(world, 1.0f);
+    if (std::abs(clip.w) <= 1e-5f || clip.z <= -clip.w) {
+        return false;
+    }
+    const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+    outScreen.x = (ndc.x * 0.5f + 0.5f) * host.extent.x;
+    outScreen.y = (1.0f - (ndc.y * 0.5f + 0.5f)) * host.extent.y;
+    return std::isfinite(outScreen.x) && std::isfinite(outScreen.y);
+}
+
+float computeWorldUnitsPerPixel(const FEditorViewportHostState& host, const glm::vec3& world)
+{
+    const glm::vec3 viewSpace = glm::vec3(host.view * glm::vec4(world, 1.0f));
+    const float     depth     = std::max(std::abs(viewSpace.z), 0.05f);
+    const float     scaleY    = std::abs(host.projection[1][1]);
+    if (scaleY <= 1e-5f || host.extent.y <= 1.0f) {
+        return 0.01f;
+    }
+    return (2.0f * depth) / (scaleY * host.extent.y);
+}
+
+Ray makeViewportRay(const FEditorViewportHostState& host, const glm::vec2& localPoint)
+{
+    return Ray::fromScreen(localPoint.x,
+                           localPoint.y,
+                           std::max(host.extent.x, 1.0f),
+                           std::max(host.extent.y, 1.0f),
+                           host.view,
+                           host.projection);
+}
+
+std::optional<glm::vec3> intersectRayPlane(const Ray& ray,
+                                           const glm::vec3& planePoint,
+                                           const glm::vec3& planeNormal)
+{
+    const float denom = glm::dot(ray.direction, planeNormal);
+    if (std::abs(denom) <= 1e-5f) {
+        return std::nullopt;
+    }
+    const float t = glm::dot(planePoint - ray.origin, planeNormal) / denom;
+    if (t < 0.0f) {
+        return std::nullopt;
+    }
+    return ray.at(t);
+}
+
+glm::vec3 choosePerpendicular(const glm::vec3& normal)
+{
+    glm::vec3 axis = glm::cross(normal, glm::vec3(0.0f, 1.0f, 0.0f));
+    if (glm::dot(axis, axis) <= 1e-5f) {
+        axis = glm::cross(normal, glm::vec3(1.0f, 0.0f, 0.0f));
+    }
+    if (glm::dot(axis, axis) <= 1e-5f) {
+        axis = glm::vec3(1.0f, 0.0f, 0.0f);
+    }
+    return glm::normalize(axis);
+}
+
+glm::vec3 buildAxisDragPlaneNormal(const glm::vec3& axis, const glm::vec3& cameraToOrigin)
+{
+    const glm::vec3 tangent = glm::cross(cameraToOrigin, axis);
+    glm::vec3 planeNormal   = glm::cross(axis, tangent);
+    if (glm::dot(planeNormal, planeNormal) <= 1e-5f) {
+        planeNormal = choosePerpendicular(axis);
+    }
+    return glm::normalize(planeNormal);
+}
+
+float signedAngleAroundAxis(const glm::vec3& from,
+                            const glm::vec3& to,
+                            const glm::vec3& axis)
+{
+    const glm::vec3 crossValue = glm::cross(from, to);
+    return std::atan2(glm::dot(crossValue, axis), glm::dot(from, to));
+}
+
+float distanceSquaredToSegment(const glm::vec2& point,
+                               const glm::vec2& start,
+                               const glm::vec2& end,
+                               float*           outT = nullptr)
+{
+    const glm::vec2 segment  = end - start;
+    const float     lengthSq = glm::dot(segment, segment);
+    float           t        = 0.0f;
+    if (lengthSq > 1e-5f) {
+        t = glm::clamp(glm::dot(point - start, segment) / lengthSq, 0.0f, 1.0f);
+    }
+    if (outT) {
+        *outT = t;
+    }
+    const glm::vec2 projected = start + segment * t;
+    const glm::vec2 delta     = point - projected;
+    return glm::dot(delta, delta);
+}
+
+std::optional<FViewportGizmoFrame> buildViewportGizmoFrame(const EditorLayer&              layer,
+                                                           const FEditorViewportHostState& host,
+                                                           EEditorViewportGizmoMode        mode)
+{
+    Entity* selectedEntity = layer.getSelectedEntity();
+    if (!selectedEntity || !selectedEntity->isValid() ||
+        !selectedEntity->hasComponent<TransformComponent>()) {
+        return std::nullopt;
+    }
+
+    auto* transform = selectedEntity->getComponent<TransformComponent>();
+    auto* id        = selectedEntity->getComponent<IDComponent>();
+    if (!transform || !id) {
+        return std::nullopt;
+    }
+
+    FViewportGizmoFrame frame;
+    frame.entity      = selectedEntity;
+    frame.entityUuid  = id->_id.value;
+    const glm::mat4 world = transform->getTransform();
+    if (!decomposeTrs(world, frame.originWorld, frame.rotation, frame.scale)) {
+        return std::nullopt;
+    }
+    if (!projectWorldToViewport(host, frame.originWorld, frame.originScreen)) {
+        return std::nullopt;
+    }
+
+    frame.cameraWorld = glm::vec3(glm::inverse(host.view)[3]);
+    const float worldPerPixel = computeWorldUnitsPerPixel(host, frame.originWorld);
+    frame.axisLengthWorld = std::max(worldPerPixel * kViewportGizmoAxisPixels, 0.2f);
+    frame.ringRadiusWorld = std::max(worldPerPixel * kViewportGizmoRingPixels, 0.15f);
+
+    constexpr std::array<EEditorViewportGizmoAxis, 3> axes = {
+        EEditorViewportGizmoAxis::X,
+        EEditorViewportGizmoAxis::Y,
+        EEditorViewportGizmoAxis::Z,
+    };
+    for (size_t i = 0; i < axes.size(); ++i) {
+        FGizmoAxisFrame axisFrame;
+        axisFrame.axis = axes[i];
+        const glm::vec3 basis = gizmoAxisBasis(axisFrame.axis);
+        axisFrame.worldDir =
+            mode == EEditorViewportGizmoMode::Local ? glm::normalize(frame.rotation * basis) : basis;
+        axisFrame.worldEnd = frame.originWorld + axisFrame.worldDir * frame.axisLengthWorld;
+        axisFrame.bProjected = projectWorldToViewport(host, axisFrame.worldEnd, axisFrame.screenEnd);
+        frame.axes[i] = axisFrame;
+    }
+    return frame;
+}
+
+EEditorViewportGizmoAxis hitTestLinearAxis(const FViewportGizmoFrame& frame, const glm::vec2& point)
+{
+    EEditorViewportGizmoAxis bestAxis = EEditorViewportGizmoAxis::None;
+    float                    bestDistSq = kViewportGizmoLineHitPixels * kViewportGizmoLineHitPixels;
+    for (const auto& axis : frame.axes) {
+        if (!axis.bProjected) {
+            continue;
+        }
+        float t = 0.0f;
+        const float distSq = distanceSquaredToSegment(point, frame.originScreen, axis.screenEnd, &t);
+        if (t < 0.18f || t > 1.05f || distSq > bestDistSq) {
+            continue;
+        }
+        bestAxis   = axis.axis;
+        bestDistSq = distSq;
+    }
+    return bestAxis;
+}
+
+EEditorViewportGizmoAxis hitTestRotateAxis(const FEditorViewportHostState& host,
+                                           const FViewportGizmoFrame&      frame,
+                                           const glm::vec2&                point)
+{
+    const Ray ray = makeViewportRay(host, point);
+    EEditorViewportGizmoAxis bestAxis = EEditorViewportGizmoAxis::None;
+    float                    bestDistance = std::numeric_limits<float>::max();
+    for (const auto& axis : frame.axes) {
+        const auto hit = intersectRayPlane(ray, frame.originWorld, axis.worldDir);
+        if (!hit.has_value()) {
+            continue;
+        }
+        const float radiusError = std::abs(glm::length(*hit - frame.originWorld) - frame.ringRadiusWorld);
+        const float tolerance   = std::max(frame.ringRadiusWorld * 0.18f, frame.axisLengthWorld * 0.12f);
+        if (radiusError > tolerance || radiusError >= bestDistance) {
+            continue;
+        }
+        bestAxis     = axis.axis;
+        bestDistance = radiusError;
+    }
+    return bestAxis;
+}
+
+bool isViewportGizmoSnapEnabled(const App& app)
+{
+#if defined(__APPLE__)
+    return app.getInputManager().isKeyPressed(EKey::LMeta) ||
+           app.getInputManager().isKeyPressed(EKey::RMeta);
+#else
+    return app.getInputManager().isKeyPressed(EKey::LCtrl) ||
+           app.getInputManager().isKeyPressed(EKey::RCtrl);
+#endif
 }
 
 /// Pixel-accurate pick: read the entity id written by the viewport graph's
@@ -125,7 +447,7 @@ void EditorLayer::onEvent(const Event& event)
     case EEvent::MouseMoved:
     {
         // If right mouse is held and we moved significantly, mark as dragging
-        if (ImGui::IsMouseDown(ImGuiMouseButton_Right) && bViewportHovered) {
+        if (_app && _app->getInputManager().isMouseButtonDown(EMouse::Right) && bViewportHovered) {
             glm::vec2 currentPos = _app->getLastMousePos();
             float     dist       = glm::length(currentPos - _rightMousePressPos);
             if (dist > 3.0f) { // Threshold to distinguish click from drag
@@ -135,8 +457,9 @@ void EditorLayer::onEvent(const Event& event)
 
         // 2D canvas panning (right or middle drag).
         if (isViewportMode2D() && bViewportHovered) {
-            const bool bPanning = ImGui::IsMouseDown(ImGuiMouseButton_Right) ||
-                                  ImGui::IsMouseDown(ImGuiMouseButton_Middle);
+            const bool bPanning = _app &&
+                                  (_app->getInputManager().isMouseButtonDown(EMouse::Right) ||
+                                   _app->getInputManager().isMouseButtonDown(EMouse::Middle));
             if (bPanning) {
                 const glm::vec2 currentPos = _app->getLastMousePos();
                 if (_bCanvasPanning) {
@@ -153,9 +476,9 @@ void EditorLayer::onEvent(const Event& event)
         // 2D canvas widget manipulation: left-drag on the designer preview
         // (move or resize). Never fights the right/middle pan.
         if (isViewportMode2D() && bViewportHovered && _canvasPressHit &&
-            ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
-            !ImGui::IsMouseDown(ImGuiMouseButton_Right) &&
-            !ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
+            _app && _app->getInputManager().isMouseButtonDown(EMouse::Left) &&
+            !_app->getInputManager().isMouseButtonDown(EMouse::Right) &&
+            !_app->getInputManager().isMouseButtonDown(EMouse::Middle)) {
             updateCanvasDrag();
         }
     } break;
@@ -253,6 +576,10 @@ void EditorLayer::onEvent(const Event& event)
         auto& mouseEvent = static_cast<const MouseButtonReleasedEvent&>(event);
         // Only pick on left click and when gizmo is not being used
         if (mouseEvent.GetMouseButton() == EMouse::Left) {
+            if (_bViewportGizmoConsumeReleasePick) {
+                _bViewportGizmoConsumeReleasePick = false;
+                break;
+            }
             if (!isGizmoActive()) {
                 float localX{}, localY{};
                 auto  cursorPos = _app->getLastMousePos();
@@ -276,13 +603,13 @@ void EditorLayer::onEvent(const Event& event)
             // Handle viewport shortcuts (W/E/R for gizmo, Delete for selection, etc.)
             switch (keyEvent._keyCode) {
             case EKey::K_W:
-                _gizmoOperation = ImGuizmo::TRANSLATE;
+                setViewportGizmoOperation(EEditorViewportGizmoOperation::Translate);
                 break;
             case EKey::K_E:
-                _gizmoOperation = ImGuizmo::ROTATE;
+                setViewportGizmoOperation(EEditorViewportGizmoOperation::Rotate);
                 break;
             case EKey::K_R:
-                _gizmoOperation = ImGuizmo::SCALE;
+                setViewportGizmoOperation(EEditorViewportGizmoOperation::Scale);
                 break;
             default:
                 break;
@@ -315,169 +642,301 @@ void EditorLayer::onEvent(const Event& event)
 
 bool EditorLayer::isGizmoActive() const
 {
-    bool bUsing = ImGuizmo::IsUsing();
-    bool bOver  = ImGuizmo::IsOver();
-    return bUsing || bOver;
+    return _bViewportGizmoDragging || _bViewportGizmoHovered;
 }
 
-void EditorLayer::setViewportGizmoOperation(ImGuizmo::OPERATION operation)
+bool EditorLayer::hasViewportGizmoSelection() const
+{
+    if (!_bViewportGizmoHostValid || isViewportMode2D()) {
+        return false;
+    }
+    Entity* selectedEntity = getSelectedEntity();
+    return selectedEntity && selectedEntity->isValid() &&
+           selectedEntity->hasComponent<TransformComponent>() &&
+           selectedEntity->getComponent<IDComponent>() != nullptr;
+}
+
+void EditorLayer::syncViewportGizmoHost(const FEditorViewportHostState& host)
+{
+    _viewportGizmoHostState  = host;
+    _bViewportGizmoHostValid = host.extent.x > 0.0f && host.extent.y > 0.0f;
+    if (!_bViewportGizmoHostValid) {
+        cancelViewportGizmoDrag();
+        _bViewportGizmoHovered = false;
+        _gizmoHoveredAxis      = EEditorViewportGizmoAxis::None;
+        return;
+    }
+    if (!host.bHovered && !_bViewportGizmoDragging) {
+        _bViewportGizmoPointerInside = false;
+        _bViewportGizmoHovered       = false;
+        _gizmoHoveredAxis            = EEditorViewportGizmoAxis::None;
+    }
+}
+
+void EditorLayer::setViewportGizmoPointer(const glm::vec2& localPoint, bool insideViewport)
+{
+    _viewportGizmoPointerLocal  = localPoint;
+    _bViewportGizmoPointerInside = insideViewport;
+    if (_bViewportGizmoDragging) {
+        updateViewportGizmoDrag(localPoint);
+        return;
+    }
+    if (!insideViewport || !hasViewportGizmoSelection()) {
+        _bViewportGizmoHovered = false;
+        _gizmoHoveredAxis      = EEditorViewportGizmoAxis::None;
+        return;
+    }
+
+    const auto frame = buildViewportGizmoFrame(*this, _viewportGizmoHostState, _gizmoMode);
+    if (!frame.has_value()) {
+        _bViewportGizmoHovered = false;
+        _gizmoHoveredAxis      = EEditorViewportGizmoAxis::None;
+        return;
+    }
+
+    _gizmoHoveredAxis = _gizmoOperation == EEditorViewportGizmoOperation::Rotate
+                            ? hitTestRotateAxis(_viewportGizmoHostState, *frame, localPoint)
+                            : hitTestLinearAxis(*frame, localPoint);
+    _bViewportGizmoHovered = _gizmoHoveredAxis != EEditorViewportGizmoAxis::None;
+}
+
+bool EditorLayer::beginViewportGizmoDrag(const glm::vec2& localPoint)
+{
+    setViewportGizmoPointer(localPoint, true);
+    if (_bViewportGizmoDragging || !hasViewportGizmoSelection()) {
+        return false;
+    }
+
+    const auto frame = buildViewportGizmoFrame(*this, _viewportGizmoHostState, _gizmoMode);
+    if (!frame.has_value()) {
+        return false;
+    }
+
+    const EEditorViewportGizmoAxis axis =
+        _gizmoOperation == EEditorViewportGizmoOperation::Rotate
+            ? hitTestRotateAxis(_viewportGizmoHostState, *frame, localPoint)
+            : hitTestLinearAxis(*frame, localPoint);
+    if (axis == EEditorViewportGizmoAxis::None) {
+        return false;
+    }
+
+    const FGizmoAxisFrame& axisFrame = frame->axes[gizmoAxisIndex(axis)];
+    const Ray              ray       = makeViewportRay(_viewportGizmoHostState, localPoint);
+    const glm::vec3 cameraToOrigin = glm::normalize(frame->originWorld - frame->cameraWorld);
+
+    _gizmoActiveAxis             = axis;
+    _gizmoHoveredAxis            = axis;
+    _bViewportGizmoHovered       = true;
+    _bViewportGizmoDragging      = true;
+    _bViewportGizmoConsumeReleasePick = true;
+    _gizmoDragStartPrimaryWorld  = frame->entity->getComponent<TransformComponent>()->getTransform();
+    _gizmoDragAxisWorld          = axisFrame.worldDir;
+    _gizmoDragOriginWorld        = frame->originWorld;
+    _gizmoUndoBefore             = captureEditorTransformSelection(getSelections());
+
+    if (_gizmoOperation == EEditorViewportGizmoOperation::Rotate) {
+        _gizmoDragPlaneNormal = axisFrame.worldDir;
+        const auto hit = intersectRayPlane(ray, frame->originWorld, _gizmoDragPlaneNormal);
+        if (!hit.has_value()) {
+            cancelViewportGizmoDrag();
+            return false;
+        }
+        const glm::vec3 fromOrigin = *hit - frame->originWorld;
+        if (glm::dot(fromOrigin, fromOrigin) <= 1e-5f) {
+            cancelViewportGizmoDrag();
+            return false;
+        }
+        _gizmoDragStartPlaneVector = glm::normalize(fromOrigin);
+        _gizmoDragStartScalar      = 0.0f;
+        return true;
+    }
+
+    _gizmoDragPlaneNormal = buildAxisDragPlaneNormal(axisFrame.worldDir, cameraToOrigin);
+    const auto hit = intersectRayPlane(ray, frame->originWorld, _gizmoDragPlaneNormal);
+    if (!hit.has_value()) {
+        cancelViewportGizmoDrag();
+        return false;
+    }
+    _gizmoDragStartScalar = glm::dot(*hit - frame->originWorld, axisFrame.worldDir);
+    _gizmoDragStartPlaneVector = glm::vec3(0.0f);
+    return true;
+}
+
+void EditorLayer::updateViewportGizmoDrag(const glm::vec2& localPoint)
+{
+    if (!_bViewportGizmoDragging || !_app) {
+        return;
+    }
+
+    Entity* selectedEntity = getSelectedEntity();
+    if (!selectedEntity || !selectedEntity->isValid() || !selectedEntity->hasComponent<TransformComponent>()) {
+        cancelViewportGizmoDrag();
+        return;
+    }
+
+    glm::vec3 startPosition;
+    glm::quat startRotation;
+    glm::vec3 startScale;
+    if (!decomposeTrs(_gizmoDragStartPrimaryWorld, startPosition, startRotation, startScale)) {
+        cancelViewportGizmoDrag();
+        return;
+    }
+
+    const Ray ray = makeViewportRay(_viewportGizmoHostState, localPoint);
+    glm::mat4 newPrimaryWorld = _gizmoDragStartPrimaryWorld;
+
+    if (_gizmoOperation == EEditorViewportGizmoOperation::Rotate) {
+        const auto hit = intersectRayPlane(ray, _gizmoDragOriginWorld, _gizmoDragPlaneNormal);
+        if (!hit.has_value()) {
+            return;
+        }
+        glm::vec3 planeVector = *hit - _gizmoDragOriginWorld;
+        if (glm::dot(planeVector, planeVector) <= 1e-5f) {
+            return;
+        }
+        planeVector = glm::normalize(planeVector);
+        float angle = signedAngleAroundAxis(_gizmoDragStartPlaneVector, planeVector, _gizmoDragPlaneNormal);
+        if (isViewportGizmoSnapEnabled(*_app)) {
+            angle = glm::radians(snapScalar(glm::degrees(angle), kViewportGizmoRotateSnapDeg));
+        }
+        newPrimaryWorld = composeTrs(startPosition, glm::angleAxis(angle, _gizmoDragPlaneNormal) * startRotation, startScale);
+    }
+    else {
+        const auto hit = intersectRayPlane(ray, _gizmoDragOriginWorld, _gizmoDragPlaneNormal);
+        if (!hit.has_value()) {
+            return;
+        }
+        float delta = glm::dot(*hit - _gizmoDragOriginWorld, _gizmoDragAxisWorld) - _gizmoDragStartScalar;
+        if (_gizmoOperation == EEditorViewportGizmoOperation::Translate) {
+            if (isViewportGizmoSnapEnabled(*_app)) {
+                delta = snapScalar(delta, kViewportGizmoTranslateSnap);
+            }
+            newPrimaryWorld = composeTrs(startPosition + _gizmoDragAxisWorld * delta, startRotation, startScale);
+        }
+        else {
+            const float axisLengthWorld =
+                std::max(computeWorldUnitsPerPixel(_viewportGizmoHostState, _gizmoDragOriginWorld) *
+                             kViewportGizmoAxisPixels,
+                         0.2f);
+            float scaleDelta = delta / axisLengthWorld;
+            if (isViewportGizmoSnapEnabled(*_app)) {
+                scaleDelta = snapScalar(scaleDelta, kViewportGizmoScaleSnap);
+            }
+            glm::vec3 newScale = startScale;
+            const size_t axisIndex = gizmoAxisIndex(_gizmoActiveAxis);
+            newScale[axisIndex] = clampScaleValue(startScale[axisIndex] + scaleDelta);
+            newPrimaryWorld = composeTrs(startPosition, startRotation, newScale);
+        }
+    }
+
+    auto* primaryTransform = selectedEntity->getComponent<TransformComponent>();
+    TransformSystem::setWorldTransform(primaryTransform, newPrimaryWorld);
+
+    Scene* scene = getViewportInteractionScene();
+    if (scene && _gizmoUndoBefore.size() > 1) {
+        const glm::mat4 deltaWorld = newPrimaryWorld * glm::inverse(_gizmoDragStartPrimaryWorld);
+        const uint64_t primaryUuid = _gizmoUndoBefore.empty() ? 0 : _gizmoUndoBefore.front().entityUUID;
+        for (const auto& snapshot : _gizmoUndoBefore) {
+            if (snapshot.entityUUID == primaryUuid) {
+                continue;
+            }
+            Entity* other = scene->getEntityByUUID(snapshot.entityUUID);
+            if (!other || !other->isValid() || !other->hasComponent<TransformComponent>()) {
+                continue;
+            }
+            TransformSystem::setWorldTransform(other->getComponent<TransformComponent>(), deltaWorld * snapshot.world);
+        }
+    }
+}
+
+void EditorLayer::endViewportGizmoDrag()
+{
+    if (!_bViewportGizmoDragging) {
+        return;
+    }
+    Scene* scene = getViewportInteractionScene();
+    std::vector<FEditorTransformSnapshot> after = captureEditorTransformSelection(getSelections());
+    if (_gizmoUndo && scene && after.size() == _gizmoUndoBefore.size()) {
+        (void)pushEditorTransformUndo(*_gizmoUndo, scene, _gizmoUndoBefore, std::move(after));
+    }
+    _bViewportGizmoDragging = false;
+    _gizmoActiveAxis        = EEditorViewportGizmoAxis::None;
+    _bViewportGizmoConsumeReleasePick = true;
+    _gizmoUndoBefore.clear();
+    setViewportGizmoPointer(_viewportGizmoPointerLocal, _bViewportGizmoPointerInside);
+}
+
+void EditorLayer::cancelViewportGizmoDrag()
+{
+    _bViewportGizmoDragging = false;
+    _bViewportGizmoHovered  = false;
+    _gizmoActiveAxis        = EEditorViewportGizmoAxis::None;
+    _gizmoHoveredAxis       = EEditorViewportGizmoAxis::None;
+    _bViewportGizmoConsumeReleasePick = false;
+    _gizmoUndoBefore.clear();
+}
+
+void EditorLayer::setViewportGizmoOperation(EEditorViewportGizmoOperation operation)
 {
     _gizmoOperation = operation;
+    if (_bViewportGizmoPointerInside && !_bViewportGizmoDragging) {
+        setViewportGizmoPointer(_viewportGizmoPointerLocal, true);
+    }
 }
 
-void EditorLayer::renderViewportGizmoOverlay()
-{
-    renderGizmo();
-}
-
-void EditorLayer::renderGizmo()
+void EditorLayer::recordViewportGizmoOverlay() const
 {
     YA_PROFILE_FUNCTION();
-    // Primary selection drives the gizmo; other selected entities follow the
-    // same world delta (see the manipulation block below).
-    Entity* selectedEntity = getSelectedEntity();
-
-    // CRITICAL: Do NOT call selectedEntity->isValid() before null check!
-    // The entity pointer may point to destroyed memory after scene switch.
-    // The scene switch handler should have cleared selection, but double-check here.
-    if (!selectedEntity) {
-        resetGizmoUndoSession(_bGizmoUndoSession, _gizmoUndoBefore);
-        ImGuizmo::Enable(false);
-        return; // No entity selected
-    }
-
-    // Now safe to call member functions - verify entity is still valid
-    if (!selectedEntity->isValid()) {
-        resetGizmoUndoSession(_bGizmoUndoSession, _gizmoUndoBefore);
-        YA_CORE_WARN("Selected entity is invalid after scene switch, clearing selection");
-        _sceneHierarchyPanel.setSelection(nullptr);
-        ImGuizmo::Enable(false);
+    if (!hasViewportGizmoSelection()) {
         return;
     }
 
-    ImGuizmo::Enable(true);
-
-    // Get transform component
-    if (!selectedEntity->hasComponent<TransformComponent>()) {
-        resetGizmoUndoSession(_bGizmoUndoSession, _gizmoUndoBefore);
-        return;
-    }
-    auto* tc = selectedEntity->getComponent<TransformComponent>();
-    if (!tc) {
-        return; // No transform component
-    }
-
-    // Get camera view and projection matrices
-    auto* app = App::get();
-    if (!app) {
-        resetGizmoUndoSession(_bGizmoUndoSession, _gizmoUndoBefore);
+    const auto frame = buildViewportGizmoFrame(*this, _viewportGizmoHostState, _gizmoMode);
+    if (!frame.has_value()) {
         return;
     }
 
-    const auto& frameState = app->getRenderServices().getRenderFrameState();
-    glm::mat4   view       = frameState.view;
-    glm::mat4   proj       = frameState.projection;
+    const EEditorViewportGizmoAxis highlightedAxis =
+        _bViewportGizmoDragging ? _gizmoActiveAxis : _gizmoHoveredAxis;
+    auto* white = TextureLibrary::get().getWhiteTexture().get();
 
-    // Setup ImGuizmo context
-    ImGuizmo::SetOrthographic(false);
-    ImGuizmo::SetDrawlist();
-
-    // Set gizmo rect to match viewport bounds
-    ImGuizmo::SetRect(_viewportBounds[0].x,
-                      _viewportBounds[0].y,
-                      _viewportSize.x,
-                      _viewportSize.y);
-    // Get parent world matrix for hierarchy transform calculations
-
-    // Use WORLD matrix for gizmo display (so gizmo appears at actual world position)
-    glm::mat4 worldTransform          = tc->getTransform();
-    const glm::mat4 originalWorldTransform = worldTransform;
-    const bool wasUsing = ImGuizmo::IsUsing();
-
-    // Snap settings (can be toggled with Ctrl key)
-    float snap[3] = {0.0f, 0.0f, 0.0f};     // No snap by default
-    bool  useSnap = ImGui::GetIO().KeyCtrl; // Hold Ctrl to enable snap
-
-    if (useSnap) {
-        // Snap values for different operations
-        switch (_gizmoOperation) {
-        case ImGuizmo::TRANSLATE:
-            snap[0] = snap[1] = snap[2] = 0.5f; // 0.5 unit snap for translation
-            break;
-        case ImGuizmo::ROTATE:
-            snap[0] = snap[1] = snap[2] = 15.0f; // 15 degree snap for rotation
-            break;
-        case ImGuizmo::SCALE:
-            snap[0] = snap[1] = snap[2] = 0.1f; // 0.1 snap for scale
-            break;
-        default:
-            break;
-        }
-    }
-
-    // Manipulate transform with gizmo (using world matrix)
-    if (ImGuizmo::Manipulate(
-            glm::value_ptr(view),
-            glm::value_ptr(proj),
-            _gizmoOperation,
-            _gizmoMode,
-            glm::value_ptr(worldTransform),
-            nullptr,
-            useSnap ? snap : nullptr))
-    {
-        if (!wasUsing && !_bGizmoUndoSession && _gizmoUndo) {
-            _gizmoUndoBefore = captureEditorTransformSelection(getSelections());
-            _bGizmoUndoSession = !_gizmoUndoBefore.empty();
-        }
-
-        // Gizmo was used - worldTransform now contains the NEW world matrix after manipulation
-        // Use TransformSystem to update transform (ensures proper computation and propagation)
-        TransformSystem::setWorldTransform(tc, worldTransform);
-
-        // Apply the same world-space delta to every other selected entity so
-        // translation moves them together and rotation/scale pivot on the
-        // primary entity.
-        const auto& selections = getSelections();
-        if (selections.size() > 1) {
-            const glm::mat4 delta = worldTransform * glm::inverse(originalWorldTransform);
-            for (Entity* other : selections) {
-                if (!other || other == selectedEntity || !other->isValid()) {
-                    continue;
-                }
-                if (!other->hasComponent<TransformComponent>()) {
-                    continue;
-                }
-                auto* otherTc = other->getComponent<TransformComponent>();
-                const glm::mat4 otherWorld = delta * otherTc->getTransform();
-                TransformSystem::setWorldTransform(otherTc, otherWorld);
+    if (_gizmoOperation == EEditorViewportGizmoOperation::Rotate) {
+        for (const auto& axis : frame->axes) {
+            const bool highlighted = axis.axis == highlightedAxis;
+            const glm::vec4 color  = gizmoAxisColor(axis.axis, highlighted);
+            const glm::vec3 tangent0 = choosePerpendicular(axis.worldDir);
+            const glm::vec3 tangent1 = glm::normalize(glm::cross(axis.worldDir, tangent0));
+            glm::vec3 prev = frame->originWorld + tangent0 * frame->ringRadiusWorld;
+            for (int segment = 1; segment <= kViewportGizmoRingSegments; ++segment) {
+                const float angle = (2.0f * std::numbers::pi_v<float>) * static_cast<float>(segment) /
+                                    static_cast<float>(kViewportGizmoRingSegments);
+                const glm::vec3 next =
+                    frame->originWorld +
+                    (tangent0 * std::cos(angle) + tangent1 * std::sin(angle)) * frame->ringRadiusWorld;
+                Render2D::makeWorldLine(prev, next, color);
+                prev = next;
             }
         }
-
-        // Decompose LOCAL matrix back to position/rotation/scale
-        // glm::vec3 position, rotation, scale;
-        // ImGuizmo::DecomposeMatrixToComponents(
-        //     glm::value_ptr(newLocalMatrix),
-        //     glm::value_ptr(position),
-        //     glm::value_ptr(rotation),
-        //     glm::value_ptr(scale));
-
-        // // Update transform component with LOCAL values
-        // // Use setters to properly propagate dirty flags to children
-        // tc->_position   = position;
-        // tc->_rotation   = rotation;
-        // tc->_scale      = scale;
-        // tc->_localDirty = true;
-        // tc->markWorldDirty();
-
-        // YA_CORE_TRACE("Gizmo manipulated: local pos({}, {}, {})", position.x, position.y, position.z);
+        return;
     }
-    if (_bGizmoUndoSession && wasUsing && !ImGuizmo::IsUsing()) {
-        Scene* scene = getViewportInteractionScene();
-        std::vector<FEditorTransformSnapshot> after = captureEditorTransformSelection(getSelections());
-        if (_gizmoUndo && scene && after.size() == _gizmoUndoBefore.size()) {
-            (void)pushEditorTransformUndo(*_gizmoUndo, scene, _gizmoUndoBefore, std::move(after));
+
+    if (!white) {
+        return;
+    }
+
+    for (const auto& axis : frame->axes) {
+        if (!axis.bProjected) {
+            continue;
         }
-        resetGizmoUndoSession(_bGizmoUndoSession, _gizmoUndoBefore);
+        const bool highlighted = axis.axis == highlightedAxis;
+        const glm::vec4 color  = gizmoAxisColor(axis.axis, highlighted);
+        Render2D::makeWorldLine(frame->originWorld, axis.worldEnd, color);
+        Render2D::makeSprite(glm::vec3(axis.screenEnd.x - kViewportGizmoHandlePixels * 0.5f,
+                                       axis.screenEnd.y - kViewportGizmoHandlePixels * 0.5f,
+                                       0.0f),
+                             glm::vec2(kViewportGizmoHandlePixels, kViewportGizmoHandlePixels),
+                             white,
+                             color);
     }
 }
 
@@ -741,7 +1200,7 @@ void EditorLayer::focusCameraOnSelection()
     const glm::vec3 camPos = _camera.getPosition();
 
     glm::vec3 camToEntity = entityPos - camPos;
-    if (glm::length2(camToEntity) < 1e-6f) {
+    if (glm::dot(camToEntity, camToEntity) < 1e-6f) {
         // Camera sits exactly on the entity: keep the current view direction.
         camToEntity = -glm::vec3(_camera.getViewMatrix()[2]);
     }

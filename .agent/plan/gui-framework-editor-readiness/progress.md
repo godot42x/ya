@@ -1089,3 +1089,17 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - 没有宣称 ImGui/ImGuizmo 已移除。异常 Debug 窗来自 editor 帧仍 `GuiSystem::beginFrame` + `ImGuizmo::SetDrawlist()` 打到 `Debug##Default`。
 - Inspector 类型覆盖（10B）和自研 gizmo（10C）未做。
 
+## Phase 10C 当前 checkpoint（2026-09-04）
+
+- `EditorViewportGizmoOverlay` 不再同步 ImGui IO，也不再依赖 `ImGuizmo`；现在只负责 retained viewport host 的输入路由（hover/drag/W-E-R）。
+- `EditorLayer` 内建 native gizmo controller：屏幕命中测试 + 世界空间轴向平移/旋转/缩放 + stable UUID undo；多选仍以 primary entity 为 pivot，通过 world delta 同步到其他选中实体。
+- gizmo 绘制从 `EditorSurface::presentViewportGizmo` 搬到 `EditorModule` 的 viewport compose callback，走 `Render2D::makeWorldLine/makeSprite`，因此 editor presentation frame 不再 `GuiSystem::beginFrame/endFrame/submit`。
+- `Engine/Source/Applications/GameEditor` 与 `Engine/Source/Applications/GameRuntime` 源码内已无 `ImGuizmo` 引用；`ya-game-editor` / `ya-game-runtime` / `HelloMaterial` 的 **debug** 依赖文件不再链接 `imguizmo-local`。
+- 验证：`xmake b ya-game-editor`；`xmake b ya-game-runtime`；`xmake b ya-testing`；`xmake r ya-testing -- --gtest_filter='EditorViewportOverlayHostTest.*:EditorTransformUndoTest.*'`；`python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=60 --log-level=warn`。
+
+### Phase 10C 边界
+
+- `imgui-local` 仍因 `FilePicker` / `TypeRenderer` legacy helper 与 editor-internal texture bridge 保留；本 checkpoint 只完成 gizmo/viewport frame 对 `ImGuizmo` 的摘除。
+- native gizmo 当前只覆盖轴向 translate/rotate/scale；尚未补 plane handles、uniform scale、mode switch UI。
+- 下一步：Phase 10B inspector 类型覆盖，随后做 10E shell refactor + 第二轮 density/token 收口。
+

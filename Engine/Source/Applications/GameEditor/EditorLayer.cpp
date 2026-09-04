@@ -89,6 +89,7 @@ void EditorLayer::setViewportMode(EViewportMode mode, bool bPersist)
     }
 
     _viewportMode = mode;
+    cancelViewportGizmoDrag();
     _sceneHierarchyPanel.setContext(getSceneHierarchyContext());
 
     // Cancel any in-flight 2D canvas manipulation on mode switch.

@@ -3,7 +3,7 @@
 > **As of:** 2026-09-04 (after Phase 8W)  
 > **Default chrome:** WidgetTree only (`EditorSurface`)  
 > **Legacy chrome:** `--editor-chrome=imgui` is ignored (WARN); `onImGuiRender` deleted  
-> **Purpose:** Gate remaining `imgui-local` removal — ImGuizmo overlay still requires it.
+> **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, but legacy helpers still require it.
 
 ## How to read
 
@@ -37,10 +37,10 @@
 | Debug images window | `EditorLayer::debugWindow` | `EditorDebugImagesTab` dock tab | ⚫ / ✅ | ImGui window deleted 8W; cube-face button grid not retained |
 | Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | Retained popups on `EditorSurface` | ⚫ / ✅ | ImGui FilePicker modal chrome deleted 8W; `FilePicker` type remains for fallback APIs |
 | Viewport display | `viewportWindow` + `ImGui::Image` | `UIImage` samples offscreen compose | ⚫ / ✅ | `viewportWindow` deleted 8W |
-| Viewport input / pick / gizmo | `EditorLayer::onEvent` + ImGuizmo | Same `onEvent` + `EditorViewportGizmoOverlay` | 🟡 | Gizmo draw/IO still ImGuizmo; overlay contract retained |
+| Viewport input / pick / gizmo | `EditorLayer::onEvent` + ImGuizmo | Same `onEvent` + `EditorViewportGizmoOverlay` | ✅ | Native gizmo math + `Render2D` compose draw; overlay contract retained |
 | Viewport context menu | `viewportWindow` → `ContextMenu` (ImGui) | `EditorSurface::openViewportContextMenu` (`UIMenu`) | ✅ | Uses `NodeCreateRegistry` presets + `EditorLayer` cmds |
 | Viewport Delete / Duplicate | Context menu only (ImGui path) | `cmdDeleteSelection` / `cmdDuplicateSelection` + Delete / Ctrl+D | ✅ | Works on widgettree via `onEvent` + Edit menu actions |
-| ImGui texture bridge | `getOrCreateImGuiTextureID` | Not used by widgettree chrome | ➖ | Still needed for ImGuizmo overlay |
+| ImGui texture bridge | `getOrCreateImGuiTextureID` | Not used by widgettree chrome | ➖ | Still needed by legacy helper paths |
 
 ---
 
@@ -182,10 +182,10 @@
 
 | Dependency | Still required for | Safe to remove when |
 |------------|-------------------|---------------------|
-| `imgui-local` | ImGuizmo overlay, leftover FilePicker/TypeRenderer | Gizmo has retained draw path; FilePicker/TypeRenderer have no callers |
+| `imgui-local` | leftover FilePicker/TypeRenderer, editor-internal texture bridge | FilePicker/TypeRenderer have no callers |
 | `TypeRenderer` + `ContainerPropertyRenderer` | **Nothing** (no live caller) | After audit confirms no dynamic load; UI Designer retained inspector lands |
 | `FileExplorer::render` | **Nothing** (⚫) | Already removed from Content Browser path |
-| `ImGuiImageEntry` / texture bridge | ImGuizmo overlay | Gizmo has retained draw path |
+| `ImGuiImageEntry` / texture bridge | legacy helper paths | Helper callers are removed or migrated |
 
 ---
 
@@ -200,8 +200,7 @@
 
 **Critical remaining before removing `imgui-local`:**
 
-1. ImGuizmo overlay still uses `GuiSystem` / `imgui-local`  
-2. `FilePicker` / `TypeRenderer` still compile without a live widgettree chrome caller  
+1. `FilePicker` / `TypeRenderer` still compile without a live widgettree chrome caller  
 
 Hierarchy tree CRUD remains a retained-UI gap, not an ImGui chrome blocker.
 
@@ -213,7 +212,7 @@ Hierarchy tree CRUD remains a retained-UI gap, not an ImGui chrome blocker.
 2. **8S** — ~~Generalize retained file picker~~ ✅  
 3. **8T** — ~~UI Designer palette + inspector~~ ✅  
 4. ~~**8V** — Debug window: retained panel or descope~~ ✅  
-5. ~~**8W** — Remove `onImGuiRender` shell~~ ✅（`imgui-local` remains for ImGuizmo）  
+5. ~~**8W** — Remove `onImGuiRender` shell~~ ✅  
 6. ~~**9B** — Large hierarchy / content catalog / inspector snapshot baseline~~ ✅  
 7. ~~**9C** — Attach/detach + theme-switch soak~~ ✅  
 8. ~~**9D** — DPI / CJK / keyboard / IME / clipboard / text editing~~ ✅  

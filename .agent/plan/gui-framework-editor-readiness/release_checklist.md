@@ -16,10 +16,10 @@ Host for recorded Pass rows: macOS 15.5, Clang, Vulkan, Apple M5. Date: 2026-09-
 | XP-WIN | Windows/MSVC compile + same tests | No Windows host in this session; designated-initializer / `YA_*_API` rules in `.agent/skills/cross-platform/SKILL.md` are the compile contract, not a substitute for a green MSVC run | **Blocker** |
 | XP-OGL | OpenGL presentation | `GUIAppHost` asserts `VulkanSwapChain`; WidgetTree chrome compose is Vulkan-only. OpenGL 3D runtime is a separate matrix and was not run | **Blocker** |
 | SOAK-HR | Multi-hour process soak | 9C is structural cycle soak (64/32), not a long-lived editor process | **Blocker** (descoped to structural soak) |
-| IMGUI | `imgui-local` removed | ImGuizmo overlay still uses `GuiSystem`; FilePicker/TypeRenderer still compile | **Blocker** for “no ImGui in process”, not for WidgetTree-only chrome |
+| IMGUI | `imgui-local` removed | Native viewport gizmo no longer uses `GuiSystem` / `ImGuizmo`; `imgui-local` still remains for FilePicker/TypeRenderer legacy helpers | **Blocker** for “no ImGui in process”, not for WidgetTree-only chrome |
 
 ## Ready claim
 
-**Not ready.** WidgetTree is the only editor chrome host on the verified macOS/Vulkan path, but Windows/MSVC, OpenGL presentation, hour-scale soak, and ImGuizmo-without-ImGui remain open.
+**Not ready.** WidgetTree is the only editor chrome host on the verified macOS/Vulkan path, but Windows/MSVC, OpenGL presentation, hour-scale soak, and full `imgui-local` removal remain open.
 
 Do not advertise “retained editor ready” until XP-WIN is Pass and the remaining Blocker rows are either Pass or an explicit product descope recorded in `progress.md`.

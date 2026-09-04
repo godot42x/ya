@@ -395,6 +395,7 @@ class EditorViewportCompositor
                 },
             },
             [&]() {
+                layer.recordViewportGizmoOverlay();
                 // Camera overlay text on top of the composed viewport.
                 const auto texts = layer.buildViewportCameraOverlayTexts();
                 if (!texts.empty()) {
@@ -1036,7 +1037,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             .height = render->getSwapchainHeight(),
         };
         replayUIFrameSnapshot(&commandBuffer, snapshot, targetExtent, ERender2DComposePassKind::EditorToolSurface);
-        _editorSurface.presentViewportGizmo(commandBuffer);
     }
 };
 

@@ -210,7 +210,6 @@ do
         { public = true })
     add_deps("utility.cc", "log.cc", "reflects-core", { public = true })
     add_deps("imgui-local")
-    add_deps("imguizmo-local")
 
     if is_plat("windows") then
         add_defines("IMGUI_API=__declspec(dllexport)")

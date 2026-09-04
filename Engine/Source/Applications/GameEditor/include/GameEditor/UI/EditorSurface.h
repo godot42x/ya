@@ -218,8 +218,6 @@ struct EditorSurface
     [[nodiscard]] EditorViewportOverlayHost& viewportOverlayHost() { return _viewportOverlayHost; }
     [[nodiscard]] const EditorViewportOverlayHost& viewportOverlayHost() const { return _viewportOverlayHost; }
     [[nodiscard]] bool isViewportOverlayActive() const { return _viewportOverlayHost.isActive(); }
-    [[nodiscard]] bool shouldRenderViewportGizmo() const;
-    void presentViewportGizmo(ICommandBuffer& commandBuffer);
     void openSceneSaveDialog();
     void openFilePickerDialog(FEditorFilePickerRequest request);
     void openAssetPickerDialog(EEditorAssetPickerKind kind,

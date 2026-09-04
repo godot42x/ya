@@ -28,8 +28,6 @@
 #include <imgui_impl_sdlgpu3.h>
 #include <imgui_impl_vulkan.h>
 
-#include <ImGuizmo.h>
-
 namespace ya
 {
 
@@ -77,7 +75,6 @@ struct YA_GAME_RUNTIME_API ImGuiManager
 
     static void* addTexture(IImageView* imageView, Sampler* sampler, EImageLayout::T layout = EImageLayout::ShaderReadOnlyOptimal);
     static void  removeTexture(void* textureID);
-    static void  setGizmoRect(float x, float y, float width, float height);
 
     bool onRenderGUI();
 

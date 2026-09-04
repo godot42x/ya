@@ -27,7 +27,6 @@
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 
-#include <ImGuizmo.h>
 #include <filesystem>
 #include <format>
 #include <glm/gtc/quaternion.hpp>

@@ -168,8 +168,9 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 - 启动时 **WidgetTree 唯一 chrome**：整窗 `EditorSurface` + `replayUIFrameSnapshot`；3D 仍离屏
   compose，树只采样那张 RT。`--editor-chrome=imgui` / `editor.chrome.host=imgui` 会被忽略并打 WARN。
 - WidgetTree 输入：`EditorInputNode` → `WidgetTree::dispatchEvent`。
-- ImGuizmo overlay 仍经 `EditorSurface::presentViewportGizmo` 走 `GuiSystem` begin/render/submit；
-  `imgui-local` 因此仍是 editor 依赖，直到 gizmo 有 retained 绘制路径。
+- Viewport gizmo 已改为 retained host + native math controller：`EditorViewportGizmoOverlay`
+  只路由输入，`EditorLayer` 负责世界空间 translate/rotate/scale 与 undo，绘制在
+  `EditorModule` 的 viewport compose callback 中走 `Render2D`。
 - `onImGuiRender` 编辑器 chrome shell（menu/toolbar/dockspace/viewport/debug/settings/project browser）已删除。
 - Workbench 作为 WidgetTree dock panel 嵌入时用 `FWorkbenchSurface::buildUI(tree, parent)`，
   不要 `attachToLayer(Content)` 盖掉 editor root。Dock 只把**当前选中 tab** 的
@@ -180,7 +181,7 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   之前丢掉 tree、snapshot、viewport wrap；随后 `FontManager::clearCache()`，
   否则 RuntimeDefault atlas 会以 dedicated allocation 活过 allocator Destroy。
 - 原 ImGui editor chrome shell（`onImGuiRender` / menu / toolbar / dockspace / viewport window）已删除。
-  `imgui-local` 仍因 ImGuizmo overlay 与 `FilePicker`/`TypeRenderer` 残留而保留。
+  `imgui-local` 仍因 `FilePicker`/`TypeRenderer` 残留而保留。
   `IGuiBackend` 仍是 ImGui 形，不要强迫 EditorSurface 走它。
 - WidgetTree chrome 的 theme 走 `buildEditorTheme`（`GameEditor/UI/EditorTheme.h`），
   不要直接调 `buildWorkbenchTheme`。Chrome 文案用 `text.header` / `text.muted` /
@@ -191,7 +192,9 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 - `PropertyGraph::project` 是反射字段 → editor field model 的入口（`build` + `PropertyProjectionRegistry`）。Transform projection 负责显示名和 `setPosition/setRotation/setScale` 写回。Inspector 对多选的 **交集** component 物化 `EditorAutoPropertySection`；`UIDragFloat` mixed 显示 "—"，编辑写回全部 instance，undo 按 instance 快照恢复。enum 字段走 `UIComboBox`；`.color()` 元数据的 `glm::vec3`/`glm::vec4` 走 `UIColorEdit`（非 color vec3 仍走 DragFloat）。`TextureRef`/`ModelRef`/`MeshRef` 走 path `UITextField` + Browse；Browse 经 `EditorAssetPickerCallback`（widgettree：`EditorLayer::setAssetPickerHandler` → `EditorSurface::openAssetPickerDialog`；legacy imgui：`FilePicker`；`EditorInspectorTab` 注入，framework 不依赖 `EditorLayer`）。`PropertyHandle::validationError` 读 manipulate spec 范围；`hasAssetResolveError` 对 failed resolve 画 error fill；`UIDragFloat`/`UITextField` `setError` 画 error fill。`UIImage` 对缺失 asset / `setResourceMissing` 画 error fill。没有 retained 可编辑字段的类型跳过。ImGui `DetailsView` 实现已在 Phase 8N 删除；`EditorInspectorTab` 是实体/component 唯一正式 Inspector UI，并显示 Game UI Entry 摘要 + Open in UI Designer。
 - `EditorSurface` Content Browser：`FileExplorer` 管 mount/目录/搜索枚举；`UIKeyedChildReconciler` + `EditorListRows.h` 物化 mount/entry 行；entry 列表用 `computeKeyedVisibleWindow` 窗口化。fingerprint 含 search + selected path；`selectContentItem` 写 `setSelectedPath` 并对纹理调 `inspectAsset`。ImGui `ContentBrowserPanel` 已删（Phase 8A）；`ContentBrowserPanel` 仅保留 FilePicker 图标加载。
 - `UITreeView` 在 `UIScrollViewport` 内只 paint 可见行窗口（`computeKeyedVisibleWindow` + `getPaintedRowCount`）；`EditorSurface` Hierarchy 用 scroll 包裹。flatten/hit-test 仍读全量可见行；无 per-row widget。`bindFilter` + `HierarchyFilter` 搜索框过滤节点；`setReorderable` + `moveEditorHierarchyEntity` 支持 scene 实体拖放重排（`ui:` 条目仍不可重排）。ImGui `SceneHierarchyPanel::sceneTree` 已删（Phase 8O）；`SceneHierarchyPanel` 仅保留 viewport 选择总线 API。
-- Viewport overlay：`FEditorViewportHostState` / `IEditorViewportOverlay` / `EditorViewportOverlayHost`；`EditorSurface::syncViewportHostState` + hover 时 overlay dispatch。ImGuizmo 仍经 `presentViewportGizmo` 绘制。
+- Viewport overlay：`FEditorViewportHostState` / `IEditorViewportOverlay` / `EditorViewportOverlayHost`；
+  `EditorSurface::syncViewportHostState` + hover/focus overlay dispatch；gizmo 绘制不再经
+  `GuiSystem`，而是在 viewport compose 中直接发 `Render2D` world-line/screen-handle。
 
 ## Style / Theme
 

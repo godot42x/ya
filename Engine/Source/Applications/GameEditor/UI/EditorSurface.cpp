@@ -58,7 +58,6 @@
 #include "RHI/Core/Texture.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Swapchain.h"
-#include "GameRuntime/GUI/GuiSystem.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Render.h"
 #include "Render/Resources/FontManager.h"
@@ -2696,25 +2695,6 @@ bool EditorSurface::wantsTextInput() const
     UIElement* focused = _tree->getFocused();
     return dynamic_cast<UITextField*>(focused) != nullptr ||
            (_inspectorTab && _inspectorTab->wantsTextInput(*_tree));
-}
-
-bool EditorSurface::shouldRenderViewportGizmo() const
-{
-    return _layer && _layer->isProjectLoaded() && !_layer->isViewportMode2D();
-}
-
-void EditorSurface::presentViewportGizmo(ICommandBuffer& commandBuffer)
-{
-    if (!shouldRenderViewportGizmo() || !_viewportGizmoOverlay || !_layer) {
-        return;
-    }
-
-    GuiSystem::get().beginFrame();
-    _viewportGizmoOverlay->syncImGuiIO();
-    _layer->renderViewportGizmoOverlay();
-    GuiSystem::get().endFrame();
-    (void)GuiSystem::get().render();
-    GuiSystem::get().submit(commandBuffer);
 }
 
 } // namespace ya

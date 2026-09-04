@@ -9,9 +9,9 @@ namespace ya
 
 struct EditorLayer;
 
-/// Retained viewport overlay that routes pointer/keyboard input to ImGuizmo and
-/// exposes active/capture state to EditorSurface. Painting is submitted by
-/// EditorSurface::presentViewportGizmo after the WidgetTree chrome replay.
+/// Retained viewport overlay that routes pointer/keyboard input to the native
+/// editor gizmo controller. Rendering is recorded into the viewport compose
+/// pass by `EditorLayer::recordViewportGizmoOverlay()`.
 class EditorViewportGizmoOverlay final : public IEditorViewportOverlay
 {
   public:
@@ -25,13 +25,9 @@ class EditorViewportGizmoOverlay final : public IEditorViewportOverlay
     [[nodiscard]] bool wantsPointerCapture() const override;
     [[nodiscard]] bool isActive() const override;
 
-    void syncImGuiIO() const;
-
   private:
     EditorLayer*             _layer = nullptr;
     FEditorViewportHostState _host{};
-    glm::vec2                _windowMousePos{0.0f};
-    bool                     _bMouseDown[3] = {false, false, false};
 };
 
 } // namespace ya

@@ -10,7 +10,7 @@ namespace ya
 
 /// Presentation + input host for the Game Editor shell. WidgetTree is the only
 /// chrome host; `--editor-chrome=imgui` is accepted then ignored with a warning.
-/// ImGui remains for the ImGuizmo overlay via GuiSystem.
+/// Any remaining ImGui usage is legacy/editor-internal, not the shell viewport.
 enum class EEditorChromeHost : uint8_t
 {
     ImGui = 0,
