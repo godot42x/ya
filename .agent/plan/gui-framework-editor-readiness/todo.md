@@ -109,6 +109,6 @@
 - [x] Phase 9B：editor-scale 性能基线（Hierarchy 视口 paint 窗口、Content keyed window、Inspector 干净 snapshot）。
 - [x] Phase 9C：长时间运行 attach/detach、theme switch 压测。
 - [x] Phase 9D：DPI、CJK fallback、键盘、IME、剪贴板、文本编辑。
-- [ ] Phase 9E：snapshot digest、GPU/offscreen parity、automation route trace。
+- [x] Phase 9E：snapshot digest、GPU/offscreen parity、automation route trace。
 - [ ] Phase 9F：macOS/Clang、Windows/MSVC、Vulkan/OpenGL 组合回归。
 - [ ] Editor release checklist（未通过项阻止宣称 retained editor ready）。

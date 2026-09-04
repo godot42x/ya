@@ -1052,3 +1052,16 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - IME 候选窗仍是 OS/SDL；retained tree 只消费 committed `KeyTypedEvent`。
 - CJK fallback 字体栈回归仍由 `WidgetLayoutTest` ScaledViewScalesFallbackGlyphsByOwnDesignSize 覆盖。
 - 下一步：Phase 9E snapshot digest、GPU/offscreen parity、automation route trace。
+
+## Phase 9E 当前 checkpoint（2026-09-04）
+
+- 新增 `Script/automation/gui/run_workbench_gpu_parity.py`：把 snapshot digest、automation route trace 和 GPU/offscreen 零容差 diff 收成一条可重复门禁。
+- Headless：`widgets_interaction.jsonl` dump `lastRoute`（Counter / NotesField）并写 `headless-snapshot.json`（structuralDigest + semanticDigest）。
+- Windowed：同一 Widgets 页 `--gpu-shot` + `--offscreen-shot` + `--offscreen-diff`（tolerance 0）；`finishRun` 在 differing!=0 时退出码 3。
+- 本地验证：`python3 Script/automation/gui/run_workbench_gpu_parity.py --skip-build` 退出码 0；日志 `pass=true differing=0 ratio=0.0000`（1280x800）；产物在 `Engine/Saved/Automation/gui-gpu-parity/`（不入库）。
+- 既有 `UIFrameSnapshotTest` digest 与 `WidgetTreeTest` lastRoute 仍是 closure 层合同。
+
+### Phase 9E 边界
+
+- 这是 macOS/Clang/Vulkan 上的 GUIWorkbench 像素 parity，不是 editor chrome GPU shot，也不是 Windows/MSVC 或 OpenGL。
+- 下一步：Phase 9F 跨平台回归证据 + editor release checklist。
