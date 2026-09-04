@@ -1023,3 +1023,17 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - 这是 headless 结构/增量布局基线，不是大场景 ECS 帧时间、长时 soak、DPI/CJK、GPU/offscreen 或跨平台门禁。
 - Hierarchy flatten/hit-test 仍读全量可见行；本 checkpoint 只证明 paint 窗口有界。
 - 下一步：Phase 9C attach/detach + theme-switch soak。
+
+## Phase 9C 当前 checkpoint（2026-09-04）
+
+- 新增 `EditorLongRunSoakTest`：重复 editor 热路径，而不是单次 attach/theme 回归。
+- 同一 subtree 64 次 attach/detach（dock tab hide/show）：attached draw-item 数稳定，detach 后 snapshot 为空，第二次 snapshot `rebuiltWidgets==0`。
+- 64 次 destroy/recreate（document close / hot reload）：runtime id 单调递增，draw-item 数稳定。
+- 32 次 theme A/B 切换：每次切换后 rebuild，随后干净 snapshot `rebuiltWidgets==0`，fill 颜色跟随当前 theme。
+- 32 次 deferred texture generation miss/hit：miss 无 texture，hit 带 resolver 纹理，随后干净 snapshot。
+- 验证：`xmake r ya-gui-closure-test`（391/391）；`EditorLongRunSoakTest.*`（4/4）。
+
+### Phase 9C 边界
+
+- 这是 headless 结构 soak，不是进程级小时 soak、热重载 shader/asset 文件系统，也不是 GPU 泄漏门禁。
+- 下一步：Phase 9D DPI / CJK / keyboard / IME / clipboard / text editing。

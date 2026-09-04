@@ -215,7 +215,8 @@ Hierarchy tree CRUD remains a retained-UI gap, not an ImGui chrome blocker.
 4. ~~**8V** — Debug window: retained panel or descope~~ ✅  
 5. ~~**8W** — Remove `onImGuiRender` shell~~ ✅（`imgui-local` remains for ImGuizmo）  
 6. ~~**9B** — Large hierarchy / content catalog / inspector snapshot baseline~~ ✅  
-7. **9C** — Attach/detach + theme-switch soak  
+7. ~~**9C** — Attach/detach + theme-switch soak~~ ✅  
+8. **9D** — DPI / CJK / keyboard / IME / clipboard / text editing  
 8. **9D** — DPI / CJK / keyboard / IME / clipboard / text editing  
 9. **9E** — Snapshot digest, GPU/offscreen parity, automation route trace  
 10. **9F** — macOS/Clang, Windows/MSVC, Vulkan/OpenGL regression + release checklist  

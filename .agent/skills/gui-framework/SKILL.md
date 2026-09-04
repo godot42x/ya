@@ -48,7 +48,8 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   回调中直接修改 tree 结构；tooltip/drag 等 framework maintenance 只在显式 pass boundary 执行。
   编辑器规模基线在 `EditorScaleBaselineTest`：Hierarchy 只 paint 视口窗口、Content 目录
   `computeKeyedVisibleWindow` 与 catalog 规模无关、Inspector 列第二次干净 snapshot `rebuiltWidgets==0`。
-  GPU/offscreen 像素门禁仍属 Phase 9。
+  长时结构 soak 在 `EditorLongRunSoakTest`：同 subtree attach/detach、destroy/recreate、theme 切换、
+  deferred texture generation。GPU/offscreen 像素门禁仍属 Phase 9。
 
 ## 布局契约（SizeToContent）
 

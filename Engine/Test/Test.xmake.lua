@@ -113,6 +113,7 @@ do
     add_files("./Source/AppKernelTest.cpp")
     add_files("./Source/DeclarativeContractTest.cpp")
     add_files("./Source/EditorScaleBaselineTest.cpp")
+    add_files("./Source/EditorLongRunSoakTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-framework")
@@ -137,6 +138,7 @@ do
     add_files("./Source/ToolControlsTest.cpp")
     add_files("./Source/DeclarativeContractTest.cpp")
     add_files("./Source/EditorScaleBaselineTest.cpp")
+    add_files("./Source/EditorLongRunSoakTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-widgets", "ya-render-resources")
