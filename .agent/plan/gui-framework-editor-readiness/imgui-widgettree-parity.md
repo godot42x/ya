@@ -183,7 +183,7 @@
 | Dependency | Still required for | Safe to remove when |
 |------------|-------------------|---------------------|
 | `imgui-local` | leftover FilePicker/TypeRenderer, editor-internal texture bridge | FilePicker/TypeRenderer have no callers |
-| `TypeRenderer` + `ContainerPropertyRenderer` | **Nothing** (no live caller) | Safe to delete only after retained container/custom editor parity lands and generic property access no longer lives in `PropertyHandle` |
+| `TypeRenderer` + `ContainerPropertyRenderer` | **Nothing** (no live caller) | Safe to delete only after retained container/custom editor parity lands on `PropertyAccessor` |
 | `FileExplorer::render` | **Nothing** (⚫) | Already removed from Content Browser path |
 | `ImGuiImageEntry` / texture bridge | legacy helper paths | Helper callers are removed or migrated |
 

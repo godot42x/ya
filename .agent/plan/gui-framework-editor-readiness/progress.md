@@ -1123,3 +1123,15 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - `TypeRenderer` / `ContainerPropertyRenderer` 现在没有 widgettree live caller，但在删除前仍要先完成 retained 容器/custom editor 替代，以及 reflection accessor 拆分，避免把 editor-specific 偶然实现固化成底层事实源。
 - 按用户约束，新增 inspector/plan 能力不继续塞进 `EditorSurface`；现阶段只允许它保留现有装配职责，系统性拆分留到 Phase 10E。
 
+## Phase 10B PropertyAccessor checkpoint（2026-09-04）
+
+- `Core/Reflection/PropertyAccessor` 成为单实例 property 访问的事实源：typed get/set、equals/axis compare、enum/color/asset path、manipulate validation、以及 `collectLeaves` 的 nested path-walk。
+- `PropertyHandle` 收瘦为 editor adapter：多选 mixed、N-instance copy/restore/undo glue、`Vec3Setter` / change hook、asset picker kind。不再内嵌 typed read/write 实现。
+- `PropertyGraph::build` 改为消费 `PropertyAccessor::collectLeaves`，不再自己递归 ClassRegistry。
+- 验证：`xmake b ya-testing`；`xmake r ya-testing -- --gtest_filter='PropertyAccessorTest.*:EditorPropertyGraphTest.*'`（21/21）。
+
+### 边界
+
+- 容器 element access 仍未进入 `PropertyAccessor`；下一步 10B 才把 sequence/map 编辑接到 retained inspector。
+- custom renderer parity 仍未做；`TypeRenderer` 仍无 widgettree live caller。
+
