@@ -1,6 +1,7 @@
 #include "Core/Reflection/PropertyAccessor.h"
 
 #include "Core/Common/AssetRef.h"
+#include "Core/Reflection/PropertyExtensions.h"
 #include "reflects-core/lib.h"
 
 #include <algorithm>
@@ -76,12 +77,12 @@ bool writeIntegerToAddress(type_index_t typeIndex, void* address, int64_t value)
 }
 
 template <typename T>
-bool tryGetPod(const Property& property, const void* instance, T& value)
+bool tryGetPod(const Property& property, const void* instance, T& value, int elementIndex)
 {
-    if (property.typeIndex != refl::type_index_v<T>) {
+    if (PropertyAccessor::valueType(property, elementIndex) != refl::type_index_v<T>) {
         return false;
     }
-    const void* addr = PropertyAccessor::address(property, instance);
+    const void* addr = PropertyAccessor::address(property, instance, elementIndex);
     if (!addr) {
         return false;
     }
@@ -90,12 +91,13 @@ bool tryGetPod(const Property& property, const void* instance, T& value)
 }
 
 template <typename T>
-bool setPod(const Property& property, void* instance, const T& value)
+bool setPod(const Property& property, void* instance, const T& value, int elementIndex)
 {
-    if (!PropertyAccessor::isEditable(property) || property.typeIndex != refl::type_index_v<T>) {
+    if (!PropertyAccessor::isEditable(property) ||
+        PropertyAccessor::valueType(property, elementIndex) != refl::type_index_v<T>) {
         return false;
     }
-    void* addr = PropertyAccessor::addressMutable(property, instance);
+    void* addr = PropertyAccessor::addressMutable(property, instance, elementIndex);
     if (!addr) {
         return false;
     }
@@ -162,6 +164,41 @@ void collectLeavesImpl(type_index_t currentType,
             }
         }
 
+        if (PropertyAccessor::isSequenceOfLeaves(property)) {
+            size_t count = 0;
+            bool bSized = true;
+            for (size_t i = 0; i < instances.size(); ++i) {
+                void* container = PropertyAccessor::addressMutable(property, instances[i]);
+                if (!container) {
+                    container = const_cast<void*>(PropertyAccessor::address(property, instances[i]));
+                }
+                IContainerProperty* accessor = PropertyAccessor::containerOf(property);
+                if (!container || !accessor) {
+                    bSized = false;
+                    break;
+                }
+                const size_t size = accessor->getSize(container);
+                if (i == 0) {
+                    count = size;
+                }
+                else {
+                    count = std::min(count, size);
+                }
+            }
+            if (bSized) {
+                for (size_t index = 0; index < count; ++index) {
+                    PropertyAccessor::FLeaf leaf;
+                    leaf.ownerType = currentType;
+                    leaf.property = &property;
+                    leaf.path = leafPath + "[" + std::to_string(index) + "]";
+                    leaf.ownerInstances = instances;
+                    leaf.elementIndex = static_cast<int>(index);
+                    out.push_back(std::move(leaf));
+                }
+                continue;
+            }
+        }
+
         PropertyAccessor::FLeaf leaf;
         leaf.ownerType = currentType;
         leaf.property = &property;
@@ -208,7 +245,39 @@ bool PropertyAccessor::isCompositeType(const Property& property)
 {
     return property.addressGetter &&
            !isLeafValueType(property.typeIndex) &&
+           containerOf(property) == nullptr &&
            ClassRegistry::instance().getClass(property.typeIndex) != nullptr;
+}
+
+bool PropertyAccessor::isSequenceOfLeaves(const Property& property)
+{
+    IContainerProperty* accessor = containerOf(property);
+    if (!accessor || accessor->isMapLike()) {
+        return false;
+    }
+    const EContainer type = accessor->getContainerType();
+    if (type != EContainer::Vector && type != EContainer::Array) {
+        return false;
+    }
+    return isLeafValueType(accessor->getElementTypeIndex());
+}
+
+IContainerProperty* PropertyAccessor::containerOf(const Property& property)
+{
+    const ContainerPropertyExtension* extension = PropertyContainerHelper::getContainerExtension(property);
+    if (!extension || !extension->hasContainer()) {
+        return nullptr;
+    }
+    return extension->containerAccessor.get();
+}
+
+type_index_t PropertyAccessor::valueType(const Property& property, int elementIndex)
+{
+    if (elementIndex < 0) {
+        return property.typeIndex;
+    }
+    IContainerProperty* accessor = containerOf(property);
+    return accessor ? accessor->getElementTypeIndex() : 0;
 }
 
 bool PropertyAccessor::isEditable(const Property& property)
@@ -217,9 +286,9 @@ bool PropertyAccessor::isEditable(const Property& property)
            !property.metadata.hasFlag(FieldFlags::EditReadOnly);
 }
 
-bool PropertyAccessor::isEnum(const Property& property)
+bool PropertyAccessor::isEnum(const Property& property, int elementIndex)
 {
-    return EnumRegistry::instance().getEnum(property.typeIndex) != nullptr;
+    return EnumRegistry::instance().getEnum(valueType(property, elementIndex)) != nullptr;
 }
 
 bool PropertyAccessor::isColor(const Property& property)
@@ -235,56 +304,79 @@ bool PropertyAccessor::isColor(const Property& property)
     }
 }
 
-const void* PropertyAccessor::address(const Property& property, const void* instance)
+const void* PropertyAccessor::address(const Property& property, const void* instance, int elementIndex)
 {
-    if (!instance || !property.addressGetter) {
+    if (!instance) {
         return nullptr;
     }
-    return property.addressGetter(instance);
-}
-
-void* PropertyAccessor::addressMutable(const Property& property, void* instance)
-{
-    if (!instance || !property.addressGetterMutable) {
+    if (elementIndex < 0) {
+        if (!property.addressGetter) {
+            return nullptr;
+        }
+        return property.addressGetter(instance);
+    }
+    IContainerProperty* accessor = containerOf(property);
+    void* container = const_cast<void*>(address(property, instance));
+    if (!accessor || !container || static_cast<size_t>(elementIndex) >= accessor->getSize(container)) {
         return nullptr;
     }
-    return property.addressGetterMutable(instance);
+    return accessor->getElementPtr(container, static_cast<size_t>(elementIndex));
 }
 
-bool PropertyAccessor::equals(const Property& property, const void* a, const void* b)
+void* PropertyAccessor::addressMutable(const Property& property, void* instance, int elementIndex)
+{
+    if (!instance) {
+        return nullptr;
+    }
+    if (elementIndex < 0) {
+        if (!property.addressGetterMutable) {
+            return nullptr;
+        }
+        return property.addressGetterMutable(instance);
+    }
+    IContainerProperty* accessor = containerOf(property);
+    void* container = addressMutable(property, instance);
+    if (!accessor || !container || static_cast<size_t>(elementIndex) >= accessor->getSize(container)) {
+        return nullptr;
+    }
+    return accessor->getElementPtr(container, static_cast<size_t>(elementIndex));
+}
+
+bool PropertyAccessor::equals(const Property& property, const void* a, const void* b, int elementIndex)
 {
     if (!a || !b) {
         return false;
     }
-    if (const Enum* enumInfo = EnumRegistry::instance().getEnum(property.typeIndex)) {
+    const type_index_t type = valueType(property, elementIndex);
+    if (const Enum* enumInfo = EnumRegistry::instance().getEnum(type)) {
         return enumInfo->getValue(const_cast<void*>(a)) == enumInfo->getValue(const_cast<void*>(b));
     }
-    if (property.typeIndex == refl::type_index_v<glm::vec2>) {
+    if (type == refl::type_index_v<glm::vec2>) {
         return *static_cast<const glm::vec2*>(a) == *static_cast<const glm::vec2*>(b);
     }
-    if (property.typeIndex == refl::type_index_v<glm::vec3>) {
+    if (type == refl::type_index_v<glm::vec3>) {
         return *static_cast<const glm::vec3*>(a) == *static_cast<const glm::vec3*>(b);
     }
-    if (property.typeIndex == refl::type_index_v<glm::vec4>) {
+    if (type == refl::type_index_v<glm::vec4>) {
         return *static_cast<const glm::vec4*>(a) == *static_cast<const glm::vec4*>(b);
     }
-    if (property.typeIndex == refl::type_index_v<float>) {
+    if (type == refl::type_index_v<float>) {
         return *static_cast<const float*>(a) == *static_cast<const float*>(b);
     }
-    if (isIntegerType(property.typeIndex)) {
+    if (isIntegerType(type)) {
         int64_t left = 0;
         int64_t right = 0;
-        return readIntegerFromAddress(property.typeIndex, a, left) &&
-               readIntegerFromAddress(property.typeIndex, b, right) &&
+        return readIntegerFromAddress(type, a, left) &&
+               readIntegerFromAddress(type, b, right) &&
                left == right;
     }
-    if (property.typeIndex == refl::type_index_v<bool>) {
+    if (type == refl::type_index_v<bool>) {
         return *static_cast<const bool*>(a) == *static_cast<const bool*>(b);
     }
-    if (property.typeIndex == refl::type_index_v<std::string>) {
+    if (type == refl::type_index_v<std::string>) {
         return *static_cast<const std::string*>(a) == *static_cast<const std::string*>(b);
     }
-    if (isAssetRefType(property.typeIndex)) {
+    if (isAssetRefType(type)) {
         return static_cast<const AssetRefBase*>(a)->getPath() == static_cast<const AssetRefBase*>(b)->getPath();
     }
     return false;
@@ -294,104 +386,106 @@ bool PropertyAccessor::equalsVecAxis(const Property& property,
                                      const void* a,
                                      const void* b,
                                      int axis,
-                                     int componentCount)
+                                     int componentCount,
+                                     int elementIndex)
 {
     if (!a || !b || axis < 0 || axis >= componentCount) {
         return false;
     }
-    if (componentCount == 2 && property.typeIndex == refl::type_index_v<glm::vec2>) {
+    const type_index_t type = valueType(property, elementIndex);
+    if (componentCount == 2 && type == refl::type_index_v<glm::vec2>) {
         return (*static_cast<const glm::vec2*>(a))[axis] == (*static_cast<const glm::vec2*>(b))[axis];
     }
-    if (componentCount == 3 && property.typeIndex == refl::type_index_v<glm::vec3>) {
+    if (componentCount == 3 && type == refl::type_index_v<glm::vec3>) {
         return (*static_cast<const glm::vec3*>(a))[axis] == (*static_cast<const glm::vec3*>(b))[axis];
     }
-    if (componentCount == 4 && property.typeIndex == refl::type_index_v<glm::vec4>) {
+    if (componentCount == 4 && type == refl::type_index_v<glm::vec4>) {
         return (*static_cast<const glm::vec4*>(a))[axis] == (*static_cast<const glm::vec4*>(b))[axis];
     }
     return false;
 }
 
-bool PropertyAccessor::tryGetVec2(const Property& property, const void* instance, glm::vec2& value)
+bool PropertyAccessor::tryGetVec2(const Property& property, const void* instance, glm::vec2& value, int elementIndex)
 {
-    return tryGetPod(property, instance, value);
+    return tryGetPod(property, instance, value, elementIndex);
 }
 
-bool PropertyAccessor::setVec2(const Property& property, void* instance, const glm::vec2& value)
+bool PropertyAccessor::setVec2(const Property& property, void* instance, const glm::vec2& value, int elementIndex)
 {
-    return setPod(property, instance, value);
+    return setPod(property, instance, value, elementIndex);
 }
 
-bool PropertyAccessor::tryGetVec3(const Property& property, const void* instance, glm::vec3& value)
+bool PropertyAccessor::tryGetVec3(const Property& property, const void* instance, glm::vec3& value, int elementIndex)
 {
-    return tryGetPod(property, instance, value);
+    return tryGetPod(property, instance, value, elementIndex);
 }
 
-bool PropertyAccessor::setVec3(const Property& property, void* instance, const glm::vec3& value)
+bool PropertyAccessor::setVec3(const Property& property, void* instance, const glm::vec3& value, int elementIndex)
 {
-    return setPod(property, instance, value);
+    return setPod(property, instance, value, elementIndex);
 }
 
-bool PropertyAccessor::tryGetVec4(const Property& property, const void* instance, glm::vec4& value)
+bool PropertyAccessor::tryGetVec4(const Property& property, const void* instance, glm::vec4& value, int elementIndex)
 {
-    return tryGetPod(property, instance, value);
+    return tryGetPod(property, instance, value, elementIndex);
 }
 
-bool PropertyAccessor::setVec4(const Property& property, void* instance, const glm::vec4& value)
+bool PropertyAccessor::setVec4(const Property& property, void* instance, const glm::vec4& value, int elementIndex)
 {
-    return setPod(property, instance, value);
+    return setPod(property, instance, value, elementIndex);
 }
 
-bool PropertyAccessor::tryGetFloat(const Property& property, const void* instance, float& value)
+bool PropertyAccessor::tryGetFloat(const Property& property, const void* instance, float& value, int elementIndex)
 {
-    return tryGetPod(property, instance, value);
+    return tryGetPod(property, instance, value, elementIndex);
 }
 
-bool PropertyAccessor::setFloat(const Property& property, void* instance, float value)
+bool PropertyAccessor::setFloat(const Property& property, void* instance, float value, int elementIndex)
 {
-    return setPod(property, instance, value);
+    return setPod(property, instance, value, elementIndex);
 }
 
-bool PropertyAccessor::tryGetInteger(const Property& property, const void* instance, int64_t& value)
+bool PropertyAccessor::tryGetInteger(const Property& property, const void* instance, int64_t& value, int elementIndex)
 {
-    if (!isIntegerType(property.typeIndex)) {
+    if (!isIntegerType(valueType(property, elementIndex))) {
         return false;
     }
-    return readIntegerFromAddress(property.typeIndex, address(property, instance), value);
+    return readIntegerFromAddress(valueType(property, elementIndex), address(property, instance, elementIndex), value);
 }
 
-bool PropertyAccessor::setInteger(const Property& property, void* instance, int64_t value)
+bool PropertyAccessor::setInteger(const Property& property, void* instance, int64_t value, int elementIndex)
 {
-    if (!isEditable(property) || !isIntegerType(property.typeIndex)) {
+    if (!isEditable(property) || !isIntegerType(valueType(property, elementIndex))) {
         return false;
     }
-    return writeIntegerToAddress(property.typeIndex, addressMutable(property, instance), value);
+    return writeIntegerToAddress(valueType(property, elementIndex), addressMutable(property, instance, elementIndex), value);
 }
 
-bool PropertyAccessor::tryGetBool(const Property& property, const void* instance, bool& value)
+bool PropertyAccessor::tryGetBool(const Property& property, const void* instance, bool& value, int elementIndex)
 {
-    return tryGetPod(property, instance, value);
+    return tryGetPod(property, instance, value, elementIndex);
 }
 
-bool PropertyAccessor::setBool(const Property& property, void* instance, bool value)
+bool PropertyAccessor::setBool(const Property& property, void* instance, bool value, int elementIndex)
 {
-    return setPod(property, instance, value);
+    return setPod(property, instance, value, elementIndex);
 }
 
-bool PropertyAccessor::tryGetString(const Property& property, const void* instance, std::string& value)
+bool PropertyAccessor::tryGetString(const Property& property, const void* instance, std::string& value, int elementIndex)
 {
-    return tryGetPod(property, instance, value);
+    return tryGetPod(property, instance, value, elementIndex);
 }
 
-bool PropertyAccessor::setString(const Property& property, void* instance, const std::string& value)
+bool PropertyAccessor::setString(const Property& property, void* instance, const std::string& value, int elementIndex)
 {
-    return setPod(property, instance, value);
+    return setPod(property, instance, value, elementIndex);
 }
 
-bool PropertyAccessor::tryGetEnumIndex(const Property& property, const void* instance, int& index)
+bool PropertyAccessor::tryGetEnumIndex(const Property& property, const void* instance, int& index, int elementIndex)
 {
     index = -1;
-    const Enum* enumInfo = EnumRegistry::instance().getEnum(property.typeIndex);
-    const void* addr = address(property, instance);
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(property, elementIndex));
+    const void* addr = address(property, instance, elementIndex);
     if (!enumInfo || !addr) {
         return false;
     }
@@ -405,10 +499,10 @@ bool PropertyAccessor::tryGetEnumIndex(const Property& property, const void* ins
     return false;
 }
 
-bool PropertyAccessor::enumLabels(const Property& property, std::vector<std::string>& labels)
+bool PropertyAccessor::enumLabels(const Property& property, std::vector<std::string>& labels, int elementIndex)
 {
     labels.clear();
-    const Enum* enumInfo = EnumRegistry::instance().getEnum(property.typeIndex);
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(property, elementIndex));
     if (!enumInfo) {
         return false;
     }
@@ -419,19 +513,19 @@ bool PropertyAccessor::enumLabels(const Property& property, std::vector<std::str
     return true;
 }
 
-bool PropertyAccessor::setEnumByIndex(const Property& property, void* instance, int index)
+bool PropertyAccessor::setEnumByIndex(const Property& property, void* instance, int index, int elementIndex)
 {
-    const Enum* enumInfo = EnumRegistry::instance().getEnum(property.typeIndex);
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(property, elementIndex));
     if (!isEditable(property) || !enumInfo || index < 0 || index >= static_cast<int>(enumInfo->values.size())) {
         return false;
     }
-    return setEnumValue(property, instance, enumInfo->values[static_cast<size_t>(index)].value);
+    return setEnumValue(property, instance, enumInfo->values[static_cast<size_t>(index)].value, elementIndex);
 }
 
-bool PropertyAccessor::tryGetEnumValue(const Property& property, const void* instance, int64_t& value)
+bool PropertyAccessor::tryGetEnumValue(const Property& property, const void* instance, int64_t& value, int elementIndex)
 {
-    const Enum* enumInfo = EnumRegistry::instance().getEnum(property.typeIndex);
-    const void* addr = address(property, instance);
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(property, elementIndex));
+    const void* addr = address(property, instance, elementIndex);
     if (!enumInfo || !addr) {
         return false;
     }
@@ -439,10 +533,10 @@ bool PropertyAccessor::tryGetEnumValue(const Property& property, const void* ins
     return true;
 }
 
-bool PropertyAccessor::setEnumValue(const Property& property, void* instance, int64_t value)
+bool PropertyAccessor::setEnumValue(const Property& property, void* instance, int64_t value, int elementIndex)
 {
-    const Enum* enumInfo = EnumRegistry::instance().getEnum(property.typeIndex);
-    void* addr = addressMutable(property, instance);
+    const Enum* enumInfo = EnumRegistry::instance().getEnum(valueType(property, elementIndex));
+    void* addr = addressMutable(property, instance, elementIndex);
     if (!isEditable(property) || !enumInfo || !addr) {
         return false;
     }
@@ -453,36 +547,38 @@ bool PropertyAccessor::setEnumValue(const Property& property, void* instance, in
     return true;
 }
 
-bool PropertyAccessor::tryGetColor(const Property& property, const void* instance, glm::vec4& value)
+bool PropertyAccessor::tryGetColor(const Property& property, const void* instance, glm::vec4& value, int elementIndex)
 {
     if (!isColor(property)) {
         return false;
     }
-    const void* addr = address(property, instance);
+    const void* addr = address(property, instance, elementIndex);
     if (!addr) {
         return false;
     }
-    if (property.typeIndex == refl::type_index_v<glm::vec4>) {
+    const type_index_t type = valueType(property, elementIndex);
+    if (type == refl::type_index_v<glm::vec4>) {
         value = *static_cast<const glm::vec4*>(addr);
         return true;
     }
-    if (property.typeIndex == refl::type_index_v<glm::vec3>) {
+    if (type == refl::type_index_v<glm::vec3>) {
         value = glm::vec4(*static_cast<const glm::vec3*>(addr), 1.0f);
         return true;
     }
     return false;
 }
 
-bool PropertyAccessor::setColor(const Property& property, void* instance, const glm::vec4& value)
+bool PropertyAccessor::setColor(const Property& property, void* instance, const glm::vec4& value, int elementIndex)
 {
     if (!isEditable(property) || !isColor(property)) {
         return false;
     }
-    void* addr = addressMutable(property, instance);
+    void* addr = addressMutable(property, instance, elementIndex);
     if (!addr) {
         return false;
     }
-    if (property.typeIndex == refl::type_index_v<glm::vec4>) {
+    const type_index_t type = valueType(property, elementIndex);
+    if (type == refl::type_index_v<glm::vec4>) {
         auto& current = *static_cast<glm::vec4*>(addr);
         if (current == value) {
             return false;
@@ -490,7 +586,7 @@ bool PropertyAccessor::setColor(const Property& property, void* instance, const 
         current = value;
         return true;
     }
-    if (property.typeIndex == refl::type_index_v<glm::vec3>) {
+    if (type == refl::type_index_v<glm::vec3>) {
         const glm::vec3 next(value);
         auto& current = *static_cast<glm::vec3*>(addr);
         if (current == next) {
@@ -502,12 +598,12 @@ bool PropertyAccessor::setColor(const Property& property, void* instance, const 
     return false;
 }
 
-bool PropertyAccessor::tryGetAssetPath(const Property& property, const void* instance, std::string& value)
+bool PropertyAccessor::tryGetAssetPath(const Property& property, const void* instance, std::string& value, int elementIndex)
 {
-    if (!isAssetRefType(property.typeIndex)) {
+    if (!isAssetRefType(valueType(property, elementIndex))) {
         return false;
     }
-    const void* addr = address(property, instance);
+    const void* addr = address(property, instance, elementIndex);
     if (!addr) {
         return false;
     }
@@ -515,12 +611,12 @@ bool PropertyAccessor::tryGetAssetPath(const Property& property, const void* ins
     return true;
 }
 
-bool PropertyAccessor::setAssetPath(const Property& property, void* instance, const std::string& value)
+bool PropertyAccessor::setAssetPath(const Property& property, void* instance, const std::string& value, int elementIndex)
 {
-    if (!isEditable(property) || !isAssetRefType(property.typeIndex)) {
+    if (!isEditable(property) || !isAssetRefType(valueType(property, elementIndex))) {
         return false;
     }
-    void* addr = addressMutable(property, instance);
+    void* addr = addressMutable(property, instance, elementIndex);
     if (!addr) {
         return false;
     }
@@ -532,12 +628,13 @@ bool PropertyAccessor::setAssetPath(const Property& property, void* instance, co
     return true;
 }
 
-bool PropertyAccessor::hasAssetResolveError(const Property& property, const void* instance)
+bool PropertyAccessor::hasAssetResolveError(const Property& property, const void* instance, int elementIndex)
 {
-    if (!isAssetRefType(property.typeIndex)) {
+    const type_index_t type = valueType(property, elementIndex);
+    if (!isAssetRefType(type)) {
         return false;
     }
-    const void* addr = address(property, instance);
+    const void* addr = address(property, instance, elementIndex);
     if (!addr) {
         return false;
     }
@@ -545,13 +642,13 @@ bool PropertyAccessor::hasAssetResolveError(const Property& property, const void
     if (!ref->hasPath()) {
         return false;
     }
-    if (property.typeIndex == refl::type_index_v<TextureRef>) {
+    if (type == refl::type_index_v<TextureRef>) {
         return static_cast<const TextureRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
     }
-    if (property.typeIndex == refl::type_index_v<ModelRef>) {
+    if (type == refl::type_index_v<ModelRef>) {
         return static_cast<const ModelRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
     }
-    if (property.typeIndex == refl::type_index_v<MeshRef>) {
+    if (type == refl::type_index_v<MeshRef>) {
         return static_cast<const MeshRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
     }
     return false;
@@ -562,7 +659,7 @@ bool PropertyAccessor::tryGetManipulateSpec(const Property& property, Meta::Mani
     return readManipulateSpec(property, spec);
 }
 
-std::string PropertyAccessor::validationError(const Property& property, const void* instance)
+std::string PropertyAccessor::validationError(const Property& property, const void* instance, int elementIndex)
 {
     Meta::ManipulateSpec spec;
     if (!readManipulateSpec(property, spec)) {
@@ -571,9 +668,10 @@ std::string PropertyAccessor::validationError(const Property& property, const vo
     auto outOfRange = [&](double value) {
         return value < spec.min || value > spec.max;
     };
-    if (property.typeIndex == refl::type_index_v<float>) {
+    const type_index_t type = valueType(property, elementIndex);
+    if (type == refl::type_index_v<float>) {
         float value = 0.0f;
-        if (!tryGetFloat(property, instance, value)) {
+        if (!tryGetFloat(property, instance, value, elementIndex)) {
             return "Invalid value";
         }
         if (outOfRange(value)) {
@@ -581,9 +679,9 @@ std::string PropertyAccessor::validationError(const Property& property, const vo
         }
         return {};
     }
-    if (isIntegerType(property.typeIndex)) {
+    if (isIntegerType(type)) {
         int64_t value = 0;
-        if (!tryGetInteger(property, instance, value)) {
+        if (!tryGetInteger(property, instance, value, elementIndex)) {
             return "Invalid value";
         }
         if (outOfRange(static_cast<double>(value))) {
@@ -591,9 +689,9 @@ std::string PropertyAccessor::validationError(const Property& property, const vo
         }
         return {};
     }
-    if (property.typeIndex == refl::type_index_v<glm::vec2>) {
+    if (type == refl::type_index_v<glm::vec2>) {
         glm::vec2 value{};
-        if (!tryGetVec2(property, instance, value)) {
+        if (!tryGetVec2(property, instance, value, elementIndex)) {
             return "Invalid value";
         }
         for (int axis = 0; axis < 2; ++axis) {
@@ -603,9 +701,9 @@ std::string PropertyAccessor::validationError(const Property& property, const vo
         }
         return {};
     }
-    if (property.typeIndex == refl::type_index_v<glm::vec3>) {
+    if (type == refl::type_index_v<glm::vec3>) {
         glm::vec3 value{};
-        if (!tryGetVec3(property, instance, value)) {
+        if (!tryGetVec3(property, instance, value, elementIndex)) {
             return "Invalid value";
         }
         for (int axis = 0; axis < 3; ++axis) {
@@ -615,9 +713,9 @@ std::string PropertyAccessor::validationError(const Property& property, const vo
         }
         return {};
     }
-    if (property.typeIndex == refl::type_index_v<glm::vec4>) {
+    if (type == refl::type_index_v<glm::vec4>) {
         glm::vec4 value{};
-        if (!tryGetVec4(property, instance, value)) {
+        if (!tryGetVec4(property, instance, value, elementIndex)) {
             return "Invalid value";
         }
         for (int axis = 0; axis < 4; ++axis) {

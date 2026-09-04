@@ -30,7 +30,11 @@ class PropertyHandle final
     using Vec3Setter = std::function<void(void*, const glm::vec3&)>;
     using ChangeHook = std::function<void()>;
 
-    PropertyHandle(type_index_t ownerType, std::vector<void*> instances, const Property* property, Vec3Setter setter = {});
+    PropertyHandle(type_index_t ownerType,
+                   std::vector<void*> instances,
+                   const Property* property,
+                   Vec3Setter setter = {},
+                   int elementIndex = -1);
 
     [[nodiscard]] bool isValid() const;
     [[nodiscard]] bool isEditable() const;
@@ -99,6 +103,7 @@ class PropertyHandle final
     type_index_t _ownerType = 0;
     std::vector<void*> _instances;
     const Property* _property = nullptr;
+    int _elementIndex = -1;
     Vec3Setter _vec3Setter;
     ChangeHook _changeHook;
 };

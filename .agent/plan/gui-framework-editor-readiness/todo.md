@@ -112,11 +112,12 @@
 - [x] Phase 9E：snapshot digest、GPU/offscreen parity、automation route trace。
 - [x] Phase 9F：editor release checklist（macOS/Clang/Vulkan 证据入表；Windows/MSVC 与 OpenGL 为 blocker）。
 - [x] Phase 10A：compact dock chrome（矮 tab strip、左上角隐藏 title bar、dock content 不再 inset）。
-- [ ] Phase 10B：Inspector 补齐 ImGui DetailsView 类型覆盖（剩余：容器/custom renderer）。
+- [ ] Phase 10B：Inspector 补齐 ImGui DetailsView 类型覆盖（剩余：动态增删/map/custom renderer）。
   - [x] `PropertyGraph` 递归展开 nested/composite property（dot-path leaf nodes）。
   - [x] retained inspector 补齐 `vec2` / `vec4` / `int` / `int32_t` / `uint32_t` 的 mixed/edit/undo/test。
   - [x] 提炼 reflection-layer `PropertyAccessor` / path-walk / copy-compare-restore，收瘦 `PropertyHandle` 为 editor adapter。
-  - [ ] retained inspector 容器与 custom renderer parity。
+  - [x] retained inspector 展开 sequence-of-leaf 容器（`std::array` / `std::vector` 索引 leaf，例如 Skybox `cubemapSource.files[i]`）。
+  - [ ] retained inspector 动态 vector 增删、map、custom renderer parity。
 - [x] Phase 10C：自研 viewport gizmo（WidgetTree/Render2D），移除 editor 帧内 GuiSystem/ImGuizmo。
 - [ ] Windows/MSVC 组合回归（本机未跑；未通过则不得宣称 retained editor ready）。
 - [ ] OpenGL GUI/editor presentation（`GUIAppHost` 现为 Vulkan-only）。

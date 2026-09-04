@@ -44,7 +44,15 @@ std::string displayNameFromPath(std::string_view path)
             if (!display.empty()) {
                 display += " / ";
             }
-            display += makeDisplayName(part);
+            const size_t bracket = part.find('[');
+            if (bracket != std::string_view::npos) {
+                display += makeDisplayName(part.substr(0, bracket));
+                display += " ";
+                display += part.substr(bracket);
+            }
+            else {
+                display += makeDisplayName(part);
+            }
         }
         if (end == std::string_view::npos) {
             break;
@@ -84,8 +92,8 @@ PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> in
             catch (...) {
             }
         }
-        node.valueType = leaf.property->typeIndex;
-        node.binding = PropertyHandle(leaf.ownerType, std::move(leaf.ownerInstances), leaf.property);
+        node.valueType = reflection::PropertyAccessor::valueType(*leaf.property, leaf.elementIndex);
+        node.binding = PropertyHandle(leaf.ownerType, std::move(leaf.ownerInstances), leaf.property, {}, leaf.elementIndex);
         node.bEditable = node.binding.isEditable();
         node.bVisible = true;
         node.bInstanceEditable = leaf.property->metadata.hasFlag(FieldFlags::InstanceEditable);

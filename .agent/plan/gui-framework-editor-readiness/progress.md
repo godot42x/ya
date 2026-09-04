@@ -1135,3 +1135,15 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - 容器 element access 仍未进入 `PropertyAccessor`；下一步 10B 才把 sequence/map 编辑接到 retained inspector。
 - custom renderer parity 仍未做；`TypeRenderer` 仍无 widgettree live caller。
 
+## Phase 10B sequence container leaves checkpoint（2026-09-04）
+
+- `PropertyAccessor::collectLeaves` 把 sequence-of-leaf 容器（`std::array` / `std::vector`，排除 map/set）展开成 `path[i]` 叶子；typed get/set/equals/validation 通过 `elementIndex` 访问元素地址。
+- `PropertyHandle` 作为 editor adapter 转发 `elementIndex`；mixed compare 比较的是元素值地址，不是容器地址。
+- `PropertyGraph` 用 `valueType(property, elementIndex)` 作为 node 类型，因此 retained `EditorAutoPropertySection` 能直接编辑 Skybox `cubemapSource.files[i]` 这类固定数组字符串，无需把 UI 塞进 `EditorSurface`。
+- 验证：`xmake b ya-testing`；`xmake r ya-testing -- --gtest_filter='PropertyAccessorTest.*:EditorPropertyGraphTest.*'`（25/25）。
+
+### 边界
+
+- 只覆盖当前尺寸的 sequence 元素编辑；动态 vector 的 Add/Remove、map key-value 行、以及 `TypeRenderer` custom renderer（例如 TextureSlot 预览）仍未迁移。
+- 下一步 10B：动态增删 / map / custom renderer；随后 Phase 10E 拆分 `EditorSurface`。
+

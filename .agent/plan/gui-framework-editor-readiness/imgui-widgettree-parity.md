@@ -100,7 +100,7 @@
 | Feature | Legacy ImGui | WidgetTree | Status | Notes |
 |---------|--------------|------------|--------|-------|
 | DetailsView stack | `DetailsView` + `TypeRenderer` tree | — | ⚫ | Deleted 8N; was uncalled after 8C |
-| Entity/component fields | `TypeRenderer::renderReflectedType` | `PropertyGraph` + `EditorAutoPropertySection` | 🟡 | Retained path now covers bool/float/vec2/vec3/vec4/int/string/enum/color/asset-ref and recursively flattened nested/composite fields; remaining Phase 10B gaps are containers/custom renderers and reflection accessor cleanup |
+| Entity/component fields | `TypeRenderer::renderReflectedType` | `PropertyGraph` + `EditorAutoPropertySection` | 🟡 | Retained path covers bool/float/vec2/vec3/vec4/int/string/enum/color/asset-ref, nested/composite flatten, and sequence-of-leaf `array`/`vector` indexed paths (e.g. Skybox `cubemapSource.files[i]`); remaining Phase 10B gaps are dynamic add/remove, maps, and custom renderers |
 | Multi-selection mixed values | DetailsView | `PropertyGraph` intersection + em-dash | ✅ | |
 | Asset path Browse | `FilePicker` | `EditorSurface` asset picker popup | ✅ | Phase 8M |
 | Game UI Entry summary | DetailsView | `EditorInspectorTab` widget entry block | ✅ | Open in UI Designer button |
@@ -183,7 +183,7 @@
 | Dependency | Still required for | Safe to remove when |
 |------------|-------------------|---------------------|
 | `imgui-local` | leftover FilePicker/TypeRenderer, editor-internal texture bridge | FilePicker/TypeRenderer have no callers |
-| `TypeRenderer` + `ContainerPropertyRenderer` | **Nothing** (no live caller) | Safe to delete only after retained container/custom editor parity lands on `PropertyAccessor` |
+| `TypeRenderer` + `ContainerPropertyRenderer` | **Nothing** (no live caller) | Safe to delete only after retained dynamic-container / map / custom editor parity lands |
 | `FileExplorer::render` | **Nothing** (⚫) | Already removed from Content Browser path |
 | `ImGuiImageEntry` / texture bridge | legacy helper paths | Helper callers are removed or migrated |
 

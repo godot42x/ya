@@ -1,9 +1,11 @@
 #include "Core/Reflection/PropertyAccessor.h"
 #include "Core/Reflection/Reflection.h"
 
+#include <array>
 #include <gtest/gtest.h>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <vector>
 
 namespace ya
 {
@@ -102,6 +104,56 @@ TEST(PropertyAccessorTest, EqualsDetectsScalarAndVectorDifferences)
     const void* firstCount = reflection::PropertyAccessor::address(*count, &first.params);
     const void* secondCount = reflection::PropertyAccessor::address(*count, &second.params);
     EXPECT_FALSE(reflection::PropertyAccessor::equals(*count, firstCount, secondCount));
+}
+
+struct SequenceOwner
+{
+    YA_REFLECT_BEGIN(SequenceOwner)
+    YA_REFLECT_FIELD(files)
+    YA_REFLECT_FIELD(weights)
+    YA_REFLECT_END()
+
+    std::array<std::string, 2> files{"posx.hdr", "negx.hdr"};
+    std::vector<float>         weights{0.25f, 0.75f};
+};
+
+TEST(PropertyAccessorTest, CollectLeavesExpandsSequenceOfLeafElements)
+{
+    SequenceOwner owner;
+    std::vector<reflection::PropertyAccessor::FLeaf> leaves;
+    reflection::PropertyAccessor::collectLeaves(type_index_v<SequenceOwner>, {&owner}, leaves);
+
+    ASSERT_EQ(leaves.size(), 4u);
+    EXPECT_EQ(leaves[0].path, "files[0]");
+    EXPECT_EQ(leaves[1].path, "files[1]");
+    EXPECT_EQ(leaves[2].path, "weights[0]");
+    EXPECT_EQ(leaves[3].path, "weights[1]");
+    EXPECT_EQ(leaves[0].elementIndex, 0);
+    EXPECT_EQ(leaves[1].elementIndex, 1);
+    EXPECT_EQ(reflection::PropertyAccessor::valueType(*leaves[0].property, leaves[0].elementIndex),
+              type_index_v<std::string>);
+    EXPECT_EQ(reflection::PropertyAccessor::valueType(*leaves[2].property, leaves[2].elementIndex),
+              type_index_v<float>);
+
+    std::string face;
+    ASSERT_TRUE(reflection::PropertyAccessor::tryGetString(*leaves[0].property, &owner, face, leaves[0].elementIndex));
+    EXPECT_EQ(face, "posx.hdr");
+    EXPECT_TRUE(reflection::PropertyAccessor::setString(*leaves[0].property, &owner, "front.hdr", leaves[0].elementIndex));
+    EXPECT_EQ(owner.files[0], "front.hdr");
+    EXPECT_EQ(owner.files[1], "negx.hdr");
+
+    float weight = 0.0f;
+    ASSERT_TRUE(reflection::PropertyAccessor::tryGetFloat(*leaves[2].property, &owner, weight, leaves[2].elementIndex));
+    EXPECT_FLOAT_EQ(weight, 0.25f);
+    EXPECT_TRUE(reflection::PropertyAccessor::setFloat(*leaves[2].property, &owner, 0.5f, leaves[2].elementIndex));
+    EXPECT_FLOAT_EQ(owner.weights[0], 0.5f);
+    EXPECT_FLOAT_EQ(owner.weights[1], 0.75f);
+
+    SequenceOwner other = owner;
+    other.files[0] = "other.hdr";
+    const void* first = reflection::PropertyAccessor::address(*leaves[0].property, &owner, 0);
+    const void* second = reflection::PropertyAccessor::address(*leaves[0].property, &other, 0);
+    EXPECT_FALSE(reflection::PropertyAccessor::equals(*leaves[0].property, first, second, 0));
 }
 
 } // namespace ya

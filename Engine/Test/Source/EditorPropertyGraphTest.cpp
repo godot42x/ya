@@ -6,6 +6,7 @@
 #include "Scene3D/TransformComponent.h"
 #include "Physics/PhysicsBodyComponent.h"
 #include "Render3D/Component/Material/PBRMaterialComponent.h"
+#include "Render3D/Component/3D/SkyboxComponent.h"
 #include "ECS/Systems/Components/TerrainComponent.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
@@ -14,6 +15,7 @@
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Widgets/WidgetTree.h"
 
+#include <array>
 #include <gtest/gtest.h>
 
 namespace ya
@@ -514,6 +516,96 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionAssetShowsResolveErrorState)
     EXPECT_FALSE(pathField->hasError());
 
     tree.detach(*section);
+}
+
+struct SequenceTestComponent
+{
+    std::array<std::string, 2> files{"posx.hdr", "negx.hdr"};
+
+    YA_REFLECT_BEGIN(SequenceTestComponent)
+    YA_REFLECT_FIELD(files)
+    YA_REFLECT_END()
+};
+
+TEST(EditorPropertyGraphTest, SequenceLeavesBindIndexedPathsAndWriteElements)
+{
+    SequenceTestComponent first;
+    SequenceTestComponent second;
+    second.files[0] = "other.hdr";
+
+    auto graph = PropertyGraph::build(type_index_v<SequenceTestComponent>, {&first, &second});
+    const PropertyNode* face0 = graph.find("files[0]");
+    const PropertyNode* face1 = graph.find("files[1]");
+    ASSERT_NE(face0, nullptr);
+    ASSERT_NE(face1, nullptr);
+    EXPECT_EQ(face0->valueType, type_index_v<std::string>);
+    EXPECT_EQ(face0->displayName, "Files [0]");
+    EXPECT_TRUE(face0->binding.isMixed());
+    EXPECT_FALSE(face1->binding.isMixed());
+
+    std::string value;
+    ASSERT_TRUE(face0->binding.tryGetString(value));
+    EXPECT_EQ(value, "posx.hdr");
+    EXPECT_TRUE(face0->binding.setString("front.hdr"));
+    EXPECT_EQ(first.files[0], "front.hdr");
+    EXPECT_EQ(second.files[0], "front.hdr");
+    EXPECT_EQ(first.files[1], "negx.hdr");
+    EXPECT_EQ(second.files[1], "negx.hdr");
+}
+
+TEST(EditorPropertyGraphTest, AutoPropertySectionSequenceStringUndoRestoresEach)
+{
+    SequenceTestComponent first;
+    SequenceTestComponent second;
+    second.files[0] = "other.hdr";
+
+    auto graph = PropertyGraph::build(type_index_v<SequenceTestComponent>, {&first, &second});
+    UndoStack stack;
+    auto section = std::make_shared<EditorAutoPropertySection>("AutoSequence", std::move(graph), &stack);
+    WidgetTree tree({.width = 360, .height = 200});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
+    ASSERT_EQ(section->getChildren().size(), 1u);
+    ASSERT_EQ(section->getChildren()[0]->getChildren().size(), 2u);
+
+    const UIElementRef& row = section->getChildren()[0]->getChildren()[0];
+    auto* field = dynamic_cast<UITextField*>(row->getChildren()[1].get());
+    ASSERT_NE(field, nullptr);
+    field->setText("front.hdr");
+    if (field->_onCommit) {
+        field->_onCommit(field->getText());
+    }
+
+    EXPECT_EQ(first.files[0], "front.hdr");
+    EXPECT_EQ(second.files[0], "front.hdr");
+    EXPECT_EQ(stack.undoCount(), 1u);
+    EXPECT_TRUE(stack.undo());
+    EXPECT_EQ(first.files[0], "posx.hdr");
+    EXPECT_EQ(second.files[0], "other.hdr");
+    EXPECT_TRUE(stack.redo());
+    EXPECT_EQ(first.files[0], "front.hdr");
+    EXPECT_EQ(second.files[0], "front.hdr");
+
+    tree.detach(*section);
+}
+
+TEST(EditorPropertyGraphTest, SkyboxCubemapFilesExpandAsIndexedStringLeaves)
+{
+    SkyboxComponent skybox;
+    skybox.cubemapSource.files[0] = "px.hdr";
+    auto graph = PropertyGraph::build(type_index_v<SkyboxComponent>, {&skybox});
+    const PropertyNode* face0 = graph.find("cubemapSource.files[0]");
+    const PropertyNode* face5 = graph.find("cubemapSource.files[5]");
+    ASSERT_NE(face0, nullptr);
+    ASSERT_NE(face5, nullptr);
+    EXPECT_EQ(face0->valueType, type_index_v<std::string>);
+    EXPECT_EQ(face0->displayName, "Cubemap Source / Files [0]");
+
+    std::string value;
+    ASSERT_TRUE(face0->binding.tryGetString(value));
+    EXPECT_EQ(value, "px.hdr");
+    EXPECT_TRUE(face0->binding.setString("front.hdr"));
+    EXPECT_EQ(skybox.cubemapSource.files[0], "front.hdr");
+    EXPECT_TRUE(skybox.cubemapSource.files[1].empty());
 }
 
 } // namespace ya
