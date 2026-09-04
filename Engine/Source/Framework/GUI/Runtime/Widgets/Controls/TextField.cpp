@@ -122,9 +122,38 @@ bool UITextField::handleInputEvent(const Event& event, const WidgetEventContext&
 
     if (eventType == EEvent::KeyPressed) {
         const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
+        if (!keyEvent.bRepeat && keyEvent.isPrimaryModifierPressed() &&
+            !keyEvent.isAltPressed() && !keyEvent.isShiftPressed()) {
+            if (WidgetTree* tree = getTree()) {
+                switch (keyEvent._keyCode) {
+                case EKey::K_C:
+                    tree->setClipboardText(_text);
+                    return true;
+                case EKey::K_X:
+                    tree->setClipboardText(_text);
+                    if (!_text.empty()) {
+                        _text.clear();
+                        _cursorIndex = 0;
+                        invalidateProperty(EUIPropertyImpact::Paint);
+                        if (_onTextChanged) {
+                            _onTextChanged(_text);
+                        }
+                    }
+                    return true;
+                case EKey::K_V:
+                    insertText(tree->getClipboardText());
+                    return true;
+                default:
+                    break;
+                }
+            }
+        }
         switch (keyEvent._keyCode) {
         case EKey::Backspace:
             erasePreviousCodePoint();
+            return true;
+        case EKey::Delete:
+            eraseNextCodePoint();
             return true;
         case EKey::Left:
             moveCursorByCodePoint(-1);
@@ -188,6 +217,19 @@ void UITextField::erasePreviousCodePoint()
     // Mark paint-dirty so the incremental paint cache re-emits the text.
     // Without this the edited buffer would not repaint until a full rebuild
     // (focus loss / window recreate) — see UITextField::setText.
+    invalidateProperty(EUIPropertyImpact::Paint);
+    if (_onTextChanged) {
+        _onTextChanged(_text);
+    }
+}
+
+void UITextField::eraseNextCodePoint()
+{
+    const size_t end = nextCodePoint(_text, _cursorIndex);
+    if (end == _cursorIndex) {
+        return;
+    }
+    _text.erase(_cursorIndex, end - _cursorIndex);
     invalidateProperty(EUIPropertyImpact::Paint);
     if (_onTextChanged) {
         _onTextChanged(_text);

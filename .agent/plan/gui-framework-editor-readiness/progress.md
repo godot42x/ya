@@ -1037,3 +1037,18 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 
 - 这是 headless 结构 soak，不是进程级小时 soak、热重载 shader/asset 文件系统，也不是 GPU 泄漏门禁。
 - 下一步：Phase 9D DPI / CJK / keyboard / IME / clipboard / text editing。
+
+## Phase 9D 当前 checkpoint（2026-09-04）
+
+- `KeyEvent::isPrimaryModifierPressed`：macOS Cmd、别处 Ctrl；与 ActionMap 加速键同一规则。
+- `WidgetTree` 默认内存剪贴板 + `setClipboardHooks`；`bindSdlClipboard` 接到 SDL，GUIAppHost 与 EditorSurface 在建树后绑定。
+- `UITextField`：KeyTyped 提交 IME/Unicode；Backspace/Delete 按码点；primary+C/X/V 走 tree clipboard；paste 去掉换行/Tab。
+- `EditorInputContractTest`：DPI 与 uiScale 正交折叠进 snapshot；CJK「你好」KeyTyped + 码点删除 + measure；copy/cut/paste；hooks 替换内存缓冲。
+- 验证：`xmake r ya-gui-closure-test`（395/395）；`EditorInputContractTest.*`（4/4）；`xmake b ya-game-editor`。
+
+### Phase 9D 边界
+
+- Copy 当前复制整段 `_text`（无 selection range）。
+- IME 候选窗仍是 OS/SDL；retained tree 只消费 committed `KeyTypedEvent`。
+- CJK fallback 字体栈回归仍由 `WidgetLayoutTest` ScaledViewScalesFallbackGlyphsByOwnDesignSize 覆盖。
+- 下一步：Phase 9E snapshot digest、GPU/offscreen parity、automation route trace。

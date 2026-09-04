@@ -174,6 +174,14 @@ struct YA_GUI_API WidgetTree final
     void setDpiScale(float scale);
     [[nodiscard]] float getDpiScale() const { return _dpiScale; }
 
+    /// Clipboard used by focused text fields (primary+C/X/V). Default is an
+    /// in-memory buffer so closure tests do not need SDL. Windowed hosts bind
+    /// OS clipboard via `setClipboardHooks`.
+    void setClipboardText(std::string text);
+    [[nodiscard]] std::string getClipboardText() const;
+    void setClipboardHooks(std::function<std::string()> read,
+                           std::function<void(const std::string&)> write);
+
     // === Theme (style-system Phase 2) ===
     /// Mount the tree-level theme (app/game provides the content). Switching
     /// bumps the generation token, which repaints every widget that resolved
@@ -404,6 +412,9 @@ struct YA_GUI_API WidgetTree final
     std::array<UIElementRef, static_cast<size_t>(ELayer::Count)> _layers;
     Extent2D      _logicalExtent{};
     float         _dpiScale = 1.0f; // logical points -> framebuffer pixels
+    std::string   _clipboardText;
+    std::function<std::string()> _clipboardRead;
+    std::function<void(const std::string&)> _clipboardWrite;
     bool          _bLayoutDirty = true;
     uint8_t       _layoutInvalidationMask = static_cast<uint8_t>(EWidgetLayoutInvalidation::Structure);
     GuiPerfStats  _perfStats;

@@ -333,6 +333,15 @@ struct YA_CORE_API KeyEvent : public Event
 #if defined(__APPLE__)
     bool isMetaPressed() const { return _mod & EKeyMod::LMeta || _mod & EKeyMod::RMeta; }
 #endif
+    /// File/edit accelerators: Cmd on macOS, Ctrl elsewhere.
+    [[nodiscard]] bool isPrimaryModifierPressed() const
+    {
+#if defined(__APPLE__)
+        return isMetaPressed();
+#else
+        return isCtrlPressed();
+#endif
+    }
 
 
     EVENT_CLASS_CATEGORY(EEventCategory::Keyboard | EEventCategory::Input);

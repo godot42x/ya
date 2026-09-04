@@ -43,6 +43,9 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   可 detach 自身，executor 会持有 path 并重查 membership。drag&drop 会话
   （`beginDrag/updateDrag/endDrag/cancelDrag`，payload 为 string）由树管理，目标控件实现
   `canAcceptDrop/onDrop/setDropHighlight`。
+  文本焦点：`UITextField` 消费 `KeyTyped`（IME 提交）、按码点 Backspace/Delete，以及
+  primary+C/X/V（Cmd macOS / Ctrl 别处）经 `WidgetTree` clipboard。默认内存缓冲；
+  windowed host 用 `bindSdlClipboard` 接 SDL。DPI 由 `setDpiScale` 与 `uiScale` 正交折叠。
 - 快照：`buildSnapshot`（layout dirty 时才 layout + paint）→ 不可变 `UIFrameSnapshot`；
   录制只消费快照。命令录制期绝不读 live tree。业务代码不得在 paint/layout
   回调中直接修改 tree 结构；tooltip/drag 等 framework maintenance 只在显式 pass boundary 执行。
@@ -201,7 +204,7 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 - `_styleKey` 在 `UIElement` 上反射；稀疏 patch 经 `YA_GUI_AUTHORED_STYLE_IO` 虚函数写入 UIDocument 的 `_authoredStyle`（mixin 字段不能 `YA_REFLECT_FIELD`，MI 偏移不对）。缺键 = inherit；旧文档的全字段对象仍是 freeze。`FBrush`/`F*Style` 走运行时反射，merge 用 `deserializeProperty`。
 - `FBrush`：纯色 = 无 resource + tint；Image 整张拉伸；NinePatch/Border 按 `margin`（纹理 px，1 tex px = 1 logical px）切成最多 9/8 个 snapshot sprite，compose 经 `uvScale`/`uvOffset` 透传。无纹理尺寸时退回整张拉伸。`sliceBrush` 是纯函数。
 - `UIPanel` paint 只读 `resolvedStyle().fillColor`。无 theme 时 `_color` 是 fillColor fallback（与 `UIText` 的 `_color`/`_fontSize` 相同）；不要再走第二套 `_color` sprite。Image 是 content：无 authored overlay 的 themed panel 仍画 theme chrome。
-- 无 theme / 缺纹理 / 延迟就绪的 GPU 输入就是 snapshot：miss 时 image 画 `placeholderFill`，`UIFrameBuildContext.generation` bump 后 resolver 命中才带 texture。Headless host 与 windowed compose 消费同一份 packet；windowed `--gpu-shot` 像素门禁仍是 Phase 9。
+- 无 theme / 缺纹理 / 延迟就绪的 GPU 输入就是 snapshot：miss 时 image 画 `placeholderFill`，`UIFrameBuildContext.generation` bump 后 resolver 命中才带 texture。Headless host 与 windowed compose 消费同一份 packet；`setDpiScale` 与 `uiScale` 正交折叠（`EditorInputContractTest`）；windowed `--gpu-shot` 像素门禁仍是 Phase 9。
 - 族 key：`panel` / `button` / `text` / `menubar` / `tab` / `split` / `scrollbar` /
   `dock` / `floating` / `image` / `popup`。角色 key：`panel.window` / `panel.canvas` / `panel.sidebar` /
   `tab.dock` / `tab.sidebar` / `text.header` / `text.muted` / `text.error` /

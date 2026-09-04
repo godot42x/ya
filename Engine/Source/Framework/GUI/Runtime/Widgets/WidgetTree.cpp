@@ -715,6 +715,30 @@ void WidgetTree::setDpiScale(float scale)
     _dpiScale = scale;
 }
 
+void WidgetTree::setClipboardText(std::string text)
+{
+    if (_clipboardWrite) {
+        _clipboardWrite(text);
+        return;
+    }
+    _clipboardText = std::move(text);
+}
+
+std::string WidgetTree::getClipboardText() const
+{
+    if (_clipboardRead) {
+        return _clipboardRead();
+    }
+    return _clipboardText;
+}
+
+void WidgetTree::setClipboardHooks(std::function<std::string()> read,
+                                   std::function<void(const std::string&)> write)
+{
+    _clipboardRead  = std::move(read);
+    _clipboardWrite = std::move(write);
+}
+
 void WidgetTree::invalidateLayout(EWidgetLayoutInvalidation scope)
 {
     // Keep node-local skip proofs coherent with the tree-level dirty bit. The

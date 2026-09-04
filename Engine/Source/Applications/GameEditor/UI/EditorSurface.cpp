@@ -29,6 +29,7 @@
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "GameRuntime/App.h"
+#include "GUI/Host/OsClipboard.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
@@ -583,6 +584,7 @@ void EditorSurface::rebuild(App& app)
         .width  = static_cast<uint32_t>(std::max(windowW, 1)),
         .height = static_cast<uint32_t>(std::max(windowH, 1)),
     });
+    bindSdlClipboard(*_tree);
     _theme = buildEditorTheme(true);
     _tree->setTheme(_theme.get());
 

@@ -14,6 +14,7 @@
 #include "RHI/Render.h"
 #include "RHI/RenderDefines.h"
 #include "RHI/Shader.h"
+#include "GUI/Host/OsClipboard.h"
 #include "RHI/NativeWindow.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "RHI/Backend/Vulkan/VulkanSwapChain.h"
@@ -715,6 +716,7 @@ bool GUIWindowHost::init()
         .width  = swapchain->getExtent().width,
         .height = swapchain->getExtent().height,
     });
+    bindSdlClipboard(*_impl->tree);
     if (!_impl->automationServer.init(config.automation.controlPort)) {
         YA_CORE_ERROR("GUIAppHost: failed to initialize automation control server on port {}",
                       config.automation.controlPort);

@@ -15,8 +15,10 @@ namespace ya
 /// Input contract:
 ///   - click places the caret at the nearest character boundary and requests
 ///     focus;
-///   - focused field consumes KeyTyped (appends at the caret), Backspace,
-///     Left/Right, Home/End and Enter (commit);
+///   - focused field consumes KeyTyped (IME/committed Unicode at the caret),
+///     Backspace/Delete by code point, Left/Right, Home/End and Enter (commit);
+///   - primary+C/X/V copy/cut/paste through WidgetTree clipboard (OS clipboard
+///     is a host hook; paste strips newlines/tabs for the single-line field);
 ///   - `_onTextChanged` fires on every edit, `_onCommit` on Enter / focus
 ///     loss — the workspace owns the text fact source, the field only edits
 ///     its own buffer;
@@ -92,6 +94,7 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
   private:
     void moveCursorByCodePoint(int direction);
     void erasePreviousCodePoint();
+    void eraseNextCodePoint();
     void insertText(const std::string& text);
     /// Place the caret at the nearest character boundary for `localX`
     /// (tree-local logical px, measured from the field's left edge).
