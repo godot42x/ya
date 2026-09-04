@@ -329,6 +329,8 @@ std::shared_ptr<UIElement> EditorSurface::buildRuntimeTools(EditorLayer& layer)
         .release();
 }
 
+EditorSurface::EditorSurface() = default;
+
 EditorSurface::~EditorSurface() = default;
 
 void EditorSurface::shutdown()

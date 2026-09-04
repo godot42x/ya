@@ -128,8 +128,6 @@ void EditorLayer::menuBar()
     {
         ImGui::MenuItem("Fullscreen", nullptr, &bFullscreen);
         ImGui::MenuItem("Padding", nullptr, &bPadding);
-        ImGui::MenuItem("Show Demo Window", nullptr, &bShowDemoWindow);
-        ImGui::MenuItem("Render Graph", nullptr, &bShowRenderGraphWindow);
 
         ImGui::Separator();
 
@@ -353,44 +351,8 @@ void EditorLayer::projectBrowserWindow()
     ImGui::End();
 }
 
-void EditorLayer::runtimeToolsWindow()
-{
-    if (!_app) {
-        return;
-    }
-    _runtimeToolsPanel.onImGuiRender(*_app, _lastDeltaTime);
-}
-
-void renderGUIWorkbenchWindow(EditorLayer& layer)
-{
-    layer.getGUIWorkbenchPanel().onImGuiRender();
-}
-
-void EditorLayer::renderGraphWindow()
-{
-    if (!_app || !bShowRenderGraphWindow) {
-        return;
-    }
-    renderRenderGraphWindowContent(*_app, &bShowRenderGraphWindow);
-}
-
-void EditorLayer::statsWindow()
-{
-    // The Frame Stats panel is now rendered with the YA_GUI framework (retained
-    // widget tree composed into an offscreen surface, bridged back here via
-    // ImGui::Image). The panel owns its ImGui window shell.
-    _frameStatsPanel.onImGuiRender(*_app, _lastDeltaTime);
-}
-
 void EditorLayer::renderAuxiliaryUi()
 {
-    renderGUIWorkbenchWindow(*this);
     _filePicker.render();
-    renderGraphWindow();
-
-    if (bShowDemoWindow)
-    {
-        ImGui::ShowDemoWindow(&bShowDemoWindow);
-    }
 }
 } // namespace ya

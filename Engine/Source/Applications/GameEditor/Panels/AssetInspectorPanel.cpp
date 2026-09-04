@@ -15,8 +15,6 @@
 namespace ya
 {
 
-static const char* kWindowTitle = "Asset Inspector";
-
 namespace
 {
 int comboIndexForValue(const char* const* labels, int count, std::string_view value, int defaultIndex = 0)
@@ -49,10 +47,6 @@ void AssetInspectorPanel::resetPreviewState()
 void AssetInspectorPanel::inspectTexture(const std::string& relativePath)
 {
     if (relativePath == _inspectedPath && _bVisible) {
-        // Already inspecting this asset — just focus the window
-        if (auto* window = ImGui::FindWindowByName(kWindowTitle)) {
-            ImGui::FocusWindow(window);
-        }
         return;
     }
 
@@ -61,10 +55,6 @@ void AssetInspectorPanel::inspectTexture(const std::string& relativePath)
     _bVisible      = true;
     _bDirty        = false;
     resetPreviewState();
-
-    if (auto* window = ImGui::FindWindowByName(kWindowTitle)) {
-        ImGui::FocusWindow(window);
-    }
 }
 
 void AssetInspectorPanel::clear()
@@ -105,25 +95,6 @@ void AssetInspectorPanel::updatePreviewMaskView(bool bForceRefresh)
     auto* const render          = app ? app->getRenderServices().getRender() : nullptr;
     auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
     _previewMaskedView          = resourceFactory ? resourceFactory->createImageView(_previewTexture->getImageShared(), ci) : nullptr;
-}
-
-void AssetInspectorPanel::onImGuiRender()
-{
-    if (!_bVisible) return;
-
-    if (!ImGui::Begin(kWindowTitle, &_bVisible)) {
-        ImGui::End();
-        return;
-    }
-
-    if (_inspectedPath.empty()) {
-        ImGui::TextDisabled("No asset selected");
-    }
-    else {
-        renderTextureInspector();
-    }
-
-    ImGui::End();
 }
 
 void AssetInspectorPanel::renderTextureInspector()

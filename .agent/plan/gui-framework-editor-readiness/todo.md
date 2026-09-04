@@ -82,6 +82,17 @@
 - [x] Runtime Tools retained render graph summary（pipeline + pass/dependency 状态）。
 - [x] Runtime Tools retained render target summary（target/owner/extent/read-only 状态）。
 - [x] Runtime Tools retained debug primitives（开关与 pending/frame/immediate 计数）。
-- [ ] Remove ImGui editor paths。
+- [x] Phase 8A：移除 ImGui Content Browser panel（retained EditorSurface 为唯一路径）。
+- [x] Phase 8B：移除 ImGui Scene Hierarchy panel render（retained EditorSurface Hierarchy 为唯一 UI）。
+- [x] Phase 8C：移除 ImGui DetailsView panel render（retained EditorInspectorTab 为唯一 Inspector UI）。
+- [x] Phase 8D：移除 ImGui Frame Stats panel render（retained EditorSurface Frame Stats 为唯一路径）。
+- [x] Phase 8E：移除 ImGui Asset Inspector panel render（retained EditorSurface Asset Inspector tab 为唯一路径）。
+- [x] Phase 8F：移除 ImGui Runtime Tools panel render（retained EditorSurface Runtime Tools tab 为唯一路径）。
+- [x] Phase 8G：移除 ImGui UI Designer panel render（retained EditorSurface UI Designer tab 为唯一路径）。
+- [x] Phase 8H：移除 ImGui GUI Workbench panel render/compositor（retained EditorSurface Workbench host 为唯一路径）。
+- [x] Phase 8I：默认 editor chrome 切到 widgettree（`editor.chrome.host` / CLI 默认）。
+- [x] Phase 8J：移除 ImGui Render Graph debug 窗口（retained RuntimeRenderGraphSection 为唯一路径）。
+- [x] Phase 8K：移除 ImGui demo window（legacy imgui chrome 仅保留 FilePicker modal）。
+- [ ] Remove remaining ImGui editor paths。
 - [ ] Multi-window/docking persistence。
 - [ ] Cross-platform and long-run gates。

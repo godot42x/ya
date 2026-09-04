@@ -8,10 +8,7 @@ EditorLayer::EditorLayer(App* app)
       _detailsView(this),
       _contentBrowserPanel(this),
       _assetInspectorPanel(this),
-      _frameStatsPanel(this),
-      _runtimeToolsPanel(this),
-      _uiDesignerPanel(this),
-      _guiWorkbenchPanel(this)
+      _uiDesignerPanel(this)
 {
 }
 

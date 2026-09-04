@@ -8,8 +8,6 @@
 #include "RHI/Render.h"
 #include "RHI/Core/CommandBuffer.h"
 
-#include <imgui.h>
-
 namespace ya
 {
 
@@ -66,31 +64,6 @@ UIFrameSnapshot FrameStatsPanel::buildSnapshot()
     ctx.uiScale = {1.0f, 1.0f};
     ctx.offset  = {0.0f, 0.0f};
     return _tree->buildSnapshot(ctx);
-}
-
-void FrameStatsPanel::onImGuiRender(const App& app, float dt)
-{
-    ImGui::Begin("Frame Stats");
-    updateStats(app, dt);
-    ensureTree();
-
-    // Drive the offscreen surface size from the ImGui content region so the
-    // composed texture matches the window. Compose happens later in the editor
-    // module's presentation pass, using this extent.
-    const ImVec2 region = ImGui::GetContentRegionAvail();
-    const uint32_t w = std::max<uint32_t>(static_cast<uint32_t>(region.x), 1);
-    const uint32_t h = std::max<uint32_t>(static_cast<uint32_t>(region.y), 1);
-    if (_logicalExtent.width != w || _logicalExtent.height != h)
-    {
-        _logicalExtent = {w, h};
-        if (_tree)
-            _tree->setLogicalExtent(_logicalExtent);
-        _surface.reset(); // recreate at the new size on next compose
-    }
-
-    if (_displayImage)
-        ImGui::Image(_displayImage.get(), ImVec2(static_cast<float>(_logicalExtent.width), static_cast<float>(_logicalExtent.height)));
-    ImGui::End();
 }
 
 void FrameStatsPanel::ensureTarget(IRender& render, const Extent2D& extent)

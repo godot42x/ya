@@ -154,7 +154,7 @@ struct EditorSurface
     std::shared_ptr<EditorViewportGizmoOverlay> _viewportGizmoOverlay;
 
   public:
-    EditorSurface() = default;
+    EditorSurface();
     ~EditorSurface();
 
     void bind(EditorLayer& layer) { _layer = &layer; }

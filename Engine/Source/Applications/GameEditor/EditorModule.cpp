@@ -14,6 +14,7 @@
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/Panels/RuntimeToolsPanel.h"
 #include "GameEditor/EditorPlaySession.h"
 #include "GameEditor/EditorChrome.h"
 #include "GameEditor/EditorProfilingSettings.h"
@@ -38,7 +39,6 @@
 #include "GUI/Compose/GUIRenderSurface.h"
 #include "RHI/Core/Swapchain.h"
 #include "RHI/NativeWindow.h"
-#include "GameEditor/Panels/GUIWorkbenchPanel.h"
 #include "Render3D/RenderRuntime.h"
 #include "Scene/Core/Scene.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
@@ -487,67 +487,6 @@ class EditorViewportCompositor
     }
 };
 
-class EditorToolSurfaceCompositor
-{
-  private:
-    std::shared_ptr<GUIRenderSurface> _surface = nullptr;
-
-  public:
-    void shutdown()
-    {
-        _surface.reset();
-    }
-
-    [[nodiscard]] std::shared_ptr<RenderTexture> getOutputImage() const
-    {
-        return _surface ? _surface->getRenderImage() : nullptr;
-    }
-
-    void compose(IRender& render, ICommandBuffer& commandBuffer, GUIWorkbenchPanel& panel)
-    {
-        if (!panel.hasRenderableExtent()) {
-            return;
-        }
-
-        const Extent2D extent = panel.getLogicalExtent();
-        ensureTarget(render, extent);
-        if (!_surface || !_surface->isValid()) {
-            return;
-        }
-
-        const UIFrameSnapshot snapshot = panel.buildSnapshot();
-        _surface->prepare(FRender2DComposePassDesc{
-            .kind = ERender2DComposePassKind::EditorToolSurface,
-        });
-        _surface->record(&commandBuffer,
-                         nullptr,
-                         &snapshot,
-                         FRender2DComposePassDesc{
-                             .kind = ERender2DComposePassKind::EditorToolSurface,
-                             .logicalViewportExtent = extent,
-                         });
-    }
-
-  private:
-    void ensureTarget(IRender& render, const Extent2D& extent)
-    {
-        if (_surface &&
-            _surface->isValid() &&
-            _surface->getRenderImage()->getWidth() == extent.width &&
-            _surface->getRenderImage()->getHeight() == extent.height &&
-            _surface->getRenderImage()->getFormat() == EFormat::R16G16B16A16_SFLOAT) {
-            return;
-        }
-        _surface = GUIRenderSurface::createOffscreen(
-            *render.getResourceFactory(),
-            FGUIRenderSurfaceDesc{
-                .label       = "EditorToolSurface",
-                .extent      = extent,
-                .colorFormat = EFormat::R16G16B16A16_SFLOAT,
-            });
-    }
-};
-
 class EditorModule final : public IModule, public IRuntimeModule, public IEditorAutomationControl
 {
   private:
@@ -555,11 +494,10 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     EditorPlaySession              _playSession;
     FreeCameraController           _cameraController;
     EditorViewportCompositor       _viewportCompositor;
-    EditorToolSurfaceCompositor    _guiWorkbenchCompositor;
     EditorSurface                  _editorSurface;
     EditorInputNode                _inputNode;
     InputRouter::FNodeRegistration _inputNodeRegistration;
-    EEditorChromeHost              _chromeHost      = EEditorChromeHost::ImGui;
+    EEditorChromeHost              _chromeHost      = EEditorChromeHost::WidgetTree;
     bool                           _bWasRunning     = false;
     std::optional<EViewportMode>   _viewportModeBeforePlay;
 
@@ -768,11 +706,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             }
         }
 
-        _chromeHost = EEditorChromeHost::ImGui;
-        const std::string fromConfig = ConfigManager::get().getOr<std::string>("editor", "chrome.host", "imgui");
+        _chromeHost = EEditorChromeHost::WidgetTree;
+        const std::string fromConfig = ConfigManager::get().getOr<std::string>("editor", "chrome.host", "widgettree");
         if (!tryParseEditorChromeHost(fromConfig, _chromeHost)) {
-            YA_CORE_WARN("Ignoring invalid editor.chrome.host '{}', using imgui", fromConfig);
-            _chromeHost = EEditorChromeHost::ImGui;
+            YA_CORE_WARN("Ignoring invalid editor.chrome.host '{}', using widgettree", fromConfig);
+            _chromeHost = EEditorChromeHost::WidgetTree;
         }
         if (desc.editorChrome) {
             if (!tryParseEditorChromeHost(*desc.editorChrome, _chromeHost)) {
@@ -791,7 +729,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         registerBuiltinTypeRenderers();
 
         _layer = std::make_unique<EditorLayer>(&app);
-        _layer->setCameraController(&_cameraController);
         initializeEditorCamera(app, *_layer);
         _layer->setCurrentScenePath(app.getDesc().defaultScenePath.value_or(std::string{}));
         _layer->onAttach();
@@ -869,10 +806,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         gEditorAuthoringScene = nullptr;
         app.getRenderServices().clearExtensionRenderFrameState();
         _viewportCompositor.shutdown();
-        // Release the tool-surface composed image BEFORE the render runtime /
-        // VMA allocator is torn down (leaking it past device destruction trips
-        // VMA's "unfreed dedicated allocations" assertion).
-        _guiWorkbenchCompositor.shutdown();
         if (_layer) {
             _layer->setViewportDisplayImage(nullptr);
             _layer->onDetach();
@@ -1068,20 +1001,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                                     *_layer,
                                     app.getRenderServices().getRenderFrameState(),
                                     canvasTargetExtent);
-        if (_chromeHost == EEditorChromeHost::ImGui) {
-            _guiWorkbenchCompositor.compose(*render, commandBuffer, _layer->getGUIWorkbenchPanel());
-        }
         // Keep the last valid frame instead of clobbering the display with a
         // transiently null output (startup / mode-switch / resize gaps).
         if (auto output = _viewportCompositor.getOutputImage();
             output && output->isValid() && output->getImageView()) {
             _layer->setViewportDisplayImage(std::move(output));
-        }
-        if (_chromeHost == EEditorChromeHost::ImGui) {
-            if (auto output = _guiWorkbenchCompositor.getOutputImage();
-                output && output->isValid() && output->getImageView()) {
-                _layer->getGUIWorkbenchPanel().setDisplayImage(std::move(output));
-            }
         }
     }
 

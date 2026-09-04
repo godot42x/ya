@@ -7,6 +7,7 @@
 #include "ECS/ECSRegistry.h"
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Declarative/Build.h"
+#include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -14,8 +15,10 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/Inspector/PropertyGraph.h"
+#include "GameEditor/Panels/UIDesignerPanel.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
+#include "Scene/Core/SceneWidgetEntry.h"
 
 #include <algorithm>
 #include <format>
@@ -158,15 +161,51 @@ std::shared_ptr<UIElement> EditorInspectorTab::build(WidgetTree&)
     auto projected = ui::column("InspectorProjected").setSpacing(8.0f);
     _projectedHost = projected.share();
 
+    auto entityForm = ui::column("InspectorEntityForm")
+                          .setSpacing(6.0f)
+                          .child(std::move(entityText))
+                          .child(ui::text("NameLabel").setText("Name").setFontSize(12))
+                          .child(std::move(nameField), FBoxSlotArgs{.preferredSize = {220.0f, 26.0f}})
+                          .child(std::move(empty))
+                          .child(std::move(projected));
+    _entityFormHost = entityForm.share();
+
+    auto widgetEntryId = ui::text("InspectorWidgetEntryId").setStyleKey("text.muted");
+    _widgetEntryIdText = widgetEntryId.share();
+    auto widgetEntryType = ui::text("InspectorWidgetEntryType").setFontSize(12);
+    _widgetEntryTypeText = widgetEntryType.share();
+    auto openDesigner = ui::button("InspectorOpenDesigner")
+                            .child(ui::text("InspectorOpenDesignerLabel").setText("Open in UI Designer"));
+    _openDesignerButton = openDesigner.share();
+    _openDesignerButton->_onClick = [this]() {
+        if (!_layer) {
+            return;
+        }
+        SceneWidgetEntry* entry = _layer->getSelectedWidgetEntry();
+        Scene* scene = _layer->getViewportInteractionScene();
+        if (!entry || !scene || !entry->inlineDocument) {
+            return;
+        }
+        _layer->getUIDesignerPanel().openSceneEntry(*scene, *entry);
+    };
+
+    auto widgetEntryForm = ui::column("InspectorWidgetEntryForm")
+                               .setSpacing(6.0f)
+                               .child(ui::text("InspectorWidgetEntryTitle")
+                                          .setText("Game UI Entry")
+                                          .setStyleKey("text.header"))
+                               .child(std::move(widgetEntryId))
+                               .child(std::move(widgetEntryType))
+                               .child(std::move(openDesigner), FBoxSlotArgs{.preferredSize = {220.0f, 26.0f}})
+                               .setVisibility(EWidgetVisibility::Hidden);
+    _widgetEntryHost = widgetEntryForm.share();
+
     auto form = ui::column("InspectorForm")
                     .setPadding({10.0f, 8.0f})
                     .setSpacing(6.0f)
                     .child(ui::text("InspectorTitle").setText("INSPECTOR").setStyleKey("text.eyebrow"))
-                    .child(std::move(entityText))
-                    .child(ui::text("NameLabel").setText("Name").setFontSize(12))
-                    .child(std::move(nameField), FBoxSlotArgs{.preferredSize = {220.0f, 26.0f}})
-                    .child(std::move(empty))
-                    .child(std::move(projected));
+                    .child(std::move(entityForm))
+                    .child(std::move(widgetEntryForm));
     return ui::panel("InspectorBody")
         .setStyleKey("panel")
         .child(std::move(form), ui::canvasSlot().fill())
@@ -259,6 +298,37 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
 void EditorInspectorTab::sync(WidgetTree& tree)
 {
     if (!_layer) return;
+
+    SceneWidgetEntry* widgetEntry = _layer->getSelectedWidgetEntry();
+    const bool widgetMode = widgetEntry != nullptr;
+    if (_widgetEntryHost) {
+        _widgetEntryHost->setVisibility(widgetMode ? EWidgetVisibility::Visible : EWidgetVisibility::Hidden);
+    }
+    if (_entityFormHost) {
+        _entityFormHost->setVisibility(widgetMode ? EWidgetVisibility::Hidden : EWidgetVisibility::Visible);
+    }
+    if (widgetMode) {
+        if (_widgetEntryIdText) {
+            _widgetEntryIdText->setText(std::format("Entry: {}", widgetEntry->entryId));
+        }
+        if (_widgetEntryTypeText) {
+            if (widgetEntry->inlineDocument) {
+                _widgetEntryTypeText->setText(std::format("Type: {}", widgetEntry->inlineDocument->typeId));
+            }
+            else {
+                _widgetEntryTypeText->setText("Type: <invalid: no document>");
+            }
+        }
+        if (_openDesignerButton) {
+            _openDesignerButton->setEnabled(widgetEntry->inlineDocument != nullptr);
+        }
+        if (!_projectedFingerprint.empty()) {
+            _projectedFingerprint.clear();
+            rebuildProjected(tree, {});
+        }
+        return;
+    }
+
     const std::vector<Entity*> entities = inspectorTargets(_layer);
     Entity* primary = entities.empty() ? nullptr : entities.front();
     const bool selected = !entities.empty();
@@ -312,6 +382,11 @@ void EditorInspectorTab::reset()
     _nameField.reset();
     _entityText.reset();
     _emptyText.reset();
+    _entityFormHost.reset();
+    _widgetEntryHost.reset();
+    _widgetEntryIdText.reset();
+    _widgetEntryTypeText.reset();
+    _openDesignerButton.reset();
     _projectedHost.reset();
     _projectedWidgets.clear();
     _projectedSections.clear();

@@ -5,9 +5,6 @@
 #include "Core/Base.h"
 #include "GameEditor/Panels/AssetInspectorPanel.h"
 #include "GameEditor/Panels/ContentBrowserPanel.h"
-#include "GameEditor/Panels/FrameStatsPanel.h"
-#include "GameEditor/Panels/GUIWorkbenchPanel.h"
-#include "GameEditor/Panels/RuntimeToolsPanel.h"
 
 #include "Core/Camera/Camera.h"
 
@@ -70,10 +67,7 @@ struct EditorLayer
     DetailsView         _detailsView;
     ContentBrowserPanel _contentBrowserPanel;
     AssetInspectorPanel _assetInspectorPanel;
-    FrameStatsPanel     _frameStatsPanel{this};
-    RuntimeToolsPanel   _runtimeToolsPanel;
     UIDesignerPanel     _uiDesignerPanel;
-    GUIWorkbenchPanel   _guiWorkbenchPanel;
 
     // ImGui Docking state
     ImGuiDockNodeFlags _dockspaceFlags = ImGuiDockNodeFlags_None;
@@ -82,8 +76,6 @@ struct EditorLayer
     // Window state
     bool bFullscreen            = true;
     bool bPadding               = true;
-    bool bShowDemoWindow        = false;
-    bool bShowRenderGraphWindow = false;
     // bool bShowSettingsWindow = true;
     // bool bShowRenderStats    = true;
 
@@ -201,7 +193,6 @@ struct EditorLayer
     [[nodiscard]] std::vector<RenderOverlayText2D>      buildViewportCameraOverlayTexts() const;
 
     void                                                onUpdate(float dt);
-    void                                                setCameraController(FreeCameraController* controller) { _runtimeToolsPanel.setCameraController(controller); }
     void                                                setEditableScene(Scene* scene);
     void                                                setCurrentScenePath(std::string scenePath) { _currentScenePath = std::move(scenePath); }
     [[nodiscard]] const std::string&                    getCurrentScenePath() const { return _currentScenePath; }
@@ -354,13 +345,6 @@ struct EditorLayer
         viewportWindow();
         debugWindow();
 
-        _sceneHierarchyPanel.onImGuiRender();
-        _detailsView.onImGuiRender();
-        _contentBrowserPanel.onImGuiRender();
-        _assetInspectorPanel.onImGuiRender();
-        _uiDesignerPanel.onImGuiRender();
-        statsWindow();
-        runtimeToolsWindow();
         renderAuxiliaryUi();
 
         ImGui::End(); // End main dockspace window
@@ -395,9 +379,6 @@ struct EditorLayer
     void menuBar();
     void toolbar();
     void projectBrowserWindow();
-    void runtimeToolsWindow();
-    void renderGraphWindow();
-    void statsWindow();
     void renderAuxiliaryUi();
     // void settingsWindow();
     // void renderStatsWindow();
@@ -461,7 +442,6 @@ struct EditorLayer
     bool                             isRightMouseDragging() const { return _bRightMouseDragging; }
     const std::vector<Entity*>&      getSelections() const { return _selections; }
     [[nodiscard]] UIDesignerPanel&   getUIDesignerPanel() { return _uiDesignerPanel; }
-    [[nodiscard]] GUIWorkbenchPanel& getGUIWorkbenchPanel() { return _guiWorkbenchPanel; }
     [[nodiscard]] AssetInspectorPanel& getAssetInspectorPanel() { return _assetInspectorPanel; }
 
     Entity*  getSelectedEntity() const { return _selections.empty() ? nullptr : _selections.front(); }

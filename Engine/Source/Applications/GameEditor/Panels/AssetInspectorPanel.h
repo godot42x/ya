@@ -44,9 +44,6 @@ struct AssetInspectorPanel
     /// Close / clear
     void clear();
 
-    /// Render the ImGui panel
-    void onImGuiRender();
-
     bool isVisible() const { return _bVisible; }
     [[nodiscard]] const std::string& inspectedPath() const { return _inspectedPath; }
 

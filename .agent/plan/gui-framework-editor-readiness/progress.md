@@ -737,3 +737,122 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 ### Phase 7T 边界
 
 - debug pipeline inspector、render target attachment preview/format editing、render graph topology canvas/internals、deferred/forward 专属详细参数仍待 retained 迁移；旧 ImGui panels 保持编译。
+
+## Phase 8A 当前 checkpoint（2026-09-04）
+
+- 删除 ImGui `ContentBrowserPanel::onImGuiRender` 及 `EditorLayer::onImGuiRender` 调用；`ContentBrowserPanel` 仅保留 FilePicker 所需的 folder/file 图标加载。
+- retained `EditorSurface` Content Browser 是唯一正式路径；ImGui chrome 模式不再提供 Content Browser 窗口。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`；`xmake r ya-testing --gtest_filter='FileExplorerNavigationTest.*:EditorListRowsTest.*'`；widgettree editor smoke 退出码 0。
+
+### Phase 8A 边界
+
+- ImGui `SceneHierarchyPanel`、`DetailsView`、`AssetInspectorPanel`、Runtime Tools、UI Designer 等仍保留编译与 ImGui 渲染路径。
+- `FilePicker` 仍依赖 ImGui 纹理描述符；下一步继续按功能删除其余 ImGui editor path。
+
+## Phase 8B 当前 checkpoint（2026-09-04）
+
+- 删除 ImGui `SceneHierarchyPanel::onImGuiRender` 及 `EditorLayer::onImGuiRender` 调用；`SceneHierarchyPanel` 仍保留 selection/move/duplicate 等 editor 数据面 API（viewport pick、undo 等仍经此面板同步）。
+- retained `EditorSurface` Hierarchy（filter + scroll + entity drag-drop）是唯一正式层级 UI。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（378/378）；`EditorHierarchyOpsTest.*` 2/2；widgettree editor smoke 退出码 0。
+
+### Phase 8B 边界
+
+- `SceneHierarchyPanel` 内 ImGui 绘制实现（`sceneTree` 等）仍编译但未调用；后续 checkpoint 可整块删除。
+- ImGui Frame Stats、Asset Inspector 等仍平行。
+
+## Phase 8C 当前 checkpoint（2026-09-04）
+
+- 删除 ImGui `DetailsView::onImGuiRender` 及 `EditorLayer::onImGuiRender` 调用；`DetailsView` 内 ImGui 绘制实现仍编译但未调用。
+- retained `EditorInspectorTab` 是实体/component 唯一正式 Inspector UI；选中 `ui:` hierarchy 条目时显示 Game UI Entry 摘要与 Open in UI Designer。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（378/378）；`EditorPropertyGraphTest.*` 16/16；widgettree editor smoke 退出码 0。
+
+### Phase 8C 边界
+
+- Game UI Entry 的 zOrder/autoMount/transform/overrides/delete 仍只在未调用的 ImGui `DetailsView` 实现中；后续 checkpoint 迁移到 retained Inspector 或 UI Designer。
+- ImGui Frame Stats、Asset Inspector、Runtime Tools、UI Designer 等仍平行。
+
+## Phase 8D 当前 checkpoint（2026-09-04）
+
+- 删除 ImGui `EditorLayer::statsWindow` / `FrameStatsPanel::onImGuiRender` 及 `EditorLayer` 对 `_frameStatsPanel` 的持有；retained `EditorSurface` Frame Stats tab 是唯一正式路径。
+- `FrameStatsPanel` 仍编译（offscreen compose 工具），但 ImGui 窗口壳已删。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`；widgettree editor smoke 退出码 0。
+
+### Phase 8D 边界
+
+- retained Frame Stats 尚未恢复 avg FPS 滑动窗口；ImGui `FrameStatsPanel` 的 history 逻辑仍留在未调用代码中。
+- ImGui Runtime Tools、UI Designer 等仍平行。
+
+## Phase 8E 当前 checkpoint（2026-09-04）
+
+- 删除 ImGui `AssetInspectorPanel::onImGuiRender` 及 `EditorLayer::onImGuiRender` 调用；`AssetInspectorPanel` 仍保留 `inspectTexture`/`clear`/`inspectedPath` 数据面 API（Content Browser 与 retained tab 同步路径）。
+- retained `EditorSurface` Asset Inspector tab 是唯一正式资产检视 UI。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`；widgettree editor smoke 退出码 0。
+
+### Phase 8E 边界
+
+- ImGui `AssetInspectorPanel` 内 meta 编辑与 RGBA mask 控件仍编译但未调用；后续迁移到 retained tab 或删除。
+- ImGui UI Designer 等仍平行。
+
+## Phase 8F 当前 checkpoint（2026-09-04）
+
+- 删除 ImGui `EditorLayer::runtimeToolsWindow` / `RuntimeToolsPanel::onImGuiRender` 及 `EditorLayer` 对 `_runtimeToolsPanel` 的持有；`migrateLegacyRuntimeSettings` 仍由 `EditorModule` 启动时调用。
+- retained `EditorSurface` Runtime Tools tab（session/diagnostics/render settings/profiling/graph/targets/debug primitives）是唯一正式路径。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`；widgettree editor smoke 退出码 0。
+
+### Phase 8F 边界
+
+- ImGui `RuntimeToolsPanel` 内 deferred/forward/camera/clear-values 等折叠面板仍编译但未调用；后续整块删除或按需迁移到 retained sections。
+- ImGui UI Designer 等仍平行。
+
+## Phase 8G 当前 checkpoint（2026-09-04）
+
+- 删除 ImGui `UIDesignerPanel::onImGuiRender` 及 `EditorLayer::onImGuiRender` 调用；`UIDesignerPanel` 仍保留 document/preview/selection API（retained tab 与 hierarchy Open in UI Designer 仍经此面板）。
+- retained `EditorSurface` UI Designer tab（new/save/close、状态/选择同步、preview tree）是唯一正式 UI Designer chrome。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`；widgettree editor smoke 退出码 0。
+
+### Phase 8G 边界
+
+- ImGui `UIDesignerPanel` 内 palette/inspector/toolbar 绘制仍编译但未调用；完整 authoring 工作流仍依赖 `UIDesignerPanel` 数据面 + retained tab 壳。
+- ImGui menu/toolbar/dockspace chrome host、FilePicker 等仍平行。
+
+## Phase 8H 当前 checkpoint（2026-09-04）
+
+- 删除 ImGui `GUIWorkbenchPanel::onImGuiRender`、`renderGUIWorkbenchWindow`、`EditorLayer::_guiWorkbenchPanel` 持有，以及 `EditorModule` 的 `EditorToolSurfaceCompositor` offscreen compose 路径。
+- retained `EditorSurface` `FWorkbenchSurface` dock tab 是唯一正式 GUI Workbench UI；ImGui chrome 模式不再显示平行 Workbench 窗口。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`；widgettree editor smoke 退出码 0。
+
+### Phase 8H 边界
+
+- `GUIWorkbenchPanel` 类型仍编译为 legacy stub，待后续整块删除。
+- ImGui menu/toolbar/dockspace/viewport shell、FilePicker、render graph debug window 等仍平行。
+
+## Phase 8I 当前 checkpoint（2026-09-04）
+
+- 将 `editor.chrome.host` 默认值与 `EditorModule` fallback 从 `imgui` 改为 `widgettree`；`--editor-chrome=imgui` 仍可显式启用 legacy ImGui chrome。
+- retained `EditorSurface` 成为默认编辑器 shell；ImGui chrome 降为 opt-in legacy 路径。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`；widgettree editor smoke 退出码 0。
+
+### Phase 8I 边界
+
+- ImGui chrome host 代码路径仍完整保留（menu/toolbar/dockspace、FilePicker、render graph debug）；下一步继续删除或仅在 imgui 模式下编译。
+- docking persistence / 多窗口仍待 Phase 8 后续 checkpoint。
+
+## Phase 8J 当前 checkpoint（2026-09-04）
+
+- 删除 ImGui `EditorLayer::renderGraphWindow`、View 菜单 Render Graph 项及 `bShowRenderGraphWindow`；`renderRenderGraphWindowContent` 仍编译但未调用。
+- retained `EditorSurface` Runtime Tools 内的 `RuntimeRenderGraphSection` 是正式 render graph 摘要路径。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`；widgettree editor smoke 退出码 0。
+
+### Phase 8J 边界
+
+- ImGui chrome host（menu/toolbar/dockspace/viewport）、FilePicker 等仍平行。
+
+## Phase 8K 当前 checkpoint（2026-09-04）
+
+- 删除 ImGui `ImGui::ShowDemoWindow` 路径、View 菜单 Show Demo Window 项及 `bShowDemoWindow`。
+- legacy ImGui chrome 的 `renderAuxiliaryUi` 现仅保留 `FilePicker::render` modal。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`；widgettree editor smoke 退出码 0。
+
+### Phase 8K 边界
+
+- ImGui chrome host（menu/toolbar/dockspace/viewport/project browser）与 ImGui `FilePicker` 仍平行；下一步迁移 FilePicker 或继续削减 imgui chrome shell。

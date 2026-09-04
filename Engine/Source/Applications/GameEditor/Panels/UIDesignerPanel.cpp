@@ -703,41 +703,4 @@ void UIDesignerPanel::drawInspector()
     }
 }
 
-void UIDesignerPanel::onImGuiRender()
-{
-    if (!ImGui::Begin("UI Designer")) {
-        ImGui::End();
-        return;
-    }
-
-    // Clear the drag auto-expand when no designer-tree drag is active.
-    if (!ImGui::GetDragDropPayload()) {
-        _dragHoverTarget = nullptr;
-    }
-
-    drawToolbar();
-
-    if (!hasDocument()) {
-        ImGui::TextWrapped("Create a document with New (pick a widget type), or open a "
-                           "SceneWidgetEntry from the Scene Hierarchy.");
-        ImGui::End();
-        return;
-    }
-
-    applyPreviewExtent();
-
-    ImGui::SeparatorText("WidgetTree");
-    if (_previewRoot) {
-        drawWidgetTree(*_previewRoot);
-    }
-    else {
-        ImGui::TextDisabled("Preview root missing");
-    }
-
-    drawPalette();
-    drawInspector();
-
-    ImGui::End();
-}
-
 } // namespace ya

@@ -44,10 +44,8 @@ struct FrameStatsPanel
   public:
     explicit FrameStatsPanel(EditorLayer* owner);
 
-    /// Render the ImGui window shell and bridge the composed YA_GUI texture in.
-    void onImGuiRender(const App& app, float dt);
     /// Compose the retained tree into the offscreen surface. Call from the
-    /// editor module's presentation pass, after onImGuiRender() has sized it.
+    /// editor module's presentation pass when an ImGui shell has sized it.
     void compose(IRender& render, ICommandBuffer& commandBuffer);
     [[nodiscard]] bool hasRenderableExtent() const { return _logicalExtent.width > 0 && _logicalExtent.height > 0; }
     [[nodiscard]] Extent2D getLogicalExtent() const { return _logicalExtent; }

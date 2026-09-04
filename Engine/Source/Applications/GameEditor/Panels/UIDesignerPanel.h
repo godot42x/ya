@@ -37,8 +37,6 @@ struct UIDesignerPanel
     UIDesignerPanel(const UIDesignerPanel&)            = delete;
     UIDesignerPanel& operator=(const UIDesignerPanel&) = delete;
 
-    void onImGuiRender();
-
     // === Document lifecycle ===
     [[nodiscard]] bool hasDocument() const { return _document != nullptr; }
 

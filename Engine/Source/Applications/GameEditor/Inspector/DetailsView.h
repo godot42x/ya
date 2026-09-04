@@ -50,8 +50,6 @@ struct DetailsView
   public:
     DetailsView(EditorLayer *owner);
 
-    void onImGuiRender();
-
   private:
     void drawComponents(Entity &entity);
     /// Game UI entry inspector (SceneWidgetEntry authoring data).

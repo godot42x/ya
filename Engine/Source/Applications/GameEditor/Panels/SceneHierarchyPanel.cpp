@@ -34,12 +34,6 @@
 namespace ya
 {
 
-void SceneHierarchyPanel::onImGuiRender()
-{
-    YA_PROFILE_FUNCTION();
-    sceneTree();
-}
-
 void SceneHierarchyPanel::setContext(Scene* scene)
 {
     if (_context == scene) {

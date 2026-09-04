@@ -107,33 +107,6 @@ bool resolveReflectionPath(void*               rootInstance,
 
 } // namespace
 
-void DetailsView::onImGuiRender()
-{
-    YA_PROFILE_FUNCTION();
-    ImGui::SetNextWindowSize(ImVec2(300, 600), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Properties")) {
-        ImGui::End();
-        return;
-    }
-
-    if (SceneWidgetEntry* entry = _owner->getSelectedWidgetEntry()) {
-        if (Scene* scene = _owner->getViewportInteractionScene()) {
-            drawWidgetEntry(*scene, *entry);
-        }
-    }
-    else if (const auto& selections = _owner->getSelections(); selections.size() > 1) {
-        drawMultiComponents(selections);
-    }
-    else if (!selections.empty()) {
-        if (auto* firstEntity = selections[0]; firstEntity->isValid()) {
-            drawComponents(*firstEntity);
-        }
-    }
-
-    ImGui::End();
-    _filePicker.render();
-}
-
 void DetailsView::drawWidgetEntry(Scene& scene, SceneWidgetEntry& entry)
 {
     ImGui::Text("Game UI Entry");

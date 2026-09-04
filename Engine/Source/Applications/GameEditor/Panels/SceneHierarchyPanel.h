@@ -104,7 +104,6 @@ struct SceneHierarchyPanel
     SceneHierarchyPanel(EditorLayer *owner) : _owner(owner) {}
 
     void setContext(Scene *scene);
-    void onImGuiRender();
 
     [[nodiscard]] Entity *getSelectedEntity() const { return _primarySelection; }
     void                  setSelection(Entity *entity);
