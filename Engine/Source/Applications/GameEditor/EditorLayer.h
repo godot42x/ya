@@ -462,6 +462,7 @@ struct EditorLayer
     const std::vector<Entity*>&      getSelections() const { return _selections; }
     [[nodiscard]] UIDesignerPanel&   getUIDesignerPanel() { return _uiDesignerPanel; }
     [[nodiscard]] GUIWorkbenchPanel& getGUIWorkbenchPanel() { return _guiWorkbenchPanel; }
+    [[nodiscard]] AssetInspectorPanel& getAssetInspectorPanel() { return _assetInspectorPanel; }
 
     Entity*  getSelectedEntity() const { return _selections.empty() ? nullptr : _selections.front(); }
     uint64_t getSelectedEntityUUID() const { return _selectedEntityUUID; }

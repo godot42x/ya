@@ -142,7 +142,168 @@ bool widgetOrAncestor(const UIElement* node, const UIElement* target)
     return false;
 }
 
+UITreeView::FNode makeDesignerTreeNode(const UIElement& widget, const std::string& path)
+{
+    UITreeView::FNode node;
+    node.id = path;
+    node.label = widget._name + " [" + widget._typeId + "]";
+    const auto& children = widget.getChildren();
+    node.children.reserve(children.size());
+    for (size_t index = 0; index < children.size(); ++index) {
+        node.children.push_back(makeDesignerTreeNode(*children[index], path + "/" + std::to_string(index)));
+    }
+    return node;
+}
+
+void collectDesignerTreeFingerprint(const UIElement& widget, std::string& out, const std::string& path)
+{
+    out += path + ":" + widget._name + ":" + widget._typeId + ";";
+    const auto& children = widget.getChildren();
+    for (size_t index = 0; index < children.size(); ++index) {
+        collectDesignerTreeFingerprint(*children[index], out, path + "/" + std::to_string(index));
+    }
+}
+
 } // namespace
+
+std::shared_ptr<UIElement> EditorSurface::buildAssetInspector(EditorLayer& layer)
+{
+    (void)layer;
+    auto pathText = ui::text("AssetInspectorPath").setText("No asset selected").setStyleKey("text.muted").share();
+    auto statusText = ui::text("AssetInspectorStatus").setText("Select a texture in Content Browser").setStyleKey("text.muted").share();
+    auto preview = ui::image("AssetInspectorPreview").setStyleKey("image").share();
+    _assetInspectorPathText = pathText;
+    _assetInspectorStatusText = statusText;
+    _assetInspectorPreview = preview;
+
+    return ui::panel("AssetInspectorBody")
+        .setStyleKey("panel.canvas")
+        .child(ui::column("AssetInspectorColumn")
+                   .setSpacing(8.0f)
+                   .child(pathText)
+                   .child(preview, FBoxSlotArgs{.preferredSize = {0.0f, 220.0f}})
+                   .child(statusText)
+                   .release(),
+               ui::canvasSlot().fill().offset({12.0f, 12.0f}))
+        .release();
+}
+
+std::shared_ptr<UIElement> EditorSurface::buildUIDesigner(EditorLayer& layer)
+{
+    auto status = ui::text("UIDesignerStatus").setText("No document open").setStyleKey("text.muted").share();
+    auto selection = ui::text("UIDesignerSelection").setText("No widget selected").setStyleKey("text.muted").share();
+    _uiDesignerRoots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    _uiDesignerSelection = std::make_shared<Reactive<std::string>>("");
+    auto treeBuilder = ui::treeView("UIDesignerTree")
+                           .bindData(_uiDesignerRoots)
+                           .bindSelection(_uiDesignerSelection)
+                           .setOnSelectionChanged([&layer](const std::string& id) {
+                               std::vector<size_t> path;
+                               size_t start = 0;
+                               while (start < id.size()) {
+                                   const size_t slash = id.find('/', start);
+                                   const size_t end = slash == std::string::npos ? id.size() : slash;
+                                   if (start == 0 && id.compare(start, end - start, "root") == 0) {
+                                       start = slash == std::string::npos ? id.size() : slash + 1;
+                                       continue;
+                                   }
+                                   try {
+                                       path.push_back(static_cast<size_t>(std::stoul(id.substr(start, end - start))));
+                                   }
+                                   catch (...) {
+                                       return;
+                                   }
+                                   start = slash == std::string::npos ? id.size() : slash + 1;
+                               }
+                               layer.getUIDesignerPanel().selectByChildPath(path);
+                           });
+    auto tree = treeBuilder.share();
+    _uiDesignerTree = tree;
+
+    auto newBuilder = ui::button("UIDesignerNew").child(ui::text("UIDesignerNewLabel").setText("New Panel"));
+    newBuilder.setOnClick([&layer]() { layer.getUIDesignerPanel().newDocument("panel"); });
+    auto newButton = newBuilder.share();
+
+    auto saveBuilder = ui::button("UIDesignerSave").child(ui::text("UIDesignerSaveLabel").setText("Save"));
+    saveBuilder.setOnClick([&layer]() { (void)layer.getUIDesignerPanel().saveDocument(); });
+    auto saveButton = saveBuilder.share();
+
+    auto closeBuilder = ui::button("UIDesignerClose").child(ui::text("UIDesignerCloseLabel").setText("Close"));
+    closeBuilder.setOnClick([&layer]() { layer.getUIDesignerPanel().clearDocument(); });
+    auto closeButton = closeBuilder.share();
+
+    _uiDesignerStatusText = status;
+    _uiDesignerSelectionText = selection;
+    _uiDesignerNewButton = newButton;
+    _uiDesignerSaveButton = saveButton;
+    _uiDesignerCloseButton = closeButton;
+
+    return ui::panel("UIDesignerBody")
+        .setStyleKey("panel.canvas")
+        .child(ui::column("UIDesignerColumn")
+                   .setSpacing(8.0f)
+                   .child(status)
+                   .child(selection)
+                   .child(tree, FBoxSlotArgs{.preferredSize = {0.0f, 220.0f}})
+                   .child(newButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
+                   .child(saveButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
+                   .child(closeButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
+                   .release(),
+               ui::canvasSlot().fill().offset({12.0f, 12.0f}))
+        .release();
+}
+
+std::shared_ptr<UIElement> EditorSurface::buildRuntimeTools(EditorLayer& layer)
+{
+    auto status = ui::text("RuntimeToolsStatus").setText("Stopped").setStyleKey("text.header").share();
+    auto frame = ui::text("RuntimeToolsFrame").setText("Frame 0").setStyleKey("text.muted").share();
+
+    auto playBuilder = ui::button("RuntimeToolsPlay").child(ui::text("RuntimeToolsPlayLabel").setText("Play"));
+    playBuilder.setOnClick([]() {
+        if (auto* app = App::get()) {
+            app->getTaskManager().registerFrameTask([app]() { app->startRuntime(); });
+        }
+    });
+    auto play = playBuilder.share();
+
+    auto simulateBuilder = ui::button("RuntimeToolsSimulate").child(ui::text("RuntimeToolsSimulateLabel").setText("Simulate"));
+    simulateBuilder.setOnClick([]() {
+        if (auto* app = App::get()) {
+            app->getTaskManager().registerFrameTask([app]() { app->startSimulation(); });
+        }
+    });
+    auto simulate = simulateBuilder.share();
+
+    auto stopBuilder = ui::button("RuntimeToolsStop").child(ui::text("RuntimeToolsStopLabel").setText("Stop"));
+    stopBuilder.setOnClick([]() {
+        if (auto* app = App::get()) {
+            app->getTaskManager().registerFrameTask([app]() {
+                if (app->isRuntimeMode()) app->stopRuntime();
+                else if (app->isSimulationMode()) app->stopSimulation();
+            });
+        }
+    });
+    auto stop = stopBuilder.share();
+
+    _runtimeToolsStatusText = status;
+    _runtimeToolsFrameText = frame;
+    _runtimeToolsPlayButton = play;
+    _runtimeToolsSimulateButton = simulate;
+    _runtimeToolsStopButton = stop;
+
+    return ui::panel("RuntimeToolsBody")
+        .setStyleKey("panel.canvas")
+        .child(ui::column("RuntimeToolsColumn")
+                   .setSpacing(8.0f)
+                   .child(status)
+                   .child(frame)
+                   .child(play, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
+                   .child(simulate, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
+                   .child(stop, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
+                   .release(),
+               ui::canvasSlot().fill().offset({12.0f, 12.0f}))
+        .release();
+}
 
 EditorSurface::~EditorSurface() = default;
 
@@ -612,17 +773,64 @@ void EditorSurface::buildEditorChrome(App& app)
     _tabRegistry->registerTab({
         .id = "runtime-tools",
         .title = "Runtime Tools",
-        .build = [](EditorLayer&, WidgetTree&) { return makePlaceholderPanel("RuntimeTools", "Runtime Tools — pending"); },
+        .build = [this](EditorLayer& layer, WidgetTree&) { return buildRuntimeTools(layer); },
+        .sync = [this](EditorLayer&, WidgetTree&) {
+            if (!_runtimeToolsStatusText || !_runtimeToolsFrameText) {
+                return;
+            }
+            App* app = App::get();
+            if (!app) {
+                return;
+            }
+            const char* state = app->isRuntimeMode() ? "Playing" : (app->isSimulationMode() ? "Simulating" : "Stopped");
+            _runtimeToolsStatusText->setText(state);
+            _runtimeToolsFrameText->setText(std::format("Frame {}", app->getFrameIndex()));
+            if (_runtimeToolsPlayButton) _runtimeToolsPlayButton->setEnabled(app->isStopped());
+            if (_runtimeToolsSimulateButton) _runtimeToolsSimulateButton->setEnabled(app->isStopped());
+            if (_runtimeToolsStopButton) _runtimeToolsStopButton->setEnabled(!app->isStopped());
+        },
     });
     _tabRegistry->registerTab({
         .id = "ui-designer",
         .title = "UI Designer",
-        .build = [](EditorLayer&, WidgetTree&) { return makePlaceholderPanel("UIDesigner", "UI Designer — pending"); },
+        .build = [this](EditorLayer& layer, WidgetTree&) { return buildUIDesigner(layer); },
+        .sync = [this](EditorLayer& layer, WidgetTree&) {
+            if (!_uiDesignerStatusText || !_uiDesignerSelectionText || !_uiDesignerRoots || !_uiDesignerSelection) {
+                return;
+            }
+            const auto& designer = layer.getUIDesignerPanel();
+            const auto& document = designer.getOpenDocument();
+            _uiDesignerStatusText->setText(document ? "Document: " + document->typeId : "No document open");
+            UIElement* selected = designer.getSelectedWidget();
+            _uiDesignerSelectionText->setText(selected ? "Selected: " + selected->_name : "No widget selected");
+            std::string fingerprint;
+            std::vector<UITreeView::FNode> roots;
+            if (UIElement* root = designer.getPreviewRoot()) {
+                collectDesignerTreeFingerprint(*root, fingerprint, "root");
+                roots.push_back(makeDesignerTreeNode(*root, "root"));
+            }
+            if (fingerprint != _uiDesignerTreeFingerprint) {
+                _uiDesignerTreeFingerprint = std::move(fingerprint);
+                _uiDesignerRoots->replace(std::move(roots));
+            }
+            if (_uiDesignerSaveButton) _uiDesignerSaveButton->setEnabled(document != nullptr);
+            if (_uiDesignerCloseButton) _uiDesignerCloseButton->setEnabled(document != nullptr);
+        },
     });
     _tabRegistry->registerTab({
         .id = "asset-inspector",
         .title = "Asset Inspector",
-        .build = [](EditorLayer&, WidgetTree&) { return makePlaceholderPanel("Assets", "Asset Inspector — pending"); },
+        .build = [this](EditorLayer& layer, WidgetTree&) { return buildAssetInspector(layer); },
+        .sync = [this](EditorLayer& layer, WidgetTree&) {
+            if (!_assetInspectorPathText || !_assetInspectorStatusText || !_assetInspectorPreview) {
+                return;
+            }
+            const std::string& path = layer.getAssetInspectorPanel().inspectedPath();
+            _assetInspectorPathText->setText(path.empty() ? "No asset selected" : path);
+            _assetInspectorStatusText->setText(path.empty() ? "Select a texture in Content Browser" : "Texture preview");
+            _assetInspectorPreview->_assetPath = path;
+            _assetInspectorPreview->setResourceMissing(false);
+        },
     });
     DockPanelId runtimeId = kInvalidDockPanelId;
     DockPanelId designerId = kInvalidDockPanelId;

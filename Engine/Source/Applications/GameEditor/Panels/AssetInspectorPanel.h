@@ -48,6 +48,7 @@ struct AssetInspectorPanel
     void onImGuiRender();
 
     bool isVisible() const { return _bVisible; }
+    [[nodiscard]] const std::string& inspectedPath() const { return _inspectedPath; }
 
   private:
     void renderTextureInspector();

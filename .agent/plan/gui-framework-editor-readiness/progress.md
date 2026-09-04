@@ -626,3 +626,44 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - 这是单机 macOS 的 bounded smoke，不是 cross-platform、长时 soak、DPI/CJK 或 GPU/offscreen parity 全量门禁。
 - smoke 当前验证 editor runtime 稳定启动/绘制/退出，不覆盖 gizmo 交互脚本化拖拽、content browser 操作链或 ImGui 路径移除后的全工作流。
 - 下一步：继续清理剩余 ImGui editor path，并补更细粒度的 widgettree editor automation 命令面。
+## Phase 7J 当前 checkpoint（2026-09-04）
+
+- 移除 EditorSurface 中 Asset Inspector 的 pending placeholder，新增 retained tab 内容：当前资产路径、预览区域和状态文案。
+- retained tab 通过 EditorLayer 的 AssetInspectorPanel inspectedPath 读取既有资产选择状态；Content Browser 选中纹理后，路径同步到 retained UIImage 的 asset path。
+- 验证：xmake b ya-game-editor 通过；widgettree editor smoke（frame progression + presentation screenshot + clean quit）退出码 0。
+
+### Phase 7J 边界
+
+- 旧 AssetInspectorPanel 的 ImGui 元数据编辑和 RGBA mask 控件仍保留，属于后续 Phase 8 清理范围；本 checkpoint 只移除 retained chrome 中的占位 tab。
+- retained 预览当前依赖 UIImage 的资源解析/占位机制，尚未迁移完整导入元数据编辑器。
+- 下一步：迁移 UI Designer 或 Runtime Tools，继续清理 pending placeholder 和 ImGui editor path。
+## Phase 7K 当前 checkpoint（2026-09-04）
+
+- 移除 EditorSurface 中 UI Designer 的 pending placeholder，改为 retained tab shell：New Panel、Save、Close 三个真实操作按钮，以及当前 document / selected widget 状态。
+- 操作直接调用现有 UIDesignerPanel 的 document 生命周期（newDocument/saveDocument/clearDocument）；每帧通过 getOpenDocument/getSelectedWidget 同步状态，不复制 preview tree。
+- 验证：xmake b ya-game-editor 通过；widgettree editor smoke（frame progression + presentation screenshot + clean quit）退出码 0。
+
+### Phase 7K 边界
+
+- UI Designer 的 palette、层级树、反射 inspector、preview canvas 仍由旧 ImGui panel 承载；本 checkpoint 只替换 dock tab 的 placeholder shell，未宣称完整迁移。
+- 下一步优先迁移 Runtime Tools 的只读诊断 section，或继续补 UI Designer preview 的 retained surface，随后再删除对应 ImGui path。
+## Phase 7L 当前 checkpoint（2026-09-04）
+
+- 移除 EditorSurface 中 Runtime Tools 的 pending placeholder，改为 retained shell：Play、Simulate、Stop 三个真实动作按钮，以及当前状态 / 帧号显示。
+- 动作直接调度现有 App 生命周期接口（startRuntime/startSimulation/stopRuntime/stopSimulation）；状态通过 App::isRuntimeMode/isSimulationMode 和 frame index 每帧同步。
+- 验证：xmake b ya-game-editor 通过；widgettree editor smoke（frame progression + presentation screenshot + clean quit）退出码 0。
+
+### Phase 7L 边界
+
+- Runtime Tools 的 profiling、render settings、debug primitives、render target inspector 仍是后续更细粒度的 retained 迁移目标；本 checkpoint 只替换 shell 和核心控制动作。
+- 下一步继续迁移剩余的 ImGui 诊断 section，并最终移除对应 path。
+
+## Phase 7M 当前 checkpoint（2026-09-04）
+
+- Dock leaf 的 selected panel 现在通过 `DockContent` 父容器的 `UIBoxSlot` 显式 `Fill` 挂载；不再依赖 child 自身的 canvas anchor 或默认 Auto slot。
+- 这修正了 `HierarchyBody` 在 `DockContent4` path-A 下声明 stretch anchors 的启动诊断，并保证切换 dock tab 后 panel root 始终获得完整 content rect。
+- 验证：`xmake b ya-game-editor`、`xmake b ya-runtime` 通过；重启 `xmake r ya-runtime --editor --editor-chrome=widgettree` 后未再出现 `declares stretch anchors`，进程可正常初始化并退出。
+
+### Phase 7M 边界
+
+- 这是 dock parent-owned slot contract 修复，不等于移除旧 ImGui editor path；UI Designer palette/inspector/preview、Runtime Tools diagnostics 等仍待迁移。

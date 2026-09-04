@@ -517,15 +517,41 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
             }
         }
         if (const UIDockWorkspace::FPanel* fp = _ws->findPanel(panelId)) {
-            currentView->content->addDetachedChild(fp->widget);
+            currentView->content->addDetachedChild(fp->widget, [](UIElement&, UISlot& edge)
+            {
+                if (auto* slot = edge.as<UIBoxSlot>()) {
+                    FBoxSlotArgs args;
+                    args.sizeRule = EUIBoxSlotSizeRule::Fill;
+                    slot->apply(args);
+                }
+            });
         }
+    };
+
+    const auto attachPanelContent = [view](const UIElementRef& panel)
+    {
+        if (!view || !view->content || !panel) {
+            return;
+        }
+        // DockContent is a path-A box host. The selected panel's extent is
+        // therefore expressed on the parent-owned box slot, never through
+        // child-authored canvas anchors. This keeps dock roots portable
+        // regardless of how the panel was authored.
+        view->content->addDetachedChild(panel, [](UIElement&, UISlot& edge)
+        {
+            if (auto* slot = edge.as<UIBoxSlot>()) {
+                FBoxSlotArgs args;
+                args.sizeRule = EUIBoxSlotSizeRule::Fill;
+                slot->apply(args);
+            }
+        });
     };
 
     if (selectedIndex >= 0) {
         view->bar->syncSelectedTab(selectedIndex);
         DockPanelId selectedPanel = leaf->panelIds[static_cast<size_t>(selectedIndex)];
         if (const UIDockWorkspace::FPanel* fp = _ws->findPanel(selectedPanel)) {
-            view->content->addDetachedChild(fp->widget);
+            attachPanelContent(fp->widget);
         }
     }
     markLayoutDirty();

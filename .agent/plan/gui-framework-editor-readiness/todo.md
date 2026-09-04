@@ -71,6 +71,10 @@
 - [x] Viewport/gizmo ImGuizmo bridge。
 - [x] Gizmo transform undo session（稳定 UUID 快照 + UndoStack）。
 - [x] Bounded widgettree editor smoke gate（automation control + frame progression + presentation screenshot + clean quit）。
+- [x] Asset Inspector retained tab（路径状态 + 预览区域，移除 pending placeholder）。
+- [x] UI Designer retained shell（新建/保存/关闭文档 + 状态同步，移除 pending placeholder）。
+- [x] Dock panel content 使用 parent-owned box slot fill，消除 path-A 下 child anchor 冲突。
+- [x] Runtime Tools retained shell（Play/Simulate/Stop + status/frame 同步，移除 pending placeholder）。
 - [ ] Remove ImGui editor paths。
 - [ ] Multi-window/docking persistence。
 - [ ] Cross-platform and long-run gates。

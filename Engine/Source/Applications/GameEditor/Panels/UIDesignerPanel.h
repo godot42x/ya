@@ -59,6 +59,7 @@ struct UIDesignerPanel
     /// when opened via openSceneEntry). Used to detect stale designer state
     /// after external document edits (e.g. hierarchy drag-drop).
     [[nodiscard]] const std::shared_ptr<UIDocument>& getOpenDocument() const { return _document; }
+    [[nodiscard]] UIElement* getPreviewRoot() const { return _previewRoot.get(); }
     /// Close the current document and drop the preview (no save).
     void clearDocument();
     /// Rebuild the document from the preview after a structural edit and

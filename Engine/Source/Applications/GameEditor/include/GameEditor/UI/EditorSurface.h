@@ -82,6 +82,23 @@ struct EditorSurface
     std::unique_ptr<EditorInspectorTab> _inspectorTab;
     std::unique_ptr<guiworkbench::FWorkbenchSurface> _workbench;
     std::unique_ptr<EditorTabRegistry> _tabRegistry;
+    std::shared_ptr<UIText> _assetInspectorPathText;
+    std::shared_ptr<UIText> _assetInspectorStatusText;
+    std::shared_ptr<UIImage> _assetInspectorPreview;
+    std::shared_ptr<UIText> _uiDesignerStatusText;
+    std::shared_ptr<UIText> _uiDesignerSelectionText;
+    std::shared_ptr<UIButton> _uiDesignerNewButton;
+    std::shared_ptr<UIButton> _uiDesignerSaveButton;
+    std::shared_ptr<UIButton> _uiDesignerCloseButton;
+    std::shared_ptr<ReactiveList<UITreeView::FNode>> _uiDesignerRoots;
+    std::shared_ptr<Reactive<std::string>> _uiDesignerSelection;
+    std::shared_ptr<UITreeView> _uiDesignerTree;
+    std::string _uiDesignerTreeFingerprint;
+    std::shared_ptr<UIText> _runtimeToolsStatusText;
+    std::shared_ptr<UIText> _runtimeToolsFrameText;
+    std::shared_ptr<UIButton> _runtimeToolsPlayButton;
+    std::shared_ptr<UIButton> _runtimeToolsSimulateButton;
+    std::shared_ptr<UIButton> _runtimeToolsStopButton;
 
     // Content Browser (WidgetTree chrome). FileExplorer keeps the mount /
     // directory / filter state; the rows below are the retained view.
@@ -164,6 +181,9 @@ struct EditorSurface
     void syncSelectionFromLayer();
     void syncToolbar(App& app);
     std::shared_ptr<UIElement> buildContentBrowser();
+    std::shared_ptr<UIElement> buildAssetInspector(EditorLayer& layer);
+    std::shared_ptr<UIElement> buildUIDesigner(EditorLayer& layer);
+    std::shared_ptr<UIElement> buildRuntimeTools(EditorLayer& layer);
     void syncContentBrowser();
     void rebuildContentRows();
     void selectContentMount(const std::string& itemId);
