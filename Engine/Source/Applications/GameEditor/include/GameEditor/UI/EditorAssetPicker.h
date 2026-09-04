@@ -14,8 +14,8 @@ enum class EEditorAssetPickerKind : uint8_t
     Mesh,
 };
 
-/// Host callback for retained asset-reference rows. The inspector tab wires this
-/// to the existing ImGui FilePicker; PropertyHandle stays free of editor UI.
+/// Host callback for retained asset-reference rows. Widgettree chrome wires this
+/// to EditorSurface::openAssetPickerDialog; legacy imgui chrome falls back to FilePicker.
 using EditorAssetPickerCallback = std::function<void(EEditorAssetPickerKind kind,
                                                        std::string currentPath,
                                                        std::function<void(std::string newPath)> onPicked)>;

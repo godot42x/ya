@@ -11,9 +11,12 @@
 #include "GUI/Widgets/KeyedChildReconciler.h"
 
 #include "GameEditor/FileExplorer.h"
+#include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/UI/EditorTabRegistry.h"
 #include "GameEditor/UI/EditorInspectorTab.h"
 #include "GameEditor/UI/EditorViewportHost.h"
+
+#include <functional>
 
 #include <array>
 #include <memory>
@@ -144,6 +147,21 @@ struct EditorSurface
     std::string                     _sceneSaveFingerprint;
     bool                            _bSceneSaveRowsDirty = true;
 
+    std::shared_ptr<UIPopupOverlay> _assetPickerOverlay;
+    std::shared_ptr<UIPanel>        _assetPickerPanel;
+    std::shared_ptr<FileExplorer>   _assetPickerExplorer;
+    std::shared_ptr<UIText>         _assetPickerPathText;
+    std::shared_ptr<UIText>         _assetPickerPreviewText;
+    std::shared_ptr<UIButton>       _assetPickerSelectButton;
+    std::shared_ptr<UIContainer>    _assetPickerMountList;
+    std::shared_ptr<UIContainer>    _assetPickerEntryList;
+    std::unique_ptr<UIKeyedChildReconciler> _assetPickerMountReconciler;
+    std::unique_ptr<UIKeyedChildReconciler> _assetPickerEntryReconciler;
+    std::string                     _assetPickerFingerprint;
+    bool                            _bAssetPickerRowsDirty = true;
+    EEditorAssetPickerKind          _assetPickerKind = EEditorAssetPickerKind::Texture;
+    std::function<void(std::string)> _assetPickerOnPicked;
+
     std::shared_ptr<Texture>    _viewportTexture;
     std::shared_ptr<IImage>     _viewportImageResource;
     std::shared_ptr<IImageView> _viewportImageView;
@@ -181,6 +199,10 @@ struct EditorSurface
     [[nodiscard]] bool isViewportOverlayActive() const { return _viewportOverlayHost.isActive(); }
     [[nodiscard]] bool shouldRenderViewportGizmo() const;
     void presentViewportGizmo(ICommandBuffer& commandBuffer);
+    void openSceneSaveDialog();
+    void openAssetPickerDialog(EEditorAssetPickerKind kind,
+                               std::string currentPath,
+                               std::function<void(std::string)> onPicked);
 
   private:
     void rebuild(App& app);
@@ -201,13 +223,19 @@ struct EditorSurface
     void selectContentMount(const std::string& itemId);
     void selectContentItem(const std::filesystem::path& path, bool bIsDirectory);
     void activateContentItem(const std::filesystem::path& path, bool bIsDirectory);
-    void openSceneSaveDialog();
     void clearSceneSaveDialog();
     void syncSceneSaveDialog();
     void rebuildSceneSaveRows();
     void selectSceneSaveMount(const std::string& itemId);
     void activateSceneSaveItem(const std::filesystem::path& path, bool bIsDirectory);
     void confirmSceneSaveDialog();
+    void clearAssetPickerDialog();
+    void syncAssetPickerDialog();
+    void rebuildAssetPickerRows();
+    void selectAssetPickerMount(const std::string& itemId);
+    void selectAssetPickerItem(const std::filesystem::path& path, bool bIsDirectory);
+    void activateAssetPickerItem(const std::filesystem::path& path, bool bIsDirectory);
+    void confirmAssetPickerDialog();
     void publishViewportRect();
     void syncViewportHostState(App& app);
     void applyWindowMetrics(App& app);

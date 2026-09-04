@@ -93,6 +93,11 @@
 - [x] Phase 8I：默认 editor chrome 切到 widgettree（`editor.chrome.host` / CLI 默认）。
 - [x] Phase 8J：移除 ImGui Render Graph debug 窗口（retained RuntimeRenderGraphSection 为唯一路径）。
 - [x] Phase 8K：移除 ImGui demo window（legacy imgui chrome 仅保留 FilePicker modal）。
+- [x] Phase 8L：widgettree Save Scene As 走 retained EditorSurface 对话框（不再经 ImGui FilePicker scene-save 模式）。
+- [x] Phase 8M：widgettree Inspector asset Browse 走 retained EditorSurface asset-picker popup（不再经 ImGui FilePicker texture/model 模式）。
+- [x] Phase 8N：删除未调用的 ImGui DetailsView 实现与 AssetInspectorPanel ImGui render 死代码。
+- [x] Phase 8O：删除 SceneHierarchyPanel ImGui sceneTree 与 RuntimeTools/RenderTarget ImGui 死代码。
+- [x] Phase 8P：删除 UIDesignerPanel 未调用的 ImGui draw helpers（保留 preview/document 数据层）。
 - [ ] Remove remaining ImGui editor paths。
 - [ ] Multi-window/docking persistence。
 - [ ] Cross-platform and long-run gates。

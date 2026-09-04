@@ -734,9 +734,17 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _layer->onAttach();
         if (_chromeHost == EEditorChromeHost::WidgetTree) {
             _editorSurface.bind(*_layer);
+            _layer->setSaveSceneAsHandler([this]() { _editorSurface.openSceneSaveDialog(); });
+            _layer->setAssetPickerHandler([this](EEditorAssetPickerKind kind,
+                                                 std::string currentPath,
+                                                 std::function<void(std::string)> onPicked) {
+                _editorSurface.openAssetPickerDialog(kind, std::move(currentPath), std::move(onPicked));
+            });
             _inputNode.bind(app, *_layer, &_editorSurface);
         }
         else {
+            _layer->clearSaveSceneAsHandler();
+            _layer->clearAssetPickerHandler();
             _inputNode.bind(app, *_layer, nullptr);
         }
         _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);

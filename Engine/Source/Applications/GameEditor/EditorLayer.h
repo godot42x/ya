@@ -11,8 +11,8 @@
 #include "Core/Event.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "GameEditor/FilePicker.h"
+#include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/ImGui/ImGuiHelper.h"
-#include "GameEditor/Inspector/DetailsView.h"
 #include "GameEditor/Panels/SceneHierarchyPanel.h"
 #include "GameEditor/Panels/UIDesignerPanel.h"
 #include "GameEditor/UI/EditorTransformUndo.h"
@@ -26,6 +26,7 @@
 
 #include <ImGuizmo.h>
 #include <algorithm>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -64,7 +65,6 @@ struct EditorLayer
 
     // Editor panels
     SceneHierarchyPanel _sceneHierarchyPanel;
-    DetailsView         _detailsView;
     ContentBrowserPanel _contentBrowserPanel;
     AssetInspectorPanel _assetInspectorPanel;
     UIDesignerPanel     _uiDesignerPanel;
@@ -170,6 +170,8 @@ struct EditorLayer
 
     // File picker for save/load dialogs and asset selection
     FilePicker  _filePicker;
+    std::function<void()> _saveSceneAsHandler;
+    EditorAssetPickerCallback _assetPickerHandler;
     std::string _currentScenePath; // Current scene file path
     Scene*      _editableScene = nullptr;
 
@@ -236,7 +238,7 @@ struct EditorLayer
     /// The selected SceneWidgetEntry (nullptr when none/not found).
     SceneWidgetEntry* getSelectedWidgetEntry();
 
-    // Entity selection bus - notifies DetailsView of selection changes
+    // Entity selection bus - notifies inspector consumers of selection changes
     void setSelectedEntity(Entity* entity)
     {
         setSelections(entity && entity->isValid() ? std::vector<Entity*>{entity} : std::vector<Entity*>{},
@@ -455,6 +457,10 @@ struct EditorLayer
     void cmdNewScene();
     void cmdSaveScene();
     void cmdSaveSceneAs();
+    void setSaveSceneAsHandler(std::function<void()> handler) { _saveSceneAsHandler = std::move(handler); }
+    void clearSaveSceneAsHandler() { _saveSceneAsHandler = nullptr; }
+    void setAssetPickerHandler(EditorAssetPickerCallback handler) { _assetPickerHandler = std::move(handler); }
+    void clearAssetPickerHandler() { _assetPickerHandler = nullptr; }
 };
 
 } // namespace ya

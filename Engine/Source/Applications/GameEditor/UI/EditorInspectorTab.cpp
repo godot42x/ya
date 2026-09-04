@@ -112,6 +112,10 @@ EditorAssetPickerCallback makeAssetPicker(EditorLayer* layer)
         if (!layer) {
             return;
         }
+        if (layer->_assetPickerHandler) {
+            layer->_assetPickerHandler(kind, std::move(currentPath), std::move(onPicked));
+            return;
+        }
         switch (kind) {
         case EEditorAssetPickerKind::Texture:
             layer->_filePicker.openTexturePicker(currentPath, std::move(onPicked));

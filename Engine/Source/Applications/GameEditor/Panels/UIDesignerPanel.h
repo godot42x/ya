@@ -11,8 +11,8 @@
 //   - tree:         the preview tree's widget hierarchy
 //   - inspector:    reflected fields of the selected preview widget
 //   - save:         rebuilds the document from the preview (fromWidget)
-// The editor shell stays fully ImGui; the preview can also be composited
-// into the 2D canvas via buildPreviewSnapshot().
+// Retained EditorSurface tab owns chrome controls; preview/canvas manipulation
+// stays on this panel's data layer.
 // ============================================================================
 
 #include "GUI/Widgets/UIDocument.h"
@@ -123,15 +123,11 @@ struct UIDesignerPanel
         After,
     };
     /// Drop position from the mouse Y within a row (before / into / after).
-    static EDropPos computeDropPos(float itemMinY, float itemMaxY);
+    static EDropPos computeDropPos(float itemMinY, float itemMaxY, float mouseY);
     /// Apply a designer-tree drag-drop (reparent/reorder in the preview).
     void applyWidgetDrop(UIElement* dragged, UIElement& target, EDropPos position);
 
   private:
-    void drawToolbar();
-    void drawWidgetTree(UIElement& widget);
-    void drawPalette();
-    void drawInspector();
     void rebuildDocumentFromPreview();
     void applyPreviewExtent();
 
@@ -145,9 +141,6 @@ struct UIDesignerPanel
     /// Scene-entry edit mode (save writes back to the entry).
     Scene*    _entryScene = nullptr;
     std::string _entryId;
-
-    /// Widget row kept open while a designer-tree drag hovers it.
-    UIElement* _dragHoverTarget = nullptr;
 
     // === Canvas direct-manipulation session state ===
     enum class EDragMode : uint8_t

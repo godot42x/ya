@@ -5,7 +5,6 @@ namespace ya
 EditorLayer::EditorLayer(App* app)
     : _app(app),
       _sceneHierarchyPanel(this),
-      _detailsView(this),
       _contentBrowserPanel(this),
       _assetInspectorPanel(this),
       _uiDesignerPanel(this)
@@ -191,6 +190,11 @@ void EditorLayer::cmdSaveScene()
 
 void EditorLayer::cmdSaveSceneAs()
 {
+    if (_saveSceneAsHandler) {
+        _saveSceneAsHandler();
+        return;
+    }
+
     std::string defaultName = "NewScene";
     if (_app && _app->getSceneServices().getSceneManager()) {
         if (auto* scene = getEditableScene(); scene && !scene->getName().empty()) {

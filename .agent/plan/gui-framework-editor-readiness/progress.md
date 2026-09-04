@@ -856,3 +856,59 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 ### Phase 8K 边界
 
 - ImGui chrome host（menu/toolbar/dockspace/viewport/project browser）与 ImGui `FilePicker` 仍平行；下一步迁移 FilePicker 或继续削减 imgui chrome shell。
+
+## Phase 8L 当前 checkpoint（2026-09-04）
+
+- `EditorLayer::cmdSaveSceneAs` 在 widgettree chrome 下经 `setSaveSceneAsHandler` 打开 retained `EditorSurface` scene-save popup，不再调用 `FilePicker::openSceneSavePicker`。
+- legacy `--editor-chrome=imgui` 仍走 ImGui `FilePicker` scene-save 模式；asset Browse 仍依赖 ImGui FilePicker。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`；widgettree editor smoke 退出码 0。
+
+### Phase 8L 边界
+
+- Inspector/TypeRenderer asset Browse 仍打开 ImGui `FilePicker`；下一步迁移通用 asset picker 到 retained popup。
+
+## Phase 8M 当前 checkpoint（2026-09-04）
+
+- `EditorInspectorTab::makeAssetPicker` 在 widgettree chrome 下经 `EditorLayer::setAssetPickerHandler` 打开 retained `EditorSurface` asset-picker popup，不再调用 `FilePicker::openTexturePicker` / `openModelPicker`。
+- popup 复用 scene-save 的 `FileExplorer` + mount/entry keyed rows + modal overlay；按 `EEditorAssetPickerKind` 过滤 texture/model 扩展名。
+- legacy `--editor-chrome=imgui` 仍走 ImGui `FilePicker` asset 模式；`renderAuxiliaryUi` 仍仅保留 `FilePicker::render` modal。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（378/378）；`xmake r ya-testing --gtest_filter='EditorPropertyGraphTest.*'`（16/16）；widgettree editor smoke 退出码 0。
+
+### Phase 8M 边界
+
+- legacy ImGui chrome host（menu/toolbar/dockspace/viewport/project browser）与 ImGui `FilePicker` 仍平行；下一步继续削减 imgui chrome shell 或移除 `imgui-local` 依赖。
+
+## Phase 8N 当前 checkpoint（2026-09-04）
+
+- 删除未再调用的 ImGui `DetailsView` 实现（组件/反射/script/skybox/environment 源文件）及 `EditorLayer::_detailsView` 成员。
+- `AssetInspectorPanel` 收敛为 retained 所需的 `inspectTexture` / `clear` / `inspectedPath` 状态；ImGui `renderTextureInspector` 等死代码移除。
+- `TypeRenderer` 仍保留给 `UIDesignerPanel` legacy 数据层；widgettree Inspector 继续走 `PropertyGraph` + `EditorInspectorTab`。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（378/378）；`xmake r ya-testing --gtest_filter='EditorPropertyGraphTest.*'`（16/16）；widgettree editor smoke 退出码 0。
+
+### Phase 8N 边界
+
+- legacy ImGui chrome host（menu/toolbar/dockspace/viewport/project browser/debug）与 ImGui `FilePicker` 仍平行；`TypeRenderer` 仍服务 UI Designer legacy 层。
+- 下一步继续削减 imgui chrome shell、迁移 UI Designer field inspector，或推进 docking persistence / `imgui-local` 移除。
+
+## Phase 8O 当前 checkpoint（2026-09-04）
+
+- 删除未调用的 ImGui `SceneHierarchyPanel::sceneTree` 及整套 draw/drag-drop 实现；面板收敛为 viewport 选择总线（`setSelection` / `handleEntityClick` / `replaceSelection` / `deleteSelection`），修饰键改读 `SDL_GetModState`。
+- 删除未调用的 RuntimeTools ImGui helper 源文件（Profiling/Rendering/Session/Diagnostics）与 `RuntimeToolsPanelInternal.h`；`migrateLegacyRuntimeSettings` 仍保留在 `RuntimeToolsPanel.cpp`。
+- 删除未调用的 `RenderTargetInspector` 与 `renderFrameStatsContent`。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（378/378）；`xmake r ya-testing --gtest_filter='EditorHierarchyOpsTest.*'`（2/2）；widgettree editor smoke 退出码 0。
+
+### Phase 8O 边界
+
+- legacy ImGui chrome host（menu/toolbar/dockspace/viewport/project browser/debug/settings）与 ImGui `FilePicker` 仍平行。
+- 下一步继续削减 imgui chrome shell 或推进 docking persistence / `imgui-local` 移除。
+
+## Phase 8P 当前 checkpoint（2026-09-04）
+
+- 删除未调用的 `UIDesignerPanel` ImGui `drawToolbar` / `drawWidgetTree` / `drawPalette` / `drawInspector` 及 ImGui drag-drop 反馈辅助代码；`UIDesignerPanel.cpp` 不再依赖 `imgui.h` / `TypeRenderer`。
+- 保留 preview/document 数据层：`openSceneEntry`、`buildPreviewSnapshot`、`applyWidgetDrop`、`computeDropPos(itemMinY, itemMaxY, mouseY)` 等 API 供 retained tab 与 2D canvas 使用。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（378/378）；`xmake r ya-testing --gtest_filter='UIDesignerPanelTest.*'`（1/1）；widgettree editor smoke 退出码 0。
+
+### Phase 8P 边界
+
+- legacy ImGui chrome host 与 `FilePicker` 仍平行；UI Designer palette/field inspector 仍待 retained 绑定。
+- 下一步继续削减 imgui chrome shell、迁移 UI Designer retained palette/inspector，或推进 docking persistence。

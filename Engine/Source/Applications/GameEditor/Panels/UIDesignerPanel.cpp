@@ -3,7 +3,6 @@
 #include "Core/Log.h"
 
 #include "GameEditor/EditorLayer.h"
-#include "GameEditor/Inspector/TypeRenderer.h"
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/UITypeRegistry.h"
@@ -13,8 +12,6 @@
 #include "Scene/Core/Scene.h"
 
 #include "GameRuntime/App.h"
-
-#include <imgui.h>
 
 #include <algorithm>
 
@@ -30,15 +27,6 @@ std::string shortTypeName(const std::string& typeId)
     return dot == std::string::npos ? typeId : typeId.substr(dot + 1);
 }
 
-/// POD payload for designer widget-tree drag-drop (ImGui memcpy's it). The
-/// pointer stays valid: the preview tree outlives the drag.
-struct DesignerWidgetDragPayload
-{
-    UIElement* widget = nullptr;
-};
-
-constexpr const char* kDesignerWidgetDragPayloadName = "UI_DESIGNER_WIDGET_DRAG";
-
 /// Find the strong reference to `widget` inside its parent's children.
 UIElementRef refOf(UIElement* widget)
 {
@@ -51,39 +39,6 @@ UIElementRef refOf(UIElement* widget)
         }
     }
     return nullptr;
-}
-
-void drawDesignerDropFeedback(const ImVec2& itemMin, const ImVec2& itemMax, UIDesignerPanel::EDropPos position)
-{
-    ImDrawList* drawList  = ImGui::GetWindowDrawList();
-    const ImU32 lineColor = IM_COL32(80, 160, 255, 235);
-    const ImU32 bandColor = IM_COL32(80, 160, 255, 70);
-    const ImU32 fillColor = IM_COL32(80, 160, 255, 30);
-    const float bandHeight = 8.0f;
-    const float lineStartX = ImGui::GetCursorScreenPos().x - ImGui::GetTreeNodeToLabelSpacing();
-    const float lineEndX   = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
-
-    switch (position) {
-    case UIDesignerPanel::EDropPos::Before:
-        drawList->AddRectFilled({lineStartX, itemMin.y - bandHeight * 0.5f},
-                                {lineEndX, itemMin.y + bandHeight * 0.5f}, bandColor, 2.0f);
-        drawList->AddLine({lineStartX, itemMin.y}, {lineEndX, itemMin.y}, lineColor, 2.0f);
-        ImGui::SetTooltip("插入到当前节点前");
-        break;
-    case UIDesignerPanel::EDropPos::Into:
-        drawList->AddRectFilled({itemMin.x + 14.0f, itemMin.y + 4.0f},
-                                {itemMax.x - 4.0f, itemMax.y - 4.0f}, fillColor, 3.0f);
-        drawList->AddRect({itemMin.x + 14.0f, itemMin.y + 4.0f},
-                          {itemMax.x - 4.0f, itemMax.y - 4.0f}, lineColor, 3.0f, 0, 1.5f);
-        ImGui::SetTooltip("作为当前节点的子节点");
-        break;
-    case UIDesignerPanel::EDropPos::After:
-        drawList->AddRectFilled({lineStartX, itemMax.y - bandHeight * 0.5f},
-                                {lineEndX, itemMax.y + bandHeight * 0.5f}, bandColor, 2.0f);
-        drawList->AddLine({lineStartX, itemMax.y}, {lineEndX, itemMax.y}, lineColor, 2.0f);
-        ImGui::SetTooltip("插入到当前节点后");
-        break;
-    }
 }
 
 } // namespace
@@ -256,11 +211,10 @@ void UIDesignerPanel::syncPreviewToDocument()
     }
 }
 
-UIDesignerPanel::EDropPos UIDesignerPanel::computeDropPos(float itemMinY, float itemMaxY)
+UIDesignerPanel::EDropPos UIDesignerPanel::computeDropPos(float itemMinY, float itemMaxY, float mouseY)
 {
     const float itemHeight      = std::max(itemMaxY - itemMinY, 1.0f);
     const float boundaryPadding = std::clamp(itemHeight * 0.33f, 8.0f, 14.0f);
-    const float mouseY          = ImGui::GetMousePos().y;
     if (mouseY <= itemMinY + boundaryPadding) {
         return EDropPos::Before;
     }
@@ -544,162 +498,6 @@ void UIDesignerPanel::applyPreviewExtent()
     const glm::vec2 viewportSize = _owner->getViewportSize();
     if (viewportSize.x > 1.0f && viewportSize.y > 1.0f) {
         _previewTree->setLogicalExtent(Extent2D::fromVec2(viewportSize));
-    }
-}
-
-void UIDesignerPanel::drawToolbar()
-{
-    // New: palette-driven root creation.
-    if (ImGui::Button("New")) {
-        ImGui::OpenPopup("UIDesignerNewType");
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Save") && hasDocument()) {
-        saveDocument();
-    }
-
-    if (ImGui::BeginPopup("UIDesignerNewType")) {
-        for (const std::string& typeId : UITypeRegistry::instance().getTypeIds()) {
-            if (ImGui::MenuItem(typeId.c_str())) {
-                newDocument(typeId);
-                ImGui::CloseCurrentPopup();
-            }
-        }
-        ImGui::EndPopup();
-    }
-
-    if (hasDocument()) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("%s", shortTypeName(_document->typeId).c_str());
-    }
-}
-
-void UIDesignerPanel::drawWidgetTree(UIElement& widget)
-{
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-    const bool bSelected     = _selected == &widget;
-    const bool bLeaf         = widget.getChildren().empty();
-    if (bLeaf) {
-        flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-    }
-    if (bSelected) {
-        flags |= ImGuiTreeNodeFlags_Selected;
-    }
-
-    // Auto-expand the dragged-onto row so the drop target is visible.
-    if (_dragHoverTarget == &widget) {
-        ImGui::SetNextItemOpen(true);
-    }
-    const bool bOpened = ImGui::TreeNodeEx(&widget, flags, "%s  [%s]",
-                                           widget._name.c_str(),
-                                           shortTypeName(widget._typeId).c_str());
-    if (ImGui::IsItemClicked()) {
-        _selected = &widget;
-    }
-    if (ImGui::BeginPopupContextItem()) {
-        if (ImGui::MenuItem("Delete")) {
-            deleteWidget(&widget);
-        }
-        ImGui::EndPopup();
-    }
-
-    // Drag the subtree (the document root keeps its place).
-    if (&widget != _previewRoot.get()) {
-        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-            DesignerWidgetDragPayload payload;
-            payload.widget = &widget;
-            ImGui::SetDragDropPayload(kDesignerWidgetDragPayloadName, &payload, sizeof(payload));
-            ImGui::Text("Reparent %s", widget._name.c_str());
-            ImGui::EndDragDropSource();
-        }
-    }
-    // Drop target: Before / Into / After by hover position.
-    {
-        const ImVec2 itemMin = ImGui::GetItemRectMin();
-        const ImVec2 itemMax = ImGui::GetItemRectMax();
-        EDropPos     position = EDropPos::Into;
-        bool         bHovered = false;
-        if (ImGui::BeginDragDropTarget()) {
-            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kDesignerWidgetDragPayloadName)) {
-                const auto* src = static_cast<const DesignerWidgetDragPayload*>(payload->Data);
-                position        = computeDropPos(itemMin.y, itemMax.y);
-                bHovered        = true;
-                _dragHoverTarget = &widget;
-                if (payload->IsDelivery() && src->widget) {
-                    applyWidgetDrop(src->widget, widget, position);
-                }
-            }
-            ImGui::EndDragDropTarget();
-        }
-        if (bHovered) {
-            drawDesignerDropFeedback(itemMin, itemMax, position);
-        }
-    }
-
-    if (bOpened && !bLeaf) {
-        for (const auto& child : widget.getChildren()) {
-            drawWidgetTree(*child);
-        }
-        ImGui::TreePop();
-    }
-}
-
-void UIDesignerPanel::drawPalette()
-{
-    ImGui::SeparatorText("Palette");
-    const bool bHasSelection = _selected != nullptr && _selected->isAttached();
-    for (const std::string& typeId : UITypeRegistry::instance().getTypeIds()) {
-        ImGui::PushID(typeId.c_str());
-        const bool bAdd = ImGui::Button(shortTypeName(typeId).c_str(), ImVec2(-1.0f, 0.0f));
-        if (bAdd) {
-            UIElementRef widget = UITypeRegistry::instance().createInstance(typeId);
-            if (widget && _previewTree) {
-                widget->_name = shortTypeName(typeId);
-                // UE/Godot semantics: adding always adds a CHILD under the
-                // selection (or the document root when nothing is selected).
-                // It never replaces or reparents the existing root.
-                UIElement* parent = bHasSelection ? _selected : _previewRoot.get();
-                if (parent) {
-                    _previewTree->attach(*parent, widget);
-                    _selected = widget.get();
-                    // UMG-style live authoring: the document (and therefore
-                    // the scene hierarchy's Game UI Entries tree) follows the
-                    // preview immediately.
-                    syncPreviewToDocument();
-                }
-                else {
-                    newDocument(typeId);
-                }
-            }
-        }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("%s", typeId.c_str());
-        }
-        ImGui::PopID();
-    }
-}
-
-void UIDesignerPanel::drawInspector()
-{
-    ImGui::SeparatorText("Inspector");
-    if (!_selected || !_selected->isAttached()) {
-        ImGui::TextDisabled("Select a widget");
-        return;
-    }
-
-    auto* cls = ClassRegistry::instance().getClass(_selected->getTypeIndex());
-    if (!cls) {
-        ImGui::TextDisabled("Type not registered: %s", _selected->_typeId.c_str());
-        return;
-    }
-
-    ya::RenderContext ctx;
-    ctx.beginInstance(_selected);
-    ya::renderReflectedType(cls->getName(), _selected->getTypeIndex(), _selected, ctx, 0);
-    // Property edits must reach the canvas: layout caches the anchor math in
-    // _layoutRect, so any reflected-field modification invalidates the tree.
-    if (ctx.hasModifications()) {
-        invalidatePreview();
     }
 }
 

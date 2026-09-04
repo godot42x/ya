@@ -1,60 +1,34 @@
 #pragma once
 
-#include "Resource/Core/Meta/AssetMeta.h"
-#include "RHI/Core/Texture.h"
-
-#include <array>
 #include <string>
 
 namespace ya
 {
 
 struct EditorLayer;
-struct ImGuiImageEntry;
 
+/// Retained Asset Inspector selection state. ImGui render path was removed in
+/// Phase 8E; EditorSurface consumes inspectedPath() for the retained tab.
 struct AssetInspectorPanel
 {
   private:
     EditorLayer* _owner = nullptr;
-
-    std::string _inspectedPath;
-    AssetMeta   _meta;
-    bool        _bVisible = false;
-    bool        _bDirty   = false; // meta was edited, needs save
-    std::shared_ptr<Texture> _previewTexture;
-    bool                     _bPreviewRequested = false;
-    std::array<bool, 4>      _previewChannelEnabled = {true, true, true, true};
-    std::shared_ptr<IImageView> _previewMaskedView;
-    IImageView*                 _previewLastBase = nullptr;
-
-    // Preview
-    const ImGuiImageEntry* _previewImGuiID = nullptr;
+    std::string  _inspectedPath;
+    bool         _bVisible = false;
 
   public:
-    AssetInspectorPanel(EditorLayer* owner);
+    explicit AssetInspectorPanel(EditorLayer* owner);
 
     AssetInspectorPanel(const AssetInspectorPanel&)            = delete;
     AssetInspectorPanel& operator=(const AssetInspectorPanel&) = delete;
     AssetInspectorPanel(AssetInspectorPanel&&)                 = delete;
     AssetInspectorPanel& operator=(AssetInspectorPanel&&)      = delete;
 
-    /// Open inspector for a texture asset
     void inspectTexture(const std::string& relativePath);
-
-    /// Close / clear
     void clear();
 
     bool isVisible() const { return _bVisible; }
     [[nodiscard]] const std::string& inspectedPath() const { return _inspectedPath; }
-
-  private:
-    void renderTextureInspector();
-    bool renderPreviewMaskControls();
-    void updatePreviewMaskView(bool bForceRefresh = false);
-    void resetPreviewState();
-
-    /// Save current meta to disk and trigger hot-reload
-    void applyMetaChanges();
 };
 
 } // namespace ya
