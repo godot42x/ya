@@ -45,6 +45,12 @@ struct UIPopupOverlay;
 struct UIScrollViewport;
 struct UISizeBox;
 struct UIText;
+class RuntimeDiagnosticsSection;
+class RuntimeRenderSettingsSection;
+class RuntimeProfilingSection;
+class RuntimeRenderGraphSection;
+class RuntimeRenderTargetSection;
+class RuntimeDebugPrimitivesSection;
 struct UITextField;
 struct UITheme;
 struct UITreeView;
@@ -99,6 +105,12 @@ struct EditorSurface
     std::shared_ptr<UIButton> _runtimeToolsPlayButton;
     std::shared_ptr<UIButton> _runtimeToolsSimulateButton;
     std::shared_ptr<UIButton> _runtimeToolsStopButton;
+    std::shared_ptr<RuntimeDiagnosticsSection> _runtimeToolsDiagnostics;
+    std::shared_ptr<RuntimeRenderSettingsSection> _runtimeToolsRenderSettings;
+    std::shared_ptr<RuntimeProfilingSection> _runtimeToolsProfiling;
+    std::shared_ptr<RuntimeRenderGraphSection> _runtimeToolsRenderGraph;
+    std::shared_ptr<RuntimeRenderTargetSection> _runtimeToolsRenderTargets;
+    std::shared_ptr<RuntimeDebugPrimitivesSection> _runtimeToolsDebugPrimitives;
 
     // Content Browser (WidgetTree chrome). FileExplorer keeps the mount /
     // directory / filter state; the rows below are the retained view.

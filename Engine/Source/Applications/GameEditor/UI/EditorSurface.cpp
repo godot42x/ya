@@ -1,4 +1,10 @@
 #include "GameEditor/UI/EditorSurface.h"
+#include "GameEditor/UI/RuntimeDiagnosticsSection.h"
+#include "GameEditor/UI/RuntimeRenderSettingsSection.h"
+#include "GameEditor/UI/RuntimeProfilingSection.h"
+#include "GameEditor/UI/RuntimeRenderGraphSection.h"
+#include "GameEditor/UI/RuntimeRenderTargetSection.h"
+#include "GameEditor/UI/RuntimeDebugPrimitivesSection.h"
 
 #include "Core/Event.h"
 #include "Core/Config/ConfigManager.h"
@@ -284,12 +290,24 @@ std::shared_ptr<UIElement> EditorSurface::buildRuntimeTools(EditorLayer& layer)
         }
     });
     auto stop = stopBuilder.share();
+    auto diagnostics = std::make_shared<RuntimeDiagnosticsSection>();
+    auto renderSettings = std::make_shared<RuntimeRenderSettingsSection>();
+    auto profiling = std::make_shared<RuntimeProfilingSection>();
+    auto renderGraph = std::make_shared<RuntimeRenderGraphSection>();
+    auto renderTargets = std::make_shared<RuntimeRenderTargetSection>();
+    auto debugPrimitives = std::make_shared<RuntimeDebugPrimitivesSection>();
 
     _runtimeToolsStatusText = status;
     _runtimeToolsFrameText = frame;
     _runtimeToolsPlayButton = play;
     _runtimeToolsSimulateButton = simulate;
     _runtimeToolsStopButton = stop;
+    _runtimeToolsDiagnostics = diagnostics;
+    _runtimeToolsRenderSettings = renderSettings;
+    _runtimeToolsProfiling = profiling;
+    _runtimeToolsRenderGraph = renderGraph;
+    _runtimeToolsRenderTargets = renderTargets;
+    _runtimeToolsDebugPrimitives = debugPrimitives;
 
     return ui::panel("RuntimeToolsBody")
         .setStyleKey("panel.canvas")
@@ -300,6 +318,12 @@ std::shared_ptr<UIElement> EditorSurface::buildRuntimeTools(EditorLayer& layer)
                    .child(play, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
                    .child(simulate, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
                    .child(stop, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
+                   .child(diagnostics)
+                   .child(renderSettings)
+                   .child(profiling)
+                   .child(renderGraph)
+                   .child(renderTargets)
+                   .child(debugPrimitives)
                    .release(),
                ui::canvasSlot().fill().offset({12.0f, 12.0f}))
         .release();
@@ -785,6 +809,24 @@ void EditorSurface::buildEditorChrome(App& app)
             const char* state = app->isRuntimeMode() ? "Playing" : (app->isSimulationMode() ? "Simulating" : "Stopped");
             _runtimeToolsStatusText->setText(state);
             _runtimeToolsFrameText->setText(std::format("Frame {}", app->getFrameIndex()));
+            if (_runtimeToolsDiagnostics) {
+                _runtimeToolsDiagnostics->sync(app);
+            }
+            if (_runtimeToolsRenderSettings) {
+                _runtimeToolsRenderSettings->sync(app);
+            }
+            if (_runtimeToolsProfiling) {
+                _runtimeToolsProfiling->sync(app);
+            }
+            if (_runtimeToolsRenderGraph) {
+                _runtimeToolsRenderGraph->sync(app);
+            }
+            if (_runtimeToolsRenderTargets) {
+                _runtimeToolsRenderTargets->sync(app);
+            }
+            if (_runtimeToolsDebugPrimitives) {
+                _runtimeToolsDebugPrimitives->sync(app);
+            }
             if (_runtimeToolsPlayButton) _runtimeToolsPlayButton->setEnabled(app->isStopped());
             if (_runtimeToolsSimulateButton) _runtimeToolsSimulateButton->setEnabled(app->isStopped());
             if (_runtimeToolsStopButton) _runtimeToolsStopButton->setEnabled(!app->isStopped());

@@ -667,3 +667,73 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 ### Phase 7M 边界
 
 - 这是 dock parent-owned slot contract 修复，不等于移除旧 ImGui editor path；UI Designer palette/inspector/preview、Runtime Tools diagnostics 等仍待迁移。
+
+## Phase 7N 当前 checkpoint（2026-09-04）
+
+- 新增 `RuntimeDiagnosticsSection` retained compound，接入 Runtime Tools tab，持续同步 RenderDoc 可用性、DLL/output 路径、最近 capture、capturing/queued delay 等只读状态。
+- 该 section 只消费 `RenderDiagnosticsService::RenderDocState`，不复制 RenderDoc 生命周期；capture mutation buttons 仍由 legacy RuntimeToolsPanel 所有，边界保持清晰。
+- 验证：`xmake b ya-game-editor` 通过；widgettree editor smoke 截图成功并退出码 0。
+
+### Phase 7N 边界
+
+- profiling、render settings、RenderDoc 操作按钮、debug primitives、render target inspector 仍未迁移；下一步继续逐个迁移 Runtime Tools diagnostics/control sections。
+
+## Phase 7O 当前 checkpoint（2026-09-04）
+
+- `RuntimeDiagnosticsSection` 增加 retained Capture Enabled、Show RenderDoc HUD、Capture Next Frame、Capture After 120 Frames 控件，直接调用 `RenderDocCapture` 的现有 API。
+- 同步阶段根据 runtime/capture availability 设置 checked/enabled 状态；点击回调不持有 `App` 或 runtime 裸指针，按当前服务重新解析。
+- 验证：`xmake b ya-game-editor` 通过；widgettree editor smoke 截图成功并退出码 0。
+
+### Phase 7O 边界
+
+- profiling、render settings、render graph diagnostics、debug primitives、render target inspector 仍未迁移；旧 ImGui `RuntimeToolsPanel` 保持编译但不作为 retained 数据源。
+
+## Phase 7P 当前 checkpoint（2026-09-04）
+
+- 新增 `RuntimeRenderSettingsSection` retained compound，接入 Runtime Tools，覆盖 pending/active render pipeline、viewport framebuffer scale、VSync、present mode 与 active pipeline reload。
+- 所有修改通过 `RenderRuntime`、`ISwapchain` 现有 API；present mode 写入 frame task，避免在录制期直接重建 swapchain。
+- 验证：`xmake b ya-game-editor` 通过；widgettree editor smoke 截图成功并退出码 0。
+
+### Phase 7P 边界
+
+- profiling、render graph topology/internals、debug primitives、render target inspector 仍未迁移；deferred/forward 专属大量参数仍由旧 ImGui section 提供。
+
+## Phase 7Q 当前 checkpoint（2026-09-04）
+
+- 新增 `RuntimeProfilingSection` retained compound，接入 Runtime Tools，展示 compile mode、CPU trace session、frame CPU/GPU metrics，并提供 CPU Trace、Perf Metrics、Static Init 和 metrics average window 控件。
+- 控件直接调用 `profiling` 公共 API；`sync()` 在 compound 尚未 construct 时安全返回，避免 tab 注册期间提前同步导致生命周期崩溃。
+- 验证：`xmake b ya-game-editor` 通过；widgettree editor smoke（port 19998）截图成功并退出码 0。
+
+### Phase 7Q 边界
+
+- render graph topology/internals、debug primitives、render target inspector、deferred/forward 专属详细参数仍待 retained 迁移；旧 ImGui profiling panel 保持编译。
+
+## Phase 7R 当前 checkpoint（2026-09-04）
+
+- 新增 `RuntimeRenderGraphSection` retained compound，接入 Runtime Tools，展示当前 active pipeline、最近 compiled frame graph 的 pass 数、dependency 数，以及是否已捕获到拓扑。
+- 这一步只迁移拓扑摘要，不把 ImGui 的 bezier topology canvas 直接硬塞进 retained chrome；复杂图谱绘制和 pipeline internals 仍保留为后续独立切片。
+- 验证：`xmake b ya-game-editor` 通过；widgettree editor smoke（port 19999）截图成功并退出码 0。
+
+### Phase 7R 边界
+
+- render graph topology canvas/internals、debug primitives、render target inspector、deferred/forward 专属详细参数仍待 retained 迁移；旧 ImGui render diagnostics 仍保留编译。
+
+## Phase 7S 当前 checkpoint（2026-09-04）
+
+- 新增 `RuntimeRenderTargetSection` retained compound，接入 Runtime Tools，列出当前 render target 总数以及每个 target 的 label、owner、extent、swapchain/offscreen 与 read-only 状态。
+- 数据直接读取 `RenderRuntime::buildRenderTargetCatalog()`；本轮只迁移 catalog 摘要，不在 retained 面板里复制 ImGui 的 attachment preview / format editing 流程。
+- 验证：`xmake b ya-game-editor` 通过；widgettree editor smoke（port 20000）截图成功并退出码 0。
+
+### Phase 7S 边界
+
+- Debug primitives、render target attachment preview/format editing、render graph topology canvas/internals、deferred/forward 专属详细参数仍待 retained 迁移；旧 ImGui panels 保持编译。
+
+## Phase 7T 当前 checkpoint（2026-09-04）
+
+- 新增 `RuntimeDebugPrimitivesSection` retained compound，接入 Runtime Tools，提供 Enabled、Depth Test、Draw Lines、Draw Shapes 开关，并显示 pending/frame/immediate lines/shapes 计数。
+- 设置通过 `DebugRenderSystem::buildSettingsSnapshot/requestSettings` 进入现有 render-thread deferred 应用路径；不会在 UI 录制期直接修改 GPU pipeline。
+- 验证：`xmake b ya-game-editor` 通过；widgettree editor smoke（port 20001）截图成功并退出码 0。
+
+### Phase 7T 边界
+
+- debug pipeline inspector、render target attachment preview/format editing、render graph topology canvas/internals、deferred/forward 专属详细参数仍待 retained 迁移；旧 ImGui panels 保持编译。

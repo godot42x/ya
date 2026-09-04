@@ -75,6 +75,13 @@
 - [x] UI Designer retained shell（新建/保存/关闭文档 + 状态同步，移除 pending placeholder）。
 - [x] Dock panel content 使用 parent-owned box slot fill，消除 path-A 下 child anchor 冲突。
 - [x] Runtime Tools retained shell（Play/Simulate/Stop + status/frame 同步，移除 pending placeholder）。
+- [x] Runtime Tools retained diagnostics summary（RenderDoc 状态/路径/capture 状态同步）。
+- [x] Runtime Tools retained diagnostics controls（capture enabled/HUD/next-frame/after-120）。
+- [x] Runtime Tools retained render settings（pipeline、viewport scale、VSync、present mode、pipeline reload）。
+- [x] Runtime Tools retained profiling summary（compile/session 状态、CPU/GPU frame metrics、profiling toggles、average window）。
+- [x] Runtime Tools retained render graph summary（pipeline + pass/dependency 状态）。
+- [x] Runtime Tools retained render target summary（target/owner/extent/read-only 状态）。
+- [x] Runtime Tools retained debug primitives（开关与 pending/frame/immediate 计数）。
 - [ ] Remove ImGui editor paths。
 - [ ] Multi-window/docking persistence。
 - [ ] Cross-platform and long-run gates。
