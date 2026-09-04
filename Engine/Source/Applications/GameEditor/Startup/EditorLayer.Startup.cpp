@@ -1,8 +1,6 @@
 #include "GameEditor/EditorLayerInternal.h"
 #include "GameEditor/UI/EditorFilePicker.h"
 
-#include "GameRuntime/GUI/GuiSystem.h"
-
 namespace ya
 {
 Scene* EditorLayer::getEditableScene() const
@@ -160,74 +158,4 @@ bool EditorLayer::defaultScenePathExists() const
     return VFS::get() && VirtualFileSystem::get()->isFileExists(scenePath);
 }
 
-void EditorLayer::editorSettings()
-{
-    if (!ImGui::Begin("Editor Settings")) {
-        ImGui::End();
-        return;
-    }
-
-    if (!_bDefaultScenePathDirty && _defaultScenePathBuffer[0] == '\0') {
-        syncEditorSettingsFromConfig();
-    }
-
-    ImGui::Combo("Viewport Sampler", (int*)&_viewPortSamplerType, "Linear\0Nearest\0");
-    if (ImGui::Checkbox("Show Viewport Camera Overlay", &_bShowViewportCameraOverlay)) {
-        setShowViewportCameraOverlay(_bShowViewportCameraOverlay);
-    }
-
-    ImGui::Separator();
-    ImGui::TextUnformatted("Startup Scene");
-    ImGui::SetNextItemWidth(-90.0f);
-    if (ImGui::InputText("##DefaultScenePath", _defaultScenePathBuffer, sizeof(_defaultScenePathBuffer))) {
-        _bDefaultScenePathDirty = true;
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Button("Browse")) {
-        auto onPicked = [this](const std::string& newPath) { setDefaultScenePathDraft(newPath); };
-        if (_filePickerHandler) {
-            _filePickerHandler(makeSceneJsonFilePickerRequest(_defaultScenePathBuffer, std::move(onPicked)));
-        }
-        else {
-            _filePicker.open("Select Default Scene",
-                             _defaultScenePathBuffer,
-                             {".scene.json"},
-                             std::move(onPicked));
-        }
-    }
-
-    const std::string scenePath = _defaultScenePathBuffer;
-    const bool        bHasScenePath = !scenePath.empty();
-    if (bHasScenePath) {
-        const bool bExists = VFS::get() && VirtualFileSystem::get()->isFileExists(scenePath);
-        ImGui::TextDisabled("Used on next app start");
-        ImGui::TextColored(bExists ? ImVec4(0.35f, 0.85f, 0.45f, 1.0f) : ImVec4(1.0f, 0.55f, 0.35f, 1.0f),
-                           bExists ? "Scene exists" : "Scene not found");
-    }
-    else {
-        ImGui::TextDisabled("Empty means startup falls back to an empty scene");
-    }
-
-    if (_bDefaultScenePathDirty) {
-        if (ImGui::Button("Apply Default Scene Path")) {
-            applyDefaultScenePathDraft();
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Reset")) {
-            resetDefaultScenePathDraft();
-        }
-    }
-
-    ImGui::Separator();
-    if (ImGui::TreeNode("ImGui")) {
-        if (GuiSystem::get().renderBackendSettings()) {
-            saveImGuiSettingsToConfig();
-        }
-        ImGui::TreePop();
-    }
-
-    ImGui::End();
-}
 } // namespace ya

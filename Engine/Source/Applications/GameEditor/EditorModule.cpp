@@ -708,15 +708,22 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
 
         _chromeHost = EEditorChromeHost::WidgetTree;
         const std::string fromConfig = ConfigManager::get().getOr<std::string>("editor", "chrome.host", "widgettree");
-        if (!tryParseEditorChromeHost(fromConfig, _chromeHost)) {
+        EEditorChromeHost requested = EEditorChromeHost::WidgetTree;
+        if (!tryParseEditorChromeHost(fromConfig, requested)) {
             YA_CORE_WARN("Ignoring invalid editor.chrome.host '{}', using widgettree", fromConfig);
-            _chromeHost = EEditorChromeHost::WidgetTree;
+        }
+        else if (requested == EEditorChromeHost::ImGui) {
+            YA_CORE_WARN("Ignoring editor.chrome.host=imgui; WidgetTree is the only editor chrome host");
         }
         if (desc.editorChrome) {
-            if (!tryParseEditorChromeHost(*desc.editorChrome, _chromeHost)) {
+            if (!tryParseEditorChromeHost(*desc.editorChrome, requested)) {
                 YA_CORE_WARN("Ignoring invalid --editor-chrome '{}'", *desc.editorChrome);
             }
+            else if (requested == EEditorChromeHost::ImGui) {
+                YA_CORE_WARN("Ignoring --editor-chrome=imgui; WidgetTree is the only editor chrome host");
+            }
         }
+        _chromeHost = EEditorChromeHost::WidgetTree;
     }
 
     void onAttach(App& app) override
@@ -732,25 +739,17 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         initializeEditorCamera(app, *_layer);
         _layer->setCurrentScenePath(app.getDesc().defaultScenePath.value_or(std::string{}));
         _layer->onAttach();
-        if (_chromeHost == EEditorChromeHost::WidgetTree) {
-            _editorSurface.bind(*_layer);
-            _layer->setSaveSceneAsHandler([this]() { _editorSurface.openSceneSaveDialog(); });
-            _layer->setAssetPickerHandler([this](EEditorAssetPickerKind kind,
-                                                 std::string currentPath,
-                                                 std::function<void(std::string)> onPicked) {
-                _editorSurface.openAssetPickerDialog(kind, std::move(currentPath), std::move(onPicked));
-            });
-            _layer->setFilePickerHandler([this](FEditorFilePickerRequest request) {
-                _editorSurface.openFilePickerDialog(std::move(request));
-            });
-            _inputNode.bind(app, *_layer, &_editorSurface);
-        }
-        else {
-            _layer->clearSaveSceneAsHandler();
-            _layer->clearAssetPickerHandler();
-            _layer->clearFilePickerHandler();
-            _inputNode.bind(app, *_layer, nullptr);
-        }
+        _editorSurface.bind(*_layer);
+        _layer->setSaveSceneAsHandler([this]() { _editorSurface.openSceneSaveDialog(); });
+        _layer->setAssetPickerHandler([this](EEditorAssetPickerKind kind,
+                                             std::string currentPath,
+                                             std::function<void(std::string)> onPicked) {
+            _editorSurface.openAssetPickerDialog(kind, std::move(currentPath), std::move(onPicked));
+        });
+        _layer->setFilePickerHandler([this](FEditorFilePickerRequest request) {
+            _editorSurface.openFilePickerDialog(std::move(request));
+        });
+        _inputNode.bind(app, *_layer, &_editorSurface);
         _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);
         gEditorLayer           = _layer.get();
         registerEditorPresets();
@@ -951,24 +950,15 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                     },
                     EFormat::R16G16B16A16_SFLOAT);
             }
-            if (_chromeHost == EEditorChromeHost::ImGui) {
-                prepareRender2DComposePassPipeline(
-                    FRender2DComposePassDesc{
-                        .kind = ERender2DComposePassKind::EditorToolSurface,
-                    },
-                    EFormat::R16G16B16A16_SFLOAT);
+            EFormat::T chromeFormat = EFormat::B8G8R8A8_UNORM;
+            if (auto* render = renderServices.getRender(); render && render->getSwapchain()) {
+                chromeFormat = render->getSwapchain()->getFormat();
             }
-            if (_chromeHost == EEditorChromeHost::WidgetTree) {
-                EFormat::T chromeFormat = EFormat::B8G8R8A8_UNORM;
-                if (auto* render = renderServices.getRender(); render && render->getSwapchain()) {
-                    chromeFormat = render->getSwapchain()->getFormat();
-                }
-                prepareRender2DComposePassPipeline(
-                    FRender2DComposePassDesc{
-                        .kind = ERender2DComposePassKind::EditorToolSurface,
-                    },
-                    chromeFormat);
-            }
+            prepareRender2DComposePassPipeline(
+                FRender2DComposePassDesc{
+                    .kind = ERender2DComposePassKind::EditorToolSurface,
+                },
+                chromeFormat);
         }
 
         _layer->onUpdate(dt);
@@ -1026,14 +1016,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         (void)app;
         (void)commandBuffer;
         (void)dt;
-        if (!_layer || _chromeHost != EEditorChromeHost::ImGui) {
-            return;
-        }
-
-        GuiSystem::get().beginFrame();
-        _layer->onImGuiRender();
-        GuiSystem::get().endFrame();
-        (void)GuiSystem::get().render();
     }
 
     void onPresentation(App& app, ICommandBuffer& commandBuffer, float dt) override
@@ -1043,23 +1025,18 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             return;
         }
 
-        if (_chromeHost == EEditorChromeHost::WidgetTree) {
-            auto* render = app.getRenderServices().getRender();
-            if (!render) {
-                return;
-            }
-            _editorSurface.tick(app, dt);
-            const UIFrameSnapshot& snapshot = _editorSurface.snapshot();
-            const Extent2D targetExtent{
-                .width  = render->getSwapchainWidth(),
-                .height = render->getSwapchainHeight(),
-            };
-            replayUIFrameSnapshot(&commandBuffer, snapshot, targetExtent, ERender2DComposePassKind::EditorToolSurface);
-            _editorSurface.presentViewportGizmo(commandBuffer);
+        auto* render = app.getRenderServices().getRender();
+        if (!render) {
             return;
         }
-
-        GuiSystem::get().submit(commandBuffer);
+        _editorSurface.tick(app, dt);
+        const UIFrameSnapshot& snapshot = _editorSurface.snapshot();
+        const Extent2D targetExtent{
+            .width  = render->getSwapchainWidth(),
+            .height = render->getSwapchainHeight(),
+        };
+        replayUIFrameSnapshot(&commandBuffer, snapshot, targetExtent, ERender2DComposePassKind::EditorToolSurface);
+        _editorSurface.presentViewportGizmo(commandBuffer);
     }
 };
 

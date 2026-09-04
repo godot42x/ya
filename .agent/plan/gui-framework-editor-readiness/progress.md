@@ -996,3 +996,16 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 
 - 仍是同一 OS window 内的 Popup-layer 浮窗，不是 native 多窗口 coordinator。
 - 下一步：8W 仅在剩余 🔴 parity 行（gizmo bridge / optional imgui chrome）被接受或替换后删除 `onImGuiRender` / `imgui-local`。
+
+## Phase 8W 当前 checkpoint（2026-09-04）
+
+- `EditorModule` 只走 WidgetTree chrome；`--editor-chrome=imgui` / `editor.chrome.host=imgui` 忽略并 WARN。
+- 删除 `EditorLayer::onImGuiRender` 及 ImGui chrome 实现：`EditorLayer.Layout.cpp`（menu/toolbar/dockspace/project browser/FilePicker modal）、`viewportWindow`、`editorSettings` ImGui 窗口、`debugWindow` 与 ImGui debug grid/slot 绘制。
+- ImGuizmo overlay 仍经 `EditorSurface::presentViewportGizmo` 使用 `GuiSystem`；`imgui-local` 保留。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test`（384/384）。
+
+### Phase 8W 边界
+
+- 未摘 `imgui-local` / `imguizmo-local`；`FilePicker` 与 `TypeRenderer` 仍编译但 widgettree 默认不再打开 ImGui chrome。
+- Fullscreen / ImGui dock-padding 菜单项随 chrome shell 删除（➖）。
+- 下一步：Phase 9 跨平台、DPI/CJK、long-run soak。

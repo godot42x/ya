@@ -156,21 +156,12 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 ## GameEditor chrome
 
-- 启动时二选一，**同帧不能混画**（两边都要占 swapchain overlay）：
-  - 默认 **`widgettree`**：整窗 `EditorSurface` + `replayUIFrameSnapshot`；3D 仍离屏
-    compose，树只采样那张 RT。不要再做「ImGui 窗口里 Image + 事件转发」的渐进内嵌。
-  - **`imgui`**（legacy）：`GuiSystem` begin / `EditorLayer::onImGuiRender` / submit；
-    仅 `--editor-chrome=imgui` 或 `editor.chrome.host=imgui` 时启用。
-- 选择顺序：`--editor-chrome=imgui|widgettree` >
-  `editor.chrome.host`（`Engine/Saved/Config/Editor.json`）> 默认 `widgettree`。
-  进程生命周期内不可热切。
-- WidgetTree 输入：`EditorInputNode` → `WidgetTree::dispatchEvent`。ImGui 输入：
-  同一 node 走 `GuiSystem::processEvent`。
-- ImGui 路径：`onBeforePresentation` 只做 `beginFrame` / `onImGuiRender`（CPU）；
-  `onPresentation` 只 `GuiSystem::submit`（已打开的 presentation pass）。Workbench
-  离屏合成留在 `onViewportCompose`。不要在 presentation pass 里 `GUIRenderSurface::record()`
-  （会再 beginRendering）。Frame Stats 的 WidgetTree 离屏合成仍与 ToolSurface 抢同一
-  Render2D slot，暂不在 ImGui 路径录制。
+- 启动时 **WidgetTree 唯一 chrome**：整窗 `EditorSurface` + `replayUIFrameSnapshot`；3D 仍离屏
+  compose，树只采样那张 RT。`--editor-chrome=imgui` / `editor.chrome.host=imgui` 会被忽略并打 WARN。
+- WidgetTree 输入：`EditorInputNode` → `WidgetTree::dispatchEvent`。
+- ImGuizmo overlay 仍经 `EditorSurface::presentViewportGizmo` 走 `GuiSystem` begin/render/submit；
+  `imgui-local` 因此仍是 editor 依赖，直到 gizmo 有 retained 绘制路径。
+- `onImGuiRender` 编辑器 chrome shell（menu/toolbar/dockspace/viewport/debug/settings/project browser）已删除。
 - Workbench 作为 WidgetTree dock panel 嵌入时用 `FWorkbenchSurface::buildUI(tree, parent)`，
   不要 `attachToLayer(Content)` 盖掉 editor root。Dock 只把**当前选中 tab** 的
   panel widget `addDetachedChild` 进树；未选中的 panel 是 detached subtree。
@@ -179,22 +170,19 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 - WidgetTree chrome teardown：`EditorSurface::shutdown` 必须在 compositor / VMA
   之前丢掉 tree、snapshot、viewport wrap；随后 `FontManager::clearCache()`，
   否则 RuntimeDefault atlas 会以 dedicated allocation 活过 allocator Destroy。
-- 原 ImGui editor 文件先留着编译，等 TypeRenderer / FilePicker /
-  ImGuizmo / debug images 迁完再删、再摘
-  `imgui-local`。Content Browser / Hierarchy / Frame Stats /
-  Asset Inspector / Runtime Tools / UI Designer / GUI Workbench 的 ImGui panel
-  render 已删（Phase 8A–8H）。
+- 原 ImGui editor chrome shell（`onImGuiRender` / menu / toolbar / dockspace / viewport window）已删除。
+  `imgui-local` 仍因 ImGuizmo overlay 与 `FilePicker`/`TypeRenderer` 残留而保留。
   `IGuiBackend` 仍是 ImGui 形，不要强迫 EditorSurface 走它。
 - WidgetTree chrome 的 theme 走 `buildEditorTheme`（`GameEditor/UI/EditorTheme.h`），
   不要直接调 `buildWorkbenchTheme`。Chrome 文案用 `text.header` / `text.muted` /
   `text.error` / `text.eyebrow`，不要 `setColor` 字面量（显式着色会盖掉 theme）。
 - `SelectionModel` 是 identity 选择源（`GUI/Binding/SelectionModel.h`）：selected 有序集合 + primary（空或不在集合外）+ hover/active/focus。不持有 Entity*。控件绑 `primaryRef()`；多选走 `add`/`toggle`；`replace` 批量同步 viewport 多选。Hierarchy 仍写 `EditorLayer`，`syncSelectionFromLayer` 按 `selectionGeneration` 把 layer 选择映射为 `e:{uuid}` / `ui:{entryId}` 写回共享 model。
-- `ActionMap` 是 identity 命令表（`GUI/Binding/ActionMap.h`）：菜单、快捷键、toolbar 都 `execute(id)`。`FActionChord::primary` 在 macOS 是 Cmd、别处是 Ctrl。WidgetTree 未处理的 KeyPressed 才走 shortcut；文本焦点下只匹配带 modifier 的 chord。`UIMenu::FItem::fromAction` 生成同一 execute 的菜单行。ImGui 菜单栏仍是平行路径（Phase 8 再删）。
+- `ActionMap` 是 identity 命令表（`GUI/Binding/ActionMap.h`）：菜单、快捷键、toolbar 都 `execute(id)`。`FActionChord::primary` 在 macOS 是 Cmd、别处是 Ctrl。WidgetTree 未处理的 KeyPressed 才走 shortcut；文本焦点下只匹配带 modifier 的 chord。`UIMenu::FItem::fromAction` 生成同一 execute 的菜单行。
 - `UndoStack` 是 identity 撤销历史（`GUI/Binding/UndoStack.h`）：`push` 记录已应用的 undo/redo 闭包，不在 push 时调用 redo。`beginMerge`/`endMerge` 把同一 `mergeKey` 的连续 push 收成一步（拖动）；`UndoTransaction` 把嵌套 push 收成一步。栈不持有 Entity*。`edit.undo` / `edit.redo` 走 ActionMap（macOS Redo 是 Cmd+Shift+Z，别处 Ctrl+Y）。Inspector 拖动 `UIDragFloat` 在 `_onDragBegan/Ended` 开闭 merge；`setValue(..., false)` 是 sync，不进 undo。Gizmo / viewport 选择仍未接入。
 - `PropertyGraph::project` 是反射字段 → editor field model 的入口（`build` + `PropertyProjectionRegistry`）。Transform projection 负责显示名和 `setPosition/setRotation/setScale` 写回。Inspector 对多选的 **交集** component 物化 `EditorAutoPropertySection`；`UIDragFloat` mixed 显示 "—"，编辑写回全部 instance，undo 按 instance 快照恢复。enum 字段走 `UIComboBox`；`.color()` 元数据的 `glm::vec3`/`glm::vec4` 走 `UIColorEdit`（非 color vec3 仍走 DragFloat）。`TextureRef`/`ModelRef`/`MeshRef` 走 path `UITextField` + Browse；Browse 经 `EditorAssetPickerCallback`（widgettree：`EditorLayer::setAssetPickerHandler` → `EditorSurface::openAssetPickerDialog`；legacy imgui：`FilePicker`；`EditorInspectorTab` 注入，framework 不依赖 `EditorLayer`）。`PropertyHandle::validationError` 读 manipulate spec 范围；`hasAssetResolveError` 对 failed resolve 画 error fill；`UIDragFloat`/`UITextField` `setError` 画 error fill。`UIImage` 对缺失 asset / `setResourceMissing` 画 error fill。没有 retained 可编辑字段的类型跳过。ImGui `DetailsView` 实现已在 Phase 8N 删除；`EditorInspectorTab` 是实体/component 唯一正式 Inspector UI，并显示 Game UI Entry 摘要 + Open in UI Designer。
 - `EditorSurface` Content Browser：`FileExplorer` 管 mount/目录/搜索枚举；`UIKeyedChildReconciler` + `EditorListRows.h` 物化 mount/entry 行；entry 列表用 `computeKeyedVisibleWindow` 窗口化。fingerprint 含 search + selected path；`selectContentItem` 写 `setSelectedPath` 并对纹理调 `inspectAsset`。ImGui `ContentBrowserPanel` 已删（Phase 8A）；`ContentBrowserPanel` 仅保留 FilePicker 图标加载。
 - `UITreeView` 在 `UIScrollViewport` 内只 paint 可见行窗口（`computeKeyedVisibleWindow` + `getPaintedRowCount`）；`EditorSurface` Hierarchy 用 scroll 包裹。flatten/hit-test 仍读全量可见行；无 per-row widget。`bindFilter` + `HierarchyFilter` 搜索框过滤节点；`setReorderable` + `moveEditorHierarchyEntity` 支持 scene 实体拖放重排（`ui:` 条目仍不可重排）。ImGui `SceneHierarchyPanel::sceneTree` 已删（Phase 8O）；`SceneHierarchyPanel` 仅保留 viewport 选择总线 API。
-- Viewport overlay：`FEditorViewportHostState` / `IEditorViewportOverlay` / `EditorViewportOverlayHost`；`EditorSurface::syncViewportHostState` + hover 时 overlay dispatch。ImGuizmo bridge 仍待实现。
+- Viewport overlay：`FEditorViewportHostState` / `IEditorViewportOverlay` / `EditorViewportOverlayHost`；`EditorSurface::syncViewportHostState` + hover 时 overlay dispatch。ImGuizmo 仍经 `presentViewportGizmo` 绘制。
 
 ## Style / Theme
 

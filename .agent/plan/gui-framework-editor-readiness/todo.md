@@ -105,5 +105,5 @@
 - [x] Phase 8T：UI Designer retained palette + PropertyGraph inspector（`addPaletteWidget` + `EditorAutoPropertySection`）。
 - [x] Phase 8V：Debug images retained dock tab（`EditorDebugImagesTab` + `EditorLayer` catalog/mask/group API；ImGui `debugWindow` 仍保留至 8W）。
 - [x] Multi-window/docking persistence（floating geometry：`UIDockWorkspace` layout JSON + editor tear-off host）。
-- [ ] Remove remaining ImGui editor paths（见 [`imgui-widgettree-parity.md`](./imgui-widgettree-parity.md) 删除门禁）。
+- [x] Phase 8W：删除 `onImGuiRender` chrome shell；WidgetTree 为唯一 editor chrome（`imgui-local` 仍服务 ImGuizmo）。
 - [ ] Cross-platform and long-run gates。

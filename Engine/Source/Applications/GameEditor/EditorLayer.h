@@ -71,16 +71,6 @@ struct EditorLayer
     AssetInspectorPanel _assetInspectorPanel;
     UIDesignerPanel     _uiDesignerPanel;
 
-    // ImGui Docking state
-    ImGuiDockNodeFlags _dockspaceFlags = ImGuiDockNodeFlags_None;
-    ImGuiWindowFlags   _windowFlags    = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-
-    // Window state
-    bool bFullscreen            = true;
-    bool bPadding               = true;
-    // bool bShowSettingsWindow = true;
-    // bool bShowRenderStats    = true;
-
     // Viewport state
     glm::vec2                _viewportSize = {1280.f, 720.f};
     glm::vec2                _viewportBounds[2]; // Min and max bounds
@@ -345,36 +335,6 @@ struct EditorLayer
         _bViewportResizePending = true;
     }
 
-    void onImGuiRender()
-    {
-        YA_PROFILE_FUNCTION();
-        // ya::DeferredModificationQueue::get().onFrameBegin();
-
-        if (!hasProjectLoaded()) {
-            projectBrowserWindow();
-            return;
-        }
-
-        {
-            ya::ImGuiStyleScope style;
-            updateWindowFlags(style);
-
-            // Begin main dockspace window
-            ImGui::Begin("MainEditor", nullptr, _windowFlags);
-        }
-
-
-        setupDockspace();
-        menuBar();
-        toolbar();
-        editorSettings();
-        viewportWindow();
-        debugWindow();
-
-        renderAuxiliaryUi();
-
-        ImGui::End(); // End main dockspace window
-    }
     void onEvent(const Event& event);
 
 
@@ -400,38 +360,11 @@ struct EditorLayer
     void               refreshProjectBrowser();
     [[nodiscard]] bool openProjectInPlace(const std::string& projectPath);
 
-    // UI Methods
-    void updateWindowFlags(ya::ImGuiStyleScope& style);
-    void menuBar();
-    void toolbar();
-    void projectBrowserWindow();
-    void renderAuxiliaryUi();
-    // void settingsWindow();
-    // void renderStatsWindow();
-    void viewportWindow();
-    void editorSettings();
-
-    // --
-    void                                              debugWindow();
-    bool                                              renderDebugImageGroup(const EditorViewportDebugCatalog::Group& group,
-                                                                            int                                      groupIndex,
-                                                                            const ImVec2&                            panelSize,
-                                                                            bool                                     bUseCollapsingHeader = true,
-                                                                            float                                    maxPreviewSize       = 0.0f);
-    void                                              renderDebugImageGroups(const ImVec2& panelSize, int categoryFilter = -1);
-    void                                              renderDebugImageGroupsGrid(const ImVec2& panelSize, int categoryFilter, float maxPreviewSize = 0.0f);
-    void                                              renderDebugImageSlots(const ImVec2& panelSize, int categoryFilter = -1);
     void                                              syncDebugSlotState(const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state);
-    bool                                              renderDebugSlotMaskControls(const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state);
     void                                              updateDebugSlotImageView(uint32_t slotIndex, const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state, bool bForceRefresh = false);
-    void                                              renderDebugSlotImage(uint32_t slotIndex, const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state, float width, float height, Sampler* sampler);
     void                                              ensureDebugViewerState();
     void                                              loadDebugGroupState(int groupIndex);
     void                                              persistDebugGroupState(int groupIndex);
-
-    // Helpers
-    void setupDockspace();
-
 
     void cleanupImGuiTextures();
     void removeImGuiTexture(const ImGuiImageEntry* entry);
