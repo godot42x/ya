@@ -1009,3 +1009,17 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - 未摘 `imgui-local` / `imguizmo-local`；`FilePicker` 与 `TypeRenderer` 仍编译但 widgettree 默认不再打开 ImGui chrome。
 - Fullscreen / ImGui dock-padding 菜单项随 chrome shell 删除（➖）。
 - 下一步：Phase 9 跨平台、DPI/CJK、long-run soak。
+
+## Phase 9B 当前 checkpoint（2026-09-04）
+
+- 新增 `EditorScaleBaselineTest`（`ya-gui-closure-test` / `ya-gui-widgets-test`）：用结构界线而不是墙钟时间卡住 editor 规模。
+- Hierarchy：50×40 展开节点（2050 可见行）在 220px scroll viewport 内 `getPaintedRowCount() < 30`，第二次干净 snapshot `rebuiltWidgets==0`。
+- Inspector：250 行 `UIText` 列第一次 snapshot 有 draw items，第二次 `rebuiltWidgets==0` 且 draw-item 数稳定。
+- Content catalog：`computeKeyedVisibleWindow` 在 50 与 5000 条目、同一 viewport 下 window count 相同且 < 20；5000 条目的 `contentExtent` 仍按全量计算。
+- 验证：`xmake r ya-gui-closure-test`（387/387）；`EditorScaleBaselineTest.*`（3/3）。
+
+### Phase 9B 边界
+
+- 这是 headless 结构/增量布局基线，不是大场景 ECS 帧时间、长时 soak、DPI/CJK、GPU/offscreen 或跨平台门禁。
+- Hierarchy flatten/hit-test 仍读全量可见行；本 checkpoint 只证明 paint 窗口有界。
+- 下一步：Phase 9C attach/detach + theme-switch soak。
