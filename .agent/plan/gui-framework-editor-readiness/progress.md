@@ -577,3 +577,52 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - TableGrid flat paint 仍未虚拟化。
 
 下一 checkpoint：viewport/gizmo overlay contract，或 drag-drop asset workflow。
+
+## Phase 7G 当前 checkpoint
+
+- `EditorViewportHost.h`：`FEditorViewportHostState` + `IEditorViewportOverlay` + `EditorViewportOverlayHost` 定义 retained viewport overlay 契约（host rect/hover/focus/view/proj；overlay dispatch/active/capture）。
+- `EditorSurface` 每帧 `syncViewportHostState`；viewport hover 时 `dispatchEvent` 先路由 overlay host；暴露 `viewportOverlayHost()` / `isViewportOverlayActive()`。
+- `EditorViewportOverlayHostTest` 3/3 通过；ImGuizmo 桥接仍待后续 overlay 实现。
+- xmake b ya-game-editor / ya-testing / ya-gui-closure-test 通过。
+
+### Phase 7G 边界
+
+- 尚无具体 overlay 实现（gizmo 仍走 ImGui `renderGizmo`）；WidgetTree chrome 下 viewport 工具输入待 ImGuizmo bridge。
+- drag-drop asset workflow、menu/palette gaps 未做。
+
+下一 checkpoint：ImGuizmo retained overlay bridge，或 drag-drop asset workflow。
+## Phase 7H 当前 checkpoint（2026-09-04）
+
+- EditorViewportGizmoOverlay 已接入 EditorViewportOverlayHost：viewport hover/focus 时先路由 overlay，W/E/R 切换平移/旋转/缩放操作，ImGuizmo active/capture 状态回传到输入路由。
+- WidgetTree chrome 的 presentation 在 retained snapshot replay 后调用 EditorSurface::presentViewportGizmo，将 gizmo 作为 viewport overlay 提交到同一 presentation command buffer；未恢复 ImGui editor chrome。
+- overlay 事件转发条件扩大为 hovered || focused，避免 gizmo 拖拽开始后鼠标离开 viewport rect 立刻丢失输入。
+- 验证：xmake b ya-game-editor 通过；xmake r ya-testing -- --gtest_filter='EditorViewportOverlayHostTest.*' 通过。
+
+### Phase 7H 边界
+
+- ImGuizmo 的绘制和键盘 modifier 仍依赖共享 ImGui backend，属于 bridge，不是最终 retained renderer。
+- 当前 runtime editor smoke 仍可能以 255 退出，不能据此宣称完整启动通过；下一步是定位该退出并接入 gizmo transform 的 command/undo 闭环。
+## Phase 7I 当前 checkpoint（2026-09-04）
+
+- 新增 EditorTransformUndo：按 IDComponent UUID 捕获多选 Transform 的 world 快照，撤销/重做时通过 Scene::getEntityByUUID 重新解析实体，避免闭包持有裸 Entity*。
+- EditorLayer::renderGizmo 在第一次实际 ImGuizmo::Manipulate 时捕获 before，操作结束时捕获 after，并向 EditorSurface 共享的 UndoStack 提交一个 Transform gizmo 命令；多选沿用同一批 UUID 快照。
+- EditorTransformUndoTest 验证稳定 UUID 恢复和无 Transform 实体过滤；overlay 契约测试继续通过。
+- 验证：xmake b ya-game-editor、xmake b ya-testing，以及 EditorTransformUndoTest.*:EditorViewportOverlayHostTest.*（5/5）通过。
+
+### Phase 7I 边界
+
+- ImGuizmo 绘制/输入仍是共享 ImGui backend 的 bridge；最终 retained gizmo renderer 未完成。
+- 当前撤销命令按 world matrix 快照恢复，未把操作类型、snap 参数和 UI 标签细分为独立 command payload。
+- 下一步：为 widgettree editor 增加有界 automation smoke，确认 gizmo drag 的 begin/commit/undo 生命周期，再继续清理 ImGui editor paths。
+
+## Phase 9A 当前 checkpoint（2026-09-04）
+
+- 新增 Script/automation/editor/run_widgettree_editor_smoke.py 与 test_widgettree_editor_smoke.py：以现有 automation control 为唯一控制面，启动 run-editor --editor-chrome=widgettree，验证 ping、viewport rect、editor camera 写入、frame index 持续推进、presentation screenshot 落盘，并显式 quit 校验干净退出。
+- smoke 运行日志落到 Engine/Saved/Automation/widgettree-editor-smoke.log，presentation 证据图落到 Engine/Saved/Automation/widgettree-editor-smoke-presentation.png；不再把“看起来能跑”当成 editor runtime readiness 证据。
+- 本地验证：python3 -m py_compile Script/automation/editor/run_widgettree_editor_smoke.py Script/automation/editor/test_widgettree_editor_smoke.py 通过；python3 Script/automation/editor/run_widgettree_editor_smoke.py --skip-build --startup-timeout 90 --frame-budget 180 --min-frame-delta 20 --presentation-shot Engine/Saved/Automation/widgettree-editor-smoke-presentation.png 退出码 0。
+
+### Phase 9A 边界
+
+- 这是单机 macOS 的 bounded smoke，不是 cross-platform、长时 soak、DPI/CJK 或 GPU/offscreen parity 全量门禁。
+- smoke 当前验证 editor runtime 稳定启动/绘制/退出，不覆盖 gizmo 交互脚本化拖拽、content browser 操作链或 ImGui 路径移除后的全工作流。
+- 下一步：继续清理剩余 ImGui editor path，并补更细粒度的 widgettree editor automation 命令面。

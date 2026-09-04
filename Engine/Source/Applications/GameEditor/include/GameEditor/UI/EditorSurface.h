@@ -13,6 +13,7 @@
 #include "GameEditor/FileExplorer.h"
 #include "GameEditor/UI/EditorTabRegistry.h"
 #include "GameEditor/UI/EditorInspectorTab.h"
+#include "GameEditor/UI/EditorViewportHost.h"
 
 #include <array>
 #include <memory>
@@ -26,8 +27,11 @@ class FWorkbenchSurface;
 namespace ya
 {
 
+struct ICommandBuffer;
+
 struct App;
 struct EditorLayer;
+class EditorViewportGizmoOverlay;
 struct Texture;
 struct UIDockSpace;
 struct UIDockWorkspace;
@@ -117,6 +121,8 @@ struct EditorSurface
 
     std::string _hierarchyFingerprint;
     uint64_t    _syncedSelectionGeneration = ~uint64_t{0};
+    EditorViewportOverlayHost _viewportOverlayHost;
+    std::shared_ptr<EditorViewportGizmoOverlay> _viewportGizmoOverlay;
 
   public:
     EditorSurface() = default;
@@ -141,6 +147,11 @@ struct EditorSurface
     [[nodiscard]] const ActionMap& actions() const { return *_actions; }
     [[nodiscard]] UndoStack& undo() { return *_undo; }
     [[nodiscard]] const UndoStack& undo() const { return *_undo; }
+    [[nodiscard]] EditorViewportOverlayHost& viewportOverlayHost() { return _viewportOverlayHost; }
+    [[nodiscard]] const EditorViewportOverlayHost& viewportOverlayHost() const { return _viewportOverlayHost; }
+    [[nodiscard]] bool isViewportOverlayActive() const { return _viewportOverlayHost.isActive(); }
+    [[nodiscard]] bool shouldRenderViewportGizmo() const;
+    void presentViewportGizmo(ICommandBuffer& commandBuffer);
 
   private:
     void rebuild(App& app);
@@ -166,6 +177,7 @@ struct EditorSurface
     void activateSceneSaveItem(const std::filesystem::path& path, bool bIsDirectory);
     void confirmSceneSaveDialog();
     void publishViewportRect();
+    void syncViewportHostState(App& app);
     void applyWindowMetrics(App& app);
 };
 

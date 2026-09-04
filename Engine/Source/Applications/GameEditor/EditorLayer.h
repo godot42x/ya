@@ -18,6 +18,7 @@
 #include "GameEditor/Inspector/DetailsView.h"
 #include "GameEditor/Panels/SceneHierarchyPanel.h"
 #include "GameEditor/Panels/UIDesignerPanel.h"
+#include "GameEditor/UI/EditorTransformUndo.h"
 #include "RHI/Core/Image.h"
 #include "RHI/Core/RenderTexture.h"
 #include "Render3D/Common/RenderOverlay.h"
@@ -40,6 +41,7 @@ struct App;
 struct IImageView;
 struct IImage;
 struct RenderTexture;
+class UndoStack;
 using EditorViewportContext      = RenderViewportSnapshot;
 using EditorViewportDebugCatalog = RenderViewportDebugCatalog;
 
@@ -128,6 +130,9 @@ struct EditorLayer
     // Gizmo state
     ImGuizmo::OPERATION _gizmoOperation = ImGuizmo::TRANSLATE;
     ImGuizmo::MODE      _gizmoMode      = ImGuizmo::LOCAL;
+    UndoStack* _gizmoUndo = nullptr;
+    bool _bGizmoUndoSession = false;
+    std::vector<FEditorTransformSnapshot> _gizmoUndoBefore;
 
     const ImGuiImageEntry* _playIcon       = nullptr;
     const ImGuiImageEntry* _pauseIcon      = nullptr;
@@ -450,6 +455,9 @@ struct EditorLayer
     const Rect2D&                    getViewportMouseRect() const { return _viewportMouseRect; }
     const glm::vec2&                 getViewportMouseCenter() const { return _viewportMouseCenter; }
     bool                             isGizmoActive() const; // Check if ImGuizmo is being used or hovered
+    void                             setViewportGizmoOperation(ImGuizmo::OPERATION operation);
+    void                             setViewportGizmoUndoStack(UndoStack* undo) { _gizmoUndo = undo; }
+    void                             renderViewportGizmoOverlay();
     bool                             isRightMouseDragging() const { return _bRightMouseDragging; }
     const std::vector<Entity*>&      getSelections() const { return _selections; }
     [[nodiscard]] UIDesignerPanel&   getUIDesignerPanel() { return _uiDesignerPanel; }

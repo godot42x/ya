@@ -3,15 +3,19 @@
 #include "Core/Event.h"
 #include "Core/Config/ConfigManager.h"
 #include "Core/Log.h"
+#include "GameEditor/UI/EditorViewportHost.h"
 #include "GameEditor/UI/EditorHierarchyOps.h"
+#include "GameEditor/UI/EditorViewportGizmoOverlay.h"
 #include "GameEditor/UI/EditorListRows.h"
 #include "ECS/Entity.h"
 #include "ECS/Component.h"
 #include "ECS/ECSRegistry.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Tooling/Workbench/WorkbenchSurface.h"
+#include "GameEditor/EditorLayer.h"
 #include "GameEditor/UI/EditorTheme.h"
 #include "GameEditor/UI/EditorTabRegistry.h"
+#include "GameRuntime/App.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
@@ -31,15 +35,14 @@
 #include "GUI/Widgets/KeyedVisibleWindow.h"
 #include "GUI/Widgets/WidgetAttachment.h"
 #include "GUI/Widgets/WidgetTree.h"
-#include "GameEditor/EditorLayer.h"
 #include "Core/System/PathUtils.h"
 #include "Core/System/VirtualFileSystem.h"
-#include "GameRuntime/App.h"
 #include "Hierarchy/Node.h"
 #include "RHI/Core/Texture.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Swapchain.h"
-#include "RHI/NativeWindow.h"
+#include "GameRuntime/GUI/GuiSystem.h"
+#include "RHI/Core/CommandBuffer.h"
 #include "RHI/Render.h"
 #include "Render/Resources/FontManager.h"
 #include "Scene/Core/Scene.h"
@@ -157,6 +160,8 @@ void EditorSurface::shutdown()
     _dockWorkspace.reset();
     _dockSpace.reset();
     _viewportImage.reset();
+    _viewportGizmoOverlay.reset();
+    _viewportOverlayHost.clearOverlay();
     _hierarchyView.reset();
     _hierarchyRoots.reset();
     _hierarchyFilter.reset();
@@ -204,6 +209,7 @@ void EditorSurface::tick(App& app, float dt)
     syncPresentation(app, dt);
     _snapshot = _tree->buildSnapshot(UIFrameBuildContext{});
     publishViewportRect();
+    syncViewportHostState(app);
 }
 
 void EditorSurface::rebuild(App& app)
@@ -214,6 +220,8 @@ void EditorSurface::rebuild(App& app)
     _dockWorkspace.reset();
     _dockSpace.reset();
     _viewportImage.reset();
+    _viewportGizmoOverlay.reset();
+    _viewportOverlayHost.clearOverlay();
     _hierarchyView.reset();
     _hierarchyRoots.reset();
     _hierarchyFilter.reset();
@@ -648,6 +656,10 @@ void EditorSurface::buildEditorChrome(App& app)
     model.selectPanel(hierarchyId);
     model.selectPanel(inspectorId);
     _dockWorkspace->fireDockUpdated();
+
+    _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(*_layer);
+    _viewportOverlayHost.setOverlay(_viewportGizmoOverlay);
+    _layer->setViewportGizmoUndoStack(_undo.get());
 }
 
 void EditorSurface::applyWindowMetrics(App& app)
@@ -1480,11 +1492,39 @@ void EditorSurface::publishViewportRect()
     _layer->setViewportHoverFocus(hovered, focused);
 }
 
+void EditorSurface::syncViewportHostState(App& app)
+{
+    if (!_viewportImage) {
+        return;
+    }
+
+    FEditorViewportHostState state{};
+    state.widgetRect = _viewportImage->_layoutRect;
+    state.extent     = state.widgetRect.extent;
+    state.bHovered   = isViewportHovered();
+    state.bFocused   = isViewportFocused();
+
+    const auto& frameState = app.getRenderServices().getRenderFrameState();
+    state.view             = frameState.view;
+    state.projection       = frameState.projection;
+
+    _viewportOverlayHost.syncHost(state);
+}
+
 EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::vec2& windowPoint)
 {
     if (!_tree) {
         return EWidgetRouteResult::NotHandled;
     }
+
+    if (_viewportImage && (isViewportHovered() || isViewportFocused())) {
+        const glm::vec2 localPoint = windowPoint - _viewportImage->_layoutRect.pos;
+        const EWidgetRouteResult overlayResult = _viewportOverlayHost.dispatchEvent(event, localPoint);
+        if (overlayResult != EWidgetRouteResult::NotHandled) {
+            return overlayResult;
+        }
+    }
+
     WidgetEventContext ctx;
     ctx.logicalPoint = windowPoint;
     const EWidgetRouteResult routed = _tree->dispatchEvent(event, ctx);
@@ -1516,6 +1556,25 @@ bool EditorSurface::wantsTextInput() const
     UIElement* focused = _tree->getFocused();
     return dynamic_cast<UITextField*>(focused) != nullptr ||
            (_inspectorTab && _inspectorTab->wantsTextInput(*_tree));
+}
+
+bool EditorSurface::shouldRenderViewportGizmo() const
+{
+    return _layer && _layer->isProjectLoaded() && !_layer->isViewportMode2D();
+}
+
+void EditorSurface::presentViewportGizmo(ICommandBuffer& commandBuffer)
+{
+    if (!shouldRenderViewportGizmo() || !_viewportGizmoOverlay || !_layer) {
+        return;
+    }
+
+    GuiSystem::get().beginFrame();
+    _viewportGizmoOverlay->syncImGuiIO();
+    _layer->renderViewportGizmoOverlay();
+    GuiSystem::get().endFrame();
+    (void)GuiSystem::get().render();
+    GuiSystem::get().submit(commandBuffer);
 }
 
 } // namespace ya

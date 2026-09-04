@@ -23,6 +23,7 @@ struct FEditorInputSnapshot
     bool               keyboardEvent    = false;
     bool               viewportMouse    = false;
     bool               viewportKeyboard = false;
+    bool               viewportOverlayActive = false;
     bool               textInput        = false;
     bool               widgetTreeChrome = false;
 };
@@ -48,6 +49,7 @@ FEditorInputSnapshot buildSnapshot(App& app, EditorLayer& layer, EditorSurface* 
             surface->isViewportHovered() || surface->isViewportFocused() ||
             layer.isViewportHovered() || layer.isViewportFocused();
         snapshot.viewportKeyboard = surface->isViewportFocused() || layer.isViewportFocused();
+        snapshot.viewportOverlayActive = surface->isViewportOverlayActive();
     }
     else {
         snapshot.guiProcessState = GuiSystem::get().processEvent(event);
@@ -131,6 +133,11 @@ FInputReply routeViewportToolInput(
     // handled here, full runtime hands the viewport over to the game.
     if (app.isRuntimeMode() && !layer.isViewportMode2D()) {
         return {};
+    }
+
+    if (snapshot.viewportOverlayActive && snapshot.pointerEvent) {
+        layer.onEvent(event);
+        return FInputReply{.handled = true};
     }
 
     layer.onEvent(event);

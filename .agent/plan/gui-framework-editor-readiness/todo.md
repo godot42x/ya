@@ -67,7 +67,10 @@
 - [x] Content Browser retained controls（EditorSurface mount/entry lists、search、selection、navigate、visible-window；ImGui panel 仍平行）。
 - [x] Hierarchy virtualization（UITreeView scroll-window paint + EditorSurface HierarchyScroll）。
 - [x] Hierarchy filter + entity drag-drop reorder（`HierarchyFilter` + `bindFilter`；`setReorderable` + `EditorHierarchyOps`）。
-- [ ] Viewport/gizmo/drag-drop。
+- [x] Viewport overlay contract（`EditorViewportHost` + `EditorSurface` host sync/dispatch）。
+- [x] Viewport/gizmo ImGuizmo bridge。
+- [x] Gizmo transform undo session（稳定 UUID 快照 + UndoStack）。
+- [x] Bounded widgettree editor smoke gate（automation control + frame progression + presentation screenshot + clean quit）。
 - [ ] Remove ImGui editor paths。
 - [ ] Multi-window/docking persistence。
 - [ ] Cross-platform and long-run gates。

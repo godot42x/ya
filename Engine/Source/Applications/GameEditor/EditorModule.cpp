@@ -1119,6 +1119,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                 .height = render->getSwapchainHeight(),
             };
             replayUIFrameSnapshot(&commandBuffer, snapshot, targetExtent, ERender2DComposePassKind::EditorToolSurface);
+            _editorSurface.presentViewportGizmo(commandBuffer);
             return;
         }
 

@@ -1,4 +1,5 @@
 #include "GameEditor/EditorLayerInternal.h"
+#include "GameEditor/UI/EditorTransformUndo.h"
 
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/Systems/TransformSystem.h"
@@ -17,6 +18,11 @@ namespace ya
 
 namespace
 {
+void resetGizmoUndoSession(bool& active, std::vector<FEditorTransformSnapshot>& before)
+{
+    before.clear();
+    active = false;
+}
 
 /// Pixel-accurate pick: read the entity id written by the viewport graph's
 /// entity-id pass at the cursor position, then map the id back to an entity.
@@ -313,6 +319,16 @@ bool EditorLayer::isGizmoActive() const
     return bUsing || bOver;
 }
 
+void EditorLayer::setViewportGizmoOperation(ImGuizmo::OPERATION operation)
+{
+    _gizmoOperation = operation;
+}
+
+void EditorLayer::renderViewportGizmoOverlay()
+{
+    renderGizmo();
+}
+
 void EditorLayer::renderGizmo()
 {
     YA_PROFILE_FUNCTION();
@@ -324,12 +340,14 @@ void EditorLayer::renderGizmo()
     // The entity pointer may point to destroyed memory after scene switch.
     // The scene switch handler should have cleared selection, but double-check here.
     if (!selectedEntity) {
+        resetGizmoUndoSession(_bGizmoUndoSession, _gizmoUndoBefore);
         ImGuizmo::Enable(false);
         return; // No entity selected
     }
 
     // Now safe to call member functions - verify entity is still valid
     if (!selectedEntity->isValid()) {
+        resetGizmoUndoSession(_bGizmoUndoSession, _gizmoUndoBefore);
         YA_CORE_WARN("Selected entity is invalid after scene switch, clearing selection");
         _sceneHierarchyPanel.setSelection(nullptr);
         ImGuizmo::Enable(false);
@@ -340,6 +358,7 @@ void EditorLayer::renderGizmo()
 
     // Get transform component
     if (!selectedEntity->hasComponent<TransformComponent>()) {
+        resetGizmoUndoSession(_bGizmoUndoSession, _gizmoUndoBefore);
         return;
     }
     auto* tc = selectedEntity->getComponent<TransformComponent>();
@@ -350,6 +369,7 @@ void EditorLayer::renderGizmo()
     // Get camera view and projection matrices
     auto* app = App::get();
     if (!app) {
+        resetGizmoUndoSession(_bGizmoUndoSession, _gizmoUndoBefore);
         return;
     }
 
@@ -371,6 +391,7 @@ void EditorLayer::renderGizmo()
     // Use WORLD matrix for gizmo display (so gizmo appears at actual world position)
     glm::mat4 worldTransform          = tc->getTransform();
     const glm::mat4 originalWorldTransform = worldTransform;
+    const bool wasUsing = ImGuizmo::IsUsing();
 
     // Snap settings (can be toggled with Ctrl key)
     float snap[3] = {0.0f, 0.0f, 0.0f};     // No snap by default
@@ -403,6 +424,10 @@ void EditorLayer::renderGizmo()
             nullptr,
             useSnap ? snap : nullptr))
     {
+        if (!wasUsing && !_bGizmoUndoSession && _gizmoUndo) {
+            _gizmoUndoBefore = captureEditorTransformSelection(getSelections());
+            _bGizmoUndoSession = !_gizmoUndoBefore.empty();
+        }
 
         // Gizmo was used - worldTransform now contains the NEW world matrix after manipulation
         // Use TransformSystem to update transform (ensures proper computation and propagation)
@@ -444,6 +469,14 @@ void EditorLayer::renderGizmo()
         // tc->markWorldDirty();
 
         // YA_CORE_TRACE("Gizmo manipulated: local pos({}, {}, {})", position.x, position.y, position.z);
+    }
+    if (_bGizmoUndoSession && wasUsing && !ImGuizmo::IsUsing()) {
+        Scene* scene = getViewportInteractionScene();
+        std::vector<FEditorTransformSnapshot> after = captureEditorTransformSelection(getSelections());
+        if (_gizmoUndo && scene && after.size() == _gizmoUndoBefore.size()) {
+            (void)pushEditorTransformUndo(*_gizmoUndo, scene, _gizmoUndoBefore, std::move(after));
+        }
+        resetGizmoUndoSession(_bGizmoUndoSession, _gizmoUndoBefore);
     }
 }
 
