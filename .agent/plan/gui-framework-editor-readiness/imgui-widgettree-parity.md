@@ -218,8 +218,7 @@ Hierarchy tree CRUD remains a retained-UI gap, not an ImGui chrome blocker.
 7. ~~**9C** — Attach/detach + theme-switch soak~~ ✅  
 8. ~~**9D** — DPI / CJK / keyboard / IME / clipboard / text editing~~ ✅  
 9. ~~**9E** — Snapshot digest, GPU/offscreen parity, automation route trace~~ ✅  
-10. **9F** — macOS/Clang, Windows/MSVC, Vulkan/OpenGL regression + release checklist  
-10. **9F** — macOS/Clang, Windows/MSVC, Vulkan/OpenGL regression + release checklist  
+10. ~~**9F** — Release checklist~~ ✅（macOS/Vulkan Pass；Windows/MSVC and OpenGL presentation remain blockers）  
 
 ---
 

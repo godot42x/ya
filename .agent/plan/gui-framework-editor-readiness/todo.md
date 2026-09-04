@@ -110,5 +110,6 @@
 - [x] Phase 9C：长时间运行 attach/detach、theme switch 压测。
 - [x] Phase 9D：DPI、CJK fallback、键盘、IME、剪贴板、文本编辑。
 - [x] Phase 9E：snapshot digest、GPU/offscreen parity、automation route trace。
-- [ ] Phase 9F：macOS/Clang、Windows/MSVC、Vulkan/OpenGL 组合回归。
-- [ ] Editor release checklist（未通过项阻止宣称 retained editor ready）。
+- [x] Phase 9F：editor release checklist（macOS/Clang/Vulkan 证据入表；Windows/MSVC 与 OpenGL 为 blocker）。
+- [ ] Windows/MSVC 组合回归（本机未跑；未通过则不得宣称 retained editor ready）。
+- [ ] OpenGL GUI/editor presentation（`GUIAppHost` 现为 Vulkan-only）。

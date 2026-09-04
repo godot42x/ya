@@ -1065,3 +1065,14 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 
 - 这是 macOS/Clang/Vulkan 上的 GUIWorkbench 像素 parity，不是 editor chrome GPU shot，也不是 Windows/MSVC 或 OpenGL。
 - 下一步：Phase 9F 跨平台回归证据 + editor release checklist。
+
+## Phase 9F 当前 checkpoint（2026-09-04）
+
+- 新增 `release_checklist.md`：Phase 9 发布门禁表。macOS/Clang/Vulkan 行（9A–9E、XP-MAC）为 Pass；Windows/MSVC、OpenGL presentation、小时级 soak、ImGuizmo-without-ImGui 为 Blocker。
+- `GUIAppHost` 断言 `VulkanSwapChain`，没有第二条 OpenGL GUI compose 路径可在本机冒充回归。
+- **不得宣称 retained editor ready**，直到 checklist 的 Blocker 行变成 Pass 或被产品明确 descope。
+
+### Phase 9F 边界
+
+- 本机无法提供 Windows/MSVC 或 OpenGL 运行证据；跨平台 skill 只约束编译契约，不是 XP-WIN 的替代。
+- 计划 Phase 9 步骤 3 的 Windows/OpenGL 组合仍未关闭。
