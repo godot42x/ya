@@ -6,6 +6,7 @@
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -94,7 +95,44 @@ void EditorAutoPropertySection::construct()
 
         EditorSlot slot;
         slot.node = &node;
-        if (node.bColor && node.binding.isColor() &&
+        if (node.kind == PropertyNode::Kind::Sequence || node.kind == PropertyNode::Kind::Map) {
+            slot.kind = EditorSlot::Kind::Container;
+            slot.add = ui::button(node.name + "_Add", "+")
+                           .setOnClick([this, index = _editors.size()]() {
+                               PropertyHandle binding = _editors[index].node->binding;
+                               if (!binding.appendEmpty()) {
+                                   return;
+                               }
+                               const size_t added = binding.containerSize() - 1;
+                               if (_undo) {
+                                   (void)_undo->push({
+                                       .label = "Add " + _editors[index].node->displayName,
+                                       .undo  = [binding, added]() { binding.removeAtIndex(static_cast<int>(added)); },
+                                       .redo  = [binding]() { binding.appendEmpty(); },
+                                   });
+                               }
+                               rebuildRows();
+                           })
+                           .child(ui::text(node.name + "_AddLabel").setText("+"))
+                           .share();
+            slot.clear = ui::button(node.name + "_Clear", "Clear")
+                             .setOnClick([this, index = _editors.size()]() {
+                                 PropertyHandle binding = _editors[index].node->binding;
+                                 if (!binding.clearContainer()) {
+                                     return;
+                                 }
+                                 rebuildRows();
+                             })
+                             .child(ui::text(node.name + "_ClearLabel").setText("Clear"))
+                             .share();
+            row.child(slot.add, FBoxSlotArgs{.preferredSize = {36.0f, 22.0f}});
+            row.child(slot.clear, FBoxSlotArgs{.preferredSize = {56.0f, 22.0f}});
+            if (!node.bEditable) {
+                slot.add->setEnabled(false);
+                slot.clear->setEnabled(false);
+            }
+        }
+        else if (node.bColor && node.binding.isColor() &&
             (node.valueType == refl::type_index_v<glm::vec3> || node.valueType == refl::type_index_v<glm::vec4>)) {
             slot.kind = EditorSlot::Kind::Color;
             slot.color = std::make_shared<UIColorEdit>(node.name);
@@ -336,6 +374,10 @@ void EditorAutoPropertySection::construct()
                               .share();
             row.child(slot.assetPath, FBoxSlotArgs{.preferredSize = {140.0f, 22.0f}});
             row.child(slot.browse, FBoxSlotArgs{.preferredSize = {56.0f, 22.0f}});
+            if (node.binding.assetRefKind() == EEditorAssetPickerKind::Texture) {
+                slot.preview = std::make_shared<UIImage>(node.name + "_Preview");
+                row.child(slot.preview, FBoxSlotArgs{.preferredSize = {48.0f, 48.0f}});
+            }
             if (!node.bEditable) {
                 slot.assetPath->setEnabled(false);
                 slot.browse->setEnabled(false);
@@ -344,17 +386,100 @@ void EditorAutoPropertySection::construct()
         else {
             continue;
         }
+        if (node.kind == PropertyNode::Kind::Value && node.bEditable && node.binding.canMutateContainer() &&
+            (node.binding.loc().elementIndex >= 0 || !node.binding.loc().mapKey.empty())) {
+            slot.remove = ui::button(node.name + "_Remove", "X")
+                              .setOnClick([this, index = _editors.size()]() {
+                                  PropertyHandle binding = _editors[index].node->binding;
+                                  const int elementIndex = binding.loc().elementIndex;
+                                  const std::string mapKey = binding.loc().mapKey;
+                                  std::string previousString;
+                                  const bool hadString = binding.tryGetString(previousString);
+                                  float previousFloat = 0.0f;
+                                  const bool hadFloat = binding.tryGetFloat(previousFloat);
+                                  const bool removed = !mapKey.empty() ? binding.removeMapKey() : binding.removeAt();
+                                  if (!removed) {
+                                      return;
+                                  }
+                                  if (_undo) {
+                                      (void)_undo->push({
+                                          .label = "Remove " + _editors[index].node->displayName,
+                                          .undo  = [binding, mapKey, elementIndex, hadString, previousString, hadFloat, previousFloat]() {
+                                              if (!mapKey.empty()) {
+                                                  if (!binding.insertMapKey(mapKey)) {
+                                                      return;
+                                                  }
+                                              }
+                                              else if (!binding.insertEmptyAt(elementIndex)) {
+                                                  return;
+                                              }
+                                              if (hadString) {
+                                                  (void)binding.setString(previousString);
+                                              }
+                                              else if (hadFloat) {
+                                                  (void)binding.setFloat(previousFloat);
+                                              }
+                                          },
+                                          .redo  = [binding, mapKey]() {
+                                              if (!mapKey.empty()) {
+                                                  (void)binding.removeMapKey();
+                                              }
+                                              else {
+                                                  (void)binding.removeAt();
+                                              }
+                                          },
+                                      });
+                                  }
+                                  rebuildRows();
+                              })
+                              .child(ui::text(node.name + "_RemoveLabel").setText("X"))
+                              .share();
+            row.child(slot.remove, FBoxSlotArgs{.preferredSize = {28.0f, 22.0f}});
+        }
         _editors.push_back(std::move(slot));
         rows.child(std::move(row));
     }
     addDetachedChild(rows.release());
 }
 
+void EditorAutoPropertySection::rebuildRows()
+{
+    const type_index_t owner = _graph.getOwnerType();
+    std::vector<void*> roots = _graph.getRootInstances();
+    _graph = PropertyGraph::project(owner, std::move(roots));
+    _editors.clear();
+    WidgetTree* tree = getTree();
+    if (tree && !getChildren().empty()) {
+        tree->detach(*getChildren().front());
+    }
+    _bConstructed = false;
+    prepareForAttach();
+}
+
 void EditorAutoPropertySection::sync(WidgetTree& tree)
 {
+    std::string fingerprint;
+    for (const PropertyNode& node : _graph.getNodes()) {
+        if (node.kind == PropertyNode::Kind::Sequence || node.kind == PropertyNode::Kind::Map) {
+            fingerprint += node.name;
+            fingerprint += '=';
+            fingerprint += std::to_string(node.binding.containerSize());
+            fingerprint += ';';
+        }
+    }
+    if (!_structureFingerprint.empty() && fingerprint != _structureFingerprint) {
+        _structureFingerprint = fingerprint;
+        rebuildRows();
+    }
+    else {
+        _structureFingerprint = fingerprint;
+    }
     UIElement* focused = tree.getFocused();
     for (EditorSlot& slot : _editors) {
         if (!slot.node) continue;
+        if (slot.kind == EditorSlot::Kind::Container) {
+            continue;
+        }
         const bool hasValidationError = !slot.node->binding.validationError().empty();
         if (slot.kind == EditorSlot::Kind::Vec2) {
             glm::vec2 value{};
@@ -465,6 +590,17 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
             std::string value;
             if (slot.node->binding.tryGetAssetPath(value) && slot.assetPath.get() != focused) {
                 slot.assetPath->setText(value);
+            }
+            if (slot.preview) {
+                std::string path;
+                if (slot.node->binding.tryGetAssetPath(path) && !slot.node->binding.isMixed()) {
+                    slot.preview->_assetPath = path;
+                    slot.preview->setResourceMissing(slot.node->binding.hasAssetResolveError());
+                }
+                else {
+                    slot.preview->_assetPath.clear();
+                    slot.preview->setResourceMissing(false);
+                }
             }
         }
         else {

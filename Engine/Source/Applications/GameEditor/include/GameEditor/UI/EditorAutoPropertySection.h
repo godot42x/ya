@@ -18,6 +18,7 @@ struct UITextField;
 struct UIComboBox;
 struct UIColorEdit;
 struct UIButton;
+struct UIImage;
 struct WidgetTree;
 class UndoStack;
 
@@ -42,7 +43,7 @@ class EditorAutoPropertySection final : public UICompoundWidget
   private:
     struct EditorSlot
     {
-        enum class Kind { Vec2, Vec3, Vec4, Float, Integer, Bool, String, Enum, Color, Asset } kind;
+        enum class Kind { Vec2, Vec3, Vec4, Float, Integer, Bool, String, Enum, Color, Asset, Container } kind;
         const PropertyNode* node = nullptr;
         std::vector<std::shared_ptr<UIDragFloat>> vec2;
         std::vector<std::shared_ptr<UIDragFloat>> vec3;
@@ -55,15 +56,21 @@ class EditorAutoPropertySection final : public UICompoundWidget
         std::shared_ptr<UIColorEdit> color;
         std::shared_ptr<UITextField> assetPath;
         std::shared_ptr<UIButton> browse;
+        std::shared_ptr<UIImage> preview;
+        std::shared_ptr<UIButton> add;
+        std::shared_ptr<UIButton> clear;
+        std::shared_ptr<UIButton> remove;
     };
     PropertyGraph _graph;
     UndoStack* _undo = nullptr;
     std::string _mergeIdentity;
     EditorAssetPickerCallback _assetPicker;
     std::vector<EditorSlot> _editors;
+    std::string _structureFingerprint;
 
     void bindDragMerge(UIDragFloat& drag);
     void commitAssetPath(size_t editorIndex, const std::string& value);
+    void rebuildRows();
     [[nodiscard]] std::string mergeKey(const PropertyNode& node, int axis = -1) const;
 };
 

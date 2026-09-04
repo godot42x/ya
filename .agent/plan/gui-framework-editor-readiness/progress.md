@@ -1147,3 +1147,16 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - 只覆盖当前尺寸的 sequence 元素编辑；动态 vector 的 Add/Remove、map key-value 行、以及 `TypeRenderer` custom renderer（例如 TextureSlot 预览）仍未迁移。
 - 下一步 10B：动态增删 / map / custom renderer；随后 Phase 10E 拆分 `EditorSurface`。
 
+## Phase 10B container mutation / map / texture preview checkpoint（2026-09-05）
+
+- `PropertyAccessor` 增加 `FValueLoc`（sequence index 或 map key）、动态 vector `appendEmpty` / `removeAt` / `insertEmptyAt` / `clearContainer`，以及 string-key map `insertMapKey` / `removeMapKey`。`collectLeaves` 为动态 sequence 与 map-of-leaf 发出 header + 值叶子。
+- `VectorProperty::addEmptyEntry` / `insertEmptyAt` 补上真实 `emplace_back` / `insert`；旧 ImGui `ContainerPropertyRenderer` 的 `+` 以前是空操作。
+- `EditorAutoPropertySection` 为 sequence/map header 提供 Add/Clear，为动态元素提供 Remove，结构变化后 `rebuildRows`；TextureRef 行增加 `UIImage` preview（替代 `TypeRenderer` TextureSlot after-property renderer）。
+- 验证：`xmake b ya-testing`；`xmake r ya-testing -- --gtest_filter='PropertyAccessorTest.*:EditorPropertyGraphTest.*'`（30/30）。
+
+### 边界
+
+- map 只覆盖 leaf key + leaf value（`std::map<std::string, int>` 一类）；set、嵌套容器、非 string key 的任意 upsert UI 未做。
+- `TypeRenderer` / `ContainerPropertyRenderer` 仍无 widgettree live caller，现已可删，但 `imgui-local` 仍被 FilePicker 占用，删除死代码留到后续 chrome 收口。
+- 下一步：Phase 10E 拆分 `EditorSurface` + density/token；release gates 仍为 Windows/MSVC、OpenGL、hour-scale soak。
+

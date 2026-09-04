@@ -93,9 +93,14 @@ struct IContainerProperty
         (void)valuePtr;
     }
 
-    virtual void addEmptyEntry(void* containerPtr) // Map::emplace
+    virtual void addEmptyEntry(void* containerPtr) // Map::emplace / Vector::emplace_back
     {
         (void)containerPtr;
+    }
+    virtual void insertEmptyAt(void* containerPtr, size_t index)
+    {
+        (void)containerPtr;
+        (void)index;
     }
     virtual void popBack(void* containerPtr) // Map::emplace
     {
@@ -180,12 +185,25 @@ class VectorProperty : public IContainerProperty
     {
         auto* vec = static_cast<ContainerType*>(containerPtr);
         if (elementPtr) {
-            // 使用拷贝构造函数创建新元素
             vec->emplace_back(*static_cast<const T*>(elementPtr));
         }
         else {
-            vec->emplace_back(); // 默认构造
+            vec->emplace_back();
         }
+    }
+
+    void addEmptyEntry(void* containerPtr) override
+    {
+        static_cast<ContainerType*>(containerPtr)->emplace_back();
+    }
+
+    void insertEmptyAt(void* containerPtr, size_t index) override
+    {
+        auto* vec = static_cast<ContainerType*>(containerPtr);
+        if (index > vec->size()) {
+            index = vec->size();
+        }
+        vec->insert(vec->begin() + static_cast<std::ptrdiff_t>(index), T{});
     }
 
     void removeElement(void* containerPtr, size_t index) override

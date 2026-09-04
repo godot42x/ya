@@ -11,10 +11,18 @@ namespace ya
 
 struct PropertyNode
 {
+    enum class Kind
+    {
+        Value,
+        Sequence,
+        Map,
+    };
+
     std::string name;
     std::string displayName;
     std::string category;
     type_index_t valueType = 0;
+    Kind kind = Kind::Value;
     bool bEditable = false;
     bool bVisible = true;
     bool bInstanceEditable = false;

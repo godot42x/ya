@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <map>
 #include <vector>
 
 namespace ya
@@ -123,29 +124,31 @@ TEST(PropertyAccessorTest, CollectLeavesExpandsSequenceOfLeafElements)
     std::vector<reflection::PropertyAccessor::FLeaf> leaves;
     reflection::PropertyAccessor::collectLeaves(type_index_v<SequenceOwner>, {&owner}, leaves);
 
-    ASSERT_EQ(leaves.size(), 4u);
+    ASSERT_EQ(leaves.size(), 5u);
     EXPECT_EQ(leaves[0].path, "files[0]");
     EXPECT_EQ(leaves[1].path, "files[1]");
-    EXPECT_EQ(leaves[2].path, "weights[0]");
-    EXPECT_EQ(leaves[3].path, "weights[1]");
-    EXPECT_EQ(leaves[0].elementIndex, 0);
-    EXPECT_EQ(leaves[1].elementIndex, 1);
-    EXPECT_EQ(reflection::PropertyAccessor::valueType(*leaves[0].property, leaves[0].elementIndex),
+    EXPECT_EQ(leaves[2].path, "weights");
+    EXPECT_EQ(leaves[2].role, reflection::PropertyAccessor::ELeafRole::Sequence);
+    EXPECT_EQ(leaves[3].path, "weights[0]");
+    EXPECT_EQ(leaves[4].path, "weights[1]");
+    EXPECT_EQ(leaves[0].loc.elementIndex, 0);
+    EXPECT_EQ(leaves[1].loc.elementIndex, 1);
+    EXPECT_EQ(reflection::PropertyAccessor::valueType(*leaves[0].property, leaves[0].loc),
               type_index_v<std::string>);
-    EXPECT_EQ(reflection::PropertyAccessor::valueType(*leaves[2].property, leaves[2].elementIndex),
+    EXPECT_EQ(reflection::PropertyAccessor::valueType(*leaves[3].property, leaves[3].loc),
               type_index_v<float>);
 
     std::string face;
-    ASSERT_TRUE(reflection::PropertyAccessor::tryGetString(*leaves[0].property, &owner, face, leaves[0].elementIndex));
+    ASSERT_TRUE(reflection::PropertyAccessor::tryGetString(*leaves[0].property, &owner, face, leaves[0].loc));
     EXPECT_EQ(face, "posx.hdr");
-    EXPECT_TRUE(reflection::PropertyAccessor::setString(*leaves[0].property, &owner, "front.hdr", leaves[0].elementIndex));
+    EXPECT_TRUE(reflection::PropertyAccessor::setString(*leaves[0].property, &owner, "front.hdr", leaves[0].loc));
     EXPECT_EQ(owner.files[0], "front.hdr");
     EXPECT_EQ(owner.files[1], "negx.hdr");
 
     float weight = 0.0f;
-    ASSERT_TRUE(reflection::PropertyAccessor::tryGetFloat(*leaves[2].property, &owner, weight, leaves[2].elementIndex));
+    ASSERT_TRUE(reflection::PropertyAccessor::tryGetFloat(*leaves[3].property, &owner, weight, leaves[3].loc));
     EXPECT_FLOAT_EQ(weight, 0.25f);
-    EXPECT_TRUE(reflection::PropertyAccessor::setFloat(*leaves[2].property, &owner, 0.5f, leaves[2].elementIndex));
+    EXPECT_TRUE(reflection::PropertyAccessor::setFloat(*leaves[3].property, &owner, 0.5f, leaves[3].loc));
     EXPECT_FLOAT_EQ(owner.weights[0], 0.5f);
     EXPECT_FLOAT_EQ(owner.weights[1], 0.75f);
 
@@ -154,6 +157,60 @@ TEST(PropertyAccessorTest, CollectLeavesExpandsSequenceOfLeafElements)
     const void* first = reflection::PropertyAccessor::address(*leaves[0].property, &owner, 0);
     const void* second = reflection::PropertyAccessor::address(*leaves[0].property, &other, 0);
     EXPECT_FALSE(reflection::PropertyAccessor::equals(*leaves[0].property, first, second, 0));
+}
+
+struct MapOwner
+{
+    YA_REFLECT_BEGIN(MapOwner)
+    YA_REFLECT_FIELD(slots)
+    YA_REFLECT_END()
+
+    std::map<std::string, int> slots{{"sword", 2}, {"shield", 1}};
+};
+
+TEST(PropertyAccessorTest, CollectLeavesExpandsMapOfLeafValuesAndMutates)
+{
+    MapOwner owner;
+    std::vector<reflection::PropertyAccessor::FLeaf> leaves;
+    reflection::PropertyAccessor::collectLeaves(type_index_v<MapOwner>, {&owner}, leaves);
+
+    ASSERT_EQ(leaves.size(), 3u);
+    EXPECT_EQ(leaves[0].path, "slots");
+    EXPECT_EQ(leaves[0].role, reflection::PropertyAccessor::ELeafRole::Map);
+    EXPECT_EQ(leaves[1].path, "slots[\"shield\"]");
+    EXPECT_EQ(leaves[2].path, "slots[\"sword\"]");
+
+    int64_t sword = 0;
+    ASSERT_TRUE(reflection::PropertyAccessor::tryGetInteger(*leaves[2].property, &owner, sword, leaves[2].loc));
+    EXPECT_EQ(sword, 2);
+    EXPECT_TRUE(reflection::PropertyAccessor::setInteger(*leaves[2].property, &owner, 5, leaves[2].loc));
+    EXPECT_EQ(owner.slots["sword"], 5);
+
+    EXPECT_TRUE(reflection::PropertyAccessor::insertMapKey(*leaves[0].property, &owner, "bow"));
+    EXPECT_EQ(owner.slots.count("bow"), 1u);
+    EXPECT_TRUE(reflection::PropertyAccessor::removeMapKey(*leaves[0].property, &owner, "shield"));
+    EXPECT_EQ(owner.slots.count("shield"), 0u);
+}
+
+TEST(PropertyAccessorTest, DynamicSequenceAppendRemoveAndClear)
+{
+    SequenceOwner owner;
+    const Class* cls = ClassRegistry::instance().getClass(type_index_v<SequenceOwner>);
+    ASSERT_NE(cls, nullptr);
+    const Property& weights = cls->properties.at("weights");
+
+    EXPECT_TRUE(reflection::PropertyAccessor::isDynamicSequence(weights));
+    EXPECT_FALSE(reflection::PropertyAccessor::isDynamicSequence(cls->properties.at("files")));
+    EXPECT_EQ(reflection::PropertyAccessor::containerSize(weights, &owner), 2u);
+    EXPECT_TRUE(reflection::PropertyAccessor::appendEmpty(weights, &owner));
+    EXPECT_EQ(owner.weights.size(), 3u);
+    EXPECT_TRUE(reflection::PropertyAccessor::removeAt(weights, &owner, 1));
+    EXPECT_EQ(owner.weights.size(), 2u);
+    EXPECT_FLOAT_EQ(owner.weights[0], 0.25f);
+    EXPECT_TRUE(reflection::PropertyAccessor::clearContainer(weights, &owner));
+    EXPECT_TRUE(owner.weights.empty());
+    EXPECT_TRUE(reflection::PropertyAccessor::insertEmptyAt(weights, &owner, 0));
+    EXPECT_EQ(owner.weights.size(), 1u);
 }
 
 } // namespace ya

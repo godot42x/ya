@@ -100,7 +100,7 @@
 | Feature | Legacy ImGui | WidgetTree | Status | Notes |
 |---------|--------------|------------|--------|-------|
 | DetailsView stack | `DetailsView` + `TypeRenderer` tree | — | ⚫ | Deleted 8N; was uncalled after 8C |
-| Entity/component fields | `TypeRenderer::renderReflectedType` | `PropertyGraph` + `EditorAutoPropertySection` | 🟡 | Retained path covers bool/float/vec2/vec3/vec4/int/string/enum/color/asset-ref, nested/composite flatten, and sequence-of-leaf `array`/`vector` indexed paths (e.g. Skybox `cubemapSource.files[i]`); remaining Phase 10B gaps are dynamic add/remove, maps, and custom renderers |
+| Entity/component fields | `TypeRenderer::renderReflectedType` | `PropertyGraph` + `EditorAutoPropertySection` | ✅ | Retained path covers scalars/vectors/enum/color/asset-ref, nested flatten, sequence-of-leaf arrays/vectors with add/remove, string-key map-of-leaf values, and TextureRef `UIImage` preview. `TypeRenderer` remains compiled with no widgettree caller |
 | Multi-selection mixed values | DetailsView | `PropertyGraph` intersection + em-dash | ✅ | |
 | Asset path Browse | `FilePicker` | `EditorSurface` asset picker popup | ✅ | Phase 8M |
 | Game UI Entry summary | DetailsView | `EditorInspectorTab` widget entry block | ✅ | Open in UI Designer button |
@@ -183,7 +183,7 @@
 | Dependency | Still required for | Safe to remove when |
 |------------|-------------------|---------------------|
 | `imgui-local` | leftover FilePicker/TypeRenderer, editor-internal texture bridge | FilePicker/TypeRenderer have no callers |
-| `TypeRenderer` + `ContainerPropertyRenderer` | **Nothing** (no live caller) | Safe to delete only after retained dynamic-container / map / custom editor parity lands |
+| `TypeRenderer` + `ContainerPropertyRenderer` | **Nothing** (no live caller) | Retained container/map/preview parity landed; safe to delete when `imgui-local` FilePicker is also gone |
 | `FileExplorer::render` | **Nothing** (⚫) | Already removed from Content Browser path |
 | `ImGuiImageEntry` / texture bridge | legacy helper paths | Helper callers are removed or migrated |
 

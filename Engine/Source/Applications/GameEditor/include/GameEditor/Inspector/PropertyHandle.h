@@ -3,6 +3,7 @@
 #include "Core/TypeIndex.h"
 
 #include "Core/Reflection/MetadataSupport.h"
+#include "Core/Reflection/PropertyAccessor.h"
 
 #include "GameEditor/UI/EditorAssetPicker.h"
 
@@ -34,7 +35,7 @@ class PropertyHandle final
                    std::vector<void*> instances,
                    const Property* property,
                    Vec3Setter setter = {},
-                   int elementIndex = -1);
+                   reflection::FValueLoc loc = {});
 
     [[nodiscard]] bool isValid() const;
     [[nodiscard]] bool isEditable() const;
@@ -47,6 +48,7 @@ class PropertyHandle final
     [[nodiscard]] bool isMixedVecAxis(int axis, int componentCount) const;
     [[nodiscard]] const std::string& getName() const;
 
+    [[nodiscard]] const reflection::FValueLoc& loc() const { return _loc; }
     void setVec3Setter(Vec3Setter setter) { _vec3Setter = std::move(setter); }
     void setChangeHook(ChangeHook hook) { _changeHook = std::move(hook); }
 
@@ -96,6 +98,16 @@ class PropertyHandle final
     bool restoreAssetPath(const std::vector<std::string>& values) const;
     [[nodiscard]] bool hasAssetResolveError() const;
 
+    [[nodiscard]] bool canMutateContainer() const;
+    [[nodiscard]] size_t containerSize() const;
+    bool appendEmpty() const;
+    bool removeAt() const;
+    bool removeAtIndex(int index) const;
+    bool insertEmptyAt(int index) const;
+    bool clearContainer() const;
+    bool removeMapKey() const;
+    bool insertMapKey(std::string_view key) const;
+
     [[nodiscard]] std::string validationError() const;
     [[nodiscard]] bool tryGetManipulateSpec(reflection::Meta::ManipulateSpec& spec) const;
 
@@ -103,7 +115,7 @@ class PropertyHandle final
     type_index_t _ownerType = 0;
     std::vector<void*> _instances;
     const Property* _property = nullptr;
-    int _elementIndex = -1;
+    reflection::FValueLoc _loc;
     Vec3Setter _vec3Setter;
     ChangeHook _changeHook;
 };

@@ -10,13 +10,16 @@
 #include "ECS/Systems/Components/TerrainComponent.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
+#include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <array>
+#include <map>
 #include <gtest/gtest.h>
+#include <vector>
 
 namespace ya
 {
@@ -606,6 +609,90 @@ TEST(EditorPropertyGraphTest, SkyboxCubemapFilesExpandAsIndexedStringLeaves)
     EXPECT_TRUE(face0->binding.setString("front.hdr"));
     EXPECT_EQ(skybox.cubemapSource.files[0], "front.hdr");
     EXPECT_TRUE(skybox.cubemapSource.files[1].empty());
+}
+
+struct DynamicSequenceComponent
+{
+    std::vector<std::string> tags{"alpha", "beta"};
+
+    YA_REFLECT_BEGIN(DynamicSequenceComponent)
+    YA_REFLECT_FIELD(tags)
+    YA_REFLECT_END()
+};
+
+struct MapComponent
+{
+    std::map<std::string, int> slots{{"sword", 2}, {"shield", 1}};
+
+    YA_REFLECT_BEGIN(MapComponent)
+    YA_REFLECT_FIELD(slots)
+    YA_REFLECT_END()
+};
+
+TEST(EditorPropertyGraphTest, DynamicSequenceAddRemoveRebuildsRowsAndUndo)
+{
+    DynamicSequenceComponent value;
+    auto graph = PropertyGraph::build(type_index_v<DynamicSequenceComponent>, {&value});
+    ASSERT_NE(graph.find("tags"), nullptr);
+    EXPECT_EQ(graph.find("tags")->kind, PropertyNode::Kind::Sequence);
+    ASSERT_NE(graph.find("tags[0]"), nullptr);
+    ASSERT_NE(graph.find("tags[1]"), nullptr);
+
+    UndoStack stack;
+    auto section = std::make_shared<EditorAutoPropertySection>("AutoTags", std::move(graph), &stack);
+    WidgetTree tree({.width = 360, .height = 240});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
+    ASSERT_EQ(section->getChildren()[0]->getChildren().size(), 3u);
+
+    const UIElementRef& header = section->getChildren()[0]->getChildren()[0];
+    auto* add = dynamic_cast<UIButton*>(header->getChildren()[1].get());
+    ASSERT_NE(add, nullptr);
+    if (add->_onClick) {
+        add->_onClick();
+    }
+    EXPECT_EQ(value.tags.size(), 3u);
+    EXPECT_EQ(section->getChildren()[0]->getChildren().size(), 4u);
+
+    EXPECT_TRUE(stack.undo());
+    EXPECT_EQ(value.tags.size(), 2u);
+
+    tree.detach(*section);
+}
+
+TEST(EditorPropertyGraphTest, MapLeavesEditAndRemoveKeys)
+{
+    MapComponent value;
+    auto graph = PropertyGraph::build(type_index_v<MapComponent>, {&value});
+    ASSERT_NE(graph.find("slots"), nullptr);
+    EXPECT_EQ(graph.find("slots")->kind, PropertyNode::Kind::Map);
+    const PropertyNode* sword = graph.find("slots[\"sword\"]");
+    ASSERT_NE(sword, nullptr);
+    EXPECT_EQ(sword->valueType, type_index_v<int>);
+    int64_t amount = 0;
+    ASSERT_TRUE(sword->binding.tryGetInteger(amount));
+    EXPECT_EQ(amount, 2);
+    EXPECT_TRUE(sword->binding.setInteger(9));
+    EXPECT_EQ(value.slots["sword"], 9);
+    EXPECT_TRUE(sword->binding.removeMapKey());
+    EXPECT_EQ(value.slots.count("sword"), 0u);
+}
+
+TEST(EditorPropertyGraphTest, TextureAssetRowShowsRetainedPreview)
+{
+    AssetRefTestComponent value;
+    auto graph = PropertyGraph::build(type_index_v<AssetRefTestComponent>, {&value});
+    auto section = std::make_shared<EditorAutoPropertySection>("AutoAssetPreview", std::move(graph));
+    WidgetTree tree({.width = 360, .height = 220});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
+    section->sync(tree);
+
+    const UIElementRef& albedoRow = section->getChildren()[0]->getChildren()[0];
+    ASSERT_GE(albedoRow->getChildren().size(), 4u);
+    auto* preview = dynamic_cast<UIImage*>(albedoRow->getChildren()[3].get());
+    ASSERT_NE(preview, nullptr);
+    EXPECT_EQ(preview->_assetPath, "Content/Textures/Albedo.png");
+
+    tree.detach(*section);
 }
 
 } // namespace ya

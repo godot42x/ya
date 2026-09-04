@@ -64,6 +64,9 @@ std::string displayNameFromPath(std::string_view path)
 
 bool isLeafEditableType(const PropertyNode& node)
 {
+    if (node.kind == PropertyNode::Kind::Sequence || node.kind == PropertyNode::Kind::Map) {
+        return true;
+    }
     return reflection::PropertyAccessor::isLeafValueType(node.valueType);
 }
 
@@ -92,8 +95,13 @@ PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> in
             catch (...) {
             }
         }
-        node.valueType = reflection::PropertyAccessor::valueType(*leaf.property, leaf.elementIndex);
-        node.binding = PropertyHandle(leaf.ownerType, std::move(leaf.ownerInstances), leaf.property, {}, leaf.elementIndex);
+        node.valueType = reflection::PropertyAccessor::valueType(*leaf.property, leaf.loc);
+        node.kind = leaf.role == reflection::PropertyAccessor::ELeafRole::Sequence
+            ? PropertyNode::Kind::Sequence
+            : leaf.role == reflection::PropertyAccessor::ELeafRole::Map
+                ? PropertyNode::Kind::Map
+                : PropertyNode::Kind::Value;
+        node.binding = PropertyHandle(leaf.ownerType, std::move(leaf.ownerInstances), leaf.property, {}, leaf.loc);
         node.bEditable = node.binding.isEditable();
         node.bVisible = true;
         node.bInstanceEditable = leaf.property->metadata.hasFlag(FieldFlags::InstanceEditable);
