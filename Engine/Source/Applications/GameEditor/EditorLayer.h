@@ -4,7 +4,6 @@
 
 #include "Core/Base.h"
 #include "GameEditor/Panels/AssetInspectorPanel.h"
-#include "GameEditor/Panels/ContentBrowserPanel.h"
 
 #include "Core/Camera/Camera.h"
 
@@ -87,9 +86,8 @@ struct EditorLayer
     std::vector<Entity*> _selections;
     std::string          _selectedWidgetEntryId; // Mutually exclusive with the above
 
-    // Editor panels
+    // Domain models (not retained UI). WidgetTree views live on EditorSurface tabs.
     SceneHierarchyPanel _sceneHierarchyPanel;
-    ContentBrowserPanel _contentBrowserPanel;
     AssetInspectorPanel _assetInspectorPanel;
     UIDesignerPanel     _uiDesignerPanel;
 

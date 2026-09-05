@@ -14,9 +14,14 @@
     },
     {
       "id": "dead_panel_cleanup",
-      "status": "pending",
+      "status": "implemented",
       "phase": "C1",
-      "evidence": []
+      "evidence": [
+        "GUIWorkbenchPanel/FrameStatsPanel/ContentBrowserPanel/RuntimeToolsPanel deleted",
+        "editor_runtime_settings::migrateLegacy",
+        "FilePicker icons loaded in EditorLayer::onAttach",
+        "empty GameEditor/Layout removed"
+      ]
     },
     {
       "id": "editor_surface_tab_owners",

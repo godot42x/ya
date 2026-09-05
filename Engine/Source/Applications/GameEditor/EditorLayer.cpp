@@ -5,7 +5,6 @@ namespace ya
 EditorLayer::EditorLayer(App* app)
     : _app(app),
       _sceneHierarchyPanel(this),
-      _contentBrowserPanel(this),
       _assetInspectorPanel(this),
       _uiDesignerPanel(this)
 {
@@ -29,13 +28,13 @@ void EditorLayer::onAttach()
         _sceneHierarchyPanel.setContext(scene);
     }
 
-    _contentBrowserPanel.init();
-
-    // Initialize FilePicker with same icons as ContentBrowserPanel
-    _filePicker.setIcons(_contentBrowserPanel.folderIcon, _contentBrowserPanel.fileIcon);
-    _filePicker.setDefaultViewMode(FileExplorer::ViewMode::Icon);
-
     auto am             = AssetManager::get();
+    auto fileTexture    = am->loadTextureSync("file", "Engine/Content/TestTextures/editor/file.png").get();
+    auto folderTexture  = am->loadTextureSync("folder", "Engine/Content/TestTextures/editor/folder2.png").get();
+    auto sampler        = TextureLibrary::get().getDefaultSampler();
+    _filePicker.setIcons(getOrCreateImGuiTextureID(fileTexture->getImageView(), sampler),
+                         getOrCreateImGuiTextureID(folderTexture->getImageView(), sampler));
+    _filePicker.setDefaultViewMode(FileExplorer::ViewMode::Icon);
     auto playIcon       = am->loadTextureSync("play", "Engine/Content/TestTextures/editor/play.png");
     auto pauseIcon      = am->loadTextureSync("pause", "Engine/Content/TestTextures/editor/pause.png");
     auto stopIcon       = am->loadTextureSync("stop", "Engine/Content/TestTextures/editor/stop.png");

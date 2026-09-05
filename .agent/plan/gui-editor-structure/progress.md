@@ -1,5 +1,20 @@
 # Progress
 
+## C1 当前 checkpoint（2026-09-06）
+
+- 删除无实例 leftover：`GUIWorkbenchPanel`、`FrameStatsPanel`、`ContentBrowserPanel` 及公开转发头。
+- `migrateLegacyRuntimeSettings` 收进 `editor_runtime_settings::migrateLegacy()`；删除空壳 `RuntimeToolsPanel`。
+- legacy `FilePicker` 图标改在 `EditorLayer::onAttach` 加载。
+- 删除空目录 `GameEditor/Layout/`。
+- 保留的 `UIDesignerPanel` / `SceneHierarchyPanel` / `AssetInspectorPanel` 注释改为 domain model，不是 retained UI。
+- 验证：`xmake b ya-game-editor`。
+
+### C1 保留项
+
+- C2 tab owner 未做。
+- 三份 domain panel 尚未改名（下轮抽 UI 后再考虑）。
+- 不合并 `GUIApp` 与 `ya::App`。
+
 ## C0 当前 checkpoint（2026-09-06）
 
 - 建立 `gui-editor-structure` 计划工件。

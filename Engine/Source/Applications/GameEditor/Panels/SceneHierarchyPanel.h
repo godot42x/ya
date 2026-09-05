@@ -11,9 +11,8 @@ struct Scene;
 struct EditorLayer;
 struct Node;
 
-/// Entity selection bus for viewport pick and legacy imgui chrome. Retained
-/// hierarchy UI lives in EditorSurface; ImGui sceneTree draw path removed in
-/// Phase 8O.
+/// Entity selection bus for viewport pick. Not a WidgetTree view.
+/// Retained hierarchy UI lives on EditorSurface; ImGui sceneTree was removed.
 struct SceneHierarchyPanel
 {
     EditorLayer*         _owner             = nullptr;

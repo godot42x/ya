@@ -1,18 +1,13 @@
 #pragma once
 
 // ============================================================================
-// UIDesignerPanel - Game UI authoring (ui-widget-tree-refactor Phase 5).
+// UIDesignerPanel - Game UI document/preview model, not a retained chrome tab.
 //
-// Edits one UIDocument (inline authoring data) through a live PREVIEW
-// WidgetTree that is strictly separate from the runtime tree: PIE mounts fresh
-// instances from the scene entries, so preview and PIE state never pollute
-// each other.
-//   - palette:      registered widget types (UITypeRegistry, stable IDs)
-//   - tree:         the preview tree's widget hierarchy
-//   - inspector:    reflected fields of the selected preview widget
-//   - save:         rebuilds the document from the preview (fromWidget)
+// Edits one UIDocument through a live PREVIEW WidgetTree that is strictly
+// separate from the runtime tree: PIE mounts fresh instances from scene
+// entries, so preview and PIE state never pollute each other.
 // Retained EditorSurface tab owns chrome controls; preview/canvas manipulation
-// stays on this panel's data layer.
+// stays on this data layer.
 // ============================================================================
 
 #include "GUI/Widgets/UIDocument.h"

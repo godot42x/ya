@@ -7,8 +7,8 @@ namespace ya
 
 struct EditorLayer;
 
-/// Retained Asset Inspector selection state. ImGui render path was removed in
-/// Phase 8E; EditorSurface consumes inspectedPath() for the retained tab.
+/// Inspected asset path for the retained Asset Inspector tab.
+/// Not a WidgetTree view; ImGui render path was removed.
 struct AssetInspectorPanel
 {
   private:

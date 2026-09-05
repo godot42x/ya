@@ -14,8 +14,8 @@ struct UIButton;
 struct WidgetTree;
 
 /// Retained, read-only summary of the runtime diagnostics service.
-/// Actions that mutate RenderDoc state remain owned by RuntimeToolsPanel until
-/// their retained command surface is migrated.
+/// RenderDoc mutations go through RenderDiagnosticsService; this section is
+/// the retained command surface.
 class RuntimeDiagnosticsSection final : public UICompoundWidget
 {
   public:

@@ -21,7 +21,7 @@ struct ImGuiImageEntry;
  * - 右侧：当前目录内容（支持层级导航）
  * - 支持图标/列表两种展示模式
  *
- * 可被 FilePicker、ContentBrowserPanel 等复用
+ * 可被 FilePicker 与 retained Content Browser 复用
  */
 class FileExplorer
 {

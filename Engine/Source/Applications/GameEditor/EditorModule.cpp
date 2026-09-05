@@ -14,7 +14,6 @@
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "GameEditor/EditorLayer.h"
-#include "GameEditor/Panels/RuntimeToolsPanel.h"
 #include "GameEditor/EditorPlaySession.h"
 #include "GameEditor/EditorChrome.h"
 #include "GameEditor/EditorProfilingSettings.h"
@@ -693,7 +692,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     void onConfigure(App& app, AppDesc& desc) override
     {
         ConfigManager::get().openDocument("editor", "Engine/Saved/Config/Editor.json");
-        migrateLegacyRuntimeSettings();
+        editor_runtime_settings::migrateLegacy();
         if (!shadow_settings::hasRuntimeSettings()) {
             shadow_settings::saveRuntimeSettings(
                 shadow_settings::loadSettingsFromDocument("editor", app.getRenderServices().getShadowSettings()));
