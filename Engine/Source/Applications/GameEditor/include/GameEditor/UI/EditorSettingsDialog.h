@@ -1,0 +1,80 @@
+#pragma once
+
+#include "GameEditor/UI/EditorFilePicker.h"
+
+#include <functional>
+#include <memory>
+#include <string>
+
+namespace ya
+{
+
+struct UIButton;
+struct UICheckBox;
+struct UIComboBox;
+struct UIPanel;
+struct UIPopupOverlay;
+struct UIText;
+struct UITextField;
+struct WidgetTree;
+
+struct FEditorSettingsBindings
+{
+    std::function<int()> samplerIndex;
+    std::function<void(int)> setSamplerIndex;
+    std::function<bool()> showCameraOverlay;
+    std::function<void(bool)> setShowCameraOverlay;
+    std::function<std::string()> scenePathDraft;
+    std::function<void(std::string)> setScenePathDraft;
+    std::function<bool()> scenePathDirty;
+    std::function<bool()> scenePathExists;
+    std::function<void()> applyScenePath;
+    std::function<void()> resetScenePath;
+    EditorFilePickerCallback openFilePicker;
+};
+
+struct FEditorSettingsScenePathStatus
+{
+    const char* styleKey = "text.muted";
+    const char* text = "";
+};
+
+[[nodiscard]] inline FEditorSettingsScenePathStatus describeEditorSettingsScenePath(const std::string& path,
+                                                                                    bool exists)
+{
+    if (path.empty()) {
+        return {"text.muted", "Empty means startup falls back to an empty scene"};
+    }
+    if (exists) {
+        return {"text.muted", "Used on next app start — scene exists"};
+    }
+    return {"text.error", "Used on next app start — scene not found"};
+}
+
+/// Retained editor-settings modal. EditorSurface hosts it but does not own
+/// the overlay or the sampler/overlay/startup-scene controls.
+class EditorSettingsDialog
+{
+  public:
+    void open(WidgetTree& tree, FEditorSettingsBindings bindings);
+    void sync(WidgetTree& tree);
+    void close();
+    void reset();
+
+    [[nodiscard]] bool isOpen() const;
+    [[nodiscard]] bool isApplyEnabled() const;
+    void browseStartupScene();
+
+  private:
+    FEditorSettingsBindings _bindings;
+    std::shared_ptr<UIPopupOverlay> _overlay;
+    std::shared_ptr<UIPanel> _panel;
+    std::shared_ptr<UIComboBox> _samplerCombo;
+    std::shared_ptr<UICheckBox> _overlayCheckbox;
+    std::shared_ptr<UITextField> _scenePathField;
+    std::shared_ptr<UIText> _sceneStatusText;
+    std::shared_ptr<UIButton> _applyButton;
+    std::shared_ptr<UIButton> _resetButton;
+};
+
+} // namespace ya

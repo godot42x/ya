@@ -19,21 +19,6 @@
 
 namespace ya
 {
-namespace
-{
-
-ui::UIButtonWidgetBuilder labeledButton(std::string key, const std::string& label)
-{
-    std::string labelKey = key + "_Label";
-    return ui::button(std::move(key))
-        .child(ui::text(std::move(labelKey))
-                   .setText(label)
-                   .setFontSize(13)
-                   .setHAlign(EWidgetAlignH::Center)
-                   .setVAlign(EWidgetAlignV::Center));
-}
-
-} // namespace
 
 void EditorFilePickerDialog::open(WidgetTree& tree, FEditorFilePickerRequest request)
 {

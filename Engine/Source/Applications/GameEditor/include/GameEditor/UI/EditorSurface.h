@@ -40,6 +40,7 @@ struct EditorLayer;
 class EditorViewportGizmoOverlay;
 struct Texture;
 class EditorFilePickerDialog;
+class EditorSettingsDialog;
 struct UIDockSpace;
 struct UIDockWorkspace;
 struct UIDockFloatingHost;
@@ -60,8 +61,6 @@ class RuntimeRenderGraphSection;
 class RuntimeRenderTargetSection;
 class RuntimeDebugPrimitivesSection;
 struct UITextField;
-struct UIComboBox;
-struct UICheckBox;
 struct UITheme;
 struct UITreeView;
 struct WidgetTree;
@@ -148,15 +147,7 @@ struct EditorSurface
     bool                           _bContentRowsDirty = true;
 
     std::unique_ptr<EditorFilePickerDialog> _filePicker;
-
-    std::shared_ptr<UIPopupOverlay> _settingsOverlay;
-    std::shared_ptr<UIPanel>        _settingsPanel;
-    std::shared_ptr<UIComboBox>     _settingsSamplerCombo;
-    std::shared_ptr<UICheckBox>     _settingsOverlayCheckbox;
-    std::shared_ptr<UITextField>    _settingsScenePathField;
-    std::shared_ptr<UIText>         _settingsSceneStatusText;
-    std::shared_ptr<UIButton>       _settingsApplyButton;
-    std::shared_ptr<UIButton>       _settingsResetButton;
+    std::unique_ptr<EditorSettingsDialog> _settings;
 
     std::shared_ptr<Texture>    _viewportTexture;
     std::shared_ptr<IImage>     _viewportImageResource;
@@ -219,8 +210,6 @@ struct EditorSurface
     void selectContentMount(const std::string& itemId);
     void selectContentItem(const std::filesystem::path& path, bool bIsDirectory);
     void activateContentItem(const std::filesystem::path& path, bool bIsDirectory);
-    void clearEditorSettingsDialog();
-    void syncEditorSettingsDialog();
     void rebuildUIDesignerInspector(EditorLayer& layer, WidgetTree& tree, UIElement* selected);
     void publishViewportRect();
     void syncViewportHostState(App& app);

@@ -1185,3 +1185,15 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - `imgui-local` 仍被 legacy `FilePicker` 占用；本步不宣称可删。
 - 下一步：其余稳定 owner 或 density/token；release gates 仍为 Windows/MSVC、OpenGL、hour-scale soak。
 
+## Phase 10E editor-settings owner checkpoint（2026-09-05）
+
+- `EditorSettingsDialog` 持有 settings overlay 与 sampler/overlay/startup-scene 控件。`EditorSurface` 只提供 `FEditorSettingsBindings`（EditorLayer 读写 + `openFilePickerDialog`）并每帧 `_settings->sync`。
+- Browse 走同一套 `makeSceneJsonFilePickerRequest` → `EditorFilePickerDialog`，不再在 `EditorSurface` 里拼 settings 控件树。`labeledButton` 收到 `EditorListRows.h`，避免第三份拷贝。
+- 验证：`xmake b ya-testing`；`xmake r ya-testing -- --gtest_filter='EditorSettingsDialogTest.*:EditorFilePickerDialogTest.*:EditorListRowsTest.*'`（7/7）。
+
+### 边界
+
+- 未拆 Content Browser / UI Designer / Runtime Tools / Asset Inspector；那些仍嵌在 `EditorSurface` 装配路径里。
+- density/token 仍未做。
+- 下一步：density/token，或下一个已有稳定边界的 tab owner。
+

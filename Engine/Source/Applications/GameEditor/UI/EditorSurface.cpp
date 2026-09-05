@@ -2,6 +2,7 @@
 #include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/UI/EditorFilePicker.h"
 #include "GameEditor/UI/EditorFilePickerDialog.h"
+#include "GameEditor/UI/EditorSettingsDialog.h"
 #include "GameEditor/UI/RuntimeDiagnosticsSection.h"
 #include "GameEditor/UI/RuntimeRenderSettingsSection.h"
 #include "GameEditor/UI/RuntimeProfilingSection.h"
@@ -136,17 +137,6 @@ std::shared_ptr<UIElement> makePlaceholderPanel(const std::string& name, const s
                    .setVAlign(EWidgetAlignV::Center),
                ui::canvasSlot().fill().offset({12.0f, 12.0f}))
         .release();
-}
-
-ui::UIButtonWidgetBuilder labeledButton(std::string key, const std::string& label)
-{
-    std::string labelKey = key + "_Label";
-    return ui::button(std::move(key))
-        .child(ui::text(std::move(labelKey))
-                   .setText(label)
-                   .setFontSize(13)
-                   .setHAlign(EWidgetAlignH::Center)
-                   .setVAlign(EWidgetAlignV::Center));
 }
 
 bool widgetOrAncestor(const UIElement* node, const UIElement* target)
@@ -433,7 +423,10 @@ void EditorSurface::shutdown()
         _filePicker->reset();
     }
     _filePicker.reset();
-    clearEditorSettingsDialog();
+    if (_settings) {
+        _settings->reset();
+    }
+    _settings.reset();
     _tree.reset();
     _theme.reset();
     _snapshot = {};
@@ -539,6 +532,10 @@ void EditorSurface::rebuild(App& app)
         _filePicker->reset();
     }
     _filePicker.reset();
+    if (_settings) {
+        _settings->reset();
+    }
+    _settings.reset();
     _hierarchyFingerprint.clear();
     _syncedSelectionGeneration = ~uint64_t{0};
 
@@ -1342,7 +1339,9 @@ void EditorSurface::syncPresentation(App& app, float dt)
     if (_filePicker) {
         _filePicker->sync(*_tree);
     }
-    syncEditorSettingsDialog();
+    if (_settings) {
+        _settings->sync(*_tree);
+    }
     if (_tabRegistry) {
         for (const auto& tab : _tabRegistry->tabs()) {
             if (tab.sync) {
@@ -1786,185 +1785,25 @@ void EditorSurface::openEditorSettingsDialog()
     if (!_tree || !_root || !_layer) {
         return;
     }
-    if (_settingsOverlay && _settingsOverlay->isAttached()) {
-        return;
+    if (!_settings) {
+        _settings = std::make_unique<EditorSettingsDialog>();
     }
-
-    clearEditorSettingsDialog();
-
-    auto samplerCombo = ui::comboBox("EditorSettingsSampler")
-                            .setItems({"Linear", "Nearest"})
-                            .setSelectedIndex(_layer->getViewportSamplerType())
-                            .setOnSelectionChanged([this](int index) {
-                                if (_layer) {
-                                    _layer->setViewportSamplerType(index);
-                                }
-                            });
-    _settingsSamplerCombo = samplerCombo.share();
-
-    auto overlayCheckbox = ui::checkBox("EditorSettingsCameraOverlay")
-                               .setText("Show Viewport Camera Overlay")
-                               .setChecked(_layer->shouldShowViewportCameraOverlay())
-                               .setOnChanged([this](bool checked) {
-                                   if (_layer) {
-                                       _layer->setShowViewportCameraOverlay(checked);
-                                   }
-                               });
-    _settingsOverlayCheckbox = overlayCheckbox.share();
-
-    auto scenePathField = ui::textField("EditorSettingsScenePath")
-                              .setText(_layer->getDefaultScenePathDraft())
-                              .setOnTextChanged([this](const std::string& text) {
-                                  if (_layer) {
-                                      _layer->setDefaultScenePathDraft(text);
-                                  }
-                              });
-    _settingsScenePathField = scenePathField.share();
-
-    auto sceneStatusText = ui::text("EditorSettingsSceneStatus").setFontSize(12).setStyleKey("text.muted");
-    _settingsSceneStatusText = sceneStatusText.share();
-
-    _settingsApplyButton = labeledButton("EditorSettingsApply", "Apply Default Scene Path")
-                               .setOnClick([this]() {
-                                   if (_layer) {
-                                       _layer->applyDefaultScenePathDraft();
-                                   }
-                               })
-                               .share();
-    _settingsResetButton = labeledButton("EditorSettingsReset", "Reset")
-                               .setOnClick([this]() {
-                                   if (_layer) {
-                                       _layer->resetDefaultScenePathDraft();
-                                       if (_settingsScenePathField) {
-                                           _settingsScenePathField->setText(_layer->getDefaultScenePathDraft());
-                                       }
-                                   }
-                               })
-                               .share();
-
-    auto sceneRow = ui::row("EditorSettingsSceneRow")
-                        .setSpacing(6.0f)
-                        .setStretchLastChild(true)
-                        .child(ui::text("EditorSettingsSceneLabel")
-                                   .setText("Startup Scene")
-                                   .setFontSize(12)
-                                   .setVAlign(EWidgetAlignV::Center),
-                               ui::boxSlot().preferredSize({120.0f, 26.0f}))
-                        .child(std::move(scenePathField), ui::boxSlot().fill())
-                        .child(labeledButton("EditorSettingsBrowse", "Browse")
-                                   .setOnClick([this]() {
-                                       if (!_layer) {
-                                           return;
-                                       }
-                                       openFilePickerDialog(makeSceneJsonFilePickerRequest(
-                                           _layer->getDefaultScenePathDraft(),
-                                           [this](std::string path) {
-                                               if (_layer) {
-                                                   _layer->setDefaultScenePathDraft(std::move(path));
-                                               }
-                                               if (_settingsScenePathField) {
-                                                   _settingsScenePathField->setText(_layer->getDefaultScenePathDraft());
-                                               }
-                                           }));
-                                   }),
-                               ui::boxSlot().preferredSize({84.0f, 26.0f}));
-    auto sceneActions = ui::row("EditorSettingsSceneActions")
-                            .setSpacing(8.0f)
-                            .child(_settingsApplyButton, ui::boxSlot().preferredSize({180.0f, 26.0f}))
-                            .child(_settingsResetButton, ui::boxSlot().preferredSize({84.0f, 26.0f}));
-    auto settingsRoot = ui::column("EditorSettingsRoot")
-                            .setSpacing(10.0f)
-                            .setPadding({12.0f, 12.0f})
-                            .child(ui::text("EditorSettingsTitle")
-                                       .setText("Editor Settings")
-                                       .setStyleKey("text.header")
-                                       .setFontSize(14))
-                            .child(ui::row("EditorSettingsSamplerRow")
-                                       .setSpacing(8.0f)
-                                       .setStretchLastChild(true)
-                                       .child(ui::text("EditorSettingsSamplerLabel")
-                                                  .setText("Viewport Sampler")
-                                                  .setFontSize(12)
-                                                  .setVAlign(EWidgetAlignV::Center),
-                                              ui::boxSlot().preferredSize({140.0f, 26.0f}))
-                                       .child(std::move(samplerCombo), ui::boxSlot().preferredSize({160.0f, 26.0f})))
-                            .child(std::move(overlayCheckbox))
-                            .child(std::move(sceneRow), ui::boxSlot().preferredSize({0.0f, 26.0f}))
-                            .child(std::move(sceneStatusText))
-                            .child(std::move(sceneActions))
-                            .child(labeledButton("EditorSettingsClose", "Close")
-                                       .setOnClick([this]() {
-                                           if (_settingsOverlay) {
-                                               _settingsOverlay->close();
-                                           }
-                                       }),
-                                   ui::boxSlot().preferredSize({84.0f, 26.0f}));
-    auto dialogPanel = ui::panel("EditorSettingsPanel")
-                           .setStyleKey("panel.window")
-                           .child(std::move(settingsRoot), ui::canvasSlot().fill());
-
-    _settingsPanel = dialogPanel.share();
-    _settingsOverlay = ui::popupOverlay("EditorSettingsOverlay")
-                           .setRole(UIPopupOverlay::EOverlayRole::Modal)
-                           .setOnDismiss([this]() { clearEditorSettingsDialog(); })
-                           .child(std::move(dialogPanel))
-                           .share();
-    _settingsOverlay->open(*_tree);
-}
-
-void EditorSurface::clearEditorSettingsDialog()
-{
-    _settingsOverlay.reset();
-    _settingsPanel.reset();
-    _settingsSamplerCombo.reset();
-    _settingsOverlayCheckbox.reset();
-    _settingsScenePathField.reset();
-    _settingsSceneStatusText.reset();
-    _settingsApplyButton.reset();
-    _settingsResetButton.reset();
-}
-
-void EditorSurface::syncEditorSettingsDialog()
-{
-    if (!_settingsOverlay || !_settingsPanel || !_tree || !_layer) {
-        return;
-    }
-
-    const Extent2D logicalExtent = _tree->getLogicalExtent();
-    const glm::vec2 extent = {static_cast<float>(logicalExtent.width), static_cast<float>(logicalExtent.height)};
-    const glm::vec2 desired = _settingsPanel->computeDesiredSize();
-    _settingsOverlay->_contentPos = {
-        std::max(0.0f, (extent.x - desired.x) * 0.5f),
-        std::max(0.0f, (extent.y - desired.y) * 0.5f),
-    };
-
-    if (_settingsSamplerCombo) {
-        _settingsSamplerCombo->setSelectedIndex(_layer->getViewportSamplerType(), false);
-    }
-    if (_settingsOverlayCheckbox) {
-        _settingsOverlayCheckbox->setChecked(_layer->shouldShowViewportCameraOverlay());
-    }
-    if (_settingsApplyButton) {
-        _settingsApplyButton->setEnabled(_layer->isDefaultScenePathDirty());
-    }
-    if (_settingsResetButton) {
-        _settingsResetButton->setEnabled(_layer->isDefaultScenePathDirty());
-    }
-    if (_settingsSceneStatusText) {
-        const std::string scenePath = _layer->getDefaultScenePathDraft();
-        if (scenePath.empty()) {
-            _settingsSceneStatusText->setStyleKey("text.muted");
-            _settingsSceneStatusText->setText("Empty means startup falls back to an empty scene");
-        }
-        else if (_layer->defaultScenePathExists()) {
-            _settingsSceneStatusText->setStyleKey("text.muted");
-            _settingsSceneStatusText->setText("Used on next app start — scene exists");
-        }
-        else {
-            _settingsSceneStatusText->setStyleKey("text.error");
-            _settingsSceneStatusText->setText("Used on next app start — scene not found");
-        }
-    }
+    EditorLayer* layer = _layer;
+    _settings->open(*_tree, FEditorSettingsBindings{
+        .samplerIndex = [layer]() { return layer->getViewportSamplerType(); },
+        .setSamplerIndex = [layer](int index) { layer->setViewportSamplerType(index); },
+        .showCameraOverlay = [layer]() { return layer->shouldShowViewportCameraOverlay(); },
+        .setShowCameraOverlay = [layer](bool enabled) { layer->setShowViewportCameraOverlay(enabled); },
+        .scenePathDraft = [layer]() { return layer->getDefaultScenePathDraft(); },
+        .setScenePathDraft = [layer](std::string path) { layer->setDefaultScenePathDraft(std::move(path)); },
+        .scenePathDirty = [layer]() { return layer->isDefaultScenePathDirty(); },
+        .scenePathExists = [layer]() { return layer->defaultScenePathExists(); },
+        .applyScenePath = [layer]() { layer->applyDefaultScenePathDraft(); },
+        .resetScenePath = [layer]() { layer->resetDefaultScenePathDraft(); },
+        .openFilePicker = [this](FEditorFilePickerRequest request) {
+            openFilePickerDialog(std::move(request));
+        },
+    });
 }
 
 void EditorSurface::publishViewportRect()

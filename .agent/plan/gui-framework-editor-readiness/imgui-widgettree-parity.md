@@ -1,6 +1,6 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-05 (after Phase 10E file-picker owner extract)  
+> **As of:** 2026-09-05 (after Phase 10E settings dialog owner extract)  
 > **Default chrome:** WidgetTree only (`EditorSurface`)  
 > **Legacy chrome:** `--editor-chrome=imgui` is ignored (WARN); `onImGuiRender` deleted  
 > **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, but legacy helpers still require it.
@@ -33,7 +33,7 @@
 | Main menu | `EditorLayer::menuBar` (ImGui) | `UIMenuBar` + `ActionMap` | ⚫ / 🟡 | ImGui menu deleted 8W; see File menu gaps below |
 | Toolbar | `EditorLayer::toolbar` (icon `ImageButton`) | Text `UIButton` row | ⚫ / 🟡 | ImGui toolbar deleted 8W |
 | Dock layout | ImGui `DockSpace` | `UIDockWorkspace` + `UIDockSpace` | ✅ | Compact dock tab strip + leaf/floating `hideTabBar` corner; docked tree + floating geometry persist in `editor.dockLayout` |
-| Editor Settings window | `EditorLayer::editorSettings` | `EditorSurface::openEditorSettingsDialog` | ⚫ / ✅ | ImGui window deleted 8W |
+| Editor Settings window | `EditorLayer::editorSettings` | `EditorSettingsDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui window deleted 8W; 10E owner extract |
 | Debug images window | `EditorLayer::debugWindow` | `EditorDebugImagesTab` dock tab | ⚫ / ✅ | ImGui window deleted 8W; cube-face button grid not retained |
 | Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | `EditorFilePickerDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui FilePicker modal chrome deleted 8W; `FilePicker` type remains for fallback APIs |
 | Viewport display | `viewportWindow` + `ImGui::Image` | `UIImage` samples offscreen compose | ⚫ / ✅ | `viewportWindow` deleted 8W |
@@ -171,7 +171,7 @@
 | Feature | Legacy ImGui | WidgetTree | Status | Notes |
 |---------|--------------|------------|--------|-------|
 | Viewport 3D / 2D | View menu | View menu + toolbar | ✅ | |
-| Editor Settings | — (ImGui window in legacy shell) | View → Editor Settings | ✅ | Phase 8U |
+| Editor Settings | — (ImGui window in legacy shell) | View → Editor Settings → `EditorSettingsDialog` | ✅ | 8U; 10E owner extract |
 | Fullscreen | View menu checkbox | — | ➖ | OS/window fullscreen; ImGui chrome item deleted 8W |
 | Dock padding / dock flags | View menu | — | ➖ | Dev-only ImGui dock tuning; deleted with chrome shell |
 | ImGui demo window | View menu (⚫) | — | ⚫ | Removed 8K |
@@ -219,8 +219,9 @@ Hierarchy tree CRUD remains a retained-UI gap, not an ImGui chrome blocker.
 9. ~~**9E** — Snapshot digest, GPU/offscreen parity, automation route trace~~ ✅  
 10. ~~**9F** — Release checklist~~ ✅（macOS/Vulkan Pass；Windows/MSVC and OpenGL presentation remain blockers）  
 11. ~~**10E** — Collapse retained file/save-as/asset pickers into `EditorFilePickerDialog`~~ ✅  
-12. **10E follow-up** — remaining stable tab/dialog owners, then density/token  
-13. Release blockers — XP-WIN, XP-OGL, SOAK-HR, `imgui-local`  
+12. ~~**10E** — Extract `EditorSettingsDialog` overlay owner~~ ✅  
+13. **10E follow-up** — remaining stable tab owners, then density/token  
+14. Release blockers — XP-WIN, XP-OGL, SOAK-HR, `imgui-local`  
 
 ---
 
