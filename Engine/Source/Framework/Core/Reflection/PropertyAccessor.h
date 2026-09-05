@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <optional>
 #include <vector>
 
 struct Property;
@@ -21,7 +22,7 @@ struct FPropertySlot
 {
     const Property* property     = nullptr;
     int             elementIndex = -1;
-    std::string     mapKey;
+    std::optional<std::string> mapKey;
 
     FPropertySlot() = default;
     FPropertySlot(const Property& field) : property(&field) {}
@@ -41,14 +42,14 @@ struct FPropertySlot
     static FPropertySlot at(const Property& property, std::string key)
     {
         FPropertySlot slot(property);
-        slot.mapKey = std::move(key);
+        slot.mapKey.emplace(std::move(key));
         return slot;
     }
 
     [[nodiscard]] bool isValid() const { return property != nullptr; }
-    [[nodiscard]] bool isField() const { return isValid() && elementIndex < 0 && mapKey.empty(); }
-    [[nodiscard]] bool isSequenceElement() const { return isValid() && elementIndex >= 0; }
-    [[nodiscard]] bool isMapValue() const { return isValid() && !mapKey.empty(); }
+    [[nodiscard]] bool isField() const { return isValid() && elementIndex < 0 && !mapKey.has_value(); }
+    [[nodiscard]] bool isSequenceElement() const { return isValid() && elementIndex >= 0 && !mapKey.has_value(); }
+    [[nodiscard]] bool isMapValue() const { return isValid() && mapKey.has_value(); }
 };
 
 /// Single-instance property access owned by the reflection layer.

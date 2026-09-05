@@ -327,3 +327,25 @@ P2  Phase 9  性能、跨平台、发布门禁
 - 不把 React/VDOM/Reconciler 作为静态 native DSL 的基础。
 - 不为了“看起来有进度”拆分无关提交。
 
+### Phase 10F：Property binding/accessor boundary
+
+目标：把当前可运行但职责交叉的 `PropertyAccessor` / `PropertyHandle` 收敛为清晰的 Reflection → PropertyGraph → Projection → UI/Undo 分层，同时先修复 slot、生命周期和多选 mutation 的正确性。
+
+边界：本阶段不恢复 ImGui，不新增 legacy 兼容 API；不把 review 结论扩大为一次性全仓库重写。每个 10F checkpoint 必须包含真实 Inspector consumer 和回归测试。
+
+顺序：
+
+1. 先冻结 `PropertySlot` 的 field/sequence/map 判别，修复空字符串 map key，并建立访问契约测试。
+2. 引入稳定 property instance identity/resolver；Undo 命令只捕获 identity、slot 和 snapshot，不捕获长期有效的裸地址。
+3. 为单实例访问与批量 mutation 引入结构化结果；多选默认 all-or-nothing，明确 partial failure 策略。
+4. 将 `collectLeaves` 与 editor path/leaf role 从 Core Reflection 移到 PropertyGraphBuilder。
+5. 将 color、manipulate spec、validation、asset picker/resolve 状态改为 editor projection 或 capability registry。
+6. 以 codec/equality/container capability registry 替换分散的具体类型 if/else，随后收瘦 `PropertyHandle`。
+
+验收：
+
+- 空字符串 map key 可被定位、读取、写入、删除和 undo。
+- 对象销毁/重建后旧 Undo 不访问悬空地址，并能返回明确的 unavailable 结果。
+- 多选 mutation 不会留下部分写入；undo/redo 与 mutation 结果一致。
+- Core Reflection 不再依赖 GameEditor 语义；PropertyGraph/Projection 仍能驱动 retained Inspector。
+- `PropertyAccessorTest`、`EditorPropertyGraphTest` 和 GameEditor build 全部通过。

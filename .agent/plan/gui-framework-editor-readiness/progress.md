@@ -1,5 +1,17 @@
 # Progress
 
+## Phase 10F-1 当前 checkpoint（2026-09-05）
+
+- 将 PropertySlot 的 map key 从空字符串 sentinel 改为 `std::optional<std::string>`；field、sequence element、map value 三种定位状态现在可区分，空字符串 key 不再与 field 混淆。
+- PropertyAccessor 与 PropertyHandle 的 map 访问、删除及 retained Inspector remove-row 路径已同步迁移到 optional key 判别。
+- 新增 `PropertyAccessorTest.EmptyStringMapKeyIsRepresentedAsMapSlot`，覆盖空 key 定位、读取、写入和删除。
+- 验证：`xmake b ya-testing`；`xmake r ya-testing -- --gtest_filter='PropertyAccessorTest.*:EditorPropertyGraphTest.*'`（33/33）。
+
+### Phase 10F-1 保留项
+
+- 本 checkpoint 只冻结 slot 定位契约；尚未处理 PropertyHandle 裸实例地址生命周期、结构化 mutation 结果、all-or-nothing 多选写入，以及 Core Reflection 与 editor projection 的职责拆分。
+- 下一 checkpoint 进入稳定 PropertyInstance identity/resolver 设计，必须先覆盖 Undo 对象销毁/重建场景，再迁移调用方。
+
 ## 当前状态
 
 - 计划建立：2026-09-03
@@ -1209,4 +1221,3 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - EditorSurface 里仍有不少按钮 preferredSize 字面量（Play/Content header 等）；本步只收 inspector/list/toolbar 共用密度，不做全文件数字替换。
 - 未拆其余 tab owner；release gates 仍为 Windows/MSVC、OpenGL、hour-scale soak、`imgui-local`。
 - 下一步：其余稳定 tab owner，或继续把剩余 chrome 字面量迁到 `editor_density`。
-

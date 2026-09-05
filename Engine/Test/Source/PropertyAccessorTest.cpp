@@ -192,6 +192,28 @@ TEST(PropertyAccessorTest, CollectLeavesExpandsMapOfLeafValuesAndMutates)
     EXPECT_EQ(owner.slots.count("shield"), 0u);
 }
 
+TEST(PropertyAccessorTest, EmptyStringMapKeyIsRepresentedAsMapSlot)
+{
+    MapOwner owner;
+    owner.slots.emplace("", 7);
+
+    const Class* cls = ClassRegistry::instance().getClass(type_index_v<MapOwner>);
+    ASSERT_NE(cls, nullptr);
+    const Property& slots = cls->properties.at("slots");
+    const reflection::FPropertySlot slot = reflection::FPropertySlot::at(slots, std::string{});
+
+    EXPECT_TRUE(slot.isMapValue());
+    EXPECT_FALSE(slot.isField());
+
+    int64_t value = 0;
+    ASSERT_TRUE(reflection::PropertyAccessor::tryGetInteger(slot, &owner, value));
+    EXPECT_EQ(value, 7);
+    EXPECT_TRUE(reflection::PropertyAccessor::setInteger(slot, &owner, 9));
+    EXPECT_EQ(owner.slots.at(""), 9);
+    EXPECT_TRUE(reflection::PropertyAccessor::removeMapKey(slots, &owner, ""));
+    EXPECT_EQ(owner.slots.count(""), 0u);
+}
+
 TEST(PropertyAccessorTest, DynamicSequenceAppendRemoveAndClear)
 {
     SequenceOwner owner;

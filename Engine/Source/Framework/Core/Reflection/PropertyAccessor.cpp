@@ -386,7 +386,7 @@ const void* PropertyAccessor::address(const FPropertySlot& slot, const void* ins
     }
     void* mutableContainer = const_cast<void*>(container);
     if (slot.isMapValue()) {
-        return accessor->getValuePtr(mutableContainer, slot.mapKey);
+        return accessor->getValuePtr(mutableContainer, *slot.mapKey);
     }
     if (static_cast<size_t>(slot.elementIndex) >= accessor->getSize(mutableContainer)) {
         return nullptr;
@@ -411,7 +411,7 @@ void* PropertyAccessor::addressMutable(const FPropertySlot& slot, void* instance
         return nullptr;
     }
     if (slot.isMapValue()) {
-        return accessor->getValuePtr(container, slot.mapKey);
+        return accessor->getValuePtr(container, *slot.mapKey);
     }
     if (static_cast<size_t>(slot.elementIndex) >= accessor->getSize(container)) {
         return nullptr;
@@ -528,7 +528,7 @@ bool PropertyAccessor::removeMapKey(const Property& property, void* instance, st
 {
     IContainerProperty* accessor = containerOf(property);
     void* container = containerPtr(property, instance);
-    if (!isEditable(property) || !accessor || !container || !accessor->isMapLike() || key.empty()) {
+    if (!isEditable(property) || !accessor || !container || !accessor->isMapLike()) {
         return false;
     }
     const std::string owned(key);

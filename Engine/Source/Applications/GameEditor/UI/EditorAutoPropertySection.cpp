@@ -403,17 +403,17 @@ void EditorAutoPropertySection::construct()
             continue;
         }
         if (node.kind == PropertyNode::Kind::Value && node.bEditable && node.binding.canMutateContainer() &&
-            (node.binding.slot().elementIndex >= 0 || !node.binding.slot().mapKey.empty())) {
+            (node.binding.slot().elementIndex >= 0 || node.binding.slot().mapKey.has_value())) {
             slot.remove = ui::button(node.name + "_Remove", "X")
                               .setOnClick([this, index = _editors.size()]() {
                                   PropertyHandle binding = _editors[index].node->binding;
                                   const int elementIndex = binding.slot().elementIndex;
-                                  const std::string mapKey = binding.slot().mapKey;
+                                  const std::optional<std::string> mapKey = binding.slot().mapKey;
                                   std::string previousString;
                                   const bool hadString = binding.tryGet(previousString);
                                   float previousFloat = 0.0f;
                                   const bool hadFloat = binding.tryGet(previousFloat);
-                                  const bool removed = !mapKey.empty() ? binding.removeMapKey() : binding.removeAt();
+                                  const bool removed = mapKey.has_value() ? binding.removeMapKey() : binding.removeAt();
                                   if (!removed) {
                                       return;
                                   }
@@ -421,8 +421,8 @@ void EditorAutoPropertySection::construct()
                                       (void)_undo->push({
                                           .label = "Remove " + _editors[index].node->displayName,
                                           .undo  = [binding, mapKey, elementIndex, hadString, previousString, hadFloat, previousFloat]() {
-                                              if (!mapKey.empty()) {
-                                                  if (!binding.insertMapKey(mapKey)) {
+                                              if (mapKey.has_value()) {
+                                                  if (!binding.insertMapKey(*mapKey)) {
                                                       return;
                                                   }
                                               }
@@ -437,7 +437,7 @@ void EditorAutoPropertySection::construct()
                                               }
                                           },
                                           .redo  = [binding, mapKey]() {
-                                              if (!mapKey.empty()) {
+                                              if (mapKey.has_value()) {
                                                   (void)binding.removeMapKey();
                                               }
                                               else {

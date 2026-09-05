@@ -126,3 +126,14 @@
 - [ ] Phase 10E：其余 tab owner（仅稳定边界；禁止按行数切文件）。
 - [ ] Windows/MSVC 组合回归（本机未跑；未通过则不得宣称 retained editor ready）。
 - [ ] OpenGL GUI/editor presentation（`GUIAppHost` 现为 Vulkan-only）。
+
+## Phase 10F：Property binding/accessor boundary
+
+- [ ] 10F-1：冻结 PropertySlot 的完整定位契约（field / sequence element / map value，允许空字符串 key）。
+- [ ] 10F-2：引入稳定 PropertyInstance identity/resolver，禁止 PropertyHandle/Undo 长期依赖裸对象地址。
+- [ ] 10F-3：为单实例访问和多实例 mutation 引入结构化结果，区分 invalid/read-only/type mismatch/unsupported/unchanged/changed。
+- [ ] 10F-4：多选 mutation 默认 all-or-nothing；补齐 partial failure 与 undo 一致性测试。
+- [ ] 10F-5：将 collectLeaves/编辑器路径投影移出 Core Reflection，收敛到 PropertyGraphBuilder。
+- [ ] 10F-6：将 color/manipulate/validation/asset picker capability 移到 editor projection/codec registry。
+- [ ] 10F-7：为 equality、整数、枚举、容器 key 和 asset-ref 能力建立 registry，删除分散的硬编码类型分支。
+- [ ] 10F-8：PropertyHandle 收瘦为 editor binding（multi-instance aggregation、mutation command、change hook），保留真实 Inspector consumer 回归。

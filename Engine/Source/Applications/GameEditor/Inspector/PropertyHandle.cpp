@@ -440,12 +440,12 @@ bool PropertyHandle::clearContainer() const
 
 bool PropertyHandle::removeMapKey() const
 {
-    if (!isEditable() || _slot.mapKey.empty()) {
+    if (!isEditable() || !_slot.mapKey.has_value()) {
         return false;
     }
     bool changed = false;
     for (void* instance : _instances) {
-        changed = anyChanged(changed, PropertyAccessor::removeMapKey(*_slot.property, instance, _slot.mapKey));
+        changed = anyChanged(changed, PropertyAccessor::removeMapKey(*_slot.property, instance, *_slot.mapKey));
     }
     notifyIfChanged(changed);
     return changed;
@@ -453,7 +453,7 @@ bool PropertyHandle::removeMapKey() const
 
 bool PropertyHandle::insertMapKey(std::string_view key) const
 {
-    if (!canMutateContainer() || key.empty()) {
+    if (!canMutateContainer()) {
         return false;
     }
     bool changed = false;
