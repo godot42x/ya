@@ -8,20 +8,12 @@
 #include "GUI/Binding/ActionMap.h"
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Widgets/Controls/TreeView.h"
-#include "GUI/Widgets/KeyedChildReconciler.h"
 
-#include "GameEditor/FileExplorer.h"
 #include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/UI/EditorFilePicker.h"
-#include "GameEditor/UI/EditorTabRegistry.h"
-#include "GameEditor/UI/EditorInspectorTab.h"
-#include "GameEditor/UI/EditorDebugImagesTab.h"
-#include "GameEditor/UI/EditorAutoPropertySection.h"
 #include "GameEditor/UI/EditorViewportHost.h"
 
 #include <functional>
-
-#include <array>
 #include <memory>
 #include <string>
 
@@ -41,6 +33,12 @@ class EditorViewportGizmoOverlay;
 struct Texture;
 class EditorFilePickerDialog;
 class EditorSettingsDialog;
+class EditorInspectorTab;
+class EditorDebugImagesTab;
+class EditorContentBrowserTab;
+class EditorAssetInspectorTab;
+class EditorUIDesignerTab;
+class EditorRuntimeToolsTab;
 struct UIDockSpace;
 struct FDockContext;
 struct UIDockFloatingHost;
@@ -54,12 +52,6 @@ struct UIPopupOverlay;
 struct UIScrollViewport;
 struct UISizeBox;
 struct UIText;
-class RuntimeDiagnosticsSection;
-class RuntimeRenderSettingsSection;
-class RuntimeProfilingSection;
-class RuntimeRenderGraphSection;
-class RuntimeRenderTargetSection;
-class RuntimeDebugPrimitivesSection;
 struct UITextField;
 struct UITheme;
 struct UITreeView;
@@ -68,9 +60,13 @@ struct IImage;
 struct IImageView;
 enum class EWidgetRouteResult : uint8_t;
 
-/// Game Editor chrome owned as one WidgetTree. The presentation host replays
-/// the snapshot into the open swapchain pass; the 3D viewport remains an
-/// offscreen compose that this tree samples as a live UIImage.
+/// Game Editor chrome owned as one WidgetTree.
+///
+/// tick: rebuild-if-needed -> window metrics -> sync tabs/chrome ->
+/// buildSnapshot -> viewport host.
+/// rebuild: new tree/theme/dock -> shell chrome -> tab.build() into FDockContext.
+/// Tab content lives on owner objects; this surface keeps shell, dock persist,
+/// viewport host, and dialogs.
 struct EditorSurface
 {
   private:
@@ -97,54 +93,11 @@ struct EditorSurface
     std::shared_ptr<UIText>          _statsText;
     std::unique_ptr<EditorInspectorTab> _inspectorTab;
     std::unique_ptr<EditorDebugImagesTab> _debugImagesTab;
+    std::unique_ptr<EditorContentBrowserTab> _contentBrowserTab;
+    std::unique_ptr<EditorAssetInspectorTab> _assetInspectorTab;
+    std::unique_ptr<EditorUIDesignerTab> _uiDesignerTab;
+    std::unique_ptr<EditorRuntimeToolsTab> _runtimeToolsTab;
     std::unique_ptr<guiworkbench::FWorkbenchSurface> _workbench;
-    std::unique_ptr<EditorTabRegistry> _tabRegistry;
-    std::shared_ptr<UIText> _assetInspectorPathText;
-    std::shared_ptr<UIText> _assetInspectorStatusText;
-    std::shared_ptr<UIImage> _assetInspectorPreview;
-    std::shared_ptr<UIText> _uiDesignerStatusText;
-    std::shared_ptr<UIText> _uiDesignerSelectionText;
-    std::shared_ptr<UIButton> _uiDesignerNewButton;
-    std::shared_ptr<UIButton> _uiDesignerSaveButton;
-    std::shared_ptr<UIButton> _uiDesignerCloseButton;
-    std::shared_ptr<ReactiveList<UITreeView::FNode>> _uiDesignerRoots;
-    std::shared_ptr<Reactive<std::string>> _uiDesignerSelection;
-    std::shared_ptr<UITreeView> _uiDesignerTree;
-    std::string _uiDesignerTreeFingerprint;
-    std::shared_ptr<UIContainer> _uiDesignerPaletteList;
-    std::shared_ptr<UIContainer> _uiDesignerInspectorHost;
-    std::shared_ptr<EditorAutoPropertySection> _uiDesignerInspectorSection;
-    std::string _uiDesignerInspectorFingerprint;
-    std::string _uiDesignerSelectionFingerprint;
-    std::shared_ptr<UIText> _runtimeToolsStatusText;
-    std::shared_ptr<UIText> _runtimeToolsFrameText;
-    std::shared_ptr<UIButton> _runtimeToolsPlayButton;
-    std::shared_ptr<UIButton> _runtimeToolsSimulateButton;
-    std::shared_ptr<UIButton> _runtimeToolsStopButton;
-    std::shared_ptr<RuntimeDiagnosticsSection> _runtimeToolsDiagnostics;
-    std::shared_ptr<RuntimeRenderSettingsSection> _runtimeToolsRenderSettings;
-    std::shared_ptr<RuntimeProfilingSection> _runtimeToolsProfiling;
-    std::shared_ptr<RuntimeRenderGraphSection> _runtimeToolsRenderGraph;
-    std::shared_ptr<RuntimeRenderTargetSection> _runtimeToolsRenderTargets;
-    std::shared_ptr<RuntimeDebugPrimitivesSection> _runtimeToolsDebugPrimitives;
-
-    // Content Browser (WidgetTree chrome). FileExplorer keeps the mount /
-    // directory / filter state; the rows below are the retained view.
-    std::shared_ptr<FileExplorer>  _contentExplorer;
-    std::shared_ptr<UIText>        _contentPathText;
-    std::shared_ptr<UITextField>   _contentSearchField;
-    std::shared_ptr<UIContainer>   _contentMountList;
-    std::shared_ptr<UIContainer>   _contentEntryList;
-    std::shared_ptr<UIContainer>   _contentEntryRows;
-    std::shared_ptr<UISizeBox>     _contentEntryLeading;
-    std::shared_ptr<UISizeBox>     _contentEntryTrailing;
-    std::shared_ptr<UIScrollViewport> _contentEntryScroll;
-    std::unique_ptr<UIKeyedChildReconciler> _contentMountReconciler;
-    std::unique_ptr<UIKeyedChildReconciler> _contentEntryReconciler;
-    std::string                    _contentFingerprint;
-    float                          _contentEntryScrollOffset = 0.0f;
-    float                          _contentEntryViewportHeight = 0.0f;
-    bool                           _bContentRowsDirty = true;
 
     std::unique_ptr<EditorFilePickerDialog> _filePicker;
     std::unique_ptr<EditorSettingsDialog> _settings;
@@ -201,16 +154,6 @@ struct EditorSurface
     void syncHierarchy();
     void syncSelectionFromLayer();
     void syncToolbar(App& app);
-    std::shared_ptr<UIElement> buildContentBrowser();
-    std::shared_ptr<UIElement> buildAssetInspector(EditorLayer& layer);
-    std::shared_ptr<UIElement> buildUIDesigner(EditorLayer& layer);
-    std::shared_ptr<UIElement> buildRuntimeTools(EditorLayer& layer);
-    void syncContentBrowser();
-    void rebuildContentRows();
-    void selectContentMount(const std::string& itemId);
-    void selectContentItem(const std::filesystem::path& path, bool bIsDirectory);
-    void activateContentItem(const std::filesystem::path& path, bool bIsDirectory);
-    void rebuildUIDesignerInspector(EditorLayer& layer, WidgetTree& tree, UIElement* selected);
     void publishViewportRect();
     void syncViewportHostState(App& app);
     void applyWindowMetrics(App& app);

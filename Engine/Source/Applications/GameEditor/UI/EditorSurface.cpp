@@ -3,12 +3,12 @@
 #include "GameEditor/UI/EditorFilePicker.h"
 #include "GameEditor/UI/EditorFilePickerDialog.h"
 #include "GameEditor/UI/EditorSettingsDialog.h"
-#include "GameEditor/UI/RuntimeDiagnosticsSection.h"
-#include "GameEditor/UI/RuntimeRenderSettingsSection.h"
-#include "GameEditor/UI/RuntimeProfilingSection.h"
-#include "GameEditor/UI/RuntimeRenderGraphSection.h"
-#include "GameEditor/UI/RuntimeRenderTargetSection.h"
-#include "GameEditor/UI/RuntimeDebugPrimitivesSection.h"
+#include "GameEditor/UI/EditorContentBrowserTab.h"
+#include "GameEditor/UI/EditorAssetInspectorTab.h"
+#include "GameEditor/UI/EditorUIDesignerTab.h"
+#include "GameEditor/UI/EditorRuntimeToolsTab.h"
+#include "GameEditor/UI/EditorInspectorTab.h"
+#include "GameEditor/UI/EditorDebugImagesTab.h"
 
 #include "Core/Event.h"
 #include "Core/Config/ConfigManager.h"
@@ -23,18 +23,11 @@
 #include "GUI/Declarative/Build.h"
 #include "GUI/Tooling/Workbench/WorkbenchSurface.h"
 #include "GameEditor/EditorLayer.h"
-#include "GameEditor/Panels/UIDesignerPanel.h"
 #include "GameEditor/UI/EditorTheme.h"
-#include "GameEditor/UI/EditorTabRegistry.h"
-#include "GameEditor/UI/EditorAutoPropertySection.h"
-#include "GameEditor/Inspector/PropertyGraph.h"
-#include "GUI/Widgets/UITypeRegistry.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "GameRuntime/App.h"
 #include "GUI/Host/OsClipboard.h"
 #include "GUI/Layout/UILayout.h"
-#include "GUI/Widgets/Controls/CheckBox.h"
-#include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
@@ -46,16 +39,12 @@
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
-#include "GUI/Widgets/Controls/SelectableRow.h"
-#include "GUI/Widgets/Controls/SizeBox.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/Controls/TreeView.h"
-#include "GUI/Widgets/KeyedVisibleWindow.h"
 #include "GUI/Widgets/WidgetAttachment.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "Core/System/PathUtils.h"
-#include "Core/System/VirtualFileSystem.h"
 #include "Hierarchy/Node.h"
 #include "RHI/Core/Texture.h"
 #include "RHI/Core/RenderTexture.h"
@@ -68,6 +57,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <filesystem>
 #include <format>
 #include <string_view>
 
@@ -126,19 +116,6 @@ void appendHierarchyFingerprint(std::string& fingerprint, const Node* node)
     }
 }
 
-std::shared_ptr<UIElement> makePlaceholderPanel(const std::string& name, const std::string& text)
-{
-    return ui::panel(name + "_Body")
-        .setStyleKey("panel.canvas")
-        .child(ui::text(name + "_Label")
-                   .setText(text)
-                   .setFontSize(13)
-                   .setHAlign(EWidgetAlignH::Center)
-                   .setVAlign(EWidgetAlignV::Center),
-               ui::canvasSlot().fill().offset({12.0f, 12.0f}))
-        .release();
-}
-
 bool widgetOrAncestor(const UIElement* node, const UIElement* target)
 {
     for (const UIElement* cursor = node; cursor; cursor = cursor->getParent()) {
@@ -147,46 +124,6 @@ bool widgetOrAncestor(const UIElement* node, const UIElement* target)
         }
     }
     return false;
-}
-
-UITreeView::FNode makeDesignerTreeNode(const UIElement& widget, const std::string& path)
-{
-    UITreeView::FNode node;
-    node.id = path;
-    node.label = widget._name + " [" + widget._typeId + "]";
-    const auto& children = widget.getChildren();
-    node.children.reserve(children.size());
-    for (size_t index = 0; index < children.size(); ++index) {
-        node.children.push_back(makeDesignerTreeNode(*children[index], path + "/" + std::to_string(index)));
-    }
-    return node;
-}
-
-void collectDesignerTreeFingerprint(const UIElement& widget, std::string& out, const std::string& path)
-{
-    out += path + ":" + widget._name + ":" + widget._typeId + ";";
-    const auto& children = widget.getChildren();
-    for (size_t index = 0; index < children.size(); ++index) {
-        collectDesignerTreeFingerprint(*children[index], out, path + "/" + std::to_string(index));
-    }
-}
-
-std::string designerSelectionPath(const UIElement& root, const UIElement& target, const std::string& prefix = "root")
-{
-    if (&root == &target) {
-        return prefix;
-    }
-    const auto& children = root.getChildren();
-    for (size_t index = 0; index < children.size(); ++index) {
-        const std::string childPrefix = prefix + "/" + std::to_string(index);
-        if (children[index].get() == &target) {
-            return childPrefix;
-        }
-        if (std::string nested = designerSelectionPath(*children[index], target, childPrefix); !nested.empty()) {
-            return nested;
-        }
-    }
-    return {};
 }
 
 DockPanelId dockPanelIdForKey(const FDockTreeModel& model, const char* stableKey)
@@ -215,202 +152,6 @@ std::vector<UIMenu::FItem> makePresetMenuItems(EditorLayer& layer, const std::st
 
 } // namespace
 
-std::shared_ptr<UIElement> EditorSurface::buildAssetInspector(EditorLayer& layer)
-{
-    (void)layer;
-    auto pathText = ui::text("AssetInspectorPath").setText("No asset selected").setStyleKey("text.muted").share();
-    auto statusText = ui::text("AssetInspectorStatus").setText("Select a texture in Content Browser").setStyleKey("text.muted").share();
-    auto preview = ui::image("AssetInspectorPreview").setStyleKey("image").share();
-    _assetInspectorPathText = pathText;
-    _assetInspectorStatusText = statusText;
-    _assetInspectorPreview = preview;
-
-    return ui::panel("AssetInspectorBody")
-        .setStyleKey("panel.canvas")
-        .child(ui::column("AssetInspectorColumn")
-                   .setSpacing(8.0f)
-                   .child(pathText)
-                   .child(preview, FBoxSlotArgs{.preferredSize = {0.0f, 220.0f}})
-                   .child(statusText)
-                   .release(),
-               ui::canvasSlot().fill().offset({12.0f, 12.0f}))
-        .release();
-}
-
-std::shared_ptr<UIElement> EditorSurface::buildUIDesigner(EditorLayer& layer)
-{
-    auto status = ui::text("UIDesignerStatus").setText("No document open").setStyleKey("text.muted").share();
-    auto selection = ui::text("UIDesignerSelection").setText("No widget selected").setStyleKey("text.muted").share();
-    _uiDesignerRoots = std::make_shared<ReactiveList<UITreeView::FNode>>();
-    _uiDesignerSelection = std::make_shared<Reactive<std::string>>("");
-    auto treeBuilder = ui::treeView("UIDesignerTree")
-                           .bindData(_uiDesignerRoots)
-                           .bindSelection(_uiDesignerSelection)
-                           .setOnSelectionChanged([&layer](const std::string& id) {
-                               std::vector<size_t> path;
-                               size_t start = 0;
-                               while (start < id.size()) {
-                                   const size_t slash = id.find('/', start);
-                                   const size_t end = slash == std::string::npos ? id.size() : slash;
-                                   if (start == 0 && id.compare(start, end - start, "root") == 0) {
-                                       start = slash == std::string::npos ? id.size() : slash + 1;
-                                       continue;
-                                   }
-                                   try {
-                                       path.push_back(static_cast<size_t>(std::stoul(id.substr(start, end - start))));
-                                   }
-                                   catch (...) {
-                                       return;
-                                   }
-                                   start = slash == std::string::npos ? id.size() : slash + 1;
-                               }
-                               layer.getUIDesignerPanel().selectByChildPath(path);
-                           });
-    auto tree = treeBuilder.share();
-    _uiDesignerTree = tree;
-
-    auto newBuilder = ui::button("UIDesignerNew").child(ui::text("UIDesignerNewLabel").setText("New Panel"));
-    newBuilder.setOnClick([&layer]() { layer.getUIDesignerPanel().newDocument("panel"); });
-    auto newButton = newBuilder.share();
-
-    auto saveBuilder = ui::button("UIDesignerSave").child(ui::text("UIDesignerSaveLabel").setText("Save"));
-    saveBuilder.setOnClick([&layer]() { (void)layer.getUIDesignerPanel().saveDocument(); });
-    auto saveButton = saveBuilder.share();
-
-    auto closeBuilder = ui::button("UIDesignerClose").child(ui::text("UIDesignerCloseLabel").setText("Close"));
-    closeBuilder.setOnClick([&layer]() { layer.getUIDesignerPanel().clearDocument(); });
-    auto closeButton = closeBuilder.share();
-
-    _uiDesignerStatusText = status;
-    _uiDesignerSelectionText = selection;
-    _uiDesignerNewButton = newButton;
-    _uiDesignerSaveButton = saveButton;
-    _uiDesignerCloseButton = closeButton;
-
-    _uiDesignerPaletteList = [&layer]() {
-        auto palette = ui::column("UIDesignerPalette").setSpacing(4.0f);
-        for (const std::string& typeId : UITypeRegistry::instance().getTypeIds()) {
-            const std::string label = UIDesignerPanel::paletteDisplayName(typeId);
-            palette = palette.child(labeledButton("UIDesignerPalette_" + label, label)
-                                        .setOnClick([&layer, typeId]() {
-                                            (void)layer.getUIDesignerPanel().addPaletteWidget(typeId);
-                                        }),
-                                    ui::boxSlot().preferredSize({0.0f, 24.0f}));
-        }
-        return palette.share();
-    }();
-
-    _uiDesignerInspectorHost = ui::column("UIDesignerInspectorHost").setSpacing(6.0f).share();
-
-    auto mainColumn = ui::column("UIDesignerMainColumn")
-                          .setSpacing(8.0f)
-                          .child(status)
-                          .child(selection)
-                          .child(tree, FBoxSlotArgs{.preferredSize = {0.0f, 180.0f}})
-                          .child(newButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                          .child(saveButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                          .child(closeButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}});
-
-    return ui::panel("UIDesignerBody")
-        .setStyleKey("panel.canvas")
-        .child(ui::row("UIDesignerLayout")
-                   .setSpacing(8.0f)
-                   .setStretchLastChild(true)
-                   .child(ui::scroll("UIDesignerPaletteScroll")
-                              .setAxis(EScrollAxis::Vertical)
-                              .child(ui::column("UIDesignerPaletteColumn")
-                                         .setSpacing(4.0f)
-                                         .child(ui::text("UIDesignerPaletteTitle")
-                                                    .setText("Palette")
-                                                    .setStyleKey("text.eyebrow"))
-                                         .child(_uiDesignerPaletteList, ui::boxSlot().fill()),
-                                     ui::overlaySlot().fill()),
-                          ui::boxSlot().preferredSize({120.0f, 0.0f}))
-                   .child(std::move(mainColumn), ui::boxSlot().fill())
-                   .child(ui::scroll("UIDesignerInspectorScroll")
-                              .setAxis(EScrollAxis::Vertical)
-                              .child(ui::column("UIDesignerInspectorColumn")
-                                         .setSpacing(6.0f)
-                                         .child(ui::text("UIDesignerInspectorTitle")
-                                                    .setText("Inspector")
-                                                    .setStyleKey("text.eyebrow"))
-                                         .child(_uiDesignerInspectorHost, ui::boxSlot().fill()),
-                                     ui::overlaySlot().fill()),
-                          ui::boxSlot().preferredSize({220.0f, 0.0f})),
-               ui::canvasSlot().fill().offset({12.0f, 12.0f}))
-        .release();
-}
-
-std::shared_ptr<UIElement> EditorSurface::buildRuntimeTools(EditorLayer& layer)
-{
-    auto status = ui::text("RuntimeToolsStatus").setText("Stopped").setStyleKey("text.header").share();
-    auto frame = ui::text("RuntimeToolsFrame").setText("Frame 0").setStyleKey("text.muted").share();
-
-    auto playBuilder = ui::button("RuntimeToolsPlay").child(ui::text("RuntimeToolsPlayLabel").setText("Play"));
-    playBuilder.setOnClick([]() {
-        if (auto* app = App::get()) {
-            app->getTaskManager().registerFrameTask([app]() { app->startRuntime(); });
-        }
-    });
-    auto play = playBuilder.share();
-
-    auto simulateBuilder = ui::button("RuntimeToolsSimulate").child(ui::text("RuntimeToolsSimulateLabel").setText("Simulate"));
-    simulateBuilder.setOnClick([]() {
-        if (auto* app = App::get()) {
-            app->getTaskManager().registerFrameTask([app]() { app->startSimulation(); });
-        }
-    });
-    auto simulate = simulateBuilder.share();
-
-    auto stopBuilder = ui::button("RuntimeToolsStop").child(ui::text("RuntimeToolsStopLabel").setText("Stop"));
-    stopBuilder.setOnClick([]() {
-        if (auto* app = App::get()) {
-            app->getTaskManager().registerFrameTask([app]() {
-                if (app->isRuntimeMode()) app->stopRuntime();
-                else if (app->isSimulationMode()) app->stopSimulation();
-            });
-        }
-    });
-    auto stop = stopBuilder.share();
-    auto diagnostics = std::make_shared<RuntimeDiagnosticsSection>();
-    auto renderSettings = std::make_shared<RuntimeRenderSettingsSection>();
-    auto profiling = std::make_shared<RuntimeProfilingSection>();
-    auto renderGraph = std::make_shared<RuntimeRenderGraphSection>();
-    auto renderTargets = std::make_shared<RuntimeRenderTargetSection>();
-    auto debugPrimitives = std::make_shared<RuntimeDebugPrimitivesSection>();
-
-    _runtimeToolsStatusText = status;
-    _runtimeToolsFrameText = frame;
-    _runtimeToolsPlayButton = play;
-    _runtimeToolsSimulateButton = simulate;
-    _runtimeToolsStopButton = stop;
-    _runtimeToolsDiagnostics = diagnostics;
-    _runtimeToolsRenderSettings = renderSettings;
-    _runtimeToolsProfiling = profiling;
-    _runtimeToolsRenderGraph = renderGraph;
-    _runtimeToolsRenderTargets = renderTargets;
-    _runtimeToolsDebugPrimitives = debugPrimitives;
-
-    return ui::panel("RuntimeToolsBody")
-        .setStyleKey("panel.canvas")
-        .child(ui::column("RuntimeToolsColumn")
-                   .setSpacing(8.0f)
-                   .child(status)
-                   .child(frame)
-                   .child(play, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                   .child(simulate, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                   .child(stop, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                   .child(diagnostics)
-                   .child(renderSettings)
-                   .child(profiling)
-                   .child(renderGraph)
-                   .child(renderTargets)
-                   .child(debugPrimitives)
-                   .release(),
-               ui::canvasSlot().fill().offset({12.0f, 12.0f}))
-        .release();
-}
-
 EditorSurface::EditorSurface() = default;
 
 EditorSurface::~EditorSurface() = default;
@@ -418,7 +159,12 @@ EditorSurface::~EditorSurface() = default;
 void EditorSurface::shutdown()
 {
     _workbench.reset();
-    _tabRegistry.reset();
+    _inspectorTab.reset();
+    _debugImagesTab.reset();
+    _contentBrowserTab.reset();
+    _assetInspectorTab.reset();
+    _uiDesignerTab.reset();
+    _runtimeToolsTab.reset();
     if (_filePicker) {
         _filePicker->reset();
     }
@@ -446,24 +192,7 @@ void EditorSurface::shutdown()
     _selection = std::make_shared<SelectionModel>();
     _actions   = std::make_shared<ActionMap>();
     _undo      = std::make_shared<UndoStack>();
-    _inspectorTab.reset();
-    _debugImagesTab.reset();
     _statsText.reset();
-    _contentExplorer.reset();
-    _contentPathText.reset();
-    _contentSearchField.reset();
-    _contentMountList.reset();
-    _contentEntryList.reset();
-    _contentEntryRows.reset();
-    _contentEntryLeading.reset();
-    _contentEntryTrailing.reset();
-    _contentEntryScroll.reset();
-    _contentMountReconciler.reset();
-    _contentEntryReconciler.reset();
-    _contentFingerprint.clear();
-    _contentEntryScrollOffset = 0.0f;
-    _contentEntryViewportHeight = 0.0f;
-    _bContentRowsDirty = true;
     _viewportTexture.reset();
     _viewportImageResource.reset();
     _viewportImageView.reset();
@@ -510,24 +239,12 @@ void EditorSurface::rebuild(App& app)
     _undo      = std::make_shared<UndoStack>();
     _inspectorTab.reset();
     _debugImagesTab.reset();
+    _contentBrowserTab.reset();
+    _assetInspectorTab.reset();
+    _uiDesignerTab.reset();
+    _runtimeToolsTab.reset();
     _statsText.reset();
     _workbench.reset();
-    _tabRegistry = std::make_unique<EditorTabRegistry>();
-    _contentExplorer.reset();
-    _contentPathText.reset();
-    _contentSearchField.reset();
-    _contentMountList.reset();
-    _contentEntryList.reset();
-    _contentEntryRows.reset();
-    _contentEntryLeading.reset();
-    _contentEntryTrailing.reset();
-    _contentEntryScroll.reset();
-    _contentMountReconciler.reset();
-    _contentEntryReconciler.reset();
-    _contentFingerprint.clear();
-    _contentEntryScrollOffset = 0.0f;
-    _contentEntryViewportHeight = 0.0f;
-    _bContentRowsDirty = true;
     if (_filePicker) {
         _filePicker->reset();
     }
@@ -906,8 +623,11 @@ void EditorSurface::buildEditorChrome(App& app)
                                         .offset({4.0f, 34.0f}));
 
     _inspectorTab = std::make_unique<EditorInspectorTab>(*_layer, _undo.get());
-    auto inspectorBody = _inspectorTab->build(*_tree);
     _debugImagesTab = std::make_unique<EditorDebugImagesTab>(*_layer);
+    _contentBrowserTab = std::make_unique<EditorContentBrowserTab>(*_layer);
+    _assetInspectorTab = std::make_unique<EditorAssetInspectorTab>(*_layer);
+    _uiDesignerTab = std::make_unique<EditorUIDesignerTab>(*_layer, _undo.get());
+    _runtimeToolsTab = std::make_unique<EditorRuntimeToolsTab>();
 
     auto statsText = ui::text("FrameStatsBody")
                          .setText("Frame Stats")
@@ -931,131 +651,14 @@ void EditorSurface::buildEditorChrome(App& app)
 
     _dockContext->addPanel("viewport", "Viewport", viewportBody.release());
     _dockContext->addPanel("hierarchy", "Hierarchy", hierarchyBody.release());
-    _dockContext->addPanel("inspector", "Inspector", inspectorBody);
-    _dockContext->addPanel("content-browser", "Content", buildContentBrowser());
+    _dockContext->addPanel("inspector", "Inspector", _inspectorTab->build(*_tree));
+    _dockContext->addPanel("content-browser", "Content", _contentBrowserTab->build(*_tree));
     _dockContext->addPanel("frame-stats", "Stats", statsBody.release());
     _dockContext->addPanel("gui-workbench", "Workbench", workbenchHost);
-    _tabRegistry->registerTab({
-        .id = "runtime-tools",
-        .title = "Runtime",
-        .build = [this](EditorLayer& layer, WidgetTree&) { return buildRuntimeTools(layer); },
-        .sync = [this](EditorLayer&, WidgetTree&) {
-            if (!_runtimeToolsStatusText || !_runtimeToolsFrameText) {
-                return;
-            }
-            App* app = App::get();
-            if (!app) {
-                return;
-            }
-            const char* state = app->isRuntimeMode() ? "Playing" : (app->isSimulationMode() ? "Simulating" : "Stopped");
-            _runtimeToolsStatusText->setText(state);
-            _runtimeToolsFrameText->setText(std::format("Frame {}", app->getFrameIndex()));
-            if (_runtimeToolsDiagnostics) {
-                _runtimeToolsDiagnostics->sync(app);
-            }
-            if (_runtimeToolsRenderSettings) {
-                _runtimeToolsRenderSettings->sync(app);
-            }
-            if (_runtimeToolsProfiling) {
-                _runtimeToolsProfiling->sync(app);
-            }
-            if (_runtimeToolsRenderGraph) {
-                _runtimeToolsRenderGraph->sync(app);
-            }
-            if (_runtimeToolsRenderTargets) {
-                _runtimeToolsRenderTargets->sync(app);
-            }
-            if (_runtimeToolsDebugPrimitives) {
-                _runtimeToolsDebugPrimitives->sync(app);
-            }
-            if (_runtimeToolsPlayButton) _runtimeToolsPlayButton->setEnabled(app->isStopped());
-            if (_runtimeToolsSimulateButton) _runtimeToolsSimulateButton->setEnabled(app->isStopped());
-            if (_runtimeToolsStopButton) _runtimeToolsStopButton->setEnabled(!app->isStopped());
-        },
-    });
-    _tabRegistry->registerTab({
-        .id = "ui-designer",
-        .title = "UI",
-        .build = [this](EditorLayer& layer, WidgetTree&) { return buildUIDesigner(layer); },
-        .sync = [this](EditorLayer& layer, WidgetTree&) {
-            if (!_uiDesignerStatusText || !_uiDesignerSelectionText || !_uiDesignerRoots || !_uiDesignerSelection) {
-                return;
-            }
-            const auto& designer = layer.getUIDesignerPanel();
-            const auto& document = designer.getOpenDocument();
-            _uiDesignerStatusText->setText(document ? "Document: " + document->typeId : "No document open");
-            UIElement* selected = designer.getSelectedWidget();
-            _uiDesignerSelectionText->setText(selected ? "Selected: " + selected->_name : "No widget selected");
-            std::string fingerprint;
-            std::vector<UITreeView::FNode> roots;
-            if (UIElement* root = designer.getPreviewRoot()) {
-                collectDesignerTreeFingerprint(*root, fingerprint, "root");
-                roots.push_back(makeDesignerTreeNode(*root, "root"));
-            }
-            if (fingerprint != _uiDesignerTreeFingerprint) {
-                _uiDesignerTreeFingerprint = std::move(fingerprint);
-                _uiDesignerRoots->replace(std::move(roots));
-            }
-            if (_uiDesignerSaveButton) _uiDesignerSaveButton->setEnabled(document != nullptr);
-            if (_uiDesignerCloseButton) _uiDesignerCloseButton->setEnabled(document != nullptr);
-            if (_tree) {
-                rebuildUIDesignerInspector(layer, *_tree, selected);
-                if (_uiDesignerInspectorSection) {
-                    _uiDesignerInspectorSection->sync(*_tree);
-                    layer.getUIDesignerPanel().invalidatePreview();
-                }
-                if (UIElement* root = designer.getPreviewRoot()) {
-                    std::string selectionPath;
-                    if (selected) {
-                        selectionPath = designerSelectionPath(*root, *selected);
-                    }
-                    if (selectionPath != _uiDesignerSelectionFingerprint) {
-                        _uiDesignerSelectionFingerprint = std::move(selectionPath);
-                        if (_uiDesignerSelection) {
-                            _uiDesignerSelection->set(_uiDesignerSelectionFingerprint);
-                        }
-                    }
-                }
-                else if (!_uiDesignerSelectionFingerprint.empty()) {
-                    _uiDesignerSelectionFingerprint.clear();
-                    if (_uiDesignerSelection) {
-                        _uiDesignerSelection->set("");
-                    }
-                }
-            }
-        },
-    });
-    _tabRegistry->registerTab({
-        .id = "asset-inspector",
-        .title = "Assets",
-        .build = [this](EditorLayer& layer, WidgetTree&) { return buildAssetInspector(layer); },
-        .sync = [this](EditorLayer& layer, WidgetTree&) {
-            if (!_assetInspectorPathText || !_assetInspectorStatusText || !_assetInspectorPreview) {
-                return;
-            }
-            const std::string& path = layer.getAssetInspectorPanel().inspectedPath();
-            _assetInspectorPathText->setText(path.empty() ? "No asset selected" : path);
-            _assetInspectorStatusText->setText(path.empty() ? "Select a texture in Content Browser" : "Texture preview");
-            _assetInspectorPreview->_assetPath = path;
-            _assetInspectorPreview->setResourceMissing(false);
-        },
-    });
-    _tabRegistry->registerTab({
-        .id = "debug-images",
-        .title = "Debug",
-        .build = [this](EditorLayer&, WidgetTree&) {
-            return _debugImagesTab ? _debugImagesTab->build(*_tree) : nullptr;
-        },
-        .sync = [this](EditorLayer&, WidgetTree& tree) {
-            if (_debugImagesTab) {
-                _debugImagesTab->sync(tree);
-            }
-        },
-    });
-    for (const auto& tab : _tabRegistry->tabs()) {
-        _dockContext->addPanel(tab.id, tab.title, tab.build(*_layer, *_tree));
-    }
-
+    _dockContext->addPanel("runtime-tools", "Runtime", _runtimeToolsTab->build(*_tree));
+    _dockContext->addPanel("ui-designer", "UI", _uiDesignerTab->build(*_tree));
+    _dockContext->addPanel("asset-inspector", "Assets", _assetInspectorTab->build(*_tree));
+    _dockContext->addPanel("debug-images", "Debug", _debugImagesTab->build(*_tree));
     if (!tryRestoreEditorDockLayout()) {
         applyDefaultEditorDockLayout();
     }
@@ -1224,89 +827,6 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
     menu->openAt(*_tree, windowPoint);
 }
 
-std::shared_ptr<UIElement> EditorSurface::buildContentBrowser()
-{
-    _contentExplorer = std::make_shared<FileExplorer>();
-    _contentExplorer->setConfigScope("editorContentBrowser");
-    _contentExplorer->initFromVFS();
-    _contentExplorer->setFilterMode(FileExplorer::FilterMode::Both);
-    _contentExplorer->setSelectionMode(FileExplorer::SelectionMode::File);
-    _contentExplorer->setLeftPanelWidth(180.0f);
-
-    auto pathText = ui::text("ContentPath").setFontSize(12).setVAlign(EWidgetAlignV::Center);
-    _contentPathText = pathText.share();
-
-    // Row lists are only rebuilt when the directory fingerprint or the entry
-    // scroll window changes. Mounts stay fully materialized; entries use a
-    // keyed visible window plus leading/trailing spacers so scroll extent
-    // stays equal to the full directory height.
-    _contentMountList = ui::column("ContentMounts").setSpacing(kEditorListRowSpacing).share();
-    auto entryLeading = ui::sizeBox("ContentEntryLeading");
-    _contentEntryLeading = entryLeading.share();
-    auto entryRows = ui::column("ContentEntryRows").setSpacing(kEditorListRowSpacing);
-    _contentEntryRows = entryRows.share();
-    auto entryTrailing = ui::sizeBox("ContentEntryTrailing");
-    _contentEntryTrailing = entryTrailing.share();
-    _contentEntryList = ui::column("ContentEntries")
-                            .setSpacing(0.0f)
-                            .child(std::move(entryLeading))
-                            .child(std::move(entryRows))
-                            .child(std::move(entryTrailing))
-                            .share();
-    _contentMountReconciler.reset();
-    _contentEntryReconciler.reset();
-    _contentEntryScrollOffset = 0.0f;
-    _contentEntryViewportHeight = 0.0f;
-
-    auto backButton = ui::button("ContentBack")
-                          .setOnClick([this]() {
-                              if (_contentExplorer) {
-                                  _contentExplorer->navigateBack();
-                              }
-                          })
-                          .child(ui::text("ContentBack_Label")
-                                     .setText("< Back")
-                                     .setFontSize(12)
-                                     .setHAlign(EWidgetAlignH::Center)
-                                     .setVAlign(EWidgetAlignV::Center));
-
-    auto searchField = ui::textField("ContentSearch")
-                           .setOnTextChanged([this](const std::string& text) {
-                               if (_contentExplorer) {
-                                   _contentExplorer->setSearchText(text);
-                                   _bContentRowsDirty = true;
-                               }
-                           });
-    _contentSearchField = searchField.share();
-
-    // Header: back / current path / name filter.
-    auto header = ui::row("ContentBrowser.ContainerHeader", "Header")
-                      .setSpacing(6.0f)
-                      .child(std::move(backButton), ui::boxSlot().preferredSize({52.0f, 22.0f}))
-                      .child(std::move(pathText))
-                      .child(std::move(searchField), ui::boxSlot().preferredSize({140.0f, 22.0f}));
-
-    // Body: mount list (fixed width) + entry list (fill). Scroll hosts keep
-    // long directory listings from overflowing and give wheel navigation;
-    // each host owns exactly the one list container.
-    auto mountScroll = ui::scroll("ContentMountScroll")
-                           .child(_contentMountList, ui::overlaySlot().fill());
-    auto entryScroll = ui::scroll("ContentEntryScroll")
-                           .child(_contentEntryList, ui::overlaySlot().fill());
-    _contentEntryScroll = entryScroll.share();
-    auto body = ui::row("ContentBody")
-                    .setSpacing(4.0f)
-                    .child(std::move(mountScroll), ui::boxSlot().preferredSize({180.0f, 0.0f}))
-                    .child(std::move(entryScroll), ui::boxSlot().fill());
-
-    auto root = ui::column("ContentBrowserRoot")
-                    .setSpacing(2.0f)
-                    .setPadding({4.0f, 4.0f})
-                    .child(std::move(header), ui::boxSlot().preferredSize({0.0f, 26.0f}))
-                    .child(std::move(body), ui::boxSlot().fill());
-    return root.release();
-}
-
 void EditorSurface::syncPresentation(App& app, float dt)
 {
     if (_bBuiltAsProjectBrowser) {
@@ -1335,19 +855,26 @@ void EditorSurface::syncPresentation(App& app, float dt)
         _inspectorTab->sync(*_tree);
     }
     syncToolbar(app);
-    syncContentBrowser();
+    if (_contentBrowserTab) {
+        _contentBrowserTab->sync(*_tree);
+    }
+    if (_assetInspectorTab) {
+        _assetInspectorTab->sync();
+    }
+    if (_uiDesignerTab) {
+        _uiDesignerTab->sync(*_tree);
+    }
+    if (_runtimeToolsTab) {
+        _runtimeToolsTab->sync();
+    }
+    if (_debugImagesTab) {
+        _debugImagesTab->sync(*_tree);
+    }
     if (_filePicker) {
         _filePicker->sync(*_tree);
     }
     if (_settings) {
         _settings->sync(*_tree);
-    }
-    if (_tabRegistry) {
-        for (const auto& tab : _tabRegistry->tabs()) {
-            if (tab.sync) {
-                tab.sync(*_layer, *_tree);
-            }
-        }
     }
     if (_statsText) {
         const float fps = dt > 0.0f ? 1.0f / dt : 0.0f;
@@ -1494,238 +1021,6 @@ void EditorSurface::syncToolbar(App& app)
                         : app.isSimulationMode() ? "SIMULATING"
                                                  : "EDIT";
     _toolbarModeText->setText(label);
-}
-
-void EditorSurface::syncContentBrowser()
-{
-    if (!_contentExplorer || !_contentPathText || !_tree) {
-        return;
-    }
-
-    // Fingerprint: mount list identity + active mount + current directory +
-    // entry summary. Rows are only rebuilt when one of these actually changed,
-    // so typing in the search field or walking directories does not detach/
-    // re-attach rows every frame.
-    std::string fingerprint;
-    if (const FileExplorer::MountPoint* active = _contentExplorer->getActiveMountPoint()) {
-        fingerprint += active->name;
-        fingerprint += '|';
-    }
-    fingerprint += _contentExplorer->getCurrentDirectory().string();
-    fingerprint += '|';
-
-    std::vector<FileExplorer::FEntry> entries;
-    _contentExplorer->collectEntries(entries);
-    for (const auto& entry : entries) {
-        fingerprint += entry.name;
-        fingerprint += entry.bIsDirectory ? "/" : ";";
-    }
-    fingerprint += "|search:";
-    fingerprint += _contentExplorer->getSearchText();
-    fingerprint += "|selected:";
-    fingerprint += _contentExplorer->getSelectedPath().string();
-
-    if (fingerprint != _contentFingerprint) {
-        _contentFingerprint = std::move(fingerprint);
-        _bContentRowsDirty = true;
-        if (_contentEntryScroll) {
-            _contentEntryScroll->setScrollOffset(0.0f);
-            _contentEntryScrollOffset = 0.0f;
-        }
-    }
-    if (_contentEntryScroll && _contentEntryScroll->isAttached()) {
-        const float offset = _contentEntryScroll->getScrollOffset();
-        const float viewportHeight = _contentEntryScroll->getLayoutRect().extent.y;
-        if (offset != _contentEntryScrollOffset || viewportHeight != _contentEntryViewportHeight) {
-            _contentEntryScrollOffset = offset;
-            _contentEntryViewportHeight = viewportHeight;
-            _bContentRowsDirty = true;
-        }
-    }
-    if (_bContentRowsDirty && _contentMountList && _contentEntryList && _contentEntryRows &&
-        _contentMountList->isAttached() && _contentEntryList->isAttached() && _contentEntryRows->isAttached()) {
-        rebuildContentRows();
-        _bContentRowsDirty = false;
-    }
-    if (_contentSearchField && _tree->getFocused() != _contentSearchField.get()) {
-        _contentSearchField->setText(_contentExplorer->getSearchText());
-    }
-}
-
-void EditorSurface::rebuildContentRows()
-{
-    if (!_contentExplorer || !_tree || !_contentMountList || !_contentEntryRows) {
-        return;
-    }
-
-    const FileExplorer::MountPoint* active = _contentExplorer->getActiveMountPoint();
-    const std::filesystem::path selectedPath = _contentExplorer->getSelectedPath();
-    std::vector<FileExplorer::FEntry> entries;
-    _contentExplorer->collectEntries(entries);
-
-    if (!_contentMountReconciler) {
-        _contentMountReconciler = std::make_unique<UIKeyedChildReconciler>(
-            *_tree, *_contentMountList, makeContentRowFactory());
-    }
-    if (!_contentEntryReconciler) {
-        _contentEntryReconciler = std::make_unique<UIKeyedChildReconciler>(
-            *_tree, *_contentEntryRows, makeContentRowFactory());
-    }
-
-    std::vector<std::string> mountKeys;
-    mountKeys.reserve(_contentExplorer->getMountPoints().size());
-    for (const auto& mp : _contentExplorer->getMountPoints()) {
-        mountKeys.push_back("ContentMount_" + mp.name);
-    }
-    _contentMountReconciler->reconcile(
-        mountKeys,
-        [this, active](UIElement& child, const std::string&, size_t index) {
-            const auto& mp = _contentExplorer->getMountPoints()[index];
-            updateContentRow(child,
-                             mp.name,
-                             mp.name,
-                             active != nullptr && active->name == mp.name,
-                             [this](const std::string& itemId) { selectContentMount(itemId); },
-                             [this](const std::string& itemId) { selectContentMount(itemId); });
-        },
-        bindEditorListRowSlot);
-
-    std::vector<std::string> entryKeys;
-    entryKeys.reserve(entries.size());
-    for (const auto& entry : entries) {
-        entryKeys.push_back("ContentEntry_" + entry.name);
-    }
-    const FKeyedVisibleWindow window = computeKeyedVisibleWindow(entryKeys.size(),
-                                                                kEditorListRowHeight,
-                                                                kEditorListRowSpacing,
-                                                                _contentEntryViewportHeight,
-                                                                _contentEntryScrollOffset,
-                                                                kEditorListOverscan);
-    if (_contentEntryLeading) {
-        _contentEntryLeading->setHeightOverride(window.leadingExtent);
-    }
-    if (_contentEntryTrailing) {
-        _contentEntryTrailing->setHeightOverride(window.trailingExtent);
-    }
-    const std::vector<std::string> visibleKeys = sliceKeyedVisibleWindow(entryKeys, window);
-    _contentEntryReconciler->reconcile(
-        visibleKeys,
-        [this, &entries, window, selectedPath](UIElement& child, const std::string&, size_t index) {
-            const size_t itemIndex = window.first + index;
-            const auto& entry = entries[itemIndex];
-            const std::filesystem::path path = entry.path;
-            const bool bDir = entry.bIsDirectory;
-            updateContentRow(child,
-                             bDir ? entry.name + "/" : entry.name,
-                             entry.name,
-                             selectedPath == path,
-                             [this, path, bDir](const std::string&) { selectContentItem(path, bDir); },
-                             [this, path, bDir](const std::string&) { activateContentItem(path, bDir); });
-        },
-        bindEditorListRowSlot);
-
-    if (_contentPathText) {
-        std::string pathText = _contentExplorer->getCurrentDirectory().string();
-        if (active) {
-            pathText = active->name + ": " + pathText;
-        }
-        _contentPathText->setText(pathText);
-    }
-}
-
-void EditorSurface::selectContentMount(const std::string& itemId)
-{
-    if (!_contentExplorer) {
-        return;
-    }
-    for (const auto& candidate : _contentExplorer->getMountPoints()) {
-        if (candidate.name == itemId) {
-            _contentExplorer->selectMountPoint(candidate);
-            break;
-        }
-    }
-}
-
-void EditorSurface::selectContentItem(const std::filesystem::path& path, bool bIsDirectory)
-{
-    if (!_contentExplorer) {
-        return;
-    }
-    _contentExplorer->setSelectedPath(path);
-    _bContentRowsDirty = true;
-    if (!_layer || bIsDirectory) {
-        return;
-    }
-
-    std::string assetPath = path_utils::pathToUtf8String(path);
-    if (VirtualFileSystem* vfs = VirtualFileSystem::get()) {
-        assetPath = vfs->toVfsPath(assetPath);
-    }
-    const auto isTexturePath = [](std::string_view value) {
-        return value.ends_with(".png") || value.ends_with(".jpg") || value.ends_with(".jpeg") ||
-               value.ends_with(".tga") || value.ends_with(".bmp") || value.ends_with(".hdr");
-    };
-    if (isTexturePath(assetPath)) {
-        _layer->inspectAsset(assetPath);
-    }
-}
-
-void EditorSurface::activateContentItem(const std::filesystem::path& path, bool bIsDirectory)
-{
-    if (!_contentExplorer) {
-        return;
-    }
-    if (bIsDirectory) {
-        _contentExplorer->navigateInto(path);
-        return;
-    }
-    // Scene files open through the scene services (frame task so the open
-    // lands outside the input dispatch), everything else just selects.
-    std::string utf8Path = path_utils::pathToUtf8String(path);
-    if (utf8Path.ends_with(".scene.json")) {
-        if (App* app = App::get()) {
-            const std::string scenePath = std::move(utf8Path);
-            app->getTaskManager().registerFrameTask([scenePath]() {
-                App::get()->getSceneServices().loadScene(scenePath);
-            });
-        }
-    }
-}
-
-void EditorSurface::rebuildUIDesignerInspector(EditorLayer& /*layer*/, WidgetTree& tree, UIElement* selected)
-{
-    std::string fingerprint = "none";
-    if (selected) {
-        fingerprint = selected->_typeId + ":" + std::to_string(reinterpret_cast<uintptr_t>(selected));
-    }
-    if (fingerprint == _uiDesignerInspectorFingerprint) {
-        return;
-    }
-
-    if (_uiDesignerInspectorSection && _uiDesignerInspectorSection->isAttached()) {
-        tree.detach(*_uiDesignerInspectorSection);
-    }
-    _uiDesignerInspectorSection.reset();
-    _uiDesignerInspectorFingerprint = std::move(fingerprint);
-
-    if (!selected || !_uiDesignerInspectorHost) {
-        return;
-    }
-
-    PropertyGraph graph = PropertyGraph::project(selected->getTypeIndex(), {selected});
-    if (!graph.hasRetainedEditors()) {
-        return;
-    }
-
-    auto section = std::make_shared<EditorAutoPropertySection>(
-        "UIDesignerInspectorSection",
-        std::move(graph),
-        _undo.get(),
-        std::string("uidesigner:") + selected->_name);
-    if (!tree.attach(*_uiDesignerInspectorHost, section).valid()) {
-        return;
-    }
-    _uiDesignerInspectorSection = std::move(section);
 }
 
 void EditorSurface::openSceneSaveDialog()

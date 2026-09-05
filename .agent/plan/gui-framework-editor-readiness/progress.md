@@ -1342,3 +1342,15 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 ### 边界
 
 - equality、integer、enum、容器 key capability 尚未迁移；容器 mutation rollback 仍待完成。
+
+## Phase 10E remaining tab owners checkpoint（2026-09-06）
+
+- 落地在 `.agent/plan/gui-editor-structure/` C2：抽出 `EditorContentBrowserTab` /
+  `EditorAssetInspectorTab` / `EditorUIDesignerTab` / `EditorRuntimeToolsTab`。
+- 删除 `EditorTabRegistry` callback 袋；`EditorSurface` 只编排 `tab->build/sync`。
+- 验证：`xmake b ya-game-editor`；dock/layout closure tests 102/102；editor targeted tests 10/10。
+
+### 边界
+
+- Hierarchy / Viewport / Menu / Dock persist / dialogs 仍在 Surface（chrome 编排）。
+- domain panels 仍名 `*Panel`；不接 10F；release gates 仍为 Windows/MSVC、OpenGL、soak。

@@ -63,8 +63,9 @@ AppKernel
 ```
 
 `EditorSurface::tick` 是编辑器 chrome 的阅读入口。tab 内容必须有独立 owner
-（`EditorInspectorTab` / `EditorDebugImagesTab` / 后续 Content、Asset、UI Designer、
-Runtime Tools）；Surface 只编排 shell、dock persist、viewport host 和 dialogs。
+（`EditorInspectorTab` / `EditorDebugImagesTab` / `EditorContentBrowserTab` /
+`EditorAssetInspectorTab` / `EditorUIDesignerTab` / `EditorRuntimeToolsTab`）；
+Surface 只编排 shell、dock persist、viewport host 和 dialogs。
 不要再往 Surface 堆 tab 控件指针，也不要用 `EditorTabRegistry` 这种 `std::function`
 袋子假装 owner。长线见 `.agent/plan/gui-editor-structure/`。
 
@@ -77,8 +78,10 @@ Runtime Tools）；Surface 只编排 shell、dock persist、viewport host 和 di
   candidate；capture/focus/popup/modal/drag 都是 tree 级 route policy。`WidgetTree` 持有
   persistent pointer state、pointer path、focus path 和 route trace；`WidgetTreeDump`
   输出 `pointer`、`focusPath`、`lastRoute`（policy/path/phase/handled/result）。route callback
-  可 detach 自身，executor 会持有 path 并重查 membership。drag&drop 会话
-  （`beginDrag/updateDrag/endDrag/cancelDrag`，payload 为 string）由树管理，目标控件实现
+  可 detach 自身，executor 会持有 path 并重查 membership。  drag&drop 会话（`beginDrag/updateDrag/endDrag/cancelDrag`，payload 为
+  `UIDragDropOperation`）由树管理。扩展靠子类（`FDockPanelDragDropOp` /
+  `FTreeReorderDragDropOp` / `UIStringDragDropOperation`），目标用
+  `as<T>()` / `isType()`。目标控件实现
   `canAcceptDrop/onDrop/setDropHighlight`。
   文本焦点：`UITextField` 消费 `KeyTyped`（IME 提交）、按码点 Backspace/Delete，以及
   primary+C/X/V（Cmd macOS / Ctrl 别处）经 `WidgetTree` clipboard。默认内存缓冲；
@@ -215,6 +218,8 @@ Runtime Tools）；Surface 只编排 shell、dock persist、viewport host 和 di
 
 - `EditorSurface::tick` 是 chrome 编排入口：`rebuild-if-needed` → window metrics →
   sync tabs/chrome → `buildSnapshot` → viewport host。tab 内容不堆回 Surface。
+  Content / Asset / UI Designer / Runtime Tools / Inspector / Debug Images 是独立
+  owner。不要再引入 `EditorTabRegistry` 这种 `std::function` 袋子。
   结构收口见 `.agent/plan/gui-editor-structure/`。
 - 启动时 **WidgetTree 唯一 chrome**：整窗 `EditorSurface` + `replayUIFrameSnapshot`；3D 仍离屏
   compose，树只采样那张 RT。`--editor-chrome=imgui` / `editor.chrome.host=imgui` 会被忽略并打 WARN。
@@ -241,7 +246,7 @@ Runtime Tools）；Surface 只编排 shell、dock persist、viewport host 和 di
 - `ActionMap` 是 identity 命令表（`GUI/Binding/ActionMap.h`）：菜单、快捷键、toolbar 都 `execute(id)`。`FActionChord::primary` 在 macOS 是 Cmd、别处是 Ctrl。WidgetTree 未处理的 KeyPressed 才走 shortcut；文本焦点下只匹配带 modifier 的 chord。`UIMenu::FItem::fromAction` 生成同一 execute 的菜单行。
 - `UndoStack` 是 identity 撤销历史（`GUI/Binding/UndoStack.h`）：`push` 记录已应用的 undo/redo 闭包，不在 push 时调用 redo。`beginMerge`/`endMerge` 把同一 `mergeKey` 的连续 push 收成一步（拖动）；`UndoTransaction` 把嵌套 push 收成一步。栈不持有 Entity*。`edit.undo` / `edit.redo` 走 ActionMap（macOS Redo 是 Cmd+Shift+Z，别处 Ctrl+Y）。Inspector 拖动 `UIDragFloat` 在 `_onDragBegan/Ended` 开闭 merge；`setValue(..., false)` 是 sync，不进 undo。Gizmo / viewport 选择仍未接入。
 - `PropertyGraph::project` 是反射字段 → editor field model 的入口（`PropertyAccessor::collectLeaves` + `PropertyProjectionRegistry`）。单实例 typed get/set/equals/validation 在 `Core/Reflection/PropertyAccessor`；`PropertyHandle` 只做多选 mixed、undo copy/restore、asset picker kind 和 owner callback。Transform projection 负责显示名和 `setPosition/setRotation/setScale` 写回。Inspector 对多选的 **交集** component 物化 `EditorAutoPropertySection`；`UIDragFloat` mixed 显示 "—"，编辑写回全部 instance，undo 按 instance 快照恢复。enum 字段走 `UIComboBox`；`.color()` 元数据的 `glm::vec3`/`glm::vec4` 走 `UIColorEdit`（非 color vec3 仍走 DragFloat）。`TextureRef`/`ModelRef`/`MeshRef` 走 path `UITextField` + Browse；Browse 经 `EditorAssetPickerCallback`（widgettree：`EditorLayer::setAssetPickerHandler` → `EditorSurface::openAssetPickerDialog`；legacy imgui：`FilePicker`；`EditorInspectorTab` 注入，framework 不依赖 `EditorLayer`）。`PropertyHandle::validationError` 转调 `PropertyAccessor` 的 manipulate spec 范围；`hasAssetResolveError` 对 failed resolve 画 error fill；`UIDragFloat`/`UITextField` `setError` 画 error fill。`UIImage` 对缺失 asset / `setResourceMissing` 画 error fill。没有 retained 可编辑字段的类型跳过。ImGui `DetailsView` 实现已在 Phase 8N 删除；`EditorInspectorTab` 是实体/component 唯一正式 Inspector UI，并显示 Game UI Entry 摘要 + Open in UI Designer。
-- `EditorSurface` Content Browser：`FileExplorer` 管 mount/目录/搜索枚举；`UIKeyedChildReconciler` + `EditorListRows.h` 物化 mount/entry 行；entry 列表用 `computeKeyedVisibleWindow` 窗口化。fingerprint 含 search + selected path；`selectContentItem` 写 `setSelectedPath` 并对纹理调 `inspectAsset`。ImGui Content Browser panel 已删。legacy `FilePicker` 图标在 `EditorLayer::onAttach` 加载。
+- `EditorSurface` Content Browser：`EditorContentBrowserTab` 持有 `FileExplorer` 与 keyed window；fingerprint 含 search + selected path；选中纹理调 `inspectAsset`。legacy `FilePicker` 图标在 `EditorLayer::onAttach` 加载。
 - `UITreeView` 在 `UIScrollViewport` 内只 paint 可见行窗口（`computeKeyedVisibleWindow` + `getPaintedRowCount`）；`EditorSurface` Hierarchy 用 scroll 包裹。flatten/hit-test 仍读全量可见行；无 per-row widget。`bindFilter` + `HierarchyFilter` 搜索框过滤节点；`setReorderable` + `moveEditorHierarchyEntity` 支持 scene 实体拖放重排（`ui:` 条目仍不可重排）。ImGui `SceneHierarchyPanel::sceneTree` 已删（Phase 8O）；`SceneHierarchyPanel` 仅保留 viewport 选择总线 API。
 - Viewport overlay：`FEditorViewportHostState` / `IEditorViewportOverlay` / `EditorViewportOverlayHost`；
   `EditorSurface::syncViewportHostState` + hover/focus overlay dispatch；gizmo 绘制不再经

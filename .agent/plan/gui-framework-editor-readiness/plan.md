@@ -294,7 +294,7 @@ Render2D compose / window or offscreen presentation
 - settings dialog 自己持有 overlay 与 sampler/overlay/startup-scene 控件。
 - inspector 行显示叶名，nested 字段用 group header；chrome 度量走 `editor_density`。
 - `EditorSurface` 不再维护 picker / settings overlay 成员。
-- 其余 tab owner 是后续 checkpoint。
+- 其余 tab owner 已由 `.agent/plan/gui-editor-structure/` C2 落地。
 
 ## 6. 优先级与依赖
 

@@ -25,9 +25,13 @@
     },
     {
       "id": "editor_surface_tab_owners",
-      "status": "pending",
+      "status": "implemented",
       "phase": "C2",
-      "evidence": []
+      "evidence": [
+        "EditorContentBrowserTab/EditorAssetInspectorTab/EditorUIDesignerTab/EditorRuntimeToolsTab",
+        "EditorTabRegistry deleted",
+        "EditorSurface.h no longer holds those tab widget pointers"
+      ]
     },
     {
       "id": "gui_inputextras_split",

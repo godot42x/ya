@@ -1,5 +1,19 @@
 # Progress
 
+## C2 当前 checkpoint（2026-09-06）
+
+- 抽出 `EditorContentBrowserTab` / `EditorAssetInspectorTab` / `EditorUIDesignerTab` / `EditorRuntimeToolsTab`。
+- 删除 `EditorTabRegistry` callback 袋；`EditorSurface::tick` / `buildEditorChrome` / `syncPresentation` 只编排 `tab->build/sync`。
+- `EditorSurface.h` 不再持有 content/designer/runtime/asset 控件指针。
+- 验证：`xmake b ya-game-editor`；`xmake r ya-gui-closure-test -- --gtest_filter='WidgetLayoutTest.*:DockNodeTest.*:WidgetTreeTest.Dock*'`；`xmake r ya-testing -- --gtest_filter='EditorListRowsTest.*:EditorFilePickerDialogTest.*:EditorHierarchyOpsTest.*:FileExplorerNavigationTest.*'`。
+
+### C2 保留项
+
+- C3 InputExtras 拆分与 Dock drag helper 未做。
+- Hierarchy / Viewport / Menu / Dock persist / dialogs 仍在 Surface（chrome 编排）。
+- `UIDesignerPanel` / `SceneHierarchyPanel` / `AssetInspectorPanel` 仍是 domain model 原名。
+- 不合并 `GUIApp` 与 `ya::App`。
+
 ## C1 当前 checkpoint（2026-09-06）
 
 - 删除无实例 leftover：`GUIWorkbenchPanel`、`FrameStatsPanel`、`ContentBrowserPanel` 及公开转发头。

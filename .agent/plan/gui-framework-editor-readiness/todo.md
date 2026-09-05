@@ -126,7 +126,7 @@
 - [x] Phase 10E：合并 retained file/save-as/asset picker 为 `EditorFilePickerDialog`（`EditorSurface` 只做宿主 open/sync）。
 - [x] Phase 10E：抽出 `EditorSettingsDialog`（bindings 宿主，不把 overlay/控件留在 `EditorSurface`）。
 - [x] Phase 10E：editor density/token 收口（inspector 叶标签 + 分组标题 + `editor_density`；底栏 tab 短标题）。
-- [ ] Phase 10E：其余 tab owner（仅稳定边界；禁止按行数切文件）。落地线改到 `.agent/plan/gui-editor-structure/` C2，不在本计划继续堆 Surface。
+- [x] Phase 10E：其余 tab owner（仅稳定边界；禁止按行数切文件）。落地在 `.agent/plan/gui-editor-structure/` C2。
 - [ ] Windows/MSVC 组合回归（本机未跑；未通过则不得宣称 retained editor ready）。
 - [ ] OpenGL GUI/editor presentation（`GUIAppHost` 现为 Vulkan-only）。
 

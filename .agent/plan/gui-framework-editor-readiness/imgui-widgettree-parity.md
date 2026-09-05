@@ -221,7 +221,7 @@ Hierarchy tree CRUD remains a retained-UI gap, not an ImGui chrome blocker.
 11. ~~**10E** — Collapse retained file/save-as/asset pickers into `EditorFilePickerDialog`~~ ✅  
 12. ~~**10E** — Extract `EditorSettingsDialog` overlay owner~~ ✅  
 13. ~~**10E** — Inspector leaf labels + `editor_density` tokens + short dock tabs~~ ✅  
-14. **10E follow-up** — remaining stable tab owners; leftover chrome literals  
+14. ~~**10E follow-up** — remaining stable tab owners~~ ✅（落地 `gui-editor-structure` C2）；leftover chrome literals 仍开放  
 15. Release blockers — XP-WIN, XP-OGL, SOAK-HR, `imgui-local`  
 
 ---
