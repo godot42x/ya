@@ -2,6 +2,7 @@
 
 #include "Core/Common/AssetRef.h"
 #include "Core/Reflection/PropertyAccessor.h"
+#include "GameEditor/Inspector/PropertyCapabilityRegistry.h"
 #include "GameEditor/Inspector/PropertyEditorMetadata.h"
 #include "reflects-core/lib.h"
 
@@ -125,17 +126,8 @@ std::optional<EEditorAssetPickerKind> PropertyHandle::assetRefKind() const
     if (!isAssetRef()) {
         return std::nullopt;
     }
-    const type_index_t type = PropertyAccessor::valueType(_slot);
-    if (type == refl::type_index_v<TextureRef>) {
-        return EEditorAssetPickerKind::Texture;
-    }
-    if (type == refl::type_index_v<ModelRef>) {
-        return EEditorAssetPickerKind::Model;
-    }
-    if (type == refl::type_index_v<MeshRef>) {
-        return EEditorAssetPickerKind::Mesh;
-    }
-    return std::nullopt;
+    registerBuiltinPropertyCapabilities();
+    return PropertyCapabilityRegistry::instance().assetRefKind(PropertyAccessor::valueType(_slot));
 }
 
 bool PropertyHandle::isMixed() const

@@ -1332,3 +1332,13 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 
 - 容器 mutation 尚未有可恢复 snapshot（尤其 vector/map 的结构和值），因此仍依赖全实例 preflight；自定义容器异常回滚留待 10F-4。
 - restoreInteger/restoreEnum/restoreColor/restoreAssetPath 等专用路径尚未统一到同一快照 helper。
+
+## Phase 10F asset capability registry checkpoint（2026-09-05）
+
+- 新增 GameEditor `PropertyCapabilityRegistry`，将 TextureRef/ModelRef/MeshRef 到 asset picker kind 的映射从 PropertyHandle 移出。
+- 内建 capability 通过一次性注册安装；PropertyHandle 只查询 capability，不再维护类型分支。
+- 验证：`xmake b ya-game-editor`、`xmake b ya-testing`；asset-ref Inspector targeted 2/2 通过。
+
+### 边界
+
+- equality、integer、enum、容器 key capability 尚未迁移；容器 mutation rollback 仍待完成。
