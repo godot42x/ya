@@ -8,6 +8,7 @@
 #include "GameEditor/UI/EditorRuntimeToolsTab.h"
 #include "GameEditor/UI/EditorStatsTab.h"
 #include "GameEditor/UI/EditorUIDesignerTab.h"
+#include "GameEditor/UI/EditorViewportTab.h"
 #include "GameEditor/UI/EditorWorkbenchTab.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -34,6 +35,14 @@ const FEditorTabSpawner* EditorTabSpawnerRegistry::find(std::string_view tabId) 
 
 void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
 {
+    registry.add({
+        .tabId = "viewport",
+        .title = "Viewport",
+        .toolsMenuLabel = "Viewport",
+        .spawn = [](FEditorTabSpawnContext& ctx) {
+            return std::make_shared<EditorViewportTab>(ctx.viewportHost);
+        },
+    });
     registry.add({
         .tabId = "hierarchy",
         .title = "Hierarchy",

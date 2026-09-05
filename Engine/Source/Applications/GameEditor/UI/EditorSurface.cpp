@@ -62,16 +62,6 @@ constexpr float kMenuHeight     = editor_density::kMenuHeight;
 constexpr float kToolbarHeight  = editor_density::kToolbarHeight;
 constexpr float kChromeTop      = kMenuHeight + kToolbarHeight;
 
-bool widgetOrAncestor(const UIElement* node, const UIElement* target)
-{
-    for (const UIElement* cursor = node; cursor; cursor = cursor->getParent()) {
-        if (cursor == target) {
-            return true;
-        }
-    }
-    return false;
-}
-
 DockPanelId dockPanelIdForKey(const FDockTreeModel& model, const char* stableKey)
 {
     if (const FDockPanelRecord* record = model.findPanelByStableKey(stableKey)) {
@@ -134,7 +124,7 @@ void EditorSurface::shutdown()
     _dockFloatingHost.reset();
     _dockSpace.reset();
     _dockContext.reset();
-    _viewportImage.reset();
+    _viewportHost = nullptr;
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
     _projectList.reset();
@@ -163,7 +153,8 @@ void EditorSurface::tick(App& app, float dt)
 
     applyWindowMetrics(app);
     _tree->tick(dt);
-    syncPresentation(app, dt);
+    syncShellChrome(app);
+    pushViewportDisplay();
     UIFrameBuildContext snapshotCtx;
     snapshotCtx.textureResolver = &resolveGameUITexture;
     _snapshot = _tree->buildSnapshot(snapshotCtx);
@@ -179,7 +170,7 @@ void EditorSurface::rebuild(App& app)
     _dockFloatingHost.reset();
     _dockSpace.reset();
     _dockContext.reset();
-    _viewportImage.reset();
+    _viewportHost = nullptr;
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
     _projectList.reset();
@@ -534,18 +525,8 @@ FEditorTabSpawnContext EditorSurface::makeSpawnContext()
         .actions = *_actions,
         .undo = *_undo,
         .authoringParent = _root.get(),
+        .viewportHost = this,
     };
-}
-
-std::shared_ptr<UIElement> EditorSurface::buildViewportBody()
-{
-    auto viewportImage = ui::image("ViewportImage");
-    _viewportImage     = viewportImage.share();
-    _viewportImage->_hitFilter = EWidgetHitFilter::Stop;
-    return ui::panel("ViewportBody")
-        .setStyleKey("panel.canvas")
-        .child(std::move(viewportImage), ui::canvasSlot().fill())
-        .release();
 }
 
 void EditorSurface::buildToolsMenu()
@@ -555,10 +536,6 @@ void EditorSurface::buildToolsMenu()
     }
     _menuBar->addItem("Tools", [this]() {
         std::vector<UIMenu::FItem> items;
-        items.push_back({
-            .label  = "Viewport",
-            .action = [this]() { invokeTab("viewport"); },
-        });
         if (_tabSpawners) {
             for (const FEditorTabSpawner& spawner : _tabSpawners->all()) {
                 if (spawner.toolsMenuLabel.empty()) {
@@ -602,11 +579,7 @@ bool EditorSurface::materializeTab(std::string_view tabId)
     }
     std::shared_ptr<UIElement> widget;
     std::string title{tabId};
-    if (tabId == "viewport") {
-        widget = buildViewportBody();
-        title = "Viewport";
-    }
-    else if (_tabSpawners) {
+    if (_tabSpawners) {
         if (const FEditorTabSpawner* spawner = _tabSpawners->find(tabId)) {
             FEditorTabSpawnContext ctx = makeSpawnContext();
             widget = spawner->spawn(ctx);
@@ -788,9 +761,8 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
     menu->openAt(*_tree, windowPoint);
 }
 
-void EditorSurface::syncPresentation(App& app, float dt)
+void EditorSurface::syncShellChrome(App& app)
 {
-    (void)dt;
     if (_bBuiltAsProjectBrowser) {
         std::vector<UITreeView::FNode> projects;
         const auto& discovered = _layer->getDiscoveredProjects();
@@ -810,7 +782,6 @@ void EditorSurface::syncPresentation(App& app, float dt)
         return;
     }
 
-    syncViewportTexture();
     syncToolbar(app);
     if (_filePicker) {
         _filePicker->sync(*_tree);
@@ -820,16 +791,15 @@ void EditorSurface::syncPresentation(App& app, float dt)
     }
 }
 
-void EditorSurface::syncViewportTexture()
+void EditorSurface::pushViewportDisplay()
 {
-    if (!_viewportImage) {
+    if (!_viewportHost || !_layer) {
         return;
     }
     const auto& display = _layer->getViewportDisplayImage();
     const bool expectsViewport = _layer->getHierarchyScene() != nullptr;
     if (!display || !display->isValid() || !display->getImageView()) {
-        _viewportImage->setTexture(nullptr);
-        _viewportImage->setResourceMissing(expectsViewport);
+        _viewportHost->setDisplayImage(nullptr, expectsViewport);
         _viewportTexture.reset();
         _viewportImageResource.reset();
         _viewportImageView.reset();
@@ -839,15 +809,13 @@ void EditorSurface::syncViewportTexture()
     auto sourceImage     = display->getImageShared();
     auto sourceImageView = display->getImageViewShared();
     if (!sourceImage || !sourceImageView) {
-        _viewportImage->setTexture(nullptr);
-        _viewportImage->setResourceMissing(expectsViewport);
+        _viewportHost->setDisplayImage(nullptr, expectsViewport);
         return;
     }
-    _viewportImage->setResourceMissing(false);
     if (_viewportTexture &&
         _viewportImageResource == sourceImage &&
         _viewportImageView == sourceImageView) {
-        _viewportImage->setTexture(_viewportTexture);
+        _viewportHost->setDisplayImage(_viewportTexture, false);
         return;
     }
 
@@ -856,7 +824,7 @@ void EditorSurface::syncViewportTexture()
     _viewportTexture       = Texture::wrap(_viewportImageResource,
                                      _viewportImageView,
                                      "EditorSurfaceViewport");
-    _viewportImage->setTexture(_viewportTexture);
+    _viewportHost->setDisplayImage(_viewportTexture, false);
 }
 
 void EditorSurface::syncToolbar(App& app)
@@ -950,23 +918,24 @@ void EditorSurface::openEditorSettingsDialog()
 
 void EditorSurface::publishViewportRect()
 {
-    if (!_viewportImage || !_layer) {
+    if (!_viewportHost || !_layer) {
         return;
     }
-    _layer->notifyViewportWidgetRect(_viewportImage->_layoutRect);
-    const bool hovered = widgetOrAncestor(_tree->getHovered(), _viewportImage.get());
-    const bool focused = widgetOrAncestor(_tree->getFocused(), _viewportImage.get()) || hovered;
+    const Rect2D rect = _viewportHost->imageRect();
+    _layer->notifyViewportWidgetRect(rect);
+    const bool hovered = _viewportHost->isHovered();
+    const bool focused = _viewportHost->isFocused() || hovered;
     _layer->setViewportHoverFocus(hovered, focused);
 }
 
 void EditorSurface::syncViewportHostState(App& app)
 {
-    if (!_viewportImage) {
+    if (!_viewportHost) {
         return;
     }
 
     FEditorViewportHostState state{};
-    state.widgetRect = _viewportImage->_layoutRect;
+    state.widgetRect = _viewportHost->imageRect();
     state.extent     = state.widgetRect.extent;
     state.bHovered   = isViewportHovered();
     state.bFocused   = isViewportFocused();
@@ -984,8 +953,8 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
         return EWidgetRouteResult::NotHandled;
     }
 
-    if (_viewportImage && (isViewportHovered() || isViewportFocused())) {
-        const glm::vec2 localPoint = windowPoint - _viewportImage->_layoutRect.pos;
+    if (_viewportHost && (isViewportHovered() || isViewportFocused())) {
+        const glm::vec2 localPoint = windowPoint - _viewportHost->imageRect().pos;
         const EWidgetRouteResult overlayResult = _viewportOverlayHost.dispatchEvent(event, localPoint);
         if (overlayResult != EWidgetRouteResult::NotHandled) {
             return overlayResult;
@@ -1015,12 +984,12 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
 
 bool EditorSurface::isViewportHovered() const
 {
-    return _tree && widgetOrAncestor(_tree->getHovered(), _viewportImage.get());
+    return _viewportHost && _viewportHost->isHovered();
 }
 
 bool EditorSurface::isViewportFocused() const
 {
-    return _tree && widgetOrAncestor(_tree->getFocused(), _viewportImage.get());
+    return _viewportHost && _viewportHost->isFocused();
 }
 
 bool EditorSurface::wantsTextInput() const

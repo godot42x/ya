@@ -32,3 +32,13 @@
 
 - Viewport 仍由 Surface `buildViewportBody` 物化。
 - Surface 仍有 `syncPresentation`（viewport 纹理 / toolbar / dialogs / project browser）。
+
+## P3 当前 checkpoint
+
+- Viewport 由 `EditorViewportTab` spawn；`IEditorViewportHost` / `IEditorViewportHostSink` 让 Surface 推 display image、读 rect/hover/focus，不再持有 `_viewportImage`。
+- `EditorSurface::tick`：window metrics → `WidgetTree::tick` → shell chrome → push viewport display → snapshot → overlay bridge。没有 `syncPresentation`。
+- 验证：`ya-game-editor` 构建通过；`EditorViewportTabTest`、`EditorViewportOverlayHostTest`、`EditorInputContractTest` 通过。
+
+### P3 保留项
+
+- `syncShellChrome` 仍每帧刷 toolbar / dialogs / project browser；P4 把 toolbar 改 `onAppStateChanged` 并清残留 helper。

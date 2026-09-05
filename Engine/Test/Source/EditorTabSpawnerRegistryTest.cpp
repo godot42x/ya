@@ -37,7 +37,7 @@ TEST(EditorTabSpawnerRegistryTest, AddFindRejectsDuplicatesAndSpawnDoesNotReregi
     EXPECT_EQ(registry.find("missing"), nullptr);
 }
 
-TEST(EditorTabSpawnerRegistryTest, BuiltinRegistryIncludesHierarchy)
+TEST(EditorTabSpawnerRegistryTest, BuiltinRegistryIncludesHierarchyAndViewport)
 {
     EditorTabSpawnerRegistry registry;
     registerBuiltinEditorTabSpawners(registry);
@@ -46,6 +46,12 @@ TEST(EditorTabSpawnerRegistryTest, BuiltinRegistryIncludesHierarchy)
     EXPECT_EQ(hierarchy->title, "Hierarchy");
     EXPECT_EQ(hierarchy->toolsMenuLabel, "Hierarchy");
     EXPECT_TRUE(static_cast<bool>(hierarchy->spawn));
+
+    const FEditorTabSpawner* viewport = registry.find("viewport");
+    ASSERT_NE(viewport, nullptr);
+    EXPECT_EQ(viewport->title, "Viewport");
+    EXPECT_EQ(viewport->toolsMenuLabel, "Viewport");
+    EXPECT_TRUE(static_cast<bool>(viewport->spawn));
 }
 
 } // namespace ya

@@ -37,7 +37,6 @@ struct UIDockFloatingHost;
 struct UIElement;
 struct UIContainer;
 struct UIButton;
-struct UIImage;
 struct UIMenuBar;
 struct UIPanel;
 struct UIPopupOverlay;
@@ -55,9 +54,9 @@ enum class EWidgetRouteResult : uint8_t;
 /// Game Editor chrome owned as one WidgetTree.
 ///
 /// tick: rebuild-if-needed -> window metrics -> WidgetTree::tick ->
-/// sync remaining chrome -> buildSnapshot -> viewport host.
+/// shell chrome -> buildSnapshot -> viewport host bridge.
 /// rebuild: new tree/theme/dock -> shell chrome -> spawn tabs into FDockContext.
-struct EditorSurface
+struct EditorSurface : IEditorViewportHostSink
 {
   private:
     EditorLayer* _layer = nullptr;
@@ -72,7 +71,6 @@ struct EditorSurface
     std::shared_ptr<FDockContext>    _dockContext;
     std::shared_ptr<UIDockSpace>     _dockSpace;
     std::shared_ptr<UIDockFloatingHost> _dockFloatingHost;
-    std::shared_ptr<UIImage>         _viewportImage;
     std::shared_ptr<UITreeView>      _projectList;
     std::shared_ptr<ReactiveList<UITreeView::FNode>> _projectRoots;
     std::shared_ptr<SelectionModel>  _selection = std::make_shared<SelectionModel>();
@@ -90,6 +88,7 @@ struct EditorSurface
 
     EditorViewportOverlayHost _viewportOverlayHost;
     std::shared_ptr<EditorViewportGizmoOverlay> _viewportGizmoOverlay;
+    IEditorViewportHost* _viewportHost = nullptr;
 
   public:
     EditorSurface();
@@ -124,6 +123,7 @@ struct EditorSurface
     [[nodiscard]] EditorViewportOverlayHost& viewportOverlayHost() { return _viewportOverlayHost; }
     [[nodiscard]] const EditorViewportOverlayHost& viewportOverlayHost() const { return _viewportOverlayHost; }
     [[nodiscard]] bool isViewportOverlayActive() const { return _viewportOverlayHost.isActive(); }
+    void setViewportHost(IEditorViewportHost* host) override { _viewportHost = host; }
     void openSceneSaveDialog();
     void openFilePickerDialog(FEditorFilePickerRequest request);
     void openAssetPickerDialog(EEditorAssetPickerKind kind,
@@ -136,15 +136,14 @@ struct EditorSurface
     void buildProjectBrowser(App& app);
     void buildEditorChrome(App& app);
     void registerEditorActions();
-    void syncPresentation(App& app, float dt);
-    void syncViewportTexture();
+    void syncShellChrome(App& app);
+    void pushViewportDisplay();
     void syncToolbar(App& app);
     void publishViewportRect();
     void syncViewportHostState(App& app);
     bool invokeTab(std::string_view tabId);
     bool materializeTab(std::string_view tabId);
     [[nodiscard]] FEditorTabSpawnContext makeSpawnContext();
-    std::shared_ptr<UIElement> buildViewportBody();
     void buildToolsMenu();
     void materializeWorkspaceTabs();
     void applyWindowMetrics(App& app);

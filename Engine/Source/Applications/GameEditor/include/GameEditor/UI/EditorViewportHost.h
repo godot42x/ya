@@ -10,6 +10,8 @@
 namespace ya
 {
 
+struct Texture;
+
 /// Snapshot of the retained viewport host each frame. Overlays read this in
 /// viewport-local coordinates (origin = top-left of the viewport image rect).
 struct FEditorViewportHostState
@@ -20,6 +22,23 @@ struct FEditorViewportHostState
     bool      bFocused  = false;
     glm::mat4 view{1.0f};
     glm::mat4 projection{1.0f};
+};
+
+/// Narrow viewport-widget contract for the editor shell. Surface pushes the
+/// display image and reads rect/hover/focus; it does not retain tab widgets.
+struct IEditorViewportHost
+{
+    virtual ~IEditorViewportHost() = default;
+    virtual void setDisplayImage(const std::shared_ptr<Texture>& texture, bool missing) = 0;
+    [[nodiscard]] virtual Rect2D imageRect() const = 0;
+    [[nodiscard]] virtual bool isHovered() const = 0;
+    [[nodiscard]] virtual bool isFocused() const = 0;
+};
+
+struct IEditorViewportHostSink
+{
+    virtual ~IEditorViewportHostSink() = default;
+    virtual void setViewportHost(IEditorViewportHost* host) = 0;
 };
 
 /// Retained viewport overlay contract. Implementations (gizmo, selection
