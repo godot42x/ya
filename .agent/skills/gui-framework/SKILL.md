@@ -67,7 +67,7 @@ AppKernel
            modules.onPresentation
              EditorModule → EditorSurface::tick
                rebuild-if-needed → window metrics
-               → sync tabs/chrome → buildSnapshot
+               → WidgetTree::tick → sync tabs/chrome → buildSnapshot
                → publishViewportRect → syncViewportHostState
              replayUIFrameSnapshot(..., EditorToolSurface)
 ```
@@ -229,7 +229,7 @@ Surface 只编排 shell、dock persist、viewport host 和 dialogs。
 ## GameEditor chrome
 
 - `EditorSurface::tick` 是 chrome 编排入口：`rebuild-if-needed` → window metrics →
-  sync tabs/chrome → `buildSnapshot` → viewport host。tab 内容不堆回 Surface。
+  `WidgetTree::tick` → sync tabs/chrome → `buildSnapshot` → viewport host。tab 内容不堆回 Surface。
   Content / Asset / UI Designer / Runtime Tools / Inspector / Debug Images 是独立
   owner。不要再引入 `EditorTabRegistry` 这种 `std::function` 袋子。
   结构收口见 `.agent/plan/gui-editor-structure/`。

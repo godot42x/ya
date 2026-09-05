@@ -213,6 +213,7 @@ void EditorSurface::tick(App& app, float dt)
     }
 
     applyWindowMetrics(app);
+    _tree->tick(dt);
     syncPresentation(app, dt);
     _snapshot = _tree->buildSnapshot(UIFrameBuildContext{});
     publishViewportRect();

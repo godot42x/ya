@@ -62,8 +62,8 @@ enum class EWidgetRouteResult : uint8_t;
 
 /// Game Editor chrome owned as one WidgetTree.
 ///
-/// tick: rebuild-if-needed -> window metrics -> sync tabs/chrome ->
-/// buildSnapshot -> viewport host.
+/// tick: rebuild-if-needed -> window metrics -> WidgetTree::tick ->
+/// sync tabs/chrome -> buildSnapshot -> viewport host.
 /// rebuild: new tree/theme/dock -> shell chrome -> tab.build() into FDockContext.
 /// Tab content lives on owner objects; this surface keeps shell, dock persist,
 /// viewport host, and dialogs.

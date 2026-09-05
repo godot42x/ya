@@ -22,6 +22,7 @@
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/UIBehavior.h"
 
 #include <gtest/gtest.h>
@@ -195,6 +196,40 @@ struct DragDetectWidget final : public UIElement
         return UIStringDragDropOperation::make("detected", "Detected", "test.detected");
     }
     bool detected = false;
+};
+
+struct TickCounterWidget final : public UIElement
+{
+    explicit TickCounterWidget(std::string name) : UIElement(std::move(name)) {}
+
+    int ticks = 0;
+    bool bTick = true;
+
+    [[nodiscard]] bool wantsTick() const override { return bTick; }
+    void tick(float) override { ++ticks; }
+};
+
+struct TickHostCompound final : public UICompoundWidget
+{
+    explicit TickHostCompound(std::string name) : UICompoundWidget(std::move(name)) {}
+
+    int ticks = 0;
+    std::shared_ptr<TickCounterWidget> child;
+
+    void setTickEnabled(bool enabled = true) { enableTick(enabled); }
+
+    void tick(float deltaSeconds) override
+    {
+        UIElement::tick(deltaSeconds);
+        ++ticks;
+    }
+
+  protected:
+    void construct() override
+    {
+        child = std::make_shared<TickCounterWidget>("TickChild");
+        addDetachedChild(child);
+    }
 };
 
 struct TestBehavior final : public UIBehavior
@@ -477,6 +512,55 @@ TEST(WidgetTreeTest, BehaviorLifecycleTickAndInvalidationFollowOwner)
     EXPECT_EQ(behavior->detached, 1);
     tree.tick(1.0f / 60.0f);
     EXPECT_EQ(behavior->tickHits, 1);
+}
+
+TEST(WidgetTreeTest, TickVisitsOnlyAttachedVisibleOptInNodes)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto idle = std::make_shared<TickCounterWidget>("Idle");
+    idle->bTick = false;
+    auto live = std::make_shared<TickCounterWidget>("Live");
+    auto hidden = std::make_shared<TickCounterWidget>("Hidden");
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {80.0f, 40.0f};
+
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), idle, slot).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), live, slot).valid());
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), hidden, slot).valid());
+    hidden->setVisibility(EWidgetVisibility::Hidden);
+
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(idle->ticks, 0);
+    EXPECT_EQ(live->ticks, 1);
+    EXPECT_EQ(hidden->ticks, 0);
+
+    tree.detach(*live);
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(live->ticks, 1);
+}
+
+TEST(WidgetTreeTest, TickRecursesCompoundChildrenWithoutCompoundDrivingThem)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto host = std::make_shared<TickHostCompound>("TickHost");
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {120.0f, 80.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, slot).valid());
+    ASSERT_NE(host->child, nullptr);
+
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(host->ticks, 0);
+    EXPECT_EQ(host->child->ticks, 1);
+
+    host->setTickEnabled();
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(host->ticks, 1);
+    EXPECT_EQ(host->child->ticks, 2);
+
+    host->setVisibility(EWidgetVisibility::Collapsed);
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(host->ticks, 1);
+    EXPECT_EQ(host->child->ticks, 2);
 }
 
 TEST(WidgetTreeTest, BehaviorParticipatesInPreviewTargetAndBubbleRouting)
