@@ -1,5 +1,18 @@
 # Progress
 
+## K3 当前 checkpoint（2026-09-06）
+
+- `UIColorEdit` 色板打开 SV 方 + hue 条 + hex/rgba 选色器（`FColorPicker` 单 paint 面，不是 `UICompoundWidget`）。
+- 点选 SV/hue 实时改色且不关 popup；靠近窗口底边时 picker 翻到色板上方。
+- RGBA 通道条仍是次要路径。Inspector `EditorAutoPropertySection` 已用同一 `UIColorEdit`，零改。
+- 验证：`ToolControlsTest.ColorEditSwatchOpensSvHuePicker`（含 hex 提交）；headless `gallery_color_picker.jsonl` + `gallery_acceptance.jsonl`。
+
+### K3 保留项
+
+- K4–E3 未做。
+- 不合并 `GUIApp` 与 `ya::App`；不拆 WidgetTree。
+- 未宣称 retained editor ready。
+
 ## K2 当前 checkpoint（2026-09-06）
 
 - `FTextEditState` 是 TextField / DragFloat 编辑态 / SpinBox 编辑态的唯一选区+插入实现；无第三套迷你编辑器。

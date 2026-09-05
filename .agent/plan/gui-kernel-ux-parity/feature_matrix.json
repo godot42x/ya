@@ -37,9 +37,14 @@
     },
     {
       "id": "color_picker",
-      "status": "pending",
+      "status": "implemented",
       "phase": "K3",
-      "evidence": []
+      "evidence": [
+        "UIColorEdit SV/hue/hex FColorPicker popup",
+        "ToolControlsTest.ColorEditSwatchOpensSvHuePicker",
+        "gallery_color_picker.jsonl + gallery_acceptance.jsonl",
+        "EditorAutoPropertySection already uses UIColorEdit"
+      ]
     },
     {
       "id": "dock_tab_close_reorder",

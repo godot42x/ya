@@ -20,6 +20,7 @@
 #include "GUI/Widgets/Controls/TreeView.h"
 #include "GUI/Widgets/Controls/DragFloat.h"
 #include "GUI/Widgets/Controls/SpinBox.h"
+#include "GUI/Widgets/Controls/ColorEdit.h"
 #include "Render/Resources/FontManager.h"
 
 #include <gtest/gtest.h>
@@ -1067,6 +1068,43 @@ TEST(ToolControlsTest, SpinBoxEditReusesTextSelection)
     EXPECT_EQ(tree.dispatchEvent(KeyTypedEvent("2"), at), EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Enter), at), EWidgetRouteResult::HandledExclusive);
     EXPECT_FLOAT_EQ(spin->_value, 2.0f);
+}
+
+TEST(ToolControlsTest, ColorEditSwatchOpensSvHuePicker)
+{
+    WidgetTree tree({.width = 400, .height = 400});
+    auto       edit = std::make_shared<UIColorEdit>("Tint");
+    edit->setColor({1.0f, 1.0f, 1.0f, 1.0f});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {180.0f, 28.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
+    tree.layout();
+
+    EXPECT_FALSE(edit->isPickerOpen());
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(12.0f, 14.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    tree.layout();
+    EXPECT_TRUE(edit->isPickerOpen());
+
+    const glm::vec4 before = edit->_color;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(140.0f, 50.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(140.0f, 50.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_NE(edit->_color, before);
+    EXPECT_TRUE(edit->isPickerOpen());
+
+    // Hex row is below SV (160) + pads + hue bar; commit replaces the live color.
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(80.0f, 237.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(KeyTypedEvent("#FF0000FF"), pointAt(80.0f, 237.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(80.0f, 237.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_NEAR(edit->_color.r, 1.0f, 1e-4f);
+    EXPECT_NEAR(edit->_color.g, 0.0f, 1e-4f);
+    EXPECT_NEAR(edit->_color.b, 0.0f, 1e-4f);
+    EXPECT_TRUE(edit->isPickerOpen());
 }
 
 // === Popup menu ===

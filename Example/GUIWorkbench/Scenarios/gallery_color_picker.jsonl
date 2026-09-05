@@ -1,0 +1,57 @@
+# GUIWorkbench --start-page=Gallery. ColorEdit SV/hue/hex picker:
+# swatch opens ColorPickerOverlay (flips above near the window bottom),
+# SV drag changes saturation/value without dismissing, hex commit writes RGBA.
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"GalleryScroll","control":{"type":"scrollViewport"}}}
+{"checkpoint":"scroll_exists"}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"frame":2}
+{"checkpoint":"scrolled_bottom"}
+{"event":"mouse_press","x":419,"y":536,"button":0}
+{"event":"mouse_release","x":419,"y":536,"button":0}
+{"frame":2}
+{"assert":{"widget":"ColorPickerOverlay","control":{"type":"popupOverlay","modal":false}}}
+{"assert":{"widget":"ColorPicker","control":{"type":"colorPicker"}}}
+{"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","pickerOpen":true}}}
+{"checkpoint":"picker_open"}
+{"event":"mouse_press","x":540,"y":360,"button":0}
+{"event":"mouse_release","x":540,"y":360,"button":0}
+{"frame":2}
+{"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","pickerOpen":true}}}
+{"assert":{"widget":"ColorPicker","control":{"type":"colorPicker","s":{"$gt":0.72},"v":{"$lt":0.78}}}}
+{"checkpoint":"picker_sv_changed"}
+# Hex row sits under the SV square + hue bar (picker flipped above the swatch).
+{"event":"mouse_press","x":490,"y":511,"button":0}
+{"event":"mouse_release","x":490,"y":511,"button":0}
+{"event":"key_typed","text":"#00FF00FF"}
+{"event":"key_press","key":"Enter"}
+{"frame":2}
+{"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","pickerOpen":true,"color":[0.0,1.0,0.0,1.0]}}}
+{"checkpoint":"picker_hex_committed"}
+{"frame":1}

@@ -60,18 +60,27 @@
 {"frame":2}
 {"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","activeChannel":3}}}
 {"checkpoint":"color_channel_selected"}
-# Swatch at ColorEdit+4; palette opens below it.
+# Swatch at ColorEdit+4; SV/hue picker opens (flips above if near the bottom).
 {"event":"mouse_press","x":419,"y":536,"button":0}
 {"event":"mouse_release","x":419,"y":536,"button":0}
 {"frame":2}
-{"assert":{"widget":"ColorPaletteOverlay","control":{"type":"popupOverlay","modal":false}}}
-{"checkpoint":"palette_open"}
-# First palette cell (22px) at overlay origin.
-{"event":"mouse_press","x":421,"y":561,"button":0}
-{"event":"mouse_release","x":421,"y":561,"button":0}
+{"assert":{"widget":"ColorPickerOverlay","control":{"type":"popupOverlay","modal":false}}}
+{"assert":{"widget":"ColorPicker","control":{"type":"colorPicker"}}}
+{"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","pickerOpen":true}}}
+{"checkpoint":"picker_open"}
+# SV square is 8px inside the picker; click toward high saturation.
+{"event":"mouse_press","x":540,"y":360,"button":0}
+{"event":"mouse_release","x":540,"y":360,"button":0}
+{"frame":2}
+{"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","pickerOpen":true}}}
+{"assert":{"widget":"ColorPicker","control":{"type":"colorPicker","s":{"$gt":0.72},"v":{"$lt":0.78}}}}
+{"checkpoint":"picker_sv_changed"}
+# Picker stays open after SV pick; click the shield to dismiss before SearchCombo.
+{"event":"mouse_press","x":80,"y":80,"button":0}
+{"event":"mouse_release","x":80,"y":80,"button":0}
 {"frame":2}
 {"assert":{"layers":{"Popup":{"children":[]}}}}
-{"checkpoint":"palette_picked"}
+{"checkpoint":"picker_dismissed"}
 # SearchCombo ≈ (422,562) 180x24; type 'To' then pick Torus.
 {"event":"mouse_press","x":512,"y":574,"button":0}
 {"event":"mouse_release","x":512,"y":574,"button":0}

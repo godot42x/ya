@@ -3,13 +3,17 @@
 #include "Core/KeyCode.h"
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
+#include "GUI/Widgets/Controls/TextEdit.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <format>
 #include <functional>
-#include <vector>
+#include <optional>
+#include <string>
 
 namespace ya
 {
@@ -17,77 +21,401 @@ namespace ya
 namespace
 {
 
-glm::vec4 hsvToRgb(float h, float s, float v)
+constexpr float kSvSize     = 160.0f;
+constexpr float kHueBarH    = 14.0f;
+constexpr float kPickerPad  = 8.0f;
+constexpr float kHexRowH    = 22.0f;
+constexpr int   kSvCells    = 16;
+constexpr int   kHueCells   = 24;
+
+bool contains(const Rect2D& rect, const glm::vec2& point)
 {
+    return point.x >= rect.pos.x && point.x < rect.pos.x + rect.extent.x &&
+           point.y >= rect.pos.y && point.y < rect.pos.y + rect.extent.y;
+}
+
+glm::vec4 hsvToRgb(float h, float s, float v, float a)
+{
+    h = std::fmod(h, 360.0f);
+    if (h < 0.0f) {
+        h += 360.0f;
+    }
     const float c = v * s;
     const float x = c * (1.0f - std::abs(std::fmod(h / 60.0f, 2.0f) - 1.0f));
     const float m = v - c;
     float       r = 0.0f, g = 0.0f, b = 0.0f;
-    if (h < 60.0f)       { r = c; g = x; }
-    else if (h < 120.0f) { r = x; g = c; }
-    else if (h < 180.0f) { g = c; b = x; }
-    else if (h < 240.0f) { g = x; b = c; }
-    else if (h < 300.0f) { r = x; b = c; }
-    else                 { r = c; b = x; }
-    return {r + m, g + m, b + m, 1.0f};
+    if (h < 60.0f) {
+        r = c;
+        g = x;
+    }
+    else if (h < 120.0f) {
+        r = x;
+        g = c;
+    }
+    else if (h < 180.0f) {
+        g = c;
+        b = x;
+    }
+    else if (h < 240.0f) {
+        g = x;
+        b = c;
+    }
+    else if (h < 300.0f) {
+        r = x;
+        b = c;
+    }
+    else {
+        r = c;
+        b = x;
+    }
+    return {r + m, g + m, b + m, a};
 }
 
-/// Preset color grid (the ColorEdit popup palette): paints an N-column
-/// swatch grid; a press on a cell reports its color.
-class FColorPalette : public UIElement
+void rgbToHsv(const glm::vec3& rgb, float& h, float& s, float& v)
+{
+    const float r    = std::clamp(rgb.r, 0.0f, 1.0f);
+    const float g    = std::clamp(rgb.g, 0.0f, 1.0f);
+    const float b    = std::clamp(rgb.b, 0.0f, 1.0f);
+    const float maxC = std::max(r, std::max(g, b));
+    const float minC = std::min(r, std::min(g, b));
+    const float d    = maxC - minC;
+    v                = maxC;
+    s                = maxC <= 1e-6f ? 0.0f : d / maxC;
+    if (d <= 1e-6f) {
+        return;
+    }
+    if (maxC == r) {
+        h = 60.0f * std::fmod((g - b) / d, 6.0f);
+    }
+    else if (maxC == g) {
+        h = 60.0f * ((b - r) / d + 2.0f);
+    }
+    else {
+        h = 60.0f * ((r - g) / d + 4.0f);
+    }
+    if (h < 0.0f) {
+        h += 360.0f;
+    }
+}
+
+std::string formatHex(const glm::vec4& color)
+{
+    const auto byte = [](float ch) {
+        return static_cast<int>(std::clamp(std::round(ch * 255.0f), 0.0f, 255.0f));
+    };
+    return std::format("#{:02X}{:02X}{:02X}{:02X}", byte(color.r), byte(color.g), byte(color.b), byte(color.a));
+}
+
+std::optional<glm::vec4> parseHex(std::string_view text)
+{
+    std::string hex;
+    hex.reserve(text.size());
+    for (const char ch : text) {
+        if (ch == '#' || ch == ' ') {
+            continue;
+        }
+        hex.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+    }
+    if (hex.size() != 6 && hex.size() != 8) {
+        return std::nullopt;
+    }
+    const auto nibble = [](char c) -> int {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if (c >= 'A' && c <= 'F') {
+            return 10 + (c - 'A');
+        }
+        return -1;
+    };
+    const auto channel = [&](size_t i) -> std::optional<float> {
+        const int hi = nibble(hex[i]);
+        const int lo = nibble(hex[i + 1]);
+        if (hi < 0 || lo < 0) {
+            return std::nullopt;
+        }
+        return static_cast<float>((hi << 4) | lo) / 255.0f;
+    };
+    const auto r = channel(0);
+    const auto g = channel(2);
+    const auto b = channel(4);
+    if (!r || !g || !b) {
+        return std::nullopt;
+    }
+    float a = 1.0f;
+    if (hex.size() == 8) {
+        const auto alpha = channel(6);
+        if (!alpha) {
+            return std::nullopt;
+        }
+        a = *alpha;
+    }
+    return glm::vec4{*r, *g, *b, a};
+}
+
+/// SV square + hue bar + hex/rgba readout. Not a UICompoundWidget: the picker
+/// is one paint/input surface hosted in the ColorEdit popup.
+class FColorPicker : public UIElement
 {
 public:
-    explicit FColorPalette(std::string name) : UIElement(std::move(name), "coloredit")
+    explicit FColorPicker(std::string name) : UIElement(std::move(name), "coloredit")
     {
-        _hitFilter = EWidgetHitFilter::Stop;
-        // 4 rows x 8 columns: hue ring + value steps.
-        for (int row = 0; row < 4; ++row) {
-            const float v = 1.0f - static_cast<float>(row) * 0.22f;
-            for (int col = 0; col < 8; ++col) {
-                _colors.push_back(hsvToRgb(static_cast<float>(col) * 45.0f, 0.75f, v));
-            }
-        }
+        _hitFilter   = EWidgetHitFilter::Stop;
+        _focusPolicy = EWidgetFocusPolicy::Focusable;
     }
 
-    std::function<void(const glm::vec4&)> _onPick;
-    float _cellSize = 22.0f;
-    int   _cols     = 8;
+    std::function<void(const glm::vec4&)> _onColorChanged;
+    float _h = 0.0f;
+    float _s = 0.0f;
+    float _v = 1.0f;
+    float _a = 1.0f;
+
+    void setFromRgba(const glm::vec4& color)
+    {
+        rgbToHsv(glm::vec3(color), _h, _s, _v);
+        _a = color.a;
+        if (!_bEditingHex) {
+            _hexBuffer = formatHex(currentColor());
+            _hexEdit.selectAll(_hexBuffer.size());
+        }
+        invalidateProperty(EUIPropertyImpact::Paint);
+    }
+
+    [[nodiscard]] glm::vec4 currentColor() const { return hsvToRgb(_h, _s, _v, _a); }
+
+    [[nodiscard]] glm::vec2 computeDesiredSize() const override { return computeIntrinsicSize(); }
+    [[nodiscard]] glm::vec2 computeIntrinsicSize() const override
+    {
+        return {kPickerPad * 2.0f + kSvSize, kPickerPad * 3.0f + kSvSize + kHueBarH + kHexRowH};
+    }
+
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override
+    {
+        const glm::vec4 color = currentColor();
+        node["control"]       = {{"type", "colorPicker"},
+                                 {"h", _h},
+                                 {"s", _s},
+                                 {"v", _v},
+                                 {"hex", _hexBuffer},
+                                 {"color", {color.r, color.g, color.b, color.a}}};
+    }
 
     void paintSelf(UIFrameBuilder& builder) override
     {
-        // Nested helper, not UIStyledWidget: no sparse patch / resolved-style
-        // cache. Key "coloredit" still registers theme edges via the uncached
-        // helper so a theme switch repaints the palette.
         const FColorEditStyle style = resolveWidgetStyle<FColorEditStyle>(*this);
         builder.addBrush(_layoutRect, style.backgroundFill);
-        for (size_t i = 0; i < _colors.size(); ++i) {
-            const int col = static_cast<int>(i) % _cols;
-            const int row = static_cast<int>(i) / _cols;
-            builder.addSprite(Rect2D{
-                                  .pos    = {_layoutRect.pos.x + static_cast<float>(col) * _cellSize,
-                                             _layoutRect.pos.y + static_cast<float>(row) * _cellSize},
-                                  .extent = {_cellSize, _cellSize}},
-                              _colors[i], nullptr);
+        const Rect2D sv  = svRect();
+        const Rect2D hue = hueRect();
+        const float  cellW = sv.extent.x / static_cast<float>(kSvCells);
+        const float  cellH = sv.extent.y / static_cast<float>(kSvCells);
+        for (int y = 0; y < kSvCells; ++y) {
+            const float v = 1.0f - (static_cast<float>(y) + 0.5f) / static_cast<float>(kSvCells);
+            for (int x = 0; x < kSvCells; ++x) {
+                const float s = (static_cast<float>(x) + 0.5f) / static_cast<float>(kSvCells);
+                builder.addSprite(Rect2D{.pos    = {sv.pos.x + static_cast<float>(x) * cellW,
+                                                    sv.pos.y + static_cast<float>(y) * cellH},
+                                         .extent = {cellW + 0.5f, cellH + 0.5f}},
+                                  hsvToRgb(_h, s, v, 1.0f),
+                                  nullptr);
+            }
+        }
+        const glm::vec2 cursor{sv.pos.x + _s * sv.extent.x, sv.pos.y + (1.0f - _v) * sv.extent.y};
+        builder.addRectOutline(Rect2D{.pos = cursor - glm::vec2(4.0f), .extent = {8.0f, 8.0f}},
+                               {1.0f, 1.0f, 1.0f, 1.0f},
+                               1.0f);
+
+        const float hueCellW = hue.extent.x / static_cast<float>(kHueCells);
+        for (int i = 0; i < kHueCells; ++i) {
+            const float h = (static_cast<float>(i) + 0.5f) * (360.0f / static_cast<float>(kHueCells));
+            builder.addSprite(Rect2D{.pos    = {hue.pos.x + static_cast<float>(i) * hueCellW, hue.pos.y},
+                                     .extent = {hueCellW + 0.5f, hue.extent.y}},
+                              hsvToRgb(h, 1.0f, 1.0f, 1.0f),
+                              nullptr);
+        }
+        const float hueX = hue.pos.x + (_h / 360.0f) * hue.extent.x;
+        builder.addRectOutline(Rect2D{.pos = {hueX - 2.0f, hue.pos.y}, .extent = {4.0f, hue.extent.y}},
+                               {1.0f, 1.0f, 1.0f, 1.0f},
+                               1.0f);
+
+        auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 12);
+        const Rect2D hex = hexRect();
+        builder.addSprite(hex, currentColor(), nullptr);
+        if (font) {
+            if (_bEditingHex) {
+                textEditPaint(builder,
+                              hex,
+                              _hexBuffer,
+                              _hexEdit,
+                              font,
+                              style.textColor,
+                              style.textColor,
+                              kTextEditSelectionColor,
+                              EWidgetAlignH::Left,
+                              0.0f,
+                              true);
+            }
+            else {
+                builder.addText(hex, _hexBuffer, style.textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
+            }
         }
     }
 
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override
     {
-        if (event.getEventType() == EEvent::MouseButtonPressed &&
-            hitTestLayoutRect(ctx.logicalPoint)) {
-            const int col = static_cast<int>((ctx.logicalPoint.x - _layoutRect.pos.x) / _cellSize);
-            const int row = static_cast<int>((ctx.logicalPoint.y - _layoutRect.pos.y) / _cellSize);
-            const int index = row * _cols + col;
-            if (index >= 0 && index < static_cast<int>(_colors.size()) && _onPick) {
-                _onPick(_colors[index]);
+        const EEvent::T eventType = event.getEventType();
+        if (_bEditingHex) {
+            if (eventType == EEvent::KeyTyped) {
+                textEditInsert(_hexBuffer, _hexEdit, static_cast<const KeyTypedEvent&>(event).getText(), 9);
+                invalidateProperty(EUIPropertyImpact::Paint);
+                return true;
+            }
+            if (eventType == EEvent::KeyPressed) {
+                const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
+                if (keyEvent._keyCode == EKey::Enter) {
+                    commitHex();
+                    return true;
+                }
+                if (keyEvent._keyCode == EKey::Escape) {
+                    _bEditingHex = false;
+                    _hexBuffer   = formatHex(currentColor());
+                    invalidateProperty(EUIPropertyImpact::Paint);
+                    return true;
+                }
+                if (textEditHandleKey(_hexBuffer, _hexEdit, keyEvent, getTree(), 9)) {
+                    invalidateProperty(EUIPropertyImpact::Paint);
+                    return true;
+                }
+            }
+        }
+
+        if (eventType == EEvent::MouseButtonPressed) {
+            const auto& mouse = static_cast<const MouseButtonPressedEvent&>(event);
+            if (mouse.GetMouseButton() != EMouse::Left) {
+                return false;
+            }
+            if (WidgetTree* tree = getTree()) {
+                tree->setFocus(this);
+                tree->setPointerCapture(this);
+            }
+            if (contains(hexRect(), ctx.logicalPoint)) {
+                _bEditingHex = true;
+                _hexBuffer   = formatHex(currentColor());
+                _hexEdit.selectAll(_hexBuffer.size());
+                _drag = EDrag::None;
+                invalidateProperty(EUIPropertyImpact::Paint);
+                return true;
+            }
+            _bEditingHex = false;
+            if (contains(svRect(), ctx.logicalPoint)) {
+                _drag = EDrag::Sv;
+                applySv(ctx.logicalPoint);
+                return true;
+            }
+            if (contains(hueRect(), ctx.logicalPoint)) {
+                _drag = EDrag::Hue;
+                applyHue(ctx.logicalPoint);
+                return true;
+            }
+            _drag = EDrag::None;
+            return true;
+        }
+        if (eventType == EEvent::MouseMoved && ctx.bViaCapture) {
+            if (_drag == EDrag::Sv) {
+                applySv(ctx.logicalPoint);
+            }
+            else if (_drag == EDrag::Hue) {
+                applyHue(ctx.logicalPoint);
+            }
+            return true;
+        }
+        if (eventType == EEvent::MouseButtonReleased) {
+            _drag = EDrag::None;
+            if (WidgetTree* tree = getTree()) {
+                tree->releasePointerCapture(this);
             }
             return true;
         }
         return false;
     }
 
+    void clearTransientInputState() override
+    {
+        _drag        = EDrag::None;
+        _bEditingHex = false;
+    }
+
 private:
-    std::vector<glm::vec4> _colors;
+    enum class EDrag : uint8_t
+    {
+        None,
+        Sv,
+        Hue,
+    };
+
+    [[nodiscard]] Rect2D svRect() const
+    {
+        return Rect2D{.pos    = {_layoutRect.pos.x + kPickerPad, _layoutRect.pos.y + kPickerPad},
+                      .extent = {kSvSize, kSvSize}};
+    }
+    [[nodiscard]] Rect2D hueRect() const
+    {
+        return Rect2D{.pos    = {_layoutRect.pos.x + kPickerPad,
+                                 _layoutRect.pos.y + kPickerPad * 2.0f + kSvSize},
+                      .extent = {kSvSize, kHueBarH}};
+    }
+    [[nodiscard]] Rect2D hexRect() const
+    {
+        return Rect2D{.pos    = {_layoutRect.pos.x + kPickerPad,
+                                 _layoutRect.pos.y + kPickerPad * 3.0f + kSvSize + kHueBarH},
+                      .extent = {kSvSize, kHexRowH}};
+    }
+
+    void emitColor()
+    {
+        const glm::vec4 color = currentColor();
+        if (!_bEditingHex) {
+            _hexBuffer = formatHex(color);
+        }
+        invalidateProperty(EUIPropertyImpact::Paint);
+        if (_onColorChanged) {
+            _onColorChanged(color);
+        }
+    }
+
+    void applySv(const glm::vec2& point)
+    {
+        const Rect2D sv = svRect();
+        _s = std::clamp((point.x - sv.pos.x) / std::max(1.0f, sv.extent.x), 0.0f, 1.0f);
+        _v = std::clamp(1.0f - (point.y - sv.pos.y) / std::max(1.0f, sv.extent.y), 0.0f, 1.0f);
+        emitColor();
+    }
+
+    void applyHue(const glm::vec2& point)
+    {
+        const Rect2D hue = hueRect();
+        _h = std::clamp((point.x - hue.pos.x) / std::max(1.0f, hue.extent.x), 0.0f, 1.0f) * 360.0f;
+        emitColor();
+    }
+
+    void commitHex()
+    {
+        if (const auto parsed = parseHex(_hexBuffer)) {
+            setFromRgba(*parsed);
+            if (_onColorChanged) {
+                _onColorChanged(*parsed);
+            }
+        }
+        else {
+            _hexBuffer = formatHex(currentColor());
+        }
+        _bEditingHex = false;
+        invalidateProperty(EUIPropertyImpact::Paint);
+    }
+
+    EDrag          _drag = EDrag::None;
+    bool           _bEditingHex = false;
+    std::string    _hexBuffer   = "#FFFFFFFF";
+    FTextEditState _hexEdit;
 };
 
 } // namespace
@@ -132,23 +460,28 @@ void UIColorEdit::adjustActiveChannel(float delta)
 void UIColorEdit::openPalette()
 {
     closePalette();
-    auto overlay = std::make_shared<UIPopupOverlay>("ColorPaletteOverlay");
+    auto overlay = std::make_shared<UIPopupOverlay>("ColorPickerOverlay");
     overlay->setStyleKey("popup");
-    overlay->_bModal     = false; // transparent shield: click outside closes
-    overlay->_contentPos = {swatchRect().pos.x, swatchRect().pos.y + swatchRect().extent.y + 4.0f};
+    overlay->_bModal = false;
 
-    auto palette = std::make_shared<FColorPalette>("ColorPaletteGrid");
-    overlay->_contentExtent = {palette->_cellSize * static_cast<float>(palette->_cols),
-                               palette->_cellSize * 4.0f};
-    palette->_onPick = [this, overlay](const glm::vec4& picked)
-    {
-        setColor(picked);
-        overlay->close();
-    };
-    overlay->addDetachedChild(palette);
+    auto picker = std::make_shared<FColorPicker>("ColorPicker");
+    picker->setFromRgba(_color);
+    picker->_onColorChanged = [this](const glm::vec4& picked) { setColor(picked); };
+    const glm::vec2 pickerSize = picker->computeDesiredSize();
+    const Rect2D    swatch     = swatchRect();
+    glm::vec2       pos        = {swatch.pos.x, swatch.pos.y + swatch.extent.y + 4.0f};
+    if (WidgetTree* tree = getTree()) {
+        const float viewH = static_cast<float>(tree->getLogicalExtent().height);
+        if (pos.y + pickerSize.y > viewH && swatch.pos.y - 4.0f - pickerSize.y >= 0.0f) {
+            pos.y = swatch.pos.y - 4.0f - pickerSize.y;
+        }
+    }
+    overlay->_contentPos    = pos;
+    overlay->_contentExtent = pickerSize;
+    overlay->addDetachedChild(picker);
 
     overlay->_onDismiss = [this]() { _paletteOverlay.reset(); };
-    _paletteOverlay = overlay;
+    _paletteOverlay     = overlay;
     if (WidgetTree* tree = getTree()) {
         overlay->open(*tree);
     }
@@ -176,7 +509,6 @@ void UIColorEdit::paintSelf(UIFrameBuilder& builder)
         return;
     }
 
-    // Channel strip: four cells, the active one highlighted.
     const float stripX = swatchRect().pos.x + _swatchSize + 8.0f;
     const float cellW  = 26.0f;
     const float cellH  = 12.0f;
@@ -217,7 +549,6 @@ bool UIColorEdit::handleInputEvent(const Event& event, const WidgetEventContext&
     }
 
     if (eventType == EEvent::MouseButtonPressed) {
-        // Channel strip click: select the active channel (no drag).
         const float stripX = swatchRect().pos.x + _swatchSize + 8.0f;
         const float cellW  = 26.0f;
         const float cellH  = 12.0f;
@@ -227,11 +558,7 @@ bool UIColorEdit::handleInputEvent(const Event& event, const WidgetEventContext&
                 .pos    = {stripX + static_cast<float>(ch) * (cellW + 2.0f), cellY},
                 .extent = {cellW, cellH},
             };
-            const bool bInside = ctx.logicalPoint.x >= cell.pos.x &&
-                                 ctx.logicalPoint.x <= cell.pos.x + cell.extent.x &&
-                                 ctx.logicalPoint.y >= cell.pos.y &&
-                                 ctx.logicalPoint.y <= cell.pos.y + cell.extent.y;
-            if (bInside) {
+            if (contains(cell, ctx.logicalPoint)) {
                 if (_activeChannel != ch) {
                     _activeChannel = ch;
                     markPaintDirty();
@@ -239,17 +566,15 @@ bool UIColorEdit::handleInputEvent(const Event& event, const WidgetEventContext&
                 return true;
             }
         }
-        // Swatch click: open the preset palette popup.
-        const Rect2D swatch = swatchRect();
-        const bool bOnSwatch = ctx.logicalPoint.x >= swatch.pos.x &&
-                               ctx.logicalPoint.x <= swatch.pos.x + swatch.extent.x &&
-                               ctx.logicalPoint.y >= swatch.pos.y &&
-                               ctx.logicalPoint.y <= swatch.pos.y + swatch.extent.y;
-        if (bOnSwatch) {
-            openPalette();
+        if (contains(swatchRect(), ctx.logicalPoint)) {
+            if (isPickerOpen()) {
+                closePalette();
+            }
+            else {
+                openPalette();
+            }
             return true;
         }
-        // Anywhere else in the control: drag adjusts the active channel.
         if (hitTestLayoutRect(ctx.logicalPoint)) {
             _bDragging = true;
             _dragStart = ctx.logicalPoint;

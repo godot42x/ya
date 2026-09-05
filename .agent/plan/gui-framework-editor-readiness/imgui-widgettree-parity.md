@@ -1,6 +1,6 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-06 (gui-kernel-ux-parity K0: path vs feel)  
+> **As of:** 2026-09-06 (gui-kernel-ux-parity K3: ColorEdit SV/hue/hex picker)  
 > **Default chrome:** WidgetTree only (`EditorSurface`)  
 > **Legacy chrome:** `--editor-chrome=imgui` is ignored (WARN); `onImGuiRender` deleted  
 > **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, but leftover helpers still require it. **Hand-feel** is a separate gate: see `.agent/plan/gui-kernel-ux-parity/`.
@@ -102,7 +102,7 @@
 | Feature | Legacy ImGui | WidgetTree | Status | Notes |
 |---------|--------------|------------|--------|-------|
 | DetailsView stack | `DetailsView` + `TypeRenderer` tree | — | ⚫ | Deleted 8N; was uncalled after 8C |
-| Entity/component fields | `TypeRenderer::renderReflectedType` | `PropertyGraph` + `EditorAutoPropertySection` | ✅ | Leaf display names + nested group headers; `editor_density` label column; retained path covers scalars/vectors/enum/color/asset-ref, nested flatten, sequence/map mutation, TextureRef preview |
+| Entity/component fields | `TypeRenderer::renderReflectedType` | `PropertyGraph` + `EditorAutoPropertySection` | ✅ | Leaf display names + nested group headers; `editor_density` label column; retained path covers scalars/vectors/enum/color/asset-ref, nested flatten, sequence/map mutation, TextureRef preview. **Feel (K3):** `UIColorEdit` swatch opens SV/hue/hex picker (channel strip secondary) |
 | Multi-selection mixed values | DetailsView | `PropertyGraph` intersection + em-dash | ✅ | |
 | Asset path Browse | `FilePicker` | `EditorSurface` asset picker popup | ✅ | Phase 8M |
 | Game UI Entry summary | DetailsView | `EditorInspectorTab` widget entry block | ✅ | Open in UI Designer button |
@@ -215,7 +215,7 @@ Kernel feel (not another `EditorSurface` split) — `.agent/plan/gui-kernel-ux-p
 1. **K0** — Freeze path vs feel (this file + skill)  
 2. **K1** — Typed `UIDragDropOperation` only payload ✅ (`1c66af41`; this checkpoint records evidence)  
 3. **K2** — `UITextField` selection + DragFloat/SpinBox edit reuse + I-beam ✅  
-4. **K3** — ColorEdit SV/hue/hex picker  
+4. **K3** — ColorEdit SV/hue/hex picker ✅  
 5. **K4** — Dock leaf tab close + same-leaf reorder  
 6. **E1** — Hierarchy tree right-click CRUD via existing `ActionMap`  
 7. **E2** — Toolbar / Content Browser icons  
