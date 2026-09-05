@@ -237,7 +237,8 @@ TEST(PropertyAccessorTest, DynamicSequenceAppendRemoveAndClear)
     EXPECT_TRUE(reflection::PropertyAccessor::isDynamicSequence(weights));
     EXPECT_FALSE(reflection::PropertyAccessor::isDynamicSequence(cls->properties.at("files")));
     EXPECT_EQ(reflection::PropertyAccessor::containerSize(weights, &owner), 2u);
-    EXPECT_TRUE(reflection::PropertyAccessor::appendEmpty(weights, &owner));
+    EXPECT_EQ(reflection::PropertyAccessor::appendEmptyResult(weights, &owner).status,
+              reflection::EPropertyMutationStatus::Changed);
     EXPECT_EQ(owner.weights.size(), 3u);
     EXPECT_TRUE(reflection::PropertyAccessor::removeAt(weights, &owner, 1));
     EXPECT_EQ(owner.weights.size(), 2u);

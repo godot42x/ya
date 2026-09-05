@@ -94,11 +94,17 @@ struct YA_CORE_API PropertyAccessor
     [[nodiscard]] static void* addressMutable(const FPropertySlot& slot, void* instance);
 
     [[nodiscard]] static size_t containerSize(const Property& property, const void* instance);
+    [[nodiscard]] static FPropertyMutationResult appendEmptyResult(const Property& property, void* instance);
     static bool appendEmpty(const Property& property, void* instance);
+    [[nodiscard]] static FPropertyMutationResult removeAtResult(const Property& property, void* instance, int index);
     static bool removeAt(const Property& property, void* instance, int index);
+    [[nodiscard]] static FPropertyMutationResult insertEmptyAtResult(const Property& property, void* instance, int index);
     static bool insertEmptyAt(const Property& property, void* instance, int index);
+    [[nodiscard]] static FPropertyMutationResult clearContainerResult(const Property& property, void* instance);
     static bool clearContainer(const Property& property, void* instance);
+    [[nodiscard]] static FPropertyMutationResult removeMapKeyResult(const Property& property, void* instance, std::string_view key);
     static bool removeMapKey(const Property& property, void* instance, std::string_view key);
+    [[nodiscard]] static FPropertyMutationResult insertMapKeyResult(const Property& property, void* instance, std::string_view key);
     static bool insertMapKey(const Property& property, void* instance, std::string_view key);
 
     [[nodiscard]] static bool equals(const FPropertySlot& slot, const void* a, const void* b);

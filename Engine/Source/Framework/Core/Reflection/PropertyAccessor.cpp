@@ -270,73 +270,137 @@ size_t PropertyAccessor::containerSize(const Property& property, const void* ins
     return accessor->getSize(container);
 }
 
-bool PropertyAccessor::appendEmpty(const Property& property, void* instance)
+FPropertyMutationResult PropertyAccessor::appendEmptyResult(const Property& property, void* instance)
 {
     IContainerProperty* accessor = containerOf(property);
     void* container = containerPtr(property, instance);
-    if (!isEditable(property) || !accessor || !container || accessor->isFixedSize()) {
-        return false;
+    if (!accessor) {
+        return {EPropertyMutationStatus::Unsupported};
+    }
+    if (!isEditable(property)) {
+        return {EPropertyMutationStatus::ReadOnly};
+    }
+    if (!container) {
+        return {EPropertyMutationStatus::Unavailable};
+    }
+    if (accessor->isFixedSize()) {
+        return {EPropertyMutationStatus::Unsupported};
     }
     const size_t before = accessor->getSize(container);
     accessor->addEmptyEntry(container);
-    return accessor->getSize(container) > before;
+    return {accessor->getSize(container) > before ? EPropertyMutationStatus::Changed
+                                                   : EPropertyMutationStatus::Unchanged};
+}
+
+bool PropertyAccessor::appendEmpty(const Property& property, void* instance)
+{
+    return appendEmptyResult(property, instance).changed();
+}
+
+FPropertyMutationResult PropertyAccessor::removeAtResult(const Property& property, void* instance, int index)
+{
+    IContainerProperty* accessor = containerOf(property);
+    void* container = containerPtr(property, instance);
+    if (!accessor) {
+        return {EPropertyMutationStatus::Unsupported};
+    }
+    if (!isEditable(property)) {
+        return {EPropertyMutationStatus::ReadOnly};
+    }
+    if (!container) {
+        return {EPropertyMutationStatus::Unavailable};
+    }
+    if (accessor->isFixedSize() || index < 0) {
+        return {EPropertyMutationStatus::Unsupported};
+    }
+    if (static_cast<size_t>(index) >= accessor->getSize(container)) {
+        return {EPropertyMutationStatus::Unavailable};
+    }
+    accessor->removeElement(container, static_cast<size_t>(index));
+    return {EPropertyMutationStatus::Changed};
 }
 
 bool PropertyAccessor::removeAt(const Property& property, void* instance, int index)
 {
+    return removeAtResult(property, instance, index).changed();
+}
+
+FPropertyMutationResult PropertyAccessor::insertEmptyAtResult(const Property& property, void* instance, int index)
+{
     IContainerProperty* accessor = containerOf(property);
     void* container = containerPtr(property, instance);
-    if (!isEditable(property) || !accessor || !container || accessor->isFixedSize() || index < 0) {
-        return false;
+    if (!accessor) {
+        return {EPropertyMutationStatus::Unsupported};
     }
-    if (static_cast<size_t>(index) >= accessor->getSize(container)) {
-        return false;
+    if (!isEditable(property)) {
+        return {EPropertyMutationStatus::ReadOnly};
     }
-    accessor->removeElement(container, static_cast<size_t>(index));
-    return true;
+    if (!container) {
+        return {EPropertyMutationStatus::Unavailable};
+    }
+    if (accessor->isFixedSize() || index < 0) {
+        return {EPropertyMutationStatus::Unsupported};
+    }
+    if (static_cast<size_t>(index) > accessor->getSize(container)) {
+        return {EPropertyMutationStatus::Unavailable};
+    }
+    const size_t before = accessor->getSize(container);
+    accessor->insertEmptyAt(container, static_cast<size_t>(index));
+    return {accessor->getSize(container) > before ? EPropertyMutationStatus::Changed
+                                                   : EPropertyMutationStatus::Unchanged};
 }
 
 bool PropertyAccessor::insertEmptyAt(const Property& property, void* instance, int index)
 {
+    return insertEmptyAtResult(property, instance, index).changed();
+}
+
+FPropertyMutationResult PropertyAccessor::clearContainerResult(const Property& property, void* instance)
+{
     IContainerProperty* accessor = containerOf(property);
     void* container = containerPtr(property, instance);
-    if (!isEditable(property) || !accessor || !container || accessor->isFixedSize() || index < 0) {
-        return false;
+    if (!accessor) {
+        return {EPropertyMutationStatus::Unsupported};
     }
-    const size_t before = accessor->getSize(container);
-    accessor->insertEmptyAt(container, static_cast<size_t>(index));
-    return accessor->getSize(container) > before;
+    if (!isEditable(property)) {
+        return {EPropertyMutationStatus::ReadOnly};
+    }
+    if (!container || accessor->isFixedSize()) {
+        return {container ? EPropertyMutationStatus::Unsupported : EPropertyMutationStatus::Unavailable};
+    }
+    if (accessor->getSize(container) == 0) {
+        return {EPropertyMutationStatus::Unchanged};
+    }
+    accessor->clear(container);
+    return {EPropertyMutationStatus::Changed};
 }
 
 bool PropertyAccessor::clearContainer(const Property& property, void* instance)
 {
-    IContainerProperty* accessor = containerOf(property);
-    void* container = containerPtr(property, instance);
-    if (!isEditable(property) || !accessor || !container || accessor->isFixedSize()) {
-        return false;
-    }
-    if (accessor->getSize(container) == 0) {
-        return false;
-    }
-    accessor->clear(container);
-    return true;
+    return clearContainerResult(property, instance).changed();
 }
 
-bool PropertyAccessor::removeMapKey(const Property& property, void* instance, std::string_view key)
+FPropertyMutationResult PropertyAccessor::removeMapKeyResult(const Property& property, void* instance, std::string_view key)
 {
     IContainerProperty* accessor = containerOf(property);
     void* container = containerPtr(property, instance);
-    if (!isEditable(property) || !accessor || !container || !accessor->isMapLike()) {
-        return false;
+    if (!accessor || !accessor->isMapLike()) {
+        return {EPropertyMutationStatus::Unsupported};
+    }
+    if (!isEditable(property)) {
+        return {EPropertyMutationStatus::ReadOnly};
+    }
+    if (!container) {
+        return {EPropertyMutationStatus::Unavailable};
     }
     const std::string owned(key);
     void* value = accessor->getValuePtr(container, owned);
     if (!value) {
-        return false;
+        return {EPropertyMutationStatus::Unavailable};
     }
     if (accessor->getKeyTypeIndex() == refl::type_index_v<std::string>) {
         accessor->removeByKey(container, const_cast<std::string*>(&owned));
-        return true;
+        return {EPropertyMutationStatus::Changed};
     }
     if (accessor->getKeyTypeIndex() == refl::type_index_v<int> ||
         accessor->getKeyTypeIndex() == refl::type_index_v<int32_t>) {
@@ -345,30 +409,47 @@ bool PropertyAccessor::removeMapKey(const Property& property, void* instance, st
             parsed = static_cast<int32_t>(std::stoi(owned));
         }
         catch (...) {
-            return false;
+            return {EPropertyMutationStatus::TypeMismatch};
         }
         accessor->removeByKey(container, &parsed);
-        return true;
+        return {EPropertyMutationStatus::Changed};
     }
-    return false;
+    return {EPropertyMutationStatus::Unsupported};
+}
+
+bool PropertyAccessor::removeMapKey(const Property& property, void* instance, std::string_view key)
+{
+    return removeMapKeyResult(property, instance, key).changed();
+}
+
+FPropertyMutationResult PropertyAccessor::insertMapKeyResult(const Property& property, void* instance, std::string_view key)
+{
+    IContainerProperty* accessor = containerOf(property);
+    void* container = containerPtr(property, instance);
+    if (!accessor || !accessor->isMapLike()) {
+        return {EPropertyMutationStatus::Unsupported};
+    }
+    if (!isEditable(property)) {
+        return {EPropertyMutationStatus::ReadOnly};
+    }
+    if (!container) {
+        return {EPropertyMutationStatus::Unavailable};
+    }
+    if (accessor->getKeyTypeIndex() != refl::type_index_v<std::string>) {
+        return {EPropertyMutationStatus::Unsupported};
+    }
+    std::string owned(key);
+    if (accessor->getValuePtr(container, owned)) {
+        return {EPropertyMutationStatus::Unchanged};
+    }
+    accessor->insertElement(container, &owned, nullptr);
+    return {accessor->getValuePtr(container, owned) != nullptr ? EPropertyMutationStatus::Changed
+                                                                : EPropertyMutationStatus::Unavailable};
 }
 
 bool PropertyAccessor::insertMapKey(const Property& property, void* instance, std::string_view key)
 {
-    IContainerProperty* accessor = containerOf(property);
-    void* container = containerPtr(property, instance);
-    if (!isEditable(property) || !accessor || !container || !accessor->isMapLike()) {
-        return false;
-    }
-    if (accessor->getKeyTypeIndex() != refl::type_index_v<std::string>) {
-        return false;
-    }
-    std::string owned(key);
-    if (accessor->getValuePtr(container, owned)) {
-        return false;
-    }
-    accessor->insertElement(container, &owned, nullptr);
-    return accessor->getValuePtr(container, owned) != nullptr;
+    return insertMapKeyResult(property, instance, key).changed();
 }
 
 bool PropertyAccessor::equals(const FPropertySlot& slot, const void* a, const void* b)
