@@ -15,6 +15,40 @@ namespace ya
 
 struct WidgetTree;
 
+/// Horizontal alignment inside a parent-owned canvas / overlay slot, and for
+/// painted text. Lives with layout slots rather than the widget kernel.
+enum class EWidgetAlignH : uint8_t
+{
+    Left,
+    Center,
+    Right,
+};
+
+/// Vertical alignment inside a parent-owned canvas / overlay slot, and for
+/// painted text.
+enum class EWidgetAlignV : uint8_t
+{
+    Top,
+    Center,
+    Bottom,
+};
+
+enum class EWidgetBoxLayout : uint8_t
+{
+    Horizontal,
+    Vertical,
+};
+
+/// Main-axis arrangement of a box container (Stack role, gui-app-bootstrap
+/// Phase 2): where the packed children sit when they do not fill the content
+/// extent.
+enum class EWidgetMainAxisAlignment : uint8_t
+{
+    Start,  // children packed at the content start (default)
+    Center, // children centered along the main axis
+    End,    // children packed at the content end
+};
+
 /// How a child resolves its own size on an axis when its rect is computed.
 /// Defined here (not in UILayoutIntent.h) because UILayout needs it and
 /// UILayoutIntent includes UILayout.

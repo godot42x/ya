@@ -697,18 +697,6 @@ void UIElement::appendRuntimeLayoutDiagnostics(nlohmann::json& node) const
 // Enum reflection for serialization (must register at global scope; the
 // EWidget* names are distinct from the legacy EUI* enums while both modules
 // coexist).
-YA_REFLECT_ENUM_BEGIN(ya::EWidgetAlignH)
-YA_REFLECT_ENUM_VALUE(Left)
-YA_REFLECT_ENUM_VALUE(Center)
-YA_REFLECT_ENUM_VALUE(Right)
-YA_REFLECT_ENUM_END()
-
-YA_REFLECT_ENUM_BEGIN(ya::EWidgetAlignV)
-YA_REFLECT_ENUM_VALUE(Top)
-YA_REFLECT_ENUM_VALUE(Center)
-YA_REFLECT_ENUM_VALUE(Bottom)
-YA_REFLECT_ENUM_END()
-
 YA_REFLECT_ENUM_BEGIN(ya::EWidgetHitFilter)
 YA_REFLECT_ENUM_VALUE(Pass)
 YA_REFLECT_ENUM_VALUE(Stop)
@@ -720,17 +708,6 @@ YA_REFLECT_ENUM_VALUE(Hidden)
 YA_REFLECT_ENUM_VALUE(Collapsed)
 YA_REFLECT_ENUM_VALUE(HitTestInvisible)
 YA_REFLECT_ENUM_VALUE(SelfHitTestInvisible)
-YA_REFLECT_ENUM_END()
-
-YA_REFLECT_ENUM_BEGIN(ya::EWidgetBoxLayout)
-YA_REFLECT_ENUM_VALUE(Horizontal)
-YA_REFLECT_ENUM_VALUE(Vertical)
-YA_REFLECT_ENUM_END()
-
-YA_REFLECT_ENUM_BEGIN(ya::EWidgetMainAxisAlignment)
-YA_REFLECT_ENUM_VALUE(Start)
-YA_REFLECT_ENUM_VALUE(Center)
-YA_REFLECT_ENUM_VALUE(End)
 YA_REFLECT_ENUM_END()
 
 YA_REFLECT_ENUM_BEGIN(ya::EWidgetFocusPolicy)

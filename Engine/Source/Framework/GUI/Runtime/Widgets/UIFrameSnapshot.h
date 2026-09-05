@@ -18,6 +18,7 @@
 #include "Core/Common/AssetRef.h"
 #include "Core/Common/Types.h"
 
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Brush.h"
 #include "GUI/Widgets/UIElement.h"
 

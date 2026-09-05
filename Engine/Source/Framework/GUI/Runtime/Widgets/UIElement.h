@@ -34,20 +34,6 @@
 namespace ya
 {
 
-enum class EWidgetAlignH : uint8_t
-{
-    Left,
-    Center,
-    Right,
-};
-
-enum class EWidgetAlignV : uint8_t
-{
-    Top,
-    Center,
-    Bottom,
-};
-
 /// Per-widget event routing at the game boundary (same semantics as the
 /// legacy EUIHitFilter): Pass nodes respond but never block; Stop nodes
 /// consume exclusively.
@@ -66,22 +52,6 @@ enum class EWidgetVisibility : uint8_t
     Collapsed,           // no render, no hit; no layout space
     HitTestInvisible,    // renders; self not hittable, children still are
     SelfHitTestInvisible // renders; the whole subtree is not hittable
-};
-
-enum class EWidgetBoxLayout : uint8_t
-{
-    Horizontal,
-    Vertical,
-};
-
-/// Main-axis arrangement of a box container (Stack role, gui-app-bootstrap
-/// Phase 2): where the packed children sit when they do not fill the content
-/// extent.
-enum class EWidgetMainAxisAlignment : uint8_t
-{
-    Start,  // children packed at the content start (default)
-    Center, // children centered along the main axis
-    End,    // children packed at the content end
 };
 
 /// Keyboard focus participation (gui-app-bootstrap Phase 2).
