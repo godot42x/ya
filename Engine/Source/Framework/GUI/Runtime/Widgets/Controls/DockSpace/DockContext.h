@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GUI/Widgets/Controls/DockNode.h"
+#include "GUI/Widgets/Controls/DockSpace/DockNode.h"
 
 #include <glm/glm.hpp>
 #include <functional>

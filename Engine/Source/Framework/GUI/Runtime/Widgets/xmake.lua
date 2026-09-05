@@ -7,6 +7,7 @@
 --                    owner + live-instance unload guard
 --   UIDocument     - reusable authoring data (detached subtree)
 --   Controls/      - the basic widgets (Panel/Text/Button/Container)
+--   Controls/DockSpace/ - dock session + docked/floating projections
 --
 -- Boundary: must never depend on Scene/ECS/Render3D/Host/Editor. Paint
 -- records through the GUI Draw2D batch (ya-render-2d) and the font atlas
@@ -18,11 +19,11 @@ target("ya-gui-widgets")
     add_includedirs("../Binding/include", { public = true })
     add_includedirs("../Layout/include", { public = true })
     add_includedirs("../Declarative/include", { public = true })
-    add_files("*.cpp", "Controls/*.cpp", "../Layout/*.cpp")
+    add_files("*.cpp", "Controls/**.cpp", "../Layout/*.cpp")
     add_files("../Binding/*.cpp")
     add_files("../Declarative/*.cpp")
     add_headerfiles("./include/**.h", "../Binding/include/**.h", { public = true })
-    add_headerfiles("*.h", "Controls/*.h", "../Binding/*.h", "../Layout/*.h", "../Layout/include/**.h", "../Declarative/include/**.h")
+    add_headerfiles("*.h", "Controls/**.h", "../Binding/*.h", "../Layout/*.h", "../Layout/include/**.h", "../Declarative/include/**.h")
     add_deps("ya-foundation-core", { public = true })
     add_deps("ya-render-resources")
     add_packages("glm", { public = true })

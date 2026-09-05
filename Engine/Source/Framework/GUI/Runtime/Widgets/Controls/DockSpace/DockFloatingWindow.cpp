@@ -1,8 +1,8 @@
-#include "GUI/Widgets/Controls/DockFloatingWindow.h"
+#include "GUI/Widgets/Controls/DockSpace/DockFloatingWindow.h"
 
 #include "GUI/Widgets/Controls/Button.h"
-#include "GUI/Widgets/Controls/DockSpace.h"
-#include "GUI/Widgets/Controls/DockContext.h"
+#include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
+#include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Layout/UILayout.h"

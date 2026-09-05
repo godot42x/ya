@@ -1,4 +1,4 @@
-#include "GUI/Widgets/Controls/DockContext.h"
+#include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 
 #include <algorithm>
 

@@ -1,4 +1,4 @@
-#include "GUI/Widgets/Controls/DockNode.h"
+#include "GUI/Widgets/Controls/DockSpace/DockNode.h"
 
 #include <algorithm>
 #include <cmath>

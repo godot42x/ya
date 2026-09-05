@@ -1,5 +1,16 @@
 # Progress
 
+## Phase 10A-dir 当前 checkpoint（2026-09-06）
+
+- Dock 相关源码与公开转发头从 `Controls/` 平铺迁到 `Controls/DockSpace/`（`DockNode` / `DockContext` / `UIDockSpace` / `UIDockFloatingHost` / `UIDockFloatingWindow`）。
+- 公开 include 改为 `GUI/Widgets/Controls/DockSpace/...`；`ya-gui-widgets` 用 `Controls/**` 收集子目录。TabBar 仍留在通用 Controls。
+- 验证：`xmake b ya-gui-closure-test`；`xmake r ya-gui-closure-test -- --gtest_filter='WidgetLayoutTest.*:DockNodeTest.*:WidgetTreeTest.Dock*'`。
+
+### Phase 10A-dir 保留项
+
+- 未宣称 retained editor ready；Windows/MSVC、OpenGL presentation、soak/imgui 仍是后续门禁。
+- 其余 10E tab owner 未做。
+
 ## Phase 10A-name 当前 checkpoint（2026-09-06）
 
 - 拆开 Dock 会话与投影的命名：`UIDockWorkspace` 改为 `FDockContext`（`F` 前缀、非 widget），文件 `DockContext.h/.cpp`。

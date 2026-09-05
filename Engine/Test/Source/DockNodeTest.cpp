@@ -1,5 +1,5 @@
-#include "GUI/Widgets/Controls/DockNode.h"
-#include "GUI/Widgets/Controls/DockContext.h"
+#include "GUI/Widgets/Controls/DockSpace/DockNode.h"
+#include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/Panel.h"
 
 #include <gtest/gtest.h>

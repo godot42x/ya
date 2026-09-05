@@ -1,7 +1,7 @@
-#include "GUI/Widgets/Controls/DockFloatingHost.h"
+#include "GUI/Widgets/Controls/DockSpace/DockFloatingHost.h"
 
-#include "GUI/Widgets/Controls/DockFloatingWindow.h"
-#include "GUI/Widgets/Controls/DockContext.h"
+#include "GUI/Widgets/Controls/DockSpace/DockFloatingWindow.h"
+#include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/WidgetTree.h"
 

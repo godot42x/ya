@@ -7,7 +7,7 @@
 
 #include "GUI/Declarative/BuilderBase.h"
 
-#include "GUI/Widgets/Controls/DockSpace.h"
+#include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"

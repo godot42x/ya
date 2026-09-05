@@ -1,4 +1,4 @@
-#include "GUI/Widgets/Controls/DockSpace.h"
+#include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 
 
 #include "GUI/Widgets/Controls/Container.h"

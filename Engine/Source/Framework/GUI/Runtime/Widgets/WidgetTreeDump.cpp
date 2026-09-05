@@ -5,7 +5,7 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
-#include "GUI/Widgets/Controls/DockSpace.h"
+#include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/Overlay.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"

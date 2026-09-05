@@ -61,6 +61,7 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 - `UIDockSpace` 是 in-window 投影：把 context 的 docked tree 物化成 nested split + tab。不拥有 model。
 - `UIDockFloatingHost` 是 Popup 层投影：把 context 的 floating records 物化成浮窗。
 - 绑定 API：`UIDockSpace::setContext` / `UIDockFloatingHost::bindContext`。不要再引入 `UIDockWorkspace` 这种与 Space 近义、还带 `UI` 前缀的会话类型。
+- 源码与公开头收在 `Runtime/Widgets/Controls/DockSpace/`；include 为 `GUI/Widgets/Controls/DockSpace/...`。TabBar 仍是通用控件，不进这个目录。
 
 ## 布局契约（SizeToContent）
 
