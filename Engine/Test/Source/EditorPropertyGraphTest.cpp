@@ -86,6 +86,24 @@ TEST(EditorPropertyGraphTest, MultiInstanceWritePreflightsAllAddresses)
     EXPECT_EQ(first._position, (glm::vec3{0.0f, 0.0f, 0.0f}));
 }
 
+TEST(EditorPropertyGraphTest, PropertyHandleRefreshesResolvedTopLevelInstance)
+{
+    TransformComponent first;
+    TransformComponent replacement;
+    void* current = &first;
+    const auto graph = PropertyGraph::build(type_index_v<TransformComponent>, {current});
+    const PropertyNode* position = graph.find("_position");
+
+    ASSERT_NE(position, nullptr);
+    PropertyHandle binding = position->binding;
+    binding.setInstanceResolvers({[&current]() { return current; }});
+
+    current = &replacement;
+    EXPECT_TRUE(binding.set(glm::vec3{4.0f, 5.0f, 6.0f}));
+    EXPECT_EQ(first._position, (glm::vec3{0.0f, 0.0f, 0.0f}));
+    EXPECT_EQ(replacement._position, (glm::vec3{4.0f, 5.0f, 6.0f}));
+}
+
 TEST(EditorPropertyGraphTest, AutoPropertySectionMaterializesVec3RowsOnce)
 {
     TransformComponent transform;

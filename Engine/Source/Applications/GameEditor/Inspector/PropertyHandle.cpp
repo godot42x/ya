@@ -27,7 +27,18 @@ PropertyHandle::PropertyHandle(type_index_t ownerType, std::vector<void*> instan
 
 bool PropertyHandle::isValid() const
 {
+    refreshInstances();
     return _slot.property != nullptr && !_instances.empty();
+}
+
+void PropertyHandle::refreshInstances() const
+{
+    if (_instanceResolvers.size() != _instances.size()) {
+        return;
+    }
+    for (size_t index = 0; index < _instances.size(); ++index) {
+        _instances[index] = _instanceResolvers[index] ? _instanceResolvers[index]() : nullptr;
+    }
 }
 
 bool PropertyHandle::canAccessAllMutable() const

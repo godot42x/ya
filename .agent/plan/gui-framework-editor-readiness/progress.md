@@ -24,6 +24,19 @@
 - 这不是完整的结构化 mutation result，也不是跨自定义 setter/容器异常的事务回滚；后续仍需引入明确的 all-or-nothing transaction contract 和错误枚举。
 - PropertyHandle 仍保存裸实例地址；稳定 PropertyInstance identity/resolver 仍是下一主要 checkpoint。
 
+## Phase 10F-2A 当前 checkpoint（2026-09-05）
+
+- PropertyHandle 新增可选 InstanceResolver；每次 validity/access/mutation 前刷新实例地址，允许对象替换后重新解析，而不是继续使用旧地址。
+- EditorInspectorTab 将 resolver 接入顶层 component property binding：通过 Scene + Entity handle + component type 重新取得当前 component。
+- 嵌套 composite leaf 暂未接入 resolver，因为当前 Core collectLeaves 仍只携带 nested owner 的裸地址；该边界明确保留给后续 PropertyGraphBuilder 迁移。
+- 新增 EditorPropertyGraphTest.PropertyHandleRefreshesResolvedTopLevelInstance，验证对象替换后写入新实例且旧实例不变。
+- 验证：xmake b ya-testing；顶层 property resolver targeted tests 通过。
+
+### Phase 10F-2A 保留项
+
+- 这是顶层 component 的 resolver 增量，不是完整 PropertyInstance identity 系统；当前 resolver 仍捕获 Scene 指针和 EnTT handle，尚未统一为跨场景稳定 identity 对象。
+- Undo 对 nested/composite property 仍可能捕获裸 nested address；必须在移出 collectLeaves 前完成完整路径 resolver，不能用局部猜测补齐。
+
 ## 当前状态
 
 - 计划建立：2026-09-03

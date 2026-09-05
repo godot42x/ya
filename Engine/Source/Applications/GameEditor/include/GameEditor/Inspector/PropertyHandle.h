@@ -32,6 +32,7 @@ class PropertyHandle final
     PropertyHandle() = default;
     using Vec3Setter = std::function<void(void*, const glm::vec3&)>;
     using ChangeHook = std::function<void()>;
+    using InstanceResolver = std::function<void*()>;
 
     PropertyHandle(type_index_t ownerType,
                    std::vector<void*> instances,
@@ -51,6 +52,11 @@ class PropertyHandle final
     [[nodiscard]] const reflection::FPropertySlot& slot() const { return _slot; }
     void setVec3Setter(Vec3Setter setter) { _vec3Setter = std::move(setter); }
     void setChangeHook(ChangeHook hook) { _changeHook = std::move(hook); }
+    void setInstanceResolvers(std::vector<InstanceResolver> resolvers)
+    {
+        _instanceResolvers = std::move(resolvers);
+        refreshInstances();
+    }
 
     template <typename T>
     [[nodiscard]] bool tryGet(T& value) const
@@ -177,7 +183,8 @@ class PropertyHandle final
     [[nodiscard]] std::string validationError() const;
     [[nodiscard]] bool tryGetManipulateSpec(reflection::Meta::ManipulateSpec& spec) const;
 
-    private:
+  private:
+    void refreshInstances() const;
     [[nodiscard]] bool canAccessAllMutable() const;
 
     void notifyIfChanged(bool changed) const
@@ -188,7 +195,8 @@ class PropertyHandle final
     }
 
     type_index_t _ownerType = 0;
-    std::vector<void*> _instances;
+    mutable std::vector<void*> _instances;
+    std::vector<InstanceResolver> _instanceResolvers;
     reflection::FPropertySlot _slot;
     Vec3Setter _vec3Setter;
     ChangeHook _changeHook;

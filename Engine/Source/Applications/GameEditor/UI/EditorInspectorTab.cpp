@@ -277,6 +277,24 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
         if (!graph.hasRetainedEditors()) {
             continue;
         }
+        std::vector<PropertyHandle::InstanceResolver> rootResolvers;
+        rootResolvers.reserve(entities.size());
+        for (Entity* entity : entities) {
+            Scene* scene = entity ? entity->getScene() : nullptr;
+            const entt::entity handle = entity ? entity->getHandle() : entt::null;
+            const type_index_t componentType = entry.type;
+            rootResolvers.emplace_back([scene, handle, componentType]() -> void* {
+                if (!scene || handle == entt::null) {
+                    return nullptr;
+                }
+                return ECSRegistry::get().getComponent(componentType, scene->getRegistry(), handle);
+            });
+        }
+        for (PropertyNode& node : graph.getNodesMutable()) {
+            if (node.name == node.binding.getName()) {
+                node.binding.setInstanceResolvers(rootResolvers);
+            }
+        }
         auto title = std::make_shared<UIText>("InspectorComp_" + entry.name);
         title->setText(entry.name);
         title->setFontSize(12);
