@@ -104,7 +104,8 @@
 - [x] Phase 8U：Editor Settings retained 面板（View 菜单 + sampler/overlay/startup scene）。
 - [x] Phase 8T：UI Designer retained palette + PropertyGraph inspector（`addPaletteWidget` + `EditorAutoPropertySection`）。
 - [x] Phase 8V：Debug images retained dock tab（`EditorDebugImagesTab` + `EditorLayer` catalog/mask/group API；ImGui `debugWindow` 仍保留至 8W）。
-- [x] Multi-window/docking persistence（floating geometry：`UIDockWorkspace` layout JSON + editor tear-off host）。
+- [x] Multi-window/docking persistence（floating geometry：`FDockContext` layout JSON + editor tear-off host）。
+- [x] Dock 会话/投影命名：`FDockContext` + `UIDockSpace` + `UIDockFloatingHost`。
 - [x] Phase 8W：删除 `onImGuiRender` chrome shell；WidgetTree 为唯一 editor chrome（`imgui-local` 仍服务 ImGuizmo）。
 - [x] Phase 9B：editor-scale 性能基线（Hierarchy 视口 paint 窗口、Content keyed window、Inspector 干净 snapshot）。
 - [x] Phase 9C：长时间运行 attach/detach、theme switch 压测。

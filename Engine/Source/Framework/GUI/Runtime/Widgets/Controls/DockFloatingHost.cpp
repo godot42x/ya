@@ -1,7 +1,7 @@
 #include "GUI/Widgets/Controls/DockFloatingHost.h"
 
 #include "GUI/Widgets/Controls/DockFloatingWindow.h"
-#include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/DockContext.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -22,43 +22,43 @@ UIDockFloatingHost::UIDockFloatingHost(std::string name)
 
 UIDockFloatingHost::~UIDockFloatingHost()
 {
-    if (_ws && _ws->floatingHost() == this) {
-        _ws->setFloatingHost(nullptr);
+    if (_context && _context->floatingHost() == this) {
+        _context->setFloatingHost(nullptr);
     }
 }
 
-void UIDockFloatingHost::bindWorkspace(std::shared_ptr<UIDockWorkspace> ws)
+void UIDockFloatingHost::bindContext(std::shared_ptr<FDockContext> context)
 {
-    if (_ws && _ws != ws && _ws->floatingHost() == this) {
-        _ws->setFloatingHost(nullptr);
+    if (_context && _context != context && _context->floatingHost() == this) {
+        _context->setFloatingHost(nullptr);
     }
-    _ws = std::move(ws);
-    if (_ws) {
-        _ws->setFloatingHost(this);
-        // Weak self: the workspace may fire floating-updated after this widget
-        // is destroyed (another host re-binds the same workspace), so the
+    _context = std::move(context);
+    if (_context) {
+        _context->setFloatingHost(this);
+        // Weak self: the context may fire floating-updated after this widget
+        // is destroyed (another host re-binds the same context), so the
         // callback must never dereference a stale 'this'.
         std::weak_ptr<UIDockFloatingHost> weakSelf =
             std::static_pointer_cast<UIDockFloatingHost>(shared_from_this());
-        _ws->setOnFloatingUpdated([weakSelf]()
+        _context->setOnFloatingUpdated([weakSelf]()
         {
             if (auto self = weakSelf.lock()) {
-                self->syncFromWorkspace();
+                self->syncFromContext();
             }
         });
     }
 }
 
-void UIDockFloatingHost::syncFromWorkspace()
+void UIDockFloatingHost::syncFromContext()
 {
-    if (!_ws) {
+    if (!_context) {
         return;
     }
     WidgetTree* tree = getTree();
 
     // Drop windows whose floating record no longer exists.
     for (auto it = _windows.begin(); it != _windows.end();) {
-        if (!_ws->findFloatingById(it->first)) {
+        if (!_context->findFloatingById(it->first)) {
             if (tree && it->second) {
                 tree->detach(*it->second);
             }
@@ -70,15 +70,15 @@ void UIDockFloatingHost::syncFromWorkspace()
     }
 
     // Create / refresh windows for current floating records.
-    for (const auto& record : _ws->floatingWindows()) {
+    for (const auto& record : _context->floatingWindows()) {
         auto it = _windows.find(record.id);
         if (it != _windows.end()) {
             it->second->setWindowRect({record.pos, record.size});
-            it->second->refreshFromWorkspace();
+            it->second->refreshFromContext();
             continue;
         }
         auto window = std::make_shared<UIDockFloatingWindow>(
-            std::format("FloatingWindow{}", record.id), record.id, _ws);
+            std::format("FloatingWindow{}", record.id), record.id, _context);
         window->setWindowRect({record.pos, record.size});
         window->_onActivated = [this, floatingId = record.id]()
         {

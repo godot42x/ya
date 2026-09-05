@@ -1,5 +1,16 @@
 # Progress
 
+## Phase 10A-name 当前 checkpoint（2026-09-06）
+
+- 拆开 Dock 会话与投影的命名：`UIDockWorkspace` 改为 `FDockContext`（`F` 前缀、非 widget），文件 `DockContext.h/.cpp`。
+- `UIDockSpace` 只表达 in-window docked-tree 投影；`UIDockFloatingHost` 只表达 floating 投影。绑定改为 `setContext` / `bindContext` / `syncFromContext`。
+- 验证：`xmake b ya-gui-closure-test`；`xmake r ya-gui-closure-test -- --gtest_filter='WidgetLayoutTest.*:DockNodeTest.*:WidgetTreeTest.Dock*'`。
+
+### Phase 10A-name 保留项
+
+- 未宣称 retained editor ready；Windows/MSVC、OpenGL presentation、soak/imgui 仍是后续门禁。
+- 其余 10E tab owner 未做。
+
 ## Phase 10A-fix 当前 checkpoint（2026-09-05）
 
 - Dock 的 split-resize / 选 tab / hide-tab-bar 不再从 live chrome 回调里 `fireDockUpdated()` 整树 rematerialize；这些路径只改 live 投影并 `notifyDockLayoutListeners()` 做 layout 持久化。
@@ -1271,3 +1282,15 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - EditorSurface 里仍有不少按钮 preferredSize 字面量（Play/Content header 等）；本步只收 inspector/list/toolbar 共用密度，不做全文件数字替换。
 - 未拆其余 tab owner；release gates 仍为 Windows/MSVC、OpenGL、hour-scale soak、`imgui-local`。
 - 下一步：其余稳定 tab owner，或继续把剩余 chrome 字面量迁到 `editor_density`。
+
+## Phase 10F boundary extraction checkpoint（2026-09-05）
+
+- 新增 GameEditor 侧 `PropertyGraphBuilder`，接管 nested/composite、sequence/map leaf 展开及 editor path/leaf role；Core Reflection 不再暴露 `FLeaf` / `collectLeaves`。
+- 新增 `PropertyEditorMetadata`，接管 color、manipulate spec 和 validation；`PropertyHandle` / `PropertyGraph` 改从 editor adapter 读取这些语义。
+- Core `PropertyAccessor` 保留 slot/address、基础类型、容器、enum/asset/value conversion；editor path 与 UI metadata 不再位于 Core API。
+- 验证：`xmake b ya-foundation-core` 通过；Inspector targeted tests 在边界迁移前后保持通过（36/36）。
+
+### 边界
+
+- 本 checkpoint 未完成稳定 identity value object、nested path resolver、结构化 mutation result 和 capability registry。
+- `ya-testing` 全量构建当前被工作树中其他未提交的 DockWorkspace → DockContext 重命名阻塞；未触碰或覆盖该用户改动。

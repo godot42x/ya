@@ -18,11 +18,14 @@ struct UIDockSpace;
 using FDockFloatingWindowId = uint64_t;
 inline constexpr FDockFloatingWindowId kInvalidFloatingWindowId = 0;
 
-/// Central dock workspace (UE-style registration / policy switches). Holds the
-/// shared dock tree, the panel registry and the switches that every DockSpace
-/// and floating host reads. In the future one workspace can back multiple
-/// window projections (the seed of the coordinator behind multi-window dock).
-struct YA_GUI_API UIDockWorkspace
+/// Shared dock session. Not a widget.
+///
+/// Owns the panel registry, `FDockTreeModel`, floating-window records, policy
+/// flags, and layout JSON. The two projections that read this session are:
+///   - `UIDockSpace` — in-window nested splits + tab groups
+///   - `UIDockFloatingHost` — Popup-layer torn-off windows
+/// One context can back both projections (and later multiple windows).
+struct YA_GUI_API FDockContext
 {
     struct FPanel
     {
@@ -41,7 +44,7 @@ struct YA_GUI_API UIDockWorkspace
         bool                       bHideTabBar = false;
     };
 
-    /// Dock policy switches (central on/off for the whole workspace).
+    /// Dock policy switches (central on/off for the whole session).
     bool bAllowDocking  = true;   // panels may dock into DockSpaces
     bool bAllowFloating = false;  // floating windows may exist
     bool bAllowTearOff  = false;  // drag-out may create a floating window
@@ -52,11 +55,11 @@ struct YA_GUI_API UIDockWorkspace
     DockPanelId addPanel(const std::string& stableKey, const std::string& title, std::shared_ptr<UIElement> widget);
 
     // === Floating (Phase 5) ===
-    /// Bind the floating host that presents this workspace's floating windows.
+    /// Bind the floating host that presents this context's floating windows.
     void setFloatingHost(UIDockFloatingHost* host) { _floatingHost = host; }
     [[nodiscard]] UIDockFloatingHost* floatingHost() const { return _floatingHost; }
 
-    /// Bind the DockSpace that projects this workspace's dock tree. Used by
+    /// Bind the DockSpace that projects this context's dock tree. Used by
     /// floating-window tab drags to drive the dock drop-preview (chooser),
     /// since the DockSpace lives on a different layer than the floating host.
     void setDockSpace(UIDockSpace* space) { _dockSpace = space; }

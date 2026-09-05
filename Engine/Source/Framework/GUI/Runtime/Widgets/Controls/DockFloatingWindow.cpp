@@ -2,7 +2,7 @@
 
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
-#include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/DockContext.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Layout/UILayout.h"
@@ -116,7 +116,7 @@ struct FDockFloatingWindowDropTargetBehavior final : public UIDropTargetBehavior
         acceptPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
         {
             auto* window = dynamic_cast<UIDockFloatingWindow*>(&owner);
-            UIDockSpace* space = window && window->_ws ? window->_ws->dockSpace() : nullptr;
+            UIDockSpace* space = window && window->_context ? window->_context->dockSpace() : nullptr;
             if (!space) {
                 return false;
             }
@@ -130,7 +130,7 @@ struct FDockFloatingWindowDropTargetBehavior final : public UIDropTargetBehavior
             if (!window) {
                 return;
             }
-            if (UIDockSpace* space = window->_ws ? window->_ws->dockSpace() : nullptr) {
+            if (UIDockSpace* space = window->_context ? window->_context->dockSpace() : nullptr) {
                 space->onDrop(payload, logicalPoint);
             }
         };
@@ -158,15 +158,15 @@ struct FDockFloatingWindowPanelDragBehavior final : public UIBehavior
                 Rect2D moved = owner.getWindowRect();
                 moved.pos += logicalPoint - *owner._lastDragPoint;
                 owner.setWindowRect(moved);
-                if (owner._ws) {
-                    owner._ws->setFloatingWindowRect(owner._floatingId, moved.pos, moved.extent);
+                if (owner._context) {
+                    owner._context->setFloatingWindowRect(owner._floatingId, moved.pos, moved.extent);
                 }
             }
             owner._lastDragPoint = logicalPoint;
             if (WidgetTree* tree = owner.getTree()) {
                 tree->invalidateLayout();
             }
-            UIDockSpace* space = owner._ws ? owner._ws->dockSpace() : nullptr;
+            UIDockSpace* space = owner._context ? owner._context->dockSpace() : nullptr;
             if (!space) {
                 return;
             }
@@ -183,10 +183,10 @@ struct FDockFloatingWindowPanelDragBehavior final : public UIBehavior
         {
             owner._lastDragPoint.reset();
             owner._bDockDragging = false;
-            if (UIDockSpace* space = owner._ws ? owner._ws->dockSpace() : nullptr) {
+            if (UIDockSpace* space = owner._context ? owner._context->dockSpace() : nullptr) {
                 space->clearDropPreview();
             }
-            owner.refreshFromWorkspace();
+            owner.refreshFromContext();
         };
         tree->beginDrag(&owner, payload, std::move(label), std::move(observer), false, true);
     }
@@ -300,7 +300,7 @@ struct FResizeHandle final : UIElement
             }
             if (eventType == EEvent::MouseButtonReleased) {
                 _bResizing = false;
-                _owner->commitGeometryToWorkspace(true);
+                _owner->commitGeometryToContext(true);
                 if (WidgetTree* tree = getTree()) {
                     tree->releasePointerCapture(this);
                     tree->invalidateLayout();
@@ -326,10 +326,10 @@ struct FResizeHandle final : UIElement
 } // namespace
 
 UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindowId floatingId,
-                                           std::shared_ptr<UIDockWorkspace> ws)
+                                           std::shared_ptr<FDockContext> context)
     : UIElement(std::move(name), "floating")
     , _floatingId(floatingId)
-    , _ws(std::move(ws))
+    , _context(std::move(context))
 {
     installLayout(std::make_unique<UIOverlayLayout>());
     _hitFilter = EWidgetHitFilter::Stop;
@@ -357,10 +357,10 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
         if (index < 0) {
             return;
         }
-        if (const auto* rec = _ws->findFloatingById(_floatingId)) {
+        if (const auto* rec = _context->findFloatingById(_floatingId)) {
             if (static_cast<size_t>(index) < rec->panelIds.size()) {
                 _panelId = rec->panelIds[static_cast<size_t>(index)];
-                _title = _ws->findPanel(_panelId) ? _ws->findPanel(_panelId)->name : std::string{};
+                _title = _context->findPanel(_panelId) ? _context->findPanel(_panelId)->name : std::string{};
             }
         }
         if (auto* behavior = findBehavior<FDockFloatingWindowPanelDragBehavior>(*this)) {
@@ -377,8 +377,8 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
     close->addDetachedChild(closeText);
     close->_onClick = [this]()
     {
-        if (_ws && _ws->dockPanelHome(_panelId) && _ws->floatingHost()) {
-            // Host observes floating drift via the workspace; the window is
+        if (_context && _context->dockPanelHome(_panelId) && _context->floatingHost()) {
+            // Host observes floating drift via the context; the window is
             // removed by the host once it re-syncs its window set.
         }
     };
@@ -394,20 +394,20 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
     auto hideBar = std::make_shared<FDockHideTabBarAffordance>(
         [this]()
         {
-            if (!_ws) {
+            if (!_context) {
                 return;
             }
-            const auto* rec = _ws->findFloatingById(_floatingId);
+            const auto* rec = _context->findFloatingById(_floatingId);
             if (!rec) {
                 return;
             }
-            _ws->setFloatingHideTabBar(_floatingId, !rec->bHideTabBar);
-            _ws->fireFloatingUpdated();
-            refreshFromWorkspace();
+            _context->setFloatingHideTabBar(_floatingId, !rec->bHideTabBar);
+            _context->fireFloatingUpdated();
+            refreshFromContext();
         },
         [this]()
         {
-            const auto* rec = _ws ? _ws->findFloatingById(_floatingId) : nullptr;
+            const auto* rec = _context ? _context->findFloatingById(_floatingId) : nullptr;
             return rec && rec->bHideTabBar;
         });
     addDetachedChild(hideBar, [](UIElement&, UISlot& slot)
@@ -421,7 +421,7 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
         }
     });
 
-    refreshFromWorkspace();
+    refreshFromContext();
 
     const auto addHandle = [this](EResizeEdge edge, EUIOverlayAlignment hAlign,
                                   EUIOverlayAlignment vAlign, glm::vec2 desired)
@@ -475,12 +475,12 @@ void UIDockFloatingWindow::onAttached()
     setWindowRect(_windowRect);
 }
 
-void UIDockFloatingWindow::refreshFromWorkspace()
+void UIDockFloatingWindow::refreshFromContext()
 {
-    if (!_ws) {
+    if (!_context) {
         return;
     }
-    const auto* rec = _ws->findFloatingById(_floatingId);
+    const auto* rec = _context->findFloatingById(_floatingId);
     if (!rec) {
         return;
     }
@@ -490,12 +490,12 @@ void UIDockFloatingWindow::refreshFromWorkspace()
         _tabBar->removeTab(i);
     }
     for (const DockPanelId pid : rec->panelIds) {
-        const std::string title = _ws->findPanel(pid) ? _ws->findPanel(pid)->name : std::string{};
+        const std::string title = _context->findPanel(pid) ? _context->findPanel(pid)->name : std::string{};
         _tabBar->addTab(title.empty() ? "?" : title);
     }
     _panelId = rec->activePanelId;
-    if (_ws->findPanel(_panelId)) {
-        _title = _ws->findPanel(_panelId)->name;
+    if (_context->findPanel(_panelId)) {
+        _title = _context->findPanel(_panelId)->name;
     }
     int activeIndex = 0;
     for (size_t i = 0; i < rec->panelIds.size(); ++i) {
@@ -511,12 +511,12 @@ void UIDockFloatingWindow::refreshFromWorkspace()
     }
     _tabBar->_onTabSelected = [this](int index)
     {
-        if (const auto* r = _ws->findFloatingById(_floatingId)) {
+        if (const auto* r = _context->findFloatingById(_floatingId)) {
             if (static_cast<size_t>(index) < r->panelIds.size()) {
                 _panelId = r->panelIds[static_cast<size_t>(index)];
-                _title = _ws->findPanel(_panelId) ? _ws->findPanel(_panelId)->name : std::string{};
-                _ws->setFloatingWindowActivePanel(_floatingId, _panelId);
-                _ws->fireFloatingUpdated();
+                _title = _context->findPanel(_panelId) ? _context->findPanel(_panelId)->name : std::string{};
+                _context->setFloatingWindowActivePanel(_floatingId, _panelId);
+                _context->fireFloatingUpdated();
             }
         }
         rebuildContent();
@@ -536,8 +536,8 @@ void UIDockFloatingWindow::rebuildContent()
             tree->detach(*child);
         }
     }
-    if (_ws && _panelId != kInvalidDockPanelId) {
-        if (const auto* panel = _ws->findPanel(_panelId); panel && panel->widget) {
+    if (_context && _panelId != kInvalidDockPanelId) {
+        if (const auto* panel = _context->findPanel(_panelId); panel && panel->widget) {
             if (tree) {
                 tree->detach(*panel->widget);
             }
@@ -611,7 +611,7 @@ void UIDockFloatingWindow::updateWindowMove(const glm::vec2& logicalPoint)
     Rect2D moved = _windowRect;
     moved.pos += delta;
     setWindowRect(moved);
-    commitGeometryToWorkspace(false);
+    commitGeometryToContext(false);
     if (WidgetTree* tree = getTree()) {
         tree->invalidateLayout();
     }
@@ -653,7 +653,7 @@ bool UIDockFloatingWindow::handleInputEvent(const Event& event, const WidgetEven
                 _bTitlePressed = false;
                 _bTitleMoving = false;
                 _lastDragPoint.reset();
-                commitGeometryToWorkspace(true);
+                commitGeometryToContext(true);
                 if (WidgetTree* tree = getTree()) {
                     tree->releasePointerCapture(this);
                 }
@@ -667,7 +667,7 @@ bool UIDockFloatingWindow::handleInputEvent(const Event& event, const WidgetEven
         if (_bTitleMoving && eventType == EEvent::MouseButtonReleased) {
             _bTitleMoving = false;
             _lastDragPoint.reset();
-            commitGeometryToWorkspace(true);
+            commitGeometryToContext(true);
             if (WidgetTree* tree = getTree()) {
                 tree->releasePointerCapture(this);
             }
@@ -737,17 +737,17 @@ void UIDockFloatingWindow::applyResizeFromEdge(EResizeEdge edge, const glm::vec2
         break;
     }
     setWindowRect(next);
-    commitGeometryToWorkspace(false);
+    commitGeometryToContext(false);
 }
 
-void UIDockFloatingWindow::commitGeometryToWorkspace(bool notify)
+void UIDockFloatingWindow::commitGeometryToContext(bool notify)
 {
-    if (!_ws) {
+    if (!_context) {
         return;
     }
-    _ws->setFloatingWindowRect(_floatingId, _windowRect.pos, _windowRect.extent);
+    _context->setFloatingWindowRect(_floatingId, _windowRect.pos, _windowRect.extent);
     if (notify) {
-        _ws->fireFloatingUpdated();
+        _context->fireFloatingUpdated();
     }
 }
 

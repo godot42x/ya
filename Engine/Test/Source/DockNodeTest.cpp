@@ -1,5 +1,5 @@
 #include "GUI/Widgets/Controls/DockNode.h"
-#include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/DockContext.h"
 #include "GUI/Widgets/Controls/Panel.h"
 
 #include <gtest/gtest.h>
@@ -280,7 +280,7 @@ TEST(DockNodeTest, HideTabBarRoundTripsLayoutJson)
 
 TEST(DockNodeTest, FloatingHideTabBarRoundTripsLayoutJson)
 {
-    UIDockWorkspace source;
+    FDockContext source;
     source.bAllowFloating = true;
     source.bAllowTearOff  = true;
     const DockPanelId inspectorId = source.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody"));
@@ -294,7 +294,7 @@ TEST(DockNodeTest, FloatingHideTabBarRoundTripsLayoutJson)
     ASSERT_EQ(layout["floating"].size(), 1u);
     EXPECT_TRUE(layout["floating"][0].value("hideTabBar", false));
 
-    UIDockWorkspace restored;
+    FDockContext restored;
     restored.bAllowFloating = true;
     restored.bAllowTearOff  = true;
     ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody2")), kInvalidDockPanelId);
@@ -336,9 +336,9 @@ TEST(DockNodeTest, ImportMountsMissingPanelsOnFirstLeaf)
     EXPECT_TRUE(model.validateInvariants());
 }
 
-TEST(DockNodeTest, WorkspaceExportImportRestoresFloatingGeometry)
+TEST(DockNodeTest, ContextExportImportRestoresFloatingGeometry)
 {
-    UIDockWorkspace source;
+    FDockContext source;
     source.bAllowFloating = true;
     source.bAllowTearOff  = true;
     const DockPanelId viewportId = source.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody"));
@@ -356,7 +356,7 @@ TEST(DockNodeTest, WorkspaceExportImportRestoresFloatingGeometry)
     ASSERT_TRUE(layout.contains("floating"));
     ASSERT_EQ(layout["floating"].size(), 1u);
 
-    UIDockWorkspace restored;
+    FDockContext restored;
     restored.bAllowFloating = true;
     restored.bAllowTearOff  = true;
     ASSERT_NE(restored.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody2")), kInvalidDockPanelId);
@@ -376,11 +376,11 @@ TEST(DockNodeTest, WorkspaceExportImportRestoresFloatingGeometry)
     EXPECT_EQ(restored.dockModel().findLeafForPanel(restored.dockModel().findPanelByStableKey("inspector")->id), nullptr);
 }
 
-TEST(DockNodeTest, WorkspaceImportRejectsUnknownFloatingPanelKey)
+TEST(DockNodeTest, ContextImportRejectsUnknownFloatingPanelKey)
 {
-    UIDockWorkspace workspace;
-    workspace.bAllowFloating = true;
-    const DockPanelId viewportId = workspace.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody"));
+    FDockContext context;
+    context.bAllowFloating = true;
+    const DockPanelId viewportId = context.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody"));
     ASSERT_NE(viewportId, kInvalidDockPanelId);
     const nlohmann::json layout = {
         {"version", 1},
@@ -391,24 +391,24 @@ TEST(DockNodeTest, WorkspaceImportRejectsUnknownFloatingPanelKey)
             {"size", nlohmann::json::array({100.0f, 80.0f})},
         })})},
     };
-    EXPECT_FALSE(workspace.importLayoutJson(layout));
-    EXPECT_TRUE(workspace.floatingWindows().empty());
-    ASSERT_NE(workspace.dockModel().findLeafForPanel(viewportId), nullptr);
+    EXPECT_FALSE(context.importLayoutJson(layout));
+    EXPECT_TRUE(context.floatingWindows().empty());
+    ASSERT_NE(context.dockModel().findLeafForPanel(viewportId), nullptr);
 }
 
-TEST(DockNodeTest, WorkspaceImportAcceptsTreeOnlySnapshot)
+TEST(DockNodeTest, ContextImportAcceptsTreeOnlySnapshot)
 {
-    UIDockWorkspace workspace;
-    workspace.bAllowFloating = true;
-    ASSERT_NE(workspace.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody")), kInvalidDockPanelId);
-    ASSERT_NE(workspace.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody")), kInvalidDockPanelId);
+    FDockContext context;
+    context.bAllowFloating = true;
+    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody")), kInvalidDockPanelId);
     const nlohmann::json layout = {
         {"version", 1},
         {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport", "inspector"})}, {"selected", "viewport"}}},
     };
-    ASSERT_TRUE(workspace.importLayoutJson(layout));
-    EXPECT_TRUE(workspace.floatingWindows().empty());
-    EXPECT_NE(workspace.dockModel().findLeafForPanel(workspace.dockModel().findPanelByStableKey("inspector")->id), nullptr);
+    ASSERT_TRUE(context.importLayoutJson(layout));
+    EXPECT_TRUE(context.floatingWindows().empty());
+    EXPECT_NE(context.dockModel().findLeafForPanel(context.dockModel().findPanelByStableKey("inspector")->id), nullptr);
 }
 
 } // namespace ya

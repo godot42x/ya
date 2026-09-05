@@ -1,16 +1,16 @@
-#include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/DockContext.h"
 
 #include <algorithm>
 
 namespace ya
 {
 
-DockPanelId UIDockWorkspace::addPanel(const std::string& name, std::shared_ptr<UIElement> widget)
+DockPanelId FDockContext::addPanel(const std::string& name, std::shared_ptr<UIElement> widget)
 {
     return addPanel(name, name, std::move(widget));
 }
 
-DockPanelId UIDockWorkspace::addPanel(const std::string& stableKey, const std::string& title, std::shared_ptr<UIElement> widget)
+DockPanelId FDockContext::addPanel(const std::string& stableKey, const std::string& title, std::shared_ptr<UIElement> widget)
 {
     const DockPanelId id = _nextPanelId++;
     if (!_model.registerPanel({.id = id, .stableKey = stableKey, .title = title}) ||
@@ -21,19 +21,19 @@ DockPanelId UIDockWorkspace::addPanel(const std::string& stableKey, const std::s
     return id;
 }
 
-const UIDockWorkspace::FPanel* UIDockWorkspace::findPanel(DockPanelId id) const
+const FDockContext::FPanel* FDockContext::findPanel(DockPanelId id) const
 {
     auto it = _panels.find(id);
     return it == _panels.end() ? nullptr : &it->second;
 }
 
-UIDockWorkspace::FPanel* UIDockWorkspace::findPanel(DockPanelId id)
+FDockContext::FPanel* FDockContext::findPanel(DockPanelId id)
 {
     auto it = _panels.find(id);
     return it == _panels.end() ? nullptr : &it->second;
 }
 
-FDockFloatingWindowId UIDockWorkspace::tearOffPanel(DockPanelId panelId, const glm::vec2& pos, const glm::vec2& size)
+FDockFloatingWindowId FDockContext::tearOffPanel(DockPanelId panelId, const glm::vec2& pos, const glm::vec2& size)
 {
     if (!findPanel(panelId)) {
         return kInvalidFloatingWindowId;
@@ -61,7 +61,7 @@ FDockFloatingWindowId UIDockWorkspace::tearOffPanel(DockPanelId panelId, const g
     return id;
 }
 
-bool UIDockWorkspace::addPanelToFloating(FDockFloatingWindowId targetId, DockPanelId panelId)
+bool FDockContext::addPanelToFloating(FDockFloatingWindowId targetId, DockPanelId panelId)
 {
     FFloatingWindow* target = nullptr;
     for (FFloatingWindow& f : _floating) {
@@ -87,7 +87,7 @@ bool UIDockWorkspace::addPanelToFloating(FDockFloatingWindowId targetId, DockPan
     return true;
 }
 
-bool UIDockWorkspace::dockPanelHome(DockPanelId panelId)
+bool FDockContext::dockPanelHome(DockPanelId panelId)
 {
     if (!findPanel(panelId)) {
         return false;
@@ -104,7 +104,7 @@ bool UIDockWorkspace::dockPanelHome(DockPanelId panelId)
     return ok;
 }
 
-void UIDockWorkspace::endFloatingForPanel(DockPanelId panelId)
+void FDockContext::endFloatingForPanel(DockPanelId panelId)
 {
     bool bChanged = false;
     for (auto it = _floating.begin(); it != _floating.end();) {
@@ -128,12 +128,12 @@ void UIDockWorkspace::endFloatingForPanel(DockPanelId panelId)
     }
 }
 
-bool UIDockWorkspace::isPanelFloating(DockPanelId panelId) const
+bool FDockContext::isPanelFloating(DockPanelId panelId) const
 {
     return findFloatingByPanel(panelId) != nullptr;
 }
 
-const UIDockWorkspace::FFloatingWindow* UIDockWorkspace::findFloatingByPanel(DockPanelId panelId) const
+const FDockContext::FFloatingWindow* FDockContext::findFloatingByPanel(DockPanelId panelId) const
 {
     for (const FFloatingWindow& f : _floating) {
         if (std::find(f.panelIds.begin(), f.panelIds.end(), panelId) != f.panelIds.end()) {
@@ -143,7 +143,7 @@ const UIDockWorkspace::FFloatingWindow* UIDockWorkspace::findFloatingByPanel(Doc
     return nullptr;
 }
 
-const UIDockWorkspace::FFloatingWindow* UIDockWorkspace::findFloatingById(FDockFloatingWindowId id) const
+const FDockContext::FFloatingWindow* FDockContext::findFloatingById(FDockFloatingWindowId id) const
 {
     for (const FFloatingWindow& f : _floating) {
         if (f.id == id) {
@@ -153,14 +153,14 @@ const UIDockWorkspace::FFloatingWindow* UIDockWorkspace::findFloatingById(FDockF
     return nullptr;
 }
 
-void UIDockWorkspace::setFloatingWindowPos(FDockFloatingWindowId id, const glm::vec2& pos)
+void FDockContext::setFloatingWindowPos(FDockFloatingWindowId id, const glm::vec2& pos)
 {
     if (FFloatingWindow* window = findFloatingByIdMutable(id)) {
         window->pos = pos;
     }
 }
 
-void UIDockWorkspace::setFloatingWindowRect(FDockFloatingWindowId id, const glm::vec2& pos, const glm::vec2& size)
+void FDockContext::setFloatingWindowRect(FDockFloatingWindowId id, const glm::vec2& pos, const glm::vec2& size)
 {
     if (FFloatingWindow* window = findFloatingByIdMutable(id)) {
         window->pos  = pos;
@@ -168,7 +168,7 @@ void UIDockWorkspace::setFloatingWindowRect(FDockFloatingWindowId id, const glm:
     }
 }
 
-void UIDockWorkspace::setFloatingWindowActivePanel(FDockFloatingWindowId id, DockPanelId panelId)
+void FDockContext::setFloatingWindowActivePanel(FDockFloatingWindowId id, DockPanelId panelId)
 {
     FFloatingWindow* window = findFloatingByIdMutable(id);
     if (!window) {
@@ -180,14 +180,14 @@ void UIDockWorkspace::setFloatingWindowActivePanel(FDockFloatingWindowId id, Doc
     window->activePanelId = panelId;
 }
 
-void UIDockWorkspace::setFloatingHideTabBar(FDockFloatingWindowId id, bool hide)
+void FDockContext::setFloatingHideTabBar(FDockFloatingWindowId id, bool hide)
 {
     if (FFloatingWindow* window = findFloatingByIdMutable(id)) {
         window->bHideTabBar = hide;
     }
 }
 
-UIDockWorkspace::FFloatingWindow* UIDockWorkspace::findFloatingByIdMutable(FDockFloatingWindowId id)
+FDockContext::FFloatingWindow* FDockContext::findFloatingByIdMutable(FDockFloatingWindowId id)
 {
     for (FFloatingWindow& window : _floating) {
         if (window.id == id) {
@@ -197,7 +197,7 @@ UIDockWorkspace::FFloatingWindow* UIDockWorkspace::findFloatingByIdMutable(FDock
     return nullptr;
 }
 
-nlohmann::json UIDockWorkspace::exportLayoutJson() const
+nlohmann::json FDockContext::exportLayoutJson() const
 {
     nlohmann::json layout = _model.exportLayoutJson();
     nlohmann::json floating = nlohmann::json::array();
@@ -229,7 +229,7 @@ nlohmann::json UIDockWorkspace::exportLayoutJson() const
     return layout;
 }
 
-bool UIDockWorkspace::importLayoutJson(const nlohmann::json& layout)
+bool FDockContext::importLayoutJson(const nlohmann::json& layout)
 {
     struct FPendingFloating
     {

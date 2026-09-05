@@ -25,7 +25,7 @@
 #include "GUI/Widgets/Controls/DockFloatingHost.h"
 #include "GUI/Widgets/Controls/DockFloatingWindow.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
-#include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/DockContext.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "Render/Resources/FontManager.h"
@@ -2045,10 +2045,10 @@ TEST(WidgetLayoutTest, OverlayLayoutIgnoresCorruptedChildSizeAfterAttach)
 TEST(WidgetLayoutTest, DockSpaceArrangesProjectionThroughTheSingleChildSlot)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       ws   = std::make_shared<FDockContext>();
     auto       dock = std::make_shared<UIDockSpace>("Dock");
     FCanvasSlotArgs dockArgs; dockArgs.anchorMin = {0.0f, 0.0f}; dockArgs.anchorMax = {1.0f, 1.0f};
-    dock->setWorkspace(ws);
+    dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UIPanel>("SceneBody");
@@ -2069,12 +2069,12 @@ TEST(WidgetLayoutTest, DockSpaceArrangesProjectionThroughTheSingleChildSlot)
 TEST(WidgetLayoutTest, FloatingWindowGeometryLivesOnTheHostCanvasSlot)
 {
     WidgetTree tree({.width = 1000, .height = 700});
-    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       ws   = std::make_shared<FDockContext>();
     ws->bAllowFloating = true;
     ws->bAllowTearOff  = true;
 
     auto host = std::make_shared<UIDockFloatingHost>("Host");
-    host->bindWorkspace(ws);
+    host->bindContext(ws);
     FCanvasSlotArgs hostFill;
     hostFill.anchorMin = {0.0f, 0.0f};
     hostFill.anchorMax = {1.0f, 1.0f};
@@ -2085,7 +2085,7 @@ TEST(WidgetLayoutTest, FloatingWindowGeometryLivesOnTheHostCanvasSlot)
     const FDockFloatingWindowId floatingId =
         ws->tearOffPanel(panelId, {120.0f, 80.0f}, {320.0f, 240.0f});
     ASSERT_NE(floatingId, kInvalidFloatingWindowId);
-    host->syncFromWorkspace();
+    host->syncFromContext();
     tree.layout();
 
     ASSERT_FALSE(host->getChildren().empty());
@@ -2102,12 +2102,12 @@ TEST(WidgetLayoutTest, FloatingWindowGeometryLivesOnTheHostCanvasSlot)
 TEST(WidgetLayoutTest, FloatingWindowResizeHandlesLiveOnOverlaySlots)
 {
     WidgetTree tree({.width = 1000, .height = 700});
-    auto       ws = std::make_shared<UIDockWorkspace>();
+    auto       ws = std::make_shared<FDockContext>();
     ws->bAllowFloating = true;
     ws->bAllowTearOff  = true;
 
     auto host = std::make_shared<UIDockFloatingHost>("Host");
-    host->bindWorkspace(ws);
+    host->bindContext(ws);
     FCanvasSlotArgs hostFill;
     hostFill.anchorMin = {0.0f, 0.0f};
     hostFill.anchorMax = {1.0f, 1.0f};
@@ -2116,7 +2116,7 @@ TEST(WidgetLayoutTest, FloatingWindowResizeHandlesLiveOnOverlaySlots)
     auto                  panel    = std::make_shared<UIPanel>("SceneBody");
     const DockPanelId     panelId  = ws->addPanel("Scene", panel);
     ASSERT_NE(ws->tearOffPanel(panelId, {100.0f, 80.0f}, {300.0f, 200.0f}), kInvalidFloatingWindowId);
-    host->syncFromWorkspace();
+    host->syncFromContext();
     tree.layout();
 
     ASSERT_FALSE(host->getChildren().empty());
@@ -2165,12 +2165,12 @@ TEST(WidgetLayoutTest, DockLeafTabBarIsCompactAndCanHide)
 {
     registerSyntheticFont(13, 7.0f);
     WidgetTree tree({.width = 800, .height = 600});
-    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       ws   = std::make_shared<FDockContext>();
     auto       dock = std::make_shared<UIDockSpace>("Dock");
     FCanvasSlotArgs dockArgs;
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
-    dock->setWorkspace(ws);
+    dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UIPanel>("SceneBody");
@@ -2212,12 +2212,12 @@ TEST(WidgetLayoutTest, DockHideTabBarClickHidesStripAndKeepsPanelContent)
 {
     registerSyntheticFont(13, 7.0f);
     WidgetTree tree({.width = 800, .height = 600});
-    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       ws   = std::make_shared<FDockContext>();
     auto       dock = std::make_shared<UIDockSpace>("Dock");
     FCanvasSlotArgs dockArgs;
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
-    dock->setWorkspace(ws);
+    dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UIPanel>("SceneBody");
@@ -2263,12 +2263,12 @@ TEST(WidgetLayoutTest, DockTabBarContextMenuHidesTitleBarOnly)
 {
     registerSyntheticFont(13, 7.0f);
     WidgetTree tree({.width = 800, .height = 600});
-    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       ws   = std::make_shared<FDockContext>();
     auto       dock = std::make_shared<UIDockSpace>("Dock");
     FCanvasSlotArgs dockArgs;
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
-    dock->setWorkspace(ws);
+    dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UIPanel>("SceneBody");
@@ -2312,12 +2312,12 @@ TEST(WidgetLayoutTest, DockSplitResizeKeepsPanelAttachedWithoutRematerialize)
 {
     registerSyntheticFont(13, 7.0f);
     WidgetTree tree({.width = 800, .height = 600});
-    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       ws   = std::make_shared<FDockContext>();
     auto       dock = std::make_shared<UIDockSpace>("Dock");
     FCanvasSlotArgs dockArgs;
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
-    dock->setWorkspace(ws);
+    dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto scene = std::make_shared<UIPanel>("SceneBody");
@@ -2362,12 +2362,12 @@ TEST(WidgetLayoutTest, DockProjectionRebuildReparentsLivePanelWidgets)
 {
     registerSyntheticFont(13, 7.0f);
     WidgetTree tree({.width = 800, .height = 600});
-    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       ws   = std::make_shared<FDockContext>();
     auto       dock = std::make_shared<UIDockSpace>("Dock");
     FCanvasSlotArgs dockArgs;
     dockArgs.anchorMin = {0.0f, 0.0f};
     dockArgs.anchorMax = {1.0f, 1.0f};
-    dock->setWorkspace(ws);
+    dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto scene = std::make_shared<UIPanel>("SceneBody");

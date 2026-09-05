@@ -38,7 +38,7 @@
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DockNode.h"
-#include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/DockContext.h"
 #include "GUI/Widgets/Controls/DockFloatingHost.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Menu.h"
@@ -435,7 +435,7 @@ void EditorSurface::shutdown()
     _toolbarModeText.reset();
     _dockFloatingHost.reset();
     _dockSpace.reset();
-    _dockWorkspace.reset();
+    _dockContext.reset();
     _viewportImage.reset();
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
@@ -497,7 +497,7 @@ void EditorSurface::rebuild(App& app)
     _toolbarModeText.reset();
     _dockFloatingHost.reset();
     _dockSpace.reset();
-    _dockWorkspace.reset();
+    _dockContext.reset();
     _viewportImage.reset();
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
@@ -825,16 +825,16 @@ void EditorSurface::buildEditorChrome(App& app)
                   .offset({0.0f, kMenuHeight})
                   .size({0.0f, kToolbarHeight}));
 
-    _dockWorkspace = std::make_shared<UIDockWorkspace>();
-    _dockWorkspace->bAllowFloating = true;
-    _dockWorkspace->bAllowTearOff  = true;
+    _dockContext = std::make_shared<FDockContext>();
+    _dockContext->bAllowFloating = true;
+    _dockContext->bAllowTearOff  = true;
     _dockSpace = ui::buildAs<UIDockSpace>(*_tree,
                                           *_root,
-                                          ui::dockSpace("EditorDock").setWorkspace(_dockWorkspace),
+                                          ui::dockSpace("EditorDock").setContext(_dockContext),
                                           ui::canvasSlot().anchor({0.0f, 0.0f}, {1.0f, 1.0f}).offset({0.0f, kChromeTop}));
 
     _dockFloatingHost = std::make_shared<UIDockFloatingHost>("EditorDockFloatingHost");
-    _dockFloatingHost->bindWorkspace(_dockWorkspace);
+    _dockFloatingHost->bindContext(_dockContext);
     FCanvasSlotArgs floatingFill;
     floatingFill.anchorMin = {0.0f, 0.0f};
     floatingFill.anchorMax = {1.0f, 1.0f};
@@ -929,12 +929,12 @@ void EditorSurface::buildEditorChrome(App& app)
         _tree->detach(*workbenchHost);
     }
 
-    _dockWorkspace->addPanel("viewport", "Viewport", viewportBody.release());
-    _dockWorkspace->addPanel("hierarchy", "Hierarchy", hierarchyBody.release());
-    _dockWorkspace->addPanel("inspector", "Inspector", inspectorBody);
-    _dockWorkspace->addPanel("content-browser", "Content", buildContentBrowser());
-    _dockWorkspace->addPanel("frame-stats", "Stats", statsBody.release());
-    _dockWorkspace->addPanel("gui-workbench", "Workbench", workbenchHost);
+    _dockContext->addPanel("viewport", "Viewport", viewportBody.release());
+    _dockContext->addPanel("hierarchy", "Hierarchy", hierarchyBody.release());
+    _dockContext->addPanel("inspector", "Inspector", inspectorBody);
+    _dockContext->addPanel("content-browser", "Content", buildContentBrowser());
+    _dockContext->addPanel("frame-stats", "Stats", statsBody.release());
+    _dockContext->addPanel("gui-workbench", "Workbench", workbenchHost);
     _tabRegistry->registerTab({
         .id = "runtime-tools",
         .title = "Runtime",
@@ -1053,15 +1053,15 @@ void EditorSurface::buildEditorChrome(App& app)
         },
     });
     for (const auto& tab : _tabRegistry->tabs()) {
-        _dockWorkspace->addPanel(tab.id, tab.title, tab.build(*_layer, *_tree));
+        _dockContext->addPanel(tab.id, tab.title, tab.build(*_layer, *_tree));
     }
 
     if (!tryRestoreEditorDockLayout()) {
         applyDefaultEditorDockLayout();
     }
-    _dockWorkspace->fireDockUpdated();
-    _dockWorkspace->appendOnDockUpdated([this]() { persistEditorDockLayout(); });
-    _dockWorkspace->appendOnFloatingUpdated([this]() { persistEditorDockLayout(); });
+    _dockContext->fireDockUpdated();
+    _dockContext->appendOnDockUpdated([this]() { persistEditorDockLayout(); });
+    _dockContext->appendOnFloatingUpdated([this]() { persistEditorDockLayout(); });
 
     _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(*_layer);
     _viewportOverlayHost.setOverlay(_viewportGizmoOverlay);
@@ -1100,10 +1100,10 @@ void EditorSurface::applyWindowMetrics(App& app)
 
 void EditorSurface::applyDefaultEditorDockLayout()
 {
-    if (!_dockWorkspace) {
+    if (!_dockContext) {
         return;
     }
-    FDockTreeModel& model = _dockWorkspace->dockModel();
+    FDockTreeModel& model = _dockContext->dockModel();
     const DockPanelId viewportId = dockPanelIdForKey(model, "viewport");
     const DockPanelId hierarchyId = dockPanelIdForKey(model, "hierarchy");
     const DockPanelId inspectorId = dockPanelIdForKey(model, "inspector");
@@ -1156,23 +1156,23 @@ void EditorSurface::applyDefaultEditorDockLayout()
 
 bool EditorSurface::tryRestoreEditorDockLayout()
 {
-    if (!_dockWorkspace) {
+    if (!_dockContext) {
         return false;
     }
     nlohmann::json layout = nlohmann::json::object();
     if (!ConfigManager::get().tryGet("editor", "dockLayout", layout)) {
         return false;
     }
-    return _dockWorkspace->importLayoutJson(layout);
+    return _dockContext->importLayoutJson(layout);
 }
 
 void EditorSurface::persistEditorDockLayout()
 {
-    if (!_dockWorkspace) {
+    if (!_dockContext) {
         return;
     }
     ConfigManager::Editor("editor")
-        .set("dockLayout", _dockWorkspace->exportLayoutJson())
+        .set("dockLayout", _dockContext->exportLayoutJson())
         .flush();
 }
 

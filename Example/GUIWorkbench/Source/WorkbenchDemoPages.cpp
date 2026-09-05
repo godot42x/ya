@@ -10,7 +10,7 @@
 #include "GUI/Widgets/Controls/Dialog.h"
 #include "GUI/Widgets/Controls/DockFloatingHost.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
-#include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/DockContext.h"
 #include "GUI/Widgets/Controls/DragDrop.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
@@ -1187,19 +1187,19 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
     }
     state.dockFloatingHost.reset();
 
-    auto dockWs            = std::make_shared<ya::UIDockWorkspace>();
-    dockWs->bAllowFloating = true;
-    dockWs->bAllowTearOff  = true;
+    auto dockContext = std::make_shared<ya::FDockContext>();
+    dockContext->bAllowFloating = true;
+    dockContext->bAllowTearOff  = true;
 
     auto dock        = std::make_shared<ya::UIDockSpace>("DemoDock");
-    dock->setWorkspace(dockWs);
+    dock->setContext(dockContext);
 
     auto page = ya::ui::column("DockDemo");
     page.child(dock, ya::ui::boxSlot().fill());
     ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
 
     auto floatHost = std::make_shared<ya::UIDockFloatingHost>("DemoFloatingHost");
-    floatHost->bindWorkspace(dockWs);
+    floatHost->bindContext(dockContext);
     ya::FCanvasSlotArgs hostFill;
     hostFill.anchorMin = {0.0f, 0.0f};
     hostFill.anchorMax = {1.0f, 1.0f};
@@ -1221,13 +1221,13 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
             .release();
     };
 
-    const ya::DockPanelId sceneId     = dockWs->addPanel("Scene", makePanel("Scene", "Scene viewport"));
-    const ya::DockPanelId hierarchyId = dockWs->addPanel("Hierarchy", makePanel("Hierarchy", "Actor hierarchy"));
-    const ya::DockPanelId inspectorId = dockWs->addPanel("Inspector", makePanel("Inspector", "Inspector panel"));
-    const ya::DockPanelId consoleId   = dockWs->addPanel("Console", makePanel("Console", "Console output"));
-    const ya::DockPanelId assetsId    = dockWs->addPanel("Assets", makePanel("Assets", "Asset browser"));
+    const ya::DockPanelId sceneId     = dockContext->addPanel("Scene", makePanel("Scene", "Scene viewport"));
+    const ya::DockPanelId hierarchyId = dockContext->addPanel("Hierarchy", makePanel("Hierarchy", "Actor hierarchy"));
+    const ya::DockPanelId inspectorId = dockContext->addPanel("Inspector", makePanel("Inspector", "Inspector panel"));
+    const ya::DockPanelId consoleId   = dockContext->addPanel("Console", makePanel("Console", "Console output"));
+    const ya::DockPanelId assetsId    = dockContext->addPanel("Assets", makePanel("Assets", "Asset browser"));
 
-    auto&                model    = dockWs->dockModel();
+    auto&                model    = dockContext->dockModel();
     const ya::DockNodeId rootLeaf = model.getRootNode()->id;
     model.selectPanel(sceneId);
     model.splitLeaf(rootLeaf, ya::EDockCardinalSide::East, inspectorId, 0.74f);
@@ -1241,7 +1241,7 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
         model.movePanel(assetsId, hierarchyLeaf->id);
         model.selectPanel(hierarchyId);
     }
-    dockWs->fireDockUpdated();
+    dockContext->fireDockUpdated();
     log("Dock demo: drag tabs to split / merge, drag out to float, drag floating title to re-dock");
 
     (void)state;

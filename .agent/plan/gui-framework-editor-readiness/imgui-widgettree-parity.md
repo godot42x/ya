@@ -1,6 +1,6 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-05 (after Phase 10E density / inspector leaf labels)  
+> **As of:** 2026-09-06 (after dock session rename to FDockContext)  
 > **Default chrome:** WidgetTree only (`EditorSurface`)  
 > **Legacy chrome:** `--editor-chrome=imgui` is ignored (WARN); `onImGuiRender` deleted  
 > **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, but legacy helpers still require it.
@@ -32,7 +32,7 @@
 | Project browser (no project) | `EditorLayer::projectBrowserWindow` | `EditorSurface::buildProjectBrowser` | ⚫ / ✅ | ImGui window deleted 8W |
 | Main menu | `EditorLayer::menuBar` (ImGui) | `UIMenuBar` + `ActionMap` | ⚫ / 🟡 | ImGui menu deleted 8W; see File menu gaps below |
 | Toolbar | `EditorLayer::toolbar` (icon `ImageButton`) | Text `UIButton` row | ⚫ / 🟡 | ImGui toolbar deleted 8W |
-| Dock layout | ImGui `DockSpace` | `UIDockWorkspace` + `UIDockSpace` | ✅ | Compact dock tab strip; hide-tab-bar hides title strip only (corner + right-click); live split-resize does not rematerialize; docked tree + floating geometry persist in `editor.dockLayout` |
+| Dock layout | ImGui `DockSpace` | `FDockContext` + `UIDockSpace` | ✅ | Compact dock tab strip; hide-tab-bar hides title strip only (corner + right-click); live split-resize does not rematerialize; docked tree + floating geometry persist in `editor.dockLayout` |
 | Editor Settings window | `EditorLayer::editorSettings` | `EditorSettingsDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui window deleted 8W; 10E owner extract |
 | Debug images window | `EditorLayer::debugWindow` | `EditorDebugImagesTab` dock tab | ⚫ / ✅ | ImGui window deleted 8W; cube-face button grid not retained |
 | Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | `EditorFilePickerDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui FilePicker modal chrome deleted 8W; `FilePicker` type remains for fallback APIs |

@@ -2,7 +2,7 @@
 
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/Controls/DockNode.h"
-#include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/DockContext.h"
 #include "GUI/Widgets/Theme.h"
 
 #include <memory>
@@ -17,28 +17,29 @@ namespace ya
 struct UIContainer;
 struct UISplitPane;
 struct UITabBar;
-struct UIDockWorkspace;
+struct FDockContext;
 
-/// DockSpace: a full nested dock tree (FDockTreeModel) projected into nested
-/// UISplitPanes with tab groups. There is no fixed zone layout — the initial
-/// model is a single root leaf holding all registered panels, and dragging a
-/// tab splits into cardinal sub-leaves or merges into another leaf.
-/// No floating windows or persistence yet.
+/// In-window projection of `FDockContext`'s docked tree.
+/// Nested UISplitPanes + tab groups fill this widget. The context owns the
+/// model, panel registry, floating records, and policy; this widget does not.
+/// Torn-off windows are projected by `UIDockFloatingHost`, not here.
+/// There is no fixed zone layout — the initial model is a single root leaf,
+/// and dragging a tab splits into cardinal sub-leaves or merges into another leaf.
 struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSpace, FDockSpaceStyle>
 {
     YA_GUI_AUTHORED_STYLE_IO(FDockSpaceStyle)
 
     explicit UIDockSpace(std::string name = "DockSpace");
-    /// Unregister the workspace back-pointer (UIDockWorkspace::_dockSpace) so a
-    /// workspace that outlives this widget never hands out a dangling pointer.
+    /// Unregister the context back-pointer (FDockContext::_dockSpace) so a
+    /// context that outlives this widget never hands out a dangling pointer.
     ~UIDockSpace() override;
-    /// Bind the shared workspace this dock reads its model / registry / policy from.
-    void setWorkspace(std::shared_ptr<UIDockWorkspace> ws);
-    [[nodiscard]] UIDockWorkspace* workspace() const { return _ws.get(); }
+    /// Bind the shared session this dock reads its model / registry / policy from.
+    void setContext(std::shared_ptr<FDockContext> context);
+    [[nodiscard]] FDockContext* context() const { return _context.get(); }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIDockSpace>; }
 
-    /// Add a panel through the workspace (its widget becomes that leaf's active
+    /// Add a panel through the context (its widget becomes that leaf's active
     /// content when its tab is selected).
     void addPanel(const std::string& name, std::shared_ptr<UIElement> widget);
 
@@ -145,7 +146,7 @@ private:
     std::unordered_map<DockNodeId, FLeafView> _leafViews;
     std::optional<FDropPreview> _preview;
     std::shared_ptr<UIElement> _previewOverlay;
-    std::shared_ptr<UIDockWorkspace> _ws;
+    std::shared_ptr<FDockContext> _context;
     bool _bRebuildingProjection = false;
 };
 

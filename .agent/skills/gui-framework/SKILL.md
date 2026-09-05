@@ -55,6 +55,13 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   deferred texture generation。GPU/offscreen 像素门禁：`Script/automation/gui/run_workbench_gpu_parity.py`
   （headless lastRoute + snapshot digest + windowed `--gpu-shot`/`--offscreen-diff` 零容差）。
 
+## Dock 权责
+
+- `FDockContext` 是共享会话，不是 widget。它持有 panel 注册表、`FDockTreeModel`、floating 记录、policy 和 layout JSON，以及到两个投影的回指。
+- `UIDockSpace` 是 in-window 投影：把 context 的 docked tree 物化成 nested split + tab。不拥有 model。
+- `UIDockFloatingHost` 是 Popup 层投影：把 context 的 floating records 物化成浮窗。
+- 绑定 API：`UIDockSpace::setContext` / `UIDockFloatingHost::bindContext`。不要再引入 `UIDockWorkspace` 这种与 Space 近义、还带 `UI` 前缀的会话类型。
+
 ## 布局契约（SizeToContent）
 
 - SizeToContent / Slate DesiredSize 模型完全由 parent-owned slot 表达：canvas 在 attach 时把 Auto 种到 `UICanvasSlot` size mode。每轴解析优先级
@@ -93,9 +100,9 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   面板内容继续填满 leaf。split ratio / 选 tab / hide-tab-bar 只改 live chrome 并
   `notifyDockLayoutListeners()`；结构变化才 `rebuildProjection()`，且会先 unlink 再
   reparent/attach 已挂载的 panel widget，禁止对仍有 parent 的 panel `addDetachedChild`）。
-  `UIDockWorkspace::exportLayoutJson` / `importLayoutJson` 在同一 JSON 上附加
+  `FDockContext::exportLayoutJson` / `importLayoutJson` 在同一 JSON 上附加
   `floating[]`（panel keys + pos/size + selected tab + `hideTabBar`）。Editor 经
-  `ConfigManager` `editor.dockLayout` 恢复，`UIDockWorkspace::appendOnDockUpdated`
+  `ConfigManager` `editor.dockLayout` 恢复，`FDockContext::appendOnDockUpdated`
   与 `appendOnFloatingUpdated` 写回。Editor chrome 打开 `bAllowFloating` /
   `bAllowTearOff`，`UIDockFloatingHost` 挂在 Popup 层。
   `UIDockFloatingHost` 是 canvas host；floating window 的位置/尺寸写在 host-owned `UICanvasSlot`，

@@ -3,7 +3,7 @@
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockNode.h"
-#include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/DockContext.h"
 #include "GUI/Widgets/Theme.h"
 
 #include <functional>
@@ -18,9 +18,9 @@ namespace ya
 struct UITabBar;
 struct UIContainer;
 struct UIButton;
-struct UIDockWorkspace;
+struct FDockContext;
 
-/// A floating dock window (Phase 5). Presents one workspace floating record as a
+/// A floating dock window (Phase 5). Presents one FDockContext floating record as a
 /// titled window that may host several tabs (panels). It is positioned
 /// absolutely inside a UIDockFloatingHost via the host-owned UICanvasSlot:
 ///   - `setWindowRect` writes that edge (and seeds it at attach);
@@ -33,17 +33,17 @@ struct YA_GUI_API UIDockFloatingWindow : public UIElement, public UIStyledWidget
     YA_GUI_AUTHORED_STYLE_IO(FFloatingWindowStyle)
 
     explicit UIDockFloatingWindow(std::string name, FDockFloatingWindowId floatingId,
-                                  std::shared_ptr<UIDockWorkspace> ws);
+                                  std::shared_ptr<FDockContext> context);
 
     [[nodiscard]] DockPanelId getActivePanelId() const { return _panelId; }
     [[nodiscard]] FDockFloatingWindowId getFloatingId() const { return _floatingId; }
     [[nodiscard]] const Rect2D& getWindowRect() const { return _windowRect; }
     void setWindowRect(const Rect2D& rect);
     void resizeTo(const glm::vec2& extent);
-    void commitGeometryToWorkspace(bool notify);
-    /// Rebuild the window's tab bar + content to match the workspace's current
+    void commitGeometryToContext(bool notify);
+    /// Rebuild the window's tab bar + content to match the context's current
     /// floating record for this window (called by the host on floating updates).
-    void refreshFromWorkspace();
+    void refreshFromContext();
     /// Fired when the window is activated (title drag begins). Used by the host
     /// to bring the window to the front of the floating z-order.
     std::function<void()> _onActivated;
@@ -78,7 +78,7 @@ struct YA_GUI_API UIDockFloatingWindow : public UIElement, public UIStyledWidget
     FDockFloatingWindowId _floatingId = kInvalidFloatingWindowId;
     DockPanelId _panelId = kInvalidDockPanelId; ///< Active (selected) tab.
     std::string _title;
-    std::shared_ptr<UIDockWorkspace> _ws;
+    std::shared_ptr<FDockContext> _context;
     std::shared_ptr<UITabBar> _tabBar;
     std::shared_ptr<UIContainer> _content;
     std::shared_ptr<UIContainer> _chrome;

@@ -113,8 +113,8 @@ class UITreeViewWidgetBuilder final : public TUIWidgetBuilder<UITreeView, UITree
     }
 };
 
-/// Dock space projecting a UIDockWorkspace's dock tree. The workspace is the
-/// model owner and is bound at construct time.
+/// Dock space projecting an FDockContext dock tree. The context is the
+/// session owner and is bound at construct time.
 class UIDockSpaceWidgetBuilder final : public TUIWidgetBuilder<UIDockSpace, UIDockSpaceWidgetBuilder>
 {
   public:
@@ -123,15 +123,15 @@ class UIDockSpaceWidgetBuilder final : public TUIWidgetBuilder<UIDockSpace, UIDo
     {
     }
 
-    [[nodiscard]] UIDockSpaceWidgetBuilder& setWorkspace(std::shared_ptr<UIDockWorkspace> value) &
+    [[nodiscard]] UIDockSpaceWidgetBuilder& setContext(std::shared_ptr<FDockContext> value) &
     {
-        _widget->setWorkspace(std::move(value));
+        _widget->setContext(std::move(value));
         return *this;
     }
 
-    [[nodiscard]] UIDockSpaceWidgetBuilder&& setWorkspace(std::shared_ptr<UIDockWorkspace> value) &&
+    [[nodiscard]] UIDockSpaceWidgetBuilder&& setContext(std::shared_ptr<FDockContext> value) &&
     {
-        _widget->setWorkspace(std::move(value));
+        _widget->setContext(std::move(value));
         return std::move(*this);
     }
 };

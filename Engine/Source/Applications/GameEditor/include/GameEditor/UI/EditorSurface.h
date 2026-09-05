@@ -42,7 +42,7 @@ struct Texture;
 class EditorFilePickerDialog;
 class EditorSettingsDialog;
 struct UIDockSpace;
-struct UIDockWorkspace;
+struct FDockContext;
 struct UIDockFloatingHost;
 struct UIElement;
 struct UIContainer;
@@ -83,7 +83,7 @@ struct EditorSurface
     std::shared_ptr<UIPanel>         _root;
     std::shared_ptr<UIMenuBar>       _menuBar;
     std::shared_ptr<UIText>          _toolbarModeText;
-    std::shared_ptr<UIDockWorkspace> _dockWorkspace;
+    std::shared_ptr<FDockContext>    _dockContext;
     std::shared_ptr<UIDockSpace>     _dockSpace;
     std::shared_ptr<UIDockFloatingHost> _dockFloatingHost;
     std::shared_ptr<UIImage>         _viewportImage;

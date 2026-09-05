@@ -18,7 +18,7 @@
 #include "GUI/Widgets/Controls/Dialog.h"
 #include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DockFloatingWindow.h"
-#include "GUI/Widgets/Controls/DockWorkspace.h"
+#include "GUI/Widgets/Controls/DockContext.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -1737,11 +1737,11 @@ TEST(WidgetTreeTest, DragOverDockSetsPointSensitiveDropPreview)
     // per move) — before the fix, canAcceptDrop computed the preview into a
     // local and setDropHighlight(true) never stored it, so no hint rendered.
     WidgetTree tree({.width = 800, .height = 600});
-    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       ws   = std::make_shared<FDockContext>();
     ws->bAllowFloating = true;
     ws->bAllowTearOff  = true;
     auto dock = std::make_shared<UIDockSpace>("Dock");
-    dock->setWorkspace(ws);
+    dock->setContext(ws);
     FCanvasSlotArgs dockArgs;
     dockArgs.anchorMax = {1.0f, 1.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs).valid());
@@ -1796,13 +1796,13 @@ TEST(WidgetTreeTest, DragOverDockSetsPointSensitiveDropPreview)
 TEST(WidgetTreeTest, DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTarget)
 {
     WidgetTree tree({.width = 1000, .height = 700});
-    auto       ws = std::make_shared<UIDockWorkspace>();
+    auto       ws = std::make_shared<FDockContext>();
     ws->bAllowFloating = true;
     ws->bAllowTearOff  = true;
 
     auto dock = std::make_shared<UIDockSpace>("Dock");
     FCanvasSlotArgs dockArgs; dockArgs.anchorMin = {0.0f, 0.0f}; dockArgs.anchorMax = {1.0f, 1.0f};
-    dock->setWorkspace(ws);
+    dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panelA = std::make_shared<UIPanel>("PanelA");
@@ -1840,13 +1840,13 @@ TEST(WidgetTreeTest, DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTa
 TEST(WidgetTreeTest, DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget)
 {
     WidgetTree tree({.width = 1000, .height = 700});
-    auto       ws = std::make_shared<UIDockWorkspace>();
+    auto       ws = std::make_shared<FDockContext>();
     ws->bAllowFloating = true;
     ws->bAllowTearOff  = true;
 
     auto dock = std::make_shared<UIDockSpace>("Dock");
     FCanvasSlotArgs dockArgs; dockArgs.anchorMin = {0.0f, 0.0f}; dockArgs.anchorMax = {1.0f, 1.0f};
-    dock->setWorkspace(ws);
+    dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UIPanel>("Panel");
@@ -1874,13 +1874,13 @@ TEST(WidgetTreeTest, DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget)
 TEST(WidgetTreeTest, FloatingWindowTabDragBehaviorStartsDockPanelSession)
 {
     WidgetTree tree({.width = 1000, .height = 700});
-    auto       ws = std::make_shared<UIDockWorkspace>();
+    auto       ws = std::make_shared<FDockContext>();
     ws->bAllowFloating = true;
     ws->bAllowTearOff  = true;
 
     auto dock = std::make_shared<UIDockSpace>("Dock");
     FCanvasSlotArgs dockArgs; dockArgs.anchorMin = {0.0f, 0.0f}; dockArgs.anchorMax = {1.0f, 1.0f};
-    dock->setWorkspace(ws);
+    dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UIPanel>("Panel");

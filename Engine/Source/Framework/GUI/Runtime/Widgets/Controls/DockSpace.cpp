@@ -269,12 +269,12 @@ struct FDockSpacePanelDragBehavior final : public UIBehavior
         observer.onFinished = [&owner, panelId](EDragFinishResult result, const glm::vec2& logicalPoint, std::string_view)
         {
             owner.clearPreview();
-            if (result == EDragFinishResult::NoTarget && owner._ws && owner._ws->bAllowTearOff && owner._ws->bAllowFloating) {
+            if (result == EDragFinishResult::NoTarget && owner._context && owner._context->bAllowTearOff && owner._context->bAllowFloating) {
                 const glm::vec2 size{320.0f, 240.0f};
-                owner._ws->tearOffPanel(panelId, logicalPoint, size);
+                owner._context->tearOffPanel(panelId, logicalPoint, size);
                 owner.rebuildProjection();
-                owner._ws->fireFloatingUpdated();
-                owner._ws->notifyDockLayoutListeners();
+                owner._context->fireFloatingUpdated();
+                owner._context->notifyDockLayoutListeners();
             }
         };
         tree->beginDrag(&owner, std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelId), std::move(label), std::move(observer));
@@ -312,34 +312,34 @@ struct FDockSpaceDropTargetBehavior final : public UIDropTargetBehavior
                 return;
             }
 
-            const FDockNode* sourceLeaf = dock->_ws->dockModel().findLeafForPanel(panelId);
-            const bool bWasFloating = dock->_ws->isPanelFloating(panelId);
+            const FDockNode* sourceLeaf = dock->_context->dockModel().findLeafForPanel(panelId);
+            const bool bWasFloating = dock->_context->isPanelFloating(panelId);
             if (!sourceLeaf && !bWasFloating) {
                 return;
             }
 
             bool bChanged = false;
             if (preview->targetFloatingId != kInvalidFloatingWindowId) {
-                bChanged = dock->_ws->addPanelToFloating(preview->targetFloatingId, panelId);
+                bChanged = dock->_context->addPanelToFloating(preview->targetFloatingId, panelId);
             }
             else if (preview->bMerge) {
                 if (sourceLeaf && sourceLeaf->id != preview->targetLeafId) {
-                    bChanged = dock->_ws->dockModel().movePanel(panelId, preview->targetLeafId, SIZE_MAX, true);
+                    bChanged = dock->_context->dockModel().movePanel(panelId, preview->targetLeafId, SIZE_MAX, true);
                 }
                 else if (!sourceLeaf) {
-                    bChanged = dock->_ws->dockModel().addPanel(panelId, preview->targetLeafId);
+                    bChanged = dock->_context->dockModel().addPanel(panelId, preview->targetLeafId);
                 }
             }
             else {
-                bChanged = dock->_ws->dockModel().splitLeaf(preview->targetLeafId, preview->side, panelId);
+                bChanged = dock->_context->dockModel().splitLeaf(preview->targetLeafId, preview->side, panelId);
             }
 
             if (bChanged) {
                 if (bWasFloating && preview->targetFloatingId == kInvalidFloatingWindowId) {
-                    dock->_ws->endFloatingForPanel(panelId);
+                    dock->_context->endFloatingForPanel(panelId);
                 }
                 dock->rebuildProjection();
-                dock->_ws->notifyDockLayoutListeners();
+                dock->_context->notifyDockLayoutListeners();
             }
         };
         setHighlightState = [](UIElement& owner, bool bHighlight)
@@ -386,12 +386,12 @@ UIDockSpace::UIDockSpace(std::string name)
 
 UIDockSpace::~UIDockSpace()
 {
-    // Detach from the workspace so a workspace that outlives this widget (the
+    // Detach from the context so a context that outlives this widget (the
     // floating host keeps it alive) never serves a dangling UIDockSpace* via
     // dockSpace(). The drag-drop completion path resolves UIDockSpace through
     // exactly this pointer, so a stale value is a use-after-free.
-    if (_ws && _ws->dockSpace() == this) {
-        _ws->setDockSpace(nullptr);
+    if (_context && _context->dockSpace() == this) {
+        _context->setDockSpace(nullptr);
     }
 }
 
@@ -527,22 +527,22 @@ void UIDockSpace::paintDropPreviewOverlay(UIFrameBuilder& builder) const
     }
 }
 
-void UIDockSpace::setWorkspace(std::shared_ptr<UIDockWorkspace> ws)
+void UIDockSpace::setContext(std::shared_ptr<FDockContext> context)
 {
-    // Rebind: the old workspace must not keep pointing back at us (a floating
+    // Rebind: the old context must not keep pointing back at us (a floating
     // host may keep it alive long after this widget is replaced).
-    if (_ws && _ws != ws && _ws->dockSpace() == this) {
-        _ws->setDockSpace(nullptr);
+    if (_context && _context != context && _context->dockSpace() == this) {
+        _context->setDockSpace(nullptr);
     }
-    _ws = std::move(ws);
-    if (_ws) {
-        _ws->setDockSpace(this);
-        // Weak self: the workspace may fire dock-updated after this widget is
+    _context = std::move(context);
+    if (_context) {
+        _context->setDockSpace(this);
+        // Weak self: the context may fire dock-updated after this widget is
         // destroyed (it is kept alive by the floating host), so the callback
         // must never dereference a stale 'this'.
         std::weak_ptr<UIDockSpace> weakSelf =
             std::static_pointer_cast<UIDockSpace>(shared_from_this());
-        _ws->setOnDockUpdated([weakSelf]()
+        _context->setOnDockUpdated([weakSelf]()
         {
             if (auto self = weakSelf.lock()) {
                 if (self->getTree() && !self->_bRebuildingProjection) {
@@ -558,7 +558,7 @@ void UIDockSpace::setWorkspace(std::shared_ptr<UIDockWorkspace> ws)
 
 void UIDockSpace::rebuildProjection()
 {
-    if (!getTree() || !_ws || _bRebuildingProjection) {
+    if (!getTree() || !_context || _bRebuildingProjection) {
         return;
     }
     _bRebuildingProjection = true;
@@ -571,7 +571,7 @@ void UIDockSpace::rebuildProjection()
         }
     }
     _leafViews.clear();
-    addDetachedChild(materializeNode(*_ws->dockModel().getRootNode()));
+    addDetachedChild(materializeNode(*_context->dockModel().getRootNode()));
     markLayoutDirty();
     markPaintDirty();
     _bRebuildingProjection = false;
@@ -595,7 +595,7 @@ void UIDockSpace::releaseMountedPanels()
 
 void UIDockSpace::applyLeafTabBarVisibility(DockNodeId leafId)
 {
-    const FDockNode* leaf = _ws ? _ws->dockModel().findNode(leafId) : nullptr;
+    const FDockNode* leaf = _context ? _context->dockModel().findNode(leafId) : nullptr;
     FLeafView* view = leafViewForLeaf(leafId);
     if (!leaf || !view || !view->bar) {
         return;
@@ -609,7 +609,7 @@ void UIDockSpace::applyLeafTabBarVisibility(DockNodeId leafId)
 void UIDockSpace::openLeafTabBarMenu(DockNodeId leafId, const glm::vec2& pos)
 {
     WidgetTree* tree = getTree();
-    const FDockNode* leaf = _ws ? _ws->dockModel().findNode(leafId) : nullptr;
+    const FDockNode* leaf = _context ? _context->dockModel().findNode(leafId) : nullptr;
     if (!tree || !leaf || leaf->kind != EDockNodeKind::Leaf) {
         return;
     }
@@ -619,13 +619,13 @@ void UIDockSpace::openLeafTabBarMenu(DockNodeId leafId, const glm::vec2& pos)
             .label = bHidden ? "Show Tab Bar" : "Hide Tab Bar",
             .action = [this, leafId]()
             {
-                const FDockNode* current = _ws->dockModel().findNode(leafId);
+                const FDockNode* current = _context->dockModel().findNode(leafId);
                 if (!current || current->kind != EDockNodeKind::Leaf) {
                     return;
                 }
-                if (_ws->dockModel().setHideTabBar(leafId, !current->bHideTabBar)) {
+                if (_context->dockModel().setHideTabBar(leafId, !current->bHideTabBar)) {
                     applyLeafTabBarVisibility(leafId);
-                    _ws->notifyDockLayoutListeners();
+                    _context->notifyDockLayoutListeners();
                 }
             },
         },
@@ -642,10 +642,10 @@ void UIDockSpace::graftPanelIntoContent(UIContainer& content, const UIElementRef
 
 void UIDockSpace::rebuildLeaf(DockNodeId leafId)
 {
-    if (!_ws) {
+    if (!_context) {
         return;
     }
-    const FDockNode* leaf = _ws->dockModel().findNode(leafId);
+    const FDockNode* leaf = _context->dockModel().findNode(leafId);
     FLeafView* view = leafViewForLeaf(leafId);
     if (!leaf || !view || !view->bar || !view->content) {
         return;
@@ -664,7 +664,7 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
     }
 
     for (DockPanelId panelId : leaf->panelIds) {
-        if (const UIDockWorkspace::FPanel* fp = _ws->findPanel(panelId)) {
+        if (const FDockContext::FPanel* fp = _context->findPanel(panelId)) {
             view->bar->addTab(fp->name);
         }
     }
@@ -682,17 +682,17 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
 
     view->bar->_onTabSelected = [this, leafId](int index)
     {
-        const FDockNode* currentLeaf = _ws->dockModel().findNode(leafId);
+        const FDockNode* currentLeaf = _context->dockModel().findNode(leafId);
         FLeafView* currentView = leafViewForLeaf(leafId);
         if (!currentLeaf || !currentView || !currentView->content || index < 0 || index >= static_cast<int>(currentLeaf->panelIds.size())) {
             return;
         }
         const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
-        _ws->dockModel().selectPanel(panelId);
-        if (const UIDockWorkspace::FPanel* fp = _ws->findPanel(panelId)) {
+        _context->dockModel().selectPanel(panelId);
+        if (const FDockContext::FPanel* fp = _context->findPanel(panelId)) {
             graftPanelIntoContent(*currentView->content, fp->widget);
         }
-        _ws->notifyDockLayoutListeners();
+        _context->notifyDockLayoutListeners();
     };
     view->bar->_onTabContextMenu = [this, leafId](int, const glm::vec2& logicalPoint)
     {
@@ -702,7 +702,7 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
     if (selectedIndex >= 0) {
         view->bar->syncSelectedTab(selectedIndex);
         DockPanelId selectedPanel = leaf->panelIds[static_cast<size_t>(selectedIndex)];
-        if (const UIDockWorkspace::FPanel* fp = _ws->findPanel(selectedPanel)) {
+        if (const FDockContext::FPanel* fp = _context->findPanel(selectedPanel)) {
             graftPanelIntoContent(*view->content, fp->widget);
         }
     }
@@ -721,10 +721,10 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
         const DockNodeId splitId = node.id;
         split->setSplitRatioChangedCallback([this, splitId](float ratio)
         {
-            if (_ws->dockModel().setSplitRatio(splitId, ratio)) {
+            if (_context->dockModel().setSplitRatio(splitId, ratio)) {
                 markLayoutDirty();
                 markPaintDirty();
-                _ws->notifyDockLayoutListeners();
+                _context->notifyDockLayoutListeners();
             }
         });
         if (node.child[0]) split->addDetachedChild(materializeNode(*node.child[0]));
@@ -746,7 +746,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     bar->_emptyPlaceholder = std::format("{} (drop tabs here)", leaf->_name);
     bar->_onTabDragBegin = [this, leafId = node.id](int index, const std::string& label)
     {
-        const FDockNode* currentLeaf = _ws->dockModel().findNode(leafId);
+        const FDockNode* currentLeaf = _context->dockModel().findNode(leafId);
         if (!currentLeaf || index < 0 || index >= static_cast<int>(currentLeaf->panelIds.size())) {
             return;
         }
@@ -788,18 +788,18 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     auto hideBar = std::make_shared<FDockHideTabBarAffordance>(
         [this, leafId = node.id]()
         {
-            const FDockNode* current = _ws->dockModel().findNode(leafId);
+            const FDockNode* current = _context->dockModel().findNode(leafId);
             if (!current || current->kind != EDockNodeKind::Leaf) {
                 return;
             }
-            if (_ws->dockModel().setHideTabBar(leafId, !current->bHideTabBar)) {
+            if (_context->dockModel().setHideTabBar(leafId, !current->bHideTabBar)) {
                 applyLeafTabBarVisibility(leafId);
-                _ws->notifyDockLayoutListeners();
+                _context->notifyDockLayoutListeners();
             }
         },
         [this, leafId = node.id]()
         {
-            const FDockNode* current = _ws->dockModel().findNode(leafId);
+            const FDockNode* current = _context->dockModel().findNode(leafId);
             return current && current->kind == EDockNodeKind::Leaf && current->bHideTabBar;
         });
     leaf->addDetachedChild(hideBar, [](UIElement&, UISlot& slot)
@@ -859,26 +859,26 @@ const std::string& UIDockSpace::getDropPreviewDisabledReason() const
 
 void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> widget)
 {
-    if (!_ws) {
+    if (!_context) {
         return;
     }
-    const DockPanelId panelId = _ws->addPanel(name, std::move(widget));
+    const DockPanelId panelId = _context->addPanel(name, std::move(widget));
     if (panelId == kInvalidDockPanelId) {
         YA_CORE_WARN("UIDockSpace '{}': rejected duplicate or invalid panel '{}'", _name, name);
         return;
     }
     if (getTree() && !getChildren().empty()) {
-        rebuildLeaf(_ws->dockModel().getRootNode()->id);
+        rebuildLeaf(_context->dockModel().getRootNode()->id);
     }
 }
 
 std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const glm::vec2& logicalPoint, DockPanelId panelId) const
 {
-    if (!_ws || panelId == kInvalidDockPanelId) {
+    if (!_context || panelId == kInvalidDockPanelId) {
         return std::nullopt;
     }
-    const FDockNode* sourceLeaf = _ws->dockModel().findLeafForPanel(panelId);
-    const bool bFloating = _ws->isPanelFloating(panelId);
+    const FDockNode* sourceLeaf = _context->dockModel().findLeafForPanel(panelId);
+    const bool bFloating = _context->isPanelFloating(panelId);
     if (!sourceLeaf && !bFloating) {
         return std::nullopt;
     }
@@ -886,8 +886,8 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     // window merges the dragged panel in as a new tab. It takes precedence over
     // the dock leaves beneath, since floating windows render above the content.
     // The panel's own floating window is excluded (you cannot merge into itself).
-    const UIDockWorkspace::FFloatingWindow* sourceFloating = bFloating ? _ws->findFloatingByPanel(panelId) : nullptr;
-    for (const UIDockWorkspace::FFloatingWindow& fw : _ws->floatingWindows()) {
+    const FDockContext::FFloatingWindow* sourceFloating = bFloating ? _context->findFloatingByPanel(panelId) : nullptr;
+    for (const FDockContext::FFloatingWindow& fw : _context->floatingWindows()) {
         if (sourceFloating && sourceFloating->id == fw.id) {
             continue;
         }
