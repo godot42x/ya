@@ -6,6 +6,7 @@
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/KeyedChildReconciler.h"
+#include "GameEditor/UI/EditorTheme.h"
 
 #include <functional>
 #include <string>
@@ -13,7 +14,7 @@
 namespace ya
 {
 
-inline constexpr float kEditorListRowHeight = 22.0f;
+inline constexpr float kEditorListRowHeight = editor_density::kListRowHeight;
 inline constexpr float kEditorListRowSpacing = 2.0f;
 inline constexpr size_t kEditorListOverscan = 2;
 

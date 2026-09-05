@@ -285,14 +285,16 @@ Render2D compose / window or offscreen presentation
 步骤：
 
 1. 合并 scene-save / generic file / asset picker 三套 overlay 为 `EditorFilePickerDialog`；`EditorSurface` 只保留 open/sync 宿主调用。
-2. 仅当 Content Browser、UI Designer、Runtime Tools、Asset Inspector、settings 已经有稳定边界时再拆，不做 line-count surgery。
-3. density/token：把 editor chrome 的 magic size（8/12/22/26 一类）收到 `EditorTheme`。
+2. 抽出 `EditorSettingsDialog`（bindings 宿主）。其余 Content Browser / UI Designer / Runtime Tools / Asset Inspector 仅当已有稳定边界时再拆，不做 line-count surgery。
+3. density/token：`editor_density` 收口 chrome 度量；inspector 用叶名 + group header，去掉 path 前缀噪音。
 
 验收：
 
 - 文件选择 dialog 自己持有 overlay、explorer、keyed mount/entry rows 和 save-as 合成路径。
-- `EditorSurface` 不再维护 picker overlay / explorer / reconciler 成员。
-- density/token 与其余 tab owner 是后续 checkpoint，不混进本步。
+- settings dialog 自己持有 overlay 与 sampler/overlay/startup-scene 控件。
+- inspector 行显示叶名，nested 字段用 group header；chrome 度量走 `editor_density`。
+- `EditorSurface` 不再维护 picker / settings overlay 成员。
+- 其余 tab owner 是后续 checkpoint。
 
 ## 6. 优先级与依赖
 

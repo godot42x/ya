@@ -77,8 +77,8 @@ namespace ya
 namespace
 {
 
-constexpr float kMenuHeight     = 24.0f;
-constexpr float kToolbarHeight  = 26.0f;
+constexpr float kMenuHeight     = editor_density::kMenuHeight;
+constexpr float kToolbarHeight  = editor_density::kToolbarHeight;
 constexpr float kChromeTop      = kMenuHeight + kToolbarHeight;
 
 bool parseWidgetEntryKey(const std::string& id, std::string& outEntryId)
@@ -932,12 +932,12 @@ void EditorSurface::buildEditorChrome(App& app)
     _dockWorkspace->addPanel("viewport", "Viewport", viewportBody.release());
     _dockWorkspace->addPanel("hierarchy", "Hierarchy", hierarchyBody.release());
     _dockWorkspace->addPanel("inspector", "Inspector", inspectorBody);
-    _dockWorkspace->addPanel("content-browser", "Content Browser", buildContentBrowser());
-    _dockWorkspace->addPanel("frame-stats", "Frame Stats", statsBody.release());
-    _dockWorkspace->addPanel("gui-workbench", "GUI Workbench", workbenchHost);
+    _dockWorkspace->addPanel("content-browser", "Content", buildContentBrowser());
+    _dockWorkspace->addPanel("frame-stats", "Stats", statsBody.release());
+    _dockWorkspace->addPanel("gui-workbench", "Workbench", workbenchHost);
     _tabRegistry->registerTab({
         .id = "runtime-tools",
-        .title = "Runtime Tools",
+        .title = "Runtime",
         .build = [this](EditorLayer& layer, WidgetTree&) { return buildRuntimeTools(layer); },
         .sync = [this](EditorLayer&, WidgetTree&) {
             if (!_runtimeToolsStatusText || !_runtimeToolsFrameText) {
@@ -975,7 +975,7 @@ void EditorSurface::buildEditorChrome(App& app)
     });
     _tabRegistry->registerTab({
         .id = "ui-designer",
-        .title = "UI Designer",
+        .title = "UI",
         .build = [this](EditorLayer& layer, WidgetTree&) { return buildUIDesigner(layer); },
         .sync = [this](EditorLayer& layer, WidgetTree&) {
             if (!_uiDesignerStatusText || !_uiDesignerSelectionText || !_uiDesignerRoots || !_uiDesignerSelection) {
@@ -1027,7 +1027,7 @@ void EditorSurface::buildEditorChrome(App& app)
     });
     _tabRegistry->registerTab({
         .id = "asset-inspector",
-        .title = "Asset Inspector",
+        .title = "Assets",
         .build = [this](EditorLayer& layer, WidgetTree&) { return buildAssetInspector(layer); },
         .sync = [this](EditorLayer& layer, WidgetTree&) {
             if (!_assetInspectorPathText || !_assetInspectorStatusText || !_assetInspectorPreview) {
@@ -1042,7 +1042,7 @@ void EditorSurface::buildEditorChrome(App& app)
     });
     _tabRegistry->registerTab({
         .id = "debug-images",
-        .title = "Debug Images",
+        .title = "Debug",
         .build = [this](EditorLayer&, WidgetTree&) {
             return _debugImagesTab ? _debugImagesTab->build(*_tree) : nullptr;
         },

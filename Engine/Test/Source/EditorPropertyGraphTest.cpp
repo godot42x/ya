@@ -12,6 +12,7 @@
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
+#include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -101,6 +102,70 @@ TEST(EditorPropertyGraphTest, TransformProjectionCustomizesDisplayNamesWithoutCh
     EXPECT_EQ(graph.find("_position")->displayName, "Position");
     EXPECT_EQ(graph.find("_rotation")->displayName, "Rotation");
     EXPECT_EQ(graph.find("_scale")->displayName, "Scale");
+}
+
+TEST(EditorPropertyGraphTest, PropertyLabelFromPathUsesLeafNameAndParentGroup)
+{
+    const FPropertyLabel visible = propertyLabelFromPath("bVisible");
+    EXPECT_EQ(visible.displayName, "Visible");
+    EXPECT_TRUE(visible.group.empty());
+
+    const FPropertyLabel nested = propertyLabelFromPath("image.uvScale");
+    EXPECT_EQ(nested.group, "Image");
+    EXPECT_EQ(nested.displayName, "Uv Scale");
+
+    const FPropertyLabel enable = propertyLabelFromPath("image.bEnable");
+    EXPECT_EQ(enable.group, "Image");
+    EXPECT_EQ(enable.displayName, "Enable");
+
+    const FPropertyLabel indexed = propertyLabelFromPath("cubemapSource.files[0]");
+    EXPECT_EQ(indexed.group, "Cubemap Source");
+    EXPECT_EQ(indexed.displayName, "Files [0]");
+}
+
+struct NestedInspectorComponent
+{
+    struct Image
+    {
+        bool bEnable = true;
+        float uvScale = 1.0f;
+
+        YA_REFLECT_BEGIN(Image)
+        YA_REFLECT_FIELD(bEnable)
+        YA_REFLECT_FIELD(uvScale)
+        YA_REFLECT_END()
+    };
+
+    bool bVisible = true;
+    Image image;
+
+    YA_REFLECT_BEGIN(NestedInspectorComponent)
+    YA_REFLECT_FIELD(bVisible)
+    YA_REFLECT_FIELD(image)
+    YA_REFLECT_END()
+};
+
+TEST(EditorPropertyGraphTest, AutoPropertySectionInsertsGroupHeaderForNestedFields)
+{
+    NestedInspectorComponent value;
+    auto graph = PropertyGraph::build(type_index_v<NestedInspectorComponent>, {&value});
+    ASSERT_EQ(graph.find("bVisible")->displayName, "Visible");
+    ASSERT_EQ(graph.find("image.uvScale")->group, "Image");
+
+    auto section = std::make_shared<EditorAutoPropertySection>("AutoNested", std::move(graph));
+    WidgetTree tree({.width = 360, .height = 220});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
+    ASSERT_EQ(section->getChildren()[0]->getChildren().size(), 4u);
+
+    auto* group = dynamic_cast<UIText*>(section->getChildren()[0]->getChildren()[1].get());
+    ASSERT_NE(group, nullptr);
+    EXPECT_EQ(group->getText(), "Image");
+
+    auto* visibleLabel = dynamic_cast<UIText*>(section->getChildren()[0]->getChildren()[0]->getChildren()[0].get());
+    ASSERT_NE(visibleLabel, nullptr);
+    EXPECT_EQ(visibleLabel->getText(), "Visible");
+
+    tree.detach(*section);
 }
 
 TEST(EditorPropertyGraphTest, ProjectInstallsTransformSettersThatMarkDirty)
@@ -346,8 +411,10 @@ TEST(EditorPropertyGraphTest, RecursiveProjectionFlattensNestedMaterialPropertie
     ASSERT_NE(metallic, nullptr);
     ASSERT_NE(albedoSlot, nullptr);
     EXPECT_TRUE(graph.hasRetainedEditors());
-    EXPECT_EQ(albedo->displayName, "Params / Albedo");
-    EXPECT_EQ(albedoSlot->displayName, "Albedo Slot / Texture Ref");
+    EXPECT_EQ(albedo->displayName, "Albedo");
+    EXPECT_EQ(albedo->group, "Params");
+    EXPECT_EQ(albedoSlot->displayName, "Texture Ref");
+    EXPECT_EQ(albedoSlot->group, "Albedo Slot");
 
     EXPECT_TRUE(albedo->binding.setColor(glm::vec4(0.2f, 0.3f, 0.4f, 1.0f)));
     EXPECT_EQ(material.getParams().albedo, glm::vec3(0.2f, 0.3f, 0.4f));
@@ -601,7 +668,8 @@ TEST(EditorPropertyGraphTest, SkyboxCubemapFilesExpandAsIndexedStringLeaves)
     ASSERT_NE(face0, nullptr);
     ASSERT_NE(face5, nullptr);
     EXPECT_EQ(face0->valueType, type_index_v<std::string>);
-    EXPECT_EQ(face0->displayName, "Cubemap Source / Files [0]");
+    EXPECT_EQ(face0->displayName, "Files [0]");
+    EXPECT_EQ(face0->group, "Cubemap Source");
 
     std::string value;
     ASSERT_TRUE(face0->binding.tryGet(value));

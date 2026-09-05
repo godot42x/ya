@@ -20,6 +20,7 @@ struct PropertyNode
 
     std::string name;
     std::string displayName;
+    std::string group;
     std::string category;
     type_index_t valueType = 0;
     Kind kind = Kind::Value;
@@ -29,6 +30,17 @@ struct PropertyNode
     bool bColor = false;
     PropertyHandle binding;
 };
+
+struct FPropertyLabel
+{
+    std::string group;
+    std::string displayName;
+};
+
+/// Pretty inspector label for a reflected path. Nested paths keep the parent as
+/// a group header and show only the leaf on the row (so "image.uvScale" is
+/// "Image" + "Uv Scale", not "Image / Uv Scale" on every line).
+[[nodiscard]] FPropertyLabel propertyLabelFromPath(std::string_view path);
 
 /// Ordered, metadata-aware editor field model. `project()` is the retained
 /// inspector entry: reflection `build` plus registered projections.

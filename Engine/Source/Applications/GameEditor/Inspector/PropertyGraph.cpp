@@ -20,8 +20,12 @@ std::string makeDisplayName(std::string_view name)
     while (!name.empty() && name.front() == '_') {
         name.remove_prefix(1);
     }
+    if (name.size() > 1 && (name.front() == 'b' || name.front() == 'm') &&
+        std::isupper(static_cast<unsigned char>(name[1]))) {
+        name.remove_prefix(1);
+    }
     std::string result;
-    result.reserve(name.size());
+    result.reserve(name.size() + 4);
     for (size_t i = 0; i < name.size(); ++i) {
         const char c = name[i];
         if (i > 0 && std::isupper(static_cast<unsigned char>(c)) &&
@@ -33,31 +37,29 @@ std::string makeDisplayName(std::string_view name)
     return result;
 }
 
-std::string displayNameFromPath(std::string_view path)
+std::string prettySegment(std::string_view part)
+{
+    if (part.empty()) {
+        return {};
+    }
+    const size_t bracket = part.find('[');
+    if (bracket != std::string_view::npos) {
+        return makeDisplayName(part.substr(0, bracket)) + " " + std::string(part.substr(bracket));
+    }
+    return makeDisplayName(part);
+}
+
+std::string joinGroups(const std::vector<std::string>& parts)
 {
     std::string display;
-    size_t start = 0;
-    while (start <= path.size()) {
-        const size_t end = path.find('.', start);
-        const std::string_view part = path.substr(start, end == std::string_view::npos ? path.size() - start : end - start);
-        if (!part.empty()) {
-            if (!display.empty()) {
-                display += " / ";
-            }
-            const size_t bracket = part.find('[');
-            if (bracket != std::string_view::npos) {
-                display += makeDisplayName(part.substr(0, bracket));
-                display += " ";
-                display += part.substr(bracket);
-            }
-            else {
-                display += makeDisplayName(part);
-            }
+    for (const std::string& part : parts) {
+        if (part.empty()) {
+            continue;
         }
-        if (end == std::string_view::npos) {
-            break;
+        if (!display.empty()) {
+            display += " / ";
         }
-        start = end + 1;
+        display += part;
     }
     return display;
 }
@@ -71,6 +73,33 @@ bool isLeafEditableType(const PropertyNode& node)
 }
 
 } // namespace
+
+FPropertyLabel propertyLabelFromPath(std::string_view path)
+{
+    std::vector<std::string> parts;
+    size_t start = 0;
+    while (start <= path.size()) {
+        const size_t end = path.find('.', start);
+        const std::string_view part =
+            path.substr(start, end == std::string_view::npos ? path.size() - start : end - start);
+        if (!part.empty()) {
+            parts.push_back(prettySegment(part));
+        }
+        if (end == std::string_view::npos) {
+            break;
+        }
+        start = end + 1;
+    }
+
+    FPropertyLabel label;
+    if (parts.empty()) {
+        return label;
+    }
+    label.displayName = parts.back();
+    parts.pop_back();
+    label.group = joinGroups(parts);
+    return label;
+}
 
 PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> instances)
 {
@@ -87,7 +116,9 @@ PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> in
         }
         PropertyNode node;
         node.name = leaf.path;
-        node.displayName = displayNameFromPath(leaf.path);
+        const FPropertyLabel label = propertyLabelFromPath(leaf.path);
+        node.displayName = label.displayName;
+        node.group = label.group;
         if (leaf.slot.property && leaf.slot.property->metadata.hasMeta("category")) {
             try {
                 node.category = leaf.slot.property->metadata.get<std::string>("category");

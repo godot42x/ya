@@ -10,6 +10,7 @@
 #include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "GameEditor/UI/EditorTheme.h"
 
 #include <cmath>
 #include <format>
@@ -86,12 +87,27 @@ void EditorAutoPropertySection::commitAssetPath(size_t editorIndex, const std::s
 
 void EditorAutoPropertySection::construct()
 {
-    auto rows = ui::column("AutoPropertyRows").setSpacing(4.0f);
+    auto rows = ui::column("AutoPropertyRows").setSpacing(editor_density::kRowSpacing);
+    std::string currentGroup;
     for (const PropertyNode& node : _graph.getNodes()) {
         if (!node.bVisible) continue;
-        auto row = ui::row("PropertyRow_" + node.name).setSpacing(6.0f);
-        row.child(ui::text("PropertyLabel_" + node.name).setText(node.displayName),
-                  FBoxSlotArgs{.preferredSize = {100.0f, 22.0f}});
+        if (node.group != currentGroup) {
+            currentGroup = node.group;
+            if (!currentGroup.empty()) {
+                rows.child(ui::text("PropertyGroup_" + currentGroup)
+                               .setText(currentGroup)
+                               .setStyleKey("text.eyebrow")
+                               .setFontSize(11),
+                           FBoxSlotArgs{.preferredSize = {0.0f, editor_density::kGroupHeaderHeight}});
+            }
+        }
+        auto row = ui::row("PropertyRow_" + node.name).setSpacing(editor_density::kControlSpacing);
+        row.child(ui::text("PropertyLabel_" + node.name)
+                      .setText(node.displayName)
+                      .setFontSize(12)
+                      .setStyleKey("text.muted")
+                      .setVAlign(EWidgetAlignV::Center),
+                  FBoxSlotArgs{.preferredSize = {editor_density::kLabelColumn, editor_density::kRowHeight}});
 
         EditorSlot slot;
         slot.node = &node;

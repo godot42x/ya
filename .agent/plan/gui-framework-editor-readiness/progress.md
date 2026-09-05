@@ -1197,3 +1197,16 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - density/token 仍未做。
 - 下一步：density/token，或下一个已有稳定边界的 tab owner。
 
+## Phase 10E density / inspector chrome checkpoint（2026-09-05）
+
+- Inspector 行不再把整条 reflected path 写成 `Image / Uv Scale`。`propertyLabelFromPath` 把父路径收成 `PropertyNode::group`，行上只显示叶名；`bVisible` / `bEnable` 去掉匈牙利 `b` 前缀。`EditorAutoPropertySection` 在 group 变化时插入 eyebrow 分组标题。
+- `editor_density` 放进 `EditorTheme.h`：label column 140、row 22、spacing 6。Inspector form / AutoProperty rows / list row height / toolbar 高度走同一套 token，不再各写 100×22。
+- 底栏 dock tab 标题缩短（Content / Stats / Workbench / Runtime / UI / Assets / Debug）；稳定 panel key 不变，布局 persistence 不受影响。
+- 验证：`xmake b ya-testing`；`xmake r ya-testing -- --gtest_filter='EditorPropertyGraphTest.*:EditorListRowsTest.*'`（27/27）。
+
+### 边界
+
+- EditorSurface 里仍有不少按钮 preferredSize 字面量（Play/Content header 等）；本步只收 inspector/list/toolbar 共用密度，不做全文件数字替换。
+- 未拆其余 tab owner；release gates 仍为 Windows/MSVC、OpenGL、hour-scale soak、`imgui-local`。
+- 下一步：其余稳定 tab owner，或继续把剩余 chrome 字面量迁到 `editor_density`。
+

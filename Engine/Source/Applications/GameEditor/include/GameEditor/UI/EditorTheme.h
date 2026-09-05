@@ -21,4 +21,20 @@ inline std::shared_ptr<UITheme> buildEditorTheme(bool bDark)
     return guiworkbench::buildWorkbenchTheme(bDark);
 }
 
+/// Shared chrome metrics. Inspector rows, list rows, and the editor toolbar
+/// read these instead of scattering 8/12/22/26 literals.
+namespace editor_density
+{
+inline constexpr float kRowHeight         = 22.0f;
+inline constexpr float kLabelColumn       = 140.0f;
+inline constexpr float kRowSpacing        = 6.0f;
+inline constexpr float kControlSpacing    = 6.0f;
+inline constexpr float kPanelPadding      = 8.0f;
+inline constexpr float kSectionSpacing    = 10.0f;
+inline constexpr float kGroupHeaderHeight = 18.0f;
+inline constexpr float kToolbarHeight     = 26.0f;
+inline constexpr float kMenuHeight        = 24.0f;
+inline constexpr float kListRowHeight     = 22.0f;
+}
+
 } // namespace ya

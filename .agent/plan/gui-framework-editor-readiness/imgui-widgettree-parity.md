@@ -1,6 +1,6 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-05 (after Phase 10E settings dialog owner extract)  
+> **As of:** 2026-09-05 (after Phase 10E density / inspector leaf labels)  
 > **Default chrome:** WidgetTree only (`EditorSurface`)  
 > **Legacy chrome:** `--editor-chrome=imgui` is ignored (WARN); `onImGuiRender` deleted  
 > **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, but legacy helpers still require it.
@@ -100,7 +100,7 @@
 | Feature | Legacy ImGui | WidgetTree | Status | Notes |
 |---------|--------------|------------|--------|-------|
 | DetailsView stack | `DetailsView` + `TypeRenderer` tree | — | ⚫ | Deleted 8N; was uncalled after 8C |
-| Entity/component fields | `TypeRenderer::renderReflectedType` | `PropertyGraph` + `EditorAutoPropertySection` | ✅ | Retained path covers scalars/vectors/enum/color/asset-ref, nested flatten, sequence-of-leaf arrays/vectors with add/remove, string-key map-of-leaf values, and TextureRef `UIImage` preview. Access is `FPropertySlot` + `tryGet<T>`/`set<T>`; `TypeRenderer` remains compiled with no widgettree caller |
+| Entity/component fields | `TypeRenderer::renderReflectedType` | `PropertyGraph` + `EditorAutoPropertySection` | ✅ | Leaf display names + nested group headers; `editor_density` label column; retained path covers scalars/vectors/enum/color/asset-ref, nested flatten, sequence/map mutation, TextureRef preview |
 | Multi-selection mixed values | DetailsView | `PropertyGraph` intersection + em-dash | ✅ | |
 | Asset path Browse | `FilePicker` | `EditorSurface` asset picker popup | ✅ | Phase 8M |
 | Game UI Entry summary | DetailsView | `EditorInspectorTab` widget entry block | ✅ | Open in UI Designer button |
@@ -220,8 +220,9 @@ Hierarchy tree CRUD remains a retained-UI gap, not an ImGui chrome blocker.
 10. ~~**9F** — Release checklist~~ ✅（macOS/Vulkan Pass；Windows/MSVC and OpenGL presentation remain blockers）  
 11. ~~**10E** — Collapse retained file/save-as/asset pickers into `EditorFilePickerDialog`~~ ✅  
 12. ~~**10E** — Extract `EditorSettingsDialog` overlay owner~~ ✅  
-13. **10E follow-up** — remaining stable tab owners, then density/token  
-14. Release blockers — XP-WIN, XP-OGL, SOAK-HR, `imgui-local`  
+13. ~~**10E** — Inspector leaf labels + `editor_density` tokens + short dock tabs~~ ✅  
+14. **10E follow-up** — remaining stable tab owners; leftover chrome literals  
+15. Release blockers — XP-WIN, XP-OGL, SOAK-HR, `imgui-local`  
 
 ---
 

@@ -16,6 +16,7 @@
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/Panels/UIDesignerPanel.h"
+#include "GameEditor/UI/EditorTheme.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Core/SceneWidgetEntry.h"
@@ -162,11 +163,11 @@ std::shared_ptr<UIElement> EditorInspectorTab::build(WidgetTree&)
     _emptyText = empty.share();
     auto entityText = ui::text("InspectorEntityId").setText("Entity ID: -").setFontSize(12).setStyleKey("text.muted");
     _entityText = entityText.share();
-    auto projected = ui::column("InspectorProjected").setSpacing(8.0f);
+    auto projected = ui::column("InspectorProjected").setSpacing(editor_density::kSectionSpacing);
     _projectedHost = projected.share();
 
     auto entityForm = ui::column("InspectorEntityForm")
-                          .setSpacing(6.0f)
+                          .setSpacing(editor_density::kRowSpacing)
                           .child(std::move(entityText))
                           .child(ui::text("NameLabel").setText("Name").setFontSize(12))
                           .child(std::move(nameField), FBoxSlotArgs{.preferredSize = {220.0f, 26.0f}})
@@ -205,8 +206,8 @@ std::shared_ptr<UIElement> EditorInspectorTab::build(WidgetTree&)
     _widgetEntryHost = widgetEntryForm.share();
 
     auto form = ui::column("InspectorForm")
-                    .setPadding({6.0f, 4.0f})
-                    .setSpacing(4.0f)
+                    .setPadding({editor_density::kPanelPadding, editor_density::kPanelPadding})
+                    .setSpacing(editor_density::kRowSpacing)
                     .child(ui::text("InspectorTitle").setText("INSPECTOR").setStyleKey("text.eyebrow"))
                     .child(std::move(entityForm))
                     .child(std::move(widgetEntryForm));
