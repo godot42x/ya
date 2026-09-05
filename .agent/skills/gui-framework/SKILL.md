@@ -237,8 +237,9 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
 - `EditorSurface::tick` 是 chrome 编排入口：`rebuild-if-needed` → window metrics →
   `WidgetTree::tick` → shell dialogs → push viewport display → `buildSnapshot` →
   viewport host bridge。禁止 `tab->sync`，禁止 Surface 持有 Tab 控件指针。
-  Tab 经 `EditorTabSpawnerRegistry` 注册，`EditorSurface::invokeTab` 按 stable key
-  激活或 spawn。`onAttached` 拉权威状态并订阅所属边界的 `MulticastDelegate`，
+  Tab 经 `EditorTabSpawnerRegistry` 注册，`EditorDockWorkspace::invokeTab` 按 stable key
+  激活或 spawn。rebuild 期 dock/workspace 政策在 `EditorDockWorkspace`，ActionMap 目录在
+  `registerEditorActions`。`onAttached` 拉权威状态并订阅所属边界的 `MulticastDelegate`，
   `onDetached` 按 handle 退订。未选中 dock tab 是 detached subtree，不会 tick。
   不要再引入 `EditorPanel`、中心 MessageBus，或 `EditorTabRegistry` 那种 `std::function`
   袋子。结构见 `.agent/plan/gui-editor-tab-lifecycle/`。

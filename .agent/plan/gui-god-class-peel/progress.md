@@ -26,3 +26,17 @@
 - 未做 plane handle / uniform scale / mode UI。
 - Viewport 两个 `.cpp` 未动。
 
+## C3 当前 checkpoint
+
+- rebuild 期 dock/workspace 政策迁到 `EditorDockWorkspace`（materialize/invoke/Tools/default layout/persist）。
+- `registerEditorActions` 独立为 `EditorActionCatalog`；Surface rebuild 调一次。
+- `EditorSurface::tick` 顺序未变：metrics → `tree.tick` → `syncShellDialogs` → `pushViewportDisplay` → snapshot → publish rect → overlay host。
+- 公共头去掉 `TreeView.h`、未用转发（`ICommandBuffer` / `UIElement` / `UITextField`）和重复的 `EditorTabSpawnerRegistry` class 前向。
+- 验证：`xmake b ya-game-editor` 通过；`WidgetTreeTest.*:DockNodeTest.*` 93 passed；既有 editor 滤镜 37 passed。
+
+### C3 保留项
+
+- `tick` 本体、viewport wrap、`syncShellDialogs` 未拆。
+- Inspector `wantsTextInput` 仍 `dynamic_cast`，未做成 tab 自己的焦点查询。
+
+

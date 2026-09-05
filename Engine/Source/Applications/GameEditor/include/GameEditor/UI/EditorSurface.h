@@ -4,26 +4,21 @@
 #include "Core/Delegate.h"
 #include "Core/Event.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
-#include "GUI/Binding/Reactive.h"
 #include "GUI/Binding/SelectionModel.h"
 #include "GUI/Binding/ActionMap.h"
 #include "GUI/Binding/UndoStack.h"
-#include "GUI/Widgets/Controls/TreeView.h"
 
 #include "GameEditor/UI/EditorAssetPicker.h"
+#include "GameEditor/UI/EditorDockWorkspace.h"
 #include "GameEditor/UI/EditorFilePicker.h"
-#include "GameEditor/UI/EditorTabSpawnerRegistry.h"
 #include "GameEditor/UI/EditorViewportHost.h"
 
 #include <functional>
 #include <memory>
 #include <string>
-#include <string_view>
 
 namespace ya
 {
-
-struct ICommandBuffer;
 
 struct App;
 struct EditorLayer;
@@ -31,20 +26,17 @@ class EditorViewportGizmoOverlay;
 struct Texture;
 class EditorFilePickerDialog;
 class EditorSettingsDialog;
-class EditorTabSpawnerRegistry;
 struct UIDockSpace;
 struct FDockContext;
 struct UIDockFloatingHost;
-struct UIElement;
 struct UIMenuBar;
 struct UIPanel;
 struct UIText;
-struct UITextField;
 struct UITheme;
-struct UITreeView;
 struct WidgetTree;
 struct IImage;
 struct IImageView;
+struct FEditorProjectBrowser;
 enum class EWidgetRouteResult : uint8_t;
 
 /// Game Editor chrome owned as one WidgetTree.
@@ -67,15 +59,14 @@ struct EditorSurface : IEditorViewportHostSink
     std::shared_ptr<FDockContext>    _dockContext;
     std::shared_ptr<UIDockSpace>     _dockSpace;
     std::shared_ptr<UIDockFloatingHost> _dockFloatingHost;
-    std::shared_ptr<UITreeView>      _projectList;
-    std::shared_ptr<ReactiveList<UITreeView::FNode>> _projectRoots;
+    std::unique_ptr<FEditorProjectBrowser> _projectBrowser;
     std::shared_ptr<SelectionModel>  _selection = std::make_shared<SelectionModel>();
     std::shared_ptr<ActionMap>       _actions   = std::make_shared<ActionMap>();
     std::shared_ptr<UndoStack>       _undo      = std::make_shared<UndoStack>();
-    std::shared_ptr<UIText>          _projectErrorText;
     EditorTabSpawnerRegistry*        _tabSpawners = nullptr;
     App*                             _app = nullptr;
     DelegateHandle                   _appStateHandle = INVALID_HANDLE;
+    EditorDockWorkspace              _workspace;
 
     std::unique_ptr<EditorFilePickerDialog> _filePicker;
     std::unique_ptr<EditorSettingsDialog> _settings;
@@ -133,7 +124,6 @@ struct EditorSurface : IEditorViewportHostSink
     void rebuild(App& app);
     void buildProjectBrowser(App& app);
     void buildEditorChrome(App& app);
-    void registerEditorActions();
     void syncShellDialogs();
     void pushViewportDisplay();
     void updateToolbarMode(App& app);
@@ -142,15 +132,7 @@ struct EditorSurface : IEditorViewportHostSink
     void refreshProjectBrowserRows();
     void publishViewportRect();
     void syncViewportHostState(App& app);
-    bool invokeTab(std::string_view tabId);
-    bool materializeTab(std::string_view tabId);
-    [[nodiscard]] FEditorTabSpawnContext makeSpawnContext();
-    void buildToolsMenu();
-    void materializeWorkspaceTabs();
     void applyWindowMetrics(App& app);
-    void applyDefaultEditorDockLayout();
-    bool tryRestoreEditorDockLayout();
-    void persistEditorDockLayout();
     void openViewportContextMenu(const glm::vec2& windowPoint);
 };
 

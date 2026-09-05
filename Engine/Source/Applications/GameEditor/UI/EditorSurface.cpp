@@ -1,4 +1,5 @@
 #include "GameEditor/UI/EditorSurface.h"
+#include "GameEditor/UI/EditorActionCatalog.h"
 #include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/UI/EditorFilePicker.h"
 #include "GameEditor/UI/EditorFilePickerDialog.h"
@@ -6,7 +7,6 @@
 #include "GameEditor/UI/EditorInspectorTab.h"
 
 #include "Core/Event.h"
-#include "Core/Config/ConfigManager.h"
 #include "Core/Log.h"
 #include "GameEditor/UI/EditorViewportHost.h"
 #include "GameEditor/UI/EditorViewportGizmoOverlay.h"
@@ -33,6 +33,7 @@
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/Controls/TreeView.h"
+#include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/WidgetAttachment.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "Core/System/PathUtils.h"
@@ -49,11 +50,17 @@
 #include <filesystem>
 #include <format>
 #include <optional>
-#include <string_view>
 #include <vector>
 
 namespace ya
 {
+
+struct FEditorProjectBrowser
+{
+    std::shared_ptr<UITreeView> list;
+    std::shared_ptr<ReactiveList<UITreeView::FNode>> roots;
+    std::shared_ptr<UIText> errorText;
+};
 
 namespace
 {
@@ -61,14 +68,6 @@ namespace
 constexpr float kMenuHeight     = editor_density::kMenuHeight;
 constexpr float kToolbarHeight  = editor_density::kToolbarHeight;
 constexpr float kChromeTop      = kMenuHeight + kToolbarHeight;
-
-DockPanelId dockPanelIdForKey(const FDockTreeModel& model, const char* stableKey)
-{
-    if (const FDockPanelRecord* record = model.findPanelByStableKey(stableKey)) {
-        return record->id;
-    }
-    return kInvalidDockPanelId;
-}
 
 std::vector<UIMenu::FItem> makePresetMenuItems(EditorLayer& layer, const std::string& category)
 {
@@ -85,19 +84,6 @@ std::vector<UIMenu::FItem> makePresetMenuItems(EditorLayer& layer, const std::st
     }
     return items;
 }
-
-constexpr std::string_view kDefaultWorkspaceTabs[] = {
-    "viewport",
-    "hierarchy",
-    "inspector",
-    "content-browser",
-    "frame-stats",
-    "gui-workbench",
-    "runtime-tools",
-    "ui-designer",
-    "asset-inspector",
-    "debug-images",
-};
 
 } // namespace
 
@@ -125,18 +111,17 @@ void EditorSurface::shutdown()
     _root.reset();
     _menuBar.reset();
     _toolbarModeText.reset();
+    _workspace.clear();
     _dockFloatingHost.reset();
     _dockSpace.reset();
     _dockContext.reset();
     _viewportHost = nullptr;
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
-    _projectList.reset();
-    _projectRoots.reset();
+    _projectBrowser.reset();
     _selection = std::make_shared<SelectionModel>();
     _actions   = std::make_shared<ActionMap>();
     _undo      = std::make_shared<UndoStack>();
-    _projectErrorText.reset();
     _viewportTexture.reset();
     _viewportImageResource.reset();
     _viewportImageView.reset();
@@ -172,18 +157,17 @@ void EditorSurface::rebuild(App& app)
     _root.reset();
     _menuBar.reset();
     _toolbarModeText.reset();
+    _workspace.clear();
     _dockFloatingHost.reset();
     _dockSpace.reset();
     _dockContext.reset();
     _viewportHost = nullptr;
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
-    _projectList.reset();
-    _projectRoots.reset();
+    _projectBrowser.reset();
     _selection = std::make_shared<SelectionModel>();
     _actions   = std::make_shared<ActionMap>();
     _undo      = std::make_shared<UndoStack>();
-    _projectErrorText.reset();
     if (_filePicker) {
         _filePicker->reset();
     }
@@ -238,9 +222,10 @@ void EditorSurface::buildProjectBrowser(App& app)
                            }
                        });
 
-    _projectRoots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    _projectBrowser = std::make_unique<FEditorProjectBrowser>();
+    _projectBrowser->roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
     auto list = ui::treeView("ProjectList")
-                    .bindData(_projectRoots)
+                    .bindData(_projectBrowser->roots)
                     .bindSelection(_selection->primaryRef())
                     .setOnSelectionChanged([this](const std::string& id) {
                         _selection->select(id);
@@ -250,7 +235,7 @@ void EditorSurface::buildProjectBrowser(App& app)
                             _layer->setProjectBrowserSelection(index);
                         }
                     });
-    _projectList = list.share();
+    _projectBrowser->list = list.share();
 
     auto openBtn = labeledButton("OpenProject", "Open Project")
                        .setOnClick([this]() {
@@ -263,7 +248,7 @@ void EditorSurface::buildProjectBrowser(App& app)
                        });
 
     auto errorText = ui::text("ProjectError").setStyleKey("text.error");
-    _projectErrorText = errorText.share();
+    _projectBrowser->errorText = errorText.share();
 
     auto page = ui::column("ProjectBrowser")
                     .setPadding({48.0f, 48.0f})
@@ -281,140 +266,14 @@ void EditorSurface::buildProjectBrowser(App& app)
     refreshProjectBrowserRows();
 }
 
-void EditorSurface::registerEditorActions()
-{
-    auto define = [this](FAction action) {
-        if (!_actions->define(std::move(action))) {
-            YA_CORE_ERROR("EditorSurface: failed to define action");
-        }
-    };
-
-    define({
-        .id      = "scene.new",
-        .label   = "New Scene",
-        .chord   = FActionChord::primary(EKey::K_N),
-        .execute = [this]() { _layer->cmdNewScene(); },
-    });
-    define({
-        .id      = "scene.save",
-        .label   = "Save Scene",
-        .chord   = FActionChord::primary(EKey::K_S),
-        .execute = [this]() { _layer->cmdSaveScene(); },
-    });
-    define({
-        .id      = "scene.saveAs",
-        .label   = "Save Scene As",
-        .chord   = FActionChord::primary(EKey::K_S, true),
-        .execute = [this]() { openSceneSaveDialog(); },
-    });
-    define({
-        .id         = "edit.undo",
-        .label      = "Undo",
-        .chord      = FActionChord::primary(EKey::K_Z),
-        .execute    = [this]() { (void)_undo->undo(); },
-        .canExecute = [this]() { return _undo->canUndo(); },
-    });
-    const FActionChord redoChord =
-#if defined(__APPLE__)
-        FActionChord::primary(EKey::K_Z, true);
-#else
-        FActionChord::primary(EKey::K_Y);
-#endif
-    define({
-        .id         = "edit.redo",
-        .label      = "Redo",
-        .chord      = redoChord,
-        .execute    = [this]() { (void)_undo->redo(); },
-        .canExecute = [this]() { return _undo->canRedo(); },
-    });
-    define({
-        .id         = "selection.createEmpty",
-        .label      = "Create Empty Node",
-        .execute    = [this]() { _layer->cmdCreateEmptyNode(); },
-        .canExecute = [this]() { return _layer && _layer->canViewportAuthor(); },
-    });
-    define({
-        .id         = "selection.duplicate",
-        .label      = "Duplicate",
-        .chord      = FActionChord::primary(EKey::K_D),
-        .execute    = [this]() { _layer->cmdDuplicateSelection(); },
-        .canExecute = [this]() {
-            return _layer && _layer->canViewportAuthor() && !_layer->getSelections().empty();
-        },
-    });
-    define({
-        .id         = "selection.delete",
-        .label      = "Delete",
-        .chord      = {.key = EKey::Delete},
-        .execute    = [this]() { _layer->cmdDeleteSelection(); },
-        .canExecute = [this]() {
-            return _layer && _layer->canViewportAuthor() && !_layer->getSelections().empty();
-        },
-    });
-    define({
-        .id      = "app.exit",
-        .label   = "Exit",
-        .execute = []() {
-            if (auto* app = App::get()) {
-                app->requestQuit();
-            }
-        },
-    });
-    define({
-        .id      = "editor.settings",
-        .label   = "Editor Settings...",
-        .execute = [this]() { openEditorSettingsDialog(); },
-    });
-    define({
-        .id      = "viewport.mode3d",
-        .label   = "Viewport 3D",
-        .execute = [this]() { _layer->setViewportMode(EViewportMode::Mode3D); },
-    });
-    define({
-        .id      = "viewport.mode2d",
-        .label   = "Viewport 2D",
-        .execute = [this]() { _layer->setViewportMode(EViewportMode::Mode2D); },
-    });
-    define({
-        .id      = "runtime.play",
-        .label   = "Play",
-        .execute = []() {
-            if (auto* app = App::get()) {
-                app->getTaskManager().registerFrameTask([app]() { app->startRuntime(); });
-            }
-        },
-    });
-    define({
-        .id      = "runtime.simulate",
-        .label   = "Simulate",
-        .execute = []() {
-            if (auto* app = App::get()) {
-                app->getTaskManager().registerFrameTask([app]() { app->startSimulation(); });
-            }
-        },
-    });
-    define({
-        .id      = "runtime.stop",
-        .label   = "Stop",
-        .execute = []() {
-            if (auto* app = App::get()) {
-                app->getTaskManager().registerFrameTask([app]() {
-                    if (app->isRuntimeMode()) {
-                        app->stopRuntime();
-                    }
-                    else if (app->isSimulationMode()) {
-                        app->stopSimulation();
-                    }
-                });
-            }
-        },
-    });
-}
-
 void EditorSurface::buildEditorChrome(App& app)
 {
     (void)app;
-    registerEditorActions();
+    registerEditorActions(*_actions,
+                          *_layer,
+                          *_undo,
+                          [this]() { openSceneSaveDialog(); },
+                          [this]() { openEditorSettingsDialog(); });
     _root = ui::panel("EditorRoot").setStyleKey("panel.window").share();
     FCanvasSlotArgs fillArgs;
     fillArgs.anchorMin = {0.0f, 0.0f};
@@ -455,7 +314,6 @@ void EditorSurface::buildEditorChrome(App& app)
             UIMenu::FItem::fromAction(*_actions, "editor.settings"),
         });
     });
-    buildToolsMenu();
 
     auto play = iconLabeledButton("Play", "Play", editor_icons::kPlay).setOnClick([this]() {
         (void)_actions->execute("runtime.play");
@@ -506,19 +364,32 @@ void EditorSurface::buildEditorChrome(App& app)
     floatingFill.anchorMax = {1.0f, 1.0f};
     (void)_tree->attachToLayer(WidgetTree::ELayer::Popup, _dockFloatingHost, floatingFill);
 
-    materializeWorkspaceTabs();
+    _workspace.bind(EditorDockWorkspace::FHost{
+        .tree            = _tree.get(),
+        .layer           = _layer,
+        .selection       = _selection.get(),
+        .actions         = _actions.get(),
+        .undo            = _undo.get(),
+        .authoringParent = _root.get(),
+        .viewportHost    = this,
+        .spawners        = _tabSpawners,
+        .dock            = _dockContext.get(),
+        .menuBar         = _menuBar.get(),
+    });
+    _workspace.buildToolsMenu();
+    _workspace.materializeWorkspaceTabs();
     _dockContext->setPanelClosable("viewport", false);
     _dockContext->setPanelClosable("hierarchy", false);
     _dockContext->setPanelClosable("inspector", false);
-    if (!tryRestoreEditorDockLayout()) {
-        applyDefaultEditorDockLayout();
+    if (!_workspace.tryRestoreLayout()) {
+        _workspace.applyDefaultLayout();
     }
     _dockContext->fireDockUpdated();
-    _dockContext->appendOnDockUpdated([this]() { persistEditorDockLayout(); });
-    _dockContext->appendOnFloatingUpdated([this]() { persistEditorDockLayout(); });
+    _dockContext->appendOnDockUpdated([this]() { _workspace.persistLayout(); });
+    _dockContext->appendOnFloatingUpdated([this]() { _workspace.persistLayout(); });
 
     if (const std::optional<std::string>& editorTab = app.getDesc().editorTab; editorTab && !editorTab->empty()) {
-        invokeTab(*editorTab);
+        _workspace.invokeTab(*editorTab);
     }
 
     _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(_layer->gizmo());
@@ -526,107 +397,6 @@ void EditorSurface::buildEditorChrome(App& app)
     _layer->gizmo().setUndoStack(_undo.get());
     bindAppState(app);
     updateToolbarMode(app);
-}
-
-FEditorTabSpawnContext EditorSurface::makeSpawnContext()
-{
-    return FEditorTabSpawnContext{
-        .tree = *_tree,
-        .layer = *_layer,
-        .selection = *_selection,
-        .actions = *_actions,
-        .undo = *_undo,
-        .authoringParent = _root.get(),
-        .viewportHost = this,
-    };
-}
-
-void EditorSurface::buildToolsMenu()
-{
-    if (!_menuBar) {
-        return;
-    }
-    _menuBar->addItem("Tools", [this]() {
-        std::vector<UIMenu::FItem> items;
-        if (_tabSpawners) {
-            for (const FEditorTabSpawner& spawner : _tabSpawners->all()) {
-                if (spawner.toolsMenuLabel.empty()) {
-                    continue;
-                }
-                const std::string tabId = spawner.tabId;
-                items.push_back({
-                    .label  = spawner.toolsMenuLabel,
-                    .action = [this, tabId]() { invokeTab(tabId); },
-                });
-            }
-        }
-        return UIMenu::create(std::move(items));
-    });
-}
-
-void EditorSurface::materializeWorkspaceTabs()
-{
-    nlohmann::json layout;
-    std::vector<std::string> keys;
-    if (ConfigManager::get().tryGet("editor", "dockLayout", layout)) {
-        keys = FDockContext::collectLayoutPanelKeys(layout);
-    }
-    if (keys.empty()) {
-        for (std::string_view id : kDefaultWorkspaceTabs) {
-            keys.emplace_back(id);
-        }
-    }
-    for (const std::string& id : keys) {
-        materializeTab(id);
-    }
-}
-
-bool EditorSurface::materializeTab(std::string_view tabId)
-{
-    if (!_dockContext || tabId.empty()) {
-        return false;
-    }
-    if (_dockContext->hasPanel(tabId)) {
-        return true;
-    }
-    std::shared_ptr<UIElement> widget;
-    std::string title{tabId};
-    if (_tabSpawners) {
-        if (const FEditorTabSpawner* spawner = _tabSpawners->find(tabId)) {
-            FEditorTabSpawnContext ctx = makeSpawnContext();
-            widget = spawner->spawn(ctx);
-            title = spawner->title;
-        }
-    }
-    if (!widget) {
-        YA_CORE_WARN("EditorSurface: no spawner for tab '{}'", tabId);
-        return false;
-    }
-    return _dockContext->addPanel(std::string(tabId), title, std::move(widget)) != kInvalidDockPanelId;
-}
-
-bool EditorSurface::invokeTab(std::string_view tabId)
-{
-    if (!_dockContext) {
-        return false;
-    }
-    if (_dockContext->hasPanel(tabId)) {
-        return _dockContext->activatePanel(tabId);
-    }
-    if (!materializeTab(tabId)) {
-        return false;
-    }
-    const FDockContext::FPanel* spawned = _dockContext->findPanelByStableKey(tabId);
-    if (!spawned) {
-        return false;
-    }
-    if (const FDockContext::FPanel* content = _dockContext->findPanelByStableKey("content-browser")) {
-        if (FDockNode* leaf = _dockContext->dockModel().findLeafForPanel(content->id)) {
-            (void)_dockContext->dockModel().movePanel(spawned->id, leaf->id);
-        }
-    }
-    _dockContext->fireDockUpdated();
-    return _dockContext->activatePanel(tabId);
 }
 
 void EditorSurface::applyWindowMetrics(App& app)
@@ -657,84 +427,6 @@ void EditorSurface::applyWindowMetrics(App& app)
     if (auto* fonts = FontManager::get()) {
         fonts->setActiveDpiScale(dpiScale);
     }
-}
-
-void EditorSurface::applyDefaultEditorDockLayout()
-{
-    if (!_dockContext) {
-        return;
-    }
-    FDockTreeModel& model = _dockContext->dockModel();
-    const DockPanelId viewportId = dockPanelIdForKey(model, "viewport");
-    const DockPanelId hierarchyId = dockPanelIdForKey(model, "hierarchy");
-    const DockPanelId inspectorId = dockPanelIdForKey(model, "inspector");
-    const DockPanelId contentId = dockPanelIdForKey(model, "content-browser");
-    const DockPanelId statsId = dockPanelIdForKey(model, "frame-stats");
-    const DockPanelId workbenchId = dockPanelIdForKey(model, "gui-workbench");
-    const DockPanelId runtimeId = dockPanelIdForKey(model, "runtime-tools");
-    const DockPanelId designerId = dockPanelIdForKey(model, "ui-designer");
-    const DockPanelId assetsId = dockPanelIdForKey(model, "asset-inspector");
-    const DockPanelId debugId = dockPanelIdForKey(model, "debug-images");
-    if (viewportId == kInvalidDockPanelId || hierarchyId == kInvalidDockPanelId || inspectorId == kInvalidDockPanelId ||
-        contentId == kInvalidDockPanelId) {
-        return;
-    }
-
-    model.selectPanel(viewportId);
-    const DockNodeId rootLeaf = model.getRootNode()->id;
-    model.splitLeaf(rootLeaf, EDockCardinalSide::East, inspectorId, 0.74f);
-    if (FDockNode* viewportLeaf = model.findLeafForPanel(viewportId)) {
-        model.splitLeaf(viewportLeaf->id, EDockCardinalSide::West, hierarchyId, 0.26f);
-    }
-    if (FDockNode* viewportLeaf = model.findLeafForPanel(viewportId)) {
-        model.splitLeaf(viewportLeaf->id, EDockCardinalSide::South, contentId, 0.72f);
-    }
-    if (FDockNode* contentLeaf = model.findLeafForPanel(contentId)) {
-        if (statsId != kInvalidDockPanelId) {
-            model.movePanel(statsId, contentLeaf->id);
-        }
-        if (workbenchId != kInvalidDockPanelId) {
-            model.movePanel(workbenchId, contentLeaf->id);
-        }
-        if (runtimeId != kInvalidDockPanelId) {
-            model.movePanel(runtimeId, contentLeaf->id);
-        }
-        if (designerId != kInvalidDockPanelId) {
-            model.movePanel(designerId, contentLeaf->id);
-        }
-        if (assetsId != kInvalidDockPanelId) {
-            model.movePanel(assetsId, contentLeaf->id);
-        }
-        if (debugId != kInvalidDockPanelId) {
-            model.movePanel(debugId, contentLeaf->id);
-        }
-        model.selectPanel(contentId);
-    }
-    model.selectPanel(viewportId);
-    model.selectPanel(hierarchyId);
-    model.selectPanel(inspectorId);
-}
-
-bool EditorSurface::tryRestoreEditorDockLayout()
-{
-    if (!_dockContext) {
-        return false;
-    }
-    nlohmann::json layout = nlohmann::json::object();
-    if (!ConfigManager::get().tryGet("editor", "dockLayout", layout)) {
-        return false;
-    }
-    return _dockContext->importLayoutJson(layout);
-}
-
-void EditorSurface::persistEditorDockLayout()
-{
-    if (!_dockContext) {
-        return;
-    }
-    ConfigManager::Editor("editor")
-        .set("dockLayout", _dockContext->exportLayoutJson())
-        .flush();
 }
 
 void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
@@ -800,11 +492,11 @@ void EditorSurface::refreshProjectBrowserRows()
             .label = discovered[static_cast<size_t>(i)],
         });
     }
-    if (_projectRoots) {
-        _projectRoots->replace(std::move(projects));
+    if (_projectBrowser && _projectBrowser->roots) {
+        _projectBrowser->roots->replace(std::move(projects));
     }
-    if (_projectErrorText) {
-        _projectErrorText->setText(_layer->getProjectBrowserError());
+    if (_projectBrowser && _projectBrowser->errorText) {
+        _projectBrowser->errorText->setText(_layer->getProjectBrowserError());
     }
 }
 
