@@ -22,6 +22,7 @@ void EditorLayer::cmdCreateEmptyNode()
         return;
     }
     Node* newNode = scene->createNode3D("New Node");
+    notifyHierarchyChanged();
     if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
         setSelectedEntity(node3D->getEntity());
     }
@@ -37,6 +38,7 @@ void EditorLayer::cmdCreateNodePreset(const std::string& presetDisplayName)
         return;
     }
     Node* node = editor::NodeCreateRegistry::get().createPreset(presetDisplayName, *scene, presetDisplayName, nullptr);
+    notifyHierarchyChanged();
     if (auto* node3D = dynamic_cast<Node3D*>(node)) {
         setSelectedEntity(node3D->getEntity());
     }
@@ -72,6 +74,7 @@ void EditorLayer::cmdDuplicateSelection()
         return;
     }
 
+    notifyHierarchyChanged();
     YA_CORE_INFO("Duplicated {} entit{}", duplicated.size(), duplicated.size() > 1 ? "ies" : "y");
     facade().timerManager.delayCall(
         1,
@@ -90,6 +93,7 @@ void EditorLayer::cmdDeleteSelection()
         return;
     }
     _sceneHierarchyPanel.deleteSelection();
+    notifyHierarchyChanged();
 }
 
 } // namespace ya

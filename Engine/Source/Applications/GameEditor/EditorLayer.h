@@ -196,6 +196,8 @@ struct EditorLayer
 
   public:
     Delegate<void(Rect2D /*rect*/)> onViewportResized;
+    MulticastDelegate<void()>       onSelectionChanged;
+    MulticastDelegate<void()>       onHierarchyChanged;
 
     // File picker for save/load dialogs and asset selection
     FilePicker  _filePicker;
@@ -257,7 +259,9 @@ struct EditorLayer
     void                             setSceneContext(Scene* scene)
     {
         _sceneHierarchyPanel.setContext(scene);
+        notifyHierarchyChanged();
     }
+    void notifyHierarchyChanged() { onHierarchyChanged.broadcast(); }
     void selectEntity(Entity* entity)
     {
         _sceneHierarchyPanel.setSelection(entity);
@@ -273,6 +277,7 @@ struct EditorLayer
             _selectedEntityUUID = 0;
         }
         ++_selectionGeneration;
+        onSelectionChanged.broadcast();
     }
     [[nodiscard]] const std::string& getSelectedWidgetEntryId() const { return _selectedWidgetEntryId; }
     /// The selected SceneWidgetEntry (nullptr when none/not found).
@@ -317,6 +322,7 @@ struct EditorLayer
             setViewportMode(EViewportMode::Mode3D, /*bPersist=*/false);
         }
         ++_selectionGeneration;
+        onSelectionChanged.broadcast();
     }
 
     [[nodiscard]] uint64_t selectionGeneration() const { return _selectionGeneration; }

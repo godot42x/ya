@@ -73,10 +73,8 @@ struct EditorSurface
     std::shared_ptr<UIDockSpace>     _dockSpace;
     std::shared_ptr<UIDockFloatingHost> _dockFloatingHost;
     std::shared_ptr<UIImage>         _viewportImage;
-    std::shared_ptr<UITreeView>      _hierarchyView;
-    std::shared_ptr<ReactiveList<UITreeView::FNode>> _hierarchyRoots;
-    std::shared_ptr<Reactive<std::string>>           _hierarchyFilter;
-    std::shared_ptr<UITextField>                     _hierarchyFilterField;
+    std::shared_ptr<UITreeView>      _projectList;
+    std::shared_ptr<ReactiveList<UITreeView::FNode>> _projectRoots;
     std::shared_ptr<SelectionModel>  _selection = std::make_shared<SelectionModel>();
     std::shared_ptr<ActionMap>       _actions   = std::make_shared<ActionMap>();
     std::shared_ptr<UndoStack>       _undo      = std::make_shared<UndoStack>();
@@ -90,8 +88,6 @@ struct EditorSurface
     std::shared_ptr<IImage>     _viewportImageResource;
     std::shared_ptr<IImageView> _viewportImageView;
 
-    std::string _hierarchyFingerprint;
-    uint64_t    _syncedSelectionGeneration = ~uint64_t{0};
     EditorViewportOverlayHost _viewportOverlayHost;
     std::shared_ptr<EditorViewportGizmoOverlay> _viewportGizmoOverlay;
 
@@ -142,8 +138,6 @@ struct EditorSurface
     void registerEditorActions();
     void syncPresentation(App& app, float dt);
     void syncViewportTexture();
-    void syncHierarchy();
-    void syncSelectionFromLayer();
     void syncToolbar(App& app);
     void publishViewportRect();
     void syncViewportHostState(App& app);
@@ -151,7 +145,6 @@ struct EditorSurface
     bool materializeTab(std::string_view tabId);
     [[nodiscard]] FEditorTabSpawnContext makeSpawnContext();
     std::shared_ptr<UIElement> buildViewportBody();
-    std::shared_ptr<UIElement> buildHierarchyBody();
     void buildToolsMenu();
     void materializeWorkspaceTabs();
     void applyWindowMetrics(App& app);
@@ -159,7 +152,6 @@ struct EditorSurface
     bool tryRestoreEditorDockLayout();
     void persistEditorDockLayout();
     void openViewportContextMenu(const glm::vec2& windowPoint);
-    void openHierarchyContextMenu(const glm::vec2& logicalPoint);
 };
 
 } // namespace ya

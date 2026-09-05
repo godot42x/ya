@@ -3,6 +3,7 @@
 #include "GameEditor/UI/EditorAssetInspectorTab.h"
 #include "GameEditor/UI/EditorContentBrowserTab.h"
 #include "GameEditor/UI/EditorDebugImagesTab.h"
+#include "GameEditor/UI/EditorHierarchyTab.h"
 #include "GameEditor/UI/EditorInspectorTab.h"
 #include "GameEditor/UI/EditorRuntimeToolsTab.h"
 #include "GameEditor/UI/EditorStatsTab.h"
@@ -33,6 +34,14 @@ const FEditorTabSpawner* EditorTabSpawnerRegistry::find(std::string_view tabId) 
 
 void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
 {
+    registry.add({
+        .tabId = "hierarchy",
+        .title = "Hierarchy",
+        .toolsMenuLabel = "Hierarchy",
+        .spawn = [](FEditorTabSpawnContext& ctx) {
+            return std::make_shared<EditorHierarchyTab>(ctx.layer, ctx.selection, ctx.actions);
+        },
+    });
     registry.add({
         .tabId = "inspector",
         .title = "Inspector",

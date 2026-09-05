@@ -19,3 +19,16 @@
 - Hierarchy / Viewport 仍由 Surface 物化，尚未成为 spawner tab。
 - Selection / hierarchy 仍靠 Surface fingerprint 轮询。
 - Surface 仍有 `syncPresentation`。
+
+## P2 当前 checkpoint
+
+- `EditorLayer` 在 `++_selectionGeneration` 处广播 `onSelectionChanged`；`notifyHierarchyChanged()` 覆盖 scene context、create/delete/duplicate、Inspector rename、Hierarchy reorder。
+- `EditorHierarchyTab` 为 compound root：`onAttached` 拉 scene 并订两个 delegate；Surface 不再持 Hierarchy 控件或 fingerprint 轮询。
+- Project browser 用独立 `_projectList` / `_projectRoots`，刷新走 `ReactiveList::replace`。
+- Inspector 结构跟 selection/hierarchy delegate；`tick` 只拉已投影属性值。
+- 验证：`ya-game-editor` 构建通过；`EditorHierarchyOpsTest`、`EditorTabSpawnerRegistryTest`（含 builtin hierarchy）通过。
+
+### P2 保留项
+
+- Viewport 仍由 Surface `buildViewportBody` 物化。
+- Surface 仍有 `syncPresentation`（viewport 纹理 / toolbar / dialogs / project browser）。

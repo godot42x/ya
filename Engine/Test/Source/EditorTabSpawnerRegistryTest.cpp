@@ -37,4 +37,15 @@ TEST(EditorTabSpawnerRegistryTest, AddFindRejectsDuplicatesAndSpawnDoesNotReregi
     EXPECT_EQ(registry.find("missing"), nullptr);
 }
 
+TEST(EditorTabSpawnerRegistryTest, BuiltinRegistryIncludesHierarchy)
+{
+    EditorTabSpawnerRegistry registry;
+    registerBuiltinEditorTabSpawners(registry);
+    const FEditorTabSpawner* hierarchy = registry.find("hierarchy");
+    ASSERT_NE(hierarchy, nullptr);
+    EXPECT_EQ(hierarchy->title, "Hierarchy");
+    EXPECT_EQ(hierarchy->toolsMenuLabel, "Hierarchy");
+    EXPECT_TRUE(static_cast<bool>(hierarchy->spawn));
+}
+
 } // namespace ya

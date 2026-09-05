@@ -45,6 +45,7 @@ void renameEntity(EditorLayer* layer, uint64_t uuid, const std::string& name)
     }
     if (Node* node = scene->getNodeByEntity(entity)) {
         node->setName(name);
+        layer->notifyHierarchyChanged();
     }
 }
 
@@ -139,6 +140,11 @@ EditorInspectorTab::EditorInspectorTab(EditorLayer& layer, UndoStack* undo)
     enableTick();
 }
 
+EditorInspectorTab::~EditorInspectorTab()
+{
+    unbindLayerDelegates();
+}
+
 void EditorInspectorTab::construct()
 {
     auto nameField = ui::textField("InspectorName").setFontSize(14);
@@ -154,6 +160,7 @@ void EditorInspectorTab::construct()
         const std::string old = node->getName();
         if (old == text) return;
         node->setName(text);
+        _layer->notifyHierarchyChanged();
         if (!_undo) return;
         uint64_t uuid = 0;
         if (auto* id = entity->getComponent<IDComponent>()) {
@@ -224,12 +231,53 @@ void EditorInspectorTab::construct()
 
 void EditorInspectorTab::onAttached()
 {
+    bindLayerDelegates();
     refresh();
+}
+
+void EditorInspectorTab::onDetached()
+{
+    unbindLayerDelegates();
+}
+
+void EditorInspectorTab::bindLayerDelegates()
+{
+    unbindLayerDelegates();
+    if (!_layer) {
+        return;
+    }
+    _selectionHandle = _layer->onSelectionChanged.addLambda(this, [this]() {
+        refresh();
+    });
+    _hierarchyHandle = _layer->onHierarchyChanged.addLambda(this, [this]() {
+        refresh();
+    });
+}
+
+void EditorInspectorTab::unbindLayerDelegates()
+{
+    if (!_layer) {
+        _selectionHandle = INVALID_HANDLE;
+        _hierarchyHandle = INVALID_HANDLE;
+        return;
+    }
+    if (_selectionHandle != INVALID_HANDLE) {
+        _layer->onSelectionChanged.remove(_selectionHandle);
+        _selectionHandle = INVALID_HANDLE;
+    }
+    if (_hierarchyHandle != INVALID_HANDLE) {
+        _layer->onHierarchyChanged.remove(_hierarchyHandle);
+        _hierarchyHandle = INVALID_HANDLE;
+    }
 }
 
 void EditorInspectorTab::tick(float)
 {
-    refresh();
+    WidgetTree* tree = getTree();
+    if (!tree) {
+        return;
+    }
+    syncProjectedValues(*tree);
 }
 
 void EditorInspectorTab::refresh()
@@ -239,6 +287,7 @@ void EditorInspectorTab::refresh()
         return;
     }
     refreshFromTree(*tree);
+    syncProjectedValues(*tree);
 }
 
 void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<Entity*>& entities)
@@ -410,6 +459,10 @@ void EditorInspectorTab::refreshFromTree(WidgetTree& tree)
         _projectedFingerprint = fingerprint;
         rebuildProjected(tree, entities);
     }
+}
+
+void EditorInspectorTab::syncProjectedValues(WidgetTree& tree)
+{
     for (const auto& section : _projectedSections) {
         if (section) {
             section->sync(tree);

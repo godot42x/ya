@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Delegate.h"
 #include "GUI/Widgets/CompoundWidget.h"
 
 #include <memory>
@@ -20,13 +21,16 @@ class EditorAutoPropertySection;
 struct WidgetTree;
 class UndoStack;
 
-/// Retained Inspector tab. Component rows come from `PropertyGraph::project`.
+/// Retained Inspector tab. Structure follows Layer selection/hierarchy
+/// delegates; property values tick only while attached.
 class EditorInspectorTab : public UICompoundWidget
 {
   public:
     explicit EditorInspectorTab(EditorLayer& layer, UndoStack* undo = nullptr);
+    ~EditorInspectorTab() override;
 
     void onAttached() override;
+    void onDetached() override;
     void tick(float deltaSeconds) override;
     [[nodiscard]] bool wantsTextInput() const;
 
@@ -48,9 +52,14 @@ class EditorInspectorTab : public UICompoundWidget
     std::vector<std::shared_ptr<UIElement>> _projectedWidgets;
     std::vector<std::shared_ptr<EditorAutoPropertySection>> _projectedSections;
     std::string _projectedFingerprint;
+    DelegateHandle _selectionHandle = INVALID_HANDLE;
+    DelegateHandle _hierarchyHandle = INVALID_HANDLE;
 
+    void bindLayerDelegates();
+    void unbindLayerDelegates();
     void refresh();
     void refreshFromTree(WidgetTree& tree);
+    void syncProjectedValues(WidgetTree& tree);
     void rebuildProjected(WidgetTree& tree, const std::vector<Entity*>& entities);
 };
 

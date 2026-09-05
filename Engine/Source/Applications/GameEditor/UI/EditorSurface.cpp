@@ -9,17 +9,14 @@
 #include "Core/Config/ConfigManager.h"
 #include "Core/Log.h"
 #include "GameEditor/UI/EditorViewportHost.h"
-#include "GameEditor/UI/EditorHierarchyOps.h"
 #include "GameEditor/UI/EditorViewportGizmoOverlay.h"
 #include "GameEditor/UI/EditorListRows.h"
-#include "ECS/Entity.h"
-#include "ECS/Component.h"
-#include "ECS/ECSRegistry.h"
 #include "GUI/Declarative/Build.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/UI/EditorTheme.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "GameRuntime/App.h"
+#include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "GUI/Host/OsClipboard.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Container.h"
@@ -39,7 +36,6 @@
 #include "GUI/Widgets/WidgetAttachment.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "Core/System/PathUtils.h"
-#include "Hierarchy/Node.h"
 #include "RHI/Core/Texture.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Swapchain.h"
@@ -47,7 +43,6 @@
 #include "RHI/Render.h"
 #include "Render/Resources/FontManager.h"
 #include "Scene/Core/Scene.h"
-#include "Scene3D/TransformComponent.h"
 
 #include <algorithm>
 #include <charconv>
@@ -66,51 +61,6 @@ namespace
 constexpr float kMenuHeight     = editor_density::kMenuHeight;
 constexpr float kToolbarHeight  = editor_density::kToolbarHeight;
 constexpr float kChromeTop      = kMenuHeight + kToolbarHeight;
-
-bool parseWidgetEntryKey(const std::string& id, std::string& outEntryId)
-{
-    constexpr std::string_view kPrefix = "ui:";
-    if (id.size() <= kPrefix.size() || id.compare(0, kPrefix.size(), kPrefix) != 0) {
-        return false;
-    }
-    outEntryId = id.substr(kPrefix.size());
-    return true;
-}
-
-UITreeView::FNode buildHierarchyNode(Node* node)
-{
-    UITreeView::FNode out;
-    if (!node) {
-        return out;
-    }
-    uint64_t uuid = 0;
-    if (Entity* entity = node->getEntity()) {
-        if (auto* id = entity->getComponent<IDComponent>()) {
-            uuid = id->_id.value;
-        }
-    }
-    out.id    = editorHierarchyEntityIdKey(uuid);
-    out.label = node->getName();
-    out.children.reserve(node->getChildCount());
-    for (Node* child : node->getChildren()) {
-        out.children.push_back(buildHierarchyNode(child));
-    }
-    return out;
-}
-
-void appendHierarchyFingerprint(std::string& fingerprint, const Node* node)
-{
-    if (!node) {
-        return;
-    }
-    fingerprint += node->getName();
-    fingerprint += ':';
-    fingerprint += std::to_string(node->getChildCount());
-    fingerprint += ';';
-    for (const Node* child : node->getChildren()) {
-        appendHierarchyFingerprint(fingerprint, child);
-    }
-}
 
 bool widgetOrAncestor(const UIElement* node, const UIElement* target)
 {
@@ -187,10 +137,8 @@ void EditorSurface::shutdown()
     _viewportImage.reset();
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
-    _hierarchyView.reset();
-    _hierarchyRoots.reset();
-    _hierarchyFilter.reset();
-    _hierarchyFilterField.reset();
+    _projectList.reset();
+    _projectRoots.reset();
     _selection = std::make_shared<SelectionModel>();
     _actions   = std::make_shared<ActionMap>();
     _undo      = std::make_shared<UndoStack>();
@@ -198,8 +146,6 @@ void EditorSurface::shutdown()
     _viewportTexture.reset();
     _viewportImageResource.reset();
     _viewportImageView.reset();
-    _hierarchyFingerprint.clear();
-    _syncedSelectionGeneration = ~uint64_t{0};
     _layer = nullptr;
     _tabSpawners = nullptr;
 }
@@ -218,7 +164,9 @@ void EditorSurface::tick(App& app, float dt)
     applyWindowMetrics(app);
     _tree->tick(dt);
     syncPresentation(app, dt);
-    _snapshot = _tree->buildSnapshot(UIFrameBuildContext{});
+    UIFrameBuildContext snapshotCtx;
+    snapshotCtx.textureResolver = &resolveGameUITexture;
+    _snapshot = _tree->buildSnapshot(snapshotCtx);
     publishViewportRect();
     syncViewportHostState(app);
 }
@@ -234,10 +182,8 @@ void EditorSurface::rebuild(App& app)
     _viewportImage.reset();
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
-    _hierarchyView.reset();
-    _hierarchyRoots.reset();
-    _hierarchyFilter.reset();
-    _hierarchyFilterField.reset();
+    _projectList.reset();
+    _projectRoots.reset();
     _selection = std::make_shared<SelectionModel>();
     _actions   = std::make_shared<ActionMap>();
     _undo      = std::make_shared<UndoStack>();
@@ -250,8 +196,6 @@ void EditorSurface::rebuild(App& app)
         _settings->reset();
     }
     _settings.reset();
-    _hierarchyFingerprint.clear();
-    _syncedSelectionGeneration = ~uint64_t{0};
 
     int windowW = 0;
     int windowH = 0;
@@ -295,9 +239,9 @@ void EditorSurface::buildProjectBrowser(App& app)
                            }
                        });
 
-    _hierarchyRoots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    _projectRoots = std::make_shared<ReactiveList<UITreeView::FNode>>();
     auto list = ui::treeView("ProjectList")
-                    .bindData(_hierarchyRoots)
+                    .bindData(_projectRoots)
                     .bindSelection(_selection->primaryRef())
                     .setOnSelectionChanged([this](const std::string& id) {
                         _selection->select(id);
@@ -307,7 +251,7 @@ void EditorSurface::buildProjectBrowser(App& app)
                             _layer->setProjectBrowserSelection(index);
                         }
                     });
-    _hierarchyView = list.share();
+    _projectList = list.share();
 
     auto openBtn = labeledButton("OpenProject", "Open Project")
                        .setOnClick([this]() {
@@ -512,13 +456,13 @@ void EditorSurface::buildEditorChrome(App& app)
     });
     buildToolsMenu();
 
-    auto play = labeledButton("Play", "Play").setOnClick([this]() {
+    auto play = iconLabeledButton("Play", "Play", editor_icons::kPlay).setOnClick([this]() {
         (void)_actions->execute("runtime.play");
     });
-    auto simulate = labeledButton("Simulate", "Simulate").setOnClick([this]() {
+    auto simulate = iconLabeledButton("Simulate", "Simulate", editor_icons::kSimulate).setOnClick([this]() {
         (void)_actions->execute("runtime.simulate");
     });
-    auto stop = labeledButton("Stop", "Stop").setOnClick([this]() {
+    auto stop = iconLabeledButton("Stop", "Stop", editor_icons::kStop).setOnClick([this]() {
         (void)_actions->execute("runtime.stop");
     });
     auto mode3d = labeledButton("Mode3D", "3D").setOnClick([this]() {
@@ -604,71 +548,6 @@ std::shared_ptr<UIElement> EditorSurface::buildViewportBody()
         .release();
 }
 
-std::shared_ptr<UIElement> EditorSurface::buildHierarchyBody()
-{
-    _hierarchyFilter = std::make_shared<Reactive<std::string>>("");
-    auto hierarchyFilterField = ui::textField("HierarchyFilter")
-                                    .setOnTextChanged([this](const std::string& text) {
-                                        if (_hierarchyFilter) {
-                                            _hierarchyFilter->set(text);
-                                        }
-                                    });
-    _hierarchyFilterField = hierarchyFilterField.share();
-
-    _hierarchyRoots = std::make_shared<ReactiveList<UITreeView::FNode>>();
-    _hierarchyView  = ui::treeView("HierarchyTree")
-                         .bindData(_hierarchyRoots)
-                         .bindFilter(_hierarchyFilter)
-                         .bindSelection(_selection->primaryRef())
-                         .setReorderable(true)
-                         .setOnSelectionChanged([this](const std::string& id) {
-                             _selection->select(id);
-                             uint64_t uuid = 0;
-                             std::string entryId;
-                             if (parseEditorHierarchyEntityIdKey(id, uuid)) {
-                                 if (Scene* scene = _layer->getHierarchyScene()) {
-                                     _layer->setSelectedEntity(scene->getEntityByUUID(uuid));
-                                 }
-                             }
-                             else if (parseWidgetEntryKey(id, entryId)) {
-                                 _layer->setSelectedWidgetEntryId(entryId);
-                             }
-                         })
-                         .setOnReorderHandler([this](const std::string& fromId,
-                                                     const std::string& toId,
-                                                     int dropMode) {
-                             if (!_layer) {
-                                 return;
-                             }
-                             Scene* scene = _layer->getHierarchyScene();
-                             if (!scene) {
-                                 return;
-                             }
-                             if (Entity* moved = moveEditorHierarchyEntity(*scene, fromId, toId, dropMode)) {
-                                 _layer->setSelectedEntity(moved);
-                                 _hierarchyFingerprint.clear();
-                             }
-                         })
-                         .setOnContextMenu([this](const std::string&, const glm::vec2& logicalPoint) {
-                             openHierarchyContextMenu(logicalPoint);
-                         })
-                         .share();
-    auto hierarchyScroll = ui::scroll("HierarchyScroll")
-                               .child(_hierarchyView, ui::overlaySlot().fill());
-    return ui::panel("HierarchyBody")
-        .setStyleKey("panel.canvas")
-        .child(std::move(hierarchyFilterField),
-               ui::canvasSlot()
-                   .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
-                   .offset({4.0f, 4.0f})
-                   .size({0.0f, 26.0f}))
-        .child(std::move(hierarchyScroll),
-               ui::canvasSlot()
-                   .anchor({0.0f, 0.0f}, {1.0f, 1.0f})
-                   .offset({4.0f, 34.0f}))
-        .release();
-}
-
 void EditorSurface::buildToolsMenu()
 {
     if (!_menuBar) {
@@ -679,10 +558,6 @@ void EditorSurface::buildToolsMenu()
         items.push_back({
             .label  = "Viewport",
             .action = [this]() { invokeTab("viewport"); },
-        });
-        items.push_back({
-            .label  = "Hierarchy",
-            .action = [this]() { invokeTab("hierarchy"); },
         });
         if (_tabSpawners) {
             for (const FEditorTabSpawner& spawner : _tabSpawners->all()) {
@@ -730,10 +605,6 @@ bool EditorSurface::materializeTab(std::string_view tabId)
     if (tabId == "viewport") {
         widget = buildViewportBody();
         title = "Viewport";
-    }
-    else if (tabId == "hierarchy") {
-        widget = buildHierarchyBody();
-        title = "Hierarchy";
     }
     else if (_tabSpawners) {
         if (const FEditorTabSpawner* spawner = _tabSpawners->find(tabId)) {
@@ -917,20 +788,6 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
     menu->openAt(*_tree, windowPoint);
 }
 
-void EditorSurface::openHierarchyContextMenu(const glm::vec2& logicalPoint)
-{
-    if (!_tree || !_actions) {
-        return;
-    }
-    auto menu = UIMenu::create({
-        UIMenu::FItem::fromAction(*_actions, "selection.createEmpty"),
-        UIMenu::FItem::separator(),
-        UIMenu::FItem::fromAction(*_actions, "selection.duplicate"),
-        UIMenu::FItem::fromAction(*_actions, "selection.delete"),
-    });
-    menu->openAt(*_tree, logicalPoint);
-}
-
 void EditorSurface::syncPresentation(App& app, float dt)
 {
     (void)dt;
@@ -944,8 +801,8 @@ void EditorSurface::syncPresentation(App& app, float dt)
                 .label = discovered[static_cast<size_t>(i)],
             });
         }
-        if (_hierarchyRoots) {
-            _hierarchyRoots->replace(std::move(projects));
+        if (_projectRoots) {
+            _projectRoots->replace(std::move(projects));
         }
         if (_projectErrorText) {
             _projectErrorText->setText(_layer->getProjectBrowserError());
@@ -954,8 +811,6 @@ void EditorSurface::syncPresentation(App& app, float dt)
     }
 
     syncViewportTexture();
-    syncSelectionFromLayer();
-    syncHierarchy();
     syncToolbar(app);
     if (_filePicker) {
         _filePicker->sync(*_tree);
@@ -1002,88 +857,6 @@ void EditorSurface::syncViewportTexture()
                                      _viewportImageView,
                                      "EditorSurfaceViewport");
     _viewportImage->setTexture(_viewportTexture);
-}
-
-void EditorSurface::syncHierarchy()
-{
-    if (!_hierarchyRoots) {
-        return;
-    }
-    Scene* scene = _layer->getHierarchyScene();
-    std::string fingerprint;
-    fingerprint.reserve(256);
-    if (scene) {
-        fingerprint += scene->getName();
-        if (Node* root = scene->getRootNode()) {
-            appendHierarchyFingerprint(fingerprint, root);
-        }
-        fingerprint += "|ui:";
-        fingerprint += std::to_string(scene->getWidgetEntries().size());
-        for (const auto& entry : scene->getWidgetEntries()) {
-            fingerprint += entry.entryId;
-            fingerprint += ';';
-        }
-    }
-    if (fingerprint == _hierarchyFingerprint) {
-        return;
-    }
-    _hierarchyFingerprint = std::move(fingerprint);
-
-    std::vector<UITreeView::FNode> roots;
-    if (scene) {
-        if (Node* root = scene->getRootNode()) {
-            for (Node* child : root->getChildren()) {
-                roots.push_back(buildHierarchyNode(child));
-            }
-        }
-        if (!scene->getWidgetEntries().empty()) {
-            UITreeView::FNode uiRoot;
-            uiRoot.id    = "ui-root";
-            uiRoot.label = "Game UI";
-            for (const auto& entry : scene->getWidgetEntries()) {
-                uiRoot.children.push_back(UITreeView::FNode{
-                    .id    = std::format("ui:{}", entry.entryId),
-                    .label = entry.entryId,
-                });
-            }
-            roots.push_back(std::move(uiRoot));
-        }
-    }
-    _hierarchyRoots->replace(std::move(roots));
-}
-
-void EditorSurface::syncSelectionFromLayer()
-{
-    if (!_layer || !_selection) {
-        return;
-    }
-    const uint64_t generation = _layer->selectionGeneration();
-    if (generation == _syncedSelectionGeneration) {
-        return;
-    }
-    _syncedSelectionGeneration = generation;
-
-    std::vector<std::string> ids;
-    if (!_layer->getSelectedWidgetEntryId().empty()) {
-        ids.push_back(std::format("ui:{}", _layer->getSelectedWidgetEntryId()));
-    }
-    else {
-        ids.reserve(_layer->getSelections().size());
-        for (Entity* entity : _layer->getSelections()) {
-            if (!entity || !entity->isValid()) {
-                continue;
-            }
-            uint64_t uuid = 0;
-            if (auto* id = entity->getComponent<IDComponent>()) {
-                uuid = id->_id.value;
-            }
-            if (uuid != 0) {
-                ids.push_back(editorHierarchyEntityIdKey(uuid));
-            }
-        }
-    }
-    std::string primary = ids.empty() ? std::string{} : ids.front();
-    _selection->replace(std::move(ids), std::move(primary));
 }
 
 void EditorSurface::syncToolbar(App& app)

@@ -26,6 +26,7 @@ void EditorLayer::onAttach()
     if (auto scene = getEditableScene())
     {
         _sceneHierarchyPanel.setContext(scene);
+        notifyHierarchyChanged();
     }
 
     auto am             = AssetManager::get();
