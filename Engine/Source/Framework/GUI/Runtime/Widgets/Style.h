@@ -290,6 +290,7 @@ struct FTextFieldStyle
     FBrush    errorFill        = FBrush::solid({0.72f, 0.24f, 0.24f, 0.45f});
     glm::vec4 textColor      = {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec4 caretColor     = {0.90f, 0.92f, 0.95f, 1.0f};
+    glm::vec4 selectionColor = {0.24f, 0.46f, 0.82f, 0.45f};
     uint32_t  fontSize       = 16;
 
     bool operator==(const FTextFieldStyle&) const = default;

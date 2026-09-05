@@ -153,6 +153,16 @@ std::vector<GuiScenarioStep> parseGuiScenario(std::string_view jsonl,
             else if (type == "key_press") {
                 step.kind = EGuiScenarioStepKind::KeyPress;
                 step.key  = keyFromName(obj.value("key", ""));
+                if (obj.value("shift", false)) {
+                    step.keyMod |= EKeyMod::Shift;
+                }
+                if (obj.value("primary", false)) {
+#if defined(__APPLE__)
+                    step.keyMod |= EKeyMod::LMeta;
+#else
+                    step.keyMod |= EKeyMod::LCtrl;
+#endif
+                }
             }
             else if (type == "key_release") {
                 step.kind = EGuiScenarioStepKind::KeyRelease;
@@ -253,7 +263,7 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
     case EGuiScenarioStepKind::KeyPress: {
         KeyPressedEvent ev;
         ev._keyCode = step.key;
-        ev._mod     = 0;
+        ev._mod     = step.keyMod;
         ev.bRepeat  = false;
         stamp(ev);
         sink.dispatch(ev, {-1.0f, -1.0f});
@@ -262,7 +272,7 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
     case EGuiScenarioStepKind::KeyRelease: {
         KeyReleasedEvent ev;
         ev._keyCode = step.key;
-        ev._mod     = 0;
+        ev._mod     = step.keyMod;
         stamp(ev);
         sink.dispatch(ev, {-1.0f, -1.0f});
         break;

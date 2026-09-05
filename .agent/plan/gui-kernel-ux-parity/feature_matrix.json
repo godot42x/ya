@@ -26,9 +26,14 @@
     },
     {
       "id": "text_selection",
-      "status": "pending",
+      "status": "implemented",
       "phase": "K2",
-      "evidence": []
+      "evidence": [
+        "FTextEditState shared by TextField/DragFloat/SpinBox",
+        "ECursorType::IBeam",
+        "ToolControlsTest.TextFieldSelectionShiftArrowsCopyCutPaste",
+        "widgets_text_selection.jsonl"
+      ]
     },
     {
       "id": "color_picker",

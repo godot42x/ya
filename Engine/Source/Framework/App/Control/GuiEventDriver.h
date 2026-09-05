@@ -50,6 +50,7 @@ struct GuiScenarioStep
     glm::vec2  wheel      = {0.0f, 0.0f};
     int        button     = 0;
     EKey::T    key        = EKey::NONE;
+    uint32_t   keyMod     = 0;
     std::string text;
     glm::vec2  dragTo     = {0.0f, 0.0f};
     int        dragSteps  = 8;

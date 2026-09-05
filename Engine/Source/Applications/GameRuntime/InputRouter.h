@@ -126,6 +126,7 @@ class YA_GAME_RUNTIME_API InputRouter
     FPointerCaptureState    _pointerCapture;
     int                     _activeCursor = -1;
     SDL_Cursor*             _sdlArrowCursor = nullptr;
+    SDL_Cursor*             _sdlIBeamCursor = nullptr;
     SDL_Cursor*             _sdlResizeEWCursor = nullptr;
     SDL_Cursor*             _sdlResizeNSCursor = nullptr;
     uint64_t                _nextNodeId  = 1;

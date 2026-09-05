@@ -94,9 +94,13 @@ Surface 只编排 shell、dock persist、viewport host 和 dialogs。
   `FTreeReorderDragDropOp` / `UIStringDragDropOperation`），目标用
   `as<T>()` / `isType()`。目标控件实现
   `canAcceptDrop/onDrop/setDropHighlight`。
-  文本焦点：`UITextField` 消费 `KeyTyped`（IME 提交）、按码点 Backspace/Delete，以及
-  primary+C/X/V（Cmd macOS / Ctrl 别处）经 `WidgetTree` clipboard。默认内存缓冲；
+  文本焦点：`UITextField` 消费 `KeyTyped`（IME 提交）、按码点 Backspace/Delete，选区
+  （anchor/caret、Shift+方向、拖选、primary+A），以及
+  primary+C/X/V（Cmd macOS / Ctrl 别处）经 `WidgetTree` clipboard（作用在选区上；
+  无选区时拷切整缓冲）。默认内存缓冲；
   windowed host 用 `bindSdlClipboard` 接 SDL。DPI 由 `setDpiScale` 与 `uiScale` 正交折叠。
+  焦点/悬停时 `getCursor()` 为 `ECursorType::IBeam`。`UIDragFloat` / `UISpinBox`
+  的 `_bEditing` 复用同一套 `FTextEditState`，不要再写第三套迷你编辑器。
 - 快照：`buildSnapshot`（layout dirty 时才 layout + paint）→ 不可变 `UIFrameSnapshot`；
   录制只消费快照。命令录制期绝不读 live tree。业务代码不得在 paint/layout
   回调中直接修改 tree 结构；tooltip/drag 等 framework maintenance 只在显式 pass boundary 执行。

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Widgets/Controls/TextEdit.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
@@ -11,7 +12,7 @@ namespace ya
 
 /// Spin box (ImGui InputInt/InputFloat step equivalent, minimal): three
 /// zones — left "-" steps down, right "+" steps up, center shows the value.
-/// Clicking a zone repeats on hold (frame-independent via drag capture).
+/// Center click / double-click edit reuses `FTextEditState` (same as TextField).
 struct YA_GUI_API UISpinBox : public UIElement, public UIStyledWidget<UISpinBox, FSpinBoxStyle>
 {
     YA_REFLECT_BEGIN(UISpinBox, UIElement)
@@ -31,11 +32,11 @@ struct YA_GUI_API UISpinBox : public UIElement, public UIStyledWidget<UISpinBox,
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UISpinBox>; }
 
-    float     _value = 0.0f;
-    float     _step  = 1.0f;
-    float     _min   = -1000000.0f;
-    float     _max   = 1000000.0f;
-    uint32_t    _fontSize = 13;
+    float    _value    = 0.0f;
+    float    _step     = 1.0f;
+    float    _min      = -1000000.0f;
+    float    _max      = 1000000.0f;
+    uint32_t _fontSize = 13;
 
     std::function<void(float value)> _onValueChanged;
 
@@ -43,40 +44,36 @@ struct YA_GUI_API UISpinBox : public UIElement, public UIStyledWidget<UISpinBox,
 
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
-        node["control"] = {{"type", "spinBox"}, {"value", _value}};
+        node["control"] = {{"type", "spinBox"}, {"value", _value},
+                           {"editing", static_cast<bool>(_bEditing)}};
     }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void onFocusLost() override;
+    [[nodiscard]] ECursorType getCursor() const override
+    {
+        return _bEditing ? ECursorType::IBeam : ECursorType::Arrow;
+    }
     void clearTransientInputState() override
     {
         _hoveredZone = -1;
         _bEditing    = false;
         _editBuffer.clear();
+        _edit = {};
     }
 
   private:
-    enum class EZone : int8_t
-    {
-        None = -1,
-        Minus = 0,
-        Plus = 1,
-    };
-    /// Which zone the pointer is over (0 minus / 1 plus), -1 none.
     int _hoveredZone = -1;
-    /// Zone being pressed (capture drag repeat).
     int _pressedZone = -1;
     [[nodiscard]] int zoneFromPointer(float localX) const;
     void stepBy(float multiplier);
     void beginEdit();
     void commitEdit();
     void cancelEdit();
-    uint64_t _lastPressTimeMs = 0;
-    bool     _bHasLastPress   = false;
-    VisualFlag _bEditing{*this};
-    std::string _editBuffer;
-    /// True right after entering edit mode: the next typed character
-    /// replaces the pre-filled buffer (select-all semantics).
-    bool _bReplaceNext = false;
+    uint64_t       _lastPressTimeMs = 0;
+    bool           _bHasLastPress   = false;
+    VisualFlag     _bEditing{*this};
+    std::string    _editBuffer;
+    FTextEditState _edit;
 };
 
 } // namespace ya

@@ -558,6 +558,7 @@ struct GUIWindowHost::FImpl
     // Mouse cursor state (system cursors created lazily in init()).
     ECursorType activeCursor       = ECursorType::Arrow;
     SDL_Cursor* sdlArrowCursor     = nullptr;
+    SDL_Cursor* sdlIBeamCursor     = nullptr;
     SDL_Cursor* sdlResizeEWCursor  = nullptr;
     SDL_Cursor* sdlResizeNSCursor  = nullptr;
 };
@@ -610,6 +611,7 @@ bool GUIWindowHost::init()
     SDL_StartTextInput(static_cast<SDL_Window*>(window.getNativeWindowHandle()));
     // System cursors for hover feedback (split dividers request resize cursors).
     _impl->sdlArrowCursor    = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
+    _impl->sdlIBeamCursor    = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_TEXT);
     _impl->sdlResizeEWCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_EW_RESIZE);
     _impl->sdlResizeNSCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_NS_RESIZE);
 
@@ -815,6 +817,9 @@ void GUIWindowHost::updateCursor()
     switch (cursor) {
     case ECursorType::Arrow:
         sdlCursor = _impl->sdlArrowCursor;
+        break;
+    case ECursorType::IBeam:
+        sdlCursor = _impl->sdlIBeamCursor;
         break;
     case ECursorType::ResizeEastWest:
         sdlCursor = _impl->sdlResizeEWCursor;
@@ -1602,9 +1607,11 @@ void GUIWindowHost::shutdown()
     _impl->render = nullptr;
     SDL_StopTextInput(static_cast<SDL_Window*>(_impl->window.getNativeWindowHandle()));
     SDL_DestroyCursor(_impl->sdlArrowCursor);
+    SDL_DestroyCursor(_impl->sdlIBeamCursor);
     SDL_DestroyCursor(_impl->sdlResizeEWCursor);
     SDL_DestroyCursor(_impl->sdlResizeNSCursor);
     _impl->sdlArrowCursor     = nullptr;
+    _impl->sdlIBeamCursor     = nullptr;
     _impl->sdlResizeEWCursor  = nullptr;
     _impl->sdlResizeNSCursor  = nullptr;
     _impl->window.destroy();

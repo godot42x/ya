@@ -100,6 +100,7 @@ enum class EWidgetFocusPolicy : uint8_t
 enum class ECursorType : uint8_t
 {
     Arrow,            // default pointer
+    IBeam,            // text insertion caret
     ResizeEastWest,   // vertical divider (left/right panes)
     ResizeNorthSouth, // horizontal divider (top/bottom panes)
 };

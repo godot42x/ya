@@ -1,9 +1,9 @@
 #pragma once
 
+#include "GUI/Widgets/Controls/TextEdit.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
 
-#include <algorithm>
 #include <functional>
 #include <string>
 
@@ -14,9 +14,10 @@ namespace ya
 ///
 /// Input contract:
 ///   - click places the caret at the nearest character boundary and requests
-///     focus;
-///   - focused field consumes KeyTyped (IME/committed Unicode at the caret),
-///     Backspace/Delete by code point, Left/Right, Home/End and Enter (commit);
+///     focus; Shift+click and drag extend the selection; hover shows I-beam;
+///   - focused field consumes KeyTyped (insert replaces the selection),
+///     Backspace/Delete on the selection or by code point, Left/Right/Home/End
+///     (Shift extends), primary+A select-all, Enter (commit);
 ///   - primary+C/X/V copy/cut/paste through WidgetTree clipboard (OS clipboard
 ///     is a host hook; paste strips newlines/tabs for the single-line field);
 ///   - `_onTextChanged` fires on every edit, `_onCommit` on Enter / focus
@@ -77,10 +78,13 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
     std::function<void(const std::string& text)> _onCommit;
 
     /// Byte offset of the caret (always on a code-point boundary).
-    [[nodiscard]] size_t getCursorIndex() const { return _cursorIndex; }
+    [[nodiscard]] size_t getCursorIndex() const { return _edit.caret; }
+    [[nodiscard]] size_t getSelectionAnchor() const { return _edit.anchor; }
+    [[nodiscard]] bool   hasSelection() const { return _edit.hasSelection(); }
     /// Clamp the caret into the current buffer (used by presenters when they
     /// replace the text from the workspace).
-    void clampCursor() { _cursorIndex = std::min(_cursorIndex, _text.size()); }
+    void clampCursor() { _edit.clamp(_text.size()); }
+    [[nodiscard]] ECursorType getCursor() const override { return ECursorType::IBeam; }
 
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
@@ -89,23 +93,27 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
     [[nodiscard]] glm::vec2 computeIntrinsicSize() const override;
     void onFocusGained(bool /*bFromKeyboard*/) override { _bFocused = true; }
     void onFocusLost() override;
-    void clearTransientInputState() override { _bFocused = false; }
+    void clearTransientInputState() override
+    {
+        _bFocused    = false;
+        _bDragSelect = false;
+        _edit.collapseToCaret();
+    }
 
   private:
-    void moveCursorByCodePoint(int direction);
-    void erasePreviousCodePoint();
-    void eraseNextCodePoint();
+    void notifyTextChanged();
     void insertText(const std::string& text);
-    /// Place the caret at the nearest character boundary for `localX`
-    /// (tree-local logical px, measured from the field's left edge).
-    void placeCaretAt(const glm::vec2& logicalPoint);
+    /// Place the caret at the nearest character boundary for `logicalPoint`
+    /// (tree-local logical px). Shift/drag keeps the existing anchor.
+    void placeCaretAt(const glm::vec2& logicalPoint, bool bExtendSelection);
 
-    size_t     _cursorIndex = 0;
-    VisualFlag _bFocused{*this};
-    bool       _bError = false;
+    FTextEditState _edit;
+    VisualFlag     _bFocused{*this};
+    bool           _bError      = false;
+    bool           _bDragSelect = false;
     /// Horizontal scroll offset so the caret stays visible when the text is
     /// wider than the field (recomputed during paint; derived from _text and
-    /// _cursorIndex, so it never needs its own invalidation).
+    /// caret, so it never needs its own invalidation).
     float _scrollX = 0.0f;
 };
 

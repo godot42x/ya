@@ -213,8 +213,8 @@ Hierarchy tree CRUD remains a retained-UI gap, not an ImGui chrome blocker.
 Kernel feel (not another `EditorSurface` split) — `.agent/plan/gui-kernel-ux-parity/`:
 
 1. **K0** — Freeze path vs feel (this file + skill)  
-2. **K1** — Typed `UIDragDropOperation` only payload (`1c66af41` landed code; plan records evidence)  
-3. **K2** — `UITextField` selection + DragFloat/SpinBox edit reuse + I-beam  
+2. **K1** — Typed `UIDragDropOperation` only payload ✅ (`1c66af41`; this checkpoint records evidence)  
+3. **K2** — `UITextField` selection + DragFloat/SpinBox edit reuse + I-beam ✅  
 4. **K3** — ColorEdit SV/hue/hex picker  
 5. **K4** — Dock leaf tab close + same-leaf reorder  
 6. **E1** — Hierarchy tree right-click CRUD via existing `ActionMap`  

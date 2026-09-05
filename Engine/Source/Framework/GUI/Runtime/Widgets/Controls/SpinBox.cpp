@@ -2,6 +2,7 @@
 
 #include "Core/KeyCode.h"
 #include "Render/Resources/FontManager.h"
+#include "GUI/Widgets/Controls/TextEdit.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -31,9 +32,9 @@ void UISpinBox::stepBy(float multiplier)
 
 void UISpinBox::beginEdit()
 {
-    _bEditing     = true;
-    _editBuffer   = std::format("{:.2f}", _value);
-    _bReplaceNext = true;
+    _bEditing   = true;
+    _editBuffer = std::format("{:.2f}", _value);
+    _edit.selectAll(_editBuffer.size());
     if (WidgetTree* tree = getTree()) {
         tree->setFocus(this);
     }
@@ -44,21 +45,20 @@ void UISpinBox::commitEdit()
     if (!_bEditing) {
         return;
     }
-    _bEditing     = false;
-    _bReplaceNext = false;
+    _bEditing = false;
+    _edit     = {};
     try {
         setValue(std::stof(_editBuffer));
     }
     catch (...) {
-        // Invalid text: keep the previous value.
     }
     _editBuffer.clear();
 }
 
 void UISpinBox::cancelEdit()
 {
-    _bEditing     = false;
-    _bReplaceNext = false;
+    _bEditing = false;
+    _edit     = {};
     _editBuffer.clear();
 }
 
@@ -98,14 +98,21 @@ void UISpinBox::paintSelf(UIFrameBuilder& builder)
     builder.addText(minusRect, "-", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     builder.addText(plusRect, "+", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     const std::string shown = _bEditing ? _editBuffer : std::format("{:.2f}", _value);
-    builder.addText(_layoutRect, shown, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     if (_bEditing) {
-        const float textW  = font->measureText(shown);
-        const float caretX = _layoutRect.pos.x + (_layoutRect.extent.x + textW) * 0.5f + 1.0f;
-        const float caretY = _layoutRect.pos.y + (_layoutRect.extent.y - font->lineHeight) * 0.5f;
-        builder.addSprite(Rect2D{.pos = {caretX, caretY}, .extent = {1.0f, font->lineHeight}},
-                          style.textColor, nullptr);
+        textEditPaint(builder,
+                      _layoutRect,
+                      shown,
+                      _edit,
+                      font,
+                      style.textColor,
+                      style.textColor,
+                      kTextEditSelectionColor,
+                      EWidgetAlignH::Center,
+                      0.0f,
+                      true);
+        return;
     }
+    builder.addText(_layoutRect, shown, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
 }
 
 bool UISpinBox::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
@@ -113,41 +120,56 @@ bool UISpinBox::handleInputEvent(const Event& event, const WidgetEventContext& c
     const EEvent::T eventType = event.getEventType();
 
     if (_bEditing) {
+        constexpr uint32_t kEditMaxLength = 32;
         if (eventType == EEvent::KeyTyped) {
-            if (_bReplaceNext) {
-                _editBuffer.clear();
-                _bReplaceNext = false;
-            }
-            _editBuffer += static_cast<const KeyTypedEvent&>(event).getText();
+            textEditInsert(_editBuffer, _edit, static_cast<const KeyTypedEvent&>(event).getText(), kEditMaxLength);
             invalidateProperty(EUIPropertyImpact::Paint);
             return true;
         }
         if (eventType == EEvent::KeyPressed) {
             const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
-            if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Backspace) {
-                if (!_editBuffer.empty()) {
-                    _editBuffer.pop_back();
-                    invalidateProperty(EUIPropertyImpact::Paint);
-                }
-                return true;
-            }
-            if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Enter) {
+            if (keyEvent._keyCode == EKey::Enter) {
                 commitEdit();
                 return true;
             }
-            if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Escape) {
+            if (keyEvent._keyCode == EKey::Escape) {
                 cancelEdit();
                 return true;
             }
+            if (textEditHandleKey(_editBuffer, _edit, keyEvent, getTree(), kEditMaxLength)) {
+                invalidateProperty(EUIPropertyImpact::Paint);
+                return true;
+            }
+            return false;
         }
         if (eventType == EEvent::MouseButtonPressed) {
-            // A press on +/- while editing commits the edit first (an
-            // unparseable buffer keeps the previous value), then steps —
-            // the edit mode must never swallow the step buttons.
             const int zone = zoneFromPointer(ctx.logicalPoint.x - _layoutRect.pos.x);
             if (zone == 0 || zone == 1) {
                 commitEdit();
                 stepBy(zone == 0 ? -1.0f : 1.0f);
+                return true;
+            }
+            auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+            _edit.setCaret(textEditHitIndex(_editBuffer, font, _layoutRect, ctx.logicalPoint.x,
+                                            EWidgetAlignH::Center, 0.0f),
+                           false);
+            if (WidgetTree* tree = getTree()) {
+                tree->setPointerCapture(this);
+            }
+            invalidateProperty(EUIPropertyImpact::Paint);
+            return true;
+        }
+        if (eventType == EEvent::MouseMoved && ctx.bViaCapture) {
+            auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+            _edit.setCaret(textEditHitIndex(_editBuffer, font, _layoutRect, ctx.logicalPoint.x,
+                                            EWidgetAlignH::Center, 0.0f),
+                           true);
+            invalidateProperty(EUIPropertyImpact::Paint);
+            return true;
+        }
+        if (eventType == EEvent::MouseButtonReleased) {
+            if (WidgetTree* tree = getTree()) {
+                tree->releasePointerCapture(this);
             }
             return true;
         }

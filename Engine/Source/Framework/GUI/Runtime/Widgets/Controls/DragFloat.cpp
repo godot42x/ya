@@ -50,9 +50,18 @@ void UIDragFloat::adjustValue(float delta)
 
 void UIDragFloat::beginEdit()
 {
-    _bEditing     = true;
-    _editBuffer   = std::format("{:.{}f}", _value, _decimals);
-    _bReplaceNext = true;
+    if (_bDragging) {
+        _bDragging = false;
+        if (WidgetTree* tree = getTree()) {
+            tree->releasePointerCapture(this);
+        }
+        if (_onDragEnded) {
+            _onDragEnded();
+        }
+    }
+    _bEditing   = true;
+    _editBuffer = std::format("{:.{}f}", _value, _decimals);
+    _edit.selectAll(_editBuffer.size());
     if (WidgetTree* tree = getTree()) {
         tree->setFocus(this);
     }
@@ -63,22 +72,21 @@ void UIDragFloat::commitEdit()
     if (!_bEditing) {
         return;
     }
-    _bEditing     = false;
-    _bReplaceNext = false;
+    _bEditing = false;
+    _edit     = {};
     try {
         const float parsed = std::stof(_editBuffer);
         setValue(parsed);
     }
     catch (...) {
-        // Invalid text: keep the previous value.
     }
     _editBuffer.clear();
 }
 
 void UIDragFloat::cancelEdit()
 {
-    _bEditing     = false;
-    _bReplaceNext = false;
+    _bEditing = false;
+    _edit     = {};
     _editBuffer.clear();
 }
 
@@ -100,15 +108,24 @@ void UIDragFloat::paintSelf(UIFrameBuilder& builder)
     if (!font) {
         return;
     }
-    const std::string shown = _bEditing ? _editBuffer : (_bMixed ? std::string("—") : std::format("{:.{}f}", _value, _decimals));
-    builder.addText(_layoutRect, shown, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    const std::string shown = _bEditing ? _editBuffer
+                                        : (_bMixed ? std::string("—")
+                                                   : std::format("{:.{}f}", _value, _decimals));
     if (_bEditing) {
-        const float textW  = font->measureText(shown);
-        const float caretX = _layoutRect.pos.x + (_layoutRect.extent.x + textW) * 0.5f + 1.0f;
-        const float caretY = _layoutRect.pos.y + (_layoutRect.extent.y - font->lineHeight) * 0.5f;
-        builder.addSprite(Rect2D{.pos = {caretX, caretY}, .extent = {1.0f, font->lineHeight}},
-                          style.textColor, nullptr);
+        textEditPaint(builder,
+                      _layoutRect,
+                      shown,
+                      _edit,
+                      font,
+                      style.textColor,
+                      style.textColor,
+                      kTextEditSelectionColor,
+                      EWidgetAlignH::Center,
+                      0.0f,
+                      true);
+        return;
     }
+    builder.addText(_layoutRect, shown, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
 }
 
 bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
@@ -116,32 +133,56 @@ bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext&
     const EEvent::T eventType = event.getEventType();
 
     if (_bEditing) {
+        constexpr uint32_t kEditMaxLength = 32;
         if (eventType == EEvent::KeyTyped) {
-            if (_bReplaceNext) {
-                _editBuffer.clear();
-                _bReplaceNext = false;
-            }
-            _editBuffer += static_cast<const KeyTypedEvent&>(event).getText();
+            textEditInsert(_editBuffer, _edit, static_cast<const KeyTypedEvent&>(event).getText(), kEditMaxLength);
             invalidateProperty(EUIPropertyImpact::Paint);
             return true;
         }
         if (eventType == EEvent::KeyPressed) {
             const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
-            if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Backspace) {
-                if (!_editBuffer.empty()) {
-                    _editBuffer.pop_back();
-                    invalidateProperty(EUIPropertyImpact::Paint);
-                }
-                return true;
-            }
-            if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Enter) {
+            if (keyEvent._keyCode == EKey::Enter) {
                 commitEdit();
                 return true;
             }
-            if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Escape) {
+            if (keyEvent._keyCode == EKey::Escape) {
                 cancelEdit();
                 return true;
             }
+            if (textEditHandleKey(_editBuffer, _edit, keyEvent, getTree(), kEditMaxLength)) {
+                invalidateProperty(EUIPropertyImpact::Paint);
+                return true;
+            }
+            return false;
+        }
+        if (eventType == EEvent::MouseButtonPressed) {
+            const auto& mouse = static_cast<const MouseButtonPressedEvent&>(event);
+            if (mouse.GetMouseButton() != EMouse::Left) {
+                return false;
+            }
+            auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+            _edit.setCaret(textEditHitIndex(_editBuffer, font, _layoutRect, ctx.logicalPoint.x,
+                                            EWidgetAlignH::Center, 0.0f),
+                           false);
+            if (WidgetTree* tree = getTree()) {
+                tree->setPointerCapture(this);
+            }
+            invalidateProperty(EUIPropertyImpact::Paint);
+            return true;
+        }
+        if (eventType == EEvent::MouseMoved && ctx.bViaCapture) {
+            auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+            _edit.setCaret(textEditHitIndex(_editBuffer, font, _layoutRect, ctx.logicalPoint.x,
+                                            EWidgetAlignH::Center, 0.0f),
+                           true);
+            invalidateProperty(EUIPropertyImpact::Paint);
+            return true;
+        }
+        if (eventType == EEvent::MouseButtonReleased) {
+            if (WidgetTree* tree = getTree()) {
+                tree->releasePointerCapture(this);
+            }
+            return true;
         }
         return false;
     }
@@ -166,9 +207,6 @@ bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext&
 
     switch (eventType) {
     case EEvent::MouseButtonPressed: {
-        // Double-click (event timestamps): a press within 400ms of the
-        // previous one enters text edit mode; a single press starts the
-        // capture drag.
         const uint64_t now     = event.getTimestampMs();
         const bool     bDouble = _bHasLastPress && (now - _lastPressTimeMs) < 400;
         _lastPressTimeMs = now;

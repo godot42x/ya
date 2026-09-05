@@ -5,6 +5,8 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/WidgetTreeDump.h"
 #include "GUI/Widgets/Theme.h"
+#include "Core/Event.h"
+#include "Core/KeyCode.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Menu.h"
@@ -16,6 +18,8 @@
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TreeView.h"
+#include "GUI/Widgets/Controls/DragFloat.h"
+#include "GUI/Widgets/Controls/SpinBox.h"
 #include "Render/Resources/FontManager.h"
 
 #include <gtest/gtest.h>
@@ -42,6 +46,15 @@ KeyPressedEvent makeKeyPress(EKey::T key, uint32_t mod = 0, bool bRepeat = false
     ev._mod     = mod;
     ev.bRepeat  = bRepeat;
     return ev;
+}
+
+uint32_t primaryMod()
+{
+#if defined(__APPLE__)
+    return EKeyMod::LMeta;
+#else
+    return EKeyMod::LCtrl;
+#endif
 }
 
 // Synthetic font: every ASCII glyph advances 8px at the given size (no GPU
@@ -962,6 +975,98 @@ TEST(ToolControlsTest, TextFieldDoesNotConsumeForeignKeys)
     // app layer can observe/route them.
     EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::K_A), pointAt(0.0f, 0.0f)),
               EWidgetRouteResult::NotHandled);
+}
+
+TEST(ToolControlsTest, TextFieldShowsIBeamCursor)
+{
+    UITextField field("Name");
+    EXPECT_EQ(field.getCursor(), ECursorType::IBeam);
+}
+
+TEST(ToolControlsTest, TextFieldSelectionShiftArrowsCopyCutPaste)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       field = std::make_shared<UITextField>("Name");
+    FCanvasSlotArgs fieldSlot;
+    fieldSlot.fixedSize = {200.0f, 28.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
+    tree.layout();
+    tree.setFocus(field.get());
+
+    const auto at = pointAt(0.0f, 0.0f);
+    EXPECT_EQ(tree.dispatchEvent(KeyTypedEvent("hello"), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(field->hasSelection());
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Left, EKeyMod::Shift), at),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Left, EKeyMod::Shift), at),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_TRUE(field->hasSelection());
+    EXPECT_EQ(field->getText(), "hello");
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::K_C, primaryMod()), at),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getClipboardText(), "lo");
+    EXPECT_EQ(field->getText(), "hello");
+
+    EXPECT_EQ(tree.dispatchEvent(KeyTypedEvent("X"), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(field->getText(), "helX");
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::K_A, primaryMod()), at),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_TRUE(field->hasSelection());
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::K_X, primaryMod()), at),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(field->getText(), "");
+    EXPECT_EQ(tree.getClipboardText(), "helX");
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::K_V, primaryMod()), at),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(field->getText(), "helX");
+}
+
+TEST(ToolControlsTest, DragFloatEditReusesTextSelection)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       drag = std::make_shared<UIDragFloat>("Value");
+    drag->setValue(3.50f);
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {160.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), drag, slot);
+    tree.layout();
+
+    const auto at = pointAt(80.0f, 12.0f);
+    MouseButtonPressedEvent first(EMouse::Left);
+    first.setTimestampMs(1000);
+    MouseButtonPressedEvent second(EMouse::Left);
+    second.setTimestampMs(1100);
+    EXPECT_EQ(tree.dispatchEvent(first, at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(second, at), EWidgetRouteResult::HandledExclusive);
+
+    EXPECT_EQ(tree.dispatchEvent(KeyTypedEvent("9"), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Enter), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_FLOAT_EQ(drag->_value, 9.0f);
+    EXPECT_EQ(drag->getCursor(), ECursorType::Arrow);
+}
+
+TEST(ToolControlsTest, SpinBoxEditReusesTextSelection)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       spin = std::make_shared<UISpinBox>("Count");
+    spin->setValue(8.0f);
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {180.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), spin, slot);
+    tree.layout();
+
+    const auto at = pointAt(90.0f, 12.0f);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), at),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(spin->getCursor(), ECursorType::IBeam);
+
+    EXPECT_EQ(tree.dispatchEvent(KeyTypedEvent("2"), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Enter), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_FLOAT_EQ(spin->_value, 2.0f);
 }
 
 // === Popup menu ===

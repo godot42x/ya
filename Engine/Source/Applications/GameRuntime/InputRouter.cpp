@@ -11,9 +11,11 @@ namespace ya
 InputRouter::~InputRouter()
 {
     SDL_DestroyCursor(_sdlArrowCursor);
+    SDL_DestroyCursor(_sdlIBeamCursor);
     SDL_DestroyCursor(_sdlResizeEWCursor);
     SDL_DestroyCursor(_sdlResizeNSCursor);
     _sdlArrowCursor    = nullptr;
+    _sdlIBeamCursor    = nullptr;
     _sdlResizeEWCursor = nullptr;
     _sdlResizeNSCursor = nullptr;
 }
@@ -307,6 +309,9 @@ void InputRouter::updateCursor()
     if (!_sdlArrowCursor) {
         _sdlArrowCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
     }
+    if (!_sdlIBeamCursor) {
+        _sdlIBeamCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_TEXT);
+    }
     if (!_sdlResizeEWCursor) {
         _sdlResizeEWCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_EW_RESIZE);
     }
@@ -318,6 +323,9 @@ void InputRouter::updateCursor()
     switch (cursor) {
     case ECursorType::Arrow:
         sdlCursor = _sdlArrowCursor;
+        break;
+    case ECursorType::IBeam:
+        sdlCursor = _sdlIBeamCursor;
         break;
     case ECursorType::ResizeEastWest:
         sdlCursor = _sdlResizeEWCursor;

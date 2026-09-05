@@ -69,12 +69,33 @@ TEST(GuiEventDriverTest, ParsesScenarioSteps)
     EXPECT_EQ(steps[2].kind, EGuiScenarioStepKind::MousePress);
     EXPECT_EQ(steps[3].kind, EGuiScenarioStepKind::KeyPress);
     EXPECT_EQ(steps[3].key, EKey::Enter);
+    EXPECT_EQ(steps[3].keyMod, 0u);
     EXPECT_EQ(steps[4].kind, EGuiScenarioStepKind::Drag);
     EXPECT_EQ(steps[4].dragSteps, 4);
     EXPECT_EQ(steps[5].kind, EGuiScenarioStepKind::Checkpoint);
     EXPECT_EQ(steps[5].tag, "after");
     EXPECT_EQ(steps[6].kind, EGuiScenarioStepKind::Assert);
     EXPECT_EQ(steps[6].assertion, R"json({"control":{"checked":true},"widget":"Example"})json");
+}
+
+TEST(GuiEventDriverTest, ParsesKeyPressModifiers)
+{
+    const std::string jsonl = R"json(
+{"event":"key_press","key":"Left","shift":true}
+{"event":"key_press","key":"A","primary":true}
+)json";
+    std::string error;
+    const auto  steps = parseGuiScenario(jsonl, &error);
+    ASSERT_TRUE(error.empty());
+    ASSERT_EQ(steps.size(), 2u);
+    EXPECT_EQ(steps[0].key, EKey::Left);
+    EXPECT_NE(steps[0].keyMod & EKeyMod::Shift, 0u);
+    EXPECT_EQ(steps[1].key, EKey::K_A);
+#if defined(__APPLE__)
+    EXPECT_NE(steps[1].keyMod & EKeyMod::LMeta, 0u);
+#else
+    EXPECT_NE(steps[1].keyMod & EKeyMod::LCtrl, 0u);
+#endif
 }
 
 TEST(GuiEventDriverTest, ExecutesDragAndKeyThroughSink)

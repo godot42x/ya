@@ -1,0 +1,23 @@
+# GUIWorkbench --start-page=Widgets. Enter NotesField, replace a selection,
+# then cut/paste through primary+A / X / V (same contract as Inspector rename).
+{"window_size":{"width":960,"height":640}}
+{"frame":3}
+{"event":"mouse_press","x":411,"y":357,"button":0}
+{"event":"mouse_release","x":411,"y":357,"button":0}
+{"event":"key_typed","text":"hello"}
+{"event":"key_press","key":"Left","shift":true}
+{"event":"key_press","key":"Left","shift":true}
+{"event":"key_typed","text":"X"}
+{"frame":1}
+{"assert":{"widget":"NotesField","control":{"type":"textField","text":"helX"}}}
+{"checkpoint":"replace_selection"}
+{"event":"key_press","key":"A","primary":true}
+{"event":"key_press","key":"X","primary":true}
+{"frame":1}
+{"assert":{"widget":"NotesField","control":{"type":"textField","text":""}}}
+{"checkpoint":"cut_selection"}
+{"event":"key_press","key":"V","primary":true}
+{"frame":1}
+{"assert":{"widget":"NotesField","control":{"type":"textField","text":"helX"}}}
+{"checkpoint":"paste_selection"}
+{"frame":1}
