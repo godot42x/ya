@@ -59,6 +59,7 @@ class PropertyHandle final
     void setChangeHook(ChangeHook hook) { _changeHook = std::move(hook); }
     void setInstanceResolvers(std::vector<InstanceResolver> resolvers)
     {
+        _instanceBindings.clear();
         _instanceResolvers = std::move(resolvers);
         refreshInstances();
     }
@@ -97,24 +98,71 @@ class PropertyHandle final
             !canAccessAllMutable()) {
             return false;
         }
+        std::vector<T> before;
+        before.reserve(_instances.size());
+        for (void* instance : _instances) {
+            T current{};
+            if (!reflection::PropertyAccessor::tryGet(_slot, instance, current)) {
+                return false;
+            }
+            before.push_back(current);
+        }
         bool changed = false;
+        size_t applied = 0;
+        bool failed = false;
         for (void* instance : _instances) {
             if constexpr (std::is_same_v<T, glm::vec3>) {
                 glm::vec3 current{};
                 if (!reflection::PropertyAccessor::tryGet(_slot, instance, current) || current == value) {
+                    ++applied;
                     continue;
                 }
                 if (_vec3Setter) {
                     _vec3Setter(instance, value);
                     changed = true;
+                    ++applied;
                 }
-                else if (reflection::PropertyAccessor::set(_slot, instance, value)) {
+                else {
+                    const reflection::FPropertyMutationResult result =
+                        reflection::PropertyAccessor::setResult(_slot, instance, value);
+                    if (result.changed()) {
+                        changed = true;
+                        ++applied;
+                    }
+                    else if (!result.accepted()) {
+                        failed = true;
+                        break;
+                    }
+                }
+            }
+            else {
+                const reflection::FPropertyMutationResult result =
+                    reflection::PropertyAccessor::setResult(_slot, instance, value);
+                if (result.changed()) {
                     changed = true;
+                    ++applied;
+                }
+                else if (!result.accepted()) {
+                    failed = true;
+                    break;
                 }
             }
-            else if (reflection::PropertyAccessor::setResult(_slot, instance, value).changed()) {
-                changed = true;
+        }
+        if (failed) {
+            for (size_t index = 0; index < applied; ++index) {
+                if constexpr (std::is_same_v<T, glm::vec3>) {
+                    if (_vec3Setter) {
+                        _vec3Setter(_instances[index], before[index]);
+                    }
+                    else {
+                        (void)reflection::PropertyAccessor::set(_slot, _instances[index], before[index]);
+                    }
+                }
+                else {
+                    (void)reflection::PropertyAccessor::set(_slot, _instances[index], before[index]);
+                }
             }
+            return false;
         }
         notifyIfChanged(changed);
         return changed;

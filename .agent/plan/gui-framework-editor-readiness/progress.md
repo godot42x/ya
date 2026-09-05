@@ -1320,3 +1320,15 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - 多实例容器操作仍只有 preflight + bool 结果，尚未具备统一 rollback/partial-failure transaction。
 - PropertyHandle 仍保留直接地址作为无 resolver 的构造 fallback；稳定 identity 已进入 API，但 Undo command 尚未完全改为 identity-only。
 - equality、integer、enum、asset-ref 和容器 key capability registry 尚未抽出。
+
+## Phase 10F multi-instance scalar transaction checkpoint（2026-09-05）
+
+- PropertyHandle 的模板 set<T> 现在先读取所有实例快照，再执行批量写入；若 typed accessor 在执行中返回拒绝，已应用实例会恢复到快照，避免部分成功。
+- Vec3 projection setter 也纳入同一批量路径；resolver 刷新和 mutable-address preflight 仍在事务开始前执行。
+- `setInstanceResolvers` 会清除旧 identity bindings，避免替换 resolver 后混用两套来源。
+- 验证：`xmake b ya-game-editor`、`xmake b ya-testing`；`EditorPropertyGraphTest.*:PropertyAccessorTest.*` targeted 38/38 通过。
+
+### 边界
+
+- 容器 mutation 尚未有可恢复 snapshot（尤其 vector/map 的结构和值），因此仍依赖全实例 preflight；自定义容器异常回滚留待 10F-4。
+- restoreInteger/restoreEnum/restoreColor/restoreAssetPath 等专用路径尚未统一到同一快照 helper。
