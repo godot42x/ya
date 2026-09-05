@@ -50,6 +50,18 @@
 - 这是顶层 component 的 resolver 增量，不是完整 PropertyInstance identity 系统；当前 resolver 仍捕获 Scene 指针和 EnTT handle，尚未统一为跨场景稳定 identity 对象。
 - Undo 对 nested/composite property 仍可能捕获裸 nested address；必须在移出 collectLeaves 前完成完整路径 resolver，不能用局部猜测补齐。
 
+## Phase 10F-4B 当前 checkpoint（2026-09-06）
+
+- PropertyHandle 现在会对 sequence remove/insert 的索引、map value 的存在性和 map key 插入冲突做全实例预检。
+- 多选容器 mutation 在实例形状不一致时会在写入前拒绝，不再依赖底层容器对越界操作的静默 clamp/no-op 行为。
+- 新增 EditorPropertyGraphTest.MultiInstanceContainerMutationPreflightsShape，验证 vector 长度不一致时不会只修改较长实例。
+- 验证：xmake b ya-testing；容器 preflight targeted test 通过。
+
+### Phase 10F-4B 保留项
+
+- 结构化 mutation result 和异常/自定义 accessor 的事务回滚仍未完成；当前是成功前置条件预检，不是完整 command transaction。
+- 稳定 PropertyInstance identity/resolver、nested path resolver 和 Core/editor 职责拆分仍待后续 checkpoint。
+
 ## 当前状态
 
 - 计划建立：2026-09-03

@@ -51,6 +51,47 @@ bool PropertyHandle::canAccessAllMutable() const
     });
 }
 
+bool PropertyHandle::canRemoveAtIndexFromAll(int index) const
+{
+    if (!canMutateContainer() || index < 0) {
+        return false;
+    }
+    return std::all_of(_instances.begin(), _instances.end(), [&](void* instance) {
+        return static_cast<size_t>(index) < PropertyAccessor::containerSize(*_slot.property, instance);
+    });
+}
+
+bool PropertyHandle::canInsertAtIndexIntoAll(int index) const
+{
+    if (!canMutateContainer() || index < 0) {
+        return false;
+    }
+    return std::all_of(_instances.begin(), _instances.end(), [&](void* instance) {
+        return static_cast<size_t>(index) <= PropertyAccessor::containerSize(*_slot.property, instance);
+    });
+}
+
+bool PropertyHandle::canRemoveMapKeyFromAll() const
+{
+    if (!canMutateContainer() || !_slot.mapKey.has_value()) {
+        return false;
+    }
+    return std::all_of(_instances.begin(), _instances.end(), [&](void* instance) {
+        return PropertyAccessor::address(_slot, instance) != nullptr;
+    });
+}
+
+bool PropertyHandle::canInsertMapKeyIntoAll(std::string_view key) const
+{
+    if (!canMutateContainer()) {
+        return false;
+    }
+    const reflection::FPropertySlot valueSlot = reflection::FPropertySlot::at(*_slot.property, std::string(key));
+    return std::all_of(_instances.begin(), _instances.end(), [&](void* instance) {
+        return PropertyAccessor::address(valueSlot, instance) == nullptr;
+    });
+}
+
 bool PropertyHandle::isEditable() const
 {
     return isValid() && PropertyAccessor::isEditable(*_slot.property);
@@ -409,7 +450,8 @@ bool PropertyHandle::appendEmpty() const
 
 bool PropertyHandle::removeAt() const
 {
-    if (!isEditable() || _slot.elementIndex < 0 || !canAccessAllMutable()) {
+    if (!isEditable() || _slot.elementIndex < 0 || !canAccessAllMutable() ||
+        !canRemoveAtIndexFromAll(_slot.elementIndex)) {
         return false;
     }
     bool changed = false;
@@ -422,7 +464,7 @@ bool PropertyHandle::removeAt() const
 
 bool PropertyHandle::removeAtIndex(int index) const
 {
-    if (!isEditable() || index < 0 || !canAccessAllMutable()) {
+    if (!isEditable() || !canAccessAllMutable() || !canRemoveAtIndexFromAll(index)) {
         return false;
     }
     bool changed = false;
@@ -435,7 +477,7 @@ bool PropertyHandle::removeAtIndex(int index) const
 
 bool PropertyHandle::insertEmptyAt(int index) const
 {
-    if (!canMutateContainer() || !canAccessAllMutable()) {
+    if (!canMutateContainer() || !canAccessAllMutable() || !canInsertAtIndexIntoAll(index)) {
         return false;
     }
     bool changed = false;
@@ -461,7 +503,8 @@ bool PropertyHandle::clearContainer() const
 
 bool PropertyHandle::removeMapKey() const
 {
-    if (!isEditable() || !_slot.mapKey.has_value() || !canAccessAllMutable()) {
+    if (!isEditable() || !_slot.mapKey.has_value() || !canAccessAllMutable() ||
+        !canRemoveMapKeyFromAll()) {
         return false;
     }
     bool changed = false;
@@ -474,7 +517,7 @@ bool PropertyHandle::removeMapKey() const
 
 bool PropertyHandle::insertMapKey(std::string_view key) const
 {
-    if (!canMutateContainer() || !canAccessAllMutable()) {
+    if (!canMutateContainer() || !canAccessAllMutable() || !canInsertMapKeyIntoAll(key)) {
         return false;
     }
     bool changed = false;

@@ -47,6 +47,15 @@ struct ColorTestComponent
     YA_REFLECT_END()
 };
 
+struct ContainerShapeTestComponent
+{
+    std::vector<float> values;
+
+    YA_REFLECT_BEGIN(ContainerShapeTestComponent)
+    YA_REFLECT_FIELD(values)
+    YA_REFLECT_END()
+};
+
 TEST(EditorPropertyGraphTest, ReflectsTransformInDeclaredOrder)
 {
     TransformComponent transform;
@@ -102,6 +111,22 @@ TEST(EditorPropertyGraphTest, PropertyHandleRefreshesResolvedTopLevelInstance)
     EXPECT_TRUE(binding.set(glm::vec3{4.0f, 5.0f, 6.0f}));
     EXPECT_EQ(first._position, (glm::vec3{0.0f, 0.0f, 0.0f}));
     EXPECT_EQ(replacement._position, (glm::vec3{4.0f, 5.0f, 6.0f}));
+}
+
+TEST(EditorPropertyGraphTest, MultiInstanceContainerMutationPreflightsShape)
+{
+    std::vector<float> firstValues{1.0f, 2.0f};
+    std::vector<float> secondValues{3.0f};
+
+    ContainerShapeTestComponent first{firstValues};
+    ContainerShapeTestComponent second{secondValues};
+
+    const auto graph = PropertyGraph::build(type_index_v<ContainerShapeTestComponent>, {&first, &second});
+    const PropertyNode* values = graph.find("values");
+    ASSERT_NE(values, nullptr);
+    EXPECT_FALSE(values->binding.removeAtIndex(1));
+    EXPECT_EQ(first.values.size(), 2u);
+    EXPECT_EQ(second.values.size(), 1u);
 }
 
 TEST(EditorPropertyGraphTest, AutoPropertySectionMaterializesVec3RowsOnce)
