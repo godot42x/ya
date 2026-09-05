@@ -65,7 +65,15 @@ std::string designerSelectionPath(const UIElement& root, const UIElement& target
 
 } // namespace
 
-std::shared_ptr<UIElement> EditorUIDesignerTab::build(WidgetTree&)
+EditorUIDesignerTab::EditorUIDesignerTab(EditorLayer& layer, UndoStack* undo)
+    : UICompoundWidget("UIDesignerBody", "panel.canvas")
+    , _layer(&layer)
+    , _undo(undo)
+{
+    enableTick();
+}
+
+void EditorUIDesignerTab::construct()
 {
     auto status = ui::text("UIDesignerStatus").setText("No document open").setStyleKey("text.muted").share();
     auto selection = ui::text("UIDesignerSelection").setText("No widget selected").setStyleKey("text.muted").share();
@@ -158,7 +166,7 @@ std::shared_ptr<UIElement> EditorUIDesignerTab::build(WidgetTree&)
                           .child(saveButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
                           .child(closeButton, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}});
 
-    return ui::panel("UIDesignerBody")
+    addDetachedChild(ui::panel("UIDesignerBodyInner")
         .setStyleKey("panel.canvas")
         .child(ui::row("UIDesignerLayout")
                    .setSpacing(8.0f)
@@ -185,10 +193,29 @@ std::shared_ptr<UIElement> EditorUIDesignerTab::build(WidgetTree&)
                                      ui::overlaySlot().fill()),
                           ui::boxSlot().preferredSize({220.0f, 0.0f})),
                ui::canvasSlot().fill().offset({12.0f, 12.0f}))
-        .release();
+        .release());
 }
 
-void EditorUIDesignerTab::sync(WidgetTree& tree)
+void EditorUIDesignerTab::onAttached()
+{
+    refresh();
+}
+
+void EditorUIDesignerTab::tick(float)
+{
+    refresh();
+}
+
+void EditorUIDesignerTab::refresh()
+{
+    WidgetTree* tree = getTree();
+    if (!tree) {
+        return;
+    }
+    refreshFromTree(*tree);
+}
+
+void EditorUIDesignerTab::refreshFromTree(WidgetTree& tree)
 {
     if (!_layer || !_statusText || !_selectionText || !_roots || !_selection) {
         return;

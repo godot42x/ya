@@ -116,6 +116,8 @@ struct YA_GAME_RUNTIME_API AppDesc
     bool                       bEditor = false;
     /// Editor chrome host flag. WidgetTree is the only host; `imgui` is ignored.
     std::optional<std::string> editorChrome;
+    /// Open and activate this editor tab after workspace restore (`--editor-tab`).
+    std::optional<std::string> editorTab;
 
     bool                     bEnableRenderDoc           = false;
     bool                     bRenderDocOutputOverridden = false;

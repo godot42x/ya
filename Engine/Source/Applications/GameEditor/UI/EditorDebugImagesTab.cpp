@@ -69,7 +69,14 @@ std::string catalogFingerprint(const RenderViewportDebugCatalog& catalog)
 }
 } // namespace
 
-std::shared_ptr<UIElement> EditorDebugImagesTab::build(WidgetTree&)
+EditorDebugImagesTab::EditorDebugImagesTab(EditorLayer& layer)
+    : UICompoundWidget("DebugImagesBody", "panel.canvas")
+    , _layer(&layer)
+{
+    enableTick();
+}
+
+void EditorDebugImagesTab::construct()
 {
     auto category = ui::comboBox("DebugImagesCategory")
                         .setOnSelectionChanged([this](int index) {
@@ -83,7 +90,7 @@ std::shared_ptr<UIElement> EditorDebugImagesTab::build(WidgetTree&)
 
     _contentHost = ui::column("DebugImagesContent").setSpacing(10.0f).share();
 
-    return ui::panel("DebugImagesBody")
+    addDetachedChild(ui::panel("DebugImagesBodyInner")
         .setStyleKey("panel.canvas")
         .child(ui::scroll("DebugImagesScroll")
                    .setAxis(EScrollAxis::Vertical)
@@ -99,7 +106,26 @@ std::shared_ptr<UIElement> EditorDebugImagesTab::build(WidgetTree&)
                               .child(_contentHost, ui::boxSlot().fill()),
                           ui::overlaySlot().fill()),
                ui::canvasSlot().fill())
-        .release();
+        .release());
+}
+
+void EditorDebugImagesTab::onAttached()
+{
+    refresh();
+}
+
+void EditorDebugImagesTab::tick(float)
+{
+    refresh();
+}
+
+void EditorDebugImagesTab::refresh()
+{
+    WidgetTree* tree = getTree();
+    if (!tree) {
+        return;
+    }
+    refreshFromTree(*tree);
 }
 
 void EditorDebugImagesTab::rebuild(WidgetTree& tree)
@@ -303,7 +329,7 @@ void EditorDebugImagesTab::syncPreviews()
     }
 }
 
-void EditorDebugImagesTab::sync(WidgetTree& tree)
+void EditorDebugImagesTab::refreshFromTree(WidgetTree& tree)
 {
     if (!_layer || !_contentHost || !_statusText) {
         return;

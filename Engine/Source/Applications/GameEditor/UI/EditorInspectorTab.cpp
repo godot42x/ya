@@ -131,7 +131,15 @@ EditorAssetPickerCallback makeAssetPicker(EditorLayer* layer)
 
 } // namespace
 
-std::shared_ptr<UIElement> EditorInspectorTab::build(WidgetTree&)
+EditorInspectorTab::EditorInspectorTab(EditorLayer& layer, UndoStack* undo)
+    : UICompoundWidget("InspectorBody", "panel")
+    , _layer(&layer)
+    , _undo(undo)
+{
+    enableTick();
+}
+
+void EditorInspectorTab::construct()
 {
     auto nameField = ui::textField("InspectorName").setFontSize(14);
     _nameField = nameField.share();
@@ -211,10 +219,26 @@ std::shared_ptr<UIElement> EditorInspectorTab::build(WidgetTree&)
                     .child(ui::text("InspectorTitle").setText("INSPECTOR").setStyleKey("text.eyebrow"))
                     .child(std::move(entityForm))
                     .child(std::move(widgetEntryForm));
-    return ui::panel("InspectorBody")
-        .setStyleKey("panel")
-        .child(std::move(form), ui::canvasSlot().fill())
-        .release();
+    addDetachedChild(form.release());
+}
+
+void EditorInspectorTab::onAttached()
+{
+    refresh();
+}
+
+void EditorInspectorTab::tick(float)
+{
+    refresh();
+}
+
+void EditorInspectorTab::refresh()
+{
+    WidgetTree* tree = getTree();
+    if (!tree) {
+        return;
+    }
+    refreshFromTree(*tree);
 }
 
 void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<Entity*>& entities)
@@ -325,7 +349,7 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
     }
 }
 
-void EditorInspectorTab::sync(WidgetTree& tree)
+void EditorInspectorTab::refreshFromTree(WidgetTree& tree)
 {
     if (!_layer) return;
 
@@ -393,34 +417,22 @@ void EditorInspectorTab::sync(WidgetTree& tree)
     }
 }
 
-bool EditorInspectorTab::wantsTextInput(WidgetTree& tree) const
+bool EditorInspectorTab::wantsTextInput() const
 {
-    UIElement* focused = tree.getFocused();
+    WidgetTree* tree = getTree();
+    if (!tree) {
+        return false;
+    }
+    UIElement* focused = tree->getFocused();
     if (focused == _nameField.get()) {
         return true;
     }
     for (const auto& section : _projectedSections) {
-        if (section && section->wantsTextInput(tree)) {
+        if (section && section->wantsTextInput(*tree)) {
             return true;
         }
     }
     return false;
-}
-
-void EditorInspectorTab::reset()
-{
-    _nameField.reset();
-    _entityText.reset();
-    _emptyText.reset();
-    _entityFormHost.reset();
-    _widgetEntryHost.reset();
-    _widgetEntryIdText.reset();
-    _widgetEntryTypeText.reset();
-    _openDesignerButton.reset();
-    _projectedHost.reset();
-    _projectedWidgets.clear();
-    _projectedSections.clear();
-    _projectedFingerprint.clear();
 }
 
 } // namespace ya

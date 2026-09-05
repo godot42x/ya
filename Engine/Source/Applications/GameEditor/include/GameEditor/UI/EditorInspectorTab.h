@@ -1,5 +1,7 @@
 #pragma once
 
+#include "GUI/Widgets/CompoundWidget.h"
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -18,21 +20,18 @@ class EditorAutoPropertySection;
 struct WidgetTree;
 class UndoStack;
 
-/// Retained Inspector tab. The editor surface hosts this tab but does not own
-/// its controls or synchronization state. Component rows come from
-/// `PropertyGraph::project`, not handwritten per-type widgets.
-class EditorInspectorTab
+/// Retained Inspector tab. Component rows come from `PropertyGraph::project`.
+class EditorInspectorTab : public UICompoundWidget
 {
   public:
-    explicit EditorInspectorTab(EditorLayer& layer, UndoStack* undo = nullptr)
-        : _layer(&layer), _undo(undo)
-    {
-    }
+    explicit EditorInspectorTab(EditorLayer& layer, UndoStack* undo = nullptr);
 
-    [[nodiscard]] std::shared_ptr<UIElement> build(WidgetTree& tree);
-    void sync(WidgetTree& tree);
-    [[nodiscard]] bool wantsTextInput(WidgetTree& tree) const;
-    void reset();
+    void onAttached() override;
+    void tick(float deltaSeconds) override;
+    [[nodiscard]] bool wantsTextInput() const;
+
+  protected:
+    void construct() override;
 
   private:
     EditorLayer* _layer = nullptr;
@@ -50,6 +49,8 @@ class EditorInspectorTab
     std::vector<std::shared_ptr<EditorAutoPropertySection>> _projectedSections;
     std::string _projectedFingerprint;
 
+    void refresh();
+    void refreshFromTree(WidgetTree& tree);
     void rebuildProjected(WidgetTree& tree, const std::vector<Entity*>& entities);
 };
 

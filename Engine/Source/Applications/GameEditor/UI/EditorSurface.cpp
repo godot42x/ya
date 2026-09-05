@@ -3,12 +3,7 @@
 #include "GameEditor/UI/EditorFilePicker.h"
 #include "GameEditor/UI/EditorFilePickerDialog.h"
 #include "GameEditor/UI/EditorSettingsDialog.h"
-#include "GameEditor/UI/EditorContentBrowserTab.h"
-#include "GameEditor/UI/EditorAssetInspectorTab.h"
-#include "GameEditor/UI/EditorUIDesignerTab.h"
-#include "GameEditor/UI/EditorRuntimeToolsTab.h"
 #include "GameEditor/UI/EditorInspectorTab.h"
-#include "GameEditor/UI/EditorDebugImagesTab.h"
 
 #include "Core/Event.h"
 #include "Core/Config/ConfigManager.h"
@@ -21,7 +16,6 @@
 #include "ECS/Component.h"
 #include "ECS/ECSRegistry.h"
 #include "GUI/Declarative/Build.h"
-#include "GUI/Tooling/Workbench/WorkbenchSurface.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/UI/EditorTheme.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
@@ -59,7 +53,9 @@
 #include <charconv>
 #include <filesystem>
 #include <format>
+#include <optional>
 #include <string_view>
+#include <vector>
 
 namespace ya
 {
@@ -150,6 +146,19 @@ std::vector<UIMenu::FItem> makePresetMenuItems(EditorLayer& layer, const std::st
     return items;
 }
 
+constexpr std::string_view kDefaultWorkspaceTabs[] = {
+    "viewport",
+    "hierarchy",
+    "inspector",
+    "content-browser",
+    "frame-stats",
+    "gui-workbench",
+    "runtime-tools",
+    "ui-designer",
+    "asset-inspector",
+    "debug-images",
+};
+
 } // namespace
 
 EditorSurface::EditorSurface() = default;
@@ -158,13 +167,6 @@ EditorSurface::~EditorSurface() = default;
 
 void EditorSurface::shutdown()
 {
-    _workbench.reset();
-    _inspectorTab.reset();
-    _debugImagesTab.reset();
-    _contentBrowserTab.reset();
-    _assetInspectorTab.reset();
-    _uiDesignerTab.reset();
-    _runtimeToolsTab.reset();
     if (_filePicker) {
         _filePicker->reset();
     }
@@ -192,13 +194,14 @@ void EditorSurface::shutdown()
     _selection = std::make_shared<SelectionModel>();
     _actions   = std::make_shared<ActionMap>();
     _undo      = std::make_shared<UndoStack>();
-    _statsText.reset();
+    _projectErrorText.reset();
     _viewportTexture.reset();
     _viewportImageResource.reset();
     _viewportImageView.reset();
     _hierarchyFingerprint.clear();
     _syncedSelectionGeneration = ~uint64_t{0};
     _layer = nullptr;
+    _tabSpawners = nullptr;
 }
 
 void EditorSurface::tick(App& app, float dt)
@@ -238,14 +241,7 @@ void EditorSurface::rebuild(App& app)
     _selection = std::make_shared<SelectionModel>();
     _actions   = std::make_shared<ActionMap>();
     _undo      = std::make_shared<UndoStack>();
-    _inspectorTab.reset();
-    _debugImagesTab.reset();
-    _contentBrowserTab.reset();
-    _assetInspectorTab.reset();
-    _uiDesignerTab.reset();
-    _runtimeToolsTab.reset();
-    _statsText.reset();
-    _workbench.reset();
+    _projectErrorText.reset();
     if (_filePicker) {
         _filePicker->reset();
     }
@@ -323,7 +319,7 @@ void EditorSurface::buildProjectBrowser(App& app)
                        });
 
     auto errorText = ui::text("ProjectError").setStyleKey("text.error");
-    _statsText     = errorText.share();
+    _projectErrorText = errorText.share();
 
     auto page = ui::column("ProjectBrowser")
                     .setPadding({48.0f, 48.0f})
@@ -385,6 +381,12 @@ void EditorSurface::registerEditorActions()
         .chord      = redoChord,
         .execute    = [this]() { (void)_undo->redo(); },
         .canExecute = [this]() { return _undo->canRedo(); },
+    });
+    define({
+        .id         = "selection.createEmpty",
+        .label      = "Create Empty Node",
+        .execute    = [this]() { _layer->cmdCreateEmptyNode(); },
+        .canExecute = [this]() { return _layer && _layer->canViewportAuthor(); },
     });
     define({
         .id         = "selection.duplicate",
@@ -508,6 +510,7 @@ void EditorSurface::buildEditorChrome(App& app)
             UIMenu::FItem::fromAction(*_actions, "editor.settings"),
         });
     });
+    buildToolsMenu();
 
     auto play = labeledButton("Play", "Play").setOnClick([this]() {
         (void)_actions->execute("runtime.play");
@@ -558,13 +561,51 @@ void EditorSurface::buildEditorChrome(App& app)
     floatingFill.anchorMax = {1.0f, 1.0f};
     (void)_tree->attachToLayer(WidgetTree::ELayer::Popup, _dockFloatingHost, floatingFill);
 
+    materializeWorkspaceTabs();
+    _dockContext->setPanelClosable("viewport", false);
+    _dockContext->setPanelClosable("hierarchy", false);
+    _dockContext->setPanelClosable("inspector", false);
+    if (!tryRestoreEditorDockLayout()) {
+        applyDefaultEditorDockLayout();
+    }
+    _dockContext->fireDockUpdated();
+    _dockContext->appendOnDockUpdated([this]() { persistEditorDockLayout(); });
+    _dockContext->appendOnFloatingUpdated([this]() { persistEditorDockLayout(); });
+
+    if (const std::optional<std::string>& editorTab = app.getDesc().editorTab; editorTab && !editorTab->empty()) {
+        invokeTab(*editorTab);
+    }
+
+    _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(*_layer);
+    _viewportOverlayHost.setOverlay(_viewportGizmoOverlay);
+    _layer->setViewportGizmoUndoStack(_undo.get());
+}
+
+FEditorTabSpawnContext EditorSurface::makeSpawnContext()
+{
+    return FEditorTabSpawnContext{
+        .tree = *_tree,
+        .layer = *_layer,
+        .selection = *_selection,
+        .actions = *_actions,
+        .undo = *_undo,
+        .authoringParent = _root.get(),
+    };
+}
+
+std::shared_ptr<UIElement> EditorSurface::buildViewportBody()
+{
     auto viewportImage = ui::image("ViewportImage");
     _viewportImage     = viewportImage.share();
     _viewportImage->_hitFilter = EWidgetHitFilter::Stop;
-    auto viewportBody = ui::panel("ViewportBody")
-                            .setStyleKey("panel.canvas")
-                            .child(std::move(viewportImage), ui::canvasSlot().fill());
+    return ui::panel("ViewportBody")
+        .setStyleKey("panel.canvas")
+        .child(std::move(viewportImage), ui::canvasSlot().fill())
+        .release();
+}
 
+std::shared_ptr<UIElement> EditorSurface::buildHierarchyBody()
+{
     _hierarchyFilter = std::make_shared<Reactive<std::string>>("");
     auto hierarchyFilterField = ui::textField("HierarchyFilter")
                                     .setOnTextChanged([this](const std::string& text) {
@@ -608,71 +649,128 @@ void EditorSurface::buildEditorChrome(App& app)
                                  _hierarchyFingerprint.clear();
                              }
                          })
+                         .setOnContextMenu([this](const std::string&, const glm::vec2& logicalPoint) {
+                             openHierarchyContextMenu(logicalPoint);
+                         })
                          .share();
     auto hierarchyScroll = ui::scroll("HierarchyScroll")
                                .child(_hierarchyView, ui::overlaySlot().fill());
-    auto hierarchyBody = ui::panel("HierarchyBody")
-                             .setStyleKey("panel.canvas")
-                             .child(std::move(hierarchyFilterField),
-                                    ui::canvasSlot()
-                                        .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
-                                        .offset({4.0f, 4.0f})
-                                        .size({0.0f, 26.0f}))
-                             .child(std::move(hierarchyScroll),
-                                    ui::canvasSlot()
-                                        .anchor({0.0f, 0.0f}, {1.0f, 1.0f})
-                                        .offset({4.0f, 34.0f}));
+    return ui::panel("HierarchyBody")
+        .setStyleKey("panel.canvas")
+        .child(std::move(hierarchyFilterField),
+               ui::canvasSlot()
+                   .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
+                   .offset({4.0f, 4.0f})
+                   .size({0.0f, 26.0f}))
+        .child(std::move(hierarchyScroll),
+               ui::canvasSlot()
+                   .anchor({0.0f, 0.0f}, {1.0f, 1.0f})
+                   .offset({4.0f, 34.0f}))
+        .release();
+}
 
-    _inspectorTab = std::make_unique<EditorInspectorTab>(*_layer, _undo.get());
-    _debugImagesTab = std::make_unique<EditorDebugImagesTab>(*_layer);
-    _contentBrowserTab = std::make_unique<EditorContentBrowserTab>(*_layer);
-    _assetInspectorTab = std::make_unique<EditorAssetInspectorTab>(*_layer);
-    _uiDesignerTab = std::make_unique<EditorUIDesignerTab>(*_layer, _undo.get());
-    _runtimeToolsTab = std::make_unique<EditorRuntimeToolsTab>();
-
-    auto statsText = ui::text("FrameStatsBody")
-                         .setText("Frame Stats")
-                         .setFontSize(13);
-    _statsText = statsText.share();
-    auto statsBody = ui::panel("FrameStatsPanel")
-                         .setStyleKey("panel.canvas")
-                         .child(std::move(statsText), ui::canvasSlot().fill().offset({12.0f, 12.0f}));
-
-    auto workbenchHost = ui::panel("WorkbenchHost").setStyleKey("panel.window").share();
-    // Dock panel bodies are detached until their tab is selected. WorkbenchSurface
-    // authors with tree.attach, so mount the host long enough to build, then
-    // detach the intact subtree for the workspace to graft later.
-    _workbench = std::make_unique<guiworkbench::FWorkbenchSurface>();
-    {
-        const WidgetAttachment hostAttached = _tree->attach(*_root, workbenchHost);
-        YA_CORE_ASSERT(hostAttached.valid(), "EditorSurface: failed to attach workbench host for authoring");
-        _workbench->buildUI(*_tree, *workbenchHost);
-        _tree->detach(*workbenchHost);
+void EditorSurface::buildToolsMenu()
+{
+    if (!_menuBar) {
+        return;
     }
+    _menuBar->addItem("Tools", [this]() {
+        std::vector<UIMenu::FItem> items;
+        items.push_back({
+            .label  = "Viewport",
+            .action = [this]() { invokeTab("viewport"); },
+        });
+        items.push_back({
+            .label  = "Hierarchy",
+            .action = [this]() { invokeTab("hierarchy"); },
+        });
+        if (_tabSpawners) {
+            for (const FEditorTabSpawner& spawner : _tabSpawners->all()) {
+                if (spawner.toolsMenuLabel.empty()) {
+                    continue;
+                }
+                const std::string tabId = spawner.tabId;
+                items.push_back({
+                    .label  = spawner.toolsMenuLabel,
+                    .action = [this, tabId]() { invokeTab(tabId); },
+                });
+            }
+        }
+        return UIMenu::create(std::move(items));
+    });
+}
 
-    _dockContext->addPanel("viewport", "Viewport", viewportBody.release());
-    _dockContext->addPanel("hierarchy", "Hierarchy", hierarchyBody.release());
-    _dockContext->addPanel("inspector", "Inspector", _inspectorTab->build(*_tree));
-    _dockContext->addPanel("content-browser", "Content", _contentBrowserTab->build(*_tree));
-    _dockContext->addPanel("frame-stats", "Stats", statsBody.release());
-    _dockContext->addPanel("gui-workbench", "Workbench", workbenchHost);
-    _dockContext->addPanel("runtime-tools", "Runtime", _runtimeToolsTab->build(*_tree));
-    _dockContext->addPanel("ui-designer", "UI", _uiDesignerTab->build(*_tree));
-    _dockContext->addPanel("asset-inspector", "Assets", _assetInspectorTab->build(*_tree));
-    _dockContext->addPanel("debug-images", "Debug", _debugImagesTab->build(*_tree));
-    _dockContext->setPanelClosable("viewport", false);
-    _dockContext->setPanelClosable("hierarchy", false);
-    _dockContext->setPanelClosable("inspector", false);
-    if (!tryRestoreEditorDockLayout()) {
-        applyDefaultEditorDockLayout();
+void EditorSurface::materializeWorkspaceTabs()
+{
+    nlohmann::json layout;
+    std::vector<std::string> keys;
+    if (ConfigManager::get().tryGet("editor", "dockLayout", layout)) {
+        keys = FDockContext::collectLayoutPanelKeys(layout);
+    }
+    if (keys.empty()) {
+        for (std::string_view id : kDefaultWorkspaceTabs) {
+            keys.emplace_back(id);
+        }
+    }
+    for (const std::string& id : keys) {
+        materializeTab(id);
+    }
+}
+
+bool EditorSurface::materializeTab(std::string_view tabId)
+{
+    if (!_dockContext || tabId.empty()) {
+        return false;
+    }
+    if (_dockContext->hasPanel(tabId)) {
+        return true;
+    }
+    std::shared_ptr<UIElement> widget;
+    std::string title{tabId};
+    if (tabId == "viewport") {
+        widget = buildViewportBody();
+        title = "Viewport";
+    }
+    else if (tabId == "hierarchy") {
+        widget = buildHierarchyBody();
+        title = "Hierarchy";
+    }
+    else if (_tabSpawners) {
+        if (const FEditorTabSpawner* spawner = _tabSpawners->find(tabId)) {
+            FEditorTabSpawnContext ctx = makeSpawnContext();
+            widget = spawner->spawn(ctx);
+            title = spawner->title;
+        }
+    }
+    if (!widget) {
+        YA_CORE_WARN("EditorSurface: no spawner for tab '{}'", tabId);
+        return false;
+    }
+    return _dockContext->addPanel(std::string(tabId), title, std::move(widget)) != kInvalidDockPanelId;
+}
+
+bool EditorSurface::invokeTab(std::string_view tabId)
+{
+    if (!_dockContext) {
+        return false;
+    }
+    if (_dockContext->hasPanel(tabId)) {
+        return _dockContext->activatePanel(tabId);
+    }
+    if (!materializeTab(tabId)) {
+        return false;
+    }
+    const FDockContext::FPanel* spawned = _dockContext->findPanelByStableKey(tabId);
+    if (!spawned) {
+        return false;
+    }
+    if (const FDockContext::FPanel* content = _dockContext->findPanelByStableKey("content-browser")) {
+        if (FDockNode* leaf = _dockContext->dockModel().findLeafForPanel(content->id)) {
+            (void)_dockContext->dockModel().movePanel(spawned->id, leaf->id);
+        }
     }
     _dockContext->fireDockUpdated();
-    _dockContext->appendOnDockUpdated([this]() { persistEditorDockLayout(); });
-    _dockContext->appendOnFloatingUpdated([this]() { persistEditorDockLayout(); });
-
-    _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(*_layer);
-    _viewportOverlayHost.setOverlay(_viewportGizmoOverlay);
-    _layer->setViewportGizmoUndoStack(_undo.get());
+    return _dockContext->activatePanel(tabId);
 }
 
 void EditorSurface::applyWindowMetrics(App& app)
@@ -791,10 +889,7 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
 
     EditorLayer& layer = *_layer;
     std::vector<UIMenu::FItem> items;
-    items.push_back({
-        .label  = "Create Empty Node",
-        .action = [&layer]() { layer.cmdCreateEmptyNode(); },
-    });
+    items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.createEmpty"));
     items.push_back({
         .label          = "Create 3D Object",
         .submenuFactory = [&layer]()
@@ -814,25 +909,31 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
         });
     }
 
-    const bool hasSelection = !layer.getSelections().empty();
     items.push_back(UIMenu::FItem::separator());
-    items.push_back({
-        .label    = "Duplicate Selected",
-        .action   = [&layer]() { layer.cmdDuplicateSelection(); },
-        .bEnabled = hasSelection,
-    });
-    items.push_back({
-        .label    = "Delete Selected",
-        .action   = [&layer]() { layer.cmdDeleteSelection(); },
-        .bEnabled = hasSelection,
-    });
+    items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.duplicate"));
+    items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.delete"));
 
     auto menu = UIMenu::create(std::move(items));
     menu->openAt(*_tree, windowPoint);
 }
 
+void EditorSurface::openHierarchyContextMenu(const glm::vec2& logicalPoint)
+{
+    if (!_tree || !_actions) {
+        return;
+    }
+    auto menu = UIMenu::create({
+        UIMenu::FItem::fromAction(*_actions, "selection.createEmpty"),
+        UIMenu::FItem::separator(),
+        UIMenu::FItem::fromAction(*_actions, "selection.duplicate"),
+        UIMenu::FItem::fromAction(*_actions, "selection.delete"),
+    });
+    menu->openAt(*_tree, logicalPoint);
+}
+
 void EditorSurface::syncPresentation(App& app, float dt)
 {
+    (void)dt;
     if (_bBuiltAsProjectBrowser) {
         std::vector<UITreeView::FNode> projects;
         const auto& discovered = _layer->getDiscoveredProjects();
@@ -846,8 +947,8 @@ void EditorSurface::syncPresentation(App& app, float dt)
         if (_hierarchyRoots) {
             _hierarchyRoots->replace(std::move(projects));
         }
-        if (_statsText) {
-            _statsText->setText(_layer->getProjectBrowserError());
+        if (_projectErrorText) {
+            _projectErrorText->setText(_layer->getProjectBrowserError());
         }
         return;
     }
@@ -855,43 +956,12 @@ void EditorSurface::syncPresentation(App& app, float dt)
     syncViewportTexture();
     syncSelectionFromLayer();
     syncHierarchy();
-    if (_inspectorTab) {
-        _inspectorTab->sync(*_tree);
-    }
     syncToolbar(app);
-    if (_contentBrowserTab) {
-        _contentBrowserTab->sync(*_tree);
-    }
-    if (_assetInspectorTab) {
-        _assetInspectorTab->sync();
-    }
-    if (_uiDesignerTab) {
-        _uiDesignerTab->sync(*_tree);
-    }
-    if (_runtimeToolsTab) {
-        _runtimeToolsTab->sync();
-    }
-    if (_debugImagesTab) {
-        _debugImagesTab->sync(*_tree);
-    }
     if (_filePicker) {
         _filePicker->sync(*_tree);
     }
     if (_settings) {
         _settings->sync(*_tree);
-    }
-    if (_statsText) {
-        const float fps = dt > 0.0f ? 1.0f / dt : 0.0f;
-        _statsText->setText(std::format(
-            "Frame {}\nDelta {:.2f} ms\nFPS {:.1f}\nViewport {:.0f} x {:.0f}",
-            app.getFrameIndex(),
-            dt * 1000.0f,
-            fps,
-            _layer->getViewportSize().x,
-            _layer->getViewportSize().y));
-    }
-    if (_workbench) {
-        _workbench->updateUI();
     }
 }
 
@@ -1186,8 +1256,17 @@ bool EditorSurface::wantsTextInput() const
         return false;
     }
     UIElement* focused = _tree->getFocused();
-    return dynamic_cast<UITextField*>(focused) != nullptr ||
-           (_inspectorTab && _inspectorTab->wantsTextInput(*_tree));
+    if (dynamic_cast<UITextField*>(focused) != nullptr) {
+        return true;
+    }
+    if (_dockContext) {
+        if (const FDockContext::FPanel* inspector = _dockContext->findPanelByStableKey("inspector")) {
+            if (auto* tab = dynamic_cast<EditorInspectorTab*>(inspector->widget.get())) {
+                return tab->wantsTextInput();
+            }
+        }
+    }
+    return false;
 }
 
 } // namespace ya

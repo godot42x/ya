@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/KeyedChildReconciler.h"
 
 #include <filesystem>
@@ -15,13 +16,16 @@ struct WidgetTree;
 
 /// Retained Content Browser tab. FileExplorer owns mount/directory/filter
 /// state; this tab is the WidgetTree view (keyed rows + visible window).
-class EditorContentBrowserTab
+class EditorContentBrowserTab : public UICompoundWidget
 {
   public:
-    explicit EditorContentBrowserTab(EditorLayer& layer) : _layer(&layer) {}
+    explicit EditorContentBrowserTab(EditorLayer& layer);
 
-    [[nodiscard]] std::shared_ptr<UIElement> build(WidgetTree& tree);
-    void sync(WidgetTree& tree);
+    void onAttached() override;
+    void tick(float deltaSeconds) override;
+
+  protected:
+    void construct() override;
 
   private:
     EditorLayer* _layer = nullptr;
@@ -42,6 +46,8 @@ class EditorContentBrowserTab
     float _entryViewportHeight = 0.0f;
     bool _bRowsDirty = true;
 
+    void refresh();
+    void refreshFromTree(WidgetTree& tree);
     void rebuildRows(WidgetTree& tree);
     void selectMount(const std::string& itemId);
     void selectItem(const std::filesystem::path& path, bool bIsDirectory);

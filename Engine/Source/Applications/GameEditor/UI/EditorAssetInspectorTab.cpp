@@ -11,7 +11,14 @@
 namespace ya
 {
 
-std::shared_ptr<UIElement> EditorAssetInspectorTab::build(WidgetTree&)
+EditorAssetInspectorTab::EditorAssetInspectorTab(EditorLayer& layer)
+    : UICompoundWidget("AssetInspectorBody", "panel.canvas")
+    , _layer(&layer)
+{
+    enableTick();
+}
+
+void EditorAssetInspectorTab::construct()
 {
     auto pathText = ui::text("AssetInspectorPath").setText("No asset selected").setStyleKey("text.muted").share();
     auto statusText = ui::text("AssetInspectorStatus")
@@ -23,7 +30,7 @@ std::shared_ptr<UIElement> EditorAssetInspectorTab::build(WidgetTree&)
     _statusText = statusText;
     _preview = preview;
 
-    return ui::panel("AssetInspectorBody")
+    addDetachedChild(ui::panel("AssetInspectorBodyInner")
         .setStyleKey("panel.canvas")
         .child(ui::column("AssetInspectorColumn")
                    .setSpacing(8.0f)
@@ -32,10 +39,20 @@ std::shared_ptr<UIElement> EditorAssetInspectorTab::build(WidgetTree&)
                    .child(statusText)
                    .release(),
                ui::canvasSlot().fill().offset({12.0f, 12.0f}))
-        .release();
+        .release());
 }
 
-void EditorAssetInspectorTab::sync()
+void EditorAssetInspectorTab::onAttached()
+{
+    refresh();
+}
+
+void EditorAssetInspectorTab::tick(float)
+{
+    refresh();
+}
+
+void EditorAssetInspectorTab::refresh()
 {
     if (!_layer || !_pathText || !_statusText || !_preview) {
         return;

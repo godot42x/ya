@@ -1,5 +1,7 @@
 #pragma once
 
+#include "GUI/Widgets/CompoundWidget.h"
+
 #include <memory>
 
 namespace ya
@@ -9,13 +11,16 @@ struct UIElement;
 struct WidgetTree;
 
 /// Retained Runtime Tools tab. Play/stop chrome plus Runtime*Section widgets.
-class EditorRuntimeToolsTab
+class EditorRuntimeToolsTab : public UICompoundWidget
 {
   public:
-    EditorRuntimeToolsTab() = default;
+    EditorRuntimeToolsTab();
 
-    [[nodiscard]] std::shared_ptr<UIElement> build(WidgetTree& tree);
-    void sync();
+    void onAttached() override;
+    void tick(float deltaSeconds) override;
+
+  protected:
+    void construct() override;
 
   private:
     std::shared_ptr<struct UIText> _statusText;
@@ -29,6 +34,8 @@ class EditorRuntimeToolsTab
     std::shared_ptr<class RuntimeRenderGraphSection> _renderGraph;
     std::shared_ptr<class RuntimeRenderTargetSection> _renderTargets;
     std::shared_ptr<class RuntimeDebugPrimitivesSection> _debugPrimitives;
+
+    void refresh();
 };
 
 } // namespace ya

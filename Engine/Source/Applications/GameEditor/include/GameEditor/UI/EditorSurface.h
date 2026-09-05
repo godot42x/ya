@@ -11,16 +11,13 @@
 
 #include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/UI/EditorFilePicker.h"
+#include "GameEditor/UI/EditorTabSpawnerRegistry.h"
 #include "GameEditor/UI/EditorViewportHost.h"
 
 #include <functional>
 #include <memory>
 #include <string>
-
-namespace guiworkbench
-{
-class FWorkbenchSurface;
-}
+#include <string_view>
 
 namespace ya
 {
@@ -33,12 +30,7 @@ class EditorViewportGizmoOverlay;
 struct Texture;
 class EditorFilePickerDialog;
 class EditorSettingsDialog;
-class EditorInspectorTab;
-class EditorDebugImagesTab;
-class EditorContentBrowserTab;
-class EditorAssetInspectorTab;
-class EditorUIDesignerTab;
-class EditorRuntimeToolsTab;
+class EditorTabSpawnerRegistry;
 struct UIDockSpace;
 struct FDockContext;
 struct UIDockFloatingHost;
@@ -63,10 +55,8 @@ enum class EWidgetRouteResult : uint8_t;
 /// Game Editor chrome owned as one WidgetTree.
 ///
 /// tick: rebuild-if-needed -> window metrics -> WidgetTree::tick ->
-/// sync tabs/chrome -> buildSnapshot -> viewport host.
-/// rebuild: new tree/theme/dock -> shell chrome -> tab.build() into FDockContext.
-/// Tab content lives on owner objects; this surface keeps shell, dock persist,
-/// viewport host, and dialogs.
+/// sync remaining chrome -> buildSnapshot -> viewport host.
+/// rebuild: new tree/theme/dock -> shell chrome -> spawn tabs into FDockContext.
 struct EditorSurface
 {
   private:
@@ -90,14 +80,8 @@ struct EditorSurface
     std::shared_ptr<SelectionModel>  _selection = std::make_shared<SelectionModel>();
     std::shared_ptr<ActionMap>       _actions   = std::make_shared<ActionMap>();
     std::shared_ptr<UndoStack>       _undo      = std::make_shared<UndoStack>();
-    std::shared_ptr<UIText>          _statsText;
-    std::unique_ptr<EditorInspectorTab> _inspectorTab;
-    std::unique_ptr<EditorDebugImagesTab> _debugImagesTab;
-    std::unique_ptr<EditorContentBrowserTab> _contentBrowserTab;
-    std::unique_ptr<EditorAssetInspectorTab> _assetInspectorTab;
-    std::unique_ptr<EditorUIDesignerTab> _uiDesignerTab;
-    std::unique_ptr<EditorRuntimeToolsTab> _runtimeToolsTab;
-    std::unique_ptr<guiworkbench::FWorkbenchSurface> _workbench;
+    std::shared_ptr<UIText>          _projectErrorText;
+    EditorTabSpawnerRegistry*        _tabSpawners = nullptr;
 
     std::unique_ptr<EditorFilePickerDialog> _filePicker;
     std::unique_ptr<EditorSettingsDialog> _settings;
@@ -115,9 +99,16 @@ struct EditorSurface
     EditorSurface();
     ~EditorSurface();
 
-    void bind(EditorLayer& layer) { _layer = &layer; }
-    void unbind() { _layer = nullptr; }
-    /// Drop the tree, snapshot, and GPU-backed viewport wrap before VMA teardown.
+    void bind(EditorLayer& layer, EditorTabSpawnerRegistry* spawners = nullptr)
+    {
+        _layer = &layer;
+        _tabSpawners = spawners;
+    }
+    void unbind()
+    {
+        _layer = nullptr;
+        _tabSpawners = nullptr;
+    }
     void shutdown();
 
     void tick(App& app, float dt);
@@ -156,11 +147,19 @@ struct EditorSurface
     void syncToolbar(App& app);
     void publishViewportRect();
     void syncViewportHostState(App& app);
+    bool invokeTab(std::string_view tabId);
+    bool materializeTab(std::string_view tabId);
+    [[nodiscard]] FEditorTabSpawnContext makeSpawnContext();
+    std::shared_ptr<UIElement> buildViewportBody();
+    std::shared_ptr<UIElement> buildHierarchyBody();
+    void buildToolsMenu();
+    void materializeWorkspaceTabs();
     void applyWindowMetrics(App& app);
     void applyDefaultEditorDockLayout();
     bool tryRestoreEditorDockLayout();
     void persistEditorDockLayout();
     void openViewportContextMenu(const glm::vec2& windowPoint);
+    void openHierarchyContextMenu(const glm::vec2& logicalPoint);
 };
 
 } // namespace ya

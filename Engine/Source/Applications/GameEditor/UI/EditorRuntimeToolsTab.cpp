@@ -19,7 +19,12 @@
 namespace ya
 {
 
-std::shared_ptr<UIElement> EditorRuntimeToolsTab::build(WidgetTree&)
+EditorRuntimeToolsTab::EditorRuntimeToolsTab() : UICompoundWidget("RuntimeToolsBody", "panel.canvas")
+{
+    enableTick();
+}
+
+void EditorRuntimeToolsTab::construct()
 {
     auto status = ui::text("RuntimeToolsStatus").setText("Stopped").setStyleKey("text.header").share();
     auto frame = ui::text("RuntimeToolsFrame").setText("Frame 0").setStyleKey("text.muted").share();
@@ -74,7 +79,7 @@ std::shared_ptr<UIElement> EditorRuntimeToolsTab::build(WidgetTree&)
     _renderTargets = renderTargets;
     _debugPrimitives = debugPrimitives;
 
-    return ui::panel("RuntimeToolsBody")
+    addDetachedChild(ui::panel("RuntimeToolsBodyInner")
         .setStyleKey("panel.canvas")
         .child(ui::column("RuntimeToolsColumn")
                    .setSpacing(8.0f)
@@ -91,10 +96,20 @@ std::shared_ptr<UIElement> EditorRuntimeToolsTab::build(WidgetTree&)
                    .child(debugPrimitives)
                    .release(),
                ui::canvasSlot().fill().offset({12.0f, 12.0f}))
-        .release();
+        .release());
 }
 
-void EditorRuntimeToolsTab::sync()
+void EditorRuntimeToolsTab::onAttached()
+{
+    refresh();
+}
+
+void EditorRuntimeToolsTab::tick(float)
+{
+    refresh();
+}
+
+void EditorRuntimeToolsTab::refresh()
 {
     if (!_statusText || !_frameText) {
         return;

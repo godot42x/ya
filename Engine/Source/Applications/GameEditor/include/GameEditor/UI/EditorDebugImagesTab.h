@@ -1,5 +1,7 @@
 #pragma once
 
+#include "GUI/Widgets/CompoundWidget.h"
+
 #include <array>
 #include <memory>
 #include <string>
@@ -20,13 +22,16 @@ struct Texture;
 
 /// Retained Debug Images tab. Catalog/mask/group selection stay on EditorLayer;
 /// this tab is the WidgetTree view of that state.
-class EditorDebugImagesTab
+class EditorDebugImagesTab : public UICompoundWidget
 {
   public:
-    explicit EditorDebugImagesTab(EditorLayer& layer) : _layer(&layer) {}
+    explicit EditorDebugImagesTab(EditorLayer& layer);
 
-    [[nodiscard]] std::shared_ptr<UIElement> build(WidgetTree& tree);
-    void sync(WidgetTree& tree);
+    void onAttached() override;
+    void tick(float deltaSeconds) override;
+
+  protected:
+    void construct() override;
 
   private:
     struct FSlotRow
@@ -58,8 +63,11 @@ class EditorDebugImagesTab
     std::string _structureFingerprint;
     int _categoryFilter = -1;
 
+    void refresh();
+    void refreshFromTree(WidgetTree& tree);
     void rebuild(WidgetTree& tree);
     void syncPreviews();
     void bindPreview(UIImage& image, std::shared_ptr<Texture>& cache, uint32_t slotIndex);
 };
+
 } // namespace ya

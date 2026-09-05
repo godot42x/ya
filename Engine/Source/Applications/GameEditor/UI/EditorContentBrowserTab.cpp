@@ -23,7 +23,14 @@
 namespace ya
 {
 
-std::shared_ptr<UIElement> EditorContentBrowserTab::build(WidgetTree&)
+EditorContentBrowserTab::EditorContentBrowserTab(EditorLayer& layer)
+    : UICompoundWidget("ContentBrowserRoot", "panel.canvas")
+    , _layer(&layer)
+{
+    enableTick();
+}
+
+void EditorContentBrowserTab::construct()
 {
     _explorer = std::make_shared<FileExplorer>();
     _explorer->setConfigScope("editorContentBrowser");
@@ -88,15 +95,34 @@ std::shared_ptr<UIElement> EditorContentBrowserTab::build(WidgetTree&)
                     .child(std::move(mountScroll), ui::boxSlot().preferredSize({180.0f, 0.0f}))
                     .child(std::move(entryScroll), ui::boxSlot().fill());
 
-    auto root = ui::column("ContentBrowserRoot")
+    auto root = ui::column("ContentBrowserInner")
                     .setSpacing(2.0f)
                     .setPadding({4.0f, 4.0f})
                     .child(std::move(header), ui::boxSlot().preferredSize({0.0f, 26.0f}))
                     .child(std::move(body), ui::boxSlot().fill());
-    return root.release();
+    addDetachedChild(root.release());
 }
 
-void EditorContentBrowserTab::sync(WidgetTree& tree)
+void EditorContentBrowserTab::onAttached()
+{
+    refresh();
+}
+
+void EditorContentBrowserTab::tick(float)
+{
+    refresh();
+}
+
+void EditorContentBrowserTab::refresh()
+{
+    WidgetTree* tree = getTree();
+    if (!tree) {
+        return;
+    }
+    refreshFromTree(*tree);
+}
+
+void EditorContentBrowserTab::refreshFromTree(WidgetTree& tree)
 {
     if (!_explorer || !_pathText) {
         return;

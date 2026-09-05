@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Binding/Reactive.h"
+#include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/Controls/TreeView.h"
 
 #include <memory>
@@ -16,16 +17,16 @@ class UndoStack;
 
 /// Retained UI Designer chrome tab. Document/preview tree stay on
 /// UIDesignerPanel; this tab owns palette, tree, and inspector projection.
-class EditorUIDesignerTab
+class EditorUIDesignerTab : public UICompoundWidget
 {
   public:
-    explicit EditorUIDesignerTab(EditorLayer& layer, UndoStack* undo = nullptr)
-        : _layer(&layer), _undo(undo)
-    {
-    }
+    explicit EditorUIDesignerTab(EditorLayer& layer, UndoStack* undo = nullptr);
 
-    [[nodiscard]] std::shared_ptr<UIElement> build(WidgetTree& tree);
-    void sync(WidgetTree& tree);
+    void onAttached() override;
+    void tick(float deltaSeconds) override;
+
+  protected:
+    void construct() override;
 
   private:
     EditorLayer* _layer = nullptr;
@@ -46,6 +47,8 @@ class EditorUIDesignerTab
     std::string _inspectorFingerprint;
     std::string _selectionFingerprint;
 
+    void refresh();
+    void refreshFromTree(WidgetTree& tree);
     void rebuildInspector(WidgetTree& tree, UIElement* selected);
 };
 

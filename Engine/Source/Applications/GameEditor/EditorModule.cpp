@@ -20,6 +20,7 @@
 #include "GameEditor/EditorRuntimeSettings.h"
 #include "GameEditor/Input/EditorInputNode.h"
 #include "GameEditor/UI/EditorSurface.h"
+#include "GameEditor/UI/EditorTabSpawnerRegistry.h"
 #include "GameEditor/Inspector/TypeRenderer.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "Render3D/Debug/PhysicsDebugDraw.h"
@@ -495,6 +496,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     FreeCameraController           _cameraController;
     EditorViewportCompositor       _viewportCompositor;
     EditorSurface                  _editorSurface;
+    EditorTabSpawnerRegistry       _tabSpawners;
     EditorInputNode                _inputNode;
     InputRouter::FNodeRegistration _inputNodeRegistration;
     EEditorChromeHost              _chromeHost      = EEditorChromeHost::WidgetTree;
@@ -739,7 +741,8 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         initializeEditorCamera(app, *_layer);
         _layer->setCurrentScenePath(app.getDesc().defaultScenePath.value_or(std::string{}));
         _layer->onAttach();
-        _editorSurface.bind(*_layer);
+        registerBuiltinEditorTabSpawners(_tabSpawners);
+        _editorSurface.bind(*_layer, &_tabSpawners);
         _layer->setSaveSceneAsHandler([this]() { _editorSurface.openSceneSaveDialog(); });
         _layer->setAssetPickerHandler([this](EEditorAssetPickerKind kind,
                                              std::string currentPath,

@@ -138,6 +138,7 @@ void AppDesc::init(int argc, char** argv)
         .opt<std::string>("", {"ya-project"}, "Project descriptor path (XMake-safe alias)")
         .opt<bool>("", {"editor"}, "Enable the Editor module", "false")
         .opt<std::string>("", {"editor-chrome"}, "Editor chrome host: widgettree (default) or imgui")
+        .opt<std::string>("", {"editor-tab"}, "Open and activate an editor tab by stable id after workspace restore")
         .opt<std::string>("", {"screenshot"}, "Automation screenshot output PNG path")
         .opt<std::string>("", {"screenshot-target"}, "Automation screenshot target: viewport or presentation")
         .opt<uint64_t>("", {"screenshot-frame"}, "Earliest frame index allowed to request automation screenshot", "0")
@@ -201,6 +202,9 @@ void AppDesc::init(int argc, char** argv)
     params.tryGet<bool>("editor", bEditor);
     if (std::string chrome; params.tryGet<std::string>("editor-chrome", chrome)) {
         editorChrome = std::move(chrome);
+    }
+    if (std::string tab; params.tryGet<std::string>("editor-tab", tab)) {
+        editorTab = std::move(tab);
     }
     if (std::string screenshotPath; params.tryGet<std::string>("screenshot", screenshotPath)) {
         automation.screenshotPath = std::move(screenshotPath);
