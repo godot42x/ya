@@ -1,0 +1,34 @@
+{
+  "plan": "gui-editor-structure",
+  "as_of": "2026-09-06",
+  "features": [
+    {
+      "id": "orchestration_map",
+      "status": "implemented",
+      "phase": "C0",
+      "evidence": [
+        "gui-framework skill Host/ya-gui-host map",
+        "two product loops documented",
+        "EditorSurface tick contract documented"
+      ]
+    },
+    {
+      "id": "dead_panel_cleanup",
+      "status": "pending",
+      "phase": "C1",
+      "evidence": []
+    },
+    {
+      "id": "editor_surface_tab_owners",
+      "status": "pending",
+      "phase": "C2",
+      "evidence": []
+    },
+    {
+      "id": "gui_inputextras_split",
+      "status": "pending",
+      "phase": "C3",
+      "evidence": []
+    }
+  ]
+}

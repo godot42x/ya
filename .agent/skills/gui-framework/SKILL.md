@@ -19,17 +19,54 @@ description: YA GUI 框架（WidgetTree / 控件 / layout / Render2D pass slot /
 
 ```text
 Framework/GUI/
-  Runtime/Resource/   ya-gui-resources   Font/glyph、texture-slot（FontManager::registerFont 可注入合成字体做无 GPU 测试）
-  Runtime/Draw2D/     ya-gui-draw2d      Render2D：screen/world 精灵+文本+线条批处理；pass slot 资源池
   Runtime/Widgets/    ya-gui-widgets     UIElement / WidgetTree / UIFrameSnapshot / 控件
+                                         （Layout / Binding / Declarative 编进本 target）
   Runtime/Compose/    ya-gui-compose     共享 2D 合成 pass（UIFrameSnapshot -> Render2D）
   Tooling/            ya-gui-tooling     WorkbenchSurface / Workspace（工具 UI 外壳，demo 无关）
-  App/                ya-gui-app-host    standalone 宿主：SDL 窗口、Vulkan、帧循环、automation 入口
+  Host/               ya-gui-host        standalone 宿主：SDL 窗口、Vulkan、帧循环、automation
+Framework/Render/                        ya-render-2d / ya-render-resources（Font/glyph、Render2D）
+Framework/App/Kernel  ya-app-kernel      唯一 while-loop；GUI 与 GameRuntime 共用
 Example/GUIWorkbench/                    retain-mode demo app（页面注册进 FWorkbenchSurface）
+Applications/GameRuntime                 ya::App 产品壳（scene / RenderRuntime / modules）
+Applications/GameEditor                  EditorModule + EditorSurface（不是独立主循环）
 ```
 
-`ya-gui-framework` 是聚合 meta target（widgets+compose+tooling 等）；GUI 测试只链 GUI closure
-（`ya-gui-closure-test` 不依赖 Scene/ECS/Render3D/Host/Editor）。
+`ya-gui-framework` 是聚合 meta target（widgets+compose+tooling 等），**不含** host。
+GUI 测试只链 GUI closure（`ya-gui-closure-test` 不依赖 Scene/ECS/Render3D/Editor）。
+standalone GUI 可执行文件显式链 `ya-gui-host`。
+
+不要合并 `GUIWindowHost` 与 `ya::App` 的 present / 输入栈：Workbench 必须保持 GUI
+closure；Editor 必须吃 3D viewport + swapchain。结构整理优先让 `EditorSurface`
+成为可阅读 orchestrator，而不是再造一条产品宿主。
+
+## 产品循环
+
+唯一 while-loop 是 `AppKernel`。两条产品线在 kernel 之下分叉，不要读成「GameApp vs GuiApp」类型对：
+
+```text
+AppKernel
+  ├─ GUIApp / GUIWindowHost     GUI-only（无 Scene / ECS / Render3D）
+  │    SDL → dispatchEvent → tree.tick → delegate.updateUI
+  │    → buildSnapshot → compose → present
+  │    GUIWorkbench：IGUIAppDelegate 挂 FWorkbenchSurface
+  └─ ya::App                    游戏 / 编辑器产品壳
+       GameRuntimeFrameOrchestrator
+         tickLogic → modules.onLogic
+         tickRender → RenderRuntime
+           modules.onViewportCompose
+           modules.onPresentation
+             EditorModule → EditorSurface::tick
+               rebuild-if-needed → window metrics
+               → sync tabs/chrome → buildSnapshot
+               → publishViewportRect → syncViewportHostState
+             replayUIFrameSnapshot(..., EditorToolSurface)
+```
+
+`EditorSurface::tick` 是编辑器 chrome 的阅读入口。tab 内容必须有独立 owner
+（`EditorInspectorTab` / `EditorDebugImagesTab` / 后续 Content、Asset、UI Designer、
+Runtime Tools）；Surface 只编排 shell、dock persist、viewport host 和 dialogs。
+不要再往 Surface 堆 tab 控件指针，也不要用 `EditorTabRegistry` 这种 `std::function`
+袋子假装 owner。长线见 `.agent/plan/gui-editor-structure/`。
 
 ## WidgetTree 模型
 
@@ -176,6 +213,9 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 ## GameEditor chrome
 
+- `EditorSurface::tick` 是 chrome 编排入口：`rebuild-if-needed` → window metrics →
+  sync tabs/chrome → `buildSnapshot` → viewport host。tab 内容不堆回 Surface。
+  结构收口见 `.agent/plan/gui-editor-structure/`。
 - 启动时 **WidgetTree 唯一 chrome**：整窗 `EditorSurface` + `replayUIFrameSnapshot`；3D 仍离屏
   compose，树只采样那张 RT。`--editor-chrome=imgui` / `editor.chrome.host=imgui` 会被忽略并打 WARN。
 - WidgetTree 输入：`EditorInputNode` → `WidgetTree::dispatchEvent`。
@@ -236,7 +276,7 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   实例覆盖走 `setStyle(TStyle)`（freeze）或 `setStyleField`（单键 inherit）；Text/Panel 的 `setColor` 只 overlay 颜色（Paint 粒度），字号等跟 theme。
   列表行标签走 `text` key，不要 `setColor` 冻色。布局宿主（Container/Overlay/SizeBox/DockFloatingHost）无 chrome paint。
 
-## Host（ya-gui-app-host）
+## Host（ya-gui-host）
 
 - 顶层命名：`GUIApp` 是 standalone GUI 的装配层（当前一个 primary
   `GUIWindowHost`）；`GUIWindowHost` 是一窗口一 tree / SDL window / presenter /
@@ -261,6 +301,7 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 - 旧路径 `GUIWorkbenchPanel` / `FrameStatsPanel` 把 WidgetTree 合成到离屏 RT 再
   `ImGui::Image`。GameEditor chrome 已切到整窗 `EditorSurface`，不要再扩这条桥。
+  这两个类型若仍无实例，按 `gui-editor-structure` C1 删除，不要继续编译空壳。
 - `EditorToolSurfaceCompositor` 仍保留 shutdown，但 presentation 不再 compose
   workbench 离屏图。
 
