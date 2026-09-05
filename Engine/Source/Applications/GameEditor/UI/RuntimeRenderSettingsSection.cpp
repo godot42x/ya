@@ -5,7 +5,7 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
-#include "GUI/Widgets/Controls/InputExtras.h"
+#include "GUI/Widgets/Controls/DragFloat.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "RHI/Core/Swapchain.h"
 #include "Render3D/RenderRuntime.h"

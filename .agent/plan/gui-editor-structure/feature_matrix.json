@@ -35,9 +35,14 @@
     },
     {
       "id": "gui_inputextras_split",
-      "status": "pending",
+      "status": "implemented",
       "phase": "C3",
-      "evidence": []
+      "evidence": [
+        "DragFloat/SpinBox/RadioButton/ColorEdit/SearchComboBox single-class files",
+        "Controls.h forwards those headers",
+        "no InputExtras includes remain",
+        "dock panel vs floating title drag diverge; no shared helper"
+      ]
     }
   ]
 }

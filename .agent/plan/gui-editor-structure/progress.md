@@ -1,5 +1,19 @@
 # Progress
 
+## C3 当前 checkpoint（2026-09-06）
+
+- 拆 `InputExtras` 为 `DragFloat` / `SpinBox` / `RadioButton` / `ColorEdit` / `SearchComboBox` 单类文件；`Controls.h` 转发；无旧 `InputExtras` include。
+- Dock drag：`FDockSpacePanelDragBehavior`（ghost + tear-off）与 `FDockFloatingWindowPanelDragBehavior`（窗体跟随、skip-source、sticky preview）有分叉，不抽 helper。
+- 不拆 `WidgetTree` / `UILayout` / `GUIAppHost`。
+- 验证：`xmake b ya-gui-closure-test`；`xmake r ya-gui-closure-test -- --gtest_filter='WidgetLayoutTest.*:DockNodeTest.*:WidgetTreeTest.Dock*'`。
+
+### C3 保留项
+
+- Hierarchy / Viewport / Menu / Dock persist / dialogs 仍在 Surface。
+- domain panels 仍名 `*Panel`。
+- 不合并 `GUIApp` 与 `ya::App`。
+- 未宣称 retained editor ready。
+
 ## C2 当前 checkpoint（2026-09-06）
 
 - 抽出 `EditorContentBrowserTab` / `EditorAssetInspectorTab` / `EditorUIDesignerTab` / `EditorRuntimeToolsTab`。
@@ -9,7 +23,7 @@
 
 ### C2 保留项
 
-- C3 InputExtras 拆分与 Dock drag helper 未做。
+- C3 InputExtras 拆分已做；Dock drag 因手势分叉未抽 helper。
 - Hierarchy / Viewport / Menu / Dock persist / dialogs 仍在 Surface（chrome 编排）。
 - `UIDesignerPanel` / `SceneHierarchyPanel` / `AssetInspectorPanel` 仍是 domain model 原名。
 - 不合并 `GUIApp` 与 `ya::App`。
