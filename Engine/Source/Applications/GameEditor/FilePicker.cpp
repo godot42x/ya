@@ -2,9 +2,7 @@
 #include "Core/Config/ConfigManager.h"
 #include "Core/Log.h"
 #include "Core/System/PathUtils.h"
-#include "GameEditor/ImGui/ImGuiHelper.h"
 #include <format>
-#include <imgui.h>
 
 namespace ya
 {
@@ -35,7 +33,6 @@ void FilePicker::open(const std::string              &title,
     YA_CORE_ASSERT(_isOpen == false, "FilePicker is already open");
 
     _isOpen         = true;
-    _pendingClose   = false;
     _bSceneSaveMode = false;
     _title          = title;
     _onConfirm      = onConfirm;
@@ -59,50 +56,10 @@ void FilePicker::open(const std::string              &title,
 
 void FilePicker::close()
 {
-    _pendingClose = true;
-}
-
-void FilePicker::render()
-{
-    // Handle deferred close
-    if (_pendingClose)
-    {
-        _isOpen         = false;
-        _pendingClose   = false;
-        _onConfirm      = nullptr;
-        _onSaveConfirm  = nullptr;
-        _bSceneSaveMode = false;
-        return;
-    }
-
-    if (!_isOpen) return;
-
-    ImGui::OpenPopup(_title.c_str());
-
-    // Center the popup
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(700, 500), ImGuiCond_FirstUseEver);
-
-    bool open = _isOpen;
-    if (ImGui::BeginPopupModal(_title.c_str(), &open, ImGuiWindowFlags_None))
-    {
-        if (_bSceneSaveMode)
-        {
-            renderSceneSaveContent();
-        }
-        else
-        {
-            renderFileSelectContent();
-        }
-        ImGui::EndPopup();
-    }
-
-    // Check if closed via X button
-    if (!open)
-    {
-        close();
-    }
+    _isOpen         = false;
+    _onConfirm      = nullptr;
+    _onSaveConfirm  = nullptr;
+    _bSceneSaveMode = false;
 }
 
 void FilePicker::openScriptPicker(const std::string &currentPath, Callback onConfirm)
@@ -129,7 +86,6 @@ void FilePicker::openDirectoryPicker(const std::string &currentPath,
                                      Callback           onConfirm)
 {
     _isOpen         = true;
-    _pendingClose   = false;
     _bSceneSaveMode = false;
     _title          = "Select Directory";
     _onConfirm      = onConfirm;
@@ -152,7 +108,6 @@ void FilePicker::openDirectoryPicker(const std::string &currentPath,
 void FilePicker::openSceneSavePicker(const std::string &defaultName, SaveCallback onConfirm)
 {
     _isOpen         = true;
-    _pendingClose   = false;
     _bSceneSaveMode = true;
     _title          = "Save Scene";
     _onConfirm      = nullptr;
@@ -173,121 +128,6 @@ void FilePicker::openSceneSavePicker(const std::string &defaultName, SaveCallbac
     const std::string lastSaveDirectory = ConfigManager::get().getOr<std::string>("editor", "filePicker.lastSaveDirectory", "");
     if (!lastSaveDirectory.empty()) {
         _fileExplorer.setSelectedPath(path_utils::pathFromUtf8String(lastSaveDirectory));
-    }
-}
-
-void FilePicker::renderFileSelectContent()
-{
-    // File explorer takes most of the space
-    float footerHeight    = 35.0f;
-    float availableHeight = ImGui::GetContentRegionAvail().y - footerHeight;
-
-    _fileExplorer.render([this](const std::filesystem::path &path) {
-        // Double-click callback
-        if (_onConfirm)
-        {
-            _onConfirm(path_utils::pathToUtf8String(path));
-        }
-        close();
-    },
-                         availableHeight);
-
-    ImGui::Separator();
-
-    // Footer with OK/Cancel buttons
-    if (ImGui::Button("OK", ImVec2(120, 0)))
-    {
-        auto selectedPath = _fileExplorer.getSelectedPath();
-        if (_onConfirm && !selectedPath.empty())
-        {
-            _onConfirm(path_utils::pathToUtf8String(selectedPath));
-        }
-        close();
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Cancel", ImVec2(120, 0)))
-    {
-        close();
-    }
-
-    ImGui::SameLine();
-
-    // Show selected path
-    auto selectedPath = _fileExplorer.getSelectedPath();
-    if (!selectedPath.empty())
-    {
-        const std::string selectedName = path_utils::pathToUtf8String(selectedPath.filename());
-        ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f), "%s", selectedName.c_str());
-    }
-}
-
-void FilePicker::renderSceneSaveContent()
-{
-    // Scene name input at top
-    ImGui::Text("Scene Name:");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(200);
-    ImGui::InputText("##sceneName", _sceneNameBuffer, sizeof(_sceneNameBuffer));
-
-    ImGui::Separator();
-
-    // File explorer in the middle
-    float footerHeight    = 60.0f;
-    float availableHeight = ImGui::GetContentRegionAvail().y - footerHeight;
-
-    _fileExplorer.render([this](const std::filesystem::path &path) {
-        // Double-click on directory - navigate (handled by FileExplorer)
-    },
-                         availableHeight);
-
-    // Preview path
-    auto                  selectedPath = _fileExplorer.getSelectedPath();
-    std::filesystem::path saveDir;
-
-    if (!selectedPath.empty())
-    {
-        saveDir = selectedPath;
-    }
-    else if (_fileExplorer.getActiveMountPoint())
-    {
-        saveDir = _fileExplorer.getCurrentDirectory();
-    }
-
-    std::string previewPath = (saveDir / (_sceneNameBuffer + std::string(".scene.json"))).string();
-    ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f), "Will save to: %s", previewPath.c_str());
-
-    ImGui::Separator();
-
-    // Footer with Save/Cancel buttons
-    bool canSave = strlen(_sceneNameBuffer) > 0;
-
-    if (!canSave)
-    {
-        ImGui::BeginDisabled();
-    }
-
-    if (ImGui::Button("Save", ImVec2(120, 0)))
-    {
-        if (_onSaveConfirm)
-        {
-            ConfigManager::Editor("editor").set("filePicker.lastSaveDirectory", path_utils::pathToUtf8String(saveDir));
-            _onSaveConfirm(path_utils::pathToUtf8String(saveDir), std::string(_sceneNameBuffer));
-        }
-        close();
-    }
-
-    if (!canSave)
-    {
-        ImGui::EndDisabled();
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Cancel", ImVec2(120, 0)))
-    {
-        close();
     }
 }
 

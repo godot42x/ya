@@ -1,9 +1,9 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-06 (gui-kernel-ux-parity K4: dock tab close + same-leaf reorder)  
+> **As of:** 2026-09-06 (gui-kernel-ux-parity E3: Designer tree DnD + dead ImGui TypeRenderer/FilePicker::render)  
 > **Default chrome:** WidgetTree only (`EditorSurface`)  
 > **Legacy chrome:** `--editor-chrome=imgui` is ignored (WARN); `onImGuiRender` deleted  
-> **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, but leftover helpers still require it. **Hand-feel** is a separate gate: see `.agent/plan/gui-kernel-ux-parity/`.
+> **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, TypeRenderer/FilePicker::render are gone, but texture-bridge / debug helpers still require it. **Hand-feel** is a separate gate: see `.agent/plan/gui-kernel-ux-parity/`.
 
 ## How to read
 
@@ -37,7 +37,7 @@
 | Dock layout | ImGui `DockSpace` | `FDockContext` + `UIDockSpace` | 🟡 | Path: compact strip, hide-tab-bar, persist `editor.dockLayout`. **Feel (K4):** leaf tab close + same-leaf reorder; Viewport/Hierarchy/Inspector hide close |
 | Editor Settings window | `EditorLayer::editorSettings` | `EditorSettingsDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui window deleted 8W; 10E owner extract |
 | Debug images window | `EditorLayer::debugWindow` | `EditorDebugImagesTab` dock tab | ⚫ / ✅ | ImGui window deleted 8W; cube-face button grid not retained |
-| Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | `EditorFilePickerDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui FilePicker modal chrome deleted 8W; `FilePicker` type remains for fallback APIs |
+| Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | `EditorFilePickerDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui FilePicker modal + `FilePicker::render` deleted; `FilePicker` type/`open*` remain for fallback |
 | Viewport display | `viewportWindow` + `ImGui::Image` | `UIImage` samples offscreen compose | ⚫ / ✅ | `viewportWindow` deleted 8W |
 | Viewport input / pick / gizmo | `EditorLayer::onEvent` + ImGuizmo | Same `onEvent` + `EditorViewportGizmoOverlay` | ✅ | Native gizmo math + `Render2D` compose draw; overlay contract retained |
 | Viewport context menu | `viewportWindow` → `ContextMenu` (ImGui) | `EditorSurface::openViewportContextMenu` (`UIMenu`) | ✅ | Uses `NodeCreateRegistry` presets + `EditorLayer` cmds |
@@ -106,7 +106,7 @@
 | Multi-selection mixed values | DetailsView | `PropertyGraph` intersection + em-dash | ✅ | |
 | Asset path Browse | `FilePicker` | `EditorSurface` asset picker popup | ✅ | Phase 8M |
 | Game UI Entry summary | DetailsView | `EditorInspectorTab` widget entry block | ✅ | Open in UI Designer button |
-| `TypeRenderer` registry | Compiled, `registerBuiltinTypeRenderers` | **No caller** on widgettree | ⚫ | Dead stack; UIDesigner ImGui inspector removed 8P |
+| `TypeRenderer` registry | `registerBuiltinTypeRenderers` | — | ⚫ | Deleted E3; Inspector is PropertyGraph + EditorAutoPropertySection |
 
 ### Asset Inspector
 
@@ -137,9 +137,9 @@
 | Panel render | `UIDesignerPanel::onImGuiRender` | Retained tab: palette + tree + inspector | ⚫ / 🟡 | 8G shell; 8T palette/inspector |
 | Document open/save | Data layer | Same `UIDesignerPanel` APIs | ✅ | |
 | Widget palette | `drawPalette` (⚫) | `UITypeRegistry` button list + `addPaletteWidget` | ✅ | Phase 8T |
-| Widget tree authoring | `drawWidgetTree` (⚫) | `UITreeView` + canvas pick sync | 🟡 | **Feel:** tree DnD not retained (E3 / K1 typed op) |
+| Widget tree authoring | `drawWidgetTree` (⚫) | `UITreeView` + canvas pick sync + `FTreeReorderDragDropOp` | ✅ | **Feel (E3):** tree reorder → `UIDesignerPanel::applyWidgetDrop` |
 | Field inspector | `drawInspector` + `TypeRenderer` (⚫) | `PropertyGraph` + `EditorAutoPropertySection` | ✅ | Phase 8T |
-| Preview canvas / pick / drop | Data layer (`pickAt`, `applyWidgetDrop`) | 2D viewport mode + `EditorModule` compose | 🟡 | Canvas overlay works in 2D mode; tree DnD not retained |
+| Preview canvas / pick / drop | Data layer (`pickAt`, `applyWidgetDrop`) | 2D viewport mode + `EditorModule` compose + Designer tree DnD | 🟡 | Canvas overlay works in 2D mode; tree reorder retained (E3) |
 | Delete widget | Keyboard in 2D canvas mode | `UIDesignerPanel::deleteWidget` via `onEvent` | 🟡 | Works in 2D mode only |
 
 ### GUI Workbench
@@ -163,7 +163,7 @@
 |------|--------------|------------|--------|-------|
 | Scene save | `openSceneSavePicker` | `makeSceneSavePickerRequest` → `EditorFilePickerDialog` | ✅ | 8L; 10E collapsed three overlays into one owner |
 | Texture / model asset | `openTexturePicker` / `openModelPicker` | `makeAssetPickerRequest` → same dialog | ✅ | 8M; 10E |
-| Script / material / directory / generic | `FilePicker::*` | `openFilePickerDialog` + `FEditorFilePickerRequest` factories | ✅ | 8S；legacy `FilePicker` type remains |
+| Script / material / directory / generic | `FilePicker::*` | `openFilePickerDialog` + `FEditorFilePickerRequest` factories | ✅ | 8S；`FilePicker` type/`open*` remain, ImGui `render` deleted E3 |
 | Editor Settings browse | `FilePicker` in `editorSettings` | `makeSceneJsonFilePickerRequest` → same dialog | ✅ | 8U |
 
 ---
@@ -184,10 +184,10 @@
 
 | Dependency | Still required for | Safe to remove when |
 |------------|-------------------|---------------------|
-| `imgui-local` | leftover FilePicker/TypeRenderer, editor-internal texture bridge | FilePicker/TypeRenderer have no callers |
-| `TypeRenderer` + `ContainerPropertyRenderer` | **Nothing** (no live caller) | Retained container/map/preview parity landed; safe to delete when `imgui-local` FilePicker is also gone |
-| `FileExplorer::render` | **Nothing** (⚫) | Already removed from Content Browser path |
-| `ImGuiImageEntry` / texture bridge | legacy helper paths | Helper callers are removed or migrated |
+| `imgui-local` | editor-internal texture bridge, `ImGuiImageEntry`, debug helpers | Windows/OpenGL and remaining ImGui helper callers are gone |
+| `TypeRenderer` + `ContainerPropertyRenderer` | — | Deleted E3 |
+| `FileExplorer::render` / `FilePicker::render` | — | Deleted E3; retained Content Browser / `EditorFilePickerDialog` |
+| `ImGuiImageEntry` / texture bridge | FilePicker icon cache + debug images | Helper callers migrate off ImGui textures |
 
 ---
 
@@ -202,7 +202,7 @@
 
 **Critical remaining before removing `imgui-local`:**
 
-1. `FilePicker` / `TypeRenderer` still compile without a live widgettree chrome caller
+1. Editor-internal texture bridge (`getOrCreateImGuiTextureID` / `ImGuiImageEntry`) and debug helpers still compile against ImGui
 
 ---
 
@@ -217,9 +217,9 @@ Kernel feel (not another `EditorSurface` split) — `.agent/plan/gui-kernel-ux-p
 5. **K4** — Dock leaf tab close + same-leaf reorder ✅  
 6. **E1** — Hierarchy tree right-click CRUD via existing `ActionMap` ✅  
 7. **E2** — Toolbar / Content Browser icons ✅  
-8. **E3** — UI Designer tree DnD; delete dead `TypeRenderer` / ImGui `FilePicker::render`
+8. **E3** — UI Designer tree DnD; delete dead `TypeRenderer` / ImGui `FilePicker::render` ✅
 
-Release blockers still outside this line: XP-WIN, XP-OGL, SOAK-HR, remaining `imgui-local` after E3.  
+Release blockers still outside this line: XP-WIN, XP-OGL, SOAK-HR, remaining `imgui-local` (texture bridge / debug).  
 
 ---
 

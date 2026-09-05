@@ -13,8 +13,8 @@ target("ya-game-editor")
         add_deps("ya-engine")
         add_links("ya-engine")
     end
-    -- imgui remains shared because editor-internal legacy helpers still consume
-    -- the same global context as the runtime host.
+    -- imgui remains shared because editor-internal texture-bridge / debug helpers
+    -- still consume the same global context as the runtime host.
     add_deps("imgui-local")
     add_includedirs("../../../ThirdParty/ImGui", { public = true })
     add_includedirs("../../../ThirdParty/ImGui/Backends", { public = true })

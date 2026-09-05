@@ -84,9 +84,16 @@
     },
     {
       "id": "designer_dnd_imgui_dead",
-      "status": "pending",
+      "status": "implemented",
       "phase": "E3",
-      "evidence": []
+      "evidence": [
+        "EditorUIDesignerTab setReorderable + FTreeReorderDragDropOp -> applyWidgetDrop",
+        "UIDesignerPanel::findByChildPath",
+        "deleted TypeRenderer / ContainerPropertyRenderer / FilePicker::render / FileExplorer.Render.cpp",
+        "UIDesignerPanelTest.FindByChildPathResolvesRootAndNestedWidgets",
+        "UIDesignerPanelTest.ApplyWidgetDropReordersPreviewSiblings",
+        "UIDesignerPanelTest.ApplyWidgetDropIntoNestsChild"
+      ]
     }
   ]
 }

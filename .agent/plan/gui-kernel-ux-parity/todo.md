@@ -7,4 +7,4 @@
 - [x] K4：Dock 叶内 tab close + 同 leaf 重排
 - [x] E1：Hierarchy 树右键 CRUD 走现有 ActionMap
 - [x] E2：Toolbar / Content Browser 图标行
-- [ ] E3：UI Designer 树 DnD；删 TypeRenderer / FilePicker 死路径
+- [x] E3：UI Designer 树 DnD；删 TypeRenderer / FilePicker 死路径

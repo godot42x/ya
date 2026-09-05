@@ -21,7 +21,8 @@ struct ImGuiImageEntry;
  * - 右侧：当前目录内容（支持层级导航）
  * - 支持图标/列表两种展示模式
  *
- * 可被 FilePicker 与 retained Content Browser 复用
+ * 可被 FilePicker 数据层与 retained Content Browser 复用。
+ * ImGui `render()` 已删除；浏览 UI 走 WidgetTree 行。
  */
 class FileExplorer
 {
@@ -58,7 +59,6 @@ class FileExplorer
         const ImGuiImageEntry *file   = nullptr;
     };
 
-    using SelectionCallback  = std::function<void(const std::filesystem::path &)>;
     using ItemActionCallback = std::function<void(const std::filesystem::path &)>;
 
     FileExplorer() = default;
@@ -80,13 +80,6 @@ class FileExplorer
      * @brief 从 VirtualFileSystem 自动发现挂载点
      */
     void initFromVFS();
-
-    /**
-     * @brief 渲染文件浏览器界面
-     * @param onSelect 选择回调（双击或确认时调用）
-     * @param height 高度（-1 表示自动填充）
-     */
-    void render(SelectionCallback onSelect = nullptr, float height = -1);
 
     /**
      * @brief 获取当前选中的路径
@@ -238,14 +231,6 @@ class FileExplorer
 
     void switchToMountPoint(MountPoint *mp);
     bool isPathWithinActiveMountPoint(const std::filesystem::path &path) const;
-    void renderMountPointSelector();
-    void renderDirectoryContents(SelectionCallback onSelect);
-    void renderListView(SelectionCallback                                    onSelect,
-                        const std::vector<std::filesystem::directory_entry> &directories,
-                        const std::vector<std::filesystem::directory_entry> &files);
-    void renderIconView(SelectionCallback                                    onSelect,
-                        const std::vector<std::filesystem::directory_entry> &directories,
-                        const std::vector<std::filesystem::directory_entry> &files);
     bool matchesSearch(const std::string &name) const;
 };
 

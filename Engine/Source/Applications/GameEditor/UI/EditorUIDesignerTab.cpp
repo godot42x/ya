@@ -15,6 +15,7 @@
 #include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/Panels/UIDesignerPanel.h"
 
+#include <optional>
 #include <vector>
 
 namespace ya
@@ -43,6 +44,31 @@ void collectDesignerTreeFingerprint(const UIElement& widget, std::string& out, c
     for (size_t index = 0; index < children.size(); ++index) {
         collectDesignerTreeFingerprint(*children[index], out, path + "/" + std::to_string(index));
     }
+}
+
+std::optional<std::vector<size_t>> parseDesignerChildPath(const std::string& id)
+{
+    if (id.empty()) {
+        return std::nullopt;
+    }
+    std::vector<size_t> path;
+    size_t              start = 0;
+    while (start < id.size()) {
+        const size_t slash = id.find('/', start);
+        const size_t end   = slash == std::string::npos ? id.size() : slash;
+        if (start == 0 && id.compare(start, end - start, "root") == 0) {
+            start = slash == std::string::npos ? id.size() : slash + 1;
+            continue;
+        }
+        try {
+            path.push_back(static_cast<size_t>(std::stoul(id.substr(start, end - start))));
+        }
+        catch (...) {
+            return std::nullopt;
+        }
+        start = slash == std::string::npos ? id.size() : slash + 1;
+    }
+    return path;
 }
 
 std::string designerSelectionPath(const UIElement& root, const UIElement& target, const std::string& prefix = "root")
@@ -82,28 +108,42 @@ void EditorUIDesignerTab::construct()
     auto treeBuilder = ui::treeView("UIDesignerTree")
                            .bindData(_roots)
                            .bindSelection(_selection)
+                           .setReorderable(true)
                            .setOnSelectionChanged([this](const std::string& id) {
                                if (!_layer) {
                                    return;
                                }
-                               std::vector<size_t> path;
-                               size_t start = 0;
-                               while (start < id.size()) {
-                                   const size_t slash = id.find('/', start);
-                                   const size_t end = slash == std::string::npos ? id.size() : slash;
-                                   if (start == 0 && id.compare(start, end - start, "root") == 0) {
-                                       start = slash == std::string::npos ? id.size() : slash + 1;
-                                       continue;
-                                   }
-                                   try {
-                                       path.push_back(static_cast<size_t>(std::stoul(id.substr(start, end - start))));
-                                   }
-                                   catch (...) {
-                                       return;
-                                   }
-                                   start = slash == std::string::npos ? id.size() : slash + 1;
+                               const std::optional<std::vector<size_t>> path = parseDesignerChildPath(id);
+                               if (!path) {
+                                   return;
                                }
-                               _layer->getUIDesignerPanel().selectByChildPath(path);
+                               _layer->getUIDesignerPanel().selectByChildPath(*path);
+                           })
+                           .setOnReorderHandler([this](const std::string& fromId,
+                                                       const std::string& toId,
+                                                       int mode) {
+                               if (!_layer) {
+                                   return;
+                               }
+                               const std::optional<std::vector<size_t>> fromPath = parseDesignerChildPath(fromId);
+                               const std::optional<std::vector<size_t>> toPath   = parseDesignerChildPath(toId);
+                               if (!fromPath || !toPath) {
+                                   return;
+                               }
+                               UIDesignerPanel& panel = _layer->getUIDesignerPanel();
+                               UIElement* dragged = panel.findByChildPath(*fromPath);
+                               UIElement* target  = panel.findByChildPath(*toPath);
+                               if (!dragged || !target) {
+                                   return;
+                               }
+                               UIDesignerPanel::EDropPos position = UIDesignerPanel::EDropPos::Before;
+                               if (mode == 1) {
+                                   position = UIDesignerPanel::EDropPos::Into;
+                               }
+                               else if (mode == 2) {
+                                   position = UIDesignerPanel::EDropPos::After;
+                               }
+                               panel.applyWidgetDrop(dragged, *target, position);
                            });
     auto tree = treeBuilder.share();
     _treeView = tree;
@@ -234,6 +274,9 @@ void EditorUIDesignerTab::refreshFromTree(WidgetTree& tree)
     if (fingerprint != _treeFingerprint) {
         _treeFingerprint = std::move(fingerprint);
         _roots->replace(std::move(roots));
+        if (_treeView) {
+            _treeView->setExpanded("root", true);
+        }
     }
     if (_saveButton) {
         _saveButton->setEnabled(document != nullptr);

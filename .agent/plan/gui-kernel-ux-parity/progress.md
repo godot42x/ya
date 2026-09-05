@@ -1,5 +1,19 @@
 # Progress
 
+## E3 当前 checkpoint（2026-09-06）
+
+- UI Designer 树 `setReorderable` 走 K1 `FTreeReorderDragDropOp`，落到 `UIDesignerPanel::applyWidgetDrop`（`findByChildPath` 解析 `root/0/1`）。
+- 删除无 live caller 的 ImGui `TypeRenderer` / `ContainerPropertyRenderer` 与 `registerBuiltinTypeRenderers`。
+- 删除 `FilePicker::render` 与 `FileExplorer::render`（含 `FileExplorer.Render.cpp`）；`FilePicker` 类型 / `open*` 仍作 handler 缺失 fallback。
+- 未摘 `imgui-local`（texture bridge / debug helpers）。
+- 验证：`UIDesignerPanelTest.FindByChildPath*` / `ApplyWidgetDrop*`；`ya-game-editor` 构建。
+
+### E3 保留项
+
+- 不合并 `GUIApp` 与 `ya::App`；不拆 WidgetTree。
+- Windows / OpenGL 门禁仍在线外。
+- 未宣称 retained editor ready；未宣称可删 `imgui-local`。
+
 ## E2 当前 checkpoint（2026-09-06）
 
 - Toolbar Play / Simulate / Stop 用 `UIImage` + `editor_icons` 路径，不再纯文字块。

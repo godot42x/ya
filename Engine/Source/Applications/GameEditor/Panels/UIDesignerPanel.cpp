@@ -160,20 +160,25 @@ const Rect2D* UIDesignerPanel::getSelectedLayoutRect() const
     return &_selected->_layoutRect;
 }
 
-void UIDesignerPanel::selectByChildPath(const std::vector<size_t>& path)
+UIElement* UIDesignerPanel::findByChildPath(const std::vector<size_t>& path) const
 {
     if (!_previewRoot) {
-        return;
+        return nullptr;
     }
     UIElement* node = _previewRoot.get();
     for (const size_t index : path) {
         const auto& children = node->getChildren();
         if (index >= children.size()) {
-            return;
+            return nullptr;
         }
         node = children[index].get();
     }
-    _selected = node;
+    return node;
+}
+
+void UIDesignerPanel::selectByChildPath(const std::vector<size_t>& path)
+{
+    _selected = findByChildPath(path);
 }
 
 void UIDesignerPanel::clearDocument()

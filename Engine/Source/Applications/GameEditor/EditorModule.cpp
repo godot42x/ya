@@ -21,7 +21,6 @@
 #include "GameEditor/Input/EditorInputNode.h"
 #include "GameEditor/UI/EditorSurface.h"
 #include "GameEditor/UI/EditorTabSpawnerRegistry.h"
-#include "GameEditor/Inspector/TypeRenderer.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "Render3D/Debug/PhysicsDebugDraw.h"
 #include "Render2D/Render2D.h"
@@ -735,7 +734,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         YA_CORE_ASSERT(renderRuntime, "Editor extension requires an initialized RenderRuntime");
 
         GuiSystem::get().init(renderServices.getRender(), nullptr);
-        registerBuiltinTypeRenderers();
 
         _layer = std::make_unique<EditorLayer>(&app);
         initializeEditorCamera(app, *_layer);

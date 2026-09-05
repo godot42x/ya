@@ -67,4 +67,112 @@ TEST(UIDesignerPanelTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceOfTruth)
     EXPECT_FLOAT_EQ(afterSecond->extent.y, 40.0f);
 }
 
+TEST(UIDesignerPanelTest, FindByChildPathResolvesRootAndNestedWidgets)
+{
+    auto& registry = UITypeRegistry::instance();
+    auto  root     = registry.createInstance(kTypeIdPanel);
+    auto  child    = registry.createInstance(kTypeIdPanel);
+    ASSERT_NE(root, nullptr);
+    ASSERT_NE(child, nullptr);
+    root->_name  = "Root";
+    child->_name = "Child";
+    root->addDetachedChild(child);
+
+    auto document = UIDocument::fromWidget(*root);
+    ASSERT_NE(document, nullptr);
+
+    UIDesignerPanel designer(nullptr);
+    designer.openDocument(document);
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+
+    UIElement* previewRoot = designer.findByChildPath({});
+    ASSERT_NE(previewRoot, nullptr);
+    EXPECT_EQ(previewRoot, designer.getPreviewRoot());
+    EXPECT_EQ(previewRoot->_name, "Root");
+
+    UIElement* previewChild = designer.findByChildPath({0});
+    ASSERT_NE(previewChild, nullptr);
+    EXPECT_EQ(previewChild->_name, "Child");
+    EXPECT_EQ(designer.findByChildPath({1}), nullptr);
+}
+
+TEST(UIDesignerPanelTest, ApplyWidgetDropReordersPreviewSiblings)
+{
+    auto& registry = UITypeRegistry::instance();
+    auto  root     = registry.createInstance(kTypeIdPanel);
+    auto  first    = registry.createInstance(kTypeIdPanel);
+    auto  second   = registry.createInstance(kTypeIdPanel);
+    ASSERT_NE(root, nullptr);
+    ASSERT_NE(first, nullptr);
+    ASSERT_NE(second, nullptr);
+    root->_name   = "Root";
+    first->_name  = "First";
+    second->_name = "Second";
+    root->addDetachedChild(first);
+    root->addDetachedChild(second);
+
+    auto document = UIDocument::fromWidget(*root);
+    ASSERT_NE(document, nullptr);
+
+    UIDesignerPanel designer(nullptr);
+    designer.openDocument(document);
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+
+    UIElement* previewFirst  = designer.findByChildPath({0});
+    UIElement* previewSecond = designer.findByChildPath({1});
+    ASSERT_NE(previewFirst, nullptr);
+    ASSERT_NE(previewSecond, nullptr);
+    EXPECT_EQ(previewFirst->_name, "First");
+    EXPECT_EQ(previewSecond->_name, "Second");
+
+    designer.applyWidgetDrop(previewFirst, *previewSecond, UIDesignerPanel::EDropPos::After);
+
+    UIElement* after0 = designer.findByChildPath({0});
+    UIElement* after1 = designer.findByChildPath({1});
+    ASSERT_NE(after0, nullptr);
+    ASSERT_NE(after1, nullptr);
+    EXPECT_EQ(after0->_name, "Second");
+    EXPECT_EQ(after1->_name, "First");
+}
+
+TEST(UIDesignerPanelTest, ApplyWidgetDropIntoNestsChild)
+{
+    auto& registry = UITypeRegistry::instance();
+    auto  root     = registry.createInstance(kTypeIdPanel);
+    auto  first    = registry.createInstance(kTypeIdPanel);
+    auto  second   = registry.createInstance(kTypeIdPanel);
+    ASSERT_NE(root, nullptr);
+    ASSERT_NE(first, nullptr);
+    ASSERT_NE(second, nullptr);
+    root->_name   = "Root";
+    first->_name  = "First";
+    second->_name = "Second";
+    root->addDetachedChild(first);
+    root->addDetachedChild(second);
+
+    auto document = UIDocument::fromWidget(*root);
+    ASSERT_NE(document, nullptr);
+
+    UIDesignerPanel designer(nullptr);
+    designer.openDocument(document);
+    (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
+
+    UIElement* previewRoot   = designer.getPreviewRoot();
+    UIElement* previewFirst  = designer.findByChildPath({0});
+    UIElement* previewSecond = designer.findByChildPath({1});
+    ASSERT_NE(previewRoot, nullptr);
+    ASSERT_NE(previewFirst, nullptr);
+    ASSERT_NE(previewSecond, nullptr);
+
+    designer.applyWidgetDrop(previewSecond, *previewFirst, UIDesignerPanel::EDropPos::Into);
+
+    EXPECT_EQ(previewRoot->getChildren().size(), 1u);
+    UIElement* nestedParent = designer.findByChildPath({0});
+    UIElement* nestedChild  = designer.findByChildPath({0, 0});
+    ASSERT_NE(nestedParent, nullptr);
+    ASSERT_NE(nestedChild, nullptr);
+    EXPECT_EQ(nestedParent->_name, "First");
+    EXPECT_EQ(nestedChild->_name, "Second");
+}
+
 } // namespace ya

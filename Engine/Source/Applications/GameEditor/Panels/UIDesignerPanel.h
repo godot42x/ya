@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace ya
 {
@@ -83,6 +84,8 @@ struct UIDesignerPanel
     /// root (the Scene Hierarchy's entry tree uses this to jump into the
     /// designer document).
     void selectByChildPath(const std::vector<size_t>& path);
+    /// Resolve a child-index path from the preview root (`{}` is the root).
+    [[nodiscard]] UIElement* findByChildPath(const std::vector<size_t>& path) const;
     /// Mark the preview layout dirty (called after direct edits so the next
     /// snapshot reflects them).
     void invalidatePreview();

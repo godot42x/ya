@@ -5,7 +5,6 @@
 #include "Core/Config/ConfigManager.h"
 #include "Core/System/PathUtils.h"
 #include "Core/System/VirtualFileSystem.h"
-#include "GameEditor/ImGui/ImGuiHelper.h"
 
 #include <algorithm>
 #include <format>

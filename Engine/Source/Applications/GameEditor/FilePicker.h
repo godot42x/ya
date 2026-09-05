@@ -28,9 +28,8 @@ struct FilePicker
     using SaveCallback = std::function<void(const std::string &dir, const std::string &filename)>;
 
   private:
-    bool        _isOpen       = false;
-    bool        _pendingClose = false;
-    std::string _title        = "Select File";
+    bool        _isOpen = false;
+    std::string _title  = "Select File";
 
     FileExplorer _fileExplorer;
     Callback     _onConfirm;
@@ -79,11 +78,6 @@ struct FilePicker
     void close();
 
     /**
-     * @brief 渲染选择器界面（需要每帧调用）
-     */
-    void render();
-
-    /**
      * @brief 检查是否打开
      */
     bool isOpen() const { return _isOpen; }
@@ -122,10 +116,7 @@ struct FilePicker
     void openSceneSavePicker(const std::string &defaultName,
                              SaveCallback       onConfirm);
 
-
     void applyCommonSettings();
-    void renderFileSelectContent();
-    void renderSceneSaveContent();
 };
 
 } // namespace ya

@@ -1,5 +1,7 @@
 #include "GameEditor/FileExplorerInternal.h"
 
+#include <cstring>
+
 namespace ya
 {
 
