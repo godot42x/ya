@@ -20,6 +20,7 @@
 #include "Core/Common/Types.h"
 #include "Core/Event.h"
 #include "Core/Reflection/Reflection.h"
+#include "GUI/Widgets/DragDropOperation.h"
 #include "GUI/Widgets/UIBehavior.h"
 
 #include <glm/glm.hpp>
@@ -104,13 +105,6 @@ enum class ECursorType : uint8_t
 };
 
 struct WidgetTree;
-struct UIDragDropOperation
-{
-    std::string typeId = "text";
-    std::string payload;
-    std::string ghostLabel;
-};
-using UIDragDropOperationRef = std::shared_ptr<UIDragDropOperation>;
 struct FDragDetectedEvent
 {
     glm::vec2 startPoint{};
@@ -466,16 +460,13 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// outside the parent rect.
     [[nodiscard]] virtual bool cullsChildHits(const glm::vec2& /*logicalPoint*/) const { return false; }
 
-    // === Drag & drop target hooks (gui-app-bootstrap Phase 4) ===
-    /// Whether this widget accepts a drag payload at `logicalPoint` (the
-    /// tree highlights it as a valid drop target during a drag session).
-    [[nodiscard]] virtual bool canAcceptDrop(const std::string& payload,
-                                             const glm::vec2& logicalPoint);
+    // === Drag & drop target hooks ===
+    /// Whether this widget accepts the in-flight operation at `logicalPoint`
+    /// (the tree highlights it as a valid drop target during a drag session).
     [[nodiscard]] virtual bool canAcceptDrop(const UIDragDropOperation& operation,
                                              const glm::vec2& logicalPoint);
     /// Called when a drag session is released over this target (only after
     /// canAcceptDrop returned true for that point).
-    virtual void onDrop(const std::string& payload, const glm::vec2& logicalPoint);
     virtual void onDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
     /// Visual feedback while the drag hovers this target (cleared on leave /
     /// drop / cancel). Targets with a point-SENSITIVE preview (e.g. a dock
@@ -486,8 +477,6 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// every pointer move while this widget is the active drop target (the
     /// tree calls it after setDropHighlight(true) and on each move). Default:
     /// no-op — targets without a moving preview keep using setDropHighlight.
-    virtual void updateDropHover(const std::string& payload,
-                                 const glm::vec2& logicalPoint);
     virtual void updateDropHover(const UIDragDropOperation& operation,
                                  const glm::vec2& logicalPoint);
     /// Start an operation owned by the widget tree. Any UIElement may invoke

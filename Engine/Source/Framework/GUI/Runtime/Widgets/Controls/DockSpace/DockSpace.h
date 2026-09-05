@@ -4,6 +4,7 @@
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Theme.h"
+#include "GUI/Widgets/DragDropOperation.h"
 
 #include <memory>
 #include <optional>
@@ -18,6 +19,25 @@ struct UIContainer;
 struct UISplitPane;
 struct UITabBar;
 struct FDockContext;
+
+/// Typed drag payload for a dock panel (UE `FTabDragDropOp` analog).
+/// Drop targets `as<FDockPanelDragDropOp>()` instead of parsing a string prefix.
+struct YA_GUI_API FDockPanelDragDropOp : public UIDragDropOperation
+{
+    static constexpr const char* kTypeId = "ya.dock.panel";
+    DockPanelId panelId = kInvalidDockPanelId;
+
+    FDockPanelDragDropOp() { typeId = kTypeId; }
+    ~FDockPanelDragDropOp() override;
+
+    static UIDragDropOperationRef make(DockPanelId panelId, std::string ghostLabel)
+    {
+        auto operation = std::make_shared<FDockPanelDragDropOp>();
+        operation->panelId = panelId;
+        operation->ghostLabel = std::move(ghostLabel);
+        return operation;
+    }
+};
 
 /// In-window projection of `FDockContext`'s docked tree.
 /// Nested UISplitPanes + tab groups fill this widget. The context owns the
@@ -42,9 +62,6 @@ struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSp
     /// Add a panel through the context (its widget becomes that leaf's active
     /// content when its tab is selected).
     void addPanel(const std::string& name, std::shared_ptr<UIElement> widget);
-
-    /// Payload prefix carried by tab-drag sessions.
-    static constexpr const char* kDockPanelPayload = "dock-panel:";
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
@@ -113,7 +130,7 @@ struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSp
     void setDropPreview(const FDropPreview& preview);
     /// Resolve the drop-preview for a payload at a point (used by external drop
     /// targets such as floating windows to decide whether a drop is accepted).
-    [[nodiscard]] std::optional<FDropPreview> dropPreviewFor(const std::string& payload,
+    [[nodiscard]] std::optional<FDropPreview> dropPreviewFor(const UIDragDropOperation& operation,
                                                              const glm::vec2& logicalPoint) const;
 
 private:
@@ -139,7 +156,6 @@ private:
     [[nodiscard]] const FLeafView* leafViewForLeaf(DockNodeId leafId) const;
     [[nodiscard]] std::optional<FDropPreview> resolveDropPreview(const glm::vec2& logicalPoint,
                                                                  DockPanelId panelId) const;
-    [[nodiscard]] bool parsePanelPayload(const std::string& payload, DockPanelId& panelId) const;
     void clearPreview();
     void syncPreviewOverlay();
 

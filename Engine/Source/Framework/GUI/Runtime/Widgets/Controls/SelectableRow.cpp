@@ -27,11 +27,10 @@ struct FSelectableRowDragDropBehavior final : public UIDragSourceBehavior
             if (!row || !row->_bDraggable) {
                 return nullptr;
             }
-            auto operation = std::make_shared<UIDragDropOperation>();
-            operation->typeId = "selectable-row";
-            operation->payload = row->_dragPayload.empty() ? row->_itemId : row->_dragPayload;
-            operation->ghostLabel = row->_dragGhostLabel.empty() ? row->_itemId : row->_dragGhostLabel;
-            return operation;
+            return UIStringDragDropOperation::make(
+                row->_dragPayload.empty() ? row->_itemId : row->_dragPayload,
+                row->_dragGhostLabel.empty() ? row->_itemId : row->_dragGhostLabel,
+                "ya.selectable.row");
         };
     }
 };
@@ -40,16 +39,19 @@ struct FSelectableRowDropTargetBehavior final : public UIDropTargetBehavior
 {
     FSelectableRowDropTargetBehavior()
     {
-        acceptPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* row = dynamic_cast<UISelectableRow*>(&owner);
-            return row && row->_bDraggable && owner.hitTestLayoutRect(logicalPoint) && !payload.empty() && payload != row->_itemId;
+            const auto* textOp = operation.as<UIStringDragDropOperation>();
+            return row && row->_bDraggable && owner.hitTestLayoutRect(logicalPoint) &&
+                   textOp && !textOp->text.empty() && textOp->text != row->_itemId;
         };
-        handleDroppedPayload = [](UIElement& owner, const std::string& payload, const glm::vec2&)
+        handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2&)
         {
             if (auto* row = dynamic_cast<UISelectableRow*>(&owner)) {
-                if (row->_onDropped) {
-                    row->_onDropped(payload);
+                const auto* textOp = operation.as<UIStringDragDropOperation>();
+                if (row->_onDropped && textOp) {
+                    row->_onDropped(textOp->text);
                 }
             }
         };

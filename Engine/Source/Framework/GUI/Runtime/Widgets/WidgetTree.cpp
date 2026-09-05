@@ -1,5 +1,6 @@
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "GUI/Widgets/DragDropOperation.h"
 
 #include "Core/Log.h"
 #include "Core/Profiling/PerfState.h"
@@ -1435,10 +1436,11 @@ void WidgetTree::beginDrag(UIElement* source,
                            bool bShowGhost,
                            bool bSkipSourceInHitTest)
 {
-    auto operation = std::make_shared<UIDragDropOperation>();
-    operation->payload = std::move(payload);
-    operation->ghostLabel = std::move(ghostLabel);
-    beginDrag(source, std::move(operation), std::move(observer), bShowGhost, bSkipSourceInHitTest);
+    beginDrag(source,
+              UIStringDragDropOperation::make(std::move(payload), std::move(ghostLabel)),
+              std::move(observer),
+              bShowGhost,
+              bSkipSourceInHitTest);
 }
 
 void WidgetTree::beginDrag(UIElement* source,
@@ -1458,7 +1460,6 @@ void WidgetTree::beginDrag(UIElement* source,
     // source subtree (dock floating-window re-sync) before onFinished runs.
     _dragSourceKeepAlive = source ? source->shared_from_this() : nullptr;
     _dragOperation = std::move(operation);
-    _dragPayload = _dragOperation->payload;
     _dragPoint   = {};
     _dragObserver = std::move(observer);
     _bDragSkipSource = bSkipSourceInHitTest;
@@ -1553,7 +1554,7 @@ void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
         _dragObserver.onTargetChanged(previousTargetName, currentTargetName);
     }
     if (_dragObserver.onMove) {
-        _dragObserver.onMove(_dragPayload, logicalPoint, currentTargetName);
+        _dragObserver.onMove(*_dragOperation, logicalPoint, currentTargetName);
     }
 }
 
@@ -1563,13 +1564,12 @@ void WidgetTree::clearDragSession()
         _dragDropTarget->setDropHighlight(false);
         _dragDropTarget = nullptr;
     }
-    _dragPayload.clear();
     _dragOperation.reset();
     _dragSource = nullptr;
     _dragCandidate = nullptr;
     _bDragSkipSource = false;
     if (_dragGhost && _dragGhost->isAttached()) {
-        detach(*_dragGhost); // payload already cleared: no recursive cancel
+        detach(*_dragGhost); // operation already cleared: no recursive cancel
     }
     _dragGhost.reset();
 }
@@ -1582,7 +1582,6 @@ void WidgetTree::endDrag(const glm::vec2& logicalPoint)
     UIElement*       target  = findDropTarget(logicalPoint);
     UIElementRef      targetKeepAlive = target ? target->shared_from_this() : nullptr;
     UIDragDropOperationRef operation = _dragOperation;
-    const std::string payload = _dragPayload;
     const std::string targetName = target ? target->_name : std::string{};
     DragSessionObserver observer = std::move(_dragObserver);
     // Hold the source alive through onDrop + onFinished: the drop handler can

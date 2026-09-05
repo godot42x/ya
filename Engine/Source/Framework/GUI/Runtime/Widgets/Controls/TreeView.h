@@ -15,6 +15,24 @@
 namespace ya
 {
 
+/// Typed drag payload for tree-row reorder (not a `"tree-node:"` string prefix).
+struct YA_GUI_API FTreeReorderDragDropOp : public UIDragDropOperation
+{
+    static constexpr const char* kTypeId = "ya.tree.reorder";
+    std::string rowId;
+
+    FTreeReorderDragDropOp() { typeId = kTypeId; }
+    ~FTreeReorderDragDropOp() override;
+
+    static UIDragDropOperationRef make(std::string rowId, std::string ghostLabel = {})
+    {
+        auto operation = std::make_shared<FTreeReorderDragDropOp>();
+        operation->rowId = std::move(rowId);
+        operation->ghostLabel = ghostLabel.empty() ? operation->rowId : std::move(ghostLabel);
+        return operation;
+    }
+};
+
 /// Data-driven tree view (hierarchy panel first brick): a tree list with
 /// selection and expand/collapse, built on the reactive data-source contract.
 ///
@@ -142,8 +160,6 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
         int          depth = 0;
     };
 
-    /// Payload prefix carried by reorder drag sessions from this tree.
-    static constexpr const char* kReorderPayloadPrefix = "tree-node:";
     /// Hard cap on data depth (defensive: cyclic node data must never
     /// recurse forever in flatten / filter walks).
     static constexpr int kMaxDepth = 64;

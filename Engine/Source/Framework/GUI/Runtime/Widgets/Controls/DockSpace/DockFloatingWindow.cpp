@@ -113,25 +113,25 @@ struct FDockFloatingWindowDropTargetBehavior final : public UIDropTargetBehavior
 {
     FDockFloatingWindowDropTargetBehavior()
     {
-        acceptPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* window = dynamic_cast<UIDockFloatingWindow*>(&owner);
             UIDockSpace* space = window && window->_context ? window->_context->dockSpace() : nullptr;
             if (!space) {
                 return false;
             }
-            const auto preview = space->dropPreviewFor(payload, logicalPoint);
+            const auto preview = space->dropPreviewFor(operation, logicalPoint);
             return preview.has_value() && preview->bMerge &&
                    preview->targetFloatingId == window->_floatingId && !preview->bDisabled;
         };
-        handleDroppedPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* window = dynamic_cast<UIDockFloatingWindow*>(&owner);
             if (!window) {
                 return;
             }
             if (UIDockSpace* space = window->_context ? window->_context->dockSpace() : nullptr) {
-                space->onDrop(payload, logicalPoint);
+                space->onDrop(operation, logicalPoint);
             }
         };
     }
@@ -149,10 +149,9 @@ struct FDockFloatingWindowPanelDragBehavior final : public UIBehavior
         owner._bDockDragging = true;
         owner._bTitlePressed = false;
         owner._bTitleMoving  = false;
-        const std::string payload = std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelId);
         DragSessionObserver observer;
         auto lastPreview = std::make_shared<std::optional<UIDockSpace::FDropPreview>>();
-        observer.onMove = [&owner, payload, lastPreview](const std::string&, const glm::vec2& logicalPoint, std::string_view)
+        observer.onMove = [&owner, lastPreview](const UIDragDropOperation& operation, const glm::vec2& logicalPoint, std::string_view)
         {
             if (owner._lastDragPoint) {
                 Rect2D moved = owner.getWindowRect();
@@ -170,7 +169,7 @@ struct FDockFloatingWindowPanelDragBehavior final : public UIBehavior
             if (!space) {
                 return;
             }
-            space->updateDropHover(payload, logicalPoint);
+            space->updateDropHover(operation, logicalPoint);
             if (space->hasDropPreview()) {
                 *lastPreview = space->dropPreview();
             }
@@ -188,7 +187,7 @@ struct FDockFloatingWindowPanelDragBehavior final : public UIBehavior
             }
             owner.refreshFromContext();
         };
-        tree->beginDrag(&owner, payload, std::move(label), std::move(observer), false, true);
+        tree->beginDrag(&owner, FDockPanelDragDropOp::make(panelId, std::move(label)), std::move(observer), false, true);
     }
 };
 

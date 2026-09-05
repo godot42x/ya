@@ -141,15 +141,17 @@ struct TestDropTarget final : public UIElement
     int drops = 0;
     std::string lastPayload;
 
-    bool canAcceptDrop(const std::string&, const glm::vec2& point) override
+    bool canAcceptDrop(const UIDragDropOperation&, const glm::vec2& point) override
     {
         return bAccept && hitTestLayoutRect(point);
     }
 
-    void onDrop(const std::string& payload, const glm::vec2&) override
+    void onDrop(const UIDragDropOperation& operation, const glm::vec2&) override
     {
         ++drops;
-        lastPayload = payload;
+        if (const auto* text = operation.as<UIStringDragDropOperation>()) {
+            lastPayload = text->text;
+        }
     }
 
     void setDropHighlight(bool bHighlight) override
@@ -157,6 +159,13 @@ struct TestDropTarget final : public UIElement
         (void)bHighlight;
         ++highlightChanges;
     }
+};
+
+struct FAssetTestDragDropOp : public UIDragDropOperation
+{
+    static constexpr const char* kTypeId = "test.asset";
+    int assetId = 0;
+    FAssetTestDragDropOp() { typeId = kTypeId; }
 };
 
 struct OperationDropTarget final : public UIElement
@@ -167,11 +176,13 @@ struct OperationDropTarget final : public UIElement
     bool canAcceptDrop(const UIDragDropOperation& operation, const glm::vec2&) override
     {
         receivedType = operation.typeId;
-        return operation.typeId == "test.asset";
+        return operation.as<FAssetTestDragDropOp>() != nullptr;
     }
     void onDrop(const UIDragDropOperation& operation, const glm::vec2&) override
     {
-        accepted = operation.payload == "asset:42";
+        if (const auto* asset = operation.as<FAssetTestDragDropOp>()) {
+            accepted = asset->assetId == 42;
+        }
     }
 };
 
@@ -181,11 +192,7 @@ struct DragDetectWidget final : public UIElement
     UIDragDropOperationRef onDragDetected(const FDragDetectedEvent& event) override
     {
         detected = event.currentPoint.x > event.startPoint.x;
-        auto op = std::make_shared<UIDragDropOperation>();
-        op->typeId = "test.detected";
-        op->payload = "detected";
-        op->ghostLabel = "Detected";
-        return op;
+        return UIStringDragDropOperation::make("detected", "Detected", "test.detected");
     }
     bool detected = false;
 };
@@ -270,9 +277,9 @@ struct TestDragBehavior final : public UIBehavior
         if (!bSource) {
             return nullptr;
         }
-        auto op = std::make_shared<UIDragDropOperation>();
+        auto op = std::make_shared<UIStringDragDropOperation>();
         op->typeId = "behavior.payload";
-        op->payload = payload.empty() ? "behavior.payload.1" : payload;
+        op->text = payload.empty() ? "behavior.payload.1" : payload;
         op->ghostLabel = "Behavior";
         return op;
     }
@@ -286,7 +293,8 @@ struct TestDragBehavior final : public UIBehavior
     void onDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint) override
     {
         (void)owner; (void)logicalPoint;
-        dropped = operation.payload == (payload.empty() ? "behavior.payload.1" : payload);
+        const auto* text = operation.as<UIStringDragDropOperation>();
+        dropped = text && text->text == (payload.empty() ? "behavior.payload.1" : payload);
     }
 
     void setDropHighlight(UIElement& owner, bool bHighlight) override
@@ -390,9 +398,8 @@ TEST(WidgetTreeTest, DragOperationReachesTypedDropTarget)
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
     tree.layout();
 
-    auto operation = std::make_shared<UIDragDropOperation>();
-    operation->typeId = "test.asset";
-    operation->payload = "asset:42";
+    auto operation = std::make_shared<FAssetTestDragDropOp>();
+    operation->assetId = 42;
     operation->ghostLabel = "Asset";
     tree.beginDrag(nullptr, operation, {}, false);
     tree.updateDrag({80.0f, 80.0f});
@@ -427,9 +434,8 @@ TEST(WidgetTreeTest, DragGhostLabelUsesCanvasSlotInsteadOfChildZeroSize)
     FCanvasSlotArgs sourceSlot; sourceSlot.offset = {20.0f, 20.0f}; sourceSlot.fixedSize = {120.0f, 80.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot).valid());
 
-    auto operation = std::make_shared<UIDragDropOperation>();
-    operation->typeId = "test.asset";
-    operation->payload = "asset:42";
+    auto operation = std::make_shared<FAssetTestDragDropOp>();
+    operation->assetId = 42;
     operation->ghostLabel = "Ghost";
     tree.beginDrag(source.get(), operation, {}, true);
     (void)tree.buildSnapshot(UIFrameBuildContext{});
@@ -1758,7 +1764,7 @@ TEST(WidgetTreeTest, DragOverDockSetsPointSensitiveDropPreview)
     FCanvasSlotArgs sourceSlot; sourceSlot.offset = {10.0f, 10.0f}; sourceSlot.fixedSize = {30.0f, 30.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
     tree.buildSnapshot(UIFrameBuildContext{});
-    tree.beginDrag(source.get(), std::string(UIDockSpace::kDockPanelPayload) + std::to_string(id), "Scene",
+    tree.beginDrag(source.get(), FDockPanelDragDropOp::make(id, "Scene"),
                    {}, /*bShowGhost=*/true, /*bSkipSourceInHitTest=*/true);
     tree.updateDrag({400.0f, 300.0f}); // center -> merge preview on the leaf
     EXPECT_TRUE(dock->hasDropPreview());
@@ -1823,7 +1829,7 @@ TEST(WidgetTreeTest, DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTa
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
     tree.buildSnapshot(UIFrameBuildContext{});
 
-    tree.beginDrag(source.get(), std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelBId), "SceneB",
+    tree.beginDrag(source.get(), FDockPanelDragDropOp::make(panelBId, "SceneB"),
                    {}, /*bShowGhost=*/true, /*bSkipSourceInHitTest=*/true);
     tree.updateDrag({180.0f, 180.0f});
     ASSERT_TRUE(tree.isDragging());
@@ -1861,7 +1867,9 @@ TEST(WidgetTreeTest, DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget)
     tabBar->_onTabDragBegin(0, "Scene");
     ASSERT_TRUE(tree.isDragging());
     EXPECT_EQ(tree.getDragSource(), dock.get());
-    EXPECT_EQ(tree.getDragPayload(), std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelId));
+    const auto* sessionOp = tree.getDragOperation() ? tree.getDragOperation()->as<FDockPanelDragDropOp>() : nullptr;
+    ASSERT_NE(sessionOp, nullptr);
+    EXPECT_EQ(sessionOp->panelId, panelId);
 
     tree.endDrag({520.0f, 410.0f});
     EXPECT_FALSE(tree.isDragging());
@@ -1900,7 +1908,9 @@ TEST(WidgetTreeTest, FloatingWindowTabDragBehaviorStartsDockPanelSession)
     tabBar->_onTabDragBegin(0, "Scene");
     ASSERT_TRUE(tree.isDragging());
     EXPECT_EQ(tree.getDragSource(), floating.get());
-    EXPECT_EQ(tree.getDragPayload(), std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelId));
+    const auto* sessionOp = tree.getDragOperation() ? tree.getDragOperation()->as<FDockPanelDragDropOp>() : nullptr;
+    ASSERT_NE(sessionOp, nullptr);
+    EXPECT_EQ(sessionOp->panelId, panelId);
 
     tree.endDrag({9000.0f, 9000.0f});
     EXPECT_FALSE(tree.isDragging());
@@ -1923,8 +1933,10 @@ TEST(WidgetTreeTest, DragObserverReceivesEveryMoveAndTargetChanges)
     std::vector<glm::vec2> moves;
     std::vector<std::string> observations;
     DragSessionObserver observer;
-    observer.onMove = [&](const std::string& payload, const glm::vec2& point, std::string_view target) {
-        EXPECT_EQ(payload, "panel");
+    observer.onMove = [&](const UIDragDropOperation& operation, const glm::vec2& point, std::string_view target) {
+        const auto* text = operation.as<UIStringDragDropOperation>();
+        ASSERT_NE(text, nullptr);
+        EXPECT_EQ(text->text, "panel");
         moves.push_back(point);
         observations.emplace_back(target);
     };
@@ -1993,7 +2005,7 @@ TEST(WidgetTreeTest, DragObserverDistinguishesDropNoTargetAndCancel)
     EXPECT_TRUE(names[2].empty());
     EXPECT_FALSE(tree.isDragging());
     EXPECT_EQ(tree.getDragSource(), nullptr);
-    EXPECT_TRUE(tree.getDragPayload().empty());
+    EXPECT_EQ(tree.getDragOperation(), nullptr);
 }
 
 // === UITypeRegistry ===

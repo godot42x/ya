@@ -625,21 +625,21 @@ void UIElement::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&
     (void)tree;
 }
 
-bool UIElement::canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint)
+bool UIElement::canAcceptDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
     for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->canAcceptDrop(*this, payload, logicalPoint)) {
+        if (behavior && behavior->canAcceptDrop(*this, operation, logicalPoint)) {
             return true;
         }
     }
     return false;
 }
 
-void UIElement::onDrop(const std::string& payload, const glm::vec2& logicalPoint)
+void UIElement::onDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
     for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->canAcceptDrop(*this, payload, logicalPoint)) {
-            behavior->onDrop(*this, payload, logicalPoint);
+        if (behavior && behavior->canAcceptDrop(*this, operation, logicalPoint)) {
+            behavior->onDrop(*this, operation, logicalPoint);
             return;
         }
     }
@@ -654,37 +654,6 @@ void UIElement::setDropHighlight(bool bHighlight)
     }
 }
 
-void UIElement::updateDropHover(const std::string& payload, const glm::vec2& logicalPoint)
-{
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->canAcceptDrop(*this, payload, logicalPoint)) {
-            behavior->updateDropHover(*this, payload, logicalPoint);
-            return;
-        }
-    }
-}
-
-bool UIElement::canAcceptDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
-{
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->canAcceptDrop(*this, operation, logicalPoint)) {
-            return true;
-        }
-    }
-    return canAcceptDrop(operation.payload, logicalPoint);
-}
-
-void UIElement::onDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
-{
-    for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->canAcceptDrop(*this, operation, logicalPoint)) {
-            behavior->onDrop(*this, operation, logicalPoint);
-            return;
-        }
-    }
-    onDrop(operation.payload, logicalPoint);
-}
-
 void UIElement::updateDropHover(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
     for (const UIBehaviorRef& behavior : _behaviors) {
@@ -693,7 +662,6 @@ void UIElement::updateDropHover(const UIDragDropOperation& operation, const glm:
             return;
         }
     }
-    updateDropHover(operation.payload, logicalPoint);
 }
 
 bool UIElement::beginDragOperation(UIDragDropOperationRef operation,

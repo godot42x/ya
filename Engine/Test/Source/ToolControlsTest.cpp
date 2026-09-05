@@ -759,7 +759,9 @@ TEST(ToolControlsTest, SelectableRowDraggableRowsUseBehaviorBackedDragDrop)
               EWidgetRouteResult::HandledExclusive);
     ASSERT_TRUE(tree.isDragging());
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
-    EXPECT_EQ(tree.getDragPayload(), "payload.source");
+    const auto* sourceOp = tree.getDragOperation() ? tree.getDragOperation()->as<UIStringDragDropOperation>() : nullptr;
+    ASSERT_NE(sourceOp, nullptr);
+    EXPECT_EQ(sourceOp->text, "payload.source");
 
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(260.0f, 12.0f), pointAt(260.0f, 12.0f)),
               EWidgetRouteResult::HandledExclusive);
@@ -802,7 +804,9 @@ TEST(ToolControlsTest, TreeViewReorderUsesBehaviorBackedDragDrop)
               EWidgetRouteResult::HandledExclusive);
     ASSERT_TRUE(tree.isDragging());
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
-    EXPECT_EQ(tree.getDragPayload(), "tree-node:node.1");
+    const auto* reorderOp = tree.getDragOperation() ? tree.getDragOperation()->as<FTreeReorderDragDropOp>() : nullptr;
+    ASSERT_NE(reorderOp, nullptr);
+    EXPECT_EQ(reorderOp->rowId, "node.1");
 
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(80.0f, 48.0f), pointAt(80.0f, 48.0f)),
               EWidgetRouteResult::HandledExclusive);

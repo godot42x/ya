@@ -92,7 +92,7 @@ enum class EDragFinishResult : uint8_t
 /// callback.
 struct DragSessionObserver
 {
-    std::function<void(const std::string& payload,
+    std::function<void(const UIDragDropOperation& operation,
                        const glm::vec2& logicalPoint,
                        std::string_view targetName)> onMove;
     std::function<void(std::string_view previousTarget,
@@ -307,12 +307,14 @@ struct YA_GUI_API WidgetTree final
     /// pointer moves (ghost + drop-target highlight), releases (drop) and
     /// presses/Esc (cancel).
     [[nodiscard]] bool isDragging() const { return static_cast<bool>(_dragOperation); }
-    /// Start a drag session from `source` with a string payload; a ghost
-    /// (Panel + label) follows the pointer on the DragIme layer unless
-    /// `bShowGhost` is false (the source itself follows the pointer instead,
-    /// e.g. a dock floating window). While the session is active, the drag
-    /// SOURCE subtree is skipped by the hit walk so the widgets beneath it
-    /// stay reachable as drop targets.
+    /// Start a drag session from `source` with a string payload wrapped as
+    /// `UIStringDragDropOperation` (typeId `"text"`). Prefer the operation
+    /// overload for typed domain payloads. A ghost (Panel + label) follows
+    /// the pointer on the DragIme layer unless `bShowGhost` is false (the
+    /// source itself follows the pointer instead, e.g. a dock floating
+    /// window). While the session is active, the drag SOURCE subtree is
+    /// skipped by the hit walk so the widgets beneath it stay reachable as
+    /// drop targets.
     void beginDrag(UIElement* source,
                    std::string payload,
                    std::string ghostLabel,
@@ -331,7 +333,6 @@ struct YA_GUI_API WidgetTree final
     /// Abort the drag without delivering a drop.
     void cancelDrag();
     [[nodiscard]] UIElement* getDragSource() const { return _dragSource; }
-    [[nodiscard]] const std::string& getDragPayload() const { return _dragPayload; }
     [[nodiscard]] const UIDragDropOperation* getDragOperation() const { return _dragOperation.get(); }
 
   private:
@@ -495,7 +496,6 @@ struct YA_GUI_API WidgetTree final
     /// floating window; containers like DockSpace/TreeView keep their own
     /// subtree hittable).
     bool               _bDragSkipSource = false;
-    std::string       _dragPayload;
     UIDragDropOperationRef _dragOperation;
     glm::vec2         _dragPoint{};
     UIElement*        _dragDropTarget = nullptr;

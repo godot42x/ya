@@ -156,13 +156,10 @@ bool pointInRect(const glm::vec2& point, const Rect2D& rect)
            point.y >= rect.pos.y && point.y <= rect.pos.y + rect.extent.y;
 }
 
-DockPanelId parsePanelId(const std::string& payload)
+DockPanelId panelIdFrom(const UIDragDropOperation& operation)
 {
-    const std::string prefix = UIDockSpace::kDockPanelPayload;
-    if (!payload.starts_with(prefix)) {
-        return kInvalidDockPanelId;
-    }
-    return static_cast<DockPanelId>(std::strtoull(payload.c_str() + prefix.size(), nullptr, 10));
+    const auto* dockOp = operation.as<FDockPanelDragDropOp>();
+    return dockOp ? dockOp->panelId : kInvalidDockPanelId;
 }
 
 std::pair<bool, std::string> rejectForExtent(const Rect2D& rect, const glm::vec2& local)
@@ -246,6 +243,8 @@ TBehavior* findBehavior(UIElement& owner)
 
 } // namespace
 
+FDockPanelDragDropOp::~FDockPanelDragDropOp() = default;
+
 struct FDockSpacePanelDragBehavior final : public UIBehavior
 {
     void beginPanelDrag(UIDockSpace& owner, DockPanelId panelId, std::string label)
@@ -256,7 +255,7 @@ struct FDockSpacePanelDragBehavior final : public UIBehavior
         }
 
         DragSessionObserver observer;
-        observer.onMove = [&owner, panelId](const std::string&, const glm::vec2& logicalPoint, std::string_view)
+        observer.onMove = [&owner, panelId](const UIDragDropOperation&, const glm::vec2& logicalPoint, std::string_view)
         {
             owner._preview = owner.resolveDropPreview(logicalPoint, panelId);
             owner.syncPreviewOverlay();
@@ -277,7 +276,7 @@ struct FDockSpacePanelDragBehavior final : public UIBehavior
                 owner._context->notifyDockLayoutListeners();
             }
         };
-        tree->beginDrag(&owner, std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelId), std::move(label), std::move(observer));
+        tree->beginDrag(&owner, FDockPanelDragDropOp::make(panelId, std::move(label)), std::move(observer));
     }
 };
 
@@ -285,24 +284,24 @@ struct FDockSpaceDropTargetBehavior final : public UIDropTargetBehavior
 {
     FDockSpaceDropTargetBehavior()
     {
-        acceptPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* dock = dynamic_cast<UIDockSpace*>(&owner);
             if (!dock) {
                 return false;
             }
-            DockPanelId panelId = kInvalidDockPanelId;
-            auto preview = dock->parsePanelPayload(payload, panelId) ? dock->resolveDropPreview(logicalPoint, panelId) : std::nullopt;
+            const DockPanelId panelId = panelIdFrom(operation);
+            auto preview = panelId != kInvalidDockPanelId ? dock->resolveDropPreview(logicalPoint, panelId) : std::nullopt;
             return preview.has_value() && !preview->bDisabled && !preview->bChooser;
         };
-        handleDroppedPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* dock = dynamic_cast<UIDockSpace*>(&owner);
             if (!dock) {
                 return;
             }
-            DockPanelId panelId = kInvalidDockPanelId;
-            if (!dock->parsePanelPayload(payload, panelId)) {
+            const DockPanelId panelId = panelIdFrom(operation);
+            if (panelId == kInvalidDockPanelId) {
                 dock->clearPreview();
                 return;
             }
@@ -350,16 +349,16 @@ struct FDockSpaceDropTargetBehavior final : public UIDropTargetBehavior
                 }
             }
         };
-        updateHoverState = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        updateHover = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* dock = dynamic_cast<UIDockSpace*>(&owner);
             if (!dock) {
                 return;
             }
-            DockPanelId panelId = kInvalidDockPanelId;
-            auto        preview = dock->parsePanelPayload(payload, panelId)
-                                    ? dock->resolveDropPreview(logicalPoint, panelId)
-                                    : std::nullopt;
+            const DockPanelId panelId = panelIdFrom(operation);
+            auto              preview = panelId != kInvalidDockPanelId
+                                            ? dock->resolveDropPreview(logicalPoint, panelId)
+                                            : std::nullopt;
             dock->_preview = std::move(preview);
             dock->syncPreviewOverlay();
             dock->markPaintDirty();
@@ -1048,17 +1047,11 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     };
 }
 
-bool UIDockSpace::parsePanelPayload(const std::string& payload, DockPanelId& panelId) const
-{
-    panelId = parsePanelId(payload);
-    return panelId != kInvalidDockPanelId;
-}
-
-std::optional<UIDockSpace::FDropPreview> UIDockSpace::dropPreviewFor(const std::string& payload,
+std::optional<UIDockSpace::FDropPreview> UIDockSpace::dropPreviewFor(const UIDragDropOperation& operation,
                                                                      const glm::vec2& logicalPoint) const
 {
-    DockPanelId panelId = kInvalidDockPanelId;
-    if (!parsePanelPayload(payload, panelId)) {
+    const DockPanelId panelId = panelIdFrom(operation);
+    if (panelId == kInvalidDockPanelId) {
         return std::nullopt;
     }
     return resolveDropPreview(logicalPoint, panelId);

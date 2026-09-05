@@ -11,6 +11,8 @@
 namespace ya
 {
 
+FTreeReorderDragDropOp::~FTreeReorderDragDropOp() = default;
+
 struct FTreeViewReorderDragBehavior final : public UIDragSourceBehavior
 {
     FTreeViewReorderDragBehavior()
@@ -29,10 +31,7 @@ struct FTreeViewReorderDragBehavior final : public UIDragSourceBehavior
             if (!tree || !tree->_bReorderable || tree->_pressRowId.empty()) {
                 return nullptr;
             }
-            auto operation = std::make_shared<UIDragDropOperation>();
-            operation->typeId = "tree.reorder";
-            operation->payload = std::string(UITreeView::kReorderPayloadPrefix) + tree->_pressRowId;
-            operation->ghostLabel = tree->_pressRowId;
+            auto operation = FTreeReorderDragDropOp::make(tree->_pressRowId, tree->_pressRowId);
             tree->_pressRowId.clear();
             return operation;
         };
@@ -52,17 +51,17 @@ struct FTreeViewReorderDropBehavior final : public UIDropTargetBehavior
 {
     FTreeViewReorderDropBehavior()
     {
-        acceptPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* tree = dynamic_cast<UITreeView*>(&owner);
-            if (!tree || !tree->_bReorderable || payload.rfind(UITreeView::kReorderPayloadPrefix, 0) != 0) {
+            if (!tree || !tree->_bReorderable || !operation.as<FTreeReorderDragDropOp>()) {
                 return false;
             }
             int rowIndex = -1;
             int mode     = 0;
             return tree->dropPosition(logicalPoint, rowIndex, mode);
         };
-        handleDroppedPayload = [](UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+        handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* tree = dynamic_cast<UITreeView*>(&owner);
             if (!tree) {
@@ -70,7 +69,11 @@ struct FTreeViewReorderDropBehavior final : public UIDropTargetBehavior
             }
             tree->_dropRowIndex = -1;
             tree->markPaintDirty();
-            const std::string fromId = payload.substr(std::char_traits<char>::length(UITreeView::kReorderPayloadPrefix));
+            const auto* reorder = operation.as<FTreeReorderDragDropOp>();
+            if (!reorder) {
+                return;
+            }
+            const std::string fromId = reorder->rowId;
             int               rowIndex = -1;
             int               mode     = 0;
             if (!tree->dropPosition(logicalPoint, rowIndex, mode)) {
@@ -96,7 +99,7 @@ struct FTreeViewReorderDropBehavior final : public UIDropTargetBehavior
                 }
             }
         };
-        updateHoverState = [](UIElement& owner, const std::string&, const glm::vec2& logicalPoint)
+        updateHover = [](UIElement& owner, const UIDragDropOperation&, const glm::vec2& logicalPoint)
         {
             auto* tree = dynamic_cast<UITreeView*>(&owner);
             if (!tree) {

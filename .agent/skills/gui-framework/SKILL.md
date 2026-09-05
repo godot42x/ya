@@ -78,7 +78,8 @@ Surface 只编排 shell、dock persist、viewport host 和 dialogs。
   candidate；capture/focus/popup/modal/drag 都是 tree 级 route policy。`WidgetTree` 持有
   persistent pointer state、pointer path、focus path 和 route trace；`WidgetTreeDump`
   输出 `pointer`、`focusPath`、`lastRoute`（policy/path/phase/handled/result）。route callback
-  可 detach 自身，executor 会持有 path 并重查 membership。  drag&drop 会话（`beginDrag/updateDrag/endDrag/cancelDrag`，payload 为
+  可 detach 自身，executor 会持有 path 并重查 membership。
+  drag&drop 会话（`beginDrag/updateDrag/endDrag/cancelDrag`，payload 为
   `UIDragDropOperation`）由树管理。扩展靠子类（`FDockPanelDragDropOp` /
   `FTreeReorderDragDropOp` / `UIStringDragDropOperation`），目标用
   `as<T>()` / `isType()`。目标控件实现

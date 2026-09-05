@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Common/Types.h"
+#include "GUI/Widgets/DragDropOperation.h"
 
 #include <functional>
 #include <memory>
@@ -9,8 +10,6 @@ namespace ya
 {
 
 struct UIElement;
-struct UIDragDropOperation;
-using UIDragDropOperationRef = std::shared_ptr<UIDragDropOperation>;
 struct FDragDetectedEvent;
 struct WidgetEventContext;
 class Event;
@@ -30,12 +29,9 @@ struct YA_GUI_API UIBehavior
     virtual bool handleInputEvent(UIElement& owner, const Event& event, const WidgetEventContext& ctx);
     virtual bool bubbleInputEvent(UIElement& owner, const Event& event, const WidgetEventContext& ctx);
 
-    virtual bool canAcceptDrop(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint);
     virtual bool canAcceptDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
-    virtual void onDrop(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint);
     virtual void onDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
     virtual void setDropHighlight(UIElement& owner, bool bHighlight);
-    virtual void updateDropHover(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint);
     virtual void updateDropHover(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
     virtual UIDragDropOperationRef onDragDetected(UIElement& owner, const FDragDetectedEvent& event);
 
@@ -68,15 +64,15 @@ struct YA_GUI_API UIDragSourceBehavior : public UIBehavior
 
 struct YA_GUI_API UIDropTargetBehavior : public UIBehavior
 {
-    std::function<bool(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)> acceptPayload;
-    std::function<void(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)> handleDroppedPayload;
+    std::function<bool(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)> canAccept;
+    std::function<void(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)> handleDrop;
     std::function<void(UIElement& owner, bool bHighlight)> setHighlightState;
-    std::function<void(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)> updateHoverState;
+    std::function<void(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)> updateHover;
 
-    bool canAcceptDrop(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint) override;
-    void onDrop(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint) override;
+    bool canAcceptDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint) override;
+    void onDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint) override;
     void setDropHighlight(UIElement& owner, bool bHighlight) override;
-    void updateDropHover(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint) override;
+    void updateDropHover(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint) override;
     void onDetached(UIElement& owner) override;
 };
 

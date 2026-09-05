@@ -110,11 +110,10 @@ std::shared_ptr<ya::UIDragDropTile> makeDemoDragSource(std::string name,
     };
     const std::string behaviorPayload = std::move(payload);
     behavior->operationFactory = [behaviorPayload, ghostLabel = tile->_label](ya::UIElement&) {
-        auto operation = std::make_shared<ya::UIDragDropOperation>();
-        operation->typeId = "workbench.payload";
-        operation->payload = behaviorPayload;
-        operation->ghostLabel = ghostLabel.empty() ? behaviorPayload : ghostLabel;
-        return operation;
+        return ya::UIStringDragDropOperation::make(
+            behaviorPayload,
+            ghostLabel.empty() ? behaviorPayload : ghostLabel,
+            "workbench.payload");
     };
     tile->addBehavior(behavior);
     return tile;
@@ -129,14 +128,19 @@ std::shared_ptr<ya::UIDragDropTile> makeDemoDropTarget(
     auto tile = std::make_shared<ya::UIDragDropTile>(std::move(name), ya::UIDragDropTile::EKind::Target);
     tile->_label = std::move(label);
     auto behavior = std::make_shared<ya::UIDropTargetBehavior>();
-    behavior->acceptPayload = [accept = std::move(accept)](ya::UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+    behavior->canAccept = [accept = std::move(accept)](ya::UIElement& owner, const ya::UIDragDropOperation& operation, const glm::vec2& logicalPoint)
     {
-        return owner.hitTestLayoutRect(logicalPoint) && (accept ? accept(payload) : !payload.empty());
+        const auto* textOp = operation.as<ya::UIStringDragDropOperation>();
+        if (!textOp) {
+            return false;
+        }
+        return owner.hitTestLayoutRect(logicalPoint) && (accept ? accept(textOp->text) : !textOp->text.empty());
     };
-    behavior->handleDroppedPayload = [onDropped = std::move(onDropped)](ya::UIElement&, const std::string& payload, const glm::vec2&)
+    behavior->handleDrop = [onDropped = std::move(onDropped)](ya::UIElement&, const ya::UIDragDropOperation& operation, const glm::vec2&)
     {
-        if (onDropped) {
-            onDropped(payload);
+        const auto* textOp = operation.as<ya::UIStringDragDropOperation>();
+        if (onDropped && textOp) {
+            onDropped(textOp->text);
         }
     };
     behavior->setHighlightState = [](ya::UIElement& owner, bool bHighlight)

@@ -50,24 +50,14 @@ bool UIBehavior::bubbleInputEvent(UIElement& owner, const Event& event, const Wi
     return false;
 }
 
-bool UIBehavior::canAcceptDrop(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
-{
-    (void)owner; (void)payload; (void)logicalPoint; return false;
-}
-
 bool UIBehavior::canAcceptDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
-    return canAcceptDrop(owner, operation.payload, logicalPoint);
-}
-
-void UIBehavior::onDrop(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
-{
-    (void)owner; (void)payload; (void)logicalPoint;
+    (void)owner; (void)operation; (void)logicalPoint; return false;
 }
 
 void UIBehavior::onDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
-    onDrop(owner, operation.payload, logicalPoint);
+    (void)owner; (void)operation; (void)logicalPoint;
 }
 
 void UIBehavior::setDropHighlight(UIElement& owner, bool bHighlight)
@@ -75,14 +65,9 @@ void UIBehavior::setDropHighlight(UIElement& owner, bool bHighlight)
     (void)owner; (void)bHighlight;
 }
 
-void UIBehavior::updateDropHover(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
-{
-    (void)owner; (void)payload; (void)logicalPoint;
-}
-
 void UIBehavior::updateDropHover(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
-    updateDropHover(owner, operation.payload, logicalPoint);
+    (void)owner; (void)operation; (void)logicalPoint;
 }
 
 UIDragDropOperationRef UIBehavior::onDragDetected(UIElement& owner, const FDragDetectedEvent& event)
@@ -198,16 +183,16 @@ void UIDragSourceBehavior::onDetached(UIElement& owner)
     UIBehavior::onDetached(owner);
 }
 
-bool UIDropTargetBehavior::canAcceptDrop(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+bool UIDropTargetBehavior::canAcceptDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
-    return acceptPayload ? acceptPayload(owner, payload, logicalPoint) : false;
+    return canAccept ? canAccept(owner, operation, logicalPoint) : false;
 }
 
-void UIDropTargetBehavior::onDrop(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+void UIDropTargetBehavior::onDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
     setDropHighlight(owner, false);
-    if (handleDroppedPayload) {
-        handleDroppedPayload(owner, payload, logicalPoint);
+    if (handleDrop) {
+        handleDrop(owner, operation, logicalPoint);
     }
 }
 
@@ -218,10 +203,10 @@ void UIDropTargetBehavior::setDropHighlight(UIElement& owner, bool bHighlight)
     }
 }
 
-void UIDropTargetBehavior::updateDropHover(UIElement& owner, const std::string& payload, const glm::vec2& logicalPoint)
+void UIDropTargetBehavior::updateDropHover(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
-    if (updateHoverState) {
-        updateHoverState(owner, payload, logicalPoint);
+    if (updateHover) {
+        updateHover(owner, operation, logicalPoint);
     }
 }
 
