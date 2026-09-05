@@ -75,6 +75,17 @@ TEST(EditorPropertyGraphTest, Vec3BindingReportsMixedAndWritesAllInstances)
     EXPECT_EQ(second._position, glm::vec3(4.0f, 5.0f, 6.0f));
 }
 
+TEST(EditorPropertyGraphTest, MultiInstanceWritePreflightsAllAddresses)
+{
+    TransformComponent first;
+    const auto graph = PropertyGraph::build(type_index_v<TransformComponent>, {&first, nullptr});
+    const PropertyNode* position = graph.find("_position");
+
+    ASSERT_NE(position, nullptr);
+    EXPECT_FALSE(position->binding.set(glm::vec3{4.0f, 5.0f, 6.0f}));
+    EXPECT_EQ(first._position, (glm::vec3{0.0f, 0.0f, 0.0f}));
+}
+
 TEST(EditorPropertyGraphTest, AutoPropertySectionMaterializesVec3RowsOnce)
 {
     TransformComponent transform;

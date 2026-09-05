@@ -30,6 +30,16 @@ bool PropertyHandle::isValid() const
     return _slot.property != nullptr && !_instances.empty();
 }
 
+bool PropertyHandle::canAccessAllMutable() const
+{
+    if (!isValid()) {
+        return false;
+    }
+    return std::all_of(_instances.begin(), _instances.end(), [&](void* instance) {
+        return PropertyAccessor::addressMutable(_slot, instance) != nullptr;
+    });
+}
+
 bool PropertyHandle::isEditable() const
 {
     return isValid() && PropertyAccessor::isEditable(*_slot.property);
@@ -116,7 +126,7 @@ bool PropertyHandle::tryGetInteger(int64_t& value) const
 
 bool PropertyHandle::setInteger(int64_t value) const
 {
-    if (!isEditable()) {
+    if (!isEditable() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -146,7 +156,7 @@ std::vector<int64_t> PropertyHandle::copyInteger() const
 
 bool PropertyHandle::restoreInteger(const std::vector<int64_t>& values) const
 {
-    if (!isEditable() || values.size() != _instances.size()) {
+    if (!isEditable() || values.size() != _instances.size() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -176,7 +186,7 @@ std::vector<uint8_t> PropertyHandle::copyBool() const
 
 bool PropertyHandle::restoreBool(const std::vector<uint8_t>& values) const
 {
-    if (!isEditable() || values.size() != _instances.size()) {
+    if (!isEditable() || values.size() != _instances.size() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -199,7 +209,7 @@ bool PropertyHandle::enumLabels(std::vector<std::string>& labels) const
 
 bool PropertyHandle::setEnumByIndex(int index) const
 {
-    if (!isEditable()) {
+    if (!isEditable() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -229,7 +239,7 @@ std::vector<int64_t> PropertyHandle::copyEnum() const
 
 bool PropertyHandle::restoreEnum(const std::vector<int64_t>& values) const
 {
-    if (!isEditable() || values.size() != _instances.size()) {
+    if (!isEditable() || values.size() != _instances.size() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -247,7 +257,7 @@ bool PropertyHandle::tryGetColor(glm::vec4& value) const
 
 bool PropertyHandle::setColor(const glm::vec4& value) const
 {
-    if (!isEditable()) {
+    if (!isEditable() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -277,7 +287,7 @@ std::vector<glm::vec4> PropertyHandle::copyColor() const
 
 bool PropertyHandle::restoreColor(const std::vector<glm::vec4>& values) const
 {
-    if (!isEditable() || values.size() != _instances.size()) {
+    if (!isEditable() || values.size() != _instances.size() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -295,7 +305,7 @@ bool PropertyHandle::tryGetAssetPath(std::string& value) const
 
 bool PropertyHandle::setAssetPath(const std::string& value) const
 {
-    if (!isEditable()) {
+    if (!isEditable() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -325,7 +335,7 @@ std::vector<std::string> PropertyHandle::copyAssetPath() const
 
 bool PropertyHandle::restoreAssetPath(const std::vector<std::string>& values) const
 {
-    if (!isEditable() || values.size() != _instances.size()) {
+    if (!isEditable() || values.size() != _instances.size() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -375,7 +385,7 @@ size_t PropertyHandle::containerSize() const
 
 bool PropertyHandle::appendEmpty() const
 {
-    if (!canMutateContainer()) {
+    if (!canMutateContainer() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -388,7 +398,7 @@ bool PropertyHandle::appendEmpty() const
 
 bool PropertyHandle::removeAt() const
 {
-    if (!isEditable() || _slot.elementIndex < 0) {
+    if (!isEditable() || _slot.elementIndex < 0 || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -401,7 +411,7 @@ bool PropertyHandle::removeAt() const
 
 bool PropertyHandle::removeAtIndex(int index) const
 {
-    if (!isEditable() || index < 0) {
+    if (!isEditable() || index < 0 || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -414,7 +424,7 @@ bool PropertyHandle::removeAtIndex(int index) const
 
 bool PropertyHandle::insertEmptyAt(int index) const
 {
-    if (!canMutateContainer()) {
+    if (!canMutateContainer() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -427,7 +437,7 @@ bool PropertyHandle::insertEmptyAt(int index) const
 
 bool PropertyHandle::clearContainer() const
 {
-    if (!canMutateContainer()) {
+    if (!canMutateContainer() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -440,7 +450,7 @@ bool PropertyHandle::clearContainer() const
 
 bool PropertyHandle::removeMapKey() const
 {
-    if (!isEditable() || !_slot.mapKey.has_value()) {
+    if (!isEditable() || !_slot.mapKey.has_value() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -453,7 +463,7 @@ bool PropertyHandle::removeMapKey() const
 
 bool PropertyHandle::insertMapKey(std::string_view key) const
 {
-    if (!canMutateContainer()) {
+    if (!canMutateContainer() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;

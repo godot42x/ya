@@ -12,6 +12,18 @@
 - 本 checkpoint 只冻结 slot 定位契约；尚未处理 PropertyHandle 裸实例地址生命周期、结构化 mutation 结果、all-or-nothing 多选写入，以及 Core Reflection 与 editor projection 的职责拆分。
 - 下一 checkpoint 进入稳定 PropertyInstance identity/resolver 设计，必须先覆盖 Undo 对象销毁/重建场景，再迁移调用方。
 
+## Phase 10F-4A 当前 checkpoint（2026-09-05）
+
+- PropertyHandle 的多实例写入和容器 mutation 入口现在会先预检全部实例的 mutable address；任一实例不可访问时，整个操作在写入前拒绝。
+- 模板 set/restore、integer、enum、color、asset 和 sequence/map mutation 均接入该 preflight，降低多选编辑留下部分写入的风险。
+- 新增 EditorPropertyGraphTest.MultiInstanceWritePreflightsAllAddresses，验证第二个实例不可用时第一个实例保持原值。
+- 验证：xmake b ya-testing；单测 EditorPropertyGraphTest.MultiInstanceWritePreflightsAllAddresses 通过。
+
+### Phase 10F-4A 保留项
+
+- 这不是完整的结构化 mutation result，也不是跨自定义 setter/容器异常的事务回滚；后续仍需引入明确的 all-or-nothing transaction contract 和错误枚举。
+- PropertyHandle 仍保存裸实例地址；稳定 PropertyInstance identity/resolver 仍是下一主要 checkpoint。
+
 ## 当前状态
 
 - 计划建立：2026-09-03

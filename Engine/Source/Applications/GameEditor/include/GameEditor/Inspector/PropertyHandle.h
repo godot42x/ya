@@ -61,7 +61,8 @@ class PropertyHandle final
     template <typename T>
     bool set(const T& value) const
     {
-        if (!isEditable()) {
+        if (!isEditable() || reflection::PropertyAccessor::valueType(_slot) != ya::type_index_v<T> ||
+            !canAccessAllMutable()) {
             return false;
         }
         bool changed = false;
@@ -110,7 +111,9 @@ class PropertyHandle final
     bool restore(const std::vector<T>& values) const
     {
         static_assert(!std::is_same_v<T, bool>, "bool snapshots use restoreBool()");
-        if (!isEditable() || values.size() != _instances.size()) {
+        if (!isEditable() || values.size() != _instances.size() ||
+            reflection::PropertyAccessor::valueType(_slot) != ya::type_index_v<T> ||
+            !canAccessAllMutable()) {
             return false;
         }
         bool changed = false;
@@ -174,7 +177,9 @@ class PropertyHandle final
     [[nodiscard]] std::string validationError() const;
     [[nodiscard]] bool tryGetManipulateSpec(reflection::Meta::ManipulateSpec& spec) const;
 
-  private:
+    private:
+    [[nodiscard]] bool canAccessAllMutable() const;
+
     void notifyIfChanged(bool changed) const
     {
         if (changed && _changeHook) {
