@@ -33,7 +33,7 @@
 | Default host | `EditorModule::onBeforePresentation` → `onImGuiRender` | `onPresentation` → `EditorSurface::tick` + snapshot replay | ⚫ / ✅ | ImGui chrome host removed in 8W |
 | Project browser (no project) | `EditorLayer::projectBrowserWindow` | `EditorSurface::buildProjectBrowser` | ⚫ / ✅ | ImGui window deleted 8W |
 | Main menu | `EditorLayer::menuBar` (ImGui) | `UIMenuBar` + `ActionMap` | ⚫ / 🟡 | ImGui menu deleted 8W; see File menu gaps below |
-| Toolbar | `EditorLayer::toolbar` (icon `ImageButton`) | Text `UIButton` row | ⚫ / 🟡 | ImGui toolbar deleted 8W; **feel:** no icons (E2) |
+| Toolbar | `EditorLayer::toolbar` (icon `ImageButton`) | Icon+label `UIButton` (`UIImage` + `editor_icons`) | ⚫ / ✅ | ImGui toolbar deleted 8W; **feel (E2):** Play/Stop/Simulate use loaded PNG icons |
 | Dock layout | ImGui `DockSpace` | `FDockContext` + `UIDockSpace` | 🟡 | Path: compact strip, hide-tab-bar, persist `editor.dockLayout`. **Feel (K4):** leaf tab close + same-leaf reorder; Viewport/Hierarchy/Inspector hide close |
 | Editor Settings window | `EditorLayer::editorSettings` | `EditorSettingsDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui window deleted 8W; 10E owner extract |
 | Debug images window | `EditorLayer::debugWindow` | `EditorDebugImagesTab` dock tab | ⚫ / ✅ | ImGui window deleted 8W; cube-face button grid not retained |
@@ -87,7 +87,7 @@
 | Mount list + entries | `FileExplorer::render` | Keyed reconciler + visible window | ✅ | |
 | Search / filter | ImGui | `UITextField` + fingerprint | ✅ | |
 | Texture inspect | Panel callback | `inspectAsset` → Asset Inspector tab | ✅ | |
-| Icons | `ContentBrowserPanel::init` (ImGui tex) | Retained rows (no ImGui icons in list) | 🟡 | Cosmetic; textures already loaded in `EditorLayer::onAttach` (E2) |
+| Icons | `ContentBrowserPanel::init` (ImGui tex) | `UIImage` on list rows (`editor_icons` folder/file) | ✅ | Same textures `EditorLayer::onAttach` loads; snapshot uses `resolveGameUITexture` (E2) |
 
 ### Hierarchy
 
@@ -216,7 +216,7 @@ Kernel feel (not another `EditorSurface` split) — `.agent/plan/gui-kernel-ux-p
 4. **K3** — ColorEdit SV/hue/hex picker ✅  
 5. **K4** — Dock leaf tab close + same-leaf reorder ✅  
 6. **E1** — Hierarchy tree right-click CRUD via existing `ActionMap` ✅  
-7. **E2** — Toolbar / Content Browser icons  
+7. **E2** — Toolbar / Content Browser icons ✅  
 8. **E3** — UI Designer tree DnD; delete dead `TypeRenderer` / ImGui `FilePicker::render`
 
 Release blockers still outside this line: XP-WIN, XP-OGL, SOAK-HR, remaining `imgui-local` after E3.  

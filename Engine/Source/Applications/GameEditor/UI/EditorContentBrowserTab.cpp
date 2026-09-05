@@ -208,7 +208,8 @@ void EditorContentBrowserTab::rebuildRows(WidgetTree& tree)
                              mp.name,
                              active != nullptr && active->name == mp.name,
                              [this](const std::string& itemId) { selectMount(itemId); },
-                             [this](const std::string& itemId) { selectMount(itemId); });
+                             [this](const std::string& itemId) { selectMount(itemId); },
+                             true);
         },
         bindEditorListRowSlot);
 
@@ -242,7 +243,8 @@ void EditorContentBrowserTab::rebuildRows(WidgetTree& tree)
                              entry.name,
                              selectedPath == path,
                              [this, path, bDir](const std::string&) { selectItem(path, bDir); },
-                             [this, path, bDir](const std::string&) { activateItem(path, bDir); });
+                             [this, path, bDir](const std::string&) { activateItem(path, bDir); },
+                             bDir);
         },
         bindEditorListRowSlot);
 

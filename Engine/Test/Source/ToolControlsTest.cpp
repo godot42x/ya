@@ -13,6 +13,7 @@
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
+#include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TextField.h"
@@ -1607,5 +1608,21 @@ TEST(ToolControlsTest, SelectableRowHoverUsesThemeFill)
     EXPECT_EQ(snap.items[0].color, glm::vec4(1.0f, 0.2f, 0.1f, 1.0f));
 }
 
+TEST(ToolControlsTest, ImageDumpReportsAssetPath)
+{
+    WidgetTree tree({.width = 200, .height = 80});
+    auto       image = std::make_shared<UIImage>("Icon");
+    image->_assetPath = "Engine/Content/TestTextures/editor/play.png";
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {16.0f, 16.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, slot);
+    tree.layout();
+
+    const nlohmann::json dump = dumpWidgetTree(tree);
+    const auto*          node = findWidgetNode(dump, "Icon");
+    ASSERT_NE(node, nullptr);
+    EXPECT_EQ((*node)["control"]["type"], "image");
+    EXPECT_EQ((*node)["control"]["assetPath"], "Engine/Content/TestTextures/editor/play.png");
+}
 
 } // namespace ya

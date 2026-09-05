@@ -72,9 +72,15 @@
     },
     {
       "id": "chrome_icons",
-      "status": "pending",
+      "status": "implemented",
       "phase": "E2",
-      "evidence": []
+      "evidence": [
+        "toolbar Play/Simulate/Stop UIImage + editor_icons paths",
+        "content/file-picker rows folder/file icons",
+        "EditorSurface toolbar + textureResolver in fe7bf44e",
+        "ToolControlsTest.ImageDumpReportsAssetPath",
+        "EditorListRowsTest.*"
+      ]
     },
     {
       "id": "designer_dnd_imgui_dead",

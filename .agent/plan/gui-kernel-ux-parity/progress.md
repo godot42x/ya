@@ -1,5 +1,19 @@
 # Progress
 
+## E2 当前 checkpoint（2026-09-06）
+
+- Toolbar Play / Simulate / Stop 用 `UIImage` + `editor_icons` 路径，不再纯文字块。
+- Content Browser / FilePicker 行带 folder/file 图标；`editor_density` 控制图标尺寸。
+- `EditorSurface` snapshot 接 `resolveGameUITexture`，与 `EditorLayer::onAttach` 已加载的纹理同一 cache。
+- 验证：`ToolControlsTest.ImageDumpReportsAssetPath`；`EditorListRowsTest.*`。Editor toolbar 接线已在 `fe7bf44e` 的 `EditorSurface` 中。
+
+### E2 保留项
+
+- E3 未做。
+- Mode3D / Mode2D 仍是文字按钮（没有对应图标资产）。
+- 不合并 `GUIApp` 与 `ya::App`；不拆 WidgetTree。
+- 未宣称 retained editor ready。
+
 ## E1 当前 checkpoint（2026-09-06）
 
 - `UITreeView` 右键选中行（或空白处 `nodeId=""`）并回调 host；DSL `setOnContextMenu`。

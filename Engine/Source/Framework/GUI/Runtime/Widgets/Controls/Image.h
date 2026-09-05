@@ -43,6 +43,10 @@ struct YA_GUI_API UIImage : public UIElement, public UIStyledWidget<UIImage, FIm
     [[nodiscard]] bool isResourceMissing() const { return _bResourceMissing; }
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override
+    {
+        node["control"] = {{"type", "image"}, {"assetPath", _assetPath}};
+    }
     [[nodiscard]] bool isHoverable() const override { return true; }
 
   private:

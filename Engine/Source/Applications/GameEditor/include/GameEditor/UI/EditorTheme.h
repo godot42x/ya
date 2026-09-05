@@ -35,6 +35,18 @@ inline constexpr float kGroupHeaderHeight = 18.0f;
 inline constexpr float kToolbarHeight     = 26.0f;
 inline constexpr float kMenuHeight        = 24.0f;
 inline constexpr float kListRowHeight     = 22.0f;
+inline constexpr float kToolbarIconSize   = 16.0f;
+inline constexpr float kListIconSize      = 16.0f;
+}
+
+/// Editor chrome icon assets (same files `EditorLayer::onAttach` loads).
+namespace editor_icons
+{
+inline constexpr const char* kPlay     = "Engine/Content/TestTextures/editor/play.png";
+inline constexpr const char* kStop     = "Engine/Content/TestTextures/editor/stop.png";
+inline constexpr const char* kSimulate = "Engine/Content/TestTextures/editor/simulate_button.png";
+inline constexpr const char* kFolder   = "Engine/Content/TestTextures/editor/folder2.png";
+inline constexpr const char* kFile     = "Engine/Content/TestTextures/editor/file.png";
 }
 
 } // namespace ya
