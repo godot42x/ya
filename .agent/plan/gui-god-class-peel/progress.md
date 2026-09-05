@@ -12,3 +12,17 @@
 
 - `UIElement.h` 仍是宽内核门面（lifecycle / dirty / hit / focus）；本轮只搬家 layout 枚举。
 - VisualFlag 仍贴在 `UIElement.h` 末尾。
+
+## C2 当前 checkpoint
+
+- 抽出 `EditorViewportGizmoController`（`GameEditor/UI/`）；Layer 只 bind 窄 sources 并在 selection / Mode2D 时 `cancelDrag()`。
+- Overlay 持有 controller 指针，不再 friend Layer；W/E/R 只走 Overlay。
+- compose 仍是 `EditorModule` 调一次 `layer.gizmo().recordOverlay()`；undo 仍是 begin 捕获、end `pushEditorTransformUndo`。
+- `buildViewportGizmoFrame` 吃 `Entity*`，不再吃 `const EditorLayer&`。
+- 验证：`xmake b ya-game-editor` 通过；`EditorInputContractTest` 4 passed；`EditorViewportOverlayHostTest` 3 passed。
+
+### C2 保留项
+
+- 未做 plane handle / uniform scale / mode UI。
+- Viewport 两个 `.cpp` 未动。
+

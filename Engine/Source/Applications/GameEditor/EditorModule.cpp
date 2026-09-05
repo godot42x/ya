@@ -394,7 +394,7 @@ class EditorViewportCompositor
                 },
             },
             [&]() {
-                layer.recordViewportGizmoOverlay();
+                layer.gizmo().recordOverlay();
                 // Camera overlay text on top of the composed viewport.
                 const auto texts = layer.buildViewportCameraOverlayTexts();
                 if (!texts.empty()) {

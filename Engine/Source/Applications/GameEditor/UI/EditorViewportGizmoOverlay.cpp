@@ -1,66 +1,69 @@
 #include "GameEditor/UI/EditorViewportGizmoOverlay.h"
 
 #include "Core/Event.h"
-#include "GameEditor/EditorLayer.h"
+#include "Core/KeyCode.h"
 
 namespace ya
 {
 
-EditorViewportGizmoOverlay::EditorViewportGizmoOverlay(EditorLayer& layer) : _layer(&layer) {}
+EditorViewportGizmoOverlay::EditorViewportGizmoOverlay(EditorViewportGizmoController& controller)
+    : _controller(&controller)
+{
+}
 
 void EditorViewportGizmoOverlay::syncHost(const FEditorViewportHostState& host)
 {
     _host = host;
-    if (_layer) {
-        _layer->syncViewportGizmoHost(host);
+    if (_controller) {
+        _controller->syncHost(host);
     }
 }
 
 EWidgetRouteResult EditorViewportGizmoOverlay::dispatchEvent(const Event& event,
                                                              const glm::vec2& localPoint)
 {
-    if (!_layer) {
+    if (!_controller) {
         return EWidgetRouteResult::NotHandled;
     }
     const bool bInside = _host.bHovered || wantsPointerCapture();
 
     switch (event.getEventType()) {
     case EEvent::MouseMoved:
-        _layer->setViewportGizmoPointer(localPoint, bInside);
+        _controller->setPointer(localPoint, bInside);
         if (isActive() || wantsPointerCapture()) {
             return EWidgetRouteResult::HandledExclusive;
         }
         break;
     case EEvent::MouseButtonPressed: {
         const auto& press = static_cast<const MouseButtonPressedEvent&>(event);
-        _layer->setViewportGizmoPointer(localPoint, bInside);
+        _controller->setPointer(localPoint, bInside);
         if (press.GetMouseButton() == EMouse::Left && _host.bHovered &&
-            _layer->beginViewportGizmoDrag(localPoint)) {
+            _controller->beginDrag(localPoint)) {
             return EWidgetRouteResult::HandledExclusive;
         }
         break;
     }
     case EEvent::MouseButtonReleased: {
         const auto& release = static_cast<const MouseButtonReleasedEvent&>(event);
-        _layer->setViewportGizmoPointer(localPoint, bInside);
-        if (release.GetMouseButton() == EMouse::Left && _layer->isViewportGizmoDragging()) {
-            _layer->endViewportGizmoDrag();
+        _controller->setPointer(localPoint, bInside);
+        if (release.GetMouseButton() == EMouse::Left && _controller->isDragging()) {
+            _controller->endDrag();
             return EWidgetRouteResult::HandledExclusive;
         }
         break;
     }
     case EEvent::KeyPressed: {
         const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
-        if (!_layer->getSelections().empty()) {
+        if (_controller->hasSelectedEntities()) {
             switch (keyEvent.getKeyCode()) {
             case EKey::K_W:
-                _layer->setViewportGizmoOperation(EEditorViewportGizmoOperation::Translate);
+                _controller->setOperation(EEditorViewportGizmoOperation::Translate);
                 return EWidgetRouteResult::HandledExclusive;
             case EKey::K_E:
-                _layer->setViewportGizmoOperation(EEditorViewportGizmoOperation::Rotate);
+                _controller->setOperation(EEditorViewportGizmoOperation::Rotate);
                 return EWidgetRouteResult::HandledExclusive;
             case EKey::K_R:
-                _layer->setViewportGizmoOperation(EEditorViewportGizmoOperation::Scale);
+                _controller->setOperation(EEditorViewportGizmoOperation::Scale);
                 return EWidgetRouteResult::HandledExclusive;
             default:
                 break;
@@ -84,12 +87,12 @@ EWidgetRouteResult EditorViewportGizmoOverlay::dispatchEvent(const Event& event,
 
 bool EditorViewportGizmoOverlay::wantsPointerCapture() const
 {
-    return _layer && _layer->isViewportGizmoDragging();
+    return _controller && _controller->isDragging();
 }
 
 bool EditorViewportGizmoOverlay::isActive() const
 {
-    return _layer && _layer->isGizmoActive();
+    return _controller && _controller->isActive();
 }
 
 } // namespace ya

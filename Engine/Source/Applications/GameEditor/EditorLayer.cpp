@@ -8,6 +8,12 @@ EditorLayer::EditorLayer(App* app)
       _assetInspectorPanel(this),
       _uiDesignerPanel(this)
 {
+    _gizmo.bind(_app, FEditorViewportGizmoSources{
+        .getSelectedEntity = [this]() { return getSelectedEntity(); },
+        .getSelections = [this]() -> const std::vector<Entity*>& { return getSelections(); },
+        .getViewportInteractionScene = [this]() { return getViewportInteractionScene(); },
+        .isViewportMode2D = [this]() { return isViewportMode2D(); },
+    });
 }
 
 void EditorLayer::onAttach()
@@ -89,7 +95,7 @@ void EditorLayer::setViewportMode(EViewportMode mode, bool bPersist)
     }
 
     _viewportMode = mode;
-    cancelViewportGizmoDrag();
+    _gizmo.cancelDrag();
     _sceneHierarchyPanel.setContext(getSceneHierarchyContext());
 
     // Cancel any in-flight 2D canvas manipulation on mode switch.

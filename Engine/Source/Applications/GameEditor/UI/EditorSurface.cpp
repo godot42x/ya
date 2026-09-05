@@ -521,9 +521,9 @@ void EditorSurface::buildEditorChrome(App& app)
         invokeTab(*editorTab);
     }
 
-    _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(*_layer);
+    _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(_layer->gizmo());
     _viewportOverlayHost.setOverlay(_viewportGizmoOverlay);
-    _layer->setViewportGizmoUndoStack(_undo.get());
+    _layer->gizmo().setUndoStack(_undo.get());
     bindAppState(app);
     updateToolbarMode(app);
 }

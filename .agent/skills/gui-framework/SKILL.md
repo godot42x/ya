@@ -246,8 +246,8 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   compose，树只采样那张 RT。`--editor-chrome=imgui` / `editor.chrome.host=imgui` 会被忽略并打 WARN。
 - WidgetTree 输入：`EditorInputNode` → `WidgetTree::dispatchEvent`。
 - Viewport gizmo 已改为 retained host + native math controller：`EditorViewportGizmoOverlay`
-  只路由输入，`EditorLayer` 负责世界空间 translate/rotate/scale 与 undo，绘制在
-  `EditorModule` 的 viewport compose callback 中走 `Render2D`。
+  只路由输入，`EditorViewportGizmoController` 负责世界空间 translate/rotate/scale 与 undo，绘制在
+  `EditorModule` 的 viewport compose callback 中走 `Render2D`（`layer.gizmo().recordOverlay()`）。
 - `onImGuiRender` 编辑器 chrome shell（menu/toolbar/dockspace/viewport/debug/settings/project browser）已删除。
 - Workbench 作为 WidgetTree dock panel 嵌入时用 `FWorkbenchSurface::buildUI(tree, parent)`，
   不要 `attachToLayer(Content)` 盖掉 editor root。Dock 只把**当前选中 tab** 的

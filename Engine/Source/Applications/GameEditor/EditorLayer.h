@@ -12,11 +12,10 @@
 #include "GameEditor/FilePicker.h"
 #include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/UI/EditorFilePicker.h"
-#include "GameEditor/UI/EditorViewportHost.h"
+#include "GameEditor/UI/EditorViewportGizmoController.h"
 #include "GameEditor/ImGui/ImGuiHelper.h"
 #include "GameEditor/Panels/SceneHierarchyPanel.h"
 #include "GameEditor/Panels/UIDesignerPanel.h"
-#include "GameEditor/UI/EditorTransformUndo.h"
 #include "RHI/Core/Image.h"
 #include "RHI/Core/RenderTexture.h"
 #include "Render3D/Common/RenderOverlay.h"
@@ -40,7 +39,6 @@ struct IImageView;
 struct IImage;
 struct RenderTexture;
 struct Texture;
-class UndoStack;
 using EditorViewportContext      = RenderViewportSnapshot;
 using EditorViewportDebugCatalog = RenderViewportDebugCatalog;
 
@@ -53,31 +51,9 @@ enum class EViewportMode : uint8_t
     Mode2D = 1,
 };
 
-enum class EEditorViewportGizmoOperation : uint8_t
-{
-    Translate = 0,
-    Rotate    = 1,
-    Scale     = 2,
-};
-
-enum class EEditorViewportGizmoMode : uint8_t
-{
-    Local = 0,
-    World = 1,
-};
-
-enum class EEditorViewportGizmoAxis : uint8_t
-{
-    None = 0,
-    X    = 1,
-    Y    = 2,
-    Z    = 3,
-};
-
 struct EditorLayer
 {
     friend class EditorViewportCompositor;
-    friend class EditorViewportGizmoOverlay;
 
   private:
     App*                 _app                = nullptr;
@@ -131,26 +107,7 @@ struct EditorLayer
     // ImGui texture descriptor set cache (editor-only, application layer)
     std::unordered_set<ImGuiImageEntry> _imguiTextureCache; // ImageView -> VkDescriptorSet
 
-    // Viewport gizmo state
-    EEditorViewportGizmoOperation _gizmoOperation = EEditorViewportGizmoOperation::Translate;
-    EEditorViewportGizmoMode      _gizmoMode      = EEditorViewportGizmoMode::Local;
-    UndoStack*                    _gizmoUndo      = nullptr;
-    FEditorViewportHostState      _viewportGizmoHostState{};
-    bool                          _bViewportGizmoHostValid = false;
-    bool                          _bViewportGizmoHovered = false;
-    bool                          _bViewportGizmoDragging = false;
-    bool                          _bViewportGizmoPointerInside = false;
-    bool                          _bViewportGizmoConsumeReleasePick = false;
-    glm::vec2                     _viewportGizmoPointerLocal = {0.0f, 0.0f};
-    EEditorViewportGizmoAxis      _gizmoHoveredAxis = EEditorViewportGizmoAxis::None;
-    EEditorViewportGizmoAxis      _gizmoActiveAxis  = EEditorViewportGizmoAxis::None;
-    glm::mat4                     _gizmoDragStartPrimaryWorld = glm::mat4(1.0f);
-    glm::vec3                     _gizmoDragAxisWorld = {0.0f, 0.0f, 0.0f};
-    glm::vec3                     _gizmoDragOriginWorld = {0.0f, 0.0f, 0.0f};
-    glm::vec3                     _gizmoDragPlaneNormal = {0.0f, 0.0f, 0.0f};
-    glm::vec3                     _gizmoDragStartPlaneVector = {0.0f, 0.0f, 0.0f};
-    float                         _gizmoDragStartScalar = 0.0f;
-    std::vector<FEditorTransformSnapshot> _gizmoUndoBefore;
+    EditorViewportGizmoController _gizmo;
 
     const ImGuiImageEntry* _playIcon       = nullptr;
     const ImGuiImageEntry* _pauseIcon      = nullptr;
@@ -270,7 +227,7 @@ struct EditorLayer
     /// Select a SceneWidgetEntry (clears entity selection).
     void setSelectedWidgetEntryId(const std::string& entryId)
     {
-        cancelViewportGizmoDrag();
+        _gizmo.cancelDrag();
         _selectedWidgetEntryId = entryId;
         if (!entryId.empty()) {
             _selections.clear();
@@ -294,7 +251,7 @@ struct EditorLayer
     /// so existing single-selection consumers (gizmo, details, focus) keep working.
     void setSelections(const std::vector<Entity*>& selections, Entity* primary = nullptr)
     {
-        cancelViewportGizmoDrag();
+        _gizmo.cancelDrag();
         _selectedWidgetEntryId.clear();
         _selections.clear();
         for (Entity* entity : selections) {
@@ -410,13 +367,6 @@ struct EditorLayer
 
     void cleanupImGuiTextures();
     void removeImGuiTexture(const ImGuiImageEntry* entry);
-    [[nodiscard]] bool hasViewportGizmoSelection() const;
-    void syncViewportGizmoHost(const FEditorViewportHostState& host);
-    void setViewportGizmoPointer(const glm::vec2& localPoint, bool insideViewport);
-    [[nodiscard]] bool beginViewportGizmoDrag(const glm::vec2& localPoint);
-    void updateViewportGizmoDrag(const glm::vec2& localPoint);
-    void endViewportGizmoDrag();
-    void cancelViewportGizmoDrag();
     void pickEntity(float viewportX, float viewportY);
     /// 2D mode picking: hit-test the UI Designer preview tree (canvas coords).
     void pickNode2D(float viewportX, float viewportY);
@@ -443,11 +393,8 @@ struct EditorLayer
     bool                             isViewportHovered() const { return bViewportHovered; }
     const Rect2D&                    getViewportMouseRect() const { return _viewportMouseRect; }
     const glm::vec2&                 getViewportMouseCenter() const { return _viewportMouseCenter; }
-    bool                             isGizmoActive() const;
-    bool                             isViewportGizmoDragging() const { return _bViewportGizmoDragging; }
-    void                             recordViewportGizmoOverlay() const;
-    void                             setViewportGizmoOperation(EEditorViewportGizmoOperation operation);
-    void                             setViewportGizmoUndoStack(UndoStack* undo) { _gizmoUndo = undo; }
+    [[nodiscard]] EditorViewportGizmoController&       gizmo() { return _gizmo; }
+    [[nodiscard]] const EditorViewportGizmoController& gizmo() const { return _gizmo; }
     bool                             isRightMouseDragging() const { return _bRightMouseDragging; }
     const std::vector<Entity*>&      getSelections() const { return _selections; }
     [[nodiscard]] UIDesignerPanel&   getUIDesignerPanel() { return _uiDesignerPanel; }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GameEditor/UI/EditorViewportGizmoController.h"
 #include "GameEditor/UI/EditorViewportHost.h"
 
 #include <glm/glm.hpp>
@@ -7,15 +8,13 @@
 namespace ya
 {
 
-struct EditorLayer;
-
 /// Retained viewport overlay that routes pointer/keyboard input to the native
 /// editor gizmo controller. Rendering is recorded into the viewport compose
-/// pass by `EditorLayer::recordViewportGizmoOverlay()`.
+/// pass by `EditorViewportGizmoController::recordOverlay()`.
 class EditorViewportGizmoOverlay final : public IEditorViewportOverlay
 {
   public:
-    explicit EditorViewportGizmoOverlay(EditorLayer& layer);
+    explicit EditorViewportGizmoOverlay(EditorViewportGizmoController& controller);
 
     void syncHost(const FEditorViewportHostState& host) override;
 
@@ -26,8 +25,8 @@ class EditorViewportGizmoOverlay final : public IEditorViewportOverlay
     [[nodiscard]] bool isActive() const override;
 
   private:
-    EditorLayer*             _layer = nullptr;
-    FEditorViewportHostState _host{};
+    EditorViewportGizmoController* _controller = nullptr;
+    FEditorViewportHostState       _host{};
 };
 
 } // namespace ya
