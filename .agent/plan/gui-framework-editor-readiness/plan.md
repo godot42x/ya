@@ -278,6 +278,22 @@ Render2D compose / window or offscreen presentation
 5. 增加 snapshot digest、GPU/offscreen parity、automation route trace 门禁。
 6. 形成 editor release checklist，未通过项阻止宣称“retained editor ready”。
 
+### Phase 10E：拆分 EditorSurface 为稳定 owner
+
+目标：把平行 overlay / tab 实现从 `EditorSurface` 抽成独立 owner，禁止按行数机械切文件，也不把新 inspector 能力塞回宿主文件。
+
+步骤：
+
+1. 合并 scene-save / generic file / asset picker 三套 overlay 为 `EditorFilePickerDialog`；`EditorSurface` 只保留 open/sync 宿主调用。
+2. 仅当 Content Browser、UI Designer、Runtime Tools、Asset Inspector、settings 已经有稳定边界时再拆，不做 line-count surgery。
+3. density/token：把 editor chrome 的 magic size（8/12/22/26 一类）收到 `EditorTheme`。
+
+验收：
+
+- 文件选择 dialog 自己持有 overlay、explorer、keyed mount/entry rows 和 save-as 合成路径。
+- `EditorSurface` 不再维护 picker overlay / explorer / reconciler 成员。
+- density/token 与其余 tab owner 是后续 checkpoint，不混进本步。
+
 ## 6. 优先级与依赖
 
 ```text

@@ -1172,3 +1172,16 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 - 未改 inspector 功能面；这是 accessor/handle 边界的 API 收口。
 - 下一步仍是 Phase 10E：拆分 `EditorSurface` + density/token。
 
+## Phase 10E file-picker owner checkpoint（2026-09-05）
+
+- scene-save / generic file / asset picker 不再各维护一套 overlay + FileExplorer + keyed rows。`EditorFilePickerDialog` 是唯一 retained picker owner；save-as 用目录选择 + name 字段合成 `dir / (name + ext)`。
+- `EditorSurface` 只保留 `openSceneSaveDialog` / `openFilePickerDialog` / `openAssetPickerDialog` 宿主入口，以及每帧 `_filePicker->sync`。asset kind → request 的映射在 `makeAssetPickerRequest`。
+- 验证：`xmake b ya-testing`；`xmake r ya-testing -- --gtest_filter='EditorFilePickerDialogTest.*'`（3/3）。
+
+### 边界
+
+- 未拆 Content Browser / UI Designer / Runtime Tools / Asset Inspector / settings；那些只有在已有稳定 owner 边界时才拆，不做 line-count surgery。
+- density/token 仍未做；editor chrome 仍有 magic 8/12/22/26。
+- `imgui-local` 仍被 legacy `FilePicker` 占用；本步不宣称可删。
+- 下一步：其余稳定 owner 或 density/token；release gates 仍为 Windows/MSVC、OpenGL、hour-scale soak。
+

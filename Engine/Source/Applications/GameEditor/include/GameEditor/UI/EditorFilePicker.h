@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GameEditor/FileExplorer.h"
+#include "GameEditor/UI/EditorAssetPicker.h"
 
 #include <functional>
 #include <string>
@@ -11,14 +12,34 @@ namespace ya
 
 struct FEditorFilePickerRequest
 {
-    std::string                        title;
-    std::string                        configScope;
-    std::vector<std::string>           extensions;
-    FileExplorer::FilterMode           filterMode    = FileExplorer::FilterMode::Both;
-    FileExplorer::SelectionMode        selectionMode = FileExplorer::SelectionMode::File;
-    std::string                        currentPath;
-    std::function<void(std::string)>   onPicked;
+    std::string                           title;
+    std::string                           configScope;
+    std::vector<std::string>              extensions;
+    FileExplorer::FilterMode              filterMode    = FileExplorer::FilterMode::Both;
+    FileExplorer::SelectionMode           selectionMode = FileExplorer::SelectionMode::File;
+    std::string                           currentPath;
+    std::function<void(std::string)>      onPicked;
+    std::string                           confirmLabel = "Select";
+    std::string                           saveAsName;
+    std::string                           saveAsExtension;
+    std::string                           nameFieldLabel = "Name";
+    std::vector<FileExplorer::MountPoint> mounts;
 };
+
+[[nodiscard]] inline bool isRetainedPickerSelectionValid(const std::vector<FileExplorer::FEntry>& entries,
+                                                         const std::filesystem::path& selectedPath,
+                                                         FileExplorer::SelectionMode mode)
+{
+    if (selectedPath.empty()) {
+        return false;
+    }
+    for (const auto& entry : entries) {
+        if (entry.path == selectedPath) {
+            return mode == FileExplorer::SelectionMode::Directory ? entry.bIsDirectory : !entry.bIsDirectory;
+        }
+    }
+    return false;
+}
 
 /// Host callback for retained file/directory pickers. Widgettree chrome wires this
 /// to EditorSurface::openFilePickerDialog; legacy imgui chrome falls back to FilePicker.
@@ -70,6 +91,49 @@ using EditorFilePickerCallback = std::function<void(FEditorFilePickerRequest req
     request.extensions     = {".scene.json"};
     request.currentPath    = std::move(currentPath);
     request.onPicked       = std::move(onPicked);
+    return request;
+}
+
+[[nodiscard]] inline FEditorFilePickerRequest makeSceneSavePickerRequest(std::string defaultName,
+                                                                        std::string currentPath,
+                                                                        std::function<void(std::string)> onPicked)
+{
+    FEditorFilePickerRequest request;
+    request.title           = "Save Scene";
+    request.configScope     = "sceneSaveDialog";
+    request.filterMode      = FileExplorer::FilterMode::Directories;
+    request.selectionMode   = FileExplorer::SelectionMode::Directory;
+    request.confirmLabel    = "Save";
+    request.saveAsName      = std::move(defaultName);
+    request.saveAsExtension = ".scene.json";
+    request.nameFieldLabel  = "Scene Name";
+    request.currentPath     = std::move(currentPath);
+    request.onPicked        = std::move(onPicked);
+    return request;
+}
+
+[[nodiscard]] inline FEditorFilePickerRequest makeAssetPickerRequest(EEditorAssetPickerKind kind,
+                                                                     std::string currentPath,
+                                                                     std::function<void(std::string)> onPicked)
+{
+    FEditorFilePickerRequest request;
+    switch (kind) {
+    case EEditorAssetPickerKind::Texture: {
+        request.title = "Select Texture";
+        request.configScope = "assetPickerDialog.texture";
+        request.extensions = {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".hdr", ".ktx", ".ktx2"};
+        break;
+    }
+    case EEditorAssetPickerKind::Model:
+    case EEditorAssetPickerKind::Mesh: {
+        request.title = "Select Model";
+        request.configScope = "assetPickerDialog.model";
+        request.extensions = {".obj", ".fbx", ".gltf", ".glb", ".dae"};
+        break;
+    }
+    }
+    request.currentPath = std::move(currentPath);
+    request.onPicked = std::move(onPicked);
     return request;
 }
 

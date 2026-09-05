@@ -120,5 +120,8 @@
   - [x] retained inspector 动态 vector 增删、map-of-leaf、TextureRef preview parity。
   - [x] `FPropertySlot` 收口 property 定位；`PropertyAccessor`/`PropertyHandle` POD 读写改为 `tryGet<T>`/`set<T>`，去掉构造函数末尾 loc/setter 与底层 typed get/set 森林。
 - [x] Phase 10C：自研 viewport gizmo（WidgetTree/Render2D），移除 editor 帧内 GuiSystem/ImGuizmo。
+- [x] Phase 10E：合并 retained file/save-as/asset picker 为 `EditorFilePickerDialog`（`EditorSurface` 只做宿主 open/sync）。
+- [ ] Phase 10E：其余 tab/dialog owner（仅稳定边界；禁止按行数切文件）。
+- [ ] Phase 10E：editor density/token 收口。
 - [ ] Windows/MSVC 组合回归（本机未跑；未通过则不得宣称 retained editor ready）。
 - [ ] OpenGL GUI/editor presentation（`GUIAppHost` 现为 Vulkan-only）。

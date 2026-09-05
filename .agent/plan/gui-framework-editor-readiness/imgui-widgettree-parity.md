@@ -1,6 +1,6 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-05 (after Phase 10B slot/typed-access cleanup)  
+> **As of:** 2026-09-05 (after Phase 10E file-picker owner extract)  
 > **Default chrome:** WidgetTree only (`EditorSurface`)  
 > **Legacy chrome:** `--editor-chrome=imgui` is ignored (WARN); `onImGuiRender` deleted  
 > **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, but legacy helpers still require it.
@@ -35,7 +35,7 @@
 | Dock layout | ImGui `DockSpace` | `UIDockWorkspace` + `UIDockSpace` | ✅ | Compact dock tab strip + leaf/floating `hideTabBar` corner; docked tree + floating geometry persist in `editor.dockLayout` |
 | Editor Settings window | `EditorLayer::editorSettings` | `EditorSurface::openEditorSettingsDialog` | ⚫ / ✅ | ImGui window deleted 8W |
 | Debug images window | `EditorLayer::debugWindow` | `EditorDebugImagesTab` dock tab | ⚫ / ✅ | ImGui window deleted 8W; cube-face button grid not retained |
-| Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | Retained popups on `EditorSurface` | ⚫ / ✅ | ImGui FilePicker modal chrome deleted 8W; `FilePicker` type remains for fallback APIs |
+| Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | `EditorFilePickerDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui FilePicker modal chrome deleted 8W; `FilePicker` type remains for fallback APIs |
 | Viewport display | `viewportWindow` + `ImGui::Image` | `UIImage` samples offscreen compose | ⚫ / ✅ | `viewportWindow` deleted 8W |
 | Viewport input / pick / gizmo | `EditorLayer::onEvent` + ImGuizmo | Same `onEvent` + `EditorViewportGizmoOverlay` | ✅ | Native gizmo math + `Render2D` compose draw; overlay contract retained |
 | Viewport context menu | `viewportWindow` → `ContextMenu` (ImGui) | `EditorSurface::openViewportContextMenu` (`UIMenu`) | ✅ | Uses `NodeCreateRegistry` presets + `EditorLayer` cmds |
@@ -51,7 +51,7 @@
 | New Scene | File menu | `scene.new` action | ✅ | |
 | Open Scene | File menu (**TODO stub**) | — | ➖ | Neither path implements real open-scene dialog yet |
 | Save Scene | File menu | `scene.save` | ✅ | |
-| Save Scene As | File menu → `FilePicker` | `EditorSurface::openSceneSaveDialog` (retained) | ✅ | Phase 8L |
+| Save Scene As | File menu → `FilePicker` | `EditorSurface::openSceneSaveDialog` → `EditorFilePickerDialog` | ✅ | 8L; 10E owner extract |
 | Exit | File menu | `app.exit` | ✅ | |
 | Open project | Project browser | Project browser (retained) | ✅ | |
 | Content: open `.scene.json` | ImGui Content Browser (⚫) | `activateContentItem` → `loadScene` | ✅ | Retained only since 8A |
@@ -159,10 +159,10 @@
 
 | Mode | Legacy ImGui | WidgetTree | Status | Notes |
 |------|--------------|------------|--------|-------|
-| Scene save | `openSceneSavePicker` | `EditorSurface` scene-save popup | ✅ | 8L |
-| Texture / model asset | `openTexturePicker` / `openModelPicker` | `openAssetPickerDialog` | ✅ | 8M |
-| Script / material / directory / generic | `FilePicker::*` | `openFilePickerDialog` + `FEditorFilePickerRequest` factories | ✅ | 8S；legacy imgui chrome 仍可用 ImGui `FilePicker` |
-| Editor Settings browse | `FilePicker` in `editorSettings` | `makeSceneJsonFilePickerRequest` → retained picker | ✅ | 8U |
+| Scene save | `openSceneSavePicker` | `makeSceneSavePickerRequest` → `EditorFilePickerDialog` | ✅ | 8L; 10E collapsed three overlays into one owner |
+| Texture / model asset | `openTexturePicker` / `openModelPicker` | `makeAssetPickerRequest` → same dialog | ✅ | 8M; 10E |
+| Script / material / directory / generic | `FilePicker::*` | `openFilePickerDialog` + `FEditorFilePickerRequest` factories | ✅ | 8S；legacy `FilePicker` type remains |
+| Editor Settings browse | `FilePicker` in `editorSettings` | `makeSceneJsonFilePickerRequest` → same dialog | ✅ | 8U |
 
 ---
 
@@ -218,6 +218,9 @@ Hierarchy tree CRUD remains a retained-UI gap, not an ImGui chrome blocker.
 8. ~~**9D** — DPI / CJK / keyboard / IME / clipboard / text editing~~ ✅  
 9. ~~**9E** — Snapshot digest, GPU/offscreen parity, automation route trace~~ ✅  
 10. ~~**9F** — Release checklist~~ ✅（macOS/Vulkan Pass；Windows/MSVC and OpenGL presentation remain blockers）  
+11. ~~**10E** — Collapse retained file/save-as/asset pickers into `EditorFilePickerDialog`~~ ✅  
+12. **10E follow-up** — remaining stable tab/dialog owners, then density/token  
+13. Release blockers — XP-WIN, XP-OGL, SOAK-HR, `imgui-local`  
 
 ---
 

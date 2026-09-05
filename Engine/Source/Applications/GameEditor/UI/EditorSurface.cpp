@@ -1,6 +1,7 @@
 #include "GameEditor/UI/EditorSurface.h"
 #include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/UI/EditorFilePicker.h"
+#include "GameEditor/UI/EditorFilePickerDialog.h"
 #include "GameEditor/UI/RuntimeDiagnosticsSection.h"
 #include "GameEditor/UI/RuntimeRenderSettingsSection.h"
 #include "GameEditor/UI/RuntimeProfilingSection.h"
@@ -146,44 +147,6 @@ ui::UIButtonWidgetBuilder labeledButton(std::string key, const std::string& labe
                    .setFontSize(13)
                    .setHAlign(EWidgetAlignH::Center)
                    .setVAlign(EWidgetAlignV::Center));
-}
-
-struct FAssetPickerDialogConfig
-{
-    const char*              title;
-    const char*              configScope;
-    std::vector<std::string> extensions;
-};
-
-FAssetPickerDialogConfig assetPickerDialogConfig(EEditorAssetPickerKind kind)
-{
-    switch (kind) {
-    case EEditorAssetPickerKind::Texture:
-        return {"Select Texture",
-                "assetPickerDialog.texture",
-                {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".dds", ".hdr", ".ktx", ".ktx2"}};
-    case EEditorAssetPickerKind::Model:
-    case EEditorAssetPickerKind::Mesh:
-        return {"Select Model",
-                "assetPickerDialog.model",
-                {".obj", ".fbx", ".gltf", ".glb", ".dae"}};
-    }
-    return {"Select Asset", "assetPickerDialog.generic", {}};
-}
-
-bool isRetainedPickerSelectionValid(const std::vector<FileExplorer::FEntry>& entries,
-                                    const std::filesystem::path& selectedPath,
-                                    FileExplorer::SelectionMode mode)
-{
-    if (selectedPath.empty()) {
-        return false;
-    }
-    for (const auto& entry : entries) {
-        if (entry.path == selectedPath) {
-            return mode == FileExplorer::SelectionMode::Directory ? entry.bIsDirectory : !entry.bIsDirectory;
-        }
-    }
-    return false;
 }
 
 bool widgetOrAncestor(const UIElement* node, const UIElement* target)
@@ -466,9 +429,11 @@ void EditorSurface::shutdown()
 {
     _workbench.reset();
     _tabRegistry.reset();
-    clearAssetPickerDialog();
+    if (_filePicker) {
+        _filePicker->reset();
+    }
+    _filePicker.reset();
     clearEditorSettingsDialog();
-    clearSceneSaveDialog();
     _tree.reset();
     _theme.reset();
     _snapshot = {};
@@ -570,7 +535,10 @@ void EditorSurface::rebuild(App& app)
     _contentEntryScrollOffset = 0.0f;
     _contentEntryViewportHeight = 0.0f;
     _bContentRowsDirty = true;
-    clearSceneSaveDialog();
+    if (_filePicker) {
+        _filePicker->reset();
+    }
+    _filePicker.reset();
     _hierarchyFingerprint.clear();
     _syncedSelectionGeneration = ~uint64_t{0};
 
@@ -1371,8 +1339,9 @@ void EditorSurface::syncPresentation(App& app, float dt)
     }
     syncToolbar(app);
     syncContentBrowser();
-    syncSceneSaveDialog();
-    syncAssetPickerDialog();
+    if (_filePicker) {
+        _filePicker->sync(*_tree);
+    }
     syncEditorSettingsDialog();
     if (_tabRegistry) {
         for (const auto& tab : _tabRegistry->tabs()) {
@@ -1765,665 +1734,51 @@ void EditorSurface::openSceneSaveDialog()
     if (!_tree || !_root || !_layer) {
         return;
     }
-    if (_sceneSaveOverlay && _sceneSaveOverlay->isAttached()) {
-        _tree->setFocus(_sceneSaveNameField.get());
-        return;
-    }
-
-    clearSceneSaveDialog();
 
     std::string defaultName = "NewScene";
     if (Scene* scene = _layer->getHierarchyScene(); scene && !scene->getName().empty()) {
         defaultName = scene->getName();
     }
-
-    _sceneSaveExplorer = std::make_shared<FileExplorer>();
-    _sceneSaveExplorer->setConfigScope("sceneSaveDialog");
-    _sceneSaveExplorer->initFromVFS();
-    _sceneSaveExplorer->setExtensions({});
-    _sceneSaveExplorer->setFilterMode(FileExplorer::FilterMode::Directories);
-    _sceneSaveExplorer->setSelectionMode(FileExplorer::SelectionMode::Directory);
-    _sceneSaveExplorer->setLeftPanelWidth(180.0f);
-
+    std::string currentPath;
     if (!_layer->getCurrentScenePath().empty()) {
-        _sceneSaveExplorer->setSelectedPath(std::filesystem::path(_layer->getCurrentScenePath()).parent_path());
-    }
-    else {
-        const std::string lastSaveDirectory = ConfigManager::get().getOr<std::string>("editor",
-                                                                                      "sceneSaveDialog.lastDirectory",
-                                                                                      "");
-        if (!lastSaveDirectory.empty()) {
-            _sceneSaveExplorer->setSelectedPath(path_utils::pathFromUtf8String(lastSaveDirectory));
-        }
+        currentPath = path_utils::pathToUtf8String(
+            std::filesystem::path(_layer->getCurrentScenePath()).parent_path());
     }
 
-    auto nameField = ui::textField("SceneSaveName").setText(defaultName);
-    _sceneSaveNameField = nameField.share();
-
-    auto pathText = ui::text("SceneSavePath").setFontSize(12).setStyleKey("text.muted");
-    _sceneSavePathText = pathText.share();
-
-    auto previewText = ui::text("SceneSavePreview").setFontSize(12);
-    _sceneSavePreviewText = previewText.share();
-
-    _sceneSaveMountList = ui::column("SceneSaveMounts").setSpacing(2.0f).share();
-    _sceneSaveEntryList = ui::column("SceneSaveEntries").setSpacing(2.0f).share();
-    _sceneSaveMountReconciler.reset();
-    _sceneSaveEntryReconciler.reset();
-
-    _sceneSaveSaveButton = labeledButton("SceneSaveConfirm", "Save")
-                               .setOnClick([this]() { confirmSceneSaveDialog(); })
-                               .share();
-
-    auto nameRow = ui::row("SceneSaveNameRow")
-                       .setSpacing(6.0f)
-                       .setStretchLastChild(true)
-                       .child(ui::text("SceneSaveNameLabel")
-                                  .setText("Scene Name")
-                                  .setFontSize(12)
-                                  .setVAlign(EWidgetAlignV::Center), ui::boxSlot().preferredSize({90.0f, 26.0f}))
-                       .child(std::move(nameField), ui::boxSlot().fill());
-    auto saveBody = ui::row("SceneSaveBody")
-                        .setSpacing(6.0f)
-                        .setStretchLastChild(true)
-                        .child(ui::scroll("SceneSaveMountScroll")
-                                   .setAxis(EScrollAxis::Vertical)
-                                   .child(_sceneSaveMountList, ui::overlaySlot().fill()),
-                               ui::boxSlot().preferredSize({180.0f, 0.0f}))
-                        .child(ui::scroll("SceneSaveEntryScroll")
-                                   .setAxis(EScrollAxis::Vertical)
-                                   .child(_sceneSaveEntryList, ui::overlaySlot().fill()),
-                               ui::boxSlot().fill());
-    auto actions = ui::row("SceneSaveActions")
-                       .setSpacing(8.0f)
-                       .setMainAxisAlignment(EWidgetMainAxisAlignment::End)
-                       .child(labeledButton("SceneSaveBack", "Back")
-                                  .setOnClick([this]() {
-                                      if (_sceneSaveExplorer && _sceneSaveExplorer->navigateBack()) _bSceneSaveRowsDirty = true;
-                                  }), ui::boxSlot().preferredSize({72.0f, 26.0f}))
-                       .child(_sceneSaveSaveButton, ui::boxSlot().preferredSize({84.0f, 26.0f}))
-                       .child(labeledButton("SceneSaveCancel", "Cancel")
-                                  .setOnClick([this]() {
-                                      if (_sceneSaveOverlay) _sceneSaveOverlay->close();
-                                  }), ui::boxSlot().preferredSize({84.0f, 26.0f}));
-    auto saveRoot = ui::column("SceneSaveRoot")
-                       .setSpacing(8.0f)
-                       .setPadding({12.0f, 12.0f})
-                       .child(ui::text("SceneSaveTitle").setText("Save Scene").setStyleKey("text.header").setFontSize(14))
-                       .child(std::move(nameRow), ui::boxSlot().preferredSize({0.0f, 26.0f}))
-                       .child(std::move(pathText))
-                       .child(ui::textField("SceneSaveSearch")
-                                  .setOnTextChanged([this](const std::string& text) {
-                                      if (_sceneSaveExplorer) { _sceneSaveExplorer->setSearchText(text); _bSceneSaveRowsDirty = true; }
-                                  }), ui::boxSlot().preferredSize({0.0f, 24.0f}))
-                       .child(std::move(saveBody), ui::boxSlot().preferredSize({0.0f, 360.0f}))
-                       .child(std::move(previewText))
-                       .child(std::move(actions));
-    auto dialogPanel = ui::panel("SceneSavePanel")
-            .setStyleKey("panel.window")
-            .child(std::move(saveRoot), ui::canvasSlot().fill());
-
-    _sceneSavePanel = dialogPanel.share();
-    _sceneSaveOverlay = ui::popupOverlay("SceneSaveOverlay")
-                            .setRole(UIPopupOverlay::EOverlayRole::Modal)
-                            .setOnDismiss([this]() { clearSceneSaveDialog(); })
-                            .child(std::move(dialogPanel))
-                            .share();
-
-    _sceneSaveFingerprint.clear();
-    _bSceneSaveRowsDirty = true;
-    _sceneSaveOverlay->open(*_tree);
-    _tree->setFocus(_sceneSaveNameField.get());
-}
-
-void EditorSurface::clearSceneSaveDialog()
-{
-    _sceneSaveOverlay.reset();
-    _sceneSavePanel.reset();
-    _sceneSaveExplorer.reset();
-    _sceneSavePathText.reset();
-    _sceneSavePreviewText.reset();
-    _sceneSaveNameField.reset();
-    _sceneSaveSaveButton.reset();
-    _sceneSaveMountList.reset();
-    _sceneSaveEntryList.reset();
-    _sceneSaveMountReconciler.reset();
-    _sceneSaveEntryReconciler.reset();
-    _sceneSaveFingerprint.clear();
-    _bSceneSaveRowsDirty = true;
-}
-
-void EditorSurface::syncSceneSaveDialog()
-{
-    if (!_sceneSaveOverlay || !_sceneSaveExplorer || !_sceneSavePanel || !_tree) {
-        return;
-    }
-
-    std::string fingerprint;
-    if (const FileExplorer::MountPoint* active = _sceneSaveExplorer->getActiveMountPoint()) {
-        fingerprint += active->name;
-        fingerprint += '|';
-    }
-    fingerprint += _sceneSaveExplorer->getCurrentDirectory().string();
-    fingerprint += '|';
-    fingerprint += _sceneSaveExplorer->getSelectedPath().string();
-
-    std::vector<FileExplorer::FEntry> entries;
-    _sceneSaveExplorer->collectEntries(entries);
-    for (const auto& entry : entries) {
-        fingerprint += entry.name;
-        fingerprint += ';';
-    }
-    fingerprint += "|search:";
-    fingerprint += _sceneSaveExplorer->getSearchText();
-    if (_sceneSaveNameField) {
-        fingerprint += "|name:";
-        fingerprint += _sceneSaveNameField->getText();
-    }
-
-    if (fingerprint != _sceneSaveFingerprint) {
-        _sceneSaveFingerprint = std::move(fingerprint);
-        _bSceneSaveRowsDirty = true;
-    }
-
-    if (_bSceneSaveRowsDirty && _sceneSaveMountList && _sceneSaveEntryList &&
-        _sceneSaveMountList->isAttached() && _sceneSaveEntryList->isAttached()) {
-        rebuildSceneSaveRows();
-        _bSceneSaveRowsDirty = false;
-    }
-
-    const Extent2D logicalExtent = _tree->getLogicalExtent();
-    const glm::vec2 extent = {static_cast<float>(logicalExtent.width), static_cast<float>(logicalExtent.height)};
-    const glm::vec2 desired = _sceneSavePanel->computeDesiredSize();
-    _sceneSaveOverlay->_contentPos = {
-        std::max(0.0f, (extent.x - desired.x) * 0.5f),
-        std::max(0.0f, (extent.y - desired.y) * 0.5f),
-    };
-
-    const std::filesystem::path targetDir = !_sceneSaveExplorer->getSelectedPath().empty()
-                                                ? _sceneSaveExplorer->getSelectedPath()
-                                                : _sceneSaveExplorer->getCurrentDirectory();
-    if (_sceneSavePathText) {
-        std::string pathText = targetDir.string();
-        if (const FileExplorer::MountPoint* active = _sceneSaveExplorer->getActiveMountPoint()) {
-            pathText = active->name + ": " + pathText;
-        }
-        _sceneSavePathText->setText(pathText);
-    }
-
-    const std::string sceneName = _sceneSaveNameField ? _sceneSaveNameField->getText() : std::string{};
-    const bool bCanSave = !sceneName.empty() && !targetDir.empty();
-    if (_sceneSaveSaveButton) {
-        _sceneSaveSaveButton->setEnabled(bCanSave);
-    }
-    if (_sceneSavePreviewText) {
-        if (bCanSave) {
-            _sceneSavePreviewText->setStyleKey("text.muted");
-            _sceneSavePreviewText->setText(std::format("Will save to: {}", (targetDir / (sceneName + ".scene.json")).string()));
-        }
-        else {
-            _sceneSavePreviewText->setStyleKey("text.error");
-            _sceneSavePreviewText->setText("Enter a scene name and choose a directory.");
-        }
-    }
-}
-
-void EditorSurface::rebuildSceneSaveRows()
-{
-    if (!_sceneSaveExplorer || !_tree || !_sceneSaveMountList || !_sceneSaveEntryList) {
-        return;
-    }
-
-    const FileExplorer::MountPoint* active = _sceneSaveExplorer->getActiveMountPoint();
-    const std::filesystem::path selectedPath = _sceneSaveExplorer->getSelectedPath();
-    std::vector<FileExplorer::FEntry> entries;
-    _sceneSaveExplorer->collectEntries(entries);
-
-    if (!_sceneSaveMountReconciler) {
-        _sceneSaveMountReconciler = std::make_unique<UIKeyedChildReconciler>(
-            *_tree, *_sceneSaveMountList, makeContentRowFactory());
-    }
-    if (!_sceneSaveEntryReconciler) {
-        _sceneSaveEntryReconciler = std::make_unique<UIKeyedChildReconciler>(
-            *_tree, *_sceneSaveEntryList, makeContentRowFactory());
-    }
-
-    std::vector<std::string> mountKeys;
-    mountKeys.reserve(_sceneSaveExplorer->getMountPoints().size());
-    for (const auto& mp : _sceneSaveExplorer->getMountPoints()) {
-        mountKeys.push_back("SceneSaveMount_" + mp.name);
-    }
-    _sceneSaveMountReconciler->reconcile(
-        mountKeys,
-        [this, active](UIElement& child, const std::string&, size_t index) {
-            const auto& mp = _sceneSaveExplorer->getMountPoints()[index];
-            updateContentRow(child,
-                             mp.name,
-                             mp.name,
-                             active != nullptr && active->name == mp.name,
-                             [this](const std::string& itemId) { selectSceneSaveMount(itemId); },
-                             [this](const std::string& itemId) { selectSceneSaveMount(itemId); });
-        },
-        bindEditorListRowSlot);
-
-    std::vector<std::string> entryKeys;
-    entryKeys.reserve(entries.size());
-    for (const auto& entry : entries) {
-        entryKeys.push_back("SceneSaveEntry_" + entry.name);
-    }
-    _sceneSaveEntryReconciler->reconcile(
-        entryKeys,
-        [this, &entries, &selectedPath](UIElement& child, const std::string&, size_t index) {
-            const auto& entry = entries[index];
-            const std::filesystem::path path = entry.path;
-            updateContentRow(child,
-                             entry.name + "/",
-                             entry.name,
-                             selectedPath == path,
-                             [this, path](const std::string&) {
-                                 if (_sceneSaveExplorer) {
-                                     _sceneSaveExplorer->setSelectedPath(path);
-                                     _bSceneSaveRowsDirty = true;
-                                 }
-                             },
-                             [this, path](const std::string&) { activateSceneSaveItem(path, true); });
-        },
-        bindEditorListRowSlot);
-}
-
-void EditorSurface::selectSceneSaveMount(const std::string& itemId)
-{
-    if (!_sceneSaveExplorer) {
-        return;
-    }
-    for (const auto& candidate : _sceneSaveExplorer->getMountPoints()) {
-        if (candidate.name == itemId) {
-            _sceneSaveExplorer->selectMountPoint(candidate);
-            _bSceneSaveRowsDirty = true;
-            break;
-        }
-    }
-}
-
-void EditorSurface::activateSceneSaveItem(const std::filesystem::path& path, bool bIsDirectory)
-{
-    if (!_sceneSaveExplorer || !bIsDirectory) {
-        return;
-    }
-    if (_sceneSaveExplorer->navigateInto(path)) {
-        _bSceneSaveRowsDirty = true;
-    }
-}
-
-void EditorSurface::confirmSceneSaveDialog()
-{
-    if (!_sceneSaveExplorer || !_sceneSaveNameField || !_layer) {
-        return;
-    }
-
-    const std::string sceneName = _sceneSaveNameField->getText();
-    const std::filesystem::path targetDir = !_sceneSaveExplorer->getSelectedPath().empty()
-                                                ? _sceneSaveExplorer->getSelectedPath()
-                                                : _sceneSaveExplorer->getCurrentDirectory();
-    if (sceneName.empty() || targetDir.empty()) {
-        return;
-    }
-
-    const std::string targetDirUtf8 = path_utils::pathToUtf8String(targetDir);
-    ConfigManager::Editor("editor").set("sceneSaveDialog.lastDirectory", targetDirUtf8).flush();
-    const std::string scenePath = targetDirUtf8 + "/" + sceneName + ".scene.json";
-    _layer->setCurrentScenePath(scenePath);
-    if (Scene* scene = _layer->getEditableScene()) {
-        scene->setName(sceneName);
-    }
-    if (App* app = App::get()) {
-        app->getSceneServices().saveScene(scenePath);
-    }
-    YA_CORE_INFO("Scene saved to: {}", scenePath);
-
-    if (_sceneSaveOverlay) {
-        _sceneSaveOverlay->close();
-    }
+    openFilePickerDialog(makeSceneSavePickerRequest(
+        std::move(defaultName),
+        std::move(currentPath),
+        [this](std::string scenePath) {
+            if (!_layer) {
+                return;
+            }
+            _layer->setCurrentScenePath(scenePath);
+            if (Scene* scene = _layer->getEditableScene()) {
+                scene->setName(std::filesystem::path(scenePath).stem().string());
+            }
+            if (App* app = App::get()) {
+                app->getSceneServices().saveScene(scenePath);
+            }
+            YA_CORE_INFO("Scene saved to: {}", scenePath);
+        }));
 }
 
 void EditorSurface::openAssetPickerDialog(EEditorAssetPickerKind kind,
                                           std::string currentPath,
                                           std::function<void(std::string)> onPicked)
 {
-    const FAssetPickerDialogConfig config = assetPickerDialogConfig(kind);
-    FEditorFilePickerRequest request;
-    request.title       = config.title;
-    request.configScope = config.configScope;
-    request.extensions  = config.extensions;
-    request.currentPath = std::move(currentPath);
-    request.onPicked    = std::move(onPicked);
-    openFilePickerDialog(std::move(request));
+    openFilePickerDialog(makeAssetPickerRequest(kind, std::move(currentPath), std::move(onPicked)));
 }
 
 void EditorSurface::openFilePickerDialog(FEditorFilePickerRequest request)
 {
-    if (!_tree || !_root || !request.onPicked) {
+    if (!_tree || !_root) {
         return;
     }
-    if (_assetPickerOverlay && _assetPickerOverlay->isAttached()) {
-        _filePickerRequest = std::move(request);
-        return;
+    if (!_filePicker) {
+        _filePicker = std::make_unique<EditorFilePickerDialog>();
     }
-
-    clearAssetPickerDialog();
-    _filePickerRequest = std::move(request);
-
-    _assetPickerExplorer = std::make_shared<FileExplorer>();
-    _assetPickerExplorer->setConfigScope(_filePickerRequest.configScope);
-    _assetPickerExplorer->initFromVFS();
-    _assetPickerExplorer->setExtensions(_filePickerRequest.extensions);
-    _assetPickerExplorer->setFilterMode(_filePickerRequest.filterMode);
-    _assetPickerExplorer->setSelectionMode(_filePickerRequest.selectionMode);
-    _assetPickerExplorer->setLeftPanelWidth(180.0f);
-
-    if (!_filePickerRequest.currentPath.empty()) {
-        _assetPickerExplorer->setSelectedPath(path_utils::pathFromUtf8String(_filePickerRequest.currentPath));
-    }
-    else {
-        const std::string lastDirectory = ConfigManager::get().getOr<std::string>(
-            "editor", _filePickerRequest.configScope + ".lastDirectory", "");
-        if (!lastDirectory.empty()) {
-            _assetPickerExplorer->setSelectedPath(path_utils::pathFromUtf8String(lastDirectory));
-        }
-    }
-
-    auto pathText = ui::text("AssetPickerPath").setFontSize(12).setStyleKey("text.muted");
-    _assetPickerPathText = pathText.share();
-
-    auto previewText = ui::text("AssetPickerPreview").setFontSize(12);
-    _assetPickerPreviewText = previewText.share();
-
-    _assetPickerMountList = ui::column("AssetPickerMounts").setSpacing(2.0f).share();
-    _assetPickerEntryList = ui::column("AssetPickerEntries").setSpacing(2.0f).share();
-    _assetPickerMountReconciler.reset();
-    _assetPickerEntryReconciler.reset();
-
-    _assetPickerSelectButton = labeledButton("AssetPickerConfirm", "Select")
-                                   .setOnClick([this]() { confirmAssetPickerDialog(); })
-                                   .share();
-
-    auto pickerBody = ui::row("AssetPickerBody")
-                          .setSpacing(6.0f)
-                          .setStretchLastChild(true)
-                          .child(ui::scroll("AssetPickerMountScroll")
-                                     .setAxis(EScrollAxis::Vertical)
-                                     .child(_assetPickerMountList, ui::overlaySlot().fill()),
-                                 ui::boxSlot().preferredSize({180.0f, 0.0f}))
-                          .child(ui::scroll("AssetPickerEntryScroll")
-                                     .setAxis(EScrollAxis::Vertical)
-                                     .child(_assetPickerEntryList, ui::overlaySlot().fill()),
-                                 ui::boxSlot().fill());
-    auto actions = ui::row("AssetPickerActions")
-                       .setSpacing(8.0f)
-                       .setMainAxisAlignment(EWidgetMainAxisAlignment::End)
-                       .child(labeledButton("AssetPickerBack", "Back")
-                                  .setOnClick([this]() {
-                                      if (_assetPickerExplorer && _assetPickerExplorer->navigateBack()) {
-                                          _bAssetPickerRowsDirty = true;
-                                      }
-                                  }), ui::boxSlot().preferredSize({72.0f, 26.0f}))
-                       .child(_assetPickerSelectButton, ui::boxSlot().preferredSize({84.0f, 26.0f}))
-                       .child(labeledButton("AssetPickerCancel", "Cancel")
-                                  .setOnClick([this]() {
-                                      if (_assetPickerOverlay) {
-                                          _assetPickerOverlay->close();
-                                      }
-                                  }), ui::boxSlot().preferredSize({84.0f, 26.0f}));
-    auto pickerRoot = ui::column("AssetPickerRoot")
-                          .setSpacing(8.0f)
-                          .setPadding({12.0f, 12.0f})
-                          .child(ui::text("AssetPickerTitle")
-                                     .setText(_filePickerRequest.title)
-                                     .setStyleKey("text.header")
-                                     .setFontSize(14))
-                          .child(std::move(pathText))
-                          .child(ui::textField("AssetPickerSearch")
-                                     .setOnTextChanged([this](const std::string& text) {
-                                         if (_assetPickerExplorer) {
-                                             _assetPickerExplorer->setSearchText(text);
-                                             _bAssetPickerRowsDirty = true;
-                                         }
-                                     }), ui::boxSlot().preferredSize({0.0f, 24.0f}))
-                          .child(std::move(pickerBody), ui::boxSlot().preferredSize({0.0f, 360.0f}))
-                          .child(std::move(previewText))
-                          .child(std::move(actions));
-    auto dialogPanel = ui::panel("AssetPickerPanel")
-                           .setStyleKey("panel.window")
-                           .child(std::move(pickerRoot), ui::canvasSlot().fill());
-
-    _assetPickerPanel = dialogPanel.share();
-    _assetPickerOverlay = ui::popupOverlay("AssetPickerOverlay")
-                              .setRole(UIPopupOverlay::EOverlayRole::Modal)
-                              .setOnDismiss([this]() { clearAssetPickerDialog(); })
-                              .child(std::move(dialogPanel))
-                              .share();
-
-    _assetPickerFingerprint.clear();
-    _bAssetPickerRowsDirty = true;
-    _assetPickerOverlay->open(*_tree);
-}
-
-void EditorSurface::clearAssetPickerDialog()
-{
-    _assetPickerOverlay.reset();
-    _assetPickerPanel.reset();
-    _assetPickerExplorer.reset();
-    _assetPickerPathText.reset();
-    _assetPickerPreviewText.reset();
-    _assetPickerSelectButton.reset();
-    _assetPickerMountList.reset();
-    _assetPickerEntryList.reset();
-    _assetPickerMountReconciler.reset();
-    _assetPickerEntryReconciler.reset();
-    _assetPickerFingerprint.clear();
-    _filePickerRequest = {};
-    _bAssetPickerRowsDirty = true;
-}
-
-void EditorSurface::syncAssetPickerDialog()
-{
-    if (!_assetPickerOverlay || !_assetPickerExplorer || !_assetPickerPanel || !_tree) {
-        return;
-    }
-
-    std::string fingerprint;
-    if (const FileExplorer::MountPoint* active = _assetPickerExplorer->getActiveMountPoint()) {
-        fingerprint += active->name;
-        fingerprint += '|';
-    }
-    fingerprint += _assetPickerExplorer->getCurrentDirectory().string();
-    fingerprint += '|';
-    fingerprint += _assetPickerExplorer->getSelectedPath().string();
-
-    std::vector<FileExplorer::FEntry> entries;
-    _assetPickerExplorer->collectEntries(entries);
-    for (const auto& entry : entries) {
-        fingerprint += entry.name;
-        fingerprint += ';';
-    }
-    fingerprint += "|search:";
-    fingerprint += _assetPickerExplorer->getSearchText();
-
-    if (fingerprint != _assetPickerFingerprint) {
-        _assetPickerFingerprint = std::move(fingerprint);
-        _bAssetPickerRowsDirty = true;
-    }
-
-    if (_bAssetPickerRowsDirty && _assetPickerMountList && _assetPickerEntryList &&
-        _assetPickerMountList->isAttached() && _assetPickerEntryList->isAttached()) {
-        rebuildAssetPickerRows();
-        _bAssetPickerRowsDirty = false;
-    }
-
-    const Extent2D logicalExtent = _tree->getLogicalExtent();
-    const glm::vec2 extent = {static_cast<float>(logicalExtent.width), static_cast<float>(logicalExtent.height)};
-    const glm::vec2 desired = _assetPickerPanel->computeDesiredSize();
-    _assetPickerOverlay->_contentPos = {
-        std::max(0.0f, (extent.x - desired.x) * 0.5f),
-        std::max(0.0f, (extent.y - desired.y) * 0.5f),
-    };
-
-    const std::filesystem::path selectedPath = _assetPickerExplorer->getSelectedPath();
-    if (_assetPickerPathText) {
-        std::string pathText = _assetPickerExplorer->getCurrentDirectory().string();
-        if (const FileExplorer::MountPoint* active = _assetPickerExplorer->getActiveMountPoint()) {
-            pathText = active->name + ": " + pathText;
-        }
-        _assetPickerPathText->setText(pathText);
-    }
-
-    const bool bCanSelect = isRetainedPickerSelectionValid(entries,
-                                                           selectedPath,
-                                                           _filePickerRequest.selectionMode);
-    if (_assetPickerSelectButton) {
-        _assetPickerSelectButton->setEnabled(bCanSelect);
-    }
-    if (_assetPickerPreviewText) {
-        if (bCanSelect) {
-            _assetPickerPreviewText->setStyleKey("text.muted");
-            _assetPickerPreviewText->setText(std::format("Selected: {}", selectedPath.filename().string()));
-        }
-        else {
-            _assetPickerPreviewText->setStyleKey("text.error");
-            _assetPickerPreviewText->setText(_filePickerRequest.selectionMode == FileExplorer::SelectionMode::Directory
-                                                 ? "Select a directory to continue."
-                                                 : "Select a file to continue.");
-        }
-    }
-}
-
-void EditorSurface::rebuildAssetPickerRows()
-{
-    if (!_assetPickerExplorer || !_tree || !_assetPickerMountList || !_assetPickerEntryList) {
-        return;
-    }
-
-    const FileExplorer::MountPoint* active = _assetPickerExplorer->getActiveMountPoint();
-    const std::filesystem::path selectedPath = _assetPickerExplorer->getSelectedPath();
-    std::vector<FileExplorer::FEntry> entries;
-    _assetPickerExplorer->collectEntries(entries);
-
-    if (!_assetPickerMountReconciler) {
-        _assetPickerMountReconciler = std::make_unique<UIKeyedChildReconciler>(
-            *_tree, *_assetPickerMountList, makeContentRowFactory());
-    }
-    if (!_assetPickerEntryReconciler) {
-        _assetPickerEntryReconciler = std::make_unique<UIKeyedChildReconciler>(
-            *_tree, *_assetPickerEntryList, makeContentRowFactory());
-    }
-
-    std::vector<std::string> mountKeys;
-    mountKeys.reserve(_assetPickerExplorer->getMountPoints().size());
-    for (const auto& mp : _assetPickerExplorer->getMountPoints()) {
-        mountKeys.push_back("AssetPickerMount_" + mp.name);
-    }
-    _assetPickerMountReconciler->reconcile(
-        mountKeys,
-        [this, active](UIElement& child, const std::string&, size_t index) {
-            const auto& mp = _assetPickerExplorer->getMountPoints()[index];
-            updateContentRow(child,
-                             mp.name,
-                             mp.name,
-                             active != nullptr && active->name == mp.name,
-                             [this](const std::string& itemId) { selectAssetPickerMount(itemId); },
-                             [this](const std::string& itemId) { selectAssetPickerMount(itemId); });
-        },
-        bindEditorListRowSlot);
-
-    std::vector<std::string> entryKeys;
-    entryKeys.reserve(entries.size());
-    for (const auto& entry : entries) {
-        entryKeys.push_back("AssetPickerEntry_" + entry.name);
-    }
-    _assetPickerEntryReconciler->reconcile(
-        entryKeys,
-        [this, &entries, selectedPath](UIElement& child, const std::string&, size_t index) {
-            const auto& entry = entries[index];
-            const std::filesystem::path path = entry.path;
-            const bool bDir = entry.bIsDirectory;
-            updateContentRow(child,
-                             bDir ? entry.name + "/" : entry.name,
-                             entry.name,
-                             selectedPath == path,
-                             [this, path, bDir](const std::string&) { selectAssetPickerItem(path, bDir); },
-                             [this, path, bDir](const std::string&) { activateAssetPickerItem(path, bDir); });
-        },
-        bindEditorListRowSlot);
-}
-
-void EditorSurface::selectAssetPickerMount(const std::string& itemId)
-{
-    if (!_assetPickerExplorer) {
-        return;
-    }
-    for (const auto& candidate : _assetPickerExplorer->getMountPoints()) {
-        if (candidate.name == itemId) {
-            _assetPickerExplorer->selectMountPoint(candidate);
-            _bAssetPickerRowsDirty = true;
-            break;
-        }
-    }
-}
-
-void EditorSurface::selectAssetPickerItem(const std::filesystem::path& path, bool /*bIsDirectory*/)
-{
-    if (!_assetPickerExplorer) {
-        return;
-    }
-    _assetPickerExplorer->setSelectedPath(path);
-    _bAssetPickerRowsDirty = true;
-}
-
-void EditorSurface::activateAssetPickerItem(const std::filesystem::path& path, bool bIsDirectory)
-{
-    if (!_assetPickerExplorer) {
-        return;
-    }
-    if (bIsDirectory) {
-        if (_assetPickerExplorer->navigateInto(path)) {
-            _bAssetPickerRowsDirty = true;
-        }
-        return;
-    }
-    _assetPickerExplorer->setSelectedPath(path);
-    _bAssetPickerRowsDirty = true;
-    confirmAssetPickerDialog();
-}
-
-void EditorSurface::confirmAssetPickerDialog()
-{
-    if (!_assetPickerExplorer || !_filePickerRequest.onPicked) {
-        return;
-    }
-
-    const std::filesystem::path selectedPath = _assetPickerExplorer->getSelectedPath();
-    if (selectedPath.empty()) {
-        return;
-    }
-
-    std::vector<FileExplorer::FEntry> entries;
-    _assetPickerExplorer->collectEntries(entries);
-    if (!isRetainedPickerSelectionValid(entries, selectedPath, _filePickerRequest.selectionMode)) {
-        return;
-    }
-
-    const std::string picked = path_utils::pathToUtf8String(selectedPath);
-    ConfigManager::Editor("editor")
-        .set(_filePickerRequest.configScope + ".lastDirectory", path_utils::pathToUtf8String(selectedPath.parent_path()))
-        .flush();
-
-    std::function<void(std::string)> callback = std::move(_filePickerRequest.onPicked);
-    if (_assetPickerOverlay) {
-        _assetPickerOverlay->close();
-    }
-    if (callback) {
-        callback(picked);
-    }
+    _filePicker->open(*_tree, std::move(request));
 }
 
 void EditorSurface::openEditorSettingsDialog()
