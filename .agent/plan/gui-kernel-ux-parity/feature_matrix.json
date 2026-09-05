@@ -14,9 +14,15 @@
     },
     {
       "id": "typed_drag_payload",
-      "status": "pending",
+      "status": "implemented",
       "phase": "K1",
-      "evidence": []
+      "evidence": [
+        "1c66af41 UIDragDropOperation / FDockPanelDragDropOp / FTreeReorderDragDropOp",
+        "string beginDrag wraps UIStringDragDropOperation",
+        "no kDockPanelPayload parser",
+        "WidgetTreeTest.Dock* + ToolControlsTest tree/row DnD",
+        "gallery_drop.jsonl + dragdrop_interaction.jsonl"
+      ]
     },
     {
       "id": "text_selection",

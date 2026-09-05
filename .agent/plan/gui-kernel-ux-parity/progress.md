@@ -1,5 +1,17 @@
 # Progress
 
+## K1 当前 checkpoint（2026-09-06）
+
+- 代码已在 `1c66af41`：`UIDragDropOperation` 是会话 payload；string `beginDrag` 只包 `UIStringDragDropOperation`；Dock 用 `FDockPanelDragDropOp`；Tree 用 `FTreeReorderDragDropOp`；无 `kDockPanelPayload` 前缀解析。
+- 不停靠 tab 拖与浮窗标题拖抽 helper。
+- 验证：`xmake r ya-gui-closure-test -- --gtest_filter='WidgetTreeTest.Dock*:WidgetTreeTest.*Drag*:ToolControlsTest.SelectableRowDraggable*:ToolControlsTest.TreeViewReorder*'`（14/14）；Gallery `gallery_drop.jsonl` + DragDrop `dragdrop_interaction.jsonl`。
+
+### K1 保留项
+
+- K2–E3 未做。
+- 不合并 `GUIApp` 与 `ya::App`；不拆 WidgetTree / UILayout / GUIAppHost。
+- 未宣称 retained editor ready。
+
 ## K0 当前 checkpoint（2026-09-06）
 
 - 建立 `gui-kernel-ux-parity` 计划工件。
