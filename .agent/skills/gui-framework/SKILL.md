@@ -15,6 +15,16 @@ description: YA GUI 框架（WidgetTree / 控件 / layout / Render2D pass slot /
 - 一个 checkpoint 只能对应一个可运行、可验证的架构目标；代码、测试和 plan/progress 必须在同一提交中，且提交说明必须写清未完成项。
 - `EditorSurface`、`UICompoundWidget`、WidgetTree 和 DSL 的边界若尚未验证，不得继续向宿主文件堆实现；先停下来做边界审计。
 
+## UX vs closure 测试
+
+- `ya-gui-closure-test` 覆盖 dump / dirty / route / snapshot contract，**不是**手感门禁。
+  不要把「N dump tests passed」写成 UX 完成。
+- 手感验收走 Gallery `--scenario` 的状态组合（见下方交互契约 1–5）和 editor 手测
+  （选区、选色、dock 关 tab、Hierarchy 右键）。路径存在 ≠ 手感等价。
+- 内核体验长线见 `.agent/plan/gui-kernel-ux-parity/`。parity 表
+  `.agent/plan/gui-framework-editor-readiness/imgui-widgettree-parity.md`
+  里 ✅ 只表示 retained 有一条能完成核心工作流的路径。
+
 ## 模块地图
 
 ```text

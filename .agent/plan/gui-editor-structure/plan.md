@@ -36,6 +36,8 @@ rebuild: new tree/theme/dock -> shell chrome -> tab.build() 挂进 FDockContext
 
 Hierarchy / Viewport / Menu / Dock persist / dialogs 留在 Surface（chrome 编排）。Content / Asset / UI Designer / Runtime Tools 必须是独立 tab owner。
 
+结构面 C0–C3 已完成。内核手感与 ImGui 工作流接线见 `.agent/plan/gui-kernel-ux-parity/`。
+
 ## Checkpoints
 
 - **C0**：口径与编排图（skill + 本计划工件，不改 C++）
@@ -44,3 +46,5 @@ Hierarchy / Viewport / Menu / Dock persist / dialogs 留在 Surface（chrome 编
 - **C3**：拆 `InputExtras`；Dock drag 仅在真重复时抽 helper
 
 每个 checkpoint 必须有代码或文档闭环、验证和一次 `[gui] ...` 提交。
+
+结构面 C0–C3 已完成。内核手感与 ImGui 工作流接线见 `.agent/plan/gui-kernel-ux-parity/`。

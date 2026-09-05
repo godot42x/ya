@@ -129,6 +129,7 @@
 - [x] Phase 10E：其余 tab owner（仅稳定边界；禁止按行数切文件）。落地在 `.agent/plan/gui-editor-structure/` C2。
 - [ ] Windows/MSVC 组合回归（本机未跑；未通过则不得宣称 retained editor ready）。
 - [ ] OpenGL GUI/editor presentation（`GUIAppHost` 现为 Vulkan-only）。
+- 内核手感（选区 / 选色 / dock 关 tab / Hierarchy 右键 / chrome 图标）不在本文件继续拆 EditorSurface，落地 `.agent/plan/gui-kernel-ux-parity/`。
 
 ## Phase 10F：Property binding/accessor boundary
 

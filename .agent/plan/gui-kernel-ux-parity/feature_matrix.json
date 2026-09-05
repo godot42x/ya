@@ -1,0 +1,58 @@
+{
+  "plan": "gui-kernel-ux-parity",
+  "as_of": "2026-09-06",
+  "features": [
+    {
+      "id": "gap_freeze",
+      "status": "implemented",
+      "phase": "K0",
+      "evidence": [
+        "gui-kernel-ux-parity plan artifacts",
+        "skill: closure tests are not UX gate",
+        "parity table path vs feel split"
+      ]
+    },
+    {
+      "id": "typed_drag_payload",
+      "status": "pending",
+      "phase": "K1",
+      "evidence": []
+    },
+    {
+      "id": "text_selection",
+      "status": "pending",
+      "phase": "K2",
+      "evidence": []
+    },
+    {
+      "id": "color_picker",
+      "status": "pending",
+      "phase": "K3",
+      "evidence": []
+    },
+    {
+      "id": "dock_tab_close_reorder",
+      "status": "pending",
+      "phase": "K4",
+      "evidence": []
+    },
+    {
+      "id": "hierarchy_tree_crud",
+      "status": "pending",
+      "phase": "E1",
+      "evidence": []
+    },
+    {
+      "id": "chrome_icons",
+      "status": "pending",
+      "phase": "E2",
+      "evidence": []
+    },
+    {
+      "id": "designer_dnd_imgui_dead",
+      "status": "pending",
+      "phase": "E3",
+      "evidence": []
+    }
+  ]
+}

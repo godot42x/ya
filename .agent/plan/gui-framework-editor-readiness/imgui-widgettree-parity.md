@@ -1,19 +1,21 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-06 (after dock session rename to FDockContext)  
+> **As of:** 2026-09-06 (gui-kernel-ux-parity K0: path vs feel)  
 > **Default chrome:** WidgetTree only (`EditorSurface`)  
 > **Legacy chrome:** `--editor-chrome=imgui` is ignored (WARN); `onImGuiRender` deleted  
-> **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, but legacy helpers still require it.
+> **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, but leftover helpers still require it. **Hand-feel** is a separate gate: see `.agent/plan/gui-kernel-ux-parity/`.
 
 ## How to read
 
 | Symbol | Meaning |
 |--------|---------|
-| ✅ | Widgettree default path has functional parity for the **core workflow**; safe to delete the ImGui-only *render entry* once verified. |
-| 🟡 | Retained path exists but **known gaps** vs legacy ImGui (listed in Notes). |
-| 🔴 | **ImGui-only** today (`onImGuiRender` / `FilePicker` / ImGuizmo bridge). Widgettree has no equivalent UI. |
+| ✅ | Widgettree default path has functional parity for the **core workflow**; safe to delete the ImGui-only *render entry* once verified. **Does not mean** daily ImGui hand-feel (selection, picker, tab close, tree CRUD). |
+| 🟡 | Retained path exists but **known gaps** vs legacy ImGui (listed in Notes). Often a feel gap, not a missing host. |
+| 🔴 | **No equivalent UI** on the retained path (or still ImGui-only leftover). |
 | ⚫ | Old ImGui implementation **already removed**; capability may be partial or replaced elsewhere. |
 | ➖ | Not applicable / intentionally out of scope for this migration. |
+
+**Path vs feel:** a row can be ✅ (you can finish the job) and still fail daily editor muscle memory. Kernel feel work lives in `gui-kernel-ux-parity` (K2–K4, E1–E3). Closure dump tests are not a feel gate.
 
 **Deletion rule (per feature row):**
 
@@ -31,8 +33,8 @@
 | Default host | `EditorModule::onBeforePresentation` → `onImGuiRender` | `onPresentation` → `EditorSurface::tick` + snapshot replay | ⚫ / ✅ | ImGui chrome host removed in 8W |
 | Project browser (no project) | `EditorLayer::projectBrowserWindow` | `EditorSurface::buildProjectBrowser` | ⚫ / ✅ | ImGui window deleted 8W |
 | Main menu | `EditorLayer::menuBar` (ImGui) | `UIMenuBar` + `ActionMap` | ⚫ / 🟡 | ImGui menu deleted 8W; see File menu gaps below |
-| Toolbar | `EditorLayer::toolbar` (icon `ImageButton`) | Text `UIButton` row | ⚫ / 🟡 | ImGui toolbar deleted 8W |
-| Dock layout | ImGui `DockSpace` | `FDockContext` + `UIDockSpace` | ✅ | Compact dock tab strip; hide-tab-bar hides title strip only (corner + right-click); live split-resize does not rematerialize; docked tree + floating geometry persist in `editor.dockLayout` |
+| Toolbar | `EditorLayer::toolbar` (icon `ImageButton`) | Text `UIButton` row | ⚫ / 🟡 | ImGui toolbar deleted 8W; **feel:** no icons (E2) |
+| Dock layout | ImGui `DockSpace` | `FDockContext` + `UIDockSpace` | 🟡 | Path: compact strip, hide-tab-bar, persist `editor.dockLayout`. **Feel:** no leaf tab close / same-leaf reorder (K4); tear-off only |
 | Editor Settings window | `EditorLayer::editorSettings` | `EditorSettingsDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui window deleted 8W; 10E owner extract |
 | Debug images window | `EditorLayer::debugWindow` | `EditorDebugImagesTab` dock tab | ⚫ / ✅ | ImGui window deleted 8W; cube-face button grid not retained |
 | Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | `EditorFilePickerDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui FilePicker modal chrome deleted 8W; `FilePicker` type remains for fallback APIs |
@@ -70,7 +72,7 @@
 | Viewport pick | `onEvent` | `onEvent` (via `EditorInputNode`) | ✅ | |
 | Gizmo translate/rotate/scale | W/E/R + ImGuizmo | Same | 🟡 | Bridge retained; not pure WidgetTree draw |
 | Gizmo undo session | `EditorTransformUndo` | Same | ✅ | |
-| Hierarchy delete | Viewport context menu / shortcuts | `cmdDeleteSelection` + Delete key | ✅ | No hierarchy-tree UI; viewport/menu/shortcut path |
+| Hierarchy delete | Viewport context menu / shortcuts | `cmdDeleteSelection` + Delete key | 🟡 | Viewport/menu/shortcut path exists; **feel:** no tree context menu (E1) |
 | Duplicate selection | Viewport context menu / shortcuts | `cmdDuplicateSelection` + Ctrl/Cmd+D | ✅ | |
 
 ---
@@ -85,7 +87,7 @@
 | Mount list + entries | `FileExplorer::render` | Keyed reconciler + visible window | ✅ | |
 | Search / filter | ImGui | `UITextField` + fingerprint | ✅ | |
 | Texture inspect | Panel callback | `inspectAsset` → Asset Inspector tab | ✅ | |
-| Icons | `ContentBrowserPanel::init` (ImGui tex) | Retained rows (no ImGui icons in list) | 🟡 | Cosmetic |
+| Icons | `ContentBrowserPanel::init` (ImGui tex) | Retained rows (no ImGui icons in list) | 🟡 | Cosmetic; textures already loaded in `EditorLayer::onAttach` (E2) |
 
 ### Hierarchy
 
@@ -93,7 +95,7 @@
 |---------|--------------|------------|--------|-------|
 | Panel render | `sceneTree` draw | `UITreeView` in dock panel | ⚫ / ✅ | ImGui draw removed 8O |
 | Selection sync | `SceneHierarchyPanel` | Same panel as selection bus | ✅ | |
-| Entity CRUD from tree UI | Context / ImGui menus | — | 🔴 | Create/delete not in retained hierarchy |
+| Entity CRUD from tree UI | Context / ImGui menus | — | 🔴 | Create/delete not in retained hierarchy (E1: ActionMap on tree right-click) |
 
 ### Inspector (entity / component)
 
@@ -135,7 +137,7 @@
 | Panel render | `UIDesignerPanel::onImGuiRender` | Retained tab: palette + tree + inspector | ⚫ / 🟡 | 8G shell; 8T palette/inspector |
 | Document open/save | Data layer | Same `UIDesignerPanel` APIs | ✅ | |
 | Widget palette | `drawPalette` (⚫) | `UITypeRegistry` button list + `addPaletteWidget` | ✅ | Phase 8T |
-| Widget tree authoring | `drawWidgetTree` (⚫) | `UITreeView` + canvas pick sync | 🟡 | DnD reorder UI still missing |
+| Widget tree authoring | `drawWidgetTree` (⚫) | `UITreeView` + canvas pick sync | 🟡 | **Feel:** tree DnD not retained (E3 / K1 typed op) |
 | Field inspector | `drawInspector` + `TypeRenderer` (⚫) | `PropertyGraph` + `EditorAutoPropertySection` | ✅ | Phase 8T |
 | Preview canvas / pick / drop | Data layer (`pickAt`, `applyWidgetDrop`) | 2D viewport mode + `EditorModule` compose | 🟡 | Canvas overlay works in 2D mode; tree DnD not retained |
 | Delete widget | Keyboard in 2D canvas mode | `UIDesignerPanel::deleteWidget` via `onEvent` | 🟡 | Works in 2D mode only |
@@ -208,21 +210,18 @@ Hierarchy tree CRUD remains a retained-UI gap, not an ImGui chrome blocker.
 
 ## Suggested migration order (next checkpoints)
 
-1. ~~**8R** — Viewport authoring parity: retained context menu + Delete/Duplicate actions (`ActionMap`)~~  
-2. **8S** — ~~Generalize retained file picker~~ ✅  
-3. **8T** — ~~UI Designer palette + inspector~~ ✅  
-4. ~~**8V** — Debug window: retained panel or descope~~ ✅  
-5. ~~**8W** — Remove `onImGuiRender` shell~~ ✅  
-6. ~~**9B** — Large hierarchy / content catalog / inspector snapshot baseline~~ ✅  
-7. ~~**9C** — Attach/detach + theme-switch soak~~ ✅  
-8. ~~**9D** — DPI / CJK / keyboard / IME / clipboard / text editing~~ ✅  
-9. ~~**9E** — Snapshot digest, GPU/offscreen parity, automation route trace~~ ✅  
-10. ~~**9F** — Release checklist~~ ✅（macOS/Vulkan Pass；Windows/MSVC and OpenGL presentation remain blockers）  
-11. ~~**10E** — Collapse retained file/save-as/asset pickers into `EditorFilePickerDialog`~~ ✅  
-12. ~~**10E** — Extract `EditorSettingsDialog` overlay owner~~ ✅  
-13. ~~**10E** — Inspector leaf labels + `editor_density` tokens + short dock tabs~~ ✅  
-14. ~~**10E follow-up** — remaining stable tab owners~~ ✅（落地 `gui-editor-structure` C2）；leftover chrome literals 仍开放  
-15. Release blockers — XP-WIN, XP-OGL, SOAK-HR, `imgui-local`  
+Kernel feel (not another `EditorSurface` split) — `.agent/plan/gui-kernel-ux-parity/`:
+
+1. **K0** — Freeze path vs feel (this file + skill)  
+2. **K1** — Typed `UIDragDropOperation` only payload (`1c66af41` landed code; plan records evidence)  
+3. **K2** — `UITextField` selection + DragFloat/SpinBox edit reuse + I-beam  
+4. **K3** — ColorEdit SV/hue/hex picker  
+5. **K4** — Dock leaf tab close + same-leaf reorder  
+6. **E1** — Hierarchy tree right-click CRUD via existing `ActionMap`  
+7. **E2** — Toolbar / Content Browser icons  
+8. **E3** — UI Designer tree DnD; delete dead `TypeRenderer` / ImGui `FilePicker::render`
+
+Release blockers still outside this line: XP-WIN, XP-OGL, SOAK-HR, remaining `imgui-local` after E3.  
 
 ---
 
