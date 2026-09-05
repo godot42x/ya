@@ -1,6 +1,12 @@
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 
+#include "GUI/Widgets/UIElement.h"
+#include "GUI/Widgets/WidgetTree.h"
+
 #include <algorithm>
+#include <string>
+#include <functional>
+#include <unordered_set>
 
 namespace ya
 {
@@ -21,6 +27,43 @@ DockPanelId FDockContext::addPanel(const std::string& stableKey, const std::stri
     return id;
 }
 
+bool FDockContext::setPanelClosable(DockPanelId id, bool closable)
+{
+    return _model.setPanelClosable(id, closable);
+}
+
+bool FDockContext::setPanelClosable(std::string_view stableKey, bool closable)
+{
+    const FDockPanelRecord* record = _model.findPanelByStableKey(std::string(stableKey));
+    return record && _model.setPanelClosable(record->id, closable);
+}
+
+bool FDockContext::closePanel(DockPanelId id)
+{
+    FPanel* panel = findPanel(id);
+    if (!panel) {
+        return false;
+    }
+    const FDockPanelRecord* record = _model.findPanel(id);
+    if (record && !record->closable) {
+        return false;
+    }
+    if (panel->widget && panel->widget->isAttached()) {
+        if (WidgetTree* tree = panel->widget->getTree()) {
+            tree->detach(*panel->widget);
+        }
+    }
+    if (isPanelFloating(id)) {
+        endFloatingForPanel(id);
+    }
+    if (!_model.removePanel(id)) {
+        return false;
+    }
+    _panels.erase(id);
+    fireDockUpdated();
+    return true;
+}
+
 const FDockContext::FPanel* FDockContext::findPanel(DockPanelId id) const
 {
     auto it = _panels.find(id);
@@ -31,6 +74,85 @@ FDockContext::FPanel* FDockContext::findPanel(DockPanelId id)
 {
     auto it = _panels.find(id);
     return it == _panels.end() ? nullptr : &it->second;
+}
+
+const FDockContext::FPanel* FDockContext::findPanelByStableKey(std::string_view stableKey) const
+{
+    const FDockPanelRecord* record = _model.findPanelByStableKey(std::string(stableKey));
+    return record ? findPanel(record->id) : nullptr;
+}
+
+bool FDockContext::hasPanel(std::string_view stableKey) const
+{
+    return findPanelByStableKey(stableKey) != nullptr;
+}
+
+bool FDockContext::activatePanel(std::string_view stableKey)
+{
+    const FPanel* panel = findPanelByStableKey(stableKey);
+    if (!panel) {
+        return false;
+    }
+    if (const FDockNode* leaf = _model.findLeafForPanel(panel->id)) {
+        if (leaf->selectedPanel == panel->id) {
+            return true;
+        }
+        if (!_model.selectPanel(panel->id)) {
+            return false;
+        }
+        fireDockUpdated();
+        return true;
+    }
+    const FFloatingWindow* floating = findFloatingByPanel(panel->id);
+    if (!floating) {
+        return false;
+    }
+    if (floating->activePanelId == panel->id) {
+        return true;
+    }
+    setFloatingWindowActivePanel(floating->id, panel->id);
+    fireFloatingUpdated();
+    notifyDockLayoutListeners();
+    return true;
+}
+
+std::vector<std::string> FDockContext::collectLayoutPanelKeys(const nlohmann::json& layout)
+{
+    std::vector<std::string> keys;
+    std::unordered_set<std::string> seen;
+    const auto add = [&](const std::string& key) {
+        if (key.empty() || !seen.insert(key).second) {
+            return;
+        }
+        keys.push_back(key);
+    };
+    std::function<void(const nlohmann::json&)> walk = [&](const nlohmann::json& node) {
+        if (!node.is_object()) {
+            return;
+        }
+        if (node.contains("panels") && node["panels"].is_array()) {
+            for (const nlohmann::json& panel : node["panels"]) {
+                if (panel.is_string()) {
+                    add(panel.get<std::string>());
+                }
+            }
+        }
+        if (node.contains("root")) {
+            walk(node["root"]);
+        }
+        if (node.contains("children") && node["children"].is_array()) {
+            for (const nlohmann::json& child : node["children"]) {
+                walk(child);
+            }
+        }
+        if (node.contains("floating") && node["floating"].is_array()) {
+            for (const nlohmann::json& window : node["floating"]) {
+                walk(window);
+            }
+        }
+    };
+    walk(layout);
+    return keys;
 }
 
 FDockFloatingWindowId FDockContext::tearOffPanel(DockPanelId panelId, const glm::vec2& pos, const glm::vec2& size)

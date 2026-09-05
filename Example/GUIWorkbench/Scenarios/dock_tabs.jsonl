@@ -1,0 +1,23 @@
+# GUIWorkbench --start-page=Dock. Leaf tab close + same-leaf reorder.
+# Hierarchy/Assets share the west leaf; Scene is not closable; Console is.
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"Tab_Hierarchy","control":{"type":"tabButton","closable":true}}}
+{"assert":{"widget":"Tab_Assets","control":{"type":"tabButton","closable":true}}}
+{"assert":{"widget":"Tab_Scene","control":{"type":"tabButton","closable":false}}}
+{"assert":{"widget":"Tab_Console","control":{"type":"tabButton","closable":true}}}
+{"assert":{"widget":"DockTabBar4","control":{"type":"tabBar","tabs":["Hierarchy","Assets"]}}}
+{"checkpoint":"dock_tabs"}
+# Drag Assets onto the left half of Hierarchy so the west leaf becomes Assets, Hierarchy.
+{"drag":{"from":[459,57],"to":[325,57],"button":0,"steps":8}}
+{"frame":3}
+{"assert":{"widget":"DockTabBar4","control":{"type":"tabBar","tabs":["Assets","Hierarchy"]}}}
+{"checkpoint":"leaf_reordered"}
+# Console close hit-zone is the trailing 12px of Tab_Console at (529,554) 82x21.
+{"event":"mouse_press","x":602,"y":564,"button":0}
+{"event":"mouse_release","x":602,"y":564,"button":0}
+{"frame":3}
+{"assert":{"widget":"!Tab_Console"}}
+{"assert":{"widget":"!DockLeaf7"}}
+{"checkpoint":"console_closed"}
+{"frame":1}

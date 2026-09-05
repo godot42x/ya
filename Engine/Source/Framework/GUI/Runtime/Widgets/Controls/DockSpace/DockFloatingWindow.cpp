@@ -490,7 +490,18 @@ void UIDockFloatingWindow::refreshFromContext()
     }
     for (const DockPanelId pid : rec->panelIds) {
         const std::string title = _context->findPanel(pid) ? _context->findPanel(pid)->name : std::string{};
-        _tabBar->addTab(title.empty() ? "?" : title);
+        UITabButton* tab = _tabBar->addTab(title.empty() ? "?" : title);
+        if (const FDockPanelRecord* record = _context->dockModel().findPanel(pid)) {
+            tab->_bClosable = record->closable;
+            if (record->closable) {
+                tab->_onClose = [this, pid]()
+                {
+                    if (_context) {
+                        _context->closePanel(pid);
+                    }
+                };
+            }
+        }
     }
     _panelId = rec->activePanelId;
     if (_context->findPanel(_panelId)) {

@@ -157,6 +157,8 @@ Surface 只编排 shell、dock persist、viewport host 和 dialogs。
   面板内容继续填满 leaf。split ratio / 选 tab / hide-tab-bar 只改 live chrome 并
   `notifyDockLayoutListeners()`；结构变化才 `rebuildProjection()`，且会先 unlink 再
   reparent/attach 已挂载的 panel widget，禁止对仍有 parent 的 panel `addDetachedChild`）。
+  叶内 tab 可关（`UITabButton` close hit-zone → `FDockContext::closePanel`）并可在同 leaf
+  拖到 tab 条上 `movePanel` 重排；`FDockPanelRecord.closable=false` 隐藏关闭钮。
   `FDockContext::exportLayoutJson` / `importLayoutJson` 在同一 JSON 上附加
   `floating[]`（panel keys + pos/size + selected tab + `hideTabBar`）。Editor 经
   `ConfigManager` `editor.dockLayout` 恢复，`FDockContext::appendOnDockUpdated`

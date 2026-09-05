@@ -132,6 +132,16 @@ bool FDockTreeModel::selectPanel(DockPanelId panelId)
     return true;
 }
 
+bool FDockTreeModel::setPanelClosable(DockPanelId panelId, bool closable)
+{
+    auto it = _panels.find(panelId);
+    if (it == _panels.end()) {
+        return false;
+    }
+    it->second.closable = closable;
+    return true;
+}
+
 bool FDockTreeModel::removePanelFromLeaf(DockPanelId panelId, FDockNode*& source)
 {
     source = findLeafForPanel(panelId);
@@ -146,7 +156,33 @@ bool FDockTreeModel::movePanel(DockPanelId panelId, DockNodeId targetLeafId, siz
 {
     FDockNode* target = findNode(targetLeafId);
     FDockNode* source = findLeafForPanel(panelId);
-    if (!findPanel(panelId) || !target || target->kind != EDockNodeKind::Leaf || !source || source == target) return false;
+    if (!findPanel(panelId) || !target || target->kind != EDockNodeKind::Leaf || !source) {
+        return false;
+    }
+
+    if (source == target) {
+        auto& ids = source->panelIds;
+        auto  fromIt = std::find(ids.begin(), ids.end(), panelId);
+        if (fromIt == ids.end()) {
+            return false;
+        }
+        const size_t from = static_cast<size_t>(std::distance(ids.begin(), fromIt));
+        size_t       to   = insertIndex;
+        if (to == SIZE_MAX || to > ids.size()) {
+            to = ids.size();
+        }
+        if (to == from || to == from + 1) {
+            source->selectedPanel = panelId;
+            return true;
+        }
+        ids.erase(ids.begin() + static_cast<std::ptrdiff_t>(from));
+        if (to > from) {
+            --to;
+        }
+        ids.insert(ids.begin() + static_cast<std::ptrdiff_t>(to), panelId);
+        source->selectedPanel = panelId;
+        return validateInvariants();
+    }
 
     auto backup = cloneNode(*_root, nullptr);
     const DockNodeId nextNodeId = _nextNodeId;
@@ -318,11 +354,15 @@ std::vector<DockNodeId> FDockTreeModel::leafIds() const
 
 bool FDockTreeModel::removePanel(DockPanelId panelId)
 {
-    if (!findPanel(panelId) || !findLeafForPanel(panelId)) return false;
+    if (!findPanel(panelId)) return false;
+    FDockNode* source = findLeafForPanel(panelId);
+    if (!source) {
+        _panels.erase(panelId);
+        return true;
+    }
     auto backup = cloneNode(*_root, nullptr);
     const auto panelsBackup = _panels;
     const DockNodeId nextNodeId = _nextNodeId;
-    FDockNode* source = nullptr;
     if (!removePanelFromLeaf(panelId, source)) return false;
     _panels.erase(panelId);
     if (source->panelIds.empty() && !source->persistentEmptyLeaf) collapseEmptyLeaf(source);

@@ -154,6 +154,7 @@ private:
     std::shared_ptr<UIElement> materializeNode(const FDockNode& node);
     FLeafView* leafViewForLeaf(DockNodeId leafId);
     [[nodiscard]] const FLeafView* leafViewForLeaf(DockNodeId leafId) const;
+    [[nodiscard]] size_t tabInsertIndexAt(DockNodeId leafId, const glm::vec2& logicalPoint) const;
     [[nodiscard]] std::optional<FDropPreview> resolveDropPreview(const glm::vec2& logicalPoint,
                                                                  DockPanelId panelId) const;
     void clearPreview();

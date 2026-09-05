@@ -9,9 +9,36 @@
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
 #include <algorithm>
+#include <nlohmann/json.hpp>
 
 namespace ya
 {
+
+namespace
+{
+
+constexpr float kTabCloseSize = 12.0f;
+constexpr float kTabClosePad  = 3.0f;
+
+bool containsPoint(const Rect2D& rect, const glm::vec2& point)
+{
+    return point.x >= rect.pos.x && point.x < rect.pos.x + rect.extent.x &&
+           point.y >= rect.pos.y && point.y < rect.pos.y + rect.extent.y;
+}
+
+} // namespace
+
+Rect2D UITabButton::closeHitRect() const
+{
+    if (!_bClosable || _layoutRect.extent.x <= 0.0f) {
+        return {};
+    }
+    return Rect2D{
+        .pos    = {_layoutRect.pos.x + _layoutRect.extent.x - kTabClosePad - kTabCloseSize,
+                   _layoutRect.pos.y + (_layoutRect.extent.y - kTabCloseSize) * 0.5f},
+        .extent = {kTabCloseSize, kTabCloseSize},
+    };
+}
 
 void UITabButton::paintSelf(UIFrameBuilder& builder)
 {
@@ -43,7 +70,14 @@ void UITabButton::paintSelf(UIFrameBuilder& builder)
     }
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {
-        builder.addText(_layoutRect, _label, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+        Rect2D labelRect = _layoutRect;
+        if (_bClosable) {
+            labelRect.extent.x = std::max(0.0f, labelRect.extent.x - (kTabCloseSize + kTabClosePad * 2.0f));
+        }
+        builder.addText(labelRect, _label, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+        if (_bClosable) {
+            builder.addText(closeHitRect(), "x", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+        }
     }
 }
 
@@ -56,7 +90,9 @@ glm::vec2 UITabButton::computeDesiredSize() const
     const FTabStyle& style = resolvedStyle(ReactiveBase::EDirtyLevel::Layout, false);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     const float textWidth = font ? font->measureText(_label) : static_cast<float>(_label.size()) * 7.0f;
-    return {textWidth + style.padding.x * 2.0f, style.padding.y * 2.0f + (font ? font->lineHeight : 14.0f)};
+    const float closeW    = _bClosable ? (kTabCloseSize + kTabClosePad) : 0.0f;
+    return {textWidth + style.padding.x * 2.0f + closeW,
+            style.padding.y * 2.0f + (font ? font->lineHeight : 14.0f)};
 }
 
 bool UITabButton::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
@@ -99,6 +135,13 @@ bool UITabButton::handleInputEvent(const Event& event, const WidgetEventContext&
 
     if (eventType == EEvent::MouseButtonPressed) {
         const auto& mouse = static_cast<const MouseButtonPressedEvent&>(event);
+        if (mouse.GetMouseButton() == EMouse::Left && _bClosable &&
+            containsPoint(closeHitRect(), ctx.logicalPoint)) {
+            if (_onClose) {
+                _onClose();
+            }
+            return true;
+        }
         if (mouse.GetMouseButton() == EMouse::Right) {
             if (_onContextMenu) {
                 _onContextMenu(ctx.logicalPoint);
@@ -285,6 +328,17 @@ glm::vec2 UITabBar::computeDesiredSize() const
     const glm::vec2 pad = getBoxLayout().getPadding();
     const float headerH = pad.y * 2.0f + (font ? font->lineHeight : 14.0f);
     return {base.x, std::max(base.y, headerH)};
+}
+
+void UITabBar::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const
+{
+    nlohmann::json tabs = nlohmann::json::array();
+    for (const UITabButton* tab : _tabs) {
+        if (tab) {
+            tabs.push_back(tab->_label);
+        }
+    }
+    node["control"] = {{"type", "tabBar"}, {"tabs", std::move(tabs)}, {"selected", _selectedIndex}};
 }
 
 void UITabBar::paintSelf(UIFrameBuilder& builder)

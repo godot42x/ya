@@ -61,6 +61,22 @@ T* findDescendantOfType(UIElement& root)
     return nullptr;
 }
 
+UIElement* findNamedDescendant(UIElement& root, std::string_view name)
+{
+    if (root._name == name) {
+        return &root;
+    }
+    for (const UIElementRef& child : root.getChildren()) {
+        if (!child) {
+            continue;
+        }
+        if (UIElement* found = findNamedDescendant(*child, name)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
 std::shared_ptr<UIButton> makeButton(const std::string& name, glm::vec2 pos, glm::vec2 size)
 {
     (void)pos;
@@ -1961,6 +1977,73 @@ TEST(WidgetTreeTest, DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget)
     const auto* floating = ws->findFloatingByPanel(panelId);
     ASSERT_NE(floating, nullptr);
     EXPECT_EQ(floating->pos, glm::vec2(520.0f, 410.0f));
+}
+
+TEST(WidgetTreeTest, DockSpaceTabCloseRemovesClosablePanel)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<FDockContext>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto keep  = std::make_shared<UIPanel>("KeepBody");
+    auto close = std::make_shared<UIPanel>("CloseBody");
+    const DockPanelId keepId  = ws->addPanel("Keep", keep);
+    const DockPanelId closeId = ws->addPanel("CloseMe", close);
+    ASSERT_NE(keepId, kInvalidDockPanelId);
+    ASSERT_NE(closeId, kInvalidDockPanelId);
+    tree.layout();
+
+    auto* tab = dynamic_cast<UITabButton*>(findNamedDescendant(*dock, "Tab_CloseMe"));
+    ASSERT_NE(tab, nullptr);
+    EXPECT_TRUE(tab->_bClosable);
+    const Rect2D    hit = tab->closeHitRect();
+    const glm::vec2 at  = hit.pos + hit.extent * 0.5f;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(at.x, at.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(ws->findPanel(closeId), nullptr);
+    EXPECT_EQ(findNamedDescendant(*dock, "Tab_CloseMe"), nullptr);
+    EXPECT_NE(ws->findPanel(keepId), nullptr);
+    ASSERT_TRUE(ws->setPanelClosable(keepId, false));
+    EXPECT_FALSE(ws->closePanel(keepId));
+}
+
+TEST(WidgetTreeTest, DockSpaceSameLeafTabDropReorders)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<FDockContext>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto panelA = std::make_shared<UIPanel>("ABody");
+    auto panelB = std::make_shared<UIPanel>("BBody");
+    const DockPanelId aId = ws->addPanel("Alpha", panelA);
+    const DockPanelId bId = ws->addPanel("Beta", panelB);
+    tree.layout();
+    EXPECT_EQ(ws->dockModel().getRootNode()->panelIds, (std::vector<DockPanelId>{aId, bId}));
+
+    UITabBar* bar = findDescendantOfType<UITabBar>(*dock);
+    ASSERT_NE(bar, nullptr);
+    ASSERT_TRUE(static_cast<bool>(bar->_onTabDragBegin));
+    bar->_onTabDragBegin(1, "Beta");
+    ASSERT_TRUE(tree.isDragging());
+
+    UIElement* tabA = findNamedDescendant(*dock, "Tab_Alpha");
+    ASSERT_NE(tabA, nullptr);
+    const glm::vec2 drop{tabA->_layoutRect.pos.x + 2.0f,
+                         tabA->_layoutRect.pos.y + tabA->_layoutRect.extent.y * 0.5f};
+    tree.updateDrag(drop);
+    tree.endDrag(drop);
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_EQ(ws->dockModel().getRootNode()->panelIds, (std::vector<DockPanelId>{bId, aId}));
 }
 
 TEST(WidgetTreeTest, FloatingWindowTabDragBehaviorStartsDockPanelSession)

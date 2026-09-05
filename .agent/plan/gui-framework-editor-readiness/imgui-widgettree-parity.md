@@ -1,6 +1,6 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-06 (gui-kernel-ux-parity K3: ColorEdit SV/hue/hex picker)  
+> **As of:** 2026-09-06 (gui-kernel-ux-parity K4: dock tab close + same-leaf reorder)  
 > **Default chrome:** WidgetTree only (`EditorSurface`)  
 > **Legacy chrome:** `--editor-chrome=imgui` is ignored (WARN); `onImGuiRender` deleted  
 > **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, but leftover helpers still require it. **Hand-feel** is a separate gate: see `.agent/plan/gui-kernel-ux-parity/`.
@@ -34,7 +34,7 @@
 | Project browser (no project) | `EditorLayer::projectBrowserWindow` | `EditorSurface::buildProjectBrowser` | ⚫ / ✅ | ImGui window deleted 8W |
 | Main menu | `EditorLayer::menuBar` (ImGui) | `UIMenuBar` + `ActionMap` | ⚫ / 🟡 | ImGui menu deleted 8W; see File menu gaps below |
 | Toolbar | `EditorLayer::toolbar` (icon `ImageButton`) | Text `UIButton` row | ⚫ / 🟡 | ImGui toolbar deleted 8W; **feel:** no icons (E2) |
-| Dock layout | ImGui `DockSpace` | `FDockContext` + `UIDockSpace` | 🟡 | Path: compact strip, hide-tab-bar, persist `editor.dockLayout`. **Feel:** no leaf tab close / same-leaf reorder (K4); tear-off only |
+| Dock layout | ImGui `DockSpace` | `FDockContext` + `UIDockSpace` | 🟡 | Path: compact strip, hide-tab-bar, persist `editor.dockLayout`. **Feel (K4):** leaf tab close + same-leaf reorder; Viewport/Hierarchy/Inspector hide close |
 | Editor Settings window | `EditorLayer::editorSettings` | `EditorSettingsDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui window deleted 8W; 10E owner extract |
 | Debug images window | `EditorLayer::debugWindow` | `EditorDebugImagesTab` dock tab | ⚫ / ✅ | ImGui window deleted 8W; cube-face button grid not retained |
 | Auxiliary modals | `renderAuxiliaryUi` → `FilePicker::render` | `EditorFilePickerDialog` hosted by `EditorSurface` | ⚫ / ✅ | ImGui FilePicker modal chrome deleted 8W; `FilePicker` type remains for fallback APIs |
@@ -216,7 +216,7 @@ Kernel feel (not another `EditorSurface` split) — `.agent/plan/gui-kernel-ux-p
 2. **K1** — Typed `UIDragDropOperation` only payload ✅ (`1c66af41`; this checkpoint records evidence)  
 3. **K2** — `UITextField` selection + DragFloat/SpinBox edit reuse + I-beam ✅  
 4. **K3** — ColorEdit SV/hue/hex picker ✅  
-5. **K4** — Dock leaf tab close + same-leaf reorder  
+5. **K4** — Dock leaf tab close + same-leaf reorder ✅  
 6. **E1** — Hierarchy tree right-click CRUD via existing `ActionMap`  
 7. **E2** — Toolbar / Content Browser icons  
 8. **E3** — UI Designer tree DnD; delete dead `TypeRenderer` / ImGui `FilePicker::render`

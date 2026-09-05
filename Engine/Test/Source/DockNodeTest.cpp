@@ -1,9 +1,13 @@
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
+#include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/WidgetTree.h"
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
+
+#include <algorithm>
 
 namespace ya
 {
@@ -80,7 +84,7 @@ TEST(DockNodeTest, InvalidMutationDoesNotChangeModel)
     EXPECT_TRUE(model.validateInvariants());
 }
 
-TEST(DockNodeTest, MoveToSameLeafIsAtomicNoOp)
+TEST(DockNodeTest, MoveToSameLeafNoOpKeepsOrder)
 {
     FDockTreeModel model;
     registerPanel(model, 1, "scene");
@@ -88,7 +92,7 @@ TEST(DockNodeTest, MoveToSameLeafIsAtomicNoOp)
     const auto* before = model.findLeafForPanel(1);
     ASSERT_NE(before, nullptr);
     const auto beforePanels = before->panelIds;
-    EXPECT_FALSE(model.movePanel(1, before->id));
+    EXPECT_TRUE(model.movePanel(1, before->id));
     ASSERT_NE(model.findLeafForPanel(1), nullptr);
     EXPECT_EQ(model.findLeafForPanel(1)->panelIds, beforePanels);
     EXPECT_TRUE(model.validateInvariants());
@@ -121,6 +125,25 @@ TEST(DockNodeTest, SplitEmptyLeafKeepsPersistentPlaceholder)
     ASSERT_NE(empty, nullptr);
     EXPECT_TRUE(empty->panelIds.empty());
     EXPECT_TRUE(empty->persistentEmptyLeaf);
+    EXPECT_TRUE(model.validateInvariants());
+}
+
+TEST(DockNodeTest, SameLeafMoveReordersTabs)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "hierarchy");
+    registerPanel(model, 2, "assets");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.addPanel(2));
+    const DockNodeId leafId = model.getRootNode()->id;
+    EXPECT_EQ(model.getRootNode()->panelIds, (std::vector<DockPanelId>{1, 2}));
+
+    ASSERT_TRUE(model.movePanel(2, leafId, 0));
+    EXPECT_EQ(model.getRootNode()->panelIds, (std::vector<DockPanelId>{2, 1}));
+    EXPECT_EQ(model.getRootNode()->selectedPanel, 2);
+
+    ASSERT_TRUE(model.movePanel(2, leafId, 1));
+    EXPECT_EQ(model.getRootNode()->panelIds, (std::vector<DockPanelId>{2, 1}));
     EXPECT_TRUE(model.validateInvariants());
 }
 
@@ -409,6 +432,89 @@ TEST(DockNodeTest, ContextImportAcceptsTreeOnlySnapshot)
     ASSERT_TRUE(context.importLayoutJson(layout));
     EXPECT_TRUE(context.floatingWindows().empty());
     EXPECT_NE(context.dockModel().findLeafForPanel(context.dockModel().findPanelByStableKey("inspector")->id), nullptr);
+}
+
+TEST(DockNodeTest, CollectLayoutPanelKeysWalksDockedAndFloating)
+{
+    FDockContext source;
+    source.bAllowFloating = true;
+    source.bAllowTearOff = true;
+    ASSERT_NE(source.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("V")), kInvalidDockPanelId);
+    ASSERT_NE(source.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("I")), kInvalidDockPanelId);
+    ASSERT_NE(source.addPanel("hierarchy", "Hierarchy", std::make_shared<UIPanel>("H")), kInvalidDockPanelId);
+    const DockPanelId inspectorId = source.findPanelByStableKey("inspector")->id;
+    ASSERT_NE(source.tearOffPanel(inspectorId, {10.f, 10.f}, {100.f, 80.f}), kInvalidFloatingWindowId);
+
+    const std::vector<std::string> keys = FDockContext::collectLayoutPanelKeys(source.exportLayoutJson());
+    EXPECT_EQ(keys.size(), 3u);
+    EXPECT_NE(std::find(keys.begin(), keys.end(), "viewport"), keys.end());
+    EXPECT_NE(std::find(keys.begin(), keys.end(), "inspector"), keys.end());
+    EXPECT_NE(std::find(keys.begin(), keys.end(), "hierarchy"), keys.end());
+}
+
+TEST(DockNodeTest, HasPanelAndActivatePanelSelectByStableKey)
+{
+    FDockContext context;
+    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("V")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("I")), kInvalidDockPanelId);
+    EXPECT_TRUE(context.hasPanel("viewport"));
+    EXPECT_FALSE(context.hasPanel("missing"));
+
+    ASSERT_TRUE(context.activatePanel("viewport"));
+    const FDockContext::FPanel* viewport = context.findPanelByStableKey("viewport");
+    ASSERT_NE(viewport, nullptr);
+    const FDockNode* leaf = context.dockModel().findLeafForPanel(viewport->id);
+    ASSERT_NE(leaf, nullptr);
+    EXPECT_EQ(leaf->selectedPanel, viewport->id);
+
+    ASSERT_TRUE(context.activatePanel("inspector"));
+    const FDockContext::FPanel* inspector = context.findPanelByStableKey("inspector");
+    ASSERT_NE(inspector, nullptr);
+    EXPECT_EQ(context.dockModel().findLeafForPanel(inspector->id)->selectedPanel, inspector->id);
+    ASSERT_TRUE(context.activatePanel("inspector"));
+    EXPECT_EQ(context.findPanelByStableKey("inspector"), inspector);
+}
+
+TEST(DockNodeTest, ActivatePanelGraftsSelectedTabAndDetachedStopsTick)
+{
+    struct TickProbe final : public UIPanel
+    {
+        explicit TickProbe(std::string name) : UIPanel(std::move(name)) {}
+        int ticks = 0;
+        [[nodiscard]] bool wantsTick() const override { return true; }
+        void tick(float) override { ++ticks; }
+    };
+
+    WidgetTree tree({.width = 800, .height = 600});
+    auto context = std::make_shared<FDockContext>();
+    auto visible = std::make_shared<TickProbe>("VisibleTab");
+    auto hidden = std::make_shared<TickProbe>("HiddenTab");
+    ASSERT_NE(context->addPanel("visible", "Visible", visible), kInvalidDockPanelId);
+    ASSERT_NE(context->addPanel("hidden", "Hidden", hidden), kInvalidDockPanelId);
+
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    dock->setContext(context);
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, fill).valid());
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+
+    ASSERT_TRUE(context->activatePanel("visible"));
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    visible->ticks = 0;
+    hidden->ticks = 0;
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(visible->ticks, 1);
+    EXPECT_EQ(hidden->ticks, 0);
+
+    ASSERT_TRUE(context->activatePanel("hidden"));
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+    visible->ticks = 0;
+    hidden->ticks = 0;
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(visible->ticks, 0);
+    EXPECT_EQ(hidden->ticks, 1);
 }
 
 } // namespace ya

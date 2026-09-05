@@ -660,6 +660,9 @@ void EditorSurface::buildEditorChrome(App& app)
     _dockContext->addPanel("ui-designer", "UI", _uiDesignerTab->build(*_tree));
     _dockContext->addPanel("asset-inspector", "Assets", _assetInspectorTab->build(*_tree));
     _dockContext->addPanel("debug-images", "Debug", _debugImagesTab->build(*_tree));
+    _dockContext->setPanelClosable("viewport", false);
+    _dockContext->setPanelClosable("hierarchy", false);
+    _dockContext->setPanelClosable("inspector", false);
     if (!tryRestoreEditorDockLayout()) {
         applyDefaultEditorDockLayout();
     }

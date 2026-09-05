@@ -1,5 +1,19 @@
 # Progress
 
+## K4 当前 checkpoint（2026-09-06）
+
+- `UITabButton` 可关 tab 有 close hit-zone；`FDockContext::closePanel` 走已有 `FDockTreeModel::removePanel`。
+- 同 leaf 拖到 tab 条调用 `movePanel` 重排；`FDockPanelRecord.closable=false` 隐藏关闭钮。
+- Editor：Viewport / Hierarchy / Inspector 不可关；Workbench Scene 不可关、Console 可关。
+- 验证：`WidgetTreeTest.DockSpaceTabCloseRemovesClosablePanel` / `DockSpaceSameLeafTabDropReorders` / `DockNodeTest.SameLeafMoveReordersTabs`；headless `dock_tabs.jsonl`（关 Console + 西叶 Assets/Hierarchy 换序）。布局仍走已有 `editor.dockLayout` JSON。
+
+### K4 保留项
+
+- E1–E3 未做。
+- 浮窗标题栏 X 仍是整窗 re-dock，不是关单个 floating tab 的唯一路径（叶内 × 对 floating tab 也接到 `closePanel`）。
+- 不合并 `GUIApp` 与 `ya::App`；不拆 WidgetTree。
+- 未宣称 retained editor ready。
+
 ## K3 当前 checkpoint（2026-09-06）
 
 - `UIColorEdit` 色板打开 SV 方 + hue 条 + hex/rgba 选色器（`FColorPicker` 单 paint 面，不是 `UICompoundWidget`）。

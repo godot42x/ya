@@ -82,6 +82,10 @@ struct YA_GUI_API FDockTreeModel
     bool registerPanel(FDockPanelRecord record);
     bool addPanel(DockPanelId panelId, DockNodeId leafId = kInvalidDockNodeId);
     bool selectPanel(DockPanelId panelId);
+    bool setPanelClosable(DockPanelId panelId, bool closable);
+    /// Move `panelId` onto `targetLeafId`. Same-leaf calls reorder tabs at
+    /// `insertIndex` (SIZE_MAX appends). Cross-leaf calls insert then optionally
+    /// collapse the emptied source.
     bool movePanel(DockPanelId panelId, DockNodeId targetLeafId, size_t insertIndex = SIZE_MAX, bool collapseSource = true);
     bool setSplitRatio(DockNodeId splitId, float ratio);
     bool setHideTabBar(DockNodeId leafId, bool hide);

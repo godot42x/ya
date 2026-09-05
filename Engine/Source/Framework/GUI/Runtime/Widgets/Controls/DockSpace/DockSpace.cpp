@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <functional>
 #include <utility>
 
@@ -322,7 +323,21 @@ struct FDockSpaceDropTargetBehavior final : public UIDropTargetBehavior
                 bChanged = dock->_context->addPanelToFloating(preview->targetFloatingId, panelId);
             }
             else if (preview->bMerge) {
-                if (sourceLeaf && sourceLeaf->id != preview->targetLeafId) {
+                if (preview->bTabBar) {
+                    const size_t insert = dock->tabInsertIndexAt(preview->targetLeafId, logicalPoint);
+                    if (sourceLeaf) {
+                        bChanged = dock->_context->dockModel().movePanel(
+                            panelId, preview->targetLeafId, insert, true);
+                    }
+                    else {
+                        bChanged = dock->_context->dockModel().addPanel(panelId, preview->targetLeafId);
+                        if (bChanged) {
+                            (void)dock->_context->dockModel().movePanel(
+                                panelId, preview->targetLeafId, insert, false);
+                        }
+                    }
+                }
+                else if (sourceLeaf && sourceLeaf->id != preview->targetLeafId) {
                     bChanged = dock->_context->dockModel().movePanel(panelId, preview->targetLeafId, SIZE_MAX, true);
                 }
                 else if (!sourceLeaf) {
@@ -404,6 +419,26 @@ const UIDockSpace::FLeafView* UIDockSpace::leafViewForLeaf(DockNodeId leafId) co
 {
     auto it = _leafViews.find(leafId);
     return it == _leafViews.end() ? nullptr : &it->second;
+}
+
+size_t UIDockSpace::tabInsertIndexAt(DockNodeId leafId, const glm::vec2& logicalPoint) const
+{
+    const FLeafView* view = leafViewForLeaf(leafId);
+    if (!view || !view->bar) {
+        return SIZE_MAX;
+    }
+    size_t index = 0;
+    for (const UIElementRef& child : view->bar->getChildren()) {
+        if (!child) {
+            continue;
+        }
+        const Rect2D& rect = child->_layoutRect;
+        if (logicalPoint.x < rect.pos.x + rect.extent.x * 0.5f) {
+            return index;
+        }
+        ++index;
+    }
+    return index;
 }
 
 void UIDockSpace::clearPreview()
@@ -664,7 +699,18 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
 
     for (DockPanelId panelId : leaf->panelIds) {
         if (const FDockContext::FPanel* fp = _context->findPanel(panelId)) {
-            view->bar->addTab(fp->name);
+            UITabButton* tab = view->bar->addTab(fp->name);
+            if (const FDockPanelRecord* rec = _context->dockModel().findPanel(panelId)) {
+                tab->_bClosable = rec->closable;
+                if (rec->closable) {
+                    tab->_onClose = [this, panelId]()
+                    {
+                        if (_context) {
+                            _context->closePanel(panelId);
+                        }
+                    };
+                }
+            }
         }
     }
 

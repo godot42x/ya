@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -133,6 +134,18 @@ struct YA_GUI_API FDockContext
 
     [[nodiscard]] const FPanel* findPanel(DockPanelId id) const;
     [[nodiscard]] FPanel* findPanel(DockPanelId id);
+    [[nodiscard]] const FPanel* findPanelByStableKey(std::string_view stableKey) const;
+    [[nodiscard]] bool hasPanel(std::string_view stableKey) const;
+    /// Select a docked or floating panel by stable key. Rematerializes the
+    /// owning projection so the panel widget is grafted as the visible tab.
+    bool activatePanel(std::string_view stableKey);
+    /// Collect unique panel keys from a layout JSON (docked tree + floating).
+    [[nodiscard]] static std::vector<std::string> collectLayoutPanelKeys(const nlohmann::json& layout);
+    bool setPanelClosable(DockPanelId id, bool closable);
+    bool setPanelClosable(std::string_view stableKey, bool closable);
+    /// Close a closable panel: unlink it from the dock tree or floating window
+    /// and drop the registry record. Non-closable panels return false.
+    bool closePanel(DockPanelId id);
     [[nodiscard]] FDockTreeModel& dockModel() { return _model; }
     [[nodiscard]] const FDockTreeModel& dockModel() const { return _model; }
 

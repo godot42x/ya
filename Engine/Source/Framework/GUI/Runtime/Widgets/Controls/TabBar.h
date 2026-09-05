@@ -36,6 +36,7 @@ struct YA_GUI_API UITabButton : public UIElement, public UIStyledWidget<UITabBut
 
     std::string _label;
     bool        _bSelected = false;
+    bool        _bClosable = false;
     uint32_t    _fontSize  = 13;
 
     /// Fired when this tab is activated (click / Enter / Space).
@@ -47,13 +48,23 @@ struct YA_GUI_API UITabButton : public UIElement, public UIStyledWidget<UITabBut
     std::function<void()> _onDragArmed;
     /// Right-click on this tab (logical point in tree space).
     std::function<void(const glm::vec2& logicalPoint)> _onContextMenu;
+    /// Fired when the close hit-zone is clicked (only if `_bClosable`).
+    std::function<void()> _onClose;
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override
+    {
+        node["control"] = {{"type", "tabButton"},
+                           {"label", _label},
+                           {"selected", _bSelected},
+                           {"closable", _bClosable}};
+    }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
     void resetHoverState() override { _bHovered = false; }
     void clearTransientInputState() override { _bHovered = false; }
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
+    [[nodiscard]] Rect2D    closeHitRect() const;
 
   private:
     VisualFlag _bHovered{*this};
@@ -106,6 +117,7 @@ struct YA_GUI_API UITabBar : public UIContainer, public UIStyledWidget<UITabBar,
     std::string _emptyPlaceholder;
 
     void paintSelf(UIFrameBuilder& builder) override;
+    void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 

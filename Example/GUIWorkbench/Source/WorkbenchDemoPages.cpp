@@ -1234,6 +1234,7 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
     const ya::DockPanelId inspectorId = dockContext->addPanel("Inspector", makePanel("Inspector", "Inspector panel"));
     const ya::DockPanelId consoleId   = dockContext->addPanel("Console", makePanel("Console", "Console output"));
     const ya::DockPanelId assetsId    = dockContext->addPanel("Assets", makePanel("Assets", "Asset browser"));
+    dockContext->setPanelClosable(sceneId, false);
 
     auto&                model    = dockContext->dockModel();
     const ya::DockNodeId rootLeaf = model.getRootNode()->id;

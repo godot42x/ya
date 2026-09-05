@@ -48,9 +48,15 @@
     },
     {
       "id": "dock_tab_close_reorder",
-      "status": "pending",
+      "status": "implemented",
       "phase": "K4",
-      "evidence": []
+      "evidence": [
+        "UITabButton close hit-zone + FDockContext::closePanel",
+        "same-leaf movePanel reorder on tab-bar drop",
+        "WidgetTreeTest.DockSpaceTabCloseRemovesClosablePanel",
+        "WidgetTreeTest.DockSpaceSameLeafTabDropReorders",
+        "dock_tabs.jsonl"
+      ]
     },
     {
       "id": "hierarchy_tree_crud",
