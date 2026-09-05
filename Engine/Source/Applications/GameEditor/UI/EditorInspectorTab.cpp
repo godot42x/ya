@@ -277,23 +277,30 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
         if (!graph.hasRetainedEditors()) {
             continue;
         }
-        std::vector<PropertyHandle::InstanceResolver> rootResolvers;
-        rootResolvers.reserve(entities.size());
+        std::vector<PropertyHandle::FInstanceBinding> rootBindings;
+        rootBindings.reserve(entities.size());
         for (Entity* entity : entities) {
             Scene* scene = entity ? entity->getScene() : nullptr;
             const entt::entity handle = entity ? entity->getHandle() : entt::null;
             const type_index_t componentType = entry.type;
-            rootResolvers.emplace_back([scene, handle, componentType]() -> void* {
-                if (!scene || handle == entt::null) {
-                    return nullptr;
+            uint64_t uuid = 0;
+            if (entity) {
+                if (auto* id = entity->getComponent<IDComponent>()) {
+                    uuid = id->_id.value;
                 }
-                return ECSRegistry::get().getComponent(componentType, scene->getRegistry(), handle);
+            }
+            rootBindings.push_back({
+                .identity = _layer->getCurrentScenePath() + "#" + std::to_string(uuid) + ":" + entry.name,
+                .resolver = [scene, handle, componentType]() -> void* {
+                    if (!scene || handle == entt::null) {
+                        return nullptr;
+                    }
+                    return ECSRegistry::get().getComponent(componentType, scene->getRegistry(), handle);
+                },
             });
         }
         for (PropertyNode& node : graph.getNodesMutable()) {
-            if (node.name == node.binding.getName()) {
-                node.binding.setInstanceResolvers(rootResolvers);
-            }
+            node.binding.setInstanceBindings(rootBindings);
         }
         auto title = std::make_shared<UIText>("InspectorComp_" + entry.name);
         title->setText(entry.name);

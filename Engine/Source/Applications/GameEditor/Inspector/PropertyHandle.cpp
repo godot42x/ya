@@ -2,6 +2,7 @@
 
 #include "Core/Common/AssetRef.h"
 #include "Core/Reflection/PropertyAccessor.h"
+#include "GameEditor/Inspector/PropertyEditorMetadata.h"
 #include "reflects-core/lib.h"
 
 #include <algorithm>
@@ -37,7 +38,14 @@ void PropertyHandle::refreshInstances() const
         return;
     }
     for (size_t index = 0; index < _instances.size(); ++index) {
-        _instances[index] = _instanceResolvers[index] ? _instanceResolvers[index]() : nullptr;
+        void* resolved = _instanceResolvers[index] ? _instanceResolvers[index]() : nullptr;
+        for (const reflection::FPropertySlot& ownerSlot : _ownerPath) {
+            if (!resolved) {
+                break;
+            }
+            resolved = const_cast<void*>(PropertyAccessor::address(ownerSlot, resolved));
+        }
+        _instances[index] = resolved;
     }
 }
 
@@ -104,7 +112,7 @@ bool PropertyHandle::isEnum() const
 
 bool PropertyHandle::isColor() const
 {
-    return isValid() && PropertyAccessor::isColor(*_slot.property);
+    return isValid() && PropertyEditorMetadata::isColor(*_slot.property);
 }
 
 bool PropertyHandle::isAssetRef() const
@@ -304,12 +312,12 @@ bool PropertyHandle::restoreEnum(const std::vector<int64_t>& values) const
 
 bool PropertyHandle::tryGetColor(glm::vec4& value) const
 {
-    return isValid() && PropertyAccessor::tryGetColor(_slot, _instances.front(), value);
+    return isValid() && isColor() && PropertyAccessor::tryGetColor(_slot, _instances.front(), value);
 }
 
 bool PropertyHandle::setColor(const glm::vec4& value) const
 {
-    if (!isEditable() || !canAccessAllMutable()) {
+    if (!isEditable() || !isColor() || !canAccessAllMutable()) {
         return false;
     }
     bool changed = false;
@@ -329,7 +337,7 @@ std::vector<glm::vec4> PropertyHandle::copyColor() const
     values.reserve(_instances.size());
     for (void* instance : _instances) {
         glm::vec4 value{};
-        if (!PropertyAccessor::tryGetColor(_slot, instance, value)) {
+        if (!isColor() || !PropertyAccessor::tryGetColor(_slot, instance, value)) {
             return {};
         }
         values.push_back(value);
@@ -413,12 +421,12 @@ std::string PropertyHandle::validationError() const
     if (!isValid()) {
         return {};
     }
-    return PropertyAccessor::validationError(_slot, _instances.front());
+    return PropertyEditorMetadata::validationError(_slot, _instances.front());
 }
 
 bool PropertyHandle::tryGetManipulateSpec(reflection::Meta::ManipulateSpec& spec) const
 {
-    return isValid() && PropertyAccessor::tryGetManipulateSpec(*_slot.property, spec);
+    return isValid() && PropertyEditorMetadata::tryGetManipulateSpec(*_slot.property, spec);
 }
 
 bool PropertyHandle::canMutateContainer() const

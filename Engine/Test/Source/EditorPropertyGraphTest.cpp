@@ -222,6 +222,23 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionInsertsGroupHeaderForNestedFiel
     tree.detach(*section);
 }
 
+TEST(EditorPropertyGraphTest, NestedBindingReplaysOwnerPathAfterRootReplacement)
+{
+    NestedInspectorComponent first;
+    NestedInspectorComponent replacement;
+    void* current = &first;
+    auto graph = PropertyGraph::build(type_index_v<NestedInspectorComponent>, {current});
+    PropertyNode* scale = graph.find("image.uvScale");
+
+    ASSERT_NE(scale, nullptr);
+    scale->binding.setInstanceResolvers({[&current]() { return current; }});
+    current = &replacement;
+
+    EXPECT_TRUE(scale->binding.set(4.0f));
+    EXPECT_FLOAT_EQ(first.image.uvScale, 1.0f);
+    EXPECT_FLOAT_EQ(replacement.image.uvScale, 4.0f);
+}
+
 TEST(EditorPropertyGraphTest, ProjectInstallsTransformSettersThatMarkDirty)
 {
     TransformComponent transform;

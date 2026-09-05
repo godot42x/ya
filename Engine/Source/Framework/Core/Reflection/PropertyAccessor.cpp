@@ -4,7 +4,6 @@
 #include "Core/Reflection/PropertyExtensions.h"
 #include "reflects-core/lib.h"
 
-#include <algorithm>
 #include <format>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -15,20 +14,6 @@ namespace ya::reflection
 {
 namespace
 {
-
-bool readManipulateSpec(const Property& property, Meta::ManipulateSpec& spec)
-{
-    if (!property.metadata.hasMeta(Meta::ManipulateSpec::name)) {
-        return false;
-    }
-    try {
-        spec = property.metadata.get<Meta::ManipulateSpec>(Meta::ManipulateSpec::name);
-        return spec.type != Meta::ManipulateSpec::None;
-    }
-    catch (...) {
-        return false;
-    }
-}
 
 bool readIntegerFromAddress(type_index_t typeIndex, const void* address, int64_t& value)
 {
@@ -77,180 +62,6 @@ bool writeIntegerToAddress(type_index_t typeIndex, void* address, int64_t value)
         return true;
     }
     return false;
-}
-
-void collectLeavesImpl(type_index_t currentType,
-                       const std::vector<void*>& instances,
-                       std::string_view pathPrefix,
-                       std::vector<type_index_t>& ancestry,
-                       std::vector<PropertyAccessor::FLeaf>& out)
-{
-    const Class* cls = ClassRegistry::instance().getClass(currentType);
-    if (!cls || instances.empty()) {
-        return;
-    }
-    ancestry.push_back(currentType);
-    std::vector<std::string> names = cls->propertyOrder;
-    for (const auto& [name, property] : cls->properties) {
-        if (std::find(names.begin(), names.end(), name) == names.end()) {
-            names.push_back(name);
-        }
-    }
-
-    for (const std::string& name : names) {
-        auto it = cls->properties.find(name);
-        if (it == cls->properties.end()) {
-            continue;
-        }
-        const Property& property = it->second;
-        if (property.metadata.hasFlag(FieldFlags::NotSerialized) ||
-            property.metadata.hasFlag(FieldFlags::Transient)) {
-            continue;
-        }
-
-        const std::string leafPath = pathPrefix.empty()
-            ? property.name
-            : std::string(pathPrefix) + "." + property.name;
-
-        if (PropertyAccessor::isCompositeType(property) &&
-            std::find(ancestry.begin(), ancestry.end(), property.typeIndex) == ancestry.end()) {
-            std::vector<void*> childInstances;
-            childInstances.reserve(instances.size());
-            bool bAll = true;
-            const FPropertySlot field(property);
-            for (void* instance : instances) {
-                void* child = PropertyAccessor::addressMutable(field, instance);
-                if (!child) {
-                    child = const_cast<void*>(PropertyAccessor::address(field, instance));
-                }
-                if (!child) {
-                    bAll = false;
-                    break;
-                }
-                childInstances.push_back(child);
-            }
-            if (bAll) {
-                collectLeavesImpl(property.typeIndex, childInstances, leafPath, ancestry, out);
-                continue;
-            }
-        }
-
-        if (PropertyAccessor::isMapOfLeaves(property)) {
-            PropertyAccessor::FLeaf header;
-            header.ownerType = currentType;
-            header.slot = FPropertySlot::field(property);
-            header.path = leafPath;
-            header.ownerInstances = instances;
-            header.role = PropertyAccessor::ELeafRole::Map;
-            out.push_back(std::move(header));
-
-            IContainerProperty* accessor = PropertyAccessor::containerOf(property);
-            const FPropertySlot field(property);
-            void* firstContainer = PropertyAccessor::addressMutable(field, instances.front());
-            if (!firstContainer) {
-                firstContainer = const_cast<void*>(PropertyAccessor::address(field, instances.front()));
-            }
-            if (accessor && firstContainer) {
-                auto iterator = accessor->createIterator(firstContainer);
-                while (iterator && iterator->hasNext()) {
-                    const type_index_t keyType = iterator->getKeyTypeIndex();
-                    const std::string key = [&]() {
-                        void* keyPtr = iterator->getKeyPtr();
-                        if (!keyPtr) {
-                            return std::string{};
-                        }
-                        if (keyType == refl::type_index_v<std::string>) {
-                            return *static_cast<const std::string*>(keyPtr);
-                        }
-                        if (keyType == refl::type_index_v<int> || keyType == refl::type_index_v<int32_t>) {
-                            return std::to_string(*static_cast<const int32_t*>(keyPtr));
-                        }
-                        if (keyType == refl::type_index_v<uint32_t>) {
-                            return std::to_string(*static_cast<const uint32_t*>(keyPtr));
-                        }
-                        return std::string{};
-                    }();
-                    iterator->next();
-                    if (key.empty() && keyType != refl::type_index_v<std::string>) {
-                        continue;
-                    }
-                    const FPropertySlot valueSlot = FPropertySlot::at(property, key);
-                    bool bAll = true;
-                    for (void* instance : instances) {
-                        if (!PropertyAccessor::address(valueSlot, instance)) {
-                            bAll = false;
-                            break;
-                        }
-                    }
-                    if (!bAll) {
-                        continue;
-                    }
-                    PropertyAccessor::FLeaf leaf;
-                    leaf.ownerType = currentType;
-                    leaf.slot = valueSlot;
-                    leaf.path = keyType == refl::type_index_v<std::string>
-                        ? leafPath + "[\"" + key + "\"]"
-                        : leafPath + "[" + key + "]";
-                    leaf.ownerInstances = instances;
-                    leaf.role = PropertyAccessor::ELeafRole::Value;
-                    out.push_back(std::move(leaf));
-                }
-            }
-            continue;
-        }
-
-        if (PropertyAccessor::isSequenceOfLeaves(property)) {
-            const FPropertySlot field(property);
-            if (PropertyAccessor::isDynamicSequence(property)) {
-                PropertyAccessor::FLeaf header;
-                header.ownerType = currentType;
-                header.slot = field;
-                header.path = leafPath;
-                header.ownerInstances = instances;
-                header.role = PropertyAccessor::ELeafRole::Sequence;
-                out.push_back(std::move(header));
-            }
-            size_t count = 0;
-            bool bSized = true;
-            for (size_t i = 0; i < instances.size(); ++i) {
-                void* container = PropertyAccessor::addressMutable(field, instances[i]);
-                if (!container) {
-                    container = const_cast<void*>(PropertyAccessor::address(field, instances[i]));
-                }
-                IContainerProperty* accessor = PropertyAccessor::containerOf(property);
-                if (!container || !accessor) {
-                    bSized = false;
-                    break;
-                }
-                const size_t size = accessor->getSize(container);
-                if (i == 0) {
-                    count = size;
-                }
-                else {
-                    count = std::min(count, size);
-                }
-            }
-            if (bSized) {
-                for (size_t index = 0; index < count; ++index) {
-                    PropertyAccessor::FLeaf leaf;
-                    leaf.ownerType = currentType;
-                    leaf.slot = FPropertySlot::at(property, static_cast<int>(index));
-                    leaf.path = leafPath + "[" + std::to_string(index) + "]";
-                    leaf.ownerInstances = instances;
-                    out.push_back(std::move(leaf));
-                }
-                continue;
-            }
-        }
-
-        PropertyAccessor::FLeaf leaf;
-        leaf.ownerType = currentType;
-        leaf.slot = FPropertySlot::field(property);
-        leaf.path = leafPath;
-        leaf.ownerInstances = instances;
-        out.push_back(std::move(leaf));
-    }
-    ancestry.pop_back();
 }
 
 } // namespace
@@ -353,19 +164,6 @@ bool PropertyAccessor::isEditable(const Property& property)
 bool PropertyAccessor::isEnum(const FPropertySlot& slot)
 {
     return EnumRegistry::instance().getEnum(valueType(slot)) != nullptr;
-}
-
-bool PropertyAccessor::isColor(const Property& property)
-{
-    if (!property.metadata.hasMeta(Meta::Color)) {
-        return false;
-    }
-    try {
-        return property.metadata.get<bool>(Meta::Color);
-    }
-    catch (...) {
-        return false;
-    }
 }
 
 const void* PropertyAccessor::address(const FPropertySlot& slot, const void* instance)
@@ -720,7 +518,7 @@ bool PropertyAccessor::setEnumValue(const FPropertySlot& slot, void* instance, i
 
 bool PropertyAccessor::tryGetColor(const FPropertySlot& slot, const void* instance, glm::vec4& value)
 {
-    if (!slot.property || !isColor(*slot.property)) {
+    if (!slot.property) {
         return false;
     }
     const void* addr = address(slot, instance);
@@ -741,7 +539,7 @@ bool PropertyAccessor::tryGetColor(const FPropertySlot& slot, const void* instan
 
 bool PropertyAccessor::setColor(const FPropertySlot& slot, void* instance, const glm::vec4& value)
 {
-    if (!slot.property || !isEditable(*slot.property) || !isColor(*slot.property)) {
+    if (!slot.property || !isEditable(*slot.property)) {
         return false;
     }
     void* addr = addressMutable(slot, instance);
@@ -823,91 +621,6 @@ bool PropertyAccessor::hasAssetResolveError(const FPropertySlot& slot, const voi
         return static_cast<const MeshRef*>(ref)->getResolveState() == EAssetResolveState::Failed;
     }
     return false;
-}
-
-bool PropertyAccessor::tryGetManipulateSpec(const Property& property, Meta::ManipulateSpec& spec)
-{
-    return readManipulateSpec(property, spec);
-}
-
-std::string PropertyAccessor::validationError(const FPropertySlot& slot, const void* instance)
-{
-    if (!slot.property) {
-        return {};
-    }
-    Meta::ManipulateSpec spec;
-    if (!readManipulateSpec(*slot.property, spec)) {
-        return {};
-    }
-    auto outOfRange = [&](double value) {
-        return value < spec.min || value > spec.max;
-    };
-    const type_index_t type = valueType(slot);
-    if (type == refl::type_index_v<float>) {
-        float value = 0.0f;
-        if (!tryGet(slot, instance, value)) {
-            return "Invalid value";
-        }
-        if (outOfRange(value)) {
-            return std::format("Value must be between {} and {}", spec.min, spec.max);
-        }
-        return {};
-    }
-    if (isIntegerType(type)) {
-        int64_t value = 0;
-        if (!tryGetInteger(slot, instance, value)) {
-            return "Invalid value";
-        }
-        if (outOfRange(static_cast<double>(value))) {
-            return std::format("Value must be between {} and {}", spec.min, spec.max);
-        }
-        return {};
-    }
-    if (type == refl::type_index_v<glm::vec2>) {
-        glm::vec2 value{};
-        if (!tryGet(slot, instance, value)) {
-            return "Invalid value";
-        }
-        for (int axis = 0; axis < 2; ++axis) {
-            if (outOfRange(value[axis])) {
-                return std::format("Component must be between {} and {}", spec.min, spec.max);
-            }
-        }
-        return {};
-    }
-    if (type == refl::type_index_v<glm::vec3>) {
-        glm::vec3 value{};
-        if (!tryGet(slot, instance, value)) {
-            return "Invalid value";
-        }
-        for (int axis = 0; axis < 3; ++axis) {
-            if (outOfRange(value[axis])) {
-                return std::format("Component must be between {} and {}", spec.min, spec.max);
-            }
-        }
-        return {};
-    }
-    if (type == refl::type_index_v<glm::vec4>) {
-        glm::vec4 value{};
-        if (!tryGet(slot, instance, value)) {
-            return "Invalid value";
-        }
-        for (int axis = 0; axis < 4; ++axis) {
-            if (outOfRange(value[axis])) {
-                return std::format("Component must be between {} and {}", spec.min, spec.max);
-            }
-        }
-    }
-    return {};
-}
-
-void PropertyAccessor::collectLeaves(type_index_t rootType,
-                                     const std::vector<void*>& roots,
-                                     std::vector<FLeaf>& out)
-{
-    out.clear();
-    std::vector<type_index_t> ancestry;
-    collectLeavesImpl(rootType, roots, {}, ancestry, out);
 }
 
 } // namespace ya::reflection

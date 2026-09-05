@@ -1294,3 +1294,18 @@ Phase 4A 已完成；以下记录本 checkpoint 的闭环与边界。
 
 - 本 checkpoint 未完成稳定 identity value object、nested path resolver、结构化 mutation result 和 capability registry。
 - `ya-testing` 全量构建当前被工作树中其他未提交的 DockWorkspace → DockContext 重命名阻塞；未触碰或覆盖该用户改动。
+
+## Phase 10F boundary extraction follow-up checkpoint（2026-09-06）
+
+- PropertyGraphBuilder::FLeaf 现在保存从根对象到 leaf owner 的 ownerPath；PropertyHandle 在配置 resolver 后按 slot path 重新解析 nested/composite owner，根对象替换后 nested leaf 仍可读写。
+- EditorInspectorTab 为所有 graph node 安装根实例 resolver，并附带 scene-path#entity-uuid:component identity；不再只对顶层字段刷新地址。
+- PropertyProjection 的现有 change-hook 行为保持不变，避免在 projection 完成前捕获未安装的 resolver；后续会把 hook 进一步提升为 identity-aware command sink。
+- Core 新增 FPropertyMutationResult / EPropertyMutationStatus，typed set<T> 通过 setResult 区分 invalid/read-only/type mismatch/unavailable/unchanged/changed；旧 bool API 保持兼容现有 Inspector consumer。
+- 新增 NestedBindingReplaysOwnerPathAfterRootReplacement 与 TypedMutationResultPreservesFailureReason 回归测试。
+- 验证：xmake b ya-game-editor、xmake b ya-testing；PropertyAccessorTest.*:EditorPropertyGraphTest.* targeted 37/37 通过。
+
+### 边界
+
+- 多实例容器操作仍只有 preflight + bool 结果，尚未具备统一 rollback/partial-failure transaction。
+- PropertyHandle 仍保留直接地址作为无 resolver 的构造 fallback；稳定 identity 已进入 API，但 Undo command 尚未完全改为 identity-only。
+- equality、integer、enum、asset-ref 和容器 key capability registry 尚未抽出。

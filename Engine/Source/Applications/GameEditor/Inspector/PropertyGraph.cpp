@@ -1,5 +1,7 @@
 #include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/Inspector/PropertyProjection.h"
+#include "GameEditor/Inspector/PropertyGraphBuilder.h"
+#include "GameEditor/Inspector/PropertyEditorMetadata.h"
 
 #include "Core/Reflection/MetadataSupport.h"
 #include "Core/Reflection/PropertyAccessor.h"
@@ -107,10 +109,10 @@ PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> in
     graph._ownerType = ownerType;
     graph._rootInstances = instances;
 
-    std::vector<reflection::PropertyAccessor::FLeaf> leaves;
-    reflection::PropertyAccessor::collectLeaves(ownerType, instances, leaves);
+    std::vector<PropertyGraphBuilder::FLeaf> leaves;
+    PropertyGraphBuilder::collectLeaves(ownerType, instances, leaves);
     graph._nodes.reserve(leaves.size());
-    for (reflection::PropertyAccessor::FLeaf& leaf : leaves) {
+    for (PropertyGraphBuilder::FLeaf& leaf : leaves) {
         if (!leaf.slot.property) {
             continue;
         }
@@ -127,16 +129,17 @@ PropertyGraph PropertyGraph::build(type_index_t ownerType, std::vector<void*> in
             }
         }
         node.valueType = reflection::PropertyAccessor::valueType(leaf.slot);
-        node.kind = leaf.role == reflection::PropertyAccessor::ELeafRole::Sequence
+        node.kind = leaf.role == PropertyGraphBuilder::ELeafRole::Sequence
             ? PropertyNode::Kind::Sequence
-            : leaf.role == reflection::PropertyAccessor::ELeafRole::Map
+            : leaf.role == PropertyGraphBuilder::ELeafRole::Map
                 ? PropertyNode::Kind::Map
                 : PropertyNode::Kind::Value;
         node.binding = PropertyHandle(leaf.ownerType, std::move(leaf.ownerInstances), leaf.slot);
+        node.binding.setOwnerPath(std::move(leaf.ownerPath));
         node.bEditable = node.binding.isEditable();
         node.bVisible = true;
         node.bInstanceEditable = leaf.slot.property && leaf.slot.property->metadata.hasFlag(FieldFlags::InstanceEditable);
-        node.bColor = leaf.slot.property && reflection::PropertyAccessor::isColor(*leaf.slot.property);
+        node.bColor = leaf.slot.property && PropertyEditorMetadata::isColor(*leaf.slot.property);
         graph._nodes.push_back(std::move(node));
     }
     return graph;

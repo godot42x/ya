@@ -52,26 +52,32 @@ struct FPropertySlot
     [[nodiscard]] bool isMapValue() const { return isValid() && mapKey.has_value(); }
 };
 
+enum class EPropertyMutationStatus
+{
+    Invalid,
+    ReadOnly,
+    TypeMismatch,
+    Unsupported,
+    Unavailable,
+    Unchanged,
+    Changed,
+};
+
+struct FPropertyMutationResult
+{
+    EPropertyMutationStatus status = EPropertyMutationStatus::Invalid;
+
+    [[nodiscard]] bool changed() const { return status == EPropertyMutationStatus::Changed; }
+    [[nodiscard]] bool accepted() const
+    {
+        return status == EPropertyMutationStatus::Changed || status == EPropertyMutationStatus::Unchanged;
+    }
+};
+
 /// Single-instance property access owned by the reflection layer.
 /// Editor adapters (multi-select, undo, UI callbacks) sit on top of this.
 struct YA_CORE_API PropertyAccessor
 {
-    enum class ELeafRole
-    {
-        Value,
-        Sequence,
-        Map,
-    };
-
-    struct FLeaf
-    {
-        type_index_t       ownerType = 0;
-        FPropertySlot      slot;
-        std::string        path;
-        std::vector<void*> ownerInstances;
-        ELeafRole          role = ELeafRole::Value;
-    };
-
     [[nodiscard]] static bool isIntegerType(type_index_t typeIndex);
     [[nodiscard]] static bool isAssetRefType(type_index_t typeIndex);
     [[nodiscard]] static bool isLeafValueType(type_index_t typeIndex);
@@ -81,7 +87,6 @@ struct YA_CORE_API PropertyAccessor
     [[nodiscard]] static bool isMapOfLeaves(const Property& property);
     [[nodiscard]] static bool isEditable(const Property& property);
     [[nodiscard]] static bool isEnum(const FPropertySlot& slot);
-    [[nodiscard]] static bool isColor(const Property& property);
     [[nodiscard]] static IContainerProperty* containerOf(const Property& property);
     [[nodiscard]] static type_index_t valueType(const FPropertySlot& slot);
 
@@ -118,21 +123,35 @@ struct YA_CORE_API PropertyAccessor
     }
 
     template <typename T>
-    static bool set(const FPropertySlot& slot, void* instance, const T& value)
+    [[nodiscard]] static FPropertyMutationResult setResult(const FPropertySlot& slot,
+                                                           void* instance,
+                                                           const T& value)
     {
-        if (!slot.property || !isEditable(*slot.property) || valueType(slot) != ya::type_index_v<T>) {
-            return false;
+        if (!slot.property) {
+            return {EPropertyMutationStatus::Invalid};
+        }
+        if (valueType(slot) != ya::type_index_v<T>) {
+            return {EPropertyMutationStatus::TypeMismatch};
+        }
+        if (!isEditable(*slot.property)) {
+            return {EPropertyMutationStatus::ReadOnly};
         }
         void* addr = addressMutable(slot, instance);
         if (!addr) {
-            return false;
+            return {EPropertyMutationStatus::Unavailable};
         }
         T& current = *static_cast<T*>(addr);
         if (current == value) {
-            return false;
+            return {EPropertyMutationStatus::Unchanged};
         }
         current = value;
-        return true;
+        return {EPropertyMutationStatus::Changed};
+    }
+
+    template <typename T>
+    static bool set(const FPropertySlot& slot, void* instance, const T& value)
+    {
+        return setResult(slot, instance, value).changed();
     }
 
     [[nodiscard]] static bool tryGetInteger(const FPropertySlot& slot, const void* instance, int64_t& value);
@@ -151,12 +170,7 @@ struct YA_CORE_API PropertyAccessor
     static bool setAssetPath(const FPropertySlot& slot, void* instance, const std::string& value);
     [[nodiscard]] static bool hasAssetResolveError(const FPropertySlot& slot, const void* instance);
 
-    [[nodiscard]] static bool tryGetManipulateSpec(const Property& property, Meta::ManipulateSpec& spec);
-    [[nodiscard]] static std::string validationError(const FPropertySlot& slot, const void* instance);
 
-    /// Flatten serialized reflected fields, expanding nested composite types,
-    /// sequence-of-leaf containers, and map-of-leaf values.
-    static void collectLeaves(type_index_t rootType, const std::vector<void*>& roots, std::vector<FLeaf>& out);
 };
 
 } // namespace ya::reflection

@@ -1,4 +1,5 @@
 #include "Core/Reflection/PropertyAccessor.h"
+#include "GameEditor/Inspector/PropertyGraphBuilder.h"
 #include "Core/Reflection/Reflection.h"
 
 #include <array>
@@ -48,11 +49,23 @@ TEST(PropertyAccessorTest, ReadsWritesAndValidatesSingleInstance)
     EXPECT_FALSE(reflection::PropertyAccessor::set(enabled, &owner, false));
 }
 
+TEST(PropertyAccessorTest, TypedMutationResultPreservesFailureReason)
+{
+    NestedOwner owner;
+    const Class* cls = ClassRegistry::instance().getClass(type_index_v<NestedOwner>);
+    ASSERT_NE(cls, nullptr);
+    const reflection::FPropertySlot enabled = reflection::FPropertySlot::field(cls->properties.at("enabled"));
+    const auto unchanged = reflection::PropertyAccessor::setResult(enabled, &owner, true);
+    EXPECT_EQ(unchanged.status, reflection::EPropertyMutationStatus::Unchanged);
+    const auto mismatch = reflection::PropertyAccessor::setResult(enabled, &owner, 1.0f);
+    EXPECT_EQ(mismatch.status, reflection::EPropertyMutationStatus::TypeMismatch);
+}
+
 TEST(PropertyAccessorTest, CollectLeavesFlattensNestedCompositeFields)
 {
     NestedOwner owner;
-    std::vector<reflection::PropertyAccessor::FLeaf> leaves;
-    reflection::PropertyAccessor::collectLeaves(type_index_v<NestedOwner>, {&owner}, leaves);
+    std::vector<PropertyGraphBuilder::FLeaf> leaves;
+    PropertyGraphBuilder::collectLeaves(type_index_v<NestedOwner>, {&owner}, leaves);
 
     ASSERT_EQ(leaves.size(), 3u);
     EXPECT_EQ(leaves[0].path, "enabled");
@@ -81,8 +94,8 @@ TEST(PropertyAccessorTest, EqualsDetectsScalarAndVectorDifferences)
     second.params.scale.x = 9.0f;
     second.params.count = 8;
 
-    std::vector<reflection::PropertyAccessor::FLeaf> leaves;
-    reflection::PropertyAccessor::collectLeaves(type_index_v<NestedOwner>, {&first}, leaves);
+    std::vector<PropertyGraphBuilder::FLeaf> leaves;
+    PropertyGraphBuilder::collectLeaves(type_index_v<NestedOwner>, {&first}, leaves);
     reflection::FPropertySlot scale;
     reflection::FPropertySlot count;
     for (const auto& leaf : leaves) {
@@ -121,14 +134,14 @@ struct SequenceOwner
 TEST(PropertyAccessorTest, CollectLeavesExpandsSequenceOfLeafElements)
 {
     SequenceOwner owner;
-    std::vector<reflection::PropertyAccessor::FLeaf> leaves;
-    reflection::PropertyAccessor::collectLeaves(type_index_v<SequenceOwner>, {&owner}, leaves);
+    std::vector<PropertyGraphBuilder::FLeaf> leaves;
+    PropertyGraphBuilder::collectLeaves(type_index_v<SequenceOwner>, {&owner}, leaves);
 
     ASSERT_EQ(leaves.size(), 5u);
     EXPECT_EQ(leaves[0].path, "files[0]");
     EXPECT_EQ(leaves[1].path, "files[1]");
     EXPECT_EQ(leaves[2].path, "weights");
-    EXPECT_EQ(leaves[2].role, reflection::PropertyAccessor::ELeafRole::Sequence);
+    EXPECT_EQ(leaves[2].role, PropertyGraphBuilder::ELeafRole::Sequence);
     EXPECT_EQ(leaves[3].path, "weights[0]");
     EXPECT_EQ(leaves[4].path, "weights[1]");
     EXPECT_EQ(leaves[0].slot.elementIndex, 0);
@@ -171,12 +184,12 @@ struct MapOwner
 TEST(PropertyAccessorTest, CollectLeavesExpandsMapOfLeafValuesAndMutates)
 {
     MapOwner owner;
-    std::vector<reflection::PropertyAccessor::FLeaf> leaves;
-    reflection::PropertyAccessor::collectLeaves(type_index_v<MapOwner>, {&owner}, leaves);
+    std::vector<PropertyGraphBuilder::FLeaf> leaves;
+    PropertyGraphBuilder::collectLeaves(type_index_v<MapOwner>, {&owner}, leaves);
 
     ASSERT_EQ(leaves.size(), 3u);
     EXPECT_EQ(leaves[0].path, "slots");
-    EXPECT_EQ(leaves[0].role, reflection::PropertyAccessor::ELeafRole::Map);
+    EXPECT_EQ(leaves[0].role, PropertyGraphBuilder::ELeafRole::Map);
     EXPECT_EQ(leaves[1].path, "slots[\"shield\"]");
     EXPECT_EQ(leaves[2].path, "slots[\"sword\"]");
 

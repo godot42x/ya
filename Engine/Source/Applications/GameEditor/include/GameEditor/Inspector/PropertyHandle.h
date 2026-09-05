@@ -33,6 +33,11 @@ class PropertyHandle final
     using Vec3Setter = std::function<void(void*, const glm::vec3&)>;
     using ChangeHook = std::function<void()>;
     using InstanceResolver = std::function<void*()>;
+    struct FInstanceBinding
+    {
+        std::string identity;
+        InstanceResolver resolver;
+    };
 
     PropertyHandle(type_index_t ownerType,
                    std::vector<void*> instances,
@@ -56,6 +61,27 @@ class PropertyHandle final
     {
         _instanceResolvers = std::move(resolvers);
         refreshInstances();
+    }
+    void setInstanceBindings(std::vector<FInstanceBinding> bindings)
+    {
+        _instanceBindings = std::move(bindings);
+        _instanceResolvers.clear();
+        _instanceResolvers.reserve(_instanceBindings.size());
+        for (const FInstanceBinding& binding : _instanceBindings) {
+            _instanceResolvers.push_back(binding.resolver);
+        }
+        refreshInstances();
+    }
+    void setOwnerPath(std::vector<reflection::FPropertySlot> path)
+    {
+        _ownerPath = std::move(path);
+        refreshInstances();
+    }
+    [[nodiscard]] const std::vector<FInstanceBinding>& instanceBindings() const { return _instanceBindings; }
+    [[nodiscard]] std::vector<void*> resolvedInstances() const
+    {
+        refreshInstances();
+        return _instances;
     }
 
     template <typename T>
@@ -86,7 +112,7 @@ class PropertyHandle final
                     changed = true;
                 }
             }
-            else if (reflection::PropertyAccessor::set(_slot, instance, value)) {
+            else if (reflection::PropertyAccessor::setResult(_slot, instance, value).changed()) {
                 changed = true;
             }
         }
@@ -133,11 +159,11 @@ class PropertyHandle final
                     _vec3Setter(_instances[i], values[i]);
                     changed = true;
                 }
-                else if (reflection::PropertyAccessor::set(_slot, _instances[i], values[i])) {
+                else if (reflection::PropertyAccessor::setResult(_slot, _instances[i], values[i]).changed()) {
                     changed = true;
                 }
             }
-            else if (reflection::PropertyAccessor::set(_slot, _instances[i], values[i])) {
+            else if (reflection::PropertyAccessor::setResult(_slot, _instances[i], values[i]).changed()) {
                 changed = true;
             }
         }
@@ -186,6 +212,10 @@ class PropertyHandle final
   private:
     void refreshInstances() const;
     [[nodiscard]] bool canAccessAllMutable() const;
+    [[nodiscard]] bool canRemoveAtIndexFromAll(int index) const;
+    [[nodiscard]] bool canInsertAtIndexIntoAll(int index) const;
+    [[nodiscard]] bool canRemoveMapKeyFromAll() const;
+    [[nodiscard]] bool canInsertMapKeyIntoAll(std::string_view key) const;
 
     void notifyIfChanged(bool changed) const
     {
@@ -197,6 +227,8 @@ class PropertyHandle final
     type_index_t _ownerType = 0;
     mutable std::vector<void*> _instances;
     std::vector<InstanceResolver> _instanceResolvers;
+    std::vector<FInstanceBinding> _instanceBindings;
+    std::vector<reflection::FPropertySlot> _ownerPath;
     reflection::FPropertySlot _slot;
     Vec3Setter _vec3Setter;
     ChangeHook _changeHook;
