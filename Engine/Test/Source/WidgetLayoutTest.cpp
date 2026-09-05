@@ -27,7 +27,10 @@
 #include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DockWorkspace.h"
 #include "GUI/Widgets/Controls/TabBar.h"
+#include "GUI/Widgets/Controls/Menu.h"
 #include "Render/Resources/FontManager.h"
+
+#include "Core/Event.h"
 
 #include <gtest/gtest.h>
 
@@ -2198,6 +2201,198 @@ TEST(WidgetLayoutTest, DockLeafTabBarIsCompactAndCanHide)
     hide = findNamedDescendant(*dock, "DockHideTabBar");
     ASSERT_NE(hide, nullptr);
     EXPECT_FLOAT_EQ(hide->_layoutRect.extent.x, 12.0f);
+
+    EXPECT_TRUE(panel->isAttached());
+    EXPECT_NE(panel->getParent(), nullptr);
+    EXPECT_GT(panel->_layoutRect.extent.x, 0.0f);
+    EXPECT_GT(panel->_layoutRect.extent.y, 500.0f);
+}
+
+TEST(WidgetLayoutTest, DockHideTabBarClickHidesStripAndKeepsPanelContent)
+{
+    registerSyntheticFont(13, 7.0f);
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setWorkspace(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto panel = std::make_shared<UIPanel>("SceneBody");
+    ASSERT_NE(ws->addPanel("Scene", panel), kInvalidDockPanelId);
+    tree.layout();
+
+    UIElement* bar = findNamedDescendant(*dock, "DockTabBar1");
+    ASSERT_NE(bar, nullptr);
+    const float barHeight = bar->_layoutRect.extent.y;
+    EXPECT_GT(barHeight, 10.0f);
+    UIElement* contentHost = panel->getParent();
+    ASSERT_NE(contentHost, nullptr);
+    UIElement* hide = findNamedDescendant(*dock, "DockHideTabBar");
+    ASSERT_NE(hide, nullptr);
+
+    const glm::vec2 hideCenter = hide->_layoutRect.pos + hide->_layoutRect.extent * 0.5f;
+    ASSERT_TRUE(hide->handleInputEvent(MouseButtonPressedEvent(EMouse::Left),
+                                       pointAt(hideCenter.x, hideCenter.y)));
+    tree.layout();
+
+    bar = findNamedDescendant(*dock, "DockTabBar1");
+    ASSERT_NE(bar, nullptr);
+    EXPECT_EQ(bar->getVisibility(), EWidgetVisibility::Collapsed);
+    EXPECT_FLOAT_EQ(bar->_layoutRect.extent.y, 0.0f);
+    EXPECT_EQ(panel->getParent(), contentHost);
+    EXPECT_TRUE(panel->isAttached());
+    EXPECT_GT(panel->_layoutRect.extent.y, 0.0f);
+    EXPECT_GT(panel->_layoutRect.extent.y, 500.0f);
+    EXPECT_TRUE(ws->dockModel().getRootNode()->bHideTabBar);
+
+    hide = findNamedDescendant(*dock, "DockHideTabBar");
+    ASSERT_NE(hide, nullptr);
+    const glm::vec2 restoreCenter = hide->_layoutRect.pos + hide->_layoutRect.extent * 0.5f;
+    ASSERT_TRUE(hide->handleInputEvent(MouseButtonPressedEvent(EMouse::Left),
+                                       pointAt(restoreCenter.x, restoreCenter.y)));
+    tree.layout();
+    EXPECT_EQ(bar->getVisibility(), EWidgetVisibility::Visible);
+    EXPECT_GT(bar->_layoutRect.extent.y, 10.0f);
+    EXPECT_FALSE(ws->dockModel().getRootNode()->bHideTabBar);
+}
+
+TEST(WidgetLayoutTest, DockTabBarContextMenuHidesTitleBarOnly)
+{
+    registerSyntheticFont(13, 7.0f);
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setWorkspace(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto panel = std::make_shared<UIPanel>("SceneBody");
+    ASSERT_NE(ws->addPanel("Scene", panel), kInvalidDockPanelId);
+    tree.layout();
+
+    UIElement* tab = findNamedDescendant(*dock, "Tab_Scene");
+    ASSERT_NE(tab, nullptr);
+    UIElement* contentHost = panel->getParent();
+    const glm::vec2 tabCenter = tab->_layoutRect.pos + tab->_layoutRect.extent * 0.5f;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Right),
+                                 pointAt(tabCenter.x, tabCenter.y)),
+              EWidgetRouteResult::HandledExclusive);
+
+    UIElement* popupLayer = tree.getLayer(WidgetTree::ELayer::Popup);
+    ASSERT_NE(popupLayer, nullptr);
+    UIMenu* menu = nullptr;
+    for (UIElement* child : popupLayer->getChildrenInPaintOrder()) {
+        menu = dynamic_cast<UIMenu*>(child);
+        if (menu) {
+            break;
+        }
+    }
+    ASSERT_NE(menu, nullptr);
+    std::vector<UIMenuItem*> items = menu->menuItems();
+    ASSERT_FALSE(items.empty());
+    EXPECT_EQ(items.front()->_label, "Hide Tab Bar");
+    ASSERT_TRUE(static_cast<bool>(items.front()->_onAction));
+    items.front()->_onAction();
+    tree.layout();
+
+    UIElement* bar = findNamedDescendant(*dock, "DockTabBar1");
+    ASSERT_NE(bar, nullptr);
+    EXPECT_EQ(bar->getVisibility(), EWidgetVisibility::Collapsed);
+    EXPECT_EQ(panel->getParent(), contentHost);
+    EXPECT_TRUE(panel->isAttached());
+    EXPECT_GT(panel->_layoutRect.extent.y, 500.0f);
+}
+
+TEST(WidgetLayoutTest, DockSplitResizeKeepsPanelAttachedWithoutRematerialize)
+{
+    registerSyntheticFont(13, 7.0f);
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setWorkspace(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto scene = std::make_shared<UIPanel>("SceneBody");
+    auto inspector = std::make_shared<UIPanel>("InspectorBody");
+    const DockPanelId sceneId = ws->addPanel("Scene", scene);
+    const DockPanelId inspectorId = ws->addPanel("Inspector", inspector);
+    ASSERT_NE(sceneId, kInvalidDockPanelId);
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    ASSERT_TRUE(ws->dockModel().splitLeaf(ws->dockModel().getRootNode()->id,
+                                          EDockCardinalSide::East, inspectorId, 0.50f));
+    ws->fireDockUpdated();
+    tree.layout();
+
+    UIElement* split = findNamedDescendant(*dock, "DockSplit1");
+    ASSERT_NE(split, nullptr);
+    auto* splitPane = dynamic_cast<UISplitPane*>(split);
+    ASSERT_NE(splitPane, nullptr);
+    UIElement* sceneParent = scene->getParent();
+    ASSERT_NE(sceneParent, nullptr);
+    EXPECT_TRUE(scene->isAttached());
+    EXPECT_TRUE(inspector->isAttached());
+    EXPECT_GT(scene->_layoutRect.extent.y, 0.0f);
+
+    const Rect2D divider = splitPane->getDividerRect();
+    const float pressX = divider.pos.x + divider.extent.x * 0.5f;
+    const float pressY = divider.pos.y + divider.extent.y * 0.5f;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(pressX, pressY)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(pressX + 40.0f, pressY), pointAt(pressX + 40.0f, pressY)),
+              EWidgetRouteResult::HandledExclusive);
+    tree.layout();
+
+    EXPECT_EQ(findNamedDescendant(*dock, "DockSplit1"), split);
+    EXPECT_EQ(scene->getParent(), sceneParent);
+    EXPECT_TRUE(scene->isAttached());
+    EXPECT_TRUE(inspector->isAttached());
+    EXPECT_GT(scene->_layoutRect.extent.y, 0.0f);
+    EXPECT_GT(inspector->_layoutRect.extent.y, 0.0f);
+}
+
+TEST(WidgetLayoutTest, DockProjectionRebuildReparentsLivePanelWidgets)
+{
+    registerSyntheticFont(13, 7.0f);
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<UIDockWorkspace>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setWorkspace(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto scene = std::make_shared<UIPanel>("SceneBody");
+    auto inspector = std::make_shared<UIPanel>("InspectorBody");
+    const DockPanelId sceneId = ws->addPanel("Scene", scene);
+    const DockPanelId inspectorId = ws->addPanel("Inspector", inspector);
+    ASSERT_NE(sceneId, kInvalidDockPanelId);
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    ASSERT_TRUE(ws->dockModel().selectPanel(sceneId));
+    tree.layout();
+    ASSERT_TRUE(scene->isAttached());
+    ASSERT_FALSE(inspector->isAttached());
+
+    ASSERT_TRUE(ws->dockModel().splitLeaf(ws->dockModel().getRootNode()->id,
+                                          EDockCardinalSide::East, inspectorId, 0.50f));
+    ws->fireDockUpdated();
+    tree.layout();
+
+    EXPECT_TRUE(scene->isAttached());
+    EXPECT_TRUE(inspector->isAttached());
+    EXPECT_NE(scene->getParent(), nullptr);
+    EXPECT_NE(inspector->getParent(), nullptr);
+    EXPECT_NE(scene->getParent(), inspector->getParent());
+    EXPECT_GT(scene->_layoutRect.extent.x, 0.0f);
+    EXPECT_GT(inspector->_layoutRect.extent.x, 0.0f);
 }
 
 } // namespace ya

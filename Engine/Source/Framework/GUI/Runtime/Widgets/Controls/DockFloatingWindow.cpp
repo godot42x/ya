@@ -530,19 +530,28 @@ void UIDockFloatingWindow::rebuildContent()
         return;
     }
     WidgetTree* tree = getTree();
-    // Swap in the active panel's widget (mirrors UIDockSpace::rebuildLeaf).
-    if (tree) {
-        auto oldChildren = _content->getChildrenInPaintOrder();
-        for (UIElement* child : oldChildren) {
-            if (child && child->participatesInLayout()) {
-                tree->detach(*child);
-                break;
-            }
+    const std::vector<UIElementRef> oldChildren = _content->getChildren();
+    for (const UIElementRef& child : oldChildren) {
+        if (child && tree) {
+            tree->detach(*child);
         }
     }
     if (_ws && _panelId != kInvalidDockPanelId) {
-        if (const auto* panel = _ws->findPanel(_panelId)) {
-            _content->addDetachedChild(panel->widget);
+        if (const auto* panel = _ws->findPanel(_panelId); panel && panel->widget) {
+            if (tree) {
+                tree->detach(*panel->widget);
+            }
+            if (tree && tree->contains(*_content)) {
+                if (panel->widget->isAttached()) {
+                    tree->reparent(*_content, panel->widget);
+                }
+                else {
+                    tree->attach(*_content, panel->widget);
+                }
+            }
+            else if (!panel->widget->getParent()) {
+                _content->addDetachedChild(panel->widget);
+            }
         }
     }
     if (tree) {

@@ -111,7 +111,8 @@
 - [x] Phase 9D：DPI、CJK fallback、键盘、IME、剪贴板、文本编辑。
 - [x] Phase 9E：snapshot digest、GPU/offscreen parity、automation route trace。
 - [x] Phase 9F：editor release checklist（macOS/Clang/Vulkan 证据入表；Windows/MSVC 与 OpenGL 为 blocker）。
-- [x] Phase 10A：compact dock chrome（矮 tab strip、左上角隐藏 title bar、dock content 不再 inset）。
+- [x] Phase 10A：compact dock chrome（矮 tab strip、左上角/右键隐藏 title bar、dock content 不再 inset）。
+- [x] Phase 10A-fix：split-resize 与 hide-tab-bar 不再 rematerialize live dock；title bar 隐藏不等于折叠整个 tab。
 - [x] Phase 10B：Inspector 补齐 ImGui DetailsView 类型覆盖。
   - [x] `PropertyGraph` 递归展开 nested/composite property（dot-path leaf nodes）。
   - [x] retained inspector 补齐 `vec2` / `vec4` / `int` / `int32_t` / `uint32_t` 的 mixed/edit/undo/test。

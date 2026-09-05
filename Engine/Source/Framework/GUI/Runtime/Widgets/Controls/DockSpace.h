@@ -129,6 +129,10 @@ private:
 
     void rebuildProjection();
     void rebuildLeaf(DockNodeId leafId);
+    void releaseMountedPanels();
+    void applyLeafTabBarVisibility(DockNodeId leafId);
+    void openLeafTabBarMenu(DockNodeId leafId, const glm::vec2& pos);
+    void graftPanelIntoContent(UIContainer& content, const UIElementRef& panel);
     std::shared_ptr<UIElement> materializeNode(const FDockNode& node);
     FLeafView* leafViewForLeaf(DockNodeId leafId);
     [[nodiscard]] const FLeafView* leafViewForLeaf(DockNodeId leafId) const;
@@ -142,6 +146,7 @@ private:
     std::optional<FDropPreview> _preview;
     std::shared_ptr<UIElement> _previewOverlay;
     std::shared_ptr<UIDockWorkspace> _ws;
+    bool _bRebuildingProjection = false;
 };
 
 } // namespace ya

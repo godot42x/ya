@@ -1,5 +1,18 @@
 # Progress
 
+## Phase 10A-fix 当前 checkpoint（2026-09-05）
+
+- Dock 的 split-resize / 选 tab / hide-tab-bar 不再从 live chrome 回调里 `fireDockUpdated()` 整树 rematerialize；这些路径只改 live 投影并 `notifyDockLayoutListeners()` 做 layout 持久化。
+- `hideTabBar` 只 Collapsed 掉 leaf tab strip（title bar），面板 widget 继续挂在 `DockContent` 并填满 leaf；右键菜单 `Hide Tab Bar` 与左上角 12px 折角都走同一条 live 路径。
+- `rebuildProjection()` 在拆掉旧 chrome 之前先 unlink 已挂载 panel，再 `reparent`/`attach`；禁止对仍有 parent 的 `HierarchyBody` 等 panel `addDetachedChild`。
+- 测试：`WidgetLayoutTest.DockHideTabBarClickHidesStripAndKeepsPanelContent` / `DockTabBarContextMenuHidesTitleBarOnly` / `DockSplitResizeKeepsPanelAttachedWithoutRematerialize` / `DockProjectionRebuildReparentsLivePanelWidgets`。
+- 验证：`xmake b ya-gui-closure-test`；`xmake r ya-gui-closure-test -- --gtest_filter='WidgetLayoutTest.*:DockNodeTest.*'`（100/100）；全量 `xmake r ya-gui-closure-test`（402/402）。
+
+### Phase 10A-fix 保留项
+
+- 未宣称 retained editor ready；Windows/MSVC、OpenGL presentation、soak/imgui 仍是后续门禁。
+- 其余 10E tab owner（Content Browser / UI Designer / Runtime Tools / Asset Inspector）未做。
+
 ## Phase 10F-1 当前 checkpoint（2026-09-05）
 
 - 将 PropertySlot 的 map key 从空字符串 sentinel 改为 `std::optional<std::string>`；field、sequence element、map value 三种定位状态现在可区分，空字符串 key 不再与 field 混淆。

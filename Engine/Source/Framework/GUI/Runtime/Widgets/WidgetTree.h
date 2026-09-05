@@ -226,6 +226,9 @@ struct YA_GUI_API WidgetTree final
     void reparentAfter(UIElement& sibling, const UIElementRef& widget);
     /// Recursively detach the whole subtree from the tree. Never destroys the
     /// widget; releases focus/capture/hover pointing into the subtree.
+    /// A widget that still has a visual parent after its chrome was detached
+    /// (parented, `_tree == nullptr`) is unlinked from that parent so a later
+    /// attach/addDetachedChild does not see a stale parent.
     void detach(UIElement& widget);
     /// Whether `widget` is attached anywhere in this tree.
     [[nodiscard]] bool contains(const UIElement& widget) const;

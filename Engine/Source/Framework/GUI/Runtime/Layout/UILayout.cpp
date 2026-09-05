@@ -725,6 +725,10 @@ void UIBoxLayout::arrange(UIElement& parent, const Rect2D& rect) const
     };
     std::vector<FEntry> entries;
     for (UIElement* child : parent.getChildrenInPaintOrder()) {
+        if (!child->participatesInLayout()) {
+            assignChildRect(*child, Rect2D{.pos = child->getLayoutRect().pos, .extent = {0.0f, 0.0f}});
+            continue;
+        }
         if (!participatesInBox(parent, *child)) {
             continue;
         }

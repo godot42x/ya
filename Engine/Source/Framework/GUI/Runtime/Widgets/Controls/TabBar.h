@@ -45,6 +45,8 @@ struct YA_GUI_API UITabButton : public UIElement, public UIStyledWidget<UITabBut
     /// DockSpace drag: fired when a press crosses the drag threshold; the
     /// bar begins the tree drag session carrying dock-tab:<label>.
     std::function<void()> _onDragArmed;
+    /// Right-click on this tab (logical point in tree space).
+    std::function<void(const glm::vec2& logicalPoint)> _onContextMenu;
 
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
@@ -95,6 +97,8 @@ struct YA_GUI_API UITabBar : public UIContainer, public UIStyledWidget<UITabBar,
     std::function<void(int index, const std::string& label)> _onTabDragBegin;
 
     std::function<void(int selectedIndex)> _onTabSelected;
+    /// Right-click on a tab (`index`) or the strip (`index < 0`).
+    std::function<void(int index, const glm::vec2& logicalPoint)> _onTabContextMenu;
 
     /// When the bar has no tabs, draw this placeholder text (and keep a
     /// header-sized height) so an empty zone is still a visible drop target
@@ -102,6 +106,7 @@ struct YA_GUI_API UITabBar : public UIContainer, public UIStyledWidget<UITabBar,
     std::string _emptyPlaceholder;
 
     void paintSelf(UIFrameBuilder& builder) override;
+    bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 
   private:

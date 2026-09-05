@@ -647,10 +647,26 @@ void WidgetTree::reparentAfter(UIElement& sibling, const UIElementRef& widget)
 
 void WidgetTree::detach(UIElement& widget)
 {
-    if (widget._tree != this) {
+    if (widget._tree != nullptr && widget._tree != this) {
         YA_CORE_WARN("WidgetTree::detach: widget '{}' is not attached to this tree", widget._name);
         return;
     }
+    if (widget._tree == nullptr) {
+        // Parent still set after a chrome subtree was detached from the tree.
+        // Unlink so a later attach/addDetachedChild does not see a stale parent.
+        if (UIElement* oldParent = widget._parent) {
+            UIElementRef keepAlive;
+            for (const auto& ref : oldParent->_children) {
+                if (ref.get() == &widget) {
+                    keepAlive = ref;
+                    break;
+                }
+            }
+            oldParent->removeChildEdge(widget);
+        }
+        return;
+    }
+
     for (const auto& layer : _layers) {
         if (layer.get() == &widget) {
             YA_CORE_ERROR("WidgetTree::detach: system layers cannot be detached by project code");

@@ -89,7 +89,10 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   已收口为 `UIScrollLayout` / `UISplitLayout` / `UIOverlayLayout`；`UIButton`、`UISelectableRow`、`UICheckBox`、`UICompoundWidget` 与 `UISizeBox`
   使用 `UISingleChildLayout`。  `UIDockSpace` 也是 single-child host：投影根填满 dock。  `FDockTreeModel::exportLayoutJson` /
   `importLayoutJson` 按 panel `stableKey` 持久化 split/leaf 树（不持久化 NodeId），leaf 可带
-  `hideTabBar`（左上角 12px 折角切换，Collapsed 掉 tab strip）。
+  `hideTabBar`（默认展示 tab strip；右键菜单或左上角 12px 折角只 Collapsed 掉 title bar，
+  面板内容继续填满 leaf。split ratio / 选 tab / hide-tab-bar 只改 live chrome 并
+  `notifyDockLayoutListeners()`；结构变化才 `rebuildProjection()`，且会先 unlink 再
+  reparent/attach 已挂载的 panel widget，禁止对仍有 parent 的 panel `addDetachedChild`）。
   `UIDockWorkspace::exportLayoutJson` / `importLayoutJson` 在同一 JSON 上附加
   `floating[]`（panel keys + pos/size + selected tab + `hideTabBar`）。Editor 经
   `ConfigManager` `editor.dockLayout` 恢复，`UIDockWorkspace::appendOnDockUpdated`

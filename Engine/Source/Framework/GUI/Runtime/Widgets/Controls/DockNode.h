@@ -56,7 +56,8 @@ struct FDockNode
     std::vector<DockPanelId>   panelIds;
     DockPanelId                selectedPanel       = kInvalidDockPanelId;
     bool                       persistentEmptyLeaf = false;
-    /// When true the leaf tab strip is collapsed; a corner affordance restores it.
+    /// When true the leaf tab strip (title bar) is hidden; panel content still
+    /// fills the leaf. A corner affordance or context menu restores the strip.
     bool                       bHideTabBar         = false;
 };
 

@@ -6,6 +6,7 @@
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TabBar.h"
+#include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Layout/UILayout.h"
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
@@ -27,6 +28,51 @@ constexpr float kSplitMinExtent = 120.0f;
 constexpr float kChooserBlock = 28.0f;
 constexpr float kChooserGap = 8.0f;
 constexpr float kHideTabBarSize = 12.0f;
+
+void unlinkWidgetFromVisualParent(UIElement& widget, WidgetTree* tree)
+{
+    if (WidgetTree* attached = widget.getTree()) {
+        attached->detach(widget);
+        return;
+    }
+    if (tree) {
+        tree->detach(widget);
+    }
+}
+
+void fillDockPanelBoxSlot(UIElement&, UISlot& edge)
+{
+    if (auto* slot = edge.as<UIBoxSlot>()) {
+        FBoxSlotArgs args;
+        args.sizeRule = EUIBoxSlotSizeRule::Fill;
+        slot->apply(args);
+    }
+}
+
+void graftPanelIntoHost(UIElement& host, const UIElementRef& panel)
+{
+    if (!panel || panel.get() == &host) {
+        return;
+    }
+    if (panel->getParent() == &host) {
+        host.initializeChildSlot(*panel, fillDockPanelBoxSlot);
+        return;
+    }
+
+    WidgetTree* hostTree = host.getTree();
+    if (hostTree && hostTree->contains(host) && panel->isAttached() && panel->getTree() == hostTree) {
+        hostTree->reparent(host, panel);
+        host.initializeChildSlot(*panel, fillDockPanelBoxSlot);
+        return;
+    }
+
+    unlinkWidgetFromVisualParent(*panel, hostTree);
+    if (hostTree && hostTree->contains(host)) {
+        hostTree->attach(host, panel, fillDockPanelBoxSlot);
+        return;
+    }
+    host.addDetachedChild(panel, fillDockPanelBoxSlot);
+}
 
 struct FDockHideTabBarAffordance final : UIElement
 {
@@ -228,7 +274,7 @@ struct FDockSpacePanelDragBehavior final : public UIBehavior
                 owner._ws->tearOffPanel(panelId, logicalPoint, size);
                 owner.rebuildProjection();
                 owner._ws->fireFloatingUpdated();
-                owner._ws->fireDockUpdated();
+                owner._ws->notifyDockLayoutListeners();
             }
         };
         tree->beginDrag(&owner, std::string(UIDockSpace::kDockPanelPayload) + std::to_string(panelId), std::move(label), std::move(observer));
@@ -293,7 +339,7 @@ struct FDockSpaceDropTargetBehavior final : public UIDropTargetBehavior
                     dock->_ws->endFloatingForPanel(panelId);
                 }
                 dock->rebuildProjection();
-                dock->_ws->fireDockUpdated();
+                dock->_ws->notifyDockLayoutListeners();
             }
         };
         setHighlightState = [](UIElement& owner, bool bHighlight)
@@ -499,7 +545,7 @@ void UIDockSpace::setWorkspace(std::shared_ptr<UIDockWorkspace> ws)
         _ws->setOnDockUpdated([weakSelf]()
         {
             if (auto self = weakSelf.lock()) {
-                if (self->getTree()) {
+                if (self->getTree() && !self->_bRebuildingProjection) {
                     self->rebuildProjection();
                 }
             }
@@ -512,13 +558,15 @@ void UIDockSpace::setWorkspace(std::shared_ptr<UIDockWorkspace> ws)
 
 void UIDockSpace::rebuildProjection()
 {
-    if (!getTree() || !_ws) {
+    if (!getTree() || !_ws || _bRebuildingProjection) {
         return;
     }
+    _bRebuildingProjection = true;
     clearPreview();
-    auto children = getChildrenInPaintOrder();
-    for (UIElement* child : children) {
-        if (child && child->participatesInLayout()) {
+    releaseMountedPanels();
+    const std::vector<UIElementRef> children = getChildren();
+    for (const UIElementRef& child : children) {
+        if (child && child->isAttached() && child->getTree() == getTree()) {
             getTree()->detach(*child);
         }
     }
@@ -526,6 +574,70 @@ void UIDockSpace::rebuildProjection()
     addDetachedChild(materializeNode(*_ws->dockModel().getRootNode()));
     markLayoutDirty();
     markPaintDirty();
+    _bRebuildingProjection = false;
+}
+
+void UIDockSpace::releaseMountedPanels()
+{
+    for (auto& [id, view] : _leafViews) {
+        (void)id;
+        if (!view.content) {
+            continue;
+        }
+        const std::vector<UIElementRef> mounted = view.content->getChildren();
+        for (const UIElementRef& child : mounted) {
+            if (child) {
+                unlinkWidgetFromVisualParent(*child, getTree());
+            }
+        }
+    }
+}
+
+void UIDockSpace::applyLeafTabBarVisibility(DockNodeId leafId)
+{
+    const FDockNode* leaf = _ws ? _ws->dockModel().findNode(leafId) : nullptr;
+    FLeafView* view = leafViewForLeaf(leafId);
+    if (!leaf || !view || !view->bar) {
+        return;
+    }
+    view->bar->setVisibility(leaf->bHideTabBar ? EWidgetVisibility::Collapsed
+                                               : EWidgetVisibility::Visible);
+    markLayoutDirty();
+    markPaintDirty();
+}
+
+void UIDockSpace::openLeafTabBarMenu(DockNodeId leafId, const glm::vec2& pos)
+{
+    WidgetTree* tree = getTree();
+    const FDockNode* leaf = _ws ? _ws->dockModel().findNode(leafId) : nullptr;
+    if (!tree || !leaf || leaf->kind != EDockNodeKind::Leaf) {
+        return;
+    }
+    const bool bHidden = leaf->bHideTabBar;
+    auto menu = UIMenu::create({
+        UIMenu::FItem{
+            .label = bHidden ? "Show Tab Bar" : "Hide Tab Bar",
+            .action = [this, leafId]()
+            {
+                const FDockNode* current = _ws->dockModel().findNode(leafId);
+                if (!current || current->kind != EDockNodeKind::Leaf) {
+                    return;
+                }
+                if (_ws->dockModel().setHideTabBar(leafId, !current->bHideTabBar)) {
+                    applyLeafTabBarVisibility(leafId);
+                    _ws->notifyDockLayoutListeners();
+                }
+            },
+        },
+    });
+    menu->openAt(*tree, pos);
+}
+
+void UIDockSpace::graftPanelIntoContent(UIContainer& content, const UIElementRef& panel)
+{
+    // DockContent is a box host. The selected panel's extent is expressed on
+    // the parent-owned box slot, never through child-authored canvas anchors.
+    graftPanelIntoHost(content, panel);
 }
 
 void UIDockSpace::rebuildLeaf(DockNodeId leafId)
@@ -539,13 +651,10 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
         return;
     }
 
-    if (WidgetTree* tree = getTree()) {
-        auto contentChildren = view->content->getChildrenInPaintOrder();
-        for (UIElement* child : contentChildren) {
-            if (child && child->participatesInLayout()) {
-                tree->detach(*child);
-                break;
-            }
+    const std::vector<UIElementRef> contentChildren = view->content->getChildren();
+    for (const UIElementRef& child : contentChildren) {
+        if (child) {
+            unlinkWidgetFromVisualParent(*child, getTree());
         }
     }
 
@@ -580,56 +689,24 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
         }
         const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
         _ws->dockModel().selectPanel(panelId);
-        _ws->fireDockUpdated();
-        if (WidgetTree* tree = getTree()) {
-            auto contentChildren = currentView->content->getChildrenInPaintOrder();
-            for (UIElement* child : contentChildren) {
-                if (child && child->participatesInLayout()) {
-                    tree->detach(*child);
-                    break;
-                }
-            }
-        }
         if (const UIDockWorkspace::FPanel* fp = _ws->findPanel(panelId)) {
-            currentView->content->addDetachedChild(fp->widget, [](UIElement&, UISlot& edge)
-            {
-                if (auto* slot = edge.as<UIBoxSlot>()) {
-                    FBoxSlotArgs args;
-                    args.sizeRule = EUIBoxSlotSizeRule::Fill;
-                    slot->apply(args);
-                }
-            });
+            graftPanelIntoContent(*currentView->content, fp->widget);
         }
+        _ws->notifyDockLayoutListeners();
     };
-
-    const auto attachPanelContent = [view](const UIElementRef& panel)
+    view->bar->_onTabContextMenu = [this, leafId](int, const glm::vec2& logicalPoint)
     {
-        if (!view || !view->content || !panel) {
-            return;
-        }
-        // DockContent is a path-A box host. The selected panel's extent is
-        // therefore expressed on the parent-owned box slot, never through
-        // child-authored canvas anchors. This keeps dock roots portable
-        // regardless of how the panel was authored.
-        view->content->addDetachedChild(panel, [](UIElement&, UISlot& edge)
-        {
-            if (auto* slot = edge.as<UIBoxSlot>()) {
-                FBoxSlotArgs args;
-                args.sizeRule = EUIBoxSlotSizeRule::Fill;
-                slot->apply(args);
-            }
-        });
+        openLeafTabBarMenu(leafId, logicalPoint);
     };
 
     if (selectedIndex >= 0) {
         view->bar->syncSelectedTab(selectedIndex);
         DockPanelId selectedPanel = leaf->panelIds[static_cast<size_t>(selectedIndex)];
         if (const UIDockWorkspace::FPanel* fp = _ws->findPanel(selectedPanel)) {
-            attachPanelContent(fp->widget);
+            graftPanelIntoContent(*view->content, fp->widget);
         }
     }
-    view->bar->setVisibility(leaf->bHideTabBar ? EWidgetVisibility::Collapsed : EWidgetVisibility::Visible);
-    markLayoutDirty();
+    applyLeafTabBarVisibility(leafId);
 }
 
 std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
@@ -647,7 +724,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
             if (_ws->dockModel().setSplitRatio(splitId, ratio)) {
                 markLayoutDirty();
                 markPaintDirty();
-                _ws->fireDockUpdated();
+                _ws->notifyDockLayoutListeners();
             }
         });
         if (node.child[0]) split->addDetachedChild(materializeNode(*node.child[0]));
@@ -664,7 +741,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     bar->_bDraggableTabs = true;
     bar->_styleKey = "tab.dock";
     bar->setClipChildren(true);
-    bar->setPadding({2.0f, 1.0f});
+    bar->setPadding({kHideTabBarSize, 1.0f});
     bar->setSpacing(1.0f);
     bar->_emptyPlaceholder = std::format("{} (drop tabs here)", leaf->_name);
     bar->_onTabDragBegin = [this, leafId = node.id](int index, const std::string& label)
@@ -716,7 +793,8 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
                 return;
             }
             if (_ws->dockModel().setHideTabBar(leafId, !current->bHideTabBar)) {
-                _ws->fireDockUpdated();
+                applyLeafTabBarVisibility(leafId);
+                _ws->notifyDockLayoutListeners();
             }
         },
         [this, leafId = node.id]()

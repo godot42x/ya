@@ -97,7 +97,21 @@ bool UITabButton::handleInputEvent(const Event& event, const WidgetEventContext&
         return false;
     }
 
+    if (eventType == EEvent::MouseButtonPressed) {
+        const auto& mouse = static_cast<const MouseButtonPressedEvent&>(event);
+        if (mouse.GetMouseButton() == EMouse::Right) {
+            if (_onContextMenu) {
+                _onContextMenu(ctx.logicalPoint);
+            }
+            return true;
+        }
+    }
+
     if (eventType == EEvent::MouseButtonPressed && _onDragArmed) {
+        const auto& mouse = static_cast<const MouseButtonPressedEvent&>(event);
+        if (mouse.GetMouseButton() != EMouse::Left) {
+            return false;
+        }
         _bPressed   = true;
         _pressPoint = ctx.logicalPoint;
         if (WidgetTree* tree = getTree()) {
@@ -163,6 +177,12 @@ UITabButton* UITabBar::addTab(const std::string& label)
             }
         };
     }
+    button->_onContextMenu = [this, index](const glm::vec2& logicalPoint)
+    {
+        if (_onTabContextMenu) {
+            _onTabContextMenu(index, logicalPoint);
+        }
+    };
 
     addDetachedChild(button);
     _tabs.push_back(button.get());
@@ -185,6 +205,20 @@ std::string UITabBar::removeTab(int index)
     for (size_t i = 0; i < _tabs.size(); ++i) {
         const size_t newIndex = i;
         _tabs[i]->_onActivated = [this, newIndex]() { selectTab(static_cast<int>(newIndex)); };
+        _tabs[i]->_onContextMenu = [this, newIndex](const glm::vec2& logicalPoint)
+        {
+            if (_onTabContextMenu) {
+                _onTabContextMenu(static_cast<int>(newIndex), logicalPoint);
+            }
+        };
+        if (_bDraggableTabs) {
+            _tabs[i]->_onDragArmed = [this, newIndex]()
+            {
+                if (newIndex < _tabs.size()) {
+                    _onTabDragBegin(static_cast<int>(newIndex), _tabs[newIndex]->_label);
+                }
+            };
+        }
     }
     if (_selectedIndex >= static_cast<int>(_tabs.size())) {
         _selectedIndex = static_cast<int>(_tabs.size()) - 1;
@@ -275,6 +309,21 @@ void UITabBar::paintSelf(UIFrameBuilder& builder)
                             font, EWidgetAlignH::Center, EWidgetAlignV::Center);
         }
     }
+}
+
+bool UITabBar::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
+{
+    if (event.getEventType() != EEvent::MouseButtonPressed) {
+        return false;
+    }
+    const auto& mouse = static_cast<const MouseButtonPressedEvent&>(event);
+    if (mouse.GetMouseButton() != EMouse::Right || !hitTestLayoutRect(ctx.logicalPoint)) {
+        return false;
+    }
+    if (_onTabContextMenu) {
+        _onTabContextMenu(-1, ctx.logicalPoint);
+    }
+    return true;
 }
 
 } // namespace ya

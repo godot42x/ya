@@ -91,22 +91,30 @@ struct YA_GUI_API UIDockWorkspace
     /// (backward compatible with tree-only snapshots). Unknown panel keys fail the import.
     bool importLayoutJson(const nlohmann::json& layout);
 
-    /// The DockSpace re-projects its tree when panels move into/out of dock.
+    /// The DockSpace re-projects its tree when the dock *structure* changes
+    /// (drop / tear-off / import). Split-ratio, tab selection, and hide-tab-bar
+    /// must not go through this: they update live chrome and call
+    /// notifyDockLayoutListeners() so persist runs without rematerializing.
     void setOnDockUpdated(std::function<void()> cb) { _onDockUpdated = std::move(cb); }
     void appendOnDockUpdated(std::function<void()> cb) { _onDockUpdatedListeners.push_back(std::move(cb)); }
     /// The floating host re-syncs its window set when floating changes.
     void setOnFloatingUpdated(std::function<void()> cb) { _onFloatingUpdated = std::move(cb); }
     void appendOnFloatingUpdated(std::function<void()> cb) { _onFloatingUpdatedListeners.push_back(std::move(cb)); }
-    void fireDockUpdated()
+    /// Persist listeners only (layout JSON). Does not rematerialize DockSpace.
+    void notifyDockLayoutListeners()
     {
-        if (_onDockUpdated) {
-            _onDockUpdated();
-        }
         for (const std::function<void()>& listener : _onDockUpdatedListeners) {
             if (listener) {
                 listener();
             }
         }
+    }
+    void fireDockUpdated()
+    {
+        if (_onDockUpdated) {
+            _onDockUpdated();
+        }
+        notifyDockLayoutListeners();
     }
     void fireFloatingUpdated()
     {
