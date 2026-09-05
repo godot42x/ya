@@ -42,3 +42,10 @@
 ### P3 保留项
 
 - `syncShellChrome` 仍每帧刷 toolbar / dialogs / project browser；P4 把 toolbar 改 `onAppStateChanged` 并清残留 helper。
+
+## P4 当前 checkpoint
+
+- Surface 只剩 dialog `syncShellDialogs`、viewport wrap/bridge、project browser 的 `ReactiveList::replace`（refresh/open 时，不再每帧扫）。
+- Toolbar 模式字订 `App::onAppStateChanged`。
+- skill GameEditor chrome：禁止 `tab->sync` / Surface 持 Tab 指针；tick 为 metrics → tree.tick → dialogs → push display → snapshot → overlay bridge。
+- 验证：`ya-game-editor` 构建通过；`ya-gui-closure-test` `WidgetTreeTest.*:DockNodeTest.*` 93 passed；既有 editor 测试集 17 passed。

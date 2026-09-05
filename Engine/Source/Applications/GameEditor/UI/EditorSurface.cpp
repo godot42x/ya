@@ -103,10 +103,14 @@ constexpr std::string_view kDefaultWorkspaceTabs[] = {
 
 EditorSurface::EditorSurface() = default;
 
-EditorSurface::~EditorSurface() = default;
+EditorSurface::~EditorSurface()
+{
+    unbindAppState();
+}
 
 void EditorSurface::shutdown()
 {
+    unbindAppState();
     if (_filePicker) {
         _filePicker->reset();
     }
@@ -153,7 +157,7 @@ void EditorSurface::tick(App& app, float dt)
 
     applyWindowMetrics(app);
     _tree->tick(dt);
-    syncShellChrome(app);
+    syncShellDialogs();
     pushViewportDisplay();
     UIFrameBuildContext snapshotCtx;
     snapshotCtx.textureResolver = &resolveGameUITexture;
@@ -164,6 +168,7 @@ void EditorSurface::tick(App& app, float dt)
 
 void EditorSurface::rebuild(App& app)
 {
+    unbindAppState();
     _root.reset();
     _menuBar.reset();
     _toolbarModeText.reset();
@@ -222,7 +227,10 @@ void EditorSurface::buildProjectBrowser(App& app)
                      .setStyleKey("text.muted");
 
     auto refresh = labeledButton("RefreshProjects", "Refresh Projects")
-                       .setOnClick([this]() { _layer->requestRefreshProjectBrowser(); });
+                       .setOnClick([this]() {
+                           _layer->requestRefreshProjectBrowser();
+                           refreshProjectBrowserRows();
+                       });
     auto exitBtn = labeledButton("ExitEditor", "Exit Editor")
                        .setOnClick([]() {
                            if (auto* app = App::get()) {
@@ -250,6 +258,7 @@ void EditorSurface::buildProjectBrowser(App& app)
                            const int   index    = _layer->getProjectBrowserSelection();
                            if (index >= 0 && index < static_cast<int>(projects.size())) {
                                _layer->requestOpenProject(projects[static_cast<size_t>(index)]);
+                               refreshProjectBrowserRows();
                            }
                        });
 
@@ -269,6 +278,7 @@ void EditorSurface::buildProjectBrowser(App& app)
                     .child(std::move(openBtn), ui::boxSlot().preferredSize({160.0f, 26.0f}))
                     .child(std::move(errorText));
     ui::build(*_tree, *_tree->getLayer(WidgetTree::ELayer::Content), std::move(page), ui::canvasSlot().fill());
+    refreshProjectBrowserRows();
 }
 
 void EditorSurface::registerEditorActions()
@@ -514,6 +524,8 @@ void EditorSurface::buildEditorChrome(App& app)
     _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(*_layer);
     _viewportOverlayHost.setOverlay(_viewportGizmoOverlay);
     _layer->setViewportGizmoUndoStack(_undo.get());
+    bindAppState(app);
+    updateToolbarMode(app);
 }
 
 FEditorTabSpawnContext EditorSurface::makeSpawnContext()
@@ -761,34 +773,59 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
     menu->openAt(*_tree, windowPoint);
 }
 
-void EditorSurface::syncShellChrome(App& app)
+void EditorSurface::syncShellDialogs()
 {
-    if (_bBuiltAsProjectBrowser) {
-        std::vector<UITreeView::FNode> projects;
-        const auto& discovered = _layer->getDiscoveredProjects();
-        projects.reserve(discovered.size());
-        for (int i = 0; i < static_cast<int>(discovered.size()); ++i) {
-            projects.push_back(UITreeView::FNode{
-                .id    = std::to_string(i),
-                .label = discovered[static_cast<size_t>(i)],
-            });
-        }
-        if (_projectRoots) {
-            _projectRoots->replace(std::move(projects));
-        }
-        if (_projectErrorText) {
-            _projectErrorText->setText(_layer->getProjectBrowserError());
-        }
+    if (!_tree) {
         return;
     }
-
-    syncToolbar(app);
     if (_filePicker) {
         _filePicker->sync(*_tree);
     }
     if (_settings) {
         _settings->sync(*_tree);
     }
+}
+
+void EditorSurface::refreshProjectBrowserRows()
+{
+    if (!_layer) {
+        return;
+    }
+    std::vector<UITreeView::FNode> projects;
+    const auto& discovered = _layer->getDiscoveredProjects();
+    projects.reserve(discovered.size());
+    for (int i = 0; i < static_cast<int>(discovered.size()); ++i) {
+        projects.push_back(UITreeView::FNode{
+            .id    = std::to_string(i),
+            .label = discovered[static_cast<size_t>(i)],
+        });
+    }
+    if (_projectRoots) {
+        _projectRoots->replace(std::move(projects));
+    }
+    if (_projectErrorText) {
+        _projectErrorText->setText(_layer->getProjectBrowserError());
+    }
+}
+
+void EditorSurface::bindAppState(App& app)
+{
+    unbindAppState();
+    _app = &app;
+    _appStateHandle = app.onAppStateChanged.addLambda(this, [this](AppState) {
+        if (_app) {
+            updateToolbarMode(*_app);
+        }
+    });
+}
+
+void EditorSurface::unbindAppState()
+{
+    if (_app && _appStateHandle != INVALID_HANDLE) {
+        _app->onAppStateChanged.remove(_appStateHandle);
+    }
+    _appStateHandle = INVALID_HANDLE;
+    _app = nullptr;
 }
 
 void EditorSurface::pushViewportDisplay()
@@ -827,7 +864,7 @@ void EditorSurface::pushViewportDisplay()
     _viewportHost->setDisplayImage(_viewportTexture, false);
 }
 
-void EditorSurface::syncToolbar(App& app)
+void EditorSurface::updateToolbarMode(App& app)
 {
     if (!_toolbarModeText) {
         return;

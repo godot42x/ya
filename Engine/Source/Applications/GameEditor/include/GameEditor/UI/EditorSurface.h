@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Common/Types.h"
+#include "Core/Delegate.h"
 #include "Core/Event.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Binding/Reactive.h"
@@ -35,13 +36,8 @@ struct UIDockSpace;
 struct FDockContext;
 struct UIDockFloatingHost;
 struct UIElement;
-struct UIContainer;
-struct UIButton;
 struct UIMenuBar;
 struct UIPanel;
-struct UIPopupOverlay;
-struct UIScrollViewport;
-struct UISizeBox;
 struct UIText;
 struct UITextField;
 struct UITheme;
@@ -78,6 +74,8 @@ struct EditorSurface : IEditorViewportHostSink
     std::shared_ptr<UndoStack>       _undo      = std::make_shared<UndoStack>();
     std::shared_ptr<UIText>          _projectErrorText;
     EditorTabSpawnerRegistry*        _tabSpawners = nullptr;
+    App*                             _app = nullptr;
+    DelegateHandle                   _appStateHandle = INVALID_HANDLE;
 
     std::unique_ptr<EditorFilePickerDialog> _filePicker;
     std::unique_ptr<EditorSettingsDialog> _settings;
@@ -136,9 +134,12 @@ struct EditorSurface : IEditorViewportHostSink
     void buildProjectBrowser(App& app);
     void buildEditorChrome(App& app);
     void registerEditorActions();
-    void syncShellChrome(App& app);
+    void syncShellDialogs();
     void pushViewportDisplay();
-    void syncToolbar(App& app);
+    void updateToolbarMode(App& app);
+    void bindAppState(App& app);
+    void unbindAppState();
+    void refreshProjectBrowserRows();
     void publishViewportRect();
     void syncViewportHostState(App& app);
     bool invokeTab(std::string_view tabId);

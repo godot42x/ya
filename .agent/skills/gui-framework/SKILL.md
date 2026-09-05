@@ -20,7 +20,7 @@ description: YA GUI 框架（WidgetTree / 控件 / layout / Render2D pass slot /
 - `ya-gui-closure-test` 覆盖 dump / dirty / route / snapshot contract，**不是**手感门禁。
   不要把「N dump tests passed」写成 UX 完成。
 - 手感验收走 Gallery `--scenario` 的状态组合（见下方交互契约 1–5）和 editor 手测
-  （选区、选色、dock 关 tab、Hierarchy 右键）。路径存在 ≠ 手感等价。
+  （选区、选色、dock 关 tab、Hierarchy 右键、Designer 树 DnD）。路径存在 ≠ 手感等价。
 - 内核体验长线见 `.agent/plan/gui-kernel-ux-parity/`。parity 表
   `.agent/plan/gui-framework-editor-readiness/imgui-widgettree-parity.md`
   里 ✅ 只表示 retained 有一条能完成核心工作流的路径。
@@ -67,17 +67,17 @@ AppKernel
            modules.onPresentation
              EditorModule → EditorSurface::tick
                rebuild-if-needed → window metrics
-               → WidgetTree::tick → sync tabs/chrome → buildSnapshot
-               → publishViewportRect → syncViewportHostState
+               → WidgetTree::tick → shell dialogs
+               → pushViewportDisplay → buildSnapshot
+               → publishViewportRect → viewport overlay bridge
              replayUIFrameSnapshot(..., EditorToolSurface)
 ```
 
-`EditorSurface::tick` 是编辑器 chrome 的阅读入口。tab 内容必须有独立 owner
-（`EditorInspectorTab` / `EditorDebugImagesTab` / `EditorContentBrowserTab` /
-`EditorAssetInspectorTab` / `EditorUIDesignerTab` / `EditorRuntimeToolsTab`）；
-Surface 只编排 shell、dock persist、viewport host 和 dialogs。
-不要再往 Surface 堆 tab 控件指针，也不要用 `EditorTabRegistry` 这种 `std::function`
-袋子假装 owner。长线见 `.agent/plan/gui-editor-structure/`。
+`EditorSurface::tick` 是编辑器 chrome 的阅读入口。Tab 由 `EditorTabSpawnerRegistry`
+spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `WidgetTree`
+驱动。Surface 只编排 shell、dock persist、viewport host bridge 和 dialogs。
+禁止 `tab->sync`、禁止 Surface 持有 Tab 控件指针。不要再引入 `EditorPanel` 或中心
+事件总线。长线见 `.agent/plan/gui-editor-tab-lifecycle/`。
 
 ## WidgetTree 模型
 
@@ -235,10 +235,13 @@ Surface 只编排 shell、dock persist、viewport host 和 dialogs。
 ## GameEditor chrome
 
 - `EditorSurface::tick` 是 chrome 编排入口：`rebuild-if-needed` → window metrics →
-  `WidgetTree::tick` → sync tabs/chrome → `buildSnapshot` → viewport host。tab 内容不堆回 Surface。
-  Content / Asset / UI Designer / Runtime Tools / Inspector / Debug Images 是独立
-  owner。不要再引入 `EditorTabRegistry` 这种 `std::function` 袋子。
-  结构收口见 `.agent/plan/gui-editor-structure/`。
+  `WidgetTree::tick` → shell dialogs → push viewport display → `buildSnapshot` →
+  viewport host bridge。禁止 `tab->sync`，禁止 Surface 持有 Tab 控件指针。
+  Tab 经 `EditorTabSpawnerRegistry` 注册，`EditorSurface::invokeTab` 按 stable key
+  激活或 spawn。`onAttached` 拉权威状态并订阅所属边界的 `MulticastDelegate`，
+  `onDetached` 按 handle 退订。未选中 dock tab 是 detached subtree，不会 tick。
+  不要再引入 `EditorPanel`、中心 MessageBus，或 `EditorTabRegistry` 那种 `std::function`
+  袋子。结构见 `.agent/plan/gui-editor-tab-lifecycle/`。
 - 启动时 **WidgetTree 唯一 chrome**：整窗 `EditorSurface` + `replayUIFrameSnapshot`；3D 仍离屏
   compose，树只采样那张 RT。`--editor-chrome=imgui` / `editor.chrome.host=imgui` 会被忽略并打 WARN。
 - WidgetTree 输入：`EditorInputNode` → `WidgetTree::dispatchEvent`。
@@ -260,12 +263,12 @@ Surface 只编排 shell、dock persist、viewport host 和 dialogs。
 - WidgetTree chrome 的 theme 走 `buildEditorTheme`（`GameEditor/UI/EditorTheme.h`），
   不要直接调 `buildWorkbenchTheme`。Chrome 文案用 `text.header` / `text.muted` /
   `text.error` / `text.eyebrow`，不要 `setColor` 字面量（显式着色会盖掉 theme）。
-- `SelectionModel` 是 identity 选择源（`GUI/Binding/SelectionModel.h`）：selected 有序集合 + primary（空或不在集合外）+ hover/active/focus。不持有 Entity*。控件绑 `primaryRef()`；多选走 `add`/`toggle`；`replace` 批量同步 viewport 多选。Hierarchy 仍写 `EditorLayer`，`syncSelectionFromLayer` 按 `selectionGeneration` 把 layer 选择映射为 `e:{uuid}` / `ui:{entryId}` 写回共享 model。
+- `SelectionModel` 是 identity 选择源（`GUI/Binding/SelectionModel.h`）：selected 有序集合 + primary（空或不在集合外）+ hover/active/focus。不持有 Entity*。控件绑 `primaryRef()`；多选走 `add`/`toggle`；`replace` 批量同步。`EditorHierarchyTab` 在 `onAttached` 拉一次 Layer 选择，之后只订 `EditorLayer::onSelectionChanged`。
 - `ActionMap` 是 identity 命令表（`GUI/Binding/ActionMap.h`）：菜单、快捷键、toolbar 都 `execute(id)`。`FActionChord::primary` 在 macOS 是 Cmd、别处是 Ctrl。WidgetTree 未处理的 KeyPressed 才走 shortcut；文本焦点下只匹配带 modifier 的 chord。`UIMenu::FItem::fromAction` 生成同一 execute 的菜单行。
 - `UndoStack` 是 identity 撤销历史（`GUI/Binding/UndoStack.h`）：`push` 记录已应用的 undo/redo 闭包，不在 push 时调用 redo。`beginMerge`/`endMerge` 把同一 `mergeKey` 的连续 push 收成一步（拖动）；`UndoTransaction` 把嵌套 push 收成一步。栈不持有 Entity*。`edit.undo` / `edit.redo` 走 ActionMap（macOS Redo 是 Cmd+Shift+Z，别处 Ctrl+Y）。Inspector 拖动 `UIDragFloat` 在 `_onDragBegan/Ended` 开闭 merge；`setValue(..., false)` 是 sync，不进 undo。Gizmo / viewport 选择仍未接入。
 - `PropertyGraph::project` 是反射字段 → editor field model 的入口（`PropertyAccessor::collectLeaves` + `PropertyProjectionRegistry`）。单实例 typed get/set/equals/validation 在 `Core/Reflection/PropertyAccessor`；`PropertyHandle` 只做多选 mixed、undo copy/restore、asset picker kind 和 owner callback。Transform projection 负责显示名和 `setPosition/setRotation/setScale` 写回。Inspector 对多选的 **交集** component 物化 `EditorAutoPropertySection`；`UIDragFloat` mixed 显示 "—"，编辑写回全部 instance，undo 按 instance 快照恢复。enum 字段走 `UIComboBox`；`.color()` 元数据的 `glm::vec3`/`glm::vec4` 走 `UIColorEdit`（非 color vec3 仍走 DragFloat）。`TextureRef`/`ModelRef`/`MeshRef` 走 path `UITextField` + Browse；Browse 经 `EditorAssetPickerCallback`（widgettree：`EditorLayer::setAssetPickerHandler` → `EditorSurface::openAssetPickerDialog`；legacy imgui：`FilePicker`；`EditorInspectorTab` 注入，framework 不依赖 `EditorLayer`）。`PropertyHandle::validationError` 转调 `PropertyAccessor` 的 manipulate spec 范围；`hasAssetResolveError` 对 failed resolve 画 error fill；`UIDragFloat`/`UITextField` `setError` 画 error fill。`UIImage` 对缺失 asset / `setResourceMissing` 画 error fill。没有 retained 可编辑字段的类型跳过。ImGui `DetailsView` 实现已在 Phase 8N 删除；`EditorInspectorTab` 是实体/component 唯一正式 Inspector UI，并显示 Game UI Entry 摘要 + Open in UI Designer。
 - `EditorSurface` Content Browser：`EditorContentBrowserTab` 持有 `FileExplorer` 与 keyed window；fingerprint 含 search + selected path；选中纹理调 `inspectAsset`。legacy `FilePicker` 图标在 `EditorLayer::onAttach` 加载。
-- `UITreeView` 在 `UIScrollViewport` 内只 paint 可见行窗口（`computeKeyedVisibleWindow` + `getPaintedRowCount`）；`EditorSurface` Hierarchy 用 scroll 包裹。flatten/hit-test 仍读全量可见行；无 per-row widget。`bindFilter` + `HierarchyFilter` 搜索框过滤节点；`setReorderable` + `moveEditorHierarchyEntity` 支持 scene 实体拖放重排（`ui:` 条目仍不可重排）。ImGui `SceneHierarchyPanel::sceneTree` 已删（Phase 8O）；`SceneHierarchyPanel` 仅保留 viewport 选择总线 API。
+- `UITreeView` 在 `UIScrollViewport` 内只 paint 可见行窗口（`computeKeyedVisibleWindow` + `getPaintedRowCount`）；`EditorHierarchyTab` 用 scroll 包裹。flatten/hit-test 仍读全量可见行；无 per-row widget。`bindFilter` + `HierarchyFilter` 搜索框过滤节点；`setReorderable` + `moveEditorHierarchyEntity` 支持 scene 实体拖放重排（`ui:` 条目仍不可重排）。结构变化走 `EditorLayer::onHierarchyChanged`，不在 Surface 轮询 fingerprint。ImGui `SceneHierarchyPanel::sceneTree` 已删（Phase 8O）；`SceneHierarchyPanel` 仅保留 viewport 选择总线 API。
 - Viewport overlay：`FEditorViewportHostState` / `IEditorViewportOverlay` / `EditorViewportOverlayHost`；
   `EditorSurface::syncViewportHostState` + hover/focus overlay dispatch；gizmo 绘制不再经
   `GuiSystem`，而是在 viewport compose 中直接发 `Render2D` world-line/screen-handle。
