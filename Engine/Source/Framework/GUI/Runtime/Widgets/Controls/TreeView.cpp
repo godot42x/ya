@@ -514,21 +514,34 @@ bool UITreeView::handleInputEvent(const Event& event, const WidgetEventContext& 
     }
 
     if (eventType == EEvent::MouseButtonPressed) {
+        const auto& pressEvent = static_cast<const MouseButtonPressedEvent&>(event);
+        if (pressEvent.GetMouseButton() == EMouse::Right) {
+            const int rowIndex = hitRowIndex(ctx.logicalPoint);
+            std::string nodeId;
+            if (rowIndex >= 0) {
+                const auto        rows = flattenVisible();
+                const VisibleRow& row  = rows[static_cast<size_t>(rowIndex)];
+                nodeId                 = row.node->id;
+                if (_selectedId) {
+                    _selectedId->set(nodeId);
+                }
+                if (_onSelectionChanged) {
+                    _onSelectionChanged(nodeId);
+                }
+            }
+            if (_onContextMenu) {
+                _onContextMenu(nodeId, ctx.logicalPoint);
+                return true;
+            }
+            return false;
+        }
+
         const int rowIndex = hitRowIndex(ctx.logicalPoint);
         if (rowIndex < 0) {
             return false;
         }
-        const auto      rows = flattenVisible();
-        const VisibleRow& row = rows[static_cast<size_t>(rowIndex)];
-
-        // Right-button press: context menu (host owns the menu).
-        const auto& pressEvent = static_cast<const MouseButtonPressedEvent&>(event);
-        if (pressEvent.GetMouseButton() == EMouse::Right) {
-            if (_onContextMenu) {
-                _onContextMenu(row.node->id, ctx.logicalPoint);
-            }
-            return true;
-        }
+        const auto        rows = flattenVisible();
+        const VisibleRow& row  = rows[static_cast<size_t>(rowIndex)];
 
         if (!row.node->children.empty() && onArrow(ctx.logicalPoint, row)) {
             toggleExpanded(row.node->id);

@@ -111,6 +111,20 @@ class UITreeViewWidgetBuilder final : public TUIWidgetBuilder<UITreeView, UITree
         _widget->setOnReorderHandler(std::move(value));
         return std::move(*this);
     }
+
+    [[nodiscard]] UITreeViewWidgetBuilder& setOnContextMenu(
+        std::function<void(const std::string&, const glm::vec2&)> value) &
+    {
+        _widget->setOnContextMenu(std::move(value));
+        return *this;
+    }
+
+    [[nodiscard]] UITreeViewWidgetBuilder&& setOnContextMenu(
+        std::function<void(const std::string&, const glm::vec2&)> value) &&
+    {
+        _widget->setOnContextMenu(std::move(value));
+        return std::move(*this);
+    }
 };
 
 /// Dock space projecting an FDockContext dock tree. The context is the

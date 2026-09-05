@@ -823,6 +823,8 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     treeView->bindData(roots);
     treeView->setExpanded("root", true);
     treeView->setReorderable(true);
+    auto treeSelectedId = std::make_shared<ya::Reactive<std::string>>("");
+    treeView->bindSelection(treeSelectedId);
     treeView->setOnReorderHandler([roots, log](const std::string& fromId, const std::string& toId, int mode)
     {
         // Minimal demo reorder: move `fromId` within the ROOT list only
@@ -894,10 +896,26 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     {
         log(std::format("Tree toggle '{}' -> {}", id, bExpanded ? "expanded" : "collapsed"));
     };
-    treeView->_onContextMenu = [log](const std::string& nodeId, const glm::vec2&)
+    treeView->setOnContextMenu([&tree, log](const std::string& nodeId, const glm::vec2& point)
     {
         log(std::format("Tree context menu -> '{}'", nodeId));
-    };
+        auto menu = ya::UIMenu::create({
+            ya::UIMenu::FItem{
+                .label  = "Create Empty Node",
+                .action = [log]() { log("Tree menu: Create Empty Node"); },
+            },
+            ya::UIMenu::FItem::separator(),
+            ya::UIMenu::FItem{
+                .label  = "Duplicate",
+                .action = [log]() { log("Tree menu: Duplicate"); },
+            },
+            ya::UIMenu::FItem{
+                .label  = "Delete",
+                .action = [log]() { log("Tree menu: Delete"); },
+            },
+        });
+        menu->openAt(tree, point);
+    });
     auto treeFilterRef = std::make_shared<ya::Reactive<std::string>>("");
     treeView->bindFilter(treeFilterRef);
     auto selStrRef = std::make_shared<ya::Reactive<std::string>>("(none)");

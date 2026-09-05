@@ -72,7 +72,7 @@
 | Viewport pick | `onEvent` | `onEvent` (via `EditorInputNode`) | ✅ | |
 | Gizmo translate/rotate/scale | W/E/R + ImGuizmo | Same | 🟡 | Bridge retained; not pure WidgetTree draw |
 | Gizmo undo session | `EditorTransformUndo` | Same | ✅ | |
-| Hierarchy delete | Viewport context menu / shortcuts | `cmdDeleteSelection` + Delete key | 🟡 | Viewport/menu/shortcut path exists; **feel:** no tree context menu (E1) |
+| Hierarchy delete | Viewport context menu / shortcuts | `cmdDeleteSelection` + Delete key + Hierarchy tree menu | ✅ | Viewport/menu/shortcut + **feel (E1):** tree right-click uses `selection.delete` |
 | Duplicate selection | Viewport context menu / shortcuts | `cmdDuplicateSelection` + Ctrl/Cmd+D | ✅ | |
 
 ---
@@ -95,7 +95,7 @@
 |---------|--------------|------------|--------|-------|
 | Panel render | `sceneTree` draw | `UITreeView` in dock panel | ⚫ / ✅ | ImGui draw removed 8O |
 | Selection sync | `SceneHierarchyPanel` | Same panel as selection bus | ✅ | |
-| Entity CRUD from tree UI | Context / ImGui menus | — | 🔴 | Create/delete not in retained hierarchy (E1: ActionMap on tree right-click) |
+| Entity CRUD from tree UI | Context / ImGui menus | Hierarchy `setOnContextMenu` → `ActionMap` | ✅ | Create Empty / Duplicate / Delete share viewport actions (E1) |
 
 ### Inspector (entity / component)
 
@@ -202,9 +202,7 @@
 
 **Critical remaining before removing `imgui-local`:**
 
-1. `FilePicker` / `TypeRenderer` still compile without a live widgettree chrome caller  
-
-Hierarchy tree CRUD remains a retained-UI gap, not an ImGui chrome blocker.
+1. `FilePicker` / `TypeRenderer` still compile without a live widgettree chrome caller
 
 ---
 
@@ -217,7 +215,7 @@ Kernel feel (not another `EditorSurface` split) — `.agent/plan/gui-kernel-ux-p
 3. **K2** — `UITextField` selection + DragFloat/SpinBox edit reuse + I-beam ✅  
 4. **K3** — ColorEdit SV/hue/hex picker ✅  
 5. **K4** — Dock leaf tab close + same-leaf reorder ✅  
-6. **E1** — Hierarchy tree right-click CRUD via existing `ActionMap`  
+6. **E1** — Hierarchy tree right-click CRUD via existing `ActionMap` ✅  
 7. **E2** — Toolbar / Content Browser icons  
 8. **E3** — UI Designer tree DnD; delete dead `TypeRenderer` / ImGui `FilePicker::render`
 

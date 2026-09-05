@@ -60,9 +60,15 @@
     },
     {
       "id": "hierarchy_tree_crud",
-      "status": "pending",
+      "status": "implemented",
       "phase": "E1",
-      "evidence": []
+      "evidence": [
+        "UITreeView setOnContextMenu + right-click selects row",
+        "selection.createEmpty / duplicate / delete via ActionMap fromAction",
+        "ToolControlsTest.TreeViewRightClick*",
+        "gallery_tree_context.jsonl",
+        "EditorSurface wiring in 810170da"
+      ]
     },
     {
       "id": "chrome_icons",

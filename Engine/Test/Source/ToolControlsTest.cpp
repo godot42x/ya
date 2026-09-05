@@ -833,6 +833,60 @@ TEST(ToolControlsTest, TreeViewReorderUsesBehaviorBackedDragDrop)
     EXPECT_FALSE(tree.isDragging());
 }
 
+TEST(ToolControlsTest, TreeViewRightClickSelectsRowAndFiresContextMenu)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       view = std::make_shared<UITreeView>("Tree");
+    FCanvasSlotArgs viewSlot;
+    viewSlot.offset    = {20.0f, 20.0f};
+    viewSlot.fixedSize = {220.0f, 96.0f};
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    roots->push({.id = "node.1", .label = "Node 1"});
+    roots->push({.id = "node.2", .label = "Node 2"});
+    view->bindData(roots);
+
+    std::string selected;
+    std::string menuId;
+    glm::vec2   menuAt{0.0f, 0.0f};
+    view->_onSelectionChanged = [&](const std::string& id) { selected = id; };
+    view->setOnContextMenu([&](const std::string& id, const glm::vec2& point)
+    {
+        menuId = id;
+        menuAt = point;
+    });
+
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Right), pointAt(80.0f, 32.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(selected, "node.1");
+    EXPECT_EQ(menuId, "node.1");
+    EXPECT_EQ(menuAt, glm::vec2(80.0f, 32.0f));
+}
+
+TEST(ToolControlsTest, TreeViewRightClickEmptySpaceFiresContextMenuWithEmptyId)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       view = std::make_shared<UITreeView>("Tree");
+    FCanvasSlotArgs viewSlot;
+    viewSlot.offset    = {20.0f, 20.0f};
+    viewSlot.fixedSize = {220.0f, 96.0f};
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    roots->push({.id = "node.1", .label = "Node 1"});
+    view->bindData(roots);
+
+    std::string menuId = "unset";
+    view->setOnContextMenu([&](const std::string& id, const glm::vec2&) { menuId = id; });
+
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), view, viewSlot);
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Right), pointAt(80.0f, 90.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(menuId, "");
+}
+
 TEST(ToolControlsTest, TreeViewVirtualizesPaintInsideScrollViewport)
 {
     WidgetTree tree({.width = 200, .height = 120});

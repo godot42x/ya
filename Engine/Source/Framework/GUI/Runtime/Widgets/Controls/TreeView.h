@@ -117,6 +117,10 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     {
         _onReorder = std::move(handler);
     }
+    void setOnContextMenu(std::function<void(const std::string& nodeId, const glm::vec2& logicalPoint)> handler)
+    {
+        _onContextMenu = std::move(handler);
+    }
 
     // === Editing (editor-parity P5) ===
     /// When true a press on a row (not the arrow) starts a tree drag
@@ -126,8 +130,8 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     /// 1 = into the target (as its child), 2 = after the target. The host
     /// rebuilds the ReactiveList (the widget never mutates the data).
     std::function<void(const std::string& fromId, const std::string& toId, int mode)> _onReorder;
-    /// Fired on a right-button press over a row; the host opens its own
-    /// context menu (the widget never owns menus).
+    /// Fired on a right-button press; `nodeId` is the hit row or empty when
+    /// the press is in empty space. The host opens its own context menu.
     std::function<void(const std::string& nodeId, const glm::vec2& logicalPoint)> _onContextMenu;
     /// Filter ref: only nodes whose id/label matches (or that have a
     /// matching descendant) stay visible; while a filter is active all

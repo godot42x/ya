@@ -1,5 +1,19 @@
 # Progress
 
+## E1 当前 checkpoint（2026-09-06）
+
+- `UITreeView` 右键选中行（或空白处 `nodeId=""`）并回调 host；DSL `setOnContextMenu`。
+- Editor：`selection.createEmpty` 与 duplicate/delete 同一 `ActionMap`；Hierarchy 与 viewport 菜单都 `fromAction`。
+- Gallery：右键 `GalleryTree` 打开 Create/Duplicate/Delete 菜单，点 Create 后关闭。
+- 验证：`ToolControlsTest.TreeViewRightClick*`；headless `gallery_tree_context.jsonl`。Editor 接线已在 `810170da` 的 `EditorSurface` 中。
+
+### E1 保留项
+
+- E2–E3 未做。
+- Hierarchy 菜单没有 viewport 的 Create 3D Object / Light 子菜单（同一 ActionMap 三命令即可）。
+- 不合并 `GUIApp` 与 `ya::App`；不拆 WidgetTree。
+- 未宣称 retained editor ready。
+
 ## K4 当前 checkpoint（2026-09-06）
 
 - `UITabButton` 可关 tab 有 close hit-zone；`FDockContext::closePanel` 走已有 `FDockTreeModel::removePanel`。
