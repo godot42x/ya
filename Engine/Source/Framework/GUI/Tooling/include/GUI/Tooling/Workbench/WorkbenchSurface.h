@@ -43,8 +43,7 @@ class YA_GUI_API FWorkbenchSurface
     /// the shell only knows their names and builders. Call before buildUI().
     int addPage(const std::string& name, FPageBuilder builder);
     /// Index of the built-in Editor reference page (after all registered
-    /// pages; the shell's own tool-GUI example, shared with the product
-    /// editor panel).
+    /// pages; the shell's own tool-GUI example for FeatureGallery).
     [[nodiscard]] int getEditorPageIndex() const { return _editorPageIndex; }
     /// Switch the content page (tabs + content host). Public so apps can
     /// drive the shell (automation, commands).
@@ -61,10 +60,6 @@ class YA_GUI_API FWorkbenchSurface
     FWorkbenchWorkspace workspace;
 
     void buildUI(ya::WidgetTree& tree);
-    /// Build the workbench chrome under an existing parent instead of the
-    /// Content layer. Used when the editor shell hosts the workbench as a
-    /// dock panel rather than as the window root.
-    void buildUI(ya::WidgetTree& tree, ya::UIElement& parent);
     void updateUI();
     void onRoutedEvent(const ya::Event& event, ya::EWidgetRouteResult result);
 

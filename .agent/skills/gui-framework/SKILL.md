@@ -239,7 +239,8 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   viewport host bridge。禁止 `tab->sync`，禁止 Surface 持有 Tab 控件指针。
   Tab 经 `EditorTabSpawnerRegistry` 注册，`EditorDockWorkspace::invokeTab` 按 stable key
   激活或 spawn。layout 是 JSON 文档（用户 `editor.dockLayout` + 工厂
-  `DefaultEditorDockLayout.json`）；Window 菜单 checkbox 切换已注册 tab。rebuild 期
+  `DefaultEditorDockLayout.json`）；Window 菜单 checkbox 切换已注册 tab；Layout → Default
+  一键恢复工厂布局。rebuild 期
   dock/workspace 政策在 `EditorDockWorkspace`，ActionMap 目录在
   `registerEditorActions`。`onAttached` 拉权威状态并订阅所属边界的 `MulticastDelegate`，
   `onDetached` 按 handle 退订。未选中 dock tab 是 detached subtree，不会 tick。

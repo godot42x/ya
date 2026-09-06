@@ -124,14 +124,15 @@ void EditorDockWorkspace::buildWindowMenu()
                 });
             }
         }
-        if (!items.empty()) {
-            items.push_back(UIMenu::FItem::separator());
-        }
-        items.push_back({
-            .label  = "Reset Layout",
-            .action = [this]() { resetLayout(); },
-        });
         return UIMenu::create(std::move(items));
+    });
+    _host.menuBar->addItem("Layout", [this]() {
+        return UIMenu::create({
+            {
+                .label  = "Default",
+                .action = [this]() { resetLayout(); },
+            },
+        });
     });
 }
 
@@ -236,6 +237,7 @@ void EditorDockWorkspace::resetLayout()
         (void)_host.dock->closePanel(key);
     }
     (void)applyLayoutDocument(factoryLayout(), false);
+    _host.dock->fireDockUpdated();
     persistLayout();
 }
 

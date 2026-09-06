@@ -67,18 +67,6 @@ void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
     assembleChrome(tree, *_root);
 }
 
-void FWorkbenchSurface::buildUI(ya::WidgetTree& tree, ya::UIElement& parent)
-{
-    _tree = &tree;
-
-    _root = std::make_shared<ya::UIPanel>("WorkbenchRoot");
-    _root->_styleKey = "panel.window";
-    tree.attach(parent, _root);
-    ya::ui::attachSlot(parent, *_root, ya::ui::canvasSlot().fill());
-
-    assembleChrome(tree, *_root);
-}
-
 int FWorkbenchSurface::findPageIndexByName(const std::string& name) const
 {
     for (size_t i = 0; i < _pages.size(); ++i) {

@@ -146,7 +146,7 @@
 
 | Feature | Legacy ImGui | WidgetTree | Status | Notes |
 |---------|--------------|------------|--------|-------|
-| Panel render | `GUIWorkbenchPanel` ImGui | `FWorkbenchSurface` host in dock | ⚫ / ✅ | 8H |
+| Panel render | `GUIWorkbenchPanel` ImGui | standalone `FWorkbenchSurface` (GUIWorkbench app) | ⚫ | 8H deleted ImGui; 8Y removed editor dock host |
 | Demo pages | ImGui compositor | `WorkbenchSurface::buildUI` | ✅ | |
 
 ### Render Graph debug

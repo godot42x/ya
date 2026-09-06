@@ -1,5 +1,19 @@
 # Progress
 
+## Phase 8Y 当前 checkpoint（2026-09-06）
+
+- 删除 `EditorWorkbenchTab` 与 builtin `gui-workbench` spawner；GameEditor 不再把 `FWorkbenchSurface` 嵌进 dock。
+- 去掉 `FWorkbenchSurface::buildUI(tree, parent)` 与 `FEditorTabSpawnContext::authoringParent`（只服务 editor 嵌套 host）。
+- Window 菜单只列已注册 tab；Layout → Default 恢复工厂布局并 `fireDockUpdated`。
+- 验证：`xmake b ya-game-editor`；`EditorTabSpawnerRegistryTest.*`；`EditorDockWorkspaceTest.*`。
+
+### Phase 8Y 保留项
+
+- 未宣称 retained editor ready。
+- 进程内 `imgui-local` 仍链在 GameRuntime `GuiSystem`/`ImGuiSystem`。
+- Windows/MSVC、OpenGL presentation、hour-scale soak 仍是 blocker。
+- GUIWorkbench 仍是独立 FeatureGallery app，不是 editor 功能。
+
 ## Phase 8X 当前 checkpoint（2026-09-06）
 
 - 删除 GameEditor ImGui texture cache（`getOrCreateImGuiTextureID` / play-stop FilePicker 图标 descriptor）。Toolbar / Content 图标已走 `UIImage` 资产路径。

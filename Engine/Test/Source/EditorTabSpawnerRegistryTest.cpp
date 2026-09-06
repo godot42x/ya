@@ -52,6 +52,7 @@ TEST(EditorTabSpawnerRegistryTest, BuiltinRegistryIncludesHierarchyAndViewport)
     EXPECT_EQ(viewport->title, "Viewport");
     EXPECT_EQ(viewport->toolsMenuLabel, "Viewport");
     EXPECT_TRUE(static_cast<bool>(viewport->spawn));
+    EXPECT_EQ(registry.find("gui-workbench"), nullptr);
 }
 
 } // namespace ya

@@ -109,6 +109,7 @@
 - [x] Dock 源码收口到 `Controls/DockSpace/`。
 - [x] Phase 8W：删除 `onImGuiRender` chrome shell；WidgetTree 为唯一 editor chrome（`imgui-local` 仍服务 ImGuizmo）。
 - [x] Phase 8X：GameEditor 去掉 ImGui texture bridge / `ImGuiImageEntry` / `EditorCommon` ContextMenu；EditorModule 不再 `GuiSystem::init`；`ya-game-editor` 不再直接依赖 `imgui-local`。
+- [x] Phase 8Y：删除 editor `gui-workbench` dock tab；`FWorkbenchSurface` 只服务独立 GUIWorkbench app。
 - [x] Phase 9B：editor-scale 性能基线（Hierarchy 视口 paint 窗口、Content keyed window、Inspector 干净 snapshot）。
 - [x] Phase 9C：长时间运行 attach/detach、theme switch 压测。
 - [x] Phase 9D：DPI、CJK fallback、键盘、IME、剪贴板、文本编辑。

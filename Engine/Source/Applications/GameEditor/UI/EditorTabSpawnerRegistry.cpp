@@ -9,8 +9,6 @@
 #include "GameEditor/UI/EditorStatsTab.h"
 #include "GameEditor/UI/EditorUIDesignerTab.h"
 #include "GameEditor/UI/EditorViewportTab.h"
-#include "GameEditor/UI/EditorWorkbenchTab.h"
-#include "GUI/Widgets/WidgetTree.h"
 
 namespace ya
 {
@@ -105,22 +103,6 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
         .toolsMenuLabel = "Frame Stats",
         .spawn = [](FEditorTabSpawnContext& ctx) {
             return std::make_shared<EditorStatsTab>(ctx.layer);
-        },
-    });
-    registry.add({
-        .tabId = "gui-workbench",
-        .title = "Workbench",
-        .toolsMenuLabel = "GUI Workbench",
-        .spawn = [](FEditorTabSpawnContext& ctx) {
-            auto tab = std::make_shared<EditorWorkbenchTab>();
-            if (ctx.authoringParent) {
-                const WidgetAttachment attached = ctx.tree.attach(*ctx.authoringParent, tab);
-                if (attached.valid()) {
-                    tab->buildWorkbench(ctx.tree);
-                    ctx.tree.detach(*tab);
-                }
-            }
-            return tab;
         },
     });
 }

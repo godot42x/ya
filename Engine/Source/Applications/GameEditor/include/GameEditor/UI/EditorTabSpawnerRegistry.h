@@ -24,7 +24,6 @@ struct FEditorTabSpawnContext
     SelectionModel&  selection;
     ActionMap&       actions;
     UndoStack&       undo;
-    UIElement*       authoringParent = nullptr;
     IEditorViewportHostSink* viewportHost = nullptr;
 };
 
