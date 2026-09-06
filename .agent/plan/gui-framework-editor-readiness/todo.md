@@ -110,6 +110,7 @@
 - [x] Phase 8W：删除 `onImGuiRender` chrome shell；WidgetTree 为唯一 editor chrome（`imgui-local` 仍服务 ImGuizmo）。
 - [x] Phase 8X：GameEditor 去掉 ImGui texture bridge / `ImGuiImageEntry` / `EditorCommon` ContextMenu；EditorModule 不再 `GuiSystem::init`；`ya-game-editor` 不再直接依赖 `imgui-local`。
 - [x] Phase 8Y：删除 editor `gui-workbench` dock tab；`FWorkbenchSurface` 只服务独立 GUIWorkbench app。
+- [x] Phase 8Z：删除 GameRuntime `GuiSystem`/`ImGuiSystem`；进程不再链接 `imgui-local`。
 - [x] Phase 9B：editor-scale 性能基线（Hierarchy 视口 paint 窗口、Content keyed window、Inspector 干净 snapshot）。
 - [x] Phase 9C：长时间运行 attach/detach、theme switch 压测。
 - [x] Phase 9D：DPI、CJK fallback、键盘、IME、剪贴板、文本编辑。
@@ -129,7 +130,7 @@
 - [x] Phase 10E：抽出 `EditorSettingsDialog`（bindings 宿主，不把 overlay/控件留在 `EditorSurface`）。
 - [x] Phase 10E：editor density/token 收口（inspector 叶标签 + 分组标题 + `editor_density`；底栏 tab 短标题）。
 - [x] Phase 10E：其余 tab owner（仅稳定边界；禁止按行数切文件）。落地在 `.agent/plan/gui-editor-structure/` C2。
-- [ ] 进程内移除 `imgui-local`（GameRuntime `GuiSystem` / `ImGuiSystem`；IMGUI 门禁未过）。
+- [x] 进程内移除 `imgui-local`（GameRuntime `GuiSystem` / `ImGuiSystem` 已删；vendor 树未编）。
 - [ ] Windows/MSVC 组合回归（本机未跑；未通过则不得宣称 retained editor ready）。
 - [ ] OpenGL GUI/editor presentation（`GUIAppHost` 现为 Vulkan-only）。
 - 内核手感（选区 / 选色 / dock 关 tab / Hierarchy 右键 / chrome 图标）不在本文件继续拆 EditorSurface，落地 `.agent/plan/gui-kernel-ux-parity/`。

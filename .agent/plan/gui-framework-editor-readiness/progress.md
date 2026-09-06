@@ -1,5 +1,18 @@
 # Progress
 
+## Phase 8Z 当前 checkpoint（2026-09-06）
+
+- 删除 GameRuntime `GuiSystem` / `IGuiBackend` / `ImGuiSystem`（无剩余 caller）。
+- `ya-game-runtime` 与 `ya-engine` 不再依赖 `imgui-local`；xmake 不再定义该 target。
+- runtime isolation 禁止 `imgui.h` / ImGuizmo include（不限 GUI 目录例外）。
+- 验证：`xmake -r --shallow ya-game-runtime`；`xmake b ya-game-editor`；`xmake -r --shallow ya-runtime`；`GameUIHostTest.*` 10 passed；`otool -L` on debug `libya-game-runtime` / `libya-game-editor` / `libya-engine` / `ya-runtime` has no `libimgui-local`；`run_widgettree_editor_smoke.py --skip-build` exit 0。
+
+### Phase 8Z 保留项
+
+- 未宣称 retained editor ready。
+- Windows/MSVC、OpenGL presentation、hour-scale soak 仍是 blocker。
+- `Engine/ThirdParty/ImGui` 与 `ImGuizmo` vendor 树仍在仓库，未编进任何 target。
+
 ## Phase 8Y 当前 checkpoint（2026-09-06）
 
 - 删除 `EditorWorkbenchTab` 与 builtin `gui-workbench` spawner；GameEditor 不再把 `FWorkbenchSurface` 嵌进 dock。

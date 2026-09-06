@@ -113,7 +113,6 @@ local function check_runtime_source_isolation()
     table.join2(sourceFiles, os.files(path.join(sourceRoot, "**.cpp")))
 
     for _, sourceFile in ipairs(sourceFiles) do
-        local bAllowGuiRuntime = sourceFile:find("/Runtime/GUI/", 1, true) ~= nil
         if not sourceFile:find("/Editor/", 1, true) then
             local contents = io.readfile(sourceFile):lower()
             for _, forbidden in ipairs(forbiddenIncludes) do
@@ -121,16 +120,14 @@ local function check_runtime_source_isolation()
                     raise("ya-runtime isolation violation: %s includes %s", sourceFile, forbidden.label)
                 end
             end
-            if not bAllowGuiRuntime then
-                local guiForbiddenIncludes = {
-                    { pattern = "#include%s*[<\"]%s*imgui%.h", label = "ImGui" },
-                    { pattern = "#include%s*[<\"]%s*imguihelper%.h", label = "ImGuiHelper" },
-                    { pattern = "#include%s*[<\"]%s*imguizmo", label = "ImGuizmo" },
-                }
-                for _, forbidden in ipairs(guiForbiddenIncludes) do
-                    if contents:find(forbidden.pattern) then
-                        raise("ya-runtime isolation violation: %s includes %s outside Host/GUI", sourceFile, forbidden.label)
-                    end
+            local guiForbiddenIncludes = {
+                { pattern = "#include%s*[<\"]%s*imgui%.h", label = "ImGui" },
+                { pattern = "#include%s*[<\"]%s*imguihelper%.h", label = "ImGuiHelper" },
+                { pattern = "#include%s*[<\"]%s*imguizmo", label = "ImGuizmo" },
+            }
+            for _, forbidden in ipairs(guiForbiddenIncludes) do
+                if contents:find(forbidden.pattern) then
+                    raise("ya-runtime isolation violation: %s includes %s", sourceFile, forbidden.label)
                 end
             end
         end
@@ -169,9 +166,6 @@ do
     -- lives in a module target (single-header third-party implementations are
     -- owned by their consuming modules). The only file here is the aggregate
     -- anchor TU (Module.cpp) that gives the shared facade a DLL entry point.
-    -- imgui_demo.cpp is compiled by imgui-local (see ThirdParty.xmake.lua):
-    -- compiling it here with IMGUI_API=dllexport would make the data symbol
-    -- ImGuiTextBuffer::EmptyString "export-to-here" and break linking.
     add_files("./Module.cpp", { unity_ignored = true })
 
     add_headerfiles("./Source/**.h")
@@ -209,13 +203,6 @@ do
         "ya-game-runtime",
         { public = true })
     add_deps("utility.cc", "log.cc", "reflects-core", { public = true })
-    add_deps("imgui-local")
-
-    if is_plat("windows") then
-        add_defines("IMGUI_API=__declspec(dllexport)")
-        add_defines("IMGUI_IMPL_API=__declspec(dllexport)")
-        add_defines("USE_IMGUI_API")
-    end
 
     if is_plat("windows") then
         -- Debug 模式下禁用链接器优化，保留所有代码（包括静态初始化）

@@ -1,9 +1,9 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-06 (Phase 8X: GameEditor peeled off ImGui texture bridge / GuiSystem init)  
+> **As of:** 2026-09-06 (Phase 8Z: imgui-local unlinked from the process)  
 > **Default chrome:** WidgetTree only (`EditorSurface`)  
 > **Legacy chrome:** `--editor-chrome=imgui` is ignored (WARN); `onImGuiRender` deleted  
-> **Purpose:** Gate remaining `imgui-local` removal — editor chrome no longer includes imgui.h; GameRuntime `ImGuiSystem` still links the library. **Hand-feel** is a separate gate: see `.agent/plan/gui-kernel-ux-parity/`.
+> **Purpose:** Record ImGui → WidgetTree parity after `imgui-local` left the process graph. **Hand-feel** is a separate gate: see `.agent/plan/gui-kernel-ux-parity/`.
 
 ## How to read
 
@@ -184,7 +184,7 @@
 
 | Dependency | Still required for | Safe to remove when |
 |------------|-------------------|---------------------|
-| `imgui-local` | GameRuntime `GuiSystem` / `ImGuiSystem` | GameRuntime no longer initializes an ImGui backend |
+| `imgui-local` | — | Deleted 8Z; vendor tree not built |
 | `TypeRenderer` + `ContainerPropertyRenderer` | — | Deleted E3 |
 | `FileExplorer::render` / `FilePicker::render` / texture bridge | — | Deleted E3 + 8X |
 | `ImGuiImageEntry` | — | Deleted 8X |
@@ -202,7 +202,7 @@
 
 **Critical remaining before removing `imgui-local`:**
 
-1. GameRuntime `GuiSystem` / `ImGuiSystem` still initialize an ImGui backend and keep `imgui-local` on the process graph
+- Done in 8Z. Vendor `Engine/ThirdParty/ImGui` / `ImGuizmo` trees remain on disk, unused.
 
 ---
 
@@ -219,7 +219,7 @@ Kernel feel (not another `EditorSurface` split) — `.agent/plan/gui-kernel-ux-p
 7. **E2** — Toolbar / Content Browser icons ✅  
 8. **E3** — UI Designer tree DnD; delete dead `TypeRenderer` / ImGui `FilePicker::render` ✅
 
-Release blockers still outside this line: XP-WIN, XP-OGL, SOAK-HR, remaining `imgui-local` (GameRuntime `ImGuiSystem`).  
+Release blockers still outside this line: XP-WIN, XP-OGL, SOAK-HR. `imgui-local` is unlinked (8Z).  
 
 ---
 

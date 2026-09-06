@@ -4,7 +4,7 @@
 // public deps re-export the whole GUI module closure. A shared library still
 // needs at least one object file so the linker can generate the DLL entry
 // point (_DllMainCRTStartup), and at least one exported symbol so link.exe
-// produces an import library for consumers. See ya-engine (imgui_demo.cpp) for
+// produces an import library for consumers. See ya-engine (Module.cpp) for
 // the same pattern. The anchor is exported with a raw dllexport because this
 // aggregate target does not define YA_GUI_API (that macro belongs to the four
 // GUI modules).

@@ -261,9 +261,8 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   否则 RuntimeDefault atlas 会以 dedicated allocation 活过 allocator Destroy。
 - 原 ImGui editor chrome shell（`onImGuiRender` / menu / toolbar / dockspace / viewport window）已删除。
   `TypeRenderer` / `FilePicker::render` / `FileExplorer::render` / editor ImGui texture
-  bridge 已删。`ya-game-editor` 不再直接依赖 `imgui-local`。进程内 `imgui-local` 仍因
-  GameRuntime `GuiSystem`/`ImGuiSystem` 保留。
-  `IGuiBackend` 仍是 ImGui 形，不要强迫 EditorSurface 走它。
+  bridge / GameRuntime `GuiSystem`/`ImGuiSystem` 已删。进程不再链接 `imgui-local`。
+  不要再引入 ImGui-shaped `IGuiBackend` 或强迫 EditorSurface 走它。
 - WidgetTree chrome 的 theme 走 `buildEditorTheme`（`GameEditor/UI/EditorTheme.h`），
   不要直接调 `buildWorkbenchTheme`。Chrome 文案用 `text.header` / `text.muted` /
   `text.error` / `text.eyebrow`，不要 `setColor` 字面量（显式着色会盖掉 theme）。

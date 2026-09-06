@@ -13,7 +13,7 @@ target("ya-game-runtime")
     -- App.h publicly exposes IModule (addModule), so the module-system target
     -- is a public dependency of the runtime shell.
     add_deps("ya-module-manager", { public = true })
-    add_deps("ya-render-3d", "imgui-local", { public = true })
+    add_deps("ya-render-3d", { public = true })
     -- Host drives GUI fonts directly; Game UI lives in the widgets module.
     add_deps("ya-render-resources", "ya-gui-widgets")
     -- Host binds the scene lifecycle sink and drives Scene/SceneManager from
@@ -21,9 +21,9 @@ target("ya-game-runtime")
     add_deps("ya-scene-core", "ya-scene-runtime")
     -- Host composes the render ECS adapters (linkage rules).
     add_deps("ya-render-ecs-adapters")
-    -- Host TUs use the Vulkan backend types directly (ImGui backend,
-    -- screenshot readback, frame loop); the include root is exposed by
-    -- ya-rhi-vulkan (backend-common no longer re-exports it).
+    -- Host TUs use the Vulkan backend types directly (screenshot readback,
+    -- frame loop); the include root is exposed by ya-rhi-vulkan
+    -- (backend-common no longer re-exports it).
     add_deps("ya-rhi-vulkan")
     add_packages("libsdl3", "glm", "nlohmann_json", "cxxopts", { public = true })
     add_packages("vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk", "stb")

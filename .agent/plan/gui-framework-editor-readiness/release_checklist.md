@@ -16,10 +16,10 @@ Host for recorded Pass rows: macOS 15.5, Clang, Vulkan, Apple M5. Date: 2026-09-
 | XP-WIN | Windows/MSVC compile + same tests | No Windows host in this session; designated-initializer / `YA_*_API` rules in `.agent/skills/cross-platform/SKILL.md` are the compile contract, not a substitute for a green MSVC run | **Blocker** |
 | XP-OGL | OpenGL presentation | `GUIAppHost` asserts `VulkanSwapChain`; WidgetTree chrome compose is Vulkan-only. OpenGL 3D runtime is a separate matrix and was not run | **Blocker** |
 | SOAK-HR | Multi-hour process soak | 9C is structural cycle soak (64/32), not a long-lived editor process | **Blocker** (descoped to structural soak) |
-| IMGUI | `imgui-local` removed | GameEditor no longer compiles against imgui (8X: no texture bridge / EditorCommon / GuiSystem init). Process still links `imgui-local` via GameRuntime `ImGuiSystem` | **Blocker** for “no ImGui in process”, not for WidgetTree-only chrome |
+| IMGUI | `imgui-local` removed | Phase 8Z deleted GameRuntime `GuiSystem`/`ImGuiSystem`; debug `otool -L` on `ya-runtime` / `libya-game-runtime` / `libya-game-editor` / `libya-engine` has no `libimgui-local`; widgettree editor smoke exit 0 | Pass (macOS) |
 
 ## Ready claim
 
-**Not ready.** WidgetTree is the only editor chrome host on the verified macOS/Vulkan path, but Windows/MSVC, OpenGL presentation, hour-scale soak, and full `imgui-local` removal remain open.
+**Not ready.** WidgetTree is the only editor chrome host on the verified macOS/Vulkan path, and `imgui-local` is no longer linked, but Windows/MSVC, OpenGL presentation, and hour-scale soak remain open.
 
 Do not advertise “retained editor ready” until XP-WIN is Pass and the remaining Blocker rows are either Pass or an explicit product descope recorded in `progress.md`.

@@ -9,7 +9,7 @@ description: YA 引擎字体栈（FontManager / DynamicFontAtlas / Bitmap+SDF Ra
 - 改字体相关着色器 `Engine/Shader/Slang/Sprite2D.slang` 的 bitmap / SDF 分支
 - 改字体 atlas 采样器 `Engine/Source/Framework/RHI/Backend/TextureLibrary.*`
 - 排查中文/emoji 渲染：缺字、方块、亮度不一、边缘发虚、竖笔过窄、SDF 咬边
-- 在 `GUIAppHost` / `AppLifecycle` / `ImGuiSystem` 调整字体栈注册
+- 在 `GUIAppHost` / `AppLifecycle` 调整字体栈注册
 
 ## 字体栈架构
 
