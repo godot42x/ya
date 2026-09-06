@@ -38,6 +38,12 @@ bool FDockContext::setPanelClosable(std::string_view stableKey, bool closable)
     return record && _model.setPanelClosable(record->id, closable);
 }
 
+bool FDockContext::closePanel(std::string_view stableKey)
+{
+    const FPanel* panel = findPanelByStableKey(stableKey);
+    return panel && closePanel(panel->id);
+}
+
 bool FDockContext::closePanel(DockPanelId id)
 {
     FPanel* panel = findPanel(id);
@@ -153,6 +159,73 @@ std::vector<std::string> FDockContext::collectLayoutPanelKeys(const nlohmann::js
     };
     walk(layout);
     return keys;
+}
+
+std::vector<std::string> FDockContext::panelStableKeys() const
+{
+    std::vector<std::string> keys;
+    keys.reserve(_panels.size());
+    for (const auto& [id, panel] : _panels) {
+        (void)panel;
+        if (const FDockPanelRecord* record = _model.findPanel(id)) {
+            keys.push_back(record->stableKey);
+        }
+    }
+    return keys;
+}
+
+nlohmann::json FDockContext::sanitizeLayoutJson(nlohmann::json layout,
+                                                const std::unordered_set<std::string>& knownKeys)
+{
+    const auto keepPanel = [&](const nlohmann::json& panel) {
+        return panel.is_string() && knownKeys.contains(panel.get<std::string>());
+    };
+    const auto sanitizeNode = [&](auto& self, nlohmann::json& node) -> void {
+        if (!node.is_object()) {
+            return;
+        }
+        if (node.contains("panels") && node["panels"].is_array()) {
+            nlohmann::json kept = nlohmann::json::array();
+            for (const nlohmann::json& panel : node["panels"]) {
+                if (keepPanel(panel)) {
+                    kept.push_back(panel);
+                }
+            }
+            node["panels"] = std::move(kept);
+            if (node.contains("selected")) {
+                const bool bSelectedKnown = node["selected"].is_string() &&
+                                            knownKeys.contains(node["selected"].get<std::string>());
+                if (!bSelectedKnown) {
+                    if (!node["panels"].empty()) {
+                        node["selected"] = node["panels"].front();
+                    }
+                    else {
+                        node.erase("selected");
+                    }
+                }
+            }
+        }
+        if (node.contains("children") && node["children"].is_array()) {
+            for (nlohmann::json& child : node["children"]) {
+                self(self, child);
+            }
+        }
+    };
+
+    if (layout.contains("root")) {
+        sanitizeNode(sanitizeNode, layout["root"]);
+    }
+    if (layout.contains("floating") && layout["floating"].is_array()) {
+        nlohmann::json keptWindows = nlohmann::json::array();
+        for (nlohmann::json window : layout["floating"]) {
+            sanitizeNode(sanitizeNode, window);
+            if (window.contains("panels") && window["panels"].is_array() && !window["panels"].empty()) {
+                keptWindows.push_back(std::move(window));
+            }
+        }
+        layout["floating"] = std::move(keptWindows);
+    }
+    return layout;
 }
 
 FDockFloatingWindowId FDockContext::tearOffPanel(DockPanelId panelId, const glm::vec2& pos, const glm::vec2& size)

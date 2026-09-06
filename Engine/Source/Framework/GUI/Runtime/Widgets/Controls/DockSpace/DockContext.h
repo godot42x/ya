@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace ya
@@ -141,11 +142,17 @@ struct YA_GUI_API FDockContext
     bool activatePanel(std::string_view stableKey);
     /// Collect unique panel keys from a layout JSON (docked tree + floating).
     [[nodiscard]] static std::vector<std::string> collectLayoutPanelKeys(const nlohmann::json& layout);
+    /// Drop panel keys not in `knownKeys` from leaves and floating windows so a
+    /// strict import can succeed after spawners skip unknown tabs.
+    [[nodiscard]] static nlohmann::json sanitizeLayoutJson(nlohmann::json layout,
+                                                           const std::unordered_set<std::string>& knownKeys);
+    [[nodiscard]] std::vector<std::string> panelStableKeys() const;
     bool setPanelClosable(DockPanelId id, bool closable);
     bool setPanelClosable(std::string_view stableKey, bool closable);
     /// Close a closable panel: unlink it from the dock tree or floating window
     /// and drop the registry record. Non-closable panels return false.
     bool closePanel(DockPanelId id);
+    bool closePanel(std::string_view stableKey);
     [[nodiscard]] FDockTreeModel& dockModel() { return _model; }
     [[nodiscard]] const FDockTreeModel& dockModel() const { return _model; }
 

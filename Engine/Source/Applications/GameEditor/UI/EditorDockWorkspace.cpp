@@ -11,6 +11,7 @@
 
 #include <nlohmann/json.hpp>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace ya
@@ -19,28 +20,72 @@ namespace ya
 namespace
 {
 
-DockPanelId dockPanelIdForKey(const FDockTreeModel& model, const char* stableKey)
+// Keep in sync with DefaultEditorDockLayout.json.
+constexpr std::string_view kFactoryDockLayoutJson = R"JSON(
 {
-    if (const FDockPanelRecord* record = model.findPanelByStableKey(stableKey)) {
-        return record->id;
-    }
-    return kInvalidDockPanelId;
+  "version": 1,
+  "root": {
+    "kind": "split",
+    "orientation": "vertical",
+    "ratio": 0.74,
+    "minExtent": [120.0, 120.0],
+    "children": [
+      {
+        "kind": "split",
+        "orientation": "vertical",
+        "ratio": 0.26,
+        "minExtent": [120.0, 120.0],
+        "children": [
+          {
+            "kind": "leaf",
+            "panels": ["hierarchy"],
+            "selected": "hierarchy"
+          },
+          {
+            "kind": "split",
+            "orientation": "horizontal",
+            "ratio": 0.72,
+            "minExtent": [120.0, 120.0],
+            "children": [
+              {
+                "kind": "leaf",
+                "panels": ["viewport"],
+                "selected": "viewport"
+              },
+              {
+                "kind": "leaf",
+                "panels": [
+                  "content-browser",
+                  "frame-stats",
+                  "runtime-tools",
+                  "ui-designer",
+                  "asset-inspector",
+                  "debug-images"
+                ],
+                "selected": "content-browser"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "leaf",
+        "panels": ["inspector"],
+        "selected": "inspector"
+      }
+    ]
+  },
+  "floating": []
 }
-
-constexpr std::string_view kDefaultWorkspaceTabs[] = {
-    "viewport",
-    "hierarchy",
-    "inspector",
-    "content-browser",
-    "frame-stats",
-    "gui-workbench",
-    "runtime-tools",
-    "ui-designer",
-    "asset-inspector",
-    "debug-images",
-};
+)JSON";
 
 } // namespace
+
+const nlohmann::json& EditorDockWorkspace::factoryLayout()
+{
+    static const nlohmann::json kLayout = nlohmann::json::parse(kFactoryDockLayoutJson);
+    return kLayout;
+}
 
 FEditorTabSpawnContext EditorDockWorkspace::makeSpawnContext() const
 {
@@ -50,7 +95,6 @@ FEditorTabSpawnContext EditorDockWorkspace::makeSpawnContext() const
         .selection       = *_host.selection,
         .actions         = *_host.actions,
         .undo            = *_host.undo,
-        .authoringParent = _host.authoringParent,
         .viewportHost    = _host.viewportHost,
     };
 }
@@ -78,21 +122,57 @@ void EditorDockWorkspace::buildToolsMenu()
     });
 }
 
-void EditorDockWorkspace::materializeWorkspaceTabs()
+bool EditorDockWorkspace::applyLayoutDocument(const nlohmann::json& layout, bool bFallbackToFactory)
 {
-    nlohmann::json layout;
-    std::vector<std::string> keys;
-    if (ConfigManager::get().tryGet("editor", "dockLayout", layout)) {
-        keys = FDockContext::collectLayoutPanelKeys(layout);
+    if (!_host.dock) {
+        return false;
     }
-    if (keys.empty()) {
-        for (std::string_view id : kDefaultWorkspaceTabs) {
-            keys.emplace_back(id);
+
+    const auto applyOnce = [this](const nlohmann::json& document) -> bool {
+        const std::vector<std::string> keys = FDockContext::collectLayoutPanelKeys(document);
+        std::unordered_set<std::string> known;
+        for (const std::string& id : keys) {
+            if (materializeTab(id)) {
+                known.insert(id);
+            }
+        }
+        if (known.empty()) {
+            return false;
+        }
+        nlohmann::json sanitized = FDockContext::sanitizeLayoutJson(document, known);
+        if (FDockContext::collectLayoutPanelKeys(sanitized).empty()) {
+            return false;
+        }
+        return _host.dock->importLayoutJson(sanitized);
+    };
+
+    if (applyOnce(layout)) {
+        return true;
+    }
+    if (!bFallbackToFactory) {
+        return false;
+    }
+
+    YA_CORE_WARN("EditorDockWorkspace: layout document failed; applying factory layout");
+    const std::vector<std::string> factoryKeys = FDockContext::collectLayoutPanelKeys(factoryLayout());
+    std::unordered_set<std::string> factorySet(factoryKeys.begin(), factoryKeys.end());
+    for (const std::string& key : _host.dock->panelStableKeys()) {
+        if (!factorySet.contains(key)) {
+            (void)_host.dock->closePanel(key);
         }
     }
-    for (const std::string& id : keys) {
-        materializeTab(id);
+    return applyOnce(factoryLayout());
+}
+
+void EditorDockWorkspace::applyWorkspaceLayout()
+{
+    nlohmann::json user;
+    if (ConfigManager::get().tryGet("editor", "dockLayout", user)) {
+        if (applyLayoutDocument(user, true)) {
+            return;
+        }
     }
+    (void)applyLayoutDocument(factoryLayout(), false);
 }
 
 bool EditorDockWorkspace::materializeTab(std::string_view tabId)
@@ -113,7 +193,7 @@ bool EditorDockWorkspace::materializeTab(std::string_view tabId)
         }
     }
     if (!widget) {
-        YA_CORE_WARN("EditorSurface: no spawner for tab '{}'", tabId);
+        YA_CORE_WARN("EditorDockWorkspace: no spawner for tab '{}'", tabId);
         return false;
     }
     return _host.dock->addPanel(std::string(tabId), title, std::move(widget)) != kInvalidDockPanelId;
@@ -141,74 +221,6 @@ bool EditorDockWorkspace::invokeTab(std::string_view tabId)
     }
     _host.dock->fireDockUpdated();
     return _host.dock->activatePanel(tabId);
-}
-
-void EditorDockWorkspace::applyDefaultLayout()
-{
-    if (!_host.dock) {
-        return;
-    }
-    FDockTreeModel& model          = _host.dock->dockModel();
-    const DockPanelId viewportId   = dockPanelIdForKey(model, "viewport");
-    const DockPanelId hierarchyId  = dockPanelIdForKey(model, "hierarchy");
-    const DockPanelId inspectorId  = dockPanelIdForKey(model, "inspector");
-    const DockPanelId contentId    = dockPanelIdForKey(model, "content-browser");
-    const DockPanelId statsId      = dockPanelIdForKey(model, "frame-stats");
-    const DockPanelId workbenchId  = dockPanelIdForKey(model, "gui-workbench");
-    const DockPanelId runtimeId    = dockPanelIdForKey(model, "runtime-tools");
-    const DockPanelId designerId   = dockPanelIdForKey(model, "ui-designer");
-    const DockPanelId assetsId     = dockPanelIdForKey(model, "asset-inspector");
-    const DockPanelId debugId      = dockPanelIdForKey(model, "debug-images");
-    if (viewportId == kInvalidDockPanelId || hierarchyId == kInvalidDockPanelId || inspectorId == kInvalidDockPanelId ||
-        contentId == kInvalidDockPanelId) {
-        return;
-    }
-
-    model.selectPanel(viewportId);
-    const DockNodeId rootLeaf = model.getRootNode()->id;
-    model.splitLeaf(rootLeaf, EDockCardinalSide::East, inspectorId, 0.74f);
-    if (FDockNode* viewportLeaf = model.findLeafForPanel(viewportId)) {
-        model.splitLeaf(viewportLeaf->id, EDockCardinalSide::West, hierarchyId, 0.26f);
-    }
-    if (FDockNode* viewportLeaf = model.findLeafForPanel(viewportId)) {
-        model.splitLeaf(viewportLeaf->id, EDockCardinalSide::South, contentId, 0.72f);
-    }
-    if (FDockNode* contentLeaf = model.findLeafForPanel(contentId)) {
-        if (statsId != kInvalidDockPanelId) {
-            model.movePanel(statsId, contentLeaf->id);
-        }
-        if (workbenchId != kInvalidDockPanelId) {
-            model.movePanel(workbenchId, contentLeaf->id);
-        }
-        if (runtimeId != kInvalidDockPanelId) {
-            model.movePanel(runtimeId, contentLeaf->id);
-        }
-        if (designerId != kInvalidDockPanelId) {
-            model.movePanel(designerId, contentLeaf->id);
-        }
-        if (assetsId != kInvalidDockPanelId) {
-            model.movePanel(assetsId, contentLeaf->id);
-        }
-        if (debugId != kInvalidDockPanelId) {
-            model.movePanel(debugId, contentLeaf->id);
-        }
-        model.selectPanel(contentId);
-    }
-    model.selectPanel(viewportId);
-    model.selectPanel(hierarchyId);
-    model.selectPanel(inspectorId);
-}
-
-bool EditorDockWorkspace::tryRestoreLayout()
-{
-    if (!_host.dock) {
-        return false;
-    }
-    nlohmann::json layout = nlohmann::json::object();
-    if (!ConfigManager::get().tryGet("editor", "dockLayout", layout)) {
-        return false;
-    }
-    return _host.dock->importLayoutJson(layout);
 }
 
 void EditorDockWorkspace::persistLayout()

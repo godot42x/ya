@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <unordered_set>
 
 namespace ya
 {
@@ -515,6 +516,68 @@ TEST(DockNodeTest, ActivatePanelGraftsSelectedTabAndDetachedStopsTick)
     tree.tick(1.0f / 60.0f);
     EXPECT_EQ(visible->ticks, 0);
     EXPECT_EQ(hidden->ticks, 1);
+}
+
+TEST(DockNodeTest, SanitizeLayoutJsonDropsUnknownDockedAndFloatingKeys)
+{
+    const nlohmann::json layout = {
+        {"version", 1},
+        {"root",
+         {{"kind", "split"},
+          {"orientation", "vertical"},
+          {"ratio", 0.5f},
+          {"children",
+           nlohmann::json::array({
+               nlohmann::json{{"kind", "leaf"},
+                              {"panels", nlohmann::json::array({"viewport", "gui-workbench"})},
+                              {"selected", "gui-workbench"}},
+               nlohmann::json{{"kind", "leaf"},
+                              {"panels", nlohmann::json::array({"inspector"})},
+                              {"selected", "inspector"}},
+           })}}},
+        {"floating",
+         nlohmann::json::array({
+             nlohmann::json{{"panels", nlohmann::json::array({"missing-panel"})},
+                            {"pos", nlohmann::json::array({10.0f, 20.0f})},
+                            {"size", nlohmann::json::array({100.0f, 80.0f})}},
+             nlohmann::json{{"panels", nlohmann::json::array({"hierarchy", "gone"})},
+                            {"selected", "gone"},
+                            {"pos", nlohmann::json::array({30.0f, 40.0f})},
+                            {"size", nlohmann::json::array({120.0f, 90.0f})}},
+         })},
+    };
+
+    const nlohmann::json sanitized = FDockContext::sanitizeLayoutJson(
+        layout, std::unordered_set<std::string>{"viewport", "inspector", "hierarchy"});
+
+    EXPECT_EQ(sanitized["root"]["children"][0]["panels"], nlohmann::json::array({"viewport"}));
+    EXPECT_EQ(sanitized["root"]["children"][0]["selected"], "viewport");
+    EXPECT_EQ(sanitized["root"]["children"][1]["panels"], nlohmann::json::array({"inspector"}));
+    ASSERT_EQ(sanitized["floating"].size(), 1u);
+    EXPECT_EQ(sanitized["floating"][0]["panels"], nlohmann::json::array({"hierarchy"}));
+    EXPECT_EQ(sanitized["floating"][0]["selected"], "hierarchy");
+
+    FDockContext context;
+    context.bAllowFloating = true;
+    context.bAllowTearOff  = true;
+    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("V")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("I")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("hierarchy", "Hierarchy", std::make_shared<UIPanel>("H")), kInvalidDockPanelId);
+    ASSERT_TRUE(context.importLayoutJson(sanitized));
+    EXPECT_NE(context.dockModel().findLeafForPanel(context.findPanelByStableKey("viewport")->id), nullptr);
+    EXPECT_NE(context.dockModel().findLeafForPanel(context.findPanelByStableKey("inspector")->id), nullptr);
+    ASSERT_EQ(context.floatingWindows().size(), 1u);
+    EXPECT_EQ(context.floatingWindows().front().panelIds.size(), 1u);
+}
+
+TEST(DockNodeTest, ClosePanelByStableKeyRemovesRegistryRecord)
+{
+    FDockContext context;
+    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("V")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("I")), kInvalidDockPanelId);
+    ASSERT_TRUE(context.closePanel("inspector"));
+    EXPECT_FALSE(context.hasPanel("inspector"));
+    EXPECT_TRUE(context.hasPanel("viewport"));
 }
 
 } // namespace ya

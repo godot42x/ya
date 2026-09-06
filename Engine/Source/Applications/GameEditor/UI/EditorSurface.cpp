@@ -370,20 +370,16 @@ void EditorSurface::buildEditorChrome(App& app)
         .selection       = _selection.get(),
         .actions         = _actions.get(),
         .undo            = _undo.get(),
-        .authoringParent = _root.get(),
         .viewportHost    = this,
         .spawners        = _tabSpawners,
         .dock            = _dockContext.get(),
         .menuBar         = _menuBar.get(),
     });
     _workspace.buildToolsMenu();
-    _workspace.materializeWorkspaceTabs();
+    _workspace.applyWorkspaceLayout();
     _dockContext->setPanelClosable("viewport", false);
     _dockContext->setPanelClosable("hierarchy", false);
     _dockContext->setPanelClosable("inspector", false);
-    if (!_workspace.tryRestoreLayout()) {
-        _workspace.applyDefaultLayout();
-    }
     _dockContext->fireDockUpdated();
     _dockContext->appendOnDockUpdated([this]() { _workspace.persistLayout(); });
     _dockContext->appendOnFloatingUpdated([this]() { _workspace.persistLayout(); });
