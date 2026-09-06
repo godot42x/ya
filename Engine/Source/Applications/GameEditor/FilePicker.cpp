@@ -7,20 +7,13 @@
 namespace ya
 {
 
-void FilePicker::setIcons(const ImGuiImageEntry *folderIcon, const ImGuiImageEntry *fileIcon)
-{
-    _icons.folder = folderIcon;
-    _icons.file   = fileIcon;
-}
-
 void FilePicker::applyCommonSettings()
 {
     _fileExplorer.setConfigScope(_configScope);
-    _fileExplorer.setIcons(_icons);
     _fileExplorer.setViewMode(_defaultViewMode);
     _fileExplorer.setShowViewModeToggle(true);
-    _fileExplorer.setShowSizeSlider(false); // Less clutter in picker dialogs
-    _fileExplorer.setThumbnailSize(64.0f);  // Smaller thumbnails for picker
+    _fileExplorer.setShowSizeSlider(false);
+    _fileExplorer.setThumbnailSize(64.0f);
     _fileExplorer.setPadding(12.0f);
     _fileExplorer.loadConfig();
 }

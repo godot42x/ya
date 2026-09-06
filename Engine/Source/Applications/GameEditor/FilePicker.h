@@ -8,8 +8,6 @@
 namespace ya
 {
 
-struct ImGuiImageEntry;
-
 /**
  * @brief 通用文件/资源选择器弹窗
  *
@@ -35,8 +33,6 @@ struct FilePicker
     Callback     _onConfirm;
     SaveCallback _onSaveConfirm;
 
-    // Icons
-    FileExplorer::Icons    _icons;
     FileExplorer::ViewMode _defaultViewMode = FileExplorer::ViewMode::Icon;
     std::string            _configScope     = "filePicker";
 
@@ -48,11 +44,6 @@ struct FilePicker
 
     FilePicker()  = default;
     ~FilePicker() = default;
-
-    /**
-     * @brief 设置图标（在 init 阶段调用，所有弹窗共享）
-     */
-    void setIcons(const ImGuiImageEntry *folderIcon, const ImGuiImageEntry *fileIcon);
 
     /**
      * @brief 设置默认视图模式

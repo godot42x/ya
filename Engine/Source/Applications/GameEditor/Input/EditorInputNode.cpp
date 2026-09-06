@@ -3,7 +3,6 @@
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/UI/EditorSurface.h"
 #include "GameRuntime/App.h"
-#include "GameRuntime/GUI/GuiSystem.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <glm/glm.hpp>
@@ -17,8 +16,6 @@ namespace
 struct FEditorInputSnapshot
 {
     EWidgetRouteResult chromeResult     = EWidgetRouteResult::NotHandled;
-    EventProcessState  guiProcessState  = EventProcessState::Continue;
-    FGuiInputClaim     guiClaim{};
     bool               pointerEvent     = false;
     bool               keyboardEvent    = false;
     bool               viewportMouse    = false;
@@ -52,9 +49,6 @@ FEditorInputSnapshot buildSnapshot(App& app, EditorLayer& layer, EditorSurface* 
         snapshot.viewportOverlayActive = surface->isViewportOverlayActive();
     }
     else {
-        snapshot.guiProcessState = GuiSystem::get().processEvent(event);
-        snapshot.guiClaim        = GuiSystem::get().describeInputClaim(event);
-        snapshot.textInput       = snapshot.guiClaim.text;
         snapshot.viewportMouse   = layer.isViewportHovered() || layer.isViewportFocused();
         snapshot.viewportKeyboard = layer.isViewportFocused();
     }
@@ -81,17 +75,6 @@ FInputReply routeCommandInput(FInputRouteContext& context, const FInputEvent& ev
         .handled        = true,
         .pointerCapture = FPointerCaptureRequest{},
     };
-}
-
-FInputReply routeGuiInput(const FEditorInputSnapshot& snapshot, const FInputEvent& event)
-{
-    if (snapshot.widgetTreeChrome) {
-        return {};
-    }
-    if (snapshot.guiProcessState != EventProcessState::Continue || snapshot.guiClaim.wantsEvent(event)) {
-        return FInputReply{.handled = true};
-    }
-    return {};
 }
 
 FInputReply routeChromeInput(const FEditorInputSnapshot& snapshot)
@@ -281,11 +264,6 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
     }
 
     reply = routeGameplayViewportInput(*_app, *_layer, snapshot, event);
-    if (shouldStopRouting(reply)) {
-        return reply;
-    }
-
-    reply = routeGuiInput(snapshot, event);
     if (shouldStopRouting(reply)) {
         return reply;
     }

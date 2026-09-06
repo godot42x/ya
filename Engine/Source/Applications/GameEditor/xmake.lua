@@ -13,16 +13,6 @@ target("ya-game-editor")
         add_deps("ya-engine")
         add_links("ya-engine")
     end
-    -- imgui remains shared because editor-internal texture-bridge / debug helpers
-    -- still consume the same global context as the runtime host.
-    add_deps("imgui-local")
-    add_includedirs("../../../ThirdParty/ImGui", { public = true })
-    add_includedirs("../../../ThirdParty/ImGui/Backends", { public = true })
-    add_includedirs("../../../ThirdParty/ImGui/misc/cpp", { public = true })
-    add_includedirs("../../../ThirdParty/ImGui/misc/freetype", { public = true })
     if is_plat("windows") then
         add_cxxflags("/bigobj")
-        add_defines("IMGUI_API=__declspec(dllimport)")
-        add_defines("IMGUI_IMPL_API=__declspec(dllimport)")
-        add_defines("USE_IMGUI_API")
     end

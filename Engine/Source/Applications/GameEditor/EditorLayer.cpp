@@ -25,8 +25,6 @@ void EditorLayer::onAttach()
         return;
 
     syncEditorSettingsFromConfig();
-    loadImGuiSettingsFromConfig();
-    saveImGuiSettingsToConfig();
 
     // Initialize editor panels
     if (auto scene = getEditableScene())
@@ -34,29 +32,6 @@ void EditorLayer::onAttach()
         _sceneHierarchyPanel.setContext(scene);
         notifyHierarchyChanged();
     }
-
-    auto am             = AssetManager::get();
-    auto fileTexture    = am->loadTextureSync("file", "Engine/Content/TestTextures/editor/file.png").get();
-    auto folderTexture  = am->loadTextureSync("folder", "Engine/Content/TestTextures/editor/folder2.png").get();
-    auto sampler        = TextureLibrary::get().getDefaultSampler();
-    _filePicker.setIcons(getOrCreateImGuiTextureID(fileTexture->getImageView(), sampler),
-                         getOrCreateImGuiTextureID(folderTexture->getImageView(), sampler));
-    _filePicker.setDefaultViewMode(FileExplorer::ViewMode::Icon);
-    auto playIcon       = am->loadTextureSync("play", "Engine/Content/TestTextures/editor/play.png");
-    auto pauseIcon      = am->loadTextureSync("pause", "Engine/Content/TestTextures/editor/pause.png");
-    auto stopIcon       = am->loadTextureSync("stop", "Engine/Content/TestTextures/editor/stop.png");
-    auto simulationIcon = am->loadTextureSync("simulate_button", "Engine/Content/TestTextures/editor/simulate_button.png");
-
-    // Validate texture loading
-    if (!playIcon) YA_CORE_ERROR("Failed to load play icon");
-    if (!pauseIcon) YA_CORE_ERROR("Failed to load pause icon");
-    if (!stopIcon) YA_CORE_ERROR("Failed to load stop icon");
-    if (!simulationIcon) YA_CORE_ERROR("Failed to load simulation icon");
-
-    _playIcon       = getOrCreateImGuiTextureID(playIcon->getImageView());
-    _pauseIcon      = getOrCreateImGuiTextureID(pauseIcon->getImageView());
-    _stopIcon       = getOrCreateImGuiTextureID(stopIcon->getImageView());
-    _simulationIcon = getOrCreateImGuiTextureID(simulationIcon->getImageView());
 
     if (!hasProjectLoaded()) {
         refreshProjectBrowser();
@@ -72,8 +47,6 @@ void EditorLayer::onDetach()
             sceneManager->onSceneActivated.removeAll(this);
         }
     }
-    // Cleanup ImGui textures before destroying panels
-    cleanupImGuiTextures();
 }
 
 void EditorLayer::onUpdate(float dt)

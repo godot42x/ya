@@ -13,18 +13,15 @@
 #include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/UI/EditorFilePicker.h"
 #include "GameEditor/UI/EditorViewportGizmoController.h"
-#include "GameEditor/ImGui/ImGuiHelper.h"
 #include "GameEditor/Panels/SceneHierarchyPanel.h"
 #include "GameEditor/Panels/UIDesignerPanel.h"
 #include "RHI/Core/Image.h"
 #include "RHI/Core/RenderTexture.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Common/RenderViewportSnapshot.h"
-#include <imgui.h>
-
-#include "GameEditor/EditorCommon.h"
 
 #include <algorithm>
+#include <array>
 #include <functional>
 #include <string>
 #include <vector>
@@ -104,15 +101,8 @@ struct EditorLayer
     bool      _bDefaultScenePathDirty      = false;
     bool      _bShowViewportCameraOverlay  = true;
 
-    // ImGui texture descriptor set cache (editor-only, application layer)
-    std::unordered_set<ImGuiImageEntry> _imguiTextureCache; // ImageView -> VkDescriptorSet
-
     EditorViewportGizmoController _gizmo;
 
-    const ImGuiImageEntry* _playIcon       = nullptr;
-    const ImGuiImageEntry* _pauseIcon      = nullptr;
-    const ImGuiImageEntry* _stopIcon       = nullptr;
-    const ImGuiImageEntry* _simulationIcon = nullptr;
     enum
     {
         Linear = 0,
@@ -174,7 +164,7 @@ struct EditorLayer
     /// Open the Asset Inspector for the given relative path
     void inspectAsset(const std::string& relativePath) { _assetInspectorPanel.inspectTexture(relativePath); }
 
-    // Set viewport render context before ImGui render - called from App each frame
+    // Set viewport render context before chrome tick - called from App each frame
     void                                                setViewportContext(const EditorViewportContext& ctx) { _viewportCtx = ctx; }
     void                                                setViewportDisplayImage(std::shared_ptr<RenderTexture> image) { _viewportDisplayImage = std::move(image); }
     void                                                setEntityIdPickImage(std::shared_ptr<RenderTexture> image) { _entityIdPickImage = std::move(image); }
@@ -336,19 +326,6 @@ struct EditorLayer
 
     void onEvent(const Event& event);
 
-
-    /**
-     * @brief Get or create ImGui texture ID for rendering in ImGui::Image()
-     * @param imageView Platform image view handle (e.g., VkImageView)
-     * @param sampler Platform sampler handle (e.g., VkSampler)
-     * @return ImTextureID (VkDescriptorSet as void*)
-     */
-    const ImGuiImageEntry* getOrCreateImGuiTextureID(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler = nullptr);
-    const ImGuiImageEntry* getOrCreateImGuiDescriptorSet(ya::Ptr<IImageView> imageView, ya::Ptr<Sampler> sampler = nullptr)
-    {
-        return getOrCreateImGuiTextureID(imageView, sampler);
-    }
-
   public:
     Scene* getEditableScene() const;
 
@@ -365,8 +342,6 @@ struct EditorLayer
     void                                              loadDebugGroupState(int groupIndex);
     void                                              persistDebugGroupState(int groupIndex);
 
-    void cleanupImGuiTextures();
-    void removeImGuiTexture(const ImGuiImageEntry* entry);
     void pickEntity(float viewportX, float viewportY);
     /// 2D mode picking: hit-test the UI Designer preview tree (canvas coords).
     void pickNode2D(float viewportX, float viewportY);
@@ -406,7 +381,6 @@ struct EditorLayer
     /// always the authoring scene so runtime UI editing never mutates the play
     /// clone. In the 3D workspace it follows the active scene.
     Scene* getViewportInteractionScene() const;
-    // void      setViewportImage(stdptr<IImageView> image) { _viewportImage = getOrCreateImGuiTextureID(image); }
 
     void cmdNewScene();
     void cmdSaveScene();

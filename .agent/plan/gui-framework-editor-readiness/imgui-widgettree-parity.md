@@ -1,9 +1,9 @@
 # ImGui → WidgetTree Parity Checklist
 
-> **As of:** 2026-09-06 (gui-kernel-ux-parity E3: Designer tree DnD + dead ImGui TypeRenderer/FilePicker::render)  
+> **As of:** 2026-09-06 (Phase 8X: GameEditor peeled off ImGui texture bridge / GuiSystem init)  
 > **Default chrome:** WidgetTree only (`EditorSurface`)  
 > **Legacy chrome:** `--editor-chrome=imgui` is ignored (WARN); `onImGuiRender` deleted  
-> **Purpose:** Gate remaining `imgui-local` removal — viewport gizmo is native, TypeRenderer/FilePicker::render are gone, but texture-bridge / debug helpers still require it. **Hand-feel** is a separate gate: see `.agent/plan/gui-kernel-ux-parity/`.
+> **Purpose:** Gate remaining `imgui-local` removal — editor chrome no longer includes imgui.h; GameRuntime `ImGuiSystem` still links the library. **Hand-feel** is a separate gate: see `.agent/plan/gui-kernel-ux-parity/`.
 
 ## How to read
 
@@ -42,7 +42,7 @@
 | Viewport input / pick / gizmo | `EditorLayer::onEvent` + ImGuizmo | Same `onEvent` + `EditorViewportGizmoOverlay` | ✅ | Native gizmo math + `Render2D` compose draw; overlay contract retained |
 | Viewport context menu | `viewportWindow` → `ContextMenu` (ImGui) | `EditorSurface::openViewportContextMenu` (`UIMenu`) | ✅ | Uses `NodeCreateRegistry` presets + `EditorLayer` cmds |
 | Viewport Delete / Duplicate | Context menu only (ImGui path) | `cmdDeleteSelection` / `cmdDuplicateSelection` + Delete / Ctrl+D | ✅ | Works on widgettree via `onEvent` + Edit menu actions |
-| ImGui texture bridge | `getOrCreateImGuiTextureID` | Not used by widgettree chrome | ➖ | Still needed by legacy helper paths |
+| ImGui texture bridge | `getOrCreateImGuiTextureID` | Deleted 8X | ⚫ | GameEditor no longer holds ImGui texture IDs |
 
 ---
 
@@ -184,10 +184,10 @@
 
 | Dependency | Still required for | Safe to remove when |
 |------------|-------------------|---------------------|
-| `imgui-local` | editor-internal texture bridge, `ImGuiImageEntry`, debug helpers | Windows/OpenGL and remaining ImGui helper callers are gone |
+| `imgui-local` | GameRuntime `GuiSystem` / `ImGuiSystem` | GameRuntime no longer initializes an ImGui backend |
 | `TypeRenderer` + `ContainerPropertyRenderer` | — | Deleted E3 |
-| `FileExplorer::render` / `FilePicker::render` | — | Deleted E3; retained Content Browser / `EditorFilePickerDialog` |
-| `ImGuiImageEntry` / texture bridge | FilePicker icon cache + debug images | Helper callers migrate off ImGui textures |
+| `FileExplorer::render` / `FilePicker::render` / texture bridge | — | Deleted E3 + 8X |
+| `ImGuiImageEntry` | — | Deleted 8X |
 
 ---
 
@@ -202,7 +202,7 @@
 
 **Critical remaining before removing `imgui-local`:**
 
-1. Editor-internal texture bridge (`getOrCreateImGuiTextureID` / `ImGuiImageEntry`) and debug helpers still compile against ImGui
+1. GameRuntime `GuiSystem` / `ImGuiSystem` still initialize an ImGui backend and keep `imgui-local` on the process graph
 
 ---
 
@@ -219,7 +219,7 @@ Kernel feel (not another `EditorSurface` split) — `.agent/plan/gui-kernel-ux-p
 7. **E2** — Toolbar / Content Browser icons ✅  
 8. **E3** — UI Designer tree DnD; delete dead `TypeRenderer` / ImGui `FilePicker::render` ✅
 
-Release blockers still outside this line: XP-WIN, XP-OGL, SOAK-HR, remaining `imgui-local` (texture bridge / debug).  
+Release blockers still outside this line: XP-WIN, XP-OGL, SOAK-HR, remaining `imgui-local` (GameRuntime `ImGuiSystem`).  
 
 ---
 

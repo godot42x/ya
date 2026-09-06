@@ -6,12 +6,8 @@
 #include <string_view>
 #include <vector>
 
-#include "GameEditor/EditorCommon.h"
-
 namespace ya
 {
-
-struct ImGuiImageEntry;
 
 /**
  * @brief 可复用的层级文件浏览器组件
@@ -22,7 +18,7 @@ struct ImGuiImageEntry;
  * - 支持图标/列表两种展示模式
  *
  * 可被 FilePicker 数据层与 retained Content Browser 复用。
- * ImGui `render()` 已删除；浏览 UI 走 WidgetTree 行。
+ * 浏览 UI 走 WidgetTree 行，不再依赖 ImGui。
  */
 class FileExplorer
 {
@@ -51,12 +47,6 @@ class FileExplorer
         std::string           name; // Display name ("Engine", "Game", etc.)
         std::filesystem::path path; // Physical path
         bool                  isActive = false;
-    };
-
-    struct Icons
-    {
-        const ImGuiImageEntry *folder = nullptr;
-        const ImGuiImageEntry *file   = nullptr;
     };
 
     using ItemActionCallback = std::function<void(const std::filesystem::path &)>;
@@ -161,11 +151,6 @@ class FileExplorer
     ViewMode getViewMode() const { return _viewMode; }
 
     /**
-     * @brief 设置图标（用于图标视图）
-     */
-    void setIcons(const Icons &icons) { _icons = icons; }
-
-    /**
      * @brief 设置图标视图的缩略图大小
      */
     void setThumbnailSize(float size) { _thumbnailSize = size; }
@@ -215,8 +200,6 @@ class FileExplorer
     float _leftPanelWidth    = 150.0f;
     char  _searchBuffer[128] = "";
 
-    // Icon view settings
-    Icons _icons;
     float _thumbnailSize      = 94.0f;
     float _padding            = 16.0f;
     bool  _showViewModeToggle = true;

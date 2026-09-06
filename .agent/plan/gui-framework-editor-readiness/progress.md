@@ -1,5 +1,21 @@
 # Progress
 
+## Phase 8X 当前 checkpoint（2026-09-06）
+
+- 删除 GameEditor ImGui texture cache（`getOrCreateImGuiTextureID` / play-stop FilePicker 图标 descriptor）。Toolbar / Content 图标已走 `UIImage` 资产路径。
+- 删除 `EditorCommon`（`ImGuiImageEntry` + ImGui `ContextMenu`）、`ImGuiHelper` 按钮、`FilePicker::setIcons` / `FileExplorer::Icons`。
+- Debug 通道 mask 改为 `EditorLayer.Debug.cpp` 本地 helper，不再 include imgui。
+- `EditorModule` 不再 `GuiSystem::init/shutdown`；`EditorInputNode` 不再把事件喂给 ImGui backend。
+- `ya-game-editor` xmake 去掉 `imgui-local` 与 ThirdParty/ImGui include。
+- 验证：`xmake -r --shallow ya-game-editor`；`xmake b ya-testing`；13 tests `FileExplorerNavigationTest.*:EditorInputContractTest.*:EditorDebugCatalogViewTest.*:EditorFilePickerDialogTest.*`。
+
+### Phase 8X 保留项
+
+- 未宣称 retained editor ready。
+- 进程内 `imgui-local` 仍链在 GameRuntime `GuiSystem`/`ImGuiSystem`（IMGUI 门禁未过）。
+- Windows/MSVC、OpenGL presentation、hour-scale soak 仍是 blocker。
+- `FilePicker` 类型 / `open*` 仍作 handler 缺失 fallback，无 chrome。
+
 ## Phase 10A-dir 当前 checkpoint（2026-09-06）
 
 - Dock 相关源码与公开转发头从 `Controls/` 平铺迁到 `Controls/DockSpace/`（`DockNode` / `DockContext` / `UIDockSpace` / `UIDockFloatingHost` / `UIDockFloatingWindow`）。

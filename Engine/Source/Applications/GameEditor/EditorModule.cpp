@@ -31,7 +31,6 @@
 #include "GameRuntime/App.h"
 #include "GameRuntime/Automation/EditorAutomationControl.h"
 #include "GameRuntime/IRuntimeModule.h"
-#include "GameRuntime/GUI/GuiSystem.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "GUI/Compose/Render2DComposePass.h"
@@ -733,8 +732,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         auto* renderRuntime  = renderServices.getRenderRuntime();
         YA_CORE_ASSERT(renderRuntime, "Editor extension requires an initialized RenderRuntime");
 
-        GuiSystem::get().init(renderServices.getRender(), nullptr);
-
         _layer = std::make_unique<EditorLayer>(&app);
         initializeEditorCamera(app, *_layer);
         _layer->setCurrentScenePath(app.getDesc().defaultScenePath.value_or(std::string{}));
@@ -824,7 +821,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             _layer.reset();
         }
         gEditorLayer = nullptr;
-        GuiSystem::get().shutdown();
         // WidgetTree chrome lazily built RuntimeDefault atlas textures; drop
         // them after the surface (snapshot/widget Font refs) is already gone.
         if (FontManager::get()) {

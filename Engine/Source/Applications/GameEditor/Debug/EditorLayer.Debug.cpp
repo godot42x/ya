@@ -1,9 +1,48 @@
 #include "GameEditor/EditorLayerInternal.h"
 #include "RHI/Core/Texture.h"
 #include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/RenderDefines.h"
+
+#include <array>
 
 namespace ya
 {
+
+namespace
+{
+
+bool isIdentityRGBAChannelMask(const std::array<bool, 4>& channelEnabled)
+{
+    return channelEnabled[0] && channelEnabled[1] && channelEnabled[2] && channelEnabled[3];
+}
+
+ComponentMapping buildRGBAChannelMaskMapping(const std::array<bool, 4>& channelEnabled)
+{
+    const bool bR = channelEnabled[0];
+    const bool bG = channelEnabled[1];
+    const bool bB = channelEnabled[2];
+    const bool bA = channelEnabled[3];
+
+    auto chooseColor = [bR, bG, bB, bA]() -> EComponentSwizzle::T
+    {
+        if (bR) return EComponentSwizzle::R;
+        if (bG) return EComponentSwizzle::G;
+        if (bB) return EComponentSwizzle::B;
+        if (bA) return EComponentSwizzle::A;
+        return EComponentSwizzle::Zero;
+    };
+
+    const EComponentSwizzle::T fallback = chooseColor();
+    return ComponentMapping{
+        .r = bR ? EComponentSwizzle::R : fallback,
+        .g = bG ? EComponentSwizzle::G : fallback,
+        .b = bB ? EComponentSwizzle::B : fallback,
+        .a = bA ? EComponentSwizzle::A : EComponentSwizzle::One,
+    };
+}
+
+} // namespace
+
 const EditorViewportDebugCatalog& EditorLayer::getDebugCatalog() const
 {
     static const EditorViewportDebugCatalog kEmptyCatalog;
@@ -190,7 +229,7 @@ std::shared_ptr<Texture> EditorLayer::getDebugSlotPreviewTexture(uint32_t slotIn
     }
 
     std::shared_ptr<IImageView> displayView;
-    if (ImGuiHelper::IsIdentityRGBAChannelMask(state.channelEnabled)) {
+    if (isIdentityRGBAChannelMask(state.channelEnabled)) {
         if (frame->ownedView) {
             displayView = frame->ownedView;
         }
@@ -259,7 +298,7 @@ void EditorLayer::updateDebugSlotImageView(uint32_t slotIndex,
     state.identityView.reset();
     state.previewTexture.reset();
     state.previewView = nullptr;
-    if (ImGuiHelper::IsIdentityRGBAChannelMask(state.channelEnabled) || !frame || !frame->image) {
+    if (isIdentityRGBAChannelMask(state.channelEnabled) || !frame || !frame->image) {
         state.maskedView.reset();
         return;
     }
@@ -268,7 +307,7 @@ void EditorLayer::updateDebugSlotImageView(uint32_t slotIndex,
     ci.label         = slot.label + "_mask";
     ci.viewType      = EImageViewType::View2D;
     ci.aspectFlags   = slot.aspectFlags;
-    ci.components    = ImGuiHelper::BuildRGBAChannelMaskMapping(state.channelEnabled);
+    ci.components    = buildRGBAChannelMaskMapping(state.channelEnabled);
     auto* const render          = _app ? _app->getRenderServices().getRender() : nullptr;
     auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
     state.maskedView            = resourceFactory ? resourceFactory->createImageView(frame->image, ci) : nullptr;

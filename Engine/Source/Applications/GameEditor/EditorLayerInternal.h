@@ -16,8 +16,6 @@
 #include "Scene3D/TransformComponent.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/Systems/TransformSystem.h"
-#include "GameEditor/EditorCommon.h"
-#include "GameEditor/ImGui/ImGuiHelper.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Resource/AssetManager.h"
@@ -71,42 +69,11 @@ inline std::string buildDebugGroupSelectionConfigKey(const std::string& groupLab
 }
 
 inline constexpr const char* kEditorConfigDocument            = "editor";
-inline constexpr const char* kImGuiFontSizeBaseKey            = "imgui.fontSizeBase";
-inline constexpr const char* kImGuiFontScaleMainKey           = "imgui.fontScaleMain";
-inline constexpr const char* kImGuiFontScaleDpiKey            = "imgui.fontScaleDpi";
 inline constexpr const char* kViewportCameraOverlayEnabledKey = "viewport.cameraOverlay.enabled";
 
 inline constexpr float kViewportCameraOverlayMarginX      = 10.0f;
 inline constexpr float kViewportCameraOverlayMarginY      = 10.0f;
 inline constexpr float kViewportCameraOverlayLineSpacing  = 4.0f;
-
-inline void loadImGuiSettingsFromConfig()
-{
-    auto& config = ConfigManager::get();
-    if (!config.hasDocument(kEditorConfigDocument)) {
-        return;
-    }
-
-    auto& style = ImGui::GetStyle();
-    const float fallbackFontSizeBase = style.FontSizeBase > 0.0f ? style.FontSizeBase : ImGui::GetFontSize();
-    style.FontSizeBase = config.getOr<float>(kEditorConfigDocument, kImGuiFontSizeBaseKey, fallbackFontSizeBase);
-    if (style.FontSizeBase <= 0.0f) {
-        style.FontSizeBase = fallbackFontSizeBase;
-    }
-    style.FontScaleMain = config.getOr<float>(kEditorConfigDocument, kImGuiFontScaleMainKey, style.FontScaleMain);
-    style.FontScaleDpi = config.getOr<float>(kEditorConfigDocument, kImGuiFontScaleDpiKey, style.FontScaleDpi);
-    style._NextFrameFontSizeBase = style.FontSizeBase;
-}
-
-inline void saveImGuiSettingsToConfig()
-{
-    const auto& style = ImGui::GetStyle();
-    ConfigManager::Editor(kEditorConfigDocument)
-        .set(kImGuiFontSizeBaseKey, style.FontSizeBase)
-        .set(kImGuiFontScaleMainKey, style.FontScaleMain)
-        .set(kImGuiFontScaleDpiKey, style.FontScaleDpi)
-        .flush();
-}
 
 inline constexpr const char* kCubeFaceLabels[6] = {
     "PosX",
