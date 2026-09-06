@@ -375,11 +375,8 @@ void EditorSurface::buildEditorChrome(App& app)
         .dock            = _dockContext.get(),
         .menuBar         = _menuBar.get(),
     });
-    _workspace.buildToolsMenu();
+    _workspace.buildWindowMenu();
     _workspace.applyWorkspaceLayout();
-    _dockContext->setPanelClosable("viewport", false);
-    _dockContext->setPanelClosable("hierarchy", false);
-    _dockContext->setPanelClosable("inspector", false);
     _dockContext->fireDockUpdated();
     _dockContext->appendOnDockUpdated([this]() { _workspace.persistLayout(); });
     _dockContext->appendOnFloatingUpdated([this]() { _workspace.persistLayout(); });

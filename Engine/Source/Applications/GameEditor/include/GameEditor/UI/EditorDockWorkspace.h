@@ -19,7 +19,7 @@ struct IEditorViewportHostSink;
 
 /// Rebuild-period dock / workspace policy. Surface creates the DockSpace
 /// chrome, then this object materializes tabs, layout documents, persist, and
-/// Tools-menu invoke. Tick does not go through here.
+/// Window-menu toggle. Tick does not go through here.
 class EditorDockWorkspace
 {
   public:
@@ -47,7 +47,7 @@ class EditorDockWorkspace
     [[nodiscard]] static const nlohmann::json& factoryLayout();
 
     [[nodiscard]] FEditorTabSpawnContext makeSpawnContext() const;
-    void buildToolsMenu();
+    void buildWindowMenu();
     /// Apply user `editor.dockLayout` if present, otherwise the factory document.
     void applyWorkspaceLayout();
     /// Spawn known keys, sanitize unknown keys, import. Falls back to factory
@@ -55,6 +55,7 @@ class EditorDockWorkspace
     bool applyLayoutDocument(const nlohmann::json& layout, bool bFallbackToFactory);
     bool materializeTab(std::string_view tabId);
     bool invokeTab(std::string_view tabId);
+    void resetLayout();
     void persistLayout();
 };
 

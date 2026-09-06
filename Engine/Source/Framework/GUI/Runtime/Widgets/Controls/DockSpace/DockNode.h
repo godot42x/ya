@@ -80,6 +80,8 @@ struct YA_GUI_API FDockTreeModel
     [[nodiscard]] const FDockPanelRecord* findPanel(DockPanelId id) const;
 
     bool registerPanel(FDockPanelRecord record);
+    /// Dock `panelId` onto `leafId`. `kInvalidDockNodeId` means the root leaf,
+    /// or the first leaf if the root has already been split.
     bool addPanel(DockPanelId panelId, DockNodeId leafId = kInvalidDockNodeId);
     bool selectPanel(DockPanelId panelId);
     bool setPanelClosable(DockPanelId panelId, bool closable);

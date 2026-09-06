@@ -734,6 +734,7 @@ void UIDockSpace::rebuildLeaf(DockNodeId leafId)
         }
         const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
         _context->dockModel().selectPanel(panelId);
+        _context->rememberFocusedLeaf(leafId);
         if (const FDockContext::FPanel* fp = _context->findPanel(panelId)) {
             graftPanelIntoContent(*currentView->content, fp->widget);
         }

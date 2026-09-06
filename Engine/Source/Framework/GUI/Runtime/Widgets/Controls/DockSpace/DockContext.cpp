@@ -19,11 +19,19 @@ DockPanelId FDockContext::addPanel(const std::string& name, std::shared_ptr<UIEl
 DockPanelId FDockContext::addPanel(const std::string& stableKey, const std::string& title, std::shared_ptr<UIElement> widget)
 {
     const DockPanelId id = _nextPanelId++;
+    DockNodeId leafId = kInvalidDockNodeId;
+    if (const FDockNode* focused = _model.findNode(_lastFocusedLeafId);
+        focused && focused->kind == EDockNodeKind::Leaf) {
+        leafId = focused->id;
+    }
     if (!_model.registerPanel({.id = id, .stableKey = stableKey, .title = title}) ||
-        !_model.addPanel(id)) {
+        !_model.addPanel(id, leafId)) {
         return kInvalidDockPanelId;
     }
     _panels.emplace(id, FPanel{id, title, std::move(widget)});
+    if (const FDockNode* leaf = _model.findLeafForPanel(id)) {
+        _lastFocusedLeafId = leaf->id;
+    }
     return id;
 }
 
@@ -100,6 +108,7 @@ bool FDockContext::activatePanel(std::string_view stableKey)
         return false;
     }
     if (const FDockNode* leaf = _model.findLeafForPanel(panel->id)) {
+        rememberFocusedLeaf(leaf->id);
         if (leaf->selectedPanel == panel->id) {
             return true;
         }
@@ -159,6 +168,15 @@ std::vector<std::string> FDockContext::collectLayoutPanelKeys(const nlohmann::js
     };
     walk(layout);
     return keys;
+}
+
+void FDockContext::rememberFocusedLeaf(DockNodeId leafId)
+{
+    const FDockNode* leaf = _model.findNode(leafId);
+    if (!leaf || leaf->kind != EDockNodeKind::Leaf) {
+        return;
+    }
+    _lastFocusedLeafId = leafId;
 }
 
 std::vector<std::string> FDockContext::panelStableKeys() const

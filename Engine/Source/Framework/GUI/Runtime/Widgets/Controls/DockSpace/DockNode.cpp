@@ -115,7 +115,19 @@ bool FDockTreeModel::registerPanel(FDockPanelRecord record)
 bool FDockTreeModel::addPanel(DockPanelId panelId, DockNodeId leafId)
 {
     if (!findPanel(panelId) || findLeafForPanel(panelId)) return false;
-    FDockNode* leaf = leafId == kInvalidDockNodeId ? _root.get() : findNode(leafId);
+    FDockNode* leaf = nullptr;
+    if (leafId == kInvalidDockNodeId) {
+        if (_root && _root->kind == EDockNodeKind::Leaf) {
+            leaf = _root.get();
+        }
+        else {
+            const std::vector<DockNodeId> leaves = leafIds();
+            leaf = leaves.empty() ? nullptr : findNode(leaves.front());
+        }
+    }
+    else {
+        leaf = findNode(leafId);
+    }
     if (!leaf || leaf->kind != EDockNodeKind::Leaf) return false;
     leaf->panelIds.push_back(panelId);
     leaf->selectedPanel = panelId;

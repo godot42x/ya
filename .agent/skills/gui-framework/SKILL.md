@@ -6,7 +6,7 @@ description: YA GUI 框架（WidgetTree / 控件 / layout / Render2D pass slot /
 ## 适用场景
 
 - 在 `Engine/Source/Framework/GUI/` 内改控件、布局、事件、快照、合成
-- 开发 GUIWorkbench demo / 编辑器内嵌 panel
+- 开发 GUIWorkbench demo / GameEditor chrome
 - 排查 GUI 渲染、布局、生命周期问题（GPU 资源 teardown、pass slot、clip/scissor）
 
 ## 计划与提交门禁
@@ -238,7 +238,9 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   `WidgetTree::tick` → shell dialogs → push viewport display → `buildSnapshot` →
   viewport host bridge。禁止 `tab->sync`，禁止 Surface 持有 Tab 控件指针。
   Tab 经 `EditorTabSpawnerRegistry` 注册，`EditorDockWorkspace::invokeTab` 按 stable key
-  激活或 spawn。rebuild 期 dock/workspace 政策在 `EditorDockWorkspace`，ActionMap 目录在
+  激活或 spawn。layout 是 JSON 文档（用户 `editor.dockLayout` + 工厂
+  `DefaultEditorDockLayout.json`）；Window 菜单 checkbox 切换已注册 tab。rebuild 期
+  dock/workspace 政策在 `EditorDockWorkspace`，ActionMap 目录在
   `registerEditorActions`。`onAttached` 拉权威状态并订阅所属边界的 `MulticastDelegate`，
   `onDetached` 按 handle 退订。未选中 dock tab 是 detached subtree，不会 tick。
   不要再引入 `EditorPanel`、中心 MessageBus，或 `EditorTabRegistry` 那种 `std::function`
@@ -250,11 +252,9 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   只路由输入，`EditorViewportGizmoController` 负责世界空间 translate/rotate/scale 与 undo，绘制在
   `EditorModule` 的 viewport compose callback 中走 `Render2D`（`layer.gizmo().recordOverlay()`）。
 - `onImGuiRender` 编辑器 chrome shell（menu/toolbar/dockspace/viewport/debug/settings/project browser）已删除。
-- Workbench 作为 WidgetTree dock panel 嵌入时用 `FWorkbenchSurface::buildUI(tree, parent)`，
-  不要 `attachToLayer(Content)` 盖掉 editor root。Dock 只把**当前选中 tab** 的
+- GUIWorkbench 是独立 FeatureGallery（`FWorkbenchSurface` 挂 GUIApp）；GameEditor 不把 Workbench 做成 dock tab。
+  Dock 只把**当前选中 tab** 的
   panel widget `addDetachedChild` 进树；未选中的 panel 是 detached subtree。
-  因此 `buildUI` 前要把 host 临时 `attach` 到 editor tree，建完再 `detach`，
-  交给 workspace 之后再 graft。未挂上时 `updateUI` 不能再 `tree.attach`。
 - WidgetTree chrome teardown：`EditorSurface::shutdown` 必须在 compositor / VMA
   之前丢掉 tree、snapshot、viewport wrap；随后 `FontManager::clearCache()`，
   否则 RuntimeDefault atlas 会以 dedicated allocation 活过 allocator Destroy。

@@ -580,4 +580,36 @@ TEST(DockNodeTest, ClosePanelByStableKeyRemovesRegistryRecord)
     EXPECT_TRUE(context.hasPanel("viewport"));
 }
 
+TEST(DockNodeTest, AddPanelAfterSplitUsesFirstLeaf)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "viewport");
+    registerPanel(model, 2, "inspector");
+    registerPanel(model, 3, "stats");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.splitLeaf(model.getRootNode()->id, EDockCardinalSide::East, 2, 0.5f));
+    ASSERT_TRUE(model.addPanel(3));
+    const FDockNode* viewportLeaf = model.findLeafForPanel(1);
+    ASSERT_NE(viewportLeaf, nullptr);
+    EXPECT_NE(std::find(viewportLeaf->panelIds.begin(), viewportLeaf->panelIds.end(), DockPanelId{3}),
+              viewportLeaf->panelIds.end());
+}
+
+TEST(DockNodeTest, NewPanelDocksOnLastFocusedLeaf)
+{
+    FDockContext context;
+    const DockPanelId viewportId = context.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("V"));
+    const DockPanelId inspectorId = context.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("I"));
+    ASSERT_NE(viewportId, kInvalidDockPanelId);
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    ASSERT_TRUE(context.dockModel().splitLeaf(context.dockModel().getRootNode()->id, EDockCardinalSide::East, inspectorId, 0.5f));
+    ASSERT_TRUE(context.activatePanel("inspector"));
+    const DockNodeId inspectorLeaf = context.lastFocusedLeafId();
+    EXPECT_EQ(inspectorLeaf, context.dockModel().findLeafForPanel(inspectorId)->id);
+
+    const DockPanelId statsId = context.addPanel("stats", "Stats", std::make_shared<UIPanel>("S"));
+    ASSERT_NE(statsId, kInvalidDockPanelId);
+    EXPECT_EQ(context.dockModel().findLeafForPanel(statsId)->id, inspectorLeaf);
+}
+
 } // namespace ya

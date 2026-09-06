@@ -3,7 +3,6 @@
 #include "Core/Config/ConfigManager.h"
 #include "Core/Log.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
-#include "GUI/Widgets/Controls/DockSpace/DockNode.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/UIElement.h"
@@ -99,25 +98,39 @@ FEditorTabSpawnContext EditorDockWorkspace::makeSpawnContext() const
     };
 }
 
-void EditorDockWorkspace::buildToolsMenu()
+void EditorDockWorkspace::buildWindowMenu()
 {
     if (!_host.menuBar) {
         return;
     }
-    _host.menuBar->addItem("Tools", [this]() {
+    _host.menuBar->addItem("Window", [this]() {
         std::vector<UIMenu::FItem> items;
         if (_host.spawners) {
             for (const FEditorTabSpawner& spawner : _host.spawners->all()) {
-                if (spawner.toolsMenuLabel.empty()) {
-                    continue;
-                }
                 const std::string tabId = spawner.tabId;
+                const bool bOpen = _host.dock && _host.dock->hasPanel(tabId);
                 items.push_back({
-                    .label  = spawner.toolsMenuLabel,
-                    .action = [this, tabId]() { invokeTab(tabId); },
+                    .label    = spawner.title,
+                    .action   = [this, tabId, bOpen]() {
+                        if (bOpen) {
+                            if (_host.dock) {
+                                (void)_host.dock->closePanel(tabId);
+                            }
+                            return;
+                        }
+                        invokeTab(tabId);
+                    },
+                    .bChecked = bOpen,
                 });
             }
         }
+        if (!items.empty()) {
+            items.push_back(UIMenu::FItem::separator());
+        }
+        items.push_back({
+            .label  = "Reset Layout",
+            .action = [this]() { resetLayout(); },
+        });
         return UIMenu::create(std::move(items));
     });
 }
@@ -210,17 +223,20 @@ bool EditorDockWorkspace::invokeTab(std::string_view tabId)
     if (!materializeTab(tabId)) {
         return false;
     }
-    const FDockContext::FPanel* spawned = _host.dock->findPanelByStableKey(tabId);
-    if (!spawned) {
-        return false;
-    }
-    if (const FDockContext::FPanel* content = _host.dock->findPanelByStableKey("content-browser")) {
-        if (FDockNode* leaf = _host.dock->dockModel().findLeafForPanel(content->id)) {
-            (void)_host.dock->dockModel().movePanel(spawned->id, leaf->id);
-        }
-    }
     _host.dock->fireDockUpdated();
     return _host.dock->activatePanel(tabId);
+}
+
+void EditorDockWorkspace::resetLayout()
+{
+    if (!_host.dock) {
+        return;
+    }
+    for (const std::string& key : _host.dock->panelStableKeys()) {
+        (void)_host.dock->closePanel(key);
+    }
+    (void)applyLayoutDocument(factoryLayout(), false);
+    persistLayout();
 }
 
 void EditorDockWorkspace::persistLayout()

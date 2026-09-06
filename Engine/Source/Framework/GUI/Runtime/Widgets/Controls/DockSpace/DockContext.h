@@ -140,6 +140,10 @@ struct YA_GUI_API FDockContext
     /// Select a docked or floating panel by stable key. Rematerializes the
     /// owning projection so the panel widget is grafted as the visible tab.
     bool activatePanel(std::string_view stableKey);
+    /// Record the leaf that should receive newly spawned panels (tab click /
+    /// activate). No-op if `leafId` is not a live leaf.
+    void rememberFocusedLeaf(DockNodeId leafId);
+    [[nodiscard]] DockNodeId lastFocusedLeafId() const { return _lastFocusedLeafId; }
     /// Collect unique panel keys from a layout JSON (docked tree + floating).
     [[nodiscard]] static std::vector<std::string> collectLayoutPanelKeys(const nlohmann::json& layout);
     /// Drop panel keys not in `knownKeys` from leaves and floating windows so a
@@ -160,6 +164,7 @@ private:
     FDockTreeModel _model;
     std::unordered_map<DockPanelId, FPanel> _panels;
     std::vector<FFloatingWindow> _floating;
+    DockNodeId _lastFocusedLeafId = kInvalidDockNodeId;
     DockPanelId _nextPanelId = 1;
     FDockFloatingWindowId _nextFloatingWindowId = 1;
     UIDockFloatingHost* _floatingHost = nullptr;

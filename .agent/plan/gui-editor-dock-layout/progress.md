@@ -8,9 +8,11 @@ Deleted `kDefaultWorkspaceTabs`, `applyDefaultLayout` C++ splits, `materializeWo
 
 Verify: `xmake b ya-game-editor`; `DockNodeTest.*` 27 passed; `EditorDockWorkspaceTest.*:EditorTabSpawnerRegistryTest.*` 4 passed.
 
-## C2 — pending
+## C2 — done
 
-Window menu, all tabs closable, last-focused-leaf invoke, drop Tools tab list.
+All dock tabs are closable (viewport/hierarchy/inspector locks removed). Menubar **Window** lists every registered spawner as a checkbox and **Reset Layout** reapplies the factory JSON. `invokeTab` no longer special-cases `content-browser`; new panels dock on the last focused leaf (`FDockContext::rememberFocusedLeaf`, tab-bar click, `activatePanel`). Split-root `addPanel` falls back to the first leaf so closed tabs can reopen.
+
+Verify: `xmake b ya-game-editor`; `DockNodeTest.*:EditorDockWorkspaceTest.*:EditorTabSpawnerRegistryTest.*` 33 passed.
 
 ## Not in this line
 
