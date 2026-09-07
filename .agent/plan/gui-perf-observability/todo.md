@@ -5,18 +5,23 @@
 
 ## 当前切片
 
-当前激活切片：`GPO-002`。
+当前激活切片：无（mainline 完成）。
 
 执行规则：同时最多一个 `[-]`；代码、测试和计划状态同一提交；不吸收共享工作区无关改动。
 
 - [x] `GPO-001` 帧诊断记录 + `YA_PROFILING_*` 裁剪
   - 提交：`[gui/debug] record per-frame rebuild rects`。
 
-- [-] `GPO-002` compose GPU 计数
-  - 依赖：GPO-001。
-  - 工作：Render2D session 真实 flush/vtx 计数；写入 inspector 包；CPU model flush 并列。
-  - 非目标：不画 overlay。
-  - 提交：`[gui/compose] export frame draw-call stats`。
+- [x] `GPO-002` compose GPU 计数
+  - 提交：与 GPO-003/004 同提交 `[gui/debug] frame inspector overlay`（overlay 模块共用）。
 
-- [ ] `GPO-003` HUD + rebuild flash
-- [ ] `GPO-004` overdraw occupancy
+- [x] `GPO-003` HUD + rebuild flash
+  - extraContent 画 overlay，不写入 `snapshot.items`。
+  - GPU 计数取自 product replay 之后、overlay 之前的 session。
+
+- [x] `GPO-004` overdraw occupancy
+  - 64×64 occupancy；HUD 显示 mean/max/factor；heatmap 走 Overdraw 通道。
+
+## 延后（不在本计划 mainline）
+
+- [~] Editor overlay：`replayUIFrameSnapshot` 之后同一套 `emitGuiFrameInspectorOverlay`，不做 EditorPanel。

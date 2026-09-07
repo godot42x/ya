@@ -116,4 +116,16 @@ bool applyGuiFrameInspectorSpec(std::string_view spec)
     return channels != 0;
 }
 
+void toggleGuiFrameInspectorChannel(EGuiFrameInspectorChannel channel)
+{
+    if (profiling::isCompiledOut()) {
+        YA_CORE_WARN("GUI Frame Inspector compiled out (YA_PROFILING_DISABLED)");
+        return;
+    }
+    const uint8_t bit = guiFrameInspectorChannelMask(channel);
+    uint8_t       channels = profiling::getGuiFrameInspectorChannels() ^ bit;
+    profiling::setGuiFrameInspectorChannels(channels);
+    profiling::setGuiFrameInspectorEnabled(channels != 0);
+}
+
 } // namespace ya

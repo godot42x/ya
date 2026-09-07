@@ -681,6 +681,10 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
     cmdBuf->drawIndexed(static_cast<uint32_t>(indexCount), 1, 0, static_cast<int32_t>(screenBatchStartVertex), 0);
 
+    ++Render2D::session.screenFlushCount;
+    Render2D::session.screenVertexCount += vertexCount;
+    Render2D::session.screenIndexCount += static_cast<uint32_t>(indexCount);
+
     screenBatchStartVertex = static_cast<uint32_t>(vertexPtr - vertexPtrHead);
     vertexCount = 0;
     indexCount  = 0;
@@ -744,6 +748,7 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     cmdBuf->bindVertexBuffer(0, resources.worldVertexBuffer.get(), 0);
     cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
     cmdBuf->drawIndexed(static_cast<uint32_t>(worldIndexCount), 1, 0, static_cast<int32_t>(worldBatchStartVertex), 0);
+    ++Render2D::session.worldFlushCount;
 
     worldBatchStartVertex = static_cast<uint32_t>(worldVertexPtr - worldVertexPtrHead);
     worldVertexCount = 0;

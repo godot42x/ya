@@ -10,11 +10,17 @@ FRender2dSession    Render2D::session;
 FQuadRender*        Render2D::quadData = nullptr;
 FLineRender*        Render2D::lineData = nullptr;
 
+namespace
+{
+FRender2dFrameStats gLastFrameStats{};
+}
+
 FQuadRender* Render2D::quadRender() { return quadData; }
 FLineRender* Render2D::lineRender() { return lineData; }
 
 FRender2dDebugState& Render2D::debugState() { return debug; }
 FRender2dSession&    Render2D::sessionState() { return session; }
+const FRender2dFrameStats& Render2D::lastFrameStats() { return gLastFrameStats; }
 
 void Render2D::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
 {
@@ -62,6 +68,10 @@ void Render2D::begin(const FRender2dContext& ctx)
     session.debugClipLogCount     = 0;
     session.debugScreenFlushCount = 0;
     session.debugWorldFlushCount  = 0;
+    session.screenFlushCount      = 0;
+    session.worldFlushCount       = 0;
+    session.screenVertexCount     = 0;
+    session.screenIndexCount      = 0;
     if (debug.bLogSessionLifecycle) {
         YA_CORE_INFO("Render2D begin: passSlot={} extent={}x{} cmdBuf={} reverseViewport={}",
                      static_cast<size_t>(ctx.passSlot),
@@ -79,6 +89,12 @@ void Render2D::end()
 {
     flushPending();
     session.pendingKind = ERender2dBatchKind::None;
+    gLastFrameStats = FRender2dFrameStats{
+        .screenFlushCount  = session.screenFlushCount,
+        .worldFlushCount   = session.worldFlushCount,
+        .screenVertexCount = session.screenVertexCount,
+        .screenIndexCount  = session.screenIndexCount,
+    };
     YA_CORE_ASSERT(quadData->vertexCount == 0 && quadData->worldVertexCount == 0,
                    "Render2D end() left unflushed quads (screen={} world={})",
                    quadData->vertexCount,

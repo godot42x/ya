@@ -37,7 +37,8 @@ struct FGuiRebuildRect
 
 /// Per-snapshot CPU inspector packet. Heavy fields stay empty unless the
 /// profiling runtime toggle is on. GPU compose stats are filled by the host
-/// after Render2D::end().
+/// from the live Render2D session after product replay and before overlay
+/// emit, so HUD counts exclude inspector draws.
 struct YA_GUI_API FGuiFrameInspectorRecord
 {
     static constexpr uint32_t kMaxRebuildRects = 128;
@@ -73,6 +74,7 @@ struct YA_GUI_API FGuiFrameInspectorRecord
 };
 
 [[nodiscard]] YA_GUI_API bool applyGuiFrameInspectorSpec(std::string_view spec);
+YA_GUI_API void toggleGuiFrameInspectorChannel(EGuiFrameInspectorChannel channel);
 
 } // namespace ya
 

@@ -259,6 +259,7 @@ struct YA_GUI_API WidgetTree final
     [[nodiscard]] const GuiPerfStats& getPerfStats() const { return _perfStats; }
     /// Opt-in inspector packet from the most recent buildSnapshot(). Empty
     /// unless `YA_GUI_INSPECTOR_IS_ENABLED()`.
+    [[nodiscard]] FGuiFrameInspectorRecord& getFrameInspectorRecord() { return _inspectorRecord; }
     [[nodiscard]] const FGuiFrameInspectorRecord& getFrameInspectorRecord() const { return _inspectorRecord; }
     /// Cumulative G2 validation-frame mismatches since tree creation
     /// (guardrail G-C; always 0 in release builds).

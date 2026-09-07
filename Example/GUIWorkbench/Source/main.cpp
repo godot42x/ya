@@ -107,6 +107,7 @@ int main(int argc, char** argv)
         ("scenario-diff", "Write the scenario difference image to this path", cxxopts::value<std::string>())
         ("start-page", "Start the workbench on a named page (Render/Widgets/Layout/Menus/DragDrop/Modal/ScrollSplit/Editor)", cxxopts::value<std::string>())
         ("debug-render-overlay", "Inject a host-side render debug overlay into the UI snapshot")
+        ("gui-frame-inspector", "Enable GUI Frame Inspector channels: hud,rebuild,overdraw (debug/profile builds)", cxxopts::value<std::string>()->implicit_value("hud,rebuild"))
         ("debug-render2d-log", "Enable Render2D session/clip/flush diagnostics in the log")
         ("debug-render2d-log-limit", "Maximum Render2D clip/flush logs per frame", cxxopts::value<uint32_t>()->default_value("16"))
         ("perf-telemetry", "Emit per-frame GUI perf telemetry (draw/painted/rebuilt/dirty/notify) for the performance baseline");
@@ -160,6 +161,9 @@ int main(int argc, char** argv)
             app.startPageName = result["start-page"].as<std::string>();
         }
         config.bDebugRenderOverlay = result.count("debug-render-overlay") > 0;
+        if (result.count("gui-frame-inspector") > 0) {
+            config.guiFrameInspector = result["gui-frame-inspector"].as<std::string>();
+        }
         if (result.count("debug-render2d-log") > 0) {
             auto& debug = ya::Render2D::debugState();
             debug.bLogSessionLifecycle = true;

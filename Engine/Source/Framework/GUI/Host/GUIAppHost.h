@@ -96,6 +96,9 @@ struct FGUIWindowHostConfig
     /// clipping and event routing without touching app widgets or Render2D
     /// internals.
     bool                     bDebugRenderOverlay = false;
+    /// Frame inspector spec (`hud`, `rebuild`, `overdraw`). Compiled out of
+    /// release/releasedbg; host WARNs and ignores the flag in those builds.
+    std::string              guiFrameInspector;
     std::vector<uint32_t>    fontSizes{16, 20};
     /// Whether Escape (and SDL_QUIT) stops the app loop. Host-level key
     /// handling; app widgets never see Escape while this is enabled.

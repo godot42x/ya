@@ -1,7 +1,7 @@
 {
   "plan": "gui-perf-observability",
   "updated_at": "2026-09-08",
-  "active_task": "GPO-002",
+  "active_task": null,
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -20,18 +20,18 @@
         },
         {
           "id": "GPO-002",
-          "status": "planned",
-          "notes": "Render2D GPU flush/vtx 导出"
+          "status": "pass",
+          "notes": "session flush/vtx 在 drawIndexed 后累加；HUD 用 product replay 后的 live session"
         },
         {
           "id": "GPO-003",
-          "status": "planned",
-          "notes": "host overlay HUD + rebuild flash"
+          "status": "pass",
+          "notes": "extraContent HUD + rebuild 描边；不写 snapshot.items；offscreen 不挂 overlay"
         },
         {
           "id": "GPO-004",
-          "status": "planned",
-          "notes": "occupancy overdraw heatmap"
+          "status": "pass",
+          "notes": "64x64 occupancy；factor/mean/max；Overdraw 通道 heatmap"
         }
       ]
     }

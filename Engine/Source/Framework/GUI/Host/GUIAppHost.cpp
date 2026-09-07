@@ -21,9 +21,11 @@
 #include "RHI/Backend/Vulkan/VulkanSwapChain.h"
 #include "RHI/Core/CommandBuffer.h"
 
+#include "GUI/Compose/GuiFrameInspectorOverlay.h"
 #include "GUI/Compose/Render2DComposePass.h"
 #include "Render/Resources/FontManager.h"
 #include "Render2D/Render2D.h"
+#include "GUI/Widgets/GuiFrameInspector.h"
 #include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
 #include "GUI/Widgets/WidgetTreeDump.h"
@@ -673,6 +675,9 @@ bool GUIWindowHost::init()
     // reflection registration. Standalone GUI apps intentionally do not pull
     // in the engine/game VFS by default.
     AppBootstrap::initializeProcessCore();
+    if (!config.guiFrameInspector.empty()) {
+        applyGuiFrameInspectorSpec(config.guiFrameInspector);
+    }
 
     // 1. Window provider (SDL3 + Vulkan surface).
     SDLNativeWindow& window = _impl->window;
@@ -1440,6 +1445,25 @@ void GUIWindowHost::onTick(float dt)
     });
     cmdBuf->endRendering();
 
+    const auto inspectorExtra = [&]() {
+        if (!YA_GUI_INSPECTOR_IS_ENABLED()) {
+            return;
+        }
+        FGuiFrameInspectorRecord& record = _impl->tree->getFrameInspectorRecord();
+        const FRender2dSession&   session = Render2D::sessionState();
+        captureGuiComposeInspector(record,
+                                   snapshot,
+                                   FRender2dFrameStats{
+                                       .screenFlushCount  = session.screenFlushCount,
+                                       .worldFlushCount   = session.worldFlushCount,
+                                       .screenVertexCount = session.screenVertexCount,
+                                       .screenIndexCount  = session.screenIndexCount,
+                                   });
+        captureGuiOverdrawInspector(record,
+                                    snapshot,
+                                    Extent2D{.width = presentExtent.width, .height = presentExtent.height});
+        emitGuiFrameInspectorOverlay(record, snapshot, _impl->tree->getPerfStats());
+    };
     renderSurface->record(
         cmdBuf.get(),
         /*depthTarget=*/nullptr,
@@ -1447,7 +1471,8 @@ void GUIWindowHost::onTick(float dt)
         FRender2DComposePassDesc{
             .kind                  = ERender2DComposePassKind::RuntimeUIComposite,
             .logicalViewportExtent = _impl->tree->getLogicalExtent(),
-        });
+        },
+        inspectorExtra);
 
     // Runtime automation capture (GUI offscreen parity): the control server
     // defers the request until this frame loop reaches its warmup frame.

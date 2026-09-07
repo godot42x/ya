@@ -6,6 +6,7 @@
 
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/GuiFrameInspector.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
@@ -182,7 +183,21 @@ void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent
     {
         return ya::UIMenu::create({
             ya::UIMenu::FItem{.label = "Show Grid", .action = [log] { log("Menu: Show Grid"); }},
-            ya::UIMenu::FItem{.label = "Show FPS", .action = [log] { log("Menu: Show FPS"); }},
+            ya::UIMenu::FItem{.label = "Frame Inspector HUD", .action = [log]
+            {
+                ya::toggleGuiFrameInspectorChannel(ya::EGuiFrameInspectorChannel::Hud);
+                log("Frame Inspector HUD toggled");
+            }},
+            ya::UIMenu::FItem{.label = "Rebuild Flash", .action = [log]
+            {
+                ya::toggleGuiFrameInspectorChannel(ya::EGuiFrameInspectorChannel::Rebuild);
+                log("Rebuild flash toggled");
+            }},
+            ya::UIMenu::FItem{.label = "Overdraw Heatmap", .action = [log]
+            {
+                ya::toggleGuiFrameInspectorChannel(ya::EGuiFrameInspectorChannel::Overdraw);
+                log("Overdraw heatmap toggled");
+            }},
             ya::UIMenu::FItem{.label = "Fullscreen", .action = [log] { log("Menu: Fullscreen"); }},
             ya::UIMenu::FItem::separator(),
             ya::UIMenu::FItem{.label = "Dark Theme", .action = [this, log]

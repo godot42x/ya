@@ -70,6 +70,20 @@ struct FRender2dSession
     uint32_t            debugClipLogCount = 0;
     uint32_t            debugScreenFlushCount = 0;
     uint32_t            debugWorldFlushCount = 0;
+    uint32_t            screenFlushCount      = 0;
+    uint32_t            worldFlushCount       = 0;
+    uint32_t            screenVertexCount     = 0;
+    uint32_t            screenIndexCount      = 0;
+};
+
+/// GPU counters from the most recently ended Render2D session. Independent of
+/// `bLogFlushBatches` (that flag only limits log lines).
+struct FRender2dFrameStats
+{
+    uint32_t screenFlushCount  = 0;
+    uint32_t worldFlushCount   = 0;
+    uint32_t screenVertexCount = 0;
+    uint32_t screenIndexCount  = 0;
 };
 
 struct FRender2dContext
@@ -146,6 +160,7 @@ struct YA_RENDER_2D_API Render2D
     // symbol cannot be imported from another DLL).
     [[nodiscard]] static FRender2dDebugState& debugState();
     [[nodiscard]] static FRender2dSession&    sessionState();
+    [[nodiscard]] static const FRender2dFrameStats& lastFrameStats();
 
     static void makeSprite(const glm::vec3& position,
                            const glm::vec2& size,
