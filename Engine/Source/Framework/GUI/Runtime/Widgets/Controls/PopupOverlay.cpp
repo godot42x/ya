@@ -107,7 +107,7 @@ const Rect2D* UIPopupOverlay::contentLayoutRect() const
 
 void UIPopupOverlay::paintSelf(UIFrameBuilder& builder)
 {
-    if (!isModal()) {
+    if (!_bDimBackground) {
         return;
     }
     const FPopupStyle& style = resolvedStyle();
@@ -141,8 +141,11 @@ bool UIPopupOverlay::handleInputEvent(const Event& event, const WidgetEventConte
     }
 
     // Children are hit-tested before the overlay, so a shield click here
-    // means no content child consumed it: dismiss.
+    // means no content child consumed it.
     if (eventType == EEvent::MouseButtonPressed) {
+        if (isModal()) {
+            return true; // consume; modal stays until OK/Cancel/Esc
+        }
         close();
         return true;
     }

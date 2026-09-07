@@ -12,14 +12,15 @@ namespace ya
 /// Full-screen popup overlay attached to the tree's Popup layer
 /// (gui-app-bootstrap Phase 4).
 ///
-/// One shared detach-safe mechanism behind popup-like surfaces, with an
-/// explicit role API backed by the modal role flag:
-///   - Popup role draws a transparent shield: clicks outside the content child
-///     dismiss the overlay, lower layers never see them;
-///   - Modal role draws a dimming shield and blocks the whole app until
-///     dismissed;
-///   - Esc dismisses; opening takes keyboard focus (the overlay owns the
-///     focus until closed, which matches modal semantics);
+/// One shared detach-safe mechanism behind popup-like surfaces.
+///
+/// Modal vs dim are independent:
+///   - Modal (`_bModal`) captures input until the overlay is closed by
+///     content actions / Esc. Outside clicks are consumed and do **not**
+///     dismiss a modal. Whether the shield is painted is `_bDimBackground`.
+///   - Non-modal popups dismiss on outside click / Esc. They do not dim
+///     unless the app sets `_bDimBackground`.
+///   - Opening takes keyboard focus; Esc always dismisses.
 ///   - the first visible content child is laid out through a popup-owned
 ///     canvas slot; the base popup places it at `_contentPos` and sizes it
 ///     from `_contentExtent` when set, otherwise the child's desired size.
@@ -33,6 +34,7 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
 {
     YA_REFLECT_BEGIN(UIPopupOverlay, UIElement)
     YA_REFLECT_FIELD(_bModal, .instanceEditable())
+    YA_REFLECT_FIELD(_bDimBackground, .instanceEditable())
     YA_REFLECT_FIELD(_contentPos, .instanceEditable())
     YA_REFLECT_FIELD(_contentExtent, .instanceEditable())
     YA_REFLECT_END()
@@ -59,7 +61,10 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     void setRole(EOverlayRole role) { _bModal = role == EOverlayRole::Modal; }
     [[nodiscard]] bool isModal() const { return getRole() == EOverlayRole::Modal; }
 
-    bool    _bModal     = false;
+    bool    _bModal          = false;
+    /// When true the shield paints `modalFill`. Independent of `_bModal`:
+    /// dimming is an app choice, not the definition of modal.
+    bool    _bDimBackground  = false;
     /// Content child origin in tree-local logical pixels.
     glm::vec2 _contentPos = {0.0f, 0.0f};
     /// Optional content extent for the popup-owned canvas slot. When non-zero
@@ -83,12 +88,12 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override { node["type"] = "canvas"; }
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
-        node["control"] = {{"type", "popupOverlay"}, {"modal", _bModal}};
+        node["control"] = {{"type", "popupOverlay"}, {"modal", _bModal}, {"dim", _bDimBackground}};
     }
     /// A non-modal popup shield is invisible to the user: it swallows presses
     /// (dismiss) but is transparent to hover, so the menu bar item underneath
-    /// keeps its hover-switch. A modal shield is drawn (dimming) and blocks
-    /// both hover and presses.
+    /// keeps its hover-switch. A modal shield blocks hover and presses
+    /// regardless of whether it is dimmed.
     [[nodiscard]] bool isHoverTransparent() const override { return !_bModal; }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
 

@@ -18,7 +18,7 @@ void UIPanel::paintSelf(UIFrameBuilder& builder)
         builder.addBrush(_layoutRect, fill);
     };
 
-    if (_image.isLoaded()) {
+    if (_image.hasPath()) {
         const bool bThemed = !_styleKey.empty() && getTree() && getTree()->getTheme()
                              && getTree()->getTheme()->find<FPanelStyle>(_styleKey);
         // Image is content. A mounted theme without an authored overlay still
@@ -31,6 +31,9 @@ void UIPanel::paintSelf(UIFrameBuilder& builder)
         return;
     }
     paintFill(style.fillColor);
+    if (style.outlineColor.a > 0.0f && style.outlineThickness > 0.0f) {
+        builder.addRectOutline(_layoutRect, style.outlineColor, style.outlineThickness);
+    }
 }
 
 const FPanelStyle& UIPanel::resolvedStyle(ReactiveBase::EDirtyLevel level, bool bTrackDependencies) const

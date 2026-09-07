@@ -9,3 +9,4 @@
 - G7 Host `IGuiTextureSource` 用 stbi 加载磁盘/`file:` 路径；Brush 页加 Load 示例。
 - G8 Theme 切换进 View 菜单；Theme 页改为 sub-style 样例。
 - G17 离页 `FPage::leave` 拆掉 Dock Popup 层 floating host。
+- G9 Open popup menu 锚在按钮下沿，不再写死 (300, 220)。

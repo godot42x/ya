@@ -880,14 +880,16 @@ TEST(WidgetTreeTest, ModalOverlayUsesModalRoutePolicyAndCanDetachDuringTarget)
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(200.0f, 150.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_FALSE(overlay->isAttached());
+    EXPECT_TRUE(overlay->isAttached());
     EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::Modal);
     EXPECT_EQ(tree.getLastRouteTrace().target, "ModalOverlay");
     EXPECT_EQ(tree.getLastRouteTrace().result, EWidgetRouteResult::HandledExclusive);
 
-    const nlohmann::json dump = dumpWidgetTree(tree);
-    EXPECT_EQ(dump["lastRoute"]["policyName"], "modal");
-    EXPECT_EQ(dump["lastRoute"]["resultName"], "handledExclusive");
+    KeyPressedEvent escape{};
+    escape._keyCode = EKey::Escape;
+    EXPECT_EQ(tree.dispatchEvent(escape, pointAt(-1.0f, -1.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(overlay->isAttached());
 }
 
 TEST(WidgetTreeTest, ModalOverlayConsumesDismissClickBeforeUnderlyingContent)
@@ -903,18 +905,23 @@ TEST(WidgetTreeTest, ModalOverlayConsumesDismissClickBeforeUnderlyingContent)
     overlay->open(tree);
     tree.layout();
 
-    // The dismissing press belongs to the modal shield, not the content
-    // underneath. Closing the overlay must not leak this click through.
+    // Modal shield consumes the press and does not dismiss. The content
+    // underneath must not receive this click.
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(170.0f, 130.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_FALSE(overlay->isAttached());
+    EXPECT_TRUE(overlay->isAttached());
     EXPECT_EQ(clicks, 0);
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(170.0f, 130.0f)),
               EWidgetRouteResult::NotHandled);
     EXPECT_EQ(clicks, 0);
 
-    // A fresh click after the modal is gone reaches the underlying content.
+    KeyPressedEvent escape{};
+    escape._keyCode = EKey::Escape;
+    EXPECT_EQ(tree.dispatchEvent(escape, pointAt(-1.0f, -1.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(overlay->isAttached());
+
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(170.0f, 130.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(170.0f, 130.0f)),
@@ -2044,6 +2051,92 @@ TEST(WidgetTreeTest, DockSpaceSameLeafTabDropReorders)
     tree.endDrag(drop);
     EXPECT_FALSE(tree.isDragging());
     EXPECT_EQ(ws->dockModel().getRootNode()->panelIds, (std::vector<DockPanelId>{bId, aId}));
+}
+
+TEST(WidgetTreeTest, DockSpaceSameLeafContentDropSelectsWithoutSplit)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<FDockContext>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto panelA = std::make_shared<UIPanel>("ABody");
+    auto panelB = std::make_shared<UIPanel>("BBody");
+    const DockPanelId aId = ws->addPanel("Alpha", panelA);
+    const DockPanelId bId = ws->addPanel("Beta", panelB);
+    tree.layout();
+    ASSERT_EQ(ws->dockModel().getRootNode()->kind, EDockNodeKind::Leaf);
+    EXPECT_EQ(ws->dockModel().getRootNode()->selectedPanel, bId);
+
+    UITabBar* bar = findDescendantOfType<UITabBar>(*dock);
+    ASSERT_NE(bar, nullptr);
+    ASSERT_TRUE(static_cast<bool>(bar->_onTabDragBegin));
+    bar->_onTabDragBegin(0, "Alpha");
+    ASSERT_TRUE(tree.isDragging());
+
+    const glm::vec2 drop{
+        bar->_layoutRect.pos.x + bar->_layoutRect.extent.x * 0.5f,
+        bar->_layoutRect.pos.y + bar->_layoutRect.extent.y + 48.0f,
+    };
+    tree.updateDrag(drop);
+    tree.endDrag(drop);
+    EXPECT_FALSE(tree.isDragging());
+
+    const FDockNode* root = ws->dockModel().getRootNode();
+    ASSERT_NE(root, nullptr);
+    EXPECT_EQ(root->kind, EDockNodeKind::Leaf);
+    EXPECT_EQ(root->panelIds, (std::vector<DockPanelId>{aId, bId}));
+    EXPECT_EQ(root->selectedPanel, aId);
+}
+
+TEST(WidgetTreeTest, DockSpaceCrossLeafEdgeDropStillSplits)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<FDockContext>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto panelA = std::make_shared<UIPanel>("ABody");
+    auto panelB = std::make_shared<UIPanel>("BBody");
+    auto panelC = std::make_shared<UIPanel>("CBody");
+    const DockPanelId aId = ws->addPanel("Alpha", panelA);
+    const DockPanelId bId = ws->addPanel("Beta", panelB);
+    const DockPanelId cId = ws->addPanel("Gamma", panelC);
+    ASSERT_TRUE(ws->dockModel().splitLeaf(ws->dockModel().getRootNode()->id,
+                                          EDockCardinalSide::East, cId));
+    ws->fireDockUpdated();
+    tree.layout();
+
+    UITabBar* westBar = findDescendantOfType<UITabBar>(*dock);
+    ASSERT_NE(westBar, nullptr);
+    ASSERT_TRUE(static_cast<bool>(westBar->_onTabDragBegin));
+    westBar->_onTabDragBegin(1, "Beta");
+    ASSERT_TRUE(tree.isDragging());
+
+    auto* split = findDescendantOfType<UISplitPane>(*dock);
+    ASSERT_NE(split, nullptr);
+    ASSERT_GE(split->getChildren().size(), 2u);
+    const Rect2D eastRect = split->getChildren()[1]->_layoutRect;
+    const glm::vec2 eastCenter = eastRect.pos + eastRect.extent * 0.5f;
+    const glm::vec2 southDrop{eastCenter.x, eastCenter.y + 36.0f};
+    tree.updateDrag(southDrop);
+    tree.endDrag(southDrop);
+    EXPECT_FALSE(tree.isDragging());
+
+    const FDockNode* root = ws->dockModel().getRootNode();
+    ASSERT_NE(root, nullptr);
+    ASSERT_EQ(root->kind, EDockNodeKind::Split);
+    ASSERT_NE(root->child[1], nullptr);
+    EXPECT_EQ(root->child[1]->kind, EDockNodeKind::Split);
+    EXPECT_NE(ws->dockModel().findLeafForPanel(bId), ws->dockModel().findLeafForPanel(aId));
 }
 
 TEST(WidgetTreeTest, FloatingWindowTabDragBehaviorStartsDockPanelSession)
