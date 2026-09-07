@@ -229,6 +229,14 @@ struct Font
         return fbAtlas ? fbAtlas->textureForSlot(ch.atlasSlot) : fallbacks[ch.atlasIndex - 1].atlasTexture;
     }
 
+    [[nodiscard]] EFontRenderMode renderModeFor(const Character& ch) const
+    {
+        if (ch.atlasIndex == 0 || ch.atlasIndex > fallbacks.size()) {
+            return renderMode;
+        }
+        return fallbacks[ch.atlasIndex - 1].renderMode;
+    }
+
     [[nodiscard]] bool isView() const { return baseFont != nullptr; }
 
     bool hasCharacter(uint32_t codePoint) const { return characters.contains(codePoint); }

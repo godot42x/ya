@@ -36,12 +36,33 @@ using Render2DPassSlot = uint32_t;
 /// binding table shared by screen and world batches.
 struct YA_RENDER_2D_API FQuadRender
 {
+    static constexpr uint32_t kTextureIndexMask = 0x3FFFFFFFu;
+    static constexpr uint32_t kTextureModeShift = 30u;
+    enum class ETextureSampleMode : uint8_t
+    {
+        Coverage = 0,
+        Sdf      = 1,
+        Opaque   = 2,
+    };
+
+    struct TextureRef
+    {
+        uint32_t          slot = 0;
+        ETextureSampleMode mode = ETextureSampleMode::Coverage;
+
+        [[nodiscard]] constexpr uint32_t encode() const
+        {
+            return (slot & kTextureIndexMask) |
+                   (static_cast<uint32_t>(mode) << kTextureModeShift);
+        }
+    };
+
     struct Vertex
     {
         glm::vec3 pos;
         glm::vec4 color;
         glm::vec2 texCoord;
-        uint32_t  textureIdx;
+        uint32_t  textureRef;
         glm::vec3 worldCenter;
         glm::vec3 worldDirection;
         glm::vec2 worldSize;
@@ -183,11 +204,8 @@ struct YA_RENDER_2D_API FQuadRender
     bool                _worldFrameUboUploaded = false;
     std::vector<TextureBinding>                _textureBindings;
     std::unordered_map<const Texture*, uint32_t> _texturePtr2Idx;
-    /// High bit of the per-vertex textureIdx marks an SDF glyph atlas; the
-    /// shader decodes it to pick the distance-field branch. Per-draw (rather
-    /// than a per-slot UBO mask) because slots are recycled by mid-frame
-    /// overflow flushes while the frame UBO is written only once per frame.
-    static constexpr uint32_t                  kSdfTextureFlag = 0x80000000u;
+    // The packed GPU representation keeps texture slot and sampling semantics
+    // together per draw, without making callers manipulate bit flags.
     static constexpr size_t                    TEXTURE_SET_SIZE     = 16;
     static constexpr uint32_t                  RESOURCE_DS_POOL_SIZE = 64;
     int                                        _lastPushTextureSlot = -1;
@@ -226,13 +244,15 @@ struct YA_RENDER_2D_API FQuadRender
                      ya::Ptr<Texture> texture = nullptr,
                      const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                      const glm::vec2& uvScale = {1.0f, 1.0f},
-                     const glm::vec2& uvTranslation = {0.0f, 0.0f});
+                     const glm::vec2& uvTranslation = {0.0f, 0.0f},
+                     bool             bOpaqueSample = false);
 
     void drawTexture(const glm::mat4& transform,
                      ya::Ptr<Texture> texture = nullptr,
                      const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                      const glm::vec2& uvScale = {1.0f, 1.0f},
-                     const glm::vec2& uvTranslation = {0.0f, 0.0f});
+                     const glm::vec2& uvTranslation = {0.0f, 0.0f},
+                     bool             bOpaqueSample = false);
 
     void drawWorldTexture(const glm::vec3& center,
                           const glm::vec3& direction,
@@ -255,6 +275,14 @@ struct YA_RENDER_2D_API FQuadRender
                         const glm::vec4& tint,
                         float            cornerRadius);
 
+    /// Screen quad with a different color on each vertex. `colors` is Y-down
+    /// ImGui `AddRectFilledMultiColor` order: top-left, top-right, bottom-right,
+    /// bottom-left. The GPU interpolates; `texture` nullptr uses the white sprite.
+    void drawRectFilledMultiColor(const glm::vec3&               position,
+                                  const glm::vec2&               size,
+                                  const std::array<glm::vec4, 4>& colors,
+                                  ya::Ptr<Texture>               texture = nullptr);
+
     void drawText(const std::string& text,
                   const glm::vec3&   position,
                   const glm::vec4&   color,
@@ -262,21 +290,35 @@ struct YA_RENDER_2D_API FQuadRender
                   const glm::vec2&   scale = glm::vec2(1.0f));
 
   private:
-    uint32_t findOrAddTexture(ya::Ptr<Texture> texture);
+    TextureRef findOrAddTexture(ya::Ptr<Texture> texture, ETextureSampleMode mode = ETextureSampleMode::Coverage);
 
     void drawTextureInternal(const glm::mat4& transform,
-                             uint32_t textureIdx,
-                             const glm::vec3 tint,
+                             TextureRef textureRef,
+                             const glm::vec4& tint,
                              const glm::vec2& uvScale,
                              const glm::vec2& uvTranslation = {0, 0},
                              const glm::vec3& corner        = {0.0f, 0.0f, 0.0f});
 
+    void emitScreenQuad(const glm::mat4&                 transform,
+                        TextureRef                       textureRef,
+                        const std::array<glm::vec4, 4>&  colorsYaOrder,
+                        const glm::vec2&                 uvScale,
+                        const glm::vec2&                 uvTranslation,
+                        const glm::vec3&                 corner);
+
     void drawWorldTextureInternal(const glm::vec3& center,
                                   const glm::vec3& direction,
                                   const glm::vec2& size,
-                                  uint32_t textureIdx,
-                                  const glm::vec3 tint,
+                                  TextureRef textureRef,
+                                  const glm::vec4& tint,
                                   const glm::vec2& uvScale);
+
+    void drawSubTextureInternal(const glm::vec3& position,
+                                const glm::vec2& size,
+                                ya::Ptr<Texture> texture,
+                                const glm::vec4& tint,
+                                const glm::vec4& uvRect,
+                                ETextureSampleMode mode);
 };
 
 } // namespace ya

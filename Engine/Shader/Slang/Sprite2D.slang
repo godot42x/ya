@@ -4,6 +4,11 @@
 #define TEXTURE_SET_SIZE 16
 #endif
 
+static const uint kTextureIndexMask = 0x3FFFFFFFu;
+static const uint kTextureModeShift = 30u;
+static const uint kSampleModeSdf = 1u;
+static const uint kSampleModeOpaque = 2u;
+
 struct FrameData
 {
     float4x4 viewProj;
@@ -19,7 +24,7 @@ struct VertexInput
     [[vk::location(0)]] float3 pos         : POSITION;
     [[vk::location(1)]] float4 color       : COLOR0;
     [[vk::location(2)]] float2 texCoord    : TEXCOORD;
-    [[vk::location(3)]] uint   textureIdx  : TEXCOORD_TEXTURE_IDX;
+    [[vk::location(3)]] uint   textureRef  : TEXCOORD_TEXTURE_REF;
     [[vk::location(4)]] float3 worldCenter : TEXCOORD_WORLD_CENTER;
     [[vk::location(5)]] float3 worldDirection : TEXCOORD_WORLD_DIR;
     [[vk::location(6)]] float2 worldSize   : TEXCOORD_WORLD_SIZE;
@@ -31,7 +36,7 @@ struct VertexOutput
     float4 sv_position : SV_Position;
     float4 color       : COLOR0;
     float2 texCoord    : TEXCOORD;
-    nointerpolation uint textureIdx : TEXCOORD_TEXTURE_IDX;
+    nointerpolation uint textureRef : TEXCOORD_TEXTURE_REF;
     // corner = (radiusPx, quadW, quadH); radiusPx > 0 routes the fragment into
     // the SDF round-rect alpha branch (screen quads only).
     nointerpolation float3 corner : TEXCOORD_CORNER;
@@ -39,20 +44,18 @@ struct VertexOutput
 
 float4 sampleTexturedSprite(VertexOutput input)
 {
-    // Glyph flavor rides WITH the draw: textureIdx's high bit flags an SDF
-    // atlas, the low bits index uTextures. A per-slot UBO bitmask cannot work
-    // here because texture slots are recycled by mid-frame overflow flushes
-    // (resetTextureBatch) while the frame UBO is written only once per frame —
-    // a stale mask would route an SDF atlas through the coverage branch
-    // (A=255 everywhere -> solid blocks) or a bitmap atlas through the
-    // distance-field branch (smoothstep eats thin strokes).
-    const uint textureIdx = input.textureIdx & 0x7FFFFFFFu;
+    // The draw carries its descriptor-array slot and sampling mode together.
+    // Slots are recycled after texture-overflow flushes, so this metadata must
+    // remain per draw rather than live in a frame-level mask.
+    const uint textureRef = input.textureRef;
+    const uint textureIdx = textureRef & kTextureIndexMask;
+    const uint sampleMode = textureRef >> kTextureModeShift;
     // SDF glyph atlas (high bit set): the R channel carries the signed
     // distance (128 = boundary, FreeType FT_RENDER_MODE_SDF). Convert to
     // coverage with SCREEN-SPACE AA: the transition width is one screen
     // pixel regardless of scale (fwidth measures d's change per pixel), so
     // text stays crisp at any size.
-    if ((input.textureIdx & 0x80000000u) != 0u) {
+    if (sampleMode == kSampleModeSdf) {
         float d = uTextures[textureIdx].Sample(input.texCoord).r;
         // HALF-pixel AA: fwidth(d) is d's change per screen pixel; spanning
         // +-0.25*fwidth gives a 0.5px transition. A 1px stroke then keeps a
@@ -65,7 +68,14 @@ float4 sampleTexturedSprite(VertexOutput input)
         return float4(input.color.rgb, input.color.a * alpha);
     }
     float4 texColor = uTextures[textureIdx].Sample(input.texCoord);
-    if (texColor.a < 0.01) { discard; }
+    // Viewport / scene RTs often leave alpha unused (0). Discard would punch
+    // the whole sprite to the panel behind it. Bit 30 requests opaque RGB.
+    if (sampleMode == kSampleModeOpaque) {
+        texColor.a = 1.0;
+    }
+    else if (texColor.a < 0.01) {
+        discard;
+    }
     return texColor * input.color;
 }
 
@@ -81,7 +91,7 @@ VertexOutput vertMain(VertexInput input)
     output.sv_position = mul(uFrame.viewProj, float4(input.pos, 1.0));
     output.color       = input.color;
     output.texCoord    = input.texCoord;
-    output.textureIdx  = input.textureIdx;
+    output.textureRef  = input.textureRef;
     output.corner      = input.corner;
     return output;
 }
@@ -98,7 +108,7 @@ VertexOutput vertWorldMain(VertexInput input)
     output.sv_position = mul(uFrame.viewProj, float4(worldPos, 1.0));
     output.color       = input.color;
     output.texCoord    = flipWorldUv(input.texCoord);
-    output.textureIdx  = input.textureIdx;
+    output.textureRef  = input.textureRef;
     return output;
 }
 

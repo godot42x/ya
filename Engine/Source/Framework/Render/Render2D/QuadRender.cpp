@@ -16,6 +16,7 @@
 #include "utility.cc/ranges.h"
 
 #include <algorithm>
+#include <array>
 #include <format>
 #include <limits>
 
@@ -141,7 +142,7 @@ std::vector<VertexAttribute> buildQuadVertexAttributes()
             .bufferSlot = 0,
             .location   = 3,
             .format     = EVertexAttributeFormat::Uint,
-            .offset     = offsetof(FQuadRender::Vertex, textureIdx),
+            .offset     = offsetof(FQuadRender::Vertex, textureRef),
         },
         VertexAttribute{
             .bufferSlot = 0,
@@ -851,11 +852,10 @@ DescriptorSetHandle FQuadRender::acquireWorldResourceDS(FlightResources& resourc
     return resources.worldResourceDSPool[resources.nextWorldResourceDS++];
 }
 
-uint32_t FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture)
+FQuadRender::TextureRef FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture, ETextureSampleMode mode)
 {
     uint32_t textureIdx = 0;
     if (texture) {
-        const bool bSdfAtlas = texture->getLabel().starts_with("SDFFontAtlas_");
         auto it = _texturePtr2Idx.find(texture.get());
         if (it != _texturePtr2Idx.end()) {
             textureIdx = it->second;
@@ -881,39 +881,62 @@ uint32_t FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture)
             _lastPushTextureSlot             = static_cast<int>(idx);
             ++_resourceVersion;
         }
-        // SDF glyph atlases are sampled as distance fields (see the shader's
-        // textureIdx flag decode): flag the returned index per draw so the
-        // flavor survives mid-frame slot recycling.
-        if (bSdfAtlas) {
-            textureIdx |= kSdfTextureFlag;
-        }
     }
-    return textureIdx;
+    return TextureRef{.slot = textureIdx, .mode = mode};
 }
 
-void FQuadRender::drawTextureInternal(const glm::mat4& transform,
-                                      uint32_t         textureIdx,
-                                      const glm::vec3  tint,
-                                      const glm::vec2& uvScale,
-                                      const glm::vec2& uvTranslation,
-                                      const glm::vec3& corner)
+void FQuadRender::emitScreenQuad(const glm::mat4&                transform,
+                                 TextureRef                      textureRef,
+                                 const std::array<glm::vec4, 4>& colorsYaOrder,
+                                 const glm::vec2&                uvScale,
+                                 const glm::vec2&                uvTranslation,
+                                 const glm::vec3&                corner)
 {
     for (int i = 0; i < 4; i++) {
         *vertexPtr = FQuadRender::Vertex{
-            .pos         = transform * FQuadRender::vertices[i],
-            .color       = {tint, 1.0f},
-            .texCoord    = FQuadRender::defaultTexcoord[i] * uvScale + uvTranslation,
-            .textureIdx  = textureIdx,
-            .worldCenter = glm::vec3(0.0f),
+            .pos            = transform * FQuadRender::vertices[i],
+            .color          = colorsYaOrder[static_cast<size_t>(i)],
+            .texCoord       = FQuadRender::defaultTexcoord[i] * uvScale + uvTranslation,
+            .textureRef     = textureRef.encode(),
+            .worldCenter    = glm::vec3(0.0f),
             .worldDirection = glm::vec3(0.0f, 0.0f, -1.0f),
-            .worldSize   = glm::vec2(0.0f),
-            .corner      = corner,
+            .worldSize      = glm::vec2(0.0f),
+            .corner         = corner,
         };
         ++vertexPtr;
     }
 
     vertexCount += 4;
     indexCount += 6;
+}
+
+void FQuadRender::drawTextureInternal(const glm::mat4& transform,
+                                      TextureRef       textureRef,
+                                      const glm::vec4& tint,
+                                      const glm::vec2& uvScale,
+                                      const glm::vec2& uvTranslation,
+                                      const glm::vec3& corner)
+{
+    emitScreenQuad(transform, textureRef, {tint, tint, tint, tint}, uvScale, uvTranslation, corner);
+}
+
+void FQuadRender::drawRectFilledMultiColor(const glm::vec3&               position,
+                                           const glm::vec2&               size,
+                                           const std::array<glm::vec4, 4>& colors,
+                                           ya::Ptr<Texture>               texture)
+{
+    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
+                   "Render2D draw called outside a begin()/end() recording session");
+    if (vertexCount >= MaxVertexCount - 4) {
+        flush(Render2D::session.curCmdBuf);
+    }
+
+    glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
+                      glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
+
+    // Public/ImGui order is TL, TR, BR, BL. Vertex buffer order is TL, TR, BL, BR.
+    const std::array<glm::vec4, 4> yaColors{colors[0], colors[1], colors[3], colors[2]};
+    emitScreenQuad(model, findOrAddTexture(texture), yaColors, {1.0f, 1.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, 0.0f});
 }
 
 void FQuadRender::drawRoundedRect(const glm::vec3& position,
@@ -933,16 +956,16 @@ void FQuadRender::drawRoundedRect(const glm::vec3& position,
     // No texture: the white sprite fills the quad, the SDF round-rect branch in
     // the shader carves the corners from the quad's alpha. corner = (radius, w, h)
     // so the fragment shader can build the local-space signed distance.
-    uint32_t textureIdx = findOrAddTexture(nullptr);
-    drawTextureInternal(model, textureIdx, tint, {1.0f, 1.0f}, {0.0f, 0.0f},
+    auto textureRef = findOrAddTexture(nullptr);
+    drawTextureInternal(model, textureRef, tint, {1.0f, 1.0f}, {0.0f, 0.0f},
                         {cornerRadius, size.x, size.y});
 }
 
 void FQuadRender::drawWorldTextureInternal(const glm::vec3&            center,
                                            const glm::vec3&            direction,
                                            const glm::vec2&            size,
-                                           uint32_t                    textureIdx,
-                                           const glm::vec3             tint,
+                                           TextureRef                  textureRef,
+                                           const glm::vec4&            tint,
                                            const glm::vec2&            uvScale)
 {
     const glm::vec3 normalizedDirection = glm::length2(direction) > std::numeric_limits<float>::epsilon()
@@ -952,9 +975,9 @@ void FQuadRender::drawWorldTextureInternal(const glm::vec3&            center,
     for (int i = 0; i < 4; i++) {
         *worldVertexPtr = FQuadRender::Vertex{
             .pos         = glm::vec3(FQuadRender::vertices[i]),
-            .color       = {tint, 1.0f},
+            .color       = tint,
             .texCoord    = FQuadRender::defaultTexcoord[i] * uvScale,
-            .textureIdx  = textureIdx,
+            .textureRef  = textureRef.encode(),
             .worldCenter = center,
             .worldDirection = normalizedDirection,
             .worldSize   = size,
@@ -971,7 +994,8 @@ void FQuadRender::drawTexture(const glm::vec3& position,
                               ya::Ptr<Texture> texture,
                               const glm::vec4& tint,
                               const glm::vec2& uvScale,
-                              const glm::vec2& uvTranslation)
+                              const glm::vec2& uvTranslation,
+                              bool             bOpaqueSample)
 {
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
@@ -982,15 +1006,16 @@ void FQuadRender::drawTexture(const glm::vec3& position,
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
                       glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
 
-    uint32_t textureIdx = findOrAddTexture(texture);
-    drawTextureInternal(model, textureIdx, tint, uvScale, uvTranslation);
+    drawTextureInternal(model, findOrAddTexture(texture, bOpaqueSample ? ETextureSampleMode::Opaque : ETextureSampleMode::Coverage),
+                        tint, uvScale, uvTranslation);
 }
 
 void FQuadRender::drawTexture(const glm::mat4& transform,
                               ya::Ptr<Texture> texture,
                               const glm::vec4& tint,
                               const glm::vec2& uvScale,
-                              const glm::vec2& uvTranslation)
+                              const glm::vec2& uvTranslation,
+                              bool             bOpaqueSample)
 {
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
@@ -998,8 +1023,9 @@ void FQuadRender::drawTexture(const glm::mat4& transform,
         flush(Render2D::session.curCmdBuf);
     }
 
-    uint32_t textureIdx = findOrAddTexture(texture);
-    drawTextureInternal(transform, textureIdx, tint, {uvScale.x, uvScale.y}, uvTranslation);
+    drawTextureInternal(transform,
+                        findOrAddTexture(texture, bOpaqueSample ? ETextureSampleMode::Opaque : ETextureSampleMode::Coverage),
+                        tint, uvScale, uvTranslation);
 }
 
 void FQuadRender::drawWorldTexture(const glm::vec3&            center,
@@ -1015,8 +1041,7 @@ void FQuadRender::drawWorldTexture(const glm::vec3&            center,
         flushWorld(Render2D::session.curCmdBuf);
     }
 
-    uint32_t textureIdx = findOrAddTexture(texture);
-    drawWorldTextureInternal(center, direction, size, textureIdx, tint, {uvScale.x, uvScale.y});
+    drawWorldTextureInternal(center, direction, size, findOrAddTexture(texture), tint, {uvScale.x, uvScale.y});
 }
 
 void FQuadRender::drawSubTexture(const glm::vec3& position,
@@ -1031,12 +1056,24 @@ void FQuadRender::drawSubTexture(const glm::vec3& position,
         flush(Render2D::session.curCmdBuf);
     }
 
-    uint32_t textureIdx = findOrAddTexture(texture);
+    drawSubTextureInternal(position, size, texture, tint, uvRect, ETextureSampleMode::Coverage);
+}
 
+void FQuadRender::drawSubTextureInternal(const glm::vec3& position,
+                                         const glm::vec2& size,
+                                         ya::Ptr<Texture> texture,
+                                         const glm::vec4& tint,
+                                         const glm::vec4& uvRect,
+                                         ETextureSampleMode mode)
+{
+    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
+                   "Render2D draw called outside a begin()/end() recording session");
+    if (vertexCount >= MaxVertexCount - 4) {
+        flush(Render2D::session.curCmdBuf);
+    }
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
                       glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
-
-    drawTextureInternal(model, textureIdx, tint, {uvRect.z, uvRect.w}, {uvRect.x, uvRect.y});
+    drawTextureInternal(model, findOrAddTexture(texture, mode), tint, {uvRect.z, uvRect.w}, {uvRect.x, uvRect.y});
 }
 
 void FQuadRender::drawText(const std::string& text,
@@ -1112,11 +1149,15 @@ void FQuadRender::drawText(const std::string& text,
         // and SDF glyphs use the text color as before.
         const auto atlasTexture = font->atlasTextureFor(character);
         if (atlasTexture) {
-            drawSubTexture(pos,
-                           scaledGlyphSize,
-                           atlasTexture,
-                           character.bColor ? glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) : color,
-                           character.uvRect);
+            const auto sampleMode = font->renderModeFor(character) == EFontRenderMode::SDF
+                                        ? ETextureSampleMode::Sdf
+                                        : ETextureSampleMode::Coverage;
+            drawSubTextureInternal(pos,
+                                   scaledGlyphSize,
+                                   atlasTexture,
+                                   character.bColor ? glm::vec4(1.0f, 1.0f, 1.0f, 1.0f) : color,
+                                   character.uvRect,
+                                   sampleMode);
         }
 
         cursorX += character.advance.x * scale.x;

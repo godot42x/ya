@@ -152,20 +152,22 @@ struct YA_RENDER_2D_API Render2D
                            ya::Ptr<Texture> texture = nullptr,
                            const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                            const glm::vec2& uvScale = {1.0f, 1.0f},
-                           const glm::vec2& uvOffset = {0.0f, 0.0f})
+                           const glm::vec2& uvOffset = {0.0f, 0.0f},
+                           bool             bOpaqueSample = false)
     {
         beginBatch(ERender2dBatchKind::ScreenQuad);
-        quadRender()->drawTexture(position, size, texture, tint, uvScale, uvOffset);
+        quadRender()->drawTexture(position, size, texture, tint, uvScale, uvOffset, bOpaqueSample);
     }
 
     static void makeSprite(const glm::mat4& transform,
                            ya::Ptr<Texture> texture = nullptr,
                            const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                            const glm::vec2& uvScale = {1.0f, 1.0f},
-                           const glm::vec2& uvOffset = {0.0f, 0.0f})
+                           const glm::vec2& uvOffset = {0.0f, 0.0f},
+                           bool             bOpaqueSample = false)
     {
         beginBatch(ERender2dBatchKind::ScreenQuad);
-        quadRender()->drawTexture(transform, texture, tint, uvScale, uvOffset);
+        quadRender()->drawTexture(transform, texture, tint, uvScale, uvOffset, bOpaqueSample);
     }
 
     static void makeWorldSprite(const glm::vec3& worldCenter,
@@ -223,6 +225,18 @@ struct YA_RENDER_2D_API Render2D
     {
         beginBatch(ERender2dBatchKind::ScreenQuad);
         quadRender()->drawRoundedRect(position, size, tint, cornerRadius);
+    }
+
+    /// Screen quad with a different color on each corner. `colors` is Y-down
+    /// ImGui order: top-left, top-right, bottom-right, bottom-left. GPU
+    /// interpolates vertex color; no extra texture or offscreen pass.
+    static void makeRectFilledMultiColor(const glm::vec3&               position,
+                                         const glm::vec2&               size,
+                                         const std::array<glm::vec4, 4>& colors,
+                                         ya::Ptr<Texture>               texture = nullptr)
+    {
+        beginBatch(ERender2dBatchKind::ScreenQuad);
+        quadRender()->drawRectFilledMultiColor(position, size, colors, texture);
     }
 };
 
