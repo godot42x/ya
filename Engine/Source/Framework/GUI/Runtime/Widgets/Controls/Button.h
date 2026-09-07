@@ -66,7 +66,10 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
 
     /// Reactive enabled binding (paint-dirty). Disabled dims the fill color.
     void               bindEnabled(std::shared_ptr<Reactive<bool>> ref) { _enabledBinding = std::move(ref); }
-    [[nodiscard]] bool resolvedEnabled() const { return _enabledBinding ? _enabledBinding->get() : true; }
+    [[nodiscard]] bool resolvedEnabled() const
+    {
+        return isEnabledInTree() && (!_enabledBinding || _enabledBinding->get());
+    }
 
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;

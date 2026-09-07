@@ -80,7 +80,7 @@ void UISelectableRow::paintSelf(UIFrameBuilder& builder)
                                            composeVisualFlags(_bHovered,
                                                               false,
                                                               false,
-                                                              !isEnabled(),
+                                                              !isEnabledInTree(),
                                                               _bSelected,
                                                               false,
                                                               _bDropHighlighted));
