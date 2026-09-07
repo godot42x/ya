@@ -8,9 +8,10 @@
 namespace ya
 {
 
-/// Color edit: swatch opens an SV/hue/hex picker (ImGui ColorEdit analog).
-/// The RGBA channel strip on the field is secondary (click to select, drag
-/// the field to tweak that channel).
+/// Color edit: left swatch opens an SV/hue/hex picker; four RGBA drag
+/// fields sit to the right (ImGui ColorEdit analog). The picker SV square
+/// is a layered hue + white + black approximation until Render2D grows a
+/// vertex-color / HSV shader primitive.
 struct YA_GUI_API UIColorEdit : public UIElement, public UIStyledWidget<UIColorEdit, FColorEditStyle>
 {
     YA_REFLECT_BEGIN(UIColorEdit, UIElement)
@@ -30,7 +31,7 @@ struct YA_GUI_API UIColorEdit : public UIElement, public UIStyledWidget<UIColorE
     glm::vec4 _color         = {1.0f, 1.0f, 1.0f, 1.0f};
     int       _activeChannel = 0; // 0=R 1=G 2=B 3=A
     uint32_t  _fontSize      = 13;
-    float     _swatchSize    = 18.0f;
+    float     _swatchSize    = 22.0f;
 
     std::function<void(const glm::vec4& color)> _onColorChanged;
 
@@ -56,6 +57,7 @@ struct YA_GUI_API UIColorEdit : public UIElement, public UIStyledWidget<UIColorE
 
   private:
     [[nodiscard]] Rect2D swatchRect() const;
+    [[nodiscard]] Rect2D channelRect(int channel) const;
     void adjustActiveChannel(float delta);
     void openPalette();
     void closePalette();

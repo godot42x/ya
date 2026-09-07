@@ -1,68 +1,41 @@
-# GUIWorkbench --start-page=Gallery. Automated acceptance for the input
-# extras fixes: page scrolling, double-click text entry (DragFloat/SpinBox),
-# and ColorEdit channel selection. Coordinates assume the window size below
-# and scrolling the gallery to the bottom (offset clamps to maxOffset).
+# GUIWorkbench --start-page=Inputs. Automated acceptance for the input
+# extras: double-click text entry (DragFloat/SpinBox), ColorEdit channel
+# selection, and SearchCombo filter/pick. Widgets sit at the top of the
+# Inputs page (no gallery scroll). DemoHost x≈327 at 1280x720.
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
-{"assert":{"widget":"GalleryScroll","control":{"type":"scrollViewport"}}}
-{"checkpoint":"scroll_exists"}
-# Scroll to the bottom: 26 wheel steps x 40px >= maxOffset (~710), clamped.
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
-{"frame":2}
-{"checkpoint":"scrolled_bottom"}
-# After clamp, maxOffset≈710. Widget screen y = layoutY - offset.
-# DragFloat ≈ (406,416) 120x24; double-click center and type 1.5.
-{"event":"mouse_press","x":466,"y":428,"button":0}
-{"event":"mouse_release","x":466,"y":428,"button":0}
-{"event":"mouse_press","x":466,"y":428,"button":0}
-{"event":"mouse_release","x":466,"y":428,"button":0}
+{"assert":{"widget":"GalleryDragFloat","control":{"type":"dragFloat","value":3.5}}}
+{"assert":{"widget":"GallerySpinBox","control":{"type":"spinBox","value":8.0}}}
+{"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit"}}}
+{"assert":{"widget":"GallerySearchCombo","control":{"type":"searchComboBox","selectedIndex":0}}}
+{"checkpoint":"inputs_present"}
+# DragFloat ≈ (406,87) 120x24; double-click center and type 1.5.
+{"event":"mouse_press","x":466,"y":99,"button":0}
+{"event":"mouse_release","x":466,"y":99,"button":0}
+{"event":"mouse_press","x":466,"y":99,"button":0}
+{"event":"mouse_release","x":466,"y":99,"button":0}
 {"event":"key_typed","text":"1.5"}
 {"event":"key_press","key":"Enter"}
 {"frame":2}
 {"assert":{"widget":"GalleryDragFloat","control":{"type":"dragFloat","value":1.5}}}
 {"checkpoint":"dragfloat_edited"}
-# SpinBox ≈ (390,452) 120x24; middle value area (not +/-) enters edit; type 4.
-{"event":"mouse_press","x":450,"y":464,"button":0}
-{"event":"mouse_release","x":450,"y":464,"button":0}
+# SpinBox ≈ (390,123) 120x24; middle value area (not +/-) enters edit; type 4.
+{"event":"mouse_press","x":450,"y":135,"button":0}
+{"event":"mouse_release","x":450,"y":135,"button":0}
 {"event":"key_typed","text":"4"}
 {"event":"key_press","key":"Enter"}
 {"frame":2}
 {"assert":{"widget":"GallerySpinBox","control":{"type":"spinBox","value":4.0}}}
 {"checkpoint":"spinbox_edited"}
-# ColorEdit ≈ (406,522) 170x28. Alpha channel cell (ch 3) is the 4th 26px strip.
-{"event":"mouse_press","x":533,"y":536,"button":0}
-{"event":"mouse_release","x":533,"y":536,"button":0}
+# ColorEdit ≈ (406,193) 280x28. A field is the 4th RGBA drag cell after the swatch.
+{"event":"mouse_press","x":650,"y":207,"button":0}
+{"event":"mouse_release","x":650,"y":207,"button":0}
 {"frame":2}
 {"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","activeChannel":3}}}
 {"checkpoint":"color_channel_selected"}
-# Swatch at ColorEdit+4; SV/hue picker opens (flips above if near the bottom).
-{"event":"mouse_press","x":419,"y":536,"button":0}
-{"event":"mouse_release","x":419,"y":536,"button":0}
+# Swatch at ColorEdit+4; picker opens below (page is not near the bottom).
+{"event":"mouse_press","x":419,"y":207,"button":0}
+{"event":"mouse_release","x":419,"y":207,"button":0}
 {"frame":2}
 {"assert":{"widget":"ColorPickerOverlay","control":{"type":"popupOverlay","modal":false}}}
 {"assert":{"widget":"ColorPicker","control":{"type":"colorPicker"}}}
@@ -81,9 +54,9 @@
 {"frame":2}
 {"assert":{"layers":{"Popup":{"children":[]}}}}
 {"checkpoint":"picker_dismissed"}
-# SearchCombo ≈ (422,562) 180x24; type 'To' then pick Torus.
-{"event":"mouse_press","x":512,"y":574,"button":0}
-{"event":"mouse_release","x":512,"y":574,"button":0}
+# SearchCombo ≈ (422,233) 180x24; type 'To' then pick Torus (Menu0 ≈426,261).
+{"event":"mouse_press","x":512,"y":245,"button":0}
+{"event":"mouse_release","x":512,"y":245,"button":0}
 {"frame":2}
 {"assert":{"widget":"GallerySearchCombo","control":{"type":"searchComboBox"}}}
 {"checkpoint":"search_menu_open"}
@@ -91,8 +64,8 @@
 {"frame":2}
 {"assert":{"widget":"GallerySearchCombo","control":{"type":"searchComboBox","filter":"To"}}}
 {"checkpoint":"search_filtered"}
-{"event":"mouse_press","x":472,"y":600,"button":0}
-{"event":"mouse_release","x":472,"y":600,"button":0}
+{"event":"mouse_press","x":463,"y":274,"button":0}
+{"event":"mouse_release","x":463,"y":274,"button":0}
 {"frame":2}
 {"assert":{"layers":{"Popup":{"children":[]}}}}
 {"checkpoint":"search_picked"}
