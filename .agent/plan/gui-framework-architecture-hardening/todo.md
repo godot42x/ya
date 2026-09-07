@@ -5,7 +5,7 @@
 
 ## 当前切片
 
-当前激活切片：无。下一项是 `GAH-003`。共享工作区仍有 Editor/Dock/ColorEdit/Workbench
+当前激活切片：无。下一项是 `GAH-101`。共享工作区仍有 Editor/Dock/ColorEdit/Workbench
 未提交改动；后续 checkpoint 继续只提交本任务文件，不得批量吸收。
 
 执行规则：
@@ -32,14 +32,14 @@
   - 非目标：不在本任务引入 measure cache。
   - 提交：`[test/gui] baseline layout host skip`。
 
-- [ ] `GAH-003` Texture completion 线程事实测试
+- [x] `GAH-003` Texture completion 线程事实测试
   - 依赖：无。
   - 工作：确认 GameRuntime completion 经 game thread、standalone source 同步完成；增加 foreign-thread completion 测试 seam。
   - 验收：当前两个真实 adapter 的线程事实被测试或明确代码证据覆盖；接口缺口可以稳定复现。
   - 非目标：不修改 AssetManager 调度系统。
   - 提交：`[test/gui] baseline texture completion thread`。
 
-- [ ] `GAH-004` 代表性场景性能记录
+- [x] `GAH-004` 代表性场景性能记录
   - 依赖：GAH-001、GAH-002。
   - 工作：记录 clipped long list、Inspector、Dock workspace、ColorEdit popup 的 draw items、flush、layout/paint/arrange 数据。
   - 验收：数字和运行命令写入 `progress.md`；不能只写主观结论。

@@ -135,7 +135,7 @@ xmake run ya-gui-closure-test -- --gtest_filter='LayoutHostSkipBaselineTest.*:Wi
 ### 保留 / 未完成
 
 - SelectableRow / CompoundWidget / TableGrid 同样 bypass，本任务未列入验收名单，GAH-201 统一入口时应一并覆盖。
-- GAH-003 / GAH-004 未开始。
+- GAH-003 / GAH-004 当时未开始。
 
 ### 偏离项
 
@@ -144,3 +144,77 @@ xmake run ya-gui-closure-test -- --gtest_filter='LayoutHostSkipBaselineTest.*:Wi
 ### 下一接力点
 
 领取 `GAH-003`：texture completion 线程事实与 foreign-thread seam。
+
+## 2026-09-08 — GAH-003 / GAH-004 Texture thread 与场景成本基线
+
+### 目标与边界
+
+- GAH-003：锁定两个真实 adapter 的 completion 线程事实，并留下 foreign-thread 红灯用例。
+- GAH-004：记录 clipped list / Inspector / Dock / ColorEdit 的 draw item、flush、layout/paint/arrange。
+- 非目标：不改 AssetManager 调度，不引入 GUI task queue，不在 catalog/tree 上加 owner-thread fail-loudly（GAH-301），不实现 clip-run 合批。
+- 工作区：`WidgetTree` / `GameUIHost` / `UIFrameSnapshot` / ColorEdit / Dock 仍有无关脏改动，本 checkpoint 不吸收。`FGuiTextureCatalog` 源文件此前未被 git 跟踪，但 HEAD `GUIAppHost` 已依赖该头；本任务补进仓库作为测试与 host include 的类型源。
+
+### 本轮完成
+
+- 提交 `GuiTextureCatalog`（`IGuiTextureSource` + `FGuiTextureCatalog`）。接口只有 `lookup` / `requestLoad` / `epoch`，没有 completion-thread 字段。
+- `TextureCompletionThreadBaselineTest`：inline source 在 `requestLoad` 内完成；deferred source 把 callback 存起来稍后同线程完成；foreign-thread `notify` 先写 `cached` 再 `revision.set()`。
+- `SceneCostBaselineTest`：四类 CPU 场景走 `GuiPerfStats` + `measureUIFrameComposeReplay` + host `getArrangeCount()`。
+
+### 验证
+
+```text
+xmake b ya-gui-closure-test
+xmake run ya-gui-closure-test -- --gtest_filter='TextureCompletionThreadBaselineTest.*:SceneCostBaselineTest.*'
+# 7 tests, PASSED
+xmake b ya-gui-widgets-test
+xmake run ya-gui-widgets-test -- --gtest_filter='TextureCompletionThreadBaselineTest.*'
+# 3 tests, PASSED
+```
+
+真实 adapter 代码证据（closure-test 不链接 GameRuntime / Host）：
+
+| adapter | 完成线程 |
+|---|---|
+| standalone `HostGuiTextureSource`（`GUIAppHost.cpp` `requestLoad`） | 调用线程同步：`FGuiTextureReady` 在 `requestLoad` 返回前执行，含 `stbi_load` + `Texture::fromData` |
+| `AssetTextureManager` `onReady` | 始终 `AssetManager::dispatchToGameThread`（cache hit / fail / load complete）。无 `g_frameTaskSink` 时 inline 跑 |
+| HEAD `GameUIHost` | 仍是 `getTextureByPath` 同步 resolver，没有 catalog adapter |
+| 工作区未提交的 `AssetGuiTextureSource` | `loadTexture` + 上述 game-thread `onReady`；不在本提交 |
+
+Foreign-thread 缺口（GAH-301 红灯）：
+
+1. `Reactive::set` 已拒绝非 UI 线程（`wrongThreadMutations + 1`，本测试会打 `YA_CORE_ERROR`）。
+2. `FGuiTextureCatalog::notify` 仍先写 `entry.cached` / `bKicked`，join 后 `bind()` 读到 Ready。
+3. GAH-301 必须在改 `cached` 或 dependent 之前 fail loudly。
+
+GAH-004 CPU 数字（`SceneCostBaselineTest` stdout，debug macOS）：
+
+| 场景 | drawItems | clipped | flush | scissor | painted | rebuilt | arrange | layoutMS | paintMS |
+|---|---|---|---|---|---|---|---|---|---|
+| clipped list ×80 rows | 82 | 82 | 82 | 164 | 87 | 87 | 1 | 0.557 | 0.317 |
+| Inspector column ×250 | 250 | 250 | 250 | 500 | 256 | 256 | 1 | 3.245 | 0.977 |
+| Dock viewport/hierarchy/inspector | 33 | 33 | 33 | 66 | 32 | 32 | 1 | 0.176 | 0.066 |
+| ColorEdit picker open | 49 | 49 | 49 | 98 | 8 | 8 | 0 | 0 | 0.065 |
+
+ColorEdit `arrange=0` / `layoutMS=0`：控件本身没有 host `UILayout`；打开 picker 后 `buildSnapshot` 时 layout 已干净，只计量 paint。当前协议下 clipped item 数 = screen flush 数。
+
+Workbench dump 结构对照（`Example/GUIWorkbench/Baselines/`，全部 clipped）：
+
+| dump | items | clipped |
+|---|---|---|
+| editor.json | 91 | 91 |
+| dock.json | 102 | 102 |
+
+### 保留 / 未完成
+
+- `WidgetTree` catalog 挂载（`setTextureSource`）与 GameRuntime `AssetGuiTextureSource` 仍在未提交工作区，不是本 checkpoint。
+- 未改 `IGuiTextureSource` 线程契约（GAH-301）。
+- 未跑 GPU/offscreen parity（GAH-102）。
+- layoutMS/paintMS 是单次 debug CPU 读数，C1/C2 对比以 item/flush/arrange 计数为主。
+
+### 偏离项
+
+无。没有实现 clip-run 合批、layout skip 统一或 owner-thread 诊断。
+
+### 下一接力点
+
+领取 `GAH-101`：相邻相同 flattened clip 共享 scissor run；`measureUIFrameComposeReplay` 与 `replaySnapshotItems` 必须收成同一 walker。

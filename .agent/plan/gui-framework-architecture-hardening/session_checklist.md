@@ -75,8 +75,8 @@ xmake run ya-gui-closure-test -- --gtest_filter='<本轮相关 suites>'
 
 ## 当前下一刀
 
-`GAH-003`：
+`GAH-101`：
 
-1. 用代码证据确认 GameRuntime texture completion 经 game thread、standalone source 同步完成；
-2. 增加 foreign-thread completion 测试 seam，作为 C3 的红灯用例；
-3. 不修改 AssetManager 调度系统，不引入 GUI task queue。
+1. replay 维护 active flattened clip，相邻相同 clip 共享一次 scissor run；
+2. 把 `measureUIFrameComposeReplay` 与 `replaySnapshotItems` 收成同一状态机；
+3. 同 clip N quad 在无 overflow 时 flush 从 N 收到 1；不改 snapshot schema，不重排 painter order。

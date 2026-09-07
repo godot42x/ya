@@ -44,13 +44,13 @@
         },
         {
           "id": "GAH-003",
-          "status": "planned",
-          "notes": "真实 texture source completion thread 与 foreign-thread seam"
+          "status": "pass",
+          "notes": "Inline requestLoad completes on caller; deferred source does not. Foreign notify: Reactive wrongThreadMutations+1, catalog still writes cached (Ready after join). GameRuntime onReady always dispatchToGameThread; HostGuiTextureSource is sync. IGuiTextureSource has no completion-thread field."
         },
         {
           "id": "GAH-004",
-          "status": "planned",
-          "notes": "clipped list、Inspector、Dock、ColorEdit 代表性性能记录"
+          "status": "pass",
+          "notes": "CPU SceneCostBaselineTest: clipped list 82 items/82 flush; inspector 250/250; dock 33/33; ColorEdit picker 49/49. Workbench dump editor.json 91 clipped, dock.json 102 clipped."
         }
       ]
     },
