@@ -15,3 +15,4 @@
 - G12 DragDrop tile 按标签测宽，不再把 asset.texture.diffuse 裁进 160px。
 - G13 Button/SelectableRow 禁用态走 `isEnabledInTree()`（CheckBox 已随 G2）。
 - G14 TreeView expand/collapse 同时 `markLayoutDirty`+`markPaintDirty`；`isExpanded` 始终创建 Layout Reactive（随 G5 TreeView.cpp 落地，本项补测试）。
+- G15 TableGrid 列/行分隔条 ±3px 命中，拖拽改宽/高（stretch 列首次拖时物化）。

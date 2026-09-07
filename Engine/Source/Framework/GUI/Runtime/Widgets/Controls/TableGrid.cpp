@@ -2,9 +2,11 @@
 
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
+#include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
 #include <climits>
+#include <cmath>
 
 namespace ya
 {
@@ -132,6 +134,66 @@ int UITableGrid::hitRowIndex(const glm::vec2& point) const
     return index;
 }
 
+int UITableGrid::hitColumnSplitter(const glm::vec2& point) const
+{
+    constexpr float kHit = 3.0f;
+    if (point.y < _layoutRect.pos.y || point.y > _layoutRect.pos.y + _layoutRect.extent.y) {
+        return -1;
+    }
+    const auto rects = columnRects();
+    for (size_t col = 1; col < rects.size(); ++col) {
+        if (std::abs(point.x - rects[col].pos.x) <= kHit) {
+            return static_cast<int>(col) - 1;
+        }
+    }
+    return -1;
+}
+
+bool UITableGrid::hitRowSplitter(const glm::vec2& point) const
+{
+    constexpr float kHit = 3.0f;
+    if (point.x < _layoutRect.pos.x || point.x > _layoutRect.pos.x + _layoutRect.extent.x) {
+        return false;
+    }
+    const size_t rowCount = _rows ? _rows->size() : 0;
+    for (size_t row = 1; row <= rowCount; ++row) {
+        const float y = _layoutRect.pos.y + static_cast<float>(row) * _rowHeight;
+        if (std::abs(point.y - y) <= kHit) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void UITableGrid::materializeStretchColumns()
+{
+    const auto rects = columnRects();
+    if (_columnWidths.empty()) {
+        _columnWidths.resize(rects.size(), 0.0f);
+    }
+    for (size_t col = 0; col < rects.size(); ++col) {
+        if (col >= _columnWidths.size()) {
+            _columnWidths.push_back(rects[col].extent.x);
+            continue;
+        }
+        if (_columnWidths[col] <= 0.0f) {
+            _columnWidths[col] = std::max(40.0f, rects[col].extent.x);
+        }
+    }
+}
+
+ECursorType UITableGrid::getCursor() const
+{
+    const EResize kind = _resize != EResize::None ? _resize : _hoverResize;
+    if (kind == EResize::Column) {
+        return ECursorType::ResizeEastWest;
+    }
+    if (kind == EResize::Row) {
+        return ECursorType::ResizeNorthSouth;
+    }
+    return ECursorType::Arrow;
+}
+
 void UITableGrid::paintSelf(UIFrameBuilder& builder)
 {
     // (Guardrail G1: the base paint template clips this widget's own rect.)
@@ -212,15 +274,58 @@ bool UITableGrid::handleInputEvent(const Event& event, const WidgetEventContext&
     const EEvent::T eventType = event.getEventType();
 
     if (eventType == EEvent::MouseMoved) {
+        if (_resize == EResize::Column && _resizeColumn >= 0 &&
+            static_cast<size_t>(_resizeColumn) < _columnWidths.size()) {
+            const float next = std::max(40.0f, _resizeStartValue + (ctx.logicalPoint.x - _resizeStart.x));
+            if (_columnWidths[static_cast<size_t>(_resizeColumn)] != next) {
+                _columnWidths[static_cast<size_t>(_resizeColumn)] = next;
+                markLayoutDirty();
+            }
+            return true;
+        }
+        if (_resize == EResize::Row) {
+            const float next = std::max(16.0f, _resizeStartValue + (ctx.logicalPoint.y - _resizeStart.y));
+            if (_rowHeight != next) {
+                setRowHeight(next);
+            }
+            return true;
+        }
+        _hoverResize = hitColumnSplitter(ctx.logicalPoint) >= 0
+                           ? EResize::Column
+                           : (hitRowSplitter(ctx.logicalPoint) ? EResize::Row : EResize::None);
         const int row = hitRowIndex(ctx.logicalPoint);
         if (row != _hoveredRow) {
             _hoveredRow = row;
             markPaintDirty();
         }
-        return row >= 0;
+        return row >= 0 || _hoverResize != EResize::None;
     }
 
     if (eventType == EEvent::MouseButtonPressed) {
+        const int splitterCol = hitColumnSplitter(ctx.logicalPoint);
+        if (splitterCol >= 0) {
+            materializeStretchColumns();
+            _resize           = EResize::Column;
+            _resizeColumn     = splitterCol;
+            _resizeStart      = ctx.logicalPoint;
+            _resizeStartValue = (static_cast<size_t>(splitterCol) < _columnWidths.size())
+                                    ? _columnWidths[static_cast<size_t>(splitterCol)]
+                                    : 40.0f;
+            if (WidgetTree* tree = getTree()) {
+                tree->setPointerCapture(this);
+            }
+            return true;
+        }
+        if (hitRowSplitter(ctx.logicalPoint)) {
+            _resize           = EResize::Row;
+            _resizeColumn     = -1;
+            _resizeStart      = ctx.logicalPoint;
+            _resizeStartValue = _rowHeight;
+            if (WidgetTree* tree = getTree()) {
+                tree->setPointerCapture(this);
+            }
+            return true;
+        }
         const int row = hitRowIndex(ctx.logicalPoint);
         if (row < 0) {
             return false;
@@ -234,6 +339,18 @@ bool UITableGrid::handleInputEvent(const Event& event, const WidgetEventContext&
         return true;
     }
 
+    if (eventType == EEvent::MouseButtonReleased) {
+        if (_resize != EResize::None) {
+            _resize       = EResize::None;
+            _resizeColumn = -1;
+            if (WidgetTree* tree = getTree()) {
+                tree->releasePointerCapture(this);
+            }
+            return true;
+        }
+        return false;
+    }
+
     return false;
 }
 
@@ -245,11 +362,15 @@ void UITableGrid::onPointerLeave()
         _hoveredRow = -1;
         markPaintDirty();
     }
+    _hoverResize = EResize::None;
 }
 
 void UITableGrid::clearTransientInputState()
 {
-    _hoveredRow = -1;
+    _hoveredRow   = -1;
+    _resize       = EResize::None;
+    _hoverResize  = EResize::None;
+    _resizeColumn = -1;
 }
 
 glm::vec2 UITableGrid::computeDesiredSize() const

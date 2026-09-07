@@ -611,6 +611,44 @@ TEST(BindingContractTest, TableSelectionBindingCoexistsWithHoverTransientState)
     EXPECT_EQ(selected->value(), "row-a");
 }
 
+TEST(BindingContractTest, TableGridSplitterDragResizesColumnAndRow)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto rows = std::make_shared<ReactiveList<UITableGrid::FTableRow>>();
+    rows->push(UITableGrid::FTableRow{.id = "h", .cells = {"A", "B"}});
+    rows->push(UITableGrid::FTableRow{.id = "r1", .cells = {"1", "2"}});
+    rows->push(UITableGrid::FTableRow{.id = "r2", .cells = {"3", "4"}});
+
+    auto table = std::make_shared<UITableGrid>("Table");
+    table->_columnWidths = {100.0f, 100.0f};
+    table->bindData(rows);
+    FCanvasSlotArgs slot;
+    slot.offset    = {20.0f, 20.0f};
+    slot.fixedSize = {200.0f, 66.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), table, slot);
+    tree.layout();
+
+    const float splitX = 120.0f;
+    const float midY   = 31.0f;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(splitX, midY)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(splitX + 40.0f, midY), pointAt(splitX + 40.0f, midY)),
+              EWidgetRouteResult::HandledExclusive);
+    tree.layout();
+    EXPECT_FLOAT_EQ(table->_columnWidths[0], 140.0f);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(splitX + 40.0f, midY)),
+              EWidgetRouteResult::HandledExclusive);
+
+    const float rowSplitY = 42.0f;
+    const float midX      = 40.0f;
+    const float oldHeight = table->_rowHeight;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(midX, rowSplitY)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(midX, rowSplitY + 10.0f), pointAt(midX, rowSplitY + 10.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FLOAT_EQ(table->_rowHeight, oldHeight + 10.0f);
+}
+
 TEST(BindingContractTest, TableSelectionFollowsKeyedRowAcrossInsertMoveAndRemove)
 {
     WidgetTree tree({.width = 800, .height = 600});

@@ -92,6 +92,7 @@ struct YA_GUI_API UITableGrid : public UIElement, public UIStyledWidget<UITableG
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     [[nodiscard]] glm::vec2 computeIntrinsicSize() const override;
     [[nodiscard]] bool isHoverable() const override { return true; }
+    [[nodiscard]] ECursorType getCursor() const override;
     void onPointerLeave() override;
     void clearTransientInputState() override;
     [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
@@ -103,12 +104,28 @@ private:
     [[nodiscard]] std::vector<Rect2D> columnRects() const;
     /// Whether a child widget occupies the given cell (suppresses the text).
     [[nodiscard]] bool cellHasWidget(int row, int col) const;
+    /// Column to the left of a vertical splitter under `point`, or -1.
+    [[nodiscard]] int hitColumnSplitter(const glm::vec2& point) const;
+    [[nodiscard]] bool hitRowSplitter(const glm::vec2& point) const;
+    void materializeStretchColumns();
+
+    enum class EResize : uint8_t
+    {
+        None,
+        Column,
+        Row,
+    };
 
     UITableLayout _tableLayout;
     std::shared_ptr<ReactiveList<FTableRow>> _rows;
     std::shared_ptr<Reactive<std::string>>  _selectedId;
     uint64_t                               _observedRowsRevision = std::numeric_limits<uint64_t>::max();
     int _hoveredRow = -1;
+    EResize   _resize            = EResize::None;
+    EResize   _hoverResize       = EResize::None;
+    int       _resizeColumn      = -1;
+    glm::vec2 _resizeStart{0.0f, 0.0f};
+    float     _resizeStartValue  = 0.0f;
 };
 
 } // namespace ya

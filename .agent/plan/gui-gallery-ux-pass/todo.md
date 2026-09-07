@@ -15,6 +15,6 @@
 - [x] G12 Drag source 按标签 desired 宽度，不再 160 clip
 - [x] G13 disabled 视觉走 `isEnabledInTree`（Button/CheckBox/SelectableRow）
 - [x] G14 TreeView expand `markLayoutDirty`（含首次 expand 无 dependent）
-- [ ] G15 TableGrid 拖分隔条改列宽/行高
+- [x] G15 TableGrid 拖分隔条改列宽/行高
 - [ ] G16 Dock chooser 五块始终绘制，hover 只加亮
 - [ ] G18 skill 补 UX vs closure；更新相关 scenario
