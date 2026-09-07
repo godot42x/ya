@@ -28,6 +28,14 @@ void UIDragDropTile::paintSelf(UIFrameBuilder& builder)
     builder.addText(_layoutRect, text, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
 }
 
+glm::vec2 UIDragDropTile::computeDesiredSize() const
+{
+    const FDragDropStyle& style = resolvedStyle();
+    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
+    const float textW = font ? font->measureText(_label) : 80.0f;
+    return {textW + 20.0f, 30.0f};
+}
+
 void UIDragDropTile::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const
 {
     node["control"] = {

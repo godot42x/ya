@@ -11,3 +11,4 @@
 - G17 离页 `FPage::leave` 拆掉 Dock Popup 层 floating host。
 - G9 Open popup menu 锚在按钮下沿，不再写死 (300, 220)。
 - G10 Modal 只独占输入；`_bDimBackground` 可选；modal 外点不关；Dialog 画 outline。
+- G11 UIDialog 内容默认 wrap，窗口加宽以免 DescText 被 clip。

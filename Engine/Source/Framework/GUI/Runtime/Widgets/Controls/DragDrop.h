@@ -34,6 +34,7 @@ struct YA_GUI_API UIDragDropTile : public UIElement, public UIStyledWidget<UIDra
     void setHighlighted(bool highlighted) { _bHighlighted = highlighted; }
 
     void paintSelf(UIFrameBuilder& builder) override;
+    [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override;
     void clearTransientInputState() override;
 
