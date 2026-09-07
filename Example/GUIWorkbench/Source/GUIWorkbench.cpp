@@ -1,23 +1,6 @@
-// GUIWorkbench — the retain-mode GUI feature gallery.
-//
-// Every page below is one gallery section exercising a framework capability
-// end-to-end (not just unit tests). Pages own their scenario files under
-// Example/GUIWorkbench/Scenarios/ for pre-manual acceptance:
-//
-//   Render       correctness baseline (text/image/clip/first-frame)
-//   Widgets      basic controls (button/checkbox/slider/combo/field)
-//   Layout       box layout (H/V, spacing, padding, alignment, anchors)
-//   Menus        popup menus + the shell menu bar
-//   DragDrop     drag sessions (sources onto targets)
-//   Modal        popup dialog over a transparent shield
-//   ScrollSplit  scroll viewport + split pane
-//   Gallery      reactive bindings, style system, tree view, vector
-//                primitives, table grid, input extras, drag wrappers
-//   Interactions tooltip, wrapped text, subtree disable, modal dialog
-//   Editor       built-in workspace (selectable rows, split, inspector)
-//
-// New framework features go on a dedicated page (never appended to an
-// existing one — inserting content shifts every scenario coordinate).
+// GUIWorkbench — Feature Gallery for the retain-mode GUI framework.
+// Pages are grouped in the left rail (Diagnostics / Controls / Layout / ...).
+// Scenario files live under Example/GUIWorkbench/Scenarios/.
 #include "GUIWorkbench.h"
 
 #include "Core/KeyCode.h"
@@ -33,7 +16,6 @@
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Slider.h"
-#include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
 
 #include <format>
@@ -55,57 +37,56 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     _lightTheme = buildWorkbenchTheme(/*bDark=*/false);
     tree.setTheme(_darkTheme.get());
 
+    surface.onToggleTheme = [this](bool bDark)
+    {
+        _bDarkTheme = bDark;
+        if (_tree) {
+            _tree->setTheme((bDark ? _darkTheme : _lightTheme).get());
+        }
+    };
+    surface.bDarkTheme = true;
+
     // Demo pages are example content: register them into the shell. The
     // builders capture this app's demo state; the shell stays demo-agnostic.
-    surface.addPage("Render", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Diagnostics", "Render", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
         demoState.resetHandles();
         buildRenderDemo(t, p, demoState, status);
     });
-    surface.addPage("Widgets", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Controls", "Widgets", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
         demoState.resetHandles();
         buildWidgetsDemo(t, p, demoState, status);
     });
-    surface.addPage("Layout", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Controls", "Inputs", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildInputsDemo(t, p, demoState, status);
+    });
+    surface.addPage("Layout", "Box", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
         buildLayoutDemo(t, p, demoState, status);
     });
-    surface.addPage("Menus", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Layout", "Hosts", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
-        buildMenusDemo(t, p, demoState, status);
+        buildHostsDemo(t, p, demoState, status);
     });
-    surface.addPage("DragDrop", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
-    {
-        demoState.resetHandles();
-        buildDragDropDemo(t, p, demoState, status);
-    });
-    surface.addPage("Modal", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
-    {
-        demoState.resetHandles();
-        buildModalDemo(t, p, demoState, status);
-    });
-    surface.addPage("ScrollSplit", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Layout", "ScrollSplit", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
         buildScrollSplitDemo(t, p, demoState, status);
     });
-    surface.addPage("Gallery", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Paint", "Brush", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
-        buildGalleryDemo(t, p, demoState, status, [this](bool bDark)
-        {
-            _bDarkTheme = bDark;
-            _tree->setTheme((bDark ? _darkTheme : _lightTheme).get());
-        });
+        buildBrushDemo(t, p, demoState, status);
     });
-    surface.addPage("Interactions", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Text", "Text", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
-        buildInteractionsDemo(t, p, demoState, status);
+        buildTextDemo(t, p, demoState, status);
     });
-    surface.addPage("Dock", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Text", "Fonts", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
-        buildDockDemo(t, p, demoState, status);
+        buildFontsDemo(t, p, demoState, status);
     });
-    surface.addPage("Theme", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Style", "Theme", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
         buildThemeDemo(t, p, demoState, status, [this](bool bDark)
         {
@@ -113,22 +94,46 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
             _tree->setTheme((bDark ? _darkTheme : _lightTheme).get());
         });
     });
-    // Appended LAST so existing scenario coordinates stay stable.
-    surface.addPage("Unicode", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Overlays", "Menus", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
-        buildUnicodeDemo(t, p, demoState, status);
+        buildMenusDemo(t, p, demoState, status);
     });
-    // Dedicated Chinese-only scene to eyeball per-glyph brightness / edge blur
-    // (CJK fallback now resolves from a single face, so a run of Chinese should
-    // keep uniform weight — this page is the acceptance surface for that).
-    surface.addPage("中文测试", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Overlays", "Dialog", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
-        buildChineseTest(t, p, demoState, status);
+        demoState.resetHandles();
+        buildDialogDemo(t, p, demoState, status);
     });
-    // Rounded-rect capability demo: app-pended after the stable scenario pages.
-    surface.addPage("RoundedRect", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Interaction", "DragDrop", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
-        buildRoundedRectDemo(t, p, demoState, status);
+        demoState.resetHandles();
+        buildDragDropDemo(t, p, demoState, status);
+    });
+    surface.addPage("Interaction", "Enable", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildEnableDemo(t, p, demoState, status);
+    });
+    surface.addPage("Data", "Binding", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildBindingDemo(t, p, demoState, status);
+    });
+    surface.addPage("Data", "Tree", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildTreeDemo(t, p, demoState, status);
+    });
+    surface.addPage("Data", "Table", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildTableDemo(t, p, demoState, status);
+    });
+    surface.addPage("Composition", "Dock", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildDockDemo(t, p, demoState, status);
+    });
+    surface.setPageLeave("Dock", [this](ya::WidgetTree& t)
+    {
+        if (demoState.dockFloatingHost && demoState.dockFloatingHost->isAttached()) {
+            t.detach(*demoState.dockFloatingHost);
+        }
+        demoState.dockFloatingHost.reset();
     });
 
     // DSL page: typed builders materialize live widgets once. The press
@@ -141,7 +146,7 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     };
     auto dslModel = std::make_shared<FDslPageModel>();
 
-    surface.addPage("DSL", [dslModel](ya::WidgetTree& tree, ya::UIElement& parent, const std::function<void(const std::string&)>&)
+    surface.addPage("Composition", "DSL", [dslModel](ya::WidgetTree& tree, ya::UIElement& parent, const std::function<void(const std::string&)>&)
     {
         auto page = ya::ui::column("dsl-root")
                         .setDirection(ya::EWidgetBoxLayout::Vertical)
@@ -164,6 +169,9 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
                                     ya::ui::text("dsl-cell-b").setText("cell B")));
         ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
     });
+    // Register the built-in Editor page before applyStartPage so
+    // `--start-page=Editor` resolves. Empty builder uses the surface demo.
+    surface.addPage("Composition", "Editor", {});
 
     applyStartPage();
 
@@ -228,9 +236,18 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
         dispatchKey(event);
     };
 
+    const auto gotoPage = [this](const char* name) -> bool
+    {
+        if (!surface.selectPageByName(name)) {
+            surface.failSmoke(std::format("Demo automation: unknown page '{}'", name));
+            return false;
+        }
+        return true;
+    };
+
     switch (frame) {
     case 3: {
-        if (surface.getCurrentPageIndex() != 0) {
+        if (surface.findPageIndexByName("Render") != surface.getCurrentPageIndex()) {
             surface.failSmoke("Demo automation: render page not selected");
         }
         click(demoState.renderProbeButton.get());
@@ -240,10 +257,8 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
         return true;
     }
     case 4: {
-        const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[1].get()); // Widgets tab
-        if (surface.getCurrentPageIndex() != 1) {
-            surface.failSmoke("Demo automation: tab switch to Widgets failed");
+        if (!gotoPage("Widgets")) {
+            return true;
         }
         return true;
     }
@@ -308,27 +323,15 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
         return true;
     }
     case 12: {
-        const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[2].get()); // Layout tab
-        if (surface.getCurrentPageIndex() != 2) {
-            surface.failSmoke("Demo automation: tab switch to Layout failed");
-        }
+        (void)gotoPage("Box");
         return true;
     }
     case 13: {
-        const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[3].get()); // Menus tab
-        if (surface.getCurrentPageIndex() != 3) {
-            surface.failSmoke("Demo automation: tab switch to Menus failed");
-        }
+        (void)gotoPage("Menus");
         return true;
     }
     case 14: {
-        const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[4].get()); // DragDrop tab
-        if (surface.getCurrentPageIndex() != 4) {
-            surface.failSmoke("Demo automation: tab switch to DragDrop failed");
-        }
+        (void)gotoPage("DragDrop");
         return true;
     }
     case 15: {
@@ -343,11 +346,7 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
         return true;
     }
     case 16: {
-        const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[5].get()); // Modal tab
-        if (surface.getCurrentPageIndex() != 5) {
-            surface.failSmoke("Demo automation: tab switch to Modal failed");
-        }
+        (void)gotoPage("Dialog");
         return true;
     }
     case 17: {
@@ -365,24 +364,11 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
         return true;
     }
     case 19: {
-        const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[6].get()); // ScrollSplit tab
-        if (surface.getCurrentPageIndex() != 6) {
-            surface.failSmoke("Demo automation: tab switch to ScrollSplit failed");
-        }
+        (void)gotoPage("ScrollSplit");
         return true;
     }
     case 20: {
-        const auto& tabs = surface.getTabBar()->getChildren();
-        const int editorIndex = surface.getEditorPageIndex();
-        if (editorIndex < 0 || static_cast<size_t>(editorIndex) >= tabs.size()) {
-            surface.failSmoke("Demo automation: Editor tab index is out of range");
-            return true;
-        }
-        click(tabs[static_cast<size_t>(editorIndex)].get()); // Editor tab
-        if (surface.getCurrentPageIndex() != surface.getEditorPageIndex()) {
-            surface.failSmoke("Demo automation: tab switch to Editor failed");
-        }
+        (void)gotoPage("Editor");
         return true;
     }
     default:

@@ -20,7 +20,6 @@ struct UIPanel;
 struct UISelectableRow;
 struct UISplitPane;
 struct UIScrollViewport;
-struct UITabBar;
 struct UIText;
 struct UITextField;
 struct WidgetTree;
@@ -38,22 +37,31 @@ class YA_GUI_API FWorkbenchSurface
     using FPageBuilder = std::function<void(ya::WidgetTree& tree,
                                             ya::UIElement& parent,
                                             const std::function<void(const std::string&)>& log)>;
+    using FPageLeave = std::function<void(ya::WidgetTree& tree)>;
 
-    /// Register an app page (appends a tab). Pages are example/app content:
-    /// the shell only knows their names and builders. Call before buildUI().
+    /// Register an app page under a gallery group. The left rail shows group
+    /// headers and page rows; `--start-page` matches `name`. Call before buildUI().
+    int addPage(const std::string& group, const std::string& name, FPageBuilder builder);
+    /// Ungrouped overload (empty group, or the last group set by addPage).
     int addPage(const std::string& name, FPageBuilder builder);
-    /// Index of the built-in Editor reference page (after all registered
-    /// pages; the shell's own tool-GUI example for FeatureGallery).
+    /// Index of the built-in Editor reference page (Composition / Editor).
     [[nodiscard]] int getEditorPageIndex() const { return _editorPageIndex; }
-    /// Switch the content page (tabs + content host). Public so apps can
-    /// drive the shell (automation, commands).
+    /// Switch the content page. Public so apps can drive the shell
+    /// (automation, commands).
     void selectPage(int index);
+    bool selectPageByName(const std::string& name);
+    /// Called when leaving a page (before the demo host is cleared). Dock
+    /// uses this to detach Popup-layer floating hosts that outlive DemoHost.
+    void setPageLeave(const std::string& name, FPageLeave leave);
+    /// App-owned dark/light swap. View menu items invoke this.
+    std::function<void(bool bDark)> onToggleTheme;
+    bool                            bDarkTheme = true;
     [[nodiscard]] int getCurrentPageIndex() const { return _currentPageIndex; }
     /// Current status-line text (app automation asserts on it).
     [[nodiscard]] const std::string& getStatusText() const;
     /// Shell chrome access for app-driven automation.
     [[nodiscard]] ya::UIMenuBar* getMenuBar() const { return _menuBar.get(); }
-    [[nodiscard]] ya::UITabBar*  getTabBar() const { return _tabBar.get(); }
+    [[nodiscard]] ya::UISelectableRow* getPageRow(const std::string& name) const;
     [[nodiscard]] int findPageIndexByName(const std::string& name) const;
     void setInitialPageIndex(int index) { _initialPageIndex = index; }
 
@@ -77,7 +85,8 @@ class YA_GUI_API FWorkbenchSurface
   private:
     void buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildPageRail(ya::WidgetTree& tree, ya::UIElement& parent);
-    void buildTabBar(ya::WidgetTree& tree, ya::UIElement& parent);
+    void buildPageList(ya::WidgetTree& tree, ya::UIElement& parent);
+    void syncRailSelection();
     void buildDemoHost(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildStatusBar(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildWorkspaceShell(ya::WidgetTree& tree, ya::UIElement& parent);
@@ -120,14 +129,19 @@ class YA_GUI_API FWorkbenchSurface
     std::shared_ptr<ya::UIPanel> _pageRailCard;
     std::shared_ptr<ya::UIPanel> _contentFrame;
     std::shared_ptr<ya::UIText> _pageRailTitle;
-    std::shared_ptr<ya::UITabBar>  _tabBar;
+    std::shared_ptr<ya::UIScrollViewport> _pageRailScroll;
+    std::shared_ptr<ya::UIContainer>      _pageRailList;
+    std::vector<std::shared_ptr<ya::UISelectableRow>> _pageRows;
     std::shared_ptr<ya::UIPanel>   _demoHost;
     struct FPage
     {
+        std::string    group;
         std::string    name;
         FPageBuilder   build;
+        FPageLeave     leave;
     };
     std::vector<FPage> _pages;
+    std::string        _lastPageGroup;
     int                _editorPageIndex = -1;
     int                _currentPageIndex = -1;
     int                _initialPageIndex = 0;

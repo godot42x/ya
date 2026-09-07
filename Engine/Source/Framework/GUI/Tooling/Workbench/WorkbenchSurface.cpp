@@ -18,7 +18,6 @@
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
-#include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 
@@ -53,6 +52,11 @@ void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
 {
     _tree = &tree;
 
+    if (findPageIndexByName("Editor") < 0) {
+        _pages.push_back(FPage{.group = "Composition", .name = "Editor", .build = {}});
+    }
+    _editorPageIndex = findPageIndexByName("Editor");
+
     _root = std::make_shared<ya::UIPanel>("WorkbenchRoot");
     // Shell chrome resolves its fill from the mounted theme (Phase 4): the
     // window key drives the root backdrop; no authored color so the
@@ -69,21 +73,69 @@ void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
 
 int FWorkbenchSurface::findPageIndexByName(const std::string& name) const
 {
+    std::string canonical = name;
+    if (name == "Layout") {
+        canonical = "Box";
+    }
+    else if (name == "Gallery") {
+        canonical = "Binding";
+    }
+    else if (name == "Modal" || name == "Interactions") {
+        canonical = "Dialog";
+    }
+    else if (name == "Unicode" || name == "中文测试") {
+        canonical = "Fonts";
+    }
+    else if (name == "RoundedRect") {
+        canonical = "Brush";
+    }
     for (size_t i = 0; i < _pages.size(); ++i) {
-        if (_pages[i].name == name) {
+        if (_pages[i].name == canonical) {
             return static_cast<int>(i);
         }
-    }
-    if (name == "Editor") {
-        return static_cast<int>(_pages.size());
     }
     return -1;
 }
 
+int FWorkbenchSurface::addPage(const std::string& group, const std::string& name, FPageBuilder builder)
+{
+    _lastPageGroup = group;
+    _pages.push_back(FPage{.group = group, .name = name, .build = std::move(builder)});
+    return static_cast<int>(_pages.size()) - 1;
+}
+
 int FWorkbenchSurface::addPage(const std::string& name, FPageBuilder builder)
 {
-    _pages.push_back(FPage{.name = name, .build = std::move(builder)});
-    return static_cast<int>(_pages.size()) - 1;
+    return addPage(_lastPageGroup, name, std::move(builder));
+}
+
+void FWorkbenchSurface::setPageLeave(const std::string& name, FPageLeave leave)
+{
+    const int index = findPageIndexByName(name);
+    if (index < 0) {
+        return;
+    }
+    _pages[static_cast<size_t>(index)].leave = std::move(leave);
+}
+
+bool FWorkbenchSurface::selectPageByName(const std::string& name)
+{
+    const int index = findPageIndexByName(name);
+    if (index < 0) {
+        return false;
+    }
+    selectPage(index);
+    return true;
+}
+
+ya::UISelectableRow* FWorkbenchSurface::getPageRow(const std::string& name) const
+{
+    for (const auto& row : _pageRows) {
+        if (row && row->_itemId == name) {
+            return row.get();
+        }
+    }
+    return nullptr;
 }
 
 void FWorkbenchSurface::failSmoke(const std::string& message)
@@ -126,12 +178,29 @@ void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent
             ya::UIMenu::FItem{.label = "Paste", .action = [log] { log("Menu: Paste"); }},
         });
     });
-    _menuBar->addItem("View", [log]
+    _menuBar->addItem("View", [this, log]
     {
         return ya::UIMenu::create({
             ya::UIMenu::FItem{.label = "Show Grid", .action = [log] { log("Menu: Show Grid"); }},
             ya::UIMenu::FItem{.label = "Show FPS", .action = [log] { log("Menu: Show FPS"); }},
             ya::UIMenu::FItem{.label = "Fullscreen", .action = [log] { log("Menu: Fullscreen"); }},
+            ya::UIMenu::FItem::separator(),
+            ya::UIMenu::FItem{.label = "Dark Theme", .action = [this, log]
+            {
+                bDarkTheme = true;
+                if (onToggleTheme) {
+                    onToggleTheme(true);
+                }
+                log("Theme -> dark");
+            }},
+            ya::UIMenu::FItem{.label = "Light Theme", .action = [this, log]
+            {
+                bDarkTheme = false;
+                if (onToggleTheme) {
+                    onToggleTheme(false);
+                }
+                log("Theme -> white");
+            }},
         });
     });
     _menuBar->addItem("Help", [log]
@@ -148,22 +217,57 @@ void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent
     // shell no longer traverses children to re-style controls.
 }
 
-void FWorkbenchSurface::buildTabBar(ya::WidgetTree& tree, ya::UIElement& parent)
+void FWorkbenchSurface::buildPageList(ya::WidgetTree& tree, ya::UIElement& parent)
 {
-    _tabBar = std::make_shared<ya::UITabBar>("DemoTabs");
-    _tabBar->setDirection(ya::EWidgetBoxLayout::Vertical);
-    _tabBar->setSpacing(4.0f);
-    _tabBar->setPadding({10.0f, 10.0f});
-    _tabBar->_styleKey = "tab.sidebar";
-    tree.attach(parent, _tabBar);
-    ya::ui::attachSlot(parent, *_tabBar, ya::ui::canvasSlot().fill());
+    _pageRailScroll = std::make_shared<ya::UIScrollViewport>("FeatureRailScroll");
+    tree.attach(parent, _pageRailScroll);
+    ya::ui::attachSlot(parent, *_pageRailScroll, ya::ui::canvasSlot().fill());
 
-    for (const FPage& page : _pages) {
-        _tabBar->addTab(page.name);
+    _pageRailList = std::make_shared<ya::UIContainer>("FeatureRailList");
+    _pageRailList->setDirection(ya::EWidgetBoxLayout::Vertical);
+    _pageRailList->setSpacing(2.0f);
+    _pageRailList->setPadding({6.0f, 6.0f});
+    tree.attach(*_pageRailScroll, _pageRailList);
+
+    _pageRows.clear();
+    std::string lastGroup;
+    for (size_t i = 0; i < _pages.size(); ++i) {
+        const FPage& page = _pages[i];
+        if (page.group != lastGroup && !page.group.empty()) {
+            lastGroup = page.group;
+            auto header = std::make_shared<ya::UIText>("RailGroup_" + page.group);
+            header->_fontSize = 10;
+            header->setStyleKey("text.eyebrow");
+            header->setText(page.group);
+            tree.attach(*_pageRailList, header);
+            if (auto* slot = dynamic_cast<ya::UIBoxSlot*>(_pageRailList->getSlotForChild(*header))) {
+                slot->setPreferredSize({0.0f, 18.0f});
+            }
+        }
+
+        auto row = std::make_shared<ya::UISelectableRow>("RailPage_" + page.name);
+        row->_itemId = page.name;
+        row->_onSelect = [this](const std::string& id) { (void)selectPageByName(id); };
+        auto label = std::make_shared<ya::UIText>("RailPageLabel_" + page.name);
+        label->_fontSize = 13;
+        label->setStyleKey("text");
+        label->setText(page.name);
+        label->_vAlign = ya::EWidgetAlignV::Center;
+        tree.attach(*_pageRailList, row);
+        if (auto* slot = dynamic_cast<ya::UIBoxSlot*>(_pageRailList->getSlotForChild(*row))) {
+            slot->setPreferredSize({0.0f, 22.0f});
+        }
+        row->setContentPadding(ya::FMargin{8.0f, 0.0f, 4.0f, 0.0f});
+        tree.attach(*row, label);
+        _pageRows.push_back(row);
     }
-    _tabBar->addTab("Editor");
-    _editorPageIndex = static_cast<int>(_pages.size());
-    _tabBar->_onTabSelected = [this](int index) { selectPage(index); };
+}
+
+void FWorkbenchSurface::syncRailSelection()
+{
+    for (size_t i = 0; i < _pageRows.size(); ++i) {
+        _pageRows[i]->setSelected(static_cast<int>(i) == _currentPageIndex);
+    }
 }
 
 void FWorkbenchSurface::buildWorkspaceShell(ya::WidgetTree& tree, ya::UIElement& parent)
@@ -206,7 +310,7 @@ void FWorkbenchSurface::buildPageRail(ya::WidgetTree& tree, ya::UIElement& paren
     ya::ui::attachSlot(*_pageRail, *_pageRailCard,
                        ya::ui::canvasSlot().fill().offset({10.0f, 46.0f}));
 
-    buildTabBar(tree, *_pageRailCard);
+    buildPageList(tree, *_pageRailCard);
 }
 
 void FWorkbenchSurface::buildDemoHost(ya::WidgetTree& tree, ya::UIElement& parent)
@@ -226,7 +330,7 @@ void FWorkbenchSurface::buildStatusBar(ya::WidgetTree& tree, ya::UIElement& pare
 {
     _statusText = std::make_shared<ya::UIText>("Status");
     _statusText->_fontSize  = 13;
-    _statusText->setText("Tab: switch demo | Click / drag / keyboard to explore");
+    _statusText->setText("Select a feature | Click / drag / keyboard to explore");
     _statusText->setColor(kHeaderColor);
     tree.attach(parent, _statusText);
     // Bottom-left corner anchor: no span, so the slot size is honoured and
@@ -254,22 +358,26 @@ void FWorkbenchSurface::buildStatusBar(ya::WidgetTree& tree, ya::UIElement& pare
 
 void FWorkbenchSurface::selectPage(int index)
 {
-    const int pageCount = static_cast<int>(_pages.size()) + 1; // + built-in Editor
+    const int pageCount = static_cast<int>(_pages.size());
     if (index < 0 || index >= pageCount || index == _currentPageIndex) {
         return;
     }
 
-    if (_tabBar) {
-        _tabBar->syncSelectedTab(index);
+    const int previous = _currentPageIndex;
+    _currentPageIndex  = index;
+    syncRailSelection();
+    if (previous >= 0 && previous < pageCount && _tree) {
+        if (FPageLeave& leave = _pages[static_cast<size_t>(previous)].leave; leave) {
+            leave(*_tree);
+        }
     }
-    _currentPageIndex = index;
     clearDemoHost();
 
-    if (index == _editorPageIndex) {
+    FPage& page = _pages[static_cast<size_t>(index)];
+    if (index == _editorPageIndex || !page.build) {
         buildEditorDemo(*_tree, *_demoHost);
     }
     else {
-        FPage& page = _pages[static_cast<size_t>(index)];
         const auto log = [this](const std::string& text) { logStatus(text); };
         page.build(*_tree, *_demoHost, log);
     }
