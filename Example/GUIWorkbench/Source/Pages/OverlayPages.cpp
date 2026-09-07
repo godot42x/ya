@@ -1,0 +1,251 @@
+#include "../WorkbenchDemoPages.h"
+#include "DemoPageCommon.h"
+
+#include "GUI/Declarative/Build.h"
+#include "GUI/Widgets/Controls/Dialog.h"
+#include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Menu.h"
+#include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/PopupOverlay.h"
+#include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Widgets/WidgetTree.h"
+
+#include <format>
+
+namespace guiworkbench
+{
+
+void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                    const std::function<void(const std::string&)>& log)
+{
+    auto header = [](std::string key, const std::string& text)
+    {
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kHeaderColor);
+    };
+    auto body = [](std::string key, const std::string& text)
+    {
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kTextColor);
+    };
+
+    auto popupBtn = ya::ui::button("PopupButton")
+                        .child(ya::ui::text("PopupButton_Label")
+                                   .setText("Open popup menu...")
+                                   .setFontSize(13)
+                                   .setHAlign(ya::EWidgetAlignH::Center)
+                                   .setVAlign(ya::EWidgetAlignV::Center));
+    auto popupBtnRef = popupBtn.share();
+    popupBtn.setOnClick([popupBtnRef, &tree, &state, log]
+                        {
+                            auto menu = ya::UIMenu::create({
+                                ya::UIMenu::FItem{.label = "New Document",
+                                                 .action = [&state, log]
+                                                 {
+                                                     state.menuLog = "Menu: New Document";
+                                                     log(state.menuLog);
+                                                 }},
+                                ya::UIMenu::FItem{.label = "Open File...",
+                                                 .action = [&state, log]
+                                                 {
+                                                     state.menuLog = "Menu: Open File...";
+                                                     log(state.menuLog);
+                                                 }},
+                                ya::UIMenu::FItem{.label = "Save",
+                                                 .action = [&state, log]
+                                                 {
+                                                     state.menuLog = "Menu: Save";
+                                                     log(state.menuLog);
+                                                 }},
+                                ya::UIMenu::FItem::separator(),
+                                ya::UIMenu::FItem{.label = "Quit",
+                                                 .action = [&state, log]
+                                                 {
+                                                     state.menuLog = "Menu: Quit";
+                                                     log(state.menuLog);
+                                                 }},
+                            });
+                            const auto& rect = popupBtnRef->_layoutRect;
+                            menu->openAt(tree, {rect.pos.x, rect.pos.y + rect.extent.y});
+                        });
+
+    auto form = ya::ui::column("MenusForm")
+                    .setPadding({16.0f, 12.0f})
+                    .setSpacing(10.0f)
+                    .child(header("MenusTitle",
+                               "Menus & popups — the menu bar above opens popup menus"))
+                    .child(body("MenusHint", "Click a menu-bar entry, hover to switch, Esc or outside click closes."))
+                    .child(std::move(popupBtn), ya::ui::boxSlot().preferredSize({180.0f, 26.0f}))
+                    .child(body("MenusKeys", "Keyboard: Up/Down move, Enter activates, Esc closes."));
+    auto page = ya::ui::panel("MenusDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
+    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+}
+
+void buildDialogDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                     const std::function<void(const std::string&)>& log)
+{
+    auto header = [](std::string key, const std::string& text)
+    {
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kHeaderColor);
+    };
+    auto body = [](std::string key, const std::string& text)
+    {
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kTextColor);
+    };
+    auto demoButton = [](std::string name, const std::string& label)
+    {
+        auto button = ya::ui::button(name).child(
+            ya::ui::text(name + "_Label")
+                .setText(label)
+                .setFontSize(13)
+                .setHAlign(ya::EWidgetAlignH::Center)
+                .setVAlign(ya::EWidgetAlignV::Center));
+        return std::move(button).setContentPadding({12.0f, 4.0f});
+    };
+
+    auto openModal = ya::ui::button("OpenModal")
+                         .child(ya::ui::text("OpenModal_Label")
+                                    .setText("Open modeless dialog...")
+                                    .setFontSize(13)
+                                    .setHAlign(ya::EWidgetAlignH::Center)
+                                    .setVAlign(ya::EWidgetAlignV::Center))
+                         .setOnClick([&tree, &state, log]
+                         {
+                             if (state.bModalOpen) {
+                                 return;
+                             }
+                             state.bModalOpen = true;
+
+                             auto overlay         = std::make_shared<ya::UIPopupOverlay>("ModalOverlay");
+                             overlay->_bModal     = false;
+                             overlay->_contentPos = {440.0f, 300.0f};
+
+                             auto dialog = std::make_shared<ya::UIPanel>("ModalDialog");
+                             dialog->setStyleKey("panel");
+                             overlay->addDetachedChild(dialog, [](ya::UIElement&, ya::UISlot& edge) {
+                                 if (auto* slot = edge.as<ya::UICanvasSlot>()) {
+                                     slot->setFixedSize({360.0f, 170.0f});
+                                     slot->setWidthSizeMode(ya::EWidgetSizeMode::Fixed);
+                                     slot->setHeightSizeMode(ya::EWidgetSizeMode::Fixed);
+                                 }
+                             });
+
+                             auto stack = std::make_shared<ya::UIContainer>("ModalStack");
+                             stack->setPadding({16.0f, 14.0f});
+                             stack->setDirection(ya::EWidgetBoxLayout::Vertical);
+                             stack->setSpacing(12.0f);
+                             stack->setClipChildren(true);
+                             dialog->addDetachedChild(stack);
+                             ya::ui::attachSlot(*dialog, *stack, ya::ui::overlaySlot().fill());
+
+                             auto title = makeLabel("About / New Project", 14.0f);
+                             stack->addDetachedChild(title);
+
+                             auto nameField       = std::make_shared<ya::UITextField>("ModalName");
+                             nameField->_fontSize = 13;
+                             nameField->setText(state.modalName);
+                             stack->addDetachedChild(nameField, [](ya::UIElement&, ya::UISlot& edge) {
+                                 if (auto* slot = edge.as<ya::UIBoxSlot>()) {
+                                     slot->setPreferredSize({320.0f, 26.0f});
+                                 }
+                             });
+                             if (auto* slot = stack->getBoxSlot(*nameField)) {
+                                 slot->setCrossAlignment(ya::EUIBoxSlotCrossAlignment::Start);
+                             }
+
+                             auto buttons = std::make_shared<ya::UIContainer>("ModalButtons");
+                             buttons->setDirection(ya::EWidgetBoxLayout::Horizontal);
+                             buttons->setSpacing(8.0f);
+                             stack->addDetachedChild(buttons);
+
+                             auto okButton      = makeDemoButton("ModalOK", "OK", 80.0f);
+                             okButton->_onClick = [&state, overlay, nameField, log]
+                             {
+                                 state.modalName = nameField->_text;
+                                 log(std::format("Modal OK: '{}'", state.modalName));
+                                 overlay->close();
+                             };
+                             buttons->addDetachedChild(okButton, [](ya::UIElement&, ya::UISlot& edge) {
+                                 if (auto* slot = edge.as<ya::UIBoxSlot>()) {
+                                     slot->setPreferredSize({80.0f, 26.0f});
+                                 }
+                             });
+
+                             auto cancelButton      = makeDemoButton("ModalCancel", "Cancel", 80.0f);
+                             cancelButton->_onClick = [&state, overlay, log]
+                             {
+                                 log("Modal cancelled");
+                                 overlay->close();
+                             };
+                             buttons->addDetachedChild(cancelButton, [](ya::UIElement&, ya::UISlot& edge) {
+                                 if (auto* slot = edge.as<ya::UIBoxSlot>()) {
+                                     slot->setPreferredSize({80.0f, 26.0f});
+                                 }
+                             });
+
+                             overlay->_onDismiss = [&state]() { state.bModalOpen = false; };
+                             overlay->open(tree);
+                         });
+    state.openModalButton = openModal.share();
+
+    auto form = ya::ui::column("DialogForm")
+                    .setPadding({16.0f, 12.0f})
+                    .setSpacing(12.0f)
+                    .child(header("ModalTitle",
+                               "Modeless dialog — outside click / Esc dismisses; no dimming"))
+                    .child(std::move(openModal), ya::ui::boxSlot().preferredSize({220.0f, 26.0f}))
+                    .child(body("ModalHint", "Modeless: click outside or Esc closes. Modal (below) keeps input until OK/Cancel/Esc."))
+                    .child(header("InteractionsTooltipHeader", "Tooltip"))
+                    .child(ya::ui::row("InteractionsTipRow")
+                               .child(demoButton("TooltipBtn", "Hover me (tooltip)")
+                                          .setTooltip("This tooltip appears after a 0.5s hover dwell."),
+                                      ya::ui::boxSlot().preferredSize({200.0f, 26.0f})))
+                    .child(header("InteractionsDialogHeader", "Modal dialog (UIDialog) — input exclusive, dim optional"))
+                    .child(demoButton("OpenDialogBtn", "Open modal...")
+                               .setOnClick(
+                                   [&tree, log]
+                                   {
+                                       auto content = ya::ui::text("DialogContent")
+                                                          .setText("This is a modal dialog. It captures input until OK, Cancel, or Esc. "
+                                                                   "Clicking outside does not close it. Dimming is off by default "
+                                                                   "(_bDimBackground); the app can turn the shield on separately.")
+                                                          .setFontSize(13)
+                                                          .setColor({0.88f, 0.90f, 0.94f, 1.0f})
+                                                          .setWrap(true)
+                                                          .setMaxWrapWidth(380.0f)
+                                                          .release();
+                                       auto dialog       = ya::UIDialog::create("Confirm", std::move(content));
+                                       dialog->_onClosed = [log](bool bConfirmed)
+                                       {
+                                           const std::string result = bConfirmed ? "confirmed" : "cancelled";
+                                           log(std::format("Dialog closed: {}", result));
+                                       };
+                                       dialog->open(tree);
+                                   }),
+                           ya::ui::boxSlot().preferredSize({180.0f, 26.0f}))
+                    .child(demoButton("OpenDimDialogBtn", "Open dimmed modal...")
+                               .setOnClick(
+                                   [&tree, log]
+                                   {
+                                       auto content = ya::ui::text("DimDialogContent")
+                                                          .setText("Same modal dialog with _bDimBackground enabled by the app.")
+                                                          .setFontSize(13)
+                                                          .setColor({0.88f, 0.90f, 0.94f, 1.0f})
+                                                          .setWrap(true)
+                                                          .setMaxWrapWidth(380.0f)
+                                                          .release();
+                                       auto dialog             = ya::UIDialog::create("Confirm", std::move(content));
+                                       dialog->_bDimBackground = true;
+                                       dialog->_onClosed       = [log](bool bConfirmed)
+                                       {
+                                           log(std::format("Dimmed dialog closed: {}",
+                                                           bConfirmed ? "confirmed" : "cancelled"));
+                                       };
+                                       dialog->open(tree);
+                                   }),
+                           ya::ui::boxSlot().preferredSize({200.0f, 26.0f}));
+    auto page = ya::ui::panel("DialogDemo")
+                    .setColor(kPanelColor)
+                    .child(std::move(form), ya::ui::canvasSlot().fill());
+    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+}
+
+} // namespace guiworkbench
