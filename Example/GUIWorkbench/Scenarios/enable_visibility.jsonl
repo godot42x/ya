@@ -1,0 +1,24 @@
+# GUIWorkbench --start-page=Enable. Subtree disable plus visibility modes.
+# ToggleGroupBtn ≈ (327,154); GroupBtnA ≈ (327,116) 140x26.
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"DisableGroup"}}
+{"assert":{"widget":"ToggleGroupBtn"}}
+{"assert":{"widget":"VisModeVisible"}}
+{"assert":{"widget":"VisModeCollapsed"}}
+{"checkpoint":"enable_widgets"}
+# Subtree disable: toggle the group off, then a press on GroupBtnA must
+# not route (input-inert).
+{"event":"mouse_press","x":427,"y":167,"button":0}
+{"event":"mouse_release","x":427,"y":167,"button":0}
+{"frame":2}
+{"event":"mouse_press","x":397,"y":129,"button":0}
+{"event":"mouse_release","x":397,"y":129,"button":0}
+{"frame":2}
+{"assert":{"lastRoute":{"resultName":"notHandled"}}}
+{"checkpoint":"group_disabled"}
+{"event":"mouse_press","x":427,"y":167,"button":0}
+{"event":"mouse_release","x":427,"y":167,"button":0}
+{"frame":2}
+{"checkpoint":"group_reenabled"}
+{"frame":1}

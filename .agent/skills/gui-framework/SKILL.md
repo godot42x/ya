@@ -19,8 +19,11 @@ description: YA GUI 框架（WidgetTree / 控件 / layout / Render2D pass slot /
 
 - `ya-gui-closure-test` 覆盖 dump / dirty / route / snapshot contract，**不是**手感门禁。
   不要把「N dump tests passed」写成 UX 完成。
-- 手感验收走 Gallery `--scenario` 的状态组合（见下方交互契约 1–5）和 editor 手测
+- 手感验收走 Gallery `--scenario` 的状态组合（见下方交互契约 1–11）和 editor 手测
   （选区、选色、dock 关 tab、Hierarchy 右键、Designer 树 DnD）。路径存在 ≠ 手感等价。
+- closure dump/route/dirty **测不出**：`isHoverable`、presenter 选中循环、首次 expand
+  的 Layout Reactive、Modal≠dim、page `leave` 拆 Popup、ColorEdit 是否真渐变。
+  Gallery scenario 必须点 hover/select/expand/resize，不能只 assert 控件存在。
 - 内核体验长线见 `.agent/plan/gui-kernel-ux-parity/`。parity 表
   `.agent/plan/gui-framework-editor-readiness/imgui-widgettree-parity.md`
   里 ✅ 只表示 retained 有一条能完成核心工作流的路径。
@@ -360,9 +363,10 @@ python3 Script/gui_convergence_macos_validation.py
 2. **弹出控件的 dismiss 必须释放交互残留**：菜单/弹出被真实关闭（外部点击/Esc/
    选挑）时，dismiss 回调要一次清完——filter 清空 + 主动 `setFocus(nullptr)`
    （否则控件继续画 '(type to filter)' 等占位态，用户要再点一次才恢复）。
-3. **可见内容集变化必须同时标 Paint**：Reactive 的 Layout 粒度通知只保证重排；
+3. **可见内容集变化必须同时标 Layout + Paint**：Reactive 的 Layout 粒度通知只保证重排；
    若重排后排列 rect 不变（固定高度树/表），增量 paint 缓存会继续画旧内容。
-   `setExpanded/toggleExpanded` 这类「行集变化」必须显式 `markPaintDirty()`。
+   `setExpanded/toggleExpanded` 必须 `markLayoutDirty()` + `markPaintDirty()`。
+   首次 expand 前 `isExpanded` 必须创建 Layout 粒度 Reactive，否则 Auto 父级高度不涨。
    任何影响可见行/可见项的状态变化都按此处理。
 4. **弹出刷新 ≠ 真实关闭**：「关旧开新」的刷新路径会触发旧菜单 dismiss 回调；
    回调里的清理逻辑（清 filter 等）必须用刷新标志（_bRefreshingMenu）隔离，
@@ -374,6 +378,16 @@ python3 Script/gui_convergence_macos_validation.py
 6. **demo 的约束性行为要有可见文案**：选择性 accept（drop target 谓词）、禁用
    条件等「看起来像 bug」的设计，必须在控件 label / 页面说明里写明
    （如 'Zone B: only payload.2'）。
+7. **Hover chrome 必须 `isHoverable()`**：WidgetTree 只对 hoverable 节点发 enter/leave。
+   DragFloat/SpinBox 这类叶子不声明时，hover 填色永远不出现。
+8. **Modal ≠ dim**：`_bModal` 只独占输入直到完成/Esc；`_bDimBackground` 独立。
+   Modal 外点消费事件但不关窗。
+9. **字符串匹配默认 ignore-case**：SearchCombo / TreeView filter 走 `StringMatch`，
+   默认 IgnoreCase；要大小写敏感再显式 Sensitive。
+10. **Presenter 必须同步 SelectableRow**：行上的 `_bSelected` 不是数据源。
+    `_onSelect` 必须循环 `setSelected` 全部行，否则点了看起来没选中。
+11. **离页必须拆 Popup 附着**：Workbench `FPage::leave` / `setPageLeave` 拆掉该页
+    挂到 Popup 层的 host（Dock floating）。Content 层换页时 Popup 层会活下来。
 
 ## 人肉测试前的自动化验收
 

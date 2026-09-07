@@ -17,3 +17,4 @@
 - G14 TreeView expand/collapse 同时 `markLayoutDirty`+`markPaintDirty`；`isExpanded` 始终创建 Layout Reactive（随 G5 TreeView.cpp 落地，本项补测试）。
 - G15 TableGrid 列/行分隔条 ±3px 命中，拖拽改宽/高（stretch 列首次拖时物化）。
 - G16 Dock drop chooser 五块始终画暗，hover/active 只加亮；不把 tab 拖与浮窗标题拖合成同一 helper。
+- G18 skill 交互契约补 Layout+Paint / hoverable / Modal≠dim / ignore-case / presenter 选中 / page leave；Enable 页加 `enable_visibility.jsonl`。

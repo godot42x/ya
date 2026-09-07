@@ -17,4 +17,4 @@
 - [x] G14 TreeView expand `markLayoutDirty`（含首次 expand 无 dependent）
 - [x] G15 TableGrid 拖分隔条改列宽/行高
 - [x] G16 Dock chooser 五块始终绘制，hover 只加亮
-- [ ] G18 skill 补 UX vs closure；更新相关 scenario
+- [x] G18 skill 补 UX vs closure；更新相关 scenario
