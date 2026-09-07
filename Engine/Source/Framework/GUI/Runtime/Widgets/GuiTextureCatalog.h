@@ -17,6 +17,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 namespace ya
@@ -42,8 +43,23 @@ using FGuiTextureReady =
 using FGuiTextureResolver =
     std::function<std::shared_ptr<Texture>(const std::string& assetPath)>;
 
+/// Where `FGuiTextureReady` is allowed to run. Catalog notify rejects any
+/// other thread before writing cache or Reactive dependents. There is no GUI
+/// task queue: a deferred source must dispatch with its product scheduler
+/// (AssetManager::dispatchToGameThread today).
+enum class EGuiTextureCompletionThread : uint8_t
+{
+    /// `ready` runs before `requestLoad` returns, on the calling thread
+    /// (already the WidgetTree owner / UI mutation thread).
+    Caller,
+    /// `ready` is deferred. The adapter must hop to the WidgetTree owner
+    /// thread before invoking it.
+    UIOwner,
+};
+
 /// Product / host adapter. Lives in GameRuntime or GUIApp; this header must
 /// not include AssetManager. `epoch()` is a hot-reload token (0 = unused).
+/// `FGuiTextureReady` must execute on the WidgetTree owner thread.
 struct YA_GUI_API IGuiTextureSource
 {
     virtual ~IGuiTextureSource() = default;
@@ -51,6 +67,13 @@ struct YA_GUI_API IGuiTextureSource
     [[nodiscard]] virtual FGuiTextureLookup lookup(const std::string& path) = 0;
     virtual void requestLoad(const std::string& path, FGuiTextureReady ready) = 0;
     [[nodiscard]] virtual uint64_t epoch() const { return 0; }
+    /// Default is deferred UI-owner completion. Sync file loaders override
+    /// `Caller`. GameRuntime's AssetManager adapter keeps the default because
+    /// `onReady` is always `dispatchToGameThread`.
+    [[nodiscard]] virtual EGuiTextureCompletionThread completionThread() const
+    {
+        return EGuiTextureCompletionThread::UIOwner;
+    }
 };
 
 /// Tree-owned catalog. Entry addresses are stable (unique_ptr) so Reactive
@@ -58,8 +81,14 @@ struct YA_GUI_API IGuiTextureSource
 class YA_GUI_API FGuiTextureCatalog
 {
 public:
+    FGuiTextureCatalog();
+
     void setSource(IGuiTextureSource* source) { _source = source; }
     [[nodiscard]] IGuiTextureSource* getSource() const { return _source; }
+    /// Thread that constructed this catalog (WidgetTree ctor / test thread).
+    /// Completions and cache writes must stay on this thread.
+    [[nodiscard]] std::thread::id ownerThread() const { return _ownerThread; }
+    [[nodiscard]] uint64_t foreignThreadCompletions() const { return _foreignThreadCompletions; }
 
     /// Subscribe the current paint widget to `path` and return the lookup.
     /// Ready/Failed cache hits do not call requestLoad. A miss asks the source
@@ -88,9 +117,16 @@ private:
 
     [[nodiscard]] Entry& ensureEntry(const std::string& path);
 
+    [[nodiscard]] bool onOwnerThread() const;
+    /// Logs and counts a foreign-thread attempt. Returns true when the caller
+    /// must return without mutating cache or dependents.
+    bool rejectForeignThread(const char* op);
+
     IGuiTextureSource* _source = nullptr;
     std::unordered_map<std::string, std::unique_ptr<Entry>> _entries;
     std::shared_ptr<uint8_t> _alive = std::make_shared<uint8_t>(1);
+    std::thread::id          _ownerThread{};
+    uint64_t                 _foreignThreadCompletions = 0;
 };
 
 } // namespace ya

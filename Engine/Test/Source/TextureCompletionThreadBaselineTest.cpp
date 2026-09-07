@@ -1,14 +1,12 @@
-// GAH-003: CPU-only baseline for GUI texture completion threads.
+// GAH-301: FGuiTextureReady must run on the catalog owner thread (the thread
+// that constructed FGuiTextureCatalog / WidgetTree). Catalog notify rejects
+// a foreign thread before writing `cached` or Reactive dependents.
 //
-// Real adapters (not linked here):
-//   - GameRuntime AssetGuiTextureSource -> AssetManager::loadTexture onReady
-//     is always AssetManager::dispatchToGameThread (see AssetTextureManager).
-//   - standalone HostGuiTextureSource calls FGuiTextureReady before
-//     requestLoad returns (GUIAppHost).
-//
-// IGuiTextureSource does not declare a completion thread. Reactive already
-// rejects set() off the UI thread, but catalog.notify still writes `cached`
-// first. GAH-301 must refuse foreign-thread notify before mutating the entry.
+// Real adapters (closure-test does not link them):
+//   - standalone HostGuiTextureSource: completionThread() == Caller;
+//     FGuiTextureReady runs before requestLoad returns (GUIAppHost).
+//   - GameRuntime AssetGuiTextureSource: default UIOwner;
+//     AssetManager::loadTexture onReady is always dispatchToGameThread.
 
 #include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/GuiTextureCatalog.h"
@@ -34,7 +32,7 @@ struct InlineSyncSource final : IGuiTextureSource
 {
     std::shared_ptr<Texture> texture = makeFakeTexture();
     std::thread::id          requestThread;
-    std::thread::id          completionThread;
+    std::thread::id          readyThread;
     bool                     bCompletedInline = false;
 
     [[nodiscard]] FGuiTextureLookup lookup(const std::string&) override
@@ -45,9 +43,14 @@ struct InlineSyncSource final : IGuiTextureSource
     void requestLoad(const std::string& path, FGuiTextureReady ready) override
     {
         requestThread = std::this_thread::get_id();
-        completionThread = std::this_thread::get_id();
+        readyThread = std::this_thread::get_id();
         ready(path, {texture, EGuiTextureState::Ready});
         bCompletedInline = true;
+    }
+
+    [[nodiscard]] EGuiTextureCompletionThread completionThread() const override
+    {
+        return EGuiTextureCompletionThread::Caller;
     }
 };
 
@@ -57,7 +60,7 @@ struct DeferredSameThreadSource final : IGuiTextureSource
     FGuiTextureReady         pending;
     std::string              pendingPath;
     std::thread::id          requestThread;
-    std::thread::id          completionThread;
+    std::thread::id          readyThread;
 
     [[nodiscard]] FGuiTextureLookup lookup(const std::string&) override
     {
@@ -73,11 +76,16 @@ struct DeferredSameThreadSource final : IGuiTextureSource
 
     void completeOnThisThread()
     {
-        completionThread = std::this_thread::get_id();
+        readyThread = std::this_thread::get_id();
         if (!pending) {
             return;
         }
         pending(pendingPath, {texture, EGuiTextureState::Ready});
+    }
+
+    [[nodiscard]] EGuiTextureCompletionThread completionThread() const override
+    {
+        return EGuiTextureCompletionThread::UIOwner;
     }
 };
 
@@ -88,13 +96,16 @@ TEST(TextureCompletionThreadBaselineTest, InlineSourceCompletesOnTheCallingThrea
     InlineSyncSource   source;
     FGuiTextureCatalog catalog;
     catalog.setSource(&source);
+    EXPECT_EQ(source.completionThread(), EGuiTextureCompletionThread::Caller);
+    EXPECT_EQ(catalog.ownerThread(), std::this_thread::get_id());
 
     const FGuiTextureLookup lookup = catalog.bind("tex:inline", {});
     EXPECT_TRUE(source.bCompletedInline);
     EXPECT_EQ(source.requestThread, std::this_thread::get_id());
-    EXPECT_EQ(source.completionThread, source.requestThread);
+    EXPECT_EQ(source.readyThread, source.requestThread);
     EXPECT_EQ(lookup.state, EGuiTextureState::Ready);
     EXPECT_EQ(lookup.texture, source.texture);
+    EXPECT_EQ(catalog.foreignThreadCompletions(), 0u);
 }
 
 TEST(TextureCompletionThreadBaselineTest, DeferredSourceDoesNotCompleteInsideRequestLoad)
@@ -102,22 +113,24 @@ TEST(TextureCompletionThreadBaselineTest, DeferredSourceDoesNotCompleteInsideReq
     DeferredSameThreadSource source;
     FGuiTextureCatalog       catalog;
     catalog.setSource(&source);
+    EXPECT_EQ(source.completionThread(), EGuiTextureCompletionThread::UIOwner);
 
     const FGuiTextureLookup pending = catalog.bind("tex:deferred", {});
     EXPECT_EQ(pending.state, EGuiTextureState::Pending);
     EXPECT_EQ(source.requestThread, std::this_thread::get_id());
     EXPECT_TRUE(static_cast<bool>(source.pending));
-    EXPECT_NE(source.completionThread, source.requestThread);
+    EXPECT_NE(source.readyThread, source.requestThread);
 
     source.completeOnThisThread();
-    EXPECT_EQ(source.completionThread, source.requestThread);
+    EXPECT_EQ(source.readyThread, source.requestThread);
 
     const FGuiTextureLookup ready = catalog.bind("tex:deferred", {});
     EXPECT_EQ(ready.state, EGuiTextureState::Ready);
     EXPECT_EQ(ready.texture, source.texture);
+    EXPECT_EQ(catalog.foreignThreadCompletions(), 0u);
 }
 
-TEST(TextureCompletionThreadBaselineTest, ForeignThreadNotifyCurrentlyMutatesCatalog)
+TEST(TextureCompletionThreadBaselineTest, ForeignThreadNotifyIsRejectedBeforeMutatingCatalog)
 {
     Reactive<int> pinUiThread(0);
     pinUiThread.set(1);
@@ -131,11 +144,12 @@ TEST(TextureCompletionThreadBaselineTest, ForeignThreadNotifyCurrentlyMutatesCat
     worker.join();
     const auto after = getReactiveDiagnostics();
 
-    EXPECT_EQ(after.wrongThreadMutations - before.wrongThreadMutations, 1u);
+    EXPECT_EQ(catalog.foreignThreadCompletions(), 1u);
+    EXPECT_EQ(after.wrongThreadMutations - before.wrongThreadMutations, 0u);
 
     const FGuiTextureLookup lookup = catalog.bind("tex:foreign", {});
-    EXPECT_EQ(lookup.state, EGuiTextureState::Ready);
-    EXPECT_EQ(lookup.texture, texture);
+    EXPECT_EQ(lookup.state, EGuiTextureState::Pending);
+    EXPECT_EQ(lookup.texture, nullptr);
 }
 
 } // namespace ya

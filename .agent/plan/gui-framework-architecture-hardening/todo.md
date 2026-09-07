@@ -5,8 +5,8 @@
 
 ## 当前切片
 
-当前激活切片：无。下一项是 `GAH-301`。共享工作区仍有 Editor/Dock/ColorEdit/Workbench
-未提交改动；后续 checkpoint 继续只提交本任务文件，不得批量吸收。
+当前激活切片：无。主线 GAH-101 / GAH-201 / GAH-301 已完成。C4 决策门保持延后。
+共享工作区仍有 Editor/Dock/ColorEdit/Workbench 未提交改动。
 
 执行规则：
 
@@ -81,7 +81,7 @@
 
 ## C3 — Texture completion 线程契约
 
-- [ ] `GAH-301` 冻结 UI-owner-thread completion
+- [x] `GAH-301` 冻结 UI-owner-thread completion
   - 依赖：GAH-003。
   - 工作：在 `IGuiTextureSource` 和 adapter 上声明 completion 线程；tree/catalog 建立 debug ownership 诊断。
   - 验收：foreign-thread completion fail loudly 且不触碰 dependent/cache；真实 adapter 行为不变。

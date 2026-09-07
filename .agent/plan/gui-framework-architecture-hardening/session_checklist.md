@@ -75,8 +75,7 @@ xmake run ya-gui-closure-test -- --gtest_filter='<本轮相关 suites>'
 
 ## 当前下一刀
 
-`GAH-301`：
-
-1. 在 `IGuiTextureSource` 和 adapter 上声明 completion 必须回到 WidgetTree owner thread；
-2. foreign-thread completion fail loudly，且不触碰 dependent / cache；
-3. 不新增通用 GUI task queue。
+主线已完成（GAH-101 / GAH-201 / GAH-301）。C4 决策门保持延后，不要为完整性去评
+估 opaque texture handle、draw-item payload 或 Render2D session 实例化。
+GAH-302 仍不满足启动条件：只有 GameRuntime 一条真实 deferred completion 需要
+dispatch，standalone host 是 Caller 同步完成。

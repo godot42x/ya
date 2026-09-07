@@ -97,8 +97,8 @@
       "items": [
         {
           "id": "GAH-301",
-          "status": "planned",
-          "notes": "completion 必须在 WidgetTree owner thread；foreign thread fail loudly"
+          "status": "pass",
+          "notes": "notify 在改 cached/Reactive 前拒绝 foreign thread；Host Caller，GameRuntime 默认 UIOwner（dispatchToGameThread）"
         },
         {
           "id": "GAH-302",

@@ -334,3 +334,53 @@ GAH-202：desired size、slot size rule、visibility collapse、structure add ch
 
 领取 `GAH-301`：冻结 UI-owner-thread texture completion。
 
+## 2026-09-08 — GAH-301 冻结 UI-owner-thread texture completion
+
+### 目标与边界
+
+- `FGuiTextureReady` 必须在 catalog owner thread（构造 `FGuiTextureCatalog` / WidgetTree 的线程）执行。
+- foreign-thread `notify` 在写 `cached` 或 Reactive dependent 之前 fail loudly。
+- 不新增 GUI task queue，不改 AssetManager 调度，不吸收 WidgetTree / GameUIHost 脏改动。
+
+### 本轮完成
+
+- `IGuiTextureSource::completionThread()`：默认 `UIOwner`；standalone `HostGuiTextureSource` 覆盖为 `Caller`。
+- `FGuiTextureCatalog` 构造时钉死 owner thread；`notify` / `bind` / invalidate / refresh / drop 在非 owner thread 记 `foreignThreadCompletions`、打 `YA_CORE_ERROR` 并返回，不改 cache。
+- GAH-003 红灯用例改为：foreign notify 后 `cached` 仍 Pending，`wrongThreadMutations` 不再增加。
+
+### 验证
+
+```text
+xmake b ya-gui-closure-test
+xmake run ya-gui-closure-test -- --gtest_filter='TextureCompletionThreadBaselineTest.*'
+# 3 tests, PASSED（foreign 用例打一条 YA_CORE_ERROR，属预期诊断）
+
+xmake b ya-gui-widgets-test
+xmake run ya-gui-widgets-test -- --gtest_filter='TextureCompletionThreadBaselineTest.*'
+# 3 tests, PASSED
+
+xmake b ya-gui-host
+# build ok
+```
+
+真实 adapter：
+
+| adapter | completionThread | 事实 |
+|---|---|---|
+| `HostGuiTextureSource` | Caller | `ready` 在 `requestLoad` 返回前、GUIApp 线程执行 |
+| GameRuntime AssetManager `onReady` | UIOwner（接口默认） | 仍是 `dispatchToGameThread`；未提交的 `AssetGuiTextureSource` 显式 override 同一值，本 checkpoint 不吸收 GameUIHost |
+
+### 保留 / 未完成
+
+- WidgetTree catalog 挂载与 `AssetGuiTextureSource` 仍在未提交工作区。
+- GAH-302 不启动：只有一条真实 deferred adapter 需要 hop 线程。
+- C4 三项决策门启动条件仍不满足。
+
+### 偏离项
+
+无。没有 GUI task queue，没有改 AssetManager 调度。
+
+### 下一接力点
+
+主线闭环。不要领取 C4，除非出现计划写明的裁剪 / 第二 backend / 测量热点。
+

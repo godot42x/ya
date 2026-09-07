@@ -1,7 +1,29 @@
 #include "GUI/Widgets/GuiTextureCatalog.h"
 
+#include "Core/Log.h"
+
 namespace ya
 {
+
+FGuiTextureCatalog::FGuiTextureCatalog()
+    : _ownerThread(std::this_thread::get_id())
+{
+}
+
+bool FGuiTextureCatalog::onOwnerThread() const
+{
+    return std::this_thread::get_id() == _ownerThread;
+}
+
+bool FGuiTextureCatalog::rejectForeignThread(const char* op)
+{
+    if (onOwnerThread()) {
+        return false;
+    }
+    ++_foreignThreadCompletions;
+    YA_CORE_ERROR("FGuiTextureCatalog::{} rejected from a non-UI owner thread", op);
+    return true;
+}
 
 FGuiTextureCatalog::Entry& FGuiTextureCatalog::ensureEntry(const std::string& path)
 {
@@ -15,7 +37,7 @@ FGuiTextureCatalog::Entry& FGuiTextureCatalog::ensureEntry(const std::string& pa
 FGuiTextureLookup FGuiTextureCatalog::bind(const std::string& path,
                                            const FGuiTextureResolver& fallbackResolver)
 {
-    if (path.empty()) {
+    if (rejectForeignThread("bind") || path.empty()) {
         return {};
     }
 
@@ -71,7 +93,7 @@ FGuiTextureLookup FGuiTextureCatalog::bind(const std::string& path,
 
 void FGuiTextureCatalog::notify(const std::string& path, FGuiTextureLookup lookup)
 {
-    if (path.empty()) {
+    if (rejectForeignThread("notify") || path.empty()) {
         return;
     }
     Entry& entry = ensureEntry(path);
@@ -82,6 +104,9 @@ void FGuiTextureCatalog::notify(const std::string& path, FGuiTextureLookup looku
 
 void FGuiTextureCatalog::invalidate(const std::string& path)
 {
+    if (rejectForeignThread("invalidate")) {
+        return;
+    }
     auto it = _entries.find(path);
     if (it == _entries.end()) {
         return;
@@ -93,6 +118,9 @@ void FGuiTextureCatalog::invalidate(const std::string& path)
 
 void FGuiTextureCatalog::invalidateAll()
 {
+    if (rejectForeignThread("invalidateAll")) {
+        return;
+    }
     for (auto& [path, entry] : _entries) {
         (void)path;
         entry->cached = {};
@@ -103,6 +131,9 @@ void FGuiTextureCatalog::invalidateAll()
 
 void FGuiTextureCatalog::refreshFromSource()
 {
+    if (rejectForeignThread("refreshFromSource")) {
+        return;
+    }
     if (!_source) {
         invalidateAll();
         return;
@@ -134,6 +165,9 @@ void FGuiTextureCatalog::refreshFromSource()
 
 void FGuiTextureCatalog::dropCachedLookups()
 {
+    if (rejectForeignThread("dropCachedLookups")) {
+        return;
+    }
     for (auto& [path, entry] : _entries) {
         (void)path;
         entry->cached = {};

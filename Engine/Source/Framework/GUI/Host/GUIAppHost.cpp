@@ -105,6 +105,8 @@ std::shared_ptr<Texture> resolveBuiltinTexture(const std::string& assetPath)
     return nullptr;
 }
 
+/// Standalone GUI host adapter: stbi_load + Texture::fromData complete on the
+/// GUIApp / WidgetTree owner thread before requestLoad returns (Caller).
 struct HostGuiTextureSource final : IGuiTextureSource
 {
     IRender* render = nullptr;
@@ -128,6 +130,11 @@ struct HostGuiTextureSource final : IGuiTextureSource
             return {it->second, EGuiTextureState::Ready};
         }
         return {nullptr, EGuiTextureState::Pending};
+    }
+
+    [[nodiscard]] EGuiTextureCompletionThread completionThread() const override
+    {
+        return EGuiTextureCompletionThread::Caller;
     }
 
     void requestLoad(const std::string& path, FGuiTextureReady ready) override
