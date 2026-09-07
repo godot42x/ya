@@ -99,6 +99,8 @@ struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISe
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
+    void onPointerEnter() override { _bHovered = true; }
+    void onPointerLeave() override { _bHovered = false; }
     void resetHoverState() override { _bHovered = false; }
     void clearTransientInputState() override;
     void layout(const Rect2D& parentRect) override;

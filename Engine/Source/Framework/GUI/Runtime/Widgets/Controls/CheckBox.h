@@ -71,6 +71,8 @@ struct YA_GUI_API UICheckBox : public UIElement, public UIStyledWidget<UICheckBo
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
+    void onPointerEnter() override { _bHovered = true; }
+    void onPointerLeave() override { _bHovered = false; }
     void resetHoverState() override { _bHovered = false; }
     void clearTransientInputState() override { _bHovered = false; _bPressed = false; }
 

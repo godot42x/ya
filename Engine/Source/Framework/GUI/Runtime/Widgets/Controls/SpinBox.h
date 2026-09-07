@@ -48,6 +48,14 @@ struct YA_GUI_API UISpinBox : public UIElement, public UIStyledWidget<UISpinBox,
                            {"editing", static_cast<bool>(_bEditing)}};
     }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
+    bool isHoverable() const override { return true; }
+    void onPointerEnter() override { _bHovered = true; }
+    void onPointerLeave() override
+    {
+        _bHovered     = false;
+        _hoveredZone  = -1;
+    }
+    void resetHoverState() override { onPointerLeave(); }
     void onFocusLost() override;
     [[nodiscard]] ECursorType getCursor() const override
     {
@@ -56,6 +64,7 @@ struct YA_GUI_API UISpinBox : public UIElement, public UIStyledWidget<UISpinBox,
     void clearTransientInputState() override
     {
         _hoveredZone = -1;
+        _bHovered    = false;
         _bEditing    = false;
         _editBuffer.clear();
         _edit = {};
@@ -63,6 +72,7 @@ struct YA_GUI_API UISpinBox : public UIElement, public UIStyledWidget<UISpinBox,
 
   private:
     int _hoveredZone = -1;
+    VisualFlag _bHovered{*this};
     int _pressedZone = -1;
     [[nodiscard]] int zoneFromPointer(float localX) const;
     void stepBy(float multiplier);

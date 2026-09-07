@@ -82,7 +82,8 @@ int UISpinBox::zoneFromPointer(float localX) const
 void UISpinBox::paintSelf(UIFrameBuilder& builder)
 {
     const FSpinBoxStyle& style = resolvedStyle();
-    builder.addBrush(_layoutRect, style.backgroundFill);
+    const FBrush& fieldFill = (_bHovered && _hoveredZone < 0) ? style.hoveredFill : style.backgroundFill;
+    builder.addBrush(_layoutRect, fieldFill);
     builder.addRectOutline(_layoutRect, style.borderColor, 1.0f);
     const float zoneWidth = 26.0f;
     const Rect2D minusRect{.pos = _layoutRect.pos, .extent = {zoneWidth, _layoutRect.extent.y}};
@@ -196,6 +197,7 @@ bool UISpinBox::handleInputEvent(const Event& event, const WidgetEventContext& c
             _hoveredZone = zone;
             markPaintDirty();
         }
+        _bHovered = bInside;
         return bInside;
     }
 

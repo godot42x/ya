@@ -61,6 +61,8 @@ struct YA_GUI_API UITabButton : public UIElement, public UIStyledWidget<UITabBut
     }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
+    void onPointerEnter() override { _bHovered = true; }
+    void onPointerLeave() override { _bHovered = false; }
     void resetHoverState() override { _bHovered = false; }
     void clearTransientInputState() override { _bHovered = false; }
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;

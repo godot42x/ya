@@ -100,6 +100,7 @@ void UIDragFloat::paintSelf(UIFrameBuilder& builder)
     const FDragFloatStyle& style = resolvedStyle();
     const FBrush& fill = _bError ? style.errorFill
                        : _bDragging ? style.draggingFill
+                       : _bHovered ? style.hoveredFill
                                     : style.backgroundFill;
     builder.addBrush(_layoutRect, fill);
     const glm::vec4 outline = _bError ? style.errorBorderColor : style.borderColor;

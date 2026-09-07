@@ -58,6 +58,10 @@ struct YA_GUI_API UIDragFloat : public UIElement, public UIStyledWidget<UIDragFl
                            {"editing", static_cast<bool>(_bEditing)}};
     }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
+    bool isHoverable() const override { return true; }
+    void onPointerEnter() override { _bHovered = true; }
+    void onPointerLeave() override { _bHovered = false; }
+    void resetHoverState() override { _bHovered = false; }
     void onFocusLost() override;
     [[nodiscard]] ECursorType getCursor() const override
     {
@@ -67,6 +71,7 @@ struct YA_GUI_API UIDragFloat : public UIElement, public UIStyledWidget<UIDragFl
     {
         const bool bWasDragging = _bDragging;
         _bDragging = false;
+        _bHovered  = false;
         _bEditing  = false;
         _editBuffer.clear();
         _edit      = {};
@@ -81,6 +86,7 @@ struct YA_GUI_API UIDragFloat : public UIElement, public UIStyledWidget<UIDragFl
     void commitEdit();
     void cancelEdit();
     VisualFlag _bDragging{*this};
+    VisualFlag _bHovered{*this};
     bool       _bMixed = false;
     bool       _bError = false;
     glm::vec2  _dragStart{0.0f, 0.0f};

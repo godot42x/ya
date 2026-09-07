@@ -158,7 +158,9 @@ struct FTextStyle
 /// Panel: fill brush (solid color, or image later). Mirrors UIPanel default.
 struct FPanelStyle
 {
-    FBrush fillColor = FBrush::solid({0.2f, 0.2f, 0.2f, 0.8f});
+    FBrush    fillColor        = FBrush::solid({0.2f, 0.2f, 0.2f, 0.8f});
+    glm::vec4 outlineColor     = {0.0f, 0.0f, 0.0f, 0.0f};
+    float     outlineThickness = 1.0f;
 
     bool operator==(const FPanelStyle&) const = default;
 };
@@ -334,6 +336,7 @@ struct FSelectableRowStyle
 struct FDragFloatStyle
 {
     FBrush    backgroundFill = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f});
+    FBrush    hoveredFill    = FBrush::solid({0.22f, 0.25f, 0.32f, 1.0f});
     FBrush    draggingFill   = FBrush::solid({0.18f, 0.24f, 0.34f, 1.0f});
     FBrush    errorFill      = FBrush::solid({0.72f, 0.24f, 0.24f, 0.45f});
     glm::vec4 textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
@@ -396,8 +399,9 @@ struct FTableGridStyle
 struct FSpinBoxStyle
 {
     FBrush    backgroundFill    = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f});
+    FBrush    hoveredFill       = FBrush::solid({0.22f, 0.25f, 0.32f, 1.0f});
     FBrush    buttonFill        = FBrush::solid({0.22f, 0.24f, 0.30f, 1.0f});
-    FBrush    buttonHoveredFill = FBrush::solid({0.30f, 0.33f, 0.40f, 1.0f});
+    FBrush    buttonHoveredFill = FBrush::solid({0.42f, 0.48f, 0.62f, 1.0f});
     glm::vec4 textColor         = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 borderColor       = {0.30f, 0.33f, 0.40f, 1.0f};
     uint32_t  fontSize          = 13;

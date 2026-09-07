@@ -142,6 +142,7 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
     auto drag = ya::FDragFloatStyle{};
     drag.backgroundFill = FBrush::solid(bDark ? glm::vec4{0.17f, 0.19f, 0.24f, 1.0f}
                                               : glm::vec4{0.94f, 0.95f, 0.97f, 1.0f});
+    drag.hoveredFill    = FBrush::solid(hovered);
     drag.draggingFill   = FBrush::solid(bDark ? glm::vec4{0.18f, 0.24f, 0.34f, 1.0f}
                                               : glm::vec4{0.84f, 0.88f, 0.95f, 1.0f});
     drag.textColor      = text;
@@ -184,9 +185,11 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
     auto spin = ya::FSpinBoxStyle{};
     spin.backgroundFill    = FBrush::solid(bDark ? glm::vec4{0.17f, 0.19f, 0.24f, 1.0f}
                                                  : glm::vec4{0.94f, 0.95f, 0.97f, 1.0f});
+    spin.hoveredFill       = FBrush::solid(hovered);
     spin.buttonFill        = FBrush::solid(bDark ? glm::vec4{0.22f, 0.24f, 0.30f, 1.0f}
                                                  : glm::vec4{0.86f, 0.88f, 0.92f, 1.0f});
-    spin.buttonHoveredFill = FBrush::solid(hovered);
+    spin.buttonHoveredFill = FBrush::solid(bDark ? glm::vec4{0.42f, 0.50f, 0.68f, 1.0f}
+                                                 : glm::vec4{0.62f, 0.70f, 0.86f, 1.0f});
     spin.textColor         = text;
     spin.borderColor       = bDark ? glm::vec4{0.30f, 0.33f, 0.40f, 1.0f}
                                    : glm::vec4{0.70f, 0.72f, 0.76f, 1.0f};
