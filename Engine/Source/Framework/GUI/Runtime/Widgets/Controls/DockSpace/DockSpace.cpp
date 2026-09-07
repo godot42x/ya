@@ -523,19 +523,19 @@ void UIDockSpace::paintDropPreviewOverlay(UIFrameBuilder& builder) const
 
     builder.addRectOutline(leafRect, style.dropPreviewOutlineColor, 1.0f);
 
-    // Chooser mode: pointer is over the leaf but not over a specific block yet.
-    // Render all blocks dimmed so the user can see the drop targets.
+    // Always draw every chooser block. Hover/active only brightens the
+    // selected target — otherwise blocks are invisible until the pointer
+    // is already on top of them.
+    drawChoice(chooser.center, false);
+    drawChoice(chooser.left, false);
+    drawChoice(chooser.right, false);
+    drawChoice(chooser.top, false);
+    drawChoice(chooser.bottom, false);
+
     if (_preview->bChooser) {
-        drawChoice(chooser.center, false);
-        drawChoice(chooser.left, false);
-        drawChoice(chooser.right, false);
-        drawChoice(chooser.top, false);
-        drawChoice(chooser.bottom, false);
         return;
     }
 
-    // Active drop mode: only the selected block is highlighted, so the
-    // preview of where the panel will land is unambiguous.
     if (_preview->bMerge) {
         // ImGui-style tab merge: highlight the tab bar strip, not the body
         // center block, so the user sees the tab becomes the drop target.
