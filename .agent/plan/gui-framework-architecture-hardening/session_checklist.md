@@ -1,6 +1,6 @@
 # GUI Framework 架构加固 Session Checklist
 
-> 更新时间：2026-09-07  
+> 更新时间：2026-09-08
 > 作用：每轮推进 `.agent/plan/gui-framework-architecture-hardening` 时的固定开工、实施和收尾步骤。
 
 ## 开工前
@@ -75,9 +75,8 @@ xmake run ya-gui-closure-test -- --gtest_filter='<本轮相关 suites>'
 
 ## 当前下一刀
 
-`GAH-002`：
+`GAH-003`：
 
-1. 为 Container/Button/CheckBox/Overlay/Scroll/Split/SizeBox/Popup/Dock 增加 arrange 计数观测；
-2. 构造局部分支 layout dirty，记录 clean sibling subtree 的现状 arrange 数；
-3. 明确哪些 specialized host override 绕过 `tryReuseAssignedLayout()`；
-4. 不在本任务引入 measure cache，也不统一 skip 入口（那是 GAH-201）。
+1. 用代码证据确认 GameRuntime texture completion 经 game thread、standalone source 同步完成；
+2. 增加 foreign-thread completion 测试 seam，作为 C3 的红灯用例；
+3. 不修改 AssetManager 调度系统，不引入 GUI task queue。

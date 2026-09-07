@@ -1,11 +1,11 @@
 # GUI Framework 架构加固 TODO
 
-> 更新时间：2026-09-07  
+> 更新时间：2026-09-08
 > 状态：`[ ]` 未开始，`[-]` 进行中，`[x]` 完成，`[~]` 条件延后，`[-x]` 停止。
 
 ## 当前切片
 
-当前激活切片：无。下一项是 `GAH-002`。共享工作区仍有 Editor/Dock/ColorEdit/Workbench
+当前激活切片：无。下一项是 `GAH-003`。共享工作区仍有 Editor/Dock/ColorEdit/Workbench
 未提交改动；后续 checkpoint 继续只提交本任务文件，不得批量吸收。
 
 执行规则：
@@ -25,7 +25,7 @@
   - 非目标：不在本任务实现合批。
   - 提交：`[test/gui] baseline clipped compose batches`。
 
-- [ ] `GAH-002` Layout host skip 基线
+- [x] `GAH-002` Layout host skip 基线
   - 依赖：无。
   - 工作：为 Container/Button/CheckBox/Overlay/Scroll/Split/SizeBox/Popup/Dock 的 assigned layout 增加 arrange 观测；构造局部分支 dirty。
   - 验收：明确哪些 override 绕过 `tryReuseAssignedLayout()`，并锁定 clean sibling 的现状计数。

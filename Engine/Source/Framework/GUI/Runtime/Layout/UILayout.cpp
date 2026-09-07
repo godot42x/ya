@@ -454,7 +454,7 @@ glm::vec2 UICanvasLayout::measure(const UIElement& parent) const
     return contentExtent + _padding * 2.0f;
 }
 
-void UICanvasLayout::arrange(UIElement& parent, const Rect2D& rect) const
+void UICanvasLayout::onArrange(UIElement& parent, const Rect2D& rect) const
 {
     const Rect2D contentRect{.pos = rect.pos + _padding,
                              .extent = glm::max(rect.extent - _padding * 2.0f, glm::vec2{0.0f, 0.0f})};
@@ -593,6 +593,12 @@ std::unique_ptr<UISlot> UILayout::createSlot(UIElement& parent, UIElement& child
     return std::make_unique<UISlot>(parent, child);
 }
 
+void UILayout::arrange(UIElement& parent, const Rect2D& rect) const
+{
+    ++_arrangeCount;
+    onArrange(parent, rect);
+}
+
 void UILayout::invalidateMeasure() const
 {
     if (_owner) {
@@ -702,7 +708,7 @@ glm::vec2 UIBoxLayout::measure(const UIElement& parent) const
                : glm::vec2(cross + _padding.x * 2.0f, main + _padding.y * 2.0f);
 }
 
-void UIBoxLayout::arrange(UIElement& parent, const Rect2D& rect) const
+void UIBoxLayout::onArrange(UIElement& parent, const Rect2D& rect) const
 {
     Rect2D content = rect;
     content.pos += _padding;
@@ -870,7 +876,7 @@ std::unique_ptr<UISlot> UISingleChildLayout::createSlot(UIElement& parent, UIEle
     return std::make_unique<UIOverlaySlot>(parent, child);
 }
 
-void UISingleChildLayout::arrange(UIElement& parent, const Rect2D& rect) const
+void UISingleChildLayout::onArrange(UIElement& parent, const Rect2D& rect) const
 {
     Rect2D contentRect = rect;
     contentRect.pos += _padding.minOffset();
@@ -991,7 +997,7 @@ glm::vec2 UIOverlayLayout::measure(const UIElement& parent) const
     return glm::max(desired, glm::vec2(0.0f));
 }
 
-void UIOverlayLayout::arrange(UIElement& parent, const Rect2D& rect) const
+void UIOverlayLayout::onArrange(UIElement& parent, const Rect2D& rect) const
 {
     for (UIElement* child : parent.getChildrenInPaintOrder()) {
         if (!child->participatesInLayout()) {
@@ -1157,7 +1163,7 @@ std::unique_ptr<UISlot> UISplitLayout::createSlot(UIElement& parent, UIElement& 
     return std::make_unique<UIOverlaySlot>(parent, child);
 }
 
-void UISplitLayout::arrange(UIElement& parent, const Rect2D& rect) const
+void UISplitLayout::onArrange(UIElement& parent, const Rect2D& rect) const
 {
     _contentRect = rect;
     _contentRect.pos += _padding;
@@ -1256,7 +1262,7 @@ glm::vec2 UIScrollLayout::measure(const UIElement& parent) const
     return parent.getLayoutRect().extent;
 }
 
-void UIScrollLayout::arrange(UIElement& parent, const Rect2D& rect) const
+void UIScrollLayout::onArrange(UIElement& parent, const Rect2D& rect) const
 {
     const auto children = parent.getChildrenInPaintOrder();
     if (children.empty()) {
@@ -1399,7 +1405,7 @@ glm::vec2 UITableLayout::measure(const UIElement& parent) const
     return {totalWidth, totalHeight};
 }
 
-void UITableLayout::arrange(UIElement& parent, const Rect2D& rect) const
+void UITableLayout::onArrange(UIElement& parent, const Rect2D& rect) const
 {
     const glm::vec2 contentPos = rect.pos + _padding;
     const float     contentW   = std::max(0.0f, rect.extent.x - _padding.x * 2.0f);

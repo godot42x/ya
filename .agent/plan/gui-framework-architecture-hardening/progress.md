@@ -91,3 +91,56 @@ xmake run ya-gui-closure-test -- --gtest_filter='ComposeClipReplayTest.*'
 ### 下一接力点
 
 领取 `GAH-002`：layout host assigned-rect skip 与 clean sibling arrange 基线。
+
+## 2026-09-08 — GAH-002 Layout host skip 基线
+
+### 目标与边界
+
+- 单一目标：证明 specialized layout host 绕过 `tryReuseAssignedLayout()`，并锁定 clean sibling 的现状 arrange 数。
+- 非目标：不统一 skip 入口，不引入 measure cache。
+- 工作区：`UIElement.cpp` / `WidgetLayoutTest.cpp` 已有无关脏改动；观测加在干净的 `UILayout` 上，测试放新文件。
+
+### 本轮完成
+
+- `UILayout::arrange()` 改为计数入口，真实算法在 `onArrange()`。`getArrangeCount()` / `resetArrangeCount()` 是 CPU-only 观测。
+- `LayoutHostSkipBaselineTest` 覆盖 Panel skip 对照，以及 Container/Button/CheckBox/Overlay/Scroll/Split/SizeBox/Popup/Dock 的 bypass。
+- 局部分支 dirty：Fill 的 clean sibling Container 仍 arrange=1；其 Panel 子节点仍 skip。
+
+### 验证
+
+```text
+xmake b ya-gui-closure-test
+xmake run ya-gui-closure-test -- --gtest_filter='LayoutHostSkipBaselineTest.*:WidgetLayoutTest.*'
+# 86 tests, PASSED
+```
+
+基线数字（parent 以相同 assigned rect 再 assign 一次）：
+
+| host | arrangeCount |
+|---|---|
+| UIPanel（基类 skip） | 0 |
+| Container / Button / CheckBox / Overlay / Scroll / Split / SizeBox / Popup / Dock | 1 |
+
+局部分支 dirty（row 内两个 Fill Container）：
+
+| 节点 | arrangeCount |
+|---|---|
+| dirty 侧 Container | 1 |
+| clean 侧 Container | 1（bypass；GAH-201 应收成 0） |
+| dirty 侧 Panel child | 1 |
+| clean 侧 Panel child | 0 |
+
+结论：基类 assigned-layout skip 对 Panel/canvas 仍然成立；specialized host override 直接 `setLayoutRect + arrange`，clean sibling host 会随另一分支的局部 dirty 一起重排。
+
+### 保留 / 未完成
+
+- SelectableRow / CompoundWidget / TableGrid 同样 bypass，本任务未列入验收名单，GAH-201 统一入口时应一并覆盖。
+- GAH-003 / GAH-004 未开始。
+
+### 偏离项
+
+无。没有实现 skip 统一，没有改 dirty taxonomy。
+
+### 下一接力点
+
+领取 `GAH-003`：texture completion 线程事实与 foreign-thread seam。

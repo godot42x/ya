@@ -198,9 +198,15 @@ public:
     void setOwner(UIElement& owner) { _owner = &owner; }
     [[nodiscard]] virtual std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const;
     [[nodiscard]] virtual glm::vec2 measure(const UIElement& parent) const = 0;
-    virtual void arrange(UIElement& parent, const Rect2D& rect) const = 0;
+    /// Counted public entry. Hosts that override `layoutAssigned` currently
+    /// call this without `tryReuseAssignedLayout()`; GAH-002 records that
+    /// bypass, GAH-201 must keep the counter when skip is unified.
+    void arrange(UIElement& parent, const Rect2D& rect) const;
+    [[nodiscard]] uint32_t getArrangeCount() const { return _arrangeCount; }
+    void resetArrangeCount() const { _arrangeCount = 0; }
 
 protected:
+    virtual void onArrange(UIElement& parent, const Rect2D& rect) const = 0;
     void invalidateMeasure() const;
     void invalidateArrange() const;
     /// Invalidate the owner's whole subtree paint context (clip/visibility),
@@ -209,7 +215,7 @@ protected:
 
     /// The single entry point for path-A child rect assignment.
     ///
-    /// Every arrange() must route child rects through here instead of calling
+    /// Every onArrange() must route child rects through here instead of calling
     /// child.layoutAssigned() directly: this is what makes the "path-A parents
     /// ignore child anchors" contract observable, so an author who wrote
     /// setAnchors()/fillWidth() on a child of a box/scroll/split/overlay gets a
@@ -218,6 +224,7 @@ protected:
 
 private:
     UIElement* _owner = nullptr;
+    mutable uint32_t _arrangeCount = 0;
 };
 
 /// The first formal layout: horizontal/vertical box packing with layout-owned
@@ -241,7 +248,7 @@ public:
 
     [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
-    void arrange(UIElement& parent, const Rect2D& rect) const override;
+    void onArrange(UIElement& parent, const Rect2D& rect) const override;
 
 private:
     EWidgetBoxLayout         _direction         = EWidgetBoxLayout::Horizontal;
@@ -277,7 +284,7 @@ public:
 
     [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
-    void arrange(UIElement& parent, const Rect2D& rect) const override;
+    void onArrange(UIElement& parent, const Rect2D& rect) const override;
 
 private:
     FMargin _padding{};
@@ -327,7 +334,7 @@ class YA_GUI_API UIOverlayLayout final : public UILayout
 public:
     [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
-    void arrange(UIElement& parent, const Rect2D& rect) const override;
+    void onArrange(UIElement& parent, const Rect2D& rect) const override;
 };
 
 enum class ESplitOrientation : uint8_t
@@ -362,7 +369,7 @@ public:
     /// carried by a single-child slot (fill by default).
     [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
-    void arrange(UIElement& parent, const Rect2D& rect) const override;
+    void onArrange(UIElement& parent, const Rect2D& rect) const override;
 
 private:
     void clampRatio() const;
@@ -486,7 +493,7 @@ public:
 
     [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
-    void arrange(UIElement& parent, const Rect2D& rect) const override;
+    void onArrange(UIElement& parent, const Rect2D& rect) const override;
 
     /// Resolve one child rect from its canvas slot against the parent content
     /// rect. Delegates to UIElement::resolveCanvasRect() with slot-authored
@@ -545,7 +552,7 @@ public:
 
     [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
-    void arrange(UIElement& parent, const Rect2D& rect) const override;
+    void onArrange(UIElement& parent, const Rect2D& rect) const override;
 
     /// Resolved column rects for the last arrange (row 0, content space).
     [[nodiscard]] const std::vector<Rect2D>& getColumnRects() const { return _columnRects; }
@@ -584,7 +591,7 @@ public:
     [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
 
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
-    void arrange(UIElement& parent, const Rect2D& rect) const override;
+    void onArrange(UIElement& parent, const Rect2D& rect) const override;
 
 private:
     EScrollAxis   _axis = EScrollAxis::Vertical;

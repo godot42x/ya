@@ -1,6 +1,6 @@
 {
   "plan": "gui-framework-architecture-hardening",
-  "updated_at": "2026-09-07",
+  "updated_at": "2026-09-08",
   "active_task": null,
   "legend": {
     "planned": "已纳入计划但尚未开始",
@@ -39,8 +39,8 @@
         },
         {
           "id": "GAH-002",
-          "status": "planned",
-          "notes": "specialized layout host assigned-rect skip 与 clean sibling arrange 基线"
+          "status": "pass",
+          "notes": "UIPanel parent-reassign arrange=0；Container/Button/CheckBox/Overlay/Scroll/Split/SizeBox/Popup/Dock =1。Fill sibling：dirty left Container=1 且 right Container=1，right Panel child=0。"
         },
         {
           "id": "GAH-003",
