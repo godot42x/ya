@@ -43,16 +43,10 @@ void UICheckBox::syncContentPadding()
     _contentLayout.setPadding(FMargin{_boxSize + _labelSpacing, 0.0f, 0.0f, 0.0f});
 }
 
-void UICheckBox::layout(const Rect2D& parentRect)
+void UICheckBox::applyAssignedLayout(const Rect2D& rect)
 {
-    layoutAssigned(parentRect);
-}
-
-void UICheckBox::layoutAssigned(const Rect2D& rect)
-{
-    setLayoutRect(rect);
     syncContentPadding();
-    _contentLayout.arrange(*this, _layoutRect);
+    UIElement::applyAssignedLayout(rect);
 }
 
 glm::vec2 UICheckBox::computeDesiredSize() const

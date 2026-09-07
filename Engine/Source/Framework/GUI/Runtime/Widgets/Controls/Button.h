@@ -38,7 +38,7 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
         _hitFilter = EWidgetHitFilter::Stop;
         // Buttons take part in Tab traversal (focus contract, Phase 2).
         _focusPolicy = EWidgetFocusPolicy::Focusable;
-        _contentLayout.setOwner(*this);
+        bindHostLayout(_contentLayout);
     }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIButton>; }
@@ -82,12 +82,9 @@ struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, F
     void onFocusGained(bool bFromKeyboard) override { _bFocused = bFromKeyboard; }
     void onFocusLost() override { _bFocused = false; }
 
-    // Content-slot layout (Slate ContentControl model): the button resolves
-    // its own rect (anchor math) and delegates its only child to
-    // UISingleChildLayout. Desired size is content + padding; authored size
-    // lives on the parent-owned slot.
-    void                    layout(const Rect2D& parentRect) override;
-    void                    layoutAssigned(const Rect2D& rect) override;
+    // Content-slot layout (Slate ContentControl model): the button binds
+    // UISingleChildLayout as its host layout. Desired size is content +
+    // padding; authored size lives on the parent-owned slot.
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     /// The button owns its content box via UISingleChildLayout, so the label's
     /// intent lives on the edge: fill (default) or align at desired size.

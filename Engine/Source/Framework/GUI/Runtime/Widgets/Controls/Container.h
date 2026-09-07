@@ -46,8 +46,6 @@ struct YA_GUI_API UIContainer : public UIElement
         return nullptr;
     }
 
-    void                    layout(const Rect2D& parentRect) override;
-    void                    layoutAssigned(const Rect2D& rect) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 
   protected:

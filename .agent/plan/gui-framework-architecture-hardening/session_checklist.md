@@ -75,8 +75,8 @@ xmake run ya-gui-closure-test -- --gtest_filter='<本轮相关 suites>'
 
 ## 当前下一刀
 
-`GAH-201`：
+`GAH-301`：
 
-1. 让 specialized layout host 复用统一 assignment/skip 入口，不再各自绕过 `tryReuseAssignedLayout()`；
-2. clean assigned rect + clean revision 跳过 arrange；局部 dirty 不重排无关 sibling；
-3. 不引入 measure cache，不移动控件目录。
+1. 在 `IGuiTextureSource` 和 adapter 上声明 completion 必须回到 WidgetTree owner thread；
+2. foreign-thread completion fail loudly，且不触碰 dependent / cache；
+3. 不新增通用 GUI task queue。

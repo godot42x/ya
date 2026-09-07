@@ -36,7 +36,7 @@ struct YA_GUI_API UISplitPane : public UIElement, public UIStyledWidget<UISplitP
     {
         _hitFilter = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
-        _splitLayout.setOwner(*this);
+        bindHostLayout(_splitLayout);
     }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UISplitPane>; }
@@ -77,8 +77,6 @@ struct YA_GUI_API UISplitPane : public UIElement, public UIStyledWidget<UISplitP
     /// bind time (layout attributes are long-lived, not per-paint reads).
     void bindSplitRatio(std::shared_ptr<Reactive<float>> ref);
 
-    void layout(const Rect2D& parentRect) override;
-    void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
@@ -111,6 +109,7 @@ struct YA_GUI_API UISplitPane : public UIElement, public UIStyledWidget<UISplitP
     [[nodiscard]] Rect2D getDividerRect() const { return _splitLayout.getDividerRect(); }
 
   protected:
+    void applyAssignedLayout(const Rect2D& rect) override;
     /// Clip every pane child to its arranged pane rect (GI-302: the base paint
     /// owns self rebuild/reuse; this only customizes the children context).
     void paintChildren(UIFrameBuilder& builder) override;

@@ -76,13 +76,13 @@
       "items": [
         {
           "id": "GAH-201",
-          "status": "planned",
-          "notes": "统一 assigned-layout skip 入口，避免 clean sibling 重排"
+          "status": "pass",
+          "notes": "bindHostLayout / applyAssignedLayout 统一 skip；clean sibling Container arrange=0"
         },
         {
           "id": "GAH-202",
-          "status": "planned",
-          "notes": "真实 layout mutation 不被错误 skip 的反例门禁"
+          "status": "pass",
+          "notes": "desired size / slot / visibility / structure / scroll / split / popup slot / dock projection 均会 arrange"
         },
         {
           "id": "GAH-203",

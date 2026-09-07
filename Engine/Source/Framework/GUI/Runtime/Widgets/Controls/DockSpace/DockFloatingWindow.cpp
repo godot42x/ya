@@ -576,10 +576,10 @@ void UIDockFloatingWindow::layout(const Rect2D& parentRect)
     layoutAssigned(_windowRect);
 }
 
-void UIDockFloatingWindow::layoutAssigned(const Rect2D& rect)
+void UIDockFloatingWindow::applyAssignedLayout(const Rect2D& rect)
 {
     _windowRect = rect;
-    UIElement::layoutAssigned(rect);
+    UIElement::applyAssignedLayout(rect);
 }
 
 void UIDockFloatingWindow::paintSelf(UIFrameBuilder& builder)

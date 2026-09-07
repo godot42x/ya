@@ -18,19 +18,13 @@ void UIScrollViewport::appendRuntimeDiagnostics(nlohmann::json& node, const Widg
     };
 }
 
-void UIScrollViewport::layout(const Rect2D& parentRect)
+void UIScrollViewport::applyAssignedLayout(const Rect2D& rect)
 {
-    layoutAssigned(parentRect);
-}
-
-void UIScrollViewport::layoutAssigned(const Rect2D& rect)
-{
-    setLayoutRect(rect);
     if (getChildren().size() > 1) {
         YA_CORE_WARN("UIScrollViewport '{}': UIScrollLayout only scrolls the first child ({} attached)",
                      _name, getChildren().size());
     }
-    _scrollLayout.arrange(*this, _layoutRect);
+    UIElement::applyAssignedLayout(rect);
 }
 
 void UIScrollViewport::paintSelf(UIFrameBuilder& builder)

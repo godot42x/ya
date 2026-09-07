@@ -6,7 +6,7 @@ namespace ya
 UISizeBox::UISizeBox(std::string name)
     : UIElement(std::move(name))
 {
-    _contentLayout.setOwner(*this);
+    bindHostLayout(_contentLayout);
 }
 
 void UISizeBox::setWidthOverride(float value)
@@ -42,17 +42,6 @@ void UISizeBox::setMaxSize(glm::vec2 value)
         _maxSize = value;
         invalidateProperty(EUIPropertyImpact::Layout);
     }
-}
-
-void UISizeBox::layout(const Rect2D& parentRect)
-{
-    layoutAssigned(parentRect);
-}
-
-void UISizeBox::layoutAssigned(const Rect2D& rect)
-{
-    setLayoutRect(rect);
-    _contentLayout.arrange(*this, _layoutRect);
 }
 
 glm::vec2 UISizeBox::computeDesiredSize() const

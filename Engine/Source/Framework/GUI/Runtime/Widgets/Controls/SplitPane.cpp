@@ -35,14 +35,8 @@ bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 
 } // namespace
 
-void UISplitPane::layout(const Rect2D& parentRect)
+void UISplitPane::applyAssignedLayout(const Rect2D& rect)
 {
-    layoutAssigned(parentRect);
-}
-
-void UISplitPane::layoutAssigned(const Rect2D& rect)
-{
-    setLayoutRect(rect);
     if (getChildren().size() > 2) {
         YA_CORE_WARN("UISplitPane '{}': UISplitLayout only arranges the first two children ({} attached)",
                      _name, getChildren().size());
@@ -55,7 +49,7 @@ void UISplitPane::layoutAssigned(const Rect2D& rect)
             _splitLayout.setSplitRatio(ratio);
         }
     }
-    _splitLayout.arrange(*this, _layoutRect);
+    UIElement::applyAssignedLayout(rect);
 }
 
 void UISplitPane::bindSplitRatio(std::shared_ptr<Reactive<float>> ref)

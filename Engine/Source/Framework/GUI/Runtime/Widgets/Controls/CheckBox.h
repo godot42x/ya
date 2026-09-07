@@ -34,7 +34,7 @@ struct YA_GUI_API UICheckBox : public UIElement, public UIStyledWidget<UICheckBo
     {
         _hitFilter   = EWidgetHitFilter::Stop;
         _focusPolicy = EWidgetFocusPolicy::Focusable;
-        _contentLayout.setOwner(*this);
+        bindHostLayout(_contentLayout);
         syncContentPadding();
     }
 
@@ -76,10 +76,11 @@ struct YA_GUI_API UICheckBox : public UIElement, public UIStyledWidget<UICheckBo
     void resetHoverState() override { _bHovered = false; }
     void clearTransientInputState() override { _bHovered = false; _bPressed = false; }
 
-    void layout(const Rect2D& parentRect) override;
-    void layoutAssigned(const Rect2D& rect) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
+
+  protected:
+    void applyAssignedLayout(const Rect2D& rect) override;
 
   private:
     void toggle();

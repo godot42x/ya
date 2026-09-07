@@ -12,17 +12,6 @@ void UICompoundWidget::prepareForAttach()
     _bConstructed = true;
 }
 
-void UICompoundWidget::layout(const Rect2D& parentRect)
-{
-    layoutAssigned(parentRect);
-}
-
-void UICompoundWidget::layoutAssigned(const Rect2D& rect)
-{
-    setLayoutRect(rect);
-    _contentLayout.arrange(*this, _layoutRect);
-}
-
 glm::vec2 UICompoundWidget::computeDesiredSize() const
 {
     const auto& children = getChildren();

@@ -5,7 +5,7 @@
 
 ## 当前切片
 
-当前激活切片：无。下一项是 `GAH-201`。共享工作区仍有 Editor/Dock/ColorEdit/Workbench
+当前激活切片：无。下一项是 `GAH-301`。共享工作区仍有 Editor/Dock/ColorEdit/Workbench
 未提交改动；后续 checkpoint 继续只提交本任务文件，不得批量吸收。
 
 执行规则：
@@ -62,14 +62,14 @@
 
 ## C2 — Layout host skip 契约
 
-- [ ] `GAH-201` 统一 assigned-layout skip 入口
+- [x] `GAH-201` 统一 assigned-layout skip 入口
   - 依赖：GAH-002、GAH-004。
   - 工作：让 specialized host 复用一个 assignment/skip 模板；删除各自绕过 skip 的重复路径。
   - 验收：clean rect + clean revision 跳过 arrange；局部 dirty 不重排无关 sibling subtree。
   - 非目标：不实现完整 measure cache，不移动控件目录。
   - 提交：`[gui/layout] unify assigned layout skip`。
 
-- [ ] `GAH-202` Layout invalidation 反例门禁
+- [x] `GAH-202` Layout invalidation 反例门禁
   - 依赖：GAH-201。
   - 工作：覆盖 desired size、slot、visibility、structure、scroll offset、split ratio、popup content slot 和 Dock projection 变化。
   - 验收：所有真实 layout mutation 都不会被错误跳过；Editor scale baseline 不退化。

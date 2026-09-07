@@ -11,18 +11,6 @@
 namespace ya
 {
 
-void UIButton::layout(const Rect2D& parentRect)
-{
-    layoutAssigned(parentRect);
-}
-
-void UIButton::layoutAssigned(const Rect2D& rect)
-{
-    setLayoutRect(rect);
-
-    _contentLayout.arrange(*this, _layoutRect);
-}
-
 glm::vec2 UIButton::computeDesiredSize() const
 {
     return _contentLayout.measure(*this);

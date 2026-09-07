@@ -63,8 +63,6 @@ struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSp
     /// content when its tab is selected).
     void addPanel(const std::string& name, std::shared_ptr<UIElement> widget);
 
-    void layout(const Rect2D& parentRect) override;
-    void layoutAssigned(const Rect2D& rect) override;
     void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override
     {
         node["type"] = "singleChild";
@@ -132,6 +130,10 @@ struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSp
     /// targets such as floating windows to decide whether a drop is accepted).
     [[nodiscard]] std::optional<FDropPreview> dropPreviewFor(const UIDragDropOperation& operation,
                                                              const glm::vec2& logicalPoint) const;
+
+  protected:
+    void applyAssignedLayout(const Rect2D& rect) override;
+    [[nodiscard]] bool assignedLayoutInputsUnchanged() const override;
 
 private:
     friend struct FDockSpacePanelDragBehavior;

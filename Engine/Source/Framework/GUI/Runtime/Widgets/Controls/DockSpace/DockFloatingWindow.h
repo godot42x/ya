@@ -49,7 +49,6 @@ struct YA_GUI_API UIDockFloatingWindow : public UIElement, public UIStyledWidget
     std::function<void()> _onActivated;
 
     void layout(const Rect2D& parentRect) override;
-    void layoutAssigned(const Rect2D& rect) override;
     void onAttached() override;
     void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override { node["type"] = "overlay"; }
     void paintSelf(UIFrameBuilder& builder) override;
@@ -66,6 +65,9 @@ struct YA_GUI_API UIDockFloatingWindow : public UIElement, public UIStyledWidget
     };
 
     void applyResizeFromEdge(EResizeEdge edge, const glm::vec2& pointerDelta);
+
+  protected:
+    void applyAssignedLayout(const Rect2D& rect) override;
 
   private:
     friend struct FDockFloatingWindowDropTargetBehavior;

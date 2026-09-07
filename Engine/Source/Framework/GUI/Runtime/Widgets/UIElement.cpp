@@ -220,16 +220,15 @@ void UIElement::installLayout(std::unique_ptr<UILayout> layout)
     }
 }
 
+void UIElement::bindHostLayout(UILayout& layout)
+{
+    _layout = &layout;
+    _layout->setOwner(*this);
+}
+
 void UIElement::layout(const Rect2D& parentRect)
 {
-    // All geometry is assigned by the parent edge or the tree root. A plain
-    // element therefore accepts the supplied rect verbatim.
-    setLayoutRect(parentRect);
-    if (_layout != nullptr) {
-        _layout->arrange(*this, _layoutRect);
-        return;
-    }
-    layoutChildren(_layoutRect);
+    layoutAssigned(parentRect);
 }
 
 void UIElement::layoutAssigned(const Rect2D& rect)
@@ -237,12 +236,7 @@ void UIElement::layoutAssigned(const Rect2D& rect)
     if (tryReuseAssignedLayout(rect)) {
         return;
     }
-    setLayoutRect(rect);
-    if (_layout != nullptr) {
-        _layout->arrange(*this, _layoutRect);
-        return;
-    }
-    layoutChildren(_layoutRect);
+    applyAssignedLayout(rect);
 }
 
 bool UIElement::tryReuseAssignedLayout(const Rect2D& rect)
@@ -250,6 +244,7 @@ bool UIElement::tryReuseAssignedLayout(const Rect2D& rect)
     Rect2D clamped = rect;
     clamped.extent = glm::max(clamped.extent, glm::vec2(0.0f));
     if (_assignedLayoutRevision == _layoutRevision && _layoutDirtyMask == 0 &&
+        assignedLayoutInputsUnchanged() &&
         clamped.pos == _layoutRect.pos &&
         clamped.extent == _layoutRect.extent) {
         if (_tree) {
@@ -258,6 +253,16 @@ bool UIElement::tryReuseAssignedLayout(const Rect2D& rect)
         return true;
     }
     return false;
+}
+
+void UIElement::applyAssignedLayout(const Rect2D& rect)
+{
+    setLayoutRect(rect);
+    if (_layout != nullptr) {
+        _layout->arrange(*this, _layoutRect);
+        return;
+    }
+    layoutChildren(_layoutRect);
 }
 
 void UIElement::layoutChildren(const Rect2D& layoutRect)

@@ -16,7 +16,7 @@ UITableGrid::UITableGrid(std::string name)
 {
     _hitFilter     = EWidgetHitFilter::Stop;
     _selectedId = std::make_shared<Reactive<std::string>>(std::string{});
-    _tableLayout.setOwner(*this);
+    bindHostLayout(_tableLayout);
     _tableLayout.setColumnCount(1);
 }
 
@@ -47,12 +47,7 @@ std::unique_ptr<UISlot> UITableGrid::createSlotForChild(UIElement& child)
     return _tableLayout.createSlot(*this, child);
 }
 
-void UITableGrid::layout(const Rect2D& parentRect)
-{
-    layoutAssigned(parentRect);
-}
-
-void UITableGrid::layoutAssigned(const Rect2D& rect)
+void UITableGrid::applyAssignedLayout(const Rect2D& rect)
 {
     if (_rows && _rows->isKeyed() && _selectedId && _observedRowsRevision != _rows->revision()) {
         if (!_selectedId->value().empty() && _rows->indexOfKey(_selectedId->value()) >= _rows->size()) {
@@ -61,7 +56,6 @@ void UITableGrid::layoutAssigned(const Rect2D& rect)
         _observedRowsRevision = _rows->revision();
         _hoveredRow = -1;
     }
-    setLayoutRect(rect);
     // Keep the layout's column widths in sync with the visual column widths.
     _tableLayout.setColumnCount(static_cast<int>(_columnWidths.empty() ? 1 : _columnWidths.size()));
     for (size_t col = 0; col < _columnWidths.size(); ++col) {
@@ -70,7 +64,7 @@ void UITableGrid::layoutAssigned(const Rect2D& rect)
         }
     }
     _tableLayout.setRowHeight(_rowHeight);
-    _tableLayout.arrange(*this, _layoutRect);
+    UIElement::applyAssignedLayout(rect);
 }
 
 bool UITableGrid::cellHasWidget(int row, int col) const

@@ -328,8 +328,8 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     // the PARENT, not the child:
     //
     //   Path A - parent owns arrangement (box / scroll / split / overlay /
-    //            size box / button ...). The parent overrides layoutAssigned()
-    //            and assigns every child rect itself from slot data. The
+    //            size box / button ...). The parent applies child rects from
+    //            slot data (via applyAssignedLayout / its UILayout). The
     //            child's anchors are IGNORED. Child intent lives in the slot.
     //
     //   Path B - no independent child-owned positioning. Plain elements take
@@ -341,15 +341,13 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     // rect assignments through UILayout::assignChildRect(); child anchors are
     // not consulted on this parent-owned path.
     //
-    /// Accept a parent-assigned rect, store it in `_layoutRect`, then lay out
-    /// children in paint order. There is no child-owned anchor fallback.
+    /// Accept a parent-assigned rect through the same skip/apply path as
+    /// `layoutAssigned`. Hosts that ignore the supplied rect (floating
+    /// windows) still override this.
     virtual void layout(const Rect2D& parentRect);
-    /// Container-assigned layout: take `rect` verbatim (no anchor math) and
-    /// run this element's own arrangement (containers re-arrange children,
-    /// scroll viewports shift their content, plain elements lay children out
-    /// with the assigned rect). Virtual so nested containers / split panes /
-    /// scroll viewports keep their custom layout when they receive an
-    /// assigned rect from a parent container.
+    /// Single skip/apply entry for a parent-assigned rect. Hosts must not
+    /// override this to bypass `tryReuseAssignedLayout()`; put pre-arrange
+    /// work in `applyAssignedLayout()` instead.
     virtual void layoutAssigned(const Rect2D& rect);
     [[nodiscard]] bool tryReuseAssignedLayout(const Rect2D& rect);
     /// Content measure for packing: layout hosts aggregate children through
@@ -372,6 +370,10 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
 
     /// Install a layout owned by this element (transfers ownership).
     void installLayout(std::unique_ptr<UILayout> layout);
+    /// Bind a member-owned layout as this host's arrangement algorithm.
+    /// Same skip / measure / arrange path as installLayout(), without taking
+    /// ownership of the layout object.
+    void bindHostLayout(UILayout& layout);
 
     // === Paint (after layout; records resolved draw items into the frame) ===
     /// Records this element and its subtree into `builder`. Runs before the
@@ -572,11 +574,18 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// mark (self only) is not enough.
     virtual void onLayoutRectChanged() {}
 
+    /// Host-specific assignment after skip fails. Default: setLayoutRect then
+    /// arrange the bound layout or layoutChildren. Specialized hosts that
+    /// must sync internal state first override this instead of layoutAssigned().
+    virtual void applyAssignedLayout(const Rect2D& rect);
+    /// Extra skip inputs beyond rect + revision + dirty mask. Default true.
+    [[nodiscard]] virtual bool assignedLayoutInputsUnchanged() const { return true; }
+
     /// Store the widget's final layout rect (clamping negative extents, per
     /// the layout contract) and mark it paint-dirty when the rect actually
     /// moved/resized — a changed rect invalidates the draw items cached from
     /// the previous rect (they carry the old pixel positions). Every
-    /// layout/layoutAssigned override must route its rect assignment through
+    /// applyAssignedLayout override must route its rect assignment through
     /// here so a layout change propagates to the incremental paint cache.
     void setLayoutRect(const Rect2D& rect)
     {

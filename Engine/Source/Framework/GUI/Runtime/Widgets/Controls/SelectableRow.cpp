@@ -68,7 +68,7 @@ UISelectableRow::UISelectableRow(std::string name) : UIElement(std::move(name), 
 {
     _hitFilter  = EWidgetHitFilter::Stop;
     _focusPolicy = EWidgetFocusPolicy::Focusable;
-    _contentLayout.setOwner(*this);
+    bindHostLayout(_contentLayout);
     addBehavior(std::make_shared<FSelectableRowDragDropBehavior>());
     addBehavior(std::make_shared<FSelectableRowDropTargetBehavior>());
 }
@@ -154,17 +154,6 @@ void UISelectableRow::clearTransientInputState()
     _bHovered = false;
     _bPressed = false;
     _bDropHighlighted = false;
-}
-
-void UISelectableRow::layout(const Rect2D& parentRect)
-{
-    layoutAssigned(parentRect);
-}
-
-void UISelectableRow::layoutAssigned(const Rect2D& rect)
-{
-    setLayoutRect(rect);
-    _contentLayout.arrange(*this, _layoutRect);
 }
 
 glm::vec2 UISelectableRow::computeDesiredSize() const

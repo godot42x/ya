@@ -103,8 +103,6 @@ struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISe
     void onPointerLeave() override { _bHovered = false; }
     void resetHoverState() override { _bHovered = false; }
     void clearTransientInputState() override;
-    void layout(const Rect2D& parentRect) override;
-    void layoutAssigned(const Rect2D& rect) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 

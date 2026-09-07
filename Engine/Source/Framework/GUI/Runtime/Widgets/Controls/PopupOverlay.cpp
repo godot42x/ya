@@ -69,14 +69,10 @@ void UIPopupOverlay::close()
     }
 }
 
-void UIPopupOverlay::layout(const Rect2D& parentRect)
+void UIPopupOverlay::applyAssignedLayout(const Rect2D& rect)
 {
-    layoutAssigned(parentRect);
-}
-
-void UIPopupOverlay::layoutAssigned(const Rect2D& rect)
-{
-    setLayoutRect(rect); // full screen
+    _appliedContentPos    = _contentPos;
+    _appliedContentExtent = _contentExtent;
 
     for (UIElement* child : getChildrenInPaintOrder()) {
         if (!child->participatesInLayout()) {
@@ -90,9 +86,12 @@ void UIPopupOverlay::layoutAssigned(const Rect2D& rect)
         }
         break;
     }
-    if (UILayout* layout = getLayout()) {
-        layout->arrange(*this, _layoutRect);
-    }
+    UIElement::applyAssignedLayout(rect);
+}
+
+bool UIPopupOverlay::assignedLayoutInputsUnchanged() const
+{
+    return _appliedContentPos == _contentPos && _appliedContentExtent == _contentExtent;
 }
 
 const Rect2D* UIPopupOverlay::contentLayoutRect() const

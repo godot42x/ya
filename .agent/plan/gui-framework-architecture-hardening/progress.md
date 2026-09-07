@@ -269,7 +269,7 @@ G1 `_bSelfClip` 把每个 widget 的 flattened clip 收成自身 layout rect，�
 ### 保留 / 未完成
 
 - Render2D texture/capacity overflow 仍会额外 flush；measure 不建模 overflow。
-- C2 layout skip（GAH-201）未开始。
+- C2 layout skip（GAH-201）当时未开始。
 
 ### 偏离项
 
@@ -278,3 +278,59 @@ G1 `_bSelfClip` 把每个 widget 的 flattened clip 收成自身 layout rect，�
 ### 下一接力点
 
 领取 `GAH-201`：统一 assigned-layout skip 入口。
+
+## 2026-09-08 — GAH-201 / GAH-202 统一 assigned-layout skip
+
+### 目标
+
+让 specialized layout host 走同一个 assignment/skip 入口；clean rect + clean revision 跳过 arrange；局部 dirty 不重排无关 sibling。GAH-202 覆盖真实 mutation 不被错误 skip。不引入 measure cache，不移动控件目录。
+
+### 本轮完成
+
+- `UIElement::layoutAssigned()` 是唯一 skip 入口；`layout()` 转发到它。
+- `bindHostLayout()` 把成员 `UILayout` 接到 `_layout`，简单 host 不再 override `layoutAssigned()`。
+- 必须在 arrange 前同步内部状态的 host 只 override `applyAssignedLayout()`（CheckBox padding、Split ratio pull、Scroll 多 child 警告、Table 列宽、Popup content slot、Dock 空投影 rebuild、Expander collapse）。
+- Popup / Dock 用 `assignedLayoutInputsUnchanged()` 作为 skip 的额外输入（content slot authoring、空投影）。
+
+### 验证
+
+```text
+xmake b ya-gui-closure-test
+xmake run ya-gui-closure-test -- --gtest_filter='LayoutHostSkipBaselineTest.*:WidgetLayoutTest.*:EditorScaleBaselineTest.*'
+# 97 tests, PASSED
+```
+
+parent 以相同 assigned rect 再 assign 一次（对照 GAH-002）：
+
+| host | arrangeCount GAH-002 | GAH-201 |
+|---|---|---|
+| UIPanel | 0 | 0 |
+| Container / Button / CheckBox / Overlay / Scroll / Split / SizeBox / SelectableRow / Popup / Dock | 1 | **0** |
+
+局部分支 dirty（row 内两个 Fill Container）：
+
+| 节点 | GAH-002 | GAH-201 |
+|---|---|---|
+| dirty 侧 Container | 1 | 1 |
+| clean 侧 Container | 1 | **0** |
+| dirty 侧 Panel child | 1 | 1 |
+| clean 侧 Panel child | 0 | 0 |
+
+GAH-202：desired size、slot size rule、visibility collapse、structure add child、scroll offset、split ratio、popup content pos（parent reassign + 未 dirty 的 popup）、Dock `addPanel` 都是 arrange=1。Editor scale baseline 未退化。
+
+工作区 `WidgetTreeTest.DialogCentresContentThroughThePopupCanvasSlot` 仍失败：脏改动把 Dialog 宽改成 420，测试仍期望 360。不是本任务引入，未吸收 Dialog/WidgetTreeTest。
+
+### 保留 / 未完成
+
+- 未实现 measure cache（GAH-203 启动条件仍不满足：本轮没有把 measure 测成显著热点）。
+- Expander 走同一 `applyAssignedLayout` 入口，但是未跟踪的其它工作，未提交。
+- C3 texture completion（GAH-301）未开始。
+
+### 偏离项
+
+无。没有关 `_bSelfClip`，没有移动控件目录，没有 GUI task queue。
+
+### 下一接力点
+
+领取 `GAH-301`：冻结 UI-owner-thread texture completion。
+

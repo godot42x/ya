@@ -864,22 +864,17 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     return leaf;
 }
 
-void UIDockSpace::layout(const Rect2D& parentRect)
+void UIDockSpace::applyAssignedLayout(const Rect2D& rect)
 {
-    layoutAssigned(parentRect);
-}
-
-void UIDockSpace::layoutAssigned(const Rect2D& rect)
-{
-    setLayoutRect(rect);
-
     if (getChildren().empty() && getTree()) {
         rebuildProjection();
     }
+    UIElement::applyAssignedLayout(rect);
+}
 
-    if (UILayout* layout = getLayout()) {
-        layout->arrange(*this, _layoutRect);
-    }
+bool UIDockSpace::assignedLayoutInputsUnchanged() const
+{
+    return !getChildren().empty() || getTree() == nullptr;
 }
 
 void UIDockSpace::paintSelf(UIFrameBuilder& builder)

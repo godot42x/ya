@@ -30,7 +30,7 @@ struct YA_GUI_API UIScrollViewport : public UIElement, public UIStyledWidget<UIS
     explicit UIScrollViewport(std::string name = "ScrollViewport") : UIElement(std::move(name), "scrollbar")
     {
         _hitFilter = EWidgetHitFilter::Stop;
-        _scrollLayout.setOwner(*this);
+        bindHostLayout(_scrollLayout);
     }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIScrollViewport>; }
@@ -60,8 +60,6 @@ struct YA_GUI_API UIScrollViewport : public UIElement, public UIStyledWidget<UIS
     [[nodiscard]] float getScrollOffset() const { return _scrollLayout.getScrollOffset(); }
     [[nodiscard]] float getScrollStep() const { return _scrollLayout.getScrollStep(); }
 
-    void layout(const Rect2D& parentRect) override;
-    void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
@@ -81,6 +79,7 @@ struct YA_GUI_API UIScrollViewport : public UIElement, public UIStyledWidget<UIS
     [[nodiscard]] float getMaxScrollOffset() const { return _scrollLayout.getMaxScrollOffset(); }
 
   protected:
+    void applyAssignedLayout(const Rect2D& rect) override;
     /// Clip the content traversal to the viewport rect (GI-302: the base paint
     /// owns self rebuild/reuse; this only customizes the children context).
     void paintChildren(UIFrameBuilder& builder) override;

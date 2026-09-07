@@ -1,6 +1,6 @@
-// GAH-002: CPU-only baseline for specialized layout hosts that override
-// layoutAssigned() and bypass UIElement::tryReuseAssignedLayout(). Does not
-// introduce measure cache or unify the skip entry (GAH-201).
+// GAH-201 / GAH-202: assigned-layout skip is a single UIElement entry.
+// Specialized hosts bind a member layout or override applyAssignedLayout();
+// they must not bypass tryReuseAssignedLayout(). Does not introduce measure cache.
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
@@ -12,9 +12,12 @@
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
+#include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/SizeBox.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
+#include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "Render/Resources/FontManager.h"
 
 #include <gtest/gtest.h>
 
@@ -40,6 +43,11 @@ void addFillBoxChild(UIContainer& parent, const UIElementRef& child)
     });
 }
 
+void addAutoBoxChild(UIContainer& parent, const UIElementRef& child)
+{
+    parent.addDetachedChild(child);
+}
+
 void attachFill(WidgetTree& tree, const UIElementRef& widget)
 {
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, fillCanvasArgs()).valid());
@@ -59,6 +67,25 @@ void expectArrangeAfterParentReassign(WidgetTree& tree,
     EXPECT_EQ(layout.getArrangeCount(), expected) << host._name;
 }
 
+std::shared_ptr<Font> registerSkipTestFont()
+{
+    auto font        = std::make_shared<Font>();
+    font->fontSize   = 16.0f;
+    font->lineHeight = 20.0f;
+    font->ascent     = 16.0f;
+    font->descent    = 4.0f;
+    for (uint32_t cp = 32; cp < 127; ++cp) {
+        Character ch;
+        ch.size     = {8, 16};
+        ch.bearing  = {0, 0};
+        ch.advance  = {8.0f, 0.0f};
+        ch.bInAtlas = true;
+        font->characters[cp] = ch;
+    }
+    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, 16, font);
+    return font;
+}
+
 } // namespace
 
 TEST(LayoutHostSkipBaselineTest, PanelSkipProofStillHoldsOnParentReassign)
@@ -72,7 +99,7 @@ TEST(LayoutHostSkipBaselineTest, PanelSkipProofStillHoldsOnParentReassign)
     expectArrangeAfterParentReassign(tree, *panel, *layout, 0u);
 }
 
-TEST(LayoutHostSkipBaselineTest, SpecializedHostsBypassAssignedLayoutSkip)
+TEST(LayoutHostSkipBaselineTest, SpecializedHostsSkipOnParentReassign)
 {
     WidgetTree tree({.width = 640, .height = 360});
 
@@ -83,6 +110,7 @@ TEST(LayoutHostSkipBaselineTest, SpecializedHostsBypassAssignedLayoutSkip)
     auto scroll    = std::make_shared<UIScrollViewport>("Scroll");
     auto split     = std::make_shared<UISplitPane>("Split");
     auto sizeBox   = std::make_shared<UISizeBox>("SizeBox");
+    auto row       = std::make_shared<UISelectableRow>("Row");
 
     overlay->addDetachedChild(std::make_shared<UIPanel>("OverlayChild"));
     scroll->addDetachedChild(std::make_shared<UIPanel>("ScrollChild"), [](UIElement&, UISlot& slot) {
@@ -101,17 +129,19 @@ TEST(LayoutHostSkipBaselineTest, SpecializedHostsBypassAssignedLayoutSkip)
     attachFill(tree, scroll);
     attachFill(tree, split);
     attachFill(tree, sizeBox);
+    attachFill(tree, row);
 
-    expectArrangeAfterParentReassign(tree, *container, container->getBoxLayout(), 1u);
-    expectArrangeAfterParentReassign(tree, *button, button->getContentLayout(), 1u);
-    expectArrangeAfterParentReassign(tree, *checkBox, checkBox->getContentLayout(), 1u);
-    expectArrangeAfterParentReassign(tree, *overlay, overlay->getOverlayLayout(), 1u);
-    expectArrangeAfterParentReassign(tree, *scroll, scroll->getScrollLayout(), 1u);
-    expectArrangeAfterParentReassign(tree, *split, split->getSplitLayout(), 1u);
-    expectArrangeAfterParentReassign(tree, *sizeBox, sizeBox->getContentLayout(), 1u);
+    expectArrangeAfterParentReassign(tree, *container, container->getBoxLayout(), 0u);
+    expectArrangeAfterParentReassign(tree, *button, button->getContentLayout(), 0u);
+    expectArrangeAfterParentReassign(tree, *checkBox, checkBox->getContentLayout(), 0u);
+    expectArrangeAfterParentReassign(tree, *overlay, overlay->getOverlayLayout(), 0u);
+    expectArrangeAfterParentReassign(tree, *scroll, scroll->getScrollLayout(), 0u);
+    expectArrangeAfterParentReassign(tree, *split, split->getSplitLayout(), 0u);
+    expectArrangeAfterParentReassign(tree, *sizeBox, sizeBox->getContentLayout(), 0u);
+    expectArrangeAfterParentReassign(tree, *row, row->getContentLayout(), 0u);
 }
 
-TEST(LayoutHostSkipBaselineTest, PopupAndDockBypassAssignedLayoutSkip)
+TEST(LayoutHostSkipBaselineTest, PopupAndDockSkipOnParentReassign)
 {
     WidgetTree tree({.width = 800, .height = 600});
 
@@ -134,11 +164,11 @@ TEST(LayoutHostSkipBaselineTest, PopupAndDockBypassAssignedLayoutSkip)
     ASSERT_NE(popupLayout, nullptr);
     ASSERT_NE(dockLayout, nullptr);
 
-    expectArrangeAfterParentReassign(tree, *popup, *popupLayout, 1u);
-    expectArrangeAfterParentReassign(tree, *dock, *dockLayout, 1u);
+    expectArrangeAfterParentReassign(tree, *popup, *popupLayout, 0u);
+    expectArrangeAfterParentReassign(tree, *dock, *dockLayout, 0u);
 }
 
-TEST(LayoutHostSkipBaselineTest, CleanSiblingContainerStillArrangesWhenOtherBranchDirties)
+TEST(LayoutHostSkipBaselineTest, CleanSiblingContainerSkipsWhenOtherBranchDirties)
 {
     WidgetTree tree({.width = 400, .height = 200});
     auto       row   = std::make_shared<UIContainer>("Row");
@@ -172,7 +202,7 @@ TEST(LayoutHostSkipBaselineTest, CleanSiblingContainerStillArrangesWhenOtherBran
     tree.layout();
 
     EXPECT_EQ(left->getBoxLayout().getArrangeCount(), 1u);
-    EXPECT_EQ(right->getBoxLayout().getArrangeCount(), 1u);
+    EXPECT_EQ(right->getBoxLayout().getArrangeCount(), 0u);
     ASSERT_NE(dirty->getLayout(), nullptr);
     ASSERT_NE(clean->getLayout(), nullptr);
     EXPECT_EQ(dirty->getLayout()->getArrangeCount(), 1u);
@@ -206,6 +236,142 @@ TEST(LayoutHostSkipBaselineTest, CleanSiblingPanelSkipsWhenOtherBranchDirties)
 
     EXPECT_EQ(first->getLayout()->getArrangeCount(), 1u);
     EXPECT_EQ(second->getLayout()->getArrangeCount(), 0u);
+}
+
+TEST(LayoutHostSkipBaselineTest, DesiredSizeChangeRearrangesHost)
+{
+    registerSkipTestFont();
+    WidgetTree tree({.width = 320, .height = 160});
+    auto       column = std::make_shared<UIContainer>("Column");
+    auto       label  = std::make_shared<UIText>("Label");
+    label->setText("Hi");
+    attachFill(tree, column);
+    addAutoBoxChild(*column, label);
+    tree.layout();
+
+    column->getBoxLayout().resetArrangeCount();
+    label->setText("Hello world");
+    tree.layout();
+    EXPECT_EQ(column->getBoxLayout().getArrangeCount(), 1u);
+}
+
+TEST(LayoutHostSkipBaselineTest, SlotChangeRearrangesHost)
+{
+    WidgetTree tree({.width = 320, .height = 160});
+    auto       column = std::make_shared<UIContainer>("Column");
+    auto       child  = std::make_shared<UIPanel>("Child");
+    attachFill(tree, column);
+    addAutoBoxChild(*column, child);
+    tree.layout();
+
+    UIBoxSlot* slot = column->getBoxSlot(*child);
+    ASSERT_NE(slot, nullptr);
+    column->getBoxLayout().resetArrangeCount();
+    slot->setSizeRule(EUIBoxSlotSizeRule::Fill);
+    tree.layout();
+    EXPECT_EQ(column->getBoxLayout().getArrangeCount(), 1u);
+}
+
+TEST(LayoutHostSkipBaselineTest, VisibilityCollapseRearrangesHost)
+{
+    WidgetTree tree({.width = 320, .height = 160});
+    auto       column = std::make_shared<UIContainer>("Column");
+    auto       child  = std::make_shared<UIPanel>("Child");
+    attachFill(tree, column);
+    addFillBoxChild(*column, child);
+    tree.layout();
+
+    column->getBoxLayout().resetArrangeCount();
+    child->setVisibility(EWidgetVisibility::Collapsed);
+    tree.layout();
+    EXPECT_EQ(column->getBoxLayout().getArrangeCount(), 1u);
+}
+
+TEST(LayoutHostSkipBaselineTest, StructureChangeRearrangesHost)
+{
+    WidgetTree tree({.width = 320, .height = 160});
+    auto       column = std::make_shared<UIContainer>("Column");
+    attachFill(tree, column);
+    addFillBoxChild(*column, std::make_shared<UIPanel>("First"));
+    tree.layout();
+
+    column->getBoxLayout().resetArrangeCount();
+    addFillBoxChild(*column, std::make_shared<UIPanel>("Second"));
+    tree.layout();
+    EXPECT_EQ(column->getBoxLayout().getArrangeCount(), 1u);
+}
+
+TEST(LayoutHostSkipBaselineTest, ScrollOffsetChangeRearrangesViewport)
+{
+    WidgetTree tree({.width = 320, .height = 160});
+    auto       scroll = std::make_shared<UIScrollViewport>("Scroll");
+    scroll->addDetachedChild(std::make_shared<UIPanel>("Content"), [](UIElement&, UISlot& slot) {
+        if (auto* single = dynamic_cast<UIOverlaySlot*>(&slot)) {
+            single->setPreferredSize({200.0f, 400.0f});
+        }
+    });
+    attachFill(tree, scroll);
+    tree.layout();
+
+    scroll->getScrollLayout().resetArrangeCount();
+    scroll->setScrollOffset(24.0f);
+    tree.layout();
+    EXPECT_EQ(scroll->getScrollLayout().getArrangeCount(), 1u);
+}
+
+TEST(LayoutHostSkipBaselineTest, SplitRatioChangeRearrangesPane)
+{
+    WidgetTree tree({.width = 320, .height = 160});
+    auto       split = std::make_shared<UISplitPane>("Split");
+    split->addDetachedChild(std::make_shared<UIPanel>("PaneA"));
+    split->addDetachedChild(std::make_shared<UIPanel>("PaneB"));
+    attachFill(tree, split);
+    tree.layout();
+
+    split->getSplitLayout().resetArrangeCount();
+    split->setSplitRatio(0.25f);
+    tree.layout();
+    EXPECT_EQ(split->getSplitLayout().getArrangeCount(), 1u);
+}
+
+TEST(LayoutHostSkipBaselineTest, PopupContentSlotChangeRearrangesOverlay)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       popup = std::make_shared<UIPopupOverlay>("Popup");
+    popup->_contentPos    = {16.0f, 12.0f};
+    popup->_contentExtent = {120.0f, 48.0f};
+    popup->addDetachedChild(std::make_shared<UIPanel>("Content"));
+    popup->open(tree);
+    tree.layout();
+
+    UILayout* layout = popup->getLayout();
+    ASSERT_NE(layout, nullptr);
+    layout->resetArrangeCount();
+    UIElement* parent = popup->getParent();
+    ASSERT_NE(parent, nullptr);
+    popup->_contentPos = {40.0f, 50.0f};
+    parent->markArrangeDirty();
+    EXPECT_FALSE(popup->isArrangeDirty());
+    tree.layout();
+    EXPECT_EQ(layout->getArrangeCount(), 1u);
+}
+
+TEST(LayoutHostSkipBaselineTest, DockProjectionChangeRearrangesSpace)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       context = std::make_shared<FDockContext>();
+    auto       dock    = std::make_shared<UIDockSpace>("Dock");
+    dock->setContext(context);
+    attachFill(tree, dock);
+    dock->addPanel("scene", std::make_shared<UIPanel>("SceneBody"));
+    tree.layout();
+
+    UILayout* layout = dock->getLayout();
+    ASSERT_NE(layout, nullptr);
+    layout->resetArrangeCount();
+    dock->addPanel("inspector", std::make_shared<UIPanel>("InspectorBody"));
+    tree.layout();
+    EXPECT_EQ(layout->getArrangeCount(), 1u);
 }
 
 } // namespace ya

@@ -27,12 +27,10 @@ struct YA_GUI_API UICompoundWidget : public UIElement
     explicit UICompoundWidget(std::string name = "Widget", std::string styleKey = {})
         : UIElement(std::move(name), std::move(styleKey))
     {
-        _contentLayout.setOwner(*this);
+        bindHostLayout(_contentLayout);
     }
 
     void prepareForAttach() override;
-    void layout(const Rect2D& parentRect) override;
-    void layoutAssigned(const Rect2D& rect) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
     void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override

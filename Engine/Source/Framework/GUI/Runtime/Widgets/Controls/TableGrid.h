@@ -82,8 +82,6 @@ struct YA_GUI_API UITableGrid : public UIElement, public UIStyledWidget<UITableG
     /// Fired after a row is selected (with the row index).
     std::function<void(int rowIndex)> _onSelectionChanged;
 
-    void layout(const Rect2D& parentRect) override;
-    void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
         node["control"] = {{"type", "tableGrid"}, {"selected", _selectedId ? _selectedId->value() : std::string{}}};
@@ -96,6 +94,9 @@ struct YA_GUI_API UITableGrid : public UIElement, public UIStyledWidget<UITableG
     void onPointerLeave() override;
     void clearTransientInputState() override;
     [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
+
+  protected:
+    void applyAssignedLayout(const Rect2D& rect) override;
 
 private:
     /// Live row index under `point` (re-flattens), or -1.

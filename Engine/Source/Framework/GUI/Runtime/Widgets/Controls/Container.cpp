@@ -9,18 +9,7 @@ namespace ya
 UIContainer::UIContainer(std::string name, std::string styleKey)
     : UIElement(std::move(name), std::move(styleKey))
 {
-    _boxLayout.setOwner(*this);
-}
-
-void UIContainer::layout(const Rect2D& parentRect)
-{
-    layoutAssigned(parentRect);
-}
-
-void UIContainer::layoutAssigned(const Rect2D& rect)
-{
-    setLayoutRect(rect);
-    _boxLayout.arrange(*this, _layoutRect);
+    bindHostLayout(_boxLayout);
 }
 
 void UIContainer::paintChildren(UIFrameBuilder& builder)

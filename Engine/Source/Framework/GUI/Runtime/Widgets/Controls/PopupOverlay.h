@@ -83,8 +83,6 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     /// Same as close(); used by shield/Esc handling.
     void dismiss() { close(); }
 
-    void layout(const Rect2D& parentRect) override;
-    void layoutAssigned(const Rect2D& rect) override;
     void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override { node["type"] = "canvas"; }
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
@@ -98,6 +96,8 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
 
   protected:
+    void applyAssignedLayout(const Rect2D& rect) override;
+    [[nodiscard]] bool assignedLayoutInputsUnchanged() const override;
     /// Content rect (first visible child) resolved by the last layout.
     [[nodiscard]] const Rect2D* contentLayoutRect() const;
     /// Resolve the popup-owned canvas slot args for the visible content child.
@@ -111,6 +111,8 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     /// reference) before it finishes, so the overlay must keep itself alive
     /// until close() returns.
     std::shared_ptr<UIElement> _selfHold;
+    glm::vec2                  _appliedContentPos{};
+    glm::vec2                  _appliedContentExtent{};
 };
 
 } // namespace ya
