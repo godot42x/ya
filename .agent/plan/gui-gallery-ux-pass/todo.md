@@ -13,9 +13,8 @@
 - [x] G10 Modal=输入独占；dim 可选；modal 外点不关；Dialog 画 border
 - [x] G11 Modal dialog 内容 wrap + 更高 content extent
 - [x] G12 Drag source 按标签 desired 宽度，不再 160 clip
-- [ ] G13 disabled 视觉走 `isEnabledInTree`（Button/CheckBox/SelectableRow）
-- [ ] G14 TreeView expand `markLayoutDirty`（含首次 expand 无 dependent）
+- [x] G13 disabled 视觉走 `isEnabledInTree`（Button/CheckBox/SelectableRow）
+- [x] G14 TreeView expand `markLayoutDirty`（含首次 expand 无 dependent）
 - [ ] G15 TableGrid 拖分隔条改列宽/行高
 - [ ] G16 Dock chooser 五块始终绘制，hover 只加亮
-- [ ] G17 离页 `leave` 拆掉 Popup 层 floating host
 - [ ] G18 skill 补 UX vs closure；更新相关 scenario

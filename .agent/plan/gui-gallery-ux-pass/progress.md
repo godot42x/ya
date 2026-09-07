@@ -13,3 +13,5 @@
 - G10 Modal 只独占输入；`_bDimBackground` 可选；modal 外点不关；Dialog 画 outline。
 - G11 UIDialog 内容默认 wrap，窗口加宽以免 DescText 被 clip。
 - G12 DragDrop tile 按标签测宽，不再把 asset.texture.diffuse 裁进 160px。
+- G13 Button/SelectableRow 禁用态走 `isEnabledInTree()`（CheckBox 已随 G2）。
+- G14 TreeView expand/collapse 同时 `markLayoutDirty`+`markPaintDirty`；`isExpanded` 始终创建 Layout Reactive（随 G5 TreeView.cpp 落地，本项补测试）。

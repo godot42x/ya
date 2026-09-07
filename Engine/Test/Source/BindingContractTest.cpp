@@ -547,6 +547,33 @@ TEST(BindingContractTest, TreeFilterBindingAndManualExpansionCoexistWithoutStick
     EXPECT_EQ(treeView->getVisibleRowCount(), 2);
 }
 
+TEST(BindingContractTest, TreeViewFirstPaintRegistersExpandLayoutDependent)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    roots->push(UITreeView::FNode{
+        .id = "root",
+        .label = "Root",
+        .children = {UITreeView::FNode{.id = "child", .label = "Child"}},
+    });
+
+    auto treeView = std::make_shared<UITreeView>("Tree");
+    FCanvasSlotArgs slot;
+    slot.offset    = {20.0f, 20.0f};
+    slot.fixedSize = {240.0f, 0.0f};
+    treeView->bindData(roots);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), treeView, slot);
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(treeView->getVisibleRowCount(), 1);
+    EXPECT_FLOAT_EQ(treeView->computeDesiredSize().y, treeView->_rowHeight);
+
+    treeView->toggleExpanded("root");
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(treeView->getVisibleRowCount(), 2);
+    EXPECT_FLOAT_EQ(treeView->computeDesiredSize().y, treeView->_rowHeight * 2.0f);
+}
+
 TEST(BindingContractTest, TableSelectionBindingCoexistsWithHoverTransientState)
 {
     WidgetTree tree({.width = 800, .height = 600});
