@@ -1,0 +1,132 @@
+{
+  "plan": "gui-framework-architecture-hardening",
+  "updated_at": "2026-09-07",
+  "active_task": null,
+  "legend": {
+    "planned": "已纳入计划但尚未开始",
+    "in_progress": "当前唯一执行切片",
+    "pass": "已有实现与验证证据",
+    "fail": "已有明确回归或验收失败",
+    "blocked": "受外部条件或前置决策阻塞",
+    "deferred": "只有启动条件满足才实施",
+    "rejected": "评估后明确不实施"
+  },
+  "tracks": [
+    {
+      "id": "planning_harness",
+      "title": "计划与执行工件",
+      "items": [
+        {
+          "id": "architecture_review",
+          "status": "pass",
+          "notes": "已基于当前 WidgetTree、snapshot、compose、Render2D 和两个 texture source 收敛真实缺口"
+        },
+        {
+          "id": "execution_harness",
+          "status": "pass",
+          "notes": "plan/todo/progress/feature_matrix/session_checklist 已建立"
+        }
+      ]
+    },
+    {
+      "id": "c0_baseline",
+      "title": "C0 - 测量与正确性基线",
+      "items": [
+        {
+          "id": "GAH-001",
+          "status": "pass",
+          "notes": "CPU measureUIFrameComposeReplay：同 clip N sprite = N flush / 2N scissor transition；unclipped N = 1 flush；A->B->none = 3 flush / 4 transition。未实现合批。"
+        },
+        {
+          "id": "GAH-002",
+          "status": "planned",
+          "notes": "specialized layout host assigned-rect skip 与 clean sibling arrange 基线"
+        },
+        {
+          "id": "GAH-003",
+          "status": "planned",
+          "notes": "真实 texture source completion thread 与 foreign-thread seam"
+        },
+        {
+          "id": "GAH-004",
+          "status": "planned",
+          "notes": "clipped list、Inspector、Dock、ColorEdit 代表性性能记录"
+        }
+      ]
+    },
+    {
+      "id": "c1_clip_batching",
+      "title": "C1 - Compose clip-run batching",
+      "items": [
+        {
+          "id": "GAH-101",
+          "status": "planned",
+          "notes": "相邻相同 flattened clip 共用一次 scissor run，不重排 draw item"
+        },
+        {
+          "id": "GAH-102",
+          "status": "planned",
+          "notes": "GPU/offscreen zero-diff 与 flush 数对比，和 GAH-101 同 checkpoint"
+        }
+      ]
+    },
+    {
+      "id": "c2_layout_skip",
+      "title": "C2 - Layout host skip contract",
+      "items": [
+        {
+          "id": "GAH-201",
+          "status": "planned",
+          "notes": "统一 assigned-layout skip 入口，避免 clean sibling 重排"
+        },
+        {
+          "id": "GAH-202",
+          "status": "planned",
+          "notes": "真实 layout mutation 不被错误 skip 的反例门禁"
+        },
+        {
+          "id": "GAH-203",
+          "status": "deferred",
+          "notes": "只有统一 skip 后 measure 仍为显著热点才评估"
+        }
+      ]
+    },
+    {
+      "id": "c3_texture_thread",
+      "title": "C3 - Texture completion thread contract",
+      "items": [
+        {
+          "id": "GAH-301",
+          "status": "planned",
+          "notes": "completion 必须在 WidgetTree owner thread；foreign thread fail loudly"
+        },
+        {
+          "id": "GAH-302",
+          "status": "deferred",
+          "notes": "两个以上真实 adapter 重复 dispatch 时才引入共享 UI task sink"
+        }
+      ]
+    },
+    {
+      "id": "c4_decision_gates",
+      "title": "C4 - Profile/consumer gated decisions",
+      "items": [
+        {
+          "id": "GAH-401",
+          "status": "deferred",
+          "notes": "Widgets/Texture opaque reference：由裁剪、第二 backend 或 DLL 问题触发"
+        },
+        {
+          "id": "GAH-402",
+          "status": "deferred",
+          "notes": "UIFrameDrawItem 紧凑 payload：由 item 数或复制带宽热点触发"
+        },
+        {
+          "id": "GAH-403",
+          "status": "deferred",
+          "notes": "Render2D session 实例化：由真实并行/嵌套/多 owner 需求触发"
+        }
+      ]
+    }
+  ]
+}
