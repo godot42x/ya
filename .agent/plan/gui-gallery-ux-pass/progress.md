@@ -5,3 +5,4 @@
 - G3 DragFloat/SpinBox：`isHoverable` + hover fill；SpinBox +/- hover 对比加强。
 - G4 ColorEdit：左侧 swatch + RGBA 拖拽字段；picker SV 用分层 sprite 近似渐变。
 - G5 SearchCombo / TreeView filter 默认 ignore-case，可改 Sensitive。
+- G6 HBox 子格 Fill，spacing 不再撑破窗口；VBox 绑定同一 slider。
