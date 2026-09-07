@@ -22,32 +22,18 @@ void UICheckBox::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree
 namespace
 {
 
-/// Approximate a check mark with two short diagonal chains of small squares
-/// (axis-aligned sprites only; no rotated quads in Render2D).
 void paintCheckMark(UIFrameBuilder& builder, const Rect2D& boxRect, const glm::vec4& color)
 {
     const float x = boxRect.pos.x;
     const float y = boxRect.pos.y;
     const float w = boxRect.extent.x;
     const float h = boxRect.extent.y;
-    const float s = w * 0.16f; // stamp size
-
-    // Left stroke: bottom-left -> center.
-    const glm::vec2 leftStart{x + s * 0.8f, y + h * 0.58f};
-    const glm::vec2 leftEnd{x + w * 0.42f, y + h * 0.82f};
-    const glm::vec2 leftDir = glm::normalize(leftEnd - leftStart);
-    for (float t = 0.0f; t <= 1.0f; t += 0.34f) {
-        const glm::vec2 p = leftStart + leftDir * glm::length(leftEnd - leftStart) * t;
-        builder.addSprite(Rect2D{.pos = p - glm::vec2(s * 0.5f), .extent = glm::vec2(s)}, color, nullptr);
-    }
-    // Right stroke: center -> top-right.
-    const glm::vec2 rightStart{leftEnd};
-    const glm::vec2 rightEnd{x + w * 0.86f, y + h * 0.20f};
-    const glm::vec2 rightDir = glm::normalize(rightEnd - rightStart);
-    for (float t = 0.0f; t <= 1.0f; t += 0.28f) {
-        const glm::vec2 p = rightStart + rightDir * glm::length(rightEnd - rightStart) * t;
-        builder.addSprite(Rect2D{.pos = p - glm::vec2(s * 0.5f), .extent = glm::vec2(s)}, color, nullptr);
-    }
+    const float thickness = std::max(1.5f, w * 0.12f);
+    const glm::vec2 p0{x + w * 0.22f, y + h * 0.52f};
+    const glm::vec2 p1{x + w * 0.42f, y + h * 0.74f};
+    const glm::vec2 p2{x + w * 0.80f, y + h * 0.26f};
+    builder.addLine(p0, p1, color, thickness);
+    builder.addLine(p1, p2, color, thickness);
 }
 
 } // namespace
@@ -91,7 +77,7 @@ void UICheckBox::paintSelf(UIFrameBuilder& builder)
                                            composeVisualFlags(_bHovered,
                                                               false,
                                                               false,
-                                                              !isEnabled(),
+                                                              !isEnabledInTree(),
                                                               _bChecked,
                                                               false,
                                                               false));
