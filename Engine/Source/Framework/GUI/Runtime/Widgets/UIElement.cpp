@@ -307,7 +307,7 @@ void UIElement::paint(UIFrameBuilder& builder)
     PaintScope paintScope(this);
     if (_bVolatile || _bPaintDirty || !builder.hasCachedItems(this)) {
         clearDependencies();
-        builder.countRebuild();
+        builder.countRebuild(this);
         const size_t start = builder.getItemCount();
         paintSelf(builder);
         builder.cacheItems(this, start);

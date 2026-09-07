@@ -18,6 +18,7 @@
 // ============================================================================
 
 #include "GUI/Binding/Reactive.h"
+#include "GUI/Widgets/GuiFrameInspector.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetAttachment.h"
@@ -256,6 +257,9 @@ struct YA_GUI_API WidgetTree final
 
     /// Per-frame counters from the most recent buildSnapshot() call.
     [[nodiscard]] const GuiPerfStats& getPerfStats() const { return _perfStats; }
+    /// Opt-in inspector packet from the most recent buildSnapshot(). Empty
+    /// unless `YA_GUI_INSPECTOR_IS_ENABLED()`.
+    [[nodiscard]] const FGuiFrameInspectorRecord& getFrameInspectorRecord() const { return _inspectorRecord; }
     /// Cumulative G2 validation-frame mismatches since tree creation
     /// (guardrail G-C; always 0 in release builds).
     [[nodiscard]] uint64_t getValidationMismatches() const { return _validationMismatches; }
@@ -421,7 +425,11 @@ struct YA_GUI_API WidgetTree final
     std::function<void(const std::string&)> _clipboardWrite;
     bool          _bLayoutDirty = true;
     uint8_t       _layoutInvalidationMask = static_cast<uint8_t>(EWidgetLayoutInvalidation::Structure);
-    GuiPerfStats  _perfStats;
+    GuiPerfStats               _perfStats;
+    FGuiFrameInspectorRecord   _inspectorRecord;
+    uint64_t                   _inspectorPrevPaintDirty   = 0;
+    uint64_t                   _inspectorPrevLayoutDirty  = 0;
+    uint64_t                   _inspectorPrevArrangeDirty = 0;
 
     // Tree-level theme (style-system Phase 2). _themeGeneration is a
     // Reactive<uint64_t> token: setTheme bumps it so every widget that read

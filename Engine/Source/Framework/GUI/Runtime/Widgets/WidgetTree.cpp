@@ -10,6 +10,7 @@
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/GuiFrameInspector.h"
 #include "GUI/Widgets/Theme.h"
 
 #include <algorithm>
@@ -878,6 +879,12 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     _itemCache[_cacheIndex ^ 1].clear();
     UIFrameBuilder builder(effectiveCtx);
     builder.bindCache(&_itemCache[_cacheIndex], &_itemCache[_cacheIndex ^ 1]);
+    _inspectorRecord.resetForFrame();
+    _inspectorRecord.targetScale  = effectiveScale;
+    _inspectorRecord.targetOffset = effectiveCtx.offset;
+    if (YA_GUI_INSPECTOR_IS_ENABLED()) {
+        builder.bindInspector(&_inspectorRecord);
+    }
     _root->paint(builder);
     _cacheIndex ^= 1;
     const auto paintDur     = clock_t::now() - paintStart;
@@ -939,6 +946,13 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     _perfStats.arrangeInvalidations   = _arrangeInvalidations;
     _perfStats.measureInvalidations   = _measureInvalidations;
     _perfStats.structureInvalidations = _structureInvalidations;
+
+    _inspectorRecord.finishDirtyDeltas(_paintDirtyTransitions,
+                                       _layoutDirtyTransitions,
+                                       _arrangeInvalidations,
+                                       _inspectorPrevPaintDirty,
+                                       _inspectorPrevLayoutDirty,
+                                       _inspectorPrevArrangeDirty);
 
     // Bridge into the engine-wide perf metrics (aggregated per frame; the
     // per-tree GuiPerfStats stays the per-instance structural view).

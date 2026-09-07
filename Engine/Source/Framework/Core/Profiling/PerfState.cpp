@@ -277,15 +277,19 @@ RuntimeState& runtimeStateStorage()
 {
 #if defined(YA_PROFILING_ENABLED)
     static RuntimeState state{
-        .cpuTraceEnabled    = true,
-        .perfMetricsEnabled = true,
-        .staticInitEnabled  = true,
+        .cpuTraceEnabled           = true,
+        .perfMetricsEnabled        = true,
+        .staticInitEnabled         = true,
+        .guiFrameInspectorEnabled  = true,
+        .guiFrameInspectorChannels = 0,
     };
 #else
     static RuntimeState state{
-        .cpuTraceEnabled    = false,
-        .perfMetricsEnabled = true,
-        .staticInitEnabled  = true,
+        .cpuTraceEnabled           = false,
+        .perfMetricsEnabled        = true,
+        .staticInitEnabled         = true,
+        .guiFrameInspectorEnabled  = false,
+        .guiFrameInspectorChannels = 0,
     };
 #endif
     return state;
@@ -304,9 +308,10 @@ RuntimeState& runtimeStateStorage()
 
 void applyRuntimeState(RuntimeState& state)
 {
-    state.cpuTraceEnabled    = normalizeRuntimeToggle(state.cpuTraceEnabled);
-    state.perfMetricsEnabled = normalizeRuntimeToggle(state.perfMetricsEnabled);
-    state.staticInitEnabled  = normalizeRuntimeToggle(state.staticInitEnabled);
+    state.cpuTraceEnabled          = normalizeRuntimeToggle(state.cpuTraceEnabled);
+    state.perfMetricsEnabled       = normalizeRuntimeToggle(state.perfMetricsEnabled);
+    state.staticInitEnabled        = normalizeRuntimeToggle(state.staticInitEnabled);
+    state.guiFrameInspectorEnabled = normalizeRuntimeToggle(state.guiFrameInspectorEnabled);
 }
 
 RuntimeState getRuntimeState()
@@ -355,8 +360,32 @@ bool isStaticInitEnabled()
 
 void setStaticInitEnabled(bool enabled)
 {
-    auto state             = getRuntimeState();
+    auto state              = getRuntimeState();
     state.staticInitEnabled = enabled;
+    setRuntimeState(state);
+}
+
+bool isGuiFrameInspectorEnabled()
+{
+    return getRuntimeState().guiFrameInspectorEnabled;
+}
+
+void setGuiFrameInspectorEnabled(bool enabled)
+{
+    auto state                     = getRuntimeState();
+    state.guiFrameInspectorEnabled = enabled;
+    setRuntimeState(state);
+}
+
+uint8_t getGuiFrameInspectorChannels()
+{
+    return getRuntimeState().guiFrameInspectorChannels;
+}
+
+void setGuiFrameInspectorChannels(uint8_t channels)
+{
+    auto state                      = getRuntimeState();
+    state.guiFrameInspectorChannels = channels;
     setRuntimeState(state);
 }
 

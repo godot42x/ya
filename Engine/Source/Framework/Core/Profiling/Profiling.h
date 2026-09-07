@@ -74,9 +74,11 @@ enum class ECompileMode : uint8_t
 
 struct RuntimeState
 {
-    bool cpuTraceEnabled    = false;
-    bool perfMetricsEnabled = false;
-    bool staticInitEnabled  = false;
+    bool    cpuTraceEnabled             = false;
+    bool    perfMetricsEnabled          = false;
+    bool    staticInitEnabled           = false;
+    bool    guiFrameInspectorEnabled    = false;
+    uint8_t guiFrameInspectorChannels   = 0;
 };
 
 struct RuntimeSessionPaths
@@ -137,6 +139,11 @@ YA_CORE_API void               setPerfMetricsEnabled(bool enabled);
 
 [[nodiscard]] YA_CORE_API bool isStaticInitEnabled();
 YA_CORE_API void               setStaticInitEnabled(bool enabled);
+
+[[nodiscard]] YA_CORE_API bool isGuiFrameInspectorEnabled();
+YA_CORE_API void               setGuiFrameInspectorEnabled(bool enabled);
+[[nodiscard]] YA_CORE_API uint8_t getGuiFrameInspectorChannels();
+YA_CORE_API void                  setGuiFrameInspectorChannels(uint8_t channels);
 
 YA_CORE_API void beginRuntimeSession(const AppDesc& appDesc);
 YA_CORE_API void endRuntimeSession();

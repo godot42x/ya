@@ -20,6 +20,7 @@
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Brush.h"
+#include "GUI/Widgets/GuiFrameInspector.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <memory>
@@ -186,8 +187,13 @@ class YA_GUI_API UIFrameBuilder
     void countWidget() { ++_widgetCount; }
     [[nodiscard]] uint32_t getWidgetCount() const { return _widgetCount; }
     /// Count one widget re-running its paintSelf (dirty) instead of reusing.
-    void countRebuild() { ++_rebuildCount; }
+    void countRebuild(const UIElement* widget)
+    {
+        ++_rebuildCount;
+        YA_GUI_INSPECTOR_RECORD_REBUILD(_inspector, widget);
+    }
     [[nodiscard]] uint32_t getRebuildCount() const { return _rebuildCount; }
+    void bindInspector(FGuiFrameInspectorRecord* inspector) { _inspector = inspector; }
 
     // === Reactive incremental reuse ===
     /// Bind the double-buffered per-widget draw-item caches (owned by
@@ -224,6 +230,7 @@ class YA_GUI_API UIFrameBuilder
     uint32_t                   _rebuildCount = 0;
     const std::unordered_map<uint64_t, std::vector<UIFrameDrawItem>>* _readCache  = nullptr;
     std::unordered_map<uint64_t, std::vector<UIFrameDrawItem>>*       _writeCache = nullptr;
+    FGuiFrameInspectorRecord*                                         _inspector = nullptr;
 };
 
 } // namespace ya

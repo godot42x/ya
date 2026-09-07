@@ -1,0 +1,39 @@
+{
+  "plan": "gui-perf-observability",
+  "updated_at": "2026-09-08",
+  "active_task": "GPO-002",
+  "legend": {
+    "planned": "已纳入计划但尚未开始",
+    "in_progress": "当前唯一执行切片",
+    "pass": "已有实现与验证证据",
+    "deferred": "只有启动条件满足才实施"
+  },
+  "tracks": [
+    {
+      "id": "inspector",
+      "title": "GUI Frame Inspector",
+      "items": [
+        {
+          "id": "GPO-001",
+          "status": "pass",
+          "notes": "CONDITIONAL 下 runtime 开才记 rebuilt rect；DISABLED 宏为空；snapshot item 数不变"
+        },
+        {
+          "id": "GPO-002",
+          "status": "planned",
+          "notes": "Render2D GPU flush/vtx 导出"
+        },
+        {
+          "id": "GPO-003",
+          "status": "planned",
+          "notes": "host overlay HUD + rebuild flash"
+        },
+        {
+          "id": "GPO-004",
+          "status": "planned",
+          "notes": "occupancy overdraw heatmap"
+        }
+      ]
+    }
+  ]
+}
