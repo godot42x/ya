@@ -27,17 +27,27 @@ void UIImage::setResourceMissing(bool missing)
 
 void UIImage::paintSelf(UIFrameBuilder& builder)
 {
-    std::shared_ptr<Texture> texture = _texture;
-    if (!texture && !_assetPath.empty()) {
-        texture = builder.resolveTexture(_assetPath);
-    }
-    if (texture) {
-        builder.addSprite(_layoutRect, _tint, texture);
+    if (_texture) {
+        builder.addSprite(_layoutRect, _tint, _texture);
         return;
     }
+
     const FImageStyle& style = resolvedStyle();
-    const bool missing = _bResourceMissing || !_assetPath.empty();
-    builder.addBrush(_layoutRect, missing ? style.errorFill : style.placeholderFill);
+    if (!_assetPath.empty()) {
+        const FGuiTextureLookup lookup = builder.resolveTextureLookup(_assetPath);
+        if (lookup.state == EGuiTextureState::Ready && lookup.texture) {
+            builder.addSprite(_layoutRect, _tint, lookup.texture);
+            return;
+        }
+        if (lookup.state == EGuiTextureState::Failed || _bResourceMissing) {
+            builder.addBrush(_layoutRect, style.errorFill);
+            return;
+        }
+        builder.addBrush(_layoutRect, style.placeholderFill);
+        return;
+    }
+
+    builder.addBrush(_layoutRect, _bResourceMissing ? style.errorFill : style.placeholderFill);
 }
 
 } // namespace ya

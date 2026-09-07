@@ -538,13 +538,13 @@ class UIImageWidgetBuilder final : public TUIWidgetBuilder<UIImage, UIImageWidge
 
     [[nodiscard]] UIImageWidgetBuilder& setAssetPath(std::string value) &
     {
-        _widget->_assetPath = std::move(value);
+        _widget->setAssetPath(std::move(value));
         return *this;
     }
 
     [[nodiscard]] UIImageWidgetBuilder&& setAssetPath(std::string value) &&
     {
-        _widget->_assetPath = std::move(value);
+        _widget->setAssetPath(std::move(value));
         return std::move(*this);
     }
 

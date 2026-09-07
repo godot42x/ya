@@ -6,3 +6,4 @@
 - G4 ColorEdit：左侧 swatch + RGBA 拖拽字段；picker SV 用分层 sprite 近似渐变。
 - G5 SearchCombo / TreeView filter 默认 ignore-case，可改 Sensitive。
 - G6 HBox 子格 Fill，spacing 不再撑破窗口；VBox 绑定同一 slider。
+- G7 Host `IGuiTextureSource` 用 stbi 加载磁盘/`file:` 路径；Brush 页加 Load 示例。

@@ -16,6 +16,7 @@
 #include "RHI/Shader.h"
 #include "GUI/Host/OsClipboard.h"
 #include "RHI/NativeWindow.h"
+#include "RHI/Core/Texture.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "RHI/Backend/Vulkan/VulkanSwapChain.h"
 #include "RHI/Core/CommandBuffer.h"
@@ -23,16 +24,21 @@
 #include "GUI/Compose/Render2DComposePass.h"
 #include "Render/Resources/FontManager.h"
 #include "Render2D/Render2D.h"
+#include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
 #include "GUI/Widgets/WidgetTreeDump.h"
 
 #include <SDL3/SDL.h>
+#include <stb_image.h>
 
 #include <algorithm>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <format>
 #include <optional>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -98,6 +104,78 @@ std::shared_ptr<Texture> resolveBuiltinTexture(const std::string& assetPath)
     }
     return nullptr;
 }
+
+struct HostGuiTextureSource final : IGuiTextureSource
+{
+    IRender* render = nullptr;
+    std::unordered_map<std::string, std::shared_ptr<Texture>> disk;
+
+    [[nodiscard]] static std::string diskPath(const std::string& path)
+    {
+        constexpr std::string_view kFile = "file:";
+        if (path.starts_with(kFile)) {
+            return path.substr(kFile.size());
+        }
+        return path;
+    }
+
+    [[nodiscard]] FGuiTextureLookup lookup(const std::string& path) override
+    {
+        if (auto texture = resolveBuiltinTexture(path)) {
+            return {std::move(texture), EGuiTextureState::Ready};
+        }
+        if (auto it = disk.find(path); it != disk.end() && it->second) {
+            return {it->second, EGuiTextureState::Ready};
+        }
+        return {nullptr, EGuiTextureState::Pending};
+    }
+
+    void requestLoad(const std::string& path, FGuiTextureReady ready) override
+    {
+        if (auto texture = resolveBuiltinTexture(path)) {
+            ready(path, {std::move(texture), EGuiTextureState::Ready});
+            return;
+        }
+        if (auto it = disk.find(path); it != disk.end() && it->second) {
+            ready(path, {it->second, EGuiTextureState::Ready});
+            return;
+        }
+        if (!render) {
+            ready(path, {nullptr, EGuiTextureState::Failed});
+            return;
+        }
+
+        const std::string file = diskPath(path);
+        int               width = 0;
+        int               height = 0;
+        int               channels = 0;
+        stbi_set_flip_vertically_on_load_thread(false);
+        stbi_uc* raw = stbi_load(file.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+        if (!raw || width <= 0 || height <= 0) {
+            if (raw) {
+                stbi_image_free(raw);
+            }
+            ready(path, {nullptr, EGuiTextureState::Failed});
+            return;
+        }
+
+        std::vector<ColorU8_t> pixels(static_cast<size_t>(width) * static_cast<size_t>(height));
+        std::memcpy(pixels.data(), raw, pixels.size() * sizeof(ColorU8_t));
+        stbi_image_free(raw);
+
+        auto texture = Texture::fromData(*render,
+                                         static_cast<uint32_t>(width),
+                                         static_cast<uint32_t>(height),
+                                         pixels,
+                                         path);
+        if (!texture) {
+            ready(path, {nullptr, EGuiTextureState::Failed});
+            return;
+        }
+        disk[path] = texture;
+        ready(path, {std::move(texture), EGuiTextureState::Ready});
+    }
+};
 
 void appendDebugRenderOverlay(UIFrameSnapshot& snapshot, const WidgetTree& tree)
 {
@@ -522,6 +600,7 @@ struct GUIWindowHost::FImpl
     AppAutomationControlServer automationServer;
     std::shared_ptr<ShaderStorage> shaderStorage;
     std::unique_ptr<WidgetTree> tree;
+    HostGuiTextureSource        textureSource;
 
     std::vector<std::shared_ptr<ICommandBuffer>>       commandBuffers;
     std::vector<std::shared_ptr<GUIPresentationTarget>> presentationTargets;
@@ -718,6 +797,8 @@ bool GUIWindowHost::init()
         .width  = swapchain->getExtent().width,
         .height = swapchain->getExtent().height,
     });
+    _impl->textureSource.render = render;
+    _impl->tree->setTextureSource(&_impl->textureSource);
     bindSdlClipboard(*_impl->tree);
     if (!_impl->automationServer.init(config.automation.controlPort)) {
         YA_CORE_ERROR("GUIAppHost: failed to initialize automation control server on port {}",
