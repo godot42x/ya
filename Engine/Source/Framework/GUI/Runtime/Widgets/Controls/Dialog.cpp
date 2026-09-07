@@ -4,6 +4,9 @@
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/Brush.h"
+
+#include <algorithm>
 
 namespace ya
 {
@@ -11,15 +14,20 @@ namespace ya
 std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UIElement> content)
 {
     auto dialog = std::make_shared<UIDialog>("Dialog");
-    dialog->_bModal = true; // dimming shield + focus ownership + Esc
+    dialog->_bModal         = true;
+    dialog->_bDimBackground = false;
 
     // Panel: title bar + content + button row. UIPanel does not aggregate
     // child desired sizes, so measure the content from its parent-owned edge
     // after attaching it to the stack.
+    const float kDialogW = 420.0f;
     const float titleH   = 18.0f;
     const float buttonH  = 26.0f;
     auto panel = std::make_shared<UIPanel>("DialogPanel");
     panel->setStyleKey("panel");
+    panel->setStyleField("outlineColor", glm::vec4{0.48f, 0.52f, 0.60f, 1.0f});
+    panel->setStyleField("outlineThickness", 1.0f);
+    panel->setStyleField("fillColor", FBrush::solid({0.14f, 0.15f, 0.19f, 1.0f}));
 
     auto stack = std::make_shared<UIContainer>("DialogStack");
     stack->setDirection(EWidgetBoxLayout::Vertical);
@@ -42,6 +50,12 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     stack->addDetachedChild(titleText);
 
     if (content) {
+        if (auto* text = dynamic_cast<UIText*>(content.get())) {
+            text->_bWrap = true;
+            if (text->_maxWrapWidth <= 0.0f) {
+                text->_maxWrapWidth = kDialogW - 32.0f;
+            }
+        }
         stack->addDetachedChild(content);
     }
 
@@ -56,7 +70,7 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
         }
     }
     const float panelH = 14.0f + titleH + 12.0f + std::max(contentH, 0.0f) + 12.0f + buttonH + 14.0f;
-    dialog->_contentExtent = {360.0f, panelH};
+    dialog->_contentExtent = {kDialogW, std::max(panelH, 140.0f)};
 
     auto buttons = std::make_shared<UIContainer>("DialogButtons");
     buttons->setDirection(EWidgetBoxLayout::Horizontal);
@@ -89,9 +103,8 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
 
     dialog->addDetachedChild(panel);
 
-    // Esc / shield click: report a cancel through the same callback. The
-    // lambda is moved and run inside close(), so capturing the raw pointer
-    // is safe (no ownership cycle).
+    // Esc: report a cancel through the same callback. The lambda is moved
+    // and run inside close(), so capturing the raw pointer is safe.
     dialog->_onDismiss = [dialogRaw = dialog.get()]()
     {
         if (dialogRaw->_onClosed) {

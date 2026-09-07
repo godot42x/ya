@@ -10,3 +10,4 @@
 - G8 Theme 切换进 View 菜单；Theme 页改为 sub-style 样例。
 - G17 离页 `FPage::leave` 拆掉 Dock Popup 层 floating host。
 - G9 Open popup menu 锚在按钮下沿，不再写死 (300, 220)。
+- G10 Modal 只独占输入；`_bDimBackground` 可选；modal 外点不关；Dialog 画 outline。
