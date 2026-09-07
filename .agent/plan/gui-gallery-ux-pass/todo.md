@@ -7,7 +7,8 @@
 - [x] G5 字符串匹配默认 ignore-case（SearchCombo / TreeView filter，可改 Sensitive）
 - [x] G6 Box：HBox Fill 不撑破窗口；VBox 跟 spacing slider
 - [x] G7 Brush：Host 加载磁盘图（`file:` path）并在页上渲染
-- [ ] G8 Theme toggle 进 View 菜单；Theme 页改成 sub-style 样例
+- [x] G8 Theme toggle 进 View 菜单；Theme 页改成 sub-style 样例
+- [x] G17 离页 `leave` 拆掉 Popup 层 floating host
 - [ ] G9 Open popup menu 锚在按钮下沿
 - [ ] G10 Modal=输入独占；dim 可选；modal 外点不关；Dialog 画 border
 - [ ] G11 Modal dialog 内容 wrap + 更高 content extent

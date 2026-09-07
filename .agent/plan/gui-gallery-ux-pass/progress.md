@@ -7,3 +7,5 @@
 - G5 SearchCombo / TreeView filter 默认 ignore-case，可改 Sensitive。
 - G6 HBox 子格 Fill，spacing 不再撑破窗口；VBox 绑定同一 slider。
 - G7 Host `IGuiTextureSource` 用 stbi 加载磁盘/`file:` 路径；Brush 页加 Load 示例。
+- G8 Theme 切换进 View 菜单；Theme 页改为 sub-style 样例。
+- G17 离页 `FPage::leave` 拆掉 Dock Popup 层 floating host。
