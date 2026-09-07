@@ -3,6 +3,7 @@
 #include "Core/KeyCode.h"
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/Controls/Menu.h"
+#include "GUI/Widgets/StringMatch.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -16,7 +17,10 @@ std::vector<int> UISearchComboBox::filteredIndices() const
 {
     std::vector<int> indices;
     for (int i = 0; i < static_cast<int>(_items.size()); ++i) {
-        if (_filter.empty() || _items[i].find(_filter) != std::string::npos) {
+        if (_filter.empty() ||
+            stringContains(_items[i],
+                           _filter,
+                           _bCaseSensitive ? EStringMatchCase::Sensitive : EStringMatchCase::Ignore)) {
             indices.push_back(i);
         }
     }

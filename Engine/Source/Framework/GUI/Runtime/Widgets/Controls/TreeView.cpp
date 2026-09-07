@@ -4,6 +4,7 @@
 #include "GUI/Widgets/KeyedVisibleWindow.h"
 
 #include "Render/Resources/FontManager.h"
+#include "GUI/Widgets/StringMatch.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "Core/Base.h"  
@@ -190,9 +191,9 @@ std::shared_ptr<Reactive<bool>>& UITreeView::expandedRef(const std::string& id)
 void UITreeView::setExpanded(const std::string& id, bool expanded)
 {
     expandedRef(id)->set(expanded);
-    // The visible-row set is a paint attribute too: when the arranged rect
-    // does not change (fixed-height tree), the Layout invalidation alone
-    // would leave the incremental paint cache showing the old rows.
+    // Visible-row count changes desired height (Auto parents) and the
+    // painted row set (fixed-height trees keep the same arranged rect).
+    markLayoutDirty();
     markPaintDirty();
 }
 
@@ -201,7 +202,8 @@ void UITreeView::toggleExpanded(const std::string& id)
     auto& ref = expandedRef(id);
     const bool bNext = !ref->value();
     ref->set(bNext);
-    markPaintDirty(); // see setExpanded
+    markLayoutDirty();
+    markPaintDirty();
     if (_onToggleExpanded) {
         _onToggleExpanded(id, bNext);
     }
@@ -209,9 +211,9 @@ void UITreeView::toggleExpanded(const std::string& id)
 
 bool UITreeView::isExpanded(const std::string& id) const
 {
-    const auto it = _expanded.find(id);
-    // Expansion changes the visible-row count -> Layout granularity.
-    return it != _expanded.end() ? it->second->get(ReactiveBase::EDirtyLevel::Layout) : false;
+    // Always create the Reactive so the first expand has a Layout dependent
+    // (a missing id used to return false without registering anyone).
+    return const_cast<UITreeView*>(this)->expandedRef(id)->get(ReactiveBase::EDirtyLevel::Layout);
 }
 
 std::vector<UITreeView::VisibleRow> UITreeView::flattenVisible() const
@@ -271,8 +273,9 @@ bool UITreeView::matchesFilter(const FNode& node) const
     if (filter.empty()) {
         return true;
     }
-    if (node.id.find(filter) != std::string::npos ||
-        node.label.find(filter) != std::string::npos) {
+    const EStringMatchCase mode =
+        _bFilterCaseSensitive ? EStringMatchCase::Sensitive : EStringMatchCase::Ignore;
+    if (stringContains(node.id, filter, mode) || stringContains(node.label, filter, mode)) {
         return true;
     }
     return matchesFilterDescendants(node, filter, 0);
@@ -283,9 +286,10 @@ bool UITreeView::matchesFilterDescendants(const FNode& node, const std::string& 
     if (depth > kMaxDepth) {
         return false; // defensive: cyclic data must never recurse forever
     }
+    const EStringMatchCase mode =
+        _bFilterCaseSensitive ? EStringMatchCase::Sensitive : EStringMatchCase::Ignore;
     for (const FNode& child : node.children) {
-        if (child.id.find(filter) != std::string::npos ||
-            child.label.find(filter) != std::string::npos) {
+        if (stringContains(child.id, filter, mode) || stringContains(child.label, filter, mode)) {
             return true;
         }
         if (matchesFilterDescendants(child, filter, depth + 1)) {

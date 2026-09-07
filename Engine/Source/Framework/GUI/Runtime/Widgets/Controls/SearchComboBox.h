@@ -32,6 +32,8 @@ struct YA_GUI_API UISearchComboBox : public UIElement, public UIStyledWidget<UIS
     std::vector<std::string> _items;
     int      _selectedIndex = -1;
     std::string _filter;
+    /// Default ignore-case; set true for a literal substring match.
+    bool        _bCaseSensitive = false;
     uint32_t    _fontSize = 13;
 
     std::function<void(int index)> _onSelectionChanged;
@@ -51,6 +53,10 @@ struct YA_GUI_API UISearchComboBox : public UIElement, public UIStyledWidget<UIS
                                {"filter", _filter}};
     }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
+    bool isHoverable() const override { return true; }
+    void onPointerEnter() override { _bHovered = true; }
+    void onPointerLeave() override { _bHovered = false; }
+    void resetHoverState() override { _bHovered = false; }
     void onFocusGained(bool /*bFromKeyboard*/) override { _bFocused = true; }
     void onFocusLost() override { _bFocused = false; }
     void clearTransientInputState() override;

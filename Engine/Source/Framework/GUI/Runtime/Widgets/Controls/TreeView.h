@@ -135,8 +135,9 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     std::function<void(const std::string& nodeId, const glm::vec2& logicalPoint)> _onContextMenu;
     /// Filter ref: only nodes whose id/label matches (or that have a
     /// matching descendant) stay visible; while a filter is active all
-    /// matching chains are shown expanded.
+    /// matching chains are shown expanded. Match is ignore-case by default.
     void bindFilter(std::shared_ptr<Reactive<std::string>> ref);
+    bool _bFilterCaseSensitive = false;
 
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override

@@ -4,7 +4,7 @@
 - [x] G2 CheckBox 勾用 `addLine`，去掉马赛克 stamp
 - [x] G3 DragFloat/SpinBox `isHoverable` + hover 填色（+/- 对比加强）
 - [x] G4 ColorEdit：swatch + RGBA 字段；picker SV 分层渐变而非 16×16 格子
-- [ ] G5 字符串匹配默认 ignore-case（SearchCombo / TreeView filter，可改 Sensitive）
+- [x] G5 字符串匹配默认 ignore-case（SearchCombo / TreeView filter，可改 Sensitive）
 - [ ] G6 Box：HBox Fill 不撑破窗口；VBox 跟 spacing slider
 - [ ] G7 Brush：Host 加载磁盘图（`file:` path）并在页上渲染
 - [ ] G8 Theme toggle 进 View 菜单；Theme 页改成 sub-style 样例
