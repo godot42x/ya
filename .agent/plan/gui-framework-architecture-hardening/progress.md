@@ -218,3 +218,63 @@ Workbench dump 结构对照（`Example/GUIWorkbench/Baselines/`，全部 clipped
 ### 下一接力点
 
 领取 `GAH-101`：相邻相同 flattened clip 共享 scissor run；`measureUIFrameComposeReplay` 与 `replaySnapshotItems` 必须收成同一 walker。
+
+## 2026-09-08 — GAH-101 / GAH-102 Clip-run 合批
+
+### 目标与边界
+
+- 单一目标：相邻相同 flattened clip 共用一次 scissor run；measure 与 GPU replay 走同一 walker。
+- 非目标：不改 snapshot schema，不重排 painter order，不关 G1 `_bSelfClip`，不吸收 Compose/ColorEdit 其它脏改动。
+
+### 本轮完成
+
+- `walkComposeClipRuns`：只在 clip 状态变化时 push/pop；A→B 不经过中间 unclipped emit。
+- `measureUIFrameComposeReplay` 与 `replaySnapshotItems` 共用该 walker。
+- `ComposeClipReplayTest` 改为合批后数字；`SceneCostBaselineTest` 增加 self-clip off 对照。
+
+### 验证
+
+```text
+xmake b ya-gui-closure-test
+xmake run ya-gui-closure-test -- --gtest_filter='ComposeClipReplayTest.*:SceneCostBaselineTest.*'
+# 13 tests, PASSED
+
+xmake b GUIWorkbench
+python3 Script/automation/gui/run_workbench_gpu_parity.py --skip-build
+# GUIAppHost offscreen parity diff: pass=true differing=0 ratio=0.0000
+```
+
+CPU 合批对照（GAH-001 → GAH-101，overflow 除外）：
+
+| 场景 | flush 前 | flush 后 | scissor 前 | scissor 后 |
+|---|---|---|---|---|
+| 同 clip sprite ×N | N | 1 | 2N | 2 |
+| unclipped ×8 | 1 | 1 | 0 | 0 |
+| clip A → B → unclipped | 3 | 3 | 4 | 3 |
+| nested flatten ×4 | 4 | 1 | 8 | 2 |
+| sprite/text/line 同 clip | 3 | 1 | — | 2 |
+
+代表性场景（`SceneCostBaselineTest`）：
+
+| 场景 | items | flush GAH-004 | flush GAH-101 |
+|---|---|---|---|
+| clipped list（默认 self-clip） | 82 | 82 | 81 |
+| clipped list（`_bSelfClip=false`） | 82 | — | 1 |
+| Inspector ×250 | 250 | 250 | 250 |
+| Dock 三栏 | 33 | 33 | 14 |
+| ColorEdit picker | 49 | 49 | 2 |
+
+G1 `_bSelfClip` 把每个 widget 的 flattened clip 收成自身 layout rect，所以默认 Inspector/长列表几乎仍是一 item 一 clip。合批只在相邻 item 的 flattened clip 真相等时生效；不在本任务关掉 self-clip。
+
+### 保留 / 未完成
+
+- Render2D texture/capacity overflow 仍会额外 flush；measure 不建模 overflow。
+- C2 layout skip（GAH-201）未开始。
+
+### 偏离项
+
+无。没有改 snapshot schema，没有按材质重排 item。
+
+### 下一接力点
+
+领取 `GAH-201`：统一 assigned-layout skip 入口。

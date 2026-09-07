@@ -75,8 +75,8 @@ xmake run ya-gui-closure-test -- --gtest_filter='<本轮相关 suites>'
 
 ## 当前下一刀
 
-`GAH-101`：
+`GAH-201`：
 
-1. replay 维护 active flattened clip，相邻相同 clip 共享一次 scissor run；
-2. 把 `measureUIFrameComposeReplay` 与 `replaySnapshotItems` 收成同一状态机；
-3. 同 clip N quad 在无 overflow 时 flush 从 N 收到 1；不改 snapshot schema，不重排 painter order。
+1. 让 specialized layout host 复用统一 assignment/skip 入口，不再各自绕过 `tryReuseAssignedLayout()`；
+2. clean assigned rect + clean revision 跳过 arrange；局部 dirty 不重排无关 sibling；
+3. 不引入 measure cache，不移动控件目录。

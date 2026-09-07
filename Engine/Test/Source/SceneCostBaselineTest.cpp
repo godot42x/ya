@@ -1,6 +1,6 @@
-// GAH-004: CPU-only cost of representative WidgetTree scenes. Records draw
-// items, compose flush, paint, and arrange for C1/C2 comparison. Does not
-// change clip-run batching or layout skip.
+// GAH-004/101: CPU-only cost of representative WidgetTree scenes. Records draw
+// items, compose flush, paint, and arrange. Clip-run batching is asserted as
+// flush < clipped item count on long same-clip lists.
 
 #include "GUI/Compose/UIFrameComposeReplay.h"
 #include "GUI/Layout/UILayout.h"
@@ -140,9 +140,44 @@ TEST(SceneCostBaselineTest, ClippedLongListFlushTracksClippedItems)
 
     EXPECT_GE(cost.drawItems, static_cast<uint32_t>(kRows));
     EXPECT_GE(cost.compose.clippedItemCount, static_cast<uint32_t>(kRows));
-    EXPECT_EQ(cost.compose.screenFlushCount, cost.compose.clippedItemCount);
+    EXPECT_LT(cost.compose.screenFlushCount, cost.compose.clippedItemCount);
+    EXPECT_GE(cost.compose.screenFlushCount, 1u);
     EXPECT_GE(cost.arrangeCount, 1u);
     EXPECT_GE(cost.rebuiltWidgets, 1u);
+}
+
+TEST(SceneCostBaselineTest, ClippedListWithoutSelfClipSharesViewportClip)
+{
+    registerBaselineFont();
+
+    WidgetTree tree({.width = 280, .height = 220});
+    auto       scroll = std::make_shared<UIScrollViewport>("ClippedList");
+    auto       column = std::make_shared<UIContainer>("Rows");
+    column->setDirection(EWidgetBoxLayout::Vertical);
+    column->setSpacing(2.0f);
+    column->_bSelfClip = false;
+
+    FCanvasSlotArgs scrollSlot;
+    scrollSlot.fixedSize = {260.0f, 200.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), scroll, scrollSlot).valid());
+    tree.attach(*scroll, column);
+
+    constexpr int kRows = 80;
+    for (int i = 0; i < kRows; ++i) {
+        auto row = std::make_shared<UIText>("Row" + std::to_string(i));
+        row->setText("row_" + std::to_string(i));
+        row->_fontSize = 16;
+        row->_bSelfClip = false;
+        tree.attach(*column, row);
+    }
+
+    UILayout* layout = &scroll->getScrollLayout();
+    const FSceneCost cost = measureScene(tree, layout);
+    reportScene("clipped_list_shared_clip", cost);
+
+    EXPECT_GE(cost.compose.clippedItemCount, static_cast<uint32_t>(kRows));
+    EXPECT_LE(cost.compose.screenFlushCount, 8u);
+    EXPECT_LT(cost.compose.screenFlushCount, cost.compose.clippedItemCount);
 }
 
 TEST(SceneCostBaselineTest, InspectorColumnRecordsDrawAndArrange)
@@ -172,6 +207,8 @@ TEST(SceneCostBaselineTest, InspectorColumnRecordsDrawAndArrange)
 
     EXPECT_GE(cost.drawItems, static_cast<uint32_t>(kRows));
     EXPECT_EQ(cost.compose.itemCount, cost.drawItems);
+    EXPECT_LE(cost.compose.screenFlushCount, cost.compose.itemCount);
+    EXPECT_GE(cost.compose.screenFlushCount, 1u);
     EXPECT_GE(cost.arrangeCount, 1u);
     EXPECT_GE(cost.rebuiltWidgets, 1u);
 }
@@ -216,8 +253,9 @@ TEST(SceneCostBaselineTest, DockWorkspaceRecordsDrawAndArrange)
 
     EXPECT_GE(cost.drawItems, 1u);
     EXPECT_EQ(cost.compose.itemCount, cost.drawItems);
-    EXPECT_GE(cost.arrangeCount, 1u);
+    EXPECT_LE(cost.compose.screenFlushCount, cost.compose.itemCount);
     EXPECT_GE(cost.compose.screenFlushCount, 1u);
+    EXPECT_GE(cost.arrangeCount, 1u);
 }
 
 TEST(SceneCostBaselineTest, ColorEditPickerRecordsDrawAndFlush)
@@ -243,6 +281,7 @@ TEST(SceneCostBaselineTest, ColorEditPickerRecordsDrawAndFlush)
 
     EXPECT_GE(cost.drawItems, 8u);
     EXPECT_EQ(cost.compose.itemCount, cost.drawItems);
+    EXPECT_LE(cost.compose.screenFlushCount, cost.compose.itemCount);
     EXPECT_GE(cost.compose.screenFlushCount, 1u);
     EXPECT_GE(cost.rebuiltWidgets, 1u);
 }

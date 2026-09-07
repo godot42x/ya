@@ -1,6 +1,6 @@
-// GAH-001: CPU-only baseline for compose clip runs. Documents that the current
-// per-item push/pop protocol flushes once per clipped item even when adjacent
-// items share the same flattened clip. Does not record GPU commands.
+// GAH-101: CPU-only clip-run compose. Adjacent items that share a flattened
+// clip keep one scissor (one push / pop / screen flush, overflow excluded).
+// Painter order and snapshot digest stay unchanged.
 
 #include "GUI/Compose/UIFrameComposeReplay.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
@@ -59,7 +59,7 @@ void expectPainterOrderMatchesItems(const FUIFrameComposeReplayStats& stats,
 
 } // namespace
 
-TEST(ComposeClipReplayTest, SameClipSpritesFlushOncePerItem)
+TEST(ComposeClipReplayTest, SameClipSpritesShareOneScreenFlush)
 {
     constexpr uint32_t kFour = 4;
     constexpr uint32_t kEight = 8;
@@ -89,13 +89,15 @@ TEST(ComposeClipReplayTest, SameClipSpritesFlushOncePerItem)
 
     EXPECT_EQ(statsFour.itemCount, kFour);
     EXPECT_EQ(statsFour.clippedItemCount, kFour);
-    EXPECT_EQ(statsFour.clipPushCount, kFour);
-    EXPECT_EQ(statsFour.clipPopCount, kFour);
-    EXPECT_EQ(statsFour.screenFlushCount, kFour);
-    EXPECT_EQ(statsFour.scissorTransitionCount, kFour * 2u);
+    EXPECT_EQ(statsFour.clipPushCount, 1u);
+    EXPECT_EQ(statsFour.clipPopCount, 1u);
+    EXPECT_EQ(statsFour.screenFlushCount, 1u);
+    EXPECT_EQ(statsFour.scissorTransitionCount, 2u);
 
-    EXPECT_EQ(statsEight.screenFlushCount, kEight);
-    EXPECT_EQ(statsEight.screenFlushCount, statsFour.screenFlushCount * 2u);
+    EXPECT_EQ(statsEight.screenFlushCount, 1u);
+    EXPECT_EQ(statsEight.clipPushCount, 1u);
+    EXPECT_EQ(statsEight.clipPopCount, 1u);
+    EXPECT_EQ(statsEight.scissorTransitionCount, 2u);
     expectPainterOrderMatchesItems(statsEight, eight);
 }
 
@@ -134,23 +136,20 @@ TEST(ComposeClipReplayTest, ClipAThenBThenUnclippedRecordsEachTransition)
     EXPECT_EQ(stats.clippedItemCount, 2u);
     EXPECT_EQ(stats.clipPushCount, 2u);
     EXPECT_EQ(stats.clipPopCount, 2u);
-    // Per-item pop returns to unclipped, so A/B never stay adjacent:
-    // none -> A -> none -> B -> none, then the unclipped item flushes at end.
-    EXPECT_EQ(stats.scissorTransitionCount, 4u);
+    EXPECT_EQ(stats.scissorTransitionCount, 3u);
     EXPECT_EQ(stats.screenFlushCount, 3u);
-    ASSERT_EQ(stats.scissorSequence.size(), 4u);
+    ASSERT_EQ(stats.scissorSequence.size(), 3u);
     EXPECT_TRUE(stats.scissorSequence[0].bClipped);
     EXPECT_EQ(stats.scissorSequence[0].clip.pos, kClipA.pos);
     EXPECT_EQ(stats.scissorSequence[0].clip.extent, kClipA.extent);
-    EXPECT_FALSE(stats.scissorSequence[1].bClipped);
-    EXPECT_TRUE(stats.scissorSequence[2].bClipped);
-    EXPECT_EQ(stats.scissorSequence[2].clip.pos, kClipB.pos);
-    EXPECT_EQ(stats.scissorSequence[2].clip.extent, kClipB.extent);
-    EXPECT_FALSE(stats.scissorSequence[3].bClipped);
+    EXPECT_TRUE(stats.scissorSequence[1].bClipped);
+    EXPECT_EQ(stats.scissorSequence[1].clip.pos, kClipB.pos);
+    EXPECT_EQ(stats.scissorSequence[1].clip.extent, kClipB.extent);
+    EXPECT_FALSE(stats.scissorSequence[2].bClipped);
     expectPainterOrderMatchesItems(stats, snapshot);
 }
 
-TEST(ComposeClipReplayTest, MixedSpriteTextLineSameClipStillFlushPerItem)
+TEST(ComposeClipReplayTest, MixedSpriteTextLineSameClipShareOneFlush)
 {
     const UIFrameSnapshot snapshot = makeSnapshot({
         makeItem(UIFrameDrawItem::EKind::Sprite, {0.0f, 0.0f}, true, kClipA),
@@ -160,14 +159,16 @@ TEST(ComposeClipReplayTest, MixedSpriteTextLineSameClipStillFlushPerItem)
     const FUIFrameComposeReplayStats stats = measureUIFrameComposeReplay(snapshot);
 
     EXPECT_EQ(stats.itemCount, 3u);
-    EXPECT_EQ(stats.screenFlushCount, 3u);
+    EXPECT_EQ(stats.screenFlushCount, 1u);
+    EXPECT_EQ(stats.clipPushCount, 1u);
+    EXPECT_EQ(stats.clipPopCount, 1u);
     ASSERT_EQ(stats.painterOrder.size(), 3u);
     EXPECT_EQ(stats.painterOrder[0], UIFrameDrawItem::EKind::Sprite);
     EXPECT_EQ(stats.painterOrder[1], UIFrameDrawItem::EKind::Text);
     EXPECT_EQ(stats.painterOrder[2], UIFrameDrawItem::EKind::Line);
 }
 
-TEST(ComposeClipReplayTest, EmptyClipExtentStillPushesAndFlushes)
+TEST(ComposeClipReplayTest, EmptyClipExtentStillFormsOneClipRun)
 {
     const Rect2D emptyClip{.pos = {50.0f, 50.0f}, .extent = {0.0f, 0.0f}};
     const UIFrameSnapshot snapshot = makeSnapshot({
@@ -177,9 +178,10 @@ TEST(ComposeClipReplayTest, EmptyClipExtentStillPushesAndFlushes)
     const FUIFrameComposeReplayStats stats = measureUIFrameComposeReplay(snapshot);
 
     EXPECT_EQ(stats.clippedItemCount, 2u);
-    EXPECT_EQ(stats.clipPushCount, 2u);
-    EXPECT_EQ(stats.clipPopCount, 2u);
-    EXPECT_EQ(stats.screenFlushCount, 2u);
+    EXPECT_EQ(stats.clipPushCount, 1u);
+    EXPECT_EQ(stats.clipPopCount, 1u);
+    EXPECT_EQ(stats.screenFlushCount, 1u);
+    EXPECT_EQ(stats.scissorTransitionCount, 2u);
 }
 
 TEST(ComposeClipReplayTest, NestedBuilderClipFlattensToOneClipRun)
@@ -206,9 +208,30 @@ TEST(ComposeClipReplayTest, NestedBuilderClipFlattensToOneClipRun)
     const uint64_t digestBefore = digestUIFrameSnapshot(snapshot);
     const FUIFrameComposeReplayStats stats = measureUIFrameComposeReplay(snapshot);
     EXPECT_EQ(digestUIFrameSnapshot(snapshot), digestBefore);
-    EXPECT_EQ(stats.screenFlushCount, 4u);
-    EXPECT_EQ(stats.scissorTransitionCount, 8u);
+    EXPECT_EQ(stats.screenFlushCount, 1u);
+    EXPECT_EQ(stats.scissorTransitionCount, 2u);
+    EXPECT_EQ(stats.clipPushCount, 1u);
     expectPainterOrderMatchesItems(stats, snapshot);
+}
+
+TEST(ComposeClipReplayTest, UnclippedGapPreventsMergingTheSameClip)
+{
+    const UIFrameSnapshot snapshot = makeSnapshot({
+        makeItem(UIFrameDrawItem::EKind::Sprite, {0.0f, 0.0f}, true, kClipA),
+        makeItem(UIFrameDrawItem::EKind::Sprite, {0.0f, 10.0f}, false),
+        makeItem(UIFrameDrawItem::EKind::Sprite, {0.0f, 20.0f}, true, kClipA),
+    });
+    const FUIFrameComposeReplayStats stats = measureUIFrameComposeReplay(snapshot);
+
+    EXPECT_EQ(stats.clipPushCount, 2u);
+    EXPECT_EQ(stats.clipPopCount, 2u);
+    EXPECT_EQ(stats.screenFlushCount, 3u);
+    EXPECT_EQ(stats.scissorTransitionCount, 4u);
+    ASSERT_EQ(stats.scissorSequence.size(), 4u);
+    EXPECT_TRUE(stats.scissorSequence[0].bClipped);
+    EXPECT_FALSE(stats.scissorSequence[1].bClipped);
+    EXPECT_TRUE(stats.scissorSequence[2].bClipped);
+    EXPECT_FALSE(stats.scissorSequence[3].bClipped);
 }
 
 TEST(ComposeClipReplayTest, SameComposeScissorComparesFlagAndRect)

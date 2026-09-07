@@ -60,13 +60,13 @@
       "items": [
         {
           "id": "GAH-101",
-          "status": "planned",
-          "notes": "相邻相同 flattened clip 共用一次 scissor run，不重排 draw item"
+          "status": "pass",
+          "notes": "walkComposeClipRuns：同 clip N sprite flush=1 push/pop=1；A->B->none flush=3 scissor=3。self-clip 列表仍几乎 1 item 1 clip；关掉 self-clip 后 scroll 80 行 flush=1。ColorEdit picker 49->2，Dock 33->14。"
         },
         {
           "id": "GAH-102",
-          "status": "planned",
-          "notes": "GPU/offscreen zero-diff 与 flush 数对比，和 GAH-101 同 checkpoint"
+          "status": "pass",
+          "notes": "python3 Script/automation/gui/run_workbench_gpu_parity.py --skip-build：offscreen parity pass=true differing=0 ratio=0.0000"
         }
       ]
     },

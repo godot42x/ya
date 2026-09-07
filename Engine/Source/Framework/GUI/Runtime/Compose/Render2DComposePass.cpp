@@ -1,4 +1,5 @@
 #include "GUI/Compose/Render2DComposePass.h"
+#include "GUI/Compose/UIFrameComposeReplay.h"
 
 #include "Render2D/Render2D.h"
 #include "RHI/Core/CommandBuffer.h"
@@ -89,58 +90,61 @@ const char* composePassLabel(ERender2DComposePassKind kind)
     return "Render2D Compose";
 }
 
-void replaySnapshotItems(const UIFrameSnapshot& snapshot)
+void emitSnapshotItem(const UIFrameDrawItem& item)
 {
-    for (const auto& item : snapshot.items) {
-        if (item.bClipped) {
-            Render2D::pushClipRect(item.clip);
-        }
-        if (item.kind == UIFrameDrawItem::EKind::Sprite) {
-            if (item.cornerRadius > 0.0f && !item.texture) {
-                Render2D::drawRoundedRect(glm::vec3(item.pos, 0.0f),
-                                          item.size,
-                                          item.color,
-                                          item.cornerRadius);
-            }
-            else {
-                Render2D::makeSprite(glm::vec3(item.pos, 0.0f),
-                                     item.size,
-                                     item.texture,
-                                     item.color,
-                                     item.uvScale,
-                                     item.uvOffset);
-            }
-        }
-        else if (item.kind == UIFrameDrawItem::EKind::Line) {
-            const glm::vec2 delta = item.lineTo - item.lineFrom;
-            const float     len   = glm::length(delta);
-            if (len <= 1e-4f) {
-                const glm::vec2 t = glm::vec2(item.lineThickness);
-                Render2D::makeSprite(glm::vec3(item.lineFrom - t * 0.5f, 0.0f),
-                                     t, nullptr, item.color);
-            }
-            else {
-                const glm::vec2 dir = delta / len;
-                const glm::vec2 nrm = glm::vec2(-dir.y, dir.x);
-                const glm::mat4 transform(
-                    glm::vec4(dir.x * len, dir.y * len, 0.0f, 0.0f),
-                    glm::vec4(nrm.x * item.lineThickness, nrm.y * item.lineThickness, 0.0f, 0.0f),
-                    glm::vec4(0.0f, 0.0f, 1.0f, 0.0f),
-                    glm::vec4(item.lineFrom.x, item.lineFrom.y, 0.0f, 1.0f));
-                Render2D::makeSprite(transform, nullptr, item.color);
-            }
+    if (item.kind == UIFrameDrawItem::EKind::Sprite) {
+        if (item.cornerRadius > 0.0f && !item.texture) {
+            Render2D::drawRoundedRect(glm::vec3(item.pos, 0.0f),
+                                      item.size,
+                                      item.color,
+                                      item.cornerRadius);
         }
         else {
-            Render2D::makeText(item.text,
-                               glm::vec3(item.pos, 0.0f),
-                               item.color,
-                               item.font.get(),
-                               item.textScale);
-        }
-        if (item.bClipped) {
-            Render2D::popClipRect();
+            Render2D::makeSprite(glm::vec3(item.pos, 0.0f),
+                                 item.size,
+                                 item.texture,
+                                 item.color,
+                                 item.uvScale,
+                                 item.uvOffset);
         }
     }
+    else if (item.kind == UIFrameDrawItem::EKind::Line) {
+        const glm::vec2 delta = item.lineTo - item.lineFrom;
+        const float     len   = glm::length(delta);
+        if (len <= 1e-4f) {
+            const glm::vec2 t = glm::vec2(item.lineThickness);
+            Render2D::makeSprite(glm::vec3(item.lineFrom - t * 0.5f, 0.0f),
+                                 t, nullptr, item.color);
+        }
+        else {
+            const glm::vec2 dir = delta / len;
+            const glm::vec2 nrm = glm::vec2(-dir.y, dir.x);
+            const glm::mat4 transform(
+                glm::vec4(dir.x * len, dir.y * len, 0.0f, 0.0f),
+                glm::vec4(nrm.x * item.lineThickness, nrm.y * item.lineThickness, 0.0f, 0.0f),
+                glm::vec4(0.0f, 0.0f, 1.0f, 0.0f),
+                glm::vec4(item.lineFrom.x, item.lineFrom.y, 0.0f, 1.0f));
+            Render2D::makeSprite(transform, nullptr, item.color);
+        }
+    }
+    else {
+        Render2D::makeText(item.text,
+                           glm::vec3(item.pos, 0.0f),
+                           item.color,
+                           item.font.get(),
+                           item.textScale);
+    }
+}
+
+void replaySnapshotItems(const UIFrameSnapshot& snapshot)
+{
+    walkComposeClipRuns(snapshot,
+                        emitSnapshotItem,
+                        nullptr,
+                        FComposeClipRunSink{
+                            .pushClip = &Render2D::pushClipRect,
+                            .popClip  = &Render2D::popClipRect,
+                        });
 }
 
 void drawEditorCanvasGrid(const Extent2D& rtExtent, const glm::vec2& uiScale, const glm::vec2& canvasPan, float canvasZoom)

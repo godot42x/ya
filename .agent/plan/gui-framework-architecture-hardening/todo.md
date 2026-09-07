@@ -5,7 +5,7 @@
 
 ## 当前切片
 
-当前激活切片：无。下一项是 `GAH-101`。共享工作区仍有 Editor/Dock/ColorEdit/Workbench
+当前激活切片：无。下一项是 `GAH-201`。共享工作区仍有 Editor/Dock/ColorEdit/Workbench
 未提交改动；后续 checkpoint 继续只提交本任务文件，不得批量吸收。
 
 执行规则：
@@ -47,14 +47,14 @@
 
 ## C1 — Compose clip-run 合批
 
-- [ ] `GAH-101` 相邻相同 clip 共享 scissor run
+- [x] `GAH-101` 相邻相同 clip 共享 scissor run
   - 依赖：GAH-001、GAH-004。
   - 工作：replay 维护 active flattened clip；只在 clipped/unclipped 或不同 clip 间切换。
   - 验收：同 clip N 个连续 quad 在无 overflow 时为一个 screen batch；顺序、clip 结果和 snapshot schema 不变。
   - 测试：sprite/text/line、A->B、A->none、空范围、nested clip 展平。
   - 提交：`[gui/compose] batch adjacent items by clip run`。
 
-- [ ] `GAH-102` Clip 合批 GPU/offscreen 收口
+- [x] `GAH-102` Clip 合批 GPU/offscreen 收口
   - 依赖：GAH-101。
   - 工作：运行 Workbench GPU/offscreen parity 和 clipped 场景。
   - 验收：zero-diff；flush 数相较 GAH-001 降低；证据写入 `progress.md`。
