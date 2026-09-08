@@ -100,7 +100,7 @@ struct FGUIWindowHostConfig
     /// release/releasedbg; host WARNs and ignores the flag in those builds.
     std::string              guiFrameInspector;
     std::vector<uint32_t>    fontSizes{16, 20};
-    /// Whether Escape (and SDL_QUIT) stops the app loop. Host-level key
+    /// Whether Escape (and the process quit event) stops the app loop. Host-level key
     /// handling; app widgets never see Escape while this is enabled.
     bool bEscapeQuits = true;
     /// Shared automation run policy. Zero means "run until closed".
@@ -125,7 +125,7 @@ public:
     /// Create the window / backend / presentation resources and mount the
     /// delegate content. Returns false on any init failure.
     [[nodiscard]] bool init();
-    /// Run the frame loop until quit (SDL_QUIT / Escape / requestClose()) or
+    /// Run the frame loop until quit (process quit / Escape / requestClose()) or
     /// the shared automation policy asks for a graceful stop. Transitional
     /// convenience only: new code should let GUIApp own AppKernel.
     [[nodiscard]] int run();

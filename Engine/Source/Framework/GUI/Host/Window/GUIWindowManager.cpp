@@ -3,9 +3,8 @@
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
 #include "GUI/Widgets/UIElement.h"
+#include "Core/Os/OsCursor.h"
 #include "Render/Resources/FontManager.h"
-
-#include <SDL3/SDL.h>
 
 #include <algorithm>
 
@@ -28,41 +27,7 @@ Extent2D nativeLogicalExtent(INativeWindow& window)
 
 void applyHoveredCursor(const UIElement* hovered)
 {
-    const ECursorType cursor = hovered ? hovered->getCursor() : ECursorType::Arrow;
-    static ECursorType active = ECursorType::Arrow;
-    static SDL_Cursor* arrow  = nullptr;
-    static SDL_Cursor* ibeam  = nullptr;
-    static SDL_Cursor* resizeEW = nullptr;
-    static SDL_Cursor* resizeNS = nullptr;
-    if (cursor == active && arrow != nullptr) {
-        return;
-    }
-    active = cursor;
-    if (!arrow) {
-        arrow    = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
-        ibeam    = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_TEXT);
-        resizeEW = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_EW_RESIZE);
-        resizeNS = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_NS_RESIZE);
-    }
-    SDL_Cursor* sdlCursor = arrow;
-    switch (cursor) {
-    case ECursorType::IBeam:
-        sdlCursor = ibeam;
-        break;
-    case ECursorType::ResizeEastWest:
-        sdlCursor = resizeEW;
-        break;
-    case ECursorType::ResizeNorthSouth:
-        sdlCursor = resizeNS;
-        break;
-    case ECursorType::Arrow:
-    default:
-        sdlCursor = arrow;
-        break;
-    }
-    if (sdlCursor) {
-        SDL_SetCursor(sdlCursor);
-    }
+    OsCursor::set(hovered ? hovered->getCursor() : ECursorType::Arrow);
 }
 
 } // namespace
@@ -77,6 +42,8 @@ uint32_t guiEventWindowId(const Event& event)
     case EEvent::WindowFocus:
     case EEvent::WindowFocusLost:
     case EEvent::WindowMoved:
+    case EEvent::WindowMouseEnter:
+    case EEvent::WindowMouseLeave:
         return static_cast<const WindowEvent&>(event).getWindowID();
     case EEvent::MouseMoved:
         return static_cast<const MouseMoveEvent&>(event).getWindowID();

@@ -1,9 +1,10 @@
 #pragma once
 
-#include <SDL3/SDL.h>
+#include "Core/Api.h"
+#include "Core/Os/Os.h"
 
 #include <algorithm>
-#include "Core/Api.h"
+#include <cstdint>
 
 namespace ya
 {
@@ -31,7 +32,7 @@ struct YA_GAME_RUNTIME_API FPSControl
         {
             float delayTimeSec = remainSec - dt;
             // YA_CORE_INFO("FPS limit exceeded. Delaying for {} ms", delayTime);
-            SDL_Delay(static_cast<Uint32>(delayTimeSec * 1000));
+            Os::sleepMs(static_cast<uint32_t>(delayTimeSec * 1000));
             return delayTimeSec;
         }
 

@@ -17,7 +17,7 @@ class GameRuntimeFrameOrchestrator
     /// Run one product frame. Direct callers retain the legacy native event
     /// pump; AppKernel-backed run() passes false because its event source has
     /// already delivered the events for this frame.
-    static int      iterate(App& app, float dt, bool bPumpNativeEvents = true);
+    static int      iterate(App& app, float dt);
     static Entity*  getPrimaryCamera(const App& app);
 
   private:

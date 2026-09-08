@@ -1,9 +1,5 @@
 #pragma once
 
-#include <SDL3/SDL_events.h>
-#include <SDL3/SDL_keycode.h>
-
-
 #include <glm/glm.hpp>
 #include <string>
 #include <string_view>
@@ -109,10 +105,7 @@ struct YA_CORE_API InputManager
 
   private:
     void setKeyState(EKey::T keycode, KeyState state) { currentKeyStates[keycode] = state; }
-    void setKeyState(SDL_Keycode keycode, KeyState state) { setKeyState(EKey::fromSDLKeycode(keycode), state); }
-
     void setMouseState(EMouse::T button, KeyState state) { currentMouseStates[button] = state; }
-    void setMouseState(Uint8 button, KeyState state) { setMouseState(EMouse::fromSDLMouseButton(button), state); } // from sdl defines
     void setMousePosition(glm::vec2 position, glm::vec2 delta);
 };
 

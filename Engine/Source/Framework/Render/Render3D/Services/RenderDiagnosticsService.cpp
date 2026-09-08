@@ -4,10 +4,10 @@
 
 #include "Core/Async/TaskQueue.h"
 #include "Core/Debug/RenderDocCapture.h"
+#include "Core/Os/Os.h"
 
 #include "RHI/Backend/Vulkan/VulkanRender.h"
 
-#include <SDL3/SDL.h>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
@@ -119,8 +119,8 @@ void openCaptureDirectoryInOS(const std::string& filePath)
 
     dir            = std::filesystem::absolute(dir);
     const auto url = std::format("file:///{}", dir.string());
-    if (!SDL_OpenURL(url.c_str())) {
-        YA_CORE_ERROR("Failed to open directory {}: {}", dir.string(), SDL_GetError());
+    if (!Os::openUrl(url)) {
+        YA_CORE_ERROR("Failed to open directory {}: {}", dir.string(), Os::lastError());
     }
 }
 

@@ -21,7 +21,8 @@ target("ya-rhi")
     add_headerfiles("Shader/**.h")
     add_headerfiles("Render.h", "RenderDefines.h", "Shader.h", "NativeWindow.h")
     add_deps("ya-foundation-core", "utility.cc", { public = true })
-    add_packages("glm", "entt", "vulkansdk", "libsdl3", { public = true })
+    add_packages("glm", "entt", "vulkansdk", { public = true })
+    add_packages("libsdl3")
     -- Regenerates Engine/Shader/*/Generated when shader sources change.
     add_rules("ya.shader.codegen")
 

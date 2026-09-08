@@ -30,8 +30,6 @@
 
 #include "utility.cc/string_utils.h"
 
-#include <SDL3/SDL_gpu.h>
-
 #include "Core/System/VirtualFileSystem.h"
 
 // Slang runtime API
@@ -108,22 +106,6 @@ const char* getSpvOutputExtension(EShaderStage::T stage)
     return "";
 }
 
-
-SDL_GPUShaderStage toSDLStage(EShaderStage::T Stage)
-{
-    switch (Stage) {
-    case Vertex:
-        return SDL_GPU_SHADERSTAGE_VERTEX;
-    case Fragment:
-        return SDL_GPU_SHADERSTAGE_FRAGMENT;
-    // case Geometry:
-    // return SDL_GPU_SHADERSTAGE_GEOMETRY;
-    default:
-        break;
-    }
-    YA_CORE_ASSERT(false, "Unknown shader type!");
-    return (SDL_GPUShaderStage)-1;
-}
 } // namespace EShaderStage
 
 namespace shader_internal

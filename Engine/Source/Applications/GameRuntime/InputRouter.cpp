@@ -2,24 +2,15 @@
 
 #include "Core/Input/InputManager.h"
 #include "Core/Log.h"
+#include "Core/Os/Os.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GameRuntime/App.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
+#include "RHI/NativeWindow.h"
+#include "Core/Os/OsCursor.h"
 
 namespace ya
 {
-
-InputRouter::~InputRouter()
-{
-    SDL_DestroyCursor(_sdlArrowCursor);
-    SDL_DestroyCursor(_sdlIBeamCursor);
-    SDL_DestroyCursor(_sdlResizeEWCursor);
-    SDL_DestroyCursor(_sdlResizeNSCursor);
-    _sdlArrowCursor    = nullptr;
-    _sdlIBeamCursor    = nullptr;
-    _sdlResizeEWCursor = nullptr;
-    _sdlResizeNSCursor = nullptr;
-}
 
 namespace
 {
@@ -177,13 +168,11 @@ void InputRouter::applyInputMode(EInputMode mode)
         return;
     }
     if (mode == EInputMode::GameOnly) {
-        _activeCursor = -1;
-        SDL_HideCursor();
+        OsCursor::hide();
         return;
     }
 
-    SDL_ShowCursor();
-    _activeCursor = -1;
+    OsCursor::show();
     updateCursor();
 }
 
@@ -214,48 +203,46 @@ void InputRouter::applyPointerCapture(const FPointerCaptureRequest& request)
         .relative    = request.relative,
         .hideCursor  = request.hideCursor,
         .confine     = request.confine,
-        .confinement = request.confine ? toSDLRect(request.confinement) : SDL_Rect{0, 0, 0, 0},
+        .confinement = request.confinement,
     };
 
     const bool bWasCaptured = _pointerCapture.isCaptured();
     const bool bWillCapture = nextState.isCaptured();
 
     if (_window) {
-        auto* window = static_cast<SDL_Window*>(_window);
         if (nextState.confine) {
-            if (!SDL_SetWindowMouseRect(window, &nextState.confinement)) {
-                YA_CORE_WARN("InputRouter: failed to confine mouse to rect: {}", SDL_GetError());
+            if (!_window->setMouseConfineRect(&nextState.confinement)) {
+                YA_CORE_WARN("InputRouter: failed to confine mouse to rect: {}", Os::lastError());
             }
         }
         else if (_pointerCapture.confine) {
-            if (!SDL_SetWindowMouseRect(window, nullptr)) {
-                YA_CORE_WARN("InputRouter: failed to clear mouse confinement: {}", SDL_GetError());
+            if (!_window->setMouseConfineRect(nullptr)) {
+                YA_CORE_WARN("InputRouter: failed to clear mouse confinement: {}", Os::lastError());
             }
         }
 
         if (_pointerCapture.relative != nextState.relative) {
-            if (!SDL_SetWindowRelativeMouseMode(window, nextState.relative)) {
+            if (!_window->setRelativeMouseMode(nextState.relative)) {
                 YA_CORE_WARN("InputRouter: failed to set relative mouse mode to {}: {}",
                              nextState.relative,
-                             SDL_GetError());
+                             Os::lastError());
             }
         }
 
         if (bWasCaptured != bWillCapture) {
-            if (!SDL_SetWindowMouseGrab(window, bWillCapture)) {
-                YA_CORE_WARN("InputRouter: failed to set mouse grab to {}: {}", bWillCapture, SDL_GetError());
+            if (!_window->setMouseGrab(bWillCapture)) {
+                YA_CORE_WARN("InputRouter: failed to set mouse grab to {}: {}", bWillCapture, Os::lastError());
             }
         }
     }
 
     if (_pointerCapture.hideCursor != nextState.hideCursor) {
         if (nextState.hideCursor) {
-            SDL_HideCursor();
+            OsCursor::hide();
         }
         else {
-            SDL_ShowCursor();
+            OsCursor::show();
         }
-        _activeCursor = -1;
     }
 
     _pointerCapture = nextState;
@@ -311,43 +298,7 @@ void InputRouter::updateCursor()
         }
     }
 
-    const int nextCursor = static_cast<int>(cursor);
-    if (_activeCursor == nextCursor) {
-        return;
-    }
-    _activeCursor = nextCursor;
-
-    if (!_sdlArrowCursor) {
-        _sdlArrowCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
-    }
-    if (!_sdlIBeamCursor) {
-        _sdlIBeamCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_TEXT);
-    }
-    if (!_sdlResizeEWCursor) {
-        _sdlResizeEWCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_EW_RESIZE);
-    }
-    if (!_sdlResizeNSCursor) {
-        _sdlResizeNSCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_NS_RESIZE);
-    }
-
-    SDL_Cursor* sdlCursor = _sdlArrowCursor;
-    switch (cursor) {
-    case ECursorType::Arrow:
-        sdlCursor = _sdlArrowCursor;
-        break;
-    case ECursorType::IBeam:
-        sdlCursor = _sdlIBeamCursor;
-        break;
-    case ECursorType::ResizeEastWest:
-        sdlCursor = _sdlResizeEWCursor;
-        break;
-    case ECursorType::ResizeNorthSouth:
-        sdlCursor = _sdlResizeNSCursor;
-        break;
-    }
-    if (sdlCursor) {
-        SDL_SetCursor(sdlCursor);
-    }
+    OsCursor::set(cursor);
 }
 
 FInputRouteContext InputRouter::makeRouteContext()
@@ -365,16 +316,6 @@ IInputNode* InputRouter::getActiveNode() const
         return _nodeStack.back().node;
     }
     return _defaultNode;
-}
-
-SDL_Rect InputRouter::toSDLRect(const Rect2D& rect)
-{
-    return SDL_Rect{
-        .x = static_cast<int>(rect.pos.x),
-        .y = static_cast<int>(rect.pos.y),
-        .w = static_cast<int>(rect.extent.x),
-        .h = static_cast<int>(rect.extent.y),
-    };
 }
 
 } // namespace ya

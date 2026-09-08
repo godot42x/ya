@@ -3,6 +3,10 @@
 #include "OpenGLRender.h"
 #include <cmath>
 
+#if USE_SDL
+    #include <SDL3/SDL.h>
+#endif
+
 namespace ya
 {
 

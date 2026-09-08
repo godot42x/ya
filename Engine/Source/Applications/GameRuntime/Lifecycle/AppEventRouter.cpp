@@ -55,6 +55,8 @@ int App::onEvent(const Event& event)
         }
     } break;
     case EEvent::WindowMoved:
+    case EEvent::WindowMouseEnter:
+    case EEvent::WindowMouseLeave:
     case EEvent::AppTick:
     case EEvent::AppUpdate:
     case EEvent::AppRender:

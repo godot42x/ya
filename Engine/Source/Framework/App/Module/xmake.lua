@@ -11,6 +11,4 @@ target("ya-module-manager")
     add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("*.h")
     add_deps("ya-foundation-core", { public = true })
-    -- SDL_loadso (dynamic library load) and the manifest JSON parser are
-    -- implementation-only; they never appear in public headers.
-    add_packages("libsdl3", "nlohmann_json")
+    add_packages("nlohmann_json")

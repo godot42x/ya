@@ -17,6 +17,7 @@
 #include "RHI/Shader.h"
 #include "GUI/Host/OsClipboard.h"
 #include "RHI/NativeWindow.h"
+#include "Core/Os/OsCursor.h"
 #include "RHI/Core/Texture.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "RHI/Backend/Vulkan/VulkanSwapChain.h"
@@ -32,7 +33,7 @@
 #include "GUI/Widgets/WidgetTreeDump.h"
 #include "GUI/Widgets/WidgetTree.h"
 
-#include <SDL3/SDL.h>
+#include "Core/Os/OsEvent.h"
 #include <stb_image.h>
 
 #include <algorithm>
@@ -434,200 +435,68 @@ void writeRGBAtoBMP(const uint8_t* rgba, uint32_t width, uint32_t height,
     }
 }
 
-/// Maps SDL events to Core Events. Pointer press/release/scroll carry no
-/// position in the Core event structs; the host tracks the current pointer
-/// position from MouseMoveEvent and uses it for those.
+/// Host policy on top of Core Events from `OsEventPump`: window filter,
+/// first-pointer synthesis, and mouse enter/leave → pointer/focus.
 struct SdlEventSource final : IAppEventSource
 {
     uint32_t hostWindowID = 0;
     bool     bPointerKnown = false;
 
+    [[nodiscard]] bool isHostWindow(uint32_t windowID) const
+    {
+        return hostWindowID == 0 || windowID == 0 || windowID == hostWindowID;
+    }
+
     void pollEvents(const std::function<void(const Event&)>& emit) override
     {
-        SDL_PumpEvents();
+        OsEventPump::pump();
         if (!bPointerKnown) {
-            SDL_Window* focusedWindow = SDL_GetMouseFocus();
-            if (focusedWindow &&
-                (hostWindowID == 0 || SDL_GetWindowID(focusedWindow) == hostWindowID)) {
-                float mouseX = -1.0f;
-                float mouseY = -1.0f;
-                SDL_GetMouseState(&mouseX, &mouseY);
-                MouseMoveEvent move(mouseX, mouseY);
-                move._windowID = SDL_GetWindowID(focusedWindow);
+            const FOsMouseQuery mouse = OsEventPump::queryMouse();
+            if (mouse.bHasWindow && isHostWindow(mouse.windowID)) {
+                MouseMoveEvent move(mouse.x, mouse.y);
+                move._windowID = mouse.windowID;
                 emit(move);
                 bPointerKnown = true;
             }
         }
 
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            const bool bHostWindowEvent = [&]() {
-                switch (event.type) {
-            case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-            case SDL_EVENT_WINDOW_RESIZED:
-            case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-            case SDL_EVENT_WINDOW_METAL_VIEW_RESIZED:
-            case SDL_EVENT_WINDOW_MINIMIZED:
-            case SDL_EVENT_WINDOW_MAXIMIZED:
-            case SDL_EVENT_WINDOW_RESTORED:
-            case SDL_EVENT_WINDOW_MOUSE_ENTER:
-            case SDL_EVENT_WINDOW_MOUSE_LEAVE:
-            case SDL_EVENT_WINDOW_FOCUS_GAINED:
-            case SDL_EVENT_WINDOW_FOCUS_LOST:
-                return hostWindowID == 0 || event.window.windowID == hostWindowID;
-                default:
-                    return true;
-                }
-            }();
-
-            const bool bHostPointerEvent = [&]() {
-                switch (event.type) {
-                case SDL_EVENT_MOUSE_MOTION:
-                    return hostWindowID == 0 || event.motion.windowID == hostWindowID;
-                case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                case SDL_EVENT_MOUSE_BUTTON_UP:
-                    return hostWindowID == 0 || event.button.windowID == hostWindowID;
-                case SDL_EVENT_MOUSE_WHEEL:
-                    return hostWindowID == 0 || event.wheel.windowID == hostWindowID;
-                default:
-                    return true;
-                }
-            }();
-
-            switch (event.type) {
-            case SDL_EVENT_QUIT:
-                emit(AppQuitEvent{});
-                break;
-            case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-                if (bHostWindowEvent) {
-                    emit(WindowCloseEvent(event.window.windowID));
-                }
-                break;
-            case SDL_EVENT_WINDOW_RESIZED:
-                if (bHostWindowEvent) {
-                    emit(WindowResizeEvent(event.window.windowID, event.window.data1, event.window.data2));
-                }
-                break;
-            case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-            case SDL_EVENT_WINDOW_METAL_VIEW_RESIZED:
-            case SDL_EVENT_WINDOW_MAXIMIZED:
-            case SDL_EVENT_WINDOW_RESTORED:
-                if (bHostWindowEvent) {
-                    emit(WindowRestoreEvent(event.window.windowID));
-                }
-                break;
-            case SDL_EVENT_WINDOW_MINIMIZED:
-                if (bHostWindowEvent) {
-                    emit(WindowMinimizeEvent(event.window.windowID));
-                }
-                break;
-            case SDL_EVENT_WINDOW_FOCUS_GAINED:
-                if (bHostWindowEvent) {
-                    emit(WindowFocusEvent(event.window.windowID));
-                }
-                break;
-            case SDL_EVENT_WINDOW_FOCUS_LOST:
-                if (bHostWindowEvent) {
-                    emit(WindowFocusLostEvent(event.window.windowID));
-                }
-                break;
-            case SDL_EVENT_WINDOW_MOUSE_ENTER:
-                if (bHostWindowEvent) {
-                    float mouseX = -1.0f;
-                    float mouseY = -1.0f;
-                    SDL_GetMouseState(&mouseX, &mouseY);
-                    MouseMoveEvent move(mouseX, mouseY);
-                    move._windowID = event.window.windowID;
-                    emit(move);
-                    emit(WindowFocusEvent(event.window.windowID));
-                    bPointerKnown = true;
-                }
-                break;
-            case SDL_EVENT_WINDOW_MOUSE_LEAVE:
-                if (bHostWindowEvent) {
-                    MouseMoveEvent leave(-1000000.0f, -1000000.0f);
-                    leave._windowID = event.window.windowID;
-                    emit(leave);
-                    bPointerKnown = false;
-                }
-                break;
-            case SDL_EVENT_MOUSE_MOTION:
-                if (bHostPointerEvent) {
-                    MouseMoveEvent move(event.motion.x, event.motion.y);
-                    move._windowID = event.motion.windowID;
-                    emit(move);
-                    bPointerKnown = true;
-                }
-                break;
-            case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                if (bHostPointerEvent) {
-                    MouseMoveEvent move(event.button.x, event.button.y);
-                    move._windowID = event.button.windowID;
-                    emit(move);
-                    MouseButtonPressedEvent press(static_cast<EMouse::T>(event.button.button));
-                    press._windowID = event.button.windowID;
-                    emit(press);
-                    bPointerKnown = true;
-                }
-                break;
-            case SDL_EVENT_MOUSE_BUTTON_UP:
-                if (bHostPointerEvent) {
-                    MouseMoveEvent move(event.button.x, event.button.y);
-                    move._windowID = event.button.windowID;
-                    emit(move);
-                    MouseButtonReleasedEvent release(static_cast<EMouse::T>(event.button.button));
-                    release._windowID = event.button.windowID;
-                    emit(release);
-                    bPointerKnown = true;
-                }
-                break;
-            case SDL_EVENT_MOUSE_WHEEL:
-                if (bHostPointerEvent) {
-                    MouseMoveEvent move(event.wheel.mouse_x, event.wheel.mouse_y);
-                    move._windowID = event.wheel.windowID;
-                    emit(move);
-                    MouseScrolledEvent scroll(event.wheel.x, event.wheel.y);
-                    scroll._windowID = event.wheel.windowID;
-                    emit(scroll);
-                    bPointerKnown = true;
-                }
-                break;
-            case SDL_EVENT_KEY_DOWN: {
-                if (hostWindowID != 0 && event.key.windowID != hostWindowID) {
-                    break;
-                }
-                KeyPressedEvent ev;
-                ev._keyCode   = EKey::fromSDLKeycode(event.key.key);
-                ev._mod       = event.key.mod;
-                ev.bRepeat    = event.key.repeat;
-                ev._windowID  = event.key.windowID;
-                emit(ev);
+        OsEventPump::poll([&](const Event& event) {
+            if (!isHostWindow(guiEventWindowId(event))) {
+                return;
+            }
+            switch (event.getEventType()) {
+            case EEvent::WindowMouseEnter: {
+                const auto& enter = static_cast<const WindowMouseEnterEvent&>(event);
+                const FOsMouseQuery mouse = OsEventPump::queryMouse();
+                MouseMoveEvent move(mouse.x, mouse.y);
+                move._windowID = enter.getWindowID();
+                emit(move);
+                emit(WindowFocusEvent(enter.getWindowID()));
+                bPointerKnown = true;
                 break;
             }
-            case SDL_EVENT_KEY_UP: {
-                if (hostWindowID != 0 && event.key.windowID != hostWindowID) {
-                    break;
-                }
-                KeyReleasedEvent ev;
-                ev._keyCode  = EKey::fromSDLKeycode(event.key.key);
-                ev._mod      = event.key.mod;
-                ev._windowID = event.key.windowID;
-                emit(ev);
+            case EEvent::WindowMouseLeave: {
+                const auto& leaveEvent = static_cast<const WindowMouseLeaveEvent&>(event);
+                MouseMoveEvent leave(-1000000.0f, -1000000.0f);
+                leave._windowID = leaveEvent.getWindowID();
+                emit(leave);
+                bPointerKnown = false;
                 break;
             }
-            case SDL_EVENT_TEXT_INPUT: {
-                if (hostWindowID != 0 && event.text.windowID != hostWindowID) {
-                    break;
-                }
-                KeyTypedEvent typed(event.text.text);
-                typed._windowID = event.text.windowID;
-                emit(typed);
+            case EEvent::MouseMoved:
+            case EEvent::MouseButtonPressed:
+            case EEvent::MouseButtonReleased:
+            case EEvent::MouseScrolled: {
+                emit(event);
+                bPointerKnown = true;
                 break;
             }
-            default:
+            default: {
+                emit(event);
                 break;
             }
-        }
+            }
+        });
     }
 };
 
@@ -690,13 +559,6 @@ struct GUIWindowHost::FImpl
     float devicePixelRatio = 1.0f;
     // App/settings-level UI zoom, orthogonal to devicePixelRatio. Default 1.0.
     float uiUserScale = 1.0f;
-
-    // Mouse cursor state (system cursors created lazily in init()).
-    ECursorType activeCursor       = ECursorType::Arrow;
-    SDL_Cursor* sdlArrowCursor     = nullptr;
-    SDL_Cursor* sdlIBeamCursor     = nullptr;
-    SDL_Cursor* sdlResizeEWCursor  = nullptr;
-    SDL_Cursor* sdlResizeNSCursor  = nullptr;
 };
 
 GUIWindowHost::GUIWindowHost(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate)
@@ -744,15 +606,9 @@ bool GUIWindowHost::init()
         window.destroy();
         return false;
     }
-    // Enable Unicode text input (SDL_EVENT_TEXT_INPUT -> KeyTypedEvent) so
-    // focused text fields can edit; the events are routed like every other
-    // keyboard event.
-    SDL_StartTextInput(static_cast<SDL_Window*>(window.getNativeWindowHandle()));
-    // System cursors for hover feedback (split dividers request resize cursors).
-    _impl->sdlArrowCursor    = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
-    _impl->sdlIBeamCursor    = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_TEXT);
-    _impl->sdlResizeEWCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_EW_RESIZE);
-    _impl->sdlResizeNSCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_NS_RESIZE);
+    // Enable Unicode text input (KeyTypedEvent) so focused text fields can
+    // edit; the events are routed like every other keyboard event.
+    window.startTextInput();
 
     // 2. Shader compile/cache service (Slang processor serves the GUI
     //    Sprite2D shaders; injected into the backend before pipeline build).
@@ -962,29 +818,7 @@ void GUIWindowHost::updateCursor()
     if (const UIElement* hovered = _impl->tree->getHovered()) {
         cursor = hovered->getCursor();
     }
-    if (cursor == _impl->activeCursor) {
-        return;
-    }
-    _impl->activeCursor = cursor;
-
-    SDL_Cursor* sdlCursor = _impl->sdlArrowCursor;
-    switch (cursor) {
-    case ECursorType::Arrow:
-        sdlCursor = _impl->sdlArrowCursor;
-        break;
-    case ECursorType::IBeam:
-        sdlCursor = _impl->sdlIBeamCursor;
-        break;
-    case ECursorType::ResizeEastWest:
-        sdlCursor = _impl->sdlResizeEWCursor;
-        break;
-    case ECursorType::ResizeNorthSouth:
-        sdlCursor = _impl->sdlResizeNSCursor;
-        break;
-    }
-    if (sdlCursor) {
-        SDL_SetCursor(sdlCursor);
-    }
+    OsCursor::set(cursor);
 }
 
 bool GUIWindowHost::requestWindowSize(uint32_t width, uint32_t height, std::string_view reason)
@@ -1785,15 +1619,7 @@ void GUIWindowHost::shutdown()
     _impl->render->destroy();
     delete _impl->render;
     _impl->render = nullptr;
-    SDL_StopTextInput(static_cast<SDL_Window*>(_impl->window.getNativeWindowHandle()));
-    SDL_DestroyCursor(_impl->sdlArrowCursor);
-    SDL_DestroyCursor(_impl->sdlIBeamCursor);
-    SDL_DestroyCursor(_impl->sdlResizeEWCursor);
-    SDL_DestroyCursor(_impl->sdlResizeNSCursor);
-    _impl->sdlArrowCursor     = nullptr;
-    _impl->sdlIBeamCursor     = nullptr;
-    _impl->sdlResizeEWCursor  = nullptr;
-    _impl->sdlResizeNSCursor  = nullptr;
+    _impl->window.stopTextInput();
     _impl->window.destroy();
 
     _impl->bInitialized = false;

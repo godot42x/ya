@@ -2,9 +2,6 @@
 
 #include "Core/Log.h"
 
-#include <SDL3/SDL.h>
-
-#include <SDL3/SDL_mouse.h>
 #include <algorithm>
 #include <cctype>
 #include <optional>

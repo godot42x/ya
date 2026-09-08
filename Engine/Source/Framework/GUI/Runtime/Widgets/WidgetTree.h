@@ -169,7 +169,7 @@ struct YA_GUI_API WidgetTree final
     [[nodiscard]] Extent2D getLogicalExtent() const { return _logicalExtent; }
 
     /// Device-pixel-ratio mapping: logical canvas points -> framebuffer pixels.
-    /// The host publishes the real window-system DPI (SDL_GetWindowDisplayScale)
+    /// The host publishes the real window-system DPI
     /// here on init / resize / monitor move. It is orthogonal to the user zoom
     /// carried by UIFrameBuildContext::uiScale; the final target-pixel size is
     /// logical * dpiScale * uiScale. Defaults to 1.0 (headless / unscaled).

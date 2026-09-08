@@ -19,6 +19,7 @@
 
 #include "Core/Common/Types.h"
 #include "Core/Event.h"
+#include "Core/Input/Cursor.h"
 #include "Core/Reflection/Reflection.h"
 #include "GUI/Widgets/DragDropOperation.h"
 #include "GUI/Widgets/UIBehavior.h"
@@ -64,16 +65,8 @@ enum class EWidgetFocusPolicy : uint8_t
     Focusable,
 };
 
-/// Mouse cursor the window host should show while this widget is hovered.
-/// Mapped to a system cursor by the host (SDL system cursors); the default
-/// is the arrow and split panes request a resize cursor over their divider.
-enum class ECursorType : uint8_t
-{
-    Arrow,            // default pointer
-    IBeam,            // text insertion caret
-    ResizeEastWest,   // vertical divider (left/right panes)
-    ResizeNorthSouth, // horizontal divider (top/bottom panes)
-};
+/// Mouse cursor shown while this widget is hovered. See `ECursorType` in
+/// Core/Input/Cursor.h; the host applies it through `OsCursor`.
 
 struct WidgetTree;
 struct FDragDetectedEvent

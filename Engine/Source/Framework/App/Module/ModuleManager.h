@@ -10,8 +10,6 @@
 #include <unordered_map>
 #include <vector>
 
-struct SDL_SharedObject;
-
 namespace ya
 {
 

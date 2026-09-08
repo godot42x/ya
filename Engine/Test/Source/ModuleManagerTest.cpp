@@ -1,9 +1,8 @@
 #include "App/Module/ModuleManager.h"
+#include "Core/Os/Os.h"
 #include "Core/TypeIndex.h"
 
 #include <gtest/gtest.h>
-#include <SDL3/SDL_loadso.h>
-#include <SDL3/SDL_filesystem.h>
 
 #include <filesystem>
 #include <fstream>
@@ -122,11 +121,11 @@ TEST_F(ModuleManagerTest, LoadsQueriesAndTearsDownDynamicModuleInOrder)
     constexpr const char* fixtureBinary = "libya-module-fixture.so";
 #endif
 
-    const auto fixturePath = std::filesystem::path(SDL_GetBasePath()) / fixtureBinary;
-    SDL_SharedObject* fixtureHandle = SDL_LoadObject(fixturePath.string().c_str());
-    ASSERT_NE(fixtureHandle, nullptr) << SDL_GetError();
-    auto getState = reinterpret_cast<const FFixtureState* (*)()>(SDL_LoadFunction(fixtureHandle, "yaGetFixtureState"));
-    ASSERT_NE(getState, nullptr) << SDL_GetError();
+    const auto fixturePath = Os::executableBasePath() / fixtureBinary;
+    Os::SharedLibrary fixtureHandle = Os::loadLibrary(fixturePath);
+    ASSERT_TRUE(fixtureHandle.isValid()) << Os::lastError();
+    auto getState = reinterpret_cast<const FFixtureState* (*)()>(Os::loadSymbol(fixtureHandle, "yaGetFixtureState"));
+    ASSERT_NE(getState, nullptr) << Os::lastError();
 
     const auto manifestPath = writeManifest("Fixture", "runtime", "[]", fixtureBinary);
     {
@@ -147,7 +146,7 @@ TEST_F(ModuleManagerTest, LoadsQueriesAndTearsDownDynamicModuleInOrder)
     EXPECT_LT(state->started, state->stopped);
     EXPECT_LT(state->stopped, state->unloaded);
     EXPECT_LT(state->unloaded, state->destroyed);
-    SDL_UnloadObject(fixtureHandle);
+    Os::unloadLibrary(fixtureHandle);
 }
 
 } // namespace

@@ -10,9 +10,7 @@
 #include <vector>
 
 
-#if USE_SDL
-    #include "SDL3/SDL.h"
-#elif USE_GLFW
+#if USE_GLFW
     #include "GLFW/glfw3.h"
 #endif
 
@@ -40,8 +38,8 @@ class OpenGLState
 
     // Platform-specific context
 #if USE_SDL
-    SDL_GLContext m_GLContext = nullptr;
-    SDL_Window   *m_Window    = nullptr;
+    void *m_GLContext = nullptr;
+    void *m_Window    = nullptr;
 #elif USE_GLFW
     GLFWwindow *m_Window = nullptr;
 #endif

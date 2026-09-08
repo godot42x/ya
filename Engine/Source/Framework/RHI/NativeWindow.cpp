@@ -106,6 +106,56 @@ bool SDLNativeWindow::setWindowSize(int width, int height)
     return false;
 }
 
+bool SDLNativeWindow::startTextInput()
+{
+    if (!nativeWindowHandle) {
+        return false;
+    }
+    return SDL_StartTextInput(static_cast<SDL_Window *>(nativeWindowHandle));
+}
+
+bool SDLNativeWindow::stopTextInput()
+{
+    if (!nativeWindowHandle) {
+        return false;
+    }
+    return SDL_StopTextInput(static_cast<SDL_Window *>(nativeWindowHandle));
+}
+
+bool SDLNativeWindow::setMouseGrab(bool grab)
+{
+    if (!nativeWindowHandle) {
+        return false;
+    }
+    return SDL_SetWindowMouseGrab(static_cast<SDL_Window *>(nativeWindowHandle), grab);
+}
+
+bool SDLNativeWindow::setRelativeMouseMode(bool relative)
+{
+    if (!nativeWindowHandle) {
+        return false;
+    }
+    return SDL_SetWindowRelativeMouseMode(static_cast<SDL_Window *>(nativeWindowHandle), relative);
+}
+
+bool SDLNativeWindow::setMouseConfineRect(const Rect2D* rect)
+{
+    if (!nativeWindowHandle) {
+        return false;
+    }
+    auto* window = static_cast<SDL_Window *>(nativeWindowHandle);
+    if (!rect) {
+        return SDL_SetWindowMouseRect(window, nullptr);
+    }
+    const SDL_Rect sdlRect{
+        .x = static_cast<int>(rect->pos.x),
+        .y = static_cast<int>(rect->pos.y),
+        .w = static_cast<int>(rect->extent.x),
+        .h = static_cast<int>(rect->extent.y),
+    };
+    return SDL_SetWindowMouseRect(window, &sdlRect);
+}
+
 #if USE_VULKAN
 bool SDLNativeWindow::onCreateVkSurface(VkInstance instance, VkSurfaceKHR *surface)
 {

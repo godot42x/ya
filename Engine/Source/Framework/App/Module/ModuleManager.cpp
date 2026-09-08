@@ -1,8 +1,6 @@
 #include "App/Module/ModuleManager.h"
 
-#include <SDL3/SDL_error.h>
-#include <SDL3/SDL_filesystem.h>
-#include <SDL3/SDL_loadso.h>
+#include "Core/Os/Os.h"
 
 #include <algorithm>
 #include <format>
@@ -25,7 +23,7 @@ struct ModuleManager::Context final : FModuleContext
 
 struct ModuleManager::LoadedModule
 {
-    SDL_SharedObject*           handle = nullptr;
+    Os::SharedLibrary           handle;
     const FYaModuleApi*         api    = nullptr;
     IModule*                    instance = nullptr;
     std::unique_ptr<Context>    context;
@@ -150,8 +148,7 @@ std::filesystem::path ModuleManager::resolveBinaryPath(const FModuleManifest& ma
     if (std::filesystem::exists(manifestBinaries)) {
         return manifestBinaries;
     }
-    if (const char* basePath = SDL_GetBasePath()) {
-        const auto executableRoot = std::filesystem::path(basePath);
+    if (const auto executableRoot = Os::executableBasePath(); !executableRoot.empty()) {
         const auto besideExecutable = executableRoot / binary;
         if (std::filesystem::exists(besideExecutable)) {
             return besideExecutable;
@@ -185,13 +182,13 @@ bool ModuleManager::loadAll()
     for (const auto& name : _resolvedOrder) {
         const auto& manifest  = _manifests.at(name);
         const auto  binaryPath = resolveBinaryPath(manifest);
-        SDL_SharedObject* handle = SDL_LoadObject(binaryPath.string().c_str());
-        if (!handle) {
+        Os::SharedLibrary handle = Os::loadLibrary(binaryPath);
+        if (!handle.isValid()) {
             unloadAll();
-            return fail(std::format("Failed to load module {} from {}: {}", name, binaryPath.string(), SDL_GetError()));
+            return fail(std::format("Failed to load module {} from {}: {}", name, binaryPath.string(), Os::lastError()));
         }
 
-        auto getApi = reinterpret_cast<FGetModuleApi>(SDL_LoadFunction(handle, "yaGetModuleApi"));
+        auto getApi = reinterpret_cast<FGetModuleApi>(Os::loadSymbol(handle, "yaGetModuleApi"));
         if (!getApi) {
             unloadAll();
             return fail("Module " + name + " does not export yaGetModuleApi");

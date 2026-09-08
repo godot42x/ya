@@ -11,6 +11,7 @@
 
 #include "Core/Async/TaskQueue.h"
 #include "Core/Manager/Facade.h"
+#include "Core/Os/Os.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/System/FileWatcher.h"
@@ -56,7 +57,7 @@ void syncRuntimeCameraAspect(Scene& scene, const Extent2D& viewportExtent)
 
 } // namespace
 
-int GameRuntimeFrameOrchestrator::iterate(App& app, float dt, bool bPumpNativeEvents)
+int GameRuntimeFrameOrchestrator::iterate(App& app, float dt)
 {
     YA_PROFILE_FUNCTION()
     YA_PERF_FUNCTION(perf::metric::cpuTimeMs(), perf::domain::render());
@@ -73,13 +74,6 @@ int GameRuntimeFrameOrchestrator::iterate(App& app, float dt, bool bPumpNativeEv
         perf::sample::frameMainThreadCallbacks(),
         perf::sample::frameAutomation());
 
-    if (bPumpNativeEvents) {
-        HostSdlEventSource eventSource;
-        eventSource.pollEvents([&app](const Event& event) {
-            app.dispatchEvent(event);
-        });
-    }
-
     {
         YA_PROFILE_SCOPE("Frame/FpsControl");
         YA_PERF_SCOPE(perf::sample::frameFpsControl(), perf::metric::cpuTimeMs(), perf::domain::game());
@@ -87,7 +81,7 @@ int GameRuntimeFrameOrchestrator::iterate(App& app, float dt, bool bPumpNativeEv
     }
 
     if (app._bMinimized) {
-        SDL_Delay(100);
+        Os::sleepMs(100);
         return 0;
     }
     if (!app._bPause) {

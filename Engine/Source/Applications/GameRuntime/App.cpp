@@ -53,7 +53,7 @@ class GameRuntimeLoopDelegate final : public IAppLoopDelegate
 
     void onTick(float dt) override
     {
-        GameRuntimeFrameOrchestrator::iterate(app, dt, /*bPumpNativeEvents=*/false);
+        GameRuntimeFrameOrchestrator::iterate(app, dt);
     }
 
     void onShutdown() override {}

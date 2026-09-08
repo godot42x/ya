@@ -5,9 +5,7 @@
 #include "RHI/Core/Swapchain.h"
 #include "glad/glad.h"
 
-#if USE_SDL
-    #include "SDL3/SDL.h"
-#elif USE_GLFW
+#if USE_GLFW
     #include "GLFW/glfw3.h"
 #endif
 

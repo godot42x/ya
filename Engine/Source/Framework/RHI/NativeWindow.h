@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Core/Log.h"
+#include "Core/Common/Types.h"
 #include "RHI/Render.h"
 
 #include <string>
@@ -46,10 +47,10 @@ struct INativeWindow
     [[nodiscard]] void *getNativeWindowHandle() const { return nativeWindowHandle; }
 
     /// Device pixel ratio (content scale) of the display the window lives on.
-    /// Set by the backend at create/resize time from the window-system DPI
-    /// (SDL_GetWindowDisplayScale), NOT derived from present/logical extent —
-    /// that avoids the classic "DPI assumed 1.0" pitfall on HiDPI monitors.
-    /// Defaults to 1.0 when no native window exists (headless/scenario).
+    /// Set by the backend at create/resize time from the window-system DPI,
+    /// NOT derived from present/logical extent — that avoids the classic
+    /// "DPI assumed 1.0" pitfall on HiDPI monitors. Defaults to 1.0 when no
+    /// native window exists (headless/scenario).
     [[nodiscard]] float getDpiScale() const { return dpiScale; }
 
     // TODO: support multiple windows
@@ -59,8 +60,27 @@ struct INativeWindow
     virtual void setTitle(const std::string &title)    = 0;
     [[nodiscard]] virtual uint32_t getWindowID() const = 0;
 
-    /// Re-read per-monitor DPI. Default no-op for non-SDL backends.
+    /// Re-read per-monitor DPI. Default no-op when the backend has no display.
     virtual void refreshDpiScale() {}
+
+    virtual bool startTextInput() { return false; }
+    virtual bool stopTextInput() { return false; }
+    virtual bool setMouseGrab(bool grab)
+    {
+        (void)grab;
+        return false;
+    }
+    virtual bool setRelativeMouseMode(bool relative)
+    {
+        (void)relative;
+        return false;
+    }
+    /// Confine the cursor to `rect` in window coordinates. Pass nullptr to clear.
+    virtual bool setMouseConfineRect(const Rect2D* rect)
+    {
+        (void)rect;
+        return false;
+    }
 
     void getWindowSize(float &width, float &height)
     {
@@ -85,7 +105,8 @@ struct INativeWindow
 #endif
 };
 
-/// SDL-backed concrete native window implementation.
+/// SDL-backed concrete native window plus Vulkan surface hooks. Process-wide
+/// OS APIs (events, cursor, clipboard, sleep) live in Core/Os, not here.
 class YA_RHI_API SDLNativeWindow final : public INativeWindow
 {
   public:
@@ -100,6 +121,12 @@ class YA_RHI_API SDLNativeWindow final : public INativeWindow
 
     void getWindowSize(int &width, int &height) override;
     bool setWindowSize(int width, int height) override;
+
+    bool startTextInput() override;
+    bool stopTextInput() override;
+    bool setMouseGrab(bool grab) override;
+    bool setRelativeMouseMode(bool relative) override;
+    bool setMouseConfineRect(const Rect2D* rect) override;
 
     /// Re-read the window's display content scale. Called at create time and
     /// whenever the window moves to a different monitor (Qt's per-monitor DPI

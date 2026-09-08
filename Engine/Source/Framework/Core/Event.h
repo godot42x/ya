@@ -65,6 +65,8 @@ enum T
     MouseScrolled,
     MouseButtonPressed,
     MouseButtonReleased,
+    WindowMouseEnter,
+    WindowMouseLeave,
 
     EventTypeCount,
 
@@ -319,6 +321,22 @@ struct WindowMinimizeEvent : public WindowEvent
     EVENT_CLASS_TYPE(WindowMinimize)
 };
 
+struct WindowMouseEnterEvent : public WindowEvent
+{
+    WindowMouseEnterEvent(uint32_t windowID) : WindowEvent(windowID) {}
+
+    EVENT_CLASS_CATEGORY(EEventCategory::Application)
+    EVENT_CLASS_TYPE(WindowMouseEnter)
+};
+
+struct WindowMouseLeaveEvent : public WindowEvent
+{
+    WindowMouseLeaveEvent(uint32_t windowID) : WindowEvent(windowID) {}
+
+    EVENT_CLASS_CATEGORY(EEventCategory::Application)
+    EVENT_CLASS_TYPE(WindowMouseLeave)
+};
+
 
 
 // MARK: KeyEvent
@@ -518,5 +536,7 @@ YA_REFLECT_ENUM_VALUE(MouseMoved)
 YA_REFLECT_ENUM_VALUE(MouseScrolled)
 YA_REFLECT_ENUM_VALUE(MouseButtonPressed)
 YA_REFLECT_ENUM_VALUE(MouseButtonReleased)
+YA_REFLECT_ENUM_VALUE(WindowMouseEnter)
+YA_REFLECT_ENUM_VALUE(WindowMouseLeave)
 YA_REFLECT_ENUM_VALUE(EventTypeCount)
 YA_REFLECT_ENUM_END()

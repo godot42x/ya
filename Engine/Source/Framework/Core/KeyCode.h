@@ -1,40 +1,37 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "SDL3/SDL_mouse.h"
-#include "SDL3/sdl_keycode.h"
 #include "log.cc/helper.h"
 #include "reflects-core/enum.h"
 
-
+#include <cstdint>
 
 namespace ya
 {
-
 
 namespace EKeyMod
 {
 
 enum T
 {
-    LShift = SDL_KMOD_LSHIFT,
-    RShift = SDL_KMOD_RSHIFT,
-    Level5 = SDL_KMOD_LEVEL5,
-    LCtrl  = SDL_KMOD_LCTRL,
-    RCtrl  = SDL_KMOD_RCTRL,
-    LAlt   = SDL_KMOD_LALT,
-    RAlt   = SDL_KMOD_RALT,
-    LMeta  = SDL_KMOD_LGUI,
-    RMeta  = SDL_KMOD_RGUI,
-    Num    = SDL_KMOD_NUM,
-    Caps   = SDL_KMOD_CAPS,
-    Mode   = SDL_KMOD_MODE,
-    Scroll = SDL_KMOD_SCROLL,
+    LShift = 0x0001,
+    RShift = 0x0002,
+    Level5 = 0x0004,
+    LCtrl  = 0x0040,
+    RCtrl  = 0x0080,
+    LAlt   = 0x0100,
+    RAlt   = 0x0200,
+    LMeta  = 0x0400,
+    RMeta  = 0x0800,
+    Num    = 0x1000,
+    Caps   = 0x2000,
+    Mode   = 0x4000,
+    Scroll = 0x8000,
 
     Ctrl  = LCtrl | RCtrl,
     Shift = LShift | RShift,
     Alt   = LAlt | RAlt,
-
+    Gui   = LMeta | RMeta,
 };
 
 constexpr const char *toString(enum T v)
@@ -56,17 +53,14 @@ constexpr const char *toString(enum T v)
         CASE_ENUM_TO_STR(EKeyMod::Ctrl);
         CASE_ENUM_TO_STR(EKeyMod::Shift);
         CASE_ENUM_TO_STR(EKeyMod::Alt);
+        CASE_ENUM_TO_STR(EKeyMod::Gui);
     default:
         UNREACHABLE();
         return "";
     }
 }
 
-
-
 }; // namespace EKeyMod
-
-
 
 namespace EKey
 {
@@ -74,90 +68,86 @@ enum T
 {
     NONE = -1,
 
+    K_A = 0x00000061,
+    K_B = 0x00000062,
+    K_C = 0x00000063,
+    K_D = 0x00000064,
+    K_E = 0x00000065,
+    K_F = 0x00000066,
+    K_G = 0x00000067,
+    K_H = 0x00000068,
+    K_I = 0x00000069,
+    K_J = 0x0000006a,
+    K_K = 0x0000006b,
+    K_L = 0x0000006c,
+    K_M = 0x0000006d,
+    K_N = 0x0000006e,
+    K_O = 0x0000006f,
+    K_P = 0x00000070,
+    K_Q = 0x00000071,
+    K_R = 0x00000072,
+    K_S = 0x00000073,
+    K_T = 0x00000074,
+    K_U = 0x00000075,
+    K_V = 0x00000076,
+    K_W = 0x00000077,
+    K_X = 0x00000078,
+    K_Y = 0x00000079,
+    K_Z = 0x0000007a,
 
-    K_A = SDLK_A,
-    K_B = SDLK_B,
-    K_C = SDLK_C,
-    K_D = SDLK_D,
-    K_E = SDLK_E,
-    K_F = SDLK_F,
-    K_G = SDLK_G,
-    K_H = SDLK_H,
-    K_I = SDLK_I,
-    K_J = SDLK_J,
-    K_K = SDLK_K,
-    K_L = SDLK_L,
-    K_M = SDLK_M,
-    K_N = SDLK_N,
-    K_O = SDLK_O,
-    K_P = SDLK_P,
-    K_Q = SDLK_Q,
-    K_R = SDLK_R,
-    K_S = SDLK_S,
-    K_T = SDLK_T,
-    K_U = SDLK_U,
-    K_V = SDLK_V,
-    K_W = SDLK_W,
-    K_X = SDLK_X,
-    K_Y = SDLK_Y,
-    K_Z = SDLK_Z,
+    K_0 = 0x00000030,
+    K_1 = 0x00000031,
+    K_2 = 0x00000032,
+    K_3 = 0x00000033,
+    K_4 = 0x00000034,
+    K_5 = 0x00000035,
+    K_6 = 0x00000036,
+    K_7 = 0x00000037,
+    K_8 = 0x00000038,
+    K_9 = 0x00000039,
 
-    K_0 = SDLK_0,
-    K_1 = SDLK_1,
-    K_2 = SDLK_2,
-    K_3 = SDLK_3,
-    K_4 = SDLK_4,
-    K_5 = SDLK_5,
-    K_6 = SDLK_6,
-    K_7 = SDLK_7,
-    K_8 = SDLK_8,
-    K_9 = SDLK_9,
+    K_GRAVE = 0x00000060,
 
-    K_GRAVE = SDLK_GRAVE, // ` / ~ key (left of 1 on US keyboard)
+    Space     = 0x00000020,
+    Enter     = 0x0000000d,
+    Escape    = 0x0000001b,
+    Backspace = 0x00000008,
+    Tab       = 0x00000009,
+    LShift    = 0x400000e1,
+    LCtrl     = 0x400000e0,
+    LAlt      = 0x400000e2,
+    CapsLock  = 0x40000039,
+    F1        = 0x4000003a,
+    F2        = 0x4000003b,
+    F3        = 0x4000003c,
+    F4        = 0x4000003d,
+    F5        = 0x4000003e,
+    F6        = 0x4000003f,
+    F7        = 0x40000040,
+    F8        = 0x40000041,
+    F9        = 0x40000042,
+    F10       = 0x40000043,
+    F11       = 0x40000044,
+    F12       = 0x40000045,
 
-    Space     = SDLK_SPACE,
-    Enter     = SDLK_RETURN,
-    Escape    = SDLK_ESCAPE,
-    Backspace = SDLK_BACKSPACE,
-    Tab       = SDLK_TAB,
-    LShift    = SDLK_LSHIFT,
-    LCtrl     = SDLK_LCTRL,
-    LAlt      = SDLK_LALT,
-    CapsLock  = SDLK_CAPSLOCK,
-    F1        = SDLK_F1,
-    F2        = SDLK_F2,
-    F3        = SDLK_F3,
-    F4        = SDLK_F4,
-    F5        = SDLK_F5,
-    F6        = SDLK_F6,
-    F7        = SDLK_F7,
-    F8        = SDLK_F8,
-    F9        = SDLK_F9,
-    F10       = SDLK_F10,
-    F11       = SDLK_F11,
-    F12       = SDLK_F12,
+    Up    = 0x40000052,
+    Down  = 0x40000051,
+    Left  = 0x40000050,
+    Right = 0x4000004f,
 
-    Up    = SDLK_UP,
-    Down  = SDLK_DOWN,
-    Left  = SDLK_LEFT,
-    Right = SDLK_RIGHT,
+    Insert   = 0x40000049,
+    Delete   = 0x0000007f,
+    Home     = 0x4000004a,
+    End      = 0x4000004d,
+    Pageup   = 0x4000004b,
+    PagedowN = 0x4000004e,
 
-    Insert   = SDLK_INSERT,
-    Delete   = SDLK_DELETE,
-    Home     = SDLK_HOME,
-    End      = SDLK_END,
-    Pageup   = SDLK_PAGEUP,
-    PagedowN = SDLK_PAGEDOWN,
-
-    RCtrl  = SDLK_RCTRL,
-    RAlt   = SDLK_RALT,
-    RShift = SDLK_RSHIFT,
-    LMeta  = SDLK_LGUI, // Left Command/Windows key
-    RMeta  = SDLK_RGUI, // Right Command/Windows key
-
+    RCtrl  = 0x400000e4,
+    RAlt   = 0x400000e6,
+    RShift = 0x400000e5,
+    LMeta  = 0x400000e3,
+    RMeta  = 0x400000e7,
 };
-
-
 
 constexpr const char *toString(EKey::T v)
 {
@@ -250,9 +240,8 @@ constexpr const char *toString(EKey::T v)
     }
 }
 
-inline EKey::T fromSDLKeycode(SDL_Keycode keycode)
+inline EKey::T fromNativeKeycode(uint32_t keycode)
 {
-    // TODO: if no more directly use SDL_Keycode, maintain it
     return static_cast<EKey::T>(keycode);
 }
 
@@ -262,12 +251,11 @@ namespace EMouse
 {
 enum T
 {
-    Left   = SDL_BUTTON_LEFT,
-    Middle = SDL_BUTTON_MIDDLE,
-    Right  = SDL_BUTTON_RIGHT,
-    X1     = SDL_BUTTON_X1,
-    X2     = SDL_BUTTON_X2,
-
+    Left   = 1,
+    Middle = 2,
+    Right  = 3,
+    X1     = 4,
+    X2     = 5,
 };
 constexpr const char *toString(enum T v)
 {
@@ -283,13 +271,10 @@ constexpr const char *toString(enum T v)
     }
 }
 
-
-inline EMouse::T fromSDLMouseButton(Uint8 button)
+inline EMouse::T fromNativeMouseButton(uint8_t button)
 {
     return static_cast<EMouse::T>(button);
-
-}; // namespace EMouse
-
+}
 
 } // namespace EMouse
 

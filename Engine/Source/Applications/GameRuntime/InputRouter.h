@@ -3,9 +3,8 @@
 #include "Core/Api.h"
 #include "Core/Common/Types.h"
 #include "Core/Event.h"
+#include "Core/Input/Cursor.h"
 #include "Core/Input/InputMode.h"
-
-#include <SDL3/SDL.h>
 
 #include <cstdint>
 #include <optional>
@@ -16,9 +15,8 @@ namespace ya
 
 struct App;
 struct InputManager;
+struct INativeWindow;
 using FInputEvent = Event;
-
-enum class ECursorType : uint8_t;
 
 enum class EInputCancelReason : uint8_t
 {
@@ -116,7 +114,7 @@ class YA_GAME_RUNTIME_API InputRouter
         bool     relative   = false;
         bool     hideCursor = false;
         bool     confine    = false;
-        SDL_Rect confinement{0, 0, 0, 0};
+        Rect2D   confinement{};
 
         [[nodiscard]] bool isCaptured() const
         {
@@ -125,24 +123,19 @@ class YA_GAME_RUNTIME_API InputRouter
     };
 
     App*                    _app         = nullptr;
-    void*                   _window      = nullptr;
+    INativeWindow*          _window      = nullptr;
     IInputNode*             _defaultNode = nullptr;
     std::vector<FNodeEntry> _nodeStack;
     FPointerCaptureState    _pointerCapture;
-    int                     _activeCursor = -1;
-    SDL_Cursor*             _sdlArrowCursor = nullptr;
-    SDL_Cursor*             _sdlIBeamCursor = nullptr;
-    SDL_Cursor*             _sdlResizeEWCursor = nullptr;
-    SDL_Cursor*             _sdlResizeNSCursor = nullptr;
     uint64_t                _nextNodeId  = 1;
 
   public:
     InputRouter() = default;
-    ~InputRouter();
+    ~InputRouter() = default;
 
     void setApp(App& app) { _app = &app; }
-    void setWindow(void* window) { _window = window; }
-    [[nodiscard]] void* getWindow() const { return _window; }
+    void setWindow(INativeWindow* window) { _window = window; }
+    [[nodiscard]] INativeWindow* getWindow() const { return _window; }
 
     void setDefaultNode(IInputNode& node);
     [[nodiscard]] FNodeRegistration registerNode(IInputNode& node);
@@ -166,7 +159,6 @@ class YA_GAME_RUNTIME_API InputRouter
     void updateCursor();
     [[nodiscard]] FInputRouteContext makeRouteContext();
     [[nodiscard]] IInputNode*        getActiveNode() const;
-    [[nodiscard]] static SDL_Rect    toSDLRect(const Rect2D& rect);
 };
 
 } // namespace ya

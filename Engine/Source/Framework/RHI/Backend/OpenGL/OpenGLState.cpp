@@ -1,6 +1,10 @@
 #include "OpenGLState.h"
 #include "Core/Base.h"
 
+#if USE_SDL
+    #include <SDL3/SDL.h>
+#endif
+
 
 namespace ya
 {
@@ -68,7 +72,7 @@ void OpenGLState::init(const ya::RenderCreateInfo &renderCI)
 
     // buffers
 
-    SDL_GL_CreateContext(m_Window);
+    SDL_GL_CreateContext(static_cast<SDL_Window *>(m_Window));
 }
 
 void OpenGLState::recreateSwapchain(const ya::SwapchainCreateInfo &swapchainCI)
@@ -156,7 +160,7 @@ void OpenGLState::destroyContext()
 
 #if USE_SDL
     if (m_GLContext) {
-        SDL_GL_DestroyContext(m_GLContext);
+        SDL_GL_DestroyContext(static_cast<SDL_GLContext>(m_GLContext));
         m_GLContext = nullptr;
     }
 #elif USE_GLFW
@@ -168,7 +172,8 @@ void OpenGLState::makeCurrent()
 {
 #if USE_SDL
     if (_window && m_GLContext) {
-        SDL_GL_MakeCurrent(static_cast<SDL_Window *>(_window->getNativeWindowHandle()), m_GLContext);
+        SDL_GL_MakeCurrent(static_cast<SDL_Window *>(_window->getNativeWindowHandle()),
+                           static_cast<SDL_GLContext>(m_GLContext));
     }
 #elif USE_GLFW
     if (m_Window) {
@@ -181,7 +186,7 @@ void OpenGLState::swapBuffers()
 {
 #if USE_SDL
     if (m_Window) {
-        SDL_GL_SwapWindow(m_Window);
+        SDL_GL_SwapWindow(static_cast<SDL_Window *>(m_Window));
     }
 #elif USE_GLFW
     if (m_Window) {

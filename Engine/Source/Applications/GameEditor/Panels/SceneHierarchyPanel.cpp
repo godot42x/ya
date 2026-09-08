@@ -5,8 +5,8 @@
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 #include "Scene3D/TransformComponent.h"
-
-#include <SDL3/SDL_keyboard.h>
+#include "Core/KeyCode.h"
+#include "Core/Os/Os.h"
 
 #include <algorithm>
 
@@ -18,13 +18,13 @@ namespace
 
 bool isMultiSelectModifierPressed()
 {
-    const SDL_Keymod mod = SDL_GetModState();
-    return (mod & SDL_KMOD_CTRL) != 0 || (mod & SDL_KMOD_GUI) != 0;
+    const uint32_t mod = Os::queryKeyModState();
+    return (mod & EKeyMod::Ctrl) != 0 || (mod & EKeyMod::Gui) != 0;
 }
 
 bool isRangeSelectModifierPressed()
 {
-    return (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+    return (Os::queryKeyModState() & EKeyMod::Shift) != 0;
 }
 
 } // namespace

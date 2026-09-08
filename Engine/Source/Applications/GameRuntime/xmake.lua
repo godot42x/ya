@@ -25,5 +25,5 @@ target("ya-game-runtime")
     -- frame loop); the include root is exposed by ya-rhi-vulkan
     -- (backend-common no longer re-exports it).
     add_deps("ya-rhi-vulkan")
-    add_packages("libsdl3", "glm", "nlohmann_json", "cxxopts", { public = true })
+    add_packages("glm", "nlohmann_json", "cxxopts", { public = true })
     add_packages("vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk", "stb")

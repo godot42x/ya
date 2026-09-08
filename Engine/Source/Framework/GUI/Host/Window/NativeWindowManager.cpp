@@ -2,10 +2,6 @@
 
 #include "Core/Log.h"
 
-#if USE_SDL
-    #include <SDL3/SDL.h>
-#endif
-
 #include <algorithm>
 
 namespace ya
@@ -30,8 +26,8 @@ void NativeWindowManager::shutdown()
 
     clear();
 
-    // Do not SDL_Quit here. SDL is shared with GUIWindowHost / the process;
-    // extra windows can come and go without tearing down the primary window.
+    // Extra windows can come and go without tearing down the primary window
+    // or the process-wide window-system session.
     _initialized = false;
 }
 

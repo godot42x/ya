@@ -122,7 +122,7 @@ struct YA_RHI_API IRender : public plat_base<IRender>
 
     /**
      * @brief Get the native window handle as a specific type
-     * @tparam T The window type (e.g., SDL_Window*)
+     * @tparam T The native window handle type
      */
     template <typename T>
     T getNativeWindowHandleAs() const

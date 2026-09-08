@@ -209,7 +209,7 @@ void App::init(AppDesc ci)
         render->getWindowSize(winW, winH);
         app._windowSize.x = static_cast<float>(winW);
         app._windowSize.y = static_cast<float>(winH);
-        app.inputRouter.setWindow(render->getNativeWindow() ? render->getNativeWindow()->getNativeWindowHandle() : nullptr);
+        app.inputRouter.setWindow(render->getNativeWindow());
     }
 
     app._sceneManager = new SceneManager();
