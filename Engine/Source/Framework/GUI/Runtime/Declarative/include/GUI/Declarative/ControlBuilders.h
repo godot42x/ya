@@ -559,6 +559,18 @@ class UIImageWidgetBuilder final : public TUIWidgetBuilder<UIImage, UIImageWidge
         _widget->setTexture(std::move(value));
         return std::move(*this);
     }
+
+    [[nodiscard]] UIImageWidgetBuilder& setScaleMode(EImageScaleMode value) &
+    {
+        _widget->setScaleMode(value);
+        return *this;
+    }
+
+    [[nodiscard]] UIImageWidgetBuilder&& setScaleMode(EImageScaleMode value) &&
+    {
+        _widget->setScaleMode(value);
+        return std::move(*this);
+    }
 };
 
 } // namespace ya::ui

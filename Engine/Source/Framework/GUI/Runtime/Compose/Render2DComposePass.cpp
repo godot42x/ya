@@ -75,6 +75,9 @@ ClearValue composeClearValue(ERender2DComposePassKind kind)
     if (kind == ERender2DComposePassKind::EditorToolSurface) {
         return ClearValue(0.075f, 0.082f, 0.10f, 1.0f);
     }
+    if (kind == ERender2DComposePassKind::EditorViewportCompose) {
+        return ClearValue(0.07f, 0.075f, 0.09f, 1.0f);
+    }
     return ClearValue(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
@@ -93,7 +96,13 @@ const char* composePassLabel(ERender2DComposePassKind kind)
 void emitSnapshotItem(const UIFrameDrawItem& item)
 {
     if (item.kind == UIFrameDrawItem::EKind::Sprite) {
-        if (item.cornerRadius > 0.0f && !item.texture) {
+        if (item.bPerVertexColor) {
+            Render2D::makeRectFilledMultiColor(glm::vec3(item.pos, 0.0f),
+                                               item.size,
+                                               item.vertexColors,
+                                               item.texture);
+        }
+        else if (item.cornerRadius > 0.0f && !item.texture) {
             Render2D::drawRoundedRect(glm::vec3(item.pos, 0.0f),
                                       item.size,
                                       item.color,
@@ -105,7 +114,8 @@ void emitSnapshotItem(const UIFrameDrawItem& item)
                                  item.texture,
                                  item.color,
                                  item.uvScale,
-                                 item.uvOffset);
+                                 item.uvOffset,
+                                 item.bOpaqueSample);
         }
     }
     else if (item.kind == UIFrameDrawItem::EKind::Line) {
@@ -278,7 +288,10 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
             Render2D::makeSprite(glm::vec3(0.0f, 0.0f, 0.0f),
                                  glm::vec2(static_cast<float>(rtExtent.width), static_cast<float>(rtExtent.height)),
                                  passDesc.sceneSourceTexture.get(),
-                                 glm::vec4(1.0f));
+                                 glm::vec4(1.0f),
+                                 {1.0f, 1.0f},
+                                 {0.0f, 0.0f},
+                                 true);
         }
     }
     if (passDesc.kind == ERender2DComposePassKind::EditorCanvasPreview) {
@@ -303,7 +316,8 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
 void replayUIFrameSnapshot(ICommandBuffer*          cmdBuf,
                            const UIFrameSnapshot&   snapshot,
                            Extent2D                 targetExtent,
-                           ERender2DComposePassKind kind)
+                           ERender2DComposePassKind kind,
+                           const std::function<void()>& extraContent)
 {
     if (!cmdBuf || targetExtent.width == 0 || targetExtent.height == 0) {
         return;
@@ -333,6 +347,9 @@ void replayUIFrameSnapshot(ICommandBuffer*          cmdBuf,
     Render2D::begin(render2dCtx);
     logSnapshotItemsOnce(&snapshot);
     replaySnapshotItems(snapshot);
+    if (extraContent) {
+        extraContent();
+    }
     Render2D::end();
 }
 

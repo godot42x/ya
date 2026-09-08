@@ -72,6 +72,14 @@ nlohmann::json dumpUIFrameSnapshot(const UIFrameSnapshot& snapshot)
             items.back()["uvOffset"] = dumpVec2(item.uvOffset);
             items.back()["uvScale"]  = dumpVec2(item.uvScale);
         }
+        if (item.bPerVertexColor) {
+            items.back()["vertexColors"] = {
+                dumpVec4(item.vertexColors[0]),
+                dumpVec4(item.vertexColors[1]),
+                dumpVec4(item.vertexColors[2]),
+                dumpVec4(item.vertexColors[3]),
+            };
+        }
     }
 
     return {

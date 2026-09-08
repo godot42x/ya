@@ -5,8 +5,10 @@
 #include "GameRuntime/GUI/GameUI/DefaultGameUIController.h"
 
 #include "Resource/AssetManager.h"
+#include "RHI/Core/Texture.h"
 
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/GuiTextureCatalog.h"
 
 #include "Scene/Core/Scene.h"
 
@@ -16,8 +18,78 @@
 namespace ya
 {
 
+namespace
+{
+
+struct AssetGuiTextureSource final : IGuiTextureSource
+{
+    [[nodiscard]] FGuiTextureLookup lookup(const std::string& path) override
+    {
+        AssetManager* assets = AssetManager::get();
+        if (!assets || path.empty()) {
+            return {};
+        }
+        if (auto texture = assets->getTextureByPath(path)) {
+            return {std::move(texture), EGuiTextureState::Ready};
+        }
+        if (assets->isTextureLoadFailed(path)) {
+            return {nullptr, EGuiTextureState::Failed};
+        }
+        return {nullptr, EGuiTextureState::Pending};
+    }
+
+    void requestLoad(const std::string& path, FGuiTextureReady ready) override
+    {
+        AssetManager* assets = AssetManager::get();
+        if (!assets || path.empty()) {
+            if (ready) {
+                ready(path, {nullptr, EGuiTextureState::Failed});
+            }
+            return;
+        }
+        const std::string normalized = AssetManager::normalizeAssetPath(path);
+        // Async only: snapshot/paint must not create GPU resources (Core Rule 6).
+        // Catalog kick-once plus AssetManager pending-dedup keep one load per path.
+        assets->loadTexture(AssetManager::TextureLoadRequest{
+            .filepath = normalized,
+            .name     = {},
+            .onReady  = [ready, path](const std::shared_ptr<Texture>& texture) {
+                if (!ready) {
+                    return;
+                }
+                if (texture) {
+                    ready(path, {texture, EGuiTextureState::Ready});
+                    return;
+                }
+                ready(path, {nullptr, EGuiTextureState::Failed});
+            },
+        });
+    }
+
+    [[nodiscard]] uint64_t epoch() const override
+    {
+        AssetManager* assets = AssetManager::get();
+        return assets ? assets->getResourceVersionEpoch() : 0;
+    }
+
+    /// AssetManager::loadTexture onReady always hops to the game/UI thread.
+    [[nodiscard]] EGuiTextureCompletionThread completionThread() const override
+    {
+        return EGuiTextureCompletionThread::UIOwner;
+    }
+};
+
+} // namespace
+
+IGuiTextureSource& gameUITextureSource()
+{
+    static AssetGuiTextureSource source;
+    return source;
+}
+
 GameUIHost::GameUIHost() : _controller(std::make_unique<DefaultGameUIController>())
 {
+    _tree.setTextureSource(&gameUITextureSource());
 }
 
 GameUIHost::~GameUIHost() = default;
@@ -127,10 +199,8 @@ EWidgetRouteResult GameUIHost::dispatchEvent(const Event& event, const glm::vec2
 UIFrameSnapshot GameUIHost::buildSnapshot()
 {
     UIFrameBuildContext ctx{
-        .uiScale = _framebufferScale,
-        .offset  = _viewportPx.pos,
-        // Strong draw-resource lifetime: the snapshot retains every texture
-        // it references through queue submit, independent of the asset cache.
+        .uiScale         = _framebufferScale,
+        .offset          = _viewportPx.pos,
         .textureResolver = &resolveGameUITexture,
     };
     return _tree.buildSnapshot(ctx);
@@ -138,7 +208,7 @@ UIFrameSnapshot GameUIHost::buildSnapshot()
 
 std::shared_ptr<Texture> resolveGameUITexture(const std::string& assetPath)
 {
-    return AssetManager::get() ? AssetManager::get()->getTextureByPath(assetPath) : nullptr;
+    return gameUITextureSource().lookup(assetPath).texture;
 }
 
 std::vector<WidgetAttachment> mountSceneAutoMountEntries(Scene&                                       scene,

@@ -9,7 +9,7 @@
 // regions via `margin` so corners keep their size while edges/center stretch.
 //
 // Pure data: the asset path is resolved to a strong texture at paint time via
-// UIFrameBuildContext::textureResolver (widgets never reach the asset layer).
+// the tree texture catalog (widgets never reach the asset layer).
 // ============================================================================
 
 #include "Core/Base.h"

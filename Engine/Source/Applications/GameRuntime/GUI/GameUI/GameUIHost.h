@@ -20,6 +20,7 @@
 
 #include "Core/Api.h"
 
+#include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -93,11 +94,14 @@ struct YA_GAME_RUNTIME_API GameUIHost
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};
 };
 
-/// Strong texture resolver shared by every Game UI snapshot build context
-/// (runtime host, editor canvas preview, UI designer). The snapshot holds
-/// the returned shared_ptr, so draw resources survive queue submit even if
-/// the asset cache unloads/clears/reloads the texture afterwards.
+/// Lookup-only Game UI texture helper (cache hit / miss). Async load and
+/// per-path notify live on `gameUITextureSource()` + WidgetTree catalog.
 [[nodiscard]] YA_GAME_RUNTIME_API std::shared_ptr<Texture> resolveGameUITexture(const std::string& assetPath);
+
+/// Process-wide AssetManager adapter. Product trees call
+/// `tree.setTextureSource(&gameUITextureSource())` once; paint never links
+/// AssetManager into a GUI closure.
+[[nodiscard]] YA_GAME_RUNTIME_API IGuiTextureSource& gameUITextureSource();
 
 /// Instantiate + attach all autoMount SceneWidgetEntries of `scene` into
 /// `tree`'s content layer (entry zOrder -> widget zOrder, entry overrides

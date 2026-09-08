@@ -32,16 +32,18 @@ void UIFrameBuilder::addSprite(const Rect2D&                   logicalRect,
                                const glm::vec4&                color,
                                const std::shared_ptr<Texture>& texture,
                                glm::vec2                       uvOffset,
-                               glm::vec2                       uvScale)
+                               glm::vec2                       uvScale,
+                               bool                            bOpaqueSample)
 {
     UIFrameDrawItem item;
-    item.kind     = UIFrameDrawItem::EKind::Sprite;
-    item.pos      = toPx(logicalRect.pos);
-    item.size     = logicalRect.extent * _ctx.uiScale;
-    item.color    = color;
-    item.texture  = texture;
-    item.uvOffset = uvOffset;
-    item.uvScale  = uvScale;
+    item.kind          = UIFrameDrawItem::EKind::Sprite;
+    item.pos           = toPx(logicalRect.pos);
+    item.size          = logicalRect.extent * _ctx.uiScale;
+    item.color         = color;
+    item.texture       = texture;
+    item.uvOffset      = uvOffset;
+    item.uvScale       = uvScale;
+    item.bOpaqueSample = bOpaqueSample;
     if (!_clipStack.empty()) {
         item.bClipped = true;
         const Rect2D& clip = _clipStack.back();
@@ -59,6 +61,28 @@ void UIFrameBuilder::addRoundedRect(const Rect2D& logicalRect, const glm::vec4& 
     item.size         = logicalRect.extent * _ctx.uiScale;
     item.color        = color;
     item.cornerRadius = cornerRadius * _ctx.uiScale.x;
+    if (!_clipStack.empty()) {
+        item.bClipped = true;
+        const Rect2D& clip = _clipStack.back();
+        item.clip.pos     = toPx(clip.pos);
+        item.clip.extent  = clip.extent * _ctx.uiScale;
+    }
+    _items.push_back(std::move(item));
+}
+
+void UIFrameBuilder::addRectFilledMultiColor(const Rect2D&    logicalRect,
+                                             const glm::vec4& colTL,
+                                             const glm::vec4& colTR,
+                                             const glm::vec4& colBR,
+                                             const glm::vec4& colBL)
+{
+    UIFrameDrawItem item;
+    item.kind            = UIFrameDrawItem::EKind::Sprite;
+    item.pos             = toPx(logicalRect.pos);
+    item.size            = logicalRect.extent * _ctx.uiScale;
+    item.color           = colTL;
+    item.vertexColors    = {colTL, colTR, colBR, colBL};
+    item.bPerVertexColor = true;
     if (!_clipStack.empty()) {
         item.bClipped = true;
         const Rect2D& clip = _clipStack.back();
@@ -179,6 +203,20 @@ void UIFrameBuilder::addRectOutline(const Rect2D& logicalRect, const glm::vec4& 
     addLine({p0.x, p1.y}, p0, color, thickness);
 }
 
+void UIFrameBuilder::addCheckMark(const Rect2D& boxRect, const glm::vec4& color)
+{
+    const float x = boxRect.pos.x;
+    const float y = boxRect.pos.y;
+    const float w = boxRect.extent.x;
+    const float h = boxRect.extent.y;
+    const float thickness = std::max(1.5f, w * 0.12f);
+    const glm::vec2 p0{x + w * 0.22f, y + h * 0.52f};
+    const glm::vec2 p1{x + w * 0.42f, y + h * 0.74f};
+    const glm::vec2 p2{x + w * 0.80f, y + h * 0.26f};
+    addLine(p0, p1, color, thickness);
+    addLine(p1, p2, color, thickness);
+}
+
 void UIFrameBuilder::addBezierCubic(const glm::vec2& p0,
                                     const glm::vec2& c1,
                                     const glm::vec2& c2,
@@ -204,8 +242,24 @@ UIFrameSnapshot UIFrameBuilder::build(Extent2D logicalExtent)
     UIFrameSnapshot snapshot;
     snapshot.logicalExtent = logicalExtent;
     snapshot.buildContext  = _ctx;
+    // Catalog is tree-owned; the immutable packet must not keep a pointer
+    // that outlives WidgetTree::buildSnapshot.
+    snapshot.buildContext.textureCatalog = nullptr;
     snapshot.items         = std::move(_items);
     return snapshot;
+}
+
+FGuiTextureLookup UIFrameBuilder::resolveTextureLookup(const std::string& assetPath) const
+{
+    if (_ctx.textureCatalog) {
+        return _ctx.textureCatalog->bind(assetPath, _ctx.textureResolver);
+    }
+    FGuiTextureLookup lookup;
+    if (_ctx.textureResolver) {
+        lookup.texture = _ctx.textureResolver(assetPath);
+        lookup.state   = lookup.texture ? EGuiTextureState::Ready : EGuiTextureState::Pending;
+    }
+    return lookup;
 }
 
 bool UIFrameBuilder::hasCachedItems(const UIElement* widget) const

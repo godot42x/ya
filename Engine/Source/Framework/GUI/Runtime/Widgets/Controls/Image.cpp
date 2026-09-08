@@ -25,10 +25,48 @@ void UIImage::setResourceMissing(bool missing)
     invalidateProperty(EUIPropertyImpact::Paint);
 }
 
+void UIImage::setOpaqueSample(bool opaque)
+{
+    if (_bOpaqueSample == opaque) {
+        return;
+    }
+    _bOpaqueSample = opaque;
+    invalidateProperty(EUIPropertyImpact::Paint);
+}
+
+void UIImage::setScaleMode(EImageScaleMode mode)
+{
+    if (_scaleMode == mode) {
+        return;
+    }
+    _scaleMode = mode;
+    invalidateProperty(EUIPropertyImpact::Paint);
+}
+
+namespace
+{
+
+Rect2D spriteDestRect(const Rect2D& bounds, EImageScaleMode mode, const Texture& texture)
+{
+    if (mode != EImageScaleMode::Contain) {
+        return bounds;
+    }
+    return containedImageRect(bounds,
+                              static_cast<float>(texture.getWidth()),
+                              static_cast<float>(texture.getHeight()));
+}
+
+} // namespace
+
 void UIImage::paintSelf(UIFrameBuilder& builder)
 {
     if (_texture) {
-        builder.addSprite(_layoutRect, _tint, _texture);
+        builder.addSprite(spriteDestRect(_layoutRect, _scaleMode, *_texture),
+                          _tint,
+                          _texture,
+                          {0.0f, 0.0f},
+                          {1.0f, 1.0f},
+                          _bOpaqueSample);
         return;
     }
 
@@ -36,7 +74,9 @@ void UIImage::paintSelf(UIFrameBuilder& builder)
     if (!_assetPath.empty()) {
         const FGuiTextureLookup lookup = builder.resolveTextureLookup(_assetPath);
         if (lookup.state == EGuiTextureState::Ready && lookup.texture) {
-            builder.addSprite(_layoutRect, _tint, lookup.texture);
+            builder.addSprite(spriteDestRect(_layoutRect, _scaleMode, *lookup.texture),
+                              _tint,
+                              lookup.texture);
             return;
         }
         if (lookup.state == EGuiTextureState::Failed || _bResourceMissing) {

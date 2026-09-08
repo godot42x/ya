@@ -12,6 +12,7 @@
 #include "GUI/Widgets/Style.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
@@ -35,6 +36,7 @@
 #include <gtest/gtest.h>
 
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -1556,16 +1558,14 @@ TEST(UIFrameSnapshotTest, SetColorOverlaysColorAndInheritsThemeFontSize)
     EXPECT_EQ(text->resolvedStyle().fontSize, 24u);
 }
 
-TEST(UIFrameSnapshotTest, ImagePlaceholderAndModalPopupFollowTheme)
+TEST(UIFrameSnapshotTest, ImagePlaceholderFollowsThemeWithoutModalChrome)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto theme = std::make_shared<UITheme>();
     FImageStyle imageStyle;
     imageStyle.placeholderFill = FBrush::solid({0.1f, 0.2f, 0.3f, 1.0f});
     theme->define<FImageStyle>("image", imageStyle);
-    FPopupStyle popupStyle;
-    popupStyle.modalFill = FBrush::solid({0.4f, 0.0f, 0.0f, 0.5f});
-    theme->define<FPopupStyle>("popup", popupStyle);
+    theme->define<FPopupStyle>("popup", FPopupStyle{});
     tree.setTheme(theme.get());
 
     auto image = std::make_shared<UIImage>("Img");
@@ -1581,9 +1581,8 @@ TEST(UIFrameSnapshotTest, ImagePlaceholderAndModalPopupFollowTheme)
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), overlay, overlayArgs).valid());
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
-    ASSERT_GE(snap.items.size(), 2u);
+    ASSERT_EQ(snap.items.size(), 1u);
     EXPECT_EQ(snap.items[0].color, glm::vec4(0.1f, 0.2f, 0.3f, 1.0f));
-    EXPECT_EQ(snap.items.back().color, glm::vec4(0.4f, 0.0f, 0.0f, 0.5f));
     EXPECT_FALSE(image->hasAuthoredStyle());
     EXPECT_FALSE(overlay->hasAuthoredStyle());
 
@@ -1591,14 +1590,11 @@ TEST(UIFrameSnapshotTest, ImagePlaceholderAndModalPopupFollowTheme)
     FImageStyle imageStyle2;
     imageStyle2.placeholderFill = FBrush::solid({0.9f, 0.8f, 0.1f, 1.0f});
     other->define<FImageStyle>("image", imageStyle2);
-    FPopupStyle popupStyle2;
-    popupStyle2.modalFill = FBrush::solid({0.0f, 0.5f, 0.0f, 0.4f});
-    other->define<FPopupStyle>("popup", popupStyle2);
+    other->define<FPopupStyle>("popup", FPopupStyle{});
     tree.setTheme(other.get());
     const UIFrameSnapshot after = tree.buildSnapshot(UIFrameBuildContext{});
-    ASSERT_GE(after.items.size(), 2u);
+    ASSERT_EQ(after.items.size(), 1u);
     EXPECT_EQ(after.items[0].color, glm::vec4(0.9f, 0.8f, 0.1f, 1.0f));
-    EXPECT_EQ(after.items.back().color, glm::vec4(0.0f, 0.5f, 0.0f, 0.4f));
 }
 
 TEST(UIFrameSnapshotTest, TreeViewSelectionFollowsTheme)
@@ -1764,6 +1760,70 @@ TEST(UIFrameSnapshotTest, AddBrushSolidStaysOneSprite)
     EXPECT_EQ(snap.items[0].uvScale, glm::vec2(1.0f, 1.0f));
 }
 
+TEST(UIFrameSnapshotTest, AddRectFilledMultiColorStoresPerVertexColors)
+{
+    UIFrameBuilder builder(UIFrameBuildContext{
+        .uiScale = {2.0f, 2.0f},
+        .offset  = {10.0f, 20.0f},
+    });
+    const glm::vec4 white{1.0f, 1.0f, 1.0f, 1.0f};
+    const glm::vec4 hue{1.0f, 0.0f, 0.0f, 1.0f};
+    const glm::vec4 black{0.0f, 0.0f, 0.0f, 1.0f};
+    builder.addRectFilledMultiColor(Rect2D{.pos = {1.0f, 2.0f}, .extent = {10.0f, 8.0f}},
+                                    white,
+                                    hue,
+                                    black,
+                                    black);
+    const UIFrameSnapshot snap = builder.build({.width = 800, .height = 600});
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_EQ(snap.items[0].kind, UIFrameDrawItem::EKind::Sprite);
+    EXPECT_TRUE(snap.items[0].bPerVertexColor);
+    EXPECT_EQ(snap.items[0].pos, glm::vec2(12.0f, 24.0f));
+    EXPECT_EQ(snap.items[0].size, glm::vec2(20.0f, 16.0f));
+    EXPECT_EQ(snap.items[0].color, white);
+    EXPECT_EQ(snap.items[0].vertexColors[0], white);
+    EXPECT_EQ(snap.items[0].vertexColors[1], hue);
+    EXPECT_EQ(snap.items[0].vertexColors[2], black);
+    EXPECT_EQ(snap.items[0].vertexColors[3], black);
+}
+
+TEST(UIFrameSnapshotTest, AddSpriteStoresOpaqueSampleFlag)
+{
+    UIFrameBuilder opaqueBuilder(UIFrameBuildContext{});
+    opaqueBuilder.addSprite(Rect2D{.pos = {0.0f, 0.0f}, .extent = {16.0f, 16.0f}},
+                            glm::vec4(1.0f),
+                            nullptr,
+                            {0.0f, 0.0f},
+                            {1.0f, 1.0f},
+                            true);
+    const UIFrameSnapshot opaqueSnap = opaqueBuilder.build({.width = 64, .height = 64});
+    ASSERT_EQ(opaqueSnap.items.size(), 1u);
+    EXPECT_TRUE(opaqueSnap.items[0].bOpaqueSample);
+
+    UIFrameBuilder defaultBuilder(UIFrameBuildContext{});
+    defaultBuilder.addSprite(Rect2D{.pos = {0.0f, 0.0f}, .extent = {8.0f, 8.0f}}, glm::vec4(1.0f), nullptr);
+    const UIFrameSnapshot defaultSnap = defaultBuilder.build({.width = 64, .height = 64});
+    ASSERT_EQ(defaultSnap.items.size(), 1u);
+    EXPECT_FALSE(defaultSnap.items[0].bOpaqueSample);
+}
+
+TEST(UIFrameSnapshotTest, ContainedImageRectPreservesAspectInsideBounds)
+{
+    const Rect2D wide{.pos = {10.0f, 20.0f}, .extent = {200.0f, 100.0f}};
+    const Rect2D fitted = containedImageRect(wide, 64.0f, 64.0f);
+    EXPECT_FLOAT_EQ(fitted.extent.x, 100.0f);
+    EXPECT_FLOAT_EQ(fitted.extent.y, 100.0f);
+    EXPECT_FLOAT_EQ(fitted.pos.x, 60.0f);
+    EXPECT_FLOAT_EQ(fitted.pos.y, 20.0f);
+
+    const Rect2D tall{.pos = {0.0f, 0.0f}, .extent = {100.0f, 200.0f}};
+    const Rect2D fittedWide = containedImageRect(tall, 200.0f, 50.0f);
+    EXPECT_FLOAT_EQ(fittedWide.extent.x, 100.0f);
+    EXPECT_FLOAT_EQ(fittedWide.extent.y, 25.0f);
+    EXPECT_FLOAT_EQ(fittedWide.pos.x, 0.0f);
+    EXPECT_FLOAT_EQ(fittedWide.pos.y, 87.5f);
+}
+
 TEST(UIFrameSnapshotTest, AddBrushNinePatchWithoutTextureStretches)
 {
     UIFrameBuilder builder(UIFrameBuildContext{});
@@ -1804,6 +1864,10 @@ TEST(UIFrameSnapshotTest, StyleFieldImpactCatalogClassifiesPaintLayoutAndResourc
     EXPECT_TRUE(scrollbarWidth.bPaint);
     EXPECT_FALSE(scrollbarWidth.bLayout);
     EXPECT_FALSE(scrollbarWidth.bResource);
+
+    const FStyleFieldImpact textFieldPadding = lookupStyleFieldImpact<FTextFieldStyle>("padding");
+    EXPECT_TRUE(textFieldPadding.bLayout);
+    EXPECT_FALSE(textFieldPadding.bResource);
 
     const FStyleFieldImpact minSize = lookupStyleFieldImpact<FFloatingWindowStyle>("minSize");
     EXPECT_TRUE(minSize.bLayout);
@@ -1952,6 +2016,23 @@ std::shared_ptr<Texture> makeFakeTexture()
                                     [](Texture*) {});
 }
 
+struct FakeGuiTextureSource final : IGuiTextureSource
+{
+    std::unordered_map<std::string, FGuiTextureLookup> store;
+    int                                                requestCount = 0;
+
+    [[nodiscard]] FGuiTextureLookup lookup(const std::string& path) override
+    {
+        const auto it = store.find(path);
+        if (it != store.end()) {
+            return it->second;
+        }
+        return {nullptr, EGuiTextureState::Pending};
+    }
+
+    void requestLoad(const std::string&, FGuiTextureReady) override { ++requestCount; }
+};
+
 } // namespace
 
 TEST(UIFrameSnapshotTest, FontManagerRevisionBumpsOnRegister)
@@ -2032,20 +2113,27 @@ TEST(UIFrameSnapshotTest, ImageResolverReadyAfterGenerationBumpPaintsTexture)
     EXPECT_TRUE(bHitHasTexture);
 }
 
-TEST(UIFrameSnapshotTest, ImageMissingAssetUsesErrorFill)
+TEST(UIFrameSnapshotTest, ImageUnresolvedPathUsesPlaceholderUntilMissingFlag)
 {
-    WidgetTree tree({.width = 200, .height = 120});
+    WidgetTree tree({.width = 280, .height = 120});
     auto empty = std::make_shared<UIImage>("Empty");
-    auto missing = std::make_shared<UIImage>("Missing");
-    missing->_assetPath = "tex:missing";
+    auto pending = std::make_shared<UIImage>("Pending");
+    pending->_assetPath = "tex:pending";
+    auto failed = std::make_shared<UIImage>("Failed");
+    failed->_assetPath = "tex:failed";
+    failed->setResourceMissing(true);
     FCanvasSlotArgs emptySlot;
     emptySlot.offset    = {10.0f, 10.0f};
     emptySlot.fixedSize = {64.0f, 64.0f};
-    FCanvasSlotArgs missingSlot;
-    missingSlot.offset    = {90.0f, 10.0f};
-    missingSlot.fixedSize = {64.0f, 64.0f};
+    FCanvasSlotArgs pendingSlot;
+    pendingSlot.offset    = {90.0f, 10.0f};
+    pendingSlot.fixedSize = {64.0f, 64.0f};
+    FCanvasSlotArgs failedSlot;
+    failedSlot.offset    = {170.0f, 10.0f};
+    failedSlot.fixedSize = {64.0f, 64.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), empty, emptySlot);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), missing, missingSlot);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), pending, pendingSlot);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), failed, failedSlot);
 
     UIFrameBuildContext ctx;
     ctx.generation = 1;
@@ -2053,19 +2141,182 @@ TEST(UIFrameSnapshotTest, ImageMissingAssetUsesErrorFill)
     const UIFrameSnapshot snapshot = tree.buildSnapshot(ctx);
 
     const UIFrameDrawItem* emptyItem = nullptr;
-    const UIFrameDrawItem* missingItem = nullptr;
+    const UIFrameDrawItem* pendingItem = nullptr;
+    const UIFrameDrawItem* failedItem = nullptr;
     for (const UIFrameDrawItem& item : snapshot.items) {
         if (!item.texture && item.pos.x == 10.0f) {
             emptyItem = &item;
         }
         if (!item.texture && item.pos.x == 90.0f) {
-            missingItem = &item;
+            pendingItem = &item;
+        }
+        if (!item.texture && item.pos.x == 170.0f) {
+            failedItem = &item;
         }
     }
     ASSERT_NE(emptyItem, nullptr);
-    ASSERT_NE(missingItem, nullptr);
+    ASSERT_NE(pendingItem, nullptr);
+    ASSERT_NE(failedItem, nullptr);
     EXPECT_EQ(emptyItem->color, FImageStyle{}.placeholderFill.tintColor);
-    EXPECT_EQ(missingItem->color, FImageStyle{}.errorFill.tintColor);
+    EXPECT_EQ(pendingItem->color, FImageStyle{}.placeholderFill.tintColor);
+    EXPECT_EQ(failedItem->color, FImageStyle{}.errorFill.tintColor);
+}
+
+TEST(UIFrameSnapshotTest, GuiTextureCatalogNotifyDirtiesOnlySubscribers)
+{
+    WidgetTree tree({.width = 280, .height = 120});
+    FakeGuiTextureSource source;
+    tree.setTextureSource(&source);
+
+    auto image = std::make_shared<UIImage>("Img");
+    image->_assetPath = "tex:catalog";
+    auto panel = std::make_shared<UIPanel>("Side");
+    FCanvasSlotArgs imageSlot;
+    imageSlot.offset    = {10.0f, 10.0f};
+    imageSlot.fixedSize = {64.0f, 64.0f};
+    FCanvasSlotArgs panelSlot;
+    panelSlot.offset    = {90.0f, 10.0f};
+    panelSlot.fixedSize = {64.0f, 64.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+
+    UIFrameBuildContext ctx;
+    const UIFrameSnapshot missSnap = tree.buildSnapshot(ctx);
+    EXPECT_EQ(source.requestCount, 1);
+    bool bMissHasTexture = false;
+    const UIFrameDrawItem* missImage = nullptr;
+    for (const UIFrameDrawItem& item : missSnap.items) {
+        if (item.pos.x == 10.0f) {
+            missImage = &item;
+        }
+        if (item.texture) {
+            bMissHasTexture = true;
+        }
+    }
+    ASSERT_NE(missImage, nullptr);
+    EXPECT_FALSE(bMissHasTexture);
+    EXPECT_EQ(missImage->color, FImageStyle{}.placeholderFill.tintColor);
+
+    tree.buildSnapshot(ctx);
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+    EXPECT_EQ(source.requestCount, 1);
+    const uint64_t cacheInv = tree.getPerfStats().cacheInvalidations;
+
+    auto ready = makeFakeTexture();
+    source.store["tex:catalog"] = {ready, EGuiTextureState::Ready};
+    tree.textureCatalog().notify("tex:catalog", {ready, EGuiTextureState::Ready});
+
+    const UIFrameSnapshot hitSnap = tree.buildSnapshot(ctx);
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
+    EXPECT_EQ(tree.getPerfStats().cacheInvalidations, cacheInv);
+    EXPECT_EQ(tree.getLastInvalidationReason(), EUIInvalidationReason::ReactivePaint);
+    bool bHitHasTexture = false;
+    for (const UIFrameDrawItem& item : hitSnap.items) {
+        if (item.texture == ready) {
+            bHitHasTexture = true;
+        }
+    }
+    EXPECT_TRUE(bHitHasTexture);
+}
+
+TEST(UIFrameSnapshotTest, GuiTextureCatalogSharedPathLoadsOnce)
+{
+    WidgetTree tree({.width = 280, .height = 120});
+    FakeGuiTextureSource source;
+    tree.setTextureSource(&source);
+
+    auto left = std::make_shared<UIImage>("Left");
+    left->_assetPath = "tex:shared";
+    auto right = std::make_shared<UIImage>("Right");
+    right->_assetPath = "tex:shared";
+    FCanvasSlotArgs leftSlot;
+    leftSlot.offset    = {10.0f, 10.0f};
+    leftSlot.fixedSize = {64.0f, 64.0f};
+    FCanvasSlotArgs rightSlot;
+    rightSlot.offset    = {90.0f, 10.0f};
+    rightSlot.fixedSize = {64.0f, 64.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), left, leftSlot);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), right, rightSlot);
+
+    UIFrameBuildContext ctx;
+    tree.buildSnapshot(ctx);
+    EXPECT_EQ(source.requestCount, 1);
+    tree.buildSnapshot(ctx);
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    auto ready = makeFakeTexture();
+    source.store["tex:shared"] = {ready, EGuiTextureState::Ready};
+    tree.textureCatalog().notify("tex:shared", {ready, EGuiTextureState::Ready});
+
+    const UIFrameSnapshot hitSnap = tree.buildSnapshot(ctx);
+    EXPECT_EQ(source.requestCount, 1);
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 2u);
+    int hitCount = 0;
+    for (const UIFrameDrawItem& item : hitSnap.items) {
+        if (item.texture == ready) {
+            ++hitCount;
+        }
+    }
+    EXPECT_EQ(hitCount, 2);
+}
+
+TEST(UIFrameSnapshotTest, GuiTextureCatalogFailedPaintsErrorWithoutRetry)
+{
+    WidgetTree tree({.width = 200, .height = 120});
+    FakeGuiTextureSource source;
+    tree.setTextureSource(&source);
+
+    auto image = std::make_shared<UIImage>("Failed");
+    image->_assetPath = "tex:broken";
+    FCanvasSlotArgs slot;
+    slot.offset    = {10.0f, 10.0f};
+    slot.fixedSize = {64.0f, 64.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, slot);
+
+    UIFrameBuildContext ctx;
+    tree.buildSnapshot(ctx);
+    EXPECT_EQ(source.requestCount, 1);
+    tree.buildSnapshot(ctx);
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    source.store["tex:broken"] = {nullptr, EGuiTextureState::Failed};
+    tree.textureCatalog().notify("tex:broken", {nullptr, EGuiTextureState::Failed});
+
+    const UIFrameSnapshot failSnap = tree.buildSnapshot(ctx);
+    const UIFrameDrawItem* failItem = nullptr;
+    for (const UIFrameDrawItem& item : failSnap.items) {
+        if (item.pos.x == 10.0f) {
+            failItem = &item;
+        }
+    }
+    ASSERT_NE(failItem, nullptr);
+    EXPECT_EQ(failItem->texture, nullptr);
+    EXPECT_EQ(failItem->color, FImageStyle{}.errorFill.tintColor);
+
+    tree.buildSnapshot(ctx);
+    EXPECT_EQ(source.requestCount, 1);
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+    tree.buildSnapshot(ctx);
+    EXPECT_EQ(source.requestCount, 1);
+}
+
+TEST(UIFrameSnapshotTest, GuiTextureCatalogRefreshFromSourceKeepsReadyTexture)
+{
+    FakeGuiTextureSource source;
+    auto                 ready = makeFakeTexture();
+    source.store["tex:keep"]   = {ready, EGuiTextureState::Ready};
+
+    FGuiTextureCatalog catalog;
+    catalog.setSource(&source);
+    const FGuiTextureLookup first = catalog.bind("tex:keep", {});
+    EXPECT_EQ(first.state, EGuiTextureState::Ready);
+    EXPECT_EQ(first.texture, ready);
+
+    catalog.refreshFromSource();
+    const FGuiTextureLookup second = catalog.bind("tex:keep", {});
+    EXPECT_EQ(second.state, EGuiTextureState::Ready);
+    EXPECT_EQ(second.texture, ready);
+    EXPECT_EQ(source.requestCount, 0);
 }
 
 TEST(UIFrameSnapshotTest, VisualFillPrecedenceMatrix)
@@ -2267,7 +2518,7 @@ TEST(UIFrameSnapshotTest, FallbackThemeSwitchAndDeferredTextureReady)
     ASSERT_NE(unthemedImage, nullptr);
     EXPECT_EQ(unthemedPanel->color, FPanelStyle{}.fillColor.tintColor);
     EXPECT_EQ(unthemedPanel->texture, nullptr);
-    EXPECT_EQ(unthemedImage->color, FImageStyle{}.errorFill.tintColor);
+    EXPECT_EQ(unthemedImage->color, FImageStyle{}.placeholderFill.tintColor);
     EXPECT_EQ(unthemedImage->texture, nullptr);
 
     auto themeA = std::make_shared<UITheme>();
@@ -2286,7 +2537,7 @@ TEST(UIFrameSnapshotTest, FallbackThemeSwitchAndDeferredTextureReady)
     ASSERT_NE(aPanel, nullptr);
     ASSERT_NE(aImage, nullptr);
     EXPECT_EQ(aPanel->color, panelA.fillColor.tintColor);
-    EXPECT_EQ(aImage->color, imageA.errorFill.tintColor);
+    EXPECT_EQ(aImage->color, imageA.placeholderFill.tintColor);
     EXPECT_EQ(aImage->texture, nullptr);
 
     auto themeB = std::make_shared<UITheme>();
@@ -2305,7 +2556,7 @@ TEST(UIFrameSnapshotTest, FallbackThemeSwitchAndDeferredTextureReady)
     ASSERT_NE(bPanel, nullptr);
     ASSERT_NE(bImage, nullptr);
     EXPECT_EQ(bPanel->color, panelB.fillColor.tintColor);
-    EXPECT_EQ(bImage->color, imageB.errorFill.tintColor);
+    EXPECT_EQ(bImage->color, imageB.placeholderFill.tintColor);
     EXPECT_EQ(bImage->texture, nullptr);
 
     auto ready = makeFakeTexture();

@@ -21,8 +21,11 @@
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Brush.h"
 #include "GUI/Widgets/GuiFrameInspector.h"
+#include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/UIElement.h"
 
+#include <algorithm>
+#include <array>
 #include <memory>
 #include <functional>
 #include <string>
@@ -50,18 +53,24 @@ struct UIFrameBuildContext
     glm::vec2 offset  = {0.0f, 0.0f}; // render-target px origin of logical (0,0)
 
     /// Host-provided monotonic generation token: bump when the texture
-    /// resolver identity changes (asset reload, brush texture became ready).
+    /// *resolver identity* changes (tests swapping a fake resolver, host
+    /// replacing the source). Everyday async ready does **not** bump this —
+    /// FGuiTextureCatalog notifies only the widgets that bound that path.
     /// WidgetTree treats a generation bump as ResourceReady and drops draw-item
-    /// caches that hold resolved textures. Coordinate mapping changes
-    /// (uiScale/offset / DPI) are a separate BuildContextChanged path.
+    /// caches. Coordinate mapping changes (uiScale/offset / DPI) are a
+    /// separate BuildContextChanged path.
     uint64_t generation = 0;
 
-    /// Host-provided strong-resource resolver: asset path -> strong texture
-    /// reference. The snapshot holds the returned shared_ptr, so draw
-    /// resources stay alive through queue submit even if the asset cache
-    /// unloads/clears/reloads the texture afterwards. Widgets never reach the
-    /// asset layer themselves; without a resolver image textures fall back to
-    /// the white sprite (documented limitation for resolver-less hosts).
+    /// Tree-owned catalog wired by WidgetTree::buildSnapshot. Widgets resolve
+    /// through UIFrameBuilder::resolveTextureLookup so Pending/Ready/Failed
+    /// stay path-keyed. Null in ad-hoc builders; then `textureResolver` is
+    /// the lookup-only fallback.
+    FGuiTextureCatalog* textureCatalog = nullptr;
+
+    /// Lookup-only fallback when no catalog/source is mounted (tests, headless
+    /// hosts that inject a lambda). Product hosts set WidgetTree::setTextureSource
+    /// and keep this as a cache hit helper. Non-null return is Ready; null is
+    /// Pending — this lambda cannot express Failed.
     std::function<std::shared_ptr<Texture>(const std::string& assetPath)> textureResolver;
 };
 
@@ -100,6 +109,13 @@ struct UIFrameDrawItem
     glm::vec2 lineFrom      = {0.0f, 0.0f};
     glm::vec2 lineTo        = {0.0f, 0.0f};
     float     lineThickness = 1.0f;
+    /// Per-vertex colors for Sprite, Y-down ImGui order: TL, TR, BR, BL.
+    /// Ignored unless `bPerVertexColor`. `color` stays `vertexColors[0]` for dump.
+    std::array<glm::vec4, 4> vertexColors{};
+    bool                     bPerVertexColor = false;
+    /// Scene / viewport RTs often store unused alpha = 0. Sprite2D discards
+    /// those fragments; opaque sampling keeps RGB and writes A=1.
+    bool                     bOpaqueSample = false;
     bool operator==(const UIFrameDrawItem& other) const
     {
         return kind == other.kind && pos == other.pos && size == other.size && color == other.color &&
@@ -107,7 +123,8 @@ struct UIFrameDrawItem
                texture == other.texture && uvOffset == other.uvOffset && uvScale == other.uvScale &&
                cornerRadius == other.cornerRadius && font == other.font && text == other.text &&
                textScale == other.textScale && lineFrom == other.lineFrom && lineTo == other.lineTo &&
-               lineThickness == other.lineThickness;
+               lineThickness == other.lineThickness && vertexColors == other.vertexColors &&
+               bPerVertexColor == other.bPerVertexColor && bOpaqueSample == other.bOpaqueSample;
     }
 };
 
@@ -118,6 +135,17 @@ struct UIFrameSnapshot
     UIFrameBuildContext        buildContext;
     std::vector<UIFrameDrawItem> items;
 };
+
+/// Shrink `rect` on all sides so a 1px outline sits inside self-clip instead
+/// of being discarded on the layout-rect edge.
+[[nodiscard]] inline Rect2D insetRect(const Rect2D& rect, float amount)
+{
+    const float inset = std::max(amount, 0.0f);
+    return Rect2D{
+        .pos    = rect.pos + glm::vec2(inset),
+        .extent = glm::max(rect.extent - glm::vec2(inset * 2.0f), glm::vec2(0.0f)),
+    };
+}
 
 /// Accumulates resolved draw items during the pre-graph paint pass.
 class YA_GUI_API UIFrameBuilder
@@ -136,12 +164,27 @@ class YA_GUI_API UIFrameBuilder
                    const glm::vec4&                 color,
                    const std::shared_ptr<Texture>&  texture,
                    glm::vec2                        uvOffset = {0.0f, 0.0f},
-                   glm::vec2                        uvScale  = {1.0f, 1.0f});
+                   glm::vec2                        uvScale  = {1.0f, 1.0f},
+                   bool                             bOpaqueSample = false);
 
     /// Record a filled rounded rectangle. `cornerRadius` is in tree-local
     /// logical px (scaled to target px at compose time). Drawn via the shader's
     /// SDF round-rect alpha branch (no texture needed).
     void addRoundedRect(const Rect2D& logicalRect, const glm::vec4& color, float cornerRadius);
+
+    /// Record a filled rect with per-corner colors (Y-down ImGui order:
+    /// top-left, top-right, bottom-right, bottom-left). Compose writes four
+    /// different vertex colors; the GPU interpolates. No texture.
+    ///
+    /// A quad is two triangles. A true 2D field (all four corners independent)
+    /// shows a diagonal seam. 1D gradients are correct: keep the two vertices
+    /// of each axis-aligned edge the same color (horizontal: TL==BL, TR==BR;
+    /// vertical: TL==TR, BL==BR). HSV squares are two 1D layers, not one 2D quad.
+    void addRectFilledMultiColor(const Rect2D&    logicalRect,
+                                 const glm::vec4& colTL,
+                                 const glm::vec4& colTR,
+                                 const glm::vec4& colBR,
+                                 const glm::vec4& colBL);
 
     /// Record a brush (solid color / image / nine-patch / border). A solid
     /// brush has an empty resource and its tint colors the white sprite; an
@@ -169,6 +212,9 @@ class YA_GUI_API UIFrameBuilder
     /// Record a rectangle outline (4 line segments, logical rect).
     void addRectOutline(const Rect2D& logicalRect, const glm::vec4& color, float thickness = 1.0f);
 
+    /// Two-segment check glyph inside `boxRect` (same geometry as UICheckBox).
+    void addCheckMark(const Rect2D& boxRect, const glm::vec4& color);
+
     /// Record a cubic bezier approximated by `segments` line segments
     /// (client-side tessellation; the frame only carries the polyline).
     void addBezierCubic(const glm::vec2& p0,
@@ -193,6 +239,7 @@ class YA_GUI_API UIFrameBuilder
         YA_GUI_INSPECTOR_RECORD_REBUILD(_inspector, widget);
     }
     [[nodiscard]] uint32_t getRebuildCount() const { return _rebuildCount; }
+
     void bindInspector(FGuiFrameInspectorRecord* inspector) { _inspector = inspector; }
 
     // === Reactive incremental reuse ===
@@ -213,11 +260,13 @@ class YA_GUI_API UIFrameBuilder
     /// Append the widget's previous-frame segment from the read cache.
     void reuseCachedItems(const UIElement* widget);
 
-    /// Resolve an asset path to a strong texture reference through the build
-    /// context's resolver (null without a resolver or on cache miss).
+    /// Path-keyed lookup (Pending / Ready / Failed). Empty path is Pending.
+    [[nodiscard]] FGuiTextureLookup resolveTextureLookup(const std::string& assetPath) const;
+
+    /// Strong texture pointer for brushes/sprites. Null on Pending/Failed.
     [[nodiscard]] std::shared_ptr<Texture> resolveTexture(const std::string& assetPath) const
     {
-        return _ctx.textureResolver ? _ctx.textureResolver(assetPath) : nullptr;
+        return resolveTextureLookup(assetPath).texture;
     }
 
   private:

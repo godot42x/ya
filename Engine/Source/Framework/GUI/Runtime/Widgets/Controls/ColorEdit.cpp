@@ -25,8 +25,7 @@ constexpr float kSvSize     = 160.0f;
 constexpr float kHueBarH    = 14.0f;
 constexpr float kPickerPad  = 8.0f;
 constexpr float kHexRowH    = 22.0f;
-constexpr int   kSvBands    = 32;
-constexpr int   kHueCells   = 48;
+constexpr int   kHueSegments = 6;
 
 bool contains(const Rect2D& rect, const glm::vec2& point)
 {
@@ -206,38 +205,31 @@ public:
         builder.addBrush(_layoutRect, style.backgroundFill);
         const Rect2D sv  = svRect();
         const Rect2D hue = hueRect();
-        // Layered SV: hue fill + white-alpha S bands + black-alpha V bands.
-        // Not a GPU gradient (Render2D has Sprite/Text/Line only); this is
-        // ~65 sprites instead of a 16x16 cell grid.
-        builder.addSprite(sv, hsvToRgb(_h, 1.0f, 1.0f, 1.0f), nullptr);
-        const float bandW = sv.extent.x / static_cast<float>(kSvBands);
-        const float bandH = sv.extent.y / static_cast<float>(kSvBands);
-        for (int x = 0; x < kSvBands; ++x) {
-            const float t = (static_cast<float>(x) + 0.5f) / static_cast<float>(kSvBands);
-            builder.addSprite(Rect2D{.pos    = {sv.pos.x + static_cast<float>(x) * bandW, sv.pos.y},
-                                     .extent = {bandW + 0.5f, sv.extent.y}},
-                              glm::vec4{1.0f, 1.0f, 1.0f, 1.0f - t},
-                              nullptr);
-        }
-        for (int y = 0; y < kSvBands; ++y) {
-            const float t = (static_cast<float>(y) + 0.5f) / static_cast<float>(kSvBands);
-            builder.addSprite(Rect2D{.pos    = {sv.pos.x, sv.pos.y + static_cast<float>(y) * bandH},
-                                     .extent = {sv.extent.x, bandH + 0.5f}},
-                              glm::vec4{0.0f, 0.0f, 0.0f, t},
-                              nullptr);
-        }
+        // GPU quads are two triangles: a 2D four-corner field (white/hue/black/black)
+        // interpolates a gray diagonal. ImGui paints two 1D layers instead:
+        // S = white→hue across, V = transparent→black down, alpha-blended.
+        const glm::vec4 white{1.0f, 1.0f, 1.0f, 1.0f};
+        const glm::vec4 black{0.0f, 0.0f, 0.0f, 1.0f};
+        const glm::vec4 clear{0.0f, 0.0f, 0.0f, 0.0f};
+        const glm::vec4 hueColor = hsvToRgb(_h, 1.0f, 1.0f, 1.0f);
+        builder.addRectFilledMultiColor(sv, white, hueColor, hueColor, white);
+        builder.addRectFilledMultiColor(sv, clear, clear, black, black);
         const glm::vec2 cursor{sv.pos.x + _s * sv.extent.x, sv.pos.y + (1.0f - _v) * sv.extent.y};
         builder.addRectOutline(Rect2D{.pos = cursor - glm::vec2(4.0f), .extent = {8.0f, 8.0f}},
                                {1.0f, 1.0f, 1.0f, 1.0f},
                                1.0f);
 
-        const float hueCellW = hue.extent.x / static_cast<float>(kHueCells);
-        for (int i = 0; i < kHueCells; ++i) {
-            const float h = (static_cast<float>(i) + 0.5f) * (360.0f / static_cast<float>(kHueCells));
-            builder.addSprite(Rect2D{.pos    = {hue.pos.x + static_cast<float>(i) * hueCellW, hue.pos.y},
-                                     .extent = {hueCellW + 0.5f, hue.extent.y}},
-                              hsvToRgb(h, 1.0f, 1.0f, 1.0f),
-                              nullptr);
+        const float hueSegW = hue.extent.x / static_cast<float>(kHueSegments);
+        for (int i = 0; i < kHueSegments; ++i) {
+            const glm::vec4 left  = hsvToRgb(static_cast<float>(i) * 60.0f, 1.0f, 1.0f, 1.0f);
+            const glm::vec4 right = hsvToRgb(static_cast<float>(i + 1) * 60.0f, 1.0f, 1.0f, 1.0f);
+            builder.addRectFilledMultiColor(
+                Rect2D{.pos    = {hue.pos.x + static_cast<float>(i) * hueSegW, hue.pos.y},
+                       .extent = {hueSegW, hue.extent.y}},
+                left,
+                right,
+                right,
+                left);
         }
         const float hueX = hue.pos.x + (_h / 360.0f) * hue.extent.x;
         builder.addRectOutline(Rect2D{.pos = {hueX - 2.0f, hue.pos.y}, .extent = {4.0f, hue.extent.y}},
@@ -429,21 +421,23 @@ private:
 
 Rect2D UIColorEdit::swatchRect() const
 {
+    const glm::vec2 pad = resolvedStyle().padding;
     return Rect2D{
-        .pos    = {_layoutRect.pos.x + 4.0f, _layoutRect.pos.y + 3.0f},
-        .extent = {_swatchSize, std::max(8.0f, _layoutRect.extent.y - 6.0f)},
+        .pos    = {_layoutRect.pos.x + pad.x, _layoutRect.pos.y + pad.y},
+        .extent = {_swatchSize, std::max(8.0f, _layoutRect.extent.y - pad.y * 2.0f)},
     };
 }
 
 Rect2D UIColorEdit::channelRect(int channel) const
 {
-    const Rect2D swatch = swatchRect();
-    const float  x0     = swatch.pos.x + swatch.extent.x + 6.0f;
-    const float  avail  = std::max(32.0f, _layoutRect.pos.x + _layoutRect.extent.x - 4.0f - x0);
-    const float  cellW  = avail / 4.0f;
+    const glm::vec2 pad    = resolvedStyle().padding;
+    const Rect2D     swatch = swatchRect();
+    const float      x0    = swatch.pos.x + swatch.extent.x + pad.x;
+    const float      avail  = std::max(32.0f, _layoutRect.pos.x + _layoutRect.extent.x - pad.x - x0);
+    const float      cellW  = avail / 4.0f;
     return Rect2D{
-        .pos    = {x0 + static_cast<float>(channel) * cellW, _layoutRect.pos.y + 3.0f},
-        .extent = {std::max(8.0f, cellW - 2.0f), std::max(8.0f, _layoutRect.extent.y - 6.0f)},
+        .pos    = {x0 + static_cast<float>(channel) * cellW, _layoutRect.pos.y + pad.y},
+        .extent = {std::max(8.0f, cellW - pad.x), std::max(8.0f, _layoutRect.extent.y - pad.y * 2.0f)},
     };
 }
 
@@ -469,10 +463,13 @@ void UIColorEdit::setMixed(bool mixed)
     invalidateProperty(EUIPropertyImpact::Paint);
 }
 
-void UIColorEdit::adjustActiveChannel(float delta)
+void UIColorEdit::adjustChannel(int channel, float delta)
 {
+    if (channel < 0 || channel > 3) {
+        return;
+    }
     glm::vec4 next = _color;
-    next[_activeChannel] = std::clamp(next[_activeChannel] + delta, 0.0f, 1.0f);
+    next[channel] = std::clamp(next[channel] + delta, 0.0f, 1.0f);
     setColor(next);
 }
 
@@ -521,32 +518,41 @@ void UIColorEdit::paintSelf(UIFrameBuilder& builder)
     builder.addBrush(_layoutRect, style.backgroundFill);
     const glm::vec4 swatchColor = _bMixed ? glm::vec4(0.45f, 0.45f, 0.45f, 1.0f) : _color;
     builder.addSprite(swatchRect(), swatchColor, nullptr);
-    builder.addRectOutline(swatchRect(), style.textColor * glm::vec4(1.0f, 1.0f, 1.0f, 0.35f), 1.0f);
+    builder.addRectOutline(insetRect(swatchRect(), 1.0f), style.textColor * glm::vec4(1.0f, 1.0f, 1.0f, 0.35f), 1.0f);
 
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 11);
+    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (_bMixed && font) {
         builder.addText(swatchRect(), "—", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
         return;
     }
 
     static const char* kNames[4] = {"R", "G", "B", "A"};
+    const glm::vec2 innerPad{std::max(4.0f, style.padding.x * 0.5f), 0.0f};
     for (int ch = 0; ch < 4; ++ch) {
         const Rect2D cell = channelRect(ch);
-        if (ch == _activeChannel) {
-            builder.addSprite(cell, style.channelHighlight, nullptr);
+        builder.addSprite(cell, glm::vec4(0.16f, 0.18f, 0.22f, 1.0f), nullptr);
+        builder.addRectOutline(insetRect(cell, 1.0f), style.textColor * glm::vec4(1.0f, 1.0f, 1.0f, 0.22f), 1.0f);
+        if (!font) {
+            continue;
         }
-        else {
-            builder.addSprite(cell, glm::vec4(0.16f, 0.18f, 0.22f, 1.0f), nullptr);
-        }
-        builder.addRectOutline(cell, style.textColor * glm::vec4(1.0f, 1.0f, 1.0f, 0.22f), 1.0f);
-        if (font) {
-            builder.addText(cell,
-                            std::format("{} {:.2f}", kNames[ch], _color[ch]),
-                            style.textColor,
-                            font,
-                            EWidgetAlignH::Center,
-                            EWidgetAlignV::Center);
-        }
+        Rect2D inner = cell;
+        inner.pos += innerPad;
+        inner.extent = glm::max(inner.extent - innerPad * 2.0f, glm::vec2(0.0f));
+        const float prefixW = font->measureText(kNames[ch]) + innerPad.x;
+        Rect2D prefix = inner;
+        prefix.extent.x = std::min(prefixW, inner.extent.x);
+        Rect2D value = inner;
+        value.pos.x += prefix.extent.x;
+        value.extent.x = std::max(0.0f, inner.extent.x - prefix.extent.x);
+        builder.pushClip(cell);
+        builder.addText(prefix, kNames[ch], style.textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
+        builder.addText(value,
+                        std::format("{:.2f}", _color[ch]),
+                        style.textColor,
+                        font,
+                        EWidgetAlignH::Left,
+                        EWidgetAlignV::Center);
+        builder.popClip();
     }
 }
 
@@ -555,13 +561,16 @@ bool UIColorEdit::handleInputEvent(const Event& event, const WidgetEventContext&
     const EEvent::T eventType = event.getEventType();
 
     if (eventType == EEvent::KeyPressed) {
+        if (_dragChannel < 0) {
+            return false;
+        }
         const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
         if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Left) {
-            adjustActiveChannel(-0.05f);
+            adjustChannel(_dragChannel, -0.05f);
             return true;
         }
         if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Right) {
-            adjustActiveChannel(0.05f);
+            adjustChannel(_dragChannel, 0.05f);
             return true;
         }
         return false;
@@ -579,32 +588,21 @@ bool UIColorEdit::handleInputEvent(const Event& event, const WidgetEventContext&
         }
         for (int ch = 0; ch < 4; ++ch) {
             if (contains(channelRect(ch), ctx.logicalPoint)) {
-                if (_activeChannel != ch) {
-                    _activeChannel = ch;
-                    markPaintDirty();
-                }
-                _bDragging = true;
-                _dragStart = ctx.logicalPoint;
+                _dragChannel = ch;
+                _bDragging   = true;
+                _dragStart   = ctx.logicalPoint;
                 if (WidgetTree* tree = getTree()) {
                     tree->setPointerCapture(this);
                 }
                 return true;
             }
         }
-        if (hitTestLayoutRect(ctx.logicalPoint)) {
-            _bDragging = true;
-            _dragStart = ctx.logicalPoint;
-            if (WidgetTree* tree = getTree()) {
-                tree->setPointerCapture(this);
-            }
-            return true;
-        }
-        return false;
+        return hitTestLayoutRect(ctx.logicalPoint);
     }
 
     if (eventType == EEvent::MouseMoved) {
-        if (_bDragging) {
-            adjustActiveChannel((ctx.logicalPoint.x - _dragStart.x) * 0.01f);
+        if (_bDragging && _dragChannel >= 0) {
+            adjustChannel(_dragChannel, (ctx.logicalPoint.x - _dragStart.x) * 0.01f);
             _dragStart = ctx.logicalPoint;
         }
         return true;
@@ -612,7 +610,8 @@ bool UIColorEdit::handleInputEvent(const Event& event, const WidgetEventContext&
 
     if (eventType == EEvent::MouseButtonReleased) {
         if (_bDragging) {
-            _bDragging = false;
+            _bDragging   = false;
+            _dragChannel = -1;
             if (WidgetTree* tree = getTree()) {
                 tree->releasePointerCapture(this);
             }
