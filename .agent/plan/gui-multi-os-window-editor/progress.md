@@ -124,3 +124,24 @@
 ### 下一接力点
 
 `MW-101`：`GUIWindowManager` 最小生命周期，消费共享 device + surface-context provider，禁止 `IRender::create` 复制 backend。
+
+## 2026-09-09 — C1 MW-101（GUIWindowManager + 双窗 tree/input）
+
+### 完成
+
+- `GUIWindowManager`：额外 OS window 各持一个 `INativeWindow` + `WidgetTree`；create/requestClose/destroy/find/dispatch/tickAll；`renderAll` 空实现。
+- `GUIApp` 成为 `IAppLoopDelegate`：统一 `AppKernel`；`openWindow` / `closeWindow` / `findTree`；按 `guiEventWindowId` 路由；关副窗不退主循环。
+- 额外窗不调用 `IRender::create`，不复制 `GUIAppHost::init`，不 present。
+- 鼠标/键盘/窗口事件携带 window id；`SdlEventSource` 可接受全部 OS 窗口事件。
+- `NativeWindowManager::shutdown` 不再 `SDL_Quit`（与主窗共享 SDL）。
+- 测试：`ya-gui-headless-host-test` 中 `GUIWindowManagerTest` / `GUIAppExtraWindowTest`（SDL 创建失败则 skip）。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：单窗 `GUIApp::init/run`、主窗 `IRender` facade、关主窗才 `shouldClose`。
+- 未完成：extra present / surface-context（C2）；MW-102 更完整的 capture/tooltip/clipboard 隔离；C2G Feature Gallery `Windows` 页。
+- 偏离：MW-101 未接入 surface-context provider——额外窗本切片无 GPU，C2 再接。`GUIApp` 用 `unique_ptr<GUIWindowManager>` 避免与 `GUIWindowHost` 头循环。
+
+### 下一接力点
+
+`MW-102`：per-window input/tick/snapshot 不泄漏。不要开始 extra swapchain。

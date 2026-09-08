@@ -59,6 +59,9 @@ struct INativeWindow
     virtual void setTitle(const std::string &title)    = 0;
     [[nodiscard]] virtual uint32_t getWindowID() const = 0;
 
+    /// Re-read per-monitor DPI. Default no-op for non-SDL backends.
+    virtual void refreshDpiScale() {}
+
     void getWindowSize(float &width, float &height)
     {
         int w = 0, h = 0;

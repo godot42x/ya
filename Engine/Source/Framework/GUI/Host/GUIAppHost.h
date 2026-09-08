@@ -107,6 +107,8 @@ struct FGUIWindowHostConfig
     AppAutomationRunOptions automation;
 };
 
+using GUIWindowId = uint32_t;
+
 /// One native GUI window: owns its SDL window, presentation resources,
 /// transient pointer state and exactly one WidgetTree. It is the concrete
 /// single-window owner.
@@ -139,6 +141,10 @@ public:
     [[nodiscard]] bool isInitialized() const;
     [[nodiscard]] IAppEventSource* getEventSource();
     [[nodiscard]] const FGUIWindowHostConfig& getConfig() const;
+    [[nodiscard]] uint32_t getWindowID() const;
+    /// When true, the SDL source emits events for every OS window so GUIApp
+    /// can route extras. Default filters to this host's window.
+    void setAcceptAllWindowEvents(bool enabled);
     /// Complete scenario / surface parity diffs after an externally-owned
     /// AppKernel run. GUIApp calls this after its kernel exits.
     [[nodiscard]] int finishRun(int kernelResult);
@@ -168,13 +174,19 @@ private:
     std::unique_ptr<FImpl> _impl;
 };
 
-/// GUI assembly/policy layer. v1 owns one primary window but it is deliberately
-/// a composition of GUIWindowHost rather than a second event/render loop; the
-/// next multi-window increment grows a registry here.
-class YA_GUI_API GUIApp final
+class GUIWindowManager;
+
+/// GUI assembly/policy layer. Owns the primary GUIWindowHost plus extra
+/// native windows (GUIWindowManager). One AppKernel drives both; extras share
+/// the process device and do not call IRender::create. Extra present is C2.
+class YA_GUI_API GUIApp final : public IAppLoopDelegate
 {
+    GUIWindowHost                     _primaryWindow;
+    std::unique_ptr<GUIWindowManager> _extraWindows;
+
 public:
     GUIApp(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate);
+    ~GUIApp();
 
     GUIApp(const GUIApp&)            = delete;
     GUIApp& operator=(const GUIApp&) = delete;
@@ -190,8 +202,16 @@ public:
         _primaryWindow.injectEvent(event, logicalPoint);
     }
 
-private:
-    GUIWindowHost _primaryWindow;
+    /// Extra OS window + WidgetTree. Does not create a GPU device or present.
+    [[nodiscard]] GUIWindowId openWindow(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate);
+    void                      closeWindow(GUIWindowId id);
+    [[nodiscard]] WidgetTree* findTree(GUIWindowId id);
+
+    void onInit() override;
+    void onEvent(const Event& event) override;
+    void onTick(float dt) override;
+    void onShutdown() override;
+    [[nodiscard]] bool shouldClose() const override;
 };
 
 } // namespace ya

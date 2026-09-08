@@ -50,7 +50,10 @@ bool SDLNativeWindow::recreate(const WindowCreateInfo &ci)
     }
 
     SDL_Window *window = SDL_CreateWindow(ci.title.c_str(), static_cast<int>(ci.width), static_cast<int>(ci.height), flags);
-    YA_CORE_ASSERT(window, "Failed to create window: {}", SDL_GetError());
+    if (!window) {
+        YA_CORE_ERROR("Failed to create window: {}", SDL_GetError());
+        return false;
+    }
     nativeWindowHandle = window;
     return true;
 }

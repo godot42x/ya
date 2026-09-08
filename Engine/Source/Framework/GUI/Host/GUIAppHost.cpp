@@ -1,5 +1,6 @@
 #include "GUI/Host/GUIAppHost.h"
 #include "GUI/Host/GUIPresentationTarget.h"
+#include "GUI/Host/GUIWindowManager.h"
 
 #include "GUI/Host/AppBootstrap.h"
 #include "App/Control/BmpDiff.h"
@@ -441,37 +442,39 @@ struct SdlEventSource final : IAppEventSource
     uint32_t hostWindowID = 0;
     bool     bPointerKnown = false;
 
-    static bool isMouseFocusedHostWindow(uint32_t hostWindowID)
-    {
-        SDL_Window* focusedWindow = SDL_GetMouseFocus();
-        return focusedWindow != nullptr && hostWindowID != 0 && SDL_GetWindowID(focusedWindow) == hostWindowID;
-    }
-
     void pollEvents(const std::function<void(const Event&)>& emit) override
     {
         SDL_PumpEvents();
-        if (!bPointerKnown && isMouseFocusedHostWindow(hostWindowID)) {
-            float mouseX = -1.0f;
-            float mouseY = -1.0f;
-            SDL_GetMouseState(&mouseX, &mouseY);
-            emit(MouseMoveEvent(mouseX, mouseY));
-            bPointerKnown = true;
+        if (!bPointerKnown) {
+            SDL_Window* focusedWindow = SDL_GetMouseFocus();
+            if (focusedWindow &&
+                (hostWindowID == 0 || SDL_GetWindowID(focusedWindow) == hostWindowID)) {
+                float mouseX = -1.0f;
+                float mouseY = -1.0f;
+                SDL_GetMouseState(&mouseX, &mouseY);
+                MouseMoveEvent move(mouseX, mouseY);
+                move._windowID = SDL_GetWindowID(focusedWindow);
+                emit(move);
+                bPointerKnown = true;
+            }
         }
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             const bool bHostWindowEvent = [&]() {
                 switch (event.type) {
-                case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-                case SDL_EVENT_WINDOW_RESIZED:
-                case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-                case SDL_EVENT_WINDOW_METAL_VIEW_RESIZED:
-                case SDL_EVENT_WINDOW_MINIMIZED:
-                case SDL_EVENT_WINDOW_MAXIMIZED:
-                case SDL_EVENT_WINDOW_RESTORED:
-                case SDL_EVENT_WINDOW_MOUSE_ENTER:
-                case SDL_EVENT_WINDOW_MOUSE_LEAVE:
-                    return hostWindowID == 0 || event.window.windowID == hostWindowID;
+            case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+            case SDL_EVENT_WINDOW_RESIZED:
+            case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+            case SDL_EVENT_WINDOW_METAL_VIEW_RESIZED:
+            case SDL_EVENT_WINDOW_MINIMIZED:
+            case SDL_EVENT_WINDOW_MAXIMIZED:
+            case SDL_EVENT_WINDOW_RESTORED:
+            case SDL_EVENT_WINDOW_MOUSE_ENTER:
+            case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+            case SDL_EVENT_WINDOW_FOCUS_GAINED:
+            case SDL_EVENT_WINDOW_FOCUS_LOST:
+                return hostWindowID == 0 || event.window.windowID == hostWindowID;
                 default:
                     return true;
                 }
@@ -518,66 +521,109 @@ struct SdlEventSource final : IAppEventSource
                     emit(WindowMinimizeEvent(event.window.windowID));
                 }
                 break;
+            case SDL_EVENT_WINDOW_FOCUS_GAINED:
+                if (bHostWindowEvent) {
+                    emit(WindowFocusEvent(event.window.windowID));
+                }
+                break;
+            case SDL_EVENT_WINDOW_FOCUS_LOST:
+                if (bHostWindowEvent) {
+                    emit(WindowFocusLostEvent(event.window.windowID));
+                }
+                break;
             case SDL_EVENT_WINDOW_MOUSE_ENTER:
                 if (bHostWindowEvent) {
                     float mouseX = -1.0f;
                     float mouseY = -1.0f;
                     SDL_GetMouseState(&mouseX, &mouseY);
-                    emit(MouseMoveEvent(mouseX, mouseY));
+                    MouseMoveEvent move(mouseX, mouseY);
+                    move._windowID = event.window.windowID;
+                    emit(move);
+                    emit(WindowFocusEvent(event.window.windowID));
                     bPointerKnown = true;
                 }
                 break;
             case SDL_EVENT_WINDOW_MOUSE_LEAVE:
                 if (bHostWindowEvent) {
-                    emit(MouseMoveEvent(-1000000.0f, -1000000.0f));
+                    MouseMoveEvent leave(-1000000.0f, -1000000.0f);
+                    leave._windowID = event.window.windowID;
+                    emit(leave);
                     bPointerKnown = false;
                 }
                 break;
             case SDL_EVENT_MOUSE_MOTION:
                 if (bHostPointerEvent) {
-                    emit(MouseMoveEvent(event.motion.x, event.motion.y));
+                    MouseMoveEvent move(event.motion.x, event.motion.y);
+                    move._windowID = event.motion.windowID;
+                    emit(move);
                     bPointerKnown = true;
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
                 if (bHostPointerEvent) {
-                    emit(MouseMoveEvent(event.button.x, event.button.y));
-                    emit(MouseButtonPressedEvent(static_cast<EMouse::T>(event.button.button)));
+                    MouseMoveEvent move(event.button.x, event.button.y);
+                    move._windowID = event.button.windowID;
+                    emit(move);
+                    MouseButtonPressedEvent press(static_cast<EMouse::T>(event.button.button));
+                    press._windowID = event.button.windowID;
+                    emit(press);
                     bPointerKnown = true;
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
                 if (bHostPointerEvent) {
-                    emit(MouseMoveEvent(event.button.x, event.button.y));
-                    emit(MouseButtonReleasedEvent(static_cast<EMouse::T>(event.button.button)));
+                    MouseMoveEvent move(event.button.x, event.button.y);
+                    move._windowID = event.button.windowID;
+                    emit(move);
+                    MouseButtonReleasedEvent release(static_cast<EMouse::T>(event.button.button));
+                    release._windowID = event.button.windowID;
+                    emit(release);
                     bPointerKnown = true;
                 }
                 break;
             case SDL_EVENT_MOUSE_WHEEL:
                 if (bHostPointerEvent) {
-                    emit(MouseMoveEvent(event.wheel.mouse_x, event.wheel.mouse_y));
-                    emit(MouseScrolledEvent(event.wheel.x, event.wheel.y));
+                    MouseMoveEvent move(event.wheel.mouse_x, event.wheel.mouse_y);
+                    move._windowID = event.wheel.windowID;
+                    emit(move);
+                    MouseScrolledEvent scroll(event.wheel.x, event.wheel.y);
+                    scroll._windowID = event.wheel.windowID;
+                    emit(scroll);
                     bPointerKnown = true;
                 }
                 break;
             case SDL_EVENT_KEY_DOWN: {
+                if (hostWindowID != 0 && event.key.windowID != hostWindowID) {
+                    break;
+                }
                 KeyPressedEvent ev;
-                ev._keyCode = EKey::fromSDLKeycode(event.key.key);
-                ev._mod     = event.key.mod;
-                ev.bRepeat  = event.key.repeat;
+                ev._keyCode   = EKey::fromSDLKeycode(event.key.key);
+                ev._mod       = event.key.mod;
+                ev.bRepeat    = event.key.repeat;
+                ev._windowID  = event.key.windowID;
                 emit(ev);
                 break;
             }
             case SDL_EVENT_KEY_UP: {
+                if (hostWindowID != 0 && event.key.windowID != hostWindowID) {
+                    break;
+                }
                 KeyReleasedEvent ev;
-                ev._keyCode = EKey::fromSDLKeycode(event.key.key);
-                ev._mod     = event.key.mod;
+                ev._keyCode  = EKey::fromSDLKeycode(event.key.key);
+                ev._mod      = event.key.mod;
+                ev._windowID = event.key.windowID;
                 emit(ev);
                 break;
             }
-            case SDL_EVENT_TEXT_INPUT:
-                emit(KeyTypedEvent(event.text.text));
+            case SDL_EVENT_TEXT_INPUT: {
+                if (hostWindowID != 0 && event.text.windowID != hostWindowID) {
+                    break;
+                }
+                KeyTypedEvent typed(event.text.text);
+                typed._windowID = event.text.windowID;
+                emit(typed);
                 break;
+            }
             default:
                 break;
             }
@@ -627,6 +673,7 @@ struct GUIWindowHost::FImpl
     std::shared_ptr<IBuffer>           offscreenShotBuffer;
 
     std::unique_ptr<IAppEventSource> eventSource;
+    uint32_t* sdlHostWindowFilter = nullptr;
     std::string captureRequestPath;
     std::optional<PendingGuiCapture> pendingCapture;
     bool    bLoggedFirstSnapshot = false;
@@ -870,6 +917,8 @@ bool GUIWindowHost::init()
         auto sdl = std::make_unique<SdlEventSource>();
         sdl->hostWindowID = _impl->window.getWindowID();
         _impl->eventSource = std::move(sdl);
+        _impl->sdlHostWindowFilter =
+            &static_cast<SdlEventSource*>(_impl->eventSource.get())->hostWindowID;
     }
 
     render->allocateCommandBuffers(render->getSwapchainImageCount(), _impl->commandBuffers);
@@ -994,6 +1043,19 @@ const FGUIWindowHostConfig& GUIWindowHost::getConfig() const
     return *_impl->config;
 }
 
+uint32_t GUIWindowHost::getWindowID() const
+{
+    return _impl->window.getWindowID();
+}
+
+void GUIWindowHost::setAcceptAllWindowEvents(bool enabled)
+{
+    if (!_impl->sdlHostWindowFilter) {
+        return;
+    }
+    *_impl->sdlHostWindowFilter = enabled ? 0u : _impl->window.getWindowID();
+}
+
 int GUIWindowHost::finishRun(int kernelResult)
 {
     if (kernelResult != 0) {
@@ -1042,9 +1104,16 @@ void GUIWindowHost::onEvent(const Event& event)
 {
     switch (event.getEventType()) {
     case EEvent::AppQuit:
-    case EEvent::WindowClose:
         _impl->bQuitRequested = true;
         return;
+    case EEvent::WindowClose: {
+        const uint32_t closeId = static_cast<const WindowCloseEvent&>(event).getWindowID();
+        const uint32_t hostId  = _impl->window.getWindowID();
+        if (closeId == 0 || closeId == hostId) {
+            _impl->bQuitRequested = true;
+        }
+        return;
+    }
     case EEvent::WindowResize: {
         const auto& resize = static_cast<const WindowResizeEvent&>(event);
         _impl->bWindowMinimized = resize.GetWidth() == 0 || resize.GetHeight() == 0;
@@ -1732,7 +1801,13 @@ void GUIWindowHost::shutdown()
 
 GUIApp::GUIApp(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate)
     : _primaryWindow(config, delegate)
+    , _extraWindows(std::make_unique<GUIWindowManager>())
 {
+}
+
+GUIApp::~GUIApp()
+{
+    shutdown();
 }
 
 bool GUIApp::init()
@@ -1746,13 +1821,88 @@ int GUIApp::run()
         YA_CORE_ERROR("GUIApp::run called before a successful init()");
         return 1;
     }
-    AppKernel kernel({.eventSource = _primaryWindow.getEventSource()}, _primaryWindow);
+    AppKernel kernel({.eventSource = _primaryWindow.getEventSource()}, *this);
     return _primaryWindow.finishRun(kernel.run(_primaryWindow.getConfig().automation));
 }
 
 void GUIApp::shutdown()
 {
+    if (_extraWindows) {
+        _extraWindows->shutdown();
+    }
     _primaryWindow.shutdown();
+}
+
+GUIWindowId GUIApp::openWindow(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate)
+{
+    const GUIWindowId id = _extraWindows->create(config, delegate);
+    if (id != 0) {
+        _primaryWindow.setAcceptAllWindowEvents(true);
+    }
+    return id;
+}
+
+void GUIApp::closeWindow(GUIWindowId id)
+{
+    _extraWindows->requestClose(id);
+}
+
+WidgetTree* GUIApp::findTree(GUIWindowId id)
+{
+    if (_primaryWindow.isInitialized()) {
+        const uint32_t primaryId = _primaryWindow.getWindowID();
+        if (id == 0 || id == primaryId) {
+            return &_primaryWindow.getTree();
+        }
+    }
+    return _extraWindows->findTree(id);
+}
+
+void GUIApp::onInit() {}
+
+void GUIApp::onEvent(const Event& event)
+{
+    if (event.getEventType() == EEvent::AppQuit) {
+        _primaryWindow.onEvent(event);
+        return;
+    }
+
+    const uint32_t eventId   = guiEventWindowId(event);
+    const uint32_t primaryId = _primaryWindow.getWindowID();
+    if (eventId != 0 && eventId != primaryId) {
+        _extraWindows->dispatchEvent(event);
+        return;
+    }
+
+    const bool bKeyEvent = event.getEventType() == EEvent::KeyPressed ||
+                           event.getEventType() == EEvent::KeyReleased ||
+                           event.getEventType() == EEvent::KeyTyped;
+    if (eventId == 0 && bKeyEvent && _extraWindows->focusedWindowId() != 0) {
+        if (_extraWindows->dispatchEvent(event)) {
+            return;
+        }
+    }
+
+    _primaryWindow.onEvent(event);
+}
+
+void GUIApp::onTick(float dt)
+{
+    _extraWindows->flushPendingCloses();
+    if (_primaryWindow.isInitialized()) {
+        _primaryWindow.onTick(dt);
+    }
+    _extraWindows->tickAll(dt);
+    if (_extraWindows->extraWindowCount() == 0) {
+        _primaryWindow.setAcceptAllWindowEvents(false);
+    }
+}
+
+void GUIApp::onShutdown() {}
+
+bool GUIApp::shouldClose() const
+{
+    return _primaryWindow.shouldClose();
 }
 
 } // namespace ya

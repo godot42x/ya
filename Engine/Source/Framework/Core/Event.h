@@ -324,7 +324,9 @@ struct WindowMinimizeEvent : public WindowEvent
 // MARK: KeyEvent
 struct YA_CORE_API KeyEvent : public Event
 {
-    uint32_t _mod;
+    uint32_t _mod      = 0;
+    uint32_t _windowID = 0;
+    [[nodiscard]] uint32_t getWindowID() const { return _windowID; }
 
 
     [[nodiscard]] bool isCtrlPressed() const { return _mod & EKeyMod::LCtrl || _mod & EKeyMod::RCtrl; }
@@ -407,6 +409,8 @@ class YA_CORE_API MouseMoveEvent : public Event
     float _mouseDeltaX = 0.0f, _mouseDeltaY = 0.0f;
 
   public:
+    uint32_t _windowID = 0;
+
     MouseMoveEvent(float x, float y)
         : _mouseX(x)
         , _mouseY(y)
@@ -425,6 +429,7 @@ class YA_CORE_API MouseMoveEvent : public Event
     inline float getY() const { return _mouseY; }
     inline float getDeltaX() const { return _mouseDeltaX; }
     inline float getDeltaY() const { return _mouseDeltaY; }
+    [[nodiscard]] uint32_t getWindowID() const { return _windowID; }
 
     [[nodiscard]] std::string toString() const override { return std::format("MouseMovedEvent: {}, {} ", _mouseX, _mouseY); }
 
@@ -434,11 +439,13 @@ class YA_CORE_API MouseMoveEvent : public Event
 
 struct YA_CORE_API MouseScrolledEvent : public Event
 {
-    float _offsetX, _offsetY;
+    float    _offsetX, _offsetY;
+    uint32_t _windowID = 0;
 
   public:
     MouseScrolledEvent() = default;
     MouseScrolledEvent(float x, float y) : _offsetX(x), _offsetY(y) {}
+    [[nodiscard]] uint32_t getWindowID() const { return _windowID; }
 
     inline float getOffsetX() const { return _offsetX; }
     inline float getOffsetY() const { return _offsetY; }
@@ -454,7 +461,10 @@ struct YA_CORE_API MouseScrolledEvent : public Event
 class YA_CORE_API MouseButtonEvent : public Event
 {
   public:
+    uint32_t _windowID = 0;
+
     [[nodiscard]] inline EMouse::T GetMouseButton() const { return m_Button; }
+    [[nodiscard]] uint32_t         getWindowID() const { return _windowID; }
 
     EVENT_CLASS_CATEGORY(EEventCategory::MouseButton | EEventCategory::Input)
 

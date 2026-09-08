@@ -1,7 +1,7 @@
 {
   "plan": "gui-multi-os-window-editor",
-  "updated_at": "2026-09-08",
-  "active_task": null,
+  "updated_at": "2026-09-09",
+  "active_task": "MW-102",
   "architecture": {
     "application_loop": "one GUI application loop",
     "window_tree": "one native window owns one WidgetTree",
@@ -28,7 +28,7 @@
       "id": "gui_framework",
       "title": "C1-C2G-C3 - GUI Framework 多 native window + FeatureGallery",
       "items": [
-        {"id": "MW-101", "status": "planned"},
+        {"id": "MW-101", "status": "pass", "notes": "GUIWindowManager extras: native window+WidgetTree; GUIApp openWindow/closeWindow; no IRender::create; present deferred to C2"},
         {"id": "MW-102", "status": "planned"},
         {"id": "MW-201", "status": "planned"},
         {"id": "MW-202", "status": "planned"},

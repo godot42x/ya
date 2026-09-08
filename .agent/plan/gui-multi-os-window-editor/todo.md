@@ -17,7 +17,7 @@
 
 ## C1 — GUI Framework 双窗口
 
-- [ ] `MW-101` 实现 `GUIWindowManager` 最小生命周期：create/requestClose/destroy/find/dispatch/tick/render。验收：依赖共享 device + surface-context provider，不调用 `IRender::create` 为每个窗口复制 backend；两个 native window、两个 WidgetTree、统一 loop、输入/resize/focus/close 隔离。
+- [x] `MW-101` 实现 `GUIWindowManager` 最小生命周期：create/requestClose/destroy/find/dispatch/tick/render。验收：依赖共享 device + surface-context provider，不调用 `IRender::create` 为每个窗口复制 backend；两个 native window、两个 WidgetTree、统一 loop、输入/resize/focus/close 隔离。
 - [ ] `MW-102` 实现 per-window input/tick/snapshot。验收：pointer/focus/capture/tooltip/clipboard/DPI/snapshot 不泄漏。
 
 ## C2 — GUI/RHI presentation

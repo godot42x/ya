@@ -30,12 +30,8 @@ void NativeWindowManager::shutdown()
 
     clear();
 
-#if USE_SDL
-    if (SDL_WasInit(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
-        SDL_Quit();
-    }
-#endif
-
+    // Do not SDL_Quit here. SDL is shared with GUIWindowHost / the process;
+    // extra windows can come and go without tearing down the primary window.
     _initialized = false;
 }
 
@@ -50,9 +46,18 @@ INativeWindow* NativeWindowManager::createWindow(const WindowCreateInfo& ci)
 #else
     std::unique_ptr<INativeWindow> window;
 #endif
-    YA_CORE_ASSERT(window != nullptr, "No native window implementation available");
-    YA_CORE_ASSERT(window->init(), "Failed to initialize native window");
-    YA_CORE_ASSERT(window->recreate(ci), "Failed to recreate native window");
+    if (!window) {
+        YA_CORE_ERROR("No native window implementation available");
+        return nullptr;
+    }
+    if (!window->init()) {
+        YA_CORE_ERROR("Failed to initialize native window");
+        return nullptr;
+    }
+    if (!window->recreate(ci)) {
+        YA_CORE_ERROR("Failed to recreate native window '{}'", ci.title);
+        return nullptr;
+    }
     return addWindow(std::move(window), false);
 }
 
