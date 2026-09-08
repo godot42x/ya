@@ -24,10 +24,10 @@ DIAGNOSTIC_PATTERN = re.compile(r"VUID|\[ERROR\]|ASSERT", re.IGNORECASE)
 WORKBENCH_PAGE_MATRIX: tuple[tuple[str, str, Path], ...] = (
     ("render", "Render", ROOT / "Example/GUIWorkbench/Scenarios/render_probe_interaction.jsonl"),
     ("widgets", "Widgets", ROOT / "Example/GUIWorkbench/Scenarios/widgets_interaction.jsonl"),
-    ("layout", "Layout", ROOT / "Example/GUIWorkbench/Scenarios/layout_spacing_interaction.jsonl"),
+    ("layout", "Box", ROOT / "Example/GUIWorkbench/Scenarios/layout_spacing_interaction.jsonl"),
     ("menus", "Menus", ROOT / "Example/GUIWorkbench/Scenarios/menus_popup_interaction.jsonl"),
     ("dragdrop", "DragDrop", ROOT / "Example/GUIWorkbench/Scenarios/dragdrop_interaction.jsonl"),
-    ("modal", "Modal", ROOT / "Example/GUIWorkbench/Scenarios/modal_interaction.jsonl"),
+    ("modal", "Dialog", ROOT / "Example/GUIWorkbench/Scenarios/modal_interaction.jsonl"),
     (
         "scrollsplit",
         "ScrollSplit",

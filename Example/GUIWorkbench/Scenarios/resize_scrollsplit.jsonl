@@ -1,3 +1,7 @@
+{"frame":2}
+{"assert":{"widget":"DemoSplit"}}
+{"assert":{"widget":"DemoScroll","control":{"type":"scrollViewport"}}}
+{"assert":{"widget":"InnerScroll","control":{"type":"scrollViewport"}}}
 {"checkpoint":"before_resize"}
 {"frame":1}
 {"window_size":{"width":960,"height":640}}

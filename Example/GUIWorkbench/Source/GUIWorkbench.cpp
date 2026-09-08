@@ -17,6 +17,7 @@
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/Controls/DockSpace/DockFloatingHost.h"
 
 #include <format>
 

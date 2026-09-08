@@ -1,4 +1,4 @@
-# GUIWorkbench --start-page=Modal. Coordinates are window-space including
+# GUIWorkbench --start-page=Dialog. Coordinates are window-space including
 # the workbench chrome (left page list ~238px, top bar ~46px). Hits OpenModal,
 # then the ModalName field inside the popup dialog, then Escape to dismiss.
 {"window_size":{"width":1280,"height":800}}

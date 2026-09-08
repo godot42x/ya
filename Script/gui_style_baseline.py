@@ -33,7 +33,7 @@ BIN = ROOT / "build" / "macosx" / "arm64" / "debug" / "GUIWorkbench"
 
 # (slug, start-page, scenario-lines) — the shell pages that pin shell chrome
 # + theme values. theme_light toggles the tree theme via the ThemeToggle
-# button at (255,135) (same coordinates as Scenarios/theme.jsonl).
+# button (same coordinates as Scenarios/theme.jsonl).
 MATRIX: list[tuple[str, str, list[str]]] = [
     ("render", "Render", ['{"frame":2}']),
     ("theme_dark", "Theme", ['{"frame":2}']),
@@ -42,8 +42,8 @@ MATRIX: list[tuple[str, str, list[str]]] = [
         "Theme",
         [
             '{"frame":1}',
-            '{"event":"mouse_press","x":255,"y":135,"button":0}',
-            '{"event":"mouse_release","x":255,"y":135,"button":0}',
+            '{"event":"mouse_press","x":566,"y":120,"button":0}',
+            '{"event":"mouse_release","x":566,"y":120,"button":0}',
             '{"frame":3}',
         ],
     ),

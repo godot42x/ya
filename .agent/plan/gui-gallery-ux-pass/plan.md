@@ -12,7 +12,8 @@ closure dump 测试继续当契约门禁；本线把 Gallery 能点的路径修�
 3. Widgets 不 include AssetManager；磁盘贴图只在 Host `IGuiTextureSource` 里加载。
 4. 不停靠 tab 拖与浮窗标题拖抽成同一 helper。
 5. 不为 1–2 个文件发明新目录。
-6. Modal **不等于** 遮罩：Modal = 独占输入直到完成/Esc；是否 dim 由 overlay `_bDimBackground` 交给应用。
+6. Modal **只独占输入**：鼠标/键盘无法穿透到窗口之外。框架不画遮罩、不提供 dim
+   开关；挡住/模糊底下由应用自己叠 Panel/Image。
 
 ## 分层
 

@@ -1,10 +1,15 @@
-# GUIWorkbench --start-page=Gallery. Drag sources and drop targets exist
-# with their control types (the drag interaction itself is covered by the
-# dedicated DragDrop page scenario; this locks the gallery wrappers).
+# GUIWorkbench --start-page=DragDrop. Drag sources and drop targets exist
+# with their control types (the drag interaction itself is covered by
+# dragdrop_interaction.jsonl; this locks the predicate-zone wrappers).
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
 {"assert":{"widget":"GalleryDragSrc0","control":{"type":"dragSource","label":"Item 1"}}}
 {"assert":{"widget":"GalleryDropA","control":{"type":"dropTarget"}}}
 {"assert":{"widget":"GalleryDropB","control":{"type":"dropTarget"}}}
 {"checkpoint":"drag_wrappers"}
+# Drag Item 1 onto Zone A (centers ≈382,268 → 590,321 at 1280x720).
+{"drag":{"from":[382,268],"to":[590,321],"steps":8}}
+{"frame":2}
+{"assert":{"lastRoute":{"policyName":"dragSession","target":"GalleryDropA"}}}
+{"checkpoint":"zone_a_drop"}
 {"frame":1}

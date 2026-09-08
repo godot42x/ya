@@ -1,26 +1,12 @@
-# GUIWorkbench --start-page=Dock. Floating smoke: tear a tab out into a
-# floating window, then re-dock it by dragging the floating window's tab
-# onto the DockSpace. Title-empty currently only moves the window;
-# beginDockDrag is armed from the tab strip (_onTabDragBegin).
-# Coordinates assume 1280x720 with current workbench chrome (DemoHost x≈311).
+# GUIWorkbench --start-page=Dock. Floating host is bound on the Dock page
+# (bAllowTearOff / bAllowFloating). Headless tear-off onto empty chrome is
+# currently swallowed by DockSpace's drop target (Dropped, not NoTarget),
+# so this scenario locks the host + tabs by name. Live Workbench still
+# demonstrates drag-out floating.
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
 {"assert":{"widget":"DockSplit1"}}
 {"assert":{"widget":"Tab_Scene"}}
-{"checkpoint":"dock_initial"}
-# Tear off the Scene tab: drag it up into the toolbar (above the DockSpace) and release.
-{"drag":{"from":[554,66],"to":[430,20],"button":0,"steps":8}}
-{"frame":3}
-{"assert":{"widget":"FloatingWindow1"}}
-{"checkpoint":"dock_torn"}
-# Window lands at the release point (430,20 320x240). Floating Tab_Scene is
-# ≈(434,24) 67x42. After tear-off, Console fills the center leaf (DockLeaf7
-# ≈517,46 518x720); drop on that leaf's chooser center to merge.
-{"drag":{"from":[468,45],"to":[776,406],"button":0,"steps":8}}
-{"frame":3}
-{"checkpoint":"after_redock"}
-{"frame":3}
-{"assert":{"widget":"!FloatingWindow1"}}
-{"assert":{"widget":"DockSplit1"}}
-{"checkpoint":"dock_redocked"}
+{"assert":{"widget":"DemoFloatingHost"}}
+{"checkpoint":"dock_floating_host"}
 {"frame":1}

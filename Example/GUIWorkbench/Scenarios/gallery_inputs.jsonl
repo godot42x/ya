@@ -1,4 +1,4 @@
-# GUIWorkbench --start-page=Gallery. All five input controls exist with
+# GUIWorkbench --start-page=Inputs. All five input controls exist with
 # their control types; exercise the spin box +/- and radio group selection.
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}

@@ -1,20 +1,19 @@
-# GUIWorkbench --start-page=Gallery. TreeView right-click selects the row
+# GUIWorkbench --start-page=Tree. TreeView right-click selects the row
 # and opens a host menu (same ActionMap-style wiring as editor Hierarchy).
-# Coordinates assume 1280x720 with current workbench chrome (DemoHost x≈311).
-# GalleryTree rect ≈ (327, 508) 950x120; rowHeight 24. button 1 = right.
+# GalleryTree ≈ (327, 87) 950x120; rowHeight 24. button 1 = right.
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
 {"assert":{"widget":"GalleryTree","control":{"type":"treeView"}}}
 {"checkpoint":"tree_ready"}
-# Right-click Scene Root (row 0).
-{"event":"mouse_press","x":407,"y":520,"button":1}
+# Right-click Scene Root (row 0 center ≈407,99).
+{"event":"mouse_press","x":407,"y":99,"button":1}
 {"frame":1}
 {"assert":{"widget":"GalleryTree","control":{"type":"treeView","selected":"root"}}}
 {"assert":{"widget":"Menu","control":{"type":"popupOverlay","modal":false}}}
 {"checkpoint":"tree_context_open"}
-# Click Create Empty Node (Menu0 ≈ 411,524 154x26).
-{"event":"mouse_press","x":487,"y":537,"button":0}
-{"event":"mouse_release","x":487,"y":537,"button":0}
+# Click Create Empty Node (Menu0 ≈ 411,103 154x26).
+{"event":"mouse_press","x":487,"y":116,"button":0}
+{"event":"mouse_release","x":487,"y":116,"button":0}
 {"frame":1}
 {"assert":{"widget":"!Menu"}}
 {"checkpoint":"tree_context_create"}

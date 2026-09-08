@@ -3,6 +3,8 @@
 # Counter (stretched), CheckA box, BrightnessSlider, ApiCombo, NotesField.
 {"window_size":{"width":960,"height":640}}
 {"frame":3}
+{"assert":{"widget":"WidgetRowAlpha"}}
+{"assert":{"widget":"WidgetTabs","control":{"type":"tabBar"}}}
 {"event":"mouse_press","x":480,"y":106,"button":0}
 {"event":"mouse_release","x":480,"y":106,"button":0}
 {"frame":1}

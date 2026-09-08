@@ -1,0 +1,14 @@
+# GUIWorkbench --start-page=Hosts. Overlay / SizeBox / Canvas hosts exist.
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"OverlayDemo","layout":{"type":"overlay"}}}
+{"assert":{"widget":"OverlayFill"}}
+{"assert":{"widget":"OverlayStart"}}
+{"assert":{"widget":"OverlayCenter"}}
+{"assert":{"widget":"OverlayEnd"}}
+{"assert":{"widget":"SizeBoxWide","layout":{"type":"sizeBox"}}}
+{"assert":{"widget":"SizeBoxClamped","layout":{"type":"sizeBox"}}}
+{"assert":{"widget":"CanvasAnchorDemo"}}
+{"assert":{"widget":"CanvasStretch"}}
+{"checkpoint":"layout_hosts"}
+{"frame":1}

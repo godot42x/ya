@@ -9,6 +9,7 @@
 #include "GUI/Widgets/Controls/DragFloat.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/RadioButton.h"
+#include "GUI/Widgets/Controls/SearchComboBox.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/SpinBox.h"

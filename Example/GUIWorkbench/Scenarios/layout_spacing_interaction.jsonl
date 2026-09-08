@@ -1,4 +1,4 @@
-# GUIWorkbench --start-page=Layout. Coordinates are window-space including
+# GUIWorkbench --start-page=Box. Coordinates are window-space including
 # the workbench chrome (left page list ~238px, top bar ~46px). Hits the
 # SpacingSlider track at ~80%; current slider rect is ~220x22 at y≈390, so
 # the track point is (~566,401).
@@ -6,6 +6,10 @@
 {"frame":2}
 {"assert":{"widget":"DemoHBox","layout":{"type":"box","direction":"horizontal","spacing":8.0}}}
 {"assert":{"widget":"DemoVBox","layout":{"type":"box","direction":"vertical","mainAxisAlignment":2}}}
+{"assert":{"widget":"FillCellA"}}
+{"assert":{"widget":"FillCellB"}}
+{"assert":{"widget":"VisHidden"}}
+{"assert":{"widget":"VisCollapsed"}}
 {"checkpoint":"initial"}
 {"event":"mouse_press","x":566,"y":401,"button":0}
 {"event":"mouse_release","x":566,"y":401,"button":0}

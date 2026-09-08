@@ -1,0 +1,6 @@
+# GUIWorkbench --start-page=Text. Wrapped text geometry.
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"WrappedText","rect":{"w":360.0}}}
+{"checkpoint":"wrapped_text"}
+{"frame":1}

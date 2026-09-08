@@ -1,0 +1,21 @@
+# GUIWorkbench --start-page=Binding. Reactive counter plus identity APIs
+# (SelectionModel / ActionMap / UndoStack). Click ActionInc then Undo.
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"GalleryBoundCounter"}}
+{"assert":{"widget":"GalleryScroll","control":{"type":"scrollViewport"}}}
+{"assert":{"widget":"SelectionPrimary"}}
+{"assert":{"widget":"UndoValue"}}
+{"assert":{"widget":"ActionInc"}}
+{"checkpoint":"binding_widgets"}
+{"event":"mouse_press","x":387,"y":616,"button":0}
+{"event":"mouse_release","x":387,"y":616,"button":0}
+{"frame":2}
+{"assert":{"lastRoute":{"policyName":"pointerCapture","target":"ActionInc","resultName":"handledExclusive"}}}
+{"checkpoint":"action_inc"}
+{"event":"mouse_press","x":500,"y":616,"button":0}
+{"event":"mouse_release","x":500,"y":616,"button":0}
+{"frame":2}
+{"assert":{"lastRoute":{"policyName":"pointerCapture","target":"ActionUndo","resultName":"handledExclusive"}}}
+{"checkpoint":"action_undo"}
+{"frame":1}

@@ -2,6 +2,8 @@
 #include "DemoPageCommon.h"
 
 #include "GUI/Declarative/Build.h"
+#include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Brush.h"
 #include "GUI/Widgets/Controls/Dialog.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Menu.h"
@@ -198,15 +200,16 @@ void buildDialogDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                                .child(demoButton("TooltipBtn", "Hover me (tooltip)")
                                           .setTooltip("This tooltip appears after a 0.5s hover dwell."),
                                       ya::ui::boxSlot().preferredSize({200.0f, 26.0f})))
-                    .child(header("InteractionsDialogHeader", "Modal dialog (UIDialog) — input exclusive, dim optional"))
+                    .child(header("InteractionsDialogHeader", "Modal dialog (UIDialog) — input exclusive"))
                     .child(demoButton("OpenDialogBtn", "Open modal...")
                                .setOnClick(
                                    [&tree, log]
                                    {
                                        auto content = ya::ui::text("DialogContent")
-                                                          .setText("This is a modal dialog. It captures input until OK, Cancel, or Esc. "
-                                                                   "Clicking outside does not close it. Dimming is off by default "
-                                                                   "(_bDimBackground); the app can turn the shield on separately.")
+                                                          .setText("This is a modal dialog. Mouse and keyboard cannot "
+                                                                   "reach widgets behind it until OK, Cancel, or Esc. "
+                                                                   "Clicking outside does not close it. The overlay paints "
+                                                                   "no dim — stack a fill Panel/Image if you want one.")
                                                           .setFontSize(13)
                                                           .setColor({0.88f, 0.90f, 0.94f, 1.0f})
                                                           .setWrap(true)
@@ -221,27 +224,41 @@ void buildDialogDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                                        dialog->open(tree);
                                    }),
                            ya::ui::boxSlot().preferredSize({180.0f, 26.0f}))
-                    .child(demoButton("OpenDimDialogBtn", "Open dimmed modal...")
+                    .child(demoButton("OpenDimDialogBtn", "Open modal with composed dim...")
                                .setOnClick(
                                    [&tree, log]
                                    {
                                        auto content = ya::ui::text("DimDialogContent")
-                                                          .setText("Same modal dialog with _bDimBackground enabled by the app.")
+                                                          .setText("Dim is a HitTestInvisible fill Panel stacked under "
+                                                                   "the dialog chrome — not a popup flag.")
                                                           .setFontSize(13)
                                                           .setColor({0.88f, 0.90f, 0.94f, 1.0f})
                                                           .setWrap(true)
                                                           .setMaxWrapWidth(380.0f)
                                                           .release();
-                                       auto dialog             = ya::UIDialog::create("Confirm", std::move(content));
-                                       dialog->_bDimBackground = true;
-                                       dialog->_onClosed       = [log](bool bConfirmed)
+                                       auto dialog = ya::UIDialog::create("Confirm", std::move(content));
+                                       auto dim    = std::make_shared<ya::UIPanel>("ModalDim");
+                                       dim->setVisibility(ya::EWidgetVisibility::HitTestInvisible);
+                                       dim->setStyleField("fillColor",
+                                                          ya::FBrush::solid({0.0f, 0.0f, 0.0f, 0.45f}));
+                                       dim->_zOrder = -1;
+                                       dialog->addDetachedChild(dim, [](ya::UIElement&, ya::UISlot& slot)
+                                       {
+                                           if (auto* canvas = slot.as<ya::UICanvasSlot>()) {
+                                               ya::FCanvasSlotArgs fill;
+                                               fill.anchorMin = {0.0f, 0.0f};
+                                               fill.anchorMax = {1.0f, 1.0f};
+                                               canvas->apply(fill);
+                                           }
+                                       });
+                                       dialog->_onClosed = [log](bool bConfirmed)
                                        {
                                            log(std::format("Dimmed dialog closed: {}",
                                                            bConfirmed ? "confirmed" : "cancelled"));
                                        };
                                        dialog->open(tree);
                                    }),
-                           ya::ui::boxSlot().preferredSize({200.0f, 26.0f}));
+                           ya::ui::boxSlot().preferredSize({260.0f, 26.0f}));
     auto page = ya::ui::panel("DialogDemo")
                     .setColor(kPanelColor)
                     .child(std::move(form), ya::ui::canvasSlot().fill());

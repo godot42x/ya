@@ -10,9 +10,10 @@
 // The shell (FWorkbenchSurface) and the demo pages resolve every canonical
 // typed-style key ("button"/"panel"/"menubar"/"tab"/"split"/"scrollbar"/
 // "dock"/"floating"/"text") plus per-role shell keys ("panel.window",
-// "panel.canvas", "text.header", "text.muted") and form-widget keys
-// ("tree"/"textfield"/"menu"/"selectable"/"dragfloat"/"checkbox"/"combobox"/
-// "slider"/"table"/"spinbox"/"radio"/"coloredit"/"searchcombo") plus drag
+// "panel.canvas", "text.header", "text.muted", "text.small", "text.caption")
+// and form-widget keys ("tree"/"expander"/"textfield"/"textfield.compact"/
+// "menu"/"selectable"/"dragfloat"/"checkbox"/
+// "combobox"/"slider"/"table"/"spinbox"/"radio"/"coloredit"/"searchcombo") plus drag
 // chrome ("drag.source"/"drag.target"/"drag.ghost") from the mounted
 // WorkbenchTheme, so swapping the theme restyles the whole shell at once.
 // ============================================================================
@@ -77,7 +78,7 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
 
     auto headerStyle = ya::FTextStyle{};
     headerStyle.textColor = bDark ? glm::vec4{0.90f, 0.92f, 0.95f, 1.0f} : text;
-    headerStyle.fontSize  = 28;
+    headerStyle.fontSize  = ya::gui_type::kTitle;
     theme.define<ya::FTextStyle>("text.header", headerStyle);
 
     auto mutedStyle = ya::FTextStyle{};
@@ -92,8 +93,18 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
 
     auto eyebrow = ya::FTextStyle{};
     eyebrow.textColor = header;
-    eyebrow.fontSize  = 11;
+    eyebrow.fontSize  = ya::gui_type::kCaption;
     theme.define<ya::FTextStyle>("text.eyebrow", eyebrow);
+
+    auto smallText = ya::FTextStyle{};
+    smallText.textColor = text;
+    smallText.fontSize  = ya::gui_type::kSmall;
+    theme.define<ya::FTextStyle>("text.small", smallText);
+
+    auto caption = ya::FTextStyle{};
+    caption.textColor = muted;
+    caption.fontSize  = ya::gui_type::kCaption;
+    theme.define<ya::FTextStyle>("text.caption", caption);
 
     auto tree = ya::FTreeViewStyle{};
     tree.textColor        = text;
@@ -105,11 +116,47 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
     tree.dropIndicator    = selected;
     theme.define<ya::FTreeViewStyle>("tree", tree);
 
+    auto expander = ya::FExpanderStyle{};
+    expander.textColor        = text;
+    expander.headerFill       = FBrush::solid({0.0f, 0.0f, 0.0f, 0.0f});
+    expander.hoveredFill      = FBrush::solid(hovered);
+    expander.pressedFill      = FBrush::solid(bDark ? glm::vec4{0.20f, 0.22f, 0.27f, 1.0f}
+                                                    : glm::vec4{0.78f, 0.80f, 0.84f, 1.0f});
+    expander.focusedFill      = FBrush::solid(bDark ? glm::vec4{0.26f, 0.52f, 0.90f, 0.35f}
+                                                    : glm::vec4{0.32f, 0.55f, 0.90f, 0.28f});
+    expander.arrowColor       = muted;
+    expander.arrowHoveredFill = FBrush::solid(bDark ? glm::vec4{0.32f, 0.36f, 0.44f, 1.0f}
+                                                    : glm::vec4{0.78f, 0.80f, 0.85f, 1.0f});
+    expander.guideColor       = bDark ? glm::vec4{0.42f, 0.46f, 0.54f, 0.70f}
+                                      : glm::vec4{0.62f, 0.65f, 0.72f, 0.70f};
+    expander.fontSize         = 13;
+    theme.define<ya::FExpanderStyle>("expander", expander);
+
+    // Framed TreeNode look (`setFramed` / collapsingHeader), same FExpanderStyle.
+
+    auto expanderHeader = expander;
+    expanderHeader.headerFill = FBrush::solid(bDark ? glm::vec4{0.16f, 0.18f, 0.22f, 1.0f}
+                                                    : glm::vec4{0.86f, 0.88f, 0.92f, 1.0f});
+    expanderHeader.hoveredFill = FBrush::solid(bDark ? glm::vec4{0.20f, 0.23f, 0.28f, 1.0f}
+                                                     : glm::vec4{0.80f, 0.83f, 0.88f, 1.0f});
+    expanderHeader.outlineColor = bDark ? glm::vec4{0.28f, 0.30f, 0.36f, 1.0f}
+                                        : glm::vec4{0.70f, 0.72f, 0.76f, 1.0f};
+    expanderHeader.guideColor   = {0.0f, 0.0f, 0.0f, 0.0f};
+    theme.define<ya::FExpanderStyle>("expander.header", expanderHeader);
+
     auto field = ya::FTextFieldStyle{};
     field.backgroundFill = FBrush::solid(fieldBg);
+    field.hoveredFill    = FBrush::solid(hovered);
     field.textColor      = text;
     field.caretColor     = text;
+    field.borderColor    = bDark ? glm::vec4{0.50f, 0.54f, 0.62f, 1.0f}
+                                 : glm::vec4{0.58f, 0.61f, 0.68f, 1.0f};
+    field.fontSize       = ya::gui_type::kBody;
     theme.define<ya::FTextFieldStyle>("textfield", field);
+
+    auto fieldCompact = field;
+    fieldCompact.fontSize = ya::gui_type::kSmall;
+    theme.define<ya::FTextFieldStyle>("textfield.compact", fieldCompact);
 
     auto menu = ya::FMenuStyle{};
     menu.itemNormalFill  = FBrush::solid(menuItem);
@@ -146,8 +193,8 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
     drag.draggingFill   = FBrush::solid(bDark ? glm::vec4{0.18f, 0.24f, 0.34f, 1.0f}
                                               : glm::vec4{0.84f, 0.88f, 0.95f, 1.0f});
     drag.textColor      = text;
-    drag.borderColor    = bDark ? glm::vec4{0.30f, 0.33f, 0.40f, 1.0f}
-                                : glm::vec4{0.70f, 0.72f, 0.76f, 1.0f};
+    drag.borderColor    = bDark ? glm::vec4{0.50f, 0.54f, 0.62f, 1.0f}
+                                : glm::vec4{0.58f, 0.61f, 0.68f, 1.0f};
     theme.define<ya::FDragFloatStyle>("dragfloat", drag);
 
     auto checkbox = ya::FCheckBoxStyle{};
@@ -191,8 +238,8 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
     spin.buttonHoveredFill = FBrush::solid(bDark ? glm::vec4{0.42f, 0.50f, 0.68f, 1.0f}
                                                  : glm::vec4{0.62f, 0.70f, 0.86f, 1.0f});
     spin.textColor         = text;
-    spin.borderColor       = bDark ? glm::vec4{0.30f, 0.33f, 0.40f, 1.0f}
-                                   : glm::vec4{0.70f, 0.72f, 0.76f, 1.0f};
+    spin.borderColor       = bDark ? glm::vec4{0.50f, 0.54f, 0.62f, 1.0f}
+                                   : glm::vec4{0.58f, 0.61f, 0.68f, 1.0f};
     theme.define<ya::FSpinBoxStyle>("spinbox", spin);
 
     auto radio = ya::FRadioButtonStyle{};
@@ -205,7 +252,6 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
     auto colorEdit = ya::FColorEditStyle{};
     colorEdit.backgroundFill   = FBrush::solid(fieldBg);
     colorEdit.textColor        = text;
-    colorEdit.channelHighlight = selected;
     theme.define<ya::FColorEditStyle>("coloredit", colorEdit);
 
     auto search = ya::FSearchComboStyle{};
@@ -220,10 +266,7 @@ inline void defineWorkbenchContentStyles(ya::UITheme& theme, bool bDark)
                                                 : glm::vec4{0.78f, 0.80f, 0.84f, 1.0f});
     theme.define<ya::FImageStyle>("image", image);
 
-    auto popup = ya::FPopupStyle{};
-    popup.modalFill = FBrush::solid(bDark ? glm::vec4{0.0f, 0.0f, 0.0f, 0.45f}
-                                          : glm::vec4{0.12f, 0.13f, 0.16f, 0.28f});
-    theme.define<ya::FPopupStyle>("popup", popup);
+    theme.define<ya::FPopupStyle>("popup", ya::FPopupStyle{});
 
     auto tooltip = ya::FPanelStyle{};
     tooltip.fillColor = FBrush::solid(bDark ? glm::vec4{0.14f, 0.15f, 0.18f, 0.97f}
