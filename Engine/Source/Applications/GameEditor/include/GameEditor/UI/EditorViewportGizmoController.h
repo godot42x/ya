@@ -53,7 +53,7 @@ class EditorViewportGizmoController
     FEditorViewportGizmoSources   _sources{};
     EEditorViewportGizmoOperation _operation = EEditorViewportGizmoOperation::Translate;
     EEditorViewportGizmoMode      _mode      = EEditorViewportGizmoMode::Local;
-    FEditorViewportHostState      _host{};
+    FEditorViewportHostState      _hostState{};
     bool                          _bHostValid          = false;
     bool                          _bHovered            = false;
     bool                          _bDragging           = false;

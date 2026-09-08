@@ -2,7 +2,9 @@
 #include "GameEditor/UI/EditorDebugCatalogView.h"
 
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/UI/EditorTheme.h"
 #include "GUI/Declarative/Build.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
@@ -21,8 +23,6 @@ namespace
 {
 constexpr const char* kChannelNames[4] = {"R", "G", "B", "A"};
 constexpr const char* kCubeFaces[6]    = {"PosX", "NegX", "PosY", "NegY", "PosZ", "NegZ"};
-constexpr glm::vec2   kComboPreferred  = {0.0f, 26.0f};
-constexpr glm::vec2   kPreviewPreferred = {0.0f, 180.0f};
 
 std::shared_ptr<UICheckBox> makeLabeledCheckBox(const std::string& id, const char* label)
 {
@@ -42,6 +42,48 @@ void attachChild(WidgetTree& tree, UIContainer& parent, const UIElementRef& chil
             slot->setPreferredSize(preferred);
         }
     }
+}
+
+void attachFill(WidgetTree& tree, UIContainer& parent, const UIElementRef& child, glm::vec2 preferred = {})
+{
+    (void)tree.attach(parent, child);
+    if (!child) {
+        return;
+    }
+    if (auto* slot = parent.getBoxSlot(*child)) {
+        slot->setSizeRule(EUIBoxSlotSizeRule::Fill);
+        if (preferred.x > 0.0f || preferred.y > 0.0f) {
+            slot->setPreferredSize(preferred);
+        }
+    }
+}
+
+std::shared_ptr<UIContainer> makeLabeledControlRow(WidgetTree& tree,
+                                                   const std::string& id,
+                                                   const char* label,
+                                                   const UIElementRef& control)
+{
+    auto row = std::make_shared<UIContainer>(id);
+    row->setDirection(EWidgetBoxLayout::Horizontal);
+    row->setSpacing(editor_density::kControlSpacing);
+    auto text = std::make_shared<UIText>(id + "Label");
+    text->setText(label);
+    text->setFontSize(12);
+    text->setStyleKey("text.muted");
+    text->_vAlign = EWidgetAlignV::Center;
+    attachChild(tree, *row, text, {editor_density::kLabelColumn, editor_density::kRowHeight});
+    attachFill(tree, *row, control, {0.0f, editor_density::kToolbarHeight});
+    return row;
+}
+
+std::shared_ptr<UIPanel> makePreviewWell(const std::string& id, const std::shared_ptr<UIImage>& preview)
+{
+    preview->setScaleMode(EImageScaleMode::Contain);
+    preview->setOpaqueSample(true);
+    return ui::panel(id)
+        .setStyleKey("panel.canvas")
+        .child(preview, ui::canvasSlot().fill())
+        .share();
 }
 
 std::string catalogFingerprint(const RenderViewportDebugCatalog& catalog)
@@ -67,10 +109,35 @@ std::string catalogFingerprint(const RenderViewportDebugCatalog& catalog)
     }
     return out;
 }
+
+[[nodiscard]] const char* groupComboLabel(RenderViewportDebugCatalog::EGroupType type)
+{
+    switch (type) {
+    case RenderViewportDebugCatalog::EGroupType::CubeMapMipFaces:
+        return "Mip";
+    case RenderViewportDebugCatalog::EGroupType::CubeMapFaces:
+        return "Cube";
+    case RenderViewportDebugCatalog::EGroupType::Generic:
+        return "Item";
+    }
+    return "Item";
+}
+
+[[nodiscard]] const char* itemComboLabel(RenderViewportDebugCatalog::EGroupType type)
+{
+    switch (type) {
+    case RenderViewportDebugCatalog::EGroupType::CubeMapMipFaces:
+    case RenderViewportDebugCatalog::EGroupType::CubeMapFaces:
+        return "Face";
+    case RenderViewportDebugCatalog::EGroupType::Generic:
+        return "View";
+    }
+    return "View";
+}
 } // namespace
 
 EditorDebugImagesTab::EditorDebugImagesTab(EditorLayer& layer)
-    : UICompoundWidget("DebugImagesBody", "panel.canvas")
+    : UICompoundWidget("DebugImagesBody", "panel")
     , _layer(&layer)
 {
     enableTick();
@@ -88,20 +155,27 @@ void EditorDebugImagesTab::construct()
     auto status = ui::text("DebugImagesStatus").setFontSize(12).setStyleKey("text.muted");
     _statusText = status.share();
 
-    _contentHost = ui::column("DebugImagesContent").setSpacing(10.0f).share();
+    _contentHost = ui::column("DebugImagesContent").setSpacing(editor_density::kSectionSpacing).share();
 
     addDetachedChild(ui::panel("DebugImagesBodyInner")
-        .setStyleKey("panel.canvas")
+        .setStyleKey("panel")
         .child(ui::scroll("DebugImagesScroll")
                    .setAxis(EScrollAxis::Vertical)
                    .child(ui::column("DebugImagesRoot")
-                              .setSpacing(8.0f)
+                              .setSpacing(editor_density::kSectionSpacing)
                               .setPadding({12.0f, 12.0f})
-                              .child(ui::text("DebugImagesTitle")
-                                         .setText("Debug Images")
-                                         .setStyleKey("text.header")
-                                         .setFontSize(14))
-                              .child(std::move(category), ui::boxSlot().preferredSize({0.0f, 26.0f}))
+                              .child(ui::row("DebugImagesCategoryRow")
+                                         .setSpacing(editor_density::kControlSpacing)
+                                         .child(ui::text("DebugImagesCategoryLabel")
+                                                    .setText("Category")
+                                                    .setFontSize(12)
+                                                    .setStyleKey("text.muted")
+                                                    .setVAlign(EWidgetAlignV::Center),
+                                                FBoxSlotArgs{.preferredSize = {editor_density::kLabelColumn,
+                                                                               editor_density::kRowHeight}})
+                                         .child(std::move(category),
+                                                ui::boxSlot().fillWidth().preferredSize(
+                                                    {0.0f, editor_density::kToolbarHeight})))
                               .child(std::move(status))
                               .child(_contentHost, ui::boxSlot().fill()),
                           ui::overlaySlot().fill()),
@@ -137,13 +211,32 @@ void EditorDebugImagesTab::rebuild(WidgetTree& tree)
     }
     _groups.clear();
     _slots.clear();
-    if (!_layer || !_contentHost) {
-        return;
-    }
 
     const auto& catalog = _layer->getDebugCatalog();
     const auto  groupIndices = debugGroupIndicesForCategory(catalog, _categoryFilter);
     const auto  slotIndices  = debugStandaloneSlotIndices(catalog, _categoryFilter);
+
+    if (groupIndices.empty() && slotIndices.empty()) {
+        auto empty = ui::panel("DebugImagesEmpty")
+                         .setStyleKey("panel.surface")
+                         .child(ui::column("DebugImagesEmptyBody")
+                                    .setPadding({16.0f, 16.0f})
+                                    .setSpacing(editor_density::kRowSpacing)
+                                    .child(ui::text("DebugImagesEmptyTitle")
+                                               .setText("No debug images")
+                                               .setStyleKey("text.header")
+                                               .setFontSize(14))
+                                    .child(ui::text("DebugImagesEmptyHint")
+                                               .setText("This category has no grouped or standalone GPU views.")
+                                               .setStyleKey("text.muted")
+                                               .setFontSize(12)
+                                               .setWrap(true))
+                                    .release(),
+                                ui::canvasSlot().fill())
+                         .share();
+        attachChild(tree, *_contentHost, empty, {0.0f, 140.0f});
+        return;
+    }
 
     if (!groupIndices.empty()) {
         auto header = std::make_shared<UIText>("DebugImagesGroupedHeader");
@@ -166,6 +259,7 @@ void EditorDebugImagesTab::rebuild(WidgetTree& tree)
         auto label = std::make_shared<UIText>("DebugGroupLabel_" + std::to_string(groupIndex));
         label->setText(group.label);
         label->setFontSize(13);
+        label->setStyleKey("text.eyebrow");
         row.label = label;
 
         std::vector<std::string> groupItems;
@@ -223,13 +317,25 @@ void EditorDebugImagesTab::rebuild(WidgetTree& tree)
         auto preview = std::make_shared<UIImage>("DebugGroupPreview_" + std::to_string(groupIndex));
         row.preview = preview;
 
-        auto block = std::make_shared<UIContainer>("DebugGroupBlock_" + std::to_string(groupIndex));
-        block->setSpacing(6.0f);
-        attachChild(tree, *_contentHost, block);
-        attachChild(tree, *block, label);
-        attachChild(tree, *block, groupCombo, kComboPreferred);
-        attachChild(tree, *block, itemCombo, kComboPreferred);
-        attachChild(tree, *block, preview, kPreviewPreferred);
+        auto body = std::make_shared<UIContainer>("DebugGroupBody_" + std::to_string(groupIndex));
+        body->setSpacing(editor_density::kRowSpacing);
+        body->setPadding({editor_density::kPanelPadding, editor_density::kPanelPadding});
+        auto card = ui::panel("DebugGroupCard_" + std::to_string(groupIndex))
+                        .setStyleKey("panel.surface")
+                        .child(body, ui::canvasSlot().fill())
+                        .share();
+        attachChild(tree, *_contentHost, card);
+        attachChild(tree, *body, label);
+        attachChild(tree, *body, makeLabeledControlRow(tree,
+                                                       "DebugGroupComboRow_" + std::to_string(groupIndex),
+                                                       groupComboLabel(group.type),
+                                                       groupCombo));
+        attachChild(tree, *body, makeLabeledControlRow(tree,
+                                                       "DebugGroupItemRow_" + std::to_string(groupIndex),
+                                                       itemComboLabel(group.type),
+                                                       itemCombo));
+        attachChild(tree, *body, makePreviewWell("DebugGroupPreviewWell_" + std::to_string(groupIndex), preview),
+                    {0.0f, editor_density::kDebugPreviewHeight});
         _groups.push_back(std::move(row));
     }
 
@@ -246,6 +352,7 @@ void EditorDebugImagesTab::rebuild(WidgetTree& tree)
         auto label = std::make_shared<UIText>("DebugSlotLabel_" + std::to_string(slotIndex));
         label->setText(catalog.slots[static_cast<size_t>(slotIndex)].label);
         label->setFontSize(13);
+        label->setStyleKey("text.eyebrow");
         row.label = label;
 
         auto maskRow = std::make_shared<UIContainer>("DebugSlotMask_" + std::to_string(slotIndex));
@@ -271,12 +378,18 @@ void EditorDebugImagesTab::rebuild(WidgetTree& tree)
         auto preview = std::make_shared<UIImage>("DebugSlotPreview_" + std::to_string(slotIndex));
         row.preview = preview;
 
-        auto block = std::make_shared<UIContainer>("DebugSlotBlock_" + std::to_string(slotIndex));
-        block->setSpacing(6.0f);
-        attachChild(tree, *_contentHost, block);
-        attachChild(tree, *block, label);
-        attachChild(tree, *block, maskRow, {0.0f, 26.0f});
-        attachChild(tree, *block, preview, kPreviewPreferred);
+        auto body = std::make_shared<UIContainer>("DebugSlotBody_" + std::to_string(slotIndex));
+        body->setSpacing(editor_density::kRowSpacing);
+        body->setPadding({editor_density::kPanelPadding, editor_density::kPanelPadding});
+        auto card = ui::panel("DebugSlotCard_" + std::to_string(slotIndex))
+                        .setStyleKey("panel.surface")
+                        .child(body, ui::canvasSlot().fill())
+                        .share();
+        attachChild(tree, *_contentHost, card);
+        attachChild(tree, *body, label);
+        attachChild(tree, *body, maskRow, {0.0f, editor_density::kToolbarHeight});
+        attachChild(tree, *body, makePreviewWell("DebugSlotPreviewWell_" + std::to_string(slotIndex), preview),
+                    {0.0f, editor_density::kDebugPreviewHeight});
         _slots.push_back(std::move(row));
     }
 }
@@ -288,6 +401,8 @@ void EditorDebugImagesTab::bindPreview(UIImage& image, std::shared_ptr<Texture>&
     }
     auto texture = _layer->getDebugSlotPreviewTexture(slotIndex);
     cache = texture;
+    image.setScaleMode(EImageScaleMode::Contain);
+    image.setOpaqueSample(true);
     image.setTexture(texture);
     image.setResourceMissing(texture == nullptr);
 }
@@ -331,10 +446,6 @@ void EditorDebugImagesTab::syncPreviews()
 
 void EditorDebugImagesTab::refreshFromTree(WidgetTree& tree)
 {
-    if (!_layer || !_contentHost || !_statusText) {
-        return;
-    }
-
     const auto& catalog = _layer->getDebugCatalog();
     if (_categoryCombo) {
         std::vector<std::string> items;
@@ -350,11 +461,12 @@ void EditorDebugImagesTab::refreshFromTree(WidgetTree& tree)
 
     const auto groupIndices = debugGroupIndicesForCategory(catalog, _categoryFilter);
     const auto slotIndices  = debugStandaloneSlotIndices(catalog, _categoryFilter);
-    if (groupIndices.empty() && slotIndices.empty()) {
-        _statusText->setText("No debug images available for this category.");
-    }
-    else {
-        _statusText->setText(std::format("Groups: {}  Standalone: {}", groupIndices.size(), slotIndices.size()));
+    const bool empty = groupIndices.empty() && slotIndices.empty();
+    if (_statusText) {
+        _statusText->setVisibility(empty ? EWidgetVisibility::Collapsed : EWidgetVisibility::Visible);
+        if (!empty) {
+            _statusText->setText(std::format("Groups: {}  Standalone: {}", groupIndices.size(), slotIndices.size()));
+        }
     }
 
     std::string fingerprint = catalogFingerprint(catalog);

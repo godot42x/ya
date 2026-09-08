@@ -33,6 +33,9 @@ struct IEditorViewportHost
     [[nodiscard]] virtual Rect2D imageRect() const = 0;
     [[nodiscard]] virtual bool isHovered() const = 0;
     [[nodiscard]] virtual bool isFocused() const = 0;
+    /// Clicking the viewport image must take keyboard focus so WASD reaches
+    /// the editor camera after the pointer leaves the image.
+    virtual void takeKeyboardFocus() = 0;
 };
 
 struct IEditorViewportHostSink

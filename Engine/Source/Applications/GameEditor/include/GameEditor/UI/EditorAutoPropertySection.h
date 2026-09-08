@@ -7,6 +7,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -32,7 +33,8 @@ class EditorAutoPropertySection final : public UICompoundWidget
                               PropertyGraph graph,
                               UndoStack* undo = nullptr,
                               std::string mergeIdentity = {},
-                              EditorAssetPickerCallback assetPicker = {});
+                              EditorAssetPickerCallback assetPicker = {},
+                              EditorRevealAssetCallback revealAsset = {});
 
     void sync(WidgetTree& tree);
     [[nodiscard]] bool wantsTextInput(WidgetTree& tree) const;
@@ -56,6 +58,7 @@ class EditorAutoPropertySection final : public UICompoundWidget
         std::shared_ptr<UIColorEdit> color;
         std::shared_ptr<UITextField> assetPath;
         std::shared_ptr<UIButton> browse;
+        std::shared_ptr<UIButton> locate;
         std::shared_ptr<UIImage> preview;
         std::shared_ptr<UIButton> add;
         std::shared_ptr<UIButton> clear;
@@ -65,8 +68,10 @@ class EditorAutoPropertySection final : public UICompoundWidget
     UndoStack* _undo = nullptr;
     std::string _mergeIdentity;
     EditorAssetPickerCallback _assetPicker;
+    EditorRevealAssetCallback _revealAsset;
     std::vector<EditorSlot> _editors;
     std::string _structureFingerprint;
+    std::unordered_map<std::string, bool> _groupExpanded;
 
     void bindDragMerge(UIDragFloat& drag);
     void commitAssetPath(size_t editorIndex, const std::string& value);

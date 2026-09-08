@@ -3,7 +3,6 @@
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
-#include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/UI/RuntimeDebugPrimitivesSection.h"
@@ -79,24 +78,28 @@ void EditorRuntimeToolsTab::construct()
     _renderTargets = renderTargets;
     _debugPrimitives = debugPrimitives;
 
-    addDetachedChild(ui::panel("RuntimeToolsBodyInner")
-        .setStyleKey("panel.canvas")
-        .child(ui::column("RuntimeToolsColumn")
-                   .setSpacing(8.0f)
-                   .child(status)
-                   .child(frame)
-                   .child(play, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                   .child(simulate, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                   .child(stop, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
-                   .child(diagnostics)
-                   .child(renderSettings)
-                   .child(profiling)
-                   .child(renderGraph)
-                   .child(renderTargets)
-                   .child(debugPrimitives)
-                   .release(),
-               ui::canvasSlot().fill().offset({12.0f, 12.0f}))
-        .release());
+    addDetachedChild(ui::scroll("RuntimeToolsScroll")
+                         .setAxis(EScrollAxis::Vertical)
+                         .child(ui::column("RuntimeToolsColumn")
+                                    .setSpacing(8.0f)
+                                    .setPadding({12.0f, 12.0f})
+                                    .setStretchLastChild(false)
+                                    .child(status)
+                                    .child(frame)
+                                    .child(play, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
+                                    .child(simulate, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
+                                    .child(stop, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
+                                    .child(diagnostics)
+                                    .child(renderSettings)
+                                    .child(profiling)
+                                    .child(renderGraph)
+                                    .child(renderTargets)
+                                    .child(debugPrimitives)
+                                    .release(),
+                                ui::overlaySlot()
+                                    .hAlign(EUIOverlayAlignment::Fill)
+                                    .vAlign(EUIOverlayAlignment::Start))
+                         .release());
 }
 
 void EditorRuntimeToolsTab::onAttached()
@@ -111,9 +114,6 @@ void EditorRuntimeToolsTab::tick(float)
 
 void EditorRuntimeToolsTab::refresh()
 {
-    if (!_statusText || !_frameText) {
-        return;
-    }
     App* app = App::get();
     if (!app) {
         return;
@@ -121,33 +121,15 @@ void EditorRuntimeToolsTab::refresh()
     const char* state = app->isRuntimeMode() ? "Playing" : (app->isSimulationMode() ? "Simulating" : "Stopped");
     _statusText->setText(state);
     _frameText->setText(std::format("Frame {}", app->getFrameIndex()));
-    if (_diagnostics) {
-        _diagnostics->sync(app);
-    }
-    if (_renderSettings) {
-        _renderSettings->sync(app);
-    }
-    if (_profiling) {
-        _profiling->sync(app);
-    }
-    if (_renderGraph) {
-        _renderGraph->sync(app);
-    }
-    if (_renderTargets) {
-        _renderTargets->sync(app);
-    }
-    if (_debugPrimitives) {
-        _debugPrimitives->sync(app);
-    }
-    if (_playButton) {
-        _playButton->setEnabled(app->isStopped());
-    }
-    if (_simulateButton) {
-        _simulateButton->setEnabled(app->isStopped());
-    }
-    if (_stopButton) {
-        _stopButton->setEnabled(!app->isStopped());
-    }
+    _diagnostics->sync(app);
+    _renderSettings->sync(app);
+    _profiling->sync(app);
+    _renderGraph->sync(app);
+    _renderTargets->sync(app);
+    _debugPrimitives->sync(app);
+    _playButton->setEnabled(app->isStopped());
+    _simulateButton->setEnabled(app->isStopped());
+    _stopButton->setEnabled(!app->isStopped());
 }
 
 } // namespace ya

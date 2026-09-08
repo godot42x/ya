@@ -20,4 +20,7 @@ using EditorAssetPickerCallback = std::function<void(EEditorAssetPickerKind kind
                                                        std::string currentPath,
                                                        std::function<void(std::string newPath)> onPicked)>;
 
+/// Reveal an asset path in the Content Browser (VFS or filesystem path).
+using EditorRevealAssetCallback = std::function<void(std::string vfsPath)>;
+
 } // namespace ya

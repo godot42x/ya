@@ -1,6 +1,7 @@
 #include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/UI/EditorAutoPropertySection.h"
 #include "GameEditor/UI/EditorAssetPicker.h"
+#include "GameEditor/UI/EditorTheme.h"
 #include "Core/Common/AssetRef.h"
 #include "Core/Reflection/Reflection.h"
 #include "Scene3D/TransformComponent.h"
@@ -8,11 +9,14 @@
 #include "Render3D/Component/Material/PBRMaterialComponent.h"
 #include "Render3D/Component/3D/SkyboxComponent.h"
 #include "ECS/Systems/Components/TerrainComponent.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
+#include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/DragFloat.h"
 #include "GUI/Widgets/Controls/ColorEdit.h"
+#include "GUI/Widgets/Controls/Expander.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Binding/UndoStack.h"
@@ -25,6 +29,69 @@
 
 namespace ya
 {
+
+[[nodiscard]] UITextField* assetPathField(UIElement& row)
+{
+    if (row.getChildren().size() < 2) {
+        return nullptr;
+    }
+    UIElement* value = row.getChildren()[1].get();
+    if (auto* field = dynamic_cast<UITextField*>(value)) {
+        return field;
+    }
+    if (!value || value->getChildren().empty()) {
+        return nullptr;
+    }
+    UIElement* pathRow = value->getChildren()[0].get();
+    if (!pathRow || pathRow->getChildren().empty()) {
+        return nullptr;
+    }
+    return dynamic_cast<UITextField*>(pathRow->getChildren()[0].get());
+}
+
+[[nodiscard]] UIButton* assetBrowseButton(UIElement& row)
+{
+    if (row.getChildren().size() < 2) {
+        return nullptr;
+    }
+    UIElement* value = row.getChildren()[1].get();
+    if (!value || value->getChildren().empty()) {
+        return nullptr;
+    }
+    UIElement* pathRow = value->getChildren()[0].get();
+    if (!pathRow || pathRow->getChildren().size() < 2) {
+        return nullptr;
+    }
+    return dynamic_cast<UIButton*>(pathRow->getChildren()[1].get());
+}
+
+[[nodiscard]] UIButton* assetLocateButton(UIElement& row)
+{
+    if (row.getChildren().size() < 2) {
+        return nullptr;
+    }
+    UIElement* value = row.getChildren()[1].get();
+    if (!value || value->getChildren().empty()) {
+        return nullptr;
+    }
+    UIElement* pathRow = value->getChildren()[0].get();
+    if (!pathRow || pathRow->getChildren().size() < 3) {
+        return nullptr;
+    }
+    return dynamic_cast<UIButton*>(pathRow->getChildren()[2].get());
+}
+
+[[nodiscard]] UIImage* assetPreviewImage(UIElement& row)
+{
+    if (row.getChildren().size() < 2) {
+        return nullptr;
+    }
+    UIElement* value = row.getChildren()[1].get();
+    if (!value || value->getChildren().size() < 2) {
+        return nullptr;
+    }
+    return dynamic_cast<UIImage*>(value->getChildren()[1].get());
+}
 
 struct ValidationTestComponent
 {
@@ -176,6 +243,10 @@ TEST(EditorPropertyGraphTest, PropertyLabelFromPathUsesLeafNameAndParentGroup)
     const FPropertyLabel indexed = propertyLabelFromPath("cubemapSource.files[0]");
     EXPECT_EQ(indexed.group, "Cubemap Source");
     EXPECT_EQ(indexed.displayName, "Files [0]");
+
+    const FPropertyLabel sampler = propertyLabelFromPath("diffuseSlot.samplerConfig.filterMode");
+    EXPECT_EQ(sampler.group, "Diffuse Slot / Sampler Config");
+    EXPECT_EQ(sampler.displayName, "Filter Mode");
 }
 
 struct NestedInspectorComponent
@@ -210,15 +281,70 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionInsertsGroupHeaderForNestedFiel
     auto section = std::make_shared<EditorAutoPropertySection>("AutoNested", std::move(graph));
     WidgetTree tree({.width = 360, .height = 220});
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
-    ASSERT_EQ(section->getChildren()[0]->getChildren().size(), 4u);
+    ASSERT_EQ(section->getChildren()[0]->getChildren().size(), 2u);
 
-    auto* group = dynamic_cast<UIText*>(section->getChildren()[0]->getChildren()[1].get());
+    auto* group = dynamic_cast<UIExpander*>(section->getChildren()[0]->getChildren()[1].get());
     ASSERT_NE(group, nullptr);
-    EXPECT_EQ(group->getText(), "Image");
+    EXPECT_EQ(group->getTitle(), "Image");
+    EXPECT_TRUE(group->isExpanded());
+    EXPECT_EQ(group->getChildren().size(), 2u);
 
     auto* visibleLabel = dynamic_cast<UIText*>(section->getChildren()[0]->getChildren()[0]->getChildren()[0].get());
     ASSERT_NE(visibleLabel, nullptr);
     EXPECT_EQ(visibleLabel->getText(), "Visible");
+
+    tree.detach(*section);
+}
+
+struct DeepNestedInspectorComponent
+{
+    struct SamplerConfig
+    {
+        int filterMode = 0;
+
+        YA_REFLECT_BEGIN(SamplerConfig)
+        YA_REFLECT_FIELD(filterMode)
+        YA_REFLECT_END()
+    };
+
+    struct Slot
+    {
+        float uvScale = 1.0f;
+        SamplerConfig samplerConfig;
+
+        YA_REFLECT_BEGIN(Slot)
+        YA_REFLECT_FIELD(uvScale)
+        YA_REFLECT_FIELD(samplerConfig)
+        YA_REFLECT_END()
+    };
+
+    Slot diffuseSlot;
+
+    YA_REFLECT_BEGIN(DeepNestedInspectorComponent)
+    YA_REFLECT_FIELD(diffuseSlot)
+    YA_REFLECT_END()
+};
+
+TEST(EditorPropertyGraphTest, AutoPropertySectionNestsGroupHeadersByPath)
+{
+    DeepNestedInspectorComponent value;
+    auto graph = PropertyGraph::build(type_index_v<DeepNestedInspectorComponent>, {&value});
+    ASSERT_EQ(graph.find("diffuseSlot.uvScale")->group, "Diffuse Slot");
+    ASSERT_EQ(graph.find("diffuseSlot.samplerConfig.filterMode")->group, "Diffuse Slot / Sampler Config");
+
+    auto section = std::make_shared<EditorAutoPropertySection>("AutoDeepNested", std::move(graph));
+    WidgetTree tree({.width = 360, .height = 280});
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
+
+    auto* slotGroup = dynamic_cast<UIExpander*>(section->getChildren()[0]->getChildren()[0].get());
+    ASSERT_NE(slotGroup, nullptr);
+    EXPECT_EQ(slotGroup->getTitle(), "Diffuse Slot");
+    ASSERT_EQ(slotGroup->getChildren().size(), 2u);
+
+    auto* samplerGroup = dynamic_cast<UIExpander*>(slotGroup->getChildren()[1].get());
+    ASSERT_NE(samplerGroup, nullptr);
+    EXPECT_EQ(samplerGroup->getTitle(), "Sampler Config");
+    EXPECT_EQ(samplerGroup->getChildren().size(), 1u);
 
     tree.detach(*section);
 }
@@ -457,6 +583,12 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionColorShowsMixedAndUndoRestoresE
     const UIElementRef& tintRow = section->getChildren()[0]->getChildren()[0];
     auto* tintEdit = dynamic_cast<UIColorEdit*>(tintRow->getChildren()[1].get());
     ASSERT_NE(tintEdit, nullptr);
+    auto* tintRowBox = dynamic_cast<UIContainer*>(tintRow.get());
+    ASSERT_NE(tintRowBox, nullptr);
+    const UIBoxSlot* colorSlot = tintRowBox->getBoxSlot(*tintEdit);
+    ASSERT_NE(colorSlot, nullptr);
+    EXPECT_EQ(colorSlot->getPreferredSize().y, editor_density::kRowHeight);
+    EXPECT_EQ(colorSlot->getSizeRule(), EUIBoxSlotSizeRule::Fill);
     EXPECT_TRUE(tintEdit->isMixed());
 
     tintEdit->setColor(glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
@@ -596,6 +728,7 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionAssetPathCommitBrowseAndUndo)
     UndoStack stack;
     EEditorAssetPickerKind requestedKind = EEditorAssetPickerKind::Texture;
     std::string requestedPath;
+    std::string revealedPath;
     auto section = std::make_shared<EditorAutoPropertySection>(
         "AutoAsset",
         std::move(graph),
@@ -605,16 +738,19 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionAssetPathCommitBrowseAndUndo)
             requestedKind = kind;
             requestedPath = currentPath;
             onPicked("Content/Textures/Picked.png");
-        });
+        },
+        [&](std::string path) { revealedPath = std::move(path); });
     WidgetTree tree({.width = 360, .height = 220});
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
     section->sync(tree);
 
     const UIElementRef& modelRow = section->getChildren()[0]->getChildren()[1];
-    auto* pathField = dynamic_cast<UITextField*>(modelRow->getChildren()[1].get());
-    auto* browse = dynamic_cast<UIButton*>(modelRow->getChildren()[2].get());
+    auto* pathField = assetPathField(*modelRow);
+    auto* browse = assetBrowseButton(*modelRow);
+    auto* locate = assetLocateButton(*modelRow);
     ASSERT_NE(pathField, nullptr);
     ASSERT_NE(browse, nullptr);
+    ASSERT_NE(locate, nullptr);
     EXPECT_EQ(pathField->getText(), "Content/Models/Test.glb");
 
     pathField->setText("Content/Models/Typed.glb");
@@ -629,6 +765,11 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionAssetPathCommitBrowseAndUndo)
     EXPECT_EQ(requestedKind, EEditorAssetPickerKind::Model);
     EXPECT_EQ(requestedPath, "Content/Models/Typed.glb");
     EXPECT_EQ(value.model.getPath(), "Content/Textures/Picked.png");
+
+    if (locate->_onClick) {
+        locate->_onClick();
+    }
+    EXPECT_EQ(revealedPath, "Content/Textures/Picked.png");
 
     EXPECT_TRUE(stack.undo());
     EXPECT_EQ(value.model.getPath(), "Content/Models/Typed.glb");
@@ -649,7 +790,7 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionAssetShowsResolveErrorState)
     section->sync(tree);
 
     const UIElementRef& albedoRow = section->getChildren()[0]->getChildren()[0];
-    auto* pathField = dynamic_cast<UITextField*>(albedoRow->getChildren()[1].get());
+    auto* pathField = assetPathField(*albedoRow);
     ASSERT_NE(pathField, nullptr);
     EXPECT_TRUE(pathField->hasError());
 
@@ -823,14 +964,24 @@ TEST(EditorPropertyGraphTest, TextureAssetRowShowsRetainedPreview)
     auto graph = PropertyGraph::build(type_index_v<AssetRefTestComponent>, {&value});
     auto section = std::make_shared<EditorAutoPropertySection>("AutoAssetPreview", std::move(graph));
     WidgetTree tree({.width = 360, .height = 220});
-    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section).valid());
+    FCanvasSlotArgs hostSlot;
+    hostSlot.anchorMin = {0.0f, 0.0f};
+    hostSlot.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), section, hostSlot).valid());
     section->sync(tree);
 
     const UIElementRef& albedoRow = section->getChildren()[0]->getChildren()[0];
-    ASSERT_GE(albedoRow->getChildren().size(), 4u);
-    auto* preview = dynamic_cast<UIImage*>(albedoRow->getChildren()[3].get());
+    ASSERT_GE(albedoRow->getChildren().size(), 2u);
+    auto* preview = assetPreviewImage(*albedoRow);
     ASSERT_NE(preview, nullptr);
     EXPECT_EQ(preview->_assetPath, "Content/Textures/Albedo.png");
+    EXPECT_EQ(preview->getScaleMode(), EImageScaleMode::Contain);
+
+    tree.layout();
+    auto* pathField = assetPathField(*albedoRow);
+    ASSERT_NE(pathField, nullptr);
+    EXPECT_GT(pathField->_layoutRect.extent.x, editor_density::kAssetThumbSize);
+    EXPECT_GT(preview->_layoutRect.pos.y, pathField->_layoutRect.pos.y + pathField->_layoutRect.extent.y - 1.0f);
 
     tree.detach(*section);
 }

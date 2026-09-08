@@ -3,7 +3,6 @@
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Image.h"
-#include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "RHI/Core/Texture.h"
 
@@ -25,11 +24,10 @@ void EditorViewportTab::construct()
 {
     auto image = ui::image("ViewportImage");
     _image     = image.share();
-    _image->_hitFilter = EWidgetHitFilter::Stop;
-    addDetachedChild(ui::panel("ViewportBodyInner")
-                         .setStyleKey("panel.canvas")
-                         .child(std::move(image), ui::canvasSlot().fill())
-                         .release());
+    _image->_hitFilter   = EWidgetHitFilter::Stop;
+    _image->_focusPolicy = EWidgetFocusPolicy::Focusable;
+    _image->setOpaqueSample(true);
+    addDetachedChild(image.release());
 }
 
 void EditorViewportTab::onAttached()
@@ -57,18 +55,14 @@ void EditorViewportTab::clearHostRegistration()
 
 void EditorViewportTab::setDisplayImage(const std::shared_ptr<Texture>& texture, bool missing)
 {
-    if (!_image) {
-        return;
-    }
     _image->setTexture(texture);
     _image->setResourceMissing(missing);
+    // Live RT contents change every frame even when the wrap pointer does not.
+    _image->markPaintDirty();
 }
 
 Rect2D EditorViewportTab::imageRect() const
 {
-    if (!_image) {
-        return {};
-    }
     return _image->_layoutRect;
 }
 
@@ -84,10 +78,19 @@ bool EditorViewportTab::isFocused() const
     return tree && containsTreeNode(tree->getFocused());
 }
 
+void EditorViewportTab::takeKeyboardFocus()
+{
+    WidgetTree* tree = getTree();
+    if (!tree || !_image) {
+        return;
+    }
+    tree->setFocus(_image.get());
+}
+
 bool EditorViewportTab::containsTreeNode(const UIElement* node) const
 {
     for (const UIElement* cursor = node; cursor; cursor = cursor->getParent()) {
-        if (cursor == this || cursor == _image.get()) {
+        if (cursor == this) {
             return true;
         }
     }

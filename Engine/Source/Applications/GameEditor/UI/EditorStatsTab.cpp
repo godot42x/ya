@@ -25,18 +25,15 @@ void EditorStatsTab::construct()
     _statsText = statsText.share();
     addDetachedChild(ui::panel("FrameStatsHost")
                          .setStyleKey("panel.canvas")
-                         .child(std::move(statsText), ui::canvasSlot().fill().offset({12.0f, 12.0f}))
+                         .child(std::move(statsText), ui::canvasSlot().fill().insets(FMargin::all(12.0f)))
                          .release());
 }
 
 void EditorStatsTab::tick(float deltaSeconds)
 {
-    if (!_statsText) {
-        return;
-    }
     App* app = App::get();
     const float fps = deltaSeconds > 0.0f ? 1.0f / deltaSeconds : 0.0f;
-    const glm::vec2 viewport = _layer ? _layer->getViewportSize() : glm::vec2{0.0f, 0.0f};
+    const glm::vec2 viewport = _layer->getViewportSize();
     _statsText->setText(std::format(
         "Frame {}\nDelta {:.2f} ms\nFPS {:.1f}\nViewport {:.0f} x {:.0f}",
         app ? app->getFrameIndex() : 0,

@@ -23,7 +23,12 @@ void FileExplorer::selectMountPoint(const MountPoint& mp)
 {
     for (auto& candidate : _mountPoints) {
         if (candidate.name == mp.name && candidate.path == mp.path) {
+            const MountPoint* previousMount = _activeMountPoint;
+            const std::filesystem::path previousDir = _currentDirectory;
             switchToMountPoint(&candidate);
+            if (previousMount != _activeMountPoint || previousDir != _currentDirectory) {
+                bumpContentGeneration();
+            }
             saveConfig();
             return;
         }
@@ -84,6 +89,7 @@ bool FileExplorer::navigateBack()
     }
     _currentDirectory = parent;
     _selectedPath.clear();
+    bumpContentGeneration();
     saveConfig();
     return true;
 }
@@ -96,6 +102,7 @@ bool FileExplorer::navigateInto(const std::filesystem::path& directory)
     }
     _currentDirectory = directory;
     _selectedPath.clear();
+    bumpContentGeneration();
     saveConfig();
     return true;
 }
@@ -103,8 +110,12 @@ bool FileExplorer::navigateInto(const std::filesystem::path& directory)
 void FileExplorer::setSearchText(std::string_view text)
 {
     const size_t length = std::min(text.size(), sizeof(_searchBuffer) - 1);
+    if (length == std::strlen(_searchBuffer) && std::string_view(_searchBuffer, length) == text.substr(0, length)) {
+        return;
+    }
     std::memcpy(_searchBuffer, text.data(), length);
     _searchBuffer[length] = '\0';
+    bumpContentGeneration();
 }
 
 std::string FileExplorer::getSearchText() const
@@ -122,6 +133,8 @@ bool FileExplorer::isPathWithinActiveMountPoint(const std::filesystem::path& pat
 
 void FileExplorer::setSelectedPath(const std::filesystem::path& path)
 {
+    const MountPoint* previousMount = _activeMountPoint;
+    const std::filesystem::path previousDir = _currentDirectory;
     for (auto& mp : _mountPoints) {
         auto relativePath = std::filesystem::relative(path, mp.path);
         if (!relativePath.empty() && !relativePath.string().starts_with("..")) {
@@ -135,6 +148,9 @@ void FileExplorer::setSelectedPath(const std::filesystem::path& path)
             }
             break;
         }
+    }
+    if (previousMount != _activeMountPoint || previousDir != _currentDirectory) {
+        bumpContentGeneration();
     }
 }
 

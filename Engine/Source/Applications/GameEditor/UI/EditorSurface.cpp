@@ -8,6 +8,7 @@
 
 #include "Core/Event.h"
 #include "Core/Log.h"
+#include "Core/Profiling/Profiling.h"
 #include "GameEditor/UI/EditorViewportHost.h"
 #include "GameEditor/UI/EditorViewportGizmoOverlay.h"
 #include "GameEditor/UI/EditorListRows.h"
@@ -27,6 +28,7 @@
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
+#include "GUI/Widgets/GuiFrameInspector.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
@@ -49,6 +51,7 @@
 #include <charconv>
 #include <filesystem>
 #include <format>
+#include <glm/glm.hpp>
 #include <optional>
 #include <vector>
 
@@ -97,6 +100,8 @@ EditorSurface::~EditorSurface()
 void EditorSurface::shutdown()
 {
     unbindAppState();
+    closeViewportContextMenu();
+    _bViewportRightPressPending = false;
     if (_filePicker) {
         _filePicker->reset();
     }
@@ -154,6 +159,8 @@ void EditorSurface::tick(App& app, float dt)
 void EditorSurface::rebuild(App& app)
 {
     unbindAppState();
+    closeViewportContextMenu();
+    _bViewportRightPressPending = false;
     _root.reset();
     _menuBar.reset();
     _toolbarModeText.reset();
@@ -186,6 +193,7 @@ void EditorSurface::rebuild(App& app)
         .width  = static_cast<uint32_t>(std::max(windowW, 1)),
         .height = static_cast<uint32_t>(std::max(windowH, 1)),
     });
+    _tree->setTextureSource(&gameUITextureSource());
     bindSdlClipboard(*_tree);
     _theme = buildEditorTheme(true);
     _tree->setTheme(_theme.get());
@@ -307,12 +315,27 @@ void EditorSurface::buildEditorChrome(App& app)
         });
     });
     _menuBar->addItem("View", [this]() {
-        return UIMenu::create({
+        std::vector<UIMenu::FItem> items = {
             UIMenu::FItem::fromAction(*_actions, "viewport.mode3d"),
             UIMenu::FItem::fromAction(*_actions, "viewport.mode2d"),
             UIMenu::FItem::separator(),
             UIMenu::FItem::fromAction(*_actions, "editor.settings"),
-        });
+        };
+#if !defined(YA_PROFILING_DISABLED)
+        auto channelItem = [](const char* label, EGuiFrameInspectorChannel channel) {
+            UIMenu::FItem item;
+            item.label     = label;
+            item.bCheckable = true;
+            item.bChecked  = isGuiFrameInspectorChannelOn(channel);
+            item.action   = [channel]() { toggleGuiFrameInspectorChannel(channel); };
+            return item;
+        };
+        items.push_back(UIMenu::FItem::separator());
+        items.push_back(channelItem("Frame Inspector HUD", EGuiFrameInspectorChannel::Hud));
+        items.push_back(channelItem("Rebuild Flash", EGuiFrameInspectorChannel::Rebuild));
+        items.push_back(channelItem("Overdraw Heatmap", EGuiFrameInspectorChannel::Overdraw));
+#endif
+        return UIMenu::create(std::move(items));
     });
 
     auto play = iconLabeledButton("Play", "Play", editor_icons::kPlay).setOnClick([this]() {
@@ -355,7 +378,12 @@ void EditorSurface::buildEditorChrome(App& app)
     _dockSpace = ui::buildAs<UIDockSpace>(*_tree,
                                           *_root,
                                           ui::dockSpace("EditorDock").setContext(_dockContext),
-                                          ui::canvasSlot().anchor({0.0f, 0.0f}, {1.0f, 1.0f}).offset({0.0f, kChromeTop}));
+                                          ui::canvasSlot()
+                                              .anchor({0.0f, 0.0f}, {1.0f, 1.0f})
+                                              .insets(FMargin{editor_density::kChromeInset,
+                                                              kChromeTop,
+                                                              editor_density::kChromeInset,
+                                                              editor_density::kChromeInset}));
 
     _dockFloatingHost = std::make_shared<UIDockFloatingHost>("EditorDockFloatingHost");
     _dockFloatingHost->bindContext(_dockContext);
@@ -422,11 +450,23 @@ void EditorSurface::applyWindowMetrics(App& app)
     }
 }
 
+void EditorSurface::closeViewportContextMenu()
+{
+    if (!_viewportContextMenu) {
+        return;
+    }
+    std::shared_ptr<UIMenu> menu = std::move(_viewportContextMenu);
+    menu->_onDismiss             = nullptr;
+    menu->close();
+}
+
 void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
 {
     if (!_tree || !_layer || !_layer->canViewportAuthor()) {
         return;
     }
+
+    closeViewportContextMenu();
 
     EditorLayer& layer = *_layer;
     std::vector<UIMenu::FItem> items;
@@ -455,6 +495,8 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
     items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.delete"));
 
     auto menu = UIMenu::create(std::move(items));
+    _viewportContextMenu = menu;
+    menu->_onDismiss = [this]() { _viewportContextMenu.reset(); };
     menu->openAt(*_tree, windowPoint);
 }
 
@@ -601,6 +643,11 @@ void EditorSurface::openAssetPickerDialog(EEditorAssetPickerKind kind,
     openFilePickerDialog(makeAssetPickerRequest(kind, std::move(currentPath), std::move(onPicked)));
 }
 
+void EditorSurface::showContentBrowser()
+{
+    (void)_workspace.invokeTab("content-browser");
+}
+
 void EditorSurface::openFilePickerDialog(FEditorFilePickerRequest request)
 {
     if (!_tree || !_root) {
@@ -675,25 +722,80 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
         return EWidgetRouteResult::NotHandled;
     }
 
-    if (_viewportHost && (isViewportHovered() || isViewportFocused())) {
+    bool bPopupOpen = false;
+    if (UIElement* popup = _tree->getLayer(WidgetTree::ELayer::Popup)) {
+        bPopupOpen = !popup->getChildren().empty();
+    }
+    if (handleGuiFrameInspectorHudInput(event, windowPoint, _tree->getLogicalExtent(), bPopupOpen)) {
+        return EWidgetRouteResult::HandledExclusive;
+    }
+
+    constexpr float kViewportContextDragSlop = 4.0f;
+    const bool overlayCandidate =
+        _viewportHost &&
+        (isPointInViewport(windowPoint) || _viewportOverlayHost.wantsPointerCapture() ||
+         _bViewportRightPressPending);
+    if (overlayCandidate) {
         const glm::vec2 localPoint = windowPoint - _viewportHost->imageRect().pos;
         const EWidgetRouteResult overlayResult = _viewportOverlayHost.dispatchEvent(event, localPoint);
         if (overlayResult != EWidgetRouteResult::NotHandled) {
+            _bViewportRightPressPending = false;
             return overlayResult;
-        }
-        if (event.getEventType() == EEvent::MouseButtonPressed) {
-            const auto& mouseEvent = static_cast<const MouseButtonPressedEvent&>(event);
-            if (mouseEvent.GetMouseButton() == EMouse::Right && _layer && _layer->canViewportAuthor() &&
-                !_layer->isRightMouseDragging()) {
-                openViewportContextMenu(windowPoint);
-                return EWidgetRouteResult::HandledExclusive;
-            }
         }
     }
 
     WidgetEventContext ctx;
     ctx.logicalPoint = windowPoint;
     const EWidgetRouteResult routed = _tree->dispatchEvent(event, ctx);
+
+    if (event.getEventType() == EEvent::MouseButtonPressed && isPointInViewport(windowPoint) &&
+        _viewportHost &&
+        (routed != EWidgetRouteResult::HandledExclusive || isViewportHovered())) {
+        _viewportHost->takeKeyboardFocus();
+    }
+
+    const bool canAuthor = _layer && _layer->canViewportAuthor();
+    switch (event.getEventType()) {
+    case EEvent::MouseButtonPressed: {
+        const auto& mouseEvent = static_cast<const MouseButtonPressedEvent&>(event);
+        if (mouseEvent.GetMouseButton() != EMouse::Right) {
+            break;
+        }
+        _bViewportRightPressPending = false;
+        if (canAuthor && isPointInViewport(windowPoint)) {
+            _bViewportRightPressPending = true;
+            _viewportRightPressPos      = windowPoint;
+        }
+        if (routed == EWidgetRouteResult::HandledExclusive && !isViewportHovered()) {
+            _bViewportRightPressPending = false;
+        }
+        break;
+    }
+    case EEvent::MouseMoved: {
+        if (_bViewportRightPressPending &&
+            glm::length(windowPoint - _viewportRightPressPos) > kViewportContextDragSlop) {
+            _bViewportRightPressPending = false;
+        }
+        break;
+    }
+    case EEvent::MouseButtonReleased: {
+        const auto& mouseEvent = static_cast<const MouseButtonReleasedEvent&>(event);
+        if (mouseEvent.GetMouseButton() != EMouse::Right) {
+            break;
+        }
+        const bool openMenu =
+            _bViewportRightPressPending && canAuthor && isPointInViewport(windowPoint);
+        _bViewportRightPressPending = false;
+        if (openMenu) {
+            openViewportContextMenu(windowPoint);
+            return EWidgetRouteResult::HandledExclusive;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+
     if (routed != EWidgetRouteResult::NotHandled) {
         return routed;
     }
@@ -702,6 +804,16 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
         return EWidgetRouteResult::HandledExclusive;
     }
     return routed;
+}
+
+bool EditorSurface::isPointInViewport(const glm::vec2& windowPoint) const
+{
+    if (!_viewportHost) {
+        return false;
+    }
+    const Rect2D rect = _viewportHost->imageRect();
+    return windowPoint.x >= rect.pos.x && windowPoint.x < rect.pos.x + rect.extent.x &&
+           windowPoint.y >= rect.pos.y && windowPoint.y < rect.pos.y + rect.extent.y;
 }
 
 bool EditorSurface::isViewportHovered() const

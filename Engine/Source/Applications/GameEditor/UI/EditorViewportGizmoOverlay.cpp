@@ -30,7 +30,7 @@ EWidgetRouteResult EditorViewportGizmoOverlay::dispatchEvent(const Event& event,
     switch (event.getEventType()) {
     case EEvent::MouseMoved:
         _controller->setPointer(localPoint, bInside);
-        if (isActive() || wantsPointerCapture()) {
+        if (wantsPointerCapture()) {
             return EWidgetRouteResult::HandledExclusive;
         }
         break;
@@ -54,17 +54,17 @@ EWidgetRouteResult EditorViewportGizmoOverlay::dispatchEvent(const Event& event,
     }
     case EEvent::KeyPressed: {
         const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
-        if (_controller->hasSelectedEntities()) {
+        if (bInside && _controller->hasSelectedEntities()) {
             switch (keyEvent.getKeyCode()) {
             case EKey::K_W:
                 _controller->setOperation(EEditorViewportGizmoOperation::Translate);
-                return EWidgetRouteResult::HandledExclusive;
+                break;
             case EKey::K_E:
                 _controller->setOperation(EEditorViewportGizmoOperation::Rotate);
-                return EWidgetRouteResult::HandledExclusive;
+                break;
             case EKey::K_R:
                 _controller->setOperation(EEditorViewportGizmoOperation::Scale);
-                return EWidgetRouteResult::HandledExclusive;
+                break;
             default:
                 break;
             }
@@ -75,7 +75,7 @@ EWidgetRouteResult EditorViewportGizmoOverlay::dispatchEvent(const Event& event,
         break;
     }
 
-    if (isActive() || wantsPointerCapture()) {
+    if (wantsPointerCapture()) {
         if (event.isInCategory(EEventCategory::Mouse) ||
             event.isInCategory(EEventCategory::MouseButton)) {
             return EWidgetRouteResult::HandledExclusive;

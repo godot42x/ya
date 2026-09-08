@@ -38,6 +38,40 @@ TEST(EditorListRowsTest, ContentRowUpdaterRefreshesSelectionWithoutRebuildingIns
     EXPECT_EQ(contentRowIcon(*row)->_assetPath, editor_icons::kFile);
 }
 
+TEST(EditorListRowsTest, ContentTileUpdaterSetsPreviewPathAndSelection)
+{
+    auto tile = contentTile("Tile", "ao.jpg", "ao.jpg", {}, {}).share();
+    ASSERT_FALSE(tile->_bSelected);
+
+    updateContentTile(*tile,
+                      "ao.jpg",
+                      "ao.jpg",
+                      true,
+                      {},
+                      {},
+                      editor_icons::kFile,
+                      64.0f);
+    EXPECT_TRUE(tile->_bSelected);
+    ASSERT_NE(contentRowLabel(*tile), nullptr);
+    EXPECT_EQ(contentRowLabel(*tile)->getText(), "ao.jpg");
+    ASSERT_NE(contentRowIcon(*tile), nullptr);
+    EXPECT_EQ(contentRowIcon(*tile)->_assetPath, editor_icons::kFile);
+    EXPECT_EQ(contentRowIcon(*tile)->getScaleMode(), EImageScaleMode::Contain);
+    EXPECT_TRUE(contentRowLabel(*tile)->_bWrap);
+    EXPECT_FLOAT_EQ(contentRowLabel(*tile)->_maxWrapWidth, 64.0f);
+
+    UIImage* icon = contentRowIcon(*tile);
+    ASSERT_NE(icon, nullptr);
+    icon->clearPaintDirty();
+    updateContentTile(*tile, "ao.jpg", "ao.jpg", true, {}, {}, editor_icons::kFile, 64.0f);
+    EXPECT_FALSE(icon->isPaintDirty());
+    EXPECT_EQ(icon->_assetPath, editor_icons::kFile);
+
+    updateContentTile(*tile, "ao.jpg", "ao.jpg", true, {}, {}, "Engine:Content/face.png", 64.0f);
+    EXPECT_TRUE(icon->isPaintDirty());
+    EXPECT_EQ(icon->_assetPath, "Engine:Content/face.png");
+}
+
 TEST(EditorListRowsTest, IconLabeledButtonHostsImageAndLabel)
 {
     auto button = iconLabeledButton("Play", "Play", editor_icons::kPlay).share();

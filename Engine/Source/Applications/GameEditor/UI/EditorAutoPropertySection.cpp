@@ -3,9 +3,11 @@
 #include "Core/Reflection/MetadataSupport.h"
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Declarative/Build.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/Expander.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/DragFloat.h"
 #include "GUI/Widgets/Controls/ColorEdit.h"
@@ -15,6 +17,8 @@
 
 #include <cmath>
 #include <format>
+#include <string_view>
+#include <vector>
 
 namespace ya
 {
@@ -32,18 +36,91 @@ void applyManipulateSpec(UIDragFloat& drag, const PropertyHandle& binding)
         drag._speed = spec.step;
     }
 }
+
+[[nodiscard]] FBoxSlotArgs labelColumnSlot()
+{
+    return {.preferredSize = {editor_density::kLabelColumn, editor_density::kRowHeight}};
+}
+
+[[nodiscard]] FBoxSlotArgs labelTopSlot()
+{
+    return {
+        .crossAlignment = EUIBoxSlotCrossAlignment::Start,
+        .preferredSize  = {editor_density::kLabelColumn, editor_density::kRowHeight},
+    };
+}
+
+[[nodiscard]] FBoxSlotArgs fillPathSlot()
+{
+    return {
+        .sizeRule      = EUIBoxSlotSizeRule::Fill,
+        .preferredSize = {160.0f, editor_density::kRowHeight},
+    };
+}
+
+[[nodiscard]] FBoxSlotArgs fillControlSlot()
+{
+    return {
+        .sizeRule      = EUIBoxSlotSizeRule::Fill,
+        .preferredSize  = {0.0f, editor_density::kRowHeight},
+    };
+}
+
+[[nodiscard]] FBoxSlotArgs fillRemainingSlot()
+{
+    return {.sizeRule = EUIBoxSlotSizeRule::Fill};
+}
+
+[[nodiscard]] FBoxSlotArgs fixedControlSlot(float width)
+{
+    return {.preferredSize = {width, editor_density::kRowHeight}};
+}
+
+[[nodiscard]] std::vector<std::string> splitPropertyGroupPath(const std::string& group)
+{
+    std::vector<std::string> parts;
+    if (group.empty()) {
+        return parts;
+    }
+    constexpr std::string_view kSep = " / ";
+    size_t start = 0;
+    while (start <= group.size()) {
+        const size_t found = group.find(kSep, start);
+        if (found == std::string::npos) {
+            parts.push_back(group.substr(start));
+            break;
+        }
+        parts.push_back(group.substr(start, found - start));
+        start = found + kSep.size();
+    }
+    return parts;
+}
+
+[[nodiscard]] std::string joinPropertyGroupKey(const std::vector<std::string>& parts, size_t count)
+{
+    std::string key;
+    for (size_t i = 0; i < count; ++i) {
+        if (i > 0) {
+            key += " / ";
+        }
+        key += parts[i];
+    }
+    return key;
+}
 }
 
 EditorAutoPropertySection::EditorAutoPropertySection(std::string name,
                                                      PropertyGraph graph,
                                                      UndoStack* undo,
                                                      std::string mergeIdentity,
-                                                     EditorAssetPickerCallback assetPicker)
-    : UICompoundWidget(std::move(name), "panel")
+                                                     EditorAssetPickerCallback assetPicker,
+                                                     EditorRevealAssetCallback revealAsset)
+    : UICompoundWidget(std::move(name))
     , _graph(std::move(graph))
     , _undo(undo)
     , _mergeIdentity(std::move(mergeIdentity))
     , _assetPicker(std::move(assetPicker))
+    , _revealAsset(std::move(revealAsset))
 {
 }
 
@@ -89,26 +166,61 @@ void EditorAutoPropertySection::commitAssetPath(size_t editorIndex, const std::s
 void EditorAutoPropertySection::construct()
 {
     auto rows = ui::column("AutoPropertyRows").setSpacing(editor_density::kRowSpacing);
+    std::vector<std::shared_ptr<UIExpander>> groupStack;
+    std::vector<std::string> groupSegments;
     std::string currentGroup;
+    auto beginGroup = [&](const std::string& group) {
+        if (group == currentGroup) {
+            return;
+        }
+        currentGroup = group;
+        const std::vector<std::string> parts = splitPropertyGroupPath(group);
+        size_t common = 0;
+        while (common < groupSegments.size() && common < parts.size() &&
+               groupSegments[common] == parts[common]) {
+            ++common;
+        }
+        while (groupSegments.size() > common) {
+            groupSegments.pop_back();
+            groupStack.pop_back();
+        }
+        for (size_t i = common; i < parts.size(); ++i) {
+            const std::string key = joinPropertyGroupKey(parts, i + 1);
+            bool expanded = true;
+            if (const auto it = _groupExpanded.find(key); it != _groupExpanded.end()) {
+                expanded = it->second;
+            }
+            else {
+                _groupExpanded.emplace(key, true);
+            }
+            auto expander = ui::treeNode("PropertyGroup_" + key)
+                                .setTitle(parts[i])
+                                .setExpanded(expanded)
+                                .setSpacing(editor_density::kRowSpacing)
+                                .share();
+            expander->_onExpandedChanged = [this, key](bool value) {
+                _groupExpanded[key] = value;
+            };
+            if (groupStack.empty()) {
+                rows.child(expander);
+            }
+            else {
+                groupStack.back()->addDetachedChild(expander);
+            }
+            groupStack.push_back(std::move(expander));
+            groupSegments.push_back(parts[i]);
+        }
+    };
     for (const PropertyNode& node : _graph.getNodes()) {
         if (!node.bVisible) continue;
-        if (node.group != currentGroup) {
-            currentGroup = node.group;
-            if (!currentGroup.empty()) {
-                rows.child(ui::text("PropertyGroup_" + currentGroup)
-                               .setText(currentGroup)
-                               .setStyleKey("text.eyebrow")
-                               .setFontSize(11),
-                           FBoxSlotArgs{.preferredSize = {0.0f, editor_density::kGroupHeaderHeight}});
-            }
-        }
+        beginGroup(node.group);
         auto row = ui::row("PropertyRow_" + node.name).setSpacing(editor_density::kControlSpacing);
         row.child(ui::text("PropertyLabel_" + node.name)
                       .setText(node.displayName)
                       .setFontSize(12)
                       .setStyleKey("text.muted")
                       .setVAlign(EWidgetAlignV::Center),
-                  FBoxSlotArgs{.preferredSize = {editor_density::kLabelColumn, editor_density::kRowHeight}});
+                  node.binding.isAssetRef() ? labelTopSlot() : labelColumnSlot());
 
         EditorSlot slot;
         slot.node = &node;
@@ -142,8 +254,8 @@ void EditorAutoPropertySection::construct()
                              })
                              .child(ui::text(node.name + "_ClearLabel").setText("Clear"))
                              .share();
-            row.child(slot.add, FBoxSlotArgs{.preferredSize = {36.0f, 22.0f}});
-            row.child(slot.clear, FBoxSlotArgs{.preferredSize = {56.0f, 22.0f}});
+            row.child(slot.add, fixedControlSlot(36.0f));
+            row.child(slot.clear, fixedControlSlot(56.0f));
             if (!node.bEditable) {
                 slot.add->setEnabled(false);
                 slot.clear->setEnabled(false);
@@ -166,7 +278,7 @@ void EditorAutoPropertySection::construct()
                     .redo  = [binding, after]() { binding.restoreColor(after); },
                 });
             };
-            row.child(slot.color, FBoxSlotArgs{.preferredSize = {180.0f, 28.0f}});
+            row.child(slot.color, fillControlSlot());
             if (!node.bEditable) slot.color->setEnabled(false);
         }
         else if (node.valueType == refl::type_index_v<glm::vec2>) {
@@ -192,7 +304,7 @@ void EditorAutoPropertySection::construct()
                 };
                 slot.vec2.push_back(drag);
                 applyManipulateSpec(*drag, node.binding);
-                row.child(drag, FBoxSlotArgs{.preferredSize = {72.0f, 22.0f}});
+                row.child(drag, fillControlSlot());
             }
             if (!node.bEditable) {
                 for (auto& drag : slot.vec2) drag->setEnabled(false);
@@ -221,7 +333,7 @@ void EditorAutoPropertySection::construct()
                 };
                 slot.vec3.push_back(drag);
                 applyManipulateSpec(*drag, node.binding);
-                row.child(drag, FBoxSlotArgs{.preferredSize = {72.0f, 22.0f}});
+                row.child(drag, fillControlSlot());
             }
             if (!node.bEditable) {
                 for (auto& drag : slot.vec3) drag->setEnabled(false);
@@ -250,7 +362,7 @@ void EditorAutoPropertySection::construct()
                 };
                 slot.vec4.push_back(drag);
                 applyManipulateSpec(*drag, node.binding);
-                row.child(drag, FBoxSlotArgs{.preferredSize = {54.0f, 22.0f}});
+                row.child(drag, fillControlSlot());
             }
             if (!node.bEditable) {
                 for (auto& drag : slot.vec4) drag->setEnabled(false);
@@ -275,7 +387,7 @@ void EditorAutoPropertySection::construct()
                     .redo     = [binding, after]() { binding.restore(after); },
                 });
             };
-            row.child(slot.scalar, FBoxSlotArgs{.preferredSize = {110.0f, 22.0f}});
+            row.child(slot.scalar, fillControlSlot());
             if (!node.bEditable) slot.scalar->setEnabled(false);
         }
         else if (node.valueType == refl::type_index_v<int> ||
@@ -302,7 +414,7 @@ void EditorAutoPropertySection::construct()
                     .redo     = [binding, after]() { binding.restoreInteger(after); },
                 });
             };
-            row.child(slot.integer, FBoxSlotArgs{.preferredSize = {110.0f, 22.0f}});
+            row.child(slot.integer, fillControlSlot());
             if (!node.bEditable) slot.integer->setEnabled(false);
         }
         else if (node.valueType == refl::type_index_v<bool>) {
@@ -340,7 +452,7 @@ void EditorAutoPropertySection::construct()
                     .redo  = [binding, after]() { binding.restore(after); },
                 });
             };
-            row.child(slot.string, FBoxSlotArgs{.preferredSize = {160.0f, 22.0f}});
+            row.child(slot.string, fillControlSlot());
             if (!node.bEditable) slot.string->setEnabled(false);
         }
         else if (node.binding.isEnum()) {
@@ -360,12 +472,13 @@ void EditorAutoPropertySection::construct()
                     .redo  = [binding, after]() { binding.restoreEnum(after); },
                 });
             };
-            row.child(slot.enumeration, FBoxSlotArgs{.preferredSize = {160.0f, 22.0f}});
+            row.child(slot.enumeration, fillControlSlot());
             if (!node.bEditable) slot.enumeration->setEnabled(false);
         }
         else if (node.binding.isAssetRef()) {
             slot.kind = EditorSlot::Kind::Asset;
             slot.assetPath = std::make_shared<UITextField>(node.name + "_Path");
+            slot.assetPath->setStyleKey(std::string(StyleKey::TextFieldCompact));
             slot.assetPath->_onCommit = [this, index = _editors.size()](const std::string& value) {
                 commitAssetPath(index, value);
             };
@@ -389,12 +502,37 @@ void EditorAutoPropertySection::construct()
                               })
                               .child(ui::text(node.name + "_BrowseLabel").setText("Browse"))
                               .share();
-            row.child(slot.assetPath, FBoxSlotArgs{.preferredSize = {140.0f, 22.0f}});
-            row.child(slot.browse, FBoxSlotArgs{.preferredSize = {56.0f, 22.0f}});
+            slot.locate = ui::button(node.name + "_Locate", "Show")
+                              .setOnClick([this, index = _editors.size()]() {
+                                  if (!_revealAsset) {
+                                      return;
+                                  }
+                                  std::string current;
+                                  if (!_editors[index].node->binding.tryGetAssetPath(current) || current.empty()) {
+                                      return;
+                                  }
+                                  _revealAsset(std::move(current));
+                              })
+                              .child(ui::text(node.name + "_LocateLabel").setText("Show"))
+                              .share();
+            auto pathRow = ui::row(node.name + "_PathRow").setSpacing(editor_density::kControlSpacing);
+            pathRow.child(slot.assetPath, fillPathSlot());
+            pathRow.child(slot.browse, fixedControlSlot(editor_density::kBrowseButtonWidth));
+            pathRow.child(slot.locate, fixedControlSlot(editor_density::kLocateButtonWidth));
+            auto assetCol = ui::column(node.name + "_AssetCol").setSpacing(editor_density::kControlSpacing);
+            assetCol.child(std::move(pathRow),
+                          FBoxSlotArgs{.preferredSize = {0.0f, editor_density::kRowHeight}});
             if (node.binding.assetRefKind() == EEditorAssetPickerKind::Texture) {
                 slot.preview = std::make_shared<UIImage>(node.name + "_Preview");
-                row.child(slot.preview, FBoxSlotArgs{.preferredSize = {48.0f, 48.0f}});
+                slot.preview->setScaleMode(EImageScaleMode::Contain);
+                assetCol.child(slot.preview,
+                               FBoxSlotArgs{
+                                   .crossAlignment = EUIBoxSlotCrossAlignment::Start,
+                                   .preferredSize = {editor_density::kAssetThumbSize,
+                                                     editor_density::kAssetThumbSize},
+                               });
             }
+            row.child(std::move(assetCol), fillRemainingSlot());
             if (!node.bEditable) {
                 slot.assetPath->setEnabled(false);
                 slot.browse->setEnabled(false);
@@ -451,10 +589,15 @@ void EditorAutoPropertySection::construct()
                               })
                               .child(ui::text(node.name + "_RemoveLabel").setText("X"))
                               .share();
-            row.child(slot.remove, FBoxSlotArgs{.preferredSize = {28.0f, 22.0f}});
+            row.child(slot.remove, fixedControlSlot(28.0f));
         }
         _editors.push_back(std::move(slot));
-        rows.child(std::move(row));
+        if (!groupStack.empty()) {
+            groupStack.back()->addDetachedChild(std::move(row).release());
+        }
+        else {
+            rows.child(std::move(row));
+        }
     }
     addDetachedChild(rows.release());
 }
@@ -608,14 +751,22 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
             if (slot.node->binding.tryGetAssetPath(value) && slot.assetPath.get() != focused) {
                 slot.assetPath->setText(value);
             }
+            if (slot.locate) {
+                std::string locatePath = value;
+                if (locatePath.empty()) {
+                    (void)slot.node->binding.tryGetAssetPath(locatePath);
+                }
+                slot.locate->setEnabled(!locatePath.empty());
+            }
             if (slot.preview) {
                 std::string path;
                 if (slot.node->binding.tryGetAssetPath(path) && !slot.node->binding.isMixed()) {
-                    slot.preview->_assetPath = path;
+                    slot.preview->setAssetPath(std::move(path));
+                    slot.preview->setScaleMode(EImageScaleMode::Contain);
                     slot.preview->setResourceMissing(slot.node->binding.hasAssetResolveError());
                 }
                 else {
-                    slot.preview->_assetPath.clear();
+                    slot.preview->setAssetPath({});
                     slot.preview->setResourceMissing(false);
                 }
             }

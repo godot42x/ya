@@ -137,7 +137,7 @@ void EditorHierarchyTab::construct()
                          .child(std::move(hierarchyScroll),
                                 ui::canvasSlot()
                                     .anchor({0.0f, 0.0f}, {1.0f, 1.0f})
-                                    .offset({4.0f, 34.0f}))
+                                    .insets(FMargin{4.0f, 34.0f, 4.0f, 4.0f}))
                          .release());
 }
 

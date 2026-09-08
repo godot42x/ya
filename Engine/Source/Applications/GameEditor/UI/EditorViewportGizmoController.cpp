@@ -394,7 +394,7 @@ bool EditorViewportGizmoController::hasViewportGizmoSelection() const
 
 void EditorViewportGizmoController::syncHost(const FEditorViewportHostState& host)
 {
-    _host       = host;
+    _hostState       = host;
     _bHostValid = host.extent.x > 0.0f && host.extent.y > 0.0f;
     if (!_bHostValid) {
         cancelDrag();
@@ -423,7 +423,7 @@ void EditorViewportGizmoController::setPointer(const glm::vec2& localPoint, bool
         return;
     }
 
-    const auto frame = buildViewportGizmoFrame(selectedEntity(), _host, _mode);
+    const auto frame = buildViewportGizmoFrame(selectedEntity(), _hostState, _mode);
     if (!frame.has_value()) {
         _bHovered    = false;
         _hoveredAxis = EEditorViewportGizmoAxis::None;
@@ -431,7 +431,7 @@ void EditorViewportGizmoController::setPointer(const glm::vec2& localPoint, bool
     }
 
     _hoveredAxis = _operation == EEditorViewportGizmoOperation::Rotate
-                       ? hitTestRotateAxis(_host, *frame, localPoint)
+                       ? hitTestRotateAxis(_hostState, *frame, localPoint)
                        : hitTestLinearAxis(*frame, localPoint);
     _bHovered = _hoveredAxis != EEditorViewportGizmoAxis::None;
 }
@@ -443,21 +443,21 @@ bool EditorViewportGizmoController::beginDrag(const glm::vec2& localPoint)
         return false;
     }
 
-    const auto frame = buildViewportGizmoFrame(selectedEntity(), _host, _mode);
+    const auto frame = buildViewportGizmoFrame(selectedEntity(), _hostState, _mode);
     if (!frame.has_value()) {
         return false;
     }
 
     const EEditorViewportGizmoAxis axis =
         _operation == EEditorViewportGizmoOperation::Rotate
-            ? hitTestRotateAxis(_host, *frame, localPoint)
+            ? hitTestRotateAxis(_hostState, *frame, localPoint)
             : hitTestLinearAxis(*frame, localPoint);
     if (axis == EEditorViewportGizmoAxis::None) {
         return false;
     }
 
     const FGizmoAxisFrame& axisFrame     = frame->axes[gizmoAxisIndex(axis)];
-    const Ray              ray           = makeViewportRay(_host, localPoint);
+    const Ray              ray           = makeViewportRay(_hostState, localPoint);
     const glm::vec3        cameraToOrigin = glm::normalize(frame->originWorld - frame->cameraWorld);
 
     _activeAxis          = axis;
@@ -518,7 +518,7 @@ void EditorViewportGizmoController::updateDrag(const glm::vec2& localPoint)
         return;
     }
 
-    const Ray ray             = makeViewportRay(_host, localPoint);
+    const Ray ray             = makeViewportRay(_hostState, localPoint);
     glm::mat4 newPrimaryWorld = _dragStartPrimaryWorld;
 
     if (_operation == EEditorViewportGizmoOperation::Rotate) {
@@ -553,7 +553,7 @@ void EditorViewportGizmoController::updateDrag(const glm::vec2& localPoint)
         }
         else {
             const float axisLengthWorld =
-                std::max(computeWorldUnitsPerPixel(_host, _dragOriginWorld) * kViewportGizmoAxisPixels, 0.2f);
+                std::max(computeWorldUnitsPerPixel(_hostState, _dragOriginWorld) * kViewportGizmoAxisPixels, 0.2f);
             float scaleDelta = delta / axisLengthWorld;
             if (isViewportGizmoSnapEnabled(*_app)) {
                 scaleDelta = snapScalar(scaleDelta, kViewportGizmoScaleSnap);
@@ -628,7 +628,7 @@ void EditorViewportGizmoController::recordOverlay() const
         return;
     }
 
-    const auto frame = buildViewportGizmoFrame(selectedEntity(), _host, _mode);
+    const auto frame = buildViewportGizmoFrame(selectedEntity(), _hostState, _mode);
     if (!frame.has_value()) {
         return;
     }

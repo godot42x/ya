@@ -16,6 +16,14 @@ EditorLayer::EditorLayer(App* app)
     });
 }
 
+bool EditorLayer::shouldCaptureInput() const
+{
+    if (bViewportFocused || bViewportHovered) {
+        return true;
+    }
+    return _app && _app->getInputManager().isMouseButtonPressed(EMouse::Right);
+}
+
 void EditorLayer::onAttach()
 {
     YA_PROFILE_FUNCTION();

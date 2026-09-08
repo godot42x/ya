@@ -151,6 +151,8 @@ struct EditorLayer
     std::function<void()> _saveSceneAsHandler;
     EditorAssetPickerCallback _assetPickerHandler;
     EditorFilePickerCallback  _filePickerHandler;
+    std::function<void()>     _showContentBrowser;
+    std::string               _pendingContentReveal;
     std::string _currentScenePath; // Current scene file path
     Scene*      _editableScene = nullptr;
 
@@ -289,11 +291,10 @@ struct EditorLayer
     /// Inverse of viewportToCanvas (viewport-local px from canvas logical px).
     [[nodiscard]] glm::vec2 canvasToViewport(const glm::vec2& canvasPoint) const;
 
-    /**
-     * @brief Check if viewport should capture input events
-     * @return true if viewport is focused and should receive events
-     */
-    bool shouldCaptureInput() const { return bViewportFocused; }
+    /// True while the viewport has hover/focus, or while RMB look is held so
+    /// the editor camera keeps receiving InputManager state after the pointer
+    /// leaves the image.
+    [[nodiscard]] bool shouldCaptureInput() const;
     bool shouldShowViewportCameraOverlay() const { return _bShowViewportCameraOverlay; }
     void setShowViewportCameraOverlay(bool enabled);
     [[nodiscard]] int getViewportSamplerType() const { return static_cast<int>(_viewPortSamplerType); }
@@ -396,6 +397,21 @@ struct EditorLayer
     void clearAssetPickerHandler() { _assetPickerHandler = nullptr; }
     void setFilePickerHandler(EditorFilePickerCallback handler) { _filePickerHandler = std::move(handler); }
     void clearFilePickerHandler() { _filePickerHandler = nullptr; }
+    void setShowContentBrowserHandler(std::function<void()> handler) { _showContentBrowser = std::move(handler); }
+    void clearShowContentBrowserHandler() { _showContentBrowser = nullptr; }
+    void revealInContentBrowser(std::string vfsPath)
+    {
+        _pendingContentReveal = std::move(vfsPath);
+        if (_showContentBrowser) {
+            _showContentBrowser();
+        }
+    }
+    [[nodiscard]] std::string consumePendingContentReveal()
+    {
+        std::string path;
+        path.swap(_pendingContentReveal);
+        return path;
+    }
 };
 
 } // namespace ya

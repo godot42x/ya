@@ -7,8 +7,10 @@
 #include "ECS/ECSRegistry.h"
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Declarative/Build.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Expander.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
@@ -130,6 +132,15 @@ EditorAssetPickerCallback makeAssetPicker(EditorLayer* layer)
     };
 }
 
+EditorRevealAssetCallback makeRevealAsset(EditorLayer* layer)
+{
+    return [layer](std::string vfsPath) {
+        if (layer) {
+            layer->revealInContentBrowser(std::move(vfsPath));
+        }
+    };
+}
+
 } // namespace
 
 EditorInspectorTab::EditorInspectorTab(EditorLayer& layer, UndoStack* undo)
@@ -147,7 +158,7 @@ EditorInspectorTab::~EditorInspectorTab()
 
 void EditorInspectorTab::construct()
 {
-    auto nameField = ui::textField("InspectorName").setFontSize(14);
+    auto nameField = ui::textField("InspectorName").setFontSize(13);
     _nameField = nameField.share();
     _nameField->_onCommit = [this](const std::string& text) {
         if (!_layer) return;
@@ -174,25 +185,49 @@ void EditorInspectorTab::construct()
         });
     };
 
-    auto empty = ui::text("InspectorEmpty").setText("No selection").setStyleKey("text.muted");
+    auto empty = ui::text("InspectorEmpty")
+                     .setText("Select an entity in the Hierarchy")
+                     .setStyleKey("text.muted")
+                     .setFontSize(13)
+                     .setWrap(true);
     _emptyText = empty.share();
-    auto entityText = ui::text("InspectorEntityId").setText("Entity ID: -").setFontSize(12).setStyleKey("text.muted");
+    auto entityText = ui::text("InspectorEntityId")
+                          .setText("—")
+                          .setFontSize(12)
+                          .setVAlign(EWidgetAlignV::Center);
     _entityText = entityText.share();
     auto projected = ui::column("InspectorProjected").setSpacing(editor_density::kSectionSpacing);
     _projectedHost = projected.share();
 
+    const FBoxSlotArgs labelSlot{.preferredSize = {editor_density::kLabelColumn, editor_density::kRowHeight}};
     auto entityForm = ui::column("InspectorEntityForm")
                           .setSpacing(editor_density::kRowSpacing)
-                          .child(std::move(entityText))
-                          .child(ui::text("NameLabel").setText("Name").setFontSize(12))
-                          .child(std::move(nameField), FBoxSlotArgs{.preferredSize = {220.0f, 26.0f}})
-                          .child(std::move(empty))
+                          .child(ui::row("InspectorIdRow")
+                                     .setSpacing(editor_density::kControlSpacing)
+                                     .child(ui::text("InspectorIdLabel")
+                                                .setText("ID")
+                                                .setFontSize(12)
+                                                .setStyleKey("text.muted")
+                                                .setVAlign(EWidgetAlignV::Center),
+                                            labelSlot)
+                                     .child(std::move(entityText),
+                                            ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight})))
+                          .child(ui::row("InspectorNameRow")
+                                     .setSpacing(editor_density::kControlSpacing)
+                                     .child(ui::text("NameLabel")
+                                                .setText("Name")
+                                                .setFontSize(12)
+                                                .setStyleKey("text.muted")
+                                                .setVAlign(EWidgetAlignV::Center),
+                                            labelSlot)
+                                     .child(std::move(nameField),
+                                            ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight})))
                           .child(std::move(projected));
     _entityFormHost = entityForm.share();
 
-    auto widgetEntryId = ui::text("InspectorWidgetEntryId").setStyleKey("text.muted");
+    auto widgetEntryId = ui::text("InspectorWidgetEntryId").setStyleKey("text.muted").setVAlign(EWidgetAlignV::Center);
     _widgetEntryIdText = widgetEntryId.share();
-    auto widgetEntryType = ui::text("InspectorWidgetEntryType").setFontSize(12);
+    auto widgetEntryType = ui::text("InspectorWidgetEntryType").setFontSize(12).setVAlign(EWidgetAlignV::Center);
     _widgetEntryTypeText = widgetEntryType.share();
     auto openDesigner = ui::button("InspectorOpenDesigner")
                             .child(ui::text("InspectorOpenDesignerLabel").setText("Open in UI Designer"));
@@ -210,23 +245,45 @@ void EditorInspectorTab::construct()
     };
 
     auto widgetEntryForm = ui::column("InspectorWidgetEntryForm")
-                               .setSpacing(6.0f)
+                               .setSpacing(editor_density::kRowSpacing)
                                .child(ui::text("InspectorWidgetEntryTitle")
                                           .setText("Game UI Entry")
-                                          .setStyleKey("text.header"))
-                               .child(std::move(widgetEntryId))
-                               .child(std::move(widgetEntryType))
-                               .child(std::move(openDesigner), FBoxSlotArgs{.preferredSize = {220.0f, 26.0f}})
-                               .setVisibility(EWidgetVisibility::Hidden);
+                                          .setStyleKey("text.eyebrow"))
+                               .child(ui::row("InspectorWidgetEntryIdRow")
+                                          .setSpacing(editor_density::kControlSpacing)
+                                          .child(ui::text("InspectorWidgetEntryIdLabel")
+                                                     .setText("Entry")
+                                                     .setFontSize(12)
+                                                     .setStyleKey("text.muted")
+                                                     .setVAlign(EWidgetAlignV::Center),
+                                                 labelSlot)
+                                          .child(std::move(widgetEntryId),
+                                                 ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight})))
+                               .child(ui::row("InspectorWidgetEntryTypeRow")
+                                          .setSpacing(editor_density::kControlSpacing)
+                                          .child(ui::text("InspectorWidgetEntryTypeLabel")
+                                                     .setText("Type")
+                                                     .setFontSize(12)
+                                                     .setStyleKey("text.muted")
+                                                     .setVAlign(EWidgetAlignV::Center),
+                                                 labelSlot)
+                                          .child(std::move(widgetEntryType),
+                                                 ui::boxSlot().fillWidth().preferredSize({0.0f, editor_density::kRowHeight})))
+                               .child(std::move(openDesigner),
+                                      FBoxSlotArgs{.preferredSize = {0.0f, editor_density::kToolbarHeight}})
+                               .setVisibility(EWidgetVisibility::Collapsed);
     _widgetEntryHost = widgetEntryForm.share();
 
     auto form = ui::column("InspectorForm")
                     .setPadding({editor_density::kPanelPadding, editor_density::kPanelPadding})
-                    .setSpacing(editor_density::kRowSpacing)
-                    .child(ui::text("InspectorTitle").setText("INSPECTOR").setStyleKey("text.eyebrow"))
+                    .setSpacing(editor_density::kSectionSpacing)
+                    .child(std::move(empty))
                     .child(std::move(entityForm))
                     .child(std::move(widgetEntryForm));
-    addDetachedChild(form.release());
+    addDetachedChild(ui::scroll("InspectorScroll")
+                         .setAxis(EScrollAxis::Vertical)
+                         .child(std::move(form), ui::overlaySlot().fill())
+                         .release());
 }
 
 void EditorInspectorTab::onAttached()
@@ -243,9 +300,6 @@ void EditorInspectorTab::onDetached()
 void EditorInspectorTab::bindLayerDelegates()
 {
     unbindLayerDelegates();
-    if (!_layer) {
-        return;
-    }
     _selectionHandle = _layer->onSelectionChanged.addLambda(this, [this]() {
         refresh();
     });
@@ -375,25 +429,34 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
         for (PropertyNode& node : graph.getNodesMutable()) {
             node.binding.setInstanceBindings(rootBindings);
         }
-        auto title = std::make_shared<UIText>("InspectorComp_" + entry.name);
-        title->setText(entry.name);
-        title->setFontSize(12);
-        title->setStyleKey("text.eyebrow");
         auto section = std::make_shared<EditorAutoPropertySection>(
             "InspectorProps_" + entry.name,
             std::move(graph),
             _undo,
             identity.empty() ? entry.name : identity + ":" + entry.name,
-            makeAssetPicker(_layer));
-        if (!tree.attach(*_projectedHost, title).valid()) {
+            makeAssetPicker(_layer),
+            makeRevealAsset(_layer));
+        bool expanded = true;
+        if (const auto it = _componentExpanded.find(entry.name); it != _componentExpanded.end()) {
+            expanded = it->second;
+        }
+        else {
+            _componentExpanded.emplace(entry.name, true);
+        }
+        auto expander = ui::collapsingHeader("InspectorComp_" + entry.name)
+                            .setTitle(entry.name)
+                            .setExpanded(expanded)
+                            .setPadding({editor_density::kPanelPadding, editor_density::kPanelPadding})
+                            .setSpacing(editor_density::kRowSpacing)
+                            .child(section)
+                            .share();
+        expander->_onExpandedChanged = [this, name = entry.name](bool value) {
+            _componentExpanded[name] = value;
+        };
+        if (!tree.attach(*_projectedHost, expander).valid()) {
             continue;
         }
-        if (!tree.attach(*_projectedHost, section).valid()) {
-            tree.detach(*title);
-            continue;
-        }
-        _projectedWidgets.push_back(title);
-        _projectedWidgets.push_back(section);
+        _projectedWidgets.push_back(std::move(expander));
         _projectedSections.push_back(section);
     }
 }
@@ -405,21 +468,24 @@ void EditorInspectorTab::refreshFromTree(WidgetTree& tree)
     SceneWidgetEntry* widgetEntry = _layer->getSelectedWidgetEntry();
     const bool widgetMode = widgetEntry != nullptr;
     if (_widgetEntryHost) {
-        _widgetEntryHost->setVisibility(widgetMode ? EWidgetVisibility::Visible : EWidgetVisibility::Hidden);
-    }
-    if (_entityFormHost) {
-        _entityFormHost->setVisibility(widgetMode ? EWidgetVisibility::Hidden : EWidgetVisibility::Visible);
+        _widgetEntryHost->setVisibility(widgetMode ? EWidgetVisibility::Visible : EWidgetVisibility::Collapsed);
     }
     if (widgetMode) {
+        if (_entityFormHost) {
+            _entityFormHost->setVisibility(EWidgetVisibility::Collapsed);
+        }
+        if (_emptyText) {
+            _emptyText->setVisibility(EWidgetVisibility::Collapsed);
+        }
         if (_widgetEntryIdText) {
-            _widgetEntryIdText->setText(std::format("Entry: {}", widgetEntry->entryId));
+            _widgetEntryIdText->setText(widgetEntry->entryId);
         }
         if (_widgetEntryTypeText) {
             if (widgetEntry->inlineDocument) {
-                _widgetEntryTypeText->setText(std::format("Type: {}", widgetEntry->inlineDocument->typeId));
+                _widgetEntryTypeText->setText(widgetEntry->inlineDocument->typeId);
             }
             else {
-                _widgetEntryTypeText->setText("Type: <invalid: no document>");
+                _widgetEntryTypeText->setText("<invalid: no document>");
             }
         }
         if (_openDesignerButton) {
@@ -435,13 +501,21 @@ void EditorInspectorTab::refreshFromTree(WidgetTree& tree)
     const std::vector<Entity*> entities = inspectorTargets(_layer);
     Entity* primary = entities.empty() ? nullptr : entities.front();
     const bool selected = !entities.empty();
-    if (_emptyText) _emptyText->setVisibility(selected ? EWidgetVisibility::Hidden : EWidgetVisibility::Visible);
+    if (_emptyText) {
+        _emptyText->setVisibility(selected ? EWidgetVisibility::Collapsed : EWidgetVisibility::Visible);
+    }
+    if (_entityFormHost) {
+        _entityFormHost->setVisibility(selected ? EWidgetVisibility::Visible : EWidgetVisibility::Collapsed);
+    }
     if (_entityText) {
         if (entities.size() > 1) {
-            _entityText->setText(std::format("Entities: {}", entities.size()));
+            _entityText->setText(std::format("{} selected", entities.size()));
+        }
+        else if (primary) {
+            _entityText->setText(std::format("{}", primary->getId()));
         }
         else {
-            _entityText->setText(primary ? std::format("Entity ID: {}", primary->getId()) : "Entity ID: -");
+            _entityText->setText("—");
         }
     }
     UIElement* focused = tree.getFocused();

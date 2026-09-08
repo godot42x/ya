@@ -33,7 +33,9 @@
 #include "GameRuntime/IRuntimeModule.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
+#include "GUI/Compose/GuiFrameInspectorOverlay.h"
 #include "GUI/Compose/Render2DComposePass.h"
+#include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Compose/GUIRenderSurface.h"
 #include "RHI/Core/Swapchain.h"
 #include "RHI/NativeWindow.h"
@@ -206,6 +208,21 @@ void drawSelectedEntityBounds(const EditorLayer& layer)
     }
 }
 
+void drawEditorWorldGrid()
+{
+    constexpr int   kHalf  = 20;
+    constexpr float kStep  = 1.0f;
+    const glm::vec4 minor{0.22f, 0.24f, 0.28f, 1.0f};
+    const glm::vec4 axisX{0.62f, 0.24f, 0.24f, 1.0f};
+    const glm::vec4 axisZ{0.24f, 0.38f, 0.72f, 1.0f};
+    const float     extent = static_cast<float>(kHalf) * kStep;
+    for (int i = -kHalf; i <= kHalf; ++i) {
+        const float t = static_cast<float>(i) * kStep;
+        Render2D::makeWorldLine({-extent, 0.0f, t}, {extent, 0.0f, t}, i == 0 ? axisX : minor);
+        Render2D::makeWorldLine({t, 0.0f, -extent}, {t, 0.0f, extent}, i == 0 ? axisZ : minor);
+    }
+}
+
 class EditorViewportCompositor
 {
   private:
@@ -243,6 +260,7 @@ class EditorViewportCompositor
                                                            const glm::vec2& offset)
     {
         WidgetTree  previewTree(logicalExtent);
+        previewTree.setTextureSource(&gameUITextureSource());
         std::string errors;
         const auto  attachments =
             mountSceneAutoMountEntries(scene, previewTree,
@@ -347,7 +365,56 @@ class EditorViewportCompositor
 
         auto source = snapshot.viewportImageOwner;
         if (!source || !source->getImageShared() || !source->getImageView()) {
-            _composedViewportImage.reset();
+            Extent2D fallback = canvasTargetExtent;
+            if (fallback.width == 0 || fallback.height == 0) {
+                fallback = Extent2D::fromVec2(layer.getViewportSize());
+            }
+            if (fallback.width == 0 || fallback.height == 0) {
+                fallback = {.width = 1280, .height = 720};
+            }
+            ensureCanvasTarget(render, fallback);
+            if (!_composedViewportImage || !_composedViewportImage->isValid()) {
+                return;
+            }
+            commandBuffer.retireResource(_composedViewportImage->getImageShared());
+            commandBuffer.retireResource(_composedViewportImage->getImageViewShared());
+            commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(),
+                                                    EImageLayout::ColorAttachmentOptimal);
+            recordRender2DComposePass(
+                &commandBuffer,
+                *_composedViewportImage,
+                nullptr,
+                nullptr,
+                FRender2DComposePassDesc{
+                    .kind   = ERender2DComposePassKind::EditorViewportCompose,
+                    .camera = {
+                        .position       = renderFrame.cameraPos,
+                        .view           = renderFrame.view,
+                        .projection     = renderFrame.projection,
+                        .viewProjection = renderFrame.projection * renderFrame.view,
+                    },
+                },
+                [&]() {
+                    drawEditorWorldGrid();
+                    layer.gizmo().recordOverlay();
+                    const auto texts = layer.buildViewportCameraOverlayTexts();
+                    if (!texts.empty()) {
+                        Render2D::makeSprite(glm::vec3(6.0f, 6.0f, 0.0f),
+                                             glm::vec2(240.0f, 46.0f),
+                                             TextureLibrary::get().getWhiteTexture().get(),
+                                             glm::vec4(0.0f, 0.0f, 0.0f, 0.36f));
+                    }
+                    for (const auto& text : texts) {
+                        auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, text.fontSize);
+                        if (!font) {
+                            continue;
+                        }
+                        Render2D::makeText(text.text,
+                                           glm::vec3(text.viewportPos, text.depth),
+                                           text.color,
+                                           font.get());
+                    }
+                });
             return;
         }
 
@@ -393,6 +460,7 @@ class EditorViewportCompositor
                 },
             },
             [&]() {
+                drawEditorWorldGrid();
                 layer.gizmo().recordOverlay();
                 // Camera overlay text on top of the composed viewport.
                 const auto texts = layer.buildViewportCameraOverlayTexts();
@@ -744,6 +812,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                                              std::function<void(std::string)> onPicked) {
             _editorSurface.openAssetPickerDialog(kind, std::move(currentPath), std::move(onPicked));
         });
+        _layer->setShowContentBrowserHandler([this]() { _editorSurface.showContentBrowser(); });
         _layer->setFilePickerHandler([this](FEditorFilePickerRequest request) {
             _editorSurface.openFilePickerDialog(std::move(request));
         });
@@ -1032,7 +1101,15 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             .width  = render->getSwapchainWidth(),
             .height = render->getSwapchainHeight(),
         };
-        replayUIFrameSnapshot(&commandBuffer, snapshot, targetExtent, ERender2DComposePassKind::EditorToolSurface);
+        replayUIFrameSnapshot(&commandBuffer,
+                              snapshot,
+                              targetExtent,
+                              ERender2DComposePassKind::EditorToolSurface,
+                              [&]() {
+                                  if (WidgetTree* tree = _editorSurface.tree()) {
+                                      runGuiFrameInspectorOverlay(*tree, snapshot, targetExtent);
+                                  }
+                              });
     }
 };
 

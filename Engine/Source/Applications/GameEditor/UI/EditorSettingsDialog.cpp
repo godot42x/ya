@@ -5,6 +5,7 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
+#include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -77,9 +78,7 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
                            if (_bindings.resetScenePath) {
                                _bindings.resetScenePath();
                            }
-                           if (_scenePathField && _bindings.scenePathDraft) {
-                               _scenePathField->setText(_bindings.scenePathDraft());
-                           }
+                           _scenePathField->setText(_bindings.scenePathDraft());
                        })
                        .share();
 
@@ -122,9 +121,13 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
                             .child(labeledButton("EditorSettingsClose", "Close")
                                        .setOnClick([this]() { close(); }),
                                    ui::boxSlot().preferredSize({84.0f, 26.0f}));
+    _settingsRoot = settingsRoot.share();
     auto dialogPanel = ui::panel("EditorSettingsPanel")
                            .setStyleKey("panel.window")
-                           .child(std::move(settingsRoot), ui::canvasSlot().fill());
+                           .child(ui::scroll("EditorSettingsScroll")
+                                      .setAxis(EScrollAxis::Vertical)
+                                      .child(std::move(settingsRoot), ui::overlaySlot().fill()),
+                                  ui::canvasSlot().fill());
 
     _panel = dialogPanel.share();
     _overlay = ui::popupOverlay("EditorSettingsOverlay")
@@ -143,26 +146,27 @@ void EditorSettingsDialog::sync(WidgetTree& tree)
 
     const Extent2D logicalExtent = tree.getLogicalExtent();
     const glm::vec2 extent = {static_cast<float>(logicalExtent.width), static_cast<float>(logicalExtent.height)};
-    const glm::vec2 desired = _panel->computeDesiredSize();
+    const glm::vec2 desired = _settingsRoot->computeDesiredSize();
+    const glm::vec2 size = {
+        std::min(desired.x, std::max(1.0f, extent.x - 32.0f)),
+        std::min(desired.y, std::max(1.0f, extent.y - 32.0f)),
+    };
+    _overlay->_contentExtent = size;
     _overlay->_contentPos = {
-        std::max(0.0f, (extent.x - desired.x) * 0.5f),
-        std::max(0.0f, (extent.y - desired.y) * 0.5f),
+        std::max(0.0f, (extent.x - size.x) * 0.5f),
+        std::max(0.0f, (extent.y - size.y) * 0.5f),
     };
 
-    if (_samplerCombo && _bindings.samplerIndex) {
+    if (_bindings.samplerIndex) {
         _samplerCombo->setSelectedIndex(_bindings.samplerIndex(), false);
     }
-    if (_overlayCheckbox && _bindings.showCameraOverlay) {
+    if (_bindings.showCameraOverlay) {
         _overlayCheckbox->setChecked(_bindings.showCameraOverlay());
     }
     const bool dirty = _bindings.scenePathDirty && _bindings.scenePathDirty();
-    if (_applyButton) {
-        _applyButton->setEnabled(dirty);
-    }
-    if (_resetButton) {
-        _resetButton->setEnabled(dirty);
-    }
-    if (_sceneStatusText && _bindings.scenePathDraft && _bindings.scenePathExists) {
+    _applyButton->setEnabled(dirty);
+    _resetButton->setEnabled(dirty);
+    if (_bindings.scenePathDraft && _bindings.scenePathExists) {
         const FEditorSettingsScenePathStatus status =
             describeEditorSettingsScenePath(_bindings.scenePathDraft(), _bindings.scenePathExists());
         _sceneStatusText->setStyleKey(status.styleKey);
@@ -183,6 +187,7 @@ void EditorSettingsDialog::reset()
 {
     _overlay.reset();
     _panel.reset();
+    _settingsRoot.reset();
     _samplerCombo.reset();
     _overlayCheckbox.reset();
     _scenePathField.reset();
@@ -213,9 +218,7 @@ void EditorSettingsDialog::browseStartupScene()
             if (_bindings.setScenePathDraft) {
                 _bindings.setScenePathDraft(std::move(path));
             }
-            if (_scenePathField && _bindings.scenePathDraft) {
-                _scenePathField->setText(_bindings.scenePathDraft());
-            }
+            _scenePathField->setText(_bindings.scenePathDraft());
         }));
 }
 

@@ -29,6 +29,7 @@ class EditorSettingsDialog;
 struct UIDockSpace;
 struct FDockContext;
 struct UIDockFloatingHost;
+struct UIMenu;
 struct UIMenuBar;
 struct UIPanel;
 struct UIText;
@@ -78,6 +79,9 @@ struct EditorSurface : IEditorViewportHostSink
     EditorViewportOverlayHost _viewportOverlayHost;
     std::shared_ptr<EditorViewportGizmoOverlay> _viewportGizmoOverlay;
     IEditorViewportHost* _viewportHost = nullptr;
+    std::shared_ptr<UIMenu> _viewportContextMenu;
+    bool                    _bViewportRightPressPending = false;
+    glm::vec2               _viewportRightPressPos{};
 
   public:
     EditorSurface();
@@ -101,6 +105,7 @@ struct EditorSurface : IEditorViewportHostSink
     [[nodiscard]] EWidgetRouteResult dispatchEvent(const Event& event, const glm::vec2& windowPoint);
     [[nodiscard]] bool isViewportHovered() const;
     [[nodiscard]] bool isViewportFocused() const;
+    [[nodiscard]] bool isPointInViewport(const glm::vec2& windowPoint) const;
     [[nodiscard]] bool wantsTextInput() const;
     [[nodiscard]] WidgetTree* tree() const { return _tree.get(); }
     [[nodiscard]] SelectionModel& selection() { return *_selection; }
@@ -119,6 +124,7 @@ struct EditorSurface : IEditorViewportHostSink
                                std::string currentPath,
                                std::function<void(std::string)> onPicked);
     void openEditorSettingsDialog();
+    void showContentBrowser();
 
   private:
     void rebuild(App& app);
@@ -134,6 +140,7 @@ struct EditorSurface : IEditorViewportHostSink
     void syncViewportHostState(App& app);
     void applyWindowMetrics(App& app);
     void openViewportContextMenu(const glm::vec2& windowPoint);
+    void closeViewportContextMenu();
 };
 
 } // namespace ya

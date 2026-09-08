@@ -59,6 +59,7 @@ void UIDesignerPanel::openDocument(const std::shared_ptr<UIDocument>& document)
     _entryId.clear();
 
     _previewTree  = std::make_unique<WidgetTree>(Extent2D{800, 600});
+    _previewTree->setTextureSource(&gameUITextureSource());
     _previewRoot  = document->instantiate();
     _selected     = nullptr;
     if (!_previewRoot) {

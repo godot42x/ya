@@ -18,7 +18,15 @@ namespace ya
 
 inline std::shared_ptr<UITheme> buildEditorTheme(bool bDark)
 {
-    return guiworkbench::buildWorkbenchTheme(bDark);
+    auto theme = guiworkbench::buildWorkbenchTheme(bDark);
+    // Workbench `text.header` is a page title (28). Editor chrome is dense:
+    // Runtime/Inspector section titles must not consume a gallery heading.
+    if (auto header = theme->find<FTextStyle>("text.header")) {
+        FTextStyle style = header->value();
+        style.fontSize = gui_type::kHeader;
+        theme->define("text.header", std::move(style));
+    }
+    return theme;
 }
 
 /// Shared chrome metrics. Inspector rows, list rows, and the editor toolbar
@@ -37,6 +45,13 @@ inline constexpr float kMenuHeight        = 24.0f;
 inline constexpr float kListRowHeight     = 22.0f;
 inline constexpr float kToolbarIconSize   = 16.0f;
 inline constexpr float kListIconSize      = 16.0f;
+inline constexpr float kGridThumbSize     = 72.0f;
+inline constexpr float kGridLabelHeight   = 28.0f;
+inline constexpr float kBrowseButtonWidth = 64.0f;
+inline constexpr float kLocateButtonWidth = 48.0f;
+inline constexpr float kAssetThumbSize    = 64.0f;
+inline constexpr float kChromeInset       = 1.0f;
+inline constexpr float kDebugPreviewHeight = 180.0f;
 }
 
 /// Editor chrome icon assets (same files `EditorLayer::onAttach` loads).

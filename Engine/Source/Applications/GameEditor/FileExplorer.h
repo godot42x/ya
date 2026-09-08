@@ -107,7 +107,13 @@ class FileExplorer
 
     /// 枚举并排序当前目录可见条目（应用扩展名 / 搜索过滤）。view-agnostic：
     /// ImGui 渲染与 WidgetTree 视图共享同一份目录枚举结果。
+    /// 只在 `contentGeneration()` 变化或可见窗口变化时调用；不要每帧扫盘。
     void collectEntries(std::vector<FEntry> &outEntries) const;
+
+    /// Bumps when mount / directory / search / view / filter / selection
+    /// identity changes. Content Browser ticks compare this instead of
+    /// fingerprinting every entry name.
+    [[nodiscard]] uint64_t contentGeneration() const { return _contentGeneration; }
 
     /// 返回上一级目录（保持在激活挂载点内）。
     [[nodiscard]] bool navigateBack();
@@ -123,12 +129,23 @@ class FileExplorer
     /**
      * @brief 设置扩展名过滤
      */
-    void setExtensions(const std::vector<std::string> &extensions) { _extensions = extensions; }
+    void setExtensions(const std::vector<std::string> &extensions)
+    {
+        _extensions = extensions;
+        bumpContentGeneration();
+    }
 
     /**
      * @brief 设置过滤模式
      */
-    void setFilterMode(FilterMode mode) { _filterMode = mode; }
+    void setFilterMode(FilterMode mode)
+    {
+        if (_filterMode == mode) {
+            return;
+        }
+        _filterMode = mode;
+        bumpContentGeneration();
+    }
 
     /**
      * @brief 设置选择模式
@@ -139,11 +156,19 @@ class FileExplorer
      * @brief 设置左侧面板宽度
      */
     void setLeftPanelWidth(float width) { _leftPanelWidth = width; }
+    [[nodiscard]] float getLeftPanelWidth() const { return _leftPanelWidth; }
 
     /**
      * @brief 设置视图模式
      */
-    void setViewMode(ViewMode mode) { _viewMode = mode; }
+    void setViewMode(ViewMode mode)
+    {
+        if (_viewMode == mode) {
+            return;
+        }
+        _viewMode = mode;
+        bumpContentGeneration();
+    }
 
     /**
      * @brief 获取视图模式
@@ -153,12 +178,21 @@ class FileExplorer
     /**
      * @brief 设置图标视图的缩略图大小
      */
-    void setThumbnailSize(float size) { _thumbnailSize = size; }
+    void setThumbnailSize(float size)
+    {
+        if (_thumbnailSize == size) {
+            return;
+        }
+        _thumbnailSize = size;
+        bumpContentGeneration();
+    }
+    [[nodiscard]] float getThumbnailSize() const { return _thumbnailSize; }
 
     /**
      * @brief 设置图标视图的内边距
      */
     void setPadding(float padding) { _padding = padding; }
+    [[nodiscard]] float getPadding() const { return _padding; }
 
     /**
      * @brief 设置文件双击回调（用于打开文件等操作）
@@ -206,6 +240,9 @@ class FileExplorer
     bool  _showSizeSlider     = true;
     std::string _configScope;
     mutable bool _configDirty = false;
+    uint64_t _contentGeneration = 1;
+
+    void bumpContentGeneration() { ++_contentGeneration; }
 
     // Callbacks
     ItemActionCallback _itemActionCallback;

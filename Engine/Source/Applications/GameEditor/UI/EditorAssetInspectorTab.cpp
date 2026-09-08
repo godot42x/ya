@@ -25,7 +25,10 @@ void EditorAssetInspectorTab::construct()
                           .setText("Select a texture in Content Browser")
                           .setStyleKey("text.muted")
                           .share();
-    auto preview = ui::image("AssetInspectorPreview").setStyleKey("image").share();
+    auto preview = ui::image("AssetInspectorPreview")
+                       .setStyleKey("image")
+                       .setScaleMode(EImageScaleMode::Contain)
+                       .share();
     _pathText = pathText;
     _statusText = statusText;
     _preview = preview;
@@ -38,7 +41,7 @@ void EditorAssetInspectorTab::construct()
                    .child(preview, FBoxSlotArgs{.preferredSize = {0.0f, 220.0f}})
                    .child(statusText)
                    .release(),
-               ui::canvasSlot().fill().offset({12.0f, 12.0f}))
+               ui::canvasSlot().fill().insets(FMargin::all(12.0f)))
         .release());
 }
 
@@ -54,13 +57,11 @@ void EditorAssetInspectorTab::tick(float)
 
 void EditorAssetInspectorTab::refresh()
 {
-    if (!_layer || !_pathText || !_statusText || !_preview) {
-        return;
-    }
     const std::string& path = _layer->getAssetInspectorPanel().inspectedPath();
     _pathText->setText(path.empty() ? "No asset selected" : path);
     _statusText->setText(path.empty() ? "Select a texture in Content Browser" : "Texture preview");
-    _preview->_assetPath = path;
+    _preview->setAssetPath(path);
+    _preview->setScaleMode(EImageScaleMode::Contain);
     _preview->setResourceMissing(false);
 }
 

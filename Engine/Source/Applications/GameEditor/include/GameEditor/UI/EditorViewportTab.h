@@ -23,8 +23,10 @@ class EditorViewportTab : public UICompoundWidget, public IEditorViewportHost
 
     void setDisplayImage(const std::shared_ptr<Texture>& texture, bool missing) override;
     [[nodiscard]] Rect2D imageRect() const override;
+    [[nodiscard]] bool isHoverable() const override { return true; }
     [[nodiscard]] bool isHovered() const override;
     [[nodiscard]] bool isFocused() const override;
+    void takeKeyboardFocus() override;
 
   protected:
     void construct() override;

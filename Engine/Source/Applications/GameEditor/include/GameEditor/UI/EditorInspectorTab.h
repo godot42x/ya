@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -54,6 +55,7 @@ class EditorInspectorTab : public UICompoundWidget
     std::string _projectedFingerprint;
     DelegateHandle _selectionHandle = INVALID_HANDLE;
     DelegateHandle _hierarchyHandle = INVALID_HANDLE;
+    std::unordered_map<std::string, bool> _componentExpanded;
 
     void bindLayerDelegates();
     void unbindLayerDelegates();

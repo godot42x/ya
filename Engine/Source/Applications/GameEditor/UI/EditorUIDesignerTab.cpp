@@ -232,7 +232,7 @@ void EditorUIDesignerTab::construct()
                                          .child(_inspectorHost, ui::boxSlot().fill()),
                                      ui::overlaySlot().fill()),
                           ui::boxSlot().preferredSize({220.0f, 0.0f})),
-               ui::canvasSlot().fill().offset({12.0f, 12.0f}))
+               ui::canvasSlot().fill().insets(FMargin::all(12.0f)))
         .release());
 }
 
@@ -257,9 +257,6 @@ void EditorUIDesignerTab::refresh()
 
 void EditorUIDesignerTab::refreshFromTree(WidgetTree& tree)
 {
-    if (!_layer || !_statusText || !_selectionText || !_roots || !_selection) {
-        return;
-    }
     const auto& designer = _layer->getUIDesignerPanel();
     const auto& document = designer.getOpenDocument();
     _statusText->setText(document ? "Document: " + document->typeId : "No document open");
@@ -274,16 +271,10 @@ void EditorUIDesignerTab::refreshFromTree(WidgetTree& tree)
     if (fingerprint != _treeFingerprint) {
         _treeFingerprint = std::move(fingerprint);
         _roots->replace(std::move(roots));
-        if (_treeView) {
-            _treeView->setExpanded("root", true);
-        }
+        _treeView->setExpanded("root", true);
     }
-    if (_saveButton) {
-        _saveButton->setEnabled(document != nullptr);
-    }
-    if (_closeButton) {
-        _closeButton->setEnabled(document != nullptr);
-    }
+    _saveButton->setEnabled(document != nullptr);
+    _closeButton->setEnabled(document != nullptr);
     rebuildInspector(tree, selected);
     if (_inspectorSection) {
         _inspectorSection->sync(tree);
@@ -334,7 +325,13 @@ void EditorUIDesignerTab::rebuildInspector(WidgetTree& tree, UIElement* selected
         "UIDesignerInspectorSection",
         std::move(graph),
         _undo,
-        std::string("uidesigner:") + selected->_name);
+        std::string("uidesigner:") + selected->_name,
+        EditorAssetPickerCallback{},
+        [this](std::string vfsPath) {
+            if (_layer) {
+                _layer->revealInContentBrowser(std::move(vfsPath));
+            }
+        });
     if (!tree.attach(*_inspectorHost, section).valid()) {
         return;
     }
