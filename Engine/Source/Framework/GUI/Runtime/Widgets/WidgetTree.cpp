@@ -920,6 +920,7 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     UIFrameSnapshot snapshot = builder.build(_logicalExtent);
     _perfStats.drawItems      = static_cast<uint32_t>(snapshot.items.size());
     _perfStats.layoutSkippedWidgets = _layoutSkippedWidgets;
+    ++_frameCounter;
 
 #ifndef NDEBUG
     // Guardrail G2 validation frame: every 60 frames, force a full repaint
@@ -927,7 +928,7 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     // and diff it against the incremental result. Any difference means some
     // widget changed paint-relevant state without marking itself dirty —
     // caught here in development instead of shipping a stale frame.
-    if ((++_frameCounter % 60) == 0) {
+    if ((_frameCounter % 60) == 0) {
         UIFrameBuilder fullBuilder(effectiveCtx); // unbound: hasCachedItems() == false
         _root->paint(fullBuilder);
         const UIFrameSnapshot fullSnapshot = fullBuilder.build(_logicalExtent);

@@ -145,3 +145,23 @@
 ### 下一接力点
 
 `MW-102`：per-window input/tick/snapshot 不泄漏。不要开始 extra swapchain。
+
+## 2026-09-09 — C1 MW-102（per-window input/tick/snapshot 隔离）
+
+### 完成
+
+- Extra 窗 `WindowFocusLost` 清 hover/tooltip，保留 tree-local focus/capture；manager `_focusedId` 在失焦后不再把无 window id 的键送给该副窗。
+- `tickAll` 在每窗 `buildSnapshot` 前设置 `FontManager` active DPI；每槽独立 `UIFrameSnapshot`（`findSnapshot`）。
+- Extra 窗使用 tree-local clipboard，不绑定 OS clipboard，避免互相覆盖 paste buffer。
+- Tooltip dwell 的 `_frameCounter` 每帧递增（不再只在 debug validation 里 ++）。
+- 测试：`GUIWindowManagerTest.IsolatesPointerFocusCaptureTooltipClipboardDpiAndSnapshot`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：单窗 `GUIApp::init/run`、主窗 OS clipboard、主窗 `IRender` present。
+- 未完成：C2 extra surface/swapchain/present（MW-201..203）；C2G Feature Gallery `Windows` 页。
+- 偏离：OS clipboard 仍只绑主窗；C2G 产品副窗若需要系统剪贴板再绑，且须保持 tree hook 可替换。SDL 光标对象为 process-static，由当前 pointer 窗更新。
+
+### 下一接力点
+
+`MW-201`：RHI additive surface/presentation context。不要把 `IRender` 改成数组，不要复制 `GUIAppHost::init`。

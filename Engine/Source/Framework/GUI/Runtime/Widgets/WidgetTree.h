@@ -300,6 +300,7 @@ struct YA_GUI_API WidgetTree final
     void releasePointerCapture(UIElement* widget);
     [[nodiscard]] UIElement* getPointerCapture() const { return _captured; }
     [[nodiscard]] UIElement* getHovered() const { return _hovered; }
+    [[nodiscard]] UIElement* getTooltipHost() const { return _tooltipHost.get(); }
 
     /// Remove the active tooltip (hover change / detach / tree teardown).
     void removeTooltip();

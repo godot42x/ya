@@ -18,7 +18,8 @@ namespace ya
 
 /// Extra native GUI windows that share the process IRender device.
 ///
-/// MW-101: each slot owns one INativeWindow + one WidgetTree. It does not
+/// Each slot owns one INativeWindow + one WidgetTree + one snapshot. Pointer,
+/// focus, capture, tooltip, clipboard and DPI live on that tree. It does not
 /// call IRender::create and does not present (C2). The primary window stays
 /// on GUIWindowHost; this manager only holds extras. One AppKernel tick
 /// calls tickAll after the primary host tick.
@@ -62,6 +63,7 @@ class YA_GUI_API GUIWindowManager
 
     [[nodiscard]] WidgetTree*    findTree(GUIWindowId id) const;
     [[nodiscard]] INativeWindow* findNative(GUIWindowId id) const;
+    [[nodiscard]] const UIFrameSnapshot* findSnapshot(GUIWindowId id) const;
     [[nodiscard]] GUIWindowId    focusedWindowId() const { return _focusedId; }
     [[nodiscard]] size_t         extraWindowCount() const { return _slots.size(); }
 
@@ -70,7 +72,7 @@ class YA_GUI_API GUIWindowManager
     /// manager does not own the event's window id (caller should try primary).
     bool dispatchEvent(const Event& event);
     void tickAll(float dt);
-    /// C2 will present extras. MW-101 is tree/input only.
+    /// C2 will present extras. MW-102 is tree/input/snapshot isolation only.
     void renderAll() {}
 
     /// Destroy any requestClose'd slots. Safe at the start of a kernel tick.
