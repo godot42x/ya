@@ -1,5 +1,7 @@
 #include "GUI/Widgets/GuiFrameInspector.h"
 
+#include "Core/Event.h"
+#include "Core/KeyCode.h"
 #include "Core/Log.h"
 
 #include <algorithm>
@@ -126,6 +128,100 @@ void toggleGuiFrameInspectorChannel(EGuiFrameInspectorChannel channel)
     uint8_t       channels = profiling::getGuiFrameInspectorChannels() ^ bit;
     profiling::setGuiFrameInspectorChannels(channels);
     profiling::setGuiFrameInspectorEnabled(channels != 0);
+}
+
+namespace
+{
+
+struct FHudPlacement
+{
+    glm::vec2 pos       = kGuiFrameInspectorHudDefaultPos;
+    bool      bDragging = false;
+    glm::vec2 grabOffset{0.0f, 0.0f};
+};
+
+FHudPlacement gHud;
+
+[[nodiscard]] bool pointInRect(const glm::vec2& point, const Rect2D& rect)
+{
+    return point.x >= rect.pos.x && point.x <= rect.pos.x + rect.extent.x &&
+           point.y >= rect.pos.y && point.y <= rect.pos.y + rect.extent.y;
+}
+
+void clampHudPos(Extent2D framebuffer)
+{
+    const float maxX = std::max(0.0f, static_cast<float>(framebuffer.width) - kGuiFrameInspectorHudSize.x);
+    const float maxY = std::max(0.0f, static_cast<float>(framebuffer.height) - kGuiFrameInspectorHudSize.y);
+    gHud.pos.x = std::clamp(gHud.pos.x, 0.0f, maxX);
+    gHud.pos.y = std::clamp(gHud.pos.y, 0.0f, maxY);
+}
+
+} // namespace
+
+glm::vec2 getGuiFrameInspectorHudPos()
+{
+    return gHud.pos;
+}
+
+void setGuiFrameInspectorHudPos(glm::vec2 pos)
+{
+    gHud.pos = pos;
+}
+
+void resetGuiFrameInspectorHudPlacement()
+{
+    gHud = {};
+}
+
+Rect2D guiFrameInspectorHudRect()
+{
+    return Rect2D{.pos = gHud.pos, .extent = kGuiFrameInspectorHudSize};
+}
+
+bool handleGuiFrameInspectorHudInput(const Event&     event,
+                                     const glm::vec2& windowPoint,
+                                     Extent2D         framebuffer,
+                                     bool             bPopupOpen)
+{
+#if defined(YA_PROFILING_DISABLED)
+    (void)event;
+    (void)windowPoint;
+    (void)framebuffer;
+    (void)bPopupOpen;
+    return false;
+#else
+    if (!isGuiFrameInspectorChannelOn(EGuiFrameInspectorChannel::Hud) && !gHud.bDragging) {
+        return false;
+    }
+
+    const EEvent::T type = event.getEventType();
+    if (type == EEvent::MouseButtonPressed) {
+        const auto& press = static_cast<const MouseButtonPressedEvent&>(event);
+        if (press.GetMouseButton() != EMouse::Left) {
+            return false;
+        }
+        if (bPopupOpen) {
+            return false;
+        }
+        if (!pointInRect(windowPoint, guiFrameInspectorHudRect())) {
+            return false;
+        }
+        gHud.bDragging  = true;
+        gHud.grabOffset = windowPoint - gHud.pos;
+        return true;
+    }
+    if (type == EEvent::MouseMoved && gHud.bDragging) {
+        gHud.pos = windowPoint - gHud.grabOffset;
+        clampHudPos(framebuffer);
+        return true;
+    }
+    if (type == EEvent::MouseButtonReleased && gHud.bDragging) {
+        gHud.bDragging = false;
+        clampHudPos(framebuffer);
+        return true;
+    }
+    return false;
+#endif
 }
 
 } // namespace ya

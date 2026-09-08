@@ -32,6 +32,11 @@
           "id": "GPO-004",
           "status": "pass",
           "notes": "64x64 occupancy；factor/mean/max；Overdraw 通道 heatmap"
+        },
+        {
+          "id": "GPO-005",
+          "status": "pass",
+          "notes": "View 菜单勾选开关仅 debug/profile；Editor replay extraContent 接 overlay"
         }
       ]
     }

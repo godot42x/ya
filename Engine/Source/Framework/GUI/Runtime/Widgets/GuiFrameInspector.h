@@ -73,8 +73,31 @@ struct YA_GUI_API FGuiFrameInspectorRecord
                            uint64_t& arrangePrev);
 };
 
+[[nodiscard]] inline bool isGuiFrameInspectorChannelOn(EGuiFrameInspectorChannel channel)
+{
+    return profiling::isGuiFrameInspectorEnabled() &&
+           (profiling::getGuiFrameInspectorChannels() & guiFrameInspectorChannelMask(channel)) != 0;
+}
+
 [[nodiscard]] YA_GUI_API bool applyGuiFrameInspectorSpec(std::string_view spec);
 YA_GUI_API void toggleGuiFrameInspectorChannel(EGuiFrameInspectorChannel channel);
+
+inline constexpr glm::vec2 kGuiFrameInspectorHudSize{430.0f, 62.0f};
+/// Below typical chrome (Workbench menu 30px, Editor menu+toolbar 50px).
+inline constexpr glm::vec2 kGuiFrameInspectorHudDefaultPos{8.0f, 52.0f};
+
+[[nodiscard]] YA_GUI_API glm::vec2 getGuiFrameInspectorHudPos();
+YA_GUI_API void                    setGuiFrameInspectorHudPos(glm::vec2 pos);
+YA_GUI_API void                    resetGuiFrameInspectorHudPlacement();
+[[nodiscard]] YA_GUI_API Rect2D    guiFrameInspectorHudRect();
+
+class Event;
+/// Overlay HUD is not a widget. Hosts call this before tree dispatch so the
+/// panel can be dragged. Returns true when the event was consumed.
+YA_GUI_API bool handleGuiFrameInspectorHudInput(const Event&     event,
+                                                const glm::vec2& windowPoint,
+                                                Extent2D         framebuffer,
+                                                bool             bPopupOpen = false);
 
 } // namespace ya
 

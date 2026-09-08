@@ -3,6 +3,7 @@
 
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
+#include "Core/Profiling/Profiling.h"
 
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
@@ -25,6 +26,7 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <vector>
 
 namespace guiworkbench
 {
@@ -181,42 +183,44 @@ void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent
     });
     _menuBar->addItem("View", [this, log]
     {
-        return ya::UIMenu::create({
+        std::vector<ya::UIMenu::FItem> items = {
             ya::UIMenu::FItem{.label = "Show Grid", .action = [log] { log("Menu: Show Grid"); }},
-            ya::UIMenu::FItem{.label = "Frame Inspector HUD", .action = [log]
-            {
-                ya::toggleGuiFrameInspectorChannel(ya::EGuiFrameInspectorChannel::Hud);
-                log("Frame Inspector HUD toggled");
-            }},
-            ya::UIMenu::FItem{.label = "Rebuild Flash", .action = [log]
-            {
-                ya::toggleGuiFrameInspectorChannel(ya::EGuiFrameInspectorChannel::Rebuild);
-                log("Rebuild flash toggled");
-            }},
-            ya::UIMenu::FItem{.label = "Overdraw Heatmap", .action = [log]
-            {
-                ya::toggleGuiFrameInspectorChannel(ya::EGuiFrameInspectorChannel::Overdraw);
-                log("Overdraw heatmap toggled");
-            }},
-            ya::UIMenu::FItem{.label = "Fullscreen", .action = [log] { log("Menu: Fullscreen"); }},
-            ya::UIMenu::FItem::separator(),
-            ya::UIMenu::FItem{.label = "Dark Theme", .action = [this, log]
-            {
-                bDarkTheme = true;
-                if (onToggleTheme) {
-                    onToggleTheme(true);
-                }
-                log("Theme -> dark");
-            }},
-            ya::UIMenu::FItem{.label = "Light Theme", .action = [this, log]
-            {
-                bDarkTheme = false;
-                if (onToggleTheme) {
-                    onToggleTheme(false);
-                }
-                log("Theme -> white");
-            }},
-        });
+        };
+#if !defined(YA_PROFILING_DISABLED)
+        auto channelItem = [log](const char* label, ya::EGuiFrameInspectorChannel channel) {
+            ya::UIMenu::FItem item;
+            item.label     = label;
+            item.bCheckable = true;
+            item.bChecked  = ya::isGuiFrameInspectorChannelOn(channel);
+            item.action   = [log, channel, label]() {
+                ya::toggleGuiFrameInspectorChannel(channel);
+                log(std::format("{} {}", label, ya::isGuiFrameInspectorChannelOn(channel) ? "on" : "off"));
+            };
+            return item;
+        };
+        items.push_back(channelItem("Frame Inspector HUD", ya::EGuiFrameInspectorChannel::Hud));
+        items.push_back(channelItem("Rebuild Flash", ya::EGuiFrameInspectorChannel::Rebuild));
+        items.push_back(channelItem("Overdraw Heatmap", ya::EGuiFrameInspectorChannel::Overdraw));
+#endif
+        items.push_back(ya::UIMenu::FItem{.label = "Fullscreen", .action = [log] { log("Menu: Fullscreen"); }});
+        items.push_back(ya::UIMenu::FItem::separator());
+        items.push_back(ya::UIMenu::FItem{.label = "Dark Theme", .action = [this, log]
+        {
+            bDarkTheme = true;
+            if (onToggleTheme) {
+                onToggleTheme(true);
+            }
+            log("Theme -> dark");
+        }});
+        items.push_back(ya::UIMenu::FItem{.label = "Light Theme", .action = [this, log]
+        {
+            bDarkTheme = false;
+            if (onToggleTheme) {
+                onToggleTheme(false);
+            }
+            log("Theme -> white");
+        }});
+        return ya::UIMenu::create(std::move(items));
     });
     _menuBar->addItem("Help", [log]
     {

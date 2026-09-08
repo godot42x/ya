@@ -1,7 +1,7 @@
 # GUI Frame Inspector
 
 > 建立日期：2026-09-08
-> 状态：mainline 完成（GPO-001..004）。诊断工具，不是 dirty-region present / RetainerBox / measure cache。
+> 状态：mainline 完成（GPO-001..005）。诊断工具，不是 dirty-region present / RetainerBox / measure cache。
 
 配套：`todo.md` / `progress.md` / `feature_matrix.json` / `session_checklist.md`。
 

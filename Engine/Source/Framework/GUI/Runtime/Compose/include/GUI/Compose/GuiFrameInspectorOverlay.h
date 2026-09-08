@@ -9,6 +9,7 @@ namespace ya
 {
 
 struct GuiPerfStats;
+struct WidgetTree;
 
 /// Fill CPU model flush and optional GPU session stats into an inspector
 /// record. Does not mutate the snapshot. Model flush is always written;
@@ -29,5 +30,12 @@ YA_GUI_API void captureGuiOverdrawInspector(FGuiFrameInspectorRecord& record,
 YA_GUI_API void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& record,
                                              const UIFrameSnapshot&          snapshot,
                                              const GuiPerfStats&             perf);
+
+/// Capture compose/overdraw stats from the live session (product replay already
+/// flushed) and emit the overlay. No-op when the inspector is off or compiled
+/// out. Call from `extraContent` so HUD GPU counts exclude overlay draws.
+YA_GUI_API void runGuiFrameInspectorOverlay(WidgetTree&            tree,
+                                            const UIFrameSnapshot& snapshot,
+                                            Extent2D               framebuffer);
 
 } // namespace ya

@@ -22,6 +22,6 @@
 - [x] `GPO-004` overdraw occupancy
   - 64×64 occupancy；HUD 显示 mean/max/factor；heatmap 走 Overdraw 通道。
 
-## 延后（不在本计划 mainline）
-
-- [~] Editor overlay：`replayUIFrameSnapshot` 之后同一套 `emitGuiFrameInspectorOverlay`，不做 EditorPanel。
+- [x] `GPO-005` debug/profile menubar 开关
+  - Workbench / Editor View 菜单勾选项；`YA_PROFILING_DISABLED` 不出现。
+  - Editor `replayUIFrameSnapshot` extraContent 接同一 overlay。

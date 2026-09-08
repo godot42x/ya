@@ -29,6 +29,7 @@
 #include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
 #include "GUI/Widgets/WidgetTreeDump.h"
+#include "GUI/Widgets/WidgetTree.h"
 
 #include <SDL3/SDL.h>
 #include <stb_image.h>
@@ -885,8 +886,19 @@ bool GUIWindowHost::init()
 
 void GUIWindowHost::dispatchToTree(const Event& event, float mouseX, float mouseY)
 {
+    const glm::vec2 point{mouseX, mouseY};
+    bool            bPopupOpen = false;
+    if (UIElement* popup = _impl->tree->getLayer(WidgetTree::ELayer::Popup)) {
+        bPopupOpen = !popup->getChildren().empty();
+    }
+    if (handleGuiFrameInspectorHudInput(event, point, _impl->tree->getLogicalExtent(), bPopupOpen)) {
+        _impl->delegate->onRoutedEvent(event, EWidgetRouteResult::HandledExclusive);
+        updateCursor();
+        return;
+    }
+
     WidgetEventContext ctx;
-    ctx.logicalPoint = {mouseX, mouseY};
+    ctx.logicalPoint = point;
     const EWidgetRouteResult result = _impl->tree->dispatchEvent(event, ctx);
     _impl->delegate->onRoutedEvent(event, result);
     updateCursor();
@@ -1446,23 +1458,9 @@ void GUIWindowHost::onTick(float dt)
     cmdBuf->endRendering();
 
     const auto inspectorExtra = [&]() {
-        if (!YA_GUI_INSPECTOR_IS_ENABLED()) {
-            return;
-        }
-        FGuiFrameInspectorRecord& record = _impl->tree->getFrameInspectorRecord();
-        const FRender2dSession&   session = Render2D::sessionState();
-        captureGuiComposeInspector(record,
-                                   snapshot,
-                                   FRender2dFrameStats{
-                                       .screenFlushCount  = session.screenFlushCount,
-                                       .worldFlushCount   = session.worldFlushCount,
-                                       .screenVertexCount = session.screenVertexCount,
-                                       .screenIndexCount  = session.screenIndexCount,
-                                   });
-        captureGuiOverdrawInspector(record,
+        runGuiFrameInspectorOverlay(*_impl->tree,
                                     snapshot,
                                     Extent2D{.width = presentExtent.width, .height = presentExtent.height});
-        emitGuiFrameInspectorOverlay(record, snapshot, _impl->tree->getPerfStats());
     };
     renderSurface->record(
         cmdBuf.get(),

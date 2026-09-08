@@ -27,4 +27,4 @@ xmake run ya-gui-closure-test -- --gtest_filter='GuiFrameInspectorTest.*'
 
 ## 当前下一刀
 
-无。Mainline（GPO-001..004）完成。Editor overlay 接线按需另开。
+无。Mainline（GPO-001..005）完成。

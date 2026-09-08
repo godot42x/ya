@@ -3,6 +3,8 @@
 // recorded when the runtime inspector toggle is on.
 
 #include "Core/Profiling/Profiling.h"
+#include "Core/Event.h"
+#include "Core/KeyCode.h"
 #include "GUI/Compose/GuiFrameInspectorOverlay.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Panel.h"
@@ -167,6 +169,52 @@ TEST(GuiFrameInspectorTest, OverdrawFactorCountsStackedCoverage)
     EXPECT_NEAR(record.overdrawFactor, 2.0f, 0.05f);
     EXPECT_GE(record.maxCoverage, 2.0f);
     EXPECT_GE(record.meanCoverage, 1.9f);
+}
+
+TEST(GuiFrameInspectorTest, ChannelToggleShowsOnQuery)
+{
+    if constexpr (profiling::isCompiledOut()) {
+        GTEST_SKIP() << "GUI Frame Inspector compiled out";
+    }
+
+    InspectorScope restore(false);
+    EXPECT_FALSE(isGuiFrameInspectorChannelOn(EGuiFrameInspectorChannel::Hud));
+    EXPECT_FALSE(isGuiFrameInspectorChannelOn(EGuiFrameInspectorChannel::Rebuild));
+
+    toggleGuiFrameInspectorChannel(EGuiFrameInspectorChannel::Hud);
+    EXPECT_TRUE(isGuiFrameInspectorChannelOn(EGuiFrameInspectorChannel::Hud));
+    EXPECT_FALSE(isGuiFrameInspectorChannelOn(EGuiFrameInspectorChannel::Rebuild));
+
+    toggleGuiFrameInspectorChannel(EGuiFrameInspectorChannel::Hud);
+    EXPECT_FALSE(isGuiFrameInspectorChannelOn(EGuiFrameInspectorChannel::Hud));
+}
+
+TEST(GuiFrameInspectorTest, HudDefaultPosClearsMenuBarAndDragMovesIt)
+{
+    if constexpr (profiling::isCompiledOut()) {
+        GTEST_SKIP() << "GUI Frame Inspector compiled out";
+    }
+
+    InspectorScope restore(false);
+    resetGuiFrameInspectorHudPlacement();
+    EXPECT_GE(getGuiFrameInspectorHudPos().y, 40.0f);
+
+    toggleGuiFrameInspectorChannel(EGuiFrameInspectorChannel::Hud);
+    const Rect2D hud = guiFrameInspectorHudRect();
+    const glm::vec2 grab = hud.pos + hud.extent * 0.5f;
+    const Extent2D fb{.width = 800, .height = 600};
+    EXPECT_TRUE(handleGuiFrameInspectorHudInput(MouseButtonPressedEvent(EMouse::Left), grab, fb, false));
+    EXPECT_TRUE(handleGuiFrameInspectorHudInput(MouseMoveEvent(grab.x + 40.0f, grab.y + 30.0f),
+                                                {grab.x + 40.0f, grab.y + 30.0f},
+                                                fb,
+                                                false));
+    EXPECT_NEAR(getGuiFrameInspectorHudPos().x, hud.pos.x + 40.0f, 0.5f);
+    EXPECT_NEAR(getGuiFrameInspectorHudPos().y, hud.pos.y + 30.0f, 0.5f);
+    EXPECT_TRUE(handleGuiFrameInspectorHudInput(MouseButtonReleasedEvent(EMouse::Left),
+                                                {grab.x + 40.0f, grab.y + 30.0f},
+                                                fb,
+                                                false));
+    resetGuiFrameInspectorHudPlacement();
 }
 
 } // namespace ya

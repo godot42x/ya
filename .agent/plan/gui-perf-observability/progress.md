@@ -77,3 +77,36 @@ GPO-002 原计划单独提交且不画 overlay。实现时 overlay 模块同时�
 ### 下一接力点
 
 无。Editor overlay 接线在调用方有需求时再做。
+
+## 2026-09-08 — GPO-005 debug/profile menubar 开关
+
+### 目标与边界
+
+- View 菜单三项为勾选开关，仅 `debug`/`profile`（`YA_PROFILING_DISABLED` 不出现）。
+- Editor 用同一套 overlay；不把 overlay 写入 snapshot；不做 EditorPanel。
+- 不吸收 Editor/Dock 无关脏改动。
+
+### 本轮完成
+
+- `isGuiFrameInspectorChannelOn`；菜单打开时读当前通道写 `bChecked`。
+- Workbench / Editor View 菜单。
+- `replayUIFrameSnapshot(..., extraContent)`；Editor `runGuiFrameInspectorOverlay`。
+- Host extraContent 收到同一 helper。
+
+### 验证
+
+```text
+xmake run ya-gui-closure-test -- --gtest_filter='GuiFrameInspectorTest.*'
+```
+
+### 保留 / 未完成
+
+无。
+
+### 偏离项
+
+无。
+
+### 下一接力点
+
+无。

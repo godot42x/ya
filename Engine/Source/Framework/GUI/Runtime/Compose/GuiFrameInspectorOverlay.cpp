@@ -18,10 +18,7 @@ namespace
 
 [[nodiscard]] bool inspectorChannelOn(EGuiFrameInspectorChannel channel)
 {
-    if (!profiling::isGuiFrameInspectorEnabled()) {
-        return false;
-    }
-    return (profiling::getGuiFrameInspectorChannels() & guiFrameInspectorChannelMask(channel)) != 0;
+    return isGuiFrameInspectorChannelOn(channel);
 }
 
 [[nodiscard]] Rect2D intersectRects(Rect2D a, const Rect2D& b)
@@ -215,7 +212,13 @@ void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& record,
     }
 
     if (inspectorChannelOn(EGuiFrameInspectorChannel::Hud)) {
-        addFilled({8.0f, 8.0f}, {430.0f, 62.0f}, {0.05f, 0.06f, 0.08f, 0.72f});
+        const Extent2D fb{.width = Render2D::sessionState().windowWidth,
+                          .height = Render2D::sessionState().windowHeight};
+        Rect2D hud = guiFrameInspectorHudRect();
+        hud.pos.x = std::clamp(hud.pos.x, 0.0f, std::max(0.0f, static_cast<float>(fb.width) - hud.extent.x));
+        hud.pos.y = std::clamp(hud.pos.y, 0.0f, std::max(0.0f, static_cast<float>(fb.height) - hud.extent.y));
+        setGuiFrameInspectorHudPos(hud.pos);
+        addFilled(hud.pos, hud.extent, {0.05f, 0.06f, 0.08f, 0.72f});
         auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 14);
         if (font) {
             const glm::vec4 color{0.95f, 0.96f, 0.90f, 1.0f};
@@ -234,11 +237,36 @@ void emitGuiFrameInspectorOverlay(const FGuiFrameInspectorRecord& record,
                                                   record.meanCoverage,
                                                   record.maxCoverage,
                                                   record.overdrawFactor);
-            Render2D::makeText(line0, glm::vec3(14.0f, 12.0f, 0.0f), color, font.get());
-            Render2D::makeText(line1, glm::vec3(14.0f, 28.0f, 0.0f), color, font.get());
-            Render2D::makeText(line2, glm::vec3(14.0f, 44.0f, 0.0f), color, font.get());
+            Render2D::makeText(line0, glm::vec3(hud.pos.x + 6.0f, hud.pos.y + 4.0f, 0.0f), color, font.get());
+            Render2D::makeText(line1, glm::vec3(hud.pos.x + 6.0f, hud.pos.y + 20.0f, 0.0f), color, font.get());
+            Render2D::makeText(line2, glm::vec3(hud.pos.x + 6.0f, hud.pos.y + 36.0f, 0.0f), color, font.get());
         }
     }
+#endif
+}
+
+void runGuiFrameInspectorOverlay(WidgetTree& tree, const UIFrameSnapshot& snapshot, Extent2D framebuffer)
+{
+#if defined(YA_PROFILING_DISABLED)
+    (void)tree;
+    (void)snapshot;
+    (void)framebuffer;
+#else
+    if (!YA_GUI_INSPECTOR_IS_ENABLED()) {
+        return;
+    }
+    FGuiFrameInspectorRecord& record  = tree.getFrameInspectorRecord();
+    const FRender2dSession&   session = Render2D::sessionState();
+    captureGuiComposeInspector(record,
+                               snapshot,
+                               FRender2dFrameStats{
+                                   .screenFlushCount  = session.screenFlushCount,
+                                   .worldFlushCount   = session.worldFlushCount,
+                                   .screenVertexCount = session.screenVertexCount,
+                                   .screenIndexCount  = session.screenIndexCount,
+                               });
+    captureGuiOverdrawInspector(record, snapshot, framebuffer);
+    emitGuiFrameInspectorOverlay(record, snapshot, tree.getPerfStats());
 #endif
 }
 
