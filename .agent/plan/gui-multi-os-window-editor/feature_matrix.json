@@ -1,0 +1,72 @@
+{
+  "plan": "gui-multi-os-window-editor",
+  "updated_at": "2026-09-08",
+  "active_task": null,
+  "architecture": {
+    "application_loop": "one GUI application loop",
+    "window_tree": "one native window owns one WidgetTree",
+    "shared": ["IRender device", "shader cache", "font/texture services"],
+    "boundary": "GUI owns windows/presentation; FeatureGallery is first multi-window consumer; GameEditor owns sessions/tabs/documents",
+    "tab_scopes": {
+      "WindowRootEditor": "top-level editor in a window-root DockContext; default native-window tear-off unit",
+      "EditorOwnedTool": "owned nested leaf; cannot dock under another root editor/tab, but may become an independent editor window while retaining ownerEditorId",
+      "WindowTool": "window-level non-document tool; independent window allowed by policy"
+    }
+  },
+  "tracks": [
+    {
+      "id": "c0_audit",
+      "title": "C0 - GUI/RHI 与旧 tab 事实矩阵",
+      "items": [
+        {"id": "MW-001", "status": "pass", "notes": "c0_mw001_irender_ownership.md：device vs surface vs main-facade；未改 RHI"},
+        {"id": "MW-002", "status": "pass", "notes": "c0_mw002_frame_boundary.md：串行双窗 present；per-window pass slot；GUI 未 init DeferredDeletionQueue"},
+        {"id": "MW-003", "status": "pass", "notes": "c0_mw003_tab_scope.md：9 个 builtin tab 分类；Level/Material/Script 尚未注册"},
+        {"id": "MW-004", "status": "pass", "notes": "c0_mw004_contract.md：GUI 不依赖 GameEditor；C1 前冻结"}
+      ]
+    },
+    {
+      "id": "gui_framework",
+      "title": "C1-C2G-C3 - GUI Framework 多 native window + FeatureGallery",
+      "items": [
+        {"id": "MW-101", "status": "planned"},
+        {"id": "MW-102", "status": "planned"},
+        {"id": "MW-201", "status": "planned"},
+        {"id": "MW-202", "status": "planned"},
+        {"id": "MW-203", "status": "planned"},
+        {"id": "MW-204", "status": "planned", "notes": "GUIApp openWindow/closeWindow for Feature Gallery; shared device; no second loop"},
+        {"id": "MW-205", "status": "planned", "notes": "Composition/Windows page: extra OS window instances with independent WidgetTree; not dock floating, not GameEditor"},
+        {"id": "MW-301", "status": "planned"}
+      ]
+    },
+    {
+      "id": "game_editor",
+      "title": "C4-C8 - GameEditor editor/session/tab",
+      "items": [
+        {"id": "ES-1", "status": "planned", "notes": "FEditorSurfaceContext + EditorWindowMetrics; Surface 不再读 App/IRender window API"},
+        {"id": "ES-2", "status": "planned", "notes": "单元素 EditorWindowRegistry + EditorWindowSession 持有 Surface；禁止 god object"},
+        {"id": "ES-3", "status": "planned", "notes": "selection/action/undo 归属 EditorRootSession；owned tool 带 ownerEditorId"},
+        {"id": "ES-4", "status": "planned", "notes": "spawn context 携带 windowId/scope/owner/document/placement；tab 不持有 Surface"},
+        {"id": "ES-5", "status": "planned", "notes": "删除 tick(App&)；wantsTextInput 走 WidgetTree capability；完成后才允许第二扇 editor window"},
+        {"id": "MW-401", "status": "planned", "notes": "ES-5 之后的双 session；window-root dock + nested editor-owned dock"},
+        {"id": "MW-402", "status": "planned", "notes": "与 ES-4 同一目标：factory 不依赖固定 EditorSurface"},
+        {"id": "MW-501", "status": "planned"},
+        {"id": "MW-502", "status": "planned"},
+        {"id": "MW-601", "status": "planned"},
+        {"id": "MW-602", "status": "planned", "notes": "root editors + nested owned tools"},
+        {"id": "MW-701", "status": "planned", "notes": "root editor or detachable owned tool can become native window root"},
+        {"id": "MW-702", "status": "planned", "notes": "owned tools cannot dock under another root editor/tab; retain owner and avoid orphan leaf"},
+        {"id": "MW-801", "status": "planned", "notes": "root/nested dock topology and ownerEditorId"},
+        {"id": "MW-802", "status": "planned"}
+      ]
+    },
+    {
+      "id": "conditional",
+      "title": "条件延后",
+      "items": [
+        {"id": "MW-901", "status": "deferred", "notes": "并行/嵌套 recording 真实存在时才实例化 Render2D session"},
+        {"id": "MW-902", "status": "deferred", "notes": "独立 world preview 真实需要时才扩展 RenderRuntime"},
+        {"id": "MW-903", "status": "deferred", "notes": "跨平台构建暴露缺口时才增加平台特化 backend"}
+      ]
+    }
+  ]
+}
