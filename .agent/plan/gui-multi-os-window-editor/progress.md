@@ -165,3 +165,24 @@
 ### 下一接力点
 
 `MW-201`：RHI additive surface/presentation context。不要把 `IRender` 改成数组，不要复制 `GUIAppHost::init`。
+
+## 2026-09-09 — C2 MW-201（additive surface/presentation context）
+
+### 完成
+
+- `IRenderSurfaceContext`：per-surface begin/end、swapchain、acquire/present sync。
+- `IRender::createSurfaceContext(INativeWindow&)`：共享当前 device，不调用 `IRender::create`。
+- `VulkanRenderSurfaceContext`：每窗 `VkSurfaceKHR` + `VulkanSwapChain` + flight fence/semaphore。
+- `VulkanSwapChain` 显式持有 surface/window，不再读 `VulkanRender::getSurface()`。
+- 主 `IRender::begin/end` 仍驱动第一扇窗；GUI extra 仍不 present。
+- 测试：`ya-rhi-vulkan-smoke` `RHISurfaceContext.ExtraWindowAcquireSubmitPresentIndependentOfPrimary`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：单窗 `IRender` facade、`GUIAppHost` present、`PresentationGraphService` 主窗、`GUIWindowManager::renderAll` 空实现。
+- 未完成：MW-202 resize/minimize/out-of-date/close（`VulkanSwapChain::recreate` 仍 `vkDeviceWaitIdle`）；MW-203 per-window Render2D slot；extra GUI present。
+- 偏离：extra context 析构会 `vkQueueWaitIdle` graphics+present（共享 queue，会排空主窗 in-flight）。主 `begin/end` 未抽进 context，避免改单窗时序。
+
+### 下一接力点
+
+`MW-202`：per-surface recreate/minimize/close，禁止用 device waitIdle 卡住其他窗。不要开始 Feature Gallery `Windows` 页。

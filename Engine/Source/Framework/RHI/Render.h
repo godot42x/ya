@@ -2,6 +2,9 @@
 
 #include "Core/Base.h"
 #include "RenderDefines.h"
+#include "RHI/Core/RenderSurfaceContext.h"
+
+#include <memory>
 
 namespace ya
 {
@@ -82,6 +85,11 @@ struct YA_RHI_API IRender : public plat_base<IRender>
 
     virtual bool begin(int32_t* imageIndex)                                 = 0;
     virtual bool end(int32_t imageIndex, std::vector<void*> CommandBuffers) = 0;
+
+    /// Extra presentation surface sharing this device. Does not create a
+    /// second backend. Returns null when the backend cannot present to `window`.
+    /// Destroy the context before `destroy()` on this device.
+    [[nodiscard]] virtual std::unique_ptr<IRenderSurfaceContext> createSurfaceContext(INativeWindow& window);
 
     [[nodiscard]] ERenderAPI::T getAPI() const { return _renderAPI; }
 

@@ -13,6 +13,7 @@
 
 #include "RHI/Core/Swapchain.h"
 #include "RHI/Core/BuiltinTextureSource.h"
+#include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/Render.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanDescriptorSet.h"
@@ -224,6 +225,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
     bool begin(int32_t* imageIndex) override;
     bool end(int32_t imageIndex, std::vector<void*> CommandBuffers) override;
+    std::unique_ptr<IRenderSurfaceContext> createSurfaceContext(INativeWindow& window) override;
 
     // IRender interface implementations
     void getWindowSize(int& width, int& height) const override
@@ -343,7 +345,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
             _debugUtils->initDeviceLevel();
         }
 
-        _swapChain = new VulkanSwapChain(this);
+        _swapChain = new VulkanSwapChain(this, _surface, _nativeWindow);
         _swapChain->as<VulkanSwapChain>()->recreate(ci.swapchainCI);
 
         if (!createCommandPool()) {

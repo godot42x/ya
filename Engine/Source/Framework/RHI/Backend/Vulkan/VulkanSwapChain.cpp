@@ -328,7 +328,7 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &newCI)
     // Query surface capabilities
     _supportDetails = VulkanSwapChainSupportDetails::query(
         _render->getPhysicalDevice(),
-        _render->getSurface());
+        _surface);
     const auto &newExtent = _supportDetails.capabilities.currentExtent;
 
     // Validate extent (check for minimized window)
@@ -367,7 +367,7 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &newCI)
         .sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .pNext            = nullptr,
         .flags            = 0,
-        .surface          = _render->getSurface(),
+        .surface          = _surface,
         .minImageCount    = _minImageCount,
         .imageFormat      = _surfaceFormat,
         .imageColorSpace  = _surfaceColorSpace,
@@ -492,7 +492,7 @@ EPresentMode::T VulkanSwapChain::getPresentMode() const
 
 std::vector<EPresentMode::T> VulkanSwapChain::getAvailablePresentModes() const
 {
-    auto                         details = VulkanSwapChainSupportDetails::query(_render->getPhysicalDevice(), _render->getSurface());
+    auto                         details = VulkanSwapChainSupportDetails::query(_render->getPhysicalDevice(), _surface);
     std::vector<EPresentMode::T> modes;
     for (const auto &mode : details.presentModes) {
         modes.push_back(EPresentMode::fromVk(mode));

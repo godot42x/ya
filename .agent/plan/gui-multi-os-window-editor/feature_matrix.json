@@ -1,7 +1,7 @@
 {
   "plan": "gui-multi-os-window-editor",
   "updated_at": "2026-09-09",
-  "active_task": "MW-201",
+  "active_task": "MW-202",
   "architecture": {
     "application_loop": "one GUI application loop",
     "window_tree": "one native window owns one WidgetTree",
@@ -30,7 +30,7 @@
       "items": [
         {"id": "MW-101", "status": "pass", "notes": "GUIWindowManager extras: native window+WidgetTree; GUIApp openWindow/closeWindow; no IRender::create; present deferred to C2"},
         {"id": "MW-102", "status": "pass", "notes": "per-window pointer/focus/capture/tooltip/clipboard/DPI/snapshot; FontManager DPI set per extra snapshot; no extra present"},
-        {"id": "MW-201", "status": "planned"},
+        {"id": "MW-201", "status": "pass", "notes": "IRender::createSurfaceContext + VulkanRenderSurfaceContext; extra VkSurface/swapchain/sync; main begin/end unchanged; no extra GUI present"},
         {"id": "MW-202", "status": "planned"},
         {"id": "MW-203", "status": "planned"},
         {"id": "MW-204", "status": "planned", "notes": "GUIApp openWindow/closeWindow for Feature Gallery; shared device; no second loop"},

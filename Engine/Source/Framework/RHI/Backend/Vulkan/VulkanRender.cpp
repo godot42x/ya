@@ -2,6 +2,7 @@
 #include "VulkanCommandBuffer.h"
 #include "VulkanDescriptorSet.h"
 #include "VulkanSampler.h"
+#include "VulkanRenderSurfaceContext.h"
 #include "RHI/NativeWindow.h"
 
 #include <Core/Base.h>
@@ -1478,6 +1479,15 @@ bool VulkanRender::end(int32_t imageIndex, std::vector<void*> cmdBufs)
 
     currentFrameIdx = (currentFrameIdx + 1) % flightFrameSize;
     return true;
+}
+
+std::unique_ptr<IRenderSurfaceContext> VulkanRender::createSurfaceContext(INativeWindow& window)
+{
+    auto context = std::make_unique<VulkanRenderSurfaceContext>();
+    if (!context->init(this, window, _ci.swapchainCI)) {
+        return nullptr;
+    }
+    return context;
 }
 
 void VulkanRender::submitToQueue(

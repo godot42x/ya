@@ -1,6 +1,6 @@
 # GUI 多 OS Window / GameEditor 多 Editor TODO
 
-> 更新时间：2026-09-08。状态：`[ ]` 未开始，`[-]` 进行中，`[x]` 完成，`[~]` 条件延后。
+> 更新时间：2026-09-09。状态：`[ ]` 未开始，`[-]` 进行中，`[x]` 完成，`[~]` 条件延后。
 
 执行规则：同时最多一个任务为 `[-]`；GUI 与 GameEditor 两条 track 不跨层混提；RHI 改动必须对应 surface/swapchain/frame-resource 验收；计划文件与实现、测试同一 checkpoint 提交；共享工作区已有大量未提交改动，实施前逐文件确认归属。
 
@@ -22,7 +22,7 @@
 
 ## C2 — GUI/RHI presentation
 
-- [ ] `MW-201` 在 `RHI/Core` 增加 additive surface/presentation context，并在 Vulkan 复用 `VulkanSwapChain` 为每个 `INativeWindow` 创建独立 surface/swapchain/sync。验收：各自 acquire/submit/present；主 `IRender` facade 仍兼容；不把 `IRender` 改成数组。
+- [x] `MW-201` 在 `RHI/Core` 增加 additive surface/presentation context，并在 Vulkan 复用 `VulkanSwapChain` 为每个 `INativeWindow` 创建独立 surface/swapchain/sync。验收：各自 acquire/submit/present；主 `IRender` facade 仍兼容；不把 `IRender` 改成数组。
 - [ ] `MW-202` 覆盖 resize/minimize/out-of-date/close/deferred deletion。验收：zero extent、安全销毁、GPU validation 无错误。
 - [ ] `MW-203` 实现 per-window Render2D pass/resource isolation：每窗口唯一 pass slot，静态 session 仅串行复用。验收：不同窗口 UI 不覆盖 vertex/descriptor/snapshot，offscreen parity 不退化；并行 recorder 不在本任务实现。
 

@@ -32,6 +32,8 @@ struct VulkanRender;
 struct YA_RHI_BACKEND_API VulkanSwapChain : public ISwapchain
 {
     VulkanRender *_render = nullptr;
+    VkSurfaceKHR  _surface = VK_NULL_HANDLE;
+    INativeWindow* _window = nullptr;
 
     VkSwapchainKHR                m_swapChain = VK_NULL_HANDLE;
     VulkanSwapChainSupportDetails _supportDetails;
@@ -52,10 +54,14 @@ struct YA_RHI_BACKEND_API VulkanSwapChain : public ISwapchain
 
 
   public:
-    VulkanSwapChain(VulkanRender *render)
+    VulkanSwapChain(VulkanRender *render, VkSurfaceKHR surface, INativeWindow *window)
         : _render(render)
+        , _surface(surface)
+        , _window(window)
     {
         YA_CORE_ASSERT(_render != nullptr, "VulkanRender is null!");
+        YA_CORE_ASSERT(_surface != VK_NULL_HANDLE, "VulkanSwapChain requires a VkSurfaceKHR");
+        YA_CORE_ASSERT(_window != nullptr, "VulkanSwapChain requires a native window");
     }
     ~VulkanSwapChain();
 

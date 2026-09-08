@@ -241,7 +241,7 @@ RHI 目标是共享一个 device、每窗口 surface/swapchain/frame resources�
 
 `MW-001/002` 的输出必须具体包含：IRender API 的 device/surface/main-facade 分类；instance→device→surface→swapchain→sync→imported image 时序；双窗口 acquire/record/submit/present 顺序；minimized/out-of-date/close 对另一窗口的行为；flight/descriptor/vertex/pass-slot/deferred-deletion 共享表；RenderRuntime 仍只服务主 world window 的证据；OpenGL current-context 的支持结论。
 
-`MW-001` 已落地为 [`c0_mw001_irender_ownership.md`](c0_mw001_irender_ownership.md)。`MW-002` 为 [`c0_mw002_frame_boundary.md`](c0_mw002_frame_boundary.md)。`MW-003` 为 [`c0_mw003_tab_scope.md`](c0_mw003_tab_scope.md)。`MW-004` 为 [`c0_mw004_contract.md`](c0_mw004_contract.md)。C0 闭环。`MW-101`/`MW-102` 已落地 extra native window 的 tree/input/snapshot 隔离。下一编码入口是 `MW-201`（RHI additive surface/presentation context；禁止复制 `IRender::create`）。
+`MW-001` 已落地为 [`c0_mw001_irender_ownership.md`](c0_mw001_irender_ownership.md)。`MW-002` 为 [`c0_mw002_frame_boundary.md`](c0_mw002_frame_boundary.md)。`MW-003` 为 [`c0_mw003_tab_scope.md`](c0_mw003_tab_scope.md)。`MW-004` 为 [`c0_mw004_contract.md`](c0_mw004_contract.md)。C0 闭环。`MW-101`/`MW-102` 已落地 extra native window 的 tree/input/snapshot 隔离。`MW-201` 已落地 additive `IRenderSurfaceContext`。下一编码入口是 `MW-202`（resize/minimize/out-of-date/close/deferred deletion；禁止 `vkDeviceWaitIdle` 卡住其他窗）。
 
 ## GUI Framework 实施轨道
 

@@ -5,6 +5,12 @@
 namespace ya
 {
 
+std::unique_ptr<IRenderSurfaceContext> IRender::createSurfaceContext(INativeWindow& window)
+{
+    (void)window;
+    return nullptr;
+}
+
 IRender *IRender::create(const RenderCreateInfo &ci)
 {
 

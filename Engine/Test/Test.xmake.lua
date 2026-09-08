@@ -87,7 +87,8 @@ if get_config("ya_profile") ~= "gui" then
     do
         set_kind("binary")
         add_files("./Source/TestEntry.cpp",
-                  "./Source/RHIVulkanSmoke.cpp")
+                  "./Source/RHIVulkanSmoke.cpp",
+                  "./Source/RHISurfaceContextTest.cpp")
         add_deps("ya-rhi-vulkan")
         add_packages("gtest")
     end
