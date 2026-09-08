@@ -16,7 +16,9 @@ namespace ya
 ///     shifted by UIScrollLayout's offset), so the existing hit walk needs no
 ///     point conversion; `cullsChildHits` rejects events outside the
 ///     viewport rect;
-///   - paint clips to the viewport rect via the snapshot clip stack;
+///   - paint clips children to the viewport minus the overlay scrollbar
+///     gutter (`FScrollBarStyle.width` is paint-only, not a layout inset);
+///     the track/thumb are painted after children so row fills cannot cover them;
 ///   - wheel is consumed by the innermost scrollable viewport; when the
 ///     content fits (or the scroll is already at its limit) the event is
 ///     not consumed and bubbles outward through the tree walk.
@@ -64,10 +66,7 @@ struct YA_GUI_API UIScrollViewport : public UIElement, public UIStyledWidget<UIS
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
-    [[nodiscard]] bool cullsChildHits(const glm::vec2& logicalPoint) const override
-    {
-        return !hitTestLayoutRect(logicalPoint);
-    }
+    [[nodiscard]] bool cullsChildHits(const glm::vec2& logicalPoint) const override;
 
     // === Scrollbar ===
     /// Draw a vertical scrollbar along the right edge when the content
@@ -88,6 +87,10 @@ struct YA_GUI_API UIScrollViewport : public UIElement, public UIStyledWidget<UIS
 
   private:
     UIScrollLayout _scrollLayout;
+
+    [[nodiscard]] bool showsOverlayScrollbar() const;
+    [[nodiscard]] Rect2D contentClipRect() const;
+    void paintScrollbarOverlay(UIFrameBuilder& builder) const;
 };
 
 } // namespace ya

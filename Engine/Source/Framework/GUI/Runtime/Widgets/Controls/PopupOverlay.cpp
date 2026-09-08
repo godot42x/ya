@@ -3,7 +3,6 @@
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
 
-#include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
@@ -28,6 +27,13 @@ void retireOverlay(std::shared_ptr<UIElement>&& overlay)
     if (g_retiredOverlays.size() > 64) {
         g_retiredOverlays.clear();
     }
+}
+
+[[nodiscard]] bool isFillCanvasSlot(const UISlot* edge)
+{
+    const auto* canvas = edge ? edge->as<UICanvasSlot>() : nullptr;
+    return canvas && canvas->getAnchorMin() == glm::vec2(0.0f, 0.0f) &&
+           canvas->getAnchorMax() == glm::vec2(1.0f, 1.0f);
 }
 
 } // namespace
@@ -78,9 +84,11 @@ void UIPopupOverlay::applyAssignedLayout(const Rect2D& rect)
         if (!child->participatesInLayout()) {
             continue;
         }
-        // Policy for this edge is popup-owned; write it onto the slot before
-        // the installed canvas layout arranges from that edge.
-        if (UISlot* edge = getSlotForChild(*child); edge && edge->as<UICanvasSlot>()) {
+        UISlot* edge = getSlotForChild(*child);
+        if (isFillCanvasSlot(edge)) {
+            continue;
+        }
+        if (edge && edge->as<UICanvasSlot>()) {
             auto* slot = edge->as<UICanvasSlot>();
             slot->apply(resolveContentSlotArgs(*child));
         }
@@ -96,21 +104,13 @@ bool UIPopupOverlay::assignedLayoutInputsUnchanged() const
 
 const Rect2D* UIPopupOverlay::contentLayoutRect() const
 {
-    for (const auto& child : getChildrenInPaintOrder()) {
-        if (child->participatesInLayout()) {
-            return &child->_layoutRect;
+    for (UIElement* child : getChildrenInPaintOrder()) {
+        if (!child->participatesInLayout() || isFillCanvasSlot(getSlotForChild(*child))) {
+            continue;
         }
+        return &child->_layoutRect;
     }
     return nullptr;
-}
-
-void UIPopupOverlay::paintSelf(UIFrameBuilder& builder)
-{
-    if (!_bDimBackground) {
-        return;
-    }
-    const FPopupStyle& style = resolvedStyle();
-    builder.addBrush(_layoutRect, style.modalFill);
 }
 
 FCanvasSlotArgs UIPopupOverlay::resolveContentSlotArgs(const UIElement& child) const

@@ -38,6 +38,7 @@ struct YA_GUI_API UIMenuItem : public UIElement, public UIStyledWidget<UIMenuIte
     VisualFlag  _bHighlighted{*this};
     bool        _bSeparator = false;
     bool        _bChecked = false;
+    bool        _bCheckable = false;
     bool        _bEnabled = true;
     bool        _bShowsSubmenu = false;
     float       _reservedCheckmarkExtent = 0.0f;
@@ -69,6 +70,7 @@ struct YA_GUI_API UIMenu : public UIPopupOverlay
         std::string                                  shortcut;
         std::function<std::shared_ptr<UIMenu>()>     submenuFactory;
         bool                                         bChecked = false;
+        bool                                         bCheckable = false;
         bool                                         bEnabled = true;
         bool                                         bSeparator = false;
 

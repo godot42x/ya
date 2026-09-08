@@ -6,6 +6,7 @@
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "Render/Resources/FontManager.h"
+#include "GUI/Widgets/Brush.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -82,12 +83,25 @@ void UIMenuItem::paintSelf(UIFrameBuilder& builder)
         textRect.extent.x = std::max(0.0f, textRect.extent.x - UIMenu::kItemHorizontalPadding * 2.0f);
         const glm::vec4 textColor = _bEnabled ? style.textColor : style.disabledTextColor;
         const glm::vec4 iconColor = _bEnabled ? style.iconColor : style.disabledIconColor;
-        if (_bChecked) {
+        if (_bCheckable || _bChecked) {
             Rect2D checkRect{
                 .pos = {textRect.pos.x, _layoutRect.pos.y},
                 .extent = {UIMenu::kCheckmarkColumnWidth, _layoutRect.extent.y},
             };
-            builder.addText(checkRect, "v", style.checkmarkColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+            constexpr float kBox = 12.0f;
+            Rect2D boxRect{
+                .pos = {
+                    checkRect.pos.x + std::max(0.0f, (checkRect.extent.x - kBox) * 0.5f),
+                    checkRect.pos.y + std::max(0.0f, (checkRect.extent.y - kBox) * 0.5f),
+                },
+                .extent = {kBox, kBox},
+            };
+            const glm::vec4 boxBorder = _bEnabled ? style.textColor : style.disabledTextColor;
+            if (_bChecked) {
+                builder.addBrush(boxRect, FBrush::solid(style.checkmarkColor));
+                builder.addCheckMark(boxRect, {0.95f, 0.96f, 0.98f, 1.0f});
+            }
+            builder.addRectOutline(boxRect, boxBorder, 1.0f);
             textRect.pos.x += _reservedCheckmarkExtent;
             textRect.extent.x = std::max(0.0f, textRect.extent.x - _reservedCheckmarkExtent);
         }
@@ -248,7 +262,7 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
         const float w = font ? font->measureText(item.label) : 0.0f;
         maxLabelWidth = std::max(maxLabelWidth, w);
         bAnyIcon = bAnyIcon || !item.icon.empty();
-        bAnyCheckmark = bAnyCheckmark || item.bChecked;
+        bAnyCheckmark = bAnyCheckmark || item.bChecked || item.bCheckable;
         bAnySubmenu = bAnySubmenu || static_cast<bool>(item.submenuFactory);
         bAnyShortcut = bAnyShortcut || !item.shortcut.empty();
         maxShortcutWidth = std::max(maxShortcutWidth, font ? font->measureText(item.shortcut) : 0.0f);
@@ -278,6 +292,7 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
         menuItem->_styleKey = _styleKey;
         menuItem->_bSeparator = bSeparator;
         menuItem->_bChecked = items[i].bChecked;
+        menuItem->_bCheckable = items[i].bCheckable;
         menuItem->_bEnabled = items[i].bEnabled;
         menuItem->_bShowsSubmenu = static_cast<bool>(items[i].submenuFactory);
         menuItem->_reservedCheckmarkExtent = _checkmarkColumnExtent;

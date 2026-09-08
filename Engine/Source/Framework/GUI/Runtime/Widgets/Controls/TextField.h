@@ -43,7 +43,7 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UITextField>; }
 
     std::string _text            = "";
-    uint32_t    _fontSize        = 16;
+    uint32_t    _fontSize        = gui_type::kBody;
     uint32_t    _maxLength       = 256;
 
   public:
@@ -66,7 +66,7 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
             return;
         }
         _fontSize = value;
-        invalidateProperty(EUIPropertyImpact::Layout);
+        setStyleField("fontSize", value, EUIPropertyImpact::Layout);
     }
 
     void setError(bool error);
@@ -86,6 +86,11 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
     void clampCursor() { _edit.clamp(_text.size()); }
     [[nodiscard]] ECursorType getCursor() const override { return ECursorType::IBeam; }
 
+    bool isHoverable() const override { return true; }
+    void onPointerEnter() override { _bHovered = true; }
+    void onPointerLeave() override { _bHovered = false; }
+    void resetHoverState() override { _bHovered = false; }
+
     void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree& tree) const override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
@@ -97,6 +102,7 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
     {
         _bFocused    = false;
         _bDragSelect = false;
+        _bHovered    = false;
         _edit.collapseToCaret();
     }
 
@@ -106,9 +112,12 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
     /// Place the caret at the nearest character boundary for `logicalPoint`
     /// (tree-local logical px). Shift/drag keeps the existing anchor.
     void placeCaretAt(const glm::vec2& logicalPoint, bool bExtendSelection);
+    [[nodiscard]] uint32_t resolvedFontSize() const { return resolvedStyle().fontSize; }
+    [[nodiscard]] Rect2D textInnerRect() const;
 
     FTextEditState _edit;
     VisualFlag     _bFocused{*this};
+    VisualFlag     _bHovered{*this};
     bool           _bError      = false;
     bool           _bDragSelect = false;
     /// Horizontal scroll offset so the caret stays visible when the text is

@@ -5,6 +5,8 @@
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
+#include <glm/glm.hpp>
+
 namespace ya
 {
 
@@ -93,6 +95,17 @@ void UISplitPane::paintSelf(UIFrameBuilder& builder)
     builder.addBrush(_splitLayout.getDividerRect(), fill);
 }
 
+void UISplitPane::applySplitRatio(float ratio)
+{
+    _splitLayout.setSplitRatio(ratio);
+    if (_splitRatioBinding) {
+        _splitRatioBinding->set(_splitLayout.getSplitRatio());
+    }
+    if (_onSplitRatioChanged) {
+        _onSplitRatioChanged(_splitLayout.getSplitRatio());
+    }
+}
+
 bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
     const EEvent::T eventType = event.getEventType();
@@ -104,6 +117,24 @@ bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext&
     if (eventType == EEvent::MouseButtonPressed) {
         if (!pointInRect(ctx.logicalPoint, _splitLayout.getDividerRect())) {
             return false;
+        }
+        constexpr uint64_t kDoubleClickMs = 400;
+        constexpr float    kDoubleClickSlop = 6.0f;
+        const uint64_t     now              = event.getTimestampMs();
+        const bool         bDouble =
+            _bHasLastPress && (now - _lastPressTimeMs) < kDoubleClickMs &&
+            glm::length(ctx.logicalPoint - _lastPressPos) < kDoubleClickSlop;
+        _lastPressTimeMs = now;
+        _lastPressPos    = ctx.logicalPoint;
+        _bHasLastPress   = true;
+        if (bDouble) {
+            _bHasLastPress    = false;
+            _bDraggingDivider = false;
+            if (WidgetTree* tree = getTree()) {
+                tree->releasePointerCapture(this);
+            }
+            applySplitRatio(0.5f);
+            return true;
         }
         _bDraggingDivider = true;
         _dragStartRatio   = _splitLayout.getSplitRatio();
@@ -127,16 +158,7 @@ bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext&
             const float newRatio = _dragStartRatio +
                                    (_splitLayout.axisCoordinate(ctx.logicalPoint) - _dragStartPointer) /
                                        contentExtent;
-            _splitLayout.setSplitRatio(newRatio);
-            // Write the dragged ratio back into the binding (two-way
-            // semantics): without this the next layout pulls the stale ref
-            // value back into the layout and the drag visibly does nothing.
-            if (_splitRatioBinding) {
-                _splitRatioBinding->set(newRatio);
-            }
-            if (_onSplitRatioChanged) {
-                _onSplitRatioChanged(_splitLayout.getSplitRatio());
-            }
+            applySplitRatio(newRatio);
         }
         return true;
     }
@@ -165,6 +187,7 @@ void UISplitPane::clearTransientInputState()
 {
     _bDraggingDivider = false;
     _bHoveredDivider  = false;
+    _bHasLastPress    = false;
 }
 
 glm::vec2 UISplitPane::computeDesiredSize() const

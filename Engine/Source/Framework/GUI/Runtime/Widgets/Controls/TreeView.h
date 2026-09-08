@@ -1,6 +1,8 @@
 #pragma once
 
 #include "GUI/Binding/Reactive.h"
+#include "GUI/Widgets/Brush.h"
+#include "GUI/Widgets/Controls/DisclosureChrome.h"
 #include "GUI/Widgets/KeyedVisibleWindow.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"
@@ -48,6 +50,9 @@ struct YA_GUI_API FTreeReorderDragDropOp : public UIDragDropOperation
 /// selection/hover highlight) and hit-tests the same flatten at input. When
 /// hosted inside a UIScrollViewport it paints only the scrolled visible window
 /// (uniform row stride); there are no per-row child widgets.
+///
+/// Folding *widget children* (Details sections) is `UIExpander` / `ui::treeNode`,
+/// not this control. TreeView is a data list; Expander is a layout host.
 struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeView, FTreeViewStyle>
 {
     YA_GUI_AUTHORED_STYLE_IO(FTreeViewStyle)
@@ -59,6 +64,9 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
         std::string id;
         std::string label;
         std::vector<FNode> children;
+        /// Optional row icon after the disclosure (`+ icon Name`). Empty
+        /// resource means no icon; TreeView still paints the row itself.
+        FBrush icon;
     };
 
     explicit UITreeView(std::string name = "TreeView");
@@ -89,8 +97,9 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     /// Explicit intrinsic extent used only when measured without a parent
     /// edge (for example a designer preview root).
     glm::vec2 _intrinsicSize = {0.0f, 0.0f};
-    /// Width of the expand/collapse arrow button (also its hover/hit area).
+    /// Width of the expand/collapse button (also its hover/hit area when shown).
     float     _arrowWidth    = 22.0f;
+    FDisclosureSpec _disclosure;
 
     /// Fired after a row is selected (with the node id).
     std::function<void(const std::string& id)> _onSelectionChanged;
@@ -122,6 +131,42 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
         _onContextMenu = std::move(handler);
     }
 
+    void setDisclosureKind(EDisclosureKind kind)
+    {
+        if (_disclosure.kind == kind) {
+            return;
+        }
+        const bool bLayout = showsDisclosureButton(_disclosure) != (kind != EDisclosureKind::Hidden);
+        _disclosure.kind = kind;
+        invalidateProperty(bLayout ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
+    }
+    void setDisclosureSpec(FDisclosureSpec spec)
+    {
+        if (_disclosure == spec) {
+            return;
+        }
+        const bool bLayout = showsDisclosureButton(_disclosure) != showsDisclosureButton(spec);
+        _disclosure = std::move(spec);
+        invalidateProperty(bLayout ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
+    }
+    void setDisclosureGlyphs(std::string collapsed, std::string expanded)
+    {
+        FDisclosureSpec spec = _disclosure;
+        spec.kind            = EDisclosureKind::Glyph;
+        spec.collapsedGlyph  = std::move(collapsed);
+        spec.expandedGlyph   = std::move(expanded);
+        setDisclosureSpec(std::move(spec));
+    }
+    void setDisclosureImages(FBrush collapsed, FBrush expanded = {})
+    {
+        FDisclosureSpec spec = _disclosure;
+        spec.kind            = EDisclosureKind::Image;
+        spec.collapsedImage  = std::move(collapsed);
+        spec.expandedImage   = std::move(expanded);
+        setDisclosureSpec(std::move(spec));
+    }
+    [[nodiscard]] const FDisclosureSpec& getDisclosure() const { return _disclosure; }
+
     // === Editing (editor-parity P5) ===
     /// When true a press on a row (not the arrow) starts a tree drag
     /// session; dropping onto another row fires _onReorder.
@@ -147,6 +192,7 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
             {"visibleRows", getVisibleRowCount()},
             {"paintedRows", _lastPaintedRowCount},
             {"selected", _selectedId ? _selectedId->value() : std::string{}},
+            {"disclosure", disclosureKindName(_disclosure.kind)},
         };
     }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;

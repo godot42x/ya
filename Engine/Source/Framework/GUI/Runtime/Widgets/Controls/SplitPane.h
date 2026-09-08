@@ -71,6 +71,9 @@ struct YA_GUI_API UISplitPane : public UIElement, public UIStyledWidget<UISplitP
     VisualFlag _bHoveredDivider{*this};
     float      _dragStartRatio   = 0.0f;
     float      _dragStartPointer = 0.0f;
+    uint64_t   _lastPressTimeMs  = 0;
+    glm::vec2  _lastPressPos{0.0f, 0.0f};
+    bool       _bHasLastPress    = false;
 
     /// Reactive split-ratio binding (layout-dirty). A write re-runs the tree's
     /// layout (measure + arrange) and re-paints. Dependency is registered at
@@ -115,6 +118,8 @@ struct YA_GUI_API UISplitPane : public UIElement, public UIStyledWidget<UISplitP
     void paintChildren(UIFrameBuilder& builder) override;
 
   private:
+    void applySplitRatio(float ratio);
+
     UISplitLayout _splitLayout;
     std::shared_ptr<Reactive<float>> _splitRatioBinding;
     std::function<void(float)> _onSplitRatioChanged;

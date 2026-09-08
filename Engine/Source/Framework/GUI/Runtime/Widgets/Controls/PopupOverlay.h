@@ -14,19 +14,18 @@ namespace ya
 ///
 /// One shared detach-safe mechanism behind popup-like surfaces.
 ///
-/// Modal vs dim are independent:
-///   - Modal (`_bModal`) captures input until the overlay is closed by
+/// Modal is input capture only (UE / Qt / Win32 modal window):
+///   - Modal (`_bModal`) keeps mouse and keyboard on this overlay until
 ///     content actions / Esc. Outside clicks are consumed and do **not**
-///     dismiss a modal. Whether the shield is painted is `_bDimBackground`.
-///   - Non-modal popups dismiss on outside click / Esc. They do not dim
-///     unless the app sets `_bDimBackground`.
+///     dismiss a modal. The overlay paints no chrome.
+///   - Non-modal popups dismiss on outside click / Esc.
 ///   - Opening takes keyboard focus; Esc always dismisses.
-///   - the first visible content child is laid out through a popup-owned
-///     canvas slot; the base popup places it at `_contentPos` and sizes it
-///     from `_contentExtent` when set, otherwise the child's desired size.
-///     Derived classes may override the slot args (e.g. centred dialogs,
-///     fixed-size menus). Children are hit-tested BEFORE the overlay
-///     (topmost first), so interactive content receives events first.
+///   - Dim / blur / hide-the-world is not a popup flag: stack a fill
+///     Panel, Image, or custom widget under the content (HitTestInvisible
+///     if it should not steal hits). Fill canvas children keep their
+///     authored slot; the popup-owned content slot is the first non-fill
+///     child (`_contentPos` / `_contentExtent`, overridable in derived
+///     classes). Children are hit-tested BEFORE the overlay.
 ///
 /// Lifecycle: created via make_shared, opened with open() and closed with
 /// close() / dismiss. The overlay detaches itself on close.
@@ -34,7 +33,6 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
 {
     YA_REFLECT_BEGIN(UIPopupOverlay, UIElement)
     YA_REFLECT_FIELD(_bModal, .instanceEditable())
-    YA_REFLECT_FIELD(_bDimBackground, .instanceEditable())
     YA_REFLECT_FIELD(_contentPos, .instanceEditable())
     YA_REFLECT_FIELD(_contentExtent, .instanceEditable())
     YA_REFLECT_END()
@@ -62,9 +60,6 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     [[nodiscard]] bool isModal() const { return getRole() == EOverlayRole::Modal; }
 
     bool    _bModal          = false;
-    /// When true the shield paints `modalFill`. Independent of `_bModal`:
-    /// dimming is an app choice, not the definition of modal.
-    bool    _bDimBackground  = false;
     /// Content child origin in tree-local logical pixels.
     glm::vec2 _contentPos = {0.0f, 0.0f};
     /// Optional content extent for the popup-owned canvas slot. When non-zero
@@ -84,14 +79,12 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     void dismiss() { close(); }
 
     void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override { node["type"] = "canvas"; }
-    void paintSelf(UIFrameBuilder& builder) override;
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
-        node["control"] = {{"type", "popupOverlay"}, {"modal", _bModal}, {"dim", _bDimBackground}};
+        node["control"] = {{"type", "popupOverlay"}, {"modal", _bModal}};
     }
     /// A non-modal popup shield is invisible to the user: it swallows presses
     /// (dismiss) but is transparent to hover, so the menu bar item underneath
-    /// keeps its hover-switch. A modal shield blocks hover and presses
-    /// regardless of whether it is dimmed.
+    /// keeps its hover-switch. A modal shield blocks hover and presses.
     [[nodiscard]] bool isHoverTransparent() const override { return !_bModal; }
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
 

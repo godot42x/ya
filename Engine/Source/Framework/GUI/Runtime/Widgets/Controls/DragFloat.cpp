@@ -104,17 +104,20 @@ void UIDragFloat::paintSelf(UIFrameBuilder& builder)
                                     : style.backgroundFill;
     builder.addBrush(_layoutRect, fill);
     const glm::vec4 outline = _bError ? style.errorBorderColor : style.borderColor;
-    builder.addRectOutline(_layoutRect, outline, 1.0f);
+    builder.addRectOutline(insetRect(_layoutRect, 1.0f), outline, 1.0f);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (!font) {
         return;
     }
+    Rect2D inner = _layoutRect;
+    inner.pos += style.padding;
+    inner.extent = glm::max(inner.extent - style.padding * 2.0f, glm::vec2(0.0f));
     const std::string shown = _bEditing ? _editBuffer
                                         : (_bMixed ? std::string("—")
                                                    : std::format("{:.{}f}", _value, _decimals));
     if (_bEditing) {
         textEditPaint(builder,
-                      _layoutRect,
+                      inner,
                       shown,
                       _edit,
                       font,
@@ -126,7 +129,7 @@ void UIDragFloat::paintSelf(UIFrameBuilder& builder)
                       true);
         return;
     }
-    builder.addText(_layoutRect, shown, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    builder.addText(inner, shown, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
 }
 
 bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext& ctx)

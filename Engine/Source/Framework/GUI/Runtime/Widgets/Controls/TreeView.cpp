@@ -1,5 +1,6 @@
 #include "GUI/Widgets/Controls/TreeView.h"
 
+#include "GUI/Widgets/Controls/DisclosureChrome.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/KeyedVisibleWindow.h"
 
@@ -373,12 +374,15 @@ int UITreeView::hitRowIndex(const glm::vec2& point) const
 
 bool UITreeView::onArrow(const glm::vec2& point, const VisibleRow& row) const
 {
-    // The row itself was already resolved by hitRowIndex (y), so only the
-    // horizontal band of the arrow button is tested here. The band extends
-    // a few pixels beyond the drawn button so a slightly-off click still
-    // lands — a 22px button is hard to hit precisely on a real display.
     constexpr float kHitSlack = 4.0f;
     const float x0 = _layoutRect.pos.x + static_cast<float>(row.depth) * _indentWidth;
+    if (!showsDisclosureButton(_disclosure)) {
+        if (brushHasIcon(row.node->icon)) {
+            constexpr float kIcon = 14.0f;
+            return point.x >= x0 - kHitSlack && point.x <= x0 + kIcon + kHitSlack;
+        }
+        return point.x >= x0 - kHitSlack && point.x <= x0 + 14.0f + kHitSlack;
+    }
     return point.x >= x0 - kHitSlack && point.x <= x0 + _arrowWidth + kHitSlack;
 }
 
@@ -449,16 +453,31 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
         float x = rowRect.pos.x + static_cast<float>(row.depth) * _indentWidth;
 
         if (!row.node->children.empty()) {
-            const bool     expanded  = isExpanded(row.node->id);
-            const Rect2D   arrowRect = arrowButtonRect(x, rowRect.pos.y);
-            if (row.node->id == _hoveredArrowId) {
-                builder.addBrush(arrowRect, style.arrowHoveredFill);
+            const bool   expanded  = isExpanded(row.node->id);
+            const Rect2D arrowRect = arrowButtonRect(x, rowRect.pos.y);
+            paintDisclosureButton(builder,
+                                  FDisclosurePaint{
+                                      .buttonRect  = arrowRect,
+                                      .bExpanded   = expanded,
+                                      .bHovered    = row.node->id == _hoveredArrowId,
+                                      .color       = style.arrowColor,
+                                      .hoveredFill = style.arrowHoveredFill,
+                                      .spec        = _disclosure,
+                                      .font        = font,
+                                  });
+            if (showsDisclosureButton(_disclosure)) {
+                x += _arrowWidth;
             }
-            if (font) {
-                builder.addText(arrowRect, expanded ? "v" : ">", style.arrowColor, font,
-                                EWidgetAlignH::Center, EWidgetAlignV::Center);
-            }
-            x += _arrowWidth;
+        }
+
+        if (brushHasIcon(row.node->icon)) {
+            constexpr float kIcon = 14.0f;
+            const Rect2D iconRect{
+                .pos    = {x, rowRect.pos.y + (_rowHeight - kIcon) * 0.5f},
+                .extent = {kIcon, kIcon},
+            };
+            builder.addBrush(iconRect, row.node->icon);
+            x += kIcon + 4.0f;
         }
 
         if (font) {

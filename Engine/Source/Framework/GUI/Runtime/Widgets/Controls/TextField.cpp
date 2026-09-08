@@ -18,17 +18,33 @@ void UITextField::setError(bool error)
     invalidateProperty(EUIPropertyImpact::Paint);
 }
 
+Rect2D UITextField::textInnerRect() const
+{
+    const glm::vec2 pad = resolvedStyle().padding;
+    Rect2D inner = _layoutRect;
+    inner.pos += pad;
+    inner.extent = glm::max(inner.extent - pad * 2.0f, glm::vec2(0.0f));
+    return inner;
+}
+
 void UITextField::paintSelf(UIFrameBuilder& builder)
 {
     const FTextFieldStyle& style = resolvedStyle();
-    builder.addBrush(_layoutRect, _bError ? style.errorFill : style.backgroundFill);
+    const FBrush& fill = _bError ? style.errorFill
+                       : _bHovered ? style.hoveredFill
+                                   : style.backgroundFill;
+    builder.addBrush(_layoutRect, fill);
+    builder.addRectOutline(insetRect(_layoutRect, 1.0f),
+                           _bError ? style.errorBorderColor : style.borderColor,
+                           1.0f);
 
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, resolvedFontSize());
     if (!font) {
         return;
     }
 
-    const float fieldW      = _layoutRect.extent.x;
+    const Rect2D inner = textInnerRect();
+    const float fieldW      = inner.extent.x;
     const float caretOffset = font->measureText(_text.substr(0, _edit.caret));
     const float margin      = 4.0f;
     if (!_bFocused) {
@@ -41,8 +57,9 @@ void UITextField::paintSelf(UIFrameBuilder& builder)
         _scrollX = caretOffset;
     }
 
+    builder.pushClip(inner);
     textEditPaint(builder,
-                  _layoutRect,
+                  inner,
                   _text,
                   _edit,
                   font,
@@ -52,15 +69,17 @@ void UITextField::paintSelf(UIFrameBuilder& builder)
                   EWidgetAlignH::Left,
                   _scrollX,
                   _bFocused);
+    builder.popClip();
 }
 
 glm::vec2 UITextField::computeIntrinsicSize() const
 {
-    const auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    const auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, resolvedFontSize());
     if (!font) {
         return {0.0f, 0.0f};
     }
-    return {font->measureText(_text), font->lineHeight};
+    const glm::vec2 pad = resolvedStyle().padding;
+    return {font->measureText(_text) + pad.x * 2.0f, font->lineHeight + pad.y * 2.0f};
 }
 
 void UITextField::onFocusLost()
@@ -164,8 +183,8 @@ void UITextField::insertText(const std::string& text)
 
 void UITextField::placeCaretAt(const glm::vec2& logicalPoint, bool bExtendSelection)
 {
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
-    _edit.setCaret(textEditHitIndex(_text, font, _layoutRect, logicalPoint.x, EWidgetAlignH::Left, _scrollX),
+    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, resolvedFontSize());
+    _edit.setCaret(textEditHitIndex(_text, font, textInnerRect(), logicalPoint.x, EWidgetAlignH::Left, _scrollX),
                    bExtendSelection);
     invalidateProperty(EUIPropertyImpact::Paint);
 }

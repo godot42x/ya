@@ -9,11 +9,11 @@
 namespace ya
 {
 
-/// Modal dialog: UIPopupOverlay with `_bModal` so input stays on the dialog
-/// until OK / Cancel / Esc. Dimming is `_bDimBackground` (off by default);
-/// the app turns it on when it wants a dim shield. Adds a title bar, a
-/// content slot and OK/Cancel buttons; the result is reported through
-/// `_onClosed(bConfirmed)`.
+/// Modal dialog: UIPopupOverlay with `_bModal` so mouse/keyboard stay on the
+/// dialog until OK / Cancel / Esc. No framework dim; stack a fill widget
+/// under the chrome if the app wants to hide or blur the world. Adds a
+/// title bar, a content slot and OK/Cancel buttons; the result is reported
+/// through `_onClosed(bConfirmed)`.
 struct YA_GUI_API UIDialog : public UIPopupOverlay
 {
     explicit UIDialog(std::string name = "Dialog") : UIPopupOverlay(std::move(name), "popup") {}

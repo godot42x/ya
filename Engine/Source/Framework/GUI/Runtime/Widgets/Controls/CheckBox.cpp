@@ -19,25 +19,6 @@ void UICheckBox::appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree
     };
 }
 
-namespace
-{
-
-void paintCheckMark(UIFrameBuilder& builder, const Rect2D& boxRect, const glm::vec4& color)
-{
-    const float x = boxRect.pos.x;
-    const float y = boxRect.pos.y;
-    const float w = boxRect.extent.x;
-    const float h = boxRect.extent.y;
-    const float thickness = std::max(1.5f, w * 0.12f);
-    const glm::vec2 p0{x + w * 0.22f, y + h * 0.52f};
-    const glm::vec2 p1{x + w * 0.42f, y + h * 0.74f};
-    const glm::vec2 p2{x + w * 0.80f, y + h * 0.26f};
-    builder.addLine(p0, p1, color, thickness);
-    builder.addLine(p1, p2, color, thickness);
-}
-
-} // namespace
-
 void UICheckBox::syncContentPadding()
 {
     _contentLayout.setPadding(FMargin{_boxSize + _labelSpacing, 0.0f, 0.0f, 0.0f});
@@ -77,7 +58,7 @@ void UICheckBox::paintSelf(UIFrameBuilder& builder)
                                                               false));
     builder.addBrush(boxRect, fill);
     if (_bChecked) {
-        paintCheckMark(builder, boxRect, style.checkColor);
+        builder.addCheckMark(boxRect, style.checkColor);
     }
 }
 

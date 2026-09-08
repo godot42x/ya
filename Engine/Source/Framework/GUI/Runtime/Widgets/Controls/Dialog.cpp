@@ -14,8 +14,7 @@ namespace ya
 std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UIElement> content)
 {
     auto dialog = std::make_shared<UIDialog>("Dialog");
-    dialog->_bModal         = true;
-    dialog->_bDimBackground = false;
+    dialog->_bModal = true;
 
     // Panel: title bar + content + button row. UIPanel does not aggregate
     // child desired sizes, so measure the content from its parent-owned edge

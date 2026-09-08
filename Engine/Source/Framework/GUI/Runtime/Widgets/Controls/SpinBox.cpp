@@ -84,7 +84,7 @@ void UISpinBox::paintSelf(UIFrameBuilder& builder)
     const FSpinBoxStyle& style = resolvedStyle();
     const FBrush& fieldFill = (_bHovered && _hoveredZone < 0) ? style.hoveredFill : style.backgroundFill;
     builder.addBrush(_layoutRect, fieldFill);
-    builder.addRectOutline(_layoutRect, style.borderColor, 1.0f);
+    builder.addRectOutline(insetRect(_layoutRect, 1.0f), style.borderColor, 1.0f);
     const float zoneWidth = 26.0f;
     const Rect2D minusRect{.pos = _layoutRect.pos, .extent = {zoneWidth, _layoutRect.extent.y}};
     const Rect2D plusRect{.pos = {_layoutRect.pos.x + _layoutRect.extent.x - zoneWidth, _layoutRect.pos.y},

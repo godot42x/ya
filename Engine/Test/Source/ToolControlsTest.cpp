@@ -22,10 +22,13 @@
 #include "GUI/Widgets/Controls/DragFloat.h"
 #include "GUI/Widgets/Controls/SpinBox.h"
 #include "GUI/Widgets/Controls/ColorEdit.h"
+#include "GUI/Widgets/Controls/Expander.h"
+#include "GUI/Widgets/UIFrameSnapshot.h"
 #include "Render/Resources/FontManager.h"
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <memory>
 
 namespace ya
@@ -297,6 +300,39 @@ TEST(ToolControlsTest, SplitPaneDividerDragChangesRatioAndEndsSession)
     EXPECT_FALSE(split->_bDraggingDivider);
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
     EXPECT_NEAR(split->getSplitRatio(), 40.0f / 300.0f, 1e-4f);
+}
+
+TEST(ToolControlsTest, SplitPaneDoubleClickResetsRatio)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       split = std::make_shared<UISplitPane>("Split");
+    split->setSplitRatio(0.25f);
+    auto left  = std::make_shared<UIPanel>("Left");
+    auto right = std::make_shared<UIPanel>("Right");
+    FCanvasSlotArgs splitSlot;
+    splitSlot.fixedSize = {300.0f, 200.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
+    tree.attach(*split, left);
+    tree.attach(*split, right);
+    tree.layout();
+
+    const Rect2D divider = split->getDividerRect();
+    const float x = divider.pos.x + divider.extent.x * 0.5f;
+    const float y = divider.pos.y + 100.0f;
+
+    MouseButtonPressedEvent first(EMouse::Left);
+    first.setTimestampMs(1000);
+    EXPECT_EQ(tree.dispatchEvent(first, pointAt(x, y)), EWidgetRouteResult::HandledExclusive);
+    MouseButtonReleasedEvent release(EMouse::Left);
+    release.setTimestampMs(1080);
+    EXPECT_EQ(tree.dispatchEvent(release, pointAt(x, y)), EWidgetRouteResult::HandledExclusive);
+
+    MouseButtonPressedEvent second(EMouse::Left);
+    second.setTimestampMs(1200);
+    EXPECT_EQ(tree.dispatchEvent(second, pointAt(x, y)), EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(split->_bDraggingDivider);
+    EXPECT_NEAR(split->getSplitRatio(), 0.5f, 1e-4f);
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
 }
 
 TEST(ToolControlsTest, SplitPanePressOnPaneFallsThroughToChild)
@@ -609,6 +645,24 @@ TEST(ToolControlsTest, ScrollViewportCullsChildHitsOutsideViewport)
               EWidgetRouteResult::NotHandled);
     // Inside the viewport the content is reachable.
     EXPECT_EQ(tree.pickAt({100.0f, 30.0f}), content.get());
+}
+
+TEST(ToolControlsTest, ScrollViewportCullsChildHitsInScrollbarGutter)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       viewport = std::make_shared<UIScrollViewport>("Scroll");
+    auto content = std::make_shared<UIPanel>("Content");
+    FCanvasSlotArgs viewportSlot;
+    viewportSlot.fixedSize = {200.0f, 60.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
+    attachPreferredSize(*viewport, content, {200.0f, 200.0f});
+    tree.layout();
+
+    ASSERT_TRUE(viewport->isScrollable());
+    const float barW = viewport->resolvedStyle().width;
+    EXPECT_GT(barW, 0.0f);
+    EXPECT_NE(tree.pickAt({100.0f, 30.0f}), nullptr);
+    EXPECT_NE(tree.pickAt({200.0f - barW * 0.5f, 30.0f}), content.get());
 }
 
 TEST(ToolControlsTest, ScrollViewportNestedInsideSplitKeepsCustomLayout)
@@ -1162,6 +1216,60 @@ TEST(ToolControlsTest, ColorEditSwatchOpensSvHuePicker)
     EXPECT_TRUE(edit->isPickerOpen());
 }
 
+TEST(ToolControlsTest, ColorEditPickerPaintsVertexColorQuads)
+{
+    WidgetTree tree({.width = 400, .height = 400});
+    auto       edit = std::make_shared<UIColorEdit>("Tint");
+    edit->setColor({1.0f, 0.0f, 0.0f, 1.0f});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {180.0f, 28.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(12.0f, 14.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    tree.layout();
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    int                   multiColorCount = 0;
+    for (const UIFrameDrawItem& item : snap.items) {
+        if (item.bPerVertexColor) {
+            ++multiColorCount;
+        }
+    }
+    EXPECT_EQ(multiColorCount, 8);
+}
+
+TEST(ToolControlsTest, ColorEditChannelDragEditsOnlyThatComponent)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    auto       edit = std::make_shared<UIColorEdit>("Tint");
+    edit->setColor({0.50f, 0.50f, 0.50f, 1.0f});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {180.0f, 28.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), edit, slot);
+    tree.layout();
+
+    // Swatch is 22px inset by style.padding (6); four cells fill the rest
+    // with padding.x as the gap. Channel 2 (B) is the third cell — drag it
+    // without a persistent "active channel".
+    const float pad    = 6.0f;
+    const float x0     = pad + 22.0f + pad;
+    const float avail  = 180.0f - pad - x0;
+    const float cellW  = avail / 4.0f;
+    const float x      = x0 + 2.0f * cellW + (cellW - pad) * 0.5f;
+    const float y      = 14.0f;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(x, y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(x + 40.0f, y), pointAt(x + 40.0f, y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(x + 40.0f, y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_NEAR(edit->_color.r, 0.50f, 1e-4f);
+    EXPECT_NEAR(edit->_color.g, 0.50f, 1e-4f);
+    EXPECT_NEAR(edit->_color.b, 0.90f, 1e-4f);
+    EXPECT_NEAR(edit->_color.a, 1.00f, 1e-4f);
+}
+
 // === Popup menu ===
 
 TEST(ToolControlsTest, MenuSizesPanelFromItemLabels)
@@ -1515,18 +1623,28 @@ TEST(ToolControlsTest, MenuReservesColumnsForCheckmarkIconAndShortcut)
     EXPECT_FLOAT_EQ(items[0]->_layoutRect.extent.x, expectedRowWidth);
 
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
-    bool bFoundCheck = false;
+    bool bFoundCheckGlyph = false;
+    bool bFoundCheckV     = false;
     bool bFoundIcon = false;
     bool bFoundShortcut = false;
     for (const auto& draw : snap.items) {
+        if (draw.kind == UIFrameDrawItem::EKind::Line) {
+            const float checkRight = items[0]->_layoutRect.pos.x + UIMenu::kItemHorizontalPadding +
+                                     UIMenu::kCheckmarkColumnWidth;
+            const bool inColumn =
+                draw.lineFrom.x >= items[0]->_layoutRect.pos.x &&
+                draw.lineFrom.x <= checkRight;
+            bFoundCheckGlyph = bFoundCheckGlyph || inColumn;
+        }
         if (draw.kind != UIFrameDrawItem::EKind::Text) {
             continue;
         }
-        bFoundCheck = bFoundCheck || draw.text == "v";
+        bFoundCheckV = bFoundCheckV || draw.text == "v";
         bFoundIcon = bFoundIcon || draw.text == "~";
         bFoundShortcut = bFoundShortcut || draw.text == "Cmd+R";
     }
-    EXPECT_TRUE(bFoundCheck);
+    EXPECT_TRUE(bFoundCheckGlyph);
+    EXPECT_FALSE(bFoundCheckV);
     EXPECT_TRUE(bFoundIcon);
     EXPECT_TRUE(bFoundShortcut);
 }
@@ -1623,6 +1741,315 @@ TEST(ToolControlsTest, ImageDumpReportsAssetPath)
     ASSERT_NE(node, nullptr);
     EXPECT_EQ((*node)["control"]["type"], "image");
     EXPECT_EQ((*node)["control"]["assetPath"], "Engine/Content/TestTextures/editor/play.png");
+}
+
+TEST(ToolControlsTest, ExpanderCollapsedMeasureIsHeaderHeight)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       expander = std::make_shared<UIExpander>("Section");
+    expander->setTitle("Transform");
+    expander->setFramed(true);
+    expander->setExpanded(true);
+    auto body = std::make_shared<UIButton>("BodyBtn");
+    body->addDetachedChild(std::make_shared<UIText>("BodyLabel"));
+    expander->addDetachedChild(body, [](UIElement&, UISlot& childSlot) {
+        if (auto* box = childSlot.as<UIBoxSlot>()) {
+            box->setPreferredSize({180.0f, 28.0f});
+        }
+    });
+
+    FCanvasSlotArgs slot;
+    slot.fixedSize       = {200.0f, 0.0f};
+    slot.widthSizeMode   = EWidgetSizeMode::Fixed;
+    slot.heightSizeMode  = EWidgetSizeMode::Auto;
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    tree.layout();
+
+    const float expandedHeight = expander->getLayoutRect().extent.y;
+    EXPECT_GT(expandedHeight, expander->_headerHeight + 1.0f);
+    EXPECT_GT(body->getLayoutRect().extent.y, 0.0f);
+
+    expander->setExpanded(false);
+    tree.layout();
+    EXPECT_NEAR(expander->getLayoutRect().extent.y, expander->_headerHeight, 0.5f);
+    EXPECT_FLOAT_EQ(body->getLayoutRect().extent.y, 0.0f);
+}
+
+TEST(ToolControlsTest, ExpanderClickHeaderTogglesAndHidesChildren)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       expander = std::make_shared<UIExpander>("Section");
+    expander->setTitle("Transform");
+    expander->setFramed(true);
+    expander->setExpanded(true);
+    int clicks = 0;
+    auto body = std::make_shared<UIButton>("BodyBtn");
+    body->_onClick = [&clicks]() { ++clicks; };
+    expander->addDetachedChild(body, [](UIElement&, UISlot& childSlot) {
+        if (auto* box = childSlot.as<UIBoxSlot>()) {
+            box->setPreferredSize({180.0f, 28.0f});
+        }
+    });
+
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {200.0f, 80.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    tree.layout();
+
+    EXPECT_TRUE(expander->isExpanded());
+    const glm::vec2 bodyCenter = body->getLayoutRect().pos + body->getLayoutRect().extent * 0.5f;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(bodyCenter.x, bodyCenter.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(bodyCenter.x, bodyCenter.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(clicks, 1);
+    EXPECT_TRUE(expander->isExpanded());
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 12.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(40.0f, 12.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(expander->isExpanded());
+
+    tree.layout();
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(bodyCenter.x, bodyCenter.y)),
+              EWidgetRouteResult::NotHandled);
+    EXPECT_EQ(clicks, 1);
+}
+
+TEST(ToolControlsTest, ExpanderSpaceTogglesWhenFocused)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       expander = std::make_shared<UIExpander>("Section");
+    expander->setTitle("Params");
+    expander->setExpanded(true);
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {200.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    tree.layout();
+    tree.setFocus(expander.get());
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Space), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(expander->isExpanded());
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_TRUE(expander->isExpanded());
+}
+
+TEST(ToolControlsTest, ExpanderBodyLabelDoesNotHoverHeader)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       expander = std::make_shared<UIExpander>("Section");
+    expander->setTitle("Params");
+    expander->setExpanded(true);
+    auto label = std::make_shared<UIText>("Ao");
+    label->setText("Ao");
+    expander->addDetachedChild(label, [](UIElement&, UISlot& childSlot) {
+        if (auto* box = childSlot.as<UIBoxSlot>()) {
+            box->setPreferredSize({180.0f, 22.0f});
+        }
+    });
+
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {220.0f, 90.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    tree.layout();
+
+    tree.dispatchEvent(MouseMoveEvent(40.0f, 8.0f), pointAt(40.0f, 8.0f));
+    EXPECT_EQ(tree.getHovered(), expander.get());
+    EXPECT_TRUE(expander->_bHovered);
+
+    const glm::vec2 labelCenter = label->getLayoutRect().pos + label->getLayoutRect().extent * 0.5f;
+    ASSERT_GT(label->getLayoutRect().extent.y, 0.0f);
+    tree.dispatchEvent(MouseMoveEvent(labelCenter.x, labelCenter.y),
+                       pointAt(labelCenter.x, labelCenter.y));
+    EXPECT_NE(tree.getHovered(), expander.get());
+    EXPECT_FALSE(expander->_bHovered);
+}
+
+TEST(ToolControlsTest, NestedExpanderBodyDoesNotHoverFramedAncestor)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       outer = std::make_shared<UIExpander>("Outer");
+    outer->setTitle("PBRMaterialComponent");
+    outer->setFramed(true);
+    outer->setExpanded(true);
+    auto inner = std::make_shared<UIExpander>("Inner");
+    inner->setTitle("Params");
+    inner->setExpanded(true);
+    auto label = std::make_shared<UIText>("Ao");
+    label->setText("Ao");
+    inner->addDetachedChild(label, [](UIElement&, UISlot& childSlot) {
+        if (auto* box = childSlot.as<UIBoxSlot>()) {
+            box->setPreferredSize({180.0f, 22.0f});
+        }
+    });
+    outer->addDetachedChild(inner, [](UIElement&, UISlot& childSlot) {
+        if (auto* box = childSlot.as<UIBoxSlot>()) {
+            box->setPreferredSize({200.0f, 70.0f});
+        }
+    });
+
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {240.0f, 140.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), outer, slot);
+    tree.layout();
+
+    const glm::vec2 labelCenter = label->getLayoutRect().pos + label->getLayoutRect().extent * 0.5f;
+    ASSERT_GT(label->getLayoutRect().extent.y, 0.0f);
+    tree.dispatchEvent(MouseMoveEvent(labelCenter.x, labelCenter.y),
+                       pointAt(labelCenter.x, labelCenter.y));
+    EXPECT_NE(tree.getHovered(), outer.get());
+    EXPECT_NE(tree.getHovered(), inner.get());
+    EXPECT_FALSE(outer->_bHovered);
+    EXPECT_FALSE(inner->_bHovered);
+}
+
+TEST(ToolControlsTest, ExpanderPaintsBoxedDisclosureNotGlyphArrows)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       expander = std::make_shared<UIExpander>("Section");
+    expander->setTitle("Params");
+    expander->setExpanded(true);
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {200.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    tree.layout();
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    bool bFoundGlyphArrow = false;
+    bool bFoundLine       = false;
+    for (const auto& draw : snap.items) {
+        if (draw.kind == UIFrameDrawItem::EKind::Text && (draw.text == "v" || draw.text == ">")) {
+            bFoundGlyphArrow = true;
+        }
+        if (draw.kind == UIFrameDrawItem::EKind::Line) {
+            bFoundLine = true;
+        }
+    }
+    EXPECT_FALSE(bFoundGlyphArrow);
+    EXPECT_TRUE(bFoundLine);
+}
+
+TEST(ToolControlsTest, ExpanderChevronDoesNotPaintAsciiGlyphs)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       expander = std::make_shared<UIExpander>("Section");
+    expander->setTitle("Params");
+    expander->setExpanded(false);
+    expander->setDisclosureKind(EDisclosureKind::Chevron);
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {200.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    tree.layout();
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    bool bFoundAscii = false;
+    bool bFoundLine  = false;
+    for (const auto& draw : snap.items) {
+        if (draw.kind == UIFrameDrawItem::EKind::Text && (draw.text == "v" || draw.text == ">")) {
+            bFoundAscii = true;
+        }
+        if (draw.kind == UIFrameDrawItem::EKind::Line) {
+            bFoundLine = true;
+        }
+    }
+    EXPECT_FALSE(bFoundAscii);
+    EXPECT_TRUE(bFoundLine);
+}
+
+TEST(ToolControlsTest, ExpanderGlyphModePaintsConfiguredPair)
+{
+    registerMenuFont(13.0f, 8.0f);
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       expander = std::make_shared<UIExpander>("Section");
+    expander->setTitle("Params");
+    expander->setExpanded(false);
+    expander->setDisclosureGlyphs(">", "v");
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {200.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    tree.layout();
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    bool bFoundCollapsed = false;
+    for (const auto& draw : snap.items) {
+        if (draw.kind == UIFrameDrawItem::EKind::Text && draw.text == ">") {
+            bFoundCollapsed = true;
+        }
+    }
+    EXPECT_TRUE(bFoundCollapsed);
+}
+
+TEST(ToolControlsTest, ExpanderHiddenDisclosureKeepsIconOnly)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       expander = std::make_shared<UIExpander>("Section");
+    expander->setTitle("Params");
+    expander->setIcon(FBrush::image("Engine/Content/TestTextures/editor/folder2.png"));
+    expander->setDisclosureKind(EDisclosureKind::Hidden);
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {200.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), expander, slot);
+    tree.layout();
+
+    EXPECT_EQ(expander->getDisclosure().kind, EDisclosureKind::Hidden);
+    const nlohmann::json dump = dumpWidgetTree(tree);
+    const auto*          node = findWidgetNode(dump, "Section");
+    ASSERT_NE(node, nullptr);
+    EXPECT_EQ((*node)["control"]["disclosure"], "hidden");
+    EXPECT_TRUE((*node)["control"]["hasIcon"].get<bool>());
+}
+
+TEST(ToolControlsTest, DragFloatOutlineSitsInsideLayoutRect)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       drag = std::make_shared<UIDragFloat>("Metallic");
+    FCanvasSlotArgs slot;
+    slot.offset    = {10.0f, 10.0f};
+    slot.fixedSize = {120.0f, 22.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), drag, slot);
+    tree.layout();
+
+    const Rect2D rect = drag->getLayoutRect();
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    bool bFoundInsetTop = false;
+    for (const auto& draw : snap.items) {
+        if (draw.kind != UIFrameDrawItem::EKind::Line) {
+            continue;
+        }
+        const float y = draw.lineFrom.y;
+        if (std::abs(y - (rect.pos.y + 1.0f)) < 0.51f) {
+            bFoundInsetTop = true;
+        }
+    }
+    EXPECT_TRUE(bFoundInsetTop);
+}
+
+TEST(ToolControlsTest, TextFieldOutlineSitsInsideLayoutRect)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       field = std::make_shared<UITextField>("Path");
+    FCanvasSlotArgs slot;
+    slot.offset    = {10.0f, 10.0f};
+    slot.fixedSize = {180.0f, 22.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, slot);
+    tree.layout();
+
+    const Rect2D rect = field->getLayoutRect();
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    bool bFoundInsetTop = false;
+    for (const auto& draw : snap.items) {
+        if (draw.kind != UIFrameDrawItem::EKind::Line) {
+            continue;
+        }
+        const float y = draw.lineFrom.y;
+        if (std::abs(y - (rect.pos.y + 1.0f)) < 0.51f) {
+            bFoundInsetTop = true;
+        }
+    }
+    EXPECT_TRUE(bFoundInsetTop);
 }
 
 } // namespace ya

@@ -27,20 +27,26 @@ void UIScrollViewport::applyAssignedLayout(const Rect2D& rect)
     UIElement::applyAssignedLayout(rect);
 }
 
-void UIScrollViewport::paintSelf(UIFrameBuilder& builder)
+bool UIScrollViewport::showsOverlayScrollbar() const
 {
-    // Scrollbar: the thumb position is a paint attribute derived from the
-    // scroll offset, so every offset change must re-paint this widget (the
-    // wheel handler marks paint-dirty on a real scroll).
-    if (!_bShowScrollbar || !isScrollable()) {
+    return _bShowScrollbar && isScrollable();
+}
+
+Rect2D UIScrollViewport::contentClipRect() const
+{
+    Rect2D clip = _layoutRect;
+    if (showsOverlayScrollbar()) {
+        clip.extent.x = std::max(0.0f, clip.extent.x - resolvedStyle().width);
+    }
+    return clip;
+}
+
+void UIScrollViewport::paintScrollbarOverlay(UIFrameBuilder& builder) const
+{
+    if (!showsOverlayScrollbar()) {
         return;
     }
-    // Theme resolution (style-system Phase 3): track/thumb brushes + width
-    // from FScrollBarStyle. Paint-only (the width does not inset content).
-    // Absent key/theme → default-constructed style is the fallback (Phase 3
-    // cleanup: no bare fields).
     const FScrollBarStyle& style = resolvedStyle();
-
     const float  trackX = _layoutRect.pos.x + _layoutRect.extent.x - style.width;
     const Rect2D track{
         .pos    = {trackX, _layoutRect.pos.y},
@@ -56,11 +62,30 @@ void UIScrollViewport::paintSelf(UIFrameBuilder& builder)
     builder.addBrush(Rect2D{.pos = {trackX, thumbY}, .extent = {style.width, thumbH}}, style.thumbColor);
 }
 
+void UIScrollViewport::paintSelf(UIFrameBuilder&)
+{
+    // Overlay track/thumb is painted after children so full-width row fills
+    // cannot cover the gutter. `FScrollBarStyle.width` stays paint-only.
+}
+
 void UIScrollViewport::paintChildren(UIFrameBuilder& builder)
 {
-    builder.pushClip(_layoutRect);
+    builder.pushClip(contentClipRect());
     UIElement::paintChildren(builder);
     builder.popClip();
+    paintScrollbarOverlay(builder);
+}
+
+bool UIScrollViewport::cullsChildHits(const glm::vec2& logicalPoint) const
+{
+    if (!hitTestLayoutRect(logicalPoint)) {
+        return true;
+    }
+    if (!showsOverlayScrollbar()) {
+        return false;
+    }
+    const float gutterX = _layoutRect.pos.x + _layoutRect.extent.x - resolvedStyle().width;
+    return logicalPoint.x >= gutterX;
 }
 
 void UIScrollViewport::onLayoutRectChanged()
