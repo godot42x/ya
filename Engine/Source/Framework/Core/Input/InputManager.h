@@ -75,6 +75,9 @@ struct YA_CORE_API InputManager
     void preUpdate();
     void postUpdate();
     void cancelInput();
+    /// Drop held keys without touching mouse buttons or deltas. Used when
+    /// keyboard ownership leaves the editor camera so WASD cannot stick.
+    void cancelHeldKeys();
 
     bool isKeyPressed(EKey::T keycode) const;
     bool wasKeyPressed(EKey::T keycode) const;

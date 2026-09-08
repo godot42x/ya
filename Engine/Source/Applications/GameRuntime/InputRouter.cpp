@@ -2,6 +2,7 @@
 
 #include "Core/Input/InputManager.h"
 #include "Core/Log.h"
+#include "GUI/Widgets/UIElement.h"
 #include "GameRuntime/App.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 
@@ -29,6 +30,11 @@ bool isInputEvent(const FInputEvent& event)
 }
 
 } // namespace
+
+std::optional<ECursorType> IInputNode::getCursor() const
+{
+    return std::nullopt;
+}
 
 FInputReply GameInputNode::route(FInputRouteContext& context, const FInputEvent& event)
 {
@@ -293,10 +299,15 @@ void InputRouter::updateCursor()
     }
 
     ECursorType cursor = ECursorType::Arrow;
-    if (GameUIHost* gameUIHost = _app->getGameUIHost();
-        gameUIHost && gameUIHost->getMountedScene()) {
-        if (const UIElement* hovered = gameUIHost->getTree().getHovered()) {
-            cursor = hovered->getCursor();
+    if (IInputNode* node = getActiveNode()) {
+        if (std::optional<ECursorType> fromNode = node->getCursor()) {
+            cursor = *fromNode;
+        }
+        else if (GameUIHost* gameUIHost = _app->getGameUIHost();
+                 gameUIHost && gameUIHost->getMountedScene()) {
+            if (const UIElement* hovered = gameUIHost->getTree().getHovered()) {
+                cursor = hovered->getCursor();
+            }
         }
     }
 

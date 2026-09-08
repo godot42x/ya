@@ -18,6 +18,8 @@ struct App;
 struct InputManager;
 using FInputEvent = Event;
 
+enum class ECursorType : uint8_t;
+
 enum class EInputCancelReason : uint8_t
 {
     NodeChanged,
@@ -55,6 +57,9 @@ struct IInputNode
 
     [[nodiscard]] virtual FInputReply route(FInputRouteContext& context, const FInputEvent& event) = 0;
     virtual void                     cancelInput(FInputRouteContext& context, EInputCancelReason reason) = 0;
+    /// Cursor requested by this node after the last routed event. `nullopt`
+    /// means the router should fall back to GameUIHost hover (game-only UI).
+    [[nodiscard]] virtual std::optional<ECursorType> getCursor() const;
 };
 
 class YA_GAME_RUNTIME_API GameInputNode final : public IInputNode

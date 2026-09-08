@@ -156,11 +156,7 @@ void EditorLayer::onEvent(const Event& event)
     {
         auto& mouseEvent = static_cast<const MouseButtonReleasedEvent&>(event);
         if (mouseEvent.GetMouseButton() == EMouse::Right) {
-            // Reset drag state on release (after a short delay to let ImGui process)
-            // We keep the flag true briefly so context menu check can see it
-            facade().timerManager.delayCall(50, [this]() {
-                _bRightMouseDragging = false;
-            });
+            _bRightMouseDragging = false;
         }
     } break;
     default:

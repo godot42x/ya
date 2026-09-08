@@ -195,5 +195,41 @@ TEST(InputRouterTest, RestoresPreviousRootWhenRegistrationEnds)
     EXPECT_EQ(defaultNode.routeCount, 1);
 }
 
+TEST(InputRouterTest, DefaultNodeCursorFallsBackToHost)
+{
+    RecordingInputNode node;
+    EXPECT_EQ(node.getCursor(), std::nullopt);
+}
+
+TEST(InputManagerTest, CancelHeldKeysClearsKeysAndLeavesMouse)
+{
+    InputManager inputManager;
+    KeyPressedEvent pressed;
+    pressed._keyCode = EKey::K_W;
+    pressed._mod     = 0;
+    inputManager.processEvent(pressed);
+    inputManager.processEvent(MouseButtonPressedEvent(EMouse::Right));
+    EXPECT_TRUE(inputManager.isKeyPressed(EKey::K_W));
+    EXPECT_TRUE(inputManager.isMouseButtonPressed(EMouse::Right));
+
+    inputManager.cancelHeldKeys();
+    EXPECT_FALSE(inputManager.isKeyPressed(EKey::K_W));
+    EXPECT_TRUE(inputManager.isMouseButtonPressed(EMouse::Right));
+}
+
+TEST(InputManagerTest, CancelInputClearsKeysAndMouse)
+{
+    InputManager inputManager;
+    KeyPressedEvent pressed;
+    pressed._keyCode = EKey::K_W;
+    pressed._mod     = 0;
+    inputManager.processEvent(pressed);
+    inputManager.processEvent(MouseButtonPressedEvent(EMouse::Right));
+
+    inputManager.cancelInput();
+    EXPECT_FALSE(inputManager.isKeyPressed(EKey::K_W));
+    EXPECT_FALSE(inputManager.isMouseButtonPressed(EMouse::Right));
+}
+
 } // namespace
 } // namespace ya

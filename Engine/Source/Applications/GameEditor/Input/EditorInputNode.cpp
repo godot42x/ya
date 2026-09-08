@@ -1,8 +1,12 @@
 #include "GameEditor/Input/EditorInputNode.h"
 
+#include "Core/Input/InputManager.h"
+#include "Core/KeyCode.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/UI/EditorSurface.h"
 #include "GameRuntime/App.h"
+#include "GameRuntime/GUI/GameUI/GameUIHost.h"
+#include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <glm/glm.hpp>
@@ -18,9 +22,9 @@ struct FEditorInputSnapshot
     EWidgetRouteResult chromeResult     = EWidgetRouteResult::NotHandled;
     bool               pointerEvent     = false;
     bool               keyboardEvent    = false;
-    bool               viewportMouse    = false;
-    bool               viewportKeyboard = false;
-    bool               viewportOverlayActive = false;
+    bool               pointerInViewport = false;
+    bool               viewportFocused  = false;
+    bool               viewportOverlayDragging = false;
     bool               textInput        = false;
     bool               widgetTreeChrome = false;
 };
@@ -42,15 +46,14 @@ FEditorInputSnapshot buildSnapshot(App& app, EditorLayer& layer, EditorSurface* 
         snapshot.widgetTreeChrome = true;
         snapshot.chromeResult     = surface->dispatchEvent(event, windowPoint);
         snapshot.textInput        = surface->wantsTextInput();
-        snapshot.viewportMouse =
-            surface->isViewportHovered() || surface->isViewportFocused() ||
-            layer.isViewportHovered() || layer.isViewportFocused();
-        snapshot.viewportKeyboard = surface->isViewportFocused() || layer.isViewportFocused();
-        snapshot.viewportOverlayActive = surface->isViewportOverlayActive();
+        snapshot.pointerInViewport =
+            surface->isPointInViewport(windowPoint) || surface->isViewportHovered();
+        snapshot.viewportFocused         = surface->isViewportFocused();
+        snapshot.viewportOverlayDragging = surface->isViewportOverlayActive();
     }
     else {
-        snapshot.viewportMouse   = layer.isViewportHovered() || layer.isViewportFocused();
-        snapshot.viewportKeyboard = layer.isViewportFocused();
+        snapshot.pointerInViewport = layer.isViewportHovered();
+        snapshot.viewportFocused   = layer.isViewportFocused();
     }
     return snapshot;
 }
@@ -77,15 +80,19 @@ FInputReply routeCommandInput(FInputRouteContext& context, const FInputEvent& ev
     };
 }
 
-FInputReply routeChromeInput(const FEditorInputSnapshot& snapshot)
+FInputReply routeChromeInput(const FEditorInputSnapshot& snapshot, bool looking)
 {
     if (!snapshot.widgetTreeChrome) {
         return {};
     }
-    if (snapshot.textInput && snapshot.keyboardEvent) {
+    if (snapshot.textInput && snapshot.keyboardEvent && !looking) {
         return FInputReply{.handled = true};
     }
-    if (snapshot.chromeResult == EWidgetRouteResult::HandledExclusive && !snapshot.viewportMouse) {
+    // Look is an InputManager session: chrome may have already seen the event
+    // (tree dispatch runs first). Exclusive chrome must not stop the camera
+    // while RMB look is held, but it must stop otherwise so dock splitters /
+    // inspector keep ownership of their pointer capture.
+    if (snapshot.chromeResult == EWidgetRouteResult::HandledExclusive && !looking) {
         return FInputReply{.handled = true};
     }
     return {};
@@ -109,16 +116,16 @@ FInputReply routeViewportToolInput(
     App& app,
     EditorLayer& layer,
     const FEditorInputSnapshot& snapshot,
-    const FInputEvent& event)
+    const FInputEvent& event,
+    bool looking,
+    bool wantPointer,
+    bool wantKeys)
 {
-    // The 2D workspace always routes input to editor authoring, even during a
-    // play session. The 3D workspace keeps the old rule: edit/sim authoring is
-    // handled here, full runtime hands the viewport over to the game.
     if (app.isRuntimeMode() && !layer.isViewportMode2D()) {
         return {};
     }
 
-    if (snapshot.viewportOverlayActive && snapshot.pointerEvent) {
+    if (snapshot.viewportOverlayDragging && snapshot.pointerEvent && !looking) {
         layer.onEvent(event);
         return FInputReply{.handled = true};
     }
@@ -126,19 +133,14 @@ FInputReply routeViewportToolInput(
     layer.onEvent(event);
 
     if (layer.isViewportMode2D()) {
-        if ((snapshot.pointerEvent && snapshot.viewportMouse) ||
-            (snapshot.keyboardEvent && snapshot.viewportKeyboard && !snapshot.textInput)) {
+        if ((snapshot.pointerEvent && snapshot.pointerInViewport) ||
+            (snapshot.keyboardEvent && snapshot.viewportFocused && !snapshot.textInput)) {
             return FInputReply{.handled = true};
         }
         return {};
     }
 
-    if (snapshot.pointerEvent && snapshot.viewportMouse) {
-        app.getInputManager().processEvent(event);
-        return FInputReply{.handled = true};
-    }
-
-    if (snapshot.keyboardEvent && snapshot.viewportKeyboard && !snapshot.textInput) {
+    if ((snapshot.pointerEvent && wantPointer) || (snapshot.keyboardEvent && wantKeys)) {
         app.getInputManager().processEvent(event);
         return FInputReply{.handled = true};
     }
@@ -152,13 +154,11 @@ FInputReply routeGameplayViewportInput(
     const FEditorInputSnapshot& snapshot,
     const FInputEvent& event)
 {
-    // Game input and pointer capture only exist in full runtime (PIE).
-    // Simulation keeps the editor camera and never captures the viewport mouse.
     if (!app.isRuntimeMode() || layer.isViewportMode2D()) {
         return {};
     }
 
-    if (snapshot.pointerEvent && snapshot.viewportMouse) {
+    if (snapshot.pointerEvent && snapshot.pointerInViewport) {
         app.getInputManager().processEvent(event);
 
         std::optional<FPointerCaptureRequest> pointerCapture;
@@ -178,7 +178,7 @@ FInputReply routeGameplayViewportInput(
         };
     }
 
-    if (snapshot.keyboardEvent && snapshot.viewportKeyboard && !snapshot.textInput) {
+    if (snapshot.keyboardEvent && snapshot.viewportFocused && !snapshot.textInput) {
         app.getInputManager().processEvent(event);
         return FInputReply{.handled = true};
     }
@@ -188,14 +188,10 @@ FInputReply routeGameplayViewportInput(
 
 FInputReply routeGameUIInput(App& app, EditorLayer& layer, const FInputEvent& event)
 {
-    // The 2D workspace is authoring-only: game UI stays inert so canvas
-    // editing tools own every viewport event (Godot-style 2D editor).
     if (app.isStopped() || layer.isViewportMode2D()) {
         return {};
     }
 
-    // Game UI picking runs before gameplay: an exclusive Stop hit keeps the
-    // event away from the game (mode semantics live in App).
     const EWidgetRouteResult result = app.dispatchUIInputEvent(event);
     if (result == EWidgetRouteResult::NotHandled) {
         return {};
@@ -215,6 +211,24 @@ bool shouldStopRouting(const FInputReply& reply)
     return reply.handled || reply.pointerCapture.has_value();
 }
 
+void deliverMatchingRelease(InputManager& inputManager, const FInputEvent& event)
+{
+    const EEvent::T eventType = event.getEventType();
+    if (eventType == EEvent::KeyReleased) {
+        const EKey::T key = static_cast<const KeyReleasedEvent&>(event).getKeyCode();
+        if (inputManager.isKeyPressed(key)) {
+            inputManager.processEvent(event);
+        }
+        return;
+    }
+    if (eventType == EEvent::MouseButtonReleased) {
+        const EMouse::T button = static_cast<const MouseButtonReleasedEvent&>(event).GetMouseButton();
+        if (inputManager.isMouseButtonPressed(button)) {
+            inputManager.processEvent(event);
+        }
+    }
+}
+
 } // namespace
 
 void EditorInputNode::bind(App& app, EditorLayer& layer, EditorSurface* surface)
@@ -226,9 +240,11 @@ void EditorInputNode::bind(App& app, EditorLayer& layer, EditorSurface* surface)
 
 void EditorInputNode::unbind()
 {
-    _surface = nullptr;
-    _layer   = nullptr;
-    _app     = nullptr;
+    _bLooking     = false;
+    _bFeedingKeys = false;
+    _surface      = nullptr;
+    _layer        = nullptr;
+    _app          = nullptr;
 }
 
 FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEvent& event)
@@ -237,7 +253,34 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
         return {};
     }
 
+    InputManager& inputManager = _app->getInputManager();
+    deliverMatchingRelease(inputManager, event);
+
+    const EEvent::T eventType = event.getEventType();
+    if (eventType == EEvent::MouseButtonReleased &&
+        static_cast<const MouseButtonReleasedEvent&>(event).GetMouseButton() == EMouse::Right) {
+        _bLooking = false;
+    }
+
     const FEditorInputSnapshot snapshot = buildSnapshot(*_app, *_layer, _surface, event);
+
+    if (eventType == EEvent::MouseButtonPressed) {
+        const auto& press = static_cast<const MouseButtonPressedEvent&>(event);
+        if (press.GetMouseButton() == EMouse::Right && snapshot.pointerInViewport &&
+            snapshot.chromeResult != EWidgetRouteResult::HandledExclusive) {
+            _bLooking = true;
+        }
+    }
+
+    const bool wantPointer = _bLooking || snapshot.pointerInViewport;
+    const bool wantKeys =
+        !snapshot.textInput && (_bLooking || snapshot.viewportFocused || snapshot.pointerInViewport);
+
+    if (_bFeedingKeys && !wantKeys) {
+        inputManager.cancelHeldKeys();
+    }
+    _bFeedingKeys = wantKeys;
+
     FInputReply reply = routeCommandInput(context, event);
     if (shouldStopRouting(reply)) {
         return reply;
@@ -248,7 +291,7 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
         return reply;
     }
 
-    reply = routeChromeInput(snapshot);
+    reply = routeChromeInput(snapshot, _bLooking);
     if (shouldStopRouting(reply)) {
         return reply;
     }
@@ -258,7 +301,8 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
         return reply;
     }
 
-    reply = routeViewportToolInput(*_app, *_layer, snapshot, event);
+    reply = routeViewportToolInput(
+        *_app, *_layer, snapshot, event, _bLooking, wantPointer, wantKeys);
     if (shouldStopRouting(reply)) {
         return reply;
     }
@@ -275,9 +319,37 @@ void EditorInputNode::cancelInput(FInputRouteContext& context, EInputCancelReaso
 {
     (void)context;
     (void)reason;
+    _bLooking     = false;
+    _bFeedingKeys = false;
     if (_app) {
         _app->getInputManager().cancelInput();
     }
+}
+
+std::optional<ECursorType> EditorInputNode::getCursor() const
+{
+    if (!_surface) {
+        return std::nullopt;
+    }
+
+    if (WidgetTree* tree = _surface->tree()) {
+        if (const UIElement* hovered = tree->getHovered()) {
+            const ECursorType chrome = hovered->getCursor();
+            if (chrome != ECursorType::Arrow || !_surface->isViewportHovered()) {
+                return chrome;
+            }
+        }
+    }
+
+    if (_surface->isViewportHovered() && _app) {
+        if (GameUIHost* host = _app->getGameUIHost(); host && host->getMountedScene()) {
+            if (const UIElement* hovered = host->getTree().getHovered()) {
+                return hovered->getCursor();
+            }
+        }
+    }
+
+    return ECursorType::Arrow;
 }
 
 } // namespace ya

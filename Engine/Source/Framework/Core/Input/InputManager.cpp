@@ -162,13 +162,18 @@ void InputManager::postUpdate()
 
 void InputManager::cancelInput()
 {
-    currentKeyStates.clear();
-    previousKeyStates.clear();
+    cancelHeldKeys();
     currentMouseStates.clear();
     previousMouseStates.clear();
     mouseDelta           = {0.0f, 0.0f};
     _mouseScrollDelta    = {0.0f, 0.0f};
     previousMousePosition = mousePosition;
+}
+
+void InputManager::cancelHeldKeys()
+{
+    currentKeyStates.clear();
+    previousKeyStates.clear();
 }
 
 void InputManager::clearActionBindings()
