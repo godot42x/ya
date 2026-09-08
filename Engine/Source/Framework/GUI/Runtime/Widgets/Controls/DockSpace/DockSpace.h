@@ -153,6 +153,8 @@ private:
     void applyLeafTabBarVisibility(DockNodeId leafId);
     void openLeafTabBarMenu(DockNodeId leafId, const glm::vec2& pos);
     void graftPanelIntoContent(UIContainer& content, const UIElementRef& panel);
+    /// Same-leaf drop that is not a tab-bar reorder: select + graft, never split.
+    void activateDraggedPanel(DockPanelId panelId);
     std::shared_ptr<UIElement> materializeNode(const FDockNode& node);
     FLeafView* leafViewForLeaf(DockNodeId leafId);
     [[nodiscard]] const FLeafView* leafViewForLeaf(DockNodeId leafId) const;

@@ -1,6 +1,7 @@
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 
 
+#include "GUI/Widgets/Controls/DockSpace/DockHideTabBarAffordance.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Overlay.h"
 #include "GUI/Widgets/Controls/Panel.h"
@@ -28,7 +29,6 @@ using glm::vec2;
 constexpr float kSplitMinExtent = 120.0f;
 constexpr float kChooserBlock = 28.0f;
 constexpr float kChooserGap = 8.0f;
-constexpr float kHideTabBarSize = 12.0f;
 
 void unlinkWidgetFromVisualParent(UIElement& widget, WidgetTree* tree)
 {
@@ -50,7 +50,7 @@ void fillDockPanelBoxSlot(UIElement&, UISlot& edge)
     }
 }
 
-void graftPanelIntoHost(UIElement& host, const UIElementRef& panel)
+void graftPanelIntoHost(UIElement& host, const UIElementRef& panel, WidgetTree* fallbackTree)
 {
     if (!panel || panel.get() == &host) {
         return;
@@ -60,7 +60,7 @@ void graftPanelIntoHost(UIElement& host, const UIElementRef& panel)
         return;
     }
 
-    WidgetTree* hostTree = host.getTree();
+    WidgetTree* hostTree = host.getTree() ? host.getTree() : fallbackTree;
     if (hostTree && hostTree->contains(host) && panel->isAttached() && panel->getTree() == hostTree) {
         hostTree->reparent(host, panel);
         host.initializeChildSlot(*panel, fillDockPanelBoxSlot);
@@ -75,72 +75,18 @@ void graftPanelIntoHost(UIElement& host, const UIElementRef& panel)
     host.addDetachedChild(panel, fillDockPanelBoxSlot);
 }
 
-struct FDockHideTabBarAffordance final : UIElement
+/// A leaf shows exactly one panel. Box DockContent defaults to horizontal Fill,
+/// so leftover siblings share the node 50/50 instead of hiding.
+void showPanelInContent(UIElement& host, const UIElementRef& panel, WidgetTree* tree)
 {
-    FDockHideTabBarAffordance(std::function<void()> onToggle, std::function<bool()> isFolded)
-        : UIElement("DockHideTabBar")
-        , _onToggle(std::move(onToggle))
-        , _isFolded(std::move(isFolded))
-    {
-        _hitFilter = EWidgetHitFilter::Stop;
-        _zOrder    = 8;
-    }
-
-    [[nodiscard]] bool hitTestSelf(const glm::vec2& logicalPoint) const override
-    {
-        return isHitTestableSelf() && hitTestLayoutRect(logicalPoint);
-    }
-
-    [[nodiscard]] bool isHoverable() const override { return true; }
-
-    void paintSelf(UIFrameBuilder& builder) override
-    {
-        const glm::vec4 color = _bHovered ? glm::vec4{0.78f, 0.82f, 0.90f, 1.0f}
-                                          : glm::vec4{0.52f, 0.56f, 0.64f, 0.95f};
-        const glm::vec2 p = _layoutRect.pos;
-        const float     s = std::min(_layoutRect.extent.x, _layoutRect.extent.y);
-        const float     inset = std::max(1.0f, s * 0.18f);
-        if (_isFolded && _isFolded()) {
-            const glm::vec2 a = {p.x + inset, p.y + inset};
-            const glm::vec2 b = {p.x + inset, p.y + s - inset};
-            const glm::vec2 c = {p.x + s - inset, p.y + s * 0.5f};
-            builder.addLine(a, b, color, 1.5f);
-            builder.addLine(b, c, color, 1.5f);
-            builder.addLine(c, a, color, 1.5f);
-            return;
+    const std::vector<UIElementRef> mounted = host.getChildren();
+    for (const UIElementRef& child : mounted) {
+        if (child && child != panel) {
+            unlinkWidgetFromVisualParent(*child, tree);
         }
-        const glm::vec2 a = {p.x + inset, p.y + inset};
-        const glm::vec2 b = {p.x + s - inset, p.y + inset};
-        const glm::vec2 c = {p.x + s * 0.5f, p.y + s - inset};
-        builder.addLine(a, b, color, 1.5f);
-        builder.addLine(b, c, color, 1.5f);
-        builder.addLine(c, a, color, 1.5f);
     }
-
-    bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override
-    {
-        const bool inside = hitTestLayoutRect(ctx.logicalPoint);
-        if (event.getEventType() == EEvent::MouseMoved) {
-            _bHovered = inside;
-            return inside;
-        }
-        if (event.getEventType() == EEvent::MouseButtonPressed && inside) {
-            if (_onToggle) {
-                _onToggle();
-            }
-            return true;
-        }
-        return false;
-    }
-
-    void resetHoverState() override { _bHovered = false; }
-    void clearTransientInputState() override { _bHovered = false; }
-
-  private:
-    std::function<void()> _onToggle;
-    std::function<bool()> _isFolded;
-    bool                  _bHovered = false;
-};
+    graftPanelIntoHost(host, panel, tree);
+}
 
 struct FChooserRects
 {
@@ -269,6 +215,22 @@ struct FDockSpacePanelDragBehavior final : public UIBehavior
         observer.onFinished = [&owner, panelId](EDragFinishResult result, const glm::vec2& logicalPoint, std::string_view)
         {
             owner.clearPreview();
+            if (result == EDragFinishResult::Dropped || result == EDragFinishResult::Cancelled) {
+                return;
+            }
+            // A click that crossed the 6px drag threshold and released back
+            // over the source leaf is still a tab select, not a tear-off.
+            // resolveDropPreview falls back to the source leaf when the pointer
+            // is outside every leaf; that fallback is not "over the source".
+            if (owner._context) {
+                const FDockNode* sourceLeaf = owner._context->dockModel().findLeafForPanel(panelId);
+                const UIDockSpace::FLeafView* view =
+                    sourceLeaf ? owner.leafViewForLeaf(sourceLeaf->id) : nullptr;
+                if (view && view->root && pointInRect(logicalPoint, view->root->_layoutRect)) {
+                    owner.activateDraggedPanel(panelId);
+                    return;
+                }
+            }
             if (result == EDragFinishResult::NoTarget && owner._context && owner._context->bAllowTearOff && owner._context->bAllowFloating) {
                 const glm::vec2 size{320.0f, 240.0f};
                 owner._context->tearOffPanel(panelId, logicalPoint, size);
@@ -340,9 +302,19 @@ struct FDockSpaceDropTargetBehavior final : public UIDropTargetBehavior
                 else if (sourceLeaf && sourceLeaf->id != preview->targetLeafId) {
                     bChanged = dock->_context->dockModel().movePanel(panelId, preview->targetLeafId, SIZE_MAX, true);
                 }
+                else if (sourceLeaf && sourceLeaf->id == preview->targetLeafId) {
+                    // Same-leaf content drop: the 6px drag threshold turned a
+                    // tab click into a session. Select the dragged panel; do
+                    // not split this leaf (cardinal split is a different-leaf
+                    // operation).
+                    dock->activateDraggedPanel(panelId);
+                }
                 else if (!sourceLeaf) {
                     bChanged = dock->_context->dockModel().addPanel(panelId, preview->targetLeafId);
                 }
+            }
+            else if (sourceLeaf && sourceLeaf->id == preview->targetLeafId) {
+                dock->activateDraggedPanel(panelId);
             }
             else {
                 bChanged = dock->_context->dockModel().splitLeaf(preview->targetLeafId, preview->side, panelId);
@@ -537,8 +509,6 @@ void UIDockSpace::paintDropPreviewOverlay(UIFrameBuilder& builder) const
     }
 
     if (_preview->bMerge) {
-        // ImGui-style tab merge: highlight the tab bar strip, not the body
-        // center block, so the user sees the tab becomes the drop target.
         if (_preview->bTabBar) {
             builder.addBrush(_preview->rect, style.dropPreviewMergeColor);
             builder.addRectOutline(_preview->rect, style.dropPreviewOutlineColor, 2.0f);
@@ -625,6 +595,25 @@ void UIDockSpace::releaseMountedPanels()
             }
         }
     }
+    if (!_context) {
+        return;
+    }
+    // Panels coming from a just-closed floating window are not in `_leafViews`.
+    // Unlink them here so rematerialize can graft without addDetachedChild
+    // hitting a stale parent (drag keepAlive still holds the floating chrome).
+    WidgetTree* tree = getTree();
+    for (DockNodeId leafId : _context->dockModel().leafIds()) {
+        const FDockNode* leaf = _context->dockModel().findNode(leafId);
+        if (!leaf) {
+            continue;
+        }
+        for (DockPanelId panelId : leaf->panelIds) {
+            const FDockContext::FPanel* fp = _context->findPanel(panelId);
+            if (fp && fp->widget) {
+                unlinkWidgetFromVisualParent(*fp->widget, tree);
+            }
+        }
+    }
 }
 
 void UIDockSpace::applyLeafTabBarVisibility(DockNodeId leafId)
@@ -667,11 +656,29 @@ void UIDockSpace::openLeafTabBarMenu(DockNodeId leafId, const glm::vec2& pos)
     menu->openAt(*tree, pos);
 }
 
+void UIDockSpace::activateDraggedPanel(DockPanelId panelId)
+{
+    if (!_context) {
+        return;
+    }
+    const FDockNode* leaf = _context->dockModel().findLeafForPanel(panelId);
+    if (!leaf) {
+        return;
+    }
+    FLeafView* view = leafViewForLeaf(leaf->id);
+    if (!view || !view->bar) {
+        return;
+    }
+    auto it = std::find(leaf->panelIds.begin(), leaf->panelIds.end(), panelId);
+    if (it == leaf->panelIds.end()) {
+        return;
+    }
+    view->bar->selectTab(static_cast<int>(std::distance(leaf->panelIds.begin(), it)));
+}
+
 void UIDockSpace::graftPanelIntoContent(UIContainer& content, const UIElementRef& panel)
 {
-    // DockContent is a box host. The selected panel's extent is expressed on
-    // the parent-owned box slot, never through child-authored canvas anchors.
-    graftPanelIntoHost(content, panel);
+    showPanelInContent(content, panel, getTree());
 }
 
 void UIDockSpace::rebuildLeaf(DockNodeId leafId)
@@ -787,7 +794,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     bar->_bDraggableTabs = true;
     bar->_styleKey = "tab.dock";
     bar->setClipChildren(true);
-    bar->setPadding({kHideTabBarSize, 1.0f});
+    bar->setPadding({kDockHideTabBarSize, 1.0f});
     bar->setSpacing(1.0f);
     bar->_emptyPlaceholder = std::format("{} (drop tabs here)", leaf->_name);
     bar->_onTabDragBegin = [this, leafId = node.id](int index, const std::string& label)
@@ -808,7 +815,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     chrome->addDetachedChild(body);
 
     auto content = std::make_shared<UIContainer>(std::format("DockContent{}", node.id));
-    content->setPadding({0.0f, 0.0f});
+    content->setPadding({kDockContentInset, kDockContentInset});
     chrome->setStretchLastChild(true);
     body->addDetachedChild(content);
     // Stretch intent lives on the parent->child edge: the body is a canvas host,
@@ -832,6 +839,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
         }
     });
     auto hideBar = std::make_shared<FDockHideTabBarAffordance>(
+        "DockHideTabBar",
         [this, leafId = node.id]()
         {
             const FDockNode* current = _context->dockModel().findNode(leafId);
@@ -854,7 +862,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
             overlay->apply(FOverlaySlotArgs{
                 .hAlign        = EUIOverlayAlignment::Start,
                 .vAlign        = EUIOverlayAlignment::Start,
-                .preferredSize = {kHideTabBarSize, kHideTabBarSize},
+                .preferredSize = {kDockHideTabBarSize, kDockHideTabBarSize},
             });
         }
     });
@@ -969,11 +977,12 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
         return std::nullopt;
     }
     const Rect2D leafRect = focus->root->_layoutRect;
+    const bool bOverLeaf = pointInRect(logicalPoint, leafRect);
 
     // ImGui-style "drop on a tab": hovering a leaf's tab bar merges the dragged
     // panel into that tab group. This is a real dock (bMerge, not bChooser), so
     // the tab bar highlights and a drop there adds the panel as a new tab.
-    if (focus->bar && pointInRect(logicalPoint, focus->bar->_layoutRect)) {
+    if (bOverLeaf && focus->bar && pointInRect(logicalPoint, focus->bar->_layoutRect)) {
         return FDropPreview{
             .targetLeafId     = focus->leafId,
             .targetFloatingId = kInvalidFloatingWindowId,
@@ -983,6 +992,28 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
             .prompt           = "Add Tab",
             .bMerge           = true,
             .bTabBar          = true,
+            .bChooser         = false,
+            .bDisabled        = false,
+            .disabledReason   = {},
+        };
+    }
+
+    // Same-leaf content is a tab-select (or a click that crossed the drag
+    // threshold). Cardinal split targets a *different* leaf; dropping onto
+    // this leaf's south/north chooser must not split it in two.
+    // Only when the pointer is actually over the leaf — fallback focus (pointer
+    // outside every leaf) must not look like a same-leaf merge, or canAccept
+    // would eat the drop and tear-off would never run.
+    if (bOverLeaf && sourceLeaf && sourceLeaf->id == focus->leafId) {
+        return FDropPreview{
+            .targetLeafId     = focus->leafId,
+            .targetFloatingId = kInvalidFloatingWindowId,
+            .panelId          = panelId,
+            .side             = EDockCardinalSide::West,
+            .rect             = leafRect,
+            .prompt           = {},
+            .bMerge           = true,
+            .bTabBar          = false,
             .bChooser         = false,
             .bDisabled        = false,
             .disabledReason   = {},

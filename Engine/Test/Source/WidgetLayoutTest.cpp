@@ -28,6 +28,7 @@
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Menu.h"
+#include "GUI/Widgets/CompoundWidget.h"
 #include "Render/Resources/FontManager.h"
 
 #include "Core/Event.h"
@@ -99,6 +100,19 @@ std::shared_ptr<UIButton> makeAutoButton(const std::string& name, const std::str
     button->addDetachedChild(label);
     return button;
 }
+
+struct DockCompoundPanel final : UICompoundWidget
+{
+    explicit DockCompoundPanel(std::string name) : UICompoundWidget(std::move(name), "panel.canvas") {}
+
+    int constructCount = 0;
+
+    void construct() override
+    {
+        ++constructCount;
+        addDetachedChild(ui::text("Body").setText("Hello").release());
+    }
+};
 
 WidgetAttachment attachAutoToLayer(WidgetTree& tree, WidgetTree::ELayer layer, const UIElementRef& widget)
 {
@@ -1659,6 +1673,31 @@ static_assert(!ui::SlotBuilderAcceptedBy<ui::UIPanelWidgetBuilder, decltype(ui::
 static_assert(ui::SlotBuilderAcceptedBy<ui::UIButtonWidgetBuilder, decltype(ui::overlaySlot())>);
 static_assert(!ui::SlotBuilderAcceptedBy<ui::UIButtonWidgetBuilder, decltype(ui::canvasSlot())>);
 
+TEST(WidgetLayoutTest, CanvasFillOffsetDoesNotShrinkTheChild)
+{
+    registerSyntheticFont(16, 8.0f);
+
+    auto panel = ui::panel("Panel")
+                     .child(ui::text("Inner").setText("Hi"), ui::canvasSlot().fill().offset({0.0f, 50.0f}))
+                     .release();
+
+    WidgetTree tree({.width = 300, .height = 200});
+    FCanvasSlotArgs panelSlot;
+    panelSlot.fixedSize = {300.0f, 200.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    tree.layout();
+
+    const UIElement* child = panel->getChildrenInPaintOrder().front();
+    ASSERT_NE(child, nullptr);
+    // offset() only moves the min corner. Fill still spans the parent extent,
+    // so the child overflows the parent bottom by the offset. Editor chrome
+    // (dock under menu/toolbar, Hierarchy under the filter strip) must use
+    // insets(), not fill()+offset().
+    EXPECT_FLOAT_EQ(child->_layoutRect.pos.y, 50.0f);
+    EXPECT_FLOAT_EQ(child->_layoutRect.extent.y, 200.0f);
+    EXPECT_GT(child->_layoutRect.pos.y + child->_layoutRect.extent.y, 200.0f);
+}
+
 TEST(WidgetLayoutTest, CanvasFourSideOffsetsInsetTheChildWithoutAnExplicitSize)
 {
     registerSyntheticFont(16, 8.0f);
@@ -2393,6 +2432,67 @@ TEST(WidgetLayoutTest, DockProjectionRebuildReparentsLivePanelWidgets)
     EXPECT_NE(scene->getParent(), inspector->getParent());
     EXPECT_GT(scene->_layoutRect.extent.x, 0.0f);
     EXPECT_GT(inspector->_layoutRect.extent.x, 0.0f);
+}
+
+TEST(WidgetLayoutTest, DockLeafTabSwitchShowsOnlySelectedPanel)
+{
+    registerSyntheticFont(13, 7.0f);
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<FDockContext>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto first  = std::make_shared<UIPanel>("FirstBody");
+    auto second = std::make_shared<UIPanel>("SecondBody");
+    const DockPanelId firstId = ws->addPanel("First", first);
+    ASSERT_NE(firstId, kInvalidDockPanelId);
+    ASSERT_NE(ws->addPanel("Second", second), kInvalidDockPanelId);
+    ASSERT_TRUE(ws->dockModel().selectPanel(firstId));
+    tree.layout();
+
+    EXPECT_TRUE(first->isAttached());
+    EXPECT_FALSE(second->isAttached());
+    const float fullWidth = first->_layoutRect.extent.x;
+    EXPECT_GT(fullWidth, 400.0f);
+
+    auto* bar = dynamic_cast<UITabBar*>(findNamedDescendant(*dock, "DockTabBar1"));
+    ASSERT_NE(bar, nullptr);
+    bar->selectTab(1);
+    tree.layout();
+
+    EXPECT_FALSE(first->isAttached());
+    EXPECT_TRUE(second->isAttached());
+    EXPECT_NEAR(second->_layoutRect.extent.x, fullWidth, 1.0f);
+    ASSERT_NE(second->getParent(), nullptr);
+    EXPECT_EQ(second->getParent()->getChildren().size(), 1u);
+}
+
+TEST(WidgetLayoutTest, DockProjectionConstructsCompoundPanelWithoutTabSwitch)
+{
+    registerSyntheticFont(13, 7.0f);
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<FDockContext>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto panel = std::make_shared<DockCompoundPanel>("CompoundBody");
+    ASSERT_NE(ws->addPanel("Compound", panel), kInvalidDockPanelId);
+    ws->fireDockUpdated();
+    tree.layout();
+
+    EXPECT_EQ(panel->constructCount, 1);
+    ASSERT_EQ(panel->getChildren().size(), 1u);
+    EXPECT_TRUE(panel->isAttached());
+    EXPECT_GT(panel->_layoutRect.extent.x, 0.0f);
+    EXPECT_GT(panel->_layoutRect.extent.y, 0.0f);
 }
 
 } // namespace ya

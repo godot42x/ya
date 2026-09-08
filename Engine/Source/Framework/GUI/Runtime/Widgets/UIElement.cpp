@@ -556,9 +556,22 @@ void UIElement::insertChildEdge(size_t index, const UIElementRef& child, FChildS
 
 void UIElement::finalizeInsertedChild(const UIElementRef& child)
 {
-    if (_tree) {
-        WidgetTree::markSubtreeMembership(child.get(), _tree);
+    if (!_tree) {
+        return;
     }
+    // attach()/reparent() prepare and mark the subtree before appending the
+    // edge. Skip so we do not notify onAttached twice.
+    if (child->_tree == _tree) {
+        return;
+    }
+    // addDetachedChild onto a live parent used to only stamp membership, so
+    // UICompoundWidget::construct / onAttached never ran until a later
+    // tree->attach (dock tab switch). Joining a live tree is attach.
+    WidgetTree::prepareSubtree(child.get());
+    WidgetTree::markSubtreeMembership(child.get(), _tree);
+    WidgetTree::notifyAttachedSubtree(child.get());
+    markLayoutDirty(EUIInvalidationReason::ChildStructure);
+    _tree->invalidateLayout();
 }
 
 void UIElement::removeChildEdge(UIElement& child)

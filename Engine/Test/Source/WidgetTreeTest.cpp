@@ -17,11 +17,14 @@
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Dialog.h"
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
+#include "GUI/Widgets/Controls/DockSpace/DockFloatingHost.h"
 #include "GUI/Widgets/Controls/DockSpace/DockFloatingWindow.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/Brush.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/UIBehavior.h"
 
@@ -927,6 +930,56 @@ TEST(WidgetTreeTest, ModalOverlayConsumesDismissClickBeforeUnderlyingContent)
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(170.0f, 130.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(clicks, 1);
+}
+
+TEST(WidgetTreeTest, ModalOverlayPaintsNoDimShield)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto overlay = std::make_shared<UIPopupOverlay>("ModalOverlay");
+    overlay->_bModal = true;
+    overlay->open(tree);
+    tree.layout();
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_TRUE(snap.items.empty());
+}
+
+TEST(WidgetTreeTest, ModalFillBackdropIsAnAppChild)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto overlay = std::make_shared<UIPopupOverlay>("ModalOverlay");
+    overlay->_bModal = true;
+
+    auto dim = std::make_shared<UIPanel>("Dim");
+    dim->setVisibility(EWidgetVisibility::HitTestInvisible);
+    dim->setStyleField("fillColor", FBrush::solid({0.4f, 0.0f, 0.0f, 0.5f}));
+    dim->_zOrder = -1;
+    overlay->addDetachedChild(dim, [](UIElement&, UISlot& slot)
+    {
+        if (auto* canvas = slot.as<UICanvasSlot>()) {
+            FCanvasSlotArgs fill;
+            fill.anchorMin = {0.0f, 0.0f};
+            fill.anchorMax = {1.0f, 1.0f};
+            canvas->apply(fill);
+        }
+    });
+
+    auto content = std::make_shared<UIPanel>("Content");
+    overlay->_contentPos    = {100.0f, 80.0f};
+    overlay->_contentExtent = {80.0f, 40.0f};
+    overlay->addDetachedChild(content);
+
+    overlay->open(tree);
+    tree.layout();
+
+    EXPECT_EQ(dim->_layoutRect.pos, glm::vec2(0.0f, 0.0f));
+    EXPECT_EQ(dim->_layoutRect.extent, glm::vec2(400.0f, 300.0f));
+    EXPECT_EQ(content->_layoutRect.pos, glm::vec2(100.0f, 80.0f));
+    EXPECT_EQ(content->_layoutRect.extent, glm::vec2(80.0f, 40.0f));
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(10.0f, 10.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_TRUE(overlay->isAttached());
 }
 
 TEST(WidgetTreeTest, PopupOverlayUsesACanvasSlotForItsContentChild)
@@ -1920,8 +1973,6 @@ TEST(WidgetTreeTest, DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTa
 
     auto panelA = std::make_shared<UIPanel>("PanelA");
     auto panelB = std::make_shared<UIPanel>("PanelB");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panelA);
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panelB);
     const DockPanelId panelAId = ws->addPanel("SceneA", panelA);
     const DockPanelId panelBId = ws->addPanel("SceneB", panelB);
 
@@ -1958,12 +2009,13 @@ TEST(WidgetTreeTest, DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget)
     ws->bAllowTearOff  = true;
 
     auto dock = std::make_shared<UIDockSpace>("Dock");
-    FCanvasSlotArgs dockArgs; dockArgs.anchorMin = {0.0f, 0.0f}; dockArgs.anchorMax = {1.0f, 1.0f};
+    FCanvasSlotArgs dockArgs;
+    dockArgs.offset = {0.0f, 0.0f};
+    dockArgs.fixedSize = {400.0f, 300.0f};
     dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
     auto panel = std::make_shared<UIPanel>("Panel");
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
     const DockPanelId panelId = ws->addPanel("Scene", panel);
     tree.buildSnapshot(UIFrameBuildContext{});
 
@@ -1978,12 +2030,15 @@ TEST(WidgetTreeTest, DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget)
     ASSERT_NE(sessionOp, nullptr);
     EXPECT_EQ(sessionOp->panelId, panelId);
 
-    tree.endDrag({520.0f, 410.0f});
+    // Center-of-leaf is a tab select (same-leaf merge), not a tear-off.
+    // NoTarget is a drop outside the dock widget.
+    const glm::vec2 outside{800.0f, 500.0f};
+    tree.endDrag(outside);
     EXPECT_FALSE(tree.isDragging());
     EXPECT_TRUE(ws->isPanelFloating(panelId));
     const auto* floating = ws->findFloatingByPanel(panelId);
     ASSERT_NE(floating, nullptr);
-    EXPECT_EQ(floating->pos, glm::vec2(520.0f, 410.0f));
+    EXPECT_EQ(floating->pos, outside);
 }
 
 TEST(WidgetTreeTest, DockSpaceTabCloseRemovesClosablePanel)
@@ -2175,6 +2230,70 @@ TEST(WidgetTreeTest, FloatingWindowTabDragBehaviorStartsDockPanelSession)
     tree.endDrag({9000.0f, 9000.0f});
     EXPECT_FALSE(tree.isDragging());
     EXPECT_TRUE(ws->isPanelFloating(panelId));
+}
+
+TEST(WidgetTreeTest, FloatingWindowCardinalDockGraftsPanelIntoNewLeaf)
+{
+    // Dropping a floating window onto a leaf's north chooser rematerializes
+    // the dock while drag keepAlive still holds the floating chrome. The
+    // panel must be unlinked from that chrome and grafted into the new leaf,
+    // not left blank until a later tab switch.
+    WidgetTree tree({.width = 1000, .height = 700});
+    auto       ws = std::make_shared<FDockContext>();
+    ws->bAllowFloating = true;
+    ws->bAllowTearOff  = true;
+
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto host = std::make_shared<UIDockFloatingHost>("Host");
+    host->bindContext(ws);
+    FCanvasSlotArgs hostFill;
+    hostFill.anchorMin = {0.0f, 0.0f};
+    hostFill.anchorMax = {1.0f, 1.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), host, hostFill);
+
+    auto anchored = std::make_shared<UIPanel>("ViewportBody");
+    auto floatingPanel = std::make_shared<UIPanel>("FrameStatsPanel");
+    const DockPanelId anchoredId = ws->addPanel("Viewport", anchored);
+    const DockPanelId statsId = ws->addPanel("Stats", floatingPanel);
+    ASSERT_NE(anchoredId, kInvalidDockPanelId);
+    ASSERT_NE(statsId, kInvalidDockPanelId);
+    ASSERT_NE(ws->tearOffPanel(statsId, {20.0f, 20.0f}, {220.0f, 120.0f}), kInvalidFloatingWindowId);
+    host->syncFromContext();
+    tree.layout();
+    ASSERT_EQ(floatingPanel->getParent() != nullptr, true);
+
+    UITabBar* tabBar = findDescendantOfType<UITabBar>(*host);
+    ASSERT_NE(tabBar, nullptr);
+    ASSERT_TRUE(static_cast<bool>(tabBar->_onTabDragBegin));
+    tabBar->_onTabDragBegin(0, "Stats");
+    ASSERT_TRUE(tree.isDragging());
+
+    const Rect2D leafRect = dock->_layoutRect;
+    const glm::vec2 center = leafRect.pos + leafRect.extent * 0.5f;
+    const glm::vec2 northDrop{center.x, center.y - 50.0f};
+    tree.updateDrag(northDrop);
+    tree.endDrag(northDrop);
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_FALSE(ws->isPanelFloating(statsId));
+
+    const FDockNode* root = ws->dockModel().getRootNode();
+    ASSERT_NE(root, nullptr);
+    ASSERT_EQ(root->kind, EDockNodeKind::Split);
+    EXPECT_EQ(root->orientation, EDockSplitOrientation::Horizontal);
+    ASSERT_NE(ws->dockModel().findLeafForPanel(statsId), nullptr);
+    EXPECT_NE(ws->dockModel().findLeafForPanel(statsId), ws->dockModel().findLeafForPanel(anchoredId));
+
+    tree.layout();
+    EXPECT_EQ(findNamedDescendant(*dock, "FrameStatsPanel"), floatingPanel.get());
+    EXPECT_NE(floatingPanel->getParent(), nullptr);
+    EXPECT_EQ(floatingPanel->getTree(), &tree);
+    EXPECT_GT(floatingPanel->_layoutRect.extent.y, 1.0f);
 }
 
 TEST(WidgetTreeTest, DragObserverReceivesEveryMoveAndTargetChanges)

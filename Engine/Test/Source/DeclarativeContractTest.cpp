@@ -863,6 +863,25 @@ TEST(DeclarativeContractTest, CompoundWidgetConstructsOnceAndTicksOnlyWhileAttac
     EXPECT_EQ(compound->tickCount, 3);
 }
 
+TEST(DeclarativeContractTest, AddDetachedChildOntoAttachedHostConstructsCompound)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    auto host = std::make_shared<UIPanel>("Host");
+    FCanvasSlotArgs hostSlot;
+    hostSlot.anchorMin = {0.0f, 0.0f};
+    hostSlot.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, hostSlot).valid());
+
+    auto compound = std::make_shared<FTestCompoundWidget>("grafted");
+    EXPECT_EQ(compound->constructCount, 0);
+    host->addDetachedChild(compound);
+    EXPECT_EQ(compound->constructCount, 1);
+    EXPECT_TRUE(compound->isAttached());
+    ASSERT_EQ(compound->getChildren().size(), 1u);
+    tree.tick(0.25f);
+    EXPECT_EQ(compound->tickCount, 1);
+}
+
 TEST(DeclarativeContractTest, CompoundWidgetBuilderBuildsTypedLiveWidget)
 {
     WidgetTree tree({.width = 320, .height = 200});

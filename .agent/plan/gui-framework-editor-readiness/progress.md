@@ -1,5 +1,31 @@
 # Progress
 
+## GUI path-keyed async texture catalog（2026-09-06）
+
+- `IGuiTextureSource` + `FGuiTextureCatalog` 挂在 `WidgetTree`：每 path 一个 `Reactive<uint64_t>` revision，`bind()` 订阅当前 paint widget，ready/fail 只 `markPaintDirty` 该 path 的订阅者。
+- `UIImage` 按 Pending/Ready/Failed 画 placeholder / sprite / errorFill。`setResourceMissing` 只留给 viewport 这类 live RT 缺席。`UIPanel` 有 path 就 `resolveTexture`，不再等 `TextureRef::isLoaded()`。
+- `GameUIHost` 用 `AssetGuiTextureSource` 替换全局 `gameUITextureGeneration` / `gKickedPaths`。`EditorSurface` / Designer preview / scene preview 同一 source。Workbench builtin source lookup 即 Ready。
+- `ctx.generation` 只表示 resolver 身份被换掉；日常 ready 不清全树 paint cache。
+- 验证：`xmake r ya-gui-closure-test -- --gtest_filter='*Image*:*Texture*:*GuiTexture*'`；`xmake b ya-game-editor`。
+
+### 保留项
+
+- 未宣称 retained editor ready。XP-WIN / XP-OGL / SOAK-HR 仍是 blocker。
+- Phase 10F remainder（identity-only Undo 等）不是本 checkpoint。
+
+## Live editor chrome 当前 checkpoint（2026-09-06）
+
+- 同 leaf 的 tab 拖到内容区 / 边缘不再 `splitLeaf`：点击 titlebar 切换 tab 越过 6px 阈值时只 select + graft。Cardinal split 仍只作用于另一个 leaf。
+- `UIImage` 对 pending/unresolved `_assetPath` 画 `placeholderFill`；`errorFill` 只跟 `setResourceMissing`。`resolveGameUITexture` 在 miss 时异步 `loadTexture`（每路径一次），`gameUITextureGeneration()` 写入 snapshot `generation`，就绪后丢 paint cache。
+- Tab/SelectableRow/CheckBox/ComboBox/SearchCombo 与 dock hide-tab-bar affordance 的 hover 走 `onPointerEnter` + `VisualFlag`，避免 G2 incremental/full 因 hover 未标 paint-dirty 不一致。
+- 验证：`WidgetTreeTest.DockSpaceSameLeafContentDropSelectsWithoutSplit` / `DockSpaceCrossLeafEdgeDropStillSplits` / `DockSpaceSameLeafTabDropReorders`；`UIFrameSnapshotTest.ImageUnresolvedPathUsesPlaceholderUntilMissingFlag` / `ImageResolverReadyAfterGenerationBumpPaintsTexture`。
+
+### 保留项
+
+- 未宣称 retained editor ready。XP-WIN / XP-OGL / SOAK-HR 仍是 blocker。
+- 若本地已把 Runtime/Viewport 拆成上下两叶，用 Layout → Default 恢复工厂布局（`editor.dockLayout` 可能仍持久化了误 split）。
+- Phase 10F remainder（identity-only Undo 等）不是本 checkpoint。
+
 ## Phase 8Z 当前 checkpoint（2026-09-06）
 
 - 删除 GameRuntime `GuiSystem` / `IGuiBackend` / `ImGuiSystem`（无剩余 caller）。
