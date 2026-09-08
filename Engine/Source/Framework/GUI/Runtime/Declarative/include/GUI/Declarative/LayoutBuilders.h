@@ -3,6 +3,7 @@
 #include "GUI/Declarative/BuilderBase.h"
 
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Expander.h"
 #include "GUI/Widgets/Controls/Overlay.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
@@ -240,6 +241,18 @@ class UISplitPaneWidgetBuilder final : public TUIWidgetChildrenBuilder<UISplitPa
     UISplitPaneWidgetBuilder&& child(TChild&& builder, const FOverlaySlotArgs& slot) &&
     {
         this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISplitPaneWidgetBuilder& setOrientation(ESplitOrientation value) &
+    {
+        _widget->setOrientation(value);
+        return *this;
+    }
+
+    [[nodiscard]] UISplitPaneWidgetBuilder&& setOrientation(ESplitOrientation value) &&
+    {
+        _widget->setOrientation(value);
         return std::move(*this);
     }
 
@@ -516,6 +529,160 @@ class UISizeBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UISizeBox, 
     {
         this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
         return std::move(*this);
+    }
+};
+
+class UIExpanderWidgetBuilder final : public TUIWidgetChildrenBuilder<UIExpander, UIExpanderWidgetBuilder>
+{
+  public:
+    using SlotArgs = FBoxSlotArgs;
+
+    explicit UIExpanderWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetChildrenBuilder(kTypeIdExpander, std::move(key), std::move(displayName))
+    {
+    }
+
+    [[nodiscard]] UIExpanderWidgetBuilder& setFramed(bool value) &
+    {
+        _widget->setFramed(value);
+        return *this;
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder&& setFramed(bool value) &&
+    {
+        _widget->setFramed(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIExpanderWidgetBuilder& setTitle(std::string value) &
+    {
+        _widget->setTitle(std::move(value));
+        return *this;
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder&& setTitle(std::string value) &&
+    {
+        _widget->setTitle(std::move(value));
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIExpanderWidgetBuilder& setIcon(FBrush icon) &
+    {
+        _widget->setIcon(std::move(icon));
+        return *this;
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder&& setIcon(FBrush icon) &&
+    {
+        _widget->setIcon(std::move(icon));
+        return std::move(*this);
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder& setIcon(std::string assetPath) &
+    {
+        _widget->setIcon(FBrush::image(std::move(assetPath)));
+        return *this;
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder&& setIcon(std::string assetPath) &&
+    {
+        _widget->setIcon(FBrush::image(std::move(assetPath)));
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIExpanderWidgetBuilder& setDisclosureKind(EDisclosureKind kind) &
+    {
+        _widget->setDisclosureKind(kind);
+        return *this;
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder&& setDisclosureKind(EDisclosureKind kind) &&
+    {
+        _widget->setDisclosureKind(kind);
+        return std::move(*this);
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder& setDisclosureGlyphs(std::string collapsed, std::string expanded) &
+    {
+        _widget->setDisclosureGlyphs(std::move(collapsed), std::move(expanded));
+        return *this;
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder&& setDisclosureGlyphs(std::string collapsed, std::string expanded) &&
+    {
+        _widget->setDisclosureGlyphs(std::move(collapsed), std::move(expanded));
+        return std::move(*this);
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder& setDisclosureImages(FBrush collapsed, FBrush expanded = {}) &
+    {
+        _widget->setDisclosureImages(std::move(collapsed), std::move(expanded));
+        return *this;
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder&& setDisclosureImages(FBrush collapsed, FBrush expanded = {}) &&
+    {
+        _widget->setDisclosureImages(std::move(collapsed), std::move(expanded));
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIExpanderWidgetBuilder& setExpanded(bool value) &
+    {
+        _widget->setExpanded(value);
+        return *this;
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder&& setExpanded(bool value) &&
+    {
+        _widget->setExpanded(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIExpanderWidgetBuilder& setSpacing(float value) &
+    {
+        _widget->setSpacing(value);
+        return *this;
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder&& setSpacing(float value) &&
+    {
+        _widget->setSpacing(value);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UIExpanderWidgetBuilder& setPadding(const glm::vec2& value) &
+    {
+        _widget->setPadding(value);
+        return *this;
+    }
+    [[nodiscard]] UIExpanderWidgetBuilder&& setPadding(const glm::vec2& value) &&
+    {
+        _widget->setPadding(value);
+        return std::move(*this);
+    }
+
+    using TUIWidgetChildrenBuilder::child;
+
+    UIExpanderWidgetBuilder& child(UIElementRef node, const FBoxSlotArgs& slot) &
+    {
+        applyChildSlot(std::move(node), slot);
+        return *this;
+    }
+    UIExpanderWidgetBuilder&& child(UIElementRef node, const FBoxSlotArgs& slot) &&
+    {
+        applyChildSlot(std::move(node), slot);
+        return std::move(*this);
+    }
+
+    template<UIWidgetBuilder TChild>
+    UIExpanderWidgetBuilder& child(TChild&& builder, const FBoxSlotArgs& slot) &
+    {
+        applyChildSlot(std::forward<TChild>(builder).release(), slot);
+        return *this;
+    }
+    template<UIWidgetBuilder TChild>
+    UIExpanderWidgetBuilder&& child(TChild&& builder, const FBoxSlotArgs& slot) &&
+    {
+        applyChildSlot(std::forward<TChild>(builder).release(), slot);
+        return std::move(*this);
+    }
+
+  private:
+    void applyChildSlot(UIElementRef node, const FBoxSlotArgs& slot)
+    {
+        this->attachChild(std::move(node), [&slot](UIElement&, UISlot& childSlot) {
+            if (auto* boxSlot = childSlot.as<UIBoxSlot>()) {
+                boxSlot->apply(slot);
+            }
+        });
     }
 };
 

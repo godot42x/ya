@@ -19,6 +19,7 @@
 
 #include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/GuiFrameInspector.h"
+#include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetAttachment.h"
@@ -193,6 +194,14 @@ struct YA_GUI_API WidgetTree final
     /// resolveThemeStyle) so a theme switch repaints them.
     [[nodiscard]] const std::shared_ptr<Reactive<uint64_t>>& getThemeGeneration() const { return _themeGeneration; }
 
+    /// Path-keyed async textures. The source adapter lives in the product host
+    /// (AssetManager) or Workbench (builtin lookup); the catalog is tree-owned
+    /// so paint never holds AssetManager or widget-pointer listeners.
+    void setTextureSource(IGuiTextureSource* source);
+    [[nodiscard]] IGuiTextureSource* getTextureSource() const { return _textureSource; }
+    [[nodiscard]] FGuiTextureCatalog& textureCatalog() { return _textureCatalog; }
+    [[nodiscard]] const FGuiTextureCatalog& textureCatalog() const { return _textureCatalog; }
+
     // === Structure ===
     /// Internal root (owns the layers). Not a business object.
     [[nodiscard]] UIElement* getRoot() const { return _root.get(); }
@@ -354,12 +363,13 @@ struct YA_GUI_API WidgetTree final
                                               const glm::vec2& logicalPoint,
                                               bool bForHover = false,
                                               UIElement* skipSubtree = nullptr);
-    /// Resolve the single hover owner from a hit target: walk up its ancestor
-    /// chain for the first isHoverable() widget. Because the target is already
-    /// the topmost hit, this is deterministic (the deepest hoverable) with no
-    /// separate scan — a text child or a transparent popup shield can never
-    /// become the hover owner in place of the real interactive leaf.
-    [[nodiscard]] static UIElement* hoverOwnerAlongPath(UIElement* target);
+    /// Resolve the hover owner from a hit target: deepest attached
+    /// isHoverable() ancestor whose hitTestSelf contains `logicalPoint`.
+    /// A text child resolves to its button; an expander/split whose hoverable
+    /// region is only the header/divider is skipped when the pointer is on
+    /// a body descendant.
+    [[nodiscard]] static UIElement* hoverOwnerAlongPath(UIElement* target,
+                                                        const glm::vec2& logicalPoint);
     /// Assign tree membership to a widget and its whole subtree (invariant:
     /// attached iff every descendant is a member of the same tree).
     static void markSubtreeMembership(UIElement* widget, WidgetTree* tree);
@@ -464,8 +474,9 @@ struct YA_GUI_API WidgetTree final
 
     // Build-context validity (GI-002): draw-item segments hold final target-
     // pixel + resolved-texture data. uiScale/offset/DPI mapping changes drop
-    // caches as BuildContextChanged; ctx.generation (resolver identity) drops
-    // caches as ResourceReady. Font atlas identity is a separate
+    // caches as BuildContextChanged; ctx.generation (resolver identity swap)
+    // drops caches as ResourceReady. Everyday texture ready is path-keyed via
+    // FGuiTextureCatalog, not generation. Font atlas identity is a separate
     // FontManager::resourceRevision poll.
     bool      _bHasBuildContext = false;
     uint64_t  _lastGeneration   = 0;
@@ -473,6 +484,10 @@ struct YA_GUI_API WidgetTree final
     glm::vec2 _lastOffset       = {0.0f, 0.0f};
     bool      _bHasFontRevision = false;
     uint64_t  _lastFontRevision = 0;
+    IGuiTextureSource* _textureSource = nullptr;
+    FGuiTextureCatalog _textureCatalog;
+    bool               _bHasTextureEpoch = false;
+    uint64_t           _lastTextureEpoch = 0;
     UIElement*    _focused      = nullptr;
     UIElement*    _captured     = nullptr;
     UIElement*    _hovered      = nullptr;

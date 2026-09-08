@@ -130,6 +130,7 @@ struct FComboBoxStyle;
 struct FMenuStyle;
 struct FTableGridStyle;
 struct FTreeViewStyle;
+struct FExpanderStyle;
 
 [[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FButtonStyle& style);
 [[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FSelectableRowStyle& style);
@@ -140,6 +141,7 @@ struct FTreeViewStyle;
 [[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FMenuStyle& style);
 [[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FTableGridStyle& style);
 [[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FTreeViewStyle& style);
+[[nodiscard]] YA_GUI_API FVisualChrome visualChrome(const FExpanderStyle& style);
 
 /// Text: color + size, plus the optional themed background (badge/chip) fill
 /// + padding. Mirrors what UIText's paint actually consumes (authoring
@@ -284,15 +286,55 @@ struct FTreeViewStyle
     bool operator==(const FTreeViewStyle&) const = default;
 };
 
-/// Single-line text field: fill, caret, text. Authoring fontSize on the
-/// widget is layout/behavior; look comes from this style when themed.
+/// Folding section header (ImGui TreeNode). `expander.header` is the Framed
+/// look used by `CollapsingHeader`, not a second widget type. Geometry
+/// (headerHeight / indent / arrow width) stays on the widget.
+struct FExpanderStyle
+{
+    glm::vec4 textColor        = {0.90f, 0.92f, 0.95f, 1.0f};
+    FBrush    headerFill       = FBrush::solid({0.0f, 0.0f, 0.0f, 0.0f});
+    FBrush    hoveredFill      = FBrush::solid({0.24f, 0.26f, 0.31f, 1.0f});
+    FBrush    pressedFill      = FBrush::solid({0.20f, 0.22f, 0.27f, 1.0f});
+    FBrush    focusedFill      = FBrush::solid({0.26f, 0.52f, 0.90f, 0.35f});
+    glm::vec4 arrowColor       = {0.60f, 0.65f, 0.70f, 1.0f};
+    FBrush    arrowHoveredFill = FBrush::solid({0.32f, 0.36f, 0.44f, 1.0f});
+    glm::vec4 outlineColor     = {0.0f, 0.0f, 0.0f, 0.0f};
+    /// Unframed nested groups: left rail + header hairline. Framed headers
+    /// leave this transparent.
+    glm::vec4 guideColor       = {0.40f, 0.44f, 0.52f, 0.55f};
+    float     outlineThickness = 1.0f;
+    uint32_t  fontSize         = 13;
+
+    bool operator==(const FExpanderStyle&) const = default;
+};
+
+/// Preset type scale. Theme keys consume these (`text` / `text.header` /
+/// `text.small` / `text.caption` / `textfield` / `textfield.compact`).
+/// Do not scatter `setFontSize(12)` for chrome roles — pick a key.
+namespace gui_type
+{
+inline constexpr uint32_t kTitle   = 28;
+inline constexpr uint32_t kHeader  = 14;
+inline constexpr uint32_t kBody    = 16;
+inline constexpr uint32_t kSmall   = 12;
+inline constexpr uint32_t kCaption = 11;
+}
+
+/// Single-line text field: fill, hover, caret, outline. `textfield.compact`
+/// is the same chrome at `gui_type::kSmall`. Authoring `setFontSize` patches
+/// the style; paint reads `resolvedStyle().fontSize`. Text is clipped to the
+/// padded inner rect (caret-follow scroll, no font autosize, no Fill grow).
 struct FTextFieldStyle
 {
     FBrush    backgroundFill = FBrush::solid({0.08f, 0.09f, 0.12f, 1.0f});
+    FBrush    hoveredFill    = FBrush::solid({0.22f, 0.25f, 0.32f, 1.0f});
     FBrush    errorFill        = FBrush::solid({0.72f, 0.24f, 0.24f, 0.45f});
     glm::vec4 textColor      = {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec4 caretColor     = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 selectionColor = {0.24f, 0.46f, 0.82f, 0.45f};
+    glm::vec4 borderColor    = {0.48f, 0.52f, 0.60f, 1.0f};
+    glm::vec4 errorBorderColor = {0.90f, 0.35f, 0.35f, 1.0f};
+    glm::vec2 padding        = {6.0f, 2.0f};
     uint32_t  fontSize       = 16;
 
     bool operator==(const FTextFieldStyle&) const = default;
@@ -333,6 +375,8 @@ struct FSelectableRowStyle
 };
 
 /// Inspector numeric drag: fill, dragging fill, text, outline.
+/// `padding` is FramePadding: text sits inside the field, not against the
+/// 1px outline. Vec rows still space fields with the parent row's spacing.
 struct FDragFloatStyle
 {
     FBrush    backgroundFill = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f});
@@ -340,8 +384,9 @@ struct FDragFloatStyle
     FBrush    draggingFill   = FBrush::solid({0.18f, 0.24f, 0.34f, 1.0f});
     FBrush    errorFill      = FBrush::solid({0.72f, 0.24f, 0.24f, 0.45f});
     glm::vec4 textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 borderColor    = {0.30f, 0.33f, 0.40f, 1.0f};
+    glm::vec4 borderColor    = {0.48f, 0.52f, 0.60f, 1.0f};
     glm::vec4 errorBorderColor = {0.90f, 0.35f, 0.35f, 1.0f};
+    glm::vec2 padding       = {6.0f, 2.0f};
     uint32_t  fontSize       = 13;
 
     bool operator==(const FDragFloatStyle&) const = default;
@@ -403,7 +448,7 @@ struct FSpinBoxStyle
     FBrush    buttonFill        = FBrush::solid({0.22f, 0.24f, 0.30f, 1.0f});
     FBrush    buttonHoveredFill = FBrush::solid({0.42f, 0.48f, 0.62f, 1.0f});
     glm::vec4 textColor         = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 borderColor       = {0.30f, 0.33f, 0.40f, 1.0f};
+    glm::vec4 borderColor       = {0.48f, 0.52f, 0.60f, 1.0f};
     uint32_t  fontSize          = 13;
 
     bool operator==(const FSpinBoxStyle&) const = default;
@@ -421,13 +466,15 @@ struct FRadioButtonStyle
     bool operator==(const FRadioButtonStyle&) const = default;
 };
 
-/// Color edit chrome (swatch background / channel highlight). The edited
-/// `_color` is the control value, not a style field.
+/// Color edit chrome. The edited `_color` is the control value, not a style
+/// field. Channel fields share this fill — ColorEdit has no selected channel.
+/// `padding` is ItemInnerSpacing + FramePadding: gap after the swatch, gap
+/// between RGBA cells, and inset of the swatch/cells from the control edge.
 struct FColorEditStyle
 {
     FBrush    backgroundFill    = FBrush::solid({0.12f, 0.13f, 0.17f, 1.0f});
     glm::vec4 textColor         = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 channelHighlight  = {0.24f, 0.46f, 0.82f, 1.0f};
+    glm::vec2 padding          = {6.0f, 3.0f};
     uint32_t  fontSize          = 13;
 
     bool operator==(const FColorEditStyle&) const = default;
@@ -455,11 +502,10 @@ struct FImageStyle
     bool operator==(const FImageStyle&) const = default;
 };
 
-/// Popup/modal shield. Non-modal popups paint nothing; modal uses modalFill.
+/// Popup overlay catalog type. Modal is input capture only; visual chrome
+/// (dim, blur, image) is an app-composed child, not a popup style field.
 struct FPopupStyle
 {
-    FBrush modalFill = FBrush::solid({0.0f, 0.0f, 0.0f, 0.45f});
-
     bool operator==(const FPopupStyle&) const = default;
 };
 
@@ -495,6 +541,8 @@ struct FDragDropStyle
     X(FTextStyle, TextMuted, "text.muted")           \
     X(FTextStyle, TextError, "text.error")           \
     X(FTextStyle, TextEyebrow, "text.eyebrow")       \
+    X(FTextStyle, TextSmall, "text.small")           \
+    X(FTextStyle, TextCaption, "text.caption")       \
     X(FMenuBarItemStyle, MenuBar, "menubar")         \
     X(FTabStyle, Tab, "tab")                         \
     X(FTabStyle, TabSidebar, "tab.sidebar")          \
@@ -504,7 +552,10 @@ struct FDragDropStyle
     X(FDockSpaceStyle, Dock, "dock")                 \
     X(FFloatingWindowStyle, Floating, "floating")    \
     X(FTreeViewStyle, Tree, "tree")                  \
+    X(FExpanderStyle, Expander, "expander")          \
+    X(FExpanderStyle, ExpanderHeader, "expander.header") \
     X(FTextFieldStyle, TextField, "textfield")       \
+    X(FTextFieldStyle, TextFieldCompact, "textfield.compact") \
     X(FMenuStyle, Menu, "menu")                      \
     X(FSelectableRowStyle, Selectable, "selectable") \
     X(FDragFloatStyle, DragFloat, "dragfloat")       \

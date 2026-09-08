@@ -22,6 +22,7 @@
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Widgets/Controls/Expander.h"
 #include "GUI/Widgets/Controls/TreeView.h"
 
 #include <algorithm>
@@ -93,6 +94,8 @@ void UITypeRegistry::ensureBuiltinTypesRegistered()
                  [] { return std::make_shared<UISizeBox>("SizeBox"); });
     registerType({.typeId = kTypeIdTreeView, .displayName = "Tree View", .category = "Basic"},
                  [] { return std::make_shared<UITreeView>("TreeView"); });
+    registerType({.typeId = kTypeIdExpander, .displayName = "Expander", .category = "Layout"},
+                 [] { return std::make_shared<UIExpander>("Expander"); });
     registerType({.typeId = kTypeIdDockSpace, .displayName = "Dock Space", .category = "Layout"},
                  [] { return std::make_shared<UIDockSpace>("DockSpace"); });
     registerType({.typeId = kTypeIdPopupOverlay, .displayName = "Popup Overlay", .category = "Layout"},

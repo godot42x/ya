@@ -203,6 +203,22 @@ YA_UI_ANONYMOUS_FACTORY(menuBar, UIMenuBarWidgetBuilder)
 }
 YA_UI_ANONYMOUS_FACTORY(treeView, UITreeViewWidgetBuilder)
 
+[[nodiscard]] inline UIExpanderWidgetBuilder treeNode(std::string key, std::string displayName = {})
+{
+    return UIExpanderWidgetBuilder{std::move(key), std::move(displayName)};
+}
+YA_UI_ANONYMOUS_FACTORY(treeNode, UIExpanderWidgetBuilder)
+
+/// ImGui `CollapsingHeader`: the same `UIExpander` / `treeNode` with Framed.
+[[nodiscard]] inline UIExpanderWidgetBuilder collapsingHeader(std::string key, std::string displayName = {})
+{
+    return treeNode(std::move(key), std::move(displayName)).setFramed(true);
+}
+[[nodiscard]] inline UIExpanderWidgetBuilder collapsingHeader()
+{
+    return treeNode().setFramed(true);
+}
+
 [[nodiscard]] inline UIDockSpaceWidgetBuilder dockSpace(std::string key, std::string displayName = {})
 {
     return UIDockSpaceWidgetBuilder{std::move(key), std::move(displayName)};

@@ -33,6 +33,7 @@ inline constexpr const char* kTypeIdTabBar         = "engine.tab_bar";
 inline constexpr const char* kTypeIdOverlay        = "engine.overlay";
 inline constexpr const char* kTypeIdSizeBox        = "engine.size_box";
 inline constexpr const char* kTypeIdTreeView       = "engine.tree_view";
+inline constexpr const char* kTypeIdExpander       = "engine.expander";
 inline constexpr const char* kTypeIdDockSpace      = "engine.dock_space";
 inline constexpr const char* kTypeIdPopupOverlay   = "engine.popup_overlay";
 

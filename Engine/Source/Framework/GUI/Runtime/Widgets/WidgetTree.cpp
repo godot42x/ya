@@ -95,6 +95,17 @@ void WidgetTree::setTheme(UITheme* theme)
     _themeGeneration->set(_themeGeneration->value() + 1);
 }
 
+void WidgetTree::setTextureSource(IGuiTextureSource* source)
+{
+    if (_textureSource == source) {
+        return;
+    }
+    _textureSource = source;
+    _textureCatalog.setSource(source);
+    _textureCatalog.invalidateAll();
+    _bHasTextureEpoch = false;
+}
+
 UIElement* WidgetTree::hitTestAt(UIElement* element,
                                  const glm::vec2& logicalPoint,
                                  bool bForHover,
@@ -140,15 +151,15 @@ UIElement* WidgetTree::hitTestAt(UIElement* element,
     return element;
 }
 
-UIElement* WidgetTree::hoverOwnerAlongPath(UIElement* target)
+UIElement* WidgetTree::hoverOwnerAlongPath(UIElement* target, const glm::vec2& logicalPoint)
 {
-    // The target is the single topmost hit; the hover owner is simply the
-    // deepest isHoverable() widget on its ancestor chain. No separate scan, no
-    // tie-breaking: deterministically the most specific interactive widget
-    // under the pointer (a text child resolves to its hoverable button, a
-    // split divider resolves to the split pane, and so on).
+    // The target is the single topmost hit. Hover chrome must still match
+    // hitTestSelf: an expander is hoverable, but only the header is its
+    // hover region, so a body label must not light the header (or an
+    // ancestor framed section). A text child still resolves to its button
+    // because the button's hitTestSelf is the full layout rect.
     for (UIElement* node = target; node != nullptr; node = node->getParent()) {
-        if (node->isHoverable() && node->isAttached()) {
+        if (node->isHoverable() && node->isAttached() && node->hitTestSelf(logicalPoint)) {
             return node;
         }
     }
@@ -671,7 +682,7 @@ void WidgetTree::detach(UIElement& widget)
 
     for (const auto& layer : _layers) {
         if (layer.get() == &widget) {
-            YA_CORE_ERROR("WidgetTree::detach: system layers cannot be detached by project code");
+            YA_CORE_ASSERT(false, "WidgetTree::detach: system layers cannot be detached by project code");
             return;
         }
     }
@@ -838,8 +849,8 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     // maps logical canvas points to framebuffer pixels. The cached draw-item
     // segments hold final target-pixel coordinates, so any change to either
     // factor (or offset/generation) must drop both cache buffers.
-    // generation is the host token for resolver identity (texture ready);
-    // scale/offset are the coordinate mapping.
+    // generation is the host token for resolver *identity* (tests swapping a
+    // fake source). Everyday texture ready is path-keyed via the catalog.
     const glm::vec2 effectiveScale = ctx.uiScale * _dpiScale;
     const bool bGenerationChanged =
         _bHasBuildContext && ctx.generation != _lastGeneration;
@@ -859,11 +870,25 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     _lastUiScale      = effectiveScale;
     _lastOffset       = ctx.offset;
 
+    _textureCatalog.setSource(_textureSource);
+    if (bGenerationChanged) {
+        _textureCatalog.dropCachedLookups();
+    }
+    if (_textureSource) {
+        const uint64_t epoch = _textureSource->epoch();
+        if (_bHasTextureEpoch && epoch != _lastTextureEpoch) {
+            _textureCatalog.refreshFromSource();
+        }
+        _bHasTextureEpoch = true;
+        _lastTextureEpoch = epoch;
+    }
+
     // Pass the DPI-folded scale to the builder: uiScale is the single
     // logical->target-pixel factor it reads. User zoom (ctx.uiScale) and DPI
     // (_dpiScale) stay decoupled up to this point.
     UIFrameBuildContext effectiveCtx = ctx;
     effectiveCtx.uiScale = effectiveScale;
+    effectiveCtx.textureCatalog = &_textureCatalog;
 
     std::chrono::steady_clock::duration layoutDur{};
     if (_bLayoutDirty) {
@@ -1117,7 +1142,8 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
     // above stays valid for the route above.
     if (eventType == EEvent::MouseMoved || eventType == EEvent::MouseButtonPressed) {
         updateHovered(hoverOwnerAlongPath(
-            hitTestAt(_root.get(), ctx.logicalPoint, /*bForHover=*/true)));
+            hitTestAt(_root.get(), ctx.logicalPoint, /*bForHover=*/true),
+            ctx.logicalPoint));
     }
     return result;
 }

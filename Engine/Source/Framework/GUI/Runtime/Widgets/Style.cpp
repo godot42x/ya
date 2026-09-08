@@ -108,12 +108,30 @@ YA_REFLECT_FIELD(dropIndicator)
 YA_REFLECT_FIELD(fontSize)
 YA_REFLECT_END_EXTERNAL()
 
+YA_REFLECT_BEGIN_EXTERNAL(ya::FExpanderStyle)
+YA_REFLECT_FIELD(textColor)
+YA_REFLECT_FIELD(headerFill)
+YA_REFLECT_FIELD(hoveredFill)
+YA_REFLECT_FIELD(pressedFill)
+YA_REFLECT_FIELD(focusedFill)
+YA_REFLECT_FIELD(arrowColor)
+YA_REFLECT_FIELD(arrowHoveredFill)
+YA_REFLECT_FIELD(outlineColor)
+YA_REFLECT_FIELD(guideColor)
+YA_REFLECT_FIELD(outlineThickness)
+YA_REFLECT_FIELD(fontSize)
+YA_REFLECT_END_EXTERNAL()
+
 YA_REFLECT_BEGIN_EXTERNAL(ya::FTextFieldStyle)
 YA_REFLECT_FIELD(backgroundFill)
+YA_REFLECT_FIELD(hoveredFill)
 YA_REFLECT_FIELD(errorFill)
 YA_REFLECT_FIELD(textColor)
 YA_REFLECT_FIELD(caretColor)
 YA_REFLECT_FIELD(selectionColor)
+YA_REFLECT_FIELD(borderColor)
+YA_REFLECT_FIELD(errorBorderColor)
+YA_REFLECT_FIELD(padding)
 YA_REFLECT_FIELD(fontSize)
 YA_REFLECT_END_EXTERNAL()
 
@@ -149,6 +167,7 @@ YA_REFLECT_FIELD(errorFill)
 YA_REFLECT_FIELD(textColor)
 YA_REFLECT_FIELD(borderColor)
 YA_REFLECT_FIELD(errorBorderColor)
+YA_REFLECT_FIELD(padding)
 YA_REFLECT_FIELD(fontSize)
 YA_REFLECT_END_EXTERNAL()
 
@@ -204,7 +223,7 @@ YA_REFLECT_END_EXTERNAL()
 YA_REFLECT_BEGIN_EXTERNAL(ya::FColorEditStyle)
 YA_REFLECT_FIELD(backgroundFill)
 YA_REFLECT_FIELD(textColor)
-YA_REFLECT_FIELD(channelHighlight)
+YA_REFLECT_FIELD(padding)
 YA_REFLECT_FIELD(fontSize)
 YA_REFLECT_END_EXTERNAL()
 
@@ -222,7 +241,6 @@ YA_REFLECT_FIELD(errorFill)
 YA_REFLECT_END_EXTERNAL()
 
 YA_REFLECT_BEGIN_EXTERNAL(ya::FPopupStyle)
-YA_REFLECT_FIELD(modalFill)
 YA_REFLECT_END_EXTERNAL()
 
 YA_REFLECT_BEGIN_EXTERNAL(ya::FDragDropStyle)
@@ -517,6 +535,21 @@ FVisualChrome visualChrome(const FTreeViewStyle& style)
         .selectedHovered = style.selectedFill,
         .error           = style.selectedFill,
         .dropTarget      = style.selectedFill,
+    };
+}
+
+FVisualChrome visualChrome(const FExpanderStyle& style)
+{
+    return FVisualChrome{
+        .normal          = style.headerFill,
+        .hovered         = style.hoveredFill,
+        .pressed         = style.pressedFill,
+        .focused         = style.focusedFill,
+        .disabled        = style.headerFill,
+        .selected        = style.headerFill,
+        .selectedHovered = style.hoveredFill,
+        .error           = style.headerFill,
+        .dropTarget      = style.headerFill,
     };
 }
 

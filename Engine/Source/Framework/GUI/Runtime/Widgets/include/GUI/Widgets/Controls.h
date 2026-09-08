@@ -23,4 +23,6 @@
 #include "../../../Controls/SelectableRow.h"
 #include "../../../Controls/TextField.h"
 #include "../../../Controls/TreeView.h"
+#include "../../../Controls/Expander.h"
+#include "../../../Controls/DisclosureChrome.h"
 #include "../../../Controls/DockSpace/DockNode.h"
