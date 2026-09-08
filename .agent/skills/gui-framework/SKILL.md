@@ -22,8 +22,8 @@ description: YA GUI 框架（WidgetTree / 控件 / layout / Render2D pass slot /
 - 手感验收走 Gallery `--scenario` 的状态组合（见下方交互契约 1–11）和 editor 手测
   （选区、选色、dock 关 tab、Hierarchy 右键、Designer 树 DnD）。路径存在 ≠ 手感等价。
 - closure dump/route/dirty **测不出**：`isHoverable`、presenter 选中循环、首次 expand
-  的 Layout Reactive、Modal≠dim、page `leave` 拆 Popup、ColorEdit 是否真渐变。
-  Gallery scenario 必须点 hover/select/expand/resize，不能只 assert 控件存在。
+  的 Layout Reactive、Modal 输入独占、page `leave` 拆 Popup、ColorEdit SV 是否是
+  ImGui 两层一维顶点色（S 再 V-alpha；不是四角 2D quad，也不是 HSV 格子）。Gallery scenario 必须点 hover/select/expand/resize，不能只 assert 控件存在。
 - 内核体验长线见 `.agent/plan/gui-kernel-ux-parity/`。parity 表
   `.agent/plan/gui-framework-editor-readiness/imgui-widgettree-parity.md`
   里 ✅ 只表示 retained 有一条能完成核心工作流的路径。
@@ -39,7 +39,9 @@ Framework/GUI/
   Host/               ya-gui-host        standalone 宿主：SDL 窗口、Vulkan、帧循环、automation
 Framework/Render/                        ya-render-2d / ya-render-resources（Font/glyph、Render2D）
 Framework/App/Kernel  ya-app-kernel      唯一 while-loop；GUI 与 GameRuntime 共用
-Example/GUIWorkbench/                    retain-mode demo app（页面注册进 FWorkbenchSurface）
+Example/GUIWorkbench/                    Feature Gallery（FWorkbenchSurface 分组 rail：
+                                         Diagnostics/Controls/Layout/Paint/Text/Style/
+                                         Overlays/Interaction/Data/Composition）
 Applications/GameRuntime                 ya::App 产品壳（scene / RenderRuntime / modules）
 Applications/GameEditor                  EditorModule + EditorSurface（不是独立主循环）
 ```
@@ -107,6 +109,9 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
 - 快照：`buildSnapshot`（layout dirty 时才 layout + paint）→ 不可变 `UIFrameSnapshot`；
   录制只消费快照。命令录制期绝不读 live tree。业务代码不得在 paint/layout
   回调中直接修改 tree 结构；tooltip/drag 等 framework maintenance 只在显式 pass boundary 执行。
+  渐变走 `UIFrameBuilder::addRectFilledMultiColor`（Y-down 四角：TL/TR/BR/BL）→
+  `Render2D::makeRectFilledMultiColor`。GPU 一个 quad 是两个三角形，二维四角场会出对角缝；
+  一维渐变（对边同色）才正确。HSV 方是两层 1D（S 再 V-alpha），不要用 sprite 格子或控件离屏 RT。
   编辑器规模基线在 `EditorScaleBaselineTest`：Hierarchy 只 paint 视口窗口、Content 目录
   `computeKeyedVisibleWindow` 与 catalog 规模无关、Inspector 列第二次干净 snapshot `rebuiltWidgets==0`。
   长时结构 soak 在 `EditorLongRunSoakTest`：同 subtree attach/detach、destroy/recreate、theme 切换、
@@ -159,9 +164,18 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   `hideTabBar`（默认展示 tab strip；右键菜单或左上角 12px 折角只 Collapsed 掉 title bar，
   面板内容继续填满 leaf。split ratio / 选 tab / hide-tab-bar 只改 live chrome 并
   `notifyDockLayoutListeners()`；结构变化才 `rebuildProjection()`，且会先 unlink 再
-  reparent/attach 已挂载的 panel widget，禁止对仍有 parent 的 panel `addDetachedChild`）。
+  reparent/attach 已挂载的 panel widget，禁止对仍有 parent 的 panel `addDetachedChild`。
+  floating 停靠 cardinal split 时，drag keepAlive 仍握着刚 detach 的 floating window，
+  panel 的 `_tree` 已空但 `_parent` 还在 chrome 上：`releaseMountedPanels` 必须把
+  **dock tree 里每一块 panel**（不只是旧 `_leafViews`）从任何 parent 上摘下来，
+  `unlinkWidgetFromVisualParent` 在无 tree 时也要 `removeChildEdge`。否则 north-of-leaf
+  新叶是空白，直到再切一次 tab。
   叶内 tab 可关（`UITabButton` close hit-zone → `FDockContext::closePanel`）并可在同 leaf
-  拖到 tab 条上 `movePanel` 重排；`FDockPanelRecord.closable=false` 隐藏关闭钮。
+  拖到 tab 条上 `movePanel` 重排；同 leaf 内容区 / 边缘 drop 只 `selectPanel` + graft，
+  **不会** `splitLeaf`（点击 titlebar 切换 tab 越过 6px 拖动阈值时禁止把 Runtime/Viewport
+  拆成上下两叶）。`resolveDropPreview` 的 source-leaf fallback（指针在所有 leaf 外）
+  不是 same-leaf merge：`canAccept` 必须为 false，finish observer 才能 `NoTarget` tear-off。
+  Cardinal split 只作用于**另一个** leaf 的边缘。`FDockPanelRecord.closable=false` 隐藏关闭钮。
   `FDockContext::exportLayoutJson` / `importLayoutJson` 在同一 JSON 上附加
   `floating[]`（panel keys + pos/size + selected tab + `hideTabBar`）。Editor 经
   `ConfigManager` `editor.dockLayout` 恢复，`FDockContext::appendOnDockUpdated`
@@ -183,7 +197,7 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
 
 ## 静态 DSL（live construct）
 
-- 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/panel/splitPane/scroll/overlay/sizeBox/...` 组好 builder，再单独 `ui::build(tree, parent, std::move(page))` 物化 live `UIElement`（Slate `SNew`）。不要把整棵 DSL 包进 `ui::build(...)`。`setAnchors` / `fillParent` / panel `setCornerRadius` / panel+text `setStyleKey` / `setStyle`（freeze）/ `setStyleField`（单键 inherit）/ container `childFill` 与 `child(node, FBoxSlotArgs)` / overlay `child(node, FOverlaySlotArgs)` 在 Construct 时写到 live widget。`setTooltip` 写在 base builder；Text `setWrap` / `setMaxWrapWidth` 控制折行；base `setVisibility`；split `setPadding`。`ui::button` 没有 `setText`；文字走内部 `UIText` 子 widget。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。自定义 / 复杂 demo widget（MenuBar、TreeView、TableGrid、DragFloat/SpinBox/RadioButton/ColorEdit/SearchComboBox、UIDragDropTile、DockSpace、SelectableRow）用 `child(UIElementRef)` 挂进 DSL 壳，不要为此扩 Construct。Gallery / Interactions / Dock / Workbench 内置 Editor demo（`FWorkbenchSurface::buildEditorDemo`）已是一次 `ui::build`。Editor 的 `rebuildItemRows()` 仍是事件期 live attach/detach `UISelectableRow`。弹层（Menu / Modal / Dialog）仍在点击时 live 组装。Dock floating host 仍 `attachToLayer(Popup, host, fill canvas args)`。Render 仍是 raw retained 对照。GameEditor chrome 已切到 `EditorSurface`（整窗 WidgetTree，不是 ImGui 内嵌 panel）。
+- 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/panel/splitPane/scroll/overlay/sizeBox/...` 组好 builder，再单独 `ui::build(tree, parent, std::move(page))` 物化 live `UIElement`（Slate `SNew`）。不要把整棵 DSL 包进 `ui::build(...)`。`setAnchors` / `fillParent` / panel `setCornerRadius` / panel+text `setStyleKey` / `setStyle`（freeze）/ `setStyleField`（单键 inherit）/ container `childFill` 与 `child(node, FBoxSlotArgs)` / overlay `child(node, FOverlaySlotArgs)` 在 Construct 时写到 live widget。`setTooltip` 写在 base builder；Text `setWrap` / `setMaxWrapWidth` 控制折行；base `setVisibility`；split `setPadding`。`ui::button` 没有 `setText`；文字走内部 `UIText` 子 widget。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。自定义 / 复杂 demo widget（MenuBar、TreeView、TableGrid、DragFloat/SpinBox/RadioButton/ColorEdit/SearchComboBox、UIDragDropTile、DockSpace、SelectableRow）用 `child(UIElementRef)` 挂进 DSL 壳，不要为此扩 Construct。GUIWorkbench Feature Gallery 各页与 Workbench 内置 Editor demo（`FWorkbenchSurface::buildEditorDemo`）已是一次 `ui::build`。Editor 的 `rebuildItemRows()` 仍是事件期 live attach/detach `UISelectableRow`。弹层（Menu / Modal / Dialog）仍在点击时 live 组装。Dock floating host 仍 `attachToLayer(Popup, host, fill canvas args)`。Render 仍是 raw retained 对照。GameEditor chrome 已切到 `EditorSurface`（整窗 WidgetTree，不是 ImGui 内嵌 panel）。
 - `UIDescription` / `UIReconciler` / `UIRenderController` / apply hook **已删除**。不要恢复 Description → apply → widget 转发层。
 - Document/script：`UIDocument::instantiate()`（registry factory）只实例化一次。变长集合走列表控件 + `ReactiveList`，不是整页 re-run。
 - `UIScreen` 是挂卸 / z-order / input blocking，不是每帧 `render()` owner。Gallery / Editor 不使用它；接到游戏多表面（HUD/模态）之前保持搁置。
@@ -202,7 +216,7 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   容量 `MaxVertexCount × kFrameFlushSlots`，超限 assert（见 memory：multi-flush 覆盖坑）。
   kind 切换也算一次该 backend 的 flush，连续同类仍合批。
 - Session 是 state-change batcher：`pendingKind ∈ {None, ScreenQuad, WorldQuad, Line}`。
-  `makeSprite` / `makeText` / `drawRoundedRect` → ScreenQuad，`makeWorldSprite` → WorldQuad，
+  `makeSprite` / `makeText` / `drawRoundedRect` / `makeRectFilledMultiColor` → ScreenQuad，`makeWorldSprite` → WorldQuad，
   `makeWorldLine` / wire → Line。kind 一变先 `flushPending()` 再切换，GPU draw 顺序 = emit
   顺序。禁止在 `end()` 里按 world→screen→line 固定倒空。clip 改栈 flush 的是 pending
   kind（三条 backend），不是只 flush screen quad。
@@ -252,11 +266,31 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
 - 启动时 **WidgetTree 唯一 chrome**：整窗 `EditorSurface` + `replayUIFrameSnapshot`；3D 仍离屏
   compose，树只采样那张 RT。`--editor-chrome=imgui` / `editor.chrome.host=imgui` 会被忽略并打 WARN。
 - WidgetTree 输入：`EditorInputNode` → `WidgetTree::dispatchEvent`。
+  所有权分层（不要在 Router 里每条事件 `cancelHeldKeys`）：
+  1. `EditorSurface` 先把事件交给 chrome 树。Viewport gizmo overlay **只在 LMB drag** 时 Exclusive；hover 一条轴不得吞 MouseMoved，否则树的 hover 冻在 viewport 上，dock/split 收不到 press。
+  2. Overlay 命中用 **指针是否在 viewport imageRect 内**（或 gizmo 正在 capture），不要用 stale 的 hover/focus。
+  3. 点在 viewport image 上 `takeKeyboardFocus()`。Image 必须 `Focusable`，否则 WidgetTree 会 `setFocus(nullptr)`，WASD 只剩 hover 碰巧有效。
+  4. Viewport 3D 右键菜单在 **release** 打开（press 记 pending；移动超过 ~4px 视为 look）。同一时间一个 viewport menu。
+  5. RMB look 是 `EditorInputNode` 上的会话（`_bLooking`），不是“本帧 IM 里 RMB 还在 + stale viewportMouse”。按住期间 MouseMoved/WASD 继续进 `InputManager`，即使指针离开 image。
+  6. 只把 **IM 当前按住的** KeyReleased / MouseButtonReleased 回写 IM。键盘所有权从相机丢掉的那一次（焦点/hover/look 全无）才 `cancelHeldKeys()`。
+  7. `shouldCaptureInput()` = viewport hover/focus **或** RMB held。`FreeCameraController` 只读 IM，不读 WidgetTree。
+  8. `UISplitPane` 分隔条双击（400ms / 6px，与 SpinBox 相同时钟）把 ratio 重置为 0.5，并写回 binding / dock callback。
 - Viewport gizmo 已改为 retained host + native math controller：`EditorViewportGizmoOverlay`
   只路由输入，`EditorViewportGizmoController` 负责世界空间 translate/rotate/scale 与 undo，绘制在
   `EditorModule` 的 viewport compose callback 中走 `Render2D`（`layer.gizmo().recordOverlay()`）。
 - `onImGuiRender` 编辑器 chrome shell（menu/toolbar/dockspace/viewport/debug/settings/project browser）已删除。
-- GUIWorkbench 是独立 FeatureGallery（`FWorkbenchSurface` 挂 GUIApp）；GameEditor 不把 Workbench 做成 dock tab。
+- GUIWorkbench 是独立 Feature Gallery（`FWorkbenchSurface` 挂 GUIApp）。左侧 rail 是
+  分组 `UISelectableRow` 列表（`UIScrollViewport` + group `UIText`），**不是**垂直 `UITabBar`。
+  `--start-page` / smoke 一律按页名 `selectPageByName`，禁止 `tabs[N]`。
+  分组与页名：
+  Diagnostics=`Render`；Controls=`Widgets`/`Inputs`；Layout=`Box`/`Hosts`/`ScrollSplit`；
+  Paint=`Brush`；Text=`Text`/`Fonts`；Style=`Theme`；Overlays=`Menus`/`Dialog`；
+  Interaction=`DragDrop`/`Enable`；Data=`Binding`/`Tree`/`Table`；
+  Composition=`Dock`/`DSL`/`Editor`。
+  旧名别名：`Layout`→`Box`，`Gallery`→`Binding`，`Modal`/`Interactions`→`Dialog`，
+  `Unicode`/`中文测试`→`Fonts`，`RoundedRect`→`Brush`。
+  页源码在 `Example/GUIWorkbench/Source/Pages/`，builder 仍从 `WorkbenchDemoPages.h` 转发。
+  GameEditor 不把 Workbench 做成 dock tab。
   Dock 只把**当前选中 tab** 的
   panel widget `addDetachedChild` 进树；未选中的 panel 是 detached subtree。
 - WidgetTree chrome teardown：`EditorSurface::shutdown` 必须在 compositor / VMA
@@ -267,14 +301,39 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   bridge / GameRuntime `GuiSystem`/`ImGuiSystem` 已删。进程不再链接 `imgui-local`。
   不要再引入 ImGui-shaped `IGuiBackend` 或强迫 EditorSurface 走它。
 - WidgetTree chrome 的 theme 走 `buildEditorTheme`（`GameEditor/UI/EditorTheme.h`），
-  不要直接调 `buildWorkbenchTheme`。Chrome 文案用 `text.header` / `text.muted` /
-  `text.error` / `text.eyebrow`，不要 `setColor` 字面量（显式着色会盖掉 theme）。
+  不要直接调 `buildWorkbenchTheme`。Workbench `text.header` 是 page title（`gui_type::kTitle` 28）；
+  EditorTheme 把它覆写成 `gui_type::kHeader`（14），Runtime/Inspector 段标题才能是面板 header。
+  Chrome 文案用 `text.header` / `text.muted` /
+  `text.error` /   `text.eyebrow` / `text.small` / `text.caption`，不要 `setColor` 字面量（显式着色会盖掉 theme）。
+  字号走 `ya::gui_type`（`kTitle/kHeader/kBody/kSmall/kCaption`）和对应 theme key；
+  紧凑输入用 `textfield.compact`，不要给 path 字段散落 `setFontSize(12)`。
+  Inspector ColorEdit / DragFloat 的内边距是 `FColorEditStyle::padding` /
+  `FDragFloatStyle::padding`（ImGui FramePadding / ItemInnerSpacing），不要把
+  `"R 0.60"` 画成一串居中字符串。`UITextField` 同样有 `FTextFieldStyle::padding`，
+  paint 把文字/caret clip 到 padded inner rect，并在焦点下横向滚到 caret；不要自适应字号，
+  也不要为了长路径撑开 Fill 表单行。`TextureRef` 是「path 填满一行 + Browse + Show」，预览在下一行；
+  禁止把缩略图、路径框、Browse 塞进同一行。Show 经 `EditorRevealAssetCallback`
+  （`EditorLayer::revealInContentBrowser` → `EditorSurface::showContentBrowser` / `content-browser` tab
+  → `FileExplorer::setSelectedPath`）。`propertyLabelFromPath` 的 `" / "` group 是 expander **路径**，
+  Sampler Config 嵌在 Texture Slot 里，不要做成同级 collapsing header。
+- Canvas `fill()` / `anchor({0,0},{1,1})` 的 `offset({x,y})` **只移动 min 角**，span 仍是父矩形全高/全宽
+  （`resolveCanvasRect`）。菜单+toolbar 下的 Dock、Hierarchy 过滤条下的 scroll，必须用
+  `insets(FMargin{left, top, right, bottom})` 收缩 fill，不能 `fill().offset({0, chromeTop})`。
+  合同：`WidgetLayoutTest.CanvasFillOffsetDoesNotShrinkTheChild` vs
+  `CanvasFourSideOffsetsInsetTheChildWithoutAnExplicitSize`。
 - `SelectionModel` 是 identity 选择源（`GUI/Binding/SelectionModel.h`）：selected 有序集合 + primary（空或不在集合外）+ hover/active/focus。不持有 Entity*。控件绑 `primaryRef()`；多选走 `add`/`toggle`；`replace` 批量同步。`EditorHierarchyTab` 在 `onAttached` 拉一次 Layer 选择，之后只订 `EditorLayer::onSelectionChanged`。
 - `ActionMap` 是 identity 命令表（`GUI/Binding/ActionMap.h`）：菜单、快捷键、toolbar 都 `execute(id)`。`FActionChord::primary` 在 macOS 是 Cmd、别处是 Ctrl。WidgetTree 未处理的 KeyPressed 才走 shortcut；文本焦点下只匹配带 modifier 的 chord。`UIMenu::FItem::fromAction` 生成同一 execute 的菜单行。
 - `UndoStack` 是 identity 撤销历史（`GUI/Binding/UndoStack.h`）：`push` 记录已应用的 undo/redo 闭包，不在 push 时调用 redo。`beginMerge`/`endMerge` 把同一 `mergeKey` 的连续 push 收成一步（拖动）；`UndoTransaction` 把嵌套 push 收成一步。栈不持有 Entity*。`edit.undo` / `edit.redo` 走 ActionMap（macOS Redo 是 Cmd+Shift+Z，别处 Ctrl+Y）。Inspector 拖动 `UIDragFloat` 在 `_onDragBegan/Ended` 开闭 merge；`setValue(..., false)` 是 sync，不进 undo。Gizmo / viewport 选择仍未接入。
-- `PropertyGraph::project` 是反射字段 → editor field model 的入口（`PropertyAccessor::collectLeaves` + `PropertyProjectionRegistry`）。单实例 typed get/set/equals/validation 在 `Core/Reflection/PropertyAccessor`；`PropertyHandle` 只做多选 mixed、undo copy/restore、asset picker kind 和 owner callback。Transform projection 负责显示名和 `setPosition/setRotation/setScale` 写回。Inspector 对多选的 **交集** component 物化 `EditorAutoPropertySection`；`UIDragFloat` mixed 显示 "—"，编辑写回全部 instance，undo 按 instance 快照恢复。enum 字段走 `UIComboBox`；`.color()` 元数据的 `glm::vec3`/`glm::vec4` 走 `UIColorEdit`（非 color vec3 仍走 DragFloat）。`TextureRef`/`ModelRef`/`MeshRef` 走 path `UITextField` + Browse；Browse 经 `EditorAssetPickerCallback`（widgettree：`EditorLayer::setAssetPickerHandler` → `EditorSurface::openAssetPickerDialog`；handler 缺失时 `FilePicker::open*` 仍作 fallback，无 ImGui `render`）。`PropertyHandle::validationError` 转调 `PropertyAccessor` 的 manipulate spec 范围；`hasAssetResolveError` 对 failed resolve 画 error fill；`UIDragFloat`/`UITextField` `setError` 画 error fill。`UIImage` 对缺失 asset / `setResourceMissing` 画 error fill。没有 retained 可编辑字段的类型跳过。ImGui `DetailsView` / `TypeRenderer` 已删；`EditorInspectorTab` 是实体/component 唯一正式 Inspector UI，并显示 Game UI Entry 摘要 + Open in UI Designer。
-- `EditorSurface` Content Browser：`EditorContentBrowserTab` 持有 `FileExplorer` 与 keyed window；fingerprint 含 search + selected path；选中纹理调 `inspectAsset`。行列图标走 `editor_icons` 资产路径，不再经 ImGui texture cache。
-- `UITreeView` 在 `UIScrollViewport` 内只 paint 可见行窗口（`computeKeyedVisibleWindow` + `getPaintedRowCount`）；`EditorHierarchyTab` 用 scroll 包裹。flatten/hit-test 仍读全量可见行；无 per-row widget。`bindFilter` + `HierarchyFilter` 搜索框过滤节点；`setReorderable` + `FTreeReorderDragDropOp`：Hierarchy 走 `moveEditorHierarchyEntity`（`ui:` 条目仍不可重排）；UI Designer 树接到 `UIDesignerPanel::applyWidgetDrop`。结构变化走 `EditorLayer::onHierarchyChanged`，不在 Surface 轮询 fingerprint。ImGui `SceneHierarchyPanel::sceneTree` 已删（Phase 8O）；`SceneHierarchyPanel` 仅保留 viewport 选择总线 API。
+- `PropertyGraph::project` 是反射字段 → editor field model 的入口（`PropertyAccessor::collectLeaves` + `PropertyProjectionRegistry`）。单实例 typed get/set/equals/validation 在 `Core/Reflection/PropertyAccessor`；`PropertyHandle` 只做多选 mixed、undo copy/restore、asset picker kind 和 owner callback。Transform projection 负责显示名和 `setPosition/setRotation/setScale` 写回。Inspector 对多选的 **交集** component 物化 `EditorAutoPropertySection`；`UIDragFloat` mixed 显示 "—"，编辑写回全部 instance，undo 按 instance 快照恢复。enum 字段走 `UIComboBox`；`.color()` 元数据的 `glm::vec3`/`glm::vec4` 走 `UIColorEdit`（非 color vec3 仍走 DragFloat）。`TextureRef`/`ModelRef`/`MeshRef` 走 path `UITextField` + Browse + Show；Browse 经 `EditorAssetPickerCallback`（widgettree：`EditorLayer::setAssetPickerHandler` → `EditorSurface::openAssetPickerDialog`；handler 缺失时 `FilePicker::open*` 仍作 fallback，无 ImGui `render`）。Show 经 `EditorRevealAssetCallback`（`EditorLayer::revealInContentBrowser` → activate `content-browser`）。`EditorAutoPropertySection` 把 `" / "` group path 展成嵌套 `UIExpander`（`Diffuse Slot` 含 `Sampler Config`），不要平铺成同级 header。`PropertyHandle::validationError` 转调 `PropertyAccessor` 的 manipulate spec 范围；`hasAssetResolveError` 对 failed resolve 画 error fill；`UIDragFloat`/`UITextField` `setError` 画 error fill。`UIImage` 对缺失 asset / `setResourceMissing` 画 error fill。没有 retained 可编辑字段的类型跳过。ImGui `DetailsView` / `TypeRenderer` 已删；`EditorInspectorTab` 是实体/component 唯一正式 Inspector UI，并显示 Game UI Entry 摘要 + Open in UI Designer。
+- `EditorSurface` Content Browser：`EditorContentBrowserTab` 持有 `FileExplorer` 与 keyed window。
+  `FileExplorer::contentGeneration()` 才是 catalog 身份（mount/dir/search/view/filter）；
+  tick **禁止**每帧 `collectEntries` 拼 fingerprint。tick 只做 O(1)：generation +
+  选中 path + scroll/viewport 像素。`collectEntries` 只发生在 keyed window rebuild。
+  磁盘变更没有 watcher；navigate/search 才会看到新文件。选中纹理调 `inspectAsset`。
+  行列图标走 `editor_icons` 资产路径，不再经 ImGui texture cache。
+  construct 之后的 widget / explorer 指针是不变量：不要 `if (!_pathText)`；create/attach 失败应崩溃。
+- `UITreeView` 在 `UIScrollViewport` 内只 paint 可见行窗口（`computeKeyedVisibleWindow` + `getPaintedRowCount`）；`EditorHierarchyTab` 用 scroll 包裹。flatten/hit-test 仍读全量可见行；无 per-row widget。**没有** UE `SListView` / `generateWidgetForItem`：行不是 child widget，图标走 `FNode::icon`（`FBrush`），展开钮走共享 `paintDisclosureButton`。`FDisclosureSpec` / `EDisclosureKind`：`PlusMinus`（默认带框 +/-）、`Chevron`（同一条折线在 Y-down 下旋转 90°，不是 ASCII `>`/`v`）、`Glyph`（自定文字对）、`Image`（collapsed 图，缺 expanded 时 UV 翻转 180°）、`Hidden`（只留 icon）。`bindFilter` + `HierarchyFilter` 搜索框过滤节点；`setReorderable` + `FTreeReorderDragDropOp`：Hierarchy 走 `moveEditorHierarchyEntity`（`ui:` 条目仍不可重排）；UI Designer 树接到 `UIDesignerPanel::applyWidgetDrop`。结构变化走 `EditorLayer::onHierarchyChanged`，不在 Surface 轮询 fingerprint。ImGui `SceneHierarchyPanel::sceneTree` 已删（Phase 8O）；`SceneHierarchyPanel` 仅保留 viewport 选择总线 API。
+- `UIExpander` 是 ImGui `TreeNode`：折叠 **widget 子树** 的 layout host（Details 组件段 / 属性组）。`ui::collapsingHeader` 只是 `ui::treeNode().setFramed(true)`（`TreeNodeFlags_Framed`），不是第二种控件。Header 默认带框 `+`/`-`；`setDisclosureKind` / `setDisclosureGlyphs` / `setDisclosureImages` 与 TreeView 共用 `FDisclosureSpec`；`setIcon` 画出 `mark icon Name`，`Hidden` 时只留 icon。不要用 `UITreeView` 做 Details 折叠：TreeView 是数据行列表，Expander 的 children 才是属性行。不要为 TreeView 造 per-row child factory。
 - Viewport overlay：`FEditorViewportHostState` / `IEditorViewportOverlay` / `EditorViewportOverlayHost`；
   `EditorSurface::syncViewportHostState` + hover/focus overlay dispatch；gizmo 绘制不再经
   `GuiSystem`，而是在 viewport compose 中直接发 `Render2D` world-line/screen-handle。
@@ -284,20 +343,24 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
 - 机制在 framework：`UITheme` + `resolveThemeStyle` + generation token。值在 app：
   WorkbenchTheme（demo 壳）/ EditorTheme（GameEditor chrome）。
 - Resolve：稀疏 patch（JSON 键 = 反射字段名）overlay 到 theme 的 dense `TStyle`。`setStyle(TStyle)` 写全字段 = full freeze（不登记 theme 边）；`setStyleField` / Text·Panel `setColor` 只盖出现过的键，其余 inherit，**必须**登记 generation + style Reactive。空 / null / `{}` = 无覆盖。
-- Field impact：`lookupStyleFieldImpact` / `lookupStylePatchImpact` 用反射分类字段，而不是 per-type 表。`FBrush` → Paint+Resource；`fontSize` / `padding` / `minSize` → Layout；`FScrollBarStyle.width` 是 overlay 绘制厚度，不是 Layout。`setStyle` / `setStyleField` / `clearStyleField` / `clearAuthoredStyle` 默认走 catalog；`UIText::setFontSize` 等仍可显式覆盖。`bResource` 是 metadata；异步就绪不走 `invalidateProperty`。Font 由 `FontManager::resourceRevision()` 在 `WidgetTree::buildSnapshot` 消费：revision 变化则整树 `markLayoutDirty(ResourceReady)`（嵌套 fill 容器不能 skip 过期文字度量）。Texture 由 host `UIFrameBuildContext.generation` 作为 ResourceReady 丢 paint cache。Host 只 `flushPendingGlyphs`，不要再 `invalidateSubtree`。
-- Visual fill matrix：`composeVisualFlags` + `FVisualChrome` + `resolveVisualFill` 是 exclusive 优先级（Disabled > DropTarget > Error > Pressed > Selected+Hovered > Selected > Hovered > Focused > Normal）。`visualChrome(style)` 覆盖 Button / SelectableRow / CheckBox / ComboBox / MenuBar / Tab / MenuItem / TableGrid / TreeView 行填充。CheckBox 的 checked 与 Tab 的 selected 映射为 Selected，且 Selected+Hovered 回落到 Selected（保持原“选中盖住 hover”）。Table/Tree 未选中且未 hover 的 normal 是透明刷，paint 仍按 alpha 跳过。SpinBox/Radio/TextField/DragFloat 等非这套 chrome 的控件不硬套。
+- Field impact：`lookupStyleFieldImpact` / `lookupStylePatchImpact` 用反射分类字段，而不是 per-type 表。`FBrush` → Paint+Resource；`fontSize` / `padding` / `minSize` → Layout；`FScrollBarStyle.width` 是 overlay 绘制厚度，不是 Layout；`UIScrollViewport` 把 children clip/hit 到 gutter 左侧，thumb 在 children 之后画，避免 list hover/selection 盖住滚动条。`setStyle` / `setStyleField` / `clearStyleField` / `clearAuthoredStyle` 默认走 catalog；`UIText::setFontSize` 等仍可显式覆盖。`bResource` 是 metadata；异步就绪不走 `invalidateProperty`。Font 由 `FontManager::resourceRevision()` 在 `WidgetTree::buildSnapshot` 消费：revision 变化则整树 `markLayoutDirty(ResourceReady)`（嵌套 fill 容器不能 skip 过期文字度量）。Texture 走 tree 上的 `FGuiTextureCatalog`（path-keyed `Reactive` revision）：`bind(path)` 订阅当前 paint widget，ready/fail 只 `markPaintDirty` 该 path 的订阅者。`UIFrameBuildContext.generation` 只表示 resolver **身份**被换掉（测试/host 换 source），日常 ready **不** bump 它、也不清全树 paint cache。Host 只 `flushPendingGlyphs`，不要再 `invalidateSubtree`。
+- Visual fill matrix：`composeVisualFlags` + `FVisualChrome` + `resolveVisualFill` 是 exclusive 优先级（Disabled > DropTarget > Error > Pressed > Selected+Hovered > Selected > Hovered > Focused > Normal）。`visualChrome(style)` 覆盖 Button / SelectableRow / CheckBox / ComboBox / MenuBar / Tab / MenuItem / TableGrid / TreeView 行填充。CheckBox 的 checked 与 Tab 的 selected 映射为 Selected，且 Selected+Hovered 回落到 Selected（保持原“选中盖住 hover”）。Table/Tree 未选中且未 hover 的 normal 是透明刷，paint 仍按 alpha 跳过。`UITextField` / `UIDragFloat` 不走这套 matrix，但 **必须** 有自己的 `hoveredFill` + inset `borderColor`（self-clip 会吃贴边 1px stroke）。TextField 文字必须 clip 到 padded inner，不要画穿 chrome。
+- Dock / floating chrome：`kDockContentInset`（1px）是 leaf `DockContent` 与 floating `_content` 的 padding，给 editor 控件 outline 留边；不要给每个 DragFloat 再加 margin。窗口底边裁切不是再加 padding 能解的：EditorSurface Dock 必须 insets 到 `kChromeTop` + `kChromeInset`，否则 fill dock 比窗口高一段 chrome。
 - Key catalog：`YA_GUI_STYLE_CATALOG` / `StyleKey::*` 是 theme key + `TStyle` 的单一词汇。`lookupStyleKey` 校验 `define` / `setStyleKey` / document deserialize；未知 key 与类型不匹配记入 `StyleCatalogDiagnostics` 并 `YA_CORE_WARN`，不拒绝写入。空 key 表示不查 theme。`editor.<key>` 是同一词汇的 GameEditor overlay，不是第二套机制。`canvas` 是无 chrome 的 panel 角色 key（`ui::canvas()`）。
 - 控件 paint/layout 读 `UIStyledWidget::resolvedStyle()`（dense cache）。merge（theme base + 稀疏 patch）在 dirty/recompute 时发生，不在每帧 paint 热路径。`resolveWidgetStyle` 仍是无缓存计算路径，给测试断言和非 `UIStyledWidget` 节点（如 ColorEdit 色板）用。cache 不落盘。
 - 高频路径是实例 `setStyle` / `setStyleField` / `setStyleKey`（DSL 基类 builder 已暴露）；切 theme 是低频目录切换。未盖满的控件在切皮肤时未覆写字段跟着变。
 - `_styleKey` 在 `UIElement` 上反射；稀疏 patch 经 `YA_GUI_AUTHORED_STYLE_IO` 虚函数写入 UIDocument 的 `_authoredStyle`（mixin 字段不能 `YA_REFLECT_FIELD`，MI 偏移不对）。缺键 = inherit；旧文档的全字段对象仍是 freeze。`FBrush`/`F*Style` 走运行时反射，merge 用 `deserializeProperty`。
 - `FBrush`：纯色 = 无 resource + tint；Image 整张拉伸；NinePatch/Border 按 `margin`（纹理 px，1 tex px = 1 logical px）切成最多 9/8 个 snapshot sprite，compose 经 `uvScale`/`uvOffset` 透传。无纹理尺寸时退回整张拉伸。`sliceBrush` 是纯函数。
-- `UIPanel` paint 只读 `resolvedStyle().fillColor`。无 theme 时 `_color` 是 fillColor fallback（与 `UIText` 的 `_color`/`_fontSize` 相同）；不要再走第二套 `_color` sprite。Image 是 content：无 authored overlay 的 themed panel 仍画 theme chrome。
-- 无 theme / 缺纹理 / 延迟就绪的 GPU 输入就是 snapshot：miss 时 image 画 `placeholderFill`，`UIFrameBuildContext.generation` bump 后 resolver 命中才带 texture。Headless host 与 windowed compose 消费同一份 packet；`setDpiScale` 与 `uiScale` 正交折叠（`EditorInputContractTest`）；windowed `--gpu-shot` 像素门禁走 `Script/automation/gui/run_workbench_gpu_parity.py`。
+- `UIPanel` paint 只读 `resolvedStyle().fillColor`。无 theme 时 `_color` 是 fillColor fallback（与 `UIText` 的 `_color`/`_fontSize` 相同）；不要再走第二套 `_color` sprite。Image 是 content：无 authored overlay 的 themed panel 仍画 theme chrome。有 path 就 `resolveTexture(getPath())`，不要等 `TextureRef::isLoaded()`（GUI 从不跑 ResourceResolveSystem）。
+- 无 theme / 缺纹理 / 延迟就绪的 GPU 输入就是 snapshot：`UIImage` Pending/miss 画 `placeholderFill`，catalog Failed 或 `setResourceMissing(true)`（live RT 缺席）画 `errorFill`。不要为「路径尚未加载」调 `setResourceMissing`。
+  产品 host：`tree.setTextureSource(&gameUITextureSource())`（AssetManager lookup + async `loadTexture`，onReady → `catalog.notify(path)`）。Workbench：builtin source（lookup 即 Ready，`requestLoad` 空操作）。
+  Widgets 禁止 include / 调用 `AssetManager`，禁止 paint 里 `loadTextureSync`。`ya-gui-closure-test` 必须仍不链 AssetManager。
+  Headless host 与 windowed compose 消费同一份 packet；`setDpiScale` 与 `uiScale` 正交折叠（`EditorInputContractTest`）；windowed `--gpu-shot` 像素门禁走 `Script/automation/gui/run_workbench_gpu_parity.py`。
 - 族 key：`panel` / `button` / `text` / `menubar` / `tab` / `split` / `scrollbar` /
   `dock` / `floating` / `image` / `popup`。角色 key：`panel.window` / `panel.canvas` / `panel.sidebar` /
   `tab.dock` / `tab.sidebar` / `text.header` / `text.muted` / `text.error` /
-  `text.eyebrow` / `menu.panel` / `tooltip` / `drag.ghost` / `drag.source` /
-  `drag.target`。表单 key：`tree` / `textfield` / `menu` /
+  `text.eyebrow` / `text.small` / `text.caption` / `menu.panel` / `tooltip` / `drag.ghost` / `drag.source` /
+  `drag.target`。表单 key：`tree` / `textfield` / `textfield.compact` / `menu` /
   `selectable` / `dragfloat` / `checkbox` / `combobox` / `slider` / `table` /
   `spinbox` / `radio` / `coloredit` / `searchcombo`。
 - `editor.*` 前缀只用于 GameEditor 显式覆盖，不是第二套词汇。
@@ -378,10 +441,16 @@ python3 Script/gui_convergence_macos_validation.py
 6. **demo 的约束性行为要有可见文案**：选择性 accept（drop target 谓词）、禁用
    条件等「看起来像 bug」的设计，必须在控件 label / 页面说明里写明
    （如 'Zone B: only payload.2'）。
-7. **Hover chrome 必须 `isHoverable()`**：WidgetTree 只对 hoverable 节点发 enter/leave。
-   DragFloat/SpinBox 这类叶子不声明时，hover 填色永远不出现。
-8. **Modal ≠ dim**：`_bModal` 只独占输入直到完成/Esc；`_bDimBackground` 独立。
-   Modal 外点消费事件但不关窗。
+7. **Hover chrome 必须 `isHoverable()`，且 hover owner 的 `hitTestSelf` 含指针**：
+   WidgetTree 只对 hoverable 节点发 enter/leave。DragFloat/SpinBox 这类叶子不声明时，
+   hover 填色永远不出现。`hoverOwnerAlongPath` 还会要求 `hitTestSelf(point)`：
+   Expander 只把 header 当 hover 区，body 里的 label 不能点亮 header（或外层
+   CollapsingHeader）。Button 仍会从 text child 冒泡，因为 button 的 hitTestSelf
+   是整块 layout rect。
+8. **Modal 只独占输入**：`_bModal` 让鼠标/键盘无法穿透到该 overlay 之外（直到
+   OK/Cancel/Esc），外点消费但不关窗。框架不画遮罩、不提供 dim 开关。要挡住/
+   模糊底下，在 dialog chrome 下叠一张 fill 的 Panel/Image（`HitTestInvisible`
+   以免抢 hit），和 UE / Qt / Win32 modal window 一样。
 9. **字符串匹配默认 ignore-case**：SearchCombo / TreeView filter 走 `StringMatch`，
    默认 IgnoreCase；要大小写敏感再显式 Sensitive。
 10. **Presenter 必须同步 SelectableRow**：行上的 `_bSelected` 不是数据源。
@@ -392,8 +461,10 @@ python3 Script/gui_convergence_macos_validation.py
 ## 人肉测试前的自动化验收
 
 按 `Example/GUIWorkbench/Scenarios/` 的 jsonl 回放做第一道闸（跑法：
-`xmake run GUIWorkbench --start-page <X> --scenario <abs path> --scenario-dump-dir <dir>`，
-exit 0 = 全 checkpoint 过）。写验收场景时的覆盖要求：
+`xmake run GUIWorkbench --start-page <Page> --scenario <abs path> --scenario-dump-dir <dir>`，
+exit 0 = 全 checkpoint 过）。页名必须是分组 rail 上的 Gallery 页（`Inputs`/`Tree`/`Brush`/`Dialog`…
+不要再写已删除的 `Gallery`/`Layout`/`Modal`，除非有意走别名）。tooltip dwell 用
+`--scenario-render`（`gallery_p1.jsonl`）。写验收场景时的覆盖要求：
 
 1. **状态 × 交互组合矩阵**：有编辑态/弹出态的控件，必须覆盖「进入状态 → 各交互」
    的关键项（编辑态 × {键入, Backspace, Enter, Esc, +/- 点击, 外部点击}；菜单开 ×
