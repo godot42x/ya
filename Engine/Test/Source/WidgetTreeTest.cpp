@@ -2387,6 +2387,52 @@ TEST(WidgetTreeTest, DragObserverDistinguishesDropNoTargetAndCancel)
     EXPECT_EQ(tree.getDragOperation(), nullptr);
 }
 
+TEST(WidgetTreeTest, ExternalDropHoverDoesNotStartLocalDrag)
+{
+    WidgetTree sourceTree({.width = 200, .height = 120});
+    WidgetTree targetTree({.width = 200, .height = 120});
+    auto source = makeButton("Source", {8.0f, 8.0f}, {60.0f, 24.0f});
+    auto target = std::make_shared<TestDropTarget>("Target");
+    FCanvasSlotArgs targetSlot;
+    targetSlot.offset    = {8.0f, 8.0f};
+    targetSlot.fixedSize = {160.0f, 80.0f};
+    sourceTree.attach(*sourceTree.getLayer(WidgetTree::ELayer::Content), source,
+                      makeButtonSlot({8.0f, 8.0f}, {60.0f, 24.0f}));
+    targetTree.attach(*targetTree.getLayer(WidgetTree::ELayer::Content), target, targetSlot);
+    sourceTree.layout();
+    targetTree.layout();
+
+    sourceTree.beginDrag(source.get(), "cross", "Cross", {}, false);
+    ASSERT_TRUE(sourceTree.isDragging());
+    const UIDragDropOperation* operation = sourceTree.getDragOperation();
+    ASSERT_NE(operation, nullptr);
+
+    targetTree.setExternalDropHover(*operation, {40.0f, 40.0f});
+    EXPECT_FALSE(targetTree.isDragging());
+    EXPECT_EQ(targetTree.getDropTarget(), target.get());
+    EXPECT_GT(target->highlightChanges, 0);
+    EXPECT_TRUE(sourceTree.isDragging());
+
+    std::vector<EDragFinishResult> results;
+    DragSessionObserver observer;
+    observer.onFinished = [&](EDragFinishResult result, const glm::vec2&, std::string_view) {
+        results.push_back(result);
+    };
+    sourceTree.cancelDrag();
+    sourceTree.beginDrag(source.get(), "cross", "Cross", std::move(observer), false);
+    operation = sourceTree.getDragOperation();
+    ASSERT_NE(operation, nullptr);
+    EXPECT_TRUE(targetTree.dropExternal(*operation, {40.0f, 40.0f}));
+    EXPECT_EQ(target->drops, 1);
+    EXPECT_EQ(target->lastPayload, "cross");
+    EXPECT_EQ(targetTree.getDropTarget(), nullptr);
+
+    sourceTree.finishDrag(EDragFinishResult::Dropped);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_EQ(results[0], EDragFinishResult::Dropped);
+    EXPECT_FALSE(sourceTree.isDragging());
+}
+
 // === UITypeRegistry ===
 
 TEST(WidgetTreeTest, RegistryExplicitRegistrationAndCreate)

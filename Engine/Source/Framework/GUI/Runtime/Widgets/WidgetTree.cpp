@@ -1544,12 +1544,40 @@ void WidgetTree::beginDrag(UIElement* source,
 
 UIElement* WidgetTree::findDropTarget(const glm::vec2& logicalPoint) const
 {
+    return findDropTarget(logicalPoint, _dragOperation.get());
+}
+
+UIElement* WidgetTree::findDropTarget(const glm::vec2& logicalPoint,
+                                      const UIDragDropOperation* operation) const
+{
+    if (!operation) {
+        return nullptr;
+    }
     for (UIElement* node = topmostHit(logicalPoint); node != nullptr; node = node->getParent()) {
-        if (_dragOperation && node->canAcceptDrop(*_dragOperation, logicalPoint)) {
+        if (node->canAcceptDrop(*operation, logicalPoint)) {
             return node;
         }
     }
     return nullptr;
+}
+
+void WidgetTree::applyDropTarget(UIElement* target,
+                                 const UIDragDropOperation& operation,
+                                 const glm::vec2& logicalPoint)
+{
+    if (target != _dragDropTarget) {
+        if (_dragDropTarget) {
+            _dragDropTarget->setDropHighlight(false);
+        }
+        _dragDropTarget = target;
+        if (_dragDropTarget) {
+            _dragDropTarget->setDropHighlight(true);
+            _dragDropTarget->updateDropHover(operation, logicalPoint);
+        }
+    }
+    else if (_dragDropTarget) {
+        _dragDropTarget->updateDropHover(operation, logicalPoint);
+    }
 }
 
 void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
@@ -1573,22 +1601,7 @@ void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
     UIElement* target = findDropTarget(logicalPoint);
     const std::string previousTargetName = _dragDropTarget ? _dragDropTarget->_name : std::string{};
     const bool bTargetChanged = target != _dragDropTarget;
-    if (target != _dragDropTarget) {
-        if (_dragDropTarget) {
-            _dragDropTarget->setDropHighlight(false);
-        }
-        _dragDropTarget = target;
-        if (_dragDropTarget) {
-            _dragDropTarget->setDropHighlight(true);
-            _dragDropTarget->updateDropHover(*_dragOperation, logicalPoint);
-        }
-    }
-    else if (_dragDropTarget) {
-        // Hover feedback follows the pointer even when the target is unchanged
-        // (point-sensitive previews: dock spaces resolve their highlight per
-        // move via updateDropHover).
-        _dragDropTarget->updateDropHover(*_dragOperation, logicalPoint);
-    }
+    applyDropTarget(target, *_dragOperation, logicalPoint);
 
     const std::string currentTargetName = target ? target->_name : std::string{};
     if (bTargetChanged && _dragObserver.onTargetChanged) {
@@ -1605,6 +1618,7 @@ void WidgetTree::clearDragSession()
         _dragDropTarget->setDropHighlight(false);
         _dragDropTarget = nullptr;
     }
+    _externalDropOp = nullptr;
     _dragOperation.reset();
     _dragSource = nullptr;
     _dragCandidate = nullptr;
@@ -1653,6 +1667,55 @@ void WidgetTree::cancelDrag()
     if (observer.onFinished) {
         observer.onFinished(EDragFinishResult::Cancelled, logicalPoint, {});
     }
+}
+
+void WidgetTree::finishDrag(EDragFinishResult result)
+{
+    if (!isDragging()) {
+        return;
+    }
+    const glm::vec2 logicalPoint = _dragPoint;
+    DragSessionObserver observer = std::move(_dragObserver);
+    UIElementRef sourceKeepAlive = std::move(_dragSourceKeepAlive);
+    clearDragSession();
+    if (observer.onFinished) {
+        observer.onFinished(result, logicalPoint, {});
+    }
+}
+
+void WidgetTree::setExternalDropHover(const UIDragDropOperation& operation,
+                                      const glm::vec2& logicalPoint)
+{
+    if (isDragging()) {
+        return;
+    }
+    _externalDropOp = &operation;
+    _dragPoint      = logicalPoint;
+    applyDropTarget(findDropTarget(logicalPoint, &operation), operation, logicalPoint);
+}
+
+void WidgetTree::clearExternalDropHover()
+{
+    if (_dragDropTarget) {
+        _dragDropTarget->setDropHighlight(false);
+        _dragDropTarget = nullptr;
+    }
+    _externalDropOp = nullptr;
+}
+
+bool WidgetTree::dropExternal(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+{
+    if (isDragging()) {
+        return false;
+    }
+    UIElement*  target = findDropTarget(logicalPoint, &operation);
+    UIElementRef keep  = target ? target->shared_from_this() : nullptr;
+    clearExternalDropHover();
+    if (!target) {
+        return false;
+    }
+    keep->onDrop(operation, logicalPoint);
+    return true;
 }
 
 } // namespace ya

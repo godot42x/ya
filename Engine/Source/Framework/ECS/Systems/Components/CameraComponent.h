@@ -25,7 +25,7 @@ struct YA_ECS_SYSTEMS_API CameraComponent : public IComponent
     YA_REFLECT_FIELD(_focusPoint)
     YA_REFLECT_END()
 
-    bool bPrimary          = false; // TODO: think about moving to Scene
+    bool bPrimary          = false; // Default camera for WorldView[0]; not "the only viewport"
     bool _fixedAspectRatio = false;
 
     float _fov         = 45.0f;

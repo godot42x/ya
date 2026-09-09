@@ -107,7 +107,8 @@ struct DebugPrimitives
               uint32_t         viewportWidth,
               uint32_t         viewportHeight,
               const glm::mat4& projection,
-              const glm::mat4& view);
+              const glm::mat4& view,
+              uint32_t         flightIndex);
 
     [[nodiscard]] SettingsSnapshot buildSettingsSnapshot() const;
     void requestSettings(const SettingsSnapshot& settings);
@@ -126,7 +127,7 @@ struct DebugPrimitives
     void initFrameResources();
     void initLinePipeline();
     void initShapePipeline();
-    void updateFrameUBO();
+    void updateFrameUBO(uint32_t flightIndex);
     void ensureLineBufferCapacity(uint32_t requiredVertexCount);
     void applyPipelineFormats(stdptr<IGraphicsPipeline>& pipeline, const RenderAttachmentFormats& formats);
     void updateDepthState();

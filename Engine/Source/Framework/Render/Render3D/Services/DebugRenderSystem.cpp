@@ -80,9 +80,10 @@ void DebugRenderSystem::draw(ICommandBuffer*  cmdBuf,
                              uint32_t         viewportWidth,
                              uint32_t         viewportHeight,
                              const glm::mat4& projection,
-                             const glm::mat4& view)
+                             const glm::mat4& view,
+                             uint32_t         flightIndex)
 {
-    _primitives.draw(cmdBuf, viewportWidth, viewportHeight, projection, view);
+    _primitives.draw(cmdBuf, viewportWidth, viewportHeight, projection, view, flightIndex);
 }
 
 DebugPrimitives::SettingsSnapshot DebugRenderSystem::buildSettingsSnapshot() const

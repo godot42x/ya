@@ -9,9 +9,10 @@
 //
 // Frame contract (single-threaded, frame-boundary only):
 //   SDL events -> WidgetTree::dispatchEvent (tree-local logical points)
-//   begin -> swapchain-stability check -> prepare compose pipeline
-//         -> delegate.updateUI() -> WidgetTree::buildSnapshot
+//   updateUI + buildSnapshot (also when unpresentable)
+//   if presentable: begin -> swapchain-stability check -> prepare compose
 //         -> record clear + compose -> end/present
+//   Unpresentable (minimized / zero extent) skips acquire/present only.
 //
 // The host never knows Scene / ECS / Render3D / Product Host / Editor /
 // ToolWorkspace; delegates implement IGUIAppDelegate to mount widgets and
@@ -31,6 +32,8 @@
 #include "GUI/Host/GUIAppDelegate.h"
 
 #include <cstdint>
+#include <cstddef>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -142,6 +145,7 @@ public:
     [[nodiscard]] IAppEventSource* getEventSource();
     [[nodiscard]] const FGUIWindowHostConfig& getConfig() const;
     [[nodiscard]] uint32_t getWindowID() const;
+    [[nodiscard]] IRender* getRender() const;
     /// When true, the SDL source emits events for every OS window so GUIApp
     /// can route extras. Default filters to this host's window.
     void setAcceptAllWindowEvents(bool enabled);
@@ -178,11 +182,26 @@ class GUIWindowManager;
 
 /// GUI assembly/policy layer. Owns the primary GUIWindowHost plus extra
 /// native windows (GUIWindowManager). One AppKernel drives both; extras share
-/// the process device and do not call IRender::create. Extra present is C2.
+/// the process device and do not call IRender::create. Extra windows present
+/// through `GUIWindowManager::renderAll`.
 class YA_GUI_API GUIApp final : public IAppLoopDelegate
 {
     GUIWindowHost                     _primaryWindow;
     std::unique_ptr<GUIWindowManager> _extraWindows;
+
+    struct FCrossWindowDrag
+    {
+        GUIWindowId sourceWindowId = 0;
+        GUIWindowId hoverWindowId  = 0;
+        WidgetTree* sourceTree     = nullptr;
+        WidgetTree* hoverTree      = nullptr;
+        uint32_t    boundaryEnterCount = 0;
+        uint32_t    boundaryLeaveCount = 0;
+    };
+    FCrossWindowDrag                 _crossWindowDrag;
+    std::vector<std::function<void()>> _afterDrag;
+    glm::vec2                        _lastPointer{};
+    GUIWindowId                      _lastPointerWindow = 0;
 
 public:
     GUIApp(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate);
@@ -202,16 +221,38 @@ public:
         _primaryWindow.injectEvent(event, logicalPoint);
     }
 
-    /// Extra OS window + WidgetTree. Does not create a GPU device or present.
+    /// Extra OS window + WidgetTree on the shared device. Presents via renderAll.
     [[nodiscard]] GUIWindowId openWindow(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate);
     void                      closeWindow(GUIWindowId id);
     [[nodiscard]] WidgetTree* findTree(GUIWindowId id);
+    [[nodiscard]] size_t      extraWindowCount() const;
+
+    /// Cross-window drag primitive (MW-301). Source tree owns the session;
+    /// the target tree only receives external hover/drop. No tab semantics.
+    [[nodiscard]] bool         isCrossWindowDragActive() const;
+    [[nodiscard]] GUIWindowId  crossWindowDragSourceId() const;
+    [[nodiscard]] GUIWindowId  crossWindowDragHoverId() const;
+    [[nodiscard]] uint32_t     crossWindowDragEnterCount() const;
+    [[nodiscard]] uint32_t     crossWindowDragLeaveCount() const;
+    void                       runAfterDrag(std::function<void()> fn);
 
     void onInit() override;
     void onEvent(const Event& event) override;
     void onTick(float dt) override;
     void onShutdown() override;
     [[nodiscard]] bool shouldClose() const override;
+
+private:
+    void               adoptDragSource();
+    void               syncCrossWindowDrag();
+    [[nodiscard]] bool routeCrossWindowDrag(const Event& event);
+    void               finishCrossWindowDrag(EDragFinishResult result);
+    void               cancelCrossWindowDrag();
+    void               runQueuedAfterDrag();
+    void               applyDeferredCloses();
+    void               setHoverWindow(GUIWindowId id, WidgetTree* tree, glm::vec2 point);
+    void               rememberPointer(const Event& event);
+    [[nodiscard]] glm::vec2 pointerForEvent(const Event& event) const;
 };
 
 } // namespace ya

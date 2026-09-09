@@ -2,6 +2,8 @@
 
 #include "Core/Log.h"
 
+#include <vector>
+
 namespace ya
 {
 
@@ -13,6 +15,18 @@ FLineRender*        Render2D::lineData = nullptr;
 namespace
 {
 FRender2dFrameStats gLastFrameStats{};
+
+struct PassSlotPool
+{
+    Render2DPassSlot              next = 0;
+    std::vector<Render2DPassSlot> free;
+};
+
+PassSlotPool& passSlotPool()
+{
+    static PassSlotPool pool;
+    return pool;
+}
 }
 
 FQuadRender* Render2D::quadRender() { return quadData; }
@@ -118,12 +132,25 @@ void Render2D::end()
 
 Render2DPassSlot Render2D::acquirePassSlot()
 {
-    static Render2DPassSlot sNextSlot = 0;
-    const Render2DPassSlot  slot      = sNextSlot++;
+    auto& pool = passSlotPool();
+    if (!pool.free.empty()) {
+        const Render2DPassSlot slot = pool.free.back();
+        pool.free.pop_back();
+        return slot;
+    }
+    const Render2DPassSlot slot = pool.next++;
     YA_CORE_ASSERT(slot < FQuadRender::kMaxPassSlots,
                    "Render2D pass slot pool exhausted ({} slots)",
                    FQuadRender::kMaxPassSlots);
     return slot;
+}
+
+void Render2D::releasePassSlot(Render2DPassSlot slot)
+{
+    if (slot == kInvalidRender2DPassSlot) {
+        return;
+    }
+    passSlotPool().free.push_back(slot);
 }
 
 void Render2D::preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFormat, EFormat::T depthFormat)

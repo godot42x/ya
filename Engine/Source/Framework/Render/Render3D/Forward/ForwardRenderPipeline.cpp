@@ -292,7 +292,7 @@ void ForwardRenderPipeline::tick(const RenderPipelineFrameContext& frame)
 bool ForwardRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& frame) const
 {
     YA_CORE_ASSERT(frame.cmdBuf, "ForwardRenderPipeline requires command buffer");
-    return frame.viewportRect.extent.x <= 0 || frame.viewportRect.extent.y <= 0;
+    return !frame.camera.hasOffscreenExtent();
 }
 
 void ForwardRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
@@ -304,9 +304,9 @@ void ForwardRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, R
 
     stageCtx = RenderStageContext{
         .cmdBuf         = frame.cmdBuf,
-        .frameData      = frame.frameData,
-        .flightIndex    = frame.flightIndex,
-        .deltaTime      = frame.deltaTime,
+        .frameData      = frame.camera.frameData,
+        .flightIndex    = frame.camera.flightIndex,
+        .deltaTime      = frame.camera.deltaTime,
         .viewportExtent = _viewportResources.extent,
     };
 }
@@ -421,7 +421,7 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
 
 void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
-    const auto desiredExtent = Extent2D::fromVec2(frame.viewportRect.extent / frame.viewportFrameBufferScale);
+    const auto desiredExtent = Extent2D::fromVec2(frame.camera.viewportRect.extent / frame.camera.viewportFrameBufferScale);
     if (desiredExtent.width > 0 && desiredExtent.height > 0 && !(desiredExtent == _viewportResources.extent)) {
         requestViewportResize(desiredExtent);
     }
@@ -477,8 +477,8 @@ void ForwardRenderPipeline::syncShadowSettings()
 
 void ForwardRenderPipeline::captureShadowSettings(const RenderPipelineFrameContext& frame)
 {
-    if (frame.shadowSettings) {
-        _frameShadowSettings = *frame.shadowSettings;
+    if (frame.camera.shadowSettings) {
+        _frameShadowSettings = *frame.camera.shadowSettings;
     }
     else if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
@@ -585,12 +585,12 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     YA_CORE_ASSERT(_viewportRTSpec.attachments.depthAttach.has_value(),
                    "Forward viewport pass requires a depth attachment spec");
 
-    _lastTickCtx        = frame.frameData ? frame.frameData->toFrameContext() : FrameContext{
-                                                                                  .view       = frame.view,
-                                                                                  .projection = frame.projection,
-                                                                                  .cameraPos  = frame.cameraPos,
-                                                                              };
-    _lastTickCtx.extent = _viewportResources.extent;
+    _lastTickCtx        = frame.camera.frameData ? frame.camera.frameData->toFrameContext() : FrameContext{};
+    _lastTickCtx.view           = frame.camera.view;
+    _lastTickCtx.projection     = frame.camera.projection;
+    _lastTickCtx.viewProjection = frame.camera.viewProjection;
+    _lastTickCtx.cameraPos      = frame.camera.cameraPos;
+    _lastTickCtx.extent         = _viewportResources.extent;
     _lastFrameInput     = frame;
 
     [[maybe_unused]] const bool bExecuted = executeViewportPassGraph(frame, stageCtx);
@@ -649,7 +649,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             .viewportPassContext      = &viewportPassContext,
             .postContext              = &_lastTickCtx,
             .bEnableShadow            = _shadowStage && currentShadowSettings().isEnabled(),
-            .bPostprocessOutputIsSRGB = EFormat::isSRGB(_render->getSwapchain()->getFormat()),
+            .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
             .viewportOverlaySnapshot  = _lastFrameInput.viewportOverlaySnapshot,
         });
 

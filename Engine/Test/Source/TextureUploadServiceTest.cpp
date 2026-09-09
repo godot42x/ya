@@ -139,36 +139,15 @@ class UploadTestRender final : public IRender
     void destroy() override {}
     void setShaderStorage(std::shared_ptr<ShaderStorage>) override {}
     std::shared_ptr<ShaderStorage> getShaderStorage() override { return nullptr; }
-    bool begin(int32_t*) override { return false; }
-    bool end(int32_t, std::vector<void*>) override { return false; }
-    void getWindowSize(int& width, int& height) const override
-    {
-        width = 0;
-        height = 0;
-    }
-    void setVsync(bool) override {}
-    uint32_t getSwapchainWidth() const override { return 0; }
-    uint32_t getSwapchainHeight() const override { return 0; }
-    uint32_t getSwapchainImageCount() const override { return 0; }
     void allocateCommandBuffers(uint32_t, std::vector<std::shared_ptr<ICommandBuffer>>&) override {}
     void waitIdle() override {}
     ICommandBuffer* beginIsolateCommands(const std::string& = "") override { return recorded; }
     void endIsolateCommands(ICommandBuffer*) override {}
-    ISwapchain* getSwapchain() override { return nullptr; }
     IDescriptorSetHelper* getDescriptorHelper() override { return nullptr; }
     IRenderResourceFactory* getResourceFactory() override { return nullptr; }
     void submitToQueue(const std::vector<void*>&, const std::vector<void*>&, const std::vector<void*>&, void* = nullptr) override {}
-    int presentImage(int32_t, const std::vector<void*>&) override { return 0; }
-    void* getCurrentImageAvailableSemaphore() override { return nullptr; }
-    void* getCurrentFrameFence() override { return nullptr; }
-    uint32_t getCurrentFrameIndex() const override { return 0; }
-    void* getRenderFinishedSemaphore(uint32_t) override { return nullptr; }
     void* createSemaphore(const char* = nullptr) override { return nullptr; }
     void destroySemaphore(void*) override {}
-    void advanceFrame() override {}
-
-  protected:
-    void* getNativeWindowHandle() const override { return nullptr; }
 };
 
 std::shared_ptr<UploadTestImage> makeUploadImage(uint32_t mipLevels = 1)

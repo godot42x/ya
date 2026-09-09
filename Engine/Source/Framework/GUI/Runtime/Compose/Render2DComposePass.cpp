@@ -43,10 +43,9 @@ void logSnapshotItemsOnce(const UIFrameSnapshot* uiFrameSnapshot)
     }
 }
 
-/// One Render2D pass slot per compose kind. Each kind gets its own slot so
-/// that multiple compose passes recorded into the same command buffer (e.g.
-/// editor viewport + canvas preview + tool surface) never share the per-slot
-/// vertex buffers / descriptor sets within one frame.
+/// One Render2D pass slot per compose kind for the process-wide kind pool.
+/// Multi-window hosts pass `FRender2DComposePassDesc::passSlot` instead so
+/// two windows composing the same kind in one CPU frame do not share UBO.
 Render2DPassSlot composePassSlot(ERender2DComposePassKind kind)
 {
     static const std::array<Render2DPassSlot, 5> sSlots = []() {
@@ -57,6 +56,14 @@ Render2DPassSlot composePassSlot(ERender2DComposePassKind kind)
         return out;
     }();
     return sSlots[static_cast<size_t>(kind)];
+}
+
+Render2DPassSlot resolveComposePassSlot(const FRender2DComposePassDesc& desc)
+{
+    if (desc.passSlot != kInvalidRender2DPassSlot) {
+        return desc.passSlot;
+    }
+    return composePassSlot(desc.kind);
 }
 
 bool shouldClearComposeTarget(ERender2DComposePassKind kind)
@@ -204,7 +211,7 @@ void prepareRender2DComposePassPipeline(const FRender2DComposePassDesc& passDesc
                                         EFormat::T                      colorFormat,
                                         EFormat::T                      depthFormat)
 {
-    Render2D::preparePassPipeline(composePassSlot(passDesc.kind), colorFormat, depthFormat);
+    Render2D::preparePassPipeline(resolveComposePassSlot(passDesc), colorFormat, depthFormat);
 }
 
 void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
@@ -277,7 +284,7 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
         .cmdBuf       = cmdBuf,
         .windowWidth  = rtExtent.width,
         .windowHeight = rtExtent.height,
-        .passSlot     = composePassSlot(passDesc.kind),
+        .passSlot     = resolveComposePassSlot(passDesc),
         .view         = passDesc.camera.view,
         .viewProjection = passDesc.camera.viewProjection,
     };

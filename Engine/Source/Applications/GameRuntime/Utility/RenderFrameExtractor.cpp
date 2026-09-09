@@ -133,6 +133,7 @@ void RenderFrameExtractor::extractCamera(const ExtractInput& input, RenderFrameD
 {
     out.view           = input.view;
     out.projection     = input.projection;
+    out.viewProjection = input.viewProjection;
     out.cameraPos      = input.cameraPos;
     out.viewportExtent = input.viewportExtent;
     out.viewOwner      = input.viewOwner;

@@ -15,7 +15,7 @@ void OffscreenTaskService::init(IRender* render)
     }
 
     std::vector<stdptr<ICommandBuffer>> cmdBufs;
-    _render->allocateCommandBuffers(_render->getSwapchainImageCount() + 1, cmdBufs);
+    _render->allocateCommandBuffers(1, cmdBufs);
     YA_CORE_ASSERT(!cmdBufs.empty(), "Failed to allocate offscreen command buffer");
     _commandBuffer = cmdBufs.back();
 

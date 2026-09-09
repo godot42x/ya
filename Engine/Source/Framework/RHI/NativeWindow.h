@@ -90,6 +90,10 @@ struct INativeWindow
         height = static_cast<float>(h);
     }
     virtual void getWindowSize(int &width, int &height) = 0;
+    /// Iconified / minimized. Present surfaces skip acquire while this is true.
+    [[nodiscard]] virtual bool isMinimized() const { return false; }
+    virtual bool minimize() { return false; }
+    virtual bool restoreFromMinimize() { return false; }
     virtual bool setWindowSize(int width, int height)
     {
         (void) width;
@@ -120,6 +124,9 @@ class YA_RHI_API SDLNativeWindow final : public INativeWindow
     [[nodiscard]] uint32_t getWindowID() const override;
 
     void getWindowSize(int &width, int &height) override;
+    [[nodiscard]] bool isMinimized() const override;
+    bool minimize() override;
+    bool restoreFromMinimize() override;
     bool setWindowSize(int width, int height) override;
 
     bool startTextInput() override;

@@ -31,6 +31,20 @@ description: YA Engine 渲染架构、RenderRuntime 边界与 shader 生成链�
    旧格式 scene 文件）。
 10. `ya-gui-widgets` 无 Scene/ECS/Render3D/Host/RHI 依赖；texture 归资产缓存、
     font 由 snapshot item 强引用；UI 合成在 world graph 之后（不进 bloom）。
+11. 一帧按 Camera 链组织，不是按窗口：`graphics → UI → view compose` 写该相机离屏 RT；
+    `display compose → present` 才碰 swapchain。`RenderRuntime::FrameInput` 分组为
+    `CameraFrameInput` / `ViewComposeInput` / `DisplayComposeInput` / `PresentFrameInput`；
+    一次 host 调用仍是一次 `prepareFrame` + 一次 `endFrameCommandBuffer`；acquire/present
+    由 host `FPresentFrame` coordinator 配对。`CameraFrameInput` 在 graph
+    build 前携带 owner 计算的 view / projection / viewProjection / offscreen extent；
+    Forward/Deferred/debug/overlay 只消费该包，不从 swapchain/window 猜尺寸。view compose
+    经 `recordCameraViewCompose` 写 Camera 离屏 RT；display compose 经
+    `PresentationGraphService::recordDisplayCompose` 写 `swapchain[imageIndex]`。
+    `GUIRenderSurface` 只是 compose target，不 acquire/present、不读 live WidgetTree。
+    acquire/present 由 host `FPresentFrame` coordinator 调用，不在 `RenderRuntime` 内。
+    `ViewportState` 迁移期等于唯一 `WorldView[0]`。对象模型见
+    `./.agent/plan/gui-multi-os-window-editor/c2_view_model.md`
+    与 `c2_present_compose_model.md`。不要为 Material/UI 窗复制 `RenderRuntime`。
 
 ## 目录锚点
 

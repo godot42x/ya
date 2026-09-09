@@ -83,8 +83,31 @@ struct YA_RHI_API IRender : public plat_base<IRender>
     virtual void                                 setShaderStorage(std::shared_ptr<ShaderStorage> shaderStorage) = 0;
     [[nodiscard]] virtual std::shared_ptr<ShaderStorage> getShaderStorage()                                   = 0;
 
-    virtual bool begin(int32_t* imageIndex)                                 = 0;
-    virtual bool end(int32_t imageIndex, std::vector<void*> CommandBuffers) = 0;
+    /// Bootstrap present surface used to pick the physical device.
+    /// Not the viewport. World rendering targets offscreen RenderTextures;
+    /// this surface only supplies swapchain images at present/compose time.
+    /// Extra windows use `createSurfaceContext`.
+    [[nodiscard]] virtual IRenderSurfaceContext* getPrimarySurfaceContext() const { return nullptr; }
+
+    /// Convenience for the bootstrap present surface. Do not use as viewport
+    /// extent, world format, or recording-flight index.
+    [[nodiscard]] ISwapchain* primarySwapchain() const
+    {
+        auto* surface = getPrimarySurfaceContext();
+        return surface ? surface->getSwapchain() : nullptr;
+    }
+
+    [[nodiscard]] INativeWindow* primaryWindow() const
+    {
+        auto* surface = getPrimarySurfaceContext();
+        return surface ? surface->getNativeWindow() : nullptr;
+    }
+
+    [[nodiscard]] uint32_t primaryFrameIndex() const
+    {
+        auto* surface = getPrimarySurfaceContext();
+        return surface ? surface->getCurrentFrameIndex() : 0;
+    }
 
     /// Extra presentation surface sharing this device. Does not create a
     /// second backend. Returns null when the backend cannot present to `window`.
@@ -92,31 +115,6 @@ struct YA_RHI_API IRender : public plat_base<IRender>
     [[nodiscard]] virtual std::unique_ptr<IRenderSurfaceContext> createSurfaceContext(INativeWindow& window);
 
     [[nodiscard]] ERenderAPI::T getAPI() const { return _renderAPI; }
-
-    /**
-     * @brief Get window size from the render's window provider
-     */
-    virtual void getWindowSize(int& width, int& height) const = 0;
-
-    /**
-     * @brief Set VSync on the swapchain
-     */
-    virtual void setVsync(bool enabled) = 0;
-
-    /**
-     * @brief Get the swapchain width
-     */
-    virtual uint32_t getSwapchainWidth() const = 0;
-
-    /**
-     * @brief Get the swapchain height
-     */
-    virtual uint32_t getSwapchainHeight() const = 0;
-
-    /**
-     * @brief Get the number of swapchain images
-     */
-    virtual uint32_t getSwapchainImageCount() const = 0;
 
     /**
      * @brief Allocate command buffers (returns generic ICommandBuffer interface)
@@ -127,16 +125,6 @@ struct YA_RHI_API IRender : public plat_base<IRender>
      * @brief Wait for the device to become idle
      */
     virtual void waitIdle() = 0;
-
-    /**
-     * @brief Get the native window handle as a specific type
-     * @tparam T The native window handle type
-     */
-    template <typename T>
-    T getNativeWindowHandleAs() const
-    {
-        return static_cast<T>(getNativeWindowHandle());
-    }
 
     struct RAIICommandBuffer
     {
@@ -158,13 +146,6 @@ struct YA_RHI_API IRender : public plat_base<IRender>
      * @param commandBuffer The command buffer to submit
      */
     virtual void endIsolateCommands(ICommandBuffer* commandBuffer) = 0;
-
-    /**
-     * @brief Get the swapchain interface
-     */
-    virtual ISwapchain* getSwapchain() = 0;
-
-    virtual INativeWindow* getNativeWindow() const { return nullptr; }
 
     /**
      * @brief Get the descriptor set helper for updating descriptor sets
@@ -246,29 +227,6 @@ struct YA_RHI_API IRender : public plat_base<IRender>
         const std::vector<void*>& signalSemaphores,
         void*                     fence = nullptr) = 0;
 
-    /**
-     * @brief Present swapchain image
-     * @param imageIndex Swapchain image index to present
-     * @param waitSemaphores Semaphores to wait on before presenting
-     * @return VK_SUCCESS or error code
-     */
-    virtual int presentImage(int32_t imageIndex, const std::vector<void*>& waitSemaphores) = 0;
-
-    /**
-     * @brief Get current frame's image available semaphore
-     */
-    virtual void* getCurrentImageAvailableSemaphore() = 0;
-
-    /**
-     * @brief Get current frame's fence
-     */
-    virtual void* getCurrentFrameFence() = 0;
-
-    /**
-     * @brief Get current frame index
-     */
-    virtual uint32_t getCurrentFrameIndex() const = 0;
-
     virtual void beginFrameGpuTiming(ICommandBuffer* commandBuffer)
     {
         (void)commandBuffer;
@@ -285,13 +243,6 @@ struct YA_RHI_API IRender : public plat_base<IRender>
     }
 
     /**
-     * @brief Get render finished semaphore for given swapchain image index
-     * @param imageIndex Swapchain image index
-     * @return Semaphore that will be signaled when rendering to this image completes
-     */
-    virtual void* getRenderFinishedSemaphore(uint32_t imageIndex) = 0;
-
-    /**
      * @brief Create a semaphore (for App-managed synchronization)
      * @param debugName Optional debug name for the semaphore
      * @return Opaque handle to semaphore
@@ -304,11 +255,6 @@ struct YA_RHI_API IRender : public plat_base<IRender>
      */
     virtual void destroySemaphore(void* semaphore) = 0;
 
-    /**
-     * @brief Advance to next frame (increment frame index)
-     */
-    virtual void advanceFrame() = 0;
-
     virtual void queueBeginLabel(const char* labelName, const float* colorRGBA = nullptr)
     {
         (void)labelName;
@@ -316,12 +262,6 @@ struct YA_RHI_API IRender : public plat_base<IRender>
     }
 
     virtual void queueEndLabel() {}
-
-  protected:
-    /**
-     * @brief Get the native window handle (backend-specific)
-     */
-    virtual void* getNativeWindowHandle() const = 0;
 };
 
 } // namespace ya

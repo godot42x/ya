@@ -52,7 +52,8 @@ if get_config("ya_profile") ~= "gui" then
         add_files("./Source/TestEntry.cpp",
                   "./Source/DeferredRenderPipelineTest.cpp",
                   "./Source/DirectionalShadowMathTest.cpp",
-                  "./Source/RenderGraphCoreTest.cpp")
+                  "./Source/RenderGraphCoreTest.cpp",
+                  "./Source/RenderRuntimeSnapshotTest.cpp")
         add_deps("ya-render-3d", "ya-render-graph", "ya-foundation-core")
         add_packages("gtest")
     end
@@ -109,6 +110,7 @@ do
     add_files("./Source/UIDocumentTest.cpp")
     add_files("./Source/UIFrameSnapshotTest.cpp")
     add_files("./Source/ComposeClipReplayTest.cpp")
+    add_files("./Source/GUIRenderSurfaceTest.cpp")
     add_files("./Source/LayoutHostSkipBaselineTest.cpp")
     add_files("./Source/TextureCompletionThreadBaselineTest.cpp")
     add_files("./Source/GuiFrameInspectorTest.cpp")

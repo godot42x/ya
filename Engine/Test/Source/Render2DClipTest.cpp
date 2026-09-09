@@ -74,4 +74,19 @@ TEST(Render2DClipTest, NestedClipsChainIdempotently)
     expectRectEq(Render2D::intersectClipRect(Render2D::intersectClipRect(inner, middle), outer), expected);
 }
 
+TEST(Render2DPassSlotTest, AcquireReturnsDistinctSlotsAndReleaseRecycles)
+{
+    const Render2DPassSlot a = Render2D::acquirePassSlot();
+    const Render2DPassSlot b = Render2D::acquirePassSlot();
+    EXPECT_NE(a, b);
+    EXPECT_NE(a, kInvalidRender2DPassSlot);
+    EXPECT_NE(b, kInvalidRender2DPassSlot);
+
+    Render2D::releasePassSlot(a);
+    const Render2DPassSlot recycled = Render2D::acquirePassSlot();
+    EXPECT_EQ(recycled, a);
+    Render2D::releasePassSlot(b);
+    Render2D::releasePassSlot(recycled);
+}
+
 } // namespace ya

@@ -215,18 +215,9 @@ void VulkanRender::destroyInternal()
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     }
 
-    releaseSyncResources();
+    _primarySurface.reset();
     releaseFrameGpuTimingResources();
     VK_DESTROY(PipelineCache, m_LogicalDevice, _pipelineCache);
-
-    if (_swapChain) {
-        // Cleanup swap chain resources
-        // Cast to VulkanSwapChain for Vulkan-specific cleanup
-        auto* vkSwapchain = static_cast<VulkanSwapChain*>(_swapChain);
-        vkSwapchain->cleanup();
-        delete _swapChain;
-    }
-    // m_renderPass.cleanup();
 
     _graphicsCommandPool->cleanup();
     if (_presentCommandPool) {
@@ -1136,68 +1127,12 @@ bool VulkanRender::isFeatureSupported(
     return true;
 }
 
-void VulkanRender::createSyncResources(int32_t swapchainImageSize)
+bool VulkanRender::createPrimarySurface(const SwapchainCreateInfo& swapchainCI)
 {
-    // Create synchronization objects
-
-    VkSemaphoreCreateInfo semaphoreInfo{
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0, // No special flags
-    };
-
-    VkResult ret = {};
-    // NOTICE : 应该创建与swapchain图像数量相同的信号量数量
-    // 以避免不同图像之间的资源竞争（如信号量) VUID-vkQueueSubmit-pSignalSemaphores-00067
-
-    // ✅ 为每个飞行帧分配独立的同步对象数组
-    // 这是Flight Frames的核心：避免不同帧之间的资源竞争
-    imageSubmittedSignalSemaphores.resize(swapchainImageSize); // 渲染完成信号量
-    frameImageAvailableSemaphores.resize(flightFrameSize);
-    frameFences.resize(flightFrameSize);
-
-    // ✅ 循环创建每个swapchain image的同步对象
-    for (uint32_t i = 0; i < (uint32_t)swapchainImageSize; i++) {
-        // 创建渲染完成信号量：当GPU完成渲染时发出信号
-        ret = vkCreateSemaphore(this->getDevice(), &semaphoreInfo, nullptr, &imageSubmittedSignalSemaphores[i]);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create render finished semaphore! Result: {}", ret);
-        this->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
-                                 imageSubmittedSignalSemaphores[i],
-                                 std::format("RenderFinishedSemaphore_{}", i).c_str());
-    }
-
-    for (uint32_t i = 0; i < flightFrameSize; i++) {
-        // 创建图像可用信号量：当swapchain图像准备好被渲染时发出信号
-        ret = vkCreateSemaphore(this->getDevice(), &semaphoreInfo, nullptr, &frameImageAvailableSemaphores[i]);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create image available semaphore! Result: {}", ret);
-        // 创建帧fence：用于CPU等待GPU完成整个帧的处理
-        // ⚠️ 重要：初始状态设为已信号(SIGNALED)，这样第一帧不会被阻塞
-        VkFenceCreateInfo fenceInfo{
-            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-            .pNext = nullptr,
-            .flags = VK_FENCE_CREATE_SIGNALED_BIT // 开始时就处于已信号状态
-        };
-
-        ret = vkCreateFence(this->getDevice(), &fenceInfo, nullptr, &frameFences[i]);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "failed to create fence!");
-        this->setDebugObjectName(VK_OBJECT_TYPE_FENCE,
-                                 frameFences[i],
-                                 std::format("FrameFence_{}", i).c_str());
-        this->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
-                                 frameImageAvailableSemaphores[i],
-                                 std::format("ImageAvailableSemaphore_{}", i).c_str());
-    }
-}
-
-void VulkanRender::releaseSyncResources()
-{
-    for (uint32_t i = 0; i < flightFrameSize; i++) {
-        vkDestroySemaphore(this->getDevice(), frameImageAvailableSemaphores[i], this->getAllocator());
-        vkDestroyFence(this->getDevice(), frameFences[i], this->getAllocator());
-    }
-    for (uint32_t i = 0; i < imageSubmittedSignalSemaphores.size(); i++) {
-        vkDestroySemaphore(this->getDevice(), imageSubmittedSignalSemaphores[i], this->getAllocator());
-    }
+    YA_CORE_ASSERT(_nativeWindow, "Primary surface requires a native window");
+    YA_CORE_ASSERT(_surface != VK_NULL_HANDLE, "Primary VkSurfaceKHR must exist before swapchain");
+    _primarySurface = std::make_unique<VulkanRenderSurfaceContext>();
+    return _primarySurface->attachExistingSurface(this, *_nativeWindow, _surface, swapchainCI);
 }
 
 void VulkanRender::createFrameGpuTimingResources()
@@ -1205,7 +1140,7 @@ void VulkanRender::createFrameGpuTimingResources()
     _lastCompletedFrameGpuTimeMs = 0.0f;
     _gpuTimestampPeriodNs        = 0.0f;
     _bFrameGpuTimingSupported    = false;
-    _frameGpuTimingValid.assign(flightFrameSize, 0);
+    _frameGpuTimingValid.assign(VulkanRenderSurfaceContext::flightFrameSize, 0);
 
     if (getDevice() == VK_NULL_HANDLE || !_pfnCmdResetQueryPool) {
         return;
@@ -1230,7 +1165,7 @@ void VulkanRender::createFrameGpuTimingResources()
         .pNext              = nullptr,
         .flags              = 0,
         .queryType          = VK_QUERY_TYPE_TIMESTAMP,
-        .queryCount         = flightFrameSize * 2,
+        .queryCount         = VulkanRenderSurfaceContext::flightFrameSize * 2,
         .pipelineStatistics = 0,
     };
 
@@ -1259,7 +1194,8 @@ void VulkanRender::releaseFrameGpuTimingResources()
 
 void VulkanRender::updateCompletedFrameGpuTiming()
 {
-    if (!_bFrameGpuTimingSupported || _frameGpuTimestampQueryPool == VK_NULL_HANDLE || currentFrameIdx >= _frameGpuTimingValid.size() || !_frameGpuTimingValid[currentFrameIdx]) {
+    const uint32_t frameIdx = _primarySurface ? _primarySurface->getCurrentFrameIndex() : 0;
+    if (!_bFrameGpuTimingSupported || _frameGpuTimestampQueryPool == VK_NULL_HANDLE || frameIdx >= _frameGpuTimingValid.size() || !_frameGpuTimingValid[frameIdx]) {
         return;
     }
 
@@ -1267,7 +1203,7 @@ void VulkanRender::updateCompletedFrameGpuTiming()
     VkResult ret           = vkGetQueryPoolResults(
         getDevice(),
         _frameGpuTimestampQueryPool,
-        currentFrameIdx * 2,
+        frameIdx * 2,
         2,
         sizeof(timestamps),
         timestamps,
@@ -1277,7 +1213,7 @@ void VulkanRender::updateCompletedFrameGpuTiming()
         return;
     }
 
-    _frameGpuTimingValid[currentFrameIdx] = 0;
+    _frameGpuTimingValid[frameIdx] = 0;
     if (timestamps[1] < timestamps[0]) {
         return;
     }
@@ -1312,99 +1248,12 @@ const VkAllocationCallbacks* VulkanRender::getAllocator()
 
 
 
-// MARK: Being/End
-bool VulkanRender::begin(int32_t* outImageIndex)
+// MARK: Frame
+void VulkanRender::onPrimaryPresentFenceWaited()
 {
-    YA_PROFILE_FUNCTION()
-
-    // 这确保CPU不会在GPU还在使用资源时(present)就开始修改它们
-    // 例如：如果MAX_FRAMES_IN_FLIGHT=2，当渲染第3帧时，等待第1帧完成
-    {
-        YA_PERF_SCOPE(perf::sample::vulkanWaitFence(), perf::metric::cpuTimeMs(), perf::domain::render());
-        YA_PROFILE_SCOPE("vkWaitFence1");
-        VK_CALL(vkWaitForFences(this->getDevice(),
-                                1,
-                                &frameFences[currentFrameIdx],
-                                VK_TRUE,
-                                UINT64_MAX));
-    }
-
     updateCompletedFrameGpuTiming();
-
-    // 重置fence为未信号状态，准备给GPU在本帧结束时发送信号
-    {
-        YA_PROFILE_SCOPE("vkWaitFence2");
-        VK_CALL(vkResetFences(this->getDevice(), 1, &frameFences[currentFrameIdx]));
-    }
-
-    // GPU has finished with the previous frame at this slot — safe to destroy
-    // any GPU resources that were deferred-deleted during that frame.
     ++_frameIndex;
     DeferredDeletionQueue::get().flush(_frameIndex);
-
-    auto vkSwapChain = this->getSwapchain<VulkanSwapChain>();
-
-    if (!vkSwapChain->flushDirtyRecreateAtFrameBegin()) {
-        YA_CORE_ERROR("Failed to apply pending swapchain recreate at frame begin");
-        return false;
-    }
-
-    if (vkSwapChain->getImageSize() == 0) {
-        YA_CORE_WARN("Swapchain has no images (window minimized), skipping frame");
-        *outImageIndex = -1;
-        return true;
-    }
-
-
-    uint32_t imageIndex = 0;
-    VkResult ret        = VK_SUCCESS;
-    {
-        YA_PERF_SCOPE(perf::sample::vulkanAcquire(), perf::metric::cpuTimeMs(), perf::domain::render());
-        YA_PROFILE_SCOPE("acquireNextImage");
-        ret = vkSwapChain->acquireNextImage(
-            frameImageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
-            frameFences[currentFrameIdx],                   // 等待上一present完成
-            imageIndex);
-    }
-
-    // Do a sync recreation here, Can it be async?(just return and register a frame task)
-    if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
-        YA_PROFILE_SCOPE("VK_ERROR_OUT_OF_DATE_KHR");
-        vkDeviceWaitIdle(this->getDevice());
-
-        // current ignore the size in ci
-        YA_CORE_INFO("Swapchain out of date or suboptimal, recreating...");
-        bool ok = vkSwapChain->recreate(vkSwapChain->getCreateInfo());
-        if (!ok) {
-            YA_CORE_ERROR("Failed to recreate swapchain");
-            return false;
-        }
-
-        // If swapchain recreation was skipped (e.g., window minimized), return and retry next frame
-        if (vkSwapChain->getImageSize() == 0) {
-            YA_CORE_WARN("Swapchain has no images (window minimized), skipping frame");
-            *outImageIndex = -1;
-            return true;
-        }
-
-        {
-            YA_PERF_SCOPE(perf::sample::vulkanAcquire(), perf::metric::cpuTimeMs(), perf::domain::render());
-            ret = vkSwapChain->acquireNextImage(frameImageAvailableSemaphores[currentFrameIdx],
-                                                frameFences[currentFrameIdx],
-                                                imageIndex);
-        }
-
-        if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
-            YA_CORE_ERROR("Failed to acquire next image: {}", ret);
-            return false;
-        }
-        YA_CORE_ASSERT(imageIndex >= 0 && imageIndex < vkSwapChain->getImageSize(),
-                       "Invalid image index: {}. Swapchain image size: {}",
-                       imageIndex,
-                       vkSwapChain->getImageSize());
-    }
-    *outImageIndex = static_cast<int32_t>(imageIndex);
-    return true;
 }
 
 void VulkanRender::beginFrameGpuTiming(ICommandBuffer* commandBuffer)
@@ -1418,8 +1267,9 @@ void VulkanRender::beginFrameGpuTiming(ICommandBuffer* commandBuffer)
         return;
     }
 
-    const uint32_t queryBase              = currentFrameIdx * 2;
-    _frameGpuTimingValid[currentFrameIdx] = 0;
+    const uint32_t frameIdx               = _primarySurface ? _primarySurface->getCurrentFrameIndex() : 0;
+    const uint32_t queryBase              = frameIdx * 2;
+    _frameGpuTimingValid[frameIdx]        = 0;
     _pfnCmdResetQueryPool(vkCommandBuffer, _frameGpuTimestampQueryPool, queryBase, 2);
     vkCmdWriteTimestamp(vkCommandBuffer,
                         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -1438,47 +1288,13 @@ void VulkanRender::endFrameGpuTiming(ICommandBuffer* commandBuffer)
         return;
     }
 
-    const uint32_t queryBase = currentFrameIdx * 2;
+    const uint32_t frameIdx  = _primarySurface ? _primarySurface->getCurrentFrameIndex() : 0;
+    const uint32_t queryBase = frameIdx * 2;
     vkCmdWriteTimestamp(vkCommandBuffer,
                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                         _frameGpuTimestampQueryPool,
                         queryBase + 1);
-    _frameGpuTimingValid[currentFrameIdx] = 1;
-}
-
-bool VulkanRender::end(int32_t imageIndex, std::vector<void*> cmdBufs)
-{
-    YA_PROFILE_FUNCTION()
-    // If cmdBufs is not empty, use legacy single-pass mode
-    if (!cmdBufs.empty()) {
-        submitToQueue(
-            cmdBufs,
-            {frameImageAvailableSemaphores[currentFrameIdx]},
-            {imageSubmittedSignalSemaphores[imageIndex]},
-            frameFences[currentFrameIdx]);
-    }
-    // Otherwise, App has already submitted with custom sync
-
-    // Present the image
-    int result = VK_SUCCESS;
-    {
-        YA_PERF_SCOPE(perf::sample::vulkanPresent(), perf::metric::cpuTimeMs(), perf::domain::render());
-        result = presentImage(imageIndex, {imageSubmittedSignalSemaphores[imageIndex]});
-    }
-
-    if (result == VK_SUBOPTIMAL_KHR) {
-        YA_CORE_INFO("Swapchain suboptimal, recreating...");
-        auto vkSwapChain = this->getSwapchain<VulkanSwapChain>();
-        VK_CALL(vkDeviceWaitIdle(this->getDevice()));
-        bool ok = vkSwapChain->recreate(vkSwapChain->getCreateInfo());
-        if (!ok) {
-            YA_CORE_ERROR("Failed to recreate swapchain after suboptimal!");
-        }
-        return false;
-    }
-
-    currentFrameIdx = (currentFrameIdx + 1) % flightFrameSize;
-    return true;
+    _frameGpuTimingValid[frameIdx] = 1;
 }
 
 std::unique_ptr<IRenderSurfaceContext> VulkanRender::createSurfaceContext(INativeWindow& window)
@@ -1542,19 +1358,6 @@ void VulkanRender::queueEndLabel()
         return;
     }
     _pfnQueueEndDebugUtilsLabelEXT(_graphicsQueues[0].getHandle());
-}
-
-int VulkanRender::presentImage(int32_t imageIndex, const std::vector<void*>& waitSemaphores)
-{
-    std::vector<VkSemaphore> vkWaitSemaphores;
-    vkWaitSemaphores.reserve(waitSemaphores.size());
-    for (auto sem : waitSemaphores) {
-        vkWaitSemaphores.push_back(static_cast<VkSemaphore>(sem));
-    }
-
-    auto     vkSwapChain = this->getSwapchain<VulkanSwapChain>();
-    VkResult result      = vkSwapChain->presentImage(imageIndex, vkWaitSemaphores);
-    return static_cast<int>(result);
 }
 
 void* VulkanRender::createSemaphore(const char* debugName)

@@ -4,7 +4,9 @@
 
 ## 结论
 
-当前帧循环把 **device fence、唯一 swapchain acquire/present、全局 DeferredDeletion flush、静态 Render2D session** 串在一次 `IRender::begin/end` 里。双窗必须拆成「每 surface 自己的 acquire/submit/present」，device 级资源仍共享；CPU 在一个 `AppKernel` 里 **串行** 录制各窗。`Render2D::session` 继续静态单例，但 **每窗必须有唯一 pass slot**，否则同 flight 的 UBO/vertex 会互相覆盖。
+> 2026-09-09：现状以 [`plan.md`](plan.md)「冻结」节为准。下文「`IRender::begin/end`」是审计当时的调用链；代码已迁到 `IRenderSurfaceContext::begin/end`。
+
+当前帧循环把 **device fence、唯一 swapchain acquire/present、全局 DeferredDeletion flush、静态 Render2D session** 串在一次 surface `begin/end` 里。双窗必须拆成「每 surface 自己的 acquire/submit/present」，device 级资源仍共享；CPU 在一个 `AppKernel` 里 **串行** 录制各窗。`Render2D::session` 继续静态单例，但 **每窗必须有唯一 pass slot**，否则同 flight 的 UBO/vertex 会互相覆盖。
 
 `flightFrameSize`（VulkanRender，现为 1）、`MAX_FLIGHTS_IN_FLIGHT`（RenderDefines，2）、`DeferredDeletionQueue::init(1)`（仅 RenderRuntime）三者不一致。GUIAppHost **从不 init** 延迟删除队列。
 
@@ -83,7 +85,7 @@ device.advanceFrame / DeferredDeletion flush once per kernel tick
 | 关最后一扇 / 关主窗 | 现产品：退进程 | n/a |
 | GPU validation use-after-free | 根因几乎总是 waitIdle 全局化或共享 pass slot | — |
 
-当前 `GUIWindowHost::rebuildPresentationResources(true)` 和 OUT_OF_DATE 路径的 `vkDeviceWaitIdle` 在多窗下 **不安全**。C2 必须改成 per-surface fence。
+当前 `GUIWindowHost` 最小化跳过 present；swapchain recreate 只 wait 该 surface fence（MW-202）。禁止再引入 `vkDeviceWaitIdle` 卡住其他窗。
 
 ## 4. 共享 / 独占表
 
@@ -142,12 +144,10 @@ World graph UBO（Forward/Deferred `MAX_FLIGHTS_IN_FLIGHT`）只服务主 `Rende
 
 ## 8. RenderRuntime / PresentationGraphService
 
-`RenderRuntime::beginFrameCommandBuffer` 用 `getSwapchain()->getExtent()` 和 `IRender::begin`。`PresentationGraphService` import **该** swapchain 的全部 image，并订唯一 `onRecreate`。
-
-证据：辅助 GUI 窗不得复用这套 service；主 world 窗继续走 facade。多 world viewport 是 MW-902。
+`RenderRuntime::beginFrameCommandBuffer` 现用 `getPrimarySurfaceContext()->begin()`；world 写离屏 Camera RT。`PresentationGraphService` 注入该 surface，只做 display compose。C0 当时写的 `IRender::begin` / `getSwapchain()` 已删除。辅助 GUI 窗仍不得复用这套 service。N Camera 见 `c2_view_model.md`，C2 前冻结。
 
 ## 9. 本 checkpoint 边界
 
-- 保留：单窗 `begin/end` 语义、静态 Render2D session、主窗 PresentationGraphService。
+- 保留：静态 Render2D session、主窗 PresentationGraphService。当时 `IRender::begin/end` 仍存在；2026-09-09 已迁到 `IRenderSurfaceContext`（见第 8 节补记）。
 - 未完成：MW-003 tab 分类、MW-004 层契约冻结；C1/C2 实现。
 - 偏离：无。未改 Engine，未新增 surface-context 接口，未实例化第二 Render2D session。

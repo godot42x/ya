@@ -187,6 +187,7 @@ struct RenderFrameData
     // ═══════════════════════════════════════════════════════════════
     glm::mat4    view           = glm::mat4(1.0f);
     glm::mat4    projection     = glm::mat4(1.0f);
+    glm::mat4    viewProjection = glm::mat4(1.0f);
     glm::vec3    cameraPos      = glm::vec3(0.0f);
     Extent2D     viewportExtent = {};
     entt::entity viewOwner      = entt::null;
@@ -228,6 +229,7 @@ struct RenderFrameData
         FrameContext ctx;
         ctx.view                 = view;
         ctx.projection           = projection;
+        ctx.viewProjection       = viewProjection;
         ctx.cameraPos            = cameraPos;
         ctx.bHasDirectionalLight = bHasDirectionalLight;
         ctx.directionalLight     = directionalLight;

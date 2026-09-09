@@ -42,6 +42,9 @@ struct YA_RENDER_3D_API PipelineCoordinator
         RenderSharedResourceProvider* sharedResourceProvider = nullptr;
         /// Injected as `runtimeServices` into both pipelines.
         IRenderRuntimeServices*       runtimeServices       = nullptr;
+        /// Host viewport size in pixels. Not swapchain extent.
+        int                           viewportWidth         = 0;
+        int                           viewportHeight        = 0;
         /// Invoked after a pipeline switch/reload so the owner can re-apply
         /// its current viewport rect to the freshly built pipeline.
         std::function<void()>         reapplyViewportSink;
@@ -81,6 +84,8 @@ struct YA_RENDER_3D_API PipelineCoordinator
     RenderSharedResourceProvider*    _sharedResourceProvider = nullptr;
     IRenderRuntimeServices*          _runtimeServices       = nullptr;
     std::function<void()>            _reapplyViewportSink;
+    int                              _viewportWidth         = 0;
+    int                              _viewportHeight        = 0;
 
     ERenderPipeline _renderPipeline          = ERenderPipeline::Deferred;
     ERenderPipeline _pendingRenderPipeline   = ERenderPipeline::Deferred;

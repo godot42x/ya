@@ -16,7 +16,7 @@ namespace ya
 namespace
 {
 
-std::shared_ptr<RenderViewportOverlaySnapshot> buildViewportOverlaySnapshot(const RenderRuntime::FrameInput::OverlayInput& overlay)
+std::shared_ptr<RenderViewportOverlaySnapshot> buildViewportOverlaySnapshot(const CameraFrameInput::OverlayInput& overlay)
 {
     auto snapshot = std::make_shared<RenderViewportOverlaySnapshot>();
     if (overlay.screenSprites) {
@@ -35,44 +35,39 @@ std::shared_ptr<RenderViewportOverlaySnapshot> buildViewportOverlaySnapshot(cons
 
 void RenderRuntime::ensureViewportRectInitialized(const FrameInput& input)
 {
-    if (_viewportState.getRect().extent.x > 0 && _viewportState.getRect().extent.y > 0) {
+    const Rect2D& rect = input.camera.viewportRect;
+    if (rect.extent.x <= 0.0f || rect.extent.y <= 0.0f) {
         return;
     }
 
-    if (input.pipeline.viewportRect.extent.x > 0 && input.pipeline.viewportRect.extent.y > 0) {
-        onViewportResized(input.pipeline.viewportRect);
+    const Rect2D& current = _viewportState.getRect();
+    if (current.extent.x == rect.extent.x && current.extent.y == rect.extent.y &&
+        current.pos.x == rect.pos.x && current.pos.y == rect.pos.y) {
         return;
     }
 
-    auto swapchainExtent = _render->getSwapchain()->getExtent();
-    onViewportResized(Rect2D{
-        .pos    = {0.0f, 0.0f},
-        .extent = {static_cast<float>(swapchainExtent.width), static_cast<float>(swapchainExtent.height)},
-    });
+    onViewportResized(rect);
 }
 
-bool RenderRuntime::beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf)
+bool RenderRuntime::beginFrameCommandBuffer(const FrameInput& input, std::shared_ptr<ICommandBuffer>& cmdBuf)
 {
     YA_PROFILE_SCOPE("RenderRuntime::beginFrameCommandBuffer");
     YA_PERF_SCOPE(perf::sample::renderPrepareFrame(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    if (_render->getSwapchain()->getExtent().width <= 0 || _render->getSwapchain()->getExtent().height <= 0) {
+    if (!input.present.surface || input.present.imageIndex < 0) {
+        // Host skipped acquire (unpresentable / failed begin). One cmdBuf still
+        // couples world record to present, so there is nothing to record here.
+        // Camera skip is host policy, not a swapchain query inside RenderRuntime.
         return false;
     }
 
-    imageIndex = -1;
-    {
-        YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());
-        if (!_render->begin(&imageIndex)) {
-            return false;
-        }
-    }
-    if (imageIndex < 0) {
-        YA_CORE_WARN("Invalid image index ({}), skipping frame render", imageIndex);
+    const uint32_t flightIndex = input.camera.flightIndex;
+    if (flightIndex >= _commandBuffers.size() || !_commandBuffers[flightIndex]) {
+        YA_CORE_ERROR("Recording flight {} has no command buffer", flightIndex);
         return false;
     }
 
-    cmdBuf = _commandBuffers[imageIndex];
+    cmdBuf = _commandBuffers[flightIndex];
     cmdBuf->reset();
     cmdBuf->begin();
     if (YA_PERF_IS_ENABLED()) {
@@ -89,18 +84,10 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
     auto* pipeline = getActivePipeline();
     YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ticking viewport pass");
 
-    auto overlaySnapshot = buildViewportOverlaySnapshot(input.overlay);
+    auto overlaySnapshot = buildViewportOverlaySnapshot(input.camera.overlay);
     pipeline->tick(RenderPipelineFrameContext{
-        .flightIndex              = input.pipeline.flightIndex,
-        .cmdBuf                   = cmdBuf,
-        .deltaTime                = input.pipeline.deltaTime,
-        .view                     = input.pipeline.view,
-        .projection               = input.pipeline.projection,
-        .cameraPos                = input.pipeline.cameraPos,
-        .viewportRect             = _viewportState.getRect(),
-        .viewportFrameBufferScale = _viewportState.getFrameBufferScale(),
-        .frameData                = input.pipeline.frameData,
-        .shadowSettings           = input.pipeline.shadowSettings,
+        .cmdBuf                    = cmdBuf,
+        .camera                    = input.camera,
         .viewportOverlaySnapshot   = std::move(overlaySnapshot),
     });
 }
@@ -146,7 +133,7 @@ EFormat::T RenderRuntime::getViewportDisplayImageFormat() const
     return EFormat::Undefined;
 }
 
-void RenderRuntime::submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf)
+void RenderRuntime::endFrameCommandBuffer(ICommandBuffer* cmdBuf)
 {
     YA_PROFILE_FUNCTION();
 
@@ -158,11 +145,6 @@ void RenderRuntime::submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf)
     {
         YA_PROFILE_SCOPE("RenderRuntime::endCommandBuffer");
         cmdBuf->end();
-    }
-
-    {
-        YA_PROFILE_SCOPE("RenderRuntime::present");
-        _render->end(imageIndex, {cmdBuf->getHandle()});
     }
 
     if (YA_PERF_IS_ENABLED()) {

@@ -115,10 +115,11 @@ struct YA_RENDER_2D_API Render2D
     static void begin(const FRender2dContext& ctx);
     static void end();
 
-    /// Acquire a unique pass slot for this Render2D instance. Call once at
-    /// setup; the returned index is caller-owned and maps the caller's own
-    /// pass vocabulary onto Render2D's per-pass resources.
+    /// Acquire a unique pass slot. Call once per window (or per window+kind
+    /// that records into the same in-flight command buffer). Release when the
+    /// window is destroyed after that surface's GPU work has finished.
     [[nodiscard]] static Render2DPassSlot acquirePassSlot();
+    static void                           releasePassSlot(Render2DPassSlot slot);
 
     /// Push a clip rect (intersected with the current clip). Changes are applied
     /// as a command-level scissor on the next screen batch flush. Any pending

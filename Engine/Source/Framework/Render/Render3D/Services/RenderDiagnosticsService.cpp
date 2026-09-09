@@ -145,7 +145,7 @@ void RenderDiagnosticsService::init(IRender* render, bool bEnableRenderDoc,
                                                    { handleCaptureFinished(result); });
     configureRenderContext();
 
-    if (auto* swapchain = _render ? _render->getSwapchain() : nullptr) {
+    if (auto* swapchain = _render ? _render->primarySwapchain() : nullptr) {
         swapchain->onRecreate.addLambda(
             this,
             [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
@@ -248,13 +248,14 @@ void RenderDiagnosticsService::configureRenderContext()
     }
 
     auto* vkRender = _render->as<VulkanRender>();
-    if (!vkRender || !vkRender->getSwapchain()) {
+    auto* swapchain = _render ? _render->primarySwapchain() : nullptr;
+    if (!vkRender || !swapchain) {
         return;
     }
 
     _renderDoc.capture->setRenderContext({
         .device    = vkRender->getDevice(),
-        .swapchain = vkRender->getSwapchain()->getHandle(),
+        .swapchain = swapchain->getHandle(),
     });
 }
 

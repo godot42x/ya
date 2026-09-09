@@ -4,9 +4,13 @@
 #include "Core/Log.h"
 #include "GUI/Widgets/UIElement.h"
 #include "Core/Os/OsCursor.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/RenderSurfaceContext.h"
 #include "Render/Resources/FontManager.h"
+#include "Render2D/Render2D.h"
 
 #include <algorithm>
+#include <format>
 
 namespace ya
 {
@@ -91,7 +95,9 @@ void GUIWindowManager::shutdown()
     _bInitialized = false;
 }
 
-GUIWindowId GUIWindowManager::create(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate)
+GUIWindowId GUIWindowManager::create(const FGUIWindowHostConfig& config,
+                                     IGUIAppDelegate&            delegate,
+                                     IRender*                    render)
 {
     if (!_bInitialized && !init()) {
         return 0;
@@ -119,6 +125,29 @@ GUIWindowId GUIWindowManager::create(const FGUIWindowHostConfig& config, IGUIApp
     // Tree-local in-memory clipboard. OS clipboard stays on the primary
     // GUIWindowHost so extra windows cannot overwrite each other's paste buffer.
     delegate.buildUI(*slot->tree);
+    slot->presentPassSlot   = Render2D::acquirePassSlot();
+    slot->offscreenPassSlot = Render2D::acquirePassSlot();
+
+    if (render) {
+        slot->ownedPresent = render->createSurfaceContext(*native);
+        if (!slot->ownedPresent) {
+            YA_CORE_ERROR("GUIWindowManager: failed to create surface context for extra window '{}'",
+                          config.title);
+            Render2D::releasePassSlot(slot->presentPassSlot);
+            Render2D::releasePassSlot(slot->offscreenPassSlot);
+            slot->presentPassSlot   = kInvalidRender2DPassSlot;
+            slot->offscreenPassSlot = kInvalidRender2DPassSlot;
+            slot->tree.reset();
+            slot->native = nullptr;
+            _nativeWindows.destroyWindow(native->getWindowID());
+            return 0;
+        }
+        slot->presentResources.render  = render;
+        slot->presentResources.present = slot->ownedPresent.get();
+        rebuildGuiSurfacePresentation(slot->presentResources,
+                                      std::format("GUIExtra_{}", slot->id).c_str(),
+                                      /*bWaitForGpu=*/true);
+    }
 
     const GUIWindowId id = slot->id;
     _focusedId           = id;
@@ -199,7 +228,7 @@ void GUIWindowManager::tickAll(float dt)
 {
     flushPendingCloses();
     for (auto& slot : _slots) {
-        if (!slot || !slot->tree || slot->bMinimized) {
+        if (!slot || !slot->tree) {
             continue;
         }
         if (slot->native) {
@@ -219,11 +248,46 @@ void GUIWindowManager::tickAll(float dt)
     }
 }
 
+void GUIWindowManager::renderAll()
+{
+    for (auto& slot : _slots) {
+        if (!slot || !slot->ownedPresent) {
+            continue;
+        }
+        presentGuiSnapshot(slot->presentResources,
+                           slot->snapshot,
+                           slot->tree ? slot->tree->getLogicalExtent() : Extent2D{},
+                           slot->presentPassSlot,
+                           slot->bMinimized,
+                           slot->bSwapchainRecreatePending);
+    }
+}
+
+void GUIWindowManager::setDeferredCloseWindows(GUIWindowId a, GUIWindowId b)
+{
+    _deferCloseA = a;
+    _deferCloseB = b;
+}
+
+GUIWindowId GUIWindowManager::findDraggingWindowId() const
+{
+    for (const auto& slot : _slots) {
+        if (slot && slot->tree && slot->tree->isDragging()) {
+            return slot->id;
+        }
+    }
+    return 0;
+}
+
 void GUIWindowManager::flushPendingCloses()
 {
     for (size_t i = 0; i < _slots.size();) {
         if (_slots[i] && _slots[i]->bCloseRequested) {
             const GUIWindowId id = _slots[i]->id;
+            if (id != 0 && (id == _deferCloseA || id == _deferCloseB)) {
+                ++i;
+                continue;
+            }
             destroySlot(*_slots[i]);
             _slots.erase(_slots.begin() + static_cast<std::ptrdiff_t>(i));
             if (_focusedId == id) {
@@ -258,6 +322,18 @@ const GUIWindowManager::FSlot* GUIWindowManager::findSlot(GUIWindowId id) const
 
 void GUIWindowManager::destroySlot(FSlot& slot)
 {
+    if (slot.ownedPresent) {
+        slot.ownedPresent->waitInFlight();
+    }
+    slot.presentResources.commandBuffers.clear();
+    slot.presentResources.presentationTargets.clear();
+    slot.presentResources.present = nullptr;
+    slot.presentResources.render  = nullptr;
+    slot.ownedPresent.reset();
+    Render2D::releasePassSlot(slot.presentPassSlot);
+    Render2D::releasePassSlot(slot.offscreenPassSlot);
+    slot.presentPassSlot   = kInvalidRender2DPassSlot;
+    slot.offscreenPassSlot = kInvalidRender2DPassSlot;
     slot.snapshot = {};
     slot.tree.reset();
     slot.delegate = nullptr;
@@ -295,13 +371,16 @@ void GUIWindowManager::dispatchToSlot(FSlot& slot, const Event& event)
     }
     case EEvent::WindowMinimize:
         slot.bMinimized = true;
+        slot.bSwapchainRecreatePending = true;
         return;
     case EEvent::WindowRestore:
         slot.bMinimized = false;
+        slot.bSwapchainRecreatePending = true;
         return;
     case EEvent::WindowResize: {
         const auto& resize = static_cast<const WindowResizeEvent&>(event);
         slot.bMinimized    = resize.GetWidth() == 0 || resize.GetHeight() == 0;
+        slot.bSwapchainRecreatePending = true;
         if (slot.tree) {
             slot.tree->setLogicalExtent(Extent2D{
                 .width  = std::max(resize.GetWidth(), 1u),

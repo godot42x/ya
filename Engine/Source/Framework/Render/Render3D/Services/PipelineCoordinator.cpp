@@ -6,6 +6,7 @@
 #include "Render2D/Render2D.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
+#include "RHI/Render.h"
 
 namespace ya
 {
@@ -29,6 +30,8 @@ void PipelineCoordinator::init(const InitDesc& desc)
     _sharedResourceProvider = desc.sharedResourceProvider;
     _runtimeServices       = desc.runtimeServices;
     _reapplyViewportSink   = desc.reapplyViewportSink;
+    _viewportWidth         = desc.viewportWidth;
+    _viewportHeight        = desc.viewportHeight;
 
     initActivePipeline();
 }
@@ -41,6 +44,8 @@ void PipelineCoordinator::shutdown()
     _sharedResourceProvider = nullptr;
     _runtimeServices       = nullptr;
     _reapplyViewportSink   = {};
+    _viewportWidth         = 0;
+    _viewportHeight        = 0;
     _pendingRenderTargetFormatCommands.clear();
 }
 
@@ -85,9 +90,8 @@ DeferredRenderPipeline* PipelineCoordinator::getSelectedDeferredPipeline() const
 
 void PipelineCoordinator::initActivePipeline()
 {
-    int windowWidth  = 0;
-    int windowHeight = 0;
-    _render->getWindowSize(windowWidth, windowHeight);
+    const int windowWidth  = _viewportWidth;
+    const int windowHeight = _viewportHeight;
 
     if (_renderPipeline == ERenderPipeline::Forward) {
         initForwardPipeline(windowWidth, windowHeight);

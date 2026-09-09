@@ -1,5 +1,6 @@
 #include "RenderRuntime.h"
 #include "Render3D/Common/RenderRuntimeHostServices.h"
+#include "Render3D/Common/ViewCompose.h"
 
 #include "Render3D/Services/DebugRenderSystem.h"
 #include "Core/Profiling/PerfKeys.h"
@@ -8,6 +9,7 @@
 #include "Render3D/Common/RenderOverlay.h"
 #include "GUI/Compose/Render2DComposePass.h"
 #include "RHI/Core/RenderTexture.h"
+#include "RHI/Core/Swapchain.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
 #include "Render2D/Render2D.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
@@ -27,34 +29,30 @@ void RenderRuntime::onViewportResized(Rect2D rect)
     }
 }
 
-void RenderRuntime::renderFrame(const FrameInput& input)
+ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
 {
     YA_PROFILE_SCOPE("RenderRuntime::renderFrame");
     YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    // Frame lifecycle (FG-603):
-    //   1. prepareFrame: acquire swapchain image + begin command buffer (graph-external).
-    //   2. renderWorldFrame: Deferred/Forward world graph via the pipeline-owned executor.
-    //   3. presentation graph service: per-swapchain-image presentation; screenshot
-    //      readback is appended inside that graph (FG-601), never recorded outside.
-    //   4. submitFrame: submit + present (graph-external).
-    //
-    // Presentation intentionally keeps its own executor (FG-602 decision): the
-    // swapchain-image scope and acquire/present lifecycle stay outside the world
-    // graph, so merging the two executors would only spread swapchain semantics
-    // into the render pipelines without removing real duplicated state.
+    // One Camera chain (Unity-style). The unit is the camera, not the window:
+    //   graphics  → world graph into this camera's offscreen RT
+    //   UI        → game UI onto that RT (after post, never into bloom)
+    //   view compose → editor overlays onto that RT
+    //   display compose → PresentationGraphService onto swapchain[imageIndex]
+    // Acquire/present are the host FPresentFrame coordinator's job. Swapchain
+    // images are chosen only at display compose, never as the graphics target.
 
     // Tick owned derived-processing systems (gameplay binding / environment
     // lighting / terrain) inside the render frame; the Host no longer drives
     // them through its generic system list.
     if (_environmentLightingProcessor) {
-        _environmentLightingProcessor->onUpdate(input.pipeline.deltaTime);
+        _environmentLightingProcessor->onUpdate(input.camera.deltaTime);
     }
     if (_terrainProcessor) {
-        _terrainProcessor->onUpdate(input.pipeline.deltaTime);
+        _terrainProcessor->onUpdate(input.camera.deltaTime);
     }
     if (_gameplayResourceBinding) {
-        _gameplayResourceBinding->onUpdate(input.pipeline.deltaTime);
+        _gameplayResourceBinding->onUpdate(input.camera.deltaTime);
     }
 
     _pipelineCoordinator.applyPendingChanges();
@@ -83,7 +81,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
             },
             getViewportDisplayImageFormat());
     }
-    if (input.uiFrameSnapshot) {
+    if (input.camera.uiFrameSnapshot) {
         auto uiTarget = getViewportDisplayImageShared();
         if (uiTarget) {
             prepareRender2DComposePassPipeline(
@@ -94,10 +92,9 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         }
     }
 
-    int32_t                         imageIndex = -1;
     std::shared_ptr<ICommandBuffer> cmdBuf;
-    if (!prepareFrame(input, imageIndex, cmdBuf)) {
-        return;
+    if (!prepareFrame(input, cmdBuf)) {
+        return nullptr;
     }
 
     {
@@ -106,44 +103,25 @@ void RenderRuntime::renderFrame(const FrameInput& input)
             renderWorldFrame(input, cmdBuf.get());
         }
     }
-    // Game UI composites AFTER the world graph and its post-processing, so UI
-    // never enters bloom or tonemapping (graph-external, manual transitions).
-    if (input.uiFrameSnapshot) {
-        auto uiTarget = getViewportDisplayImageShared();
-        if (uiTarget) {
-            recordRender2DComposePass(cmdBuf.get(),
-                                      *uiTarget,
-                                      nullptr,
-                                      input.uiFrameSnapshot,
-                                      FRender2DComposePassDesc{
-                                          .kind = ERender2DComposePassKind::RuntimeUIComposite,
-                                          .logicalViewportExtent = Extent2D{
-                                              .width  = static_cast<uint32_t>(input.pipeline.viewportRect.extent.x),
-                                              .height = static_cast<uint32_t>(input.pipeline.viewportRect.extent.y),
-                                          },
-            });
-        }
-    }
-    // Module viewport composition (editor overlays) records after the world
-    // graph and the runtime game UI pass, still before the presentation graph.
-    // This keeps every manual compose segment in one place inside renderFrame;
-    // modules only provide content through the registered callback.
-    if (input.viewportCompose.recordCompose) {
-        input.viewportCompose.recordCompose(cmdBuf.get());
-    }
-    _presentationGraphService.render(input.pipeline.deltaTime, input.presentationExtensions, cmdBuf.get());
-    {
-        YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
-        submitFrame(imageIndex, cmdBuf.get());
-    }
+    // View compose writes this Camera's offscreen display RT (UI + gizmos).
+    // Display compose then writes swapchain[imageIndex]. Same cmdBuf / submit.
+    recordCameraViewCompose(cmdBuf.get(),
+                            getViewportDisplayImageShared().get(),
+                            input.camera,
+                            input.viewCompose);
+    _presentationGraphService.recordDisplayCompose(input.camera.deltaTime,
+                                                   input.displayCompose.extensions,
+                                                   cmdBuf.get());
+    endFrameCommandBuffer(cmdBuf.get());
+    return cmdBuf.get();
 }
 
-bool RenderRuntime::prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf)
+bool RenderRuntime::prepareFrame(const FrameInput& input, std::shared_ptr<ICommandBuffer>& cmdBuf)
 {
     YA_PROFILE_FUNCTION()
     ensureViewportRectInitialized(input);
-    _viewportState.setFrameBufferScale(input.pipeline.viewportFrameBufferScale);
-    return beginFrameCommandBuffer(imageIndex, cmdBuf);
+    _viewportState.setFrameBufferScale(input.camera.viewportFrameBufferScale);
+    return beginFrameCommandBuffer(input, cmdBuf);
 }
 
 void RenderRuntime::renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf)
@@ -288,13 +266,14 @@ RenderTargetCatalog RenderRuntime::buildRenderTargetCatalog() const
     RenderTargetCatalog catalog{};
 
     if (auto presentationImage = _presentationGraphService.getCurrentPresentationImageShared()) {
+        auto* swapchain = _presentationGraphService.getSwapchain();
         catalog.entries.push_back({
             .label            = "Presentation",
             .owner            = RenderTargetCatalog::Entry::EOwner::Presentation,
-            .colorFormats     = {_render->getSwapchain()->getFormat()},
+            .colorFormats     = {presentationImage->getFormat()},
             .colorAttachments = {presentationImage},
             .extent           = presentationImage->getExtent(),
-            .frameBufferCount = _render->getSwapchain()->getImageCount(),
+            .frameBufferCount = swapchain ? swapchain->getImageCount() : 1,
             .bSwapChainTarget = true,
             .bEditable        = false,
         });

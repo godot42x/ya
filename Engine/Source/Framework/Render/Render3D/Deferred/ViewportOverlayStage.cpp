@@ -336,7 +336,7 @@ void ViewportOverlayStage::prepare(const RenderStageContext& ctx)
     if (!ctx.frameData) return;
 
     BillboardFrameUBO billboardUbo{
-        .viewProjection = ctx.frameData->projection * ctx.frameData->view,
+        .viewProjection = ctx.frameData->viewProjection,
         .view           = ctx.frameData->view,
     };
     _billboardFrameUBO[ctx.flightIndex]->writeData(&billboardUbo, sizeof(billboardUbo), 0);
@@ -592,7 +592,7 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx, const Fram
         debugSystem.addLineImmediate(gizmo.lineStart, gizmo.lineEnd, glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
     }
 
-    debugSystem.draw(cmdBuf, vpW, vpH, fd.projection, fd.view);
+    debugSystem.draw(cmdBuf, vpW, vpH, fd.projection, fd.view, ctx.flightIndex);
 
     cmdBuf->debugEndLabel();
 }

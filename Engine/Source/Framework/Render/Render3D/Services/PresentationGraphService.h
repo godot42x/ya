@@ -16,6 +16,8 @@ namespace ya
 
 struct ICommandBuffer;
 struct IRender;
+struct IRenderSurfaceContext;
+struct ISwapchain;
 class RenderGraphExecutor;
 struct RenderTexture;
 struct BasicPostprocessing;
@@ -23,12 +25,12 @@ struct BasicPostprocessing;
 /**
  * Owns the presentation graph: per-swapchain-image executors + imported
  * presentation images and the post-process pipeline that composits the final
- * viewport image into the swapchain target.
+ * viewport image into that surface's swapchain target.
  *
- * Presentation resources are intentionally independent from the world-frame
- * executor: swapchain acquire/present and recreate stay outside the world
- * graph (FG-601/602/603). The service only consumes the viewport display
- * image provided through InitDesc; it owns no world/UI state.
+ * The injected `IRenderSurfaceContext` is a present destination only. World
+ * rendering stays on offscreen viewport textures; this service never sizes
+ * or formats the viewport from the swapchain. `onRecreate` rebuilds only
+ * THIS surface's imported images (FG-601/602/603).
  */
 struct YA_RENDER_3D_API PresentationGraphService
 {
@@ -49,27 +51,32 @@ struct YA_RENDER_3D_API PresentationGraphService
 
     struct InitDesc
     {
-        IRender* render = nullptr;
+        IRender*                render  = nullptr;
+        IRenderSurfaceContext*  present = nullptr;
         /// Supplies the final viewport display image (postprocessed output or
-        /// raw viewport image) that the presentation graph composits.
+        /// raw viewport image) that the presentation graph composits onto the
+        /// acquired swapchain image.
         std::function<std::shared_ptr<RenderTexture>()> viewportDisplayImageProvider;
     };
 
     void init(const InitDesc& desc);
     void shutdown();
 
-    /// Rebuild per-swapchain-image presentation executors + imported images
-    /// (called on init and on swapchain recreate).
+    /// Rebuild this surface's imported swapchain images + executors.
+    /// Called on init and on THIS swapchain's `onRecreate` only.
     void rebuildImages();
 
-    /// Record the presentation graph for the current swapchain image.
-    void render(float deltaTime, const Extensions& extensions, ICommandBuffer* cmdBuf);
+    /// Display compose: blit the Camera display RT onto this surface's
+    /// `swapchain[imageIndex]`. Not view compose; does not write Camera RTs.
+    void recordDisplayCompose(float deltaTime, const Extensions& extensions, ICommandBuffer* cmdBuf);
 
     [[nodiscard]] std::shared_ptr<RenderTexture> getCurrentPresentationImageShared() const;
     [[nodiscard]] uint32_t                     getCurrentPresentationImageIndex() const;
+    [[nodiscard]] ISwapchain*                  getSwapchain() const;
 
   private:
-    IRender* _render = nullptr;
+    IRender*               _render  = nullptr;
+    IRenderSurfaceContext* _present = nullptr;
     std::function<std::shared_ptr<RenderTexture>()> _viewportDisplayImageProvider;
     std::vector<std::unique_ptr<RenderGraphExecutor>> _presentationGraphExecutors;
     std::vector<std::shared_ptr<RenderTexture>>       _presentationImages;

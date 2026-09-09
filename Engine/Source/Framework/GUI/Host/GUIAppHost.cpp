@@ -22,6 +22,7 @@
 #include "RHI/Backend/TextureLibrary.h"
 #include "RHI/Backend/Vulkan/VulkanSwapChain.h"
 #include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/PresentFrame.h"
 
 #include "GUI/Compose/GuiFrameInspectorOverlay.h"
 #include "GUI/Compose/Render2DComposePass.h"
@@ -74,11 +75,11 @@ nlohmann::json makeAutomationError(const AppAutomationControlServer::Request& re
     };
 }
 
-Extent2D queryWindowLogicalExtent(IRender& render)
+Extent2D queryWindowLogicalExtent(INativeWindow& window)
 {
     int width  = 0;
     int height = 0;
-    render.getWindowSize(width, height);
+    window.getWindowSize(width, height);
     return {
         .width  = static_cast<uint32_t>(std::max(width, 0)),
         .height = static_cast<uint32_t>(std::max(height, 0)),
@@ -522,6 +523,7 @@ struct GUIWindowHost::FImpl
 
     SDLNativeWindow          window;
     IRender*                 render  = nullptr;
+    IRenderSurfaceContext*   present = nullptr;
     AppAutomationControlServer automationServer;
     std::shared_ptr<ShaderStorage> shaderStorage;
     std::unique_ptr<WidgetTree> tree;
@@ -531,6 +533,8 @@ struct GUIWindowHost::FImpl
     std::vector<std::shared_ptr<GUIPresentationTarget>> presentationTargets;
     void*    cachedSwapchainHandle = nullptr;
     Extent2D cachedSwapchainExtent{};
+    Render2DPassSlot presentPassSlot   = kInvalidRender2DPassSlot;
+    Render2DPassSlot offscreenPassSlot = kInvalidRender2DPassSlot;
     uint64_t frameCount = 0;
     float    lastMouseX = -1.0f;
     float    lastMouseY = -1.0f;
@@ -643,13 +647,23 @@ bool GUIWindowHost::init()
         window.destroy();
         return false;
     }
-    _impl->render = render;
+    _impl->render  = render;
     render->setShaderStorage(_impl->shaderStorage);
     if (!render->init(renderCI)) {
         YA_CORE_ERROR("GUIAppHost: failed to initialize render backend");
         render->destroy();
         delete render;
         _impl->render = nullptr;
+        window.destroy();
+        return false;
+    }
+    _impl->present = render->getPrimarySurfaceContext();
+    if (!_impl->present || !_impl->present->getSwapchain()) {
+        YA_CORE_ERROR("GUIAppHost: missing primary surface context");
+        render->destroy();
+        delete render;
+        _impl->render  = nullptr;
+        _impl->present = nullptr;
         window.destroy();
         return false;
     }
@@ -702,9 +716,11 @@ bool GUIWindowHost::init()
 
     // 5. GUI Draw2D renderer (screen-space sprites, depth-less pipeline),
     //    matching the swapchain's real surface format.
-    auto* swapchain = render->getSwapchain()->as<VulkanSwapChain>();
+    auto* swapchain = _impl->present->getSwapchain()->as<VulkanSwapChain>();
     YA_CORE_ASSERT(swapchain != nullptr, "GUIAppHost requires a VulkanSwapChain");
     Render2D::init(render, swapchain->getFormat(), EFormat::Undefined);
+    _impl->presentPassSlot   = Render2D::acquirePassSlot();
+    _impl->offscreenPassSlot = Render2D::acquirePassSlot();
 
     // 5b. Game UI WidgetTree closure: layout + immutable snapshot without any
     //     Scene / ECS / Host / Render3D dependency. SDL input is routed into
@@ -777,13 +793,13 @@ bool GUIWindowHost::init()
             &static_cast<SdlEventSource*>(_impl->eventSource.get())->hostWindowID;
     }
 
-    render->allocateCommandBuffers(render->getSwapchainImageCount(), _impl->commandBuffers);
+    render->allocateCommandBuffers(swapchain->getImageCount(), _impl->commandBuffers);
 
     // Presentation render targets: one imported swapchain image per frame.
     GUIPresentationTarget::buildAll(*render, *swapchain, "GUIApp", _impl->presentationTargets);
     _impl->cachedSwapchainHandle = swapchain->getHandle();
     _impl->cachedSwapchainExtent = swapchain->getExtent();
-    _impl->tree->setLogicalExtent(queryWindowLogicalExtent(*render));
+    _impl->tree->setLogicalExtent(queryWindowLogicalExtent(_impl->window));
 
     _impl->bInitialized = true;
     return true;
@@ -838,19 +854,20 @@ bool GUIWindowHost::requestWindowSize(uint32_t width, uint32_t height, std::stri
 
 void GUIWindowHost::rebuildPresentationResources(bool bWaitForGpu)
 {
-    // Frame boundary only: wait for in-flight work, then release command
-    // buffers (and their retained resources) and the imported images/views
-    // before rebuilding from the current swapchain.
+    // Frame boundary only. Recreate already waited this surface's fences
+    // inside `IRenderSurfaceContext::begin`; do not `IRender::waitIdle()`
+    // (that stalls every other window). `bWaitForGpu` remains for callers
+    // that invoke this outside an acquired frame.
     if (bWaitForGpu) {
-        _impl->render->waitIdle();
+        _impl->present->waitInFlight();
     }
     _impl->commandBuffers.clear();
     _impl->presentationTargets.clear();
     _impl->offscreenSurface.reset();
     _impl->offscreenShotBuffer.reset();
 
-    auto* swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
-    _impl->render->allocateCommandBuffers(_impl->render->getSwapchainImageCount(), _impl->commandBuffers);
+    auto* swapchain = _impl->present->getSwapchain()->as<VulkanSwapChain>();
+    _impl->render->allocateCommandBuffers(swapchain->getImageCount(), _impl->commandBuffers);
     GUIPresentationTarget::buildAll(*_impl->render, *swapchain, "GUIApp", _impl->presentationTargets);
     _impl->cachedSwapchainHandle = swapchain->getHandle();
     _impl->cachedSwapchainExtent = swapchain->getExtent();
@@ -880,6 +897,11 @@ const FGUIWindowHostConfig& GUIWindowHost::getConfig() const
 uint32_t GUIWindowHost::getWindowID() const
 {
     return _impl->window.getWindowID();
+}
+
+IRender* GUIWindowHost::getRender() const
+{
+    return _impl->bInitialized ? _impl->render : nullptr;
 }
 
 void GUIWindowHost::setAcceptAllWindowEvents(bool enabled)
@@ -1015,7 +1037,7 @@ float GUIWindowHost::refreshDevicePixelRatio(IRender* render)
     // surface, the device/logical ratio still reflects the active scale.
     if (render != nullptr && scale <= 0.0f + 1e-3f) {
         const Extent2D logical   = _impl->tree ? _impl->tree->getLogicalExtent() : Extent2D{};
-        const auto*     swapchain = render->getSwapchain();
+        const auto*     swapchain = _impl->present ? _impl->present->getSwapchain() : nullptr;
         if (swapchain && logical.width > 0 && logical.height > 0) {
             const Extent2D present = swapchain->getExtent();
             const float    ratioX  = static_cast<float>(present.width) / static_cast<float>(logical.width);
@@ -1198,7 +1220,7 @@ void GUIWindowHost::onTick(float dt)
     }
 
     if (_impl->bSwapchainRecreatePending) {
-        auto* swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
+        auto* swapchain = _impl->present->getSwapchain()->as<VulkanSwapChain>();
         swapchain->requestRecreate();
         _impl->bSwapchainRecreatePending = false;
     }
@@ -1208,7 +1230,7 @@ void GUIWindowHost::onTick(float dt)
         // render->begin can fail or crash on an unpresented surface). The
         // frame degrades to a snapshot-only pass: buildSnapshot drives
         // layout + paint + the G2 validation frame, nothing is submitted.
-        _impl->tree->setLogicalExtent(queryWindowLogicalExtent(*_impl->render));
+        _impl->tree->setLogicalExtent(queryWindowLogicalExtent(_impl->window));
         _impl->delegate->updateUI();
         // Scenario frames have no presentable swapchain, but still use the
         // window's device-pixel-ratio (1.0 when headless) as the DPI mapping so
@@ -1228,71 +1250,17 @@ void GUIWindowHost::onTick(float dt)
         ++_impl->frameCount;
         return;
     }
-    if (_impl->bWindowMinimized) {
-        _impl->render->waitIdle();
-        return;
-    }
 
-    int32_t imageIndex = -1;
-    if (!_impl->render->begin(&imageIndex)) {
-        return;
-    }
-    if (imageIndex < 0) {
-        _impl->render->waitIdle();
-        return;
-    }
-
-    auto* swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
-    const Extent2D swapchainExtent = swapchain->getExtent();
-    if (swapchain->getHandle() != _impl->cachedSwapchainHandle ||
-        _impl->render->getSwapchainImageCount() != _impl->presentationTargets.size() ||
-        swapchainExtent.width != _impl->cachedSwapchainExtent.width ||
-        swapchainExtent.height != _impl->cachedSwapchainExtent.height) {
-        rebuildPresentationResources(/*bWaitForGpu=*/true);
-        swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
-    }
-    _impl->tree->setLogicalExtent(queryWindowLogicalExtent(*_impl->render));
-
+    _impl->tree->setLogicalExtent(queryWindowLogicalExtent(_impl->window));
     _impl->delegate->updateUI();
-    const auto& presentation = _impl->presentationTargets[static_cast<size_t>(imageIndex)];
-    if (!presentation || !presentation->renderSurface || !presentation->renderSurface->isValid()) {
-        YA_CORE_ERROR("GUIAppHost: presentation surface {} is invalid", imageIndex);
-        _impl->render->waitIdle();
-        return;
-    }
-    const auto& renderSurface = presentation->renderSurface;
-    const auto& renderImage   = renderSurface->getRenderImage();
-    const Extent2D presentExtent = renderImage->getExtent();
-    renderSurface->prepare(FRender2DComposePassDesc{
-        .kind = ERender2DComposePassKind::RuntimeUIComposite,
-    });
-
-    // devicePixelRatio is the system DPI (logical points -> framebuffer pixels),
-    // published to the tree as the DPI mapping (NOT the user zoom). The user
-    // zoom (_impl->uiUserScale, default 1.0) lives separately in the build
-    // context, so a monitor-move DPI change never disturbs the user's chosen
-    // zoom, and vice-versa. Font raster DPI reads the same devicePixelRatio.
     const float dpiScale = _impl->devicePixelRatio;
-    FontManager::get()->setActiveDpiScale(dpiScale); // idempotent; ensures consistency
+    FontManager::get()->setActiveDpiScale(dpiScale);
     _impl->tree->setDpiScale(dpiScale);
     UIFrameSnapshot snapshot = _impl->tree->buildSnapshot(UIFrameBuildContext{
-        .uiScale = {_impl->uiUserScale, _impl->uiUserScale},
-        .offset = {0.0f, 0.0f},
+        .uiScale         = {_impl->uiUserScale, _impl->uiUserScale},
+        .offset          = {0.0f, 0.0f},
         .textureResolver = resolveBuiltinTexture,
     });
-    if (!_impl->bLoggedFirstSnapshot) {
-        _impl->bLoggedFirstSnapshot = true;
-        const GuiPerfStats& stats   = _impl->tree->getPerfStats();
-        YA_CORE_INFO("GUIAppHost first snapshot: {} draw items, {} widgets painted, layout {:.3f}ms paint {:.3f}ms, {}x{} logical -> {}x{} render",
-                     snapshot.items.size(),
-                     stats.paintedWidgets,
-                     stats.layoutMS,
-                     stats.paintMS,
-                     snapshot.logicalExtent.width,
-                     snapshot.logicalExtent.height,
-                     presentExtent.width,
-                     presentExtent.height);
-    }
     if (_impl->config && _impl->config->bDebugRenderOverlay) {
         appendDebugRenderOverlay(snapshot, *_impl->tree);
     }
@@ -1318,19 +1286,63 @@ void GUIWindowHost::onTick(float dt)
                           _impl->config->dumpSnapshotJsonPath);
         }
     }
+    FontManager::get()->flushPendingGlyphs(*_impl->render);
+    (void)FontManager::get()->consumeNewGlyphCapture();
+
+    if (_impl->bWindowMinimized || !_impl->present->isPresentable()) {
+        return;
+    }
+
+    FPresentFrame presentFrame{.surface = _impl->present};
+    if (!acquirePresentFrame(presentFrame)) {
+        return;
+    }
+    if (!presentFrame.acquired()) {
+        submitPresentFrame(presentFrame, {});
+        return;
+    }
+    const int32_t imageIndex = presentFrame.imageIndex;
+
+    auto* swapchain = _impl->present->getSwapchain()->as<VulkanSwapChain>();
+    const Extent2D swapchainExtent = swapchain->getExtent();
+    if (swapchain->getHandle() != _impl->cachedSwapchainHandle ||
+        swapchain->getImageCount() != _impl->presentationTargets.size() ||
+        swapchainExtent.width != _impl->cachedSwapchainExtent.width ||
+        swapchainExtent.height != _impl->cachedSwapchainExtent.height) {
+        rebuildPresentationResources(/*bWaitForGpu=*/false);
+        swapchain = _impl->present->getSwapchain()->as<VulkanSwapChain>();
+    }
+    const auto& presentation = _impl->presentationTargets[static_cast<size_t>(imageIndex)];
+    if (!presentation || !presentation->renderSurface || !presentation->renderSurface->isValid()) {
+        YA_CORE_ERROR("GUIAppHost: presentation surface {} is invalid", imageIndex);
+        submitPresentFrame(presentFrame, {});
+        return;
+    }
+    const auto& renderSurface = presentation->renderSurface;
+    const auto& renderImage   = renderSurface->getRenderImage();
+    const Extent2D presentExtent = renderImage->getExtent();
+    renderSurface->prepare(FRender2DComposePassDesc{
+        .kind     = ERender2DComposePassKind::RuntimeUIComposite,
+        .passSlot = _impl->presentPassSlot,
+    });
+
+    if (!_impl->bLoggedFirstSnapshot) {
+        _impl->bLoggedFirstSnapshot = true;
+        const GuiPerfStats& stats   = _impl->tree->getPerfStats();
+        YA_CORE_INFO("GUIAppHost first snapshot: {} draw items, {} widgets painted, layout {:.3f}ms paint {:.3f}ms, {}x{} logical -> {}x{} render",
+                     snapshot.items.size(),
+                     stats.paintedWidgets,
+                     stats.layoutMS,
+                     stats.paintMS,
+                     snapshot.logicalExtent.width,
+                     snapshot.logicalExtent.height,
+                     presentExtent.width,
+                     presentExtent.height);
+    }
 
     auto cmdBuf = _impl->commandBuffers[static_cast<size_t>(imageIndex)];
     cmdBuf->reset();
     cmdBuf->begin();
-
-    // Flush pending glyph captures at a SAFE point (Core Rule 6): after the
-    // snapshot build registered missing glyphs, before any command recording
-    // touches them. Texture creation/repack only happens here.
-    FontManager::get()->flushPendingGlyphs(*_impl->render);
-    // Drain the capture flag. WidgetTree consumes FontManager::resourceRevision()
-    // at the next snapshot, so hosts must not re-invalidate here (that would
-    // duplicate ResourceReady and fight incremental layout skip proofs).
-    (void)FontManager::get()->consumeNewGlyphCapture();
 
     cmdBuf->retireResource(renderImage->getImageShared());
     cmdBuf->retireResource(renderImage->getImageViewShared());
@@ -1371,6 +1383,7 @@ void GUIWindowHost::onTick(float dt)
         &snapshot,
         FRender2DComposePassDesc{
             .kind                  = ERender2DComposePassKind::RuntimeUIComposite,
+            .passSlot              = _impl->presentPassSlot,
             .logicalViewportExtent = _impl->tree->getLogicalExtent(),
         },
         inspectorExtra);
@@ -1410,7 +1423,8 @@ void GUIWindowHost::onTick(float dt)
         }
         else {
             _impl->offscreenSurface->prepare(FRender2DComposePassDesc{
-                .kind = ERender2DComposePassKind::RuntimeUIOffscreen,
+                .kind     = ERender2DComposePassKind::RuntimeUIOffscreen,
+                .passSlot = _impl->offscreenPassSlot,
             });
             _impl->offscreenSurface->record(
                 cmdBuf.get(),
@@ -1418,6 +1432,7 @@ void GUIWindowHost::onTick(float dt)
                 &snapshot,
                 FRender2DComposePassDesc{
                     .kind                  = ERender2DComposePassKind::RuntimeUIOffscreen,
+                    .passSlot              = _impl->offscreenPassSlot,
                     .logicalViewportExtent = _impl->tree->getLogicalExtent(),
                 });
             offscreenImage = _impl->offscreenSurface->getRenderImage();
@@ -1493,10 +1508,10 @@ void GUIWindowHost::onTick(float dt)
     }
 
     cmdBuf->end();
-    _impl->render->end(imageIndex, {cmdBuf->getHandle()});
+    submitPresentFrame(presentFrame, {cmdBuf->getHandle()});
 
     if (!capturePath.empty() || bCaptureOffscreen) {
-        _impl->render->waitIdle();
+        _impl->present->waitInFlight();
         if (!capturePath.empty() && _impl->gpuShotBuffer) {
             if (uint8_t* pixels = _impl->gpuShotBuffer->map<uint8_t>()) {
                 writeRGBAtoBMP(pixels,
@@ -1597,6 +1612,10 @@ void GUIWindowHost::shutdown()
     // released BEFORE the Vulkan device / VMA allocator is destroyed below
     // (a later ~VulkanBuffer would call vmaDestroyBuffer on a dead allocator).
     _impl->render->waitIdle();
+    Render2D::releasePassSlot(_impl->presentPassSlot);
+    Render2D::releasePassSlot(_impl->offscreenPassSlot);
+    _impl->presentPassSlot   = kInvalidRender2DPassSlot;
+    _impl->offscreenPassSlot = kInvalidRender2DPassSlot;
     if (_impl->pendingCapture) {
         _impl->automationServer.completeRequest(
             _impl->pendingCapture->waiter,
@@ -1616,6 +1635,7 @@ void GUIWindowHost::shutdown()
     FontManager::get()->clearCache();
     TextureLibrary::get().shutdown();
     DeferredDeletionQueue::get().flushAll();
+    _impl->present = nullptr;
     _impl->render->destroy();
     delete _impl->render;
     _impl->render = nullptr;
@@ -1661,7 +1681,7 @@ void GUIApp::shutdown()
 
 GUIWindowId GUIApp::openWindow(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate)
 {
-    const GUIWindowId id = _extraWindows->create(config, delegate);
+    const GUIWindowId id = _extraWindows->create(config, delegate, _primaryWindow.getRender());
     if (id != 0) {
         _primaryWindow.setAcceptAllWindowEvents(true);
     }
@@ -1684,6 +1704,11 @@ WidgetTree* GUIApp::findTree(GUIWindowId id)
     return _extraWindows->findTree(id);
 }
 
+size_t GUIApp::extraWindowCount() const
+{
+    return _extraWindows->extraWindowCount();
+}
+
 void GUIApp::onInit() {}
 
 void GUIApp::onEvent(const Event& event)
@@ -1693,10 +1718,18 @@ void GUIApp::onEvent(const Event& event)
         return;
     }
 
+    adoptDragSource();
+    if (routeCrossWindowDrag(event)) {
+        syncCrossWindowDrag();
+        return;
+    }
+
     const uint32_t eventId   = guiEventWindowId(event);
     const uint32_t primaryId = _primaryWindow.getWindowID();
     if (eventId != 0 && eventId != primaryId) {
         _extraWindows->dispatchEvent(event);
+        adoptDragSource();
+        syncCrossWindowDrag();
         return;
     }
 
@@ -1705,20 +1738,25 @@ void GUIApp::onEvent(const Event& event)
                            event.getEventType() == EEvent::KeyTyped;
     if (eventId == 0 && bKeyEvent && _extraWindows->focusedWindowId() != 0) {
         if (_extraWindows->dispatchEvent(event)) {
+            adoptDragSource();
+            syncCrossWindowDrag();
             return;
         }
     }
 
     _primaryWindow.onEvent(event);
+    adoptDragSource();
+    syncCrossWindowDrag();
 }
 
 void GUIApp::onTick(float dt)
 {
-    _extraWindows->flushPendingCloses();
+    applyDeferredCloses();
     if (_primaryWindow.isInitialized()) {
         _primaryWindow.onTick(dt);
     }
     _extraWindows->tickAll(dt);
+    _extraWindows->renderAll();
     if (_extraWindows->extraWindowCount() == 0) {
         _primaryWindow.setAcceptAllWindowEvents(false);
     }

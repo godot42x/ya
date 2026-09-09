@@ -8,13 +8,15 @@ namespace ya
 {
 
 /**
- * Holds the runtime viewport state: the viewport rect (in logical pixels),
- * the frame-buffer scale and the world-scene render flag.
+ * Single Camera / WorldView slot: the offscreen target rect (logical pixels),
+ * framebuffer scale, and whether the world graphics pass runs.
+ *
+ * This is not an OS window and not a ViewportWidget. Multi-camera will be an
+ * array of these; today RenderRuntime executes exactly one.
  *
  * Pure state — the service neither touches the render backend nor the
  * pipelines. Notification (e.g. forwarding a resize to the active pipeline)
- * and first-frame initialization remain with the orchestrator (RenderRuntime),
- * which reads/writes this state through the service.
+ * and first-frame initialization remain with the orchestrator (RenderRuntime).
  */
 struct YA_RENDER_3D_API ViewportStateService
 {

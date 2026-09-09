@@ -1,6 +1,8 @@
 # MW-001 IRender ownership 矩阵
 
 > 2026-09-08。只读审计，不改 RHI。验收：每个公开 API 标记 device-owned / surface-owned / main-facade；列出可复用、必须 per-window、不能共享的资源。
+>
+> 2026-09-09 现状以 [`plan.md`](plan.md)「冻结：device / present / camera」和「当前 RHI 状态」为准。本文件里的 `getSwapchain()` / `IRender::begin` 等名字已过时：present 在 `IRenderSurfaceContext`；`IRender` 是共享 device。分类原则仍有效（device vs surface vs 禁止复制 `IRender::create`）。
 
 ## 结论
 

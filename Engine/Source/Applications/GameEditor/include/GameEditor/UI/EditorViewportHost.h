@@ -24,8 +24,9 @@ struct FEditorViewportHostState
     glm::mat4 projection{1.0f};
 };
 
-/// Narrow viewport-widget contract for the editor shell. Surface pushes the
-/// display image and reads rect/hover/focus; it does not retain tab widgets.
+/// Chrome widget that displays a Camera / PreviewTarget image. Layout rect is
+/// not the GPU view extent. Surface pushes the image; it does not own the
+/// camera render chain or the present surface.
 struct IEditorViewportHost
 {
     virtual ~IEditorViewportHost() = default;

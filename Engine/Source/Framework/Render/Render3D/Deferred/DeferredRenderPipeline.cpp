@@ -842,12 +842,12 @@ bool DeferredRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& fr
 {
     YA_CORE_ASSERT(frame.cmdBuf, "DeferredRenderPipeline requires a command buffer");
 
-    if (frame.viewportRect.extent.x <= 0 || frame.viewportRect.extent.y <= 0) {
+    if (!frame.camera.hasOffscreenExtent()) {
         frame.cmdBuf->debugEndLabel();
         return true;
     }
 
-    if (!frame.frameData) {
+    if (!frame.camera.frameData) {
         frame.cmdBuf->debugEndLabel();
         return true;
     }
@@ -862,25 +862,25 @@ void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, 
     _postProcessStage.beginFrame();
     captureShadowSettings(frame);
 
-    vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
-    vpH = static_cast<uint32_t>(frame.viewportRect.extent.y);
+    vpW = static_cast<uint32_t>(frame.camera.viewportRect.extent.x);
+    vpH = static_cast<uint32_t>(frame.camera.viewportRect.extent.y);
 
-    _lastPointLightCount = frame.frameData->numPointLights;
-    _lastDrawCount       = static_cast<uint32_t>(frame.frameData->totalDrawCount());
+    _lastPointLightCount = frame.camera.frameData->numPointLights;
+    _lastDrawCount       = static_cast<uint32_t>(frame.camera.frameData->totalDrawCount());
 
     stageCtx = RenderStageContext{
         .cmdBuf         = frame.cmdBuf,
-        .frameData      = frame.frameData,
-        .flightIndex    = frame.flightIndex,
-        .deltaTime      = frame.deltaTime,
+        .frameData      = frame.camera.frameData,
+        .flightIndex    = frame.camera.flightIndex,
+        .deltaTime      = frame.camera.deltaTime,
         .viewportExtent = {.width = vpW, .height = vpH},
     };
 }
 
 void DeferredRenderPipeline::captureShadowSettings(const RenderPipelineFrameContext& frame)
 {
-    if (frame.shadowSettings) {
-        _frameShadowSettings = *frame.shadowSettings;
+    if (frame.camera.shadowSettings) {
+        _frameShadowSettings = *frame.camera.shadowSettings;
     }
     else if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
@@ -901,7 +901,7 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
             : DescriptorSetHandle{};
         _lightStage->setFrameInputs(LightStage::FrameInputs{
             .frameAndLightDescriptorSet = _frameResources
-                ? _frameResources->getBinding(frame.flightIndex).frameAndLightDescriptorSet
+                ? _frameResources->getBinding(frame.camera.flightIndex).frameAndLightDescriptorSet
                 : DescriptorSetHandle{},
             .environmentLightingDescriptorSet = _currentEnvironmentLightingDescriptorSet,
         });
@@ -913,21 +913,21 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
     if (_overlayStage) {
         ViewportOverlayStage::FrameInputs frameInputs{};
         frameInputs.skybox.frameDescriptorSet = _frameResources
-            ? _frameResources->getBinding(frame.flightIndex).skyboxFrameDescriptorSet
+            ? _frameResources->getBinding(frame.camera.flightIndex).skyboxFrameDescriptorSet
             : DescriptorSetHandle{};
         auto* envProcessor = _runtimeServices ? _runtimeServices->getEnvironmentLightingProcessor() : nullptr;
 
         if (activeScene) {
-            const float viewportHeight = static_cast<float>(frame.viewportRect.extent.y);
+            const float viewportHeight = static_cast<float>(frame.camera.viewportRect.extent.y);
             if (viewportHeight > 0.0f) {
                 for (const auto& [entity, billboard, transform] : activeScene->getRegistry().view<BillboardComponent, TransformComponent>().each()) {
                     (void)entity;
-                    if (!shouldRenderBillboard(billboard, frame.bAppStopped)) {
+                    if (!shouldRenderBillboard(billboard, frame.camera.bAppStopped)) {
                         continue;
                     }
 
                     const glm::vec3 worldCenter = transform.getWorldPosition();
-                    const float distance        = glm::length(frame.cameraPos - worldCenter);
+                    const float distance        = glm::length(frame.camera.cameraPos - worldCenter);
                     if (distance <= std::numeric_limits<float>::epsilon()) {
                         continue;
                     }
@@ -1127,8 +1127,8 @@ void DeferredRenderPipeline::refreshViewportStageState()
 
 void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
-    const float frameBufferScale = std::max(frame.viewportFrameBufferScale, 1.0f);
-    const Extent2D desiredExtent  = Extent2D::fromVec2(frame.viewportRect.extent / frameBufferScale);
+    const float frameBufferScale = std::max(frame.camera.viewportFrameBufferScale, 1.0f);
+    const Extent2D desiredExtent  = Extent2D::fromVec2(frame.camera.viewportRect.extent / frameBufferScale);
     if (desiredExtent.width > 0 && desiredExtent.height > 0 && desiredExtent != _viewportRTSpec.extent) {
         requestViewportResize(desiredExtent);
     }
@@ -1190,7 +1190,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         return;
     }
 
-    const auto& frameBinding = _frameResources->getBinding(frame.flightIndex);
+    const auto& frameBinding = _frameResources->getBinding(frame.camera.flightIndex);
     // GBufferStage binding travels with DeferredGBufferPassParams in the graph
     // pass (FG-302); only stages that still read frame inputs are pre-set here.
     if (bUseSSAO) {
@@ -1202,10 +1202,11 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     _gBufferStage->prepare(stageCtx);
 
     _lastTickCtx = {
-        .view       = frame.view,
-        .projection = frame.projection,
-        .cameraPos  = frame.cameraPos,
-        .extent     = {.width = vpW, .height = vpH},
+        .view           = frame.camera.view,
+        .projection     = frame.camera.projection,
+        .viewProjection = frame.camera.viewProjection,
+        .cameraPos      = frame.camera.cameraPos,
+        .extent         = {.width = vpW, .height = vpH},
     };
     _lastFrameInput = frame;
     RenderGraph graph;
@@ -1235,7 +1236,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .viewportExtent           = _viewportRTSpec.extent,
             .bUseSSAO                 = bUseSSAO,
             .bReverseViewportY        = _bReverseViewportY,
-            .bPostprocessOutputIsSRGB = EFormat::isSRGB(_render->getSwapchain()->getFormat()),
+            .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
             .viewportOverlaySnapshot  = _lastFrameInput.viewportOverlaySnapshot,
         });
 

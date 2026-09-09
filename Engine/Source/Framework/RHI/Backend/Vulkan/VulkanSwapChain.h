@@ -120,6 +120,9 @@ struct YA_RHI_BACKEND_API VulkanSwapChain : public ISwapchain
 
     bool     recreate(const ya::SwapchainCreateInfo &ci) override;
     bool     flushDirtyRecreateAtFrameBegin();
+    [[nodiscard]] bool isRecreateDirty() const { return _bSwapchainDirty; }
+    /// Live surface capabilities (not the last successful swapchain extent).
+    [[nodiscard]] bool isSurfacePresentable() const;
     Extent2D getExtent() const override
     {
         return {

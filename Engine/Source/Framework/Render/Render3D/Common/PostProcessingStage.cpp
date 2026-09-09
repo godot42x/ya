@@ -150,7 +150,7 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
     return appendFinalizeGraphPasses(graph, FinalizePassParams{
                                                 .input         = compositeInput.isValid() ? compositeInput : input,
                                                 .inputExtent   = inputExtent,
-                                                .bOutputIsSRGB = EFormat::isSRGB(_render->getSwapchain()->getFormat()),
+                                                .bOutputIsSRGB = EFormat::isSRGB(_colorFormat),
                                                 .postContext   = ctx,
                                             });
 }

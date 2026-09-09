@@ -34,7 +34,8 @@ struct YA_RENDER_3D_API DebugRenderSystem
               uint32_t viewportWidth,
               uint32_t viewportHeight,
               const glm::mat4& projection,
-              const glm::mat4& view);
+              const glm::mat4& view,
+              uint32_t flightIndex);
     [[nodiscard]] DebugPrimitives::SettingsSnapshot buildSettingsSnapshot() const;
     [[nodiscard]] DebugPrimitives&       getPrimitives() { return _primitives; }
     [[nodiscard]] const DebugPrimitives& getPrimitives() const { return _primitives; }

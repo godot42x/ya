@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RHI/RenderDefines.h"
+#include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
@@ -19,22 +20,6 @@ struct ImageResource;
 struct RenderTexture;
 struct Texture;
 struct RenderFrameData;
-
-struct RenderPipelineFrameContext
-{
-    uint32_t         flightIndex              = 0;
-    ICommandBuffer*  cmdBuf                   = nullptr;
-    bool             bAppStopped              = false;
-    float            deltaTime                = 0.0f;
-    glm::mat4        view                     = glm::mat4(1.0f);
-    glm::mat4        projection               = glm::mat4(1.0f);
-    glm::vec3        cameraPos                = glm::vec3(0.0f);
-    Rect2D           viewportRect             = {};
-    float            viewportFrameBufferScale = 1.0f;
-    RenderFrameData* frameData                = nullptr;
-    const ShadowSettings* shadowSettings      = nullptr;
-    std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
-};
 
 struct IRenderPipelineExecution
 {

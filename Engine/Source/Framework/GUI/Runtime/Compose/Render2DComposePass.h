@@ -4,6 +4,7 @@
 #include "RHI/Core/Texture.h"
 #include "RHI/RenderDefines.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
+#include "Render2D/Render2D.h"
 
 #include <functional>
 #include <memory>
@@ -33,6 +34,10 @@ enum class ERender2DComposePassKind : uint8_t
 struct FRender2DComposePassDesc
 {
     ERender2DComposePassKind kind = ERender2DComposePassKind::RuntimeUIComposite;
+    /// Per-window slot. `kInvalidRender2DPassSlot` falls back to the process
+    /// kind pool (single-window editor/runtime). Multi-window hosts must set
+    /// a slot from `Render2D::acquirePassSlot()`.
+    Render2DPassSlot         passSlot = kInvalidRender2DPassSlot;
     Extent2D                 logicalViewportExtent{};
     glm::vec2                canvasPan  = glm::vec2(0.0f);
     float                    canvasZoom = 1.0f;

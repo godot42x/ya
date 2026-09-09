@@ -84,6 +84,38 @@ void SDLNativeWindow::getWindowSize(int &width, int &height)
     SDL_GetWindowSize(static_cast<SDL_Window *>(nativeWindowHandle), &width, &height);
 }
 
+bool SDLNativeWindow::isMinimized() const
+{
+    if (!nativeWindowHandle) {
+        return false;
+    }
+    return (SDL_GetWindowFlags(static_cast<SDL_Window *>(nativeWindowHandle)) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
+bool SDLNativeWindow::minimize()
+{
+    if (!nativeWindowHandle) {
+        return false;
+    }
+    if (!SDL_MinimizeWindow(static_cast<SDL_Window *>(nativeWindowHandle))) {
+        return false;
+    }
+    SDL_PumpEvents();
+    return true;
+}
+
+bool SDLNativeWindow::restoreFromMinimize()
+{
+    if (!nativeWindowHandle) {
+        return false;
+    }
+    if (!SDL_RestoreWindow(static_cast<SDL_Window *>(nativeWindowHandle))) {
+        return false;
+    }
+    SDL_PumpEvents();
+    return true;
+}
+
 void SDLNativeWindow::refreshDpiScale()
 {
     if (!nativeWindowHandle) {

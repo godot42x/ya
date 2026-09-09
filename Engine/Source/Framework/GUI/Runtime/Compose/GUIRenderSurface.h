@@ -53,6 +53,17 @@ public:
     [[nodiscard]] const std::shared_ptr<RenderTexture>& getRenderImage() const { return _image; }
     [[nodiscard]] EImageLayout::T getFinalLayout() const { return _finalLayout; }
 
+    /// Display compose targets finish as PresentSrcKHR (imported swapchain).
+    /// Offscreen / Camera view-compose targets stay ShaderReadOnlyOptimal.
+    [[nodiscard]] static bool isDisplayComposeFinalLayout(EImageLayout::T layout)
+    {
+        return layout == EImageLayout::PresentSrcKHR;
+    }
+    [[nodiscard]] bool isDisplayComposeTarget() const
+    {
+        return isDisplayComposeFinalLayout(_finalLayout);
+    }
+
     /// Prepare the exact format variant that record() will use. Must run
     /// before command recording.
     void prepare(const FRender2DComposePassDesc& passDesc,

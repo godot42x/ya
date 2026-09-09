@@ -11,7 +11,6 @@
 
 #include "Core/Async/TaskQueue.h"
 #include "Core/Manager/Facade.h"
-#include "Core/Os/Os.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/System/FileWatcher.h"
@@ -22,9 +21,15 @@
 #include "ECS/Systems/LuaScriptingSystem.h"
 
 #include "RHI/Backend/Vulkan//VulkanRender.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/PresentFrame.h"
+#include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/NativeWindow.h"
+#include "RHI/Render.h"
+#include "RHI/RenderDefines.h"
 
 #include "Render2D/Render2D.h"
+#include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Material/Material.h"
 
 #include "GameRuntime/Utility/RenderFrameExtractor.h"
@@ -41,6 +46,8 @@ namespace
 {
 void syncRuntimeCameraAspect(Scene& scene, const Extent2D& viewportExtent)
 {
+    // Single WorldView slot: unbound cameras with auto aspect currently share
+    // this extent. Multi-camera must apply aspect only to the bound camera.
     if (viewportExtent.width == 0 || viewportExtent.height == 0) {
         return;
     }
@@ -80,10 +87,6 @@ int GameRuntimeFrameOrchestrator::iterate(App& app, float dt)
         dt += FPSControl::get()->update(dt);
     }
 
-    if (app._bMinimized) {
-        Os::sleepMs(100);
-        return 0;
-    }
     if (!app._bPause) {
         YA_PROFILE_SCOPE("Frame/Logic");
         YA_PERF_SCOPE(perf::sample::frameLogic(), perf::metric::cpuTimeMs(), perf::domain::game());
@@ -225,7 +228,7 @@ void GameRuntimeFrameOrchestrator::tickLogic(App& app, float dt)
         return;
     }
     auto        vkRender       = render->as<VulkanRender>();
-    auto        nativeWindow   = vkRender->getNativeWindow();
+    auto        nativeWindow   = render->primaryWindow();
     std::string title          = std::format("{}({})", app._ci.title, vkRender->_selectedDeviceInfo.deviceName);
     if (nativeWindow) {
         nativeWindow->setTitle(title);
@@ -292,6 +295,12 @@ void GameRuntimeFrameOrchestrator::prepareRenderFrameState(App& app, float dt)
     app._renderState->frameState.clock.elapsedTimeMS = app.getElapsedTimeMS();
 
     Rect2D viewportRect = renderRuntime->getViewportRect();
+    if (viewportRect.extent.x <= 0.0f || viewportRect.extent.y <= 0.0f) {
+        viewportRect = Rect2D{
+            .pos    = {0.0f, 0.0f},
+            .extent = app._windowSize,
+        };
+    }
 
     (void)dt;
 
@@ -329,7 +338,15 @@ uint32_t GameRuntimeFrameOrchestrator::resolveFlightIndex(const App& app)
         return 0;
     }
 
-    return render->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT;
+    auto* present = render->getPrimarySurfaceContext();
+    if (!present) {
+        return 0;
+    }
+
+    // Surface present flight before this frame's begin(). Single-window
+    // coincidence: end() advances after present, so this is the slot begin()
+    // will wait. World recording uses this flight, not swapchain imageIndex.
+    return present->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT;
 }
 
 std::vector<RenderOverlaySprite2D> GameRuntimeFrameOrchestrator::buildScreenOverlaySprites(const App& app)
@@ -396,16 +413,20 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
     // graph, so extraction would be pure waste. Drop the stale per-flight
     // snapshot instead, mirroring the world output handling in
     // getViewportDisplayImageShared.
+    const auto& frameState = app._renderState->frameState;
+    const glm::mat4 viewProjection = makeCameraViewProjection(frameState.projection, frameState.view);
+
     if (renderRuntime->isWorldSceneRenderEnabled()) {
         YA_PERF_SCOPE(perf::sample::renderExtract(), perf::metric::cpuTimeMs(), perf::domain::render());
         YA_PROFILE_SCOPE("RenderFrameExtractor::extract");
         RenderFrameExtractor::extract(
             RenderFrameExtractor::ExtractInput{
                 .scene          = scene,
-                .view           = app._renderState->frameState.view,
-                .projection     = app._renderState->frameState.projection,
-                .cameraPos      = app._renderState->frameState.cameraPos,
-                .viewportExtent = renderRuntime->getViewportExtent(),
+                .view           = frameState.view,
+                .projection     = frameState.projection,
+                .viewProjection = viewProjection,
+                .cameraPos      = frameState.cameraPos,
+                .viewportExtent = Extent2D::fromVec2(frameState.viewportRect.extent),
                 .viewOwner      = entt::null,
                 .frameIndex     = App::_frameIndex,
                 .deltaTime      = dt,
@@ -417,15 +438,16 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
         app._renderState->frameDataPerFlight[flightIndex].clear();
     }
 
-    RenderPipelineFrameContext pipelineFrame{
+    CameraFrameInput cameraFrame{
         .flightIndex              = flightIndex,
-        .deltaTime                = dt,
         .bAppStopped              = app.isStopped(),
-        .view                     = app._renderState->frameState.view,
-        .projection               = app._renderState->frameState.projection,
-        .cameraPos                = app._renderState->frameState.cameraPos,
-        .viewportRect             = app._renderState->frameState.viewportRect,
-        .viewportFrameBufferScale = app._renderState->frameState.viewportFrameBufferScale,
+        .deltaTime                = dt,
+        .view                     = frameState.view,
+        .projection               = frameState.projection,
+        .viewProjection           = viewProjection,
+        .cameraPos                = frameState.cameraPos,
+        .viewportRect             = frameState.viewportRect,
+        .viewportFrameBufferScale = frameState.viewportFrameBufferScale,
         .frameData                = &app._renderState->frameDataPerFlight[flightIndex],
         .shadowSettings           = &app.getRenderServices().getShadowSettings(),
     };
@@ -440,56 +462,82 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
     const UIFrameSnapshot*   pUiFrameSnapshot = nullptr;
     if ((app.isRuntimeMode() || app.isSimulationMode()) && scene) {
         if (auto* gameUIHost = app.getGameUIHost()) {
-            gameUIHost->setPresentation(pipelineFrame.viewportRect,
-                                        glm::vec2(pipelineFrame.viewportFrameBufferScale));
+            gameUIHost->setPresentation(cameraFrame.viewportRect,
+                                        glm::vec2(cameraFrame.viewportFrameBufferScale));
             uiFrameSnapshot  = gameUIHost->buildSnapshot();
             pUiFrameSnapshot = &uiFrameSnapshot;
         }
     }
 
-    renderRuntime->renderFrame(RenderRuntime::FrameInput{
-        .overlay = {
-            .screenSprites = &screenOverlaySprites,
-        },
-        // Designated initializers must follow declaration order:
-        // presentationExtensions is declared before viewportCompose in FrameInput.
-        .presentationExtensions = {
-            .recordBeforeExtensions = [&app, dt](ICommandBuffer* commandBuffer)
-            {
-                if (commandBuffer) {
-                    app.recordModuleBeforePresentation(*commandBuffer, dt);
-                } },
-            .recordExtensions = [&app, dt](ICommandBuffer* commandBuffer)
-            {
-                if (commandBuffer) {
-                    app.recordModulePresentation(*commandBuffer, dt);
-                } },
-            .appendCapture = [&app](RenderGraph& graph, RGTextureHandle presentationOutput, Extent2D presentationExtent)
-            {
-                bool bAppended = AppAutomation::appendPresentationCapture(app.getFrameIndex(),
-                                                                          graph,
-                                                                          presentationOutput,
-                                                                          presentationExtent);
-                if (auto* automationControl = app.getAutomationControlService()) {
-                    bAppended = automationControl->appendPresentationCapture(app.getFrameIndex(),
-                                                                             graph,
-                                                                             presentationOutput,
-                                                                             presentationExtent) ||
-                                bAppended;
-                }
-                return bAppended;
-            },
-        },
-        .viewportCompose = {
+    cameraFrame.overlay         = {.screenSprites = &screenOverlaySprites};
+    cameraFrame.uiFrameSnapshot = pUiFrameSnapshot;
+
+    IRender*       render        = renderRuntime->getRender();
+    FPresentFrame  presentFrame{.surface = render ? render->getPrimarySurfaceContext() : nullptr};
+    {
+        YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());
+        if (!acquirePresentFrame(presentFrame)) {
+            return;
+        }
+    }
+    if (!presentFrame.acquired()) {
+        submitPresentFrame(presentFrame, {});
+        return;
+    }
+
+    ICommandBuffer* recorded = renderRuntime->renderFrame(RenderRuntime::FrameInput{
+        .camera = cameraFrame,
+        .viewCompose = {
             .recordCompose = [&app, dt](ICommandBuffer* commandBuffer)
             {
                 if (commandBuffer) {
                     app.recordModuleViewportCompose(*commandBuffer, dt);
                 } },
         },
-        .pipeline = pipelineFrame,
-        .uiFrameSnapshot = pUiFrameSnapshot,
+        .displayCompose = {
+            .extensions = {
+                .recordBeforeExtensions = [&app, dt](ICommandBuffer* commandBuffer)
+                {
+                    if (commandBuffer) {
+                        app.recordModuleBeforePresentation(*commandBuffer, dt);
+                    } },
+                .recordExtensions = [&app, dt](ICommandBuffer* commandBuffer)
+                {
+                    if (commandBuffer) {
+                        app.recordModulePresentation(*commandBuffer, dt);
+                    } },
+                .appendCapture = [&app](RenderGraph& graph, RGTextureHandle presentationOutput, Extent2D presentationExtent)
+                {
+                    bool bAppended = AppAutomation::appendPresentationCapture(app.getFrameIndex(),
+                                                                              graph,
+                                                                              presentationOutput,
+                                                                              presentationExtent);
+                    if (auto* automationControl = app.getAutomationControlService()) {
+                        bAppended = automationControl->appendPresentationCapture(app.getFrameIndex(),
+                                                                                 graph,
+                                                                                 presentationOutput,
+                                                                                 presentationExtent) ||
+                                    bAppended;
+                    }
+                    return bAppended;
+                },
+            },
+        },
+        .present = {
+            .surface    = presentFrame.surface,
+            .imageIndex = presentFrame.imageIndex,
+        },
     });
+
+    {
+        YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
+        if (recorded) {
+            submitPresentFrame(presentFrame, {recorded->getHandle()});
+        }
+        else {
+            submitPresentFrame(presentFrame, {});
+        }
+    }
 }
 
 } // namespace ya

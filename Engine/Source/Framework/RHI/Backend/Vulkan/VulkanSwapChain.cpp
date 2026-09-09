@@ -302,6 +302,25 @@ void VulkanSwapChain::markRecreateDirty(const SwapchainCreateInfo &ci)
     _bSwapchainDirty  = true;
 }
 
+bool VulkanSwapChain::isSurfacePresentable() const
+{
+    if (!_render || _surface == VK_NULL_HANDLE) {
+        return false;
+    }
+
+    VkSurfaceCapabilitiesKHR caps{};
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_render->getPhysicalDevice(), _surface, &caps);
+    if (caps.currentExtent.width == std::numeric_limits<uint32_t>::max()) {
+        int width  = 0;
+        int height = 0;
+        if (_window) {
+            _window->getWindowSize(width, height);
+        }
+        return width > 0 && height > 0;
+    }
+    return caps.currentExtent.width > 0 && caps.currentExtent.height > 0;
+}
+
 bool VulkanSwapChain::flushDirtyRecreateAtFrameBegin()
 {
     if (!_bSwapchainDirty) {
@@ -311,6 +330,11 @@ bool VulkanSwapChain::flushDirtyRecreateAtFrameBegin()
     const SwapchainCreateInfo pendingCI = _pendingCI;
     if (!recreate(pendingCI)) {
         return false;
+    }
+
+    if (!isSurfacePresentable()) {
+        _bSwapchainDirty = true;
+        return true;
     }
 
     const bool bApplied = (_ci.presentMode == pendingCI.presentMode) && (_ci.bVsync == pendingCI.bVsync);
@@ -325,24 +349,24 @@ bool VulkanSwapChain::recreate(const SwapchainCreateInfo &newCI)
     static uint32_t version = 0;
     version++;
 
-    // Query surface capabilities
-    _supportDetails = VulkanSwapChainSupportDetails::query(
+    // Query surface capabilities into a local copy first. A 0x0 (minimized)
+    // extent must not overwrite the last successful swapchain extent, and
+    // must leave recreate dirty so restore retries.
+    const VulkanSwapChainSupportDetails queried = VulkanSwapChainSupportDetails::query(
         _render->getPhysicalDevice(),
         _surface);
-    const auto &newExtent = _supportDetails.capabilities.currentExtent;
+    const auto &newExtent = queried.capabilities.currentExtent;
 
     // Validate extent (check for minimized window)
     if (!validateExtent(newExtent)) {
-        return true; // Will retry when window is restored
+        return true; // delay recreate; caller keeps `_bSwapchainDirty`
     }
+    _supportDetails = queried;
 
-    // Wait for GPU to finish before destroying old swapchain
-    VkDevice device     = _render->getDevice();
-    VkResult waitResult = vkDeviceWaitIdle(device);
-    if (waitResult != VK_SUCCESS) {
-        YA_CORE_ERROR("Failed to wait for device idle before swapchain recreation: {}", (int)waitResult);
-        return false;
-    }
+    // Caller (`IRenderSurfaceContext::begin` / `waitInFlight`) must have
+    // waited this surface's graphics + present-complete fences. A device or
+    // queue waitIdle here would stall every other window on the shared queues.
+    VkDevice device = _render->getDevice();
 
     VkSwapchainKHR oldSwapchain = m_swapChain;
     // leave the old swapchain for ci

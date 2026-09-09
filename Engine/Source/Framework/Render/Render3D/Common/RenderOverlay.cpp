@@ -46,7 +46,7 @@ void recordRenderViewportOverlayPass(const FrameContext& frameCtx,
         .windowHeight = viewportExtent.height,
         .passSlot     = viewportOverlayPassSlot(),
         .view         = frameCtx.view,
-        .viewProjection = frameCtx.projection * frameCtx.view,
+        .viewProjection = frameCtx.viewProjection,
     };
 
     Render2D::begin(render2dCtx);

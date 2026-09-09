@@ -22,6 +22,7 @@
 #include "VulkanQueue.h"
 #include "VulkanRenderPass.h"
 #include "VulkanSwapChain.h"
+#include "VulkanRenderSurfaceContext.h"
 #include "VulkanRenderResourceFactory.h"
 #include "VulkanUtils.h"
 
@@ -63,6 +64,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 {
     friend struct VulkanUtils;
     friend struct VulkanRenderPass;
+    friend struct VulkanRenderSurfaceContext;
 
     const std::vector<ya::DeviceFeature> _instanceLayers           = {};
     const std::vector<ya::DeviceFeature> _instanceValidationLayers = {
@@ -99,6 +101,8 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     uint32_t apiVersion = 0;
 
     VkInstance   _instance;
+    // Created before device pick so present support can be queried. Adopted by
+    // `_primarySurface` for swapchain/sync; this handle is still released here.
     VkSurfaceKHR _surface;
 
 
@@ -127,7 +131,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
 
 
-    ISwapchain* _swapChain;
+    std::unique_ptr<VulkanRenderSurfaceContext> _primarySurface;
 
     bool                     bOnlyOnePresentQueue = false;
     std::vector<VulkanQueue> _presentQueues;
@@ -138,10 +142,6 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     std::unique_ptr<VulkanCommandPool> _presentCommandPool  = nullptr;
     VkPipelineCache                    _pipelineCache       = VK_NULL_HANDLE;
     VkDescriptorPool                   _descriptorPool      = VK_NULL_HANDLE;
-
-    VkSemaphore m_imageAvailableSemaphore;
-    VkSemaphore m_renderFinishedSemaphore;
-    VkFence     m_inFlightFence;
 
     std::unique_ptr<VulkanDebugUtils>     _debugUtils       = nullptr;
     VulkanDescriptorHelper*               _descriptorHelper = nullptr; // Raw pointer to avoid incomplete type issue
@@ -154,8 +154,6 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
     // std::unordered_map<std::string, VkSampler> _samplers; // sampler name -> sampler
 
-    void* nativeWindow = nullptr;
-
     // Host-injected shader compile/cache service (see IRender::setShaderStorage).
     std::shared_ptr<ShaderStorage> _shaderStorage = nullptr;
     // Graphics cards excluded from device selection (host-provided via RenderCreateInfo).
@@ -167,12 +165,6 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     // owners may outlive the device via static destruction).
     std::vector<std::weak_ptr<VulkanSampler>> _trackedSamplers;
 
-    // used for GPU-CPU(fame), GPU internal(image) sync
-    static constexpr uint32_t flightFrameSize = 1;
-    uint32_t                  currentFrameIdx = 0;
-    std::vector<VkSemaphore>  frameImageAvailableSemaphores;  // 每个飞行帧的图像可用信号量
-    std::vector<VkFence>      frameFences;                    // 每个飞行帧的fence
-    std::vector<VkSemaphore>  imageSubmittedSignalSemaphores; // 渲染完成信号量（每张swapchain image）
     VkQueryPool               _frameGpuTimestampQueryPool  = VK_NULL_HANDLE;
     float                     _gpuTimestampPeriodNs        = 0.0f;
     float                     _lastCompletedFrameGpuTimeMs = 0.0f;
@@ -192,12 +184,6 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
     VulkanRender() = default;
     ~VulkanRender(); // Need definition in .cpp to properly destroy unique_ptr<VulkanDescriptor>
-
-    template <typename T>
-    T* getNativeWindow()
-    {
-        return static_cast<T*>(nativeWindow);
-    }
 
     bool init(const ya::RenderCreateInfo& ci) override
     {
@@ -223,45 +209,10 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     void trackSampler(const std::shared_ptr<VulkanSampler>& sampler) { _trackedSamplers.emplace_back(sampler); }
     void releaseTrackedSamplers();
 
-    bool begin(int32_t* imageIndex) override;
-    bool end(int32_t imageIndex, std::vector<void*> CommandBuffers) override;
     std::unique_ptr<IRenderSurfaceContext> createSurfaceContext(INativeWindow& window) override;
+    [[nodiscard]] IRenderSurfaceContext*   getPrimarySurfaceContext() const override { return _primarySurface.get(); }
 
-    // IRender interface implementations
-    void getWindowSize(int& width, int& height) const override
-    {
-        if (_nativeWindow) {
-            _nativeWindow->getWindowSize(width, height);
-        }
-    }
-
-    void setVsync(bool enabled) override
-    {
-        if (_swapChain) {
-            // Cast to VulkanSwapChain for Vulkan-specific functionality
-            auto* vkSwapchain = static_cast<VulkanSwapChain*>(_swapChain);
-            vkSwapchain->setVsync(enabled);
-        }
-    }
-
-    uint32_t getSwapchainWidth() const override
-    {
-        if (!_swapChain) return 0;
-        auto extent = _swapChain->getExtent();
-        return extent.width;
-    }
-
-    uint32_t getSwapchainHeight() const override
-    {
-        if (!_swapChain) return 0;
-        auto extent = _swapChain->getExtent();
-        return extent.height;
-    }
-
-    uint32_t getSwapchainImageCount() const override
-    {
-        return _swapChain ? _swapChain->getImageCount() : 0;
-    }
+    void onPrimaryPresentFenceWaited();
 
     const RenderCapabilities& getCapabilities() const override { return _capabilities; }
     uint32_t getUniformBufferOffsetAlignment() const override
@@ -279,20 +230,13 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
         const std::vector<void*>& signalSemaphores,
         void*                     fence = nullptr) override;
 
-    int presentImage(int32_t imageIndex, const std::vector<void*>& waitSemaphores) override;
-
-    void*    getCurrentImageAvailableSemaphore() override { return frameImageAvailableSemaphores[currentFrameIdx]; }
-    void*    getCurrentFrameFence() override { return frameFences[currentFrameIdx]; }
-    uint32_t getCurrentFrameIndex() const override { return currentFrameIdx; }
-    float    getLastCompletedFrameGpuTimeMs() const override { return _lastCompletedFrameGpuTimeMs; }
-    void*    getRenderFinishedSemaphore(uint32_t imageIndex) override { return imageSubmittedSignalSemaphores[imageIndex]; }
+    float getLastCompletedFrameGpuTimeMs() const override { return _lastCompletedFrameGpuTimeMs; }
 
     void beginFrameGpuTiming(ICommandBuffer* commandBuffer) override;
     void endFrameGpuTiming(ICommandBuffer* commandBuffer) override;
 
     void* createSemaphore(const char* debugName = nullptr) override;
     void  destroySemaphore(void* semaphore) override;
-    void  advanceFrame() override { currentFrameIdx = (currentFrameIdx + 1) % flightFrameSize; }
     void  queueBeginLabel(const char* labelName, const float* colorRGBA = nullptr) override;
     void  queueEndLabel() override;
 
@@ -315,7 +259,6 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     bool initInternal(const RenderCreateInfo& ci)
     {
         initWindow(ci);
-        nativeWindow = _nativeWindow ? _nativeWindow->getNativeWindowHandle() : nullptr;
 
         createInstance();
 
@@ -345,14 +288,13 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
             _debugUtils->initDeviceLevel();
         }
 
-        _swapChain = new VulkanSwapChain(this, _surface, _nativeWindow);
-        _swapChain->as<VulkanSwapChain>()->recreate(ci.swapchainCI);
-
         if (!createCommandPool()) {
             terminate();
         }
         createPipelineCache();
-        createSyncResources(static_cast<int32_t>(_swapChain->getImageCount()));
+        if (!createPrimarySurface(ci.swapchainCI)) {
+            terminate();
+        }
         createFrameGpuTimingResources();
         return true;
     }
@@ -366,15 +308,15 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
   public:
 
     [[nodiscard]] uint32_t         getApiVersion() const { return apiVersion; }
-    [[nodiscard]] INativeWindow* getNativeWindow() const override { return _nativeWindow; }
     [[nodiscard]] VkInstance       getInstance() const { return _instance; }
     [[nodiscard]] VkSurfaceKHR     getSurface() const { return _surface; }
     [[nodiscard]] VkDevice         getDevice() const { return m_LogicalDevice; }
     [[nodiscard]] VkPhysicalDevice getPhysicalDevice() const { return m_PhysicalDevice; }
     [[nodiscard]] VmaAllocator     getVmaAllocator() const { return _vmaAllocator; }
-    [[nodiscard]] ISwapchain*      getSwapchain() const { return _swapChain; }
-    template <typename T>
-    [[nodiscard]] T* getSwapchain() const { return static_cast<T*>(_swapChain); }
+    [[nodiscard]] VulkanSwapChain* primaryVulkanSwapchain() const
+    {
+        return _primarySurface ? static_cast<VulkanSwapChain*>(_primarySurface->getSwapchain()) : nullptr;
+    }
 
     [[nodiscard]] VkPipelineCache getPipelineCache() const { return _pipelineCache; }
 
@@ -440,18 +382,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
         delete commandBuffer;
     }
 
-    // IRender interface: get swapchain
-    ISwapchain* getSwapchain() override { return _swapChain; }
-
-    // IRender interface: get descriptor helper
     IDescriptorSetHelper* getDescriptorHelper() override;
-
-  protected:
-    // IRender interface: get native window handle
-    void* getNativeWindowHandle() const override
-    {
-        return nativeWindow;
-    }
 
   public:
     void allocateCommandBuffers(uint32_t size, std::vector<::VkCommandBuffer>& outCommandBuffers);
@@ -493,8 +424,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
         std::vector<const char*>&                 outLayerNames,
         bool                                      bDebug = false);
 
-    void createSyncResources(int32_t swapchainImageSize);
-    void releaseSyncResources();
+    bool createPrimarySurface(const SwapchainCreateInfo& swapchainCI);
     void createFrameGpuTimingResources();
     void releaseFrameGpuTimingResources();
     void updateCompletedFrameGpuTiming();

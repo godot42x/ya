@@ -14,7 +14,7 @@ namespace ya
 VulkanRenderPass::VulkanRenderPass(VulkanRender *render)
 {
     _render    = render;
-    _swapChain = _render->getSwapchain<VulkanSwapChain>();
+    _swapChain = _render->primaryVulkanSwapchain();
 
     // _swapChain->onRecreate.addLambda([this]() {
     // this->recreate(this->getCI());
@@ -117,7 +117,7 @@ bool VulkanRenderPass::createDefaultRenderPass()
     // default color attachment
     VkAttachmentDescription defaultColorAttachment({
         .flags   = 0,
-        .format  = _render->getSwapchain<VulkanSwapChain>()->_surfaceFormat,
+        .format  = _render->primaryVulkanSwapchain()->_surfaceFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -186,7 +186,7 @@ bool VulkanRenderPass::recreate(const RenderPassCreateInfo &ci)
     // Convert abstract configuration to Vulkan-specific values
     std::vector<VkAttachmentDescription> attachmentDescs;
 
-    VkFormat surfaceFormat = _render->getSwapchain<VulkanSwapChain>()->getSurfaceFormat();
+    VkFormat surfaceFormat = _render->primaryVulkanSwapchain()->getSurfaceFormat();
     // Convert attachments from config
     for (const AttachmentDescription &attachmentDesc : _ci.attachments) {
         VkAttachmentDescription vkAttachmentDesc{

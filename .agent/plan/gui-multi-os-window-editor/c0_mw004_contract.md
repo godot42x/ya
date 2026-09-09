@@ -10,12 +10,13 @@
 4. `EditorTabSpawnerRegistry` 只注册 factory，不拥有 tree/widget。
 5. GameEditor 只经 GUI window/host/widget/dock API 使用框架；新代码不得再让 `EditorSurface` 读 `IRender` window/swapchain API（ES-1）。
 6. 不新增 `EditorPanel`、中心 event bus、每窗独立 while-loop、`IRender[]`。
-7. 共享一个 Vulkan device；每窗独立 surface/swapchain/sync/imported present image。create/rebuild/destroy 只在 frame boundary。
-8. GUI 辅助窗不得复用 `PresentationGraphService` / 完整 world graph。主 `ya::App` 窗继续走 `IRender` main-facade。
+7. 共享一个 Vulkan device；每窗独立 surface/swapchain/sync/imported present image。create/rebuild/destroy 只在 frame boundary。swapchain 不是 Camera/viewport 目标。
+8. GUI 辅助窗不得复用 `PresentationGraphService` / 完整 world graph。主窗 Camera 链 + 该窗 display compose；acquire 在 `IRenderSurfaceContext` / host `FPresentFrame` coordinator（R-4）。
 9. Feature Gallery `Windows` 页（C2G）是框架层第一份真实多窗消费者，先于 GameEditor 第二窗。
 10. `Render2D::session` 静态串行复用；每窗唯一 pass slot。第二套 Render2D owner 仅 MW-901。
 11. `SelectionModel` / `ActionMap` / `UndoStack` 归属 editor/document session，不按 native window 复制。
 12. `EditorSurface` 保持单窗 UI 编排 facade；`EditorWindowSession` 不吸收全部字段变成 god object。
+13. Camera 链对象模型（`c2_view_model.md`）C2 完成前不实现 N 视图；不要为 Material/UI 窗复制 `RenderRuntime`。
 
 ## 允许的依赖方向
 
@@ -31,7 +32,7 @@ RHI device + surface-context
 ## 迁移期例外（必须有删除点）
 
 - `EditorSurface::tick(App&)` forwarding：ES-5 删除。
-- `PresentationGraphService` + `IRender::begin/end`：仅主 GameRuntime 窗。
+- 主窗 acquire/present 由 host `FPresentFrame` 配对 `IRenderSurfaceContext::begin/end`（R-4）；`RenderRuntime` 只录制。单窗仍一条 cmdBuf，拆第二次 submit 是 R-5。
 - 旧 `editor.dockLayout`：只解释为 main window；新拓扑 `windows[]` 在 C8。
 
 ## 本 checkpoint 边界

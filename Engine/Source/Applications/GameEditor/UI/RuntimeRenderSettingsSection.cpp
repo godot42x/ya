@@ -53,10 +53,10 @@ void RuntimeRenderSettingsSection::construct()
         if (auto* app = App::get()) if (auto* r = app->getRenderServices().getRenderRuntime()) r->setViewportFrameBufferScale(value);
     };
     _vsync->_onChanged = [](bool value) {
-        if (auto* app = App::get()) if (auto* render = app->getRenderServices().getRender()) if (auto* sc = render->getSwapchain()) sc->setVsync(value);
+        if (auto* app = App::get()) if (auto* render = app->getRenderServices().getRender()) if (auto* sc = render->primarySwapchain()) sc->setVsync(value);
     };
     _presentMode->_onSelectionChanged = [](int value) {
-        if (auto* app = App::get()) if (auto* render = app->getRenderServices().getRender()) if (auto* sc = render->getSwapchain()) {
+        if (auto* app = App::get()) if (auto* render = app->getRenderServices().getRender()) if (auto* sc = render->primarySwapchain()) {
             const auto mode = static_cast<EPresentMode::T>(value);
             app->getTaskManager().registerFrameTask([sc, mode]() { sc->setPresentMode(mode); });
         }
@@ -86,7 +86,7 @@ void RuntimeRenderSettingsSection::sync(const App* app)
     const bool pending = runtime->getPendingRenderPipeline() != runtime->getRenderPipeline();
     _pipelineState->setText(std::format("Pipeline: {}{}", pipelineLabel(pipeline), pending ? " (switch pending)" : ""));
     _viewportScale->setValue(runtime->getViewportFrameBufferScale(), false);
-    if (auto* render = app->getRenderServices().getRender()) if (auto* sc = render->getSwapchain()) {
+    if (auto* render = app->getRenderServices().getRender()) if (auto* sc = render->primarySwapchain()) {
         _vsync->setChecked(sc->getVsync());
         _vsyncState->setText(std::format("Present Mode: {}", presentLabel(static_cast<int>(sc->getPresentMode()))));
         _presentMode->setSelectedIndex(static_cast<int>(sc->getPresentMode()), false);

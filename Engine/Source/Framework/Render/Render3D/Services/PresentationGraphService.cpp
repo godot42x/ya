@@ -7,8 +7,10 @@
 #include "Graph/RenderGraphExecutor.h"
 #include "Graph/RenderGraphImportUtils.h"
 #include "RHI/Backend/Vulkan/VulkanSwapChain.h"
+#include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Swapchain.h"
+#include "RHI/Render.h"
 #include "Render3D/Pipelines/BasicPostprocessing.h"
 
 #include <format>
@@ -92,12 +94,16 @@ std::shared_ptr<RenderTexture> createPresentationRenderTexture(IRender& render, 
 void PresentationGraphService::init(const InitDesc& desc)
 {
     YA_CORE_ASSERT(desc.render != nullptr, "PresentationGraphService requires a render backend");
+    YA_CORE_ASSERT(desc.present != nullptr, "PresentationGraphService requires a present surface");
+    YA_CORE_ASSERT(desc.present->getSwapchain() != nullptr, "PresentationGraphService requires a swapchain");
 
-    _render                      = desc.render;
+    _render                       = desc.render;
+    _present                      = desc.present;
     _viewportDisplayImageProvider = desc.viewportDisplayImageProvider;
 
     rebuildImages();
 
+    auto* swapchain = _present->getSwapchain();
     _presentationPostProcessor = ya::makeShared<BasicPostprocessing>();
     _presentationPostProcessor->init(BasicPostprocessing::InitDesc{
         .render                = _render,
@@ -105,13 +111,13 @@ void PresentationGraphService::init(const InitDesc& desc)
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label                   = "RuntimePresentation",
             .viewMask                = 0,
-            .colorAttachmentFormats  = {_render->getSwapchain()->getFormat()},
+            .colorAttachmentFormats  = {swapchain->getFormat()},
             .depthAttachmentFormat   = EFormat::Undefined,
             .stencilAttachmentFormat = EFormat::Undefined,
         },
     });
 
-    _render->getSwapchain()->onRecreate.addLambda(
+    swapchain->onRecreate.addLambda(
         this,
         [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
         {
@@ -127,6 +133,11 @@ void PresentationGraphService::init(const InitDesc& desc)
 
 void PresentationGraphService::shutdown()
 {
+    if (_present) {
+        if (auto* swapchain = _present->getSwapchain()) {
+            swapchain->onRecreate.removeAll(this);
+        }
+    }
     if (_presentationPostProcessor) {
         _presentationPostProcessor->shutdown();
         _presentationPostProcessor.reset();
@@ -135,7 +146,8 @@ void PresentationGraphService::shutdown()
     _presentationImages.clear();
     _presentationPostProcessState = {};
     _viewportDisplayImageProvider = {};
-    _render = nullptr;
+    _present = nullptr;
+    _render  = nullptr;
 }
 
 void PresentationGraphService::rebuildImages()
@@ -148,11 +160,11 @@ void PresentationGraphService::rebuildImages()
     _presentationGraphExecutors.clear();
 
     _presentationImages.clear();
-    if (!_render) {
+    if (!_render || !_present) {
         return;
     }
 
-    auto* swapchain = _render->getSwapchain() ? _render->getSwapchain()->as<VulkanSwapChain>() : nullptr;
+    auto* swapchain = _present->getSwapchain() ? _present->getSwapchain()->as<VulkanSwapChain>() : nullptr;
     YA_CORE_ASSERT(swapchain != nullptr, "Presentation resources currently require VulkanSwapChain");
 
     _presentationGraphExecutors.reserve(swapchain->getImageCount());
@@ -163,13 +175,14 @@ void PresentationGraphService::rebuildImages()
     }
 }
 
+ISwapchain* PresentationGraphService::getSwapchain() const
+{
+    return _present ? _present->getSwapchain() : nullptr;
+}
+
 uint32_t PresentationGraphService::getCurrentPresentationImageIndex() const
 {
-    if (!_render) {
-        return std::numeric_limits<uint32_t>::max();
-    }
-
-    auto* swapchain = _render->getSwapchain();
+    auto* swapchain = getSwapchain();
     if (!swapchain) {
         return std::numeric_limits<uint32_t>::max();
     }
@@ -187,9 +200,9 @@ std::shared_ptr<RenderTexture> PresentationGraphService::getCurrentPresentationI
     return _presentationImages[imageIndex];
 }
 
-void PresentationGraphService::render(float                              deltaTime,
-                                      const Extensions&                  extensions,
-                                      ICommandBuffer*                    cmdBuf)
+void PresentationGraphService::recordDisplayCompose(float                              deltaTime,
+                                                    const Extensions&                  extensions,
+                                                    ICommandBuffer*                    cmdBuf)
 {
     YA_PROFILE_FUNCTION();
 
@@ -259,7 +272,7 @@ void PresentationGraphService::render(float                              deltaTi
                     .ctx            = nullptr,
                     .inputImageView = sourceImage->getImageView(),
                     .renderExtent   = presentationExtent,
-                    .bOutputIsSRGB  = EFormat::isSRGB(_render->getSwapchain()->getFormat()),
+                    .bOutputIsSRGB  = EFormat::isSRGB(getSwapchain() ? getSwapchain()->getFormat() : EFormat::Undefined),
                     .state          = &_presentationPostProcessState,
                 });
             }

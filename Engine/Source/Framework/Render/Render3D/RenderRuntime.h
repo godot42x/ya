@@ -9,9 +9,9 @@
 #include "RHI/Shader.h"
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/IRenderRuntimeServices.h"
+#include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/PostProcessingState.h"
 #include "Common/RenderRuntimeClockState.h"
-#include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Services/EnvironmentLightingResultProvider.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
 #include "Render3D/Common/RenderViewportSnapshot.h"
@@ -25,7 +25,6 @@
 #include "Render3D/Services/GameplayResourceBinding.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Terrain/TerrainProcessor.h"
-#include "GUI/Widgets/UIFrameSnapshot.h"
 
 #include <functional>
 #include <glm/glm.hpp>
@@ -93,41 +92,15 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
         std::string renderDocCaptureOutputDir;
     };
 
-    /// Presentation graph extension points recorded by the app. A single
-    /// descriptor object keeps the presentation boundary explicit instead of
-    /// threading several parallel callbacks through FrameInput.
-    using PresentationExtensions = PresentationGraphService::Extensions;
-
+    /// One Camera chain plus one present surface for this host call.
+    /// Grouping is typed; submit count stays one (R-1). The host acquires and
+    /// presents via `FPresentFrame`; R-5 may split submits with evidence.
     struct FrameInput
     {
-        /// Optional module viewport composition (e.g. editor overlays). Recorded
-        /// after the world graph and the runtime game UI pass, before the
-        /// presentation graph; modules must not recreate GPU resources here.
-        struct ViewportComposeExtensions
-        {
-            std::function<void(ICommandBuffer*)> recordCompose;
-
-            [[nodiscard]] bool empty() const
-            {
-                return !recordCompose;
-            }
-        };
-
-        struct OverlayInput
-        {
-            const std::vector<RenderOverlaySprite2D>* screenSprites = nullptr;
-            const std::vector<RenderOverlaySprite3D>* worldSprites  = nullptr;
-            const std::vector<RenderOverlayText2D>*   screenTexts   = nullptr;
-        } overlay{};
-
-        PresentationExtensions     presentationExtensions{};
-        ViewportComposeExtensions  viewportCompose{};
-        RenderPipelineFrameContext pipeline{};
-
-        /// Immutable Game UI frame packet built before the graph; composited
-        /// onto the final viewport image after the world graph. Command
-        /// recording never touches the live widget tree.
-        const UIFrameSnapshot* uiFrameSnapshot = nullptr;
+        CameraFrameInput    camera{};
+        ViewComposeInput    viewCompose{};
+        DisplayComposeInput displayCompose{};
+        PresentFrameInput   present{};
     };
 
     IRenderRuntimeHostServices* _hostServices = nullptr;
@@ -162,12 +135,16 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
 
     void init(const InitDesc& desc);
     void shutdown(bool bRenderAlreadyIdle = false);
-    void renderFrame(const FrameInput& input);
+    /// Records graphics → UI → view compose → display compose. Caller must
+    /// already have acquired `input.present` and must `submitPresentFrame`
+    /// with the returned command buffer (or an empty list if null).
+    [[nodiscard]] ICommandBuffer* renderFrame(const FrameInput& input);
 
   public:
     // =========================================================================
     // Runtime control / services
     // =========================================================================
+    /// Resize the single WorldView[0] offscreen target. Not the present surface.
     void onViewportResized(Rect2D rect);
     void resetSkyboxPool();
     void resetEnvironmentLightingPool();
@@ -195,16 +172,10 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     // =========================================================================
     [[nodiscard]] std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> getActiveViewportImageShared() const;
-    /// The image shown as the final viewport result: post-process output when
-    /// present, otherwise the raw viewport output. Game UI composition, the
-    /// presentation graph and the editor viewport snapshot must all read this
-    /// single source so UI never renders into an image that is not presented.
+    /// Output of this Camera chain after graphics + UI + view compose (post
+    /// when enabled, else raw world color). Not the OS window / swapchain image.
     [[nodiscard]] std::shared_ptr<RenderTexture> getViewportDisplayImageShared() const;
-    /// Color format of the viewport display image, mirrored from
-    /// getViewportDisplayImageShared() without needing the image to exist:
-    /// the post-process output format when postprocessing is enabled, else the
-    /// raw viewport color format. Pipeline-configured and stable per frame, so
-    /// pre-recording pipeline prep can use it before the world graph runs.
+    /// Format of that camera display RT, known before the world graph creates it.
     [[nodiscard]] EFormat::T getViewportDisplayImageFormat() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> getPresentationImageShared() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
@@ -259,16 +230,14 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     // =========================================================================
     // Per-frame orchestration
     // =========================================================================
-    bool                   prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
+    bool                   prepareFrame(const FrameInput& input, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf);
     void                   ensureViewportRectInitialized(const FrameInput& input);
-    bool                   beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
+    bool                   beginFrameCommandBuffer(const FrameInput& input, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf);
-    /// Presentation resources (per-swapchain-image executors + imported images)
-    /// are intentionally kept independent from the world-frame executor:
-    /// swapchain acquire/present and recreate stay outside the world graph.
-    /// Capture readback is appended inside the presentation graph (FG-601/603).
-    void                   submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf);
+    /// Ends GPU timing and the flight command buffer. Present stays on the
+    /// host `FPresentFrame` coordinator (R-4).
+    void                   endFrameCommandBuffer(ICommandBuffer* cmdBuf);
 
     // =========================================================================
     // Debug viewport catalog

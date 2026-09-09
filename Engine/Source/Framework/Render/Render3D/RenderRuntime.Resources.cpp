@@ -13,6 +13,7 @@
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Core/ResourceRegistry.h"
 #include "RHI/Backend/TextureLibrary.h"
+#include "RHI/RenderDefines.h"
 
 namespace ya
 {
@@ -179,6 +180,8 @@ void RenderRuntime::initSharedRenderResources()
         .hostServices          = _hostServices,
         .sharedResourceProvider = &_sharedResourceProvider,
         .runtimeServices       = this,
+        .viewportWidth         = static_cast<int>(_viewportState.getRect().extent.x),
+        .viewportHeight        = static_cast<int>(_viewportState.getRect().extent.y),
         .reapplyViewportSink   = [this]()
         {
             if (_viewportState.isRectInitialized()) {
@@ -190,8 +193,11 @@ void RenderRuntime::initSharedRenderResources()
 
 void RenderRuntime::initPresentationResources()
 {
+    // Main world window display compose only. Acquire/present stay on the host
+    // FPresentFrame coordinator; this service never calls begin/end.
     _presentationGraphService.init(PresentationGraphService::InitDesc{
-        .render = _render,
+        .render  = _render,
+        .present = _render->getPrimarySurfaceContext(),
         .viewportDisplayImageProvider = [this]()
         {
             return getViewportDisplayImageShared();
@@ -206,7 +212,7 @@ void RenderRuntime::initPresentationResources()
 void RenderRuntime::initCommandResources()
 {
     std::vector<stdptr<ICommandBuffer>> cmdBufs;
-    _render->allocateCommandBuffers(_render->getSwapchainImageCount(), cmdBufs);
+    _render->allocateCommandBuffers(MAX_FLIGHTS_IN_FLIGHT, cmdBufs);
     _commandBuffers.assign(cmdBufs.begin(), cmdBufs.end());
     _deleter.push("CmdBufs", [this](void*)
                   {

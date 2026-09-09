@@ -172,7 +172,7 @@ void FLineRender::ensureSlotResources(Render2DPassSlot passSlot)
 void FLineRender::begin(Render2DPassSlot passSlot)
 {
     _activePassSlot  = passSlot;
-    _activeFlightIndex = _render ? _render->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT : 0;
+    _activeFlightIndex = _render ? _render->primaryFrameIndex() % MAX_FLIGHTS_IN_FLIGHT : 0;
     ensureSlotResources(passSlot);
     auto& resources    = _passResources[static_cast<size_t>(_activePassSlot)].flights[_activeFlightIndex];
     vertexPtrHead      = resources.vertexPtrHead;

@@ -4,6 +4,7 @@
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/Utility/FPSCtrl.h"
 #include "GUI/Host/AppBootstrap.h"
+#include "RHI/NativeWindow.h"
 
 #include "Core/Config/ConfigManager.h"
 
@@ -206,10 +207,12 @@ void App::init(AppDesc ci)
     }
     if (auto* render = app.getRenderServices().getRender()) {
         int winW = 0, winH = 0;
-        render->getWindowSize(winW, winH);
+        if (auto* window = render->primaryWindow()) {
+            window->getWindowSize(winW, winH);
+        }
         app._windowSize.x = static_cast<float>(winW);
         app._windowSize.y = static_cast<float>(winH);
-        app.inputRouter.setWindow(render->getNativeWindow());
+        app.inputRouter.setWindow(render->primaryWindow());
     }
 
     app._sceneManager = new SceneManager();

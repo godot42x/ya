@@ -347,8 +347,19 @@ struct YA_GUI_API WidgetTree final
     void endDrag(const glm::vec2& logicalPoint);
     /// Abort the drag without delivering a drop.
     void cancelDrag();
+    /// Finish a source session after a foreign tree accepted or rejected the
+    /// drop. Does not search this tree for a target (use `endDrag` for that).
+    void finishDrag(EDragFinishResult result);
+    /// Hover a drop target using an operation owned by another tree. Does not
+    /// start a local drag session: `isDragging()` stays false.
+    void setExternalDropHover(const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
+    void clearExternalDropHover();
+    /// Deliver `onDrop` for an operation owned by another tree. Returns true
+    /// when a target accepted the drop.
+    [[nodiscard]] bool dropExternal(const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
     [[nodiscard]] UIElement* getDragSource() const { return _dragSource; }
     [[nodiscard]] const UIDragDropOperation* getDragOperation() const { return _dragOperation.get(); }
+    [[nodiscard]] UIElement* getDropTarget() const { return _dragDropTarget; }
 
   private:
     friend struct UIElement;
@@ -417,9 +428,14 @@ struct YA_GUI_API WidgetTree final
     {
         beginRouteTrace(policy, target);
     }
-    /// Topmost widget accepting the active drag payload at `logicalPoint`
-    /// (walks ancestors of the hit widget).
+    /// Topmost widget accepting `operation` at `logicalPoint` (walks ancestors
+    /// of the hit widget). The no-argument overload uses the local session.
     [[nodiscard]] UIElement* findDropTarget(const glm::vec2& logicalPoint) const;
+    [[nodiscard]] UIElement* findDropTarget(const glm::vec2& logicalPoint,
+                                            const UIDragDropOperation* operation) const;
+    void applyDropTarget(UIElement* target,
+                         const UIDragDropOperation& operation,
+                         const glm::vec2& logicalPoint);
     /// Release ghost + highlight + payload (shared by end/cancel).
     void clearDragSession();
     /// Poll FontManager::resourceRevision() and, on change, remasure+repaint
@@ -524,6 +540,9 @@ struct YA_GUI_API WidgetTree final
     UIDragDropOperationRef _dragOperation;
     glm::vec2         _dragPoint{};
     UIElement*        _dragDropTarget = nullptr;
+    /// Non-owning pointer into another tree's session. Null unless this tree
+    /// is the hover/drop side of a cross-window drag.
+    const UIDragDropOperation* _externalDropOp = nullptr;
     UIElementRef      _dragGhost;
     DragSessionObserver _dragObserver;
 };

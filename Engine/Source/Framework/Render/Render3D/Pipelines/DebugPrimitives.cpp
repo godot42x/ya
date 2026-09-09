@@ -187,7 +187,8 @@ void DebugPrimitives::draw(ICommandBuffer*  cmdBuf,
                            uint32_t         viewportWidth,
                            uint32_t         viewportHeight,
                            const glm::mat4& projection,
-                           const glm::mat4& view)
+                           const glm::mat4& view,
+                           uint32_t         flightIndex)
 {
     if (!_bEnabled || !cmdBuf || viewportWidth == 0 || viewportHeight == 0) {
         return;
@@ -196,23 +197,23 @@ void DebugPrimitives::draw(ICommandBuffer*  cmdBuf,
     updateDepthState();
     _frameData.projection = projection;
     _frameData.view       = view;
-    updateFrameUBO();
-    const uint32_t flightIndex = _render ? _render->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT : 0;
+    updateFrameUBO(flightIndex);
+    const uint32_t recordingFlight = flightIndex % MAX_FLIGHTS_IN_FLIGHT;
 
     if (_bDrawLines) {
         if (!_frameLineVertices.empty()) {
-            drawLines(cmdBuf, viewportWidth, viewportHeight, flightIndex, _frameLineVertices);
+            drawLines(cmdBuf, viewportWidth, viewportHeight, recordingFlight, _frameLineVertices);
         }
         if (!_immediateLineVertices.empty()) {
-            drawLines(cmdBuf, viewportWidth, viewportHeight, flightIndex, _immediateLineVertices);
+            drawLines(cmdBuf, viewportWidth, viewportHeight, recordingFlight, _immediateLineVertices);
         }
     }
     if (_bDrawShapes) {
         if (!_frameShapeInstances.empty()) {
-            drawShapes(cmdBuf, viewportWidth, viewportHeight, flightIndex, _frameShapeInstances);
+            drawShapes(cmdBuf, viewportWidth, viewportHeight, recordingFlight, _frameShapeInstances);
         }
         if (!_immediateShapeInstances.empty()) {
-            drawShapes(cmdBuf, viewportWidth, viewportHeight, flightIndex, _immediateShapeInstances);
+            drawShapes(cmdBuf, viewportWidth, viewportHeight, recordingFlight, _immediateShapeInstances);
         }
     }
 }
@@ -331,13 +332,13 @@ void DebugPrimitives::ensureLineBufferCapacity(uint32_t requiredVertexCount)
     YA_CORE_ASSERT(_lineVertexBuffer, "Failed to create debug primitive line vertex buffer");
 }
 
-void DebugPrimitives::updateFrameUBO()
+void DebugPrimitives::updateFrameUBO(uint32_t flightIndex)
 {
     if (!_render) {
         return;
     }
 
-    const uint32_t flightIndex = _render->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT;
+    flightIndex = flightIndex % MAX_FLIGHTS_IN_FLIGHT;
     YA_CORE_ASSERT(flightIndex < MAX_FLIGHTS_IN_FLIGHT, "Invalid debug primitive flight index");
     YA_CORE_ASSERT(_frameUBO[flightIndex], "Missing debug primitive frame UBO");
     _frameUBO[flightIndex]->writeData(&_frameData, sizeof(FrameUBO), 0);

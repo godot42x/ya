@@ -64,7 +64,8 @@ struct EditorLayer
     AssetInspectorPanel _assetInspectorPanel;
     UIDesignerPanel     _uiDesignerPanel;
 
-    // Viewport state
+    // ViewportWidget layout (chrome). Host copies image rect into the Camera
+    // WorldView extent; this is not the present surface.
     glm::vec2                _viewportSize = {1280.f, 720.f};
     glm::vec2                _viewportBounds[2]; // Min and max bounds
     Rect2D                   viewportRect;

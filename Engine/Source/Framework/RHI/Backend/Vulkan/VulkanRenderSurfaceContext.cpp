@@ -4,6 +4,7 @@
 #include "RHI/NativeWindow.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanRender.h"
+#include "VulkanQueue.h"
 
 #include "Core/Log.h"
 #include "Core/Profiling/Instrumentor.h"
@@ -31,27 +32,13 @@ VulkanRenderSurfaceContext::~VulkanRenderSurfaceContext()
         return;
     }
 
-    if (!frameFences.empty()) {
-        vkWaitForFences(_render->getDevice(),
-                        static_cast<uint32_t>(frameFences.size()),
-                        frameFences.data(),
-                        VK_TRUE,
-                        kFenceTimeout);
-    }
-    // Present can still hold render-finished semaphores after the graphics
-    // fence signals. Drain this device's queues before destroying sync.
-    if (!_render->getGraphicsQueues().empty()) {
-        _render->getGraphicsQueues()[0].waitIdle();
-    }
-    if (!_render->getPresentQueues().empty()) {
-        _render->getPresentQueues()[0].waitIdle();
-    }
+    waitInFlight();
 
     _scratchPresentCmd.reset();
     releaseSyncResources();
     _swapChain.reset();
 
-    if (_surface != VK_NULL_HANDLE && _window) {
+    if (_bOwnsSurface && _surface != VK_NULL_HANDLE && _window) {
         _window->onDestroyVkSurface(_render->getInstance(), &_surface);
         _surface = VK_NULL_HANDLE;
     }
@@ -95,13 +82,15 @@ void VulkanRenderSurfaceContext::createSyncResources(uint32_t swapchainImageCoun
     imageSubmittedSignalSemaphores.resize(swapchainImageCount);
     frameImageAvailableSemaphores.resize(flightFrameSize);
     frameFences.resize(flightFrameSize);
+    presentCompleteFences.resize(presentCompleteFenceCount);
+    presentCompleteFenceIdx = 0;
 
     for (uint32_t i = 0; i < swapchainImageCount; ++i) {
         const VkResult ret = vkCreateSemaphore(_render->getDevice(), &semaphoreInfo, nullptr, &imageSubmittedSignalSemaphores[i]);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create extra-surface render-finished semaphore");
+        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create {} render-finished semaphore", _debugLabel);
         _render->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
                                     imageSubmittedSignalSemaphores[i],
-                                    std::format("ExtraRenderFinishedSemaphore_{}", i).c_str());
+                                    std::format("{}_RenderFinishedSemaphore_{}", _debugLabel, i).c_str());
     }
 
     VkFenceCreateInfo fenceInfo{
@@ -111,15 +100,23 @@ void VulkanRenderSurfaceContext::createSyncResources(uint32_t swapchainImageCoun
     };
     for (uint32_t i = 0; i < flightFrameSize; ++i) {
         VkResult ret = vkCreateSemaphore(_render->getDevice(), &semaphoreInfo, nullptr, &frameImageAvailableSemaphores[i]);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create extra-surface image-available semaphore");
+        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create {} image-available semaphore", _debugLabel);
         ret = vkCreateFence(_render->getDevice(), &fenceInfo, nullptr, &frameFences[i]);
-        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create extra-surface frame fence");
+        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create {} frame fence", _debugLabel);
         _render->setDebugObjectName(VK_OBJECT_TYPE_FENCE,
                                     frameFences[i],
-                                    std::format("ExtraFrameFence_{}", i).c_str());
+                                    std::format("{}_FrameFence_{}", _debugLabel, i).c_str());
         _render->setDebugObjectName(VK_OBJECT_TYPE_SEMAPHORE,
                                     frameImageAvailableSemaphores[i],
-                                    std::format("ExtraImageAvailableSemaphore_{}", i).c_str());
+                                    std::format("{}_ImageAvailableSemaphore_{}", _debugLabel, i).c_str());
+    }
+
+    for (uint32_t i = 0; i < presentCompleteFenceCount; ++i) {
+        const VkResult ret = vkCreateFence(_render->getDevice(), &fenceInfo, nullptr, &presentCompleteFences[i]);
+        YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create {} present-complete fence", _debugLabel);
+        _render->setDebugObjectName(VK_OBJECT_TYPE_FENCE,
+                                    presentCompleteFences[i],
+                                    std::format("{}_PresentCompleteFence_{}", _debugLabel, i).c_str());
     }
 }
 
@@ -128,6 +125,7 @@ void VulkanRenderSurfaceContext::releaseSyncResources()
     if (!_render || _render->getDevice() == VK_NULL_HANDLE) {
         frameImageAvailableSemaphores.clear();
         frameFences.clear();
+        presentCompleteFences.clear();
         imageSubmittedSignalSemaphores.clear();
         return;
     }
@@ -138,19 +136,42 @@ void VulkanRenderSurfaceContext::releaseSyncResources()
     for (VkFence fence : frameFences) {
         vkDestroyFence(_render->getDevice(), fence, _render->getAllocator());
     }
+    for (VkFence fence : presentCompleteFences) {
+        vkDestroyFence(_render->getDevice(), fence, _render->getAllocator());
+    }
     for (VkSemaphore semaphore : imageSubmittedSignalSemaphores) {
         vkDestroySemaphore(_render->getDevice(), semaphore, _render->getAllocator());
     }
     frameImageAvailableSemaphores.clear();
     frameFences.clear();
+    presentCompleteFences.clear();
     imageSubmittedSignalSemaphores.clear();
+}
+
+bool VulkanRenderSurfaceContext::createSwapchainAndSync(const SwapchainCreateInfo& swapchainCI, bool bRequireImages)
+{
+    _swapChain = std::make_unique<VulkanSwapChain>(_render, _surface, _window);
+    if (!_swapChain->recreate(swapchainCI)) {
+        YA_CORE_ERROR("{}: failed to create swapchain", _debugLabel);
+        return false;
+    }
+    if (bRequireImages && _swapChain->getImageCount() == 0) {
+        YA_CORE_ERROR("{}: swapchain has no images", _debugLabel);
+        return false;
+    }
+
+    createSyncResources(_swapChain->getImageCount());
+    return true;
 }
 
 bool VulkanRenderSurfaceContext::init(VulkanRender* render, INativeWindow& window, const SwapchainCreateInfo& swapchainCI)
 {
     YA_CORE_ASSERT(render, "VulkanRenderSurfaceContext requires a device owner");
-    _render = render;
-    _window = &window;
+    _render        = render;
+    _window        = &window;
+    _bOwnsSurface      = true;
+    _bDeviceFrameOwner = false;
+    _debugLabel        = "Extra";
 
     if (!window.onCreateVkSurface(render->getInstance(), &_surface) || _surface == VK_NULL_HANDLE) {
         YA_CORE_ERROR("VulkanRenderSurfaceContext: failed to create VkSurfaceKHR");
@@ -163,18 +184,23 @@ bool VulkanRenderSurfaceContext::init(VulkanRender* render, INativeWindow& windo
         return false;
     }
 
-    _swapChain = std::make_unique<VulkanSwapChain>(render, _surface, &window);
-    if (!_swapChain->recreate(swapchainCI)) {
-        YA_CORE_ERROR("VulkanRenderSurfaceContext: failed to create swapchain");
-        return false;
-    }
-    if (_swapChain->getImageCount() == 0) {
-        YA_CORE_ERROR("VulkanRenderSurfaceContext: swapchain has no images");
-        return false;
-    }
+    return createSwapchainAndSync(swapchainCI, true);
+}
 
-    createSyncResources(_swapChain->getImageCount());
-    return true;
+bool VulkanRenderSurfaceContext::attachExistingSurface(VulkanRender*              render,
+                                                       INativeWindow&             window,
+                                                       VkSurfaceKHR               surface,
+                                                       const SwapchainCreateInfo& swapchainCI)
+{
+    YA_CORE_ASSERT(render, "VulkanRenderSurfaceContext requires a device owner");
+    YA_CORE_ASSERT(surface != VK_NULL_HANDLE, "Primary surface context requires an existing VkSurfaceKHR");
+    _render       = render;
+    _window       = &window;
+    _surface      = surface;
+    _bOwnsSurface      = false;
+    _bDeviceFrameOwner = true;
+    _debugLabel        = "Primary";
+    return createSwapchainAndSync(swapchainCI, false);
 }
 
 void VulkanRenderSurfaceContext::recordPresentBarrier(VkCommandBuffer commandBuffer, uint32_t imageIndex) const
@@ -211,22 +237,97 @@ void VulkanRenderSurfaceContext::recordPresentBarrier(VkCommandBuffer commandBuf
         &barrier);
 }
 
-bool VulkanRenderSurfaceContext::begin(int32_t* outImageIndex)
+void VulkanRenderSurfaceContext::waitAllGraphicsFences()
 {
-    YA_PROFILE_FUNCTION();
-    YA_CORE_ASSERT(outImageIndex, "begin requires an image index out-parameter");
+    if (frameFences.empty()) {
+        return;
+    }
+    YA_PERF_SCOPE(perf::sample::vulkanWaitFence(), perf::metric::cpuTimeMs(), perf::domain::render());
+    YA_PROFILE_SCOPE("vkWaitFence1");
+    VK_CALL(vkWaitForFences(_render->getDevice(),
+                            static_cast<uint32_t>(frameFences.size()),
+                            frameFences.data(),
+                            VK_TRUE,
+                            kFenceTimeout));
+}
 
-    VK_CALL(vkWaitForFences(_render->getDevice(), 1, &frameFences[currentFrameIdx], VK_TRUE, kFenceTimeout));
+void VulkanRenderSurfaceContext::waitAllPresentCompleteFences()
+{
+    if (presentCompleteFences.empty()) {
+        return;
+    }
+    VK_CALL(vkWaitForFences(_render->getDevice(),
+                            static_cast<uint32_t>(presentCompleteFences.size()),
+                            presentCompleteFences.data(),
+                            VK_TRUE,
+                            kFenceTimeout));
+}
+
+void VulkanRenderSurfaceContext::waitInFlightFence()
+{
+    waitAllGraphicsFences();
+}
+
+void VulkanRenderSurfaceContext::waitInFlight()
+{
+    waitAllGraphicsFences();
+    waitAllPresentCompleteFences();
+}
+
+void VulkanRenderSurfaceContext::resetInFlightFence()
+{
     VK_CALL(vkResetFences(_render->getDevice(), 1, &frameFences[currentFrameIdx]));
+}
+
+void VulkanRenderSurfaceContext::signalPresentComplete()
+{
+    if (presentCompleteFences.empty() || _render->getPresentQueues().empty()) {
+        return;
+    }
+
+    VkFence fence = presentCompleteFences[presentCompleteFenceIdx];
+    VK_CALL(vkWaitForFences(_render->getDevice(), 1, &fence, VK_TRUE, kFenceTimeout));
+    VK_CALL(vkResetFences(_render->getDevice(), 1, &fence));
+    _render->getPresentQueues()[0].submit(
+        std::vector<VkCommandBuffer>{},
+        {},
+        {},
+        fence);
+    presentCompleteFenceIdx = (presentCompleteFenceIdx + 1) % presentCompleteFenceCount;
+}
+
+void VulkanRenderSurfaceContext::resignalCurrentFence()
+{
+    if (frameFences.empty() || _render->getGraphicsQueues().empty()) {
+        return;
+    }
+    _render->getGraphicsQueues()[0].submit(
+        std::vector<VkCommandBuffer>{},
+        {},
+        {},
+        frameFences[currentFrameIdx]);
+}
+
+bool VulkanRenderSurfaceContext::prepareSwapchainForAcquire()
+{
+    if (_swapChain->isRecreateDirty()) {
+        waitAllPresentCompleteFences();
+    }
 
     if (!_swapChain->flushDirtyRecreateAtFrameBegin()) {
-        YA_CORE_ERROR("Extra surface: failed to apply pending swapchain recreate");
+        YA_CORE_ERROR("{}: failed to apply pending swapchain recreate", _debugLabel);
         return false;
     }
 
     if (_swapChain->getImageCount() != imageSubmittedSignalSemaphores.size() && _swapChain->getImageCount() > 0) {
         createSyncResources(_swapChain->getImageCount());
     }
+    return true;
+}
+
+bool VulkanRenderSurfaceContext::acquire(int32_t* outImageIndex)
+{
+    YA_CORE_ASSERT(outImageIndex, "acquire requires an image index out-parameter");
 
     if (_swapChain->getImageSize() == 0) {
         *outImageIndex = -1;
@@ -237,6 +338,7 @@ bool VulkanRenderSurfaceContext::begin(int32_t* outImageIndex)
     VkResult ret        = VK_SUCCESS;
     {
         YA_PERF_SCOPE(perf::sample::vulkanAcquire(), perf::metric::cpuTimeMs(), perf::domain::render());
+        YA_PROFILE_SCOPE("acquireNextImage");
         ret = _swapChain->acquireNextImage(
             frameImageAvailableSemaphores[currentFrameIdx],
             frameFences[currentFrameIdx],
@@ -244,33 +346,41 @@ bool VulkanRenderSurfaceContext::begin(int32_t* outImageIndex)
     }
 
     if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
-        VK_CALL(vkWaitForFences(_render->getDevice(),
-                                static_cast<uint32_t>(frameFences.size()),
-                                frameFences.data(),
-                                VK_TRUE,
-                                kFenceTimeout));
+        YA_PROFILE_SCOPE("VK_ERROR_OUT_OF_DATE_KHR");
+        waitAllPresentCompleteFences();
         if (!_swapChain->recreate(_swapChain->getCreateInfo())) {
-            YA_CORE_ERROR("Extra surface: failed to recreate swapchain");
+            YA_CORE_ERROR("{}: failed to recreate swapchain", _debugLabel);
             return false;
         }
         if (_swapChain->getImageCount() == 0) {
+            resignalCurrentFence();
             *outImageIndex = -1;
             return true;
         }
         if (_swapChain->getImageCount() != imageSubmittedSignalSemaphores.size()) {
             createSyncResources(_swapChain->getImageCount());
         }
-        ret = _swapChain->acquireNextImage(
-            frameImageAvailableSemaphores[currentFrameIdx],
-            frameFences[currentFrameIdx],
-            imageIndex);
+        VK_CALL(vkResetFences(_render->getDevice(), 1, &frameFences[currentFrameIdx]));
+        {
+            YA_PERF_SCOPE(perf::sample::vulkanAcquire(), perf::metric::cpuTimeMs(), perf::domain::render());
+            ret = _swapChain->acquireNextImage(
+                frameImageAvailableSemaphores[currentFrameIdx],
+                frameFences[currentFrameIdx],
+                imageIndex);
+        }
         if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
-            YA_CORE_ERROR("Extra surface: failed to acquire after recreate: {}", static_cast<int32_t>(ret));
+            YA_CORE_ERROR("{}: failed to acquire after recreate: {}", _debugLabel, static_cast<int32_t>(ret));
+            resignalCurrentFence();
             return false;
         }
+        YA_CORE_ASSERT(imageIndex < _swapChain->getImageSize(),
+                       "Invalid image index: {}. Swapchain image size: {}",
+                       imageIndex,
+                       _swapChain->getImageSize());
     }
     else if (ret != VK_SUCCESS && ret != VK_SUBOPTIMAL_KHR) {
-        YA_CORE_ERROR("Extra surface: acquire failed: {}", static_cast<int32_t>(ret));
+        YA_CORE_ERROR("{}: acquire failed: {}", _debugLabel, static_cast<int32_t>(ret));
+        resignalCurrentFence();
         return false;
     }
 
@@ -278,7 +388,46 @@ bool VulkanRenderSurfaceContext::begin(int32_t* outImageIndex)
     return true;
 }
 
-bool VulkanRenderSurfaceContext::end(int32_t imageIndex, std::vector<void*> commandBuffers)
+bool VulkanRenderSurfaceContext::isPresentable() const
+{
+    if (!_window || _window->isMinimized()) {
+        return false;
+    }
+    int width  = 0;
+    int height = 0;
+    _window->getWindowSize(width, height);
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+    return _swapChain && _swapChain->isSurfacePresentable();
+}
+
+bool VulkanRenderSurfaceContext::begin(int32_t* outImageIndex)
+{
+    YA_PROFILE_FUNCTION();
+    waitAllGraphicsFences();
+    if (_bDeviceFrameOwner) {
+        _render->onPrimaryPresentFenceWaited();
+    }
+
+    YA_CORE_ASSERT(outImageIndex, "begin requires an image index out-parameter");
+    if (!isPresentable()) {
+        *outImageIndex = -1;
+        return true;
+    }
+
+    if (!prepareSwapchainForAcquire()) {
+        return false;
+    }
+    if (!isPresentable() || _swapChain->getImageSize() == 0) {
+        *outImageIndex = -1;
+        return true;
+    }
+    resetInFlightFence();
+    return acquire(outImageIndex);
+}
+
+bool VulkanRenderSurfaceContext::submitAndPresent(int32_t imageIndex, std::vector<void*> commandBuffers, bool bScratchIfEmpty)
 {
     YA_PROFILE_FUNCTION();
     if (imageIndex < 0) {
@@ -286,14 +435,14 @@ bool VulkanRenderSurfaceContext::end(int32_t imageIndex, std::vector<void*> comm
     }
 
     std::vector<void*> submits = std::move(commandBuffers);
-    if (submits.empty()) {
+    if (submits.empty() && bScratchIfEmpty) {
         if (!_scratchPresentCmd) {
             std::vector<std::shared_ptr<ICommandBuffer>> buffers;
             _render->allocateCommandBuffers(1, buffers);
             _scratchPresentCmd = buffers.empty() ? nullptr : buffers.front();
         }
         if (!_scratchPresentCmd) {
-            YA_CORE_ERROR("Extra surface: failed to allocate present command buffer");
+            YA_CORE_ERROR("{}: failed to allocate present command buffer", _debugLabel);
             return false;
         }
         _scratchPresentCmd->reset();
@@ -303,25 +452,40 @@ bool VulkanRenderSurfaceContext::end(int32_t imageIndex, std::vector<void*> comm
         submits.push_back(_scratchPresentCmd->getHandleAs<VkCommandBuffer>());
     }
 
-    _render->submitToQueue(
-        submits,
-        {frameImageAvailableSemaphores[currentFrameIdx]},
-        {imageSubmittedSignalSemaphores[static_cast<uint32_t>(imageIndex)]},
-        frameFences[currentFrameIdx]);
+    if (!submits.empty()) {
+        _render->submitToQueue(
+            submits,
+            {frameImageAvailableSemaphores[currentFrameIdx]},
+            {imageSubmittedSignalSemaphores[static_cast<uint32_t>(imageIndex)]},
+            frameFences[currentFrameIdx]);
+    }
 
-    const VkResult result = _swapChain->presentImage(
-        static_cast<uint32_t>(imageIndex),
-        {imageSubmittedSignalSemaphores[static_cast<uint32_t>(imageIndex)]});
+    int result = VK_SUCCESS;
+    {
+        YA_PERF_SCOPE(perf::sample::vulkanPresent(), perf::metric::cpuTimeMs(), perf::domain::render());
+        result = _swapChain->presentImage(
+            static_cast<uint32_t>(imageIndex),
+            {imageSubmittedSignalSemaphores[static_cast<uint32_t>(imageIndex)]});
+    }
+
     if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR) {
         _swapChain->requestRecreate();
     }
     else if (result != VK_SUCCESS) {
-        YA_CORE_ERROR("Extra surface: present failed: {}", static_cast<int32_t>(result));
+        YA_CORE_ERROR("{}: present failed: {}", _debugLabel, static_cast<int32_t>(result));
+        signalPresentComplete();
+        advanceFrame();
         return false;
     }
 
-    currentFrameIdx = (currentFrameIdx + 1) % flightFrameSize;
+    signalPresentComplete();
+    advanceFrame();
     return true;
+}
+
+bool VulkanRenderSurfaceContext::end(int32_t imageIndex, std::vector<void*> commandBuffers)
+{
+    return submitAndPresent(imageIndex, std::move(commandBuffers), true);
 }
 
 void* VulkanRenderSurfaceContext::getCurrentImageAvailableSemaphore()

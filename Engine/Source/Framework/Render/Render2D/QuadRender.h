@@ -30,6 +30,7 @@ struct Font;
 /// composite, editor viewport, ...) onto the returned index; Render2D itself
 /// does not know about game/editor passes.
 using Render2DPassSlot = uint32_t;
+inline constexpr Render2DPassSlot kInvalidRender2DPassSlot = ~Render2DPassSlot{0};
 
 /// Screen/world quad batching used by Render2D: hosts vertex/index buffers,
 /// per-pass pipelines, frame/resource descriptor sets and the texture-array
@@ -92,7 +93,7 @@ struct YA_RENDER_2D_API FQuadRender
     // Upper bound on concurrently used pass slots (see Render2DPassSlot).
     // Per-slot resources are allocated lazily on first use, so a GUI app that
     // uses one slot only allocates one slot's buffers.
-    static constexpr uint32_t kMaxPassSlots = 8;
+    static constexpr uint32_t kMaxPassSlots = 16;
 
     // One host-visible vertex buffer is shared by every flush of a frame, and
     // the GPU only reads it after the whole command buffer is recorded. Each
