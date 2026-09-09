@@ -79,4 +79,38 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
     log("Dock demo: drag tabs to split / merge, drag out to float, drag floating title to re-dock");
 }
 
+void buildWindowsDemo(ya::WidgetTree& tree,
+                      ya::UIElement& parent,
+                      const std::function<void(const std::string&)>& log,
+                      const std::function<void()>& onOpen,
+                      const std::function<void()>& onClose,
+                      const std::shared_ptr<ya::Reactive<std::string>>& extraCountLabel)
+{
+    auto page = ya::ui::column("WindowsDemo")
+                    .setDirection(ya::EWidgetBoxLayout::Vertical)
+                    .setPadding(glm::vec2(16.0f))
+                    .setSpacing(10.0f)
+                    .children(
+                        ya::ui::text("windows-title")
+                            .setText("Extra OS windows")
+                            .setFontSize(18),
+                        ya::ui::text("windows-body").setText(
+                            "Opens a real native window with its own WidgetTree on the shared GPU device. "
+                            "Not a dock floating panel. Close the extra window; this gallery stays."),
+                        ya::ui::text("windows-count").bindText(extraCountLabel),
+                        ya::ui::row("windows-actions")
+                            .setSpacing(8.0f)
+                            .children(
+                                ya::ui::button("windows-open")
+                                    .child(ya::ui::text("windows-open-label").setText("Open extra window"))
+                                    .setOnClick(onOpen),
+                                ya::ui::button("windows-close")
+                                    .child(ya::ui::text("windows-close-label").setText("Close latest extra"))
+                                    .setOnClick(onClose)))
+                    .child(makeDemoDragSource("windows-drag", "Drag to extra window", "windows.extra"),
+                           ya::ui::boxSlot().preferredSize({220.0f, 32.0f}));
+    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    log("Windows: Open extra OS window / drag tile onto extra-drop");
+}
+
 } // namespace guiworkbench

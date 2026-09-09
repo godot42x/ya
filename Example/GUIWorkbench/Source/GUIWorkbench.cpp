@@ -2,12 +2,15 @@
 // Pages are grouped in the left rail (Diagnostics / Controls / Layout / ...).
 // Scenario files live under Example/GUIWorkbench/Scenarios/.
 #include "GUIWorkbench.h"
+#include "Pages/DemoPageCommon.h"
 
+#include "Core/Event.h"
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
 
 #include "GUI/Tooling/Workbench/WorkbenchTheme.h"
 #include "GUI/Declarative/Build.h"
+#include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
@@ -20,9 +23,133 @@
 #include "GUI/Widgets/Controls/DockSpace/DockFloatingHost.h"
 
 #include <format>
+#include <cstddef>
+#include <string>
 
 namespace guiworkbench
 {
+
+namespace
+{
+
+ya::UIElement* findNamed(ya::UIElement* node, const char* name)
+{
+    if (!node || !name) {
+        return nullptr;
+    }
+    if (node->_name == name) {
+        return node;
+    }
+    for (const auto& child : node->getChildren()) {
+        if (ya::UIElement* hit = findNamed(child.get(), name)) {
+            return hit;
+        }
+    }
+    return nullptr;
+}
+
+ya::UIElement* findNamed(ya::WidgetTree& tree, const char* name)
+{
+    using ELayer = ya::WidgetTree::ELayer;
+    for (ELayer layer : {ELayer::Content, ELayer::Popup, ELayer::Tooltip, ELayer::DragIme}) {
+        if (ya::UIElement* hit = findNamed(tree.getLayer(layer), name)) {
+            return hit;
+        }
+    }
+    return nullptr;
+}
+
+} // namespace
+
+void ExtraOsWindowDemo::buildUI(ya::WidgetTree& tree)
+{
+    auto* content = tree.getLayer(ya::WidgetTree::ELayer::Content);
+    if (!content) {
+        return;
+    }
+    auto drop = makeDemoDropTarget(
+        "extra-drop",
+        "Drop here (from Windows page)",
+        {},
+        [this](const std::string& payload)
+        {
+            dropLabel->set(std::format("Dropped '{}'", payload));
+        });
+    auto page = ya::ui::column("extra-root")
+                    .setDirection(ya::EWidgetBoxLayout::Vertical)
+                    .setPadding(glm::vec2(16.0f))
+                    .setSpacing(8.0f)
+                    .child(ya::ui::text("extra-title").setText(title).setFontSize(18))
+                    .child(ya::ui::text("extra-body")
+                               .setText("Independent WidgetTree on the shared device. Close me; the gallery stays."))
+                    .child(ya::ui::button("extra-click")
+                               .child(ya::ui::text("extra-click-label").bindText(clickLabel))
+                               .setOnClick([this]
+                               {
+                                   ++clicks;
+                                   clickLabel->set("Clicked: " + std::to_string(clicks));
+                               }))
+                    .child(ya::ui::text("extra-drop-log").bindText(dropLabel).setFontSize(13))
+                    .child(std::move(drop), ya::ui::boxSlot().preferredSize({0.0f, 80.0f}));
+    ya::ui::build(tree, *content, std::move(page), ya::ui::canvasSlot().fill());
+}
+
+void FWorkbenchApp::pruneClosedExtras()
+{
+    if (!_guiApp) {
+        return;
+    }
+    size_t i = 0;
+    while (i < _extraIds.size()) {
+        if (_guiApp->findTree(_extraIds[i]) == nullptr) {
+            _extraIds.erase(_extraIds.begin() + static_cast<std::ptrdiff_t>(i));
+            _extraDemos.erase(_extraDemos.begin() + static_cast<std::ptrdiff_t>(i));
+        }
+        else {
+            ++i;
+        }
+    }
+    _extraCountLabel->set(std::format("Open extras: {}", _extraIds.size()));
+}
+
+void FWorkbenchApp::openExtraWindow()
+{
+    if (!_guiApp) {
+        YA_CORE_ERROR("GUIWorkbench: openExtraWindow before bindHost");
+        return;
+    }
+    pruneClosedExtras();
+    auto demo   = std::make_unique<ExtraOsWindowDemo>();
+    demo->title = std::format("Extra {}", _extraDemos.size() + 1);
+    ya::FGUIWindowHostConfig config;
+    config.title         = demo->title;
+    config.width         = 480;
+    config.height        = 360;
+    config.bEscapeQuits  = true;
+    const ya::GUIWindowId id = _guiApp->openWindow(config, *demo);
+    if (id == 0) {
+        YA_CORE_ERROR("GUIWorkbench: failed to open extra OS window");
+        return;
+    }
+    _extraIds.push_back(id);
+    _extraDemos.push_back(std::move(demo));
+    if (ya::WidgetTree* extraTree = _guiApp->findTree(id); extraTree && _tree) {
+        extraTree->setTheme(_tree->getTheme());
+    }
+    _extraCountLabel->set(std::format("Open extras: {}", _extraIds.size()));
+}
+
+void FWorkbenchApp::closeLatestExtra()
+{
+    if (!_guiApp) {
+        return;
+    }
+    pruneClosedExtras();
+    if (_extraIds.empty()) {
+        return;
+    }
+    _guiApp->closeWindow(_extraIds.back());
+}
 
 void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
 {
@@ -136,6 +263,15 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
         }
         demoState.dockFloatingHost.reset();
     });
+    surface.addPage("Composition", "Windows", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildWindowsDemo(t,
+                         p,
+                         status,
+                         [this] { openExtraWindow(); },
+                         [this] { closeLatestExtra(); },
+                         _extraCountLabel);
+    });
 
     // DSL page: typed builders materialize live widgets once. The press
     // counter is a Reactive binding, so clicks do not rebuild the tree.
@@ -195,6 +331,7 @@ void FWorkbenchApp::applyStartPage()
 
 void FWorkbenchApp::updateUI()
 {
+    pruneClosedExtras();
     surface.updateUI();
 }
 
@@ -203,11 +340,18 @@ void FWorkbenchApp::onRoutedEvent(const ya::Event& event, ya::EWidgetRouteResult
     surface.onRoutedEvent(event, result);
 }
 
-void FWorkbenchApp::dispatchPointer(const ya::Event& event, const glm::vec2& point)
+void FWorkbenchApp::dispatchPointer(ya::WidgetTree& tree, const ya::Event& event, const glm::vec2& point)
 {
     ya::WidgetEventContext ctx;
     ctx.logicalPoint = point;
-    _tree->dispatchEvent(event, ctx);
+    tree.dispatchEvent(event, ctx);
+}
+
+void FWorkbenchApp::dispatchPointer(const ya::Event& event, const glm::vec2& point)
+{
+    if (_tree) {
+        dispatchPointer(*_tree, event, point);
+    }
 }
 
 void FWorkbenchApp::dispatchKey(const ya::Event& event)
@@ -365,10 +509,63 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
         return true;
     }
     case 19: {
-        (void)gotoPage("ScrollSplit");
+        if (!gotoPage("Windows")) {
+            return true;
+        }
         return true;
     }
     case 20: {
+        if (!_tree || !findNamed(*_tree, "WindowsDemo") || !findNamed(*_tree, "windows-open")) {
+            surface.failSmoke("Demo automation: Windows page widgets missing");
+            return true;
+        }
+        if (_guiApp) {
+            const int galleryClicks = demoState.clickCount;
+            click(findNamed(*_tree, "windows-open"));
+            pruneClosedExtras();
+            if (_guiApp->extraWindowCount() != 1u || _extraIds.size() != 1u || _extraDemos.size() != 1u) {
+                surface.failSmoke(std::format("Demo automation: Open extra window failed (count={})",
+                                              _guiApp->extraWindowCount()));
+                return true;
+            }
+            ya::WidgetTree* extraTree = _guiApp->findTree(_extraIds.back());
+            if (!extraTree) {
+                surface.failSmoke("Demo automation: extra WidgetTree missing after Open");
+                return true;
+            }
+            extraTree->tick(0.0f);
+            extraTree->layout();
+            ya::UIElement* extraClick = findNamed(*extraTree, "extra-click");
+            if (!extraClick) {
+                surface.failSmoke("Demo automation: extra-click missing");
+                return true;
+            }
+            const glm::vec2 extraCenter = centerOf(extraClick);
+            dispatchPointer(*extraTree, ya::MouseButtonPressedEvent(ya::EMouse::Left), extraCenter);
+            dispatchPointer(*extraTree, ya::MouseButtonReleasedEvent(ya::EMouse::Left), extraCenter);
+            if (_extraDemos.back()->clicks != 1) {
+                surface.failSmoke(std::format("Demo automation: extra click failed (count={})",
+                                              _extraDemos.back()->clicks));
+                return true;
+            }
+            if (demoState.clickCount != galleryClicks) {
+                surface.failSmoke("Demo automation: extra click leaked into gallery FDemoState");
+                return true;
+            }
+            const ya::GUIWindowId extraId = _extraIds.back();
+            _guiApp->onEvent(ya::WindowResizeEvent(extraId, 400, 300));
+            extraTree = _guiApp->findTree(extraId);
+            if (!extraTree || extraTree->getLogicalExtent().width != 400u ||
+                extraTree->getLogicalExtent().height != 300u) {
+                surface.failSmoke("Demo automation: extra resize failed");
+                return true;
+            }
+            if (_tree->getLogicalExtent().width == 400u && _tree->getLogicalExtent().height == 300u) {
+                surface.failSmoke("Demo automation: extra resize leaked into gallery tree");
+                return true;
+            }
+            closeLatestExtra();
+        }
         (void)gotoPage("Editor");
         return true;
     }

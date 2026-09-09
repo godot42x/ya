@@ -1,0 +1,13 @@
+# GUIWorkbench --headless --start-page=Windows. Locks the Composition/Windows
+# page widgets. Opening a real extra OS window requires the windowed host
+# (smoke-actions clicks Open extra / extra-click / Close).
+{"window_size":{"width":1280,"height":800}}
+{"frame":3}
+{"assert":{"widget":"WindowsDemo"}}
+{"assert":{"widget":"windows-title","control":{"type":"text","text":"Extra OS windows"}}}
+{"assert":{"widget":"windows-open","control":{"type":"button"}}}
+{"assert":{"widget":"windows-close","control":{"type":"button"}}}
+{"assert":{"widget":"windows-count","control":{"type":"text"}}}
+{"assert":{"widget":"!extra-click"}}
+{"checkpoint":"windows_page"}
+{"frame":1}

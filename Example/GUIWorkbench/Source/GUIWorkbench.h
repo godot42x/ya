@@ -16,6 +16,7 @@
 
 #include "GUI/Host/GUIApp.h"
 #include "GUI/Tooling/Workbench/WorkbenchSurface.h"
+#include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/Theme.h"
 
 #include "WorkbenchDemoPages.h"
@@ -23,9 +24,25 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace guiworkbench
 {
+
+class ExtraOsWindowDemo final : public ya::IGUIAppDelegate
+{
+  public:
+    std::string                                    title = "Extra";
+    int                                            clicks = 0;
+    std::shared_ptr<ya::Reactive<std::string>>     clickLabel =
+        std::make_shared<ya::Reactive<std::string>>("Clicked: 0");
+    std::shared_ptr<ya::Reactive<std::string>>     dropLabel =
+        std::make_shared<ya::Reactive<std::string>>("Drop from the Windows page");
+
+    void buildUI(ya::WidgetTree& tree) override;
+    void updateUI() override {}
+};
 
 class FWorkbenchApp final : public ya::IGUIAppDelegate
 {
@@ -33,7 +50,12 @@ class FWorkbenchApp final : public ya::IGUIAppDelegate
     FWorkbenchSurface surface;
     FDemoState        demoState;
     bool              bSmokeActions = false;
+    bool              bOpenExtraAtStart = false;
     std::string       startPageName;
+
+    void bindHost(ya::GUIApp& app) { _guiApp = &app; }
+    void openExtraWindow();
+    void closeLatestExtra();
 
     void buildUI(ya::WidgetTree& tree) override;
     void updateUI() override;
@@ -46,13 +68,21 @@ class FWorkbenchApp final : public ya::IGUIAppDelegate
 
   private:
     void applyStartPage();
-    /// App-driven smoke steps for the registered demo pages (frames 3..13;
-    /// frames >= 14 fall through to the shell's built-in Editor automation).
+    /// App-driven smoke steps for the registered demo pages (frames 3..20;
+    /// frames >= 21 fall through to the shell's built-in Editor automation).
     bool runDemoAutomation(int frame);
+    void dispatchPointer(ya::WidgetTree& tree, const ya::Event& event, const glm::vec2& point);
     void dispatchPointer(const ya::Event& event, const glm::vec2& point);
     void dispatchKey(const ya::Event& event);
 
     ya::WidgetTree* _tree = nullptr;
+    ya::GUIApp*     _guiApp = nullptr;
+    std::vector<std::unique_ptr<ExtraOsWindowDemo>> _extraDemos;
+    std::vector<ya::GUIWindowId>                    _extraIds;
+    std::shared_ptr<ya::Reactive<std::string>>      _extraCountLabel =
+        std::make_shared<ya::Reactive<std::string>>("Open extras: 0");
+
+    void pruneClosedExtras();
 
     // Tree-level themes (style-system Phase 2/3). Owned by the app so they
     // outlive the tree; buildUI mounts _darkTheme via setTheme.

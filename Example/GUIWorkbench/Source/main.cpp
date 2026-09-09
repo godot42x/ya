@@ -105,7 +105,8 @@ int main(int argc, char** argv)
         ("scenario-capture", "Capture the final frame swapchain to this BMP", cxxopts::value<std::string>())
         ("scenario-golden", "Baseline BMP to diff the scenario capture against", cxxopts::value<std::string>())
         ("scenario-diff", "Write the scenario difference image to this path", cxxopts::value<std::string>())
-        ("start-page", "Start the workbench on a named gallery page (Render/Widgets/Inputs/Box/Hosts/ScrollSplit/Brush/Text/Fonts/Theme/Menus/Dialog/DragDrop/Enable/Binding/Tree/Table/Dock/DSL/Editor). Aliases: Layout=Box, Gallery=Binding, Modal=Dialog, Unicode=Fonts, RoundedRect=Brush", cxxopts::value<std::string>())
+        ("start-page", "Start the workbench on a named gallery page (Render/Widgets/Inputs/Box/Hosts/ScrollSplit/Brush/Text/Fonts/Theme/Menus/Dialog/DragDrop/Enable/Binding/Tree/Table/Dock/Windows/DSL/Editor). Aliases: Layout=Box, Gallery=Binding, Modal=Dialog, Unicode=Fonts, RoundedRect=Brush", cxxopts::value<std::string>())
+        ("extra-window", "Open one extra OS window at startup (shared GPU device)")
         ("debug-render-overlay", "Inject a host-side render debug overlay into the UI snapshot")
         ("gui-frame-inspector", "Enable GUI Frame Inspector channels: hud,rebuild,overdraw (debug/profile builds)", cxxopts::value<std::string>()->implicit_value("hud,rebuild"))
         ("debug-render2d-log", "Enable Render2D session/clip/flush diagnostics in the log")
@@ -160,6 +161,7 @@ int main(int argc, char** argv)
         if (result.count("start-page") > 0) {
             app.startPageName = result["start-page"].as<std::string>();
         }
+        app.bOpenExtraAtStart = result.count("extra-window") > 0;
         config.bDebugRenderOverlay = result.count("debug-render-overlay") > 0;
         if (result.count("gui-frame-inspector") > 0) {
             config.guiFrameInspector = result["gui-frame-inspector"].as<std::string>();
@@ -276,6 +278,10 @@ int main(int argc, char** argv)
     ya::GUIApp guiApp(config, app);
     if (!guiApp.init()) {
         return 1;
+    }
+    app.bindHost(guiApp);
+    if (app.bOpenExtraAtStart) {
+        app.openExtraWindow();
     }
     const int result = guiApp.run();
     guiApp.shutdown();

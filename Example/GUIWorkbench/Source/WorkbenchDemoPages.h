@@ -1,5 +1,7 @@
 #pragma once
 
+#include "GUI/Widgets/Reactive.h"
+
 #include <functional>
 #include <memory>
 #include <string>
@@ -103,5 +105,11 @@ void buildTableDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                     const std::function<void(const std::string&)>& log);
 void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                    const std::function<void(const std::string&)>& log);
+void buildWindowsDemo(ya::WidgetTree& tree,
+                      ya::UIElement& parent,
+                      const std::function<void(const std::string&)>& log,
+                      const std::function<void()>& onOpen,
+                      const std::function<void()>& onClose,
+                      const std::shared_ptr<ya::Reactive<std::string>>& extraCountLabel);
 
 } // namespace guiworkbench
