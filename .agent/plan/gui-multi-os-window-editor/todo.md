@@ -1,6 +1,8 @@
 # GUI 多 OS Window / GameEditor 多 Editor TODO
 
-> 更新时间：2026-09-09。状态：`[ ]` 未开始，`[-]` 进行中，`[x]` 完成，`[~]` 条件延后。
+> 更新时间：2026-09-09。状态：`[ ]` 未开始，`[-]` 进行中，`[x]` 完成，`[~]` 条件延后。下一任务 **ES-3 root/nested ownership（selection/undo/actions 迁出 Surface）**。R-5 无 trace/性能证据，保持单 cmdBuf，不实施两次 submit。
+
+方向：[`plan.md`](plan.md)「冻结：device / present / camera」。Camera 链（`c2_view_model.md`）已冻结：C2 完成前不实现 N Camera / `FRenderViewDesc`。
 
 执行规则：同时最多一个任务为 `[-]`；GUI 与 GameEditor 两条 track 不跨层混提；RHI 改动必须对应 surface/swapchain/frame-resource 验收；计划文件与实现、测试同一 checkpoint 提交；共享工作区已有大量未提交改动，实施前逐文件确认归属。
 
@@ -23,26 +25,39 @@
 ## C2 — GUI/RHI presentation
 
 - [x] `MW-201` 在 `RHI/Core` 增加 additive surface/presentation context，并在 Vulkan 复用 `VulkanSwapChain` 为每个 `INativeWindow` 创建独立 surface/swapchain/sync。验收：各自 acquire/submit/present；主 `IRender` facade 仍兼容；不把 `IRender` 改成数组。
-- [ ] `MW-202` 覆盖 resize/minimize/out-of-date/close/deferred deletion。验收：zero extent、安全销毁、GPU validation 无错误。
-- [ ] `MW-203` 实现 per-window Render2D pass/resource isolation：每窗口唯一 pass slot，静态 session 仅串行复用。验收：不同窗口 UI 不覆盖 vertex/descriptor/snapshot，offscreen parity 不退化；并行 recorder 不在本任务实现。
+- [x] `MW-201c` 冻结 present ≠ viewport：world 画离屏 `RenderTexture`；surface 只在 present 时选择 swapchain image 做 compose。验收：`PresentationGraphService` 注入 `IRenderSurfaceContext`；world cmdBuf 按 flight 不按 imageIndex；viewport 不 fallback swapchain extent。工件：[`c2_present_compose_model.md`](c2_present_compose_model.md)。
+- [x] `MW-201d` 冻结 Camera 链：`graphics → UI → view compose` 写相机 RT；`display compose → present` 才碰窗口。验收：名词与 `renderFrame` 注释对齐；不实现 N Camera。工件：[`c2_view_model.md`](c2_view_model.md)。
+- [x] `MW-202` 覆盖 resize/minimize/out-of-date/close/deferred deletion。验收：zero extent、安全销毁、GPU validation 无错误。
+- [x] `MW-203` 实现 per-window Render2D pass/resource isolation：每窗口唯一 pass slot，静态 session 仅串行复用。验收：不同窗口 UI 不覆盖 vertex/descriptor/snapshot，offscreen parity 不退化；并行 recorder 不在本任务实现。
+- [x] `MW-206` 不可上屏 surface：最小化/zero extent 只 skip 该窗 acquire/present，delay swapchain recreate；AppKernel 与其它窗继续。验收：最小化 extra 时 primary 仍 present；恢复后下一帧 recreate；去掉 GameRuntime `_bMinimized` sleep。工件：[`c2_unpresentable_surface.md`](c2_unpresentable_surface.md)。不做 extra `renderAll`、N Camera。
+- [x] extra `GUIWindowManager::renderAll` present：共享 device 上每 extra 一扇 `IRenderSurfaceContext`；串行 compose；不可上屏 skip；resize 只 wait 该 surface。验收：`xmake r GUIWorkbench --extra-window --exit-after-frame=8` 双窗 swapchain present 后干净退出。
 
 ## C2G — FeatureGallery 多窗口实例（gui-framework）
 
 C1/C2 完成后再做。本步只走 `GUIApp` window API 与 GUIWorkbench，不进入 GameEditor / EditorSurface / dock tear-off。
 
-- [ ] `MW-204` GUIApp 对 Feature Gallery 暴露 `openWindow` / `closeWindow`。验收：`FWorkbenchApp` 能创建额外 `GUIWindowHost`；共享 device；不复制 `GUIAppHost::init`；不自建 while-loop。
-- [ ] `MW-205` Composition 组增加 `Windows` 页：Open / Close 额外 OS window，每窗独立 WidgetTree 与 retained UI 实例（不共享主 Gallery tree / `FDemoState` handles）。验收：`--start-page Windows` 打开第二扇窗；独立 resize/focus/点击；关副窗主窗仍在；关主窗才退；配套 scenario/smoke。禁止第二份完整 Gallery shell、`FDockContext` floating、或 GameEditor 依赖。
+- [x] `MW-204` GUIApp 对 Feature Gallery 暴露 `openWindow` / `closeWindow`。验收：`FWorkbenchApp` 经 `GUIApp::openWindow` 创建 extra `GUIWindowManager` slot（**不是**第二份 `GUIWindowHost` / 第二套 loop）；共享 device；present 走 `renderAll`。
+- [x] `MW-205` Composition 组 `Windows` 页：Open / Close extra OS window，独立 WidgetTree（`ExtraOsWindowDemo`，不共享 Gallery tree / `FDemoState`）。验收：`--start-page Windows`；headless scenario 锁页控件；windowed `--smoke-actions` 点 Open、点 extra、resize extra、Close；关副窗主窗仍在。Golden BMP 延后（双 swapchain 不能用主窗一张 capture 冒充）。禁止第二份 Gallery shell、`FDockContext` floating、或 GameEditor 依赖。
+
+## C2R — Render boundary follow-up（依赖 C2/C2G，不进入 N Camera）
+
+- [x] R-1 将 RenderRuntime::FrameInput 收口为 CameraFrameInput、ViewComposeInput、DisplayComposeInput、PresentFrameInput；只做 typed additive migration，不改变 submit 次数。
+- [x] R-2 让 Camera owner 在 graph build 前生成 view/projection/viewProjection/extent；BaseRenderPipeline、Forward/Deferred、debug/overlay 只消费 CameraFrameInput，不从 swapchain/window 猜尺寸。
+- [x] R-3 将 view compose 与 display compose 落成分离接口/测试：前者写 Camera 离屏 RT，后者写 surface swapchain image；GUIRenderSurface 不 acquire/present。
+- [x] R-4 收口 acquire/present/recreate/zero-extent 到 IRenderSurfaceContext/present coordinator；PresentationGraphService 只服务主 world surface，extra GUI 使用 window-local display compose。
+- [~] R-5 以 trace/性能证据决定是否两次 submit；当前无 N Camera、无异步 world、无测得的多 surface 同步压力，保持统一 loop/单 cmdBuf。不得用文档闭环冒充完成。
+- [~] R-6 FRenderViewDesc、N Camera、ViewId/PreviewTarget 绑定另开计划；不得并入当前多 OS window 基础线。
 
 ## C3 — GUI 跨窗口 drag primitive
 
-- [ ] `MW-301` 提供 source/target window id、boundary enter/leave、drag keep-alive、延迟 create/destroy；不包含 tab 语义。依赖 C2G：两扇窗必须已是 Feature Gallery 打开的真实 OS window。
+- [x] `MW-301` 提供 source/target window id、boundary enter/leave、drag keep-alive、延迟 create/destroy；不包含 tab 语义。依赖 C2G：两扇窗必须已是 Feature Gallery 打开的真实 OS window。
 
 ## C4 — GameEditor session/tab 解耦（EditorSurface 迁移）
 
 C4 内部顺序固定为 ES-1 → ES-5。不得把 `EditorSurface` 改造成 window manager，也不得把 `EditorWindowSession` 做成更大的 god object。ES-5 完成前禁止创建第二扇 editor window。
 
-- [ ] `ES-1` 把 `tick(App&)` / `applyWindowMetrics(App&)` 改为消费 `FEditorSurfaceContext` 与 `EditorWindowMetrics`。验收：Surface 不再读 `App`/`IRender` window API；viewport frame state 由 context 注入；单窗口行为不变；保留 `tick(App&)` 仅作过渡 forwarding。
-- [ ] `ES-2` 引入单元素 `EditorWindowRegistry` + `EditorWindowSession` 持有 Surface、window-root dock、tree/viewport binding。验收：`EditorModule` 不再直接持有 `_editorSurface`；事件/tick/snapshot 经 default window id 路由；仍只有一个 native window。
+- [x] `ES-1` 把 `tick(App&)` / `applyWindowMetrics(App&)` 改为消费 `FEditorSurfaceContext` 与 `EditorWindowMetrics`。验收：Surface 不再读 `App`/`IRender` window API；viewport frame state 由 context 注入；单窗口行为不变；保留 `tick(App&)` 仅作过渡 forwarding。
+- [x] `ES-2` 引入单元素 `EditorWindowRegistry` + `EditorWindowSession` 持有 Surface、window-root dock、tree/viewport binding。验收：`EditorModule` 不再直接持有 `_editorSurface`；事件/tick/snapshot 经 default window id 路由；仍只有一个 native window。
 - [ ] `ES-3` 落地 root/nested ownership：`WindowRootEditor` / `EditorOwnedTool` / `WindowTool`；`_selection`/`_actions`/`_undo` 迁出 Surface，归属 editor/document session。验收：窗口只引用当前激活 root editor；owned tool 带 `ownerEditorId`；不能跨 root editor dock。
 - [ ] `ES-4` / `MW-402` 解耦 `FEditorTabSpawnContext`：增加 windowId、scope、optional ownerEditorId、document key、placement/detach policy。验收：factory 只创建 UI content，不持有 Surface、不拥有 tree、不执行 tick。
 - [ ] `ES-5` 删除 `EditorSurface::tick(App&)` forwarding；事件、snapshot、viewport、dialogs、`wantsTextInput()` 全部按 window id 路由。验收：`WidgetTree::wantsTextInput()` 取代 `dynamic_cast<EditorInspectorTab*>`；`EditorInputNode` 读 session/tree capability。完成后才允许第二扇 `EditorWindowSession`。

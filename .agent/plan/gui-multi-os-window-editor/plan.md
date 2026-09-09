@@ -1,12 +1,105 @@
 # GUI Framework 真正多 OS Window 与 GameEditor 多 Editor 计划
 
-> 建立日期：2026-09-08；状态：待实施。
+> 建立日期：2026-09-08；状态：实施中。下一编码入口 **ES-3**（selection/undo/actions 迁出 Surface）。R-5 无证据，保持一条 cmdBuf。ES-2 单元素 window registry 已闭环。
+> Camera / N 视图已冻结。最小化/不可上屏见 [`c2_unpresentable_surface.md`](c2_unpresentable_surface.md)（**MW-206** 已完成）。
+> 细节：[`c2_present_compose_model.md`](c2_present_compose_model.md)、[`c2_view_model.md`](c2_view_model.md)。
 
 ## 目标与结论
 
 采用 GUI Framework 提供多 native window 基础、GameEditor 提供 editor/session/tab 语义的分层方案。主窗口默认聚合常驻 Level Editor；Material/UI/Script editor 可作为主窗口 tab，也可 tear-off 成真实 OS window，再 re-dock 到其他窗口。
 
-### Tab scope 必须显式建模
+## 冻结：device / present / camera（防止改偏）
+
+最初 RHI 把 **device、OS 窗口、swapchain、viewport/相机目标** 捏在 `IRender`/`VulkanRender` 上。后续重构必须按三层拆，禁止再把相机尺寸绑回 swapchain，也禁止为多窗复制 `IRender::create`。
+
+```text
+IRender                         共享 device（factory / queues / VMA / deferred deletion）
+IRenderSurfaceContext           一扇 OS 窗：native window + VkSurface + swapchain + acquire/present
+Camera / WorldView              graphics → UI → view compose，写该相机离屏 RT（不是窗口）
+```
+
+一条管线按 Unity Camera 组织，单位是 Camera 不是窗口：
+
+```text
+Camera
+  → graphics pass      Forward/Deferred + post → 该相机离屏 RT
+  → UI pass            该相机 Game UI（post 之后，不进 bloom）
+  → view compose       overlay / gizmos，仍写该 RT
+  → display compose    仅当这扇 OS 窗要上屏：若干 image → swapchain[imageIndex]
+  → present            该窗 IRenderSurfaceContext
+```
+
+两段 compose 不要混名：
+
+| 名字 | 写到哪 | 谁 |
+| --- | --- | --- |
+| View compose | 这台 Camera 的离屏 RT | Camera / WorldView |
+| Display compose | `swapchain[imageIndex]` | PresentSurface（`PresentationGraphService` 只服务主 world 窗） |
+
+旧词 “viewport” 拆开：`PresentSurface`、`WindowChrome`（WidgetTree）、`WorldView`/`PreviewTarget`、`ViewportWidget`（chrome 里取样相机图的控件）。`ViewportState` 迁移期 = 唯一 `WorldView[0]`。`IEditorViewportHost` 是 ViewportWidget，不是 RHI、不是 Camera。Material/UI 窗用 PreviewTarget，不复制 `RenderRuntime`、不复制 GBuffer。
+
+三套时钟禁止混用：surface present flight / Camera 离屏 extent / recording flight（pass slot、`DeferredDeletionQueue`）。`IRender::getPrimarySurfaceContext()` 只是 device pick 用的第一扇 surface。`primarySwapchain()` / `primaryFrameIndex()` 不是 viewport API。Fullscreen「相机 == 窗口」是 host 把窗口尺寸写入该 Camera 的 extent。`CameraComponent.bPrimary` 只表示 `WorldView[0]` 的默认相机，不是「全引擎唯一 viewport」。`syncRuntimeCameraAspect` 今天会把同一 aspect 写进所有相机，N Camera 落地前不要当正确语义用。
+
+**本计划当前只做多窗 RHI。** Camera 链对象模型到 MW-201d 为止；`FRenderViewDesc`、N Camera、按 view 改 `syncRuntimeCameraAspect` 延后到 C2 完成之后，必要时另开计划（条件项 `MW-902`），不要塞进 extra present。
+
+已落地（不要回退）：
+
+- `IRenderSurfaceContext` + `createSurfaceContext`；主窗 swapchain/sync 在 `_primarySurface`
+- `IRender` 不再持有 begin/end/getSwapchain 那套 present facade
+- `PresentationGraphService` 注入 surface；world cmdBuf 按 `MAX_FLIGHTS_IN_FLIGHT`，不按 swapchain `imageIndex`
+- Camera 离屏 RT ≠ swapchain；world postprocess sRGB 跟离屏 format
+- MW-202：`VulkanSwapChain::recreate` 不再 `vkDeviceWaitIdle`；context 析构不再 queue waitIdle；resize/minimize/close 只 wait 该 surface 的 graphics + present-complete fence
+- MW-203：每窗 Render2D pass slot（`acquirePassSlot` / `FRender2DComposePassDesc::passSlot`）；`kMaxPassSlots` 16
+- MW-206：不可上屏只 skip 该 surface acquire/present；delay recreate 保持 dirty；GameRuntime 不再 `sleep` 掉整进程
+
+RHI / host 仍未完成：
+
+- extra GUI present：已落地 `GUIWindowManager::renderAll`（共享 device、per-surface compose）
+- R-1：`FrameInput` 已分成 Camera / ViewCompose / DisplayCompose / Present 四组；submit 仍一次
+- R-2：`CameraFrameInput` 携带 owner 计算的 view/projection/viewProjection/extent；pipeline 不读 surface
+- R-4：host `FPresentFrame` 负责 acquire/present；`RenderRuntime` 只录制；仍一条 cmdBuf，不要顺手拆成 N Camera
+- C2G MW-205：Windows 页 scenario/smoke 已闭环；golden BMP 延后（双 swapchain）
+
+禁止：`IRender[]`；每窗 `IRender::create` / 复制 `GUIAppHost::init`；graphics/UI pass 读写 swapchain；用 ViewportWidget 布局改未绑定相机的 aspect；`PresentationGraphService` 服务辅助 GUI 窗；用进程级 `_bMinimized` / `sleep` 代替 per-surface 不可上屏。
+
+**不可上屏 ≠ 暂停窗口 ≠ 暂停进程。** 最小化 / zero extent 只 delay **该** PresentSurface 的 recreate/acquire/present；AppKernel、其它窗、Camera/WidgetTree 默认继续。不把跳过的帧攒起来补 present。现状（整进程 sleep、host 直接 return、manager 跳过 tick）是债，**MW-206** 修。见 [`c2_unpresentable_surface.md`](c2_unpresentable_surface.md)。
+
+### 渲染对象的严格边界
+
+后续实现和 review 统一使用下面的对象关系；不要再用“viewport pipeline”同时指代相机渲染和窗口上屏。
+
+| 对象 | 负责什么 | 不负责什么 | 典型输入/输出 |
+| --- | --- | --- | --- |
+| NativeWindow | OS 窗口、像素尺寸、DPI、焦点、关闭请求 | GPU image、相机矩阵、渲染 pass | window events / EditorWindowMetrics |
+| IRenderSurfaceContext / PresentSurface | VkSurface、swapchain、acquire、present、surface fences、recreate | world 绘制、Camera view/projection、GBuffer | imageIndex、present target |
+| Camera / WorldView | view、projection、viewport extent、near/far、相机输出 RT | acquire/present、OS window 生命周期 | immutable camera frame data → offscreen RT |
+| BaseRenderPipeline | 固定 graphics pass 拓扑、资源依赖、shader/pipeline 选择、pass execution | 决定哪扇窗 present、创建 OS window、从 swapchain 猜 viewport | CameraFrameInput + scene/render snapshot |
+| ViewCompose | 将 UI/gizmo/overlay 合成回 Camera 的离屏 RT | 选择 swapchain image、调用 present | Camera RT → Camera RT |
+| DisplayCompose | 将 Camera/Preview/Chrome image 排到某 surface 的 swapchain image | 修改 Camera view matrix、执行 world GBuffer | source images + imageIndex → swapchain image |
+| Present | 提交该 surface 的 command/sync 并显示 | 参与 scene/camera 绘制 | surface context → OS screen |
+
+view matrix 不是 window state，也不是 BaseRenderPipeline 的隐式全局变量：Camera owner 在 graph build 前生成 view、projection、viewProjection 和 extent；CameraFrameInput 以 immutable frame data 传入 base pipeline；pipeline 只消费，不从 surface、swapchain 或 NativeWindow 反查矩阵/尺寸。ViewportWidget 的布局矩形只决定显示/采样 Camera 输出；只有明确绑定该 Camera 时，host 才能更新其 extent/aspect。
+
+### 后续渲染重构顺序
+
+这些步骤依赖 C2 已有的 surface/present 改造，不得倒置：
+
+1. R-1 命名和输入契约收口：将 RenderRuntime::FrameInput 分组为 CameraFrameInput、ViewComposeInput、DisplayComposeInput、PresentFrameInput；只做 additive API 和调用点迁移，不改变提交次数。
+2. R-2 view matrix / extent 从 pipeline 解耦：Camera owner 在 graph build 前确定矩阵和离屏 extent；Forward/Deferred、debug/overlay 只读 CameraFrameInput，不从 swapchain/window 猜尺寸。单 Camera 可继续用 WorldView[0] 适配，但不引入 N Camera。
+3. R-3 明确两段 compose：view compose 写 Camera 离屏 RT，display compose 写 surface swapchain image；GUIRenderSurface 只负责 compose target，不 acquire、不 present、不读取 live WidgetTree。
+4. R-4 PresentSurface 独立收口：acquire/present/recreate/zero-extent 只出现在 IRenderSurfaceContext / present coordinator；PresentationGraphService 继续只编排主 world surface，GUI extra 使用自己的 display compose target。
+5. R-5 再评估 submit 边界：只有多个 Camera、异步 world 或多个 surface 的同步压力被实际测量后，才把 world/view compose 与 display compose 拆为两次 submit。当前统一 loop 可保持一条 command buffer，但类型和资源 ownership 必须先完成 R-1～R-4。
+6. R-6 Camera 扩展另开闭环：R-1～R-5 稳定后，另行实现 FRenderViewDesc / N Camera / ViewId 到 ViewportWidget 的绑定；不得把 N Camera、独立 world preview 或复制 RenderRuntime 混入多 OS window 基础改造。
+
+### 渲染重构验收证据
+
+- Camera/base pipeline 不再调用 getSwapchain、getNativeWindow、primaryFrameIndex；PresentSurface 之外不出现 acquire/present。
+- 单 Camera golden：改变 window size 不改变 Camera 离屏 extent，除非 host 明确更新该 Camera；改变 Camera aspect 不重建 swapchain。
+- 双 surface smoke：同一 Camera RT 可被两个 surface display compose；关闭/最小化其中一扇不影响另一扇 Camera/present。
+- 生命周期：surface recreate 只等待该 surface；Camera RT、pipeline resources 和 swapchain image 的 deferred deletion 边界可分别验证。
+- frame trace 明确标记 Camera graphics/UI/view compose、Display compose(surfaceId,imageIndex)、Present(surfaceId)，禁止只输出笼统的 viewport render。
+
+## Tab scope 必须显式建模
 
 不是所有 tab 都是同一级 editor：
 
@@ -32,7 +125,7 @@ GameEditor 的 `EditorSurface` 同时拥有一个 tree、DockContext、Selection
 
 不要把 `EditorSurface` 删除，也不要把它改造成多窗口管理器或更大的 `EditorWindowSession` god object。按 window-local / editor-root / app-global / legacy bridge 拆职责后，它只保留「当前窗口 UI 编排 facade」；窗口生命周期归 GUI Framework，editor/document 状态归 GameEditor session。
 
-当前入口仍是 [`EditorSurface.h`](Engine/Source/Applications/GameEditor/include/GameEditor/UI/EditorSurface.h) 的 `tick(App&, float)`，以及 [`EditorModule.cpp`](Engine/Source/Applications/GameEditor/EditorModule.cpp) 直接持有 `_editorSurface`。`applyWindowMetrics()` 仍读 `IRender::getWindowSize/getNativeWindow/getSwapchainWidth`；`wantsTextInput()` 仍 `dynamic_cast<EditorInspectorTab*>`。这些是迁移的第一批切口，不是把 Surface 再堆成 window manager 的理由。
+当前入口仍是 [`EditorSurface.h`](Engine/Source/Applications/GameEditor/include/GameEditor/UI/EditorSurface.h) 的 `tick(App&, float)`，以及 [`EditorModule.cpp`](Engine/Source/Applications/GameEditor/EditorModule.cpp) 直接持有 `_editorSurface`。`applyWindowMetrics()` 仍读 `IRender::primaryWindow()` / `primarySwapchain()`（ES-1 要改成 `EditorWindowMetrics`）；`wantsTextInput()` 仍 `dynamic_cast<EditorInspectorTab*>`。这些是迁移的第一批切口，不是把 Surface 再堆成 window manager 的理由。
 
 ### 目标对象关系
 
@@ -99,7 +192,7 @@ void EditorSurface::tick(App& app, float dt);
 void EditorSurface::applyWindowMetrics(App& app);
 ```
 
-改为消费窄 context，Surface 不再调用 `IRender` 的 window/swapchain API：
+改为消费窄 context，Surface 不再调用 `IRender` 的 window/swapchain API。ES-1 落地的是 metrics + viewport view/projection；`layer` / `tree` / spawners 仍由 Surface 持有。ES-2 session 持有 Surface 并按 window id 路由，不把 dock/tree 搬出 Surface。
 
 ```cpp
 struct EditorWindowMetrics
@@ -111,15 +204,12 @@ struct EditorWindowMetrics
 
 struct FEditorSurfaceContext
 {
-    EditorLayer& layer;
-    WidgetTree& tree;
     EditorWindowMetrics metrics;
-    EditorTabSpawnerRegistry& tabSpawners;
-    IEditorViewportHost* viewportHost = nullptr;
-    EditorApplicationServices& services;
+    glm::mat4 view{1.0f};
+    glm::mat4 projection{1.0f};
 };
 
-void EditorSurface::tick(FEditorSurfaceContext& context, float dt);
+void EditorSurface::tick(const FEditorSurfaceContext& context, float dt);
 ```
 
 第一阶段保留现有实现，由 session 持有 Surface：
@@ -223,31 +313,31 @@ C0 必须审计以下单实例假设后才能写代码：
 8. OpenGL context/window 绑定；
 9. GameRuntime world graph 是否把主窗口 swapchain 视为唯一 target。
 
-首轮不把完整 GameRuntime world graph 复制到每个 editor window。主窗口继续消费 world/presentation；Material/UI preview 优先使用 offscreen/preview target。只有真实需求证明不足时，才另开独立 RenderRuntime world viewport 计划。
+首轮不把完整 GameRuntime world graph 复制到每个 editor window。主窗口继续走一条 Camera 链 + 该窗 display compose；Material/UI preview 优先 PreviewTarget。N Camera / 独立 world preview 是冻结项，C2 完成前不开（`MW-902`）。
 
-RHI 目标是共享一个 device、每窗口 surface/swapchain/frame resources、所有 create/rebuild/destroy 在 frame boundary 完成；command recording 只消费 immutable snapshot 和当前 surface。
+RHI 目标是共享一个 device、每窗口 surface/swapchain/frame resources、所有 create/rebuild/destroy 在 frame boundary 完成；command recording 只消费 immutable snapshot 和当前 surface。Camera graphics 不读写 swapchain。
 
-### 已完成的底层调研结果
+### 当前 RHI 状态（2026-09-09，取代初版单窗调研）
 
-当前 `NativeWindowManager` 已能持有多个 `INativeWindow`，但只管理 SDL/native 对象，不创建 Vulkan surface、swapchain、同步对象，也不关联 WidgetTree。真正的单窗口耦合集中在 RHI：`IRender` 同时拥有 device 与 presentation API；`VulkanRender` 当前持有一个 `VkInstance`、一个 `VkSurfaceKHR`、一个 `_swapChain`、一个 native window、一套 graphics/present queue 和一套 frame sync；`VulkanRender::begin/end` 直接 acquire/present 这个唯一 swapchain。
+`NativeWindowManager` 持有多个 `INativeWindow`，不创建 Vulkan surface。device 与 present 已拆：`VulkanRender` 是共享 device；每窗一个 `VulkanRenderSurfaceContext`（主窗 `attachExistingSurface`，extra `init` 自建 `VkSurfaceKHR`）。`IRender::begin/end/getSwapchain` 已删除；acquire/present 在 context 上。`createSurface()` 仍在 `findPhysicalDevice` 之前（bootstrap 第一扇 surface）。
 
-`PresentationGraphService` 绑定 `render->getSwapchain()`，按唯一 swapchain image 数创建 presentation images/executors，并监听唯一 `onRecreate`。它应继续作为主 GameRuntime presentation service，不应被 GUI 辅助窗口复用。`GUIAppHost` 当前每个 host 初始化一个 `IRender`、一个 swapchain、一个 `Render2D::init` 和一个 WidgetTree；多窗口不能复制这段 init 以创建多个 device。
+`PresentationGraphService` 注入主窗 `IRenderSurfaceContext*`，只做该窗 display compose，不给辅助 GUI 窗用。`GUIAppHost` 持有 `_impl->present`，禁止再复制 `init` 造第二份 device。
 
-因此目标不是 `IRender[]`，而是长期分离 `IRenderDevice`（instance/device/queues/allocator/resource factory/descriptor/pipeline cache）与 `IRenderSurfaceContext`（INativeWindow + VkSurfaceKHR + ISwapchain + acquire/present + per-surface sync/recreate）。迁移期保留 `IRender` 作为主 surface compatibility facade；多窗口新代码不得依赖 `getSwapchain/getNativeWindow/getWindowSize/setVsync/begin/end` 这些主 surface 入口。
+对象模型：[`c2_present_compose_model.md`](c2_present_compose_model.md)、[`c2_view_model.md`](c2_view_model.md)。本节开头的「冻结：device / present / camera」是方向；C0 审计原文仍在 `c0_mw001`/`c0_mw002`（其中部分 API 名已过时，以本节为准）。
 
-每个 surface context 独占 swapchain、current image、pending recreate、image-available semaphore、render-finished semaphore、frame fence 和 imported presentation images；共享的只能是 device 级资源。
+长期目标仍是 `IRender` ≈ device，`IRenderSurfaceContext` ≈ 一扇窗 present。`IRender::primarySwapchain()` 仅兼容/bootstrap，新代码用持有的 context。
 
-`Render2D` 在统一 loop 串行录制时继续使用静态 session，但每窗口分配唯一 pass slot；只有并行 recording、嵌套 session 或第二个独立 Render2D owner 被真实证明时，才启动 `MW-901`。
+每个 surface 独占 swapchain、current image、pending recreate、image-available、render-finished、frame fence、present-complete fence、imported present images。共享只允许 device 级资源。`Render2D` 静态 session 串行复用，每窗唯一 pass slot（MW-203）；第二套 Render2D owner 仅 `MW-901`。
 
-`MW-001/002` 的输出必须具体包含：IRender API 的 device/surface/main-facade 分类；instance→device→surface→swapchain→sync→imported image 时序；双窗口 acquire/record/submit/present 顺序；minimized/out-of-date/close 对另一窗口的行为；flight/descriptor/vertex/pass-slot/deferred-deletion 共享表；RenderRuntime 仍只服务主 world window 的证据；OpenGL current-context 的支持结论。
+Swapchain recreate / extra context 析构只 wait **该** surface 的 graphics fence + present-complete fence（present 之后的 empty submit），禁止 `vkDeviceWaitIdle` / 共享 queue `waitIdle`。GUI 最小化跳过 present，不 idle 整 device。进程退出销毁 device 仍可用 `IRender::waitIdle()`。
 
-`MW-001` 已落地为 [`c0_mw001_irender_ownership.md`](c0_mw001_irender_ownership.md)。`MW-002` 为 [`c0_mw002_frame_boundary.md`](c0_mw002_frame_boundary.md)。`MW-003` 为 [`c0_mw003_tab_scope.md`](c0_mw003_tab_scope.md)。`MW-004` 为 [`c0_mw004_contract.md`](c0_mw004_contract.md)。C0 闭环。`MW-101`/`MW-102` 已落地 extra native window 的 tree/input/snapshot 隔离。`MW-201` 已落地 additive `IRenderSurfaceContext`。下一编码入口是 `MW-202`（resize/minimize/out-of-date/close/deferred deletion；禁止 `vkDeviceWaitIdle` 卡住其他窗）。
+`MW-001`..`MW-004`、`MW-101`/`MW-102`、`MW-201`/`MW-201c`/`MW-201d`、`MW-202`、`MW-203`、`MW-206`、extra `renderAll`、`MW-204`/`MW-205`、`MW-301`、`ES-1`、`ES-2`、`R-1`、`R-2`、`R-3`、`R-4` 已闭环。R-5 两次 submit 仅在有证据时，当前延后。下一编码：`ES-3`。
 
 ## GUI Framework 实施轨道
 
 ### G0：事实与契约
 
-冻结不变量：一个 `GUIWindowHost` 等于一个 native window、一个 WidgetTree 和一个 snapshot/presentation state；所有 window 由一个 loop 调度；window-local route 不泄漏；close/create/rebuild 延迟到安全边界。
+冻结不变量：主窗 `GUIWindowHost` 等于一个 native window、一个 WidgetTree 和一个 snapshot/presentation state；extra 是 `GUIWindowManager` slot（同样一窗一树一 surface），**禁止**复制 `GUIWindowHost` / `IRender::create`。所有 window 由一个 AppKernel loop 调度；window-local route 不泄漏；close/create/rebuild 延迟到安全边界。Present surface ≠ Camera RT，见计划开头冻结节。
 
 ### G1：NativeWindowManager
 
@@ -259,11 +349,11 @@ G1 必须消费共享 device + surface-context provider，禁止通过 `IRender:
 
 实现顺序固定为：先补 RHI surface-context factory 与 per-surface sync，再接 GUI host；不能复制 `GUIAppHost::init`。
 
-接入 per-window surface/swapchain、frame resources、Render2D pass slot、resize/minimize/out-of-date 和 deferred destroy。验收两个窗口同时 present 不同 retained UI，关闭/resize 一个不污染另一个，GPU validation 无生命周期错误。
+接入 per-window surface/swapchain、frame resources、Render2D pass slot、resize/minimize/out-of-date 和 deferred destroy。验收两个窗口同时 present 不同 retained UI，关闭/resize 一个不污染另一个，GPU validation 无生命周期错误。C2 内部顺序：MW-202 → MW-203 → MW-206 → extra `renderAll` present（均已完成）。不要在这一轨实现 N Camera。最小化模型见 [`c2_unpresentable_surface.md`](c2_unpresentable_surface.md)。
 
 具体落点：优先在 `RHI/Core` 增加 additive 的 surface/presentation context 接口和 Vulkan 实现，复用现有 `VulkanSwapChain`；不要第一步重命名或删除 `IRender`。`VulkanRender` 继续作为共享 device owner，并通过 context factory 为每个 `INativeWindow` 创建 surface/swapchain/sync。`GUIWindowHost` 只持有 context handle 和 `GUIRenderSurface`，不直接访问 `VulkanRender` 私有成员。
 
-`PresentationGraphService` 暂时继续只消费主 `IRender` facade；辅助 GUI window 使用 window-local imported target + GUI compose。未来若需要多个 world window，另开 `RenderRuntime multi-viewport` checkpoint。
+`PresentationGraphService` 注入该窗的 `IRenderSurfaceContext*`，做 display compose。辅助 GUI window 使用 window-local imported target + GUI compose。多 Camera / 多 WorldView 见 [`c2_view_model.md`](c2_view_model.md)，不复制 `RenderRuntime`。
 
 ### G2.5：FeatureGallery 多窗口实例
 
@@ -273,16 +363,18 @@ C1/C2 的空白双窗不能当作产品验收。GUI Framework 的第一份真实
 
 落点：Composition 组新增 `Windows` 页（[`WorkbenchDemoPages.h`](Example/GUIWorkbench/Source/WorkbenchDemoPages.h) / `Pages/CompositionPages.cpp`，`surface.addPage("Composition", "Windows", ...)`）。页内可 Open / Close 额外 native window。每个额外窗口：
 
-- 独立 `GUIWindowHost` + `WidgetTree` + snapshot + surface/swapchain；
+- `GUIWindowManager` slot：独立 `WidgetTree` + snapshot + `IRenderSurfaceContext` / swapchain（**不是**第二份 `GUIWindowHost`，也不复制 `GUIAppHost::init`）；
 - 独立 retained UI 实例（标题、计数按钮等足以证明隔离），不复用主 Gallery 的 tree、focus、`FDemoState` widget handles；
 - 不是第二份完整 Gallery shell，也不是 `FDockContext` floating / tear-off；
 - 关闭额外窗口不退出进程，不销毁主 Gallery tree；关主窗才退。
 
-验收：`xmake b GUIWorkbench`；`--start-page Windows` 打开第二扇窗；两窗可独立 resize/focus/点击；输入与 tooltip 不串窗；关副窗主窗仍在。配套 scenario / smoke，禁止用截图或“窗口对象已创建”冒充完成。GameEditor、dock tab 语义、EditorSurface 均不进入本 checkpoint。
+验收：`xmake b GUIWorkbench`；`--start-page Windows` 进入该页；`--extra-window` 或页内 Open 创建第二扇 OS window。headless `windows_extra_os.jsonl` 锁页控件；windowed `--smoke-actions` 点 Open / extra-click / resize extra / Close。两窗独立；关副窗主窗仍在。Golden BMP 延后。GameEditor、dock tab 语义、EditorSurface 均不进入本 checkpoint。
 
 ### G3：跨窗口 drag primitive
 
 G3 排在 C2G 之后：Feature Gallery 已能打开第二扇真实 OS window，drag primitive 才能在两扇 present 着的窗之间验证。Framework 只提供 source/target window id、window boundary enter/leave、drag keep-alive 和延迟 create/destroy；不解释 tab/editor/document。
+
+已落地（MW-301）：source `WidgetTree` 持有 session；target 只走 `setExternalDropHover` / `dropExternal`，`isDragging()` 保持 false。`GUIApp` 在 `onEvent` 拦截跨窗 move/release/leave/Escape；source/hover 的 `requestClose` 延到 drag 结束；`runAfterDrag` 是延迟 create 钩子（`openWindow` 本身不阻塞）。验收：`GUIAppCrossWindowDragTest` A→B drop、leave keep-alive、deferred close。Windows 页 `windows-drag` → extra `extra-drop` 是消费者，不含 tab 语义。
 
 ## GameEditor 实施轨道
 
@@ -324,8 +416,9 @@ root editor、detachable owned tool 和 policy 允许的 WindowTool 都可以成
 |---|---|---|
 | C0 | GUI/RHI/Editor | 完成 surface/swapchain/frame-resource 与旧 tab 事实矩阵（MW-001..004 工件已落地，不改 Engine） |
 | C1 | GUI | 两个 native window、两个 WidgetTree、统一 loop |
-| C2 | GUI/RHI | 多 surface/swapchain、resize/minimize/close teardown |
+| C2 | GUI/RHI | per-surface recreate（禁止 device waitIdle）；pass slot；不可上屏 skip present；extra GUI present。**不含** N Camera |
 | C2G | GUI | FeatureGallery `Windows` 页打开/关闭真实 OS window 实例；每窗独立 WidgetTree；无 GameEditor |
+| C2R | Render/RHI | typed Camera/compose/present 边界收口（R-1～R-5）；不含 N Camera、不强行拆 submit |
 | C3 | GUI | 跨 window drag primitive，不含 tab 语义 |
 | C4 | Editor | EditorSurface 降级为单窗 facade：ES-1..ES-5（context 解耦、单元素 session、scope、factory、按 window id 路由）；禁止第二扇 editor window 冒充完成 |
 | C5 | Editor | 主窗口 Level Editor 常驻，旧 tabs 完成 session-owned 路径 |
@@ -342,7 +435,7 @@ GUI Framework：两个 native window 同时运行；一个 window 一个 WidgetT
 
 GameEditor：main window 永远有 Level Editor；Material/UI/Script 可作为 tab 或独立窗口；跨窗 re-dock；document dirty/undo/selection 正确；重启恢复窗口和布局。
 
-架构：GUI Framework 不依赖 GameEditor，RHI 不认识 tab，DockContext 不创建 native window，没有第二套 loop、中心 bus 或 EditorPanel。
+架构：GUI Framework 不依赖 GameEditor，RHI 不认识 tab，DockContext 不创建 native window，没有第二套 loop、中心 bus 或 EditorPanel。RHI 不把 swapchain 当 Camera 目标；Camera 链见计划开头冻结节。
 
 ## 8. 本轮审查后收口的歧义
 
@@ -355,3 +448,9 @@ GameEditor：main window 永远有 Level Editor；Material/UI/Script 可作为 t
 - `tick(App&)`、`applyWindowMetrics(App&)` 和 `dynamic_cast<EditorInspectorTab*>` 是过渡切口；新代码只走 session + `FEditorSurfaceContext` + `WidgetTree::wantsTextInput()`。
 - 第二个 `EditorWindowSession` 只能出现在 ES-5 之后，且依赖 GUI Framework 已能承载第二扇 native window（C1/C2 + C2G FeatureGallery 实例）。
 - Feature Gallery 多窗口是 gui-framework 层验收，不是 editor tear-off；不得用 `UIDockFloatingHost` 或复制 `FWorkbenchSurface` 冒充 OS window。
+- RHI 三层：`IRender` = device，`IRenderSurfaceContext` = 一扇窗 present，Camera = 离屏 graphics→UI→view compose。swapchain 不是 viewport。
+- View compose 写相机 RT；display compose 写该窗 swapchain。`PresentationGraphService` 只服务主 world 窗。
+- Camera / N 视图在 C2 完成前冻结；不要在 extra present 实现 `FRenderViewDesc` 或复制 `RenderRuntime`。
+- `IRender::primarySwapchain()` / `primaryFrameIndex()` 不是新代码的 viewport/flight API；用持有的 surface context 与 `FrameInput.flightIndex`。
+- swapchain recreate / GUI rebuild / extra close 只 wait 该 surface 的 fence（MW-202 已落地）；禁止再引入 `vkDeviceWaitIdle` 卡住其他窗。
+- 最小化 / zero extent：只 delay 该 PresentSurface 的 present；禁止进程级 sleep 或跳过其它窗（MW-206）。

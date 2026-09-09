@@ -3,7 +3,7 @@
 #include "Core/Input/InputManager.h"
 #include "Core/KeyCode.h"
 #include "GameEditor/EditorLayer.h"
-#include "GameEditor/UI/EditorSurface.h"
+#include "GameEditor/UI/EditorWindowSession.h"
 #include "GameRuntime/App.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "GUI/Widgets/UIElement.h"
@@ -29,7 +29,7 @@ struct FEditorInputSnapshot
     bool               widgetTreeChrome = false;
 };
 
-FEditorInputSnapshot buildSnapshot(App& app, EditorLayer& layer, EditorSurface* surface, const FInputEvent& event)
+FEditorInputSnapshot buildSnapshot(App& app, EditorLayer& layer, EditorWindowSession* session, const FInputEvent& event)
 {
     FEditorInputSnapshot snapshot;
     snapshot.pointerEvent  = event.isInCategory(EEventCategory::Mouse) ||
@@ -42,14 +42,14 @@ FEditorInputSnapshot buildSnapshot(App& app, EditorLayer& layer, EditorSurface* 
         windowPoint      = {move.getX(), move.getY()};
     }
 
-    if (surface) {
+    if (session) {
         snapshot.widgetTreeChrome = true;
-        snapshot.chromeResult     = surface->dispatchEvent(event, windowPoint);
-        snapshot.textInput        = surface->wantsTextInput();
+        snapshot.chromeResult     = session->dispatchEvent(event, windowPoint);
+        snapshot.textInput        = session->wantsTextInput();
         snapshot.pointerInViewport =
-            surface->isPointInViewport(windowPoint) || surface->isViewportHovered();
-        snapshot.viewportFocused         = surface->isViewportFocused();
-        snapshot.viewportOverlayDragging = surface->isViewportOverlayActive();
+            session->isPointInViewport(windowPoint) || session->isViewportHovered();
+        snapshot.viewportFocused         = session->isViewportFocused();
+        snapshot.viewportOverlayDragging = session->isViewportOverlayActive();
     }
     else {
         snapshot.pointerInViewport = layer.isViewportHovered();
@@ -231,18 +231,18 @@ void deliverMatchingRelease(InputManager& inputManager, const FInputEvent& event
 
 } // namespace
 
-void EditorInputNode::bind(App& app, EditorLayer& layer, EditorSurface* surface)
+void EditorInputNode::bind(App& app, EditorLayer& layer, EditorWindowSession* session)
 {
     _app     = &app;
     _layer   = &layer;
-    _surface = surface;
+    _session = session;
 }
 
 void EditorInputNode::unbind()
 {
     _bLooking     = false;
     _bFeedingKeys = false;
-    _surface      = nullptr;
+    _session      = nullptr;
     _layer        = nullptr;
     _app          = nullptr;
 }
@@ -262,7 +262,7 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
         _bLooking = false;
     }
 
-    const FEditorInputSnapshot snapshot = buildSnapshot(*_app, *_layer, _surface, event);
+    const FEditorInputSnapshot snapshot = buildSnapshot(*_app, *_layer, _session, event);
 
     if (eventType == EEvent::MouseButtonPressed) {
         const auto& press = static_cast<const MouseButtonPressedEvent&>(event);
@@ -328,20 +328,20 @@ void EditorInputNode::cancelInput(FInputRouteContext& context, EInputCancelReaso
 
 std::optional<ECursorType> EditorInputNode::getCursor() const
 {
-    if (!_surface) {
+    if (!_session) {
         return std::nullopt;
     }
 
-    if (WidgetTree* tree = _surface->tree()) {
+    if (WidgetTree* tree = _session->tree()) {
         if (const UIElement* hovered = tree->getHovered()) {
             const ECursorType chrome = hovered->getCursor();
-            if (chrome != ECursorType::Arrow || !_surface->isViewportHovered()) {
+            if (chrome != ECursorType::Arrow || !_session->isViewportHovered()) {
                 return chrome;
             }
         }
     }
 
-    if (_surface->isViewportHovered() && _app) {
+    if (_session->isViewportHovered() && _app) {
         if (GameUIHost* host = _app->getGameUIHost(); host && host->getMountedScene()) {
             if (const UIElement* hovered = host->getTree().getHovered()) {
                 return hovered->getCursor();

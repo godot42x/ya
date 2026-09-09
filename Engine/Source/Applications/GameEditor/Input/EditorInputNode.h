@@ -9,14 +9,14 @@ namespace ya
 
 struct App;
 struct EditorLayer;
-struct EditorSurface;
+struct EditorWindowSession;
 
 class EditorInputNode final : public IInputNode
 {
   private:
-    App*           _app     = nullptr;
-    EditorLayer*   _layer   = nullptr;
-    EditorSurface* _surface = nullptr;
+    App*                 _app     = nullptr;
+    EditorLayer*         _layer   = nullptr;
+    EditorWindowSession* _session = nullptr;
     /// RMB look started over the viewport; stays true until RMB release so
     /// mouse-move / WASD still reach InputManager after the pointer leaves.
     bool _bLooking = false;
@@ -25,7 +25,7 @@ class EditorInputNode final : public IInputNode
     bool _bFeedingKeys = false;
 
   public:
-    void bind(App& app, EditorLayer& layer, EditorSurface* surface = nullptr);
+    void bind(App& app, EditorLayer& layer, EditorWindowSession* session = nullptr);
     void unbind();
 
     [[nodiscard]] FInputReply route(FInputRouteContext& context, const FInputEvent& event) override;

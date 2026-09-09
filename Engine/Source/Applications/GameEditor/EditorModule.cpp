@@ -19,13 +19,14 @@
 #include "GameEditor/EditorProfilingSettings.h"
 #include "GameEditor/EditorRuntimeSettings.h"
 #include "GameEditor/Input/EditorInputNode.h"
-#include "GameEditor/UI/EditorSurface.h"
 #include "GameEditor/UI/EditorTabSpawnerRegistry.h"
+#include "GameEditor/UI/EditorWindowRegistry.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "Render3D/Debug/PhysicsDebugDraw.h"
 #include "Render2D/Render2D.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderTexture.h"
+#include "RHI/Core/Swapchain.h"
 #include "Render/Resources/FontManager.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "GameRuntime/App.h"
@@ -561,7 +562,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     EditorPlaySession              _playSession;
     FreeCameraController           _cameraController;
     EditorViewportCompositor       _viewportCompositor;
-    EditorSurface                  _editorSurface;
+    EditorWindowRegistry           _windows;
     EditorTabSpawnerRegistry       _tabSpawners;
     EditorInputNode                _inputNode;
     InputRouter::FNodeRegistration _inputNodeRegistration;
@@ -805,18 +806,32 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _layer->setCurrentScenePath(app.getDesc().defaultScenePath.value_or(std::string{}));
         _layer->onAttach();
         registerBuiltinEditorTabSpawners(_tabSpawners);
-        _editorSurface.bind(*_layer, &_tabSpawners);
-        _layer->setSaveSceneAsHandler([this]() { _editorSurface.openSceneSaveDialog(); });
+        EditorWindowSession* window = _windows.find(kDefaultEditorWindowId);
+        YA_CORE_ASSERT(window, "EditorWindowRegistry always owns the default editor window");
+        window->surface().bind(*_layer, &_tabSpawners);
+        _layer->setSaveSceneAsHandler([this]() {
+            if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
+                session->surface().openSceneSaveDialog();
+            }
+        });
         _layer->setAssetPickerHandler([this](EEditorAssetPickerKind kind,
                                              std::string currentPath,
                                              std::function<void(std::string)> onPicked) {
-            _editorSurface.openAssetPickerDialog(kind, std::move(currentPath), std::move(onPicked));
+            if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
+                session->surface().openAssetPickerDialog(kind, std::move(currentPath), std::move(onPicked));
+            }
         });
-        _layer->setShowContentBrowserHandler([this]() { _editorSurface.showContentBrowser(); });
+        _layer->setShowContentBrowserHandler([this]() {
+            if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
+                session->surface().showContentBrowser();
+            }
+        });
         _layer->setFilePickerHandler([this](FEditorFilePickerRequest request) {
-            _editorSurface.openFilePickerDialog(std::move(request));
+            if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
+                session->surface().openFilePickerDialog(std::move(request));
+            }
         });
-        _inputNode.bind(app, *_layer, &_editorSurface);
+        _inputNode.bind(app, *_layer, window);
         _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);
         gEditorLayer           = _layer.get();
         registerEditorPresets();
@@ -879,7 +894,9 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         app.getInputRouter().cancelInput(EInputCancelReason::ModuleDetached);
         _inputNodeRegistration.reset();
         _inputNode.unbind();
-        _editorSurface.shutdown();
+        if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
+            session->shutdown();
+        }
         _playSession.shutdown(app);
         gEditorAuthoringScene = nullptr;
         app.getRenderServices().clearExtensionRenderFrameState();
@@ -1017,8 +1034,8 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                     EFormat::R16G16B16A16_SFLOAT);
             }
             EFormat::T chromeFormat = EFormat::B8G8R8A8_UNORM;
-            if (auto* render = renderServices.getRender(); render && render->getSwapchain()) {
-                chromeFormat = render->getSwapchain()->getFormat();
+            if (auto* render = renderServices.getRender(); render && render->primarySwapchain()) {
+                chromeFormat = render->primarySwapchain()->getFormat();
             }
             prepareRender2DComposePassPipeline(
                 FRender2DComposePassDesc{
@@ -1095,18 +1112,21 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         if (!render) {
             return;
         }
-        _editorSurface.tick(app, dt);
-        const UIFrameSnapshot& snapshot = _editorSurface.snapshot();
-        const Extent2D targetExtent{
-            .width  = render->getSwapchainWidth(),
-            .height = render->getSwapchainHeight(),
-        };
+        EditorWindowSession* session = _windows.find(kDefaultEditorWindowId);
+        if (!session) {
+            return;
+        }
+        session->tick(app, dt);
+        const UIFrameSnapshot& snapshot = session->snapshot();
+        const Extent2D targetExtent = render->primarySwapchain()
+                                          ? render->primarySwapchain()->getExtent()
+                                          : Extent2D{};
         replayUIFrameSnapshot(&commandBuffer,
                               snapshot,
                               targetExtent,
                               ERender2DComposePassKind::EditorToolSurface,
                               [&]() {
-                                  if (WidgetTree* tree = _editorSurface.tree()) {
+                                  if (WidgetTree* tree = session->tree()) {
                                       runGuiFrameInspectorOverlay(*tree, snapshot, targetExtent);
                                   }
                               });

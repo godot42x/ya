@@ -43,7 +43,8 @@ Example/GUIWorkbench/                    Feature Gallery（FWorkbenchSurface 分
                                          Diagnostics/Controls/Layout/Paint/Text/Style/
                                          Overlays/Interaction/Data/Composition）
 Applications/GameRuntime                 ya::App 产品壳（scene / RenderRuntime / modules）
-Applications/GameEditor                  EditorModule + EditorSurface（不是独立主循环）
+Applications/GameEditor                  EditorModule + EditorWindowRegistry / EditorWindowSession
+                                         （session 持有 EditorSurface；不是独立主循环）
 ```
 
 `ya-gui-framework` 是聚合 meta target（widgets+compose+tooling 等），**不含** host。
@@ -70,7 +71,8 @@ AppKernel
          tickRender → RenderRuntime
            modules.onViewportCompose
            modules.onPresentation
-             EditorModule → EditorSurface::tick
+             EditorModule → EditorWindowSession::tick（default window id）
+               → EditorSurface::tick
                rebuild-if-needed → window metrics
                → WidgetTree::tick → shell dialogs
                → pushViewportDisplay → buildSnapshot
@@ -78,7 +80,7 @@ AppKernel
              replayUIFrameSnapshot(..., EditorToolSurface)
 ```
 
-`EditorSurface::tick` 是编辑器 chrome 的阅读入口。Tab 由 `EditorTabSpawnerRegistry`
+`EditorWindowSession::tick` 是 Module 侧 chrome 入口；`EditorSurface::tick` 仍是窗口内编排。Tab 由 `EditorTabSpawnerRegistry`
 spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `WidgetTree`
 驱动。Surface 只编排 shell、dock persist、viewport host bridge 和 dialogs。
 禁止 `tab->sync`、禁止 Surface 持有 Tab 控件指针。不要再引入 `EditorPanel` 或中心
@@ -235,8 +237,8 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   swapchain image、present 或访问 live WidgetTree。window/present 仍属于 host，
   tree/snapshot 仍属于 WidgetTree。
 - 最终 layout 是 surface 的不变量：offscreen 默认 `ShaderReadOnlyOptimal`，
-  swapchain surface 为 `PresentSrcKHR`。调用方不能通过 compose desc 把二者留在
-  错误 layout。
+  swapchain surface 为 `PresentSrcKHR`（`isDisplayComposeTarget()`）。调用方不能通过 compose desc 把二者留在
+  错误 layout。view compose 写 Camera/offscreen RT；display compose 才用 PresentSrcKHR。
 - 替换/销毁 surface 必须发生在 frame boundary，且旧 command buffer 的 submit 已完成；
   command recording 仅消费不可变 snapshot 与当前 surface。
 - `RuntimeUIOffscreen` 是和 `RuntimeUIComposite` 分离的 compose kind / pass slot：
@@ -251,9 +253,11 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
 
 ## GameEditor chrome
 
-- `EditorSurface::tick` 是 chrome 编排入口：`rebuild-if-needed` → window metrics →
+- Module 经 `EditorWindowRegistry::find(kDefaultEditorWindowId)` 调
+  `EditorWindowSession::tick`；Surface 仍做窗口内编排：`rebuild-if-needed` → window metrics →
   `WidgetTree::tick` → shell dialogs → push viewport display → `buildSnapshot` →
-  viewport host bridge。禁止 `tab->sync`，禁止 Surface 持有 Tab 控件指针。
+  viewport host bridge。禁止 `tab->sync`，禁止 Surface 持有 Tab 控件指针。禁止把
+  selection/undo/actions 倒进 Session（ES-3），禁止第二扇 editor window（ES-5）。
   Tab 经 `EditorTabSpawnerRegistry` 注册，`EditorDockWorkspace::invokeTab` 按 stable key
   激活或 spawn。layout 是 JSON 文档（用户 `editor.dockLayout` + 工厂
   `DefaultEditorDockLayout.json`）；Window 菜单 checkbox 切换已注册 tab；Layout → Default
@@ -263,11 +267,12 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   `onDetached` 按 handle 退订。未选中 dock tab 是 detached subtree，不会 tick。
   不要再引入 `EditorPanel`、中心 MessageBus，或 `EditorTabRegistry` 那种 `std::function`
   袋子。结构见 `.agent/plan/gui-editor-tab-lifecycle/`。
-- 启动时 **WidgetTree 唯一 chrome**：整窗 `EditorSurface` + `replayUIFrameSnapshot`；3D 仍离屏
+- 启动时 **WidgetTree 唯一 chrome**：整窗 default `EditorWindowSession`（持有 `EditorSurface`）+ `replayUIFrameSnapshot`；3D 仍离屏
   compose，树只采样那张 RT。`--editor-chrome=imgui` / `editor.chrome.host=imgui` 会被忽略并打 WARN。
-- WidgetTree 输入：`EditorInputNode` → `WidgetTree::dispatchEvent`。
+- WidgetTree 输入：`EditorInputNode` 绑 `EditorWindowSession*` → session `dispatchEvent` →
+  `WidgetTree::dispatchEvent`。
   所有权分层（不要在 Router 里每条事件 `cancelHeldKeys`）：
-  1. `EditorSurface` 先把事件交给 chrome 树。Viewport gizmo overlay **只在 LMB drag** 时 Exclusive；hover 一条轴不得吞 MouseMoved，否则树的 hover 冻在 viewport 上，dock/split 收不到 press。
+  1. Session 先把事件交给 chrome 树。Viewport gizmo overlay **只在 LMB drag** 时 Exclusive；hover 一条轴不得吞 MouseMoved，否则树的 hover 冻在 viewport 上，dock/split 收不到 press。
   2. Overlay 命中用 **指针是否在 viewport imageRect 内**（或 gizmo 正在 capture），不要用 stale 的 hover/focus。
   3. 点在 viewport image 上 `takeKeyboardFocus()`。Image 必须 `Focusable`，否则 WidgetTree 会 `setFocus(nullptr)`，WASD 只剩 hover 碰巧有效。
   4. Viewport 3D 右键菜单在 **release** 打开（press 记 pending；移动超过 ~4px 视为 look）。同一时间一个 viewport menu。

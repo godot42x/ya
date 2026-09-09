@@ -174,15 +174,323 @@
 - `IRender::createSurfaceContext(INativeWindow&)`：共享当前 device，不调用 `IRender::create`。
 - `VulkanRenderSurfaceContext`：每窗 `VkSurfaceKHR` + `VulkanSwapChain` + flight fence/semaphore。
 - `VulkanSwapChain` 显式持有 surface/window，不再读 `VulkanRender::getSurface()`。
-- 主 `IRender::begin/end` 仍驱动第一扇窗；GUI extra 仍不 present。
+- 当时主 `IRender::begin/end` 仍驱动第一扇窗；GUI extra 仍不 present。（后续 follow-up / MW-201c 已删掉这套 facade，acquire 在 `IRenderSurfaceContext`。）
 - 测试：`ya-rhi-vulkan-smoke` `RHISurfaceContext.ExtraWindowAcquireSubmitPresentIndependentOfPrimary`。
 
 ### 保留 / 未完成 / 偏离
 
 - 保留：单窗 `IRender` facade、`GUIAppHost` present、`PresentationGraphService` 主窗、`GUIWindowManager::renderAll` 空实现。
 - 未完成：MW-202 resize/minimize/out-of-date/close（`VulkanSwapChain::recreate` 仍 `vkDeviceWaitIdle`）；MW-203 per-window Render2D slot；extra GUI present。
-- 偏离：extra context 析构会 `vkQueueWaitIdle` graphics+present（共享 queue，会排空主窗 in-flight）。主 `begin/end` 未抽进 context，避免改单窗时序。
+- 偏离：extra context 析构会 `vkQueueWaitIdle` graphics+present（共享 queue，会排空主窗 in-flight）。
+
+## 2026-09-09 — MW-201 follow-up（primary swapchain into SurfaceContext）
+
+### 完成
+
+- 主窗 swapchain + flight fence/semaphore 从 `VulkanRender` 迁到 `_primarySurface`（`attachExistingSurface`，不销毁 device-pick 的 `VkSurfaceKHR`）。
+- 当时 `IRender::begin/end` / `getSwapchain()` 曾是 primary context 的 facade；MW-201c 起这些 API 已删，调用方持有 `IRenderSurfaceContext*`。device 仍负责 GPU timing 与 `DeferredDeletionQueue` flush。
+- 删除 `VulkanRender` 上重复的 `_swapChain`、`frameFences`、`createSyncResources` 与未使用的 `m_imageAvailableSemaphore` 三件套。
+- 主窗 suboptimal 改为 `requestRecreate`（不再 `vkDeviceWaitIdle` 整 device 重建），与 extra 同一条 present 路径。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：`createSurface()` 仍在 `findPhysicalDevice` 之前；`IRender` 仍是单窗 facade，不是 context 数组。
+- 未完成：MW-202（`VulkanSwapChain::recreate` 仍 `vkDeviceWaitIdle`）；MW-203；extra GUI present。
+- 偏离：主 `end` 空 cmdbuf 仍 skip submit（兼容 “App 已自行 submit”）；extra `end` 仍补 scratch present barrier。
+
+## 2026-09-09 — MW-201c（present ≠ viewport / compose model）
+
+### 完成
+
+- 冻结三层：`IRender` device、离屏 viewport `RenderTexture`、`IRenderSurfaceContext` 只在 present 时选择 swapchain image。工件：[`c2_present_compose_model.md`](c2_present_compose_model.md)。
+- `PresentationGraphService` 注入 `IRenderSurfaceContext*`；`onRecreate` 只重建该 surface 的 imported images。
+- World command buffer 按 `MAX_FLIGHTS_IN_FLIGHT` / `flightIndex` 分配，不再按 swapchain `imageIndex`。
+- Viewport 不再 fallback 到 swapchain extent；host 在 rect 为空时用窗口尺寸；pipeline 初始尺寸来自 host viewport。
+- World postprocess sRGB 跟离屏 format；swapchain sRGB 只留在 presentation compose。
+- `GUIAppHost` 经自己持有的 present context 取 swapchain。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：单窗仍在 `RenderRuntime::beginFrameCommandBuffer` 里 acquire（world+present 共用一条 cmdBuf，acquire 必须在录制前）；extra GUI 仍不 present。
+- 未完成：Render2D / debug primitives 仍读 `primaryFrameIndex()`（MW-203）；EditorSurface 仍读 `primaryWindow/Swapchain`（ES-1）；pipeline 未把 world 与 present 拆成两次 submit。
+- 偏离：无。
+
+## 2026-09-09 — MW-201d（Camera 链 graphics → UI → compose → present）
+
+### 完成
+
+- 冻结渲染单位为 Camera，不是窗口：`graphics → UI → view compose` 写该相机离屏 RT；`display compose → present` 才碰 swapchain。工件：[`c2_view_model.md`](c2_view_model.md)。
+- `RenderRuntime::renderFrame` / `FrameInput` / `ViewportStateService` / `IEditorViewportHost` / `bPrimary` 按这条链标注。
+- `syncRuntimeCameraAspect` 标明会污染未绑定相机，多 Camera 前必须按 view 绑定改。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：仍只执行一条 Camera 链；acquire 仍在 `RenderRuntime` 内。
+- 未完成：`FRenderViewDesc`、N Camera 串行、Material/UI PreviewTarget 分窗。
+- 偏离：无。
 
 ### 下一接力点
 
-`MW-202`：per-surface recreate/minimize/close，禁止用 device waitIdle 卡住其他窗。不要开始 Feature Gallery `Windows` 页。
+`MW-202`：per-surface recreate/minimize/close，禁止用 device waitIdle 卡住其他窗。不要开始 Feature Gallery `Windows` 页。Camera 链（MW-201d）已冻结，不在 C2 铺 N 视图。
+
+## 2026-09-09 — 计划收口（方向写入 plan.md）
+
+把 device / present / Camera 结论写进 [`plan.md`](plan.md) 开头冻结节，并同步 `session_checklist.md`、`c0_mw004_contract.md`、`feature_matrix.json`。避免只记在 progress：下一会话先读 plan 冻结节。
+
+## 2026-09-09 — C2 MW-202（per-surface recreate / close）
+
+### 完成
+
+- `VulkanSwapChain::recreate` 不再 `vkDeviceWaitIdle`。调用方先 wait 该 surface。
+- `IRenderSurfaceContext::waitInFlight()`：wait 该窗 graphics fence + present-complete fence（present 后 empty submit 到 present queue，不 `vkQueueWaitIdle`）。
+- extra context 析构不再 graphics/present `queue waitIdle`。
+- GUI：最小化跳过 present；rebuild imported targets 不再整 device waitIdle；截图 wait 该 surface。
+- 测试：`RHISurfaceContext.ExtraWindowResizeAndCloseDoesNotDeviceWaitIdlePrimary`；关 extra 后主窗立刻 present。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：进程退出仍 `IRender::waitIdle()`；`RenderRuntime` 仍内部 acquire；extra GUI 仍不 present。
+- 未完成：MW-203 per-window Render2D slot；extra `renderAll` present。
+- 偏离：无。macOS 上未做 0x0 SDL 最小化专项；zero extent 走 begin `imageIndex=-1` / GUI skip present。
+
+### 下一接力点
+
+`MW-203`：每窗唯一 Render2D pass slot。不要开始 Feature Gallery `Windows` 页，不要铺 N Camera。最小化重构是 MW-206，不要塞进本任务。
+
+## 2026-09-09 — 不可上屏 / 最小化写入计划
+
+工件：[`c2_unpresentable_surface.md`](c2_unpresentable_surface.md)。最小化只 delay 该 PresentSurface 的 recreate/present，不 pause AppKernel。编码 **MW-206**，排在 MW-203 之后、extra present 之前。本轮不改代码。
+
+## 2026-09-09 — C2 MW-203（per-window Render2D pass slot）
+
+### 完成
+
+- `Render2D::acquirePassSlot` / `releasePassSlot` 共用一个 pool；`kMaxPassSlots` 16。
+- `FRender2DComposePassDesc::passSlot`；GUI host / extra slots 各持 present + offscreen slot。
+- 测试：`Render2DPassSlotTest.AcquireReturnsDistinctSlotsAndReleaseRecycles`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：静态 session 串行；kind pool 仍给单窗 editor/runtime。
+- 未完成：当时下一任务是 MW-206。
+- 偏离：无。flight 仍可用 `primaryFrameIndex()`；不作为本任务范围。
+
+### 下一接力点
+
+`MW-206`：不可上屏 skip present / delay recreate。
+
+## 2026-09-09 — C2 MW-206（不可上屏 skip present / delay recreate）
+
+### 完成
+
+- `IRenderSurfaceContext::isPresentable()`：native minimized 或 window/surface extent 0。
+- `begin` 不可上屏时不 reset fence、返回 `imageIndex == -1`；delay recreate 保持 dirty，且不覆盖上次成功的 swapchain extent。
+- GUI host：不可上屏仍 `updateUI` + snapshot，只跳过 compose/present。`GUIWindowManager::tickAll` 最小化 extra 仍 tick。
+- GameRuntime：去掉 `_bMinimized` + `sleep(100)`；logic 照常。`RenderRuntime` 在 `begin` 返回 -1 时 skip GPU（单 cmdBuf 迁移注释）。
+- 测试：`GUIWindowManagerTest.MinimizedExtraStillTicksAndSnapshots` 通过；`RHISurfaceContext.*` 2 passed。macOS 测试窗 `SDL_MinimizeWindow` 往往不置 MINIMIZED，`ExtraWindowUnpresentableDoesNotBlockPrimaryPresent` skip。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：进程退出仍 `IRender::waitIdle()`；`RenderRuntime` 仍内部 acquire；extra GUI 仍不 present。
+- 未完成：extra `GUIWindowManager::renderAll` present。
+- 偏离：无。OS 最小化在无焦点测试窗上不可靠，host 以 WindowMinimize 事件 + `isPresentable()` 为准。
+
+### 下一接力点
+
+extra `GUIWindowManager::renderAll` present。不要开始 Feature Gallery `Windows` 页，不要铺 N Camera。
+
+## 2026-09-09 — C2 extra present + C2G 最小闭环
+
+目标：尽快跑通双窗 present，再补 MW-205 scenario/smoke。
+
+### 完成
+
+- `GUIWindowPresent`：每 extra 一扇 `IRenderSurfaceContext` 上 acquire → compose snapshot → present；不可上屏 skip；resize 只 `waitInFlight` 该 surface。
+- `GUIWindowManager::create(..., IRender*)` 在共享 device 上建 surface；`renderAll` 真正 present。无 device 时（现有测试）仍 no-op。
+- `GUIApp::onTick`：primary present 之后 extra `tickAll` + `renderAll`。`openWindow` 把 primary `IRender*` 传给 manager。
+- Feature Gallery：Composition/`Windows` 页 + `--extra-window`；extra 是独立 `ExtraOsWindowDemo` WidgetTree，不是第二份 `GUIWindowHost`。
+- 验证：`xmake b ya-gui-host` / `GUIWorkbench`；`ya-gui-headless-host-test` 8/8；`xmake r GUIWorkbench --extra-window --exit-after-frame=8` 双窗 swapchain present 后 `GUIWorkbench finished`；`--start-page=Windows --exit-after-frame=5` 进入该页。validation 日志无 extra 生命周期错误（MAILBOX 不可用是既有 warn）。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：进程退出仍 `IRender::waitIdle()`；`RenderRuntime` 仍内部 acquire；extra 无 offscreen parity / inspector overlay。
+- 未完成：MW-205 点 Open 的独立 click/resize/focus scenario、smoke、golden。
+- 偏离：无。extra 走 manager slot，没有复制 `GUIAppHost::init`。
+
+### 下一接力点
+
+`MW-205` 剩余：Windows 页 scenario/smoke/golden。不要铺 N Camera、GameEditor、dock tear-off。
+
+## 2026-09-09 — C2G MW-205（Windows 页 scenario/smoke）
+
+### 完成
+
+- Headless scenario：`Example/GUIWorkbench/Scenarios/windows_extra_os.jsonl` 锁 `WindowsDemo` / Open / Close；`!extra-click` 证明 extra 树不在 Gallery。
+- Windowed smoke frame 19–20：点 `windows-open` 建真实 extra surface；点 `extra-click`；resize extra 400×300 不改 Gallery extent；Close extra；随后 Editor 自动化仍 PASS。
+- 验证：`xmake r GUIWorkbench --headless --start-page=Windows --scenario Example/GUIWorkbench/Scenarios/windows_extra_os.jsonl`；`--smoke-actions --exit-after-frame=60` → `GUIWorkbench smoke result: PASS`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：extra 无 offscreen parity / inspector；scenario-capture 只拍主窗。
+- 未完成：golden BMP（双 swapchain 不能用主窗一张图冒充完成，延后）。
+- 偏离：无。headless 不调用 `openWindow`（无 device）；真实 Open 只走 windowed smoke。
+
+### 下一接力点
+
+`MW-301`：跨窗口 drag primitive。不要铺 N Camera、GameEditor tear-off。
+
+## 2026-09-09 — C3 MW-301（跨窗口 drag primitive）
+
+### 完成
+
+- `WidgetTree`：`setExternalDropHover` / `clearExternalDropHover` / `dropExternal` / `finishDrag`。目标树不设本地 `_dragOperation`，`isDragging()` 保持 false。
+- `GUIApp` 拦截跨窗 move/release/leave/Escape：记录 source/hover window id 与 enter/leave 计数；source 会话 keep-alive。
+- 延迟销毁：drag 期间不 flush source/hover 的 `requestClose`；`runAfterDrag` 作为延迟 create 钩子。
+- 验收：`WidgetTreeTest.ExternalDropHoverDoesNotStartLocalDrag`；`GUIAppCrossWindowDragTest` A→B drop、leave keep-alive、deferred close。`ya-gui-headless-host-test` 11/11。
+- 消费者：Windows 页 `windows-drag`，extra 窗 `extra-drop`。不含 tab/editor 语义。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：ghost 停在源窗最后一点；坐标不映射到源树。
+- 未完成：C7 tear-off 用此 primitive 迁 tab；跨窗 drag 的 Workbench scenario/smoke 坐标未加（gtest 为门禁）。
+- 偏离：`openWindow` 在 drag 中仍立即创建（第三扇窗安全）；延迟 create 走 `runAfterDrag`，不阻塞 Open。
+
+### 下一接力点
+
+`ES-1`：EditorSurface 改为消费 `FEditorSurfaceContext` / `EditorWindowMetrics`。不要铺第二扇 editor window、N Camera、C2R R-1。
+
+## 2026-09-09 — C4 ES-1（EditorSurface context 解耦）
+
+### 完成
+
+- `EditorWindowMetrics` / `FEditorSurfaceContext`：logical/framebuffer extent、dpi、viewport view/projection。
+- `makeEditorSurfaceContext(App&)` 是唯一从 primary present surface 读窗口/swapchain 的适配器；`EditorSurface.cpp` 不再调用 `primaryWindow` / `primarySwapchain`。
+- `tick(const FEditorSurfaceContext&)` 消费 metrics + camera matrices；`tick(App&)` 仅 rebuild chrome 后转发。
+- `applyEditorWindowMetrics` 只写 WidgetTree extent/dpi。
+- 验收：`EditorSurfaceContextTest` 4/4；`ya-game-editor` / `ya-game-runtime` 构建通过。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：rebuild/chrome 仍用 `App&`（editorTab、play/sim 标签、`bindAppState`），不是 window API。
+- 未完成：`EditorWindowSession` / registry（ES-2）；`tick(App&)` 删除（ES-5）；`EditorApplicationServices` 未发明。
+- 偏离：context 比计划草稿更窄（不含 layer/tree/spawners/services），避免 ES-1 提前做 session 所有权迁移。
+
+### 下一接力点
+
+`ES-2`：单元素 `EditorWindowRegistry` + `EditorWindowSession` 持有 Surface。禁止第二扇 editor window、N Camera。C2R 已切到 R-1 先收口底层。
+
+## 2026-09-09 — 渲染边界计划迭代
+
+### 本轮新增决策
+
+- 明确 NativeWindow 只表示 OS 生命周期与 metrics；IRenderSurfaceContext/PresentSurface 只负责 surface、swapchain、acquire/present/recreate。
+- 明确 Camera/WorldView 负责 view/projection/viewProjection、离屏 extent 和 Camera RT；BaseRenderPipeline 只消费 immutable camera frame data，不从 swapchain 猜尺寸。
+- 明确 view compose（写回 Camera RT）与 display compose（写 surface swapchain image）是两个不同阶段；Present 不属于 graphics/base pipeline。
+- 增加 R-1～R-5 的执行顺序：先 typed frame inputs，再解耦矩阵与 pipeline，再拆 compose owner，再收口 present，最后以证据决定是否拆 submit。
+- FRenderViewDesc、N Camera、第二次 submit、独立 world preview 仍为后续条件项，不得塞入当前多 OS window 基础线。
+
+### 本轮未完成
+
+- R-1 / R-2 已落地；R-3～R-5 仍为计划任务。
+- 当前实现仍保留单 Camera / 迁移期 world+display 共用 command buffer 的路径；该现状与计划一致。
+
+## 2026-09-09 — C2R R-1（FrameInput 四组收口）
+
+### 完成
+
+- `CameraFrameInput` / `ViewComposeInput` / `DisplayComposeInput` / `PresentFrameInput`：`RenderRuntime::FrameInput` 由这四组构成。
+- `renderFrame` 仍一次 `prepareFrame` + 一次 `submitFrame`；acquire 仍在 `beginFrameCommandBuffer`。
+- Host（`GameRuntimeFrameOrchestrator`）按组填充；`PresentFrameInput.surface` 写入 primary，null 仍 fallback 到 `getPrimarySurfaceContext()`。
+- `submitFrame` 对该 surface `end`，不再二次查找 primary。
+- 验收：`RenderRuntimeSnapshotTest` 分组 static_assert + 单 prepare/submit 源扫描。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：pipeline 仍吃 `RenderPipelineFrameContext`（R-2 再让 pipeline 只消费 CameraFrameInput）；world+display 共用一条 cmdBuf。
+- 未完成：R-2 矩阵/extent 解耦；R-3 compose 接口拆分；R-4 acquire 移出 RenderRuntime；R-5 第二次 submit。
+- 偏离：无。UI snapshot 留在 `CameraFrameInput`（Camera 链 UI pass），view compose 仍是 editor `recordCompose`。
+
+### 下一接力点
+
+`R-2`：Camera owner 在 graph build 前生成 view/projection/extent；Forward/Deferred/debug/overlay 只消费 CameraFrameInput，不从 swapchain/window 猜尺寸。禁止 N Camera、第二次 submit、ES-2。
+
+## 2026-09-09 — C2R R-2（CameraFrameInput 矩阵/extent）
+
+### 完成
+
+- `CameraFrameInput` 成为 owner 在 graph build 前填好的 camera 包：view / projection / viewProjection / offscreen extent。
+- `RenderPipelineFrameContext` 只保留 `cmdBuf` + `camera` + overlay snapshot；tick 不再用 `ViewportState` 覆盖 extent。
+- Host 用 `makeCameraViewProjection` 同时喂 extractor 与 `CameraFrameInput`；extract 的 extent 来自 camera rect，不读 pipeline cache。
+- Overlay / billboard 消费 `viewProjection`；`DebugPrimitives` 用 recording flight，不再读 `primaryFrameIndex`。
+- 验收：`RenderRuntimeSnapshotTest` 含 viewProjection 与 pipeline 不猜 present surface 的源扫描。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：tick 仍走 `RenderPipelineFrameContext` 包一层 camera（cmdBuf 不是 camera 状态）；world+display 共用一条 cmdBuf；acquire 仍在 RenderRuntime。
+- 未完成：R-3 compose 接口拆分；R-4 acquire 移出 RenderRuntime；R-5 第二次 submit。
+- 偏离：项目没有独立 `BaseRenderPipeline` 类型；契约落在 `IRenderPipeline` + Forward/Deferred。
+
+### 下一接力点
+
+`R-3`：view compose 写 Camera 离屏 RT，display compose 写 surface swapchain image；GUIRenderSurface 不 acquire/present。禁止 N Camera、第二次 submit、ES-2。
+
+## 2026-09-09 — C2R R-3（view compose vs display compose）
+
+### 完成
+
+- `recordCameraViewCompose` 把 Camera UI pass + `ViewComposeInput` 录到 `getViewportDisplayImageShared()`（离屏 Camera RT），不写 swapchain。
+- `PresentationGraphService::recordDisplayCompose` 取代 `render`，只把 Camera display RT composite 到 `swapchain[imageIndex]`。
+- `GUIRenderSurface::isDisplayComposeTarget()` 以 `PresentSrcKHR` 区分 display target；surface 仍不 acquire/present/读 live WidgetTree。
+- `renderFrame` 仍一次 `prepareFrame` + 一次 `submitFrame`。
+- 验收：`RenderRuntimeSnapshotTest` 锁 view-then-display 调用顺序与目标；`GUIRenderSurfaceTest` 源扫描 compose 不碰 surface/WidgetTree。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：acquire 仍在 `beginFrameCommandBuffer`；world+display 共用一条 cmdBuf；UI snapshot 仍在 `CameraFrameInput`。
+- 未完成：R-4 acquire 移出 RenderRuntime；R-5 第二次 submit。
+- 偏离：无。没有新建平行 compose 类型；display 入口就是 `PresentationGraphService`。
+
+### 下一接力点
+
+`R-4`：acquire/present/recreate/zero-extent 只出现在 `IRenderSurfaceContext` / present coordinator；`PresentationGraphService` 继续只服务主 world surface。禁止 N Camera、第二次 submit、ES-2。
+
+## 2026-09-09 — C2R R-4（present coordinator）
+
+### 完成
+
+- `FPresentFrame` + `acquirePresentFrame` / `submitPresentFrame`：recreate/zero-extent/minimize 仍在 `IRenderSurfaceContext::begin`；host 只做 acquire→record→present 配对。
+- `GameRuntimeFrameOrchestrator`、`presentGuiSnapshot`、`GUIAppHost` 经 coordinator acquire/present；`RenderRuntime::renderFrame` 只 begin/end 飞行 cmdBuf 并返回 handle。
+- `PresentFrameInput` 携带已 acquire 的 `surface` + `imageIndex`；去掉 `getPrimarySurfaceContext` fallback。
+- `PresentationGraphService` 仍只绑主 world surface 做 display compose；extra GUI 继续 window-local `GUIRenderSurface`。
+- 验收：`RenderRuntimeSnapshotTest` 锁 RenderRuntime 无 `present->begin/end`；host/extra 使用 coordinator；`PresentFrameTest.AcquiredRequiresSurfaceAndNonNegativeImage`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：world+display 共用一条 cmdBuf（acquire 必须在录制前）；不可上屏时 host 跳过整段 GPU 录制（单 cmdBuf 仍把 world 绑在 present 上）。
+- 未完成：R-5 第二次 submit（有证据才拆 world 与 display）。
+- 偏离：无新平行 present 类型；coordinator 是 `IRenderSurfaceContext::begin/end` 的 host 配对，不是第二套 sync。
+
+### 下一接力点
+
+`R-5`：以 trace/性能证据决定是否把 world/view compose 与 display compose 拆成两次 submit。未满足证据前保持统一 loop / 单 cmdBuf。禁止 N Camera、ES-2。
+
+## 2026-09-09 — C4 ES-2（单元素 EditorWindowSession）
+
+### 完成
+
+- `EditorWindowId` / `kDefaultEditorWindowId` 落在 GameEditor，不 include GUI host。
+- `EditorWindowSession` 持有 `EditorSurface`，转发 tick / dispatchEvent / snapshot / viewport query；不吸收 selection/undo/actions。
+- `EditorWindowRegistry` 是单元素表：`find(default) == &defaultSession()`，其它 id 为 nullptr。不是 map，避免 ES-5 占位。
+- `EditorModule` 去掉 `_editorSurface`；attach / detach / presentation / dialogs 经 `find(kDefaultEditorWindowId)`。
+- `EditorInputNode` 绑 `EditorWindowSession*`。
+- 验收：`EditorWindowSessionTest`；`EditorModule.cpp` 无 `_editorSurface`；`EditorSurfaceContextTest` 仍适用。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：仍一扇 native window；`EditorSurface::tick(App&)` forwarding（ES-5 删）；dock/tree/viewport host 仍在 Surface 内；world+display 仍一条 cmdBuf。
+- 未完成：ES-3 把 selection/undo/actions 迁出 Surface；ES-4 spawn context；ES-5 删 `tick(App&)` 与第二扇 session。
+- 偏离：R-5 未做。没有 N Camera、异步 world、或测得的多 surface 同步压力，保持单 cmdBuf；不把两次 submit 用文档标成完成。
+
+### 下一接力点
+
+`ES-3`：落地 `WindowRootEditor` / `EditorOwnedTool` / `WindowTool`；`_selection` / `_actions` / `_undo` 迁出 Surface。禁止第二扇 editor window、N Camera、两次 submit。

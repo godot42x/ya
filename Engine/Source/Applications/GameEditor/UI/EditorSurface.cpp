@@ -1,4 +1,5 @@
 #include "GameEditor/UI/EditorSurface.h"
+#include "GameEditor/UI/EditorSurfaceContext.h"
 #include "GameEditor/UI/EditorActionCatalog.h"
 #include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/UI/EditorFilePicker.h"
@@ -41,9 +42,7 @@
 #include "Core/System/PathUtils.h"
 #include "RHI/Core/Texture.h"
 #include "RHI/Core/RenderTexture.h"
-#include "RHI/Core/Swapchain.h"
 #include "RHI/Core/CommandBuffer.h"
-#include "RHI/Render.h"
 #include "Render/Resources/FontManager.h"
 #include "Scene/Core/Scene.h"
 
@@ -136,16 +135,26 @@ void EditorSurface::shutdown()
 
 void EditorSurface::tick(App& app, float dt)
 {
+    const FEditorSurfaceContext context = makeEditorSurfaceContext(app);
     if (!_layer) {
         return;
     }
 
     const bool bProjectLoaded = _layer->isProjectLoaded();
     if (!_tree || _bBuiltAsProjectBrowser == bProjectLoaded) {
-        rebuild(app);
+        rebuild(app, context.metrics);
     }
 
-    applyWindowMetrics(app);
+    tick(context, dt);
+}
+
+void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
+{
+    if (!_layer || !_tree) {
+        return;
+    }
+
+    applyWindowMetrics(context.metrics);
     _tree->tick(dt);
     syncShellDialogs();
     pushViewportDisplay();
@@ -153,10 +162,10 @@ void EditorSurface::tick(App& app, float dt)
     snapshotCtx.textureResolver = &resolveGameUITexture;
     _snapshot = _tree->buildSnapshot(snapshotCtx);
     publishViewportRect();
-    syncViewportHostState(app);
+    syncViewportHostState(context);
 }
 
-void EditorSurface::rebuild(App& app)
+void EditorSurface::rebuild(App& app, const EditorWindowMetrics& metrics)
 {
     unbindAppState();
     closeViewportContextMenu();
@@ -184,15 +193,11 @@ void EditorSurface::rebuild(App& app)
     }
     _settings.reset();
 
-    int windowW = 0;
-    int windowH = 0;
-    if (auto* render = app.getRenderServices().getRender()) {
-        render->getWindowSize(windowW, windowH);
-    }
     _tree = std::make_unique<WidgetTree>(Extent2D{
-        .width  = static_cast<uint32_t>(std::max(windowW, 1)),
-        .height = static_cast<uint32_t>(std::max(windowH, 1)),
+        .width  = std::max(metrics.logicalExtent.width, 1u),
+        .height = std::max(metrics.logicalExtent.height, 1u),
     });
+    _tree->setDpiScale(metrics.dpiScale > 0.0f ? metrics.dpiScale : 1.0f);
     _tree->setTextureSource(&gameUITextureSource());
     bindSdlClipboard(*_tree);
     _theme = buildEditorTheme(true);
@@ -420,33 +425,14 @@ void EditorSurface::buildEditorChrome(App& app)
     updateToolbarMode(app);
 }
 
-void EditorSurface::applyWindowMetrics(App& app)
+void EditorSurface::applyWindowMetrics(const EditorWindowMetrics& metrics)
 {
-    int windowW = 0;
-    int windowH = 0;
-    auto* render = app.getRenderServices().getRender();
-    if (render) {
-        render->getWindowSize(windowW, windowH);
+    if (!_tree) {
+        return;
     }
-    _tree->setLogicalExtent(Extent2D{
-        .width  = static_cast<uint32_t>(std::max(windowW, 1)),
-        .height = static_cast<uint32_t>(std::max(windowH, 1)),
-    });
-
-    float dpiScale = 1.0f;
-    if (render) {
-        if (auto* window = render->getNativeWindow()) {
-            dpiScale = window->getDpiScale();
-        }
-        const uint32_t fbW = render->getSwapchainWidth();
-        const uint32_t fbH = render->getSwapchainHeight();
-        if (windowW > 0 && windowH > 0 && fbW > 0 && fbH > 0) {
-            dpiScale = static_cast<float>(fbW) / static_cast<float>(windowW);
-        }
-    }
-    _tree->setDpiScale(dpiScale);
+    applyEditorWindowMetrics(*_tree, metrics);
     if (auto* fonts = FontManager::get()) {
-        fonts->setActiveDpiScale(dpiScale);
+        fonts->setActiveDpiScale(_tree->getDpiScale());
     }
 }
 
@@ -697,7 +683,7 @@ void EditorSurface::publishViewportRect()
     _layer->setViewportHoverFocus(hovered, focused);
 }
 
-void EditorSurface::syncViewportHostState(App& app)
+void EditorSurface::syncViewportHostState(const FEditorSurfaceContext& context)
 {
     if (!_viewportHost) {
         return;
@@ -708,10 +694,8 @@ void EditorSurface::syncViewportHostState(App& app)
     state.extent     = state.widgetRect.extent;
     state.bHovered   = isViewportHovered();
     state.bFocused   = isViewportFocused();
-
-    const auto& frameState = app.getRenderServices().getRenderFrameState();
-    state.view             = frameState.view;
-    state.projection       = frameState.projection;
+    state.view       = context.view;
+    state.projection = context.projection;
 
     _viewportOverlayHost.syncHost(state);
 }

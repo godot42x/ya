@@ -11,6 +11,7 @@
 #include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/UI/EditorDockWorkspace.h"
 #include "GameEditor/UI/EditorFilePicker.h"
+#include "GameEditor/UI/EditorSurfaceContext.h"
 #include "GameEditor/UI/EditorViewportHost.h"
 
 #include <functional>
@@ -99,7 +100,9 @@ struct EditorSurface : IEditorViewportHostSink
     }
     void shutdown();
 
+    /// Transitional App adapter (ES-5 deletes this). Prefer tick(context).
     void tick(App& app, float dt);
+    void tick(const FEditorSurfaceContext& context, float dt);
     [[nodiscard]] const UIFrameSnapshot& snapshot() const { return _snapshot; }
 
     [[nodiscard]] EWidgetRouteResult dispatchEvent(const Event& event, const glm::vec2& windowPoint);
@@ -127,7 +130,7 @@ struct EditorSurface : IEditorViewportHostSink
     void showContentBrowser();
 
   private:
-    void rebuild(App& app);
+    void rebuild(App& app, const EditorWindowMetrics& metrics);
     void buildProjectBrowser(App& app);
     void buildEditorChrome(App& app);
     void syncShellDialogs();
@@ -137,8 +140,8 @@ struct EditorSurface : IEditorViewportHostSink
     void unbindAppState();
     void refreshProjectBrowserRows();
     void publishViewportRect();
-    void syncViewportHostState(App& app);
-    void applyWindowMetrics(App& app);
+    void syncViewportHostState(const FEditorSurfaceContext& context);
+    void applyWindowMetrics(const EditorWindowMetrics& metrics);
     void openViewportContextMenu(const glm::vec2& windowPoint);
     void closeViewportContextMenu();
 };

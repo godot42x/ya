@@ -3,7 +3,7 @@
 ## 开工前
 
 1. 读取根 `AGENTS.md`、`.agent/skills/gui-framework/SKILL.md`；涉及 RHI 时读取 `render-arch`、`ya-build`。
-2. 读取本目录 `plan.md`、`todo.md`、`progress.md`、`feature_matrix.json`。
+2. 读取本目录 `plan.md`（先读「冻结」与不可上屏段）、`todo.md`、`progress.md`、`feature_matrix.json`；RHI 细节再读 `c2_present_compose_model.md`、`c2_view_model.md`、`c2_unpresentable_surface.md`。
 3. 运行 `git status --short`，逐文件确认共享工作区改动归属。
 4. 复述当前单一 checkpoint 的目标、层级、依赖、非目标和回退边界。
 5. 同时最多一个 TODO 为 `[-]`，同步 `feature_matrix.active_task`。
@@ -16,6 +16,14 @@
 4. 登记旧 tab 的 spawn、tick、destroy、document、viewport、selection、undo 依赖。
 5. 不因未来多窗口提前实现 opaque handle、parallel recorder 或中心 event bus。
 
+## Render boundary follow-up
+
+1. 先区分 NativeWindow、PresentSurface、Camera/WorldView、BaseRenderPipeline、ViewCompose、DisplayCompose、Present；任何新 API 必须标明 owner。
+2. view/projection/viewProjection/extent 必须在 graph build 前进入 immutable CameraFrameInput；pipeline 不得从 swapchain/window 反查。
+3. graphics/UI/view compose 只能写 Camera 离屏 RT；display compose 才能写 swapchain image；acquire/present 只能由 surface/present coordinator 调用。
+4. R-1～R-4 未完成前，不实现 N Camera、FRenderViewDesc、第二次 submit 或复制 RenderRuntime。
+5. 每次重构后运行静态 grep、单 Camera golden、双 surface smoke 和 surface-only teardown；记录 trace 中的 Camera/Display/Present 阶段。
+
 ## GUI Framework 实施
 
 1. 先完成两个空白 native window，再接 editor。
@@ -27,6 +35,17 @@
 7. GUI Framework 不 include GameEditor、EditorLayer、Scene/ECS。
 8. C1/C2 空白双窗之后，必须用 Feature Gallery `Windows` 页作为第一份真实多窗消费者，再进 C3 drag 或 GameEditor。
 9. Gallery 额外窗口经 `GUIApp::openWindow`；禁止 `FWorkbenchSurface` 变成 window manager，禁止用 dock floating 冒充 OS window。
+
+## RHI / presentation
+
+1. `IRender` 是共享 device；一扇 OS 窗一个 `IRenderSurfaceContext`。禁止每窗 `IRender::create`。
+2. Camera 链写离屏 RT：graphics → UI → view compose。swapchain 只在 display compose + present。
+3. 新代码不要用 `primarySwapchain()` / `primaryFrameIndex()` 当 viewport 或 recording flight。
+4. swapchain recreate / imported image rebuild 只 wait **该** surface 的 fence（`IRenderSurfaceContext::waitInFlight`），禁止 `vkDeviceWaitIdle` 卡住其他窗。
+5. `PresentationGraphService` 只服务主 world 窗；辅助 GUI 窗 window-local import + compose。
+6. C2 完成前冻结 N Camera / `FRenderViewDesc`（`MW-902`）。extra present 不要顺手改 Camera 图。
+7. `Render2D` 静态 session 串行；每窗唯一 pass slot（MW-203）。
+8. 最小化只 delay 该 PresentSurface 的 present；禁止进程级 `_bMinimized` sleep。模型见 `c2_unpresentable_surface.md`。
 
 ## GameEditor 实施
 
@@ -47,7 +66,7 @@
 ## 收尾
 
 1. 运行本 checkpoint 定向构建和测试。
-2. 至少按影响运行 `xmake b ya-gui-host`、`xmake b ya-gui-closure-test`、`xmake b ya-game-runtime`、`xmake b ya-game-editor`。C2G 额外 `xmake b GUIWorkbench`，并用 `--start-page Windows` / scenario 验收多窗。
+2. 至少按影响运行 `xmake b ya-gui-host`、`xmake b ya-gui-closure-test`、`xmake b ya-game-runtime`、`xmake b ya-game-editor`。C2G 额外 `xmake b GUIWorkbench`；`--extra-window --exit-after-frame=N`、`--headless --start-page Windows --scenario Example/GUIWorkbench/Scenarios/windows_extra_os.jsonl`、`--smoke-actions`。
 3. 涉及 GPU/presentation 时运行 `python3 Script/automation/gui/run_workbench_gpu_parity.py`。
 4. 补充双窗、resize、close、focus、tear-off、re-dock 证据。
 5. 运行 `git diff --check` 和 `python3 -m json.tool .agent/plan/gui-multi-os-window-editor/feature_matrix.json`。

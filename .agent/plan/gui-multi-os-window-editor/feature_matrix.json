@@ -1,11 +1,15 @@
 {
   "plan": "gui-multi-os-window-editor",
   "updated_at": "2026-09-09",
-  "active_task": "MW-202",
+  "active_task": "ES-3",
   "architecture": {
     "application_loop": "one GUI application loop",
     "window_tree": "one native window owns one WidgetTree",
     "shared": ["IRender device", "shader cache", "font/texture services"],
+    "rhi_layers": "IRender=device; IRenderSurfaceContext=present; Camera=offscreen graphics→UI→view compose",
+    "compose": "view compose writes camera RT; display compose writes swapchain; PresentationGraphService is main world window only",
+    "frozen": "no N-camera / FRenderViewDesc until C2 done; unpresentable=skip present not pause app (MW-206); MW-902 later",
+    "next": "ES-3 selection/undo/actions off Surface; R-5 deferred (no two-submit evidence)",
     "boundary": "GUI owns windows/presentation; FeatureGallery is first multi-window consumer; GameEditor owns sessions/tabs/documents",
     "tab_scopes": {
       "WindowRootEditor": "top-level editor in a window-root DockContext; default native-window tear-off unit",
@@ -31,19 +35,27 @@
         {"id": "MW-101", "status": "pass", "notes": "GUIWindowManager extras: native window+WidgetTree; GUIApp openWindow/closeWindow; no IRender::create; present deferred to C2"},
         {"id": "MW-102", "status": "pass", "notes": "per-window pointer/focus/capture/tooltip/clipboard/DPI/snapshot; FontManager DPI set per extra snapshot; no extra present"},
         {"id": "MW-201", "status": "pass", "notes": "IRender::createSurfaceContext + VulkanRenderSurfaceContext; extra VkSurface/swapchain/sync; main begin/end unchanged; no extra GUI present"},
-        {"id": "MW-202", "status": "planned"},
-        {"id": "MW-203", "status": "planned"},
-        {"id": "MW-204", "status": "planned", "notes": "GUIApp openWindow/closeWindow for Feature Gallery; shared device; no second loop"},
-        {"id": "MW-205", "status": "planned", "notes": "Composition/Windows page: extra OS window instances with independent WidgetTree; not dock floating, not GameEditor"},
-        {"id": "MW-301", "status": "planned"}
+        {"id": "MW-201c", "status": "pass", "notes": "c2_present_compose_model.md：viewport 离屏 RT；surface 只选 swapchain image；PresentationGraphService 注入 context；cmdBuf 按 flight"},
+        {"id": "MW-201d", "status": "pass", "notes": "c2_view_model.md：Camera 链 graphics→UI→view compose；display compose+present 属窗口；ViewportState=WorldView[0]"},
+        {"id": "MW-202", "status": "pass", "notes": "per-surface recreate/minimize/close via graphics+present-complete fences; no vkDeviceWaitIdle; extra dtor no queue waitIdle"},
+        {"id": "MW-203", "status": "pass", "notes": "per-window acquirePassSlot; compose desc.passSlot; kMaxPassSlots 16; extras reserve slots; serial session"},
+        {"id": "MW-206", "status": "pass", "notes": "isPresentable; begin -1 no fence reset; delay recreate dirty; GUI tick/snapshot while unpresentable; GameRuntime no process sleep"},
+        {"id": "MW-204", "status": "pass", "notes": "GUIApp openWindow/closeWindow; extras are GUIWindowManager slots on shared device; renderAll presents; no second GUIWindowHost/loop"},
+        {"id": "MW-205", "status": "pass", "notes": "Windows page + ExtraOsWindowDemo; headless windows_extra_os.jsonl; smoke Open/click/resize/Close extra; golden BMP deferred (dual swapchain)"},
+        {"id": "R-1", "status": "pass", "notes": "CameraFrameInput/ViewComposeInput/DisplayComposeInput/PresentFrameInput; one prepareFrame+submitFrame; host fills present.surface; acquire still inside RenderRuntime"},
+        {"id": "R-2", "status": "pass", "notes": "CameraFrameInput owns view/projection/viewProjection/extent; tick consumes camera not ViewportState; DebugPrimitives uses recording flight; overlay uses owner viewProjection"},
+        {"id": "R-3", "status": "pass", "notes": "recordCameraViewCompose writes camera RT; PresentationGraphService::recordDisplayCompose writes swapchain; GUIRenderSurface is compose target only"},
+        {"id": "R-4", "status": "pass", "notes": "FPresentFrame acquire/submit on host+GUI extra; RenderRuntime records only; PresentationGraphService still main-world display compose"},
+        {"id": "R-5", "status": "deferred", "notes": "无 N Camera / 异步 world / 多 surface 同步压力测量；保持单 cmdBuf；不得文档闭环"},
+        {"id": "MW-301", "status": "pass", "notes": "GUIApp broker + WidgetTree external hover/drop/finishDrag; source session stays on source tree; leave keep-alive; defer close source/hover; runAfterDrag; gtest A→B; Windows page windows-drag / extra-drop; no tab semantics"}
       ]
     },
     {
       "id": "game_editor",
       "title": "C4-C8 - GameEditor editor/session/tab",
       "items": [
-        {"id": "ES-1", "status": "planned", "notes": "FEditorSurfaceContext + EditorWindowMetrics; Surface 不再读 App/IRender window API"},
-        {"id": "ES-2", "status": "planned", "notes": "单元素 EditorWindowRegistry + EditorWindowSession 持有 Surface；禁止 god object"},
+        {"id": "ES-1", "status": "pass", "notes": "FEditorSurfaceContext + EditorWindowMetrics; tick(App&) forwards; Surface.cpp has no primaryWindow/Swapchain; view/projection injected; layer/tree stay Surface-owned"},
+        {"id": "ES-2", "status": "pass", "notes": "单元素 EditorWindowRegistry + EditorWindowSession 持有 Surface；Module/InputNode 经 kDefaultEditorWindowId 路由；无第二扇窗、非 god object"},
         {"id": "ES-3", "status": "planned", "notes": "selection/action/undo 归属 EditorRootSession；owned tool 带 ownerEditorId"},
         {"id": "ES-4", "status": "planned", "notes": "spawn context 携带 windowId/scope/owner/document/placement；tab 不持有 Surface"},
         {"id": "ES-5", "status": "planned", "notes": "删除 tick(App&)；wantsTextInput 走 WidgetTree capability；完成后才允许第二扇 editor window"},
@@ -64,7 +76,7 @@
       "title": "条件延后",
       "items": [
         {"id": "MW-901", "status": "deferred", "notes": "并行/嵌套 recording 真实存在时才实例化 Render2D session"},
-        {"id": "MW-902", "status": "deferred", "notes": "独立 world preview 真实需要时才扩展 RenderRuntime"},
+        {"id": "MW-902", "status": "deferred", "notes": "N Camera / FRenderViewDesc / 独立 world preview；C2 完成前冻结，见 c2_view_model.md 与 plan.md 冻结节"},
         {"id": "MW-903", "status": "deferred", "notes": "跨平台构建暴露缺口时才增加平台特化 backend"}
       ]
     }
