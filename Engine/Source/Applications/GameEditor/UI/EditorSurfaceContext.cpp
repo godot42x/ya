@@ -1,6 +1,8 @@
 #include "GameEditor/UI/EditorSurfaceContext.h"
 
 #include "GameRuntime/App.h"
+#include "GUI/Host/GUIWindowChrome.h"
+#include "GUI/Host/GUIWindowPlacement.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/Core/Swapchain.h"
@@ -40,30 +42,43 @@ void applyEditorWindowMetrics(WidgetTree& tree, const EditorWindowMetrics& metri
     tree.setDpiScale(metrics.dpiScale > 0.0f ? metrics.dpiScale : 1.0f);
 }
 
-FEditorSurfaceContext makeEditorSurfaceContext(App& app)
+FEditorSurfaceContext makeEditorSurfaceContext(App& app,
+                                               IRenderSurfaceContext& surface,
+                                               const AppRenderFrameState& frame)
 {
     int      windowW = 0;
     int      windowH = 0;
     float    windowDpi = 1.0f;
     Extent2D framebuffer{};
+    FWindowChromeLayout chromeLayout;
+    FWindowScreenPlacement screenPlacement;
 
-    if (IRender* render = app.getRenderServices().getRender()) {
-        if (IRenderSurfaceContext* surface = render->getPrimarySurfaceContext()) {
-            if (INativeWindow* window = surface->getNativeWindow()) {
-                window->getWindowSize(windowW, windowH);
-                windowDpi = window->getDpiScale();
-            }
-            if (const ISwapchain* swapchain = surface->getSwapchain()) {
-                framebuffer = swapchain->getExtent();
-            }
-        }
+    if (INativeWindow* window = surface.getNativeWindow()) {
+        window->getWindowSize(windowW, windowH);
+        windowDpi       = window->getDpiScale();
+        chromeLayout    = queryWindowChromeLayout(*window, defaultWindowChromeMode(), true);
+        screenPlacement = queryWindowScreenPlacement(*window);
+    }
+    if (const ISwapchain* swapchain = surface.getSwapchain()) {
+        framebuffer = swapchain->getExtent();
     }
 
     FEditorSurfaceContext context;
-    context.metrics = makeEditorWindowMetrics(windowW, windowH, windowDpi, framebuffer);
-    const AppRenderFrameState& frame = app.getRenderServices().getRenderFrameState();
-    context.view                     = frame.view;
-    context.projection               = frame.projection;
+    context.app            = &app;
+    context.presentSurface = &surface;
+    context.metrics        = makeEditorWindowMetrics(windowW, windowH, windowDpi, framebuffer);
+    context.metrics.chromeInsetLeft   = chromeLayout.contentInsets.left;
+    context.metrics.chromeInsetTop    = chromeLayout.contentInsets.top;
+    context.metrics.chromeInsetRight  = chromeLayout.contentInsets.right;
+    context.metrics.chromeInsetBottom = chromeLayout.contentInsets.bottom;
+    context.metrics.chromeDragGutter  = chromeLayout.dragRegion.width;
+    context.metrics.screenX           = screenPlacement.x;
+    context.metrics.screenY           = screenPlacement.y;
+    context.metrics.monitorIndex      = screenPlacement.monitorIndex;
+    context.metrics.bMaximized        = screenPlacement.bMaximized;
+    context.metrics.bHasScreenOrigin  = screenPlacement.bHasOrigin;
+    context.view                      = frame.view;
+    context.projection                = frame.projection;
     return context;
 }
 

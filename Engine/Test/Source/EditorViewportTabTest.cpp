@@ -24,7 +24,7 @@ TEST(EditorViewportTabTest, AttachRegistersHostAndDetachClears)
 {
     FRecordingViewportHostSink sink;
     WidgetTree tree({.width = 400, .height = 300});
-    auto root = std::make_shared<UIPanel>("Root");
+    auto root = std::make_shared<UICanvasPanel>("Root");
     FCanvasSlotArgs rootSlot;
     rootSlot.anchorMin = {0.0f, 0.0f};
     rootSlot.anchorMax = {1.0f, 1.0f};

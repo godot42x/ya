@@ -1,12 +1,14 @@
 #include "GameEditor/UI/EditorSurface.h"
 #include "GameEditor/UI/EditorSurfaceContext.h"
+#include "GameEditor/UI/EditorRootSession.h"
 #include "GameEditor/UI/EditorActionCatalog.h"
 #include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/UI/EditorFilePicker.h"
 #include "GameEditor/UI/EditorFilePickerDialog.h"
 #include "GameEditor/UI/EditorSettingsDialog.h"
-#include "GameEditor/UI/EditorInspectorTab.h"
+#include "GameEditor/UI/EditorTabSpawnerRegistry.h"
 
+#include "Core/Config/ConfigManager.h"
 #include "Core/Event.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
@@ -19,6 +21,7 @@
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "GameRuntime/App.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
+#include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Host/OsClipboard.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Container.h"
@@ -29,7 +32,9 @@
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
+#include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/GuiFrameInspector.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
@@ -37,8 +42,12 @@
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/Controls/TreeView.h"
 #include "GUI/Binding/Reactive.h"
-#include "GUI/Widgets/WidgetAttachment.h"
+#include "GUI/Widgets/UIElement.h"
+#include "GUI/Widgets/UIBehavior.h"
+#include "GUI/Widgets/DragDropOperation.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "RHI/Core/RenderSurfaceContext.h"
+#include "RHI/NativeWindow.h"
 #include "Core/System/PathUtils.h"
 #include "RHI/Core/Texture.h"
 #include "RHI/Core/RenderTexture.h"
@@ -51,6 +60,7 @@
 #include <filesystem>
 #include <format>
 #include <glm/glm.hpp>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <vector>
 
@@ -69,7 +79,6 @@ namespace
 
 constexpr float kMenuHeight     = editor_density::kMenuHeight;
 constexpr float kToolbarHeight  = editor_density::kToolbarHeight;
-constexpr float kChromeTop      = kMenuHeight + kToolbarHeight;
 
 std::vector<UIMenu::FItem> makePresetMenuItems(EditorLayer& layer, const std::string& category)
 {
@@ -89,7 +98,11 @@ std::vector<UIMenu::FItem> makePresetMenuItems(EditorLayer& layer, const std::st
 
 } // namespace
 
-EditorSurface::EditorSurface() = default;
+EditorSurface::EditorSurface()
+    : _dockContext(std::make_shared<FDockContext>())
+    , _ownedDockContext(std::make_shared<FDockContext>())
+{
+}
 
 EditorSurface::~EditorSurface()
 {
@@ -113,49 +126,50 @@ void EditorSurface::shutdown()
     _theme.reset();
     _snapshot = {};
     _root.reset();
+    _titleBar.reset();
+    _pageTabBar.reset();
+    _pageTabKeys.clear();
     _menuBar.reset();
     _toolbarModeText.reset();
     _workspace.clear();
+    _ownedWorkspace.clear();
     _dockFloatingHost.reset();
+    _ownedDockFloatingHost.reset();
     _dockSpace.reset();
     _dockContext.reset();
+    _ownedDockContext.reset();
     _viewportHost = nullptr;
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
     _projectBrowser.reset();
-    _selection = std::make_shared<SelectionModel>();
-    _actions   = std::make_shared<ActionMap>();
-    _undo      = std::make_shared<UndoStack>();
+    _projectSelection.reset();
     _viewportTexture.reset();
     _viewportImageResource.reset();
     _viewportImageView.reset();
     _layer = nullptr;
     _tabSpawners = nullptr;
-}
-
-void EditorSurface::tick(App& app, float dt)
-{
-    const FEditorSurfaceContext context = makeEditorSurfaceContext(app);
-    if (!_layer) {
-        return;
-    }
-
-    const bool bProjectLoaded = _layer->isProjectLoaded();
-    if (!_tree || _bBuiltAsProjectBrowser == bProjectLoaded) {
-        rebuild(app, context.metrics);
-    }
-
-    tick(context, dt);
+    _rootSession = nullptr;
+    _presentSurface = nullptr;
 }
 
 void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
 {
-    if (!_layer || !_tree) {
+    if (!_layer || !context.app) {
+        return;
+    }
+
+    const bool bProjectBrowser = !_layer->isProjectLoaded();
+    _presentSurface = context.presentSurface;
+    if (!_tree || _bBuiltAsProjectBrowser != bProjectBrowser) {
+        rebuild(context);
+    }
+    if (!_tree) {
         return;
     }
 
     applyWindowMetrics(context.metrics);
     _tree->tick(dt);
+    publishTitleClientHits();
     syncShellDialogs();
     pushViewportDisplay();
     UIFrameBuildContext snapshotCtx;
@@ -165,25 +179,30 @@ void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
     syncViewportHostState(context);
 }
 
-void EditorSurface::rebuild(App& app, const EditorWindowMetrics& metrics)
+void EditorSurface::rebuild(const FEditorSurfaceContext& context)
 {
+    _presentSurface = context.presentSurface;
     unbindAppState();
     closeViewportContextMenu();
     _bViewportRightPressPending = false;
     _root.reset();
+    _titleBar.reset();
+    _pageTabBar.reset();
+    _pageTabKeys.clear();
     _menuBar.reset();
     _toolbarModeText.reset();
     _workspace.clear();
+    _ownedWorkspace.clear();
     _dockFloatingHost.reset();
+    _ownedDockFloatingHost.reset();
     _dockSpace.reset();
     _dockContext.reset();
+    _ownedDockContext.reset();
     _viewportHost = nullptr;
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
     _projectBrowser.reset();
-    _selection = std::make_shared<SelectionModel>();
-    _actions   = std::make_shared<ActionMap>();
-    _undo      = std::make_shared<UndoStack>();
+    _projectSelection.reset();
     if (_filePicker) {
         _filePicker->reset();
     }
@@ -194,10 +213,10 @@ void EditorSurface::rebuild(App& app, const EditorWindowMetrics& metrics)
     _settings.reset();
 
     _tree = std::make_unique<WidgetTree>(Extent2D{
-        .width  = std::max(metrics.logicalExtent.width, 1u),
-        .height = std::max(metrics.logicalExtent.height, 1u),
+        .width  = std::max(context.metrics.logicalExtent.width, 1u),
+        .height = std::max(context.metrics.logicalExtent.height, 1u),
     });
-    _tree->setDpiScale(metrics.dpiScale > 0.0f ? metrics.dpiScale : 1.0f);
+    _tree->setDpiScale(context.metrics.dpiScale > 0.0f ? context.metrics.dpiScale : 1.0f);
     _tree->setTextureSource(&gameUITextureSource());
     bindSdlClipboard(*_tree);
     _theme = buildEditorTheme(true);
@@ -205,11 +224,11 @@ void EditorSurface::rebuild(App& app, const EditorWindowMetrics& metrics)
 
     if (_layer->isProjectLoaded()) {
         _bBuiltAsProjectBrowser = false;
-        buildEditorChrome(app);
+        buildEditorChrome(context);
     }
     else {
         _bBuiltAsProjectBrowser = true;
-        buildProjectBrowser(app);
+        buildProjectBrowser(*context.app);
     }
 }
 
@@ -236,12 +255,13 @@ void EditorSurface::buildProjectBrowser(App& app)
                        });
 
     _projectBrowser = std::make_unique<FEditorProjectBrowser>();
+    _projectSelection = std::make_shared<SelectionModel>();
     _projectBrowser->roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
     auto list = ui::treeView("ProjectList")
                     .bindData(_projectBrowser->roots)
-                    .bindSelection(_selection->primaryRef())
+                    .bindSelection(_projectSelection->primaryRef())
                     .setOnSelectionChanged([this](const std::string& id) {
-                        _selection->select(id);
+                        _projectSelection->select(id);
                         int index = 0;
                         if (auto [ptr, ec] = std::from_chars(id.data(), id.data() + id.size(), index);
                             ec == std::errc{} && ptr == id.data() + id.size()) {
@@ -275,56 +295,179 @@ void EditorSurface::buildProjectBrowser(App& app)
                     .child(std::move(list), ui::boxSlot().preferredSize({720.0f, 320.0f}))
                     .child(std::move(openBtn), ui::boxSlot().preferredSize({160.0f, 26.0f}))
                     .child(std::move(errorText));
-    ui::build(*_tree, *_tree->getLayer(WidgetTree::ELayer::Content), std::move(page), ui::canvasSlot().fill());
+    (void)ui::attach(*_tree, *_tree->getLayer(WidgetTree::ELayer::Content), std::move(page).release(), ui::canvasSlot().fill());
     refreshProjectBrowserRows();
 }
 
-void EditorSurface::buildEditorChrome(App& app)
+void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
 {
-    (void)app;
-    registerEditorActions(*_actions,
-                          *_layer,
-                          *_undo,
-                          [this]() { openSceneSaveDialog(); },
-                          [this]() { openEditorSettingsDialog(); });
-    _root = ui::panel("EditorRoot").setStyleKey("panel.window").share();
+    App* app = context.app;
+    YA_CORE_ASSERT(_rootSession, "EditorSurface chrome requires the active EditorRootSession");
+    YA_CORE_ASSERT(app, "EditorSurface chrome requires App");
+    ActionMap&  actions = _rootSession->actions();
+    UndoStack&  undo    = _rootSession->undo();
+    if (!actions.find("scene.new")) {
+        registerEditorActions(actions,
+                              *_layer,
+                              undo,
+                              [this]() { openSceneSaveDialog(); },
+                              [this]() { openEditorSettingsDialog(); });
+    }
+    _root = ui::canvasPanel("EditorRoot").share();
     FCanvasSlotArgs fillArgs;
     fillArgs.anchorMin = {0.0f, 0.0f};
     fillArgs.anchorMax = {1.0f, 1.0f};
     const WidgetAttachment attached = _tree->attachToLayer(WidgetTree::ELayer::Content, _root, fillArgs);
     YA_CORE_ASSERT(attached.valid(), "EditorSurface: failed to attach editor root");
+    (void)ui::attach(*_tree,
+                     *_root,
+                     ui::border("EditorRootFill")
+                         .setStyleKey("panel.window")
+                         .setVisibility(EWidgetVisibility::HitTestInvisible)
+                         .release(),
+                     ui::canvasSlot().fill());
 
-    _menuBar = ui::buildAs<UIMenuBar>(*_tree,
-                                      *_root,
-                                      ui::menuBar("EditorMenu"),
-                                      ui::canvasSlot()
-                                          .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
-                                          .size({0.0f, kMenuHeight}));
+    const float titleH    = context.metrics.chromeInsetTop > 0.0f
+                                ? context.metrics.chromeInsetTop
+                                : kMenuHeight;
+    const float menuY     = titleH;
+    const float toolbarY  = menuY + kMenuHeight;
+    const float chromeTop = toolbarY + kToolbarHeight;
+
+    _titleBar = std::make_shared<UICanvasPanel>("EditorTitleBar");
+    _titleBar->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
+    (void)ui::attach(*_tree,
+                    *_root,
+                    _titleBar,
+                    ui::canvasSlot()
+                        .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
+                        .size({0.0f, titleH}));
+    (void)ui::attach(*_tree,
+                     *_titleBar,
+                     ui::border("EditorTitleBarFill")
+                         .setStyleKey("panel.titlebar")
+                         .setVisibility(EWidgetVisibility::HitTestInvisible)
+                         .release(),
+                     ui::canvasSlot().fill());
+
+    _pageTabBar = std::make_shared<UITabBar>("EditorPageTabs");
+    _pageTabBar->_bDraggableTabs = true;
+    _pageTabBar->_emptyPlaceholder = "Pages";
+    _pageTabBar->_onTabSelected = [this](int index) {
+        if (index < 0 || index >= static_cast<int>(_pageTabKeys.size()) || !_dockContext) {
+            return;
+        }
+        (void)_dockContext->activatePanel(_pageTabKeys[static_cast<size_t>(index)]);
+    };
+    _pageTabBar->_onTabDragBegin = [this](int index, const std::string&) {
+        beginPageTabDrag(index);
+    };
+    _pageTabBar->_onTabReordered = [this](int from, int to) {
+        if (!_dockContext || from < 0 || to < 0 ||
+            from >= static_cast<int>(_pageTabKeys.size()) ||
+            to >= static_cast<int>(_pageTabKeys.size())) {
+            return;
+        }
+        const FDockContext::FPanel* panel =
+            _dockContext->findPanelByStableKey(_pageTabKeys[static_cast<size_t>(from)]);
+        const FDockContext::FPanel* dest =
+            _dockContext->findPanelByStableKey(_pageTabKeys[static_cast<size_t>(to)]);
+        if (!panel || !dest) {
+            return;
+        }
+        const FDockNode* leaf = _dockContext->dockModel().findLeafForPanel(panel->id);
+        if (!leaf || _dockContext->dockModel().findLeafForPanel(dest->id) != leaf) {
+            return;
+        }
+        int leafFrom = -1;
+        int leafTo   = -1;
+        for (int i = 0; i < static_cast<int>(leaf->panelIds.size()); ++i) {
+            if (leaf->panelIds[static_cast<size_t>(i)] == panel->id) {
+                leafFrom = i;
+            }
+            if (leaf->panelIds[static_cast<size_t>(i)] == dest->id) {
+                leafTo = i;
+            }
+        }
+        if (leafFrom < 0 || leafTo < 0) {
+            return;
+        }
+        const size_t insert = static_cast<size_t>(leafTo > leafFrom ? leafTo + 1 : leafTo);
+        if (!_dockContext->dockModel().movePanel(panel->id, leaf->id, insert, false)) {
+            return;
+        }
+        std::string key = _pageTabKeys[static_cast<size_t>(from)];
+        _pageTabKeys.erase(_pageTabKeys.begin() + from);
+        _pageTabKeys.insert(_pageTabKeys.begin() + to, std::move(key));
+        _dockContext->notifyDockLayoutListeners();
+    };
+    _pageTabBar->_canBeginTabDrag = [this](int index) {
+        if (!_pageTabBar || index < 0 || index >= static_cast<int>(_pageTabKeys.size())) {
+            return false;
+        }
+        if (_tabSpawners) {
+            if (const FEditorTabSpawner* spawner = _tabSpawners->find(_pageTabKeys[static_cast<size_t>(index)])) {
+                return canTearOffEditorTab(spawner->detachPolicy);
+            }
+        }
+        UITabButton* button = _pageTabBar->tabAt(index);
+        return button && button->_bDraggable;
+    };
+    {
+        auto drop = std::make_shared<UIDropTargetBehavior>();
+        drop->canAccept = [this](UIElement&, const UIDragDropOperation& operation, const glm::vec2& point) {
+            return acceptPageTabDrop(operation, point);
+        };
+        drop->canPreview = drop->canAccept;
+        drop->handleDrop = [this](UIElement&, const UIDragDropOperation& operation, const glm::vec2&) {
+            dropOntoPageTabs(operation);
+        };
+        _pageTabBar->addBehavior(drop);
+    }
+    (void)ui::attach(*_tree,
+                    *_root,
+                    _pageTabBar,
+                    ui::canvasSlot()
+                        .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
+                        .size({0.0f, titleH})
+                        .insets(FMargin{context.metrics.chromeInsetLeft,
+                                        0.0f,
+                                        context.metrics.chromeDragGutter,
+                                        0.0f}));
+
+    _menuBar = ui::menuBar("EditorMenu").share();
+    (void)ui::attach(*_tree,
+                    *_root,
+                    _menuBar,
+                    ui::canvasSlot()
+                        .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
+                        .offset({0.0f, menuY})
+                        .size({0.0f, kMenuHeight}));
 
     _menuBar->addItem("File", [this]() {
         return UIMenu::create({
-            UIMenu::FItem::fromAction(*_actions, "scene.new"),
-            UIMenu::FItem::fromAction(*_actions, "scene.save"),
-            UIMenu::FItem::fromAction(*_actions, "scene.saveAs"),
+            UIMenu::FItem::fromAction(_rootSession->actions(), "scene.new"),
+            UIMenu::FItem::fromAction(_rootSession->actions(), "scene.save"),
+            UIMenu::FItem::fromAction(_rootSession->actions(), "scene.saveAs"),
             UIMenu::FItem::separator(),
-            UIMenu::FItem::fromAction(*_actions, "app.exit"),
+            UIMenu::FItem::fromAction(_rootSession->actions(), "app.exit"),
         });
     });
     _menuBar->addItem("Edit", [this]() {
         return UIMenu::create({
-            UIMenu::FItem::fromAction(*_actions, "edit.undo"),
-            UIMenu::FItem::fromAction(*_actions, "edit.redo"),
+            UIMenu::FItem::fromAction(_rootSession->actions(), "edit.undo"),
+            UIMenu::FItem::fromAction(_rootSession->actions(), "edit.redo"),
             UIMenu::FItem::separator(),
-            UIMenu::FItem::fromAction(*_actions, "selection.duplicate"),
-            UIMenu::FItem::fromAction(*_actions, "selection.delete"),
+            UIMenu::FItem::fromAction(_rootSession->actions(), "selection.duplicate"),
+            UIMenu::FItem::fromAction(_rootSession->actions(), "selection.delete"),
         });
     });
     _menuBar->addItem("View", [this]() {
         std::vector<UIMenu::FItem> items = {
-            UIMenu::FItem::fromAction(*_actions, "viewport.mode3d"),
-            UIMenu::FItem::fromAction(*_actions, "viewport.mode2d"),
+            UIMenu::FItem::fromAction(_rootSession->actions(), "viewport.mode3d"),
+            UIMenu::FItem::fromAction(_rootSession->actions(), "viewport.mode2d"),
             UIMenu::FItem::separator(),
-            UIMenu::FItem::fromAction(*_actions, "editor.settings"),
+            UIMenu::FItem::fromAction(_rootSession->actions(), "editor.settings"),
         };
 #if !defined(YA_PROFILING_DISABLED)
         auto channelItem = [](const char* label, EGuiFrameInspectorChannel channel) {
@@ -344,85 +487,136 @@ void EditorSurface::buildEditorChrome(App& app)
     });
 
     auto play = iconLabeledButton("Play", "Play", editor_icons::kPlay).setOnClick([this]() {
-        (void)_actions->execute("runtime.play");
+        (void)_rootSession->actions().execute("runtime.play");
     });
     auto simulate = iconLabeledButton("Simulate", "Simulate", editor_icons::kSimulate).setOnClick([this]() {
-        (void)_actions->execute("runtime.simulate");
+        (void)_rootSession->actions().execute("runtime.simulate");
     });
     auto stop = iconLabeledButton("Stop", "Stop", editor_icons::kStop).setOnClick([this]() {
-        (void)_actions->execute("runtime.stop");
+        (void)_rootSession->actions().execute("runtime.stop");
     });
     auto mode3d = labeledButton("Mode3D", "3D").setOnClick([this]() {
-        (void)_actions->execute("viewport.mode3d");
+        (void)_rootSession->actions().execute("viewport.mode3d");
     });
     auto mode2d = labeledButton("Mode2D", "2D").setOnClick([this]() {
-        (void)_actions->execute("viewport.mode2d");
+        (void)_rootSession->actions().execute("viewport.mode2d");
     });
-    auto modeText = ui::text("ToolbarMode").setFontSize(13).setText("EDIT");
+    auto modeText = ui::text("ToolbarMode").setStyleKey(editorStyle(StyleKey::Text)).setText("EDIT");
     _toolbarModeText = modeText.share();
 
-    ui::build(*_tree,
-              *_root,
-              ui::row("EditorToolbar")
-                  .setSpacing(6.0f)
-                  .setPadding({6.0f, 2.0f})
-                  .child(std::move(play), ui::boxSlot().preferredSize({64.0f, 22.0f}))
-                  .child(std::move(simulate), ui::boxSlot().preferredSize({80.0f, 22.0f}))
-                  .child(std::move(stop), ui::boxSlot().preferredSize({64.0f, 22.0f}))
-                  .child(std::move(mode3d), ui::boxSlot().preferredSize({40.0f, 22.0f}))
-                  .child(std::move(mode2d), ui::boxSlot().preferredSize({40.0f, 22.0f}))
-                  .child(std::move(modeText), ui::boxSlot().preferredSize({72.0f, 18.0f})),
-              ui::canvasSlot()
-                  .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
-                  .offset({0.0f, kMenuHeight})
-                  .size({0.0f, kToolbarHeight}));
+    auto toolbar = ui::row("EditorToolbar")
+                       .setSpacing(6.0f)
+                       .setPadding({6.0f, 2.0f})
+                       .child(std::move(play), ui::boxSlot().preferredSize({76.0f, 26.0f}))
+                       .child(std::move(simulate), ui::boxSlot().preferredSize({96.0f, 26.0f}))
+                       .child(std::move(stop), ui::boxSlot().preferredSize({76.0f, 26.0f}))
+                       .child(std::move(mode3d), ui::boxSlot().preferredSize({44.0f, 26.0f}))
+                       .child(std::move(mode2d), ui::boxSlot().preferredSize({44.0f, 26.0f}))
+                       .child(std::move(modeText), ui::boxSlot().preferredSize({56.0f, 26.0f}));
+    (void)ui::attach(*_tree,
+                    *_root,
+                    toolbar.release(),
+                    ui::canvasSlot()
+                        .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
+                        .offset({0.0f, toolbarY})
+                        .size({0.0f, kToolbarHeight}));
 
     _dockContext = std::make_shared<FDockContext>();
     _dockContext->bAllowFloating = true;
     _dockContext->bAllowTearOff  = true;
-    _dockSpace = ui::buildAs<UIDockSpace>(*_tree,
-                                          *_root,
-                                          ui::dockSpace("EditorDock").setContext(_dockContext),
-                                          ui::canvasSlot()
-                                              .anchor({0.0f, 0.0f}, {1.0f, 1.0f})
-                                              .insets(FMargin{editor_density::kChromeInset,
-                                                              kChromeTop,
-                                                              editor_density::kChromeInset,
-                                                              editor_density::kChromeInset}));
+    _dockContext->sourceScope    = EDockSourceScope::WindowRoot;
+    _dockContext->hostWindowId   = _windowId;
+    _ownedDockContext = std::make_shared<FDockContext>();
+    _ownedDockContext->bAllowFloating = true;
+    _ownedDockContext->bAllowTearOff  = true;
+    _ownedDockContext->sourceScope    = EDockSourceScope::EditorOwned;
+    _ownedDockContext->hostWindowId   = _windowId;
+    _dockSpace = ui::dockSpace("EditorDock").setContext(_dockContext).share();
+    (void)ui::attach(*_tree,
+                    *_root,
+                    _dockSpace,
+                    ui::canvasSlot()
+                        .fill()
+                        .insets(FMargin{editor_density::kChromeInset,
+                                        chromeTop,
+                                        editor_density::kChromeInset,
+                                        editor_density::kChromeInset}));
 
-    _dockFloatingHost = std::make_shared<UIDockFloatingHost>("EditorDockFloatingHost");
-    _dockFloatingHost->bindContext(_dockContext);
     FCanvasSlotArgs floatingFill;
     floatingFill.anchorMin = {0.0f, 0.0f};
     floatingFill.anchorMax = {1.0f, 1.0f};
+    _dockFloatingHost = std::make_shared<UIDockFloatingHost>("EditorDockFloatingHost");
+    _dockFloatingHost->bindContext(_dockContext);
     (void)_tree->attachToLayer(WidgetTree::ELayer::Popup, _dockFloatingHost, floatingFill);
+    _ownedDockFloatingHost = std::make_shared<UIDockFloatingHost>("EditorOwnedDockFloatingHost");
+    _ownedDockFloatingHost->bindContext(_ownedDockContext);
+    (void)_tree->attachToLayer(WidgetTree::ELayer::Popup, _ownedDockFloatingHost, floatingFill);
 
+    auto persistAll = [this]() { persistDockLayouts(); };
+    auto rootFor = [this](EditorRootId id) -> EditorRootSession* { return _roots.find(id); };
+    _ownedWorkspace.bind(EditorDockWorkspace::FHost{
+        .tree            = _tree.get(),
+        .layer           = _layer,
+        .selection       = &_rootSession->selection(),
+        .actions         = &_rootSession->actions(),
+        .undo            = &_rootSession->undo(),
+        .viewportHost    = this,
+        .spawners        = _tabSpawners,
+        .documents       = _documents,
+        .dock            = _ownedDockContext.get(),
+        .activeRootId    = _rootSession->id(),
+        .targetPlacement = EEditorTabPlacement::EditorOwnedNested,
+        .windowId        = _windowId,
+        .documentKey     = _layer->getCurrentScenePath(),
+        .app             = context.app,
+        .presentSurface  = context.presentSurface,
+        .persistAll      = persistAll,
+        .rootFor         = rootFor,
+    });
     _workspace.bind(EditorDockWorkspace::FHost{
         .tree            = _tree.get(),
         .layer           = _layer,
-        .selection       = _selection.get(),
-        .actions         = _actions.get(),
-        .undo            = _undo.get(),
+        .selection       = &_rootSession->selection(),
+        .actions         = &_rootSession->actions(),
+        .undo            = &_rootSession->undo(),
         .viewportHost    = this,
         .spawners        = _tabSpawners,
+        .documents       = _documents,
         .dock            = _dockContext.get(),
         .menuBar         = _menuBar.get(),
+        .activeRootId    = _rootSession->id(),
+        .targetPlacement = EEditorTabPlacement::WindowRootDock,
+        .windowId        = _windowId,
+        .documentKey     = _layer->getCurrentScenePath(),
+        .nestedWorkspace = &_ownedWorkspace,
+        .nestedDock      = _ownedDockContext,
+        .app             = context.app,
+        .presentSurface  = context.presentSurface,
+        .persistAll      = persistAll,
+        .rootFor         = rootFor,
     });
     _workspace.buildWindowMenu();
     _workspace.applyWorkspaceLayout();
     _dockContext->fireDockUpdated();
-    _dockContext->appendOnDockUpdated([this]() { _workspace.persistLayout(); });
-    _dockContext->appendOnFloatingUpdated([this]() { _workspace.persistLayout(); });
+    _ownedDockContext->fireDockUpdated();
+    _dockContext->appendOnDockUpdated([this]() { syncPageTabs(); });
+    _dockContext->appendOnDockUpdated(persistAll);
+    _dockContext->appendOnFloatingUpdated(persistAll);
+    _ownedDockContext->appendOnDockUpdated(persistAll);
+    _ownedDockContext->appendOnFloatingUpdated(persistAll);
+    installDockNoTargetTearOff();
+    installEmptyTabBarZoom();
+    syncPageTabs();
 
-    if (const std::optional<std::string>& editorTab = app.getDesc().editorTab; editorTab && !editorTab->empty()) {
+    if (const std::optional<std::string>& editorTab = app->getDesc().editorTab; editorTab && !editorTab->empty()) {
         _workspace.invokeTab(*editorTab);
     }
 
     _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(_layer->gizmo());
     _viewportOverlayHost.setOverlay(_viewportGizmoOverlay);
-    _layer->gizmo().setUndoStack(_undo.get());
-    bindAppState(app);
-    updateToolbarMode(app);
+    _layer->gizmo().setUndoStack(&_rootSession->undo());
+    bindAppState(*app);
+    updateToolbarMode(*app);
 }
 
 void EditorSurface::applyWindowMetrics(const EditorWindowMetrics& metrics)
@@ -434,6 +628,98 @@ void EditorSurface::applyWindowMetrics(const EditorWindowMetrics& metrics)
     if (auto* fonts = FontManager::get()) {
         fonts->setActiveDpiScale(_tree->getDpiScale());
     }
+}
+
+void EditorSurface::persistDockLayouts()
+{
+    if (_persistLayout) {
+        _persistLayout();
+        return;
+    }
+    if (!_dockContext || !_ownedDockContext) {
+        return;
+    }
+    nlohmann::json window;
+    window["role"]        = "main";
+    window["windowId"]    = _windowId;
+    window["bounds"]      = nlohmann::json::array({0, 0, 0, 0});
+    window["hasOrigin"]   = false;
+    window["monitor"]     = -1;
+    window["maximized"]   = false;
+    window["windowRoot"]  = _dockContext->exportLayoutJson();
+    window["ownedNested"] = _ownedDockContext->exportLayoutJson();
+    nlohmann::json document;
+    document["version"] = 4;
+    document["windows"] = nlohmann::json::array({std::move(window)});
+    ConfigManager::Editor("editor").set("dockLayout", document).flush();
+}
+
+void EditorSurface::setOnDockNoTargetTearOff(
+    std::function<bool(FDockContext&, uint64_t, const glm::vec2&, const glm::vec2&)> fn)
+{
+    _onDockNoTargetTearOff = std::move(fn);
+    installDockNoTargetTearOff();
+}
+
+void EditorSurface::installDockNoTargetTearOff()
+{
+    auto bind = [this](const std::shared_ptr<FDockContext>& dock) {
+        if (!dock) {
+            return;
+        }
+        if (!_onDockNoTargetTearOff) {
+            dock->realizeNoTargetTearOff = nullptr;
+            return;
+        }
+        FDockContext* raw = dock.get();
+        dock->realizeNoTargetTearOff =
+            [this, raw](DockPanelId id, const glm::vec2& pos, const glm::vec2& size) {
+                return _onDockNoTargetTearOff(*raw, id, pos, size);
+            };
+    };
+    bind(_dockContext);
+    bind(_ownedDockContext);
+}
+
+void EditorSurface::installEmptyTabBarZoom()
+{
+    auto toggle = [this]() {
+        if (!_presentSurface) {
+            return;
+        }
+        INativeWindow* native = _presentSurface->getNativeWindow();
+        if (!native) {
+            return;
+        }
+        (void)toggleWindowChromeTitleZoom(*native);
+    };
+    if (_pageTabBar) {
+        _pageTabBar->_onStripDoubleClick = toggle;
+    }
+}
+
+void EditorSurface::publishTitleClientHits()
+{
+    if (!_presentSurface) {
+        return;
+    }
+    INativeWindow* native = _presentSurface->getNativeWindow();
+    if (!native) {
+        return;
+    }
+    std::vector<FWindowChromeRect> hits;
+    if (_pageTabBar) {
+        const Rect2D& rect = _pageTabBar->getLayoutRect();
+        if (rect.extent.x > 0.0f && rect.extent.y > 0.0f) {
+            hits.push_back(FWindowChromeRect{
+                rect.pos.x,
+                rect.pos.y,
+                rect.extent.x,
+                rect.extent.y,
+            });
+        }
+    }
+    updateWindowChromeTitleClientHits(*native, hits);
 }
 
 void EditorSurface::closeViewportContextMenu()
@@ -456,7 +742,7 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
 
     EditorLayer& layer = *_layer;
     std::vector<UIMenu::FItem> items;
-    items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.createEmpty"));
+    items.push_back(UIMenu::FItem::fromAction(_rootSession->actions(), "selection.createEmpty"));
     items.push_back({
         .label          = "Create 3D Object",
         .submenuFactory = [&layer]()
@@ -477,8 +763,8 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
     }
 
     items.push_back(UIMenu::FItem::separator());
-    items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.duplicate"));
-    items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.delete"));
+    items.push_back(UIMenu::FItem::fromAction(_rootSession->actions(), "selection.duplicate"));
+    items.push_back(UIMenu::FItem::fromAction(_rootSession->actions(), "selection.delete"));
 
     auto menu = UIMenu::create(std::move(items));
     _viewportContextMenu = menu;
@@ -634,6 +920,48 @@ void EditorSurface::showContentBrowser()
     (void)_workspace.invokeTab("content-browser");
 }
 
+bool EditorSurface::invokeTab(std::string_view tabId)
+{
+    return _workspace.invokeTab(tabId);
+}
+
+bool EditorSurface::openDocumentEditor(EEditorDocumentKind kind, std::string key)
+{
+    if (key.empty() || !_documents) {
+        return false;
+    }
+    EditorRootId rootId = kInvalidEditorRootId;
+    switch (kind) {
+    case EEditorDocumentKind::UI: {
+        rootId = kUIEditorRootId;
+        break;
+    }
+    case EEditorDocumentKind::Material: {
+        rootId = kMaterialEditorRootId;
+        break;
+    }
+    case EEditorDocumentKind::Script: {
+        rootId = kScriptEditorRootId;
+        break;
+    }
+    default: {
+        return false;
+    }
+    }
+    EditorRootSession* root = _roots.find(rootId);
+    if (!root) {
+        return false;
+    }
+    EditorDocumentSession* session = _documents->open({kind, key}, EEditorDocumentClosePolicy::RejectIfDirty);
+    if (!session) {
+        return false;
+    }
+    root->bindDocument(session);
+    (void)_documents->claimPreview(session->id());
+    const char* tabId = editorRootTabId(rootId);
+    return tabId && invokeTab(tabId);
+}
+
 void EditorSurface::openFilePickerDialog(FEditorFilePickerRequest request)
 {
     if (!_tree || !_root) {
@@ -704,6 +1032,17 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
 {
     if (!_tree) {
         return EWidgetRouteResult::NotHandled;
+    }
+
+    if (event.getEventType() == EEvent::MouseButtonPressed && _presentSurface) {
+        const auto& press = static_cast<const MouseButtonPressedEvent&>(event);
+        if (press.GetMouseButton() == EMouse::Left && press.clickCount() >= 2) {
+            if (INativeWindow* native = _presentSurface->getNativeWindow()) {
+                if (handleWindowChromeTitleDoubleClick(*native, windowPoint.x, windowPoint.y)) {
+                    return EWidgetRouteResult::HandledExclusive;
+                }
+            }
+        }
     }
 
     bool bPopupOpen = false;
@@ -783,8 +1122,8 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
     if (routed != EWidgetRouteResult::NotHandled) {
         return routed;
     }
-    if (event.getEventType() == EEvent::KeyPressed &&
-        _actions->dispatchKey(static_cast<const KeyPressedEvent&>(event), wantsTextInput())) {
+    if (event.getEventType() == EEvent::KeyPressed && _rootSession &&
+        _rootSession->actions().dispatchKey(static_cast<const KeyPressedEvent&>(event), wantsTextInput())) {
         return EWidgetRouteResult::HandledExclusive;
     }
     return routed;
@@ -812,21 +1151,215 @@ bool EditorSurface::isViewportFocused() const
 
 bool EditorSurface::wantsTextInput() const
 {
-    if (!_tree) {
-        return false;
+    return _tree && _tree->wantsTextInput();
+}
+
+void EditorSurface::syncPageTabs()
+{
+    if (!_pageTabBar || !_dockContext) {
+        return;
     }
-    UIElement* focused = _tree->getFocused();
-    if (dynamic_cast<UITextField*>(focused) != nullptr) {
-        return true;
-    }
-    if (_dockContext) {
-        if (const FDockContext::FPanel* inspector = _dockContext->findPanelByStableKey("inspector")) {
-            if (auto* tab = dynamic_cast<EditorInspectorTab*>(inspector->widget.get())) {
-                return tab->wantsTextInput();
+
+    std::vector<std::string> keys;
+    std::vector<std::string> titles;
+    std::vector<bool> closable;
+    int selected = -1;
+    DockNodeId pageLeaf = _dockContext->dockModel().findFirstLeafWithRole(EDockLeafRole::Page);
+    if (pageLeaf == kInvalidDockNodeId) {
+        for (const DockNodeId id : _dockContext->dockModel().leafIds()) {
+            if (const FDockNode* leaf = _dockContext->dockModel().findNode(id);
+                leaf && leaf->bHideTabBar) {
+                pageLeaf = id;
+                break;
             }
         }
     }
-    return false;
+    const FDockNode* leaf = pageLeaf != kInvalidDockNodeId ? _dockContext->dockModel().findNode(pageLeaf)
+                                                           : nullptr;
+    if (leaf && leaf->kind == EDockNodeKind::Stack) {
+        if (!leaf->bHideTabBar) {
+            (void)_dockContext->dockModel().setHideTabBar(leaf->id, true);
+        }
+        if (_dockSpace) {
+            _dockSpace->syncTabBarVisibility();
+        }
+        for (const DockPanelId panelId : leaf->panelIds) {
+            const FDockPanelRecord* record = _dockContext->dockModel().findPanel(panelId);
+            if (!record) {
+                continue;
+            }
+            if (_tabSpawners) {
+                const FEditorTabSpawner* spawner = _tabSpawners->find(record->stableKey);
+                if (spawner && spawner->scope != EEditorTabScope::WindowRootEditor) {
+                    continue;
+                }
+            }
+            if (panelId == leaf->selectedPanel) {
+                selected = static_cast<int>(keys.size());
+            }
+            keys.push_back(record->stableKey);
+            titles.push_back(record->title);
+            closable.push_back(record->closable);
+        }
+    }
+
+    std::vector<bool> draggable(keys.size(), true);
+    if (_tabSpawners) {
+        for (size_t i = 0; i < keys.size(); ++i) {
+            const FEditorTabSpawner* spawner = _tabSpawners->find(keys[i]);
+            if (spawner) {
+                draggable[i] = canTearOffEditorTab(spawner->detachPolicy);
+            }
+        }
+    }
+
+    if (keys != _pageTabKeys || _pageTabBar->tabCount() != static_cast<int>(keys.size())) {
+        _pageTabBar->clearTabs();
+        _pageTabKeys = keys;
+        for (size_t i = 0; i < keys.size(); ++i) {
+            UITabButton* button = _pageTabBar->addTab(titles[i]);
+            button->_bClosable  = closable[i];
+            button->_bDraggable = draggable[i];
+            if (closable[i]) {
+                const std::string key = keys[i];
+                button->_onClose = [this, key]() {
+                    if (_dockContext) {
+                        (void)_dockContext->closePanel(key);
+                    }
+                };
+            }
+        }
+    }
+    for (int i = 0; i < _pageTabBar->tabCount() && i < static_cast<int>(draggable.size()); ++i) {
+        if (UITabButton* button = _pageTabBar->tabAt(i)) {
+            button->_bDraggable = draggable[static_cast<size_t>(i)];
+        }
+    }
+    if (selected >= 0) {
+        _pageTabBar->syncSelectedTab(selected);
+    }
+}
+
+void EditorSurface::beginPageTabDrag(int index)
+{
+    if (!_tree || !_dockContext || index < 0 || index >= static_cast<int>(_pageTabKeys.size())) {
+        return;
+    }
+    UITabButton* button = _pageTabBar ? _pageTabBar->tabAt(index) : nullptr;
+    if (!button || !_pageTabBar->allowsArmedTabDrag(*button)) {
+        return;
+    }
+    if (_tabSpawners) {
+        if (const FEditorTabSpawner* spawner = _tabSpawners->find(_pageTabKeys[static_cast<size_t>(index)]);
+            spawner && !canTearOffEditorTab(spawner->detachPolicy)) {
+            return;
+        }
+    }
+    const FDockContext::FPanel* panel = _dockContext->findPanelByStableKey(_pageTabKeys[static_cast<size_t>(index)]);
+    const FDockPanelRecord* record = panel ? _dockContext->dockModel().findPanel(panel->id) : nullptr;
+    if (!panel || !record) {
+        return;
+    }
+    const DockPanelId panelId = panel->id;
+    std::string label = record->title;
+    auto operation = FDockPanelDragDropOp::make(panelId, std::move(label), _dockContext.get());
+    if (canCloseEditorWindow(_windowId) && _dockContext->panelStableKeys().size() == 1) {
+        operation->bHideSourceWindowOnLeave = true;
+    }
+    DragSessionObserver observer;
+    observer.onFinished = [this, panelId](EDragFinishResult result, const glm::vec2& logicalPoint, std::string_view) {
+        if (result == EDragFinishResult::Dropped || result == EDragFinishResult::Cancelled) {
+            return;
+        }
+        if (logicalPoint.x < -10000.0f || logicalPoint.y < -10000.0f) {
+            return;
+        }
+        if (result == EDragFinishResult::NoTarget && _dockContext && _dockContext->bAllowTearOff) {
+            const glm::vec2 size{320.0f, 240.0f};
+            bool bHandled = false;
+            if (_dockContext->realizeNoTargetTearOff) {
+                bHandled = _dockContext->realizeNoTargetTearOff(panelId, logicalPoint, size);
+            }
+            if (!bHandled) {
+                _dockContext->tearOffPanel(panelId, logicalPoint, size);
+            }
+            _dockContext->fireFloatingUpdated();
+            _dockContext->notifyDockLayoutListeners();
+        }
+    };
+    _tree->beginDrag(_pageTabBar.get(), std::move(operation), std::move(observer));
+}
+
+bool EditorSurface::acceptPageTabDrop(const UIDragDropOperation& operation, const glm::vec2&)
+{
+    const auto* dockOp = operation.as<FDockPanelDragDropOp>();
+    if (!dockOp || !_dockContext || dockOp->panelId == kInvalidDockPanelId) {
+        return false;
+    }
+    const FDockContext* source = dockOp->sourceContext ? dockOp->sourceContext : _dockContext.get();
+    const FDockPanelRecord* record = source->dockModel().findPanel(dockOp->panelId);
+    const FDockContext::FPanel* panel = source->findPanel(dockOp->panelId);
+    if (!record || !panel) {
+        return false;
+    }
+    if (_tabSpawners) {
+        const FEditorTabSpawner* spawner = _tabSpawners->find(record->stableKey);
+        if (!spawner || spawner->scope != EEditorTabScope::WindowRootEditor) {
+            return false;
+        }
+        FEditorTabDragPayload payload;
+        payload.tabId = spawner->tabId;
+        payload.scope = spawner->scope;
+        payload.ownerEditorId = panel->ownerEditorId != 0
+                                    ? static_cast<EditorRootId>(panel->ownerEditorId)
+                                    : spawner->ownerEditorId;
+        payload.detachPolicy = spawner->detachPolicy;
+        if (!canAcceptEditorDrop(payload, EEditorTabPlacement::WindowPageTab, kInvalidEditorRootId)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void EditorSurface::dropOntoPageTabs(const UIDragDropOperation& operation)
+{
+    const auto* dockOp = operation.as<FDockPanelDragDropOp>();
+    if (!dockOp || !_dockContext) {
+        return;
+    }
+    DockPanelId panelId = dockOp->panelId;
+    const bool bImport = dockOp->sourceContext && dockOp->sourceContext != _dockContext.get();
+    if (bImport) {
+        std::optional<FDockContext::FDockExtractedPanel> extracted =
+            dockOp->sourceContext->extractPanel(panelId);
+        if (!extracted) {
+            return;
+        }
+        panelId = _dockContext->adoptPanel(std::move(*extracted));
+        if (panelId == kInvalidDockPanelId) {
+            return;
+        }
+    }
+    DockNodeId pageLeaf = _dockContext->dockModel().findFirstLeafWithRole(EDockLeafRole::Page);
+    if (pageLeaf == kInvalidDockNodeId) {
+        return;
+    }
+    if (_dockContext->dockModel().findLeafForPanel(panelId)) {
+        (void)_dockContext->dockModel().movePanel(panelId, pageLeaf);
+    }
+    else {
+        (void)_dockContext->dockModel().addPanel(panelId, pageLeaf);
+    }
+    (void)_dockContext->dockModel().setHideTabBar(pageLeaf, true);
+    if (const FDockPanelRecord* record = _dockContext->dockModel().findPanel(panelId)) {
+        (void)_dockContext->activatePanel(record->stableKey);
+    }
+    else {
+        (void)_dockContext->dockModel().selectPanel(panelId);
+        _dockContext->fireDockUpdated();
+        return;
+    }
+    _dockContext->fireDockUpdated();
 }
 
 } // namespace ya

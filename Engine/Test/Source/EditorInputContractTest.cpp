@@ -5,6 +5,7 @@
 
 #include "Core/Event.h"
 #include "Core/KeyCode.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
@@ -84,7 +85,7 @@ std::shared_ptr<Font> registerCjkFont(float fontSize = 16.0f, float latinAdvance
 TEST(EditorInputContractTest, DpiScaleFoldsIntoSnapshotLikeUiScale)
 {
     WidgetTree tree({.width = 320, .height = 200});
-    auto       panel = std::make_shared<UIPanel>("DpiPanel");
+    auto       panel = std::make_shared<UIBorder>("DpiPanel");
     FCanvasSlotArgs slot;
     slot.offset    = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
@@ -119,6 +120,7 @@ TEST(EditorInputContractTest, TextFieldImeCommitEditsByCodePoint)
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, slot);
     tree.layout();
     tree.setFocus(field.get());
+    EXPECT_TRUE(tree.wantsTextInput());
 
     const auto at = pointAt(0.0f, 0.0f);
     EXPECT_EQ(tree.dispatchEvent(KeyTypedEvent("你好"), at), EWidgetRouteResult::HandledExclusive);

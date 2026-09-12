@@ -4,6 +4,7 @@
 #include "Core/System/PathUtils.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
@@ -62,9 +63,9 @@ void EditorFilePickerDialog::open(WidgetTree& tree, FEditorFilePickerRequest req
         }
     }
 
-    auto pathText = ui::text("FilePickerPath").setFontSize(12).setStyleKey("text.muted");
+    auto pathText = ui::text("FilePickerPath").setStyleKey("text.muted");
     _pathText = pathText.share();
-    auto previewText = ui::text("FilePickerPreview").setFontSize(12);
+    auto previewText = ui::text("FilePickerPreview").setStyleKey("text.muted");
     _previewText = previewText.share();
     _mountList = ui::column("FilePickerMounts").setSpacing(2.0f).share();
     _entryList = ui::column("FilePickerEntries").setSpacing(2.0f).share();
@@ -78,11 +79,11 @@ void EditorFilePickerDialog::open(WidgetTree& tree, FEditorFilePickerRequest req
                           .setStretchLastChild(true)
                           .child(ui::scroll("FilePickerMountScroll")
                                      .setAxis(EScrollAxis::Vertical)
-                                     .child(_mountList, ui::overlaySlot().fill()),
+                                     .child(_mountList, ui::contentSlot().fill()),
                                  ui::boxSlot().preferredSize({180.0f, 0.0f}))
                           .child(ui::scroll("FilePickerEntryScroll")
                                      .setAxis(EScrollAxis::Vertical)
-                                     .child(_entryList, ui::overlaySlot().fill()),
+                                     .child(_entryList, ui::contentSlot().fill()),
                                  ui::boxSlot().fill());
     auto actions = ui::row("FilePickerActions")
                        .setSpacing(8.0f)
@@ -102,17 +103,18 @@ void EditorFilePickerDialog::open(WidgetTree& tree, FEditorFilePickerRequest req
     auto pickerRoot = ui::column("FilePickerRoot").setSpacing(8.0f).setPadding({12.0f, 12.0f});
     pickerRoot.child(ui::text("FilePickerTitle")
                          .setText(_request.title)
-                         .setStyleKey("text.header")
-                         .setFontSize(14));
+                         .setStyleKey("text.header"));
     if (isSaveAs()) {
-        auto nameField = ui::textField("FilePickerName").setText(_request.saveAsName);
+        auto nameField = ui::textField("FilePickerName")
+                             .setStyleKey(editorStyle(StyleKey::TextField))
+                             .setText(_request.saveAsName);
         _nameField = nameField.share();
         pickerRoot.child(ui::row("FilePickerNameRow")
                              .setSpacing(6.0f)
                              .setStretchLastChild(true)
                              .child(ui::text("FilePickerNameLabel")
                                         .setText(_request.nameFieldLabel)
-                                        .setFontSize(12)
+                                        .setStyleKey("text.muted")
                                         .setVAlign(EWidgetAlignV::Center),
                                     ui::boxSlot().preferredSize({90.0f, 26.0f}))
                              .child(std::move(nameField), ui::boxSlot().fill()),
@@ -120,6 +122,7 @@ void EditorFilePickerDialog::open(WidgetTree& tree, FEditorFilePickerRequest req
     }
     pickerRoot.child(std::move(pathText))
         .child(ui::textField("FilePickerSearch")
+                   .setStyleKey(editorStyle(StyleKey::TextField))
                    .setOnTextChanged([this](const std::string& text) {
                        if (_explorer) {
                            _explorer->setSearchText(text);
@@ -131,9 +134,9 @@ void EditorFilePickerDialog::open(WidgetTree& tree, FEditorFilePickerRequest req
         .child(std::move(previewText))
         .child(std::move(actions));
 
-    auto dialogPanel = ui::panel("FilePickerPanel")
+    auto dialogPanel = ui::border("FilePickerPanel")
                            .setStyleKey("panel.window")
-                           .child(std::move(pickerRoot), ui::canvasSlot().fill());
+                           .child(std::move(pickerRoot), ui::contentSlot().fill());
     _panel = dialogPanel.share();
     _overlay = ui::popupOverlay("FilePickerOverlay")
                    .setRole(UIPopupOverlay::EOverlayRole::Modal)

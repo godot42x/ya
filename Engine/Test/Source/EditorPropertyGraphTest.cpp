@@ -21,6 +21,7 @@
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "GUI/Widgets/Style.h"
 
 #include <array>
 #include <map>
@@ -587,7 +588,7 @@ TEST(EditorPropertyGraphTest, AutoPropertySectionColorShowsMixedAndUndoRestoresE
     ASSERT_NE(tintRowBox, nullptr);
     const UIBoxSlot* colorSlot = tintRowBox->getBoxSlot(*tintEdit);
     ASSERT_NE(colorSlot, nullptr);
-    EXPECT_EQ(colorSlot->getPreferredSize().y, editor_density::kRowHeight);
+    EXPECT_EQ(colorSlot->getPreferredSize().y, editor_density::kColorRowHeight);
     EXPECT_EQ(colorSlot->getSizeRule(), EUIBoxSlotSizeRule::Fill);
     EXPECT_TRUE(tintEdit->isMixed());
 
@@ -984,6 +985,39 @@ TEST(EditorPropertyGraphTest, TextureAssetRowShowsRetainedPreview)
     EXPECT_GT(preview->_layoutRect.pos.y, pathField->_layoutRect.pos.y + pathField->_layoutRect.extent.y - 1.0f);
 
     tree.detach(*section);
+}
+
+TEST(EditorPropertyGraphTest, EditorThemeBakesEditorTypeScaleOnOverlayKeys)
+{
+    auto theme = buildEditorTheme(true);
+    ASSERT_TRUE(theme);
+
+    auto editorField = theme->find<FTextFieldStyle>(editorStyle(StyleKey::TextField));
+    ASSERT_TRUE(editorField);
+    EXPECT_EQ(editorField->value().fontSize, editor_type::kBody);
+    EXPECT_EQ(editorField->value().padding, editor_density::kFieldPadding);
+
+    auto familyField = theme->find<FTextFieldStyle>(std::string(StyleKey::TextField));
+    ASSERT_TRUE(familyField);
+    EXPECT_EQ(familyField->value().fontSize, gui_type::kBody);
+
+    auto muted = theme->find<FTextStyle>(std::string(StyleKey::TextMuted));
+    ASSERT_TRUE(muted);
+    EXPECT_EQ(muted->value().fontSize, editor_type::kBody);
+
+    auto header = theme->find<FTextStyle>(std::string(StyleKey::TextHeader));
+    ASSERT_TRUE(header);
+    EXPECT_EQ(header->value().fontSize, editor_type::kHeader);
+
+    auto drag = theme->find<FDragFloatStyle>(editorStyle(StyleKey::DragFloat));
+    ASSERT_TRUE(drag);
+    EXPECT_EQ(drag->value().fontSize, editor_type::kBody);
+    EXPECT_EQ(drag->value().padding, editor_density::kFieldPadding);
+
+    auto color = theme->find<FColorEditStyle>(editorStyle(StyleKey::ColorEdit));
+    ASSERT_TRUE(color);
+    EXPECT_EQ(color->value().fontSize, editor_type::kBody);
+    EXPECT_EQ(color->value().padding, editor_density::kFieldPadding);
 }
 
 } // namespace ya

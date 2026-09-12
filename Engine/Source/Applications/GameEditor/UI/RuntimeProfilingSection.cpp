@@ -8,6 +8,7 @@
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Declarative/Build.h"
+#include "GameEditor/UI/EditorTheme.h"
 
 #include <format>
 
@@ -20,6 +21,7 @@ std::shared_ptr<UICheckBox> makeCheckBox(const char* key, const char* label)
     auto box = std::make_shared<UICheckBox>(key);
     auto text = std::make_shared<UIText>(std::string(key) + "Label");
     text->setText(label);
+    text->setStyleKey("text.muted");
     box->addDetachedChild(text);
     return box;
 }
@@ -40,6 +42,7 @@ void RuntimeProfilingSection::construct()
     _perfMetrics = makeCheckBox("RuntimeProfilingPerfMetrics", "Perf Metrics");
     _staticInit = makeCheckBox("RuntimeProfilingStaticInit", "Static Init");
     _averageWindow = std::make_shared<UIComboBox>("RuntimeProfilingAverageWindow");
+    _averageWindow->setStyleKey(editorStyle(StyleKey::ComboBox));
     _averageWindow->_items = {"Last", "10 frames", "30 frames", "60 frames"};
 
     _cpuTrace->_onChanged = [](bool value) { profiling::setCpuTraceEnabled(value); };

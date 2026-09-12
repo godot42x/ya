@@ -3,12 +3,14 @@
 // parent-owned slot edge consistently across multiple drags.
 
 #include "GameEditor/Panels/UIDesignerPanel.h"
+#include "GameEditor/UI/EditorDocumentSession.h"
 
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UITypeIds.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Layout/UILayout.h"
+#include "Scene/Core/Scene.h"
 
 #include <gtest/gtest.h>
 
@@ -18,8 +20,8 @@ namespace ya
 TEST(UIDesignerPanelTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceOfTruth)
 {
     auto& registry = UITypeRegistry::instance();
-    auto root = registry.createInstance(kTypeIdPanel);
-    auto child = registry.createInstance(kTypeIdPanel);
+    auto root = registry.createInstance(kTypeIdCanvasPanel);
+    auto child = registry.createInstance(kTypeIdCanvasPanel);
     ASSERT_NE(root, nullptr);
     ASSERT_NE(child, nullptr);
     root->_name  = "Root";
@@ -70,8 +72,8 @@ TEST(UIDesignerPanelTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceOfTruth)
 TEST(UIDesignerPanelTest, FindByChildPathResolvesRootAndNestedWidgets)
 {
     auto& registry = UITypeRegistry::instance();
-    auto  root     = registry.createInstance(kTypeIdPanel);
-    auto  child    = registry.createInstance(kTypeIdPanel);
+    auto  root     = registry.createInstance(kTypeIdCanvasPanel);
+    auto  child    = registry.createInstance(kTypeIdCanvasPanel);
     ASSERT_NE(root, nullptr);
     ASSERT_NE(child, nullptr);
     root->_name  = "Root";
@@ -99,9 +101,9 @@ TEST(UIDesignerPanelTest, FindByChildPathResolvesRootAndNestedWidgets)
 TEST(UIDesignerPanelTest, ApplyWidgetDropReordersPreviewSiblings)
 {
     auto& registry = UITypeRegistry::instance();
-    auto  root     = registry.createInstance(kTypeIdPanel);
-    auto  first    = registry.createInstance(kTypeIdPanel);
-    auto  second   = registry.createInstance(kTypeIdPanel);
+    auto  root     = registry.createInstance(kTypeIdCanvasPanel);
+    auto  first    = registry.createInstance(kTypeIdCanvasPanel);
+    auto  second   = registry.createInstance(kTypeIdCanvasPanel);
     ASSERT_NE(root, nullptr);
     ASSERT_NE(first, nullptr);
     ASSERT_NE(second, nullptr);
@@ -138,9 +140,9 @@ TEST(UIDesignerPanelTest, ApplyWidgetDropReordersPreviewSiblings)
 TEST(UIDesignerPanelTest, ApplyWidgetDropIntoNestsChild)
 {
     auto& registry = UITypeRegistry::instance();
-    auto  root     = registry.createInstance(kTypeIdPanel);
-    auto  first    = registry.createInstance(kTypeIdPanel);
-    auto  second   = registry.createInstance(kTypeIdPanel);
+    auto  root     = registry.createInstance(kTypeIdCanvasPanel);
+    auto  first    = registry.createInstance(kTypeIdCanvasPanel);
+    auto  second   = registry.createInstance(kTypeIdCanvasPanel);
     ASSERT_NE(root, nullptr);
     ASSERT_NE(first, nullptr);
     ASSERT_NE(second, nullptr);
@@ -173,6 +175,58 @@ TEST(UIDesignerPanelTest, ApplyWidgetDropIntoNestsChild)
     ASSERT_NE(nestedChild, nullptr);
     EXPECT_EQ(nestedParent->_name, "First");
     EXPECT_EQ(nestedChild->_name, "Second");
+}
+
+TEST(UIDesignerPanelTest, DocumentRegistryTracksDirtyCloseAndSingleton)
+{
+    EditorDocumentRegistry documents;
+    UIDesignerPanel        designer(nullptr);
+    designer.bindDocuments(&documents);
+
+    designer.newDocument(kTypeIdCanvasPanel);
+    ASSERT_TRUE(designer.hasDocument());
+    ASSERT_NE(designer.documentSession(), nullptr);
+    EXPECT_FALSE(designer.isDocumentDirty());
+    EXPECT_TRUE(designer.documentSession()->ownsPreview());
+
+    ASSERT_TRUE(designer.addPaletteWidget(kTypeIdCanvasPanel));
+    EXPECT_TRUE(designer.isDocumentDirty());
+    EXPECT_FALSE(designer.closeDocument());
+    EXPECT_TRUE(designer.hasDocument());
+
+    ASSERT_TRUE(designer.saveDocument());
+    EXPECT_FALSE(designer.isDocumentDirty());
+    EXPECT_TRUE(designer.closeDocument());
+    EXPECT_FALSE(designer.hasDocument());
+    EXPECT_EQ(documents.size(), 0u);
+}
+
+TEST(UIDesignerPanelTest, OpenSceneEntrySharesDocumentSession)
+{
+    auto& registry = UITypeRegistry::instance();
+    auto  root     = registry.createInstance(kTypeIdCanvasPanel);
+    ASSERT_NE(root, nullptr);
+    root->_name = "Root";
+    auto document = UIDocument::fromWidget(*root);
+    ASSERT_NE(document, nullptr);
+
+    Scene scene("Level");
+    SceneWidgetEntry entry;
+    entry.entryId = "hud";
+    entry.inlineDocument = document;
+
+    EditorDocumentRegistry documents;
+    UIDesignerPanel        first(nullptr);
+    UIDesignerPanel        second(nullptr);
+    first.bindDocuments(&documents);
+    second.bindDocuments(&documents);
+    first.openSceneEntry(scene, entry);
+    second.openSceneEntry(scene, entry);
+
+    ASSERT_NE(first.documentSession(), nullptr);
+    EXPECT_EQ(first.documentSession(), second.documentSession());
+    EXPECT_EQ(first.documentSession()->id(), makeEditorUIDocumentId("Level#hud"));
+    EXPECT_TRUE(first.documentSession()->ownsPreview());
 }
 
 } // namespace ya

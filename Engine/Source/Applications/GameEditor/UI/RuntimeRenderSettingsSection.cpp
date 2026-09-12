@@ -7,6 +7,8 @@
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/DragFloat.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GameEditor/UI/EditorTheme.h"
+#include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/Core/Swapchain.h"
 #include "Render3D/RenderRuntime.h"
 
@@ -29,8 +31,12 @@ const char* presentLabel(int value)
 }
 }
 
-RuntimeRenderSettingsSection::RuntimeRenderSettingsSection(std::string name)
+RuntimeRenderSettingsSection::RuntimeRenderSettingsSection(std::string name,
+                                                           App* app,
+                                                           IRenderSurfaceContext* presentSurface)
     : UICompoundWidget(std::move(name), "panel")
+    , _app(app)
+    , _presentSurface(presentSurface)
 {
 }
 
@@ -39,30 +45,39 @@ void RuntimeRenderSettingsSection::construct()
     _pipelineState = ui::text("RuntimeRenderPipelineState").share();
     _vsyncState = ui::text("RuntimeRenderVsyncState").share();
     _viewportScale = std::make_shared<UIDragFloat>("RuntimeViewportScale");
+    _viewportScale->setStyleKey(editorStyle(StyleKey::DragFloat));
     _viewportScale->_min = 1.0f; _viewportScale->_max = 10.0f; _viewportScale->_speed = 0.1f;
     _vsync = std::make_shared<UICheckBox>("RuntimeVsync");
-    _vsync->addDetachedChild(std::make_shared<UIText>("RuntimeVsyncLabel"));
-    dynamic_cast<UIText*>(_vsync->getChildren().front().get())->setText("VSync");
+    auto vsyncLabel = std::make_shared<UIText>("RuntimeVsyncLabel");
+    vsyncLabel->setText("VSync");
+    vsyncLabel->setStyleKey("text.muted");
+    _vsync->addDetachedChild(vsyncLabel);
     _presentMode = std::make_shared<UIComboBox>("RuntimePresentMode");
+    _presentMode->setStyleKey(editorStyle(StyleKey::ComboBox));
     _presentMode->_items = {"Immediate", "Mailbox", "FIFO", "FIFO Relaxed"};
     _reload = ui::button("RuntimeReloadPipeline")
                   .child(ui::text("RuntimeReloadPipelineLabel").setText("Reload Active Pipeline"))
                   .share();
 
-    _viewportScale->_onValueChanged = [](float value) {
-        if (auto* app = App::get()) if (auto* r = app->getRenderServices().getRenderRuntime()) r->setViewportFrameBufferScale(value);
+    _viewportScale->_onValueChanged = [this](float value) {
+        if (_app) if (auto* r = _app->getRenderServices().getRenderRuntime()) r->setViewportFrameBufferScale(value);
     };
-    _vsync->_onChanged = [](bool value) {
-        if (auto* app = App::get()) if (auto* render = app->getRenderServices().getRender()) if (auto* sc = render->primarySwapchain()) sc->setVsync(value);
+    _vsync->_onChanged = [this](bool value) {
+        if (_presentSurface) if (auto* sc = _presentSurface->getSwapchain()) sc->setVsync(value);
     };
-    _presentMode->_onSelectionChanged = [](int value) {
-        if (auto* app = App::get()) if (auto* render = app->getRenderServices().getRender()) if (auto* sc = render->primarySwapchain()) {
-            const auto mode = static_cast<EPresentMode::T>(value);
-            app->getTaskManager().registerFrameTask([sc, mode]() { sc->setPresentMode(mode); });
+    _presentMode->_onSelectionChanged = [this](int value) {
+        if (!_presentSurface || !_app) {
+            return;
         }
+        ISwapchain* sc = _presentSurface->getSwapchain();
+        if (!sc) {
+            return;
+        }
+        const auto mode = static_cast<EPresentMode::T>(value);
+        _app->getTaskManager().registerFrameTask([sc, mode]() { sc->setPresentMode(mode); });
     };
-    _reload->_onClick = []() {
-        if (auto* app = App::get()) if (auto* r = app->getRenderServices().getRenderRuntime()) r->requestActivePipelineReload();
+    _reload->_onClick = [this]() {
+        if (_app) if (auto* r = _app->getRenderServices().getRenderRuntime()) r->requestActivePipelineReload();
     };
 
     auto rows = ui::column("RuntimeRenderSettingsRows")
@@ -77,8 +92,11 @@ void RuntimeRenderSettingsSection::construct()
     addDetachedChild(rows.release());
 }
 
-void RuntimeRenderSettingsSection::sync(const App* app)
+void RuntimeRenderSettingsSection::sync(const App* app, IRenderSurfaceContext* presentSurface)
 {
+    if (presentSurface) {
+        _presentSurface = presentSurface;
+    }
     if (!app || !_pipelineState) return;
     auto* runtime = app->getRenderServices().getRenderRuntime();
     if (!runtime) return;
@@ -86,7 +104,7 @@ void RuntimeRenderSettingsSection::sync(const App* app)
     const bool pending = runtime->getPendingRenderPipeline() != runtime->getRenderPipeline();
     _pipelineState->setText(std::format("Pipeline: {}{}", pipelineLabel(pipeline), pending ? " (switch pending)" : ""));
     _viewportScale->setValue(runtime->getViewportFrameBufferScale(), false);
-    if (auto* render = app->getRenderServices().getRender()) if (auto* sc = render->primarySwapchain()) {
+    if (_presentSurface) if (auto* sc = _presentSurface->getSwapchain()) {
         _vsync->setChecked(sc->getVsync());
         _vsyncState->setText(std::format("Present Mode: {}", presentLabel(static_cast<int>(sc->getPresentMode()))));
         _presentMode->setSelectedIndex(static_cast<int>(sc->getPresentMode()), false);

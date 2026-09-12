@@ -1,4 +1,5 @@
 #include "GameEditor/EditorLayerInternal.h"
+#include "GameEditor/Panels/UIDesignerPanel.h"
 
 namespace ya
 {
@@ -49,6 +50,7 @@ void EditorLayer::onAttach()
 void EditorLayer::onDetach()
 {
     YA_CORE_INFO("EditorLayer::onDetach");
+    _uiDesignerPanel.abandonDocument();
     // Unsubscribe from scene manager events
     if (_app) {
         if (auto* sceneManager = _app->getSceneServices().getSceneManager()) {
@@ -67,6 +69,21 @@ void EditorLayer::setEditableScene(Scene* scene)
 {
     _editableScene = scene;
     _sceneHierarchyPanel.setContext(getSceneHierarchyContext());
+}
+
+void EditorLayer::setDocumentRegistry(EditorDocumentRegistry* documents)
+{
+    _documents = documents;
+    _uiDesignerPanel.bindDocuments(documents);
+}
+
+void EditorLayer::setCurrentScenePath(std::string scenePath)
+{
+    if (_currentScenePath == scenePath) {
+        return;
+    }
+    _currentScenePath = std::move(scenePath);
+    onScenePathChanged.broadcast();
 }
 
 void EditorLayer::setViewportMode(EViewportMode mode, bool bPersist)
@@ -157,7 +174,22 @@ void EditorLayer::cmdNewScene()
             sceneManager->unloadScene();
             sceneManager->activateScene(scene);
         }
-        _currentScenePath.clear();
+        setCurrentScenePath({});
+    });
+}
+
+void EditorLayer::cmdLoadScene(std::string scenePath)
+{
+    if (!_app || scenePath.empty()) {
+        return;
+    }
+    _app->getTaskManager().registerFrameTask([this, scenePath = std::move(scenePath)]() {
+        if (!_app) {
+            return;
+        }
+        if (_app->getSceneServices().loadScene(scenePath)) {
+            setCurrentScenePath(scenePath);
+        }
     });
 }
 

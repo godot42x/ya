@@ -1,11 +1,13 @@
 #include "GameEditor/UI/EditorInspectorTab.h"
 #include "GameEditor/UI/EditorAutoPropertySection.h"
 #include "GameEditor/UI/EditorAssetPicker.h"
+#include "GameEditor/UI/EditorHierarchyOps.h"
 
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
 #include "ECS/ECSRegistry.h"
 #include "GUI/Binding/UndoStack.h"
+#include "GUI/Binding/SelectionModel.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
@@ -14,6 +16,7 @@
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Widgets/Style.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/Inspector/PropertyGraph.h"
@@ -49,21 +52,6 @@ void renameEntity(EditorLayer* layer, uint64_t uuid, const std::string& name)
         node->setName(name);
         layer->notifyHierarchyChanged();
     }
-}
-
-std::vector<Entity*> inspectorTargets(EditorLayer* layer)
-{
-    if (!layer) {
-        return {};
-    }
-    std::vector<Entity*> targets = layer->getSelections();
-    if (targets.empty()) {
-        if (Entity* entity = layer->getSelectedEntity()) {
-            targets.push_back(entity);
-        }
-    }
-    std::erase_if(targets, [](Entity* entity) { return !entity || !entity->isValid() || !entity->getScene(); });
-    return targets;
 }
 
 std::string projectedFingerprint(const std::vector<Entity*>& entities)
@@ -143,9 +131,10 @@ EditorRevealAssetCallback makeRevealAsset(EditorLayer* layer)
 
 } // namespace
 
-EditorInspectorTab::EditorInspectorTab(EditorLayer& layer, UndoStack* undo)
+EditorInspectorTab::EditorInspectorTab(EditorLayer& layer, SelectionModel& selection, UndoStack* undo)
     : UICompoundWidget("InspectorBody", "panel")
     , _layer(&layer)
+    , _selection(&selection)
     , _undo(undo)
 {
     enableTick();
@@ -158,11 +147,15 @@ EditorInspectorTab::~EditorInspectorTab()
 
 void EditorInspectorTab::construct()
 {
-    auto nameField = ui::textField("InspectorName").setFontSize(13);
+    auto nameField = ui::textField("InspectorName").setStyleKey(editorStyle(StyleKey::TextField));
     _nameField = nameField.share();
     _nameField->_onCommit = [this](const std::string& text) {
         if (!_layer) return;
-        Entity* entity = _layer->getSelectedEntity();
+        Entity* entity = nullptr;
+        const std::vector<Entity*> targets = editorSelectionEntities(*_layer, _selection);
+        if (targets.size() == 1) {
+            entity = targets.front();
+        }
         if (!entity) return;
         Scene* scene = _layer->getHierarchyScene();
         if (!scene) return;
@@ -188,12 +181,11 @@ void EditorInspectorTab::construct()
     auto empty = ui::text("InspectorEmpty")
                      .setText("Select an entity in the Hierarchy")
                      .setStyleKey("text.muted")
-                     .setFontSize(13)
                      .setWrap(true);
     _emptyText = empty.share();
     auto entityText = ui::text("InspectorEntityId")
                           .setText("—")
-                          .setFontSize(12)
+                          .setStyleKey("text.small")
                           .setVAlign(EWidgetAlignV::Center);
     _entityText = entityText.share();
     auto projected = ui::column("InspectorProjected").setSpacing(editor_density::kSectionSpacing);
@@ -202,11 +194,11 @@ void EditorInspectorTab::construct()
     const FBoxSlotArgs labelSlot{.preferredSize = {editor_density::kLabelColumn, editor_density::kRowHeight}};
     auto entityForm = ui::column("InspectorEntityForm")
                           .setSpacing(editor_density::kRowSpacing)
+                          .setClipChildren(true)
                           .child(ui::row("InspectorIdRow")
                                      .setSpacing(editor_density::kControlSpacing)
                                      .child(ui::text("InspectorIdLabel")
                                                 .setText("ID")
-                                                .setFontSize(12)
                                                 .setStyleKey("text.muted")
                                                 .setVAlign(EWidgetAlignV::Center),
                                             labelSlot)
@@ -216,7 +208,6 @@ void EditorInspectorTab::construct()
                                      .setSpacing(editor_density::kControlSpacing)
                                      .child(ui::text("NameLabel")
                                                 .setText("Name")
-                                                .setFontSize(12)
                                                 .setStyleKey("text.muted")
                                                 .setVAlign(EWidgetAlignV::Center),
                                             labelSlot)
@@ -227,7 +218,7 @@ void EditorInspectorTab::construct()
 
     auto widgetEntryId = ui::text("InspectorWidgetEntryId").setStyleKey("text.muted").setVAlign(EWidgetAlignV::Center);
     _widgetEntryIdText = widgetEntryId.share();
-    auto widgetEntryType = ui::text("InspectorWidgetEntryType").setFontSize(12).setVAlign(EWidgetAlignV::Center);
+    auto widgetEntryType = ui::text("InspectorWidgetEntryType").setStyleKey("text.small").setVAlign(EWidgetAlignV::Center);
     _widgetEntryTypeText = widgetEntryType.share();
     auto openDesigner = ui::button("InspectorOpenDesigner")
                             .child(ui::text("InspectorOpenDesignerLabel").setText("Open in UI Designer"));
@@ -253,7 +244,6 @@ void EditorInspectorTab::construct()
                                           .setSpacing(editor_density::kControlSpacing)
                                           .child(ui::text("InspectorWidgetEntryIdLabel")
                                                      .setText("Entry")
-                                                     .setFontSize(12)
                                                      .setStyleKey("text.muted")
                                                      .setVAlign(EWidgetAlignV::Center),
                                                  labelSlot)
@@ -263,7 +253,6 @@ void EditorInspectorTab::construct()
                                           .setSpacing(editor_density::kControlSpacing)
                                           .child(ui::text("InspectorWidgetEntryTypeLabel")
                                                      .setText("Type")
-                                                     .setFontSize(12)
                                                      .setStyleKey("text.muted")
                                                      .setVAlign(EWidgetAlignV::Center),
                                                  labelSlot)
@@ -282,7 +271,7 @@ void EditorInspectorTab::construct()
                     .child(std::move(widgetEntryForm));
     addDetachedChild(ui::scroll("InspectorScroll")
                          .setAxis(EScrollAxis::Vertical)
-                         .child(std::move(form), ui::overlaySlot().fill())
+                         .child(std::move(form), ui::contentSlot().fill())
                          .release());
 }
 
@@ -498,7 +487,7 @@ void EditorInspectorTab::refreshFromTree(WidgetTree& tree)
         return;
     }
 
-    const std::vector<Entity*> entities = inspectorTargets(_layer);
+    const std::vector<Entity*> entities = editorSelectionEntities(*_layer, _selection);
     Entity* primary = entities.empty() ? nullptr : entities.front();
     const bool selected = !entities.empty();
     if (_emptyText) {
@@ -542,24 +531,6 @@ void EditorInspectorTab::syncProjectedValues(WidgetTree& tree)
             section->sync(tree);
         }
     }
-}
-
-bool EditorInspectorTab::wantsTextInput() const
-{
-    WidgetTree* tree = getTree();
-    if (!tree) {
-        return false;
-    }
-    UIElement* focused = tree->getFocused();
-    if (focused == _nameField.get()) {
-        return true;
-    }
-    for (const auto& section : _projectedSections) {
-        if (section && section->wantsTextInput(*tree)) {
-            return true;
-        }
-    }
-    return false;
 }
 
 } // namespace ya

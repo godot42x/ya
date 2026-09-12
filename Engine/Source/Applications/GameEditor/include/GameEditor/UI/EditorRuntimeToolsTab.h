@@ -9,12 +9,19 @@ namespace ya
 
 struct UIElement;
 struct WidgetTree;
+class ActionMap;
+struct App;
+struct IRenderSurfaceContext;
 
 /// Retained Runtime Tools tab. Play/stop chrome plus Runtime*Section widgets.
+/// Window session injects ActionMap, present surface, and App; this tab does
+/// not call App::get() or primarySwapchain().
 class EditorRuntimeToolsTab : public UICompoundWidget
 {
   public:
-    EditorRuntimeToolsTab();
+    EditorRuntimeToolsTab(ActionMap* actions = nullptr,
+                          IRenderSurfaceContext* presentSurface = nullptr,
+                          App* app = nullptr);
 
     void onAttached() override;
     void tick(float deltaSeconds) override;
@@ -34,6 +41,9 @@ class EditorRuntimeToolsTab : public UICompoundWidget
     std::shared_ptr<class RuntimeRenderGraphSection> _renderGraph;
     std::shared_ptr<class RuntimeRenderTargetSection> _renderTargets;
     std::shared_ptr<class RuntimeDebugPrimitivesSection> _debugPrimitives;
+    ActionMap* _actions = nullptr;
+    IRenderSurfaceContext* _presentSurface = nullptr;
+    App* _app = nullptr;
 
     void refresh();
 };

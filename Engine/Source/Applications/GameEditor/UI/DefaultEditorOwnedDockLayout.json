@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "root": {
+    "kind": "split",
+    "orientation": "horizontal",
+    "ratio": 0.78,
+    "minExtent": [120.0, 120.0],
+    "children": [
+      {
+        "kind": "split",
+        "orientation": "horizontal",
+        "ratio": 0.22,
+        "minExtent": [120.0, 120.0],
+        "children": [
+          {
+            "kind": "leaf",
+            "panels": ["hierarchy"],
+            "selected": "hierarchy"
+          },
+          {
+            "kind": "leaf",
+            "panels": ["viewport"],
+            "selected": "viewport"
+          }
+        ]
+      },
+      {
+        "kind": "leaf",
+        "panels": ["inspector"],
+        "selected": "inspector"
+      }
+    ]
+  },
+  "floating": []
+}

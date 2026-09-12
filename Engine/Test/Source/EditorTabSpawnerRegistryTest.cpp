@@ -1,4 +1,5 @@
 #include "GameEditor/UI/EditorTabSpawnerRegistry.h"
+#include "GameEditor/UI/EditorViewportHost.h"
 
 #include "GUI/Widgets/Controls/Panel.h"
 
@@ -17,7 +18,7 @@ TEST(EditorTabSpawnerRegistryTest, AddFindRejectsDuplicatesAndSpawnDoesNotReregi
         .toolsMenuLabel = "Frame Stats",
         .spawn = [&spawnCount](FEditorTabSpawnContext&) {
             ++spawnCount;
-            return std::make_shared<UIPanel>("StatsBody");
+            return std::make_shared<UICanvasPanel>("StatsBody");
         },
     });
     registry.add({
@@ -26,7 +27,7 @@ TEST(EditorTabSpawnerRegistryTest, AddFindRejectsDuplicatesAndSpawnDoesNotReregi
         .toolsMenuLabel = "Duplicate",
         .spawn = [&spawnCount](FEditorTabSpawnContext&) {
             ++spawnCount;
-            return std::make_shared<UIPanel>("DupBody");
+            return std::make_shared<UICanvasPanel>("DupBody");
         },
     });
 
@@ -53,6 +54,30 @@ TEST(EditorTabSpawnerRegistryTest, BuiltinRegistryIncludesHierarchyAndViewport)
     EXPECT_EQ(viewport->toolsMenuLabel, "Viewport");
     EXPECT_TRUE(static_cast<bool>(viewport->spawn));
     EXPECT_EQ(registry.find("gui-workbench"), nullptr);
+
+    const FEditorTabSpawner* level = registry.find("level-editor");
+    ASSERT_NE(level, nullptr);
+    EXPECT_EQ(level->title, "Level");
+    EXPECT_EQ(level->scope, EEditorTabScope::WindowRootEditor);
+    EXPECT_EQ(level->detachPolicy, EEditorTabDetachPolicy::Locked);
+}
+
+TEST(EditorTabSpawnerRegistryTest, BuiltinViewportSpawnRequiresHost)
+{
+    EditorTabSpawnerRegistry registry;
+    registerBuiltinEditorTabSpawners(registry);
+    const FEditorTabSpawner* viewport = registry.find("viewport");
+    ASSERT_NE(viewport, nullptr);
+
+    FEditorTabSpawnContext ctx;
+    EXPECT_EQ(viewport->spawn(ctx), nullptr);
+
+    struct FSink final : IEditorViewportHostSink
+    {
+        void setViewportHost(IEditorViewportHost*) override {}
+    } sink;
+    ctx.viewportHost = &sink;
+    EXPECT_NE(viewport->spawn(ctx), nullptr);
 }
 
 } // namespace ya

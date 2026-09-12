@@ -2,6 +2,7 @@
 
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
@@ -35,6 +36,7 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
     _bindings = std::move(bindings);
 
     auto samplerCombo = ui::comboBox("EditorSettingsSampler")
+                            .setStyleKey(editorStyle(StyleKey::ComboBox))
                             .setItems({"Linear", "Nearest"})
                             .setSelectedIndex(_bindings.samplerIndex())
                             .setOnSelectionChanged([this](int index) {
@@ -55,6 +57,7 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
     _overlayCheckbox = overlayCheckbox.share();
 
     auto scenePathField = ui::textField("EditorSettingsScenePath")
+                              .setStyleKey(editorStyle(StyleKey::TextField))
                               .setText(_bindings.scenePathDraft())
                               .setOnTextChanged([this](const std::string& text) {
                                   if (_bindings.setScenePathDraft) {
@@ -63,7 +66,7 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
                               });
     _scenePathField = scenePathField.share();
 
-    auto sceneStatusText = ui::text("EditorSettingsSceneStatus").setFontSize(12).setStyleKey("text.muted");
+    auto sceneStatusText = ui::text("EditorSettingsSceneStatus").setStyleKey("text.muted");
     _sceneStatusText = sceneStatusText.share();
 
     _applyButton = labeledButton("EditorSettingsApply", "Apply Default Scene Path")
@@ -87,7 +90,7 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
                         .setStretchLastChild(true)
                         .child(ui::text("EditorSettingsSceneLabel")
                                    .setText("Startup Scene")
-                                   .setFontSize(12)
+                                   .setStyleKey("text.muted")
                                    .setVAlign(EWidgetAlignV::Center),
                                ui::boxSlot().preferredSize({120.0f, 26.0f}))
                         .child(std::move(scenePathField), ui::boxSlot().fill())
@@ -103,14 +106,13 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
                             .setPadding({12.0f, 12.0f})
                             .child(ui::text("EditorSettingsTitle")
                                        .setText("Editor Settings")
-                                       .setStyleKey("text.header")
-                                       .setFontSize(14))
+                                       .setStyleKey("text.header"))
                             .child(ui::row("EditorSettingsSamplerRow")
                                        .setSpacing(8.0f)
                                        .setStretchLastChild(true)
                                        .child(ui::text("EditorSettingsSamplerLabel")
                                                   .setText("Viewport Sampler")
-                                                  .setFontSize(12)
+                                                  .setStyleKey("text.muted")
                                                   .setVAlign(EWidgetAlignV::Center),
                                               ui::boxSlot().preferredSize({140.0f, 26.0f}))
                                        .child(std::move(samplerCombo), ui::boxSlot().preferredSize({160.0f, 26.0f})))
@@ -122,12 +124,12 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
                                        .setOnClick([this]() { close(); }),
                                    ui::boxSlot().preferredSize({84.0f, 26.0f}));
     _settingsRoot = settingsRoot.share();
-    auto dialogPanel = ui::panel("EditorSettingsPanel")
+    auto dialogPanel = ui::border("EditorSettingsPanel")
                            .setStyleKey("panel.window")
                            .child(ui::scroll("EditorSettingsScroll")
                                       .setAxis(EScrollAxis::Vertical)
-                                      .child(std::move(settingsRoot), ui::overlaySlot().fill()),
-                                  ui::canvasSlot().fill());
+                                      .child(std::move(settingsRoot), ui::contentSlot().fill()),
+                                  ui::contentSlot().fill());
 
     _panel = dialogPanel.share();
     _overlay = ui::popupOverlay("EditorSettingsOverlay")

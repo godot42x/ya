@@ -13,7 +13,7 @@ namespace ya
 
 struct UIButton;
 struct UIContainer;
-struct UIPanel;
+struct UIBorder;
 struct UIPopupOverlay;
 struct UIText;
 struct UITextField;
@@ -38,7 +38,7 @@ class EditorFilePickerDialog
     FEditorFilePickerRequest _request;
     std::shared_ptr<FileExplorer> _explorer;
     std::shared_ptr<UIPopupOverlay> _overlay;
-    std::shared_ptr<UIPanel> _panel;
+    std::shared_ptr<UIBorder> _panel;
     std::shared_ptr<UIText> _pathText;
     std::shared_ptr<UIText> _previewText;
     std::shared_ptr<UITextField> _nameField;

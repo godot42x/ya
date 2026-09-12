@@ -34,6 +34,10 @@ class AppModuleTestAccess
     {
         app.recordModulePresentation(commandBuffer, dt);
     }
+    static void presentExtras(App& app, float dt)
+    {
+        app.presentModuleExtras(dt);
+    }
     static std::string resolveStartupScenePath(const AppDesc& desc)
     {
         return App::resolveStartupScenePath(desc);

@@ -21,25 +21,26 @@ struct UIButton;
 class EditorAutoPropertySection;
 struct WidgetTree;
 class UndoStack;
+struct SelectionModel;
 
 /// Retained Inspector tab. Structure follows Layer selection/hierarchy
 /// delegates; property values tick only while attached.
 class EditorInspectorTab : public UICompoundWidget
 {
   public:
-    explicit EditorInspectorTab(EditorLayer& layer, UndoStack* undo = nullptr);
+    EditorInspectorTab(EditorLayer& layer, SelectionModel& selection, UndoStack* undo = nullptr);
     ~EditorInspectorTab() override;
 
     void onAttached() override;
     void onDetached() override;
     void tick(float deltaSeconds) override;
-    [[nodiscard]] bool wantsTextInput() const;
 
   protected:
     void construct() override;
 
   private:
     EditorLayer* _layer = nullptr;
+    SelectionModel* _selection = nullptr;
     UndoStack* _undo = nullptr;
     std::shared_ptr<UITextField> _nameField;
     std::shared_ptr<UIText> _entityText;

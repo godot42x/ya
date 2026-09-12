@@ -9,6 +9,7 @@
 
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Image.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -45,15 +46,15 @@ std::shared_ptr<UITheme> makePanelTheme(const glm::vec4& fill)
 TEST(EditorLongRunSoakTest, RepeatedAttachDetachSameSubtreeDoesNotLeakDrawItems)
 {
     WidgetTree tree({.width = 400, .height = 300});
-    auto       host = std::make_shared<UIPanel>("TabHost");
+    auto       host = std::make_shared<UICanvasPanel>("TabHost");
     FCanvasSlotArgs hostSlot;
     hostSlot.fixedSize = {200.0f, 260.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, hostSlot).valid());
 
-    std::vector<std::shared_ptr<UIPanel>> cells;
+    std::vector<std::shared_ptr<UIBorder>> cells;
     cells.reserve(8);
     for (int i = 0; i < 8; ++i) {
-        auto cell = std::make_shared<UIPanel>("Cell" + std::to_string(i));
+        auto cell = std::make_shared<UIBorder>("Cell" + std::to_string(i));
         FCanvasSlotArgs cellSlot;
         cellSlot.offset    = {8.0f, 8.0f + static_cast<float>(i) * 28.0f};
         cellSlot.fixedSize = {120.0f, 24.0f};
@@ -96,7 +97,7 @@ TEST(EditorLongRunSoakTest, RepeatedDestroyRecreateSubtreeGetsFreshIdentity)
 
     constexpr int kCycles = 64;
     for (int cycle = 0; cycle < kCycles; ++cycle) {
-        auto panel = std::make_shared<UIPanel>("ReloadPanel");
+        auto panel = std::make_shared<UICanvasPanel>("ReloadPanel");
         auto child = std::make_shared<UIButton>("ReloadButton");
         EXPECT_GT(panel->getRuntimeId(), lastId);
         lastId = child->getRuntimeId();
@@ -123,7 +124,7 @@ TEST(EditorLongRunSoakTest, RepeatedDestroyRecreateSubtreeGetsFreshIdentity)
 TEST(EditorLongRunSoakTest, RepeatedThemeSwitchSettlesWithoutRebuild)
 {
     WidgetTree tree({.width = 320, .height = 200});
-    auto       panel = std::make_shared<UIPanel>("Themed");
+    auto       panel = std::make_shared<UIBorder>("Themed");
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 24.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);

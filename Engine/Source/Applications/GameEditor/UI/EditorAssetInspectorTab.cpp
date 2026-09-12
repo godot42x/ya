@@ -33,15 +33,16 @@ void EditorAssetInspectorTab::construct()
     _statusText = statusText;
     _preview = preview;
 
-    addDetachedChild(ui::panel("AssetInspectorBodyInner")
+    addDetachedChild(ui::border("AssetInspectorBodyInner")
         .setStyleKey("panel.canvas")
+        .setPadding(FMargin::all(12.0f))
         .child(ui::column("AssetInspectorColumn")
                    .setSpacing(8.0f)
                    .child(pathText)
                    .child(preview, FBoxSlotArgs{.preferredSize = {0.0f, 220.0f}})
                    .child(statusText)
                    .release(),
-               ui::canvasSlot().fill().insets(FMargin::all(12.0f)))
+               ui::contentSlot().fill())
         .release());
 }
 

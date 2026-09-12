@@ -3,6 +3,7 @@
 #include "Core/Log.h"
 
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/UI/EditorDocumentSession.h"
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/UITypeRegistry.h"
@@ -46,7 +47,99 @@ UIDesignerPanel::UIDesignerPanel(EditorLayer* owner) : _owner(owner)
 {
 }
 
-UIDesignerPanel::~UIDesignerPanel() = default;
+UIDesignerPanel::~UIDesignerPanel()
+{
+    abandonDocument();
+}
+
+EditorDocumentRegistry* UIDesignerPanel::documents() const
+{
+    if (_documents) {
+        return _documents;
+    }
+    return _owner ? _owner->documentRegistry() : nullptr;
+}
+
+void UIDesignerPanel::markDirty()
+{
+    if (_session) {
+        _session->markDirty();
+    }
+}
+
+void UIDesignerPanel::dropLocalDocument()
+{
+    _document.reset();
+    _previewTree.reset();
+    _previewRoot.reset();
+    _selected   = nullptr;
+    _entryScene = nullptr;
+    _entryId.clear();
+    endDrag();
+}
+
+bool UIDesignerPanel::closeSession(EEditorDocumentCloseMode mode)
+{
+    if (!_session) {
+        dropLocalDocument();
+        return true;
+    }
+    EditorDocumentRegistry* docs = documents();
+    const FEditorDocumentId id   = _session->id();
+    if (!docs) {
+        _session = nullptr;
+        dropLocalDocument();
+        return true;
+    }
+    _session->releaseBind();
+    if (_session->bindCount() > 0) {
+        _session = nullptr;
+        dropLocalDocument();
+        return true;
+    }
+    const EEditorDocumentCloseResult result = docs->close(id, mode);
+    if (result != EEditorDocumentCloseResult::Closed) {
+        _session->addBind();
+        return false;
+    }
+    _session = nullptr;
+    dropLocalDocument();
+    return true;
+}
+
+bool UIDesignerPanel::adoptSession(const FEditorDocumentId& id)
+{
+    if (_session && _session->id() == id) {
+        return true;
+    }
+    (void)closeSession(EEditorDocumentCloseMode::Discard);
+    EditorDocumentRegistry* docs = documents();
+    if (!docs || !id.valid()) {
+        return true;
+    }
+    _session = docs->open(id, EEditorDocumentClosePolicy::RejectIfDirty);
+    if (!_session) {
+        return false;
+    }
+    _session->addBind();
+    (void)docs->claimPreview(id);
+    return true;
+}
+
+bool UIDesignerPanel::closeDocument()
+{
+    return closeSession(EEditorDocumentCloseMode::Request);
+}
+
+void UIDesignerPanel::clearDocument()
+{
+    (void)closeSession(EEditorDocumentCloseMode::Discard);
+}
+
+void UIDesignerPanel::abandonDocument()
+{
+    (void)closeSession(EEditorDocumentCloseMode::Force);
+}
 
 void UIDesignerPanel::openDocument(const std::shared_ptr<UIDocument>& document)
 {
@@ -54,10 +147,23 @@ void UIDesignerPanel::openDocument(const std::shared_ptr<UIDocument>& document)
         YA_CORE_WARN("UIDesignerPanel::openDocument: null document");
         return;
     }
+    EditorDocumentRegistry* docs = documents();
+    const FEditorDocumentId id =
+        makeEditorUIDocumentId(docs ? docs->makeUntitledKey() : std::string("local"));
+    if (!adoptSession(id)) {
+        return;
+    }
     _document     = document;
     _entryScene   = nullptr;
     _entryId.clear();
+    if (!installPreview(document)) {
+        (void)closeSession(EEditorDocumentCloseMode::Force);
+    }
+}
 
+bool UIDesignerPanel::installPreview(const std::shared_ptr<UIDocument>& document)
+{
+    _document     = document;
     _previewTree  = std::make_unique<WidgetTree>(Extent2D{800, 600});
     _previewTree->setTextureSource(&gameUITextureSource());
     _previewRoot  = document->instantiate();
@@ -66,7 +172,8 @@ void UIDesignerPanel::openDocument(const std::shared_ptr<UIDocument>& document)
         YA_CORE_ERROR("UIDesignerPanel::openDocument: document '{}' failed to instantiate",
                       document->typeId);
         _document.reset();
-        return;
+        _previewTree.reset();
+        return false;
     }
     FCanvasSlotArgs fillArgs;
     fillArgs.anchorMin = {0.0f, 0.0f};
@@ -76,6 +183,7 @@ void UIDesignerPanel::openDocument(const std::shared_ptr<UIDocument>& document)
                                                                      fillArgs);
     YA_CORE_ASSERT(attachment.valid(), "UIDesignerPanel: failed to attach preview root");
     _selected = _previewRoot.get();
+    return true;
 }
 
 void UIDesignerPanel::newDocument(const std::string& typeId)
@@ -92,9 +200,17 @@ void UIDesignerPanel::openSceneEntry(Scene& scene, SceneWidgetEntry& entry)
         YA_CORE_WARN("UIDesignerPanel::openSceneEntry: entry '{}' has no inline document", entry.entryId);
         return;
     }
+    const FEditorDocumentId id = makeEditorUIDocumentId(scene.getName() + "#" + entry.entryId);
+    if (!adoptSession(id)) {
+        return;
+    }
     _entryScene = &scene;
     _entryId    = entry.entryId;
-    openDocument(entry.inlineDocument);
+    if (!installPreview(entry.inlineDocument)) {
+        (void)closeSession(EEditorDocumentCloseMode::Force);
+        _entryScene = nullptr;
+        _entryId.clear();
+    }
 }
 
 void UIDesignerPanel::rebuildDocumentFromPreview()
@@ -120,6 +236,9 @@ bool UIDesignerPanel::saveDocument()
                 entry.inlineDocument = _document;
                 YA_CORE_INFO("UIDesignerPanel: saved entry '{}' back to scene '{}'",
                              _entryId, _entryScene->getName());
+                if (_session) {
+                    _session->clearDirty();
+                }
                 return true;
             }
         }
@@ -130,6 +249,9 @@ bool UIDesignerPanel::saveDocument()
     // Standalone document: the rebuilt document is held in `_document`; callers
     // (e.g. scene-entry open) consume it from getOpenDocument(). No file format.
     YA_CORE_INFO("UIDesignerPanel: rebuilt document '{}'", _document->typeId);
+    if (_session) {
+        _session->clearDirty();
+    }
     return true;
 }
 
@@ -182,17 +304,6 @@ void UIDesignerPanel::selectByChildPath(const std::vector<size_t>& path)
     _selected = findByChildPath(path);
 }
 
-void UIDesignerPanel::clearDocument()
-{
-    _document.reset();
-    _previewTree.reset();
-    _previewRoot.reset();
-    _selected   = nullptr;
-    _entryScene = nullptr;
-    _entryId.clear();
-    endDrag();
-}
-
 void UIDesignerPanel::syncPreviewToDocument()
 {
     if (!_previewRoot) {
@@ -203,6 +314,7 @@ void UIDesignerPanel::syncPreviewToDocument()
         return;
     }
     _document = std::move(synced);
+    markDirty();
 
     // Inline scene-entry mode: write back to the entry so the Scene
     // Hierarchy's Game UI Entries tree reflects the edit immediately.
@@ -494,15 +606,16 @@ bool UIDesignerPanel::applyDragDelta(const glm::vec2& canvasDelta)
         // a canvas host the anchors must be written to that slot, otherwise the
         // host arranges from the default slot and the drag result is lost.
         if (UIElement* parent = _dragWidget->getParent()) {
-            if (auto* slot = dynamic_cast<UICanvasSlot*>(parent->getSlotForChild(*_dragWidget))) {
+            if (UISlot* slot = parent->getSlotForChild(*_dragWidget)) {
                 FCanvasSlotArgs args;
                 args.anchorMin = anchorMin;
                 args.anchorMax = anchorMax;
                 args.offset    = pos;
                 args.fixedSize = size;
-                slot->apply(args);
-                invalidatePreview();
-                return true;
+                if (slot->applyArgs(args)) {
+                    invalidatePreview();
+                    return true;
+                }
             }
         }
 
@@ -517,10 +630,14 @@ bool UIDesignerPanel::applyDragDelta(const glm::vec2& canvasDelta)
 
 void UIDesignerPanel::endDrag()
 {
+    const bool moved = _bDragMoved;
     _dragMode   = EDragMode::None;
     _dragWidget = nullptr;
     _resizeMask = 0;
     _bDragMoved = false;
+    if (moved) {
+        markDirty();
+    }
 }
 
 void UIDesignerPanel::applyPreviewExtent()

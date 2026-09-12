@@ -15,6 +15,7 @@
 #include "GameEditor/UI/EditorViewportGizmoController.h"
 #include "GameEditor/Panels/SceneHierarchyPanel.h"
 #include "GameEditor/Panels/UIDesignerPanel.h"
+#include "GameEditor/UI/EditorDocumentSession.h"
 #include "RHI/Core/Image.h"
 #include "RHI/Core/RenderTexture.h"
 #include "Render3D/Common/RenderOverlay.h"
@@ -32,6 +33,7 @@ namespace ya
 {
 
 struct App;
+struct EditorDocumentRegistry;
 struct IImageView;
 struct IImage;
 struct RenderTexture;
@@ -63,6 +65,7 @@ struct EditorLayer
     SceneHierarchyPanel _sceneHierarchyPanel;
     AssetInspectorPanel _assetInspectorPanel;
     UIDesignerPanel     _uiDesignerPanel;
+    EditorDocumentRegistry* _documents = nullptr;
 
     // ViewportWidget layout (chrome). Host copies image rect into the Camera
     // WorldView extent; this is not the present surface.
@@ -146,6 +149,7 @@ struct EditorLayer
     Delegate<void(Rect2D /*rect*/)> onViewportResized;
     MulticastDelegate<void()>       onSelectionChanged;
     MulticastDelegate<void()>       onHierarchyChanged;
+    MulticastDelegate<void()>       onScenePathChanged;
 
     // File picker for save/load dialogs and asset selection
     FilePicker  _filePicker;
@@ -153,6 +157,7 @@ struct EditorLayer
     EditorAssetPickerCallback _assetPickerHandler;
     EditorFilePickerCallback  _filePickerHandler;
     std::function<void()>     _showContentBrowser;
+    std::function<void(EEditorDocumentKind, std::string)> _openDocumentEditor;
     std::string               _pendingContentReveal;
     std::string _currentScenePath; // Current scene file path
     Scene*      _editableScene = nullptr;
@@ -178,7 +183,9 @@ struct EditorLayer
 
     void                                                onUpdate(float dt);
     void                                                setEditableScene(Scene* scene);
-    void                                                setCurrentScenePath(std::string scenePath) { _currentScenePath = std::move(scenePath); }
+    void                                                setDocumentRegistry(EditorDocumentRegistry* documents);
+    [[nodiscard]] EditorDocumentRegistry*               documentRegistry() const { return _documents; }
+    void                                                setCurrentScenePath(std::string scenePath);
     [[nodiscard]] const std::string&                    getCurrentScenePath() const { return _currentScenePath; }
     [[nodiscard]] bool                                  isProjectLoaded() const { return hasProjectLoaded(); }
     [[nodiscard]] const std::shared_ptr<RenderTexture>& getViewportDisplayImage() const
@@ -385,6 +392,7 @@ struct EditorLayer
     Scene* getViewportInteractionScene() const;
 
     void cmdNewScene();
+    void cmdLoadScene(std::string scenePath);
     void cmdSaveScene();
     void cmdSaveSceneAs();
     [[nodiscard]] bool canViewportAuthor() const;
@@ -400,6 +408,17 @@ struct EditorLayer
     void clearFilePickerHandler() { _filePickerHandler = nullptr; }
     void setShowContentBrowserHandler(std::function<void()> handler) { _showContentBrowser = std::move(handler); }
     void clearShowContentBrowserHandler() { _showContentBrowser = nullptr; }
+    void setOpenDocumentEditorHandler(std::function<void(EEditorDocumentKind, std::string)> handler)
+    {
+        _openDocumentEditor = std::move(handler);
+    }
+    void clearOpenDocumentEditorHandler() { _openDocumentEditor = nullptr; }
+    void openDocumentEditor(EEditorDocumentKind kind, std::string key)
+    {
+        if (_openDocumentEditor) {
+            _openDocumentEditor(kind, std::move(key));
+        }
+    }
     void revealInContentBrowser(std::string vfsPath)
     {
         _pendingContentReveal = std::move(vfsPath);

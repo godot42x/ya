@@ -3,51 +3,27 @@
   "root": {
     "kind": "split",
     "orientation": "vertical",
-    "ratio": 0.74,
+    "ratio": 0.78,
     "minExtent": [120.0, 120.0],
     "children": [
       {
-        "kind": "split",
-        "orientation": "vertical",
-        "ratio": 0.26,
-        "minExtent": [120.0, 120.0],
-        "children": [
-          {
-            "kind": "leaf",
-            "panels": ["hierarchy"],
-            "selected": "hierarchy"
-          },
-          {
-            "kind": "split",
-            "orientation": "horizontal",
-            "ratio": 0.72,
-            "minExtent": [120.0, 120.0],
-            "children": [
-              {
-                "kind": "leaf",
-                "panels": ["viewport"],
-                "selected": "viewport"
-              },
-              {
-                "kind": "leaf",
-                "panels": [
-                  "content-browser",
-                  "frame-stats",
-                  "runtime-tools",
-                  "ui-designer",
-                  "asset-inspector",
-                  "debug-images"
-                ],
-                "selected": "content-browser"
-              }
-            ]
-          }
-        ]
+        "kind": "leaf",
+        "leafRole": "page",
+        "hideTabBar": true,
+        "panels": ["level-editor", "ui-designer"],
+        "selected": "level-editor"
       },
       {
         "kind": "leaf",
-        "panels": ["inspector"],
-        "selected": "inspector"
+        "leafRole": "tools",
+        "panels": [
+          "content-browser",
+          "frame-stats",
+          "runtime-tools",
+          "asset-inspector",
+          "debug-images"
+        ],
+        "selected": "content-browser"
       }
     ]
   },

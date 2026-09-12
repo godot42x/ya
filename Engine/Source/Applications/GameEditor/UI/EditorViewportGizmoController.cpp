@@ -49,6 +49,7 @@ struct FGizmoAxisFrame
     glm::vec3                worldEnd{0.0f, 0.0f, 0.0f};
     glm::vec2                screenEnd{0.0f, 0.0f};
     bool                     bProjected = false;
+    bool                     bReversed  = false;
 };
 
 struct FViewportGizmoFrame
@@ -95,19 +96,113 @@ size_t gizmoAxisIndex(EEditorViewportGizmoAxis axis)
     }
 }
 
-glm::vec4 gizmoAxisColor(EEditorViewportGizmoAxis axis, bool highlighted)
+glm::vec4 gizmoAxisColor(EEditorViewportGizmoAxis axis, bool highlighted, bool pressed)
 {
-    const glm::vec4 tint = highlighted ? glm::vec4(1.0f, 0.95f, 0.72f, 1.0f) : glm::vec4(1.0f);
+    glm::vec4 base{0.85f, 0.85f, 0.85f, 1.0f};
     switch (axis) {
     case EEditorViewportGizmoAxis::X:
-        return glm::vec4(0.96f, 0.24f, 0.24f, 1.0f) * tint;
+        base = {0.96f, 0.24f, 0.24f, 1.0f};
+        break;
     case EEditorViewportGizmoAxis::Y:
-        return glm::vec4(0.25f, 0.88f, 0.34f, 1.0f) * tint;
+        base = {0.25f, 0.88f, 0.34f, 1.0f};
+        break;
     case EEditorViewportGizmoAxis::Z:
-        return glm::vec4(0.28f, 0.58f, 1.0f, 1.0f) * tint;
+        base = {0.28f, 0.58f, 1.0f, 1.0f};
+        break;
     case EEditorViewportGizmoAxis::None:
     default:
-        return highlighted ? glm::vec4(1.0f, 0.95f, 0.72f, 1.0f) : glm::vec4(0.85f, 0.85f, 0.85f, 1.0f);
+        break;
+    }
+    if (pressed) {
+        return glm::mix(base, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), 0.60f);
+    }
+    if (highlighted) {
+        return glm::mix(base, glm::vec4(1.0f, 0.92f, 0.22f, 1.0f), 0.55f);
+    }
+    return base;
+}
+
+float gizmoLineThickness(bool highlighted, bool pressed)
+{
+    if (pressed) {
+        return 3.5f;
+    }
+    if (highlighted) {
+        return 3.0f;
+    }
+    return 2.0f;
+}
+
+float gizmoHandlePixels(bool highlighted, bool pressed)
+{
+    if (pressed) {
+        return 12.0f;
+    }
+    if (highlighted) {
+        return 11.0f;
+    }
+    return kViewportGizmoHandlePixels;
+}
+
+void drawScreenLine(const glm::vec2& from,
+                    const glm::vec2& to,
+                    const glm::vec4& color,
+                    float            thickness,
+                    Texture*         white)
+{
+    const glm::vec2 delta = to - from;
+    const float     len   = glm::length(delta);
+    if (len < 0.5f || !white) {
+        return;
+    }
+    const float angle = std::atan2(delta.y, delta.x);
+    const glm::mat4 transform =
+        glm::translate(glm::mat4(1.0f), glm::vec3(from.x, from.y, 0.0f)) *
+        glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 0.0f, 1.0f)) *
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -thickness * 0.5f, 0.0f)) *
+        glm::scale(glm::mat4(1.0f), glm::vec3(len, thickness, 1.0f));
+    Render2D::makeSprite(transform, white, color);
+}
+
+void drawScreenCircleOutline(const glm::vec2& center,
+                             float            radius,
+                             const glm::vec4& color,
+                             float            thickness,
+                             Texture*         white)
+{
+    constexpr int kSegments = 16;
+    glm::vec2     prev      = center + glm::vec2(radius, 0.0f);
+    for (int i = 1; i <= kSegments; ++i) {
+        const float     angle = (2.0f * std::numbers::pi_v<float>) * static_cast<float>(i) /
+                            static_cast<float>(kSegments);
+        const glm::vec2 next = center + glm::vec2(std::cos(angle), std::sin(angle)) * radius;
+        drawScreenLine(prev, next, color, thickness, white);
+        prev = next;
+    }
+}
+
+void drawHatchedAxis(const glm::vec2& origin,
+                     const glm::vec2& end,
+                     const glm::vec4& color,
+                     Texture*         white)
+{
+    const glm::vec2 delta = end - origin;
+    const float     len   = glm::length(delta);
+    if (len < 8.0f) {
+        return;
+    }
+    const glm::vec2 dir = delta / len;
+    for (int dash = 1; dash < 10; ++dash) {
+        const float startT = (static_cast<float>(dash * 2) * 0.05f) * len;
+        const float endT   = (static_cast<float>(dash * 2 + 1) * 0.05f) * len;
+        if (startT >= len) {
+            break;
+        }
+        drawScreenLine(origin + dir * startT,
+                       origin + dir * std::min(endT, len),
+                       color,
+                       1.5f,
+                       white);
     }
 }
 
@@ -284,8 +379,27 @@ std::optional<FViewportGizmoFrame> buildViewportGizmoFrame(Entity*              
         const glm::vec3 basis = gizmoAxisBasis(axisFrame.axis);
         axisFrame.worldDir =
             mode == EEditorViewportGizmoMode::Local ? glm::normalize(frame.rotation * basis) : basis;
-        axisFrame.worldEnd   = frame.originWorld + axisFrame.worldDir * frame.axisLengthWorld;
-        axisFrame.bProjected = projectWorldToViewport(host, axisFrame.worldEnd, axisFrame.screenEnd);
+        const glm::vec3 plusWorld  = frame.originWorld + axisFrame.worldDir * frame.axisLengthWorld;
+        const glm::vec3 minusWorld = frame.originWorld - axisFrame.worldDir * frame.axisLengthWorld;
+        glm::vec2       plusScreen{0.0f};
+        glm::vec2       minusScreen{0.0f};
+        const bool      plusOk  = projectWorldToViewport(host, plusWorld, plusScreen);
+        const bool      minusOk = projectWorldToViewport(host, minusWorld, minusScreen);
+        const float     plusLen =
+            plusOk ? glm::distance(frame.originScreen, plusScreen) : 0.0f;
+        const float minusLen =
+            minusOk ? glm::distance(frame.originScreen, minusScreen) : 0.0f;
+        axisFrame.bReversed = minusOk && minusLen > plusLen + 1.0f;
+        if (axisFrame.bReversed) {
+            axisFrame.worldEnd   = minusWorld;
+            axisFrame.screenEnd  = minusScreen;
+            axisFrame.bProjected = true;
+        }
+        else {
+            axisFrame.worldEnd   = plusWorld;
+            axisFrame.screenEnd  = plusScreen;
+            axisFrame.bProjected = plusOk;
+        }
         frame.axes[i]        = axisFrame;
     }
     return frame;
@@ -635,28 +749,35 @@ void EditorViewportGizmoController::recordOverlay() const
 
     const EEditorViewportGizmoAxis highlightedAxis = _bDragging ? _activeAxis : _hoveredAxis;
     auto*                          white           = TextureLibrary::get().getWhiteTexture().get();
+    if (!white) {
+        return;
+    }
 
     if (_operation == EEditorViewportGizmoOperation::Rotate) {
         for (const auto& axis : frame->axes) {
             const bool      highlighted = axis.axis == highlightedAxis;
-            const glm::vec4 color       = gizmoAxisColor(axis.axis, highlighted);
+            const bool      pressed     = _bDragging && axis.axis == _activeAxis;
+            const glm::vec4 color       = gizmoAxisColor(axis.axis, highlighted, pressed);
+            const float     thickness   = gizmoLineThickness(highlighted, pressed);
             const glm::vec3 tangent0    = choosePerpendicular(axis.worldDir);
             const glm::vec3 tangent1    = glm::normalize(glm::cross(axis.worldDir, tangent0));
-            glm::vec3       prev        = frame->originWorld + tangent0 * frame->ringRadiusWorld;
-            for (int segment = 1; segment <= kViewportGizmoRingSegments; ++segment) {
+            glm::vec2       prevScreen{};
+            bool            bPrev = false;
+            for (int segment = 0; segment <= kViewportGizmoRingSegments; ++segment) {
                 const float angle = (2.0f * std::numbers::pi_v<float>) * static_cast<float>(segment) /
                                     static_cast<float>(kViewportGizmoRingSegments);
-                const glm::vec3 next =
+                const glm::vec3 world =
                     frame->originWorld +
                     (tangent0 * std::cos(angle) + tangent1 * std::sin(angle)) * frame->ringRadiusWorld;
-                Render2D::makeWorldLine(prev, next, color);
-                prev = next;
+                glm::vec2 screen{};
+                const bool bOk = projectWorldToViewport(_hostState, world, screen);
+                if (bOk && bPrev) {
+                    drawScreenLine(prevScreen, screen, color, thickness, white);
+                }
+                prevScreen = screen;
+                bPrev      = bOk;
             }
         }
-        return;
-    }
-
-    if (!white) {
         return;
     }
 
@@ -665,14 +786,23 @@ void EditorViewportGizmoController::recordOverlay() const
             continue;
         }
         const bool      highlighted = axis.axis == highlightedAxis;
-        const glm::vec4 color       = gizmoAxisColor(axis.axis, highlighted);
-        Render2D::makeWorldLine(frame->originWorld, axis.worldEnd, color);
-        Render2D::makeSprite(glm::vec3(axis.screenEnd.x - kViewportGizmoHandlePixels * 0.5f,
-                                       axis.screenEnd.y - kViewportGizmoHandlePixels * 0.5f,
-                                       0.0f),
-                             glm::vec2(kViewportGizmoHandlePixels, kViewportGizmoHandlePixels),
-                             white,
-                             color);
+        const bool      pressed     = _bDragging && axis.axis == _activeAxis;
+        const glm::vec4 color       = gizmoAxisColor(axis.axis, highlighted, pressed);
+        const float     thickness   = gizmoLineThickness(highlighted, pressed);
+        const float     handle      = gizmoHandlePixels(highlighted, pressed);
+        drawScreenLine(frame->originScreen, axis.screenEnd, color, thickness, white);
+        if (axis.bReversed) {
+            drawHatchedAxis(frame->originScreen, axis.screenEnd, color, white);
+            drawScreenCircleOutline(axis.screenEnd, handle * 0.55f, color, std::max(1.5f, thickness * 0.7f), white);
+        }
+        else {
+            Render2D::makeSprite(glm::vec3(axis.screenEnd.x - handle * 0.5f,
+                                           axis.screenEnd.y - handle * 0.5f,
+                                           0.0f),
+                                 glm::vec2(handle, handle),
+                                 white,
+                                 color);
+        }
     }
 }
 

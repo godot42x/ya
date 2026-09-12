@@ -2,6 +2,7 @@
 
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Binding/ActionMap.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -12,13 +13,20 @@
 #include "GameEditor/UI/RuntimeRenderSettingsSection.h"
 #include "GameEditor/UI/RuntimeRenderTargetSection.h"
 #include "GameRuntime/App.h"
+#include "RHI/Core/RenderSurfaceContext.h"
 
 #include <format>
 
 namespace ya
 {
 
-EditorRuntimeToolsTab::EditorRuntimeToolsTab() : UICompoundWidget("RuntimeToolsBody", "panel.canvas")
+EditorRuntimeToolsTab::EditorRuntimeToolsTab(ActionMap* actions,
+                                             IRenderSurfaceContext* presentSurface,
+                                             App* app)
+    : UICompoundWidget("RuntimeToolsBody", "panel.canvas")
+    , _actions(actions)
+    , _presentSurface(presentSurface)
+    , _app(app)
 {
     enableTick();
 }
@@ -29,38 +37,31 @@ void EditorRuntimeToolsTab::construct()
     auto frame = ui::text("RuntimeToolsFrame").setText("Frame 0").setStyleKey("text.muted").share();
 
     auto playBuilder = ui::button("RuntimeToolsPlay").child(ui::text("RuntimeToolsPlayLabel").setText("Play"));
-    playBuilder.setOnClick([]() {
-        if (auto* app = App::get()) {
-            app->getTaskManager().registerFrameTask([app]() { app->startRuntime(); });
+    playBuilder.setOnClick([this]() {
+        if (_actions) {
+            (void)_actions->execute("runtime.play");
         }
     });
     auto play = playBuilder.share();
 
     auto simulateBuilder =
         ui::button("RuntimeToolsSimulate").child(ui::text("RuntimeToolsSimulateLabel").setText("Simulate"));
-    simulateBuilder.setOnClick([]() {
-        if (auto* app = App::get()) {
-            app->getTaskManager().registerFrameTask([app]() { app->startSimulation(); });
+    simulateBuilder.setOnClick([this]() {
+        if (_actions) {
+            (void)_actions->execute("runtime.simulate");
         }
     });
     auto simulate = simulateBuilder.share();
 
     auto stopBuilder = ui::button("RuntimeToolsStop").child(ui::text("RuntimeToolsStopLabel").setText("Stop"));
-    stopBuilder.setOnClick([]() {
-        if (auto* app = App::get()) {
-            app->getTaskManager().registerFrameTask([app]() {
-                if (app->isRuntimeMode()) {
-                    app->stopRuntime();
-                }
-                else if (app->isSimulationMode()) {
-                    app->stopSimulation();
-                }
-            });
+    stopBuilder.setOnClick([this]() {
+        if (_actions) {
+            (void)_actions->execute("runtime.stop");
         }
     });
     auto stop = stopBuilder.share();
     auto diagnostics = std::make_shared<RuntimeDiagnosticsSection>();
-    auto renderSettings = std::make_shared<RuntimeRenderSettingsSection>();
+    auto renderSettings = std::make_shared<RuntimeRenderSettingsSection>("RuntimeRenderSettings", _app, _presentSurface);
     auto profiling = std::make_shared<RuntimeProfilingSection>();
     auto renderGraph = std::make_shared<RuntimeRenderGraphSection>();
     auto renderTargets = std::make_shared<RuntimeRenderTargetSection>();
@@ -96,7 +97,7 @@ void EditorRuntimeToolsTab::construct()
                                     .child(renderTargets)
                                     .child(debugPrimitives)
                                     .release(),
-                                ui::overlaySlot()
+                                ui::contentSlot()
                                     .hAlign(EUIOverlayAlignment::Fill)
                                     .vAlign(EUIOverlayAlignment::Start))
                          .release());
@@ -114,22 +115,21 @@ void EditorRuntimeToolsTab::tick(float)
 
 void EditorRuntimeToolsTab::refresh()
 {
-    App* app = App::get();
-    if (!app) {
+    if (!_app) {
         return;
     }
-    const char* state = app->isRuntimeMode() ? "Playing" : (app->isSimulationMode() ? "Simulating" : "Stopped");
+    const char* state = _app->isRuntimeMode() ? "Playing" : (_app->isSimulationMode() ? "Simulating" : "Stopped");
     _statusText->setText(state);
-    _frameText->setText(std::format("Frame {}", app->getFrameIndex()));
-    _diagnostics->sync(app);
-    _renderSettings->sync(app);
-    _profiling->sync(app);
-    _renderGraph->sync(app);
-    _renderTargets->sync(app);
-    _debugPrimitives->sync(app);
-    _playButton->setEnabled(app->isStopped());
-    _simulateButton->setEnabled(app->isStopped());
-    _stopButton->setEnabled(!app->isStopped());
+    _frameText->setText(std::format("Frame {}", _app->getFrameIndex()));
+    _diagnostics->sync(_app);
+    _renderSettings->sync(_app, _presentSurface);
+    _profiling->sync(_app);
+    _renderGraph->sync(_app);
+    _renderTargets->sync(_app);
+    _debugPrimitives->sync(_app);
+    _playButton->setEnabled(_app->isStopped());
+    _simulateButton->setEnabled(_app->isStopped());
+    _stopButton->setEnabled(!_app->isStopped());
 }
 
 } // namespace ya

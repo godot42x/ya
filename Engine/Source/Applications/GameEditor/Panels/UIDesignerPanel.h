@@ -13,6 +13,7 @@
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "GameEditor/UI/EditorDocumentSession.h"
 
 #include <memory>
 #include <string>
@@ -21,6 +22,7 @@
 namespace ya
 {
 
+struct EditorDocumentRegistry;
 struct EditorLayer;
 struct Scene;
 struct SceneWidgetEntry;
@@ -48,14 +50,26 @@ struct UIDesignerPanel
     /// is written back to the entry; otherwise it is held for the next
     /// save/open. Returns false (with diagnostics) when nothing is open or the
     /// document is invalid.
+    /// Rebuild + persist the document. In scene-entry mode the inline document
+    /// is written back to the entry; otherwise it is held for the next
+    /// save/open. Returns false (with diagnostics) when nothing is open or the
+    /// document is invalid. Clears document dirty on success.
     bool saveDocument();
     /// The currently open document (shared with the scene entry it came from
     /// when opened via openSceneEntry). Used to detect stale designer state
     /// after external document edits (e.g. hierarchy drag-drop).
     [[nodiscard]] const std::shared_ptr<UIDocument>& getOpenDocument() const { return _document; }
     [[nodiscard]] UIElement* getPreviewRoot() const { return _previewRoot.get(); }
-    /// Close the current document and drop the preview (no save).
+    [[nodiscard]] EditorDocumentSession* documentSession() { return _session; }
+    [[nodiscard]] const EditorDocumentSession* documentSession() const { return _session; }
+    [[nodiscard]] bool isDocumentDirty() const { return _session && _session->dirty(); }
+    /// Close honoring RejectIfDirty. Returns false when dirty; the document stays.
+    bool closeDocument();
+    /// Close the current document and drop the preview (discard dirty).
     void clearDocument();
+    /// Detach-time drop: ignore dirty, still honor Locked.
+    void abandonDocument();
+    void bindDocuments(EditorDocumentRegistry* documents) { _documents = documents; }
     /// Rebuild the document from the preview after a structural edit and
     /// propagate it (scene-entry mode writes back to the entry's inline
     /// document). Keeps the left hierarchy in sync.
@@ -132,8 +146,16 @@ struct UIDesignerPanel
   private:
     void rebuildDocumentFromPreview();
     void applyPreviewExtent();
+    void markDirty();
+    [[nodiscard]] EditorDocumentRegistry* documents() const;
+    bool adoptSession(const FEditorDocumentId& id);
+    bool closeSession(EEditorDocumentCloseMode mode);
+    void dropLocalDocument();
+    bool installPreview(const std::shared_ptr<UIDocument>& document);
 
     EditorLayer* _owner = nullptr;
+    EditorDocumentRegistry* _documents = nullptr;
+    EditorDocumentSession*  _session   = nullptr;
 
     std::shared_ptr<UIDocument> _document;
     std::unique_ptr<WidgetTree> _previewTree;

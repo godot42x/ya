@@ -19,7 +19,10 @@
 #include "GameEditor/EditorProfilingSettings.h"
 #include "GameEditor/EditorRuntimeSettings.h"
 #include "GameEditor/Input/EditorInputNode.h"
+#include "GameEditor/UI/EditorDocumentSession.h"
+#include "GameEditor/UI/EditorNativeTearOff.h"
 #include "GameEditor/UI/EditorTabSpawnerRegistry.h"
+#include "GameEditor/UI/EditorWindowLayout.h"
 #include "GameEditor/UI/EditorWindowRegistry.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "Render3D/Debug/PhysicsDebugDraw.h"
@@ -36,6 +39,12 @@
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "GUI/Compose/GuiFrameInspectorOverlay.h"
 #include "GUI/Compose/Render2DComposePass.h"
+#include "GUI/Host/GUIAppDelegate.h"
+#include "GUI/Host/GUIAppHost.h"
+#include "GUI/Host/GUIDragRouter.h"
+#include "GUI/Host/GUIWindowChrome.h"
+#include "GUI/Host/GUIWindowManager.h"
+#include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Compose/GUIRenderSurface.h"
 #include "RHI/Core/Swapchain.h"
@@ -44,8 +53,12 @@
 #include "Scene/Core/Scene.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
 
+#include <algorithm>
+#include <cmath>
 #include <format>
+#include <memory>
 #include <string_view>
+#include <vector>
 
 namespace ya
 {
@@ -562,13 +575,96 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     EditorPlaySession              _playSession;
     FreeCameraController           _cameraController;
     EditorViewportCompositor       _viewportCompositor;
+    EditorDocumentRegistry         _documents;
     EditorWindowRegistry           _windows;
     EditorTabSpawnerRegistry       _tabSpawners;
+    GUIWindowManager               _guiWindows;
+    GUIDragRouter                  _dragRouter;
+    struct FExtraGuiDelegate final : IGUIAppDelegate
+    {
+        void buildUI(WidgetTree&) override {}
+    } _extraGuiContent;
     EditorInputNode                _inputNode;
     InputRouter::FNodeRegistration _inputNodeRegistration;
+    DelegateHandle                 _scenePathHandle = INVALID_HANDLE;
+    App*                           _app             = nullptr;
     EEditorChromeHost              _chromeHost      = EEditorChromeHost::WidgetTree;
     bool                           _bWasRunning     = false;
     std::optional<EViewportMode>   _viewportModeBeforePlay;
+
+    [[nodiscard]] INativeWindow* mainNativeWindow() const
+    {
+        if (!_app) {
+            return nullptr;
+        }
+        if (auto* render = _app->getRenderServices().getRender()) {
+            if (IRenderSurfaceContext* surface = render->getPrimarySurfaceContext()) {
+                return surface->getNativeWindow();
+            }
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] FEditorNativeTearOff tearOffEnv()
+    {
+        return {
+            .coordinator = &_guiWindows,
+            .content     = &_extraGuiContent,
+            .windows     = &_windows,
+            .spawners    = &_tabSpawners,
+            .documents   = &_documents,
+            .render      = _app ? _app->getRenderServices().getRender() : nullptr,
+        };
+    }
+
+    void persistLayout()
+    {
+        persistEditorWindowLayout(_windows, mainNativeWindow(), &_guiWindows);
+    }
+
+    void hookExtraPersist(EditorWindowSession& session)
+    {
+        session.surface().setPersistLayout([this]() { persistLayout(); });
+        const auto persist = [this]() { persistLayout(); };
+        if (FDockContext* dock = session.surface().windowRootDock()) {
+            dock->appendOnDockUpdated(persist);
+            dock->appendOnFloatingUpdated(persist);
+        }
+        if (FDockContext* dock = session.surface().ownedNestedDock()) {
+            dock->appendOnDockUpdated(persist);
+            dock->appendOnFloatingUpdated(persist);
+        }
+    }
+
+    void hookNativeTearOff(EditorWindowSession& session)
+    {
+        const EditorWindowId windowId = session.windowId();
+        session.surface().setOnDockNoTargetTearOff(
+            [this, windowId](FDockContext& dock, uint64_t panelId, const glm::vec2& pos, const glm::vec2& size) {
+                EditorWindowSession* source = _windows.find(windowId);
+                if (!source) {
+                    return false;
+                }
+                INativeWindow* native = nullptr;
+                if (windowId == kDefaultEditorWindowId) {
+                    native = mainNativeWindow();
+                }
+                else if (source->hostGuiWindowId() != 0) {
+                    native = _guiWindows.findNative(source->hostGuiWindowId());
+                }
+                FEditorNativeTearOff env = tearOffEnv();
+                FEditorTearOffResult torn;
+                const bool handled =
+                    handleDockNoTargetTearOff(env, *source, dock, panelId, pos, size, native, &torn);
+                if (torn.editorWindowId != kInvalidEditorWindowId) {
+                    if (EditorWindowSession* extra = _windows.find(torn.editorWindowId)) {
+                        hookExtraPersist(*extra);
+                        hookNativeTearOff(*extra);
+                    }
+                }
+                return handled;
+            });
+    }
 
     void registerEditorPresets()
     {
@@ -806,9 +902,42 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _layer->setCurrentScenePath(app.getDesc().defaultScenePath.value_or(std::string{}));
         _layer->onAttach();
         registerBuiltinEditorTabSpawners(_tabSpawners);
+        _layer->setDocumentRegistry(&_documents);
         EditorWindowSession* window = _windows.find(kDefaultEditorWindowId);
         YA_CORE_ASSERT(window, "EditorWindowRegistry always owns the default editor window");
-        window->surface().bind(*_layer, &_tabSpawners);
+        window->bind(*_layer, &_tabSpawners, &_documents);
+        _app = &app;
+        if (!_guiWindows.init()) {
+            YA_CORE_WARN("EditorModule: extra native window coordinator failed to init");
+        }
+        _dragRouter.bindExtras(&_guiWindows);
+        _dragRouter.bindRender(app.getRenderServices().getRender());
+        INativeWindow* mainNative = mainNativeWindow();
+        window->surface().setPersistLayout([this]() { persistLayout(); });
+        hookNativeTearOff(*window);
+        nlohmann::json savedLayout;
+        if (mainNative && ConfigManager::get().tryGet("editor", "dockLayout", savedLayout)) {
+            if (const nlohmann::json* main = findMainEditorWindowRecord(savedLayout)) {
+                (void)recoverEditorWindowPlacement(*mainNative, *main);
+            }
+            FEditorNativeTearOff env = tearOffEnv();
+            const size_t restored = restoreEditorExtraWindows(env, savedLayout);
+            if (restored > 0) {
+                YA_CORE_INFO("EditorModule: restored {} extra native window(s)", restored);
+            }
+            _windows.forEach([this](EditorWindowSession& session) {
+                if (session.windowId() != kDefaultEditorWindowId) {
+                    hookExtraPersist(session);
+                    hookNativeTearOff(session);
+                }
+            });
+        }
+        _scenePathHandle = _layer->onScenePathChanged.addLambda(this, [this]() {
+            const std::string& path = _layer->getCurrentScenePath();
+            _windows.forEach([this, &path](EditorWindowSession& session) {
+                session.bindSceneDocument(_documents, path);
+            });
+        });
         _layer->setSaveSceneAsHandler([this]() {
             if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
                 session->surface().openSceneSaveDialog();
@@ -826,12 +955,17 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                 session->surface().showContentBrowser();
             }
         });
+        _layer->setOpenDocumentEditorHandler([this](EEditorDocumentKind kind, std::string key) {
+            if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
+                (void)session->surface().openDocumentEditor(kind, std::move(key));
+            }
+        });
         _layer->setFilePickerHandler([this](FEditorFilePickerRequest request) {
             if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
                 session->surface().openFilePickerDialog(std::move(request));
             }
         });
-        _inputNode.bind(app, *_layer, window);
+        _inputNode.bind(app, *_layer, _windows, window->windowId(), &_guiWindows, &_dragRouter);
         _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);
         gEditorLayer           = _layer.get();
         registerEditorPresets();
@@ -894,9 +1028,18 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         app.getInputRouter().cancelInput(EInputCancelReason::ModuleDetached);
         _inputNodeRegistration.reset();
         _inputNode.unbind();
-        if (EditorWindowSession* session = _windows.find(kDefaultEditorWindowId)) {
-            session->shutdown();
+        _dragRouter.unbind();
+        if (_layer && _scenePathHandle != INVALID_HANDLE) {
+            _layer->onScenePathChanged.remove(_scenePathHandle);
+            _scenePathHandle = INVALID_HANDLE;
         }
+        _windows.forEach([](EditorWindowSession& session) {
+            session.surface().setPersistLayout(nullptr);
+            session.adoptHostTree(nullptr);
+            session.shutdown();
+        });
+        _guiWindows.shutdown();
+        _app = nullptr;
         _playSession.shutdown(app);
         gEditorAuthoringScene = nullptr;
         app.getRenderServices().clearExtensionRenderFrameState();
@@ -956,7 +1099,29 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     bool onEvent(App& app, const Event& event) override
     {
         (void)app;
-        (void)event;
+        uint32_t mainId = 0;
+        if (INativeWindow* native = mainNativeWindow()) {
+            mainId = native->getWindowID();
+        }
+        _dragRouter.bindPrimary(mainId, _windows.defaultSession().tree(), mainNativeWindow());
+        _dragRouter.bindExtras(&_guiWindows);
+        _dragRouter.bindRender(app.getRenderServices().getRender());
+        _dragRouter.adoptSource();
+        if (_dragRouter.route(event)) {
+            _dragRouter.sync();
+            _dragRouter.syncTextInput();
+            return true;
+        }
+        const uint32_t windowId = guiEventWindowId(event);
+        if (windowId != 0 && _guiWindows.findSession(windowId)) {
+            (void)_guiWindows.dispatchEvent(event);
+            _dragRouter.adoptSource();
+            _dragRouter.sync();
+            return true;
+        }
+        if (event.getEventType() == EEvent::WindowFocus) {
+            _guiWindows.setFocusedWindow(0);
+        }
         return false;
     }
 
@@ -1034,8 +1199,10 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                     EFormat::R16G16B16A16_SFLOAT);
             }
             EFormat::T chromeFormat = EFormat::B8G8R8A8_UNORM;
-            if (auto* render = renderServices.getRender(); render && render->primarySwapchain()) {
-                chromeFormat = render->primarySwapchain()->getFormat();
+            if (auto* render = renderServices.getRender(); render) {
+                if (auto* surface = render->getPrimarySurfaceContext(); surface && surface->getSwapchain()) {
+                    chromeFormat = surface->getSwapchain()->getFormat();
+                }
             }
             prepareRender2DComposePassPipeline(
                 FRender2DComposePassDesc{
@@ -1116,10 +1283,18 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         if (!session) {
             return;
         }
-        session->tick(app, dt);
+        IRenderSurfaceContext* surface = render->getPrimarySurfaceContext();
+        if (!surface) {
+            return;
+        }
+        const FEditorSurfaceContext surfaceContext = makeEditorSurfaceContext(
+            app,
+            *surface,
+            app.getRenderServices().getRenderFrameState());
+        session->tick(surfaceContext, dt);
         const UIFrameSnapshot& snapshot = session->snapshot();
-        const Extent2D targetExtent = render->primarySwapchain()
-                                          ? render->primarySwapchain()->getExtent()
+        const Extent2D targetExtent = surface->getSwapchain()
+                                          ? surface->getSwapchain()->getExtent()
                                           : Extent2D{};
         replayUIFrameSnapshot(&commandBuffer,
                               snapshot,
@@ -1130,6 +1305,60 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                                       runGuiFrameInspectorOverlay(*tree, snapshot, targetExtent);
                                   }
                               });
+    }
+
+    void onAfterPresent(App& app, float dt) override
+    {
+        (void)app;
+        FEditorNativeTearOff env = tearOffEnv();
+        std::vector<EditorWindowId> closing;
+        _windows.forEach([&](EditorWindowSession& session) {
+            if (session.windowId() == kDefaultEditorWindowId || session.hostGuiWindowId() == 0) {
+                return;
+            }
+            if (IGUIWindowSession* gui = _guiWindows.findSession(session.hostGuiWindowId())) {
+                if (gui->closeRequested()) {
+                    closing.push_back(session.windowId());
+                }
+            }
+        });
+        for (EditorWindowId id : closing) {
+            (void)closeEditorWindow(env, id);
+        }
+        std::vector<EditorWindowId> extras;
+        _windows.forEach([&](EditorWindowSession& session) {
+            if (session.windowId() != kDefaultEditorWindowId) {
+                extras.push_back(session.windowId());
+            }
+        });
+        for (EditorWindowId id : extras) {
+            (void)reclaimEditorWindowIfEmpty(env, id);
+        }
+
+        std::vector<GUIWindowId> hosted;
+        _windows.forEach([&](EditorWindowSession& session) {
+            if (session.hostGuiWindowId() != 0) {
+                hosted.push_back(session.hostGuiWindowId());
+            }
+        });
+        std::vector<GUIWindowId> orphans;
+        _guiWindows.forEachWindow([&](GUIWindowId id, WidgetTree*, INativeWindow*) {
+            if (_guiWindows.isHostOverlay(id)) {
+                return;
+            }
+            if (std::find(hosted.begin(), hosted.end(), id) == hosted.end()) {
+                orphans.push_back(id);
+            }
+        });
+        for (GUIWindowId id : orphans) {
+            (void)_guiWindows.destroySession(id);
+        }
+
+        if (_guiWindows.extraWindowCount() == 0) {
+            return;
+        }
+        _guiWindows.tickTrees(dt);
+        _guiWindows.renderAll();
     }
 };
 

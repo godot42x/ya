@@ -1,26 +1,19 @@
 #pragma once
 
-#include "GUI/Binding/Reactive.h"
-#include "GUI/Widgets/CompoundWidget.h"
-#include "GUI/Widgets/Controls/TreeView.h"
-
-#include <memory>
-#include <string>
+#include "GameEditor/UI/EditorNestedDockHost.h"
 
 namespace ya
 {
 
 struct EditorLayer;
-struct UIElement;
-struct WidgetTree;
-class UndoStack;
 
-/// Retained UI Designer chrome tab. Document/preview tree stay on
-/// UIDesignerPanel; this tab owns palette, tree, and inspector projection.
-class EditorUIDesignerTab : public UICompoundWidget
+/// UI WindowRootEditor host. Palette / tree / inspector / preview chrome
+/// live in nested owned tools; document/preview WidgetTree stay on
+/// UIDesignerPanel (not the Level Editor tree).
+class EditorUIDesignerTab : public EditorNestedDockHost
 {
   public:
-    explicit EditorUIDesignerTab(EditorLayer& layer, UndoStack* undo = nullptr);
+    explicit EditorUIDesignerTab(FEditorTabSpawnContext& ctx);
 
     void onAttached() override;
     void tick(float deltaSeconds) override;
@@ -30,26 +23,12 @@ class EditorUIDesignerTab : public UICompoundWidget
 
   private:
     EditorLayer* _layer = nullptr;
-    UndoStack* _undo = nullptr;
-
     std::shared_ptr<struct UIText> _statusText;
-    std::shared_ptr<struct UIText> _selectionText;
     std::shared_ptr<struct UIButton> _newButton;
     std::shared_ptr<struct UIButton> _saveButton;
     std::shared_ptr<struct UIButton> _closeButton;
-    std::shared_ptr<ReactiveList<UITreeView::FNode>> _roots;
-    std::shared_ptr<Reactive<std::string>> _selection;
-    std::shared_ptr<UITreeView> _treeView;
-    std::string _treeFingerprint;
-    std::shared_ptr<struct UIContainer> _paletteList;
-    std::shared_ptr<struct UIContainer> _inspectorHost;
-    std::shared_ptr<class EditorAutoPropertySection> _inspectorSection;
-    std::string _inspectorFingerprint;
-    std::string _selectionFingerprint;
 
-    void refresh();
-    void refreshFromTree(WidgetTree& tree);
-    void rebuildInspector(WidgetTree& tree, UIElement* selected);
+    void refreshStatus();
 };
 
 } // namespace ya

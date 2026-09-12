@@ -2,9 +2,12 @@
 
 #include "Core/Input/InputManager.h"
 #include "Core/KeyCode.h"
+#include "GUI/Host/GUIDragRouter.h"
+#include "GUI/Host/GUIWindowManager.h"
 #include "GameEditor/EditorLayer.h"
-#include "GameEditor/UI/EditorWindowSession.h"
+#include "GameEditor/UI/EditorWindowRegistry.h"
 #include "GameRuntime/App.h"
+#include "RHI/NativeWindow.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -231,18 +234,50 @@ void deliverMatchingRelease(InputManager& inputManager, const FInputEvent& event
 
 } // namespace
 
-void EditorInputNode::bind(App& app, EditorLayer& layer, EditorWindowSession* session)
+EditorWindowSession* EditorInputNode::session() const
 {
-    _app     = &app;
-    _layer   = &layer;
-    _session = session;
+    return _windows ? _windows->find(_windowId) : nullptr;
+}
+
+void EditorInputNode::syncDragRouter(uint32_t primaryNativeId, INativeWindow* native)
+{
+    if (!_dragRouter) {
+        return;
+    }
+    WidgetTree* primaryTree = nullptr;
+    if (_windows) {
+        primaryTree = _windows->defaultSession().tree();
+    }
+    _dragRouter->bindPrimary(primaryNativeId, primaryTree, native);
+    _dragRouter->bindExtras(_extraWindows);
+    _dragRouter->adoptSource();
+    _dragRouter->adoptCapture();
+    _dragRouter->syncTextInput();
+}
+
+void EditorInputNode::bind(App& app,
+                           EditorLayer& layer,
+                           EditorWindowRegistry& windows,
+                           EditorWindowId windowId,
+                           GUIWindowManager* extraWindows,
+                           GUIDragRouter* dragRouter)
+{
+    _app          = &app;
+    _layer        = &layer;
+    _windows      = &windows;
+    _extraWindows = extraWindows;
+    _dragRouter   = dragRouter;
+    _windowId     = windowId;
 }
 
 void EditorInputNode::unbind()
 {
     _bLooking     = false;
     _bFeedingKeys = false;
-    _session      = nullptr;
+    _dragRouter   = nullptr;
+    _extraWindows = nullptr;
+    _windows      = nullptr;
+    _windowId     = kDefaultEditorWindowId;
     _layer        = nullptr;
     _app          = nullptr;
 }
@@ -251,6 +286,29 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
 {
     if (!_app || !_layer) {
         return {};
+    }
+
+    uint32_t primaryNativeId = 0;
+    INativeWindow* primaryNative = context.router.getWindow();
+    if (primaryNative) {
+        primaryNativeId = primaryNative->getWindowID();
+    }
+    syncDragRouter(primaryNativeId, primaryNative);
+    if (_dragRouter && _dragRouter->route(event)) {
+        _dragRouter->sync();
+        return FInputReply{.handled = true};
+    }
+
+    if (_extraWindows && _extraWindows->dispatchEvent(event)) {
+        syncDragRouter(primaryNativeId, primaryNative);
+        if (_dragRouter) {
+            _dragRouter->sync();
+        }
+        return FInputReply{.handled = true};
+    }
+
+    if (_dragRouter) {
+        _dragRouter->sync();
     }
 
     InputManager& inputManager = _app->getInputManager();
@@ -262,7 +320,7 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
         _bLooking = false;
     }
 
-    const FEditorInputSnapshot snapshot = buildSnapshot(*_app, *_layer, _session, event);
+    const FEditorInputSnapshot snapshot = buildSnapshot(*_app, *_layer, session(), event);
 
     if (eventType == EEvent::MouseButtonPressed) {
         const auto& press = static_cast<const MouseButtonPressedEvent&>(event);
@@ -318,9 +376,14 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
 void EditorInputNode::cancelInput(FInputRouteContext& context, EInputCancelReason reason)
 {
     (void)context;
-    (void)reason;
     _bLooking     = false;
     _bFeedingKeys = false;
+    // Focus leaving a window is how a unique pointer drag crosses OS windows.
+    // Only tear the session down when this input universe itself is ending.
+    if (_dragRouter && (reason == EInputCancelReason::ModuleDetached ||
+                        reason == EInputCancelReason::AppStateChanged)) {
+        _dragRouter->cancel();
+    }
     if (_app) {
         _app->getInputManager().cancelInput();
     }
@@ -328,20 +391,25 @@ void EditorInputNode::cancelInput(FInputRouteContext& context, EInputCancelReaso
 
 std::optional<ECursorType> EditorInputNode::getCursor() const
 {
-    if (!_session) {
+    if (_dragRouter) {
+        return _dragRouter->cursor();
+    }
+
+    EditorWindowSession* window = session();
+    if (!window) {
         return std::nullopt;
     }
 
-    if (WidgetTree* tree = _session->tree()) {
+    if (WidgetTree* tree = window->tree()) {
         if (const UIElement* hovered = tree->getHovered()) {
             const ECursorType chrome = hovered->getCursor();
-            if (chrome != ECursorType::Arrow || !_session->isViewportHovered()) {
+            if (chrome != ECursorType::Arrow || !window->isViewportHovered()) {
                 return chrome;
             }
         }
     }
 
-    if (_session->isViewportHovered() && _app) {
+    if (window->isViewportHovered() && _app) {
         if (GameUIHost* host = _app->getGameUIHost(); host && host->getMountedScene()) {
             if (const UIElement* hovered = host->getTree().getHovered()) {
                 return hovered->getCursor();

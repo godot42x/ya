@@ -1,21 +1,29 @@
 #pragma once
 
+#include "GameEditor/UI/EditorRootSession.h"
 #include "GameEditor/UI/EditorTabSpawnerRegistry.h"
+#include "GUI/Widgets/Controls/DockSpace/DockNode.h"
 
+#include <functional>
+#include <memory>
 #include <nlohmann/json.hpp>
+#include <string>
 #include <string_view>
 
 namespace ya
 {
 
 struct WidgetTree;
+struct App;
 struct EditorLayer;
+struct EditorDocumentRegistry;
 struct SelectionModel;
 class ActionMap;
 class UndoStack;
 struct UIMenuBar;
 struct FDockContext;
 struct IEditorViewportHostSink;
+struct IRenderSurfaceContext;
 
 /// Rebuild-period dock / workspace policy. Surface creates the DockSpace
 /// chrome, then this object materializes tabs, layout documents, persist, and
@@ -32,29 +40,60 @@ class EditorDockWorkspace
         UndoStack*                 undo            = nullptr;
         IEditorViewportHostSink*   viewportHost    = nullptr;
         EditorTabSpawnerRegistry*  spawners        = nullptr;
+        EditorDocumentRegistry*    documents       = nullptr;
         FDockContext*              dock            = nullptr;
         UIMenuBar*                 menuBar         = nullptr;
+        EditorRootId               activeRootId    = kLevelEditorRootId;
+        EEditorTabPlacement        targetPlacement = EEditorTabPlacement::WindowRootDock;
+        EditorWindowId             windowId        = kDefaultEditorWindowId;
+        std::string                documentKey;
+        EditorDockWorkspace*       nestedWorkspace = nullptr;
+        std::shared_ptr<FDockContext> nestedDock;
+        App*                       app             = nullptr;
+        IRenderSurfaceContext*     presentSurface  = nullptr;
+        std::function<void()>      persistAll;
+        std::function<EditorRootSession*(EditorRootId)> rootFor;
     };
 
   private:
     FHost _host{};
+    void applyAdoptPolicy();
+    [[nodiscard]] DockNodeId ensureToolsLeaf();
 
   public:
-    void bind(FHost host) { _host = host; }
+    void bind(FHost host);
     void clear() { _host = {}; }
 
-    /// First-run / reset layout. Keep in sync with DefaultEditorDockLayout.json.
+    /// Window-root factory (level-editor + window tools). Keep in sync with
+    /// DefaultEditorDockLayout.json.
     [[nodiscard]] static const nlohmann::json& factoryLayout();
+    /// Level-owned nested factory (viewport / hierarchy / inspector).
+    [[nodiscard]] static const nlohmann::json& factoryOwnedNestedLayout();
+    /// Nested factory for a document WindowRootEditor (UI / Material / Script).
+    [[nodiscard]] static const nlohmann::json& factoryOwnedNestedLayoutFor(EditorRootId rootId);
+    /// Map a persisted `editor.dockLayout` document onto this host's placement.
+    /// Version 2 envelopes use `windowRoot` / `ownedNested`. Version 1 flat
+    /// layouts remap owned tools into the nested factory and inject level-editor.
+    [[nodiscard]] static nlohmann::json layoutDocumentForPlacement(const nlohmann::json& document,
+                                                                   EEditorTabPlacement placement);
 
-    [[nodiscard]] FEditorTabSpawnContext makeSpawnContext() const;
+    [[nodiscard]] FEditorTabSpawnContext makeSpawnContext(const FEditorTabSpawner& spawner) const;
     void buildWindowMenu();
-    /// Apply user `editor.dockLayout` if present, otherwise the factory document.
+    /// Apply user `editor.dockLayout` remapped for this host's placement.
+    /// Window-root hosts also apply the nested workspace layout.
     void applyWorkspaceLayout();
     /// Spawn known keys, sanitize unknown keys, import. Falls back to factory
     /// when `bFallbackToFactory` is true and the document cannot be applied.
     bool applyLayoutDocument(const nlohmann::json& layout, bool bFallbackToFactory);
     bool materializeTab(std::string_view tabId);
+    /// Move window-tool tabs out of the chrome page well when they exist,
+    /// and prune abandoned empty Generic / Tools splits. Does not create an
+    /// empty Tools well just to host a drop placeholder.
+    void repairPlacement();
     bool invokeTab(std::string_view tabId);
+    bool closeTab(std::string_view tabId);
+    [[nodiscard]] bool hasTab(std::string_view tabId) const;
+    [[nodiscard]] EditorDockWorkspace* nestedWorkspaceFor(EditorRootId rootId) const;
     void resetLayout();
     void persistLayout();
 };

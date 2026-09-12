@@ -49,7 +49,7 @@ inline ui::UISelectableRowWidgetBuilder contentRow(const std::string& key,
                                                        editor_density::kListIconSize}))
                    .child(ui::text(key + "_Label")
                               .setText(label)
-                              .setFontSize(13)
+                              .setStyleKey(editorStyle(StyleKey::Text))
                               .setVAlign(EWidgetAlignV::Center)));
 }
 
@@ -124,7 +124,7 @@ inline ui::UISelectableRowWidgetBuilder contentTile(const std::string& key,
                                                        editor_density::kGridThumbSize}))
                    .child(ui::text(key + "_Label")
                               .setText(label)
-                              .setFontSize(11)
+                              .setStyleKey(editorStyle(StyleKey::TextCaption))
                               .setWrap(true)
                               .setMaxWrapWidth(editor_density::kGridThumbSize)
                               .setHAlign(EWidgetAlignH::Center)
@@ -193,9 +193,10 @@ inline ui::UIButtonWidgetBuilder labeledButton(std::string key, const std::strin
 {
     std::string labelKey = key + "_Label";
     return ui::button(std::move(key))
+        .setContentPadding({6.0f, 2.0f})
         .child(ui::text(std::move(labelKey))
                    .setText(label)
-                   .setFontSize(13)
+                   .setStyleKey(editorStyle(StyleKey::Text))
                    .setHAlign(EWidgetAlignH::Center)
                    .setVAlign(EWidgetAlignV::Center));
 }
@@ -208,6 +209,7 @@ inline ui::UIButtonWidgetBuilder iconLabeledButton(std::string key,
     const std::string iconKey    = key + "_Icon";
     const std::string labelKey   = key + "_Label";
     return ui::button(std::move(key))
+        .setContentPadding({6.0f, 2.0f})
         .child(ui::row(contentKey)
                    .setSpacing(4.0f)
                    .child(ui::image(iconKey).setAssetPath(assetPath),
@@ -215,8 +217,8 @@ inline ui::UIButtonWidgetBuilder iconLabeledButton(std::string key,
                                                        editor_density::kToolbarIconSize}))
                    .child(ui::text(labelKey)
                               .setText(label)
-                              .setFontSize(13)
-                              .setHAlign(EWidgetAlignH::Center)
+                              .setStyleKey(editorStyle(StyleKey::Text))
+                              .setHAlign(EWidgetAlignH::Left)
                               .setVAlign(EWidgetAlignV::Center)));
 }
 

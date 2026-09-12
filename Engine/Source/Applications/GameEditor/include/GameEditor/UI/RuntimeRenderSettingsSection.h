@@ -12,17 +12,22 @@ struct UIButton;
 struct UICheckBox;
 struct UIComboBox;
 struct UIDragFloat;
+struct IRenderSurfaceContext;
 
 class RuntimeRenderSettingsSection final : public UICompoundWidget
 {
   public:
-    explicit RuntimeRenderSettingsSection(std::string name = "RuntimeRenderSettings");
-    void sync(const App* app);
+    explicit RuntimeRenderSettingsSection(std::string name = "RuntimeRenderSettings",
+                                          App* app = nullptr,
+                                          IRenderSurfaceContext* presentSurface = nullptr);
+    void sync(const App* app, IRenderSurfaceContext* presentSurface);
 
   protected:
     void construct() override;
 
   private:
+    App* _app = nullptr;
+    IRenderSurfaceContext* _presentSurface = nullptr;
     std::shared_ptr<UIText> _pipelineState;
     std::shared_ptr<UIText> _vsyncState;
     std::shared_ptr<UIDragFloat> _viewportScale;

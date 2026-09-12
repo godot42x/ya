@@ -1,10 +1,12 @@
 #include "GameEditor/UI/EditorStatsTab.h"
 
 #include "GUI/Declarative/Build.h"
-#include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameRuntime/App.h"
+#include "GameEditor/UI/EditorTheme.h"
 
 #include <format>
 #include <glm/glm.hpp>
@@ -21,11 +23,12 @@ EditorStatsTab::EditorStatsTab(EditorLayer& layer)
 
 void EditorStatsTab::construct()
 {
-    auto statsText = ui::text("FrameStatsBody").setText("Frame Stats").setFontSize(13);
+    auto statsText = ui::text("FrameStatsBody").setText("Frame Stats").setStyleKey(editorStyle(StyleKey::Text));
     _statsText = statsText.share();
-    addDetachedChild(ui::panel("FrameStatsHost")
+    addDetachedChild(ui::border("FrameStatsHost")
                          .setStyleKey("panel.canvas")
-                         .child(std::move(statsText), ui::canvasSlot().fill().insets(FMargin::all(12.0f)))
+                         .setPadding(FMargin::all(12.0f))
+                         .child(std::move(statsText), ui::contentSlot().fill())
                          .release());
 }
 

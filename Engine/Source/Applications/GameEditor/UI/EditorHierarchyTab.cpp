@@ -13,6 +13,7 @@
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/UI/EditorTheme.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Core/SceneWidgetEntry.h"
@@ -76,6 +77,7 @@ void EditorHierarchyTab::construct()
 {
     _filter = std::make_shared<Reactive<std::string>>("");
     auto filterField = ui::textField("HierarchyFilter")
+                           .setStyleKey(editorStyle(StyleKey::TextField))
                            .setOnTextChanged([this](const std::string& text) {
                                if (_filter) {
                                    _filter->set(text);
@@ -126,9 +128,12 @@ void EditorHierarchyTab::construct()
                     .share();
 
     auto hierarchyScroll = ui::scroll("HierarchyScroll")
-                               .child(_treeView, ui::overlaySlot().fill());
-    addDetachedChild(ui::panel("HierarchyBodyInner")
-                         .setStyleKey("panel.canvas")
+                               .child(_treeView, ui::contentSlot().fill());
+    addDetachedChild(ui::canvasPanel("HierarchyBodyInner")
+                         .child(ui::border("HierarchyBodyFill")
+                                    .setStyleKey("panel.canvas")
+                                    .setVisibility(EWidgetVisibility::HitTestInvisible),
+                                ui::canvasSlot().fill())
                          .child(std::move(filterField),
                                 ui::canvasSlot()
                                     .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
@@ -136,7 +141,7 @@ void EditorHierarchyTab::construct()
                                     .size({0.0f, 26.0f}))
                          .child(std::move(hierarchyScroll),
                                 ui::canvasSlot()
-                                    .anchor({0.0f, 0.0f}, {1.0f, 1.0f})
+                                    .fill()
                                     .insets(FMargin{4.0f, 34.0f, 4.0f, 4.0f}))
                          .release());
 }

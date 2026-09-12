@@ -2,12 +2,16 @@
 
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
+#include "GUI/Binding/SelectionModel.h"
+#include "GameEditor/EditorLayer.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 
+#include <algorithm>
 #include <charconv>
 #include <format>
 #include <string_view>
+#include <vector>
 
 namespace ya
 {
@@ -90,6 +94,47 @@ Entity* moveEditorHierarchyEntity(Scene& scene, const std::string& fromId, const
         return nullptr;
     }
     return draggedEntity;
+}
+
+std::vector<Entity*> editorSelectionEntities(EditorLayer& layer, const SelectionModel* selection)
+{
+    std::vector<Entity*> targets;
+    if (selection && !selection->selected().empty()) {
+        Scene* scene = layer.getHierarchyScene();
+        if (!scene) {
+            return {};
+        }
+        targets.reserve(selection->selected().size());
+        for (const std::string& id : selection->selected()) {
+            uint64_t uuid = 0;
+            if (!parseEditorHierarchyEntityIdKey(id, uuid)) {
+                continue;
+            }
+            if (Entity* entity = scene->getEntityByUUID(uuid)) {
+                targets.push_back(entity);
+            }
+        }
+        uint64_t primaryUuid = 0;
+        if (parseEditorHierarchyEntityIdKey(selection->primary(), primaryUuid)) {
+            auto it = std::find_if(targets.begin(), targets.end(), [primaryUuid](Entity* entity) {
+                auto* id = entity ? entity->getComponent<IDComponent>() : nullptr;
+                return id && id->_id.value == primaryUuid;
+            });
+            if (it != targets.end() && it != targets.begin()) {
+                std::rotate(targets.begin(), it, std::next(it));
+            }
+        }
+    }
+    else {
+        targets = layer.getSelections();
+        if (targets.empty()) {
+            if (Entity* entity = layer.getSelectedEntity()) {
+                targets.push_back(entity);
+            }
+        }
+    }
+    std::erase_if(targets, [](Entity* entity) { return !entity || !entity->isValid() || !entity->getScene(); });
+    return targets;
 }
 
 } // namespace ya

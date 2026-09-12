@@ -25,7 +25,9 @@ EWidgetRouteResult EditorViewportGizmoOverlay::dispatchEvent(const Event& event,
     if (!_controller) {
         return EWidgetRouteResult::NotHandled;
     }
-    const bool bInside = _host.bHovered || wantsPointerCapture();
+    const bool bInsideRect = localPoint.x >= 0.0f && localPoint.y >= 0.0f &&
+                             localPoint.x < _host.extent.x && localPoint.y < _host.extent.y;
+    const bool bInside = bInsideRect || wantsPointerCapture();
 
     switch (event.getEventType()) {
     case EEvent::MouseMoved:
@@ -37,7 +39,7 @@ EWidgetRouteResult EditorViewportGizmoOverlay::dispatchEvent(const Event& event,
     case EEvent::MouseButtonPressed: {
         const auto& press = static_cast<const MouseButtonPressedEvent&>(event);
         _controller->setPointer(localPoint, bInside);
-        if (press.GetMouseButton() == EMouse::Left && _host.bHovered &&
+        if (press.GetMouseButton() == EMouse::Left && bInside &&
             _controller->beginDrag(localPoint)) {
             return EWidgetRouteResult::HandledExclusive;
         }

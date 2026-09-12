@@ -8,6 +8,8 @@ namespace ya
 {
 
 struct App;
+struct AppRenderFrameState;
+struct IRenderSurfaceContext;
 struct WidgetTree;
 
 /// Per-window chrome metrics. Not a Camera extent and not a present flight.
@@ -17,18 +19,31 @@ struct EditorWindowMetrics
 {
     Extent2D logicalExtent{1, 1};
     Extent2D framebufferExtent{};
-    float    dpiScale = 1.0f;
+    float    dpiScale          = 1.0f;
+    float    chromeInsetLeft   = 0.0f;
+    float    chromeInsetTop    = 0.0f;
+    float    chromeInsetRight  = 0.0f;
+    float    chromeInsetBottom = 0.0f;
+    /// Trailing Hybrid/ClientDrawn title drag gutter used to inset page tabs.
+    /// Empty title space is Drag; tab buttons are registered as Client hits.
+    float    chromeDragGutter  = 0.0f;
+    int      screenX           = 0;
+    int      screenY           = 0;
+    int      monitorIndex      = -1;
+    bool     bMaximized        = false;
+    bool     bHasScreenOrigin  = false;
 };
 
-/// Per-frame inputs EditorSurface needs from the window host. Layer, tree,
-/// spawners and viewport host stay Surface-owned; ES-2 session owns the Surface
-/// for this window, ES-3 moves selection/undo/actions off Surface.
+/// Layer, tree, spawners and viewport host stay Surface-owned. Selection /
+/// actions / undo live on the window's active EditorRootSession (ES-3).
 /// Viewport view/projection are Camera frame data, not swapchain state.
 struct FEditorSurfaceContext
 {
-    EditorWindowMetrics metrics;
-    glm::mat4           view{1.0f};
-    glm::mat4           projection{1.0f};
+    App*                     app = nullptr;
+    IRenderSurfaceContext*   presentSurface = nullptr;
+    EditorWindowMetrics      metrics;
+    glm::mat4                view{1.0f};
+    glm::mat4                projection{1.0f};
 };
 
 /// Derive tree extent and dpi from raw window/framebuffer numbers.
@@ -41,9 +56,9 @@ struct FEditorSurfaceContext
 
 void applyEditorWindowMetrics(WidgetTree& tree, const EditorWindowMetrics& metrics);
 
-/// Transitional adapter: read the primary present surface + render frame
-/// matrices from App. EditorSurface::tick(App&) is the only remaining caller;
-/// ES-5 deletes that forwarding.
-[[nodiscard]] FEditorSurfaceContext makeEditorSurfaceContext(App& app);
+[[nodiscard]] FEditorSurfaceContext makeEditorSurfaceContext(
+    App& app,
+    IRenderSurfaceContext& surface,
+    const AppRenderFrameState& frame);
 
 } // namespace ya

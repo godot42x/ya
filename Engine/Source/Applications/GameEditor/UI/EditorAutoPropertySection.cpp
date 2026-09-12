@@ -13,6 +13,7 @@
 #include "GUI/Widgets/Controls/ColorEdit.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "GUI/Widgets/UIElement.h"
 #include "GameEditor/UI/EditorTheme.h"
 
 #include <cmath>
@@ -37,6 +38,11 @@ void applyManipulateSpec(UIDragFloat& drag, const PropertyHandle& binding)
     }
 }
 
+void applyEditorField(UIElement& widget, std::string_view familyKey)
+{
+    widget.setStyleKey(editorStyle(familyKey));
+}
+
 [[nodiscard]] FBoxSlotArgs labelColumnSlot()
 {
     return {.preferredSize = {editor_density::kLabelColumn, editor_density::kRowHeight}};
@@ -58,17 +64,32 @@ void applyManipulateSpec(UIDragFloat& drag, const PropertyHandle& binding)
     };
 }
 
+[[nodiscard]] FBoxSlotArgs fillColorSlot()
+{
+    return {
+        .sizeRule      = EUIBoxSlotSizeRule::Fill,
+        .preferredSize = {0.0f, editor_density::kColorRowHeight},
+    };
+}
+
 [[nodiscard]] FBoxSlotArgs fillControlSlot()
 {
     return {
         .sizeRule      = EUIBoxSlotSizeRule::Fill,
-        .preferredSize  = {0.0f, editor_density::kRowHeight},
+        .preferredSize = {0.0f, editor_density::kRowHeight},
     };
 }
 
-[[nodiscard]] FBoxSlotArgs fillRemainingSlot()
+[[nodiscard]] FBoxSlotArgs fillAssetSlot(bool bTexture)
 {
-    return {.sizeRule = EUIBoxSlotSizeRule::Fill};
+    float height = editor_density::kRowHeight * 2.0f + editor_density::kControlSpacing;
+    if (bTexture) {
+        height += editor_density::kControlSpacing + editor_density::kAssetThumbSize;
+    }
+    return {
+        .sizeRule      = EUIBoxSlotSizeRule::Fill,
+        .preferredSize = {160.0f, height},
+    };
 }
 
 [[nodiscard]] FBoxSlotArgs fixedControlSlot(float width)
@@ -217,7 +238,6 @@ void EditorAutoPropertySection::construct()
         auto row = ui::row("PropertyRow_" + node.name).setSpacing(editor_density::kControlSpacing);
         row.child(ui::text("PropertyLabel_" + node.name)
                       .setText(node.displayName)
-                      .setFontSize(12)
                       .setStyleKey("text.muted")
                       .setVAlign(EWidgetAlignV::Center),
                   node.binding.isAssetRef() ? labelTopSlot() : labelColumnSlot());
@@ -265,6 +285,8 @@ void EditorAutoPropertySection::construct()
             (node.valueType == refl::type_index_v<glm::vec3> || node.valueType == refl::type_index_v<glm::vec4>)) {
             slot.kind = EditorSlot::Kind::Color;
             slot.color = std::make_shared<UIColorEdit>(node.name);
+            applyEditorField(*slot.color, StyleKey::ColorEdit);
+            slot.color->setChannelCount(node.valueType == refl::type_index_v<glm::vec3> ? 3 : 4);
             slot.color->_onColorChanged = [this, index = _editors.size()](const glm::vec4& value) {
                 PropertyHandle binding = _editors[index].node->binding;
                 auto before = binding.copyColor();
@@ -278,13 +300,14 @@ void EditorAutoPropertySection::construct()
                     .redo  = [binding, after]() { binding.restoreColor(after); },
                 });
             };
-            row.child(slot.color, fillControlSlot());
+            row.child(slot.color, fillColorSlot());
             if (!node.bEditable) slot.color->setEnabled(false);
         }
         else if (node.valueType == refl::type_index_v<glm::vec2>) {
             slot.kind = EditorSlot::Kind::Vec2;
             for (int axis = 0; axis < 2; ++axis) {
                 auto drag = std::make_shared<UIDragFloat>(node.name + std::to_string(axis));
+                applyEditorField(*drag, StyleKey::DragFloat);
                 bindDragMerge(*drag);
                 drag->_onValueChanged = [this, index = _editors.size(), axis](float value) {
                     PropertyHandle binding = _editors[index].node->binding;
@@ -314,6 +337,7 @@ void EditorAutoPropertySection::construct()
             slot.kind = EditorSlot::Kind::Vec3;
             for (int axis = 0; axis < 3; ++axis) {
                 auto drag = std::make_shared<UIDragFloat>(node.name + std::to_string(axis));
+                applyEditorField(*drag, StyleKey::DragFloat);
                 bindDragMerge(*drag);
                 drag->_onValueChanged = [this, index = _editors.size(), axis](float value) {
                     PropertyHandle binding = _editors[index].node->binding;
@@ -343,6 +367,7 @@ void EditorAutoPropertySection::construct()
             slot.kind = EditorSlot::Kind::Vec4;
             for (int axis = 0; axis < 4; ++axis) {
                 auto drag = std::make_shared<UIDragFloat>(node.name + std::to_string(axis));
+                applyEditorField(*drag, StyleKey::DragFloat);
                 bindDragMerge(*drag);
                 drag->_onValueChanged = [this, index = _editors.size(), axis](float value) {
                     PropertyHandle binding = _editors[index].node->binding;
@@ -371,6 +396,7 @@ void EditorAutoPropertySection::construct()
         else if (node.valueType == refl::type_index_v<float>) {
             slot.kind = EditorSlot::Kind::Float;
             slot.scalar = std::make_shared<UIDragFloat>(node.name);
+            applyEditorField(*slot.scalar, StyleKey::DragFloat);
             bindDragMerge(*slot.scalar);
             applyManipulateSpec(*slot.scalar, node.binding);
             slot.scalar->_onValueChanged = [this, index = _editors.size()](float value) {
@@ -395,6 +421,7 @@ void EditorAutoPropertySection::construct()
                  node.valueType == refl::type_index_v<uint32_t>) {
             slot.kind = EditorSlot::Kind::Integer;
             slot.integer = std::make_shared<UIDragFloat>(node.name);
+            applyEditorField(*slot.integer, StyleKey::DragFloat);
             bindDragMerge(*slot.integer);
             applyManipulateSpec(*slot.integer, node.binding);
             slot.integer->_speed = slot.integer->_speed > 0.0f ? slot.integer->_speed : 1.0f;
@@ -439,6 +466,7 @@ void EditorAutoPropertySection::construct()
         else if (node.valueType == refl::type_index_v<std::string>) {
             slot.kind = EditorSlot::Kind::String;
             slot.string = std::make_shared<UITextField>(node.name);
+            applyEditorField(*slot.string, StyleKey::TextField);
             slot.string->_onCommit = [this, index = _editors.size()](const std::string& value) {
                 PropertyHandle binding = _editors[index].node->binding;
                 auto before = binding.copy<std::string>();
@@ -458,6 +486,7 @@ void EditorAutoPropertySection::construct()
         else if (node.binding.isEnum()) {
             slot.kind = EditorSlot::Kind::Enum;
             slot.enumeration = std::make_shared<UIComboBox>(node.name);
+            applyEditorField(*slot.enumeration, StyleKey::ComboBox);
             (void)node.binding.enumLabels(slot.enumeration->_items);
             slot.enumeration->_onSelectionChanged = [this, index = _editors.size()](int selected) {
                 PropertyHandle binding = _editors[index].node->binding;
@@ -478,11 +507,12 @@ void EditorAutoPropertySection::construct()
         else if (node.binding.isAssetRef()) {
             slot.kind = EditorSlot::Kind::Asset;
             slot.assetPath = std::make_shared<UITextField>(node.name + "_Path");
-            slot.assetPath->setStyleKey(std::string(StyleKey::TextFieldCompact));
+            applyEditorField(*slot.assetPath, StyleKey::TextField);
             slot.assetPath->_onCommit = [this, index = _editors.size()](const std::string& value) {
                 commitAssetPath(index, value);
             };
             slot.browse = ui::button(node.name + "_Browse", "Browse")
+                              .setContentPadding({6.0f, 2.0f})
                               .setOnClick([this, index = _editors.size()]() {
                                   if (!_assetPicker) {
                                       return;
@@ -503,6 +533,7 @@ void EditorAutoPropertySection::construct()
                               .child(ui::text(node.name + "_BrowseLabel").setText("Browse"))
                               .share();
             slot.locate = ui::button(node.name + "_Locate", "Show")
+                              .setContentPadding({6.0f, 2.0f})
                               .setOnClick([this, index = _editors.size()]() {
                                   if (!_revealAsset) {
                                       return;
@@ -517,10 +548,13 @@ void EditorAutoPropertySection::construct()
                               .share();
             auto pathRow = ui::row(node.name + "_PathRow").setSpacing(editor_density::kControlSpacing);
             pathRow.child(slot.assetPath, fillPathSlot());
-            pathRow.child(slot.browse, fixedControlSlot(editor_density::kBrowseButtonWidth));
-            pathRow.child(slot.locate, fixedControlSlot(editor_density::kLocateButtonWidth));
+            auto buttonRow = ui::row(node.name + "_AssetButtons").setSpacing(editor_density::kControlSpacing);
+            buttonRow.child(slot.browse, fixedControlSlot(editor_density::kBrowseButtonWidth));
+            buttonRow.child(slot.locate, fixedControlSlot(editor_density::kLocateButtonWidth));
             auto assetCol = ui::column(node.name + "_AssetCol").setSpacing(editor_density::kControlSpacing);
             assetCol.child(std::move(pathRow),
+                          FBoxSlotArgs{.preferredSize = {0.0f, editor_density::kRowHeight}});
+            assetCol.child(std::move(buttonRow),
                           FBoxSlotArgs{.preferredSize = {0.0f, editor_density::kRowHeight}});
             if (node.binding.assetRefKind() == EEditorAssetPickerKind::Texture) {
                 slot.preview = std::make_shared<UIImage>(node.name + "_Preview");
@@ -532,7 +566,8 @@ void EditorAutoPropertySection::construct()
                                                      editor_density::kAssetThumbSize},
                                });
             }
-            row.child(std::move(assetCol), fillRemainingSlot());
+            row.child(std::move(assetCol),
+                      fillAssetSlot(node.binding.assetRefKind() == EEditorAssetPickerKind::Texture));
             if (!node.bEditable) {
                 slot.assetPath->setEnabled(false);
                 slot.browse->setEnabled(false);
@@ -780,18 +815,6 @@ void EditorAutoPropertySection::sync(WidgetTree& tree)
             if (slot.node->binding.tryGet(value) && slot.string.get() != focused) slot.string->setText(value);
         }
     }
-}
-
-bool EditorAutoPropertySection::wantsTextInput(WidgetTree& tree) const
-{
-    UIElement* focused = tree.getFocused();
-    for (const EditorSlot& slot : _editors) {
-        if (slot.string.get() == focused || slot.scalar.get() == focused ||
-            slot.integer.get() == focused || slot.assetPath.get() == focused) {
-            return true;
-        }
-    }
-    return false;
 }
 
 } // namespace ya

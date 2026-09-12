@@ -19,7 +19,6 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/FileExplorer.h"
-#include "GameRuntime/App.h"
 
 #include <algorithm>
 #include <cmath>
@@ -71,12 +70,12 @@ void EditorContentBrowserTab::construct()
                           .setOnClick([this]() { _explorer->navigateBack(); })
                           .child(ui::text("ContentBack_Label")
                                      .setText("< Back")
-                                     .setFontSize(12)
+                                     .setStyleKey(editorStyle(StyleKey::Text))
                                      .setHAlign(EWidgetAlignH::Center)
                                      .setVAlign(EWidgetAlignV::Center));
 
     auto searchField = ui::textField("ContentSearch")
-                           .setStyleKey("textfield.compact")
+                           .setStyleKey(editorStyle(StyleKey::TextField))
                            .setOnTextChanged([this](const std::string& text) {
                                _explorer->setSearchText(text);
                                _bRowsDirty = true;
@@ -91,10 +90,10 @@ void EditorContentBrowserTab::construct()
                           })
                           .child(ui::text("ContentViewList_Label")
                                      .setText("List")
-                                     .setFontSize(12)
+                                     .setStyleKey(editorStyle(StyleKey::Text))
                                      .setHAlign(EWidgetAlignH::Center)
                                      .setVAlign(EWidgetAlignV::Center),
-                                 ui::overlaySlot().fill());
+                                 ui::contentSlot().fill());
     _listModeToggle = listToggle.share();
 
     auto gridToggle = ui::selectableRow("ContentViewGrid")
@@ -105,10 +104,10 @@ void EditorContentBrowserTab::construct()
                           })
                           .child(ui::text("ContentViewGrid_Label")
                                      .setText("Grid")
-                                     .setFontSize(12)
+                                     .setStyleKey(editorStyle(StyleKey::Text))
                                      .setHAlign(EWidgetAlignH::Center)
                                      .setVAlign(EWidgetAlignV::Center),
-                                 ui::overlaySlot().fill());
+                                 ui::contentSlot().fill());
     _gridModeToggle = gridToggle.share();
 
     auto header = ui::row("ContentBrowser.ContainerHeader", "Header")
@@ -119,8 +118,8 @@ void EditorContentBrowserTab::construct()
                       .child(std::move(gridToggle), ui::boxSlot().preferredSize({44.0f, 22.0f}))
                       .child(std::move(searchField), ui::boxSlot().preferredSize({160.0f, 24.0f}));
 
-    auto mountScroll = ui::scroll("ContentMountScroll").child(_mountList, ui::overlaySlot().fill());
-    auto entryScroll = ui::scroll("ContentEntryScroll").child(_entryList, ui::overlaySlot().fill());
+    auto mountScroll = ui::scroll("ContentMountScroll").child(_mountList, ui::contentSlot().fill());
+    auto entryScroll = ui::scroll("ContentEntryScroll").child(_entryList, ui::contentSlot().fill());
     _entryScroll = entryScroll.share();
     auto body = ui::splitPane("ContentBody")
                     .setOrientation(ESplitOrientation::Vertical)
@@ -395,12 +394,13 @@ void EditorContentBrowserTab::activateItem(const std::filesystem::path& path, bo
     selectItem(path, false);
     std::string utf8Path = path_utils::pathToUtf8String(path);
     if (utf8Path.ends_with(".scene.json")) {
-        if (App* app = App::get()) {
-            const std::string scenePath = std::move(utf8Path);
-            app->getTaskManager().registerFrameTask([scenePath]() {
-                App::get()->getSceneServices().loadScene(scenePath);
-            });
-        }
+        _layer->cmdLoadScene(std::move(utf8Path));
+    }
+    else if (utf8Path.ends_with(".lua")) {
+        _layer->openDocumentEditor(EEditorDocumentKind::Script, std::move(utf8Path));
+    }
+    else if (utf8Path.ends_with(".mat") || utf8Path.ends_with(".material")) {
+        _layer->openDocumentEditor(EEditorDocumentKind::Material, std::move(utf8Path));
     }
 }
 

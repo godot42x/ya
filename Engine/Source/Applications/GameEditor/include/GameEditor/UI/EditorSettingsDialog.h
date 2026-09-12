@@ -13,7 +13,7 @@ struct UIButton;
 struct UICheckBox;
 struct UIComboBox;
 struct UIContainer;
-struct UIPanel;
+struct UIBorder;
 struct UIPopupOverlay;
 struct UIText;
 struct UITextField;
@@ -69,7 +69,7 @@ class EditorSettingsDialog
   private:
     FEditorSettingsBindings _bindings;
     std::shared_ptr<UIPopupOverlay> _overlay;
-    std::shared_ptr<UIPanel> _panel;
+    std::shared_ptr<UIBorder> _panel;
     std::shared_ptr<UIContainer> _settingsRoot;
     std::shared_ptr<UIComboBox> _samplerCombo;
     std::shared_ptr<UICheckBox> _overlayCheckbox;

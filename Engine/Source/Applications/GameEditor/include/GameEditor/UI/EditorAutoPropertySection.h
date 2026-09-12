@@ -37,7 +37,6 @@ class EditorAutoPropertySection final : public UICompoundWidget
                               EditorRevealAssetCallback revealAsset = {});
 
     void sync(WidgetTree& tree);
-    [[nodiscard]] bool wantsTextInput(WidgetTree& tree) const;
 
   protected:
     void construct() override;
