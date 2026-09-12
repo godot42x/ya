@@ -8,6 +8,7 @@
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Menu.h"
+#include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/TextField.h"
@@ -129,20 +130,12 @@ void EditorHierarchyTab::construct()
 
     auto hierarchyScroll = ui::scroll("HierarchyScroll")
                                .child(_treeView, ui::contentSlot().fill());
-    addDetachedChild(ui::canvasPanel("HierarchyBodyInner")
-                         .child(ui::border("HierarchyBodyFill")
-                                    .setStyleKey("panel.canvas")
-                                    .setVisibility(EWidgetVisibility::HitTestInvisible),
-                                ui::canvasSlot().fill())
-                         .child(std::move(filterField),
-                                ui::canvasSlot()
-                                    .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
-                                    .offset({4.0f, 4.0f})
-                                    .size({0.0f, 26.0f}))
-                         .child(std::move(hierarchyScroll),
-                                ui::canvasSlot()
-                                    .fill()
-                                    .insets(FMargin{4.0f, 34.0f, 4.0f, 4.0f}))
+    addDetachedChild(ui::column("HierarchyBodyInner")
+                         .setSpacing(4.0f)
+                         .setPadding({4.0f, 4.0f})
+                         .setStretchLastChild(true)
+                         .child(std::move(filterField), ui::boxSlot().preferredSize({0.0f, 26.0f}))
+                         .child(std::move(hierarchyScroll), ui::boxSlot().fill())
                          .release());
 }
 
