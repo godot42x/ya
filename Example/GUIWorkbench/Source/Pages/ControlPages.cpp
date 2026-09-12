@@ -24,7 +24,7 @@
 namespace guiworkbench
 {
 
-void buildWidgetsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildWidgetsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                       const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -166,11 +166,11 @@ void buildWidgetsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
                     .child(header("TabBarTitle", "TabBar — horizontal strip (not the gallery rail)"))
                     .child(tabBar, ya::ui::boxSlot().preferredSize({0.0f, 28.0f}))
                     .child(ya::ui::text("WidgetTabLabel").bindText(tabSelected).setFontSize(13));
-    auto page = ya::ui::panel("WidgetsDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    auto page = ya::ui::border("WidgetsDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
 }
 
-void buildInputsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildInputsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                      const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -237,10 +237,10 @@ void buildInputsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                   .child(body("GallerySearchCombo_Body", "SearchCombo"))
                   .child(searchCombo, ya::ui::boxSlot().preferredSize({180.0f, 24.0f})));
 
-    auto page = ya::ui::panel("InputsDemo")
+    auto page = ya::ui::border("InputsDemo")
                     .setColor(kPanelColor)
-                    .child(std::move(form), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+                    .child(std::move(form), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;
 }
 

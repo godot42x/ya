@@ -4,6 +4,7 @@
 #include "GUI/Declarative/Build.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Brush.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Dialog.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Menu.h"
@@ -17,7 +18,7 @@
 namespace guiworkbench
 {
 
-void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildMenusDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -77,11 +78,11 @@ void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                     .child(body("MenusHint", "Click a menu-bar entry, hover to switch, Esc or outside click closes."))
                     .child(std::move(popupBtn), ya::ui::boxSlot().preferredSize({180.0f, 26.0f}))
                     .child(body("MenusKeys", "Keyboard: Up/Down move, Enter activates, Esc closes."));
-    auto page = ya::ui::panel("MenusDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    auto page = ya::ui::border("MenusDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
 }
 
-void buildDialogDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildDialogDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                      const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -120,7 +121,7 @@ void buildDialogDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                              overlay->_bModal     = false;
                              overlay->_contentPos = {440.0f, 300.0f};
 
-                             auto dialog = std::make_shared<ya::UIPanel>("ModalDialog");
+                             auto dialog = std::make_shared<ya::UIBorder>("ModalDialog");
                              dialog->setStyleKey("panel");
                              overlay->addDetachedChild(dialog, [](ya::UIElement&, ya::UISlot& edge) {
                                  if (auto* slot = edge.as<ya::UICanvasSlot>()) {
@@ -135,8 +136,8 @@ void buildDialogDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                              stack->setDirection(ya::EWidgetBoxLayout::Vertical);
                              stack->setSpacing(12.0f);
                              stack->setClipChildren(true);
-                             dialog->addDetachedChild(stack);
-                             ya::ui::attachSlot(*dialog, *stack, ya::ui::overlaySlot().fill());
+                            dialog->addDetachedChild(stack);
+                            ya::ui::resetSlot(*dialog, *stack, ya::ui::contentSlot().fill());
 
                              auto title = makeLabel("About / New Project", 14.0f);
                              stack->addDetachedChild(title);
@@ -209,7 +210,7 @@ void buildDialogDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                                                           .setText("This is a modal dialog. Mouse and keyboard cannot "
                                                                    "reach widgets behind it until OK, Cancel, or Esc. "
                                                                    "Clicking outside does not close it. The overlay paints "
-                                                                   "no dim — stack a fill Panel/Image if you want one.")
+                                                                   "no dim — stack a fill Border/Image if you want one.")
                                                           .setFontSize(13)
                                                           .setColor({0.88f, 0.90f, 0.94f, 1.0f})
                                                           .setWrap(true)
@@ -229,7 +230,7 @@ void buildDialogDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                                    [&tree, log]
                                    {
                                        auto content = ya::ui::text("DimDialogContent")
-                                                          .setText("Dim is a HitTestInvisible fill Panel stacked under "
+                                                          .setText("Dim is a HitTestInvisible fill Border stacked under "
                                                                    "the dialog chrome — not a popup flag.")
                                                           .setFontSize(13)
                                                           .setColor({0.88f, 0.90f, 0.94f, 1.0f})
@@ -237,7 +238,7 @@ void buildDialogDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                                                           .setMaxWrapWidth(380.0f)
                                                           .release();
                                        auto dialog = ya::UIDialog::create("Confirm", std::move(content));
-                                       auto dim    = std::make_shared<ya::UIPanel>("ModalDim");
+                                       auto dim    = std::make_shared<ya::UIBorder>("ModalDim");
                                        dim->setVisibility(ya::EWidgetVisibility::HitTestInvisible);
                                        dim->setStyleField("fillColor",
                                                           ya::FBrush::solid({0.0f, 0.0f, 0.0f, 0.45f}));
@@ -259,10 +260,10 @@ void buildDialogDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                                        dialog->open(tree);
                                    }),
                            ya::ui::boxSlot().preferredSize({260.0f, 26.0f}));
-    auto page = ya::ui::panel("DialogDemo")
+    auto page = ya::ui::border("DialogDemo")
                     .setColor(kPanelColor)
-                    .child(std::move(form), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+                    .child(std::move(form), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
 }
 
 } // namespace guiworkbench

@@ -19,6 +19,8 @@ namespace
 
 constexpr float kTabCloseSize = 12.0f;
 constexpr float kTabClosePad  = 3.0f;
+constexpr uint64_t kTabDoubleClickMs = 400;
+constexpr float    kTabDoubleClickSlop = 6.0f;
 
 bool containsPoint(const Rect2D& rect, const glm::vec2& point)
 {
@@ -155,30 +157,49 @@ bool UITabButton::handleInputEvent(const Event& event, const WidgetEventContext&
         if (mouse.GetMouseButton() != EMouse::Left) {
             return false;
         }
-        _bPressed   = true;
-        _pressPoint = ctx.logicalPoint;
+        _bPressed    = true;
+        _bDidReorder = false;
+        _pressPoint  = ctx.logicalPoint;
         if (WidgetTree* tree = getTree()) {
             tree->setPointerCapture(this);
         }
         return true;
     }
-    if (eventType == EEvent::MouseMoved && _bPressed && _onDragArmed && getTree() && !getTree()->isDragging()) {
-        if (glm::length(ctx.logicalPoint - _pressPoint) > 6.0f) {
-            _bPressed = false;
-            if (WidgetTree* tree = getTree()) {
-                tree->releasePointerCapture(this);
-            }
-            _onDragArmed();
+    if (eventType == EEvent::MouseMoved && _bPressed && _onDragArmed &&
+        getTree() && !getTree()->isDragging()) {
+        auto* bar = dynamic_cast<UITabBar*>(getParent());
+        if (!bar) {
+            return true;
         }
-        return true;
-    }
-    if (eventType == EEvent::MouseButtonReleased && _bPressed) {
-        _bPressed = false;
+        // Locked / canAccept=false: keep capture so Hybrid Drag chrome cannot
+        // steal the gesture, and never arm a dock session or ghost.
+        if (!bar->allowsArmedTabDrag(*this)) {
+            return true;
+        }
+        if (glm::length(ctx.logicalPoint - _pressPoint) <= 6.0f) {
+            return true;
+        }
+        if (bar->hitTestLayoutRect(ctx.logicalPoint)) {
+            bar->reorderDraggedTab(*this, ctx.logicalPoint);
+            _bDidReorder = true;
+            return true;
+        }
+        _bPressed    = false;
+        _bDidReorder = false;
         if (WidgetTree* tree = getTree()) {
             tree->releasePointerCapture(this);
         }
-        // A release without crossing the threshold is a normal click.
-        if (_onActivated) {
+        _onDragArmed();
+        return true;
+    }
+    if (eventType == EEvent::MouseButtonReleased && _bPressed) {
+        const bool bDidReorder = _bDidReorder;
+        _bPressed    = false;
+        _bDidReorder = false;
+        if (WidgetTree* tree = getTree()) {
+            tree->releasePointerCapture(this);
+        }
+        if (!bDidReorder && _onActivated) {
             _onActivated();
         }
         return true;
@@ -211,11 +232,10 @@ UITabButton* UITabBar::addTab(const std::string& label)
     button->_onNavigate  = [this](int delta) { navigate(delta); };
 
     if (_bDraggableTabs) {
-        // DockSpace tab drag: a press on the tab arms a drag; crossing the
-        // threshold starts a tree session carrying dock-tab:<label>.
-        button->_onDragArmed = [this, index]()
+        button->_onDragArmed = [this, button = button.get()]()
         {
-            if (index >= 0 && index < static_cast<int>(_tabs.size())) {
+            const int index = indexOfTab(button);
+            if (index >= 0 && index < static_cast<int>(_tabs.size()) && _onTabDragBegin) {
                 _onTabDragBegin(index, _tabs[static_cast<size_t>(index)]->_label);
             }
         };
@@ -243,26 +263,7 @@ std::string UITabBar::removeTab(int index)
         tree->detach(*button);
     }
     _tabs.erase(_tabs.begin() + index);
-    // Re-point the remaining buttons' indices (activation lambdas captured
-    // the old index).
-    for (size_t i = 0; i < _tabs.size(); ++i) {
-        const size_t newIndex = i;
-        _tabs[i]->_onActivated = [this, newIndex]() { selectTab(static_cast<int>(newIndex)); };
-        _tabs[i]->_onContextMenu = [this, newIndex](const glm::vec2& logicalPoint)
-        {
-            if (_onTabContextMenu) {
-                _onTabContextMenu(static_cast<int>(newIndex), logicalPoint);
-            }
-        };
-        if (_bDraggableTabs) {
-            _tabs[i]->_onDragArmed = [this, newIndex]()
-            {
-                if (newIndex < _tabs.size()) {
-                    _onTabDragBegin(static_cast<int>(newIndex), _tabs[newIndex]->_label);
-                }
-            };
-        }
-    }
+    rebindTabCallbacks();
     if (_selectedIndex >= static_cast<int>(_tabs.size())) {
         _selectedIndex = static_cast<int>(_tabs.size()) - 1;
     }
@@ -272,6 +273,14 @@ std::string UITabBar::removeTab(int index)
     syncSelectedTab(_selectedIndex);
     markLayoutDirty();
     return label;
+}
+
+void UITabBar::clearTabs()
+{
+    while (!_tabs.empty()) {
+        (void)removeTab(static_cast<int>(_tabs.size()) - 1);
+    }
+    _selectedIndex = -1;
 }
 
 void UITabBar::selectTab(int index)
@@ -367,17 +376,115 @@ void UITabBar::paintSelf(UIFrameBuilder& builder)
 
 bool UITabBar::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
-    if (event.getEventType() != EEvent::MouseButtonPressed) {
+    if (event.getEventType() != EEvent::MouseButtonPressed || !hitTestLayoutRect(ctx.logicalPoint)) {
         return false;
     }
     const auto& mouse = static_cast<const MouseButtonPressedEvent&>(event);
-    if (mouse.GetMouseButton() != EMouse::Right || !hitTestLayoutRect(ctx.logicalPoint)) {
+    if (mouse.GetMouseButton() == EMouse::Right) {
+        if (_onTabContextMenu) {
+            _onTabContextMenu(-1, ctx.logicalPoint);
+        }
+        return true;
+    }
+    if (mouse.GetMouseButton() == EMouse::Left && _onStripDoubleClick) {
+        const bool bOsDouble = mouse.clickCount() >= 2;
+        const uint64_t now = event.getTimestampMs();
+        const bool bTimedDouble =
+            _bHasLastEmptyPress && (now - _lastEmptyPressTimeMs) < kTabDoubleClickMs &&
+            glm::length(ctx.logicalPoint - _lastEmptyPressPos) < kTabDoubleClickSlop;
+        _lastEmptyPressTimeMs = now;
+        _lastEmptyPressPos    = ctx.logicalPoint;
+        _bHasLastEmptyPress   = true;
+        if (bOsDouble || bTimedDouble) {
+            _bHasLastEmptyPress = false;
+            _onStripDoubleClick();
+            return true;
+        }
         return false;
     }
-    if (_onTabContextMenu) {
-        _onTabContextMenu(-1, ctx.logicalPoint);
+    return false;
+}
+
+int UITabBar::indexOfTab(const UITabButton* button) const
+{
+    for (int i = 0; i < tabCount(); ++i) {
+        if (_tabs[static_cast<size_t>(i)] == button) {
+            return i;
+        }
     }
-    return true;
+    return -1;
+}
+
+bool UITabBar::allowsArmedTabDrag(const UITabButton& button) const
+{
+    if (!button._bDraggable) {
+        return false;
+    }
+    const int index = indexOfTab(&button);
+    if (index < 0) {
+        return false;
+    }
+    return !_canBeginTabDrag || _canBeginTabDrag(index);
+}
+
+void UITabBar::reorderDraggedTab(UITabButton& button, const glm::vec2& point)
+{
+    const int from = indexOfTab(&button);
+    if (from < 0) {
+        return;
+    }
+    int hover = -1;
+    for (int i = 0; i < tabCount(); ++i) {
+        if (containsPoint(_tabs[static_cast<size_t>(i)]->_layoutRect, point)) {
+            hover = i;
+            break;
+        }
+    }
+    if (hover < 0 || hover == from) {
+        return;
+    }
+    if (_onTabReordered) {
+        _onTabReordered(from, hover);
+    }
+    moveTabVisual(from, hover);
+}
+
+void UITabBar::moveTabVisual(int from, int to)
+{
+    if (from == to || from < 0 || to < 0 || from >= tabCount() || to >= tabCount()) {
+        return;
+    }
+    UITabButton* button = _tabs[static_cast<size_t>(from)];
+    relocateOwnedChild(*button, static_cast<size_t>(to));
+    _tabs.erase(_tabs.begin() + from);
+    const int dest = std::clamp(to, 0, static_cast<int>(_tabs.size()));
+    _tabs.insert(_tabs.begin() + dest, button);
+    rebindTabCallbacks();
+    markLayoutDirty();
+}
+
+void UITabBar::rebindTabCallbacks()
+{
+    for (int i = 0; i < tabCount(); ++i) {
+        const int index = i;
+        _tabs[static_cast<size_t>(i)]->_onActivated = [this, index]() { selectTab(index); };
+        _tabs[static_cast<size_t>(i)]->_onContextMenu = [this, index](const glm::vec2& logicalPoint)
+        {
+            if (_onTabContextMenu) {
+                _onTabContextMenu(index, logicalPoint);
+            }
+        };
+        if (_bDraggableTabs) {
+            UITabButton* button = _tabs[static_cast<size_t>(i)];
+            button->_onDragArmed = [this, button]()
+            {
+                const int current = indexOfTab(button);
+                if (current >= 0 && current < tabCount() && _onTabDragBegin) {
+                    _onTabDragBegin(current, _tabs[static_cast<size_t>(current)]->_label);
+                }
+            };
+        }
+    }
 }
 
 } // namespace ya

@@ -7,6 +7,7 @@
 #include "Core/KeyCode.h"
 #include "GUI/Compose/GuiFrameInspectorOverlay.h"
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/GuiFrameInspector.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
@@ -43,9 +44,9 @@ WidgetTree makeTree()
     return WidgetTree({.width = 800, .height = 600});
 }
 
-std::shared_ptr<UIPanel> attachProbe(WidgetTree& tree, const char* name, const Rect2D& rect)
+std::shared_ptr<UIBorder> attachProbe(WidgetTree& tree, const char* name, const Rect2D& rect)
 {
-    auto panel = std::make_shared<UIPanel>(name);
+    auto panel = std::make_shared<UIBorder>(name);
     FCanvasSlotArgs slot;
     slot.offset    = rect.pos;
     slot.fixedSize = rect.extent;

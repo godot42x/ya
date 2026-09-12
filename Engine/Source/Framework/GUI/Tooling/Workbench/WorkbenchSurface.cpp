@@ -13,6 +13,7 @@
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/Panel.h"
@@ -43,11 +44,17 @@ constexpr glm::vec4 kHeaderColor = guiworkbench::tokens::kHeaderColor;
 
 } // namespace
 
-void FWorkbenchSurface::assembleChrome(ya::WidgetTree& tree, ya::UIElement& parent)
+void FWorkbenchSurface::assembleChrome(ya::WidgetTree& tree, ya::UICanvasPanel& parent)
 {
-    buildMenuBar(tree, parent);
-    buildWorkspaceShell(tree, parent);
-    buildStatusBar(tree, parent);
+    // Root is a canvas layout host. Window fill is a sibling UIBorder so
+    // chrome (column) can still pack by box layout.
+    auto chrome = ya::ui::column("WorkbenchChrome").setSpacing(0.0f).share();
+    _chromeColumn = chrome;
+    ya::ui::attach(tree, parent, chrome, ya::ui::canvasSlot().fill());
+
+    buildMenuBar(tree, *chrome);
+    buildWorkspaceShell(tree, *chrome);
+    buildStatusBar(tree, *chrome);
     selectPage(_initialPageIndex);
 }
 
@@ -60,16 +67,18 @@ void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
     }
     _editorPageIndex = findPageIndexByName("Editor");
 
-    _root = std::make_shared<ya::UIPanel>("WorkbenchRoot");
-    // Shell chrome resolves its fill from the mounted theme (Phase 4): the
-    // window key drives the root backdrop; no authored color so the
-    // white/dark toggle restyles the whole shell.
-    _root->_styleKey = "panel.window";
+    _root = std::make_shared<ya::UICanvasPanel>("WorkbenchRoot");
     ya::FCanvasSlotArgs fillArgs;
     fillArgs.anchorMin = {0.0f, 0.0f};
     fillArgs.anchorMax = {1.0f, 1.0f};
     const ya::WidgetAttachment attached = tree.attachToLayer(ya::WidgetTree::ELayer::Content, _root, fillArgs);
     YA_CORE_ASSERT(attached.valid(), "WorkbenchSurface: failed to attach WorkbenchRoot");
+
+    auto windowFill = ya::ui::border("WorkbenchRootFill")
+                          .setStyleKey("panel.window")
+                          .setVisibility(ya::EWidgetVisibility::HitTestInvisible)
+                          .release();
+    ya::ui::attach(tree, *_root, windowFill, ya::ui::canvasSlot().fill());
 
     assembleChrome(tree, *_root);
 }
@@ -147,16 +156,37 @@ void FWorkbenchSurface::failSmoke(const std::string& message)
     _bAutomationDone = true;
 }
 
-void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent)
+void FWorkbenchSurface::applyChromeSafeZone(const FChromeSafeZone& zone)
+{
+    const bool bChanged = _chromeSafeZone.left != zone.left ||
+                          _chromeSafeZone.right != zone.right ||
+                          _chromeSafeZone.titleHeight != zone.titleHeight;
+    _chromeSafeZone = zone;
+    if (!bChanged || !_chromeColumn || !_menuBar) {
+        return;
+    }
+    if (ya::UIBoxSlot* slot = _chromeColumn->getBoxSlot(*_menuBar)) {
+        slot->setMargin(ya::FMargin{zone.left, 0.0f, zone.right, 0.0f});
+        const float height = zone.titleHeight > 0.0f ? zone.titleHeight : 30.0f;
+        slot->setPreferredSize({0.0f, height});
+    }
+    if (_tree) {
+        _tree->invalidateLayout();
+    }
+}
+
+void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIContainer& parent)
 {
     _menuBar = std::make_shared<ya::UIMenuBar>("MainMenu");
-    tree.attach(parent, _menuBar);
-    // Layout intent lives on the parent->child edge: full width, fixed height,
-    // pinned to the top of the canvas host.
-    ya::ui::attachSlot(parent, *_menuBar,
-                       ya::ui::canvasSlot()
-                           .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
-                           .size({0.0f, 30.0f}));
+    (void)ya::ui::attach(tree,
+                         parent,
+                         _menuBar,
+                         ya::ui::boxSlot()
+                             .preferredSize({0.0f, 30.0f})
+                             .margin(ya::FMargin{_chromeSafeZone.left,
+                                                 0.0f,
+                                                 _chromeSafeZone.right,
+                                                 0.0f}));
 
     const auto log = [this](const std::string& text) { logStatus(text); };
 
@@ -236,11 +266,10 @@ void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent
     // shell no longer traverses children to re-style controls.
 }
 
-void FWorkbenchSurface::buildPageList(ya::WidgetTree& tree, ya::UIElement& parent)
+void FWorkbenchSurface::buildPageList(ya::WidgetTree& tree, ya::UIBorder& parent)
 {
     _pageRailScroll = std::make_shared<ya::UIScrollViewport>("FeatureRailScroll");
-    tree.attach(parent, _pageRailScroll);
-    ya::ui::attachSlot(parent, *_pageRailScroll, ya::ui::canvasSlot().fill());
+    (void)ya::ui::attach(tree, parent, _pageRailScroll, ya::ui::contentSlot().fill());
 
     _pageRailList = std::make_shared<ya::UIContainer>("FeatureRailList");
     _pageRailList->setDirection(ya::EWidgetBoxLayout::Vertical);
@@ -289,16 +318,13 @@ void FWorkbenchSurface::syncRailSelection()
     }
 }
 
-void FWorkbenchSurface::buildWorkspaceShell(ya::WidgetTree& tree, ya::UIElement& parent)
+void FWorkbenchSurface::buildWorkspaceShell(ya::WidgetTree& tree, ya::UIContainer& parent)
 {
     _workspaceSplit = std::make_shared<ya::UISplitPane>("WorkbenchShellSplit");
     _workspaceSplit->setSplitRatio(0.23f);
     _workspaceSplit->setMinFirstExtent(208.0f);
     _workspaceSplit->setMinSecondExtent(520.0f);
-    tree.attach(parent, _workspaceSplit);
-    // TODO: remove hardcode offset (menu bar + status bar chrome height).
-    ya::ui::attachSlot(parent, *_workspaceSplit,
-                       ya::ui::canvasSlot().fill().offset({0.0f, 34.0f}));
+    ya::ui::attach(tree, parent, _workspaceSplit, ya::ui::boxSlot().fill());
 
     buildPageRail(tree, *_workspaceSplit);
     // The demo host must exist before the tab bar selects its first page:
@@ -306,73 +332,78 @@ void FWorkbenchSurface::buildWorkspaceShell(ya::WidgetTree& tree, ya::UIElement&
     buildDemoHost(tree, *_workspaceSplit);
 }
 
-void FWorkbenchSurface::buildPageRail(ya::WidgetTree& tree, ya::UIElement& parent)
+
+void FWorkbenchSurface::buildPageRail(ya::WidgetTree& tree, ya::UISplitPane& parent)
 {
-    _pageRail = std::make_shared<ya::UIPanel>("FeatureRail");
-    _pageRail->_styleKey = "panel.sidebar";
-    tree.attach(parent, _pageRail);
+    using namespace ya;
 
-    _pageRailTitle = std::make_shared<ya::UIText>("FeatureRailTitle");
-    _pageRailTitle->_fontSize = 10;
-    _pageRailTitle->setColor(kHeaderColor);
-    _pageRailTitle->setText("FEATURE GALLERY");
-    tree.attach(*_pageRail, _pageRailTitle);
-    ya::ui::attachSlot(*_pageRail, *_pageRailTitle,
-                       ya::ui::canvasSlot()
-                           .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
-                           .offset({16.0f, 14.0f})
-                           .size({0.0f, 18.0f}));
+    _pageRailCard = ui::border("FeatureRailCard")
+                        .setStyleKey("panel.sidebar.card")
+                        .takeAs<UIBorder>();
 
-    _pageRailCard = std::make_shared<ya::UIPanel>("FeatureRailCard");
-    _pageRailCard->_styleKey = "panel.sidebar.card";
-    tree.attach(*_pageRail, _pageRailCard);
-    ya::ui::attachSlot(*_pageRail, *_pageRailCard,
-                       ya::ui::canvasSlot().fill().offset({10.0f, 46.0f}));
+    auto pageRail =
+        ui::border("FeatureRail")
+            .setStyleKey("panel.sidebar")
+            .child(
+                ui::column()
+                    .child(
+                        ui::text("FeatureRailTitle")
+                            .setText("FEATURE GALLERY")
+                            .setFontSize(10)
+                            .setColor(kHeaderColor)
+                            .setHAlign(EWidgetAlignH::Center)
+                            .setVAlign(EWidgetAlignV::Center),
+                        ui::boxSlot())
+                    .child(_pageRailCard, ui::boxSlot().fill()),
+                ui::contentSlot().fill());
+
+    ya::ui::attach(tree, parent, pageRail.release(), ya::ui::contentSlot().fill());
 
     buildPageList(tree, *_pageRailCard);
 }
 
-void FWorkbenchSurface::buildDemoHost(ya::WidgetTree& tree, ya::UIElement& parent)
+void FWorkbenchSurface::buildDemoHost(ya::WidgetTree& tree, ya::UISplitPane& parent)
 {
-    _contentFrame = std::make_shared<ya::UIPanel>("DemoContentFrame");
+    _contentFrame = std::make_shared<ya::UIBorder>("DemoContentFrame");
     _contentFrame->_styleKey = "panel.window";
-    tree.attach(parent, _contentFrame);
+    _contentFrame->setPadding(ya::FMargin{14.0f, 12.0f, 14.0f, 12.0f});
+    ya::ui::attach(tree, parent, _contentFrame);
 
-    _demoHost = std::make_shared<ya::UIPanel>("DemoHost");
-    _demoHost->_styleKey = "panel.surface";
-    tree.attach(*_contentFrame, _demoHost);
-    ya::ui::attachSlot(*_contentFrame, *_demoHost,
-                       ya::ui::canvasSlot().fill().offset({14.0f, 12.0f}));
+    auto surface = ya::ui::border("DemoSurface")
+                       .setStyleKey("panel.surface")
+                       .takeAs<ya::UIBorder>();
+    ya::ui::attach(tree, *_contentFrame, surface, ya::ui::contentSlot().fill());
+
+    _demoHost = std::make_shared<ya::UICanvasPanel>("DemoHost");
+    ya::ui::attach(tree, *surface, _demoHost, ya::ui::contentSlot().fill());
 }
 
-void FWorkbenchSurface::buildStatusBar(ya::WidgetTree& tree, ya::UIElement& parent)
+void FWorkbenchSurface::buildStatusBar(ya::WidgetTree& tree, ya::UIContainer& parent)
 {
-    _statusText = std::make_shared<ya::UIText>("Status");
-    _statusText->_fontSize  = 13;
-    _statusText->setText("Select a feature | Click / drag / keyboard to explore");
-    _statusText->setColor(kHeaderColor);
-    tree.attach(parent, _statusText);
-    // Bottom-left corner anchor: no span, so the slot size is honoured and
-    // the slot offset pins it above the bottom edge.
-    ya::ui::attachSlot(parent, *_statusText,
-                       ya::ui::canvasSlot()
-                           .anchor({0.0f, 1.0f}, {0.0f, 1.0f})
-                           .offset({12.0f, -30.0f})
-                           .size({520.0f, 24.0f}));
+    auto statusText = ya::ui::text("Status")
+                          .setText("Select a feature | Click / drag / keyboard to explore")
+                          .setFontSize(13)
+                          .setColor(kHeaderColor)
+                          .setHAlign(ya::EWidgetAlignH::Left);
+    _statusText = statusText.share();
 
-    _commandResultText = std::make_shared<ya::UIText>("CommandResult");
-    // Bottom full-width strip: right-aligned status text that never leaves
-    // the window on resize (a corner anchor with a pixel position would).
-    _commandResultText->_fontSize  = 13;
-    _commandResultText->setText("Ready");
-    _commandResultText->setColor({0.60f, 0.80f, 0.62f, 1.0f});
-    _commandResultText->_hAlign    = ya::EWidgetAlignH::Right;
-    tree.attach(parent, _commandResultText);
-    ya::ui::attachSlot(parent, *_commandResultText,
-                       ya::ui::canvasSlot()
-                           .anchor({0.0f, 1.0f}, {1.0f, 1.0f})
-                           .offset({0.0f, -30.0f})
-                           .size({0.0f, 24.0f}));
+    auto commandResultText = ya::ui::text("CommandResult")
+                                 .setText("Ready")
+                                 .setFontSize(13)
+                                 .setColor({0.60f, 0.80f, 0.62f, 1.0f})
+                                 .setHAlign(ya::EWidgetAlignH::Right);
+    _commandResultText = commandResultText.share();
+
+    // A fill slot takes the remainder of the row and lets the text right-align
+    // inside it, giving a "left status / right result" shell without canvas math.
+    auto statusBar = ya::ui::row("WorkbenchStatusBar")
+                         .setSpacing(8.0f)
+                         .setPadding({12.0f, 3.0f})
+                         .child(std::move(statusText), ya::ui::boxSlot().preferredSize({0.0f, 24.0f}))
+                         .child(std::move(commandResultText),
+                                ya::ui::boxSlot().fill().preferredSize({0.0f, 24.0f}));
+
+    ya::ui::attach(tree, parent, statusBar.release(), ya::ui::boxSlot().preferredSize({0.0f, 30.0f}));
 }
 
 void FWorkbenchSurface::selectPage(int index)
@@ -434,7 +465,7 @@ const std::string& FWorkbenchSurface::getStatusText() const
 
 // === Editor demo page (the original workbench editor loop) ===
 
-void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& parent)
+void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent)
 {
     auto toolButton = [](std::string name, const std::string& label)
     {
@@ -477,10 +508,13 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
     auto scroll  = ya::ui::scroll("ItemScroll")
                       .child(std::move(rowList));
     _rowScroll = scroll.share();
-    auto listPanel = ya::ui::panel("ItemList")
-                         .setStyleKey("panel")
+    auto listPanel = ya::ui::canvasPanel("ItemList")
+                         .child(ya::ui::border("ItemListFill")
+                                    .setStyleKey("panel")
+                                    .setVisibility(ya::EWidgetVisibility::HitTestInvisible),
+                                ya::ui::canvasSlot().fill())
                          .child(headerText("ITEMS"), ya::ui::canvasSlot().offset({10.0f, 8.0f}).size({200.0f, 20.0f}))
-                         .child(std::move(scroll), ya::ui::canvasSlot().fill().offset({0.0f, 34.0f}));
+                         .child(std::move(scroll), ya::ui::canvasSlot().fill().insets(ya::FMargin{0.0f, 34.0f, 0.0f, 0.0f}));
     _listPanel = listPanel.share();
 
     auto previewName = ya::ui::text("PreviewName")
@@ -489,12 +523,15 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                            .setColor({0.95f, 0.96f, 0.98f, 1.0f})
                            .setHAlign(ya::EWidgetAlignH::Center);
     _previewName = previewName.share();
-    auto highlight = ya::ui::panel("SelectionHighlight")
+    auto highlight = ya::ui::border("SelectionHighlight")
                          .setColor({0.35f, 0.55f, 0.90f, 1.0f})
-                         .child(std::move(previewName), ya::ui::canvasSlot().size({400.0f, 24.0f}));
+                         .child(std::move(previewName), ya::ui::contentSlot().fill());
     _highlightPanel = highlight.share();
-    auto canvas     = ya::ui::panel("PreviewCanvas")
-                      .setStyleKey("panel.canvas")
+    auto canvas     = ya::ui::canvasPanel("PreviewCanvas")
+                      .child(ya::ui::border("PreviewCanvasFill")
+                                 .setStyleKey("panel.canvas")
+                                 .setVisibility(ya::EWidgetVisibility::HitTestInvisible),
+                             ya::ui::canvasSlot().fill())
                       .child(headerText("PREVIEW"), ya::ui::canvasSlot().offset({10.0f, 8.0f}).size({200.0f, 20.0f}))
                       .child(std::move(highlight), ya::ui::canvasSlot()
                            .anchor({0.5f, 0.5f}, {0.5f, 0.5f})
@@ -565,9 +602,9 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                                                   .child(std::move(sizeGrow), ya::ui::boxSlot().preferredSize({90.0f, 24.0f}))
                                                   .child(std::move(sizeShrink), ya::ui::boxSlot().preferredSize({100.0f, 24.0f})))
                                     .child(std::move(sizeValue), ya::ui::boxSlot().preferredSize({220.0f, 14.0f}));
-    auto inspector = ya::ui::panel("Inspector")
+    auto inspector = ya::ui::border("Inspector")
                          .setStyleKey("panel")
-                         .child(std::move(inspectorForm), ya::ui::canvasSlot().fill());
+                         .child(std::move(inspectorForm), ya::ui::contentSlot().fill());
 
     auto rightSplit = ya::ui::splitPane("RightSplit")
                           .setSplitRatio(0.66f)
@@ -584,8 +621,11 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
                          .children(std::move(listPanel), std::move(rightSplit));
     _mainSplit = mainSplit.share();
 
-    auto page = ya::ui::panel("EditorDemo")
-                    .setStyleKey("panel.window")
+    auto page = ya::ui::canvasPanel("EditorDemo")
+                    .child(ya::ui::border("EditorDemoFill")
+                               .setStyleKey("panel.window")
+                               .setVisibility(ya::EWidgetVisibility::HitTestInvisible),
+                           ya::ui::canvasSlot().fill())
                     .child(std::move(toolbar), ya::ui::canvasSlot()
                          .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
                          .offset({0.0f, 6.0f})
@@ -595,7 +635,10 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
     // canvas host. The page root therefore must declare its own fill edge at
     // attach time; otherwise the default canvas slot leaves the whole editor
     // subtree at 0x0 and later children can still spill over the toolbar.
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    ya::ui::attach(tree,
+                   parent,
+                   std::move(page.take()),
+                   ya::ui::canvasSlot().fill());
 
     workspace.resetLayout();
     _bRowsDirty = true;

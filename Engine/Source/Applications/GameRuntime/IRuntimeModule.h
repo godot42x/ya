@@ -93,6 +93,15 @@ struct IRuntimeModule
         (void)commandBuffer;
         (void)dt;
     }
+    /// After the primary surface has been submitted/presented. Extra OS
+    /// windows must present here, not during onPresentation (that records
+    /// into the primary command buffer). Do not recreate GPU resources that
+    /// the just-submitted primary frame still references.
+    virtual void onAfterPresent(App& app, float dt)
+    {
+        (void)app;
+        (void)dt;
+    }
 };
 
 } // namespace ya

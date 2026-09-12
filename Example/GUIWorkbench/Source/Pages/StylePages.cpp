@@ -10,7 +10,7 @@
 namespace guiworkbench
 {
 
-void buildThemeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildThemeDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log,
                     const std::function<void(bool bDark)>& /*onToggleTheme*/)
 {
@@ -50,29 +50,29 @@ void buildThemeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                            ya::ui::boxSlot().preferredSize({220.0f, 22.0f}))
                     .child(ya::ui::row("ThemePanelRow")
                                .setSpacing(10.0f)
-                               .child(ya::ui::panel("ThemeShowPanel")
+                               .child(ya::ui::border("ThemeShowPanel")
                                           .child(header("ThemeShowCaption", "panel", 11)
                                                      .setHAlign(ya::EWidgetAlignH::Center)
                                                      .setVAlign(ya::EWidgetAlignV::Center),
-                                                 ya::ui::canvasSlot().fill()),
+                                                 ya::ui::contentSlot().fill()),
                                       ya::ui::boxSlot().preferredSize({140.0f, 48.0f}))
-                               .child(ya::ui::panel("ThemeCanvasPanel")
+                               .child(ya::ui::border("ThemeCanvasPanel")
                                           .setStyleKey("panel.canvas")
                                           .child(header("ThemeCanvasCaption", "panel.canvas", 11)
                                                      .setHAlign(ya::EWidgetAlignH::Center)
                                                      .setVAlign(ya::EWidgetAlignV::Center),
-                                                 ya::ui::canvasSlot().fill()),
+                                                 ya::ui::contentSlot().fill()),
                                       ya::ui::boxSlot().preferredSize({140.0f, 48.0f}))
-                               .child(ya::ui::panel("ThemeOutlinedPanel")
+                               .child(ya::ui::border("ThemeOutlinedPanel")
                                           .setStyleField("fillColor", ya::FBrush::solid({0.16f, 0.18f, 0.22f, 1.0f}))
                                           .setStyleField("outlineColor", glm::vec4{0.50f, 0.56f, 0.70f, 1.0f})
                                           .setStyleField("outlineThickness", 1.0f)
                                           .child(header("ThemeOutlinedCaption", "outlined", 11)
                                                      .setHAlign(ya::EWidgetAlignH::Center)
                                                      .setVAlign(ya::EWidgetAlignV::Center),
-                                                 ya::ui::canvasSlot().fill()),
+                                                 ya::ui::contentSlot().fill()),
                                       ya::ui::boxSlot().preferredSize({140.0f, 48.0f})));
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;
 }
 

@@ -55,7 +55,8 @@ std::shared_ptr<ya::UIDragDropTile> makeDemoDragSource(std::string name, std::st
     auto tile    = std::make_shared<ya::UIDragDropTile>(std::move(name), ya::UIDragDropTile::EKind::Source);
     tile->_label = std::move(label);
     auto behavior = std::make_shared<ya::UIDragSourceBehavior>();
-    behavior->bCapturePointerOnPress = true;
+    behavior->bCapturePointerOnPress     = true;
+    behavior->bBeginDragFromCapturedMove = true;
     behavior->setPressedState        = [](ya::UIElement& owner, bool bPressed)
     {
         if (auto* tileOwner = dynamic_cast<ya::UIDragDropTile*>(&owner)) {
@@ -65,7 +66,7 @@ std::shared_ptr<ya::UIDragDropTile> makeDemoDragSource(std::string name, std::st
     const std::string behaviorPayload = std::move(payload);
     behavior->operationFactory        = [behaviorPayload, ghostLabel = tile->_label](ya::UIElement&)
     {
-        return ya::UIStringDragDropOperation::make(
+        return ya::UIDragDropOperation::make(
             behaviorPayload,
             ghostLabel.empty() ? behaviorPayload : ghostLabel,
             "workbench.payload");
@@ -87,19 +88,18 @@ std::shared_ptr<ya::UIDragDropTile> makeDemoDropTarget(
                                                        const ya::UIDragDropOperation& operation,
                                                        const glm::vec2& logicalPoint)
     {
-        const auto* textOp = operation.as<ya::UIStringDragDropOperation>();
-        if (!textOp) {
+        if (!operation.isType("workbench.payload")) {
             return false;
         }
-        return owner.hitTestLayoutRect(logicalPoint) && (accept ? accept(textOp->text) : !textOp->text.empty());
+        return owner.hitTestLayoutRect(logicalPoint) &&
+               (accept ? accept(operation.payload) : !operation.payload.empty());
     };
     behavior->handleDrop = [onDropped = std::move(onDropped)](ya::UIElement&,
                                                               const ya::UIDragDropOperation& operation,
                                                               const glm::vec2&)
     {
-        const auto* textOp = operation.as<ya::UIStringDragDropOperation>();
-        if (onDropped && textOp) {
-            onDropped(textOp->text);
+        if (onDropped && operation.isType("workbench.payload")) {
+            onDropped(operation.payload);
         }
     };
     behavior->setHighlightState = [](ya::UIElement& owner, bool bHighlight)

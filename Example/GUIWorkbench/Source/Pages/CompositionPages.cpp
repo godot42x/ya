@@ -12,7 +12,7 @@
 namespace guiworkbench
 {
 
-void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildDockDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                    const std::function<void(const std::string&)>& log)
 {
     if (state.dockFloatingHost && state.dockFloatingHost->getTree() == &tree) {
@@ -29,7 +29,7 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
 
     auto page = ya::ui::column("DockDemo");
     page.child(dock, ya::ui::boxSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
 
     auto floatHost = std::make_shared<ya::UIDockFloatingHost>("DemoFloatingHost");
     floatHost->bindContext(dockContext);
@@ -43,14 +43,15 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
 
     const auto makePanel = [](const std::string& name, const std::string& text)
     {
-        return ya::ui::panel(name + "_Body")
+        return ya::ui::border(name + "_Body")
             .setStyleKey("panel.canvas")
+            .setPadding(ya::FMargin::all(12.0f))
             .child(ya::ui::text(name + "_Label")
                        .setText(text)
                        .setFontSize(14)
                        .setHAlign(ya::EWidgetAlignH::Center)
                        .setVAlign(ya::EWidgetAlignV::Center),
-                   ya::ui::canvasSlot().fill().offset({12.0f, 12.0f}))
+                   ya::ui::contentSlot().fill())
             .release();
     };
 
@@ -80,7 +81,7 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
 }
 
 void buildWindowsDemo(ya::WidgetTree& tree,
-                      ya::UIElement& parent,
+                      ya::UICanvasPanel& parent,
                       const std::function<void(const std::string&)>& log,
                       const std::function<void()>& onOpen,
                       const std::function<void()>& onClose,
@@ -109,7 +110,7 @@ void buildWindowsDemo(ya::WidgetTree& tree,
                                     .setOnClick(onClose)))
                     .child(makeDemoDragSource("windows-drag", "Drag to extra window", "windows.extra"),
                            ya::ui::boxSlot().preferredSize({220.0f, 32.0f}));
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     log("Windows: Open extra OS window / drag tile onto extra-drop");
 }
 

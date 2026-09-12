@@ -90,30 +90,35 @@ FDisclosureLeading layoutDisclosureLeading(const Rect2D& header,
                                            float         buttonSlotWidth,
                                            bool          bShowButton,
                                            bool          bHasIcon,
-                                           float         iconSize)
+                                           float         iconSize,
+                                           float         packHeight)
 {
     constexpr float kInset = 2.0f;
     constexpr float kGap   = 4.0f;
+    const float innerH = std::max(0.0f, header.extent.y - kInset * 2.0f);
+    const float rowH   = packHeight > 0.0f ? std::min(packHeight, std::max(0.0f, header.extent.y))
+                                           : innerH;
+    const float y      = header.pos.y + (header.extent.y - rowH) * 0.5f;
     FDisclosureLeading out;
     float x = header.pos.x + kInset;
     if (bShowButton) {
         out.button = {
-            .pos    = {x, header.pos.y + kInset},
-            .extent = {buttonSlotWidth, std::max(0.0f, header.extent.y - kInset * 2.0f)},
+            .pos    = {x, y},
+            .extent = {buttonSlotWidth, rowH},
         };
         x += buttonSlotWidth + kGap;
     }
     if (bHasIcon) {
-        const float size = std::min(iconSize, std::max(0.0f, header.extent.y - kInset * 2.0f));
+        const float size = std::min(iconSize, std::max(0.0f, rowH));
         out.icon         = {
-            .pos    = {x, header.pos.y + (header.extent.y - size) * 0.5f},
+            .pos    = {x, y + (rowH - size) * 0.5f},
             .extent = {size, size},
         };
         x += size + kGap;
     }
     out.title = {
-        .pos    = {x, header.pos.y},
-        .extent = {std::max(0.0f, header.pos.x + header.extent.x - x - kGap), header.extent.y},
+        .pos    = {x, y},
+        .extent = {std::max(0.0f, header.pos.x + header.extent.x - x - kGap), rowH},
     };
     return out;
 }

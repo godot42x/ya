@@ -37,7 +37,7 @@ auto demoButton(std::string name, const std::string& label)
 
 } // namespace
 
-void buildBindingDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildBindingDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                       const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -100,12 +100,12 @@ void buildBindingDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
             .setMinFirstExtent(80.0f)
             .setMinSecondExtent(80.0f)
             .children(
-                ya::ui::panel("GallerySplitLeft")
+                ya::ui::border("GallerySplitLeft")
                     .setColor({0.20f, 0.24f, 0.32f, 1.0f})
-                    .child(paneLabel("GallerySplitLeft_Body", "ratio <- reactive")),
-                ya::ui::panel("GallerySplitRight")
+                    .child(paneLabel("GallerySplitLeft_Body", "ratio <- reactive"), ya::ui::contentSlot().fill()),
+                ya::ui::border("GallerySplitRight")
                     .setColor({0.28f, 0.22f, 0.32f, 1.0f})
-                    .child(paneLabel("GallerySplitRight_Body", "drag divider"))),
+                    .child(paneLabel("GallerySplitRight_Body", "drag divider"), ya::ui::contentSlot().fill())),
            ya::ui::boxSlot().preferredSize({0.0f, 120.0f}));
     form.child(demoButton("GalleryRatio", "Set ratio 0.25 (reactive)").setOnClick(
         [ratioRef, log]
@@ -196,15 +196,15 @@ void buildBindingDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
                               [actions] { (void)actions->execute("demo.redo"); }),
                           ya::ui::boxSlot().preferredSize({90.0f, 26.0f})));
 
-    auto page = ya::ui::panel("BindingDemo")
+    auto page = ya::ui::border("BindingDemo")
                     .setColor(kPanelColor)
-                    .child(ya::ui::scroll("GalleryScroll").child(std::move(form)), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+                    .child(ya::ui::scroll("GalleryScroll").child(std::move(form)), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;
     (void)tree;
 }
 
-void buildTreeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildTreeDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                    const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -354,12 +354,12 @@ void buildTreeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
                           ya::ui::boxSlot().preferredSize({160.0f, 24.0f})));
     form.child(ya::ui::text("GallerySelected").bindText(selStrRef).setFontSize(13));
 
-    auto page = ya::ui::panel("TreeDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    auto page = ya::ui::border("TreeDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;
 }
 
-void buildTableDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildTableDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -399,8 +399,8 @@ void buildTableDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
     form.child(body("GalleryTableCaption_Body",
                     "Click a row to select (reactive selection ref); row 3 / col 2 holds a real button widget."));
 
-    auto page = ya::ui::panel("TableDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    auto page = ya::ui::border("TableDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;
 }
 

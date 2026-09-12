@@ -18,6 +18,6 @@
 {"event":"mouse_release","x":602,"y":564,"button":0}
 {"frame":3}
 {"assert":{"widget":"!Tab_Console"}}
-{"assert":{"widget":"!DockLeaf7"}}
+{"assert":{"widget":"!DockStack7"}}
 {"checkpoint":"console_closed"}
 {"frame":1}

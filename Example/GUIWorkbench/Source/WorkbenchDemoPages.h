@@ -11,7 +11,7 @@ namespace ya
 struct UIButton;
 struct UICheckBox;
 struct UIComboBox;
-struct UIElement;
+struct UICanvasPanel;
 struct UIMenuBar;
 struct UISlider;
 struct UIDockFloatingHost;
@@ -68,45 +68,45 @@ struct FDemoState
     }
 };
 
-void buildRenderDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildRenderDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                      const std::function<void(const std::string&)>& log);
-void buildWidgetsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildWidgetsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                       const std::function<void(const std::string&)>& log);
-void buildInputsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildInputsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                      const std::function<void(const std::string&)>& log);
-void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildLayoutDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                      const std::function<void(const std::string&)>& log);
-void buildHostsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildHostsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log);
-void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                           const std::function<void(const std::string&)>& log);
-void buildBrushDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildBrushDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log);
-void buildTextDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildTextDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                    const std::function<void(const std::string&)>& log);
-void buildFontsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildFontsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log);
-void buildThemeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildThemeDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log,
                     const std::function<void(bool bDark)>& onToggleTheme);
-void buildMenusDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildMenusDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log);
-void buildDialogDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildDialogDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                      const std::function<void(const std::string&)>& log);
-void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildDragDropDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                        const std::function<void(const std::string&)>& log);
-void buildEnableDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildEnableDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                      const std::function<void(const std::string&)>& log);
-void buildBindingDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildBindingDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                       const std::function<void(const std::string&)>& log);
-void buildTreeDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildTreeDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                    const std::function<void(const std::string&)>& log);
-void buildTableDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildTableDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log);
-void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildDockDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                    const std::function<void(const std::string&)>& log);
 void buildWindowsDemo(ya::WidgetTree& tree,
-                      ya::UIElement& parent,
+                      ya::UICanvasPanel& parent,
                       const std::function<void(const std::string&)>& log,
                       const std::function<void()>& onOpen,
                       const std::function<void()>& onClose,

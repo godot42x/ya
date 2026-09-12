@@ -2,6 +2,7 @@
 
 #include "Scene/Core/SceneWidgetEntry.h"
 #include "GUI/Widgets/UITypeRegistry.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -16,7 +17,7 @@ TEST(SceneWidgetEntryTest, EntryJsonRoundtripWithInlineDocumentAndOverrides)
     SceneWidgetEntry entry;
     entry.entryId = "HUD";
     entry.inlineDocument = std::make_shared<UIDocument>();
-    entry.inlineDocument->typeId = "engine.panel";
+    entry.inlineDocument->typeId = "engine.border";
     entry.inlineDocument->fields = nlohmann::json{{"_color", {0.1, 0.2, 0.3, 0.9}}};
     entry.zOrder    = 7;
     entry.autoMount = false;
@@ -26,7 +27,7 @@ TEST(SceneWidgetEntryTest, EntryJsonRoundtripWithInlineDocumentAndOverrides)
     EXPECT_EQ(json["entryId"], "HUD");
     EXPECT_EQ(json["zOrder"].get<int32_t>(), 7);
     EXPECT_FALSE(json["autoMount"].get<bool>());
-    EXPECT_EQ(json["inline"]["typeId"], "engine.panel");
+    EXPECT_EQ(json["inline"]["typeId"], "engine.border");
     ASSERT_TRUE(json["rootSlot"].is_object());
     EXPECT_EQ(json["rootSlot"]["anchorMax"][0], 1.0f);
     EXPECT_FALSE(json.contains("document"));
@@ -36,7 +37,7 @@ TEST(SceneWidgetEntryTest, EntryJsonRoundtripWithInlineDocumentAndOverrides)
     EXPECT_EQ(reloaded.zOrder, 7);
     EXPECT_FALSE(reloaded.autoMount);
     ASSERT_NE(reloaded.inlineDocument, nullptr);
-    EXPECT_EQ(reloaded.inlineDocument->typeId, "engine.panel");
+    EXPECT_EQ(reloaded.inlineDocument->typeId, "engine.border");
     EXPECT_EQ(reloaded.rootSlot.anchorMin, glm::vec2(0.0f, 0.0f));
     EXPECT_EQ(reloaded.rootSlot.anchorMax, glm::vec2(1.0f, 1.0f));
     EXPECT_EQ(reloaded.overrides.fieldOverrides.at("_color")[0], 1.0);
@@ -45,14 +46,14 @@ TEST(SceneWidgetEntryTest, EntryJsonRoundtripWithInlineDocumentAndOverrides)
 TEST(SceneWidgetEntryTest, OverrideAppliesToOwnAndBaseFields)
 {
     auto& registry = UITypeRegistry::instance();
-    auto  panel    = registry.createInstance("engine.panel");
+    auto  panel    = registry.createInstance("engine.border");
     ASSERT_NE(panel, nullptr);
 
     UIInstanceOverrideSet overrides;
     overrides.fieldOverrides["_color"]   = nlohmann::json{1.0, 0.0, 0.0, 1.0};
 
     EXPECT_TRUE(overrides.applyTo(*panel));
-    auto* panelWidget = dynamic_cast<UIPanel*>(panel.get());
+    auto* panelWidget = dynamic_cast<UIBorder*>(panel.get());
     ASSERT_NE(panelWidget, nullptr);
     EXPECT_EQ(panelWidget->getColor(), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 }
@@ -60,7 +61,7 @@ TEST(SceneWidgetEntryTest, OverrideAppliesToOwnAndBaseFields)
 TEST(SceneWidgetEntryTest, UnknownOverrideFieldIsRejected)
 {
     auto& registry = UITypeRegistry::instance();
-    auto  panel    = registry.createInstance("engine.panel");
+    auto  panel    = registry.createInstance("engine.border");
     ASSERT_NE(panel, nullptr);
 
     UIInstanceOverrideSet overrides;
@@ -72,7 +73,7 @@ TEST(SceneWidgetEntryTest, UnknownOverrideFieldIsRejected)
 TEST(SceneWidgetEntryTest, NonInstanceEditableFieldIsRejected)
 {
     auto& registry = UITypeRegistry::instance();
-    auto  panel    = registry.createInstance("engine.panel");
+    auto  panel    = registry.createInstance("engine.border");
     ASSERT_NE(panel, nullptr);
 
     UIInstanceOverrideSet overrides;

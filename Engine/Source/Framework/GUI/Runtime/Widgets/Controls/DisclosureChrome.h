@@ -80,7 +80,8 @@ struct FDisclosureLeading
                                                                     float         buttonSlotWidth,
                                                                     bool          bShowButton,
                                                                     bool          bHasIcon,
-                                                                    float         iconSize = 14.0f);
+                                                                    float         iconSize = 14.0f,
+                                                                    float         packHeight = 0.0f);
 
 struct FDisclosurePaint
 {

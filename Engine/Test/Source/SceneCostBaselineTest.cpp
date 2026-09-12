@@ -219,9 +219,9 @@ TEST(SceneCostBaselineTest, DockWorkspaceRecordsDrawAndArrange)
 
     WidgetTree tree({.width = 1280, .height = 800});
     auto       context = std::make_shared<FDockContext>();
-    auto       viewport = std::make_shared<UIPanel>("ViewportBody");
-    auto       hierarchy = std::make_shared<UIPanel>("HierarchyBody");
-    auto       inspector = std::make_shared<UIPanel>("InspectorBody");
+    auto       viewport = std::make_shared<UICanvasPanel>("ViewportBody");
+    auto       hierarchy = std::make_shared<UICanvasPanel>("HierarchyBody");
+    auto       inspector = std::make_shared<UICanvasPanel>("InspectorBody");
     const DockPanelId viewportId =
         context->addPanel("viewport", "Viewport", viewport);
     const DockPanelId hierarchyId =

@@ -11,7 +11,7 @@
 namespace guiworkbench
 {
 
-void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildDragDropDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                        const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -79,13 +79,13 @@ void buildDragDropDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& 
                                .child(dropZoneA, ya::ui::boxSlot().preferredSize({180.0f, 60.0f}))
                                .child(dropZoneB, ya::ui::boxSlot().preferredSize({180.0f, 60.0f})))
                     .child(body("GalleryDropHint", "Zone B: only payload.2"));
-    auto page = ya::ui::panel("DragDropDemo")
+    auto page = ya::ui::border("DragDropDemo")
                     .setColor(kPanelColor)
-                    .child(std::move(form), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+                    .child(std::move(form), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
 }
 
-void buildEnableDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildEnableDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                      const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -147,21 +147,21 @@ void buildEnableDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
     };
     auto modeRow = ya::ui::row("VisibilityModesRow").setSpacing(8.0f);
     for (const auto& mode : modes) {
-        modeRow.child(ya::ui::panel(mode.name)
+        modeRow.child(ya::ui::border(mode.name)
                           .setColor({0.22f, 0.28f, 0.34f, 1.0f})
                           .setVisibility(mode.value)
                           .child(body(std::string(mode.name) + "_Body", mode.label)
                                      .setHAlign(ya::EWidgetAlignH::Center)
                                      .setVAlign(ya::EWidgetAlignV::Center),
-                                 ya::ui::canvasSlot().fill()),
+                                 ya::ui::contentSlot().fill()),
                       ya::ui::boxSlot().preferredSize({120.0f, 40.0f}));
     }
     form.child(std::move(modeRow), ya::ui::boxSlot().preferredSize({0.0f, 48.0f}));
     form.child(body("VisibilityModesHint",
                     "Hidden keeps layout space; Collapsed does not. HitTestInvisible still paints; children remain hittable."));
 
-    auto page = ya::ui::panel("EnableDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    auto page = ya::ui::border("EnableDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;
 }
 

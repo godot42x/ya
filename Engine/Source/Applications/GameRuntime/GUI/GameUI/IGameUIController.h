@@ -56,9 +56,7 @@ struct IGameUIController
             return attachment;
         }
         if (UISlot* edge = widget->getSlot()) {
-            if (auto* canvas = edge->as<UICanvasSlot>()) {
-                canvas->apply(args);
-            }
+            edge->applyArgs(args);
         }
         return attachment;
     }

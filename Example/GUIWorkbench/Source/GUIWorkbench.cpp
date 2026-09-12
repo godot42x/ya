@@ -9,6 +9,7 @@
 #include "Core/Log.h"
 
 #include "GUI/Tooling/Workbench/WorkbenchTheme.h"
+#include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -22,6 +23,7 @@
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/DockSpace/DockFloatingHost.h"
 
+#include <algorithm>
 #include <format>
 #include <cstddef>
 #include <string>
@@ -75,9 +77,17 @@ void ExtraOsWindowDemo::buildUI(ya::WidgetTree& tree)
         {
             dropLabel->set(std::format("Dropped '{}'", payload));
         });
+    const ya::FWindowChromeLayout chrome =
+        ya::makeWindowChromeLayout(ya::resolveWindowChromeMode(ya::defaultWindowChromeMode()),
+                                   ya::queryWindowChromeCapabilities(),
+                                   ya::Extent2D{.width=480, .height=360},
+                                   {},
+                                   true);
+    const float padX = std::max(16.0f, chrome.contentInsets.left);
+    const float padY = std::max(16.0f, chrome.contentInsets.top);
     auto page = ya::ui::column("extra-root")
                     .setDirection(ya::EWidgetBoxLayout::Vertical)
-                    .setPadding(glm::vec2(16.0f))
+                    .setPadding(glm::vec2(padX, padY))
                     .setSpacing(8.0f)
                     .child(ya::ui::text("extra-title").setText(title).setFontSize(18))
                     .child(ya::ui::text("extra-body")
@@ -91,7 +101,7 @@ void ExtraOsWindowDemo::buildUI(ya::WidgetTree& tree)
                                }))
                     .child(ya::ui::text("extra-drop-log").bindText(dropLabel).setFontSize(13))
                     .child(std::move(drop), ya::ui::boxSlot().preferredSize({0.0f, 80.0f}));
-    ya::ui::build(tree, *content, std::move(page), ya::ui::canvasSlot().fill());
+    ya::ui::attach(tree, *content, std::move(page).release(), ya::ui::canvasSlot().fill());
 }
 
 void FWorkbenchApp::pruneClosedExtras()
@@ -176,45 +186,45 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
 
     // Demo pages are example content: register them into the shell. The
     // builders capture this app's demo state; the shell stays demo-agnostic.
-    surface.addPage("Diagnostics", "Render", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Diagnostics", "Render", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         demoState.resetHandles();
         buildRenderDemo(t, p, demoState, status);
     });
-    surface.addPage("Controls", "Widgets", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Controls", "Widgets", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         demoState.resetHandles();
         buildWidgetsDemo(t, p, demoState, status);
     });
-    surface.addPage("Controls", "Inputs", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Controls", "Inputs", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildInputsDemo(t, p, demoState, status);
     });
-    surface.addPage("Layout", "Box", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Layout", "Box", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildLayoutDemo(t, p, demoState, status);
     });
-    surface.addPage("Layout", "Hosts", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Layout", "Hosts", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildHostsDemo(t, p, demoState, status);
     });
-    surface.addPage("Layout", "ScrollSplit", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Layout", "ScrollSplit", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildScrollSplitDemo(t, p, demoState, status);
     });
-    surface.addPage("Paint", "Brush", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Paint", "Brush", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildBrushDemo(t, p, demoState, status);
     });
-    surface.addPage("Text", "Text", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Text", "Text", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildTextDemo(t, p, demoState, status);
     });
-    surface.addPage("Text", "Fonts", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Text", "Fonts", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildFontsDemo(t, p, demoState, status);
     });
-    surface.addPage("Style", "Theme", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Style", "Theme", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildThemeDemo(t, p, demoState, status, [this](bool bDark)
         {
@@ -222,37 +232,37 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
             _tree->setTheme((bDark ? _darkTheme : _lightTheme).get());
         });
     });
-    surface.addPage("Overlays", "Menus", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Overlays", "Menus", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildMenusDemo(t, p, demoState, status);
     });
-    surface.addPage("Overlays", "Dialog", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Overlays", "Dialog", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         demoState.resetHandles();
         buildDialogDemo(t, p, demoState, status);
     });
-    surface.addPage("Interaction", "DragDrop", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Interaction", "DragDrop", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         demoState.resetHandles();
         buildDragDropDemo(t, p, demoState, status);
     });
-    surface.addPage("Interaction", "Enable", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Interaction", "Enable", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildEnableDemo(t, p, demoState, status);
     });
-    surface.addPage("Data", "Binding", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Data", "Binding", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildBindingDemo(t, p, demoState, status);
     });
-    surface.addPage("Data", "Tree", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Data", "Tree", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildTreeDemo(t, p, demoState, status);
     });
-    surface.addPage("Data", "Table", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Data", "Table", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildTableDemo(t, p, demoState, status);
     });
-    surface.addPage("Composition", "Dock", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Composition", "Dock", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildDockDemo(t, p, demoState, status);
     });
@@ -263,7 +273,7 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
         }
         demoState.dockFloatingHost.reset();
     });
-    surface.addPage("Composition", "Windows", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    surface.addPage("Composition", "Windows", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildWindowsDemo(t,
                          p,
@@ -283,7 +293,7 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     };
     auto dslModel = std::make_shared<FDslPageModel>();
 
-    surface.addPage("Composition", "DSL", [dslModel](ya::WidgetTree& tree, ya::UIElement& parent, const std::function<void(const std::string&)>&)
+    surface.addPage("Composition", "DSL", [dslModel](ya::WidgetTree& tree, ya::UICanvasPanel& parent, const std::function<void(const std::string&)>&)
     {
         auto page = ya::ui::column("dsl-root")
                         .setDirection(ya::EWidgetBoxLayout::Vertical)
@@ -304,7 +314,7 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
                                 .children(
                                     ya::ui::text("dsl-cell-a").setText("cell A"),
                                     ya::ui::text("dsl-cell-b").setText("cell B")));
-        ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+        (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     });
     // Register the built-in Editor page before applyStartPage so
     // `--start-page=Editor` resolves. Empty builder uses the surface demo.
@@ -332,6 +342,15 @@ void FWorkbenchApp::applyStartPage()
 void FWorkbenchApp::updateUI()
 {
     pruneClosedExtras();
+    if (_guiApp) {
+        const ya::FWindowChromeLayout& layout =
+            _guiApp->getPrimaryWindow().windowChrome().layout;
+        surface.applyChromeSafeZone({
+            .left        = layout.contentInsets.left,
+            .right       = layout.dragRegion.width,
+            .titleHeight = layout.contentInsets.top,
+        });
+    }
     surface.updateUI();
 }
 

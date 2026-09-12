@@ -10,7 +10,7 @@
 namespace guiworkbench
 {
 
-void buildBrushDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildBrushDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -38,13 +38,13 @@ void buildBrushDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
     };
     for (const auto& c : kCards) {
         grid.child(
-            ya::ui::panel(c.name)
+            ya::ui::border(c.name)
                 .setColor(c.color)
                 .setCornerRadius(c.radius)
                 .child(body(std::format("{}_Body", c.name), std::format("r={}", c.label))
                            .setHAlign(ya::EWidgetAlignH::Center)
                            .setVAlign(ya::EWidgetAlignV::Center),
-                       ya::ui::canvasSlot().fill()),
+                       ya::ui::contentSlot().fill()),
             ya::ui::boxSlot().preferredSize({120.0f, 96.0f}));
     }
 
@@ -74,47 +74,56 @@ void buildBrushDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                     .child(header("BrushTitle", "Brush — solid / image / nine-patch / border, rounded rect, vectors"))
                     .child(header("RoundedTitle", "Rounded Rect — SDF corner radius"))
                     .child(std::move(grid), ya::ui::boxSlot().preferredSize({0.0f, 96.0f}))
-                    .child(ya::ui::panel("RoundedNested")
-                            .setColor({0.16f, 0.20f, 0.28f, 1.0f})
-                            .setCornerRadius(20.0f)
+                    .child(ya::ui::canvasPanel("RoundedNested")
+                            .child(ya::ui::border("RoundedNestedFill")
+                                       .setColor({0.16f, 0.20f, 0.28f, 1.0f})
+                                       .setCornerRadius(20.0f)
+                                       .setVisibility(ya::EWidgetVisibility::HitTestInvisible),
+                                   ya::ui::canvasSlot().fill())
                             .child(header("RoundedNestedCaption", "Rounded container with a sharp inner panel"),
                                    ya::ui::canvasSlot().anchor({0.10f, 0.20f}, {0.90f, 0.45f}))
-                            .child(ya::ui::panel("RoundedNestedInner")
+                            .child(ya::ui::border("RoundedNestedInner")
                                        .setColor({0.55f, 0.60f, 0.68f, 1.0f}),
                                    ya::ui::canvasSlot().anchor({0.10f, 0.55f}, {0.90f, 0.85f})),
                            ya::ui::boxSlot().preferredSize({280.0f, 110.0f}))
                     .child(header("BrushKindsTitle", "FBrush draw types"))
                     .child(ya::ui::row("BrushKindsRow")
                             .setSpacing(10.0f)
-                            .child(ya::ui::panel("BrushSolid")
+                            .child(ya::ui::border("BrushSolid")
                                     .setStyleField("fillColor", ya::FBrush::solid({0.28f, 0.40f, 0.32f, 1.0f}))
                                     .child(body("BrushSolid_Body", "solid")
                                                .setHAlign(ya::EWidgetAlignH::Center)
                                                .setVAlign(ya::EWidgetAlignV::Center),
-                                           ya::ui::canvasSlot().fill()),
+                                           ya::ui::contentSlot().fill()),
                                    ya::ui::boxSlot().preferredSize({110.0f, 72.0f}))
-                            .child(ya::ui::panel("BrushImage")
-                                    .setStyleField("fillColor", ya::FBrush::image("builtin/checkerboard"))
+                            .child(ya::ui::overlay("BrushImage")
+                                    .child(ya::ui::border("BrushImageFill")
+                                               .setStyleKey("panel")
+                                               .setVisibility(ya::EWidgetVisibility::HitTestInvisible),
+                                           ya::ui::overlaySlot().fill())
+                                    .child(ya::ui::image("BrushImageContent")
+                                               .setAssetPath("builtin/checkerboard"),
+                                           ya::ui::overlaySlot().fill())
                                     .child(body("BrushImage_Body", "image")
                                                .setHAlign(ya::EWidgetAlignH::Center)
                                                .setVAlign(ya::EWidgetAlignV::Center),
-                                           ya::ui::canvasSlot().fill()),
+                                           ya::ui::overlaySlot().fill()),
                                    ya::ui::boxSlot().preferredSize({110.0f, 72.0f}))
-                            .child(ya::ui::panel("BrushNinePatch")
+                            .child(ya::ui::border("BrushNinePatch")
                                     .setStyleField("fillColor",
                                                    ya::FBrush::ninePatch("builtin/checkerboard", {8.0f, 8.0f, 8.0f, 8.0f}))
                                     .child(body("BrushNinePatch_Body", "nine-patch")
                                                .setHAlign(ya::EWidgetAlignH::Center)
                                                .setVAlign(ya::EWidgetAlignV::Center),
-                                           ya::ui::canvasSlot().fill()),
+                                           ya::ui::contentSlot().fill()),
                                    ya::ui::boxSlot().preferredSize({110.0f, 72.0f}))
-                            .child(ya::ui::panel("BrushBorder")
+                            .child(ya::ui::border("BrushBorder")
                                     .setStyleField("fillColor",
                                                    ya::FBrush::border("builtin/checkerboard", {8.0f, 8.0f, 8.0f, 8.0f}))
                                     .child(body("BrushBorder_Body", "border")
                                                .setHAlign(ya::EWidgetAlignH::Center)
                                                .setVAlign(ya::EWidgetAlignV::Center),
-                                           ya::ui::canvasSlot().fill()),
+                                           ya::ui::contentSlot().fill()),
                                    ya::ui::boxSlot().preferredSize({110.0f, 72.0f})))
                     .child(header("ImageStatesTitle", "UIImage placeholder vs missing"))
                     .child(ya::ui::row("ImageStatesRow")
@@ -134,8 +143,8 @@ void buildBrushDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                     .child(vectorCanvas,
                            ya::FBoxSlotArgs{.crossAlignment = ya::EUIBoxSlotCrossAlignment::Start,
                                             .preferredSize  = {430.0f, 110.0f}});
-    auto page = ya::ui::panel("BrushDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    auto page = ya::ui::border("BrushDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     state.statusText = "Brush demo built";
     (void)log;
 }

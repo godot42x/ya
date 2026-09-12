@@ -23,8 +23,7 @@
 
 #include <glm/glm.hpp>
 
-#include <memory>
-#include <string>
+
 #include <vector>
 
 namespace guiworkbench
@@ -46,6 +45,20 @@ class ExtraOsWindowDemo final : public ya::IGUIAppDelegate
 
 class FWorkbenchApp final : public ya::IGUIAppDelegate
 {
+
+  private:
+    ya::WidgetTree*                                 _tree   = nullptr;
+    ya::GUIApp*                                     _guiApp = nullptr;
+    std::vector<std::unique_ptr<ExtraOsWindowDemo>> _extraDemos;
+    std::vector<ya::GUIWindowId>                    _extraIds;
+    std::shared_ptr<ya::Reactive<std::string>>      _extraCountLabel =
+        std::make_shared<ya::Reactive<std::string>>("Open extras: 0");
+    // Tree-level themes (style-system Phase 2/3). Owned by the app so they
+    // outlive the tree; buildUI mounts _darkTheme via setTheme.
+    std::shared_ptr<ya::UITheme> _darkTheme;
+    std::shared_ptr<ya::UITheme> _lightTheme;
+    bool                         _bDarkTheme = true;
+
   public:
     FWorkbenchSurface surface;
     FDemoState        demoState;
@@ -75,20 +88,9 @@ class FWorkbenchApp final : public ya::IGUIAppDelegate
     void dispatchPointer(const ya::Event& event, const glm::vec2& point);
     void dispatchKey(const ya::Event& event);
 
-    ya::WidgetTree* _tree = nullptr;
-    ya::GUIApp*     _guiApp = nullptr;
-    std::vector<std::unique_ptr<ExtraOsWindowDemo>> _extraDemos;
-    std::vector<ya::GUIWindowId>                    _extraIds;
-    std::shared_ptr<ya::Reactive<std::string>>      _extraCountLabel =
-        std::make_shared<ya::Reactive<std::string>>("Open extras: 0");
 
     void pruneClosedExtras();
 
-    // Tree-level themes (style-system Phase 2/3). Owned by the app so they
-    // outlive the tree; buildUI mounts _darkTheme via setTheme.
-    std::shared_ptr<ya::UITheme> _darkTheme;
-    std::shared_ptr<ya::UITheme> _lightTheme;
-    bool                         _bDarkTheme = true;
 };
 
 } // namespace guiworkbench

@@ -8,7 +8,7 @@
 namespace guiworkbench
 {
 
-void buildTextDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildTextDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                    const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -29,45 +29,45 @@ void buildTextDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
     form.child(header("AlignTitle", "Alignment"));
     form.child(ya::ui::row("TextAlignRow")
                    .setSpacing(8.0f)
-                   .child(ya::ui::panel("AlignLeft")
+                   .child(ya::ui::border("AlignLeft")
                            .setColor({0.16f, 0.18f, 0.22f, 1.0f})
                            .child(ya::ui::text("AlignLeft_Body")
                                       .setText("left")
                                       .setFontSize(13)
                                       .setHAlign(ya::EWidgetAlignH::Left)
                                       .setVAlign(ya::EWidgetAlignV::Center),
-                                  ya::ui::canvasSlot().fill()),
+                                  ya::ui::contentSlot().fill()),
                           ya::ui::boxSlot().preferredSize({140.0f, 32.0f}))
-                   .child(ya::ui::panel("AlignCenter")
+                   .child(ya::ui::border("AlignCenter")
                            .setColor({0.16f, 0.18f, 0.22f, 1.0f})
                            .child(ya::ui::text("AlignCenter_Body")
                                       .setText("center")
                                       .setFontSize(13)
                                       .setHAlign(ya::EWidgetAlignH::Center)
                                       .setVAlign(ya::EWidgetAlignV::Center),
-                                  ya::ui::canvasSlot().fill()),
+                                  ya::ui::contentSlot().fill()),
                           ya::ui::boxSlot().preferredSize({140.0f, 32.0f}))
-                   .child(ya::ui::panel("AlignRight")
+                   .child(ya::ui::border("AlignRight")
                            .setColor({0.16f, 0.18f, 0.22f, 1.0f})
                            .child(ya::ui::text("AlignRight_Body")
                                       .setText("right")
                                       .setFontSize(13)
                                       .setHAlign(ya::EWidgetAlignH::Right)
                                       .setVAlign(ya::EWidgetAlignV::Center),
-                                  ya::ui::canvasSlot().fill()),
+                                  ya::ui::contentSlot().fill()),
                           ya::ui::boxSlot().preferredSize({140.0f, 32.0f})));
     form.child(header("StyleKeyTitle", "Theme keys (no authored color)"));
     form.child(ya::ui::text("TextHeaderKey").setText("text.header").setStyleKey("text.header").setFontSize(13));
     form.child(ya::ui::text("TextMutedKey").setText("text.muted").setStyleKey("text.muted").setFontSize(13));
     form.child(ya::ui::text("TextDefaultKey").setText("text").setStyleKey("text").setFontSize(13));
 
-    auto page = ya::ui::panel("TextDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    auto page = ya::ui::border("TextDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;
     (void)log;
 }
 
-void buildFontsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildFontsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text, uint32_t fontSize = 13)
@@ -125,10 +125,10 @@ void buildFontsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
     form.child(header("ChineseGrid",
                       "日 本 语 言 学 中 文 字 体 测 试 标 题 验 收 简 体 繁 体 汉 字 笔 画 粗 细 亮 度 边 缘"));
 
-    auto page = ya::ui::panel("FontsDemo")
+    auto page = ya::ui::border("FontsDemo")
                     .setColor(kPanelColor)
-                    .child(ya::ui::scroll("FontsScroll").child(std::move(form)), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+                    .child(ya::ui::scroll("FontsScroll").child(std::move(form)), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     state.statusText = "Fonts page built (CJK fallback + emoji)";
     (void)log;
 }

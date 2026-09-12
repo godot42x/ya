@@ -4,10 +4,10 @@
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
 {"assert":{"widget":"DockSplit1"}}
-{"assert":{"widget":"DockLeaf4"}}
-{"assert":{"widget":"DockLeaf6"}}
-{"assert":{"widget":"DockLeaf7"}}
-{"assert":{"widget":"DockLeaf3"}}
+{"assert":{"widget":"DockStack4"}}
+{"assert":{"widget":"DockStack6"}}
+{"assert":{"widget":"DockStack7"}}
+{"assert":{"widget":"DockStack3"}}
 {"assert":{"widget":"Tab_Hierarchy"}}
 {"assert":{"widget":"Tab_Scene"}}
 {"assert":{"widget":"Tab_Inspector"}}
@@ -16,6 +16,6 @@
 # Drag the Console tab onto the Scene content center -> merge and collapse the bottom leaf.
 {"drag":{"from":[562,573],"to":[776,318],"button":0,"steps":8}}
 {"frame":3}
-{"assert":{"widget":"!DockLeaf7"}}
+{"assert":{"widget":"!DockStack7"}}
 {"checkpoint":"dock_dragged"}
 {"frame":1}

@@ -11,7 +11,7 @@
 namespace guiworkbench
 {
 
-void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildLayoutDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                      const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -35,9 +35,10 @@ void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                     .setClipChildren(true);
     for (int i = 0; i < 3; ++i) {
         hbox.child(
-            ya::ui::panel(std::format("HCell{}", i))
+            ya::ui::border(std::format("HCell{}", i))
                 .setColor({0.22f + i * 0.06f, 0.30f + i * 0.04f, 0.38f, 1.0f})
-                .child(cellLabel(std::format("HCell{}_Body", i), std::format("Cell {}", i + 1))),
+                .child(cellLabel(std::format("HCell{}_Body", i), std::format("Cell {}", i + 1)),
+                       ya::ui::contentSlot().fill()),
             ya::ui::boxSlot().fill(1.0f).preferredSize({0.0f, 50.0f}));
     }
 
@@ -48,9 +49,10 @@ void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                     .setClipChildren(true);
     for (int i = 0; i < 4; ++i) {
         vbox.child(
-            ya::ui::panel(std::format("VCell{}", i))
+            ya::ui::border(std::format("VCell{}", i))
                 .setColor({0.30f + i * 0.05f, 0.22f, 0.42f, 1.0f})
-                .child(cellLabel(std::format("VCell{}_Body", i), std::format("Row {}", i + 1))),
+                .child(cellLabel(std::format("VCell{}_Body", i), std::format("Row {}", i + 1)),
+                       ya::ui::contentSlot().fill()),
             ya::ui::boxSlot().preferredSize({100.0f, 50.0f}));
     }
 
@@ -85,43 +87,43 @@ void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& st
                     .child(header("FillTitle", "Auto vs Fill vs weight"))
                     .child(ya::ui::row("FillWeightRow")
                             .setSpacing(6.0f)
-                            .child(ya::ui::panel("AutoCell")
+                            .child(ya::ui::border("AutoCell")
                                     .setColor({0.28f, 0.22f, 0.20f, 1.0f})
-                                    .child(cellLabel("AutoCell_Body", "Auto"), ya::ui::canvasSlot().fill()),
+                                    .child(cellLabel("AutoCell_Body", "Auto"), ya::ui::contentSlot().fill()),
                                    ya::ui::boxSlot().autoSize().preferredSize({80.0f, 36.0f}))
-                            .child(ya::ui::panel("FillCellA")
+                            .child(ya::ui::border("FillCellA")
                                     .setColor({0.20f, 0.28f, 0.22f, 1.0f})
-                                    .child(cellLabel("FillCellA_Body", "Fill 1"), ya::ui::canvasSlot().fill()),
+                                    .child(cellLabel("FillCellA_Body", "Fill 1"), ya::ui::contentSlot().fill()),
                                    ya::ui::boxSlot().fill(1.0f).preferredSize({0.0f, 36.0f}))
-                            .child(ya::ui::panel("FillCellB")
+                            .child(ya::ui::border("FillCellB")
                                     .setColor({0.20f, 0.22f, 0.30f, 1.0f})
-                                    .child(cellLabel("FillCellB_Body", "Fill 2"), ya::ui::canvasSlot().fill()),
+                                    .child(cellLabel("FillCellB_Body", "Fill 2"), ya::ui::contentSlot().fill()),
                                    ya::ui::boxSlot().fill(2.0f).preferredSize({0.0f, 36.0f})),
                            ya::ui::boxSlot().preferredSize({0.0f, 40.0f}))
                     .child(header("HiddenTitle", "Visibility vs layout space"))
                     .child(ya::ui::row("VisibilityRow")
                             .setSpacing(6.0f)
-                            .child(ya::ui::panel("VisVisible")
+                            .child(ya::ui::border("VisVisible")
                                     .setColor({0.22f, 0.32f, 0.24f, 1.0f})
-                                    .child(cellLabel("VisVisible_Body", "Visible"), ya::ui::canvasSlot().fill()),
+                                    .child(cellLabel("VisVisible_Body", "Visible"), ya::ui::contentSlot().fill()),
                                    ya::ui::boxSlot().preferredSize({90.0f, 36.0f}))
-                            .child(ya::ui::panel("VisHidden")
+                            .child(ya::ui::border("VisHidden")
                                     .setColor({0.32f, 0.24f, 0.20f, 1.0f})
                                     .setVisibility(ya::EWidgetVisibility::Hidden)
-                                    .child(cellLabel("VisHidden_Body", "Hidden"), ya::ui::canvasSlot().fill()),
+                                    .child(cellLabel("VisHidden_Body", "Hidden"), ya::ui::contentSlot().fill()),
                                    ya::ui::boxSlot().preferredSize({90.0f, 36.0f}))
-                            .child(ya::ui::panel("VisCollapsed")
+                            .child(ya::ui::border("VisCollapsed")
                                     .setColor({0.24f, 0.20f, 0.32f, 1.0f})
                                     .setVisibility(ya::EWidgetVisibility::Collapsed)
-                                    .child(cellLabel("VisCollapsed_Body", "Collapsed"), ya::ui::canvasSlot().fill()),
+                                    .child(cellLabel("VisCollapsed_Body", "Collapsed"), ya::ui::contentSlot().fill()),
                                    ya::ui::boxSlot().preferredSize({90.0f, 36.0f}))
                             .child(body("VisibilityHint", "Hidden keeps a gap; Collapsed does not.")),
                            ya::ui::boxSlot().preferredSize({0.0f, 40.0f}));
-    auto page = ya::ui::panel("LayoutDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    auto page = ya::ui::border("LayoutDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
 }
 
-void buildHostsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildHostsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -135,12 +137,12 @@ void buildHostsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
     auto cell = [&](std::string key, const std::string& text, const glm::vec4& color)
     {
         const std::string bodyKey = key + "_Body";
-        return ya::ui::panel(std::move(key))
+        return ya::ui::border(std::move(key))
             .setColor(color)
             .child(body(bodyKey, text)
                        .setHAlign(ya::EWidgetAlignH::Center)
                        .setVAlign(ya::EWidgetAlignV::Center),
-                   ya::ui::canvasSlot().fill());
+                   ya::ui::contentSlot().fill());
     };
 
     auto overlay = ya::ui::overlay("OverlayDemo")
@@ -174,21 +176,24 @@ void buildHostsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                                     .setWidth(160.0f)
                                     .setHeight(48.0f)
                                     .child(cell("SizeBoxWideInner", "160 x 48", {0.24f, 0.30f, 0.22f, 1.0f}),
-                                           ya::ui::overlaySlot().fill()))
+                                           ya::ui::contentSlot().fill()))
                             .child(ya::ui::sizeBox("SizeBoxClamped")
                                     .setMinSize({80.0f, 32.0f})
                                     .setMaxSize({120.0f, 48.0f})
                                     .child(cell("SizeBoxClampedInner", "min/max", {0.30f, 0.22f, 0.28f, 1.0f}),
-                                           ya::ui::overlaySlot().fill())))
+                                           ya::ui::contentSlot().fill())))
                     .child(header("CanvasTitle", "Canvas — stretch anchors vs SizeToContent"))
-                    .child(ya::ui::panel("CanvasAnchorDemo")
-                            .setColor({0.14f, 0.16f, 0.20f, 1.0f})
-                            .child(ya::ui::panel("CanvasStretch")
+                    .child(ya::ui::canvasPanel("CanvasAnchorDemo")
+                            .child(ya::ui::border("CanvasAnchorDemoFill")
+                                       .setColor({0.14f, 0.16f, 0.20f, 1.0f})
+                                       .setVisibility(ya::EWidgetVisibility::HitTestInvisible),
+                                   ya::ui::canvasSlot().fill())
+                            .child(ya::ui::border("CanvasStretch")
                                     .setColor({0.22f, 0.28f, 0.38f, 1.0f})
                                     .child(body("CanvasStretch_Body", "stretch 10%..90%")
                                                .setHAlign(ya::EWidgetAlignH::Center)
                                                .setVAlign(ya::EWidgetAlignV::Center),
-                                           ya::ui::canvasSlot().fill()),
+                                           ya::ui::contentSlot().fill()),
                                    ya::ui::canvasSlot().anchor({0.10f, 0.15f}, {0.90f, 0.55f}))
                             .child(ya::ui::text("CanvasAuto")
                                     .setText("Auto size, top-left")
@@ -196,13 +201,13 @@ void buildHostsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                                     .setColor(kTextColor),
                                    ya::ui::canvasSlot().offset({12.0f, 88.0f})),
                            ya::ui::boxSlot().preferredSize({0.0f, 140.0f}));
-    auto page = ya::ui::panel("HostsDemo").setColor(kPanelColor).child(std::move(form), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+    auto page = ya::ui::border("HostsDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;
     (void)log;
 }
 
-void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                           const std::function<void(const std::string&)>& log)
 {
     auto header = [](std::string key, const std::string& text)
@@ -219,11 +224,12 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
                     .setPadding({6.0f, 6.0f});
     for (int i = 0; i < 40; ++i) {
         list.child(
-            ya::ui::panel(std::format("ScrollRow{}", i))
+            ya::ui::border(std::format("ScrollRow{}", i))
                 .setColor({0.18f + (i % 3) * 0.04f, 0.20f, 0.24f, 1.0f})
+                .setPadding(ya::FMargin{8.0f, 0.0f, 0.0f, 0.0f})
                 .child(body(std::format("ScrollRow{}_Body", i), std::format("Scrollable entry {}", i + 1))
                            .setVAlign(ya::EWidgetAlignV::Center),
-                       ya::ui::canvasSlot().fill().offset({8.0f, 0.0f})),
+                       ya::ui::contentSlot().fill()),
             ya::ui::boxSlot().preferredSize({0.0f, 24.0f}));
     }
 
@@ -241,13 +247,13 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
                          ya::ui::scroll("DemoScroll").child(std::move(list)),
                          ya::ui::column("DemoSplitRight")
                              .setSpacing(8.0f)
-                             .child(ya::ui::panel("DemoSplitRightHeader")
+                             .child(ya::ui::border("DemoSplitRightHeader")
                                      .setColor({0.24f, 0.30f, 0.40f, 1.0f})
                                      .child(body("DemoSplitRight_Body",
                                                  "Drag the divider. Inner scroll bubbles unhandled wheel to the outer pane.")
                                                 .setHAlign(ya::EWidgetAlignH::Center)
                                                 .setVAlign(ya::EWidgetAlignV::Center),
-                                            ya::ui::canvasSlot().fill()),
+                                            ya::ui::contentSlot().fill()),
                                     ya::ui::boxSlot().preferredSize({0.0f, 64.0f}))
                              .child(ya::ui::scroll("InnerScroll").child(std::move(innerList)),
                                     ya::ui::boxSlot().fill()));
@@ -261,10 +267,10 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
                                "The split stretches with the window; hover the divider to grab it. Nested scroll returns unhandled wheel at its bounds."));
     layout.child(std::move(split), ya::ui::boxSlot().fill());
 
-    auto page = ya::ui::panel("ScrollSplitDemo")
+    auto page = ya::ui::border("ScrollSplitDemo")
                     .setColor(kPanelColor)
-                    .child(std::move(layout), ya::ui::canvasSlot().fill());
-    ya::ui::build(tree, parent, std::move(page), ya::ui::canvasSlot().fill());
+                    .child(std::move(layout), ya::ui::contentSlot().fill());
+    (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;
     (void)log;
 }

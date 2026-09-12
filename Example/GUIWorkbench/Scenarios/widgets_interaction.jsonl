@@ -20,7 +20,7 @@
 {"frame":1}
 {"assert":{"widget":"CheckA","control":{"type":"checkBox","checked":false}}}
 {"assert":{"widget":"Counter","control":{"type":"button","focused":false}}}
-{"assert":{"focusPath":["TreeRoot","Layer_0","WorkbenchRoot","WorkbenchShellSplit","DemoContentFrame","DemoHost","WidgetsDemo","WidgetsForm","CheckA"]}}
+{"assert":{"focusPath":["TreeRoot","Layer_0","WorkbenchRoot","WorkbenchChrome","WorkbenchShellSplit","DemoContentFrame","DemoHost","WidgetsDemo","WidgetsForm","CheckA"]}}
 {"checkpoint":"checkbox_toggled"}
 {"event":"mouse_press","x":470,"y":213,"button":0}
 {"event":"mouse_release","x":470,"y":213,"button":0}

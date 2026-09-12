@@ -4,6 +4,7 @@
 
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -190,7 +191,7 @@ TEST(GameUIHostTest, InlineDocumentFieldsApplyOnActivation)
     SceneWidgetEntry entry;
     entry.entryId        = "HUD";
     entry.inlineDocument = std::make_shared<UIDocument>();
-    entry.inlineDocument->typeId  = "engine.panel";
+    entry.inlineDocument->typeId  = "engine.border";
     entry.inlineDocument->fields  = nlohmann::json{{"_color", {0.1, 0.2, 0.3, 0.9}}};
     entry.autoMount      = true;
     scene.addWidgetEntry(std::move(entry));
@@ -199,8 +200,8 @@ TEST(GameUIHostTest, InlineDocumentFieldsApplyOnActivation)
 
     UIElement* content = host.getTree().getLayer(WidgetTree::ELayer::Content);
     ASSERT_EQ(content->getChildren().size(), 1u);
-    EXPECT_EQ(content->getChildren()[0]->_typeId, "engine.panel");
-    auto* panel = dynamic_cast<UIPanel*>(content->getChildren()[0].get());
+    EXPECT_EQ(content->getChildren()[0]->_typeId, "engine.border");
+    auto* panel = dynamic_cast<UIBorder*>(content->getChildren()[0].get());
     ASSERT_NE(panel, nullptr);
     EXPECT_EQ(panel->getColor(), glm::vec4(0.1f, 0.2f, 0.3f, 0.9f));
 }

@@ -12,6 +12,7 @@
 #include "App/Control/AutomationRun.h"
 #include "Core/Log.h"
 
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -45,7 +46,8 @@ void attachCanvasChild(WidgetTree& tree, UIElement& parent, const UIElementRef& 
 /// still reach the button underneath.
 struct FMinimalUIDemo
 {
-    std::shared_ptr<UIPanel>  panel;
+    std::shared_ptr<UICanvasPanel>  panel;
+    std::shared_ptr<UIBorder>       fill;
     std::shared_ptr<UIText>   title;
     std::shared_ptr<UIText>   counter;
     std::shared_ptr<UIButton> button;
@@ -54,8 +56,10 @@ struct FMinimalUIDemo
 
 void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
 {
-    demo.panel = std::make_shared<UIPanel>("DemoPanel");
-    demo.panel->setColor({0.13f, 0.14f, 0.17f, 0.96f});
+    demo.panel = std::make_shared<UICanvasPanel>("DemoPanel");
+    demo.fill  = std::make_shared<UIBorder>("DemoPanelFill");
+    demo.fill->setColor({0.13f, 0.14f, 0.17f, 0.96f});
+    demo.fill->setVisibility(EWidgetVisibility::HitTestInvisible);
 
     demo.title = std::make_shared<UIText>("Title");
     demo.title->_fontSize = 20;
@@ -93,6 +97,10 @@ void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
     panelSlot.offset = {64.0f, 64.0f};
     panelSlot.fixedSize = {340.0f, 200.0f};
     tree.attachToLayer(WidgetTree::ELayer::Content, demo.panel, panelSlot);
+    FCanvasSlotArgs fillSlot;
+    fillSlot.anchorMin = {0.0f, 0.0f};
+    fillSlot.anchorMax = {1.0f, 1.0f};
+    tree.attach(*demo.panel, demo.fill, fillSlot);
     attachCanvasChild(tree, *demo.panel, demo.title, {16.0f, 14.0f}, {308.0f, 30.0f});
     attachCanvasChild(tree, *demo.panel, demo.counter, {16.0f, 58.0f}, {308.0f, 26.0f});
     attachCanvasChild(tree, *demo.panel, demo.button, {16.0f, 100.0f}, {150.0f, 44.0f});

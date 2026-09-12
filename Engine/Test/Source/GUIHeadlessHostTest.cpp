@@ -31,7 +31,7 @@ struct HeadlessDelegate final : IGUIAppDelegate
 
     void buildUI(WidgetTree& tree) override
     {
-        auto panel = std::make_shared<UIPanel>("HeadlessPanel");
+        auto panel = std::make_shared<UICanvasPanel>("HeadlessPanel");
         FCanvasSlotArgs slot;
         slot.offset = {8.0f, 12.0f};
         slot.fixedSize = {96.0f, 48.0f};
@@ -186,7 +186,7 @@ TEST(GUIHeadlessHostTest, UnthemedFallbackThenThemeSwitchRepaintsSnapshot)
         void buildUI(WidgetTree& inTree) override
         {
             tree = &inTree;
-            auto panel = std::make_shared<UIPanel>("P");
+            auto panel = std::make_shared<UICanvasPanel>("P");
             FCanvasSlotArgs panelSlot;
             panelSlot.offset    = {8.0f, 8.0f};
             panelSlot.fixedSize = {64.0f, 32.0f};

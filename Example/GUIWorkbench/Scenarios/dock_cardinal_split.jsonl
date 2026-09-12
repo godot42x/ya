@@ -6,10 +6,10 @@
 {"assert":{"widget":"DockSplit1"}}
 {"assert":{"widget":"DockSplit2"}}
 {"assert":{"widget":"DockSplit5"}}
-{"assert":{"widget":"DockLeaf4"}}
-{"assert":{"widget":"DockLeaf6"}}
-{"assert":{"widget":"DockLeaf7"}}
-{"assert":{"widget":"DockLeaf3"}}
+{"assert":{"widget":"DockStack4"}}
+{"assert":{"widget":"DockStack6"}}
+{"assert":{"widget":"DockStack7"}}
+{"assert":{"widget":"DockStack3"}}
 {"assert":{"widget":"Tab_Hierarchy"}}
 {"assert":{"widget":"Tab_Assets"}}
 {"assert":{"widget":"Tab_Scene"}}
