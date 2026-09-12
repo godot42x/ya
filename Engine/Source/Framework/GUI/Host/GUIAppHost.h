@@ -30,11 +30,15 @@
 #include "App/Kernel/AppKernel.h"
 #include "App/Control/AutomationRun.h"
 #include "GUI/Host/GUIAppDelegate.h"
+#include "GUI/Host/GUIDragRouter.h"
+#include "GUI/Host/GUIWindowChrome.h"
+#include "RHI/RenderDefines.h"
 
 #include <cstdint>
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -43,18 +47,27 @@ namespace ya
 {
 
 struct IRender; // forward decl: only used as a pointer param in refreshDevicePixelRatio
+struct INativeWindow;
 
 struct FGUIWindowHostConfig
 {
     std::string title      = "YA GUI App";
     uint32_t    width      = 1024;
     uint32_t    height     = 768;
+    int         posX       = 0;
+    int         posY       = 0;
+    int         monitorIndex = -1;
+    bool        bHasPosition = false;
+    bool        bMaximized = false;
     float       scale      = 1.0f;
     bool        bResizable = true;
     /// Present with vertical sync (FIFO). Disabling it selects Immediate
     /// mode: without vsync the direct swapchain presentation tears / 
     /// flickers on most displays, so GUI apps should keep this enabled.
     bool        bVsync     = true;
+    /// Native window + IRender backend. Extra windows follow the live
+    /// `IRender::getAPI()` when a device already exists; otherwise this value.
+    ERenderAPI::T            renderAPI = ERenderAPI::Vulkan;
     /// Runtime font: loaded once per entry under DEFAULT_RUNTIME_FONT_NAME
     /// (UIText resolves fonts by exact name+size). Empty to skip font loading.
     std::string              fontPath = "Engine/Content/Fonts/JetBrainsMono-Medium.ttf";
@@ -106,6 +119,10 @@ struct FGUIWindowHostConfig
     /// Whether Escape (and the process quit event) stops the app loop. Host-level key
     /// handling; app widgets never see Escape while this is enabled.
     bool bEscapeQuits = true;
+    /// Empty = platform default (macOS Hybrid, elsewhere Native).
+    std::optional<EWindowChromeMode> chromeMode;
+    /// Host-owned drag-ghost overlay: click-through, no taskbar, not an editor session.
+    bool bDragOverlay = false;
     /// Shared automation run policy. Zero means "run until closed".
     AppAutomationRunOptions automation;
 };
@@ -144,7 +161,10 @@ public:
     [[nodiscard]] bool isInitialized() const;
     [[nodiscard]] IAppEventSource* getEventSource();
     [[nodiscard]] const FGUIWindowHostConfig& getConfig() const;
+    [[nodiscard]] const FWindowChromeState&   windowChrome() const;
     [[nodiscard]] uint32_t getWindowID() const;
+    [[nodiscard]] INativeWindow* getNativeWindow();
+    [[nodiscard]] const INativeWindow* getNativeWindow() const;
     [[nodiscard]] IRender* getRender() const;
     /// When true, the SDL source emits events for every OS window so GUIApp
     /// can route extras. Default filters to this host's window.
@@ -179,29 +199,18 @@ private:
 };
 
 class GUIWindowManager;
+class IGUIWindowCoordinator;
+class IGUIWindowSession;
 
 /// GUI assembly/policy layer. Owns the primary GUIWindowHost plus extra
-/// native windows (GUIWindowManager). One AppKernel drives both; extras share
-/// the process device and do not call IRender::create. Extra windows present
-/// through `GUIWindowManager::renderAll`.
+/// native windows (`GUIWindowManager` as `IGUIWindowCoordinator`). One
+/// AppKernel drives both; extras share the process device and do not call
+/// IRender::create. Extra windows present through `GUIWindowManager::renderAll`.
 class YA_GUI_API GUIApp final : public IAppLoopDelegate
 {
     GUIWindowHost                     _primaryWindow;
     std::unique_ptr<GUIWindowManager> _extraWindows;
-
-    struct FCrossWindowDrag
-    {
-        GUIWindowId sourceWindowId = 0;
-        GUIWindowId hoverWindowId  = 0;
-        WidgetTree* sourceTree     = nullptr;
-        WidgetTree* hoverTree      = nullptr;
-        uint32_t    boundaryEnterCount = 0;
-        uint32_t    boundaryLeaveCount = 0;
-    };
-    FCrossWindowDrag                 _crossWindowDrag;
-    std::vector<std::function<void()>> _afterDrag;
-    glm::vec2                        _lastPointer{};
-    GUIWindowId                      _lastPointerWindow = 0;
+    GUIDragRouter                     _dragRouter;
 
 public:
     GUIApp(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate);
@@ -226,9 +235,11 @@ public:
     void                      closeWindow(GUIWindowId id);
     [[nodiscard]] WidgetTree* findTree(GUIWindowId id);
     [[nodiscard]] size_t      extraWindowCount() const;
+    [[nodiscard]] IGUIWindowCoordinator& windowCoordinator();
+    [[nodiscard]] IGUIWindowSession*     findSession(GUIWindowId id);
 
-    /// Cross-window drag primitive (MW-301). Source tree owns the session;
-    /// the target tree only receives external hover/drop. No tab semantics.
+    /// Unique drag session for this GUIApp (primary + extras). `GUIDragRouter`
+    /// is the only source/hover identity; GUIApp methods are thin wrappers.
     [[nodiscard]] bool         isCrossWindowDragActive() const;
     [[nodiscard]] GUIWindowId  crossWindowDragSourceId() const;
     [[nodiscard]] GUIWindowId  crossWindowDragHoverId() const;
@@ -243,16 +254,14 @@ public:
     [[nodiscard]] bool shouldClose() const override;
 
 private:
+    void               bindDragRouter();
     void               adoptDragSource();
     void               syncCrossWindowDrag();
+    void               applyPointerUniverse();
     [[nodiscard]] bool routeCrossWindowDrag(const Event& event);
     void               finishCrossWindowDrag(EDragFinishResult result);
     void               cancelCrossWindowDrag();
-    void               runQueuedAfterDrag();
     void               applyDeferredCloses();
-    void               setHoverWindow(GUIWindowId id, WidgetTree* tree, glm::vec2 point);
-    void               rememberPointer(const Event& event);
-    [[nodiscard]] glm::vec2 pointerForEvent(const Event& event) const;
 };
 
 } // namespace ya

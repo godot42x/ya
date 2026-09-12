@@ -2,18 +2,11 @@
 
 #include "Core/Api.h"
 #include "Core/Event.h"
-#include "GUI/Host/GUIAppDelegate.h"
-#include "GUI/Host/GUIWindowHost.h"
+#include "GUI/Host/GUIWindowSession.h"
 #include "GUI/Host/NativeWindowManager.h"
-#include "GUI/Widgets/UIFrameSnapshot.h"
-#include "GUI/Widgets/WidgetTree.h"
-#include "GUI/Host/GUIPresentationTarget.h"
-#include "GUI/Host/GUIWindowPresent.h"
-#include "RHI/NativeWindow.h"
-#include "RHI/Render.h"
-#include "Render2D/Render2D.h"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -22,44 +15,26 @@ namespace ya
 
 /// Extra native GUI windows that share the process IRender device.
 ///
-/// Each slot owns one INativeWindow + one WidgetTree + one snapshot + one
-/// `IRenderSurfaceContext`. Pointer, focus, capture, tooltip, clipboard and
-/// DPI live on that tree. It does not call `IRender::create`. The primary
-/// window stays on GUIWindowHost; this manager only holds extras. One
-/// AppKernel tick calls tickAll then renderAll after the primary host tick.
-class YA_GUI_API GUIWindowManager
+/// Concrete `IGUIWindowCoordinator`: each session owns one INativeWindow +
+/// one WidgetTree + one snapshot + one `IRenderSurfaceContext`. Focus,
+/// hover, tooltip host, capture widget and DPI live on that tree. Pointer
+/// capture/drag identity, OS clipboard, IME and cursor belong to the host
+/// `GUIDragRouter`. It does
+/// not call `IRender::create`. The primary window stays on GUIWindowHost;
+/// this manager only holds extras. One AppKernel tick calls tickAll then
+/// renderAll after the primary host tick.
+class YA_GUI_API GUIWindowManager final : public IGUIWindowCoordinator
 {
-    NativeWindowManager _nativeWindows;
-
-    struct FSlot
-    {
-        GUIWindowId              id = 0;
-        FGUIWindowHostConfig     config;
-        IGUIAppDelegate*         delegate = nullptr;
-        INativeWindow*           native   = nullptr;
-        std::unique_ptr<WidgetTree> tree;
-        UIFrameSnapshot          snapshot;
-        float                    lastMouseX = -1.0f;
-        float                    lastMouseY = -1.0f;
-        bool                     bCloseRequested = false;
-        /// Skip this slot's present only; tickAll still updates UI.
-        bool                     bMinimized      = false;
-        bool                     bSwapchainRecreatePending = false;
-        Render2DPassSlot         presentPassSlot   = kInvalidRender2DPassSlot;
-        Render2DPassSlot         offscreenPassSlot = kInvalidRender2DPassSlot;
-        std::unique_ptr<IRenderSurfaceContext> ownedPresent;
-        FGUISurfacePresentResources            presentResources;
-    };
-
-    std::vector<std::unique_ptr<FSlot>> _slots;
-    GUIWindowId                         _focusedId = 0;
-    GUIWindowId                         _deferCloseA = 0;
-    GUIWindowId                         _deferCloseB = 0;
-    bool                                _bInitialized = false;
+    NativeWindowManager                           _nativeWindows;
+    std::vector<std::unique_ptr<GUIWindowSession>> _sessions;
+    GUIWindowId                                   _focusedId     = 0;
+    GUIWindowId                                   _deferCloseA   = 0;
+    GUIWindowId                                   _deferCloseB   = 0;
+    bool                                          _bInitialized  = false;
 
   public:
     GUIWindowManager() = default;
-    ~GUIWindowManager();
+    ~GUIWindowManager() override;
 
     GUIWindowManager(const GUIWindowManager&)            = delete;
     GUIWindowManager& operator=(const GUIWindowManager&) = delete;
@@ -67,43 +42,65 @@ class YA_GUI_API GUIWindowManager
     [[nodiscard]] bool init();
     void               shutdown();
 
-    /// Create an extra OS window + WidgetTree. When `render` is non-null,
-    /// also creates a surface context on that shared device. Does not call
-    /// `IRender::create`.
+    [[nodiscard]] GUIWindowId createSession(const FGUIWindowHostConfig& config,
+                                            IGUIAppDelegate&            delegate,
+                                            IRender*                    render = nullptr) override;
+    /// Alias for createSession (MW-101 call sites).
     [[nodiscard]] GUIWindowId create(const FGUIWindowHostConfig& config,
                                      IGUIAppDelegate&            delegate,
-                                     IRender*                    render = nullptr);
-    void                      requestClose(GUIWindowId id);
-    /// Immediate destroy. Prefer requestClose so teardown happens at a tick boundary.
-    bool                      destroy(GUIWindowId id);
+                                     IRender*                    render = nullptr)
+    {
+        return createSession(config, delegate, render);
+    }
+    void requestClose(GUIWindowId id) override;
+    bool destroySession(GUIWindowId id) override;
+    bool destroy(GUIWindowId id) { return destroySession(id); }
 
-    [[nodiscard]] WidgetTree*    findTree(GUIWindowId id) const;
-    [[nodiscard]] INativeWindow* findNative(GUIWindowId id) const;
+    [[nodiscard]] IGUIWindowSession*       findSession(GUIWindowId id) override;
+    [[nodiscard]] const IGUIWindowSession* findSession(GUIWindowId id) const override;
+
+    [[nodiscard]] WidgetTree*            findTree(GUIWindowId id) const;
+    [[nodiscard]] INativeWindow*         findNative(GUIWindowId id) const;
     [[nodiscard]] const UIFrameSnapshot* findSnapshot(GUIWindowId id) const;
-    [[nodiscard]] GUIWindowId    focusedWindowId() const { return _focusedId; }
-    [[nodiscard]] size_t         extraWindowCount() const { return _slots.size(); }
+    [[nodiscard]] GUIWindowId            focusedWindowId() const { return _focusedId; }
+    [[nodiscard]] size_t                 extraWindowCount() const { return _sessions.size(); }
+    [[nodiscard]] bool                   isHostOverlay(GUIWindowId id) const override;
 
+    /// Detach a session's WidgetTree without destroying the native window.
+    /// The session tree pointer becomes null until `adoptTree`.
+    [[nodiscard]] std::unique_ptr<WidgetTree> takeTree(GUIWindowId id);
+    /// Replace a session's WidgetTree. Destroys the previous tree.
+    bool adoptTree(GUIWindowId id, std::unique_ptr<WidgetTree> tree);
+
+    /// `id == 0` clears extra focus so untagged keyboard events return to the
+    /// primary window instead of the last extra session.
     void setFocusedWindow(GUIWindowId id);
     /// Route a Core event to the owning extra window. Returns false if this
     /// manager does not own the event's window id (caller should try primary).
     bool dispatchEvent(const Event& event);
     void tickAll(float dt);
+    /// Tick extra trees and rebuild snapshots without flushing close-requested
+    /// sessions. GameEditor redocks extras before destroy; GUIApp uses tickAll.
+    void tickTrees(float dt);
     /// Present each extra's latest snapshot to its own swapchain. No-op when
-    /// a slot has no surface (tests without a shared device).
+    /// a session has no surface (tests without a shared device).
     void renderAll();
 
-    /// Destroy any requestClose'd slots except windows listed as deferred
+    /// Destroy any requestClose'd sessions except windows listed as deferred
     /// (cross-window drag keep-alive). Safe at the start of a kernel tick.
     void flushPendingCloses();
     void setDeferredCloseWindows(GUIWindowId a, GUIWindowId b);
 
     [[nodiscard]] GUIWindowId findDraggingWindowId() const;
+    [[nodiscard]] GUIWindowId findCapturingWindowId() const;
+    [[nodiscard]] GUIWindowId findModalWindowId() const;
+    void forEachWindow(const std::function<void(GUIWindowId, WidgetTree*, INativeWindow*)>& fn) const;
 
   private:
-    FSlot*       findSlot(GUIWindowId id);
-    const FSlot* findSlot(GUIWindowId id) const;
-    void         destroySlot(FSlot& slot);
-    void         dispatchToSlot(FSlot& slot, const Event& event);
+    GUIWindowSession*       findOwnedSession(GUIWindowId id);
+    const GUIWindowSession* findOwnedSession(GUIWindowId id) const;
+    void                    destroyOwnedSession(GUIWindowSession& session);
+    void                    dispatchToSession(GUIWindowSession& session, const Event& event);
 };
 
 [[nodiscard]] uint32_t guiEventWindowId(const Event& event);

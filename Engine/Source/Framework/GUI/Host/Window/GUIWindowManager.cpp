@@ -2,7 +2,11 @@
 
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
+#include "GUI/Host/GUIWindowChrome.h"
+#include "GUI/Host/GUIWindowPlacement.h"
+#include "GUI/Host/OsClipboard.h"
 #include "GUI/Widgets/UIElement.h"
+#include "GUI/Widgets/WidgetTree.h"
 #include "Core/Os/OsCursor.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderSurfaceContext.h"
@@ -11,6 +15,7 @@
 
 #include <algorithm>
 #include <format>
+#include <memory>
 
 namespace ya
 {
@@ -84,92 +89,124 @@ bool GUIWindowManager::init()
 
 void GUIWindowManager::shutdown()
 {
-    for (auto& slot : _slots) {
-        if (slot) {
-            destroySlot(*slot);
+    for (auto& session : _sessions) {
+        if (session) {
+            destroyOwnedSession(*session);
         }
     }
-    _slots.clear();
+    _sessions.clear();
     _focusedId = 0;
     _nativeWindows.shutdown();
     _bInitialized = false;
 }
 
-GUIWindowId GUIWindowManager::create(const FGUIWindowHostConfig& config,
-                                     IGUIAppDelegate&            delegate,
-                                     IRender*                    render)
+GUIWindowId GUIWindowManager::createSession(const FGUIWindowHostConfig& config,
+                                            IGUIAppDelegate&            delegate,
+                                            IRender*                    render)
 {
     if (!_bInitialized && !init()) {
         return 0;
     }
 
+    const EWindowChromeMode requested = config.bDragOverlay
+                                            ? EWindowChromeMode::ClientDrawn
+                                            : config.chromeMode.value_or(defaultWindowChromeMode());
+    const EWindowChromeMode resolved  = resolveWindowChromeMode(requested);
+
     INativeWindow* native = _nativeWindows.createWindow(WindowCreateInfo{
-        .renderAPI  = ERenderAPI::Vulkan,
-        .title      = config.title,
-        .width      = config.width,
-        .height     = config.height,
-        .scale      = config.scale,
-        .bResizable = config.bResizable,
+        .renderAPI          = render ? render->getAPI() : config.renderAPI,
+        .title              = config.title,
+        .width              = config.width,
+        .height             = config.height,
+        .scale              = config.scale,
+        .bResizable         = config.bDragOverlay ? false : config.bResizable,
+        .bBorderless        = config.bDragOverlay || resolved == EWindowChromeMode::ClientDrawn,
+        .bAlwaysOnTop       = config.bDragOverlay,
+        .bTransparent       = config.bDragOverlay,
+        .bNotFocusable      = config.bDragOverlay,
+        .bUtility           = config.bDragOverlay,
+        .bMousePassthrough  = config.bDragOverlay,
     });
     if (!native) {
         return 0;
     }
 
-    auto slot          = std::make_unique<FSlot>();
-    slot->id           = native->getWindowID();
-    slot->config       = config;
-    slot->delegate     = &delegate;
-    slot->native       = native;
-    slot->tree         = std::make_unique<WidgetTree>(nativeLogicalExtent(*native));
-    slot->tree->setDpiScale(native->getDpiScale());
-    // Tree-local in-memory clipboard. OS clipboard stays on the primary
-    // GUIWindowHost so extra windows cannot overwrite each other's paste buffer.
-    delegate.buildUI(*slot->tree);
-    slot->presentPassSlot   = Render2D::acquirePassSlot();
-    slot->offscreenPassSlot = Render2D::acquirePassSlot();
+    auto session          = std::make_unique<GUIWindowSession>();
+    session->windowId     = native->getWindowID();
+    session->config       = config;
+    session->delegate     = &delegate;
+    session->native       = native;
+    session->chromeState  = config.bDragOverlay ? FWindowChromeState{.mode = EWindowChromeMode::ClientDrawn}
+                                                : applyWindowChrome(*native, requested, config.bResizable);
+    if (config.bDragOverlay) {
+        (void)applyNativeClickThrough(*native, true);
+    }
+    if (config.bHasPosition || config.bMaximized || config.monitorIndex >= 0) {
+        FWindowScreenPlacement placement = queryWindowScreenPlacement(*native);
+        if (config.bHasPosition) {
+            placement.x          = config.posX;
+            placement.y          = config.posY;
+            placement.bHasOrigin = true;
+        }
+        placement.w            = static_cast<int>(std::max(config.width, 1u));
+        placement.h            = static_cast<int>(std::max(config.height, 1u));
+        if (config.monitorIndex >= 0) {
+            placement.monitorIndex = config.monitorIndex;
+        }
+        placement.bMaximized   = config.bMaximized;
+        (void)applyWindowScreenPlacement(*native, placement);
+    }
+    session->ownedTree    = std::make_unique<WidgetTree>(nativeLogicalExtent(*native));
+    session->ownedTree->setDpiScale(native->getDpiScale());
+    bindSdlClipboard(*session->ownedTree);
+    delegate.buildUI(*session->ownedTree);
+    session->presentPassSlot   = Render2D::acquirePassSlot();
+    session->offscreenPassSlot = Render2D::acquirePassSlot();
 
     if (render) {
-        slot->ownedPresent = render->createSurfaceContext(*native);
-        if (!slot->ownedPresent) {
+        session->ownedPresent = render->createSurfaceContext(*native);
+        if (!session->ownedPresent) {
             YA_CORE_ERROR("GUIWindowManager: failed to create surface context for extra window '{}'",
                           config.title);
-            Render2D::releasePassSlot(slot->presentPassSlot);
-            Render2D::releasePassSlot(slot->offscreenPassSlot);
-            slot->presentPassSlot   = kInvalidRender2DPassSlot;
-            slot->offscreenPassSlot = kInvalidRender2DPassSlot;
-            slot->tree.reset();
-            slot->native = nullptr;
+            Render2D::releasePassSlot(session->presentPassSlot);
+            Render2D::releasePassSlot(session->offscreenPassSlot);
+            session->presentPassSlot   = kInvalidRender2DPassSlot;
+            session->offscreenPassSlot = kInvalidRender2DPassSlot;
+            session->ownedTree.reset();
+            session->native = nullptr;
             _nativeWindows.destroyWindow(native->getWindowID());
             return 0;
         }
-        slot->presentResources.render  = render;
-        slot->presentResources.present = slot->ownedPresent.get();
-        rebuildGuiSurfacePresentation(slot->presentResources,
-                                      std::format("GUIExtra_{}", slot->id).c_str(),
+        session->presentResources.render  = render;
+        session->presentResources.present = session->ownedPresent.get();
+        rebuildGuiSurfacePresentation(session->presentResources,
+                                      std::format("GUIExtra_{}", session->windowId).c_str(),
                                       /*bWaitForGpu=*/true);
     }
 
-    const GUIWindowId id = slot->id;
-    _focusedId           = id;
-    _slots.push_back(std::move(slot));
+    const GUIWindowId id = session->windowId;
+    if (!config.bDragOverlay) {
+        _focusedId = id;
+    }
+    _sessions.push_back(std::move(session));
     return id;
 }
 
 void GUIWindowManager::requestClose(GUIWindowId id)
 {
-    if (FSlot* slot = findSlot(id)) {
-        slot->bCloseRequested = true;
+    if (GUIWindowSession* session = findOwnedSession(id)) {
+        session->bCloseRequested = true;
     }
 }
 
-bool GUIWindowManager::destroy(GUIWindowId id)
+bool GUIWindowManager::destroySession(GUIWindowId id)
 {
-    for (auto it = _slots.begin(); it != _slots.end(); ++it) {
-        if (*it && (*it)->id == id) {
-            destroySlot(**it);
-            _slots.erase(it);
+    for (auto it = _sessions.begin(); it != _sessions.end(); ++it) {
+        if (*it && (*it)->windowId == id) {
+            destroyOwnedSession(**it);
+            _sessions.erase(it);
             if (_focusedId == id) {
-                _focusedId = _slots.empty() ? 0 : _slots.front()->id;
+                _focusedId = _sessions.empty() ? 0 : _sessions.front()->windowId;
             }
             return true;
         }
@@ -177,27 +214,64 @@ bool GUIWindowManager::destroy(GUIWindowId id)
     return false;
 }
 
+IGUIWindowSession* GUIWindowManager::findSession(GUIWindowId id)
+{
+    return findOwnedSession(id);
+}
+
+const IGUIWindowSession* GUIWindowManager::findSession(GUIWindowId id) const
+{
+    return findOwnedSession(id);
+}
+
 WidgetTree* GUIWindowManager::findTree(GUIWindowId id) const
 {
-    const FSlot* slot = findSlot(id);
-    return slot ? slot->tree.get() : nullptr;
+    const GUIWindowSession* session = findOwnedSession(id);
+    return session ? session->ownedTree.get() : nullptr;
+}
+
+std::unique_ptr<WidgetTree> GUIWindowManager::takeTree(GUIWindowId id)
+{
+    GUIWindowSession* session = findOwnedSession(id);
+    if (!session) {
+        return {};
+    }
+    return std::move(session->ownedTree);
+}
+
+bool GUIWindowManager::adoptTree(GUIWindowId id, std::unique_ptr<WidgetTree> tree)
+{
+    GUIWindowSession* session = findOwnedSession(id);
+    if (!session || !tree) {
+        return false;
+    }
+    session->ownedTree = std::move(tree);
+    if (session->native && session->ownedTree) {
+        session->ownedTree->setLogicalExtent(nativeLogicalExtent(*session->native));
+        session->ownedTree->setDpiScale(session->native->getDpiScale());
+    }
+    return true;
 }
 
 INativeWindow* GUIWindowManager::findNative(GUIWindowId id) const
 {
-    const FSlot* slot = findSlot(id);
-    return slot ? slot->native : nullptr;
+    const GUIWindowSession* session = findOwnedSession(id);
+    return session ? session->native : nullptr;
 }
 
 const UIFrameSnapshot* GUIWindowManager::findSnapshot(GUIWindowId id) const
 {
-    const FSlot* slot = findSlot(id);
-    return slot ? &slot->snapshot : nullptr;
+    const GUIWindowSession* session = findOwnedSession(id);
+    return session ? &session->ownedSnapshot : nullptr;
 }
 
 void GUIWindowManager::setFocusedWindow(GUIWindowId id)
 {
-    if (findSlot(id)) {
+    if (id == 0) {
+        _focusedId = 0;
+        return;
+    }
+    if (findOwnedSession(id)) {
         _focusedId = id;
     }
 }
@@ -209,57 +283,65 @@ bool GUIWindowManager::dispatchEvent(const Event& event)
         if (_focusedId == 0) {
             return false;
         }
-        if (FSlot* focused = findSlot(_focusedId)) {
-            dispatchToSlot(*focused, event);
+        if (GUIWindowSession* focused = findOwnedSession(_focusedId)) {
+            dispatchToSession(*focused, event);
             return true;
         }
         return false;
     }
 
-    FSlot* slot = findSlot(id);
-    if (!slot) {
+    GUIWindowSession* session = findOwnedSession(id);
+    if (!session) {
         return false;
     }
-    dispatchToSlot(*slot, event);
+    if (session->isHostOverlay()) {
+        return true;
+    }
+    dispatchToSession(*session, event);
     return true;
 }
 
 void GUIWindowManager::tickAll(float dt)
 {
     flushPendingCloses();
-    for (auto& slot : _slots) {
-        if (!slot || !slot->tree) {
+    tickTrees(dt);
+}
+
+void GUIWindowManager::tickTrees(float dt)
+{
+    for (auto& session : _sessions) {
+        if (!session || !session->ownedTree) {
             continue;
         }
-        if (slot->native) {
-            slot->tree->setLogicalExtent(nativeLogicalExtent(*slot->native));
-            slot->tree->setDpiScale(slot->native->getDpiScale());
+        if (session->native) {
+            session->ownedTree->setLogicalExtent(nativeLogicalExtent(*session->native));
+            session->ownedTree->setDpiScale(session->native->getDpiScale());
         }
-        if (slot->delegate && slot->delegate->shouldRequestClose()) {
-            slot->bCloseRequested = true;
+        if (session->delegate && session->delegate->shouldRequestClose()) {
+            session->bCloseRequested = true;
             continue;
         }
-        if (slot->delegate) {
-            slot->delegate->updateUI();
+        if (session->delegate) {
+            session->delegate->updateUI();
         }
-        slot->tree->tick(dt);
-        FontManager::get()->setActiveDpiScale(slot->tree->getDpiScale());
-        slot->snapshot = slot->tree->buildSnapshot(UIFrameBuildContext{});
+        session->ownedTree->tick(dt);
+        FontManager::get()->setActiveDpiScale(session->ownedTree->getDpiScale());
+        session->ownedSnapshot = session->ownedTree->buildSnapshot(UIFrameBuildContext{});
     }
 }
 
 void GUIWindowManager::renderAll()
 {
-    for (auto& slot : _slots) {
-        if (!slot || !slot->ownedPresent) {
+    for (auto& session : _sessions) {
+        if (!session || !session->ownedPresent) {
             continue;
         }
-        presentGuiSnapshot(slot->presentResources,
-                           slot->snapshot,
-                           slot->tree ? slot->tree->getLogicalExtent() : Extent2D{},
-                           slot->presentPassSlot,
-                           slot->bMinimized,
-                           slot->bSwapchainRecreatePending);
+        presentGuiSnapshot(session->presentResources,
+                           session->ownedSnapshot,
+                           session->ownedTree ? session->ownedTree->getLogicalExtent() : Extent2D{},
+                           session->presentPassSlot,
+                           session->bMinimized || (session->native && session->native->isHidden()),
+                           session->bSwapchainRecreatePending);
     }
 }
 
@@ -269,29 +351,69 @@ void GUIWindowManager::setDeferredCloseWindows(GUIWindowId a, GUIWindowId b)
     _deferCloseB = b;
 }
 
+bool GUIWindowManager::isHostOverlay(GUIWindowId id) const
+{
+    const GUIWindowSession* session = findOwnedSession(id);
+    return session && session->isHostOverlay();
+}
+
 GUIWindowId GUIWindowManager::findDraggingWindowId() const
 {
-    for (const auto& slot : _slots) {
-        if (slot && slot->tree && slot->tree->isDragging()) {
-            return slot->id;
+    for (const auto& session : _sessions) {
+        if (session && session->ownedTree && session->ownedTree->isDragging() &&
+            !session->isHostOverlay()) {
+            return session->windowId;
         }
     }
     return 0;
 }
 
+GUIWindowId GUIWindowManager::findCapturingWindowId() const
+{
+    for (const auto& session : _sessions) {
+        if (session && session->ownedTree && session->ownedTree->getPointerCapture()) {
+            return session->windowId;
+        }
+    }
+    return 0;
+}
+
+GUIWindowId GUIWindowManager::findModalWindowId() const
+{
+    for (const auto& session : _sessions) {
+        if (session && session->ownedTree && session->ownedTree->hasModalPopup()) {
+            return session->windowId;
+        }
+    }
+    return 0;
+}
+
+void GUIWindowManager::forEachWindow(
+    const std::function<void(GUIWindowId, WidgetTree*, INativeWindow*)>& fn) const
+{
+    if (!fn) {
+        return;
+    }
+    for (const auto& session : _sessions) {
+        if (session) {
+            fn(session->windowId, session->ownedTree.get(), session->native);
+        }
+    }
+}
+
 void GUIWindowManager::flushPendingCloses()
 {
-    for (size_t i = 0; i < _slots.size();) {
-        if (_slots[i] && _slots[i]->bCloseRequested) {
-            const GUIWindowId id = _slots[i]->id;
+    for (size_t i = 0; i < _sessions.size();) {
+        if (_sessions[i] && _sessions[i]->bCloseRequested) {
+            const GUIWindowId id = _sessions[i]->windowId;
             if (id != 0 && (id == _deferCloseA || id == _deferCloseB)) {
                 ++i;
                 continue;
             }
-            destroySlot(*_slots[i]);
-            _slots.erase(_slots.begin() + static_cast<std::ptrdiff_t>(i));
+            destroyOwnedSession(*_sessions[i]);
+            _sessions.erase(_sessions.begin() + static_cast<std::ptrdiff_t>(i));
             if (_focusedId == id) {
-                _focusedId = _slots.empty() ? 0 : _slots.front()->id;
+                _focusedId = _sessions.empty() ? 0 : _sessions.front()->windowId;
             }
         }
         else {
@@ -300,105 +422,113 @@ void GUIWindowManager::flushPendingCloses()
     }
 }
 
-GUIWindowManager::FSlot* GUIWindowManager::findSlot(GUIWindowId id)
+GUIWindowSession* GUIWindowManager::findOwnedSession(GUIWindowId id)
 {
-    for (auto& slot : _slots) {
-        if (slot && slot->id == id) {
-            return slot.get();
+    for (auto& session : _sessions) {
+        if (session && session->windowId == id) {
+            return session.get();
         }
     }
     return nullptr;
 }
 
-const GUIWindowManager::FSlot* GUIWindowManager::findSlot(GUIWindowId id) const
+const GUIWindowSession* GUIWindowManager::findOwnedSession(GUIWindowId id) const
 {
-    for (const auto& slot : _slots) {
-        if (slot && slot->id == id) {
-            return slot.get();
+    for (const auto& session : _sessions) {
+        if (session && session->windowId == id) {
+            return session.get();
         }
     }
     return nullptr;
 }
 
-void GUIWindowManager::destroySlot(FSlot& slot)
+void GUIWindowManager::destroyOwnedSession(GUIWindowSession& session)
 {
-    if (slot.ownedPresent) {
-        slot.ownedPresent->waitInFlight();
+    if (session.ownedPresent) {
+        session.ownedPresent->waitInFlight();
     }
-    slot.presentResources.commandBuffers.clear();
-    slot.presentResources.presentationTargets.clear();
-    slot.presentResources.present = nullptr;
-    slot.presentResources.render  = nullptr;
-    slot.ownedPresent.reset();
-    Render2D::releasePassSlot(slot.presentPassSlot);
-    Render2D::releasePassSlot(slot.offscreenPassSlot);
-    slot.presentPassSlot   = kInvalidRender2DPassSlot;
-    slot.offscreenPassSlot = kInvalidRender2DPassSlot;
-    slot.snapshot = {};
-    slot.tree.reset();
-    slot.delegate = nullptr;
-    if (slot.native) {
-        const GUIWindowId id = slot.id;
-        slot.native          = nullptr;
+    session.presentResources.commandBuffers.clear();
+    session.presentResources.presentationTargets.clear();
+    session.presentResources.present = nullptr;
+    session.presentResources.render  = nullptr;
+    session.ownedPresent.reset();
+    Render2D::releasePassSlot(session.presentPassSlot);
+    Render2D::releasePassSlot(session.offscreenPassSlot);
+    session.presentPassSlot   = kInvalidRender2DPassSlot;
+    session.offscreenPassSlot = kInvalidRender2DPassSlot;
+    session.ownedSnapshot     = {};
+    session.ownedTree.reset();
+    session.delegate = nullptr;
+    if (session.native) {
+        const GUIWindowId id = session.windowId;
+        clearWindowChrome(*session.native);
+        session.native       = nullptr;
         _nativeWindows.destroyWindow(id);
     }
-    slot.id = 0;
+    session.windowId = 0;
 }
 
-void GUIWindowManager::dispatchToSlot(FSlot& slot, const Event& event)
+void GUIWindowManager::dispatchToSession(GUIWindowSession& session, const Event& event)
 {
     switch (event.getEventType()) {
     case EEvent::WindowClose:
-        slot.bCloseRequested = true;
+        session.bCloseRequested = true;
         return;
     case EEvent::WindowFocus:
-        _focusedId = slot.id;
+        _focusedId = session.windowId;
         return;
     case EEvent::WindowFocusLost: {
-        if (_focusedId == slot.id) {
+        if (_focusedId == session.windowId) {
             _focusedId = 0;
         }
-        if (slot.tree) {
+        if (session.ownedTree) {
+            // Capture/drag may outlive this window's key-focus (cross-window
+            // drag). Hover, tooltip and ordinary pointer-over must not.
+            session.ownedTree->clearPointerOverState();
+            if (session.ownedTree->isDragging() || session.ownedTree->getPointerCapture()) {
+                return;
+            }
             MouseMoveEvent leave(-1000000.0f, -1000000.0f);
-            leave._windowID = slot.id;
+            leave._windowID = session.windowId;
             WidgetEventContext ctx;
             ctx.logicalPoint = {leave.getX(), leave.getY()};
-            slot.tree->dispatchEvent(leave, ctx);
-            slot.lastMouseX = leave.getX();
-            slot.lastMouseY = leave.getY();
+            (void)session.ownedTree->dispatchEvent(leave, ctx);
+            session.lastMouseX = leave.getX();
+            session.lastMouseY = leave.getY();
         }
         return;
     }
     case EEvent::WindowMinimize:
-        slot.bMinimized = true;
-        slot.bSwapchainRecreatePending = true;
+        session.bMinimized                = true;
+        session.bSwapchainRecreatePending = true;
         return;
     case EEvent::WindowRestore:
-        slot.bMinimized = false;
-        slot.bSwapchainRecreatePending = true;
+        session.bMinimized                = false;
+        session.bSwapchainRecreatePending = true;
         return;
     case EEvent::WindowResize: {
-        const auto& resize = static_cast<const WindowResizeEvent&>(event);
-        slot.bMinimized    = resize.GetWidth() == 0 || resize.GetHeight() == 0;
-        slot.bSwapchainRecreatePending = true;
-        if (slot.tree) {
-            slot.tree->setLogicalExtent(Extent2D{
+        const auto& resize                 = static_cast<const WindowResizeEvent&>(event);
+        session.bMinimized                 = resize.GetWidth() == 0 || resize.GetHeight() == 0;
+        session.bSwapchainRecreatePending  = true;
+        if (session.ownedTree) {
+            session.ownedTree->setLogicalExtent(Extent2D{
                 .width  = std::max(resize.GetWidth(), 1u),
                 .height = std::max(resize.GetHeight(), 1u),
             });
         }
-        if (slot.native) {
-            slot.native->refreshDpiScale();
-            if (slot.tree) {
-                slot.tree->setDpiScale(slot.native->getDpiScale());
+        if (session.native) {
+            session.native->refreshDpiScale();
+            session.chromeState = applyWindowChrome(*session.native, session.chromeState.mode, session.config.bResizable);
+            if (session.ownedTree) {
+                session.ownedTree->setDpiScale(session.native->getDpiScale());
             }
         }
         return;
     }
     case EEvent::KeyPressed: {
         const auto& key = static_cast<const KeyPressedEvent&>(event);
-        if (slot.config.bEscapeQuits && key.getKeyCode() == EKey::Escape && !key.isRepeat()) {
-            slot.bCloseRequested = true;
+        if (session.config.bEscapeQuits && key.getKeyCode() == EKey::Escape && !key.isRepeat()) {
+            session.bCloseRequested = true;
             return;
         }
         break;
@@ -407,30 +537,38 @@ void GUIWindowManager::dispatchToSlot(FSlot& slot, const Event& event)
         break;
     }
 
-    if (!slot.tree) {
+    if (!session.ownedTree) {
         return;
     }
 
-    float mouseX = slot.lastMouseX;
-    float mouseY = slot.lastMouseY;
+    float mouseX = session.lastMouseX;
+    float mouseY = session.lastMouseY;
     if (event.getEventType() == EEvent::MouseMoved) {
         const auto& move = static_cast<const MouseMoveEvent&>(event);
         mouseX           = move.getX();
         mouseY           = move.getY();
-        slot.lastMouseX  = mouseX;
-        slot.lastMouseY  = mouseY;
+        session.lastMouseX = mouseX;
+        session.lastMouseY = mouseY;
+    }
+
+    if (event.getEventType() == EEvent::MouseButtonPressed && session.native) {
+        const auto& press = static_cast<const MouseButtonPressedEvent&>(event);
+        if (press.GetMouseButton() == EMouse::Left && press.clickCount() >= 2 &&
+            handleWindowChromeTitleDoubleClick(*session.native, mouseX, mouseY)) {
+            return;
+        }
     }
 
     WidgetEventContext ctx;
-    ctx.logicalPoint                    = {mouseX, mouseY};
-    const EWidgetRouteResult result     = slot.tree->dispatchEvent(event, ctx);
-    if (slot.delegate) {
-        slot.delegate->onRoutedEvent(event, result);
+    ctx.logicalPoint                = {mouseX, mouseY};
+    const EWidgetRouteResult result = session.ownedTree->dispatchEvent(event, ctx);
+    if (session.delegate) {
+        session.delegate->onRoutedEvent(event, result);
     }
     if (event.getEventType() == EEvent::MouseMoved ||
         event.getEventType() == EEvent::MouseButtonPressed ||
         event.getEventType() == EEvent::MouseButtonReleased) {
-        applyHoveredCursor(slot.tree->getHovered());
+        applyHoveredCursor(session.ownedTree->getHovered());
     }
 }
 

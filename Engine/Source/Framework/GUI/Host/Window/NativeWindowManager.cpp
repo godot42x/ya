@@ -1,6 +1,7 @@
 #include "GUI/Host/NativeWindowManager.h"
 
 #include "Core/Log.h"
+#include "GUI/Host/GUIWindowChrome.h"
 
 #include <algorithm>
 
@@ -96,6 +97,10 @@ bool NativeWindowManager::destroyWindow(uint32_t windowID)
         return false;
     }
 
+    if (INativeWindow* raw = it->get()) {
+        clearWindowChrome(*raw);
+    }
+
     _windowByID.erase(windowID);
     if (_mainWindowID == windowID) {
         _mainWindowID = 0;
@@ -111,6 +116,11 @@ bool NativeWindowManager::destroyWindow(uint32_t windowID)
 
 void NativeWindowManager::clear()
 {
+    for (auto& window : _windows) {
+        if (window) {
+            clearWindowChrome(*window);
+        }
+    }
     _windowByID.clear();
     _windows.clear();
     _mainWindowID = 0;

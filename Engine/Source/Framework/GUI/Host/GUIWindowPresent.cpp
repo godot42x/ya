@@ -7,7 +7,6 @@
 #include "RHI/Core/PresentFrame.h"
 #include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/Render.h"
-#include "RHI/Backend/Vulkan/VulkanSwapChain.h"
 #include "Render/Resources/FontManager.h"
 
 #include <format>
@@ -29,17 +28,18 @@ void rebuildGuiSurfacePresentation(FGUISurfacePresentResources& resources,
     resources.commandBuffers.clear();
     resources.presentationTargets.clear();
 
-    ISwapchain* swapchainBase = resources.present->getSwapchain();
-    auto*       swapchain     = swapchainBase ? swapchainBase->as<VulkanSwapChain>() : nullptr;
+    ISwapchain* swapchain = resources.present->getSwapchain();
     if (!swapchain) {
-        YA_CORE_ERROR("GUI extra present: swapchain is not VulkanSwapChain");
         return;
     }
     resources.render->allocateCommandBuffers(swapchain->getImageCount(), resources.commandBuffers);
-    GUIPresentationTarget::buildAll(*resources.render,
-                                    *swapchain,
-                                    labelPrefix ? labelPrefix : "GUIExtra",
-                                    resources.presentationTargets);
+    if (!GUIPresentationTarget::buildAll(*resources.render,
+                                         *resources.present,
+                                         labelPrefix ? labelPrefix : "GUIExtra",
+                                         resources.presentationTargets)) {
+        resources.commandBuffers.clear();
+        return;
+    }
     resources.cachedSwapchainHandle = swapchain->getHandle();
     resources.cachedSwapchainExtent = swapchain->getExtent();
 }
@@ -55,9 +55,7 @@ void presentGuiSnapshot(FGUISurfacePresentResources& resources,
         return;
     }
     if (bSwapchainRecreatePending) {
-        if (auto* swapchain = resources.present->getSwapchain()->as<VulkanSwapChain>()) {
-            swapchain->requestRecreate();
-        }
+        resources.present->requestRecreate();
         bSwapchainRecreatePending = false;
     }
     if (bMinimized || !resources.present->isPresentable()) {
@@ -74,8 +72,7 @@ void presentGuiSnapshot(FGUISurfacePresentResources& resources,
     }
     const int32_t imageIndex = presentFrame.imageIndex;
 
-    ISwapchain* swapchainBase = resources.present->getSwapchain();
-    auto*       swapchain     = swapchainBase ? swapchainBase->as<VulkanSwapChain>() : nullptr;
+    ISwapchain* swapchain = resources.present->getSwapchain();
     if (!swapchain) {
         submitPresentFrame(presentFrame, {});
         return;
@@ -86,15 +83,14 @@ void presentGuiSnapshot(FGUISurfacePresentResources& resources,
         swapchainExtent.width != resources.cachedSwapchainExtent.width ||
         swapchainExtent.height != resources.cachedSwapchainExtent.height) {
         rebuildGuiSurfacePresentation(resources, "GUIExtra", /*bWaitForGpu=*/false);
-        swapchainBase = resources.present->getSwapchain();
-        swapchain     = swapchainBase ? swapchainBase->as<VulkanSwapChain>() : nullptr;
+        swapchain = resources.present->getSwapchain();
         if (!swapchain) {
             submitPresentFrame(presentFrame, {});
             return;
         }
     }
-    if (static_cast<size_t>(imageIndex) >= resources.presentationTargets.size() ||
-        static_cast<size_t>(imageIndex) >= resources.commandBuffers.size()) {
+    if (!guiPresentationIndexValid(imageIndex, resources.presentationTargets.size(),
+                                   resources.commandBuffers.size())) {
         YA_CORE_ERROR("GUI extra present: image index {} out of range", imageIndex);
         submitPresentFrame(presentFrame, {});
         return;

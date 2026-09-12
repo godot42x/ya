@@ -21,7 +21,7 @@ namespace ya
 {
 
 struct IRender;
-struct VulkanSwapChain;
+struct IRenderSurfaceContext;
 
 /// One imported swapchain image wrapped as an external GUI render surface.
 struct GUIPresentationTarget final
@@ -29,8 +29,8 @@ struct GUIPresentationTarget final
     /// Rebuild `outTargets` from the current swapchain (clears it first).
     /// Called at startup and after every swapchain recreation (resize /
     /// restore); the caller must have waited for in-flight work first.
-    static void buildAll(IRender&                                                 render,
-                         VulkanSwapChain&                                         swapchain,
+    static bool buildAll(IRender&                                                 render,
+                         IRenderSurfaceContext&                                   surface,
                          const char*                                              labelPrefix,
                          std::vector<std::shared_ptr<GUIPresentationTarget>>& outTargets);
 

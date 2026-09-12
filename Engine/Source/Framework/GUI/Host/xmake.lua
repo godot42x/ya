@@ -14,4 +14,10 @@ target("ya-gui-host")
     add_deps("ya-render-resources", "ya-render-2d", "ya-gui-widgets", "ya-gui-compose", { public = true })
     add_deps("ya-rhi-backend-common", "ya-rhi-vulkan")
     add_packages("stb")
+    add_packages("libsdl3")
     add_packages("glm", { public = true })
+    if is_plat("macosx") then
+        add_files("Window/GUIWindowChromeCocoa.mm")
+        add_frameworks("AppKit")
+        add_mxxflags("-fobjc-arc")
+    end

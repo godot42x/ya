@@ -4,6 +4,8 @@
 #include "Render2D/Render2D.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
+#include <cstdint>
+#include <cstddef>
 #include <memory>
 #include <vector>
 
@@ -39,5 +41,14 @@ void presentGuiSnapshot(FGUISurfacePresentResources& resources,
                         Render2DPassSlot             passSlot,
                         bool                         bMinimized,
                         bool&                        bSwapchainRecreatePending);
+
+[[nodiscard]] inline bool guiPresentationIndexValid(int32_t imageIndex,
+                                                    size_t  targetCount,
+                                                    size_t  commandBufferCount)
+{
+    return imageIndex >= 0 &&
+           static_cast<size_t>(imageIndex) < targetCount &&
+           static_cast<size_t>(imageIndex) < commandBufferCount;
+}
 
 } // namespace ya

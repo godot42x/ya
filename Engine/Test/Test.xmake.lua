@@ -185,6 +185,7 @@ do
     set_kind("binary")
     add_files("./Source/GUIHeadlessHostTest.cpp")
     add_files("./Source/GUIWindowManagerTest.cpp")
+    add_files("./Source/GUIWindowChromeTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-host")

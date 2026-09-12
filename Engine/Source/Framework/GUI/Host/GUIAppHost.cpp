@@ -1,6 +1,9 @@
 #include "GUI/Host/GUIAppHost.h"
 #include "GUI/Host/GUIPresentationTarget.h"
+#include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Host/GUIWindowManager.h"
+#include "GUI/Host/GUIWindowPresent.h"
+#include "GUI/Host/GUIWindowSession.h"
 
 #include "GUI/Host/AppBootstrap.h"
 #include "App/Control/BmpDiff.h"
@@ -20,9 +23,9 @@
 #include "Core/Os/OsCursor.h"
 #include "RHI/Core/Texture.h"
 #include "RHI/Backend/TextureLibrary.h"
-#include "RHI/Backend/Vulkan/VulkanSwapChain.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/PresentFrame.h"
+#include "RHI/Core/Swapchain.h"
 
 #include "GUI/Compose/GuiFrameInspectorOverlay.h"
 #include "GUI/Compose/Render2DComposePass.h"
@@ -522,6 +525,7 @@ struct GUIWindowHost::FImpl
     IGUIAppDelegate*         delegate = nullptr;
 
     SDLNativeWindow          window;
+    FWindowChromeState       chrome;
     IRender*                 render  = nullptr;
     IRenderSurfaceContext*   present = nullptr;
     AppAutomationControlServer automationServer;
@@ -599,17 +603,22 @@ bool GUIWindowHost::init()
         return false;
     }
     if (!window.recreate(WindowCreateInfo{
-            .index      = 0,
-            .renderAPI  = ERenderAPI::Vulkan,
-            .title      = config.title,
-            .width      = config.width != 0 ? config.width : DEFAULT_WINDOW_WIDTH,
-            .height     = config.height != 0 ? config.height : DEFAULT_WINDOW_HEIGHT,
-            .scale      = config.scale,
-            .bResizable = config.bResizable,
+            .index       = 0,
+            .renderAPI   = config.renderAPI,
+            .title       = config.title,
+            .width       = config.width != 0 ? config.width : DEFAULT_WINDOW_WIDTH,
+            .height      = config.height != 0 ? config.height : DEFAULT_WINDOW_HEIGHT,
+            .scale       = config.scale,
+            .bResizable  = config.bResizable,
+            .bBorderless = resolveWindowChromeMode(config.chromeMode.value_or(defaultWindowChromeMode())) ==
+                           EWindowChromeMode::ClientDrawn,
         })) {
         window.destroy();
         return false;
     }
+    _impl->chrome = applyWindowChrome(window,
+                                      config.chromeMode.value_or(defaultWindowChromeMode()),
+                                      config.bResizable);
     // Enable Unicode text input (KeyTypedEvent) so focused text fields can
     // edit; the events are routed like every other keyboard event.
     window.startTextInput();
@@ -624,9 +633,9 @@ bool GUIWindowHost::init()
     _impl->shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
     _impl->shaderStorage->setSlangProcessor(shaderProcessor);
 
-    // 3. Vulkan backend (the fixed host backend choice).
+    // 3. Render backend (same API as the primary native window).
     RenderCreateInfo renderCI{
-        .renderAPI = ERenderAPI::Vulkan,
+        .renderAPI = config.renderAPI,
         .swapchainCI = SwapchainCreateInfo{
             .imageFormat = EFormat::R8G8B8A8_UNORM,
             // GUI hover is high-frequency interaction: prefer Mailbox (low
@@ -716,8 +725,8 @@ bool GUIWindowHost::init()
 
     // 5. GUI Draw2D renderer (screen-space sprites, depth-less pipeline),
     //    matching the swapchain's real surface format.
-    auto* swapchain = _impl->present->getSwapchain()->as<VulkanSwapChain>();
-    YA_CORE_ASSERT(swapchain != nullptr, "GUIAppHost requires a VulkanSwapChain");
+    ISwapchain* swapchain = _impl->present->getSwapchain();
+    YA_CORE_ASSERT(swapchain != nullptr, "GUIAppHost requires a present swapchain");
     Render2D::init(render, swapchain->getFormat(), EFormat::Undefined);
     _impl->presentPassSlot   = Render2D::acquirePassSlot();
     _impl->offscreenPassSlot = Render2D::acquirePassSlot();
@@ -796,7 +805,13 @@ bool GUIWindowHost::init()
     render->allocateCommandBuffers(swapchain->getImageCount(), _impl->commandBuffers);
 
     // Presentation render targets: one imported swapchain image per frame.
-    GUIPresentationTarget::buildAll(*render, *swapchain, "GUIApp", _impl->presentationTargets);
+    if (!GUIPresentationTarget::buildAll(*render,
+                                         *_impl->present,
+                                         "GUIApp",
+                                         _impl->presentationTargets)) {
+        YA_CORE_ERROR("GUIAppHost: failed to build presentation targets for the primary surface");
+        return false;
+    }
     _impl->cachedSwapchainHandle = swapchain->getHandle();
     _impl->cachedSwapchainExtent = swapchain->getExtent();
     _impl->tree->setLogicalExtent(queryWindowLogicalExtent(_impl->window));
@@ -866,9 +881,20 @@ void GUIWindowHost::rebuildPresentationResources(bool bWaitForGpu)
     _impl->offscreenSurface.reset();
     _impl->offscreenShotBuffer.reset();
 
-    auto* swapchain = _impl->present->getSwapchain()->as<VulkanSwapChain>();
+    auto* swapchain = _impl->present->getSwapchain();
+    if (!swapchain) {
+        YA_CORE_ERROR("GUIAppHost: primary surface has no swapchain");
+        return;
+    }
     _impl->render->allocateCommandBuffers(swapchain->getImageCount(), _impl->commandBuffers);
-    GUIPresentationTarget::buildAll(*_impl->render, *swapchain, "GUIApp", _impl->presentationTargets);
+    if (!GUIPresentationTarget::buildAll(*_impl->render,
+                                         *_impl->present,
+                                         "GUIApp",
+                                         _impl->presentationTargets)) {
+        YA_CORE_ERROR("GUIAppHost: failed to rebuild presentation targets");
+        _impl->commandBuffers.clear();
+        return;
+    }
     _impl->cachedSwapchainHandle = swapchain->getHandle();
     _impl->cachedSwapchainExtent = swapchain->getExtent();
 }
@@ -894,9 +920,24 @@ const FGUIWindowHostConfig& GUIWindowHost::getConfig() const
     return *_impl->config;
 }
 
+const FWindowChromeState& GUIWindowHost::windowChrome() const
+{
+    return _impl->chrome;
+}
+
 uint32_t GUIWindowHost::getWindowID() const
 {
     return _impl->window.getWindowID();
+}
+
+INativeWindow* GUIWindowHost::getNativeWindow()
+{
+    return &_impl->window;
+}
+
+const INativeWindow* GUIWindowHost::getNativeWindow() const
+{
+    return &_impl->window;
 }
 
 IRender* GUIWindowHost::getRender() const
@@ -979,6 +1020,7 @@ void GUIWindowHost::onEvent(const Event& event)
         // and republish so fonts re-raster at the new device resolution.
         _impl->window.refreshDpiScale();
         refreshDevicePixelRatio(_impl->render);
+        _impl->chrome = applyWindowChrome(_impl->window, _impl->chrome.mode, _impl->config->bResizable);
         return;
     }
     case EEvent::WindowMoved: {
@@ -987,6 +1029,7 @@ void GUIWindowHost::onEvent(const Event& event)
         // DPI / font raster in sync with the new monitor (Qt-style trap).
         _impl->window.refreshDpiScale();
         refreshDevicePixelRatio(_impl->render);
+        _impl->chrome = applyWindowChrome(_impl->window, _impl->chrome.mode, _impl->config->bResizable);
         return;
     }
     case EEvent::WindowMinimize:
@@ -1013,7 +1056,15 @@ void GUIWindowHost::onEvent(const Event& event)
         dispatchToTree(event, move.getX(), move.getY());
         return;
     }
-    case EEvent::MouseButtonPressed:
+    case EEvent::MouseButtonPressed: {
+        const auto& press = static_cast<const MouseButtonPressedEvent&>(event);
+        if (press.GetMouseButton() == EMouse::Left && press.clickCount() >= 2 &&
+            handleWindowChromeTitleDoubleClick(_impl->window, _impl->lastMouseX, _impl->lastMouseY)) {
+            return;
+        }
+        dispatchToTree(event, _impl->lastMouseX, _impl->lastMouseY);
+        return;
+    }
     case EEvent::MouseButtonReleased:
     case EEvent::MouseScrolled:
         dispatchToTree(event, _impl->lastMouseX, _impl->lastMouseY);
@@ -1220,8 +1271,7 @@ void GUIWindowHost::onTick(float dt)
     }
 
     if (_impl->bSwapchainRecreatePending) {
-        auto* swapchain = _impl->present->getSwapchain()->as<VulkanSwapChain>();
-        swapchain->requestRecreate();
+        _impl->present->requestRecreate();
         _impl->bSwapchainRecreatePending = false;
     }
     if (_impl->config->bScenarioRender && _impl->bScenarioMode) {
@@ -1303,14 +1353,35 @@ void GUIWindowHost::onTick(float dt)
     }
     const int32_t imageIndex = presentFrame.imageIndex;
 
-    auto* swapchain = _impl->present->getSwapchain()->as<VulkanSwapChain>();
+    ISwapchain* swapchain = _impl->present->getSwapchain();
+    if (!swapchain) {
+        submitPresentFrame(presentFrame, {});
+        return;
+    }
     const Extent2D swapchainExtent = swapchain->getExtent();
     if (swapchain->getHandle() != _impl->cachedSwapchainHandle ||
         swapchain->getImageCount() != _impl->presentationTargets.size() ||
         swapchainExtent.width != _impl->cachedSwapchainExtent.width ||
         swapchainExtent.height != _impl->cachedSwapchainExtent.height) {
+        // begin() already acquired from the live swapchain. Rebuild only
+        // refreshes imported compose targets; do not acquire again (that
+        // would leak the first image). If the index is then OOB or rebuild
+        // failed, legalize the acquired image and skip compose.
         rebuildPresentationResources(/*bWaitForGpu=*/false);
-        swapchain = _impl->present->getSwapchain()->as<VulkanSwapChain>();
+        swapchain = _impl->present->getSwapchain();
+        if (!swapchain) {
+            submitPresentFrame(presentFrame, {});
+            return;
+        }
+    }
+    if (!guiPresentationIndexValid(imageIndex, _impl->presentationTargets.size(),
+                                   _impl->commandBuffers.size())) {
+        YA_CORE_ERROR("GUIAppHost: presentation image index {} out of range (targets={} cmds={})",
+                      imageIndex,
+                      _impl->presentationTargets.size(),
+                      _impl->commandBuffers.size());
+        submitPresentFrame(presentFrame, {});
+        return;
     }
     const auto& presentation = _impl->presentationTargets[static_cast<size_t>(imageIndex)];
     if (!presentation || !presentation->renderSurface || !presentation->renderSurface->isValid()) {
@@ -1639,6 +1710,7 @@ void GUIWindowHost::shutdown()
     _impl->render->destroy();
     delete _impl->render;
     _impl->render = nullptr;
+    clearWindowChrome(_impl->window);
     _impl->window.stopTextInput();
     _impl->window.destroy();
 
@@ -1709,6 +1781,16 @@ size_t GUIApp::extraWindowCount() const
     return _extraWindows->extraWindowCount();
 }
 
+IGUIWindowCoordinator& GUIApp::windowCoordinator()
+{
+    return *_extraWindows;
+}
+
+IGUIWindowSession* GUIApp::findSession(GUIWindowId id)
+{
+    return _extraWindows->findSession(id);
+}
+
 void GUIApp::onInit() {}
 
 void GUIApp::onEvent(const Event& event)
@@ -1720,7 +1802,7 @@ void GUIApp::onEvent(const Event& event)
 
     adoptDragSource();
     if (routeCrossWindowDrag(event)) {
-        syncCrossWindowDrag();
+        applyPointerUniverse();
         return;
     }
 
@@ -1729,7 +1811,7 @@ void GUIApp::onEvent(const Event& event)
     if (eventId != 0 && eventId != primaryId) {
         _extraWindows->dispatchEvent(event);
         adoptDragSource();
-        syncCrossWindowDrag();
+        applyPointerUniverse();
         return;
     }
 
@@ -1739,14 +1821,14 @@ void GUIApp::onEvent(const Event& event)
     if (eventId == 0 && bKeyEvent && _extraWindows->focusedWindowId() != 0) {
         if (_extraWindows->dispatchEvent(event)) {
             adoptDragSource();
-            syncCrossWindowDrag();
+            applyPointerUniverse();
             return;
         }
     }
 
     _primaryWindow.onEvent(event);
     adoptDragSource();
-    syncCrossWindowDrag();
+    applyPointerUniverse();
 }
 
 void GUIApp::onTick(float dt)
@@ -1760,6 +1842,8 @@ void GUIApp::onTick(float dt)
     if (_extraWindows->extraWindowCount() == 0) {
         _primaryWindow.setAcceptAllWindowEvents(false);
     }
+    bindDragRouter();
+    applyPointerUniverse();
 }
 
 void GUIApp::onShutdown() {}
@@ -1767,6 +1851,84 @@ void GUIApp::onShutdown() {}
 bool GUIApp::shouldClose() const
 {
     return _primaryWindow.shouldClose();
+}
+
+void GUIApp::bindDragRouter()
+{
+    WidgetTree* primaryTree = _primaryWindow.isInitialized() ? &_primaryWindow.getTree() : nullptr;
+    INativeWindow* primaryNative = _primaryWindow.isInitialized() ? _primaryWindow.getNativeWindow() : nullptr;
+    _dragRouter.bindPrimary(_primaryWindow.getWindowID(), primaryTree, primaryNative);
+    _dragRouter.bindExtras(_extraWindows.get());
+    _dragRouter.bindRender(_primaryWindow.isInitialized() ? _primaryWindow.getRender() : nullptr);
+}
+
+bool GUIApp::isCrossWindowDragActive() const
+{
+    return _dragRouter.isActive();
+}
+
+GUIWindowId GUIApp::crossWindowDragSourceId() const
+{
+    return _dragRouter.sourceId();
+}
+
+GUIWindowId GUIApp::crossWindowDragHoverId() const
+{
+    return _dragRouter.hoverId();
+}
+
+uint32_t GUIApp::crossWindowDragEnterCount() const
+{
+    return _dragRouter.enterCount();
+}
+
+uint32_t GUIApp::crossWindowDragLeaveCount() const
+{
+    return _dragRouter.leaveCount();
+}
+
+void GUIApp::runAfterDrag(std::function<void()> fn)
+{
+    _dragRouter.runAfterDrag(std::move(fn));
+}
+
+void GUIApp::adoptDragSource()
+{
+    bindDragRouter();
+    _dragRouter.adoptSource();
+}
+
+void GUIApp::syncCrossWindowDrag()
+{
+    _dragRouter.sync();
+}
+
+void GUIApp::applyPointerUniverse()
+{
+    _dragRouter.sync();
+    _dragRouter.syncTextInput();
+    OsCursor::set(_dragRouter.cursor());
+}
+
+void GUIApp::finishCrossWindowDrag(EDragFinishResult result)
+{
+    _dragRouter.finish(result);
+}
+
+void GUIApp::cancelCrossWindowDrag()
+{
+    _dragRouter.cancel();
+}
+
+void GUIApp::applyDeferredCloses()
+{
+    _dragRouter.applyDeferredCloses();
+}
+
+bool GUIApp::routeCrossWindowDrag(const Event& event)
+{
+    bindDragRouter();
+    return _dragRouter.route(event);
 }
 
 } // namespace ya
