@@ -381,8 +381,12 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   RejectIfDirty close / per-kind preview claim（不是 Camera；画布仍是 Level 2D
   viewport）。Material/Script 同样是 WindowRootEditor + nested document tools
   （identity/dirty/undo chrome，还不是 material graph / script AST）。Owned tool 带
-  `ownerEditorId`，dock 政策是目标 dock scope + owner（`canDockEditorTab`）：不能进
-  其他 root 的 nested dock，也不能把 WindowTool 挂进 owned nested。`FDockContext`
+  `ownerEditorId`，dock 政策是目标 dock scope + owner。`canSpawnEditorTab` 管
+  Window-menu / invoke（WindowTool 只进 window-root；owned tool 只进同 owner nested）。
+  `canDockEditorTab` 管 drop 与 layout restore：Level nested 可以保留 WindowTool，
+  window-root 可以保留 Level owned tool。UI/Material/Script nested 仍拒绝 WindowTool。
+  重启必须按保存布局 `materializeTab(id, /*bRestoreLayout=*/true)`，不能再用 spawn
+  政策把用户拖过的 tab 丢掉。`FDockContext`
   不认识 editor root。UI/Material/Script 的 nested dock 由 `EditorNestedDockHost`
   持有，不把 Surface 做成 dock manager；这些 nested dock 关闭 floating/tear-off（C7）。
   C5 起 owned tool 只进同 owner 的 nested `FDockContext`（window-root 不再扁平物化）。

@@ -518,7 +518,7 @@ TEST(EditorTabSpawnerRegistryTest, BuiltinLevelEditorSpawnRequiresNestedDock)
     EXPECT_NE(level->spawn(ctx), nullptr);
 }
 
-TEST(EditorDockWorkspaceTest, LayoutDropsWindowToolFromOwnedNestedHost)
+TEST(EditorDockWorkspaceTest, LayoutRestoresWindowToolInLevelNestedHost)
 {
     EditorTabSpawnerRegistry spawners;
     spawners.add({
@@ -559,6 +559,94 @@ TEST(EditorDockWorkspaceTest, LayoutDropsWindowToolFromOwnedNestedHost)
 )JSON");
     EXPECT_TRUE(workspace.applyLayoutDocument(layout, false));
     EXPECT_TRUE(dock.hasPanel("hierarchy"));
+    EXPECT_TRUE(dock.hasPanel("content-browser"));
+}
+
+TEST(EditorDockWorkspaceTest, LayoutRestoresOwnedToolOnWindowRootHost)
+{
+    EditorTabSpawnerRegistry spawners;
+    spawners.add({
+        .tabId          = "hierarchy",
+        .title          = "Hierarchy",
+        .toolsMenuLabel = "Hierarchy",
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kLevelEditorRootId,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("H"); },
+    });
+    spawners.add({
+        .tabId          = "content-browser",
+        .title          = "Content",
+        .toolsMenuLabel = "Content Browser",
+        .scope          = EEditorTabScope::WindowTool,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
+    });
+
+    FDockContext dock;
+    EditorDockWorkspace workspace;
+    workspace.bind({
+        .spawners        = &spawners,
+        .dock            = &dock,
+        .activeRootId    = kLevelEditorRootId,
+        .targetPlacement = EEditorTabPlacement::WindowRootDock,
+    });
+
+    const nlohmann::json layout = nlohmann::json::parse(R"JSON(
+{
+  "version": 1,
+  "root": {
+    "kind": "leaf",
+    "panels": ["content-browser", "hierarchy"],
+    "selected": "content-browser"
+  },
+  "floating": []
+}
+)JSON");
+    EXPECT_TRUE(workspace.applyLayoutDocument(layout, false));
+    EXPECT_TRUE(dock.hasPanel("content-browser"));
+    EXPECT_TRUE(dock.hasPanel("hierarchy"));
+}
+
+TEST(EditorDockWorkspaceTest, LayoutDropsWindowToolFromUIOwnedNestedHost)
+{
+    EditorTabSpawnerRegistry spawners;
+    spawners.add({
+        .tabId          = "ui-hierarchy",
+        .title          = "UI Tree",
+        .toolsMenuLabel = "UI Tree",
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kUIEditorRootId,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("U"); },
+    });
+    spawners.add({
+        .tabId          = "content-browser",
+        .title          = "Content",
+        .toolsMenuLabel = "Content Browser",
+        .scope          = EEditorTabScope::WindowTool,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
+    });
+
+    FDockContext dock;
+    EditorDockWorkspace workspace;
+    workspace.bind({
+        .spawners        = &spawners,
+        .dock            = &dock,
+        .activeRootId    = kUIEditorRootId,
+        .targetPlacement = EEditorTabPlacement::EditorOwnedNested,
+    });
+
+    const nlohmann::json layout = nlohmann::json::parse(R"JSON(
+{
+  "version": 1,
+  "root": {
+    "kind": "leaf",
+    "panels": ["ui-hierarchy", "content-browser"],
+    "selected": "ui-hierarchy"
+  },
+  "floating": []
+}
+)JSON");
+    EXPECT_TRUE(workspace.applyLayoutDocument(layout, false));
+    EXPECT_TRUE(dock.hasPanel("ui-hierarchy"));
     EXPECT_FALSE(dock.hasPanel("content-browser"));
 }
 

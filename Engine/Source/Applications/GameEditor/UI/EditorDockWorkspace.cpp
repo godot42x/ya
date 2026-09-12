@@ -563,7 +563,7 @@ bool EditorDockWorkspace::applyLayoutDocument(const nlohmann::json& layout, bool
         const std::vector<std::string> keys = FDockContext::collectLayoutPanelKeys(document);
         std::unordered_set<std::string> known;
         for (const std::string& id : keys) {
-            if (materializeTab(id)) {
+            if (materializeTab(id, true)) {
                 known.insert(id);
             }
         }
@@ -698,7 +698,7 @@ void EditorDockWorkspace::applyWorkspaceLayout()
     }
 }
 
-bool EditorDockWorkspace::materializeTab(std::string_view tabId)
+bool EditorDockWorkspace::materializeTab(std::string_view tabId, bool bRestoreLayout)
 {
     if (!_host.dock || tabId.empty()) {
         return false;
@@ -714,9 +714,14 @@ bool EditorDockWorkspace::materializeTab(std::string_view tabId)
     if (_host.spawners) {
         spawner = _host.spawners->find(tabId);
         if (spawner) {
-            if (!canSpawnEditorTab(spawner->ownership(),
-                                   _host.targetPlacement,
-                                   _host.activeRootId)) {
+            const bool bAllowed = bRestoreLayout
+                                      ? canDockEditorTab(spawner->ownership(),
+                                                         _host.targetPlacement,
+                                                         _host.activeRootId)
+                                      : canSpawnEditorTab(spawner->ownership(),
+                                                          _host.targetPlacement,
+                                                          _host.activeRootId);
+            if (!bAllowed) {
                 YA_CORE_WARN("EditorDockWorkspace: tab '{}' cannot dock at placement {} under root {}",
                              tabId,
                              static_cast<int>(_host.targetPlacement),

@@ -85,7 +85,11 @@ class EditorDockWorkspace
     /// Spawn known keys, sanitize unknown keys, import. Falls back to factory
     /// when `bFallbackToFactory` is true and the document cannot be applied.
     bool applyLayoutDocument(const nlohmann::json& layout, bool bFallbackToFactory);
-    bool materializeTab(std::string_view tabId);
+    /// Spawn a tab into this host. `bRestoreLayout` uses drop policy
+    /// (`canDockEditorTab`) so a saved layout that the user created by
+    /// dragging is not stripped on restart. Invoke / Window-menu keep
+    /// `canSpawnEditorTab`.
+    bool materializeTab(std::string_view tabId, bool bRestoreLayout = false);
     /// Move window-tool tabs out of the chrome page well when they exist,
     /// and prune abandoned empty Generic / Tools splits. Does not create an
     /// empty Tools well just to host a drop placeholder.

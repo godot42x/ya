@@ -851,7 +851,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
   public:
     bool onLoad(FModuleContext&) override { return true; }
     bool onStart(const FEngineContext&) override { return true; }
-    void onStop() override {}
+    void onStop() override { persistLayout(); }
     void onUnload() override {}
 
     void onConfigure(App& app, AppDesc& desc) override
