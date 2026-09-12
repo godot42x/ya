@@ -331,7 +331,9 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
     uint32_t maxGlyphHeight = 0;
 
     for (uint32_t codePoint : BASE_GLYPH_CODEPOINTS) {
-        if (FT_Load_Char(face, static_cast<FT_ULong>(codePoint), FT_LOAD_RENDER)) {
+        if (FT_Load_Char(face,
+                         static_cast<FT_ULong>(codePoint),
+                         FT_LOAD_RENDER | FT_LOAD_NO_BITMAP | FT_LOAD_FORCE_AUTOHINT)) {
             continue;
         }
         FT_GlyphSlot &glyph = face->glyph;
