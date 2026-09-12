@@ -67,7 +67,7 @@ class EditorDockWorkspace
     /// Window-root factory (level-editor + window tools). Keep in sync with
     /// DefaultEditorDockLayout.json.
     [[nodiscard]] static const nlohmann::json& factoryLayout();
-    /// Level-owned nested factory (viewport / hierarchy / inspector).
+    /// Level-owned nested factory (play-toolbar / viewport / hierarchy / inspector).
     [[nodiscard]] static const nlohmann::json& factoryOwnedNestedLayout();
     /// Nested factory for a document WindowRootEditor (UI / Material / Script).
     [[nodiscard]] static const nlohmann::json& factoryOwnedNestedLayoutFor(EditorRootId rootId);

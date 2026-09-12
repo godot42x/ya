@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Core/Common/Types.h"
-#include "Core/Delegate.h"
 #include "Core/Event.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Binding/SelectionModel.h"
@@ -36,7 +35,6 @@ struct UIMenu;
 struct UIMenuBar;
 struct UITabBar;
 struct UICanvasPanel;
-struct UIText;
 struct UITheme;
 struct WidgetTree;
 struct IImage;
@@ -64,7 +62,6 @@ struct EditorSurface : IEditorViewportHostSink
     std::shared_ptr<UITabBar>        _pageTabBar;
     std::vector<std::string>         _pageTabKeys;
     std::shared_ptr<UIMenuBar>       _menuBar;
-    std::shared_ptr<UIText>          _toolbarModeText;
     std::shared_ptr<FDockContext>    _dockContext;
     std::shared_ptr<FDockContext>    _ownedDockContext;
     std::shared_ptr<UIDockSpace>     _dockSpace;
@@ -77,11 +74,9 @@ struct EditorSurface : IEditorViewportHostSink
     EditorWindowId                   _windowId    = kDefaultEditorWindowId;
     EditorTabSpawnerRegistry*        _tabSpawners = nullptr;
     EditorDocumentRegistry*          _documents   = nullptr;
-    App*                             _app = nullptr;
     IRenderSurfaceContext*           _presentSurface = nullptr;
     std::function<void()>            _persistLayout;
     std::function<bool(FDockContext&, uint64_t, const glm::vec2&, const glm::vec2&)> _onDockNoTargetTearOff;
-    DelegateHandle                   _appStateHandle = INVALID_HANDLE;
     EditorDockWorkspace              _workspace;
     EditorDockWorkspace              _ownedWorkspace;
 
@@ -165,9 +160,6 @@ struct EditorSurface : IEditorViewportHostSink
     void buildEditorChrome(const FEditorSurfaceContext& context);
     void syncShellDialogs();
     void pushViewportDisplay();
-    void updateToolbarMode(App& app);
-    void bindAppState(App& app);
-    void unbindAppState();
     void refreshProjectBrowserRows();
     void publishViewportRect();
     void syncViewportHostState(const FEditorSurfaceContext& context);

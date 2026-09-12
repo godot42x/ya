@@ -7,6 +7,7 @@
 #include "GameEditor/UI/EditorDocumentEditorTab.h"
 #include "GameEditor/UI/EditorHierarchyTab.h"
 #include "GameEditor/UI/EditorInspectorTab.h"
+#include "GameEditor/UI/EditorPlayToolbarTab.h"
 #include "GameEditor/UI/EditorRuntimeToolsTab.h"
 #include "GameEditor/UI/EditorStatsTab.h"
 #include "GameEditor/UI/EditorUIDesignerTab.h"
@@ -64,6 +65,18 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
                 return nullptr;
             }
             return std::make_shared<EditorViewportTab>(ctx.viewportHost);
+        },
+    });
+    registry.add({
+        .tabId = "play-toolbar",
+        .title = "Play",
+        .toolsMenuLabel = "Play Toolbar",
+        .scope = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId = kLevelEditorRootId,
+        .placement = EEditorTabPlacement::EditorOwnedNested,
+        .detachPolicy = EEditorTabDetachPolicy::TearOffKeepOwner,
+        .spawn = [](FEditorTabSpawnContext& ctx) -> std::shared_ptr<UIElement> {
+            return std::make_shared<EditorPlayToolbarTab>(ctx.actions, ctx.app);
         },
     });
     registry.add({

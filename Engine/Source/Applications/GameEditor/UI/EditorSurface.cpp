@@ -29,7 +29,6 @@
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/DockSpace/DockFloatingHost.h"
-#include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/TabBar.h"
@@ -77,8 +76,7 @@ struct FEditorProjectBrowser
 namespace
 {
 
-constexpr float kMenuHeight     = editor_density::kMenuHeight;
-constexpr float kToolbarHeight  = editor_density::kToolbarHeight;
+constexpr float kMenuHeight = editor_density::kMenuHeight;
 
 std::vector<UIMenu::FItem> makePresetMenuItems(EditorLayer& layer, const std::string& category)
 {
@@ -104,14 +102,10 @@ EditorSurface::EditorSurface()
 {
 }
 
-EditorSurface::~EditorSurface()
-{
-    unbindAppState();
-}
+EditorSurface::~EditorSurface() = default;
 
 void EditorSurface::shutdown()
 {
-    unbindAppState();
     closeViewportContextMenu();
     _bViewportRightPressPending = false;
     if (_filePicker) {
@@ -130,7 +124,6 @@ void EditorSurface::shutdown()
     _pageTabBar.reset();
     _pageTabKeys.clear();
     _menuBar.reset();
-    _toolbarModeText.reset();
     _workspace.clear();
     _ownedWorkspace.clear();
     _dockFloatingHost.reset();
@@ -182,7 +175,6 @@ void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
 void EditorSurface::rebuild(const FEditorSurfaceContext& context)
 {
     _presentSurface = context.presentSurface;
-    unbindAppState();
     closeViewportContextMenu();
     _bViewportRightPressPending = false;
     _root.reset();
@@ -190,7 +182,6 @@ void EditorSurface::rebuild(const FEditorSurfaceContext& context)
     _pageTabBar.reset();
     _pageTabKeys.clear();
     _menuBar.reset();
-    _toolbarModeText.reset();
     _workspace.clear();
     _ownedWorkspace.clear();
     _dockFloatingHost.reset();
@@ -327,12 +318,11 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
                          .release(),
                      ui::canvasSlot().fill());
 
-    const float titleH    = context.metrics.chromeInsetTop > 0.0f
-                                ? context.metrics.chromeInsetTop
-                                : kMenuHeight;
-    const float menuY     = titleH;
-    const float toolbarY  = menuY + kMenuHeight;
-    const float chromeTop = toolbarY + kToolbarHeight;
+    const float titleH   = context.metrics.chromeInsetTop > 0.0f
+                             ? context.metrics.chromeInsetTop
+                             : kMenuHeight;
+    const float menuY    = titleH;
+    const float chromeTop = menuY + kMenuHeight;
 
     _titleBar = std::make_shared<UICanvasPanel>("EditorTitleBar");
     _titleBar->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
@@ -486,41 +476,6 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
         return UIMenu::create(std::move(items));
     });
 
-    auto play = iconLabeledButton("Play", "Play", editor_icons::kPlay).setOnClick([this]() {
-        (void)_rootSession->actions().execute("runtime.play");
-    });
-    auto simulate = iconLabeledButton("Simulate", "Simulate", editor_icons::kSimulate).setOnClick([this]() {
-        (void)_rootSession->actions().execute("runtime.simulate");
-    });
-    auto stop = iconLabeledButton("Stop", "Stop", editor_icons::kStop).setOnClick([this]() {
-        (void)_rootSession->actions().execute("runtime.stop");
-    });
-    auto mode3d = labeledButton("Mode3D", "3D").setOnClick([this]() {
-        (void)_rootSession->actions().execute("viewport.mode3d");
-    });
-    auto mode2d = labeledButton("Mode2D", "2D").setOnClick([this]() {
-        (void)_rootSession->actions().execute("viewport.mode2d");
-    });
-    auto modeText = ui::text("ToolbarMode").setStyleKey(editorStyle(StyleKey::Text)).setText("EDIT");
-    _toolbarModeText = modeText.share();
-
-    auto toolbar = ui::row("EditorToolbar")
-                       .setSpacing(6.0f)
-                       .setPadding({6.0f, 2.0f})
-                       .child(std::move(play), ui::boxSlot().preferredSize({76.0f, 26.0f}))
-                       .child(std::move(simulate), ui::boxSlot().preferredSize({96.0f, 26.0f}))
-                       .child(std::move(stop), ui::boxSlot().preferredSize({76.0f, 26.0f}))
-                       .child(std::move(mode3d), ui::boxSlot().preferredSize({44.0f, 26.0f}))
-                       .child(std::move(mode2d), ui::boxSlot().preferredSize({44.0f, 26.0f}))
-                       .child(std::move(modeText), ui::boxSlot().preferredSize({56.0f, 26.0f}));
-    (void)ui::attach(*_tree,
-                    *_root,
-                    toolbar.release(),
-                    ui::canvasSlot()
-                        .anchor({0.0f, 0.0f}, {1.0f, 0.0f})
-                        .offset({0.0f, toolbarY})
-                        .size({0.0f, kToolbarHeight}));
-
     _dockContext = std::make_shared<FDockContext>();
     _dockContext->bAllowFloating = true;
     _dockContext->bAllowTearOff  = true;
@@ -615,8 +570,6 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
     _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(_layer->gizmo());
     _viewportOverlayHost.setOverlay(_viewportGizmoOverlay);
     _layer->gizmo().setUndoStack(&_rootSession->undo());
-    bindAppState(*app);
-    updateToolbarMode(*app);
 }
 
 void EditorSurface::applyWindowMetrics(const EditorWindowMetrics& metrics)
@@ -807,26 +760,6 @@ void EditorSurface::refreshProjectBrowserRows()
     }
 }
 
-void EditorSurface::bindAppState(App& app)
-{
-    unbindAppState();
-    _app = &app;
-    _appStateHandle = app.onAppStateChanged.addLambda(this, [this](AppState) {
-        if (_app) {
-            updateToolbarMode(*_app);
-        }
-    });
-}
-
-void EditorSurface::unbindAppState()
-{
-    if (_app && _appStateHandle != INVALID_HANDLE) {
-        _app->onAppStateChanged.remove(_appStateHandle);
-    }
-    _appStateHandle = INVALID_HANDLE;
-    _app = nullptr;
-}
-
 void EditorSurface::pushViewportDisplay()
 {
     if (!_viewportHost || !_layer) {
@@ -861,17 +794,6 @@ void EditorSurface::pushViewportDisplay()
                                      _viewportImageView,
                                      "EditorSurfaceViewport");
     _viewportHost->setDisplayImage(_viewportTexture, false);
-}
-
-void EditorSurface::updateToolbarMode(App& app)
-{
-    if (!_toolbarModeText) {
-        return;
-    }
-    const char* label = app.isRuntimeMode() ? "PLAYING"
-                        : app.isSimulationMode() ? "SIMULATING"
-                                                 : "EDIT";
-    _toolbarModeText->setText(label);
 }
 
 void EditorSurface::openSceneSaveDialog()

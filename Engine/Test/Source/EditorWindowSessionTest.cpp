@@ -287,6 +287,7 @@ TEST(EditorWindowSessionTest, SessionOwnedTabsDoNotUseAppGetOrPrimarySwapchain)
     const char* files[] = {
         "Source/Applications/GameEditor/UI/EditorContentBrowserTab.cpp",
         "Source/Applications/GameEditor/UI/EditorRuntimeToolsTab.cpp",
+        "Source/Applications/GameEditor/UI/EditorPlayToolbarTab.cpp",
         "Source/Applications/GameEditor/UI/RuntimeRenderSettingsSection.cpp",
         "Source/Applications/GameEditor/UI/EditorInspectorTab.cpp",
         "Source/Applications/GameEditor/UI/EditorViewportTab.cpp",

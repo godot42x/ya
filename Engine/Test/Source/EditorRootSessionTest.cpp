@@ -251,6 +251,13 @@ TEST(EditorTabSpawnerRegistryTest, BuiltinOwnedToolsBindToLevelEditor)
     EXPECT_EQ(viewport->placement, EEditorTabPlacement::EditorOwnedNested);
     EXPECT_EQ(viewport->detachPolicy, EEditorTabDetachPolicy::Locked);
 
+    const FEditorTabSpawner* play = registry.find("play-toolbar");
+    ASSERT_NE(play, nullptr);
+    EXPECT_EQ(play->scope, EEditorTabScope::EditorOwnedTool);
+    EXPECT_EQ(play->ownerEditorId, kLevelEditorRootId);
+    EXPECT_EQ(play->placement, EEditorTabPlacement::EditorOwnedNested);
+    EXPECT_EQ(play->detachPolicy, EEditorTabDetachPolicy::TearOffKeepOwner);
+
     const FEditorTabSpawner* inspector = registry.find("inspector");
     ASSERT_NE(inspector, nullptr);
     EXPECT_EQ(inspector->scope, EEditorTabScope::EditorOwnedTool);

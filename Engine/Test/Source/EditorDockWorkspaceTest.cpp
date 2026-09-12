@@ -94,11 +94,16 @@ TEST(EditorDockWorkspaceTest, FactoryOwnedNestedLayoutPlacesOwnedTools)
     EXPECT_FLOAT_EQ(context.dockModel().getRootNode()->ratio, 0.78f);
 
     EXPECT_EQ(leafKeys(context, "viewport"), std::vector<std::string>({"viewport"}));
+    EXPECT_EQ(leafKeys(context, "play-toolbar"), std::vector<std::string>({"play-toolbar"}));
     EXPECT_EQ(leafKeys(context, "hierarchy"), std::vector<std::string>({"hierarchy"}));
     EXPECT_EQ(leafKeys(context, "inspector"), std::vector<std::string>({"inspector"}));
     ASSERT_NE(context.dockModel().getRootNode()->child[0].get(), nullptr);
     EXPECT_EQ(context.dockModel().getRootNode()->child[0]->orientation,
               EDockSplitOrientation::Horizontal);
+    ASSERT_NE(context.dockModel().getRootNode()->child[0]->child[1].get(), nullptr);
+    EXPECT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->kind, EDockNodeKind::Split);
+    EXPECT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->orientation,
+              EDockSplitOrientation::Vertical);
     EXPECT_TRUE(context.floatingWindows().empty());
 }
 

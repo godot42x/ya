@@ -60,6 +60,14 @@ TEST(EditorTabSpawnerRegistryTest, BuiltinRegistryIncludesHierarchyAndViewport)
     EXPECT_EQ(level->title, "Level");
     EXPECT_EQ(level->scope, EEditorTabScope::WindowRootEditor);
     EXPECT_EQ(level->detachPolicy, EEditorTabDetachPolicy::Locked);
+
+    const FEditorTabSpawner* play = registry.find("play-toolbar");
+    ASSERT_NE(play, nullptr);
+    EXPECT_EQ(play->title, "Play");
+    EXPECT_EQ(play->scope, EEditorTabScope::EditorOwnedTool);
+    EXPECT_EQ(play->ownerEditorId, kLevelEditorRootId);
+    EXPECT_EQ(play->placement, EEditorTabPlacement::EditorOwnedNested);
+    EXPECT_EQ(play->detachPolicy, EEditorTabDetachPolicy::TearOffKeepOwner);
 }
 
 TEST(EditorTabSpawnerRegistryTest, BuiltinViewportSpawnRequiresHost)
@@ -78,6 +86,17 @@ TEST(EditorTabSpawnerRegistryTest, BuiltinViewportSpawnRequiresHost)
     } sink;
     ctx.viewportHost = &sink;
     EXPECT_NE(viewport->spawn(ctx), nullptr);
+}
+
+TEST(EditorTabSpawnerRegistryTest, BuiltinPlayToolbarSpawnDoesNotRequireHost)
+{
+    EditorTabSpawnerRegistry registry;
+    registerBuiltinEditorTabSpawners(registry);
+    const FEditorTabSpawner* play = registry.find("play-toolbar");
+    ASSERT_NE(play, nullptr);
+
+    FEditorTabSpawnContext ctx;
+    EXPECT_NE(play->spawn(ctx), nullptr);
 }
 
 } // namespace ya

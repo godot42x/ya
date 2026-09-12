@@ -79,9 +79,22 @@ constexpr std::string_view kFactoryOwnedNestedLayoutJson = R"JSON(
             "selected": "hierarchy"
           },
           {
-            "kind": "leaf",
-            "panels": ["viewport"],
-            "selected": "viewport"
+            "kind": "split",
+            "orientation": "vertical",
+            "ratio": 0.12,
+            "minExtent": [36.0, 80.0],
+            "children": [
+              {
+                "kind": "leaf",
+                "panels": ["play-toolbar"],
+                "selected": "play-toolbar"
+              },
+              {
+                "kind": "leaf",
+                "panels": ["viewport"],
+                "selected": "viewport"
+              }
+            ]
           }
         ]
       },

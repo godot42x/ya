@@ -411,7 +411,8 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   `IRender::create`）。禁止把这些模型倒进 WindowSession god object。
   Tab 经 `EditorTabSpawnerRegistry` 注册，`EditorDockWorkspace::invokeTab` 按 stable key
   激活或 spawn（owned tool 若 owner 不是当前 host，先打开对应 WindowRootEditor 再进其 nested）。layout 工厂是
-  `DefaultEditorDockLayout.json` + `DefaultEditorOwnedDockLayout.json`，外加 UI/Material/Script
+  `DefaultEditorDockLayout.json` + `DefaultEditorOwnedDockLayout.json`（Level nested
+  为 hierarchy | play-toolbar 在 viewport 上 | inspector），外加 UI/Material/Script
   的 in-code nested factory。Window 菜单
   checkbox 切换已注册 tab；Layout → Default 一键恢复工厂布局（先
   `setPanelClosable(true)` 再关 Locked tab）。rebuild 期
@@ -481,8 +482,11 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   → `FileExplorer::setSelectedPath`）。`propertyLabelFromPath` 的 `" / "` group 是 expander **路径**，
   Sampler Config 嵌在 Texture Slot 里，不要做成同级 collapsing header。
 - Canvas `fill()` / `anchor({0,0},{1,1})` 的 `offset({x,y})` **只移动 min 角**，span 仍是父矩形全高/全宽
-  （`resolveCanvasRect`）。菜单+toolbar 下的 Dock、Hierarchy 过滤条下的 scroll，必须用
+  （`resolveCanvasRect`）。菜单下的 Dock 必须用
   `insets(FMargin{left, top, right, bottom})` 收缩 fill，不能 `fill().offset({0, chromeTop})`。
+  Hierarchy 过滤条与 tree 是 column 兄弟，不要 canvas overlap 再靠 insets 让位。
+  Play/Stop/Simulate 是 Level owned tool tab（`play-toolbar`），工厂布局在 Viewport
+  上方；不是 chrome strip，也不并进 Runtime Tools。
   合同：`WidgetLayoutTest.CanvasFillOffsetDoesNotShrinkTheChild` vs
   `CanvasFourSideOffsetsInsetTheChildWithoutAnExplicitSize`。
 - `SelectionModel` 是 identity 选择源（`GUI/Binding/SelectionModel.h`）：selected 有序集合 + primary（空或不在集合外）+ hover/active/focus。不持有 Entity*。控件绑 `primaryRef()`；多选走 `add`/`toggle`；`replace` 批量同步。`EditorHierarchyTab` 在 `onAttached` 拉一次 Layer 选择，之后只订 `EditorLayer::onSelectionChanged`。
