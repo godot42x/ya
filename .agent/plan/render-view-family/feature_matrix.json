@@ -1,0 +1,14 @@
+{
+  "plan": "render-view-family",
+  "status": "planned",
+  "features": [
+    {"id": "single_view_baseline", "phase": "R0", "status": "verified", "evidence": ["ya-render-3d-test RenderRuntimeSnapshotTest.*: 9 passed", "host snapshot ordering regression"]},
+    {"id": "world_frame_snapshot", "phase": "R1", "status": "planned", "evidence": []},
+    {"id": "render_view_input", "phase": "R1", "status": "planned", "evidence": []},
+    {"id": "multi_view_recording", "phase": "R2", "status": "planned", "evidence": []},
+    {"id": "surface_independent_present", "phase": "R2", "status": "partially_available", "evidence": ["gui-multi-os-window-editor surface/present work"]},
+    {"id": "ui_only_pipeline", "phase": "R3", "status": "planned", "evidence": []},
+    {"id": "game_ui_per_view", "phase": "R3", "status": "planned", "evidence": []},
+    {"id": "submit_split_decision", "phase": "R4", "status": "blocked_on_profile", "evidence": []}
+  ]
+}

@@ -136,6 +136,29 @@ TEST(RenderRuntimeSnapshotTest, HostPresentCoordinatorOwnsAcquireAndPresent)
     EXPECT_EQ(countLiteral(surfaceTestCpp, "vulkan.h"), 0u);
 }
 
+TEST(RenderRuntimeSnapshotTest, HostBuildsWorldAndUiSnapshotsBeforeRenderRuntime)
+{
+    const std::string hostCpp = readEngineSource(
+        "Source/Applications/GameRuntime/Lifecycle/GameRuntimeFrameOrchestrator.cpp");
+
+    const auto worldSnapshotPos = hostCpp.find("RenderFrameExtractor::extract(");
+    const auto uiSnapshotPos    = hostCpp.find("buildSnapshot()");
+    const auto renderFramePos   = hostCpp.find("renderRuntime->renderFrame(");
+
+    ASSERT_NE(worldSnapshotPos, std::string::npos);
+    ASSERT_NE(uiSnapshotPos, std::string::npos);
+    ASSERT_NE(renderFramePos, std::string::npos);
+    EXPECT_LT(worldSnapshotPos, renderFramePos);
+    EXPECT_LT(uiSnapshotPos, renderFramePos);
+
+    // The render graph receives immutable frame packets. The host must not
+    // hand the live scene or WidgetTree to RenderRuntime during recording.
+    const auto renderFrameBlock = hostCpp.substr(renderFramePos);
+    EXPECT_EQ(renderFrameBlock.find("getRegistry()"), std::string::npos);
+    EXPECT_EQ(renderFrameBlock.find("WidgetTree"), std::string::npos);
+    EXPECT_EQ(renderFrameBlock.find("getActiveScene()"), std::string::npos);
+}
+
 TEST(RenderRuntimeSnapshotTest, RenderFrameRecordsViewComposeThenDisplayCompose)
 {
     const std::string runtimeCpp = readEngineSource("Source/Framework/Render/Render3D/RenderRuntime.cpp");
