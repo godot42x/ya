@@ -67,6 +67,10 @@ R1 尚未完成代码迁移。下一步应将现有 RenderFrameExtractor 接到 
 
 R1 调度切片已完成：SceneRenderScheduler 是不持有 Scene/ECS 的 frame-local collector；submit 只接受带有效 SceneId/ViewId 和 snapshot builder 的 request；seal 按 (SceneId, sceneRevision) 去重 builder，SceneRenderPlan 拥有唯一 snapshot table，再为每个 viewport 展开带 snapshotIndex 的 SceneViewportTask；clearFrame 清理本帧状态。plan 的 snapshot table 负责跨 task 保活，snapshotFor() 还会校验 task 的 SceneId/revision 与表项元数据，避免错误索引串用。尚未接入真正 SceneFrameSnapshot extractor 和 RenderRuntime record。
 
+R1 抽取分层切片已完成：RenderFrameExtractor 新增 `extractSceneSnapshot(SceneExtractInput, WorldFrameSnapshot&)`，只读取 Scene/ECS，生成原始灯光、draw candidates 和 skinning palettes；旧 `extract()` 保留为兼容入口，先调用 Scene 阶段，再执行 camera-dependent directional shadow/cascade preparation 和 draw sorting。TerrainProcessor 改为显式注入，extractor 不再通过 `App::get()` 取得全局状态。该切片尚未让 SceneRenderScheduler 直接调用 extractor，也未改变 RenderRuntime 的单 View record。
+
+兼容边界：当前 `RenderFrameData` 仍继承 `WorldFrameSnapshot`，因此旧 `extract()` 会在 per-view 兼容对象上写入 directional shadow 矩阵；共享 snapshot 接入 scheduler 后不得复用这部分可变 view 数据，必须在每个 `SceneViewportTask` 中生成独立的 View preparation。
+
 R1 第一小步已完成，但命名需要后续修正：当前 WorldFrameSnapshot 显式承载当前可识别的 Scene lights、draw buckets 和 skinning palettes；RenderFrameData 作为兼容容器继承它并继续保留 camera、viewport、frame metadata。该步没有迁移消费者，也没有改变 shadow matrix、排序或 pipeline 行为；后续应将语义迁移到 SceneFrameSnapshot/SceneRenderPlan，并把 WorldFrameSnapshot 视为过渡名称。
 
 关键新增约束：UI GPU compose 前必须存在一个明确的 SceneRenderScheduler 边界。它收集 SceneRenderRequest，输出 immutable SceneRenderPlan；UI compose 只能消费 plan 产生的 viewport outputs，不应在 UI 过程中临时触发 Scene/ECS extraction。UI widget tick/buildSnapshot 的先后由 host/product 依据输入依赖决定，不被 Scheduler 强制锁死。

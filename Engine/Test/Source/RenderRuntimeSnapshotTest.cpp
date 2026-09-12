@@ -296,6 +296,26 @@ TEST(RenderRuntimeSnapshotTest, HostBuildsWorldAndUiSnapshotsBeforeRenderRuntime
     EXPECT_EQ(renderFrameBlock.find("getActiveScene()"), std::string::npos);
 }
 
+TEST(RenderRuntimeSnapshotTest, SceneExtractorSeparatesSceneAndViewPreparation)
+{
+    const std::string extractorH = readEngineSource(
+        "Source/Applications/GameRuntime/Utility/RenderFrameExtractor.h");
+    const std::string extractorCpp = readEngineSource(
+        "Source/Applications/GameRuntime/Utility/RenderFrameExtractor.cpp");
+
+    EXPECT_NE(extractorH.find("extractSceneSnapshot"), std::string::npos);
+    EXPECT_NE(extractorH.find("SceneExtractInput"), std::string::npos);
+    EXPECT_NE(extractorCpp.find("extractSceneLights"), std::string::npos);
+    EXPECT_NE(extractorCpp.find("prepareViewLights"), std::string::npos);
+    EXPECT_EQ(extractorCpp.find("App::get()"), std::string::npos);
+
+    const auto sceneLightsPos = extractorCpp.find("extractSceneLights(reg, outFrame)");
+    const auto viewLightsPos = extractorCpp.find("prepareViewLights(input, outFrame)");
+    ASSERT_NE(sceneLightsPos, std::string::npos);
+    ASSERT_NE(viewLightsPos, std::string::npos);
+    EXPECT_LT(sceneLightsPos, viewLightsPos);
+}
+
 TEST(RenderRuntimeSnapshotTest, RenderFrameRecordsViewComposeThenDisplayCompose)
 {
     const std::string runtimeCpp = readEngineSource("Source/Framework/Render/Render3D/RenderRuntime.cpp");

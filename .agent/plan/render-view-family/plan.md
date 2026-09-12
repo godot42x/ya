@@ -67,6 +67,8 @@ Scheduler 必须是 frame-local coordinator，而不是常驻 Scene registry。b
 
 每个 Scene 的 SceneFrameSnapshot 只保存该 Scene 的 transforms、mesh/material 引用、lights、animation/skinning 结果、resource handles 和稳定 id。它不保存唯一 Camera 的矩阵、View 排序、culling 或 viewport rect，也不能隐含来自另一个 Scene 的资源/实体。
 
+兼容迁移期间，旧 `WorldFrameSnapshot` 仍包含 directional light 的 legacy shadow 字段；这些字段只能在每个 View 的兼容 `RenderFrameData` 副本中写入。SceneRenderPlan 的共享 snapshot 一旦被真实 extractor 接入，不得让不同 View 直接修改同一份 shadow/cascade 数据。
+
 RenderViewInput 至少包含 ViewId、SceneId、owner 计算的 view/projection/viewProjection/camera position、离屏 extent/scale、culling mask、postprocess/debug/overlay flags 和该 Scene 的 SceneFrameSnapshot 引用。UIOnly 不构造 RenderViewInput，也不伪造空 SceneId；它只消费 UIFrameSnapshot/Render2D 输入。View 输出是离屏 color/depth/辅助 attachment，不拥有 OS window、swapchain，也不 acquire/present。
 
 对象语义必须分开：Camera/View 是一次 world 渲染；ViewportWidget 是显示 View 输出的 GUI 矩形；Surface 是 OS window 的 present 目标；Swapchain 是 Surface 的显示缓冲；ViewCompose 写 View RT；DisplayCompose 把一个或多个 View/preview/chrome image 排到 Surface；Present 提交 Surface。一个 View 可被多个 Surface 显示，一个 Surface 可显示多个 View。
@@ -103,7 +105,7 @@ R1 字段分类不能按现有结构名整体搬迁，必须按语义拆分：
 | view/projection/viewProjection/cameraPos/viewportExtent/viewOwner | RenderViewInput | 当前已存在于 CameraFrameInput，迁移时保持值来源不变 |
 | frame index / delta time | Frame/Scene/View metadata | 不参与场景资源抽取，不能通过 ECS 在 graph execute 阶段读取 |
 
-因此 R1 的实现顺序固定为：先定义 SceneId/SceneRenderRequest 生命周期与 snapshot ownership；再为每个 Scene 引入未排序 candidates 和 View preparation；然后迁移 light/shadow；最后才替换旧 RenderFrameData adapter。禁止先把现有 RenderFrameData 机械拆成两个同构 struct，也禁止实现全局唯一 SceneFrameSnapshot。
+因此 R1 的实现顺序固定为：先定义 SceneId/SceneRenderRequest 生命周期与 snapshot ownership；再为每个 Scene 引入未排序 candidates 和 View preparation；然后迁移 light/shadow；最后才替换旧 RenderFrameData adapter。当前 extractor 已形成显式 Scene extraction / View preparation 两阶段，但 scheduler 尚未接入真实 Scene extractor；下一切片才连接这两者。禁止先把现有 RenderFrameData 机械拆成两个同构 struct，也禁止实现全局唯一 SceneFrameSnapshot。
 
 验收：同一 Scene 的两个 View 共用一个 SceneFrameSnapshot；两个不同 Scene 产生两个 snapshot 且实体/灯光/资源生命周期不串；View A 的矩阵/extent 不修改 View B；UIOnly 不需要 Scene request；pipeline 不从 window/swapchain 反查矩阵或尺寸；单 View golden 不变。
 

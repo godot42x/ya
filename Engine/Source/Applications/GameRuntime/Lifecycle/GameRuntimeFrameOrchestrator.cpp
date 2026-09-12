@@ -431,6 +431,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
                 .frameIndex     = App::_frameIndex,
                 .deltaTime      = dt,
                 .shadowSettings = &app.getRenderServices().getShadowSettings(),
+                .terrainProcessor = renderRuntime->getTerrainProcessor(),
             },
             app._renderState->frameDataPerFlight[flightIndex]);
     }

@@ -1,6 +1,5 @@
 #include "RenderFrameExtractor.h"
 
-#include "GameRuntime/App.h"
 #include "Render3D/Material/PBRMaterial.h"
 #include "Render3D/Material/PhongMaterial.h"
 #include "Render3D/Material/SimpleMaterial.h"
@@ -119,14 +118,37 @@ void RenderFrameExtractor::extract(const ExtractInput& input, RenderFrameData& o
     auto& reg = input.scene->getRegistry();
 
     extractCamera(input, outFrame);
-    extractLights(input, reg, outFrame);
+    extractSceneLights(reg, outFrame);
+    prepareViewLights(input, outFrame);
     auto drawCtx = DrawItemExtractionContext{
-        .registry  = &reg,
-        .frameData = &outFrame,
-        .viewOwner = outFrame.viewOwner,
+        .registry         = &reg,
+        .worldSnapshot    = &outFrame,
+        .viewOwner        = outFrame.viewOwner,
+        .terrainProcessor = input.terrainProcessor,
     };
     extractDrawItems(drawCtx);
     sortDrawItems(outFrame.cameraPos, outFrame);
+}
+
+void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, WorldFrameSnapshot& outSnapshot)
+{
+    outSnapshot.clearWorld();
+    outSnapshot.bHasDirectionalLight = false;
+    outSnapshot.numPointLights = 0;
+
+    if (!input.scene) {
+        return;
+    }
+
+    auto& registry = input.scene->getRegistry();
+    extractSceneLights(registry, outSnapshot);
+    auto drawCtx = DrawItemExtractionContext{
+        .registry         = &registry,
+        .worldSnapshot    = &outSnapshot,
+        .viewOwner        = entt::null,
+        .terrainProcessor = input.terrainProcessor,
+    };
+    extractDrawItems(drawCtx);
 }
 
 void RenderFrameExtractor::extractCamera(const ExtractInput& input, RenderFrameData& out)
@@ -141,46 +163,13 @@ void RenderFrameExtractor::extractCamera(const ExtractInput& input, RenderFrameD
     out.deltaTime      = input.deltaTime;
 }
 
-void RenderFrameExtractor::extractLights(const ExtractInput& input, entt::registry& reg, RenderFrameData& out)
+void RenderFrameExtractor::extractSceneLights(entt::registry& reg, WorldFrameSnapshot& out)
 {
-    const ShadowSettings defaultShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
-    const ShadowSettings& shadowSettings = input.shadowSettings ? *input.shadowSettings : defaultShadowSettings;
-    const auto populateDirectionalShadow = [&](FrameContext::DirectionalLightData& light) {
-        light.viewProjection = buildDirectionalShadowViewProjection(
-            light.direction,
-            input.cameraPos,
-            input.view,
-            shadowSettings);
-        light.cascadeViewProjections[0] = light.viewProjection;
-        light.cascadeSplits[0]          = shadowSettings.directionalDistance;
-        light.cascadeCount              = 1;
-
-        const uint32_t cascadeCount = shadowSettings.getEffectiveDirectionalCascadeCount();
-        if (cascadeCount > 1) {
-            const auto cascades = DirectionalShadowMath::buildCascades(
-                light.direction,
-                input.view,
-                input.projection,
-                shadowSettings.directionalDistance,
-                shadowSettings.resolution,
-                cascadeCount,
-                shadowSettings.directionalStableFit,
-                shadowSettings.directionalCascadeSplitRatios,
-                shadowSettings.directionalDepthRangeMultiplier);
-            light.cascadeViewProjections = cascades.viewProjections;
-            light.cascadeSplits          = cascades.splits;
-            light.cascadeCount           = cascades.count;
-        }
-        light.projection = glm::mat4(1.0f);
-        light.view       = light.viewProjection;
-    };
-
     // Directional light (take the first one with a transform)
     out.bHasDirectionalLight = false;
     for (const auto& [e, dlc, tc] : reg.view<DirectionalLightComponent, TransformComponent>().each()) {
         auto& dl                 = out.directionalLight;
         dl.direction             = resolveDirectionalVector(&tc, dlc._direction);
-        populateDirectionalShadow(dl);
         dl.color                 = dlc._color;
         dl.intensity             = dlc.intensity;
         out.bHasDirectionalLight = true;
@@ -192,7 +181,6 @@ void RenderFrameExtractor::extractLights(const ExtractInput& input, entt::regist
         for (const auto& [e, dlc] : reg.view<DirectionalLightComponent>().each()) {
             auto& dl                 = out.directionalLight;
             dl.direction             = resolveDirectionalVector(nullptr, dlc._direction);
-            populateDirectionalShadow(dl);
             dl.color                 = dlc._color;
             dl.intensity             = dlc.intensity;
             out.bHasDirectionalLight = true;
@@ -228,11 +216,40 @@ void RenderFrameExtractor::extractLights(const ExtractInput& input, entt::regist
     // between different lights while the active view camera moves.
 }
 
+void RenderFrameExtractor::prepareViewLights(const ExtractInput& input, WorldFrameSnapshot& out)
+{
+    if (!out.bHasDirectionalLight) {
+        return;
+    }
+
+    const ShadowSettings defaultShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
+    const ShadowSettings& shadowSettings = input.shadowSettings ? *input.shadowSettings : defaultShadowSettings;
+    auto& light = out.directionalLight;
+    light.viewProjection = buildDirectionalShadowViewProjection(
+        light.direction, input.cameraPos, input.view, shadowSettings);
+    light.cascadeViewProjections[0] = light.viewProjection;
+    light.cascadeSplits[0] = shadowSettings.directionalDistance;
+    light.cascadeCount = 1;
+
+    const uint32_t cascadeCount = shadowSettings.getEffectiveDirectionalCascadeCount();
+    if (cascadeCount > 1) {
+        const auto cascades = DirectionalShadowMath::buildCascades(
+            light.direction, input.view, input.projection, shadowSettings.directionalDistance,
+            shadowSettings.resolution, cascadeCount, shadowSettings.directionalStableFit,
+            shadowSettings.directionalCascadeSplitRatios, shadowSettings.directionalDepthRangeMultiplier);
+        light.cascadeViewProjections = cascades.viewProjections;
+        light.cascadeSplits = cascades.splits;
+        light.cascadeCount = cascades.count;
+    }
+    light.projection = glm::mat4(1.0f);
+    light.view = light.viewProjection;
+}
+
 int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext& ctx,
                                                       entt::entity               entity,
                                                       Mesh*                      mesh)
 {
-    if (!ctx.registry || !ctx.frameData || !mesh || !mesh->hasSkinningVertexBuffer()) {
+    if (!ctx.registry || !ctx.worldSnapshot || !mesh || !mesh->hasSkinningVertexBuffer()) {
         return -1;
     }
 
@@ -256,7 +273,7 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
         return -1;
     }
 
-    auto& palette = ctx.frameData->skinningPalettes.emplace_back();
+    auto& palette = ctx.worldSnapshot->skinningPalettes.emplace_back();
     YA_CORE_ASSERT(pose.boneMatrices.size() <= palette.boneMatrices.size(), "Exceed max bone size");
     const uint32_t boneCount = pose.boneMatrices.size();
 
@@ -264,7 +281,7 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
         palette.boneMatrices[boneIndex] = pose.boneMatrices[boneIndex];
     }
 
-    const int32_t paletteIndex = static_cast<int32_t>(ctx.frameData->skinningPalettes.size() - 1);
+    const int32_t paletteIndex = static_cast<int32_t>(ctx.worldSnapshot->skinningPalettes.size() - 1);
     ctx.skinningPaletteCache.emplace(skeletonComp, paletteIndex);
     return paletteIndex;
 }
@@ -272,7 +289,7 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
 void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
 {
     auto&      reg            = *ctx.registry;
-    auto&      out            = *ctx.frameData;
+    auto&      out            = *ctx.worldSnapshot;
     const auto viewOwner      = ctx.viewOwner;
     auto&      staticBuckets  = out.drawBuckets.staticMeshes;
     auto&      skinnedBuckets = out.drawBuckets.skinnedMeshes;
@@ -309,7 +326,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
 
     // Terrain draw items: mesh lives in the terrain processor runtime state,
     // not on the component.
-    auto* const terrainProcessor = App::get() ? App::get()->getTerrainProcessor() : nullptr;
+    auto* const terrainProcessor = ctx.terrainProcessor;
     if (terrainProcessor) {
         auto emitTerrain = [&]<typename MatComp>(std::vector<RenderDrawItem>& bucket)
         {
