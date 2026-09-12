@@ -480,6 +480,14 @@ void FQuadRender::ensureSlotResources(Render2DPassSlot passSlot)
                 .size        = sizeof(FrameUBO),
                 .memoryUsage = EMemoryUsage::CpuToGpu,
             });
+        // Bind the persistent host-visible UBO once at allocation. Later
+        // flushes only writeData(); vkUpdateDescriptorSets after the set is
+        // bound in a recording command buffer invalidates that region
+        // (no UPDATE_AFTER_BIND).
+        _render->getDescriptorHelper()->updateDescriptorSets({
+            IDescriptorSetHelper::writeOneUniformBuffer(resources.frameUboDS, 0, resources.frameUBOBuffer.get()),
+            IDescriptorSetHelper::writeOneUniformBuffer(resources.worldFrameUboDS, 0, resources.worldFrameUBOBuffer.get()),
+        });
     }
 
     // Texture-array resource descriptor sets (screen + world pools).
@@ -624,7 +632,7 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
         _uploadedScreenResourceVersion = _resourceVersion;
     }
     if (!_frameUboUploaded) {
-        updateFrameUBO(resources.frameUBOBuffer, resources.frameUboDS, _screenOrthoProj, glm::mat4(1.0f));
+        updateFrameUBO(resources.frameUBOBuffer, _screenOrthoProj, glm::mat4(1.0f));
         _frameUboUploaded = true;
     }
 
@@ -704,7 +712,6 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     }
     if (!_worldFrameUboUploaded) {
         updateFrameUBO(resources.worldFrameUBOBuffer,
-                       resources.worldFrameUboDS,
                        Render2D::session.viewProjection,
                        Render2D::session.view);
         _worldFrameUboUploaded = true;
@@ -786,7 +793,6 @@ void FQuadRender::flushForTextureOverflow(ICommandBuffer* cmdBuf)
 }
 
 void FQuadRender::updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer,
-                                 DescriptorSetHandle       dsHandle,
                                  const glm::mat4&          viewProj,
                                  const glm::mat4&          view)
 {
@@ -794,19 +800,9 @@ void FQuadRender::updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer,
         .viewProj = viewProj,
         .view     = view,
     };
+    // The descriptor already points at this buffer (see ensureSlotResources).
+    // Only the host-visible contents change per session.
     uboBuffer->writeData(&ubo, sizeof(ubo), 0);
-
-    DescriptorBufferInfo bufferInfo(BufferHandle(uboBuffer->getHandle()), 0, static_cast<uint64_t>(sizeof(FrameUBO)));
-
-    _render->getDescriptorHelper()->updateDescriptorSets(
-        {
-            IDescriptorSetHelper::genBufferWrite(dsHandle,
-                                                 0,
-                                                 0,
-                                                 EPipelineDescriptorType::UniformBuffer,
-                                                 {bufferInfo}),
-        },
-        {});
 }
 
 void FQuadRender::updateResources(DescriptorSetHandle dsHandle)

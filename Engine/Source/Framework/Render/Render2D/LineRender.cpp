@@ -2,6 +2,7 @@
 #include "Render2D.h"
 
 #include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/RenderPass.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Render.h"
@@ -166,6 +167,12 @@ void FLineRender::ensureSlotResources(Render2DPassSlot passSlot)
                 .memoryUsage = EMemoryUsage::CpuToGpu,
             });
         resources.vertexPtrHead = resources.vertexBuffer->map<FLineRender::Vertex>();
+        // Persistent host-visible UBO: bind once here. Flush only writeData();
+        // rewriting this set after vkCmdBindDescriptorSets invalidates the
+        // recording command buffer (no UPDATE_AFTER_BIND).
+        _render->getDescriptorHelper()->updateDescriptorSets({
+            IDescriptorSetHelper::writeOneUniformBuffer(resources.frameUboDS, 0, resources.frameUBOBuffer.get()),
+        });
     }
 }
 
@@ -193,20 +200,6 @@ void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
     };
     auto& resources = _passResources[static_cast<size_t>(_activePassSlot)].flights[_activeFlightIndex];
     resources.frameUBOBuffer->writeData(&ubo, sizeof(ubo), 0);
-
-    DescriptorBufferInfo bufferInfo(
-        BufferHandle(resources.frameUBOBuffer->getHandle()),
-        0,
-        static_cast<uint64_t>(sizeof(FrameUBO)));
-    _render->getDescriptorHelper()->updateDescriptorSets(
-        {
-            IDescriptorSetHelper::genBufferWrite(resources.frameUboDS,
-                                                 0,
-                                                 0,
-                                                 EPipelineDescriptorType::UniformBuffer,
-                                                 {bufferInfo}),
-        },
-        {});
     resources.vertexBuffer->flush();
 
     cmdBuf->bindPipeline(_pipeline.get());

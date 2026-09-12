@@ -55,6 +55,16 @@ ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
         _gameplayResourceBinding->onUpdate(input.camera.deltaTime);
     }
 
+    // Skybox / IBL descriptor writes are not UPDATE_AFTER_BIND. Preprocess
+    // can publish new cubemap / irradiance / prefilter views in onUpdate
+    // above; rewrite those sets before this frame's command buffer begins
+    // recording. Tick-time getters then become a no-op when views are stable.
+    {
+        Scene* scene = getActiveScene();
+        (void)_sharedResourceProvider.getSceneSkyboxDescriptorSet(scene);
+        (void)_sharedResourceProvider.getSceneEnvironmentLightingDescriptorSet(scene);
+    }
+
     _pipelineCoordinator.applyPendingChanges();
 
     // All Render2D pipeline changes must happen before command recording. The

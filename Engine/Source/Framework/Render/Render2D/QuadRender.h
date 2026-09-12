@@ -229,7 +229,7 @@ struct YA_RENDER_2D_API FQuadRender
     void resetTextureBatch();
     void flushForTextureOverflow(ICommandBuffer* cmdBuf);
 
-    void updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, DescriptorSetHandle dsHandle, const glm::mat4& viewProj, const glm::mat4& view);
+    void updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, const glm::mat4& viewProj, const glm::mat4& view);
     void updateResources(DescriptorSetHandle dsHandle);
     DescriptorSetHandle acquireScreenResourceDS(FlightResources& resources);
     DescriptorSetHandle acquireWorldResourceDS(FlightResources& resources);
