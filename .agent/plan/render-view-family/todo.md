@@ -17,6 +17,9 @@
 - [ ] 将 WorldFrameSnapshot 语义迁移为 SceneFrameSnapshot/SceneRenderPlan，保留兼容期适配。
 - [x] 定义 SceneId、SceneRenderRequest、SceneViewportTask、SceneRenderScheduler 的最小契约。
 - [x] 实现 frame-local submit/seal/clear 调度和按 SceneId 去重 snapshot builder。
+- [x] 将 snapshot table 提升为 SceneRenderPlan 所有者，以 snapshotIndex 供多个 viewport task 复用。
+- [x] 用 sceneRevision 防止同一 Scene 内容变化后错误复用旧 snapshot。
+- [x] 在 snapshotFor() 校验 snapshotIndex 对应的 SceneId/revision，拒绝错误 task 索引。
 - [ ] 将 RenderFrameExtractor 的 Scene extraction 与 View preparation 分开。
 - [ ] 在 UI GPU compose 之前聚合 SceneRenderRequest，并禁止 UI paint/compose 期间临时抽取 Scene/ECS；不强制 UI widget tick 的相对顺序。
 - [ ] 迁移 shadow/entity-id/debug/Forward/Deferred 消费者。

@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <limits>
 #include <vector>
 
 namespace ya
@@ -16,6 +17,7 @@ using SceneViewId = uint64_t;
 struct SceneRenderRequest
 {
     SceneId     sceneId  = 0;
+    uint64_t    sceneRevision = 0;
     SceneViewId viewId   = 0;
     uint64_t    familyId = 0;
 
@@ -33,7 +35,10 @@ struct SceneRenderRequest
 
 struct SceneViewportTask
 {
+    static constexpr uint32_t kInvalidSnapshotIndex = std::numeric_limits<uint32_t>::max();
+
     SceneId     sceneId  = 0;
+    uint64_t    sceneRevision = 0;
     SceneViewId viewId   = 0;
     uint64_t    familyId = 0;
 
@@ -44,15 +49,36 @@ struct SceneViewportTask
     Rect2D    viewportRect{};
     uint32_t  renderFlags = 0;
 
+    uint32_t snapshotIndex = kInvalidSnapshotIndex;
+};
+
+struct SceneSnapshotEntry
+{
+    SceneId sceneId = 0;
+    uint64_t sceneRevision = 0;
     std::shared_ptr<const WorldFrameSnapshot> snapshot;
 };
 
 struct SceneRenderPlan
 {
     uint64_t frameId = 0;
+    std::vector<SceneSnapshotEntry> snapshots;
     std::vector<SceneViewportTask> viewportTasks;
 
     [[nodiscard]] bool empty() const { return viewportTasks.empty(); }
+
+    [[nodiscard]] std::shared_ptr<const WorldFrameSnapshot> snapshotFor(
+        const SceneViewportTask& task) const
+    {
+        if (task.snapshotIndex >= snapshots.size()) {
+            return nullptr;
+        }
+        const SceneSnapshotEntry& entry = snapshots[task.snapshotIndex];
+        if (entry.sceneId != task.sceneId || entry.sceneRevision != task.sceneRevision) {
+            return nullptr;
+        }
+        return entry.snapshot;
+    }
 };
 
 /// Frame-local request collector. It does not own Scene/ECS objects and does

@@ -131,11 +131,74 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
 
     const SceneRenderPlan plan = scheduler.seal();
     ASSERT_EQ(plan.frameId, 42u);
+    ASSERT_EQ(plan.snapshots.size(), 2u);
     ASSERT_EQ(plan.viewportTasks.size(), 3u);
     EXPECT_EQ(buildCalls, 2);
-    EXPECT_EQ(plan.viewportTasks[0].snapshot, plan.viewportTasks[1].snapshot);
-    EXPECT_NE(plan.viewportTasks[0].snapshot, plan.viewportTasks[2].snapshot);
+    EXPECT_EQ(plan.viewportTasks[0].snapshotIndex, plan.viewportTasks[1].snapshotIndex);
+    EXPECT_NE(plan.viewportTasks[0].snapshotIndex, plan.viewportTasks[2].snapshotIndex);
+    EXPECT_EQ(plan.snapshots[plan.viewportTasks[0].snapshotIndex].snapshot,
+              plan.snapshots[plan.viewportTasks[1].snapshotIndex].snapshot);
+    EXPECT_NE(plan.snapshots[plan.viewportTasks[0].snapshotIndex].snapshot,
+              plan.snapshots[plan.viewportTasks[2].snapshotIndex].snapshot);
+    EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]),
+              plan.snapshotFor(plan.viewportTasks[1]));
     EXPECT_FALSE(scheduler.isFrameOpen());
+}
+
+TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionChanges)
+{
+    SceneRenderScheduler scheduler;
+    scheduler.beginFrame(9);
+
+    int buildCalls = 0;
+    auto makeRequest = [&](uint64_t revision, SceneViewId viewId)
+    {
+        SceneRenderRequest request;
+        request.sceneId = 5;
+        request.sceneRevision = revision;
+        request.viewId = viewId;
+        request.buildSnapshot = [&buildCalls]
+        {
+            ++buildCalls;
+            return std::make_shared<const WorldFrameSnapshot>();
+        };
+        return request;
+    };
+
+    ASSERT_TRUE(scheduler.submit(makeRequest(1, 51)));
+    ASSERT_TRUE(scheduler.submit(makeRequest(1, 52)));
+    ASSERT_TRUE(scheduler.submit(makeRequest(2, 53)));
+
+    const SceneRenderPlan plan = scheduler.seal();
+    ASSERT_EQ(buildCalls, 2);
+    ASSERT_EQ(plan.snapshots.size(), 2u);
+    ASSERT_EQ(plan.viewportTasks[0].snapshotIndex, plan.viewportTasks[1].snapshotIndex);
+    EXPECT_NE(plan.viewportTasks[0].snapshotIndex, plan.viewportTasks[2].snapshotIndex);
+    EXPECT_EQ(plan.snapshots[0].sceneRevision, 1u);
+    EXPECT_EQ(plan.snapshots[1].sceneRevision, 2u);
+}
+
+TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsInvalidSnapshotIndex)
+{
+    SceneRenderPlan plan;
+    SceneViewportTask task;
+    EXPECT_EQ(plan.snapshotFor(task), nullptr);
+}
+
+TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsSnapshotMetadataMismatch)
+{
+    SceneRenderPlan plan;
+    plan.snapshots.push_back(SceneSnapshotEntry{
+        .sceneId = 7,
+        .sceneRevision = 3,
+        .snapshot = std::make_shared<const WorldFrameSnapshot>(),
+    });
+
+    SceneViewportTask task;
+    task.sceneId = 7;
+    task.sceneRevision = 4;
+    task.snapshotIndex = 0;
+    EXPECT_EQ(plan.snapshotFor(task), nullptr);
 }
 
 TEST(RenderRuntimeSnapshotTest, SceneSchedulerRejectsRequestsOutsideFrame)

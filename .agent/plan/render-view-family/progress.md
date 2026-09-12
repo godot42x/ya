@@ -65,7 +65,7 @@ RenderFrameData 当前不是一个可以整体搬家的 world snapshot：
 
 R1 尚未完成代码迁移。下一步应将现有 RenderFrameExtractor 接到 request 的 snapshot builder，并把 camera-dependent sort/shadow preparation 放入 SceneViewportTask 生成阶段。
 
-R1 调度切片已完成：SceneRenderScheduler 是不持有 Scene/ECS 的 frame-local collector；submit 只接受带有效 SceneId/ViewId 和 snapshot builder 的 request；seal 按 SceneId 去重 builder，再为每个 viewport 展开 SceneViewportTask 并共享该 Scene 的 immutable snapshot；clearFrame 清理本帧状态。当前 task 还携带兼容期的 WorldFrameSnapshot 指针，尚未接入真正 SceneFrameSnapshot extractor 和 RenderRuntime record。
+R1 调度切片已完成：SceneRenderScheduler 是不持有 Scene/ECS 的 frame-local collector；submit 只接受带有效 SceneId/ViewId 和 snapshot builder 的 request；seal 按 (SceneId, sceneRevision) 去重 builder，SceneRenderPlan 拥有唯一 snapshot table，再为每个 viewport 展开带 snapshotIndex 的 SceneViewportTask；clearFrame 清理本帧状态。plan 的 snapshot table 负责跨 task 保活，snapshotFor() 还会校验 task 的 SceneId/revision 与表项元数据，避免错误索引串用。尚未接入真正 SceneFrameSnapshot extractor 和 RenderRuntime record。
 
 R1 第一小步已完成，但命名需要后续修正：当前 WorldFrameSnapshot 显式承载当前可识别的 Scene lights、draw buckets 和 skinning palettes；RenderFrameData 作为兼容容器继承它并继续保留 camera、viewport、frame metadata。该步没有迁移消费者，也没有改变 shadow matrix、排序或 pipeline 行为；后续应将语义迁移到 SceneFrameSnapshot/SceneRenderPlan，并把 WorldFrameSnapshot 视为过渡名称。
 

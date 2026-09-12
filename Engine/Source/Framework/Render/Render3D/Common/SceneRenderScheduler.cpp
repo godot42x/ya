@@ -1,6 +1,7 @@
 #include "SceneRenderScheduler.h"
 
 #include <unordered_map>
+#include <utility>
 
 namespace ya
 {
@@ -29,20 +30,52 @@ SceneRenderPlan SceneRenderScheduler::seal()
         return plan;
     }
 
-    std::unordered_map<SceneId, std::shared_ptr<const WorldFrameSnapshot>> snapshots;
-    snapshots.reserve(_requests.size());
+    struct SnapshotKey
+    {
+        SceneId sceneId = 0;
+        uint64_t sceneRevision = 0;
+
+        bool operator==(const SnapshotKey& other) const
+        {
+            return sceneId == other.sceneId && sceneRevision == other.sceneRevision;
+        }
+    };
+    struct SnapshotKeyHash
+    {
+        size_t operator()(const SnapshotKey& key) const
+        {
+            const size_t sceneHash = std::hash<SceneId>{}(key.sceneId);
+            const size_t revisionHash = std::hash<uint64_t>{}(key.sceneRevision);
+            return sceneHash ^ (revisionHash + static_cast<size_t>(0x9e3779b9u) +
+                                (sceneHash << 6u) + (sceneHash >> 2u));
+        }
+    };
+
+    std::unordered_map<SnapshotKey, uint32_t, SnapshotKeyHash> snapshotIndices;
+    snapshotIndices.reserve(_requests.size());
 
     for (const auto& request : _requests) {
-        auto [it, inserted] = snapshots.try_emplace(request.sceneId);
+        const SnapshotKey key{
+            .sceneId = request.sceneId,
+            .sceneRevision = request.sceneRevision,
+        };
+        auto [it, inserted] = snapshotIndices.try_emplace(key, static_cast<uint32_t>(plan.snapshots.size()));
         if (inserted) {
-            it->second = request.buildSnapshot();
+            plan.snapshots.push_back(SceneSnapshotEntry{
+                .sceneId = request.sceneId,
+                .sceneRevision = request.sceneRevision,
+                .snapshot = request.buildSnapshot(),
+            });
         }
-        if (!it->second) {
+        const uint32_t snapshotIndex = it->second;
+        const auto& snapshot = plan.snapshots[snapshotIndex].snapshot;
+        if (!snapshot) {
             continue;
         }
 
         plan.viewportTasks.push_back(SceneViewportTask{
             .sceneId       = request.sceneId,
+            .sceneRevision = request.sceneRevision,
             .viewId        = request.viewId,
             .familyId      = request.familyId,
             .view          = request.view,
@@ -51,7 +84,7 @@ SceneRenderPlan SceneRenderScheduler::seal()
             .cameraPos     = request.cameraPos,
             .viewportRect  = request.viewportRect,
             .renderFlags   = request.renderFlags,
-            .snapshot      = it->second,
+            .snapshotIndex = snapshotIndex,
         });
     }
 

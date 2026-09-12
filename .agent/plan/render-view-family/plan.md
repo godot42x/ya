@@ -63,7 +63,7 @@ ViewFamily 是同一 Scene、同一 frame、同一 pipeline/resource scheduling 
 
 评估结论：Scene owner 提交 offscreen request + 独立 SceneRenderScheduler + RenderRuntime 录制 immutable plan，是合理且接近主流引擎的组合。需要修正两点：Scene 不应直接调用 RHI/RenderRuntime，只由宿主调用 submit；“UI 之前”只约束 GPU compose 顺序，不强制 UI logic/snapshot 晚于 request collection。
 
-Scheduler 必须是 frame-local coordinator，而不是常驻 Scene registry。beginFrame -> submit(request)* -> seal/build plan -> record(plan) -> clearFrame。SceneRenderRequest 是产品层到渲染层的窄协议；SceneRenderPlan 是 immutable 渲染输入；RenderRuntime 不保存 request，不拥有 Scene，不调用 SceneManager。Scheduler 位于 RenderRuntime 同层的 Render3D orchestration/service，GUI Framework 只消费 View output 和 UIFrameSnapshot。
+Scheduler 必须是 frame-local coordinator，而不是常驻 Scene registry。beginFrame -> submit(request)* -> seal/build plan -> record(plan) -> clearFrame。SceneRenderRequest 是产品层到渲染层的窄协议；SceneRenderPlan 是 immutable 渲染输入，并拥有按 (SceneId, sceneRevision) 去重的 snapshot table；SceneViewportTask 只保存 snapshotIndex，读取时必须校验表项的 SceneId/revision。RenderRuntime 不保存 request，不拥有 Scene，不调用 SceneManager。Scheduler 位于 RenderRuntime 同层的 Render3D orchestration/service，GUI Framework 只消费 View output 和 UIFrameSnapshot。
 
 每个 Scene 的 SceneFrameSnapshot 只保存该 Scene 的 transforms、mesh/material 引用、lights、animation/skinning 结果、resource handles 和稳定 id。它不保存唯一 Camera 的矩阵、View 排序、culling 或 viewport rect，也不能隐含来自另一个 Scene 的资源/实体。
 
