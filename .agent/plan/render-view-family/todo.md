@@ -11,8 +11,9 @@
 
 ## R1
 
-- [ ] 设计 WorldFrameSnapshot 字段和所有权，确认 resource generation/lifetime。
-- [ ] 设计 RenderViewInput、RenderViewFamily、RenderViewOutput 最小字段。
+- [x] 设计 WorldFrameSnapshot 字段分类和所有权方向，确认 resource generation/lifetime 风险。
+- [x] 设计 RenderViewInput 的现有来源与兼容迁移边界；RenderViewFamily/Output 留待真实多 View 切片。
+- [x] 引入 WorldFrameSnapshot 的实际存储边界，并保留 RenderFrameData 兼容容器。
 - [ ] 将 RenderFrameExtractor 的 world extraction 与 view preparation 分开。
 - [ ] 迁移 shadow/entity-id/debug/Forward/Deferred 消费者。
 - [ ] 为旧 RenderFrameData 建立短期 adapter，并记录删除条件。

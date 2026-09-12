@@ -64,6 +64,20 @@ RenderViewInput 至少包含 ViewId、owner 计算的 view/projection/viewProjec
 
 View 级工作包括 culling、sort、shadow fitting、view-specific overlay；不得每个 View 重复遍历并抽取全部 ECS 资源。
 
+R1 字段分类不能按现有结构名整体搬迁，必须按语义拆分：
+
+| 当前字段/数据 | 目标归属 | 迁移说明 |
+| --- | --- | --- |
+| RenderDrawItem.worldMatrix、mesh/material 引用、entity id | World snapshot candidate | 与 Camera 无关；先保留未排序 candidate |
+| RenderDrawItem.sortKey、material/mesh bucket 顺序 | View preparation | 由 Camera distance 和 pipeline 策略决定，不能放进共享 snapshot |
+| skinning palette 内容 | World snapshot | 一帧抽取一次；多个 View 只共享 palette，索引需保持稳定 |
+| point/directional 原始光照参数 | World snapshot | 只保存灯光实体数据和稳定顺序 |
+| directional cascade/shadow view-projection | View preparation | 当前由 camera view/projection、shadow settings 计算，不能随世界快照共享 |
+| view/projection/viewProjection/cameraPos/viewportExtent/viewOwner | RenderViewInput | 当前已存在于 CameraFrameInput，迁移时保持值来源不变 |
+| frame index / delta time | Frame/View metadata | 不参与场景资源抽取，不能通过 ECS 在 graph execute 阶段读取 |
+
+因此 R1 的实现顺序固定为：先引入未排序 world candidates 和 view preparation 的内部契约；再迁移 light/shadow；最后才替换旧 RenderFrameData adapter。禁止先把现有 RenderFrameData 机械拆成两个同构 struct。
+
 验收：同一帧两个 View 共用一个 world snapshot；View A 的矩阵/extent 不修改 View B；pipeline 不从 window/swapchain 反查矩阵或尺寸；单 View golden 不变。
 
 ### R2 — RenderRuntime 编排 RenderViewFamily

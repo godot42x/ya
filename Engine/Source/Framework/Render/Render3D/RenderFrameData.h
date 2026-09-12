@@ -178,35 +178,38 @@ struct RenderMeshClassDrawBuckets
     }
 };
 
-/// All data a render pipeline needs for one frame.
-/// Built once per frame from the ECS registry, then consumed read-only by every pipeline / system.
-struct RenderFrameData
+/// Scene-level render data that can be shared by multiple camera views in the
+/// same frame. The current light payload still contains legacy shadow fields;
+/// those remain compatibility data until view preparation is migrated.
+struct WorldFrameSnapshot
 {
-    // ═══════════════════════════════════════════════════════════════
-    // View / Camera
-    // ═══════════════════════════════════════════════════════════════
+    bool                                                       bHasDirectionalLight = false;
+    FrameContext::DirectionalLightData                          directionalLight;
+    uint32_t                                                   numPointLights = 0;
+    std::array<FrameContext::PointLightData, MAX_POINT_LIGHTS> pointLights;
+
+    RenderMeshClassDrawBuckets drawBuckets;
+    std::vector<RenderSkinningPalette> skinningPalettes;
+
+    void clearWorld()
+    {
+        drawBuckets.clear();
+        skinningPalettes.clear();
+    }
+};
+
+/// All data a render pipeline needs for one camera view in one frame.
+/// Built once per frame from the ECS registry, then consumed read-only by every
+/// pipeline / system. WorldFrameSnapshot is the shareable scene portion; the
+/// camera fields remain here during the incremental migration.
+struct RenderFrameData : WorldFrameSnapshot
+{
     glm::mat4    view           = glm::mat4(1.0f);
     glm::mat4    projection     = glm::mat4(1.0f);
     glm::mat4    viewProjection = glm::mat4(1.0f);
     glm::vec3    cameraPos      = glm::vec3(0.0f);
     Extent2D     viewportExtent = {};
     entt::entity viewOwner      = entt::null;
-
-    // ═══════════════════════════════════════════════════════════════
-    // Lights (reuses FrameContext sub-structures)
-    // ═══════════════════════════════════════════════════════════════
-    bool                                                       bHasDirectionalLight = false;
-    FrameContext::DirectionalLightData                          directionalLight;
-    uint32_t                                                   numPointLights = 0;
-    std::array<FrameContext::PointLightData, MAX_POINT_LIGHTS> pointLights;
-
-    // ═══════════════════════════════════════════════════════════════
-    // Draw lists (bucketed by mesh class, then shading model)
-    // ═══════════════════════════════════════════════════════════════
-    RenderMeshClassDrawBuckets drawBuckets;
-
-    // Animation / Skinning snapshot data.
-    std::vector<RenderSkinningPalette> skinningPalettes;
 
     // ═══════════════════════════════════════════════════════════════
     // Frame constants
@@ -219,8 +222,7 @@ struct RenderFrameData
     // ═══════════════════════════════════════════════════════════════
     void clear()
     {
-        drawBuckets.clear();
-        skinningPalettes.clear();
+        clearWorld();
     }
 
     /// Build a backward-compatible FrameContext for systems that haven't migrated yet.

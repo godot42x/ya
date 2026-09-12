@@ -83,6 +83,26 @@ TEST(RenderRuntimeSnapshotTest, FrameInputGroupsCameraViewDisplayPresent)
     EXPECT_EQ(input.present.imageIndex, -1);
 }
 
+TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesWorldAndViewOwnership)
+{
+    static_assert(std::is_base_of_v<WorldFrameSnapshot, RenderFrameData>);
+
+    RenderFrameData frame;
+    frame.view = glm::translate(glm::mat4(1.0f), glm::vec3(4.0f, 0.0f, 0.0f));
+    frame.drawBuckets.staticMeshes.pbrDrawItems.resize(1);
+    frame.skinningPalettes.resize(1);
+
+    WorldFrameSnapshot& world = frame;
+    EXPECT_EQ(world.drawBuckets.staticMeshes.pbrDrawItems.size(), 1u);
+    EXPECT_EQ(world.skinningPalettes.size(), 1u);
+    EXPECT_EQ(frame.view[3][0], 4.0f);
+
+    world.clearWorld();
+    EXPECT_TRUE(frame.drawBuckets.staticMeshes.pbrDrawItems.empty());
+    EXPECT_TRUE(frame.skinningPalettes.empty());
+    EXPECT_EQ(frame.view[3][0], 4.0f);
+}
+
 TEST(RenderRuntimeSnapshotTest, RenderFrameKeepsSinglePrepareAndSubmit)
 {
     const std::string runtimeCpp = readEngineSource("Source/Framework/Render/Render3D/RenderRuntime.cpp");
