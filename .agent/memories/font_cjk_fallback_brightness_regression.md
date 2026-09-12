@@ -37,6 +37,7 @@
 ## 预防
 
 1. **CJK（及任何脚本）fallback 必须单一、全覆盖、风格统一**：多个同脚本 fallback 会按字符分散到不同 face，造成风格跳变。只有"主拉丁 + 一个中文 + 一个 emoji(色)"这种**不同脚本**才该并列。
-2. 字体相关回归先加 CJK trace（`atlasIdx / fallback / page / scale`）而非靠截图猜；`scale=1.0 + 全 Bitmap + page=0` 可快速排除 DPI / 分页 / SDF 因素。
-3. 小字（≤48px）走 bitmap（Nearest + 像素对齐）比 SDF 更锐利；SDF 仅用于大缩放场景。强制 SDF 给中文小字必然发虚。
-4. DPI 当前由 `GUIAppHost` 用 `presentExtent/logicalExtent` 比值设置（非真机 DPR）；HiDPI 自适应需改为从系统 API 取真机 DPR——属后续架构改进，非本 bug 根因。
+2. **Bitmap 小字缺笔先查 FreeType load flags，不要换字体**。Hiragino `'4'` 轮廓完整；12px 缺横笔是 FreeType 执行 Apple TT bytecode 把 stem snap 掉。`FORCE_AUTOHINT` 才是 FontManager 侧修复。
+3. 字体相关回归先加 CJK trace（`atlasIdx / fallback / page / scale`）而非靠截图猜；`scale=1.0 + 全 Bitmap + page=0` 可快速排除 DPI / 分页 / SDF 因素。
+4. 小字（≤48px）走 bitmap（Nearest + 像素对齐）比 SDF 更锐利；SDF 仅用于大缩放场景。强制 SDF 给中文小字必然发虚。
+5. DPI 当前由 `GUIAppHost` 用 `presentExtent/logicalExtent` 比值设置（非真机 DPR）；HiDPI 自适应需改为从系统 API 取真机 DPR——属后续架构改进，非本 bug 根因。

@@ -2,6 +2,7 @@
 #include "BitmapFontRasterizer.h"
 #include "ColorFontRasterizer.h"
 #include "Core/Profiling/Instrumentor.h"
+#include "Core/System/PathUtils.h"
 #include "SDFFontRasterizer.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "DynamicFontAtlas.h"
@@ -9,7 +10,11 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
+#include <filesystem>
+#include <format>
+#include <string_view>
 
 namespace ya
 {
@@ -27,6 +32,72 @@ constexpr std::array<uint32_t, 95> BASE_GLYPH_CODEPOINTS = [] {
 
 namespace
 {
+
+float parseFloatView(std::string_view text, float fallback)
+{
+    if (text.empty()) {
+        return fallback;
+    }
+    float value = fallback;
+    const std::from_chars_result parsed =
+        std::from_chars(text.data(), text.data() + text.size(), value);
+    return parsed.ec == std::errc{} ? value : fallback;
+}
+
+/// `_baseFontCache` keys are `name:size` (registerFont) or `name:size:dpi` (loadFont).
+void splitFontCacheKey(std::string_view key, std::string& stackName, float& logicalSize, float& dpi)
+{
+    dpi          = 1.0f;
+    logicalSize  = 0.0f;
+    const auto last = key.rfind(':');
+    if (last == std::string_view::npos) {
+        stackName = std::string(key);
+        return;
+    }
+    const auto prev = last == 0 ? std::string_view::npos : key.rfind(':', last - 1);
+    if (prev == std::string_view::npos) {
+        stackName   = std::string(key.substr(0, last));
+        logicalSize = parseFloatView(key.substr(last + 1), 0.0f);
+        return;
+    }
+    stackName   = std::string(key.substr(0, prev));
+    logicalSize = parseFloatView(key.substr(prev + 1, last - prev - 1), 0.0f);
+    dpi         = parseFloatView(key.substr(last + 1), 1.0f);
+}
+
+std::string atlasDebugFaceName(std::string_view facePath, std::string_view stackName)
+{
+    if (!facePath.empty()) {
+        const std::string stem = path_utils::pathToUtf8String(
+            path_utils::pathFromUtf8String(std::string(facePath)).stem());
+        if (!stem.empty()) {
+            return stem;
+        }
+    }
+    return std::string(stackName);
+}
+
+std::string makeFontAtlasDebugLabel(std::string_view face,
+                                    float            logicalSize,
+                                    EFontRenderMode  mode,
+                                    std::string_view faceRole,
+                                    uint32_t         pageIndex,
+                                    uint32_t         pageCount,
+                                    float            dpi)
+{
+    std::string label = std::format("{}  {:.0f}px  {}", face, logicalSize, fontRenderModeName(mode));
+    if (faceRole != "primary") {
+        label += "  ";
+        label += faceRole;
+    }
+    if (pageCount > 1) {
+        label += std::format("  p{}/{}", pageIndex + 1, pageCount);
+    }
+    if (std::abs(dpi - 1.0f) > 0.01f) {
+        label += std::format("  @{:g}x", dpi);
+    }
+    return label;
+}
 
 std::shared_ptr<IFontRasterizer> makeRasterizer(EFontRenderMode mode)
 {
@@ -490,7 +561,14 @@ bool FontManager::addFontFallback(IRender& render, const FName& fontName, const 
 
     // Record the definition at the font-name level so lazily materialized bases
     // (e.g. a small bitmap base built on first 13px request) also get it.
-    _fallbackDefs[fontName].push_back({fontPath, renderMode});
+    // Same path twice would split one script across duplicate faces.
+    auto& defs = _fallbackDefs[fontName];
+    for (const FFallbackDef& existing : defs) {
+        if (existing.path == fontPath) {
+            return true;
+        }
+    }
+    defs.push_back({fontPath, renderMode});
     _render = &render;
 
     // Attach the fallback face to every existing base of this font.
@@ -500,7 +578,7 @@ bool FontManager::addFontFallback(IRender& render, const FName& fontName, const 
         if (baseIt == _baseFontCache.end() || !baseIt->second) {
             continue;
         }
-        attachFallbackToBase(render, *baseIt->second, _fallbackDefs[fontName].back());
+        attachFallbackToBase(render, *baseIt->second, defs.back());
         anyAdded = true;
     }
     if (anyAdded) {
@@ -787,6 +865,97 @@ std::shared_ptr<Font> FontManager::getAdaptiveFont(IRender&            render,
     // exact-size base instead of scaling a huge base down to tiny text.
     loadFont(render, fontPath, fontName, adaptedSize);
     return getFont(fontName, adaptedSize);
+}
+
+std::vector<FontManager::FFontAtlasDebugPage> FontManager::collectFontAtlasDebugPages() const
+{
+    std::vector<FFontAtlasDebugPage> pages;
+
+    const auto appendBank = [&](const FontAtlasBank* bank,
+                                std::string_view     cacheKey,
+                                float                fontSize,
+                                std::string_view     faceRole,
+                                std::string_view     facePath,
+                                EFontRenderMode      mode,
+                                size_t               glyphCount) {
+        if (!bank || bank->pageCount() == 0) {
+            return;
+        }
+        std::string stackName;
+        float       logicalSize = 0.0f;
+        float       dpi         = 1.0f;
+        splitFontCacheKey(cacheKey, stackName, logicalSize, dpi);
+        if (logicalSize <= 0.0f) {
+            logicalSize = fontSize;
+        }
+        const std::string face = atlasDebugFaceName(facePath, stackName);
+        const uint32_t pageCount = static_cast<uint32_t>(bank->pageCount());
+        for (uint32_t i = 0; i < pageCount; ++i) {
+            FFontAtlasDebugPage page;
+            page.texture    = bank->pageTexture(i);
+            page.pageIndex  = i;
+            page.pageCount  = pageCount;
+            page.renderMode = mode;
+            const uint32_t w = page.texture ? page.texture->getWidth() : bank->pageSize();
+            const uint32_t h = page.texture ? page.texture->getHeight() : bank->pageSize();
+            page.label = makeFontAtlasDebugLabel(face, logicalSize, mode, faceRole, i, pageCount, dpi);
+            page.detail = std::format("{}  ·  {}×{}  ·  {} glyphs  ·  1:1",
+                                      stackName,
+                                      w,
+                                      h,
+                                      glyphCount);
+            if (!facePath.empty()) {
+                page.detail += "  ·  ";
+                page.detail += facePath;
+            }
+            pages.push_back(std::move(page));
+        }
+    };
+
+    for (const auto& [key, font] : _baseFontCache) {
+        if (!font || font->isView()) {
+            continue;
+        }
+        size_t primaryGlyphs = 0;
+        for (const auto& [codePoint, ch] : font->characters) {
+            (void)codePoint;
+            if (ch.atlasIndex == 0) {
+                ++primaryGlyphs;
+            }
+        }
+        appendBank(font->atlas.get(),
+                   key,
+                   font->fontSize,
+                   "primary",
+                   font->fontPath,
+                   font->renderMode,
+                   primaryGlyphs);
+        for (size_t fallback = 0; fallback < font->fallbacks.size(); ++fallback) {
+            const FFontStackEntry& entry = font->fallbacks[fallback];
+            size_t fallbackGlyphs = 0;
+            const uint16_t atlasIndex = static_cast<uint16_t>(fallback + 1);
+            for (const auto& [codePoint, ch] : font->characters) {
+                (void)codePoint;
+                if (ch.atlasIndex == atlasIndex) {
+                    ++fallbackGlyphs;
+                }
+            }
+            appendBank(entry.atlas.get(),
+                       key,
+                       font->fontSize,
+                       std::format("fallback{}", fallback + 1),
+                       entry.fontPath,
+                       entry.renderMode,
+                       fallbackGlyphs);
+        }
+    }
+
+    std::sort(pages.begin(),
+              pages.end(),
+              [](const FFontAtlasDebugPage& a, const FFontAtlasDebugPage& b) {
+                  return a.label < b.label;
+              });
+    return pages;
 }
 
 } // namespace ya

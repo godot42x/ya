@@ -99,4 +99,18 @@ TEST(EditorTabSpawnerRegistryTest, BuiltinPlayToolbarSpawnDoesNotRequireHost)
     EXPECT_NE(play->spawn(ctx), nullptr);
 }
 
+TEST(EditorTabSpawnerRegistryTest, BuiltinFontAtlasesSpawnDoesNotRequireHost)
+{
+    EditorTabSpawnerRegistry registry;
+    registerBuiltinEditorTabSpawners(registry);
+    const FEditorTabSpawner* fonts = registry.find("font-atlases");
+    ASSERT_NE(fonts, nullptr);
+    EXPECT_EQ(fonts->title, "Fonts");
+    EXPECT_EQ(fonts->toolsMenuLabel, "Font Atlases");
+    EXPECT_EQ(fonts->scope, EEditorTabScope::WindowTool);
+
+    FEditorTabSpawnContext ctx;
+    EXPECT_NE(fonts->spawn(ctx), nullptr);
+}
+
 } // namespace ya

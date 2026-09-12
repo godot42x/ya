@@ -46,6 +46,21 @@ inline EFontRenderMode chooseModeForSize(uint32_t sizePx)
     return sizePx <= kBitmapMaxSize ? EFontRenderMode::Bitmap : EFontRenderMode::SDF;
 }
 
+[[nodiscard]] inline const char* fontRenderModeName(EFontRenderMode mode)
+{
+    switch (mode) {
+    case EFontRenderMode::Bitmap:
+        return "Bitmap";
+    case EFontRenderMode::MSDF:
+        return "MSDF";
+    case EFontRenderMode::SDF:
+        return "SDF";
+    case EFontRenderMode::Color:
+        return "Color";
+    }
+    return "?";
+}
+
 struct IRender;
 
 inline constexpr const char* DEFAULT_RUNTIME_FONT_NAME = "RuntimeDefault";
@@ -441,6 +456,21 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
     /// WidgetTree already invalidates from resourceRevision(); this remains
     /// for host/debug observers.
     bool consumeNewGlyphCapture();
+
+    /// One GPU atlas page (primary or fallback) for the Font Atlases debug tab.
+    /// `label` is combo text: "{face stem}  {size}px  {Bitmap|SDF}" (role/page/dpi
+    /// only when they distinguish). `detail` is stack · texels · glyphs · path.
+    struct FFontAtlasDebugPage
+    {
+        std::string              label;
+        std::string              detail;
+        EFontRenderMode          renderMode = EFontRenderMode::Bitmap;
+        uint32_t                 pageIndex  = 0;
+        uint32_t                 pageCount  = 0;
+        std::shared_ptr<Texture> texture;
+    };
+    /// Unique atlas pages on loaded bases (views share these textures).
+    [[nodiscard]] std::vector<FFontAtlasDebugPage> collectFontAtlasDebugPages() const;
 
     // TODO: optimize key generation
     static std::string makeCacheKey(const FName &fontName, uint32_t fontSize)

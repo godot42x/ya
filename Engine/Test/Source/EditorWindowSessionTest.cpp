@@ -288,6 +288,7 @@ TEST(EditorWindowSessionTest, SessionOwnedTabsDoNotUseAppGetOrPrimarySwapchain)
         "Source/Applications/GameEditor/UI/EditorContentBrowserTab.cpp",
         "Source/Applications/GameEditor/UI/EditorRuntimeToolsTab.cpp",
         "Source/Applications/GameEditor/UI/EditorPlayToolbarTab.cpp",
+        "Source/Applications/GameEditor/UI/EditorFontAtlasTab.cpp",
         "Source/Applications/GameEditor/UI/RuntimeRenderSettingsSection.cpp",
         "Source/Applications/GameEditor/UI/EditorInspectorTab.cpp",
         "Source/Applications/GameEditor/UI/EditorViewportTab.cpp",

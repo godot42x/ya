@@ -4,6 +4,7 @@
 #include "GameEditor/UI/EditorAssetInspectorTab.h"
 #include "GameEditor/UI/EditorContentBrowserTab.h"
 #include "GameEditor/UI/EditorDebugImagesTab.h"
+#include "GameEditor/UI/EditorFontAtlasTab.h"
 #include "GameEditor/UI/EditorDocumentEditorTab.h"
 #include "GameEditor/UI/EditorHierarchyTab.h"
 #include "GameEditor/UI/EditorInspectorTab.h"
@@ -286,6 +287,15 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
                 return nullptr;
             }
             return std::make_shared<EditorDebugImagesTab>(*ctx.layer);
+        },
+    });
+    registry.add({
+        .tabId = "font-atlases",
+        .title = "Fonts",
+        .toolsMenuLabel = "Font Atlases",
+        .scope = EEditorTabScope::WindowTool,
+        .spawn = [](FEditorTabSpawnContext&) -> std::shared_ptr<UIElement> {
+            return std::make_shared<EditorFontAtlasTab>();
         },
     });
     registry.add({

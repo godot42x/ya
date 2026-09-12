@@ -28,7 +28,7 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
 
 1. **两种 flavor，按尺寸分流（flavor split）**
    - `chooseModeForSize()`：`size ≤ kBitmapMaxSize(48)` → Bitmap；否则 SDF。
-   - Bitmap：1:1 栅格 + **Nearest** 采样 + 像素对齐（`glm::round(scaledGlyphSize)`），最锐利，适合 UI 小字。
+   - Bitmap：1:1 栅格 + **FreeType autohint** + **Nearest** 采样 + 像素对齐（`glm::round(scaledGlyphSize)`），最锐利，适合 UI 小字。不要用 native TT bytecode（见契约 4）。
    - SDF：固定 64px base，缩放无损失，shader 内 `fwidth()` 抗锯齿，适合大缩放（标题/世界空间文本）。
    - **SDF 永不在 ≤48px 使用**；给中文小字强制 SDF 必定发虚。
 
@@ -42,22 +42,29 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
    - **禁止**注册多个同脚本 fallback（尤其 CJK）：字符会按命中顺序分散到不同 face，hinting/笔画权重不同 → 相邻字亮度/粗细跳变（见 `memories/font_cjk_fallback_brightness_regression.md`）。
    - `attachFallbackToBase` 用 **base 的 `renderMode`** 覆盖 fallback 的 mode，所以小字 base 是 bitmap → fallback 也是 bitmap；注册时不要强制 SDF。
 
-4. **候选顺序 `findCjkFontCandidates()` = best-first 单一全覆封面孔优先**
+4. **Bitmap 栅格必须 FORCE_AUTOHINT，不要跑 native TrueType bytecode**
+   - `BitmapFontRasterizer`：`FT_LOAD_RENDER | FT_LOAD_NO_BITMAP | FT_LOAD_FORCE_AUTOHINT`。
+   - Apple CJK face（Hiragino 等）的 hint bytecode 是给 Core Text 写的。FreeType 在 12ppem 执行它会把 `'4'` 横笔 snap 出像素格（覆盖≈0），Fonts.app 大字预览仍是完整轮廓。这不是缺 glyph，也不是换字体能修的。
+   - `FT_LOAD_TARGET_LIGHT` 对带 bytecode 的 TTF **不会**关掉 native hinter；必须 `FORCE_AUTOHINT`。
+   - `NO_BITMAP` 忽略只在特定 ppem 存在的 sbit strike。
+
+5. **候选顺序 `findCjkFontCandidates()` = best-first 单一全覆封面孔优先**
    - macOS `PingFang.ttc` / Windows `msyh.ttc` → 打包 Noto/SourceHan → 其余子集系统字体。
    - 调用方只取**第一个存在**的候选注册一次（见 `GUIAppHost.cpp`）。
 
-5. **DPI（自适应）**
+6. **DPI（自适应）**
    - `FontManager::setActiveDpiScale(scale)` 设置激活 DPI；bitmap rasterSize = `round(fontSize * effectiveDpi)`，视图目标 = 逻辑 fontSize。
    - 当前 `GUIAppHost` 用 `presentExtent/logicalExtent` 比值设 DPI（非真机 DPR）；HiDPI 需改系统 API 取真机 DPR（架构改进项，非紧急）。
 
 ## 排查清单
 
+- GameEditor Window 工具 tab `font-atlases`（Fonts / Font Atlases）列出 `FontManager::collectFontAtlasDebugPages()` 的每一张 GPU page（primary + 每个 fallback bank）。Combo 标签是 `{face stem}  {size}px  {Bitmap|SDF}`（非 primary 才跟 `fallbackN`，多 page 才跟 `p i/N`）；路径 / 像素尺寸 / glyph 数在 detail。预览是 **1:1 texel、左上角、竖向滚动**，走 atlas 自身 sampler（Bitmap = ClampNearest）。不要用 Image `Contain`：会把 512 page letterbox 进矮窗口并非整倍缩小，Nearest 下看起来又小又糊。Bitmap/Color 按白+alpha 预览；SDF/MSDF 按不透明 R 通道预览。
 - 加临时 CJK trace（`atlasIdx / fallback / page / scale / charSize`），而非靠截图猜。
 - `scale=1.0 + 全 Bitmap(renderMode=0) + page=0` → 排除 DPI / 分页 / SDF 因素，问题在 fallback 分散或 hinting。
 - 缺字/方块 → fallback 未命中或 `atlasIndex` 解析错。
 - 亮度不一 → 多同脚本 fallback（本 memory 回归）。
 - 边缘虚 → 小字误走 SDF / 未像素对齐 / Linear 采样了 bitmap atlas。
-- 竖笔过窄/缺笔 → bitmap 未 1:1 栅格 / 读了错误 `bitmap.pitch` 行宽 / padding 覆盖。
+- 竖笔过窄/缺笔 → bitmap 未 1:1 栅格 / 读了错误 `bitmap.pitch` 行宽 / padding 覆盖 / **native TT hint 在特定 ppem 把 stem snap 没了**（先对比 `FORCE_AUTOHINT`，不要先换字体）。
 
 ## 测试入口
 

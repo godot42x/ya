@@ -68,7 +68,8 @@ TEST(EditorDockWorkspaceTest, FactoryLayoutPlacesDefaultTabs)
                                         "frame-stats",
                                         "runtime-tools",
                                         "asset-inspector",
-                                        "debug-images"}));
+                                        "debug-images",
+                                        "font-atlases"}));
     const FDockNode* pageLeaf = context.dockModel().findLeafForPanel(
         context.findPanelByStableKey("level-editor")->id);
     const FDockNode* toolsLeaf = context.dockModel().findLeafForPanel(
@@ -350,6 +351,33 @@ TEST(EditorDockWorkspaceTest, RepairPrunesExistingEmptyToolsWell)
     EXPECT_EQ(context.dockModel().leafIds().size(), 1u);
     EXPECT_NE(context.dockModel().findFirstLeafWithRole(EDockLeafRole::Page), kInvalidDockNodeId);
     EXPECT_EQ(context.dockModel().findFirstLeafWithRole(EDockLeafRole::Tools), kInvalidDockNodeId);
+}
+
+TEST(EditorDockWorkspaceTest, ToolsOnlyWindowAdoptsFullLeafWithoutPageSplit)
+{
+    EditorTabSpawnerRegistry registry;
+    registerBuiltinEditorTabSpawners(registry);
+
+    FDockContext context;
+    context.bAllowFloating = true;
+    EditorDockWorkspace workspace;
+    workspace.bind(EditorDockWorkspace::FHost{
+        .spawners        = &registry,
+        .dock            = &context,
+        .targetPlacement = EEditorTabPlacement::WindowRootDock,
+    });
+
+    const FDockNode* root = context.dockModel().getRootNode();
+    ASSERT_NE(root, nullptr);
+    ASSERT_EQ(root->kind, EDockNodeKind::Stack);
+
+    const DockNodeId leaf = context.adoptLeafFor("font-atlases", 0, {});
+    EXPECT_EQ(leaf, root->id);
+    EXPECT_EQ(context.dockModel().getRootNode()->kind, EDockNodeKind::Stack);
+    EXPECT_EQ(context.dockModel().getRootNode()->leafRole, EDockLeafRole::Tools);
+    EXPECT_TRUE(context.dockModel().getRootNode()->bHideTabBar);
+    EXPECT_EQ(context.dockModel().leafIds().size(), 1u);
+    EXPECT_EQ(context.dockModel().findFirstLeafWithRole(EDockLeafRole::Page), kInvalidDockNodeId);
 }
 
 TEST(EditorDockWorkspaceTest, NestedRepairPrunesEmptyGenericLeaf)

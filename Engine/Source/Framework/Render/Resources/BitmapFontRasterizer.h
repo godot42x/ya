@@ -2,7 +2,8 @@
 
 // ============================================================================
 // BitmapFontRasterizer - EFontRenderMode::Bitmap implementation (font-framework
-// plan Module 3). Wraps FreeType's FT_LOAD_RENDER grayscale coverage into
+// plan Module 3). Wraps FreeType grayscale coverage (autohinted, no sbit)
+// into RGBA8 glyphs (white RGB + coverage alpha).
 // RGBA8 glyphs (white RGB + coverage alpha), matching the legacy atlas format
 // so Phase 1 stays behavior-preserving.
 // ============================================================================
