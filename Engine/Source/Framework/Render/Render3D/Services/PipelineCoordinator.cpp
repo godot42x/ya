@@ -6,6 +6,7 @@
 #include "Render2D/Render2D.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "RHI/Render.h"
 
 namespace ya

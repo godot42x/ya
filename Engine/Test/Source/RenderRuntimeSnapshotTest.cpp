@@ -1,4 +1,5 @@
 #include "Render3D/Common/RenderFrameInputs.h"
+#include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/RenderRuntime.h"
 
 #include <filesystem>
@@ -101,6 +102,59 @@ TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesWorldAndViewOwnership)
     EXPECT_TRUE(frame.drawBuckets.staticMeshes.pbrDrawItems.empty());
     EXPECT_TRUE(frame.skinningPalettes.empty());
     EXPECT_EQ(frame.view[3][0], 4.0f);
+}
+
+TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
+{
+    SceneRenderScheduler scheduler;
+    scheduler.beginFrame(42);
+
+    int buildCalls = 0;
+    auto makeRequest = [&](SceneId sceneId, SceneViewId viewId)
+    {
+        SceneRenderRequest request;
+        request.sceneId = sceneId;
+        request.viewId = viewId;
+        request.buildSnapshot = [&, sceneId]()
+        {
+            ++buildCalls;
+            auto snapshot = std::make_shared<WorldFrameSnapshot>();
+            snapshot->numPointLights = static_cast<uint32_t>(sceneId);
+            return std::shared_ptr<const WorldFrameSnapshot>(std::move(snapshot));
+        };
+        return request;
+    };
+
+    ASSERT_TRUE(scheduler.submit(makeRequest(1, 11)));
+    ASSERT_TRUE(scheduler.submit(makeRequest(1, 12)));
+    ASSERT_TRUE(scheduler.submit(makeRequest(2, 21)));
+
+    const SceneRenderPlan plan = scheduler.seal();
+    ASSERT_EQ(plan.frameId, 42u);
+    ASSERT_EQ(plan.viewportTasks.size(), 3u);
+    EXPECT_EQ(buildCalls, 2);
+    EXPECT_EQ(plan.viewportTasks[0].snapshot, plan.viewportTasks[1].snapshot);
+    EXPECT_NE(plan.viewportTasks[0].snapshot, plan.viewportTasks[2].snapshot);
+    EXPECT_FALSE(scheduler.isFrameOpen());
+}
+
+TEST(RenderRuntimeSnapshotTest, SceneSchedulerRejectsRequestsOutsideFrame)
+{
+    SceneRenderScheduler scheduler;
+    SceneRenderRequest request;
+    request.sceneId = 1;
+    request.viewId = 1;
+    request.buildSnapshot = [] { return std::make_shared<const WorldFrameSnapshot>(); };
+
+    EXPECT_FALSE(scheduler.submit(request));
+    scheduler.beginFrame(7);
+    request.sceneId = 0;
+    EXPECT_FALSE(scheduler.submit(request));
+    request.sceneId = 1;
+    request.viewId = 1;
+    EXPECT_TRUE(scheduler.submit(request));
+    scheduler.clearFrame();
+    EXPECT_EQ(scheduler.pendingRequestCount(), 0u);
 }
 
 TEST(RenderRuntimeSnapshotTest, RenderFrameKeepsSinglePrepareAndSubmit)
