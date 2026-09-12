@@ -96,7 +96,8 @@ void emitSdlEvent(const SDL_Event& event, const std::function<void(const Event&)
         move._windowID = event.button.windowID;
         emit(move);
         MouseButtonPressedEvent press(EMouse::fromNativeMouseButton(event.button.button));
-        press._windowID = event.button.windowID;
+        press._windowID   = event.button.windowID;
+        press._clickCount = event.button.clicks > 0 ? static_cast<uint32_t>(event.button.clicks) : 1u;
         emit(press);
         break;
     }
@@ -156,10 +157,31 @@ FOsMouseQuery OsEventPump::queryMouse()
         return query;
     }
     query.bHasWindow = true;
+    query.bValid     = true;
     query.windowID   = SDL_GetWindowID(focusedWindow);
     SDL_GetMouseState(&query.x, &query.y);
 #endif
     return query;
+}
+
+FOsMouseQuery OsEventPump::queryGlobalMouse()
+{
+    FOsMouseQuery query;
+#if USE_SDL
+    SDL_GetGlobalMouseState(&query.x, &query.y);
+    query.bValid = true;
+#endif
+    return query;
+}
+
+void OsEventPump::warpGlobalMouse(float x, float y)
+{
+#if USE_SDL
+    SDL_WarpMouseGlobal(x, y);
+#else
+    (void)x;
+    (void)y;
+#endif
 }
 
 } // namespace ya

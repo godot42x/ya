@@ -1,5 +1,7 @@
 #include "GameRuntime/App.h"
+#include "GUI/Host/GUIWindowChrome.h"
 #include "GUI/Host/NativeWindowManager.h"
+#include "RHI/NativeWindow.h"
 
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
@@ -55,6 +57,14 @@ int App::onEvent(const Event& event)
         }
     } break;
     case EEvent::WindowMoved:
+        if (isMainWindowEvent(static_cast<const WindowEvent&>(event))) {
+            if (NativeWindowManager* nwm = getNativeWindowManager()) {
+                if (INativeWindow* window = nwm->getMainWindow()) {
+                    applyWindowChrome(*window, defaultWindowChromeMode(), true);
+                }
+            }
+        }
+        break;
     case EEvent::WindowMouseEnter:
     case EEvent::WindowMouseLeave:
     case EEvent::AppTick:
@@ -101,11 +111,21 @@ bool App::handleWindowResized(const WindowResizeEvent& event)
     float aspectRatio = h > 0 ? static_cast<float>(w) / static_cast<float>(h) : 1.f;
     YA_CORE_DEBUG("Window({}) resized to {}x{}, aspectRatio: {} ",event.getWindowID(), w, h, aspectRatio);
     _windowSize = {w, h};
+    if (NativeWindowManager* nwm = getNativeWindowManager()) {
+        if (INativeWindow* window = nwm->getMainWindow()) {
+            applyWindowChrome(*window, defaultWindowChromeMode(), true);
+        }
+    }
     return false;
 }
 
 void App::handleMouseMoved(const MouseMoveEvent& event)
 {
+    const auto* nativeWindowManager = getNativeWindowManager();
+    const uint32_t mainWindowID = nativeWindowManager ? nativeWindowManager->getMainWindowID() : 0;
+    if (mainWindowID != 0 && event.getWindowID() != 0 && event.getWindowID() != mainWindowID) {
+        return;
+    }
     _lastMousePos = glm::vec2(event.getX(), event.getY());
 }
 

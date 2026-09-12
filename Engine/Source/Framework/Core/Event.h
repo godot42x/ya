@@ -479,10 +479,12 @@ struct YA_CORE_API MouseScrolledEvent : public Event
 class YA_CORE_API MouseButtonEvent : public Event
 {
   public:
-    uint32_t _windowID = 0;
+    uint32_t _windowID   = 0;
+    uint32_t _clickCount = 1;
 
     [[nodiscard]] inline EMouse::T GetMouseButton() const { return m_Button; }
     [[nodiscard]] uint32_t         getWindowID() const { return _windowID; }
+    [[nodiscard]] uint32_t         clickCount() const { return _clickCount; }
 
     EVENT_CLASS_CATEGORY(EEventCategory::MouseButton | EEventCategory::Input)
 

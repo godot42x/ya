@@ -25,9 +25,42 @@ struct WindowCreateInfo
     std::string   title      = "Window Title";
     uint32_t      width      = 1024;
     uint32_t      height     = 768;
-    float         scale      = 1.0f;
-    bool          bResizable = true;
+    float         scale       = 1.0f;
+    bool          bResizable  = true;
+    bool          bBorderless = false;
+    bool          bAlwaysOnTop = false;
+    bool          bTransparent = false;
+    bool          bNotFocusable = false;
+    bool          bUtility = false;
+    bool          bMousePassthrough = false;
 };
+
+struct NativeWindowSafeArea
+{
+    int  x     = 0;
+    int  y     = 0;
+    int  w     = 0;
+    int  h     = 0;
+    bool valid = false;
+};
+
+/// Non-client hit result in window coordinates (top-left origin).
+/// SDL maps these onto `SDL_HitTestResult`; GUI chrome classifies first.
+enum class ENativeWindowHitResult : uint8_t
+{
+    Normal,
+    Draggable,
+    ResizeTop,
+    ResizeBottom,
+    ResizeLeft,
+    ResizeRight,
+    ResizeTopLeft,
+    ResizeTopRight,
+    ResizeBottomLeft,
+    ResizeBottomRight,
+};
+
+using NativeWindowHitTestFn = ENativeWindowHitResult (*)(void* userdata, float x, float y);
 
 /// One native top-level window plus the backend surface hooks bound to it.
 /// App/window policy belongs to higher-level host code; this interface only
@@ -81,6 +114,30 @@ struct INativeWindow
         (void)rect;
         return false;
     }
+    /// Continue receiving mouse moves after the cursor leaves this window
+    /// (Win32 SetCapture / SDL_CaptureMouse). Does not grab or confine the cursor.
+    virtual bool setGlobalMouseCapture(bool capture)
+    {
+        (void)capture;
+        return false;
+    }
+    virtual bool setBordered(bool bordered)
+    {
+        (void)bordered;
+        return false;
+    }
+    virtual bool setMousePassthrough(bool enable)
+    {
+        (void)enable;
+        return false;
+    }
+    /// Pass `fn == nullptr` to restore default client hits.
+    virtual bool setHitTest(NativeWindowHitTestFn fn, void* userdata)
+    {
+        (void)fn;
+        (void)userdata;
+        return false;
+    }
 
     void getWindowSize(float &width, float &height)
     {
@@ -94,11 +151,44 @@ struct INativeWindow
     [[nodiscard]] virtual bool isMinimized() const { return false; }
     virtual bool minimize() { return false; }
     virtual bool restoreFromMinimize() { return false; }
+    /// Order-out without destroying the session (last-tab drag pickup).
+    [[nodiscard]] virtual bool isHidden() const { return false; }
+    virtual bool hide() { return false; }
+    virtual bool show() { return false; }
     virtual bool setWindowSize(int width, int height)
     {
         (void) width;
         (void) height;
         YA_CORE_ERROR("setWindowSize not implemented in INativeWindow");
+        return false;
+    }
+    virtual bool getWindowPosition(int& x, int& y) const
+    {
+        x = 0;
+        y = 0;
+        (void)x;
+        (void)y;
+        return false;
+    }
+    virtual bool setWindowPosition(int x, int y)
+    {
+        (void)x;
+        (void)y;
+        return false;
+    }
+    /// Index in the current `Os::displayCount()` list, or -1 if unknown.
+    [[nodiscard]] virtual int getDisplayIndex() const { return -1; }
+    [[nodiscard]] virtual std::string getDisplayName() const { return {}; }
+    [[nodiscard]] virtual bool isMaximized() const { return false; }
+    virtual bool maximize() { return false; }
+    virtual bool restoreFromMaximize() { return false; }
+    [[nodiscard]] virtual NativeWindowSafeArea getSafeArea() const { return {}; }
+    virtual bool getBordersSize(int& top, int& left, int& bottom, int& right) const
+    {
+        (void)top;
+        (void)left;
+        (void)bottom;
+        (void)right;
         return false;
     }
 
@@ -113,6 +203,9 @@ struct INativeWindow
 /// OS APIs (events, cursor, clipboard, sleep) live in Core/Os, not here.
 class YA_RHI_API SDLNativeWindow final : public INativeWindow
 {
+    NativeWindowHitTestFn _hitTest         = nullptr;
+    void*                 _hitTestUserdata = nullptr;
+
   public:
     SDLNativeWindow() = default;
     ~SDLNativeWindow() override;
@@ -127,13 +220,30 @@ class YA_RHI_API SDLNativeWindow final : public INativeWindow
     [[nodiscard]] bool isMinimized() const override;
     bool minimize() override;
     bool restoreFromMinimize() override;
+    [[nodiscard]] bool isHidden() const override;
+    bool hide() override;
+    bool show() override;
     bool setWindowSize(int width, int height) override;
+    bool getWindowPosition(int& x, int& y) const override;
+    bool setWindowPosition(int x, int y) override;
+    [[nodiscard]] int getDisplayIndex() const override;
+    [[nodiscard]] std::string getDisplayName() const override;
+    [[nodiscard]] bool isMaximized() const override;
+    bool maximize() override;
+    bool restoreFromMaximize() override;
+    [[nodiscard]] NativeWindowSafeArea getSafeArea() const override;
+    bool getBordersSize(int& top, int& left, int& bottom, int& right) const override;
 
     bool startTextInput() override;
     bool stopTextInput() override;
     bool setMouseGrab(bool grab) override;
     bool setRelativeMouseMode(bool relative) override;
     bool setMouseConfineRect(const Rect2D* rect) override;
+    bool setGlobalMouseCapture(bool capture) override;
+    bool setBordered(bool bordered) override;
+    bool setMousePassthrough(bool enable) override;
+    bool setHitTest(NativeWindowHitTestFn fn, void* userdata) override;
+    [[nodiscard]] ENativeWindowHitResult invokeHitTest(float x, float y) const;
 
     /// Re-read the window's display content scale. Called at create time and
     /// whenever the window moves to a different monitor (Qt's per-monitor DPI

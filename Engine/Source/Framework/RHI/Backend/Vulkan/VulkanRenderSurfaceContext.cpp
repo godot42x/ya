@@ -1,6 +1,9 @@
 #include "VulkanRenderSurfaceContext.h"
 
 #include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/ImageResource.h"
+#include "RHI/Core/RenderTexture.h"
+#include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/NativeWindow.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanRender.h"
@@ -23,6 +26,81 @@ namespace
 constexpr uint64_t kFenceTimeout = UINT64_MAX;
 
 } // namespace
+
+bool VulkanRenderSurfaceContext::buildPresentationImages(
+    IRenderResourceFactory& factory,
+    const char* labelPrefix,
+    std::vector<std::shared_ptr<RenderTexture>>& outImages)
+{
+    outImages.clear();
+    if (!_swapChain) {
+        return false;
+    }
+
+    const char* prefix = labelPrefix ? labelPrefix : "Presentation";
+    outImages.reserve(_swapChain->getImageCount());
+    for (uint32_t i = 0; i < _swapChain->getImageCount(); ++i) {
+        const std::string label = std::format("{}_Presentation_{}", prefix, i);
+        auto importedImage = factory.importImage(ImportedImageDesc{
+            .label         = label,
+            .nativeHandle  = static_cast<void*>(_swapChain->getVkImages().at(i)),
+            .format        = _swapChain->getFormat(),
+            .usage         = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment | EImageUsage::TransferSrc),
+            .extent        = {.width = _swapChain->getExtent().width,
+                              .height = _swapChain->getExtent().height,
+                              .depth = 1},
+            .initialLayout = EImageLayout::Undefined,
+            .finalLayout   = EImageLayout::PresentSrcKHR,
+        });
+        if (!importedImage) {
+            outImages.clear();
+            return false;
+        }
+        auto imageView = factory.createImageView(
+            importedImage,
+            ImageViewCreateInfo{
+                .label          = std::format("{}_Presentation_{}_View", prefix, i),
+                .viewType       = EImageViewType::View2D,
+                .aspectFlags    = EImageAspect::Color,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = 0,
+                .layerCount     = 1,
+            });
+        if (!imageView) {
+            outImages.clear();
+            return false;
+        }
+
+        auto resource = std::make_shared<ImageResource>();
+        resource->label      = label;
+        resource->desc.image = ImageCreateInfo{
+            .label         = label,
+            .format        = _swapChain->getFormat(),
+            .extent        = {.width = _swapChain->getExtent().width,
+                              .height = _swapChain->getExtent().height,
+                              .depth = 1},
+            .mipLevels     = 1,
+            .arrayLayers   = 1,
+            .samples       = ESampleCount::Sample_1,
+            .usage         = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment | EImageUsage::TransferSrc),
+            .initialLayout = EImageLayout::Undefined,
+        };
+        resource->desc.defaultView = ImageViewCreateInfo{
+            .label          = std::format("{}_Presentation_{}_View", prefix, i),
+            .viewType       = EImageViewType::View2D,
+            .aspectFlags    = EImageAspect::Color,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        };
+        resource->image       = std::move(importedImage);
+        resource->defaultView = std::move(imageView);
+        outImages.push_back(RenderTexture::adopt(std::move(resource)));
+    }
+    return !outImages.empty();
+}
 
 VulkanRenderSurfaceContext::~VulkanRenderSurfaceContext()
 {
@@ -400,6 +478,13 @@ bool VulkanRenderSurfaceContext::isPresentable() const
         return false;
     }
     return _swapChain && _swapChain->isSurfacePresentable();
+}
+
+void VulkanRenderSurfaceContext::requestRecreate()
+{
+    if (_swapChain) {
+        _swapChain->requestRecreate();
+    }
 }
 
 bool VulkanRenderSurfaceContext::begin(int32_t* outImageIndex)

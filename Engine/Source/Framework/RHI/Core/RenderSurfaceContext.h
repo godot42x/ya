@@ -3,6 +3,7 @@
 #include "Core/Api.h"
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace ya
@@ -10,6 +11,8 @@ namespace ya
 
 struct INativeWindow;
 struct ISwapchain;
+struct IRenderResourceFactory;
+struct RenderTexture;
 
 /// One OS-window present destination on a shared `IRender` device: native
 /// window, swapchain, acquire/submit/present sync.
@@ -32,9 +35,16 @@ struct YA_RHI_API IRenderSurfaceContext
     [[nodiscard]] virtual INativeWindow* getNativeWindow() const = 0;
     [[nodiscard]] virtual ISwapchain*    getSwapchain() const    = 0;
 
+    virtual bool buildPresentationImages(
+        IRenderResourceFactory& factory,
+        const char* labelPrefix,
+        std::vector<std::shared_ptr<RenderTexture>>& outImages) = 0;
+
     /// Extent > 0 and the native window is not minimized. Unpresentable is
     /// not a paused process: skip this surface's acquire/present only.
     [[nodiscard]] virtual bool isPresentable() const = 0;
+
+    virtual void requestRecreate() = 0;
 
     /// Wait this surface's in-flight fence, apply dirty recreate, acquire.
     /// `*imageIndex == -1` means unpresentable / no image; skip record+end.

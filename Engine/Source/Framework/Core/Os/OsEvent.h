@@ -14,6 +14,7 @@ struct FOsMouseQuery
     float    x          = 0.0f;
     float    y          = 0.0f;
     bool     bHasWindow = false;
+    bool     bValid     = false;
 };
 
 /// Process-wide native event pump. SDL is an implementation detail; hosts
@@ -23,6 +24,11 @@ struct YA_CORE_API OsEventPump
     static void pump();
     static void poll(const std::function<void(const Event&)>& emit);
     [[nodiscard]] static FOsMouseQuery queryMouse();
+    /// Screen-space pointer, independent of mouse-focus / capture window.
+    /// Used by cross-window drag hit-testing while `SDL_CaptureMouse` keeps
+    /// events tagged to the source window.
+    [[nodiscard]] static FOsMouseQuery queryGlobalMouse();
+    static void warpGlobalMouse(float x, float y);
 };
 
 } // namespace ya

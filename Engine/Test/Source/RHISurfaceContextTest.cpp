@@ -1,52 +1,16 @@
-#include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/PresentFrame.h"
 #include "RHI/Core/RenderSurfaceContext.h"
+#include "RHI/Core/Swapchain.h"
 #include "RHI/NativeWindow.h"
 #include "RHI/Render.h"
-#include "RHI/Backend/Vulkan/VulkanSwapChain.h"
 
 #include <gtest/gtest.h>
 #include <memory>
-#include <vector>
-#include <vulkan/vulkan.h>
 
 namespace ya
 {
 namespace
 {
-
-void recordPresentBarrier(ICommandBuffer& commandBuffer, VulkanSwapChain& swapchain, uint32_t imageIndex)
-{
-    const VkImageMemoryBarrier barrier{
-        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .pNext               = nullptr,
-        .srcAccessMask       = 0,
-        .dstAccessMask       = VK_ACCESS_MEMORY_READ_BIT,
-        .oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout           = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image               = swapchain.getVkImages()[imageIndex],
-        .subresourceRange    = {
-               .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-               .baseMipLevel   = 0,
-               .levelCount     = 1,
-               .baseArrayLayer = 0,
-               .layerCount     = 1,
-        },
-    };
-    vkCmdPipelineBarrier(
-        commandBuffer.getHandleAs<VkCommandBuffer>(),
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-        0,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        1,
-        &barrier);
-}
 
 bool createTestWindow(SDLNativeWindow& window, const char* title, uint32_t width, uint32_t height)
 {
@@ -61,7 +25,7 @@ bool createTestWindow(SDLNativeWindow& window, const char* title, uint32_t width
     });
 }
 
-bool presentOneFrame(IRender& render, IRenderSurfaceContext& surface, std::vector<std::shared_ptr<ICommandBuffer>>* cmds)
+bool presentOneFrame(IRenderSurfaceContext& surface)
 {
     int32_t imageIndex = -1;
     if (!surface.begin(&imageIndex)) {
@@ -69,22 +33,6 @@ bool presentOneFrame(IRender& render, IRenderSurfaceContext& surface, std::vecto
     }
     if (imageIndex < 0) {
         return true;
-    }
-    auto* swapchain = surface.getSwapchain()->as<VulkanSwapChain>();
-    if (!swapchain) {
-        return false;
-    }
-    if (cmds) {
-        if (cmds->size() != swapchain->getImageCount()) {
-            cmds->clear();
-            render.allocateCommandBuffers(swapchain->getImageCount(), *cmds);
-        }
-        ICommandBuffer& cmd = *(*cmds)[static_cast<size_t>(imageIndex)];
-        cmd.reset();
-        cmd.begin(false);
-        recordPresentBarrier(cmd, *swapchain, static_cast<uint32_t>(imageIndex));
-        cmd.end();
-        return surface.end(imageIndex, {cmd.getHandleAs<VkCommandBuffer>()});
     }
     return surface.end(imageIndex, {});
 }
@@ -126,15 +74,14 @@ TEST(RHISurfaceContext, ExtraWindowAcquireSubmitPresentIndependentOfPrimary)
     EXPECT_EQ(extra->getNativeWindow(), &extraWindow);
     EXPECT_EQ(render->primaryWindow(), &primaryWindow);
 
-    std::vector<std::shared_ptr<ICommandBuffer>> primaryCmds;
     for (int frame = 0; frame < 3; ++frame) {
-        ASSERT_TRUE(presentOneFrame(*render, *primary, &primaryCmds));
-        ASSERT_TRUE(presentOneFrame(*render, *extra, nullptr));
+        ASSERT_TRUE(presentOneFrame(*primary));
+        ASSERT_TRUE(presentOneFrame(*extra));
     }
 
     extra.reset();
 
-    ASSERT_TRUE(presentOneFrame(*render, *primary, &primaryCmds));
+    ASSERT_TRUE(presentOneFrame(*primary));
 
     render->waitIdle();
     render->destroy();
@@ -169,22 +116,72 @@ TEST(RHISurfaceContext, ExtraWindowResizeAndCloseDoesNotDeviceWaitIdlePrimary)
     auto* primary = render->getPrimarySurfaceContext();
     ASSERT_NE(primary, nullptr);
 
-    std::vector<std::shared_ptr<ICommandBuffer>> primaryCmds;
-    ASSERT_TRUE(presentOneFrame(*render, *primary, &primaryCmds));
-    ASSERT_TRUE(presentOneFrame(*render, *extra, nullptr));
+    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*extra));
 
     ASSERT_TRUE(extraWindow.setWindowSize(240, 180));
-    auto* extraSwap = extra->getSwapchain()->as<VulkanSwapChain>();
-    ASSERT_NE(extraSwap, nullptr);
-    extraSwap->requestRecreate();
+    extra->requestRecreate();
 
-    ASSERT_TRUE(presentOneFrame(*render, *primary, &primaryCmds));
-    ASSERT_TRUE(presentOneFrame(*render, *extra, nullptr));
-    ASSERT_TRUE(presentOneFrame(*render, *primary, &primaryCmds));
-    ASSERT_TRUE(presentOneFrame(*render, *extra, nullptr));
+    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*extra));
+    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*extra));
 
     extra.reset();
-    ASSERT_TRUE(presentOneFrame(*render, *primary, &primaryCmds));
+    ASSERT_TRUE(presentOneFrame(*primary));
+
+    render->waitIdle();
+    render->destroy();
+    delete render;
+}
+
+TEST(RHISurfaceContext, ExtraWindowPresentResizeCloseSoak)
+{
+    SDLNativeWindow primaryWindow;
+    SDLNativeWindow extraWindow;
+    if (!createTestWindow(primaryWindow, "C9-soak-A", 160, 120) ||
+        !createTestWindow(extraWindow, "C9-soak-B", 200, 150)) {
+        GTEST_SKIP() << "SDL native window create failed";
+    }
+
+    RenderCreateInfo renderCI{
+        .renderAPI = ERenderAPI::Vulkan,
+        .swapchainCI = SwapchainCreateInfo{
+            .bEnableTransferSrc = true,
+            .width              = 160,
+            .height             = 120,
+        },
+        .nativeWindow = &primaryWindow,
+    };
+
+    IRender* render = IRender::create(renderCI);
+    ASSERT_NE(render, nullptr);
+    ASSERT_TRUE(render->init(renderCI));
+
+    std::unique_ptr<IRenderSurfaceContext> extra = render->createSurfaceContext(extraWindow);
+    ASSERT_NE(extra, nullptr);
+    auto* primary = render->getPrimarySurfaceContext();
+    ASSERT_NE(primary, nullptr);
+    ASSERT_NE(primary, extra.get());
+
+    constexpr int kFrames = 32;
+    for (int frame = 0; frame < kFrames; ++frame) {
+        ASSERT_TRUE(presentOneFrame(*primary)) << "primary frame " << frame;
+        ASSERT_TRUE(presentOneFrame(*extra)) << "extra frame " << frame;
+        if (frame == 8) {
+            ASSERT_TRUE(extraWindow.setWindowSize(240, 180));
+            extra->requestRecreate();
+        }
+        if (frame == 16) {
+            ASSERT_TRUE(extraWindow.setWindowSize(160, 120));
+            extra->requestRecreate();
+        }
+    }
+
+    extra.reset();
+    for (int frame = 0; frame < 8; ++frame) {
+        ASSERT_TRUE(presentOneFrame(*primary)) << "primary after extra close " << frame;
+    }
 
     render->waitIdle();
     render->destroy();
@@ -221,9 +218,8 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockPrimaryPresent)
     EXPECT_TRUE(primary->isPresentable());
     EXPECT_TRUE(extra->isPresentable());
 
-    std::vector<std::shared_ptr<ICommandBuffer>> primaryCmds;
-    ASSERT_TRUE(presentOneFrame(*render, *primary, &primaryCmds));
-    ASSERT_TRUE(presentOneFrame(*render, *extra, nullptr));
+    ASSERT_TRUE(presentOneFrame(*primary));
+    ASSERT_TRUE(presentOneFrame(*extra));
 
     if (!extraWindow.minimize()) {
         GTEST_SKIP() << "native minimize is unavailable";
@@ -232,11 +228,9 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockPrimaryPresent)
         GTEST_SKIP() << "platform did not mark extra window unpresentable after minimize";
     }
 
-    auto* extraSwap = extra->getSwapchain()->as<VulkanSwapChain>();
-    ASSERT_NE(extraSwap, nullptr);
-    extraSwap->requestRecreate();
+    extra->requestRecreate();
 
-    ASSERT_TRUE(presentOneFrame(*render, *primary, &primaryCmds));
+    ASSERT_TRUE(presentOneFrame(*primary));
 
     int32_t extraImage = -1;
     ASSERT_TRUE(extra->begin(&extraImage));
@@ -244,16 +238,16 @@ TEST(RHISurfaceContext, ExtraWindowUnpresentableDoesNotBlockPrimaryPresent)
     EXPECT_FALSE(extra->isPresentable());
     ASSERT_TRUE(extra->end(extraImage, {}));
 
-    ASSERT_TRUE(presentOneFrame(*render, *primary, &primaryCmds));
+    ASSERT_TRUE(presentOneFrame(*primary));
 
     ASSERT_TRUE(extraWindow.restoreFromMinimize());
-    extraSwap->requestRecreate();
-    ASSERT_TRUE(presentOneFrame(*render, *extra, nullptr));
+    extra->requestRecreate();
+    ASSERT_TRUE(presentOneFrame(*extra));
     ASSERT_TRUE(extra->isPresentable());
-    ASSERT_TRUE(presentOneFrame(*render, *primary, &primaryCmds));
+    ASSERT_TRUE(presentOneFrame(*primary));
 
     extra.reset();
-    ASSERT_TRUE(presentOneFrame(*render, *primary, &primaryCmds));
+    ASSERT_TRUE(presentOneFrame(*primary));
 
     render->waitIdle();
     render->destroy();

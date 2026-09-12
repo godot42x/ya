@@ -279,6 +279,7 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     void recordModuleViewportCompose(ICommandBuffer& commandBuffer, float dt);
     void recordModuleBeforePresentation(ICommandBuffer& commandBuffer, float dt);
     void recordModulePresentation(ICommandBuffer& commandBuffer, float dt);
+    void presentModuleExtras(float dt);
     [[nodiscard]] bool notifyModulesBeforeAppStateChange(AppState nextState);
     void notifyModulesAfterAppStateChange(AppState previousState);
     void notifyModulesSceneActivated(Scene* scene);

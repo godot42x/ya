@@ -39,4 +39,16 @@ YA_CORE_API void                        unloadLibrary(SharedLibrary& library);
 [[nodiscard]] YA_CORE_API std::string clipboardText();
 YA_CORE_API bool                      setClipboardText(std::string_view text);
 
+/// Connected displays. Indices match `INativeWindow::getDisplayIndex()`.
+[[nodiscard]] YA_CORE_API int         displayCount();
+[[nodiscard]] YA_CORE_API std::string displayName(int index);
+/// `usableWorkArea` prefers the work area (taskbar/menu excluded) and falls
+/// back to the full display rect when that query fails.
+[[nodiscard]] YA_CORE_API bool displayBounds(int  index,
+                                             int& x,
+                                             int& y,
+                                             int& w,
+                                             int& h,
+                                             bool usableWorkArea);
+
 } // namespace ya::Os

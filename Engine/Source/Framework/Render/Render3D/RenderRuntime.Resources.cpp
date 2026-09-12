@@ -2,7 +2,6 @@
 
 #include "Render3D/Common/RenderRuntimeHostServices.h"
 #include "Render3D/Services/DebugRenderSystem.h"
-#include "RHI/Backend/Vulkan/VulkanSwapChain.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Core/Swapchain.h"

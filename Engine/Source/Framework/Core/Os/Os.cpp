@@ -132,6 +132,93 @@ bool setClipboardText(std::string_view text)
 #endif
 }
 
+#if USE_SDL
+namespace
+{
+
+SDL_DisplayID* lockDisplays(int& count)
+{
+    count = 0;
+    return SDL_GetDisplays(&count);
+}
+
+} // namespace
+#endif
+
+int displayCount()
+{
+#if USE_SDL
+    int count = 0;
+    SDL_DisplayID* displays = lockDisplays(count);
+    if (displays) {
+        SDL_free(displays);
+    }
+    return count;
+#else
+    return 0;
+#endif
+}
+
+std::string displayName(int index)
+{
+#if USE_SDL
+    int count = 0;
+    SDL_DisplayID* displays = lockDisplays(count);
+    if (!displays || index < 0 || index >= count) {
+        if (displays) {
+            SDL_free(displays);
+        }
+        return {};
+    }
+    const char* name = SDL_GetDisplayName(displays[index]);
+    std::string out  = name ? std::string(name) : std::string{};
+    SDL_free(displays);
+    return out;
+#else
+    (void)index;
+    return {};
+#endif
+}
+
+bool displayBounds(int index, int& x, int& y, int& w, int& h, bool usableWorkArea)
+{
+    x = 0;
+    y = 0;
+    w = 0;
+    h = 0;
+#if USE_SDL
+    int count = 0;
+    SDL_DisplayID* displays = lockDisplays(count);
+    if (!displays || index < 0 || index >= count) {
+        if (displays) {
+            SDL_free(displays);
+        }
+        return false;
+    }
+    SDL_Rect rect{};
+    bool     ok = false;
+    if (usableWorkArea) {
+        ok = SDL_GetDisplayUsableBounds(displays[index], &rect);
+    }
+    if (!ok || rect.w <= 0 || rect.h <= 0) {
+        ok = SDL_GetDisplayBounds(displays[index], &rect);
+    }
+    SDL_free(displays);
+    if (!ok || rect.w <= 0 || rect.h <= 0) {
+        return false;
+    }
+    x = rect.x;
+    y = rect.y;
+    w = rect.w;
+    h = rect.h;
+    return true;
+#else
+    (void)index;
+    (void)usableWorkArea;
+    return false;
+#endif
+}
+
 } // namespace ya::Os
 
 #if USE_SDL

@@ -477,11 +477,13 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
     {
         YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());
         if (!acquirePresentFrame(presentFrame)) {
+            app.presentModuleExtras(dt);
             return;
         }
     }
     if (!presentFrame.acquired()) {
         submitPresentFrame(presentFrame, {});
+        app.presentModuleExtras(dt);
         return;
     }
 
@@ -538,6 +540,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
             submitPresentFrame(presentFrame, {});
         }
     }
+    app.presentModuleExtras(dt);
 }
 
 } // namespace ya

@@ -118,6 +118,22 @@ TEST(RenderRuntimeSnapshotTest, HostPresentCoordinatorOwnsAcquireAndPresent)
     EXPECT_EQ(countLiteral(displayCpp, "acquirePresentFrame"), 0u);
     EXPECT_EQ(countLiteral(displayCpp, "present->begin("), 0u);
     EXPECT_EQ(countLiteral(displayCpp, "present->end("), 0u);
+    EXPECT_NE(displayCpp.find("buildPresentationImages"), std::string::npos);
+    EXPECT_EQ(countLiteral(displayCpp, "VulkanSwapChain"), 0u);
+    EXPECT_EQ(countLiteral(displayCpp, "as<VulkanSwapChain>"), 0u);
+
+    const std::string guiHostCpp = readEngineSource("Source/Framework/GUI/Host/GUIAppHost.cpp");
+    EXPECT_EQ(countLiteral(guiHostCpp, "VulkanSwapChain"), 0u);
+    EXPECT_EQ(countLiteral(guiHostCpp, "as<VulkanSwapChain>"), 0u);
+    EXPECT_NE(guiHostCpp.find("requestRecreate("), std::string::npos);
+
+    const std::string extraPresentCpp = readEngineSource("Source/Framework/GUI/Host/GUIWindowPresent.cpp");
+    EXPECT_EQ(countLiteral(extraPresentCpp, "VulkanSwapChain"), 0u);
+    EXPECT_EQ(countLiteral(extraPresentCpp, "as<VulkanSwapChain>"), 0u);
+
+    const std::string surfaceTestCpp = readEngineSource("Test/Source/RHISurfaceContextTest.cpp");
+    EXPECT_EQ(countLiteral(surfaceTestCpp, "VulkanSwapChain"), 0u);
+    EXPECT_EQ(countLiteral(surfaceTestCpp, "vulkan.h"), 0u);
 }
 
 TEST(RenderRuntimeSnapshotTest, RenderFrameRecordsViewComposeThenDisplayCompose)

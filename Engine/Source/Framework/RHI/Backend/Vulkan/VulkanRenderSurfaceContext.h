@@ -61,10 +61,15 @@ struct YA_RHI_BACKEND_API VulkanRenderSurfaceContext final : IRenderSurfaceConte
 
     [[nodiscard]] INativeWindow* getNativeWindow() const override { return _window; }
     [[nodiscard]] ISwapchain*    getSwapchain() const override { return _swapChain.get(); }
+    bool buildPresentationImages(
+        IRenderResourceFactory& factory,
+        const char* labelPrefix,
+        std::vector<std::shared_ptr<RenderTexture>>& outImages) override;
     [[nodiscard]] bool           isPresentable() const override;
 
     bool begin(int32_t* imageIndex) override;
     bool end(int32_t imageIndex, std::vector<void*> commandBuffers) override;
+    void requestRecreate() override;
 
     [[nodiscard]] void*    getCurrentImageAvailableSemaphore() override;
     [[nodiscard]] void*    getCurrentFrameFence() override;

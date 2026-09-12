@@ -1,19 +1,19 @@
 #include "PresentationGraphService.h"
 
+#include "Core/Log.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
 #include "Graph/RenderGraph.h"
 #include "Graph/RenderGraphExecutor.h"
 #include "Graph/RenderGraphImportUtils.h"
-#include "RHI/Backend/Vulkan/VulkanSwapChain.h"
+#include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Core/RenderSurfaceContext.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Swapchain.h"
 #include "RHI/Render.h"
 #include "Render3D/Pipelines/BasicPostprocessing.h"
 
-#include <format>
 #include <limits>
 
 namespace ya
@@ -33,60 +33,6 @@ RGImportedTextureDesc makePresentationImportedTextureDesc(const RenderTexture& i
         static_cast<EImageUsage::T>(EImageUsage::ColorAttachment | EImageUsage::TransferSrc));
     desc.importDesc.initialLayout = EImageLayout::PresentSrcKHR;
     return desc;
-}
-
-std::shared_ptr<RenderTexture> createPresentationRenderTexture(IRender& render, VulkanSwapChain& swapchain, uint32_t imageIndex)
-{
-    const auto& swapchainCI = swapchain.getCreateInfo();
-    auto importedImage = render.getResourceFactory()->importImage(ImportedImageDesc{
-        .label         = std::format("Presentation_{}", imageIndex),
-        .nativeHandle  = static_cast<void*>(swapchain.getVkImages().at(imageIndex)),
-        .format        = swapchain.getFormat(),
-        .usage         = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment |
-                    (swapchainCI.bEnableTransferSrc ? EImageUsage::TransferSrc : EImageUsage::None)),
-        .extent        = {.width = swapchain.getExtent().width, .height = swapchain.getExtent().height, .depth = 1},
-        .initialLayout = EImageLayout::Undefined,
-        .finalLayout   = EImageLayout::PresentSrcKHR,
-    });
-    YA_CORE_ASSERT(importedImage != nullptr, "Failed to import presentation image {}", imageIndex);
-
-    auto imageView = render.getResourceFactory()->createImageView(
-        importedImage,
-        ImageViewCreateInfo{
-            .label          = std::format("Presentation_{}_View", imageIndex),
-            .viewType       = EImageViewType::View2D,
-            .aspectFlags    = EImageAspect::Color,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        });
-    YA_CORE_ASSERT(imageView != nullptr, "Failed to create presentation image view {}", imageIndex);
-
-    auto resource = std::make_shared<ImageResource>();
-    resource->label       = std::format("Presentation_{}", imageIndex);
-    resource->desc.image  = ImageCreateInfo{
-        .label   = resource->label,
-        .format  = swapchain.getFormat(),
-        .extent  = {.width = swapchain.getExtent().width, .height = swapchain.getExtent().height, .depth = 1},
-        .mipLevels   = 1,
-        .arrayLayers = 1,
-        .samples     = ESampleCount::Sample_1,
-        .usage   = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment |
-                    (swapchainCI.bEnableTransferSrc ? EImageUsage::TransferSrc : EImageUsage::None)),
-    };
-    resource->desc.defaultView = ImageViewCreateInfo{
-        .label          = std::format("Presentation_{}_View", imageIndex),
-        .viewType       = EImageViewType::View2D,
-        .aspectFlags    = EImageAspect::Color,
-        .baseMipLevel   = 0,
-        .levelCount     = 1,
-        .baseArrayLayer = 0,
-        .layerCount     = 1,
-    };
-    resource->image       = std::move(importedImage);
-    resource->defaultView = std::move(imageView);
-    return RenderTexture::adopt(std::move(resource));
 }
 
 } // namespace
@@ -164,14 +110,17 @@ void PresentationGraphService::rebuildImages()
         return;
     }
 
-    auto* swapchain = _present->getSwapchain() ? _present->getSwapchain()->as<VulkanSwapChain>() : nullptr;
-    YA_CORE_ASSERT(swapchain != nullptr, "Presentation resources currently require VulkanSwapChain");
-
-    _presentationGraphExecutors.reserve(swapchain->getImageCount());
-    _presentationImages.reserve(swapchain->getImageCount());
-    for (uint32_t imageIndex = 0; imageIndex < swapchain->getImageCount(); ++imageIndex) {
-        _presentationGraphExecutors.push_back(std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()));
-        _presentationImages.push_back(createPresentationRenderTexture(*_render, *swapchain, imageIndex));
+    IRenderResourceFactory* factory = _render->getResourceFactory();
+    if (!factory) {
+        return;
+    }
+    if (!_present->buildPresentationImages(*factory, "Presentation", _presentationImages)) {
+        YA_CORE_ERROR("PresentationGraphService: failed to import presentation images");
+        return;
+    }
+    _presentationGraphExecutors.reserve(_presentationImages.size());
+    for (size_t i = 0; i < _presentationImages.size(); ++i) {
+        _presentationGraphExecutors.push_back(std::make_unique<RenderGraphExecutor>(*factory));
     }
 }
 

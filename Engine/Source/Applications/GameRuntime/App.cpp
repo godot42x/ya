@@ -5,6 +5,7 @@
 #include "GameRuntime/Lifecycle/GameRuntimeFrameOrchestrator.h"
 #include "Lifecycle/HostSdlEventSource.h"
 #include "GUI/Host/NativeWindowManager.h"
+#include "GUI/Host/GUIWindowChrome.h"
 #include "App/Kernel/AppKernel.h"
 #include "Core/Config/ConfigManager.h"
 #include "Render3D/RenderRuntime.h"
@@ -331,6 +332,13 @@ void App::recordModulePresentation(ICommandBuffer& commandBuffer, float dt)
     }
 }
 
+void App::presentModuleExtras(float dt)
+{
+    for (const auto& slot : _modules) {
+        getRuntimeModule(slot.module)->onAfterPresent(*this, dt);
+    }
+}
+
 bool App::notifyModulesBeforeAppStateChange(AppState nextState)
 {
     YA_PROFILE_FUNCTION();
@@ -375,7 +383,11 @@ INativeWindow* App::getOrCreateMainNativeWindow(const WindowCreateInfo& ci)
     if (auto* window = _nativeWindowManager->getMainWindow()) {
         return window;
     }
-    return _nativeWindowManager->createMainWindow(ci);
+    INativeWindow* window = _nativeWindowManager->createMainWindow(ci);
+    if (window) {
+        applyWindowChrome(*window, defaultWindowChromeMode(), ci.bResizable);
+    }
+    return window;
 }
 
 ShadowSettings* App::getShadowSettings()
