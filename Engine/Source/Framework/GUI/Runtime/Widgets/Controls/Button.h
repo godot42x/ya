@@ -28,6 +28,8 @@ namespace ya
 /// the tree walker.
 struct YA_GUI_API UIButton : public UIElement, public UIStyledWidget<UIButton, FButtonStyle>
 {
+    using SlotArgs = FContentSlotArgs;
+
     YA_REFLECT_BEGIN(UIButton, UIElement)
     YA_REFLECT_END()
 

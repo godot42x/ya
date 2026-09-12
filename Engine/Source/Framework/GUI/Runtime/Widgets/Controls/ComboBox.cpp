@@ -62,12 +62,14 @@ void UIComboBox::paintSelf(UIFrameBuilder& builder)
                      resolveVisualFill(visualChrome(style),
                                        composeVisualFlags(_bHovered, false, false, !isEnabled(), false, false, false)));
 
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (font) {
         Rect2D textRect = _layoutRect;
         textRect.pos.x += 10.0f;
         textRect.extent.x = std::max(0.0f, textRect.extent.x - 24.0f);
+        builder.pushClip(textRect);
         builder.addText(textRect, currentLabel(), style.textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
+        builder.popClip();
 
         // Dropdown arrow: two stacked triangles approximated with two rows of
         // squares, drawn at the right edge.

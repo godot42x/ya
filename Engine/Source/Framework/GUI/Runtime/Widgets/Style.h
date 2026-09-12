@@ -157,7 +157,8 @@ struct FTextStyle
     bool operator==(const FTextStyle&) const = default;
 };
 
-/// Panel: fill brush (solid color, or image later). Mirrors UIPanel default.
+/// Panel / border chrome: fill brush (solid or themed nine-patch), outline.
+/// Used by `UIBorder`. Content photos are `UIImage`, not this style.
 struct FPanelStyle
 {
     FBrush    fillColor        = FBrush::solid({0.2f, 0.2f, 0.2f, 0.8f});
@@ -380,11 +381,12 @@ struct FSelectableRowStyle
 struct FDragFloatStyle
 {
     FBrush    backgroundFill = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f});
-    FBrush    hoveredFill    = FBrush::solid({0.22f, 0.25f, 0.32f, 1.0f});
-    FBrush    draggingFill   = FBrush::solid({0.18f, 0.24f, 0.34f, 1.0f});
+    FBrush    hoveredFill    = FBrush::solid({0.28f, 0.32f, 0.40f, 1.0f});
+    FBrush    draggingFill   = FBrush::solid({0.20f, 0.32f, 0.48f, 1.0f});
     FBrush    errorFill      = FBrush::solid({0.72f, 0.24f, 0.24f, 0.45f});
     glm::vec4 textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 borderColor    = {0.48f, 0.52f, 0.60f, 1.0f};
+    glm::vec4 hoveredBorderColor = {0.72f, 0.78f, 0.90f, 1.0f};
     glm::vec4 errorBorderColor = {0.90f, 0.35f, 0.35f, 1.0f};
     glm::vec2 padding       = {6.0f, 2.0f};
     uint32_t  fontSize       = 13;
@@ -466,16 +468,15 @@ struct FRadioButtonStyle
     bool operator==(const FRadioButtonStyle&) const = default;
 };
 
-/// Color edit chrome. The edited `_color` is the control value, not a style
-/// field. Channel fields share this fill — ColorEdit has no selected channel.
-/// `padding` is ItemInnerSpacing + FramePadding: gap after the swatch, gap
-/// between RGBA cells, and inset of the swatch/cells from the control edge.
+/// Color edit host chrome (row gap after the swatch, picker text). Channel
+/// cells are `UIDragFloat` and use `FDragFloatStyle` — do not duplicate
+/// hover/drag fills here.
 struct FColorEditStyle
 {
-    FBrush    backgroundFill    = FBrush::solid({0.12f, 0.13f, 0.17f, 1.0f});
-    glm::vec4 textColor         = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec2 padding          = {6.0f, 3.0f};
-    uint32_t  fontSize          = 13;
+    FBrush    backgroundFill = FBrush::solid({0.12f, 0.13f, 0.17f, 1.0f});
+    glm::vec4 textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
+    glm::vec2 padding        = {6.0f, 3.0f};
+    uint32_t  fontSize       = 13;
 
     bool operator==(const FColorEditStyle&) const = default;
 };

@@ -23,15 +23,45 @@ const UIOverlaySlot* getOverlaySlot(const UIElement& parent, const UIElement& ch
     return edge ? edge->as<UIOverlaySlot>() : nullptr;
 }
 
+const UIContentSlot* getContentSlot(const UIElement& parent, const UIElement& child)
+{
+    const UISlot* edge = parent.getSlotForChild(child);
+    return edge ? edge->as<UIContentSlot>() : nullptr;
+}
+
 const UICanvasSlot* getCanvasSlot(const UIElement& parent, const UIElement& child)
 {
     const UISlot* edge = parent.getSlotForChild(child);
     return edge ? edge->as<UICanvasSlot>() : nullptr;
 }
 
+nlohmann::json marginJson(const FMargin& m)
+{
+    return {{"left", m.left}, {"top", m.top}, {"right", m.right}, {"bottom", m.bottom}};
+}
+
+FMargin marginFromJson(const nlohmann::json& j)
+{
+    if (!j.is_object()) {
+        return {};
+    }
+    return FMargin(j.value("left", 0.0f), j.value("top", 0.0f),
+                   j.value("right", 0.0f), j.value("bottom", 0.0f));
+}
+
+nlohmann::json vecJson(glm::vec2 v)
+{
+    return {v.x, v.y};
+}
+
+glm::vec2 vecFromJson(const nlohmann::json& j, glm::vec2 fallback = {})
+{
+    return j.is_array() && j.size() == 2 ? glm::vec2(j[0].get<float>(), j[1].get<float>()) : fallback;
+}
+
 /// Per-axis placement inside a box the parent already owns: Fill stretches,
-/// anything else keeps the child's desired size and places it. Shared by the
-/// overlay and single-child layouts, which answer the same question per axis.
+/// anything else keeps the child's desired size and places it. Shared by
+/// overlay stacking and content-region hosts.
 float overlayAxis(float start, float available, float desired, EUIOverlayAlignment align)
 {
     if (align == EUIOverlayAlignment::Fill) {
@@ -55,15 +85,14 @@ float overlayExtent(float available, float desired, EUIOverlayAlignment align)
     return std::max(0.0f, std::min(desired, available));
 }
 
-const UIOverlaySlot* getSingleChildSlot(const UIElement& parent, const UIElement& child)
+const UIContentSlot* getSingleChildSlot(const UIElement& parent, const UIElement& child)
 {
-    const UISlot* edge = parent.getSlotForChild(child);
-    return edge ? edge->as<UIOverlaySlot>() : nullptr;
+    return getContentSlot(parent, child);
 }
 
 FMargin overlaySlotPadding(const UIElement& parent, const UIElement& child)
 {
-    if (const UIOverlaySlot* slot = getSingleChildSlot(parent, child)) {
+    if (const UIContentSlot* slot = getSingleChildSlot(parent, child)) {
         const FMargin padding = slot->getPadding();
         return {
             std::max(padding.left, 0.0f),
@@ -101,7 +130,7 @@ glm::vec2 resolveDesiredSize(const UIElement& parent, const UIElement& child)
     else if (const UIOverlaySlot* slot = getOverlaySlot(parent, child)) {
         overlayAuthored(slot->getPreferredSize());
     }
-    else if (const UIOverlaySlot* slot = getSingleChildSlot(parent, child)) {
+    else if (const UIContentSlot* slot = getContentSlot(parent, child)) {
         overlayAuthored(slot->getPreferredSize());
     }
     else if (const UICanvasSlot* slot = getCanvasSlot(parent, child)) {
@@ -122,7 +151,7 @@ Rect2D applyCrossAlign(const UIElement& parent, const UIElement& child, const Re
 {
     const Rect2D paddedRect = insetRectByPadding(rect, overlaySlotPadding(parent, child));
     EUIOverlayAlignment crossAlign = EUIOverlayAlignment::Fill;
-    if (const UIOverlaySlot* slot = getSingleChildSlot(parent, child)) {
+    if (const UIContentSlot* slot = getSingleChildSlot(parent, child)) {
         crossAlign = bCrossIsY ? slot->getVAlign() : slot->getHAlign();
     }
     if (crossAlign == EUIOverlayAlignment::Fill) {
@@ -179,6 +208,20 @@ void UISlot::appendRuntimeDiagnostics(nlohmann::json& node) const
     node["type"] = "base";
 }
 
+void UISlot::serialize(nlohmann::json& node) const
+{
+    node["type"] = "base";
+}
+
+void UISlot::deserialize(const nlohmann::json&)
+{
+}
+
+bool UISlot::isAutoSizeActive() const
+{
+    return false;
+}
+
 void UISlot::invalidateMeasure() const
 {
     _parent->markLayoutDirty(EUIInvalidationReason::LayoutProperty);
@@ -192,12 +235,25 @@ UICanvasSlot::UICanvasSlot(UIElement& parent, UIElement& child)
 {
 }
 
+void UICanvasSlot::promoteStretchedAutoAxes()
+{
+    const bool bSpanX = _anchorMax.x != _anchorMin.x || _offsets.left + _offsets.right != 0.0f;
+    const bool bSpanY = _anchorMax.y != _anchorMin.y || _offsets.top + _offsets.bottom != 0.0f;
+    if (bSpanX && _widthSizeMode == EWidgetSizeMode::Auto) {
+        _widthSizeMode = EWidgetSizeMode::Fixed;
+    }
+    if (bSpanY && _heightSizeMode == EWidgetSizeMode::Auto) {
+        _heightSizeMode = EWidgetSizeMode::Fixed;
+    }
+}
+
 void UICanvasSlot::setAnchorMin(glm::vec2 value)
 {
     if (_anchorMin == value) {
         return;
     }
     _anchorMin = value;
+    promoteStretchedAutoAxes();
     invalidateArrange();
 }
 
@@ -207,6 +263,7 @@ void UICanvasSlot::setAnchorMax(glm::vec2 value)
         return;
     }
     _anchorMax = value;
+    promoteStretchedAutoAxes();
     invalidateArrange();
 }
 
@@ -243,6 +300,7 @@ void UICanvasSlot::setOffsets(FMargin value)
         return;
     }
     _offsets = value;
+    promoteStretchedAutoAxes();
     invalidateArrange();
 }
 
@@ -351,6 +409,48 @@ void UICanvasSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
     node["fixedSize"] = {_fixedSize.x, _fixedSize.y};
 }
 
+void UICanvasSlot::serialize(nlohmann::json& node) const
+{
+    node["type"] = "canvas";
+    node["anchorMin"] = vecJson(_anchorMin);
+    node["anchorMax"] = vecJson(_anchorMax);
+    node["offset"] = vecJson(_offset);
+    node["minSize"] = vecJson(_minSize);
+    node["maxSize"] = vecJson(_maxSize);
+    node["offsets"] = marginJson(_offsets);
+    node["alignmentH"] = static_cast<int>(_alignmentH);
+    node["alignmentV"] = static_cast<int>(_alignmentV);
+    node["widthSizeMode"] = static_cast<int>(_widthSizeMode);
+    node["heightSizeMode"] = static_cast<int>(_heightSizeMode);
+    node["pivot"] = vecJson(_pivot);
+    node["preferredSize"] = vecJson(_preferredSize);
+    node["fixedSize"] = vecJson(_fixedSize);
+}
+
+void UICanvasSlot::deserialize(const nlohmann::json& node)
+{
+    FCanvasSlotArgs args;
+    args.anchorMin = vecFromJson(node["anchorMin"]);
+    args.anchorMax = vecFromJson(node["anchorMax"]);
+    args.offset = vecFromJson(node["offset"]);
+    args.minSize = vecFromJson(node["minSize"]);
+    args.maxSize = vecFromJson(node["maxSize"], args.maxSize);
+    args.offsets = marginFromJson(node["offsets"]);
+    args.alignmentH = static_cast<EWidgetAlignH>(node.value("alignmentH", 0));
+    args.alignmentV = static_cast<EWidgetAlignV>(node.value("alignmentV", 0));
+    args.widthSizeMode = static_cast<EWidgetSizeMode>(node.value("widthSizeMode", 0));
+    args.heightSizeMode = static_cast<EWidgetSizeMode>(node.value("heightSizeMode", 0));
+    args.pivot = vecFromJson(node["pivot"]);
+    args.preferredSize = vecFromJson(node["preferredSize"]);
+    args.fixedSize = vecFromJson(node["fixedSize"]);
+    apply(args);
+}
+
+bool UICanvasSlot::isAutoSizeActive() const
+{
+    return _widthSizeMode == EWidgetSizeMode::Auto || _heightSizeMode == EWidgetSizeMode::Auto;
+}
+
 Rect2D UICanvasLayout::resolveChildRect(const UIElement& child, const UICanvasSlot& slot,
                                         const Rect2D& contentRect)
 {
@@ -385,27 +485,35 @@ Rect2D UICanvasLayout::resolveChildRect(const UIElement& child, const UICanvasSl
     // alignment has room to move a fixed-size child within it.
     Rect2D area = anchorRect;
     area.pos += glm::vec2{insets.left, insets.top};
-    area.extent = glm::max(
-        glm::vec2{stretchAxis.x != 0.0f ? anchorRect.extent.x : contentRect.extent.x,
-                  stretchAxis.y != 0.0f ? anchorRect.extent.y : contentRect.extent.y} -
-            insetH,
-        glm::vec2{0.0f, 0.0f});
+    const glm::vec2 stretchBound{
+        anchorSpan.x != 0.0f ? anchorRect.extent.x : contentRect.extent.x,
+        anchorSpan.y != 0.0f ? anchorRect.extent.y : contentRect.extent.y,
+    };
+    area.extent = glm::max(stretchBound - insetH, glm::vec2{0.0f, 0.0f});
 
-    // 3. Size resolution per axis: Auto uses the measured desired size, a
-    //    stretching axis takes the (inset) area, otherwise the slot's authored
-    //    size is kept.
+    // 3. Size resolution per axis: Auto (preferred else desired) wins over
+    //    stretch-to-area, then authored fixed size. DSL spanning `anchor()` /
+    //    `insets()` promote Auto to Fixed so those axes stretch; `fill()` is
+    //    the same promotion on both axes. Keep Auto only with an explicit
+    //    `widthSizeMode(Auto)` / `heightSizeMode(Auto)` after placement
+    //    (content-sized child aligned in the stretch area).
     const glm::vec2 desired = child.computeDesiredSize();
-    glm::vec2       size       = anchorRect.extent;
-    size.x = slot.getWidthSizeMode() == EWidgetSizeMode::Auto
-                 ? (preferred.x != 0.0f ? preferred.x
-                                        : desired.x)
-             : stretchAxis.x != 0.0f ? area.extent.x
-                                     : (fixed.x != 0.0f ? fixed.x : anchorRect.extent.x);
-    size.y = slot.getHeightSizeMode() == EWidgetSizeMode::Auto
-                 ? (preferred.y != 0.0f ? preferred.y
-                                        : desired.y)
-             : stretchAxis.y != 0.0f ? area.extent.y
-                                     : (fixed.y != 0.0f ? fixed.y : anchorRect.extent.y);
+    const auto resolveAxis = [](EWidgetSizeMode mode, float preferredValue, float desiredValue,
+                                float stretchValue, bool bStretch, float fixedValue, float fallback) {
+        if (mode == EWidgetSizeMode::Auto) {
+            return preferredValue != 0.0f ? preferredValue : desiredValue;
+        }
+        if (bStretch) {
+            return stretchValue;
+        }
+        return fixedValue != 0.0f ? fixedValue : fallback;
+    };
+    glm::vec2 size{
+        resolveAxis(slot.getWidthSizeMode(), preferred.x, desired.x, area.extent.x, stretchAxis.x != 0.0f,
+                    fixed.x, anchorRect.extent.x),
+        resolveAxis(slot.getHeightSizeMode(), preferred.y, desired.y, area.extent.y, stretchAxis.y != 0.0f,
+                    fixed.y, anchorRect.extent.y),
+    };
     size = glm::clamp(size, slot.getMinSize(), slot.getMaxSize());
 
     // 4. Alignment within the available area, then pivot: the resolved position
@@ -496,6 +604,40 @@ void UIBoxSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
     node["participatesInLayout"] = _bParticipatesInLayout;
 }
 
+void UIBoxSlot::serialize(nlohmann::json& node) const
+{
+    node["type"] = "box";
+    node["sizeRule"] = static_cast<int>(_sizeRule);
+    node["weight"] = _weight;
+    node["margin"] = marginJson(_margin);
+    node["crossAlignment"] = static_cast<int>(_crossAlignment);
+    node["minSize"] = vecJson(_minSize);
+    node["maxSize"] = vecJson(_maxSize);
+    node["preferredSize"] = vecJson(_preferredSize);
+    node["participatesInLayout"] = _bParticipatesInLayout;
+    node["reserveSpaceWhenHidden"] = _bReserveSpaceWhenHidden;
+}
+
+void UIBoxSlot::deserialize(const nlohmann::json& node)
+{
+    FBoxSlotArgs args;
+    args.sizeRule = static_cast<EUIBoxSlotSizeRule>(node.value("sizeRule", 0));
+    args.weight = node.value("weight", 1.0f);
+    args.margin = marginFromJson(node["margin"]);
+    args.crossAlignment = static_cast<EUIBoxSlotCrossAlignment>(node.value("crossAlignment", 0));
+    args.preferredSize = vecFromJson(node["preferredSize"]);
+    args.minSize = vecFromJson(node["minSize"]);
+    args.maxSize = vecFromJson(node["maxSize"], args.maxSize);
+    args.participatesInLayout = node.value("participatesInLayout", true);
+    args.reserveSpaceWhenHidden = node.value("reserveSpaceWhenHidden", true);
+    apply(args);
+}
+
+bool UIBoxSlot::isAutoSizeActive() const
+{
+    return _sizeRule == EUIBoxSlotSizeRule::Auto;
+}
+
 void UIBoxSlot::setSizeRule(EUIBoxSlotSizeRule value)
 {
     if (_sizeRule != value) {
@@ -531,9 +673,13 @@ void UIBoxSlot::apply(const FBoxSlotArgs& args)
     setWeight(args.weight);
     setMargin(args.margin);
     setCrossAlignment(args.crossAlignment);
+    setMinSize(args.minSize);
+    setMaxSize(args.maxSize);
     if (args.preferredSize.x != 0.0f || args.preferredSize.y != 0.0f) {
         setPreferredSize(args.preferredSize);
     }
+    setParticipatesInLayout(args.participatesInLayout);
+    setReserveSpaceWhenHidden(args.reserveSpaceWhenHidden);
 }
 
 void UIBoxSlot::setCrossAlignment(EUIBoxSlotCrossAlignment value)
@@ -873,7 +1019,7 @@ glm::vec2 UISingleChildLayout::measure(const UIElement& parent) const
 
 std::unique_ptr<UISlot> UISingleChildLayout::createSlot(UIElement& parent, UIElement& child) const
 {
-    return std::make_unique<UIOverlaySlot>(parent, child);
+    return std::make_unique<UIContentSlot>(parent, child);
 }
 
 void UISingleChildLayout::onArrange(UIElement& parent, const Rect2D& rect) const
@@ -890,7 +1036,7 @@ void UISingleChildLayout::onArrange(UIElement& parent, const Rect2D& rect) const
         // desired size.
         EUIOverlayAlignment hAlign = EUIOverlayAlignment::Fill;
         EUIOverlayAlignment vAlign = EUIOverlayAlignment::Fill;
-        if (const UIOverlaySlot* slot = getSingleChildSlot(parent, *child)) {
+        if (const UIContentSlot* slot = getSingleChildSlot(parent, *child)) {
             hAlign = slot->getHAlign();
             vAlign = slot->getVAlign();
         }
@@ -927,6 +1073,30 @@ void UIOverlaySlot::appendRuntimeDiagnostics(nlohmann::json& node) const
     node["vAlign"] = alignmentName(_vAlign);
     node["padding"] = {{"left", _padding.left}, {"top", _padding.top}, {"right", _padding.right}, {"bottom", _padding.bottom}};
     node["preferredSize"] = {_preferredSize.x, _preferredSize.y};
+}
+
+void UIOverlaySlot::serialize(nlohmann::json& node) const
+{
+    node["type"] = "overlay";
+    node["hAlign"] = static_cast<int>(_hAlign);
+    node["vAlign"] = static_cast<int>(_vAlign);
+    node["padding"] = marginJson(_padding);
+    node["preferredSize"] = vecJson(_preferredSize);
+}
+
+void UIOverlaySlot::deserialize(const nlohmann::json& node)
+{
+    FOverlaySlotArgs args;
+    args.hAlign = static_cast<EUIOverlayAlignment>(node.value("hAlign", 0));
+    args.vAlign = static_cast<EUIOverlayAlignment>(node.value("vAlign", 0));
+    args.padding = marginFromJson(node["padding"]);
+    args.preferredSize = vecFromJson(node["preferredSize"]);
+    apply(args);
+}
+
+bool UIOverlaySlot::isAutoSizeActive() const
+{
+    return _hAlign != EUIOverlayAlignment::Fill || _vAlign != EUIOverlayAlignment::Fill;
 }
 
 void UIOverlaySlot::setHAlign(EUIOverlayAlignment value)
@@ -968,6 +1138,100 @@ void UIOverlaySlot::apply(const FOverlaySlotArgs& args)
 }
 
 void UIOverlaySlot::setPreferredSize(glm::vec2 value)
+{
+    value = glm::max(value, glm::vec2(0.0f));
+    if (_preferredSize != value) {
+        _preferredSize = value;
+        invalidateMeasure();
+    }
+}
+
+UIContentSlot::UIContentSlot(UIElement& parent, UIElement& child)
+    : UISlot(parent, child)
+{
+}
+
+void UIContentSlot::appendRuntimeDiagnostics(nlohmann::json& node) const
+{
+    auto alignmentName = [](EUIOverlayAlignment value) {
+        switch (value) {
+        case EUIOverlayAlignment::Fill: return "fill";
+        case EUIOverlayAlignment::Start: return "start";
+        case EUIOverlayAlignment::Center: return "center";
+        case EUIOverlayAlignment::End: return "end";
+        }
+        return "unknown";
+    };
+    node["type"] = "content";
+    node["hAlign"] = alignmentName(_hAlign);
+    node["vAlign"] = alignmentName(_vAlign);
+    node["padding"] = {{"left", _padding.left}, {"top", _padding.top}, {"right", _padding.right}, {"bottom", _padding.bottom}};
+    node["preferredSize"] = {_preferredSize.x, _preferredSize.y};
+}
+
+void UIContentSlot::serialize(nlohmann::json& node) const
+{
+    node["type"] = "content";
+    node["hAlign"] = static_cast<int>(_hAlign);
+    node["vAlign"] = static_cast<int>(_vAlign);
+    node["padding"] = marginJson(_padding);
+    node["preferredSize"] = vecJson(_preferredSize);
+}
+
+void UIContentSlot::deserialize(const nlohmann::json& node)
+{
+    FContentSlotArgs args;
+    args.hAlign = static_cast<EUIOverlayAlignment>(node.value("hAlign", 0));
+    args.vAlign = static_cast<EUIOverlayAlignment>(node.value("vAlign", 0));
+    args.padding = marginFromJson(node["padding"]);
+    args.preferredSize = vecFromJson(node["preferredSize"]);
+    apply(args);
+}
+
+bool UIContentSlot::isAutoSizeActive() const
+{
+    return _hAlign != EUIOverlayAlignment::Fill || _vAlign != EUIOverlayAlignment::Fill;
+}
+
+void UIContentSlot::setHAlign(EUIOverlayAlignment value)
+{
+    if (_hAlign != value) {
+        _hAlign = value;
+        invalidateArrange();
+    }
+}
+
+void UIContentSlot::setVAlign(EUIOverlayAlignment value)
+{
+    if (_vAlign != value) {
+        _vAlign = value;
+        invalidateArrange();
+    }
+}
+
+void UIContentSlot::setPadding(FMargin value)
+{
+    value.left   = std::max(value.left, 0.0f);
+    value.top    = std::max(value.top, 0.0f);
+    value.right  = std::max(value.right, 0.0f);
+    value.bottom = std::max(value.bottom, 0.0f);
+    if (_padding != value) {
+        _padding = value;
+        invalidateMeasure();
+    }
+}
+
+void UIContentSlot::apply(const FContentSlotArgs& args)
+{
+    setHAlign(args.hAlign);
+    setVAlign(args.vAlign);
+    setPadding(args.padding);
+    if (args.preferredSize.x != 0.0f || args.preferredSize.y != 0.0f) {
+        setPreferredSize(args.preferredSize);
+    }
+}
+
+void UIContentSlot::setPreferredSize(glm::vec2 value)
 {
     value = glm::max(value, glm::vec2(0.0f));
     if (_preferredSize != value) {
@@ -1160,7 +1424,7 @@ glm::vec2 UISplitLayout::measure(const UIElement& parent) const
 
 std::unique_ptr<UISlot> UISplitLayout::createSlot(UIElement& parent, UIElement& child) const
 {
-    return std::make_unique<UIOverlaySlot>(parent, child);
+    return std::make_unique<UIContentSlot>(parent, child);
 }
 
 void UISplitLayout::onArrange(UIElement& parent, const Rect2D& rect) const
@@ -1254,7 +1518,7 @@ bool UIScrollLayout::scroll(const glm::vec2& wheelDelta)
 
 std::unique_ptr<UISlot> UIScrollLayout::createSlot(UIElement& parent, UIElement& child) const
 {
-    return std::make_unique<UIOverlaySlot>(parent, child);
+    return std::make_unique<UIContentSlot>(parent, child);
 }
 
 glm::vec2 UIScrollLayout::measure(const UIElement& parent) const
@@ -1316,6 +1580,26 @@ void UITableSlot::setCell(int row, int column)
     _row    = row;
     _column = column;
     invalidateArrange();
+}
+
+void UITableSlot::apply(const FTableSlotArgs& args)
+{
+    setCell(args.row, args.column);
+}
+
+void UITableSlot::serialize(nlohmann::json& node) const
+{
+    node["type"] = "table";
+    node["row"] = _row;
+    node["column"] = _column;
+}
+
+void UITableSlot::deserialize(const nlohmann::json& node)
+{
+    apply(FTableSlotArgs{
+        .row = node.value("row", 0),
+        .column = node.value("column", 0),
+    });
 }
 
 float UITableLayout::getColumnWidth(int column) const

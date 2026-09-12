@@ -27,6 +27,8 @@ namespace ya
 ///   - no dock / tab stack / floating windows in this primitive.
 struct YA_GUI_API UISplitPane : public UIElement, public UIStyledWidget<UISplitPane, FSplitPaneStyle>
 {
+    using SlotArgs = FContentSlotArgs;
+
     YA_REFLECT_BEGIN(UISplitPane, UIElement)
     YA_REFLECT_END()
 

@@ -27,7 +27,7 @@ struct FSelectableRowDragDropBehavior final : public UIDragSourceBehavior
             if (!row || !row->_bDraggable) {
                 return nullptr;
             }
-            return UIStringDragDropOperation::make(
+            return UIDragDropOperation::make(
                 row->_dragPayload.empty() ? row->_itemId : row->_dragPayload,
                 row->_dragGhostLabel.empty() ? row->_itemId : row->_dragGhostLabel,
                 "ya.selectable.row");
@@ -42,16 +42,15 @@ struct FSelectableRowDropTargetBehavior final : public UIDropTargetBehavior
         canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* row = dynamic_cast<UISelectableRow*>(&owner);
-            const auto* textOp = operation.as<UIStringDragDropOperation>();
             return row && row->_bDraggable && owner.hitTestLayoutRect(logicalPoint) &&
-                   textOp && !textOp->text.empty() && textOp->text != row->_itemId;
+                   operation.isType("ya.selectable.row") && !operation.payload.empty() &&
+                   operation.payload != row->_itemId;
         };
         handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2&)
         {
             if (auto* row = dynamic_cast<UISelectableRow*>(&owner)) {
-                const auto* textOp = operation.as<UIStringDragDropOperation>();
-                if (row->_onDropped && textOp) {
-                    row->_onDropped(textOp->text);
+                if (row->_onDropped && operation.isType("ya.selectable.row")) {
+                    row->_onDropped(operation.payload);
                 }
             }
         };

@@ -41,6 +41,7 @@ struct YA_GUI_API UITextField : public UIElement, public UIStyledWidget<UITextFi
     }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UITextField>; }
+    [[nodiscard]] bool wantsTextInput() const override { return true; }
 
     std::string _text            = "";
     uint32_t    _fontSize        = gui_type::kBody;

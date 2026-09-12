@@ -15,6 +15,8 @@ namespace ya
 /// anchors, etc.).
 struct YA_GUI_API UISizeBox : public UIElement
 {
+    using SlotArgs = FContentSlotArgs;
+
     YA_REFLECT_BEGIN(UISizeBox, UIElement)
     YA_REFLECT_END()
 

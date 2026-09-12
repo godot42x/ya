@@ -19,7 +19,7 @@ namespace ya
 /// virtualization and owns no item list.
 ///
 /// Content lives in a single-child slot (same contract as UIButton): the
-/// label's indent/fill intent is padding + UIOverlaySlot, not child
+/// label's indent/fill intent is padding + UIContentSlot, not child
 /// `setPosition` / `setSize`.
 ///
 /// Input semantics (same capture contract as UIButton):
@@ -29,6 +29,8 @@ namespace ya
 ///   - detach while pressed clears all transient state.
 struct YA_GUI_API UISelectableRow : public UIElement, public UIStyledWidget<UISelectableRow, FSelectableRowStyle>
 {
+    using SlotArgs = FContentSlotArgs;
+
     YA_REFLECT_BEGIN(UISelectableRow, UIElement)
     YA_REFLECT_FIELD(_itemId, .instanceEditable())
     YA_REFLECT_FIELD(_bSelected, .instanceEditable())

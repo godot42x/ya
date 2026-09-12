@@ -9,7 +9,7 @@ namespace ya
 
 /// Minimal host boundary for future document/component adapters.
 ///
-/// Native DSL is one authoring path (ui::build), while adapters can mount a
+/// Native DSL is one authoring path (ui::attach), while adapters can mount a
 /// retained subtree once and later issue changed-only patches against the same
 /// live root. The host owns no adapter-specific diff/model logic: it only
 /// bridges mount / patch / unmount to the existing WidgetTree kernel.

@@ -78,16 +78,32 @@ inline void exposeImplicitCanvasBuild(const char* apiName, UIElement& parent, UI
     }
 
     YA_CORE_ERROR(
-        "{}: child '{}' attached to canvas host '{}' without explicit slot intent; using the default top-left Auto/Auto canvas slot. Use canvasSlot().fill()/size()/anchor(...) when stronger placement is intended.",
+        "{}: child '{}' attached to canvas host '{}' without explicit slot intent; using the default top-left Auto/Auto canvas slot. Use canvasSlot().fill()/size(), or spanning anchor()/insets() (those axes stretch). Bare Auto + 0 desired is invisible.",
         apiName,
         child._name,
         parent._name);
 }
 
-} // namespace detail
+template<typename TArgs>
+inline void applySlotArgs(UIElement& parent, UIElement& child, const TArgs& args)
+{
+    parent.initializeChildSlot(child, [&args, &parent, &child](UIElement&, UISlot& slot) {
+        const bool applied = slot.applyArgs(args);
+        YA_CORE_ASSERT(applied,
+                       "ui::attach: parent '{}' does not accept slot args for child '{}'",
+                       parent._name,
+                       child._name);
+    });
+}
 
 template<UISlotBuilder TSlotBuilder>
-inline void attachSlot(UIElement& parent, UIElement& child, TSlotBuilder&& slotBuilder);
+    requires requires(const std::remove_reference_t<TSlotBuilder>& builder) { builder.args(); }
+inline void applyAttachedSlot(UIElement& parent, UIElement& child, TSlotBuilder&& slotBuilder)
+{
+    applySlotArgs(parent, child, slotBuilder.args());
+}
+
+} // namespace detail
 
 [[nodiscard]] inline UITextWidgetBuilder text(std::string key, std::string displayName = {})
 {
@@ -101,27 +117,23 @@ YA_UI_ANONYMOUS_FACTORY(text, UITextWidgetBuilder)
 }
 YA_UI_ANONYMOUS_FACTORY(button, UIButtonWidgetBuilder)
 
-[[nodiscard]] inline UIPanelWidgetBuilder panel(std::string key, std::string displayName = {})
+[[nodiscard]] inline UICanvasPanelWidgetBuilder canvasPanel(std::string key, std::string displayName = {})
 {
-    return UIPanelWidgetBuilder{std::move(key), std::move(displayName)};
+    return UICanvasPanelWidgetBuilder{std::move(key), std::move(displayName)};
 }
-YA_UI_ANONYMOUS_FACTORY(panel, UIPanelWidgetBuilder)
+YA_UI_ANONYMOUS_FACTORY(canvasPanel, UICanvasPanelWidgetBuilder)
 
-/// A canvas host: the same anchor layout a panel carries, but without a panel's
-/// own visuals (no background, no corner radius). Canvas is a LAYOUT TYPE, so it
-/// is available as its own host rather than only as a panel's behaviour.
-[[nodiscard]] inline UIPanelWidgetBuilder canvas(std::string key, std::string displayName = {})
+[[nodiscard]] inline UIBorderWidgetBuilder border(std::string key, std::string displayName = {})
 {
-    return panel(std::move(key), std::move(displayName)).setStyleKey(std::string(ya::StyleKey::Canvas));
+    return UIBorderWidgetBuilder{std::move(key), std::move(displayName)};
 }
-[[nodiscard]] inline UIPanelWidgetBuilder canvas()
-{
-    return panel().setStyleKey(std::string(ya::StyleKey::Canvas));
-}
+YA_UI_ANONYMOUS_FACTORY(border, UIBorderWidgetBuilder)
 
 [[nodiscard]] inline UIContainerWidgetBuilder column(std::string key, std::string displayName = {})
 {
-    return UIContainerWidgetBuilder{std::move(key), std::move(displayName), EWidgetBoxLayout::Vertical};
+    return UIContainerWidgetBuilder{std::move(key),
+                                    std::move(displayName),
+                                    EWidgetBoxLayout::Vertical};
 }
 YA_UI_ANONYMOUS_FACTORY(column, UIContainerWidgetBuilder)
 
@@ -233,116 +245,54 @@ YA_UI_ANONYMOUS_FACTORY(popupOverlay, UIPopupOverlayWidgetBuilder)
 
 #undef YA_UI_ANONYMOUS_FACTORY
 
-template<UIWidgetBuilder TBuilder>
-UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder)
+/// Mount an already-built widget into the live tree using the host's implicit
+/// default slot intent. Builders stay in the authoring phase until the caller
+/// explicitly `.release()` / `.share()`s them.
+inline WidgetAttachment attach(WidgetTree& tree, UIElement& parent, const UIElementRef& widget)
 {
-    UIElementRef root = std::forward<TBuilder>(builder).release();
-    YA_CORE_ASSERT(root, "ui::build: empty root");
-    const WidgetAttachment attached = tree.attach(parent, root);
-    YA_CORE_ASSERT(attached.valid(), "ui::build: attach failed for '{}'", root->_name);
-    detail::exposeImplicitCanvasBuild("ui::build", parent, *root);
-    return root;
-}
-
-/// Canvas parent variant: the child's stretch geometry is carried on the
-/// parent->child slot edge, never authored on the child.
-template<UIWidgetBuilder TBuilder>
-UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, const FCanvasSlotArgs& slot)
-{
-    UIElementRef root = std::forward<TBuilder>(builder).release();
-    YA_CORE_ASSERT(root, "ui::build: empty root");
-    const WidgetAttachment attached = tree.attach(parent, root);
-    YA_CORE_ASSERT(attached.valid(), "ui::build: attach failed for '{}'", root->_name);
-    if (auto* s = parent.getSlotForChild(*root)) {
-        if (auto* canvas = s ? s->template as<UICanvasSlot>() : nullptr) {
-            canvas->apply(slot);
-        }
-    }
-    return root;
-}
-
-template<UIWidgetBuilder TBuilder, UISlotBuilder TSlotBuilder>
-UIElementRef build(WidgetTree& tree, UIElement& parent, TBuilder&& builder, TSlotBuilder&& slotBuilder)
-{
-    UIElementRef root = std::forward<TBuilder>(builder).release();
-    YA_CORE_ASSERT(root, "ui::build: empty root");
-    const WidgetAttachment attached = tree.attach(parent, root);
-    YA_CORE_ASSERT(attached.valid(), "ui::build: attach failed for '{}'", root->_name);
-    attachSlot(parent, *root, std::forward<TSlotBuilder>(slotBuilder));
-    return root;
-}
-
-/// Same as build(), but keeps the concrete widget type so the host can retain
-/// a typed shared_ptr for later sync (instead of casting the base ref back).
-template<typename TWidget, typename TBuilder>
-std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&& builder)
-{
-    auto widget = std::dynamic_pointer_cast<TWidget>(std::forward<TBuilder>(builder).release());
-    YA_CORE_ASSERT(widget, "ui::buildAs: builder produced the wrong widget class");
+    YA_CORE_ASSERT(widget, "ui::attach: empty widget");
     const WidgetAttachment attached = tree.attach(parent, widget);
-    YA_CORE_ASSERT(attached.valid(), "ui::buildAs: attach failed for '{}'", widget->_name);
-    detail::exposeImplicitCanvasBuild("ui::buildAs", parent, *widget);
-    return widget;
-}
-
-template<typename TWidget, typename TBuilder>
-std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&& builder, const FCanvasSlotArgs& slot)
-{
-    auto widget = std::dynamic_pointer_cast<TWidget>(std::forward<TBuilder>(builder).release());
-    YA_CORE_ASSERT(widget, "ui::buildAs: builder produced the wrong widget class");
-    const WidgetAttachment attached = tree.attach(parent, widget);
-    YA_CORE_ASSERT(attached.valid(), "ui::buildAs: attach failed for '{}'", widget->_name);
-    if (auto* s = parent.getSlotForChild(*widget)) {
-        if (auto* canvas = s ? s->template as<UICanvasSlot>() : nullptr) {
-            canvas->apply(slot);
-        }
+    YA_CORE_ASSERT(attached.valid(), "ui::attach: attach failed for '{}'", widget ? widget->_name : "<null>");
+    if (attached.valid() && widget) {
+        detail::exposeImplicitCanvasBuild("ui::attach", parent, *widget);
     }
-    return widget;
+    return attached;
 }
 
-template<typename TWidget, UIWidgetBuilder TBuilder, UISlotBuilder TSlotBuilder>
-std::shared_ptr<TWidget> buildAs(WidgetTree& tree, UIElement& parent, TBuilder&& builder, TSlotBuilder&& slotBuilder)
+/// Mount an already-built widget and apply parent-owned slot args. The parent
+/// type's `SlotArgs` selects canvas / box / overlay / content — passing `UIElement&`
+/// here is a compile error so the slot kind cannot be lost.
+template<typename TParent>
+    requires requires { typename TParent::SlotArgs; }
+WidgetAttachment attach(WidgetTree& tree,
+                       TParent& parent,
+                       const UIElementRef& widget,
+                       const typename TParent::SlotArgs& slot)
 {
-    auto widget = std::dynamic_pointer_cast<TWidget>(std::forward<TBuilder>(builder).release());
-    YA_CORE_ASSERT(widget, "ui::buildAs: builder produced the wrong widget class");
+    YA_CORE_ASSERT(widget, "ui::attach: empty widget");
     const WidgetAttachment attached = tree.attach(parent, widget);
-    YA_CORE_ASSERT(attached.valid(), "ui::buildAs: attach failed for '{}'", widget->_name);
-    attachSlot(parent, *widget, std::forward<TSlotBuilder>(slotBuilder));
-    return widget;
-}
-
-/// Apply a canvas slot to an already-attached child (e.g. a root attached via
-/// attachToLayer that still needs canvas stretch geometry).
-inline void attachCanvasSlot(UIElement& parent, UIElement& child, const FCanvasSlotArgs& slot)
-{
-    if (auto* s = parent.getSlotForChild(child)) {
-        if (auto* canvas = s ? s->as<UICanvasSlot>() : nullptr) {
-            canvas->apply(slot);
-        }
+    YA_CORE_ASSERT(attached.valid(), "ui::attach: attach failed for '{}'", widget ? widget->_name : "<null>");
+    if (attached.valid() && widget) {
+        detail::applySlotArgs(parent, *widget, slot);
     }
+    return attached;
 }
 
-/// Build with a unified layout spec: the host consumes the capabilities it
-/// implements. This is the shared entry point for DSL-authored and
-/// imperatively-attached children alike.
- 
+/// Same as the SlotArgs overload, with a fluent slot builder. The builder type
+/// must match `TParent::SlotArgs` (`SlotBuilderAcceptedBy`).
+template<typename TParent, UISlotBuilder TSlotBuilder>
+    requires SlotBuilderAcceptedBy<TParent, TSlotBuilder>
+WidgetAttachment attach(WidgetTree& tree, TParent& parent, const UIElementRef& widget, TSlotBuilder&& slotBuilder)
+{
+    return attach(tree, parent, widget, slotBuilder.args());
+}
 
+/// Reset the typed layout intent on an already-existing parent->child slot
+/// edge. Prefer ui::attach() when creating the edge for the first time.
 template<UISlotBuilder TSlotBuilder>
-    requires requires(const std::remove_reference_t<TSlotBuilder>& builder) { builder.args(); }
-inline void attachSlot(UIElement& parent, UIElement& child, TSlotBuilder&& slotBuilder)
+inline void resetSlot(UIElement& parent, UIElement& child, TSlotBuilder&& slotBuilder)
 {
-    using TArgs = std::remove_cvref_t<decltype(slotBuilder.args())>;
-    parent.initializeChildSlot(child, [&slotBuilder](UIElement&, UISlot& slot) {
-        if constexpr (std::same_as<TArgs, FCanvasSlotArgs>) {
-            if (auto* typed = slot.as<UICanvasSlot>()) typed->apply(slotBuilder.args());
-        }
-        else if constexpr (std::same_as<TArgs, FBoxSlotArgs>) {
-            if (auto* typed = slot.as<UIBoxSlot>()) typed->apply(slotBuilder.args());
-        }
-        else if constexpr (std::same_as<TArgs, FOverlaySlotArgs>) {
-            if (auto* typed = slot.as<UIOverlaySlot>()) typed->apply(slotBuilder.args());
-        }
-    });
+    detail::applyAttachedSlot(parent, child, std::forward<TSlotBuilder>(slotBuilder));
 }
 
 } // namespace ya::ui

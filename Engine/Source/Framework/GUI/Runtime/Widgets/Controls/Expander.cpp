@@ -234,10 +234,13 @@ void UIExpander::paintSelf(UIFrameBuilder& builder)
     }
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
+    const float packH = font ? static_cast<float>(font->lineHeight) : 0.0f;
     const FDisclosureLeading leading = layoutDisclosureLeading(header,
                                                                _arrowWidth,
                                                                showsDisclosureButton(_disclosure),
-                                                               brushHasIcon(_icon));
+                                                               brushHasIcon(_icon),
+                                                               14.0f,
+                                                               packH);
     paintDisclosureButton(builder,
                           FDisclosurePaint{
                               .buttonRect  = leading.button,

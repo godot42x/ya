@@ -32,6 +32,7 @@ struct YA_GUI_API UIDragDropTile : public UIElement, public UIStyledWidget<UIDra
 
     void setPressed(bool pressed) { _bPressed = pressed; }
     void setHighlighted(bool highlighted) { _bHighlighted = highlighted; }
+    [[nodiscard]] bool isHoverable() const override { return true; }
 
     void paintSelf(UIFrameBuilder& builder) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;

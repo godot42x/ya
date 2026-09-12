@@ -3,8 +3,8 @@
 // ============================================================================
 // UIScreen - a host-owned UI surface: mount/unmount, z-order, input blocking.
 //
-// A screen owns its live widget subtree (built with ui::build / retained
-// attach). It is not a render-function / Description owner. ScreenStack
+// A screen owns its live widget subtree (built with the DSL, then
+// ui::attach). It is not a render-function / Description owner. ScreenStack
 // composes screens; value updates stay on Reactive bindings.
 // ============================================================================
 

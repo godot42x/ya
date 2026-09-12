@@ -15,7 +15,8 @@
 namespace ya
 {
 
-inline constexpr const char* kTypeIdPanel          = "engine.panel";
+inline constexpr const char* kTypeIdCanvasPanel   = "engine.panel";
+inline constexpr const char* kTypeIdBorder         = "engine.border";
 inline constexpr const char* kTypeIdText           = "engine.text";
 inline constexpr const char* kTypeIdButton         = "engine.button";
 inline constexpr const char* kTypeIdContainer      = "engine.container";

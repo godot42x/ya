@@ -4,7 +4,7 @@
 #include "Core/Log.h"
 
 #include "GUI/Widgets/Controls/Container.h"
-#include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/Brush.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
@@ -225,7 +225,7 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
     _openSubmenuItem = nullptr;
 
     // Content panel: colored backdrop sized to the items.
-    auto panel = std::make_shared<UIPanel>("MenuPanel");
+    auto panel = std::make_shared<UIBorder>("MenuPanel");
     panel->_styleKey = "menu.panel";
     addDetachedChild(panel);
 
@@ -234,17 +234,6 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
     list->setSpacing(0.0f);
     list->setPadding(glm::vec2(_panelPadding));
     panel->addDetachedChild(list);
-    // Fill the panel rect: the panel is assigned the menu's own content size by
-    // layoutAssigned(), so the list must span it (not keep its default fixed
-    // size) for rows to receive the full menu width. Stretch intent lives on
-    // the parent->child slot edge, never on the child.
-    if (UISlot* edge = panel->getSlotForChild(*list); edge && edge->as<UICanvasSlot>()) {
-        auto* slot = edge->as<UICanvasSlot>();
-        FCanvasSlotArgs fillArgs;
-        fillArgs.anchorMin = {0.0f, 0.0f};
-        fillArgs.anchorMax = {1.0f, 1.0f};
-        slot->apply(fillArgs);
-    }
 
     float maxLabelWidth = 0.0f;
     bool  bAnyIcon = false;

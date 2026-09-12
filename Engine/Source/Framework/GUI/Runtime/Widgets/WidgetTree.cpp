@@ -7,6 +7,7 @@
 #include "Core/Profiling/Profiling.h"
 
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -19,30 +20,25 @@
 namespace ya
 {
 
+UICanvasRoot::UICanvasRoot(std::string name) : UIElement(std::move(name))
+{
+    installLayout(std::make_unique<UICanvasLayout>());
+    setVisibility(EWidgetVisibility::HitTestInvisible);
+}
+
 namespace
 {
 
 constexpr float kCanvasMinSize = 1.0f;
 
-struct FTreeCanvasRoot final : UIElement
-{
-    explicit FTreeCanvasRoot(std::string name)
-        : UIElement(std::move(name))
-    {
-        installLayout(std::make_unique<UICanvasLayout>());
-        setVisibility(EWidgetVisibility::HitTestInvisible);
-    }
-};
-
 UIElementRef makeCanvasRoot(std::string name)
 {
-    auto element = std::make_shared<FTreeCanvasRoot>(std::move(name));
-    return element;
+    return std::make_shared<UICanvasRoot>(std::move(name));
 }
 
 UIElementRef makeLayerElement(std::string name)
 {
-    auto element = std::make_shared<FTreeCanvasRoot>(std::move(name));
+    auto element = std::make_shared<UICanvasRoot>(std::move(name));
     // Structural containers (root/layers) are not hit targets themselves;
     // their children are (HitTestInvisible semantics).
     element->setVisibility(EWidgetVisibility::HitTestInvisible);
@@ -70,14 +66,10 @@ WidgetTree::WidgetTree(Extent2D logicalExtent) : _logicalExtent(logicalExtent)
         _layers[i]->_zOrder = static_cast<int>(i);
         _root->appendChildEdge(_layers[i]);
         if (UISlot* edge = _root->getSlotForChild(*_layers[i])) {
-            auto* slot = edge->as<UICanvasSlot>();
-            if (!slot) {
-                continue;
-            }
             FCanvasSlotArgs fillArgs;
             fillArgs.anchorMin = {0.0f, 0.0f};
             fillArgs.anchorMax = {1.0f, 1.0f};
-            slot->apply(fillArgs);
+            edge->applyArgs(fillArgs);
         }
     }
 }
@@ -184,6 +176,12 @@ void WidgetTree::updateHovered(UIElement* widget)
     removeTooltip();
 }
 
+void WidgetTree::clearPointerOverState()
+{
+    updateHovered(nullptr);
+    refreshPointerPath(nullptr);
+}
+
 void WidgetTree::removeTooltip()
 {
     if (_tooltipHost && _tooltipHost->isAttached()) {
@@ -207,25 +205,14 @@ void WidgetTree::updateTooltip()
     const float lineH = font ? font->lineHeight : 16.0f;
     const glm::vec2 hostSize{textW + 16.0f, lineH + 8.0f};
 
-    auto host = std::make_shared<UIPanel>("TooltipHost");
+    auto host = std::make_shared<UIBorder>("TooltipHost");
     host->setStyleKey("tooltip");
+    host->setPadding(FMargin{8.0f, 4.0f, 8.0f, 4.0f});
 
     auto label = std::make_shared<UIText>("TooltipLabel");
     label->_fontSize  = 12;
     label->setText(_hovered->_tooltip);
     host->addDetachedChild(label);
-    // The host is a canvas host: fill + inset live on the parent->child slot.
-    if (UISlot* edge = host->getSlotForChild(*label)) {
-        auto* slot = edge->as<UICanvasSlot>();
-        if (!slot) {
-            return;
-        }
-        FCanvasSlotArgs args;
-        args.anchorMin = {0.0f, 0.0f};
-        args.anchorMax = {1.0f, 1.0f};
-        args.offset    = {8.0f, 4.0f};
-        slot->apply(args);
-    }
 
     // Anchor below the hovered widget's rect (clamped into the window).
     const Rect2D& target = _hovered->_layoutRect;
@@ -423,9 +410,9 @@ void WidgetTree::setLogicalExtent(Extent2D extent)
     invalidateLayout();
 }
 
-UIElement* WidgetTree::getLayer(ELayer layer) const
+UICanvasRoot* WidgetTree::getLayer(ELayer layer) const
 {
-    return _layers[static_cast<size_t>(layer)].get();
+    return static_cast<UICanvasRoot*>(_layers[static_cast<size_t>(layer)].get());
 }
 
 // === Attach / reparent / detach ===
@@ -487,11 +474,10 @@ WidgetAttachment WidgetTree::attach(UIElement& parent,
         return attachment;
     }
     if (UISlot* edge = parent.getSlotForChild(*widget)) {
-        auto* slot = edge->as<UICanvasSlot>();
-        if (!slot) {
-            return attachment;
-        }
-        slot->apply(args);
+        YA_CORE_ASSERT(edge->applyArgs(args),
+                       "WidgetTree::attach: parent '{}' is not a canvas host; cannot apply FCanvasSlotArgs to '{}'",
+                       parent._name,
+                       widget->_name);
     }
     return attachment;
 }
@@ -1188,6 +1174,21 @@ void WidgetTree::releasePointerCapture(UIElement* widget)
     }
 }
 
+bool WidgetTree::hasModalPopup() const
+{
+    const UIElement* popup = getLayer(ELayer::Popup);
+    if (!popup) {
+        return false;
+    }
+    for (const UIElementRef& child : popup->getChildren()) {
+        const auto* overlay = dynamic_cast<const UIPopupOverlay*>(child.get());
+        if (overlay && overlay->isAttached() && overlay->isModal()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // === Internals ===
 
 void WidgetTree::clearTransientState(UIElement& widget)
@@ -1471,20 +1472,6 @@ void WidgetTree::appendRouteTraceStep(const UIElement& widget,
 // === Drag & drop session ===
 
 void WidgetTree::beginDrag(UIElement* source,
-                           std::string payload,
-                           std::string ghostLabel,
-                           DragSessionObserver observer,
-                           bool bShowGhost,
-                           bool bSkipSourceInHitTest)
-{
-    beginDrag(source,
-              UIStringDragDropOperation::make(std::move(payload), std::move(ghostLabel)),
-              std::move(observer),
-              bShowGhost,
-              bSkipSourceInHitTest);
-}
-
-void WidgetTree::beginDrag(UIElement* source,
                            UIDragDropOperationRef operation,
                            DragSessionObserver observer,
                            bool bShowGhost,
@@ -1511,34 +1498,7 @@ void WidgetTree::beginDrag(UIElement* source,
         return;
     }
 
-    // Ghost on the DragIme layer: visible but never hit-testable.
-    auto ghost = std::make_shared<UIPanel>("DragGhost");
-    ghost->setStyleKey("drag.ghost");
-    ghost->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
-    FCanvasSlotArgs ghostArgs;
-    ghostArgs.offset    = {0.0f, 0.0f};
-    ghostArgs.fixedSize = {160.0f, 24.0f};
-
-    auto label = std::make_shared<UIText>("DragGhostLabel");
-    label->setText(_dragOperation->ghostLabel);
-    label->_fontSize = 13;
-    label->_hAlign    = EWidgetAlignH::Center;
-    label->_vAlign    = EWidgetAlignV::Center;
-    ghost->addDetachedChild(label);
-    // The ghost is a canvas host: fill lives on the parent->child slot edge.
-    if (UISlot* edge = ghost->getSlotForChild(*label)) {
-        auto* slot = edge->as<UICanvasSlot>();
-        if (!slot) {
-            return;
-        }
-        FCanvasSlotArgs args;
-        args.anchorMin = {0.0f, 0.0f};
-        args.anchorMax = {1.0f, 1.0f};
-        slot->apply(args);
-    }
-
-    attachToLayer(ELayer::DragIme, ghost, ghostArgs);
-    _dragGhost = ghost;
+    _dragGhost = attachDragGhost(_dragOperation->ghostLabel);
     invalidateLayout();
 }
 
@@ -1559,6 +1519,61 @@ UIElement* WidgetTree::findDropTarget(const glm::vec2& logicalPoint,
         }
     }
     return nullptr;
+}
+
+UIElement* WidgetTree::findDropHoverTarget(const glm::vec2& logicalPoint,
+                                           const UIDragDropOperation* operation) const
+{
+    if (!operation) {
+        return nullptr;
+    }
+    if (UIElement* accept = findDropTarget(logicalPoint, operation)) {
+        return accept;
+    }
+    for (UIElement* node = topmostHit(logicalPoint); node != nullptr; node = node->getParent()) {
+        if (node->canPreviewDrop(*operation, logicalPoint)) {
+            return node;
+        }
+    }
+    return nullptr;
+}
+
+UIElementRef WidgetTree::attachDragGhost(const std::string& label)
+{
+    auto ghost = std::make_shared<UIBorder>("DragGhost");
+    ghost->setStyleKey("drag.ghost");
+    ghost->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
+    FCanvasSlotArgs ghostArgs;
+    ghostArgs.offset    = {0.0f, 0.0f};
+    ghostArgs.fixedSize = {160.0f, 24.0f};
+
+    auto text = std::make_shared<UIText>("DragGhostLabel");
+    text->setText(label);
+    text->_fontSize = 13;
+    text->_hAlign    = EWidgetAlignH::Center;
+    text->_vAlign    = EWidgetAlignV::Center;
+    ghost->addDetachedChild(text);
+    attachToLayer(ELayer::DragIme, ghost, ghostArgs);
+    return ghost;
+}
+
+void WidgetTree::placeDragGhost(UIElement& ghost, const glm::vec2& logicalPoint)
+{
+    if (UIElement* layerHost = getLayer(ELayer::DragIme)) {
+        if (UISlot* edge = layerHost->getSlotForChild(ghost); edge && edge->as<UICanvasSlot>()) {
+            edge->as<UICanvasSlot>()->setOffset(logicalPoint + glm::vec2(10.0f, 10.0f));
+            return;
+        }
+    }
+    YA_CORE_ERROR("WidgetTree drag ghost is missing its canvas slot");
+}
+
+void WidgetTree::clearExternalGhost()
+{
+    if (_externalGhost && _externalGhost->isAttached()) {
+        detach(*_externalGhost);
+    }
+    _externalGhost.reset();
 }
 
 void WidgetTree::applyDropTarget(UIElement* target,
@@ -1587,18 +1602,12 @@ void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
     }
     _dragPoint = logicalPoint;
     if (_dragGhost) {
-        if (UIElement* layerHost = getLayer(ELayer::DragIme)) {
-            if (UISlot* edge = layerHost->getSlotForChild(*_dragGhost); edge && edge->as<UICanvasSlot>()) {
-                auto* slot = edge->as<UICanvasSlot>();
-                slot->setOffset(logicalPoint + glm::vec2(10.0f, 10.0f));
-            }
-            else {
-                YA_CORE_ERROR("WidgetTree drag ghost is missing its canvas slot");
-            }
-        }
+        placeDragGhost(*_dragGhost, logicalPoint);
     }
 
-    UIElement* target = findDropTarget(logicalPoint);
+    // Hover must see preview-only targets (dock chooser). Commit still uses
+    // findDropTarget in endDrag, so a chooser hover cannot drop.
+    UIElement* target = findDropHoverTarget(logicalPoint, _dragOperation.get());
     const std::string previousTargetName = _dragDropTarget ? _dragDropTarget->_name : std::string{};
     const bool bTargetChanged = target != _dragDropTarget;
     applyDropTarget(target, *_dragOperation, logicalPoint);
@@ -1627,6 +1636,7 @@ void WidgetTree::clearDragSession()
         detach(*_dragGhost); // operation already cleared: no recursive cancel
     }
     _dragGhost.reset();
+    clearExternalGhost();
 }
 
 void WidgetTree::endDrag(const glm::vec2& logicalPoint)
@@ -1691,7 +1701,13 @@ void WidgetTree::setExternalDropHover(const UIDragDropOperation& operation,
     }
     _externalDropOp = &operation;
     _dragPoint      = logicalPoint;
-    applyDropTarget(findDropTarget(logicalPoint, &operation), operation, logicalPoint);
+    applyDropTarget(findDropHoverTarget(logicalPoint, &operation), operation, logicalPoint);
+    if (!_externalGhost) {
+        _externalGhost = attachDragGhost(operation.ghostLabel);
+    }
+    if (_externalGhost) {
+        placeDragGhost(*_externalGhost, logicalPoint);
+    }
 }
 
 void WidgetTree::clearExternalDropHover()
@@ -1701,6 +1717,19 @@ void WidgetTree::clearExternalDropHover()
         _dragDropTarget = nullptr;
     }
     _externalDropOp = nullptr;
+    clearExternalGhost();
+}
+
+void WidgetTree::setSourceDragChromeVisible(bool visible)
+{
+    if (_dragGhost) {
+        _dragGhost->setVisibility(visible ? EWidgetVisibility::SelfHitTestInvisible
+                                          : EWidgetVisibility::Hidden);
+    }
+    if (!visible && _dragDropTarget) {
+        _dragDropTarget->setDropHighlight(false);
+        _dragDropTarget = nullptr;
+    }
 }
 
 bool WidgetTree::dropExternal(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)

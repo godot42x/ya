@@ -5,7 +5,7 @@
 
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
-#include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/Image.h"
 
 #include "RHI/Core/Texture.h"
 
@@ -34,19 +34,17 @@ std::shared_ptr<Texture> makeFakeTexture()
 TEST(UIFrameTextureLifetimeTest, SnapshotRetainsTextureAfterCacheClear)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
-    FCanvasSlotArgs panelSlot;
-    panelSlot.offset = {10.0f, 10.0f};
-    panelSlot.fixedSize = {100.0f, 50.0f};
+    auto       image = std::make_shared<UIImage>("P");
+    FCanvasSlotArgs imageSlot;
+    imageSlot.offset = {10.0f, 10.0f};
+    imageSlot.fixedSize = {100.0f, 50.0f};
 
-    // Fake asset cache (AssetManager's textureManager behaves the same:
-    // path -> strong ref; unloading/clearing drops the cache's reference).
     std::unordered_map<std::string, std::shared_ptr<Texture>> cache;
     auto texture = makeFakeTexture();
     cache["Engine:Content/TestTextures/face.png"] = texture;
-    panel->_image = TextureRef("Engine:Content/TestTextures/face.png", ya::Ptr<Texture>(texture.get()));
+    image->setAssetPath("Engine:Content/TestTextures/face.png");
 
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
 
     UIFrameBuildContext ctx;
     ctx.textureResolver = [&](const std::string& path) {
@@ -59,8 +57,6 @@ TEST(UIFrameTextureLifetimeTest, SnapshotRetainsTextureAfterCacheClear)
     ASSERT_NE(snapshot.items[0].texture, nullptr);
     EXPECT_EQ(snapshot.items[0].texture.get(), texture.get());
 
-    // The cache unloads/clears the texture (asset reload, scene teardown):
-    // the snapshot's strong reference keeps the object alive through submit.
     cache.clear();
     texture.reset();
 
@@ -72,22 +68,19 @@ TEST(UIFrameTextureLifetimeTest, SnapshotRetainsTextureAfterCacheClear)
 TEST(UIFrameTextureLifetimeTest, ResolverMissAndMissingResolverFallBackToWhite)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
-    FCanvasSlotArgs panelSlot;
-    panelSlot.offset = {10.0f, 10.0f};
-    panelSlot.fixedSize = {100.0f, 50.0f};
-    panel->_image    = TextureRef("Engine:Content/TestTextures/face.png",
-                                  ya::Ptr<Texture>(makeFakeTexture().get()));
-    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
+    auto       image = std::make_shared<UIImage>("P");
+    FCanvasSlotArgs imageSlot;
+    imageSlot.offset = {10.0f, 10.0f};
+    imageSlot.fixedSize = {100.0f, 50.0f};
+    image->setAssetPath("Engine:Content/TestTextures/face.png");
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), image, imageSlot);
 
-    // Resolver present but cache miss: white sprite (null texture).
     UIFrameBuildContext missCtx;
     missCtx.textureResolver = [](const std::string&) { return std::shared_ptr<Texture>(); };
     const UIFrameSnapshot missSnapshot = tree.buildSnapshot(missCtx);
     ASSERT_EQ(missSnapshot.items.size(), 1u);
     EXPECT_EQ(missSnapshot.items[0].texture, nullptr);
 
-    // No resolver at all: white sprite, never a dangling pointer.
     const UIFrameSnapshot noResolverSnapshot = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_EQ(noResolverSnapshot.items.size(), 1u);
     EXPECT_EQ(noResolverSnapshot.items[0].texture, nullptr);

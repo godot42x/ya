@@ -134,7 +134,7 @@ class UITextWidgetBuilder final : public TUIWidgetBuilder<UIText, UITextWidgetBu
 class UIButtonWidgetBuilder final : public TUIWidgetChildrenBuilder<UIButton, UIButtonWidgetBuilder>
 {
   public:
-    using SlotArgs = FOverlaySlotArgs;
+    using SlotArgs = FContentSlotArgs;
 
     explicit UIButtonWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdButton, std::move(key), std::move(displayName))
@@ -146,27 +146,27 @@ class UIButtonWidgetBuilder final : public TUIWidgetChildrenBuilder<UIButton, UI
     // plain child(node) overloads visible.
     using TUIWidgetChildrenBuilder::child;
 
-    UIButtonWidgetBuilder& child(UIElementRef node, const FOverlaySlotArgs& slot) &
+    UIButtonWidgetBuilder& child(UIElementRef node, const FContentSlotArgs& slot) &
     {
-        this->applySingleChildSlot(std::move(node), slot);
+        this->applySlotArgs(std::move(node), slot);
         return *this;
     }
-    UIButtonWidgetBuilder&& child(UIElementRef node, const FOverlaySlotArgs& slot) &&
+    UIButtonWidgetBuilder&& child(UIElementRef node, const FContentSlotArgs& slot) &&
     {
-        this->applySingleChildSlot(std::move(node), slot);
+        this->applySlotArgs(std::move(node), slot);
         return std::move(*this);
     }
 
     template<UIWidgetBuilder TChild>
-    UIButtonWidgetBuilder& child(TChild&& builder, const FOverlaySlotArgs& slot) &
+    UIButtonWidgetBuilder& child(TChild&& builder, const FContentSlotArgs& slot) &
     {
-        this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
-    UIButtonWidgetBuilder&& child(TChild&& builder, const FOverlaySlotArgs& slot) &&
+    UIButtonWidgetBuilder&& child(TChild&& builder, const FContentSlotArgs& slot) &&
     {
-        this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
         return std::move(*this);
     }
 
@@ -267,7 +267,7 @@ class UITextFieldWidgetBuilder final : public TUIWidgetBuilder<UITextField, UITe
 class UICheckBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UICheckBox, UICheckBoxWidgetBuilder>
 {
   public:
-    using SlotArgs = FOverlaySlotArgs;
+    using SlotArgs = FContentSlotArgs;
 
     explicit UICheckBoxWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdCheckBox, std::move(key), std::move(displayName))
@@ -276,27 +276,27 @@ class UICheckBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UICheckBox
 
     using TUIWidgetChildrenBuilder::child;
 
-    UICheckBoxWidgetBuilder& child(UIElementRef node, const FOverlaySlotArgs& slot) &
+    UICheckBoxWidgetBuilder& child(UIElementRef node, const FContentSlotArgs& slot) &
     {
-        this->applySingleChildSlot(std::move(node), slot);
+        this->applySlotArgs(std::move(node), slot);
         return *this;
     }
-    UICheckBoxWidgetBuilder&& child(UIElementRef node, const FOverlaySlotArgs& slot) &&
+    UICheckBoxWidgetBuilder&& child(UIElementRef node, const FContentSlotArgs& slot) &&
     {
-        this->applySingleChildSlot(std::move(node), slot);
+        this->applySlotArgs(std::move(node), slot);
         return std::move(*this);
     }
 
     template<UIWidgetBuilder TChild>
-    UICheckBoxWidgetBuilder& child(TChild&& builder, const FOverlaySlotArgs& slot) &
+    UICheckBoxWidgetBuilder& child(TChild&& builder, const FContentSlotArgs& slot) &
     {
-        this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
-    UICheckBoxWidgetBuilder&& child(TChild&& builder, const FOverlaySlotArgs& slot) &&
+    UICheckBoxWidgetBuilder&& child(TChild&& builder, const FContentSlotArgs& slot) &&
     {
-        this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
         return std::move(*this);
     }
 
@@ -344,7 +344,7 @@ class UICheckBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UICheckBox
 class UISelectableRowWidgetBuilder final : public TUIWidgetChildrenBuilder<UISelectableRow, UISelectableRowWidgetBuilder>
 {
   public:
-    using SlotArgs = FOverlaySlotArgs;
+    using SlotArgs = FContentSlotArgs;
 
     explicit UISelectableRowWidgetBuilder(std::string key, std::string displayName = {})
         : TUIWidgetChildrenBuilder(kTypeIdSelectableRow, std::move(key), std::move(displayName))
@@ -353,27 +353,27 @@ class UISelectableRowWidgetBuilder final : public TUIWidgetChildrenBuilder<UISel
 
     using TUIWidgetChildrenBuilder::child;
 
-    UISelectableRowWidgetBuilder& child(UIElementRef node, const FOverlaySlotArgs& slot) &
+    UISelectableRowWidgetBuilder& child(UIElementRef node, const FContentSlotArgs& slot) &
     {
-        this->applySingleChildSlot(std::move(node), slot);
+        this->applySlotArgs(std::move(node), slot);
         return *this;
     }
-    UISelectableRowWidgetBuilder&& child(UIElementRef node, const FOverlaySlotArgs& slot) &&
+    UISelectableRowWidgetBuilder&& child(UIElementRef node, const FContentSlotArgs& slot) &&
     {
-        this->applySingleChildSlot(std::move(node), slot);
+        this->applySlotArgs(std::move(node), slot);
         return std::move(*this);
     }
 
     template<UIWidgetBuilder TChild>
-    UISelectableRowWidgetBuilder& child(TChild&& builder, const FOverlaySlotArgs& slot) &
+    UISelectableRowWidgetBuilder& child(TChild&& builder, const FContentSlotArgs& slot) &
     {
-        this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
-    UISelectableRowWidgetBuilder&& child(TChild&& builder, const FOverlaySlotArgs& slot) &&
+    UISelectableRowWidgetBuilder&& child(TChild&& builder, const FContentSlotArgs& slot) &&
     {
-        this->applySingleChildSlot(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
         return std::move(*this);
     }
 

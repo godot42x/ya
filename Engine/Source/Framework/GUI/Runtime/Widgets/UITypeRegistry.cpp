@@ -7,6 +7,7 @@
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Menu.h"
@@ -58,8 +59,10 @@ void UITypeRegistry::ensureBuiltinTypesRegistered()
     }
     _bBuiltinsRegistered = true;
 
-    registerType({.typeId = kTypeIdPanel, .displayName = "Panel", .category = "Basic"},
-                 [] { return std::make_shared<UIPanel>("Panel"); });
+    registerType({.typeId = kTypeIdCanvasPanel, .displayName = "Canvas Panel", .category = "Layout"},
+                 [] { return std::make_shared<UICanvasPanel>("CanvasPanel"); });
+    registerType({.typeId = kTypeIdBorder, .displayName = "Border", .category = "Basic"},
+                 [] { return std::make_shared<UIBorder>("Border"); });
     registerType({.typeId = kTypeIdText, .displayName = "Text", .category = "Basic"},
                  [] { return std::make_shared<UIText>("Text"); });
     registerType({.typeId = kTypeIdButton, .displayName = "Button", .category = "Basic"},

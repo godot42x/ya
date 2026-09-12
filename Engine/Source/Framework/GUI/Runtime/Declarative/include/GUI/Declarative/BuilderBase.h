@@ -103,9 +103,8 @@ class TUIIfElseChild
 template<typename T>
 concept UISlotBuilder = requires(const std::remove_reference_t<T>& builder) {
     builder.args();
-} && (std::same_as<std::remove_cvref_t<decltype(std::declval<const std::remove_reference_t<T>&>().args())>, FCanvasSlotArgs> ||
-      std::same_as<std::remove_cvref_t<decltype(std::declval<const std::remove_reference_t<T>&>().args())>, FBoxSlotArgs> ||
-      std::same_as<std::remove_cvref_t<decltype(std::declval<const std::remove_reference_t<T>&>().args())>, FOverlaySlotArgs>);
+    typename std::remove_cvref_t<decltype(std::declval<const std::remove_reference_t<T>&>().args())>::SlotType;
+};
 
 template<typename T>
 concept UICompoundWidgetType = std::derived_from<T, UICompoundWidget>;
@@ -178,6 +177,13 @@ class TUIWidgetBuilder
     [[nodiscard]] UIElementRef take()
     {
         return release();
+    }
+    template<typename T>
+    [[nodiscard]] std::shared_ptr<T> takeAs()
+    {
+        auto widget = std::dynamic_pointer_cast<T>(release());
+        YA_CORE_ASSERT(widget, "ui builder takeAs: produced the wrong widget class");
+        return widget;
     }
 
     [[nodiscard]] std::shared_ptr<TWidget> share() const { return _widget; }
@@ -412,20 +418,15 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     template<UISlotBuilder TSlotBuilder>
     void applySlotBuilder(UIElementRef node, TSlotBuilder&& slotBuilder)
     {
-        using TArgs = std::remove_cvref_t<decltype(slotBuilder.args())>;
-        if constexpr (std::same_as<TArgs, FCanvasSlotArgs>) {
-            applyCanvasSlot(std::move(node), slotBuilder.args());
-        }
-        else if constexpr (std::same_as<TArgs, FBoxSlotArgs>) {
-            attachChild(std::move(node), [&slotBuilder](UIElement&, UISlot& childSlot) {
-                if (auto* typedSlot = childSlot.as<UIBoxSlot>()) {
-                    typedSlot->apply(slotBuilder.args());
-                }
-            });
-        }
-        else {
-            applySingleChildSlot(std::move(node), slotBuilder.args());
-        }
+        applySlotArgs(std::move(node), slotBuilder.args());
+    }
+
+    template<typename TArgs>
+    void applySlotArgs(UIElementRef node, const TArgs& args)
+    {
+        attachChild(std::move(node), [&args](UIElement&, UISlot& childSlot) {
+            childSlot.applyArgs(args);
+        });
     }
 
     void attachChild(UIElementRef node)
@@ -460,30 +461,6 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
             return false;
         }
         return true;
-    }
-
-    /// Attach a child and apply its single-child slot intent. Parents that own
-    /// both axes (button / selectable row / scroll / size box / split pane ...)
-    /// must route their child(node, slot) overloads through here so intent lands
-    /// on the edge instead of on the child's ignored anchors.
-    void applySingleChildSlot(UIElementRef node, const FOverlaySlotArgs& slot)
-    {
-        attachChild(std::move(node), [&slot](UIElement&, UISlot& childSlot) {
-            if (auto* typedSlot = childSlot.as<UIOverlaySlot>()) {
-                typedSlot->apply(slot);
-            }
-        });
-    }
-
-    /// Attach a child and apply its canvas slot intent. The anchor geometry
-    /// lives on this edge, never on the child's ignored anchors.
-    void applyCanvasSlot(UIElementRef node, const FCanvasSlotArgs& slot)
-    {
-        attachChild(std::move(node), [&slot](UIElement&, UISlot& childSlot) {
-            if (auto* typedSlot = childSlot.as<UICanvasSlot>()) {
-                typedSlot->apply(slot);
-            }
-        });
     }
 
 };

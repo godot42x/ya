@@ -1,11 +1,15 @@
 #include "GUI/Widgets/Controls/ColorEdit.h"
 
 #include "Core/KeyCode.h"
-#include "Render/Resources/FontManager.h"
+#include "GUI/Declarative/Build.h"
+#include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/DragFloat.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/TextEdit.h"
+#include "GUI/Widgets/Style.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "Render/Resources/FontManager.h"
 
 #include <algorithm>
 #include <cctype>
@@ -14,6 +18,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace ya
 {
@@ -25,6 +30,8 @@ constexpr float kSvSize     = 160.0f;
 constexpr float kHueBarH    = 14.0f;
 constexpr float kPickerPad  = 8.0f;
 constexpr float kHexRowH    = 22.0f;
+constexpr float kChannelRowH = 22.0f;
+constexpr float kMinChannelCell = 56.0f;
 constexpr int   kHueSegments = 6;
 
 bool contains(const Rect2D& rect, const glm::vec2& point)
@@ -181,6 +188,8 @@ public:
     }
 
     [[nodiscard]] glm::vec4 currentColor() const { return hsvToRgb(_h, _s, _v, _a); }
+
+    [[nodiscard]] bool wantsTextInput() const override { return _bEditingHex; }
 
     [[nodiscard]] glm::vec2 computeDesiredSize() const override { return computeIntrinsicSize(); }
     [[nodiscard]] glm::vec2 computeIntrinsicSize() const override
@@ -417,28 +426,184 @@ private:
     FTextEditState _hexEdit;
 };
 
+class FColorSwatch final : public UIElement
+{
+  public:
+    explicit FColorSwatch(std::string name) : UIElement(std::move(name), "coloredit")
+    {
+        _hitFilter = EWidgetHitFilter::Stop;
+    }
+
+    glm::vec4              color{1.0f, 1.0f, 1.0f, 1.0f};
+    bool                   bMixed = false;
+    std::function<void()>  onClick;
+
+    void setDisplay(const glm::vec4& value, bool mixed)
+    {
+        color  = value;
+        bMixed = mixed;
+        invalidateProperty(EUIPropertyImpact::Paint);
+    }
+
+    bool isHoverable() const override { return true; }
+    void onPointerEnter() override { _bHovered = true; }
+    void onPointerLeave() override { _bHovered = false; }
+    void resetHoverState() override { _bHovered = false; }
+
+    void paintSelf(UIFrameBuilder& builder) override
+    {
+        const FColorEditStyle& style = resolveWidgetStyle<FColorEditStyle>(*this);
+        const glm::vec4 fill = bMixed ? glm::vec4(0.45f, 0.45f, 0.45f, 1.0f) : color;
+        builder.addSprite(_layoutRect, fill, nullptr);
+        const glm::vec4 outline = _bHovered ? glm::vec4{0.78f, 0.82f, 0.90f, 1.0f}
+                                            : style.textColor * glm::vec4(1.0f, 1.0f, 1.0f, 0.55f);
+        builder.addRectOutline(insetRect(_layoutRect, 1.0f), outline, 1.0f);
+        if (!bMixed) {
+            return;
+        }
+        auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
+        if (font) {
+            builder.addText(_layoutRect, "—", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+        }
+    }
+
+    bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override
+    {
+        if (event.getEventType() != EEvent::MouseButtonPressed) {
+            return hitTestLayoutRect(ctx.logicalPoint);
+        }
+        if (onClick) {
+            onClick();
+        }
+        return true;
+    }
+
+  private:
+    VisualFlag _bHovered{*this};
+};
+
 } // namespace
 
-Rect2D UIColorEdit::swatchRect() const
+int UIColorEdit::visibleChannelCount() const
 {
-    const glm::vec2 pad = resolvedStyle().padding;
-    return Rect2D{
-        .pos    = {_layoutRect.pos.x + pad.x, _layoutRect.pos.y + pad.y},
-        .extent = {_swatchSize, std::max(8.0f, _layoutRect.extent.y - pad.y * 2.0f)},
+    return std::clamp(_channelCount, 1, 4);
+}
+
+std::string UIColorEdit::channelStyleKey() const
+{
+    constexpr std::string_view kSuffix = "coloredit";
+    if (_styleKey.size() > kSuffix.size() && _styleKey.ends_with(kSuffix) &&
+        _styleKey[_styleKey.size() - kSuffix.size() - 1] == '.') {
+        std::string key = _styleKey.substr(0, _styleKey.size() - kSuffix.size());
+        key += StyleKey::DragFloat;
+        return key;
+    }
+    return std::string(StyleKey::DragFloat);
+}
+
+void UIColorEdit::syncChannelVisibility()
+{
+    const int visible = visibleChannelCount();
+    for (int i = 0; i < 4; ++i) {
+        if (!_channels[static_cast<size_t>(i)]) {
+            continue;
+        }
+        _channels[static_cast<size_t>(i)]->setVisibility(
+            i < visible ? EWidgetVisibility::Visible : EWidgetVisibility::Collapsed);
+    }
+}
+
+void UIColorEdit::syncChannelsFromColor()
+{
+    _bSyncing = true;
+    for (int i = 0; i < 4; ++i) {
+        if (auto& channel = _channels[static_cast<size_t>(i)]) {
+            channel->setValue(_color[i], false);
+            channel->setMixed(_bMixed);
+        }
+    }
+    if (auto* swatch = dynamic_cast<FColorSwatch*>(_swatch.get())) {
+        swatch->setDisplay(_color, _bMixed);
+    }
+    _bSyncing = false;
+}
+
+glm::vec2 UIColorEdit::computeIntrinsicSize() const
+{
+    const glm::vec2 pad   = resolvedStyle().padding;
+    const int       count = visibleChannelCount();
+    return {
+        pad.x * 2.0f + _swatchSize + 4.0f + kMinChannelCell * static_cast<float>(count),
+        pad.y * 2.0f + kChannelRowH,
     };
 }
 
-Rect2D UIColorEdit::channelRect(int channel) const
+void UIColorEdit::applyHostPadding()
 {
-    const glm::vec2 pad    = resolvedStyle().padding;
-    const Rect2D     swatch = swatchRect();
-    const float      x0    = swatch.pos.x + swatch.extent.x + pad.x;
-    const float      avail  = std::max(32.0f, _layoutRect.pos.x + _layoutRect.extent.x - pad.x - x0);
-    const float      cellW  = avail / 4.0f;
-    return Rect2D{
-        .pos    = {x0 + static_cast<float>(channel) * cellW, _layoutRect.pos.y + pad.y},
-        .extent = {std::max(8.0f, cellW - pad.x), std::max(8.0f, _layoutRect.extent.y - pad.y * 2.0f)},
+    if (getChildren().empty()) {
+        return;
+    }
+    if (auto* row = dynamic_cast<UIContainer*>(getChildren().front().get())) {
+        row->setPadding(resolvedStyle().padding);
+    }
+}
+
+void UIColorEdit::onAttached()
+{
+    applyHostPadding();
+}
+
+void UIColorEdit::construct()
+{
+    static const char* kPrefix[4] = {"R", "G", "B", "A"};
+    auto swatch = std::make_shared<FColorSwatch>("Swatch");
+    swatch->setStyleKey(_styleKey);
+    swatch->onClick = [this]()
+    {
+        if (isPickerOpen()) {
+            closePalette();
+        }
+        else {
+            openPalette();
+        }
     };
+    _swatch = swatch;
+
+    auto row = ui::row("ColorEditRow").setSpacing(4.0f).setPadding(resolvedStyle().padding);
+    row.child(_swatch, ui::boxSlot().preferredSize({_swatchSize, kChannelRowH}));
+    for (int i = 0; i < 4; ++i) {
+        auto drag = std::make_shared<UIDragFloat>(std::string("Channel") + kPrefix[i]);
+        drag->setPrefix(kPrefix[i]);
+        drag->_min      = 0.0f;
+        drag->_max      = 1.0f;
+        drag->_decimals = 2;
+        drag->setStyleKey(channelStyleKey());
+        drag->_onValueChanged = [this, i](float value)
+        {
+            if (_bSyncing) {
+                return;
+            }
+            glm::vec4 next = _color;
+            next[i] = value;
+            setColor(next);
+        };
+        _channels[static_cast<size_t>(i)] = drag;
+        row.child(drag, ui::boxSlot().fillWidth().preferredSize({kMinChannelCell, kChannelRowH}));
+    }
+    addDetachedChild(row.release());
+    syncChannelVisibility();
+    syncChannelsFromColor();
+}
+
+void UIColorEdit::setChannelCount(int count)
+{
+    count = std::clamp(count, 1, 4);
+    if (_channelCount == count) {
+        return;
+    }
+    _channelCount = count;
+    syncChannelVisibility();
+    invalidateProperty(EUIPropertyImpact::Layout);
 }
 
 void UIColorEdit::setColor(const glm::vec4& value, bool bNotify)
@@ -448,6 +613,7 @@ void UIColorEdit::setColor(const glm::vec4& value, bool bNotify)
     }
     _color  = value;
     _bMixed = false;
+    syncChannelsFromColor();
     invalidateProperty(EUIPropertyImpact::Paint);
     if (bNotify && _onColorChanged) {
         _onColorChanged(_color);
@@ -460,17 +626,8 @@ void UIColorEdit::setMixed(bool mixed)
         return;
     }
     _bMixed = mixed;
+    syncChannelsFromColor();
     invalidateProperty(EUIPropertyImpact::Paint);
-}
-
-void UIColorEdit::adjustChannel(int channel, float delta)
-{
-    if (channel < 0 || channel > 3) {
-        return;
-    }
-    glm::vec4 next = _color;
-    next[channel] = std::clamp(next[channel] + delta, 0.0f, 1.0f);
-    setColor(next);
 }
 
 void UIColorEdit::openPalette()
@@ -484,7 +641,7 @@ void UIColorEdit::openPalette()
     picker->setFromRgba(_color);
     picker->_onColorChanged = [this](const glm::vec4& picked) { setColor(picked); };
     const glm::vec2 pickerSize = picker->computeDesiredSize();
-    const Rect2D    swatch     = swatchRect();
+    const Rect2D    swatch     = _swatch ? _swatch->getLayoutRect() : _layoutRect;
     glm::vec2       pos        = {swatch.pos.x, swatch.pos.y + swatch.extent.y + 4.0f};
     if (WidgetTree* tree = getTree()) {
         const float viewH = static_cast<float>(tree->getLogicalExtent().height);
@@ -510,116 +667,6 @@ void UIColorEdit::closePalette()
         _paletteOverlay.reset();
         overlay->close();
     }
-}
-
-void UIColorEdit::paintSelf(UIFrameBuilder& builder)
-{
-    const FColorEditStyle& style = resolvedStyle();
-    builder.addBrush(_layoutRect, style.backgroundFill);
-    const glm::vec4 swatchColor = _bMixed ? glm::vec4(0.45f, 0.45f, 0.45f, 1.0f) : _color;
-    builder.addSprite(swatchRect(), swatchColor, nullptr);
-    builder.addRectOutline(insetRect(swatchRect(), 1.0f), style.textColor * glm::vec4(1.0f, 1.0f, 1.0f, 0.35f), 1.0f);
-
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
-    if (_bMixed && font) {
-        builder.addText(swatchRect(), "—", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
-        return;
-    }
-
-    static const char* kNames[4] = {"R", "G", "B", "A"};
-    const glm::vec2 innerPad{std::max(4.0f, style.padding.x * 0.5f), 0.0f};
-    for (int ch = 0; ch < 4; ++ch) {
-        const Rect2D cell = channelRect(ch);
-        builder.addSprite(cell, glm::vec4(0.16f, 0.18f, 0.22f, 1.0f), nullptr);
-        builder.addRectOutline(insetRect(cell, 1.0f), style.textColor * glm::vec4(1.0f, 1.0f, 1.0f, 0.22f), 1.0f);
-        if (!font) {
-            continue;
-        }
-        Rect2D inner = cell;
-        inner.pos += innerPad;
-        inner.extent = glm::max(inner.extent - innerPad * 2.0f, glm::vec2(0.0f));
-        const float prefixW = font->measureText(kNames[ch]) + innerPad.x;
-        Rect2D prefix = inner;
-        prefix.extent.x = std::min(prefixW, inner.extent.x);
-        Rect2D value = inner;
-        value.pos.x += prefix.extent.x;
-        value.extent.x = std::max(0.0f, inner.extent.x - prefix.extent.x);
-        builder.pushClip(cell);
-        builder.addText(prefix, kNames[ch], style.textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
-        builder.addText(value,
-                        std::format("{:.2f}", _color[ch]),
-                        style.textColor,
-                        font,
-                        EWidgetAlignH::Left,
-                        EWidgetAlignV::Center);
-        builder.popClip();
-    }
-}
-
-bool UIColorEdit::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
-{
-    const EEvent::T eventType = event.getEventType();
-
-    if (eventType == EEvent::KeyPressed) {
-        if (_dragChannel < 0) {
-            return false;
-        }
-        const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
-        if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Left) {
-            adjustChannel(_dragChannel, -0.05f);
-            return true;
-        }
-        if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Right) {
-            adjustChannel(_dragChannel, 0.05f);
-            return true;
-        }
-        return false;
-    }
-
-    if (eventType == EEvent::MouseButtonPressed) {
-        if (contains(swatchRect(), ctx.logicalPoint)) {
-            if (isPickerOpen()) {
-                closePalette();
-            }
-            else {
-                openPalette();
-            }
-            return true;
-        }
-        for (int ch = 0; ch < 4; ++ch) {
-            if (contains(channelRect(ch), ctx.logicalPoint)) {
-                _dragChannel = ch;
-                _bDragging   = true;
-                _dragStart   = ctx.logicalPoint;
-                if (WidgetTree* tree = getTree()) {
-                    tree->setPointerCapture(this);
-                }
-                return true;
-            }
-        }
-        return hitTestLayoutRect(ctx.logicalPoint);
-    }
-
-    if (eventType == EEvent::MouseMoved) {
-        if (_bDragging && _dragChannel >= 0) {
-            adjustChannel(_dragChannel, (ctx.logicalPoint.x - _dragStart.x) * 0.01f);
-            _dragStart = ctx.logicalPoint;
-        }
-        return true;
-    }
-
-    if (eventType == EEvent::MouseButtonReleased) {
-        if (_bDragging) {
-            _bDragging   = false;
-            _dragChannel = -1;
-            if (WidgetTree* tree = getTree()) {
-                tree->releasePointerCapture(this);
-            }
-        }
-        return true;
-    }
-
-    return false;
 }
 
 } // namespace ya

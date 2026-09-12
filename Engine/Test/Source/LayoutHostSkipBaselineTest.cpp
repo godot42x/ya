@@ -91,7 +91,7 @@ std::shared_ptr<Font> registerSkipTestFont()
 TEST(LayoutHostSkipBaselineTest, PanelSkipProofStillHoldsOnParentReassign)
 {
     WidgetTree tree({.width = 320, .height = 160});
-    auto       panel = std::make_shared<UIPanel>("Panel");
+    auto       panel = std::make_shared<UICanvasPanel>("Panel");
     attachFill(tree, panel);
     UILayout* layout = panel->getLayout();
     ASSERT_NE(layout, nullptr);
@@ -112,15 +112,15 @@ TEST(LayoutHostSkipBaselineTest, SpecializedHostsSkipOnParentReassign)
     auto sizeBox   = std::make_shared<UISizeBox>("SizeBox");
     auto row       = std::make_shared<UISelectableRow>("Row");
 
-    overlay->addDetachedChild(std::make_shared<UIPanel>("OverlayChild"));
-    scroll->addDetachedChild(std::make_shared<UIPanel>("ScrollChild"), [](UIElement&, UISlot& slot) {
-        if (auto* single = dynamic_cast<UIOverlaySlot*>(&slot)) {
+    overlay->addDetachedChild(std::make_shared<UICanvasPanel>("OverlayChild"));
+    scroll->addDetachedChild(std::make_shared<UICanvasPanel>("ScrollChild"), [](UIElement&, UISlot& slot) {
+        if (auto* single = dynamic_cast<UIContentSlot*>(&slot)) {
             single->setPreferredSize({200.0f, 400.0f});
         }
     });
-    split->addDetachedChild(std::make_shared<UIPanel>("PaneA"));
-    split->addDetachedChild(std::make_shared<UIPanel>("PaneB"));
-    sizeBox->addDetachedChild(std::make_shared<UIPanel>("SizeChild"));
+    split->addDetachedChild(std::make_shared<UICanvasPanel>("PaneA"));
+    split->addDetachedChild(std::make_shared<UICanvasPanel>("PaneB"));
+    sizeBox->addDetachedChild(std::make_shared<UICanvasPanel>("SizeChild"));
 
     attachFill(tree, container);
     attachFill(tree, button);
@@ -146,7 +146,7 @@ TEST(LayoutHostSkipBaselineTest, PopupAndDockSkipOnParentReassign)
     WidgetTree tree({.width = 800, .height = 600});
 
     auto popup = std::make_shared<UIPopupOverlay>("Popup");
-    auto panel = std::make_shared<UIPanel>("PopupContent");
+    auto panel = std::make_shared<UICanvasPanel>("PopupContent");
     popup->_contentPos    = {16.0f, 12.0f};
     popup->_contentExtent = {120.0f, 48.0f};
     popup->addDetachedChild(panel);
@@ -156,7 +156,7 @@ TEST(LayoutHostSkipBaselineTest, PopupAndDockSkipOnParentReassign)
     auto dock    = std::make_shared<UIDockSpace>("Dock");
     dock->setContext(context);
     attachFill(tree, dock);
-    ASSERT_NE(context->addPanel("scene", "Scene", std::make_shared<UIPanel>("SceneBody")),
+    ASSERT_NE(context->addPanel("scene", "Scene", std::make_shared<UICanvasPanel>("SceneBody")),
               kInvalidDockPanelId);
 
     UILayout* popupLayout = popup->getLayout();
@@ -174,8 +174,8 @@ TEST(LayoutHostSkipBaselineTest, CleanSiblingContainerSkipsWhenOtherBranchDirtie
     auto       row   = std::make_shared<UIContainer>("Row");
     auto       left  = std::make_shared<UIContainer>("Left");
     auto       right = std::make_shared<UIContainer>("Right");
-    auto       dirty = std::make_shared<UIPanel>("Dirty");
-    auto       clean = std::make_shared<UIPanel>("Clean");
+    auto       dirty = std::make_shared<UICanvasPanel>("Dirty");
+    auto       clean = std::make_shared<UICanvasPanel>("Clean");
     row->setDirection(EWidgetBoxLayout::Horizontal);
 
     attachFill(tree, row);
@@ -212,8 +212,8 @@ TEST(LayoutHostSkipBaselineTest, CleanSiblingContainerSkipsWhenOtherBranchDirtie
 TEST(LayoutHostSkipBaselineTest, CleanSiblingPanelSkipsWhenOtherBranchDirties)
 {
     WidgetTree tree({.width = 320, .height = 160});
-    auto       first  = std::make_shared<UIPanel>("First");
-    auto       second = std::make_shared<UIPanel>("Second");
+    auto       first  = std::make_shared<UICanvasPanel>("First");
+    auto       second = std::make_shared<UICanvasPanel>("Second");
     FCanvasSlotArgs firstArgs;
     firstArgs.fixedSize = {40.0f, 20.0f};
     FCanvasSlotArgs secondArgs;
@@ -259,7 +259,7 @@ TEST(LayoutHostSkipBaselineTest, SlotChangeRearrangesHost)
 {
     WidgetTree tree({.width = 320, .height = 160});
     auto       column = std::make_shared<UIContainer>("Column");
-    auto       child  = std::make_shared<UIPanel>("Child");
+    auto       child  = std::make_shared<UICanvasPanel>("Child");
     attachFill(tree, column);
     addAutoBoxChild(*column, child);
     tree.layout();
@@ -276,7 +276,7 @@ TEST(LayoutHostSkipBaselineTest, VisibilityCollapseRearrangesHost)
 {
     WidgetTree tree({.width = 320, .height = 160});
     auto       column = std::make_shared<UIContainer>("Column");
-    auto       child  = std::make_shared<UIPanel>("Child");
+    auto       child  = std::make_shared<UICanvasPanel>("Child");
     attachFill(tree, column);
     addFillBoxChild(*column, child);
     tree.layout();
@@ -292,11 +292,11 @@ TEST(LayoutHostSkipBaselineTest, StructureChangeRearrangesHost)
     WidgetTree tree({.width = 320, .height = 160});
     auto       column = std::make_shared<UIContainer>("Column");
     attachFill(tree, column);
-    addFillBoxChild(*column, std::make_shared<UIPanel>("First"));
+    addFillBoxChild(*column, std::make_shared<UICanvasPanel>("First"));
     tree.layout();
 
     column->getBoxLayout().resetArrangeCount();
-    addFillBoxChild(*column, std::make_shared<UIPanel>("Second"));
+    addFillBoxChild(*column, std::make_shared<UICanvasPanel>("Second"));
     tree.layout();
     EXPECT_EQ(column->getBoxLayout().getArrangeCount(), 1u);
 }
@@ -305,8 +305,8 @@ TEST(LayoutHostSkipBaselineTest, ScrollOffsetChangeRearrangesViewport)
 {
     WidgetTree tree({.width = 320, .height = 160});
     auto       scroll = std::make_shared<UIScrollViewport>("Scroll");
-    scroll->addDetachedChild(std::make_shared<UIPanel>("Content"), [](UIElement&, UISlot& slot) {
-        if (auto* single = dynamic_cast<UIOverlaySlot*>(&slot)) {
+    scroll->addDetachedChild(std::make_shared<UICanvasPanel>("Content"), [](UIElement&, UISlot& slot) {
+        if (auto* single = dynamic_cast<UIContentSlot*>(&slot)) {
             single->setPreferredSize({200.0f, 400.0f});
         }
     });
@@ -323,8 +323,8 @@ TEST(LayoutHostSkipBaselineTest, SplitRatioChangeRearrangesPane)
 {
     WidgetTree tree({.width = 320, .height = 160});
     auto       split = std::make_shared<UISplitPane>("Split");
-    split->addDetachedChild(std::make_shared<UIPanel>("PaneA"));
-    split->addDetachedChild(std::make_shared<UIPanel>("PaneB"));
+    split->addDetachedChild(std::make_shared<UICanvasPanel>("PaneA"));
+    split->addDetachedChild(std::make_shared<UICanvasPanel>("PaneB"));
     attachFill(tree, split);
     tree.layout();
 
@@ -340,7 +340,7 @@ TEST(LayoutHostSkipBaselineTest, PopupContentSlotChangeRearrangesOverlay)
     auto       popup = std::make_shared<UIPopupOverlay>("Popup");
     popup->_contentPos    = {16.0f, 12.0f};
     popup->_contentExtent = {120.0f, 48.0f};
-    popup->addDetachedChild(std::make_shared<UIPanel>("Content"));
+    popup->addDetachedChild(std::make_shared<UICanvasPanel>("Content"));
     popup->open(tree);
     tree.layout();
 
@@ -363,13 +363,13 @@ TEST(LayoutHostSkipBaselineTest, DockProjectionChangeRearrangesSpace)
     auto       dock    = std::make_shared<UIDockSpace>("Dock");
     dock->setContext(context);
     attachFill(tree, dock);
-    dock->addPanel("scene", std::make_shared<UIPanel>("SceneBody"));
+    dock->addPanel("scene", std::make_shared<UICanvasPanel>("SceneBody"));
     tree.layout();
 
     UILayout* layout = dock->getLayout();
     ASSERT_NE(layout, nullptr);
     layout->resetArrangeCount();
-    dock->addPanel("inspector", std::make_shared<UIPanel>("InspectorBody"));
+    dock->addPanel("inspector", std::make_shared<UICanvasPanel>("InspectorBody"));
     tree.layout();
     EXPECT_EQ(layout->getArrangeCount(), 1u);
 }

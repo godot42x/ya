@@ -11,18 +11,21 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Dialog.h"
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
+#include "GUI/Widgets/Controls/DockSpace/DockTabStack.h"
 #include "GUI/Widgets/Controls/DockSpace/DockFloatingHost.h"
 #include "GUI/Widgets/Controls/DockSpace/DockFloatingWindow.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/Brush.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/CompoundWidget.h"
@@ -113,6 +116,13 @@ struct TestKeyWidget : public UIElement
     }
 };
 
+struct TestImeHostPanel : public UICanvasPanel
+{
+    using UICanvasPanel::UICanvasPanel;
+    bool bWantIme = false;
+    [[nodiscard]] bool wantsTextInput() const override { return bWantIme; }
+};
+
 struct TestRouteWidget final : public UIElement
 {
     explicit TestRouteWidget(std::string name, std::vector<std::string>& deliveries)
@@ -169,9 +179,7 @@ struct TestDropTarget final : public UIElement
     void onDrop(const UIDragDropOperation& operation, const glm::vec2&) override
     {
         ++drops;
-        if (const auto* text = operation.as<UIStringDragDropOperation>()) {
-            lastPayload = text->text;
-        }
+        lastPayload = operation.payload;
     }
 
     void setDropHighlight(bool bHighlight) override
@@ -212,7 +220,7 @@ struct DragDetectWidget final : public UIElement
     UIDragDropOperationRef onDragDetected(const FDragDetectedEvent& event) override
     {
         detected = event.currentPoint.x > event.startPoint.x;
-        return UIStringDragDropOperation::make("detected", "Detected", "test.detected");
+        return UIDragDropOperation::make("detected", "Detected", "test.detected");
     }
     bool detected = false;
 };
@@ -331,10 +339,8 @@ struct TestDragBehavior final : public UIBehavior
         if (!bSource) {
             return nullptr;
         }
-        auto op = std::make_shared<UIStringDragDropOperation>();
-        op->typeId = "behavior.payload";
-        op->text = payload.empty() ? "behavior.payload.1" : payload;
-        op->ghostLabel = "Behavior";
+        auto op = UIDragDropOperation::make(
+            payload.empty() ? "behavior.payload.1" : payload, "Behavior", "behavior.payload");
         return op;
     }
 
@@ -347,8 +353,7 @@ struct TestDragBehavior final : public UIBehavior
     void onDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint) override
     {
         (void)owner; (void)logicalPoint;
-        const auto* text = operation.as<UIStringDragDropOperation>();
-        dropped = text && text->text == (payload.empty() ? "behavior.payload.1" : payload);
+        dropped = operation.payload == (payload.empty() ? "behavior.payload.1" : payload);
     }
 
     void setDropHighlight(UIElement& owner, bool bHighlight) override
@@ -481,10 +486,10 @@ TEST(WidgetTreeTest, DragDetectionInvokesWidgetCallbackWithoutDragSourceControl)
     tree.cancelDrag();
 }
 
-TEST(WidgetTreeTest, DragGhostLabelUsesCanvasSlotInsteadOfChildZeroSize)
+TEST(WidgetTreeTest, DragGhostLabelUsesContentSlotInsteadOfChildZeroSize)
 {
     WidgetTree tree({.width = 400, .height = 300});
-    auto       source = std::make_shared<UIPanel>("Source");
+    auto       source = std::make_shared<UICanvasPanel>("Source");
     FCanvasSlotArgs sourceSlot; sourceSlot.offset = {20.0f, 20.0f}; sourceSlot.fixedSize = {120.0f, 80.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot).valid());
 
@@ -495,9 +500,12 @@ TEST(WidgetTreeTest, DragGhostLabelUsesCanvasSlotInsteadOfChildZeroSize)
     (void)tree.buildSnapshot(UIFrameBuildContext{});
 
     const nlohmann::json dump = dumpWidgetTree(tree);
+    const auto* ghostNode = findWidgetNode(dump, "DragGhost");
+    ASSERT_NE(ghostNode, nullptr);
+    EXPECT_EQ((*ghostNode)["slot"]["type"], "canvas");
     const auto* labelNode = findWidgetNode(dump, "DragGhostLabel");
     ASSERT_NE(labelNode, nullptr);
-    EXPECT_EQ((*labelNode)["slot"]["type"], "canvas");
+    EXPECT_EQ((*labelNode)["slot"]["type"], "content");
     EXPECT_GT((*labelNode)["rect"]["w"].get<float>(), 0.0f);
     EXPECT_GT((*labelNode)["rect"]["h"].get<float>(), 0.0f);
 
@@ -507,7 +515,7 @@ TEST(WidgetTreeTest, DragGhostLabelUsesCanvasSlotInsteadOfChildZeroSize)
 TEST(WidgetTreeTest, BehaviorLifecycleTickAndInvalidationFollowOwner)
 {
     WidgetTree tree({.width = 400, .height = 300});
-    auto panel = std::make_shared<UIPanel>("BehaviorHost");
+    auto panel = std::make_shared<UICanvasPanel>("BehaviorHost");
     FCanvasSlotArgs panelSlot; panelSlot.fixedSize = {120.0f, 60.0f};
     auto behavior = std::make_shared<TestBehavior>();
     behavior->bTick = true;
@@ -585,10 +593,10 @@ TEST(WidgetTreeTest, TickRecursesCompoundChildrenWithoutCompoundDrivingThem)
 TEST(WidgetTreeTest, BehaviorParticipatesInPreviewTargetAndBubbleRouting)
 {
     WidgetTree tree({.width = 400, .height = 300});
-    auto root = std::make_shared<UIPanel>("Root");
+    auto root = std::make_shared<UICanvasPanel>("Root");
     FCanvasSlotArgs rootSlot; rootSlot.offset = {20.0f, 20.0f}; rootSlot.fixedSize = {200.0f, 160.0f};
     root->_hitFilter = EWidgetHitFilter::Stop;
-    auto child = std::make_shared<UIPanel>("Child");
+    auto child = std::make_shared<UICanvasPanel>("Child");
     child->_hitFilter = EWidgetHitFilter::Pass;
     root->addDetachedChild(child, [](UIElement&, UISlot& slot) {
         if (auto* canvas = dynamic_cast<UICanvasSlot*>(&slot)) {
@@ -619,10 +627,10 @@ TEST(WidgetTreeTest, BehaviorParticipatesInPreviewTargetAndBubbleRouting)
 TEST(WidgetTreeTest, BehaviorCanActAsDragSourceAndDropTargetWithoutDedicatedWidgetSubclass)
 {
     WidgetTree tree({.width = 400, .height = 300});
-    auto source = std::make_shared<UIPanel>("BehaviorSource");
+    auto source = std::make_shared<UICanvasPanel>("BehaviorSource");
     FCanvasSlotArgs sourceSlot; sourceSlot.offset = {20.0f, 20.0f}; sourceSlot.fixedSize = {120.0f, 60.0f};
     source->_hitFilter = EWidgetHitFilter::Stop;
-    auto target = std::make_shared<UIPanel>("BehaviorTarget");
+    auto target = std::make_shared<UICanvasPanel>("BehaviorTarget");
     FCanvasSlotArgs targetSlot; targetSlot.offset = {220.0f, 20.0f}; targetSlot.fixedSize = {120.0f, 60.0f};
     target->_hitFilter = EWidgetHitFilter::Stop;
 
@@ -653,7 +661,7 @@ TEST(WidgetTreeTest, BehaviorCanActAsDragSourceAndDropTargetWithoutDedicatedWidg
 TEST(WidgetTreeTest, RouteStateTracksPointerCaptureAndFocusPaths)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto panel = std::make_shared<UIPanel>("Panel");
+    auto panel = std::make_shared<UICanvasPanel>("Panel");
     FCanvasSlotArgs panelSlot; panelSlot.offset = {100.0f, 80.0f}; panelSlot.fixedSize = {160.0f, 80.0f};
     auto button = makeButton("Button", {20.0f, 10.0f}, {80.0f, 32.0f});
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
@@ -704,7 +712,7 @@ TEST(WidgetTreeTest, RouteStateTracksPointerCaptureAndFocusPaths)
 TEST(WidgetTreeTest, ChildAddedToAttachedParentJoinsItsTree)
 {
     WidgetTree tree({.width = 400, .height = 300});
-    auto parent = std::make_shared<UIPanel>("Parent");
+    auto parent = std::make_shared<UICanvasPanel>("Parent");
     FCanvasSlotArgs parentSlot; parentSlot.offset = {40.0f, 40.0f}; parentSlot.fixedSize = {200.0f, 120.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent, parentSlot);
 
@@ -735,7 +743,7 @@ TEST(WidgetTreeTest, ChildAddedToAttachedParentJoinsItsTree)
 TEST(WidgetTreeTest, AttachWithEdgeInitializerConfiguresParentOwnedSlot)
 {
     WidgetTree tree({.width = 200, .height = 100});
-    auto panel = std::make_shared<UIPanel>("Panel");
+    auto panel = std::make_shared<UICanvasPanel>("Panel");
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel).valid());
 
     auto child = std::make_shared<UIText>("Child");
@@ -783,7 +791,7 @@ TEST(WidgetTreeTest, TreeRootUsesCanvasSlotsToStretchSystemLayers)
 TEST(WidgetTreeTest, AttachToLayerKeepsChildAbsoluteGeometrySemantics)
 {
     WidgetTree tree({.width = 320, .height = 180});
-    auto panel = std::make_shared<UIPanel>("Panel");
+    auto panel = std::make_shared<UICanvasPanel>("Panel");
     FCanvasSlotArgs panelSlot; panelSlot.offset = {24.0f, 18.0f}; panelSlot.fixedSize = {90.0f, 40.0f};
 
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot).valid());
@@ -803,7 +811,7 @@ TEST(WidgetTreeTest, AttachToLayerKeepsChildAbsoluteGeometrySemantics)
 TEST(WidgetTreeTest, LayerCanvasSlotTracksPositionUpdatesAfterAttach)
 {
     WidgetTree tree({.width = 320, .height = 180});
-    auto panel = std::make_shared<UIPanel>("Panel");
+    auto panel = std::make_shared<UICanvasPanel>("Panel");
     FCanvasSlotArgs panelSlot; panelSlot.offset = {24.0f, 18.0f}; panelSlot.fixedSize = {90.0f, 40.0f};
 
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Tooltip), panel, panelSlot).valid());
@@ -950,7 +958,7 @@ TEST(WidgetTreeTest, ModalFillBackdropIsAnAppChild)
     auto overlay = std::make_shared<UIPopupOverlay>("ModalOverlay");
     overlay->_bModal = true;
 
-    auto dim = std::make_shared<UIPanel>("Dim");
+    auto dim = std::make_shared<UIBorder>("Dim");
     dim->setVisibility(EWidgetVisibility::HitTestInvisible);
     dim->setStyleField("fillColor", FBrush::solid({0.4f, 0.0f, 0.0f, 0.5f}));
     dim->_zOrder = -1;
@@ -964,7 +972,7 @@ TEST(WidgetTreeTest, ModalFillBackdropIsAnAppChild)
         }
     });
 
-    auto content = std::make_shared<UIPanel>("Content");
+    auto content = std::make_shared<UICanvasPanel>("Content");
     overlay->_contentPos    = {100.0f, 80.0f};
     overlay->_contentExtent = {80.0f, 40.0f};
     overlay->addDetachedChild(content);
@@ -986,7 +994,7 @@ TEST(WidgetTreeTest, PopupOverlayUsesACanvasSlotForItsContentChild)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       overlay = std::make_shared<UIPopupOverlay>("Overlay");
-    auto       panel   = std::make_shared<UIPanel>("Content");
+    auto       panel   = std::make_shared<UICanvasPanel>("Content");
     overlay->_contentPos = {24.0f, 18.0f};
     overlay->_contentExtent = {80.0f, 36.0f};
     overlay->addDetachedChild(panel);
@@ -1007,7 +1015,7 @@ TEST(WidgetTreeTest, PopupOverlayContentExtentLivesOnTheCanvasSlot)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       overlay = std::make_shared<UIPopupOverlay>("Overlay");
-    auto       panel   = std::make_shared<UIPanel>("Content");
+    auto       panel   = std::make_shared<UICanvasPanel>("Content");
     overlay->_contentPos    = {16.0f, 12.0f};
     overlay->_contentExtent = {120.0f, 48.0f};
     overlay->addDetachedChild(panel);
@@ -1026,7 +1034,7 @@ TEST(WidgetTreeTest, DialogCentresContentThroughThePopupCanvasSlot)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       content = ui::column("Body")
-                              .child(ui::panel("Inner"), ui::boxSlot().preferredSize({120.0f, 40.0f}))
+                              .child(ui::canvasPanel("Inner"), ui::boxSlot().preferredSize({120.0f, 40.0f}))
                               .release();
     auto dialog = UIDialog::create("Confirm", content);
 
@@ -1056,8 +1064,8 @@ TEST(WidgetTreeTest, DialogCentresContentThroughThePopupCanvasSlot)
 TEST(WidgetTreeTest, TwoIndependentPanelsAttachToContentLayer)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panelA = std::make_shared<UIPanel>("A");
-    auto       panelB = std::make_shared<UIPanel>("B");
+    auto       panelA = std::make_shared<UICanvasPanel>("A");
+    auto       panelB = std::make_shared<UICanvasPanel>("B");
 
     auto attachA = tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panelA);
     auto attachB = tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panelB);
@@ -1081,7 +1089,7 @@ TEST(WidgetTreeTest, TwoIndependentPanelsAttachToContentLayer)
 TEST(WidgetTreeTest, DetachedWidgetDoesNotParticipate)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("Detached");
+    auto       panel = std::make_shared<UICanvasPanel>("Detached");
 
     EXPECT_FALSE(panel->isAttached());
     EXPECT_EQ(panel->getTree(), nullptr);
@@ -1125,8 +1133,8 @@ TEST(WidgetTreeTest, CrossTreeAttachFailsWithoutReparent)
 TEST(WidgetTreeTest, ExplicitReparentMovesWidget)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       parentA = std::make_shared<UIPanel>("A");
-    auto       parentB = std::make_shared<UIPanel>("B");
+    auto       parentA = std::make_shared<UICanvasPanel>("A");
+    auto       parentB = std::make_shared<UICanvasPanel>("B");
     auto       child   = std::make_shared<UIButton>("Child");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parentA);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parentB);
@@ -1144,7 +1152,7 @@ TEST(WidgetTreeTest, CrossTreeReparentMovesExplicitly)
 {
     WidgetTree treeA({.width = 800, .height = 600});
     WidgetTree treeB({.width = 800, .height = 600});
-    auto       parentB = std::make_shared<UIPanel>("B");
+    auto       parentB = std::make_shared<UICanvasPanel>("B");
     auto       child   = std::make_shared<UIButton>("Child");
     treeB.attach(*treeB.getLayer(WidgetTree::ELayer::Content), parentB);
     treeA.attach(*treeA.getLayer(WidgetTree::ELayer::Content), child);
@@ -1162,7 +1170,7 @@ TEST(WidgetTreeTest, CrossTreeReparentMovesExplicitly)
 TEST(WidgetTreeTest, ReparentAfterMovesSiblingForward)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       parent = std::make_shared<UIPanel>("Root");
+    auto       parent = std::make_shared<UICanvasPanel>("Root");
     auto       a      = std::make_shared<UIButton>("A");
     auto       b      = std::make_shared<UIButton>("B");
     auto       c      = std::make_shared<UIButton>("C");
@@ -1181,7 +1189,7 @@ TEST(WidgetTreeTest, ReparentAfterMovesSiblingForward)
 TEST(WidgetTreeTest, ReparentBeforeMovesSiblingBackward)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       parent = std::make_shared<UIPanel>("Root");
+    auto       parent = std::make_shared<UICanvasPanel>("Root");
     auto       a      = std::make_shared<UIButton>("A");
     auto       b      = std::make_shared<UIButton>("B");
     auto       c      = std::make_shared<UIButton>("C");
@@ -1200,8 +1208,8 @@ TEST(WidgetTreeTest, ReparentBeforeMovesSiblingBackward)
 TEST(WidgetTreeTest, ReparentAfterMovesIntoAnotherParentAtSiblingPosition)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       root    = std::make_shared<UIPanel>("Root");
-    auto       other   = std::make_shared<UIPanel>("Other");
+    auto       root    = std::make_shared<UICanvasPanel>("Root");
+    auto       other   = std::make_shared<UICanvasPanel>("Other");
     auto       first   = std::make_shared<UIButton>("First");
     auto       second  = std::make_shared<UIButton>("Second");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), root);
@@ -1226,7 +1234,7 @@ TEST(WidgetTreeTest, ReparentAfterMovesIntoAnotherParentAtSiblingPosition)
 TEST(WidgetTreeTest, ReparentSelfIsNoOp)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       parent = std::make_shared<UIPanel>("Root");
+    auto       parent = std::make_shared<UICanvasPanel>("Root");
     auto       a      = std::make_shared<UIButton>("A");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
     tree.attach(*parent, a);
@@ -1241,8 +1249,8 @@ TEST(WidgetTreeTest, ReparentSelfIsNoOp)
 TEST(WidgetTreeTest, ReparentUnderOwnDescendantFails)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       rootPanel = std::make_shared<UIPanel>("Root");
-    auto       inner     = std::make_shared<UIPanel>("Inner");
+    auto       rootPanel = std::make_shared<UICanvasPanel>("Root");
+    auto       inner     = std::make_shared<UICanvasPanel>("Inner");
     auto       leaf      = std::make_shared<UIButton>("Leaf");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), rootPanel);
     tree.attach(*rootPanel, inner);
@@ -1276,7 +1284,7 @@ TEST(WidgetTreeTest, DetachKeepsBusinessReferenceAlive)
 TEST(WidgetTreeTest, DetachRecursivelyClearsSubtreeMembership)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UICanvasPanel>("P");
     auto       child = std::make_shared<UIButton>("C");
     auto       grand = std::make_shared<UIText>("G");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
@@ -1315,7 +1323,7 @@ TEST(WidgetTreeTest, DetachClearsFocusCaptureAndHover)
 TEST(WidgetTreeTest, WeakPointerPathsSurviveDetachWithoutDangling)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("Panel");
+    auto       panel = std::make_shared<UICanvasPanel>("Panel");
     FCanvasSlotArgs panelSlot; panelSlot.offset = {100.0f, 80.0f}; panelSlot.fixedSize = {160.0f, 80.0f};
     auto       button = makeButton("Button", {20.0f, 10.0f}, {80.0f, 32.0f});
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, panelSlot);
@@ -1400,7 +1408,7 @@ TEST(WidgetTreeTest, PopupShieldDoesNotStealHoverOwner)
 TEST(WidgetTreeTest, TreeDestructionReleasesMembershipSafely)
 {
     auto  button = std::make_shared<UIButton>("B");
-    auto  panel  = std::make_shared<UIPanel>("P");
+    auto  panel  = std::make_shared<UICanvasPanel>("P");
     {
         WidgetTree tree({.width = 800, .height = 600});
         tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
@@ -1547,7 +1555,7 @@ TEST(WidgetTreeTest, DragGhostTeardownRemovesItsSnapshotItems)
     sourceArgs.fixedSize = {80.0f, 24.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceArgs).valid());
 
-    tree.beginDrag(source.get(), std::string("payload"), std::string("Ghost"), {}, true);
+    tree.beginDrag(source.get(), UIDragDropOperation::make("payload", "Ghost"), {}, true);
     const UIFrameSnapshot duringDrag = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_FALSE(duringDrag.items.empty());
 
@@ -1711,7 +1719,7 @@ TEST(WidgetTreeTest, TabTraversalFollowsStablePaintOrderWithWrapAround)
 TEST(WidgetTreeTest, TabSkipsNonFocusableAndHiddenWidgets)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       plain   = std::make_shared<UIPanel>("Plain"); // never focusable
+    auto       plain   = std::make_shared<UICanvasPanel>("Plain"); // never focusable
     auto       hidden  = makeButton("Hidden", {0.0f, 0.0f}, {40.0f, 20.0f});
     auto       visible = makeButton("Visible", {0.0f, 0.0f}, {40.0f, 20.0f});
     hidden->setVisibility(EWidgetVisibility::Hidden); // focusable but not visible
@@ -1728,7 +1736,7 @@ TEST(WidgetTreeTest, TabSkipsNonFocusableAndHiddenWidgets)
 TEST(WidgetTreeTest, TabWithoutFocusablesIsNotHandled)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UICanvasPanel>("P");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
     tree.layout();
 
@@ -1912,7 +1920,7 @@ TEST(WidgetTreeTest, DragOverDockSetsPointSensitiveDropPreview)
     dockArgs.anchorMax = {1.0f, 1.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs).valid());
 
-    auto panel = std::make_shared<UIPanel>("P"); // dock panel content
+    auto panel = std::make_shared<UICanvasPanel>("P"); // dock panel content
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel); // keep alive
     const DockPanelId id = ws->addPanel("Scene", panel);
     ws->tearOffPanel(id, {120.0f, 120.0f}, {320.0f, 240.0f}); // float it
@@ -1920,7 +1928,7 @@ TEST(WidgetTreeTest, DragOverDockSetsPointSensitiveDropPreview)
     tree.buildSnapshot(UIFrameBuildContext{}); // cold layout
 
     // Drag the dock-panel payload over the dock's center (merge band).
-    auto source = std::make_shared<UIPanel>("Source");
+    auto source = std::make_shared<UICanvasPanel>("Source");
     FCanvasSlotArgs sourceSlot; sourceSlot.offset = {10.0f, 10.0f}; sourceSlot.fixedSize = {30.0f, 30.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
     tree.buildSnapshot(UIFrameBuildContext{});
@@ -1971,8 +1979,8 @@ TEST(WidgetTreeTest, DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTa
     dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
-    auto panelA = std::make_shared<UIPanel>("PanelA");
-    auto panelB = std::make_shared<UIPanel>("PanelB");
+    auto panelA = std::make_shared<UICanvasPanel>("PanelA");
+    auto panelB = std::make_shared<UICanvasPanel>("PanelB");
     const DockPanelId panelAId = ws->addPanel("SceneA", panelA);
     const DockPanelId panelBId = ws->addPanel("SceneB", panelB);
 
@@ -1982,7 +1990,7 @@ TEST(WidgetTreeTest, DockPanelPayloadCanMergeIntoFloatingWindowThroughBehaviorTa
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), floating);
     tree.buildSnapshot(UIFrameBuildContext{});
 
-    auto source = std::make_shared<UIPanel>("Source");
+    auto source = std::make_shared<UICanvasPanel>("Source");
     FCanvasSlotArgs sourceSlot; sourceSlot.offset = {20.0f, 20.0f}; sourceSlot.fixedSize = {30.0f, 30.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sourceSlot);
     tree.buildSnapshot(UIFrameBuildContext{});
@@ -2015,7 +2023,7 @@ TEST(WidgetTreeTest, DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget)
     dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
-    auto panel = std::make_shared<UIPanel>("Panel");
+    auto panel = std::make_shared<UICanvasPanel>("Panel");
     const DockPanelId panelId = ws->addPanel("Scene", panel);
     tree.buildSnapshot(UIFrameBuildContext{});
 
@@ -2030,8 +2038,7 @@ TEST(WidgetTreeTest, DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget)
     ASSERT_NE(sessionOp, nullptr);
     EXPECT_EQ(sessionOp->panelId, panelId);
 
-    // Center-of-leaf is a tab select (same-leaf merge), not a tear-off.
-    // NoTarget is a drop outside the dock widget.
+    // Dropping outside the dock widget is NoTarget floating.
     const glm::vec2 outside{800.0f, 500.0f};
     tree.endDrag(outside);
     EXPECT_FALSE(tree.isDragging());
@@ -2039,6 +2046,82 @@ TEST(WidgetTreeTest, DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget)
     const auto* floating = ws->findFloatingByPanel(panelId);
     ASSERT_NE(floating, nullptr);
     EXPECT_EQ(floating->pos, outside);
+}
+
+TEST(WidgetTreeTest, DockSpaceNoTargetCallbackCanSkipOverlayTearOff)
+{
+    WidgetTree tree({.width = 1000, .height = 700});
+    auto       ws = std::make_shared<FDockContext>();
+    ws->bAllowFloating = true;
+    ws->bAllowTearOff  = true;
+
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.offset = {0.0f, 0.0f};
+    dockArgs.fixedSize = {400.0f, 300.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto panel = std::make_shared<UICanvasPanel>("Panel");
+    const DockPanelId panelId = ws->addPanel("Scene", panel);
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    UITabBar* tabBar = findDescendantOfType<UITabBar>(*dock);
+    ASSERT_NE(tabBar, nullptr);
+    ASSERT_TRUE(static_cast<bool>(tabBar->_onTabDragBegin));
+
+    bool called = false;
+    ws->realizeNoTargetTearOff = [&](DockPanelId id, const glm::vec2& pos, const glm::vec2&) {
+        called = true;
+        EXPECT_EQ(id, panelId);
+        EXPECT_EQ(pos, glm::vec2(800.0f, 500.0f));
+        return true;
+    };
+
+    tabBar->_onTabDragBegin(0, "Scene");
+    ASSERT_TRUE(tree.isDragging());
+    tree.endDrag({800.0f, 500.0f});
+    EXPECT_TRUE(called);
+    EXPECT_FALSE(ws->isPanelFloating(panelId));
+    EXPECT_NE(ws->findPanel(panelId), nullptr);
+}
+
+TEST(WidgetTreeTest, DockSpaceNoTargetCallbackFalseFallsBackToOverlay)
+{
+    WidgetTree tree({.width = 1000, .height = 700});
+    auto       ws = std::make_shared<FDockContext>();
+    ws->bAllowFloating = true;
+    ws->bAllowTearOff  = true;
+
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.offset = {0.0f, 0.0f};
+    dockArgs.fixedSize = {400.0f, 300.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto panel = std::make_shared<UICanvasPanel>("Panel");
+    const DockPanelId panelId = ws->addPanel("Scene", panel);
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    UITabBar* tabBar = findDescendantOfType<UITabBar>(*dock);
+    ASSERT_NE(tabBar, nullptr);
+
+    bool called = false;
+    ws->realizeNoTargetTearOff = [&](DockPanelId, const glm::vec2&, const glm::vec2&) {
+        called = true;
+        return false;
+    };
+
+    tabBar->_onTabDragBegin(0, "Scene");
+    const glm::vec2 outside{800.0f, 500.0f};
+    tree.endDrag(outside);
+    EXPECT_TRUE(called);
+    EXPECT_TRUE(ws->isPanelFloating(panelId));
+    const auto* floating = ws->findFloatingByPanel(panelId);
+    ASSERT_NE(floating, nullptr);
+    EXPECT_EQ(floating->pos, outside);
+    EXPECT_EQ(floating->projection, EDockFloatingProjection::InProcessOverlay);
 }
 
 TEST(WidgetTreeTest, DockSpaceTabCloseRemovesClosablePanel)
@@ -2052,8 +2135,8 @@ TEST(WidgetTreeTest, DockSpaceTabCloseRemovesClosablePanel)
     dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
-    auto keep  = std::make_shared<UIPanel>("KeepBody");
-    auto close = std::make_shared<UIPanel>("CloseBody");
+    auto keep  = std::make_shared<UICanvasPanel>("KeepBody");
+    auto close = std::make_shared<UICanvasPanel>("CloseBody");
     const DockPanelId keepId  = ws->addPanel("Keep", keep);
     const DockPanelId closeId = ws->addPanel("CloseMe", close);
     ASSERT_NE(keepId, kInvalidDockPanelId);
@@ -2074,6 +2157,80 @@ TEST(WidgetTreeTest, DockSpaceTabCloseRemovesClosablePanel)
     EXPECT_FALSE(ws->closePanel(keepId));
 }
 
+TEST(WidgetTreeTest, DockSpaceInWellMoveReordersWithoutDragSession)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<FDockContext>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto panelA = std::make_shared<UICanvasPanel>("ABody");
+    auto panelB = std::make_shared<UICanvasPanel>("BBody");
+    const DockPanelId aId = ws->addPanel("Alpha", panelA);
+    const DockPanelId bId = ws->addPanel("Beta", panelB);
+    tree.layout();
+    EXPECT_EQ(ws->dockModel().getRootNode()->panelIds, (std::vector<DockPanelId>{aId, bId}));
+
+    UIElement* tabA = findNamedDescendant(*dock, "Tab_Alpha");
+    UIElement* tabB = findNamedDescendant(*dock, "Tab_Beta");
+    ASSERT_NE(tabA, nullptr);
+    ASSERT_NE(tabB, nullptr);
+    const glm::vec2 press = tabA->_layoutRect.pos + tabA->_layoutRect.extent * 0.5f;
+    const glm::vec2 hover = tabB->_layoutRect.pos + tabB->_layoutRect.extent * 0.5f;
+    ASSERT_GT(glm::length(hover - press), 6.0f);
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(press.x, press.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(hover.x, hover.y), pointAt(hover.x, hover.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_EQ(tree.getDragOperation(), nullptr);
+    EXPECT_EQ(ws->dockModel().getRootNode()->panelIds, (std::vector<DockPanelId>{bId, aId}));
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(hover.x, hover.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_EQ(ws->dockModel().getRootNode()->kind, EDockNodeKind::Stack);
+}
+
+TEST(WidgetTreeTest, LockedTabPressDoesNotArmGhost)
+{
+    WidgetTree tree({.width = 400, .height = 80});
+    auto bar = std::make_shared<UITabBar>("Pages");
+    bar->_bDraggableTabs = true;
+    bool bBegan = false;
+    bar->_onTabDragBegin = [&](int, const std::string&) { bBegan = true; };
+    FCanvasSlotArgs args;
+    args.offset    = {0.0f, 0.0f};
+    args.fixedSize = {400.0f, 28.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, args);
+    UITabButton* locked = bar->addTab("Level");
+    ASSERT_NE(locked, nullptr);
+    locked->_bDraggable = false;
+    bar->_canBeginTabDrag = [](int) { return false; };
+    (void)bar->addTab("Tools");
+    tree.layout();
+
+    const glm::vec2 press = locked->_layoutRect.pos + locked->_layoutRect.extent * 0.5f;
+    const glm::vec2 moved = press + glm::vec2{24.0f, 18.0f};
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(press.x, press.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getPointerCapture(), locked);
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(moved.x, moved.y), pointAt(moved.x, moved.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_FALSE(bBegan);
+    EXPECT_EQ(tree.getDragOperation(), nullptr);
+    EXPECT_EQ(locked->onDragDetected({press, moved}), nullptr);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(moved.x, moved.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+}
+
 TEST(WidgetTreeTest, DockSpaceSameLeafTabDropReorders)
 {
     WidgetTree tree({.width = 800, .height = 600});
@@ -2085,8 +2242,8 @@ TEST(WidgetTreeTest, DockSpaceSameLeafTabDropReorders)
     dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
-    auto panelA = std::make_shared<UIPanel>("ABody");
-    auto panelB = std::make_shared<UIPanel>("BBody");
+    auto panelA = std::make_shared<UICanvasPanel>("ABody");
+    auto panelB = std::make_shared<UICanvasPanel>("BBody");
     const DockPanelId aId = ws->addPanel("Alpha", panelA);
     const DockPanelId bId = ws->addPanel("Beta", panelB);
     tree.layout();
@@ -2108,7 +2265,60 @@ TEST(WidgetTreeTest, DockSpaceSameLeafTabDropReorders)
     EXPECT_EQ(ws->dockModel().getRootNode()->panelIds, (std::vector<DockPanelId>{bId, aId}));
 }
 
-TEST(WidgetTreeTest, DockSpaceSameLeafContentDropSelectsWithoutSplit)
+TEST(WidgetTreeTest, DockSpaceSameLeafContentDropWithoutChooserFloats)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<FDockContext>();
+    ws->bAllowFloating = true;
+    ws->bAllowTearOff  = true;
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto panelA = std::make_shared<UICanvasPanel>("ABody");
+    auto panelB = std::make_shared<UICanvasPanel>("BBody");
+    const DockPanelId aId = ws->addPanel("Alpha", panelA);
+    const DockPanelId bId = ws->addPanel("Beta", panelB);
+    tree.layout();
+    ASSERT_EQ(ws->dockModel().getRootNode()->kind, EDockNodeKind::Stack);
+    EXPECT_EQ(ws->dockModel().getRootNode()->selectedPanel, bId);
+
+    UITabBar* bar = findDescendantOfType<UITabBar>(*dock);
+    ASSERT_NE(bar, nullptr);
+    auto* stackRoot = dynamic_cast<UIDockTabStack*>(findDescendantOfType<UIDockTabStack>(*dock));
+    ASSERT_NE(stackRoot, nullptr);
+    ASSERT_TRUE(static_cast<bool>(bar->_onTabDragBegin));
+    bar->_onTabDragBegin(0, "Alpha");
+    ASSERT_TRUE(tree.isDragging());
+
+    glm::vec2 drop{};
+    bool bFoundChooserGap = false;
+    const Rect2D rect = stackRoot->_layoutRect;
+    const UIDragDropOperation* op = tree.getDragOperation();
+    ASSERT_NE(op, nullptr);
+    for (float y = rect.pos.y + 40.0f; y < rect.pos.y + rect.extent.y - 8.0f && !bFoundChooserGap; y += 8.0f) {
+        for (float x = rect.pos.x + 8.0f; x < rect.pos.x + rect.extent.x - 8.0f; x += 8.0f) {
+            const auto preview = dock->dropPreviewFor(*op, {x, y});
+            if (preview && preview->target.kind == EDockDropTargetKind::TabStackChooser) {
+                drop = {x, y};
+                bFoundChooserGap = true;
+                break;
+            }
+        }
+    }
+    ASSERT_TRUE(bFoundChooserGap);
+    EXPECT_FALSE(stackRoot->canAcceptDrop(*op, drop));
+    tree.updateDrag(drop);
+    tree.endDrag(drop);
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_TRUE(ws->isPanelFloating(aId));
+    EXPECT_NE(ws->dockModel().findLeafForPanel(bId), nullptr);
+}
+
+TEST(WidgetTreeTest, DockSpaceSameLeafChooserSplitApplies)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       ws   = std::make_shared<FDockContext>();
@@ -2119,33 +2329,42 @@ TEST(WidgetTreeTest, DockSpaceSameLeafContentDropSelectsWithoutSplit)
     dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
-    auto panelA = std::make_shared<UIPanel>("ABody");
-    auto panelB = std::make_shared<UIPanel>("BBody");
+    auto panelA = std::make_shared<UICanvasPanel>("ABody");
+    auto panelB = std::make_shared<UICanvasPanel>("BBody");
     const DockPanelId aId = ws->addPanel("Alpha", panelA);
     const DockPanelId bId = ws->addPanel("Beta", panelB);
     tree.layout();
-    ASSERT_EQ(ws->dockModel().getRootNode()->kind, EDockNodeKind::Leaf);
-    EXPECT_EQ(ws->dockModel().getRootNode()->selectedPanel, bId);
+    ASSERT_EQ(ws->dockModel().getRootNode()->kind, EDockNodeKind::Stack);
 
+    auto* stackRoot = dynamic_cast<UIDockTabStack*>(findDescendantOfType<UIDockTabStack>(*dock));
+    ASSERT_NE(stackRoot, nullptr);
     UITabBar* bar = findDescendantOfType<UITabBar>(*dock);
     ASSERT_NE(bar, nullptr);
-    ASSERT_TRUE(static_cast<bool>(bar->_onTabDragBegin));
     bar->_onTabDragBegin(0, "Alpha");
     ASSERT_TRUE(tree.isDragging());
 
-    const glm::vec2 drop{
-        bar->_layoutRect.pos.x + bar->_layoutRect.extent.x * 0.5f,
-        bar->_layoutRect.pos.y + bar->_layoutRect.extent.y + 48.0f,
-    };
-    tree.updateDrag(drop);
-    tree.endDrag(drop);
+    const UIDragDropOperation* op = tree.getDragOperation();
+    ASSERT_NE(op, nullptr);
+    glm::vec2 splitPoint{};
+    bool bFoundSplit = false;
+    const Rect2D rect = stackRoot->_layoutRect;
+    for (float y = rect.pos.y + 40.0f; y < rect.pos.y + rect.extent.y - 8.0f && !bFoundSplit; y += 8.0f) {
+        for (float x = rect.pos.x + 8.0f; x < rect.pos.x + rect.extent.x - 8.0f; x += 8.0f) {
+            const auto preview = dock->dropPreviewFor(*op, {x, y});
+            if (preview && preview->target.kind == EDockDropTargetKind::TabStackSplit) {
+                splitPoint = {x, y};
+                bFoundSplit = true;
+                break;
+            }
+        }
+    }
+    ASSERT_TRUE(bFoundSplit);
+    EXPECT_TRUE(stackRoot->canAcceptDrop(*op, splitPoint));
+    tree.updateDrag(splitPoint);
+    tree.endDrag(splitPoint);
     EXPECT_FALSE(tree.isDragging());
-
-    const FDockNode* root = ws->dockModel().getRootNode();
-    ASSERT_NE(root, nullptr);
-    EXPECT_EQ(root->kind, EDockNodeKind::Leaf);
-    EXPECT_EQ(root->panelIds, (std::vector<DockPanelId>{aId, bId}));
-    EXPECT_EQ(root->selectedPanel, aId);
+    EXPECT_EQ(ws->dockModel().getRootNode()->kind, EDockNodeKind::Split);
+    EXPECT_NE(ws->dockModel().findStackForPanel(aId)->id, ws->dockModel().findStackForPanel(bId)->id);
 }
 
 TEST(WidgetTreeTest, DockSpaceCrossLeafEdgeDropStillSplits)
@@ -2159,9 +2378,9 @@ TEST(WidgetTreeTest, DockSpaceCrossLeafEdgeDropStillSplits)
     dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
-    auto panelA = std::make_shared<UIPanel>("ABody");
-    auto panelB = std::make_shared<UIPanel>("BBody");
-    auto panelC = std::make_shared<UIPanel>("CBody");
+    auto panelA = std::make_shared<UICanvasPanel>("ABody");
+    auto panelB = std::make_shared<UICanvasPanel>("BBody");
+    auto panelC = std::make_shared<UICanvasPanel>("CBody");
     const DockPanelId aId = ws->addPanel("Alpha", panelA);
     const DockPanelId bId = ws->addPanel("Beta", panelB);
     const DockPanelId cId = ws->addPanel("Gamma", panelC);
@@ -2206,7 +2425,7 @@ TEST(WidgetTreeTest, FloatingWindowTabDragBehaviorStartsDockPanelSession)
     dock->setContext(ws);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
 
-    auto panel = std::make_shared<UIPanel>("Panel");
+    auto panel = std::make_shared<UICanvasPanel>("Panel");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
     const DockPanelId panelId = ws->addPanel("Scene", panel);
     const FDockFloatingWindowId floatingId = ws->tearOffPanel(panelId, {120.0f, 120.0f}, {320.0f, 240.0f});
@@ -2257,8 +2476,8 @@ TEST(WidgetTreeTest, FloatingWindowCardinalDockGraftsPanelIntoNewLeaf)
     hostFill.anchorMax = {1.0f, 1.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), host, hostFill);
 
-    auto anchored = std::make_shared<UIPanel>("ViewportBody");
-    auto floatingPanel = std::make_shared<UIPanel>("FrameStatsPanel");
+    auto anchored = std::make_shared<UICanvasPanel>("ViewportBody");
+    auto floatingPanel = std::make_shared<UICanvasPanel>("FrameStatsPanel");
     const DockPanelId anchoredId = ws->addPanel("Viewport", anchored);
     const DockPanelId statsId = ws->addPanel("Stats", floatingPanel);
     ASSERT_NE(anchoredId, kInvalidDockPanelId);
@@ -2313,9 +2532,7 @@ TEST(WidgetTreeTest, DragObserverReceivesEveryMoveAndTargetChanges)
     std::vector<std::string> observations;
     DragSessionObserver observer;
     observer.onMove = [&](const UIDragDropOperation& operation, const glm::vec2& point, std::string_view target) {
-        const auto* text = operation.as<UIStringDragDropOperation>();
-        ASSERT_NE(text, nullptr);
-        EXPECT_EQ(text->text, "panel");
+        EXPECT_EQ(operation.payload, "panel");
         moves.push_back(point);
         observations.emplace_back(target);
     };
@@ -2323,7 +2540,7 @@ TEST(WidgetTreeTest, DragObserverReceivesEveryMoveAndTargetChanges)
         observations.emplace_back(std::string(previous) + "->" + std::string(current));
     };
 
-    tree.beginDrag(source.get(), "panel", "Panel", std::move(observer));
+    tree.beginDrag(source.get(), UIDragDropOperation::make("panel", "Panel"), std::move(observer));
     tree.updateDrag({10.0f, 10.0f});
     tree.updateDrag({170.0f, 60.0f});
     tree.updateDrag({180.0f, 70.0f});
@@ -2362,16 +2579,16 @@ TEST(WidgetTreeTest, DragObserverDistinguishesDropNoTargetAndCancel)
         return observer;
     };
 
-    tree.beginDrag(source.get(), "drop", "Drop", makeObserver());
+    tree.beginDrag(source.get(), UIDragDropOperation::make("drop", "Drop"), makeObserver());
     tree.endDrag({180.0f, 60.0f});
     EXPECT_FALSE(tree.isDragging());
     EXPECT_EQ(target->drops, 1);
     EXPECT_EQ(target->lastPayload, "drop");
 
-    tree.beginDrag(source.get(), "none", "None", makeObserver());
+    tree.beginDrag(source.get(), UIDragDropOperation::make("none", "None"), makeObserver());
     tree.endDrag({10.0f, 10.0f});
 
-    tree.beginDrag(source.get(), "cancel", "Cancel", makeObserver());
+    tree.beginDrag(source.get(), UIDragDropOperation::make("cancel", "Cancel"), makeObserver());
     tree.updateDrag({180.0f, 60.0f});
     tree.cancelDrag();
 
@@ -2402,7 +2619,7 @@ TEST(WidgetTreeTest, ExternalDropHoverDoesNotStartLocalDrag)
     sourceTree.layout();
     targetTree.layout();
 
-    sourceTree.beginDrag(source.get(), "cross", "Cross", {}, false);
+    sourceTree.beginDrag(source.get(), UIDragDropOperation::make("cross", "Cross"), {}, false);
     ASSERT_TRUE(sourceTree.isDragging());
     const UIDragDropOperation* operation = sourceTree.getDragOperation();
     ASSERT_NE(operation, nullptr);
@@ -2412,6 +2629,14 @@ TEST(WidgetTreeTest, ExternalDropHoverDoesNotStartLocalDrag)
     EXPECT_EQ(targetTree.getDropTarget(), target.get());
     EXPECT_GT(target->highlightChanges, 0);
     EXPECT_TRUE(sourceTree.isDragging());
+    UIElement* hoverLayer = targetTree.getLayer(WidgetTree::ELayer::DragIme);
+    ASSERT_NE(hoverLayer, nullptr);
+    EXPECT_FALSE(hoverLayer->getChildren().empty());
+    targetTree.clearExternalDropHover();
+    EXPECT_TRUE(hoverLayer->getChildren().empty());
+    EXPECT_EQ(targetTree.getDropTarget(), nullptr);
+
+    targetTree.setExternalDropHover(*operation, {40.0f, 40.0f});
 
     std::vector<EDragFinishResult> results;
     DragSessionObserver observer;
@@ -2419,7 +2644,7 @@ TEST(WidgetTreeTest, ExternalDropHoverDoesNotStartLocalDrag)
         results.push_back(result);
     };
     sourceTree.cancelDrag();
-    sourceTree.beginDrag(source.get(), "cross", "Cross", std::move(observer), false);
+    sourceTree.beginDrag(source.get(), UIDragDropOperation::make("cross", "Cross"), std::move(observer), false);
     operation = sourceTree.getDragOperation();
     ASSERT_NE(operation, nullptr);
     EXPECT_TRUE(targetTree.dropExternal(*operation, {40.0f, 40.0f}));
@@ -2440,7 +2665,7 @@ TEST(WidgetTreeTest, RegistryExplicitRegistrationAndCreate)
     auto& registry = UITypeRegistry::instance();
     registry.registerType(
         {.typeId = "test.inventory_panel", .displayName = "Inventory Panel", .category = "Test"},
-        [] { return std::make_shared<UIPanel>("Inventory"); });
+        [] { return std::make_shared<UICanvasPanel>("Inventory"); });
 
     UIElementRef widget = registry.createInstance("test.inventory_panel");
     ASSERT_NE(widget, nullptr);
@@ -2465,7 +2690,7 @@ TEST(WidgetTreeTest, RegistryModuleLiveInstanceGuard)
     ASSERT_NE(module, nullptr);
     registry.registerType(
         {.typeId = "test.module_panel", .displayName = "Module Panel", .module = module},
-        [] { return std::make_shared<UIPanel>("ModulePanel"); });
+        [] { return std::make_shared<UICanvasPanel>("ModulePanel"); });
 
     UIElementRef live = registry.createInstance("test.module_panel");
     ASSERT_NE(live, nullptr);
@@ -2491,6 +2716,52 @@ TEST(WidgetTreeTest, RegistryModulesAreSharedOwners)
     registry.endModule(a);
     // The second handle still refers to the same (now-ended) module.
     EXPECT_TRUE(registry.endModule(b));
+}
+
+TEST(WidgetTreeTest, WantsTextInputUsesFocusedWidgetCapability)
+{
+    WidgetTree tree({.width = 400, .height = 80});
+    EXPECT_FALSE(tree.wantsTextInput());
+
+    auto button = std::make_shared<UIButton>("NoIme");
+    FCanvasSlotArgs buttonSlot;
+    buttonSlot.fixedSize = {80.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
+    tree.setFocus(button.get());
+    EXPECT_FALSE(tree.wantsTextInput());
+
+    auto field = std::make_shared<UITextField>("Ime");
+    FCanvasSlotArgs fieldSlot;
+    fieldSlot.offset    = {0.0f, 32.0f};
+    fieldSlot.fixedSize = {160.0f, 24.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), field, fieldSlot);
+    tree.setFocus(field.get());
+    EXPECT_TRUE(tree.wantsTextInput());
+
+    tree.setFocus(nullptr);
+    EXPECT_FALSE(tree.wantsTextInput());
+}
+
+TEST(WidgetTreeTest, WantsTextInputWalksFocusPath)
+{
+    WidgetTree tree({.width = 400, .height = 120});
+    auto host = std::make_shared<TestImeHostPanel>("ImeHost");
+    FCanvasSlotArgs hostSlot;
+    hostSlot.fixedSize = {200.0f, 80.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, hostSlot);
+
+    auto child = std::make_shared<UIButton>("Child");
+    tree.attach(*host, child, [](UIElement&, UISlot& edge) {
+        if (auto* slot = edge.as<UICanvasSlot>()) {
+            slot->setOffset({8.0f, 8.0f});
+            slot->setFixedSize({80.0f, 24.0f});
+        }
+    });
+    tree.setFocus(child.get());
+    EXPECT_FALSE(tree.wantsTextInput());
+
+    host->bWantIme = true;
+    EXPECT_TRUE(tree.wantsTextInput());
 }
 
 } // namespace ya

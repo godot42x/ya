@@ -55,6 +55,11 @@ bool UIBehavior::canAcceptDrop(UIElement& owner, const UIDragDropOperation& oper
     (void)owner; (void)operation; (void)logicalPoint; return false;
 }
 
+bool UIBehavior::canPreviewDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+{
+    return canAcceptDrop(owner, operation, logicalPoint);
+}
+
 void UIBehavior::onDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
     (void)owner; (void)operation; (void)logicalPoint;
@@ -112,7 +117,7 @@ bool UIDragSourceBehavior::handleInputEvent(UIElement& owner, const Event& event
         }
         return true;
     case EEvent::MouseMoved:
-        if (!_bPressed || !bBeginDragFromCapturedMove) {
+        if (!_bPressed || !(bBeginDragFromCapturedMove || bCapturePointerOnPress)) {
             return false;
         }
         if (WidgetTree* tree = owner.getTree()) {
@@ -186,6 +191,14 @@ void UIDragSourceBehavior::onDetached(UIElement& owner)
 bool UIDropTargetBehavior::canAcceptDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
     return canAccept ? canAccept(owner, operation, logicalPoint) : false;
+}
+
+bool UIDropTargetBehavior::canPreviewDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+{
+    if (canPreview) {
+        return canPreview(owner, operation, logicalPoint);
+    }
+    return canAcceptDrop(owner, operation, logicalPoint);
 }
 
 void UIDropTargetBehavior::onDrop(UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)

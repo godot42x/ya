@@ -11,6 +11,8 @@ namespace ya
 /// longer live as fields on the container/widget itself.
 struct YA_GUI_API UIContainer : public UIElement
 {
+    using SlotArgs = FBoxSlotArgs;
+
     YA_REFLECT_BEGIN(UIContainer, UIElement)
     YA_REFLECT_END()
 

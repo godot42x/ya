@@ -23,6 +23,7 @@ struct YA_GUI_API UIDragFloat : public UIElement, public UIStyledWidget<UIDragFl
     YA_REFLECT_FIELD(_min, .instanceEditable())
     YA_REFLECT_FIELD(_max, .instanceEditable())
     YA_REFLECT_FIELD(_decimals, .instanceEditable())
+    YA_REFLECT_FIELD(_prefix, .instanceEditable())
     YA_REFLECT_END()
 
     YA_GUI_AUTHORED_STYLE_IO(FDragFloatStyle)
@@ -41,12 +42,16 @@ struct YA_GUI_API UIDragFloat : public UIElement, public UIStyledWidget<UIDragFl
     float     _max      = 1000000.0f;
     int       _decimals = 2;
     uint32_t  _fontSize = 13;
+    /// Optional in-cell label (`R` / `G` on ColorEdit). Empty keeps the
+    /// value centered like a bare numeric field.
+    std::string _prefix;
 
     std::function<void(float value)> _onValueChanged;
     std::function<void()> _onDragBegan;
     std::function<void()> _onDragEnded;
 
     void setValue(float value, bool bNotify = true);
+    void setPrefix(std::string prefix);
     void setMixed(bool mixed);
     void setError(bool error);
     [[nodiscard]] bool isMixed() const { return _bMixed; }
@@ -65,8 +70,9 @@ struct YA_GUI_API UIDragFloat : public UIElement, public UIStyledWidget<UIDragFl
     void onFocusLost() override;
     [[nodiscard]] ECursorType getCursor() const override
     {
-        return _bEditing ? ECursorType::IBeam : ECursorType::Arrow;
+        return _bEditing ? ECursorType::IBeam : ECursorType::ResizeEastWest;
     }
+    [[nodiscard]] bool wantsTextInput() const override { return _bEditing; }
     void clearTransientInputState() override
     {
         const bool bWasDragging = _bDragging;

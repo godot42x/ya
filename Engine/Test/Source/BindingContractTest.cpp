@@ -382,7 +382,7 @@ TEST(BindingContractTest, WidgetEnabledGateRemainsAuthoritativeOverButtonDisplay
 
     enabled->set(true);
     tree.buildSnapshot(UIFrameBuildContext{});
-    EXPECT_TRUE(button->resolvedEnabled());
+    EXPECT_FALSE(button->resolvedEnabled());
     EXPECT_FALSE(button->isEnabledInTree());
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 40.0f)),
               EWidgetRouteResult::NotHandled);

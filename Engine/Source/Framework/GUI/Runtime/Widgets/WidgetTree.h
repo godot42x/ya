@@ -18,6 +18,7 @@
 // ============================================================================
 
 #include "GUI/Binding/Reactive.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/GuiFrameInspector.h"
 #include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/UIElement.h"
@@ -36,7 +37,15 @@ namespace ya
 {
 
 struct UITheme;
-struct FCanvasSlotArgs;
+
+/// Canvas layout host used by the tree root and system layers. `ui::attach`
+/// uses `SlotArgs` so a layer parent only accepts canvas slot builders.
+struct YA_GUI_API UICanvasRoot : UIElement
+{
+    using SlotArgs = FCanvasSlotArgs;
+
+    explicit UICanvasRoot(std::string name);
+};
 
 /// Result of one game-UI event route pass. Named distinctly from the legacy
 /// EWidgetRouteResult while the old GUI/Scene module still exists (Phase 6 merge).
@@ -207,7 +216,7 @@ struct YA_GUI_API WidgetTree final
     [[nodiscard]] UIElement* getRoot() const { return _root.get(); }
     /// Stable system layer. `layer == Content` is the "join the world's Game
     /// UI" mount point.
-    [[nodiscard]] UIElement* getLayer(ELayer layer) const;
+    [[nodiscard]] UICanvasRoot* getLayer(ELayer layer) const;
 
     // === Attach / reparent / detach (single-parent contract) ===
     /// Attach `widget` under `parent` (must belong to this tree). Fails
@@ -220,10 +229,13 @@ struct YA_GUI_API WidgetTree final
     [[nodiscard]] WidgetAttachment attach(UIElement& parent,
                                           const UIElementRef& widget,
                                           FChildSlotInitializer init);
-    /// Attach `widget` under `parent` with explicit canvas edge intent.
-    [[nodiscard]] WidgetAttachment attach(UIElement& parent,
-                                          const UIElementRef& widget,
-                                          const FCanvasSlotArgs& args);
+    /// Attach `widget` under a canvas parent with explicit canvas edge intent.
+    /// Prefer `ui::attach(tree, typedParent, widget, canvasSlot()...)` so the
+    /// parent type selects the slot builder at compile time. This overload is
+    /// canvas-only; a non-canvas parent asserts.
+    [[nodiscard]] WidgetAttachment attach(UIElement&             parent,
+                                           const UIElementRef&    widget,
+                                           const FCanvasSlotArgs& args);
     [[nodiscard]] WidgetAttachment attachToLayer(ELayer layer,
                                                 const UIElementRef& widget,
                                                 const FCanvasSlotArgs& args);
@@ -296,11 +308,26 @@ struct YA_GUI_API WidgetTree final
     /// (drives the button's persistent focus highlight).
     void setFocus(UIElement* widget, bool bFromKeyboard = false);
     [[nodiscard]] UIElement* getFocused() const { return _focused; }
+    [[nodiscard]] bool wantsTextInput() const
+    {
+        for (UIElement* node : getFocusPath()) {
+            if (node && node->isAttached() && node->wantsTextInput()) {
+                return true;
+            }
+        }
+        return false;
+    }
     void setPointerCapture(UIElement* widget);
     void releasePointerCapture(UIElement* widget);
     [[nodiscard]] UIElement* getPointerCapture() const { return _captured; }
+    [[nodiscard]] bool hasModalPopup() const;
     [[nodiscard]] UIElement* getHovered() const { return _hovered; }
     [[nodiscard]] UIElement* getTooltipHost() const { return _tooltipHost.get(); }
+
+    /// Drop hover, tooltip and the ordinary pointer-over path without injecting
+    /// a pointer event. Capture, focus and an active drag session stay put so
+    /// a WindowFocusLost can keep cross-window drag/capture alive.
+    void clearPointerOverState();
 
     /// Remove the active tooltip (hover change / detach / tree teardown).
     void removeTooltip();
@@ -317,25 +344,17 @@ struct YA_GUI_API WidgetTree final
     [[nodiscard]] std::vector<UIElement*> getFocusPath() const;
     [[nodiscard]] const WidgetRouteTrace& getLastRouteTrace() const { return _lastRouteTrace; }
 
-    // === Drag & drop session (gui-app-bootstrap Phase 4) ===
-    /// Whether a drag session is active. While active the tree intercepts
-    /// pointer moves (ghost + drop-target highlight), releases (drop) and
-    /// presses/Esc (cancel).
+    // === Drag & drop (source-local) ===
+    /// Whether this tree is the source of the host drag session. The unique
+    /// session identity (source vs hover window) lives on GUIDragRouter.
     [[nodiscard]] bool isDragging() const { return static_cast<bool>(_dragOperation); }
-    /// Start a drag session from `source` with a string payload wrapped as
-    /// `UIStringDragDropOperation` (typeId `"text"`). Prefer the operation
-    /// overload for typed domain payloads. A ghost (Panel + label) follows
-    /// the pointer on the DragIme layer unless `bShowGhost` is false (the
-    /// source itself follows the pointer instead, e.g. a dock floating
-    /// window). While the session is active, the drag SOURCE subtree is
-    /// skipped by the hit walk so the widgets beneath it stay reachable as
-    /// drop targets.
-    void beginDrag(UIElement* source,
-                   std::string payload,
-                   std::string ghostLabel,
-                   DragSessionObserver observer = {},
-                   bool bShowGhost = true,
-                   bool bSkipSourceInHitTest = false);
+    /// Start a drag session from `source`. Generic id/text lives on
+    /// `operation->payload`; domain types inherit `UIDragDropOperation`.
+    /// A ghost (Border + label) follows the pointer on the DragIme layer
+    /// unless `bShowGhost` is false (the source itself follows the pointer
+    /// instead, e.g. a dock floating window). While the session is active,
+    /// the drag SOURCE subtree is skipped by the hit walk so the widgets
+    /// beneath it stay reachable as drop targets.
     void beginDrag(UIElement* source,
                    UIDragDropOperationRef operation,
                    DragSessionObserver observer = {},
@@ -354,6 +373,10 @@ struct YA_GUI_API WidgetTree final
     /// start a local drag session: `isDragging()` stays false.
     void setExternalDropHover(const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
     void clearExternalDropHover();
+    /// Hide the source-local ghost and drop preview while the pointer is over
+    /// another window or the desktop. The session stays active; the hover tree
+    /// (or the small desktop overlay) shows the same ghost chrome.
+    void setSourceDragChromeVisible(bool visible);
     /// Deliver `onDrop` for an operation owned by another tree. Returns true
     /// when a target accepted the drop.
     [[nodiscard]] bool dropExternal(const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
@@ -433,9 +456,14 @@ struct YA_GUI_API WidgetTree final
     [[nodiscard]] UIElement* findDropTarget(const glm::vec2& logicalPoint) const;
     [[nodiscard]] UIElement* findDropTarget(const glm::vec2& logicalPoint,
                                             const UIDragDropOperation* operation) const;
+    [[nodiscard]] UIElement* findDropHoverTarget(const glm::vec2& logicalPoint,
+                                                 const UIDragDropOperation* operation) const;
     void applyDropTarget(UIElement* target,
                          const UIDragDropOperation& operation,
                          const glm::vec2& logicalPoint);
+    [[nodiscard]] UIElementRef attachDragGhost(const std::string& label);
+    void placeDragGhost(UIElement& ghost, const glm::vec2& logicalPoint);
+    void clearExternalGhost();
     /// Release ghost + highlight + payload (shared by end/cancel).
     void clearDragSession();
     /// Poll FontManager::resourceRevision() and, on change, remasure+repaint
@@ -544,6 +572,7 @@ struct YA_GUI_API WidgetTree final
     /// is the hover/drop side of a cross-window drag.
     const UIDragDropOperation* _externalDropOp = nullptr;
     UIElementRef      _dragGhost;
+    UIElementRef      _externalGhost;
     DragSessionObserver _dragObserver;
 };
 

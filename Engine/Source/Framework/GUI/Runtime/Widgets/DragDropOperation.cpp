@@ -4,16 +4,15 @@ namespace ya
 {
 
 UIDragDropOperation::~UIDragDropOperation() = default;
-UIStringDragDropOperation::~UIStringDragDropOperation() = default;
 
-UIDragDropOperationRef UIStringDragDropOperation::make(std::string text,
-                                                       std::string ghostLabel,
-                                                       std::string typeId)
+UIDragDropOperationRef UIDragDropOperation::make(std::string payload,
+                                                 std::string ghostLabel,
+                                                 std::string typeId)
 {
-    auto operation = std::make_shared<UIStringDragDropOperation>();
+    auto operation = std::make_shared<UIDragDropOperation>();
+    operation->payload = std::move(payload);
+    operation->ghostLabel = ghostLabel.empty() ? operation->payload : std::move(ghostLabel);
     operation->typeId = typeId.empty() ? kTypeId : std::move(typeId);
-    operation->text = std::move(text);
-    operation->ghostLabel = ghostLabel.empty() ? operation->text : std::move(ghostLabel);
     return operation;
 }
 

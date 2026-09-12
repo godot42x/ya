@@ -12,17 +12,23 @@ namespace ya
 struct UIDragDropOperation;
 using UIDragDropOperationRef = std::shared_ptr<UIDragDropOperation>;
 
-/// In-flight drag session owned by WidgetTree (UE `FDragDropOperation` /
-/// ImGui payload analog).
+/// In-flight drag payload. Source-local ghost/observers live on WidgetTree;
+/// the unique session identity (source vs hover window) lives on GUIDragRouter.
 ///
-/// Extension is by subclass: typed fields live on the derived operation
-/// (`FDockPanelDragDropOp`, `FTreeReorderDragDropOp`, ...). Drop targets
-/// filter with `isType()` (cheap ImGui-style tag) then `as<T>()` for data.
-/// The tree holds one operation for the session; it is not a string blob.
+/// `payload` is the generic slot (id, path, text). Domain drags inherit and
+/// add typed fields (`FDockPanelDragDropOp`, `FTreeReorderDragDropOp`, ...).
+/// Drop targets filter with `isType()` then `as<T>()` for derived data.
 struct YA_GUI_API UIDragDropOperation
 {
-    std::string typeId;
+    static constexpr const char* kTypeId = "payload";
+
+    std::string typeId = kTypeId;
+    std::string payload;
     std::string ghostLabel;
+    /// Last tab of a closable extra window: hide the source OS window once
+    /// the pointer leaves it so the window does not follow the cursor. Ghost
+    /// stays on the desktop overlay / foreign tree. Cancel/NoTarget show it.
+    bool bHideSourceWindowOnLeave = false;
 
     virtual ~UIDragDropOperation();
 
@@ -39,22 +45,10 @@ struct YA_GUI_API UIDragDropOperation
     {
         return dynamic_cast<T*>(this);
     }
-};
 
-/// Convenience operation when the payload really is text / an opaque id.
-/// Domain drags (dock panel, tree reorder) should subclass
-/// `UIDragDropOperation` instead of stuffing fields into this string.
-struct YA_GUI_API UIStringDragDropOperation : public UIDragDropOperation
-{
-    static constexpr const char* kTypeId = "text";
-    std::string text;
-
-    UIStringDragDropOperation() { typeId = kTypeId; }
-    ~UIStringDragDropOperation() override;
-
-    static UIDragDropOperationRef make(std::string text,
-                                       std::string ghostLabel = {},
-                                       std::string typeId = kTypeId);
+    static UIDragDropOperationRef make(std::string payload,
+                                         std::string ghostLabel = {},
+                                         std::string typeId = {});
 };
 
 } // namespace ya

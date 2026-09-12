@@ -152,7 +152,7 @@ class UIDockSpaceWidgetBuilder final : public TUIWidgetBuilder<UIDockSpace, UIDo
 
 /// Full-screen popup overlay (menu / modal / dialog shell). Content children
 /// are laid out at `_contentPos` with their desired size; the overlay itself
-/// attaches to the tree's Popup layer via open(), not through ui::build.
+/// attaches to the tree's Popup layer via open(), not through ui::attach.
 class UIPopupOverlayWidgetBuilder final : public TUIWidgetChildrenBuilder<UIPopupOverlay, UIPopupOverlayWidgetBuilder>
 {
   public:

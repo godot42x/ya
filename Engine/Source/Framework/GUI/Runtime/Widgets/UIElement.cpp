@@ -33,22 +33,8 @@ bool UIElement::wantsTick() const
 
 bool UIElement::isAutoSizeActive() const
 {
-    UISlot* slot = getSlot();
-    if (!slot) {
-        return false;
-    }
-    if (const auto* canvas = slot->as<UICanvasSlot>()) {
-        return canvas->getWidthSizeMode() == EWidgetSizeMode::Auto ||
-               canvas->getHeightSizeMode() == EWidgetSizeMode::Auto;
-    }
-    if (const auto* box = slot->as<UIBoxSlot>()) {
-        return box->getSizeRule() == EUIBoxSlotSizeRule::Auto;
-    }
-    if (const auto* overlay = slot->as<UIOverlaySlot>()) {
-        return overlay->getHAlign() != EUIOverlayAlignment::Fill ||
-               overlay->getVAlign() != EUIOverlayAlignment::Fill;
-    }
-    return false;
+    const UISlot* slot = getSlot();
+    return slot != nullptr && slot->isAutoSizeActive();
 }
 
 UIElement::~UIElement()
@@ -188,10 +174,9 @@ Rect2D UIElement::resolveCanvasRect(const Rect2D&    parentRect,
     const glm::vec2 anchorMax = glm::clamp(anchorMaxIn, 0.0f, 1.0f);
     const glm::vec2 rectMin   = parentRect.pos + parentRect.extent * anchorMin + offset;
 
-    // Per-axis size resolution (SizeToContent contract): an axis with an
-    // anchor span stretches to the parent; an Auto axis resolves from
-    // computeDesiredSize(); otherwise the axis keeps authoredSize from the
-    // parent-owned slot.
+    // Available area from canvas anchors: a non-zero span is the stretch
+    // area; Auto/authored size only apply when the axis is a point anchor.
+    // Final child size is resolved by UICanvasLayout (Auto > stretch > authored).
     const glm::vec2 span    = (anchorMax - anchorMin) * parentRect.extent;
     const glm::vec2 desired = (autoAxis.x || autoAxis.y) ? computeDesiredSize() : authoredSize;
     glm::vec2       size    = authoredSize;
@@ -590,6 +575,37 @@ void UIElement::removeChildEdge(UIElement& child)
     child._slot   = nullptr;
 }
 
+void UIElement::relocateOwnedChild(UIElement& child, size_t destIndex)
+{
+    const auto childIt = std::find_if(_children.begin(), _children.end(),
+                                      [&child](const UIElementRef& ref) { return ref.get() == &child; });
+    if (childIt == _children.end()) {
+        return;
+    }
+    const size_t from = static_cast<size_t>(std::distance(_children.begin(), childIt));
+    if (from == destIndex) {
+        return;
+    }
+    UIElementRef keep = *childIt;
+    std::unique_ptr<UISlot> slot;
+    _children.erase(childIt);
+    if (from < _childSlots.size()) {
+        slot = std::move(_childSlots[from]);
+        _childSlots.erase(_childSlots.begin() + static_cast<std::ptrdiff_t>(from));
+    }
+    const size_t insertAt = std::min(destIndex, _children.size());
+    _children.insert(_children.begin() + static_cast<std::ptrdiff_t>(insertAt), std::move(keep));
+    _childSlots.insert(_childSlots.begin() + static_cast<std::ptrdiff_t>(insertAt), std::move(slot));
+    if (insertAt < _childSlots.size() && _childSlots[insertAt]) {
+        child._slot = _childSlots[insertAt].get();
+    }
+    child._parent = this;
+    markLayoutDirty(EUIInvalidationReason::ChildStructure);
+    if (_tree) {
+        _tree->invalidateLayout();
+    }
+}
+
 // === Field serialization ===
 
 nlohmann::json UIElement::serializeFields() const
@@ -653,6 +669,16 @@ bool UIElement::canAcceptDrop(const UIDragDropOperation& operation, const glm::v
     return false;
 }
 
+bool UIElement::canPreviewDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
+{
+    for (const UIBehaviorRef& behavior : _behaviors) {
+        if (behavior && behavior->canPreviewDrop(*this, operation, logicalPoint)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void UIElement::onDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
     for (const UIBehaviorRef& behavior : _behaviors) {
@@ -675,7 +701,7 @@ void UIElement::setDropHighlight(bool bHighlight)
 void UIElement::updateDropHover(const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
 {
     for (const UIBehaviorRef& behavior : _behaviors) {
-        if (behavior && behavior->canAcceptDrop(*this, operation, logicalPoint)) {
+        if (behavior && behavior->canPreviewDrop(*this, operation, logicalPoint)) {
             behavior->updateDropHover(*this, operation, logicalPoint);
             return;
         }

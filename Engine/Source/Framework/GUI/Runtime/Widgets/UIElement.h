@@ -181,7 +181,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     // === Identity ===
     std::string _name;
     /// Optional stable identity for dumps and list-row reuse. Empty for
-    /// hand-authored widgets; `ui::build` copies the builder key here.
+    /// hand-authored widgets; the DSL builder copies its key here.
     std::string _stableKey;
     /// Stable registry type ID, set by UITypeRegistry::createInstance (empty
     /// for framework-internal / direct make_shared instances).
@@ -403,6 +403,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Cursor to show while this widget is hovered (queried by the host from
     /// the tree's hovered widget). Base: arrow; split panes override it.
     [[nodiscard]] virtual ECursorType getCursor() const { return ECursorType::Arrow; }
+    /// Whether the focused widget owns text/IME input for this window.
+    /// Containers and non-editing controls return false.
+    [[nodiscard]] virtual bool wantsTextInput() const { return false; }
     /// Pointer hover lifecycle. The tree resolves a single hover owner and
     /// sends enter/leave when that owner changes. Default leave behavior keeps
     /// the legacy contract alive by clearing the widget's hover visuals.
@@ -431,6 +434,8 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// (the tree highlights it as a valid drop target during a drag session).
     [[nodiscard]] virtual bool canAcceptDrop(const UIDragDropOperation& operation,
                                              const glm::vec2& logicalPoint);
+    [[nodiscard]] virtual bool canPreviewDrop(const UIDragDropOperation& operation,
+                                              const glm::vec2& logicalPoint);
     /// Called when a drag session is released over this target (only after
     /// canAcceptDrop returned true for that point).
     virtual void onDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
@@ -593,11 +598,10 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     }
 
   public:
-    /// Resolve this element's rect from parent-owned canvas edge data against
-    /// `parentRect`. Size resolution does not read child-authored geometry: an axis with an
-    /// anchor span stretches to the parent, an Auto axis uses
-    /// computeDesiredSize(), otherwise the axis keeps `authoredSize` from the
-    /// parent-owned slot.
+    /// Resolve the canvas *anchor rect* (available area) from parent-owned
+    /// edge data. A non-zero anchor span is that area; Auto/authored size
+    /// apply only on a point-anchored axis. Final child size is
+    /// `UICanvasLayout::resolveChildRect` (Auto > stretch > authored).
     [[nodiscard]] Rect2D resolveCanvasRect(const Rect2D&    parentRect,
                                            const glm::vec2& anchorMin,
                                            const glm::vec2& anchorMax,
@@ -629,6 +633,10 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// its typed slot; generic elements create a plain UISlot. Hosts that
     /// hold a layout as a member still override this to call that layout.
     [[nodiscard]] virtual std::unique_ptr<UISlot> createSlotForChild(UIElement& child);
+
+    /// Reorder an already-owned child. `destIndex` is the desired index after
+    /// the move (the insertion index once the child has been taken out).
+    void relocateOwnedChild(UIElement& child, size_t destIndex);
 
   private:
     friend struct WidgetTree;

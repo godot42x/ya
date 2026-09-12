@@ -231,10 +231,13 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
     /// already resolved by hitRowIndex, so only the horizontal band is
     /// tested here).
     [[nodiscard]] bool onArrow(const glm::vec2& point, const VisibleRow& row) const;
-    /// Button rect of the expand arrow at indent `x` / row top `rowTopY`
-    /// (paint and hit test share this geometry so the hover highlight matches
-    /// the clickable area exactly).
-    [[nodiscard]] Rect2D arrowButtonRect(float x, float rowTopY) const;
+    /// Shared HBox leading (button + optional icon + title) for one row.
+    /// Paint and hit test use this so the plus-minus box and label share
+    /// the same vertically-centered band.
+    [[nodiscard]] FDisclosureLeading rowLeading(const Rect2D& rowRect,
+                                                int           depth,
+                                                bool          bHasIcon,
+                                                float         packHeight) const;
     /// Expand-state ref for `id`, creating it (Layout granularity) on demand.
     [[nodiscard]] std::shared_ptr<Reactive<bool>>& expandedRef(const std::string& id);
     /// One-shot filter expansion: expands every matching chain exactly once

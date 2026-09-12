@@ -11,6 +11,8 @@ namespace ya
 /// paint on top. This is not UIPopupOverlay (popup shield / modal).
 struct YA_GUI_API UIOverlay : public UIElement
 {
+    using SlotArgs = FOverlaySlotArgs;
+
     YA_REFLECT_BEGIN(UIOverlay, UIElement)
     YA_REFLECT_END()
 

@@ -61,6 +61,7 @@ struct YA_GUI_API UISpinBox : public UIElement, public UIStyledWidget<UISpinBox,
     {
         return _bEditing ? ECursorType::IBeam : ECursorType::Arrow;
     }
+    [[nodiscard]] bool wantsTextInput() const override { return _bEditing; }
     void clearTransientInputState() override
     {
         _hoveredZone = -1;

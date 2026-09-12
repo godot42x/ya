@@ -2,7 +2,7 @@
 
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
-#include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Brush.h"
 
@@ -16,13 +16,12 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     auto dialog = std::make_shared<UIDialog>("Dialog");
     dialog->_bModal = true;
 
-    // Panel: title bar + content + button row. UIPanel does not aggregate
-    // child desired sizes, so measure the content from its parent-owned edge
-    // after attaching it to the stack.
-    const float kDialogW = 420.0f;
+    // Display: title bar + content + button row. Measure the content from
+    // its parent-owned content slot after attaching it to the stack.
+    const float kDialogW = 360.0f;
     const float titleH   = 18.0f;
     const float buttonH  = 26.0f;
-    auto panel = std::make_shared<UIPanel>("DialogPanel");
+    auto panel = std::make_shared<UIBorder>("DialogPanel");
     panel->setStyleKey("panel");
     panel->setStyleField("outlineColor", glm::vec4{0.48f, 0.52f, 0.60f, 1.0f});
     panel->setStyleField("outlineThickness", 1.0f);
@@ -33,15 +32,6 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     stack->setSpacing(12.0f);
     stack->setPadding({16.0f, 14.0f});
     panel->addDetachedChild(stack);
-    // The panel is a canvas host: fill is expressed on the parent->child slot
-    // edge, not by authoring anchors on the child.
-    if (UISlot* edge = panel->getSlotForChild(*stack); edge && edge->as<UICanvasSlot>()) {
-        auto* slot = edge->as<UICanvasSlot>();
-        FCanvasSlotArgs fillArgs;
-        fillArgs.anchorMin = {0.0f, 0.0f};
-        fillArgs.anchorMax = {1.0f, 1.0f};
-        slot->apply(fillArgs);
-    }
 
     auto titleText = std::make_shared<UIText>("DialogTitle");
     titleText->_fontSize  = 14;
@@ -69,7 +59,7 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
         }
     }
     const float panelH = 14.0f + titleH + 12.0f + std::max(contentH, 0.0f) + 12.0f + buttonH + 14.0f;
-    dialog->_contentExtent = {kDialogW, std::max(panelH, 140.0f)};
+    dialog->_contentExtent = {kDialogW, panelH};
 
     auto buttons = std::make_shared<UIContainer>("DialogButtons");
     buttons->setDirection(EWidgetBoxLayout::Horizontal);

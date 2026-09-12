@@ -24,6 +24,8 @@ namespace ya
 ///     not consumed and bubbles outward through the tree walk.
 struct YA_GUI_API UIScrollViewport : public UIElement, public UIStyledWidget<UIScrollViewport, FScrollBarStyle>
 {
+    using SlotArgs = FContentSlotArgs;
+
     YA_REFLECT_BEGIN(UIScrollViewport, UIElement)
     YA_REFLECT_END()
 

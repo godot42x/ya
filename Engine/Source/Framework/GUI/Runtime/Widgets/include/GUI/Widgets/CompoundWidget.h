@@ -14,7 +14,7 @@ namespace ya
 /// compound widget never runs its own loop.
 ///
 /// The first constructed child is the composition host and fills this
-/// widget through a parent-owned UIOverlaySlot. The compound does not
+/// widget through a parent-owned UIContentSlot. The compound does not
 /// hand-assign that rect.
 ///
 /// This type belongs to the native retained widget layer, not the runtime
@@ -24,6 +24,8 @@ namespace ya
 /// through UICompoundWidget.
 struct YA_GUI_API UICompoundWidget : public UIElement
 {
+    using SlotArgs = FContentSlotArgs;
+
     explicit UICompoundWidget(std::string name = "Widget", std::string styleKey = {})
         : UIElement(std::move(name), std::move(styleKey))
     {

@@ -28,6 +28,8 @@ namespace ya
 /// so a header click does not fall through the panel.
 struct YA_GUI_API UIExpander : public UIElement, public UIStyledWidget<UIExpander, FExpanderStyle>
 {
+    using SlotArgs = FBoxSlotArgs;
+
     YA_REFLECT_BEGIN(UIExpander, UIElement)
     YA_REFLECT_END()
 

@@ -59,6 +59,7 @@ struct YA_GUI_API UISearchComboBox : public UIElement, public UIStyledWidget<UIS
     void resetHoverState() override { _bHovered = false; }
     void onFocusGained(bool /*bFromKeyboard*/) override { _bFocused = true; }
     void onFocusLost() override { _bFocused = false; }
+    [[nodiscard]] bool wantsTextInput() const override { return _bFocused; }
     void clearTransientInputState() override;
 
   private:

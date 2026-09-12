@@ -70,6 +70,9 @@ public:
     [[nodiscard]] UIElement& getParent() const { return *_parent; }
     [[nodiscard]] UIElement& getChild() const { return *_child; }
     virtual void appendRuntimeDiagnostics(nlohmann::json& node) const;
+    virtual void serialize(nlohmann::json& node) const;
+    virtual void deserialize(const nlohmann::json& node);
+    [[nodiscard]] virtual bool isAutoSizeActive() const;
 
     /// Typed access remains open to user-defined UISlot subclasses; adding a
     /// slot type does not require editing an engine-owned enum.
@@ -77,6 +80,20 @@ public:
     [[nodiscard]] T* as() { return dynamic_cast<T*>(this); }
     template <typename T>
     [[nodiscard]] const T* as() const { return dynamic_cast<const T*>(this); }
+
+    /// Apply construct-time args. `TArgs::SlotType` names the slot class that
+    /// accepts this payload, so a new slot type does not edit a central switch.
+    /// Args stay aggregates so designated initializers keep working.
+    template<typename TArgs>
+    [[nodiscard]] bool applyArgs(const TArgs& args)
+    {
+        auto* typed = as<typename TArgs::SlotType>();
+        if (typed == nullptr) {
+            return false;
+        }
+        typed->apply(args);
+        return true;
+    }
 
 protected:
     void invalidateMeasure() const;
@@ -163,6 +180,9 @@ public:
     void setReserveSpaceWhenHidden(bool value);
     void apply(const struct FBoxSlotArgs& args);
     void appendRuntimeDiagnostics(nlohmann::json& node) const override;
+    void serialize(nlohmann::json& node) const override;
+    void deserialize(const nlohmann::json& node) override;
+    [[nodiscard]] bool isAutoSizeActive() const override;
 
 private:
     EUIBoxSlotSizeRule        _sizeRule = EUIBoxSlotSizeRule::Auto;
@@ -180,12 +200,18 @@ private:
 /// parent-owned UIBoxSlot already exists.
 struct FBoxSlotArgs
 {
+    using SlotType = UIBoxSlot;
+
     EUIBoxSlotSizeRule       sizeRule        = EUIBoxSlotSizeRule::Auto;
     float                    weight          = 1.0f;
     FMargin                  margin          = {};
     EUIBoxSlotCrossAlignment crossAlignment  = EUIBoxSlotCrossAlignment::Stretch;
+    glm::vec2                minSize         = {0.0f, 0.0f};
+    glm::vec2                maxSize         = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
     /// Non-zero on an axis overrides the child's desired size for that axis.
     glm::vec2                preferredSize  = {0.0f, 0.0f};
+    bool                     participatesInLayout    = true;
+    bool                     reserveSpaceWhenHidden  = true;
 };
 
 /// Parent-owned layout algorithm. Layout owns measure/arrange only; visual
@@ -259,14 +285,10 @@ private:
     bool                     _bStretchLastChild = false;
 };
 
-/// Layout for a single content child that fills an inset content rect.
-/// Buttons and SizeBox reuse this instead of each reimplementing
-/// "parent rect minus padding".
 /// How a child is placed on one axis inside a box the parent already owns.
 /// Fill stretches that axis; otherwise the child keeps its desired size and
-/// Start/Center/End place it. Shared by UIOverlaySlot (multiple stacked
-/// children) and UISingleChildLayout (scroll / size box / split / button ...),
-/// which answer the same question per axis.
+/// Start/Center/End place it. Shared by overlay stacking and content-region
+/// hosts, which answer the same geometric question per axis.
 enum class EUIOverlayAlignment : uint8_t
 {
     Fill,
@@ -275,6 +297,9 @@ enum class EUIOverlayAlignment : uint8_t
     End,
 };
 
+/// Layout for a single content child that fills an inset content rect.
+/// Buttons, SizeBox, scroll, split panes and compound widgets reuse this
+/// instead of each reimplementing "parent rect minus padding".
 class YA_GUI_API UISingleChildLayout final : public UILayout
 {
 public:
@@ -310,6 +335,9 @@ public:
     void setPadding(glm::vec2 value) { setPadding(FMargin::hv(value)); }
     void apply(const struct FOverlaySlotArgs& args);
     void appendRuntimeDiagnostics(nlohmann::json& node) const override;
+    void serialize(nlohmann::json& node) const override;
+    void deserialize(const nlohmann::json& node) override;
+    [[nodiscard]] bool isAutoSizeActive() const override;
 
 private:
     EUIOverlayAlignment _hAlign  = EUIOverlayAlignment::Fill;
@@ -320,6 +348,51 @@ private:
 
 struct FOverlaySlotArgs
 {
+    using SlotType = UIOverlaySlot;
+
+    EUIOverlayAlignment hAlign  = EUIOverlayAlignment::Fill;
+    EUIOverlayAlignment vAlign  = EUIOverlayAlignment::Fill;
+    FMargin             padding = {};
+    /// Non-zero on an axis overrides the child's desired size for that axis.
+    glm::vec2           preferredSize = {0.0f, 0.0f};
+};
+
+/// Content-region slot: one child inside a parent-owned rect (button label,
+/// scroll content, split pane, size box, compound root). Same geometric
+/// fields as overlay, but a distinct type so overlay stacking cannot be
+/// confused with a single content host.
+class YA_GUI_API UIContentSlot final : public UISlot
+{
+public:
+    UIContentSlot(UIElement& parent, UIElement& child);
+
+    [[nodiscard]] EUIOverlayAlignment getHAlign() const { return _hAlign; }
+    [[nodiscard]] EUIOverlayAlignment getVAlign() const { return _vAlign; }
+    [[nodiscard]] const FMargin& getPadding() const { return _padding; }
+    [[nodiscard]] const glm::vec2& getPreferredSize() const { return _preferredSize; }
+
+    void setHAlign(EUIOverlayAlignment value);
+    void setVAlign(EUIOverlayAlignment value);
+    void setPadding(FMargin value);
+    void setPreferredSize(glm::vec2 value);
+    void setPadding(glm::vec2 value) { setPadding(FMargin::hv(value)); }
+    void apply(const struct FContentSlotArgs& args);
+    void appendRuntimeDiagnostics(nlohmann::json& node) const override;
+    void serialize(nlohmann::json& node) const override;
+    void deserialize(const nlohmann::json& node) override;
+    [[nodiscard]] bool isAutoSizeActive() const override;
+
+private:
+    EUIOverlayAlignment _hAlign  = EUIOverlayAlignment::Fill;
+    EUIOverlayAlignment _vAlign  = EUIOverlayAlignment::Fill;
+    FMargin             _padding{};
+    glm::vec2           _preferredSize = {0.0f, 0.0f};
+};
+
+struct FContentSlotArgs
+{
+    using SlotType = UIContentSlot;
+
     EUIOverlayAlignment hAlign  = EUIOverlayAlignment::Fill;
     EUIOverlayAlignment vAlign  = EUIOverlayAlignment::Fill;
     FMargin             padding = {};
@@ -366,7 +439,7 @@ public:
     void setPadding(glm::vec2 value);
 
     /// Both panes get their rect from the split, so a pane's child intent is
-    /// carried by a single-child slot (fill by default).
+    /// carried by a content slot (fill by default).
     [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;
     void onArrange(UIElement& parent, const Rect2D& rect) const override;
@@ -395,7 +468,7 @@ struct FCanvasSlotArgs;
 /// parent (which never reads this slot) cannot silently drop it.
 ///
 /// Canvas is a LAYOUT, not a widget: any host that installs UICanvasLayout
-/// (UIPanel today) can carry these edges.
+/// (UICanvasPanel today) can carry these edges.
 class YA_GUI_API UICanvasSlot final : public UISlot
 {
 public:
@@ -442,8 +515,16 @@ public:
     void setFixedSize(glm::vec2 value);
     void apply(const FCanvasSlotArgs& args);
     void appendRuntimeDiagnostics(nlohmann::json& node) const override;
+    void serialize(nlohmann::json& node) const override;
+    void deserialize(const nlohmann::json& node) override;
+    [[nodiscard]] bool isAutoSizeActive() const override;
 
 private:
+    /// Spanning anchors or insets mean stretch. Leaving Auto on those axes
+    /// measures a 0-desired child to 0px (invisible). Explicit Auto after
+    /// `apply()` / `widthSizeMode(Auto)` is the SizeToContent escape hatch.
+    void promoteStretchedAutoAxes();
+
     glm::vec2       _anchorMin = {0.0f, 0.0f};
     glm::vec2       _anchorMax = {0.0f, 0.0f};
     glm::vec2       _offset    = {0.0f, 0.0f};
@@ -459,11 +540,18 @@ private:
     glm::vec2       _fixedSize     = {0.0f, 0.0f};
 };
 
-/// Construct-time canvas slot intent. Defaults to a visible top-left child
-/// sized from desired/intrinsic content (Auto/Auto). Use fill or explicit size
-/// to express stronger placement intent.
+/// Construct-time canvas slot intent.
+///
+/// Aggregate default is Fixed/Fixed with zero `fixedSize` so `args.fixedSize =
+/// {w,h}` (the historical attach payload) is honored without also setting size
+/// modes. An empty aggregate is therefore a 0x0 child — invisible until
+/// size/fill/anchors are set. DSL `ui::canvasSlot()` does **not** use this
+/// default: the builder starts Auto/Auto, matching `UICanvasSlot` and a bare
+/// `child(node)`.
 struct FCanvasSlotArgs
 {
+    using SlotType = UICanvasSlot;
+
     glm::vec2 anchorMin = {0.0f, 0.0f};
     glm::vec2 anchorMax = {0.0f, 0.0f};
     glm::vec2 offset    = {0.0f, 0.0f};
@@ -484,7 +572,7 @@ struct FCanvasSlotArgs
 
 /// Canvas layout: children are positioned by anchor rects against the parent
 /// content rect. This is the layout form of the historical "path-B" panel
-/// behaviour; it is NOT bound to UIPanel - any host may install it.
+/// behaviour; it is NOT bound to UICanvasPanel - any host may install it.
 class YA_GUI_API UICanvasLayout final : public UILayout
 {
 public:
@@ -496,8 +584,8 @@ public:
     void onArrange(UIElement& parent, const Rect2D& rect) const override;
 
     /// Resolve one child rect from its canvas slot against the parent content
-    /// rect. Delegates to UIElement::resolveCanvasRect() with slot-authored
-    /// size so the canvas layout never reads child `_size`.
+    /// rect. Anchor span/insets are the alignment area; child size is
+    /// Auto (preferred else desired) > stretch-to-area > authored fixedSize.
     [[nodiscard]] static Rect2D resolveChildRect(const UIElement&    child,
                                                  const UICanvasSlot& slot,
                                                  const Rect2D&       contentRect);
@@ -523,10 +611,21 @@ public:
     [[nodiscard]] int getColumn() const { return _column; }
 
     void setCell(int row, int column);
+    void apply(const struct FTableSlotArgs& args);
+    void serialize(nlohmann::json& node) const override;
+    void deserialize(const nlohmann::json& node) override;
 
 private:
     int _row    = 0;
     int _column = 0;
+};
+
+struct FTableSlotArgs
+{
+    using SlotType = UITableSlot;
+
+    int row    = 0;
+    int column = 0;
 };
 
 /// Grid layout: children are placed into row/column cells. Columns are
@@ -587,7 +686,7 @@ public:
 
     /// The viewport owns the scrolling axis extent itself; the child edge only
     /// carries cross-axis placement (fill by default, or align at desired
-    /// size), so scroll content uses the shared single-child slot contract.
+    /// size), so scroll content uses the content-slot contract.
     [[nodiscard]] std::unique_ptr<UISlot> createSlot(UIElement& parent, UIElement& child) const override;
 
     [[nodiscard]] glm::vec2 measure(const UIElement& parent) const override;

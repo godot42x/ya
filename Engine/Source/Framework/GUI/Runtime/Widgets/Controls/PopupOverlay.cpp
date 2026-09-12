@@ -88,9 +88,8 @@ void UIPopupOverlay::applyAssignedLayout(const Rect2D& rect)
         if (isFillCanvasSlot(edge)) {
             continue;
         }
-        if (edge && edge->as<UICanvasSlot>()) {
-            auto* slot = edge->as<UICanvasSlot>();
-            slot->apply(resolveContentSlotArgs(*child));
+        if (edge) {
+            edge->applyArgs(resolveContentSlotArgs(*child));
         }
         break;
     }

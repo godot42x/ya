@@ -8,7 +8,9 @@
 #include "GUI/Widgets/StringMatch.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
-#include "Core/Base.h"  
+#include "Core/Base.h"
+
+#include <algorithm>
 
 namespace ya
 {
@@ -386,16 +388,21 @@ bool UITreeView::onArrow(const glm::vec2& point, const VisibleRow& row) const
     return point.x >= x0 - kHitSlack && point.x <= x0 + _arrowWidth + kHitSlack;
 }
 
-Rect2D UITreeView::arrowButtonRect(float x, float rowTopY) const
+FDisclosureLeading UITreeView::rowLeading(const Rect2D& rowRect,
+                                          int           depth,
+                                          bool          bHasIcon,
+                                          float         packHeight) const
 {
-    // A compact button box vertically inset from the row, so the hover
-    // highlight reads as a clickable button rather than a full-row strip.
-    // Paint and hit test share this geometry.
-    const float inset = 2.0f;
-    return Rect2D{
-        .pos    = {x, rowTopY + inset},
-        .extent = {_arrowWidth, _rowHeight - inset * 2.0f},
-    };
+    Rect2D header = rowRect;
+    const float indent = static_cast<float>(depth) * _indentWidth;
+    header.pos.x += indent;
+    header.extent.x = std::max(0.0f, header.extent.x - indent);
+    return layoutDisclosureLeading(header,
+                                   _arrowWidth,
+                                   showsDisclosureButton(_disclosure),
+                                   bHasIcon,
+                                   14.0f,
+                                   packHeight);
 }
 
 void UITreeView::paintSelf(UIFrameBuilder& builder)
@@ -450,42 +457,30 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
             builder.addBrush(rowRect, fill);
         }
 
-        float x = rowRect.pos.x + static_cast<float>(row.depth) * _indentWidth;
+        const bool bHasIcon = brushHasIcon(row.node->icon);
+        const float packH   = font ? static_cast<float>(font->lineHeight) : 0.0f;
+        const FDisclosureLeading leading =
+            rowLeading(rowRect, row.depth, bHasIcon, packH);
 
-        if (!row.node->children.empty()) {
-            const bool   expanded  = isExpanded(row.node->id);
-            const Rect2D arrowRect = arrowButtonRect(x, rowRect.pos.y);
+        if (showsDisclosureButton(_disclosure) && !row.node->children.empty()) {
             paintDisclosureButton(builder,
                                   FDisclosurePaint{
-                                      .buttonRect  = arrowRect,
-                                      .bExpanded   = expanded,
+                                      .buttonRect  = leading.button,
+                                      .bExpanded   = isExpanded(row.node->id),
                                       .bHovered    = row.node->id == _hoveredArrowId,
                                       .color       = style.arrowColor,
                                       .hoveredFill = style.arrowHoveredFill,
                                       .spec        = _disclosure,
                                       .font        = font,
                                   });
-            if (showsDisclosureButton(_disclosure)) {
-                x += _arrowWidth;
-            }
         }
 
-        if (brushHasIcon(row.node->icon)) {
-            constexpr float kIcon = 14.0f;
-            const Rect2D iconRect{
-                .pos    = {x, rowRect.pos.y + (_rowHeight - kIcon) * 0.5f},
-                .extent = {kIcon, kIcon},
-            };
-            builder.addBrush(iconRect, row.node->icon);
-            x += kIcon + 4.0f;
+        if (bHasIcon) {
+            builder.addBrush(leading.icon, row.node->icon);
         }
 
         if (font) {
-            const Rect2D labelRect{
-                .pos    = {x, rowRect.pos.y},
-                .extent = {rowRect.pos.x + rowRect.extent.x - x, _rowHeight},
-            };
-            builder.addText(labelRect, row.node->label, style.textColor, font,
+            builder.addText(leading.title, row.node->label, style.textColor, font,
                             EWidgetAlignH::Left, EWidgetAlignV::Center);
         }
     }

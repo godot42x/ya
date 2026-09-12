@@ -22,6 +22,8 @@ namespace ya
 ///     the desired size = box + spacing + content.
 struct YA_GUI_API UICheckBox : public UIElement, public UIStyledWidget<UICheckBox, FCheckBoxStyle>
 {
+    using SlotArgs = FContentSlotArgs;
+
     YA_REFLECT_BEGIN(UICheckBox, UIElement)
     YA_REFLECT_FIELD(_bChecked, .instanceEditable())
     YA_REFLECT_FIELD(_boxSize, .instanceEditable())

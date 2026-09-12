@@ -8,6 +8,7 @@
 #include "GUI/Widgets/UIAdapterHost.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/WidgetTree.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
@@ -29,11 +30,13 @@ namespace
 void ensureTestTypesRegistered()
 {
     auto& registry = UITypeRegistry::instance();
-    if (registry.findType("test.doc_panel")) {
+    if (registry.findType("test.doc_panel") && registry.findType("test.doc_canvas")) {
         return;
     }
     registry.registerType({.typeId = "test.doc_panel", .displayName = "Doc Panel"},
-                          [] { return std::make_shared<UIPanel>("Panel"); });
+                          [] { return std::make_shared<UIBorder>("Panel"); });
+    registry.registerType({.typeId = "test.doc_canvas", .displayName = "Doc Canvas"},
+                          [] { return std::make_shared<UICanvasPanel>("Canvas"); });
     registry.registerType({.typeId = "test.doc_text", .displayName = "Doc Text"},
                           [] { return std::make_shared<UIText>("Text"); });
     registry.registerType({.typeId = "test.doc_button", .displayName = "Doc Button"},
@@ -122,7 +125,7 @@ TEST(UIDocumentTest, JsonRoundtrip)
     auto& registry = UITypeRegistry::instance();
 
     auto panel = registry.createInstance("test.doc_panel");
-    auto* panelWidget  = dynamic_cast<UIPanel*>(panel.get());
+    auto* panelWidget  = dynamic_cast<UIBorder*>(panel.get());
     ASSERT_NE(panelWidget, nullptr);
     panelWidget->setColor({0.12f, 0.14f, 0.22f, 0.88f});
     EXPECT_TRUE(panelWidget->hasAuthoredStyle());
@@ -144,13 +147,13 @@ TEST(UIDocumentTest, JsonRoundtrip)
     EXPECT_EQ(json["children"].size(), 1u);
     ASSERT_TRUE(json["childSlots"].is_array());
     ASSERT_EQ(json["childSlots"].size(), 1u);
-    EXPECT_EQ(json["childSlots"][0]["type"], "canvas");
+    EXPECT_EQ(json["childSlots"][0]["type"], "content");
 
     auto reloaded = UIDocument::fromJson(json);
     ASSERT_NE(reloaded, nullptr);
     auto instance = reloaded->instantiate();
     ASSERT_NE(instance, nullptr);
-    auto* panelInstance = dynamic_cast<UIPanel*>(instance.get());
+    auto* panelInstance = dynamic_cast<UIBorder*>(instance.get());
     ASSERT_NE(panelInstance, nullptr);
     EXPECT_EQ(panelInstance->getColor(), glm::vec4(0.12f, 0.14f, 0.22f, 0.88f));
     EXPECT_EQ(panelInstance->_zOrder, 5);
@@ -211,7 +214,7 @@ TEST(UIDocumentTest, CanvasSlotIntentRoundtripsAnchorAndInsets)
 {
     ensureTestTypesRegistered();
     auto& registry = UITypeRegistry::instance();
-    auto panel = registry.createInstance("test.doc_panel");
+    auto panel = registry.createInstance("test.doc_canvas");
     auto child = registry.createInstance("test.doc_text");
     ASSERT_NE(panel, nullptr);
     ASSERT_NE(child, nullptr);
@@ -293,9 +296,9 @@ TEST(UIDocumentTest, SingleChildSlotIntentRoundtrips)
     ASSERT_NE(parent, nullptr);
     ASSERT_NE(child, nullptr);
     parent->addDetachedChild(child, [](UIElement&, UISlot& edge) {
-        auto* slot = edge.as<UIOverlaySlot>();
+        auto* slot = edge.as<UIContentSlot>();
         ASSERT_NE(slot, nullptr);
-        FOverlaySlotArgs args;
+        FContentSlotArgs args;
         args.hAlign = EUIOverlayAlignment::Center;
         args.vAlign = EUIOverlayAlignment::End;
         args.preferredSize = {90.0f, 24.0f};
@@ -303,7 +306,7 @@ TEST(UIDocumentTest, SingleChildSlotIntentRoundtrips)
     });
     auto restored = UIDocument::fromJson(UIDocument::fromWidget(*parent)->toJson())->instantiate();
     ASSERT_NE(restored, nullptr);
-    auto* slot = restored->getSlotForChild(*restored->getChildren()[0])->as<UIOverlaySlot>();
+    auto* slot = restored->getSlotForChild(*restored->getChildren()[0])->as<UIContentSlot>();
     ASSERT_NE(slot, nullptr);
     EXPECT_EQ(slot->getHAlign(), EUIOverlayAlignment::Center);
     EXPECT_EQ(slot->getVAlign(), EUIOverlayAlignment::End);
@@ -365,14 +368,14 @@ TEST(UIDocumentTest, AuthoredPanelFillSurvivesThemeAfterReload)
     auto& registry = UITypeRegistry::instance();
 
     auto panel = registry.createInstance("test.doc_panel");
-    auto* panelWidget = dynamic_cast<UIPanel*>(panel.get());
+    auto* panelWidget = dynamic_cast<UIBorder*>(panel.get());
     ASSERT_NE(panelWidget, nullptr);
     panelWidget->setColor({0.12f, 0.14f, 0.22f, 0.88f});
 
     auto document = UIDocument::fromWidget(*panel);
     ASSERT_NE(document, nullptr);
     auto instance = UIDocument::fromJson(document->toJson())->instantiate();
-    auto* restored = dynamic_cast<UIPanel*>(instance.get());
+    auto* restored = dynamic_cast<UIBorder*>(instance.get());
     ASSERT_NE(restored, nullptr);
     EXPECT_TRUE(restored->hasAuthoredStyle());
 
@@ -432,7 +435,7 @@ TEST(UIDocumentTest, ChildSlotCountMustMatchChildren)
 TEST(UIDocumentTest, FromWidgetRequiresRegistryTypeId)
 {
     ensureTestTypesRegistered();
-    auto plain = std::make_shared<UIPanel>("Plain");
+    auto plain = std::make_shared<UICanvasPanel>("Plain");
     EXPECT_EQ(UIDocument::fromWidget(*plain), nullptr);
 }
 
@@ -535,7 +538,7 @@ TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)
 
     // A source widget whose serialized fields become the bulk-restore payload.
     auto source = registry.createInstance("test.doc_panel");
-    auto* sourcePanel = dynamic_cast<UIPanel*>(source.get());
+    auto* sourcePanel = dynamic_cast<UIBorder*>(source.get());
     ASSERT_NE(sourcePanel, nullptr);
     sourcePanel->setColor({0.5f, 0.5f, 0.5f, 1.0f});
     auto doc = UIDocument::fromWidget(*source);
@@ -580,7 +583,7 @@ TEST(UIDocumentTest, DeserializeOnDetachedWidgetIsNoOp)
     auto& registry = UITypeRegistry::instance();
 
     auto widget = registry.createInstance("test.doc_panel");
-    auto* panel = dynamic_cast<UIPanel*>(widget.get());
+    auto* panel = dynamic_cast<UIBorder*>(widget.get());
     ASSERT_NE(panel, nullptr);
 
     // Detached: no tree, so the transaction's aggregated invalidation is a

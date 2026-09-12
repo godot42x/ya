@@ -27,19 +27,46 @@ namespace ya::ui
 
 /// Explicit authoring builder for a canvas parent->child edge.
 /// This is the primary public path for canvas placement.
+///
+/// Unspecified (`ui::canvasSlot()` / bare `child(node)`) is Auto/Auto at the
+/// top-left: the child is visible at its desired size. `fill()` is opt-in
+/// because a canvas independently places each child; defaulting every sibling
+/// to fill would stack them onto the parent rect (that is overlay, not canvas).
+/// Spanning `anchor()` or non-zero `insets()` promote that axis from Auto to
+/// Fixed (stretch). SizeToContent inside a stretch area is explicit and must
+/// come last: `fill().widthSizeMode(Auto)` / `heightSizeMode(Auto)`.
 class FCanvasSlotBuilder final
 {
   public:
+    FCanvasSlotBuilder()
+    {
+        // FCanvasSlotArgs stays Fixed so `args.fixedSize = {w,h}` still works.
+        // The DSL builder matches the live UICanvasSlot default (Auto/Auto).
+        _args.widthSizeMode  = EWidgetSizeMode::Auto;
+        _args.heightSizeMode = EWidgetSizeMode::Auto;
+    }
+
     FCanvasSlotBuilder& fill() & { _args.anchorMin = {0.0f, 0.0f}; _args.anchorMax = {1.0f, 1.0f}; _args.widthSizeMode = EWidgetSizeMode::Fixed; _args.heightSizeMode = EWidgetSizeMode::Fixed; return *this; }
     FCanvasSlotBuilder&& fill() && { fill(); return std::move(*this); }
-    FCanvasSlotBuilder& anchor(glm::vec2 min, glm::vec2 max) & { _args.anchorMin = min; _args.anchorMax = max; return *this; }
-    FCanvasSlotBuilder&& anchor(glm::vec2 min, glm::vec2 max) && { _args.anchorMin = min; _args.anchorMax = max; return std::move(*this); }
+    FCanvasSlotBuilder& anchor(glm::vec2 min, glm::vec2 max) &
+    {
+        _args.anchorMin = min;
+        _args.anchorMax = max;
+        promoteStretchedAutoAxes();
+        return *this;
+    }
+    FCanvasSlotBuilder&& anchor(glm::vec2 min, glm::vec2 max) && { anchor(min, max); return std::move(*this); }
     FCanvasSlotBuilder& offset(glm::vec2 value) & { _args.offset = value; return *this; }
-    FCanvasSlotBuilder&& offset(glm::vec2 value) && { _args.offset = value; return std::move(*this); }
-    FCanvasSlotBuilder& insets(FMargin value) & { _args.offsets = value; return *this; }
-    FCanvasSlotBuilder&& insets(FMargin value) && { _args.offsets = value; return std::move(*this); }
+    FCanvasSlotBuilder&& offset(glm::vec2 value) && { offset(value); return std::move(*this); }
+    FCanvasSlotBuilder& insets(FMargin value) &
+    {
+        _args.offsets = value;
+        promoteStretchedAutoAxes();
+        return *this;
+    }
+    FCanvasSlotBuilder&& insets(FMargin value) && { insets(value); return std::move(*this); }
     FCanvasSlotBuilder& insets(glm::vec2 value) & { return insets(FMargin::hv(value)); }
-    FCanvasSlotBuilder&& insets(glm::vec2 value) && { _args.offsets = FMargin::hv(value); return std::move(*this); }
+    FCanvasSlotBuilder&& insets(glm::vec2 value) && { insets(FMargin::hv(value)); return std::move(*this); }
     FCanvasSlotBuilder& alignment(EWidgetAlignH h, EWidgetAlignV v) & { _args.alignmentH = h; _args.alignmentV = v; return *this; }
     FCanvasSlotBuilder&& alignment(EWidgetAlignH h, EWidgetAlignV v) && { _args.alignmentH = h; _args.alignmentV = v; return std::move(*this); }
     FCanvasSlotBuilder& pivot(glm::vec2 value) & { _args.pivot = value; return *this; }
@@ -59,10 +86,29 @@ class FCanvasSlotBuilder final
     [[nodiscard]] const FCanvasSlotArgs& args() const { return _args; }
     operator const FCanvasSlotArgs&() const { return _args; }
   private:
+    void promoteStretchedAutoAxes()
+    {
+        if (_args.anchorMax.x != _args.anchorMin.x ||
+            _args.offsets.left + _args.offsets.right != 0.0f) {
+            _args.widthSizeMode = EWidgetSizeMode::Fixed;
+        }
+        if (_args.anchorMax.y != _args.anchorMin.y ||
+            _args.offsets.top + _args.offsets.bottom != 0.0f) {
+            _args.heightSizeMode = EWidgetSizeMode::Fixed;
+        }
+    }
+
     FCanvasSlotArgs _args{};
 };
 
 /// Layout intent for a UIBoxLayout edge (row / column / container).
+///
+/// Unspecified is Auto on the main axis (pack to desired) and Stretch on the
+/// cross axis. `fill()` takes leftover main-axis space; it is not the default
+/// because a column of labels/buttons would then split the parent height
+/// instead of stacking. A Fill child inside an Auto-sized parent has 0 leftover
+/// and collapses on that axis — give the parent a definite size (canvas
+/// `fill()`, split pane, SizeBox) before using box `fill()`.
 ///
 /// fillWidth/fillHeight name the axis explicitly: in a row the main axis is X,
 /// in a column it is Y, and the author should not have to remember which.
@@ -140,6 +186,28 @@ class FBoxSlotBuilder final
 
     /// Preferred size on an Auto box edge. A zero component still asks the
     /// child. This is the construct-time form of UIBoxSlot::setPreferredSize.
+    FBoxSlotBuilder& minSize(glm::vec2 value) &
+    {
+        _args.minSize = value;
+        return *this;
+    }
+    FBoxSlotBuilder&& minSize(glm::vec2 value) &&
+    {
+        _args.minSize = value;
+        return std::move(*this);
+    }
+
+    FBoxSlotBuilder& maxSize(glm::vec2 value) &
+    {
+        _args.maxSize = value;
+        return *this;
+    }
+    FBoxSlotBuilder&& maxSize(glm::vec2 value) &&
+    {
+        _args.maxSize = value;
+        return std::move(*this);
+    }
+
     FBoxSlotBuilder& preferredSize(glm::vec2 value) &
     {
         _args.preferredSize = value;
@@ -158,12 +226,11 @@ class FBoxSlotBuilder final
     FBoxSlotArgs _args{};
 };
 
-/// Layout intent for a UISingleChildLayout edge (scroll viewport / size box /
-/// split pane / button / selectable row / check box / compound widget ...).
+/// Layout intent for a stacked overlay edge (UIOverlay only).
 ///
-/// These parents own both axes, so the only useful intent is how the child sits
-/// inside the content box: stretch it (Fill, the default) or keep its desired
-/// size and place it.
+/// Each child is independently aligned in the parent rect. Fill stretches that
+/// axis; otherwise the child keeps its desired size and Start/Center/End
+/// place it. Scroll / size box / split / button content uses contentSlot().
 class FOverlaySlotBuilder final
 {
   public:
@@ -263,5 +330,104 @@ class FOverlaySlotBuilder final
 [[nodiscard]] inline FCanvasSlotBuilder canvasSlot() { return {}; }
 
 [[nodiscard]] inline FOverlaySlotBuilder overlaySlot() { return {}; }
+
+/// Layout intent for a content-region edge (button / selectable row / check
+/// box / size box / scroll viewport / split pane / compound widget).
+///
+/// These parents own a content box, so the only useful intent is how the child
+/// sits inside it: stretch it (Fill, the default) or keep its desired size and
+/// place it. Overlay stacking uses overlaySlot().
+class FContentSlotBuilder final
+{
+  public:
+    FContentSlotBuilder& fill() &
+    {
+        _args.hAlign = EUIOverlayAlignment::Fill;
+        _args.vAlign = EUIOverlayAlignment::Fill;
+        return *this;
+    }
+    FContentSlotBuilder&& fill() &&
+    {
+        _args.hAlign = EUIOverlayAlignment::Fill;
+        _args.vAlign = EUIOverlayAlignment::Fill;
+        return std::move(*this);
+    }
+
+    FContentSlotBuilder& align(EUIOverlayAlignment hAlign, EUIOverlayAlignment vAlign) &
+    {
+        _args.hAlign = hAlign;
+        _args.vAlign = vAlign;
+        return *this;
+    }
+    FContentSlotBuilder&& align(EUIOverlayAlignment hAlign, EUIOverlayAlignment vAlign) &&
+    {
+        _args.hAlign = hAlign;
+        _args.vAlign = vAlign;
+        return std::move(*this);
+    }
+
+    FContentSlotBuilder& hAlign(EUIOverlayAlignment value) &
+    {
+        _args.hAlign = value;
+        return *this;
+    }
+    FContentSlotBuilder&& hAlign(EUIOverlayAlignment value) &&
+    {
+        _args.hAlign = value;
+        return std::move(*this);
+    }
+
+    FContentSlotBuilder& vAlign(EUIOverlayAlignment value) &
+    {
+        _args.vAlign = value;
+        return *this;
+    }
+    FContentSlotBuilder&& vAlign(EUIOverlayAlignment value) &&
+    {
+        _args.vAlign = value;
+        return std::move(*this);
+    }
+
+    FContentSlotBuilder& inset(FMargin value) &
+    {
+        _args.padding = value;
+        return *this;
+    }
+    FContentSlotBuilder&& inset(FMargin value) &&
+    {
+        _args.padding = value;
+        return std::move(*this);
+    }
+
+    FContentSlotBuilder& inset(glm::vec2 value) &
+    {
+        _args.padding = FMargin::hv(value);
+        return *this;
+    }
+    FContentSlotBuilder&& inset(glm::vec2 value) &&
+    {
+        _args.padding = FMargin::hv(value);
+        return std::move(*this);
+    }
+
+    FContentSlotBuilder& preferredSize(glm::vec2 value) &
+    {
+        _args.preferredSize = value;
+        return *this;
+    }
+    FContentSlotBuilder&& preferredSize(glm::vec2 value) &&
+    {
+        _args.preferredSize = value;
+        return std::move(*this);
+    }
+
+    [[nodiscard]] const FContentSlotArgs& args() const { return _args; }
+    operator const FContentSlotArgs&() const { return _args; }
+
+  private:
+    FContentSlotArgs _args{};
+};
+
+[[nodiscard]] inline FContentSlotBuilder contentSlot() { return {}; }
 
 } // namespace ya::ui

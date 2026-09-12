@@ -21,7 +21,7 @@ namespace ya
 ///   - Non-modal popups dismiss on outside click / Esc.
 ///   - Opening takes keyboard focus; Esc always dismisses.
 ///   - Dim / blur / hide-the-world is not a popup flag: stack a fill
-///     Panel, Image, or custom widget under the content (HitTestInvisible
+///     Border, Image, or custom widget under the content (HitTestInvisible
 ///     if it should not steal hits). Fill canvas children keep their
 ///     authored slot; the popup-owned content slot is the first non-fill
 ///     child (`_contentPos` / `_contentExtent`, overridable in derived

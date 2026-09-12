@@ -90,6 +90,15 @@ void UIDragFloat::cancelEdit()
     _editBuffer.clear();
 }
 
+void UIDragFloat::setPrefix(std::string prefix)
+{
+    if (_prefix == prefix) {
+        return;
+    }
+    _prefix = std::move(prefix);
+    invalidateProperty(EUIPropertyImpact::Paint);
+}
+
 void UIDragFloat::onFocusLost()
 {
     commitEdit();
@@ -103,33 +112,44 @@ void UIDragFloat::paintSelf(UIFrameBuilder& builder)
                        : _bHovered ? style.hoveredFill
                                     : style.backgroundFill;
     builder.addBrush(_layoutRect, fill);
-    const glm::vec4 outline = _bError ? style.errorBorderColor : style.borderColor;
+    const glm::vec4 outline = _bError ? style.errorBorderColor
+                            : (_bHovered || _bDragging) ? style.hoveredBorderColor
+                                                        : style.borderColor;
     builder.addRectOutline(insetRect(_layoutRect, 1.0f), outline, 1.0f);
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (!font) {
         return;
     }
     Rect2D inner = _layoutRect;
     inner.pos += style.padding;
     inner.extent = glm::max(inner.extent - style.padding * 2.0f, glm::vec2(0.0f));
+    const bool bHasPrefix = !_prefix.empty();
+    Rect2D valueRect = inner;
+    if (bHasPrefix) {
+        const float prefixW = font->measureText(_prefix) + 4.0f;
+        builder.addText(inner, _prefix, style.textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
+        valueRect.pos.x += prefixW;
+        valueRect.extent.x = std::max(0.0f, inner.extent.x - prefixW);
+    }
     const std::string shown = _bEditing ? _editBuffer
                                         : (_bMixed ? std::string("—")
                                                    : std::format("{:.{}f}", _value, _decimals));
+    const EWidgetAlignH valueAlign = bHasPrefix ? EWidgetAlignH::Left : EWidgetAlignH::Center;
     if (_bEditing) {
         textEditPaint(builder,
-                      inner,
+                      valueRect,
                       shown,
                       _edit,
                       font,
                       style.textColor,
                       style.textColor,
                       kTextEditSelectionColor,
-                      EWidgetAlignH::Center,
+                      valueAlign,
                       0.0f,
                       true);
         return;
     }
-    builder.addText(inner, shown, style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    builder.addText(valueRect, shown, style.textColor, font, valueAlign, EWidgetAlignV::Center);
 }
 
 bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
@@ -164,9 +184,20 @@ bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext&
             if (mouse.GetMouseButton() != EMouse::Left) {
                 return false;
             }
-            auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
-            _edit.setCaret(textEditHitIndex(_editBuffer, font, _layoutRect, ctx.logicalPoint.x,
-                                            EWidgetAlignH::Center, 0.0f),
+            auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, resolvedStyle().fontSize);
+            Rect2D hitRect = _layoutRect;
+            EWidgetAlignH hitAlign = EWidgetAlignH::Center;
+            if (!_prefix.empty() && font) {
+                const glm::vec2 pad = resolvedStyle().padding;
+                hitRect.pos += pad;
+                hitRect.extent = glm::max(hitRect.extent - pad * 2.0f, glm::vec2(0.0f));
+                const float prefixW = font->measureText(_prefix) + 4.0f;
+                hitRect.pos.x += prefixW;
+                hitRect.extent.x = std::max(0.0f, hitRect.extent.x - prefixW);
+                hitAlign = EWidgetAlignH::Left;
+            }
+            _edit.setCaret(textEditHitIndex(_editBuffer, font, hitRect, ctx.logicalPoint.x,
+                                            hitAlign, 0.0f),
                            false);
             if (WidgetTree* tree = getTree()) {
                 tree->setPointerCapture(this);
@@ -175,9 +206,20 @@ bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext&
             return true;
         }
         if (eventType == EEvent::MouseMoved && ctx.bViaCapture) {
-            auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
-            _edit.setCaret(textEditHitIndex(_editBuffer, font, _layoutRect, ctx.logicalPoint.x,
-                                            EWidgetAlignH::Center, 0.0f),
+            auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, resolvedStyle().fontSize);
+            Rect2D hitRect = _layoutRect;
+            EWidgetAlignH hitAlign = EWidgetAlignH::Center;
+            if (!_prefix.empty() && font) {
+                const glm::vec2 pad = resolvedStyle().padding;
+                hitRect.pos += pad;
+                hitRect.extent = glm::max(hitRect.extent - pad * 2.0f, glm::vec2(0.0f));
+                const float prefixW = font->measureText(_prefix) + 4.0f;
+                hitRect.pos.x += prefixW;
+                hitRect.extent.x = std::max(0.0f, hitRect.extent.x - prefixW);
+                hitAlign = EWidgetAlignH::Left;
+            }
+            _edit.setCaret(textEditHitIndex(_editBuffer, font, hitRect, ctx.logicalPoint.x,
+                                            hitAlign, 0.0f),
                            true);
             invalidateProperty(EUIPropertyImpact::Paint);
             return true;

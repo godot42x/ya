@@ -13,6 +13,7 @@
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/GuiTextureCatalog.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
@@ -45,7 +46,7 @@ namespace ya
 TEST(UIFrameSnapshotTest, BuildResolvesItemsToRenderPixelsInPaintOrder)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       behind = std::make_shared<UIPanel>("Behind");
+    auto       behind = std::make_shared<UIBorder>("Behind");
     behind->_zOrder   = 0;
     auto front = std::make_shared<UIButton>("Front");
     front->_zOrder    = 10;
@@ -82,7 +83,7 @@ TEST(UIFrameSnapshotTest, ContainerClipResolvesOnChildren)
     WidgetTree tree({.width = 800, .height = 600});
     auto       clip = std::make_shared<UIContainer>("Clip");
     clip->setClipChildren(true);
-    auto child = std::make_shared<UIPanel>("Child");
+    auto child = std::make_shared<UIBorder>("Child");
     FCanvasSlotArgs clipSlot;
     clipSlot.fixedSize = {200.0f, 100.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), clip, clipSlot);
@@ -108,7 +109,7 @@ TEST(UIFrameSnapshotTest, ContainerClipResolvesOnChildren)
 TEST(UIFrameSnapshotTest, SnapshotSurvivesImmediateDetach)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
@@ -147,7 +148,7 @@ TEST(UIFrameSnapshotTest, TextItemsCarryFontAndText)
 TEST(UIFrameSnapshotTest, LayoutRunsWhenDirtyDuringSnapshot)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs slot;
     slot.offset = {5.0f, 5.0f};
     slot.fixedSize = {50.0f, 25.0f};
@@ -163,7 +164,7 @@ TEST(UIFrameSnapshotTest, LayoutRunsWhenDirtyDuringSnapshot)
 TEST(UIFrameSnapshotTest, PanelCornerRadiusScalesIntoDrawItem)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
@@ -240,7 +241,7 @@ TEST(UIFrameSnapshotTest, SemanticDigestIgnoresFontDependentTextGeometry)
 TEST(UIFrameSnapshotTest, PerfStatsCountPaintWalkAndDrawItems)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       behind = std::make_shared<UIPanel>("Behind");
+    auto       behind = std::make_shared<UIBorder>("Behind");
     auto front = std::make_shared<UIButton>("Front");
     FCanvasSlotArgs behindSlot;
     behindSlot.fixedSize = {100.0f, 50.0f};
@@ -397,7 +398,7 @@ TEST(UIFrameSnapshotTest, ReactiveButtonEnabledOnlyRepaintsButton)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       btn   = std::make_shared<UIButton>("Btn");
-    auto       plain = std::make_shared<UIPanel>("Plain");
+    auto       plain = std::make_shared<UICanvasPanel>("Plain");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), btn);
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), plain);
 
@@ -462,7 +463,7 @@ TEST(UIFrameSnapshotTest, ReactiveListPushNotifiesDependents)
 TEST(UIFrameSnapshotTest, PerfStateBridgeRecordsTreeMetrics)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs slot;
     slot.fixedSize = {80.0f, 24.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, slot);
@@ -511,7 +512,7 @@ TEST(UIFrameSnapshotTest, StyleEditRepaintsThemedTexts)
 TEST(UIFrameSnapshotTest, PanelResolvesThemeStyleAndRepaintsOnThemeSwitch)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
@@ -626,7 +627,7 @@ TEST(UIFrameSnapshotTest, TreeViewDataSourcePushInvalidatesLayout)
 TEST(UIFrameSnapshotTest, LayoutChangeRebuildsMovedWidgetDrawItems)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {50.0f, 25.0f};
@@ -651,7 +652,7 @@ TEST(UIFrameSnapshotTest, LayoutChangeRebuildsMovedWidgetDrawItems)
 TEST(UIFrameSnapshotTest, DetachAndReattachForcesFreshPaintCacheSegment)
 {
     WidgetTree tree({.width = 320, .height = 200});
-    auto panel = std::make_shared<UIPanel>("CachedPanel");
+    auto panel = std::make_shared<UIBorder>("CachedPanel");
     FCanvasSlotArgs args;
     args.fixedSize = {80.0f, 24.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, args).valid());
@@ -674,7 +675,7 @@ TEST(UIFrameSnapshotTest, CrossTreeReparentDoesNotReuseOldTreeCache)
 {
     WidgetTree source({.width = 320, .height = 200});
     WidgetTree destination({.width = 640, .height = 400});
-    auto panel = std::make_shared<UIPanel>("CrossTreePanel");
+    auto panel = std::make_shared<UIBorder>("CrossTreePanel");
     FCanvasSlotArgs sourceArgs;
     sourceArgs.offset = {12.0f, 16.0f};
     sourceArgs.fixedSize = {80.0f, 24.0f};
@@ -707,7 +708,7 @@ TEST(UIFrameSnapshotTest, DestroyAndReallocateWidgetGetsNewRuntimeIdentity)
     WidgetTree tree({.width = 320, .height = 200});
     uint64_t oldId = 0;
     {
-        auto oldPanel = std::make_shared<UIPanel>("OldPanel");
+        auto oldPanel = std::make_shared<UIBorder>("OldPanel");
         oldId = oldPanel->getRuntimeId();
         FCanvasSlotArgs args;
         args.fixedSize = {64.0f, 20.0f};
@@ -716,7 +717,7 @@ TEST(UIFrameSnapshotTest, DestroyAndReallocateWidgetGetsNewRuntimeIdentity)
         tree.detach(*oldPanel);
     }
 
-    auto replacement = std::make_shared<UIPanel>("ReplacementPanel");
+    auto replacement = std::make_shared<UIBorder>("ReplacementPanel");
     EXPECT_NE(replacement->getRuntimeId(), oldId);
     FCanvasSlotArgs args;
     args.fixedSize = {96.0f, 20.0f};
@@ -817,7 +818,7 @@ TEST(UIFrameSnapshotTest, ReactiveLayoutMutationRecordsReasonAndTransition)
 TEST(UIFrameSnapshotTest, LayoutInvalidationScopesAccumulateAcrossSnapshots)
 {
     WidgetTree tree({.width = 320, .height = 200});
-    auto panel = std::make_shared<UIPanel>("Panel");
+    auto panel = std::make_shared<UICanvasPanel>("Panel");
     FCanvasSlotArgs args;
     args.fixedSize = {80.0f, 24.0f};
     ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel, args).valid());
@@ -861,7 +862,7 @@ TEST(UIFrameSnapshotTest, SameValueReactiveSetSkipsInvalidation)
 TEST(UIFrameSnapshotTest, CleanTreeOffsetChangeRebuildsResolvedItems)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
@@ -886,7 +887,7 @@ TEST(UIFrameSnapshotTest, CleanTreeOffsetChangeRebuildsResolvedItems)
 TEST(UIFrameSnapshotTest, CleanTreeUiScaleChangeRebuildsResolvedItems)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
@@ -908,7 +909,7 @@ TEST(UIFrameSnapshotTest, CleanTreeUiScaleChangeRebuildsResolvedItems)
 TEST(UIFrameSnapshotTest, CleanTreeGenerationChangeDropsCache)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs slot;
     slot.offset = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
@@ -1072,7 +1073,7 @@ TEST(UIFrameSnapshotTest, SameWidgetTwoLevelConsumeBothEdges)
 TEST(UIFrameSnapshotTest, PaintRebuildReCollectsStyleEdgeAfterForcedRebuild)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
 
     // Un-authored panel resolves the "panel" style from the tree theme
@@ -1129,7 +1130,7 @@ TEST(UIFrameSnapshotTest, RebindSplitRatioClearsOldBinding)
 TEST(UIFrameSnapshotTest, PropertyImpactPaintDoesNotInvalidateLayout)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
     tree.buildSnapshot(UIFrameBuildContext{}); // cold start
     tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
@@ -1146,7 +1147,7 @@ TEST(UIFrameSnapshotTest, PropertyImpactPaintDoesNotInvalidateLayout)
 TEST(UIFrameSnapshotTest, PropertyImpactLayoutInvalidatesMeasure)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), panel);
     tree.buildSnapshot(UIFrameBuildContext{});
     tree.buildSnapshot(UIFrameBuildContext{});
@@ -1164,8 +1165,8 @@ TEST(UIFrameSnapshotTest, PropertyImpactLayoutInvalidatesMeasure)
 TEST(UIFrameSnapshotTest, SubtreePaintContextInvalidatesWholeSubtree)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       parent = std::make_shared<UIPanel>("Parent");
-    auto       child  = std::make_shared<UIPanel>("Child");
+    auto       parent = std::make_shared<UICanvasPanel>("Parent");
+    auto       child  = std::make_shared<UICanvasPanel>("Child");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
     tree.attach(*parent, child);
     tree.buildSnapshot(UIFrameBuildContext{}); // cold start
@@ -1220,7 +1221,7 @@ TEST(UIFrameSnapshotTest, PaintWalkRestoresReactiveStack)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       parent = std::make_shared<UIContainer>("Parent");
-    auto       child  = std::make_shared<UIPanel>("Child");
+    auto       child  = std::make_shared<UICanvasPanel>("Child");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), parent);
     tree.attach(*parent, child);
 
@@ -1239,10 +1240,10 @@ TEST(UIFrameSnapshotTest, ScrollViewportClipsContentToViewportRect)
     FCanvasSlotArgs viewportSlot;
     viewportSlot.fixedSize = {200.0f, 60.0f};
     viewport->_bShowScrollbar = false;
-    auto content = std::make_shared<UIPanel>("Content");
+    auto content = std::make_shared<UIBorder>("Content");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), viewport, viewportSlot);
     viewport->addDetachedChild(content, [](UIElement&, UISlot& slot) {
-        if (auto* single = dynamic_cast<UIOverlaySlot*>(&slot)) {
+        if (auto* single = dynamic_cast<UIContentSlot*>(&slot)) {
             single->setPreferredSize({200.0f, 100.0f});
         }
     });
@@ -1264,8 +1265,8 @@ TEST(UIFrameSnapshotTest, SplitPaneClipsChildrenToOwnPaneRect)
     FCanvasSlotArgs splitSlot;
     splitSlot.fixedSize = {400.0f, 200.0f};
     split->setSplitRatio(0.5f);
-    auto paneA = std::make_shared<UIPanel>("A");
-    auto paneB = std::make_shared<UIPanel>("B");
+    auto paneA = std::make_shared<UIBorder>("A");
+    auto paneB = std::make_shared<UIBorder>("B");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
     tree.attach(*split, paneA);
     tree.attach(*split, paneB);
@@ -1294,7 +1295,7 @@ TEST(UIFrameSnapshotTest, LayoutHostsReuseSelfSegmentWhenClean)
     WidgetTree tree({.width = 800, .height = 600});
     auto       container = std::make_shared<UIContainer>("C");
     container->setClipChildren(true);
-    auto child = std::make_shared<UIPanel>("A");
+    auto child = std::make_shared<UICanvasPanel>("A");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), container);
     tree.attach(*container, child, [](UIElement&, UISlot& slot) {
         if (auto* box = slot.as<UIBoxSlot>()) {
@@ -1303,8 +1304,8 @@ TEST(UIFrameSnapshotTest, LayoutHostsReuseSelfSegmentWhenClean)
     });
 
     auto split = std::make_shared<UISplitPane>("Split");
-    auto paneA = std::make_shared<UIPanel>("PA");
-    auto paneB = std::make_shared<UIPanel>("PB");
+    auto paneA = std::make_shared<UICanvasPanel>("PA");
+    auto paneB = std::make_shared<UICanvasPanel>("PB");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split);
     tree.attach(*split, paneA);
     tree.attach(*split, paneB);
@@ -1323,7 +1324,7 @@ TEST(UIFrameSnapshotTest, ContainerClipResizeInvalidatesChildSegments)
     clip->setClipChildren(true);
     FCanvasSlotArgs clipSlot;
     clipSlot.fixedSize = {200.0f, 100.0f};
-    auto child = std::make_shared<UIPanel>("Child");
+    auto child = std::make_shared<UIBorder>("Child");
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), clip, clipSlot);
     clip->addDetachedChild(child, [](UIElement&, UISlot& slot) {
         if (auto* box = dynamic_cast<UIBoxSlot*>(&slot)) {
@@ -1423,7 +1424,7 @@ TEST(UIFrameSnapshotTest, SetColorWritesAuthoredStyleAndBeatsTheme)
     theme->define<FTextStyle>("text", textThemed);
     tree.setTheme(theme.get());
 
-    auto panel = std::make_shared<UIPanel>("P");
+    auto panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs panelSlot;
     panelSlot.offset = {10.0f, 10.0f};
     panelSlot.fixedSize = {100.0f, 50.0f};
@@ -1918,7 +1919,7 @@ TEST(UIFrameSnapshotTest, SetStyleFieldUsesCatalogImpact)
 TEST(UIFrameSnapshotTest, SetStyleUsesPatchUnionImpact)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs panelSlot;
     panelSlot.offset    = {10.0f, 10.0f};
     panelSlot.fixedSize = {100.0f, 50.0f};
@@ -2170,7 +2171,7 @@ TEST(UIFrameSnapshotTest, GuiTextureCatalogNotifyDirtiesOnlySubscribers)
 
     auto image = std::make_shared<UIImage>("Img");
     image->_assetPath = "tex:catalog";
-    auto panel = std::make_shared<UIPanel>("Side");
+    auto panel = std::make_shared<UICanvasPanel>("Side");
     FCanvasSlotArgs imageSlot;
     imageSlot.offset    = {10.0f, 10.0f};
     imageSlot.fixedSize = {64.0f, 64.0f};
@@ -2442,7 +2443,7 @@ TEST(UIFrameSnapshotTest, SelectedTabIgnoresHoverFill)
 TEST(UIFrameSnapshotTest, UnthemedPanelPaintsFromResolvedStyleNotNakedSprite)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs slot;
     slot.offset    = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
@@ -2466,7 +2467,7 @@ TEST(UIFrameSnapshotTest, UnthemedPanelPaintsFromResolvedStyleNotNakedSprite)
 TEST(UIFrameSnapshotTest, ThemedPanelIgnoresUnsyncedColorField)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     FCanvasSlotArgs slot;
     slot.offset    = {10.0f, 10.0f};
     slot.fixedSize = {100.0f, 50.0f};
@@ -2487,7 +2488,7 @@ TEST(UIFrameSnapshotTest, ThemedPanelIgnoresUnsyncedColorField)
 TEST(UIFrameSnapshotTest, FallbackThemeSwitchAndDeferredTextureReady)
 {
     WidgetTree tree({.width = 800, .height = 600});
-    auto       panel = std::make_shared<UIPanel>("P");
+    auto       panel = std::make_shared<UIBorder>("P");
     auto       image = std::make_shared<UIImage>("Img");
     image->_assetPath = "tex:deferred";
     FCanvasSlotArgs panelSlot;
