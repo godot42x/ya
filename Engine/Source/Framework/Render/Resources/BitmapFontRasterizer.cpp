@@ -15,7 +15,13 @@ GlyphBitmap BitmapFontRasterizer::rasterize(FT_Face face, uint32_t codepoint, ui
     if (FT_Set_Pixel_Sizes(face, 0, pixelSize)) {
         return out;
     }
-    if (FT_Load_Char(face, static_cast<FT_ULong>(codepoint), FT_LOAD_RENDER)) {
+    // Native TrueType bytecode in Apple CJK faces is authored for Core Text.
+    // FreeType executing it at 12ppem snaps Hiragino `4`'s crossbar off the
+    // pixel grid. FORCE_AUTOHINT follows the outline; NO_BITMAP ignores sbit
+    // strikes that exist only at exact ppem and would make sizes inconsistent.
+    if (FT_Load_Char(face,
+                     static_cast<FT_ULong>(codepoint),
+                     FT_LOAD_RENDER | FT_LOAD_NO_BITMAP | FT_LOAD_FORCE_AUTOHINT)) {
         return out;
     }
 
