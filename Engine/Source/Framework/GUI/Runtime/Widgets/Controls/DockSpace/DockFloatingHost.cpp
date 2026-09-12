@@ -56,9 +56,10 @@ void UIDockFloatingHost::syncFromContext()
     }
     WidgetTree* tree = getTree();
 
-    // Drop windows whose floating record no longer exists.
+    // Drop windows whose overlay record no longer exists.
     for (auto it = _windows.begin(); it != _windows.end();) {
-        if (!_context->findFloatingById(it->first)) {
+        const FDockContext::FDockFloatingPlacement* record = _context->findFloatingById(it->first);
+        if (!record || record->projection != EDockFloatingProjection::InProcessOverlay) {
             if (tree && it->second) {
                 tree->detach(*it->second);
             }
@@ -69,8 +70,11 @@ void UIDockFloatingHost::syncFromContext()
         }
     }
 
-    // Create / refresh windows for current floating records.
-    for (const auto& record : _context->floatingWindows()) {
+    // Create / refresh windows for InProcessOverlay placements only.
+    for (const auto& record : _context->floatingPlacements()) {
+        if (record.projection != EDockFloatingProjection::InProcessOverlay) {
+            continue;
+        }
         auto it = _windows.find(record.id);
         if (it != _windows.end()) {
             it->second->setWindowRect({record.pos, record.size});

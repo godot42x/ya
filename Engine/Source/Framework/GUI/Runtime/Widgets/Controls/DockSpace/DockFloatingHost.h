@@ -12,11 +12,10 @@ namespace ya
 
 struct UIDockFloatingWindow;
 
-/// Popup-layer projection of `FDockContext`'s floating windows.
-/// Renders torn-off windows above content and keeps their z-order (an
-/// activated / tab-dragged window moves to the top). Empty areas pass input
-/// through to the content underneath. The docked tree is projected by
-/// `UIDockSpace`, not here.
+/// Popup-layer InProcessOverlay projection of `FDockContext` floating
+/// placements. NativeWindow placements are ignored here: they are not OS
+/// windows and must not be drawn as overlays. The docked tree is projected
+/// by `UIDockSpace`, not here.
 struct YA_GUI_API UIDockFloatingHost : public UIElement
 {
     explicit UIDockFloatingHost(std::string name = "DockFloatingHost");
@@ -28,8 +27,9 @@ struct YA_GUI_API UIDockFloatingHost : public UIElement
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIDockFloatingHost>; }
 
     void bindContext(std::shared_ptr<FDockContext> context);
-    /// Reconcile this host's windows with the context's floating records.
+    /// Reconcile overlay windows with InProcessOverlay placements only.
     void syncFromContext();
+    [[nodiscard]] size_t overlayWindowCount() const { return _windows.size(); }
     /// Move a window to the top of the floating z-order.
     void bringToFront(const std::shared_ptr<UIDockFloatingWindow>& window);
 

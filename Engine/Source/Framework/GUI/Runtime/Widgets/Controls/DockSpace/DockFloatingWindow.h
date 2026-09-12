@@ -4,6 +4,7 @@
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
+#include "GUI/Widgets/Controls/DockSpace/DockDropTarget.h"
 #include "GUI/Widgets/Theme.h"
 
 #include <functional>
@@ -44,6 +45,9 @@ struct YA_GUI_API UIDockFloatingWindow : public UIElement, public UIStyledWidget
     /// Rebuild the window's tab bar + content to match the context's current
     /// floating record for this window (called by the host on floating updates).
     void refreshFromContext();
+    /// Stack/well drop target for this overlay window. Does not consult UIDockSpace.
+    [[nodiscard]] std::optional<FDockDropTarget> dropTargetAt(const glm::vec2& logicalPoint,
+                                                              DockPanelId sourcePanelId) const;
     /// Fired when the window is activated (title drag begins). Used by the host
     /// to bring the window to the front of the floating z-order.
     std::function<void()> _onActivated;

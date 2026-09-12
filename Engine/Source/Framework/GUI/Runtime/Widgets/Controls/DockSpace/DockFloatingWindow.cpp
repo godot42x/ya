@@ -3,6 +3,7 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/DockSpace/DockHideTabBarAffordance.h"
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
+#include "GUI/Widgets/Controls/DockSpace/DockDropTarget.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -49,22 +50,59 @@ struct FDockFloatingWindowDropTargetBehavior final : public UIDropTargetBehavior
         canAccept = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* window = dynamic_cast<UIDockFloatingWindow*>(&owner);
-            UIDockSpace* space = window && window->_context ? window->_context->dockSpace() : nullptr;
-            if (!space) {
+            if (!window || !window->_context) {
                 return false;
             }
-            const auto preview = space->dropPreviewFor(operation, logicalPoint);
-            return preview.has_value() && preview->bMerge &&
-                   preview->targetFloatingId == window->_floatingId && !preview->bDisabled;
+            const auto* dockOp = operation.as<FDockPanelDragDropOp>();
+            if (!dockOp || dockOp->panelId == kInvalidDockPanelId) {
+                return false;
+            }
+            const std::optional<FDockDropTarget> target = window->dropTargetAt(logicalPoint, dockOp->panelId);
+            return target.has_value() && target->kind == EDockDropTargetKind::FloatingTabWell;
         };
         handleDrop = [](UIElement& owner, const UIDragDropOperation& operation, const glm::vec2& logicalPoint)
         {
             auto* window = dynamic_cast<UIDockFloatingWindow*>(&owner);
-            if (!window) {
+            if (!window || !window->_context) {
                 return;
             }
-            if (UIDockSpace* space = window->_context ? window->_context->dockSpace() : nullptr) {
-                space->onDrop(operation, logicalPoint);
+            const auto* dockOp = operation.as<FDockPanelDragDropOp>();
+            if (!dockOp || dockOp->panelId == kInvalidDockPanelId) {
+                return;
+            }
+            const std::optional<FDockDropTarget> target = window->dropTargetAt(logicalPoint, dockOp->panelId);
+            if (!target || !target->commitsDrop()) {
+                return;
+            }
+
+            DockPanelId panelId = dockOp->panelId;
+            const bool bImport =
+                dockOp->sourceContext != nullptr && dockOp->sourceContext != window->_context.get();
+            if (bImport) {
+                const FDockPanelRecord* record = dockOp->sourceContext->dockModel().findPanel(panelId);
+                const FDockContext::FPanel* panel = dockOp->sourceContext->findPanel(panelId);
+                if (!record || !panel ||
+                    !window->_context->acceptsImportedPanel(record->stableKey,
+                                                            panel->ownerEditorId,
+                                                            panel->documentKey)) {
+                    return;
+                }
+                std::optional<FDockContext::FDockExtractedPanel> extracted =
+                    dockOp->sourceContext->extractPanel(panelId);
+                if (!extracted) {
+                    return;
+                }
+                panelId = window->_context->adoptPanel(std::move(*extracted));
+                if (panelId == kInvalidDockPanelId) {
+                    return;
+                }
+            }
+
+            if (window->_context->commitDrop(panelId, *target) == EDockDropCommit::Applied) {
+                window->refreshFromContext();
+                if (UIDockSpace* space = window->_context->dockSpace()) {
+                    space->clearDropPreview();
+                }
             }
         };
     }
@@ -120,7 +158,7 @@ struct FDockFloatingWindowPanelDragBehavior final : public UIBehavior
             }
             owner.refreshFromContext();
         };
-        tree->beginDrag(&owner, FDockPanelDragDropOp::make(panelId, std::move(label)), std::move(observer), false, true);
+        tree->beginDrag(&owner, FDockPanelDragDropOp::make(panelId, std::move(label), owner._context.get()), std::move(observer), false, true);
     }
 };
 
@@ -346,13 +384,11 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
         });
     addDetachedChild(hideBar, [](UIElement&, UISlot& slot)
     {
-        if (auto* overlay = slot.as<UIOverlaySlot>()) {
-            overlay->apply(FOverlaySlotArgs{
-                .hAlign        = EUIOverlayAlignment::Start,
-                .vAlign        = EUIOverlayAlignment::Start,
-                .preferredSize = {kDockHideTabBarSize, kDockHideTabBarSize},
-            });
-        }
+        slot.applyArgs(FOverlaySlotArgs{
+            .hAlign        = EUIOverlayAlignment::Start,
+            .vAlign        = EUIOverlayAlignment::Start,
+            .preferredSize = {kDockHideTabBarSize, kDockHideTabBarSize},
+        });
     });
 
     refreshFromContext();
@@ -363,13 +399,11 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
         auto handle = std::make_shared<FResizeHandle>(this, edge);
         addDetachedChild(handle, [hAlign, vAlign, desired](UIElement&, UISlot& slot)
         {
-            if (auto* overlay = slot.as<UIOverlaySlot>()) {
-                overlay->apply(FOverlaySlotArgs{
-                    .hAlign        = hAlign,
-                    .vAlign        = vAlign,
-                    .preferredSize = desired,
-                });
-            }
+            slot.applyArgs(FOverlaySlotArgs{
+                .hAlign        = hAlign,
+                .vAlign        = vAlign,
+                .preferredSize = desired,
+            });
         });
         _resizeHandles.push_back(std::move(handle));
     };
@@ -392,16 +426,30 @@ void UIDockFloatingWindow::setWindowRect(const Rect2D& rect)
 {
     _windowRect = rect;
     const FChildSlotInitializer applyRect = [rect](UIElement&, UISlot& edge) {
-        if (auto* slot = edge.as<UICanvasSlot>()) {
-            FCanvasSlotArgs args;
-            args.offset    = rect.pos;
-            args.fixedSize = rect.extent;
-            slot->apply(args);
-        }
+        FCanvasSlotArgs args;
+        args.offset    = rect.pos;
+        args.fixedSize = rect.extent;
+        edge.applyArgs(args);
     };
     if (UIElement* parent = getParent()) {
         parent->initializeChildSlot(*this, applyRect);
     }
+}
+
+std::optional<FDockDropTarget> UIDockFloatingWindow::dropTargetAt(const glm::vec2& logicalPoint,
+                                                                  DockPanelId sourcePanelId) const
+{
+    if (!_context || sourcePanelId == kInvalidDockPanelId) {
+        return std::nullopt;
+    }
+    if (const FDockContext::FFloatingWindow* source = _context->findFloatingByPanel(sourcePanelId);
+        source && source->id == _floatingId) {
+        return std::nullopt;
+    }
+    if (!pointInRect(logicalPoint, _layoutRect)) {
+        return std::nullopt;
+    }
+    return FDockDropTarget::floatingWell(_floatingId);
 }
 
 void UIDockFloatingWindow::onAttached()

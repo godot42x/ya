@@ -17,9 +17,9 @@ bool fail(std::string* error, std::string message)
 
 nlohmann::json exportNode(const FDockTreeModel& model, const FDockNode& node)
 {
-    if (node.kind == EDockNodeKind::Leaf) {
+    if (node.kind == EDockNodeKind::Stack) {
         nlohmann::json result = nlohmann::json::object();
-        result["kind"] = "leaf";
+        result["kind"] = "stack";
         result["panels"] = nlohmann::json::array();
         for (const DockPanelId panelId : node.panelIds) {
             if (const FDockPanelRecord* record = model.findPanel(panelId)) {
@@ -34,6 +34,12 @@ nlohmann::json exportNode(const FDockTreeModel& model, const FDockNode& node)
         }
         if (node.bHideTabBar) {
             result["hideTabBar"] = true;
+        }
+        if (node.leafRole == EDockLeafRole::Page) {
+            result["leafRole"] = "page";
+        }
+        else if (node.leafRole == EDockLeafRole::Tools) {
+            result["leafRole"] = "tools";
         }
         return result;
     }
@@ -71,6 +77,7 @@ std::unique_ptr<FDockNode> FDockTreeModel::cloneNode(const FDockNode& source, FD
     result->selectedPanel = source.selectedPanel;
     result->persistentEmptyLeaf = source.persistentEmptyLeaf;
     result->bHideTabBar = source.bHideTabBar;
+    result->leafRole = source.leafRole;
     if (source.child[0]) result->child[0] = cloneNode(*source.child[0], result.get());
     if (source.child[1]) result->child[1] = cloneNode(*source.child[1], result.get());
     return result;
@@ -86,17 +93,17 @@ FDockNode* FDockTreeModel::findNode(FDockNode* node, DockNodeId id) const
 const FDockNode* FDockTreeModel::findNode(DockNodeId id) const { return findNode(_root.get(), id); }
 FDockNode* FDockTreeModel::findNode(DockNodeId id) { return findNode(_root.get(), id); }
 
-FDockNode* FDockTreeModel::findLeafForPanel(FDockNode* node, DockPanelId id) const
+FDockNode* FDockTreeModel::findStackForPanel(FDockNode* node, DockPanelId id) const
 {
     if (!node) return nullptr;
-    if (node->kind == EDockNodeKind::Leaf) {
+    if (node->kind == EDockNodeKind::Stack) {
         return std::find(node->panelIds.begin(), node->panelIds.end(), id) != node->panelIds.end() ? node : nullptr;
     }
-    if (auto* result = findLeafForPanel(node->child[0].get(), id)) return result;
-    return findLeafForPanel(node->child[1].get(), id);
+    if (auto* result = findStackForPanel(node->child[0].get(), id)) return result;
+    return findStackForPanel(node->child[1].get(), id);
 }
-const FDockNode* FDockTreeModel::findLeafForPanel(DockPanelId id) const { return findLeafForPanel(_root.get(), id); }
-FDockNode* FDockTreeModel::findLeafForPanel(DockPanelId id) { return findLeafForPanel(_root.get(), id); }
+const FDockNode* FDockTreeModel::findStackForPanel(DockPanelId id) const { return findStackForPanel(_root.get(), id); }
+FDockNode* FDockTreeModel::findStackForPanel(DockPanelId id) { return findStackForPanel(_root.get(), id); }
 
 const FDockPanelRecord* FDockTreeModel::findPanel(DockPanelId id) const
 {
@@ -117,7 +124,7 @@ bool FDockTreeModel::addPanel(DockPanelId panelId, DockNodeId leafId)
     if (!findPanel(panelId) || findLeafForPanel(panelId)) return false;
     FDockNode* leaf = nullptr;
     if (leafId == kInvalidDockNodeId) {
-        if (_root && _root->kind == EDockNodeKind::Leaf) {
+        if (_root && _root->kind == EDockNodeKind::Stack) {
             leaf = _root.get();
         }
         else {
@@ -128,9 +135,10 @@ bool FDockTreeModel::addPanel(DockPanelId panelId, DockNodeId leafId)
     else {
         leaf = findNode(leafId);
     }
-    if (!leaf || leaf->kind != EDockNodeKind::Leaf) return false;
+    if (!leaf || leaf->kind != EDockNodeKind::Stack) return false;
     leaf->panelIds.push_back(panelId);
     leaf->selectedPanel = panelId;
+    leaf->persistentEmptyLeaf = false;
     return validateInvariants();
 }
 
@@ -168,7 +176,7 @@ bool FDockTreeModel::movePanel(DockPanelId panelId, DockNodeId targetLeafId, siz
 {
     FDockNode* target = findNode(targetLeafId);
     FDockNode* source = findLeafForPanel(panelId);
-    if (!findPanel(panelId) || !target || target->kind != EDockNodeKind::Leaf || !source) {
+    if (!findPanel(panelId) || !target || target->kind != EDockNodeKind::Stack || !source) {
         return false;
     }
 
@@ -202,7 +210,7 @@ bool FDockTreeModel::movePanel(DockPanelId panelId, DockNodeId targetLeafId, siz
     if (insertIndex == SIZE_MAX || insertIndex > target->panelIds.size()) insertIndex = target->panelIds.size();
     target->panelIds.insert(target->panelIds.begin() + static_cast<std::ptrdiff_t>(insertIndex), panelId);
     target->selectedPanel = panelId;
-    if (collapseSource && source->panelIds.empty() && !source->persistentEmptyLeaf) collapseEmptyLeaf(source);
+    if (collapseSource && source->panelIds.empty()) collapseEmptiedNonPageLeaf(source);
     if (validateInvariants()) return true;
     _root = std::move(backup);
     _nextNodeId = nextNodeId;
@@ -227,25 +235,47 @@ bool FDockTreeModel::setSplitRatio(DockNodeId splitId, float ratio)
 bool FDockTreeModel::setHideTabBar(DockNodeId leafId, bool hide)
 {
     FDockNode* node = findNode(leafId);
-    if (!node || node->kind != EDockNodeKind::Leaf) {
+    if (!node || node->kind != EDockNodeKind::Stack) {
         return false;
     }
     node->bHideTabBar = hide;
     return true;
 }
 
-bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, DockPanelId panelId, float newPanelRatio)
+bool FDockTreeModel::setLeafRole(DockNodeId leafId, EDockLeafRole role)
+{
+    FDockNode* node = findNode(leafId);
+    if (!node || node->kind != EDockNodeKind::Stack) {
+        return false;
+    }
+    node->leafRole = role;
+    return true;
+}
+
+DockNodeId FDockTreeModel::findFirstLeafWithRole(EDockLeafRole role) const
+{
+    for (const DockNodeId id : leafIds()) {
+        const FDockNode* node = findNode(id);
+        if (node && node->kind == EDockNodeKind::Stack && node->leafRole == role) {
+            return id;
+        }
+    }
+    return kInvalidDockNodeId;
+}
+
+bool FDockTreeModel::splitStack(DockNodeId targetLeafId, EDockCardinalSide side, DockPanelId panelId, float newPanelRatio)
 {
     auto backup = cloneNode(*_root, nullptr);
     const DockNodeId nextNodeId = _nextNodeId;
     FDockNode* target = findNode(targetLeafId);
     FDockNode* source = findLeafForPanel(panelId);
-    if (!findPanel(panelId) || !target || target->kind != EDockNodeKind::Leaf) return false;
+    if (!findPanel(panelId) || !target || target->kind != EDockNodeKind::Stack) return false;
     if (source && source != target && !removePanelFromLeaf(panelId, source)) return false;
     auto oldPanels = target->panelIds;
     DockPanelId oldSelected = target->selectedPanel;
     const bool oldPersistent = target->persistentEmptyLeaf;
     const bool oldHideTabBar = target->bHideTabBar;
+    const EDockLeafRole oldLeafRole = target->leafRole;
     if (source == target) {
         auto it = std::find(oldPanels.begin(), oldPanels.end(), panelId);
         if (it == oldPanels.end()) return false;
@@ -269,6 +299,7 @@ bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, 
     target->selectedPanel = kInvalidDockPanelId;
     target->persistentEmptyLeaf = false;
     target->bHideTabBar = false;
+    target->leafRole = EDockLeafRole::Generic;
     target->child[0] = std::make_unique<FDockNode>();
     target->child[1] = std::make_unique<FDockNode>();
     target->child[0]->id = _nextNodeId++;
@@ -283,7 +314,10 @@ bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, 
     oldLeaf->selectedPanel = oldSelected;
     oldLeaf->persistentEmptyLeaf = oldPersistent;
     oldLeaf->bHideTabBar = oldHideTabBar;
-    if (source != target && source && source->panelIds.empty() && !source->persistentEmptyLeaf) collapseEmptyLeaf(source);
+    oldLeaf->leafRole = oldLeafRole;
+    newLeaf->leafRole = oldLeafRole == EDockLeafRole::Tools ? EDockLeafRole::Tools
+                                                            : EDockLeafRole::Generic;
+    if (source != target && source && source->panelIds.empty()) collapseEmptiedNonPageLeaf(source);
     if (validateInvariants()) return true;
     _root = std::move(backup);
     _nextNodeId = nextNodeId;
@@ -296,12 +330,13 @@ bool FDockTreeModel::splitEmptyLeaf(DockNodeId targetLeafId, EDockCardinalSide s
     auto backup = cloneNode(*_root, nullptr);
     const DockNodeId nextNodeId = _nextNodeId;
     FDockNode* target = findNode(targetLeafId);
-    if (!target || target->kind != EDockNodeKind::Leaf) return false;
+    if (!target || target->kind != EDockNodeKind::Stack) return false;
 
     const auto oldPanels = target->panelIds;
     const DockPanelId oldSelected = target->selectedPanel;
     const bool oldPersistent = target->persistentEmptyLeaf;
     const bool oldHideTabBar = target->bHideTabBar;
+    const EDockLeafRole oldLeafRole = target->leafRole;
     target->kind = EDockNodeKind::Split;
     target->orientation = (side == EDockCardinalSide::West || side == EDockCardinalSide::East)
                               ? EDockSplitOrientation::Vertical : EDockSplitOrientation::Horizontal;
@@ -310,6 +345,7 @@ bool FDockTreeModel::splitEmptyLeaf(DockNodeId targetLeafId, EDockCardinalSide s
     target->selectedPanel = kInvalidDockPanelId;
     target->persistentEmptyLeaf = false;
     target->bHideTabBar = false;
+    target->leafRole = EDockLeafRole::Generic;
     target->child[0] = std::make_unique<FDockNode>();
     target->child[1] = std::make_unique<FDockNode>();
     target->child[0]->id = _nextNodeId++;
@@ -324,15 +360,54 @@ bool FDockTreeModel::splitEmptyLeaf(DockNodeId targetLeafId, EDockCardinalSide s
     oldLeaf->selectedPanel = oldSelected;
     oldLeaf->persistentEmptyLeaf = oldPersistent;
     oldLeaf->bHideTabBar = oldHideTabBar;
+    oldLeaf->leafRole = oldLeafRole;
+    newLeaf->leafRole = oldLeafRole == EDockLeafRole::Tools ? EDockLeafRole::Tools
+                                                            : EDockLeafRole::Generic;
     if (validateInvariants()) return true;
     _root = std::move(backup);
     _nextNodeId = nextNodeId;
     return false;
 }
 
+void FDockTreeModel::pruneEmptyGenericLeaves()
+{
+    bool bChanged = true;
+    while (bChanged) {
+        bChanged = false;
+        for (const DockNodeId id : leafIds()) {
+            FDockNode* leaf = findNode(id);
+            if (!leaf || leaf == _root.get() || leaf->kind != EDockNodeKind::Stack) {
+                continue;
+            }
+            if (!leaf->panelIds.empty()) {
+                continue;
+            }
+            if (leaf->leafRole == EDockLeafRole::Page) {
+                continue;
+            }
+            leaf->persistentEmptyLeaf = false;
+            collapseEmptyLeaf(leaf);
+            bChanged = true;
+            break;
+        }
+    }
+}
+
+void FDockTreeModel::collapseEmptiedNonPageLeaf(FDockNode* leaf)
+{
+    if (!leaf || leaf->kind != EDockNodeKind::Stack || !leaf->panelIds.empty()) {
+        return;
+    }
+    if (leaf->leafRole == EDockLeafRole::Page) {
+        return;
+    }
+    leaf->persistentEmptyLeaf = false;
+    collapseEmptyLeaf(leaf);
+}
+
 void FDockTreeModel::collapseEmptyLeaf(FDockNode* leaf)
 {
-    if (!leaf || leaf == _root.get() || leaf->kind != EDockNodeKind::Leaf || !leaf->panelIds.empty() || leaf->persistentEmptyLeaf || !leaf->parent) return;
+    if (!leaf || leaf == _root.get() || leaf->kind != EDockNodeKind::Stack || !leaf->panelIds.empty() || leaf->persistentEmptyLeaf || !leaf->parent) return;
     FDockNode* parent = leaf->parent;
     std::unique_ptr<FDockNode> sibling = parent->child[0].get() == leaf ? std::move(parent->child[1]) : std::move(parent->child[0]);
     sibling->parent = parent->parent;
@@ -349,7 +424,7 @@ void FDockTreeModel::collapseEmptyLeaf(FDockNode* leaf)
 
 void FDockTreeModel::collectLeafIds(const FDockNode& node, std::vector<DockNodeId>& result) const
 {
-    if (node.kind == EDockNodeKind::Leaf) {
+    if (node.kind == EDockNodeKind::Stack) {
         result.push_back(node.id);
         return;
     }
@@ -357,7 +432,7 @@ void FDockTreeModel::collectLeafIds(const FDockNode& node, std::vector<DockNodeI
     if (node.child[1]) collectLeafIds(*node.child[1], result);
 }
 
-std::vector<DockNodeId> FDockTreeModel::leafIds() const
+std::vector<DockNodeId> FDockTreeModel::stackIds() const
 {
     std::vector<DockNodeId> result;
     if (_root) collectLeafIds(*_root, result);
@@ -377,7 +452,7 @@ bool FDockTreeModel::removePanel(DockPanelId panelId)
     const DockNodeId nextNodeId = _nextNodeId;
     if (!removePanelFromLeaf(panelId, source)) return false;
     _panels.erase(panelId);
-    if (source->panelIds.empty() && !source->persistentEmptyLeaf) collapseEmptyLeaf(source);
+    if (source->panelIds.empty()) collapseEmptiedNonPageLeaf(source);
     if (validateInvariants()) return true;
     _root = std::move(backup);
     _panels = panelsBackup;
@@ -392,7 +467,7 @@ bool FDockTreeModel::detachFromTree(DockPanelId panelId)
     const DockNodeId nextNodeId = _nextNodeId;
     FDockNode* source = nullptr;
     if (!removePanelFromLeaf(panelId, source)) return false;
-    if (source->panelIds.empty() && !source->persistentEmptyLeaf) collapseEmptyLeaf(source);
+    if (source->panelIds.empty()) collapseEmptiedNonPageLeaf(source);
     if (validateInvariants()) return true;
     _root = std::move(backup);
     _nextNodeId = nextNodeId;
@@ -420,12 +495,19 @@ nlohmann::json FDockTreeModel::exportLayoutJson() const
 bool FDockTreeModel::importNodeFromJson(const nlohmann::json& nodeJson, FDockNode& node, std::string* error)
 {
     const std::string kind = nodeJson.value("kind", "");
-    if (kind == "leaf") {
-        node.kind = EDockNodeKind::Leaf;
+    if (kind == "leaf" || kind == "stack") {
+        node.kind = EDockNodeKind::Stack;
         node.panelIds.clear();
         node.selectedPanel = kInvalidDockPanelId;
         node.persistentEmptyLeaf = nodeJson.value("persistentEmpty", false);
         node.bHideTabBar = nodeJson.value("hideTabBar", false);
+        node.leafRole = EDockLeafRole::Generic;
+        if (const std::string role = nodeJson.value("leafRole", ""); role == "page") {
+            node.leafRole = EDockLeafRole::Page;
+        }
+        else if (role == "tools") {
+            node.leafRole = EDockLeafRole::Tools;
+        }
         if (!nodeJson.contains("panels") || !nodeJson["panels"].is_array()) {
             return fail(error, "dock layout leaf is missing panels array");
         }
@@ -492,7 +574,7 @@ bool FDockTreeModel::importNodeFromJson(const nlohmann::json& nodeJson, FDockNod
 
 void FDockTreeModel::collectMountedPanelIds(const FDockNode& node, std::unordered_map<DockPanelId, size_t>& seen) const
 {
-    if (node.kind == EDockNodeKind::Leaf) {
+    if (node.kind == EDockNodeKind::Stack) {
         for (const DockPanelId panelId : node.panelIds) {
             ++seen[panelId];
         }
@@ -555,7 +637,7 @@ bool FDockTreeModel::validateNode(const FDockNode& node, const FDockNode* expect
                                   std::unordered_map<DockPanelId, size_t>& seen, std::string* error) const
 {
     if (node.parent != expectedParent) return fail(error, std::format("node {} has invalid parent", node.id));
-    if (node.kind == EDockNodeKind::Leaf) {
+    if (node.kind == EDockNodeKind::Stack) {
         if (node.child[0] || node.child[1]) return fail(error, std::format("leaf {} has children", node.id));
         for (DockPanelId panelId : node.panelIds) {
             if (!findPanel(panelId)) return fail(error, std::format("leaf {} references unknown panel {}", node.id, panelId));

@@ -1,6 +1,10 @@
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
+#include "GUI/Widgets/Controls/DockSpace/DockDropTarget.h"
+#include "GUI/Widgets/Controls/DockSpace/DockFloatingHost.h"
+#include "GUI/Widgets/Controls/DockSpace/DockFloatingWindow.h"
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
+#include "GUI/Widgets/Controls/DockSpace/DockTabStack.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -8,6 +12,8 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <format>
+#include <string_view>
 #include <unordered_set>
 
 namespace ya
@@ -18,6 +24,22 @@ namespace
 void registerPanel(FDockTreeModel& model, DockPanelId id, const char* key)
 {
     ASSERT_TRUE(model.registerPanel({.id = id, .stableKey = key, .title = key}));
+}
+
+UIElement* findNamedDescendant(UIElement& root, std::string_view name)
+{
+    if (root._name == name) {
+        return &root;
+    }
+    for (const UIElementRef& child : root.getChildren()) {
+        if (!child) {
+            continue;
+        }
+        if (UIElement* found = findNamedDescendant(*child, name)) {
+            return found;
+        }
+    }
+    return nullptr;
 }
 }
 
@@ -64,7 +86,7 @@ TEST(DockNodeTest, MoveCollapsesEmptySourceAndPreservesTargetOrder)
     ASSERT_TRUE(model.addPanel(3, target->id));
 
     ASSERT_TRUE(model.movePanel(2, target->id, 1));
-    EXPECT_EQ(model.getRootNode()->kind, EDockNodeKind::Leaf);
+    EXPECT_EQ(model.getRootNode()->kind, EDockNodeKind::Stack);
     EXPECT_EQ(model.getRootNode()->panelIds, (std::vector<DockPanelId>{1, 2, 3}));
     EXPECT_EQ(model.getRootNode()->selectedPanel, 2);
     EXPECT_TRUE(model.validateInvariants());
@@ -80,7 +102,7 @@ TEST(DockNodeTest, InvalidMutationDoesNotChangeModel)
 
     EXPECT_FALSE(model.movePanel(2, rootId));
     EXPECT_FALSE(model.splitLeaf(rootId, EDockCardinalSide::North, 99));
-    EXPECT_EQ(model.getRootNode()->kind, EDockNodeKind::Leaf);
+    EXPECT_EQ(model.getRootNode()->kind, EDockNodeKind::Stack);
     EXPECT_EQ(model.getRootNode()->panelIds, std::vector<DockPanelId>({1}));
     EXPECT_TRUE(model.validateInvariants());
 }
@@ -237,7 +259,7 @@ TEST(DockNodeTest, SinglePanelSameLeafSplitDoesNotCreateEmptyLeaf)
     // A one-panel leaf cannot split its only panel out onto its own edge:
     // that would leave an empty (non-persistent) half.
     EXPECT_FALSE(model.splitLeaf(rootId, EDockCardinalSide::East, 1));
-    ASSERT_EQ(model.getRootNode()->kind, EDockNodeKind::Leaf);
+    ASSERT_EQ(model.getRootNode()->kind, EDockNodeKind::Stack);
     EXPECT_EQ(model.getRootNode()->panelIds, std::vector<DockPanelId>({1}));
     EXPECT_EQ(model.leafIds().size(), 1u);
     EXPECT_TRUE(model.validateInvariants());
@@ -302,12 +324,34 @@ TEST(DockNodeTest, HideTabBarRoundTripsLayoutJson)
     EXPECT_TRUE(restored.findLeafForPanel(1)->bHideTabBar);
 }
 
+TEST(DockNodeTest, LeafRoleRoundTripsLayoutJson)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "level-editor");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.setLeafRole(model.getRootNode()->id, EDockLeafRole::Page));
+    ASSERT_TRUE(model.setHideTabBar(model.getRootNode()->id, true));
+
+    const nlohmann::json layout = model.exportLayoutJson();
+    EXPECT_EQ(layout["root"].value("leafRole", ""), "page");
+    EXPECT_TRUE(layout["root"].value("hideTabBar", false));
+
+    FDockTreeModel restored;
+    registerPanel(restored, 1, "level-editor");
+    ASSERT_TRUE(restored.addPanel(1));
+    ASSERT_TRUE(restored.importLayoutJson(layout));
+    ASSERT_NE(restored.findLeafForPanel(1), nullptr);
+    EXPECT_EQ(restored.findLeafForPanel(1)->leafRole, EDockLeafRole::Page);
+    EXPECT_TRUE(restored.findLeafForPanel(1)->bHideTabBar);
+    EXPECT_EQ(restored.findFirstLeafWithRole(EDockLeafRole::Page), restored.findLeafForPanel(1)->id);
+}
+
 TEST(DockNodeTest, FloatingHideTabBarRoundTripsLayoutJson)
 {
     FDockContext source;
     source.bAllowFloating = true;
     source.bAllowTearOff  = true;
-    const DockPanelId inspectorId = source.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody"));
+    const DockPanelId inspectorId = source.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("InspectorBody"));
     ASSERT_NE(inspectorId, kInvalidDockPanelId);
     const FDockFloatingWindowId floatingId = source.tearOffPanel(inspectorId, {180.0f, 140.0f}, {360.0f, 280.0f});
     ASSERT_NE(floatingId, kInvalidFloatingWindowId);
@@ -321,7 +365,7 @@ TEST(DockNodeTest, FloatingHideTabBarRoundTripsLayoutJson)
     FDockContext restored;
     restored.bAllowFloating = true;
     restored.bAllowTearOff  = true;
-    ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody2")), kInvalidDockPanelId);
+    ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("InspectorBody2")), kInvalidDockPanelId);
     ASSERT_TRUE(restored.importLayoutJson(layout));
     ASSERT_EQ(restored.floatingWindows().size(), 1u);
     EXPECT_TRUE(restored.floatingWindows().front().bHideTabBar);
@@ -365,9 +409,9 @@ TEST(DockNodeTest, ContextExportImportRestoresFloatingGeometry)
     FDockContext source;
     source.bAllowFloating = true;
     source.bAllowTearOff  = true;
-    const DockPanelId viewportId = source.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody"));
-    const DockPanelId inspectorId = source.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody"));
-    const DockPanelId hierarchyId = source.addPanel("hierarchy", "Hierarchy", std::make_shared<UIPanel>("HierarchyBody"));
+    const DockPanelId viewportId = source.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("ViewportBody"));
+    const DockPanelId inspectorId = source.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("InspectorBody"));
+    const DockPanelId hierarchyId = source.addPanel("hierarchy", "Hierarchy", std::make_shared<UICanvasPanel>("HierarchyBody"));
     ASSERT_NE(viewportId, kInvalidDockPanelId);
     ASSERT_NE(inspectorId, kInvalidDockPanelId);
     ASSERT_NE(hierarchyId, kInvalidDockPanelId);
@@ -383,9 +427,9 @@ TEST(DockNodeTest, ContextExportImportRestoresFloatingGeometry)
     FDockContext restored;
     restored.bAllowFloating = true;
     restored.bAllowTearOff  = true;
-    ASSERT_NE(restored.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody2")), kInvalidDockPanelId);
-    ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody2")), kInvalidDockPanelId);
-    ASSERT_NE(restored.addPanel("hierarchy", "Hierarchy", std::make_shared<UIPanel>("HierarchyBody2")), kInvalidDockPanelId);
+    ASSERT_NE(restored.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("ViewportBody2")), kInvalidDockPanelId);
+    ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("InspectorBody2")), kInvalidDockPanelId);
+    ASSERT_NE(restored.addPanel("hierarchy", "Hierarchy", std::make_shared<UICanvasPanel>("HierarchyBody2")), kInvalidDockPanelId);
     ASSERT_TRUE(restored.importLayoutJson(layout));
 
     ASSERT_EQ(restored.floatingWindows().size(), 1u);
@@ -404,7 +448,7 @@ TEST(DockNodeTest, ContextImportRejectsUnknownFloatingPanelKey)
 {
     FDockContext context;
     context.bAllowFloating = true;
-    const DockPanelId viewportId = context.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody"));
+    const DockPanelId viewportId = context.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("ViewportBody"));
     ASSERT_NE(viewportId, kInvalidDockPanelId);
     const nlohmann::json layout = {
         {"version", 1},
@@ -424,8 +468,8 @@ TEST(DockNodeTest, ContextImportAcceptsTreeOnlySnapshot)
 {
     FDockContext context;
     context.bAllowFloating = true;
-    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("ViewportBody")), kInvalidDockPanelId);
-    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("InspectorBody")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("ViewportBody")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("InspectorBody")), kInvalidDockPanelId);
     const nlohmann::json layout = {
         {"version", 1},
         {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport", "inspector"})}, {"selected", "viewport"}}},
@@ -440,9 +484,9 @@ TEST(DockNodeTest, CollectLayoutPanelKeysWalksDockedAndFloating)
     FDockContext source;
     source.bAllowFloating = true;
     source.bAllowTearOff = true;
-    ASSERT_NE(source.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("V")), kInvalidDockPanelId);
-    ASSERT_NE(source.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("I")), kInvalidDockPanelId);
-    ASSERT_NE(source.addPanel("hierarchy", "Hierarchy", std::make_shared<UIPanel>("H")), kInvalidDockPanelId);
+    ASSERT_NE(source.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
+    ASSERT_NE(source.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I")), kInvalidDockPanelId);
+    ASSERT_NE(source.addPanel("hierarchy", "Hierarchy", std::make_shared<UICanvasPanel>("H")), kInvalidDockPanelId);
     const DockPanelId inspectorId = source.findPanelByStableKey("inspector")->id;
     ASSERT_NE(source.tearOffPanel(inspectorId, {10.f, 10.f}, {100.f, 80.f}), kInvalidFloatingWindowId);
 
@@ -456,8 +500,8 @@ TEST(DockNodeTest, CollectLayoutPanelKeysWalksDockedAndFloating)
 TEST(DockNodeTest, HasPanelAndActivatePanelSelectByStableKey)
 {
     FDockContext context;
-    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("V")), kInvalidDockPanelId);
-    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("I")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I")), kInvalidDockPanelId);
     EXPECT_TRUE(context.hasPanel("viewport"));
     EXPECT_FALSE(context.hasPanel("missing"));
 
@@ -478,9 +522,9 @@ TEST(DockNodeTest, HasPanelAndActivatePanelSelectByStableKey)
 
 TEST(DockNodeTest, ActivatePanelGraftsSelectedTabAndDetachedStopsTick)
 {
-    struct TickProbe final : public UIPanel
+    struct TickProbe final : public UICanvasPanel
     {
-        explicit TickProbe(std::string name) : UIPanel(std::move(name)) {}
+        explicit TickProbe(std::string name) : UICanvasPanel(std::move(name)) {}
         int ticks = 0;
         [[nodiscard]] bool wantsTick() const override { return true; }
         void tick(float) override { ++ticks; }
@@ -560,9 +604,9 @@ TEST(DockNodeTest, SanitizeLayoutJsonDropsUnknownDockedAndFloatingKeys)
     FDockContext context;
     context.bAllowFloating = true;
     context.bAllowTearOff  = true;
-    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("V")), kInvalidDockPanelId);
-    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("I")), kInvalidDockPanelId);
-    ASSERT_NE(context.addPanel("hierarchy", "Hierarchy", std::make_shared<UIPanel>("H")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("hierarchy", "Hierarchy", std::make_shared<UICanvasPanel>("H")), kInvalidDockPanelId);
     ASSERT_TRUE(context.importLayoutJson(sanitized));
     EXPECT_NE(context.dockModel().findLeafForPanel(context.findPanelByStableKey("viewport")->id), nullptr);
     EXPECT_NE(context.dockModel().findLeafForPanel(context.findPanelByStableKey("inspector")->id), nullptr);
@@ -573,8 +617,8 @@ TEST(DockNodeTest, SanitizeLayoutJsonDropsUnknownDockedAndFloatingKeys)
 TEST(DockNodeTest, ClosePanelByStableKeyRemovesRegistryRecord)
 {
     FDockContext context;
-    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("V")), kInvalidDockPanelId);
-    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("I")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I")), kInvalidDockPanelId);
     ASSERT_TRUE(context.closePanel("inspector"));
     EXPECT_FALSE(context.hasPanel("inspector"));
     EXPECT_TRUE(context.hasPanel("viewport"));
@@ -598,8 +642,8 @@ TEST(DockNodeTest, AddPanelAfterSplitUsesFirstLeaf)
 TEST(DockNodeTest, NewPanelDocksOnLastFocusedLeaf)
 {
     FDockContext context;
-    const DockPanelId viewportId = context.addPanel("viewport", "Viewport", std::make_shared<UIPanel>("V"));
-    const DockPanelId inspectorId = context.addPanel("inspector", "Inspector", std::make_shared<UIPanel>("I"));
+    const DockPanelId viewportId = context.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V"));
+    const DockPanelId inspectorId = context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I"));
     ASSERT_NE(viewportId, kInvalidDockPanelId);
     ASSERT_NE(inspectorId, kInvalidDockPanelId);
     ASSERT_TRUE(context.dockModel().splitLeaf(context.dockModel().getRootNode()->id, EDockCardinalSide::East, inspectorId, 0.5f));
@@ -607,9 +651,914 @@ TEST(DockNodeTest, NewPanelDocksOnLastFocusedLeaf)
     const DockNodeId inspectorLeaf = context.lastFocusedLeafId();
     EXPECT_EQ(inspectorLeaf, context.dockModel().findLeafForPanel(inspectorId)->id);
 
-    const DockPanelId statsId = context.addPanel("stats", "Stats", std::make_shared<UIPanel>("S"));
+    const DockPanelId statsId = context.addPanel("stats", "Stats", std::make_shared<UICanvasPanel>("S"));
     ASSERT_NE(statsId, kInvalidDockPanelId);
     EXPECT_EQ(context.dockModel().findLeafForPanel(statsId)->id, inspectorLeaf);
+}
+
+TEST(DockNodeTest, TearOffCopiesHostAndPanelIdentityIntoPlacement)
+{
+    FDockContext context;
+    context.bAllowFloating = true;
+    context.bAllowTearOff  = true;
+    context.sourceScope    = EDockSourceScope::EditorOwned;
+    context.hostWindowId   = 7;
+    const DockPanelId inspectorId = context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I"));
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    ASSERT_TRUE(context.setPanelIdentity(inspectorId, 2, "panel-a"));
+
+    const FDockFloatingWindowId floatingId =
+        context.tearOffPanel(inspectorId, {10.0f, 20.0f}, {200.0f, 100.0f});
+    ASSERT_NE(floatingId, kInvalidFloatingWindowId);
+    const FDockContext::FDockFloatingPlacement* placement = context.findFloatingById(floatingId);
+    ASSERT_NE(placement, nullptr);
+    EXPECT_EQ(placement->projection, EDockFloatingProjection::InProcessOverlay);
+    EXPECT_EQ(placement->sourceScope, EDockSourceScope::EditorOwned);
+    EXPECT_EQ(placement->targetWindowId, 7u);
+    EXPECT_EQ(placement->ownerEditorId, 2u);
+    EXPECT_EQ(placement->documentKey, "panel-a");
+    EXPECT_EQ(placement->geometrySpace, EDockGeometrySpace::TreeLocal);
+
+    const nlohmann::json layout = context.exportLayoutJson();
+    ASSERT_EQ(layout["floating"].size(), 1u);
+    EXPECT_TRUE(layout["windows"].empty());
+    EXPECT_EQ(layout["floating"][0]["projection"], "inProcessOverlay");
+    EXPECT_EQ(layout["floating"][0]["geometrySpace"], "treeLocal");
+    EXPECT_EQ(layout["floating"][0]["sourceScope"], "editorOwned");
+    EXPECT_EQ(layout["floating"][0]["targetWindowId"], 7);
+    EXPECT_EQ(layout["floating"][0]["ownerEditorId"], 2);
+    EXPECT_EQ(layout["floating"][0]["documentKey"], "panel-a");
+}
+
+TEST(DockNodeTest, LegacyFloatingJsonImportsAsInProcessOverlay)
+{
+    FDockContext restored;
+    restored.bAllowFloating = true;
+    restored.bAllowTearOff  = true;
+    restored.hostWindowId   = 3;
+    ASSERT_NE(restored.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
+    ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I")), kInvalidDockPanelId);
+    const nlohmann::json layout = {
+        {"version", 1},
+        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"floating",
+         nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"inspector"})},
+                                               {"pos", nlohmann::json::array({12.0f, 24.0f})},
+                                               {"size", nlohmann::json::array({320.0f, 240.0f})}}})},
+    };
+    ASSERT_TRUE(restored.importLayoutJson(layout));
+    ASSERT_EQ(restored.floatingPlacements().size(), 1u);
+    const auto& placement = restored.floatingPlacements().front();
+    EXPECT_EQ(placement.projection, EDockFloatingProjection::InProcessOverlay);
+    EXPECT_EQ(placement.geometrySpace, EDockGeometrySpace::TreeLocal);
+    EXPECT_EQ(placement.sourceScope, EDockSourceScope::WindowRoot);
+    EXPECT_EQ(placement.targetWindowId, 3u);
+    EXPECT_EQ(placement.pos, glm::vec2(12.0f, 24.0f));
+    const nlohmann::json exported = restored.exportLayoutJson();
+    ASSERT_EQ(exported["floating"].size(), 1u);
+    EXPECT_TRUE(exported["windows"].empty());
+    EXPECT_EQ(exported["floating"][0]["pos"], nlohmann::json::array({12.0f, 24.0f}));
+    EXPECT_EQ(exported["floating"][0]["geometrySpace"], "treeLocal");
+    EXPECT_NE(exported["floating"][0]["geometrySpace"], "screen");
+}
+
+TEST(DockNodeTest, OverlayHostSkipsNativeWindowPlacement)
+{
+    auto context = std::make_shared<FDockContext>();
+    context->bAllowFloating = true;
+    context->bAllowTearOff  = true;
+    const DockPanelId overlayId = context->addPanel("overlay", "Overlay", std::make_shared<UICanvasPanel>("O"));
+    const DockPanelId nativeId  = context->addPanel("native", "Native", std::make_shared<UICanvasPanel>("N"));
+    ASSERT_NE(overlayId, kInvalidDockPanelId);
+    ASSERT_NE(nativeId, kInvalidDockPanelId);
+
+    auto host = std::make_shared<UIDockFloatingHost>("Host");
+    host->bindContext(context);
+    ASSERT_NE(context->tearOffPanel(overlayId, {0.0f, 0.0f}, {120.0f, 80.0f}), kInvalidFloatingWindowId);
+    context->fireFloatingUpdated();
+    EXPECT_EQ(host->overlayWindowCount(), 1u);
+
+    const FDockFloatingWindowId nativeFloating =
+        context->tearOffPanel(nativeId, {40.0f, 40.0f}, {120.0f, 80.0f}, EDockFloatingProjection::NativeWindow);
+    ASSERT_NE(nativeFloating, kInvalidFloatingWindowId);
+    EXPECT_EQ(context->findFloatingById(nativeFloating)->projection, EDockFloatingProjection::NativeWindow);
+    EXPECT_EQ(context->findFloatingById(nativeFloating)->targetWindowId, 0u);
+    context->fireFloatingUpdated();
+    EXPECT_EQ(context->floatingPlacements().size(), 2u);
+    EXPECT_EQ(host->overlayWindowCount(), 1u);
+
+    ASSERT_TRUE(context->setFloatingProjection(nativeFloating, EDockFloatingProjection::InProcessOverlay));
+    EXPECT_EQ(host->overlayWindowCount(), 2u);
+}
+
+TEST(DockNodeTest, NativeWindowTearOffLeavesTargetUnbound)
+{
+    FDockContext context;
+    context.bAllowFloating = true;
+    context.bAllowTearOff  = true;
+    context.hostWindowId   = 7;
+    const DockPanelId inspectorId = context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I"));
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+
+    const FDockFloatingWindowId floatingId =
+        context.tearOffPanel(inspectorId, {10.0f, 20.0f}, {200.0f, 100.0f}, EDockFloatingProjection::NativeWindow);
+    ASSERT_NE(floatingId, kInvalidFloatingWindowId);
+    const FDockContext::FDockFloatingPlacement* placement = context.findFloatingById(floatingId);
+    ASSERT_NE(placement, nullptr);
+    EXPECT_EQ(placement->projection, EDockFloatingProjection::NativeWindow);
+    EXPECT_EQ(placement->targetWindowId, 0u);
+    EXPECT_FALSE(context.bindFloatingTargetWindow(floatingId, 0));
+    EXPECT_TRUE(context.bindFloatingTargetWindow(floatingId, 42));
+    EXPECT_EQ(context.findFloatingById(floatingId)->targetWindowId, 42u);
+
+    const DockPanelId overlayId = context.addPanel("overlay", "Overlay", std::make_shared<UICanvasPanel>("O"));
+    const FDockFloatingWindowId overlayFloating =
+        context.tearOffPanel(overlayId, {0.0f, 0.0f}, {80.0f, 80.0f});
+    ASSERT_NE(overlayFloating, kInvalidFloatingWindowId);
+    EXPECT_EQ(context.findFloatingById(overlayFloating)->targetWindowId, 7u);
+    EXPECT_FALSE(context.bindFloatingTargetWindow(overlayFloating, 9));
+    EXPECT_EQ(context.findFloatingById(overlayFloating)->targetWindowId, 7u);
+}
+
+TEST(DockNodeTest, NativeWindowJsonWithoutTargetStaysUnbound)
+{
+    FDockContext restored;
+    restored.bAllowFloating = true;
+    restored.bAllowTearOff  = true;
+    restored.hostWindowId   = 3;
+    ASSERT_NE(restored.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
+    ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I")), kInvalidDockPanelId);
+    const nlohmann::json layout = {
+        {"version", 1},
+        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"floating",
+         nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"inspector"})},
+                                               {"projection", "nativeWindow"},
+                                               {"pos", nlohmann::json::array({12.0f, 24.0f})},
+                                               {"size", nlohmann::json::array({320.0f, 240.0f})}}})},
+    };
+    ASSERT_TRUE(restored.importLayoutJson(layout));
+    ASSERT_EQ(restored.floatingPlacements().size(), 1u);
+    const auto& placement = restored.floatingPlacements().front();
+    EXPECT_EQ(placement.projection, EDockFloatingProjection::NativeWindow);
+    EXPECT_EQ(placement.geometrySpace, EDockGeometrySpace::TreeLocal);
+    EXPECT_EQ(placement.targetWindowId, 0u);
+    const nlohmann::json exported = restored.exportLayoutJson();
+    EXPECT_TRUE(exported["floating"].empty());
+    ASSERT_EQ(exported["windows"].size(), 1u);
+    EXPECT_EQ(exported["windows"][0]["projection"], "nativeWindow");
+    EXPECT_EQ(exported["windows"][0]["geometrySpace"], "treeLocal");
+    EXPECT_EQ(exported["windows"][0]["pos"], nlohmann::json::array({12.0f, 24.0f}));
+}
+
+TEST(DockNodeTest, NativeWindowsArrayImportsWithoutTreatingPosAsScreen)
+{
+    FDockContext restored;
+    restored.bAllowFloating = true;
+    restored.bAllowTearOff  = true;
+    restored.hostWindowId   = 3;
+    ASSERT_NE(restored.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
+    ASSERT_NE(restored.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I")), kInvalidDockPanelId);
+    const nlohmann::json layout = {
+        {"version", 1},
+        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"floating", nlohmann::json::array()},
+        {"windows",
+         nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"inspector"})},
+                                               {"pos", nlohmann::json::array({12.0f, 24.0f})},
+                                               {"size", nlohmann::json::array({320.0f, 240.0f})}}})},
+    };
+    ASSERT_TRUE(restored.importLayoutJson(layout));
+    ASSERT_EQ(restored.floatingPlacements().size(), 1u);
+    const auto& placement = restored.floatingPlacements().front();
+    EXPECT_EQ(placement.projection, EDockFloatingProjection::NativeWindow);
+    EXPECT_EQ(placement.geometrySpace, EDockGeometrySpace::TreeLocal);
+    EXPECT_EQ(placement.pos, glm::vec2(12.0f, 24.0f));
+}
+
+TEST(DockNodeTest, OverlayExportNeverCopiesPosIntoWindows)
+{
+    FDockContext context;
+    context.bAllowFloating = true;
+    context.bAllowTearOff  = true;
+    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
+    const DockPanelId inspectorId = context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I"));
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    ASSERT_NE(context.tearOffPanel(inspectorId, {99.0f, 88.0f}, {200.0f, 100.0f}), kInvalidFloatingWindowId);
+
+    const nlohmann::json layout = context.exportLayoutJson();
+    ASSERT_EQ(layout["floating"].size(), 1u);
+    EXPECT_TRUE(layout["windows"].empty());
+    EXPECT_EQ(layout["floating"][0]["pos"], nlohmann::json::array({99.0f, 88.0f}));
+    EXPECT_EQ(layout["floating"][0]["geometrySpace"], "treeLocal");
+}
+
+TEST(DockNodeTest, DuplicatePanelKeysAcrossFloatingAndWindowsFailImport)
+{
+    FDockContext context;
+    context.bAllowFloating = true;
+    context.bAllowTearOff  = true;
+    ASSERT_NE(context.addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("V")), kInvalidDockPanelId);
+    ASSERT_NE(context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("I")), kInvalidDockPanelId);
+    const nlohmann::json layout = {
+        {"version", 1},
+        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"floating",
+         nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"inspector"})},
+                                               {"pos", nlohmann::json::array({1.0f, 2.0f})},
+                                               {"size", nlohmann::json::array({100.0f, 80.0f})}}})},
+        {"windows",
+         nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"inspector"})},
+                                               {"pos", nlohmann::json::array({3.0f, 4.0f})},
+                                               {"size", nlohmann::json::array({100.0f, 80.0f})}}})},
+    };
+    EXPECT_FALSE(context.importLayoutJson(layout));
+}
+
+TEST(DockNodeTest, OverlayRejectsScreenGeometrySpace)
+{
+    FDockContext context;
+    context.bAllowFloating = true;
+    context.bAllowTearOff  = true;
+    const DockPanelId overlayId = context.addPanel("overlay", "Overlay", std::make_shared<UICanvasPanel>("O"));
+    const DockPanelId nativeId  = context.addPanel("native", "Native", std::make_shared<UICanvasPanel>("N"));
+    const FDockFloatingWindowId overlayFloating =
+        context.tearOffPanel(overlayId, {0.0f, 0.0f}, {120.0f, 80.0f});
+    const FDockFloatingWindowId nativeFloating =
+        context.tearOffPanel(nativeId, {40.0f, 40.0f}, {120.0f, 80.0f}, EDockFloatingProjection::NativeWindow);
+    ASSERT_NE(overlayFloating, kInvalidFloatingWindowId);
+    ASSERT_NE(nativeFloating, kInvalidFloatingWindowId);
+    EXPECT_FALSE(context.setFloatingGeometrySpace(overlayFloating, EDockGeometrySpace::Screen));
+    EXPECT_EQ(context.findFloatingById(overlayFloating)->geometrySpace, EDockGeometrySpace::TreeLocal);
+    EXPECT_TRUE(context.setFloatingGeometrySpace(nativeFloating, EDockGeometrySpace::Screen));
+    EXPECT_EQ(context.findFloatingById(nativeFloating)->geometrySpace, EDockGeometrySpace::Screen);
+    const nlohmann::json layout = context.exportLayoutJson();
+    ASSERT_EQ(layout["windows"].size(), 1u);
+    EXPECT_EQ(layout["windows"][0]["geometrySpace"], "screen");
+    EXPECT_EQ(layout["floating"][0]["geometrySpace"], "treeLocal");
+    ASSERT_TRUE(context.setFloatingProjection(nativeFloating, EDockFloatingProjection::InProcessOverlay));
+    EXPECT_EQ(context.findFloatingById(nativeFloating)->geometrySpace, EDockGeometrySpace::TreeLocal);
+}
+
+TEST(DockNodeTest, CollectLayoutPanelKeysWalksNativeWindows)
+{
+    const nlohmann::json layout = {
+        {"version", 1},
+        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"floating", nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"inspector"})}}})},
+        {"windows", nlohmann::json::array({nlohmann::json{{"panels", nlohmann::json::array({"hierarchy"})}}})},
+    };
+    const std::vector<std::string> keys = FDockContext::collectLayoutPanelKeys(layout);
+    EXPECT_EQ(keys.size(), 3u);
+    EXPECT_NE(std::find(keys.begin(), keys.end(), "viewport"), keys.end());
+    EXPECT_NE(std::find(keys.begin(), keys.end(), "inspector"), keys.end());
+    EXPECT_NE(std::find(keys.begin(), keys.end(), "hierarchy"), keys.end());
+}
+
+TEST(DockNodeTest, SanitizeLayoutJsonDropsUnknownNativeWindowKeys)
+{
+    const nlohmann::json layout = {
+        {"version", 1},
+        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+        {"windows",
+         nlohmann::json::array({
+             nlohmann::json{{"panels", nlohmann::json::array({"missing-panel"})},
+                            {"pos", nlohmann::json::array({10.0f, 20.0f})},
+                            {"size", nlohmann::json::array({100.0f, 80.0f})}},
+             nlohmann::json{{"panels", nlohmann::json::array({"hierarchy", "gone"})},
+                            {"selected", "gone"},
+                            {"pos", nlohmann::json::array({30.0f, 40.0f})},
+                            {"size", nlohmann::json::array({120.0f, 90.0f})}},
+         })},
+    };
+    const nlohmann::json sanitized = FDockContext::sanitizeLayoutJson(
+        layout, std::unordered_set<std::string>{"viewport", "hierarchy"});
+    ASSERT_EQ(sanitized["windows"].size(), 1u);
+    EXPECT_EQ(sanitized["windows"][0]["panels"], nlohmann::json::array({"hierarchy"}));
+    EXPECT_EQ(sanitized["windows"][0]["selected"], "hierarchy");
+}
+
+TEST(DockNodeTest, TransferPanelMovesWidgetWithoutDualMount)
+{
+    WidgetTree treeA({.width = 400, .height = 300});
+    WidgetTree treeB({.width = 400, .height = 300});
+    auto contextA = std::make_shared<FDockContext>();
+    auto contextB = std::make_shared<FDockContext>();
+    auto widget = std::make_shared<UICanvasPanel>("Moved");
+    const DockPanelId idA = contextA->addPanel("moved", "Moved", widget);
+    ASSERT_NE(idA, kInvalidDockPanelId);
+    ASSERT_NE(contextB->addPanel("keep", "Keep", std::make_shared<UICanvasPanel>("Keep")), kInvalidDockPanelId);
+
+    auto dockA = std::make_shared<UIDockSpace>("DockA");
+    auto dockB = std::make_shared<UIDockSpace>("DockB");
+    dockA->setContext(contextA);
+    dockB->setContext(contextB);
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(treeA.attach(*treeA.getLayer(WidgetTree::ELayer::Content), dockA, fill).valid());
+    ASSERT_TRUE(treeB.attach(*treeB.getLayer(WidgetTree::ELayer::Content), dockB, fill).valid());
+    (void)treeA.buildSnapshot(UIFrameBuildContext{});
+    (void)treeB.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_TRUE(treeA.contains(*widget));
+    EXPECT_FALSE(treeB.contains(*widget));
+
+    const DockPanelId idB = contextA->transferPanelTo(*contextB, idA);
+    ASSERT_NE(idB, kInvalidDockPanelId);
+    EXPECT_EQ(contextA->findPanel(idA), nullptr);
+    ASSERT_NE(contextB->findPanel(idB), nullptr);
+    EXPECT_EQ(contextB->findPanel(idB)->widget, widget);
+    EXPECT_EQ(contextB->findPanel(idB)->documentKey, "");
+    EXPECT_FALSE(treeA.contains(*widget));
+    EXPECT_TRUE(treeB.contains(*widget));
+    EXPECT_EQ(widget->getTree(), &treeB);
+}
+
+TEST(DockNodeTest, TransferRejectsDuplicateStableKeyAndPreservesSource)
+{
+    FDockContext source;
+    FDockContext target;
+    auto widget = std::make_shared<UICanvasPanel>("Dup");
+    const DockPanelId id = source.addPanel("same", "Same", widget);
+    ASSERT_NE(id, kInvalidDockPanelId);
+    ASSERT_NE(target.addPanel("same", "Other", std::make_shared<UICanvasPanel>("O")), kInvalidDockPanelId);
+    EXPECT_EQ(source.transferPanelTo(target, id), kInvalidDockPanelId);
+    EXPECT_NE(source.findPanel(id), nullptr);
+    EXPECT_EQ(widget->getTree(), nullptr);
+}
+
+TEST(DockNodeTest, TransferNativePlacementMovesTornPanel)
+{
+    WidgetTree treeA({.width = 400, .height = 300});
+    WidgetTree treeB({.width = 400, .height = 300});
+    auto contextA = std::make_shared<FDockContext>();
+    auto contextB = std::make_shared<FDockContext>();
+    contextA->bAllowFloating = true;
+    contextA->bAllowTearOff  = true;
+    auto widget = std::make_shared<UICanvasPanel>("Torn");
+    const DockPanelId panelId = contextA->addPanel("torn", "Torn", widget);
+    ASSERT_NE(contextB->addPanel("keep", "Keep", std::make_shared<UICanvasPanel>("Keep")), kInvalidDockPanelId);
+
+    auto dockA = std::make_shared<UIDockSpace>("DockA");
+    auto dockB = std::make_shared<UIDockSpace>("DockB");
+    dockA->setContext(contextA);
+    dockB->setContext(contextB);
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(treeA.attach(*treeA.getLayer(WidgetTree::ELayer::Content), dockA, fill).valid());
+    ASSERT_TRUE(treeB.attach(*treeB.getLayer(WidgetTree::ELayer::Content), dockB, fill).valid());
+    (void)treeA.buildSnapshot(UIFrameBuildContext{});
+    (void)treeB.buildSnapshot(UIFrameBuildContext{});
+
+    const FDockFloatingWindowId placementId =
+        contextA->tearOffPanel(panelId, {8.0f, 8.0f}, {180.0f, 120.0f}, EDockFloatingProjection::NativeWindow);
+    ASSERT_NE(placementId, kInvalidFloatingWindowId);
+    contextA->fireDockUpdated();
+    EXPECT_FALSE(treeA.contains(*widget));
+
+    ASSERT_TRUE(contextA->transferNativePlacementTo(*contextB, placementId));
+    EXPECT_EQ(contextA->findPanel(panelId), nullptr);
+    EXPECT_TRUE(contextA->floatingPlacements().empty());
+    EXPECT_TRUE(treeB.contains(*widget));
+    EXPECT_FALSE(treeA.contains(*widget));
+    EXPECT_EQ(widget->getTree(), &treeB);
+}
+
+TEST(DockNodeTest, ForeignDockDropTransfersPanelWithoutDualMount)
+{
+    WidgetTree treeA({.width = 400, .height = 300});
+    WidgetTree treeB({.width = 400, .height = 300});
+    auto contextA = std::make_shared<FDockContext>();
+    auto contextB = std::make_shared<FDockContext>();
+    auto widget = std::make_shared<UICanvasPanel>("Moved");
+    const DockPanelId idA = contextA->addPanel("moved", "Moved", widget);
+    ASSERT_NE(idA, kInvalidDockPanelId);
+    ASSERT_NE(contextB->addPanel("keep", "Keep", std::make_shared<UICanvasPanel>("Keep")), kInvalidDockPanelId);
+
+    auto dockA = std::make_shared<UIDockSpace>("DockA");
+    auto dockB = std::make_shared<UIDockSpace>("DockB");
+    dockA->setContext(contextA);
+    dockB->setContext(contextB);
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(treeA.attach(*treeA.getLayer(WidgetTree::ELayer::Content), dockA, fill).valid());
+    ASSERT_TRUE(treeB.attach(*treeB.getLayer(WidgetTree::ELayer::Content), dockB, fill).valid());
+    (void)treeA.buildSnapshot(UIFrameBuildContext{});
+    (void)treeB.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_TRUE(treeA.contains(*widget));
+
+    const UIDragDropOperationRef operation =
+        FDockPanelDragDropOp::make(idA, "Moved", contextA.get());
+    EXPECT_TRUE(treeB.dropExternal(*operation, {200.0f, 150.0f}));
+    EXPECT_EQ(contextA->findPanel(idA), nullptr);
+    EXPECT_FALSE(treeA.contains(*widget));
+    EXPECT_TRUE(treeB.contains(*widget));
+    EXPECT_EQ(widget->getTree(), &treeB);
+}
+
+TEST(DockNodeTest, ForeignDockChooserHoverShowsPreviewWithoutDropping)
+{
+    WidgetTree treeA({.width = 400, .height = 300});
+    WidgetTree treeB({.width = 400, .height = 300});
+    auto contextA = std::make_shared<FDockContext>();
+    auto contextB = std::make_shared<FDockContext>();
+    auto widget = std::make_shared<UICanvasPanel>("Moved");
+    const DockPanelId idA = contextA->addPanel("moved", "Moved", widget);
+    ASSERT_NE(idA, kInvalidDockPanelId);
+    ASSERT_NE(contextB->addPanel("keep", "Keep", std::make_shared<UICanvasPanel>("Keep")), kInvalidDockPanelId);
+
+    auto dockA = std::make_shared<UIDockSpace>("DockA");
+    auto dockB = std::make_shared<UIDockSpace>("DockB");
+    dockA->setContext(contextA);
+    dockB->setContext(contextB);
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(treeA.attach(*treeA.getLayer(WidgetTree::ELayer::Content), dockA, fill).valid());
+    ASSERT_TRUE(treeB.attach(*treeB.getLayer(WidgetTree::ELayer::Content), dockB, fill).valid());
+    (void)treeA.buildSnapshot(UIFrameBuildContext{});
+    (void)treeB.buildSnapshot(UIFrameBuildContext{});
+
+    const UIDragDropOperationRef operation =
+        FDockPanelDragDropOp::make(idA, "Moved", contextA.get());
+    glm::vec2 chooserPoint{64.0f, 96.0f};
+    bool bFoundChooser = false;
+    for (float y = 40.0f; y <= 260.0f && !bFoundChooser; y += 16.0f) {
+        for (float x = 24.0f; x <= 180.0f; x += 16.0f) {
+            const auto preview = dockB->dropPreviewFor(*operation, {x, y});
+            if (preview && preview->target.isPreviewOnly() && !preview->bDisabled) {
+                chooserPoint = {x, y};
+                bFoundChooser = true;
+                break;
+            }
+        }
+    }
+    ASSERT_TRUE(bFoundChooser);
+    treeB.setExternalDropHover(*operation, chooserPoint);
+    EXPECT_FALSE(treeB.isDragging());
+    ASSERT_NE(dynamic_cast<UIDockTabStack*>(treeB.getDropTarget()), nullptr);
+    EXPECT_NE(treeB.getDropTarget(), dockB.get());
+    UIElement* hoverLayer = treeB.getLayer(WidgetTree::ELayer::DragIme);
+    ASSERT_NE(hoverLayer, nullptr);
+    EXPECT_GE(hoverLayer->getChildren().size(), 1u);
+    EXPECT_FALSE(treeB.dropExternal(*operation, chooserPoint));
+    EXPECT_NE(contextA->findPanel(idA), nullptr);
+    EXPECT_TRUE(treeA.contains(*widget));
+    EXPECT_FALSE(treeB.contains(*widget));
+}
+
+TEST(DockNodeTest, CanAdoptPanelRejectsTransferWithoutExtracting)
+{
+    FDockContext source;
+    FDockContext target;
+    auto widget = std::make_shared<UICanvasPanel>("Owned");
+    const DockPanelId id = source.addPanel("hierarchy", "Hierarchy", widget);
+    ASSERT_NE(id, kInvalidDockPanelId);
+    target.canAdoptPanel = [](std::string_view stableKey, uint32_t, std::string_view) {
+        return stableKey != "hierarchy";
+    };
+    EXPECT_EQ(source.transferPanelTo(target, id), kInvalidDockPanelId);
+    ASSERT_NE(source.findPanel(id), nullptr);
+    EXPECT_EQ(source.findPanel(id)->widget, widget);
+    EXPECT_EQ(target.findPanelByStableKey("hierarchy"), nullptr);
+}
+
+TEST(DockNodeTest, DropTargetKindDistinguishesWellStackSplitAndNoTarget)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto context = std::make_shared<FDockContext>();
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    dock->setContext(context);
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, fill).valid());
+
+    const DockPanelId sceneId = context->addPanel("scene", "Scene", std::make_shared<UICanvasPanel>("Scene"));
+    const DockPanelId inspectorId =
+        context->addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("Inspector"));
+    ASSERT_NE(sceneId, kInvalidDockPanelId);
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    ASSERT_TRUE(context->dockModel().splitLeaf(context->dockModel().getRootNode()->id,
+                                               EDockCardinalSide::East,
+                                               inspectorId));
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+
+    const FDockNode* sceneLeaf = context->dockModel().findLeafForPanel(sceneId);
+    const FDockNode* inspectorLeaf = context->dockModel().findLeafForPanel(inspectorId);
+    ASSERT_NE(sceneLeaf, nullptr);
+    ASSERT_NE(inspectorLeaf, nullptr);
+    ASSERT_NE(sceneLeaf->id, inspectorLeaf->id);
+
+    auto* sceneBar = dynamic_cast<UIDockTabWell*>(
+        findNamedDescendant(*dock, std::format("DockTabBar{}", sceneLeaf->id)));
+    auto* inspectorBar = dynamic_cast<UIDockTabWell*>(
+        findNamedDescendant(*dock, std::format("DockTabBar{}", inspectorLeaf->id)));
+    auto* inspectorLeafRoot = dynamic_cast<UIDockTabStack*>(
+        findNamedDescendant(*dock, std::format("DockStack{}", inspectorLeaf->id)));
+    ASSERT_NE(sceneBar, nullptr);
+    ASSERT_NE(inspectorBar, nullptr);
+    ASSERT_NE(inspectorLeafRoot, nullptr);
+    EXPECT_EQ(inspectorBar->area(), dock.get());
+    EXPECT_EQ(inspectorLeafRoot->area(), dock.get());
+
+    const UIDragDropOperationRef operation =
+        FDockPanelDragDropOp::make(sceneId, "Scene", context.get());
+
+    const glm::vec2 wellPoint = inspectorBar->_layoutRect.pos + inspectorBar->_layoutRect.extent * 0.5f;
+    const auto well = dock->dropPreviewFor(*operation, wellPoint);
+    ASSERT_TRUE(well.has_value());
+    EXPECT_EQ(well->target.kind, EDockDropTargetKind::TabWell);
+    EXPECT_EQ(well->target.stackId, inspectorLeaf->id);
+    EXPECT_TRUE(well->target.commitsDrop());
+    EXPECT_TRUE(well->target.isMerge());
+    EXPECT_TRUE(inspectorBar->canAcceptDrop(*operation, wellPoint));
+
+    const glm::vec2 sameLeafPoint = sceneBar->_layoutRect.pos + glm::vec2{8.0f, sceneBar->_layoutRect.extent.y + 40.0f};
+    const auto sameLeaf = dock->dropPreviewFor(*operation, sameLeafPoint);
+    ASSERT_TRUE(sameLeaf.has_value());
+    EXPECT_TRUE(sameLeaf->target.kind == EDockDropTargetKind::TabStackChooser ||
+                sameLeaf->target.kind == EDockDropTargetKind::TabStackSplit ||
+                sameLeaf->target.kind == EDockDropTargetKind::TabStackCenter);
+    auto* sceneStack = dynamic_cast<UIDockTabStack*>(
+        findNamedDescendant(*dock, std::format("DockStack{}", sceneLeaf->id)));
+    ASSERT_NE(sceneStack, nullptr);
+    if (sameLeaf->target.commitsDrop()) {
+        EXPECT_TRUE(sceneStack->canAcceptDrop(*operation, sameLeafPoint));
+    }
+    else {
+        EXPECT_FALSE(sceneStack->canAcceptDrop(*operation, sameLeafPoint));
+        EXPECT_TRUE(sceneStack->canPreviewDrop(*operation, sameLeafPoint));
+    }
+
+    glm::vec2 chooserPoint = inspectorLeafRoot->_layoutRect.pos + glm::vec2{24.0f, 80.0f};
+    bool bFoundChooser = false;
+    bool bFoundSplit = false;
+    bool bFoundCenter = false;
+    glm::vec2 splitPoint{};
+    glm::vec2 centerPoint{};
+    const Rect2D inspectorRect = inspectorLeafRoot->_layoutRect;
+    for (float y = inspectorRect.pos.y + 40.0f; y < inspectorRect.pos.y + inspectorRect.extent.y - 8.0f; y += 8.0f) {
+        for (float x = inspectorRect.pos.x + 8.0f; x < inspectorRect.pos.x + inspectorRect.extent.x - 8.0f; x += 8.0f) {
+            const auto preview = dock->dropPreviewFor(*operation, {x, y});
+            if (!preview) {
+                continue;
+            }
+            if (!bFoundChooser && preview->target.kind == EDockDropTargetKind::TabStackChooser) {
+                chooserPoint = {x, y};
+                bFoundChooser = true;
+            }
+            if (!bFoundSplit && preview->target.kind == EDockDropTargetKind::TabStackSplit) {
+                splitPoint = {x, y};
+                bFoundSplit = true;
+            }
+            if (!bFoundCenter && preview->target.kind == EDockDropTargetKind::TabStackCenter &&
+                preview->target.stackId == inspectorLeaf->id) {
+                centerPoint = {x, y};
+                bFoundCenter = true;
+            }
+        }
+    }
+    ASSERT_TRUE(bFoundChooser);
+    ASSERT_TRUE(bFoundSplit);
+    ASSERT_TRUE(bFoundCenter);
+
+    const auto chooser = dock->dropPreviewFor(*operation, chooserPoint);
+    ASSERT_TRUE(chooser.has_value());
+    EXPECT_EQ(chooser->target.kind, EDockDropTargetKind::TabStackChooser);
+    EXPECT_FALSE(chooser->target.commitsDrop());
+    EXPECT_TRUE(chooser->target.isPreviewOnly());
+    EXPECT_FALSE(inspectorLeafRoot->canAcceptDrop(*operation, chooserPoint));
+    EXPECT_TRUE(inspectorLeafRoot->canPreviewDrop(*operation, chooserPoint));
+    EXPECT_TRUE(inspectorLeafRoot->canAcceptDrop(*operation, splitPoint));
+
+    const auto split = dock->dropPreviewFor(*operation, splitPoint);
+    ASSERT_TRUE(split.has_value());
+    EXPECT_EQ(split->target.kind, EDockDropTargetKind::TabStackSplit);
+    EXPECT_TRUE(split->target.commitsDrop());
+    EXPECT_FALSE(split->target.isMerge());
+
+    const auto center = dock->dropPreviewFor(*operation, centerPoint);
+    ASSERT_TRUE(center.has_value());
+    EXPECT_EQ(center->target.kind, EDockDropTargetKind::TabStackCenter);
+    EXPECT_EQ(center->target.stackId, inspectorLeaf->id);
+    EXPECT_TRUE(center->target.isMerge());
+
+    const auto outside = dock->dropPreviewFor(*operation, {-20.0f, 300.0f});
+    ASSERT_TRUE(outside.has_value());
+    EXPECT_EQ(outside->target.kind, EDockDropTargetKind::NoTarget);
+    EXPECT_FALSE(outside->target.commitsDrop());
+}
+
+TEST(DockNodeTest, LayoutJsonExportsStackKindAndImportsLegacyLeaf)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "viewport");
+    ASSERT_TRUE(model.addPanel(1));
+    const nlohmann::json exported = model.exportLayoutJson();
+    EXPECT_EQ(exported["root"]["kind"], "stack");
+
+    FDockTreeModel restored;
+    registerPanel(restored, 1, "viewport");
+    ASSERT_TRUE(restored.addPanel(1));
+    const nlohmann::json legacy = {
+        {"version", 1},
+        {"root", {{"kind", "leaf"}, {"panels", nlohmann::json::array({"viewport"})}, {"selected", "viewport"}}},
+    };
+    ASSERT_TRUE(restored.importLayoutJson(legacy));
+    EXPECT_EQ(restored.getRootNode()->kind, EDockNodeKind::Stack);
+    EXPECT_EQ(restored.findStackForPanel(1)->panelIds, std::vector<DockPanelId>({1}));
+}
+
+TEST(DockNodeTest, CommitDropMovesPanelBetweenStacks)
+{
+    FDockContext context;
+    const DockPanelId sceneId = context.addPanel("scene", "Scene", std::make_shared<UICanvasPanel>("Scene"));
+    const DockPanelId inspectorId =
+        context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("Inspector"));
+    ASSERT_NE(sceneId, kInvalidDockPanelId);
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    ASSERT_TRUE(context.layout().splitStack(context.layout().getRootNode()->id,
+                                            EDockCardinalSide::East,
+                                            inspectorId));
+    const FDockNode* inspectorStack = context.layout().findStackForPanel(inspectorId);
+    const FDockNode* sceneStack = context.layout().findStackForPanel(sceneId);
+    ASSERT_NE(inspectorStack, nullptr);
+    ASSERT_NE(sceneStack, nullptr);
+    ASSERT_NE(inspectorStack->id, sceneStack->id);
+
+    EXPECT_EQ(context.commitDrop(sceneId, FDockDropTarget::well(inspectorStack->id, 0)),
+              EDockDropCommit::Applied);
+    EXPECT_EQ(context.layout().findStackForPanel(sceneId)->id, inspectorStack->id);
+    EXPECT_EQ(context.layout().findStackForPanel(inspectorId)->id, inspectorStack->id);
+    EXPECT_EQ(context.commitDrop(inspectorId, FDockDropTarget::stackCenter(inspectorStack->id)),
+              EDockDropCommit::Selected);
+}
+
+TEST(DockNodeTest, CommitDropSameStackChooserSplitApplies)
+{
+    FDockContext context;
+    const DockPanelId sceneId = context.addPanel("scene", "Scene", std::make_shared<UICanvasPanel>("Scene"));
+    const DockPanelId inspectorId =
+        context.addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("Inspector"));
+    ASSERT_NE(sceneId, kInvalidDockPanelId);
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    const FDockNode* root = context.layout().getRootNode();
+    ASSERT_NE(root, nullptr);
+    EXPECT_EQ(root->kind, EDockNodeKind::Stack);
+    EXPECT_EQ(root->panelIds.size(), 2u);
+
+    EXPECT_EQ(context.commitDrop(inspectorId, FDockDropTarget::stackSplit(root->id, EDockCardinalSide::East)),
+              EDockDropCommit::Applied);
+    const FDockNode* sceneStack = context.layout().findStackForPanel(sceneId);
+    const FDockNode* inspectorStack = context.layout().findStackForPanel(inspectorId);
+    ASSERT_NE(sceneStack, nullptr);
+    ASSERT_NE(inspectorStack, nullptr);
+    EXPECT_NE(sceneStack->id, inspectorStack->id);
+    EXPECT_EQ(context.layout().getRootNode()->kind, EDockNodeKind::Split);
+}
+
+TEST(DockNodeTest, SameStackContentShowsChooserNotSilentCenter)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto context = std::make_shared<FDockContext>();
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    dock->setContext(context);
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, fill).valid());
+
+    const DockPanelId sceneId = context->addPanel("scene", "Scene", std::make_shared<UICanvasPanel>("Scene"));
+    const DockPanelId inspectorId =
+        context->addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("Inspector"));
+    ASSERT_NE(sceneId, kInvalidDockPanelId);
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+
+    const FDockNode* stack = context->dockModel().findStackForPanel(sceneId);
+    ASSERT_NE(stack, nullptr);
+    EXPECT_EQ(stack->panelIds.size(), 2u);
+    auto* stackRoot = dynamic_cast<UIDockTabStack*>(
+        findNamedDescendant(*dock, std::format("DockStack{}", stack->id)));
+    ASSERT_NE(stackRoot, nullptr);
+
+    const UIDragDropOperationRef operation =
+        FDockPanelDragDropOp::make(inspectorId, "Inspector", context.get());
+    bool bFoundChooser = false;
+    bool bFoundSplit = false;
+    const Rect2D rect = stackRoot->_layoutRect;
+    for (float y = rect.pos.y + 40.0f; y < rect.pos.y + rect.extent.y - 8.0f; y += 8.0f) {
+        for (float x = rect.pos.x + 8.0f; x < rect.pos.x + rect.extent.x - 8.0f; x += 8.0f) {
+            const auto preview = dock->dropPreviewFor(*operation, {x, y});
+            if (!preview) {
+                continue;
+            }
+            if (preview->target.kind == EDockDropTargetKind::TabStackChooser) {
+                bFoundChooser = true;
+            }
+            if (preview->target.kind == EDockDropTargetKind::TabStackSplit) {
+                bFoundSplit = true;
+            }
+        }
+    }
+    EXPECT_TRUE(bFoundChooser);
+    EXPECT_TRUE(bFoundSplit);
+}
+
+TEST(DockNodeTest, FloatingWindowProducesDropTargetWithoutDockSpace)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto context = std::make_shared<FDockContext>();
+    context->bAllowFloating = true;
+    context->bAllowTearOff = true;
+
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    dock->setContext(context);
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, fill).valid());
+
+    auto host = std::make_shared<UIDockFloatingHost>("Host");
+    host->bindContext(context);
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Popup), host, fill).valid());
+
+    const DockPanelId sceneId = context->addPanel("scene", "Scene", std::make_shared<UICanvasPanel>("Scene"));
+    const DockPanelId inspectorId =
+        context->addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("Inspector"));
+    ASSERT_NE(sceneId, kInvalidDockPanelId);
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    const FDockFloatingWindowId floatingId =
+        context->tearOffPanel(inspectorId, {40.0f, 40.0f}, {240.0f, 180.0f});
+    ASSERT_NE(floatingId, kInvalidFloatingWindowId);
+    host->syncFromContext();
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+
+    auto* floating = dynamic_cast<UIDockFloatingWindow*>(
+        findNamedDescendant(*host, std::format("FloatingWindow{}", floatingId)));
+    ASSERT_NE(floating, nullptr);
+
+    const glm::vec2 overWindow = floating->_layoutRect.pos + floating->_layoutRect.extent * 0.5f;
+    const auto merge = floating->dropTargetAt(overWindow, sceneId);
+    ASSERT_TRUE(merge.has_value());
+    EXPECT_EQ(merge->kind, EDockDropTargetKind::FloatingTabWell);
+    EXPECT_EQ(merge->floatingWindowId, floatingId);
+    EXPECT_TRUE(merge->commitsDrop());
+
+    EXPECT_FALSE(floating->dropTargetAt(overWindow, inspectorId).has_value());
+    EXPECT_FALSE(floating->dropTargetAt({-20.0f, 300.0f}, sceneId).has_value());
+
+    EXPECT_EQ(context->commitDrop(sceneId, *merge), EDockDropCommit::Applied);
+    EXPECT_TRUE(context->isPanelFloating(sceneId));
+    EXPECT_EQ(context->findFloatingByPanel(sceneId)->id, floatingId);
+}
+
+TEST(DockNodeTest, NestedDockChooserWinsOverHostPageLeaf)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto outer = std::make_shared<FDockContext>();
+    auto nested = std::make_shared<FDockContext>();
+    auto nestedDock = std::make_shared<UIDockSpace>("NestedDock");
+    nestedDock->setContext(nested);
+    ASSERT_NE(nested->addPanel("viewport", "Viewport", std::make_shared<UICanvasPanel>("ViewportBody")),
+              kInvalidDockPanelId);
+
+    auto outerDock = std::make_shared<UIDockSpace>("OuterDock");
+    outerDock->setContext(outer);
+    const DockPanelId pageId =
+        outer->addPanel("page", "Page", nestedDock);
+    const DockPanelId contentId =
+        outer->addPanel("content", "Content", std::make_shared<UICanvasPanel>("ContentBody"));
+    ASSERT_NE(pageId, kInvalidDockPanelId);
+    ASSERT_NE(contentId, kInvalidDockPanelId);
+    ASSERT_TRUE(outer->layout().splitStack(outer->layout().getRootNode()->id,
+                                           EDockCardinalSide::South,
+                                           contentId,
+                                           0.50f));
+    outer->fireDockUpdated();
+
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), outerDock, fill).valid());
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+
+    auto* nestedStack = dynamic_cast<UIDockTabStack*>(
+        findNamedDescendant(*nestedDock, std::format("DockStack{}", nested->layout().getRootNode()->id)));
+    auto* pageStack = dynamic_cast<UIDockTabStack*>(
+        findNamedDescendant(*outerDock, std::format("DockStack{}", outer->layout().findStackForPanel(pageId)->id)));
+    ASSERT_NE(nestedStack, nullptr);
+    ASSERT_NE(pageStack, nullptr);
+    EXPECT_GT(nestedStack->_layoutRect.extent.x, 80.0f);
+    EXPECT_GT(nestedStack->_layoutRect.extent.y, 80.0f);
+
+    const UIDragDropOperationRef operation =
+        FDockPanelDragDropOp::make(contentId, "Content", outer.get());
+    glm::vec2 chooserPoint{};
+    glm::vec2 splitPoint{};
+    bool bFoundChooser = false;
+    bool bFoundSplit = false;
+    const Rect2D nestedRect = nestedStack->_layoutRect;
+    for (float y = nestedRect.pos.y + 8.0f; y < nestedRect.pos.y + nestedRect.extent.y - 8.0f; y += 8.0f) {
+        for (float x = nestedRect.pos.x + 8.0f; x < nestedRect.pos.x + nestedRect.extent.x - 8.0f; x += 8.0f) {
+            const auto nestedPreview = nestedDock->dropPreviewFor(*operation, {x, y});
+            if (!nestedPreview || nestedPreview->bDisabled) {
+                continue;
+            }
+            if (!bFoundChooser && nestedPreview->target.kind == EDockDropTargetKind::TabStackChooser) {
+                chooserPoint = {x, y};
+                bFoundChooser = true;
+            }
+            if (!bFoundSplit && nestedPreview->target.kind == EDockDropTargetKind::TabStackSplit) {
+                splitPoint = {x, y};
+                bFoundSplit = true;
+            }
+        }
+    }
+    ASSERT_TRUE(bFoundChooser);
+    ASSERT_TRUE(bFoundSplit);
+
+    EXPECT_FALSE(outerDock->dropPreviewFor(*operation, chooserPoint).has_value());
+    EXPECT_FALSE(pageStack->canAcceptDrop(*operation, chooserPoint));
+    EXPECT_FALSE(pageStack->canPreviewDrop(*operation, chooserPoint));
+    EXPECT_TRUE(nestedStack->canPreviewDrop(*operation, chooserPoint));
+    EXPECT_FALSE(nestedStack->canAcceptDrop(*operation, chooserPoint));
+    EXPECT_TRUE(nestedStack->canAcceptDrop(*operation, splitPoint));
+    EXPECT_FALSE(pageStack->canAcceptDrop(*operation, splitPoint));
+
+    tree.beginDrag(outerDock.get(), operation);
+    tree.updateDrag(chooserPoint);
+    EXPECT_EQ(tree.getDropTarget(), nestedStack);
+    EXPECT_TRUE(nestedDock->hasDropPreview());
+    EXPECT_TRUE(nestedDock->isDropPreviewChooser());
+    EXPECT_FALSE(outerDock->hasDropPreview());
+
+    tree.endDrag(splitPoint);
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_EQ(outer->findPanel(contentId), nullptr);
+    const FDockContext::FPanel* imported = nested->findPanelByStableKey("content");
+    ASSERT_NE(imported, nullptr);
+    const FDockContext::FPanel* viewportPanel = nested->findPanelByStableKey("viewport");
+    ASSERT_NE(viewportPanel, nullptr);
+    const FDockNode* nestedRoot = nested->layout().getRootNode();
+    ASSERT_NE(nestedRoot, nullptr);
+    EXPECT_EQ(nestedRoot->kind, EDockNodeKind::Split);
+    EXPECT_NE(nested->layout().findStackForPanel(imported->id),
+              nested->layout().findStackForPanel(viewportPanel->id));
+    EXPECT_EQ(outer->layout().leafIds().size(), 1u);
+    ASSERT_NE(outer->layout().getRootNode(), nullptr);
+    EXPECT_EQ(outer->layout().getRootNode()->kind, EDockNodeKind::Stack);
+}
+
+TEST(DockNodeTest, PruneEmptyGenericLeavesKeepsPageWell)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "level");
+    ASSERT_TRUE(model.addPanel(1));
+    const DockNodeId rootId = model.getRootNode()->id;
+    ASSERT_TRUE(model.setLeafRole(rootId, EDockLeafRole::Page));
+    ASSERT_TRUE(model.splitEmptyLeaf(rootId, EDockCardinalSide::East, 0.5f, true));
+    EXPECT_EQ(model.leafIds().size(), 2u);
+    model.pruneEmptyGenericLeaves();
+    EXPECT_EQ(model.leafIds().size(), 1u);
+    EXPECT_EQ(model.findFirstLeafWithRole(EDockLeafRole::Page), model.getRootNode()->id);
+
+    ASSERT_TRUE(model.splitEmptyLeaf(model.getRootNode()->id, EDockCardinalSide::South, 0.78f, true));
+    FDockNode* split = model.findNode(model.getRootNode()->id);
+    ASSERT_NE(split, nullptr);
+    ASSERT_EQ(split->kind, EDockNodeKind::Split);
+    ASSERT_TRUE(model.setLeafRole(split->child[1]->id, EDockLeafRole::Tools));
+    EXPECT_EQ(model.leafIds().size(), 2u);
+    model.pruneEmptyGenericLeaves();
+    EXPECT_EQ(model.leafIds().size(), 1u);
+    EXPECT_NE(model.findFirstLeafWithRole(EDockLeafRole::Page), kInvalidDockNodeId);
+    EXPECT_EQ(model.findFirstLeafWithRole(EDockLeafRole::Tools), kInvalidDockNodeId);
+}
+
+TEST(DockNodeTest, LastPanelLeavingPersistentToolsLeafCollapses)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "level");
+    registerPanel(model, 2, "content");
+    ASSERT_TRUE(model.addPanel(1));
+    const DockNodeId rootId = model.getRootNode()->id;
+    ASSERT_TRUE(model.setLeafRole(rootId, EDockLeafRole::Page));
+    ASSERT_TRUE(model.splitEmptyLeaf(rootId, EDockCardinalSide::South, 0.78f, true));
+    FDockNode* split = model.findNode(model.getRootNode()->id);
+    ASSERT_NE(split, nullptr);
+    ASSERT_EQ(split->kind, EDockNodeKind::Split);
+    ASSERT_TRUE(model.setLeafRole(split->child[1]->id, EDockLeafRole::Tools));
+    ASSERT_TRUE(model.addPanel(2, split->child[1]->id));
+    EXPECT_FALSE(model.findLeafForPanel(2)->persistentEmptyLeaf);
+    EXPECT_EQ(model.leafIds().size(), 2u);
+
+    ASSERT_TRUE(model.removePanel(2));
+    EXPECT_EQ(model.leafIds().size(), 1u);
+    EXPECT_NE(model.findFirstLeafWithRole(EDockLeafRole::Page), kInvalidDockNodeId);
+    EXPECT_EQ(model.findFirstLeafWithRole(EDockLeafRole::Tools), kInvalidDockNodeId);
 }
 
 } // namespace ya
