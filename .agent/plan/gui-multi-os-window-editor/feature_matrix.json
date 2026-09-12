@@ -1,16 +1,33 @@
 {
   "plan": "gui-multi-os-window-editor",
-  "updated_at": "2026-09-09",
-  "active_task": "ES-3",
-  "architecture": {
+  "updated_at": "2026-09-11",
+    "active_task": "",
+    "architecture": {
     "application_loop": "one GUI application loop",
     "window_tree": "one native window owns one WidgetTree",
     "shared": ["IRender device", "shader cache", "font/texture services"],
     "rhi_layers": "IRender=device; IRenderSurfaceContext=present; Camera=offscreen graphics→UI→view compose",
     "compose": "view compose writes camera RT; display compose writes swapchain; PresentationGraphService is main world window only",
     "frozen": "no N-camera / FRenderViewDesc until C2 done; unpresentable=skip present not pause app (MW-206); MW-902 later",
-    "next": "ES-3 selection/undo/actions off Surface; R-5 deferred (no two-submit evidence)",
-    "boundary": "GUI owns windows/presentation; FeatureGallery is first multi-window consumer; GameEditor owns sessions/tabs/documents",
+    "next": "public UIDockTabWell/UIDockTabStack widgets; GameEditor canDrop(FDockDropTarget); deferred R-5 / MW-901/902/903",
+    "boundary": "GUI owns windows/presentation/chrome capabilities; FeatureGallery is first multi-window consumer; GameEditor owns sessions/tabs/documents",
+    "floating_semantics": {
+      "dock_node": "layout model only; no OS window or GPU ownership",
+      "floating_placement": "panel placement record with source scope, target window, ownerEditorId, geometry and projection mode",
+      "in_process_overlay": "UIDockFloatingHost in the same native window and WidgetTree",
+      "native_window": "GUIWindowSession with its own NativeWindow, RenderSurfaceContext, WidgetTree, snapshot/input/focus and presentation",
+      "migration": "detach -> transfer placement/session ownership -> attach/rebuild; never dual-mount a live widget"
+    },
+    "window_chrome": {
+      "macos_default": "Hybrid; custom title content with native traffic lights/safe-area/window behavior",
+      "windows_default": "Hybrid or capability-enabled ClientDrawn; custom non-client behavior must preserve resize/snap/system/accessibility",
+      "framework_boundary": "capability API in GUI native-window backend; no platform chrome code in Dock or EditorSurface"
+    },
+    "dock_ownership": {
+      "gui_framework": ["dock tree", "area projection", "tab well/stack drop targets", "drop preview", "generic drag session", "cross-window routing", "floating projection", "detach/attach transaction", "native window lifecycle"],
+      "game_editor": ["tab scope", "ownerEditorId", "document identity", "typed editor payload", "placement policy", "owner close policy"],
+      "forbidden": ["GameEditor SDL event reimplementation", "DockContext knowing EditorRootId", "EditorDockWorkspace creating native windows"]
+    },
     "tab_scopes": {
       "WindowRootEditor": "top-level editor in a window-root DockContext; default native-window tear-off unit",
       "EditorOwnedTool": "owned nested leaf; cannot dock under another root editor/tab, but may become an independent editor window while retaining ownerEditorId",
@@ -46,8 +63,11 @@
         {"id": "R-2", "status": "pass", "notes": "CameraFrameInput owns view/projection/viewProjection/extent; tick consumes camera not ViewportState; DebugPrimitives uses recording flight; overlay uses owner viewProjection"},
         {"id": "R-3", "status": "pass", "notes": "recordCameraViewCompose writes camera RT; PresentationGraphService::recordDisplayCompose writes swapchain; GUIRenderSurface is compose target only"},
         {"id": "R-4", "status": "pass", "notes": "FPresentFrame acquire/submit on host+GUI extra; RenderRuntime records only; PresentationGraphService still main-world display compose"},
+        {"id": "MW-207", "status": "pass", "notes": "present consumers use IRenderSurfaceContext/ISwapchain/buildPresentationImages; no as<VulkanSwapChain> in GUIAppHost/GUIWindowPresent/PresentationGraphService/RHISurfaceContextTest"},
         {"id": "R-5", "status": "deferred", "notes": "无 N Camera / 异步 world / 多 surface 同步压力测量；保持单 cmdBuf；不得文档闭环"},
-        {"id": "MW-301", "status": "pass", "notes": "GUIApp broker + WidgetTree external hover/drop/finishDrag; source session stays on source tree; leave keep-alive; defer close source/hover; runAfterDrag; gtest A→B; Windows page windows-drag / extra-drop; no tab semantics"}
+        {"id": "MW-301", "status": "pass", "notes": "GUIApp broker + WidgetTree external hover/drop/finishDrag; source session stays on source tree; leave keep-alive; defer close source/hover; runAfterDrag; gtest A→B; Windows page windows-drag / extra-drop; no tab semantics"},
+        {"id": "C14", "status": "pass", "notes": "FDockDropTarget kinds; resolve well/stack/floating; no public TabWell/TabStack widgets"},
+        {"id": "C15", "status": "pass", "notes": "FDockStackView; EDockNodeKind::Stack; FTabRegistry+layout(); commitDrop; floating produces FloatingTabWell; JSON leaf/stack dual-read"}
       ]
     },
     {
@@ -56,19 +76,38 @@
       "items": [
         {"id": "ES-1", "status": "pass", "notes": "FEditorSurfaceContext + EditorWindowMetrics; tick(App&) forwards; Surface.cpp has no primaryWindow/Swapchain; view/projection injected; layer/tree stay Surface-owned"},
         {"id": "ES-2", "status": "pass", "notes": "单元素 EditorWindowRegistry + EditorWindowSession 持有 Surface；Module/InputNode 经 kDefaultEditorWindowId 路由；无第二扇窗、非 god object"},
-        {"id": "ES-3", "status": "planned", "notes": "selection/action/undo 归属 EditorRootSession；owned tool 带 ownerEditorId"},
-        {"id": "ES-4", "status": "planned", "notes": "spawn context 携带 windowId/scope/owner/document/placement；tab 不持有 Surface"},
-        {"id": "ES-5", "status": "planned", "notes": "删除 tick(App&)；wantsTextInput 走 WidgetTree capability；完成后才允许第二扇 editor window"},
-        {"id": "MW-401", "status": "planned", "notes": "ES-5 之后的双 session；window-root dock + nested editor-owned dock"},
-        {"id": "MW-402", "status": "planned", "notes": "与 ES-4 同一目标：factory 不依赖固定 EditorSurface"},
-        {"id": "MW-501", "status": "planned"},
-        {"id": "MW-502", "status": "planned"},
-        {"id": "MW-601", "status": "planned"},
-        {"id": "MW-602", "status": "planned", "notes": "root editors + nested owned tools"},
-        {"id": "MW-701", "status": "planned", "notes": "root editor or detachable owned tool can become native window root"},
-        {"id": "MW-702", "status": "planned", "notes": "owned tools cannot dock under another root editor/tab; retain owner and avoid orphan leaf"},
-        {"id": "MW-801", "status": "planned", "notes": "root/nested dock topology and ownerEditorId"},
-        {"id": "MW-802", "status": "planned"}
+        {"id": "ES-3", "status": "pass", "notes": "EditorRootSession owns selection/actions/undo; window references Level root only; builtin owned tools ownerEditorId=Level; materialize rejects other root; no nested dock (C5), no spawn-context rewrite (ES-4)"},
+        {"id": "ES-4", "status": "pass", "notes": "spawn context carries windowId/scope/optional owner/document/placement/detach; owner pointers optional; factory does not hold Surface/tree or tick; still one window, still tick(App&)"},
+        {"id": "WT-IME", "status": "pass", "notes": "WidgetTree::wantsTextInput walks focus path; TextField/DragFloat/SpinBox/ColorEdit hex; Surface/InputNode use tree; no Inspector dynamic_cast"},
+        {"id": "DS-1", "status": "pass", "notes": "canDockEditorTab(tab, targetPlacement, targetRootId); WindowTool/RootEditor rejected from EditorOwnedNested; owned tool rejected from other-root nested; FDockContext has no editor types; window-root still flattens same-owner owned tools until C5"},
+        {"id": "ES-5", "status": "pass", "notes": "tick(App&) gone; InputNode find(windowId); Surface/Session/Context/Module have no primarySwapchain/primaryWindow; still one native present surface via getPrimarySurfaceContext"},
+        {"id": "MW-401", "status": "pass", "notes": "registry create/destroy extra session; each Surface owns window-root + nested FDockContext and viewport overlay; product presents only default native window"},
+        {"id": "MW-402", "status": "pass", "notes": "与 ES-4 同一目标：factory 不依赖固定 EditorSurface"},
+        {"id": "MW-501", "status": "pass", "notes": "level-editor Locked window-root hosts nested DockSpace; owned tools only EditorOwnedNested; v2 editor.dockLayout envelope; v1 remaps to two factories (lossy splits); no second OS window"},
+        {"id": "MW-502", "status": "pass", "notes": "viewport requires host; inspector requires session SelectionModel; content cmdLoadScene via Layer; runtime ActionMap+IRenderSurfaceContext; no App::get/primarySwapchain in those tabs"},
+        {"id": "MW-601", "status": "pass", "notes": "EditorDocumentRegistry in Module; scene singleton shared undo; UI designer dirty/RejectIfDirty/preview claim; Surface/WindowSession do not own registry"},
+        {"id": "MW-602", "status": "pass", "notes": "UI/Material/Script WindowRootEditor + nested owned tools; EditorNestedDockHost owns nested FDockContext; invokeTab opens owner root then nested; CB .lua/.mat; no N Camera"},
+        {"id": "MW-701", "status": "pass", "notes": "FDockFloatingPlacement + InProcessOverlay vs NativeWindow; overlay host skips NativeWindow; opaque ownerEditorId/documentKey; old floating JSON imports as overlay"},
+        {"id": "MW-702", "status": "pass", "notes": "GUIWindowManager is IGUIWindowCoordinator; GUIWindowSession owns native+tree+snapshot+optional surface; realizeNativeDockPlacement binds targetWindowId without migrating widgets; FDockContext does not create OS windows"},
+        {"id": "MW-703", "status": "pass", "notes": "extract/adopt/transferPanelTo; FDockPanelDragDropOp sourceContext; foreign UIDockSpace drop; transferNativePlacementTo; no EditorRootId"},
+        {"id": "MW-704", "status": "pass", "notes": "FEditorTabDragPayload + canTearOff/canAccept; dock canAdoptPanel; tearOffEditorPanelToNativeWindow via coordinator+transfer; Locked reject; retain owner/document; no dual-mount; product still ticks default window only"},
+        {"id": "MW-705", "status": "pass", "notes": "redockEditorPanelToOwner + closeEditorWindow reclaim empty extra; Locked/Level cannot import or close default; owned tool home is owner nested; no dual-mount"},
+        {"id": "MW-706", "status": "pass", "notes": "EWindowChromeMode Native/Hybrid/ClientDrawn; macOS default Hybrid (traffic lights/safe-area); ClientDrawn optional via SDL hit-test; C11 consumers use queryWindowChromeLayout not raw safe-area"},
+        {"id": "MW-707", "status": "pass", "notes": "dock JSON splits overlay floating[] vs native windows[]; geometrySpace; legacy floating pos stays treeLocal; editor envelope v3 still windowRoot/ownedNested; product does not restore extra OS windows"},
+        {"id": "MW-801", "status": "pass", "notes": "editor.dockLayout v4 windows[] envelope (role/bounds/monitor/maximized/windowRoot/ownedNested); restoreEditorExtraWindows via coordinator; v1-v3 map to main; overlay pos not screen; product still ticks default window only"},
+        {"id": "MW-802", "status": "pass", "notes": "recoverWindowScreenPlacement relocates missing monitor; restore skips closing/missing document/unknown owner without rebinding; export omits empty extras; product recovers main placement only, still no extra present"}
+      ]
+    },
+    {
+      "id": "release_soak",
+      "title": "C9 - Release soak",
+      "items": [
+        {"id": "C9-P", "status": "pass", "notes": "IRuntimeModule::onAfterPresent after primary submit (also on acquire-fail); EditorModule owns GUIWindowManager, restores extras, ticks trees then renderAll; extra input by window id, lastMousePos ignores extras, main focus clears extra focusedId; no EditorSurface::tick on extras; DockSpace NoTarget still overlay"},
+        {"id": "C9", "status": "pass", "notes": "shared-device extra+primary 32-frame present/resize/close soak; GUIWindowManager tickTrees 64-frame resize/minimize/close sibling; Editor tear-off onAfterPresent closeRequested->closeEditorWindow; Workbench --extra-window 32 frames; DockSpace NoTarget still overlay; dual-swapchain golden BMP still deferred"},
+        {"id": "C10", "status": "pass", "notes": "DockSpace NoTarget uses realizeNoTargetTearOff then overlay fallback; GameEditor installs via EditorSurface+handleDockNoTargetTearOff; Locked stays; Screen geometry is OS origin; extra persist hooked on live tear-off"},
+        {"id": "C11", "status": "pass", "notes": "Hybrid min traffic-light safe-zone; titleContent Client + trailing drag gutter; Editor/Workbench/extra dock consume queryWindowChromeLayout; capture-on-press drag sources start session"},
+        {"id": "C12", "status": "pass", "notes": "GUIDragRouter unique per input universe; WidgetTree keeps source-local ghost/payload; GameEditor InputNode+onEvent share the router; WindowFocusLost does not cancel; unique extra tab NoTarget moves or reclaims"},
+        {"id": "C13", "status": "pass", "notes": "same GUIDragRouter owns capture window, OS cursor, IME window, extra OS clipboard, app-modal; no second router"}
       ]
     },
     {

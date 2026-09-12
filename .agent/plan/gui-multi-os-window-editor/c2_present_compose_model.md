@@ -109,7 +109,7 @@ acquire / present / recreate / zero-extent（R-4）：只出现在 `IRenderSurfa
 - world cmdBuf 按 `MAX_FLIGHTS_IN_FLIGHT` / `flightIndex` 分配，不再按 swapchain image
 - viewport 不再 fallback 到 swapchain extent；host 在 rect 为空时用窗口尺寸做 fullscreen 策略
 - pipeline 初始尺寸来自 host 给出的 viewport，不读 `primaryWindow()`
-- GUI host 经自己持有的 `IRenderSurfaceContext*` 取 swapchain，不经 `IRender::primarySwapchain()`
+- `GUI host 经自己持有的 `IRenderSurfaceContext*` 取 swapchain，不经 `IRender::primarySwapchain()`；imported images 走 `buildPresentationImages`，消费方禁止 `as<VulkanSwapChain>()`（MW-207）。
 
 不做：
 

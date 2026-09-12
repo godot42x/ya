@@ -35,33 +35,40 @@
 7. GUI Framework 不 include GameEditor、EditorLayer、Scene/ECS。
 8. C1/C2 空白双窗之后，必须用 Feature Gallery `Windows` 页作为第一份真实多窗消费者，再进 C3 drag 或 GameEditor。
 9. Gallery 额外窗口经 `GUIApp::openWindow`；禁止 `FWorkbenchSurface` 变成 window manager，禁止用 dock floating 冒充 OS window。
+10. 明确区分 `DockNode`、`FDockFloatingPlacement`、`UIDockFloatingHost`（in-process overlay）和 native `GUIWindowSession`；只有后者才是 OS window。
+11. 一个 native window 只绑定一个 WidgetTree；跨窗迁移必须 detach/transfer/attach，禁止同一 live widget 双挂载或用一棵树管理多窗 focus/popup/IME。
+12. Window chrome 走 capability API：macOS 默认 Hybrid、Windows 可选 ClientDrawn；Editor/Dock 层不得直接依赖 NSWindow/Win32 non-client API。菜单/hosted dock 消费 `queryWindowChromeLayout`（traffic-light safe-zone + title Client + trailing drag gutter），不要用生 SDL safe-area。
+13. DockSpace 的 split/tab/reorder/drop preview、floating projection 和 cross-window drag router 必须归 GUI Framework；GameEditor 只能提供 typed payload 与 placement policy。
+14. GameEditor 不得重新监听 SDL/平台事件实现跨窗拖拽，也不得直接创建 native window；所有迁移经 GUI coordinator/session。
+15. 指针拖拽 session 对每个 input universe 唯一，由 `GUIDragRouter` 持有 source/hover window、capture 所属窗、IME 窗与 app-modal。`WidgetTree` 只保留 payload/ghost/observer/capture widget。不是 `GUIApp`、也不是进程单例。`WindowFocusLost` 不得对正在 capture/drag 的树注入远指针。extra 窗 `bindSdlClipboard`。
 
 ## RHI / presentation
 
 1. `IRender` 是共享 device；一扇 OS 窗一个 `IRenderSurfaceContext`。禁止每窗 `IRender::create`。
 2. Camera 链写离屏 RT：graphics → UI → view compose。swapchain 只在 display compose + present。
 3. 新代码不要用 `primarySwapchain()` / `primaryFrameIndex()` 当 viewport 或 recording flight。
-4. swapchain recreate / imported image rebuild 只 wait **该** surface 的 fence（`IRenderSurfaceContext::waitInFlight`），禁止 `vkDeviceWaitIdle` 卡住其他窗。
-5. `PresentationGraphService` 只服务主 world 窗；辅助 GUI 窗 window-local import + compose。
-6. C2 完成前冻结 N Camera / `FRenderViewDesc`（`MW-902`）。extra present 不要顺手改 Camera 图。
-7. `Render2D` 静态 session 串行；每窗唯一 pass slot（MW-203）。
-8. 最小化只 delay 该 PresentSurface 的 present；禁止进程级 `_bMinimized` sleep。模型见 `c2_unpresentable_surface.md`。
+4. Present 消费方只走 `IRenderSurfaceContext` / `ISwapchain` / `buildPresentationImages`。禁止 `as<VulkanSwapChain>()`。Vulkan 细节留在 `VulkanRenderSurfaceContext`。
+5. swapchain recreate / imported image rebuild 只 wait **该** surface 的 fence（`IRenderSurfaceContext::waitInFlight`），禁止 `vkDeviceWaitIdle` 卡住其他窗。
+6. `PresentationGraphService` 只服务主 world 窗；辅助 GUI 窗 window-local import + compose。
+7. C2 完成前冻结 N Camera / `FRenderViewDesc`（`MW-902`）。extra present 不要顺手改 Camera 图。
+8. `Render2D` 静态 session 串行；每窗唯一 pass slot（MW-203）。
+9. 最小化只 delay 该 PresentSurface 的 present；禁止进程级 `_bMinimized` sleep。模型见 `c2_unpresentable_surface.md`。
 
 ## GameEditor 实施
 
-1. `FDockContext` 只管理一个 window-root 或 editor-owned dock model，不创建 native window。
+1. `FDockContext` 只管理一个 window-root 或 editor-owned dock model，不创建 native window，也不认识 `EditorRootId` / tab scope。Editor 侧用 `canDockEditorTab(tab, targetPlacement, targetRootId)` 决定能否物化进该 dock。
 2. `EditorTabSpawnerRegistry` 只注册 factory，不拥有 tree/widget。
 3. 每个 tab 先分类为 `WindowRootEditor`、`EditorOwnedTool` 或 `WindowTool`；owned tool 必须记录 `ownerEditorId`。
 4. Level Editor 是 main-window non-closable root editor。
 5. document/dirty/undo/selection 按 editor/document owner 管理。
 6. 跨窗迁移必须 detach → keep-alive → attach → focus transfer。
 7. source 不保留 detached tab parent edge；target 不重复 attach。
-8. 旧 `editor.dockLayout` 只恢复 main window；新增 topology 使用 versioned envelope。
+8. 旧 `editor.dockLayout` 只恢复 main window（v1–v3）。v4 `windows[]` 是 OS 窗 topology（MW-801）；Dock JSON 的 `windows[]` 是 NativeWindow placement（MW-707）。产品启动 recover 主窗 screen placement，并经 coordinator restore extra（C9-P）；extra present 在 primary submit 之后。缺失 monitor 迁到可用屏，不把 overlay 坐标当 origin。
 9. root editor 和允许 detachable 的 owned tool 都能 tear-off；owned tool 不能 dock 到其他 root editor/tab，独立窗口仍保留 ownerEditorId。
 10. `EditorSurface` 只做当前窗口 UI 编排；禁止改成 window manager，也禁止把字段整体倒进 `EditorWindowSession` god object。
-11. 新代码只走 `EditorWindowSession::tick` + `FEditorSurfaceContext`；`tick(App&)` 仅迁移期 forwarding，ES-5 删除。
+11. 新代码只走 `EditorWindowSession::tick` + `FEditorSurfaceContext`；`tick(App&)` 已删除（ES-5）。
 12. 文本输入走 `WidgetTree::wantsTextInput()`，禁止 Surface 特判具体 tab 类型。
-13. C4 按 ES-1 → ES-5 顺序；单元素 registry 稳定前不得创建第二扇 editor window。
+13. 第二扇 `EditorWindowSession` 只走 MW-401：独立 tree/dock，禁止两棵树画进同一 native window，禁止每窗 `IRender::create`。
 
 ## 收尾
 
@@ -72,3 +79,4 @@
 5. 运行 `git diff --check` 和 `python3 -m json.tool .agent/plan/gui-multi-os-window-editor/feature_matrix.json`。
 6. 检查 staged diff，排除其他 GUI/Editor/Workbench 改动。
 7. 同步 todo/progress/matrix；checkpoint 闭环后代码、测试、计划同一 commit。
+8. 若涉及 C7，额外验证 in-process floating 与 native-window placement 不混淆，且记录每个 window 的 WidgetTree/surface/snapshot 所有权。

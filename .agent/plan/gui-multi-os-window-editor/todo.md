@@ -1,6 +1,6 @@
 # GUI 多 OS Window / GameEditor 多 Editor TODO
 
-> 更新时间：2026-09-09。状态：`[ ]` 未开始，`[-]` 进行中，`[x]` 完成，`[~]` 条件延后。下一任务 **ES-3 root/nested ownership（selection/undo/actions 迁出 Surface）**。R-5 无 trace/性能证据，保持单 cmdBuf，不实施两次 submit。
+> 更新时间：2026-09-11。状态：`[ ]` 未开始，`[-]` 进行中，`[x]` 完成，`[~]` 条件延后。C15 已完成。剩余条件延后 R-5 / MW-901/902/903。不得把 Gallery extra 冒充 GameEditor soak，也不得把 R-5 写成完成。
 
 方向：[`plan.md`](plan.md)「冻结：device / present / camera」。Camera 链（`c2_view_model.md`）已冻结：C2 完成前不实现 N Camera / `FRenderViewDesc`。
 
@@ -31,6 +31,7 @@
 - [x] `MW-203` 实现 per-window Render2D pass/resource isolation：每窗口唯一 pass slot，静态 session 仅串行复用。验收：不同窗口 UI 不覆盖 vertex/descriptor/snapshot，offscreen parity 不退化；并行 recorder 不在本任务实现。
 - [x] `MW-206` 不可上屏 surface：最小化/zero extent 只 skip 该窗 acquire/present，delay swapchain recreate；AppKernel 与其它窗继续。验收：最小化 extra 时 primary 仍 present；恢复后下一帧 recreate；去掉 GameRuntime `_bMinimized` sleep。工件：[`c2_unpresentable_surface.md`](c2_unpresentable_surface.md)。不做 extra `renderAll`、N Camera。
 - [x] extra `GUIWindowManager::renderAll` present：共享 device 上每 extra 一扇 `IRenderSurfaceContext`；串行 compose；不可上屏 skip；resize 只 wait 该 surface。验收：`xmake r GUIWorkbench --extra-window --exit-after-frame=8` 双窗 swapchain present 后干净退出。
+- [x] `MW-207` 多窗口 present 消费方收口到 `IRenderSurfaceContext` / `ISwapchain`：`GUIAppHost`、`GUIWindowPresent`、`PresentationGraphService`、`RHISurfaceContextTest` 禁止 `as<VulkanSwapChain>()`；imported images 走 `buildPresentationImages`。验收：source-scan + `ya-rhi-vulkan-smoke` RHISurfaceContext。不做 OpenGL 多窗实现、N Camera、两次 submit。
 
 ## C2G — FeatureGallery 多窗口实例（gui-framework）
 
@@ -54,34 +55,70 @@ C1/C2 完成后再做。本步只走 `GUIApp` window API 与 GUIWorkbench，不�
 
 ## C4 — GameEditor session/tab 解耦（EditorSurface 迁移）
 
-C4 内部顺序固定为 ES-1 → ES-5。不得把 `EditorSurface` 改造成 window manager，也不得把 `EditorWindowSession` 做成更大的 god object。ES-5 完成前禁止创建第二扇 editor window。
+C4 内部顺序：ES-1 → ES-5、MW-401、MW-501、MW-502、MW-601、MW-602、C7、C8、C9-P、C9 soak 已完成。不得把 `EditorSurface` 改造成 window manager，也不得把 `EditorWindowSession` 做成更大的 god object。不得为第二扇窗复制 `IRender::create`。默认窗仍走 primary `IRenderSurfaceContext`；extra 走 `onAfterPresent` + `GUIWindowManager::renderAll`。
 
 - [x] `ES-1` 把 `tick(App&)` / `applyWindowMetrics(App&)` 改为消费 `FEditorSurfaceContext` 与 `EditorWindowMetrics`。验收：Surface 不再读 `App`/`IRender` window API；viewport frame state 由 context 注入；单窗口行为不变；保留 `tick(App&)` 仅作过渡 forwarding。
 - [x] `ES-2` 引入单元素 `EditorWindowRegistry` + `EditorWindowSession` 持有 Surface、window-root dock、tree/viewport binding。验收：`EditorModule` 不再直接持有 `_editorSurface`；事件/tick/snapshot 经 default window id 路由；仍只有一个 native window。
-- [ ] `ES-3` 落地 root/nested ownership：`WindowRootEditor` / `EditorOwnedTool` / `WindowTool`；`_selection`/`_actions`/`_undo` 迁出 Surface，归属 editor/document session。验收：窗口只引用当前激活 root editor；owned tool 带 `ownerEditorId`；不能跨 root editor dock。
-- [ ] `ES-4` / `MW-402` 解耦 `FEditorTabSpawnContext`：增加 windowId、scope、optional ownerEditorId、document key、placement/detach policy。验收：factory 只创建 UI content，不持有 Surface、不拥有 tree、不执行 tick。
-- [ ] `ES-5` 删除 `EditorSurface::tick(App&)` forwarding；事件、snapshot、viewport、dialogs、`wantsTextInput()` 全部按 window id 路由。验收：`WidgetTree::wantsTextInput()` 取代 `dynamic_cast<EditorInspectorTab*>`；`EditorInputNode` 读 session/tree capability。完成后才允许第二扇 `EditorWindowSession`。
-- [ ] `MW-401` 在 ES-5 完成且 GUI C1/C2 可用后，才扩展为两个 editor session 各自拥有 tree、window-root dock、nested editor-owned dock 和 viewport context。验收：owned tool 不能 dock 到其他 root editor/tab，但可按 policy 成为独立 editor window 并保留 ownerEditorId。
+- [x] `ES-3` 落地 root/nested ownership：`WindowRootEditor` / `EditorOwnedTool` / `WindowTool`；`_selection`/`_actions`/`_undo` 迁出 Surface，归属 editor/document session。验收：窗口只引用当前激活 root editor；owned tool 带 `ownerEditorId`；不能跨 root editor dock。
+- [x] `ES-4` / `MW-402` 解耦 `FEditorTabSpawnContext`：增加 windowId、scope、optional ownerEditorId、document key、placement/detach policy。验收：factory 只创建 UI content，不持有 Surface、不拥有 tree、不执行 tick。
+- [x] `WT-IME` 补齐 `WidgetTree::wantsTextInput()`（焦点路径 + focused widget capability）；删除 `EditorSurface` / `EditorInputNode` 对 `dynamic_cast<EditorInspectorTab*>`。验收：TextField/DragFloat/SpinBox/Inspector 走同一 tree API；GUI 不认识 Editor tab 类型。
+- [x] `DS-1` dock placement policy 从「owner root id」升级为「目标 dock scope + owner」。验收：owned tool 拒绝挂到错误 scope 的 dock，不只比较 root id；GUI `FDockContext` 仍不认识 editor root。C5 落地 nested dock 前，window-root host 仍可物化同 owner 的 owned tool（扁平兼容）。
+- [x] `ES-5` 删除 `EditorSurface::tick(App&)` forwarding；事件、snapshot、viewport、dialogs 全部按 window id 路由。前置：WT-IME、MW-207；host/Surface 不再经 `primarySwapchain()` 读窗。验收：`EditorInputNode` 经 registry `find(windowId)` 读 session/tree capability。完成后才允许第二扇 `EditorWindowSession`。
+- [x] `MW-401` 在 ES-5 完成且 GUI C1/C2 可用后，才扩展为两个 editor session 各自拥有 tree、window-root dock、nested editor-owned dock 和 viewport context。验收：owned tool 不能 dock 到其他 root editor/tab，但可按 policy 成为独立 editor window 并保留 ownerEditorId。产品路径仍只 present 默认 native window；nested dock 尚无 DockSpace chrome（C5）。
 
 ## C5 — 主窗口和旧 tab 迁移
 
-- [ ] `MW-501` main window bootstrap：Level Editor 常驻、不可关闭、旧 `editor.dockLayout` 兼容。
-- [ ] `MW-502` 迁移 Viewport/Hierarchy/Inspector/Content Browser/Runtime Tools 到 session-owned 路径。
+- [x] `MW-501` main window bootstrap：Level Editor 常驻、不可关闭、旧 `editor.dockLayout` 兼容。
+- [x] `MW-502` 迁移 Viewport/Hierarchy/Inspector/Content Browser/Runtime Tools 到 session-owned 路径。
 
 ## C6 — Document-backed editors
 
-- [ ] `MW-601` 定义 document identity、dirty、undo、close、singleton、preview ownership。
-- [ ] `MW-602` Material/UI/Script 作为 `WindowRootEditor` 主窗口 Dock tabs；各自 Preview/Parameters/Hierarchy/Inspector 作为 `EditorOwnedTool` nested leaves。
+- [x] `MW-601` 定义 document identity、dirty、undo、close、singleton、preview ownership。
+- [x] `MW-602` Material/UI/Script 作为 `WindowRootEditor` 主窗口 Dock tabs；各自 Preview/Parameters/Hierarchy/Inspector 作为 `EditorOwnedTool` nested leaves。
 
 ## C7 — 真实 tear-off/re-dock
 
-- [ ] `MW-701` root editor 或 detachable owned tool detach 到 native window：source detach → keep-alive owner/document state → create target window → attach target tree。
-- [ ] `MW-702` cross-window re-dock、owned tool 禁止挂到其他 root editor/tab、owner-aware close policy、空窗回收和 Level Editor 保护。
+- [x] `MW-701` 先冻结 `FDockFloatingPlacement`（不要把 `UIDockFloatingHost` 当 OS window）：显式区分 `InProcessOverlay` 与 `NativeWindow` projection，并记录 source dock scope / target window / ownerEditorId / document key。
+- [x] `MW-702` GUI Framework 实现 `IGUIWindowCoordinator` / `IGUIWindowSession`，并把 DockSpace 通用 orchestration 收回 Framework：每个 native window 一套 NativeWindow + RenderSurfaceContext + WidgetTree + snapshot/input/focus/presentation；共享 device 和 service，不共享 live WidgetTree，不复制 `IRender::create`。
+- [x] `MW-703` GUI Framework 完成 generic cross-window drag router：source/target window 路由、boundary enter/leave、keep-alive、deferred close、drop preview 与 source detach/target attach 事务；不得包含 EditorRootId/DocumentKey。
+- [x] `MW-704` GameEditor 接入 typed editor drag payload 与 placement policy：root editor / detachable owned tool detach 到 native window，保留 owner/document；跨 tree 迁移不得双挂载。
+- [x] `MW-705` cross-window re-dock、owned tool 禁止挂到其他 root editor/tab、owner-aware close policy、空窗回收和 Level Editor 保护。
+- [x] `MW-706` 增加 window chrome capability：macOS 默认 Hybrid（保留 traffic lights/safe-area），Windows 可选 ClientDrawn；GUI Framework 只使用 capability API，不把平台 non-client 逻辑泄漏到 Editor。
+- [x] `MW-707` persistence 保存 window topology + dock topology + placement mode；旧 in-process floating JSON 必须可迁移，不能把旧 Popup 坐标解释成屏幕坐标。
 
 ## C8 — 持久化与恢复
 
-- [ ] `MW-801` versioned `windows[]` envelope：bounds/monitor/maximized/role、root dock、root editor/document、nested owned dock、window tools、active/focus。
-- [ ] `MW-802` 坏 monitor、缺失 asset、窗口关闭中断时的安全恢复。
+- [x] `MW-801` versioned `windows[]` envelope：bounds/monitor/maximized/role、root dock、root editor/document、nested owned dock、window tools、active/focus。
+- [x] `MW-802` 坏 monitor、缺失 asset、窗口关闭中断时的安全恢复。
+
+## C9 — Release soak
+
+- [x] `C9-P` 产品 extra window present/input：`IRuntimeModule::onAfterPresent` 在 primary submit 之后（acquire 失败也调用）；`EditorModule` 持有 `GUIWindowManager`，启动 restore extra，OS close 先 `closeEditorWindow` 再 `tickTrees`/`renderAll`；extra 输入按 window id 路由，不进 default camera。DockSpace NoTarget 仍 overlay。不得把本步写成 C9 soak。
+- [x] 双窗口 GPU present / resize / close soak：共享 device 上 extra+primary 32 帧 present 并中途 recreate；`GUIWindowManager` 64 帧 `tickTrees`+resize/minimize/close 保 sibling；Editor tear-off 按产品 `onAfterPresent` 顺序 closeRequested → `closeEditorWindow`。Workbench `--extra-window --exit-after-frame=32` 干净退出。DockSpace NoTarget 仍 overlay；双 swapchain golden BMP 仍延后。
+
+## C10 — 产品 DockSpace NoTarget native tear-off
+
+- [x] `C10` DockSpace NoTarget：可拆 tab 经 `realizeNoTargetTearOff` → coordinator 开真实 OS window；Locked/Level 拒绝且不 overlay；未接线（Gallery / WidgetTree 测试）仍 InProcessOverlay。`FDockContext` / `EditorDockWorkspace` 不创建 native window；`EditorSurface` 不 include coordinator。Screen geometry 才作为 OS origin。不实现完整 extra menu chrome、R-5、N Camera。
+
+## C11 — Hybrid chrome safe-zone 与 DnD 回归
+
+- [x] `C11` macOS Hybrid：SDL safe-area 为 0 时仍保留 traffic-light 最小宽/高；`titleContent` 为 Client（菜单），仅 trailing gutter 为 Drag。Editor/Workbench 菜单避开红绿灯；extra hosted dock 吃 `contentInsets`。`UIDragSourceBehavior` 在 capture-on-press 时从 captured move 开 drag。不实现完整 extra editor menu chrome、R-5、N Camera。
+
+## C12 — Host 唯一 drag session
+
+- [x] `C12` 指针拖拽 session 由 `GUIDragRouter` 在 host 层唯一持有（GUIApp 与 GameEditor 共用）。WidgetTree 只保留 source-local payload/ghost/observer。跨窗 drop 走 router；唯一 tab extra NoTarget 移动现有窗或 reclaim 空源窗。不实现完整 extra editor menu chrome、R-5、N Camera。
+
+## C13 — Host 指针宇宙收口
+
+- [x] `C13` 同一 `GUIDragRouter` 持有 capture 所属窗、OS cursor、IME 窗、extra OS clipboard、树内 modal 的 app-modal 阻挡。不新造 router。不实现完整 extra editor menu chrome、R-5、N Camera、FontManager per-window DPI。
+
+## C14 — Dock drop target seam
+
+- [x] `C14` 把 `UIDockSpace::FDropPreview` 的 bool soup 收口为 `EDockDropTargetKind` / `FDockDropTarget`；`resolveDropPreview` 拆成 floating well / tab well / tab stack。不公开 `UIDockTabWell`/`UIDockTabStack` 控件。视觉语义不变。不实现 `FDockContext::commitDrop`、GameEditor policy 改签名、R-5、N Camera。
+
+## C15 — Stack projection + TabRegistry / DockLayout seam
+
+- [x] `C15` `FLeafView` 改名为 `FDockStackView`；`EDockNodeKind::Stack` 取代公开 `Leaf`；`FDockContext` 内部分成 `FTabRegistry` + `layout()`；drop 提交收到 `commitDrop`；overlay floating 自己产生 `FloatingTabWell`。不公开 `UIDockTabWell`/`UIDockTabStack` 控件。JSON 仍可读 `"leaf"`，写出 `"stack"`。不改 GameEditor policy 签名、R-5、N Camera。
 
 ## 条件延后
 

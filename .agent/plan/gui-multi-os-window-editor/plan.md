@@ -1,6 +1,6 @@
 # GUI Framework 真正多 OS Window 与 GameEditor 多 Editor 计划
 
-> 建立日期：2026-09-08；状态：实施中。下一编码入口 **ES-3**（selection/undo/actions 迁出 Surface）。R-5 无证据，保持一条 cmdBuf。ES-2 单元素 window registry 已闭环。
+> 建立日期：2026-09-08；状态：实施中。C15 DockStackView / TabRegistry / commitDrop 已完成。剩余条件延后 R-5 / MW-901/902/903。R-5 无证据，保持一条 cmdBuf。
 > Camera / N 视图已冻结。最小化/不可上屏见 [`c2_unpresentable_surface.md`](c2_unpresentable_surface.md)（**MW-206** 已完成）。
 > 细节：[`c2_present_compose_model.md`](c2_present_compose_model.md)、[`c2_view_model.md`](c2_view_model.md)。
 
@@ -114,6 +114,72 @@ view matrix 不是 window state，也不是 BaseRenderPipeline 的隐式全局�
 推荐一个 native window 对应一个 `WidgetTree`，但所有窗口由一个 `GUIApplication`/`GUIWindowManager` 统一 loop 调度。共享 `IRender` device、shader/font/texture services；每个窗口独立拥有 WidgetTree、snapshot、surface/swapchain、focus/capture 和 Render2D pass slot。
 
 不采用一个 WidgetTree 管多个 OS window：pointer/focus/capture、tooltip/popup、DPI、clip、snapshot 和销毁边界都会被迫增加 window 维度。也不为每个 window 建独立 while-loop。
+
+### Floating placement 与 native window 语义（冻结）
+
+DockNode、floating placement、in-process floating projection 和 native OS window 不是同一个对象：
+
+```text
+FDockTreeModel / FDockContext
+  ├─ docked projection       → UIDockSpace
+  ├─ in-process floating    → UIDockFloatingHost（同一 OS window / 同一 WidgetTree）
+  └─ native-window floating → GUIWindowSession（新 OS window / 新 WidgetTree）
+```
+
+- `DockNode` 只表示 split/leaf/tab 的布局模型，不持有 OS window 或 GPU 资源。
+- 现有 `FDockContext::FFloatingWindow` 已重命名为 `FDockFloatingPlacement`；它记录 panel 集合、tab 顺序、位置尺寸、source dock scope、opaque `ownerEditorId`、document key 和 projection mode。
+- `UIDockFloatingHost` 是 `InProcessOverlay` projection，继续使用 Popup 层和当前 surface；它不是 native multi-window。
+- 真正的 detach 由 GUI window coordinator 创建 `GUIWindowSession`，为目标窗口创建 native window、surface/swapchain、WidgetTree、snapshot、input/focus 和 presentation。
+- 一个 live `UIElement` 不得同时挂在两棵 WidgetTree；跨窗移动必须是 source detach → placement/session ownership transfer → target attach/rebuild 的事务。
+- 一个 native window 对应一棵 WidgetTree；共享的是 document/editor/session/service，不是 live widget tree。
+- `FDockContext` 不负责创建 native window。它只发布 detach/redock/placement 变化，GUI Framework 的 coordinator 执行窗口生命周期，GameEditor 负责 editor owner、document、close policy 和 tab scope。
+
+因此 C7 必须先实现 `InProcessOverlay` 与 `NativeWindow` 两种模式的显式数据模型，再实现 root editor / owned tool 的真实 tear-off；不能把现有 `UIDockFloatingHost` 改名后冒充 OS window。
+
+### Window chrome / 平台能力策略（冻结）
+
+GUI Framework 不假设 macOS 和 Windows 的非客户区能力相同，也不在上层散落平台判断。native window 暴露 capability-driven chrome API：
+
+```cpp
+enum class EWindowChromeMode
+{
+    Native,
+    Hybrid,
+    ClientDrawn
+};
+```
+
+至少需要抽象：titlebar 内容布局、drag region、resize hit-test、system buttons、safe-area、shadow、fullscreen/maximize 和 accessibility 能力。
+
+- macOS 默认采用 `Hybrid`：允许透明/隐藏标题文字和 full-size content view，自绘 title/tab/toolbar，但保留系统 traffic lights、窗口安全区及 AppKit 的窗口行为。完全 borderless 作为显式 capability，不作为默认路径。
+- Windows 可支持 `ClientDrawn`，但仍需保留或重建 resize、snap、maximize/restore、system menu、DPI、accessibility 和 shadow 行为；“隐藏全部边框”不是免费能力。
+- Linux/其他平台默认 `Native` 或 `Hybrid`，由 backend capability 决定。
+
+这套 chrome 策略属于 GUI Framework 的 `NativeWindow`/platform backend；Dock、EditorSurface 和 tab spawner 不得直接操作 NSWindow/Win32 non-client API。
+
+### Dock / floating / cross-window drag 的层级归属（冻结）
+
+完整的 DockSpace 行为属于 GUI Framework，不是 GameEditor 的重复实现。
+
+GUI Framework 必须提供：
+
+- dock tree、split/leaf/tab projection、hit-test、drop preview、tab reorder；
+- in-process floating 与 native-window floating 两种 projection；
+- generic drag session、source/target window 路由、boundary enter/leave、keep-alive、deferred close；
+- source detach → target accept → attach/rebuild 的生命周期事务；
+- IGUIWindowCoordinator / IGUIWindowSession 和每窗 WidgetTree/surface/presentation；
+- 不包含 EditorRootId、DocumentKey、EditorOwnedTool 等业务类型。
+
+GameEditor 只提供：
+
+- tab spawner、WindowRootEditor / EditorOwnedTool / WindowTool scope；
+- ownerEditorId、document identity、selection/undo/close policy；
+- typed editor drag payload 和 canAcceptDrop(target, payload) placement policy；
+- detach 后应创建哪种 editor session、回 dock 到哪个 scope，以及 owner 关闭时的处理。
+
+调用方向固定为：GameEditor placement policy → GUI DockContext requestDetach/requestDrop → GUI cross-window drag router → target WidgetTree / Dock projection → GameEditor typed policy accept/reject。
+
+GameEditor 不得重新监听 SDL 事件来实现跨窗拖拽，也不得直接创建 SDL/NSWindow/Win32 window。GUI Framework 负责“怎么拖、怎么命中、怎么迁移”；GameEditor 负责“这个 editor tab 能否放到目标 scope”。
 
 ## 当前仓库事实
 
@@ -267,7 +333,7 @@ EditorWindowSession::tick
 - `EditorOwnedTool`（Hierarchy/Inspector/Preview/UI Tree）：挂在所属 root editor 的 nested DockContext；可 tear-off，但必须保留 `ownerEditorId`，不能 dock 到其他 root editor/tab。
 - `WindowTool`（Content Browser/Output/Runtime Tools）：不绑定 editor/document，按 window policy 停靠或独立。
 
-`wantsTextInput()` 必须一起迁移。删除 `dynamic_cast<EditorInspectorTab*>`；改为 `WidgetTree::wantsTextInput()`，由 focus path 与 focused widget capability 判断。Inspector / Material / Script 都不需要被 Surface 特判。`EditorInputNode` 改为读 window session / tree capability。
+`wantsTextInput()` 已迁到 `WidgetTree`（WT-IME）：沿 focus path 问 widget capability。Inspector / Material / Script 不被 Surface 特判。`EditorInputNode` 读 window session / tree capability。
 
 ### EditorSurface 迁移 checkpoint
 
@@ -331,7 +397,7 @@ RHI 目标是共享一个 device、每窗口 surface/swapchain/frame resources�
 
 Swapchain recreate / extra context 析构只 wait **该** surface 的 graphics fence + present-complete fence（present 之后的 empty submit），禁止 `vkDeviceWaitIdle` / 共享 queue `waitIdle`。GUI 最小化跳过 present，不 idle 整 device。进程退出销毁 device 仍可用 `IRender::waitIdle()`。
 
-`MW-001`..`MW-004`、`MW-101`/`MW-102`、`MW-201`/`MW-201c`/`MW-201d`、`MW-202`、`MW-203`、`MW-206`、extra `renderAll`、`MW-204`/`MW-205`、`MW-301`、`ES-1`、`ES-2`、`R-1`、`R-2`、`R-3`、`R-4` 已闭环。R-5 两次 submit 仅在有证据时，当前延后。下一编码：`ES-3`。
+`MW-001`..`MW-004`、`MW-101`/`MW-102`、`MW-201`/`MW-201c`/`MW-201d`、`MW-202`、`MW-203`、`MW-206`、extra `renderAll`、`MW-204`/`MW-205`、`MW-207`、`MW-301`、`ES-1`、`ES-2`、`ES-3`、`ES-4`、`WT-IME`、`DS-1`、`ES-5`、`MW-401`、`MW-501`、`MW-502`、`MW-601`、`MW-602`、`MW-701`、`MW-702`、`MW-703`、`MW-704`、`MW-705`、`MW-706`、`MW-707`、`MW-801`、`MW-802`、`C9-P`、`C9`、`C10`、`C11`、`R-1`、`R-2`、`R-3`、`R-4` 已闭环。R-5 两次 submit 仅在有证据时，当前延后。
 
 ## GUI Framework 实施轨道
 
@@ -406,7 +472,10 @@ root editor、detachable owned tool 和 policy 允许的 WindowTool 都可以成
 
 ### E6：窗口拓扑持久化
 
-在旧 tree-only `editor.dockLayout` 之上增加 versioned `windows[]` envelope，保存 bounds/monitor/maximized/role、window-root dock、root editor/document、nested owned dock、独立 owned-tool windows、window tools、active/focus；owned tool 必须保存 `ownerEditorId` 与当前 placement。坏 monitor、缺失 asset、旧 JSON 或 owner 缺失必须安全降级。
+MW-707 已把 dock JSON 的 overlay `floating[]` 与 NativeWindow `windows[]` 拆开；旧 Popup
+坐标永不升格为屏幕坐标。MW-801 已落地 Editor envelope 顶层 `windows[]`（bounds/monitor/maximized/role）。
+MW-802 已落地坏 monitor 迁到可用屏、缺失 document/unknown owner 丢弃且不改绑、`closing: true` / 空 extra 不恢复。
+产品启动 recover 主窗 placement，并经 coordinator restore extra（C9-P）；DockSpace 可拆 tab 的 NoTarget 拖出走 native window（C10），未接线时仍 overlay。
 
 恢复顺序必须是：先创建 window，再创建 root editors，再创建并绑定 nested/独立 owned tools，最后恢复 window tools、active tab 和 focus；任何 owned tool 找不到 owner 时丢弃该 placement 或回退到默认 owner，不允许静默改绑到其他 root editor。
 
@@ -425,7 +494,12 @@ root editor、detachable owned tool 和 policy 允许的 WindowTool 都可以成
 | C6 | Editor | Material/UI/Script root editors 与 owned-tool nested dock |
 | C7 | Editor | root editor/owned tool tear-off-re-dock，owned tool 不得 dock 到其他 root editor/tab |
 | C8 | Editor | window topology persistence 和 recovery |
+| C9-P | Editor/Runtime | 产品 extra OS window restore + present/input（`onAfterPresent`）；不是 soak |
 | C9 | Release | 双窗口、GPU parity、长时 resize/close/drag soak |
+| C10 | Editor | 产品 DockSpace NoTarget 对可拆 tab 开真实 OS window；未接线仍 overlay |
+| C11 | GUI/Editor | Hybrid safe-zone：菜单在 traffic lights 右侧 Client；拖拽 gutter 才是 SDL drag；Workbench/Editor/extra dock 消费 `queryWindowChromeLayout`；DnD capture 可开 session |
+| C12 | GUI/Editor | `GUIDragRouter` 是每个 input universe 唯一 drag session；GameEditor 跨窗 tab drop；唯一 tab extra 不产 empty leaf 窗 |
+| C13 | GUI/Editor | 同一 router 收口 capture 所属窗、OS cursor、IME、extra clipboard、app-modal；不新造 router |
 
 每个 checkpoint 的代码、测试和 plan/progress/matrix 必须同一提交；不能用拆文件、registry、placeholder 或纯文档冒充 feature 完成。
 
@@ -454,3 +528,4 @@ GameEditor：main window 永远有 Level Editor；Material/UI/Script 可作为 t
 - `IRender::primarySwapchain()` / `primaryFrameIndex()` 不是新代码的 viewport/flight API；用持有的 surface context 与 `FrameInput.flightIndex`。
 - swapchain recreate / GUI rebuild / extra close 只 wait 该 surface 的 fence（MW-202 已落地）；禁止再引入 `vkDeviceWaitIdle` 卡住其他窗。
 - 最小化 / zero extent：只 delay 该 PresentSurface 的 present；禁止进程级 sleep 或跳过其它窗（MW-206）。
+- 指针拖拽 session 对每个 input universe 唯一（`GUIDragRouter`）；同一对象还持有 capture 所属窗、IME 窗与 app-modal。`WidgetTree` 只持有 source-local payload/ghost/capture widget。不是 `GUIApp` 单例，也不是进程单例。GameEditor 与 GUIApp 共用 router。

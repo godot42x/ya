@@ -494,3 +494,597 @@ extra `GUIWindowManager::renderAll` present。不要开始 Feature Gallery `Wind
 ### 下一接力点
 
 `ES-3`：落地 `WindowRootEditor` / `EditorOwnedTool` / `WindowTool`；`_selection` / `_actions` / `_undo` 迁出 Surface。禁止第二扇 editor window、N Camera、两次 submit。
+
+## 2026-09-09 — C4 ES-3（EditorRootSession ownership）
+
+### 完成
+
+- `EditorRootSession` 持有 Level Editor 的 selection / actions / undo；`EditorWindowSession::activeRoot()` 是窗口对当前 root 的唯一引用。
+- `EditorSurface` 不再拥有这三份模型；chrome 经 `_rootSession` 引用；project browser 用窗口局部 `_projectSelection`。rebuild 不再重建 undo/selection。
+- Builtin spawners 按 MW-003 标注 `EEditorTabScope` + `ownerEditorId`（viewport/hierarchy/inspector → Level owned tools）。
+- `canDockEditorTab`：owned tool 只能落到其 owner root；`EditorDockWorkspace::materializeTab` 拒绝其他 root。
+- 验收：`EditorRootSessionTest`；`EditorTabSpawnerRegistryTest.BuiltinOwnedToolsBindToLevelEditor`；Surface.h 无 `_selection`/`_actions`/`_undo`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：仍一扇 native window、一个 Level `EditorRootSession`；ui-designer 标成 WindowRootEditor 但没有第二份 root session（C6）；扁平 window-root dock，没有 nested editor-owned dock（C5）；`FEditorTabSpawnContext` 仍是必选 selection/actions/undo 引用（ES-4）；`tick(App&)`（ES-5）。
+- 未完成：ES-4 spawn context 字段；ES-5 删 `tick(App&)`；C5 Level 常驻 nested dock。
+- 偏离：live dock drag 仍走 GUI `FDockContext`（框架不认识 editor root）；跨 root 拒绝发生在 materialize/invoke。没有第二扇 editor window。
+
+### 下一接力点
+
+`ES-4`：`FEditorTabSpawnContext` 增加 windowId、scope、optional ownerEditorId、document key、placement/detach；factory 只创建 UI，不持有 Surface。禁止第二扇 editor window、N Camera、两次 submit。
+
+## 2026-09-09 — C4 ES-4（spawn context identity + optional owner pointers）
+
+### 完成
+
+- `FEditorTabSpawnContext` 携带 `windowId` / `scope` / optional `ownerEditorId` / `documentKey` / `placement` / `detachPolicy`；`tree` / `layer` / `selection` / `actions` / `undo` / `viewportHost` 改为可空指针。
+- `FEditorTabSpawner` 同步带 placement/detach；`EditorDockWorkspace::makeSpawnContext(spawner)` 从 host + spawner 填 identity，不解引用空 host。
+- Builtin：viewport Locked nested；hierarchy/inspector TearOffKeepOwner nested；window tools / ui-designer IndependentWindow。owned factory 缺 owner 状态返回 nullptr；`runtime-tools` 可在全空 context 下 spawn。
+- factory 不持有 `EditorSurface*`、不拥有 tree、不调用 `tick()`。
+- 验收：`SpawnContextAllowsNullPointersAndNoSurface`；`RuntimeToolsSpawnWithNullTreeAndLayer`；`OwnedToolSpawnReturnsNullWithoutOwnerState`；`MakeSpawnContextCopiesWindowAndSpawnerIdentity`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：仍一扇 native window、一个 Level `EditorRootSession`；扁平 window-root dock（C5）；`tick(App&)`（ES-5）；ui-designer 无第二份 root session（C6）。
+- 未完成：ES-5 删 `tick(App&)` 与 `dynamic_cast<EditorInspectorTab*>` IME；C5 nested owned dock；第二扇 session。
+- 偏离：placement `EditorOwnedNested` 仍物化进同一扁平 dock。没有第二扇 editor window。
+
+### 下一接力点
+
+`ES-5`：删除 `EditorSurface::tick(App&)` forwarding；`wantsTextInput()` 走 `WidgetTree` capability。完成后才允许第二扇 `EditorWindowSession`。禁止 N Camera、两次 submit。
+
+## 2026-09-09 — C2 MW-207（present 消费方去掉 VulkanSwapChain hard-code）
+
+### 完成
+
+- `GUIAppHost` 用 `ISwapchain` 读 format/extent/handle，recreate 走 `IRenderSurfaceContext::requestRecreate()`。
+- `PresentationGraphService::rebuildImages` 走 `IRenderSurfaceContext::buildPresentationImages`，不再 `as<VulkanSwapChain>()` / `getVkImages()`。
+- `RHISurfaceContextTest` present/resize/minimize 只调 surface `begin`/`end`/`requestRecreate`。
+- 验收：`RenderRuntimeSnapshotTest.HostPresentCoordinatorOwnsAcquireAndPresent` source-scan；`ya-rhi-vulkan-smoke` `RHISurfaceContext.*`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：GUI host 产品后端仍选 `ERenderAPI::Vulkan`；`VulkanRenderSurfaceContext` 仍是 Vulkan 实现；OpenGL 无 `createSurfaceContext`；`IRender::primarySwapchain()` 仍作 bootstrap/兼容。
+- 未完成：WT-IME、DS-1、ES-5（删 `tick(App&)` 与剩余 `primarySwapchain` 读窗）、OpenGL 多窗。
+- 偏离：无。未做 N Camera、两次 submit。
+
+### 下一接力点
+
+`WT-IME`：`WidgetTree::wantsTextInput()` + 删除 Inspector `dynamic_cast`。禁止第二扇 editor window、N Camera、两次 submit。
+
+## 2026-09-09 — C4 WT-IME（WidgetTree text-input capability）
+
+### 完成
+
+- `WidgetTree::wantsTextInput()` 沿 `getFocusPath()` 问 `UIElement::wantsTextInput()`。
+- `UITextField` 始终；`UIDragFloat` / `UISpinBox` 仅 `_bEditing`；ColorEdit picker 仅 hex 编辑。
+- `EditorSurface` / `EditorInputNode` 转发 tree；删除 Inspector / AutoPropertySection 的 IME 特判和 Surface 对 `EditorInspectorTab.h` 的 include。
+- 验收：`WidgetTreeTest.WantsTextInput*`；`ToolControlsTest` DragFloat/SpinBox/ColorEdit hex；`EditorWindowSessionTest.ImeUsesTreeCapabilityNotInspectorCast`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：仍一扇 native window；`tick(App&)`；扁平 dock；`primarySwapchain()` bootstrap。
+- 未完成：ES-5 删 `tick(App&)` 与剩余 `primarySwapchain` 读窗。
+- 偏离：无。没有第二扇 editor window。
+
+### 下一接力点
+
+`ES-5`：删除 `EditorSurface::tick(App&)` forwarding；事件、snapshot、viewport、dialogs 按 window id 路由；host/Surface 不经 `primarySwapchain()` 读窗。完成后才允许第二扇 `EditorWindowSession`。禁止 N Camera、两次 submit。
+
+## 2026-09-09 — C4 DS-1（dock placement = 目标 dock scope + owner）
+
+### 完成
+
+- `canDockEditorTab(tab, targetPlacement, targetRootId)`：WindowTool / WindowRootEditor 只能进 window-root dock；owned tool 只能进同 owner 的 nested dock，C5 前也可进同 owner 的扁平 window-root dock。
+- `EditorDockWorkspace::FHost.targetPlacement` 是目标 dock scope；`materializeTab` / layout import 拒绝错误 scope，不只比较 `activeRootId`。
+- 当前 chrome host 显式声明 `WindowRootDock`。GUI `FDockContext` 不包含 editor root / scope 类型。
+- 验收：`EditorRootSessionTest` 政策；`EditorDockWorkspaceTest` WindowTool-in-nested、other-root nested、layout 剔除 WindowTool；`EditorWindowSessionTest` host scope + DockContext source-scan。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：仍一扇 native window、一个 Level `EditorRootSession`；扁平 window-root dock（C5）；`tick(App&)` 转发已在 Surface 删除但仍需 ES-5 收口路由与 `primarySwapchain` 读窗。
+- 未完成：ES-5；C5 nested owned dock；第二扇 session。
+- 偏离：placement `EditorOwnedNested` 仍可物化进 window-root dock（C5 扁平兼容）。没有第二扇 editor window。
+
+### 下一接力点
+
+`ES-5`：删除 `tick(App&)` 残留、按 window id 路由事件/snapshot/viewport/dialogs；host/Surface 不经 `primarySwapchain()` 读窗。禁止第二扇 editor window、N Camera、两次 submit。
+
+## 2026-09-09 — C4 ES-5（按 window id 路由；删 tick(App&)）
+
+### 完成
+
+- `EditorSurface::tick(App&)` / `EditorWindowSession::tick(App&)` 已不存在；只走 `tick(const FEditorSurfaceContext&)`。
+- `EditorInputNode` 持有 `EditorWindowRegistry*` + `EditorWindowId`，经 `find(windowId)` 取 session；dialogs / snapshot / viewport 同样按 window id。
+- host/Surface/`EditorModule` 不再经 `primarySwapchain()` / `primaryWindow()` 读窗；metrics 来自注入的 `IRenderSurfaceContext`。
+- 验收：`EditorWindowSessionTest.TickAppForwardingIsGone`、`HostAndSurfaceDoNotReadPrimarySwapchain`、`InputRoutesByWindowId`；`EditorInputContractTest` IME。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：仍一扇 native present surface（`getPrimarySurfaceContext`）；`RuntimeRenderSettingsSection` 仍经 `primarySwapchain()` 改 vsync（WindowTool，不是 host/Surface）；扁平 window-root dock（C5）。
+- 未完成：MW-401 第二扇 session；C5 nested owned dock chrome。
+- 偏离：无第二扇 editor native window。未做 N Camera、两次 submit。
+
+### 下一接力点
+
+`MW-401`：两个 editor session 各自拥有 tree、window-root dock、nested owned dock、viewport context。禁止两棵树画进同一 native window，禁止每窗 `IRender::create`。
+
+## 2026-09-09 — C4 MW-401（两个 editor session）
+
+### 完成
+
+- `EditorWindowRegistry` 可 `create` / `destroy` extra session；默认窗不能销毁。selection / Surface / window-root dock / nested owned dock / viewport overlay 隔离。
+- 每个 `EditorSurface` 持有 window-root `FDockContext` + owned nested `FDockContext`；rebuild 分别 bind `WindowRootDock` / `EditorOwnedNested` workspace。
+- `EditorModule::onDetach` 对全部 session `shutdown`。产品路径仍只 tick/present 默认 native window。
+- 验收：`EditorWindowSessionTest.RegistryCreatesIsolatedSecondSession`；`EditorDockWorkspaceTest.TwoSessionsOwnIndependentRootAndNestedDocks`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品仍一扇 native present surface；owned tools 仍扁平进 window-root layout；nested dock 没有 `UIDockSpace` chrome。
+- 未完成：C5 MW-501 Level 常驻 nested dock chrome；MW-502 旧 tab 迁到 session-owned 路径；C7 真实 tear-off。
+- 偏离：没有第二扇 editor OS window。未做 N Camera、两次 submit、每窗 `IRender::create`。
+
+### 下一接力点
+
+`MW-501`：主窗口 Level Editor 常驻、不可关闭，owned tools 进 nested dock chrome，兼容旧 `editor.dockLayout`。禁止两树一窗、N Camera、两次 submit。
+
+## 2026-09-10 — C5 MW-501（Level Editor 常驻 nested dock）
+
+### 完成
+
+- Builtin `level-editor`：Locked `WindowRootEditor`，spawn 出 `EditorLevelEditorTab`（nested `UIDockSpace` 投影 session 的 owned `FDockContext`）。
+- `canDockEditorTab` 不再允许 owned tool 进 window-root；`invokeTab` 从 window-root 转发到 nested workspace。
+- 两个工厂布局：`DefaultEditorDockLayout.json`（level + window tools）与 `DefaultEditorOwnedDockLayout.json`（viewport/hierarchy/inspector）。Locked tab `setPanelClosable(false)`；reset 先强制 closable 再关。
+- `editor.dockLayout` v2 `{version:2, windowRoot, ownedNested}`；v1 扁平文档 remap 到两个工厂（自定义 split 丢失）。
+- 验收：`FactoryLayoutPlacesDefaultTabs`、`FactoryOwnedNestedLayoutPlacesOwnedTools`、`LayoutDocumentForPlacement*`、`OwnedToolDocksOnlyUnderItsRoot`、`MaterializeRejectsOwnedToolInWindowRootEvenMatchingOwner`、`InvokeTabForwardsOwnedToolToNestedWorkspace`、`LockedTabRejectsClose`、`BuiltinLevelEditorSpawnRequiresNestedDock`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品仍一扇 native present surface；extras 可在 registry 创建但不 tick/present；ui-designer 仍是 WindowRootEditor 但无独立 root session（C6）；in-window floating，不是 native tear-off（C7）。
+- 未完成：MW-502 把 Viewport/Hierarchy/Inspector/Content/Runtime 从「仍像整窗工具」收口到明确的 session-owned 路径；C6 Material/Script nested；C7 真实 OS tear-off。
+- 偏离：v1 自定义 dock split 不保留，只保 tab 集合语义。未做 N Camera、两次 submit、每窗 `IRender::create`、两树一窗。
+
+### 下一接力点
+
+`MW-502`：迁移 Viewport/Hierarchy/Inspector/Content Browser/Runtime Tools 到 session-owned 路径。禁止把 Surface 改成 window manager。
+
+## 2026-09-10 — C5 MW-502（旧 tab session-owned 路径）
+
+### 完成
+
+- `FEditorSurfaceContext.presentSurface` 与 spawn context `app` / `presentSurface` 由窗口 session 注入；Surface rebuild 消费完整 context。
+- Viewport spawn 无 host 返回 nullptr。Inspector 必选 owner `SelectionModel`，目标实体经 `editorSelectionEntities` 解析（session ids，否则 Layer fallback）。
+- Content Browser 经 `EditorLayer::cmdLoadScene`，不再 `App::get()`。Runtime Tools play/stop 走 ActionMap；vsync/present 走 `IRenderSurfaceContext::getSwapchain()`，不再 `primarySwapchain()`。
+- 验收：`BuiltinViewportSpawnRequiresHost`、`OwnedToolSpawnReturnsNullWithoutOwnerState`（inspector 仅 selection 仍拒绝）、`MakeSpawnContextCopiesWindowAndSpawnerIdentity` 复制 app/presentSurface、`SessionOwnedTabsDoNotUseAppGetOrPrimarySwapchain`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品仍一扇 native present surface；Runtime Diagnostics/DebugPrimitives 段仍用过程级 `App::get()`（非 present）；ActionMap 的 play/exit 内部仍调 App（session 边界在 ActionMap）；EditorLayer 仍是共享 document。
+- 未完成：C6 MW-601 document identity；MW-602 Material/Script nested；C7 真实 OS tear-off。
+- 偏离：未做 N Camera、两次 submit、每窗 `IRender::create`、两树一窗。未把 App 从 ActionMap/Layer 命令里删掉。
+
+### 下一接力点
+
+`MW-601`：定义 document identity、dirty、undo、close、singleton、preview ownership。禁止把 Surface 改成 window manager。
+
+## 2026-09-10 — C6 MW-601（document identity）
+
+### 完成
+
+- `FEditorDocumentId` / `EditorDocumentSession` / `EditorDocumentRegistry`：identity、dirty、undo、close policy、bindCount、per-kind preview claim。Registry 归 `EditorModule`，不归 Surface / WindowSession。
+- Level scene：window `bindSceneDocument` 按路径单例；`EditorRootSession::undo()` 转发到 document。两窗同 key 共享 undo；切路径后 unused session discard。
+- UI Designer：`RejectIfDirty` close、save 清 dirty、structural edit / drag `markDirty`、Close 按钮走 `closeDocument()`；scene-entry 按 `sceneName#entryId` 单例；preview claim 按 kind 互斥（不是 Camera）。
+- 验收：`EditorDocumentSessionTest` singleton/dirty/Locked/bindCount/preview/shared undo/source-scan；`UIDesignerPanelTest.DocumentRegistryTracksDirtyCloseAndSingleton`、`OpenSceneEntrySharesDocumentSession`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品仍一扇 native present surface；Level 仍共享 `EditorLayer` scene；ui-designer 仍无独立 `EditorRootSession`（MW-602）；in-window floating，不是 native tear-off（C7）。
+- 未完成：MW-602 Material/Script nested owned tools；UI Designer inspector 字段编辑不自动 markDirty；无 save/discard 对话框（脏 Close 直接拒绝）。
+- 偏离：未做 N Camera、两次 submit、每窗 `IRender::create`、两树一窗。未把 Material/Script spawners 塞进本 checkpoint。
+
+### 下一接力点
+
+`MW-602`：Material/UI/Script 作为 `WindowRootEditor` 主窗口 Dock tabs，各自 Preview/Parameters/Hierarchy/Inspector 作为 `EditorOwnedTool` nested leaves。禁止把 Surface 改成 window manager。
+
+## 2026-09-10 — Floating placement / native window 语义冻结
+
+### 决策
+
+- 明确区分 `DockNode`、`FDockFloatingPlacement`、`UIDockFloatingHost` 和 native `GUIWindowSession`。现有 floating host 是同一 OS window / WidgetTree 内的 `InProcessOverlay`，不是 native multi-window。
+- 一个 native window 只拥有一棵 WidgetTree、一个 snapshot/input/focus 域和一套 surface/presentation；共享的是 device、document/editor session 和服务，不是 live widget tree。
+- 跨窗移动采用 source detach → placement/session ownership transfer → target attach/rebuild；禁止同一 live widget 双挂载。
+- `FDockContext` 继续只管理 dock model、placement 和 policy，不创建 native window；GUI coordinator 负责窗口生命周期，GameEditor 负责 owner/document/tab scope/close policy。
+- Window chrome 作为 GUI Framework platform capability：macOS 默认 Hybrid（保留 traffic lights、safe-area 和 AppKit 行为），Windows 可选 ClientDrawn 但必须保留 resize/snap/system/accessibility 等语义；Editor/Dock 不直接依赖平台 non-client API。
+
+### 影响
+
+- C7 拆成 MW-701～MW-706：先冻结 placement/projection 数据模型，再实现 coordinator/session、跨 tree tear-off、re-dock/close、chrome capability 和 topology persistence。
+- 现有 `UIDockFloatingHost`、Popup 坐标和 layout JSON 只能作为 in-process floating 兼容路径；不能直接解释为屏幕坐标或 OS window geometry。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：C1-C6 已完成的每窗 WidgetTree、共享 device、per-surface presentation、Level root/owned-tool scope 和 ES-5 Surface 解耦。
+- 未完成：真实 native tear-off、window topology persistence、跨平台 chrome backend 和 OpenGL/其他 backend 的窗口能力实现。
+- 偏离：无代码实现；本轮只更新计划语义和验收边界。
+
+### 下一接力点
+
+`MW-602` 继续 Material/UI/Script root editor 迁移；C7 开始前先完成 `MW-701` placement/projection contract，禁止把现有 in-process floating 当作 native window 完成证据。
+
+## 2026-09-10 — C6 MW-602（Material/UI/Script WindowRootEditor + nested owned tools）
+
+### 完成
+
+- `EditorWindowSession` 持有 Level / UI / Material / Script 四个 `EditorRootSession`；Surface 只拿 `FEditorRootSessions` 指针袋。UI/Material/Script 的 nested `FDockContext` 由 `EditorNestedDockHost` 持有（关闭 floating/tear-off），不把 Surface 做成 dock manager。
+- `ui-designer` 是 `kUIEditorRootId` WindowRootEditor；Preview / Palette / Tree / Inspector 是 nested owned tools，UI 树与 Level Hierarchy 隔离。Material/Script 同样是 WindowRootEditor + Preview/Parameters/Hierarchy/Inspector document tools（identity / dirty / undo / preview claim chrome）。
+- `invokeTab` 从 window-root 打开 owned tool 时先物化对应 root tab 再进其 nested。Content Browser `.lua` / `.mat` 经 Layer `openDocumentEditor` 绑定 document、claim preview、打开 root tab。
+- 验收：`BuiltinOwnedToolsBindToLevelEditor`（ui-designer owner=UI；material/script spawners）；`UIOwnedToolCannotDockInLevelNested` / `UIOwnedToolCannotMaterializeInLevelNested`；`InvokeMaterialOwnedToolOpensRootThenNested`；`FactoryOwnedNestedLayoutForUIDoesNotUseLevelTree`；`MaterialAndScriptRootsHaveIsolatedUndoAndSelection`；`SessionOwnedTabsDoNotUseAppGetOrPrimarySwapchain` 覆盖新 tab 源文件。57 相关测试通过。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品仍一扇 native present surface；Level 仍共享 `EditorLayer` scene；UI 画布仍是 Level 2D viewport（PreviewTarget，不是 Camera）；`editor.dockLayout` v2 `ownedNested` 只持久化 Level；in-window floating，不是 native tear-off（C7）。
+- 未完成：Material/Script 还不是 material graph / script AST 编辑器；UI Designer inspector 字段编辑不自动 markDirty；无 save/discard 对话框（脏 Close 直接拒绝）；UI/Material/Script nested layout 不写入 `windows[]`（C8）。
+- 偏离：未做 N Camera、两次 submit、每窗 `IRender::create`、两树一窗。未开始 C7 tear-off。
+
+### 下一接力点
+
+`MW-701`：root editor 或 detachable owned tool detach 到 native window。禁止把 Surface 改成 window manager。
+
+## 2026-09-10 — C7 MW-701（FDockFloatingPlacement / overlay vs native projection）
+
+### 完成
+
+- `FDockFloatingPlacement` 取代 floating 记录语义：`EDockFloatingProjection::{InProcessOverlay, NativeWindow}`、`EDockSourceScope`、`targetWindowId`、opaque `ownerEditorId`、`documentKey`。Geometry 对 overlay 仍是 tree-local，不是屏幕坐标。
+- `tearOffPanel` 默认 `InProcessOverlay`，从 host `sourceScope`/`hostWindowId` 和 panel identity 填 placement。`NativeWindow` 只记账，不创建 OS window。`UIDockFloatingHost` 只物化 overlay；NativeWindow 记录被跳过。
+- 旧 `floating[]` JSON 缺 `projection` 时按 overlay 导入。Editor window-root / owned nested dock 写入 host scope + window id；`materializeTab` 把 spawner owner / document key 写到 panel。
+- 验收：`DockNodeTest.TearOffCopiesHostAndPanelIdentityIntoPlacement`、`LegacyFloatingJsonImportsAsInProcessOverlay`、`OverlayHostSkipsNativeWindowPlacement`（32/32 DockNodeTest）；`EditorDockWorkspaceTest.MaterializeCopiesSpawnerIdentityOntoDockPanel`；`EditorWindowSessionTest.DockContextDoesNotKnowEditorRoots`（无 `EditorRootId` / `GameEditor`）。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品仍一扇 native present surface；现有拖出仍是 Popup overlay；`FFloatingWindow` 作为 placement 别名保留。
+- 未完成：MW-702 coordinator/session；MW-703 跨 tree native tear-off；MW-704 re-dock/close；MW-705 chrome capability；MW-706 / C8 `windows[]`。
+- 偏离：未把 overlay host 改名冒充 OS window；未做 N Camera、两次 submit、每窗 `IRender::create`。
+
+### 下一接力点
+
+`MW-702`：GUI Framework `IGUIWindowCoordinator` / `IGUIWindowSession`。禁止把 `EditorSurface` 改成 window manager，禁止复制 `IRender::create`。
+
+## 2026-09-10 — C7 边界再收口：Dock orchestration 归 GUI Framework
+
+### 决策
+
+- DockSpace 的 split/leaf/tab projection、hit-test、drop preview、tab reorder、floating projection、generic drag session 和跨 OS window drag router 全部归 GUI Framework。
+- GUI Framework 负责 source/target window 路由、boundary enter/leave、keep-alive、deferred close 以及 detach → target accept → attach/rebuild 事务；这些接口不得包含 EditorRootId、DocumentKey、EditorOwnedTool 等 GameEditor 类型。
+- GameEditor 只提供 tab scope、ownerEditorId、document identity、typed editor drag payload、placement policy 和 owner close policy。
+- GameEditor 不得重新监听 SDL/平台事件实现跨窗拖拽，也不得由 EditorDockWorkspace 直接创建 native window。
+- `IGUIWindowCoordinator` / `IGUIWindowSession` 是 GUI Framework 的窗口机制；`EditorDockWorkspace` 只是调用方和策略适配层。
+
+### C7 执行顺序
+
+1. MW-702：GUI window coordinator/session + per-window WidgetTree/surface/presentation。
+2. MW-703：generic cross-window drag router 与 DockSpace 通用迁移事务。
+3. MW-704：GameEditor typed payload/policy 接入 root editor 与 owned tool tear-off。
+4. MW-705：owner-aware re-dock、close policy、空窗回收和 Level Editor 保护。
+5. MW-706：window chrome capability backend。
+6. MW-707：window topology 与 dock topology 分离持久化和兼容迁移。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：MW-701 已冻结的 `FDockFloatingPlacement`、`InProcessOverlay` / `NativeWindow` projection 区分，以及一个 native window 一棵 WidgetTree。
+- 未完成：MW-703～MW-707；当前 C3 的 GUI drag primitive 只证明 generic window routing，尚未完成 Dock projection 与 editor payload 的闭环。
+- 偏离：不把 `UIDockFloatingHost` 改造成 window manager，不在 GameEditor 复制 GUI drag/drop 或 native window 实现。
+
+### 下一接力点
+
+`MW-703`：generic cross-window drag router 与 DockSpace 通用迁移事务。不得包含 EditorRootId / DocumentKey。
+
+## 2026-09-10 — C7 MW-702（IGUIWindowCoordinator / GUIWindowSession）
+
+### 完成
+
+- `GUIWindowManager` 实现 `IGUIWindowCoordinator`；内部 `FSlot` 收成 `GUIWindowSession`：一扇 extra 窗拥有 NativeWindow + WidgetTree + snapshot + 可选 `IRenderSurfaceContext`。共享 process `IRender`，不调用 `IRender::create`。主窗仍是 `GUIWindowHost`，不是 session。
+- `GUIApp::windowCoordinator()` / `findSession()` 暴露 coordinator。`realizeNativeDockPlacement` 为 NativeWindow placement 创建 session 并 `bindFloatingTargetWindow`；不跨树迁移 live widget。
+- `FDockContext`：NativeWindow tear-off 的 `targetWindowId` 为 0 直到 bind；overlay 仍写 host window。`bindFloatingTargetWindow` 拒绝 overlay。缺 `targetWindowId` 的 native JSON 导入为 0。DockContext / EditorDockWorkspace 不创建 OS window。
+- 验收：`GUIWindowManagerTest.SessionOwnsIsolatedTreeSnapshotAndNullSurfaceWithoutDevice`、`RealizeNativeDockPlacementBindsSessionWithoutMigratingWidget`；`GUIAppExtraWindowTest.ExposesCoordinatorSessions`；`DockNodeTest.NativeWindowTearOffLeavesTargetUnbound`、`NativeWindowJsonWithoutTargetStaysUnbound`（34/34 DockNodeTest）；`EditorWindowSessionTest.DockContextDoesNotKnowEditorRoots`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品仍只 present 默认 native window；主窗不是 `IGUIWindowSession`；realize 出的 extra 窗在无 device 测试里 surface 为 null；现有拖出仍是 overlay。
+- 未完成：MW-703 跨 tree detach/attach 与 drag router；MW-704 editor tear-off；MW-705 re-dock/close；MW-706 chrome；MW-707 / C8 `windows[]`。
+- 偏离：未另起一套 window manager；未把 `EditorSurface` 改成 window manager；未做 N Camera、两次 submit、每窗 `IRender::create`、两树一窗。
+
+### 下一接力点
+
+`MW-703`：GUI-owned cross-window drag router 与 DockSpace 通用迁移事务（source detach → target attach，禁止双挂载）。不得包含 editor 类型。
+
+## 2026-09-10 — C7 MW-703（Dock 跨树迁移事务）
+
+### 完成
+
+- `FDockContext::extractPanel` / `adoptPanel` / `transferPanelTo` / `transferNativePlacementTo`：source detach → target adopt → leaf 挂载，禁止 live widget 双挂载。重复 `stableKey` 拒绝且保留 source。
+- `FDockPanelDragDropOp` 携带 `sourceContext`；目标 `UIDockSpace` 把 foreign drop 当 import，先 resolve preview 再 extract，避免拒绝路径抽空面板。
+- GUI 跨窗 drag router 仍是 MW-301 的那条（不另起 SDL listener）；dock 迁移发生在 DockSpace drop handler。
+- 验收：`DockNodeTest.TransferPanelMovesWidgetWithoutDualMount`、`TransferRejectsDuplicateStableKeyAndPreservesSource`、`TransferNativePlacementMovesTornPanel`、`ForeignDockDropTransfersPanelWithoutDualMount`（39 含后续 canAdopt）；`GUIAppCrossWindowDragTest.DockPanelDropTransfersWithoutDualMount`；`EditorWindowSessionTest.DockContextDoesNotKnowEditorRoots`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品仍只 present 默认 native window；`realizeNativeDockPlacement` 仍不迁移 widget。
+- 未完成：当时下一刀为 MW-704 editor tear-off。
+- 偏离：未把 `EditorSurface` 改成 window manager；未做 N Camera、两次 submit、每窗 `IRender::create`。
+
+### 下一接力点
+
+`MW-704`：GameEditor typed payload / placement policy 与 native tear-off。
+
+## 2026-09-10 — C7 MW-704（GameEditor native tear-off）
+
+### 完成
+
+- `FEditorTabDragPayload` + `canTearOffEditorTab` / `canAcceptEditorDrop`。`EditorDockWorkspace::bind` 把 `FDockContext::canAdoptPanel` 接到该政策（opaque stableKey / ownerEditorId / documentKey）；GUI 仍不认识 `EditorRootId`。
+- `canAdoptPanel` 在 `transferPanelTo` / foreign drop 的 extract 之前过滤，拒绝时 source 面板仍在。
+- `tearOffEditorPanelToNativeWindow`：GameEditor 只调用 `IGUIWindowCoordinator::realizeNativeDockPlacement` + `transferNativePlacementTo`。Locked 拒绝且不创建 OS window。Root editor 进 extra window-root dock；owned tool 进 extra owned-nested dock，保留 owner/document（同一 `EditorDocumentSession` bindCount+1）。Extra session `adoptHostTree` 使用 coordinator 的 WidgetTree，不另造第二棵树。
+- `EditorDockWorkspace` 仍不 include `IGUIWindowCoordinator` / `GUIWindowManager`。
+- 验收：`EditorRootSessionTest.TearOffAndDropPolicyFollowDetachAndScope`；`EditorDockWorkspaceTest.WindowRootAdoptPolicyRejectsOwnedToolWithoutExtracting`；`DockNodeTest.CanAdoptPanelRejectsTransferWithoutExtracting`；`EditorNativeTearOffTest.LockedTabDoesNotOpenNativeWindow`、`RootEditorMovesToNativeWindowWithoutDualMount`、`OwnedToolKeepsOwnerAndDocumentOnNativeWindow`；`EditorWindowSessionTest.DockContextDoesNotKnowEditorRoots`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品 `EditorModule` 仍只 tick/present 默认 native window；拖出 DockSpace 默认仍是 `InProcessOverlay`。Level / Viewport 仍 Locked。
+- 未完成：MW-705 re-dock、owner-aware close、空窗回收、Level 保护；MW-706 chrome；MW-707 / C8 `windows[]`；产品路径把 extra editor window 纳入 present/input。
+- 偏离：未把 `EditorSurface` 改成 window manager；未在 GameEditor 监听 SDL 或直接创建 native window；未做 N Camera、两次 submit、每窗 `IRender::create`、两树一窗。
+
+### 下一接力点
+
+`MW-705`：cross-window re-dock、owned tool 禁止挂到其他 root editor/tab（drop 路径已有 canAdopt，补 close/reclaim/Level 保护）。
+
+## 2026-09-10 — C7 MW-705（re-dock / close / empty reclaim / Level 保护）
+
+### 完成
+
+- `canRedockEditorTab` / `canCloseEditorWindow`：Locked 不能迁；默认窗不能关。`canAdoptPanel` 拒绝 Locked import，owned tool 仍只能进 owner nested。
+- `redockEditorPanelToOwner` 把面板迁回 owner home dock（owned tool → owner nested；root/window tool → default window-root），禁止双挂载。空 extra 经 `reclaimEditorWindowIfEmpty`：`EditorWindowRegistry::destroy` + `IGUIWindowCoordinator::destroySession`。
+- `closeEditorWindow` 先预检再全部迁回再回收。GameEditor 不听 SDL、不自己建窗。
+- 验收：`EditorNativeTearOffTest.OwnedToolRedocksHomeAndReclaimsEmptyWindow`、`CloseExtraWindowRedocksRootEditorHome`、`CloseDefaultWindowIsRejected`、`LockedLevelCannotRedockAwayFromDefault`；`EditorDockWorkspaceTest.LockedTabCannotImportIntoAnotherWindowRoot`；`EditorRootSessionTest.TearOffAndDropPolicyFollowDetachAndScope`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品 `EditorModule` 仍只 tick/present 默认 native window；拖出默认仍是 overlay。
+- 未完成：MW-706 chrome capability；MW-707 / C8 `windows[]`；产品路径 extra window present/input；关 tab 后自动 reclaim 尚未接到 Surface。
+- 偏离：未把 `EditorSurface` 改成 window manager；未做 N Camera、两次 submit、每窗 `IRender::create`。
+
+### 下一接力点
+
+`MW-706`：window chrome capability（macOS Hybrid，Windows 可选 ClientDrawn）。GUI Framework 只走 capability API。
+
+## 2026-09-10 — C7 MW-706（window chrome capability）
+
+### 完成
+
+- `EWindowChromeMode` { Native, Hybrid, ClientDrawn } 与 `queryWindowChromeCapabilities` / `resolveWindowChromeMode` / `applyWindowChrome` 落在 GUI Host。macOS 默认 Hybrid（full-size content + 保留 traffic lights）；ClientDrawn 为显式请求（borderless + SDL hit-test）。
+- 平台 non-client 只在 `GUIWindowChromeCocoa.mm` / `applyWindowChrome`。Dock、EditorSurface、tab spawner 只消费 `queryWindowChromeInsets` / metrics。
+- `GUIWindowHost`、`GUIWindowManager`、`App::getOrCreateMainNativeWindow` 在建窗后 apply。Editor chrome 用 `chromeInsetTop` 避开 safe-area。
+- 验收：`GUIWindowChromeTest.*`（6）；`EditorNativeTearOffTest.*`；`EditorWindowSessionTest.DockContextDoesNotKnowEditorRoots`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品仍只 present 默认 native window；拖出默认仍是 overlay。Windows ClientDrawn 走 SDL hit-test 做 resize/drag，未重建 Win32 snap / system menu / DWM shadow。
+- 未完成：MW-707 topology persistence；C8 `windows[]`；产品 extra window present/input；titlebar 内嵌 tab 仍只用 titleContent 矩形，Editor 目前把菜单叠在 safe-area 下方。
+- 偏离：未把 `EditorSurface` 改成 window manager；未做 N Camera、两次 submit、每窗 `IRender::create`。
+
+### 下一接力点
+
+`MW-707`：persistence 保存 window topology + dock topology + placement mode；旧 in-process floating JSON 必须可迁移。
+
+## 2026-09-10 — C7 MW-707（dock floating[] vs windows[] persistence）
+
+### 完成
+
+- `FDockContext` export 把 `InProcessOverlay` 写入 `floating[]`（`geometrySpace: treeLocal`），把 `NativeWindow` 写入 sibling `windows[]`。
+- 旧 `floating` 无 `projection` → overlay + TreeLocal，pos 不升格为屏幕坐标，也不进入 `windows[]`。legacy `floating` + `projection: nativeWindow` 无 geometrySpace 仍 TreeLocal；下次 export 迁到 `windows[]`。
+- `collectLayoutPanelKeys` / `sanitizeLayoutJson` 同时走 `windows[]`；跨数组重复 panel key 导入失败。
+- Editor persist envelope bump 到 v3，仍用 `windowRoot` / `ownedNested`（不是 C8 顶层 OS `windows[]`）。
+- 验收：`DockNodeTest.LegacyFloatingJsonImportsAsInProcessOverlay`、`NativeWindowJsonWithoutTargetStaysUnbound`、`OverlayExportNeverCopiesPosIntoWindows`、`CollectLayoutPanelKeysWalksNativeWindows`、`EditorDockWorkspaceTest.LayoutDocumentForPlacementV3SelectsFields`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品仍只 present 默认 native window；拖出默认仍是 overlay；NativeWindow `pos` 本步仍 TreeLocal（不写 OS `setPosition`）。
+- 未完成：MW-801 editor `windows[]` envelope（bounds/monitor/maximized/role、restore extra OS windows）；MW-802 坏 monitor 恢复；产品 extra window present/input。
+- 偏离：未把 `EditorSurface` 改成 window manager；未在产品路径 realize extra OS windows；未做 N Camera、两次 submit、每窗 `IRender::create`。
+
+### 下一接力点
+
+`MW-801`：versioned editor `windows[]` envelope（bounds/monitor/maximized/role、root dock、document、nested owned dock）。
+
+## 2026-09-10 — C8 MW-801（editor windows[] envelope）
+
+### 完成
+
+- `editor.dockLayout` v4：`windows[]` 每项含 `role` / `bounds` / `monitor` / `maximized` / `windowRoot` / `ownedNested` / `activeRootId` / `documentKey`。v1–v3 仍映射为 main window。
+- `INativeWindow` 增加 position / display / maximized；GUI `queryWindowScreenPlacement` / `applyWindowScreenPlacement`。缺失 monitor 跳过 origin，只应用 size。
+- `restoreEditorExtraWindows` 经 `IGUIWindowCoordinator::createSession` 恢复 extra OS window + `EditorWindowSession`；GameEditor 不创建 SDL 窗。`EditorDockWorkspace` 不 include coordinator。
+- overlay `floating` pos 恢复后仍是 TreeLocal，不会写成 OS origin。
+- 验收：`EditorDockWorkspaceTest.LayoutDocumentForPlacementV4SelectsMainWindowFields`；`EditorWindowLayoutTest.*`；`GUIWindowChromeTest.QueryAndApplyScreenPlacementUsesSizeNotOverlayCoords`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品 `EditorModule` 仍只 tick/present 默认 native window；App 仍无 coordinator，因此产品启动不会 restore extra OS window。拖出默认仍是 overlay。
+- 未完成：产品 extra window present/input。
+- 偏离：未把 `EditorSurface` 改成 window manager；未做 N Camera、两次 submit、每窗 `IRender::create`。
+
+### 下一接力点
+
+`MW-802`：坏 monitor、缺失 asset、窗口关闭中断时的安全恢复。
+
+## 2026-09-10 — C8 MW-802（bad monitor / missing asset / interrupted close）
+
+### 完成
+
+- `recoverWindowScreenPlacement`：有效 monitor 应用 origin；缺失 monitor 按 name 或 primary 可用区重定位；`monitorIndex < 0` 且无名只改 size。Editor/Dock 不调 SDL。
+- `restoreEditorExtraWindows` 跳过 `closing: true`、未知 `ownerEditorId`、registry 在场但找不到 `documentKey`；不把 Level/其他 root 的 document 改绑上去。空 torn-off extra 不 export、不 restore。
+- 产品 `EditorModule` 对 main native window 做一次 placement recover；仍无 coordinator，不 restore extra OS window，也不 tick extra。
+- 验收：`EditorWindowLayoutTest.*`（含 skip closing/missing document/unknown owner、export omit empty、relocate missing monitor）；`GUIWindowChromeTest.QueryAndApplyScreenPlacementUsesSizeNotOverlayCoords`；`EditorDockWorkspaceTest.LayoutDocumentForPlacement*`。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：产品仍只 tick/present 默认 native window；App 仍无 coordinator；拖出默认仍是 overlay。
+- 未完成：产品 extra window present/input；C9 soak；R-5；MW-901/902/903。
+- 偏离：未把 `EditorSurface` 改成 window manager；未做 N Camera、两次 submit、每窗 `IRender::create`。
+
+### 下一接力点
+
+`C9`：双窗口、GPU parity、长时 resize/close/drag soak。产品 extra present/input 仍未接线，编辑器双窗 soak 不能假装完成。
+
+## 2026-09-10 — C9-P（产品 extra present / input）
+
+### 完成
+
+- `IRuntimeModule::onAfterPresent`：primary `submitPresentFrame` 之后调用；primary acquire 失败 / 未 acquired 也调用（MW-206：不可上屏主窗不得跳过 extra）。
+- `EditorModule` 持有 `GUIWindowManager`：`onAttach` init + `restoreEditorExtraWindows` + persist 带 coordinator；`onAfterPresent` 对 `closeRequested` extra 先 `closeEditorWindow`，再 `tickTrees` / `renderAll`。不 `tickAll`（flush 会在 redock 前销毁）。
+- extra 不 `EditorSurface::tick`；内容在 coordinator `WidgetTree`（`adoptHostTree` + `hostDockOnTree`）。默认窗仍 `onPresentation` + primary cmdBuf + `replayUIFrameSnapshot(..., EditorToolSurface)`。
+- 输入：`EditorInputNode` extra `dispatchEvent`；`onEvent` 路由 extra window 事件；主窗 `WindowFocus` 清 extra `_focusedId`；extra 鼠标不写 `App::_lastMousePos`。
+- GameEditor 不 `IRender::create`、不 `SDL_CreateWindow`。`EditorDockWorkspace` 仍不 include coordinator。
+- 验收：`EditorWindowSessionTest.*`（含 InputRoutesByWindowId / onAfterPresent / tickTrees）；`EditorWindowLayoutTest.*`；`EditorNativeTearOffTest.*`；`EditorDockWorkspaceTest.LayoutDocumentForPlacement*`；`GUIWindowManagerTest.*`（含 `setFocusedWindow(0)` 后未标记键盘不再进 extra）。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：单 cmdBuf；N Camera / 两次 submit 不做；DockSpace NoTarget 仍 overlay；extra 窗只有 hosted dock，没有完整 editor menu chrome。
+- 未完成：C9 soak（GPU parity / 长时 resize/close/drag）；R-5；MW-901/902/903。
+- 偏离：未把 `EditorSurface` 改成 window manager；未把 Gallery extra 冒充 GameEditor soak。工作区 `WorkbenchSurface.cpp` 有未完成 DSL 草稿挡住 `ya-gui-tooling`，本步把它恢复成 HEAD 的 imperative `assembleChrome` 以便编过 editor，未做 Workbench 重构。
+
+### 下一接力点
+
+`C9 soak`：双窗口 GPU parity、长时 resize/close/drag。产品 extra present/input 已接线，但仍不能把单次 restore/present 冒充 soak 完成。
+
+## 2026-09-10 — C9 soak（dual-window present / resize / close）
+
+### 完成
+
+- `RHISurfaceContext.ExtraWindowPresentResizeCloseSoak`：共享 `IRender` device 上 primary+extra 各 present 32 帧，中途 extra 两次 `requestRecreate`，关 extra 后 primary 再 present 8 帧。
+- `GUIWindowManagerTest.TickTreesResizeMinimizeCloseSoakKeepsSibling`：64 帧 `tickTrees`+`renderAll`；resize A、minimize/restore B、`WindowClose` 后 `destroySession(A)`，B 仍在。
+- `EditorNativeTearOffTest.ExtraTickTreesResizeCloseSoakMatchesProductPath`：tear-off 后按 `EditorModule::onAfterPresent` 顺序（closeRequested → `closeEditorWindow`，否则 `tickTrees`/`renderAll`）；resize/minimize/restore extra；关窗 redock，无双挂载。
+- `GUIWorkbench --extra-window --exit-after-frame=32` 干净 `GUIWorkbench finished`；headless `windows_extra_os.jsonl` 通过。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：单 cmdBuf；N Camera / 两次 submit 不做；DockSpace NoTarget 仍 overlay；extra 窗只有 hosted dock；双 swapchain golden BMP 仍延后（C2G）。
+- 未完成：R-5；MW-901/902/903。Widgets `--gpu-shot`/`--offscreen-diff` 本步未作为 C9 门禁：工作区 `WorkbenchSurface` DSL 与 `widgets_interaction.jsonl` 的 focusPath 已分叉，且 HEAD `attachSlot` 与当前 builder API 对不上，不能把 Gallery Widgets golden 冒充双窗 soak。
+- 偏离：未开启 DockSpace native tear-off 默认；未把 Gallery extra 冒充 GameEditor soak；未做 N Camera、每窗 `IRender::create`。
+
+### 下一接力点
+
+本计划编码轨已收口。剩余只有条件延后：R-5（需 trace/性能证据才拆第二次 submit）、MW-901/902/903。DockSpace 拖出仍 overlay，若要产品默认 native tear-off 需另开目标。
+
+## 2026-09-11 — C10（产品 DockSpace NoTarget native tear-off）
+
+### 完成
+
+- `FDockContext::realizeNoTargetTearOff`：DockSpace NoTarget 先调回调，true 则跳过 overlay；未接线或 false 仍 `InProcessOverlay`（Gallery / WidgetTree 测试不变）。
+- `realizeNativeDockPlacement` 只把 `geometrySpace == Screen` 的 pos 写入 `FGUIWindowHostConfig` origin。`createSession` 不再用 `monitorIndex = -1` 覆盖已查询的 monitor，否则 recover 会丢掉 origin。
+- GameEditor：`EditorSurface::setOnDockNoTargetTearOff` 装到 window-root / owned-nested dock；`EditorModule` 调 `handleDockNoTargetTearOff` → coordinator。Locked/Level 返回 handled、不开窗、不 overlay。Live tear-off extra 补 `hookExtraPersist` + 同样的 NoTarget 回调。
+- `EditorSurface` 不 include coordinator；`EditorDockWorkspace` / `FDockContext` 不创建 OS window。
+- 验收：`WidgetTreeTest.DockSpaceTabDragBehaviorStartsSessionAndTearsOffOnNoTarget` overlay；`DockSpaceNoTargetCallback*`；`GUIWindowManagerTest.RealizeNativeDockPlacement*`；`EditorNativeTearOffTest.DockSpaceNoTarget*`；`EditorWindowSessionTest` source-scan。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：单 cmdBuf；N Camera / 两次 submit 不做；extra 窗只有 hosted dock，没有完整 editor menu chrome；Gallery NoTarget 仍 overlay；双 swapchain golden BMP 仍延后。
+- 未完成：R-5；MW-901/902/903。
+- 偏离：未把 `EditorSurface` 改成 window manager；未做每窗 `IRender::create`；未要求 OS 像素级 origin 与 Screen 坐标逐点相等（窗口管理器可夹紧）。
+
+### 下一接力点
+
+C11：Hybrid chrome safe-zone（菜单不画在红绿灯下）、titleContent Client vs trailing Drag、Workbench/Editor DnD 与顶部 panel 命中。不实现完整 extra editor menu chrome、R-5、N Camera。
+
+## 2026-09-11 — C11（Hybrid chrome safe-zone + DnD）
+
+### 完成
+
+- `makeWindowChromeLayout` Hybrid：SDL safe-area 为 0 仍 floor traffic-light 78×28；`titleContent` 是 Client（菜单），仅 trailing gutter 是 Drag。新增 `queryWindowChromeLayout`。
+- Editor 菜单放进 title 行（左 inset + 右 gutter）；toolbar/dock 在 `contentInsets.top` 之下。Workbench `applyChromeSafeZone`。extra hosted dock `contentInsets`。GameRuntime resize/move 重 apply chrome hit-test。
+- `UIDragSourceBehavior`：capture-on-press 即从 captured move 开 drag。Gallery tile 同时设 `bBeginDragFromCapturedMove`。
+- 验收：`GUIWindowChromeTest.HybridLayout*` / `ClientDrawnLayout*` / source-scan `queryWindowChromeLayout`；`GUIWindowManagerTest.DragDropTileCaptureStartsSessionAndDrops`。`ya-game-editor` / `GUIWorkbench` / `ya-game-runtime` 编译通过。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：单 cmdBuf；N Camera / 两次 submit 不做；extra 窗仍无完整 editor menu chrome。
+- 未完成：R-5；MW-901/902/903；windowed 手感（GameEditor File 菜单、Workbench DragDrop 页、tear-off extra tab）需用户确认。
+- 偏离：未把 `EditorSurface` 改成 window manager；未改 NSWindow/AppKit 到 Editor/Dock。
+
+### 下一接力点
+
+本计划编码轨已收口。剩余只有条件延后：R-5（需 trace/性能证据才拆第二次 submit）、MW-901/902/903。extra 完整 editor menu chrome 不是本步范围。
+
+## 2026-09-11 — C12（host 唯一 drag session）
+
+### 完成
+
+- 跨窗 tab drop 失效、唯一 tab 拖出 N-1 空叶窗：每棵 `WidgetTree` 各养一份 drag session，GameEditor 不走 `GUIApp` 的 router。
+- `GUIDragRouter` 是每个 input universe（`GUIApp` 或 GameEditor `AppKernel`）的唯一 source/hover window 身份。`WidgetTree` 只持有 payload/ghost/observer。
+- GameEditor：`EditorInputNode` 处理 Input 事件，`EditorModule::onEvent` 处理 `WindowMouseLeave`；二者 bind 同一 router。主窗 id 来自 `InputRouter::getWindow()`，不读 `App` 私有 `NativeWindowManager`。`WindowFocusLost` 不 cancel 进行中的 drag。
+- 唯一 extra tab NoTarget 移动现有 OS 窗；tear-off 后 reclaim 空源窗。远指针不 tear-off。
+- 验收：`GUIDragRouterTest.*`、`GUIAppCrossWindowDragTest.*`、`EditorNativeTearOffTest.UniqueExtraTabTearOffReclaimsEmptySource`、`EditorWindowSessionTest.InputRoutesByWindowId`。`ya-game-editor` / `ya-gui-headless-host-test` 编译通过。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：单 cmdBuf；N Camera / 两次 submit 不做；extra 窗仍无完整 editor menu chrome。
+- 未完成：R-5；MW-901/902/903；windowed 手感（Hierarchy 跨窗 drop、唯一 tab extra 不产空叶窗、extra 不再卡在 5 格 chooser）需用户确认。
+- 偏离：未把 session 做成进程单例（gtest 多树）；未把 `GUIApp` 当 GameEditor context。
+
+### 下一接力点
+
+C13 收口同一 router 上的 capture / cursor / IME / clipboard / app-modal。
+
+## 2026-09-11 — C13（host 指针宇宙收口）
+
+### 完成
+
+- 同一 `GUIDragRouter` 增加 capture 所属窗、OS cursor、IME 窗、树内 modal 的 app-modal 阻挡。外窗指针事件 remap 到 capture 树；modal 打开时吞掉其它 OS 窗的 pointer/key。
+- extra `GUIWindowManager` session `bindSdlClipboard`；`WindowFocusLost` 不对正在 capture/drag 的树注入远指针。
+- GameEditor `EditorInputNode::getCursor()` 问 router；GUIApp `applyPointerUniverse` 在事件后 `OsCursor::set` + `syncTextInput`。
+- 验收：`GUIDragRouterTest.RoutesCapturedMoveFromForeignTreeWithoutSdl` / `ModalBlocksForeignWindowPointerWithoutSdl` / `TextInputWindowFollowsFocusedFieldWithoutSdl` / `CursorReadsCaptureWidgetWithoutSdl`；既有 `GUIAppCrossWindowDragTest.*`；`EditorWindowSessionTest.InputRoutesByWindowId` source-scan clipboard + cursor。`ya-game-editor` 编译通过。
+
+### 保留 / 未完成 / 偏离
+
+- 保留：单 cmdBuf；N Camera / 两次 submit 不做；extra 窗仍无完整 editor menu chrome。
+- 未完成：R-5；MW-901/902/903；FontManager `setActiveDpiScale` 仍是进程全局（方向相反，未纳入本步）；windowed 手感（extra 分栏拖出窗外、extra TextField IME、file picker modal 挡住其它 OS 窗）需用户确认。
+- 偏离：未新造 `GUIPointerRouter`；未把 dialog 做成进程单例。
+
+### 下一接力点
+
+本计划编码轨已收口。剩余只有条件延后：R-5（需 trace/性能证据才拆第二次 submit）、MW-901/902/903。extra 完整 editor menu chrome 不是本步范围。
+
+## 2026-09-11 — Chrome page tabs / leaf roles / UE drag overlay
+
+### 目标
+
+Hybrid 窗体自上而下：traffic lights + 页面 TabBar → MenuBar → toolbar/dock。WindowRootEditor 只进 chrome 页签 / page leaf；WindowTool 只进 inner tools leaf。跨窗拖出 OS 窗口后，GUI Host 动态创建 click-through 透明置顶幽灵窗，只负责预览。
+
+### 已落地
+
+- `EDockLeafRole` Page/Tools + factory JSON `hideTabBar` page leaf；`canAdoptOntoLeaf` / `chooseAdoptLeaf`。
+- `EditorSurface` 把 `UIMenuBar` 移出 titleContent，页签进 Hybrid title row。
+- `GUIDragRouter`：窗口矩形命中 + `SDL_CaptureMouse`；鼠标离开全部 bound window 时 spawn `bDragOverlay` session（不进 EditorWindowRegistry / orphan reap）。
+- 未使用系统 OLE；payload/hit-test 仍在 router + WidgetTree。
+
+### 保留 / 未完成
+
+- extra 窗仍走同一套 EditorSurface chrome（含 menu），没有单独做成“无 menu 的 tool-only 窗”。
+- 透明 Vulkan swapchain 在 macOS 上可能不透明；overlay 仍是跟随光标的小窗，不是全屏桌宠层。
+- 未提交。
+
+## 2026-09-11 — C14 Dock drop target seam
+
+- 新增 `EDockDropTargetKind` / `FDockDropTarget`。`UIDockSpace::FDropPreview` 不再用 `bMerge`/`bTabBar`/`bChooser`/`targetFloatingId`。
+- `resolveDropPreview` 拆成 `resolveFloatingWell` / `resolveTabWell` / `resolveTabStack`；Area 只做 leaf focus。
+- 未公开 `UIDockTabWell` / `UIDockTabStack`；未把 `commitDrop` 收到 `FDockContext`。
+- 验收：`DockNodeTest.DropTargetKindDistinguishesWellStackSplitAndNoTarget` 区分 Well / same-leaf center / foreign chooser / split / NoTarget。
+
+## 2026-09-11 — C15 DockStackView + TabRegistry / commitDrop
+
+- `FLeafView` 改为 `FDockStackView`（`stackId` / `well` / content）。物化控件名 `DockStack*`。
+- `EDockNodeKind::Stack` 取代公开 `Leaf`；JSON 写出 `"stack"`，仍可读 `"leaf"`。`findStackForPanel` / `splitStack` / `stackIds` 为正式名，旧 `findLeafForPanel` / `splitLeaf` / `leafIds` 保留为别名。
+- `FDockContext` 内部分成 `FTabRegistry _tabs` 与 `FDockTreeModel _layout`；`layout()` / `tabs()` 与 `dockModel()` 并存。
+- `FDockContext::commitDrop` 接收 `FDockDropTarget`；`UIDockSpace` drop 只做 import + commit + 投影刷新。
+- `UIDockFloatingWindow::dropTargetAt` 自己产生 `FloatingTabWell`，不再把 accept/commit 转给 `UIDockSpace::onDrop`。
+- 未公开 `UIDockTabWell` / `UIDockTabStack`；GameEditor policy 签名未改。
+- 验收：`CommitDropMovesPanelBetweenStacks`、`FloatingWindowProducesDropTargetWithoutDockSpace`、`LayoutJsonExportsStackKindAndImportsLegacyLeaf`。

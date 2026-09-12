@@ -42,6 +42,9 @@ description: YA Engine 渲染架构、RenderRuntime 边界与 shader 生成链�
     `PresentationGraphService::recordDisplayCompose` 写 `swapchain[imageIndex]`。
     `GUIRenderSurface` 只是 compose target，不 acquire/present、不读 live WidgetTree。
     acquire/present 由 host `FPresentFrame` coordinator 调用，不在 `RenderRuntime` 内。
+    Present 消费方（`GUIAppHost`、`GUIWindowPresent`、`PresentationGraphService`）只走
+    `IRenderSurfaceContext` / `ISwapchain` / `buildPresentationImages`，禁止
+    `as<VulkanSwapChain>()`。Vulkan 细节留在 `VulkanRenderSurfaceContext`。
     `ViewportState` 迁移期等于唯一 `WorldView[0]`。对象模型见
     `./.agent/plan/gui-multi-os-window-editor/c2_view_model.md`
     与 `c2_present_compose_model.md`。不要为 Material/UI 窗复制 `RenderRuntime`。
