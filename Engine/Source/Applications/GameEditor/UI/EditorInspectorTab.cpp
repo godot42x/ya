@@ -28,12 +28,24 @@
 
 #include <algorithm>
 #include <format>
+#include <string_view>
 
 namespace ya
 {
 
 namespace
 {
+
+int inspectorComponentRank(std::string_view name)
+{
+    if (name == "TransformComponent") {
+        return 0;
+    }
+    if (name == "DirectionComponent") {
+        return 1;
+    }
+    return 100;
+}
 
 void renameEntity(EditorLayer* layer, uint64_t uuid, const std::string& name)
 {
@@ -373,6 +385,11 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
         }
     }
     std::sort(entries.begin(), entries.end(), [](const FEntry& a, const FEntry& b) {
+        const int rankA = inspectorComponentRank(a.name);
+        const int rankB = inspectorComponentRank(b.name);
+        if (rankA != rankB) {
+            return rankA < rankB;
+        }
         return a.name < b.name;
     });
 
