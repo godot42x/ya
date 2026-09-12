@@ -16,7 +16,8 @@ struct UIButton;
 struct UIContainer;
 struct UIElement;
 struct UIMenuBar;
-struct UIPanel;
+struct UICanvasPanel;
+struct UIBorder;
 struct UISelectableRow;
 struct UISplitPane;
 struct UIScrollViewport;
@@ -35,7 +36,7 @@ class YA_GUI_API FWorkbenchSurface
     /// App-provided demo page builder: builds one page into `parent` (the
     /// content host). `log` appends to the status line.
     using FPageBuilder = std::function<void(ya::WidgetTree& tree,
-                                            ya::UIElement& parent,
+                                            ya::UICanvasPanel& parent,
                                             const std::function<void(const std::string&)>& log)>;
     using FPageLeave = std::function<void(ya::WidgetTree& tree)>;
 
@@ -67,6 +68,17 @@ class YA_GUI_API FWorkbenchSurface
 
     FWorkbenchWorkspace workspace;
 
+    /// Safe-zone for Hybrid chrome: menu sits to the right of traffic lights
+    /// and left of the trailing window-drag gutter. Tooling does not include
+    /// GUIWindowChrome.h; the host converts layout → this struct.
+    struct FChromeSafeZone
+    {
+        float left         = 0.0f;
+        float right        = 0.0f;
+        float titleHeight  = 0.0f;
+    };
+    void applyChromeSafeZone(const FChromeSafeZone& zone);
+
     void buildUI(ya::WidgetTree& tree);
     void updateUI();
     void onRoutedEvent(const ya::Event& event, ya::EWidgetRouteResult result);
@@ -83,19 +95,19 @@ class YA_GUI_API FWorkbenchSurface
     void failSmoke(const std::string& message);
 
   private:
-    void buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent);
-    void buildPageRail(ya::WidgetTree& tree, ya::UIElement& parent);
-    void buildPageList(ya::WidgetTree& tree, ya::UIElement& parent);
+    void buildMenuBar(ya::WidgetTree& tree, ya::UIContainer& parent);
+    void buildPageRail(ya::WidgetTree& tree, ya::UISplitPane& parent);
+    void buildPageList(ya::WidgetTree& tree, ya::UIBorder& parent);
     void syncRailSelection();
-    void buildDemoHost(ya::WidgetTree& tree, ya::UIElement& parent);
-    void buildStatusBar(ya::WidgetTree& tree, ya::UIElement& parent);
-    void buildWorkspaceShell(ya::WidgetTree& tree, ya::UIElement& parent);
-    void assembleChrome(ya::WidgetTree& tree, ya::UIElement& parent);
+    void buildDemoHost(ya::WidgetTree& tree, ya::UISplitPane& parent);
+    void buildStatusBar(ya::WidgetTree& tree, ya::UIContainer& parent);
+    void buildWorkspaceShell(ya::WidgetTree& tree, ya::UIContainer& parent);
+    void assembleChrome(ya::WidgetTree& tree, ya::UICanvasPanel& parent);
     void clearDemoHost();
     void logStatus(const std::string& text);
 
     // Editor demo page (the original workbench editor loop).
-    void buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& parent);
+    void buildEditorDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent);
     void rebuildItemRows();
     void syncPresentationState();
 
@@ -116,7 +128,9 @@ class YA_GUI_API FWorkbenchSurface
     bool            _bSmokePassed = false;
     bool            _bAutomationDone = false;
 
-    std::shared_ptr<ya::UIPanel>  _root;
+    std::shared_ptr<ya::UICanvasPanel>  _root;
+    std::shared_ptr<ya::UIContainer>    _chromeColumn;
+    FChromeSafeZone                     _chromeSafeZone;
     std::shared_ptr<ya::UIButton> _addButton;
     std::shared_ptr<ya::UIButton> _removeButton;
     std::shared_ptr<ya::UIButton> _renameButton;
@@ -125,14 +139,14 @@ class YA_GUI_API FWorkbenchSurface
     std::shared_ptr<ya::UIText>   _commandResultText;
     std::shared_ptr<ya::UIMenuBar> _menuBar;
     std::shared_ptr<ya::UISplitPane> _workspaceSplit;
-    std::shared_ptr<ya::UIPanel> _pageRail;
-    std::shared_ptr<ya::UIPanel> _pageRailCard;
-    std::shared_ptr<ya::UIPanel> _contentFrame;
-    std::shared_ptr<ya::UIText> _pageRailTitle;
+    std::shared_ptr<ya::UIBorder> _contentFrame;
+
+    std::shared_ptr<ya::UIBorder>          _pageRailCard;
     std::shared_ptr<ya::UIScrollViewport> _pageRailScroll;
     std::shared_ptr<ya::UIContainer>      _pageRailList;
+
     std::vector<std::shared_ptr<ya::UISelectableRow>> _pageRows;
-    std::shared_ptr<ya::UIPanel>   _demoHost;
+    std::shared_ptr<ya::UICanvasPanel>   _demoHost;
     struct FPage
     {
         std::string    group;
@@ -148,13 +162,13 @@ class YA_GUI_API FWorkbenchSurface
 
     std::shared_ptr<ya::UISplitPane>      _mainSplit;
     std::shared_ptr<ya::UISplitPane>      _rightSplit;
-    std::shared_ptr<ya::UIPanel>          _listPanel;
+    std::shared_ptr<ya::UICanvasPanel>          _listPanel;
     std::shared_ptr<ya::UIScrollViewport> _rowScroll;
     std::shared_ptr<ya::UIContainer>      _rowList;
     std::vector<std::shared_ptr<ya::UISelectableRow>> _rows;
 
-    std::shared_ptr<ya::UIPanel> _canvasPanel;
-    std::shared_ptr<ya::UIPanel> _highlightPanel;
+    std::shared_ptr<ya::UICanvasPanel> _canvasPanel;
+    std::shared_ptr<ya::UIBorder> _highlightPanel;
     std::shared_ptr<ya::UIText>  _previewName;
 
     std::shared_ptr<ya::UITextField> _nameField;

@@ -5,8 +5,8 @@
 #include "ECS/Systems/Components/MirrorComponent.h"
 #include "Resource/AssetManager.h"
 #include "Render/Resources/FontManager.h"
+#include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Button.h"
-#include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 
@@ -77,8 +77,8 @@ void HelloMaterialModule::createUIDemo(ya::App& app, ya::Scene* scene)
     }
 
     auto& registry = ya::UITypeRegistry::instance();
-    auto  panel    = registry.createInstance("engine.panel");
-    static_cast<ya::UIPanel*>(panel.get())->setColor({0.12f, 0.14f, 0.22f, 0.88f});
+    auto  panel    = registry.createInstance("engine.border");
+    static_cast<ya::UIBorder*>(panel.get())->setColor({0.12f, 0.14f, 0.22f, 0.88f});
     ya::FCanvasSlotArgs panelSlot;
     panelSlot.offset = {20.0f, 20.0f};
     panelSlot.fixedSize = {300.0f, 120.0f};
