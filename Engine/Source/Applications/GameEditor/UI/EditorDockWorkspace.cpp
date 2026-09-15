@@ -677,6 +677,9 @@ DockNodeId EditorDockWorkspace::ensureToolsLeaf()
         FDockNode* leaf = model.findNode(id);
         if (leaf && leaf->kind == EDockNodeKind::Stack && !leaf->bHideTabBar) {
             (void)model.setLeafRole(id, EDockLeafRole::Tools);
+            if (model.leafIds().size() == 1) {
+                (void)model.setHideTabBar(id, true);
+            }
             return id;
         }
     }
@@ -686,9 +689,12 @@ DockNodeId EditorDockWorkspace::ensureToolsLeaf()
         if (leaves.empty()) {
             return kInvalidDockNodeId;
         }
+        // Tools-only extra/native window: the root stack is the whole window.
+        // Do not fabricate an empty Page well just to host one WindowTool.
         host = leaves.front();
-        (void)model.setLeafRole(host, EDockLeafRole::Page);
+        (void)model.setLeafRole(host, EDockLeafRole::Tools);
         (void)model.setHideTabBar(host, true);
+        return host;
     }
     if (!model.splitEmptyLeaf(host, EDockCardinalSide::South, 0.78f, true)) {
         return kInvalidDockNodeId;
