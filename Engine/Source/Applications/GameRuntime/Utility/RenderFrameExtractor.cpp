@@ -110,7 +110,7 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
 {
     outSnapshot.clearScene();
     outSnapshot.bHasDirectionalLight = false;
-    outSnapshot.numPointLights = 0;
+    outSnapshot.pointLightSourceCount = 0;
 
     if (!input.scene) {
         return;
@@ -133,6 +133,26 @@ void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
 {
     outFrame.clear();
     static_cast<SceneFrameSnapshot&>(outFrame) = sceneSnapshot;
+    outFrame.numPointLights = sceneSnapshot.pointLightSourceCount;
+    for (uint32_t index = 0; index < sceneSnapshot.pointLightSourceCount; ++index) {
+        const auto& source = sceneSnapshot.pointLightSources[index];
+        auto&       target = outFrame.pointLights[index];
+        target.position    = source.position;
+        target.type        = source.type;
+        target.constant    = source.constant;
+        target.linear      = source.linear;
+        target.quadratic   = source.quadratic;
+        target.color       = source.color;
+        target.intensity   = source.intensity;
+        target.spotDir     = source.spotDir;
+        target.innerCutOff = source.innerCutOff;
+        target.outerCutOff = source.outerCutOff;
+        target.nearPlane   = source.nearPlane;
+        target.farPlane    = source.farPlane;
+    }
+    outFrame.directionalLight.direction = sceneSnapshot.directionalLightSource.direction;
+    outFrame.directionalLight.color     = sceneSnapshot.directionalLightSource.color;
+    outFrame.directionalLight.intensity = sceneSnapshot.directionalLightSource.intensity;
     extractCamera(input, outFrame);
     prepareViewLights(input, outFrame);
     sortDrawItems(outFrame.cameraPos, outFrame);
@@ -155,7 +175,7 @@ void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneFrameSna
     // Directional light (take the first one with a transform)
     out.bHasDirectionalLight = false;
     for (const auto& [e, dlc, tc] : reg.view<DirectionalLightComponent, TransformComponent>().each()) {
-        auto& dl                 = out.directionalLight;
+        auto& dl                 = out.directionalLightSource;
         dl.direction             = resolveDirectionalVector(&tc, dlc._direction);
         dl.color                 = dlc._color;
         dl.intensity             = dlc.intensity;
@@ -166,7 +186,7 @@ void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneFrameSna
     // Fallback: directional light without transform
     if (!out.bHasDirectionalLight) {
         for (const auto& [e, dlc] : reg.view<DirectionalLightComponent>().each()) {
-            auto& dl                 = out.directionalLight;
+            auto& dl                 = out.directionalLightSource;
             dl.direction             = resolveDirectionalVector(nullptr, dlc._direction);
             dl.color                 = dlc._color;
             dl.intensity             = dlc.intensity;
@@ -176,13 +196,13 @@ void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneFrameSna
     }
 
     // Point lights
-    out.numPointLights = 0;
+    out.pointLightSourceCount = 0;
     for (const auto& [e, plc, tc] : reg.view<PointLightComponent, TransformComponent>().each()) {
-        if (out.numPointLights >= MAX_POINT_LIGHTS) {
+        if (out.pointLightSourceCount >= MAX_POINT_LIGHTS) {
             break;
         }
 
-        auto& pl       = out.pointLights[out.numPointLights];
+        auto& pl       = out.pointLightSources[out.pointLightSourceCount];
         pl.type        = static_cast<float>(plc._type);
         pl.constant    = plc._constant;
         pl.linear      = plc._linear;
@@ -196,7 +216,7 @@ void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneFrameSna
         pl.color       = plc.color;
         pl.intensity   = plc.intensity;
 
-        ++out.numPointLights;
+        ++out.pointLightSourceCount;
     }
 
     // Keep point-light order stable across camera motion so the shadow budget does not flicker

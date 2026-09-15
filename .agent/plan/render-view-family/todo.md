@@ -14,10 +14,10 @@
 - [x] 设计 SceneFrameSnapshot 字段分类和所有权方向，确认 resource generation/lifetime 风险。
 - [x] 设计 RenderViewInput 的现有来源与兼容迁移边界；RenderViewFamily/Output 留待真实多 View 切片。
 - [x] 引入 SceneFrameSnapshot 的实际存储边界，RenderFrameData 仅作为现有 per-view pipeline packet。
-- [ ] 将 shadow/cascade 字段从 SceneFrameSnapshot 移到独立 per-view preparation。
+- [x] 将 shadow/cascade 字段从 SceneFrameSnapshot 移到独立 per-view preparation。
 - [x] 将 RenderFrameExtractor 拆为 Scene extraction 与 View preparation 两个显式阶段。
 - [x] 通过显式 TerrainProcessor 输入移除 extractor 对全局 App 的依赖。
-- [ ] 在 scheduler 接入前，将 directional shadow/cascade preparation 从共享 Scene snapshot 的可变字段迁移到 per-view preparation。
+- [x] 将 directional shadow/cascade preparation 从共享 Scene snapshot 的可变字段迁移到 per-view preparation；Scene snapshot 只保存 view-independent light source data。
 - [x] 定义 SceneId、SceneRenderRequest、SceneViewportTask、SceneRenderScheduler 的最小契约。
 - [x] 实现 frame-local submit/seal/clear 调度和按 SceneId 去重 snapshot builder。
 - [x] 将 snapshot table 提升为 SceneRenderPlan 所有者，以 snapshotIndex 供多个 viewport task 复用。

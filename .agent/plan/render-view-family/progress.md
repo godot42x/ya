@@ -6,6 +6,7 @@
 - 已确认：RenderFrameInputs.h 已有四组输入；RenderFrameData 与 RenderFrameExtractor 仍混合 Scene 级和 View 级数据；RenderRuntime 仍按单 View、单 active Scene 记录。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
 - 本轮移除了 RenderRuntimeSnapshotTest 中依赖读取源码文本和 `find()` 的架构时序回归；保留运行时可执行的输入契约、scheduler 去重、revision 和 snapshot 索引校验。未修改运行时实现。
+- 当前 checkpoint：SceneFrameSnapshot 的灯光数据已收敛为 view-independent source data；directional cascade/shadow matrices 与完整 RHI light packet 仅在 per-view RenderFrameData 中生成。
 
 ## R0 真实调用链
 

@@ -66,6 +66,11 @@ TEST(RenderRuntimeSnapshotTest, FrameInputGroupsCameraViewDisplayPresent)
 TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
 {
     static_assert(std::is_base_of_v<SceneFrameSnapshot, RenderFrameData>);
+    static_assert(std::is_same_v<decltype(SceneFrameSnapshot{}.directionalLightSource), SceneDirectionalLightData>);
+    static_assert(std::is_same_v<std::remove_cvref_t<decltype(SceneFrameSnapshot{}.pointLightSources[0])>,
+                                 ScenePointLightData>);
+    static_assert(!std::is_same_v<decltype(SceneFrameSnapshot{}.directionalLightSource),
+                                  FrameContext::DirectionalLightData>);
 
     RenderFrameData frame;
     frame.view = glm::translate(glm::mat4(1.0f), glm::vec3(4.0f, 0.0f, 0.0f));
@@ -76,10 +81,18 @@ TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
     EXPECT_EQ(sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems.size(), 1u);
     EXPECT_EQ(sceneSnapshot.skinningPalettes.size(), 1u);
     EXPECT_EQ(frame.view[3][0], 4.0f);
+    sceneSnapshot.bHasDirectionalLight = true;
+    sceneSnapshot.directionalLightSource.direction = glm::vec3(0.0f, -1.0f, 0.0f);
+    sceneSnapshot.pointLightSourceCount = 1;
+    sceneSnapshot.pointLightSources[0].position = glm::vec3(2.0f, 3.0f, 4.0f);
+    EXPECT_EQ(sceneSnapshot.directionalLightSource.direction, glm::vec3(0.0f, -1.0f, 0.0f));
+    EXPECT_EQ(sceneSnapshot.pointLightSources[0].position, glm::vec3(2.0f, 3.0f, 4.0f));
 
     sceneSnapshot.clearScene();
     EXPECT_TRUE(frame.drawBuckets.staticMeshes.pbrDrawItems.empty());
     EXPECT_TRUE(frame.skinningPalettes.empty());
+    EXPECT_FALSE(sceneSnapshot.bHasDirectionalLight);
+    EXPECT_EQ(sceneSnapshot.pointLightSourceCount, 0u);
     EXPECT_EQ(frame.view[3][0], 4.0f);
 }
 
@@ -98,7 +111,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
         {
             ++buildCalls;
             auto snapshot = std::make_shared<SceneFrameSnapshot>();
-            snapshot->numPointLights = static_cast<uint32_t>(sceneId);
+            snapshot->pointLightSourceCount = static_cast<uint32_t>(sceneId);
             return std::shared_ptr<const SceneFrameSnapshot>(std::move(snapshot));
         };
         return request;

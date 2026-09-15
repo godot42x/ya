@@ -178,21 +178,55 @@ struct RenderMeshClassDrawBuckets
     }
 };
 
+/// Scene-owned directional light data. It deliberately contains no camera or
+/// shadow projection state so the snapshot can be shared by multiple views.
+struct SceneDirectionalLightData
+{
+    glm::vec3 direction = glm::vec3(0.0f, 0.0f, -1.0f);
+    glm::vec3 color     = glm::vec3(1.0f);
+    float     intensity = 1.0f;
+};
+
+/// Scene-owned point light data. Shadow matrices are generated for each view
+/// when the pipeline-facing RenderFrameData is prepared.
+struct ScenePointLightData
+{
+    glm::vec3 position = glm::vec3(0.0f);
+    float     type = 0.0f;
+
+    float constant  = 1.0f;
+    float linear    = 0.09f;
+    float quadratic = 0.032f;
+
+    glm::vec3 color = glm::vec3(1.0f);
+    float     intensity = 1.0f;
+
+    glm::vec3 spotDir = glm::vec3(0.0f, 0.0f, -1.0f);
+    float     innerCutOff = 0.0f;
+    float     outerCutOff = 0.0f;
+
+    float nearPlane = 0.1f;
+    float farPlane  = 100.0f;
+};
+
 /// Scene-level render data that can be shared by multiple camera views in the
-/// same frame. Shadow fields remain in this packet only until the per-view
-/// lighting preparation is completed.
+/// same frame. Camera and shadow state belongs to RenderFrameData below.
 struct SceneFrameSnapshot
 {
-    bool                                                       bHasDirectionalLight = false;
-    FrameContext::DirectionalLightData                          directionalLight;
-    uint32_t                                                   numPointLights = 0;
-    std::array<FrameContext::PointLightData, MAX_POINT_LIGHTS> pointLights;
+    bool                                                     bHasDirectionalLight = false;
+    SceneDirectionalLightData                                directionalLightSource;
+    uint32_t                                                 pointLightSourceCount = 0;
+    std::array<ScenePointLightData, MAX_POINT_LIGHTS>        pointLightSources;
 
     RenderMeshClassDrawBuckets drawBuckets;
     std::vector<RenderSkinningPalette> skinningPalettes;
 
     void clearScene()
     {
+        bHasDirectionalLight = false;
+        directionalLightSource = {};
+        pointLightSourceCount  = 0;
+        pointLightSources      = {};
         drawBuckets.clear();
         skinningPalettes.clear();
     }
@@ -203,6 +237,10 @@ struct SceneFrameSnapshot
 /// read-only by every pipeline / system.
 struct RenderFrameData : SceneFrameSnapshot
 {
+    FrameContext::DirectionalLightData                          directionalLight;
+    uint32_t                                                   numPointLights = 0;
+    std::array<FrameContext::PointLightData, MAX_POINT_LIGHTS> pointLights;
+
     glm::mat4    view           = glm::mat4(1.0f);
     glm::mat4    projection     = glm::mat4(1.0f);
     glm::mat4    viewProjection = glm::mat4(1.0f);
@@ -222,6 +260,9 @@ struct RenderFrameData : SceneFrameSnapshot
     void clear()
     {
         clearScene();
+        directionalLight = {};
+        numPointLights = 0;
+        pointLights = {};
     }
 
     [[nodiscard]] size_t totalDrawCount() const
