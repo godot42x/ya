@@ -129,6 +129,23 @@ template<typename TChild>
     }
 }
 
+/// Convert a builder into the element the parent will mount WITHOUT emptying a
+/// builder the caller passed as an lvalue.
+///
+/// Mounting only needs one more owner (the parent already holds the child), so
+/// consuming the caller's builder was never required - and it was exactly what
+/// turned an innocent `parent.child(builder); … builder.share()` into an empty
+/// handle that crashed much later, far from the line that caused it. Here an
+/// lvalue is copied first (the caller keeps its reference and its DSL methods),
+/// while an explicit `std::move` still consumes, because that is the author
+/// saying "I am done with this builder".
+template<typename TBuilder>
+[[nodiscard]] inline UIElementRef takeMountRef(TBuilder&& builder)
+{
+    std::decay_t<TBuilder> owned = std::forward<TBuilder>(builder);
+    return owned.release();
+}
+
 template<typename TWidget>
 [[nodiscard]] std::shared_ptr<TWidget> makeLiveWidget(const char* typeId,
                                                       std::string key,
@@ -166,8 +183,20 @@ class TUIWidgetBuilder
     {
     }
 
-    [[nodiscard]] TWidget& widget() { return *_widget; }
-    [[nodiscard]] const TWidget& widget() const { return *_widget; }
+    /// The widget this builder authors. A builder that only ever received an
+    /// lvalue into a parent still holds it (mounting copies, see takeMountRef),
+    /// so this stays valid; a builder consumed by an explicit std::move trips
+    /// the assert instead of dereferencing null.
+    [[nodiscard]] TWidget& widget()
+    {
+        YA_CORE_ASSERT(_widget, "ui builder: widget() on an already-released builder");
+        return *_widget;
+    }
+    [[nodiscard]] const TWidget& widget() const
+    {
+        YA_CORE_ASSERT(_widget, "ui builder: widget() on an already-released builder");
+        return *_widget;
+    }
 
     [[nodiscard]] UIElementRef release()
     {
@@ -186,10 +215,10 @@ class TUIWidgetBuilder
         return widget;
     }
 
-    /// Non-owning handle to the widget a builder still owns. Capture it BEFORE
-    /// the builder is moved into a parent (`parent.child(std::move(builder))`):
-    /// that move releases the builder's reference, and a later share() would
-    /// hand out an empty pointer whose first dereference crashes the host.
+    /// Non-owning handle to the widget this builder authors. Safe to call at any
+    /// point in the builder's life, including after the parent mounted it: only
+    /// an explicit `std::move(builder)` empties the builder, and that asserts
+    /// here instead of handing out an empty pointer that crashes later.
     [[nodiscard]] std::shared_ptr<TWidget> share() const
     {
         YA_CORE_ASSERT(_widget,
@@ -367,14 +396,14 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
     template<UIWidgetBuilder TChild>
     TDerived& child(TChild&& builder) &
     {
-        attachChild(std::forward<TChild>(builder).release());
+        attachChild(takeMountRef(std::forward<TChild>(builder)));
         return this->derived();
     }
 
     template<UIWidgetBuilder TChild>
     TDerived&& child(TChild&& builder) &&
     {
-        attachChild(std::forward<TChild>(builder).release());
+        attachChild(takeMountRef(std::forward<TChild>(builder)));
         return std::move(this->derived());
     }
 
@@ -382,7 +411,7 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
         requires SlotBuilderAcceptedBy<TDerived, TSlotBuilder>
     TDerived& child(TChild&& builder, TSlotBuilder&& slotBuilder) &
     {
-        applySlotBuilder(std::forward<TChild>(builder).release(), std::forward<TSlotBuilder>(slotBuilder));
+        applySlotBuilder(takeMountRef(std::forward<TChild>(builder)), std::forward<TSlotBuilder>(slotBuilder));
         return this->derived();
     }
 
@@ -390,7 +419,7 @@ class TUIWidgetChildrenBuilder : public TUIWidgetBuilder<TWidget, TDerived>
         requires SlotBuilderAcceptedBy<TDerived, TSlotBuilder>
     TDerived&& child(TChild&& builder, TSlotBuilder&& slotBuilder) &&
     {
-        applySlotBuilder(std::forward<TChild>(builder).release(), std::forward<TSlotBuilder>(slotBuilder));
+        applySlotBuilder(takeMountRef(std::forward<TChild>(builder)), std::forward<TSlotBuilder>(slotBuilder));
         return std::move(this->derived());
     }
 

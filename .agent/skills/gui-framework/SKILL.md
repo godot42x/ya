@@ -362,6 +362,12 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
 
 ## 静态 DSL（live construct）
 
+- Builder 所有权：`parent.child(builder)` 传**左值**时只挂载、不消耗调用者的 builder
+  （内部 `takeMountRef` 先拷贝再 release），所以「先挂载、后取句柄」是安全的；
+  `parent.child(std::move(builder))` 才是显式交出。任何已消耗 builder 上的
+  `share()` / `widget()` 会断言报错，而不是递出空指针。禁止恢复「child() 偷偷清空左值」
+  的语义：那正是 animation gallery `Toggle all` 崩溃（空句柄在几百帧后才被解引用）的成因；
+  契约由 `DeclarativeContractTest.MountingAnLvalueBuilderLeavesItUsable` 等三例锁住。
 - 默认路径：`ui::column/row/text/button/checkBox/slider/comboBox/image/textField/canvasPanel/border/splitPane/scroll/overlay/sizeBox/...` 组好 detached builder，再显式 `.release()` / `.share()` 取出 live `UIElement`，最后 `ui::attach(tree, parent, widget, slot)` 挂进树（Slate `SNew` + `SAssignNew`）。`ui::attach` 不隐式 `release()`；build 阶段与 attach 阶段分开。带 slot 的 `ui::attach(tree, parent, widget, slot)` 要求 `parent` 是带 `SlotArgs` 的具体 host（`UICanvasPanel`/`UIBorder`/`UIContainer`/`UISplitPane`/`UICanvasRoot`…），不能传 `UIElement&`，这样 canvas/box/overlay/content 在编译期选对。不要把整棵 DSL 包进 `ui::attach(...)`。`setAnchors` / `fillParent` / Border `setCornerRadius` / Border+Text `setStyleKey` / `setStyle`（freeze）/ `setStyleField`（单键 inherit）/ container `childFill` 与 `child(node, FBoxSlotArgs)` / overlay `child(node, FOverlaySlotArgs)` / content host `child(node, FContentSlotArgs)` 在 Construct 时写到 live widget。`setTooltip` 写在 base builder；Text `setWrap` / `setMaxWrapWidth` 控制折行；base `setVisibility`；split `setPadding`。`ui::button` 没有 `setText`；文字走内部 `UIText` 子 widget。值更新走 `Reactive<T>`；已知结构走 `attach`/`detach`/`setVisible`。自定义 / 复杂 demo widget（MenuBar、TreeView、TableGrid、DragFloat/SpinBox/RadioButton/ColorEdit/SearchComboBox、UIDragDropTile、DockSpace、SelectableRow）用 `child(UIElementRef)` 挂进 DSL 壳，不要为此扩 Construct。GUIWorkbench Feature Gallery 各页与 Workbench 内置 Editor demo（`FWorkbenchSurface::buildEditorDemo`）已是 `.release()` + `ui::attach`。Editor 的 `rebuildItemRows()` 仍是事件期 live attach/detach `UISelectableRow`。弹层（Menu / Modal / Dialog）仍在点击时 live 组装。Dock floating host 仍 `attachToLayer(Popup, host, fill canvas args)`。Render 仍是 raw retained 对照。GameEditor chrome 已切到 `EditorSurface`（整窗 WidgetTree，不是 ImGui 内嵌 panel）。
 - `UIDescription` / `UIReconciler` / `UIRenderController` / apply hook **已删除**。不要恢复 Description → apply → widget 转发层。
 - Document/script：`UIDocument::instantiate()`（registry factory）只实例化一次。变长集合走列表控件 + `ReactiveList`，不是整页 re-run。

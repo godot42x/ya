@@ -260,8 +260,9 @@ YA_UI_ANONYMOUS_FACTORY(popupOverlay, UIPopupOverlayWidgetBuilder)
 #undef YA_UI_ANONYMOUS_FACTORY
 
 /// Mount an already-built widget into the live tree using the host's implicit
-/// default slot intent. Builders stay in the authoring phase until the caller
-/// explicitly `.release()` / `.share()`s them.
+/// default slot intent. Pass a builder by lvalue and it stays usable afterwards
+/// (`parent.child(builder)` copies; nothing is silently consumed); pass
+/// `std::move(builder)` when you really want to give it up.
 inline WidgetAttachment attach(WidgetTree& tree, UIElement& parent, const UIElementRef& widget)
 {
     YA_CORE_ASSERT(widget, "ui::attach: empty widget");

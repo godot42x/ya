@@ -161,13 +161,13 @@ class UIButtonWidgetBuilder final : public TUIWidgetChildrenBuilder<UIButton, UI
     template<UIWidgetBuilder TChild>
     UIButtonWidgetBuilder& child(TChild&& builder, const FContentSlotArgs& slot) &
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
     UIButtonWidgetBuilder&& child(TChild&& builder, const FContentSlotArgs& slot) &&
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return std::move(*this);
     }
 
@@ -291,13 +291,13 @@ class UICheckBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UICheckBox
     template<UIWidgetBuilder TChild>
     UICheckBoxWidgetBuilder& child(TChild&& builder, const FContentSlotArgs& slot) &
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
     UICheckBoxWidgetBuilder&& child(TChild&& builder, const FContentSlotArgs& slot) &&
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return std::move(*this);
     }
 
@@ -368,13 +368,13 @@ class UISelectableRowWidgetBuilder final : public TUIWidgetChildrenBuilder<UISel
     template<UIWidgetBuilder TChild>
     UISelectableRowWidgetBuilder& child(TChild&& builder, const FContentSlotArgs& slot) &
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
     UISelectableRowWidgetBuilder&& child(TChild&& builder, const FContentSlotArgs& slot) &&
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return std::move(*this);
     }
 

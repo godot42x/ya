@@ -207,8 +207,8 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
     auto slowSwitch    = ya::ui::toggle("AnimSwitchSlow").setText("Slow (0.45s)");
     auto instantSwitch = ya::ui::toggle("AnimSwitchInstant").setText("Instant (none)");
     auto onSwitch      = ya::ui::toggle("AnimSwitchOn").setText("Built already on").setChecked(true);
-    // Handles first: `form.child(builder)` releases the builder, so share()
-    // must happen while the builder still owns its widget.
+    // Handles next to their builders: mounting an lvalue no longer consumes the
+    // builder, so taking the handle after `form.child(...)` would work too.
     auto fastRef       = fastSwitch.share();
     auto slowRef       = slowSwitch.share();
     auto instantRef    = instantSwitch.share();

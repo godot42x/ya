@@ -15,6 +15,7 @@
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/SizeBox.h"
 #include "GUI/Widgets/Controls/Slider.h"
+#include "GUI/Widgets/Controls/Switch.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -1192,6 +1193,77 @@ TEST(DeclarativeContractTest, DirectConstructDetachStopsButtonClicks)
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), ctx),
               EWidgetRouteResult::NotHandled);
     EXPECT_EQ(clicks, 1);
+}
+
+// === Builder ownership at mount time ========================================
+//
+// Mounting a builder into a parent must not silently empty a builder the caller
+// still holds: `parent.child(builder)` is a handoff of one extra owner, not a
+// request to consume the caller's object. These cases are the DSL-level
+// contract behind the animation gallery crash, where the switch handle was
+// taken AFTER the switch had been mounted and the first dereference of the
+// resulting empty pointer killed the host.
+
+TEST(DeclarativeContractTest, MountingAnLvalueBuilderLeavesItUsable)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    auto* host = tree.getLayer(WidgetTree::ELayer::Content);
+
+    auto form   = ui::column("MountForm");
+    auto toggle = ui::toggle("MountSwitch");
+    form.child(toggle); // lvalue: copies, the caller keeps its reference
+
+    UISwitch* togglePtr = &toggle.widget();
+    ASSERT_NE(togglePtr, nullptr);
+    EXPECT_NE(toggle.share(), nullptr); // used to be an empty pointer here
+
+    const UIElementRef root = std::move(form).release();
+    (void)ui::attach(tree, *host, root, ui::canvasSlot().size({120.0f, 24.0f}));
+
+    // The mounted child IS the widget the builder still hands out - one object,
+    // two owners - and using it after mounting is safe.
+    ASSERT_EQ(root->getChildren().size(), 1u);
+    EXPECT_EQ(root->getChildren()[0].get(), togglePtr);
+    EXPECT_EQ(toggle.share().get(), togglePtr);
+    EXPECT_FALSE(toggle.share()->isChecked()); // the dereference that crashed
+    toggle.share()->setChecked(true);
+    EXPECT_TRUE(toggle.share()->isChecked());
+    EXPECT_TRUE(togglePtr->isAttached());
+}
+
+TEST(DeclarativeContractTest, MountedBuilderHandleStillDrivesTheLiveWidget)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    auto* host = tree.getLayer(WidgetTree::ELayer::Content);
+
+    auto form  = ui::column("HandleForm");
+    auto label = ui::text("HandleLabel").setText("before");
+    form.child(label);
+    const UIElementRef root = std::move(form).release();
+    (void)ui::attach(tree, *host, root, ui::canvasSlot().size({160.0f, 40.0f}));
+
+    // Mutating through a handle obtained after the mount goes through the same
+    // changed-only setter path, so the live widget invalidates as usual.
+    label.share()->setText("after");
+    EXPECT_EQ(label.widget().getText(), "after");
+    EXPECT_TRUE(label.widget().isPaintDirty());
+    EXPECT_EQ(root->getChildren()[0].get(), &label.widget());
+}
+
+TEST(DeclarativeContractTest, ExplicitMoveStillTransfersTheBuilder)
+{
+    WidgetTree tree({.width = 320, .height = 200});
+    auto* host = tree.getLayer(WidgetTree::ELayer::Content);
+
+    auto form  = ui::column("MoveForm");
+    auto label = ui::text("MoveLabel").setText("moved");
+    UIElement* labelPtr = &label.widget();
+    form.child(std::move(label)); // explicit: the author gave the builder up
+
+    const UIElementRef root = std::move(form).release();
+    (void)ui::attach(tree, *host, root, ui::canvasSlot().size({160.0f, 40.0f}));
+    ASSERT_EQ(root->getChildren().size(), 1u);
+    EXPECT_EQ(root->getChildren()[0].get(), labelPtr);
 }
 
 } // namespace ya

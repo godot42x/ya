@@ -42,14 +42,14 @@ class UICanvasPanelWidgetBuilder final : public TUIWidgetChildrenBuilder<UICanva
     template<UIWidgetBuilder TChild>
     UICanvasPanelWidgetBuilder& child(TChild&& builder, const FCanvasSlotArgs& slot) &
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return *this;
     }
 
     template<UIWidgetBuilder TChild>
     UICanvasPanelWidgetBuilder&& child(TChild&& builder, const FCanvasSlotArgs& slot) &&
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return std::move(*this);
     }
 };
@@ -117,14 +117,14 @@ class UIBorderWidgetBuilder final : public TUIWidgetChildrenBuilder<UIBorder, UI
     template<UIWidgetBuilder TChild>
     UIBorderWidgetBuilder& child(TChild&& builder, const FContentSlotArgs& slot) &
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return *this;
     }
 
     template<UIWidgetBuilder TChild>
     UIBorderWidgetBuilder&& child(TChild&& builder, const FContentSlotArgs& slot) &&
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return std::move(*this);
     }
 };
@@ -231,14 +231,14 @@ class UIContainerWidgetBuilder final : public TUIWidgetChildrenBuilder<UIContain
     template<UIWidgetBuilder TChild>
     UIContainerWidgetBuilder& child(TChild&& builder, const FBoxSlotArgs& slot) &
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return *this;
     }
 
     template<UIWidgetBuilder TChild>
     UIContainerWidgetBuilder&& child(TChild&& builder, const FBoxSlotArgs& slot) &&
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return std::move(*this);
     }
 };
@@ -272,13 +272,13 @@ class UISplitPaneWidgetBuilder final : public TUIWidgetChildrenBuilder<UISplitPa
     template<UIWidgetBuilder TChild>
     UISplitPaneWidgetBuilder& child(TChild&& builder, const FContentSlotArgs& slot) &
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
     UISplitPaneWidgetBuilder&& child(TChild&& builder, const FContentSlotArgs& slot) &&
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return std::move(*this);
     }
 
@@ -397,13 +397,13 @@ class UIScrollViewportWidgetBuilder final : public TUIWidgetChildrenBuilder<UISc
     template<UIWidgetBuilder TChild>
     UIScrollViewportWidgetBuilder& child(TChild&& builder, const FContentSlotArgs& slot) &
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
     UIScrollViewportWidgetBuilder&& child(TChild&& builder, const FContentSlotArgs& slot) &&
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return std::move(*this);
     }
 };
@@ -436,14 +436,14 @@ class UIOverlayWidgetBuilder final : public TUIWidgetChildrenBuilder<UIOverlay, 
     template<UIWidgetBuilder TChild>
     UIOverlayWidgetBuilder& child(TChild&& builder, const FOverlaySlotArgs& slot) &
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return *this;
     }
 
     template<UIWidgetBuilder TChild>
     UIOverlayWidgetBuilder&& child(TChild&& builder, const FOverlaySlotArgs& slot) &&
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return std::move(*this);
     }
 };
@@ -549,13 +549,13 @@ class UISizeBoxWidgetBuilder final : public TUIWidgetChildrenBuilder<UISizeBox, 
     template<UIWidgetBuilder TChild>
     UISizeBoxWidgetBuilder& child(TChild&& builder, const FContentSlotArgs& slot) &
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
     UISizeBoxWidgetBuilder&& child(TChild&& builder, const FContentSlotArgs& slot) &&
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return std::move(*this);
     }
 };
@@ -693,13 +693,13 @@ class UIExpanderWidgetBuilder final : public TUIWidgetChildrenBuilder<UIExpander
     template<UIWidgetBuilder TChild>
     UIExpanderWidgetBuilder& child(TChild&& builder, const FBoxSlotArgs& slot) &
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return *this;
     }
     template<UIWidgetBuilder TChild>
     UIExpanderWidgetBuilder&& child(TChild&& builder, const FBoxSlotArgs& slot) &&
     {
-        this->applySlotArgs(std::forward<TChild>(builder).release(), slot);
+        this->applySlotArgs(takeMountRef(std::forward<TChild>(builder)), slot);
         return std::move(*this);
     }
 };
