@@ -8,6 +8,7 @@
 #include "ECS/Systems/Components/DirectionComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "Render3D/Common/PipelineCommon.h"
+#include "Render3D/Common/PostProcessingStateConfig.h"
 #include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
 #include "Scene/Core/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -181,6 +182,7 @@ void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
         .width       = static_cast<uint32_t>(desc.windowW),
         .height      = static_cast<uint32_t>(desc.windowH),
     });
+    _postProcessStage.getState() = postprocess_settings::loadRuntimeSettings(_postProcessStage.getState());
     _deleter.push("PostProcessStage", [this](void*)
                   { _postProcessStage.shutdown(); });
 }
@@ -297,6 +299,7 @@ bool ForwardRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& fra
 
 void ForwardRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
+    applyPendingPostProcessSettings();
     _postProcessStage.beginFrame();
     captureShadowSettings(frame);
     syncFrameSettings(frame);
@@ -503,6 +506,30 @@ ShadowSettings ForwardRenderPipeline::getCurrentShadowSettings() const
 void ForwardRenderPipeline::requestShadowSettings(const ShadowSettings& shadowSettings)
 {
     applyShadowSettings(shadowSettings);
+}
+
+PostProcessingState ForwardRenderPipeline::getPostProcessSettings() const
+{
+    return _postProcessStage.getState();
+}
+
+PostProcessingState ForwardRenderPipeline::resolvePostProcessSettings() const
+{
+    return _pendingPostProcessSettings ? *_pendingPostProcessSettings : _postProcessStage.getState();
+}
+
+void ForwardRenderPipeline::requestPostProcessSettings(const PostProcessingState& settings)
+{
+    _pendingPostProcessSettings = settings;
+}
+
+void ForwardRenderPipeline::applyPendingPostProcessSettings()
+{
+    if (!_pendingPostProcessSettings) {
+        return;
+    }
+    _postProcessStage.getState() = *_pendingPostProcessSettings;
+    _pendingPostProcessSettings.reset();
 }
 
 void ForwardRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSettings)

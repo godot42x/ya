@@ -10,22 +10,17 @@
 #include "GameEditor/UI/RuntimeDiagnosticsSection.h"
 #include "GameEditor/UI/RuntimeProfilingSection.h"
 #include "GameEditor/UI/RuntimeRenderGraphSection.h"
-#include "GameEditor/UI/RuntimeRenderSettingsSection.h"
 #include "GameEditor/UI/RuntimeRenderTargetSection.h"
 #include "GameRuntime/App.h"
-#include "RHI/Core/RenderSurfaceContext.h"
 
 #include <format>
 
 namespace ya
 {
 
-EditorRuntimeToolsTab::EditorRuntimeToolsTab(ActionMap* actions,
-                                             IRenderSurfaceContext* presentSurface,
-                                             App* app)
+EditorRuntimeToolsTab::EditorRuntimeToolsTab(ActionMap* actions, App* app)
     : UICompoundWidget("RuntimeToolsBody", "panel.canvas")
     , _actions(actions)
-    , _presentSurface(presentSurface)
     , _app(app)
 {
     enableTick();
@@ -61,7 +56,6 @@ void EditorRuntimeToolsTab::construct()
     });
     auto stop = stopBuilder.share();
     auto diagnostics = std::make_shared<RuntimeDiagnosticsSection>();
-    auto renderSettings = std::make_shared<RuntimeRenderSettingsSection>("RuntimeRenderSettings", _app, _presentSurface);
     auto profiling = std::make_shared<RuntimeProfilingSection>();
     auto renderGraph = std::make_shared<RuntimeRenderGraphSection>();
     auto renderTargets = std::make_shared<RuntimeRenderTargetSection>();
@@ -73,7 +67,6 @@ void EditorRuntimeToolsTab::construct()
     _simulateButton = simulate;
     _stopButton = stop;
     _diagnostics = diagnostics;
-    _renderSettings = renderSettings;
     _profiling = profiling;
     _renderGraph = renderGraph;
     _renderTargets = renderTargets;
@@ -91,7 +84,6 @@ void EditorRuntimeToolsTab::construct()
                                     .child(simulate, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
                                     .child(stop, FBoxSlotArgs{.preferredSize = {140.0f, 26.0f}})
                                     .child(diagnostics)
-                                    .child(renderSettings)
                                     .child(profiling)
                                     .child(renderGraph)
                                     .child(renderTargets)
@@ -122,7 +114,6 @@ void EditorRuntimeToolsTab::refresh()
     _statusText->setText(state);
     _frameText->setText(std::format("Frame {}", _app->getFrameIndex()));
     _diagnostics->sync(_app);
-    _renderSettings->sync(_app, _presentSurface);
     _profiling->sync(_app);
     _renderGraph->sync(_app);
     _renderTargets->sync(_app);

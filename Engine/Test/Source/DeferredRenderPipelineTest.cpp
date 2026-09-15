@@ -82,6 +82,9 @@ TEST(DeferredRenderPipelineTest, SettingsCommandsApplyLatestSnapshotAtFrameBound
     auto first = pipeline.buildSettingsSnapshot();
     first.bReverseViewportY           = false;
     first.bSSAOEnabled                = false;
+    first.ssaoRadius                  = 0.2f;
+    first.ssaoBias                    = 0.01f;
+    first.bPBRDiffuseIBL              = false;
     first.postProcessing.bEnableBloom = true;
     first.shadow                      = ShadowSettings::fromQuality(EShadowQuality::Low);
     pipeline.requestSettings(first);
@@ -89,6 +92,11 @@ TEST(DeferredRenderPipelineTest, SettingsCommandsApplyLatestSnapshotAtFrameBound
     auto latest = pipeline.buildSettingsSnapshot();
     latest.bReverseViewportY              = false;
     latest.bSSAOEnabled                   = true;
+    latest.ssaoRadius                     = 1.5f;
+    latest.ssaoPower                      = 2.0f;
+    latest.ssaoIntensity                  = 3.0f;
+    latest.bPBRDiffuseIBL                 = false;
+    latest.bPBRSpecularIBL                = false;
     latest.postProcessing.bEnableInversion = true;
     latest.postProcessing.bEnableBloom  = false;
     latest.shadow                       = ShadowSettings::fromQuality(EShadowQuality::Ultra);
@@ -97,14 +105,29 @@ TEST(DeferredRenderPipelineTest, SettingsCommandsApplyLatestSnapshotAtFrameBound
     const auto beforeApply = pipeline.buildSettingsSnapshot();
     EXPECT_TRUE(beforeApply.bReverseViewportY);
     EXPECT_TRUE(beforeApply.bSSAOEnabled);
+    EXPECT_FLOAT_EQ(beforeApply.ssaoRadius, 0.6f);
+    EXPECT_TRUE(beforeApply.bPBRDiffuseIBL);
+    EXPECT_TRUE(beforeApply.bPBRSpecularIBL);
     EXPECT_FALSE(beforeApply.postProcessing.bEnableInversion);
     EXPECT_EQ(beforeApply.shadow.quality, EShadowQuality::Off);
+
+    const auto pending = pipeline.resolveSettingsSnapshot();
+    EXPECT_FALSE(pending.bReverseViewportY);
+    EXPECT_TRUE(pending.bSSAOEnabled);
+    EXPECT_FLOAT_EQ(pending.ssaoRadius, 1.5f);
+    EXPECT_FALSE(pending.bPBRDiffuseIBL);
+    EXPECT_FALSE(pending.bPBRSpecularIBL);
 
     DeferredRenderPipelineTestAccess::applyPendingSettings(pipeline);
 
     const auto afterApply = pipeline.buildSettingsSnapshot();
     EXPECT_FALSE(afterApply.bReverseViewportY);
     EXPECT_TRUE(afterApply.bSSAOEnabled);
+    EXPECT_FLOAT_EQ(afterApply.ssaoRadius, 1.5f);
+    EXPECT_FLOAT_EQ(afterApply.ssaoPower, 2.0f);
+    EXPECT_FLOAT_EQ(afterApply.ssaoIntensity, 3.0f);
+    EXPECT_FALSE(afterApply.bPBRDiffuseIBL);
+    EXPECT_FALSE(afterApply.bPBRSpecularIBL);
     EXPECT_TRUE(afterApply.postProcessing.bEnableInversion);
     EXPECT_FALSE(afterApply.postProcessing.bEnableBloom);
     EXPECT_EQ(afterApply.shadow.quality, EShadowQuality::Ultra);
@@ -324,6 +347,29 @@ TEST_F(DeferredRenderPipelineSettingsTest, PersistentShadowSettingsSeedFirstFram
 
     EXPECT_EQ(runtimeShadowSettings.quality, EShadowQuality::Ultra);
     EXPECT_EQ(pipeline.buildSettingsSnapshot().shadow.quality, EShadowQuality::Ultra);
+}
+
+TEST_F(DeferredRenderPipelineSettingsTest, PersistentPostProcessAndDeferredExtrasSeedSnapshot)
+{
+    ConfigManager::get().set("runtime", "render.postprocess.bloom.enabled", true);
+    ConfigManager::get().set("runtime", "render.postprocess.basic.tonemapping.exposure", 1.25f);
+    ConfigManager::get().set("runtime", "render.deferred.ssaoEnabled", false);
+    ConfigManager::get().set("runtime", "render.deferred.ssao.radius", 1.5f);
+    ConfigManager::get().set("runtime", "render.deferred.light.enablePBRDiffuseIBL", false);
+    ConfigManager::get().set("runtime", "render.deferred.light.enablePBRSpecularIBL", false);
+    ConfigManager::get().set("runtime", "render.deferred.reverseViewportY", false);
+
+    DeferredRenderPipeline pipeline;
+    DeferredRenderPipelineTestAccess::loadPersistentSettings(pipeline);
+
+    const auto snapshot = pipeline.buildSettingsSnapshot();
+    EXPECT_TRUE(snapshot.postProcessing.bEnableBloom);
+    EXPECT_FLOAT_EQ(snapshot.postProcessing.exposure, 1.25f);
+    EXPECT_FALSE(snapshot.bSSAOEnabled);
+    EXPECT_FLOAT_EQ(snapshot.ssaoRadius, 1.5f);
+    EXPECT_FALSE(snapshot.bPBRDiffuseIBL);
+    EXPECT_FALSE(snapshot.bPBRSpecularIBL);
+    EXPECT_FALSE(snapshot.bReverseViewportY);
 }
 
 } // namespace

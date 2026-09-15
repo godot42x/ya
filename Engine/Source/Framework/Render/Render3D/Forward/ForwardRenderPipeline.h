@@ -21,6 +21,7 @@
 
 #include <array>
 #include <glm/glm.hpp>
+#include <optional>
 #include <vector>
 
 namespace ya
@@ -91,6 +92,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     FrameContext  _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
+    std::optional<PostProcessingState> _pendingPostProcessSettings;
 
     void init(const InitDesc& desc);
     void tick(const RenderPipelineFrameContext& frame) override;
@@ -139,6 +141,9 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] EFormat::T     getPostprocessColorFormat() const override { return POSTPROCESS_COLOR_FORMAT; }
     [[nodiscard]] ShadowSettings getCurrentShadowSettings() const;
     void                         requestShadowSettings(const ShadowSettings& shadowSettings);
+    [[nodiscard]] PostProcessingState getPostProcessSettings() const;
+    [[nodiscard]] PostProcessingState resolvePostProcessSettings() const;
+    void                         requestPostProcessSettings(const PostProcessingState& settings);
 
   private:
     void               initViewportResources(const InitDesc& desc);
@@ -167,6 +172,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void               executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               rebuildShadowViews();
     void               applyShadowSettings(const ShadowSettings& shadowSettings);
+    void               applyPendingPostProcessSettings();
 };
 
 } // namespace ya

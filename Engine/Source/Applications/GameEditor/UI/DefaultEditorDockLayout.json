@@ -20,6 +20,7 @@
           "content-browser",
           "frame-stats",
           "runtime-tools",
+          "render-settings",
           "asset-inspector",
           "debug-images"
         ],

@@ -10,6 +10,7 @@
 #include "GameEditor/UI/EditorInspectorTab.h"
 #include "GameEditor/UI/EditorPlayToolbarTab.h"
 #include "GameEditor/UI/EditorRuntimeToolsTab.h"
+#include "GameEditor/UI/EditorRenderSettingsTab.h"
 #include "GameEditor/UI/EditorStatsTab.h"
 #include "GameEditor/UI/EditorTheme.h"
 #include "GameEditor/UI/EditorUIDesignerTab.h"
@@ -137,7 +138,16 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
         .toolsMenuLabel = "Runtime Tools",
         .scope = EEditorTabScope::WindowTool,
         .spawn = [](FEditorTabSpawnContext& ctx) {
-            return std::make_shared<EditorRuntimeToolsTab>(ctx.actions, ctx.presentSurface, ctx.app);
+            return std::make_shared<EditorRuntimeToolsTab>(ctx.actions, ctx.app);
+        },
+    });
+    registry.add({
+        .tabId = "render-settings",
+        .title = "Render",
+        .toolsMenuLabel = "Render Settings",
+        .scope = EEditorTabScope::WindowTool,
+        .spawn = [](FEditorTabSpawnContext& ctx) {
+            return std::make_shared<EditorRenderSettingsTab>(ctx.app, ctx.presentSurface);
         },
     });
     registry.add({

@@ -47,6 +47,7 @@ constexpr std::string_view kFactoryWindowRootLayoutJson = R"JSON(
           "content-browser",
           "frame-stats",
           "runtime-tools",
+          "render-settings",
           "asset-inspector",
           "debug-images"
         ],

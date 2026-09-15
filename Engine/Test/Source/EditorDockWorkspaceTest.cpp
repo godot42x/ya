@@ -67,9 +67,9 @@ TEST(EditorDockWorkspaceTest, FactoryLayoutPlacesDefaultTabs)
               (std::vector<std::string>{"content-browser",
                                         "frame-stats",
                                         "runtime-tools",
+                                        "render-settings",
                                         "asset-inspector",
-                                        "debug-images",
-                                        "font-atlases"}));
+                                        "debug-images"}));
     const FDockNode* pageLeaf = context.dockModel().findLeafForPanel(
         context.findPanelByStableKey("level-editor")->id);
     const FDockNode* toolsLeaf = context.dockModel().findLeafForPanel(

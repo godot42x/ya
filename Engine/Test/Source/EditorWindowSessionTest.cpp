@@ -287,6 +287,7 @@ TEST(EditorWindowSessionTest, SessionOwnedTabsDoNotUseAppGetOrPrimarySwapchain)
     const char* files[] = {
         "Source/Applications/GameEditor/UI/EditorContentBrowserTab.cpp",
         "Source/Applications/GameEditor/UI/EditorRuntimeToolsTab.cpp",
+        "Source/Applications/GameEditor/UI/EditorRenderSettingsTab.cpp",
         "Source/Applications/GameEditor/UI/EditorPlayToolbarTab.cpp",
         "Source/Applications/GameEditor/UI/EditorFontAtlasTab.cpp",
         "Source/Applications/GameEditor/UI/RuntimeRenderSettingsSection.cpp",
@@ -303,6 +304,12 @@ TEST(EditorWindowSessionTest, SessionOwnedTabsDoNotUseAppGetOrPrimarySwapchain)
         EXPECT_EQ(text.find("App::get()"), std::string::npos) << relative;
         EXPECT_EQ(text.find("primarySwapchain"), std::string::npos) << relative;
     }
+
+    const std::string settings = readEngineSource(
+        "Source/Applications/GameEditor/UI/RuntimeRenderSettingsSection.cpp");
+    EXPECT_EQ(settings.find("LightStage.h"), std::string::npos);
+    EXPECT_EQ(settings.find("SSAOStage.h"), std::string::npos);
+    EXPECT_EQ(settings.find("getState()"), std::string::npos);
 }
 
 } // namespace ya

@@ -84,6 +84,12 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     {
         bool           bReverseViewportY = true;
         bool           bSSAOEnabled      = true;
+        float          ssaoRadius        = 0.6f;
+        float          ssaoBias          = 0.025f;
+        float          ssaoPower         = 1.5f;
+        float          ssaoIntensity     = 2.5f;
+        bool           bPBRDiffuseIBL    = true;
+        bool           bPBRSpecularIBL   = true;
         ShadowSettings shadow{};
         PostProcessingState postProcessing{};
     };
@@ -143,6 +149,12 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
 
     bool     _bReverseViewportY    = true;
     bool     _bEnableSSAO          = true;
+    float    _ssaoRadius           = 0.6f;
+    float    _ssaoBias             = 0.025f;
+    float    _ssaoPower            = 1.5f;
+    float    _ssaoIntensity        = 2.5f;
+    bool     _bEnablePBRDiffuseIBL = true;
+    bool     _bEnablePBRSpecularIBL = true;
 
     std::optional<SettingsSnapshot> _pendingSettings;
 
@@ -208,6 +220,8 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
         _bEnableSSAO = enabled;
     }
     [[nodiscard]] SettingsSnapshot buildSettingsSnapshot() const;
+    /// Pending snapshot if a request is in flight, otherwise the applied snapshot.
+    [[nodiscard]] SettingsSnapshot resolveSettingsSnapshot() const;
     void requestSettings(const SettingsSnapshot& settings);
     DeferredPipelineDebugViews buildDebugViews() const;
     void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;

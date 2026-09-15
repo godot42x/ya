@@ -20,6 +20,7 @@
 #include "RHI/Core/Texture.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 
+#include "Render3D/Common/PostProcessingStateConfig.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Graph/RenderGraphExecutor.h"
 #include "Core/Config/ConfigManager.h"
@@ -337,9 +338,20 @@ DeferredRenderPipeline::SettingsSnapshot DeferredRenderPipeline::buildSettingsSn
     return {
         .bReverseViewportY = _bReverseViewportY,
         .bSSAOEnabled      = _bEnableSSAO,
+        .ssaoRadius        = _ssaoStage ? _ssaoStage->getRadius() : _ssaoRadius,
+        .ssaoBias          = _ssaoStage ? _ssaoStage->getBias() : _ssaoBias,
+        .ssaoPower         = _ssaoStage ? _ssaoStage->getPower() : _ssaoPower,
+        .ssaoIntensity     = _ssaoStage ? _ssaoStage->getIntensity() : _ssaoIntensity,
+        .bPBRDiffuseIBL    = _lightStage ? _lightStage->isPBRDiffuseIBLEnabled() : _bEnablePBRDiffuseIBL,
+        .bPBRSpecularIBL   = _lightStage ? _lightStage->isPBRSpecularIBLEnabled() : _bEnablePBRSpecularIBL,
         .shadow            = currentShadowSettings(),
         .postProcessing    = _postProcessStage.getState(),
     };
+}
+
+DeferredRenderPipeline::SettingsSnapshot DeferredRenderPipeline::resolveSettingsSnapshot() const
+{
+    return _pendingSettings ? *_pendingSettings : buildSettingsSnapshot();
 }
 
 void DeferredRenderPipeline::requestSettings(const SettingsSnapshot& settings)
@@ -408,8 +420,20 @@ void DeferredRenderPipeline::applyPendingSettings()
 
     _bReverseViewportY = settings.bReverseViewportY;
     setSSAOEnabled(settings.bSSAOEnabled);
+    _ssaoRadius            = settings.ssaoRadius;
+    _ssaoBias              = settings.ssaoBias;
+    _ssaoPower             = settings.ssaoPower;
+    _ssaoIntensity         = settings.ssaoIntensity;
+    _bEnablePBRDiffuseIBL  = settings.bPBRDiffuseIBL;
+    _bEnablePBRSpecularIBL = settings.bPBRSpecularIBL;
     _postProcessStage.getState() = settings.postProcessing;
     applyShadowSettings(settings.shadow);
+    if (_ssaoStage) {
+        _ssaoStage->setSettings(_ssaoRadius, _ssaoBias, _ssaoPower, _ssaoIntensity, _bReverseViewportY);
+    }
+    if (_lightStage) {
+        _lightStage->setIBLSettings(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL);
+    }
 }
 
 void DeferredRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSettings)
@@ -437,25 +461,14 @@ void DeferredRenderPipeline::loadPersistentSettings()
     auto& config = ConfigManager::get();
     _bReverseViewportY = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.reverseViewportY", _bReverseViewportY);
     _bEnableSSAO       = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssaoEnabled", _bEnableSSAO);
+    _ssaoRadius        = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.radius", _ssaoRadius);
+    _ssaoBias          = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.bias", _ssaoBias);
+    _ssaoPower         = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.power", _ssaoPower);
+    _ssaoIntensity     = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssao.intensity", _ssaoIntensity);
+    _bEnablePBRDiffuseIBL  = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.light.enablePBRDiffuseIBL", _bEnablePBRDiffuseIBL);
+    _bEnablePBRSpecularIBL = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.light.enablePBRSpecularIBL", _bEnablePBRSpecularIBL);
 
-    auto& post = _postProcessStage.getState();
-    post.bEnableInversion       = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.inversion", post.bEnableInversion);
-    post.grayscaleMode          = static_cast<PostProcessingState::EGrayscaleMode>(config.getOr<int>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.grayscale", static_cast<int>(post.grayscaleMode)));
-    post.kernelMode             = static_cast<PostProcessingState::EKernelMode>(config.getOr<int>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.kernel", static_cast<int>(post.kernelMode)));
-    post.kernelTexelOffset      = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.kernelTexelOffset", post.kernelTexelOffset);
-    post.bEnableToneMapping     = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.tonemapping.enabled", post.bEnableToneMapping);
-    post.toneMappingCurve       = static_cast<PostProcessingState::EToneMappingCurve>(config.getOr<int>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.tonemapping.curve", static_cast<int>(post.toneMappingCurve)));
-    post.exposure               = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.tonemapping.exposure", post.exposure);
-    post.bEnableGammaCorrection = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.output.gammaCorrection", post.bEnableGammaCorrection);
-    post.gamma                  = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.output.gamma", post.gamma);
-    post.bEnableRandomGrain     = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.output.randomGrain", post.bEnableRandomGrain);
-    post.randomGrainStrength    = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.output.randomGrainStrength", post.randomGrainStrength);
-    post.bEnableBloom           = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.bloom.enabled", post.bEnableBloom);
-    post.bloomThreshold         = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.bloom.threshold", post.bloomThreshold);
-    post.bloomSoftKnee          = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.bloom.softKnee", post.bloomSoftKnee);
-    post.bloomExtractIntensity  = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.bloom.extractIntensity", post.bloomExtractIntensity);
-    post.bloomBlurPasses        = static_cast<uint32_t>(std::max(1, config.getOr<int>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.bloom.blurPasses", static_cast<int>(post.bloomBlurPasses))));
-    post.bloomStrength          = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.bloom.strength", post.bloomStrength);
+    _postProcessStage.getState() = postprocess_settings::loadRuntimeSettings(_postProcessStage.getState());
 
     const ShadowSettings baselineShadowSettings = _shadowSettings ? *_shadowSettings : currentShadowSettings();
     ShadowSettings shadowSettings = shadow_settings::loadRuntimeSettings(baselineShadowSettings);
@@ -730,8 +743,8 @@ void DeferredRenderPipeline::initStages()
 
     _ssaoStage = ya::makeShared<SSAOStage>();
     _ssaoStage->setup(_currentGBufferResources);
-    _ssaoStage->setSettings(_ssaoStage->getRadius(), _ssaoStage->getBias(), _ssaoStage->getPower(), _ssaoStage->getIntensity(), _bReverseViewportY);
     _ssaoStage->init(_render, _frameResources->getSSAOFrameDSL());
+    _ssaoStage->setSettings(_ssaoRadius, _ssaoBias, _ssaoPower, _ssaoIntensity, _bReverseViewportY);
 
     _lightStage = ya::makeShared<LightStage>();
     _lightStage->setup(LightStage::SharedInputs{
@@ -741,6 +754,7 @@ void DeferredRenderPipeline::initStages()
         .environmentLightingDSL = _environmentLightingDSL,
     });
     _lightStage->init(_render);
+    _lightStage->setIBLSettings(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL);
     syncShadowSettings();
 
     _overlayStage = ya::makeShared<ViewportOverlayStage>();

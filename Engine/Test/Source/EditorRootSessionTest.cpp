@@ -686,6 +686,19 @@ TEST(EditorTabSpawnerRegistryTest, RuntimeToolsSpawnWithNullTreeAndLayer)
     ASSERT_NE(widget, nullptr);
 }
 
+TEST(EditorTabSpawnerRegistryTest, RenderSettingsSpawnWithNullTreeAndLayer)
+{
+    EditorTabSpawnerRegistry registry;
+    registerBuiltinEditorTabSpawners(registry);
+    const FEditorTabSpawner* spawner = registry.find("render-settings");
+    ASSERT_NE(spawner, nullptr);
+    EXPECT_EQ(spawner->toolsMenuLabel, "Render Settings");
+    EXPECT_EQ(spawner->scope, EEditorTabScope::WindowTool);
+    FEditorTabSpawnContext ctx;
+    const std::shared_ptr<UIElement> widget = spawner->spawn(ctx);
+    ASSERT_NE(widget, nullptr);
+}
+
 TEST(EditorTabSpawnerRegistryTest, OwnedToolSpawnReturnsNullWithoutOwnerState)
 {
     EditorTabSpawnerRegistry registry;
