@@ -4,6 +4,7 @@
 #include "Core/Log.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"
+#include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/UIElement.h"
@@ -80,9 +81,9 @@ constexpr std::string_view kFactoryOwnedNestedLayoutJson = R"JSON(
           },
           {
             "kind": "split",
-            "orientation": "vertical",
-            "ratio": 0.12,
-            "minExtent": [36.0, 80.0],
+            "orientation": "horizontal",
+            "ratio": 0.0,
+            "minExtent": [54.0, 80.0],
             "children": [
               {
                 "kind": "leaf",
@@ -231,6 +232,29 @@ bool layoutContainsPanel(const nlohmann::json& layout, std::string_view key)
         }
     }
     return false;
+}
+
+/// Pixel floor for a split edge. This is a min, not an allocation: do not
+/// rewrite `ratio` (that steals divider drag and can pin pointer capture).
+/// Updating the model is not enough: persist listeners do not rematerialize
+/// DockSpace, so the live split mins are synced on the next arrange.
+void applyHostedSplitMinExtent(FDockContext* dock, DockPanelId id, float extent)
+{
+    if (!dock || extent < 0.0f) {
+        return;
+    }
+    FDockTreeModel& model = dock->dockModel();
+    const FDockNode* leaf = model.findLeafForPanel(id);
+    if (!leaf || !leaf->parent || leaf->parent->kind != EDockNodeKind::Split) {
+        return;
+    }
+    FDockNode* split = leaf->parent;
+    const int side = split->child[1].get() == leaf ? 1 : 0;
+    split->minExtent[side] = extent;
+    if (UIDockSpace* space = dock->dockSpace()) {
+        space->markLayoutDirty();
+    }
+    dock->notifyDockLayoutListeners();
 }
 
 } // namespace
@@ -470,6 +494,7 @@ FEditorTabSpawnContext EditorDockWorkspace::makeSpawnContext(const FEditorTabSpa
     ctx.spawners       = _host.spawners;
     ctx.documents      = _host.documents;
     ctx.rootFor        = _host.rootFor;
+    ctx.setMinExtent   = {};
     if (spawner.ownerEditorId != kInvalidEditorRootId) {
         ctx.ownerEditorId = spawner.ownerEditorId;
         if (_host.rootFor) {
@@ -591,6 +616,26 @@ bool EditorDockWorkspace::applyLayoutDocument(const nlohmann::json& layout, bool
             return false;
         }
         repairPlacement();
+        // Spawn-complete mins run before import (root is still a single
+        // stack). Re-apply after the split tree exists so Play hugs the
+        // toolbar pixel min instead of the persisted stretch ratio.
+        if (_host.spawners) {
+            for (const std::string& key : _host.dock->panelStableKeys()) {
+                const FEditorTabSpawner* spawner = _host.spawners->find(key);
+                if (!spawner || !spawner->onSpawnComplete) {
+                    continue;
+                }
+                const FDockContext::FPanel* panel = _host.dock->findPanelByStableKey(key);
+                if (!panel || !panel->widget) {
+                    continue;
+                }
+                FEditorTabSpawnContext ctx = makeSpawnContext(*spawner);
+                ctx.setMinExtent = [dock = _host.dock, id = panel->id](float extent) {
+                    applyHostedSplitMinExtent(dock, id, extent);
+                };
+                spawner->onSpawnComplete(ctx, *panel->widget);
+            }
+        }
         return true;
     };
 
@@ -761,6 +806,15 @@ bool EditorDockWorkspace::materializeTab(std::string_view tabId, bool bRestoreLa
         (void)_host.dock->setPanelClosable(id, false);
     }
     repairPlacement();
+    if (spawner && spawner->onSpawnComplete) {
+        FEditorTabSpawnContext callbackContext = makeSpawnContext(*spawner);
+        callbackContext.setMinExtent = [dock = _host.dock, id](float extent) {
+            applyHostedSplitMinExtent(dock, id, extent);
+        };
+        if (const FDockContext::FPanel* panel = _host.dock->findPanel(id); panel && panel->widget) {
+            spawner->onSpawnComplete(callbackContext, *panel->widget);
+        }
+    }
     return true;
 }
 

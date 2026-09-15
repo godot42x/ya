@@ -21,6 +21,7 @@ class EditorPlayToolbarTab : public UICompoundWidget
 
     void onAttached() override;
     void tick(float deltaSeconds) override;
+    void onSpawnComplete();
 
   protected:
     void construct() override;

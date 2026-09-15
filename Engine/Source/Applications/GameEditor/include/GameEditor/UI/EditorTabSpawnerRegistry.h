@@ -52,6 +52,10 @@ struct FEditorTabSpawnContext
     IRenderSurfaceContext*     presentSurface = nullptr;
     std::function<EditorRootSession*(EditorRootId)> rootFor;
     EditorRootSession*         ownerRoot      = nullptr;
+    /// Pixel floor for the split edge that contains the spawned tab. Does not
+    /// rewrite ratio. No-op when the tab is not under a split. Valid only from
+    /// onSpawnComplete.
+    std::function<void(float)> setMinExtent;
 };
 
 struct FEditorTabSpawner
@@ -65,6 +69,9 @@ struct FEditorTabSpawner
     EEditorTabPlacement    placement      = EEditorTabPlacement::WindowRootDock;
     EEditorTabDetachPolicy detachPolicy   = EEditorTabDetachPolicy::IndependentWindow;
     std::function<std::shared_ptr<UIElement>(FEditorTabSpawnContext&)> spawn;
+    /// Optional spawn-completion hook for tab-specific initialization. The hook runs
+    /// after the factory returns and after the widget is registered in Dock.
+    std::function<void(FEditorTabSpawnContext&, UIElement&)> onSpawnComplete;
 
     [[nodiscard]] FEditorTabOwnership ownership() const
     {

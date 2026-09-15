@@ -11,6 +11,7 @@
 #include "GameEditor/UI/EditorPlayToolbarTab.h"
 #include "GameEditor/UI/EditorRuntimeToolsTab.h"
 #include "GameEditor/UI/EditorStatsTab.h"
+#include "GameEditor/UI/EditorTheme.h"
 #include "GameEditor/UI/EditorUIDesignerTab.h"
 #include "GameEditor/UI/EditorUIDesignerTools.h"
 #include "GameEditor/UI/EditorViewportTab.h"
@@ -78,6 +79,14 @@ void registerBuiltinEditorTabSpawners(EditorTabSpawnerRegistry& registry)
         .detachPolicy = EEditorTabDetachPolicy::TearOffKeepOwner,
         .spawn = [](FEditorTabSpawnContext& ctx) -> std::shared_ptr<UIElement> {
             return std::make_shared<EditorPlayToolbarTab>(ctx.actions, ctx.app);
+        },
+        .onSpawnComplete = [](FEditorTabSpawnContext& ctx, UIElement& widget) {
+            if (auto* toolbar = dynamic_cast<EditorPlayToolbarTab*>(&widget)) {
+                toolbar->onSpawnComplete();
+            }
+            if (ctx.setMinExtent) {
+                ctx.setMinExtent(editor_density::kPlayToolbarDockMin);
+            }
         },
     });
     registry.add({

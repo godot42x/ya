@@ -19,9 +19,9 @@
           },
           {
             "kind": "split",
-            "orientation": "vertical",
-            "ratio": 0.12,
-            "minExtent": [36.0, 80.0],
+            "orientation": "horizontal",
+            "ratio": 0.0,
+            "minExtent": [54.0, 80.0],
             "children": [
               {
                 "kind": "leaf",

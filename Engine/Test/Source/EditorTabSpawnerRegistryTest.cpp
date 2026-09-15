@@ -97,6 +97,7 @@ TEST(EditorTabSpawnerRegistryTest, BuiltinPlayToolbarSpawnDoesNotRequireHost)
 
     FEditorTabSpawnContext ctx;
     EXPECT_NE(play->spawn(ctx), nullptr);
+    EXPECT_TRUE(static_cast<bool>(play->onSpawnComplete));
 }
 
 TEST(EditorTabSpawnerRegistryTest, BuiltinFontAtlasesSpawnDoesNotRequireHost)

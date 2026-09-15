@@ -104,7 +104,9 @@ TEST(EditorDockWorkspaceTest, FactoryOwnedNestedLayoutPlacesOwnedTools)
     ASSERT_NE(context.dockModel().getRootNode()->child[0]->child[1].get(), nullptr);
     EXPECT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->kind, EDockNodeKind::Split);
     EXPECT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->orientation,
-              EDockSplitOrientation::Vertical);
+              EDockSplitOrientation::Horizontal);
+    EXPECT_FLOAT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->ratio, 0.0f);
+    EXPECT_FLOAT_EQ(context.dockModel().getRootNode()->child[0]->child[1]->minExtent[0], 54.0f);
     EXPECT_TRUE(context.floatingWindows().empty());
 }
 
@@ -251,6 +253,40 @@ TEST(EditorDockWorkspaceTest, PageLeafRejectsToolsAndToolsLeafRejectsPages)
     EXPECT_FALSE(context.acceptsLeafDrop("content-browser", 0, {}, pageLeaf, false));
     EXPECT_EQ(context.adoptLeafFor("script-editor", kScriptEditorRootId, {}), pageLeaf);
     EXPECT_EQ(context.adoptLeafFor("content-browser", 0, {}), toolsLeaf);
+}
+
+TEST(EditorDockWorkspaceTest, MaterializeTabInvokesSpawnCompletionAfterRegistration)
+{
+    EditorTabSpawnerRegistry registry;
+    bool callbackCalled = false;
+    bool panelPresentDuringCallback = false;
+    FDockContext context;
+    registry.add({
+        .tabId = "callback-tab",
+        .title = "Callback",
+        .toolsMenuLabel = "Callback",
+        .scope = EEditorTabScope::WindowTool,
+        .spawn = [](FEditorTabSpawnContext&) {
+            return std::make_shared<UICanvasPanel>("CallbackBody");
+        },
+        .onSpawnComplete = [&](FEditorTabSpawnContext&, UIElement&) {
+            callbackCalled = true;
+            panelPresentDuringCallback = context.hasPanel("callback-tab");
+        },
+    });
+
+    context.bAllowFloating = true;
+    EditorDockWorkspace workspace;
+    workspace.bind(EditorDockWorkspace::FHost{
+        .spawners        = &registry,
+        .dock            = &context,
+        .targetPlacement = EEditorTabPlacement::WindowRootDock,
+    });
+
+    ASSERT_TRUE(workspace.materializeTab("callback-tab"));
+    EXPECT_TRUE(callbackCalled);
+    EXPECT_TRUE(panelPresentDuringCallback);
+    EXPECT_TRUE(context.hasPanel("callback-tab"));
 }
 
 TEST(EditorDockWorkspaceTest, RepairMovesWindowToolsOutOfPageLeaf)

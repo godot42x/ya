@@ -79,6 +79,11 @@ void EditorPlayToolbarTab::onAttached()
     refresh();
 }
 
+void EditorPlayToolbarTab::onSpawnComplete()
+{
+    refresh();
+}
+
 void EditorPlayToolbarTab::tick(float)
 {
     refresh();
