@@ -1307,11 +1307,16 @@ void UISplitLayout::clampRatio() const
 {
     const float contentExtent = axisExtent(_contentRect);
     if (contentExtent <= 0.0f) {
-        _splitRatio = 0.5f;
         return;
     }
-    const float minRatio = std::clamp(_minFirstExtent / contentExtent, 0.0f, 1.0f);
-    const float maxRatio = std::clamp(1.0f - _minSecondExtent / contentExtent, 0.0f, 1.0f);
+    // Ratio is the divider centre. Pane pixels are `ratio * content ± half
+    // divider`, so mins must be converted through that same mapping or a
+    // 40px minFirst would only produce ~37px after the divider is carved out.
+    const float halfDivider = _dividerThickness * 0.5f;
+    const float minRatio =
+        std::clamp((_minFirstExtent + halfDivider) / contentExtent, 0.0f, 1.0f);
+    const float maxRatio =
+        std::clamp(1.0f - (_minSecondExtent + halfDivider) / contentExtent, 0.0f, 1.0f);
     _splitRatio = std::clamp(_splitRatio, std::min(minRatio, maxRatio), std::max(minRatio, maxRatio));
 }
 

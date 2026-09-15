@@ -192,6 +192,7 @@ private:
     void syncPreviewOverlay();
 
     std::unordered_map<DockNodeId, FDockStackView> _stackViews;
+    std::unordered_map<DockNodeId, UISplitPane*>   _splitViews;
     std::optional<FDropPreview> _preview;
     std::shared_ptr<UIElement> _previewOverlay;
     std::shared_ptr<FDockContext> _context;

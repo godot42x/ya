@@ -584,6 +584,29 @@ TEST(WidgetLayoutTest, SplitPaneDesiredSizeAggregatesAutoChildren)
     EXPECT_GT(split->_layoutRect.extent.y, 20.0f);
 }
 
+TEST(WidgetLayoutTest, SplitPaneZeroRatioUsesMinFirstExtentPixels)
+{
+    WidgetTree tree({.width = 400, .height = 400});
+    auto split = std::make_shared<UISplitPane>("Split");
+    split->setOrientation(ESplitOrientation::Horizontal);
+    split->setSplitRatio(0.0f);
+    split->setMinFirstExtent(40.0f);
+    split->setMinSecondExtent(80.0f);
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, fill);
+
+    auto first = std::make_shared<UICanvasPanel>("First");
+    auto second = std::make_shared<UICanvasPanel>("Second");
+    tree.attach(*split, first);
+    tree.attach(*split, second);
+    tree.layout();
+
+    EXPECT_NEAR(first->_layoutRect.extent.y, 40.0f, 1.0f);
+    EXPECT_GT(second->_layoutRect.extent.y, 250.0f);
+}
+
 TEST(WidgetLayoutTest, BoxSlotsAreParentOwnedAndRecreatedOnReparent)
 {
     WidgetTree tree({.width = 400, .height = 200});
@@ -2726,6 +2749,62 @@ TEST(WidgetLayoutTest, DockProjectionConstructsCompoundPanelWithoutTabSwitch)
     EXPECT_TRUE(panel->isAttached());
     EXPECT_GT(panel->_layoutRect.extent.x, 0.0f);
     EXPECT_GT(panel->_layoutRect.extent.y, 0.0f);
+}
+
+TEST(WidgetLayoutTest, DockSplitArrangeKeepsClampedRatioAndSecondPaneHittable)
+{
+    registerSyntheticFont(13, 7.0f);
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<FDockContext>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    auto play     = std::make_shared<UICanvasPanel>("PlayBody");
+    auto viewport = std::make_shared<UIButton>("ViewportBody");
+    const DockPanelId playId = ws->addPanel("play-toolbar", play);
+    const DockPanelId viewId = ws->addPanel("viewport", viewport);
+    ASSERT_NE(playId, kInvalidDockPanelId);
+    ASSERT_NE(viewId, kInvalidDockPanelId);
+    ASSERT_TRUE(ws->dockModel().splitLeaf(ws->dockModel().getRootNode()->id,
+                                          EDockCardinalSide::South, viewId, 0.0f));
+    FDockNode* splitNode = ws->dockModel().getRootNode();
+    ASSERT_NE(splitNode, nullptr);
+    ASSERT_EQ(splitNode->kind, EDockNodeKind::Split);
+    splitNode->minExtent[0] = 54.0f;
+    splitNode->minExtent[1] = 80.0f;
+    splitNode->ratio        = 0.0f;
+    ws->fireDockUpdated();
+    tree.layout();
+
+    UIElement* split = findNamedDescendant(*dock, "DockSplit1");
+    ASSERT_NE(split, nullptr);
+    auto* splitPane = dynamic_cast<UISplitPane*>(split);
+    ASSERT_NE(splitPane, nullptr);
+    const float ratioAfterFirst = splitPane->getSplitRatio();
+    EXPECT_GT(ratioAfterFirst, 0.0f);
+    EXPECT_GT(viewport->_layoutRect.extent.y, 200.0f);
+
+    dock->markLayoutDirty();
+    tree.layout();
+    EXPECT_NEAR(splitPane->getSplitRatio(), ratioAfterFirst, 1e-4f);
+    EXPECT_GT(viewport->_layoutRect.extent.y, 200.0f);
+
+    const Rect2D divider = splitPane->getDividerRect();
+    const glm::vec2 dividerCenter = divider.pos + divider.extent * 0.5f;
+    (void)tree.dispatchEvent(MouseMoveEvent(dividerCenter.x, dividerCenter.y),
+                             pointAt(dividerCenter.x, dividerCenter.y));
+    EXPECT_EQ(tree.getHovered(), splitPane);
+    EXPECT_TRUE(splitPane->_bHoveredDivider);
+
+    const glm::vec2 viewCenter =
+        viewport->_layoutRect.pos + viewport->_layoutRect.extent * 0.5f;
+    (void)tree.dispatchEvent(MouseMoveEvent(viewCenter.x, viewCenter.y),
+                             pointAt(viewCenter.x, viewCenter.y));
+    EXPECT_EQ(tree.getHovered(), viewport.get());
 }
 
 } // namespace ya

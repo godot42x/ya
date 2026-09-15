@@ -94,6 +94,7 @@ struct YA_GUI_API UISplitPane : public UIElement, public UIStyledWidget<UISplitP
     bool hitTestSelf(const glm::vec2& logicalPoint) const override;
     void onPointerLeave() override { _bHoveredDivider = false; }
     void resetHoverState() override { onPointerLeave(); }
+    void onPointerEnter() override { _bHoveredDivider = true; }
     [[nodiscard]] ECursorType getCursor() const override
     {
         if (!_bHoveredDivider && !_bDraggingDivider) {

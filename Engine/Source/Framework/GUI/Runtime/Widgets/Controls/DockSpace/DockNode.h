@@ -64,7 +64,7 @@ struct FDockNode
     FDockNode*                 parent       = nullptr;
     EDockSplitOrientation      orientation  = EDockSplitOrientation::Vertical;
     float                      ratio        = 0.5f;
-    float                      minExtent[2] = {120.0f, 120.0f};
+    float                      minExtent[2] = {10,10};
     std::unique_ptr<FDockNode> child[2];
     std::vector<DockPanelId>   panelIds;
     DockPanelId                selectedPanel       = kInvalidDockPanelId;

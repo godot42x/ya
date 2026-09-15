@@ -418,6 +418,9 @@ enum class ESplitOrientation : uint8_t
 
 /// Geometry policy for a two-pane split. Drag state stays on UISplitPane;
 /// orientation, ratio, limits, padding and child arrangement live here.
+/// `minFirst/SecondExtent` are pixel floors on the split axis. They raise a
+/// too-small ratio; they do not shrink a larger ratio and they do not
+/// rewrite the stored ratio. Extra space stays with the user's ratio.
 class YA_GUI_API UISplitLayout final : public UILayout
 {
 public:

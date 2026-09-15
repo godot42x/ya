@@ -327,17 +327,19 @@ TEST(ToolControlsTest, SplitPaneDividerDragChangesRatioAndEndsSession)
     EXPECT_NEAR(split->getSplitRatio(), 0.6f, 1e-4f);
     EXPECT_FALSE(tree.isLayoutValid());
 
-    // Drag past the first pane minimum: ratio clamps at 40/300.
+    // Drag past the first pane minimum. Ratio is the divider centre, so the
+    // pixel floor is mapped through half the divider thickness.
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(5.0f, 100.0f), pointAt(5.0f, 100.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_NEAR(split->getSplitRatio(), 40.0f / 300.0f, 1e-4f);
+    const float minRatio = (40.0f + split->getDividerThickness() * 0.5f) / 300.0f;
+    EXPECT_NEAR(split->getSplitRatio(), minRatio, 1e-4f);
 
     // Release anywhere (capture): session ends, ratio persists.
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(5.0f, 100.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_FALSE(split->_bDraggingDivider);
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
-    EXPECT_NEAR(split->getSplitRatio(), 40.0f / 300.0f, 1e-4f);
+    EXPECT_NEAR(split->getSplitRatio(), minRatio, 1e-4f);
 }
 
 TEST(ToolControlsTest, SplitPaneDoubleClickResetsRatio)
@@ -2228,6 +2230,49 @@ TEST(ToolControlsTest, TextFieldOutlineSitsInsideLayoutRect)
         }
     }
     EXPECT_TRUE(bFoundInsetTop);
+}
+
+TEST(ToolControlsTest, SplitPaneOffDividerPressReleasesCaptureForMenuBar)
+{
+    registerMenuFont();
+    WidgetTree tree({.width = 400, .height = 300});
+
+    auto bar = std::make_shared<UIMenuBar>("Bar");
+    int activateCount = 0;
+    bar->addItem("File", [&activateCount]() {
+        ++activateCount;
+        return std::shared_ptr<UIMenu>{};
+    });
+    FCanvasSlotArgs barSlot;
+    barSlot.offset    = {0.0f, 0.0f};
+    barSlot.fixedSize = {400.0f, 28.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), bar, barSlot);
+
+    auto split = std::make_shared<UISplitPane>("Split");
+    split->setOrientation(ESplitOrientation::Horizontal);
+    split->setSplitRatio(0.5f);
+    FCanvasSlotArgs splitSlot;
+    splitSlot.offset    = {0.0f, 28.0f};
+    splitSlot.fixedSize = {400.0f, 272.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), split, splitSlot);
+    tree.attach(*split, std::make_shared<UICanvasPanel>("First"));
+    tree.attach(*split, std::make_shared<UICanvasPanel>("Second"));
+    tree.layout();
+
+    const Rect2D divider = split->getDividerRect();
+    const glm::vec2 dividerCenter = divider.pos + divider.extent * 0.5f;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left),
+                                 pointAt(dividerCenter.x, dividerCenter.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getPointerCapture(), split.get());
+
+    ASSERT_FALSE(bar->getChildren().empty());
+    const Rect2D fileRect = bar->getChildren().front()->getLayoutRect();
+    const glm::vec2 fileCenter = fileRect.pos + fileRect.extent * 0.5f;
+    (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left),
+                             pointAt(fileCenter.x, fileCenter.y));
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+    EXPECT_EQ(activateCount, 1);
 }
 
 } // namespace ya

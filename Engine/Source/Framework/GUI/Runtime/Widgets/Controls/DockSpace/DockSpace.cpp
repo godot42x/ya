@@ -466,6 +466,7 @@ void UIDockSpace::rebuildProjection()
         }
     }
     _stackViews.clear();
+    _splitViews.clear();
     addDetachedChild(materializeNode(*_context->dockModel().getRootNode()));
     markLayoutDirty();
     markPaintDirty();
@@ -678,6 +679,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
         split->setSplitRatio(node.ratio);
         split->setMinFirstExtent(node.minExtent[0]);
         split->setMinSecondExtent(node.minExtent[1]);
+        _splitViews[node.id] = split.get();
         const DockNodeId splitId = node.id;
         split->setSplitRatioChangedCallback([this, splitId](float ratio)
         {
@@ -790,6 +792,22 @@ void UIDockSpace::applyAssignedLayout(const Rect2D& rect)
 {
     if (getChildren().empty() && getTree()) {
         rebuildProjection();
+    }
+    if (_context) {
+        for (auto& [id, split] : _splitViews) {
+            if (!split) {
+                continue;
+            }
+            const FDockNode* node = _context->dockModel().findNode(id);
+            if (!node || node->kind != EDockNodeKind::Split) {
+                continue;
+            }
+            // Mins are host policy and can change without rematerialize
+            // (spawn-complete). Ratio is the user's drag; writing it here
+            // fights clampRatio, jumps the divider, and can pin capture.
+            split->setMinFirstExtent(node->minExtent[0]);
+            split->setMinSecondExtent(node->minExtent[1]);
+        }
     }
     UIElement::applyAssignedLayout(rect);
 }

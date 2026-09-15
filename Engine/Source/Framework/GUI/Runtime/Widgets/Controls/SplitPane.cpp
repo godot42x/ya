@@ -109,13 +109,20 @@ void UISplitPane::applySplitRatio(float ratio)
 bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
     const EEvent::T eventType = event.getEventType();
+    const bool bOnDivider = pointInRect(ctx.logicalPoint, _splitLayout.getDividerRect());
 
     if (eventType == EEvent::MouseMoved && !_bDraggingDivider) {
-        _bHoveredDivider = pointInRect(ctx.logicalPoint, _splitLayout.getDividerRect());
+        _bHoveredDivider = bOnDivider;
     }
 
     if (eventType == EEvent::MouseButtonPressed) {
-        if (!pointInRect(ctx.logicalPoint, _splitLayout.getDividerRect())) {
+        if (!bOnDivider) {
+            if (ctx.bViaCapture) {
+                _bDraggingDivider = false;
+                if (WidgetTree* tree = getTree()) {
+                    tree->releasePointerCapture(this);
+                }
+            }
             return false;
         }
         constexpr uint64_t kDoubleClickMs = 400;
@@ -163,12 +170,13 @@ bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext&
         return true;
     }
 
-    if (eventType == EEvent::MouseButtonReleased && _bDraggingDivider) {
+    if (eventType == EEvent::MouseButtonReleased) {
+        const bool bWasDragging = static_cast<bool>(_bDraggingDivider);
         _bDraggingDivider = false;
         if (WidgetTree* tree = getTree()) {
             tree->releasePointerCapture(this);
         }
-        return true;
+        return bWasDragging;
     }
 
     return false;
@@ -188,6 +196,9 @@ void UISplitPane::clearTransientInputState()
     _bDraggingDivider = false;
     _bHoveredDivider  = false;
     _bHasLastPress    = false;
+    if (WidgetTree* tree = getTree()) {
+        tree->releasePointerCapture(this);
+    }
 }
 
 glm::vec2 UISplitPane::computeDesiredSize() const
