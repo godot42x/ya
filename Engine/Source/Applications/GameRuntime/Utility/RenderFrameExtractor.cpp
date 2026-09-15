@@ -108,7 +108,7 @@ glm::mat4 buildDirectionalShadowViewProjection(const glm::vec3& lightDirection,
 
 void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, SceneFrameSnapshot& outSnapshot)
 {
-    outSnapshot.clearWorld();
+    outSnapshot.clearScene();
     outSnapshot.bHasDirectionalLight = false;
     outSnapshot.numPointLights = 0;
 

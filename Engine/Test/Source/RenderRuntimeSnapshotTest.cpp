@@ -98,7 +98,7 @@ TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
     EXPECT_EQ(sceneSnapshot.skinningPalettes.size(), 1u);
     EXPECT_EQ(frame.view[3][0], 4.0f);
 
-    sceneSnapshot.clearWorld();
+    sceneSnapshot.clearScene();
     EXPECT_TRUE(frame.drawBuckets.staticMeshes.pbrDrawItems.empty());
     EXPECT_TRUE(frame.skinningPalettes.empty());
     EXPECT_EQ(frame.view[3][0], 4.0f);
@@ -311,6 +311,9 @@ TEST(RenderRuntimeSnapshotTest, SceneExtractorSeparatesSceneAndViewPreparation)
     EXPECT_NE(extractorCpp.find("extractSceneLights"), std::string::npos);
     EXPECT_NE(extractorCpp.find("prepareViewLights"), std::string::npos);
     EXPECT_EQ(extractorCpp.find("RenderFrameExtractor::extract("), std::string::npos);
+    const std::string frameDataH = readEngineSource(
+        "Source/Framework/Render/Render3D/RenderFrameData.h");
+    EXPECT_EQ(frameDataH.find("toFrameContext"), std::string::npos);
     EXPECT_EQ(extractorCpp.find("App::get()"), std::string::npos);
 
     const auto sceneLightsPos = extractorCpp.find("extractSceneLights(registry, outSnapshot)");

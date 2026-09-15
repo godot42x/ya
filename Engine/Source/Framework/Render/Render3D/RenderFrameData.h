@@ -179,8 +179,8 @@ struct RenderMeshClassDrawBuckets
 };
 
 /// Scene-level render data that can be shared by multiple camera views in the
-/// same frame. The current light payload still contains legacy shadow fields;
-/// those remain compatibility data until view preparation is migrated.
+/// same frame. Shadow fields remain in this packet only until the per-view
+/// lighting preparation is completed.
 struct SceneFrameSnapshot
 {
     bool                                                       bHasDirectionalLight = false;
@@ -191,7 +191,7 @@ struct SceneFrameSnapshot
     RenderMeshClassDrawBuckets drawBuckets;
     std::vector<RenderSkinningPalette> skinningPalettes;
 
-    void clearWorld()
+    void clearScene()
     {
         drawBuckets.clear();
         skinningPalettes.clear();
@@ -221,24 +221,7 @@ struct RenderFrameData : SceneFrameSnapshot
     // ═══════════════════════════════════════════════════════════════
     void clear()
     {
-        clearWorld();
-    }
-
-    /// Build a backward-compatible FrameContext for systems that haven't migrated yet.
-    [[nodiscard]] FrameContext toFrameContext() const
-    {
-        FrameContext ctx;
-        ctx.view                 = view;
-        ctx.projection           = projection;
-        ctx.viewProjection       = viewProjection;
-        ctx.cameraPos            = cameraPos;
-        ctx.bHasDirectionalLight = bHasDirectionalLight;
-        ctx.directionalLight     = directionalLight;
-        ctx.numPointLights       = numPointLights;
-        ctx.pointLights          = pointLights;
-        ctx.viewOwner            = viewOwner;
-        ctx.extent               = viewportExtent;
-        return ctx;
+        clearScene();
     }
 
     [[nodiscard]] size_t totalDrawCount() const

@@ -612,7 +612,19 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     YA_CORE_ASSERT(_viewportRTSpec.attachments.depthAttach.has_value(),
                    "Forward viewport pass requires a depth attachment spec");
 
-    _lastTickCtx        = frame.camera.frameData ? frame.camera.frameData->toFrameContext() : FrameContext{};
+    _lastTickCtx = {};
+    if (const RenderFrameData* frameData = frame.camera.frameData) {
+        _lastTickCtx.view                 = frameData->view;
+        _lastTickCtx.projection           = frameData->projection;
+        _lastTickCtx.viewProjection       = frameData->viewProjection;
+        _lastTickCtx.cameraPos            = frameData->cameraPos;
+        _lastTickCtx.bHasDirectionalLight = frameData->bHasDirectionalLight;
+        _lastTickCtx.directionalLight     = frameData->directionalLight;
+        _lastTickCtx.numPointLights       = frameData->numPointLights;
+        _lastTickCtx.pointLights          = frameData->pointLights;
+        _lastTickCtx.viewOwner            = frameData->viewOwner;
+        _lastTickCtx.extent               = frameData->viewportExtent;
+    }
     _lastTickCtx.view           = frame.camera.view;
     _lastTickCtx.projection     = frame.camera.projection;
     _lastTickCtx.viewProjection = frame.camera.viewProjection;
