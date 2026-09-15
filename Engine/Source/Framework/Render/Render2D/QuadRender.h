@@ -159,6 +159,8 @@ struct YA_RENDER_2D_API FQuadRender
 
     std::shared_ptr<IPipelineLayout>   _pipelineLayout = nullptr;
     std::shared_ptr<IGraphicsPipeline> _worldPipeline  = nullptr;
+    EFormat::T                         _worldColorFormat = EFormat::Undefined;
+    EFormat::T                         _worldDepthFormat = EFormat::Undefined;
     struct PassPipelines
     {
         std::shared_ptr<IGraphicsPipeline> screenPipeline{};
@@ -219,7 +221,10 @@ struct YA_RENDER_2D_API FQuadRender
     void end();
     /// Ensure a pass slot's screen-space pipeline matches its target attachment
     /// formats. A depth-less target (depthFormat == Undefined) resolves to the
-    /// depth-less UI variant. Must be called before command recording begins.
+    /// depth-less UI variant and does not touch the shared world pipeline.
+    /// A depth-attached target also rebuilds the world sprite pipeline when
+    /// color/depth change (Deferred vs Forward depth). Must be called before
+    /// command recording begins.
     void preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFormat, EFormat::T depthFormat);
 
     bool shouldFlush() { return vertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }

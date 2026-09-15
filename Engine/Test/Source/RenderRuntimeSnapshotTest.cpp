@@ -383,5 +383,46 @@ TEST(RenderRuntimeSnapshotTest, CameraPipelineDoesNotGuessPresentSurface)
     }
 }
 
+TEST(RenderRuntimeSnapshotTest, PipelineSwitchKeepsDeviceLifetimeRender2D)
+{
+    const std::string coordinatorCpp =
+        readEngineSource("Source/Framework/Render/Render3D/Services/PipelineCoordinator.cpp");
+
+    const auto shutdownActivePos = coordinatorCpp.find("void PipelineCoordinator::shutdownActivePipeline()");
+    ASSERT_NE(shutdownActivePos, std::string::npos);
+    const auto nextFnPos = coordinatorCpp.find("void PipelineCoordinator::", shutdownActivePos + 1);
+    ASSERT_NE(nextFnPos, std::string::npos);
+    const auto shutdownActiveBody = coordinatorCpp.substr(shutdownActivePos, nextFnPos - shutdownActivePos);
+    EXPECT_EQ(countLiteral(shutdownActiveBody, "Render2D::destroy"), 0u);
+
+    const auto shutdownPos = coordinatorCpp.find("void PipelineCoordinator::shutdown()");
+    ASSERT_NE(shutdownPos, std::string::npos);
+    const auto shutdownBody = coordinatorCpp.substr(shutdownPos, shutdownActivePos - shutdownPos);
+    EXPECT_NE(shutdownBody.find("Render2D::destroy()"), std::string::npos);
+
+    EXPECT_NE(coordinatorCpp.find("!Render2D::isInitialized()"), std::string::npos);
+}
+
+TEST(RenderRuntimeSnapshotTest, RenderFramePrepsEditorComposeAfterPipelineSwitch)
+{
+    const std::string runtimeCpp = readEngineSource("Source/Framework/Render/Render3D/RenderRuntime.cpp");
+
+    const auto applyPos          = runtimeCpp.find("applyPendingChanges()");
+    const auto editorComposePos  = runtimeCpp.find("EditorViewportCompose");
+    const auto canvasPreviewPos  = runtimeCpp.find("EditorCanvasPreview");
+    const auto prepareFramePos   = runtimeCpp.find("if (!prepareFrame(");
+    ASSERT_NE(applyPos, std::string::npos);
+    ASSERT_NE(editorComposePos, std::string::npos);
+    ASSERT_NE(canvasPreviewPos, std::string::npos);
+    ASSERT_NE(prepareFramePos, std::string::npos);
+    EXPECT_LT(applyPos, editorComposePos);
+    EXPECT_LT(editorComposePos, prepareFramePos);
+    EXPECT_LT(canvasPreviewPos, prepareFramePos);
+    EXPECT_NE(runtimeCpp.find("kEditorViewportComposeColorFormat"), std::string::npos);
+
+    const std::string lineCpp = readEngineSource("Source/Framework/Render/Render2D/LineRender.cpp");
+    EXPECT_NE(lineCpp.find("void FLineRender::preparePassPipeline("), std::string::npos);
+}
+
 } // namespace
 } // namespace ya

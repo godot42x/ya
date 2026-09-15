@@ -3,70 +3,61 @@
 
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
 #include "RHI/Core/RenderPass.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Render.h"
 #include "RHI/RenderDefines.h"
 
+#include "Core/Common/DeferredDeletionQueue.h"
+#include "Core/Log.h"
 #include "Core/Math/GLM.h"
 
 #include <glm/gtc/constants.hpp>
 
 #include <format>
+#include <string>
 
 namespace ya
 {
 
-void FLineRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
+namespace
 {
-    _render = render;
-    constexpr uint32_t resourceCount = FQuadRender::kMaxPassSlots * MAX_FLIGHTS_IN_FLIGHT;
 
-    _descriptorPool = IDescriptorPool::create(
-        render,
-        DescriptorPoolCreateInfo{
-            .maxSets   = resourceCount,
-            .poolSizes = {
-                DescriptorPoolSize{
-                    .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = resourceCount,
-                },
-            },
-        });
-
-    _frameUboDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[0]);
-    std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_frameUboDSL};
-    _pipelineLayout = IPipelineLayout::create(render, "Sprite2D_Line_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
-
-    const auto buildVertexAttributes = []()
-    {
-        return std::vector<VertexAttribute>{
-            VertexAttribute{
-                .bufferSlot = 0,
-                .location   = 0,
-                .format     = EVertexAttributeFormat::Float3,
-                .offset     = offsetof(Vertex, pos),
-            },
-            VertexAttribute{
-                .bufferSlot = 0,
-                .location   = 1,
-                .format     = EVertexAttributeFormat::Float4,
-                .offset     = offsetof(Vertex, color),
-            },
-        };
+std::vector<VertexAttribute> buildLineVertexAttributes()
+{
+    return std::vector<VertexAttribute>{
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 0,
+            .format     = EVertexAttributeFormat::Float3,
+            .offset     = offsetof(FLineRender::Vertex, pos),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 1,
+            .format     = EVertexAttributeFormat::Float4,
+            .offset     = offsetof(FLineRender::Vertex, color),
+        },
     };
+}
 
-    _pipeline = IGraphicsPipeline::create(render);
-    _pipeline->recreate(GraphicsPipelineCreateInfo{
+GraphicsPipelineCreateInfo buildLinePipelineCI(IPipelineLayout* pipelineLayout,
+                                               const std::string& label,
+                                               EFormat::T colorFormat,
+                                               EFormat::T depthFormat)
+{
+    const bool bDepthAttached = depthFormat != EFormat::Undefined;
+    return GraphicsPipelineCreateInfo{
         .subPassRef            = 0,
         .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
-            .label                  = "Sprite2D_Line_Pipeline",
+            .label                  = label,
             .viewMask               = 0,
             .colorAttachmentFormats = {colorFormat},
             .depthAttachmentFormat  = depthFormat,
         },
-        .pipelineLayout = _pipelineLayout.get(),
+        .pipelineLayout = pipelineLayout,
         .shaderDesc = ShaderDesc{
             .sourceMode        = ShaderDesc::ESourceMode::StageFiles,
             .stageFiles        = {
@@ -79,7 +70,7 @@ void FLineRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
                     .pitch = sizeof(FLineRender::Vertex),
                 },
             },
-            .vertexAttributes = buildVertexAttributes(),
+            .vertexAttributes = buildLineVertexAttributes(),
         },
         .dynamicFeatures = {
             EPipelineDynamicFeature::Viewport,
@@ -93,11 +84,13 @@ void FLineRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
         },
         .multisampleState  = MultisampleState{},
         .depthStencilState = DepthStencilState{
-            // Depth-test debug lines against the scene depth (the composition
-            // pass attaches the viewport depth buffer). Lines never write depth.
-            .bDepthTestEnable       = true,
+            // Depth-attached compose (overlay / editor viewport) tests debug
+            // lines against scene depth and never writes it. Depth-less UI
+            // composite must not enable depth test: that slot has no depth
+            // attachment, and must not overwrite the depth-aware variant.
+            .bDepthTestEnable       = bDepthAttached,
             .bDepthWriteEnable      = false,
-            .depthCompareOp         = ECompareOp::LessOrEqual,
+            .depthCompareOp         = bDepthAttached ? ECompareOp::LessOrEqual : ECompareOp::Always,
             .bDepthBoundsTestEnable = false,
             .bStencilTestEnable     = false,
             .minDepthBounds         = 0.0f,
@@ -120,7 +113,35 @@ void FLineRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             },
         },
         .viewportState = buildQuadViewportState(),
-    });
+    };
+}
+
+} // namespace
+
+void FLineRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
+{
+    (void)colorFormat;
+    (void)depthFormat;
+    _render = render;
+    constexpr uint32_t resourceCount = FQuadRender::kMaxPassSlots * MAX_FLIGHTS_IN_FLIGHT;
+
+    _descriptorPool = IDescriptorPool::create(
+        render,
+        DescriptorPoolCreateInfo{
+            .maxSets   = resourceCount,
+            .poolSizes = {
+                DescriptorPoolSize{
+                    .type            = EPipelineDescriptorType::UniformBuffer,
+                    .descriptorCount = resourceCount,
+                },
+            },
+        });
+
+    _frameUboDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[0]);
+    std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_frameUboDSL};
+    _pipelineLayout = IPipelineLayout::create(render, "Sprite2D_Line_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
+    // Per-slot pipelines are created by preparePassPipeline. Color/depth here
+    // only described the old global pipeline; they are unused on purpose.
 }
 
 void FLineRender::destroy()
@@ -137,8 +158,56 @@ void FLineRender::destroy()
     vertexPtrHead = nullptr;
     _frameUboDSL.reset();
     _descriptorPool.reset();
-    _pipeline.reset();
+    for (auto& pipelines : _passPipelines) {
+        pipelines.screenPipeline.reset();
+        pipelines.screenColorFormat = EFormat::Undefined;
+        pipelines.screenDepthFormat = EFormat::Undefined;
+        pipelines.uiPipeline.reset();
+        pipelines.uiColorFormat = EFormat::Undefined;
+    }
     _pipelineLayout.reset();
+}
+
+void FLineRender::preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFormat, EFormat::T depthFormat)
+{
+    if (!_render || colorFormat == EFormat::Undefined) {
+        return;
+    }
+
+    auto& pipelines = _passPipelines[static_cast<size_t>(passSlot)];
+    if (depthFormat == EFormat::Undefined) {
+        if (pipelines.uiPipeline && pipelines.uiColorFormat == colorFormat) {
+            return;
+        }
+
+        auto pipeline = IGraphicsPipeline::create(_render);
+        pipeline->recreate(buildLinePipelineCI(_pipelineLayout.get(),
+                                               std::format("Sprite2D_Line_{}_UI_Pipeline", passSlot),
+                                               colorFormat,
+                                               EFormat::Undefined));
+        auto retired = std::move(pipelines.uiPipeline);
+        pipelines.uiPipeline = std::move(pipeline);
+        pipelines.uiColorFormat = colorFormat;
+        DeferredDeletionQueue::get().retire(std::move(retired));
+        return;
+    }
+
+    if (pipelines.screenPipeline &&
+        pipelines.screenColorFormat == colorFormat &&
+        pipelines.screenDepthFormat == depthFormat) {
+        return;
+    }
+
+    auto pipeline = IGraphicsPipeline::create(_render);
+    pipeline->recreate(buildLinePipelineCI(_pipelineLayout.get(),
+                                           std::format("Sprite2D_Line_{}_Screen_Pipeline", passSlot),
+                                           colorFormat,
+                                           depthFormat));
+    auto retired = std::move(pipelines.screenPipeline);
+    pipelines.screenPipeline = std::move(pipeline);
+    pipelines.screenColorFormat = colorFormat;
+    pipelines.screenDepthFormat = depthFormat;
+    DeferredDeletionQueue::get().retire(std::move(retired));
 }
 
 void FLineRender::ensureSlotResources(Render2DPassSlot passSlot)
@@ -202,7 +271,13 @@ void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
     resources.frameUBOBuffer->writeData(&ubo, sizeof(ubo), 0);
     resources.vertexBuffer->flush();
 
-    cmdBuf->bindPipeline(_pipeline.get());
+    auto& pipelines = _passPipelines[static_cast<size_t>(_activePassSlot)];
+    IGraphicsPipeline* pipeline = pipelines.screenPipeline ? pipelines.screenPipeline.get()
+                                                           : (pipelines.uiPipeline ? pipelines.uiPipeline.get() : nullptr);
+    YA_CORE_ASSERT(pipeline != nullptr,
+                   "Render2D line pipeline for pass slot {} was not prepared before command recording",
+                   static_cast<size_t>(_activePassSlot));
+    cmdBuf->bindPipeline(pipeline);
     setScreenViewportAndScissor(*cmdBuf, _render, Render2D::session.windowWidth, Render2D::session.windowHeight);
 
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {resources.frameUboDS});

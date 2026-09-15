@@ -40,6 +40,9 @@ void PipelineCoordinator::init(const InitDesc& desc)
 void PipelineCoordinator::shutdown()
 {
     shutdownActivePipeline();
+    if (Render2D::isInitialized()) {
+        Render2D::destroy();
+    }
     _render                = nullptr;
     _hostServices          = nullptr;
     _sharedResourceProvider = nullptr;
@@ -101,7 +104,10 @@ void PipelineCoordinator::initActivePipeline()
         initDeferredPipeline(windowWidth, windowHeight);
     }
 
-    if (auto* pipeline = getActivePipeline()) {
+    // Render2D is device-lifetime. Switching Deferred/Forward must not
+    // destroy it: editor compose/chrome already hold pass slots, and
+    // preparePassPipeline recreates format-specific variants.
+    if (auto* pipeline = getActivePipeline(); pipeline && !Render2D::isInitialized()) {
         Render2D::init(_render, pipeline->getViewportColorFormat(), pipeline->getViewportDepthFormat());
     }
 }
@@ -136,8 +142,6 @@ void PipelineCoordinator::initDeferredPipeline(int windowWidth, int windowHeight
 
 void PipelineCoordinator::shutdownActivePipeline()
 {
-    Render2D::destroy();
-
     if (_forwardPipeline) {
         _forwardPipeline->shutdown();
         _forwardPipeline.reset();

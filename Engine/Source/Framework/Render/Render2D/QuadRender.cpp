@@ -244,42 +244,11 @@ GraphicsPipelineCreateInfo buildQuadScreenPipelineCI(IPipelineLayout* pipelineLa
     };
 }
 
-} // namespace
-
-void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
+GraphicsPipelineCreateInfo buildQuadWorldPipelineCI(IPipelineLayout* pipelineLayout,
+                                                    EFormat::T colorFormat,
+                                                    EFormat::T depthFormat)
 {
-    _render = render;
-    constexpr uint32_t slotCount        = kMaxPassSlots;
-    constexpr uint32_t frameResourceCount = slotCount * MAX_FLIGHTS_IN_FLIGHT;
-    constexpr uint32_t imageResourceCount = slotCount * MAX_FLIGHTS_IN_FLIGHT * RESOURCE_DS_POOL_SIZE;
-
-    // Shared descriptor pool sized for the worst case (all slots in use).
-    // Per-slot sets are allocated lazily by ensureSlotResources, so a GUI app
-    // that uses one slot never touches the rest of the pool.
-    _descriptorPool = IDescriptorPool::create(
-        render,
-        DescriptorPoolCreateInfo{
-            .maxSets   = frameResourceCount * 2 + imageResourceCount * 2,
-            .poolSizes = {
-                DescriptorPoolSize{
-                    .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = frameResourceCount * 2,
-                },
-                DescriptorPoolSize{
-                    .type            = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = imageResourceCount * TEXTURE_SET_SIZE * 2,
-                },
-            },
-        });
-
-    _frameUboDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[0]);
-    _resourceDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[1]);
-
-    std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_frameUboDSL, _resourceDSL};
-    _pipelineLayout = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
-
-    _worldPipeline = IGraphicsPipeline::create(render);
-    _worldPipeline->recreate(GraphicsPipelineCreateInfo{
+    return GraphicsPipelineCreateInfo{
         .subPassRef            = 0,
         .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
@@ -288,7 +257,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .colorAttachmentFormats = {colorFormat},
             .depthAttachmentFormat  = depthFormat,
         },
-        .pipelineLayout = _pipelineLayout.get(),
+        .pipelineLayout = pipelineLayout,
         .shaderDesc = ShaderDesc{
             .sourceMode        = ShaderDesc::ESourceMode::StageFiles,
             .stageFiles        = {
@@ -303,7 +272,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             },
             .vertexAttributes = buildQuadVertexAttributes(),
             .defines          = {
-                std::format("TEXTURE_SET_SIZE {}", TEXTURE_SET_SIZE),
+                std::format("TEXTURE_SET_SIZE {}", FQuadRender::TEXTURE_SET_SIZE),
             },
         },
         .dynamicFeatures = {
@@ -344,7 +313,68 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             },
         },
         .viewportState = buildQuadViewportState(),
-    });
+    };
+}
+
+void ensureWorldPipeline(FQuadRender& quad,
+                         IRender* render,
+                         IPipelineLayout* pipelineLayout,
+                         EFormat::T colorFormat,
+                         EFormat::T depthFormat)
+{
+    if (!render || !pipelineLayout || colorFormat == EFormat::Undefined || depthFormat == EFormat::Undefined) {
+        return;
+    }
+    if (quad._worldPipeline &&
+        quad._worldColorFormat == colorFormat &&
+        quad._worldDepthFormat == depthFormat) {
+        return;
+    }
+
+    auto pipeline = IGraphicsPipeline::create(render);
+    pipeline->recreate(buildQuadWorldPipelineCI(pipelineLayout, colorFormat, depthFormat));
+    auto retired = std::move(quad._worldPipeline);
+    quad._worldPipeline     = std::move(pipeline);
+    quad._worldColorFormat  = colorFormat;
+    quad._worldDepthFormat  = depthFormat;
+    DeferredDeletionQueue::get().retire(std::move(retired));
+}
+
+} // namespace
+
+void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
+{
+    _render = render;
+    constexpr uint32_t slotCount        = kMaxPassSlots;
+    constexpr uint32_t frameResourceCount = slotCount * MAX_FLIGHTS_IN_FLIGHT;
+    constexpr uint32_t imageResourceCount = slotCount * MAX_FLIGHTS_IN_FLIGHT * RESOURCE_DS_POOL_SIZE;
+
+    // Shared descriptor pool sized for the worst case (all slots in use).
+    // Per-slot sets are allocated lazily by ensureSlotResources, so a GUI app
+    // that uses one slot never touches the rest of the pool.
+    _descriptorPool = IDescriptorPool::create(
+        render,
+        DescriptorPoolCreateInfo{
+            .maxSets   = frameResourceCount * 2 + imageResourceCount * 2,
+            .poolSizes = {
+                DescriptorPoolSize{
+                    .type            = EPipelineDescriptorType::UniformBuffer,
+                    .descriptorCount = frameResourceCount * 2,
+                },
+                DescriptorPoolSize{
+                    .type            = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = imageResourceCount * TEXTURE_SET_SIZE * 2,
+                },
+            },
+        });
+
+    _frameUboDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[0]);
+    _resourceDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[1]);
+
+    std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_frameUboDSL, _resourceDSL};
+    _pipelineLayout = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
+
+    ensureWorldPipeline(*this, render, _pipelineLayout.get(), colorFormat, depthFormat);
 
     std::vector<uint32_t> indices(MaxIndexCount);
     for (uint32_t i = 0; i < MaxIndexCount; i += 6) {
@@ -404,6 +434,8 @@ void FQuadRender::destroy()
         pipelines.uiColorFormat = EFormat::Undefined;
     }
     _worldPipeline.reset();
+    _worldColorFormat = EFormat::Undefined;
+    _worldDepthFormat = EFormat::Undefined;
     _pipelineLayout.reset();
 }
 
@@ -434,22 +466,25 @@ void FQuadRender::preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colo
         return;
     }
 
-    if (pipelines.screenPipeline &&
-        pipelines.screenColorFormat == colorFormat &&
-        pipelines.screenDepthFormat == depthFormat) {
-        return;
+    if (!(pipelines.screenPipeline &&
+          pipelines.screenColorFormat == colorFormat &&
+          pipelines.screenDepthFormat == depthFormat)) {
+        auto pipeline = IGraphicsPipeline::create(_render);
+        pipeline->recreate(buildQuadScreenPipelineCI(_pipelineLayout.get(),
+                                                     std::format("Sprite2D_{}_Screen_Pipeline", passSlot),
+                                                     colorFormat,
+                                                     depthFormat));
+        auto retired = std::move(pipelines.screenPipeline);
+        pipelines.screenPipeline = std::move(pipeline);
+        pipelines.screenColorFormat = colorFormat;
+        pipelines.screenDepthFormat = depthFormat;
+        DeferredDeletionQueue::get().retire(std::move(retired));
     }
 
-    auto pipeline = IGraphicsPipeline::create(_render);
-    pipeline->recreate(buildQuadScreenPipelineCI(_pipelineLayout.get(),
-                                                 std::format("Sprite2D_{}_Screen_Pipeline", passSlot),
-                                                 colorFormat,
-                                                 depthFormat));
-    auto retired = std::move(pipelines.screenPipeline);
-    pipelines.screenPipeline = std::move(pipeline);
-    pipelines.screenColorFormat = colorFormat;
-    pipelines.screenDepthFormat = depthFormat;
-    DeferredDeletionQueue::get().retire(std::move(retired));
+    // Shared world sprites (overlay billboards, editor gizmos) key off the
+    // last depth-attached target. Runtime UI's depth-less prep must not
+    // clobber this; Deferred vs Forward depth must rebuild it.
+    ensureWorldPipeline(*this, _render, _pipelineLayout.get(), colorFormat, depthFormat);
 }
 
 void FQuadRender::ensureSlotResources(Render2DPassSlot passSlot)
@@ -718,6 +753,8 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     }
     resources.worldVertexBuffer->flush();
 
+    YA_CORE_ASSERT(_worldPipeline != nullptr,
+                   "Render2D world pipeline was not prepared before command recording");
     cmdBuf->bindPipeline(_worldPipeline.get());
     setWorldViewportAndScissor(*cmdBuf, _render, Render2D::session.windowWidth, Render2D::session.windowHeight);
     if (_render && _render->getCapabilities().dynamicCullMode) {

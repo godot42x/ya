@@ -68,7 +68,15 @@ struct YA_RENDER_2D_API FLineRender
     std::shared_ptr<IDescriptorPool>      _descriptorPool;
     std::shared_ptr<IDescriptorSetLayout> _frameUboDSL;
     std::shared_ptr<IPipelineLayout>      _pipelineLayout;
-    std::shared_ptr<IGraphicsPipeline>    _pipeline;
+    struct PassPipelines
+    {
+        std::shared_ptr<IGraphicsPipeline> screenPipeline{};
+        EFormat::T                         screenColorFormat = EFormat::Undefined;
+        EFormat::T                         screenDepthFormat = EFormat::Undefined;
+        std::shared_ptr<IGraphicsPipeline> uiPipeline{};
+        EFormat::T                         uiColorFormat = EFormat::Undefined;
+    };
+    std::array<PassPipelines, FQuadRender::kMaxPassSlots> _passPipelines{};
 
     struct FlightResources
     {
@@ -91,6 +99,11 @@ struct YA_RENDER_2D_API FLineRender
 
     void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
     void destroy();
+    /// Ensure a pass slot's line pipeline matches its target attachments.
+    /// Depth-less targets use a depth-disabled variant so Runtime UI prep
+    /// cannot clobber overlay/editor debug lines. Must be called before
+    /// command recording begins.
+    void preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFormat, EFormat::T depthFormat);
     /// Lazily allocate one pass slot's buffers + descriptor sets (all flights).
     void ensureSlotResources(Render2DPassSlot passSlot);
     void begin(Render2DPassSlot passSlot);

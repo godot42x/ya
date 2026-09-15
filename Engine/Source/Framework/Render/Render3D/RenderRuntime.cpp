@@ -77,6 +77,21 @@ ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
         // attachment formats.
         prepareRenderViewportOverlayPipeline(pipeline->getViewportColorFormat(),
                                              pipeline->getViewportDepthFormat());
+        // Editor viewport compose records after applyPendingChanges in this
+        // same function. Logic-tick prep still used the previous pipeline's
+        // depth, and switching Deferred/Forward must not wait until the next
+        // onLogic (that would be after this frame's command recording).
+        prepareRender2DComposePassPipeline(
+            FRender2DComposePassDesc{
+                .kind = ERender2DComposePassKind::EditorViewportCompose,
+            },
+            kEditorViewportComposeColorFormat,
+            pipeline->getViewportDepthFormat());
+        prepareRender2DComposePassPipeline(
+            FRender2DComposePassDesc{
+                .kind = ERender2DComposePassKind::EditorCanvasPreview,
+            },
+            kEditorViewportComposeColorFormat);
     }
     // The Runtime UI composite target (viewport display image) is created
     // during the world render below, so on the first frame the gated prep

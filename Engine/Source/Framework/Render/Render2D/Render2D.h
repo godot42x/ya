@@ -139,11 +139,13 @@ struct YA_RENDER_2D_API Render2D
     /// nested-clip semantics are unit-testable without a render session.
     [[nodiscard]] static Rect2D intersectClipRect(const Rect2D& rect, const Rect2D& parentClip);
 
-    /// Lazily create the screen-space pipeline variant required by one pass
+    /// Lazily create the screen/line pipeline variants required by one pass
     /// slot. A depth-less target (depthFormat == Undefined) uses the depth-less
-    /// UI variant; a depth-attached target uses the depth-aware screen variant.
-    /// Must NOT be called while recording a command buffer.
+    /// UI variant; a depth-attached target uses the depth-aware screen variant
+    /// and refreshes the shared world sprite pipeline. Must NOT be called
+    /// while recording a command buffer.
     static void preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFormat, EFormat::T depthFormat);
+    [[nodiscard]] static bool isInitialized();
 
     // Accessors to the singleton primitives. These are exported functions
     // (defined in Render2D.cpp) rather than direct references to the static

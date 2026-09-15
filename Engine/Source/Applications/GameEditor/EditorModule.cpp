@@ -101,7 +101,7 @@ std::shared_ptr<RenderTexture> createEditorViewportImage(IRender& render, const 
             .label   = "EditorViewportComposed",
             .width   = extent.width,
             .height  = extent.height,
-            .format  = EFormat::R16G16B16A16_SFLOAT,
+            .format  = kEditorViewportComposeColorFormat,
             .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
             .samples = ESampleCount::Sample_1,
         });
@@ -546,9 +546,7 @@ class EditorViewportCompositor
         if (_composedViewportImage &&
             _composedViewportImage->getWidth() == sourceExtent.width &&
             _composedViewportImage->getHeight() == sourceExtent.height &&
-            _composedViewportImage->getFormat() == (source.getFormat() == EFormat::R16G16B16A16_SFLOAT
-                                                        ? source.getFormat()
-                                                        : EFormat::R16G16B16A16_SFLOAT)) {
+            _composedViewportImage->getFormat() == kEditorViewportComposeColorFormat) {
             return;
         }
 
@@ -560,7 +558,7 @@ class EditorViewportCompositor
         if (_composedViewportImage &&
             _composedViewportImage->getWidth() == extent.width &&
             _composedViewportImage->getHeight() == extent.height &&
-            _composedViewportImage->getFormat() == EFormat::R16G16B16A16_SFLOAT) {
+            _composedViewportImage->getFormat() == kEditorViewportComposeColorFormat) {
             return;
         }
 
@@ -1185,18 +1183,18 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                 FRender2DComposePassDesc{
                     .kind = ERender2DComposePassKind::EditorViewportCompose,
                 },
-                EFormat::R16G16B16A16_SFLOAT,
+                kEditorViewportComposeColorFormat,
                 depthFormat);
 
             // The editor 2D canvas pass records into the composed viewport
-            // image (always R16G16B16A16_SFLOAT); ensure the shared UI scene
-            // pass exists outside command recording.
+            // image; ensure the shared UI scene pass exists outside command
+            // recording.
             if (_layer->isViewportMode2D()) {
                 prepareRender2DComposePassPipeline(
                     FRender2DComposePassDesc{
                         .kind = ERender2DComposePassKind::EditorCanvasPreview,
                     },
-                    EFormat::R16G16B16A16_SFLOAT);
+                    kEditorViewportComposeColorFormat);
             }
             EFormat::T chromeFormat = EFormat::B8G8R8A8_UNORM;
             if (auto* render = renderServices.getRender(); render) {

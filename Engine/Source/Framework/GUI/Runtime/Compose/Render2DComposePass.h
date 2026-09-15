@@ -31,6 +31,11 @@ enum class ERender2DComposePassKind : uint8_t
     EditorToolSurface,
 };
 
+/// Editor viewport compose / 2D canvas always write this HDR target. Pipeline
+/// prep must use the same format; it is independent of Deferred vs Forward
+/// color, but depth still follows the active 3D pipeline.
+inline constexpr EFormat::T kEditorViewportComposeColorFormat = EFormat::R16G16B16A16_SFLOAT;
+
 struct FRender2DComposePassDesc
 {
     ERender2DComposePassKind kind = ERender2DComposePassKind::RuntimeUIComposite;

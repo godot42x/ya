@@ -38,6 +38,7 @@ const FRender2dFrameStats& Render2D::lastFrameStats() { return gLastFrameStats; 
 
 void Render2D::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
 {
+    YA_CORE_ASSERT(!isInitialized(), "Render2D::init called while already initialized");
     quadData = new FQuadRender();
     quadData->init(render, colorFormat, depthFormat);
 
@@ -47,13 +48,22 @@ void Render2D::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFor
 
 void Render2D::destroy()
 {
-    lineData->destroy();
-    delete lineData;
-    lineData = nullptr;
+    if (lineData) {
+        lineData->destroy();
+        delete lineData;
+        lineData = nullptr;
+    }
 
-    quadData->destroy();
-    delete quadData;
-    quadData = nullptr;
+    if (quadData) {
+        quadData->destroy();
+        delete quadData;
+        quadData = nullptr;
+    }
+}
+
+bool Render2D::isInitialized()
+{
+    return quadData != nullptr;
 }
 
 void Render2D::onUpdate(float dt)
@@ -157,6 +167,9 @@ void Render2D::preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFo
 {
     if (quadData) {
         quadData->preparePassPipeline(passSlot, colorFormat, depthFormat);
+    }
+    if (lineData) {
+        lineData->preparePassPipeline(passSlot, colorFormat, depthFormat);
     }
 }
 
