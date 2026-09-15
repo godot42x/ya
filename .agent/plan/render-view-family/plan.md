@@ -113,7 +113,7 @@ R1 字段分类不能按现有结构名整体搬迁，必须按语义拆分：
 
 唯一目标：在 UI 之前由 SceneRenderScheduler 聚合并执行本帧 Scene viewport 离屏任务，RenderRuntime 只消费不可变 SceneRenderPlan/SceneViewportTask。
 
-将 RenderRuntime::FrameInput 扩展为 SceneRenderPlan/SceneViewportTask additive API，保留单 View adapter；Scheduler 负责 Scene snapshot 去重和任务排序，Runtime 负责 frame resources、pipeline record、ViewCompose 和输出句柄；两者都不创建 OS window、不 acquire/present；Forward/Deferred 只接收对应 Scene snapshot 和 RenderViewInput；每个 View 建立独立 output/format/extent 句柄，不用全局 ViewportStateService 隐式表示所有 View；当前保持一条 command buffer/submit，只有 trace 证明同步或资源压力后才讨论拆分。
+将 RenderRuntime::FrameInput 扩展为 SceneRenderPlan/SceneViewportTask additive API；当前单 View 已由 GameRuntime 经 scheduler 生成 plan 并取 snapshot，下一步才把 plan 作为 Runtime 的正式输入。Scheduler 负责 Scene snapshot 去重和任务排序，Runtime 负责 frame resources、pipeline record、ViewCompose 和输出句柄；两者都不创建 OS window、不 acquire/present；Forward/Deferred 只接收对应 Scene snapshot 和 RenderViewInput；每个 View 建立独立 output/format/extent 句柄，不用全局 ViewportStateService 隐式表示所有 View；当前保持一条 command buffer/submit，只有 trace 证明同步或资源压力后才讨论拆分。
 
 验收：同一 Scene snapshot 渲染两个 Camera；两个 Scene 各自提交并渲染一个 viewport；一个 View 输出被两个 Surface display compose；一个 Surface display compose 多个 View；未提交 request 的 Scene 不产生 render task；关闭/最小化一个 Surface 不影响另一 Surface、其它 Scene request 和 View；GPU 资源在 submit 完成前存活。
 

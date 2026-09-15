@@ -278,16 +278,28 @@ TEST(RenderRuntimeSnapshotTest, HostBuildsWorldAndUiSnapshotsBeforeRenderRuntime
     const std::string hostCpp = readEngineSource(
         "Source/Applications/GameRuntime/Lifecycle/GameRuntimeFrameOrchestrator.cpp");
 
-    const auto sceneSnapshotPos = hostCpp.find("RenderFrameExtractor::extractSceneSnapshot(");
+    const auto sceneBuilderPos = hostCpp.find("RenderFrameExtractor::extractSceneSnapshot(");
+    const auto planSnapshotPos  = hostCpp.find("sceneRenderPlan.snapshotFor(task)");
     const auto viewPreparePos   = hostCpp.find("RenderFrameExtractor::prepareView(");
+    const auto schedulerBeginPos = hostCpp.find("sceneScheduler.beginFrame(");
+    const auto schedulerSubmitPos = hostCpp.find("sceneScheduler.submit(");
+    const auto schedulerSealPos = hostCpp.find("sceneRenderPlan = sceneScheduler.seal()");
     const auto uiSnapshotPos    = hostCpp.find("buildSnapshot()");
     const auto renderFramePos   = hostCpp.find("renderRuntime->renderFrame(");
 
-    ASSERT_NE(sceneSnapshotPos, std::string::npos);
+    ASSERT_NE(sceneBuilderPos, std::string::npos);
+    ASSERT_NE(planSnapshotPos, std::string::npos);
     ASSERT_NE(viewPreparePos, std::string::npos);
+    ASSERT_NE(schedulerBeginPos, std::string::npos);
+    ASSERT_NE(schedulerSubmitPos, std::string::npos);
+    ASSERT_NE(schedulerSealPos, std::string::npos);
     ASSERT_NE(uiSnapshotPos, std::string::npos);
     ASSERT_NE(renderFramePos, std::string::npos);
-    EXPECT_LT(sceneSnapshotPos, viewPreparePos);
+    EXPECT_LT(schedulerBeginPos, schedulerSubmitPos);
+    EXPECT_LT(schedulerSubmitPos, schedulerSealPos);
+    EXPECT_LT(sceneBuilderPos, schedulerSealPos);
+    EXPECT_LT(schedulerSealPos, planSnapshotPos);
+    EXPECT_LT(planSnapshotPos, viewPreparePos);
     EXPECT_LT(viewPreparePos, renderFramePos);
     EXPECT_LT(uiSnapshotPos, renderFramePos);
 

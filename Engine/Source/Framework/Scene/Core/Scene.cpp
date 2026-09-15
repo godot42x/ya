@@ -16,6 +16,7 @@ namespace ya
 namespace
 {
 ISceneLifecycleHost* g_sceneLifecycleHost = nullptr;
+std::atomic<uint64_t> g_nextSceneInstanceId{1};
 }
 
 void Scene::setLifecycleHost(ISceneLifecycleHost* host)
@@ -30,6 +31,7 @@ ISceneLifecycleHost* Scene::getLifecycleHost()
 
 Scene::Scene(const std::string &name)
     : _name(name)
+    , _instanceId(g_nextSceneInstanceId.fetch_add(1, std::memory_order_relaxed))
 {
     if (auto *lifecycleHost = getLifecycleHost()) {
         lifecycleHost->registerScenePointer(this);

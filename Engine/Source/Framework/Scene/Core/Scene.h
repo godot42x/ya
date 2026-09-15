@@ -15,6 +15,8 @@
 #include "Scene3D/Node3D.h"
 #include "Resource/Model.h"
 #include <entt/entt.hpp>
+#include <atomic>
+#include <cstdint>
 #include <concepts>
 #include <memory>
 #include <string>
@@ -38,6 +40,7 @@ struct YA_SCENE_CORE_API Scene
     // uint32_t                  _magic      = SCENE_MAGIC;
 
     std::string    _name;
+    uint64_t       _instanceId = 0;
     entt::registry _registry;
     uint32_t       _entityCounter = 0;
 
@@ -142,6 +145,7 @@ struct YA_SCENE_CORE_API Scene
     // Getters
     const std::string& getName() const { return _name; }
     void               setName(const std::string& name) { _name = name; }
+    [[nodiscard]] uint64_t getInstanceId() const { return _instanceId; }
     uint32_t           entityCount() const { return static_cast<uint32_t>(_entityMap.size()); }
 
     // Registry access

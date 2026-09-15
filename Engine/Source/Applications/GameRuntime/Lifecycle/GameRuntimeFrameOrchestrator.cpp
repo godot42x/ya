@@ -416,30 +416,70 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
     const auto& frameState = app._renderState->frameState;
     const glm::mat4 viewProjection = makeCameraViewProjection(frameState.projection, frameState.view);
 
-    if (renderRuntime->isWorldSceneRenderEnabled()) {
+    auto& sceneScheduler = app._renderState->sceneRenderScheduler;
+    sceneScheduler.beginFrame(App::_frameIndex);
+    struct SceneSchedulerGuard
+    {
+        SceneRenderScheduler* scheduler = nullptr;
+        ~SceneSchedulerGuard()
+        {
+            if (scheduler) {
+                scheduler->clearFrame();
+            }
+        }
+    } sceneSchedulerGuard{.scheduler = &sceneScheduler};
+
+    SceneRenderPlan sceneRenderPlan;
+    if (renderRuntime->isWorldSceneRenderEnabled() && scene) {
+        sceneScheduler.submit(SceneRenderRequest{
+            .sceneId = scene->getInstanceId(),
+            .sceneRevision = 0,
+            .viewId = 1,
+            .familyId = 1,
+            .view = frameState.view,
+            .projection = frameState.projection,
+            .viewProjection = viewProjection,
+            .cameraPos = frameState.cameraPos,
+            .viewportRect = frameState.viewportRect,
+            .buildSnapshot = [scene, terrainProcessor = renderRuntime->getTerrainProcessor()]
+            {
+                auto snapshot = std::make_shared<SceneFrameSnapshot>();
+                RenderFrameExtractor::extractSceneSnapshot(
+                    RenderFrameExtractor::SceneExtractInput{
+                        .scene = scene,
+                        .terrainProcessor = terrainProcessor,
+                    },
+                    *snapshot);
+                return std::shared_ptr<const SceneFrameSnapshot>(std::move(snapshot));
+            },
+        });
+    }
+    sceneRenderPlan = sceneScheduler.seal();
+
+    if (!sceneRenderPlan.viewportTasks.empty()) {
         YA_PERF_SCOPE(perf::sample::renderExtract(), perf::metric::cpuTimeMs(), perf::domain::render());
         YA_PROFILE_SCOPE("RenderFrameExtractor::sceneSnapshot");
-        SceneFrameSnapshot sceneSnapshot;
-        RenderFrameExtractor::extractSceneSnapshot(
-            RenderFrameExtractor::SceneExtractInput{
-                .scene = scene,
-                .terrainProcessor = renderRuntime->getTerrainProcessor(),
-            },
-            sceneSnapshot);
-        RenderFrameExtractor::prepareView(
-            RenderFrameExtractor::ViewPrepareInput{
-                .view = frameState.view,
-                .projection = frameState.projection,
-                .viewProjection = viewProjection,
-                .cameraPos = frameState.cameraPos,
-                .viewportExtent = Extent2D::fromVec2(frameState.viewportRect.extent),
-                .viewOwner = entt::null,
-                .frameIndex = App::_frameIndex,
-                .deltaTime = dt,
-                .shadowSettings = &app.getRenderServices().getShadowSettings(),
-            },
-            sceneSnapshot,
-            app._renderState->frameDataPerFlight[flightIndex]);
+        const SceneViewportTask& task = sceneRenderPlan.viewportTasks.front();
+        const auto sceneSnapshot = sceneRenderPlan.snapshotFor(task);
+        if (!sceneSnapshot) {
+            app._renderState->frameDataPerFlight[flightIndex].clear();
+        }
+        else {
+            RenderFrameExtractor::prepareView(
+                RenderFrameExtractor::ViewPrepareInput{
+                    .view = task.view,
+                    .projection = task.projection,
+                    .viewProjection = task.viewProjection,
+                    .cameraPos = task.cameraPos,
+                    .viewportExtent = Extent2D::fromVec2(task.viewportRect.extent),
+                    .viewOwner = entt::null,
+                    .frameIndex = App::_frameIndex,
+                    .deltaTime = dt,
+                    .shadowSettings = &app.getRenderServices().getShadowSettings(),
+                },
+                *sceneSnapshot,
+                app._renderState->frameDataPerFlight[flightIndex]);
+        }
     }
     else {
         app._renderState->frameDataPerFlight[flightIndex].clear();

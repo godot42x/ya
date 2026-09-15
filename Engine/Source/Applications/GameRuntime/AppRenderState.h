@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render3D/RenderFrameData.h"
+#include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Stage/IRenderStage.h"
 #include "GameRuntime/AppRenderFrameState.h"
@@ -22,6 +23,7 @@ struct AppRenderState
     bool                                               bRenderMirror  = false;
     AppRenderFrameState                                frameState;
     std::optional<AppRenderFrameState>                 extensionFrameState;
+    SceneRenderScheduler                               sceneRenderScheduler;
     std::array<RenderFrameData, MAX_FLIGHTS_IN_FLIGHT> frameDataPerFlight{};
 };
 
