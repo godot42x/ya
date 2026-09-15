@@ -8,6 +8,8 @@
 #include "GUI/Declarative/LayoutBuilders.h"
 #include "GUI/Declarative/ShellBuilders.h"
 #include "GUI/Declarative/SlotBuilders.h"
+// Animation authoring rides on the same builder: ui::animate(builderOrWidget, …).
+#include "GUI/Widgets/UIAnimation.h"
 
 namespace ya::ui
 {

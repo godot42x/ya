@@ -3,7 +3,7 @@
 //     declared table (own entries + inherited base entries);
 //   * every write goes through the widget's changed-only setter, so animation
 //     is a normal invalidation source (a finished tween stops dirtying);
-//   * the render overlay (opacity/translation/scale/tint) is paint-only and
+//   * the render transform (opacity/translation/scale/tint) is paint-only and
 //     inherits to the subtree, resolved into draw items at emit time;
 //   * a downstream widget type adds its own animatable property without
 //     touching the framework or the tween driver (open/closed seam).
@@ -79,7 +79,7 @@ TEST(GuiAnimationTest, SeamListsOwnThenInheritedProperties)
     UIAnimProbeWidget probe("Probe");
     UIElement         plain("Plain");
 
-    // The probe inherits the four base paint-overlay properties after its own.
+    // The probe inherits the four base paint-transform properties after its own.
     const auto ids = probe.collectAnimatablePropertyIds();
     ASSERT_EQ(ids.size(), 5u);
     EXPECT_EQ(ids[0], std::string_view("gauge"));
@@ -355,6 +355,110 @@ TEST(GuiAnimationTest, UnknownTrackIsSkippedWithoutBreakingResolvedTracks)
     EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.0f);
     tween->tick(*card, 0.5f);
     EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.5f);
+}
+
+// Retargetable playback: a two-state consumer (switch knob, hover feedback)
+// must be able to reverse mid-flight without snapping back to an endpoint.
+TEST(GuiAnimationTest, PlayTowardRetargetsWithoutSnapping)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    auto       card = std::make_shared<UIBorder>("Card");
+    card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {80.0f, 40.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+
+    auto tween = animate(*card, 1.0f);
+    tween->fade(0.0f, 1.0f, EUIAnimEase::Linear).play();
+    tween->tick(*card, 0.5f);
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.5f);
+
+    // Reverse from the current position: the value keeps falling from 0.5.
+    tween->playToward(EUIAnimDirection::Backward);
+    EXPECT_TRUE(card->wantsTick());
+    tween->tick(*card, 0.2f);
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.3f);
+
+    // Forward again from 0.3 (no jump to 0).
+    tween->playToward(EUIAnimDirection::Forward);
+    tween->tick(*card, 0.2f);
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.5f);
+
+    // Reaching the endpoint settles instead of spinning.
+    tween->playToward(EUIAnimDirection::Forward);
+    tween->tick(*card, 5.0f);
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 1.0f);
+    EXPECT_FALSE(card->wantsTick());
+
+    // Already at the target: no-op, not a restart.
+    tween->playToward(EUIAnimDirection::Forward);
+    EXPECT_FALSE(tween->isPlaying());
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 1.0f);
+}
+
+TEST(GuiAnimationTest, SetLerpNowAppliesInitialStateWithoutAnimating)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    auto       card = std::make_shared<UIBorder>("Card");
+    card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {80.0f, 40.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+
+    auto tween = animate(*card, 0.5f);
+    tween->fade(0.0f, 1.0f, EUIAnimEase::Linear).setLerpNow(1.0f);
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 1.0f); // built already "on"
+    EXPECT_FALSE(tween->isPlaying());
+    EXPECT_FALSE(card->wantsTick());
+}
+
+// The typed handle + sugar methods are the authoring surface: same runtime
+// path as the string API, but the value domain is checked at compile time.
+TEST(GuiAnimationTest, TypedHandlesAndSugarDriveTheSameTracks)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    auto       card = std::make_shared<UIBorder>("Card");
+    card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {80.0f, 40.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+
+    auto tween = animate(*card, 1.0f);
+    tween->track(ya::ui::anim::opacity, 0.25f, 0.75f, EUIAnimEase::Linear)
+        .track(ya::ui::anim::scale, glm::vec2(1.0f, 1.0f), glm::vec2(2.0f, 2.0f), EUIAnimEase::Linear)
+        .track(ya::ui::anim::translation, glm::vec2(0.0f, 0.0f), glm::vec2(10.0f, 20.0f), EUIAnimEase::Linear)
+        .track(ya::ui::anim::tint, glm::vec4(1.0f), glm::vec4(0.5f), EUIAnimEase::Linear)
+        .setLerpNow(0.5f);
+
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.5f);
+    EXPECT_EQ(card->getRenderScale(), glm::vec2(1.5f, 1.5f));
+    EXPECT_EQ(card->getRenderTranslation(), glm::vec2(5.0f, 10.0f));
+    EXPECT_EQ(card->getRenderTint(), glm::vec4(0.75f));
+    EXPECT_EQ(tween->getTrackCount(), 4u);
+
+    // The sugar methods are the same three track kinds.
+    auto sugar = animate(*card, 1.0f);
+    sugar->fade(1.0f, 0.0f).scale({1.0f, 1.0f}, {0.5f, 0.5f}).slide({0.0f, 0.0f}, {4.0f, 0.0f}).tint(glm::vec4(0.0f), glm::vec4(1.0f));
+    EXPECT_EQ(sugar->getTrackCount(), 4u);
+}
+
+TEST(GuiAnimationTest, AnimateHelperAttachesTheBehaviour)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    auto       card = std::make_shared<UIBorder>("Card");
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {80.0f, 40.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+
+    // Fire and forget: the widget owns the behaviour, so dropping the handle
+    // does not cancel the animation.
+    animate(*card, 0.3f)->fade(0.0f, 1.0f, EUIAnimEase::OutCubic).play();
+    EXPECT_TRUE(card->wantsTick());
+    tree.tick(0.15f);
+    EXPECT_GT(card->getRenderOpacity(), 0.0f);
+    tree.tick(0.15f);
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 1.0f);
+    EXPECT_FALSE(card->wantsTick());
 }
 
 TEST(GuiAnimationTest, ClockResolvesEndpointsAndLooping)

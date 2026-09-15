@@ -172,6 +172,16 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
   overlay 映射；Workbench `--start-page=Tween` 场景 `animation_tween.jsonl` 冒烟。
   新动画属性只有出现真实消费者时才加；反射层 `.animatable()` 标记等 Game UI
   轨道编辑器出现时再议。
+- 授权 DSL（首选写法）：`ya::ui::animate(widget 或 builder, duration)` 取回 tween，
+  链式 `->fade(from,to,ease)` / `.scale()` / `.slide()` / `.tint()` /
+  `.track(handle, from, to, ease)` / `.setDuration()` / `.setLoop()` /
+  `.setOnFinished()` / `.play()`。typed 句柄 `ya::ui::anim::opacity|scale|translation|tint`
+  把值域编进类型；自定义属性用 `ya::TUIAnimProperty<float>{"gauge"}` 声明，写错值类型
+  是编译错误而不是运行时拒绝。behavior 由 widget 持有，所以句柄可丢弃
+  （`ya::ui::animate(card, 0.2f)->fade(0.0f, 1.0f).play();` 就是完整动画）。
+- 两态/重定位：`playToward(Forward|Backward)` 从当前位置继续，`setLerpNow(v)` 直接落位
+  并停表。「目标态变了就朝它走」的控件（开关、hover 反馈）用这两个，不要用
+  `play()`/`playReverse()` 重启，否则中途反向会跳值。
 
 ## Dock 权责
 

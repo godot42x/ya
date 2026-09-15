@@ -311,6 +311,34 @@ void UIAnimClock::stop()
     _bFinished = false;
 }
 
+void UIAnimClock::playToward(EUIAnimDirection direction)
+{
+    if (_duration <= 0.0f) {
+        _position  = direction == EUIAnimDirection::Forward ? _duration : 0.0f;
+        _bPlaying  = false;
+        _bFinished = true;
+        return;
+    }
+    const bool bForward  = direction == EUIAnimDirection::Forward;
+    const bool bAtTarget = bForward ? (_position >= _duration) : (_position <= 0.0f);
+    if (bAtTarget) {
+        // Already there: settle instead of running a no-op animation.
+        _bPlaying  = false;
+        _bFinished = true;
+        return;
+    }
+    _direction = bForward ? 1.0f : -1.0f;
+    _bFinished = false;
+    _bPlaying  = true;
+}
+
+void UIAnimClock::setLerp(float value)
+{
+    _position  = glm::clamp(value, 0.0f, 1.0f) * _duration;
+    _bPlaying  = false;
+    _bFinished = false;
+}
+
 float UIAnimClock::getLerp() const
 {
     if (_duration <= 0.0f) {
@@ -358,7 +386,7 @@ bool UIAnimClock::tick(float deltaSeconds)
 
 // === Tween behaviour ========================================================
 
-void UITweenBehavior::addFloatTrack(std::string id, float from, float to, EUIAnimEase ease)
+UITweenBehavior& UITweenBehavior::addFloatTrack(std::string id, float from, float to, EUIAnimEase ease)
 {
     FUIAnimTrack track;
     track.id   = std::move(id);
@@ -367,9 +395,10 @@ void UITweenBehavior::addFloatTrack(std::string id, float from, float to, EUIAni
     track.ease = ease;
     _tracks.push_back(std::move(track));
     _resolved.clear();
+    return *this;
 }
 
-void UITweenBehavior::addVec2Track(std::string id, glm::vec2 from, glm::vec2 to, EUIAnimEase ease)
+UITweenBehavior& UITweenBehavior::addVec2Track(std::string id, glm::vec2 from, glm::vec2 to, EUIAnimEase ease)
 {
     FUIAnimTrack track;
     track.id   = std::move(id);
@@ -378,9 +407,10 @@ void UITweenBehavior::addVec2Track(std::string id, glm::vec2 from, glm::vec2 to,
     track.ease = ease;
     _tracks.push_back(std::move(track));
     _resolved.clear();
+    return *this;
 }
 
-void UITweenBehavior::addVec4Track(std::string id, glm::vec4 from, glm::vec4 to, EUIAnimEase ease)
+UITweenBehavior& UITweenBehavior::addVec4Track(std::string id, glm::vec4 from, glm::vec4 to, EUIAnimEase ease)
 {
     FUIAnimTrack track;
     track.id   = std::move(id);
@@ -389,6 +419,7 @@ void UITweenBehavior::addVec4Track(std::string id, glm::vec4 from, glm::vec4 to,
     track.ease = ease;
     _tracks.push_back(std::move(track));
     _resolved.clear();
+    return *this;
 }
 
 void UITweenBehavior::clearTracks()
@@ -405,7 +436,7 @@ bool UITweenBehavior::wantsTick() const
     return _clock.isPlaying();
 }
 
-void UITweenBehavior::play()
+UITweenBehavior& UITweenBehavior::play()
 {
     _warnedIds.clear();
     _bFinishedFired = false;
@@ -419,9 +450,10 @@ void UITweenBehavior::play()
             _onFinished();
         }
     }
+    return *this;
 }
 
-void UITweenBehavior::playReverse()
+UITweenBehavior& UITweenBehavior::playReverse()
 {
     _warnedIds.clear();
     _bFinishedFired = false;
@@ -435,17 +467,49 @@ void UITweenBehavior::playReverse()
             _onFinished();
         }
     }
+    return *this;
 }
 
-void UITweenBehavior::stop()
+UITweenBehavior& UITweenBehavior::playToward(EUIAnimDirection direction)
+{
+    _warnedIds.clear();
+    _bFinishedFired = false;
+    _clock.playToward(direction);
+    if (UIElement* owner = getOwner()) {
+        // Apply the current (unchanged) position so the first frame after the
+        // retarget is already consistent, then let the clock move it.
+        applyTracks(*owner, _clock.getLerp());
+    }
+    settleFinishedCallback();
+    return *this;
+}
+
+UITweenBehavior& UITweenBehavior::setLerpNow(float lerp)
+{
+    _warnedIds.clear();
+    _clock.setLerp(lerp);
+    if (UIElement* owner = getOwner()) {
+        applyTracks(*owner, _clock.getLerp());
+    }
+    _bFinishedFired = false;
+    return *this;
+}
+
+UITweenBehavior& UITweenBehavior::stop()
 {
     _clock.stop();
+    return *this;
 }
 
 void UITweenBehavior::tick(UIElement& owner, float deltaSeconds)
 {
     _clock.tick(deltaSeconds);
     applyTracks(owner, _clock.getLerp());
+    settleFinishedCallback();
+}
+
+void UITweenBehavior::settleFinishedCallback()
+{
     if (_clock.hasFinished() && !_bFinishedFired) {
         _bFinishedFired = true;
         if (_onFinished) {
@@ -507,6 +571,16 @@ void UITweenBehavior::applyTracks(UIElement& owner, float lerp)
         const FUIAnimTrack& track = _tracks[i];
         desc->write(owner, lerpAnimValue(track.from, track.to, evaluateEase(track.ease, lerp)));
     }
+}
+
+// === Authoring entry points =================================================
+
+std::shared_ptr<UITweenBehavior> animate(UIElement& widget, float duration)
+{
+    auto behavior = std::make_shared<UITweenBehavior>();
+    behavior->setDuration(duration);
+    widget.addBehavior(behavior);
+    return behavior;
 }
 
 } // namespace ya

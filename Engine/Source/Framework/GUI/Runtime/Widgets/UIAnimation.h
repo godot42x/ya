@@ -39,6 +39,7 @@
 #include <functional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -116,10 +117,40 @@ struct FUIAnimPropertyTable
     const FUIAnimPropertyTable* base    = nullptr;
 };
 
-/// The base widget's animatable properties: the render-only paint overlay
+/// The base widget's animatable properties: the render-only paint transform
 /// (opacity / renderTranslation / renderScale / tint). Every widget inherits
 /// them, so a generic driver can fade, slide or scale ANY widget.
 [[nodiscard]] YA_GUI_API const FUIAnimPropertyTable& uiElementAnimatableProperties();
+
+// === Typed property handles =================================================
+
+/// Compile-time handle for one animatable property. The value domain is part
+/// of the type, so a caller cannot pass a vec2 where the widget declares a
+/// float. A widget type that declares its own property publishes a handle next
+/// to its table, and any driver - the framework tween or a future Game UI clip
+/// player - can then drive it without knowing the widget class:
+///
+///   inline constexpr ya::TUIAnimProperty<float> kAnimGauge{"gauge"};
+///   tween->track(kAnimGauge, 0.0f, 1.0f);
+template <typename T>
+struct TUIAnimProperty
+{
+    std::string_view id;
+};
+
+inline constexpr TUIAnimProperty<float>     kAnimOpacity{"opacity"};
+inline constexpr TUIAnimProperty<glm::vec2> kAnimRenderTranslation{"renderTranslation"};
+inline constexpr TUIAnimProperty<glm::vec2> kAnimRenderScale{"renderScale"};
+inline constexpr TUIAnimProperty<glm::vec4> kAnimTint{"tint"};
+
+// Short names for authoring chains (`tween->track(ya::ui::anim::opacity, ...)`).
+namespace ui::anim
+{
+inline constexpr TUIAnimProperty<float>     opacity     = kAnimOpacity;
+inline constexpr TUIAnimProperty<glm::vec2> translation = kAnimRenderTranslation;
+inline constexpr TUIAnimProperty<glm::vec2> scale       = kAnimRenderScale;
+inline constexpr TUIAnimProperty<glm::vec4> tint        = kAnimTint;
+} // namespace ui::anim
 
 // === Easing =================================================================
 
@@ -141,6 +172,15 @@ enum class EUIAnimEase : uint8_t
 [[nodiscard]] YA_GUI_API float evaluateEase(EUIAnimEase ease, float t);
 
 // === Clock ==================================================================
+
+/// Endpoint a clock is asked to move toward. Directional playback continues
+/// from the CURRENT position, so retargeting mid-flight (hover in/out, a knob
+/// toggled twice quickly) never snaps to an endpoint.
+enum class EUIAnimDirection : uint8_t
+{
+    Forward,  ///< toward t = 1
+    Backward, ///< toward t = 0
+};
 
 /// A single 0 -> 1 time driver (UE Slate FCurveSequence analogue): duration,
 /// direction, loop and time scale, with no knowledge of what it animates. A
@@ -173,6 +213,14 @@ class YA_GUI_API UIAnimClock
     void resume();
     /// Stop and reset to the beginning.
     void stop();
+    /// Continue from the current position toward an endpoint (no restart).
+    /// Already at that endpoint: the clock settles (not playing, finished).
+    /// This is the retargetable form of play()/playReverse() and the primitive
+    /// a two-state control (switch, hover feedback) should use.
+    void playToward(EUIAnimDirection direction);
+    /// Jump to a normalized position without animating (initial state, or a
+    /// non-animated set): pauses and clears the finished flag.
+    void setLerp(float value);
 
     [[nodiscard]] bool  isPlaying() const { return _bPlaying; }
     /// Normalized timeline position 0..1, direction-independent.
@@ -213,20 +261,57 @@ struct FUIAnimTrack
 ///
 /// Usage:
 ///
-///   auto tween = std::make_shared<ya::UITweenBehavior>();
-///   tween->addFloatTrack("opacity", 0.0f, 1.0f, ya::EUIAnimEase::OutCubic);
-///   tween->addVec2Track("renderScale", {0.9f, 0.9f}, {1.0f, 1.0f},
-///                       ya::EUIAnimEase::OutBack);
-///   tween->setDuration(0.25f);
-///   card->addBehavior(tween);
-///   tween->play();
+///   auto tween = ya::ui::animate(card, 0.25f);   // attaches to `card`
+///   tween->fade(0.0f, 1.0f, ya::EUIAnimEase::OutCubic)
+///        ->scale({0.9f, 0.9f}, {1.0f, 1.0f}, ya::EUIAnimEase::OutBack)
+///        ->play();
+///
+///   // A widget's own animatable property (declared next to its table):
+///   tween->track(ya::kAnimGauge, 0.0f, 1.0f);
+///
+/// Authoring calls return *this so tracks, duration and playback read as one
+/// chain; the plain add*Track() names stay available for table-driven code.
 class YA_GUI_API UITweenBehavior : public UIBehavior
 {
   public:
     // === Authoring ===
-    void addFloatTrack(std::string id, float from, float to, EUIAnimEase ease = EUIAnimEase::Linear);
-    void addVec2Track(std::string id, glm::vec2 from, glm::vec2 to, EUIAnimEase ease = EUIAnimEase::Linear);
-    void addVec4Track(std::string id, glm::vec4 from, glm::vec4 to, EUIAnimEase ease = EUIAnimEase::Linear);
+    UITweenBehavior& addFloatTrack(std::string id, float from, float to, EUIAnimEase ease = EUIAnimEase::Linear);
+    UITweenBehavior& addVec2Track(std::string id, glm::vec2 from, glm::vec2 to, EUIAnimEase ease = EUIAnimEase::Linear);
+    UITweenBehavior& addVec4Track(std::string id, glm::vec4 from, glm::vec4 to, EUIAnimEase ease = EUIAnimEase::Linear);
+    /// Typed variant: the value domain comes from the handle, so a wrong value
+    /// type is a compile error instead of a runtime rejection.
+    template <typename T>
+    UITweenBehavior& track(const TUIAnimProperty<T>& property, T from, T to, EUIAnimEase ease = EUIAnimEase::Linear)
+    {
+        static_assert(std::is_same_v<T, float> || std::is_same_v<T, glm::vec2> || std::is_same_v<T, glm::vec4>,
+                      "animatable properties support float / vec2 / vec4 value domains only");
+        if constexpr (std::is_same_v<T, float>) {
+            return addFloatTrack(std::string(property.id), from, to, ease);
+        }
+        else if constexpr (std::is_same_v<T, glm::vec2>) {
+            return addVec2Track(std::string(property.id), from, to, ease);
+        }
+        else {
+            return addVec4Track(std::string(property.id), from, to, ease);
+        }
+    }
+    /// The base widget paint transform, spelled out for the common cases.
+    UITweenBehavior& fade(float from, float to, EUIAnimEase ease = EUIAnimEase::Linear)
+    {
+        return addFloatTrack(std::string(kAnimOpacity.id), from, to, ease);
+    }
+    UITweenBehavior& scale(glm::vec2 from, glm::vec2 to, EUIAnimEase ease = EUIAnimEase::Linear)
+    {
+        return addVec2Track(std::string(kAnimRenderScale.id), from, to, ease);
+    }
+    UITweenBehavior& slide(glm::vec2 from, glm::vec2 to, EUIAnimEase ease = EUIAnimEase::Linear)
+    {
+        return addVec2Track(std::string(kAnimRenderTranslation.id), from, to, ease);
+    }
+    UITweenBehavior& tint(glm::vec4 from, glm::vec4 to, EUIAnimEase ease = EUIAnimEase::Linear)
+    {
+        return addVec4Track(std::string(kAnimTint.id), from, to, ease);
+    }
     /// Tracks are resolved against the owner's animatable property table when
     /// the tween runs; a track whose id the owner does not expose is skipped
     /// (warned once per id). A tween never silently animates nothing.
@@ -234,20 +319,42 @@ class YA_GUI_API UITweenBehavior : public UIBehavior
     [[nodiscard]] const FUIAnimTrack& getTrack(size_t index) const { return _tracks[index]; }
     void clearTracks();
 
-    void setDuration(float seconds) { _clock.setDuration(seconds); }
+    UITweenBehavior& setDuration(float seconds)
+    {
+        _clock.setDuration(seconds);
+        return *this;
+    }
     [[nodiscard]] float getDuration() const { return _clock.getDuration(); }
-    void setLoop(bool bLoop) { _clock.setLoop(bLoop); }
-    void setTimeScale(float scale) { _clock.setTimeScale(scale); }
+    UITweenBehavior& setLoop(bool bLoop)
+    {
+        _clock.setLoop(bLoop);
+        return *this;
+    }
+    UITweenBehavior& setTimeScale(float timeScale)
+    {
+        _clock.setTimeScale(timeScale);
+        return *this;
+    }
     /// Called when a non-looping tween reaches its end (after the final value
     /// was applied). Use it to chain the next step.
-    void setOnFinished(std::function<void()> callback) { _onFinished = std::move(callback); }
+    UITweenBehavior& setOnFinished(std::function<void()> callback)
+    {
+        _onFinished = std::move(callback);
+        return *this;
+    }
 
     // === Playback ===
     /// Apply t=0 and run forward. Replaying a finished tween restarts it.
-    void play();
+    UITweenBehavior& play();
     /// Apply t=1 and run backward.
-    void playReverse();
-    void stop();
+    UITweenBehavior& playReverse();
+    /// Continue from the current position toward an endpoint (see
+    /// UIAnimClock::playToward). The current value is applied immediately, so
+    /// the first frame after the call is already consistent.
+    UITweenBehavior& playToward(EUIAnimDirection direction);
+    /// Jump to a normalized position and apply it once, without animating.
+    UITweenBehavior& setLerpNow(float lerp);
+    UITweenBehavior& stop();
     [[nodiscard]] bool  isPlaying() const { return _clock.isPlaying(); }
     [[nodiscard]] float getLerp() const { return _clock.getLerp(); }
 
@@ -258,6 +365,9 @@ class YA_GUI_API UITweenBehavior : public UIBehavior
 
   private:
     void applyTracks(UIElement& owner, float lerp);
+    /// Fire the end callback exactly once per run (play()/playReverse()/
+    /// playToward() reset the latch).
+    void settleFinishedCallback();
     /// Resolve each track's descriptor once (the owner's table is static, so
     /// a resolved descriptor stays valid). Cleared when the track list, the
     /// owner, or the widget identity changes.
@@ -274,5 +384,25 @@ class YA_GUI_API UITweenBehavior : public UIBehavior
     std::vector<std::string>   _warnedIds;
     bool                       _bFinishedFired = false;
 };
+
+// === Authoring entry points =================================================
+
+/// Attach a tween to `widget` and return it for authoring / playback. The
+/// widget owns the behaviour from here on, so dropping the returned handle is
+/// safe: `ya::ui::animate(card, 0.2f)->fade(0.0f, 1.0f)->play();` is a complete
+/// fire-and-forget animation.
+[[nodiscard]] YA_GUI_API std::shared_ptr<UITweenBehavior> animate(UIElement& widget,
+                                                                 float      duration = 0.25f);
+
+/// Same, for a declarative builder before `.release()`/`.share()`, so a widget
+/// and its animation are authored in one place:
+///   auto card = ya::ui::border("Card");
+///   ya::ui::animate(card, 0.25f)->fade(0.0f, 1.0f, ya::EUIAnimEase::OutCubic)->play();
+template <typename TBuilder>
+    requires requires(TBuilder& builder) { builder.widget(); }
+[[nodiscard]] std::shared_ptr<UITweenBehavior> animate(TBuilder& builder, float duration = 0.25f)
+{
+    return animate(builder.widget(), duration);
+}
 
 } // namespace ya
