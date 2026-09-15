@@ -78,6 +78,8 @@ void buildLayoutDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState
                      const std::function<void(const std::string&)>& log);
 void buildHostsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                     const std::function<void(const std::string&)>& log);
+void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
+                        const std::function<void(const std::string&)>& log);
 void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,
                           const std::function<void(const std::string&)>& log);
 void buildBrushDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& state,

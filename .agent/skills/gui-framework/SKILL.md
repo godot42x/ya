@@ -142,6 +142,37 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   deferred texture generation。GPU/offscreen 像素门禁：`Script/automation/gui/run_workbench_gpu_parity.py`
   （headless lastRoute + snapshot digest + windowed `--gpu-shot`/`--offscreen-diff` 零容差）。
 
+## 动画（framework 层）
+
+边界：框架只做 Slate 那一半（时钟 + easing + 少量可动画属性）。轨道/关键帧/
+clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结果通过
+**同一个可动画属性接缝**写回 widget，绝不在 widgets 内核里再造第二套
+属性/失效系统。设计记录见 `.agent/plan/gui-animation/plan.md`。
+
+- 接缝（OCP）：一个 widget 类型用 `FUIAnimPropertyTable` 声明自己可被动画
+  操纵的属性（own entries + base 链，见 `UIAnimation.h`）。驱动者（tween /
+  将来的 clip player）只认 `(widget, propertyId, value)`：`findAnimatableProperty` /
+  `applyAnimatableProperty` / `readAnimatableProperty`。加新可动画属性 = 在控件
+  类型里加表项，**不改**驱动者。
+- 基础目录：`UIElement` 自带 paint-only overlay 四通道 —— `opacity`(Float)、
+  `renderTranslation`(Vec2)、`renderScale`(Vec2，围绕 `_pivot`)、`tint`(Vec4)，
+  继承到整个子树（UMG RenderOpacity / RenderTransform 语义）。`renderRotation`
+  未入目录：快照 item 是 axis-aligned quad，旋转需要 compose 支持 rotated
+  quad。
+- 写路径唯一真源是 changed-only setter（`setRenderOpacity` 等，失效走
+  `EUIPropertyImpact::SubtreePaintContext`，因为子树继承 overlay）。禁止动画
+  field poke、禁止把 `_bVolatile` 当动画、禁止在 paint/layout 回调里 spawn 动画。
+- 时钟/tween：`UIAnimClock`（duration/方向/loop/timeScale，对标 FCurveSequence）
+  + `UITweenBehavior`（一个时钟驱动 owner 的 N 条 track；`wantsTick()` 只在播放
+  中为真，结束自动回到干净、树不再拜访）。onFinished 可做 ping-pong（playReverse）。
+- overlay 解析：`UIFrameBuilder::pushPaintOverlay`，emit 时映射 rect/color/clip
+  （缓存 draw-item 段存的是解析后结果，所以 overlay 变化必须 invalidate 子树，
+  setter 已保证）。
+- 验收：`GuiAnimationTest`（closure）覆盖接缝继承 / 类型拒绝 / tween 生命周期 /
+  overlay 映射；Workbench `--start-page=Tween` 场景 `animation_tween.jsonl` 冒烟。
+  新动画属性只有出现真实消费者时才加；反射层 `.animatable()` 标记等 Game UI
+  轨道编辑器出现时再议。
+
 ## Dock 权责
 
 划分按责任，不按目录。三层：

@@ -281,6 +281,16 @@ void UIElement::paint(UIFrameBuilder& builder)
     if (!isVisibleForRender()) {
         return;
     }
+    const bool bOverlay = hasRenderOverlay();
+    if (bOverlay) {
+        builder.pushPaintOverlay(UIFrameBuilder::FUIItemOverlay{
+            .opacity     = _renderOpacity,
+            .tint        = _renderTint,
+            .translation = _renderTranslation,
+            .scale       = _renderScale,
+            .pivot       = _layoutRect.pos + _pivot * _layoutRect.extent,
+        });
+    }
     // Guardrail G1: every widget paints inside its own rect by default, so
     // overflow can never draw over siblings/status bars. Opt out via
     // _bSelfClip only when a widget legitimately paints outside its rect.
@@ -304,6 +314,9 @@ void UIElement::paint(UIFrameBuilder& builder)
     paintChildren(builder);
     if (bSelfClip) {
         builder.popClip();
+    }
+    if (bOverlay) {
+        builder.popPaintOverlay();
     }
 }
 
@@ -412,6 +425,54 @@ void UIElement::invalidateProperty(EUIPropertyImpact impact)
         invalidateSubtree();
         break;
     }
+}
+
+// === Render overlay ===
+
+void UIElement::setRenderOpacity(float value)
+{
+    value = glm::clamp(value, 0.0f, 1.0f);
+    if (_renderOpacity == value) {
+        return;
+    }
+    _renderOpacity = value;
+    // Descendants inherit the overlay; a changed overlay re-paints the whole
+    // subtree (children cache draw items resolved in the old overlay space).
+    invalidateProperty(EUIPropertyImpact::SubtreePaintContext);
+}
+
+void UIElement::setRenderTranslation(glm::vec2 value)
+{
+    if (_renderTranslation == value) {
+        return;
+    }
+    _renderTranslation = value;
+    invalidateProperty(EUIPropertyImpact::SubtreePaintContext);
+}
+
+void UIElement::setRenderScale(glm::vec2 value)
+{
+    value = glm::max(value, glm::vec2(0.0f));
+    if (_renderScale == value) {
+        return;
+    }
+    _renderScale = value;
+    invalidateProperty(EUIPropertyImpact::SubtreePaintContext);
+}
+
+void UIElement::setRenderTint(glm::vec4 value)
+{
+    if (_renderTint == value) {
+        return;
+    }
+    _renderTint = value;
+    invalidateProperty(EUIPropertyImpact::SubtreePaintContext);
+}
+
+bool UIElement::hasRenderOverlay() const
+{
+    return _renderOpacity != 1.0f || _renderTranslation != glm::vec2(0.0f) ||
+           _renderScale != glm::vec2(1.0f) || _renderTint != glm::vec4(1.0f);
 }
 
 void UIElement::paintChildren(UIFrameBuilder& builder)

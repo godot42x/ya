@@ -1,0 +1,12 @@
+# GUIWorkbench --start-page=Tween. Framework-layer animation smoke:
+# the page builds its tween-owning widgets, the tree ticks them, and a few
+# frames later the pop tween has driven the card's opacity/scale overlay
+# (presence asserts + the G2 validation frame catch stale-paint regressions).
+{"window_size":{"width":1280,"height":720}}
+{"frame":2}
+{"assert":{"widget":"AnimationCard"}}
+{"assert":{"widget":"AnimationGauge"}}
+{"assert":{"widget":"AnimPop"}}
+{"assert":{"widget":"AnimFill"}}
+{"frame":40}
+{"checkpoint":"animation_tween_frames"}

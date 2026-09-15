@@ -216,6 +216,11 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     {
         buildBrushDemo(t, p, demoState, status);
     });
+    surface.addPage("Animation", "Tween", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
+    {
+        demoState.resetHandles();
+        buildAnimationDemo(t, p, demoState, status);
+    });
     surface.addPage("Text", "Text", [this](ya::WidgetTree& t, ya::UICanvasPanel& p, const std::function<void(const std::string&)>& status)
     {
         buildTextDemo(t, p, demoState, status);

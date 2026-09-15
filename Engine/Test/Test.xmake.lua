@@ -109,6 +109,7 @@ do
     add_files("./Source/DockNodeTest.cpp")
     add_files("./Source/UIDocumentTest.cpp")
     add_files("./Source/UIFrameSnapshotTest.cpp")
+    add_files("./Source/GuiAnimationTest.cpp")
     add_files("./Source/ComposeClipReplayTest.cpp")
     add_files("./Source/GUIRenderSurfaceTest.cpp")
     add_files("./Source/LayoutHostSkipBaselineTest.cpp")

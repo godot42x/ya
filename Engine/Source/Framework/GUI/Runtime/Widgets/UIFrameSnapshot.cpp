@@ -10,12 +10,15 @@ namespace ya
 
 void UIFrameBuilder::pushClip(const Rect2D& logicalClip)
 {
-    Rect2D resolved = logicalClip;
+    // A clip pushed while an overlay is active lives in the overlay's output
+    // space (the same space the emitted items' rects are mapped INTO), so it
+    // is resolved here, at push time, and only uiScale/offset applied later.
+    Rect2D resolved = mapOverlayRect(logicalClip);
     if (!_clipStack.empty()) {
         const Rect2D& parent = _clipStack.back();
         const glm::vec2 parentMax = parent.pos + parent.extent;
-        const glm::vec2 clipMax   = logicalClip.pos + logicalClip.extent;
-        resolved.pos    = glm::max(logicalClip.pos, parent.pos);
+        const glm::vec2 clipMax   = resolved.pos + resolved.extent;
+        resolved.pos    = glm::max(resolved.pos, parent.pos);
         resolved.extent = glm::max(glm::vec2(0.0f), glm::min(clipMax, parentMax) - resolved.pos);
     }
     _clipStack.push_back(resolved);
@@ -28,6 +31,77 @@ void UIFrameBuilder::popClip()
     }
 }
 
+void UIFrameBuilder::pushPaintOverlay(const FUIItemOverlay& overlay)
+{
+    FUIResolvedOverlay resolved;
+    resolved.scale       = overlay.scale;
+    resolved.translation = overlay.pivot * (glm::vec2(1.0f) - overlay.scale) + overlay.translation;
+    resolved.opacity     = overlay.opacity;
+    resolved.tint        = overlay.tint;
+    if (!_overlayStack.empty()) {
+        const FUIResolvedOverlay& parent = _overlayStack.back();
+        // Compose: the new overlay maps first (inner, p -> p*S1 + T1), then
+        // the parent maps the result (outer, p' -> p'*S2 + T2). Combined:
+        //   p -> p * (S1*S2) + (T1*S2 + T2)
+        const glm::vec2 translation = resolved.translation * parent.scale + parent.translation;
+        resolved.translation = translation;
+        resolved.scale       = resolved.scale * parent.scale;
+        resolved.opacity     = resolved.opacity * parent.opacity;
+        resolved.tint        = resolved.tint * parent.tint;
+    }
+    _overlayStack.push_back(resolved);
+}
+
+void UIFrameBuilder::popPaintOverlay()
+{
+    if (!_overlayStack.empty()) {
+        _overlayStack.pop_back();
+    }
+}
+
+const UIFrameBuilder::FUIResolvedOverlay& UIFrameBuilder::currentOverlay() const
+{
+    static const FUIResolvedOverlay kIdentity{};
+    return _overlayStack.empty() ? kIdentity : _overlayStack.back();
+}
+
+Rect2D UIFrameBuilder::mapOverlayRect(const Rect2D& rect) const
+{
+    if (_overlayStack.empty()) {
+        return rect;
+    }
+    const FUIResolvedOverlay& overlay = _overlayStack.back();
+    return Rect2D{
+        .pos    = rect.pos * overlay.scale + overlay.translation,
+        .extent = rect.extent * overlay.scale,
+    };
+}
+
+glm::vec2 UIFrameBuilder::mapOverlayPoint(const glm::vec2& point) const
+{
+    if (_overlayStack.empty()) {
+        return point;
+    }
+    const FUIResolvedOverlay& overlay = _overlayStack.back();
+    return point * overlay.scale + overlay.translation;
+}
+
+glm::vec4 UIFrameBuilder::mapOverlayColor(const glm::vec4& color) const
+{
+    if (_overlayStack.empty()) {
+        return color;
+    }
+    const FUIResolvedOverlay& overlay = _overlayStack.back();
+    glm::vec4 out = color * overlay.tint;
+    out.w *= overlay.opacity;
+    return out;
+}
+
+glm::vec2 UIFrameBuilder::getOverlayScale() const
+{
+    return currentOverlay().scale;
+}
+
 void UIFrameBuilder::addSprite(const Rect2D&                   logicalRect,
                                const glm::vec4&                color,
                                const std::shared_ptr<Texture>& texture,
@@ -35,11 +109,12 @@ void UIFrameBuilder::addSprite(const Rect2D&                   logicalRect,
                                glm::vec2                       uvScale,
                                bool                            bOpaqueSample)
 {
+    const Rect2D rect = mapOverlayRect(logicalRect);
     UIFrameDrawItem item;
     item.kind          = UIFrameDrawItem::EKind::Sprite;
-    item.pos           = toPx(logicalRect.pos);
-    item.size          = logicalRect.extent * _ctx.uiScale;
-    item.color         = color;
+    item.pos           = toPx(rect.pos);
+    item.size          = rect.extent * _ctx.uiScale;
+    item.color         = mapOverlayColor(color);
     item.texture       = texture;
     item.uvOffset      = uvOffset;
     item.uvScale       = uvScale;
@@ -55,12 +130,14 @@ void UIFrameBuilder::addSprite(const Rect2D&                   logicalRect,
 
 void UIFrameBuilder::addRoundedRect(const Rect2D& logicalRect, const glm::vec4& color, float cornerRadius)
 {
+    const Rect2D rect     = mapOverlayRect(logicalRect);
+    const float  scaleMix = 0.5f * (getOverlayScale().x + getOverlayScale().y);
     UIFrameDrawItem item;
     item.kind         = UIFrameDrawItem::EKind::Sprite;
-    item.pos          = toPx(logicalRect.pos);
-    item.size         = logicalRect.extent * _ctx.uiScale;
-    item.color        = color;
-    item.cornerRadius = cornerRadius * _ctx.uiScale.x;
+    item.pos          = toPx(rect.pos);
+    item.size         = rect.extent * _ctx.uiScale;
+    item.color        = mapOverlayColor(color);
+    item.cornerRadius = cornerRadius * _ctx.uiScale.x * scaleMix;
     if (!_clipStack.empty()) {
         item.bClipped = true;
         const Rect2D& clip = _clipStack.back();
@@ -76,12 +153,17 @@ void UIFrameBuilder::addRectFilledMultiColor(const Rect2D&    logicalRect,
                                              const glm::vec4& colBR,
                                              const glm::vec4& colBL)
 {
+    const Rect2D  rect = mapOverlayRect(logicalRect);
+    const glm::vec4 tl  = mapOverlayColor(colTL);
+    const glm::vec4 tr  = mapOverlayColor(colTR);
+    const glm::vec4 br  = mapOverlayColor(colBR);
+    const glm::vec4 bl  = mapOverlayColor(colBL);
     UIFrameDrawItem item;
     item.kind            = UIFrameDrawItem::EKind::Sprite;
-    item.pos             = toPx(logicalRect.pos);
-    item.size            = logicalRect.extent * _ctx.uiScale;
-    item.color           = colTL;
-    item.vertexColors    = {colTL, colTR, colBR, colBL};
+    item.pos             = toPx(rect.pos);
+    item.size            = rect.extent * _ctx.uiScale;
+    item.color           = tl;
+    item.vertexColors    = {tl, tr, br, bl};
     item.bPerVertexColor = true;
     if (!_clipStack.empty()) {
         item.bClipped = true;
@@ -136,13 +218,15 @@ void UIFrameBuilder::addText(const Rect2D& logicalRect,
         }
     }
 
-    const glm::vec2 pos  = toPx(logicalRect.pos);
-    const glm::vec2 size = logicalRect.extent * _ctx.uiScale;
-    glm::vec2       drawPos = pos;
+    const Rect2D  rect      = mapOverlayRect(logicalRect);
+    const glm::vec2 pos      = toPx(rect.pos);
+    const glm::vec2 size     = rect.extent * _ctx.uiScale;
+    const glm::vec2 textScale = _ctx.uiScale * getOverlayScale();
+    glm::vec2       drawPos  = pos;
 
     const float textWidth  = font->measureText(text);
-    const float textScaleX = _ctx.uiScale.x;
-    const float textScaleY = _ctx.uiScale.y;
+    const float textScaleX = textScale.x;
+    const float textScaleY = textScale.y;
     if (hAlign == EWidgetAlignH::Center) {
         drawPos.x += (size.x - textWidth * textScaleX) * 0.5f;
     }
@@ -160,10 +244,10 @@ void UIFrameBuilder::addText(const Rect2D& logicalRect,
     item.kind  = UIFrameDrawItem::EKind::Text;
     item.pos   = drawPos;
     item.size  = {textWidth * textScaleX, font->lineHeight * textScaleY};
-    item.color = color;
+    item.color = mapOverlayColor(color);
     item.font  = font;
     item.text  = text;
-    item.textScale = _ctx.uiScale;
+    item.textScale = textScale;
     if (!_clipStack.empty()) {
         item.bClipped = true;
         const Rect2D& clip = _clipStack.back();
@@ -178,12 +262,13 @@ void UIFrameBuilder::addLine(const glm::vec2& logicalFrom,
                              const glm::vec4& color,
                              float            thickness)
 {
+    const float scaleMix = 0.5f * (getOverlayScale().x + getOverlayScale().y);
     UIFrameDrawItem item;
     item.kind          = UIFrameDrawItem::EKind::Line;
-    item.lineFrom      = toPx(logicalFrom);
-    item.lineTo        = toPx(logicalTo);
-    item.color         = color;
-    item.lineThickness = thickness;
+    item.lineFrom      = toPx(mapOverlayPoint(logicalFrom));
+    item.lineTo        = toPx(mapOverlayPoint(logicalTo));
+    item.color         = mapOverlayColor(color);
+    item.lineThickness = thickness * scaleMix;
     if (!_clipStack.empty()) {
         item.bClipped = true;
         const Rect2D& clip = _clipStack.back();

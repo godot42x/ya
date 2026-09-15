@@ -29,6 +29,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -80,6 +81,12 @@ struct UIElement;
 class UISlot;
 class UILayout;
 class ReactiveBase;
+
+/// Animatable-property seam (the descriptor types are owned by
+/// GUI/Widgets/UIAnimation.h; UIElement only consumes them).
+struct FUIAnimPropertyDesc;
+struct FUIAnimPropertyTable;
+struct FUIAnimValue;
 
 using UIElementRef = std::shared_ptr<UIElement>;
 using FChildSlotInitializer = std::function<void(UIElement&, UISlot&)>;
@@ -503,6 +510,50 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
                                ? EUIPropertyImpact::Layout
                                : EUIPropertyImpact::SubtreePaintContext);
     }
+
+    // === Render overlay (paint-only, inherited by the subtree) ===
+    // UMG RenderOpacity / RenderTransform analogue: the framework applies
+    // these to the widget's own draw items AND its whole subtree during the
+    // paint walk, so a container can fade/scale/slide its content without
+    // touching layout, slot state or hit testing. Settlement is per-property
+    // changed-only; nonzero state invalidates the subtree (descendants
+    // inherit the overlay).
+    [[nodiscard]] float getRenderOpacity() const { return _renderOpacity; }
+    /// Group opacity in [0, 1], clamped.
+    void setRenderOpacity(float value);
+    [[nodiscard]] glm::vec2 getRenderTranslation() const { return _renderTranslation; }
+    /// Paint-only offset in logical px; the layout rect does not move.
+    void setRenderTranslation(glm::vec2 value);
+    [[nodiscard]] glm::vec2 getRenderScale() const { return _renderScale; }
+    /// Paint-only scale around the widget's normalized pivot.
+    void setRenderScale(glm::vec2 value);
+    [[nodiscard]] glm::vec4 getRenderTint() const { return _renderTint; }
+    /// Paint-only RGBA multiplier applied to every emitted item colour.
+    void setRenderTint(glm::vec4 value);
+    /// Whether this widget declares a non-identity overlay. Identity means
+    /// the paint walk pushes nothing and items are emitted exactly as before.
+    [[nodiscard]] bool hasRenderOverlay() const;
+
+    // === Animatable-property seam (framework animation boundary) ===
+    // A widget type declares which of its properties an animation driver may
+    // manipulate (FUIAnimPropertyTable, see UIAnimation.h). Drivers resolve a
+    // stable id and write through the widget's own changed-only setter, so
+    // animation stays a normal invalidation source and never pokes fields.
+    /// Own + inherited animatable properties (walked in that order).
+    [[nodiscard]] virtual const FUIAnimPropertyTable* getAnimatableProperties() const;
+    /// Descriptor for a property id, or nullptr when this widget type does
+    /// not expose that property.
+    [[nodiscard]] const FUIAnimPropertyDesc* findAnimatableProperty(std::string_view id) const;
+    /// Read a property through its declared reader. false = unknown property.
+    bool readAnimatableProperty(std::string_view id, FUIAnimValue& outValue) const;
+    /// Write a property through its declared writer (the changed-only setter,
+    /// with the property's declared impact). false = unknown property or a
+    /// value type that does not match the declaration.
+    bool applyAnimatableProperty(std::string_view id, const FUIAnimValue& value);
+    /// Every animatable id visible on this widget (own first, then inherited;
+    /// an overridden id appears once). Authoring / introspection only.
+    [[nodiscard]] std::vector<std::string_view> collectAnimatablePropertyIds() const;
+
     /// Record `ref` as a paint-collected dependency (called by Reactive::get
     /// during the paint walk). Cleared before a dirty widget re-runs its paint.
     void trackPaintDependency(ReactiveBase* ref) { _paintDependencies.insert(ref); }
@@ -656,6 +707,15 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// owning module alive and decrements its live-instance count when this
     /// element is destroyed.
     std::shared_ptr<void> _moduleLease;
+
+    /// Render-only overlay state (see the setters above). Identity by
+    /// default; identity adds zero cost because UIElement::paint pushes
+    /// nothing. Read by the paint walk only - never by layout, hit testing
+    /// or snapshot consumers.
+    float     _renderOpacity     = 1.0f;
+    glm::vec2 _renderTranslation = {0.0f, 0.0f};
+    glm::vec2 _renderScale       = {1.0f, 1.0f};
+    glm::vec4 _renderTint        = {1.0f, 1.0f, 1.0f, 1.0f};
 
     /// Paint-dirty flag (reactive invalidation): set by ReactiveBase::notify-
     /// Dependents, cleared after this widget re-runs its paintSelf.

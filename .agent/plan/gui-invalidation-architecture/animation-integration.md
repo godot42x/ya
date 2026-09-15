@@ -95,3 +95,20 @@ widget 侧零改动：`paintSelf` 里读 `tween.value.get()` → 自动成为 de
 1. 出现第一个真实动画需求（editor 或游戏内的 retain UI）；
 2. Phase 1A 已落地（setter/binding 可用）；
 3. 若做层次二，需 GI-004 基线证明 notify/依赖遍历是热点。
+
+## 8. 2026-09-15 更新：已落地形态（§1 草案的细化）
+
+§1 的「动画值 = Reactive<T>」在实现时明确为「动画值 = widget 自己的可动画属性」：
+
+- tween / 未来的 clip player 不持有 reactive 让 widget 去读，而是写 widget 声明的
+  animatable property（`FUIAnimPropertyTable`），写路径是 changed-only setter。
+  §1 的核心不变式因此保持不变：动画是失效链的合法驱动源，不是例外，也没有新的
+  dirty 通道、没有 `_bVolatile`、不改 snapshot。
+- 通用性理由：轨道播放器要按「widget 名 + 属性名」绑定（UMG 做法），这要求属性
+  目录与驱动者解耦；Reactive 仍然是数据绑定动画（例如 slider 绑模型值）的正确工具，
+  两者并存，不是替代关系。
+- 落地位置：`Engine/Source/Framework/GUI/Runtime/Widgets/UIAnimation.{h,cpp}`；
+  overlay 在 `UIFrameBuilder::pushPaintOverlay` 解析；契约见
+  `.agent/skills/gui-framework/SKILL.md` 的「动画（framework 层）」；切片边界与
+  延后项见 `.agent/plan/gui-animation/plan.md`。
+- 层次二 / 层次三的启动条件不变，仍按 §3 延后。

@@ -157,6 +157,32 @@ class YA_GUI_API UIFrameBuilder
     void pushClip(const Rect2D& logicalClip);
     void popClip();
 
+    /// Inherited paint overlay, pushed by UIElement::paint for widgets that
+    /// declare render opacity / translation / scale / tint. While active,
+    /// every emitted rect, colour and clip is mapped through the overlay, so
+    /// it reaches the widget's own items AND its whole subtree (UMG
+    /// RenderOpacity / RenderTransform, Godot CanvasItem modulate semantics).
+    ///
+    /// The pivot is the logical-space point the scale is applied around (a
+    /// widget passes its layout rect + normalized pivot). Nesting composes:
+    /// the outer overlay maps whatever the inner overlay produced.
+    ///
+    /// The overlay is resolved to draw items at emit time (positions, sizes,
+    /// colours). Because cached draw-item segments are resolved this way, an
+    /// overlay change MUST invalidate the subtree - the overlay setter does
+    /// that via EUIPropertyImpact::SubtreePaintContext.
+    struct FUIItemOverlay
+    {
+        float     opacity     = 1.0f;
+        glm::vec4 tint        = {1.0f, 1.0f, 1.0f, 1.0f};
+        glm::vec2 translation = {0.0f, 0.0f};
+        glm::vec2 scale       = {1.0f, 1.0f};
+        glm::vec2 pivot       = {0.0f, 0.0f};
+    };
+
+    void pushPaintOverlay(const FUIItemOverlay& overlay);
+    void popPaintOverlay();
+
     /// Record a sprite. `logicalRect` in tree-local logical pixels; null
     /// texture draws the white texture. `uvOffset`/`uvScale` select a UV
     /// sub-rect (default = whole texture).
@@ -270,10 +296,26 @@ class YA_GUI_API UIFrameBuilder
     }
 
   private:
+    /// Resolved overlay (result of composing the stack): p' = p * scale +
+    /// translation, colours multiplied by tint then opacity.
+    struct FUIResolvedOverlay
+    {
+        glm::vec2 scale       = {1.0f, 1.0f};
+        glm::vec2 translation = {0.0f, 0.0f};
+        float     opacity     = 1.0f;
+        glm::vec4 tint        = {1.0f, 1.0f, 1.0f, 1.0f};
+    };
+    [[nodiscard]] const FUIResolvedOverlay& currentOverlay() const;
+    [[nodiscard]] Rect2D    mapOverlayRect(const Rect2D& rect) const;
+    [[nodiscard]] glm::vec2 mapOverlayPoint(const glm::vec2& point) const;
+    [[nodiscard]] glm::vec4 mapOverlayColor(const glm::vec4& color) const;
+    [[nodiscard]] glm::vec2 getOverlayScale() const;
+
     [[nodiscard]] glm::vec2 toPx(const glm::vec2& logical) const { return _ctx.offset + logical * _ctx.uiScale; }
 
     const UIFrameBuildContext& _ctx;
     std::vector<Rect2D>        _clipStack;
+    std::vector<FUIResolvedOverlay> _overlayStack;
     std::vector<UIFrameDrawItem> _items;
     uint32_t                   _widgetCount = 0;
     uint32_t                   _rebuildCount = 0;

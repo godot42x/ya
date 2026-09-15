@@ -1,0 +1,71 @@
+# GUI 动画切片：framework 层已落地，Game UI 轨道层延后
+
+> 建立日期：2026-09-15
+> 上游：`.agent/plan/gui-invalidation-architecture/animation-integration.md`
+> （本切片细化了它的「动画值 = Reactive」草案：属性驱动动画写 widget 自己的
+> 可动画属性并走 changed-only setter，Reactive 仍用于数据绑定动画）
+> 状态：框架层第一刀已落地并验证；Game UI 轨道/关键帧层延后
+
+## 0. 边界（业界对齐）
+
+| | 框架控件层（本切片已做） | 游戏 HUD / 设计器层（延后） |
+|---|---|---|
+| UE | Slate FCurveSequence：时钟 + easing + 少量控件自取样 | UMG UWidgetAnimation：多轨关键帧 + 事件，评价后写 RenderOpacity/RenderTransform |
+| Unity | UI Toolkit USS transition（属性变化即插值） | uGUI Animator + AnimationClip |
+| Godot | Tween：代码里 tween_property | AnimationPlayer：命名 clip、方法轨 |
+| Flutter/CSS | AnimatedOpacity / transition: opacity .2s | 显式 timeline / @keyframes（不在基础 widget 里） |
+| YA | `UIAnimClock` + `UITweenBehavior` + 可动画属性表 | clip player：tracks + keyframes + notifies，写在 document/HUD 根 |
+
+共同结论：框架只给「一个时钟 + 一条曲线 + 少数 paint 属性」；时间轴/多对象/
+事件属于播放器，播放器消费框架的属性写入面。
+
+## 1. 已落地（framework 层，`Engine/Source/Framework/GUI/Runtime/Widgets/UIAnimation.*`）
+
+- **可动画属性接缝（OCP）**：`FUIAnimPropertyTable`（own entries + base 链）。
+  驱动者只认 `(widget, propertyId, value)`：`findAnimatableProperty` /
+  `readAnimatableProperty` / `applyAnimatableProperty` / `collectAnimatablePropertyIds`。
+  下游控件（含 app 自定义 widget）加自己的可动画属性不需要改框架任何一个文件。
+- **基础属性目录**：`UIElement` 的 paint-only overlay —— `opacity` / `renderTranslation` /
+  `renderScale`（围绕 `_pivot`）/ `tint`，继承到子树（UMG RenderOpacity /
+  RenderTransform、Godot modulate 语义），hit test 与 layout 不受影响。
+- **写路径**：每个属性有 changed-only setter，失效走 `EUIPropertyImpact::SubtreePaintContext`
+  （子树继承 overlay）；descriptor 不复制 impact，避免两处声明漂移。
+- **驱动**：`UIAnimClock`（duration / play / playReverse / pause / resume / loop /
+  timeScale / hasFinished）+ `UITweenBehavior`（一个时钟驱动 owner 的 N 条 track，
+  `wantsTick()` 仅播放中为真，结束即回到干净、树不再拜访，无 `_bVolatile`）。
+- **解析点**：`UIFrameBuilder::pushPaintOverlay` 在 emit 时映射 rect/color/clip；
+  缓存段是解析后结果，overlay 改动必须 invalidate 子树（setter 已保证）。
+- **验证**：`Engine/Test/Source/GuiAnimationTest.cpp`（closure target，8 例：接缝
+  继承顺序、类型不匹配拒绝、tween 推进 + 结束后零重建、下游属性驱动、overlay 自身
+  项映射、overlay 子树继承、clock 端点/循环、easing/lerp 域）；Workbench
+  `--start-page=Tween`（新 `Animation` 分组）+ `Scenarios/animation_tween.jsonl`
+  headless `--scenario-render` 通过，无 G2 validation mismatch。
+
+## 2. 未完成 / 显式延后
+
+- `renderRotation`：快照 item 是 axis-aligned quad，旋转需要 compose 侧支持
+  rotated quad（给 `UIFrameDrawItem` 加 rotation + pivot）。先不占位。
+- implicit transition（USS / Flutter implicit / QML Behavior on）：给少数属性配
+  duration，目标值变化时自动插值。等 hover 渐变这类真实需求。
+- 层次二（播放中直接 `markPaintDirty`、跳过 notify 遍历）：只在 profile 证明
+  notify 是热点时做。
+- 反射层 `.animatable()` 标记：等设计器 / 轨道编辑器需要「可绑定字段」清单时。
+- 布局类动画（expander 高度、slot padding）：可以 tween，但 setter 必须声明
+  `EUIPropertyImpact::Layout`，且 slot 目录要单独声明；尚未开口。
+
+## 3. Game UI 层（延后）设计要点
+
+- clip = tracks + keyframes + notifies；归属 UIDocument / UICompoundWidget / HUD 根，
+  `WidgetTree` 不知道 clip 存在（对齐 UUserWidget 持 UWidgetAnimation、Slate 不持 Sequencer）。
+- track 绑定 `(widget stableKey / name, propertyId)`；每帧 evaluate 后调用
+  `applyAnimatableProperty`，失效链、快照、compose 全部复用。
+- 禁止：player 直接改 draw item、player 自己开 `_bVolatile`、给每个按钮挂 clip。
+- 时序：host tick（含 player 评价）必须在 `buildSnapshot` 之前，与框架 tween 同序。
+- 启动条件：出现真正需要多对象 / 时间轴 / 事件轨的 HUD 需求（血条、伤害数字、
+  技能盘、过场 UI）。
+
+## 4. 下一步顺序
+
+1. 第一个真实手感需求（按钮按压缩放 / tab 下划线 / expander）直接用 tween；
+2. hover fade 出现后做 implicit transition；
+3. HUD 需要时间轴时再写 clip player，消费 §1 的接缝。
