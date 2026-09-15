@@ -14,6 +14,7 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Border.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Switch.h"
 
 #include <gtest/gtest.h>
 
@@ -22,6 +23,24 @@
 
 namespace ya
 {
+
+namespace
+{
+
+WidgetEventContext pointAt(float x, float y)
+{
+    return WidgetEventContext{.logicalPoint = {x, y}};
+}
+
+std::shared_ptr<UISwitch> attachSwitch(WidgetTree& tree, FCanvasSlotArgs slot)
+{
+    auto widget = std::make_shared<UISwitch>("Switch");
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, slot);
+    (void)tree.buildSnapshot({});
+    return widget;
+}
+
+} // namespace
 
 namespace
 {
@@ -79,7 +98,7 @@ TEST(GuiAnimationTest, SeamListsOwnThenInheritedProperties)
     UIAnimProbeWidget probe("Probe");
     UIElement         plain("Plain");
 
-    // The probe inherits the four base paint-transform properties after its own.
+    // The probe inherits the four base render-transform properties after its own.
     const auto ids = probe.collectAnimatablePropertyIds();
     ASSERT_EQ(ids.size(), 5u);
     EXPECT_EQ(ids[0], std::string_view("gauge"));
@@ -100,8 +119,8 @@ TEST(GuiAnimationTest, ApplyGoesThroughChangedOnlySetter)
 
     EXPECT_TRUE(widget.applyAnimatableProperty("opacity", FUIAnimValue::fromFloat(0.4f)));
     EXPECT_FLOAT_EQ(widget.getRenderOpacity(), 0.4f);
-    // The overlay setter invalidates the subtree so cached draw items cannot
-    // go stale under an inherited overlay.
+    // The render-transform setter invalidates the subtree so cached draw items
+    // cannot go stale under an inherited transform.
     EXPECT_TRUE(widget.isPaintDirty());
 
     // A wrong value type must be rejected, never reinterpreted.
@@ -188,7 +207,7 @@ TEST(GuiAnimationTest, TweenDrivesDownstreamPropertyWithoutFrameworkChange)
     EXPECT_FALSE(probe->applyAnimatableProperty("gauge", FUIAnimValue::fromVec4(glm::vec4(1.0f))));
 }
 
-TEST(GuiAnimationTest, RenderOverlayAppliesToOwnItems)
+TEST(GuiAnimationTest, RenderTransformAppliesToOwnItems)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       card = std::make_shared<UIBorder>("Card");
@@ -204,7 +223,7 @@ TEST(GuiAnimationTest, RenderOverlayAppliesToOwnItems)
         });
     };
 
-    // Baseline: the widget's own fill at identity overlay.
+    // Baseline: the widget's own fill at identity render transform.
     UIFrameSnapshot snapshot = tree.buildSnapshot({});
     auto item = findFill(snapshot, glm::vec2(200.0f, 100.0f));
     ASSERT_NE(item, snapshot.items.end());
@@ -235,7 +254,7 @@ TEST(GuiAnimationTest, RenderOverlayAppliesToOwnItems)
     EXPECT_EQ(item->pos, glm::vec2(70.0f, 45.0f));
 }
 
-TEST(GuiAnimationTest, RenderOverlayReachesSubtreeItems)
+TEST(GuiAnimationTest, RenderTransformReachesSubtreeItems)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIContainer>("Panel");
@@ -259,7 +278,7 @@ TEST(GuiAnimationTest, RenderOverlayReachesSubtreeItems)
         });
     };
 
-    // --- opacity: the child's item inherits the parent overlay ---
+    // --- opacity: the child's item inherits the parent render transform ---
     panel->setRenderOpacity(0.5f);
     UIFrameSnapshot snapshot = tree.buildSnapshot({});
     auto childItem = findFill(snapshot, glm::vec2(300.0f, 100.0f));
@@ -272,7 +291,7 @@ TEST(GuiAnimationTest, RenderOverlayReachesSubtreeItems)
     snapshot  = tree.buildSnapshot({});
     childItem = findFill(snapshot, glm::vec2(300.0f, 100.0f));
     ASSERT_NE(childItem, snapshot.items.end());
-    // The child sits at the container origin (20,20), so the overlay offset
+    // The child sits at the container origin (20,20), so the transform offset
     // moves it to 20+40, 20+20.
     EXPECT_EQ(childItem->pos, glm::vec2(60.0f, 40.0f));
 
@@ -294,12 +313,12 @@ TEST(GuiAnimationTest, RenderOverlayReachesSubtreeItems)
     EXPECT_EQ(childItem->color, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 }
 
-// Deterministic cost model for overlay-driven animation (counters, not wall
-// time): a leaf overlay animation repaints exactly the animating widget, while
-// a subtree-wide overlay repaints the whole subtree. That ratio is the reason
+// Deterministic cost model for render-transform animation (counters, not wall
+// time): a leaf transform animation repaints exactly the animating widget, while
+// a subtree-wide transform repaints the whole subtree. That ratio is the reason
 // HUD motion should animate leaves (button / knob / card) and that page-scale
 // transitions are the expensive case - see .agent/plan/gui-animation/plan.md.
-TEST(GuiAnimationTest, OverlayAnimationCostModelIsLeafVsSubtree)
+TEST(GuiAnimationTest, RenderTransformCostModelIsLeafVsSubtree)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       root = std::make_shared<UIContainer>("Root");
@@ -321,12 +340,12 @@ TEST(GuiAnimationTest, OverlayAnimationCostModelIsLeafVsSubtree)
     }
     (void)tree.buildSnapshot({});
 
-    // Leaf overlay: exactly one rebuilt widget.
+    // Leaf render transform: exactly one rebuilt widget.
     leaves[2]->setRenderOpacity(0.5f);
     (void)tree.buildSnapshot({});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
 
-    // Subtree overlay: the whole subtree repaints (root + 6 leaves).
+    // Subtree render transform: the whole subtree repaints (root + 6 leaves).
     (void)tree.buildSnapshot({});
     root->setRenderOpacity(0.5f);
     (void)tree.buildSnapshot({});
@@ -461,6 +480,181 @@ TEST(GuiAnimationTest, AnimateHelperAttachesTheBehaviour)
     EXPECT_FALSE(card->wantsTick());
 }
 
+// === Default-animated control: UISwitch =====================================
+
+TEST(GuiAnimationTest, SwitchIsIdleUntilToggledThenAnimatesItsStateChange)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {120.0f, 24.0f};
+    auto widget = attachSwitch(tree, slot);
+
+    // An untouched switch costs nothing per frame (the transition is asleep).
+    EXPECT_FALSE(widget->wantsTick());
+    EXPECT_FLOAT_EQ(widget->getProgress(), 0.0f);
+
+    widget->setChecked(true);
+    EXPECT_TRUE(widget->isChecked());
+    EXPECT_TRUE(widget->wantsTick());
+    EXPECT_FLOAT_EQ(widget->getProgress(), 0.0f); // value flipped, motion just started
+
+    tree.tick(UISwitch::kDefaultTransitionSeconds * 0.5f);
+    const float mid = widget->getProgress();
+    EXPECT_GT(mid, 0.0f);
+    EXPECT_LT(mid, 1.0f);
+
+    tree.tick(UISwitch::kDefaultTransitionSeconds);
+    EXPECT_FLOAT_EQ(widget->getProgress(), 1.0f);
+    EXPECT_FALSE(widget->wantsTick()); // settled: no per-frame cost afterwards
+}
+
+TEST(GuiAnimationTest, SwitchFlipMidFlightReversesInsteadOfSnapping)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {120.0f, 24.0f};
+    auto widget = attachSwitch(tree, slot);
+    widget->setTransitionSeconds(1.0f);
+
+    widget->setChecked(true);
+    tree.tick(0.5f);
+    const float halfway = widget->getProgress();
+    // Half the time, OutQuad ease: 0.5 * (2 - 0.5) = 0.75 of the way.
+    EXPECT_NEAR(halfway, 0.75f, 1e-3f);
+
+    // Flipping back must continue from where the knob is, not restart at 1.
+    widget->setChecked(false);
+    EXPECT_NEAR(widget->getProgress(), halfway, 1e-4f);
+    tree.tick(0.25f);
+    EXPECT_LT(widget->getProgress(), halfway);
+    tree.tick(1.0f);
+    EXPECT_FLOAT_EQ(widget->getProgress(), 0.0f);
+    EXPECT_FALSE(widget->wantsTick());
+}
+
+TEST(GuiAnimationTest, SwitchCanOptOutOfAnimation)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {120.0f, 24.0f};
+    auto widget = attachSwitch(tree, slot);
+    widget->setTransitionSeconds(0.0f);
+
+    widget->setChecked(true);
+    EXPECT_FLOAT_EQ(widget->getProgress(), 1.0f);
+    EXPECT_FALSE(widget->wantsTick());
+}
+
+TEST(GuiAnimationTest, SwitchBuildsOnWithoutAnimatingOnFirstFrame)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {120.0f, 24.0f};
+    auto widget = std::make_shared<UISwitch>("Switch");
+    widget->_bChecked = true;
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, slot);
+
+    // onAttached() settles the knob: a switch authored as "on" paints on at
+    // 0,1 without ever ticking.
+    EXPECT_FLOAT_EQ(widget->getProgress(), 1.0f);
+    EXPECT_FALSE(widget->wantsTick());
+
+    const UIFrameSnapshot snapshot = tree.buildSnapshot({});
+    EXPECT_FALSE(snapshot.items.empty());
+}
+
+TEST(GuiAnimationTest, SwitchExposesProgressToGenericDrivers)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {120.0f, 24.0f};
+    auto widget = attachSwitch(tree, slot);
+
+    // The control publishes its channel; a driver that knows nothing about
+    // switches can still position the knob.
+    ASSERT_NE(widget->findAnimatableProperty(kAnimSwitchProgress.id), nullptr);
+    ASSERT_TRUE(widget->applyAnimatableProperty(kAnimSwitchProgress.id, FUIAnimValue::fromFloat(0.25f)));
+    EXPECT_FLOAT_EQ(widget->getProgress(), 0.25f);
+
+    auto driver = animate(*widget, 1.0f);
+    driver->track(kAnimSwitchProgress, 0.25f, 1.0f, EUIAnimEase::Linear).setLerpNow(0.5f);
+    EXPECT_FLOAT_EQ(widget->getProgress(), 0.625f);
+}
+
+// The knob geometry must follow the animatable value inside the track: the
+// transition is only correct if the drawn position is what the clock drives.
+TEST(GuiAnimationTest, SwitchKnobTravelsInsideTheTrack)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    FCanvasSlotArgs slot;
+    slot.offset    = {20.0f, 20.0f};
+    slot.fixedSize = {120.0f, 20.0f};
+    auto widget = attachSwitch(tree, slot);
+    widget->setTransitionSeconds(0.0f); // measure the drawn geometry, not timing
+
+    const float trackRight = 20.0f + 34.0f;
+    struct FKnobRect
+    {
+        glm::vec2 pos{0.0f, 0.0f};
+        glm::vec2 size{0.0f, 0.0f};
+    };
+    const auto knobAt = [&](float progress) {
+        widget->setProgress(progress);
+        const UIFrameSnapshot snapshot = tree.buildSnapshot({});
+        // The knob is the smaller rounded rect of the two the switch emits.
+        FKnobRect knob;
+        bool      bFound = false;
+        for (const UIFrameDrawItem& item : snapshot.items) {
+            if (item.kind != UIFrameDrawItem::EKind::Sprite) {
+                continue;
+            }
+            if (!bFound || item.size.x < knob.size.x) {
+                knob.pos   = item.pos;
+                knob.size  = item.size;
+                bFound     = true;
+            }
+        }
+        return knob;
+    };
+
+    const FKnobRect offKnob = knobAt(0.0f);
+    ASSERT_GT(offKnob.size.x, 0.0f);
+    const FKnobRect onKnob = knobAt(1.0f);
+    ASSERT_GT(onKnob.size.x, 0.0f);
+
+    EXPECT_GT(onKnob.pos.x, offKnob.pos.x);                  // travelled right
+    EXPECT_GE(onKnob.pos.x, 20.0f);                          // still inside the track
+    EXPECT_LE(onKnob.pos.x + onKnob.size.x, trackRight);     // and inside its right edge
+    EXPECT_FLOAT_EQ(onKnob.pos.y, offKnob.pos.y);            // horizontal motion only
+}
+
+TEST(GuiAnimationTest, SwitchClickAndKeyboardToggle)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    FCanvasSlotArgs slot;
+    slot.offset    = {10.0f, 10.0f};
+    slot.fixedSize = {120.0f, 24.0f};
+    auto widget = attachSwitch(tree, slot);
+
+    int changes = 0;
+    bool last   = false;
+    widget->_onChanged = [&](bool value) { ++changes; last = value; };
+
+    const WidgetEventContext at = pointAt(20.0f, 20.0f);
+    EXPECT_TRUE(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), at) != EWidgetRouteResult::NotHandled);
+    EXPECT_TRUE(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), at) != EWidgetRouteResult::NotHandled);
+    EXPECT_TRUE(widget->isChecked());
+    EXPECT_EQ(changes, 1);
+    EXPECT_TRUE(last);
+
+    tree.tick(1.0f); // let the transition settle before the next toggle
+    tree.setFocus(widget.get());
+    EXPECT_FALSE(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(20.0f, 20.0f)) == EWidgetRouteResult::NotHandled);
+    (void)tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(20.0f, 20.0f));
+    EXPECT_FALSE(widget->isChecked());
+    EXPECT_EQ(changes, 2);
+}
+
 TEST(GuiAnimationTest, ClockResolvesEndpointsAndLooping)
 {
     UIAnimClock clock;
@@ -494,6 +688,34 @@ TEST(GuiAnimationTest, ClockResolvesEndpointsAndLooping)
     clock.stop();
     EXPECT_FALSE(clock.isPlaying());
     EXPECT_FLOAT_EQ(clock.getLerp(), 0.0f);
+}
+
+// A zero-length clock means "no animation": it must report the endpoint it
+// was placed at, in both directions. (Regression: getLerp() used to return 1
+// unconditionally, so an instant control snapped to its final state.)
+TEST(GuiAnimationTest, ZeroLengthClockReportsTheEndpointItWasPlacedAt)
+{
+    UIAnimClock clock;
+    clock.setDuration(0.0f);
+
+    clock.setLerp(0.0f);
+    EXPECT_FLOAT_EQ(clock.getLerp(), 0.0f);
+    clock.setLerp(1.0f);
+    EXPECT_FLOAT_EQ(clock.getLerp(), 1.0f);
+
+    clock.play();
+    EXPECT_FLOAT_EQ(clock.getLerp(), 1.0f); // instant to the end
+    EXPECT_FALSE(clock.isPlaying());
+    clock.playReverse();
+    EXPECT_FLOAT_EQ(clock.getLerp(), 0.0f); // instant to the start
+    EXPECT_FALSE(clock.isPlaying());
+
+    clock.playToward(EUIAnimDirection::Forward);
+    EXPECT_FLOAT_EQ(clock.getLerp(), 1.0f);
+    EXPECT_FALSE(clock.isPlaying());
+    clock.playToward(EUIAnimDirection::Backward);
+    EXPECT_FLOAT_EQ(clock.getLerp(), 0.0f);
+    EXPECT_FALSE(clock.isPlaying());
 }
 
 TEST(GuiAnimationTest, EasingAndLerpStayInDomain)

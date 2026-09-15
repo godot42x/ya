@@ -117,7 +117,7 @@ struct FUIAnimPropertyTable
     const FUIAnimPropertyTable* base    = nullptr;
 };
 
-/// The base widget's animatable properties: the render-only paint transform
+/// The base widget's animatable properties: the render transform
 /// (opacity / renderTranslation / renderScale / tint). Every widget inherits
 /// them, so a generic driver can fade, slide or scale ANY widget.
 [[nodiscard]] YA_GUI_API const FUIAnimPropertyTable& uiElementAnimatableProperties();
@@ -295,7 +295,7 @@ class YA_GUI_API UITweenBehavior : public UIBehavior
             return addVec4Track(std::string(property.id), from, to, ease);
         }
     }
-    /// The base widget paint transform, spelled out for the common cases.
+    /// The base widget render transform, spelled out for the common cases.
     UITweenBehavior& fade(float from, float to, EUIAnimEase ease = EUIAnimEase::Linear)
     {
         return addFloatTrack(std::string(kAnimOpacity.id), from, to, ease);

@@ -25,6 +25,7 @@ inline constexpr const char* kTypeIdSplitPane      = "engine.split_pane";
 inline constexpr const char* kTypeIdScrollViewport = "engine.scroll_viewport";
 inline constexpr const char* kTypeIdSelectableRow  = "engine.selectable_row";
 inline constexpr const char* kTypeIdCheckBox       = "engine.check_box";
+inline constexpr const char* kTypeIdSwitch         = "engine.switch";
 inline constexpr const char* kTypeIdSlider         = "engine.slider";
 inline constexpr const char* kTypeIdComboBox       = "engine.combo_box";
 inline constexpr const char* kTypeIdImage          = "engine.image";

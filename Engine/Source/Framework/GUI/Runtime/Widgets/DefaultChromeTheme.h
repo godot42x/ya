@@ -201,6 +201,10 @@ inline void defineContentStyles(ya::UITheme& theme, bool bDark)
     checkbox.checkColor  = bDark ? glm::vec4{0.95f, 0.96f, 0.98f, 1.0f} : glm::vec4{1.0f, 1.0f, 1.0f, 1.0f};
     theme.define<ya::FCheckBoxStyle>("checkbox", checkbox);
 
+    // Switch: same family as the checkbox (off / hover / on accent), so a
+    // switch inherits theme intent instead of inventing a second palette.
+    theme.define<ya::FCheckBoxStyle>("switch", checkbox);
+
     auto combo = ya::FComboBoxStyle{};
     combo.fieldFill   = FBrush::solid(fieldBg);
     combo.hoveredFill = FBrush::solid(hovered);

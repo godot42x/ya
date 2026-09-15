@@ -561,6 +561,7 @@ struct FDragDropStyle
     X(FSelectableRowStyle, Selectable, "selectable") \
     X(FDragFloatStyle, DragFloat, "dragfloat")       \
     X(FCheckBoxStyle, CheckBox, "checkbox")          \
+    X(FCheckBoxStyle, Switch, "switch")              \
     X(FComboBoxStyle, ComboBox, "combobox")          \
     X(FSliderStyle, Slider, "slider")                \
     X(FTableGridStyle, Table, "table")               \

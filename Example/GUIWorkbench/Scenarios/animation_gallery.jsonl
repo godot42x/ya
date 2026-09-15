@@ -1,0 +1,56 @@
+# GUIWorkbench --start-page=Tween. Framework animation gallery: every case on
+# the page is exercised with a real interaction (coordinates read from a tree
+# dump), so the tweens actually run while frames are produced. The G2
+# validation frame every 60 frames diffs the incremental paint against a full
+# repaint, so a stale paint-after-tween regression fails this scenario.
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"AnimationDemo"}}
+{"assert":{"widget":"AnimationCard"}}
+{"assert":{"widget":"AnimationGroup"}}
+{"assert":{"widget":"AnimationGroupCard2"}}
+{"assert":{"widget":"AnimationStagger"}}
+{"assert":{"widget":"AnimationStaggerCard4"}}
+{"assert":{"widget":"AnimationGauge"}}
+{"assert":{"widget":"AnimSwitchFast"}}
+{"assert":{"widget":"AnimSwitchSlow"}}
+{"assert":{"widget":"AnimSwitchInstant"}}
+{"assert":{"widget":"AnimSwitchOn"}}
+{"checkpoint":"animation_gallery_built"}
+
+# Leaf tween on a single card (paint-only overlay, one rebuilt widget).
+{"event":"mouse_press","x":382,"y":146}
+{"event":"mouse_release","x":382,"y":146}
+{"frame":6}
+{"assert":{"widget":"AnimationCard"}}
+{"checkpoint":"animation_gallery_leaf"}
+
+# Default-animated control: pointer toggle, then keyboard toggle on the focused
+# switch (both must keep the knob animation consistent).
+{"event":"mouse_press","x":345,"y":544}
+{"event":"mouse_release","x":345,"y":544}
+{"frame":4}
+{"event":"key_press","key":"space"}
+{"event":"key_release","key":"space"}
+{"frame":4}
+{"assert":{"widget":"AnimSwitchFast"}}
+{"checkpoint":"animation_gallery_switch"}
+
+# Sequence (stagger) — five chained leaf tweens running at once.
+{"event":"mouse_press","x":392,"y":412}
+{"event":"mouse_release","x":392,"y":412}
+{"frame":20}
+{"assert":{"widget":"AnimationStaggerCard0"}}
+{"assert":{"widget":"AnimationStaggerCard4"}}
+{"checkpoint":"animation_gallery_stagger"}
+
+# Subtree transition, including a mid-flight reverse (playToward).
+{"event":"mouse_press","x":382,"y":299}
+{"event":"mouse_release","x":382,"y":299}
+{"frame":4}
+{"event":"mouse_press","x":500,"y":299}
+{"event":"mouse_release","x":500,"y":299}
+{"frame":8}
+{"assert":{"widget":"AnimationGroup"}}
+{"checkpoint":"animation_gallery_group"}
+{"assert_validation_clean":true}

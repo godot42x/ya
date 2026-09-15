@@ -14,6 +14,11 @@
 namespace ya::ui
 {
 
+/// Authoring alias: the animation entry point lives in `ya` (widgets use it
+/// internally), but DSL authors reach for it as `ya::ui::animate(...)` next to
+/// `text()` / `border()` / `toggle()`.
+using ya::animate;
+
 /// Group children without adding a runtime widget. The parent builder still
 /// owns and type-checks every child edge, including its SlotArgs.
 template<typename... TItems>
@@ -156,6 +161,13 @@ YA_UI_ANONYMOUS_FACTORY(textField, UITextFieldWidgetBuilder)
     return UICheckBoxWidgetBuilder{std::move(key), std::move(displayName)};
 }
 YA_UI_ANONYMOUS_FACTORY(checkBox, UICheckBoxWidgetBuilder)
+
+/// Switch (toggle). Named `toggle` because `switch` is a C++ keyword.
+[[nodiscard]] inline UISwitchWidgetBuilder toggle(std::string key, std::string displayName = {})
+{
+    return UISwitchWidgetBuilder{std::move(key), std::move(displayName)};
+}
+YA_UI_ANONYMOUS_FACTORY(toggle, UISwitchWidgetBuilder)
 
 [[nodiscard]] inline UISliderWidgetBuilder slider(std::string key, std::string displayName = {})
 {

@@ -4,6 +4,7 @@
 #include "../../../Controls/Button.h"
 #include "../../../Controls/Container.h"
 #include "../../../Controls/CheckBox.h"
+#include "../../../Controls/Switch.h"
 #include "../../../Controls/Slider.h"
 #include "../../../Controls/Image.h"
 #include "../../../Controls/PopupOverlay.h"

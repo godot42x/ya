@@ -19,6 +19,7 @@
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/SizeBox.h"
 #include "GUI/Widgets/Controls/Slider.h"
+#include "GUI/Widgets/Controls/Switch.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -79,6 +80,8 @@ void UITypeRegistry::ensureBuiltinTypesRegistered()
                  [] { return std::make_shared<UITextField>("TextField"); });
     registerType({.typeId = kTypeIdCheckBox, .displayName = "Check Box", .category = "Input"},
                  [] { return std::make_shared<UICheckBox>("CheckBox"); });
+    registerType({.typeId = kTypeIdSwitch, .displayName = "Switch", .category = "Input"},
+                 [] { return std::make_shared<UISwitch>("Switch"); });
     registerType({.typeId = kTypeIdSlider, .displayName = "Slider", .category = "Input"},
                  [] { return std::make_shared<UISlider>("Slider"); });
     registerType({.typeId = kTypeIdComboBox, .displayName = "Combo Box", .category = "Input"},

@@ -272,6 +272,7 @@ void UIAnimClock::play()
     _bFinished = false;
     if (_duration <= 0.0f) {
         _bPlaying  = false;
+        // A zero-length forward play is instantly at the END (lerp 1).
         _bFinished = true;
         return;
     }
@@ -285,7 +286,8 @@ void UIAnimClock::playReverse()
     _bFinished = false;
     if (_duration <= 0.0f) {
         _bPlaying  = false;
-        _bFinished = true;
+        // A zero-length reverse is instantly at the START (lerp 0).
+        _bFinished = false;
         return;
     }
     _bPlaying = true;
@@ -316,7 +318,8 @@ void UIAnimClock::playToward(EUIAnimDirection direction)
     if (_duration <= 0.0f) {
         _position  = direction == EUIAnimDirection::Forward ? _duration : 0.0f;
         _bPlaying  = false;
-        _bFinished = true;
+        // Zero-length play: forward is instantly at the end, backward at the start.
+        _bFinished = direction == EUIAnimDirection::Forward;
         return;
     }
     const bool bForward  = direction == EUIAnimDirection::Forward;
@@ -334,15 +337,21 @@ void UIAnimClock::playToward(EUIAnimDirection direction)
 
 void UIAnimClock::setLerp(float value)
 {
-    _position  = glm::clamp(value, 0.0f, 1.0f) * _duration;
+    const float clamped = glm::clamp(value, 0.0f, 1.0f);
+    _position  = clamped * _duration;
     _bPlaying  = false;
-    _bFinished = false;
+    // Parked at the end reads as finished; the start does not.
+    _bFinished = clamped >= 1.0f;
 }
 
 float UIAnimClock::getLerp() const
 {
     if (_duration <= 0.0f) {
-        return 1.0f;
+        // A zero-length clock cannot interpolate, so it reads as the endpoint
+        // it was placed at: finished = end, otherwise start. (Returning 1
+        // unconditionally made setLerp(0) report the opposite endpoint - which
+        // is how an "instant" control ended up drawn in its final state.)
+        return _bFinished ? 1.0f : 0.0f;
     }
     return glm::clamp(_position / _duration, 0.0f, 1.0f);
 }

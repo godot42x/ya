@@ -154,24 +154,21 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
   将来的 clip player）只认 `(widget, propertyId, value)`：`findAnimatableProperty` /
   `applyAnimatableProperty` / `readAnimatableProperty`。加新可动画属性 = 在控件
   类型里加表项，**不改**驱动者。
-- 基础目录：`UIElement` 自带 paint-only overlay 四通道 —— `opacity`(Float)、
+- 基础目录：`UIElement` 自带 render transform 四通道 —— `opacity`(Float)、
   `renderTranslation`(Vec2)、`renderScale`(Vec2，围绕 `_pivot`)、`tint`(Vec4)，
-  继承到整个子树（UMG RenderOpacity / RenderTransform 语义）。`renderRotation`
+  继承到整个子树（UMG RenderOpacity / RenderTransform 语义）。这不是 `UIOverlay`
+  （叠层 layout host）。`renderRotation`
   未入目录：快照 item 是 axis-aligned quad，旋转需要 compose 支持 rotated
   quad。
 - 写路径唯一真源是 changed-only setter（`setRenderOpacity` 等，失效走
-  `EUIPropertyImpact::SubtreePaintContext`，因为子树继承 overlay）。禁止动画
+  `EUIPropertyImpact::SubtreePaintContext`，因为子树继承 render transform）。禁止动画
   field poke、禁止把 `_bVolatile` 当动画、禁止在 paint/layout 回调里 spawn 动画。
 - 时钟/tween：`UIAnimClock`（duration/方向/loop/timeScale，对标 FCurveSequence）
   + `UITweenBehavior`（一个时钟驱动 owner 的 N 条 track；`wantsTick()` 只在播放
   中为真，结束自动回到干净、树不再拜访）。onFinished 可做 ping-pong（playReverse）。
-- overlay 解析：`UIFrameBuilder::pushPaintOverlay`，emit 时映射 rect/color/clip
-  （缓存 draw-item 段存的是解析后结果，所以 overlay 变化必须 invalidate 子树，
+- render transform 解析：`UIFrameBuilder::pushRenderTransform`，emit 时映射 rect/color/clip
+  （缓存 draw-item 段存的是解析后结果，所以 transform 变化必须 invalidate 子树，
   setter 已保证）。
-- 验收：`GuiAnimationTest`（closure）覆盖接缝继承 / 类型拒绝 / tween 生命周期 /
-  overlay 映射；Workbench `--start-page=Tween` 场景 `animation_tween.jsonl` 冒烟。
-  新动画属性只有出现真实消费者时才加；反射层 `.animatable()` 标记等 Game UI
-  轨道编辑器出现时再议。
 - 授权 DSL（首选写法）：`ya::ui::animate(widget 或 builder, duration)` 取回 tween，
   链式 `->fade(from,to,ease)` / `.scale()` / `.slide()` / `.tint()` /
   `.track(handle, from, to, ease)` / `.setDuration()` / `.setLoop()` /
@@ -182,6 +179,16 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
 - 两态/重定位：`playToward(Forward|Backward)` 从当前位置继续，`setLerpNow(v)` 直接落位
   并停表。「目标态变了就朝它走」的控件（开关、hover 反馈）用这两个，不要用
   `play()`/`playReverse()` 重启，否则中途反向会跳值。
+- 默认带动画的控件：`UISwitch`（DSL `ya::ui::toggle(...)`）。它自己持有一个 tween 驱动
+  自己声明的 `progress` 通道（`kAnimSwitchProgress`）：值立即翻转，knob 位移 + track 配色
+  插值；静止时 `wantsTick()==false`，`setTransitionSeconds(0)` 可整体关掉动画。
+  哪些控件该默认携带动画、哪些应 opt-in，见 `.agent/plan/gui-animation/plan.md` §8。
+- 零时长时钟语义：`duration<=0` 表示“无动画”，`getLerp()` 返回被放置的那个端点
+  （play→1、playReverse→0、setLerp(v)→v）。不要写回“恒返回 1”，否则 instant 控件会被画成
+  终态（已由 `ZeroLengthClockReportsTheEndpointItWasPlacedAt` 锁住）。
+- 验收：`GuiAnimationTest` 22 例（接缝/类型/tween 生命周期/overlay 映射/playToward/
+  setLerpNow/零时长/UISwitch 行为与 knob 几何）；Workbench `Animation/Tween` 页 +
+  `Scenarios/animation_gallery.jsonl`（真实点击 + `assert_validation_clean`）。
 
 ## Dock 权责
 

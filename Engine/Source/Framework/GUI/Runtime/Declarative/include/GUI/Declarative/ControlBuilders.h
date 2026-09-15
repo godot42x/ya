@@ -8,6 +8,7 @@
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/Slider.h"
+#include "GUI/Widgets/Controls/Switch.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 
@@ -569,6 +570,95 @@ class UIImageWidgetBuilder final : public TUIWidgetBuilder<UIImage, UIImageWidge
     [[nodiscard]] UIImageWidgetBuilder&& setScaleMode(EImageScaleMode value) &&
     {
         _widget->setScaleMode(value);
+        return std::move(*this);
+    }
+};
+
+/// Switch (toggle) builder. The control animates its own state change by
+/// default, so the builder only carries value + transition settings.
+class UISwitchWidgetBuilder final : public TUIWidgetChildrenBuilder<UISwitch, UISwitchWidgetBuilder>
+{
+  public:
+    using SlotArgs = FContentSlotArgs;
+
+    explicit UISwitchWidgetBuilder(std::string key, std::string displayName = {})
+        : TUIWidgetChildrenBuilder(kTypeIdSwitch, std::move(key), std::move(displayName))
+    {
+    }
+
+    using TUIWidgetChildrenBuilder::child;
+
+    UISwitchWidgetBuilder& child(UIElementRef node, const FContentSlotArgs& slot) &
+    {
+        this->applySlotArgs(std::move(node), slot);
+        return *this;
+    }
+    UISwitchWidgetBuilder&& child(UIElementRef node, const FContentSlotArgs& slot) &&
+    {
+        this->applySlotArgs(std::move(node), slot);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISwitchWidgetBuilder& setChecked(bool value) &
+    {
+        // Build-time state: the widget is not attached yet, so set the value
+        // and let onAttached() settle the knob without animating.
+        _widget->_bChecked = value;
+        return *this;
+    }
+
+    [[nodiscard]] UISwitchWidgetBuilder&& setChecked(bool value) &&
+    {
+        _widget->_bChecked = value;
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISwitchWidgetBuilder& setOnChanged(std::function<void(bool)> callback) &
+    {
+        _widget->_onChanged = std::move(callback);
+        return *this;
+    }
+
+    [[nodiscard]] UISwitchWidgetBuilder&& setOnChanged(std::function<void(bool)> callback) &&
+    {
+        _widget->_onChanged = std::move(callback);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISwitchWidgetBuilder& setTransitionSeconds(float seconds) &
+    {
+        _widget->setTransitionSeconds(seconds);
+        return *this;
+    }
+
+    [[nodiscard]] UISwitchWidgetBuilder&& setTransitionSeconds(float seconds) &&
+    {
+        _widget->setTransitionSeconds(seconds);
+        return std::move(*this);
+    }
+
+    [[nodiscard]] UISwitchWidgetBuilder& setTrackSize(glm::vec2 value) &
+    {
+        _widget->_trackSize = value;
+        return *this;
+    }
+
+    [[nodiscard]] UISwitchWidgetBuilder&& setTrackSize(glm::vec2 value) &&
+    {
+        _widget->_trackSize = value;
+        return std::move(*this);
+    }
+
+    /// Label to the right of the track, same convention as the checkbox.
+    [[nodiscard]] UISwitchWidgetBuilder& setText(const std::string& value) &
+    {
+        child(UITextWidgetBuilder{_widget->_stableKey + "__label"}.setText(value));
+        return *this;
+    }
+
+    [[nodiscard]] UISwitchWidgetBuilder&& setText(const std::string& value) &&
+    {
+        child(UITextWidgetBuilder{_widget->_stableKey + "__label"}.setText(value));
         return std::move(*this);
     }
 };
