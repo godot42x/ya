@@ -258,8 +258,16 @@ class YA_GUI_API UITweenBehavior : public UIBehavior
 
   private:
     void applyTracks(UIElement& owner, float lerp);
+    /// Resolve each track's descriptor once (the owner's table is static, so
+    /// a resolved descriptor stays valid). Cleared when the track list, the
+    /// owner, or the widget identity changes.
+    void resolveTrackDescriptors(UIElement& owner);
+    /// Report a track that cannot run on this owner, once per track id.
+    void warnTrackSkipped(UIElement& owner, const FUIAnimTrack& track, const char* reason);
 
     std::vector<FUIAnimTrack>  _tracks;
+    /// Parallel to _tracks; lazily filled by resolveTrackDescriptors.
+    std::vector<const FUIAnimPropertyDesc*> _resolved;
     UIAnimClock                _clock;
     std::function<void()>      _onFinished;
     /// Ids already warned about in this tween run (cleared on play*()).

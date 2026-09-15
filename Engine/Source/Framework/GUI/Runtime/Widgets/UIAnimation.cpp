@@ -366,6 +366,7 @@ void UITweenBehavior::addFloatTrack(std::string id, float from, float to, EUIAni
     track.to   = FUIAnimValue::fromFloat(to);
     track.ease = ease;
     _tracks.push_back(std::move(track));
+    _resolved.clear();
 }
 
 void UITweenBehavior::addVec2Track(std::string id, glm::vec2 from, glm::vec2 to, EUIAnimEase ease)
@@ -376,6 +377,7 @@ void UITweenBehavior::addVec2Track(std::string id, glm::vec2 from, glm::vec2 to,
     track.to   = FUIAnimValue::fromVec2(to);
     track.ease = ease;
     _tracks.push_back(std::move(track));
+    _resolved.clear();
 }
 
 void UITweenBehavior::addVec4Track(std::string id, glm::vec4 from, glm::vec4 to, EUIAnimEase ease)
@@ -386,11 +388,13 @@ void UITweenBehavior::addVec4Track(std::string id, glm::vec4 from, glm::vec4 to,
     track.to   = FUIAnimValue::fromVec4(to);
     track.ease = ease;
     _tracks.push_back(std::move(track));
+    _resolved.clear();
 }
 
 void UITweenBehavior::clearTracks()
 {
     _tracks.clear();
+    _resolved.clear();
     _clock.stop();
     _warnedIds.clear();
     _bFinishedFired = false;
@@ -453,31 +457,55 @@ void UITweenBehavior::tick(UIElement& owner, float deltaSeconds)
 void UITweenBehavior::onDetached(UIElement& owner)
 {
     _clock.stop();
+    // The next owner may expose a different property table.
+    _resolved.clear();
     UIBehavior::onDetached(owner);
+}
+
+void UITweenBehavior::resolveTrackDescriptors(UIElement& owner)
+{
+    // Runs once per track set / owner change. Descriptors come from static
+    // per-widget-type tables, so the pointers stay valid while the owner (and
+    // therefore its table) is unchanged. Resolving here keeps the per-tick
+    // path free of string lookups.
+    _resolved.assign(_tracks.size(), nullptr);
+    for (size_t i = 0; i < _tracks.size(); ++i) {
+        const FUIAnimTrack&        track = _tracks[i];
+        const FUIAnimPropertyDesc* desc  = owner.findAnimatableProperty(track.id);
+        if (!desc || !desc->write) {
+            warnTrackSkipped(owner, track, "exposes no animatable property");
+            continue;
+        }
+        if (desc->type != track.from.type || desc->type != track.to.type) {
+            warnTrackSkipped(owner, track, "value type does not match the owner's declaration");
+            continue;
+        }
+        _resolved[i] = desc;
+    }
+}
+
+void UITweenBehavior::warnTrackSkipped(UIElement& owner, const FUIAnimTrack& track, const char* reason)
+{
+    if (std::ranges::find(_warnedIds, track.id) != _warnedIds.end()) {
+        return;
+    }
+    _warnedIds.push_back(track.id);
+    YA_CORE_WARN("UITweenBehavior: owner '{}' {} for track '{}'; track skipped", owner._name, reason, track.id);
 }
 
 void UITweenBehavior::applyTracks(UIElement& owner, float lerp)
 {
-    for (const FUIAnimTrack& track : _tracks) {
-        const FUIAnimPropertyDesc* desc = owner.findAnimatableProperty(track.id);
-        if (!desc || !desc->write) {
-            if (std::ranges::find(_warnedIds, track.id) == _warnedIds.end()) {
-                _warnedIds.push_back(track.id);
-                YA_CORE_WARN("UITweenBehavior: owner '{}' exposes no animatable property '{}'; track skipped",
-                             owner._name, track.id);
-            }
+    if (_resolved.size() != _tracks.size()) {
+        resolveTrackDescriptors(owner);
+    }
+    for (size_t i = 0; i < _tracks.size(); ++i) {
+        const FUIAnimPropertyDesc* desc = _resolved[i];
+        if (!desc) {
+            // Unresolved track: already reported once at resolve time.
             continue;
         }
-        const FUIAnimValue value = lerpAnimValue(track.from,
-                                                 track.to,
-                                                 evaluateEase(track.ease, lerp));
-        if (!desc->write(owner, value)) {
-            if (std::ranges::find(_warnedIds, track.id) == _warnedIds.end()) {
-                _warnedIds.push_back(track.id);
-                YA_CORE_WARN("UITweenBehavior: track '{}' value type does not match the owner's declaration",
-                             track.id);
-            }
-        }
+        const FUIAnimTrack& track = _tracks[i];
+        desc->write(owner, lerpAnimValue(track.from, track.to, evaluateEase(track.ease, lerp)));
     }
 }
 

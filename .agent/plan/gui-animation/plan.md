@@ -41,6 +41,35 @@
   `--start-page=Tween`（新 `Animation` 分组）+ `Scenarios/animation_tween.jsonl`
   headless `--scenario-render` 通过，无 G2 validation mismatch。
 
+## 1.1 每帧开销画像（2026-09-15 实测，debug/arm64，1280x720，426 widget 树）
+
+| 场景 | median ms/frame | rebuilt widget |
+|---|---|---|
+| 静止（全部命中 draw-item cache） | 0.334 | 0 |
+| 单个叶子 overlay 动画（按钮/旋钮/卡片） | 0.346 | 1 |
+| 子树 overlay 动画（容器 opacity，页级转场） | 3.26 | 421 |
+| 递归 paint 脏标记本身 | 0.006 | – |
+| `tree.tick`（无动画） | 0.013 | – |
+| `tree.tick`（1 条 tween 播放中） | 0.014 | – |
+
+结论与对策：
+
+- **静止帧零成本**：identity overlay 不 push、不走映射，cache 复用照常，`wantsTick`
+  为假的树不产生额外重建。
+- **叶子动画≈免费**（+0.012 ms）：重建数 1。HUD 的按钮反馈、旋钮、卡片都属这一档，
+  是推荐形态。
+- **子树 overlay 是唯一热点**：容器上做 opacity/scale 会按设计重画整棵子树
+  （缓存的 draw item 是在旧 overlay 空间里解析的）。421 widget 的子树约 3.3 ms/帧。
+  对策是用法约束而不是隐藏成本：页级转场尽量用 render transform 收敛到较小子树；
+  需要持续多帧的整页淡入应评估是否值得（UE/UMG 的 RenderOpacity 同样要让子树重画）。
+- **脏标记递归不是瓶颈**（0.006 ms，占子树帧 0.2%）：曾经考虑的
+  `invalidateSubtree` 早退优化被实测否决，不做。
+- **tick 走树是 O(n)**（426 widget ≈ 0.013 ms，约 30 ns/widget）：当前可接受；
+  若未来出现数千 widget 的常驻树且 profile 命中，再考虑 active-tick 注册表。
+- 每次 tick 的属性解析改为**按 owner 解析一次并缓存 descriptor**（`_resolved`，
+  track/owner 变化时失效），per-tick 不再做字符串查找。代价模型回归测试：
+  `GuiAnimationTest.OverlayAnimationCostModelIsLeafVsSubtree`（确定性计数，非计时）。
+
 ## 2. 未完成 / 显式延后
 
 - `renderRotation`：快照 item 是 axis-aligned quad，旋转需要 compose 侧支持

@@ -159,22 +159,28 @@ TEST(GuiAnimationTest, TweenAdvancesThenStopsDirtying)
 
 TEST(GuiAnimationTest, TweenDrivesDownstreamPropertyWithoutFrameworkChange)
 {
+    WidgetTree tree({.width = 400, .height = 200});
     auto probe  = std::make_shared<UIAnimProbeWidget>("Probe");
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {80.0f, 40.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), probe, slot);
     auto tween  = std::make_shared<UITweenBehavior>();
-    tween->addFloatTrack("gauge", 0.0f, 1.0f, EUIAnimEase::Linear);
+    // from != the property default, so "play applies t=0 immediately" is
+    // actually observable instead of coinciding with the initial value.
+    tween->addFloatTrack("gauge", 0.2f, 1.0f, EUIAnimEase::Linear);
     tween->setDuration(1.0f);
     probe->addBehavior(tween);
 
     tween->play();
-    EXPECT_FLOAT_EQ(probe->getGauge(), 0.0f);
+    EXPECT_FLOAT_EQ(probe->getGauge(), 0.2f);
     EXPECT_TRUE(probe->wantsTick());
 
     tween->tick(*probe, 0.5f);
-    EXPECT_FLOAT_EQ(probe->getGauge(), 0.5f);
+    EXPECT_FLOAT_EQ(probe->getGauge(), 0.6f);
     EXPECT_TRUE(probe->isPaintDirty());
 
     tween->tick(*probe, 0.5f);
-    EXPECT_FLOAT_EQ(probe->getGauge(), 1.0f);
+    EXPECT_FLOAT_EQ(probe->getGauge(), 1.0f); // end of the track
     EXPECT_FALSE(probe->wantsTick());
 
     // Type mismatch is rejected at the seam, so a track can never corrupt a
@@ -286,6 +292,69 @@ TEST(GuiAnimationTest, RenderOverlayReachesSubtreeItems)
     childItem = findFill(snapshot, glm::vec2(300.0f, 100.0f));
     ASSERT_NE(childItem, snapshot.items.end());
     EXPECT_EQ(childItem->color, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+}
+
+// Deterministic cost model for overlay-driven animation (counters, not wall
+// time): a leaf overlay animation repaints exactly the animating widget, while
+// a subtree-wide overlay repaints the whole subtree. That ratio is the reason
+// HUD motion should animate leaves (button / knob / card) and that page-scale
+// transitions are the expensive case - see .agent/plan/gui-animation/plan.md.
+TEST(GuiAnimationTest, OverlayAnimationCostModelIsLeafVsSubtree)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       root = std::make_shared<UIContainer>("Root");
+    FCanvasSlotArgs rootSlot;
+    rootSlot.offset    = {0.0f, 0.0f};
+    rootSlot.fixedSize = {400.0f, 300.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), root, rootSlot);
+
+    std::vector<std::shared_ptr<UIBorder>> leaves;
+    for (int i = 0; i < 6; ++i) {
+        auto leaf = std::make_shared<UIBorder>("Leaf");
+        leaf->setColor({1.0f, 1.0f, 1.0f, 1.0f});
+        root->addDetachedChild(leaf, [](UIElement&, UISlot& slot) {
+            if (auto* box = dynamic_cast<UIBoxSlot*>(&slot)) {
+                box->setPreferredSize({40.0f, 20.0f});
+            }
+        });
+        leaves.push_back(leaf);
+    }
+    (void)tree.buildSnapshot({});
+
+    // Leaf overlay: exactly one rebuilt widget.
+    leaves[2]->setRenderOpacity(0.5f);
+    (void)tree.buildSnapshot({});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
+
+    // Subtree overlay: the whole subtree repaints (root + 6 leaves).
+    (void)tree.buildSnapshot({});
+    root->setRenderOpacity(0.5f);
+    (void)tree.buildSnapshot({});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 7u);
+}
+
+// A track the owner cannot expose is skipped (warned once) without disabling
+// the tracks that do resolve - the descriptor cache must not collapse the
+// whole tween when one id is unknown.
+TEST(GuiAnimationTest, UnknownTrackIsSkippedWithoutBreakingResolvedTracks)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    auto       card  = std::make_shared<UIBorder>("Card");
+    card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {80.0f, 40.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+
+    auto tween = std::make_shared<UITweenBehavior>();
+    tween->addFloatTrack("notAnimatable", 0.0f, 1.0f, EUIAnimEase::Linear);
+    tween->addFloatTrack("opacity", 0.0f, 1.0f, EUIAnimEase::Linear);
+    tween->setDuration(1.0f);
+    card->addBehavior(tween);
+
+    tween->play();
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.0f);
+    tween->tick(*card, 0.5f);
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.5f);
 }
 
 TEST(GuiAnimationTest, ClockResolvesEndpointsAndLooping)
