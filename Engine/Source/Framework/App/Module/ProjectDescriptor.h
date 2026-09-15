@@ -20,6 +20,9 @@ struct FProjectDescriptor
     std::vector<std::filesystem::path> plugins;
     std::filesystem::path              contentDir = "Content";
     std::optional<std::string>         defaultScene;
+    /// Dock / taskbar icon. PNG or BMP, project-relative or workspace-relative
+    /// (`Engine/Content/...`). Omitted = engine YA branding.
+    std::optional<std::string>         icon;
     std::unordered_map<std::string, std::vector<std::string>> inputActions;
     std::filesystem::path              sourcePath;
 

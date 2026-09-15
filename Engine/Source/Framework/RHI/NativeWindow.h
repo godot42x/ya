@@ -6,6 +6,7 @@
 #include "RHI/Render.h"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #if USE_VULKAN
@@ -17,6 +18,13 @@ typedef struct VkSurfaceKHR_T *VkSurfaceKHR;
 namespace ya
 {
 
+/// Default Dock / taskbar icon. Games override this from `.yaproject` `icon`.
+inline constexpr std::string_view kDefaultWindowIconPath = "Engine/Content/Branding/ya-icon.png";
+
+/// Process-wide icon used when `WindowCreateInfo::iconPath` is empty.
+/// Empty `path` restores `kDefaultWindowIconPath`.
+YA_RHI_API void setProcessWindowIconPath(std::string path);
+[[nodiscard]] YA_RHI_API const std::string& processWindowIconPath();
 
 struct WindowCreateInfo
 {
@@ -33,6 +41,8 @@ struct WindowCreateInfo
     bool          bNotFocusable = false;
     bool          bUtility = false;
     bool          bMousePassthrough = false;
+    /// Empty = `processWindowIconPath()` (YA branding, or the packed game icon).
+    std::string   iconPath;
 };
 
 struct NativeWindowSafeArea
@@ -91,6 +101,13 @@ struct INativeWindow
     virtual void destroy()                            = 0;
     virtual bool recreate(const WindowCreateInfo &ci) = 0;
     virtual void setTitle(const std::string &title)    = 0;
+    /// PNG or BMP. Empty path applies `processWindowIconPath()`. Missing file
+    /// is a warning, not a window-create failure.
+    virtual bool setIcon(const std::string& path)
+    {
+        (void)path;
+        return false;
+    }
     [[nodiscard]] virtual uint32_t getWindowID() const = 0;
 
     /// Re-read per-monitor DPI. Default no-op when the backend has no display.
@@ -214,6 +231,7 @@ class YA_RHI_API SDLNativeWindow final : public INativeWindow
     void destroy() override;
     bool recreate(const WindowCreateInfo &ci) override;
     void setTitle(const std::string &title) override;
+    bool setIcon(const std::string& path) override;
     [[nodiscard]] uint32_t getWindowID() const override;
 
     void getWindowSize(int &width, int &height) override;
@@ -248,7 +266,7 @@ class YA_RHI_API SDLNativeWindow final : public INativeWindow
     /// Re-read the window's display content scale. Called at create time and
     /// whenever the window moves to a different monitor (Qt's per-monitor DPI
     /// trap: a stale scale makes text blurry or tiny after dragging screens).
-    void refreshDpiScale();
+    void refreshDpiScale() override;
 
 #if USE_VULKAN
     bool onCreateVkSurface(VkInstance instance, VkSurfaceKHR *surface) override;

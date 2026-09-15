@@ -13,6 +13,7 @@
 #include "App/Module/ProjectDescriptor.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "RHI/NativeWindow.h"
 #include "Scene/Core/GameMounts.h"
 #include "Scene/Core/Scene.h"
 #include "Render3D/Services/DebugRenderSystem.h"
@@ -170,6 +171,16 @@ void App::applyProjectDescriptor(const FProjectDescriptor& descriptor)
         const auto projectRoot = std::filesystem::path(*_ci.projectRoot);
         vfs->mount(kGameRootMount, projectRoot);
         vfs->mount(kContentMount, projectRoot / "Content");
+    }
+
+    // Packed games own the Dock / taskbar icon. Editor keeps YA branding.
+    if (!_ci.bEditor) {
+        if (descriptor.icon) {
+            setProcessWindowIconPath(descriptor.resolvePath(*descriptor.icon).string());
+        }
+        else {
+            setProcessWindowIconPath({});
+        }
     }
 }
 

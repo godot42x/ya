@@ -1,6 +1,9 @@
 #include "RHI/NativeWindow.h"
 
+#include "Core/System/VirtualFileSystem.h"
 #include "SDL3/SDL.h"
+
+#include <filesystem>
 
 #if USE_VULKAN
     #include "SDL3/SDL_vulkan.h"
@@ -8,6 +11,86 @@
 
 namespace ya
 {
+
+namespace
+{
+
+std::string& processIconPathStorage()
+{
+    static std::string path{kDefaultWindowIconPath};
+    return path;
+}
+
+std::filesystem::path resolveWindowIconFile(const std::string& path)
+{
+    std::error_code ec;
+    const std::filesystem::path input(path);
+    if (std::filesystem::is_regular_file(input, ec)) {
+        return input;
+    }
+    if (VirtualFileSystem* vfs = VirtualFileSystem::get()) {
+        const std::filesystem::path translated = vfs->translatePath(path);
+        if (std::filesystem::is_regular_file(translated, ec)) {
+            return translated;
+        }
+    }
+    return {};
+}
+
+bool applyWindowIcon(SDL_Window* window, const std::string& path)
+{
+    if (!window || path.empty()) {
+        return false;
+    }
+    const std::filesystem::path file = resolveWindowIconFile(path);
+    if (file.empty()) {
+        YA_CORE_WARN("Window icon not found: {}", path);
+        return false;
+    }
+
+    const std::string ext = file.extension().string();
+    SDL_Surface*      loaded = nullptr;
+    if (ext == ".bmp" || ext == ".BMP") {
+        loaded = SDL_LoadBMP(file.string().c_str());
+    }
+    else {
+        loaded = SDL_LoadPNG(file.string().c_str());
+    }
+    if (!loaded) {
+        YA_CORE_WARN("Failed to load window icon '{}': {}", file.string(), SDL_GetError());
+        return false;
+    }
+
+    SDL_Surface* icon = SDL_ConvertSurface(loaded, SDL_PIXELFORMAT_RGBA32);
+    SDL_DestroySurface(loaded);
+    if (!icon) {
+        YA_CORE_WARN("Failed to convert window icon '{}': {}", file.string(), SDL_GetError());
+        return false;
+    }
+
+    const bool ok = SDL_SetWindowIcon(window, icon);
+    if (!ok) {
+        YA_CORE_WARN("Failed to set window icon: {}", SDL_GetError());
+    }
+    SDL_DestroySurface(icon);
+    return ok;
+}
+
+} // namespace
+
+void setProcessWindowIconPath(std::string path)
+{
+    if (path.empty()) {
+        processIconPathStorage() = std::string(kDefaultWindowIconPath);
+        return;
+    }
+    processIconPathStorage() = std::move(path);
+}
+
+const std::string& processWindowIconPath()
+{
+    return processIconPathStorage();
+}
 
 SDLNativeWindow::~SDLNativeWindow()
 {
@@ -73,6 +156,8 @@ bool SDLNativeWindow::recreate(const WindowCreateInfo &ci)
     if (ci.bAlwaysOnTop) {
         (void)SDL_SetWindowAlwaysOnTop(window, true);
     }
+    const std::string& iconPath = ci.iconPath.empty() ? processWindowIconPath() : ci.iconPath;
+    (void)applyWindowIcon(window, iconPath);
     return true;
 }
 
@@ -91,6 +176,15 @@ void SDLNativeWindow::setTitle(const std::string &title)
     if (nativeWindowHandle) {
         SDL_SetWindowTitle(static_cast<SDL_Window *>(nativeWindowHandle), title.c_str());
     }
+}
+
+bool SDLNativeWindow::setIcon(const std::string& path)
+{
+    if (!nativeWindowHandle) {
+        return false;
+    }
+    const std::string& iconPath = path.empty() ? processWindowIconPath() : path;
+    return applyWindowIcon(static_cast<SDL_Window *>(nativeWindowHandle), iconPath);
 }
 
 uint32_t SDLNativeWindow::getWindowID() const

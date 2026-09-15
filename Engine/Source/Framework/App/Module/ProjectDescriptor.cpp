@@ -43,6 +43,12 @@ FProjectDescriptor FProjectDescriptor::load(const std::filesystem::path& path)
     if (json.contains("defaultScene")) {
         descriptor.defaultScene = json.at("defaultScene").get<std::string>();
     }
+    if (json.contains("icon")) {
+        const auto icon = json.at("icon").get<std::string>();
+        if (!icon.empty()) {
+            descriptor.icon = icon;
+        }
+    }
     if (json.contains("inputActions")) {
         for (const auto& [actionName, actionBindings] : json.at("inputActions").items()) {
             if (!actionBindings.is_array()) {
@@ -89,6 +95,12 @@ FProjectDescriptor FProjectDescriptor::load(const std::filesystem::path& path)
         const auto resolvedDefaultScene = resolveProjectPath(root, *descriptor.defaultScene);
         if (!std::filesystem::is_regular_file(resolvedDefaultScene)) {
             throw std::runtime_error("Project defaultScene not found: " + resolvedDefaultScene.string());
+        }
+    }
+    if (descriptor.icon) {
+        const auto resolvedIcon = resolveProjectPath(root, *descriptor.icon);
+        if (!std::filesystem::is_regular_file(resolvedIcon)) {
+            throw std::runtime_error("Project icon not found: " + resolvedIcon.string());
         }
     }
     return descriptor;

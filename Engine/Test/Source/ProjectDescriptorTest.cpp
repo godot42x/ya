@@ -73,6 +73,73 @@ TEST_F(ProjectDescriptorTest, LoadsAndValidatesProjectResources)
     ASSERT_TRUE(descriptor.defaultScene.has_value());
     EXPECT_TRUE(std::filesystem::is_regular_file(descriptor.resolvePath(*descriptor.defaultScene)));
     ASSERT_TRUE(descriptor.inputActions.contains("look"));
+    EXPECT_FALSE(descriptor.icon.has_value());
+}
+
+TEST_F(ProjectDescriptorTest, LoadsOptionalIcon)
+{
+    writeText(_root / "Content" / ".keep", "");
+    writeText(_root / "Game.yamodule",
+              R"({
+  "schemaVersion": 1,
+  "name": "Game",
+  "kind": "project",
+  "binary": "Game",
+  "dependencies": []
+})");
+    const auto branding = std::filesystem::path("Engine/Content/Branding/ya-icon.png");
+    ASSERT_TRUE(std::filesystem::is_regular_file(branding));
+    std::filesystem::copy_file(branding, _root / "Content" / "AppIcon.png");
+    const auto descriptorPath = writeText(_root / "Game.yaproject",
+                                          R"({
+  "schemaVersion": 1,
+  "name": "Game",
+  "mainModule": "Game",
+  "modules": ["Game.yamodule"],
+  "plugins": [],
+  "contentDir": "Content",
+  "icon": "Content/AppIcon.png"
+})");
+
+    const auto descriptor = FProjectDescriptor::load(descriptorPath);
+    ASSERT_TRUE(descriptor.icon.has_value());
+    EXPECT_EQ(*descriptor.icon, "Content/AppIcon.png");
+    EXPECT_TRUE(std::filesystem::is_regular_file(descriptor.resolvePath(*descriptor.icon)));
+}
+
+TEST_F(ProjectDescriptorTest, RejectsMissingIcon)
+{
+    writeText(_root / "Content" / ".keep", "");
+    writeText(_root / "Game.yamodule",
+              R"({
+  "schemaVersion": 1,
+  "name": "Game",
+  "kind": "project",
+  "binary": "Game",
+  "dependencies": []
+})");
+    const auto descriptorPath = writeText(_root / "Game.yaproject",
+                                          R"({
+  "schemaVersion": 1,
+  "name": "Game",
+  "mainModule": "Game",
+  "modules": ["Game.yamodule"],
+  "plugins": [],
+  "contentDir": "Content",
+  "icon": "Content/MissingIcon.png"
+})");
+
+    EXPECT_THROW(
+        {
+            try {
+                (void)FProjectDescriptor::load(descriptorPath);
+            }
+            catch (const std::runtime_error& error) {
+                EXPECT_NE(std::string(error.what()).find("icon not found"), std::string::npos);
+                throw;
+            }
+        },
+        std::runtime_error);
 }
 
 TEST_F(ProjectDescriptorTest, RejectsMissingDefaultScene)

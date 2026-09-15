@@ -94,6 +94,7 @@ class ProjectDescriptor:
     modules: list[Path]
     plugins: list[Path]
     content_dir: Path
+    icon: Path | None = None
 
     def resolve_path(self, value: Path) -> Path:
         if value.is_absolute():
@@ -151,6 +152,12 @@ def load_project_descriptor(path: Path) -> ProjectDescriptor:
         resolved_default_scene = descriptor.resolve_path(Path(default_scene))
         if not resolved_default_scene.is_file():
             raise RuntimeError(f"Project defaultScene not found: {resolved_default_scene}")
+    icon = data.get("icon")
+    if icon:
+        resolved_icon = descriptor.resolve_path(Path(icon))
+        if not resolved_icon.is_file():
+            raise RuntimeError(f"Project icon not found: {resolved_icon}")
+        descriptor.icon = resolved_icon
     return descriptor
 
 
@@ -500,6 +507,31 @@ def _rewrite_project_content_for_package(project: ProjectDescriptor, project_pac
             _write_json(path, rewritten)
 
 
+def _copy_project_icon(project: ProjectDescriptor, package_root: Path, project_package_dir: Path) -> None:
+    if project.icon is None or not project.icon.is_file():
+        return
+    try:
+        project.icon.resolve().relative_to(ENGINE_CONTENT_DIR.resolve())
+        return
+    except ValueError:
+        pass
+
+    project_root = project.source_path.parent
+    packaged_json = project_package_dir / project.source_path.name
+    try:
+        rel = project.icon.resolve().relative_to(project_root.resolve())
+        dest = project_package_dir / rel
+        if not dest.exists():
+            _copy_file(project.icon, package_root, dest)
+        return
+    except ValueError:
+        dest = project_package_dir / project.icon.name
+        _copy_file(project.icon, package_root, dest)
+        data = _read_json(packaged_json)
+        data["icon"] = project.icon.name
+        _write_json(packaged_json, data)
+
+
 def _copy_project_bundle(project: ProjectDescriptor, include_editor: bool, package_root: Path) -> tuple[Path, list[ModuleManifest]]:
     project_package_dir = _project_package_dir(package_root, project)
     _write_json(project_package_dir / project.source_path.name, _rewrite_project_descriptor_for_package(project))
@@ -526,6 +558,7 @@ def _copy_project_bundle(project: ProjectDescriptor, include_editor: bool, packa
                 _copy_file(config_file, package_root, project_package_dir / config_file.relative_to(project_root))
 
     _rewrite_project_content_for_package(project, project_package_dir)
+    _copy_project_icon(project, package_root, project_package_dir)
     return project_package_dir, manifests
 
 

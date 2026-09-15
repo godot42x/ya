@@ -8,6 +8,7 @@
   "plugins": [],
   "contentDir": "Content",
   "defaultScene": "Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json",
+  "icon": "Engine/Content/Branding/ya-icon.png",
   "inputActions": {
     "move_forward": [
       "W"
