@@ -5,7 +5,7 @@
 - 阶段：R0 基线审计已完成；R1 已完成 SceneRenderRequest/SceneRenderPlan 的最小 frame-local 调度切片、真实 extractor 的显式 Scene/View 分层，以及 GameRuntime 单 View 的 scheduler 接入；尚未让 RenderRuntime 接管多 View 录制。
 - 已确认：RenderFrameInputs.h 已有四组输入；RenderFrameData 与 RenderFrameExtractor 仍混合 Scene 级和 View 级数据；RenderRuntime 仍按单 View、单 active Scene 记录。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
-- 本轮新增一条 RenderRuntimeSnapshotTest 时序回归；未修改运行时实现。
+- 本轮移除了 RenderRuntimeSnapshotTest 中依赖读取源码文本和 `find()` 的架构时序回归；保留运行时可执行的输入契约、scheduler 去重、revision 和 snapshot 索引校验。未修改运行时实现。
 
 ## R0 真实调用链
 
