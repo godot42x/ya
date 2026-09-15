@@ -174,6 +174,11 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
     auto slowSwitch    = ya::ui::toggle("AnimSwitchSlow").setText("Slow (0.45s)");
     auto instantSwitch = ya::ui::toggle("AnimSwitchInstant").setText("Instant (none)");
     auto onSwitch      = ya::ui::toggle("AnimSwitchOn").setText("Built already on").setChecked(true);
+    // Handles first: `form.child(builder)` releases the builder, so share()
+    // must happen while the builder still owns its widget.
+    auto fastRef       = fastSwitch.share();
+    auto slowRef       = slowSwitch.share();
+    auto instantRef    = instantSwitch.share();
     slowSwitch.setTransitionSeconds(0.45f);
     instantSwitch.setTransitionSeconds(0.0f);
     onSwitch.setTransitionSeconds(0.2f);
@@ -290,10 +295,7 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
                    .setSpacing(8.0f)
                    .child(demoButton("AnimToggleAll", "Toggle all")
                               .setOnClick(
-                                  [fastRef = fastSwitch.share(),
-                                   slowRef = slowSwitch.share(),
-                                   instantRef = instantSwitch.share(),
-                                   log]
+                                  [fastRef, slowRef, instantRef, log]
                                   {
                                       const bool next = !(fastRef->isChecked() && slowRef->isChecked());
                                       fastRef->setChecked(next);

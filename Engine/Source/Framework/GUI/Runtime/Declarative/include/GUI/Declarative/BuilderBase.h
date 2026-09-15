@@ -186,7 +186,17 @@ class TUIWidgetBuilder
         return widget;
     }
 
-    [[nodiscard]] std::shared_ptr<TWidget> share() const { return _widget; }
+    /// Non-owning handle to the widget a builder still owns. Capture it BEFORE
+    /// the builder is moved into a parent (`parent.child(std::move(builder))`):
+    /// that move releases the builder's reference, and a later share() would
+    /// hand out an empty pointer whose first dereference crashes the host.
+    [[nodiscard]] std::shared_ptr<TWidget> share() const
+    {
+        YA_CORE_ASSERT(_widget,
+                       "ui builder: share() on an already-released builder; capture the widget handle "
+                       "before moving the builder into a parent");
+        return _widget;
+    }
 
     [[nodiscard]] TDerived& key(std::string value) &
     {

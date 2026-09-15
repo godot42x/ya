@@ -44,6 +44,14 @@
 {"assert":{"widget":"AnimationStaggerCard4"}}
 {"checkpoint":"animation_gallery_stagger"}
 
+# "Toggle all" drives three switches from one handler: it used to hand the
+# buttons a handle that the builder had already released.
+{"event":"mouse_press","x":382,"y":660}
+{"event":"mouse_release","x":382,"y":660}
+{"frame":6}
+{"assert":{"widget":"AnimSwitchSlow"}}
+{"checkpoint":"animation_gallery_toggle_all"}
+
 # Subtree transition, including a mid-flight reverse (playToward).
 {"event":"mouse_press","x":382,"y":299}
 {"event":"mouse_release","x":382,"y":299}
