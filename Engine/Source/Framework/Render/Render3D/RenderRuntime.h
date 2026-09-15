@@ -97,6 +97,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     /// presents via `FPresentFrame`; R-5 may split submits with evidence.
     struct FrameInput
     {
+        SceneRenderPlanInput sceneRender{};
         CameraFrameInput    camera{};
         ViewComposeInput    viewCompose{};
         DisplayComposeInput displayCompose{};
@@ -231,6 +232,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     // Per-frame orchestration
     // =========================================================================
     bool                   prepareFrame(const FrameInput& input, std::shared_ptr<ICommandBuffer>& cmdBuf);
+    [[nodiscard]] bool      validateSceneRenderInput(const FrameInput& input) const;
     void                   renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf);
     void                   ensureViewportRectInitialized(const FrameInput& input);
     bool                   beginFrameCommandBuffer(const FrameInput& input, std::shared_ptr<ICommandBuffer>& cmdBuf);

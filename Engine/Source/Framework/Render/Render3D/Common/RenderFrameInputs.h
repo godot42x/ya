@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Services/PresentationGraphService.h"
 
@@ -16,6 +17,18 @@ struct ICommandBuffer;
 struct IRenderSurfaceContext;
 struct RenderFrameData;
 struct UIFrameSnapshot;
+
+/// Sealed SceneRenderPlan input for one host render call. The plan owns the
+/// immutable Scene snapshot table; the task identifies the view being recorded.
+/// RenderRuntime does not build or retain either object beyond the call.
+struct SceneRenderPlanInput
+{
+    const SceneRenderPlan*   plan = nullptr;
+    const SceneViewportTask* task = nullptr;
+
+    [[nodiscard]] bool empty() const { return plan == nullptr && task == nullptr; }
+    [[nodiscard]] bool complete() const { return plan != nullptr && task != nullptr; }
+};
 
 [[nodiscard]] inline glm::mat4 makeCameraViewProjection(const glm::mat4& projection, const glm::mat4& view)
 {

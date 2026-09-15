@@ -34,6 +34,10 @@ ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
     YA_PROFILE_SCOPE("RenderRuntime::renderFrame");
     YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
 
+    if (!validateSceneRenderInput(input)) {
+        return nullptr;
+    }
+
     // One Camera chain (Unity-style). The unit is the camera, not the window:
     //   graphics  → world graph into this camera's offscreen RT
     //   UI        → game UI onto that RT (after post, never into bloom)
@@ -139,6 +143,22 @@ ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
                                                    cmdBuf.get());
     endFrameCommandBuffer(cmdBuf.get());
     return cmdBuf.get();
+}
+
+bool RenderRuntime::validateSceneRenderInput(const FrameInput& input) const
+{
+    if (input.sceneRender.empty()) {
+        return true;
+    }
+    if (!input.sceneRender.complete()) {
+        YA_CORE_ERROR("Scene render input must provide both plan and viewport task");
+        return false;
+    }
+    if (!input.sceneRender.plan->snapshotFor(*input.sceneRender.task)) {
+        YA_CORE_ERROR("Scene render task does not reference a valid snapshot in its plan");
+        return false;
+    }
+    return true;
 }
 
 bool RenderRuntime::prepareFrame(const FrameInput& input, std::shared_ptr<ICommandBuffer>& cmdBuf)

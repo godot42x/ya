@@ -31,7 +31,7 @@
 
 ## R2
 
-- [ ] 扩展 RenderRuntime::FrameInput 为 SceneRenderPlan/SceneViewportTask additive API。
+- [x] 扩展 RenderRuntime::FrameInput 为 SceneRenderPlanInput，并在录制前校验 plan/task/snapshot 归属。
 - [ ] 为每个 View 建立独立 output/extent/format 句柄。
 - [ ] 录制同一 Scene 的两个 View，共享一个 SceneFrameSnapshot。
 - [ ] 录制两个 Scene 的两个 View，验证 snapshot 和资源生命周期隔离。

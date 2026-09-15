@@ -8,6 +8,7 @@
 - 本轮移除了 RenderRuntimeSnapshotTest 中依赖读取源码文本和 `find()` 的架构时序回归；保留运行时可执行的输入契约、scheduler 去重、revision 和 snapshot 索引校验。未修改运行时实现。
 - 当前 checkpoint：SceneFrameSnapshot 的灯光数据已收敛为 view-independent source data；directional cascade/shadow matrices 与完整 RHI light packet 仅在 per-view RenderFrameData 中生成。
 - 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是组合 `sceneSnapshot`；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 Scene draw buckets、skinning palettes 和 light presence。
+- R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan/task 传入，Runtime 在 command recording 前验证 snapshot 索引和 SceneId/revision 归属。当前仍只录制首个单 View，未引入多 View output 或额外 submit。
 
 ## R0 真实调用链
 
@@ -44,8 +45,8 @@ R0 结论：world snapshot 与 UI snapshot 都在 renderFrame 前生成；Render
 | Checkpoint | 状态 | 保留项 | 未完成 |
 | --- | --- | --- | --- |
 | R0 单 View 基线 | 已完成 | 单 View、现有 pass、单 submit、Forward/Deferred topology | 真实 GPU golden 仍依赖可运行窗口环境 |
-| R1 World/View 分离 | 进行中（契约小步完成） | RenderFrameData 组合 Scene snapshot；现有单 View pipeline topology | 多 View record、SceneRenderPlan 作为 RenderRuntime 正式输入 |
-| R2 ViewFamily | 未开始 | Forward/Deferred topology、当前 submit 约束 | 多 View record、双 Surface 验收 |
+| R1 World/View 分离 | 已完成（单 View 契约） | RenderFrameData 组合 Scene snapshot；现有单 View pipeline topology | GameEditor/preview 多 request |
+| R2 ViewFamily | 进行中（输入契约切片） | Forward/Deferred topology、当前单 View submit | 多 View record、独立 output、双 Surface 验收 |
 | R3 GUI2D/GameUI | 未开始 | WidgetTree live source、UIFrameSnapshot 输入 | UI-only 与 GameUI[ViewId] |
 | R4 性能收口 | 未开始 | 优化由 profile 触发 | cache、submit、第三 pipeline 决策 |
 

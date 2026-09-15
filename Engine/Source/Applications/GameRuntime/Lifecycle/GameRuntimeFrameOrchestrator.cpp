@@ -535,6 +535,10 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
     }
 
     ICommandBuffer* recorded = renderRuntime->renderFrame(RenderRuntime::FrameInput{
+        .sceneRender = {
+            .plan = sceneRenderPlan.viewportTasks.empty() ? nullptr : &sceneRenderPlan,
+            .task = sceneRenderPlan.viewportTasks.empty() ? nullptr : &sceneRenderPlan.viewportTasks.front(),
+        },
         .camera = cameraFrame,
         .viewCompose = {
             .recordCompose = [&app, dt](ICommandBuffer* commandBuffer)

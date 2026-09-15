@@ -33,6 +33,7 @@ TEST(RenderRuntimeSnapshotTest, EmptyRuntimePublishesEmptyViewportResources)
 TEST(RenderRuntimeSnapshotTest, FrameInputGroupsCameraViewDisplayPresent)
 {
     static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.camera), CameraFrameInput>);
+    static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.sceneRender), SceneRenderPlanInput>);
     static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.viewCompose), ViewComposeInput>);
     static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.displayCompose), DisplayComposeInput>);
     static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.present), PresentFrameInput>);
@@ -175,6 +176,28 @@ TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsInvalidSnapshotIndex)
     SceneRenderPlan plan;
     SceneViewportTask task;
     EXPECT_EQ(plan.snapshotFor(task), nullptr);
+}
+
+TEST(RenderRuntimeSnapshotTest, SceneRenderPlanInputRequiresPlanAndTaskTogether)
+{
+    SceneRenderPlan plan;
+    SceneViewportTask task;
+
+    const SceneRenderPlanInput empty{};
+    EXPECT_TRUE(empty.empty());
+    EXPECT_FALSE(empty.complete());
+
+    const SceneRenderPlanInput planOnly{.plan = &plan};
+    EXPECT_FALSE(planOnly.empty());
+    EXPECT_FALSE(planOnly.complete());
+
+    const SceneRenderPlanInput taskOnly{.task = &task};
+    EXPECT_FALSE(taskOnly.empty());
+    EXPECT_FALSE(taskOnly.complete());
+
+    const SceneRenderPlanInput complete{.plan = &plan, .task = &task};
+    EXPECT_FALSE(complete.empty());
+    EXPECT_TRUE(complete.complete());
 }
 
 TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsSnapshotMetadataMismatch)
