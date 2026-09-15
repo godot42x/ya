@@ -108,7 +108,7 @@ widget 侧零改动：`paintSelf` 里读 `tween.value.get()` → 自动成为 de
   目录与驱动者解耦；Reactive 仍然是数据绑定动画（例如 slider 绑模型值）的正确工具，
   两者并存，不是替代关系。
 - 落地位置：`Engine/Source/Framework/GUI/Runtime/Widgets/UIAnimation.{h,cpp}`；
-  overlay 在 `UIFrameBuilder::pushPaintOverlay` 解析；契约见
+  render transform 在 `UIFrameBuilder::pushRenderTransform` 解析；契约见
   `.agent/skills/gui-framework/SKILL.md` 的「动画（framework 层）」；切片边界与
   延后项见 `.agent/plan/gui-animation/plan.md`。
 - 层次二 / 层次三的启动条件不变，仍按 §3 延后。

@@ -8,7 +8,8 @@ namespace ya
 
 /// Stacked layout host (UMG Overlay / Godot Control children). Each child is
 /// independently aligned in the parent rect via UIOverlaySlot; later children
-/// paint on top. This is not UIPopupOverlay (popup shield / modal).
+/// paint on top. This is not UIPopupOverlay (popup shield / modal) and not
+/// UIElement's render transform (`pushRenderTransform`: opacity/scale at emit).
 struct YA_GUI_API UIOverlay : public UIElement
 {
     using SlotArgs = FOverlaySlotArgs;

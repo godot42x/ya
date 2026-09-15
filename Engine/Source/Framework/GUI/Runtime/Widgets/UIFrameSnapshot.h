@@ -157,21 +157,25 @@ class YA_GUI_API UIFrameBuilder
     void pushClip(const Rect2D& logicalClip);
     void popClip();
 
-    /// Inherited paint overlay, pushed by UIElement::paint for widgets that
+    /// Inherited render transform, pushed by UIElement::paint for widgets that
     /// declare render opacity / translation / scale / tint. While active,
-    /// every emitted rect, colour and clip is mapped through the overlay, so
-    /// it reaches the widget's own items AND its whole subtree (UMG
-    /// RenderOpacity / RenderTransform, Godot CanvasItem modulate semantics).
+    /// every emitted rect, colour and clip is mapped through it, so it reaches
+    /// the widget's own items AND its whole subtree (UMG RenderOpacity /
+    /// RenderTransform, Godot CanvasItem modulate semantics).
+    ///
+    /// This is not UIOverlay (the stacked layout host). Layout rects and hit
+    /// testing stay in untransformed space; the mapping is applied when draw
+    /// items are emitted.
     ///
     /// The pivot is the logical-space point the scale is applied around (a
     /// widget passes its layout rect + normalized pivot). Nesting composes:
-    /// the outer overlay maps whatever the inner overlay produced.
+    /// the outer transform maps whatever the inner transform produced.
     ///
-    /// The overlay is resolved to draw items at emit time (positions, sizes,
-    /// colours). Because cached draw-item segments are resolved this way, an
-    /// overlay change MUST invalidate the subtree - the overlay setter does
-    /// that via EUIPropertyImpact::SubtreePaintContext.
-    struct FUIItemOverlay
+    /// The transform is resolved to draw items at emit time (positions, sizes,
+    /// colours). Because cached draw-item segments are resolved this way, a
+    /// transform change MUST invalidate the subtree - the setter does that
+    /// via EUIPropertyImpact::SubtreePaintContext.
+    struct FUIRenderTransform
     {
         float     opacity     = 1.0f;
         glm::vec4 tint        = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -180,8 +184,8 @@ class YA_GUI_API UIFrameBuilder
         glm::vec2 pivot       = {0.0f, 0.0f};
     };
 
-    void pushPaintOverlay(const FUIItemOverlay& overlay);
-    void popPaintOverlay();
+    void pushRenderTransform(const FUIRenderTransform& transform);
+    void popRenderTransform();
 
     /// Record a sprite. `logicalRect` in tree-local logical pixels; null
     /// texture draws the white texture. `uvOffset`/`uvScale` select a UV
@@ -296,26 +300,26 @@ class YA_GUI_API UIFrameBuilder
     }
 
   private:
-    /// Resolved overlay (result of composing the stack): p' = p * scale +
-    /// translation, colours multiplied by tint then opacity.
-    struct FUIResolvedOverlay
+    /// Resolved render transform (result of composing the stack):
+    /// p' = p * scale + translation, colours multiplied by tint then opacity.
+    struct FUIResolvedRenderTransform
     {
         glm::vec2 scale       = {1.0f, 1.0f};
         glm::vec2 translation = {0.0f, 0.0f};
         float     opacity     = 1.0f;
         glm::vec4 tint        = {1.0f, 1.0f, 1.0f, 1.0f};
     };
-    [[nodiscard]] const FUIResolvedOverlay& currentOverlay() const;
-    [[nodiscard]] Rect2D    mapOverlayRect(const Rect2D& rect) const;
-    [[nodiscard]] glm::vec2 mapOverlayPoint(const glm::vec2& point) const;
-    [[nodiscard]] glm::vec4 mapOverlayColor(const glm::vec4& color) const;
-    [[nodiscard]] glm::vec2 getOverlayScale() const;
+    [[nodiscard]] const FUIResolvedRenderTransform& currentRenderTransform() const;
+    [[nodiscard]] Rect2D    mapRenderTransformRect(const Rect2D& rect) const;
+    [[nodiscard]] glm::vec2 mapRenderTransformPoint(const glm::vec2& point) const;
+    [[nodiscard]] glm::vec4 mapRenderTransformColor(const glm::vec4& color) const;
+    [[nodiscard]] glm::vec2 getRenderTransformScale() const;
 
     [[nodiscard]] glm::vec2 toPx(const glm::vec2& logical) const { return _ctx.offset + logical * _ctx.uiScale; }
 
     const UIFrameBuildContext& _ctx;
     std::vector<Rect2D>        _clipStack;
-    std::vector<FUIResolvedOverlay> _overlayStack;
+    std::vector<FUIResolvedRenderTransform> _renderTransformStack;
     std::vector<UIFrameDrawItem> _items;
     uint32_t                   _widgetCount = 0;
     uint32_t                   _rebuildCount = 0;

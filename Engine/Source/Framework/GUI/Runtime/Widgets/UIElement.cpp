@@ -281,9 +281,9 @@ void UIElement::paint(UIFrameBuilder& builder)
     if (!isVisibleForRender()) {
         return;
     }
-    const bool bOverlay = hasRenderOverlay();
-    if (bOverlay) {
-        builder.pushPaintOverlay(UIFrameBuilder::FUIItemOverlay{
+    const bool bRenderTransform = hasRenderTransform();
+    if (bRenderTransform) {
+        builder.pushRenderTransform(UIFrameBuilder::FUIRenderTransform{
             .opacity     = _renderOpacity,
             .tint        = _renderTint,
             .translation = _renderTranslation,
@@ -315,8 +315,8 @@ void UIElement::paint(UIFrameBuilder& builder)
     if (bSelfClip) {
         builder.popClip();
     }
-    if (bOverlay) {
-        builder.popPaintOverlay();
+    if (bRenderTransform) {
+        builder.popRenderTransform();
     }
 }
 
@@ -427,7 +427,7 @@ void UIElement::invalidateProperty(EUIPropertyImpact impact)
     }
 }
 
-// === Render overlay ===
+// === Render transform ===
 
 void UIElement::setRenderOpacity(float value)
 {
@@ -436,8 +436,8 @@ void UIElement::setRenderOpacity(float value)
         return;
     }
     _renderOpacity = value;
-    // Descendants inherit the overlay; a changed overlay re-paints the whole
-    // subtree (children cache draw items resolved in the old overlay space).
+    // Descendants inherit the render transform; a change re-paints the whole
+    // subtree (children cache draw items resolved in the old transform space).
     invalidateProperty(EUIPropertyImpact::SubtreePaintContext);
 }
 
@@ -469,7 +469,7 @@ void UIElement::setRenderTint(glm::vec4 value)
     invalidateProperty(EUIPropertyImpact::SubtreePaintContext);
 }
 
-bool UIElement::hasRenderOverlay() const
+bool UIElement::hasRenderTransform() const
 {
     return _renderOpacity != 1.0f || _renderTranslation != glm::vec2(0.0f) ||
            _renderScale != glm::vec2(1.0f) || _renderTint != glm::vec4(1.0f);

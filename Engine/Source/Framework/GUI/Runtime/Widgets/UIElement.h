@@ -145,7 +145,7 @@ enum class EUIPropertyImpact : uint8_t
     None,                // no invalidation (e.g. runtime-only callback storage)
     Paint,               // repaint this widget only
     Layout,              // re-run measure + arrange (implies repaint)
-    SubtreePaintContext, // repaint this widget and its whole subtree (clip/visibility)
+    SubtreePaintContext, // clip / visibility / inherited render transform
 };
 
 struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
@@ -356,7 +356,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     [[nodiscard]] virtual glm::vec2 computeDesiredSize() const;
     /// Widget-owned content size (glyph measure, padding, row height, ...).
     /// Default is {0,0}; intrinsic size is never an authored layout fallback.
-    /// Layout overlays slot preferred/fixed size on top of this.
+    /// Layout applies slot preferred/fixed size on top of this.
     [[nodiscard]] virtual glm::vec2 computeIntrinsicSize() const;
 
     // —— Layout host hook ——
@@ -511,13 +511,13 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
                                : EUIPropertyImpact::SubtreePaintContext);
     }
 
-    // === Render overlay (paint-only, inherited by the subtree) ===
+    // === Render transform (paint-only, inherited by the subtree) ===
     // UMG RenderOpacity / RenderTransform analogue: the framework applies
     // these to the widget's own draw items AND its whole subtree during the
     // paint walk, so a container can fade/scale/slide its content without
-    // touching layout, slot state or hit testing. Settlement is per-property
-    // changed-only; nonzero state invalidates the subtree (descendants
-    // inherit the overlay).
+    // touching layout, slot state or hit testing. This is not UIOverlay (the
+    // stacked layout host). Settlement is per-property changed-only; nonzero
+    // state invalidates the subtree (descendants inherit the transform).
     [[nodiscard]] float getRenderOpacity() const { return _renderOpacity; }
     /// Group opacity in [0, 1], clamped.
     void setRenderOpacity(float value);
@@ -530,9 +530,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     [[nodiscard]] glm::vec4 getRenderTint() const { return _renderTint; }
     /// Paint-only RGBA multiplier applied to every emitted item colour.
     void setRenderTint(glm::vec4 value);
-    /// Whether this widget declares a non-identity overlay. Identity means
-    /// the paint walk pushes nothing and items are emitted exactly as before.
-    [[nodiscard]] bool hasRenderOverlay() const;
+    /// Whether this widget declares a non-identity render transform. Identity
+    /// means the paint walk pushes nothing and items are emitted as before.
+    [[nodiscard]] bool hasRenderTransform() const;
 
     // === Animatable-property seam (framework animation boundary) ===
     // A widget type declares which of its properties an animation driver may
@@ -708,10 +708,10 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// element is destroyed.
     std::shared_ptr<void> _moduleLease;
 
-    /// Render-only overlay state (see the setters above). Identity by
-    /// default; identity adds zero cost because UIElement::paint pushes
-    /// nothing. Read by the paint walk only - never by layout, hit testing
-    /// or snapshot consumers.
+    /// Render-transform state (see the setters above). Identity by default;
+    /// identity adds zero cost because UIElement::paint pushes nothing. Read
+    /// by the paint walk only - never by layout, hit testing or snapshot
+    /// consumers.
     float     _renderOpacity     = 1.0f;
     glm::vec2 _renderTranslation = {0.0f, 0.0f};
     glm::vec2 _renderScale       = {1.0f, 1.0f};
