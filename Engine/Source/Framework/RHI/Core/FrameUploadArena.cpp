@@ -77,16 +77,22 @@ FrameUploadArena::~FrameUploadArena()
     }
 }
 
-bool FrameUploadArena::beginFlight(uint32_t flightIndex)
+bool FrameUploadArena::beginFlight(uint32_t flightIndex, uint64_t frameToken)
 {
     if (flightIndex >= _flights.size()) {
         YA_CORE_WARN("FrameUploadArena::beginFlight invalid flight index {}", flightIndex);
         return false;
     }
 
-    // The caller owns the fence wait. Resetting here is safe only after the
-    // corresponding flight has completed on the GPU.
-    _flights[flightIndex].cursor = 0;
+    auto& flight = _flights[flightIndex];
+    if (flight.hasActiveFrameToken && flight.activeFrameToken == frameToken) {
+        YA_CORE_ERROR("FrameUploadArena rejected duplicate begin for flight {} and frame token {}", flightIndex, frameToken);
+        return false;
+    }
+
+    flight.cursor = 0;
+    flight.activeFrameToken = frameToken;
+    flight.hasActiveFrameToken = true;
     return true;
 }
 

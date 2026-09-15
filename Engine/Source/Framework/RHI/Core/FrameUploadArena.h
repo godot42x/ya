@@ -73,10 +73,11 @@ class YA_RHI_API FrameUploadArena
     FrameUploadArena& operator=(FrameUploadArena&&)      = delete;
 
     /**
-     * Reset the allocation cursor for a flight whose fence has completed.
-     * Returns false for an invalid flight index.
+     * Begin a logical frame on a fence-safe flight. The same frame token may
+     * not rewind the flight twice, because earlier slices may already be
+     * referenced by commands in this submission.
      */
-    bool beginFlight(uint32_t flightIndex);
+    bool beginFlight(uint32_t flightIndex, uint64_t frameToken);
 
     /**
      * Allocate an aligned slice from the current flight backing buffer.
@@ -99,6 +100,8 @@ class YA_RHI_API FrameUploadArena
         stdptr<IBuffer> backing;
         uint32_t         capacity = 0;
         uint32_t         cursor   = 0;
+        uint64_t         activeFrameToken = 0;
+        bool             hasActiveFrameToken = false;
     };
 
     IRenderResourceFactory& _factory;

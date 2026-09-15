@@ -886,6 +886,7 @@ void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, 
         .cmdBuf         = frame.cmdBuf,
         .frameData      = frame.camera.frameData,
         .flightIndex    = frame.camera.flightIndex,
+        .frameIndex     = frame.camera.frameIndex,
         .deltaTime      = frame.camera.deltaTime,
         .viewportExtent = {.width = vpW, .height = vpH},
     };

@@ -121,7 +121,7 @@ bool ForwardFrameResourceSet::prepareFramePayloads(
     if (!_render || !_uploadArena || ctx.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
         return false;
     }
-    if (!_uploadArena->beginFlight(ctx.flightIndex)) {
+    if (!_uploadArena->beginFlight(ctx.flightIndex, ctx.frameIndex)) {
         return false;
     }
 

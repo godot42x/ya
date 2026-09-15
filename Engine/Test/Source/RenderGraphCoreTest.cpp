@@ -4657,7 +4657,7 @@ TEST(RenderGraphCoreTest, FrameUploadArenaSharesAlignedSlicesPerFlight)
     TestResourceFactory factory;
     FrameUploadArena   arena(factory, /*flightCount=*/2, /*initialCapacity=*/64);
 
-    ASSERT_TRUE(arena.beginFlight(0));
+    ASSERT_TRUE(arena.beginFlight(0, 1u));
     const auto first = arena.allocate(0, /*size=*/12, /*alignment=*/16);
     const auto second = arena.allocate(0, /*size=*/8, /*alignment=*/16);
     ASSERT_TRUE(first.has_value());
@@ -4679,12 +4679,16 @@ TEST(RenderGraphCoreTest, FrameUploadArenaSharesAlignedSlicesPerFlight)
     EXPECT_TRUE(first->write(&value, sizeof(value)));
     EXPECT_FALSE(first->write(&value, 13u));
 
-    ASSERT_TRUE(arena.beginFlight(1));
+    ASSERT_TRUE(arena.beginFlight(1, 1u));
     const auto otherFlight = arena.allocate(1, /*size=*/4, /*alignment=*/16);
     ASSERT_TRUE(otherFlight.has_value());
     EXPECT_NE(otherFlight->buffer.get(), first->buffer.get());
     EXPECT_EQ(otherFlight->offset, 0u);
     EXPECT_EQ(arena.bytesUsed(1), 4u);
+
+    ASSERT_TRUE(arena.beginFlight(0, 100u));
+    EXPECT_FALSE(arena.beginFlight(0, 100u));
+    ASSERT_TRUE(arena.beginFlight(0, 101u));
 }
 
 TEST(RenderGraphCoreTest, FrameUploadArenaGrowsAndRetiresPreviousBacking)
@@ -4695,7 +4699,7 @@ TEST(RenderGraphCoreTest, FrameUploadArenaGrowsAndRetiresPreviousBacking)
 
     TestResourceFactory factory;
     FrameUploadArena   arena(factory, /*flightCount=*/1, /*initialCapacity=*/16);
-    ASSERT_TRUE(arena.beginFlight(0));
+    ASSERT_TRUE(arena.beginFlight(0, 1u));
 
     const auto first = arena.allocate(0, /*size=*/12, /*alignment=*/4);
     ASSERT_TRUE(first.has_value());
@@ -4710,7 +4714,7 @@ TEST(RenderGraphCoreTest, FrameUploadArenaGrowsAndRetiresPreviousBacking)
     EXPECT_EQ(arena.bytesUsed(0), 24u);
     EXPECT_EQ(deletionQueue.pendingCount(), 1u);
 
-    ASSERT_TRUE(arena.beginFlight(0));
+    ASSERT_TRUE(arena.beginFlight(0, 2u));
     const auto afterReset = arena.allocate(0, /*size=*/4, /*alignment=*/16);
     ASSERT_TRUE(afterReset.has_value());
     EXPECT_EQ(afterReset->offset, 0u);

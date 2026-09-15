@@ -176,6 +176,7 @@ BasicShadowFramePayload BasicShadowMapTechnique::buildFramePayload(uint32_t flig
 
     BasicShadowFramePayload payload{
         .flightIndex = flightIndex,
+        .frameIndex  = frameData.frameIndex,
         .frameData   = &frameData,
         .settings    = &_settings,
         .frameUBO    = FrameUBO{

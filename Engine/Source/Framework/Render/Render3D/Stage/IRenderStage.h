@@ -18,6 +18,7 @@ struct RenderStageContext
     ICommandBuffer*        cmdBuf         = nullptr;
     const RenderFrameData* frameData      = nullptr;
     uint32_t               flightIndex    = 0;
+    uint64_t               frameIndex     = 0;
     float                  deltaTime      = 0.0f;
     Extent2D               viewportExtent = {};
 };

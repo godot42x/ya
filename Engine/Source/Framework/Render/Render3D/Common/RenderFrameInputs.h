@@ -48,6 +48,7 @@ struct CameraFrameInput
     };
 
     uint32_t flightIndex = 0;
+    uint64_t frameIndex  = 0;
     bool     bAppStopped = false;
     float    deltaTime   = 0.0f;
 

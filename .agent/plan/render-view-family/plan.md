@@ -77,6 +77,23 @@ RenderViewInput 至少包含 ViewId、SceneId、owner 计算的 view/projection/
 
 每个 checkpoint 只有一个可验收目标；代码、测试、progress.md 与计划变更同一提交。禁止用目录移动、空 registry、兼容 facade 或只写文档冒充完成。
 
+### 4.0 GPU submission state split (R2 prerequisite)
+
+`RenderRuntime` 的持久对象不能同时充当一次 submission 和一个 View 的可变状态。后续 R2 必须按以下生命周期拆开：
+
+```text
+RenderRuntimePersistentState
+  device / pipeline / shared resource / presentation services
+
+RenderSubmissionContext
+  frameToken / command buffer / host surface / submission-owned upload lifetime
+
+RenderViewRecordingContext
+  SceneViewportTask / per-view RenderFrameData / per-view descriptors / upload slices
+```
+
+`FrameUploadArena` 不能被多个 View 以同一个可 rewind cursor 共享；`MAX_FLIGHTS_IN_FLIGHT` 只表示 GPU flight 并发，不等于 View 槽位。每个 View 的 UBO/light/shadow/skinning 引用必须在 command buffer 录制到 submit 完成前保持独立且不可被后续 View 改写。当前 frame-token duplicate-begin guard 只是迁移期护栏：它应拒绝错误的第二次 rewind，但不是最终的多 View 设计。最终方案应让 submission/context 持有 submission-owned arena，或让 per-view binding 持有独立 descriptor set 与 slice table；禁止通过“禁止第二个 View”冒充多 View 支持。
+
 ### R0 — 建立单 View 正确性基线
 
 唯一目标：证明当前单 View 的 snapshot、graph、compose、present 和资源生命周期边界。

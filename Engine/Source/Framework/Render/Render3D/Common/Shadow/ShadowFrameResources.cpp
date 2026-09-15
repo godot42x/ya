@@ -179,7 +179,7 @@ bool ShadowFrameResources::prepare(const BasicShadowFramePayload& payload)
     if (!_render || !_uploadArena || !payload.frameData || payload.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
         return false;
     }
-    if (!_uploadArena->beginFlight(payload.flightIndex) ||
+    if (!_uploadArena->beginFlight(payload.flightIndex, payload.frameIndex) ||
         !ensureSkinningCapacity(static_cast<uint32_t>(payload.frameData->sceneSnapshot.skinningPalettes.size()))) {
         return false;
     }

@@ -222,7 +222,7 @@ bool DeferredFrameResourceSet::prepare(const RenderStageContext& ctx)
         return false;
     }
 
-    if (!_uploadArena->beginFlight(ctx.flightIndex)) {
+    if (!_uploadArena->beginFlight(ctx.flightIndex, ctx.frameIndex)) {
         return false;
     }
     if (!prepareSkinning(ctx)) {

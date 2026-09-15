@@ -487,6 +487,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
 
     CameraFrameInput cameraFrame{
         .flightIndex              = flightIndex,
+        .frameIndex               = App::_frameIndex,
         .bAppStopped              = app.isStopped(),
         .deltaTime                = dt,
         .view                     = frameState.view,

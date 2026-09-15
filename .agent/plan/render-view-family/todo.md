@@ -32,6 +32,10 @@
 ## R2
 
 - [x] 扩展 RenderRuntime::FrameInput 为 SceneRenderPlanInput，并在录制前校验 plan/task/snapshot 归属。
+- [x] 为 FrameUploadArena 增加 frame token 防护，拒绝同一 submission 内重复 rewind flight backing。
+- [ ] 将 RenderRuntime 持久状态、RenderSubmissionContext、RenderViewRecordingContext 分离；明确哪些资源属于 device/runtime、submission、View。
+- [ ] 将 per-flight descriptor binding 与 upload slices 从单一 pipeline state 改为 submission/View-owned，允许同一 submission 安全录制多个 View。
+- [ ] 增加同一 submission 多 View 的 GPU data identity/lifetime 验证，证明 View A 的 descriptor/slice 不会被 View B 覆写。
 - [ ] 为每个 View 建立独立 output/extent/format 句柄。
 - [ ] 录制同一 Scene 的两个 View，共享一个 SceneFrameSnapshot。
 - [ ] 录制两个 Scene 的两个 View，验证 snapshot 和资源生命周期隔离。

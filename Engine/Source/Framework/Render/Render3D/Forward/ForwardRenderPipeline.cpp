@@ -309,6 +309,7 @@ void ForwardRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, R
         .cmdBuf         = frame.cmdBuf,
         .frameData      = frame.camera.frameData,
         .flightIndex    = frame.camera.flightIndex,
+        .frameIndex     = frame.camera.frameIndex,
         .deltaTime      = frame.camera.deltaTime,
         .viewportExtent = _viewportResources.extent,
     };
