@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- 阶段：R0 基线审计已完成；R1 已完成 SceneRenderRequest/SceneRenderPlan 的最小 frame-local 调度切片，尚未接入真实 Scene extractor 或 RenderRuntime 录制。
+- 阶段：R0 基线审计已完成；R1 已完成 SceneRenderRequest/SceneRenderPlan 的最小 frame-local 调度切片，以及真实 extractor 的显式 Scene/View 分层；尚未让 scheduler 接管多 View RenderRuntime 录制。
 - 已确认：RenderFrameInputs.h 已有四组输入；RenderFrameData 与 RenderFrameExtractor 仍混合 Scene 级和 View 级数据；RenderRuntime 仍按单 View、单 active Scene 记录。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
 - 本轮新增一条 RenderRuntimeSnapshotTest 时序回归；未修改运行时实现。
@@ -12,7 +12,7 @@
 ~~~text
 GameRuntimeFrameOrchestrator::tickRender
   -> resolve frameState / viewport rect / camera matrices
-  -> RenderFrameExtractor::extract(scene, camera input, frameData)
+  -> RenderFrameExtractor::extractSceneSnapshot(scene) + prepareView(camera, scene snapshot)
        -> extractCamera
        -> extractLights (directional/point/shadow fit)
        -> extractDrawItems (mesh/material/skinning)
@@ -49,7 +49,7 @@ R0 结论：world snapshot 与 UI snapshot 都在 renderFrame 前生成；Render
 
 ## 下一轮接力点
 
-R0 已完成。下一轮先设计 WorldFrameSnapshot / RenderViewInput 的字段和所有权，再修改 RenderFrameData 或 RenderRuntime::FrameInput。
+R0 已完成。SceneFrameSnapshot / RenderViewInput 的字段和所有权已明确，后续继续迁移 RenderFrameData 与 RenderRuntime::FrameInput。
 
 ## R1 审计结论
 
@@ -67,11 +67,11 @@ R1 尚未完成代码迁移。下一步应将现有 RenderFrameExtractor 接到 
 
 R1 调度切片已完成：SceneRenderScheduler 是不持有 Scene/ECS 的 frame-local collector；submit 只接受带有效 SceneId/ViewId 和 snapshot builder 的 request；seal 按 (SceneId, sceneRevision) 去重 builder，SceneRenderPlan 拥有唯一 snapshot table，再为每个 viewport 展开带 snapshotIndex 的 SceneViewportTask；clearFrame 清理本帧状态。plan 的 snapshot table 负责跨 task 保活，snapshotFor() 还会校验 task 的 SceneId/revision 与表项元数据，避免错误索引串用。尚未接入真正 SceneFrameSnapshot extractor 和 RenderRuntime record。
 
-R1 抽取分层切片已完成：RenderFrameExtractor 新增 `extractSceneSnapshot(SceneExtractInput, WorldFrameSnapshot&)`，只读取 Scene/ECS，生成原始灯光、draw candidates 和 skinning palettes；旧 `extract()` 保留为兼容入口，先调用 Scene 阶段，再执行 camera-dependent directional shadow/cascade preparation 和 draw sorting。TerrainProcessor 改为显式注入，extractor 不再通过 `App::get()` 取得全局状态。该切片尚未让 SceneRenderScheduler 直接调用 extractor，也未改变 RenderRuntime 的单 View record。
+R1 抽取分层切片已完成：RenderFrameExtractor 现在只有 `extractSceneSnapshot(SceneExtractInput, SceneFrameSnapshot&)` 与 `prepareView(ViewPrepareInput, SceneFrameSnapshot, RenderFrameData&)`，分别负责 Scene/ECS 数据和 camera-dependent shadow/sort；旧 `extract()` 接口已删除。GameRuntime 当前单 View 路径已改为显式调用这两个阶段，TerrainProcessor 通过显式输入注入，extractor 不再通过 `App::get()` 取得全局状态。SceneRenderScheduler 仍待下一切片接管真实 builder；RenderRuntime 仍是单 View record。
 
-兼容边界：当前 `RenderFrameData` 仍继承 `WorldFrameSnapshot`，因此旧 `extract()` 会在 per-view 兼容对象上写入 directional shadow 矩阵；共享 snapshot 接入 scheduler 后不得复用这部分可变 view 数据，必须在每个 `SceneViewportTask` 中生成独立的 View preparation。
+当前边界：`RenderFrameData` 仍继承 `SceneFrameSnapshot` 以满足现有 pipeline 消费，但 `prepareView()` 先复制不可变 Scene snapshot，再只在 per-view packet 中写入 shadow/cascade 和 sortKey；共享 snapshot 不被 View 原地修改。
 
-R1 第一小步已完成，但命名需要后续修正：当前 WorldFrameSnapshot 显式承载当前可识别的 Scene lights、draw buckets 和 skinning palettes；RenderFrameData 作为兼容容器继承它并继续保留 camera、viewport、frame metadata。该步没有迁移消费者，也没有改变 shadow matrix、排序或 pipeline 行为；后续应将语义迁移到 SceneFrameSnapshot/SceneRenderPlan，并把 WorldFrameSnapshot 视为过渡名称。
+R1 第一小步已完成：SceneFrameSnapshot 显式承载当前可识别的 Scene lights、draw buckets 和 skinning palettes；RenderFrameData 继承它并继续保留 camera、viewport、frame metadata。该步没有改变 Forward/Deferred 消费者，只把 extractor 的 Scene 与 View 阶段显式化。
 
 关键新增约束：UI GPU compose 前必须存在一个明确的 SceneRenderScheduler 边界。它收集 SceneRenderRequest，输出 immutable SceneRenderPlan；UI compose 只能消费 plan 产生的 viewport outputs，不应在 UI 过程中临时触发 Scene/ECS extraction。UI widget tick/buildSnapshot 的先后由 host/product 依据输入依赖决定，不被 Scheduler 强制锁死。
 
@@ -83,4 +83,4 @@ R1 第一小步已完成，但命名需要后续修正：当前 WorldFrameSnapsh
 - 与 Godot 对齐点：Viewport 是离屏输出和显示绑定点，SubViewport/preview 可对应多个 Scene request。
 - 与 ImGui 对齐点：后端只消费 immutable UIFrameSnapshot/SceneRenderPlan，不读取 live WidgetTree/Scene。
 - 必须坚持的修正：Scene 不直接依赖 RHI/RenderRuntime；SceneRenderScheduler 不属于 GUI Framework；UI 之前指 GPU compose 之前，不是强制 UI logic/snapshot 晚于 request collection。
-- 当前已提交的 WorldFrameSnapshot 只是过渡兼容命名，后续要迁移到 SceneFrameSnapshot/SceneRenderPlan，不得继续扩展为全局 world 抽象。
+- SceneFrameSnapshot 是当前唯一场景快照语义，不得重新引入 WorldFrameSnapshot、RenderFrameExtractor::extract() 或全局 world 抽象。

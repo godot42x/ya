@@ -30,7 +30,7 @@ struct SceneRenderRequest
 
     /// Product code owns the Scene. The scheduler invokes this once per Scene
     /// in the frame and retains only the immutable result in the plan.
-    std::function<std::shared_ptr<const WorldFrameSnapshot>()> buildSnapshot;
+    std::function<std::shared_ptr<const SceneFrameSnapshot>()> buildSnapshot;
 };
 
 struct SceneViewportTask
@@ -56,7 +56,7 @@ struct SceneSnapshotEntry
 {
     SceneId sceneId = 0;
     uint64_t sceneRevision = 0;
-    std::shared_ptr<const WorldFrameSnapshot> snapshot;
+    std::shared_ptr<const SceneFrameSnapshot> snapshot;
 };
 
 struct SceneRenderPlan
@@ -67,7 +67,7 @@ struct SceneRenderPlan
 
     [[nodiscard]] bool empty() const { return viewportTasks.empty(); }
 
-    [[nodiscard]] std::shared_ptr<const WorldFrameSnapshot> snapshotFor(
+    [[nodiscard]] std::shared_ptr<const SceneFrameSnapshot> snapshotFor(
         const SceneViewportTask& task) const
     {
         if (task.snapshotIndex >= snapshots.size()) {

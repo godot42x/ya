@@ -11,10 +11,10 @@
 
 ## R1
 
-- [x] 设计 WorldFrameSnapshot 字段分类和所有权方向，确认 resource generation/lifetime 风险。
+- [x] 设计 SceneFrameSnapshot 字段分类和所有权方向，确认 resource generation/lifetime 风险。
 - [x] 设计 RenderViewInput 的现有来源与兼容迁移边界；RenderViewFamily/Output 留待真实多 View 切片。
-- [x] 引入 WorldFrameSnapshot 的实际存储边界，并保留 RenderFrameData 兼容容器。
-- [ ] 将 WorldFrameSnapshot 语义迁移为 SceneFrameSnapshot/SceneRenderPlan，保留兼容期适配。
+- [x] 引入 SceneFrameSnapshot 的实际存储边界，RenderFrameData 仅作为现有 per-view pipeline packet。
+- [ ] 将 shadow/cascade 字段从 SceneFrameSnapshot 移到独立 per-view preparation。
 - [x] 将 RenderFrameExtractor 拆为 Scene extraction 与 View preparation 两个显式阶段。
 - [x] 通过显式 TerrainProcessor 输入移除 extractor 对全局 App 的依赖。
 - [ ] 在 scheduler 接入前，将 directional shadow/cascade preparation 从共享 Scene snapshot 的可变字段迁移到 per-view preparation。
@@ -23,10 +23,10 @@
 - [x] 将 snapshot table 提升为 SceneRenderPlan 所有者，以 snapshotIndex 供多个 viewport task 复用。
 - [x] 用 sceneRevision 防止同一 Scene 内容变化后错误复用旧 snapshot。
 - [x] 在 snapshotFor() 校验 snapshotIndex 对应的 SceneId/revision，拒绝错误 task 索引。
-- [ ] 将 SceneRenderScheduler 的 snapshot builder 接到真实 Scene extractor。
+- [ ] 将 SceneRenderScheduler 的 snapshot builder 接到真实 Scene extractor，并让 plan snapshot 直接进入 View preparation。
 - [ ] 在 UI GPU compose 之前聚合 SceneRenderRequest，并禁止 UI paint/compose 期间临时抽取 Scene/ECS；不强制 UI widget tick 的相对顺序。
 - [ ] 迁移 shadow/entity-id/debug/Forward/Deferred 消费者。
-- [ ] 为旧 RenderFrameData 建立短期 adapter，并记录删除条件。
+- [ ] 迁移 RenderFrameData 消费者到 SceneFrameSnapshot + RenderViewInput，并删除继承关系。
 
 ## R2
 

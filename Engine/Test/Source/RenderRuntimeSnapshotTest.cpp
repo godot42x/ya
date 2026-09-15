@@ -84,21 +84,21 @@ TEST(RenderRuntimeSnapshotTest, FrameInputGroupsCameraViewDisplayPresent)
     EXPECT_EQ(input.present.imageIndex, -1);
 }
 
-TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesWorldAndViewOwnership)
+TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
 {
-    static_assert(std::is_base_of_v<WorldFrameSnapshot, RenderFrameData>);
+    static_assert(std::is_base_of_v<SceneFrameSnapshot, RenderFrameData>);
 
     RenderFrameData frame;
     frame.view = glm::translate(glm::mat4(1.0f), glm::vec3(4.0f, 0.0f, 0.0f));
     frame.drawBuckets.staticMeshes.pbrDrawItems.resize(1);
     frame.skinningPalettes.resize(1);
 
-    WorldFrameSnapshot& world = frame;
-    EXPECT_EQ(world.drawBuckets.staticMeshes.pbrDrawItems.size(), 1u);
-    EXPECT_EQ(world.skinningPalettes.size(), 1u);
+    SceneFrameSnapshot& sceneSnapshot = frame;
+    EXPECT_EQ(sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems.size(), 1u);
+    EXPECT_EQ(sceneSnapshot.skinningPalettes.size(), 1u);
     EXPECT_EQ(frame.view[3][0], 4.0f);
 
-    world.clearWorld();
+    sceneSnapshot.clearWorld();
     EXPECT_TRUE(frame.drawBuckets.staticMeshes.pbrDrawItems.empty());
     EXPECT_TRUE(frame.skinningPalettes.empty());
     EXPECT_EQ(frame.view[3][0], 4.0f);
@@ -118,9 +118,9 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
         request.buildSnapshot = [&, sceneId]()
         {
             ++buildCalls;
-            auto snapshot = std::make_shared<WorldFrameSnapshot>();
+            auto snapshot = std::make_shared<SceneFrameSnapshot>();
             snapshot->numPointLights = static_cast<uint32_t>(sceneId);
-            return std::shared_ptr<const WorldFrameSnapshot>(std::move(snapshot));
+            return std::shared_ptr<const SceneFrameSnapshot>(std::move(snapshot));
         };
         return request;
     };
@@ -160,7 +160,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionC
         request.buildSnapshot = [&buildCalls]
         {
             ++buildCalls;
-            return std::make_shared<const WorldFrameSnapshot>();
+            return std::make_shared<const SceneFrameSnapshot>();
         };
         return request;
     };
@@ -191,7 +191,7 @@ TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsSnapshotMetadataMismatch)
     plan.snapshots.push_back(SceneSnapshotEntry{
         .sceneId = 7,
         .sceneRevision = 3,
-        .snapshot = std::make_shared<const WorldFrameSnapshot>(),
+        .snapshot = std::make_shared<const SceneFrameSnapshot>(),
     });
 
     SceneViewportTask task;
@@ -207,7 +207,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRejectsRequestsOutsideFrame)
     SceneRenderRequest request;
     request.sceneId = 1;
     request.viewId = 1;
-    request.buildSnapshot = [] { return std::make_shared<const WorldFrameSnapshot>(); };
+    request.buildSnapshot = [] { return std::make_shared<const SceneFrameSnapshot>(); };
 
     EXPECT_FALSE(scheduler.submit(request));
     scheduler.beginFrame(7);
@@ -278,14 +278,17 @@ TEST(RenderRuntimeSnapshotTest, HostBuildsWorldAndUiSnapshotsBeforeRenderRuntime
     const std::string hostCpp = readEngineSource(
         "Source/Applications/GameRuntime/Lifecycle/GameRuntimeFrameOrchestrator.cpp");
 
-    const auto worldSnapshotPos = hostCpp.find("RenderFrameExtractor::extract(");
+    const auto sceneSnapshotPos = hostCpp.find("RenderFrameExtractor::extractSceneSnapshot(");
+    const auto viewPreparePos   = hostCpp.find("RenderFrameExtractor::prepareView(");
     const auto uiSnapshotPos    = hostCpp.find("buildSnapshot()");
     const auto renderFramePos   = hostCpp.find("renderRuntime->renderFrame(");
 
-    ASSERT_NE(worldSnapshotPos, std::string::npos);
+    ASSERT_NE(sceneSnapshotPos, std::string::npos);
+    ASSERT_NE(viewPreparePos, std::string::npos);
     ASSERT_NE(uiSnapshotPos, std::string::npos);
     ASSERT_NE(renderFramePos, std::string::npos);
-    EXPECT_LT(worldSnapshotPos, renderFramePos);
+    EXPECT_LT(sceneSnapshotPos, viewPreparePos);
+    EXPECT_LT(viewPreparePos, renderFramePos);
     EXPECT_LT(uiSnapshotPos, renderFramePos);
 
     // The render graph receives immutable frame packets. The host must not
@@ -307,9 +310,10 @@ TEST(RenderRuntimeSnapshotTest, SceneExtractorSeparatesSceneAndViewPreparation)
     EXPECT_NE(extractorH.find("SceneExtractInput"), std::string::npos);
     EXPECT_NE(extractorCpp.find("extractSceneLights"), std::string::npos);
     EXPECT_NE(extractorCpp.find("prepareViewLights"), std::string::npos);
+    EXPECT_EQ(extractorCpp.find("RenderFrameExtractor::extract("), std::string::npos);
     EXPECT_EQ(extractorCpp.find("App::get()"), std::string::npos);
 
-    const auto sceneLightsPos = extractorCpp.find("extractSceneLights(reg, outFrame)");
+    const auto sceneLightsPos = extractorCpp.find("extractSceneLights(registry, outSnapshot)");
     const auto viewLightsPos = extractorCpp.find("prepareViewLights(input, outFrame)");
     ASSERT_NE(sceneLightsPos, std::string::npos);
     ASSERT_NE(viewLightsPos, std::string::npos);

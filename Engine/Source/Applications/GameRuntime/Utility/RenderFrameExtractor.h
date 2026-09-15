@@ -24,16 +24,15 @@ struct RenderFrameExtractor
     struct DrawItemExtractionContext
     {
         entt::registry*      registry      = nullptr;
-        WorldFrameSnapshot*  worldSnapshot = nullptr;
+        SceneFrameSnapshot*  sceneSnapshot = nullptr;
         entt::entity         viewOwner     = entt::null;
 
         TerrainProcessor* terrainProcessor = nullptr;
         std::unordered_map<const SkeletonAnimatorComponent*, int32_t> skinningPaletteCache;
     };
 
-    struct ExtractInput
+    struct ViewPrepareInput
     {
-        Scene*         scene      = nullptr;
         glm::mat4      view           = glm::mat4(1.0f);
         glm::mat4      projection     = glm::mat4(1.0f);
         glm::mat4      viewProjection = glm::mat4(1.0f);
@@ -43,20 +42,22 @@ struct RenderFrameExtractor
         uint64_t       frameIndex = 0;
         float          deltaTime  = 0.0f;
         const ShadowSettings* shadowSettings = nullptr;
-        TerrainProcessor*     terrainProcessor = nullptr;
     };
-
-    /// Extract a complete render frame snapshot from the scene.
-    static void extract(const ExtractInput& input, RenderFrameData& outFrame);
 
     /// Extract only Scene/ECS-owned data. The result is independent of camera
     /// matrices and can be shared by multiple viewport views in one frame.
-    static void extractSceneSnapshot(const SceneExtractInput& input, WorldFrameSnapshot& outSnapshot);
+    static void extractSceneSnapshot(const SceneExtractInput& input, SceneFrameSnapshot& outSnapshot);
+
+    /// Build the pipeline-facing view packet from one immutable Scene snapshot.
+    /// Camera-dependent shadow preparation and draw sorting happen here.
+    static void prepareView(const ViewPrepareInput& input,
+                            const SceneFrameSnapshot& sceneSnapshot,
+                            RenderFrameData& outFrame);
 
   private:
-    static void extractCamera(const ExtractInput& input, RenderFrameData& out);
-    static void extractSceneLights(entt::registry& reg, WorldFrameSnapshot& out);
-    static void prepareViewLights(const ExtractInput& input, WorldFrameSnapshot& out);
+    static void extractCamera(const ViewPrepareInput& input, RenderFrameData& out);
+    static void extractSceneLights(entt::registry& reg, SceneFrameSnapshot& out);
+    static void prepareViewLights(const ViewPrepareInput& input, RenderFrameData& out);
     static int32_t registerSkinningPalette(DrawItemExtractionContext& ctx, entt::entity entity, Mesh* mesh);
     static void extractDrawItems(DrawItemExtractionContext& ctx);
     static void sortDrawItems(const glm::vec3& cameraPos, RenderFrameData& out);

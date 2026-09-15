@@ -6,7 +6,6 @@
 #include "Render3D/Material/UnlitMaterial.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Terrain/TerrainProcessor.h"
-#include "Render3D/Terrain/TerrainProcessor.h"
 
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Component/2D/BillboardComponent.h"
@@ -107,30 +106,7 @@ glm::mat4 buildDirectionalShadowViewProjection(const glm::vec3& lightDirection,
 
 } // namespace
 
-void RenderFrameExtractor::extract(const ExtractInput& input, RenderFrameData& outFrame)
-{
-    outFrame.clear();
-
-    if (!input.scene) {
-        return;
-    }
-
-    auto& reg = input.scene->getRegistry();
-
-    extractCamera(input, outFrame);
-    extractSceneLights(reg, outFrame);
-    prepareViewLights(input, outFrame);
-    auto drawCtx = DrawItemExtractionContext{
-        .registry         = &reg,
-        .worldSnapshot    = &outFrame,
-        .viewOwner        = outFrame.viewOwner,
-        .terrainProcessor = input.terrainProcessor,
-    };
-    extractDrawItems(drawCtx);
-    sortDrawItems(outFrame.cameraPos, outFrame);
-}
-
-void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, WorldFrameSnapshot& outSnapshot)
+void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, SceneFrameSnapshot& outSnapshot)
 {
     outSnapshot.clearWorld();
     outSnapshot.bHasDirectionalLight = false;
@@ -144,14 +120,25 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
     extractSceneLights(registry, outSnapshot);
     auto drawCtx = DrawItemExtractionContext{
         .registry         = &registry,
-        .worldSnapshot    = &outSnapshot,
+        .sceneSnapshot    = &outSnapshot,
         .viewOwner        = entt::null,
         .terrainProcessor = input.terrainProcessor,
     };
     extractDrawItems(drawCtx);
 }
 
-void RenderFrameExtractor::extractCamera(const ExtractInput& input, RenderFrameData& out)
+void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
+                                       const SceneFrameSnapshot& sceneSnapshot,
+                                       RenderFrameData& outFrame)
+{
+    outFrame.clear();
+    static_cast<SceneFrameSnapshot&>(outFrame) = sceneSnapshot;
+    extractCamera(input, outFrame);
+    prepareViewLights(input, outFrame);
+    sortDrawItems(outFrame.cameraPos, outFrame);
+}
+
+void RenderFrameExtractor::extractCamera(const ViewPrepareInput& input, RenderFrameData& out)
 {
     out.view           = input.view;
     out.projection     = input.projection;
@@ -163,7 +150,7 @@ void RenderFrameExtractor::extractCamera(const ExtractInput& input, RenderFrameD
     out.deltaTime      = input.deltaTime;
 }
 
-void RenderFrameExtractor::extractSceneLights(entt::registry& reg, WorldFrameSnapshot& out)
+void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneFrameSnapshot& out)
 {
     // Directional light (take the first one with a transform)
     out.bHasDirectionalLight = false;
@@ -216,7 +203,7 @@ void RenderFrameExtractor::extractSceneLights(entt::registry& reg, WorldFrameSna
     // between different lights while the active view camera moves.
 }
 
-void RenderFrameExtractor::prepareViewLights(const ExtractInput& input, WorldFrameSnapshot& out)
+void RenderFrameExtractor::prepareViewLights(const ViewPrepareInput& input, RenderFrameData& out)
 {
     if (!out.bHasDirectionalLight) {
         return;
@@ -249,7 +236,7 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
                                                       entt::entity               entity,
                                                       Mesh*                      mesh)
 {
-    if (!ctx.registry || !ctx.worldSnapshot || !mesh || !mesh->hasSkinningVertexBuffer()) {
+    if (!ctx.registry || !ctx.sceneSnapshot || !mesh || !mesh->hasSkinningVertexBuffer()) {
         return -1;
     }
 
@@ -273,7 +260,7 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
         return -1;
     }
 
-    auto& palette = ctx.worldSnapshot->skinningPalettes.emplace_back();
+    auto& palette = ctx.sceneSnapshot->skinningPalettes.emplace_back();
     YA_CORE_ASSERT(pose.boneMatrices.size() <= palette.boneMatrices.size(), "Exceed max bone size");
     const uint32_t boneCount = pose.boneMatrices.size();
 
@@ -281,7 +268,7 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
         palette.boneMatrices[boneIndex] = pose.boneMatrices[boneIndex];
     }
 
-    const int32_t paletteIndex = static_cast<int32_t>(ctx.worldSnapshot->skinningPalettes.size() - 1);
+    const int32_t paletteIndex = static_cast<int32_t>(ctx.sceneSnapshot->skinningPalettes.size() - 1);
     ctx.skinningPaletteCache.emplace(skeletonComp, paletteIndex);
     return paletteIndex;
 }
@@ -289,7 +276,7 @@ int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext&
 void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
 {
     auto&      reg            = *ctx.registry;
-    auto&      out            = *ctx.worldSnapshot;
+    auto&      out            = *ctx.sceneSnapshot;
     const auto viewOwner      = ctx.viewOwner;
     auto&      staticBuckets  = out.drawBuckets.staticMeshes;
     auto&      skinnedBuckets = out.drawBuckets.skinnedMeshes;

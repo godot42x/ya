@@ -181,7 +181,7 @@ struct RenderMeshClassDrawBuckets
 /// Scene-level render data that can be shared by multiple camera views in the
 /// same frame. The current light payload still contains legacy shadow fields;
 /// those remain compatibility data until view preparation is migrated.
-struct WorldFrameSnapshot
+struct SceneFrameSnapshot
 {
     bool                                                       bHasDirectionalLight = false;
     FrameContext::DirectionalLightData                          directionalLight;
@@ -199,10 +199,9 @@ struct WorldFrameSnapshot
 };
 
 /// All data a render pipeline needs for one camera view in one frame.
-/// Built once per frame from the ECS registry, then consumed read-only by every
-/// pipeline / system. WorldFrameSnapshot is the shareable scene portion; the
-/// camera fields remain here during the incremental migration.
-struct RenderFrameData : WorldFrameSnapshot
+/// Built from a SceneFrameSnapshot plus view preparation, then consumed
+/// read-only by every pipeline / system.
+struct RenderFrameData : SceneFrameSnapshot
 {
     glm::mat4    view           = glm::mat4(1.0f);
     glm::mat4    projection     = glm::mat4(1.0f);

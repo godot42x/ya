@@ -418,21 +418,27 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
 
     if (renderRuntime->isWorldSceneRenderEnabled()) {
         YA_PERF_SCOPE(perf::sample::renderExtract(), perf::metric::cpuTimeMs(), perf::domain::render());
-        YA_PROFILE_SCOPE("RenderFrameExtractor::extract");
-        RenderFrameExtractor::extract(
-            RenderFrameExtractor::ExtractInput{
-                .scene          = scene,
-                .view           = frameState.view,
-                .projection     = frameState.projection,
-                .viewProjection = viewProjection,
-                .cameraPos      = frameState.cameraPos,
-                .viewportExtent = Extent2D::fromVec2(frameState.viewportRect.extent),
-                .viewOwner      = entt::null,
-                .frameIndex     = App::_frameIndex,
-                .deltaTime      = dt,
-                .shadowSettings = &app.getRenderServices().getShadowSettings(),
+        YA_PROFILE_SCOPE("RenderFrameExtractor::sceneSnapshot");
+        SceneFrameSnapshot sceneSnapshot;
+        RenderFrameExtractor::extractSceneSnapshot(
+            RenderFrameExtractor::SceneExtractInput{
+                .scene = scene,
                 .terrainProcessor = renderRuntime->getTerrainProcessor(),
             },
+            sceneSnapshot);
+        RenderFrameExtractor::prepareView(
+            RenderFrameExtractor::ViewPrepareInput{
+                .view = frameState.view,
+                .projection = frameState.projection,
+                .viewProjection = viewProjection,
+                .cameraPos = frameState.cameraPos,
+                .viewportExtent = Extent2D::fromVec2(frameState.viewportRect.extent),
+                .viewOwner = entt::null,
+                .frameIndex = App::_frameIndex,
+                .deltaTime = dt,
+                .shadowSettings = &app.getRenderServices().getShadowSettings(),
+            },
+            sceneSnapshot,
             app._renderState->frameDataPerFlight[flightIndex]);
     }
     else {
