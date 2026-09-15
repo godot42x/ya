@@ -65,7 +65,7 @@ TEST(RenderRuntimeSnapshotTest, FrameInputGroupsCameraViewDisplayPresent)
 
 TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
 {
-    static_assert(std::is_base_of_v<SceneFrameSnapshot, RenderFrameData>);
+    static_assert(!std::is_base_of_v<SceneFrameSnapshot, RenderFrameData>);
     static_assert(std::is_same_v<decltype(SceneFrameSnapshot{}.directionalLightSource), SceneDirectionalLightData>);
     static_assert(std::is_same_v<std::remove_cvref_t<decltype(SceneFrameSnapshot{}.pointLightSources[0])>,
                                  ScenePointLightData>);
@@ -74,10 +74,10 @@ TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
 
     RenderFrameData frame;
     frame.view = glm::translate(glm::mat4(1.0f), glm::vec3(4.0f, 0.0f, 0.0f));
-    frame.drawBuckets.staticMeshes.pbrDrawItems.resize(1);
-    frame.skinningPalettes.resize(1);
+    frame.sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems.resize(1);
+    frame.sceneSnapshot.skinningPalettes.resize(1);
 
-    SceneFrameSnapshot& sceneSnapshot = frame;
+    SceneFrameSnapshot& sceneSnapshot = frame.sceneSnapshot;
     EXPECT_EQ(sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems.size(), 1u);
     EXPECT_EQ(sceneSnapshot.skinningPalettes.size(), 1u);
     EXPECT_EQ(frame.view[3][0], 4.0f);
@@ -89,8 +89,8 @@ TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
     EXPECT_EQ(sceneSnapshot.pointLightSources[0].position, glm::vec3(2.0f, 3.0f, 4.0f));
 
     sceneSnapshot.clearScene();
-    EXPECT_TRUE(frame.drawBuckets.staticMeshes.pbrDrawItems.empty());
-    EXPECT_TRUE(frame.skinningPalettes.empty());
+    EXPECT_TRUE(frame.sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems.empty());
+    EXPECT_TRUE(frame.sceneSnapshot.skinningPalettes.empty());
     EXPECT_FALSE(sceneSnapshot.bHasDirectionalLight);
     EXPECT_EQ(sceneSnapshot.pointLightSourceCount, 0u);
     EXPECT_EQ(frame.view[3][0], 4.0f);

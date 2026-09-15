@@ -230,16 +230,16 @@ void ForwardViewportUnlitPass::prepareUnlitMaterials(const RenderFrameData& fd)
         }
     };
 
-    prepareBucket(fd.drawBuckets.staticMeshes.unlitDrawItems);
-    prepareBucket(fd.drawBuckets.skinnedMeshes.unlitDrawItems);
+    prepareBucket(fd.sceneSnapshot.drawBuckets.staticMeshes.unlitDrawItems);
+    prepareBucket(fd.sceneSnapshot.drawBuckets.skinnedMeshes.unlitDrawItems);
 }
 
 void ForwardViewportUnlitPass::draw(const DrawContext& drawCtx)
 {
     const auto& ctx          = drawCtx.stageCtx;
     const auto& fd           = *ctx.frameData;
-    const auto& staticItems  = fd.drawBuckets.staticMeshes.unlitDrawItems;
-    const auto& skinnedItems = fd.drawBuckets.skinnedMeshes.unlitDrawItems;
+    const auto& staticItems  = fd.sceneSnapshot.drawBuckets.staticMeshes.unlitDrawItems;
+    const auto& skinnedItems = fd.sceneSnapshot.drawBuckets.skinnedMeshes.unlitDrawItems;
     auto*       cmdBuf       = ctx.cmdBuf;
 
     if (staticItems.empty() && skinnedItems.empty()) {

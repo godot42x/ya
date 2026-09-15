@@ -618,7 +618,7 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
         _lastTickCtx.projection           = frameData->projection;
         _lastTickCtx.viewProjection       = frameData->viewProjection;
         _lastTickCtx.cameraPos            = frameData->cameraPos;
-        _lastTickCtx.bHasDirectionalLight = frameData->bHasDirectionalLight;
+        _lastTickCtx.bHasDirectionalLight = frameData->sceneSnapshot.bHasDirectionalLight;
         _lastTickCtx.directionalLight     = frameData->directionalLight;
         _lastTickCtx.numPointLights       = frameData->numPointLights;
         _lastTickCtx.pointLights          = frameData->pointLights;

@@ -423,8 +423,8 @@ void GBufferStage::preparePBR(const RenderFrameData& frameData)
         }
     };
 
-    prepareBucket(frameData.drawBuckets.staticMeshes.pbrDrawItems);
-    prepareBucket(frameData.drawBuckets.skinnedMeshes.pbrDrawItems);
+    prepareBucket(frameData.sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems);
+    prepareBucket(frameData.sceneSnapshot.drawBuckets.skinnedMeshes.pbrDrawItems);
 }
 
 void GBufferStage::preparePhong(const RenderFrameData& frameData)
@@ -468,8 +468,8 @@ void GBufferStage::preparePhong(const RenderFrameData& frameData)
         }
     };
 
-    prepareBucket(frameData.drawBuckets.staticMeshes.phongDrawItems);
-    prepareBucket(frameData.drawBuckets.skinnedMeshes.phongDrawItems);
+    prepareBucket(frameData.sceneSnapshot.drawBuckets.staticMeshes.phongDrawItems);
+    prepareBucket(frameData.sceneSnapshot.drawBuckets.skinnedMeshes.phongDrawItems);
 }
 
 void GBufferStage::prepareUnlit(const RenderFrameData& frameData)
@@ -513,8 +513,8 @@ void GBufferStage::prepareUnlit(const RenderFrameData& frameData)
         }
     };
 
-    flushBucket(frameData.drawBuckets.staticMeshes.unlitDrawItems);
-    flushBucket(frameData.drawBuckets.skinnedMeshes.unlitDrawItems);
+    flushBucket(frameData.sceneSnapshot.drawBuckets.staticMeshes.unlitDrawItems);
+    flushBucket(frameData.sceneSnapshot.drawBuckets.skinnedMeshes.unlitDrawItems);
     flushOne(_fallbackMaterial);
 }
 
@@ -578,8 +578,8 @@ void GBufferStage::drawPBR(const RenderStageContext& ctx, const FrameInputs& inp
         }
     };
 
-    drawBucket(DrawCandidateView{std::span<const RenderDrawItem>(ctx.frameData->drawBuckets.staticMeshes.pbrDrawItems)}, false);
-    drawBucket(DrawCandidateView{std::span<const RenderDrawItem>(ctx.frameData->drawBuckets.skinnedMeshes.pbrDrawItems)}, true);
+    drawBucket(DrawCandidateView{std::span<const RenderDrawItem>(ctx.frameData->sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems)}, false);
+    drawBucket(DrawCandidateView{std::span<const RenderDrawItem>(ctx.frameData->sceneSnapshot.drawBuckets.skinnedMeshes.pbrDrawItems)}, true);
 }
 
 void GBufferStage::drawPhong(const RenderStageContext& ctx, const FrameInputs& inputs)
@@ -616,8 +616,8 @@ void GBufferStage::drawPhong(const RenderStageContext& ctx, const FrameInputs& i
         }
     };
 
-    drawBucket(ctx.frameData->drawBuckets.staticMeshes.phongDrawItems, false);
-    drawBucket(ctx.frameData->drawBuckets.skinnedMeshes.phongDrawItems, true);
+    drawBucket(ctx.frameData->sceneSnapshot.drawBuckets.staticMeshes.phongDrawItems, false);
+    drawBucket(ctx.frameData->sceneSnapshot.drawBuckets.skinnedMeshes.phongDrawItems, true);
 }
 
 void GBufferStage::drawUnlit(const RenderStageContext& ctx, const FrameInputs& inputs)
@@ -657,8 +657,8 @@ void GBufferStage::drawUnlit(const RenderStageContext& ctx, const FrameInputs& i
         }
     };
 
-    drawBucket(ctx.frameData->drawBuckets.staticMeshes.unlitDrawItems, false);
-    drawBucket(ctx.frameData->drawBuckets.skinnedMeshes.unlitDrawItems, true);
+    drawBucket(ctx.frameData->sceneSnapshot.drawBuckets.staticMeshes.unlitDrawItems, false);
+    drawBucket(ctx.frameData->sceneSnapshot.drawBuckets.skinnedMeshes.unlitDrawItems, true);
 }
 
 void GBufferStage::drawFallback(const RenderStageContext& ctx, const FrameInputs& inputs)
@@ -700,8 +700,8 @@ void GBufferStage::drawFallback(const RenderStageContext& ctx, const FrameInputs
         }
     };
 
-    drawBucket(ctx.frameData->drawBuckets.staticMeshes.fallbackDrawItems, false);
-    drawBucket(ctx.frameData->drawBuckets.skinnedMeshes.fallbackDrawItems, true);
+    drawBucket(ctx.frameData->sceneSnapshot.drawBuckets.staticMeshes.fallbackDrawItems, false);
+    drawBucket(ctx.frameData->sceneSnapshot.drawBuckets.skinnedMeshes.fallbackDrawItems, true);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

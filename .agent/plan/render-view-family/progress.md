@@ -7,6 +7,7 @@
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
 - 本轮移除了 RenderRuntimeSnapshotTest 中依赖读取源码文本和 `find()` 的架构时序回归；保留运行时可执行的输入契约、scheduler 去重、revision 和 snapshot 索引校验。未修改运行时实现。
 - 当前 checkpoint：SceneFrameSnapshot 的灯光数据已收敛为 view-independent source data；directional cascade/shadow matrices 与完整 RHI light packet 仅在 per-view RenderFrameData 中生成。
+- 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是组合 `sceneSnapshot`；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 Scene draw buckets、skinning palettes 和 light presence。
 
 ## R0 真实调用链
 
@@ -43,7 +44,7 @@ R0 结论：world snapshot 与 UI snapshot 都在 renderFrame 前生成；Render
 | Checkpoint | 状态 | 保留项 | 未完成 |
 | --- | --- | --- | --- |
 | R0 单 View 基线 | 已完成 | 单 View、现有 pass、单 submit、Forward/Deferred topology | 真实 GPU golden 仍依赖可运行窗口环境 |
-| R1 World/View 分离 | 进行中（契约小步完成） | RenderFrameData 仍兼容单 View；旧消费者未迁移 | 场景抽取、View sorting、shadow preparation 拆分 |
+| R1 World/View 分离 | 进行中（契约小步完成） | RenderFrameData 组合 Scene snapshot；现有单 View pipeline topology | 多 View record、SceneRenderPlan 作为 RenderRuntime 正式输入 |
 | R2 ViewFamily | 未开始 | Forward/Deferred topology、当前 submit 约束 | 多 View record、双 Surface 验收 |
 | R3 GUI2D/GameUI | 未开始 | WidgetTree live source、UIFrameSnapshot 输入 | UI-only 与 GameUI[ViewId] |
 | R4 性能收口 | 未开始 | 优化由 profile 触发 | cache、submit、第三 pipeline 决策 |
@@ -72,9 +73,9 @@ R1 抽取分层切片已完成：RenderFrameExtractor 现在只有 `extractScene
 
 R1 scheduler 接入切片已完成：GameRuntime 每帧通过 `beginFrame -> submit(active Scene request) -> seal(SceneRenderPlan)` 生成 plan，再从 plan 的 snapshot table 取出 SceneFrameSnapshot 调用 `prepareView()`；Scene 通过运行期唯一 instance id 提供 SceneId，scheduler 在 guard 退出时清理。本切片只接入当前单 View，不伪造 RenderRuntime 多 View API。
 
-当前边界：`RenderFrameData` 仍继承 `SceneFrameSnapshot` 以满足现有 pipeline 消费，但 `prepareView()` 先复制不可变 Scene snapshot，再只在 per-view packet 中写入 shadow/cascade 和 sortKey；共享 snapshot 不被 View 原地修改。
+当前边界：`RenderFrameData` 已组合不可变 Scene snapshot，并在 `prepareView()` 中复制 snapshot 后写入 per-view shadow/cascade 和 sortKey；共享 snapshot 不被 View 原地修改。
 
-R1 第一小步已完成：SceneFrameSnapshot 显式承载当前可识别的 Scene lights、draw buckets 和 skinning palettes；RenderFrameData 继承它并继续保留 camera、viewport、frame metadata。该步没有改变 Forward/Deferred 消费者，只把 extractor 的 Scene 与 View 阶段显式化。
+R1 第一小步已完成：SceneFrameSnapshot 显式承载当前可识别的 Scene lights、draw buckets 和 skinning palettes；RenderFrameData 组合它并继续保留 camera、viewport、frame metadata。随后所有现有 Forward/Deferred/Shadow/Debug/EntityId 消费者已改为显式读取 `sceneSnapshot`。
 
 关键新增约束：UI GPU compose 前必须存在一个明确的 SceneRenderScheduler 边界。它收集 SceneRenderRequest，输出 immutable SceneRenderPlan；UI compose 只能消费 plan 产生的 viewport outputs，不应在 UI 过程中临时触发 Scene/ECS extraction。UI widget tick/buildSnapshot 的先后由 host/product 依据输入依赖决定，不被 Scheduler 强制锁死。
 

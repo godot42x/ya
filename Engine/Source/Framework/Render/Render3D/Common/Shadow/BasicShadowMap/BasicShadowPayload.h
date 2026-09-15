@@ -32,7 +32,7 @@ struct BasicShadowFramePayload
     [[nodiscard]] bool directionalEnabled() const
     {
         return settings && settings->directionalEnabled
-            && frameData && frameData->bHasDirectionalLight;
+            && frameData && frameData->sceneSnapshot.bHasDirectionalLight;
     }
     [[nodiscard]] uint32_t directionalCascadeCount() const
     {

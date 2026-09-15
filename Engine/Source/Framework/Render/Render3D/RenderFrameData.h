@@ -233,10 +233,11 @@ struct SceneFrameSnapshot
 };
 
 /// All data a render pipeline needs for one camera view in one frame.
-/// Built from a SceneFrameSnapshot plus view preparation, then consumed
-/// read-only by every pipeline / system.
-struct RenderFrameData : SceneFrameSnapshot
+/// Scene-owned data stays grouped in `sceneSnapshot`; camera, sorting and
+/// shadow preparation remain directly on this per-view packet.
+struct RenderFrameData
 {
+    SceneFrameSnapshot                                          sceneSnapshot;
     FrameContext::DirectionalLightData                          directionalLight;
     uint32_t                                                   numPointLights = 0;
     std::array<FrameContext::PointLightData, MAX_POINT_LIGHTS> pointLights;
@@ -259,7 +260,7 @@ struct RenderFrameData : SceneFrameSnapshot
     // ═══════════════════════════════════════════════════════════════
     void clear()
     {
-        clearScene();
+        sceneSnapshot.clearScene();
         directionalLight = {};
         numPointLights = 0;
         pointLights = {};
@@ -267,7 +268,7 @@ struct RenderFrameData : SceneFrameSnapshot
 
     [[nodiscard]] size_t totalDrawCount() const
     {
-        return drawBuckets.totalDrawCount();
+        return sceneSnapshot.drawBuckets.totalDrawCount();
     }
 };
 

@@ -272,16 +272,16 @@ ForwardViewportStage::PassContext::DebugDrawInput ForwardViewportStage::buildDeb
         input.bHasDraws = true;
     };
 
-    appendBucket(frameData->drawBuckets.staticMeshes.pbrDrawItems, false);
-    appendBucket(frameData->drawBuckets.staticMeshes.phongDrawItems, false);
-    appendBucket(frameData->drawBuckets.staticMeshes.unlitDrawItems, false);
-    appendBucket(frameData->drawBuckets.staticMeshes.simpleDrawItems, false);
-    appendBucket(frameData->drawBuckets.staticMeshes.fallbackDrawItems, false);
-    appendBucket(frameData->drawBuckets.skinnedMeshes.pbrDrawItems, true);
-    appendBucket(frameData->drawBuckets.skinnedMeshes.phongDrawItems, true);
-    appendBucket(frameData->drawBuckets.skinnedMeshes.unlitDrawItems, true);
-    appendBucket(frameData->drawBuckets.skinnedMeshes.simpleDrawItems, true);
-    appendBucket(frameData->drawBuckets.skinnedMeshes.fallbackDrawItems, true);
+    appendBucket(frameData->sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems, false);
+    appendBucket(frameData->sceneSnapshot.drawBuckets.staticMeshes.phongDrawItems, false);
+    appendBucket(frameData->sceneSnapshot.drawBuckets.staticMeshes.unlitDrawItems, false);
+    appendBucket(frameData->sceneSnapshot.drawBuckets.staticMeshes.simpleDrawItems, false);
+    appendBucket(frameData->sceneSnapshot.drawBuckets.staticMeshes.fallbackDrawItems, false);
+    appendBucket(frameData->sceneSnapshot.drawBuckets.skinnedMeshes.pbrDrawItems, true);
+    appendBucket(frameData->sceneSnapshot.drawBuckets.skinnedMeshes.phongDrawItems, true);
+    appendBucket(frameData->sceneSnapshot.drawBuckets.skinnedMeshes.unlitDrawItems, true);
+    appendBucket(frameData->sceneSnapshot.drawBuckets.skinnedMeshes.simpleDrawItems, true);
+    appendBucket(frameData->sceneSnapshot.drawBuckets.skinnedMeshes.fallbackDrawItems, true);
     return input;
 }
 

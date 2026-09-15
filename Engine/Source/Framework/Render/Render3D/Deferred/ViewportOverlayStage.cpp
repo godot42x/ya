@@ -515,8 +515,8 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx, const Fram
     _debugSkinning.bReverseViewportY   = bReverseViewportY;
 
     // Simple material entities (from snapshot)
-    const auto& staticBuckets  = fd.drawBuckets.staticMeshes;
-    const auto& skinnedBuckets = fd.drawBuckets.skinnedMeshes;
+    const auto& staticBuckets  = fd.sceneSnapshot.drawBuckets.staticMeshes;
+    const auto& skinnedBuckets = fd.sceneSnapshot.drawBuckets.skinnedMeshes;
     bool hasSimple = !staticBuckets.simpleDrawItems.empty() || !skinnedBuckets.simpleDrawItems.empty();
 
     bool hasDebugSkinning = _debugSkinning.bEnabled &&

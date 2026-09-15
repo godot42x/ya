@@ -132,7 +132,7 @@ void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
                                        RenderFrameData& outFrame)
 {
     outFrame.clear();
-    static_cast<SceneFrameSnapshot&>(outFrame) = sceneSnapshot;
+    outFrame.sceneSnapshot = sceneSnapshot;
     outFrame.numPointLights = sceneSnapshot.pointLightSourceCount;
     for (uint32_t index = 0; index < sceneSnapshot.pointLightSourceCount; ++index) {
         const auto& source = sceneSnapshot.pointLightSources[index];
@@ -225,7 +225,7 @@ void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneFrameSna
 
 void RenderFrameExtractor::prepareViewLights(const ViewPrepareInput& input, RenderFrameData& out)
 {
-    if (!out.bHasDirectionalLight) {
+    if (!out.sceneSnapshot.bHasDirectionalLight) {
         return;
     }
 
@@ -468,8 +468,8 @@ void RenderFrameExtractor::sortDrawItems(const glm::vec3& cameraPos, RenderFrame
         sortFallbackBucket(buckets.fallbackDrawItems);
     };
 
-    sortBuckets(out.drawBuckets.staticMeshes);
-    sortBuckets(out.drawBuckets.skinnedMeshes);
+    sortBuckets(out.sceneSnapshot.drawBuckets.staticMeshes);
+    sortBuckets(out.sceneSnapshot.drawBuckets.skinnedMeshes);
 }
 
 } // namespace ya

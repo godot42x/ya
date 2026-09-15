@@ -106,7 +106,7 @@ DeferredFrameResourceSet::LightData DeferredFrameResourceSet::buildLightData(con
         ? 1.0f / static_cast<float>(_shadowState.shadowMapResolution)
         : 0.0f;
 
-    if (frameData.bHasDirectionalLight) {
+    if (frameData.sceneSnapshot.bHasDirectionalLight) {
         lightData.dirLight.dir          = frameData.directionalLight.direction;
         lightData.dirLight.color        = frameData.directionalLight.color;
         lightData.dirLight.intensity    = frameData.directionalLight.intensity;

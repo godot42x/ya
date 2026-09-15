@@ -245,7 +245,7 @@ void EntityIdViewportPass::execute(ICommandBuffer*        cmdBuf,
         (void)layout;
     };
 
-    const auto& buckets = frameData.drawBuckets;
+    const auto& buckets = frameData.sceneSnapshot.drawBuckets;
 
     cmdBuf->bindPipeline(_pipeline.get());
     applyViewport(_pipelineLayout.get());

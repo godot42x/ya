@@ -230,11 +230,11 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendCascadePass(
             };
             {
                 YA_PROFILE_SCOPE("DirectionalShadowPass::DrawStatic");
-                ShadowDrawHelper::drawStaticBuckets(&commandBuffer, staticRes, payload.frameData->drawBuckets.staticMeshes);
+                ShadowDrawHelper::drawStaticBuckets(&commandBuffer, staticRes, payload.frameData->sceneSnapshot.drawBuckets.staticMeshes);
             }
             {
                 YA_PROFILE_SCOPE("DirectionalShadowPass::DrawSkinned");
-                ShadowDrawHelper::drawSkinnedBuckets(&commandBuffer, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
+                ShadowDrawHelper::drawSkinnedBuckets(&commandBuffer, skinnedRes, payload.frameData->sceneSnapshot.drawBuckets.skinnedMeshes);
             }
             ctx.endRendering();
         });

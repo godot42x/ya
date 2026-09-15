@@ -312,7 +312,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
                         .skinningDS     = skinningDS,
                     };
                     ShadowDrawHelper::drawSkinnedBuckets(
-                        &commandBuffer, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
+                        &commandBuffer, skinnedRes, payload.frameData->sceneSnapshot.drawBuckets.skinnedMeshes);
                 }
                 ctx.endRendering();
             }
@@ -335,7 +335,7 @@ void PointShadowPass::renderFaceDirect(ICommandBuffer*                 cmdBuf,
         .pipelineLayout = _directStaticVariant.pipelineLayout.get(),
         .frameDS        = facePayload.faceDS,
     };
-    ShadowDrawHelper::drawStaticBuckets(cmdBuf, staticRes, payload.frameData->drawBuckets.staticMeshes);
+    ShadowDrawHelper::drawStaticBuckets(cmdBuf, staticRes, payload.frameData->sceneSnapshot.drawBuckets.staticMeshes);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
