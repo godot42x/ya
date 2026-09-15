@@ -169,7 +169,40 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
         staggerTweens[i]->setOnFinished([next = staggerTweens[i + 1]] { next->play(); });
     }
 
-    // === Case 4: a default-animated control (UISwitch) ===
+    // === Case 4: one property, several keyframes (a toast) ===
+    // Slide in -> hold -> slide out, driven by ONE clock: the curve form of a
+    // track expresses multi-step motion without chaining tweens per step.
+    auto toastCard = std::make_shared<ya::UIBorder>("AnimationToastCard");
+    toastCard->setColor({0.20f, 0.32f, 0.26f, 1.0f});
+    toastCard->setCornerRadius(8.0f);
+    auto toastTween = ya::ui::animate(*toastCard, 1.6f);
+    toastTween->curve(ya::ui::anim::opacity,
+                      {ya::animKey(0.0f, 0.0f),
+                       ya::animKey(0.25f, 1.0f, ya::EUIAnimEase::OutCubic),
+                       ya::animKey(0.75f, 1.0f),                       // hold
+                       ya::animKey(1.0f, 0.0f, ya::EUIAnimEase::InCubic)})
+        .curve(ya::ui::anim::translation,
+               {ya::animKey(0.0f, glm::vec2(0.0f, 28.0f)),
+                ya::animKey(0.25f, glm::vec2(0.0f, 0.0f), ya::EUIAnimEase::OutBack),
+                ya::animKey(0.75f, glm::vec2(0.0f, 0.0f)),
+                ya::animKey(1.0f, glm::vec2(0.0f, -16.0f), ya::EUIAnimEase::InCubic)});
+    // A second, independent curve channel on the same widget: the stripe walks
+    // through three positions with different easings per segment.
+    auto stripe     = std::make_shared<ya::UIBorder>("AnimationToastStripe");
+    stripe->setColor({0.85f, 0.92f, 0.72f, 1.0f});
+    auto stripeTween = ya::ui::animate(*stripe, 1.6f);
+    stripeTween->curve(ya::ui::anim::translation,
+                       {ya::animKey(0.0f, glm::vec2(-24.0f, 0.0f)),
+                        ya::animKey(0.25f, glm::vec2(0.0f, 0.0f), ya::EUIAnimEase::OutBack),
+                        ya::animKey(0.5f, glm::vec2(0.0f, 0.0f)),
+                        ya::animKey(1.0f, glm::vec2(24.0f, 0.0f), ya::EUIAnimEase::InOutQuad)});
+    toastCard->addDetachedChild(stripe, [](ya::UIElement&, ya::UISlot& slot) {
+        if (auto* box = dynamic_cast<ya::UIBoxSlot*>(&slot)) {
+            box->setPreferredSize({40.0f, 10.0f});
+        }
+    });
+
+    // === Case 5: a default-animated control (UISwitch) ===
     auto fastSwitch    = ya::ui::toggle("AnimSwitchFast").setText("Fast (0.12s)");
     auto slowSwitch    = ya::ui::toggle("AnimSwitchSlow").setText("Slow (0.45s)");
     auto instantSwitch = ya::ui::toggle("AnimSwitchInstant").setText("Instant (none)");
@@ -183,7 +216,7 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
     instantSwitch.setTransitionSeconds(0.0f);
     onSwitch.setTransitionSeconds(0.2f);
 
-    // === Case 5: an app widget's own animatable property ===
+    // === Case 6: an app widget's own animatable property ===
     auto gauge     = std::make_shared<FAnimFillGauge>("AnimationGauge");
     auto fillTween = ya::ui::animate(*gauge, 1.2f);
     fillTween->track(kAnimFill, 0.0f, 1.0f, ya::EUIAnimEase::InOutCubic);
@@ -195,8 +228,13 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
                     "Layer split: this page uses the framework tween (clock + easing + widget properties). "
                     "Track/keyframe clips belong to the future Game UI layer and drive the same properties."));
 
-    form.child(header("AnimationLeafTitle", "Leaf tweens — opacity / scale / translation / tint"));
-    form.child(ya::ui::row("AnimationButtons")
+    // Two columns keep every case above the fold: the tween cases on the left,
+    // the widget-level cases (switch, app property) on the right.
+    auto left  = ya::ui::column("AnimationCases").setSpacing(8.0f);
+    auto right = ya::ui::column("AnimationWidgets").setSpacing(8.0f);
+
+    left.child(header("AnimationLeafTitle", "Leaf tweens — opacity / scale / translation / tint"));
+    left.child(ya::ui::row("AnimationButtons")
                    .setSpacing(8.0f)
                    .child(demoButton("AnimPop", "Pop in")
                               .setOnClick(
@@ -244,10 +282,28 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
                                       log("tween: card overlay reset (setters, not field pokes)");
                                   }),
                           ya::ui::boxSlot().preferredSize({90.0f, 26.0f})));
-    form.child(card, ya::ui::boxSlot().preferredSize({0.0f, 80.0f}));
+    left.child(card, ya::ui::boxSlot().preferredSize({0.0f, 72.0f}));
 
-    form.child(header("AnimationGroupTitle", "Subtree transition — one overlay drives a whole group"));
-    form.child(ya::ui::row("AnimationGroupButtons")
+    left.child(header("AnimationCurveTitle",
+                      "Keyframe curve — one property, several keys (slide in → hold → out)"));
+    left.child(body("AnimationCurveHint",
+                    "A curve is a track sampled at N keys on the same clock: no per-step chaining. "
+                    "Key times are normalized (0..1), so setDuration retimes the whole curve."));
+    left.child(ya::ui::row("AnimationCurveButtons")
+                   .setSpacing(8.0f)
+                   .child(demoButton("AnimToast", "Play toast")
+                              .setOnClick(
+                                  [toastTween, stripeTween, log]
+                                  {
+                                      toastTween->play();
+                                      stripeTween->play();
+                                      log("curve: opacity 0->1 (hold) ->0, translation 28->0 ->-16 (1.6s)");
+                                  }),
+                          ya::ui::boxSlot().preferredSize({110.0f, 26.0f})));
+    left.child(toastCard, ya::ui::boxSlot().preferredSize({0.0f, 44.0f}));
+
+    left.child(header("AnimationGroupTitle", "Subtree transition — one overlay drives a whole group"));
+    left.child(ya::ui::row("AnimationGroupButtons")
                    .setSpacing(8.0f)
                    .child(demoButton("AnimGroupHide", "Hide group")
                               .setOnClick(
@@ -265,10 +321,10 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
                                       log("tween: group opacity 0.15->1 (reverse, no snap)");
                                   }),
                           ya::ui::boxSlot().preferredSize({110.0f, 26.0f})));
-    form.child(group);
+    left.child(group);
 
-    form.child(header("AnimationStaggerTitle", "Sequence — a stagger composed by chaining end callbacks"));
-    form.child(ya::ui::row("AnimationStaggerButtons")
+    left.child(header("AnimationStaggerTitle", "Sequence — a stagger composed by chaining end callbacks"));
+    left.child(ya::ui::row("AnimationStaggerButtons")
                    .setSpacing(8.0f)
                    .child(demoButton("AnimStagger", "Play sequence")
                               .setOnClick(
@@ -280,18 +336,18 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
                                       log("tween: 5 cards, each starting the next on finished");
                                   }),
                           ya::ui::boxSlot().preferredSize({130.0f, 26.0f})));
-    form.child(staggerRow);
+    left.child(staggerRow);
 
-    form.child(header("AnimationSwitchTitle",
+    right.child(header("AnimationSwitchTitle",
                       "Default-animated control — UISwitch animates its own state change"));
-    form.child(body("AnimationSwitchHint",
+    right.child(body("AnimationSwitchHint",
                     "The switch owns one tween: the knob travels while the track colour blends. "
                     "Flipping mid-flight reverses from the current position."));
-    form.child(fastSwitch);
-    form.child(slowSwitch);
-    form.child(instantSwitch);
-    form.child(onSwitch);
-    form.child(ya::ui::row("AnimationSwitchButtons")
+    right.child(fastSwitch);
+    right.child(slowSwitch);
+    right.child(instantSwitch);
+    right.child(onSwitch);
+    right.child(ya::ui::row("AnimationSwitchButtons")
                    .setSpacing(8.0f)
                    .child(demoButton("AnimToggleAll", "Toggle all")
                               .setOnClick(
@@ -305,12 +361,12 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
                                   }),
                           ya::ui::boxSlot().preferredSize({110.0f, 26.0f})));
 
-    form.child(header("AnimationGaugeTitle", "Extension — an app widget's own animatable property"));
-    form.child(body("AnimationGaugeHint",
+    right.child(header("AnimationGaugeTitle", "Extension — an app widget's own animatable property"));
+    right.child(body("AnimationGaugeHint",
                     "FAnimFillGauge declares 'fill' next to its own table and publishes a typed handle; "
                     "the framework tween drives it without knowing the widget class."));
-    form.child(gauge, ya::ui::boxSlot().preferredSize({0.0f, 16.0f}));
-    form.child(ya::ui::row("AnimationGaugeButtons")
+    right.child(gauge, ya::ui::boxSlot().preferredSize({0.0f, 16.0f}));
+    right.child(ya::ui::row("AnimationGaugeButtons")
                    .setSpacing(8.0f)
                    .child(demoButton("AnimFill", "Fill gauge")
                               .setOnClick(
@@ -320,6 +376,11 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
                                       log("tween: custom property 'fill' 0->1 (1.2s)");
                                   }),
                           ya::ui::boxSlot().preferredSize({110.0f, 26.0f})));
+
+    form.child(ya::ui::row("AnimationBody")
+                   .setSpacing(16.0f)
+                   .child(std::move(left), ya::ui::boxSlot().preferredSize({520.0f, 0.0f}))
+                   .child(std::move(right), ya::ui::boxSlot().preferredSize({380.0f, 0.0f})));
 
     auto page = ya::ui::border("AnimationDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
     (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());

@@ -85,6 +85,42 @@ struct FUIAnimValue
                                                     const FUIAnimValue& to,
                                                     float               t);
 
+/// Easing curve of one tween segment (or of one keyframe segment).
+enum class EUIAnimEase : uint8_t
+{
+    Linear,
+    InQuad,
+    OutQuad,
+    InOutQuad,
+    InCubic,
+    OutCubic,
+    InOutCubic,
+    InBack,
+    OutBack,
+    InOutBack,
+};
+
+/// One keyframe of a property curve. `time` is normalized clock time (0..1,
+/// NOT seconds), so a curve is retimed by setDuration() like any other track;
+/// `ease` describes the segment ENDING at this key.
+struct FUIAnimKey
+{
+    float        time  = 0.0f;
+    FUIAnimValue value{};
+    EUIAnimEase  ease = EUIAnimEase::Linear;
+};
+
+[[nodiscard]] YA_GUI_API FUIAnimKey animKey(float time, float value, EUIAnimEase ease = EUIAnimEase::Linear);
+[[nodiscard]] YA_GUI_API FUIAnimKey animKey(float time, glm::vec2 value, EUIAnimEase ease = EUIAnimEase::Linear);
+[[nodiscard]] YA_GUI_API FUIAnimKey animKey(float time, glm::vec4 value, EUIAnimEase ease = EUIAnimEase::Linear);
+
+/// Evaluate a keyframe curve at normalized clock time `lerp`. Before the first
+/// and after the last key the curve holds that key's value (no extrapolation);
+/// a single key is a constant. Keys must be sorted by time and share one value
+/// domain - a track declares that, and a curve that violates it is rejected when
+/// the track is resolved instead of being evaluated into garbage.
+[[nodiscard]] YA_GUI_API FUIAnimValue evaluateAnimCurve(const std::vector<FUIAnimKey>& keys, float lerp);
+
 /// One animatable widget property: stable id + value domain + accessors.
 ///
 /// The writer must go through the widget's changed-only setter, so the
@@ -138,6 +174,31 @@ struct TUIAnimProperty
     std::string_view id;
 };
 
+/// Value domain of a typed property / track value.
+template <typename T>
+struct TUIAnimValueDomain;
+template <>
+struct TUIAnimValueDomain<float>
+{
+    static constexpr EUIAnimValueType value = EUIAnimValueType::Float;
+};
+template <>
+struct TUIAnimValueDomain<glm::vec2>
+{
+    static constexpr EUIAnimValueType value = EUIAnimValueType::Vec2;
+};
+template <>
+struct TUIAnimValueDomain<glm::vec4>
+{
+    static constexpr EUIAnimValueType value = EUIAnimValueType::Vec4;
+};
+
+template <typename T>
+[[nodiscard]] constexpr EUIAnimValueType animValueTypeOf()
+{
+    return TUIAnimValueDomain<T>::value;
+}
+
 inline constexpr TUIAnimProperty<float>     kAnimOpacity{"opacity"};
 inline constexpr TUIAnimProperty<glm::vec2> kAnimRenderTranslation{"renderTranslation"};
 inline constexpr TUIAnimProperty<glm::vec2> kAnimRenderScale{"renderScale"};
@@ -153,20 +214,6 @@ inline constexpr TUIAnimProperty<glm::vec4> tint        = kAnimTint;
 } // namespace ui::anim
 
 // === Easing =================================================================
-
-enum class EUIAnimEase : uint8_t
-{
-    Linear,
-    InQuad,
-    OutQuad,
-    InOutQuad,
-    InCubic,
-    OutCubic,
-    InOutCubic,
-    InBack,
-    OutBack,
-    InOutBack,
-};
 
 /// Map normalized time 0..1 to an eased amount. Out-of-range input is clamped.
 [[nodiscard]] YA_GUI_API float evaluateEase(EUIAnimEase ease, float t);
@@ -246,12 +293,20 @@ class YA_GUI_API UIAnimClock
 // === Tween ==================================================================
 
 /// One animated channel of a tween: this widget's <id> goes from -> to.
+/// Two authoring forms share one evaluation path:
+///   * two endpoints (`from` -> `to` with `ease`) - the common case;
+///   * a keyframe curve (`keyframes`), which is the same track sampled at N
+///     keys - used for multi-step motion such as slide in -> hold -> fade out.
+/// A curve is still ONE property on ONE clock on ONE widget; multi-object
+/// timelines with events stay in the Game UI clip player layer.
 struct FUIAnimTrack
 {
     std::string  id;   ///< animatable property id (FUIAnimPropertyDesc::id)
     FUIAnimValue from{};
     FUIAnimValue to{};
     EUIAnimEase  ease = EUIAnimEase::Linear;
+    /// Non-empty switches evaluation to the piecewise curve (from/to unused).
+    std::vector<FUIAnimKey> keyframes;
 };
 
 /// Framework-layer tween behaviour: one clock driving N animatable properties
@@ -283,8 +338,6 @@ class YA_GUI_API UITweenBehavior : public UIBehavior
     template <typename T>
     UITweenBehavior& track(const TUIAnimProperty<T>& property, T from, T to, EUIAnimEase ease = EUIAnimEase::Linear)
     {
-        static_assert(std::is_same_v<T, float> || std::is_same_v<T, glm::vec2> || std::is_same_v<T, glm::vec4>,
-                      "animatable properties support float / vec2 / vec4 value domains only");
         if constexpr (std::is_same_v<T, float>) {
             return addFloatTrack(std::string(property.id), from, to, ease);
         }
@@ -292,6 +345,8 @@ class YA_GUI_API UITweenBehavior : public UIBehavior
             return addVec2Track(std::string(property.id), from, to, ease);
         }
         else {
+            static_assert(std::is_same_v<T, glm::vec4>,
+                          "animatable properties support float / vec2 / vec4 value domains only");
             return addVec4Track(std::string(property.id), from, to, ease);
         }
     }
@@ -311,6 +366,21 @@ class YA_GUI_API UITweenBehavior : public UIBehavior
     UITweenBehavior& tint(glm::vec4 from, glm::vec4 to, EUIAnimEase ease = EUIAnimEase::Linear)
     {
         return addVec4Track(std::string(kAnimTint.id), from, to, ease);
+    }
+    /// Keyframe curve on one property (keys in normalized clock time; see
+    /// FUIAnimKey). Any number of keys, including a hold between two of them:
+    ///
+    ///   tween->curve(ya::ui::anim::translation, {ya::animKey(0.0f, glm::vec2(0.0f, 24.0f)),
+    ///                                            ya::animKey(0.3f, glm::vec2(0.0f, 0.0f), OutCubic),
+    ///                                            ya::animKey(0.7f, glm::vec2(0.0f, 0.0f)),
+    ///                                            ya::animKey(1.0f, glm::vec2(0.0f, -12.0f), InCubic)});
+    UITweenBehavior& addCurveTrack(std::string id, EUIAnimValueType type, std::vector<FUIAnimKey> keys);
+    template <typename T>
+    UITweenBehavior& curve(const TUIAnimProperty<T>& property, std::vector<FUIAnimKey> keys)
+    {
+        static_assert(requires { TUIAnimValueDomain<T>::value; },
+                      "animatable properties support float / vec2 / vec4 value domains only");
+        return addCurveTrack(std::string(property.id), animValueTypeOf<T>(), std::move(keys));
     }
     /// Tracks are resolved against the owner's animatable property table when
     /// the tween runs; a track whose id the owner does not expose is skipped

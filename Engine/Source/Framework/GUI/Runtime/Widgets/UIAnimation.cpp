@@ -12,6 +12,38 @@
 namespace ya
 {
 
+namespace
+{
+
+/// Null when `track` can run on this property; otherwise why it cannot. Both
+/// the two-endpoint form and a keyframe curve declare their value domain up
+/// front, so a mismatch is a declaration error the driver reports once instead
+/// of interpolating into garbage every frame.
+const char* trackRejectionReason(const FUIAnimTrack& track, const FUIAnimPropertyDesc& desc)
+{
+    if (track.keyframes.empty()) {
+        if (track.from.type != track.to.type) {
+            return "endpoints use different value domains";
+        }
+        return desc.type == track.from.type ? nullptr : "value type does not match the owner's declaration";
+    }
+
+    float previousTime = -1.0f;
+    for (size_t i = 0; i < track.keyframes.size(); ++i) {
+        const FUIAnimKey& key = track.keyframes[i];
+        if (key.value.type != desc.type) {
+            return "keyframe value type does not match the owner's declaration";
+        }
+        if (i > 0 && key.time < previousTime) {
+            return "keyframe times must not decrease";
+        }
+        previousTime = key.time;
+    }
+    return nullptr;
+}
+
+} // namespace
+
 // === Values =================================================================
 
 FUIAnimValue FUIAnimValue::fromFloat(float value)
@@ -47,6 +79,67 @@ FUIAnimValue lerpAnimValue(const FUIAnimValue& from, const FUIAnimValue& to, flo
     out.type = from.type;
     out.data = glm::mix(from.data, to.data, t);
     return out;
+}
+
+// === Keyframe curves ========================================================
+
+FUIAnimKey animKey(float time, float value, EUIAnimEase ease)
+{
+    return FUIAnimKey{time, FUIAnimValue::fromFloat(value), ease};
+}
+
+FUIAnimKey animKey(float time, glm::vec2 value, EUIAnimEase ease)
+{
+    return FUIAnimKey{time, FUIAnimValue::fromVec2(value), ease};
+}
+
+FUIAnimKey animKey(float time, glm::vec4 value, EUIAnimEase ease)
+{
+    return FUIAnimKey{time, FUIAnimValue::fromVec4(value), ease};
+}
+
+FUIAnimValue evaluateAnimCurve(const std::vector<FUIAnimKey>& keys, float lerp)
+{
+    if (keys.empty()) {
+        return {};
+    }
+    if (keys.size() == 1) {
+        return keys.front().value;
+    }
+
+    const float t = glm::clamp(lerp, 0.0f, 1.0f);
+    // Hold (no extrapolation) before the first key and after the last one: a
+    // curve describes an interval, and reaching its end must settle, not run on.
+    if (t <= keys.front().time) {
+        return keys.front().value;
+    }
+    if (t >= keys.back().time) {
+        return keys.back().value;
+    }
+
+    // A key owns its own time: sampling exactly at a key returns that key's
+    // value, and when two keys share a time the later one wins (a discrete cut,
+    // which is how "hold, then jump" is authored). Between keys the segment is
+    // interpolated with the easing declared on the key that ends it.
+    //
+    // Linear scan: track key counts are small (a handful) and this runs once per
+    // animating widget per frame, so a binary search would add branches without
+    // a measurable gain.
+    size_t segmentStart = 0;
+    for (size_t i = 1; i < keys.size(); ++i) {
+        if (t < keys[i].time) {
+            break;
+        }
+        segmentStart = i;
+    }
+    if (keys[segmentStart].time == t || segmentStart + 1 >= keys.size()) {
+        return keys[segmentStart].value;
+    }
+
+    const FUIAnimKey& segmentEnd = keys[segmentStart + 1];
+    const float       span       = segmentEnd.time - keys[segmentStart].time;
+    const float       u          = span > 0.0f ? (t - keys[segmentStart].time) / span : 1.0f;
+    return lerpAnimValue(keys[segmentStart].value, segmentEnd.value, evaluateEase(segmentEnd.ease, u));
 }
 
 // === Easing =================================================================
@@ -431,6 +524,22 @@ UITweenBehavior& UITweenBehavior::addVec4Track(std::string id, glm::vec4 from, g
     return *this;
 }
 
+UITweenBehavior& UITweenBehavior::addCurveTrack(std::string id, EUIAnimValueType type, std::vector<FUIAnimKey> keys)
+{
+    FUIAnimTrack track;
+    track.id = std::move(id);
+    track.keyframes = std::move(keys);
+    if (!track.keyframes.empty()) {
+        // from/to stay unused, but keep the declaration domain coherent so the
+        // resolve-time type check has a single value to compare against.
+        track.from.type = type;
+        track.to.type   = type;
+    }
+    _tracks.push_back(std::move(track));
+    _resolved.clear();
+    return *this;
+}
+
 void UITweenBehavior::clearTracks()
 {
     _tracks.clear();
@@ -549,8 +658,8 @@ void UITweenBehavior::resolveTrackDescriptors(UIElement& owner)
             warnTrackSkipped(owner, track, "exposes no animatable property");
             continue;
         }
-        if (desc->type != track.from.type || desc->type != track.to.type) {
-            warnTrackSkipped(owner, track, "value type does not match the owner's declaration");
+        if (const char* reason = trackRejectionReason(track, *desc)) {
+            warnTrackSkipped(owner, track, reason);
             continue;
         }
         _resolved[i] = desc;
@@ -578,7 +687,12 @@ void UITweenBehavior::applyTracks(UIElement& owner, float lerp)
             continue;
         }
         const FUIAnimTrack& track = _tracks[i];
-        desc->write(owner, lerpAnimValue(track.from, track.to, evaluateEase(track.ease, lerp)));
+        const FUIAnimValue value = track.keyframes.empty()
+                                       ? lerpAnimValue(track.from,
+                                                       track.to,
+                                                       evaluateEase(track.ease, lerp))
+                                       : evaluateAnimCurve(track.keyframes, lerp);
+        desc->write(owner, value);
     }
 }
 

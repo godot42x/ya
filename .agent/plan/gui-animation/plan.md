@@ -34,13 +34,15 @@
 - **驱动**：`UIAnimClock`（duration / play / playReverse / pause / resume / loop /
   timeScale / hasFinished）+ `UITweenBehavior`（一个时钟驱动 owner 的 N 条 track，
   `wantsTick()` 仅播放中为真，结束即回到干净、树不再拜访，无 `_bVolatile`）。
+- **track 的两种形态**：两端点（`from`/`to` + ease）与关键帧曲线（`keyframes`，
+  `evaluateAnimCurve`，见 §3 的边界修正）。
 - **解析点**：`UIFrameBuilder::pushRenderTransform` 在 emit 时映射 rect/color/clip；
   缓存段是解析后结果，transform 改动必须 invalidate 子树（setter 已保证）。
-- **验证**：`Engine/Test/Source/GuiAnimationTest.cpp`（closure target，8 例：接缝
-  继承顺序、类型不匹配拒绝、tween 推进 + 结束后零重建、下游属性驱动、transform 自身
-  项映射、transform 子树继承、clock 端点/循环、easing/lerp 域）；Workbench
-  `--start-page=Tween`（新 `Animation` 分组）+ `Scenarios/animation_tween.jsonl`
-  headless `--scenario-render` 通过，无 G2 validation mismatch。
+- **验证**：`Engine/Test/Source/GuiAnimationTest.cpp`（closure target，25 例：接缝/
+  类型拒绝/tween 生命周期与结束后零重建/下游属性驱动/render transform 自身与子树映射/
+  clock 端点与零时长/playToward 与 setLerpNow/curve 求值与非法曲线拒绝/UISwitch 行为与
+  knob 几何）；Workbench `--start-page=Tween`（`Animation` 分组）+
+  `Scenarios/animation_gallery.jsonl`（真实点击 + `assert_validation_clean`）。
 
 ## 1.1 每帧开销画像（2026-09-15 实测，debug/arm64，1280x720，426 widget 树）
 
@@ -85,6 +87,26 @@
 
 ## 3. Game UI 层（延后）设计要点
 
+### 边界修正（2026-09-15）：单属性关键帧属于框架层
+
+原先这里写「框架不做带关键帧的 track」。实测下来这条划得过粗，正确的切法是按**作用域**而不是
+按「有没有关键帧」拆：
+
+- **一个属性、一个时钟、一个 widget** 的多段运动（slide in → hold → out）是 track 自己的求值
+  形状。它复用同一条接缝（求值 → changed-only setter）、同一个时钟、同一份失效链，不引入
+  任何新概念，所以放在框架层（`FUIAnimTrack::keyframes` + `evaluateAnimCurve`）。放去 Game UI
+  只会让「一个 widget 的 toast 动效」也被迫经过 clip/track/notify 那套机器。
+- **多对象、跨 widget 时序、事件轨、blend、轨道编辑** 才是 Game UI 的事。判据：一旦需要
+  引用「另一个 widget」或「某一刻做一件事」，就是 player 的领域。
+- 两条路都不碰属性目录：keyframe 只是值来源，drivers 仍然只写 `applyAnimatableProperty`。
+  将来 clip player 里的 track 也可以直接把 curve 拿来用。
+
+曲线的语义（已由单测锁住）：键时间是归一化时钟时间（0..1，`setDuration` 整体改速）；键拥有
+自己的时刻、同一时刻后键胜出（离散跳变）；首键之前 / 末键之后保持端点值（不外推）；键时刻必须
+非递减、值域必须等于属性声明，违规的 track 在 resolve 时被拒且只警告一次。
+
+### 其余要点
+
 - clip = tracks + keyframes + notifies；归属 UIDocument / UICompoundWidget / HUD 根，
   `WidgetTree` 不知道 clip 存在（对齐 UUserWidget 持 UWidgetAnimation、Slate 不持 Sequencer）。
 - track 绑定 `(widget stableKey / name, propertyId)`；每帧 evaluate 后调用
@@ -106,6 +128,13 @@ pop->fade(0.0f, 1.0f, ya::EUIAnimEase::OutCubic)
 
 // 控件自己的通道，值域编进类型（写错是编译错误）
 tween->track(ya::kAnimSwitchProgress, 0.0f, 1.0f);   // 或 ya::ui::anim::opacity
+
+// 多关键帧：一个属性的分段曲线（键时间是归一化时钟时间）
+tween->curve(ya::ui::anim::opacity,
+             {ya::animKey(0.0f, 0.0f),
+              ya::animKey(0.25f, 1.0f, ya::EUIAnimEase::OutCubic),
+              ya::animKey(0.75f, 1.0f),                       // hold
+              ya::animKey(1.0f, 0.0f, ya::EUIAnimEase::InCubic)});
 ```
 
 刻意没做的：
@@ -131,8 +160,10 @@ tween->track(ya::kAnimSwitchProgress, 0.0f, 1.0f);   // 或 ya::ui::anim::opacit
 
 ## 6. Feature Gallery：Animation 页覆盖的形态
 
-`--start-page=Tween`（分组 `Animation`）现在演示 5 类：叶子 tween（fade/scale/slide/
-ping-pong）、子树过渡（一个 overlay 驱动整组卡片的显示/隐藏，含中途反向）、
+`--start-page=Tween`（分组 `Animation`，两栏布局，全部在一屏内）现在演示 6 类：
+叶子 tween（fade/scale/slide/ping-pong + reset）、关键帧曲线（一个属性 4 个键，
+slide in → hold → out，另一个 property 走独立曲线）、子树过渡（一个 render transform
+驱动整组卡片的显示/隐藏，含中途反向）、
 序列（5 张卡用 onFinished 串成 stagger，应用层组合）、默认带动画控件
 （4 个不同时长的 switch，含 instant 与“构造即 on”）、app 自定义属性（gauge 的 `fill`）。
 场景 `Scenarios/animation_gallery.jsonl` 用真实坐标点击每一个按钮并帧推进，

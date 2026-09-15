@@ -690,6 +690,107 @@ TEST(GuiAnimationTest, ClockResolvesEndpointsAndLooping)
     EXPECT_FLOAT_EQ(clock.getLerp(), 0.0f);
 }
 
+// === Multi-keyframe curves ==================================================
+
+// A curve is the same track sampled at N keys. Covers the shapes a two-endpoint
+// tween cannot express: a hold, and a multi-step motion (slide in -> hold -> out).
+TEST(GuiAnimationTest, CurveSamplingHandlesStepsAndHolds)
+{
+    const std::vector<FUIAnimKey> curve = {
+        animKey(0.0f, 0.0f),
+        animKey(0.3f, 1.0f, EUIAnimEase::Linear),
+        animKey(0.7f, 1.0f, EUIAnimEase::Linear), // hold
+        animKey(1.0f, 0.0f, EUIAnimEase::Linear),
+    };
+
+    EXPECT_FLOAT_EQ(evaluateAnimCurve(curve, 0.0f).asFloat(), 0.0f);
+    EXPECT_FLOAT_EQ(evaluateAnimCurve(curve, 0.15f).asFloat(), 0.5f); // mid segment
+    EXPECT_FLOAT_EQ(evaluateAnimCurve(curve, 0.3f).asFloat(), 1.0f);  // key
+    EXPECT_FLOAT_EQ(evaluateAnimCurve(curve, 0.5f).asFloat(), 1.0f);  // inside the hold
+    EXPECT_FLOAT_EQ(evaluateAnimCurve(curve, 0.85f).asFloat(), 0.5f); // falling segment
+    EXPECT_FLOAT_EQ(evaluateAnimCurve(curve, 1.0f).asFloat(), 0.0f);
+
+    // No extrapolation: the ends hold instead of running past the curve.
+    EXPECT_FLOAT_EQ(evaluateAnimCurve(curve, -1.0f).asFloat(), 0.0f);
+    EXPECT_FLOAT_EQ(evaluateAnimCurve(curve, 2.0f).asFloat(), 0.0f);
+
+    // A single key is a constant; an empty curve yields a default value.
+    EXPECT_FLOAT_EQ(evaluateAnimCurve({animKey(0.4f, 0.25f)}, 0.9f).asFloat(), 0.25f);
+    EXPECT_TRUE(evaluateAnimCurve({}, 0.5f).type == EUIAnimValueType::Float);
+
+    // Keys at the same time are a discrete cut: a key owns its own time, so the
+    // later of the two wins right at that instant, and the segment before it is
+    // never divided by zero.
+    const std::vector<FUIAnimKey> step = {animKey(0.0f, 0.0f), animKey(0.5f, 0.0f), animKey(0.5f, 1.0f), animKey(1.0f, 1.0f)};
+    EXPECT_FLOAT_EQ(evaluateAnimCurve(step, 0.0f).asFloat(), 0.0f);
+    EXPECT_FLOAT_EQ(evaluateAnimCurve(step, 0.499f).asFloat(), 0.0f);
+    EXPECT_FLOAT_EQ(evaluateAnimCurve(step, 0.5f).asFloat(), 1.0f);
+    EXPECT_FLOAT_EQ(evaluateAnimCurve(step, 0.9f).asFloat(), 1.0f);
+}
+
+TEST(GuiAnimationTest, CurveTrackDrivesTheOwnerThroughEverySegment)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    auto       card = std::make_shared<UIBorder>("Card");
+    card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {80.0f, 40.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+
+    // A toast: slide in, hold, slide out - one clock, two curved properties.
+    auto tween = animate(*card, 1.0f);
+    tween->curve(ya::ui::anim::opacity,
+                 {animKey(0.0f, 0.0f), animKey(0.3f, 1.0f), animKey(0.7f, 1.0f), animKey(1.0f, 0.0f)})
+        .curve(ya::ui::anim::translation,
+               {animKey(0.0f, glm::vec2(0.0f, 24.0f)),
+                animKey(0.3f, glm::vec2(0.0f, 0.0f), EUIAnimEase::OutCubic),
+                animKey(0.7f, glm::vec2(0.0f, 0.0f)),
+                animKey(1.0f, glm::vec2(0.0f, -12.0f), EUIAnimEase::InCubic)});
+    EXPECT_EQ(tween->getTrackCount(), 2u);
+
+    tween->setLerpNow(0.5f); // parked inside the hold
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 1.0f);
+    EXPECT_EQ(card->getRenderTranslation(), glm::vec2(0.0f, 0.0f));
+
+    tween->play(); // t = 0
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.0f);
+    EXPECT_EQ(card->getRenderTranslation(), glm::vec2(0.0f, 24.0f));
+
+    tree.tick(0.6f); // lands inside the hold
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 1.0f);
+    EXPECT_EQ(card->getRenderTranslation(), glm::vec2(0.0f, 0.0f));
+
+    tree.tick(0.4f); // end: fully faded and slid out
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 0.0f);
+    EXPECT_EQ(card->getRenderTranslation(), glm::vec2(0.0f, -12.0f));
+    EXPECT_FALSE(card->wantsTick());
+}
+
+// A malformed curve is rejected once at resolve time, and the valid tracks of
+// the same tween keep running.
+TEST(GuiAnimationTest, MalformedCurveIsRejectedWithoutBreakingOtherTracks)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    auto       card = std::make_shared<UIBorder>("Card");
+    card->setColor({1.0f, 1.0f, 1.0f, 1.0f});
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {80.0f, 40.0f};
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), card, slot);
+
+    auto tween = animate(*card, 1.0f);
+    // Wrong domain for 'opacity' (declared float) - the whole track is dropped.
+    tween->curve(ya::ui::anim::opacity, {animKey(0.0f, glm::vec4(0.0f)), animKey(1.0f, glm::vec4(1.0f))});
+    // Decreasing key times are an authoring error, not a curve.
+    tween->curve(ya::ui::anim::scale, {animKey(0.5f, glm::vec2(2.0f)), animKey(0.2f, glm::vec2(3.0f))});
+    // ...while a well-formed track on the same tween still drives the widget.
+    tween->curve(ya::ui::anim::tint, {animKey(0.0f, glm::vec4(1.0f)), animKey(1.0f, glm::vec4(0.0f))});
+
+    tween->setLerpNow(0.5f);
+    EXPECT_FLOAT_EQ(card->getRenderOpacity(), 1.0f);                      // untouched
+    EXPECT_EQ(card->getRenderScale(), glm::vec2(1.0f, 1.0f));             // untouched
+    EXPECT_EQ(card->getRenderTint(), glm::vec4(0.5f, 0.5f, 0.5f, 0.5f));  // drove
+}
+
 // A zero-length clock means "no animation": it must report the endpoint it
 // was placed at, in both directions. (Regression: getLerp() used to return 1
 // unconditionally, so an instant control snapped to its final state.)

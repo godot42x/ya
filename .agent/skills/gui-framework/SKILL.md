@@ -179,6 +179,12 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
 - 两态/重定位：`playToward(Forward|Backward)` 从当前位置继续，`setLerpNow(v)` 直接落位
   并停表。「目标态变了就朝它走」的控件（开关、hover 反馈）用这两个，不要用
   `play()`/`playReverse()` 重启，否则中途反向会跳值。
+- 多关键帧（curve）：`tween->curve(ya::ui::anim::opacity, {ya::animKey(t, v, ease), …})`
+  是同一个 track 的分段形式——仍是「一个属性 / 一个时钟 / 一个 widget」，只是求值从两端点
+  变成 N 个键。键时间用**归一化时钟时间**（0..1），`setDuration` 整体改速；键拥有自己的时刻，
+  同一时刻的后键胜出（离散跳变）；首键之前与末键之后保持该键的值（不外推）；时刻必须非递减、
+  值域必须与属性声明一致，否则该 track 在 resolve 时被拒并只警告一次。
+  多对象 / 事件轨 / blend 仍属 Game UI clip player，不要塞进框架。
 - 默认带动画的控件：`UISwitch`（DSL `ya::ui::toggle(...)`）。它自己持有一个 tween 驱动
   自己声明的 `progress` 通道（`kAnimSwitchProgress`）：值立即翻转，knob 位移 + track 配色
   插值；静止时 `wantsTick()==false`，`setTransitionSeconds(0)` 可整体关掉动画。
@@ -186,8 +192,8 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
 - 零时长时钟语义：`duration<=0` 表示“无动画”，`getLerp()` 返回被放置的那个端点
   （play→1、playReverse→0、setLerp(v)→v）。不要写回“恒返回 1”，否则 instant 控件会被画成
   终态（已由 `ZeroLengthClockReportsTheEndpointItWasPlacedAt` 锁住）。
-- 验收：`GuiAnimationTest` 22 例（接缝/类型/tween 生命周期/overlay 映射/playToward/
-  setLerpNow/零时长/UISwitch 行为与 knob 几何）；Workbench `Animation/Tween` 页 +
+- 验收：`GuiAnimationTest` 25 例（接缝/类型/tween 生命周期/render transform 映射/playToward/
+  setLerpNow/零时长/curve 求值与拒绝/UISwitch 行为与 knob 几何）；Workbench `Animation/Tween` 页 +
   `Scenarios/animation_gallery.jsonl`（真实点击 + `assert_validation_clean`）。
 
 ## Dock 权责
