@@ -116,19 +116,6 @@ concept SlotBuilderAcceptedBy = UISlotBuilder<TSlotBuilder> && requires {
         std::remove_cvref_t<decltype(std::declval<const std::remove_reference_t<TSlotBuilder>&>().args())>,
         typename THost::SlotArgs>;
 
-/// Take a UIElementRef from either a builder (via release()) or an already-built
-/// shared_ptr, so `spec >> widget` accepts both forms.
-template<typename TChild>
-[[nodiscard]] inline UIElementRef takeElementRef(TChild&& child)
-{
-    if constexpr (requires { std::forward<TChild>(child).release(); }) {
-        return std::forward<TChild>(child).release();
-    }
-    else {
-        return std::forward<TChild>(child);
-    }
-}
-
 /// Convert a builder into the element the parent will mount WITHOUT emptying a
 /// builder the caller passed as an lvalue.
 ///
@@ -144,6 +131,20 @@ template<typename TBuilder>
 {
     std::decay_t<TBuilder> owned = std::forward<TBuilder>(builder);
     return owned.release();
+}
+
+/// Take a UIElementRef from either a builder or an already-built shared_ptr.
+/// Builders go through takeMountRef() above, so this shares the one ownership
+/// rule instead of defining a second, subtly different one.
+template<typename TChild>
+[[nodiscard]] inline UIElementRef takeElementRef(TChild&& child)
+{
+    if constexpr (requires { std::forward<TChild>(child).release(); }) {
+        return takeMountRef(std::forward<TChild>(child));
+    }
+    else {
+        return std::forward<TChild>(child);
+    }
 }
 
 template<typename TWidget>
