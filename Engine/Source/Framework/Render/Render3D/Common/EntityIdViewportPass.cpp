@@ -275,7 +275,7 @@ void EntityIdViewportPass::execute(ICommandBuffer*        cmdBuf,
     }
 }
 
-void EntityIdViewportPass::drawStaticBucket(ICommandBuffer* cmdBuf, const std::vector<RenderDrawItem>& items)
+void EntityIdViewportPass::drawStaticBucket(ICommandBuffer* cmdBuf, DrawCandidateView items)
 {
     for (const auto& item : items) {
         if (!item.mesh) {
@@ -290,7 +290,7 @@ void EntityIdViewportPass::drawStaticBucket(ICommandBuffer* cmdBuf, const std::v
     }
 }
 
-void EntityIdViewportPass::drawSkinnedBucket(ICommandBuffer* cmdBuf, const std::vector<RenderDrawItem>& items)
+void EntityIdViewportPass::drawSkinnedBucket(ICommandBuffer* cmdBuf, DrawCandidateView items)
 {
     for (const auto& item : items) {
         if (!item.mesh) {

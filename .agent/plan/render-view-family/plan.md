@@ -1,7 +1,7 @@
 # Render View Family 与 GUI/GameUI 渲染边界重构计划
 
 > 建立日期：2026-09-12
-> 状态：R2 进行中；R1 单 View 调度与同 Scene snapshot 共享已落地，下一 checkpoint 迁移 View-owned draw bucket 为 index/order ranges。
+> 状态：R2 进行中；R1 单 View 调度与同 Scene snapshot 共享已落地，View-owned draw bucket 已迁移为共享候选数据上的 index/order ranges，下一 checkpoint 处理 submission/View 生命周期隔离。
 
 ## 1. 主线选择
 
@@ -100,14 +100,14 @@ SceneFrameSnapshot 身份，而不是把 snapshot 按值复制进每个 RenderFr
 
 “共享 snapshot”与“View-owned draw order”必须作为一个原子迁移目标，不能
 先把 RenderFrameData::sceneSnapshot 改成 shared_ptr、再让旧的
-sortDrawItems() 继续修改 snapshot。落地时 RenderFrameData 持有
-shared_ptr<const SceneFrameSnapshot>，同时持有 View-owned 的 visibility /
-order / packet ranges；pipeline 消费者通过 View order 访问 snapshot 中的
-候选项。当前第一阶段允许使用 View-owned draw bucket 副本来保持现有
-消费者接口和渲染顺序，随后必须替换为 index/order ranges，消除
-RenderDrawItem 的重复拷贝。SceneFrameSnapshot 中的 sortKey 和可变 vector
-顺序必须删除、冻结或彻底改成候选数据语义。不得通过共享可变 vector、修改
-snapshot 内的 sortKey 或复用同一 View descriptor 来“节省拷贝”。
+sortDrawItems() 继续修改 snapshot。当前 RenderFrameData 持有
+shared_ptr<const SceneFrameSnapshot>，同时持有 View-owned 的 index/order
+ranges；pipeline 消费者通过 View order 访问 snapshot 中的候选项。
+DrawCandidateView 同时支持 contiguous 与 indexed 两种只读访问，indexed
+路径不物化 RenderDrawItem，也不提供伪装成连续内存的 data()。
+SceneFrameSnapshot 中的 sortKey 和可变 vector 顺序必须删除、冻结或彻底改成
+候选数据语义。不得通过共享可变 vector、修改 snapshot 内的 sortKey 或复用
+同一 View descriptor 来“节省拷贝”。
 
 同一逻辑帧的多个 surface/window 必须在同一个 SceneRenderScheduler 中提交
 并 seal，才能命中 SceneId + sceneRevision 去重。Scheduler 不能按每个 OS
@@ -134,7 +134,7 @@ frame-local content generation。
 
 本切片的真实迁移顺序固定为：
 
-1. 以一个原子迁移改造 RenderFrameData：引用共享 SceneFrameSnapshot，同时引入 View-owned draw buckets；不再按值复制或原地排序 Scene snapshot。下一小切片再把 draw buckets 替换为 index/order/packet ranges。
+1. 以一个原子迁移改造 RenderFrameData：引用共享 SceneFrameSnapshot，同时引入 View-owned draw buckets；不再按值复制或原地排序 Scene snapshot。该阶段已完成，View bucket 现在只保存 Scene 候选 vector 的借用指针和独立 order indices；后续只允许在此基础上继续拆 submission/View 生命周期。
 2. Forward 的 resource set 提供 beginSubmission / beginView 语义：layout 和 pipeline 资源持久化，upload allocation、descriptor binding、skinning buffer 和 View output 由 submission/View 持有。
 3. RenderRuntime 保存 submission lifetime 到 submit/fence 完成；不能让 transient arena、descriptor pool 或 graph-exported image 只活到 renderFrame() 返回。
 4. pipeline 的 recordView 只消费显式 View context，不再写 _lastTickCtx、_lastFrameInput 或单一 current binding。
@@ -193,7 +193,7 @@ R1 字段分类不能按现有结构名整体搬迁，必须按语义拆分：
 
 唯一目标：在 UI 之前由 SceneRenderScheduler 聚合并执行本帧 Scene viewport 离屏任务，RenderRuntime 只消费不可变 SceneRenderPlan/SceneViewportTask。
 
-将 RenderRuntime::FrameInput 扩展为 SceneRenderPlan/SceneViewportTask additive API；当前单 View 已由 GameRuntime 经 scheduler 生成 plan 并取 snapshot，下一步才把 plan 作为 Runtime 的正式输入。Scheduler 负责 Scene snapshot 去重和任务排序，Runtime 负责 frame resources、pipeline record、ViewCompose 和输出句柄；两者都不创建 OS window、不 acquire/present；Forward/Deferred 只接收对应 Scene snapshot 和 RenderViewInput；每个 View 建立独立 output/format/extent 句柄，不用全局 ViewportStateService 隐式表示所有 View；当前保持一条 command buffer/submit，只有 trace 证明同步或资源压力后才讨论拆分。
+将 RenderRuntime::FrameInput 扩展为 SceneRenderPlan/SceneViewportTask additive API；当前单 View 已由 GameRuntime 经 scheduler 生成 plan 并作为 Runtime 的正式输入。Scheduler 负责 Scene snapshot 去重和任务排序，Runtime 负责 frame resources、pipeline record、ViewCompose 和输出句柄；两者都不创建 OS window、不 acquire/present；Forward/Deferred 只接收对应 Scene snapshot 和 RenderViewInput；每个 View 建立独立 output/format/extent 句柄，不用全局 ViewportStateService 隐式表示所有 View；当前保持一条 command buffer/submit，只有 trace 证明同步或资源压力后才讨论拆分。
 
 验收：同一 Scene snapshot 渲染两个 Camera；两个 Scene 各自提交并渲染一个 viewport；一个 View 输出被两个 Surface display compose；一个 Surface display compose 多个 View；未提交 request 的 Scene 不产生 render task；关闭/最小化一个 Surface 不影响另一 Surface、其它 Scene request 和 View；GPU 资源在 submit 完成前存活。
 

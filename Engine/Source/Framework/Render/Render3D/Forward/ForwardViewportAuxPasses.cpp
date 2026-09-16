@@ -302,7 +302,7 @@ void ForwardViewportAuxPasses::drawSimple(const DrawContext& drawCtx)
     pc.view       = fd.view;
     pc.projection = fd.projection;
 
-    auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    auto drawBucket = [&](DrawCandidateView items, bool bSkinned)
     {
         for (const auto& item : items) {
             if (!item.mesh || !item.material) continue;
@@ -376,7 +376,7 @@ void ForwardViewportAuxPasses::drawDebug(const DrawContext& drawCtx)
     cmdBuf->bindPipeline(_debugPipeline.get());
     setViewportAndScissor(*cmdBuf, vpW, vpH, drawCtx.bReverseViewportY);
 
-    auto drawItems = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    auto drawItems = [&](DrawCandidateView items, bool bSkinned)
     {
         for (const auto& item : items) {
             if (!item.mesh) continue;
@@ -393,10 +393,10 @@ void ForwardViewportAuxPasses::drawDebug(const DrawContext& drawCtx)
     };
     for (uint32_t bucketIndex = 0; bucketIndex < drawCtx.debugDraw.count; ++bucketIndex) {
         const auto& bucket = drawCtx.debugDraw.buckets[bucketIndex];
-        if (!bucket.items) {
+        if (bucket.items.empty()) {
             continue;
         }
-        drawItems(*bucket.items, bucket.bSkinned);
+        drawItems(bucket.items, bucket.bSkinned);
     }
 
     cmdBuf->debugEndLabel();

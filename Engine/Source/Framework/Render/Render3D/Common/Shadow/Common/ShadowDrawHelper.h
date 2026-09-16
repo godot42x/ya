@@ -10,7 +10,7 @@ namespace ya
 struct ICommandBuffer;
 struct IGraphicsPipeline;
 struct IPipelineLayout;
-struct RenderShadingDrawBuckets;
+struct ViewShadingDrawBuckets;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ShadowDrawHelper
@@ -36,12 +36,12 @@ namespace ShadowDrawHelper
     /// Draw all static-mesh buckets with the given pipeline / frame DS.
     void drawStaticBuckets(ICommandBuffer* cmdBuf,
                            const PassResources& res,
-                           const RenderShadingDrawBuckets& buckets);
+                           const ViewShadingDrawBuckets& buckets);
 
     /// Draw all skinned-mesh buckets. Requires res.skinningDS != nullptr.
     void drawSkinnedBuckets(ICommandBuffer* cmdBuf,
                             const PassResources& res,
-                            const RenderShadingDrawBuckets& buckets);
+                            const ViewShadingDrawBuckets& buckets);
 }
 
 } // namespace ya

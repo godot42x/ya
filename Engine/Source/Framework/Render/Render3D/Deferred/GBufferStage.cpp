@@ -392,7 +392,7 @@ void GBufferStage::preparePBR(const RenderFrameData& frameData)
     bool             force    = _pbrMatPool.ensureCapacity(matCount);
     std::vector<int> prepared(matCount, 0);
 
-    auto prepareBucket = [&](const std::vector<RenderDrawItem>& items)
+    auto prepareBucket = [&](DrawCandidateView items)
     {
         for (const auto& item : items) {
             auto* mat = static_cast<PBRMaterial*>(item.material);
@@ -434,7 +434,7 @@ void GBufferStage::preparePhong(const RenderFrameData& frameData)
     bool             force    = _phongMatPool.ensureCapacity(matCount);
     std::vector<int> prepared(matCount, 0);
 
-    auto prepareBucket = [&](const std::vector<RenderDrawItem>& items)
+    auto prepareBucket = [&](DrawCandidateView items)
     {
         for (const auto& item : items) {
             auto* mat = static_cast<PhongMaterial*>(item.material);
@@ -506,7 +506,7 @@ void GBufferStage::prepareUnlit(const RenderFrameData& frameData)
         prepared[idx] = 1;
     };
 
-    auto flushBucket = [&](const std::vector<RenderDrawItem>& items)
+    auto flushBucket = [&](DrawCandidateView items)
     {
         for (const auto& item : items) {
             flushOne(static_cast<UnlitMaterial*>(item.material));
@@ -578,8 +578,8 @@ void GBufferStage::drawPBR(const RenderStageContext& ctx, const FrameInputs& inp
         }
     };
 
-    drawBucket(DrawCandidateView{std::span<const RenderDrawItem>(ctx.frameData->drawBuckets.staticMeshes.pbrDrawItems)}, false);
-    drawBucket(DrawCandidateView{std::span<const RenderDrawItem>(ctx.frameData->drawBuckets.skinnedMeshes.pbrDrawItems)}, true);
+    drawBucket(ctx.frameData->drawBuckets.staticMeshes.pbrDrawItems.view(), false);
+    drawBucket(ctx.frameData->drawBuckets.skinnedMeshes.pbrDrawItems.view(), true);
 }
 
 void GBufferStage::drawPhong(const RenderStageContext& ctx, const FrameInputs& inputs)
@@ -587,7 +587,7 @@ void GBufferStage::drawPhong(const RenderStageContext& ctx, const FrameInputs& i
     YA_PROFILE_FUNCTION();
     auto* cmdBuf     = ctx.cmdBuf;
     auto  ds0        = inputs.frameAndLightDescriptorSet;
-    auto  drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    auto  drawBucket = [&](DrawCandidateView items, bool bSkinned)
     {
         if (items.empty()) return;
 
@@ -626,7 +626,7 @@ void GBufferStage::drawUnlit(const RenderStageContext& ctx, const FrameInputs& i
     auto* cmdBuf = ctx.cmdBuf;
     auto  ds0    = inputs.frameAndLightDescriptorSet;
 
-    auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    auto drawBucket = [&](DrawCandidateView items, bool bSkinned)
     {
         if (items.empty()) return;
 
@@ -670,7 +670,7 @@ void GBufferStage::drawFallback(const RenderStageContext& ctx, const FrameInputs
     auto     ds0    = inputs.frameAndLightDescriptorSet;
     uint32_t fbIdx  = static_cast<uint32_t>(_fallbackMaterial->getIndex());
 
-    auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    auto drawBucket = [&](DrawCandidateView items, bool bSkinned)
     {
         if (items.empty()) return;
 

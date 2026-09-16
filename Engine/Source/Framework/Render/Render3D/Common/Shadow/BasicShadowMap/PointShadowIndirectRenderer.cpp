@@ -165,7 +165,7 @@ bool PointShadowIndirectRenderer::collectBatches(const BasicShadowFramePayload& 
     std::unordered_map<Mesh*, uint32_t> meshToBatch;
     pending.reserve(16);
 
-    auto pushItems = [&](const std::vector<RenderDrawItem>& items)
+    auto pushItems = [&](DrawCandidateView items)
     {
         for (const auto& item : items) {
             if (!item.mesh) continue;

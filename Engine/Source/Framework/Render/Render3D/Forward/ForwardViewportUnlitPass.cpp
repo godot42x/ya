@@ -197,7 +197,7 @@ void ForwardViewportUnlitPass::prepareUnlitMaterials(const RenderFrameData& fd)
     uint32_t          materialCount   = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();
     std::vector<bool> preparedMaterial(materialCount);
 
-    auto prepareBucket = [&](const std::vector<RenderDrawItem>& items)
+    auto prepareBucket = [&](DrawCandidateView items)
     {
         for (const auto& item : items) {
             if (!item.material) continue;
@@ -249,7 +249,7 @@ void ForwardViewportUnlitPass::draw(const DrawContext& drawCtx)
     cmdBuf->debugBeginLabel("ForwardUnlit");
     setViewportAndScissor(*cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height, drawCtx.bReverseViewportY);
 
-    auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    auto drawBucket = [&](DrawCandidateView items, bool bSkinned)
     {
         for (const auto& item : items) {
             if (!item.mesh || !item.material) continue;

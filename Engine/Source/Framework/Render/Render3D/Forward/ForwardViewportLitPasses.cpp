@@ -427,7 +427,7 @@ void ForwardViewportLitPasses::preparePBRMaterials(const RenderFrameData& fd)
     uint32_t         materialCount   = MaterialFactory::get()->getMaterialSize<PBRMaterial>();
     std::vector<int> preparedMaterial(materialCount, 0);
 
-    auto prepareBucket = [&](const std::vector<RenderDrawItem>& items)
+    auto prepareBucket = [&](DrawCandidateView items)
     {
         for (const auto& item : items) {
             if (!item.material) continue;
@@ -479,7 +479,7 @@ void ForwardViewportLitPasses::preparePhongMaterials(const RenderFrameData& fd)
     uint32_t         materialCount   = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
     std::vector<int> preparedMaterial(materialCount, 0);
 
-    auto prepareBucket = [&](const std::vector<RenderDrawItem>& items)
+    auto prepareBucket = [&](DrawCandidateView items)
     {
         for (const auto& item : items) {
             if (!item.material) continue;
@@ -534,7 +534,7 @@ void ForwardViewportLitPasses::drawPBR(const DrawContext& drawCtx)
     cmdBuf->debugBeginLabel("ForwardPBR");
     setViewportAndScissor(*cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height, drawCtx.bReverseViewportY);
 
-    auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    auto drawBucket = [&](DrawCandidateView items, bool bSkinned)
     {
         for (const auto& item : items) {
             if (!item.mesh || !item.material) continue;
@@ -599,7 +599,7 @@ void ForwardViewportLitPasses::drawPhong(const DrawContext& drawCtx)
     cmdBuf->debugBeginLabel("ForwardPhong");
     setViewportAndScissor(*cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height, drawCtx.bReverseViewportY);
 
-    auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    auto drawBucket = [&](DrawCandidateView items, bool bSkinned)
     {
         for (const auto& item : items) {
             if (!item.mesh || !item.material) continue;

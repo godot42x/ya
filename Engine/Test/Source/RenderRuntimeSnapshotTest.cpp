@@ -77,8 +77,11 @@ TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
     frame.view = glm::translate(glm::mat4(1.0f), glm::vec3(4.0f, 0.0f, 0.0f));
     auto sceneSnapshot = std::make_shared<SceneFrameSnapshot>();
     sceneSnapshot->skinningPalettes.resize(1);
+    sceneSnapshot->drawBuckets.staticMeshes.pbrDrawItems.resize(1);
     frame.sceneSnapshot = sceneSnapshot;
-    frame.drawBuckets.staticMeshes.pbrDrawItems.resize(1);
+    frame.drawBuckets.staticMeshes.pbrDrawItems.source =
+        &sceneSnapshot->drawBuckets.staticMeshes.pbrDrawItems;
+    frame.drawBuckets.staticMeshes.pbrDrawItems.order = {0};
 
     EXPECT_EQ(frame.sceneSnapshot.get(), sceneSnapshot.get());
     EXPECT_EQ(frame.drawBuckets.staticMeshes.pbrDrawItems.size(), 1u);
@@ -96,8 +99,20 @@ TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
     RenderFrameData viewB;
     viewA.sceneSnapshot = sharedSnapshot;
     viewB.sceneSnapshot = sharedSnapshot;
+    viewA.drawBuckets.staticMeshes.pbrDrawItems.source =
+        &sceneSnapshot->drawBuckets.staticMeshes.pbrDrawItems;
+    viewB.drawBuckets.staticMeshes.pbrDrawItems.source =
+        &sceneSnapshot->drawBuckets.staticMeshes.pbrDrawItems;
+    viewA.drawBuckets.staticMeshes.pbrDrawItems.order = {2, 0, 1};
+    viewB.drawBuckets.staticMeshes.pbrDrawItems.order = {1, 2, 0};
     EXPECT_EQ(viewA.sceneSnapshot.get(), viewB.sceneSnapshot.get());
     EXPECT_EQ(viewA.sceneSnapshot.use_count(), 3);
+    EXPECT_EQ(viewA.drawBuckets.staticMeshes.pbrDrawItems.source,
+              viewB.drawBuckets.staticMeshes.pbrDrawItems.source);
+    EXPECT_NE(viewA.drawBuckets.staticMeshes.pbrDrawItems.order.data(),
+              viewB.drawBuckets.staticMeshes.pbrDrawItems.order.data());
+    EXPECT_EQ(viewA.drawBuckets.staticMeshes.pbrDrawItems.order[0], 2u);
+    EXPECT_EQ(viewB.drawBuckets.staticMeshes.pbrDrawItems.order[0], 1u);
 }
 
 TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)

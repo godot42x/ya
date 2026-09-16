@@ -20,7 +20,7 @@ namespace ya
 struct IRender;
 struct ICommandBuffer;
 struct RenderFrameData;
-struct RenderShadingDrawBuckets;
+struct ViewShadingDrawBuckets;
 struct RenderDrawItem;
 
 // ═══════════════════════════════════════════════════════════════════════════

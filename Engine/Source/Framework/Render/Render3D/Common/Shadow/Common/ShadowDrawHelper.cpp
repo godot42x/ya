@@ -13,7 +13,7 @@ namespace ya::ShadowDrawHelper
 
 void drawStaticBuckets(ICommandBuffer* cmdBuf,
                        const PassResources& res,
-                       const RenderShadingDrawBuckets& buckets)
+                       const ViewShadingDrawBuckets& buckets)
 {
     YA_PERF_SCOPE(perf::sample::shadowPointDirectDrawStatic(), perf::metric::cpuTimeMs(), perf::domain::render());
 
@@ -30,16 +30,16 @@ void drawStaticBuckets(ICommandBuffer* cmdBuf,
         }
     };
 
-    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.pbrDrawItems)});
-    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.phongDrawItems)});
-    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.unlitDrawItems)});
-    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.simpleDrawItems)});
-    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.fallbackDrawItems)});
+    drawItems(buckets.pbrDrawItems.view());
+    drawItems(buckets.phongDrawItems.view());
+    drawItems(buckets.unlitDrawItems.view());
+    drawItems(buckets.simpleDrawItems.view());
+    drawItems(buckets.fallbackDrawItems.view());
 }
 
 void drawSkinnedBuckets(ICommandBuffer* cmdBuf,
                         const PassResources& res,
-                        const RenderShadingDrawBuckets& buckets)
+                        const ViewShadingDrawBuckets& buckets)
 {
     auto drawItems = [&](DrawCandidateView items)
     {
@@ -54,11 +54,11 @@ void drawSkinnedBuckets(ICommandBuffer* cmdBuf,
         }
     };
 
-    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.pbrDrawItems)});
-    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.phongDrawItems)});
-    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.unlitDrawItems)});
-    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.simpleDrawItems)});
-    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.fallbackDrawItems)});
+    drawItems(buckets.pbrDrawItems.view());
+    drawItems(buckets.phongDrawItems.view());
+    drawItems(buckets.unlitDrawItems.view());
+    drawItems(buckets.simpleDrawItems.view());
+    drawItems(buckets.fallbackDrawItems.view());
 }
 
 } // namespace ya::ShadowDrawHelper

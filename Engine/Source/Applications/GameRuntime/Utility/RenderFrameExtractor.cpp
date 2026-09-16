@@ -137,7 +137,22 @@ void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
     }
 
     outFrame.sceneSnapshot = std::move(sceneSnapshot);
-    outFrame.drawBuckets   = outFrame.sceneSnapshot->drawBuckets;
+    const auto bindBucket = [](const std::vector<RenderDrawItem>& source, ViewDrawBucket& target)
+    {
+        target.source = &source;
+        target.order.resize(source.size());
+        std::iota(target.order.begin(), target.order.end(), 0u);
+    };
+    const auto bindBuckets = [&](const RenderShadingDrawBuckets& source, ViewShadingDrawBuckets& target)
+    {
+        bindBucket(source.pbrDrawItems, target.pbrDrawItems);
+        bindBucket(source.phongDrawItems, target.phongDrawItems);
+        bindBucket(source.unlitDrawItems, target.unlitDrawItems);
+        bindBucket(source.simpleDrawItems, target.simpleDrawItems);
+        bindBucket(source.fallbackDrawItems, target.fallbackDrawItems);
+    };
+    bindBuckets(outFrame.sceneSnapshot->drawBuckets.staticMeshes, outFrame.drawBuckets.staticMeshes);
+    bindBuckets(outFrame.sceneSnapshot->drawBuckets.skinnedMeshes, outFrame.drawBuckets.skinnedMeshes);
     outFrame.numPointLights = outFrame.sceneSnapshot->pointLightSourceCount;
     for (uint32_t index = 0; index < outFrame.sceneSnapshot->pointLightSourceCount; ++index) {
         const auto& source = outFrame.sceneSnapshot->pointLightSources[index];
@@ -427,45 +442,42 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
 
 void RenderFrameExtractor::sortDrawItems(const glm::vec3& cameraPos, RenderFrameData& out)
 {
-    auto computeSortKey = [&cameraPos](RenderDrawItem& item)
+    const auto distanceToCamera = [&cameraPos](const RenderDrawItem& item)
     {
-        glm::vec3 pos = glm::vec3(item.worldMatrix[3]);
-        item.sortKey  = glm::distance2(cameraPos, pos);
+        return glm::distance2(cameraPos, glm::vec3(item.worldMatrix[3]));
     };
 
-    auto sortOpaqueBucket = [](std::vector<RenderDrawItem>& items)
+    const auto sortOpaqueBucket = [&](ViewDrawBucket& bucket)
     {
-        std::sort(items.begin(), items.end(), [](const RenderDrawItem& a, const RenderDrawItem& b)
+        std::sort(bucket.order.begin(), bucket.order.end(), [&](uint32_t lhs, uint32_t rhs)
                   {
+                      const auto& a = (*bucket.source)[lhs];
+                      const auto& b = (*bucket.source)[rhs];
                       if (a.materialIndex != b.materialIndex) {
                           return a.materialIndex < b.materialIndex;
                       }
                       if (a.mesh != b.mesh) {
                           return a.mesh < b.mesh;
                       }
-                      return a.sortKey < b.sortKey;
+                      return distanceToCamera(a) < distanceToCamera(b);
                   });
     };
 
-    auto sortFallbackBucket = [](std::vector<RenderDrawItem>& items)
+    const auto sortFallbackBucket = [&](ViewDrawBucket& bucket)
     {
-        std::sort(items.begin(), items.end(), [](const RenderDrawItem& a, const RenderDrawItem& b)
+        std::sort(bucket.order.begin(), bucket.order.end(), [&](uint32_t lhs, uint32_t rhs)
                   {
+                      const auto& a = (*bucket.source)[lhs];
+                      const auto& b = (*bucket.source)[rhs];
                       if (a.mesh != b.mesh) {
                           return a.mesh < b.mesh;
                       }
-                      return a.sortKey < b.sortKey;
+                      return distanceToCamera(a) < distanceToCamera(b);
                   });
     };
 
-    auto sortBuckets = [&](RenderShadingDrawBuckets& buckets)
+    auto sortBuckets = [&](ViewShadingDrawBuckets& buckets)
     {
-        for (auto& item : buckets.pbrDrawItems) computeSortKey(item);
-        for (auto& item : buckets.phongDrawItems) computeSortKey(item);
-        for (auto& item : buckets.unlitDrawItems) computeSortKey(item);
-        for (auto& item : buckets.simpleDrawItems) computeSortKey(item);
-        for (auto& item : buckets.fallbackDrawItems) computeSortKey(item);
-
         sortOpaqueBucket(buckets.pbrDrawItems);
         sortOpaqueBucket(buckets.phongDrawItems);
         sortOpaqueBucket(buckets.unlitDrawItems);

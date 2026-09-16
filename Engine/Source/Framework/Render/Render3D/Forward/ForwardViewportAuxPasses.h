@@ -5,6 +5,7 @@
 #include "RHI/Core/Pipeline.h"
 #include "Render3D/Material/SimpleMaterial.h"
 #include "Render3D/Common/IRenderRuntimeServices.h"
+#include "Render3D/RenderFrameData.h"
 #include "GLSL.Skybox.glsl.h"
 
 #include <array>
@@ -16,6 +17,7 @@ namespace ya
 
 struct RenderStageContext;
 struct RenderDrawItem;
+class DrawCandidateView;
 class ForwardFrameResourceSet;
 struct Scene;
 struct Mesh;
@@ -95,8 +97,8 @@ class YA_RENDER_3D_API ForwardViewportAuxPasses
         {
             struct Bucket
             {
-                const std::vector<RenderDrawItem>* items = nullptr;
-                bool                               bSkinned = false;
+                DrawCandidateView items{};
+                bool              bSkinned = false;
             };
 
             std::array<Bucket, 10> buckets{};

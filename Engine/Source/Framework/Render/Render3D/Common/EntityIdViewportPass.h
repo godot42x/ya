@@ -15,6 +15,7 @@ namespace ya
 struct IRender;
 struct RenderDrawItem;
 struct RenderFrameData;
+class DrawCandidateView;
 
 /// Camera-facing billboard quad written into the entity-id target, mirroring
 /// the world-size math of the billboard overlay pass so the id under the
@@ -48,8 +49,8 @@ struct EntityIdViewportPass
                  const std::vector<EntityIdBillboard>& billboards = {});
 
   private:
-    void drawStaticBucket(ICommandBuffer* cmdBuf, const std::vector<RenderDrawItem>& items);
-    void drawSkinnedBucket(ICommandBuffer* cmdBuf, const std::vector<RenderDrawItem>& items);
+    void drawStaticBucket(ICommandBuffer* cmdBuf, DrawCandidateView items);
+    void drawSkinnedBucket(ICommandBuffer* cmdBuf, DrawCandidateView items);
     void drawBillboards(ICommandBuffer* cmdBuf, const std::vector<EntityIdBillboard>& billboards);
 
     IRender* _render = nullptr;

@@ -33,6 +33,31 @@ TEST(DrawCandidateViewTest, EmptyViewHasNoCandidates)
     EXPECT_EQ(view.data(), nullptr);
 }
 
+TEST(DrawCandidateViewTest, IndexedViewReordersWithoutCopyingCandidates)
+{
+    std::vector<RenderDrawItem> candidates(3);
+    candidates[0].entityId = 10;
+    candidates[1].entityId = 20;
+    candidates[2].entityId = 30;
+    const std::vector<uint32_t> order{2, 0, 1};
+
+    const DrawCandidateView view{std::span<const RenderDrawItem>(candidates),
+                                 std::span<const uint32_t>(order)};
+
+    EXPECT_EQ(view.size(), 3u);
+    EXPECT_EQ(view[0].entityId, 30u);
+    EXPECT_EQ(view[1].entityId, 10u);
+    EXPECT_EQ(view[2].entityId, 20u);
+    EXPECT_EQ(view.data(), nullptr);
+
+    uint32_t index = 0;
+    for (const auto& item : view) {
+        EXPECT_EQ(item.entityId, candidates[order[index]].entityId);
+        ++index;
+    }
+    EXPECT_EQ(index, order.size());
+}
+
 TEST(DrawCandidateViewTest, DrawPacketCarriesGroupingContractWithoutOwningCandidates)
 {
     std::vector<RenderDrawItem> candidates(2);

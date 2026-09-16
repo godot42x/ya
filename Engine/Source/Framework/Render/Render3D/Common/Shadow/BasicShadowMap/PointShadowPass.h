@@ -23,7 +23,7 @@ struct IRender;
 struct ICommandBuffer;
 struct IImage;
 struct RenderFrameData;
-struct RenderShadingDrawBuckets;
+struct ViewShadingDrawBuckets;
 struct RenderDrawItem;
 struct Mesh;
 

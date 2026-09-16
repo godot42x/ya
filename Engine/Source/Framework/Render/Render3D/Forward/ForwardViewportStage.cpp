@@ -259,14 +259,14 @@ ForwardViewportStage::PassContext::DebugDrawInput ForwardViewportStage::buildDeb
         return input;
     }
 
-    const auto appendBucket = [&input](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    const auto appendBucket = [&input](DrawCandidateView items, bool bSkinned)
     {
         if (items.empty()) {
             return;
         }
         YA_CORE_ASSERT(input.count < input.buckets.size(), "Forward debug bucket inventory overflow");
         input.buckets[input.count++] = {
-            .items    = &items,
+            .items    = items,
             .bSkinned = bSkinned,
         };
         input.bHasDraws = true;

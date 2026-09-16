@@ -31,7 +31,7 @@ namespace
 
 constexpr uint32_t BILLBOARD_TEXTURE_SET_SIZE = 16;
 
-bool hasDebugSkinningDrawItem(const std::vector<RenderDrawItem>& items)
+bool hasDebugSkinningDrawItem(DrawCandidateView items)
 {
     return std::ranges::any_of(items, [](const RenderDrawItem& item)
                                { return item.mesh && item.mesh->hasSkinningVertexBuffer(); });
@@ -39,7 +39,7 @@ bool hasDebugSkinningDrawItem(const std::vector<RenderDrawItem>& items)
 
 void drawDebugSkinningItems(DebugSkinning&                     debugSkinning,
                             ICommandBuffer*                    cmdBuf,
-                            const std::vector<RenderDrawItem>& items,
+                            DrawCandidateView items,
                             uint32_t                           vpW,
                             uint32_t                           vpH,
                             const RenderFrameData&             fd)
@@ -546,7 +546,7 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx, const Fram
     _overlayPC.projection = fd.projection;
 
     // Draw simple material entities from snapshot
-    auto drawSimpleBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    auto drawSimpleBucket = [&](DrawCandidateView items, bool bSkinned)
     {
         for (const auto& item : items) {
             if (!item.mesh || !item.material) continue;

@@ -53,6 +53,7 @@ if get_config("ya_profile") ~= "gui" then
                   "./Source/DeferredRenderPipelineTest.cpp",
                   "./Source/DirectionalShadowMathTest.cpp",
                   "./Source/RenderGraphCoreTest.cpp",
+                  "./Source/DrawCandidateViewTest.cpp",
                   "./Source/RenderRuntimeSnapshotTest.cpp")
         add_deps("ya-render-3d", "ya-render-graph", "ya-foundation-core")
         add_packages("gtest")

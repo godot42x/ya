@@ -24,3 +24,8 @@
 - [ ] 更新 progress.md、feature_matrix.json、todo.md。
 - [ ] 明确记录保留项、未完成项和偏离项。
 - [ ] 代码、测试、plan/progress 使用同一 checkpoint 提交。
+
+## 最近一次 checkpoint
+
+- 2026-09-16：View-owned draw bucket 已完成 source pointer + order indices 迁移；14 个 RenderRuntime/DrawCandidateView 测试通过，ya-game-runtime 构建通过。
+- 保留未完成项：submission/View 生命周期拆分、多 View command recording、双 View/双 Surface GPU 验收。

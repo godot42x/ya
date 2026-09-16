@@ -8,6 +8,8 @@
 #include <glm/glm.hpp>
 #include <array>
 #include <memory>
+#include <iterator>
+#include <numeric>
 #include <span>
 #include <vector>
 
@@ -46,7 +48,50 @@ class DrawCandidateView
 {
   public:
     using value_type     = RenderDrawItem;
-    using const_iterator = std::span<const value_type>::iterator;
+    class const_iterator
+    {
+      public:
+        using difference_type   = std::ptrdiff_t;
+        using value_type        = const RenderDrawItem;
+        using pointer           = const RenderDrawItem*;
+        using reference         = const RenderDrawItem&;
+        using iterator_concept  = std::forward_iterator_tag;
+        using iterator_category = std::forward_iterator_tag;
+
+        const_iterator() = default;
+        const_iterator(std::span<const RenderDrawItem> candidates,
+                       std::span<const uint32_t>        order,
+                       size_t                           position,
+                       bool                             indexed)
+            : _candidates(candidates), _order(order), _position(position), _indexed(indexed)
+        {}
+
+        reference operator*() const { return _candidates[_indexed ? _order[_position] : _position]; }
+        pointer   operator->() const { return &operator*(); }
+        const_iterator& operator++()
+        {
+            ++_position;
+            return *this;
+        }
+        const_iterator operator++(int)
+        {
+            auto copy = *this;
+            ++(*this);
+            return copy;
+        }
+        friend bool operator==(const const_iterator& lhs, const const_iterator& rhs)
+        {
+            return lhs._position == rhs._position && lhs._candidates.data() == rhs._candidates.data() &&
+                   lhs._order.data() == rhs._order.data() && lhs._indexed == rhs._indexed;
+        }
+        friend bool operator!=(const const_iterator& lhs, const const_iterator& rhs) { return !(lhs == rhs); }
+
+      private:
+        std::span<const RenderDrawItem> _candidates{};
+        std::span<const uint32_t>       _order{};
+        size_t                          _position = 0;
+        bool                            _indexed  = false;
+    };
 
     DrawCandidateView() = default;
 
@@ -54,20 +99,34 @@ class DrawCandidateView
         : _candidates(candidates)
     {}
 
-    [[nodiscard]] const value_type* data() const { return _candidates.data(); }
-    [[nodiscard]] size_t            size() const { return _candidates.size(); }
-    [[nodiscard]] bool              empty() const { return _candidates.empty(); }
+    DrawCandidateView(std::span<const value_type> candidates, std::span<const uint32_t> order)
+        : _candidates(candidates), _order(order), _indexed(true)
+    {}
+
+    [[nodiscard]] size_t size() const { return _indexed ? _order.size() : _candidates.size(); }
+    [[nodiscard]] bool   empty() const { return size() == 0; }
+    [[nodiscard]] const value_type* data() const { return _indexed ? nullptr : _candidates.data(); }
 
     [[nodiscard]] const value_type& operator[](size_t index) const
     {
-        return _candidates[index];
+        return _candidates[_indexed ? _order[index] : index];
     }
 
-    [[nodiscard]] const_iterator begin() const { return _candidates.begin(); }
-    [[nodiscard]] const_iterator end() const { return _candidates.end(); }
+    [[nodiscard]] const_iterator begin() const { return const_iterator{_candidates, _order, 0, _indexed}; }
+    [[nodiscard]] const_iterator end() const { return const_iterator{_candidates, _order, size(), _indexed}; }
+
+    [[nodiscard]] DrawCandidateView subview(size_t offset, size_t count) const
+    {
+        if (!_indexed) {
+            return DrawCandidateView{_candidates.subspan(offset, count)};
+        }
+        return DrawCandidateView{_candidates, _order.subspan(offset, count)};
+    }
 
   private:
     std::span<const value_type> _candidates{};
+    std::span<const uint32_t>   _order{};
+    bool                        _indexed = false;
 };
 
 /// Backend-neutral draw grouping metadata.
@@ -119,8 +178,7 @@ struct DrawPacket
             ++groupEnd;
         }
 
-        const auto group = DrawCandidateView{
-            std::span<const RenderDrawItem>(candidates.data() + groupBegin, groupEnd - groupBegin)};
+        const auto group = candidates.subview(groupBegin, groupEnd - groupBegin);
         packets.push_back(DrawPacket{
             .candidates    = group,
             .mesh          = first.mesh,
@@ -166,6 +224,77 @@ struct RenderMeshClassDrawBuckets
 {
     RenderShadingDrawBuckets staticMeshes;
     RenderShadingDrawBuckets skinnedMeshes;
+
+    void clear()
+    {
+        staticMeshes.clear();
+        skinnedMeshes.clear();
+    }
+
+    [[nodiscard]] size_t totalDrawCount() const
+    {
+        return staticMeshes.totalDrawCount() + skinnedMeshes.totalDrawCount();
+    }
+};
+
+/// View-owned ordering over immutable scene candidates. The source vector is
+/// borrowed from SceneFrameSnapshot; only the camera-dependent order is owned
+/// by the view.
+struct ViewDrawBucket
+{
+    const std::vector<RenderDrawItem>* source = nullptr;
+    std::vector<uint32_t>              order;
+
+    void clear()
+    {
+        source = nullptr;
+        order.clear();
+    }
+
+    [[nodiscard]] DrawCandidateView view() const
+    {
+        if (!source) {
+            return {};
+        }
+        return DrawCandidateView{std::span<const RenderDrawItem>(*source), std::span<const uint32_t>(order)};
+    }
+
+    [[nodiscard]] size_t size() const { return source ? order.size() : 0; }
+    [[nodiscard]] bool   empty() const { return size() == 0; }
+    [[nodiscard]] const RenderDrawItem& operator[](size_t index) const { return view()[index]; }
+    [[nodiscard]] auto begin() const { return view().begin(); }
+    [[nodiscard]] auto end() const { return view().end(); }
+    [[nodiscard]] operator DrawCandidateView() const { return view(); }
+};
+
+struct ViewShadingDrawBuckets
+{
+    ViewDrawBucket pbrDrawItems;
+    ViewDrawBucket phongDrawItems;
+    ViewDrawBucket unlitDrawItems;
+    ViewDrawBucket simpleDrawItems;
+    ViewDrawBucket fallbackDrawItems;
+
+    void clear()
+    {
+        pbrDrawItems.clear();
+        phongDrawItems.clear();
+        unlitDrawItems.clear();
+        simpleDrawItems.clear();
+        fallbackDrawItems.clear();
+    }
+
+    [[nodiscard]] size_t totalDrawCount() const
+    {
+        return pbrDrawItems.size() + phongDrawItems.size() + unlitDrawItems.size() +
+               simpleDrawItems.size() + fallbackDrawItems.size();
+    }
+};
+
+struct ViewMeshClassDrawBuckets
+{
+    ViewShadingDrawBuckets staticMeshes;
+    ViewShadingDrawBuckets skinnedMeshes;
 
     void clear()
     {
@@ -239,7 +368,7 @@ struct SceneFrameSnapshot
 struct RenderFrameData
 {
     std::shared_ptr<const SceneFrameSnapshot>                   sceneSnapshot;
-    RenderMeshClassDrawBuckets                                  drawBuckets;
+    ViewMeshClassDrawBuckets                                    drawBuckets;
     FrameContext::DirectionalLightData                          directionalLight;
     uint32_t                                                   numPointLights = 0;
     std::array<FrameContext::PointLightData, MAX_POINT_LIGHTS> pointLights;
