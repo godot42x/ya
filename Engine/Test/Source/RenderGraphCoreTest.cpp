@@ -6,6 +6,7 @@
 #include "RHI/Core/FrameUploadArena.h"
 #include "RHI/Core/ResourceStateTracker.h"
 #include "Core/Common/DeferredDeletionQueue.h"
+#include "Render3D/Common/ViewPersistentResourceKey.h"
 
 #include <gtest/gtest.h>
 
@@ -2043,6 +2044,41 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesStableResourcesAcrossSyncs)
     EXPECT_EQ(factory.createdImages, 2u);
     EXPECT_EQ(factory.createdViews, 2u);
     EXPECT_EQ(factory.createdBuffers, 1u);
+}
+
+TEST(RenderGraphCoreTest, ViewKeyedPersistentTexturesStayIndependent)
+{
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+
+    const auto keyA = makeViewPersistentTextureKey("ForwardViewport.Color", 11);
+    const auto keyB = makeViewPersistentTextureKey("ForwardViewport.Color", 12);
+    ASSERT_NE(keyA, keyB);
+
+    RenderGraph graph;
+    const auto desc = RGTextureDesc{
+        .label  = "ForwardViewport.Color",
+        .format = EFormat::R8G8B8A8_UNORM,
+        .extent = Extent3D{64, 32, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    };
+    const auto handleA = graph.createPersistentTexture(desc, keyA);
+    const auto handleB = graph.createPersistentTexture(desc, keyB);
+
+    registry.sync(graph);
+    const auto* textureA = registry.resolveTexture(handleA);
+    const auto* textureB = registry.resolveTexture(handleB);
+    ASSERT_NE(textureA, nullptr);
+    ASSERT_NE(textureB, nullptr);
+    EXPECT_NE(textureA, textureB);
+    EXPECT_EQ(factory.createdImages, 2u);
+    EXPECT_EQ(factory.createdViews, 2u);
+
+    RenderGraph graphReuse;
+    const auto handleAReuse = graphReuse.createPersistentTexture(desc, keyA);
+    registry.sync(graphReuse);
+    EXPECT_EQ(registry.resolveTexture(handleAReuse), textureA);
+    EXPECT_EQ(factory.createdImages, 2u);
 }
 
 TEST(RenderGraphCoreTest, ResourceRegistryKeepsPersistentResourcesAcrossTemporaryOmission)

@@ -224,6 +224,7 @@ TEST(DeferredPassParamsTest, SSAOAndLightDefaultsAreEmptyAndHandlesRemainFrameLo
     EXPECT_EQ(ssao.frameRange.offset, 0u);
     EXPECT_EQ(ssao.frameRange.size, 0u);
     EXPECT_FALSE(ssao.frameDescriptorSet);
+    EXPECT_EQ(ssao.viewId, 0u);
 
     ssao.frame  = RGBufferHandle{.index = 1, .generation = 2};
     ssao.albedo = RGTextureHandle{.index = 3, .generation = 4};

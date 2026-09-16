@@ -6,6 +6,7 @@
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Common/Shadow/ShadowStage.h"
+#include "Render3D/Common/ViewPersistentResourceKey.h"
 
 #include <string>
 
@@ -109,24 +110,31 @@ void createAttachmentTextures(DeferredFrameGraphPassContext& context)
     };
 
     for (uint32_t attachmentIndex = 0; attachmentIndex < graphResources.textures.gBufferColors.size(); ++attachmentIndex) {
-        graphResources.textures.gBufferColors[attachmentIndex] = context.graph.createPersistentTexture(
+        const auto base = std::format("DeferredGBuffer.Color{}", attachmentIndex);
+        graphResources.textures.gBufferColors[attachmentIndex] = createViewPersistentTexture(
+            context.graph,
             makeAttachmentDesc(
                 gBufferSpec,
                 gBufferSpec.attachments.colorAttach[attachmentIndex],
-                std::format("DeferredGBuffer.Color{}", attachmentIndex)),
-            RGPersistentTextureKey{.value = std::format("DeferredGBuffer.Color{}", attachmentIndex)});
+                base),
+            base,
+            context.viewId);
     }
     YA_CORE_ASSERT(gBufferSpec.attachments.depthAttach.has_value(),
                    "Deferred GBuffer graph requires a depth attachment spec");
-    graphResources.textures.gBufferDepth = context.graph.createPersistentTexture(
+    graphResources.textures.gBufferDepth = createViewPersistentTexture(
+        context.graph,
         makeAttachmentDesc(gBufferSpec, *gBufferSpec.attachments.depthAttach, "DeferredGBuffer.Depth"),
-        RGPersistentTextureKey{.value = "DeferredGBuffer.Depth"});
+        "DeferredGBuffer.Depth",
+        context.viewId);
 
     YA_CORE_ASSERT(!viewportSpec.attachments.colorAttach.empty(),
                    "Deferred viewport graph requires a color attachment spec");
-    graphResources.textures.viewportColor = context.graph.createPersistentTexture(
+    graphResources.textures.viewportColor = createViewPersistentTexture(
+        context.graph,
         makeAttachmentDesc(viewportSpec, viewportSpec.attachments.colorAttach.front(), "DeferredViewport.Color"),
-        RGPersistentTextureKey{.value = "DeferredViewport.Color"});
+        "DeferredViewport.Color",
+        context.viewId);
 
     AttachmentDescription entityIdDesc{};
     entityIdDesc.format      = EFormat::R32_UINT;
@@ -135,9 +143,11 @@ void createAttachmentTextures(DeferredFrameGraphPassContext& context)
     entityIdDesc.storeOp     = EAttachmentStoreOp::Store;
     entityIdDesc.usage       = EImageUsage::ColorAttachment | EImageUsage::TransferSrc;
     entityIdDesc.finalLayout = EImageLayout::ColorAttachmentOptimal;
-    graphResources.textures.entityId = context.graph.createPersistentTexture(
+    graphResources.textures.entityId = createViewPersistentTexture(
+        context.graph,
         makeAttachmentDesc(viewportSpec, entityIdDesc, "DeferredViewport.EntityId"),
-        RGPersistentTextureKey{.value = "DeferredViewport.EntityId"});
+        "DeferredViewport.EntityId",
+        context.viewId);
 }
 
 void appendGBuffer(DeferredFrameGraphPassContext& context)
@@ -234,6 +244,7 @@ void appendSSAO(DeferredFrameGraphPassContext& context)
             .normal             = context.graphResources.textures.gBufferColors[1],
             .depth              = context.graphResources.textures.gBufferDepth,
             .frameDescriptorSet = frameBinding.ssaoFrameDescriptorSet,
+            .viewId             = context.viewId,
         });
 }
 

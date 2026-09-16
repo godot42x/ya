@@ -4,6 +4,7 @@
 #include "Render3D/Common/EntityIdViewportPass.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/ViewPersistentResourceKey.h"
 
 #include <string>
 #include <string_view>
@@ -364,30 +365,26 @@ void appendOverlayPass(RenderGraph& graph,
 
 ViewportGraphResources createViewportResources(RenderGraph&                   graph,
                                                const RenderTargetCreateInfo& viewportRTSpec,
-                                               std::optional<RGTextureHandle> shadowDepth)
+                                               std::optional<RGTextureHandle> shadowDepth,
+                                               uint64_t                       viewId)
 {
     const auto colorAttachment = viewportRTSpec.attachments.colorAttach[0];
     const auto depthAttachment = *viewportRTSpec.attachments.depthAttach;
     const uint32_t layerCount = viewportRTSpec.layerCount;
-    const auto color = graph.createPersistentTexture(
-        makeViewportTextureDesc(colorAttachment, viewportRTSpec.extent, layerCount, "ForwardViewport.Color"),
-        RGPersistentTextureKey{.value = "ForwardViewport.Color"});
+    const auto createKeyed = [&](const AttachmentDescription& attachment, std::string_view base) {
+        return createViewPersistentTexture(
+            graph,
+            makeViewportTextureDesc(attachment, viewportRTSpec.extent, layerCount, std::string(base)),
+            base,
+            viewId);
+    };
+    const auto color = createKeyed(colorAttachment, "ForwardViewport.Color");
     const RGTextureHandle resolve = viewportRTSpec.attachments.resolveAttach.has_value()
-        ? graph.createPersistentTexture(
-              makeViewportTextureDesc(
-                  *viewportRTSpec.attachments.resolveAttach,
-                  viewportRTSpec.extent,
-                  layerCount,
-                  "ForwardViewport.Resolve"),
-              RGPersistentTextureKey{.value = "ForwardViewport.Resolve"})
+        ? createKeyed(*viewportRTSpec.attachments.resolveAttach, "ForwardViewport.Resolve")
         : RGTextureHandle{};
-    const auto depth = graph.createPersistentTexture(
-        makeViewportTextureDesc(depthAttachment, viewportRTSpec.extent, layerCount, "ForwardViewport.Depth"),
-        RGPersistentTextureKey{.value = "ForwardViewport.Depth"});
+    const auto depth = createKeyed(depthAttachment, "ForwardViewport.Depth");
     const auto entityIdAttachment = makeEntityIdAttachmentDesc();
-    const auto entityId = graph.createPersistentTexture(
-        makeViewportTextureDesc(entityIdAttachment, viewportRTSpec.extent, layerCount, "ForwardViewport.EntityId"),
-        RGPersistentTextureKey{.value = "ForwardViewport.EntityId"});
+    const auto entityId = createKeyed(entityIdAttachment, "ForwardViewport.EntityId");
 
     return ViewportGraphResources{
         .color            = color,

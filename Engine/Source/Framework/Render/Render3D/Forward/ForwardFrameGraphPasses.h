@@ -5,6 +5,7 @@
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
 #include "Render3D/Forward/ForwardViewportStage.h"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -46,6 +47,7 @@ struct BuildInputs
     bool                                             bEnableShadow       = false;
     bool                                             bPostprocessOutputIsSRGB = false;
     std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
+    uint64_t                                         viewId              = 0;
 };
 
 struct Dependencies
@@ -58,7 +60,8 @@ struct Dependencies
 [[nodiscard]] ViewportGraphResources createViewportResources(
     RenderGraph& graph,
     const RenderTargetCreateInfo& viewportRTSpec,
-    std::optional<RGTextureHandle> shadowDepth);
+    std::optional<RGTextureHandle> shadowDepth,
+    uint64_t viewId);
 
 void appendViewportPasses(RenderGraph& graph,
                           const Dependencies& deps,

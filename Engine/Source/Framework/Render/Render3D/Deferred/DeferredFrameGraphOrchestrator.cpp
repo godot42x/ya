@@ -49,6 +49,7 @@ void DeferredFrameGraphOrchestrator::build(
         .bReverseViewportY        = inputs.bReverseViewportY,
         .bPostprocessOutputIsSRGB = inputs.bPostprocessOutputIsSRGB,
         .viewportOverlaySnapshot  = inputs.viewportOverlaySnapshot,
+        .viewId                   = inputs.viewId,
         .shadowStage              = deps.shadowStage,
         .gBufferStage             = *deps.gBufferStage,
         .lightStage               = *deps.lightStage,

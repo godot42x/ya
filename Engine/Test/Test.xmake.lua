@@ -57,7 +57,9 @@ if get_config("ya_profile") ~= "gui" then
                   "./Source/RenderRuntimeSnapshotTest.cpp",
                   "./Source/RenderSubmissionTableTest.cpp",
                   "./Source/RenderViewBindingTableTest.cpp",
-                  "./Source/RenderViewOutputTableTest.cpp")
+                  "./Source/RenderViewOutputTableTest.cpp",
+                  "./Source/ViewPersistentResourceKeyTest.cpp",
+                  "./Source/ForwardFrameGraphOrchestratorTest.cpp")
         add_deps("ya-render-3d", "ya-render-graph", "ya-foundation-core")
         add_packages("gtest")
     end

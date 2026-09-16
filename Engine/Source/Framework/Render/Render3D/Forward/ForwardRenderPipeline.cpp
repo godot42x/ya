@@ -9,6 +9,7 @@
 #include "Scene3D/TransformComponent.h"
 #include "Render3D/Common/PipelineCommon.h"
 #include "Render3D/Common/PostProcessingStateConfig.h"
+#include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
 #include "Scene/Core/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -730,6 +731,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             .bEnableShadow            = _shadowStage && currentShadowSettings().isEnabled(),
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
             .viewportOverlaySnapshot  = frame.viewportOverlaySnapshot,
+            .viewId                   = frame.view.task ? frame.view.task->viewId : 0,
         });
 
     RGCompiledGraph compiled{};

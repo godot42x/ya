@@ -7,6 +7,7 @@
 #include "Render3D/Common/IRenderPipeline.h"
 
 #include <functional>
+#include <cstdint>
 #include <vector>
 
 namespace ya
@@ -52,6 +53,7 @@ struct DeferredFrameGraphOrchestrator
         bool                                   bReverseViewportY         = true;
         bool                                   bPostprocessOutputIsSRGB  = false;
         std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
+        uint64_t                               viewId                    = 0;
     };
 
     void build(const BuildDependencies& deps, const BuildInputs& inputs) const;

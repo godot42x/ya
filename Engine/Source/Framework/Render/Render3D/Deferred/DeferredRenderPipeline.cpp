@@ -13,6 +13,7 @@
 #include "Render/Resources/TextureSlotBinding.h"
 #include "Render3D/Common/PipelineCommon.h"
 #include "Render3D/Common/RenderRecordingContext.h"
+#include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
 #include "Graph/RenderGraphImportUtils.h"
@@ -1292,6 +1293,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .bReverseViewportY        = _bReverseViewportY,
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
             .viewportOverlaySnapshot  = frame.viewportOverlaySnapshot,
+            .viewId                   = frame.view.task ? frame.view.task->viewId : 0,
         });
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");

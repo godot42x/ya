@@ -1,6 +1,7 @@
 #include "SSAOStage.h"
 
 #include "Render3D/Deferred/DeferredFrameGraphPasses.h"
+#include "Render3D/Common/ViewPersistentResourceKey.h"
 #include "Graph/RenderGraphImportUtils.h"
 #include "Core/Profiling/Instrumentor.h"
 
@@ -202,12 +203,16 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
     YA_CORE_ASSERT(_noiseTexture != nullptr, "SSAOStage requires initialized noise texture before graph pass append");
 
     const auto  noise = graph.importTexture(makeSSAOImportedTextureDesc(_noiseTexture ? _noiseTexture->getResourceShared() : nullptr, "SSAO.Noise", EImageLayout::ShaderReadOnlyOptimal));
-    const auto  output = graph.createPersistentTexture(RGTextureDesc{
-         .label  = "SSAO.Output",
-         .format = AO_FORMAT,
-         .extent = Extent3D{ctx.viewportExtent.width, ctx.viewportExtent.height, 1},
-         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "SSAO.Output"});
+    const auto  output = createViewPersistentTexture(
+        graph,
+        RGTextureDesc{
+            .label  = "SSAO.Output",
+            .format = AO_FORMAT,
+            .extent = Extent3D{ctx.viewportExtent.width, ctx.viewportExtent.height, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        },
+        "SSAO.Output",
+        params.viewId);
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "SSAO Pass",

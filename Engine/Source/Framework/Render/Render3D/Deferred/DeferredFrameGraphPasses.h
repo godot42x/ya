@@ -12,6 +12,7 @@
 #include "Render3D/Deferred/ViewportOverlayStage.h"
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <optional>
 
@@ -38,6 +39,7 @@ struct DeferredFrameGraphPassContext
     bool                                     bReverseViewportY = true;
     bool                                     bPostprocessOutputIsSRGB = false;
     std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
+    uint64_t                                 viewId = 0;
 
     ShadowStage*          shadowStage = nullptr;
     GBufferStage&         gBufferStage;
@@ -76,6 +78,7 @@ struct DeferredSSAOPassParams
     RGTextureHandle     depth{};
     RGTextureHandle     output{};
     DescriptorSetHandle frameDescriptorSet{};
+    uint64_t            viewId = 0;
 };
 
 struct DeferredLightPassParams
