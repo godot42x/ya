@@ -87,6 +87,17 @@ ModelComponent._modelRef
 
 关键点：模型先决定 topology，再走普通 resolve；不要把两件事揉进一个系统。
 
+### Model 实例语义（prefab-like）
+
+`ModelComponent` 根 + 它的 `ManagedChildComponent` 子树就是一个**实例子场景**，行为对齐 Unity prefab instance：
+
+- 根实体只序列化 `_modelRef`；子 mesh 不进存档（`SceneSerializer` 跳过 `ManagedChildComponent`），加载时按 ModelRef 重建。
+- `_cachedMaterials` 按 material index 共享 runtime material，等价 `sharedMaterial`：改一个 mesh 的参数会影响共享同一 material 的同级 mesh。
+- **实例边界来自结构，不来自缓存**：判断/清理实例子节点一律扫「实例根 node 下的 `ManagedChildComponent` 子树」。曾经存在的 `ModelComponent::_childNodes` 裸指针清册在作者删掉某个子 mesh 后必然失效，触发 cleanup 时就是 use-after-free，已删除。
+- `Scene::destroyEntity` **级联销毁整棵子树**（逆前序，后代先于祖先）。不要写「删父留子」的新代码：孤儿实体会留在 registry 里继续被绘制提取渲染，同时不在任何 node 子树里，于是既看不见也选不中。
+- 编辑器侧：视口点选默认解析到实例根（`editorResolveInstanceRoot`，`Alt`+点击保留叶子 mesh）；托管子节点上的删除 / 复制 / 重排 / 拖入被拒绝，因为它们的改动会被下一次重建覆盖，或让被拖入的对象随实例一起销毁。
+- 实例子节点的材质 / 参数 / 变换编辑**仅本次会话有效**，实例重建即重置。
+
 ## Environment Lighting
 
 只保留稳定判断，不在这里堆当前实现细节。

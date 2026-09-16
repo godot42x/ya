@@ -1,5 +1,7 @@
 #include "GameEditor/EditorLayerInternal.h"
+#include "GameEditor/UI/EditorHierarchyOps.h"
 
+#include "Core/Os/Os.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
@@ -327,12 +329,28 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
             projection);
     }
 
+    // Both pick paths report the entity that owns the drawn mesh, which for a
+    // model instance is one managed child per mesh. Moving that child only moves
+    // that mesh, so a plain click selects the instance root instead; Alt+click
+    // keeps the pixel-accurate leaf for editing an individual mesh's material.
+    Entity* selectionTarget = pickedEntity;
+    if (selectionTarget && (Os::queryKeyModState() & EKeyMod::Alt) == 0) {
+        selectionTarget = editorResolveInstanceRoot(*scene, selectionTarget);
+    }
+
     // Update selection
-    if (pickedEntity) {
+    if (selectionTarget) {
         // Ctrl/Cmd toggles membership, Shift extends from the anchor; plain
         // clicks replace the selection.
-        _sceneHierarchyPanel.handleEntityClick(pickedEntity);
-        YA_CORE_INFO("Picked entity: {}", pickedEntity->getName());
+        _sceneHierarchyPanel.handleEntityClick(selectionTarget);
+        if (selectionTarget != pickedEntity) {
+            YA_CORE_INFO("Picked entity: {} (model instance root; Alt+click for '{}')",
+                         selectionTarget->getName(),
+                         pickedEntity->getName());
+        }
+        else {
+            YA_CORE_INFO("Picked entity: {}", selectionTarget->getName());
+        }
     }
     else {
         _sceneHierarchyPanel.setSelection(nullptr);

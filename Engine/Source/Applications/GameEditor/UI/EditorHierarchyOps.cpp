@@ -5,6 +5,7 @@
 #include "GUI/Binding/SelectionModel.h"
 #include "GameEditor/EditorLayer.h"
 #include "Hierarchy/Node.h"
+#include "Scene3D/ManagedChildComponent.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
@@ -19,6 +20,90 @@ namespace ya
 std::string editorHierarchyEntityIdKey(uint64_t uuid)
 {
     return std::format("e:{}", uuid);
+}
+
+bool editorIsInstanceChild(const Entity* entity)
+{
+    return entity != nullptr && entity->hasComponent<ManagedChildComponent>();
+}
+
+Entity* editorResolveInstanceRoot(Scene& scene, Entity* entity)
+{
+    if (!entity || !entity->isValid() || !editorIsInstanceChild(entity)) {
+        return entity;
+    }
+
+    // Walk past every managed ancestor. The instantiation system currently
+    // produces exactly one managed level (meshes under the ModelComponent
+    // entity), but walking the whole chain keeps this correct if a managed
+    // child ever gains managed children of its own.
+    Node*   node   = scene.getNodeByEntity(entity);
+    Node*   parent = node ? node->getParent() : nullptr;
+    Entity* root   = entity;
+    uint32_t guard = 0;
+    while (parent && guard++ < 64) {
+        Entity* parentEntity = parent->getEntity();
+        if (!parentEntity) {
+            break;
+        }
+
+        root = parentEntity;
+        if (!editorIsInstanceChild(parentEntity)) {
+            // First unmanaged ancestor: the object the author placed in the scene.
+            break;
+        }
+        parent = parent->getParent();
+    }
+
+    // A chain with no unmanaged ancestor (an orphaned managed subtree) falls
+    // back to its topmost managed node, the best available approximation of the
+    // instance root.
+    return root;
+}
+
+bool editorSelectionIsAllInstanceChildren(EditorLayer& layer)
+{
+    const std::vector<Entity*>& selections = layer.getSelections();
+    if (selections.empty()) {
+        return false;
+    }
+
+    for (const Entity* entity : selections) {
+        if (!entity || !entity->isValid() || !editorIsInstanceChild(entity)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+size_t editorCountInstanceChildren(Scene& scene, Entity* instanceRoot)
+{
+    Node* rootNode = instanceRoot ? scene.getNodeByEntity(instanceRoot) : nullptr;
+    if (!rootNode) {
+        return 0;
+    }
+
+    auto& registry = scene.getRegistry();
+    size_t count = 0;
+    std::vector<const Node*> pending{rootNode};
+    while (!pending.empty()) {
+        const Node* node = pending.back();
+        pending.pop_back();
+        if (!node) {
+            continue;
+        }
+        for (Node* child : node->getChildren()) {
+            if (!child) {
+                continue;
+            }
+            const Entity* childEntity = child->getEntity();
+            if (childEntity && registry.all_of<ManagedChildComponent>(childEntity->getHandle())) {
+                ++count;
+            }
+            pending.push_back(child);
+        }
+    }
+    return count;
 }
 
 bool parseEditorHierarchyEntityIdKey(const std::string& id, uint64_t& outUuid)
@@ -49,6 +134,25 @@ Entity* moveEditorHierarchyEntity(Scene& scene, const std::string& fromId, const
     Node* draggedNode = scene.getNodeByEntity(draggedEntity);
     Node* targetNode  = scene.getNodeByEntity(targetEntity);
     if (!draggedNode || !targetNode) {
+        return nullptr;
+    }
+
+    // Model instance children are rebuilt from the root's ModelRef, so their
+    // position in the tree is not authored state: a reorder here would be
+    // silently discarded on the next instantiation. Reparenting INTO the
+    // subtree is rejected for the same reason plus a sharper one — the managed
+    // child would be destroyed with the instance, taking the dropped object
+    // with it.
+    if (editorIsInstanceChild(draggedEntity)) {
+        YA_CORE_WARN("Cannot reorder '{}': it is a model instance child rebuilt from '{}'",
+                     draggedEntity->getName(),
+                     editorResolveInstanceRoot(scene, draggedEntity)->getName());
+        return nullptr;
+    }
+    if (dropMode == 1 && editorIsInstanceChild(targetEntity)) {
+        YA_CORE_WARN("Cannot parent '{}' into '{}': model instance children are rebuilt on load",
+                     draggedEntity->getName(),
+                     targetEntity->getName());
         return nullptr;
     }
 

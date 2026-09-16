@@ -2,6 +2,7 @@
 
 #include "ECS/Component.h"
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/UI/EditorHierarchyOps.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 #include "Scene3D/TransformComponent.h"
@@ -133,10 +134,20 @@ void SceneHierarchyPanel::deleteSelection()
         return;
     }
 
+    // Model instance children are regenerated from the root's ModelRef, so
+    // deleting one cannot stick; it would only punch a hole until the next
+    // instantiation recreated it. Delete the instance root instead.
     for (Entity* entity : _selections) {
-        if (entity && entity->isValid() && entity->getScene() == _context) {
-            _context->destroyEntity(entity);
+        if (!entity || !entity->isValid() || entity->getScene() != _context) {
+            continue;
         }
+        if (editorIsInstanceChild(entity)) {
+            YA_CORE_WARN("Cannot delete '{}': model instance children are rebuilt from '{}'. Delete that root instead.",
+                         entity->getName(),
+                         editorResolveInstanceRoot(*_context, entity)->getName());
+            continue;
+        }
+        _context->destroyEntity(entity);
     }
     replaceSelection({}, nullptr);
 }

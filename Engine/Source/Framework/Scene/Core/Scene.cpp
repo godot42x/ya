@@ -17,6 +17,25 @@ namespace
 {
 ISceneLifecycleHost* g_sceneLifecycleHost = nullptr;
 std::atomic<uint64_t> g_nextSceneInstanceId{1};
+
+/// Collect every entity in `node`'s subtree in pre-order (a node always
+/// precedes its own descendants). Callers that destroy the results must walk
+/// the list backwards so children are gone before their parents.
+void collectSubtreeEntities(Node* node, std::vector<Entity*>& out)
+{
+    if (!node) {
+        return;
+    }
+    for (Node* child : node->getChildren()) {
+        if (!child) {
+            continue;
+        }
+        if (Entity* childEntity = child->getEntity()) {
+            out.push_back(childEntity);
+        }
+        collectSubtreeEntities(child, out);
+    }
+}
 }
 
 void Scene::setLifecycleHost(ISceneLifecycleHost* host)
@@ -113,6 +132,26 @@ void Scene::destroyEntity(Entity *entity)
 
     if (isValidEntity(entity))
     {
+        // Destroy the subtree deepest-first. Leaving the children behind is not
+        // a neutral act: they stay in the registry (so render extraction keeps
+        // drawing them) while being detached from every Node subtree, which
+        // makes them invisible to the Hierarchy and unpickable. A model
+        // instance root owns one managed child per mesh, so deleting the root
+        // has to take the whole instance with it.
+        {
+            std::vector<Entity*> subtree;
+            if (auto nodeIt = _nodeMap.find(entity->getHandle()); nodeIt != _nodeMap.end()) {
+                collectSubtreeEntities(nodeIt->second.get(), subtree);
+            }
+            // Reverse pre-order puts every descendant before its ancestor, so a
+            // child is never destroyed through a freed parent Entity.
+            for (auto it = subtree.rbegin(); it != subtree.rend(); ++it) {
+                if (isValidEntity(*it)) {
+                    destroyEntity(*it);
+                }
+            }
+        }
+
         auto handle = entity->getHandle();
 
         // Clean up associated Node if exists
@@ -121,7 +160,9 @@ void Scene::destroyEntity(Entity *entity)
             auto *node = nodeIt->second.get();
             // Remove from parent
             node->removeFromParent();
-            // Clear children (they become orphans)
+            // Child ENTITIES are already gone (destroyed above). This only
+            // detaches children that carry no entity, which have no registry
+            // entry to destroy.
             node->clearChildren();
             _nodeMap.erase(nodeIt);
         }

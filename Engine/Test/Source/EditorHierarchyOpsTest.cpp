@@ -3,6 +3,7 @@
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
 #include "Hierarchy/Node.h"
+#include "Scene3D/ManagedChildComponent.h"
 #include "Scene/Core/Scene.h"
 
 #include <gtest/gtest.h>
@@ -25,6 +26,117 @@ uint64_t entityUuidOrFail(const Entity* entity)
 }
 
 } // namespace
+
+namespace
+{
+
+/// Mark `node`'s entity as a generated model-instance child, the way
+/// ModelInstantiationSystem does for one mesh.
+void markAsInstanceChild(Node* node)
+{
+    ASSERT_NE(node, nullptr);
+    Entity* entity = node ? node->getEntity() : nullptr;
+    ASSERT_NE(entity, nullptr);
+    if (entity) {
+        entity->addComponent<ManagedChildComponent>();
+    }
+}
+
+} // namespace
+
+TEST(EditorHierarchyOpsTest, InstanceChildPredicateTracksManagedChildComponent)
+{
+    Scene scene("Test");
+    Node* root  = scene.createNode("Model");
+    Node* plain = scene.createNode("Empty", root);
+    Node* mesh  = scene.createNode("Mesh_0", root);
+    markAsInstanceChild(mesh);
+
+    EXPECT_FALSE(editorIsInstanceChild(root->getEntity()));
+    EXPECT_FALSE(editorIsInstanceChild(plain->getEntity()));
+    EXPECT_TRUE(editorIsInstanceChild(mesh->getEntity()));
+    EXPECT_FALSE(editorIsInstanceChild(nullptr));
+}
+
+TEST(EditorHierarchyOpsTest, ResolveInstanceRootWalksPastManagedAncestors)
+{
+    Scene scene("Test");
+    Node* model = scene.createNode("Model");
+    Node* meshA = scene.createNode("Mesh_0", model);
+    Node* meshB = scene.createNode("Mesh_1", model);
+    markAsInstanceChild(meshA);
+    markAsInstanceChild(meshB);
+
+    // The instance root is the first unmanaged ancestor, not the direct parent
+    // and not the mesh the ray happened to hit.
+    EXPECT_EQ(editorResolveInstanceRoot(scene, meshA->getEntity()), model->getEntity());
+    EXPECT_EQ(editorResolveInstanceRoot(scene, meshB->getEntity()), model->getEntity());
+
+    // Unmanaged entities resolve to themselves, including the root.
+    EXPECT_EQ(editorResolveInstanceRoot(scene, model->getEntity()), model->getEntity());
+
+    Node* standalone = scene.createNode("Standalone");
+    EXPECT_EQ(editorResolveInstanceRoot(scene, standalone->getEntity()), standalone->getEntity());
+    EXPECT_EQ(editorResolveInstanceRoot(scene, nullptr), nullptr);
+}
+
+TEST(EditorHierarchyOpsTest, ResolveInstanceRootSkipsNestedManagedLevels)
+{
+    Scene scene("Test");
+    Node* model = scene.createNode("Model");
+    Node* group = scene.createNode("Group", model);
+    Node* leaf  = scene.createNode("Leaf", group);
+    markAsInstanceChild(group);
+    markAsInstanceChild(leaf);
+
+    EXPECT_EQ(editorResolveInstanceRoot(scene, leaf->getEntity()), model->getEntity());
+}
+
+TEST(EditorHierarchyOpsTest, UnmanagedChildOfInstanceChildResolvesToItself)
+{
+    // An object the author parented under a generated mesh is authored state:
+    // resolving it to the model root would make it impossible to select.
+    Scene scene("Test");
+    Node* model = scene.createNode("Model");
+    Node* mesh  = scene.createNode("Mesh_0", model);
+    markAsInstanceChild(mesh);
+    Node* attached = scene.createNode("Attached", mesh);
+
+    EXPECT_EQ(editorResolveInstanceRoot(scene, attached->getEntity()), attached->getEntity());
+}
+
+TEST(EditorHierarchyOpsTest, RejectsReorderingInstanceChildren)
+{
+    Scene scene("Test");
+    Node* model  = scene.createNode("Model");
+    Node* mesh   = scene.createNode("Mesh_0", model);
+    Node* sibling = scene.createNode("Sibling", model);
+    markAsInstanceChild(mesh);
+
+    const std::string meshId    = editorHierarchyEntityIdKey(entityUuidOrFail(mesh->getEntity()));
+    const std::string siblingId = editorHierarchyEntityIdKey(entityUuidOrFail(sibling->getEntity()));
+
+    EXPECT_EQ(moveEditorHierarchyEntity(scene, meshId, siblingId, 0), nullptr);
+    EXPECT_EQ(model->getChild(0), mesh);
+}
+
+TEST(EditorHierarchyOpsTest, RejectsParentingIntoInstanceChildren)
+{
+    // Dropping into a generated mesh would hand the object to a subtree that the
+    // next instantiation destroys.
+    Scene scene("Test");
+    Node* model      = scene.createNode("Model");
+    Node* mesh       = scene.createNode("Mesh_0", model);
+    Node* standalone = scene.createNode("Standalone");
+    markAsInstanceChild(mesh);
+
+    const std::string meshId       = editorHierarchyEntityIdKey(entityUuidOrFail(mesh->getEntity()));
+    const std::string standaloneId = editorHierarchyEntityIdKey(entityUuidOrFail(standalone->getEntity()));
+
+    EXPECT_EQ(moveEditorHierarchyEntity(scene, standaloneId, meshId, 1), nullptr);
+    EXPECT_EQ(mesh->getChildCount(), 0u);
+    EXPECT_EQ(standalone->getParent(), scene.getRootNode());
+}
 
 TEST(EditorHierarchyOpsTest, MoveEntityBeforeSiblingReordersChildren)
 {

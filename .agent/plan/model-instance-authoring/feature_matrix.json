@@ -1,0 +1,78 @@
+{
+  "topic": "model-instance-authoring",
+  "updated": "2026-09-17",
+  "capabilities": [
+    {
+      "id": "pick-instance-root",
+      "scenario": "视口左键点击模型实例的任意 mesh",
+      "expected": "选中实例根（ModelComponent 实体），拖拽整体移动",
+      "status": "implemented"
+    },
+    {
+      "id": "pick-instance-leaf",
+      "scenario": "Alt+左键点击某个 mesh",
+      "expected": "选中像素命中的那个托管子 mesh",
+      "status": "implemented"
+    },
+    {
+      "id": "hierarchy-select-child",
+      "scenario": "在 Hierarchy 里点开实例根并选中子 mesh",
+      "expected": "Inspector 显示该 mesh 的材质；提示改动仅本次会话有效",
+      "status": "implemented"
+    },
+    {
+      "id": "delete-instance-root",
+      "scenario": "删除实例根",
+      "expected": "整棵实例（含全部子 mesh）从 node 树与 registry 中消失，不再渲染",
+      "status": "implemented"
+    },
+    {
+      "id": "delete-instance-child",
+      "scenario": "删除单个托管子 mesh",
+      "expected": "命令被拒绝并说明原因（会被重建）",
+      "status": "implemented"
+    },
+    {
+      "id": "duplicate-instance-child",
+      "scenario": "Cmd+D 复制托管子 mesh",
+      "expected": "命令被拒绝；菜单项为灰",
+      "status": "implemented"
+    },
+    {
+      "id": "reorder-instance-child",
+      "scenario": "在 Hierarchy 里拖动托管子 mesh",
+      "expected": "拖动被拒绝，顺序不变",
+      "status": "implemented"
+    },
+    {
+      "id": "drop-into-instance-child",
+      "scenario": "把普通节点拖到托管子 mesh 上（drop into）",
+      "expected": "拖动被拒绝，避免被实例重建连带销毁",
+      "status": "implemented"
+    },
+    {
+      "id": "inspector-instance-notice",
+      "scenario": "选中托管子 mesh / 实例根",
+      "expected": "Inspector 说明「改动仅本次会话有效」或「N meshes / M materials」",
+      "status": "implemented"
+    },
+    {
+      "id": "child-edit-persistence",
+      "scenario": "改子 mesh 材质后保存场景并重新加载",
+      "expected": "改动被丢弃（当前已知限制，v1 明确不承诺）",
+      "status": "out-of-scope"
+    },
+    {
+      "id": "per-instance-material-override",
+      "scenario": "让某个子 mesh 拥有独立材质，不影响共享同材质的兄弟 mesh",
+      "expected": "不支持；共享材质语义保留",
+      "status": "out-of-scope"
+    },
+    {
+      "id": "hierarchy-instance-badge",
+      "scenario": "Hierarchy 行上显示「这是生成节点」的图标",
+      "expected": "未实现：UITreeView 行图标需要真实图片资源",
+      "status": "out-of-scope"
+    }
+  ]
+}

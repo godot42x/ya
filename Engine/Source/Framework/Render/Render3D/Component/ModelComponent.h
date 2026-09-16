@@ -28,8 +28,6 @@ namespace ya
 struct Material;
 struct Model;
 
-struct Node;
-
 enum class EModelMaterialType : uint8_t
 {
     Phong = 0,
@@ -90,19 +88,18 @@ struct YA_RENDER_3D_API ModelComponent : public IComponent
     bool _bResolved = false;
 
     /**
-     * @brief Child nodes created from this Model (one per mesh)
-     * Used for cleanup when ModelComponent is removed or Model changes
-     * @note Stores Node pointers for hierarchical management
-     */
-    std::vector<Node *> _childNodes;
-
-    /**
      * @brief Cached runtime materials for this Model (one per material in model file)
      * Key: material index in Model's MaterialData array
     * Value: runtime Material pointer (managed by MaterialFactory)
      * This allows multiple meshes to share the same material instance
      */
     std::unordered_map<int32_t, Material*> _cachedMaterials;
+
+    // NOTE: there is deliberately no child-node ledger here. The instantiated
+    // meshes are identified by ManagedChildComponent underneath this entity's
+    // Node; a raw Node* list would go stale the moment an author deletes a
+    // managed child in the Hierarchy, and the next rebuild would then walk
+    // freed nodes. The instance boundary is the structure, not a cache.
 
     // ========================================
     // Interface

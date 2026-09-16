@@ -50,6 +50,8 @@ class EditorInspectorTab : public UICompoundWidget
     std::shared_ptr<UIText> _widgetEntryIdText;
     std::shared_ptr<UIText> _widgetEntryTypeText;
     std::shared_ptr<UIButton> _openDesignerButton;
+    std::shared_ptr<UIContainer> _instanceHost;
+    std::shared_ptr<UIText> _instanceBodyText;
     std::shared_ptr<UIContainer> _projectedHost;
     std::vector<std::shared_ptr<UIElement>> _projectedWidgets;
     std::vector<std::shared_ptr<EditorAutoPropertySection>> _projectedSections;
@@ -62,6 +64,7 @@ class EditorInspectorTab : public UICompoundWidget
     void unbindLayerDelegates();
     void refresh();
     void refreshFromTree(WidgetTree& tree);
+    void updateInstanceNotice(const std::vector<Entity*>& entities);
     void syncProjectedValues(WidgetTree& tree);
     void rebuildProjected(WidgetTree& tree, const std::vector<Entity*>& entities);
 };

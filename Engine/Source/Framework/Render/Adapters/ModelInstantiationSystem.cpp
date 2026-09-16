@@ -21,6 +21,7 @@
 #include "Resource/Model.h"
 
 #include <format>
+#include <vector>
 
 namespace ya
 {
@@ -91,6 +92,34 @@ void assignCustomMaterialPath(MaterialComponentType& matComp, const ModelCompone
     }
     else {
         matComp._materialPath.clear();
+    }
+}
+
+/**
+ * Collect the topmost managed child entities under `node`.
+ *
+ * Only the top of each branch is reported: Scene::destroyEntity destroys the
+ * whole subtree, and reporting descendants as well would leave the caller with
+ * pointers that are already freed.
+ */
+void collectManagedChildEntities(Node* node, entt::registry& registry, std::vector<Entity*>& out)
+{
+    if (!node) {
+        return;
+    }
+
+    for (Node* child : node->getChildren()) {
+        if (!child) {
+            continue;
+        }
+
+        Entity* childEntity = child->getEntity();
+        if (childEntity && registry.all_of<ManagedChildComponent>(childEntity->getHandle())) {
+            out.push_back(childEntity);
+            continue;
+        }
+
+        collectManagedChildEntities(child, registry, out);
     }
 }
 
@@ -278,7 +307,6 @@ void ModelInstantiationSystem::instantiateModel(Scene* scene, Entity* entity, Mo
         }
 
         childNode->setParent(parentNode);
-        modelComp._childNodes.push_back(childNode);
     }
 
     YA_CORE_INFO("ModelInstantiationSystem: Created {} child nodes with {} shared materials for model '{}'",
@@ -433,12 +461,18 @@ void ModelInstantiationSystem::cleanupChildEntities(Scene* scene, Entity* parent
     }
     modelComp._cachedMaterials.clear();
 
-    for (Node* childNode : modelComp._childNodes) {
-        if (childNode) {
-            scene->destroyNode(childNode);
+    // Discover the instance's children through the scene instead of a ledger on
+    // the component: an author may have deleted individual meshes since the last
+    // instantiation, and a stored Node* list cannot see that. Scene::destroyEntity
+    // cascades, so destroying the topmost managed child of each branch takes the
+    // rest of that branch with it.
+    if (Node* parentNode = scene->getNodeByEntity(parentEntity)) {
+        std::vector<Entity*> managedChildren;
+        collectManagedChildEntities(parentNode, scene->getRegistry(), managedChildren);
+        for (Entity* childEntity : managedChildren) {
+            scene->destroyEntity(childEntity);
         }
     }
-    modelComp._childNodes.clear();
 
     // Remove the root-level animator attached by a previous instantiation, if any.
     // Skinned meshes held only a raw pointer to it, which becomes dangling after

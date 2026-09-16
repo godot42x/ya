@@ -4,6 +4,7 @@
 #include "GameEditor/UI/EditorHierarchyOps.h"
 
 #include "ECS/Component.h"
+#include "ECS/Component/ModelComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/ECSRegistry.h"
 #include "GUI/Binding/UndoStack.h"
@@ -275,11 +276,29 @@ void EditorInspectorTab::construct()
                                .setVisibility(EWidgetVisibility::Collapsed);
     _widgetEntryHost = widgetEntryForm.share();
 
+    // Model instance notice. The instance root and its generated meshes look
+    // alike in the viewport, so the Inspector states which one is selected and
+    // what that means for edits — the alternative is a silent no-op after the
+    // next rebuild.
+    auto instanceBody = ui::text("InspectorInstanceBody")
+                            .setStyleKey("text.small")
+                            .setWrap(true);
+    _instanceBodyText = instanceBody.share();
+    auto instanceForm = ui::column("InspectorInstanceForm")
+                            .setSpacing(editor_density::kRowSpacing)
+                            .child(ui::text("InspectorInstanceTitle")
+                                       .setText("Model Instance")
+                                       .setStyleKey("text.eyebrow"))
+                            .child(std::move(instanceBody))
+                            .setVisibility(EWidgetVisibility::Collapsed);
+    _instanceHost = instanceForm.share();
+
     auto form = ui::column("InspectorForm")
                     .setPadding({editor_density::kPanelPadding, editor_density::kPanelPadding})
                     .setSpacing(editor_density::kSectionSpacing)
                     .child(std::move(empty))
                     .child(std::move(entityForm))
+                    .child(std::move(instanceForm))
                     .child(std::move(widgetEntryForm));
     addDetachedChild(ui::scroll("InspectorScroll")
                          .setAxis(EScrollAxis::Vertical)
@@ -467,6 +486,49 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
     }
 }
 
+void EditorInspectorTab::updateInstanceNotice(const std::vector<Entity*>& entities)
+{
+    if (!_instanceHost || !_instanceBodyText) {
+        return;
+    }
+
+    Scene* scene = _layer ? _layer->getHierarchyScene() : nullptr;
+    if (!scene || entities.size() != 1) {
+        _instanceHost->setVisibility(EWidgetVisibility::Collapsed);
+        return;
+    }
+
+    Entity* primary = entities.front();
+    if (!primary || !primary->isValid()) {
+        _instanceHost->setVisibility(EWidgetVisibility::Collapsed);
+        return;
+    }
+
+    if (editorIsInstanceChild(primary)) {
+        Entity* root = editorResolveInstanceRoot(*scene, primary);
+        _instanceBodyText->setText(std::format(
+            "Generated mesh of model instance '{}'. Material, parameter and transform edits last for this "
+            "session only — rebuilding the instance restores the imported values. Delete, duplicate and "
+            "reorder are disabled; select the instance root to act on the whole model.",
+            root ? root->getName() : std::string_view("<unknown>")));
+        _instanceHost->setVisibility(EWidgetVisibility::Visible);
+        return;
+    }
+
+    if (const auto* model = primary->getComponent<ModelComponent>()) {
+        _instanceBodyText->setText(std::format(
+            "{} generated mesh(es) from '{}', sharing {} runtime material(s). Select a mesh in the Hierarchy "
+            "— or Alt+click it in the viewport — to edit that mesh's material.",
+            editorCountInstanceChildren(*scene, primary),
+            model->_modelRef.getPath(),
+            model->_cachedMaterials.size()));
+        _instanceHost->setVisibility(EWidgetVisibility::Visible);
+        return;
+    }
+
+    _instanceHost->setVisibility(EWidgetVisibility::Collapsed);
+}
+
 void EditorInspectorTab::refreshFromTree(WidgetTree& tree)
 {
     if (!_layer) return;
@@ -479,6 +541,9 @@ void EditorInspectorTab::refreshFromTree(WidgetTree& tree)
     if (widgetMode) {
         if (_entityFormHost) {
             _entityFormHost->setVisibility(EWidgetVisibility::Collapsed);
+        }
+        if (_instanceHost) {
+            _instanceHost->setVisibility(EWidgetVisibility::Collapsed);
         }
         if (_emptyText) {
             _emptyText->setVisibility(EWidgetVisibility::Collapsed);
@@ -513,6 +578,7 @@ void EditorInspectorTab::refreshFromTree(WidgetTree& tree)
     if (_entityFormHost) {
         _entityFormHost->setVisibility(selected ? EWidgetVisibility::Visible : EWidgetVisibility::Collapsed);
     }
+    updateInstanceNotice(entities);
     if (_entityText) {
         if (entities.size() > 1) {
             _entityText->setText(std::format("{} selected", entities.size()));

@@ -1,5 +1,6 @@
 #include "GameEditor/EditorLayerInternal.h"
 
+#include "GameEditor/UI/EditorHierarchyOps.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "Hierarchy/Node.h"
 #include "Scene3D/Node3D.h"
@@ -62,6 +63,15 @@ void EditorLayer::cmdDuplicateSelection()
         }
         Node* node = scene->getNodeByEntity(entity);
         if (!node) {
+            continue;
+        }
+        // A managed child is rebuilt from its instance root on load, so a
+        // duplicate of one would be deleted by the next instantiation. Clone
+        // the root to get a second independent instance.
+        if (editorIsInstanceChild(entity)) {
+            YA_CORE_WARN("Cannot duplicate '{}': model instance children are rebuilt from '{}'. Duplicate that root instead.",
+                         entity->getName(),
+                         editorResolveInstanceRoot(*scene, entity)->getName());
             continue;
         }
         if (Node* newNode = scene->duplicateNode(node, node->getParent())) {

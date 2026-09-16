@@ -5,6 +5,7 @@
 #include "GUI/Binding/ActionMap.h"
 #include "GUI/Binding/UndoStack.h"
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/UI/EditorHierarchyOps.h"
 #include "GameRuntime/App.h"
 
 namespace ya
@@ -75,14 +76,22 @@ void registerEditorActions(ActionMap& actions,
         .label      = "Duplicate",
         .chord      = FActionChord::primary(EKey::K_D),
         .execute    = [&layer]() { layer.cmdDuplicateSelection(); },
-        .canExecute = [&layer]() { return layer.canViewportAuthor() && !layer.getSelections().empty(); },
+        .canExecute = [&layer]() {
+            return layer.canViewportAuthor() &&
+                   !layer.getSelections().empty() &&
+                   !editorSelectionIsAllInstanceChildren(layer);
+        },
     });
     define({
         .id         = "selection.delete",
         .label      = "Delete",
         .chord      = {.key = EKey::Delete},
         .execute    = [&layer]() { layer.cmdDeleteSelection(); },
-        .canExecute = [&layer]() { return layer.canViewportAuthor() && !layer.getSelections().empty(); },
+        .canExecute = [&layer]() {
+            return layer.canViewportAuthor() &&
+                   !layer.getSelections().empty() &&
+                   !editorSelectionIsAllInstanceChildren(layer);
+        },
     });
     define({
         .id      = "app.exit",
