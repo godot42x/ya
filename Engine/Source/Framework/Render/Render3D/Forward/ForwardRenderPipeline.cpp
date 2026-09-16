@@ -283,7 +283,7 @@ void ForwardRenderPipeline::tick(const RenderPipelineFrameContext& frame)
     }
     {
         YA_PROFILE_SCOPE("ForwardPipeline/ShadowPass");
-        executeShadowPass(stageCtx);
+        executeShadowPass(frame, stageCtx);
     }
     {
         YA_PROFILE_SCOPE("ForwardPipeline/ViewportPass");
@@ -586,7 +586,7 @@ EFormat::T ForwardRenderPipeline::getViewportDepthFormat() const
     return _viewportFormats.depthFormat.value_or(EFormat::Undefined);
 }
 
-void ForwardRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
+void ForwardRenderPipeline::executeShadowPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
     const ShadowSettings shadowSettings = currentShadowSettings();
     if (!shadowSettings.isEnabled() || !_shadowStage) {
@@ -594,7 +594,20 @@ void ForwardRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
     }
 
     _shadowStage->applySettings(shadowSettings);
-    _shadowStage->prepare(stageCtx);
+
+    RenderSubmissionContext submission = frame.submission;
+    submission.cmdBuf      = frame.cmdBuf;
+    submission.flightIndex = frame.camera.flightIndex;
+    submission.frameToken  = frame.camera.frameIndex;
+
+    RenderViewRecordingContext view = frame.view;
+    if (!view.frameData) {
+        view.frameData = frame.camera.frameData;
+    }
+    if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
+        view.viewportExtent = stageCtx.viewportExtent;
+    }
+    _shadowStage->prepareView(submission, view);
 }
 
 void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)

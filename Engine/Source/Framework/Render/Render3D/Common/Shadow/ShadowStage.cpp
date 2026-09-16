@@ -33,9 +33,25 @@ void ShadowStage::destroy()
 
 void ShadowStage::prepare(const RenderStageContext& ctx)
 {
+    RenderSubmissionContext submission{
+        .frameToken  = ctx.frameIndex,
+        .flightIndex = ctx.flightIndex,
+        .cmdBuf      = ctx.cmdBuf,
+    };
+    RenderViewRecordingContext view{
+        .frameData      = ctx.frameData,
+        .viewportExtent = ctx.viewportExtent,
+    };
+    prepareView(submission, view);
+}
+
+void ShadowStage::prepareView(const RenderSubmissionContext& submission, RenderViewRecordingContext& view)
+{
     YA_PROFILE_FUNCTION();
-    if (!ctx.frameData || !_technique || !_settings.isEnabled()) return;
-    _technique->prepare(ctx.flightIndex, *ctx.frameData);
+    if (!view.frameData || !_technique || !_settings.isEnabled()) {
+        return;
+    }
+    _technique->prepare(submission, view);
 }
 
 void ShadowStage::execute(const RenderStageContext& ctx)

@@ -2,6 +2,7 @@
 
 #include "RHI/Core/DescriptorSet.h"
 #include "Render3D/RenderFrameData.h"
+#include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/ShadowSettings.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
@@ -23,6 +24,7 @@ struct BasicShadowFramePayload
 
     uint32_t               flightIndex = 0;
     uint64_t               frameIndex  = 0;
+    uint32_t               viewSlot    = RenderViewRecordingContext::kInvalidViewSlot;
     const RenderFrameData* frameData   = nullptr;
     const ShadowSettings*  settings    = nullptr;
 

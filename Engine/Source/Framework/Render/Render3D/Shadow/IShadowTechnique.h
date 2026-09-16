@@ -2,6 +2,7 @@
 
 #include "Core/Math/Geometry.h"
 #include "RHI/RenderDefines.h"
+#include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/ShadowSettings.h"
 
 #include <cstdint>
@@ -44,7 +45,8 @@ struct IShadowTechnique
     virtual void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent) = 0;
 
     /// Per-frame data upload (UBOs, instance buffers, frustum data).
-    virtual void prepare(uint32_t flightIndex, const RenderFrameData& frameData) = 0;
+    virtual void prepare(const RenderSubmissionContext& submission,
+                         RenderViewRecordingContext&    view) = 0;
 
 };
 

@@ -153,8 +153,9 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
     std::optional<RGPassHandle> rasterDependency = dependency;
 
     YA_CORE_ASSERT(_frameResources != nullptr, "Point shadow graph requires frame resources");
-    const auto& binding = _frameResources->getBinding(payload.flightIndex);
-    YA_CORE_ASSERT(binding.skinningBuffer, "Point shadow graph requires a skinning buffer");
+    const auto* binding = _frameResources->getViewBinding(payload.flightIndex, payload.viewSlot);
+    YA_CORE_ASSERT(binding != nullptr, "Point shadow graph requires a View binding");
+    YA_CORE_ASSERT(binding->skinningBuffer, "Point shadow graph requires a skinning buffer");
 
     const auto importBuffer = [&](const std::shared_ptr<IBuffer>& buffer,
                                   std::string label,
@@ -168,7 +169,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
         .access = EResourceAccess::HostWrite,
     };
     const auto skinningBuffer = importBuffer(
-        binding.skinningBuffer, "PointShadow.SkinningSSBO", EBufferUsage::StorageBuffer, hostWriteState);
+        binding->skinningBuffer, "PointShadow.SkinningSSBO", EBufferUsage::StorageBuffer, hostWriteState);
 
     std::optional<RGBufferHandle> drawCommands;
     std::optional<RGBufferHandle> visibleInstances;
@@ -206,11 +207,11 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
                 .faceGlobalIndex = lightIndex * 6 + faceIndex,
                 .layerIndex      = getShadowPointLightBaseLayer(lightIndex) + faceIndex,
             };
-            facePayload.faceDS = binding.pointFaceDS[facePayload.faceGlobalIndex];
+            facePayload.faceDS = binding->pointFaceDS[facePayload.faceGlobalIndex];
             facePayload.depthImage = _shadowResource->getImage();
             facePayload.depthView  = _faceDepthViews[lightIndex][faceIndex].get();
             auto faceDepthView = _faceDepthViews[lightIndex][faceIndex];
-            const auto& faceAllocation = binding.pointFaces[facePayload.faceGlobalIndex];
+            const auto& faceAllocation = binding->pointFaces[facePayload.faceGlobalIndex];
             if (!facePayload.depthView || !faceDepthView || !faceAllocation) continue;
 
             const auto depth = graph.importTexture(makeImportedTextureDesc(
@@ -256,7 +257,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
             }
         },
         [this, payload, useIndirect, graphFaces, drawCommands, visibleInstances,
-         skinningDS = binding.skinningDS](RGRenderContext& ctx) {
+         skinningDS = binding->skinningDS](RGRenderContext& ctx) {
             YA_PERF_SCOPE(perf::sample::shadowPoint(), perf::metric::cpuTimeMs(), perf::domain::render());
             YA_PROFILE_SCOPE("PointShadowPass::RenderFaces");
             YA_PERF_SCOPE(perf::sample::shadowPointFaceLoop(), perf::metric::cpuTimeMs(), perf::domain::render());

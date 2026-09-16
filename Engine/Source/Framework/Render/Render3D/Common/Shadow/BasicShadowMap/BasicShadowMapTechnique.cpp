@@ -1,5 +1,6 @@
 #include "BasicShadowMapTechnique.h"
 
+#include "Core/Log.h"
 #include "Core/Profiling/Instrumentor.h"
 
 #include "Graph/RenderGraphImportUtils.h"
@@ -48,18 +49,39 @@ void BasicShadowMapTechnique::applySettings(const ShadowSettings& settings)
 // Prepare / Execute
 // ═══════════════════════════════════════════════════════════════════════════
 
-void BasicShadowMapTechnique::prepare(uint32_t flightIndex, const RenderFrameData& frameData)
+void BasicShadowMapTechnique::prepare(const RenderSubmissionContext& submission, RenderViewRecordingContext& view)
 {
     YA_PROFILE_FUNCTION();
-    if (!_settings.isEnabled()) return;
+    _preparedViewSlot = RenderViewRecordingContext::kInvalidViewSlot;
+    if (!_settings.isEnabled() || !view.frameData) {
+        return;
+    }
 
-    const auto payload = buildFramePayload(flightIndex, frameData);
-    _lastPreparedPointLightCount = payload.pointLightCount;
+    if (!_frameResources.beginSubmission(submission)) {
+        YA_CORE_ERROR("BasicShadowMapTechnique failed to begin shadow submission");
+        return;
+    }
 
-    if (!_frameResources.prepare(payload)) {
+    RenderStageContext skinningCtx{
+        .frameData   = view.frameData,
+        .flightIndex = submission.flightIndex,
+        .frameIndex  = submission.frameToken,
+    };
+    if (!_frameResources.prepareSkinning(skinningCtx)) {
+        YA_CORE_ERROR("BasicShadowMapTechnique failed to prepare shadow skinning");
+        return;
+    }
+
+    auto payload = buildFramePayload(submission.flightIndex, *view.frameData);
+    payload.frameIndex = submission.frameToken;
+    if (!_frameResources.beginView(submission, view, payload)) {
         YA_CORE_ERROR("BasicShadowMapTechnique failed to prepare shadow frame resources");
         return;
     }
+
+    payload.viewSlot = view.viewSlot;
+    _preparedViewSlot = view.viewSlot;
+    _lastPreparedPointLightCount = payload.pointLightCount;
 
     if (payload.directionalEnabled()) {
         _directionalPass.prepare(payload);
@@ -75,9 +97,12 @@ ShadowGraphOutputs BasicShadowMapTechnique::appendGraphPasses(
     const RenderFrameData& frameData)
 {
     ShadowGraphOutputs outputs{};
-    if (!_settings.isEnabled()) return outputs;
+    if (!_settings.isEnabled() || _preparedViewSlot == RenderViewRecordingContext::kInvalidViewSlot) {
+        return outputs;
+    }
 
     auto payload = buildFramePayload(flightIndex, frameData);
+    payload.viewSlot = _preparedViewSlot;
     payload.pointLightCount = std::min(_lastPreparedPointLightCount, static_cast<uint32_t>(MAX_POINT_LIGHTS));
     std::optional<RGPassHandle> lastPass;
 

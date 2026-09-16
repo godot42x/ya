@@ -1,41 +1,22 @@
 #include "ShadowFrameResources.h"
 
 #include "Core/Log.h"
-#include "Core/Common/DeferredDeletionQueue.h"
 #include "RHI/Render.h"
+#include "Render3D/Common/FrameResourceSubmission.h"
 #include "Render3D/RenderFrameData.h"
 
 #include <algorithm>
-#include <format>
-#include <limits>
+#include <vector>
 
 namespace ya
 {
 
-namespace
-{
-
-bool checkedAdd(uint64_t lhs, uint64_t rhs, uint64_t& result)
-{
-    if (rhs > std::numeric_limits<uint64_t>::max() - lhs) {
-        return false;
-    }
-    result = lhs + rhs;
-    return true;
-}
-
-uint64_t alignUp(uint64_t value, uint32_t alignment)
-{
-    const uint64_t remainder = value % alignment;
-    return remainder == 0 ? value : value + (alignment - remainder);
-}
-
-} // namespace
-
 void ShadowFrameResources::init(IRender* render)
 {
-    _render = render;
-    YA_CORE_ASSERT(_render != nullptr, "ShadowFrameResources requires a render backend");
+    destroy();
+    YA_CORE_ASSERT(render != nullptr, "ShadowFrameResources requires a render backend");
+
+    initSkinnedUploadArena(render, "Shadow", "Shadow_Skinning_DSL", 1, "ShadowFrameUploadArena");
 
     _frameDSL = IDescriptorSetLayout::create(
         _render,
@@ -47,254 +28,206 @@ void ShadowFrameResources::init(IRender* render)
                           .descriptorCount = 1,
                           .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment}},
         });
-    _skinningDSL = IDescriptorSetLayout::create(
-        _render,
-        DescriptorSetLayoutDesc{
-            .label    = "Shadow_Skinning_DSL",
-            .set      = 1,
-            .bindings = {{.binding = 0,
-                          .descriptorType = EPipelineDescriptorType::StorageBuffer,
-                          .descriptorCount = 1,
-                          .stageFlags = EShaderStage::Vertex}},
-        });
-
-    const uint32_t directionalCount = MAX_FLIGHTS_IN_FLIGHT * MAX_DIRECTIONAL_CASCADES;
-    const uint32_t pointFaceCount   = MAX_FLIGHTS_IN_FLIGHT * ShadowConstants::POINT_SHADOW_FACE_COUNT;
-    _descriptorPool = IDescriptorPool::create(
-        _render,
-        DescriptorPoolCreateInfo{
-            .label     = "Shadow_Frame_DSP",
-            .maxSets   = directionalCount + pointFaceCount + MAX_FLIGHTS_IN_FLIGHT,
-            .poolSizes = {
-                {.type = EPipelineDescriptorType::UniformBuffer,
-                 .descriptorCount = directionalCount + pointFaceCount},
-                {.type = EPipelineDescriptorType::StorageBuffer,
-                 .descriptorCount = MAX_FLIGHTS_IN_FLIGHT},
-            },
-        });
-
-    _uploadArena = std::make_unique<FrameUploadArena>(
-        *_render->getResourceFactory(),
-        MAX_FLIGHTS_IN_FLIGHT,
-        64u * 1024u,
-        EBufferUsage::UniformBuffer | EBufferUsage::StorageBuffer,
-        "ShadowFrameUploadArena");
-
-    for (uint32_t flightIndex = 0; flightIndex < MAX_FLIGHTS_IN_FLIGHT; ++flightIndex) {
-        auto& binding = _bindings[flightIndex];
-        for (auto& descriptorSet : binding.directionalFrameDS) {
-            descriptorSet = _descriptorPool->allocateDescriptorSets(_frameDSL);
-        }
-        for (auto& descriptorSet : binding.pointFaceDS) {
-            descriptorSet = _descriptorPool->allocateDescriptorSets(_frameDSL);
-        }
-        binding.skinningDS = _descriptorPool->allocateDescriptorSets(_skinningDSL);
-    }
+    _frameSets.init(_render, "Shadow_Frame_DSP", 1);
 
     YA_CORE_ASSERT(ensureSkinningCapacity(0), "ShadowFrameResources failed to create initial skinning resources");
 }
 
 void ShadowFrameResources::destroy()
 {
-    _bindings = {};
-    _uploadArena.reset();
-    _descriptorPool.reset();
-    _skinningDSL.reset();
+    _viewBindings.clear();
+    _skinningBindings = {};
+    destroySkinnedUploadArena();
+    _frameSets.destroy();
     _frameDSL.reset();
-    _skinningCapacity = 0;
-    _render = nullptr;
 }
 
-std::optional<uint32_t> ShadowFrameResources::calculateSkinningCapacity(
-    uint32_t currentCapacity,
-    uint32_t paletteCount)
+bool ShadowFrameResources::beginSubmission(const RenderSubmissionContext& submission)
 {
-    constexpr uint32_t maxPaletteCount = std::numeric_limits<uint32_t>::max() / sizeof(RenderSkinningPalette);
-    const uint32_t requiredCount = std::max(1u, paletteCount);
-    if (requiredCount > maxPaletteCount) {
-        return std::nullopt;
-    }
-
-    uint32_t nextCapacity = currentCapacity == 0 ? 16u : currentCapacity;
-    while (nextCapacity < requiredCount) {
-        if (nextCapacity > maxPaletteCount / 2u) {
-            nextCapacity = requiredCount;
-            break;
-        }
-        nextCapacity *= 2u;
-    }
-    return nextCapacity;
-}
-
-bool ShadowFrameResources::ensureSkinningCapacity(uint32_t paletteCount)
-{
-    if (_descriptorPool && std::max(1u, paletteCount) <= _skinningCapacity) {
-        return true;
-    }
-
-    const auto nextCapacity = calculateSkinningCapacity(_skinningCapacity, paletteCount);
-    if (!nextCapacity.has_value()) {
-        YA_CORE_ERROR("Shadow skinning palette count {} exceeds buffer size limit", paletteCount);
+    if (!_render) {
         return false;
     }
+    return beginFrameResourceSubmission(_uploadArena.get(), _viewBindings, submission);
+}
 
-    const uint32_t bufferSize = *nextCapacity * sizeof(RenderSkinningPalette);
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT> nextBuffers{};
-    for (uint32_t flightIndex = 0; flightIndex < MAX_FLIGHTS_IN_FLIGHT; ++flightIndex) {
-        nextBuffers[flightIndex] = _render->getResourceFactory()->createBuffer(
-            BufferCreateInfo{
-                .label       = std::format("Shadow_Skinning_SSBO_{}", flightIndex),
-                .usage       = EBufferUsage::StorageBuffer,
-                .size        = bufferSize,
-                .memoryUsage = EMemoryUsage::CpuToGpu,
-            });
-        if (!nextBuffers[flightIndex]) {
-            YA_CORE_ERROR("ShadowFrameResources failed to create skinning buffer for flight {}", flightIndex);
+bool ShadowFrameResources::ensureViewDescriptors(
+    Binding& binding,
+    uint32_t directionalCount,
+    uint32_t pointFaceCount)
+{
+    for (uint32_t cascadeIndex = 0; cascadeIndex < directionalCount; ++cascadeIndex) {
+        if (!binding.directionalFrameDS[cascadeIndex]) {
+            binding.directionalFrameDS[cascadeIndex] = _frameSets.allocate(_frameDSL);
+        }
+        if (!binding.directionalFrameDS[cascadeIndex]) {
             return false;
         }
     }
-
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT> oldBuffers{};
-    for (uint32_t flightIndex = 0; flightIndex < MAX_FLIGHTS_IN_FLIGHT; ++flightIndex) {
-        oldBuffers[flightIndex] = std::move(_bindings[flightIndex].skinningBuffer);
-        _bindings[flightIndex].skinningBuffer = std::move(nextBuffers[flightIndex]);
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::genSingleBufferWrite(
-                _bindings[flightIndex].skinningDS,
-                0,
-                EPipelineDescriptorType::StorageBuffer,
-                _bindings[flightIndex].skinningBuffer.get())},
-            {});
-    }
-    _skinningCapacity = *nextCapacity;
-
-    for (auto& oldBuffer : oldBuffers) {
-        DeferredDeletionQueue::get().retire(std::move(oldBuffer));
+    for (uint32_t faceIndex = 0; faceIndex < pointFaceCount; ++faceIndex) {
+        if (!binding.pointFaceDS[faceIndex]) {
+            binding.pointFaceDS[faceIndex] = _frameSets.allocate(_frameDSL);
+        }
+        if (!binding.pointFaceDS[faceIndex]) {
+            return false;
+        }
     }
     return true;
 }
 
-bool ShadowFrameResources::prepare(const BasicShadowFramePayload& payload)
+void ShadowFrameResources::updateViewDescriptors(
+    const Binding& binding,
+    uint32_t       directionalCount,
+    uint32_t       pointFaceCount)
 {
-    if (!_render || !_uploadArena || !payload.frameData || payload.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
-        return false;
-    }
-    if (!_uploadArena->beginFlight(payload.flightIndex, payload.frameIndex) ||
-        !payload.frameData->sceneSnapshot ||
-        !ensureSkinningCapacity(static_cast<uint32_t>(payload.frameData->sceneSnapshot->skinningPalettes.size()))) {
-        return false;
-    }
-
-    const uint32_t alignment = std::max(_render->getUniformBufferOffsetAlignment(), 1u);
-    const uint32_t directionalCount = payload.directionalCascadeCount();
-    const uint32_t pointFaceCount = payload.pointEnabled()
-        ? payload.pointLightCount * ShadowConstants::FACES_PER_POINT_LIGHT
-        : 0u;
-    const uint64_t sliceCount = static_cast<uint64_t>(directionalCount) + pointFaceCount;
-    uint64_t reservationSize = 0;
-    if (sliceCount > 0) {
-        if (!checkedAdd(
-                static_cast<uint64_t>(sliceCount) * (alignment - 1u),
-                static_cast<uint64_t>(directionalCount) * sizeof(DirectionalFrameData) +
-                    static_cast<uint64_t>(pointFaceCount) * sizeof(PointFaceData),
-                reservationSize) ||
-            reservationSize > std::numeric_limits<uint32_t>::max()) {
-            YA_CORE_ERROR("Shadow frame upload reservation exceeds 32-bit buffer size");
-            return false;
-        }
-    }
-
-    Binding next = _bindings[payload.flightIndex];
-    next.directionalFrames.fill({});
-    next.pointFaces.fill({});
-
-    std::optional<FrameUploadArena::Allocation> reservation;
-    if (reservationSize > 0) {
-        reservation = _uploadArena->allocate(
-            payload.flightIndex,
-            static_cast<uint32_t>(reservationSize),
-            alignment);
-        if (!reservation.has_value()) {
-            return false;
-        }
-    }
-
-    uint64_t cursor = reservation ? reservation->offset : 0;
-    auto allocateSlice = [&](uint32_t size) -> FrameUploadArena::Allocation {
-        cursor = alignUp(cursor, alignment);
-        FrameUploadArena::Allocation result{
-            .buffer = reservation ? reservation->buffer : nullptr,
-            .offset = cursor,
-            .size   = size,
-        };
-        cursor += size;
-        return result;
-    };
-
-    for (uint32_t cascadeIndex = 0; cascadeIndex < directionalCount; ++cascadeIndex) {
-        auto slice = allocateSlice(sizeof(DirectionalFrameData));
-        DirectionalFrameData frameData{
-            .directionalLightMatrix = payload.frameData->directionalLight.cascadeViewProjections[cascadeIndex],
-            .numPointLights         = 0,
-            .hasDirectionalLight    = 1u,
-        };
-        if (!slice.write(&frameData, sizeof(frameData))) {
-            return false;
-        }
-        next.directionalFrames[cascadeIndex] = slice;
-    }
-
-    for (uint32_t faceGlobalIndex = 0; faceGlobalIndex < pointFaceCount; ++faceGlobalIndex) {
-        const uint32_t lightIndex = faceGlobalIndex / ShadowConstants::FACES_PER_POINT_LIGHT;
-        const uint32_t faceIndex = faceGlobalIndex % ShadowConstants::FACES_PER_POINT_LIGHT;
-        auto slice = allocateSlice(sizeof(PointFaceData));
-        PointFaceData faceData{
-            .viewProj  = payload.frameUBO.pointLights[lightIndex].matrix[faceIndex],
-            .lightPos  = payload.frameUBO.pointLights[lightIndex].pos,
-            .farPlane  = payload.frameUBO.pointLights[lightIndex].farPlane,
-        };
-        if (!slice.write(&faceData, sizeof(faceData))) {
-            return false;
-        }
-        next.pointFaces[faceGlobalIndex] = slice;
-    }
-
-    const auto& palettes = payload.frameData->sceneSnapshot->skinningPalettes;
-    auto&       skinning = next.skinningBuffer;
-    if (!palettes.empty()) {
-        const uint64_t bytes = static_cast<uint64_t>(palettes.size()) * sizeof(RenderSkinningPalette);
-        if (bytes > std::numeric_limits<uint32_t>::max() ||
-            !skinning->writeData(palettes.data(), static_cast<uint32_t>(bytes), 0) ||
-            !skinning->flush(static_cast<uint32_t>(bytes), 0)) {
-            return false;
-        }
-    }
-
     std::vector<WriteDescriptorSet> writes;
     writes.reserve(directionalCount + pointFaceCount);
     for (uint32_t cascadeIndex = 0; cascadeIndex < directionalCount; ++cascadeIndex) {
         writes.push_back(IDescriptorSetHelper::genBufferWrite(
-            next.directionalFrameDS[cascadeIndex], 0, 0,
+            binding.directionalFrameDS[cascadeIndex],
+            0,
+            0,
             EPipelineDescriptorType::UniformBuffer,
-            {next.directionalFrames[cascadeIndex].descriptor()}));
+            {binding.directionalFrames[cascadeIndex].descriptor()}));
     }
-    for (uint32_t faceGlobalIndex = 0; faceGlobalIndex < pointFaceCount; ++faceGlobalIndex) {
+    for (uint32_t faceIndex = 0; faceIndex < pointFaceCount; ++faceIndex) {
         writes.push_back(IDescriptorSetHelper::genBufferWrite(
-            next.pointFaceDS[faceGlobalIndex], 0, 0,
+            binding.pointFaceDS[faceIndex],
+            0,
+            0,
             EPipelineDescriptorType::UniformBuffer,
-            {next.pointFaces[faceGlobalIndex].descriptor()}));
+            {binding.pointFaces[faceIndex].descriptor()}));
     }
     if (!writes.empty()) {
         _render->getDescriptorHelper()->updateDescriptorSets(writes, {});
     }
-    _bindings[payload.flightIndex] = std::move(next);
+}
+
+ShadowFrameResources::ViewPayloads ShadowFrameResources::buildViewPayloads(
+    const BasicShadowFramePayload& payload)
+{
+    ViewPayloads payloads{};
+    payloads.directionalCount = payload.directionalCascadeCount();
+    for (uint32_t cascadeIndex = 0; cascadeIndex < payloads.directionalCount; ++cascadeIndex) {
+        payloads.directional[cascadeIndex] = DirectionalFrameData{
+            .directionalLightMatrix = payload.frameData->directionalLight.cascadeViewProjections[cascadeIndex],
+            .numPointLights         = 0,
+            .hasDirectionalLight    = 1u,
+        };
+    }
+
+    payloads.pointFaceCount = payload.pointEnabled()
+        ? payload.pointLightCount * ShadowConstants::FACES_PER_POINT_LIGHT
+        : 0u;
+    for (uint32_t faceGlobalIndex = 0; faceGlobalIndex < payloads.pointFaceCount; ++faceGlobalIndex) {
+        const uint32_t lightIndex = faceGlobalIndex / ShadowConstants::FACES_PER_POINT_LIGHT;
+        const uint32_t faceIndex  = faceGlobalIndex % ShadowConstants::FACES_PER_POINT_LIGHT;
+        payloads.pointFaces[faceGlobalIndex] = PointFaceData{
+            .viewProj = payload.frameUBO.pointLights[lightIndex].matrix[faceIndex],
+            .lightPos = payload.frameUBO.pointLights[lightIndex].pos,
+            .farPlane = payload.frameUBO.pointLights[lightIndex].farPlane,
+        };
+    }
+    return payloads;
+}
+
+bool ShadowFrameResources::writeViewPayloads(
+    FrameUploadArena&   arena,
+    uint32_t            flightIndex,
+    uint32_t            alignment,
+    const ViewPayloads& payloads,
+    Binding&            binding)
+{
+    if (flightIndex >= MAX_FLIGHTS_IN_FLIGHT || alignment == 0) {
+        return false;
+    }
+    if (payloads.directionalCount > MAX_DIRECTIONAL_CASCADES ||
+        payloads.pointFaceCount > ShadowConstants::POINT_SHADOW_FACE_COUNT) {
+        return false;
+    }
+
+    for (uint32_t cascadeIndex = 0; cascadeIndex < payloads.directionalCount; ++cascadeIndex) {
+        auto slice = writeUploadSlice(
+            arena,
+            flightIndex,
+            alignment,
+            &payloads.directional[cascadeIndex],
+            sizeof(payloads.directional[cascadeIndex]));
+        if (!slice) {
+            return false;
+        }
+        binding.directionalFrames[cascadeIndex] = *slice;
+    }
+    for (uint32_t faceIndex = 0; faceIndex < payloads.pointFaceCount; ++faceIndex) {
+        auto slice = writeUploadSlice(
+            arena,
+            flightIndex,
+            alignment,
+            &payloads.pointFaces[faceIndex],
+            sizeof(payloads.pointFaces[faceIndex]));
+        if (!slice) {
+            return false;
+        }
+        binding.pointFaces[faceIndex] = *slice;
+    }
     return true;
 }
 
-const ShadowFrameResources::Binding& ShadowFrameResources::getBinding(uint32_t flightIndex) const
+const ShadowFrameResources::Binding* ShadowFrameResources::beginView(
+    const RenderSubmissionContext& submission,
+    RenderViewRecordingContext&    view,
+    const BasicShadowFramePayload& payload)
 {
-    YA_CORE_ASSERT(flightIndex < _bindings.size(), "ShadowFrameResources invalid flight index {}", flightIndex);
-    return _bindings[flightIndex];
+    if (!_render || !_uploadArena || submission.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
+        return nullptr;
+    }
+    if (!view.frameData || !payload.frameData) {
+        YA_CORE_ERROR("Shadow beginView requires view frame data");
+        return nullptr;
+    }
+
+    Binding* slot = _viewBindings.mutableNextView(submission.flightIndex);
+    if (!slot) {
+        YA_CORE_ERROR("Shadow beginView requires beginSubmission on flight {}", submission.flightIndex);
+        return nullptr;
+    }
+
+    const uint32_t viewSlot = _viewBindings.liveViewCount(submission.flightIndex);
+    const SkinningBinding& skinning = _skinningBindings[submission.flightIndex];
+    slot->skinningDS     = skinning.skinningDescriptorSet;
+    slot->skinningBuffer = skinning.skinningBuffer;
+
+    const ViewPayloads payloads = buildViewPayloads(payload);
+    if (!ensureViewDescriptors(*slot, payloads.directionalCount, payloads.pointFaceCount)) {
+        YA_CORE_ERROR("Shadow beginView failed to allocate view descriptor sets");
+        return nullptr;
+    }
+
+    const uint32_t alignment = std::max(_render->getUniformBufferOffsetAlignment(), 1u);
+    if (!writeViewPayloads(*_uploadArena, submission.flightIndex, alignment, payloads, *slot)) {
+        YA_CORE_ERROR("Shadow beginView failed to upload view payloads");
+        return nullptr;
+    }
+
+    updateViewDescriptors(*slot, payloads.directionalCount, payloads.pointFaceCount);
+
+    if (!_viewBindings.commitNextView(submission.flightIndex)) {
+        return nullptr;
+    }
+
+    view.viewSlot = viewSlot;
+    return _viewBindings.getView(submission.flightIndex, viewSlot);
+}
+
+const ShadowFrameResources::Binding* ShadowFrameResources::getViewBinding(
+    uint32_t flightIndex,
+    uint32_t viewSlot) const
+{
+    return _viewBindings.getView(flightIndex, viewSlot);
+}
+
+uint32_t ShadowFrameResources::liveViewCount(uint32_t flightIndex) const
+{
+    return _viewBindings.liveViewCount(flightIndex);
 }
 
 } // namespace ya

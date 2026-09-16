@@ -2,6 +2,7 @@
 
 #include "RHI/Core/Image.h"
 #include "Graph/RenderGraph.h"
+#include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Shadow/IShadowTechnique.h"
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Stage/IRenderStage.h"
@@ -28,6 +29,7 @@ struct ShadowStage : public IRenderStage
     void init(IRender* render) override;
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
+    void prepareView(const RenderSubmissionContext& submission, RenderViewRecordingContext& view);
     void execute(const RenderStageContext& ctx) override;
 
     [[nodiscard]] IShadowTechnique* getTechnique() const { return _technique.get(); }

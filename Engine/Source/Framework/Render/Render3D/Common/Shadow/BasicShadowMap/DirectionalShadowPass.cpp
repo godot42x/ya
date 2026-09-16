@@ -151,8 +151,9 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendCascadePass(
     if (cascadeIndex >= _depthViews.size() || !_depthViews[cascadeIndex]) return std::nullopt;
 
     YA_CORE_ASSERT(_frameResources != nullptr, "Directional shadow graph requires frame resources");
-    const auto& binding = _frameResources->getBinding(payload.flightIndex);
-    YA_CORE_ASSERT(binding.directionalFrames[cascadeIndex] && binding.skinningBuffer,
+    const auto* binding = _frameResources->getViewBinding(payload.flightIndex, payload.viewSlot);
+    YA_CORE_ASSERT(binding != nullptr, "Directional shadow graph requires a View binding");
+    YA_CORE_ASSERT(binding->directionalFrames[cascadeIndex] && binding->skinningBuffer,
                    "Directional shadow graph requires frame and skinning buffers");
 
     const auto depth = graph.importTexture(makeImportedTextureDesc(
@@ -172,22 +173,22 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendCascadePass(
             allocation.size));
     };
     const auto frameBuffer = importHostWrittenBuffer(
-        binding.directionalFrames[cascadeIndex],
+        binding->directionalFrames[cascadeIndex],
         std::format("DirectionalShadow.FrameUBO.{}", cascadeIndex),
         EBufferUsage::UniformBuffer);
     const auto skinningBuffer = importHostWrittenBuffer(
         FrameUploadArena::Allocation{
-            .buffer = binding.skinningBuffer,
+            .buffer = binding->skinningBuffer,
             .offset = 0,
-            .size   = binding.skinningBuffer->getSize(),
+            .size   = binding->skinningBuffer->getSize(),
         },
         "DirectionalShadow.SkinningSSBO", EBufferUsage::StorageBuffer);
-    const auto frameDS = binding.directionalFrameDS[cascadeIndex];
-    const auto skinningDS = binding.skinningDS;
+    const auto frameDS = binding->directionalFrameDS[cascadeIndex];
+    const auto skinningDS = binding->skinningDS;
 
     const RGBufferRange frameRange{
-        .offset = binding.directionalFrames[cascadeIndex].offset,
-        .size   = binding.directionalFrames[cascadeIndex].size,
+        .offset = binding->directionalFrames[cascadeIndex].offset,
+        .size   = binding->directionalFrames[cascadeIndex].size,
     };
     const auto shadowPass = graph.addPass(
         std::format("Directional Shadow Cascade {}", cascadeIndex),

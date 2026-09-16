@@ -1,6 +1,7 @@
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/RenderViewBindingTable.h"
+#include "Render3D/Common/Shadow/ShadowFrameResources.h"
 #include "Render3D/Deferred/DeferredFrameResourceSet.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
 #include "RHI/Core/Buffer.h"
@@ -231,6 +232,46 @@ TEST(RenderViewBindingTableTest, DeferredViewSlicesStayIndependent)
     EXPECT_EQ(viewA.frame.offset, viewAOffset);
     EXPECT_EQ(viewA.light.offset, viewALight);
     EXPECT_EQ(viewA.ssaoFrame.offset, viewASsao);
+}
+
+TEST(RenderViewBindingTableTest, ShadowViewSlicesStayIndependent)
+{
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+    deletionQueue.init(/*framesInFlight=*/1);
+
+    TestResourceFactory factory;
+    FrameUploadArena    arena(factory, /*flightCount=*/1, /*initialCapacity=*/64u * 1024u);
+    ASSERT_TRUE(arena.beginFlight(0, 1u));
+
+    ShadowFrameResources::ViewPayloads payloadsA{};
+    ShadowFrameResources::ViewPayloads payloadsB{};
+    payloadsA.directionalCount = 2;
+    payloadsB.directionalCount = 2;
+    payloadsA.pointFaceCount   = 6;
+    payloadsB.pointFaceCount   = 6;
+
+    ShadowFrameResources::Binding viewA{};
+    ShadowFrameResources::Binding viewB{};
+    ASSERT_TRUE(ShadowFrameResources::writeViewPayloads(arena, 0, 16, payloadsA, viewA));
+    ASSERT_TRUE(ShadowFrameResources::writeViewPayloads(arena, 0, 16, payloadsB, viewB));
+
+    EXPECT_TRUE(viewA.directionalFrames[0].valid());
+    EXPECT_TRUE(viewB.directionalFrames[0].valid());
+    EXPECT_TRUE(viewA.pointFaces[0].valid());
+    EXPECT_TRUE(viewB.pointFaces[0].valid());
+    EXPECT_EQ(viewA.directionalFrames[0].buffer.get(), viewB.directionalFrames[0].buffer.get());
+    EXPECT_EQ(viewA.directionalFrames[0].offset, 0u);
+    EXPECT_GT(viewB.directionalFrames[0].offset, viewA.directionalFrames[0].offset);
+    EXPECT_NE(viewA.directionalFrames[1].offset, viewB.directionalFrames[1].offset);
+    EXPECT_NE(viewA.pointFaces[0].offset, viewB.pointFaces[0].offset);
+
+    const uint64_t viewACascade0 = viewA.directionalFrames[0].offset;
+    const uint64_t viewAFace0    = viewA.pointFaces[0].offset;
+    viewB.directionalFrames[0].offset = 4096;
+    viewB.pointFaces[0].offset        = 8192;
+    EXPECT_EQ(viewA.directionalFrames[0].offset, viewACascade0);
+    EXPECT_EQ(viewA.pointFaces[0].offset, viewAFace0);
 }
 
 TEST(RenderViewBindingTableTest, RecordingContextsAreIndependentOfFlightIndex)

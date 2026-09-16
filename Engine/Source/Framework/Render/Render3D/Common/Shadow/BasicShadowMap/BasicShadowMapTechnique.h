@@ -30,7 +30,7 @@ class BasicShadowMapTechnique : public IShadowTechnique
     void init(IRender* render, const ShadowSettings& settings) override;
     void destroy() override;
     void applySettings(const ShadowSettings& settings) override;
-    void prepare(uint32_t flightIndex, const RenderFrameData& frameData) override;
+    void prepare(const RenderSubmissionContext& submission, RenderViewRecordingContext& view) override;
     [[nodiscard]] DirectionalShadowPass& getDirectionalPass() { return _directionalPass; }
     [[nodiscard]] PointShadowPass&       getPointPass() { return _pointPass; }
     [[nodiscard]] const DirectionalShadowPass& getDirectionalPass() const { return _directionalPass; }
@@ -56,6 +56,7 @@ class BasicShadowMapTechnique : public IShadowTechnique
 
     ShadowSettings _settings;
     uint32_t       _lastPreparedPointLightCount = 0;
+    uint32_t       _preparedViewSlot = RenderViewRecordingContext::kInvalidViewSlot;
     ShadowFrameResources _frameResources;
     DirectionalShadowPass _directionalPass;
     PointShadowPass       _pointPass;

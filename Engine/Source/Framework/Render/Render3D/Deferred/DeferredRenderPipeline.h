@@ -262,7 +262,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     void               updateStageFrameInputs(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
-    void               prepareShadowPass(RenderStageContext& stageCtx);
+    void               prepareShadowPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               executeDeferredMainGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               markPendingResourceRefresh(EDeferredPendingResourceRefresh refresh);

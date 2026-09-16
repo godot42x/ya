@@ -4,15 +4,17 @@
 
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/FrameUploadArena.h"
-#include "Render3D/Stage/IRenderStage.h"
-
+#include "Render3D/Common/PerFlightFrameResourceSetBase.h"
+#include "Render3D/Common/RenderRecordingContext.h"
+#include "Render3D/Common/RenderViewBindingTable.h"
 #include "Render3D/Common/Shadow/ShadowTypes.h"
+#include "Render3D/Common/ViewDescriptorSetAllocator.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
 #include "Shadow.PointShadowIndirect.slang.h"
 
 #include <array>
-#include <memory>
+#include <cstdint>
 
 namespace ya
 {
@@ -20,16 +22,28 @@ namespace ya
 struct IRender;
 
 /**
- * Owns the host-written frame inputs shared by the directional and point
- * shadow raster passes. The pass modules keep pipeline state only; this
- * object owns descriptor layouts, per-flight descriptors, upload slices and
- * the capacity-managed skinning buffer.
+ * Owns Shadow's persistent layouts/pools and the per-flight upload arena.
+ *
+ * Layouts and descriptor pools are device-lifetime. Cascade/face descriptor
+ * sets and upload slices are View-owned: beginSubmission() opens a flight
+ * token, beginView() acquires an independent Binding so a second View cannot
+ * overwrite the first. Skinning palettes stay submission-scoped.
  */
-class ShadowFrameResources
+class ShadowFrameResources : public PerFlightFrameResourceSetBase<ShadowFrameResources>
 {
+    friend class PerFlightFrameResourceSetBase<ShadowFrameResources>;
+
   public:
     using DirectionalFrameData = slang_types::CombineShadowMappingGenerate::FrameData;
     using PointFaceData        = slang_types::Shadow::PointShadowIndirect::PointShadowFaceData;
+
+    struct ViewPayloads
+    {
+        uint32_t directionalCount = 0;
+        std::array<DirectionalFrameData, MAX_DIRECTIONAL_CASCADES> directional{};
+        uint32_t pointFaceCount = 0;
+        std::array<PointFaceData, ShadowConstants::POINT_SHADOW_FACE_COUNT> pointFaces{};
+    };
 
     struct Binding
     {
@@ -39,31 +53,53 @@ class ShadowFrameResources
         std::array<DescriptorSetHandle, ShadowConstants::POINT_SHADOW_FACE_COUNT>           pointFaceDS{};
         stdptr<IBuffer>        skinningBuffer;
         DescriptorSetHandle    skinningDS{};
+
+        [[nodiscard]] bool isValid() const
+        {
+            return skinningDS && skinningBuffer;
+        }
+    };
+
+    struct SkinningBinding
+    {
+        DescriptorSetHandle skinningDescriptorSet{};
+        stdptr<IBuffer>     skinningBuffer;
     };
 
     void init(IRender* render);
     void destroy();
 
-    /** Begin the flight and upload all host-written shadow inputs. */
-    bool prepare(const BasicShadowFramePayload& payload);
+    bool beginSubmission(const RenderSubmissionContext& submission);
+    const Binding* beginView(const RenderSubmissionContext& submission,
+                             RenderViewRecordingContext&    view,
+                             const BasicShadowFramePayload& payload);
+
+    bool prepareSkinning(const RenderStageContext& ctx)
+    {
+        return PerFlightFrameResourceSetBase<ShadowFrameResources>::prepareSkinning(ctx);
+    }
+
+    static bool writeViewPayloads(FrameUploadArena&   arena,
+                                  uint32_t            flightIndex,
+                                  uint32_t            alignment,
+                                  const ViewPayloads& payloads,
+                                  Binding&            binding);
 
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameDSL() const { return _frameDSL; }
-    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkinningDSL() const { return _skinningDSL; }
-    [[nodiscard]] const Binding& getBinding(uint32_t flightIndex) const;
+    [[nodiscard]] const Binding*               getViewBinding(uint32_t flightIndex, uint32_t viewSlot) const;
+    [[nodiscard]] uint32_t                     liveViewCount(uint32_t flightIndex) const;
 
   private:
-    static std::optional<uint32_t> calculateSkinningCapacity(
-        uint32_t currentCapacity,
-        uint32_t paletteCount);
-    bool ensureSkinningCapacity(uint32_t paletteCount);
+    stdptr<IDescriptorSetLayout> _frameDSL;
+    ViewDescriptorSetAllocator   _frameSets;
+    std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT> _skinningBindings{};
+    RenderViewBindingTable<Binding> _viewBindings;
 
-    IRender* _render = nullptr;
-    std::unique_ptr<FrameUploadArena> _uploadArena;
-    stdptr<IDescriptorSetLayout>      _frameDSL;
-    stdptr<IDescriptorSetLayout>      _skinningDSL;
-    stdptr<IDescriptorPool>           _descriptorPool;
-    std::array<Binding, MAX_FLIGHTS_IN_FLIGHT> _bindings{};
-    uint32_t _skinningCapacity = 0;
+    std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT>& bindings() { return _skinningBindings; }
+
+    bool ensureViewDescriptors(Binding& binding, uint32_t directionalCount, uint32_t pointFaceCount);
+    void updateViewDescriptors(const Binding& binding, uint32_t directionalCount, uint32_t pointFaceCount);
+    static ViewPayloads buildViewPayloads(const BasicShadowFramePayload& payload);
 };
 
 } // namespace ya

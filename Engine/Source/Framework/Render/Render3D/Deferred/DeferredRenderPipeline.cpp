@@ -843,7 +843,7 @@ void DeferredRenderPipeline::tick(const RenderPipelineFrameContext& frame)
     }
     {
         YA_PROFILE_SCOPE("DeferredPipeline/ShadowPass");
-        prepareShadowPass(stageCtx);
+        prepareShadowPass(frame, stageCtx);
     }
     {
         YA_PROFILE_SCOPE("DeferredPipeline/MainGraph");
@@ -1171,14 +1171,26 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
     updateStageFrameInputs(frame);
 }
 
-void DeferredRenderPipeline::prepareShadowPass(RenderStageContext& stageCtx)
+void DeferredRenderPipeline::prepareShadowPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
     const auto shadowSettings = currentShadowSettings();
     if (_shadowStage && shadowSettings.isEnabled()) {
         _shadowStage->applySettings(shadowSettings);
         {
             YA_PERF_SCOPE(perf::sample::deferredShadow(), perf::metric::cpuTimeMs(), perf::domain::render());
-            _shadowStage->prepare(stageCtx);
+            RenderSubmissionContext submission = frame.submission;
+            submission.cmdBuf      = frame.cmdBuf;
+            submission.flightIndex = frame.camera.flightIndex;
+            submission.frameToken  = frame.camera.frameIndex;
+
+            RenderViewRecordingContext view = frame.view;
+            if (!view.frameData) {
+                view.frameData = frame.camera.frameData;
+            }
+            if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
+                view.viewportExtent = stageCtx.viewportExtent;
+            }
+            _shadowStage->prepareView(submission, view);
         }
         return;
     }
