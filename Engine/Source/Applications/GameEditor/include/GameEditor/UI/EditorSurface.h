@@ -53,6 +53,11 @@ struct EditorSurface : IEditorViewportHostSink
   private:
     EditorLayer* _layer = nullptr;
     std::unique_ptr<WidgetTree> _tree;
+    /// Cached from the per-frame FEditorSurfaceContext, same lifetime contract as
+    /// _presentSurface: the host owns the App and clears it on unbind. Needed by
+    /// the settings dialog, which mutates live resources (a font-face switch
+    /// reloads the stack) between frames.
+    App* _app = nullptr;
     std::shared_ptr<UITheme>    _theme;
     UIFrameSnapshot             _snapshot;
     bool                        _bBuiltAsProjectBrowser = false;

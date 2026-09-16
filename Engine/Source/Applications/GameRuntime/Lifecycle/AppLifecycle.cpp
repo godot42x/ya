@@ -3,6 +3,7 @@
 #include "GameRuntime/Lifecycle/AppAutomation.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/Utility/FPSCtrl.h"
+#include "GameRuntime/Utility/UiFontSettings.h"
 #include "GUI/Host/AppBootstrap.h"
 #include "RHI/NativeWindow.h"
 
@@ -58,21 +59,6 @@ namespace ya
 {
 namespace
 {
-std::string findRuntimeDefaultFontPath()
-{
-    // The engine's default UI face is the BUNDLED proportional one; CJK comes
-    // from a fallback face registered right after (addDefaultUiFallbacks), not
-    // from the primary. Picking a system CJK font as the primary - the old
-    // behaviour here - made the whole editor render in that machine's Latin
-    // design (Hiragino on macOS, YaHei on Windows) and diverge from the GUI
-    // host, which bundles a face. JetBrains Mono is the last resort only, for
-    // a tree with no bundled UI face at all.
-    if (std::string uiFont = FontManager::findDefaultUiFontPath(); !uiFont.empty()) {
-        return uiFont;
-    }
-    return "Engine/Content/Fonts/JetBrainsMono-Medium.ttf";
-}
-
 std::string resolveProjectScenePath(const App& app, const std::string& requestedPath)
 {
     if (requestedPath.empty()) {
@@ -138,6 +124,17 @@ void App::init(AppDesc ci)
         ConfigManager::get().openDocument(
             "runtime",
             "Engine/Saved/Config/Runtime.json",
+            Config::OpenDocumentOptions{
+                .bPersistIfMissing = true,
+                .bReadOnly         = false,
+            });
+        // UI-wide preferences (font face today, text scale / density later).
+        // A document of its own rather than a corner of "editor": the face
+        // applies to the runtime shell and the workbench too, and "editor" only
+        // exists when the editor module is loaded.
+        ConfigManager::get().openDocument(
+            ui_font_settings::kConfigDocument,
+            "Engine/Saved/Config/Ui.json",
             Config::OpenDocumentOptions{
                 .bPersistIfMissing = true,
                 .bReadOnly         = false,
@@ -432,13 +429,18 @@ void App::onInit(const AppDesc& ci)
             AssetManager::get()->registerTexture(std::format("FontAtlas_{}:{}", fontName.toString(), fontSize),
                                                  atlasTexture);
         });
-    if (const std::string runtimeFontPath = findRuntimeDefaultFontPath(); !runtimeFontPath.empty()) {
-        auto* render = app.getRenderServices().getRender();
-        YA_CORE_ASSERT(render, "App::onInit requires a render backend");
-        FontManager::get()->loadFont(*render, runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, DEFAULT_RUNTIME_FONT_SIZE);
-        // Same CJK/emoji stack the GUI host wires (shared policy), so editor and
-        // workbench chrome resolve missing glyphs identically.
-        FontManager::get()->addDefaultUiFallbacks(*render, DEFAULT_RUNTIME_FONT_NAME);
+    // The UI face is a user CHOICE (utility setting), resolved once here and
+    // built through the same catalog entry point the GUI host uses - otherwise
+    // the runtime and the host can disagree about which face is "the default".
+    // CJK comes from a registered fallback, never from the primary: a machine's
+    // system CJK font would otherwise impose that machine's Latin design.
+    auto* render = app.getRenderServices().getRender();
+    YA_CORE_ASSERT(render, "App::onInit requires a render backend");
+    if (!ui_font_settings::apply(*render)) {
+        // Keep the shell readable rather than aborting: the last-resort bundled
+        // monospace is a usable face, just not the preferred one.
+        YA_CORE_WARN("App::onInit: configured UI font face is unavailable; falling back to bundled monospace");
+        FontManager::get()->loadUiFontStack(*render, "jetbrains-mono", DEFAULT_RUNTIME_FONT_SIZE);
     }
 
 }

@@ -1,10 +1,12 @@
 #pragma once
 
 #include "GameEditor/UI/EditorFilePicker.h"
+#include "GameRuntime/Utility/UiFontSettings.h"
 
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace ya
 {
@@ -31,6 +33,12 @@ struct FEditorSettingsBindings
     std::function<bool()> scenePathExists;
     std::function<void()> applyScenePath;
     std::function<void()> resetScenePath;
+    /// UI face, by catalog id. The dialog renders the list and reports the pick;
+    /// applying it means reloading the font stack, so the dialog cannot resolve
+    /// the choice itself (it has no render backend) - the surface does.
+    std::function<std::vector<ui_font_settings::FOption>()> fontOptions;
+    std::function<std::string()> fontFace;
+    std::function<void(std::string)> setFontFace;
     EditorFilePickerCallback openFilePicker;
 };
 
@@ -72,6 +80,8 @@ class EditorSettingsDialog
     std::shared_ptr<UIBorder> _panel;
     std::shared_ptr<UIContainer> _settingsRoot;
     std::shared_ptr<UIComboBox> _samplerCombo;
+    std::shared_ptr<UIComboBox> _fontCombo;
+    std::vector<std::string>    _fontOptionIds;
     std::shared_ptr<UICheckBox> _overlayCheckbox;
     std::shared_ptr<UITextField> _scenePathField;
     std::shared_ptr<UIText> _sceneStatusText;

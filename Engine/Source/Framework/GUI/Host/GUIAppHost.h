@@ -68,17 +68,22 @@ struct FGUIWindowHostConfig
     /// Native window + IRender backend. Extra windows follow the live
     /// `IRender::getAPI()` when a device already exists; otherwise this value.
     ERenderAPI::T            renderAPI = ERenderAPI::Vulkan;
-    /// Runtime font: loaded once per entry under DEFAULT_RUNTIME_FONT_NAME
-    /// (UIText resolves fonts by exact name+size). Empty to skip font loading.
+    /// Which UI face the host loads under DEFAULT_RUNTIME_FONT_NAME, by catalog
+    /// id (FontManager::uiFontFaces). Empty skips font loading entirely.
     ///
-    /// Inter (OFL, bundled) is the default because chrome typography needs a
-    /// PROPORTIONAL UI face: a monospace face makes every label, menu and field
-    /// read as terminal output, and its fixed advance wastes horizontal room in
-    /// dense tool panels. It is bundled rather than probed from the platform so
-    /// text metrics stay identical across macOS/Windows (the golden-image and
-    /// dump-digest checks compare runs, not machines). JetBrains Mono stays in
-    /// `Engine/Content/Fonts/` for code/console surfaces that want monospace.
-    std::string              fontPath = "Engine/Content/Fonts/Inter-Regular.ttf";
+    /// An ID rather than a path because the face is a durable CHOICE: the host
+    /// builds the whole stack (primary + CJK/emoji fallbacks + the monospace
+    /// family) from it, and a caller that can only pass a path cannot express
+    /// "the engine's default face" without re-deriving it. Inter (OFL, bundled)
+    /// is the default face in the catalog because chrome typography needs a
+    /// PROPORTIONAL UI face - a monospace primary makes every label, menu and
+    /// field read as terminal output - and it is bundled so text metrics stay
+    /// identical across macOS/Windows.
+    ///
+    /// Applications that expose a font setting should not read this struct:
+    /// resolve the user's choice once (see GameRuntime/Utility/UiFontSettings.h)
+    /// and pass the id here.
+    std::string              uiFontFace = "inter";
     /// Debug: dump the first UI snapshot as a BMP (CPU-side raster of the
     /// draw items, top-left origin). Empty to disable; dumpFrame selects the
     /// frame (0 = the first snapshot).

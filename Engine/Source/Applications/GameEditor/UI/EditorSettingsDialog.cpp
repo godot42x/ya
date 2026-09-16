@@ -66,6 +66,56 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
                               });
     _scenePathField = scenePathField.share();
 
+    // Face picker. Options come from the binding, not from here: the dialog is
+    // the view, and "which faces exist / which are installed" is app policy.
+    std::vector<ui_font_settings::FOption> faceOptions;
+    if (_bindings.fontOptions) {
+        faceOptions = _bindings.fontOptions();
+    }
+    std::vector<std::string> faceLabels;
+    faceLabels.reserve(faceOptions.size());
+    _fontOptionIds.clear();
+    int selectedFace = 0;
+    const std::string currentFace = _bindings.fontFace ? _bindings.fontFace() : std::string{};
+    for (size_t i = 0; i < faceOptions.size(); ++i) {
+        const ui_font_settings::FOption& option = faceOptions[i];
+        // Say WHY a face cannot be picked: a face that vanishes from the list
+        // would read as "the setting was lost" rather than "the file is not on
+        // this machine".
+        faceLabels.push_back(option.bAvailable ? option.label : option.label + "  (unavailable)");
+        _fontOptionIds.push_back(option.id);
+        if (option.id == currentFace) {
+            selectedFace = static_cast<int>(i);
+        }
+    }
+    auto fontCombo = ui::comboBox("EditorSettingsFontFace")
+                         .setStyleKey(editorStyle(StyleKey::ComboBox))
+                         .setItems(std::move(faceLabels))
+                         .setSelectedIndex(selectedFace)
+                         .setOnSelectionChanged([this](int index) {
+                             if (!_bindings.setFontFace) {
+                                 return;
+                             }
+                             if (index >= 0 && index < static_cast<int>(_fontOptionIds.size())) {
+                                 _bindings.setFontFace(_fontOptionIds[static_cast<size_t>(index)]);
+                             }
+                         });
+    // The row is mounted conditionally below, so keep the handle only when this
+    // dialog actually shows it - sync() must not poke a control that no tree
+    // ever sees.
+    if (!faceOptions.empty()) {
+        _fontCombo = fontCombo.share();
+    }
+    auto fontRow = ui::row("EditorSettingsFontRow")
+                       .setSpacing(8.0f)
+                       .setStretchLastChild(true)
+                       .child(ui::text("EditorSettingsFontLabel")
+                                  .setText("UI Font")
+                                  .setStyleKey("text.muted")
+                                  .setVAlign(EWidgetAlignV::Center),
+                              ui::boxSlot().preferredSize({140.0f, 26.0f}))
+                       .child(std::move(fontCombo), ui::boxSlot().preferredSize({240.0f, 26.0f}));
+
     auto sceneStatusText = ui::text("EditorSettingsSceneStatus").setStyleKey("text.muted");
     _sceneStatusText = sceneStatusText.share();
 
@@ -115,7 +165,11 @@ void EditorSettingsDialog::open(WidgetTree& tree, FEditorSettingsBindings bindin
                                                   .setStyleKey("text.muted")
                                                   .setVAlign(EWidgetAlignV::Center),
                                               ui::boxSlot().preferredSize({140.0f, 26.0f}))
-                                       .child(std::move(samplerCombo), ui::boxSlot().preferredSize({160.0f, 26.0f})))
+                            .child(std::move(samplerCombo), ui::boxSlot().preferredSize({160.0f, 26.0f})))
+                            // A host with no font catalog gets no row at all: an
+                            // empty picker reads as a broken dialog, not as "this
+                            // application has no font setting".
+                            .child(ui::when(!faceOptions.empty(), std::move(fontRow)))
                             .child(std::move(overlayCheckbox))
                             .child(std::move(sceneRow), ui::boxSlot().preferredSize({0.0f, 26.0f}))
                             .child(std::move(sceneStatusText))
@@ -162,6 +216,15 @@ void EditorSettingsDialog::sync(WidgetTree& tree)
     if (_bindings.samplerIndex) {
         _samplerCombo->setSelectedIndex(_bindings.samplerIndex(), false);
     }
+    if (_bindings.fontFace && _fontCombo) {
+        const std::string face = _bindings.fontFace();
+        for (size_t i = 0; i < _fontOptionIds.size(); ++i) {
+            if (_fontOptionIds[i] == face) {
+                _fontCombo->setSelectedIndex(static_cast<int>(i), false);
+                break;
+            }
+        }
+    }
     if (_bindings.showCameraOverlay) {
         _overlayCheckbox->setChecked(_bindings.showCameraOverlay());
     }
@@ -191,6 +254,8 @@ void EditorSettingsDialog::reset()
     _panel.reset();
     _settingsRoot.reset();
     _samplerCombo.reset();
+    _fontCombo.reset();
+    _fontOptionIds.clear();
     _overlayCheckbox.reset();
     _scenePathField.reset();
     _sceneStatusText.reset();

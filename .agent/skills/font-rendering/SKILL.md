@@ -57,11 +57,14 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
    - 当前 `GUIAppHost` 用 `presentExtent/logicalExtent` 比值设 DPI（非真机 DPR）；HiDPI 需改系统 API 取真机 DPR（架构改进项，非紧急）。
 
 7. **主字面必须打包进仓，不要探测系统字体**
-   - `FGUIWindowHostConfig::fontPath` 默认 `Engine/Content/Fonts/Inter-Regular.ttf`（Inter，OFL，随仓；许可在 `Engine/Content/Fonts/Inter-OFL.txt`）。
+   - 可选的 UI 字面目录是 `FontManager::uiFontFaces()`（`FUiFontFace{id, label, bundledPath, systemPath, bMonospace}`），**按 id 选，不按路径选**：路径是机器细节，把路径存进 config 会在文件搬走或换机后失效。默认 `defaultUiFontFace()` = `"inter"` → `Engine/Content/Fonts/Inter-Regular.ttf`（Inter，OFL，随仓；许可在 `Engine/Content/Fonts/Inter-OFL.txt`）。
    - 理由：**chrome 排版要比例字体**。等宽字面（曾用的 JetBrainsMono）让每个 label / menu / field 都像终端输出，并且固定前进宽度在密集工具面板里浪费横向空间。
    - 打包而不是走系统路径，是为了让文本度量在 macOS / Windows 完全一致：golden 图像与 `dumpSnapshot` 摘要是**跨 run** 比对，系统字体探测会让它们跨机漂移。JetBrains Mono 仍在 `Engine/Content/Fonts/`，给需要等宽的 code / console 面用。
-   - 注册名 `DEFAULT_RUNTIME_FONT_NAME`（`RuntimeDefault`）**不要改**：大量测试用它注册合成字体。换字体 = 换 `fontPath`，不是换这个名字。
-   - **只有一个入口**：`FontManager::findDefaultUiFontPath()`（主字面）+ `addDefaultUiFallbacks()`（一个 CJK fallback + 内置 emoji）。GUI host 与 game/editor runtime 都调这两个，不要再各自拼字体栈。曾经 runtime 单独去 `findCjkFontCandidates()` 里挑第一个存在的主字面——那些字面**不是只有 CJK**，它们自带一套拉丁设计，于是同一套框架下编辑器把英文渲染成 Hiragino/PingFang（Windows 上是 msyh），跟 host 不一致，而且在没有全覆封面孔的机器上会落到更老的系统字体。
+   - 注册名 `DEFAULT_RUNTIME_FONT_NAME`（`RuntimeDefault`）**不要改**：大量测试用它注册合成字体。换字面 = 换 catalog id，不是换这个名字。第二个已注册 family 是 `MONO_UI_FONT_NAME`（`RuntimeMono`→ JetBrains Mono）。
+   - **只有一个入口**：`FontManager::loadUiFontStack(render, faceId, size)` —— 它按 id 建**整个栈**（主字面 + 一个 CJK fallback + 内置 emoji + mono family）。GUI host（`FGUIWindowHostConfig::uiFontFace`）与 game/editor runtime（`ui_font_settings::apply`）都走它，不要再各自拼字体栈。曾经 runtime 单独去 `findCjkFontCandidates()` 里挑第一个存在的主字面——那些字面**不是只有 CJK**，它们自带一套拉丁设计，于是同一套框架下编辑器把英文渲染成 Hiragino/PingFang（Windows 上是 msyh），跟 host 不一致，而且在没有全覆封面孔的机器上会落到更老的系统字体。
+   - **重复调用 = 换字面，不是空操作**：`loadFont` 按 (name,size,dpi) 幂等，所以只再 load 一次会把旧字面**原样返回**、切换静默失效。`loadUiFontStack` 先按 name 前缀逐出 `_fontCache` / `_baseFontCache`（**视图也要逐出**：它持有旧 base 的 shared_ptr，留着就等于旧字面还活着）、`_baseSizes` / `_fontPaths` / `_fallbackDefs`，再 load，最后 bump `resourceRevision()`。`WidgetTree` 在下一次 `buildSnapshot` 开头 poll 到这个 revision，整树重测文字度量——所以换字面**不需要**额外的 dirty 钩子。
+   - **用户选择是 app 策略，不是 framework 机制**：`GameRuntime/Utility/UiFontSettings.h`（`faceId` / `setFaceId` / `availableFaces` / `apply` / `applyAndStore`，config document `ui`，key `font.face`）。存的是**id**；未知/过期的 id 回落到默认（而不是让外壳没有文字），且不覆写存值，这样重装字面后还能回来。`applyAndStore` **先加载成功再落盘**：会持久化一个本机渲染不出来的字面是最坏的结果。
+   - **单控件换族**走 `FTextStyle::fontFamily`（配 `UIText::setFontFamily`）。空 = 引擎 UI 主字面，所以「换默认字面」是整壳一次动作，而不是扫遍每个 style key。paint 与 measure **必须**共用 `resolveTextFont(style)`，否则度量与绘制会用不同字面。族名没注册时**回落**到 UI 主字面并 warn —— 族是可选精修，拼错不该让 label 变成空白。
 
 ## 排查清单
 

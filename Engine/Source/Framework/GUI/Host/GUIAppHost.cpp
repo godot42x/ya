@@ -686,14 +686,14 @@ bool GUIWindowHost::init()
     // face-level hard SDF, so 13px glyphs keep their thin strokes. The 128px
     // load here simply pre-warms the SDF flavor; small sizes are lazily built
     // as bitmap bases on first request.
-    if (!FontManager::get()->loadFont(*render, config.fontPath, DEFAULT_RUNTIME_FONT_NAME, 128)) {
-        YA_CORE_WARN("GUIAppHost: failed to load runtime font '{}'; text drawing disabled", config.fontPath);
+    // The whole stack (primary face + CJK/emoji fallbacks + the monospace
+    // family) comes from one catalog id, so the host, the game runtime and any
+    // later face switch all build it the same way. POLICY (one CJK face,
+    // bundled emoji, which faces exist) stays in FontManager.
+    if (!config.uiFontFace.empty() &&
+        !FontManager::get()->loadUiFontStack(*render, config.uiFontFace, 128)) {
+        YA_CORE_WARN("GUIAppHost: failed to load UI font face '{}'; text drawing disabled", config.uiFontFace);
     }
-    // Font stack (plan Phase 3): CJK + color-emoji fallbacks resolve glyphs the
-    // primary Latin face cannot render. The POLICY (one CJK face, bundled
-    // emoji) lives in FontManager so the game/editor runtime wires the same
-    // stack instead of inventing its own - see addDefaultUiFallbacks.
-    FontManager::get()->addDefaultUiFallbacks(*render, DEFAULT_RUNTIME_FONT_NAME);
 
     // Acquire the system DPI scale ONCE at startup (real device pixel ratio
     // from the window-system, not an extent ratio) and publish it to the font

@@ -31,6 +31,8 @@
 namespace ya
 {
 
+struct Font;
+
 // ============================================================================
 // Typed widget styles (style-system Phase 1).
 //
@@ -153,9 +155,25 @@ struct FTextStyle
     uint32_t  fontSize  = 16;
     FBrush    fillColor = FBrush::solid({0.8f, 0.8f, 0.8f, 1.0f});
     glm::vec2 padding   = {0.0f, 0.0f};
+    /// Font FAMILY this text resolves against, by registered FName. Empty means
+    /// "the engine UI face" - which is what almost every label wants, and what
+    /// makes switching the default face a whole-shell change instead of a sweep
+    /// over every style key. A non-empty value opts THIS text into another
+    /// registered family (e.g. MONO_UI_FONT_NAME for a hex/byte readout that has
+    /// to align by column).
+    ///
+    /// A family is a FONT concern, not a text-size concern: fontSize is a step
+    /// on the type scale, family is which design the steps are measured in, and
+    /// they change independently.
+    std::string fontFamily;
 
     bool operator==(const FTextStyle&) const = default;
 };
+
+/// Resolve the font a text style should draw with: its own family when it names
+/// one, else the engine UI face. ONE entry point so paint and measurement cannot
+/// disagree about which face (and therefore which metrics) a label uses.
+[[nodiscard]] YA_GUI_API std::shared_ptr<Font> resolveTextFont(const FTextStyle& style);
 
 /// Panel / card chrome: one fill brush, which owns the panel's corner radius
 /// and edge (`fillColor.cornerRadius` / `.borderColor`). Used by `UIBorder`.

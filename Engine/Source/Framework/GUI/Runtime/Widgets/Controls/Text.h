@@ -74,6 +74,18 @@ struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FText
         _fontSize = value;
         setStyleField("fontSize", value, isAutoSizeActive() ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
     }
+    /// Opt this text into a registered font family (see FTextStyle::fontFamily).
+    /// Empty restores the engine UI face. Layout vs paint follows the same rule
+    /// as fontSize: a family carries its own metrics, so AutoSize text has to
+    /// re-measure while fixed-size text only repaints.
+    void setFontFamily(const std::string& value)
+    {
+        if (resolvedStyle().fontFamily == value) {
+            return;
+        }
+        setStyleField("fontFamily", value,
+                      isAutoSizeActive() ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
+    }
     /// Overlay textColor + fillColor (badge) on the theme; other FTextStyle
     /// fields inherit. Keeps `_color` in sync for getColor / GI-202. Paint-only
     /// so presenters can recolor every frame without a layout pass.

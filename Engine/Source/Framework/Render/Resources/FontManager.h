@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <unordered_set>
 #include <vector>
@@ -65,6 +66,43 @@ struct IRender;
 
 inline constexpr const char* DEFAULT_RUNTIME_FONT_NAME = "RuntimeDefault";
 inline constexpr uint32_t    DEFAULT_RUNTIME_FONT_SIZE = 48;
+
+/// Stable family name for the bundled monospace face. A SECOND registered
+/// family (not a second kind of font): text that has to align by column -
+/// hex/byte readouts, code, consoles - opts in by naming it, while everything
+/// else keeps resolving the engine UI face. Registering it up front is what
+/// makes a per-widget family a real option instead of a promise; a family that
+/// is not registered renders as no text at all.
+inline constexpr const char* MONO_UI_FONT_NAME = "RuntimeMono";
+
+/// One selectable UI face. Selection is by stable `id` (config/persistence),
+/// never by path: a path is a machine detail, and a config that stores one
+/// breaks the moment the file moves or the user is on another platform.
+struct FUiFontFace
+{
+    std::string_view id;
+    std::string_view label;
+    /// Repo-relative bundled face, preferred when it exists: bundled metrics are
+    /// identical on every machine, which is what keeps a shipped UI reproducible.
+    std::string_view bundledPath;
+    /// Absolute platform path used only when nothing is bundled (or when the
+    /// face is deliberately the platform's own). Metrics then vary per machine.
+    std::string_view systemPath;
+    bool             bMonospace = false;
+};
+
+/// Selectable UI faces, in preference order (index 0 is the engine default).
+/// Small on purpose: every entry is a face someone has to look at, and a long
+/// list of near-identical sans faces is not a choice.
+[[nodiscard]] std::span<const FUiFontFace> uiFontFaces();
+/// The face used when nothing is configured.
+[[nodiscard]] const FUiFontFace& defaultUiFontFace();
+/// Face for `id`, or nullptr when the id is unknown (a stale config must not
+/// silently fall back to a different look without the caller knowing).
+[[nodiscard]] const FUiFontFace* findUiFontFace(std::string_view id);
+/// Existing file path for `face`, or empty when neither its bundled nor its
+/// system face is on this machine.
+[[nodiscard]] std::string resolveUiFontFacePath(const FUiFontFace& face);
 
 namespace utf8
 {
@@ -418,6 +456,19 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
     /// on macOS, YaHei on Windows), so chrome text differs per machine and
     /// diverges from the host that did bundle one.
     static std::string findDefaultUiFontPath();
+
+    /// Materialize the complete UI font stack for `faceId`: the chosen face
+    /// under DEFAULT_RUNTIME_FONT_NAME (plus the CJK/emoji fallbacks) and the
+    /// bundled monospace under MONO_UI_FONT_NAME. Returns false when the face
+    /// cannot be resolved at all; nothing is registered in that case, so the
+    /// caller keeps its previous face instead of ending up with no text.
+    ///
+    /// Calling this AGAIN with a different face REPLACES the registration:
+    /// loadFont is idempotent per (name, size, dpi), so a plain second load
+    /// would return the old face and the switch would silently do nothing.
+    /// The stale name is evicted first, and the atlas revision is bumped so
+    /// trees re-measure text against the new metrics.
+    bool loadUiFontStack(IRender& render, std::string_view faceId, uint32_t primarySize = DEFAULT_RUNTIME_FONT_SIZE);
 
     /// Register the fallbacks that make a Latin-primary UI face usable for
     /// CJK and emoji text: ONE CJK face plus the bundled color emoji face.

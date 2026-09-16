@@ -143,6 +143,7 @@ void EditorSurface::shutdown()
     _tabSpawners = nullptr;
     _rootSession = nullptr;
     _presentSurface = nullptr;
+    _app            = nullptr;
 }
 
 void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
@@ -153,6 +154,7 @@ void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
 
     const bool bProjectBrowser = !_layer->isProjectLoaded();
     _presentSurface = context.presentSurface;
+    _app            = context.app;
     if (!_tree || _bBuiltAsProjectBrowser != bProjectBrowser) {
         rebuild(context);
     }
@@ -904,6 +906,7 @@ void EditorSurface::openEditorSettingsDialog()
         _settings = std::make_unique<EditorSettingsDialog>();
     }
     EditorLayer* layer = _layer;
+    App* app = _app;
     _settings->open(*_tree, FEditorSettingsBindings{
         .samplerIndex = [layer]() { return layer->getViewportSamplerType(); },
         .setSamplerIndex = [layer](int index) { layer->setViewportSamplerType(index); },
@@ -915,6 +918,18 @@ void EditorSurface::openEditorSettingsDialog()
         .scenePathExists = [layer]() { return layer->defaultScenePathExists(); },
         .applyScenePath = [layer]() { layer->applyDefaultScenePathDraft(); },
         .resetScenePath = [layer]() { layer->resetDefaultScenePathDraft(); },
+        .fontOptions = []() { return ui_font_settings::availableFaces(); },
+        .fontFace = []() { return ui_font_settings::faceId(); },
+        .setFontFace = [app](std::string faceId) {
+            // Swap the stack here; no tree invalidation is needed. The reload
+            // bumps FontManager's atlas revision, and WidgetTree polls it at the
+            // start of the NEXT snapshot, so every label re-measures against the
+            // new metrics on the coming frame without a bespoke dirty hook.
+            IRender* render = app ? app->getRenderServices().getRender() : nullptr;
+            if (render) {
+                ui_font_settings::applyAndStore(*render, faceId);
+            }
+        },
         .openFilePicker = [this](FEditorFilePickerRequest request) {
             openFilePickerDialog(std::move(request));
         },

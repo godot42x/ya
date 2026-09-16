@@ -2,6 +2,7 @@
 
 #include "Core/Log.h"
 #include "Core/Reflection/Reflection.h"
+#include "Render/Resources/FontManager.h"
 
 #include <string>
 
@@ -34,7 +35,33 @@ YA_REFLECT_FIELD(textColor)
 YA_REFLECT_FIELD(fontSize)
 YA_REFLECT_FIELD(fillColor)
 YA_REFLECT_FIELD(padding)
+YA_REFLECT_FIELD(fontFamily)
 YA_REFLECT_END_EXTERNAL()
+
+namespace ya
+{
+
+std::shared_ptr<Font> resolveTextFont(const FTextStyle& style)
+{
+    // Empty family = the engine UI face. Everything that follows from a family
+    // (metrics, glyph coverage, fallback stack) is the font manager's business;
+    // this only decides WHICH registered name to ask for, so paint and measure
+    // cannot disagree about the face.
+    FontManager* manager = FontManager::get();
+    if (!style.fontFamily.empty()) {
+        const FName named(style.fontFamily);
+        if (auto font = manager->getFont(named, style.fontSize)) {
+            return font;
+        }
+        // A named family that is not registered must not blank the label: the
+        // family is an opt-in refinement, and a typo (or a face that failed to
+        // load) has to degrade to readable text, not to no text.
+        YA_CORE_WARN("Text family '{}' is not registered; falling back to the UI face", style.fontFamily);
+    }
+    return manager->getFont(FName(DEFAULT_RUNTIME_FONT_NAME), style.fontSize);
+}
+
+} // namespace ya
 
 YA_REFLECT_BEGIN_EXTERNAL(ya::FPanelStyle)
 YA_REFLECT_FIELD(fillColor)

@@ -20,7 +20,7 @@ void UIText::paintSelf(UIFrameBuilder& builder)
                                                                : ReactiveBase::EDirtyLevel::Paint;
     const std::string&               text  = resolvedText(level);
     const FTextStyle                style = resolvedStyle(level);
-    auto                             font  = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
+    auto                             font  = resolveTextFont(style);
     if (!font) {
         return;
     }
@@ -121,7 +121,7 @@ glm::vec2 UIText::computeIntrinsicSize() const
     // the paint walk, so get() here does not register a dependency; the Layout
     // edge is instead established by paintSelf at the same level.)
     const FTextStyle& style = resolvedStyle(ReactiveBase::EDirtyLevel::Layout, false);
-    auto               font  = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
+    auto               font  = resolveTextFont(style);
     if (!font) {
         return {0.0f, 0.0f};
     }

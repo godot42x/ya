@@ -684,8 +684,78 @@ std::string FontManager::findDefaultUiFontPath()
     // PROPORTIONAL face: a monospace primary makes every label, menu and field
     // read as terminal output, and its fixed advance wastes width in dense
     // tool panels. JetBrains Mono stays in the repo for code/console surfaces.
-    constexpr const char* kUiFontPath = "Engine/Content/Fonts/Inter-Regular.ttf";
-    return std::filesystem::exists(kUiFontPath) ? std::string(kUiFontPath) : std::string{};
+    return resolveUiFontFacePath(defaultUiFontFace());
+}
+
+namespace
+{
+/// Platform UI face used only by the `system` catalog entry. Kept as a
+/// candidate list because the path differs per OS and per macOS version.
+constexpr const char* kSystemUiFontCandidates[] = {
+#if defined(_WIN32)
+    "C:/Windows/Fonts/segoeui.ttf",
+#elif defined(__APPLE__)
+    "/System/Library/Fonts/HelveticaNeue.ttc",
+    "/System/Library/Fonts/Helvetica.ttc",
+#else
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/TTF/DejaVuSans.ttf",
+#endif
+};
+} // namespace
+
+std::span<const FUiFontFace> uiFontFaces()
+{
+    // Order = preference, and index 0 is the engine default. Only entries that
+    // answer a real need earn a slot: the bundled proportional face (the
+    // shipped look), the bundled monospace (column-aligned readouts), and the
+    // platform's own face for users who want the OS look and accept that its
+    // metrics differ from machine to machine.
+    static constexpr FUiFontFace kFaces[] = {
+        {.id          = "inter",
+         .label       = "Inter (bundled)",
+         .bundledPath = "Engine/Content/Fonts/Inter-Regular.ttf"},
+        {.id          = "jetbrains-mono",
+         .label       = "JetBrains Mono (bundled)",
+         .bundledPath = "Engine/Content/Fonts/JetBrainsMono-Medium.ttf",
+         .bMonospace  = true},
+        {.id         = "system",
+         .label      = "System UI",
+         .systemPath = kSystemUiFontCandidates[0]},
+    };
+    return kFaces;
+}
+
+const FUiFontFace& defaultUiFontFace()
+{
+    return uiFontFaces().front();
+}
+
+const FUiFontFace* findUiFontFace(std::string_view id)
+{
+    for (const FUiFontFace& face : uiFontFaces()) {
+        if (face.id == id) {
+            return &face;
+        }
+    }
+    return nullptr;
+}
+
+std::string resolveUiFontFacePath(const FUiFontFace& face)
+{
+    if (!face.bundledPath.empty() && std::filesystem::exists(face.bundledPath)) {
+        return std::string(face.bundledPath);
+    }
+    if (!face.systemPath.empty()) {
+        // The `system` entry names one representative path; probe the rest of
+        // the platform list so a macOS that dropped HelveticaNeue still resolves.
+        for (const char* candidate : kSystemUiFontCandidates) {
+            if (std::filesystem::exists(candidate)) {
+                return candidate;
+            }
+        }
+    }
+    return {};
 }
 
 void FontManager::addDefaultUiFallbacks(IRender& render, const FName& fontName)
@@ -699,6 +769,67 @@ void FontManager::addDefaultUiFallbacks(IRender& render, const FName& fontName)
     if (const std::string emojiPath = findEmojiFontPath(); !emojiPath.empty()) {
         addFontFallback(render, fontName, emojiPath, EFontRenderMode::Color, 32);
     }
+}
+
+bool FontManager::loadUiFontStack(IRender& render, std::string_view faceId, uint32_t primarySize)
+{
+    const FUiFontFace* face = findUiFontFace(faceId);
+    if (!face) {
+        YA_CORE_WARN("FontManager: unknown UI font face '{}'; keeping the loaded stack", faceId);
+        return false;
+    }
+    const std::string primaryPath = resolveUiFontFacePath(*face);
+    if (primaryPath.empty()) {
+        YA_CORE_WARN("FontManager: UI font face '{}' is not available on this machine", faceId);
+        return false;
+    }
+
+    // Replace, do not add: the face is identified by its name, and loadFont is
+    // idempotent per (name, size, dpi), so reloading the same name would hand
+    // back the previously rasterized face. Drop every registration this name
+    // owns - cached views, bases, its size list, its fallback defs and the
+    // recorded path - then load. Dropping the cached VIEWS matters as much as
+    // the bases: they hold shared_ptr to the old bases, so a surviving view
+    // keeps the previous face alive and getFont would keep serving it.
+    const FName primaryName(DEFAULT_RUNTIME_FONT_NAME);
+    const std::string prefix = primaryName.toString() + ":";
+    for (auto it = _fontCache.begin(); it != _fontCache.end();) {
+        it = it->first.starts_with(prefix) ? _fontCache.erase(it) : std::next(it);
+    }
+    for (auto it = _baseFontCache.begin(); it != _baseFontCache.end();) {
+        it = it->first.starts_with(prefix) ? _baseFontCache.erase(it) : std::next(it);
+    }
+    _baseSizes.erase(primaryName);
+    _fontPaths.erase(primaryName);
+    _fallbackDefs.erase(primaryName);
+
+    if (!loadFont(render, primaryPath, primaryName, primarySize)) {
+        YA_CORE_WARN("FontManager: failed to rasterize UI face '{}' from '{}'", faceId, primaryPath);
+        return false;
+    }
+    addDefaultUiFallbacks(render, primaryName);
+
+    // The monospace family is part of the UI stack, not a side quest: without it
+    // a widget that names it would draw nothing. Missing is not fatal - the
+    // primary face still serves the whole shell - so it only warns.
+    if (const FUiFontFace* mono = findUiFontFace("jetbrains-mono")) {
+        if (const std::string monoPath = resolveUiFontFacePath(*mono); !monoPath.empty()) {
+            const FName monoName(MONO_UI_FONT_NAME);
+            if (_fontPaths.find(monoName) == _fontPaths.end()) {
+                loadFont(render, monoPath, monoName, primarySize);
+                addDefaultUiFallbacks(render, monoName);
+            }
+        } else {
+            YA_CORE_WARN("FontManager: bundled monospace face is missing; mono-family text will not render");
+        }
+    }
+
+    // Text metrics changed, so trees that cached measured sizes have to re-run
+    // layout. WidgetTree already invalidates from resourceRevision(); the host
+    // only has to swap the face.
+    bumpResourceRevision();
+    YA_CORE_INFO("FontManager: UI font stack = '{}' ({}) @ {}px + mono", faceId, primaryPath, primarySize);
+    return true;
 }
 
 bool FontManager::requestGlyphs(Font& font, std::string_view text)
