@@ -528,6 +528,17 @@ struct FColorEditStyle
     glm::vec4 textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec2 padding        = {6.0f, 3.0f};
     uint32_t  fontSize       = 13;
+    /// Color SWATCH chrome. The swatch's fill is the color being edited, so the
+    /// style only owns what surrounds it: the edge and the roundness. This is a
+    /// style field rather than a control literal because the swatch sits on an
+    /// arbitrary fill - a translucent wash of the widget's text color has
+    /// nothing to relate to when the user just picked the same value, and the
+    /// edge is what tells them where the swatch ends. Keep it at the STRONG end
+    /// of the edge ramp: a swatch is small and its content is arbitrary.
+    glm::vec4 swatchBorderColor      = {1.0f, 1.0f, 1.0f, 0.26f};
+    glm::vec4 swatchHoverBorderColor = {0.29f, 0.56f, 0.98f, 1.0f};
+    float     swatchCornerRadius     = 3.0f;
+    float     swatchBorderThickness  = 1.0f;
 
     bool operator==(const FColorEditStyle&) const = default;
 };

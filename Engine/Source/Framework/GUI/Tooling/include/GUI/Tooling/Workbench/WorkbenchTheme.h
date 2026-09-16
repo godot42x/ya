@@ -14,9 +14,10 @@ namespace guiworkbench
 
 namespace tokens = ya::gui_chrome::tokens;
 
-inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(bool bDark)
+inline std::shared_ptr<ya::UITheme> buildWorkbenchTheme(
+    bool bDark, ya::gui_chrome::tokens::EPaletteFlavor flavor = ya::gui_chrome::tokens::kDefaultPaletteFlavor)
 {
-    return ya::buildDefaultChromeTheme(bDark);
+    return ya::buildDefaultChromeTheme(bDark, flavor);
 }
 
 } // namespace guiworkbench

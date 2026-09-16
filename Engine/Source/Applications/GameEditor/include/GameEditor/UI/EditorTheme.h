@@ -105,9 +105,10 @@ struct FEditorStyleBake
 };
 } // namespace editor_theme_detail
 
-inline std::shared_ptr<UITheme> buildEditorTheme(bool bDark)
+inline std::shared_ptr<UITheme> buildEditorTheme(
+    bool bDark, gui_chrome::tokens::EPaletteFlavor flavor = gui_chrome::tokens::kDefaultPaletteFlavor)
 {
-    auto theme = buildDefaultChromeTheme(bDark);
+    auto theme = buildDefaultChromeTheme(bDark, flavor);
     const editor_theme_detail::FEditorStyleBake bake{*theme};
 
     bake.restyleText(StyleKey::TextHeader, editor_type::kHeader);

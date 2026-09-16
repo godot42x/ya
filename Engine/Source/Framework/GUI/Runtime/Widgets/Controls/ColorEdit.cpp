@@ -454,10 +454,15 @@ class FColorSwatch final : public UIElement
     {
         const FColorEditStyle& style = resolveWidgetStyle<FColorEditStyle>(*this);
         const glm::vec4 fill = bMixed ? glm::vec4(0.45f, 0.45f, 0.45f, 1.0f) : color;
-        builder.addSprite(_layoutRect, fill, nullptr);
-        const glm::vec4 outline = _bHovered ? glm::vec4{0.78f, 0.82f, 0.90f, 1.0f}
-                                            : style.textColor * glm::vec4(1.0f, 1.0f, 1.0f, 0.55f);
-        builder.addRectOutline(insetRect(_layoutRect, 1.0f), outline, 1.0f);
+        // One surface value = edge ring + fill inset inside it, the same path a
+        // button or field takes. The edge comes from the STYLE, and it is the
+        // strong end of the ramp: the swatch sits on the panel, so its boundary
+        // has to be findable even when the picked color matches the panel.
+        builder.addRoundedSurface(_layoutRect,
+                                  fill,
+                                  _bHovered ? style.swatchHoverBorderColor : style.swatchBorderColor,
+                                  style.swatchCornerRadius,
+                                  style.swatchBorderThickness);
         if (!bMixed) {
             return;
         }
