@@ -21,7 +21,9 @@ struct UIFrameSnapshot;
 
 /// Sealed SceneRenderPlan input for one host render call. The plan owns the
 /// immutable Scene snapshot table; the task identifies the view being recorded.
-/// RenderRuntime does not build or retain either object beyond the call.
+/// RenderRuntime does not own the plan or task objects. Graph-exported image
+/// and overlay handles used while recording are retained on the live
+/// submission until that flight is reused after its fence.
 struct SceneRenderPlanInput
 {
     const SceneRenderPlan*   plan = nullptr;

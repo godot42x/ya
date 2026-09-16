@@ -3,6 +3,7 @@
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Graph/RenderGraphImportUtils.h"
+#include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Swapchain.h"
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
@@ -74,6 +75,17 @@ bool RenderRuntime::beginFrameCommandBuffer(const FrameInput& input, std::shared
         _render->beginFrameGpuTiming(cmdBuf.get());
     }
 
+    const RenderSubmissionContext submission{
+        .frameToken  = input.camera.frameIndex,
+        .flightIndex = flightIndex,
+        .cmdBuf      = cmdBuf.get(),
+        .hostSurface = input.present.surface,
+    };
+    if (!_submissions.begin(flightIndex, input.camera.frameIndex, submission)) {
+        YA_CORE_ERROR("Recording flight {} failed to begin a live submission", flightIndex);
+        return false;
+    }
+
     return true;
 }
 
@@ -84,17 +96,20 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
     auto* pipeline = getActivePipeline();
     YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ticking viewport pass");
 
+    const RenderSubmissionRecord* live = _submissions.get(input.camera.flightIndex);
+    YA_CORE_ASSERT(live && live->context.valid(), "Viewport tick requires a live submission");
+
     auto overlaySnapshot = buildViewportOverlaySnapshot(input.camera.overlay);
+    if (overlaySnapshot) {
+        _submissions.retain(input.camera.flightIndex, overlaySnapshot);
+        cmdBuf->retireResource(overlaySnapshot);
+    }
+
     pipeline->tick(RenderPipelineFrameContext{
         .cmdBuf                    = cmdBuf,
         .camera                    = input.camera,
-        .viewportOverlaySnapshot   = std::move(overlaySnapshot),
-        .submission = RenderSubmissionContext{
-            .frameToken  = input.camera.frameIndex,
-            .flightIndex = input.camera.flightIndex,
-            .cmdBuf      = cmdBuf,
-            .hostSurface = input.present.surface,
-        },
+        .viewportOverlaySnapshot   = overlaySnapshot,
+        .submission                = live->context,
         .view = RenderViewRecordingContext{
             .task            = input.sceneRender.task,
             .frameData       = input.camera.frameData,

@@ -16,6 +16,9 @@ TEST(RenderRuntimeSnapshotTest, EmptyRuntimePublishesEmptyViewportResources)
 {
     RenderRuntime runtime;
 
+    EXPECT_EQ(runtime.getLiveSubmission(0), nullptr);
+    EXPECT_EQ(runtime.getLiveSubmission(MAX_FLIGHTS_IN_FLIGHT), nullptr);
+
     const RenderViewportSnapshot viewport = runtime.buildViewportSnapshot();
     const RenderTargetCatalog    targets  = runtime.buildRenderTargetCatalog();
 

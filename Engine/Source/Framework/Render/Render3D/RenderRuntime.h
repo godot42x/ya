@@ -10,6 +10,7 @@
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/RenderFrameInputs.h"
+#include "Render3D/Common/RenderSubmissionTable.h"
 #include "Render3D/Common/PostProcessingState.h"
 #include "Common/RenderRuntimeClockState.h"
 #include "Render3D/Services/EnvironmentLightingResultProvider.h"
@@ -121,6 +122,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     IRender*                                     _render = nullptr;
     OffscreenTaskService                         _offscreen{};
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
+    RenderSubmissionTable                        _submissions;
     std::shared_ptr<ShaderStorage>               _shaderStorage = nullptr;
 
     ERenderAPI::T  currentRenderAPI      = ERenderAPI::None;
@@ -138,7 +140,9 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     void shutdown(bool bRenderAlreadyIdle = false);
     /// Records graphics → UI → view compose → display compose. Caller must
     /// already have acquired `input.present` and must `submitPresentFrame`
-    /// with the returned command buffer (or an empty list if null).
+    /// with the returned command buffer (or an empty list if null). The live
+    /// submission for this flight stays occupied after return until that
+    /// flight is begun again (fence-safe command-buffer reuse).
     [[nodiscard]] ICommandBuffer* renderFrame(const FrameInput& input);
 
   public:
@@ -179,6 +183,10 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     /// Format of that camera display RT, known before the world graph creates it.
     [[nodiscard]] EFormat::T getViewportDisplayImageFormat() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> getPresentationImageShared() const;
+    [[nodiscard]] const RenderSubmissionRecord* getLiveSubmission(uint32_t flightIndex) const
+    {
+        return _submissions.get(flightIndex);
+    }
     [[nodiscard]] bool     isPostprocessingEnabled() const;
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
     [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _pipelineCoordinator.getRenderPipeline(); }

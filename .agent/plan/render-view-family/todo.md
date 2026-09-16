@@ -43,7 +43,7 @@
 - [x] 移除 Forward/Deferred pipeline 中跨 View 共享的 `_lastTickCtx` / `_lastFrameInput`，graph build 改用调用栈内 View-local post context。
 - [ ] 明确并实现同 Scene 复用表：snapshot/candidates/skinning/light sources 共享；visibility/sort/shadow/targets 按 View 生成。
 - [ ] 让同一逻辑帧的多个 surface/window 共用一个 SceneRenderScheduler/SceneRenderPlan，避免按窗口重复抽取同一 Scene。
-- [ ] 将 RenderRuntime 持久状态保活到 submit/fence。
+- [x] 将 RenderRuntime 持久状态保活到 submit/fence。
 - [x] 将 Shadow 的 per-flight descriptor binding 改为 View-owned beginSubmission/beginView。
 - [ ] 将 PointShadow indirect instance/cull 缓冲从 flight 轴改为 View-owned（若双 View 录制需要）。
 - [x] 增加同一 submission 多 View 的 slot/slice identity 验证（RenderViewBindingTable + Forward/Deferred/Shadow writeViewPayloads）。真实 GPU descriptor write 与 output publish 隔离仍待录制切片。

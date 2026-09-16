@@ -256,6 +256,7 @@ void RenderRuntime::shutdown(bool bRenderAlreadyIdle)
         _render->waitIdle();
     }
 
+    _submissions.clear();
     _pipelineCoordinator.shutdown();
     // Owned derived-processing systems must release their GPU resources
     // before the render backend is destroyed.

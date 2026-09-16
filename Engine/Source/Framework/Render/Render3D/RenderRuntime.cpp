@@ -8,6 +8,7 @@
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "GUI/Compose/Render2DComposePass.h"
+#include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Swapchain.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
@@ -141,7 +142,21 @@ ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
     _presentationGraphService.recordDisplayCompose(input.camera.deltaTime,
                                                    input.displayCompose.extensions,
                                                    cmdBuf.get());
+
+    const uint32_t flightIndex = input.camera.flightIndex;
+    auto retain = [&](auto resource) {
+        if (!resource) {
+            return;
+        }
+        _submissions.retain(flightIndex, resource);
+        cmdBuf->retireResource(resource);
+    };
+    retain(getViewportDisplayImageShared());
+    retain(getActiveViewportImageShared());
+    retain(getPostprocessOutputImageShared());
+
     endFrameCommandBuffer(cmdBuf.get());
+    _submissions.markRecordingComplete(flightIndex);
     return cmdBuf.get();
 }
 
