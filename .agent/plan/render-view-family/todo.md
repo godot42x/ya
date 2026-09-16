@@ -47,7 +47,8 @@
 - [x] 将 Shadow 的 per-flight descriptor binding 改为 View-owned beginSubmission/beginView。
 - [ ] 将 PointShadow indirect instance/cull 缓冲从 flight 轴改为 View-owned（若双 View 录制需要）。
 - [x] 增加同一 submission 多 View 的 slot/slice identity 验证（RenderViewBindingTable + Forward/Deferred/Shadow writeViewPayloads）。真实 GPU descriptor write 与 output publish 隔离仍待录制切片。
-- [ ] 为每个 View 建立独立 output/extent/format 句柄。
+- [x] 为每个 View 建立独立 output/extent/format 句柄。
+- [ ] 将 Forward/Deferred viewport persistent key / RT 改为 View-keyed，避免多 View 共用一份 GBuffer/color。
 - [ ] 录制同一 Scene 的两个 View，共享一个 SceneFrameSnapshot。
 - [ ] 录制两个 Scene 的两个 View，验证 snapshot 和资源生命周期隔离。
 - [ ] 验证一个 View 到多个 Surface、多个 View 到一个 Surface。

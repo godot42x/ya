@@ -27,6 +27,7 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-16：每个 View 拥有独立 output/extent/format 句柄；发布 B 不改写 A。RenderViewOutputTable 5/5，snapshot/binding/submission 回归 38/38，ya-game-runtime 构建通过。
 - 2026-09-16：RenderRuntime 按 flight 持有 live submission；overlay 与 graph-exported image 保活到该 flight 下次 fence-safe 复用。RenderSubmissionTable 5/5，snapshot/binding/deferred/arena 回归 32/32，ya-game-runtime 构建通过。
 - 2026-09-16：Shadow FrameResourceSet 提供 beginSubmission/beginView；cascade/face descriptor 与 upload slice 按 View 隔离。RenderViewBindingTable 8/8，snapshot/deferred/arena 回归 27/27，ya-game-runtime 构建通过。
 - 2026-09-16：Deferred FrameResourceSet 提供 beginSubmission/beginView；SSAO/skybox 写入同一 View slot。抽出 ViewDescriptorSetAllocator 供 Forward/Deferred 共用。RenderViewBindingTable 7/7，snapshot/draw-candidate/deferred 回归通过，ya-game-runtime 构建通过。
@@ -34,4 +35,4 @@
 - 2026-09-16：View-owned draw bucket 已完成 source pointer + order indices 迁移；14 个 RenderRuntime/DrawCandidateView 测试通过，ya-game-runtime 构建通过。
 - 2026-09-16：Forward/Deferred 已移除跨 View 的 `_lastTickCtx` / `_lastFrameInput`，graph build 使用调用栈内 View-local context；渲染测试 14/14，ya-game-runtime 构建通过。
 - 2026-09-16：FrameUploadArena 同 `(flightIndex, frameToken)` 的 begin 改为幂等追加语义；同 submission 的后续 allocation 不 rewind cursor，FrameUploadArena 专项测试通过。
-- 保留未完成项：独立 View output、PointShadow indirect per-flight 缓冲、多 View command recording、双 View/双 Surface GPU 验收。
+- 保留未完成项：View-keyed pipeline persistent RT、PointShadow indirect per-flight 缓冲、多 View command recording、双 View/双 Surface GPU 验收。

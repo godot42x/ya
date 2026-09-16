@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/RenderFrameData.h"
 
 #include <cstdint>
@@ -48,6 +49,7 @@ struct SceneViewportTask
     glm::vec3 cameraPos      = glm::vec3(0.0f);
     Rect2D    viewportRect{};
     uint32_t  renderFlags = 0;
+    RenderViewOutputDesc output{};
 
     uint32_t snapshotIndex = kInvalidSnapshotIndex;
 };

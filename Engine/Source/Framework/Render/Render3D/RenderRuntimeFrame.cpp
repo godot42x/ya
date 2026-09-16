@@ -85,6 +85,15 @@ bool RenderRuntime::beginFrameCommandBuffer(const FrameInput& input, std::shared
         YA_CORE_ERROR("Recording flight {} failed to begin a live submission", flightIndex);
         return false;
     }
+    if (!_viewOutputs.beginSubmission(flightIndex, input.camera.frameIndex)) {
+        YA_CORE_ERROR("Recording flight {} failed to begin view outputs", flightIndex);
+        return false;
+    }
+    if (_publishedOutputFlight == flightIndex &&
+        _viewOutputs.find(flightIndex, _publishedOutputViewId) == nullptr) {
+        _publishedOutputFlight = MAX_FLIGHTS_IN_FLIGHT;
+        _publishedOutputViewId = 0;
+    }
 
     return true;
 }
@@ -105,6 +114,11 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
         cmdBuf->retireResource(overlaySnapshot);
     }
 
+    Extent2D viewExtent = Extent2D::fromVec2(input.camera.viewportRect.extent);
+    if (input.sceneRender.task && input.sceneRender.task->output.hasExtent()) {
+        viewExtent = input.sceneRender.task->output.extent;
+    }
+
     pipeline->tick(RenderPipelineFrameContext{
         .cmdBuf                    = cmdBuf,
         .camera                    = input.camera,
@@ -113,12 +127,22 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
         .view = RenderViewRecordingContext{
             .task            = input.sceneRender.task,
             .frameData       = input.camera.frameData,
-            .viewportExtent  = Extent2D::fromVec2(input.camera.viewportRect.extent),
+            .viewportExtent  = viewExtent,
         },
     });
 }
 
 std::shared_ptr<RenderTexture> RenderRuntime::getActiveViewportImageShared() const
+{
+    if (const auto* output = publishedViewOutput()) {
+        if (output->color) {
+            return output->color;
+        }
+    }
+    return pipelineViewportColorImage();
+}
+
+std::shared_ptr<RenderTexture> RenderRuntime::pipelineViewportColorImage() const
 {
     if (auto* pipeline = _pipelineCoordinator.getSelectedForwardPipeline()) {
         return pipeline->getViewportOutputImageShared();
@@ -136,10 +160,87 @@ std::shared_ptr<RenderTexture> RenderRuntime::getViewportDisplayImageShared() co
         // disabled; never present or composite a leftover image.
         return nullptr;
     }
+    if (const auto* output = publishedViewOutput()) {
+        if (auto image = output->displayImage()) {
+            return image;
+        }
+    }
+    return pipelineViewportDisplayImage();
+}
+
+std::shared_ptr<RenderTexture> RenderRuntime::pipelineViewportDisplayImage() const
+{
+    if (!_viewportState.isWorldSceneRenderEnabled()) {
+        return nullptr;
+    }
     if (auto postprocessOutput = getPostprocessOutputImageShared()) {
         return postprocessOutput;
     }
-    return getActiveViewportImageShared();
+    return pipelineViewportColorImage();
+}
+
+const RenderViewOutput* RenderRuntime::publishedViewOutput() const
+{
+    if (_publishedOutputFlight >= MAX_FLIGHTS_IN_FLIGHT || _publishedOutputViewId == 0) {
+        return nullptr;
+    }
+    return _viewOutputs.find(_publishedOutputFlight, _publishedOutputViewId);
+}
+
+const RenderViewOutput* RenderRuntime::getViewOutput(uint64_t viewId) const
+{
+    if (viewId == 0) {
+        return nullptr;
+    }
+    if (_publishedOutputFlight < MAX_FLIGHTS_IN_FLIGHT) {
+        if (const auto* output = _viewOutputs.find(_publishedOutputFlight, viewId)) {
+            return output;
+        }
+    }
+    for (uint32_t flightIndex = 0; flightIndex < MAX_FLIGHTS_IN_FLIGHT; ++flightIndex) {
+        if (const auto* output = _viewOutputs.find(flightIndex, viewId)) {
+            return output;
+        }
+    }
+    return nullptr;
+}
+
+void RenderRuntime::publishRecordedViewOutput(const FrameInput& input)
+{
+    const SceneViewportTask* task = input.sceneRender.task;
+    if (!task || task->viewId == 0) {
+        return;
+    }
+
+    RenderViewOutput output;
+    output.desc      = task->output;
+    output.desc.viewId = task->viewId;
+    if (!output.desc.hasExtent()) {
+        output.desc.extent = Extent2D::fromVec2(input.camera.viewportRect.extent);
+    }
+    output.color   = pipelineViewportColorImage();
+    output.display = pipelineViewportDisplayImage();
+    if (auto* pipeline = getActivePipeline()) {
+        output.depth    = pipeline->getViewportDepthImageShared();
+        output.entityId = pipeline->getEntityIdImageShared();
+    }
+    if (output.color) {
+        output.desc.colorFormat = output.color->getFormat();
+        if (!output.desc.hasExtent()) {
+            output.desc.extent = output.color->getExtent();
+        }
+    }
+    if (output.depth) {
+        output.desc.depthFormat = output.depth->getFormat();
+    }
+
+    const uint32_t flightIndex = input.camera.flightIndex;
+    if (!_viewOutputs.publish(flightIndex, std::move(output))) {
+        YA_CORE_ERROR("Failed to publish view output for view {}", task->viewId);
+        return;
+    }
+    _publishedOutputFlight = flightIndex;
+    _publishedOutputViewId = task->viewId;
 }
 
 EFormat::T RenderRuntime::getViewportDisplayImageFormat() const

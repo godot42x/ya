@@ -8,11 +8,11 @@ namespace ya
 {
 
 /**
- * Single Camera / WorldView slot: the offscreen target rect (logical pixels),
- * framebuffer scale, and whether the world graphics pass runs.
+ * Migration-period WorldView[0] rect / scale / world-pass enable flags.
  *
- * This is not an OS window and not a ViewportWidget. Multi-camera will be an
- * array of these; today RenderRuntime executes exactly one.
+ * This is not an OS window, not a ViewportWidget, and not a View output
+ * identity. Offscreen color/depth/display handles live on
+ * `RenderViewOutputTable`, keyed by ViewId.
  *
  * Pure state — the service neither touches the render backend nor the
  * pipelines. Notification (e.g. forwarding a resize to the active pipeline)

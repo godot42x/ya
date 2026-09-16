@@ -1,7 +1,7 @@
 # Render View Family 与 GUI/GameUI 渲染边界重构计划
 
 > 建立日期：2026-09-12
-> 状态：R2 进行中；Forward / Deferred / Shadow 已提供 View-owned frame binding。RenderRuntime 按 flight 持有 live submission，overlay 与 graph-exported image 保活到该 flight 下次 fence-safe 复用。仍只录制单 View。下一 checkpoint 为每个 View 建立独立 output，或按 SceneViewportTask 循环录制；不要在共用单一 viewport RT 时宣称双 View GPU 完成。
+> 状态：R2 进行中；Forward / Deferred / Shadow 已提供 View-owned frame binding；Runtime 按 flight 持有 submission keepalives。每个 View 已有独立 output/extent/format 句柄（`RenderViewOutputTable`），ViewportStateService 不再是 View 输出身份。仍只录制单 View，pipeline 仍发布到单一 persistent RT。下一 checkpoint 按 SceneViewportTask 循环录制，但必须先让 graph persistent key / RT 按 View 分开，不要共用一张 viewport RT 宣称双 View GPU 完成。
 
 ## 1. 主线选择
 

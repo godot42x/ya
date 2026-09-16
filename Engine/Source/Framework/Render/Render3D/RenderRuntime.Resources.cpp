@@ -257,6 +257,9 @@ void RenderRuntime::shutdown(bool bRenderAlreadyIdle)
     }
 
     _submissions.clear();
+    _viewOutputs.clear();
+    _publishedOutputFlight = MAX_FLIGHTS_IN_FLIGHT;
+    _publishedOutputViewId = 0;
     _pipelineCoordinator.shutdown();
     // Owned derived-processing systems must release their GPU resources
     // before the render backend is destroyed.

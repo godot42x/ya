@@ -18,6 +18,7 @@ TEST(RenderRuntimeSnapshotTest, EmptyRuntimePublishesEmptyViewportResources)
 
     EXPECT_EQ(runtime.getLiveSubmission(0), nullptr);
     EXPECT_EQ(runtime.getLiveSubmission(MAX_FLIGHTS_IN_FLIGHT), nullptr);
+    EXPECT_EQ(runtime.getViewOutput(1), nullptr);
 
     const RenderViewportSnapshot viewport = runtime.buildViewportSnapshot();
     const RenderTargetCatalog    targets  = runtime.buildRenderTargetCatalog();
@@ -159,6 +160,40 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
     EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]),
               plan.snapshotFor(plan.viewportTasks[1]));
     EXPECT_FALSE(scheduler.isFrameOpen());
+}
+
+TEST(RenderRuntimeSnapshotTest, SceneSchedulerCopiesIndependentViewOutputExtents)
+{
+    SceneRenderScheduler scheduler;
+    scheduler.beginFrame(3);
+
+    auto makeRequest = [](SceneViewId viewId, glm::vec2 extent)
+    {
+        SceneRenderRequest request;
+        request.sceneId = 1;
+        request.viewId = viewId;
+        request.viewportRect = {.pos = {0.0f, 0.0f}, .extent = extent};
+        request.buildSnapshot = []()
+        {
+            return std::make_shared<const SceneFrameSnapshot>();
+        };
+        return request;
+    };
+
+    ASSERT_TRUE(scheduler.submit(makeRequest(11, {1280.0f, 720.0f})));
+    ASSERT_TRUE(scheduler.submit(makeRequest(12, {256.0f, 256.0f})));
+
+    const SceneRenderPlan plan = scheduler.seal();
+    ASSERT_EQ(plan.viewportTasks.size(), 2u);
+    EXPECT_EQ(plan.viewportTasks[0].output.viewId, 11u);
+    EXPECT_EQ(plan.viewportTasks[1].output.viewId, 12u);
+    EXPECT_EQ(plan.viewportTasks[0].output.extent.width, 1280u);
+    EXPECT_EQ(plan.viewportTasks[0].output.extent.height, 720u);
+    EXPECT_EQ(plan.viewportTasks[1].output.extent.width, 256u);
+    EXPECT_EQ(plan.viewportTasks[1].output.extent.height, 256u);
+    EXPECT_NE(plan.viewportTasks[0].output.extent, plan.viewportTasks[1].output.extent);
+    EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]),
+              plan.snapshotFor(plan.viewportTasks[1]));
 }
 
 TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionChanges)

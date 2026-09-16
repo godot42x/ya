@@ -11,6 +11,7 @@
 #include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/RenderSubmissionTable.h"
+#include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/PostProcessingState.h"
 #include "Common/RenderRuntimeClockState.h"
 #include "Render3D/Services/EnvironmentLightingResultProvider.h"
@@ -123,6 +124,9 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     OffscreenTaskService                         _offscreen{};
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
     RenderSubmissionTable                        _submissions;
+    RenderViewOutputTable                        _viewOutputs;
+    uint32_t                                     _publishedOutputFlight = MAX_FLIGHTS_IN_FLIGHT;
+    uint64_t                                     _publishedOutputViewId = 0;
     std::shared_ptr<ShaderStorage>               _shaderStorage = nullptr;
 
     ERenderAPI::T  currentRenderAPI      = ERenderAPI::None;
@@ -187,6 +191,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     {
         return _submissions.get(flightIndex);
     }
+    [[nodiscard]] const RenderViewOutput* getViewOutput(uint64_t viewId) const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
     [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _pipelineCoordinator.getRenderPipeline(); }
@@ -245,6 +250,10 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     void                   ensureViewportRectInitialized(const FrameInput& input);
     bool                   beginFrameCommandBuffer(const FrameInput& input, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf);
+    void                   publishRecordedViewOutput(const FrameInput& input);
+    [[nodiscard]] const RenderViewOutput* publishedViewOutput() const;
+    [[nodiscard]] std::shared_ptr<RenderTexture> pipelineViewportColorImage() const;
+    [[nodiscard]] std::shared_ptr<RenderTexture> pipelineViewportDisplayImage() const;
     /// Ends GPU timing and the flight command buffer. Present stays on the
     /// host `FPresentFrame` coordinator (R-4).
     void                   endFrameCommandBuffer(ICommandBuffer* cmdBuf);

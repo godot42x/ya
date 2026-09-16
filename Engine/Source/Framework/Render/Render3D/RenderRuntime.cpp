@@ -143,6 +143,8 @@ ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
                                                    input.displayCompose.extensions,
                                                    cmdBuf.get());
 
+    publishRecordedViewOutput(input);
+
     const uint32_t flightIndex = input.camera.flightIndex;
     auto retain = [&](auto resource) {
         if (!resource) {

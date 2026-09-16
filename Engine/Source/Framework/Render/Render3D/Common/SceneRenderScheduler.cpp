@@ -84,6 +84,11 @@ SceneRenderPlan SceneRenderScheduler::seal()
             .cameraPos     = request.cameraPos,
             .viewportRect  = request.viewportRect,
             .renderFlags   = request.renderFlags,
+            .output =
+                {
+                    .viewId = request.viewId,
+                    .extent = Extent2D::fromVec2(request.viewportRect.extent),
+                },
             .snapshotIndex = snapshotIndex,
         });
     }
