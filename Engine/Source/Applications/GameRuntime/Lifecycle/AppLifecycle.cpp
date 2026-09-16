@@ -466,8 +466,10 @@ void App::quit()
         app.onQuit();
     }
 
-    for (auto& frameData : app._renderState->frameDataPerFlight) {
-        frameData.clear();
+    for (auto& flightFrames : app._renderState->viewFrameDataPerFlight) {
+        for (auto& frameData : flightFrames) {
+            frameData.clear();
+        }
     }
     const bool bHadSceneBeforeUnload = app._sceneManager && app._sceneManager->hasScene();
     (void)app.unloadSceneInternal();
@@ -563,8 +565,10 @@ void App::handleSceneDestroy(Scene* scene)
 
     app.notifyModulesSceneDestroyed(scene);
 
-    for (auto& frameData : app._renderState->frameDataPerFlight) {
-        frameData.clear();
+    for (auto& flightFrames : app._renderState->viewFrameDataPerFlight) {
+        for (auto& frameData : flightFrames) {
+            frameData.clear();
+        }
     }
 
     if (app._renderState->runtime) {

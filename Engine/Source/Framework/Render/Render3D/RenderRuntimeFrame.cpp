@@ -98,38 +98,70 @@ bool RenderRuntime::beginFrameCommandBuffer(const FrameInput& input, std::shared
     return true;
 }
 
-void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf)
+void RenderRuntime::beginViewportPassAndTickPipeline(
+    const CameraFrameInput& camera,
+    const SceneViewRecording& recording,
+    ICommandBuffer* cmdBuf,
+    std::shared_ptr<RenderViewportOverlaySnapshot> overlaySnapshot)
 {
     YA_PROFILE_FUNCTION();
 
     auto* pipeline = getActivePipeline();
     YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ticking viewport pass");
 
-    const RenderSubmissionRecord* live = _submissions.get(input.camera.flightIndex);
+    const RenderSubmissionRecord* live = _submissions.get(camera.flightIndex);
     YA_CORE_ASSERT(live && live->context.valid(), "Viewport tick requires a live submission");
 
-    auto overlaySnapshot = buildViewportOverlaySnapshot(input.camera.overlay);
     if (overlaySnapshot) {
-        _submissions.retain(input.camera.flightIndex, overlaySnapshot);
+        _submissions.retain(camera.flightIndex, overlaySnapshot);
         cmdBuf->retireResource(overlaySnapshot);
     }
 
-    Extent2D viewExtent = Extent2D::fromVec2(input.camera.viewportRect.extent);
-    if (input.sceneRender.task && input.sceneRender.task->output.hasExtent()) {
-        viewExtent = input.sceneRender.task->output.extent;
+    Extent2D viewExtent = Extent2D::fromVec2(camera.viewportRect.extent);
+    if (recording.task && recording.task->output.hasExtent()) {
+        viewExtent = recording.task->output.extent;
     }
 
     pipeline->tick(RenderPipelineFrameContext{
         .cmdBuf                    = cmdBuf,
-        .camera                    = input.camera,
+        .camera                    = camera,
         .viewportOverlaySnapshot   = overlaySnapshot,
         .submission                = live->context,
         .view = RenderViewRecordingContext{
-            .task            = input.sceneRender.task,
-            .frameData       = input.camera.frameData,
+            .task            = recording.task,
+            .frameData       = recording.frameData ? recording.frameData : camera.frameData,
             .viewportExtent  = viewExtent,
         },
     });
+}
+
+void RenderRuntime::renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf)
+{
+    YA_PROFILE_FUNCTION();
+
+    auto overlaySnapshot = buildViewportOverlaySnapshot(input.camera.overlay);
+
+    if (!input.sceneRender.views.empty()) {
+        const uint64_t primaryViewId =
+            input.sceneRender.primaryTask() ? input.sceneRender.primaryTask()->viewId : 0;
+        for (size_t index = 0; index < input.sceneRender.views.size(); ++index) {
+            const SceneViewRecording& recording = input.sceneRender.views[index];
+            const CameraFrameInput viewCamera = cameraForViewRecording(input.camera, recording);
+            beginViewportPassAndTickPipeline(
+                viewCamera,
+                recording,
+                cmdBuf,
+                index == 0 ? overlaySnapshot : nullptr);
+            publishRecordedViewOutput(viewCamera, recording.task);
+        }
+        if (primaryViewId != 0) {
+            _publishedOutputViewId = primaryViewId;
+            _publishedOutputFlight = input.camera.flightIndex;
+        }
+        return;
+    }
+
+    beginViewportPassAndTickPipeline(input.camera, SceneViewRecording{}, cmdBuf, overlaySnapshot);
 }
 
 std::shared_ptr<RenderTexture> RenderRuntime::getActiveViewportImageShared() const
@@ -205,9 +237,8 @@ const RenderViewOutput* RenderRuntime::getViewOutput(uint64_t viewId) const
     return nullptr;
 }
 
-void RenderRuntime::publishRecordedViewOutput(const FrameInput& input)
+void RenderRuntime::publishRecordedViewOutput(const CameraFrameInput& camera, const SceneViewportTask* task)
 {
-    const SceneViewportTask* task = input.sceneRender.task;
     if (!task || task->viewId == 0) {
         return;
     }
@@ -216,7 +247,7 @@ void RenderRuntime::publishRecordedViewOutput(const FrameInput& input)
     output.desc      = task->output;
     output.desc.viewId = task->viewId;
     if (!output.desc.hasExtent()) {
-        output.desc.extent = Extent2D::fromVec2(input.camera.viewportRect.extent);
+        output.desc.extent = Extent2D::fromVec2(camera.viewportRect.extent);
     }
     output.color   = pipelineViewportColorImage();
     output.display = pipelineViewportDisplayImage();
@@ -234,13 +265,36 @@ void RenderRuntime::publishRecordedViewOutput(const FrameInput& input)
         output.desc.depthFormat = output.depth->getFormat();
     }
 
-    const uint32_t flightIndex = input.camera.flightIndex;
+    const uint32_t flightIndex = camera.flightIndex;
     if (!_viewOutputs.publish(flightIndex, std::move(output))) {
         YA_CORE_ERROR("Failed to publish view output for view {}", task->viewId);
         return;
     }
     _publishedOutputFlight = flightIndex;
     _publishedOutputViewId = task->viewId;
+}
+
+void RenderRuntime::retainPublishedViewOutputs(uint32_t flightIndex, ICommandBuffer* cmdBuf)
+{
+    auto retain = [&](auto resource) {
+        if (!resource) {
+            return;
+        }
+        _submissions.retain(flightIndex, resource);
+        cmdBuf->retireResource(resource);
+    };
+
+    const uint32_t liveCount = _viewOutputs.liveViewCount(flightIndex);
+    for (uint32_t slot = 0; slot < liveCount; ++slot) {
+        const RenderViewOutput* output = _viewOutputs.get(flightIndex, slot);
+        if (!output) {
+            continue;
+        }
+        retain(output->displayImage());
+        retain(output->color);
+        retain(output->depth);
+        retain(output->entityId);
+    }
 }
 
 EFormat::T RenderRuntime::getViewportDisplayImageFormat() const

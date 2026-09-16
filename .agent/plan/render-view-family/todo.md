@@ -49,7 +49,7 @@
 - [x] 增加同一 submission 多 View 的 slot/slice identity 验证（RenderViewBindingTable + Forward/Deferred/Shadow writeViewPayloads）。真实 GPU descriptor write 与 output publish 隔离仍待录制切片。
 - [x] 为每个 View 建立独立 output/extent/format 句柄。
 - [x] 将 Forward/Deferred viewport persistent key / RT 改为 View-keyed，避免多 View 共用一份 GBuffer/color。
-- [ ] 录制同一 Scene 的两个 View，共享一个 SceneFrameSnapshot。
+- [x] 录制同一 Scene 的两个 View，共享一个 SceneFrameSnapshot。
 - [ ] 录制两个 Scene 的两个 View，验证 snapshot 和资源生命周期隔离。
 - [ ] 验证一个 View 到多个 Surface、多个 View 到一个 Surface。
 - [ ] 验证 surface acquire/present/recreate 不进入 View pipeline。
@@ -59,7 +59,7 @@
 
 - [ ] GameRuntime 不再提交固定 sceneRevision = 0；改为真实 Scene content generation。
 - [ ] 禁止 prepareView() 对共享 Scene snapshot 做按值复制或原地排序。
-- [ ] 为相同 Scene 的双 View 增加 snapshot pointer/index identity 验证。
+- [x] 为相同 Scene 的双 View 增加 snapshot pointer/index identity 验证。
 - [ ] 为不同 camera 的双 View 增加 draw-order / shadow-preparation 非共享验证。
 
 ## 设计评估门禁

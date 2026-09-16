@@ -6,6 +6,7 @@
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Services/PresentationGraphService.h"
 
+#include <cstddef>
 #include <functional>
 #include <glm/glm.hpp>
 #include <memory>
@@ -19,18 +20,48 @@ struct IRenderSurfaceContext;
 struct RenderFrameData;
 struct UIFrameSnapshot;
 
+/// One View inside a sealed plan: the task must point at `plan.viewportTasks[i]`,
+/// and `frameData` is the host's View-owned preparation for that task.
+struct SceneViewRecording
+{
+    const SceneViewportTask* task      = nullptr;
+    RenderFrameData*         frameData = nullptr;
+};
+
 /// Sealed SceneRenderPlan input for one host render call. The plan owns the
-/// immutable Scene snapshot table; the task identifies the view being recorded.
-/// RenderRuntime does not own the plan or task objects. Graph-exported image
-/// and overlay handles used while recording are retained on the live
-/// submission until that flight is reused after its fence.
+/// immutable Scene snapshot table; `views` is parallel to `plan.viewportTasks`.
+/// RenderRuntime records every view in this list. It does not own the plan,
+/// tasks, or frameData. Graph-exported image and overlay handles used while
+/// recording are retained on the live submission until that flight is reused
+/// after its fence.
 struct SceneRenderPlanInput
 {
-    const SceneRenderPlan*   plan = nullptr;
-    const SceneViewportTask* task = nullptr;
+    const SceneRenderPlan*           plan = nullptr;
+    std::vector<SceneViewRecording>  views;
 
-    [[nodiscard]] bool empty() const { return plan == nullptr && task == nullptr; }
-    [[nodiscard]] bool complete() const { return plan != nullptr && task != nullptr; }
+    [[nodiscard]] bool empty() const { return plan == nullptr && views.empty(); }
+
+    [[nodiscard]] bool complete() const
+    {
+        if (!plan || views.size() != plan->viewportTasks.size()) {
+            return false;
+        }
+        for (size_t index = 0; index < views.size(); ++index) {
+            const SceneViewRecording& recording = views[index];
+            if (!recording.task || recording.task != &plan->viewportTasks[index] || !recording.frameData) {
+                return false;
+            }
+            if (!plan->snapshotFor(*recording.task)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    [[nodiscard]] const SceneViewportTask* primaryTask() const
+    {
+        return views.empty() ? nullptr : views.front().task;
+    }
 };
 
 [[nodiscard]] inline glm::mat4 makeCameraViewProjection(const glm::mat4& projection, const glm::mat4& view)
@@ -73,6 +104,29 @@ struct CameraFrameInput
         return viewportRect.extent.x > 0.0f && viewportRect.extent.y > 0.0f;
     }
 };
+
+[[nodiscard]] inline CameraFrameInput cameraForViewRecording(
+    const CameraFrameInput&   host,
+    const SceneViewRecording& recording)
+{
+    CameraFrameInput camera = host;
+    if (recording.task) {
+        const SceneViewportTask& task = *recording.task;
+        camera.view           = task.view;
+        camera.projection     = task.projection;
+        camera.viewProjection = task.viewProjection;
+        camera.cameraPos      = task.cameraPos;
+        camera.viewportRect   = task.viewportRect;
+        if (task.output.hasExtent()) {
+            camera.viewportRect.extent = {
+                static_cast<float>(task.output.extent.width),
+                static_cast<float>(task.output.extent.height),
+            };
+        }
+    }
+    camera.frameData = recording.frameData;
+    return camera;
+}
 
 /// Overlay / gizmos onto this camera's offscreen RT (after graphics + UI).
 /// Not display compose; must not recreate GPU resources.

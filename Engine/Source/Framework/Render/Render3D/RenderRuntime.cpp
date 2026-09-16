@@ -143,9 +143,8 @@ ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
                                                    input.displayCompose.extensions,
                                                    cmdBuf.get());
 
-    publishRecordedViewOutput(input);
-
     const uint32_t flightIndex = input.camera.flightIndex;
+    retainPublishedViewOutputs(flightIndex, cmdBuf.get());
     auto retain = [&](auto resource) {
         if (!resource) {
             return;
@@ -168,11 +167,7 @@ bool RenderRuntime::validateSceneRenderInput(const FrameInput& input) const
         return true;
     }
     if (!input.sceneRender.complete()) {
-        YA_CORE_ERROR("Scene render input must provide both plan and viewport task");
-        return false;
-    }
-    if (!input.sceneRender.plan->snapshotFor(*input.sceneRender.task)) {
-        YA_CORE_ERROR("Scene render task does not reference a valid snapshot in its plan");
+        YA_CORE_ERROR("Scene render input must provide a plan and one recording per viewport task");
         return false;
     }
     return true;
@@ -184,13 +179,6 @@ bool RenderRuntime::prepareFrame(const FrameInput& input, std::shared_ptr<IComma
     ensureViewportRectInitialized(input);
     _viewportState.setFrameBufferScale(input.camera.viewportFrameBufferScale);
     return beginFrameCommandBuffer(input, cmdBuf);
-}
-
-void RenderRuntime::renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf)
-{
-    YA_PROFILE_FUNCTION();
-
-    beginViewportPassAndTickPipeline(input, cmdBuf);
 }
 
 IRenderPipeline* RenderRuntime::getActivePipeline() const

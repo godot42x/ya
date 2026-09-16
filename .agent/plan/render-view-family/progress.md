@@ -2,14 +2,23 @@
 
 ## 当前状态
 
-- 阶段：R0 基线审计已完成；R1 已完成 SceneRenderRequest/SceneRenderPlan 的最小 frame-local 调度切片、真实 extractor 的显式 Scene/View 分层，以及 GameRuntime 单 View 的 scheduler 接入；尚未让 RenderRuntime 接管多 View 录制。
-- 已确认：RenderFrameInputs.h 已有四组输入；RenderRuntime 仍按单 View、单 active Scene 记录，但 RenderFrameData 的 Scene snapshot owner 已与 View-owned draw buckets 分离。
+- 阶段：R0 基线审计已完成；R1 已完成 SceneRenderRequest/SceneRenderPlan 的最小 frame-local 调度切片、真实 extractor 的显式 Scene/View 分层，以及 GameRuntime 单 View 的 scheduler 接入。RenderRuntime 按 SceneViewportTask 循环录制；GameRuntime 产品路径仍只 submit 一个 camera。
+- 已确认：RenderFrameInputs.h 已有四组输入；RenderFrameData 的 Scene snapshot owner 已与 View-owned draw buckets 分离。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
-- 当前 checkpoint：Forward/Deferred viewport（含 GBuffer/SSAO）persistent key 已按 ViewId 分名；仍只录制一个 View。
+- 当前 checkpoint：RenderRuntime 按 SceneViewportTask 循环 tick/publish；同一 Scene 的两个 task 共享 snapshot。GameRuntime 仍只 submit 一个 camera。
 - 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是持有 shared snapshot 并独立保存 View-owned draw buckets；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 View buckets、shared skinning palettes 和 light presence。
-- R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan/task 传入，Runtime 在 command recording 前验证 snapshot 索引和 SceneId/revision 归属。当前仍只录制首个单 View，未引入额外 submit。
+- R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 仍是 submission 共享（同 Scene 多 View 正确）。
-- 架构审计结论：RenderSubmissionContext / RenderViewRecordingContext 已进入 tick 输入，Forward/Deferred/Shadow beginView 不再按 flightIndex 覆写唯一 Binding。Runtime 已按 flight 持有 submission keepalives 和 View-keyed output 句柄。graph persistent key 已按 View 分开。下一步按 SceneViewportTask 循环录制；不要在尚未循环任务时宣称双 View GPU 完成。
+- 架构审计结论：RenderSubmissionContext / RenderViewRecordingContext 已进入 tick 输入，Forward/Deferred/Shadow beginView 不再按 flightIndex 覆写唯一 Binding。Runtime 已按 flight 持有 submission keepalives 和 View-keyed output 句柄。graph persistent key 已按 View 分开。Runtime 已循环 SceneViewportTask。下一步不要宣称双 Surface GPU 完成；可录制两个 Scene 的两个 View，或接入 editor/preview 多 request。
+
+## 2026-09-16 checkpoint：循环录制 SceneViewportTask
+
+- 唯一目标：RenderRuntime 录制 sealed plan 里的每一个 SceneViewportTask；同一 Scene 的两个 View 共享一份 SceneFrameSnapshot，并各自发布 output。
+- `SceneRenderPlanInput` 用与 `plan.viewportTasks` 平行的 `SceneViewRecording` 替换单一 task 指针；`complete()` 要求数量、指针和 snapshot 都对齐。`cameraForViewRecording` 把 task 的矩阵/extent/`frameData` 盖到 host camera 上。
+- Runtime 对每个 recording tick pipeline、立即 publish；compose/present 仍用 primary（第一个 task）。GameRuntime 对每个 task `prepareView`，`viewFrameDataPerFlight` 按 flight 持有 View-owned `RenderFrameData`。
+- 未让 GameRuntime submit 第二个 camera；未做双 Surface GPU 验收；PointShadow indirect 仍是 flight 轴。
+- 验证：`xmake b ya-render-3d`、`xmake b ya-render-3d-test`、`xmake r ya-render-3d-test --gtest_filter='ViewPersistentResourceKeyTest.*:ForwardGraphInputsTest.*:RenderGraphCoreTest.ViewKeyedPersistentTexturesStayIndependent:RenderGraphCoreTest.ResourceRegistryReusesStableResourcesAcrossSyncs:RenderViewOutputTableTest.*:RenderRuntimeSnapshotTest.*:RenderSubmissionTableTest.*:RenderViewBindingTableTest.*:DeferredFrameResourceSetTest.*:DeferredRenderPipelineTest.*:DeferredFrameGraphResourcesTest.*:DeferredPassParamsTest.*:DrawCandidateViewTest.*:RenderGraphCoreTest.FrameUploadArena*'`（48/48）、`xmake b ya-game-runtime`、`git diff --check`。
+- 保留未完成：GameRuntime 仍单 camera submit；无双 Surface；PointShadow indirect 仍是 flight 轴。
 
 ## 2026-09-16 checkpoint：View-keyed persistent keys / RTs
 
@@ -136,13 +145,13 @@ R0 结论：world snapshot 与 UI snapshot 都在 renderFrame 前生成；Render
 | --- | --- | --- | --- |
 | R0 单 View 基线 | 已完成 | 单 View、现有 pass、单 submit、Forward/Deferred topology | 真实 GPU golden 仍依赖可运行窗口环境 |
 | R1 World/View 分离 | 已完成（单 View 契约） | RenderFrameData 组合 Scene snapshot；现有单 View pipeline topology | GameEditor/preview 多 request |
-| R2 ViewFamily | 进行中（View binding + submission keepalives + View output 句柄 + View-keyed persistent RT） | Forward/Deferred topology、当前单 View submit、PointShadow indirect per-flight | 多 View record、双 Surface 验收 |
+| R2 ViewFamily | 进行中（View binding + keepalives + output 句柄 + View-keyed RT + task 循环录制） | Forward/Deferred topology、GameRuntime 单 camera submit、PointShadow indirect per-flight | 双 Scene 录制、双 Surface 验收 |
 | R3 GUI2D/GameUI | 未开始 | WidgetTree live source、UIFrameSnapshot 输入 | UI-only 与 GameUI[ViewId] |
 | R4 性能收口 | 未开始 | 优化由 profile 触发 | cache、submit、第三 pipeline 决策 |
 
 ## 下一轮接力点
 
-R0 已完成。Forward / Deferred / Shadow 已具备 beginSubmission/beginView。RenderRuntime 按 flight 持有 submission keepalives，并按 ViewId 发布独立 output 句柄。Forward/Deferred viewport（含 GBuffer/SSAO）persistent key 已按 View 分开。下一 checkpoint 按 SceneViewportTask 循环录制；不要在尚未循环任务时宣称双 View GPU 录制完成。
+R0 已完成。Forward / Deferred / Shadow 已具备 beginSubmission/beginView。RenderRuntime 按 flight 持有 submission keepalives，按 ViewId 发布独立 output，persistent key 已 View-keyed，并按 SceneViewportTask 循环 tick/publish。GameRuntime 产品路径仍只 submit 一个 camera。下一 checkpoint 录制两个 Scene 的两个 View，或把 editor/preview 多 request 接进 scheduler；不要宣称双 Surface GPU 完成。
 
 ## R1 审计结论
 

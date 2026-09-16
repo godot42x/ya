@@ -1,11 +1,13 @@
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
+#include "Render3D/RenderFrameData.h"
 #include "Render3D/RenderRuntime.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 #include <type_traits>
+#include <vector>
 
 namespace ya
 {
@@ -38,6 +40,7 @@ TEST(RenderRuntimeSnapshotTest, FrameInputGroupsCameraViewDisplayPresent)
 {
     static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.camera), CameraFrameInput>);
     static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.sceneRender), SceneRenderPlanInput>);
+    static_assert(std::is_same_v<decltype(SceneRenderPlanInput{}.views), std::vector<SceneViewRecording>>);
     static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.viewCompose), ViewComposeInput>);
     static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.displayCompose), DisplayComposeInput>);
     static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.present), PresentFrameInput>);
@@ -236,26 +239,90 @@ TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsInvalidSnapshotIndex)
     EXPECT_EQ(plan.snapshotFor(task), nullptr);
 }
 
-TEST(RenderRuntimeSnapshotTest, SceneRenderPlanInputRequiresPlanAndTaskTogether)
+TEST(RenderRuntimeSnapshotTest, SceneRenderPlanInputRequiresPlanAndMatchingViewRecordings)
 {
     SceneRenderPlan plan;
-    SceneViewportTask task;
+    SceneViewportTask orphan;
+    RenderFrameData frame;
 
     const SceneRenderPlanInput empty{};
     EXPECT_TRUE(empty.empty());
     EXPECT_FALSE(empty.complete());
+    EXPECT_EQ(empty.primaryTask(), nullptr);
 
-    const SceneRenderPlanInput planOnly{.plan = &plan};
+    SceneRenderPlan planWithTask;
+    planWithTask.viewportTasks.push_back(SceneViewportTask{.viewId = 1});
+    const SceneRenderPlanInput planOnly{.plan = &planWithTask};
     EXPECT_FALSE(planOnly.empty());
     EXPECT_FALSE(planOnly.complete());
 
-    const SceneRenderPlanInput taskOnly{.task = &task};
-    EXPECT_FALSE(taskOnly.empty());
-    EXPECT_FALSE(taskOnly.complete());
+    SceneRenderPlanInput viewsOnly;
+    viewsOnly.views.push_back(SceneViewRecording{.task = &orphan, .frameData = &frame});
+    EXPECT_FALSE(viewsOnly.empty());
+    EXPECT_FALSE(viewsOnly.complete());
+}
 
-    const SceneRenderPlanInput complete{.plan = &plan, .task = &task};
-    EXPECT_FALSE(complete.empty());
-    EXPECT_TRUE(complete.complete());
+TEST(RenderRuntimeSnapshotTest, SceneRenderPlanInputRecordsEveryViewportTaskWithSharedSnapshot)
+{
+    SceneRenderScheduler scheduler;
+    scheduler.beginFrame(8);
+
+    auto makeRequest = [](SceneViewId viewId, const glm::mat4& view)
+    {
+        SceneRenderRequest request;
+        request.sceneId = 1;
+        request.viewId = viewId;
+        request.view = view;
+        request.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {640.0f, 360.0f}};
+        request.buildSnapshot = []()
+        {
+            return std::make_shared<const SceneFrameSnapshot>();
+        };
+        return request;
+    };
+
+    const glm::mat4 viewA = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    const glm::mat4 viewB = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 2.0f, 0.0f));
+    ASSERT_TRUE(scheduler.submit(makeRequest(11, viewA)));
+    ASSERT_TRUE(scheduler.submit(makeRequest(12, viewB)));
+
+    const SceneRenderPlan plan = scheduler.seal();
+    ASSERT_EQ(plan.viewportTasks.size(), 2u);
+    EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]), plan.snapshotFor(plan.viewportTasks[1]));
+
+    RenderFrameData frameA;
+    RenderFrameData frameB;
+    frameA.sceneSnapshot = plan.snapshotFor(plan.viewportTasks[0]);
+    frameB.sceneSnapshot = plan.snapshotFor(plan.viewportTasks[1]);
+
+    SceneRenderPlanInput input{
+        .plan = &plan,
+        .views =
+            {
+                {.task = &plan.viewportTasks[0], .frameData = &frameA},
+                {.task = &plan.viewportTasks[1], .frameData = &frameB},
+            },
+    };
+    EXPECT_TRUE(input.complete());
+    EXPECT_EQ(input.views.size(), 2u);
+    EXPECT_EQ(input.primaryTask(), &plan.viewportTasks[0]);
+    EXPECT_EQ(frameA.sceneSnapshot.get(), frameB.sceneSnapshot.get());
+    EXPECT_NE(&frameA, &frameB);
+
+    const CameraFrameInput host{
+        .view         = glm::mat4(1.0f),
+        .viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
+        .frameData    = &frameA,
+    };
+    const CameraFrameInput cameraB = cameraForViewRecording(host, input.views[1]);
+    EXPECT_EQ(cameraB.view, viewB);
+    EXPECT_NE(cameraB.view, host.view);
+    EXPECT_EQ(cameraB.frameData, &frameB);
+    EXPECT_FLOAT_EQ(cameraB.viewportRect.extent.x, 640.0f);
+    EXPECT_FLOAT_EQ(cameraB.viewportRect.extent.y, 360.0f);
+
+    input.views.pop_back();
+    EXPECT_FALSE(input.complete());
 }
 
 TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsSnapshotMetadataMismatch)

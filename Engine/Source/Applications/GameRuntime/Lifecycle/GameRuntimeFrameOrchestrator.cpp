@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <format>
+#include <vector>
 
 namespace ya
 {
@@ -456,33 +457,45 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
     }
     sceneRenderPlan = sceneScheduler.seal();
 
+    auto& viewFrames = app._renderState->viewFrameDataPerFlight[flightIndex];
+    std::vector<SceneViewRecording> viewRecordings;
     if (!sceneRenderPlan.viewportTasks.empty()) {
         YA_PERF_SCOPE(perf::sample::renderExtract(), perf::metric::cpuTimeMs(), perf::domain::render());
         YA_PROFILE_SCOPE("RenderFrameExtractor::sceneSnapshot");
-        const SceneViewportTask& task = sceneRenderPlan.viewportTasks.front();
-        const auto sceneSnapshot = sceneRenderPlan.snapshotFor(task);
-        if (!sceneSnapshot) {
-            app._renderState->frameDataPerFlight[flightIndex].clear();
-        }
-        else {
-            RenderFrameExtractor::prepareView(
-                RenderFrameExtractor::ViewPrepareInput{
-                    .view = task.view,
-                    .projection = task.projection,
-                    .viewProjection = task.viewProjection,
-                    .cameraPos = task.cameraPos,
-                    .viewportExtent = Extent2D::fromVec2(task.viewportRect.extent),
-                    .viewOwner = entt::null,
-                    .frameIndex = App::_frameIndex,
-                    .deltaTime = dt,
-                    .shadowSettings = &app.getRenderServices().getShadowSettings(),
-                },
-                sceneSnapshot,
-                app._renderState->frameDataPerFlight[flightIndex]);
+        viewFrames.resize(sceneRenderPlan.viewportTasks.size());
+        viewRecordings.reserve(viewFrames.size());
+        for (size_t index = 0; index < sceneRenderPlan.viewportTasks.size(); ++index) {
+            const SceneViewportTask& task = sceneRenderPlan.viewportTasks[index];
+            RenderFrameData& frameData = viewFrames[index];
+            const auto sceneSnapshot = sceneRenderPlan.snapshotFor(task);
+            if (!sceneSnapshot) {
+                frameData.clear();
+            }
+            else {
+                RenderFrameExtractor::prepareView(
+                    RenderFrameExtractor::ViewPrepareInput{
+                        .view = task.view,
+                        .projection = task.projection,
+                        .viewProjection = task.viewProjection,
+                        .cameraPos = task.cameraPos,
+                        .viewportExtent = Extent2D::fromVec2(task.viewportRect.extent),
+                        .viewOwner = entt::null,
+                        .frameIndex = App::_frameIndex,
+                        .deltaTime = dt,
+                        .shadowSettings = &app.getRenderServices().getShadowSettings(),
+                    },
+                    sceneSnapshot,
+                    frameData);
+            }
+            viewRecordings.push_back(SceneViewRecording{
+                .task      = &task,
+                .frameData = &frameData,
+            });
         }
     }
     else {
-        app._renderState->frameDataPerFlight[flightIndex].clear();
+        viewFrames.resize(1);
+        viewFrames[0].clear();
     }
 
     CameraFrameInput cameraFrame{
@@ -496,7 +509,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
         .cameraPos                = frameState.cameraPos,
         .viewportRect             = frameState.viewportRect,
         .viewportFrameBufferScale = frameState.viewportFrameBufferScale,
-        .frameData                = &app._renderState->frameDataPerFlight[flightIndex],
+        .frameData                = &viewFrames.front(),
         .shadowSettings           = &app.getRenderServices().getShadowSettings(),
     };
 
@@ -537,8 +550,8 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
 
     ICommandBuffer* recorded = renderRuntime->renderFrame(RenderRuntime::FrameInput{
         .sceneRender = {
-            .plan = sceneRenderPlan.viewportTasks.empty() ? nullptr : &sceneRenderPlan,
-            .task = sceneRenderPlan.viewportTasks.empty() ? nullptr : &sceneRenderPlan.viewportTasks.front(),
+            .plan  = viewRecordings.empty() ? nullptr : &sceneRenderPlan,
+            .views = std::move(viewRecordings),
         },
         .camera = cameraFrame,
         .viewCompose = {

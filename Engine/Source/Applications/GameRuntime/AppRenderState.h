@@ -24,7 +24,7 @@ struct AppRenderState
     AppRenderFrameState                                frameState;
     std::optional<AppRenderFrameState>                 extensionFrameState;
     SceneRenderScheduler                               sceneRenderScheduler;
-    std::array<RenderFrameData, MAX_FLIGHTS_IN_FLIGHT> frameDataPerFlight{};
+    std::array<std::vector<RenderFrameData>, MAX_FLIGHTS_IN_FLIGHT> viewFrameDataPerFlight{};
 };
 
 } // namespace ya
