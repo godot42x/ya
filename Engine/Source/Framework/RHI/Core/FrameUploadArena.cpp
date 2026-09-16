@@ -86,8 +86,7 @@ bool FrameUploadArena::beginFlight(uint32_t flightIndex, uint64_t frameToken)
 
     auto& flight = _flights[flightIndex];
     if (flight.hasActiveFrameToken && flight.activeFrameToken == frameToken) {
-        YA_CORE_ERROR("FrameUploadArena rejected duplicate begin for flight {} and frame token {}", flightIndex, frameToken);
-        return false;
+        return true;
     }
 
     flight.cursor = 0;

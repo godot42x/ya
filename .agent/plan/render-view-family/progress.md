@@ -9,7 +9,7 @@
 - 当前 checkpoint：SceneFrameSnapshot 的灯光数据已收敛为 view-independent source data；directional cascade/shadow matrices 与完整 RHI light packet 仅在 per-view RenderFrameData 中生成。
 - 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是持有 shared snapshot 并独立保存 View-owned draw buckets；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 View buckets、shared skinning palettes 和 light presence。
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan/task 传入，Runtime 在 command recording 前验证 snapshot 索引和 SceneId/revision 归属。当前仍只录制首个单 View，未引入多 View output 或额外 submit。
-- GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 会失败，避免重置 cursor 后覆写前一个 View 已录制命令引用的 UBO/light/shadow slices。Forward、Deferred、Shadow 资源准备均传入该 token。
+- GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op，避免重置 cursor 后覆写前一个 View 已录制命令引用的 UBO/light/shadow slices。Forward、Deferred、Shadow 资源准备均传入该 token。该语义只覆盖 upload cursor，descriptor binding/output ownership 仍未按 View 隔离。
 - 架构审计结论：token guard 只是迁移期护栏，不能作为最终 multi-view 方案。当前 `RenderRuntime` 持有的 pipeline/resource state、per-flight descriptor set、arena cursor 和 `_lastTickCtx` 仍混合了 persistent、submission、View 三种生命周期；下一步必须拆出 `RenderSubmissionContext` 与 `RenderViewRecordingContext`，让每个 View 拥有独立 descriptor/slice lifetime。
 
 ## 2026-09-16 checkpoint：pipeline View-local graph context
@@ -19,6 +19,14 @@
 - Deferred 的 graph build 改为使用 `executeDeferredMainGraph()` 栈内构造的 `FrameContext`，不再把当前 frame input 存入 pipeline 成员。
 - 该切片只消除 pipeline 层的跨 View 临时状态，不代表 upload arena、descriptor binding 或 output 资源已经完成 View 隔离。
 - 验证：`xmake b ya-render-3d-test`、`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:DrawCandidateViewTest.*'`（14/14）、`xmake b ya-game-runtime`。
+
+## 2026-09-16 checkpoint：submission upload cursor
+
+- `FrameUploadArena::beginFlight(flightIndex, frameToken)` 对同一 token 改为幂等调用，不再因为第二个 View 进入而 rewind cursor。
+- 同一 submission 内的后续 View 可以继续 `allocate()` aligned slice；测试确认首个 slice offset 为 `0`，追加 slice offset 为 `16`，cursor 从 `4` 增长到 `20`，且 backing buffer identity 保持不变。
+- 新 frame token 的 begin 仍保留原有 fence-safe flight 重置语义；本切片没有改变 descriptor pool/set、pipeline binding 或 output image 的所有权。
+- 验证：`xmake b ya-render-3d-test`；`xmake r ya-render-3d-test --gtest_filter='RenderGraphCoreTest.FrameUploadArena*'`；`git diff --check`。
+- 保留未完成：`RenderSubmissionContext` / `RenderViewRecordingContext`、per-view descriptor/slice table、双 View GPU 录制和双 Surface 验收。允许同 token 追加 allocation 不等于 descriptor binding 已安全隔离。
 
 ## 2026-09-16 checkpoint：View order ranges
 

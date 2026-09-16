@@ -33,6 +33,7 @@
 
 - [x] 扩展 RenderRuntime::FrameInput 为 SceneRenderPlanInput，并在录制前校验 plan/task/snapshot 归属。
 - [x] 为 FrameUploadArena 增加 frame token 防护，拒绝同一 submission 内重复 rewind flight backing。
+- [x] 将 FrameUploadArena 同一 token 的 begin 改为幂等追加语义，避免多 View 准备时重置 cursor；descriptor binding 隔离仍留在后续切片。
 - [x] 原子迁移 RenderFrameData：Scene snapshot 改为 shared_ptr<const SceneFrameSnapshot>，并使用 View-owned draw bucket 副本承载 camera-dependent sort；禁止旧 sortDrawItems() 修改共享 snapshot。
 - [x] 将 View-owned draw bucket 副本替换为 index/order ranges，消除 RenderDrawItem 的重复拷贝；DrawCandidateView 提供 indexed read-only range。
 - [ ] 将 DrawPacket grouping/packet ranges 的生命周期纳入 submission/View context，确认录制期不缓存失效的候选 span。

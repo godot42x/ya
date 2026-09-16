@@ -4687,7 +4687,17 @@ TEST(RenderGraphCoreTest, FrameUploadArenaSharesAlignedSlicesPerFlight)
     EXPECT_EQ(arena.bytesUsed(1), 4u);
 
     ASSERT_TRUE(arena.beginFlight(0, 100u));
-    EXPECT_FALSE(arena.beginFlight(0, 100u));
+    const auto sameSubmission = arena.allocate(0, /*size=*/4, /*alignment=*/16);
+    ASSERT_TRUE(sameSubmission.has_value());
+    EXPECT_EQ(sameSubmission->buffer.get(), second->buffer.get());
+    EXPECT_EQ(sameSubmission->offset, 0u);
+    EXPECT_EQ(arena.bytesUsed(0), 4u);
+    EXPECT_TRUE(arena.beginFlight(0, 100u));
+    const auto appended = arena.allocate(0, /*size=*/4, /*alignment=*/16);
+    ASSERT_TRUE(appended.has_value());
+    EXPECT_EQ(appended->buffer.get(), sameSubmission->buffer.get());
+    EXPECT_EQ(appended->offset, 16u);
+    EXPECT_EQ(arena.bytesUsed(0), 20u);
     ASSERT_TRUE(arena.beginFlight(0, 101u));
 }
 

@@ -73,9 +73,8 @@ class YA_RHI_API FrameUploadArena
     FrameUploadArena& operator=(FrameUploadArena&&)      = delete;
 
     /**
-     * Begin a logical frame on a fence-safe flight. The same frame token may
-     * not rewind the flight twice, because earlier slices may already be
-     * referenced by commands in this submission.
+     * Begin a logical frame on a fence-safe flight. Beginning the same token
+     * again is idempotent and preserves the cursor for additional views.
      */
     bool beginFlight(uint32_t flightIndex, uint64_t frameToken);
 

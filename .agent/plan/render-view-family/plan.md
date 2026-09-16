@@ -155,7 +155,13 @@ RenderViewRecordingContext
   SceneViewportTask / per-view RenderFrameData / per-view descriptors / upload slices
 ```
 
-`FrameUploadArena` 不能被多个 View 以同一个可 rewind cursor 共享；`MAX_FLIGHTS_IN_FLIGHT` 只表示 GPU flight 并发，不等于 View 槽位。每个 View 的 UBO/light/shadow/skinning 引用必须在 command buffer 录制到 submit 完成前保持独立且不可被后续 View 改写。当前 frame-token duplicate-begin guard 只是迁移期护栏：它应拒绝错误的第二次 rewind，但不是最终的多 View 设计。最终方案应让 submission/context 持有 submission-owned arena，或让 per-view binding 持有独立 descriptor set 与 slice table；禁止通过“禁止第二个 View”冒充多 View 支持。
+`FrameUploadArena` 不能让多个 View 通过第二次 begin 重置同一个 flight 的 cursor；`MAX_FLIGHTS_IN_FLIGHT` 只表示 GPU flight 并发，不等于 View 槽位。当前迁移语义是：同一 `(flightIndex, frameToken)` 的 `beginFlight()` 幂等，不 rewind，后续 View 可以追加 allocation slice；不同 token 仍会在 fence-safe flight 上重新开始。这个改动只解决 submission upload cursor 的覆盖风险，不代表 descriptor binding、output ownership 或完整 View 隔离已经完成。最终方案仍应让 `RenderSubmissionContext` 持有 submission-owned arena，或让 per-view binding 持有独立 descriptor set 与 slice table；禁止通过复用同一 descriptor set 或“禁止第二个 View”冒充多 View 支持。
+
+### 4.0.1 FrameUploadArena 迁移期语义
+
+同一 submission 的多个 View 可以依次调用 `beginFlight(flightIndex, frameToken)`：第一次调用初始化该 flight，后续相同 token 的调用必须是 no-op，并保留 cursor 与 backing buffer。每个 View 通过 `allocate()` 获得自己的 aligned slice，slice 的 buffer identity、offset 和 size 在 command buffer 录制到 queue submit 完成前保持有效。新的 frame token 仍必须等待旧 flight 安全后才能 rewind；扩容产生的旧 backing 继续交给 deferred deletion。
+
+这只是 upload allocation 的正确性切片。下一阶段必须把 descriptor write、light/shadow/skinning binding、graph-exported output 以及 submission/View 的资源保活纳入同一 context 模型；不得因为 arena 已可追加就宣称同一 submission 的多个 View 已可安全录制。
 
 ### R0 — 建立单 View 正确性基线
 
