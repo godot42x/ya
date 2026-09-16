@@ -490,8 +490,17 @@ TEST(GuiAnimationTest, SwitchIsIdleUntilToggledThenAnimatesItsStateChange)
     auto widget = attachSwitch(tree, slot);
 
     // An untouched switch costs nothing per frame (the transition is asleep).
+    // The lifetime tween is on the widget's behavior list, not a private clock.
     EXPECT_FALSE(widget->wantsTick());
     EXPECT_FLOAT_EQ(widget->getProgress(), 0.0f);
+    bool bTweenOnBehaviorList = false;
+    for (const UIBehaviorRef& behavior : widget->getBehaviors()) {
+        if (dynamic_cast<const UITweenBehavior*>(behavior.get()) != nullptr) {
+            bTweenOnBehaviorList = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(bTweenOnBehaviorList);
 
     widget->setChecked(true);
     EXPECT_TRUE(widget->isChecked());

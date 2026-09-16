@@ -150,8 +150,9 @@ tween->curve(ya::ui::anim::opacity,
 ## 5. 第一个默认带动画的控件：UISwitch
 
 - `UISwitch`（DSL `ya::ui::toggle(...)`，typeId `engine.switch`，style key `switch`
-  复用 `FCheckBoxStyle`）：值立即翻转，knob 位移 + track 配色插值；控件**自己**持有
-  一个 tween 驱动自己声明的 `progress` 通道（`kAnimSwitchProgress`）。
+  复用 `FCheckBoxStyle`）：值立即翻转，knob 位移 + track 配色插值；控件用
+  `animate()` 挂上自己声明的 `progress` 通道（`kAnimSwitchProgress`）。`animate()`
+  内部就是 `addBehavior(UITweenBehavior)`；`_transition` 是返回的 typed 句柄。
 - 静止时 `wantsTick()==false`（无每帧成本）；`setTransitionSeconds(0)` 关掉动画；
   构造即 on 的开关由 `onAttached()` 落位，不会动一下才画对。
 - 顺带修掉一个真 bug：`UIAnimClock::getLerp()` 在 `duration<=0` 时恒返回 1，导致

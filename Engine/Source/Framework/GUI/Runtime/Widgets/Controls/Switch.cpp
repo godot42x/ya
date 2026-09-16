@@ -32,13 +32,13 @@ bool writeSwitchProgress(UIElement& owner, const FUIAnimValue& value)
 }
 
 const FUIAnimPropertyDesc kSwitchAnimProperties[] = {
-    {kAnimSwitchProgress.id, EUIAnimValueType::Float, &readSwitchProgress, &writeSwitchProgress},
+    {.id=kAnimSwitchProgress.id, .type=EUIAnimValueType::Float, .read=&readSwitchProgress, .write=&writeSwitchProgress},
 };
 
 const FUIAnimPropertyTable kSwitchAnimPropertyTable{
-    kSwitchAnimProperties,
-    std::size(kSwitchAnimProperties),
-    &uiElementAnimatableProperties(),
+    .entries=kSwitchAnimProperties,
+    .count=std::size(kSwitchAnimProperties),
+    .base=&uiElementAnimatableProperties(),
 };
 
 glm::vec4 brushColorOr(const FBrush& brush, const glm::vec4& fallback)
@@ -55,9 +55,8 @@ UISwitch::UISwitch(std::string name) : UIElement(std::move(name), "switch")
     bindHostLayout(_contentLayout);
     syncContentPadding();
 
-    // The default-animation story: the widget itself owns a framework tween.
-    // It is idle (wantsTick() == false) until the first toggle, so an
-    // untouched switch costs nothing per frame.
+    // animate() addBehavior's a UITweenBehavior onto this widget. The returned
+    // handle is that same instance; idle (wantsTick() == false) until toggle.
     _transition = animate(*this, kDefaultTransitionSeconds);
     _transition->track(kAnimSwitchProgress, 0.0f, 1.0f, EUIAnimEase::OutQuad);
 }
@@ -125,7 +124,8 @@ void UISwitch::settleTransition()
 void UISwitch::onAttached()
 {
     // A switch built (or deserialized) as already-on must paint correctly on
-    // its first frame: the behaviour only received an owner on attach.
+    // its first frame: animate() already attached the tween, so setLerpNow
+    // writes progress through the same setter the tick path uses.
     _transition->setLerpNow(_bChecked ? 1.0f : 0.0f);
 }
 

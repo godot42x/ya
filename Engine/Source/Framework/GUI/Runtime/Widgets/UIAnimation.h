@@ -310,7 +310,9 @@ struct FUIAnimTrack
 };
 
 /// Framework-layer tween behaviour: one clock driving N animatable properties
-/// of the behaviour's OWNER widget. Multi-widget orchestration (a track bound
+/// of the behaviour's OWNER widget. It is a UIBehavior - tick and wantsTick
+/// go through UIElement's behavior list. UIAnimClock is internal; WidgetTree
+/// never ticks a clock on its own. Multi-widget orchestration (a track bound
 /// to a widget by name, keyframe events, clip sequences) belongs to the Game
 /// UI layer on top, not here.
 ///
@@ -457,10 +459,10 @@ class YA_GUI_API UITweenBehavior : public UIBehavior
 
 // === Authoring entry points =================================================
 
-/// Attach a tween to `widget` and return it for authoring / playback. The
-/// widget owns the behaviour from here on, so dropping the returned handle is
-/// safe: `ya::ui::animate(card, 0.2f)->fade(0.0f, 1.0f)->play();` is a complete
-/// fire-and-forget animation.
+/// Attach a tween onto `widget` (`addBehavior(UITweenBehavior)`) and return
+/// it for authoring / playback. This is the single attach API — the widget
+/// owns the behaviour from here on, so dropping the handle is safe:
+/// `ya::ui::animate(card, 0.2f)->fade(0.0f, 1.0f)->play();`
 [[nodiscard]] YA_GUI_API std::shared_ptr<UITweenBehavior> animate(UIElement& widget,
                                                                  float      duration = 0.25f);
 

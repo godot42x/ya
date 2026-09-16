@@ -163,9 +163,14 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
 - 写路径唯一真源是 changed-only setter（`setRenderOpacity` 等，失效走
   `EUIPropertyImpact::SubtreePaintContext`，因为子树继承 render transform）。禁止动画
   field poke、禁止把 `_bVolatile` 当动画、禁止在 paint/layout 回调里 spawn 动画。
-- 时钟/tween：`UIAnimClock`（duration/方向/loop/timeScale，对标 FCurveSequence）
-  + `UITweenBehavior`（一个时钟驱动 owner 的 N 条 track；`wantsTick()` 只在播放
-  中为真，结束自动回到干净、树不再拜访）。onFinished 可做 ping-pong（playReverse）。
+- 时钟/tween：`UIAnimClock` 是 `UITweenBehavior` 的内部时钟（对标 FCurveSequence），
+  **不是** WidgetTree 上的第二套 tick。驱动者是 `UITweenBehavior`（`UIBehavior`）：
+  `WidgetTree::tick` → `UIElement::tick` → 行为列表。`wantsTick()` 只在播放中为真，
+  结束自动回到干净、树不再拜访。挂上 tween 的**唯一接口**是 `ya::ui::animate(widget, dt)`
+  （内部 `addBehavior`）；返回的 shared_ptr 只是同一实例的句柄。onFinished 可做
+  ping-pong（playReverse）。
+  写回 widget 一律走可动画属性接缝（`applyAnimatableProperty` / setter）；将来的
+  Game UI clip player 也写同一条缝，仍然不是平行 dirty 通道。
 - render transform 解析：`UIFrameBuilder::pushRenderTransform`，emit 时映射 rect/color/clip
   （缓存 draw-item 段存的是解析后结果，所以 transform 变化必须 invalidate 子树，
   setter 已保证）。
@@ -185,9 +190,10 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
   同一时刻的后键胜出（离散跳变）；首键之前与末键之后保持该键的值（不外推）；时刻必须非递减、
   值域必须与属性声明一致，否则该 track 在 resolve 时被拒并只警告一次。
   多对象 / 事件轨 / blend 仍属 Game UI clip player，不要塞进框架。
-- 默认带动画的控件：`UISwitch`（DSL `ya::ui::toggle(...)`）。它自己持有一个 tween 驱动
-  自己声明的 `progress` 通道（`kAnimSwitchProgress`）：值立即翻转，knob 位移 + track 配色
-  插值；静止时 `wantsTick()==false`，`setTransitionSeconds(0)` 可整体关掉动画。
+- 默认带动画的控件：`UISwitch`（DSL `ya::ui::toggle(...)`）。它用 `animate()` 挂上
+  一个 `UITweenBehavior` 驱动自己声明的 `progress` 通道（`kAnimSwitchProgress`）：值立即
+  翻转，knob 位移 + track 配色插值；静止时 `wantsTick()==false`，
+  `setTransitionSeconds(0)` 可整体关掉动画。
   哪些控件该默认携带动画、哪些应 opt-in，见 `.agent/plan/gui-animation/plan.md` §8。
 - 零时长时钟语义：`duration<=0` 表示“无动画”，`getLerp()` 返回被放置的那个端点
   （play→1、playReverse→0、setLerp(v)→v）。不要写回“恒返回 1”，否则 instant 控件会被画成

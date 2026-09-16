@@ -181,6 +181,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     virtual void tick(float deltaSeconds);
     [[nodiscard]] virtual bool wantsTick() const;
 
+    /// Cross-cutting capabilities (tween, drag, drop). WidgetTree ticks a
+    /// widget that wantsTick(); UIElement::wantsTick/tick forward to this list.
+    /// A lifetime tween belongs here (addBehavior), not on a parallel clock.
     void addBehavior(const UIBehaviorRef& behavior);
     void removeBehavior(const UIBehavior& behavior);
     [[nodiscard]] bool hasBehavior(const UIBehavior& behavior) const;

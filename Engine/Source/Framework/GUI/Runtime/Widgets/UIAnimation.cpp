@@ -702,7 +702,7 @@ std::shared_ptr<UITweenBehavior> animate(UIElement& widget, float duration)
 {
     auto behavior = std::make_shared<UITweenBehavior>();
     behavior->setDuration(duration);
-    widget.addBehavior(behavior);
+    widget.addBehavior(behavior); // join the widget's UIBehavior list (tick / wantsTick)
     return behavior;
 }
 
