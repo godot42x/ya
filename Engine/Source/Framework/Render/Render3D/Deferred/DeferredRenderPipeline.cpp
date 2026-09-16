@@ -13,6 +13,7 @@
 #include "Render/Resources/TextureSlotBinding.h"
 #include "Render3D/Common/PipelineCommon.h"
 #include "Render3D/Common/RenderRecordingContext.h"
+#include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
@@ -1181,14 +1182,14 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
 void DeferredRenderPipeline::prepareShadowPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
     const auto shadowSettings = currentShadowSettings();
-    if (_shadowStage && shadowSettings.isEnabled()) {
+        if (_shadowStage && shadowSettings.isEnabled()) {
         _shadowStage->applySettings(shadowSettings);
         {
             YA_PERF_SCOPE(perf::sample::deferredShadow(), perf::metric::cpuTimeMs(), perf::domain::render());
-            RenderSubmissionContext submission = frame.submission;
-            submission.cmdBuf      = frame.cmdBuf;
-            submission.flightIndex = frame.camera.flightIndex;
-            submission.frameToken  = frame.camera.frameIndex;
+            if (!frame.submission || !frame.submission->isRecording()) {
+                YA_CORE_ERROR("Deferred shadow pass requires a recording submission");
+                return;
+            }
 
             RenderViewRecordingContext view = frame.view;
             if (!view.frameData) {
@@ -1197,7 +1198,7 @@ void DeferredRenderPipeline::prepareShadowPass(const RenderPipelineFrameContext&
             if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
                 view.viewportExtent = stageCtx.viewportExtent;
             }
-            _shadowStage->prepareView(submission, view);
+            _shadowStage->prepareView(*frame.submission, view);
         }
         return;
     }
@@ -1209,14 +1210,10 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
 {
     clearPublishedGraphOutputs();
     YA_CORE_ASSERT(_frameResources != nullptr, "Deferred pipeline frame resources are not initialized");
-
-    RenderSubmissionContext submission = frame.submission;
-    submission.cmdBuf      = frame.cmdBuf;
-    submission.flightIndex = frame.camera.flightIndex;
-    submission.frameToken  = frame.camera.frameIndex;
-    if (!_frameResources->beginSubmission(submission)) {
+    if (!frame.submission || !frame.submission->isRecording()) {
         return;
     }
+    RenderSubmission& submission = *frame.submission;
     if (!_frameResources->prepareSkinning(stageCtx)) {
         return;
     }

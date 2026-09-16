@@ -46,7 +46,7 @@ TEST(RenderRuntimeSnapshotTest, FrameInputGroupsCameraViewDisplayPresent)
     static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.displayCompose), DisplayComposeInput>);
     static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.present), PresentFrameInput>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.camera), CameraFrameInput>);
-    static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.submission), RenderSubmissionContext>);
+    static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.submission), RenderSubmission*>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.view), RenderViewRecordingContext>);
 
     const glm::mat4 view       = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f));

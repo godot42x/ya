@@ -3,6 +3,7 @@
 #include "Core/Math/Geometry.h"
 #include "RHI/RenderDefines.h"
 #include "Render3D/Common/RenderRecordingContext.h"
+#include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/ShadowSettings.h"
 
 #include <cstdint>
@@ -12,6 +13,7 @@ namespace ya
 {
 
 struct IRender;
+class RenderSubmission;
 struct RenderFrameData;
 struct IImage;
 
@@ -45,8 +47,8 @@ struct IShadowTechnique
     virtual void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent) = 0;
 
     /// Per-frame data upload (UBOs, instance buffers, frustum data).
-    virtual void prepare(const RenderSubmissionContext& submission,
-                         RenderViewRecordingContext&    view) = 0;
+    virtual void prepare(RenderSubmission&           submission,
+                         RenderViewRecordingContext& view) = 0;
 
 };
 

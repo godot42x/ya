@@ -33,19 +33,11 @@ void ShadowStage::destroy()
 
 void ShadowStage::prepare(const RenderStageContext& ctx)
 {
-    RenderSubmissionContext submission{
-        .frameToken  = ctx.frameIndex,
-        .flightIndex = ctx.flightIndex,
-        .cmdBuf      = ctx.cmdBuf,
-    };
-    RenderViewRecordingContext view{
-        .frameData      = ctx.frameData,
-        .viewportExtent = ctx.viewportExtent,
-    };
-    prepareView(submission, view);
+    (void)ctx;
+    // Shadow GPU allocation requires a live RenderSubmission via prepareView.
 }
 
-void ShadowStage::prepareView(const RenderSubmissionContext& submission, RenderViewRecordingContext& view)
+void ShadowStage::prepareView(RenderSubmission& submission, RenderViewRecordingContext& view)
 {
     YA_PROFILE_FUNCTION();
     if (!view.frameData || !_technique || !_settings.isEnabled()) {

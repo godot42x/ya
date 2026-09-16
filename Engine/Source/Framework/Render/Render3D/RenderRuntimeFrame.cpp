@@ -78,13 +78,7 @@ bool RenderRuntime::beginFrameCommandBuffer(const FrameInput& input, std::shared
         _render->beginFrameGpuTiming(cmdBuf.get());
     }
 
-    const RenderSubmissionContext submission{
-        .frameToken  = input.camera.frameIndex,
-        .flightIndex = flightIndex,
-        .cmdBuf      = cmdBuf.get(),
-        .hostSurface = input.present.surface,
-    };
-    if (!_submissions.begin(flightIndex, input.camera.frameIndex, submission)) {
+    if (!_submissions.acquire(flightIndex, input.camera.frameIndex, cmdBuf.get(), input.present.surface)) {
         YA_CORE_ERROR("Recording flight {} failed to begin a live submission", flightIndex);
         return false;
     }
@@ -112,11 +106,11 @@ void RenderRuntime::beginViewportPassAndTickPipeline(
     auto* pipeline = getActivePipeline();
     YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ticking viewport pass");
 
-    const RenderSubmissionRecord* live = _submissions.get(camera.flightIndex);
-    YA_CORE_ASSERT(live && live->context.valid(), "Viewport tick requires a live submission");
+    RenderSubmission* live = _submissions.get(camera.flightIndex);
+    YA_CORE_ASSERT(live && live->isRecording(), "Viewport tick requires a recording submission");
 
     if (overlaySnapshot) {
-        _submissions.retain(camera.flightIndex, overlaySnapshot);
+        live->retain(overlaySnapshot);
         cmdBuf->retireResource(overlaySnapshot);
     }
 
@@ -126,10 +120,10 @@ void RenderRuntime::beginViewportPassAndTickPipeline(
     }
 
     pipeline->tick(RenderPipelineFrameContext{
-        .cmdBuf                    = cmdBuf,
+        .cmdBuf                    = live->commandBuffer(),
         .camera                    = camera,
         .viewportOverlaySnapshot   = overlaySnapshot,
-        .submission                = live->context,
+        .submission                = live,
         .view = RenderViewRecordingContext{
             .task            = recording.task,
             .frameData       = recording.frameData ? recording.frameData : camera.frameData,
@@ -284,7 +278,9 @@ void RenderRuntime::retainPublishedViewOutputs(uint32_t flightIndex, ICommandBuf
         if (!resource) {
             return;
         }
-        _submissions.retain(flightIndex, resource);
+        if (RenderSubmission* submission = _submissions.get(flightIndex)) {
+            submission->retain(resource);
+        }
         cmdBuf->retireResource(resource);
     };
 

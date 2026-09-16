@@ -5,9 +5,8 @@
 #include "RHI/Core/FrameUploadArena.h"
 #include "Render3D/Common/PerFlightFrameResourceSetBase.h"
 #include "Render3D/Common/RenderRecordingContext.h"
+#include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewBindingTable.h"
-#include "Render3D/Common/ViewDescriptorSetAllocator.h"
-#include "Render3D/Stage/IRenderStage.h"
 
 #include "PBRForward.slang.h"
 #include "PhongLit.slang.h"
@@ -21,14 +20,14 @@ namespace ya
 
 struct IBuffer;
 struct IRender;
+class RenderSubmission;
 
 /**
- * Owns Forward's persistent layouts/pools and the per-flight upload arena.
+ * Owns Forward's persistent layouts and skinning storage.
  *
- * Layouts and descriptor pools are device-lifetime. Upload slices and
- * frame/light/skybox descriptor sets are View-owned: beginSubmission() opens
- * a flight token, beginView() acquires an independent Binding so a second
- * View cannot overwrite the first. Skinning palettes stay submission-scoped
+ * Layouts are device-lifetime. Upload slices and frame/light/skybox
+ * descriptor sets are allocated from `RenderSubmission` so a second View
+ * cannot overwrite the first. Skinning palettes stay submission-scoped
  * (shared by Views of the same Scene).
  */
 class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase<ForwardFrameResourceSet>
@@ -92,13 +91,12 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase<ForwardFram
     void init(IRender* render);
     void destroy();
 
-    bool beginSubmission(const RenderSubmissionContext& submission);
     /// Upload this View's frame/light/skybox slices into a new Binding slot.
     /// On success, `view.viewSlot` is the live index and the returned Binding
     /// stays stable for the rest of the submission.
-    const Binding* beginView(const RenderSubmissionContext& submission,
-                             RenderViewRecordingContext&    view,
-                             const FramePayloads&           payloads);
+    const Binding* beginView(RenderSubmission&           submission,
+                             RenderViewRecordingContext& view,
+                             const FramePayloads&        payloads);
 
     bool prepareSkinning(const RenderStageContext& ctx)
     {
@@ -106,12 +104,15 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase<ForwardFram
     }
 
     /// Write View UBO slices into `binding` without touching descriptor sets.
-    /// beginView uses this, then updates that slot's descriptor sets.
-    static bool writeViewPayloads(FrameUploadArena& arena,
-                                  uint32_t          flightIndex,
-                                  uint32_t          alignment,
+    static bool writeViewPayloads(FrameUploadArena&    arena,
+                                  uint32_t             flightIndex,
+                                  uint32_t             alignment,
                                   const FramePayloads& payloads,
-                                  Binding&          binding);
+                                  Binding&             binding);
+    static bool writeViewPayloads(RenderSubmission&    submission,
+                                  uint32_t             alignment,
+                                  const FramePayloads& payloads,
+                                  Binding&             binding);
 
     [[nodiscard]] stdptr<IDescriptorSetLayout> getPBRFrameDSL() const { return _pbrFrameDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getPhongFrameDSL() const { return _phongFrameDSL; }
@@ -122,19 +123,15 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase<ForwardFram
 
   private:
     stdptr<IDescriptorSetLayout> _pbrFrameDSL;
-    ViewDescriptorSetAllocator   _pbrFrameSets;
     stdptr<IDescriptorSetLayout> _phongFrameDSL;
-    ViewDescriptorSetAllocator   _phongFrameSets;
     stdptr<IDescriptorSetLayout> _unlitFrameDSL;
-    ViewDescriptorSetAllocator   _unlitFrameSets;
     stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
-    ViewDescriptorSetAllocator   _skyboxFrameSets;
     std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT> _skinningBindings{};
     RenderViewBindingTable<Binding> _viewBindings;
 
     std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT>& bindings() { return _skinningBindings; }
 
-    bool ensureViewDescriptors(Binding& binding);
+    bool ensureViewDescriptors(RenderSubmission& submission, Binding& binding);
     void                    updatePBRFrameDescriptorSet(const Binding& binding);
     void                    updatePhongFrameDescriptorSet(const Binding& binding);
     void                    updateUnlitFrameDescriptorSet(const Binding& binding);

@@ -55,7 +55,7 @@ if get_config("ya_profile") ~= "gui" then
                   "./Source/RenderGraphCoreTest.cpp",
                   "./Source/DrawCandidateViewTest.cpp",
                   "./Source/RenderRuntimeSnapshotTest.cpp",
-                  "./Source/RenderSubmissionTableTest.cpp",
+                  "./Source/RenderSubmissionTest.cpp",
                   "./Source/RenderViewBindingTableTest.cpp",
                   "./Source/RenderViewOutputTableTest.cpp",
                   "./Source/ViewPersistentResourceKeyTest.cpp",

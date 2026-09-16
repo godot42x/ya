@@ -27,8 +27,10 @@
 
 ## 最近一次 checkpoint
 
-- 2026-09-17：postprocess/bloom 输出与 CombinedImageSampler set 按 View 持有；同一帧两个 View 不再共用 display GPU 资源。ViewPersistentResourceKeyTest 含 PostprocessAndBloomOutputsStayViewKeyed，RenderGraphCoreTest.ViewKeyedPostprocessTexturesStayIndependentAcrossSequentialGraphs，专项回归 56/56，ya-game-runtime / ya-game-editor 构建通过。
-- 2026-09-17：overlay View 的 composeRect 与 host viewport identity 分离；overlay 不得 resize host RT spec；camera frustum 为 compact gizmo。CameraFrustumOverlayTest 1/1，RenderRuntimeSnapshotTest 14/14，专项回归 52/52，ya-game-runtime / ya-game-editor 构建通过。
+- 2026-09-17：4.0.2 A：`RenderSubmission` / `RenderSubmissionPool` 拥有 cmd/upload/transient DS/keepalive/finish；删除 `RenderSubmissionContext` / `RenderSubmissionTable` 与 resource-set `beginSubmission`。RenderSubmissionTest 7/7，专项与回归 53/53。下一刀是 Checkpoint B（SceneFamily），不再扩大 mega Binding。
+- 2026-09-16：重审 4.0.2：补齐 SceneFamily 生命周期，ViewFamily 改为 graph 编译单位；执行顺序为 Submission owner → SceneFamily owner → typed pass resources → family renderer → 拆 RenderRuntime。下一刀曾是 Checkpoint A，不再扩大 mega Binding。
+- 2026-09-16：postprocess/bloom 输出与 CombinedImageSampler set 按 View 持有；同一帧两个 View 不再共用 display GPU 资源。ViewPersistentResourceKeyTest 含 PostprocessAndBloomOutputsStayViewKeyed，RenderGraphCoreTest.ViewKeyedPostprocessTexturesStayIndependentAcrossSequentialGraphs，专项回归 56/56，ya-game-runtime / ya-game-editor 构建通过。Processor viewId map 仍是迁移期 hack。
+- 2026-09-16：overlay View 的 composeRect 与 host viewport identity 分离；overlay 不得 resize host RT spec；camera frustum 为 compact gizmo。CameraFrustumOverlayTest 1/1，RenderRuntimeSnapshotTest 14/14，专项回归 52/52，ya-game-runtime / ya-game-editor 构建通过。
 - 2026-09-16：产品路径为选中的 world Camera submit 第二个 SceneRenderRequest，ViewCompose PiP 到主 viewport 右下角，world Camera 用 overlay 3D 线画锥体。CameraFrustumOverlayTest 2/2，RenderRuntimeSnapshotTest 14/14，专项回归 53/53，ya-game-runtime / ya-game-editor 构建通过。
 - 2026-09-16：RenderRuntime 按 SceneViewportTask 循环 tick/publish；同一 Scene 两个 View 共享 snapshot。RenderRuntimeSnapshotTest 11/11，专项与回归 48/48，ya-game-runtime 构建通过。
 - 2026-09-16：Forward/Deferred viewport（含 GBuffer/SSAO）persistent key 按 ViewId 分名；同一 executor 上 View A/B 不再共用一张 GBuffer/color。ViewPersistentResourceKey 4/4，专项与 snapshot/binding/submission 回归 47/47，ya-game-runtime 构建通过。
@@ -40,4 +42,4 @@
 - 2026-09-16：View-owned draw bucket 已完成 source pointer + order indices 迁移；14 个 RenderRuntime/DrawCandidateView 测试通过，ya-game-runtime 构建通过。
 - 2026-09-16：Forward/Deferred 已移除跨 View 的 `_lastTickCtx` / `_lastFrameInput`，graph build 使用调用栈内 View-local context；渲染测试 14/14，ya-game-runtime 构建通过。
 - 2026-09-16：FrameUploadArena 同 `(flightIndex, frameToken)` 的 begin 改为幂等追加语义；同 submission 的后续 allocation 不 rewind cursor，FrameUploadArena 专项测试通过。
-- 保留未完成项：PointShadow indirect per-flight 缓冲、双 Scene 录制、双 Surface GPU 验收、viewport click picking 仍需 mesh/billboard 写 entityId。
+- 保留未完成项：4.0.2 B–E Renderer 生命周期重构、双 Scene/双 ViewFamily 录制、双 Surface GPU 验收、viewport click picking 仍需 mesh/billboard 写 entityId。

@@ -1,7 +1,7 @@
 # Render View Family 与 GUI/GameUI 渲染边界重构计划
 
 > 建立日期：2026-09-12
-> 状态：R2 进行中；Forward / Deferred / Shadow 已提供 View-owned frame binding；Runtime 按 flight 持有 submission keepalives 和 View-keyed output 句柄；viewport / postprocess / bloom persistent key 与 postprocess descriptor set 已按 View 分开。RenderRuntime 按 `SceneViewportTask` 循环录制，同一 Scene 的多个 View 共享 snapshot。Overlay View 通过 `composeOntoViewId`/`composeRect` 合成到 display root，不得改写 host viewport 身份。不要把这当成双 Surface GPU 验收。下一 checkpoint 是录制两个 Scene 的两个 View，或把 material preview 等其它 request 接进 scheduler。
+> 状态：R2 架构收口中。Scene snapshot、View-keyed attachment、双 View 录制与 PiP 已落地，但当前实现仍以 `RenderRuntime::renderFrame()`、pipeline `tick()/beginTick()` 和可变 `FrameResourceSet::Binding` 串起整帧。下一阶段不再向 Binding 或 Stage 追加字段，而是建立 Device / Submission / Scene-family / View / Pass / Surface 六个明确生命周期，并把 Deferred/Forward 改成 ViewFamily graph compiler。
 
 ## 1. 主线选择
 
@@ -11,7 +11,7 @@
 
 1. R0：正确性基线与可观测性。
 2. R1：SceneRenderRequest / SceneFrameSnapshot / RenderViewInput 契约。
-3. R2：SceneRenderScheduler 在 UI 之前聚合 viewport 离屏任务，RenderRuntime 只录制任务。
+3. R2：SceneRenderScheduler 在 UI 之前聚合 viewport 离屏任务；RenderFrameCoordinator 按 ViewFamily 编译、录制并发布 typed outputs。
 4. R3：Editor/preview/UI-only 三类产品路径接入。
 5. R4：GameUI 按 View 复用、性能与扩展性收口。
 
@@ -20,7 +20,7 @@ GUI 动画属于 gui-invalidation-architecture 的独立小切片，可在 R0 �
 ## 2. 当前仓库事实
 
 - Framework/Render/Render3D/Common/RenderFrameInputs.h 已有 CameraFrameInput、ViewComposeInput、DisplayComposeInput、PresentFrameInput。
-- RenderRuntime 位于 Framework/Render/Render3D/RenderRuntime.*，已持有 PipelineCoordinator、PresentationGraphService、ViewportStateService，但仍按单 View 录制，并通过 activeSceneProvider 间接绑定一个 active Scene；这是迁移期事实，不应成为最终 Scene 所有权。
+- RenderRuntime 位于 Framework/Render/Render3D/RenderRuntime.*，已经循环录制 `SceneViewportTask`，但仍同时拥有 device services、frame/submission 编排、单一 host viewport 状态、pipeline 选择、View output 发布和 presentation compose；`activeSceneProvider` 仍被资源/调试服务使用。这是迁移期 facade，不是最终所有权。
 - Forward 与 Deferred 保留各自的 FrameGraphOrchestrator 和 pass topology；不抽强制 BaseRenderPipeline。
 - Applications/GameRuntime/Utility/RenderFrameExtractor.* 从 ECS 抽取 RenderFrameData。
 - RenderFrameData 当前同时承载 camera、lights、draw buckets、skinning，混合了 Scene、View 和 frame-flight 语义；SceneFrameSnapshot 现在是唯一场景快照名称。RenderFrameData 仍是 pipeline 消费的 per-view packet，后续继续拆出 View preparation 数据。
@@ -77,9 +77,7 @@ RenderViewInput 至少包含 ViewId、SceneId、owner 计算的 view/projection/
 
 同一帧、同一 SceneId + sceneRevision 的多个 View 必须共享同一个不可变
 SceneFrameSnapshot 身份，而不是把 snapshot 按值复制进每个 RenderFrameData。
-当前 RenderFrameData::sceneSnapshot 仍是值成员，RenderFrameExtractor::prepareView()
-会执行 outFrame.sceneSnapshot = sceneSnapshot 并随后原地排序；这会同时造成
-深拷贝和每个 View 重复排序。目标结构是：
+早期 RenderFrameData::sceneSnapshot 是值成员，prepareView() 会复制后排序；该问题已迁移为 shared snapshot + View-owned order。稳定目标继续保持：
 
     SceneRenderPlan.snapshots[i]
       -> shared_ptr<const SceneFrameSnapshot>
@@ -126,6 +124,125 @@ render flags、shadow/settings revision 和 resource generation；不能只按 S
 editor/preview View 前必须由 Scene owner 提供真实递增 revision，或提供等价的
 frame-local content generation。
 
+### 3.3 状态与逻辑如何拆：按生命周期和不变量，不按“有状态/无状态”机械切割
+
+当前问题不是类里出现了 `begin/end`，而是同一个长寿命对象同时表示“渲染算法”“本帧当前值”和“刚录完的 View”。`RenderRuntime::renderFrame()` 既做安全点资源更新，又打开 command buffer、录 Scene View、做 UI/View/Display compose、发布调试输出并结束录制；Deferred/Forward 的 `tick -> beginTick -> prepare -> execute -> publish` 又在 persistent pipeline 上写 `_current*`。第二个 View 因而天然覆盖第一个 View。
+
+状态和逻辑应在能维护不变量的 owner 内放在一起：
+
+- `RenderDeviceState`：device、shader/pipeline cache、descriptor allocator、静态 sampler/noise/default resources；负责 init/shutdown 与 fence-safe mutation。
+- `RenderSubmission`：command buffer、flight token、upload arena、transient descriptor arena、keepalive/deferred deletion；负责 allocation/retain/finish，不能退化为裸 struct。
+- `SceneFamilyResources`：同一 Scene snapshot + family 内共享的 skinning upload、候选 packet、可共享 shadow work；由 submission 持有。不同 Scene 即使在同一 submission，也必须得到不同实例。
+- `ViewResources`：该 View 的 UBO slices、descriptor sets、GBuffer、entity-id、postprocess/history 引用和 typed outputs；以值/handle 返回，不保存在 renderer 的 `_current*`。
+- `ViewHistoryStore`：TAA/exposure 等跨帧历史，按稳定 ViewId + generation 持有；Bloom/SSAO 临时图不进入 history。
+
+应拆成显式数据或纯构建逻辑的部分：
+
+- `SceneFrameSnapshot`、`PreparedView`、`SceneViewFamilyPlan`、`RenderViewOutput` 是 immutable/value packet。
+- culling、draw ordering、cascade fitting 等 CPU 计算放进 `SceneViewPreparer`，输入 snapshot + view，输出 `PreparedView`，不访问 RHI。
+- Deferred/Forward 的图构建放进 `DeferredViewFamilyRenderer` / `ForwardViewFamilyRenderer`；它们持有 device-lifetime pass recipes，但 `recordFamily(plan, submission)` 只通过返回值发布结果。
+- 每个 pass recipe（GBuffer/SSAO/Lighting/ForwardOpaque/Postprocess 等）只持 PSO/layout/static resources，接口形如 `addPass(graph, inputs) -> outputs`。execute lambda 只捕获 pass data、RG handles 和稳定 GPU handles，不更新 recipe 自身。
+
+目标生命周期不是三层，而是六个轴：
+
+```text
+Device            RenderDeviceState / pass recipes / PSO-layout caches
+  └─ Submission   RenderSubmission (cmd + arenas + keepalive)
+      └─ SceneFamily  SceneFamilyResources + SceneViewFamilyPlan
+          ├─ View     PreparedView + ViewResources + RenderViewOutput
+          │   └─ Pass typed PassInputs / PassOutputs / PassParameters
+          └─ View ...
+Surface            DisplayComposePlan + Present（与 Scene/View 正交）
+```
+
+`FrameResourceSet::Binding` 不应继续膨胀成所有 pass 的总包。它应被替换为 `DeferredViewResources` / `ForwardViewResources` 聚合体，内部按 pass 使用 typed binding（如 `DeferredLightingBindings`、`EntityIdBindings`），而 descriptor/upload 的分配统一走 `RenderSubmission`。Forward/Deferred 不共享大 Binding，只共享 allocator、upload slice、keepalive 等资源机制。
+
+### 3.4 ViewFamily 才是 graph 编译单位
+
+现计划“一 View 一 graph”会阻断同 Scene 多 View 的 shadow、scene packet 与潜在可见性复用；“整帧一个 mega graph”又会把不相关 Scene、Surface 和 pipeline 策略绑死。折中且更接近成熟 renderer 的单位是 `SceneViewFamilyPlan`：
+
+```text
+SceneRenderPlan
+  ├─ SceneViewFamilyPlan(scene A, deferred, family settings)
+  │    ├─ PreparedView A0
+  │    └─ PreparedView A1
+  └─ SceneViewFamilyPlan(scene B, forward, family settings)
+       └─ PreparedView B0
+```
+
+每个 family 建一个 RenderGraph：先追加 family-shared work（例如符合复用条件的 shadow/scene uploads），再为每个 View 追加 GBuffer/SSAO/light/forward/postprocess 分支，最后返回 `RenderViewOutput[]`。不同 Scene、不同 pipeline、不同 shadow/history policy 默认是不同 family/graph，但可录进同一个 `RenderSubmission`。
+
+是否可共享不能只看 SceneId：family key 至少包含 scene snapshot generation、pipeline kind/config generation、shadow policy、view feature mask 和 multiview/stereo compatibility。Directional cascade 通常依赖 View；只有策略和矩阵一致时才共享。Point shadow、skinning 等也必须由明确 key 证明可共享，不能因为处于同一 flight 就共享。
+
+### 3.5 `begin/end` 的保留与删除边界
+
+`beginCommandBuffer/endCommandBuffer`、`beginRendering/endRendering`、debug label 等是 RHI 命令协议，保留在 `RenderSubmission` / graph executor / pass recorder 中是合理的。应删除的是 persistent pipeline 上表达隐式 current state 的 `beginTick()`、`beginView()`、`getCurrent*()`：
+
+- 顶层一次 `RenderSubmission submission = frameCoordinator.openSubmission(...)`；`finish()` 后不可再分配或录制。
+- 资源 API 使用 `allocateSceneFamily(...)`、`allocateView(...)` 并返回 owner/handle，不通过第二次 begin 改写内部 current slot。
+- `recordFamily()` 返回 typed result；publish/compose 消费 result，不回头问 pipeline “当前输出是什么”。
+- safe-point 资源重建由 `RenderDeviceState::applyPendingMutations(completedFlight)` 在录制前完成，不混进 View graph build。
+
+### 3.6 业界架构可吸收点
+
+- Unreal RDG 把 setup 与 execute 分开，pass parameter 显式声明资源依赖，execute lambda 只录命令；YA 应采用 typed pass data + graph result，避免 execute 修改 Stage。
+- Unity RenderGraph 同样区分 recording 与 execution，并由 graph 管理临时资源生命周期；YA 的 attachment/postprocess 临时资源应留在 graph，descriptor/upload arena 仍由 submission owner 管理。
+- Godot RenderingServer 用 opaque resource identity 分离 Scene 系统与渲染后端，并让 Viewport 绑定 Scenario；YA 可吸收 Scene/View request 与 GPU backend 解耦，但不采用全局 opaque singleton。
+- Filament FrameGraph 把 pass 明确定义成资源读写计算，并以 setup lambda + execute lambda组织；YA 可吸收 typed PassData 和 family graph，不复制其具体 API。
+
+明确拒绝：在 Stage/Processor 上继续添加 `viewId -> state` map；让 RenderGraph 拥有 device/submission allocator；抽万能 `BaseRenderPipeline`；用全局 current View；为了消除 `begin/end` 而把 command protocol 打散成无 owner 的自由函数。
+
+### 3.7 目标调用流、类名与目录
+
+最终主流程必须能按下面顺序直接阅读，CPU preparation 与 GPU recording 之间没有 service locator 或 current View：
+
+```text
+SceneRenderScheduler::seal()
+  -> SceneViewPreparer::prepare(snapshot, view requests)
+  -> SceneViewFamilyBuilder::group(prepared views)
+  -> RenderFrameCoordinator::record(frame plan)
+       -> RenderSubmissionPool::acquire(flight, token, cmd)
+       -> ISceneViewFamilyRenderer::recordFamily(family, submission)
+            -> allocate SceneFamilyResources
+            -> allocate ViewResources[]
+            -> ViewFamilyGraphBuilder::build(...)
+            -> RenderGraphExecutor::execute(...)
+            -> ViewFamilyRenderResult
+       -> record View/UI/Display compose from typed outputs
+       -> RenderSubmission::finish()
+  -> host submit / present
+```
+
+建议的最终命名映射：
+
+| 当前 | 目标 | 说明 |
+| --- | --- | --- |
+| `RenderRuntime` | 删除并拆为 `RenderDeviceState` + `RenderFrameCoordinator` | 不保留 facade |
+| `RenderRuntime::FrameInput` | `RenderFramePlan` | sealed frame value，不带 active Scene 查询 |
+| `RenderSubmissionContext` / `RenderSubmissionTable` | `RenderSubmission` / `RenderSubmissionPool` | 真正 owner，不是 context bag |
+| `RenderPipelineFrameContext` | 删除 | 分解为 family plan、PreparedView、submission、pass inputs |
+| `DeferredRenderPipeline` | `DeferredViewFamilyRenderer` | 编译/录制一个 family |
+| `ForwardRenderPipeline` | `ForwardViewFamilyRenderer` | 同上，策略独立 |
+| `DeferredFrameGraphOrchestrator` | `DeferredViewFamilyGraphBuilder` | 只 build graph，不发布 current 输出 |
+| `ForwardFrameGraphOrchestrator` | `ForwardViewFamilyGraphBuilder` | 同上 |
+| `DeferredFrameResourceSet` | `DeferredGpuResourceLibrary` | device-level layout/pool/static resources |
+| `ForwardFrameResourceSet` | `ForwardGpuResourceLibrary` | 同上 |
+| `GBufferStage` / `SSAOStage` / `LightStage` | `GBufferPass` / `SSAOPass` / `DeferredLightingPass` | pass recipe + typed inputs/outputs |
+| `ViewportOverlayStage` | `ViewportOverlayPass` | 不保存 current frame inputs |
+
+目标目录不需要为每个小类建一层；保持 4 个可读入口：
+
+```text
+Render3D/
+  Runtime/       RenderDeviceState, RenderFrameCoordinator, RenderSubmission, ViewHistoryStore
+  Scene/         SceneRenderScheduler, snapshots, preparer, ViewFamily plan
+  Deferred/      DeferredViewFamilyRenderer, graph builder, resources, Passes/*
+  Forward/       ForwardViewFamilyRenderer, graph builder, resources, Passes/*
+  Common/        仅真正跨 Forward/Deferred 的小型 value/mechanism；不再作为杂物目录
+```
+
+目录移动必须跟随对应 owner/协议迁移，不单独作为 checkpoint。
+
 ## 4. 分阶段实施
 
 每个 checkpoint 只有一个可验收目标；代码、测试、progress.md 与计划变更同一提交。禁止用目录移动、空 registry、兼容 facade 或只写文档冒充完成。
@@ -135,33 +252,87 @@ frame-local content generation。
 本切片的真实迁移顺序固定为：
 
 1. 以一个原子迁移改造 RenderFrameData：引用共享 SceneFrameSnapshot，同时引入 View-owned draw buckets；不再按值复制或原地排序 Scene snapshot。该阶段已完成，View bucket 现在只保存 Scene 候选 vector 的借用指针和独立 order indices；后续只允许在此基础上继续拆 submission/View 生命周期。
-2. Forward 的 resource set 提供 beginSubmission / beginView 语义：layout 和 pipeline 资源持久化，upload allocation、descriptor binding、skinning buffer 和 View output 由 submission/View 持有。
-3. RenderRuntime 保存 submission lifetime 到 submit/fence 完成；不能让 transient arena、descriptor pool 或 graph-exported image 只活到 renderFrame() 返回。该阶段已完成：Runtime 按 flight 持有 `RenderSubmissionTable`，overlay 与 viewport/postprocess 导出图在 `renderFrame()` 返回后仍被该 flight 的 keepalives 持有，直到同一 flight 以新 token 复用（对应 cmdBuf reset / fence-safe）。upload arena 与 descriptor pool 仍由 pipeline resource set 按 flight 持有，不在本切片搬进 Runtime。
-4. pipeline 的 recordView 只消费显式 View context，不再写 _lastTickCtx、_lastFrameInput 或单一 current binding。Forward/Deferred 的这两个 pipeline 临时槽位已移除；Forward/Deferred/Shadow frame binding 已按 View 拆开；View output 句柄与 viewport/GBuffer/SSAO persistent key 已按 View 分开；RenderRuntime 按 SceneViewportTask 循环 tick/publish。剩余 PointShadow indirect 的 per-flight 缓冲，以及双 Scene / 双 Surface 验收。
-5. 通过 View A/B identity 测试确认：B 的 allocation、descriptor write、output publish 不改变 A；同一 Scene 的 A/B 仍指向同一个 snapshot owner。
+2. Forward 的 resource set 提供 beginSubmission / beginView 语义：layout 和 pipeline 资源持久化，upload allocation、descriptor binding、skinning buffer 和 View output 由 submission/View 持有。Checkpoint A 已删除 resource-set 上的 `beginSubmission()`，改由 `RenderSubmission` 分配 upload/descriptor。
+3. RenderRuntime 保存 submission lifetime 到 submit/fence 完成；不能让 transient arena、descriptor pool 或 graph-exported image 只活到 renderFrame() 返回。Checkpoint A 已把该阶段收敛为 `RenderSubmission` / `RenderSubmissionPool`：command buffer、frame token、upload arena、transient descriptor、keepalive 与 finish 由一次 submission 持有。overlay 与 viewport/postprocess 导出图在 `renderFrame()` 返回后仍被该 flight 的 keepalives 持有，直到同一 flight 以新 token 复用。RHI cmd begin/end 仍在 RenderRuntime coordinator；skinning 仍在 `PerFlightFrameResourceSetBase`，待 Checkpoint B。
+4. pipeline 的 recordView 只消费显式 View context，不再写 _lastTickCtx、_lastFrameInput 或单一 current binding。Forward/Deferred 的这两个 pipeline 临时槽位已移除；Forward/Deferred/Shadow **frame UBO** binding 已按 View 拆开；View output 句柄与 viewport/GBuffer/SSAO/postprocess persistent key 已按 View 分开；RenderRuntime 按 SceneViewportTask 循环 tick/publish。剩余：Stage 上的 CIS/UBO 仍是 singleton；pipeline last-view 图袋；Bloom/BasicPost 的 viewId map；PointShadow indirect 的 per-flight 缓冲。双 Scene / 双 Surface 验收排在 4.0.2 之后。
+5. 通过 View A/B identity 测试确认：B 的 allocation、descriptor write、output publish 不改变 A；同一 Scene 的 A/B 仍指向同一个 snapshot owner。Stage CIS 在 4.0.2 Checkpoint C 完成前，这条对 SSAO/Light/EntityId 仍不成立。
 
-这一切片不改变 Forward/Deferred 的 pass topology，也不引入新的 World 抽象；Shadow frame Binding 已按同一生命周期规则迁移。PointShadow indirect instance/cull 缓冲仍是 flight 轴，不在本切片展开。
+这一切片不改变 Forward/Deferred 的 pass topology，也不引入新的 World 抽象；Shadow frame Binding 已按同一生命周期规则迁移。PointShadow indirect instance/cull 缓冲仍是 flight 轴，归入 4.0.2 Checkpoint C 的 typed family/View resources。
 
-`RenderRuntime` 的持久对象不能同时充当一次 submission 和一个 View 的可变状态。后续 R2 必须按以下生命周期拆开：
+`RenderSubmissionContext` 已删除。`RenderViewRecordingContext` 仍是 View 录制期的借用参数，只解决“不要从 pipeline 猜当前 View”，不是 GPU owner：
 
 ```text
-RenderRuntimePersistentState
-  device / pipeline / shared resource / presentation services
-
-RenderSubmissionContext
-  frameToken / command buffer / host surface / submission-owned upload lifetime
+RenderSubmission / RenderSubmissionPool
+  command buffer / frame token / upload arena / transient descriptor / keepalive / finish
 
 RenderViewRecordingContext
-  SceneViewportTask / per-view RenderFrameData / per-view descriptors / upload slices
+  SceneViewportTask / per-view RenderFrameData / viewSlot（borrowed parameter）
 ```
 
-`FrameUploadArena` 不能让多个 View 通过第二次 begin 重置同一个 flight 的 cursor；`MAX_FLIGHTS_IN_FLIGHT` 只表示 GPU flight 并发，不等于 View 槽位。当前迁移语义是：同一 `(flightIndex, frameToken)` 的 `beginFlight()` 幂等，不 rewind，后续 View 可以追加 allocation slice；不同 token 仍会在 fence-safe flight 上重新开始。这个改动只解决 submission upload cursor 的覆盖风险，不代表 descriptor binding、output ownership 或完整 View 隔离已经完成。最终方案仍应让 `RenderSubmissionContext` 持有 submission-owned arena，或让 per-view binding 持有独立 descriptor set 与 slice table；禁止通过复用同一 descriptor set 或“禁止第二个 View”冒充多 View 支持。
+`FrameUploadArena` 不能让多个 View 通过第二次 begin 重置同一个 flight 的 cursor；`MAX_FLIGHTS_IN_FLIGHT` 只表示 GPU flight 并发，不等于 View 槽位。同一 `(flightIndex, frameToken)` 的 `beginFlight()` 仍幂等，不 rewind，后续 View 可以追加 allocation slice；不同 token 仍会在 fence-safe flight 上重新开始。Arena 现由 `RenderSubmissionPool` 持有，View 通过 `RenderSubmission::allocateUpload()` 取得 slice。Checkpoint B 再增加 SceneFamily 轴；禁止把 context bag 或 per-view mega Binding 当作最终生命周期。
 
 ### 4.0.1 FrameUploadArena 迁移期语义
 
 同一 submission 的多个 View 可以依次调用 `beginFlight(flightIndex, frameToken)`：第一次调用初始化该 flight，后续相同 token 的调用必须是 no-op，并保留 cursor 与 backing buffer。每个 View 通过 `allocate()` 获得自己的 aligned slice，slice 的 buffer identity、offset 和 size 在 command buffer 录制到 queue submit 完成前保持有效。新的 frame token 仍必须等待旧 flight 安全后才能 rewind；扩容产生的旧 backing 继续交给 deferred deletion。
 
-这只是 upload allocation 的正确性切片。下一阶段必须把 descriptor write、light/shadow/skinning binding、graph-exported output 以及 submission/View 的资源保活纳入同一 context 模型；不得因为 arena 已可追加就宣称同一 submission 的多个 View 已可安全录制。
+这只是 upload allocation 的正确性切片。frame UBO 与 persistent attachment 已按 View 拆开，但 Stage CIS、Scene 级 GPU packet、last-view 图袋和 ViewFamily 编译单位仍未建立；不得因为 arena 可追加或 processor 有 viewId map，就宣称 multi-view 生命周期已经正确。
+
+### 4.0.2 Renderer 生命周期重构（当前主线）
+
+这一轮允许改类名、文件名和调用协议，不保留 legacy facade。每个 checkpoint 仍只有一个可验收目标。迁移顺序从“继续填 Binding”改为“先建立 owner，再迁 pass，再删除旧状态”。
+
+**Checkpoint A — 建立 `RenderSubmission` owner，替代分散的 beginSubmission（已完成）**
+
+唯一目标：一次 command submission 的 command buffer、frame token、upload arena、transient descriptor allocation、keepalive 与 finish 状态由一个对象维护。
+
+- 将 `RenderSubmissionContext` + `RenderSubmissionTable` + `FrameUploadArena` 的可变协议收敛为 `RenderSubmission` / `RenderSubmissionPool`；pipeline/resource set 不再各自 `beginSubmission()`。
+- `RenderSubmission::allocateUpload()`、`allocateDescriptorSet()`、`retain()`、`finish()` 维护录制期不变量；finish 后拒绝分配。
+- RHI command buffer begin/end 只在该 owner 或 frame coordinator 出现；本切片留在 RenderRuntime coordinator，测试使用 dummy cmd 指针。
+- 验收：同一 submission 连续分配两个 View 的 slice/set 不覆写；flight 复用前旧 keepalive 存活；非法二次 finish/finish 后分配被拒绝。
+
+**Checkpoint B — 引入 Scene-family 资源轴，修正“skinning 是 submission 全局”的错误假设**
+
+唯一目标：同一 submission 中 Scene A/B 的 scene packet、skinning upload/binding 与可共享 shadow work 互不覆盖；同 Scene family 的多个 View 显式引用同一 family owner。
+
+- `SceneRenderPlan` 物化 `SceneViewFamilyPlan[]`；family 由 scene snapshot generation + pipeline/config + feature/shadow policy 分组。
+- 引入 `SceneFamilyResources` / `SceneFamilyGpuPacket`，由 submission 持有，View 只保存引用。
+- `PerFlightFrameResourceSetBase` 的 skinning 单例迁出；不同 Scene 不以 flightIndex 为共享 key。
+- 验收：同 Scene 双 View family owner identity 相同；双 Scene identity 不同；View B 不改变 View A/Scene A 的 skinning descriptor/range。
+
+**Checkpoint C — typed View/Pass resources，Stage 改为 pass recipe**
+
+唯一目标：SSAO / Light / EntityId / Overlay / Forward-debug / postprocess 的 graph execute 不再更新 persistent Stage/Processor；每个 View 的 DS/UBO 由 `ViewResources` typed 子结构持有。
+
+- 新建 `DeferredViewResources` / `ForwardViewResources`，按 pass 组合 typed binding；不要扩展 mega `FrameResourceSet::Binding`。
+- `DeferredFrameResourceSet` / `ForwardFrameResourceSet` 重命名为 pipeline-specific GPU resource allocator/library，只持 device-lifetime layout/pool/static resource，并从 `RenderSubmission` 分配实例。
+- `GBufferStage`、`SSAOStage`、`LightStage`、`EntityIdViewportPass`、`ViewportOverlayStage` 等逐步改名为 `*Pass` 或 `*PassRecipe`，统一 `addPass(graph, inputs) -> outputs`；删除 `maxSets=1` 与 singleton CIS。
+- Bloom/BasicPost 的 `_viewBindings` map 删除；临时图归 graph，descriptor set 归 View pass resources。
+- PointShadow indirect instance/cull buffer 按真实语义进入 family 或 View resources；不能再按 flight 隐式共享。
+- 验收：两 View 的 pass binding identity 不同；execute 前后 recipe 对象状态不变；graph execute callback 不含更新 descriptor/upload 的 `[this]` 路径。
+
+**Checkpoint D — `DeferredViewFamilyRenderer` / `ForwardViewFamilyRenderer` 编译 family graph**
+
+唯一目标：pipeline 不再以 `tick()/beginTick()/getCurrent*()` 表示一次 View；一个 family graph 可产生多个 typed `RenderViewOutput`。
+
+- `IRenderPipeline` 收敛/重命名为窄 `ISceneViewFamilyRenderer`（仅因为 coordinator 需要在 Forward/Deferred 间选择）；具体 pass 保持 concrete 类型。
+- `recordFamily(familyPlan, submission) -> ViewFamilyRenderResult`：build graph、execute、返回每个 View output；不写 renderer current output。
+- family-shared pass 与 per-view branch 在同一 graph 中明确出现；不同 family graph 仍可录进同一 submission。
+- `_currentGBufferResources`、`_currentViewportResources`、`_publishedGraphOutputs`、`_currentPostprocessOutput`、`_currentOverlayFrameInputs`、`_currentEnvironmentLighting*` 删除。
+- `RenderViewOutputTable` 只接受 result；debug catalog 按 ViewId/typed output 构建。
+- 验收：单 Scene 双 View 只有一个 family graph，返回两个独立 output；双 Scene 形成两个 family owner/graph但同 submission 可录制；不依赖 pipeline getter 发布输出。
+
+**Checkpoint E — 拆除 `RenderRuntime` god facade**
+
+唯一目标：host frame 编排、device 持久状态、Scene view rendering、compose/present 不再由一个类同时拥有。
+
+- `RenderDeviceState`：backend + persistent renderer services + safe-point mutations。
+- `RenderFrameCoordinator`：消费 sealed SceneRenderPlan/compose plan，创建 submission，调用 family renderer，汇总 outputs；它不提供 active Scene/service locator。
+- `PresentationGraphService` 只消费 View/GUI images 与 Surface target；Surface acquire/present 仍留 host coordinator。
+- `ViewportStateService` 的单一 world viewport 状态删除，extent/format 来自 View plan；跨帧 View history独立进入 `ViewHistoryStore`。
+- 删除 `RenderRuntime`、`renderFrame(FrameInput)`、`getCurrent*()` legacy API，并一次性迁移调用方。
+- 验收：UI-only frame 可不创建 Scene family；多个 Surface 共享同一 frame outputs；关闭某 Surface 不影响 Scene family record；资源 mutation 只发生在 submission recording 前。
+
+Checkpoint A–E 完成前，不把新增 pipeline feature、双 Surface 视觉效果或目录搬迁当作主线进度。
 
 ### R0 — 建立单 View 正确性基线
 
@@ -183,10 +354,10 @@ R1 字段分类不能按现有结构名整体搬迁，必须按语义拆分：
 
 | 当前字段/数据 | 目标归属 | 迁移说明 |
 | --- | --- | --- |
-| RenderDrawItem.worldMatrix、mesh/material 引用、entity id | World snapshot candidate | 与 Camera 无关；先保留未排序 candidate |
+| RenderDrawItem.worldMatrix、mesh/material 引用、entity id | Scene snapshot candidate | 与 Camera 无关；先保留未排序 candidate |
 | RenderDrawItem.sortKey、material/mesh bucket 顺序 | View preparation | 由 Camera distance 和 pipeline 策略决定，不能放进共享 snapshot |
-| skinning palette 内容 | World snapshot | 一帧抽取一次；多个 View 只共享 palette，索引需保持稳定 |
-| point/directional 原始光照参数 | World snapshot | 只保存灯光实体数据和稳定顺序 |
+| skinning palette 内容 | Scene snapshot | 一帧抽取一次；同 Scene family 多个 View 共享 palette，索引需保持稳定 |
+| point/directional 原始光照参数 | Scene snapshot | 只保存灯光实体数据和稳定顺序 |
 | directional cascade/shadow view-projection | View preparation | 当前由 camera view/projection、shadow settings 计算，不能随世界快照共享 |
 | view/projection/viewProjection/cameraPos/viewportExtent/viewOwner | RenderViewInput | 当前已存在于 CameraFrameInput，迁移时保持值来源不变 |
 | frame index / delta time | Frame/Scene/View metadata | 不参与场景资源抽取，不能通过 ECS 在 graph execute 阶段读取 |
@@ -197,15 +368,17 @@ R1 字段分类不能按现有结构名整体搬迁，必须按语义拆分：
 
 ### R2 — SceneRenderScheduler 编排离屏任务
 
-唯一目标：在 UI 之前由 SceneRenderScheduler 聚合并执行本帧 Scene viewport 离屏任务，RenderRuntime 只消费不可变 SceneRenderPlan/SceneViewportTask。
+唯一目标：在 UI 之前由 SceneRenderScheduler 聚合本帧 Scene viewport 离屏任务，并由最终的 RenderFrameCoordinator 只消费 sealed SceneRenderPlan/ViewFamily plan。当前 RenderRuntime 是迁移入口，Checkpoint E 后删除。
 
 将 RenderRuntime::FrameInput 扩展为 SceneRenderPlan/SceneViewportTask additive API；当前单 View 已由 GameRuntime 经 scheduler 生成 plan 并作为 Runtime 的正式输入。Scheduler 负责 Scene snapshot 去重和任务排序，Runtime 负责 frame resources、pipeline record、ViewCompose 和输出句柄；两者都不创建 OS window、不 acquire/present；Forward/Deferred 只接收对应 Scene snapshot 和 RenderViewInput；每个 View 建立独立 output/format/extent 句柄，不用全局 ViewportStateService 隐式表示所有 View；当前保持一条 command buffer/submit，只有 trace 证明同步或资源压力后才讨论拆分。
+
+R2 当前执行顺序：按 4.0.2 A–E 建立 submission owner → Scene-family owner → typed pass resources → ViewFamily renderer → 拆 Runtime facade，再完成双 Scene / 双 Surface 验收。在 Stage/pipeline 仍保存 current View 时增加更多产品路径只会放大隐式状态。
 
 验收：同一 Scene snapshot 渲染两个 Camera；两个 Scene 各自提交并渲染一个 viewport；一个 View 输出被两个 Surface display compose；一个 Surface display compose 多个 View；未提交 request 的 Scene 不产生 render task；关闭/最小化一个 Surface 不影响另一 Surface、其它 Scene request 和 View；GPU 资源在 submit 完成前存活。
 
 ### R3 — 独立 GUI2D pipeline 与 GameUI 按 View 复用
 
-唯一目标：通过显式 SceneRenderRequest/View/compose 契约连接 Level Editor、Material Preview、UI Editor 与 Scene render，不复制 RenderRuntime，也不把 UI 挂回 Scene。
+唯一目标：通过显式 SceneRenderRequest/View/compose 契约连接 Level Editor、Material Preview、UI Editor 与 Scene render，不复制 RenderDeviceState/RenderFrameCoordinator，也不把 UI 挂回 Scene。
 
 GUI Framework 保留 WidgetTree、UIFrameSnapshot、Render2D compose、GUIRenderSurface，以及每 native window 的 tree/snapshot/focus/input。GameRuntime/GameEditor 负责 GameUIHost[ViewId] 生命周期、input rect、focus/capture、UI scale、snapshot 与 ViewCompose 绑定；Level Editor、Material Preview 等功能各自提交 SceneRenderRequest。UI Editor 默认走 WidgetTree → UIFrameSnapshot → Render2D → PresentSurface；3D 预览必须显式提交对应 Scene request，不能偷用 active runtime Scene。
 
@@ -225,7 +398,7 @@ GUI Framework 保留 WidgetTree、UIFrameSnapshot、Render2D compose、GUIRender
 | --- | --- | --- |
 | GUI invalidation / animation | gui-invalidation-architecture | R0 后可并行；动画 tick 必须在 snapshot 前 |
 | GUI Dock / multi-OS-window | gui-multi-os-window-editor | 消费 IRenderSurfaceContext 与 per-window present，不重写 Dock |
-| Forward/Deferred 去重 | render-pipeline-dedup-runtime-split | R1/R2 契约稳定后再推进，不抽万能 pipeline 基类 |
+| Forward/Deferred 去重 | render-pipeline-dedup-runtime-split | 本计划 4.0.2 建立共享 submission/resource 机制与独立 family renderer；只共享机制和窄接口，不合并 pass topology |
 | GameEditor tab/session | gui-editor plans | 只要求 editor 提供 View/Surface 绑定 |
 
 ## 6. 验证与提交门禁
@@ -239,7 +412,7 @@ GUI Framework 保留 WidgetTree、UIFrameSnapshot、Render2D compose、GUIRender
 ## 7. 完成定义
 
 - SceneRenderRequest、SceneFrameSnapshot、SceneRenderPlan 与 RenderViewInput 责任边界稳定；代码中不再存在 WorldFrameSnapshot 或 RenderFrameExtractor::extract() 兼容接口。
-- SceneRenderScheduler 能调度多个 Scene、多个 View，RenderRuntime 只录制 plan，Forward/Deferred 保留策略差异。
+- SceneRenderScheduler 能调度多个 Scene、多个 View；`RenderFrameCoordinator` 只消费 sealed plan；`RenderRuntime` 与 pipeline current-state API 已删除；Forward/Deferred family renderer 保留策略差异。
 - Surface/swapchain/present 与 Camera/Viewport/Compose 不再混名或互相反查。
 - GUI2D、GameUI、SceneViewport 依赖方向清楚。
 - 至少有单 Scene 单 View、单 Scene 双 View、双 Scene 双 View、双 Surface、UI-only 五类可重复验证场景。

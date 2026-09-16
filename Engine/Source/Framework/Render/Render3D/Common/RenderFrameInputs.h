@@ -18,6 +18,7 @@ namespace ya
 struct ICommandBuffer;
 struct IRenderSurfaceContext;
 struct RenderFrameData;
+class RenderSubmission;
 struct UIFrameSnapshot;
 
 /// One View inside a sealed plan: the task must point at `plan.viewportTasks[i]`,
@@ -203,15 +204,15 @@ struct PresentFrameInput
 
 /// Recording extras plus the camera packet consumed by Forward/Deferred.
 /// Pipelines read `camera` for matrices and extent; they do not query
-/// swapchain or NativeWindow. `submission` / `view` are the explicit
-/// lifetime contexts for resource-set beginSubmission/beginView; a missing
-/// view packet still means the current single-View path.
+/// swapchain or NativeWindow. `submission` is the live RenderSubmission
+/// owner; `view` is the View being recorded. A missing view packet still
+/// means the current single-View path.
 struct RenderPipelineFrameContext
 {
     ICommandBuffer*  cmdBuf = nullptr;
     CameraFrameInput camera{};
     std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
-    RenderSubmissionContext    submission{};
+    RenderSubmission*          submission = nullptr;
     RenderViewRecordingContext view{};
 };
 

@@ -168,8 +168,10 @@ ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
         auto texture = Texture::wrap(display->getImageShared(),
                                      display->getImageViewShared(),
                                      std::format("ViewDisplayInset.view{}", inset.viewId));
-        _submissions.retain(input.camera.flightIndex, display);
-        _submissions.retain(input.camera.flightIndex, texture);
+        if (RenderSubmission* submission = _submissions.get(input.camera.flightIndex)) {
+            submission->retain(display);
+            submission->retain(texture);
+        }
         cmdBuf->retireResource(display);
         cmdBuf->retireResource(texture);
         insetImages.push_back(ViewDisplayInsetImage{
@@ -192,7 +194,9 @@ ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
         if (!resource) {
             return;
         }
-        _submissions.retain(flightIndex, resource);
+        if (RenderSubmission* submission = _submissions.get(flightIndex)) {
+            submission->retain(resource);
+        }
         cmdBuf->retireResource(resource);
     };
     retain(getViewportDisplayImageShared());
@@ -200,7 +204,11 @@ ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
     retain(getPostprocessOutputImageShared());
 
     endFrameCommandBuffer(cmdBuf.get());
-    _submissions.markRecordingComplete(flightIndex);
+    if (RenderSubmission* submission = _submissions.get(flightIndex)) {
+        if (!submission->finish()) {
+            YA_CORE_ERROR("Recording flight {} failed to finish submission", flightIndex);
+        }
+    }
     return cmdBuf.get();
 }
 

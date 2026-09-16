@@ -10,7 +10,7 @@
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/RenderFrameInputs.h"
-#include "Render3D/Common/RenderSubmissionTable.h"
+#include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/PostProcessingState.h"
 #include "Common/RenderRuntimeClockState.h"
@@ -123,7 +123,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     IRender*                                     _render = nullptr;
     OffscreenTaskService                         _offscreen{};
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
-    RenderSubmissionTable                        _submissions;
+    RenderSubmissionPool                         _submissions;
     RenderViewOutputTable                        _viewOutputs;
     uint32_t                                     _publishedOutputFlight = MAX_FLIGHTS_IN_FLIGHT;
     uint64_t                                     _publishedOutputViewId = 0;
@@ -187,7 +187,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     /// Format of that camera display RT, known before the world graph creates it.
     [[nodiscard]] EFormat::T getViewportDisplayImageFormat() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> getPresentationImageShared() const;
-    [[nodiscard]] const RenderSubmissionRecord* getLiveSubmission(uint32_t flightIndex) const
+    [[nodiscard]] const RenderSubmission* getLiveSubmission(uint32_t flightIndex) const
     {
         return _submissions.get(flightIndex);
     }

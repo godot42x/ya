@@ -6,9 +6,9 @@
 #include "RHI/Core/FrameUploadArena.h"
 #include "Render3D/Common/PerFlightFrameResourceSetBase.h"
 #include "Render3D/Common/RenderRecordingContext.h"
+#include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewBindingTable.h"
 #include "Render3D/Common/Shadow/ShadowTypes.h"
-#include "Render3D/Common/ViewDescriptorSetAllocator.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
 #include "Shadow.PointShadowIndirect.slang.h"
@@ -20,14 +20,14 @@ namespace ya
 {
 
 struct IRender;
+class RenderSubmission;
 
 /**
- * Owns Shadow's persistent layouts/pools and the per-flight upload arena.
+ * Owns Shadow's persistent layouts and skinning storage.
  *
- * Layouts and descriptor pools are device-lifetime. Cascade/face descriptor
- * sets and upload slices are View-owned: beginSubmission() opens a flight
- * token, beginView() acquires an independent Binding so a second View cannot
- * overwrite the first. Skinning palettes stay submission-scoped.
+ * Layouts are device-lifetime. Cascade/face descriptor sets and upload slices
+ * are allocated from `RenderSubmission` so a second View cannot overwrite the
+ * first. Skinning palettes stay submission-scoped.
  */
 class ShadowFrameResources : public PerFlightFrameResourceSetBase<ShadowFrameResources>
 {
@@ -69,8 +69,7 @@ class ShadowFrameResources : public PerFlightFrameResourceSetBase<ShadowFrameRes
     void init(IRender* render);
     void destroy();
 
-    bool beginSubmission(const RenderSubmissionContext& submission);
-    const Binding* beginView(const RenderSubmissionContext& submission,
+    const Binding* beginView(RenderSubmission&              submission,
                              RenderViewRecordingContext&    view,
                              const BasicShadowFramePayload& payload);
 
@@ -84,6 +83,10 @@ class ShadowFrameResources : public PerFlightFrameResourceSetBase<ShadowFrameRes
                                   uint32_t            alignment,
                                   const ViewPayloads& payloads,
                                   Binding&            binding);
+    static bool writeViewPayloads(RenderSubmission&   submission,
+                                  uint32_t            alignment,
+                                  const ViewPayloads& payloads,
+                                  Binding&            binding);
 
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameDSL() const { return _frameDSL; }
     [[nodiscard]] const Binding*               getViewBinding(uint32_t flightIndex, uint32_t viewSlot) const;
@@ -91,13 +94,12 @@ class ShadowFrameResources : public PerFlightFrameResourceSetBase<ShadowFrameRes
 
   private:
     stdptr<IDescriptorSetLayout> _frameDSL;
-    ViewDescriptorSetAllocator   _frameSets;
     std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT> _skinningBindings{};
     RenderViewBindingTable<Binding> _viewBindings;
 
     std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT>& bindings() { return _skinningBindings; }
 
-    bool ensureViewDescriptors(Binding& binding, uint32_t directionalCount, uint32_t pointFaceCount);
+    bool ensureViewDescriptors(RenderSubmission& submission, Binding& binding, uint32_t directionalCount, uint32_t pointFaceCount);
     void updateViewDescriptors(const Binding& binding, uint32_t directionalCount, uint32_t pointFaceCount);
     static ViewPayloads buildViewPayloads(const BasicShadowFramePayload& payload);
 };

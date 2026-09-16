@@ -1,5 +1,6 @@
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/RenderRecordingContext.h"
+#include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewBindingTable.h"
 #include "Render3D/Common/Shadow/ShadowFrameResources.h"
 #include "Render3D/Deferred/DeferredFrameResourceSet.h"
@@ -276,17 +277,11 @@ TEST(RenderViewBindingTableTest, ShadowViewSlicesStayIndependent)
 
 TEST(RenderViewBindingTableTest, RecordingContextsAreIndependentOfFlightIndex)
 {
-    static_assert(!std::is_same_v<RenderSubmissionContext, RenderViewRecordingContext>);
-    static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.submission), RenderSubmissionContext>);
+    static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.submission), RenderSubmission*>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.view), RenderViewRecordingContext>);
 
-    RenderSubmissionContext submission{
-        .frameToken  = 42,
-        .flightIndex = 1,
-    };
     RenderViewRecordingContext viewA{.viewSlot = 0};
     RenderViewRecordingContext viewB{.viewSlot = 1};
-    EXPECT_TRUE(submission.flightIndex < MAX_FLIGHTS_IN_FLIGHT);
     EXPECT_NE(viewA.viewSlot, viewB.viewSlot);
     EXPECT_EQ(viewA.viewSlot, 0u);
 }

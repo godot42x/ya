@@ -45,13 +45,17 @@
 - [ ] 让同一逻辑帧的多个 surface/window 共用一个 SceneRenderScheduler/SceneRenderPlan，避免按窗口重复抽取同一 Scene。
 - [x] 将 RenderRuntime 持久状态保活到 submit/fence。
 - [x] 将 Shadow 的 per-flight descriptor binding 改为 View-owned beginSubmission/beginView。
-- [ ] 将 PointShadow indirect instance/cull 缓冲从 flight 轴改为 View-owned（若双 View 录制需要）。
-- [x] 增加同一 submission 多 View 的 slot/slice identity 验证（RenderViewBindingTable + Forward/Deferred/Shadow writeViewPayloads）。真实 GPU descriptor write 与 output publish 隔离仍待录制切片。
+- [x] 增加同一 submission 多 View 的 slot/slice identity 验证（RenderViewBindingTable + Forward/Deferred/Shadow writeViewPayloads）。Stage CIS / last-view publish 隔离见 4.0.2 Checkpoint C/D。
 - [x] 为每个 View 建立独立 output/extent/format 句柄。
 - [x] 将 Forward/Deferred viewport persistent key / RT 改为 View-keyed，避免多 View 共用一份 GBuffer/color。
-- [x] 将 postprocess/bloom 输出与 CombinedImageSampler descriptor set 改为 View-owned，避免同一 cmdbuf 里两路 display 采样同一套 GPU 资源。
+- [x] 将 postprocess/bloom 输出与 CombinedImageSampler descriptor set 改为 View-owned，避免同一 cmdbuf 里两路 display 采样同一套 GPU 资源。这是迁移期隔离，Processor 上的 viewId map 在 4.0.2 Checkpoint C 删除并迁入 typed pass resources。
 - [x] 录制同一 Scene 的两个 View，共享一个 SceneFrameSnapshot。
-- [ ] 录制两个 Scene 的两个 View，验证 snapshot 和资源生命周期隔离。
+- [x] 4.0.2 A：建立 `RenderSubmission` / pool owner，统一 command buffer、upload、transient descriptor、keepalive 与 finish 协议；删除 pipeline/resource-set 的分散 beginSubmission。
+- [ ] 4.0.2 B：引入 `SceneViewFamilyPlan` 与 `SceneFamilyResources`；skinning/scene packet 不再按 flight 全局共享；同 Scene 双 View复用 family、双 Scene隔离。
+- [ ] 4.0.2 C：引入 Deferred/Forward typed View/Pass resources；Stage 改为 pass recipe；删除 singleton CIS、processor viewId map；PointShadow buffer 归入 family/View owner。
+- [ ] 4.0.2 D：Deferred/Forward 改为 ViewFamily renderer；一个 family graph 产生多个 typed outputs；删除 tick/beginTick/getCurrent 与 pipeline last-view 资源袋。
+- [ ] 4.0.2 E：拆除 RenderRuntime facade 为 RenderDeviceState + RenderFrameCoordinator + family renderer + presentation；删除单一 ViewportState 与 active Scene service-locator 依赖。
+- [ ] 录制两个 Scene 的两个 View，验证 snapshot 和资源生命周期隔离（排在 4.0.2 之后）。
 - [ ] 验证一个 View 到多个 Surface、多个 View 到一个 Surface。
 - [ ] 验证 surface acquire/present/recreate 不进入 View pipeline。
 - [ ] 只有在 trace 证明必要时再提出 submit 拆分。
@@ -68,6 +72,10 @@
 - [x] 对照 UE Scene/FSceneRenderer/ViewFamily、Unity Camera/ScriptableRenderContext、Godot Viewport/SubViewport、ImGui draw data。
 - [x] 明确 Scene owner 不直接依赖 RHI；Scheduler 属于 Render3D orchestration，不属于 GUI Framework。
 - [x] 明确 UI 之前只指 UI GPU compose 之前。
+- [x] 明确 Stage 是 device 配方、View GPU 数据进 Binding / RDG persistent、录制 lambda 不改 Stage 成员；禁止再叠 viewId map。
+- [x] 补齐 Device / Submission / SceneFamily / View / Pass / Surface 六轴生命周期；确认 submission 级 skinning 不能支持双 Scene。
+- [x] 将 ViewFamily 定义为 graph 编译单位：同 family 共享 work 并分出 per-view branch；不同 Scene/策略分 graph但可共 submission。
+- [x] 明确 RHI begin/end 保留在 submission/graph executor，删除的是 persistent pipeline 的隐式 current begin/tick 协议。
 
 ## R3
 

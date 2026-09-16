@@ -30,7 +30,7 @@ class BasicShadowMapTechnique : public IShadowTechnique
     void init(IRender* render, const ShadowSettings& settings) override;
     void destroy() override;
     void applySettings(const ShadowSettings& settings) override;
-    void prepare(const RenderSubmissionContext& submission, RenderViewRecordingContext& view) override;
+    void prepare(RenderSubmission& submission, RenderViewRecordingContext& view) override;
     [[nodiscard]] DirectionalShadowPass& getDirectionalPass() { return _directionalPass; }
     [[nodiscard]] PointShadowPass&       getPointPass() { return _pointPass; }
     [[nodiscard]] const DirectionalShadowPass& getDirectionalPass() const { return _directionalPass; }

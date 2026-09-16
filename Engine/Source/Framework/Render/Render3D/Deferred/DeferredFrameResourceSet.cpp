@@ -16,7 +16,7 @@ void DeferredFrameResourceSet::init(IRender* render)
     YA_CORE_ASSERT(render != nullptr, "DeferredFrameResourceSet requires a render backend");
     YA_CORE_ASSERT(render->getResourceFactory() != nullptr, "DeferredFrameResourceSet requires a resource factory");
 
-    initSkinnedUploadArena(render, "Deferred", "Deferred_Skinning_DSL", 3, "Deferred.FrameUpload");
+    initSkinnedUploadArena(render, "Deferred", "Deferred_Skinning_DSL", 3);
 
     _frameAndLightDSL = IDescriptorSetLayout::create(
         _render,
@@ -28,7 +28,6 @@ void DeferredFrameResourceSet::init(IRender* render)
                 {.binding = 1, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::All},
             },
         }});
-    _frameAndLightSets.init(_render, "Deferred_Frame_And_Light_DSP", 2);
 
     _ssaoFrameDSL = IDescriptorSetLayout::create(
         _render,
@@ -37,7 +36,6 @@ void DeferredFrameResourceSet::init(IRender* render)
             .set      = 0,
             .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
         });
-    _ssaoFrameSets.init(_render, "Deferred_SSAO_Frame_DSP", 1);
 
     _skyboxFrameDSL = IDescriptorSetLayout::create(
         _render,
@@ -46,7 +44,6 @@ void DeferredFrameResourceSet::init(IRender* render)
             .set      = 0,
             .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
         });
-    _skyboxFrameSets.init(_render, "Deferred_Skybox_Frame_DSP", 1);
 
     YA_CORE_ASSERT(ensureSkinningCapacity(0), "DeferredFrameResourceSet failed to create initial skinning resources");
 }
@@ -56,11 +53,8 @@ void DeferredFrameResourceSet::destroy()
     _viewBindings.clear();
     _skinningBindings = {};
     destroySkinnedUploadArena();
-    _ssaoFrameSets.destroy();
     _ssaoFrameDSL.reset();
-    _skyboxFrameSets.destroy();
     _skyboxFrameDSL.reset();
-    _frameAndLightSets.destroy();
     _frameAndLightDSL.reset();
     _shadowState = {};
     _lastShadowedPointLights = 0;
@@ -116,7 +110,7 @@ std::optional<uint32_t> DeferredFrameResourceSet::calculateSkinningCapacity(
         paletteCount);
 }
 
-bool DeferredFrameResourceSet::ensureViewDescriptors(Binding& binding)
+bool DeferredFrameResourceSet::ensureViewDescriptors(RenderSubmission& submission, Binding& binding)
 {
     if (binding.frameAndLightDescriptorSet && binding.ssaoFrameDescriptorSet &&
         binding.skyboxFrameDescriptorSet) {
@@ -124,13 +118,13 @@ bool DeferredFrameResourceSet::ensureViewDescriptors(Binding& binding)
     }
 
     if (!binding.frameAndLightDescriptorSet) {
-        binding.frameAndLightDescriptorSet = _frameAndLightSets.allocate(_frameAndLightDSL);
+        binding.frameAndLightDescriptorSet = submission.allocateDescriptorSet(_frameAndLightDSL, 2);
     }
     if (!binding.ssaoFrameDescriptorSet) {
-        binding.ssaoFrameDescriptorSet = _ssaoFrameSets.allocate(_ssaoFrameDSL);
+        binding.ssaoFrameDescriptorSet = submission.allocateDescriptorSet(_ssaoFrameDSL, 1);
     }
     if (!binding.skyboxFrameDescriptorSet) {
-        binding.skyboxFrameDescriptorSet = _skyboxFrameSets.allocate(_skyboxFrameDSL);
+        binding.skyboxFrameDescriptorSet = submission.allocateDescriptorSet(_skyboxFrameDSL, 1);
     }
 
     return binding.frameAndLightDescriptorSet && binding.ssaoFrameDescriptorSet &&
@@ -179,14 +173,6 @@ void DeferredFrameResourceSet::updateSkyboxDescriptorSet(const Binding& binding)
     });
 }
 
-bool DeferredFrameResourceSet::beginSubmission(const RenderSubmissionContext& submission)
-{
-    if (!_render) {
-        return false;
-    }
-    return beginFrameResourceSubmission(_uploadArena.get(), _viewBindings, submission);
-}
-
 bool DeferredFrameResourceSet::writeViewPayloads(
     FrameUploadArena&   arena,
     uint32_t            flightIndex,
@@ -226,32 +212,71 @@ bool DeferredFrameResourceSet::writeViewPayloads(
     return true;
 }
 
-const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
-    const RenderSubmissionContext& submission,
-    RenderViewRecordingContext&    view,
-    const SSAOFrameData*           ssao,
-    const SkyboxFrameData*         skybox)
+bool DeferredFrameResourceSet::writeViewPayloads(
+    RenderSubmission&   submission,
+    uint32_t            alignment,
+    const ViewPayloads& payloads,
+    Binding&            binding)
 {
-    if (!_render || !_uploadArena || submission.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
+    if (!submission.isRecording() || alignment == 0) {
+        return false;
+    }
+
+    auto frame = writeUploadSlice(submission, alignment, &payloads.frame, sizeof(payloads.frame));
+    auto light = writeUploadSlice(submission, alignment, &payloads.light, sizeof(payloads.light));
+    if (!frame || !light) {
+        return false;
+    }
+
+    binding.frame = *frame;
+    binding.light = *light;
+
+    if (payloads.ssao) {
+        auto ssaoFrame = writeUploadSlice(submission, alignment, payloads.ssao, sizeof(*payloads.ssao));
+        if (!ssaoFrame) {
+            return false;
+        }
+        binding.ssaoFrame = *ssaoFrame;
+    }
+    if (payloads.skybox) {
+        auto skyboxFrame = writeUploadSlice(submission, alignment, payloads.skybox, sizeof(*payloads.skybox));
+        if (!skyboxFrame) {
+            return false;
+        }
+        binding.skyboxFrame = *skyboxFrame;
+    }
+    return true;
+}
+
+const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
+    RenderSubmission&           submission,
+    RenderViewRecordingContext& view,
+    const SSAOFrameData*        ssao,
+    const SkyboxFrameData*      skybox)
+{
+    if (!_render || !submission.isRecording()) {
         return nullptr;
     }
     if (!view.frameData) {
         YA_CORE_ERROR("Deferred beginView requires view frame data");
         return nullptr;
     }
-
-    Binding* slot = _viewBindings.mutableNextView(submission.flightIndex);
-    if (!slot) {
-        YA_CORE_ERROR("Deferred beginView requires beginSubmission on flight {}", submission.flightIndex);
+    if (!beginViewBindingTable(_viewBindings, submission)) {
         return nullptr;
     }
 
-    const uint32_t viewSlot = _viewBindings.liveViewCount(submission.flightIndex);
-    const SkinningBinding& skinning = _skinningBindings[submission.flightIndex];
-    slot->skinningDescriptorSet = skinning.skinningDescriptorSet;
-    slot->skinningBuffer        = skinning.skinningBuffer;
+    Binding* slot = _viewBindings.mutableNextView(submission.flightIndex());
+    if (!slot) {
+        YA_CORE_ERROR("Deferred beginView requires a recording submission on flight {}", submission.flightIndex());
+        return nullptr;
+    }
 
-    if (!ensureViewDescriptors(*slot)) {
+    const uint32_t         viewSlot = _viewBindings.liveViewCount(submission.flightIndex());
+    const SkinningBinding& skinning = _skinningBindings[submission.flightIndex()];
+    slot->skinningDescriptorSet     = skinning.skinningDescriptorSet;
+    slot->skinningBuffer            = skinning.skinningBuffer;
+
+    if (!ensureViewDescriptors(submission, *slot)) {
         YA_CORE_ERROR("Deferred beginView failed to allocate view descriptor sets");
         return nullptr;
     }
@@ -272,7 +297,7 @@ const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
     });
 
     const uint32_t alignment = std::max(_render->getUniformBufferOffsetAlignment(), 1u);
-    if (!writeViewPayloads(*_uploadArena, submission.flightIndex, alignment, payloads, *slot)) {
+    if (!writeViewPayloads(submission, alignment, payloads, *slot)) {
         YA_CORE_ERROR("Deferred beginView failed to upload view payloads");
         return nullptr;
     }
@@ -285,12 +310,12 @@ const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
         updateSkyboxDescriptorSet(*slot);
     }
 
-    if (!_viewBindings.commitNextView(submission.flightIndex)) {
+    if (!_viewBindings.commitNextView(submission.flightIndex())) {
         return nullptr;
     }
 
     view.viewSlot = viewSlot;
-    return _viewBindings.getView(submission.flightIndex, viewSlot);
+    return _viewBindings.getView(submission.flightIndex(), viewSlot);
 }
 
 const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::getViewBinding(

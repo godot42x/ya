@@ -9,6 +9,7 @@
 #include "Scene3D/TransformComponent.h"
 #include "Render3D/Common/PipelineCommon.h"
 #include "Render3D/Common/PostProcessingStateConfig.h"
+#include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
 #include "Scene/Core/Scene.h"
@@ -603,10 +604,10 @@ void ForwardRenderPipeline::executeShadowPass(const RenderPipelineFrameContext& 
 
     _shadowStage->applySettings(shadowSettings);
 
-    RenderSubmissionContext submission = frame.submission;
-    submission.cmdBuf      = frame.cmdBuf;
-    submission.flightIndex = frame.camera.flightIndex;
-    submission.frameToken  = frame.camera.frameIndex;
+    if (!frame.submission || !frame.submission->isRecording()) {
+        YA_CORE_ERROR("Forward shadow pass requires a recording submission");
+        return;
+    }
 
     RenderViewRecordingContext view = frame.view;
     if (!view.frameData) {
@@ -615,19 +616,17 @@ void ForwardRenderPipeline::executeShadowPass(const RenderPipelineFrameContext& 
     if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
         view.viewportExtent = stageCtx.viewportExtent;
     }
-    _shadowStage->prepareView(submission, view);
+    _shadowStage->prepareView(*frame.submission, view);
 }
 
 void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
-    RenderSubmissionContext submission = frame.submission;
-    submission.cmdBuf      = frame.cmdBuf;
-    submission.flightIndex = frame.camera.flightIndex;
-    submission.frameToken  = frame.camera.frameIndex;
-
-    if (_frameResources && !_frameResources->beginSubmission(submission)) {
-        YA_CORE_ERROR("Forward viewport submission begin failed");
+    if (!frame.submission || !frame.submission->isRecording()) {
+        YA_CORE_ERROR("Forward viewport pass requires a recording submission");
+        return;
     }
+    RenderSubmission& submission = *frame.submission;
+
     if (_frameResources && !_frameResources->prepareSkinning(stageCtx)) {
         YA_CORE_ERROR("Forward viewport skinning resource prepare failed");
     }

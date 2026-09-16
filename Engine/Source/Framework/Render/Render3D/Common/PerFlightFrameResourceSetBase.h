@@ -5,7 +5,6 @@
 #include "Core/Log.h"
 #include "RHI/Core/Buffer.h"
 #include "RHI/Core/DescriptorSet.h"
-#include "RHI/Core/FrameUploadArena.h"
 #include "RHI/Render.h"
 #include "Render3D/Stage/IRenderStage.h"
 
@@ -24,12 +23,12 @@ namespace ya
  * Shared per-flight resource mechanism for frame resource sets.
  *
  * Covers only the resource/data mechanisms shared by the Forward/Deferred
- * frame resource sets: the per-flight upload arena and the capacity-managed
- * skinning storage buffers (descriptor layout/pool, grow-on-demand capacity,
- * fence-safe retire of replaced buffers). The base deliberately owns nothing
- * of a pipeline's rendering strategy — View descriptor sets, payload structs
- * and pass state stay in the derived class. View-owned UniformBuffer pools
- * live in ViewDescriptorSetAllocator.
+ * frame resource sets: capacity-managed skinning storage buffers (descriptor
+ * layout/pool, grow-on-demand capacity, fence-safe retire of replaced
+ * buffers). Upload slices and transient descriptor sets are allocated from
+ * `RenderSubmission`. The base deliberately owns nothing of a pipeline's
+ * rendering strategy — View descriptor sets, payload structs and pass state
+ * stay in the derived class.
  *
  * CRTP contract: the derived class must grant friendship and expose the
  * per-flight skinning slots via
@@ -51,17 +50,16 @@ class PerFlightFrameResourceSetBase
     Derived&       self()       { return static_cast<Derived&>(*this); }
     const Derived& self() const { return static_cast<const Derived&>(*this); }
 
-    /// Creates the skinning descriptor layout/pool and the per-flight upload
-    /// arena; grows the initial skinning capacity. Must be called first from
-    /// the derived `init()` because it also wires the shared backend pointer.
+    /// Creates the skinning descriptor layout/pool and grows the initial
+    /// skinning capacity. Must be called first from the derived `init()`
+    /// because it also wires the shared backend pointer.
     void initSkinnedUploadArena(IRender* render,
                                 std::string_view pipelineName,
                                 std::string_view skinningDSLLabel,
-                                int32_t skinningDSLSet,
-                                std::string_view uploadArenaLabel);
+                                int32_t skinningDSLSet);
 
-    /// Releases the shared arena + skinning resources. Old skinning buffers
-    /// are retired through DeferredDeletionQueue so in-flight command buffers
+    /// Releases the shared skinning resources. Old skinning buffers are
+    /// retired through DeferredDeletionQueue so in-flight command buffers
     /// recorded before a capacity regrow stay valid until submission.
     void destroySkinnedUploadArena();
 
@@ -69,7 +67,6 @@ class PerFlightFrameResourceSetBase
     bool prepareSkinning(const RenderStageContext& ctx);
 
     IRender*                           _render           = nullptr;
-    std::unique_ptr<FrameUploadArena>  _uploadArena;
     stdptr<IDescriptorSetLayout>       _skinningDSL;
     stdptr<IDescriptorPool>            _skinningDSP;
     uint32_t                           _skinningCapacity = 0;
@@ -91,8 +88,7 @@ void PerFlightFrameResourceSetBase<Derived>::initSkinnedUploadArena(
     IRender* render,
     std::string_view pipelineName,
     std::string_view skinningDSLLabel,
-    int32_t skinningDSLSet,
-    std::string_view uploadArenaLabel)
+    int32_t skinningDSLSet)
 {
     YA_CORE_ASSERT(render != nullptr, "PerFlightFrameResourceSetBase requires a render backend");
     if (render->getResourceFactory() == nullptr) {
@@ -111,19 +107,11 @@ void PerFlightFrameResourceSetBase<Derived>::initSkinnedUploadArena(
             .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
         });
     YA_CORE_ASSERT(_skinningDSL != nullptr, "{}FrameResourceSet failed to create skinning descriptor layout", _resourceTag);
-
-    _uploadArena = std::make_unique<FrameUploadArena>(
-        *render->getResourceFactory(),
-        MAX_FLIGHTS_IN_FLIGHT,
-        64u * 1024u,
-        EBufferUsage::UniformBuffer,
-        std::string(uploadArenaLabel));
 }
 
 template <typename Derived>
 void PerFlightFrameResourceSetBase<Derived>::destroySkinnedUploadArena()
 {
-    _uploadArena.reset();
     _skinningDSP.reset();
     _skinningDSL.reset();
     _skinningCapacity = 0;

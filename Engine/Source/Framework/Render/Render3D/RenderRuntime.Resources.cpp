@@ -8,6 +8,7 @@
 #include "Render3D/Pipelines/BasicPostprocessing.h"
 #include "Resource/AssetManager.h"
 #include "Core/Common/DeferredDeletionQueue.h"
+#include "Core/Log.h"
 #include "Render/Resources/FontManager.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Core/ResourceRegistry.h"
@@ -208,6 +209,12 @@ void RenderRuntime::initCommandResources()
     _deleter.push("CmdBufs", [this](void*)
                   {
         _commandBuffers.clear(); });
+
+    if (!_submissions.init(_render)) {
+        YA_CORE_ERROR("RenderRuntime failed to initialize the submission pool");
+    }
+    _deleter.push("RenderSubmissionPool", [this](void*)
+                  { _submissions.destroy(); });
 
     _offscreen.init(_render);
     _deleter.push("OffscreenTaskService", [this](void*)

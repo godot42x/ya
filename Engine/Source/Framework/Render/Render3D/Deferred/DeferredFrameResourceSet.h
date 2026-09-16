@@ -6,8 +6,8 @@
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Render3D/Common/PerFlightFrameResourceSetBase.h"
 #include "Render3D/Common/RenderRecordingContext.h"
+#include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewBindingTable.h"
-#include "Render3D/Common/ViewDescriptorSetAllocator.h"
 
 #include "DeferredRender.GBufferPass_PBR.slang.h"
 #include "DeferredRender.LightPass.slang.h"
@@ -20,14 +20,16 @@
 namespace ya
 {
 
+struct IRender;
+class RenderSubmission;
+
 /**
- * Owns Deferred's persistent layouts/pools and the per-flight upload arena.
+ * Owns Deferred's persistent layouts and skinning storage.
  *
- * Layouts and descriptor pools are device-lifetime. Frame/light/SSAO/skybox
- * descriptor sets and upload slices are View-owned: beginSubmission() opens a
- * flight token, beginView() acquires an independent Binding so a second View
- * cannot overwrite the first. Skinning palettes stay submission-scoped
- * (shared by Views of the same Scene).
+ * Layouts are device-lifetime. Frame/light/SSAO/skybox descriptor sets and
+ * upload slices are allocated from `RenderSubmission` so a second View cannot
+ * overwrite the first. Skinning palettes stay submission-scoped (shared by
+ * Views of the same Scene).
  */
 class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceSetBase<DeferredFrameResourceSet>
 {
@@ -82,14 +84,13 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
         _shadowState = shadowState;
     }
 
-    bool beginSubmission(const RenderSubmissionContext& submission);
     /// Upload this View's frame/light (and optional SSAO/skybox) slices into a
     /// new Binding slot. On success, `view.viewSlot` is the live index and the
     /// returned Binding stays stable for the rest of the submission.
-    const Binding* beginView(const RenderSubmissionContext& submission,
-                             RenderViewRecordingContext&    view,
-                             const SSAOFrameData*           ssao   = nullptr,
-                             const SkyboxFrameData*         skybox = nullptr);
+    const Binding* beginView(RenderSubmission&           submission,
+                             RenderViewRecordingContext& view,
+                             const SSAOFrameData*        ssao   = nullptr,
+                             const SkyboxFrameData*      skybox = nullptr);
 
     bool prepareSkinning(const RenderStageContext& ctx)
     {
@@ -99,6 +100,10 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
     /// Write View UBO slices into `binding` without touching descriptor sets.
     static bool writeViewPayloads(FrameUploadArena&   arena,
                                   uint32_t            flightIndex,
+                                  uint32_t            alignment,
+                                  const ViewPayloads& payloads,
+                                  Binding&            binding);
+    static bool writeViewPayloads(RenderSubmission&   submission,
                                   uint32_t            alignment,
                                   const ViewPayloads& payloads,
                                   Binding&            binding);
@@ -113,11 +118,8 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
 
   private:
     stdptr<IDescriptorSetLayout> _frameAndLightDSL;
-    ViewDescriptorSetAllocator   _frameAndLightSets;
     stdptr<IDescriptorSetLayout> _ssaoFrameDSL;
-    ViewDescriptorSetAllocator   _ssaoFrameSets;
     stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
-    ViewDescriptorSetAllocator   _skyboxFrameSets;
     std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT> _skinningBindings{};
     RenderViewBindingTable<Binding> _viewBindings;
     ShadowRuntimeState _shadowState{};
@@ -129,7 +131,7 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
     [[nodiscard]] static std::optional<uint32_t> calculateSkinningCapacity(
         uint32_t currentCapacity,
         uint32_t paletteCount);
-    bool ensureViewDescriptors(Binding& binding);
+    bool ensureViewDescriptors(RenderSubmission& submission, Binding& binding);
     void updateFrameAndLightDescriptorSet(const Binding& binding);
     void updateSSAODescriptorSet(const Binding& binding);
     void updateSkyboxDescriptorSet(const Binding& binding);

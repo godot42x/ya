@@ -5,13 +5,39 @@
 - 阶段：R0 基线审计已完成；R1 已完成 SceneRenderRequest/SceneRenderPlan 的最小 frame-local 调度切片、真实 extractor 的显式 Scene/View 分层，以及 GameRuntime 的 scheduler 接入。RenderRuntime 按 SceneViewportTask 循环录制；选中的 world Camera 作为 overlay View submit，compose 到 display root，不改 host viewport identity。
 - 已确认：RenderFrameInputs.h 已有四组输入；RenderFrameData 的 Scene snapshot owner 已与 View-owned draw buckets 分离。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
-- 当前 checkpoint：tone mapping / bloom 的 display 路径按 View 持有 persistent RT 和 descriptor set；同一帧两个 View 不得复用同一套 postprocess GPU 资源。
+- 当前 checkpoint：4.0.2 B — 引入 `SceneViewFamilyPlan` / `SceneFamilyResources`，把 skinning 与 scene GPU packet 从 submission/flight 全局共享改成 Scene-family owner。不要继续扩大 `FrameResourceSet::Binding`。
+- 架构审计结论：`RenderSubmission` / `RenderSubmissionPool` 已拥有 command buffer、upload、transient descriptor、keepalive 与 finish；`RenderSubmissionContext` 已删除。Forward/Deferred/Shadow **frame UBO** beginView 不再按 flightIndex 覆写唯一 Binding。Runtime 已按 flight 持有 submission 和 View-keyed output 句柄。graph persistent key（含 viewport 与 postprocess/bloom）已按 View 分开。Runtime 已循环 SceneViewportTask。Overlay View 用 composeRect 合成到 display root。skinning 仍按 flight 共享；Bloom/BasicPost 的 viewId map、SSAO/Light/EntityId maxSets=1、pipeline last-view 图袋仍是 hack。下一刀是 Checkpoint B，不要宣称双 Surface GPU 完成，也不要先录两个 Scene。
 - 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是持有 shared snapshot 并独立保存 View-owned draw buckets；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 View buckets、shared skinning palettes 和 light presence。
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
-- GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 仍是 submission 共享（同 Scene 多 View 正确）。
-- 架构审计结论：RenderSubmissionContext / RenderViewRecordingContext 已进入 tick 输入，Forward/Deferred/Shadow beginView 不再按 flightIndex 覆写唯一 Binding。Runtime 已按 flight 持有 submission keepalives 和 View-keyed output 句柄。graph persistent key（含 viewport 与 postprocess/bloom）已按 View 分开。Runtime 已循环 SceneViewportTask。Overlay View 用 composeRect 合成到 display root，不得 resize host `_viewportRTSpec`。下一步不要宣称双 Surface GPU 完成；可录制两个 Scene 的两个 View。
+- GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 当前仍按 submission/flight 共享，仅能覆盖同 Scene 多 View，双 Scene 前必须迁入 SceneFamily owner。
 
-## 2026-09-17 checkpoint：View-own postprocess / bloom display 资源
+## 2026-09-17 checkpoint：RenderSubmission owner
+
+- 唯一目标：一次 command submission 的 command buffer、frame token、upload arena、transient descriptor、keepalive 与 finish 由 `RenderSubmission` / `RenderSubmissionPool` 维护；pipeline/resource set 不再各自 `beginSubmission()`。
+- 删除 `RenderSubmissionContext` / `RenderSubmissionTable`。Forward/Deferred/Shadow `beginView(RenderSubmission&)` 从 submission 分配 upload slice 与 descriptor set；`writeViewPayloads(arena)` 只留给 identity 单测。RHI cmd begin/end 仍在 RenderRuntime coordinator。skinning 仍在 `PerFlightFrameResourceSetBase`。
+- 验收：同 token 连续两 View slice 不覆写；finish 后 keepalive 存活到该 flight 新 token；二次 finish、finish 后 allocate/retain、同 token 再 acquire 均被拒绝。
+- 验证：`xmake b ya-render-3d`、`xmake b ya-render-3d-test`、`xmake r ya-render-3d-test --gtest_filter='RenderSubmissionTest.*:RenderViewBindingTableTest.*:RenderRuntimeSnapshotTest.*:RenderViewOutputTableTest.*:DeferredFrameResourceSetTest.*:DeferredRenderPipelineTest.*:DrawCandidateViewTest.*:RenderGraphCoreTest.FrameUploadArena*:ViewPersistentResourceKeyTest.*:CameraFrustumOverlayTest.*:DirectionalShadowMathTest.*:ForwardGraphInputsTest.*'`（53/53）、`git diff --check`。`xmake b ya-game-runtime` 因既有 `ModelComponent._childNodes` 编译失败，与本切片无关。
+- 保留未完成：Checkpoint B–E；skinning 仍按 flight 共享；Stage CIS / last-view 图袋 / processor viewId map；双 Scene 录制；双 Surface GPU 验收。
+
+## 2026-09-16 plan：Renderer 生命周期与 ViewFamily graph（4.0.2 重审）
+
+- 唯一目标：review 当前计划和代码，并把可执行的大尺度重构写入 plan；本轮不改引擎代码。
+- 修正遗漏：原三层 Device/Submission/View 漏了 SceneFamily；同 submission 双 Scene 下，per-flight skinning/scene GPU packet 仍会串。
+- 修正图粒度：不再固定一 View 一 graph；`SceneViewFamilyPlan` 是 graph 编译单位，同 Scene/策略的 family-shared work 与 per-view branch 同图，不相关 family 分图但可共 submission。
+- 状态/逻辑原则：allocator/submission/history 等维护不变量的 owner 保持状态+行为；snapshot/plan/prepared view/result 是值；pass recipe 只持 device-lifetime 配方。
+- `begin/end` 结论：保留 RHI command protocol；删除 persistent pipeline 上表达隐式 current state 的 tick/beginTick/beginView/getCurrent。
+- 执行顺序改为 A Submission owner → B SceneFamily owner → C typed pass resources/recipes → D family renderer → E 拆 RenderRuntime facade。
+- 允许类名/文件名重构并删除 legacy API；每个 checkpoint 仍需单一验收目标。
+
+## 2026-09-16 plan：配方与 View 数据分离（已被上述 4.0.2 重审收编）
+
+- 唯一目标：把结论写进计划，不写代码。Stage/Pipeline 混有 last-view 数据，禁止再叠 viewId map。
+- 目标三层：Device 配方（pipeline/layout/池）、Submission（arena/skinning）、View（Binding + RDG persistent）。录制 lambda 不改 Stage 成员。RDG 不接管 DS/UBO。不抽 BaseRenderPipeline。
+- 原“全部 CIS 塞进 Binding”只保留为问题清单，不再作为目标形态；typed View/Pass resources 取代 mega Binding。
+- 双 Scene / 双 Surface 排在 4.0.2 之后。Bloom/BasicPost 的 viewId map 视为迁移期 hack。
+- 未改引擎代码；plan.md 3.3 / 4.0.2、todo、feature_matrix、session_checklist 同步。
+
+## 2026-09-16 checkpoint：View-own postprocess / bloom display 资源
 
 - 唯一目标：同一 submission 里两个 View 不再共用 postprocess/bloom 的 GPU 图和 descriptor set，避免两路画面相同并闪烁。
 - 根因：tone mapping 默认开启。`BasicPostprocessing` / Bloom extract-composite 只有一套 CombinedImageSampler set，View B 在同一 cmdbuf 里原地 update 后，View A 已录制的 bind 在 submit 时也采样 View B。Bloom/Postprocess 输出曾是 transient，同 extent 时会被 registry 回收给下一个 graph。
@@ -20,7 +46,7 @@
 - 验证：`xmake b ya-render-3d`、`xmake b ya-render-3d-test`、`xmake r ya-render-3d-test --gtest_filter='ViewPersistentResourceKeyTest.*:ForwardGraphInputsTest.*:RenderGraphCoreTest.ViewKeyedPersistentTexturesStayIndependent:RenderGraphCoreTest.ViewKeyedPostprocessTexturesStayIndependentAcrossSequentialGraphs:RenderGraphCoreTest.ResourceRegistryReusesStableResourcesAcrossSyncs:PostProcessingStageTest.*:CameraFrustumOverlayTest.*:RenderViewOutputTableTest.*:RenderRuntimeSnapshotTest.*:RenderSubmissionTableTest.*:RenderViewBindingTableTest.*:DeferredFrameResourceSetTest.*:DeferredRenderPipelineTest.*:DeferredFrameGraphResourcesTest.*:DeferredPassParamsTest.*:DrawCandidateViewTest.*:RenderGraphCoreTest.FrameUploadArena*'`（56/56）、`xmake b ya-game-runtime`、`xmake b ya-game-editor`、`git diff --check`。
 - 保留未完成：双 Scene 录制；双 Surface；PointShadow indirect 仍是 flight 轴；viewport click picking 无 camera mesh。
 
-## 2026-09-17 checkpoint：overlay View 与 host viewport identity 分离
+## 2026-09-16 checkpoint：overlay View 与 host viewport identity 分离
 
 - 唯一目标：修正 camera preview 的硬编码、过大 frustum、以及点击 camera 后主 viewport 缩小到角落并闪烁。
 - `SceneRenderRequest` / `SceneViewportTask` 增加 `composeOntoViewId` + `composeRect`。`viewportRect` 只描述该 View 自己的离屏 RT；compose dest 不再进入 `cameraForViewRecording` 的 host rect。Runtime 从 plan 收集 insets，不再依赖 `kCameraPreviewViewId`。
@@ -175,13 +201,13 @@ R0 结论：world snapshot 与 UI snapshot 都在 renderFrame 前生成；Render
 | --- | --- | --- | --- |
 | R0 单 View 基线 | 已完成 | 单 View、现有 pass、单 submit、Forward/Deferred topology | 真实 GPU golden 仍依赖可运行窗口环境 |
 | R1 World/View 分离 | 已完成（单 View 契约） | RenderFrameData 组合 Scene snapshot；现有单 View pipeline topology | GameEditor/preview 多 request |
-| R2 ViewFamily | 进行中（View binding + keepalives + output 句柄 + View-keyed RT + task 循环录制 + editor camera PiP） | Forward/Deferred topology、PointShadow indirect per-flight | 双 Scene 录制、双 Surface 验收 |
+| R2 ViewFamily | 进行中（Submission owner 已落地；View binding + keepalives + output 句柄 + View-keyed RT + task 循环录制 + editor camera PiP） | Forward/Deferred topology、PointShadow indirect per-flight、skinning 仍按 flight 共享 | SceneFamily owner、typed pass resources、family renderer、拆 Runtime、双 Scene 录制、双 Surface 验收 |
 | R3 GUI2D/GameUI | 未开始 | WidgetTree live source、UIFrameSnapshot 输入 | UI-only 与 GameUI[ViewId] |
 | R4 性能收口 | 未开始 | 优化由 profile 触发 | cache、submit、第三 pipeline 决策 |
 
 ## 下一轮接力点
 
-R0 已完成。Forward / Deferred / Shadow 已具备 beginSubmission/beginView。RenderRuntime 按 flight 持有 submission keepalives，按 ViewId 发布独立 output，persistent key 已 View-keyed，并按 SceneViewportTask 循环 tick/publish。Editor 选中 world Camera 会 submit 第二个 View 并 PiP 到主 viewport。下一 checkpoint 录制两个 Scene 的两个 View；不要宣称双 Surface GPU 完成。
+R0 已完成。`RenderSubmission` 已拥有一次 command recording；Forward / Deferred / Shadow 从该 owner `beginView`。RenderRuntime 按 flight 持有 submission keepalives，按 ViewId 发布独立 output，persistent key 已 View-keyed，并按 SceneViewportTask 循环 tick/publish。Editor 选中 world Camera 会 submit 第二个 View 并 PiP 到主 viewport。下一 checkpoint 是 4.0.2 B（SceneFamily owner）；不要宣称双 Surface GPU 完成，也不要先录两个 Scene。
 
 ## R1 审计结论
 

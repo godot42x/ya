@@ -16,7 +16,7 @@ void ShadowFrameResources::init(IRender* render)
     destroy();
     YA_CORE_ASSERT(render != nullptr, "ShadowFrameResources requires a render backend");
 
-    initSkinnedUploadArena(render, "Shadow", "Shadow_Skinning_DSL", 1, "ShadowFrameUploadArena");
+    initSkinnedUploadArena(render, "Shadow", "Shadow_Skinning_DSL", 1);
 
     _frameDSL = IDescriptorSetLayout::create(
         _render,
@@ -28,7 +28,6 @@ void ShadowFrameResources::init(IRender* render)
                           .descriptorCount = 1,
                           .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment}},
         });
-    _frameSets.init(_render, "Shadow_Frame_DSP", 1);
 
     YA_CORE_ASSERT(ensureSkinningCapacity(0), "ShadowFrameResources failed to create initial skinning resources");
 }
@@ -38,26 +37,18 @@ void ShadowFrameResources::destroy()
     _viewBindings.clear();
     _skinningBindings = {};
     destroySkinnedUploadArena();
-    _frameSets.destroy();
     _frameDSL.reset();
 }
 
-bool ShadowFrameResources::beginSubmission(const RenderSubmissionContext& submission)
-{
-    if (!_render) {
-        return false;
-    }
-    return beginFrameResourceSubmission(_uploadArena.get(), _viewBindings, submission);
-}
-
 bool ShadowFrameResources::ensureViewDescriptors(
-    Binding& binding,
-    uint32_t directionalCount,
-    uint32_t pointFaceCount)
+    RenderSubmission& submission,
+    Binding&          binding,
+    uint32_t          directionalCount,
+    uint32_t          pointFaceCount)
 {
     for (uint32_t cascadeIndex = 0; cascadeIndex < directionalCount; ++cascadeIndex) {
         if (!binding.directionalFrameDS[cascadeIndex]) {
-            binding.directionalFrameDS[cascadeIndex] = _frameSets.allocate(_frameDSL);
+            binding.directionalFrameDS[cascadeIndex] = submission.allocateDescriptorSet(_frameDSL, 1);
         }
         if (!binding.directionalFrameDS[cascadeIndex]) {
             return false;
@@ -65,7 +56,7 @@ bool ShadowFrameResources::ensureViewDescriptors(
     }
     for (uint32_t faceIndex = 0; faceIndex < pointFaceCount; ++faceIndex) {
         if (!binding.pointFaceDS[faceIndex]) {
-            binding.pointFaceDS[faceIndex] = _frameSets.allocate(_frameDSL);
+            binding.pointFaceDS[faceIndex] = submission.allocateDescriptorSet(_frameDSL, 1);
         }
         if (!binding.pointFaceDS[faceIndex]) {
             return false;
@@ -172,50 +163,92 @@ bool ShadowFrameResources::writeViewPayloads(
     return true;
 }
 
+bool ShadowFrameResources::writeViewPayloads(
+    RenderSubmission&   submission,
+    uint32_t            alignment,
+    const ViewPayloads& payloads,
+    Binding&            binding)
+{
+    if (!submission.isRecording() || alignment == 0) {
+        return false;
+    }
+    if (payloads.directionalCount > MAX_DIRECTIONAL_CASCADES ||
+        payloads.pointFaceCount > ShadowConstants::POINT_SHADOW_FACE_COUNT) {
+        return false;
+    }
+
+    for (uint32_t cascadeIndex = 0; cascadeIndex < payloads.directionalCount; ++cascadeIndex) {
+        auto slice = writeUploadSlice(
+            submission,
+            alignment,
+            &payloads.directional[cascadeIndex],
+            sizeof(payloads.directional[cascadeIndex]));
+        if (!slice) {
+            return false;
+        }
+        binding.directionalFrames[cascadeIndex] = *slice;
+    }
+    for (uint32_t faceIndex = 0; faceIndex < payloads.pointFaceCount; ++faceIndex) {
+        auto slice = writeUploadSlice(
+            submission,
+            alignment,
+            &payloads.pointFaces[faceIndex],
+            sizeof(payloads.pointFaces[faceIndex]));
+        if (!slice) {
+            return false;
+        }
+        binding.pointFaces[faceIndex] = *slice;
+    }
+    return true;
+}
+
 const ShadowFrameResources::Binding* ShadowFrameResources::beginView(
-    const RenderSubmissionContext& submission,
+    RenderSubmission&              submission,
     RenderViewRecordingContext&    view,
     const BasicShadowFramePayload& payload)
 {
-    if (!_render || !_uploadArena || submission.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
+    if (!_render || !submission.isRecording()) {
         return nullptr;
     }
     if (!view.frameData || !payload.frameData) {
         YA_CORE_ERROR("Shadow beginView requires view frame data");
         return nullptr;
     }
-
-    Binding* slot = _viewBindings.mutableNextView(submission.flightIndex);
-    if (!slot) {
-        YA_CORE_ERROR("Shadow beginView requires beginSubmission on flight {}", submission.flightIndex);
+    if (!beginViewBindingTable(_viewBindings, submission)) {
         return nullptr;
     }
 
-    const uint32_t viewSlot = _viewBindings.liveViewCount(submission.flightIndex);
-    const SkinningBinding& skinning = _skinningBindings[submission.flightIndex];
-    slot->skinningDS     = skinning.skinningDescriptorSet;
-    slot->skinningBuffer = skinning.skinningBuffer;
+    Binding* slot = _viewBindings.mutableNextView(submission.flightIndex());
+    if (!slot) {
+        YA_CORE_ERROR("Shadow beginView requires a recording submission on flight {}", submission.flightIndex());
+        return nullptr;
+    }
+
+    const uint32_t         viewSlot = _viewBindings.liveViewCount(submission.flightIndex());
+    const SkinningBinding& skinning = _skinningBindings[submission.flightIndex()];
+    slot->skinningDS                = skinning.skinningDescriptorSet;
+    slot->skinningBuffer            = skinning.skinningBuffer;
 
     const ViewPayloads payloads = buildViewPayloads(payload);
-    if (!ensureViewDescriptors(*slot, payloads.directionalCount, payloads.pointFaceCount)) {
+    if (!ensureViewDescriptors(submission, *slot, payloads.directionalCount, payloads.pointFaceCount)) {
         YA_CORE_ERROR("Shadow beginView failed to allocate view descriptor sets");
         return nullptr;
     }
 
     const uint32_t alignment = std::max(_render->getUniformBufferOffsetAlignment(), 1u);
-    if (!writeViewPayloads(*_uploadArena, submission.flightIndex, alignment, payloads, *slot)) {
+    if (!writeViewPayloads(submission, alignment, payloads, *slot)) {
         YA_CORE_ERROR("Shadow beginView failed to upload view payloads");
         return nullptr;
     }
 
     updateViewDescriptors(*slot, payloads.directionalCount, payloads.pointFaceCount);
 
-    if (!_viewBindings.commitNextView(submission.flightIndex)) {
+    if (!_viewBindings.commitNextView(submission.flightIndex())) {
         return nullptr;
     }
 
     view.viewSlot = viewSlot;
-    return _viewBindings.getView(submission.flightIndex, viewSlot);
+    return _viewBindings.getView(submission.flightIndex(), viewSlot);
 }
 
 const ShadowFrameResources::Binding* ShadowFrameResources::getViewBinding(

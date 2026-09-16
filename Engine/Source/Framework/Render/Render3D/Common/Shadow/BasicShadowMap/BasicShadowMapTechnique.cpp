@@ -6,6 +6,7 @@
 #include "Graph/RenderGraphImportUtils.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Render.h"
+#include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/RenderFrameData.h"
 
 #include "Core/Math/Math.h"
@@ -49,31 +50,30 @@ void BasicShadowMapTechnique::applySettings(const ShadowSettings& settings)
 // Prepare / Execute
 // ═══════════════════════════════════════════════════════════════════════════
 
-void BasicShadowMapTechnique::prepare(const RenderSubmissionContext& submission, RenderViewRecordingContext& view)
+void BasicShadowMapTechnique::prepare(RenderSubmission& submission, RenderViewRecordingContext& view)
 {
     YA_PROFILE_FUNCTION();
     _preparedViewSlot = RenderViewRecordingContext::kInvalidViewSlot;
     if (!_settings.isEnabled() || !view.frameData) {
         return;
     }
-
-    if (!_frameResources.beginSubmission(submission)) {
-        YA_CORE_ERROR("BasicShadowMapTechnique failed to begin shadow submission");
+    if (!submission.isRecording()) {
+        YA_CORE_ERROR("BasicShadowMapTechnique requires a recording submission");
         return;
     }
 
     RenderStageContext skinningCtx{
         .frameData   = view.frameData,
-        .flightIndex = submission.flightIndex,
-        .frameIndex  = submission.frameToken,
+        .flightIndex = submission.flightIndex(),
+        .frameIndex  = submission.frameToken(),
     };
     if (!_frameResources.prepareSkinning(skinningCtx)) {
         YA_CORE_ERROR("BasicShadowMapTechnique failed to prepare shadow skinning");
         return;
     }
 
-    auto payload = buildFramePayload(submission.flightIndex, *view.frameData);
-    payload.frameIndex = submission.frameToken;
+    auto payload = buildFramePayload(submission.flightIndex(), *view.frameData);
+    payload.frameIndex = submission.frameToken();
     if (!_frameResources.beginView(submission, view, payload)) {
         YA_CORE_ERROR("BasicShadowMapTechnique failed to prepare shadow frame resources");
         return;

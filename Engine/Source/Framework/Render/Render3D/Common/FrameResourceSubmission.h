@@ -1,7 +1,7 @@
 #pragma once
 
 #include "RHI/Core/FrameUploadArena.h"
-#include "Render3D/Common/RenderRecordingContext.h"
+#include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewBindingTable.h"
 
 #include <optional>
@@ -9,21 +9,17 @@
 namespace ya
 {
 
-/// Open a flight on the submission arena and the View binding table together.
-/// Same `(flightIndex, frameToken)` is idempotent on both sides.
+/// Open this resource set's View slot table for the live submission token.
+/// Same token is idempotent; a new token rewinds live View count.
 template <typename Binding>
-[[nodiscard]] inline bool beginFrameResourceSubmission(
-    FrameUploadArena*                arena,
+[[nodiscard]] inline bool beginViewBindingTable(
     RenderViewBindingTable<Binding>& views,
-    const RenderSubmissionContext&   submission)
+    const RenderSubmission&          submission)
 {
-    if (!arena || submission.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
+    if (!submission.isRecording()) {
         return false;
     }
-    if (!arena->beginFlight(submission.flightIndex, submission.frameToken)) {
-        return false;
-    }
-    return views.beginSubmission(submission.flightIndex, submission.frameToken);
+    return views.beginSubmission(submission.flightIndex(), submission.frameToken());
 }
 
 [[nodiscard]] inline std::optional<FrameUploadArena::Allocation> writeUploadSlice(
@@ -37,6 +33,19 @@ template <typename Binding>
         return std::nullopt;
     }
     auto slice = arena.allocate(flightIndex, size, alignment);
+    if (!slice.has_value() || !slice->write(data, size)) {
+        return std::nullopt;
+    }
+    return slice;
+}
+
+[[nodiscard]] inline std::optional<FrameUploadArena::Allocation> writeUploadSlice(
+    RenderSubmission& submission,
+    uint32_t          alignment,
+    const void*       data,
+    uint32_t          size)
+{
+    auto slice = submission.allocateUpload(size, alignment);
     if (!slice.has_value() || !slice->write(data, size)) {
         return std::nullopt;
     }
