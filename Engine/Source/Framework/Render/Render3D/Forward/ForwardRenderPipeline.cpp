@@ -306,13 +306,18 @@ void ForwardRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, R
     syncFrameSettings(frame);
     applyPendingResourceRefreshes();
 
+    Extent2D viewExtent = frame.view.viewportExtent;
+    if (viewExtent.width == 0 || viewExtent.height == 0) {
+        viewExtent = _viewportResources.extent;
+    }
+
     stageCtx = RenderStageContext{
         .cmdBuf         = frame.cmdBuf,
         .frameData      = frame.camera.frameData,
         .flightIndex    = frame.camera.flightIndex,
         .frameIndex     = frame.camera.frameIndex,
         .deltaTime      = frame.camera.deltaTime,
-        .viewportExtent = _viewportResources.extent,
+        .viewportExtent = viewExtent,
     };
 }
 
@@ -426,9 +431,11 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
 
 void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
-    const auto desiredExtent = Extent2D::fromVec2(frame.camera.viewportRect.extent / frame.camera.viewportFrameBufferScale);
-    if (desiredExtent.width > 0 && desiredExtent.height > 0 && !(desiredExtent == _viewportResources.extent)) {
-        requestViewportResize(desiredExtent);
+    if (sceneViewOwnsHostViewport(frame.view.task)) {
+        const auto desiredExtent = Extent2D::fromVec2(frame.camera.viewportRect.extent / frame.camera.viewportFrameBufferScale);
+        if (desiredExtent.width > 0 && desiredExtent.height > 0 && !(desiredExtent == _viewportResources.extent)) {
+            requestViewportResize(desiredExtent);
+        }
     }
 
     const ShadowSettings shadowSettings          = currentShadowSettings();
@@ -665,7 +672,7 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     postContext.projection     = frame.camera.projection;
     postContext.viewProjection = frame.camera.viewProjection;
     postContext.cameraPos      = frame.camera.cameraPos;
-    postContext.extent         = _viewportResources.extent;
+    postContext.extent         = stageCtx.viewportExtent;
 
     [[maybe_unused]] const bool bExecuted = executeViewportPassGraph(
         frame,
@@ -713,6 +720,10 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
 
     RenderGraph graph;
     auto viewportPassContext = _viewportStage->buildPassContext(stageCtx);
+    RenderTargetCreateInfo viewRTSpec = _viewportRTSpec;
+    if (stageCtx.viewportExtent.width > 0 && stageCtx.viewportExtent.height > 0) {
+        viewRTSpec.extent = stageCtx.viewportExtent;
+    }
     _frameGraphOrchestrator.build(
         ForwardFrameGraphOrchestrator::BuildDependencies{
             .viewportStage    = _viewportStage.get(),
@@ -724,7 +735,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             .graph                    = &graph,
             .stageCtx                 = &stageCtx,
             .frameBinding             = frameBinding,
-            .viewportRTSpec           = &_viewportRTSpec,
+            .viewportRTSpec           = &viewRTSpec,
             .directionGizmos          = std::move(directionGizmos),
             .viewportPassContext      = &viewportPassContext,
             .postContext              = &postContext,
@@ -744,7 +755,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             result.getExportedTextureShared(forward_graph_exports::viewportDepth),
             result.getExportedTextureShared(forward_graph_exports::viewportResolve),
             result.getExportedTextureShared(forward_graph_exports::entityId),
-            _viewportRTSpec.extent);
+            viewRTSpec.extent);
         _currentPostprocessOutput = result.getExportedTextureShared(PostProcessingStage::kOutputExportName);
     }
     else {

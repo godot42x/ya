@@ -1,6 +1,6 @@
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
-#include "Render3D/Common/CameraFrustumOverlay.h"
+#include "Render3D/Common/ViewCompose.h"
 #include "Render3D/RenderFrameData.h"
 #include "Render3D/RenderRuntime.h"
 
@@ -367,15 +367,20 @@ TEST(RenderRuntimeSnapshotTest, ViewComposeInsetsDescribePrimaryDisplayPreview)
     ViewComposeInput compose;
     EXPECT_TRUE(compose.empty());
 
+    EXPECT_FLOAT_EQ(makeViewDisplayInsetRect({0.0f, 720.0f}).extent.x, 0.0f);
+
+    const Rect2D dest = makeViewDisplayInsetRect({1280.0f, 720.0f});
     compose.insets.push_back(ViewDisplayInset{
-        .viewId   = kCameraPreviewViewId,
-        .destRect = makeBottomRightViewInset({1280.0f, 720.0f}),
+        .viewId   = 2,
+        .destRect = dest,
     });
     EXPECT_FALSE(compose.empty());
     ASSERT_EQ(compose.insets.size(), 1u);
-    EXPECT_EQ(compose.insets.front().viewId, kCameraPreviewViewId);
+    EXPECT_EQ(compose.insets.front().viewId, 2u);
     EXPECT_GT(compose.insets.front().destRect.extent.x, 0.0f);
     EXPECT_GT(compose.insets.front().destRect.pos.x, 640.0f);
+    EXPECT_GT(compose.insets.front().destRect.pos.y, 360.0f);
+    EXPECT_LE(compose.insets.front().destRect.pos.x + compose.insets.front().destRect.extent.x, 1280.0f);
 }
 
 TEST(RenderRuntimeSnapshotTest, OverlaySnapshotEmptyIncludesWorldLines)
@@ -390,7 +395,7 @@ TEST(RenderRuntimeSnapshotTest, OverlaySnapshotEmptyIncludesWorldLines)
     EXPECT_FALSE(snapshot.empty());
 }
 
-TEST(RenderRuntimeSnapshotTest, PrimaryAndPreviewCameraRequestsShareSceneSnapshot)
+TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
 {
     SceneRenderScheduler scheduler;
     scheduler.beginFrame(9);
@@ -406,23 +411,50 @@ TEST(RenderRuntimeSnapshotTest, PrimaryAndPreviewCameraRequestsShareSceneSnapsho
     primary.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
     primary.buildSnapshot = buildSnapshot;
 
-    SceneRenderRequest preview;
-    preview.sceneId = 4;
-    preview.viewId = kCameraPreviewViewId;
-    preview.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {358.0f, 201.0f}};
-    preview.buildSnapshot = buildSnapshot;
+    const Rect2D composeRect = makeViewDisplayInsetRect({1280.0f, 720.0f});
+    SceneRenderRequest overlay;
+    overlay.sceneId = 4;
+    overlay.viewId = 2;
+    overlay.viewportRect = {.pos = {0.0f, 0.0f}, .extent = composeRect.extent};
+    overlay.composeOntoViewId = kPrimarySceneViewId;
+    overlay.composeRect = composeRect;
+    overlay.buildSnapshot = buildSnapshot;
 
     ASSERT_TRUE(scheduler.submit(primary));
-    ASSERT_TRUE(scheduler.submit(preview));
+    ASSERT_TRUE(scheduler.submit(overlay));
 
     const SceneRenderPlan plan = scheduler.seal();
     ASSERT_EQ(plan.viewportTasks.size(), 2u);
-    EXPECT_EQ(plan.viewportTasks[0].viewId, kPrimarySceneViewId);
-    EXPECT_EQ(plan.viewportTasks[1].viewId, kCameraPreviewViewId);
+    EXPECT_TRUE(plan.viewportTasks[0].ownsHostViewport());
+    EXPECT_FALSE(plan.viewportTasks[1].ownsHostViewport());
     EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]), plan.snapshotFor(plan.viewportTasks[1]));
+    EXPECT_EQ(plan.displayRootTask(), &plan.viewportTasks[0]);
     EXPECT_NE(plan.viewportTasks[0].output.extent, plan.viewportTasks[1].output.extent);
-    EXPECT_EQ(plan.viewportTasks[1].output.extent.width, 358u);
-    EXPECT_EQ(plan.viewportTasks[1].output.extent.height, 201u);
+    EXPECT_EQ(plan.viewportTasks[1].output.extent.width,
+              static_cast<uint32_t>(composeRect.extent.x));
+    EXPECT_GT(plan.viewportTasks[1].composeRect.pos.x, 640.0f);
+    EXPECT_FLOAT_EQ(plan.viewportTasks[1].viewportRect.pos.x, 0.0f);
+
+    const auto insets = viewDisplayInsetsFromPlan(plan);
+    ASSERT_EQ(insets.size(), 1u);
+    EXPECT_EQ(insets.front().viewId, 2u);
+    EXPECT_FLOAT_EQ(insets.front().destRect.pos.x, composeRect.pos.x);
+    EXPECT_FLOAT_EQ(insets.front().destRect.pos.y, composeRect.pos.y);
+
+    RenderFrameData overlayFrame;
+    const SceneViewRecording recording{
+        .task      = &plan.viewportTasks[1],
+        .frameData = &overlayFrame,
+    };
+    CameraFrameInput host;
+    host.viewportRect = {.pos = {40.0f, 80.0f}, .extent = {1280.0f, 720.0f}};
+    const CameraFrameInput overlayCamera = cameraForViewRecording(host, recording);
+    EXPECT_FLOAT_EQ(overlayCamera.viewportRect.pos.x, 0.0f);
+    EXPECT_FLOAT_EQ(overlayCamera.viewportRect.pos.y, 0.0f);
+    EXPECT_FLOAT_EQ(overlayCamera.viewportRect.extent.x,
+                    static_cast<float>(plan.viewportTasks[1].output.extent.width));
+    EXPECT_NE(overlayCamera.viewportRect.pos.x, composeRect.pos.x);
+    EXPECT_LT(overlayCamera.viewportRect.extent.x, host.viewportRect.extent.x);
 }
 
 } // namespace

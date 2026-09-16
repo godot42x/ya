@@ -74,16 +74,18 @@ SceneRenderPlan SceneRenderScheduler::seal()
         }
 
         plan.viewportTasks.push_back(SceneViewportTask{
-            .sceneId       = request.sceneId,
-            .sceneRevision = request.sceneRevision,
-            .viewId        = request.viewId,
-            .familyId      = request.familyId,
-            .view          = request.view,
-            .projection    = request.projection,
-            .viewProjection = request.viewProjection,
-            .cameraPos     = request.cameraPos,
-            .viewportRect  = request.viewportRect,
-            .renderFlags   = request.renderFlags,
+            .sceneId            = request.sceneId,
+            .sceneRevision      = request.sceneRevision,
+            .viewId             = request.viewId,
+            .familyId           = request.familyId,
+            .view               = request.view,
+            .projection         = request.projection,
+            .viewProjection     = request.viewProjection,
+            .cameraPos          = request.cameraPos,
+            .viewportRect       = request.viewportRect,
+            .renderFlags        = request.renderFlags,
+            .composeOntoViewId  = request.composeOntoViewId,
+            .composeRect        = request.composeRect,
             .output =
                 {
                     .viewId = request.viewId,

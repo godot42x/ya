@@ -15,8 +15,9 @@ namespace ya
 using SceneId = uint64_t;
 using SceneViewId = uint64_t;
 
-inline constexpr SceneViewId kPrimarySceneViewId     = 1;
-inline constexpr SceneViewId kCameraPreviewViewId    = 2;
+/// Stable persistent-key slot for the host WorldView. Overlay Views use other
+/// host-assigned ids; they must not resize this View's output identity.
+inline constexpr SceneViewId kPrimarySceneViewId = 1;
 
 struct SceneRenderRequest
 {
@@ -29,8 +30,14 @@ struct SceneRenderRequest
     glm::mat4 projection     = glm::mat4(1.0f);
     glm::mat4 viewProjection = glm::mat4(1.0f);
     glm::vec3 cameraPos      = glm::vec3(0.0f);
+    /// This View's own offscreen camera rect (origin at its RT top-left).
+    /// Not chrome widget offset, and not the compose dest on another View.
     Rect2D    viewportRect{};
     uint32_t  renderFlags = 0;
+    /// 0: this View is a display root (host viewport identity). Non-zero: blit
+    /// `composeRect` onto that View's display RT after recording.
+    SceneViewId composeOntoViewId = 0;
+    Rect2D      composeRect{};
 
     /// Product code owns the Scene. The scheduler invokes this once per Scene
     /// in the frame and retains only the immutable result in the plan.
@@ -52,9 +59,13 @@ struct SceneViewportTask
     glm::vec3 cameraPos      = glm::vec3(0.0f);
     Rect2D    viewportRect{};
     uint32_t  renderFlags = 0;
+    SceneViewId composeOntoViewId = 0;
+    Rect2D      composeRect{};
     RenderViewOutputDesc output{};
 
     uint32_t snapshotIndex = kInvalidSnapshotIndex;
+
+    [[nodiscard]] bool ownsHostViewport() const { return composeOntoViewId == 0; }
 };
 
 struct SceneSnapshotEntry
@@ -84,7 +95,22 @@ struct SceneRenderPlan
         }
         return entry.snapshot;
     }
+
+    [[nodiscard]] const SceneViewportTask* displayRootTask() const
+    {
+        for (const auto& task : viewportTasks) {
+            if (task.ownsHostViewport()) {
+                return &task;
+            }
+        }
+        return viewportTasks.empty() ? nullptr : &viewportTasks.front();
+    }
 };
+
+[[nodiscard]] inline bool sceneViewOwnsHostViewport(const SceneViewportTask* task)
+{
+    return !task || task->ownsHostViewport();
+}
 
 /// Frame-local request collector. It does not own Scene/ECS objects and does
 /// not record GPU commands; RenderRuntime consumes the sealed immutable plan.

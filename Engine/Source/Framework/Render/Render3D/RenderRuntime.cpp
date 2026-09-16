@@ -138,9 +138,24 @@ ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
     }
     // View compose writes this Camera's offscreen display RT (UI + gizmos +
     // extra View insets). Display compose then writes swapchain[imageIndex].
+    std::vector<ViewDisplayInset> composeInsets = input.viewCompose.insets;
+    if (input.sceneRender.plan) {
+        for (const auto& inset : viewDisplayInsetsFromPlan(*input.sceneRender.plan)) {
+            bool bExists = false;
+            for (const auto& existing : composeInsets) {
+                if (existing.viewId == inset.viewId) {
+                    bExists = true;
+                    break;
+                }
+            }
+            if (!bExists) {
+                composeInsets.push_back(inset);
+            }
+        }
+    }
     std::vector<ViewDisplayInsetImage> insetImages;
-    insetImages.reserve(input.viewCompose.insets.size());
-    for (const auto& inset : input.viewCompose.insets) {
+    insetImages.reserve(composeInsets.size());
+    for (const auto& inset : composeInsets) {
         const RenderViewOutput* output = getViewOutput(inset.viewId);
         if (!output || inset.viewId == 0) {
             continue;

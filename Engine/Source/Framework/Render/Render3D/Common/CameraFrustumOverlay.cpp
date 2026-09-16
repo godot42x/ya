@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <glm/glm.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 
 namespace ya
@@ -19,6 +20,19 @@ glm::vec3 unprojectClip(const glm::mat4& inverseViewProjection, const glm::vec3&
     return glm::vec3(world) / world.w;
 }
 
+glm::vec3 pointAlongFovRay(const glm::vec3& eye, const glm::vec3& ndcNear, float distance)
+{
+    glm::vec3 dir = ndcNear - eye;
+    const float length = glm::length(dir);
+    if (length <= 1e-8f || !std::isfinite(length)) {
+        dir = glm::vec3(0.0f, 0.0f, -1.0f);
+    }
+    else {
+        dir /= length;
+    }
+    return eye + dir * distance;
+}
+
 void appendLine(std::vector<RenderOverlayLine3D>& lines,
                 const glm::vec3&                  from,
                 const glm::vec3&                  to,
@@ -33,48 +47,31 @@ void appendLine(std::vector<RenderOverlayLine3D>& lines,
 
 } // namespace
 
-Rect2D makeBottomRightViewInset(const glm::vec2& hostExtent, float widthFraction, float marginFraction)
-{
-    if (hostExtent.x <= 1.0f || hostExtent.y <= 1.0f) {
-        return {};
-    }
-
-    const float safeWidthFraction  = std::clamp(widthFraction, 0.05f, 0.5f);
-    const float safeMarginFraction = std::clamp(marginFraction, 0.0f, 0.2f);
-    const float margin             = std::max(hostExtent.x, hostExtent.y) * safeMarginFraction;
-    float       width              = hostExtent.x * safeWidthFraction;
-    float       height             = width * (hostExtent.y / hostExtent.x);
-    if (height + margin * 2.0f > hostExtent.y) {
-        height = std::max(1.0f, hostExtent.y - margin * 2.0f);
-        width  = height * (hostExtent.x / hostExtent.y);
-    }
-    width  = std::max(1.0f, std::min(width, hostExtent.x - margin));
-    height = std::max(1.0f, std::min(height, hostExtent.y - margin));
-
-    return Rect2D{
-        .pos    = {hostExtent.x - margin - width, hostExtent.y - margin - height},
-        .extent = {width, height},
-    };
-}
-
 void appendCameraFrustumOverlayLines(std::vector<RenderOverlayLine3D>& lines,
                                      const glm::mat4&                  view,
                                      const glm::mat4&                  projection,
-                                     const glm::vec4&                  color)
+                                     const glm::vec4&                  color,
+                                     float                             visualDepth)
 {
     const glm::mat4 inverseViewProjection = glm::inverse(projection * view);
-    // perspectiveRH_ZO: clip Z is 0 at near, 1 at far.
-    const glm::vec3 n00 = unprojectClip(inverseViewProjection, {-1.0f, -1.0f, 0.0f});
-    const glm::vec3 n10 = unprojectClip(inverseViewProjection, {1.0f, -1.0f, 0.0f});
-    const glm::vec3 n11 = unprojectClip(inverseViewProjection, {1.0f, 1.0f, 0.0f});
-    const glm::vec3 n01 = unprojectClip(inverseViewProjection, {-1.0f, 1.0f, 0.0f});
-    const glm::vec3 f00 = unprojectClip(inverseViewProjection, {-1.0f, -1.0f, 1.0f});
-    const glm::vec3 f10 = unprojectClip(inverseViewProjection, {1.0f, -1.0f, 1.0f});
-    const glm::vec3 f11 = unprojectClip(inverseViewProjection, {1.0f, 1.0f, 1.0f});
-    const glm::vec3 f01 = unprojectClip(inverseViewProjection, {-1.0f, 1.0f, 1.0f});
+    const glm::vec3 clipNear00 = unprojectClip(inverseViewProjection, {-1.0f, -1.0f, 0.0f});
+    const glm::vec3 clipNear10 = unprojectClip(inverseViewProjection, {1.0f, -1.0f, 0.0f});
+    const glm::vec3 clipNear11 = unprojectClip(inverseViewProjection, {1.0f, 1.0f, 0.0f});
+    const glm::vec3 clipNear01 = unprojectClip(inverseViewProjection, {-1.0f, 1.0f, 0.0f});
 
     const glm::mat4 inverseView = glm::inverse(view);
     const glm::vec3 eye         = glm::vec3(inverseView[3]);
+    const float     farLen      = std::max(visualDepth, 0.05f);
+    const float     nearLen     = farLen * 0.2f;
+
+    const glm::vec3 n00 = pointAlongFovRay(eye, clipNear00, nearLen);
+    const glm::vec3 n10 = pointAlongFovRay(eye, clipNear10, nearLen);
+    const glm::vec3 n11 = pointAlongFovRay(eye, clipNear11, nearLen);
+    const glm::vec3 n01 = pointAlongFovRay(eye, clipNear01, nearLen);
+    const glm::vec3 f00 = pointAlongFovRay(eye, clipNear00, farLen);
+    const glm::vec3 f10 = pointAlongFovRay(eye, clipNear10, farLen);
+    const glm::vec3 f11 = pointAlongFovRay(eye, clipNear11, farLen);
+    const glm::vec3 f01 = pointAlongFovRay(eye, clipNear01, farLen);
 
     appendLine(lines, n00, n10, color);
     appendLine(lines, n10, n11, color);

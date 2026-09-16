@@ -39,6 +39,7 @@
 #include "Core/Math/Math.h"
 #include "ECS/Component.h"
 #include "Render3D/Common/CameraFrustumOverlay.h"
+#include "Render3D/Common/ViewCompose.h"
 
 #include <algorithm>
 #include <format>
@@ -121,30 +122,34 @@ SceneRenderRequest makeSceneCameraRequest(SceneId                               
                                           const glm::mat4&                         projection,
                                           const glm::vec3&                         cameraPos,
                                           const Rect2D&                            viewportRect,
-                                          std::function<std::shared_ptr<const SceneFrameSnapshot>()> buildSnapshot)
+                                          std::function<std::shared_ptr<const SceneFrameSnapshot>()> buildSnapshot,
+                                          SceneViewId                              composeOntoViewId = 0,
+                                          const Rect2D&                            composeRect = {})
 {
     return SceneRenderRequest{
-        .sceneId         = sceneId,
-        .sceneRevision   = 0,
-        .viewId          = viewId,
-        .familyId        = 1,
-        .view            = view,
-        .projection      = projection,
-        .viewProjection  = makeCameraViewProjection(projection, view),
-        .cameraPos       = cameraPos,
-        .viewportRect    = viewportRect,
-        .buildSnapshot   = std::move(buildSnapshot),
+        .sceneId           = sceneId,
+        .sceneRevision     = 0,
+        .viewId            = viewId,
+        .familyId          = 1,
+        .view              = view,
+        .projection        = projection,
+        .viewProjection    = makeCameraViewProjection(projection, view),
+        .cameraPos         = cameraPos,
+        .viewportRect      = viewportRect,
+        .composeOntoViewId = composeOntoViewId,
+        .composeRect       = composeRect,
+        .buildSnapshot     = std::move(buildSnapshot),
     };
 }
 
 constexpr glm::vec4 kCameraFrustumColor         = {0.35f, 0.85f, 1.0f, 1.0f};
 constexpr glm::vec4 kSelectedCameraFrustumColor = {1.0f, 0.85f, 0.2f, 1.0f};
+constexpr SceneViewId kHostOverlayPreviewViewId = 2;
 
-void appendSceneCameraFrustumLines(Scene&                              scene,
-                                   Entity*                             primaryCamera,
-                                   uint64_t                            previewEntityUUID,
-                                   const glm::vec2&                    previewExtent,
-                                   std::vector<RenderOverlayLine3D>&   lines)
+void appendSceneCameraFrustumLines(Scene&                            scene,
+                                   Entity*                           primaryCamera,
+                                   uint64_t                          previewEntityUUID,
+                                   std::vector<RenderOverlayLine3D>& lines)
 {
     auto& registry = scene.getRegistry();
     for (const auto& [handle, cameraComp] : registry.view<CameraComponent>().each()) {
@@ -157,9 +162,10 @@ void appendSceneCameraFrustumLines(Scene&                              scene,
         const glm::vec4 color = (previewEntityUUID != 0 && uuid == previewEntityUUID)
                                     ? kSelectedCameraFrustumColor
                                     : kCameraFrustumColor;
-        const glm::mat4 view = cameraComp.getFreeView();
-        const glm::mat4 projection = cameraProjectionForOutput(cameraComp, previewExtent);
-        appendCameraFrustumOverlayLines(lines, view, projection, color);
+        appendCameraFrustumOverlayLines(lines,
+                                        cameraComp.getFreeView(),
+                                        cameraComp.getProjection(),
+                                        color);
     }
 }
 
@@ -532,7 +538,6 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
 
     SceneRenderPlan sceneRenderPlan;
     std::vector<RenderOverlayLine3D> cameraFrustumLines;
-    Rect2D previewDestRect{};
     if (renderRuntime->isWorldSceneRenderEnabled() && scene) {
         auto buildSnapshot = [scene, terrainProcessor = renderRuntime->getTerrainProcessor()]
         {
@@ -562,30 +567,30 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
         if (previewCamera && previewCamera == runtimeLookCamera) {
             previewCamera = nullptr;
         }
-        previewDestRect = makeBottomRightViewInset(frameState.viewportRect.extent);
-        if (previewCamera && previewDestRect.extent.x > 0.0f && previewDestRect.extent.y > 0.0f) {
+        const Rect2D previewComposeRect = previewCamera
+                                              ? makeViewDisplayInsetRect(frameState.viewportRect.extent)
+                                              : Rect2D{};
+        if (previewCamera && previewComposeRect.extent.x > 0.0f && previewComposeRect.extent.y > 0.0f) {
             auto* cameraComp = previewCamera->getComponent<CameraComponent>();
             auto* transform  = previewCamera->getComponent<TransformComponent>();
             const Rect2D previewOutput{
                 .pos    = {0.0f, 0.0f},
-                .extent = previewDestRect.extent,
+                .extent = previewComposeRect.extent,
             };
             sceneScheduler.submit(makeSceneCameraRequest(scene->getInstanceId(),
-                                                         kCameraPreviewViewId,
+                                                         kHostOverlayPreviewViewId,
                                                          cameraComp->getFreeView(),
                                                          cameraProjectionForOutput(*cameraComp, previewOutput.extent),
                                                          transform->getWorldPosition(),
                                                          previewOutput,
-                                                         buildSnapshot));
-        }
-        else {
-            previewDestRect = {};
+                                                         buildSnapshot,
+                                                         kPrimarySceneViewId,
+                                                         previewComposeRect));
         }
 
         appendSceneCameraFrustumLines(*scene,
                                       runtimeLookCamera,
                                       previewCamera ? entityUUID(previewCamera) : 0,
-                                      previewDestRect.extent,
                                       cameraFrustumLines);
     }
     sceneRenderPlan = sceneScheduler.seal();
@@ -696,14 +701,6 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
                 if (commandBuffer) {
                     app.recordModuleViewportCompose(*commandBuffer, dt);
                 } },
-            .insets = (previewDestRect.extent.x > 0.0f && previewDestRect.extent.y > 0.0f)
-                          ? std::vector<ViewDisplayInset>{
-                                ViewDisplayInset{
-                                    .viewId   = kCameraPreviewViewId,
-                                    .destRect = previewDestRect,
-                                },
-                            }
-                          : std::vector<ViewDisplayInset>{},
         },
         .displayCompose = {
             .extensions = {

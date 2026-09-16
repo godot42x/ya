@@ -880,6 +880,10 @@ void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, 
 
     vpW = static_cast<uint32_t>(frame.camera.viewportRect.extent.x);
     vpH = static_cast<uint32_t>(frame.camera.viewportRect.extent.y);
+    if (frame.view.viewportExtent.width > 0 && frame.view.viewportExtent.height > 0) {
+        vpW = frame.view.viewportExtent.width;
+        vpH = frame.view.viewportExtent.height;
+    }
 
     _lastPointLightCount = frame.camera.frameData->numPointLights;
     _lastDrawCount       = static_cast<uint32_t>(frame.camera.frameData->totalDrawCount());
@@ -1139,10 +1143,12 @@ void DeferredRenderPipeline::refreshViewportStageState()
 
 void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
-    const float frameBufferScale = std::max(frame.camera.viewportFrameBufferScale, 1.0f);
-    const Extent2D desiredExtent  = Extent2D::fromVec2(frame.camera.viewportRect.extent / frameBufferScale);
-    if (desiredExtent.width > 0 && desiredExtent.height > 0 && desiredExtent != _viewportRTSpec.extent) {
-        requestViewportResize(desiredExtent);
+    if (sceneViewOwnsHostViewport(frame.view.task)) {
+        const float frameBufferScale = std::max(frame.camera.viewportFrameBufferScale, 1.0f);
+        const Extent2D desiredExtent  = Extent2D::fromVec2(frame.camera.viewportRect.extent / frameBufferScale);
+        if (desiredExtent.width > 0 && desiredExtent.height > 0 && desiredExtent != _viewportRTSpec.extent) {
+            requestViewportResize(desiredExtent);
+        }
     }
 
     if (_ssaoStage) {
@@ -1266,6 +1272,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     };
     RenderGraph graph;
     DeferredFrameGraphResources graphResources{};
+    RenderTargetCreateInfo viewViewportSpec = _viewportRTSpec;
+    RenderTargetCreateInfo viewGBufferSpec  = _gBufferRTSpec;
+    const Extent2D viewExtent{vpW, vpH};
+    if (viewExtent.width > 0 && viewExtent.height > 0) {
+        viewViewportSpec.extent = viewExtent;
+        viewGBufferSpec.extent  = viewExtent;
+    }
     _frameGraphOrchestrator.build(
         DeferredFrameGraphOrchestrator::BuildDependencies{
             .shadowStage      = _shadowStage.get(),
@@ -1282,13 +1295,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .stageCtx                 = &stageCtx,
             .frameBinding             = viewBinding,
             .frame                    = &frame,
-            .gBufferRTSpec            = &_gBufferRTSpec,
-            .viewportRTSpec           = &_viewportRTSpec,
+            .gBufferRTSpec            = &viewGBufferSpec,
+            .viewportRTSpec           = &viewViewportSpec,
             .overlayInputs            = &_currentOverlayFrameInputs,
             .environmentLighting      = &_currentEnvironmentLightingTextures,
             .environmentLightingDS    = _currentEnvironmentLightingDescriptorSet,
             .postContext              = &postContext,
-            .viewportExtent           = _viewportRTSpec.extent,
+            .viewportExtent           = viewViewportSpec.extent,
             .bUseSSAO                 = bUseSSAO,
             .bReverseViewportY        = _bReverseViewportY,
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),

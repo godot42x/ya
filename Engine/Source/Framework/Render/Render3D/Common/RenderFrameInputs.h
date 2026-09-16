@@ -60,6 +60,11 @@ struct SceneRenderPlanInput
 
     [[nodiscard]] const SceneViewportTask* primaryTask() const
     {
+        if (plan) {
+            if (const SceneViewportTask* root = plan->displayRootTask()) {
+                return root;
+            }
+        }
         return views.empty() ? nullptr : views.front().task;
     }
 };
@@ -117,11 +122,24 @@ struct CameraFrameInput
         camera.projection     = task.projection;
         camera.viewProjection = task.viewProjection;
         camera.cameraPos      = task.cameraPos;
-        camera.viewportRect   = task.viewportRect;
-        if (task.output.hasExtent()) {
-            camera.viewportRect.extent = {
-                static_cast<float>(task.output.extent.width),
-                static_cast<float>(task.output.extent.height),
+        const glm::vec2 outputExtent = task.output.hasExtent()
+                                           ? glm::vec2{
+                                                 static_cast<float>(task.output.extent.width),
+                                                 static_cast<float>(task.output.extent.height),
+                                             }
+                                           : task.viewportRect.extent;
+        if (task.ownsHostViewport()) {
+            camera.viewportRect = task.viewportRect;
+            if (outputExtent.x > 0.0f && outputExtent.y > 0.0f) {
+                camera.viewportRect.extent = outputExtent;
+            }
+        }
+        else {
+            // Overlay Views record into their own RT. Compose dest lives on
+            // the task, not in the camera rect that drives host resize.
+            camera.viewportRect = Rect2D{
+                .pos    = {0.0f, 0.0f},
+                .extent = outputExtent,
             };
         }
     }
@@ -136,6 +154,21 @@ struct ViewDisplayInset
     SceneViewId viewId = 0;
     Rect2D      destRect{};
 };
+
+[[nodiscard]] inline std::vector<ViewDisplayInset> viewDisplayInsetsFromPlan(const SceneRenderPlan& plan)
+{
+    std::vector<ViewDisplayInset> insets;
+    for (const auto& task : plan.viewportTasks) {
+        if (task.ownsHostViewport() || task.composeRect.extent.x <= 0.0f || task.composeRect.extent.y <= 0.0f) {
+            continue;
+        }
+        insets.push_back(ViewDisplayInset{
+            .viewId   = task.viewId,
+            .destRect = task.composeRect,
+        });
+    }
+    return insets;
+}
 
 /// Overlay / gizmos onto this camera's offscreen RT (after graphics + UI).
 /// Not display compose; must not recreate GPU resources. Insets are extra

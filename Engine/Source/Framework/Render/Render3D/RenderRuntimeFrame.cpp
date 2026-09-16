@@ -145,20 +145,21 @@ void RenderRuntime::renderWorldFrame(const FrameInput& input, ICommandBuffer* cm
     auto overlaySnapshot = buildViewportOverlaySnapshot(input.camera.overlay);
 
     if (!input.sceneRender.views.empty()) {
-        const uint64_t primaryViewId =
-            input.sceneRender.primaryTask() ? input.sceneRender.primaryTask()->viewId : 0;
+        const SceneViewportTask* displayRoot = input.sceneRender.primaryTask();
+        const uint64_t displayRootViewId = displayRoot ? displayRoot->viewId : 0;
         for (size_t index = 0; index < input.sceneRender.views.size(); ++index) {
             const SceneViewRecording& recording = input.sceneRender.views[index];
             const CameraFrameInput viewCamera = cameraForViewRecording(input.camera, recording);
+            const bool bDisplayRoot = recording.task && recording.task->viewId == displayRootViewId;
             beginViewportPassAndTickPipeline(
                 viewCamera,
                 recording,
                 cmdBuf,
-                index == 0 ? overlaySnapshot : nullptr);
+                bDisplayRoot ? overlaySnapshot : nullptr);
             publishRecordedViewOutput(viewCamera, recording.task);
         }
-        if (primaryViewId != 0) {
-            _publishedOutputViewId = primaryViewId;
+        if (displayRootViewId != 0) {
+            _publishedOutputViewId = displayRootViewId;
             _publishedOutputFlight = input.camera.flightIndex;
         }
         return;
