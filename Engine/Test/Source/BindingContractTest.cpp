@@ -1089,6 +1089,8 @@ TEST(BindingContractTest, SharedSelectionModelDrivesTwoTreeViews)
     tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(40.0f, 32.0f)),
               EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(40.0f, 32.0f)),
+              EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(model->primary(), "a");
     EXPECT_EQ(model->selected(), (std::vector<std::string>{"a"}));
     EXPECT_EQ(left->getSelection()->value(), "a");

@@ -148,6 +148,8 @@ void EditorSurface::shutdown()
 
 void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
 {
+    // Called from EditorModule::onPresentation (default window) or extra-window
+    // host tick. This is chrome orchestration, not a second product loop.
     if (!_layer || !context.app) {
         return;
     }
@@ -164,12 +166,12 @@ void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
 
     applyWindowMetrics(context.metrics);
     _tree->tick(dt);
-    publishTitleClientHits();
     syncShellDialogs();
     pushViewportDisplay();
     UIFrameBuildContext snapshotCtx;
     snapshotCtx.textureResolver = &resolveGameUITexture;
     _snapshot = _tree->buildSnapshot(snapshotCtx);
+    publishTitleClientHits();
     publishViewportRect();
     syncViewportHostState(context);
 }
@@ -673,6 +675,8 @@ void EditorSurface::publishTitleClientHits()
                 rect.extent.y,
             });
         }
+        YA_CORE_ASSERT(rect.extent.x <= 0.0f || rect.extent.y <= 0.0f || !hits.empty(),
+                       "EditorSurface: page tab bar has a layout rect but no title Client hit was published");
     }
     updateWindowChromeTitleClientHits(*native, hits);
 }

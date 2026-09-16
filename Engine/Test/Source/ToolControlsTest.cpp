@@ -1307,6 +1307,8 @@ TEST(ToolControlsTest, DragFloatEditReusesTextSelection)
     second.setTimestampMs(1100);
     EXPECT_EQ(tree.dispatchEvent(first, at), EWidgetRouteResult::HandledExclusive);
     EXPECT_FALSE(tree.wantsTextInput());
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), at),
+              EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(tree.dispatchEvent(second, at), EWidgetRouteResult::HandledExclusive);
     EXPECT_TRUE(tree.wantsTextInput());
 
@@ -1353,6 +1355,8 @@ TEST(ToolControlsTest, ColorEditSwatchOpensSvHuePicker)
     ASSERT_NE(swatch, nullptr);
     const glm::vec2 swatchAt = layoutCenter(*swatch);
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(swatchAt.x, swatchAt.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(swatchAt.x, swatchAt.y)),
               EWidgetRouteResult::HandledExclusive);
     tree.layout();
     EXPECT_TRUE(edit->isPickerOpen());
@@ -2296,13 +2300,17 @@ TEST(ToolControlsTest, SplitPaneOffDividerPressReleasesCaptureForMenuBar)
                                  pointAt(dividerCenter.x, dividerCenter.y)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(tree.getPointerCapture(), split.get());
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left),
+                                 pointAt(dividerCenter.x, dividerCenter.y)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
 
     ASSERT_FALSE(bar->getChildren().empty());
     const Rect2D fileRect = bar->getChildren().front()->getLayoutRect();
     const glm::vec2 fileCenter = fileRect.pos + fileRect.extent * 0.5f;
-    (void)tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left),
-                             pointAt(fileCenter.x, fileCenter.y));
-    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left),
+                                 pointAt(fileCenter.x, fileCenter.y)),
+              EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(activateCount, 1);
 }
 

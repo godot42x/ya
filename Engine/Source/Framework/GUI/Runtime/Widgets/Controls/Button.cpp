@@ -96,13 +96,13 @@ bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ct
         }
         return true;
     case EEvent::MouseButtonReleased:
+        if (WidgetTree* tree = getTree()) {
+            tree->releasePointerCapture(this);
+        }
         if (!_bPressed) {
             return false; // stray release: no press session to complete
         }
         _bPressed = false;
-        if (WidgetTree* tree = getTree()) {
-            tree->releasePointerCapture(this);
-        }
         // With pointer capture the release completes the click even when
         // the pointer left the widget (standard drag-release semantics).
         if (bPointInside || ctx.bViaCapture) {

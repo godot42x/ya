@@ -12,6 +12,7 @@
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "Core/Event.h"
+#include "Core/Log.h"
 
 #include <algorithm>
 #include <cmath>
@@ -243,7 +244,7 @@ struct FDockSpacePanelDragBehavior final : public UIBehavior
                 if (!bHandled) {
                     owner._context->tearOffPanel(panelId, logicalPoint, size);
                 }
-                owner.rebuildProjection();
+                owner.syncProjection(EDockProjectionSync::Structure);
                 owner._context->fireFloatingUpdated();
                 owner._context->notifyDockLayoutListeners();
             }
@@ -435,19 +436,39 @@ void UIDockSpace::setContext(std::shared_ptr<FDockContext> context)
         // Weak self: the context may fire dock-updated after this widget is
         // destroyed (it is kept alive by the floating host), so the callback
         // must never dereference a stale 'this'.
-        std::weak_ptr<UIDockSpace> weakSelf =
-            std::static_pointer_cast<UIDockSpace>(shared_from_this());
+        std::weak_ptr<UIDockSpace> weakSelf = std::static_pointer_cast<UIDockSpace>(shared_from_this());
         _context->setOnDockUpdated([weakSelf]()
         {
             if (auto self = weakSelf.lock()) {
                 if (self->getTree() && !self->_bRebuildingProjection) {
-                    self->rebuildProjection();
+                    self->syncProjection(EDockProjectionSync::Structure);
                 }
             }
         });
     }
-    if (getTree() && !getChildren().empty()) {
+    if (getTree()) {
+        syncProjection(EDockProjectionSync::Structure);
+    }
+}
+
+void UIDockSpace::syncProjection(EDockProjectionSync sync, DockNodeId stackId)
+{
+    // Single projection entry. rebuildProjection / rebuildStack are the
+    // Structure / Stack implementations; callers (drop, tear-off, addPanel,
+    // first layout) must not pick them directly.
+    switch (sync) {
+    case EDockProjectionSync::Structure: {
         rebuildProjection();
+        break;
+    }
+    case EDockProjectionSync::Stack: {
+        rebuildStack(stackId);
+        break;
+    }
+    case EDockProjectionSync::Chrome: {
+        syncTabBarVisibility();
+        break;
+    }
     }
 }
 
@@ -455,6 +476,20 @@ void UIDockSpace::rebuildProjection()
 {
     if (!getTree() || !_context || _bRebuildingProjection) {
         return;
+    }
+    if (UIElement* captured = getTree()->getPointerCapture()) {
+        bool bCaptureInDock = false;
+        for (UIElement* node = captured; node != nullptr; node = node->getParent()) {
+            if (node == this) {
+                bCaptureInDock = true;
+                break;
+            }
+        }
+        YA_CORE_ASSERT(!bCaptureInDock,
+                       "UIDockSpace '{}': Structure rematerialize while pointer capture is held "
+                       "by '{}'; press/release would straddle the rebuild and eat the next click",
+                       _name,
+                       captured->_name);
     }
     _bRebuildingProjection = true;
     clearPreview();
@@ -589,6 +624,64 @@ void UIDockSpace::graftPanelIntoContent(UIContainer& content, const UIElementRef
     showPanelInContent(content, panel, getTree());
 }
 
+void UIDockSpace::bindStackHandlers(FDockStackView& view, DockNodeId stackId)
+{
+    if (!view.well) {
+        return;
+    }
+    view.well->_onStripDoubleClick = [this]()
+    {
+        if (_context && _context->onTabBarDoubleClick) {
+            _context->onTabBarDoubleClick();
+        }
+    };
+    view.well->_onTabDragBegin = [this, stackId](int index, const std::string& label)
+    {
+        const FDockNode* currentLeaf = _context->dockModel().findNode(stackId);
+        if (!currentLeaf || index < 0 || index >= static_cast<int>(currentLeaf->panelIds.size())) {
+            return;
+        }
+        const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
+        if (auto* behavior = findBehavior<FDockSpacePanelDragBehavior>(*this)) {
+            behavior->beginPanelDrag(*this, panelId, label);
+        }
+    };
+    view.well->_onTabReordered = [this, stackId](int from, int to)
+    {
+        const FDockNode* leaf = _context ? _context->dockModel().findNode(stackId) : nullptr;
+        if (!leaf || from < 0 || to < 0 ||
+            from >= static_cast<int>(leaf->panelIds.size()) ||
+            to >= static_cast<int>(leaf->panelIds.size())) {
+            return;
+        }
+        const DockPanelId panelId = leaf->panelIds[static_cast<size_t>(from)];
+        const size_t insert = static_cast<size_t>(to > from ? to + 1 : to);
+        if (_context->dockModel().movePanel(panelId, stackId, insert, false)) {
+            _context->notifyDockLayoutListeners();
+        }
+    };
+    view.well->_onTabSelected = [this, stackId](int index)
+    {
+        const FDockNode* currentLeaf = _context->dockModel().findNode(stackId);
+        FDockStackView* currentView = stackViewFor(stackId);
+        if (!currentLeaf || !currentView || !currentView->content || index < 0 ||
+            index >= static_cast<int>(currentLeaf->panelIds.size())) {
+            return;
+        }
+        const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
+        _context->dockModel().selectPanel(panelId);
+        _context->rememberFocusedLeaf(stackId);
+        if (const FDockContext::FPanel* fp = _context->findPanel(panelId)) {
+            graftPanelIntoContent(*currentView->content, fp->widget);
+        }
+        _context->notifyDockLayoutListeners();
+    };
+    view.well->_onTabContextMenu = [this, stackId](int, const glm::vec2& logicalPoint)
+    {
+        openStackTabBarMenu(stackId, logicalPoint);
+    };
+}
+
 void UIDockSpace::rebuildStack(DockNodeId leafId)
 {
     if (!_context) {
@@ -640,26 +733,6 @@ void UIDockSpace::rebuildStack(DockNodeId leafId)
         selectedIndex = 0;
     }
 
-    view->well->_onTabSelected = [this, leafId](int index)
-    {
-        const FDockNode* currentLeaf = _context->dockModel().findNode(leafId);
-        FDockStackView* currentView = stackViewFor(leafId);
-        if (!currentLeaf || !currentView || !currentView->content || index < 0 || index >= static_cast<int>(currentLeaf->panelIds.size())) {
-            return;
-        }
-        const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
-        _context->dockModel().selectPanel(panelId);
-        _context->rememberFocusedLeaf(leafId);
-        if (const FDockContext::FPanel* fp = _context->findPanel(panelId)) {
-            graftPanelIntoContent(*currentView->content, fp->widget);
-        }
-        _context->notifyDockLayoutListeners();
-    };
-    view->well->_onTabContextMenu = [this, leafId](int, const glm::vec2& logicalPoint)
-    {
-        openStackTabBarMenu(leafId, logicalPoint);
-    };
-
     if (selectedIndex >= 0) {
         view->well->syncSelectedTab(selectedIndex);
         DockPanelId selectedPanel = leaf->panelIds[static_cast<size_t>(selectedIndex)];
@@ -705,37 +778,6 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     bar->setClipChildren(true);
     bar->setPadding({kDockHideTabBarSize, 1.0f});
     bar->setSpacing(1.0f);
-    bar->_onStripDoubleClick = [this]()
-    {
-        if (_context && _context->onTabBarDoubleClick) {
-            _context->onTabBarDoubleClick();
-        }
-    };
-    bar->_onTabDragBegin = [this, leafId = node.id](int index, const std::string& label)
-    {
-        const FDockNode* currentLeaf = _context->dockModel().findNode(leafId);
-        if (!currentLeaf || index < 0 || index >= static_cast<int>(currentLeaf->panelIds.size())) {
-            return;
-        }
-        const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
-        if (auto* behavior = findBehavior<FDockSpacePanelDragBehavior>(*this)) {
-            behavior->beginPanelDrag(*this, panelId, label);
-        }
-    };
-    bar->_onTabReordered = [this, leafId = node.id](int from, int to)
-    {
-        const FDockNode* leaf = _context ? _context->dockModel().findNode(leafId) : nullptr;
-        if (!leaf || from < 0 || to < 0 ||
-            from >= static_cast<int>(leaf->panelIds.size()) ||
-            to >= static_cast<int>(leaf->panelIds.size())) {
-            return;
-        }
-        const DockPanelId panelId = leaf->panelIds[static_cast<size_t>(from)];
-        const size_t insert = static_cast<size_t>(to > from ? to + 1 : to);
-        if (_context->dockModel().movePanel(panelId, leafId, insert, false)) {
-            _context->notifyDockLayoutListeners();
-        }
-    };
     chrome->addDetachedChild(bar);
 
     auto body = std::make_shared<UIBorder>(std::format("DockBody{}", node.id));
@@ -782,33 +824,48 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
             .preferredSize = {kDockHideTabBarSize, kDockHideTabBarSize},
         });
     });
-
-    _stackViews[node.id] = {node.id, stack.get(), bar.get(), content.get(), hideBar.get()};
-    rebuildStack(node.id);
+    _stackViews[node.id] = {
+        .stackId        = node.id,
+        .root           = stack.get(),
+        .well           = bar.get(),
+        .content        = content.get(),
+        .hideAffordance = hideBar.get(),
+    };
+    bindStackHandlers(_stackViews[node.id], node.id);
+    syncProjection(EDockProjectionSync::Stack, node.id);
     return stack;
+}
+
+void UIDockSpace::applySplitMinsFromModel()
+{
+    if (!_context) {
+        return;
+    }
+    for (auto& [id, split] : _splitViews) {
+        if (!split) {
+            continue;
+        }
+        const FDockNode* node = _context->dockModel().findNode(id);
+        if (!node || node->kind != EDockNodeKind::Split) {
+            continue;
+        }
+        // Mins are host policy and can change without rematerialize
+        // (spawn-complete). Ratio is the user's drag; writing it here
+        // fights clampRatio, jumps the divider, and can pin capture.
+        split->setMinFirstExtent(node->minExtent[0]);
+        split->setMinSecondExtent(node->minExtent[1]);
+    }
 }
 
 void UIDockSpace::applyAssignedLayout(const Rect2D& rect)
 {
+    // First layout of an empty Area materializes the *current* model, so
+    // attach → mutate model → layout still works. After that, Structure
+    // syncs come from syncProjection (drop / tear-off / fireDockUpdated).
     if (getChildren().empty() && getTree()) {
-        rebuildProjection();
+        syncProjection(EDockProjectionSync::Structure);
     }
-    if (_context) {
-        for (auto& [id, split] : _splitViews) {
-            if (!split) {
-                continue;
-            }
-            const FDockNode* node = _context->dockModel().findNode(id);
-            if (!node || node->kind != EDockNodeKind::Split) {
-                continue;
-            }
-            // Mins are host policy and can change without rematerialize
-            // (spawn-complete). Ratio is the user's drag; writing it here
-            // fights clampRatio, jumps the divider, and can pin capture.
-            split->setMinFirstExtent(node->minExtent[0]);
-            split->setMinSecondExtent(node->minExtent[1]);
-        }
-    }
+    applySplitMinsFromModel();
     UIElement::applyAssignedLayout(rect);
 }
 
@@ -846,10 +903,6 @@ void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> w
     const DockPanelId panelId = _context->addPanel(name, std::move(widget));
     if (panelId == kInvalidDockPanelId) {
         YA_CORE_WARN("UIDockSpace '{}': rejected duplicate or invalid panel '{}'", _name, name);
-        return;
-    }
-    if (getTree() && !getChildren().empty()) {
-        rebuildStack(_context->dockModel().getRootNode()->id);
     }
 }
 
@@ -1104,7 +1157,7 @@ void UIDockSpace::applyDrop(const UIDragDropOperation& operation, const glm::vec
         activateDraggedPanel(panelId);
     }
     else if (commit == EDockDropCommit::Applied) {
-        rebuildProjection();
+        syncProjection(EDockProjectionSync::Structure);
         _context->notifyDockLayoutListeners();
     }
 }

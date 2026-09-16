@@ -7,11 +7,12 @@
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/DragDropOperation.h"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 namespace ya
 {
@@ -46,12 +47,30 @@ struct YA_GUI_API FDockPanelDragDropOp : public UIDragDropOperation
     }
 };
 
+/// How far to resync the Area projection from `FDockContext`. Callers must
+/// go through `UIDockSpace::syncProjection`; they do not pick rebuild helpers.
+enum class EDockProjectionSync : uint8_t
+{
+    /// Rematerialize nested splits + stacks from the current dock tree.
+    Structure,
+    /// Restock one stack's tabs and grafted content (`stackId` required).
+    /// No-op when that stack has no view yet (first Structure has not run).
+    Stack,
+    /// Live chrome only: inner tab-well visibility. Split mins are applied
+    /// during layout so host policy can change without rematerializing.
+    Chrome,
+};
+
 /// In-window projection of `FDockContext`'s docked tree.
 /// Nested UISplitPanes + tab groups fill this widget. The context owns the
 /// model, panel registry, floating records, and policy; this widget does not.
 /// Torn-off windows are projected by `UIDockFloatingHost`, not here.
 /// There is no fixed zone layout — the initial model is a single root stack,
 /// and dragging a tab splits into cardinal sub-stacks or merges into another stack.
+///
+/// Projection driver: `syncProjection` is the only entry. Structure is also
+/// the first layout of an empty Area (so attach-then-mutate-model-then-layout
+/// still materializes the current tree). Tab fill is Stack; hide-well is Chrome.
 struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSpace, FDockSpaceStyle>
 {
     YA_GUI_AUTHORED_STYLE_IO(FDockSpaceStyle)
@@ -63,6 +82,9 @@ struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSp
     /// Bind the shared session this dock reads its model / registry / policy from.
     void setContext(std::shared_ptr<FDockContext> context);
     [[nodiscard]] FDockContext* context() const { return _context.get(); }
+
+    /// Single projection entry (see EDockProjectionSync).
+    void syncProjection(EDockProjectionSync sync, DockNodeId stackId = kInvalidDockNodeId);
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIDockSpace>; }
 
@@ -163,6 +185,8 @@ private:
 
     void rebuildProjection();
     void rebuildStack(DockNodeId stackId);
+    void bindStackHandlers(FDockStackView& view, DockNodeId stackId);
+    void applySplitMinsFromModel();
     void releaseMountedPanels();
     void applyStackTabBarVisibility(DockNodeId stackId);
     void openStackTabBarMenu(DockNodeId stackId, const glm::vec2& pos);

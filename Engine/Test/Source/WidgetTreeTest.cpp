@@ -687,7 +687,8 @@ TEST(WidgetTreeTest, RouteStateTracksPointerCaptureAndFocusPaths)
     EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::HitTest);
     EXPECT_EQ(tree.getLastRouteTrace().target, "Button");
 
-    tree.setPointerCapture(button.get());
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(130.0f, 100.0f)),
+              EWidgetRouteResult::HandledExclusive);
     tree.dispatchEvent(MouseMoveEvent(700.0f, 500.0f), pointAt(700.0f, 500.0f));
     EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::PointerCapture);
     EXPECT_EQ(tree.getLastRouteTrace().target, "Button");
@@ -1308,9 +1309,10 @@ TEST(WidgetTreeTest, DetachClearsFocusCaptureAndHover)
     FCanvasSlotArgs buttonSlot; buttonSlot.offset = {100.0f, 100.0f}; buttonSlot.fixedSize = {80.0f, 32.0f};
     tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), button, buttonSlot);
     tree.setFocus(button.get());
-    tree.setPointerCapture(button.get());
     tree.layout();
-    tree.dispatchEvent(MouseMoveEvent(120.0f, 110.0f), pointAt(120.0f, 110.0f));
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getPointerCapture(), button.get());
     ASSERT_EQ(tree.getHovered(), button.get());
 
     tree.detach(*button);
@@ -1640,17 +1642,17 @@ TEST(WidgetTreeTest, PointerCaptureOverridesHitWalk)
     captured->_onClick = [&] { ++capturedClicks; };
     other->_onClick    = [&] { ++otherClicks; };
 
-    tree.setPointerCapture(captured.get());
-    // Press outside both rects: still routed to the captured widget.
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(10.0f, 10.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getPointerCapture(), captured.get());
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(10.0f, 10.0f), pointAt(10.0f, 10.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(10.0f, 10.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(capturedClicks, 1);
     EXPECT_EQ(otherClicks, 0);
-
-    tree.releasePointerCapture(captured.get());
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
+
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(10.0f, 10.0f)),
               EWidgetRouteResult::NotHandled);
 }

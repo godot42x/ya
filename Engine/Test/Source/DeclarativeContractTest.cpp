@@ -787,7 +787,10 @@ TEST(DeclarativeContractTest, DetachClearsFocusAndPointerCapture)
     tree.layout();
 
     tree.setFocus(button.get());
-    tree.setPointerCapture(button.get());
+    WidgetEventContext pressCtx;
+    pressCtx.logicalPoint = button->_layoutRect.pos + button->_layoutRect.extent * 0.5f;
+    ASSERT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pressCtx),
+              EWidgetRouteResult::HandledExclusive);
     ASSERT_EQ(tree.getFocused(), button.get());
     ASSERT_EQ(tree.getPointerCapture(), button.get());
 

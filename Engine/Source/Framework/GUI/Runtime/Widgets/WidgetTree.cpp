@@ -2,6 +2,8 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/DragDropOperation.h"
 
+#include "Core/Event.h"
+#include "Core/KeyCode.h"
 #include "Core/Log.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
@@ -247,6 +249,9 @@ EWidgetRouteResult WidgetTree::dispatchCapturedPointerEvent(const Event& event,
         return EWidgetRouteResult::NotHandled;
     }
     if (!_captured->isAttached()) {
+        YA_CORE_ASSERT(false,
+                       "WidgetTree: dispatching to detached pointer capture '{}'",
+                       _captured->_name);
         _captured = nullptr;
         return EWidgetRouteResult::NotHandled;
     }
@@ -776,6 +781,7 @@ void WidgetTree::invalidateLayout(EWidgetLayoutInvalidation scope)
 
 void WidgetTree::tick(float deltaSeconds)
 {
+    assertPointerSessionConsistent();
     for (const auto& layer : _layers) {
         tickSubtree(layer.get(), deltaSeconds);
     }
@@ -822,6 +828,7 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 {
     using clock_t = std::chrono::steady_clock;
 
+    assertPointerSessionConsistent();
     _perfStats = GuiPerfStats{};
 
     // Font atlas / glyph identity lives on FontManager so the render layer
@@ -1049,6 +1056,12 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
         return EWidgetRouteResult::NotHandled;
     }
 
+    beginPointerDispatch(event);
+    const auto finishPointer = [this, &event](EWidgetRouteResult result) {
+        endPointerDispatch(event);
+        return result;
+    };
+
     // An active drag session owns pointer moves / releases / presses: the
     // ghost follows the pointer, the release delivers the drop, any new
     // press cancels the drag.
@@ -1072,12 +1085,12 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
             break;
         }
         setRouteTrace(EWidgetRoutePolicy::DragSession, dragRouteTarget);
-        return EWidgetRouteResult::HandledExclusive;
+        return finishPointer(EWidgetRouteResult::HandledExclusive);
     }
 
     if (const EWidgetRouteResult captureResult = dispatchCapturedPointerEvent(event, ctx, eventType);
         captureResult != EWidgetRouteResult::NotHandled) {
-        return captureResult;
+        return finishPointer(captureResult);
     }
 
     // A hover-transparent shield (non-modal popup) is invisible to the user:
@@ -1106,7 +1119,7 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
             if (operation) {
                 beginDrag(candidate.get(), std::move(operation));
                 setRouteTrace(EWidgetRoutePolicy::DragSession, candidate.get());
-                return EWidgetRouteResult::HandledExclusive;
+                return finishPointer(EWidgetRouteResult::HandledExclusive);
             }
         }
     }
@@ -1132,7 +1145,7 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
             hitTestAt(_root.get(), ctx.logicalPoint, /*bForHover=*/true),
             ctx.logicalPoint));
     }
-    return result;
+    return finishPointer(result);
 }
 
 // === Focus / capture / hover ===
@@ -1163,6 +1176,12 @@ void WidgetTree::setPointerCapture(UIElement* widget)
         YA_CORE_WARN("WidgetTree::setPointerCapture: widget '{}' is not attached to this tree",
                      widget->_name);
         return;
+    }
+    if (widget) {
+        YA_CORE_ASSERT(_pointerButtonsDown != 0,
+                       "WidgetTree: setPointerCapture('{}') with no mouse button down; "
+                       "injected capture without a press steals the next click",
+                       widget->_name);
     }
     _captured = widget;
 }
@@ -1424,6 +1443,9 @@ void WidgetTree::pruneTransientState()
         _focusPath.clear();
     }
     if (_captured && !_captured->isAttached()) {
+        YA_CORE_ASSERT(false,
+                       "WidgetTree: pointer capture held by detached '{}'; leftover capture steals the next click",
+                       _captured->_name);
         _captured = nullptr;
     }
     if (_hovered && !_hovered->isAttached()) {
@@ -1443,6 +1465,66 @@ void WidgetTree::pruneTransientState()
     };
     prunePath(_pointerPath);
     prunePath(_focusPath);
+}
+
+namespace
+{
+
+[[nodiscard]] uint8_t pointerButtonBit(EMouse::T button)
+{
+    return static_cast<uint8_t>(1u << static_cast<uint8_t>(button));
+}
+
+[[nodiscard]] EMouse::T pointerButtonOf(const Event& event)
+{
+    const EEvent::T type = event.getEventType();
+    if (type == EEvent::MouseButtonPressed) {
+        return static_cast<const MouseButtonPressedEvent&>(event).GetMouseButton();
+    }
+    if (type == EEvent::MouseButtonReleased) {
+        return static_cast<const MouseButtonReleasedEvent&>(event).GetMouseButton();
+    }
+    return EMouse::Left;
+}
+
+} // namespace
+
+void WidgetTree::beginPointerDispatch(const Event& event)
+{
+    if (event.getEventType() != EEvent::MouseButtonPressed) {
+        return;
+    }
+    const EMouse::T button = pointerButtonOf(event);
+    const uint8_t   bit    = pointerButtonBit(button);
+    YA_CORE_ASSERT((_pointerButtonsDown & bit) == 0,
+                   "WidgetTree: MouseButtonPressed ({}) while that button is still down "
+                   "(capture={}); leftover pointer session steals the first click",
+                   EMouse::toString(button),
+                   _captured ? _captured->_name.c_str() : "<none>");
+    _pointerButtonsDown = static_cast<uint8_t>(_pointerButtonsDown | bit);
+}
+
+void WidgetTree::endPointerDispatch(const Event& event)
+{
+    if (event.getEventType() == EEvent::MouseButtonReleased) {
+        const uint8_t bit = pointerButtonBit(pointerButtonOf(event));
+        _pointerButtonsDown = static_cast<uint8_t>(_pointerButtonsDown & ~bit);
+    }
+    assertPointerSessionConsistent();
+}
+
+void WidgetTree::assertPointerSessionConsistent() const
+{
+    if (!_captured) {
+        return;
+    }
+    YA_CORE_ASSERT(_captured->isAttached(),
+                   "WidgetTree: pointer capture held by detached '{}'",
+                   _captured->_name);
+    YA_CORE_ASSERT(_pointerButtonsDown != 0,
+                   "WidgetTree: pointer capture held by '{}' with no mouse button down; "
+                   "the next click would be eaten",
+                   _captured->_name);
 }
 
 void WidgetTree::beginRouteTrace(EWidgetRoutePolicy policy, UIElement* target)

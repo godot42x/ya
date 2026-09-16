@@ -656,6 +656,43 @@ TEST(DockNodeTest, NewPanelDocksOnLastFocusedLeaf)
     EXPECT_EQ(context.dockModel().findLeafForPanel(statsId)->id, inspectorLeaf);
 }
 
+TEST(DockNodeTest, AddPanelAfterProjectionSyncsFocusedStackWithoutRematerialize)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto context = std::make_shared<FDockContext>();
+    auto dock = std::make_shared<UIDockSpace>("Dock");
+    dock->setContext(context);
+    FCanvasSlotArgs fill;
+    fill.anchorMin = {0.0f, 0.0f};
+    fill.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, fill).valid());
+
+    const DockPanelId sceneId = context->addPanel("scene", "Scene", std::make_shared<UICanvasPanel>("Scene"));
+    const DockPanelId inspectorId =
+        context->addPanel("inspector", "Inspector", std::make_shared<UICanvasPanel>("Inspector"));
+    ASSERT_NE(sceneId, kInvalidDockPanelId);
+    ASSERT_NE(inspectorId, kInvalidDockPanelId);
+    (void)tree.buildSnapshot(UIFrameBuildContext{});
+
+    ASSERT_TRUE(context->dockModel().splitLeaf(context->dockModel().getRootNode()->id,
+                                               EDockCardinalSide::East,
+                                               inspectorId));
+    context->fireDockUpdated();
+    ASSERT_TRUE(context->activatePanel("inspector"));
+
+    const DockPanelId statsId = context->addPanel("stats", "Stats", std::make_shared<UICanvasPanel>("Stats"));
+    ASSERT_NE(statsId, kInvalidDockPanelId);
+
+    const FDockNode* inspectorLeaf = context->dockModel().findLeafForPanel(inspectorId);
+    ASSERT_NE(inspectorLeaf, nullptr);
+    auto* inspectorBar = dynamic_cast<UIDockTabWell*>(
+        findNamedDescendant(*dock, std::format("DockTabBar{}", inspectorLeaf->id)));
+    ASSERT_NE(inspectorBar, nullptr);
+    EXPECT_EQ(inspectorBar->getChildren().size(), 2u);
+    EXPECT_NE(findNamedDescendant(*dock, "Tab_Stats"), nullptr);
+    EXPECT_EQ(context->dockModel().findLeafForPanel(statsId)->id, inspectorLeaf->id);
+}
+
 TEST(DockNodeTest, TearOffCopiesHostAndPanelIdentityIntoPlacement)
 {
     FDockContext context;

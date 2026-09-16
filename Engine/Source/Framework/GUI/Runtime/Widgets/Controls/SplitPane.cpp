@@ -108,6 +108,16 @@ void UISplitPane::applySplitRatio(float ratio)
 
 bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
+    if (WidgetTree* tree = getTree()) {
+        const bool bHasCapture = tree->getPointerCapture() == this;
+        YA_CORE_ASSERT(bHasCapture == static_cast<bool>(_bDraggingDivider),
+                       "UISplitPane '{}': pointer capture and divider-drag session diverged "
+                       "(capture={} dragging={}); leftover capture steals the next click",
+                       _name,
+                       bHasCapture,
+                       static_cast<bool>(_bDraggingDivider));
+    }
+
     const EEvent::T eventType = event.getEventType();
     const bool bOnDivider = pointInRect(ctx.logicalPoint, _splitLayout.getDividerRect());
 

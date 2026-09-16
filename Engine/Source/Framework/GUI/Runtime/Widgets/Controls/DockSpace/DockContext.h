@@ -241,10 +241,11 @@ struct YA_GUI_API FDockContext
     /// InProcessOverlay + tree-local (never screen). Unknown panel keys fail.
     bool importLayoutJson(const nlohmann::json& layout);
 
-    /// The DockSpace re-projects its tree when the dock *structure* changes
-    /// (drop / tear-off / import). Split-ratio, tab selection, and hide-tab-bar
-    /// must not go through this: they update live chrome and call
-    /// notifyDockLayoutListeners() so persist runs without rematerializing.
+    /// The DockSpace re-projects via `syncProjection(Structure)` when the dock
+    /// *structure* changes (drop / tear-off / import / close that prunes a
+    /// stack). `addPanel` / tab selection use `syncProjection(Stack)` so they
+    /// do not rematerialize. Split-ratio and hide-tab-bar update live chrome
+    /// and call notifyDockLayoutListeners() so persist runs without rebuilding.
     void setOnDockUpdated(std::function<void()> cb) { _onDockUpdated = std::move(cb); }
     void appendOnDockUpdated(std::function<void()> cb) { _onDockUpdatedListeners.push_back(std::move(cb)); }
     /// The floating host re-syncs its window set when floating changes.

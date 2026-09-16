@@ -1,5 +1,6 @@
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 
+#include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -120,6 +121,9 @@ DockPanelId FDockContext::addPanel(const std::string& stableKey, const std::stri
     _tabs.panels.emplace(id, FPanel{id, title, std::move(widget)});
     if (const FDockNode* leaf = _layout.findLeafForPanel(id)) {
         _lastFocusedStackId = leaf->id;
+        if (_dockSpace) {
+            _dockSpace->syncProjection(EDockProjectionSync::Stack, leaf->id);
+        }
     }
     return id;
 }
@@ -219,7 +223,10 @@ bool FDockContext::activatePanel(std::string_view stableKey)
         if (!_layout.selectPanel(panel->id)) {
             return false;
         }
-        fireDockUpdated();
+        if (_dockSpace) {
+            _dockSpace->syncProjection(EDockProjectionSync::Stack, leaf->id);
+        }
+        notifyDockLayoutListeners();
         return true;
     }
     const FFloatingWindow* floating = findFloatingByPanel(panel->id);

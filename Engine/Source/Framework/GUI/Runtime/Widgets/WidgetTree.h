@@ -442,6 +442,13 @@ struct YA_GUI_API WidgetTree final
     /// widget. Complements detach-time clearing so no code path can leave the
     /// tree holding a dangling transient reference (UE FocusPath semantics).
     void pruneTransientState();
+    /// Press/release pairing for pointer capture. A leftover capture with the
+    /// mouse already up (or a second press of the same button) is the
+    /// "click twice to activate" class of bugs — assert instead of eating
+    /// the first click.
+    void beginPointerDispatch(const Event& event);
+    void endPointerDispatch(const Event& event);
+    void assertPointerSessionConsistent() const;
     void updateHovered(UIElement* widget);
     void beginRouteTrace(EWidgetRoutePolicy policy, UIElement* target);
     void appendRouteTraceStep(const UIElement& widget,
@@ -535,6 +542,9 @@ struct YA_GUI_API WidgetTree final
     uint64_t           _lastTextureEpoch = 0;
     UIElement*    _focused      = nullptr;
     UIElement*    _captured     = nullptr;
+    /// Bits indexed by `EMouse::T`. Capture may exist only while a bit is set;
+    /// a press whose bit is already set is a leftover session.
+    uint8_t       _pointerButtonsDown = 0;
     UIElement*    _hovered      = nullptr;
     /// Tooltip host widget currently mounted on the Tooltip layer (null
     /// when no tooltip is shown). Owned by the tree via attachment.

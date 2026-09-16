@@ -114,6 +114,12 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   persistent pointer state、pointer path、focus path 和 route trace；`WidgetTreeDump`
   输出 `pointer`、`focusPath`、`lastRoute`（policy/path/phase/handled/result）。route callback
   可 detach 自身，executor 会持有 path 并重查 membership。
+  **Pointer session 不变量（违反即 `YA_CORE_ASSERT` 崩溃，不要静默吞第一次点击）：**
+  capture 只在对应鼠标键仍按下时存在；同一键第二次 `MouseButtonPressed` 而第一次
+  的 release 丢失、或 capture 握在已 detach 的控件上、或 `UISplitPane` 的 capture 与
+  `_bDraggingDivider` 分叉、或 `UIDockSpace` 在 capture 仍落在 dock 子树里时
+  `syncProjection(Structure)`，都是“要点两下才有反应”的根因。禁止用“divider 外
+  再按一次放 capture”当修复。标题 Client 洞必须在 `buildSnapshot`（layout）之后发布。
   drag&drop 的 source-local 状态（`beginDrag/updateDrag/endDrag/cancelDrag`、payload、ghost、observer）由树管理，唯一入口是
   `beginDrag(source, UIDragDropOperationRef)`。跨窗的 source/hover window 身份由 host `GUIDragRouter` 唯一持有。基类带通用 `payload` slot；领域拖拽
   继承加字段（`FDockPanelDragDropOp` / `FTreeReorderDragDropOp`）。目标用
