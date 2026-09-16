@@ -84,11 +84,17 @@ void UISpinBox::paintSelf(UIFrameBuilder& builder)
     const FSpinBoxStyle& style = resolvedStyle();
     const FBrush& fieldFill = (_bHovered && _hoveredZone < 0) ? style.hoveredFill : style.backgroundFill;
     builder.addBrush(_layoutRect, fieldFill);
-    builder.addRectOutline(insetRect(_layoutRect, 1.0f), style.borderColor, 1.0f);
     const float zoneWidth = 26.0f;
-    const Rect2D minusRect{.pos = _layoutRect.pos, .extent = {zoneWidth, _layoutRect.extent.y}};
-    const Rect2D plusRect{.pos = {_layoutRect.pos.x + _layoutRect.extent.x - zoneWidth, _layoutRect.pos.y},
+    // The glyph is centred on the pointer zone (which is what hitTestStepZone
+    // tests); the painted button is that zone pulled INSIDE the field's rounded
+    // edge, so the field still reads as one rounded control instead of squaring
+    // off at the corners.
+    const Rect2D minusZone{.pos = _layoutRect.pos, .extent = {zoneWidth, _layoutRect.extent.y}};
+    const Rect2D plusZone{.pos = {_layoutRect.pos.x + _layoutRect.extent.x - zoneWidth, _layoutRect.pos.y},
                           .extent = {zoneWidth, _layoutRect.extent.y}};
+    const float inset = 2.0f;
+    const Rect2D minusRect = insetRect(minusZone, inset);
+    const Rect2D plusRect  = insetRect(plusZone, inset);
     builder.addBrush(minusRect, _hoveredZone == 0 ? style.buttonHoveredFill : style.buttonFill);
     builder.addBrush(plusRect, _hoveredZone == 1 ? style.buttonHoveredFill : style.buttonFill);
 
@@ -96,8 +102,8 @@ void UISpinBox::paintSelf(UIFrameBuilder& builder)
     if (!font) {
         return;
     }
-    builder.addText(minusRect, "-", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
-    builder.addText(plusRect, "+", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    builder.addText(minusZone, "-", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    builder.addText(plusZone, "+", style.textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     const std::string shown = _bEditing ? _editBuffer : std::format("{:.2f}", _value);
     if (_bEditing) {
         textEditPaint(builder,

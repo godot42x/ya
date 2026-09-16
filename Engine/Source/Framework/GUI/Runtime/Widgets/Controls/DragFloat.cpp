@@ -111,11 +111,9 @@ void UIDragFloat::paintSelf(UIFrameBuilder& builder)
                        : _bDragging ? style.draggingFill
                        : _bHovered ? style.hoveredFill
                                     : style.backgroundFill;
+    // The state brush owns fill + edge (FBrush::borderColor), so a hover or a
+    // drag lifts the outline with the fill instead of a parallel outline field.
     builder.addBrush(_layoutRect, fill);
-    const glm::vec4 outline = _bError ? style.errorBorderColor
-                            : (_bHovered || _bDragging) ? style.hoveredBorderColor
-                                                        : style.borderColor;
-    builder.addRectOutline(insetRect(_layoutRect, 1.0f), outline, 1.0f);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (!font) {
         return;

@@ -32,15 +32,15 @@ void UIBorder::setCornerRadius(float value)
 void UIBorder::paintSelf(UIFrameBuilder& builder)
 {
     const FPanelStyle& style = resolvedStyle();
-    if (_cornerRadius > 0.0f && style.fillColor.isSolid()) {
-        builder.addRoundedRect(_layoutRect, style.fillColor.tintColor, _cornerRadius);
+    // The panel surface (fill + radius + edge) comes from the style brush;
+    // `_cornerRadius` is the per-instance override the designer/document path
+    // uses on top of it (instanceEditable), so one card can be rounder without
+    // the theme growing a key per radius.
+    FBrush fill = style.fillColor;
+    if (_cornerRadius > 0.0f) {
+        fill.cornerRadius = _cornerRadius;
     }
-    else {
-        builder.addBrush(_layoutRect, style.fillColor);
-    }
-    if (style.outlineColor.a > 0.0f && style.outlineThickness > 0.0f) {
-        builder.addRectOutline(_layoutRect, style.outlineColor, style.outlineThickness);
-    }
+    builder.addBrush(_layoutRect, fill);
 }
 
 const FPanelStyle& UIBorder::resolvedStyle(ReactiveBase::EDirtyLevel level, bool bTrackDependencies) const

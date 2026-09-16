@@ -157,13 +157,12 @@ struct FTextStyle
     bool operator==(const FTextStyle&) const = default;
 };
 
-/// Panel / border chrome: fill brush (solid or themed nine-patch), outline.
-/// Used by `UIBorder`. Content photos are `UIImage`, not this style.
+/// Panel / card chrome: one fill brush, which owns the panel's corner radius
+/// and edge (`fillColor.cornerRadius` / `.borderColor`). Used by `UIBorder`.
+/// Content photos are `UIImage`, not this style.
 struct FPanelStyle
 {
-    FBrush    fillColor        = FBrush::solid({0.2f, 0.2f, 0.2f, 0.8f});
-    glm::vec4 outlineColor     = {0.0f, 0.0f, 0.0f, 0.0f};
-    float     outlineThickness = 1.0f;
+    FBrush fillColor = FBrush::solid({0.2f, 0.2f, 0.2f, 0.8f});
 
     bool operator==(const FPanelStyle&) const = default;
 };
@@ -261,9 +260,11 @@ struct FDockSpaceStyle
 /// UIDockFloatingWindow and its resize handles.
 struct FFloatingWindowStyle
 {
-    FBrush    bodyFill       = FBrush::solid({0.145f, 0.150f, 0.180f, 0.985f});
+    /// Body fill, which owns the window radius + edge.
+    FBrush    bodyFill       = FBrush::solid({0.145f, 0.150f, 0.180f, 0.985f},
+                                             0.0f,
+                                             {0.27f, 0.30f, 0.38f, 1.0f});
     FBrush    innerFill      = FBrush::solid({0.08f, 0.09f, 0.12f, 0.55f});
-    glm::vec4 borderColor    = {0.27f, 0.30f, 0.38f, 1.0f};
     glm::vec4 edgeAffordance = {0.40f, 0.47f, 0.62f, 0.42f};
     glm::vec4 titleTextColor = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec2 minSize        = {220.0f, 160.0f};
@@ -293,17 +294,17 @@ struct FTreeViewStyle
 struct FExpanderStyle
 {
     glm::vec4 textColor        = {0.90f, 0.92f, 0.95f, 1.0f};
+    /// Framed look: the header bar carries its own radius/edge, so
+    /// `expander.header` styles a framed header by filling this brush.
     FBrush    headerFill       = FBrush::solid({0.0f, 0.0f, 0.0f, 0.0f});
     FBrush    hoveredFill      = FBrush::solid({0.24f, 0.26f, 0.31f, 1.0f});
     FBrush    pressedFill      = FBrush::solid({0.20f, 0.22f, 0.27f, 1.0f});
     FBrush    focusedFill      = FBrush::solid({0.26f, 0.52f, 0.90f, 0.35f});
     glm::vec4 arrowColor       = {0.60f, 0.65f, 0.70f, 1.0f};
     FBrush    arrowHoveredFill = FBrush::solid({0.32f, 0.36f, 0.44f, 1.0f});
-    glm::vec4 outlineColor     = {0.0f, 0.0f, 0.0f, 0.0f};
     /// Unframed nested groups: left rail + header hairline. Framed headers
     /// leave this transparent.
     glm::vec4 guideColor       = {0.40f, 0.44f, 0.52f, 0.55f};
-    float     outlineThickness = 1.0f;
     uint32_t  fontSize         = 13;
 
     bool operator==(const FExpanderStyle&) const = default;
@@ -312,12 +313,25 @@ struct FExpanderStyle
 /// Preset type scale. Theme keys consume these (`text` / `text.header` /
 /// `text.small` / `text.caption` / `textfield` / `textfield.compact`).
 /// Do not scatter `setFontSize(12)` for chrome roles — pick a key.
+///
+/// The steps are tuned for a PROPORTIONAL UI face at 1:1 device scale (see the
+/// host's default `fontPath`):
+///   kTitle   20 - page title, the single largest piece of chrome; 28 was a
+///                 display size that dominated every screen it appeared on
+///   kHeader  16 - section header, one visible step above body text (weight
+///                 cannot carry the hierarchy: the atlas has one face, so SIZE
+///                 is the only axis available)
+///   kBody    14 - body copy, field text, and the default for un-styled text;
+///                 16 made a 22px control read as cramped around its own label
+///   kSmall   13 - dense rows (tree/menu/table/tool fields); the smallest size
+///                 that still renders proportional lowercase at full clarity
+///   kCaption 11 - uppercase eyebrows and micro captions, tracking-only roles
 namespace gui_type
 {
-inline constexpr uint32_t kTitle   = 28;
-inline constexpr uint32_t kHeader  = 14;
-inline constexpr uint32_t kBody    = 16;
-inline constexpr uint32_t kSmall   = 12;
+inline constexpr uint32_t kTitle   = 20;
+inline constexpr uint32_t kHeader  = 16;
+inline constexpr uint32_t kBody    = 14;
+inline constexpr uint32_t kSmall   = 13;
 inline constexpr uint32_t kCaption = 11;
 }
 
@@ -327,14 +341,20 @@ inline constexpr uint32_t kCaption = 11;
 /// padded inner rect (caret-follow scroll, no font autosize, no Fill grow).
 struct FTextFieldStyle
 {
-    FBrush    backgroundFill = FBrush::solid({0.08f, 0.09f, 0.12f, 1.0f});
-    FBrush    hoveredFill    = FBrush::solid({0.22f, 0.25f, 0.32f, 1.0f});
-    FBrush    errorFill        = FBrush::solid({0.72f, 0.24f, 0.24f, 0.45f});
+    // Each state brush carries the field's radius and edge, so the border can
+    // differ per state (hover/focus lift the edge) without a second field.
+    FBrush    backgroundFill = FBrush::solid({0.08f, 0.09f, 0.12f, 1.0f},
+                                             0.0f,
+                                             {0.48f, 0.52f, 0.60f, 1.0f});
+    FBrush    hoveredFill    = FBrush::solid({0.22f, 0.25f, 0.32f, 1.0f},
+                                             0.0f,
+                                             {0.48f, 0.52f, 0.60f, 1.0f});
+    FBrush    errorFill        = FBrush::solid({0.72f, 0.24f, 0.24f, 0.45f},
+                                               0.0f,
+                                               {0.90f, 0.35f, 0.35f, 1.0f});
     glm::vec4 textColor      = {1.0f, 1.0f, 1.0f, 1.0f};
     glm::vec4 caretColor     = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 selectionColor = {0.24f, 0.46f, 0.82f, 0.45f};
-    glm::vec4 borderColor    = {0.48f, 0.52f, 0.60f, 1.0f};
-    glm::vec4 errorBorderColor = {0.90f, 0.35f, 0.35f, 1.0f};
     glm::vec2 padding        = {6.0f, 2.0f};
     uint32_t  fontSize       = 16;
 
@@ -349,7 +369,10 @@ struct FMenuStyle
     FBrush    itemHoveredFill = FBrush::solid({0.22f, 0.42f, 0.78f, 1.0f});
     glm::vec4 textColor       = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4 iconColor       = {0.78f, 0.82f, 0.88f, 1.0f};
+    /// Checkable menu row: `checkmarkColor` fills the box when checked, this
+    /// edge outlines it in both states (a hollow box reads as "toggleable").
     glm::vec4 checkmarkColor  = {0.30f, 0.76f, 0.46f, 1.0f};
+    glm::vec4 checkBoxBorderColor = {0.44f, 0.48f, 0.56f, 1.0f};
     glm::vec4 shortcutColor   = {0.60f, 0.65f, 0.72f, 1.0f};
     glm::vec4 disabledTextColor = {0.46f, 0.50f, 0.58f, 1.0f};
     glm::vec4 disabledIconColor = {0.42f, 0.46f, 0.54f, 1.0f};
@@ -380,14 +403,19 @@ struct FSelectableRowStyle
 /// 1px outline. Vec rows still space fields with the parent row's spacing.
 struct FDragFloatStyle
 {
-    FBrush    backgroundFill = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f});
-    FBrush    hoveredFill    = FBrush::solid({0.28f, 0.32f, 0.40f, 1.0f});
-    FBrush    draggingFill   = FBrush::solid({0.20f, 0.32f, 0.48f, 1.0f});
-    FBrush    errorFill      = FBrush::solid({0.72f, 0.24f, 0.24f, 0.45f});
+    FBrush    backgroundFill = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f},
+                                             0.0f,
+                                             {0.48f, 0.52f, 0.60f, 1.0f});
+    FBrush    hoveredFill    = FBrush::solid({0.28f, 0.32f, 0.40f, 1.0f},
+                                             0.0f,
+                                             {0.72f, 0.78f, 0.90f, 1.0f});
+    FBrush    draggingFill   = FBrush::solid({0.20f, 0.32f, 0.48f, 1.0f},
+                                             0.0f,
+                                             {0.72f, 0.78f, 0.90f, 1.0f});
+    FBrush    errorFill      = FBrush::solid({0.72f, 0.24f, 0.24f, 0.45f},
+                                             0.0f,
+                                             {0.90f, 0.35f, 0.35f, 1.0f});
     glm::vec4 textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 borderColor    = {0.48f, 0.52f, 0.60f, 1.0f};
-    glm::vec4 hoveredBorderColor = {0.72f, 0.78f, 0.90f, 1.0f};
-    glm::vec4 errorBorderColor = {0.90f, 0.35f, 0.35f, 1.0f};
     glm::vec2 padding       = {6.0f, 2.0f};
     uint32_t  fontSize       = 13;
 
@@ -445,12 +473,15 @@ struct FTableGridStyle
 /// Spin box: field + step buttons.
 struct FSpinBoxStyle
 {
-    FBrush    backgroundFill    = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f});
-    FBrush    hoveredFill       = FBrush::solid({0.22f, 0.25f, 0.32f, 1.0f});
+    FBrush    backgroundFill    = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f},
+                                                0.0f,
+                                                {0.48f, 0.52f, 0.60f, 1.0f});
+    FBrush    hoveredFill       = FBrush::solid({0.22f, 0.25f, 0.32f, 1.0f},
+                                                0.0f,
+                                                {0.72f, 0.78f, 0.90f, 1.0f});
     FBrush    buttonFill        = FBrush::solid({0.22f, 0.24f, 0.30f, 1.0f});
     FBrush    buttonHoveredFill = FBrush::solid({0.42f, 0.48f, 0.62f, 1.0f});
     glm::vec4 textColor         = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 borderColor       = {0.48f, 0.52f, 0.60f, 1.0f};
     uint32_t  fontSize          = 13;
 
     bool operator==(const FSpinBoxStyle&) const = default;
@@ -460,7 +491,9 @@ struct FSpinBoxStyle
 struct FRadioButtonStyle
 {
     FBrush    hoveredFill = FBrush::solid({0.24f, 0.26f, 0.31f, 1.0f});
-    glm::vec4 dotColor    = {0.88f, 0.90f, 0.94f, 1.0f};
+    /// Outer circle: fill + edge, so an unchecked radio reads as a hollow ring.
+    FBrush    dotColor    = FBrush::solid({0.88f, 0.90f, 0.94f, 1.0f});
+    /// Inner core when checked (the control rounds it to a circle itself).
     glm::vec4 dotFillColor = {0.24f, 0.46f, 0.82f, 1.0f};
     glm::vec4 textColor   = {0.90f, 0.92f, 0.95f, 1.0f};
     uint32_t  fontSize    = 13;
@@ -528,6 +561,7 @@ struct FDragDropStyle
 #define YA_GUI_STYLE_CATALOG(X)                      \
     X(FPanelStyle, Panel, "panel")                   \
     X(FPanelStyle, PanelWindow, "panel.window")      \
+    X(FPanelStyle, PanelTitlebar, "panel.titlebar")  \
     X(FPanelStyle, PanelCanvas, "panel.canvas")      \
     X(FPanelStyle, PanelSidebar, "panel.sidebar")    \
     X(FPanelStyle, PanelSidebarCard, "panel.sidebar.card") \

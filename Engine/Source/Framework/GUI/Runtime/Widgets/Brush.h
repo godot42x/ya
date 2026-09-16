@@ -35,6 +35,27 @@ struct FBrush
     glm::vec4   tintColor = {1.0f, 1.0f, 1.0f, 1.0f}; // color modulation; solid = no resource + tint
     std::string resource;                             // asset path; empty = solid fill
     glm::vec4   margin = {0.0f, 0.0f, 0.0f, 0.0f};    // nine-patch insets (left/top/right/bottom, texture px)
+    /// Corner radius for a SOLID fill (logical px, 0 = square). Part of the
+    /// brush because roundness is a paint property of the surface, not of a
+    /// widget class: every style that owns an FBrush (button, field, tab, menu,
+    /// panel, badge, table row) gets the modern look by setting a token, and
+    /// nothing in the control has to learn a second geometry concept.
+    ///
+    /// Shape geometry that is DERIVED from the control's own extent (a pill
+    /// track, a radio dot) is computed by the control instead, the way UISwitch
+    /// rounds its knob to `extent.y * 0.5f`: the theme cannot know the size.
+    float cornerRadius = 0.0f;
+
+    /// Hairline ring drawn just inside the fill's edge (transparent alpha or a
+    /// zero `borderThickness` = no ring). Keeping the ring on the brush is what
+    /// makes one theme token theme a whole control: the control picks ONE brush
+    /// per state and the fill+border of that state follow together, so a hover
+    /// that lifts the fill lifts its edge too. Like `cornerRadius`, this is
+    /// honored for solid fills only - an image / nine-patch / border brush takes
+    /// its shape from the resource, so a themed frame around one would be a
+    /// second, conflicting truth about that shape.
+    glm::vec4 borderColor     = {0.0f, 0.0f, 0.0f, 0.0f};
+    float     borderThickness = 1.0f;
 
     // Compiler-generated memberwise equality: adding/removing a field can
     // never silently desync == (which would make Reactive::set() short-circuit
@@ -44,11 +65,28 @@ struct FBrush
     /// True when this brush is a solid fill (no image resource).
     [[nodiscard]] bool isSolid() const { return resource.empty(); }
 
-    /// Convenience factory: a solid brush tinted with `color` (no resource).
-    [[nodiscard]] static FBrush solid(const glm::vec4& color)
+    /// Convenience factory: a solid surface tinted with `color` (no resource).
+    /// `cornerRadius` + `borderColor` round and frame it; see the members for
+    /// why they live here.
+    [[nodiscard]] static FBrush solid(const glm::vec4& color,
+                                      float            cornerRadius    = 0.0f,
+                                      const glm::vec4& borderColor     = {0.0f, 0.0f, 0.0f, 0.0f},
+                                      float            borderThickness = 1.0f)
     {
         FBrush b;
-        b.tintColor = color;
+        b.tintColor       = color;
+        b.cornerRadius    = cornerRadius;
+        b.borderColor     = borderColor;
+        b.borderThickness = borderThickness;
+        return b;
+    }
+
+    /// This surface without its ring. Used where a state restates a base fill
+    /// but must not restate its frame.
+    [[nodiscard]] FBrush withoutBorder() const
+    {
+        FBrush b  = *this;
+        b.borderColor = {0.0f, 0.0f, 0.0f, 0.0f};
         return b;
     }
 

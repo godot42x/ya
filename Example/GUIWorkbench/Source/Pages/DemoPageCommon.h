@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Declarative/Build.h"
+#include "GUI/Widgets/DefaultChromeTheme.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/DragDrop.h"
@@ -20,9 +21,13 @@ struct WidgetTree;
 namespace guiworkbench
 {
 
-constexpr glm::vec4 kPanelColor  = {0.11f, 0.12f, 0.15f, 1.0f};
-constexpr glm::vec4 kHeaderColor = {0.55f, 0.60f, 0.68f, 1.0f};
-constexpr glm::vec4 kTextColor   = {0.88f, 0.90f, 0.94f, 1.0f};
+// Demo-page palette aliases. These used to be literals restated here, which is
+// how the gallery drifted from the chrome when the theme moved (two copies of
+// "panel colour"). They now read the shared role palette, so a gallery caption
+// and the chrome it sits on can never disagree.
+constexpr glm::vec4 kPanelColor  = ya::gui_chrome::tokens::kPanelColor;
+constexpr glm::vec4 kHeaderColor = ya::gui_chrome::tokens::kHeaderColor;
+constexpr glm::vec4 kTextColor   = ya::gui_chrome::tokens::kTextColor;
 
 std::shared_ptr<ya::UIText> makeLabel(const std::string& text, float fontSize = 13.0f);
 std::shared_ptr<ya::UIText> makeBodyText(const std::string& text);

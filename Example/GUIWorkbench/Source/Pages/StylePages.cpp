@@ -63,10 +63,11 @@ void buildThemeDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState&
                                                      .setVAlign(ya::EWidgetAlignV::Center),
                                                  ya::ui::contentSlot().fill()),
                                       ya::ui::boxSlot().preferredSize({140.0f, 48.0f}))
-                               .child(ya::ui::border("ThemeOutlinedPanel")
-                                          .setStyleField("fillColor", ya::FBrush::solid({0.16f, 0.18f, 0.22f, 1.0f}))
-                                          .setStyleField("outlineColor", glm::vec4{0.50f, 0.56f, 0.70f, 1.0f})
-                                          .setStyleField("outlineThickness", 1.0f)
+                              .child(ya::ui::border("ThemeOutlinedPanel")
+                                          .setStyleField("fillColor",
+                                                         ya::FBrush::solid({0.16f, 0.18f, 0.22f, 1.0f},
+                                                                           6.0f,
+                                                                           glm::vec4{0.50f, 0.56f, 0.70f, 1.0f}))
                                           .child(header("ThemeOutlinedCaption", "outlined", 11)
                                                      .setHAlign(ya::EWidgetAlignH::Center)
                                                      .setVAlign(ya::EWidgetAlignV::Center),

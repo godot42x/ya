@@ -139,6 +139,40 @@ void attachPreferredSize(UIElement& parent, const UIElementRef& child, glm::vec2
     return rect.pos + rect.extent * 0.5f;
 }
 
+/// The sprite item that IS the ink+border colour of a surface: the border is no
+/// longer a separate outline item (see FBrush::borderColor), so a field paints
+/// its edge as the surface's own ring.
+[[nodiscard]] const UIFrameDrawItem* findSurfaceWithBorder(const UIFrameSnapshot& snapshot, const Rect2D& rect)
+{
+    for (const UIFrameDrawItem& item : snapshot.items) {
+        if (item.kind != UIFrameDrawItem::EKind::Sprite) {
+            continue;
+        }
+        if (std::abs(item.pos.x - rect.pos.x) < 0.01f && std::abs(item.pos.y - rect.pos.y) < 0.01f &&
+            std::abs(item.size.x - rect.extent.x) < 0.01f && std::abs(item.size.y - rect.extent.y) < 0.01f) {
+            return &item;
+        }
+    }
+    return nullptr;
+}
+
+/// The fill that sits inside `rect`'s border ring (the second half of a surface).
+[[nodiscard]] const UIFrameDrawItem* findInsetFill(const UIFrameSnapshot& snapshot, const Rect2D& rect)
+{
+    for (const UIFrameDrawItem& item : snapshot.items) {
+        if (item.kind != UIFrameDrawItem::EKind::Sprite) {
+            continue;
+        }
+        const bool bInside = item.pos.x > rect.pos.x && item.pos.y > rect.pos.y &&
+                             item.pos.x + item.size.x < rect.pos.x + rect.extent.x &&
+                             item.pos.y + item.size.y < rect.pos.y + rect.extent.y;
+        if (bInside) {
+            return &item;
+        }
+    }
+    return nullptr;
+}
+
 } // namespace
 
 // === Stack (UIContainer) ===
@@ -2194,17 +2228,16 @@ TEST(ToolControlsTest, DragFloatOutlineSitsInsideLayoutRect)
 
     const Rect2D rect = drag->getLayoutRect();
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
-    bool bFoundInsetTop = false;
-    for (const auto& draw : snap.items) {
-        if (draw.kind != UIFrameDrawItem::EKind::Line) {
-            continue;
-        }
-        const float y = draw.lineFrom.y;
-        if (std::abs(y - (rect.pos.y + 1.0f)) < 0.51f) {
-            bFoundInsetTop = true;
-        }
-    }
-    EXPECT_TRUE(bFoundInsetTop);
+    // The edge is part of the field surface (FBrush::borderColor) instead of a
+    // separate outline item, so the contract is: the frame covers the layout
+    // rect exactly, and the fill is inset inside it - nothing bleeds outside.
+    const UIFrameDrawItem* ring = findSurfaceWithBorder(snap, rect);
+    ASSERT_NE(ring, nullptr);
+    EXPECT_FLOAT_EQ(ring->pos.x, rect.pos.x);
+    EXPECT_FLOAT_EQ(ring->pos.y, rect.pos.y);
+    EXPECT_FLOAT_EQ(ring->size.x, rect.extent.x);
+    EXPECT_FLOAT_EQ(ring->size.y, rect.extent.y);
+    EXPECT_NE(findInsetFill(snap, rect), nullptr);
 }
 
 TEST(ToolControlsTest, TextFieldOutlineSitsInsideLayoutRect)
@@ -2219,17 +2252,14 @@ TEST(ToolControlsTest, TextFieldOutlineSitsInsideLayoutRect)
 
     const Rect2D rect = field->getLayoutRect();
     const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
-    bool bFoundInsetTop = false;
-    for (const auto& draw : snap.items) {
-        if (draw.kind != UIFrameDrawItem::EKind::Line) {
-            continue;
-        }
-        const float y = draw.lineFrom.y;
-        if (std::abs(y - (rect.pos.y + 1.0f)) < 0.51f) {
-            bFoundInsetTop = true;
-        }
-    }
-    EXPECT_TRUE(bFoundInsetTop);
+    // See DragFloatOutlineSitsInsideLayoutRect: fill + edge are ONE surface.
+    const UIFrameDrawItem* ring = findSurfaceWithBorder(snap, rect);
+    ASSERT_NE(ring, nullptr);
+    EXPECT_FLOAT_EQ(ring->pos.x, rect.pos.x);
+    EXPECT_FLOAT_EQ(ring->pos.y, rect.pos.y);
+    EXPECT_FLOAT_EQ(ring->size.x, rect.extent.x);
+    EXPECT_FLOAT_EQ(ring->size.y, rect.extent.y);
+    EXPECT_NE(findInsetFill(snap, rect), nullptr);
 }
 
 TEST(ToolControlsTest, SplitPaneOffDividerPressReleasesCaptureForMenuBar)

@@ -70,7 +70,15 @@ struct FGUIWindowHostConfig
     ERenderAPI::T            renderAPI = ERenderAPI::Vulkan;
     /// Runtime font: loaded once per entry under DEFAULT_RUNTIME_FONT_NAME
     /// (UIText resolves fonts by exact name+size). Empty to skip font loading.
-    std::string              fontPath = "Engine/Content/Fonts/JetBrainsMono-Medium.ttf";
+    ///
+    /// Inter (OFL, bundled) is the default because chrome typography needs a
+    /// PROPORTIONAL UI face: a monospace face makes every label, menu and field
+    /// read as terminal output, and its fixed advance wastes horizontal room in
+    /// dense tool panels. It is bundled rather than probed from the platform so
+    /// text metrics stay identical across macOS/Windows (the golden-image and
+    /// dump-digest checks compare runs, not machines). JetBrains Mono stays in
+    /// `Engine/Content/Fonts/` for code/console surfaces that want monospace.
+    std::string              fontPath = "Engine/Content/Fonts/Inter-Regular.ttf";
     /// Debug: dump the first UI snapshot as a BMP (CPU-side raster of the
     /// draw items, top-left origin). Empty to disable; dumpFrame selects the
     /// frame (0 = the first snapshot).

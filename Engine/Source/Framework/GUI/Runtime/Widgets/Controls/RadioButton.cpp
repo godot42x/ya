@@ -19,11 +19,17 @@ void UIRadioButton::paintSelf(UIFrameBuilder& builder)
         .pos    = {_layoutRect.pos.x + 4.0f, _layoutRect.pos.y + (_layoutRect.extent.y - dotSize) * 0.5f},
         .extent = {dotSize, dotSize},
     };
-    builder.addSprite(dotRect, style.dotColor, nullptr);
+    // The dot is a circle whose radius is derived from its own size, so the
+    // control computes it (a theme cannot know the widget's dot size); the fill
+    // and edge come from the style brush.
+    FBrush ring       = style.dotColor;
+    ring.cornerRadius = dotRect.extent.y * 0.5f;
+    builder.addBrush(dotRect, ring);
     if (_bChecked) {
         const float inset = 4.0f;
-        builder.addSprite(Rect2D{.pos = dotRect.pos + glm::vec2(inset), .extent = dotRect.extent - glm::vec2(inset * 2.0f)},
-                          style.dotFillColor, nullptr);
+        const Rect2D core{.pos = dotRect.pos + glm::vec2(inset),
+                          .extent = dotRect.extent - glm::vec2(inset * 2.0f)};
+        builder.addBrush(core, FBrush::solid(style.dotFillColor, core.extent.y * 0.5f));
     }
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);

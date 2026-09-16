@@ -23,9 +23,10 @@ std::shared_ptr<UIDialog> UIDialog::create(std::string title, std::shared_ptr<UI
     const float buttonH  = 26.0f;
     auto panel = std::make_shared<UIBorder>("DialogPanel");
     panel->setStyleKey("panel");
-    panel->setStyleField("outlineColor", glm::vec4{0.48f, 0.52f, 0.60f, 1.0f});
-    panel->setStyleField("outlineThickness", 1.0f);
-    panel->setStyleField("fillColor", FBrush::solid({0.14f, 0.15f, 0.19f, 1.0f}));
+    panel->setStyleField("fillColor",
+                         FBrush::solid({0.14f, 0.15f, 0.19f, 1.0f},
+                                       8.0f,
+                                       {0.48f, 0.52f, 0.60f, 1.0f}));
 
     auto stack = std::make_shared<UIContainer>("DialogStack");
     stack->setDirection(EWidgetBoxLayout::Vertical);

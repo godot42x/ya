@@ -56,6 +56,12 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
    - `FontManager::setActiveDpiScale(scale)` 设置激活 DPI；bitmap rasterSize = `round(fontSize * effectiveDpi)`，视图目标 = 逻辑 fontSize。
    - 当前 `GUIAppHost` 用 `presentExtent/logicalExtent` 比值设 DPI（非真机 DPR）；HiDPI 需改系统 API 取真机 DPR（架构改进项，非紧急）。
 
+7. **主字面必须打包进仓，不要探测系统字体**
+   - `FGUIWindowHostConfig::fontPath` 默认 `Engine/Content/Fonts/Inter-Regular.ttf`（Inter，OFL，随仓；许可在 `Engine/Content/Fonts/Inter-OFL.txt`）。
+   - 理由：**chrome 排版要比例字体**。等宽字面（曾用的 JetBrainsMono）让每个 label / menu / field 都像终端输出，并且固定前进宽度在密集工具面板里浪费横向空间。
+   - 打包而不是走系统路径，是为了让文本度量在 macOS / Windows 完全一致：golden 图像与 `dumpSnapshot` 摘要是**跨 run** 比对，系统字体探测会让它们跨机漂移。JetBrains Mono 仍在 `Engine/Content/Fonts/`，给需要等宽的 code / console 面用。
+   - 注册名 `DEFAULT_RUNTIME_FONT_NAME`（`RuntimeDefault`）**不要改**：大量测试用它注册合成字体。换字体 = 换 `fontPath`，不是换这个名字。
+
 ## 排查清单
 
 - GameEditor Window 工具 tab `font-atlases`（Fonts / Font Atlases）列出 `FontManager::collectFontAtlasDebugPages()` 的每一张 GPU page（primary + 每个 fallback bank）。Combo 标签是 `{face stem}  {size}px  {Bitmap|SDF}`（非 primary 才跟 `fallbackN`，多 page 才跟 `p i/N`）；路径 / 像素尺寸 / glyph 数在 detail。预览是 **1:1 texel、左上角、竖向滚动**，走 atlas 自身 sampler（Bitmap = ClampNearest）。不要用 Image `Contain`：会把 512 page letterbox 进矮窗口并非整倍缩小，Nearest 下看起来又小又糊。Bitmap/Color 按白+alpha 预览；SDF/MSDF 按不透明 R 通道预览。

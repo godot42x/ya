@@ -96,12 +96,18 @@ void UIMenuItem::paintSelf(UIFrameBuilder& builder)
                 },
                 .extent = {kBox, kBox},
             };
-            const glm::vec4 boxBorder = _bEnabled ? style.textColor : style.disabledTextColor;
+            const glm::vec4 boxBorder = _bEnabled ? style.checkBoxBorderColor : style.disabledTextColor;
+            // One rounded box: hollow when unchecked, accent-filled when
+            // checked, with the same edge in both states.
+            constexpr float kBoxRadius = 3.0f;
+            builder.addBrush(boxRect,
+                             FBrush::solid(_bChecked ? style.checkmarkColor
+                                                     : glm::vec4{0.0f, 0.0f, 0.0f, 0.0f},
+                                           kBoxRadius,
+                                           boxBorder));
             if (_bChecked) {
-                builder.addBrush(boxRect, FBrush::solid(style.checkmarkColor));
                 builder.addCheckMark(boxRect, {0.95f, 0.96f, 0.98f, 1.0f});
             }
-            builder.addRectOutline(boxRect, boxBorder, 1.0f);
             textRect.pos.x += _reservedCheckmarkExtent;
             textRect.extent.x = std::max(0.0f, textRect.extent.x - _reservedCheckmarkExtent);
         }

@@ -538,3 +538,36 @@ Phase 1 遗留的九宫格渲染落地。`sliceBrush` 把 dest 切成 Image(1) /
 
 - `xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test` — 222/222 PASSED（含 SliceBrushNinePatchEmitsNineCells / SliceBrushBorderOmitsCenter / SliceBrushScalesMarginsWhenDestIsSmaller / AddBrushNinePatchWithoutTextureStretches）
 - `xmake b GUIWorkbench` 通过
+
+## 2026-09-16 — surface 模型 + 角色调色板 + 比例字面
+
+用户反馈「默认控件对比度不足、设计感不够、不像现代 UI」。根因有三条，都属机制层而非口味：
+
+1. **描边与填充是两个字段**，控件自己 `addRectOutline` 画方框：圆角填充被方框套住，描边也跟不上 hover（fill 换一套、outline 换另一套）。
+2. **每个 style 在 dark/light 各写一遍**（`if (bDark)` 两大块），light 与 dark 必然漂移；gallery 又在 `DemoPageCommon.h` 复写了一份 palette 字面量，chrome 与页面能不一致。
+3. **主字面是等宽字体**（JetBrainsMono）+ body 16px，chrome 像终端输出。
+
+### 本轮完成
+
+- **`FBrush` 成为完整的 surface 值**：新增 `borderColor` / `borderThickness`，与已有的 `cornerRadius` 一起表达「填充 + 圆角 + 一像素描边」。`addBrush` 对纯色刷走 `addRoundedSurface`（外圈 border 色 + 内缩 fill）；`addRoundedSurface` 支持 border-only（透明填充 = 圆角发丝线）。
+- **控件交出描边所有权**：`FTextFieldStyle` / `FDragFloatStyle` / `FSpinBoxStyle` 删除 `borderColor`、`hoveredBorderColor`、`errorBorderColor`，改由每个状态自己的 brush 携带；`FPanelStyle` / `FExpanderStyle` / `FFloatingWindowStyle` 删除 `outlineColor` / `outlineThickness` / `borderColor`。`TextField` / `DragFloat` / `SpinBox` / `Expander` / `Border` / `DockFloatingWindow` 的 `addRectOutline` 全部删除。`FRadioButtonStyle::dotColor` 升为 `FBrush`（未选中是空心环）。`FMenuStyle` 加 `checkBoxBorderColor`。反射表同步删除/新增；仓库内没有文档或资产引用被删字段。
+- **共享调色板改成角色表**：`tokens::FPalette`（`darkPalette` / `lightPalette` / `palette(bDark)`）+ 单一 `defineChromeStyles(theme, palette)`。surface 阶梯 canvas/window/panel/raised/well，交互 hover/pressed/selected/accent，文字 text/text2/text3/disabled，边 borderSubtle/borderStrong/borderHover，状态 success/error/warning；圆角走 `radius` 阶梯（kChip 4 / kControl 6 / kTab 5 / kRow 5 / kMenu 8 / kCard 10）。旧 per-look 双份 block 删除，`tokens::surface(fill, radius, border)` 是构造入口。
+- **对比度按明度比定标**：dark 下 text ≥10:1、text2 ≥5.9:1、text3 ≥3.6:1，相邻 surface 1.05–1.15:1，描边对其填充 ≥1.5:1；light 侧同样按此量级重新取值。
+- **字号台阶**：`gui_type` kTitle 28→20、kHeader 14→16、kBody 16→14、kSmall 12→13、kCaption 11 不变（比例字面、1:1 设备像素下）。
+- **主字面换 Inter**（OFL，随仓 `Engine/Content/Fonts/Inter-Regular.ttf` + `Inter-OFL.txt`），`FGUIWindowHostConfig::fontPath` 默认指向它；JetBrainsMono 留在仓内供等宽面。`DEFAULT_RUNTIME_FONT_NAME` 不动（测试注册名）。
+- 修掉 `panel.titlebar`（GameEditor 在用）**不在 catalog 里**的既有告警：加入 `StyleKey::PanelTitlebar`。
+- Gallery `DemoPageCommon.h` 的 palette 别名改为引用共享角色表（不再复写字面量）。
+
+### 保留 / 未完成
+
+- `FPopupStyle` 仍默认构造（popup host 是放置容器、不是 surface）；`FDockSpaceStyle.dropPreviewOutlineColor` 仍是裸 vec4（dock 预览框走的是 line，不是 surface）。
+- `.animatable()` 反射标记（gui-animation 计划）未动，本切片不碰动画目录。
+- GameEditor 的 `editor.*` 密度键（字号 12 / 字段 padding）保留，是刻意的编辑器密度 overlay。
+
+### 验证
+
+- `xmake b ya-engine / ya-gui-widgets / ya-gui-closure-test / GUIWorkbench / ya-game-editor / ya-testing` 全部通过。
+- `ya-gui-closure-test`（排除设计上会 trap 的 `WidgetTreeTest.SystemLayersCannotBeDetached`）— 573/573 PASSED。
+- `ya-testing` — 1134 PASSED，7 FAILED 与本切片无关（逐条在改动前复现：GUIWindowManagerTest.DragOverlay…、EditorPropertyGraphTest.Auto…/TextureAssetRow…、ScriptApiLibraryFixture.GameUIWidgetLifecycle…、GameUIHostTest.BuildSnapshotComposes…、GUIHeadlessHostTest.ReusesAppKernel…/UnthemedFallback…）。
+- `WidgetTreeTest.TextFieldOutlineSitsInsideLayoutRect` / `DragFloatOutlineSitsInsideLayoutRect` 改为断言 surface（外圈覆盖 layout rect、fill 内缩），不再断言 `Line` 项。
+- 22 个 gallery 页 `--scenario` 冒烟 + `theme.jsonl` + `animation_gallery.jsonl`（22 断言）全过；dark / light 两套 GPU 截图目视验收；近期所有 run 的日志无 `unknown key` / 断言失败。

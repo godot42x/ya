@@ -213,10 +213,9 @@ void UIExpander::paintSelf(UIFrameBuilder& builder)
     // disclosure box so nested Params/Albedo Slot do not look like another
     // CollapsingHeader when the pointer is elsewhere in the body.
     if (_bFramed && fill.tintColor.a > 0.0f) {
+        // The framed key's brush owns the bar's radius + edge, so the frame is
+        // part of the same surface as the fill (no parallel outline field).
         builder.addBrush(header, fill);
-    }
-    if (_bFramed && style.outlineColor.a > 0.0f && style.outlineThickness > 0.0f) {
-        builder.addRectOutline(insetRect(header, 1.0f), style.outlineColor, style.outlineThickness);
     }
     if (!_bFramed && style.guideColor.a > 0.0f) {
         const float x  = header.pos.x + 7.0f;

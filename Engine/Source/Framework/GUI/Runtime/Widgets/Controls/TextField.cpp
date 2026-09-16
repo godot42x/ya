@@ -33,10 +33,9 @@ void UITextField::paintSelf(UIFrameBuilder& builder)
     const FBrush& fill = _bError ? style.errorFill
                        : _bHovered ? style.hoveredFill
                                    : style.backgroundFill;
+    // Fill and edge are one brush now (see FBrush::borderColor): the field picks
+    // ONE state surface and the border of that state follows.
     builder.addBrush(_layoutRect, fill);
-    builder.addRectOutline(insetRect(_layoutRect, 1.0f),
-                           _bError ? style.errorBorderColor : style.borderColor,
-                           1.0f);
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, resolvedFontSize());
     if (!font) {

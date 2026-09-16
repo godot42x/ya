@@ -148,6 +148,33 @@ void UIFrameBuilder::addRoundedRect(const Rect2D& logicalRect, const glm::vec4& 
     _items.push_back(std::move(item));
 }
 
+void UIFrameBuilder::addRoundedSurface(const Rect2D&    logicalRect,
+                                       const glm::vec4& fillColor,
+                                       const glm::vec4& borderColor,
+                                       float            cornerRadius,
+                                       float            borderThickness)
+{
+    const bool bHasBorder = borderColor.a > 0.0f && borderThickness > 0.0f &&
+                            logicalRect.extent.x > borderThickness * 2.0f &&
+                            logicalRect.extent.y > borderThickness * 2.0f;
+    if (!bHasBorder) {
+        addRoundedRect(logicalRect, fillColor, cornerRadius);
+        return;
+    }
+
+    // Outer ring first, then the fill inset inside it: a uniform-radius border
+    // without a second shader path (the sprite shader fills a rounded quad; it
+    // cannot carve a ring).
+    addRoundedRect(logicalRect, borderColor, cornerRadius);
+    if (fillColor.a <= 0.0f) {
+        // Border-only surface (a rounded hairline): nothing to inset-draw, and
+        // skipping the transparent fill keeps the frame at one draw item.
+        return;
+    }
+    const Rect2D inner = insetRect(logicalRect, borderThickness);
+    addRoundedRect(inner, fillColor, std::max(cornerRadius - borderThickness, 0.0f));
+}
+
 void UIFrameBuilder::addRectFilledMultiColor(const Rect2D&    logicalRect,
                                              const glm::vec4& colTL,
                                              const glm::vec4& colTR,
@@ -177,6 +204,22 @@ void UIFrameBuilder::addRectFilledMultiColor(const Rect2D&    logicalRect,
 
 void UIFrameBuilder::addBrush(const Rect2D& logicalRect, const FBrush& brush)
 {
+    // A solid brush IS a surface: rounded fill + optional hairline ring, drawn
+    // by the SDF round-rect branch of the sprite shader. This is the single place
+    // a themed surface is realized, so every control that paints through a style
+    // brush (button / field / tab / menu / card / badge / row) picks up roundness
+    // and edge definition from its state brush alone.
+    if (brush.isSolid()) {
+        const bool bHasBorder = brush.borderColor.a > 0.0f && brush.borderThickness > 0.0f;
+        if (brush.cornerRadius > 0.0f || bHasBorder) {
+            addRoundedSurface(logicalRect,
+                              brush.tintColor,
+                              brush.borderColor,
+                              brush.cornerRadius,
+                              brush.borderThickness);
+            return;
+        }
+    }
     std::shared_ptr<Texture> texture;
     glm::vec2                texturePx{0.0f, 0.0f};
     if (!brush.resource.empty()) {

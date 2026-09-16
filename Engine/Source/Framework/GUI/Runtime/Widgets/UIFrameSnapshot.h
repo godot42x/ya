@@ -202,6 +202,17 @@ class YA_GUI_API UIFrameBuilder
     /// SDF round-rect alpha branch (no texture needed).
     void addRoundedRect(const Rect2D& logicalRect, const glm::vec4& color, float cornerRadius);
 
+    /// Record a rounded surface = rounded fill + optional 1px-style border in
+    /// one call. The border is drawn as an outer rounded rect with the fill
+    /// inset inside it, so a themed card/panel reads as a real surface (edge
+    /// definition) instead of a flat color patch. `borderThickness` 0 or a
+    /// transparent `borderColor` degrades to a plain rounded fill.
+    void addRoundedSurface(const Rect2D&    logicalRect,
+                           const glm::vec4& fillColor,
+                           const glm::vec4& borderColor,
+                           float            cornerRadius,
+                           float            borderThickness = 1.0f);
+
     /// Record a filled rect with per-corner colors (Y-down ImGui order:
     /// top-left, top-right, bottom-right, bottom-left). Compose writes four
     /// different vertex colors; the GPU interpolates. No texture.

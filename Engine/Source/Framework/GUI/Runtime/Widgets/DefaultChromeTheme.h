@@ -4,9 +4,30 @@
 // DefaultChromeTheme - shared chrome palette for GUI apps (editor, workbench).
 //
 // Mechanism (UITheme / resolveThemeStyle / generation token) lives in the
-// style system. This file owns the VALUES: design tokens baked into typed
-// styles at construction. Workbench and GameEditor both consume this builder
-// so EditorTheme does not include Tooling.
+// style system. This file owns the VALUES: one role palette + one set of typed
+// styles baked from it, parameterised by look. Workbench and GameEditor both
+// consume this builder so EditorTheme does not include Tooling.
+//
+// Structure: `FPalette` is the single source of truth. Every themed surface is
+// a named ROLE (canvas < window < panel < raised, plus well/hover/pressed/
+// selected, the text ramp, the border ramp and the status colours), and
+// `palette(bDark)` returns the dark or light table. `defineChromeStyles` bakes
+// the panel/frame keys AND the form-widget keys from that table in ONE pass.
+// The previous builder restated every style once per look, which is how the
+// light and dark looks drift apart; adding a key is now one role, not two
+// blocks.
+//
+// Contrast contract (relative luminance; the dark palette is the tightest
+// case): text >= 10:1 on every surface, text2 >= 5.9:1, text3 >= 3.6:1, i.e.
+// the usual >= 4.5:1 body / >= 3:1 secondary split. Surfaces step by
+// ~1.05-1.15:1 so adjacency stays readable without banding, and an edge
+// carries >= 1.5:1 against the fill it outlines (a frame that does not
+// separate is just a heavier fill).
+//
+// Radius lives in `radius`: roundness is part of the look's personality, not a
+// per-style accident. Controls that derive roundness from their OWN extent (a
+// switch knob, a radio dot) compute it themselves - the theme cannot know the
+// widget's size.
 // ============================================================================
 
 #include "GUI/Widgets/Style.h"
@@ -14,495 +35,479 @@
 
 #include <glm/glm.hpp>
 #include <memory>
+#include <string>
+#include <string_view>
 
 namespace ya::gui_chrome
 {
 
-/// Design tokens: named raw palette material. Typed styles below are baked
-/// from these (still the hardened workbench look for dark).
+// ============================================================================
+// Design tokens: named raw palette material. The typed styles below are baked
+// from these, never from literals.
+// ============================================================================
 namespace tokens
 {
-constexpr glm::vec4 kWindowColor  = {0.075f, 0.082f, 0.10f, 1.0f};
-constexpr glm::vec4 kPanelColor   = {0.11f, 0.12f, 0.15f, 1.0f};
-constexpr glm::vec4 kCanvasColor  = {0.05f, 0.055f, 0.07f, 1.0f};
-constexpr glm::vec4 kHeaderColor  = {0.55f, 0.60f, 0.68f, 1.0f};
-constexpr glm::vec4 kTextColor    = {0.88f, 0.90f, 0.94f, 1.0f};
 
-// Dark button palette (current workbench look; theme-value source of the
-// "button" key — buttons render through the theme, not these raw fields).
-constexpr glm::vec4 kButtonNormal  = {0.16f, 0.18f, 0.22f, 1.0f};
-constexpr glm::vec4 kButtonHovered = {0.24f, 0.28f, 0.34f, 1.0f};
-constexpr glm::vec4 kButtonPressed = {0.10f, 0.11f, 0.14f, 1.0f};
-constexpr glm::vec4 kButtonFocused = {0.26f, 0.52f, 0.90f, 1.0f};
+/// One role per visual decision, so a style says WHICH plane/state it means
+/// instead of naming a colour - that is what lets one palette drive dark and
+/// light without a second code path.
+struct FPalette
+{
+    bool bDark = true;
 
-// Light counterpart palette (Phase 4: a coherent light shell for the
-// white/dark toggle).
-constexpr glm::vec4 kWindowColorLight  = {0.86f, 0.87f, 0.89f, 1.0f};
-constexpr glm::vec4 kPanelColorLight   = {0.93f, 0.94f, 0.96f, 1.0f};
-constexpr glm::vec4 kCanvasColorLight  = {0.80f, 0.82f, 0.86f, 1.0f};
-constexpr glm::vec4 kHeaderColorLight  = {0.18f, 0.20f, 0.26f, 1.0f};
-constexpr glm::vec4 kTextColorLight    = {0.10f, 0.12f, 0.16f, 1.0f};
-constexpr glm::vec4 kButtonNormalLight  = {0.94f, 0.95f, 0.97f, 1.0f};
-constexpr glm::vec4 kButtonHoveredLight = {0.84f, 0.86f, 0.90f, 1.0f};
-constexpr glm::vec4 kButtonPressedLight = {0.72f, 0.74f, 0.80f, 1.0f};
-constexpr glm::vec4 kButtonFocusedLight = {0.55f, 0.75f, 0.95f, 1.0f};
+    /// Surface ladder, deepest to highest: canvas -> window -> panel -> raised,
+    /// with `well` for content that reads as sunk into its parent.
+    glm::vec4 canvas = {0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 window = {0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 panel  = {0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 raised = {0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 well   = {0.0f, 0.0f, 0.0f, 1.0f};
+
+    /// Interaction washes: one role per state, so a button, a row and a tab all
+    /// light up by the same amount instead of each inventing its own delta.
+    glm::vec4 hover    = {0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 pressed  = {0.0f, 0.0f, 0.0f, 1.0f};
+    /// Selection / current item: an accent TINT, not the accent itself (a full
+    /// accent row would out-shout the primary action next to it).
+    glm::vec4 selected = {0.0f, 0.0f, 0.0f, 1.0f};
+    /// Primary action, focus, and "on" state.
+    glm::vec4 accent = {0.0f, 0.0f, 0.0f, 1.0f};
+
+    /// Text ramp: primary / secondary / tertiary. `disabled` sits deliberately
+    /// below tertiary - it must read as unavailable, and it is never used for
+    /// text that has to be read.
+    glm::vec4 text     = {0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 text2    = {0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 text3    = {0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 disabled = {0.0f, 0.0f, 0.0f, 1.0f};
+
+    /// Edge ramp: `borderSubtle` separates sibling surfaces, `borderStrong`
+    /// outlines a control that must look interactive, `borderHover` is the
+    /// lifted edge of an input that is hovered or dragged.
+    glm::vec4 borderSubtle = {0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 borderStrong = {0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 borderHover  = {0.0f, 0.0f, 0.0f, 1.0f};
+
+    /// Status ink. Kept deliberately few: a status colour that is not one of
+    /// these belongs to the app, not to the framework palette.
+    glm::vec4 success = {0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 error   = {0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 warning = {0.0f, 0.0f, 0.0f, 1.0f};
+};
+
+/// Corner radius ramp (logical px). Smaller surfaces take smaller radii: one
+/// radius everywhere is what makes themed chrome look pasted on.
+namespace radius
+{
+inline constexpr float kChip    = 4.0f;  // badges, scrollbar thumb, check box
+inline constexpr float kControl = 6.0f;  // button, field, combo, spin
+inline constexpr float kTab     = 5.0f;  // tab strip button
+inline constexpr float kRow     = 5.0f;  // list / tree / menu row
+inline constexpr float kMenu    = 8.0f;  // popup, tooltip, floating window
+inline constexpr float kCard    = 10.0f; // content card, dialog
+} // namespace radius
+
+/// Dark chrome: near-black surfaces with a cool cast, one bright accent, and
+/// text held far above the noise floor of the surface ladder.
+[[nodiscard]] inline constexpr FPalette darkPalette()
+{
+    FPalette p;
+    p.canvas = {0.039f, 0.047f, 0.063f, 1.0f};
+    p.window = {0.063f, 0.075f, 0.094f, 1.0f};
+    p.panel  = {0.086f, 0.102f, 0.129f, 1.0f};
+    p.raised = {0.110f, 0.129f, 0.165f, 1.0f};
+    p.well   = {0.047f, 0.059f, 0.078f, 1.0f};
+
+    p.hover    = {0.137f, 0.165f, 0.204f, 1.0f};
+    p.pressed  = {0.169f, 0.200f, 0.247f, 1.0f};
+    p.selected = {0.106f, 0.200f, 0.345f, 1.0f};
+    p.accent   = {0.239f, 0.510f, 0.965f, 1.0f};
+
+    p.text     = {0.910f, 0.918f, 0.941f, 1.0f};
+    p.text2    = {0.663f, 0.698f, 0.753f, 1.0f};
+    p.text3    = {0.498f, 0.541f, 0.600f, 1.0f};
+    p.disabled = {0.357f, 0.392f, 0.447f, 1.0f};
+
+    p.borderSubtle = {0.149f, 0.173f, 0.212f, 1.0f};
+    p.borderStrong = {0.200f, 0.231f, 0.278f, 1.0f};
+    p.borderHover  = {0.302f, 0.341f, 0.396f, 1.0f};
+
+    p.success = {0.247f, 0.725f, 0.314f, 1.0f};
+    p.error   = {0.941f, 0.322f, 0.322f, 1.0f};
+    p.warning = {0.824f, 0.600f, 0.133f, 1.0f};
+    return p;
+}
+
+/// Light chrome: white work surfaces over one grey canvas. On light, an edge
+/// does the separating work that a dark surface ladder cannot.
+[[nodiscard]] inline constexpr FPalette lightPalette()
+{
+    FPalette p;
+    p.bDark  = false;
+    p.canvas = {0.961f, 0.969f, 0.980f, 1.0f};
+    p.window = {1.000f, 1.000f, 1.000f, 1.0f};
+    p.panel  = {1.000f, 1.000f, 1.000f, 1.0f};
+    p.raised = {0.976f, 0.980f, 0.988f, 1.0f};
+    p.well   = {1.000f, 1.000f, 1.000f, 1.0f};
+
+    p.hover    = {0.945f, 0.957f, 0.973f, 1.0f};
+    p.pressed  = {0.906f, 0.925f, 0.949f, 1.0f};
+    p.selected = {0.867f, 0.910f, 0.988f, 1.0f};
+    p.accent   = {0.184f, 0.435f, 0.894f, 1.0f};
+
+    p.text     = {0.082f, 0.094f, 0.114f, 1.0f};
+    p.text2    = {0.325f, 0.353f, 0.396f, 1.0f};
+    p.text3    = {0.447f, 0.478f, 0.525f, 1.0f};
+    p.disabled = {0.639f, 0.667f, 0.706f, 1.0f};
+
+    p.borderSubtle = {0.878f, 0.898f, 0.925f, 1.0f};
+    p.borderStrong = {0.796f, 0.824f, 0.859f, 1.0f};
+    p.borderHover  = {0.643f, 0.678f, 0.729f, 1.0f};
+
+    p.success = {0.102f, 0.498f, 0.216f, 1.0f};
+    p.error   = {0.776f, 0.157f, 0.157f, 1.0f};
+    p.warning = {0.604f, 0.404f, 0.000f, 1.0f};
+    return p;
+}
+
+[[nodiscard]] inline constexpr FPalette palette(bool bDark)
+{
+    return bDark ? darkPalette() : lightPalette();
+}
+
+/// A themed surface: fill + radius + edge as ONE value, which is exactly what
+/// `FBrush` carries (see FBrush::cornerRadius / FBrush::borderColor). `border`
+/// defaults to transparent, i.e. a plain fill.
+[[nodiscard]] inline FBrush surface(const glm::vec4& fill,
+                                    float            radius          = 0.0f,
+                                    const glm::vec4& border          = {0.0f, 0.0f, 0.0f, 0.0f},
+                                    float            borderThickness = 1.0f)
+{
+    return FBrush::solid(fill, radius, border, borderThickness);
+}
+
+/// Transparent fill: "no surface", used for states that only wash or outline.
+inline const glm::vec4 kNoFill{0.0f, 0.0f, 0.0f, 0.0f};
+
+// Legacy role aliases. Shell/gallery code that predates the role palette names
+// these directly; they resolve INTO the palette, so there is still one source
+// of truth (the values used to be restated per file).
+inline constexpr glm::vec4 kWindowColor = darkPalette().window;
+inline constexpr glm::vec4 kPanelColor  = darkPalette().panel;
+inline constexpr glm::vec4 kCanvasColor = darkPalette().canvas;
+inline constexpr glm::vec4 kHeaderColor = darkPalette().text2;
+inline constexpr glm::vec4 kTextColor   = darkPalette().text;
+
 } // namespace tokens
 
-/// Form widgets + text roles used by chrome (tree, fields, menus, hierarchy
-/// labels). Baked once so the light look does not fall back to dark defaults.
-inline void defineContentStyles(ya::UITheme& theme, bool bDark)
+/// Bake every chrome style - frame/panel keys AND form-widget keys - from ONE
+/// palette. `bDark` selects the table; it no longer selects a code path.
+inline void defineChromeStyles(ya::UITheme& theme, const tokens::FPalette& p)
 {
-    using ya::FBrush;
-    const glm::vec4 text     = bDark ? tokens::kTextColor : tokens::kTextColorLight;
-    const glm::vec4 header   = bDark ? tokens::kHeaderColor : tokens::kHeaderColorLight;
-    const glm::vec4 muted    = bDark ? glm::vec4{0.70f, 0.74f, 0.80f, 1.0f}
-                                     : glm::vec4{0.38f, 0.42f, 0.48f, 1.0f};
-    const glm::vec4 error    = bDark ? glm::vec4{1.0f, 0.45f, 0.35f, 1.0f}
-                                     : glm::vec4{0.78f, 0.18f, 0.12f, 1.0f};
-    const glm::vec4 selected = bDark ? glm::vec4{0.22f, 0.42f, 0.78f, 1.0f}
-                                     : glm::vec4{0.32f, 0.55f, 0.90f, 1.0f};
-    const glm::vec4 hovered  = bDark ? glm::vec4{0.24f, 0.26f, 0.31f, 1.0f}
-                                     : glm::vec4{0.84f, 0.86f, 0.90f, 1.0f};
-    const glm::vec4 fieldBg  = bDark ? glm::vec4{0.08f, 0.09f, 0.12f, 1.0f}
-                                     : glm::vec4{0.98f, 0.99f, 1.00f, 1.0f};
-    const glm::vec4 menuItem = bDark ? glm::vec4{0.13f, 0.14f, 0.17f, 1.0f}
-                                     : glm::vec4{0.93f, 0.94f, 0.96f, 1.0f};
+    using namespace tokens;
+    namespace StyleKey = ya::StyleKey;
 
-    auto headerStyle = ya::FTextStyle{};
-    headerStyle.textColor = bDark ? glm::vec4{0.90f, 0.92f, 0.95f, 1.0f} : text;
-    headerStyle.fontSize  = ya::gui_type::kTitle;
-    theme.define<ya::FTextStyle>("text.header", headerStyle);
+    const glm::vec4 selectionWash = {p.accent.r, p.accent.g, p.accent.b, 0.35f};
 
-    auto mutedStyle = ya::FTextStyle{};
-    mutedStyle.textColor = muted;
-    mutedStyle.fontSize  = ya::gui_type::kSmall;
-    theme.define<ya::FTextStyle>("text.muted", mutedStyle);
+    const auto definePanel = [&theme](std::string_view key, const FBrush& fill) {
+        ya::FPanelStyle style;
+        style.fillColor = fill;
+        theme.define<ya::FPanelStyle>(std::string(key), std::move(style));
+    };
 
-    auto errorStyle = ya::FTextStyle{};
-    errorStyle.textColor = error;
-    errorStyle.fontSize  = 13;
-    theme.define<ya::FTextStyle>("text.error", errorStyle);
+    const auto defineText = [&theme, &p](std::string_view key, const glm::vec4& color, uint32_t size) {
+        ya::FTextStyle style;
+        style.textColor = color;
+        style.fontSize  = size;
+        // Badge/chip fill for the opt-in `_bFillBackground` background.
+        style.fillColor = surface(p.raised, radius::kChip, p.borderSubtle);
+        style.padding   = {8.0f, 3.0f};
+        theme.define<ya::FTextStyle>(std::string(key), std::move(style));
+    };
 
-    auto eyebrow = ya::FTextStyle{};
-    eyebrow.textColor = header;
-    eyebrow.fontSize  = ya::gui_type::kCaption;
-    theme.define<ya::FTextStyle>("text.eyebrow", eyebrow);
+    // === Surfaces ==========================================================
+    definePanel(StyleKey::Panel, surface(p.panel));
+    definePanel(StyleKey::PanelWindow, surface(p.window));
+    definePanel(StyleKey::PanelTitlebar, surface(p.raised));
+    definePanel(StyleKey::PanelCanvas, surface(p.canvas));
+    definePanel(StyleKey::PanelSidebar, surface(p.window));
+    definePanel(StyleKey::PanelSidebarCard, surface(p.panel, radius::kCard, p.borderSubtle));
+    definePanel(StyleKey::PanelSurface, surface(p.panel, radius::kCard, p.borderSubtle));
+    definePanel(StyleKey::MenuPanel, surface(p.raised, radius::kMenu, p.borderStrong));
+    definePanel(StyleKey::Canvas, surface(p.canvas));
+    definePanel(StyleKey::Tooltip, surface({p.raised.r, p.raised.g, p.raised.b, 0.98f},
+                                           radius::kControl,
+                                           p.borderStrong));
+    definePanel(StyleKey::DragGhost, surface({p.accent.r, p.accent.g, p.accent.b, 0.90f}, radius::kControl));
 
-    auto smallText = ya::FTextStyle{};
-    smallText.textColor = text;
-    smallText.fontSize  = ya::gui_type::kSmall;
-    theme.define<ya::FTextStyle>("text.small", smallText);
+    // === Text roles ========================================================
+    defineText(StyleKey::Text, p.text, ya::gui_type::kBody);
+    defineText(StyleKey::TextHeader, p.text, ya::gui_type::kHeader);
+    defineText(StyleKey::TextSmall, p.text, ya::gui_type::kSmall);
+    defineText(StyleKey::TextMuted, p.text2, ya::gui_type::kSmall);
+    defineText(StyleKey::TextCaption, p.text3, ya::gui_type::kCaption);
+    defineText(StyleKey::TextEyebrow, p.text3, ya::gui_type::kCaption);
+    defineText(StyleKey::TextError, p.error, ya::gui_type::kSmall);
 
-    auto caption = ya::FTextStyle{};
-    caption.textColor = muted;
-    caption.fontSize  = ya::gui_type::kCaption;
-    theme.define<ya::FTextStyle>("text.caption", caption);
+    // === Button ============================================================
+    auto button = ya::FButtonStyle{};
+    button.normalFill     = surface(p.raised, radius::kControl, p.borderStrong);
+    button.hoveredFill    = surface(p.hover, radius::kControl, p.borderStrong);
+    button.pressedFill    = surface(p.pressed, radius::kControl, p.borderStrong);
+    button.focusedFill    = surface(p.selected, radius::kControl, p.accent);
+    button.disabledFill   = surface(p.raised, radius::kControl, p.borderSubtle);
+    button.selectedFill   = surface(p.accent, radius::kControl);
+    button.errorFill      = surface(p.error, radius::kControl);
+    button.dropTargetFill = surface(p.selected, radius::kControl, p.accent);
+    button.textColor      = p.text;
+    button.padding        = {12.0f, 5.0f};
+    theme.define<ya::FButtonStyle>(std::string(StyleKey::Button), button);
 
+    auto menubar = ya::FMenuBarItemStyle{};
+    menubar.textColor = p.text2;
+    // Flush with the titlebar until hovered: a permanently filled menu strip
+    // reads as a second toolbar above the first one.
+    menubar.normalFill     = surface(kNoFill, radius::kChip);
+    menubar.hoveredFill    = surface(p.hover, radius::kChip);
+    menubar.separatorColor = p.borderSubtle;
+    theme.define<ya::FMenuBarItemStyle>(std::string(StyleKey::MenuBar), menubar);
+
+    // === Tabs ==============================================================
+    auto tab = ya::FTabStyle{};
+    tab.textColor    = p.text2;
+    tab.normalFill   = surface(kNoFill, radius::kTab);
+    tab.hoveredFill  = surface(p.hover, radius::kTab);
+    tab.selectedFill = surface(p.panel, radius::kTab, p.borderSubtle);
+    tab.accentColor  = p.accent;
+    tab.padding      = {9.0f, 3.0f};
+    tab.separatorColor       = p.borderSubtle;
+    tab.placeholderTextColor = p.text3;
+    theme.define<ya::FTabStyle>(std::string(StyleKey::Tab), tab);
+
+    auto sideTab         = tab;
+    sideTab.selectedFill = surface(p.selected, radius::kRow, p.accent);
+    sideTab.padding      = {10.0f, 4.0f};
+    sideTab.separatorColor = p.borderSubtle;
+    theme.define<ya::FTabStyle>(std::string(StyleKey::TabSidebar), sideTab);
+
+    auto dockTab         = tab;
+    dockTab.padding      = {7.0f, 3.0f};
+    theme.define<ya::FTabStyle>(std::string(StyleKey::TabDock), dockTab);
+
+    // === Splitters + scrollbars ============================================
+    auto split = ya::FSplitPaneStyle{};
+    // A hairline that becomes the accent when touched: enough to show the panes
+    // are resizable, not a second border between two already-bordered panels.
+    split.dividerFill         = surface(p.borderSubtle);
+    split.dividerHoveredFill  = surface({p.accent.r, p.accent.g, p.accent.b, 0.55f});
+    split.dividerDraggingFill = surface(p.accent);
+    theme.define<ya::FSplitPaneStyle>(std::string(StyleKey::Split), split);
+
+    auto scrollbar       = ya::FScrollBarStyle{};
+    scrollbar.trackColor = surface(kNoFill);
+    scrollbar.thumbColor = surface(p.disabled, radius::kChip);
+    scrollbar.width      = 8.0f;
+    theme.define<ya::FScrollBarStyle>(std::string(StyleKey::ScrollBar), scrollbar);
+
+    auto dock = ya::FDockSpaceStyle{};
+    dock.canvasColor             = surface(p.canvas);
+    dock.dropPreviewColor        = surface({p.accent.r, p.accent.g, p.accent.b, 0.18f}, radius::kMenu);
+    dock.dropPreviewMergeColor   = surface({p.success.r, p.success.g, p.success.b, 0.45f}, radius::kMenu);
+    dock.dropPreviewOutlineColor = p.accent;
+    theme.define<ya::FDockSpaceStyle>(std::string(StyleKey::Dock), dock);
+
+    auto floating = ya::FFloatingWindowStyle{};
+    floating.bodyFill       = surface({p.panel.r, p.panel.g, p.panel.b, 0.985f}, radius::kMenu, p.borderStrong);
+    floating.innerFill      = surface(p.borderSubtle);
+    floating.edgeAffordance = {p.text3.r, p.text3.g, p.text3.b, 0.42f};
+    floating.titleTextColor = p.text;
+    theme.define<ya::FFloatingWindowStyle>(std::string(StyleKey::Floating), floating);
+
+    // === Containers / rows =================================================
     auto tree = ya::FTreeViewStyle{};
-    tree.textColor        = text;
-    tree.selectedFill     = FBrush::solid(selected);
-    tree.hoveredFill      = FBrush::solid(hovered);
-    tree.arrowColor       = muted;
-    tree.arrowHoveredFill = FBrush::solid(bDark ? glm::vec4{0.32f, 0.36f, 0.44f, 1.0f}
-                                                : glm::vec4{0.78f, 0.80f, 0.85f, 1.0f});
-    tree.dropIndicator    = selected;
-    theme.define<ya::FTreeViewStyle>("tree", tree);
+    tree.textColor        = p.text;
+    tree.selectedFill     = surface(p.selected, radius::kRow, p.accent);
+    tree.hoveredFill      = surface(p.hover, radius::kRow);
+    tree.arrowColor       = p.text3;
+    tree.arrowHoveredFill = surface(p.hover, radius::kChip);
+    tree.dropIndicator    = p.accent;
+    tree.fontSize         = ya::gui_type::kSmall;
+    theme.define<ya::FTreeViewStyle>(std::string(StyleKey::Tree), tree);
 
-    auto expander = ya::FExpanderStyle{};
-    expander.textColor        = text;
-    expander.headerFill       = FBrush::solid({0.0f, 0.0f, 0.0f, 0.0f});
-    expander.hoveredFill      = FBrush::solid(hovered);
-    expander.pressedFill      = FBrush::solid(bDark ? glm::vec4{0.20f, 0.22f, 0.27f, 1.0f}
-                                                    : glm::vec4{0.78f, 0.80f, 0.84f, 1.0f});
-    expander.focusedFill      = FBrush::solid(bDark ? glm::vec4{0.26f, 0.52f, 0.90f, 0.35f}
-                                                    : glm::vec4{0.32f, 0.55f, 0.90f, 0.28f});
-    expander.arrowColor       = muted;
-    expander.arrowHoveredFill = FBrush::solid(bDark ? glm::vec4{0.32f, 0.36f, 0.44f, 1.0f}
-                                                    : glm::vec4{0.78f, 0.80f, 0.85f, 1.0f});
-    expander.guideColor       = bDark ? glm::vec4{0.42f, 0.46f, 0.54f, 0.70f}
-                                      : glm::vec4{0.62f, 0.65f, 0.72f, 0.70f};
-    expander.fontSize         = 13;
-    theme.define<ya::FExpanderStyle>("expander", expander);
+    auto expander            = ya::FExpanderStyle{};
+    expander.textColor       = p.text;
+    expander.headerFill      = surface(kNoFill, radius::kRow);
+    expander.hoveredFill     = surface(p.hover, radius::kRow);
+    expander.pressedFill     = surface(p.pressed, radius::kRow);
+    expander.focusedFill     = surface(p.selected, radius::kRow, p.accent);
+    expander.arrowColor      = p.text3;
+    expander.arrowHoveredFill = surface(p.hover, radius::kChip);
+    expander.guideColor      = p.borderSubtle;
+    expander.fontSize        = ya::gui_type::kSmall;
+    theme.define<ya::FExpanderStyle>(std::string(StyleKey::Expander), expander);
 
-    // Framed TreeNode look (`setFramed` / collapsingHeader), same FExpanderStyle.
+    // Framed TreeNode look (`setFramed` / collapsingHeader): same type, with a
+    // header that reads as its own bordered bar.
+    auto expanderHeader         = expander;
+    expanderHeader.headerFill   = surface(p.raised, radius::kControl, p.borderSubtle);
+    expanderHeader.hoveredFill  = surface(p.hover, radius::kControl, p.borderSubtle);
+    expanderHeader.pressedFill  = surface(p.pressed, radius::kControl, p.borderSubtle);
+    expanderHeader.focusedFill  = surface(p.selected, radius::kControl, p.accent);
+    expanderHeader.guideColor   = kNoFill;
+    theme.define<ya::FExpanderStyle>(std::string(StyleKey::ExpanderHeader), expanderHeader);
 
-    auto expanderHeader = expander;
-    expanderHeader.headerFill = FBrush::solid(bDark ? glm::vec4{0.16f, 0.18f, 0.22f, 1.0f}
-                                                    : glm::vec4{0.86f, 0.88f, 0.92f, 1.0f});
-    expanderHeader.hoveredFill = FBrush::solid(bDark ? glm::vec4{0.20f, 0.23f, 0.28f, 1.0f}
-                                                     : glm::vec4{0.80f, 0.83f, 0.88f, 1.0f});
-    expanderHeader.outlineColor = bDark ? glm::vec4{0.28f, 0.30f, 0.36f, 1.0f}
-                                        : glm::vec4{0.70f, 0.72f, 0.76f, 1.0f};
-    expanderHeader.guideColor   = {0.0f, 0.0f, 0.0f, 0.0f};
-    theme.define<ya::FExpanderStyle>("expander.header", expanderHeader);
-
+    // === Inputs ===========================================================
     auto field = ya::FTextFieldStyle{};
-    field.backgroundFill = FBrush::solid(fieldBg);
-    field.hoveredFill    = FBrush::solid(hovered);
-    field.textColor      = text;
-    field.caretColor     = text;
-    field.borderColor    = bDark ? glm::vec4{0.50f, 0.54f, 0.62f, 1.0f}
-                                 : glm::vec4{0.58f, 0.61f, 0.68f, 1.0f};
+    field.backgroundFill = surface(p.well, radius::kControl, p.borderStrong);
+    field.hoveredFill    = surface(p.well, radius::kControl, p.borderHover);
+    field.errorFill      = surface(p.well, radius::kControl, p.error);
+    field.textColor      = p.text;
+    field.caretColor     = p.accent;
+    field.selectionColor = selectionWash;
+    field.padding        = {6.0f, 3.0f};
     field.fontSize       = ya::gui_type::kBody;
-    theme.define<ya::FTextFieldStyle>("textfield", field);
+    theme.define<ya::FTextFieldStyle>(std::string(StyleKey::TextField), field);
 
-    auto fieldCompact = field;
+    auto fieldCompact     = field;
     fieldCompact.fontSize = ya::gui_type::kSmall;
     fieldCompact.padding  = {4.0f, 2.0f};
-    theme.define<ya::FTextFieldStyle>("textfield.compact", fieldCompact);
-
-    auto menu = ya::FMenuStyle{};
-    menu.itemNormalFill  = FBrush::solid(menuItem);
-    menu.itemHoveredFill = FBrush::solid(selected);
-    menu.textColor       = text;
-    menu.iconColor       = muted;
-    menu.checkmarkColor  = bDark ? glm::vec4{0.34f, 0.80f, 0.52f, 1.0f}
-                                   : glm::vec4{0.18f, 0.60f, 0.34f, 1.0f};
-    menu.shortcutColor   = muted;
-    menu.disabledTextColor = bDark ? glm::vec4{0.42f, 0.46f, 0.54f, 1.0f}
-                                      : glm::vec4{0.56f, 0.59f, 0.65f, 1.0f};
-    menu.disabledIconColor = bDark ? glm::vec4{0.38f, 0.42f, 0.50f, 1.0f}
-                                      : glm::vec4{0.60f, 0.63f, 0.69f, 1.0f};
-    menu.separatorColor  = bDark ? glm::vec4{0.26f, 0.28f, 0.34f, 1.0f}
-                                   : glm::vec4{0.76f, 0.78f, 0.82f, 1.0f};
-    menu.submenuArrowColor = muted;
-    theme.define<ya::FMenuStyle>("menu", menu);
-
-    auto menuPanel = ya::FPanelStyle{};
-    menuPanel.fillColor = FBrush::solid(menuItem);
-    theme.define<ya::FPanelStyle>("menu.panel", menuPanel);
-
-    auto selectable = ya::FSelectableRowStyle{};
-    selectable.hoveredFill         = FBrush::solid(hovered);
-    selectable.selectedFill        = FBrush::solid(selected);
-    selectable.selectedHoveredFill = FBrush::solid(bDark ? glm::vec4{0.30f, 0.50f, 0.86f, 1.0f}
-                                                         : glm::vec4{0.40f, 0.62f, 0.94f, 1.0f});
-    theme.define<ya::FSelectableRowStyle>("selectable", selectable);
+    theme.define<ya::FTextFieldStyle>(std::string(StyleKey::TextFieldCompact), fieldCompact);
 
     auto drag = ya::FDragFloatStyle{};
-    drag.backgroundFill = FBrush::solid(bDark ? glm::vec4{0.17f, 0.19f, 0.24f, 1.0f}
-                                              : glm::vec4{0.94f, 0.95f, 0.97f, 1.0f});
-    drag.hoveredFill    = FBrush::solid(bDark ? glm::vec4{0.28f, 0.32f, 0.40f, 1.0f}
-                                              : glm::vec4{0.84f, 0.88f, 0.95f, 1.0f});
-    drag.draggingFill   = FBrush::solid(bDark ? glm::vec4{0.20f, 0.32f, 0.48f, 1.0f}
-                                              : glm::vec4{0.78f, 0.84f, 0.94f, 1.0f});
-    drag.textColor      = text;
-    drag.borderColor    = bDark ? glm::vec4{0.50f, 0.54f, 0.62f, 1.0f}
-                                : glm::vec4{0.58f, 0.61f, 0.68f, 1.0f};
-    drag.hoveredBorderColor = bDark ? glm::vec4{0.72f, 0.78f, 0.90f, 1.0f}
-                                    : glm::vec4{0.40f, 0.52f, 0.72f, 1.0f};
-    theme.define<ya::FDragFloatStyle>("dragfloat", drag);
-
-    auto checkbox = ya::FCheckBoxStyle{};
-    checkbox.boxFill     = FBrush::solid(bDark ? glm::vec4{0.55f, 0.60f, 0.68f, 1.0f}
-                                               : glm::vec4{0.70f, 0.73f, 0.78f, 1.0f});
-    checkbox.hoveredFill = FBrush::solid(hovered);
-    checkbox.checkedFill = FBrush::solid(selected);
-    checkbox.checkColor  = bDark ? glm::vec4{0.95f, 0.96f, 0.98f, 1.0f} : glm::vec4{1.0f, 1.0f, 1.0f, 1.0f};
-    theme.define<ya::FCheckBoxStyle>("checkbox", checkbox);
-
-    // Switch: same family as the checkbox (off / hover / on accent), so a
-    // switch inherits theme intent instead of inventing a second palette.
-    theme.define<ya::FCheckBoxStyle>("switch", checkbox);
-
-    auto combo = ya::FComboBoxStyle{};
-    combo.fieldFill   = FBrush::solid(fieldBg);
-    combo.hoveredFill = FBrush::solid(hovered);
-    combo.textColor   = text;
-    combo.arrowColor  = muted;
-    theme.define<ya::FComboBoxStyle>("combobox", combo);
-
-    auto slider = ya::FSliderStyle{};
-    slider.trackFill = FBrush::solid(bDark ? glm::vec4{0.14f, 0.16f, 0.20f, 1.0f}
-                                           : glm::vec4{0.78f, 0.80f, 0.84f, 1.0f});
-    slider.valueFill = FBrush::solid(selected);
-    slider.thumbFill = FBrush::solid(bDark ? glm::vec4{0.88f, 0.90f, 0.94f, 1.0f} : text);
-    theme.define<ya::FSliderStyle>("slider", slider);
-
-    auto table = ya::FTableGridStyle{};
-    table.backgroundFill  = FBrush::solid(fieldBg);
-    table.selectedFill    = FBrush::solid(selected);
-    table.hoveredFill     = FBrush::solid(hovered);
-    table.textColor       = text;
-    table.headerTextColor = muted;
-    table.gridColor       = bDark ? glm::vec4{0.20f, 0.22f, 0.27f, 1.0f}
-                                  : glm::vec4{0.70f, 0.72f, 0.76f, 1.0f};
-    theme.define<ya::FTableGridStyle>("table", table);
+    drag.backgroundFill = surface(p.well, radius::kControl, p.borderStrong);
+    drag.hoveredFill    = surface(p.well, radius::kControl, p.borderHover);
+    drag.draggingFill   = surface(p.selected, radius::kControl, p.accent);
+    drag.errorFill      = surface(p.well, radius::kControl, p.error);
+    drag.textColor      = p.text;
+    drag.padding        = {6.0f, 3.0f};
+    drag.fontSize       = ya::gui_type::kSmall;
+    theme.define<ya::FDragFloatStyle>(std::string(StyleKey::DragFloat), drag);
 
     auto spin = ya::FSpinBoxStyle{};
-    spin.backgroundFill    = FBrush::solid(bDark ? glm::vec4{0.17f, 0.19f, 0.24f, 1.0f}
-                                                 : glm::vec4{0.94f, 0.95f, 0.97f, 1.0f});
-    spin.hoveredFill       = FBrush::solid(hovered);
-    spin.buttonFill        = FBrush::solid(bDark ? glm::vec4{0.22f, 0.24f, 0.30f, 1.0f}
-                                                 : glm::vec4{0.86f, 0.88f, 0.92f, 1.0f});
-    spin.buttonHoveredFill = FBrush::solid(bDark ? glm::vec4{0.42f, 0.50f, 0.68f, 1.0f}
-                                                 : glm::vec4{0.62f, 0.70f, 0.86f, 1.0f});
-    spin.textColor         = text;
-    spin.borderColor       = bDark ? glm::vec4{0.50f, 0.54f, 0.62f, 1.0f}
-                                   : glm::vec4{0.58f, 0.61f, 0.68f, 1.0f};
-    theme.define<ya::FSpinBoxStyle>("spinbox", spin);
+    spin.backgroundFill    = surface(p.well, radius::kControl, p.borderStrong);
+    spin.hoveredFill       = surface(p.well, radius::kControl, p.borderHover);
+    spin.buttonFill        = surface(p.raised, radius::kChip);
+    spin.buttonHoveredFill = surface(p.hover, radius::kChip);
+    spin.textColor         = p.text;
+    spin.fontSize          = ya::gui_type::kSmall;
+    theme.define<ya::FSpinBoxStyle>(std::string(StyleKey::SpinBox), spin);
 
-    auto radio = ya::FRadioButtonStyle{};
-    radio.hoveredFill  = FBrush::solid(hovered);
-    radio.dotColor     = bDark ? glm::vec4{0.88f, 0.90f, 0.94f, 1.0f} : text;
-    radio.dotFillColor = selected;
-    radio.textColor    = text;
-    theme.define<ya::FRadioButtonStyle>("radio", radio);
+    auto checkbox = ya::FCheckBoxStyle{};
+    // Unchecked is a hollow ring, not a filled grey chip: the empty state has
+    // to read as "nothing set yet", and only the checked state spends accent.
+    checkbox.boxFill     = surface(p.well, radius::kChip, p.borderStrong);
+    checkbox.hoveredFill = surface(p.hover, radius::kChip, p.borderStrong);
+    checkbox.checkedFill = surface(p.accent, radius::kChip);
+    checkbox.checkColor  = {0.980f, 0.988f, 1.000f, 1.0f};
+    theme.define<ya::FCheckBoxStyle>(std::string(StyleKey::CheckBox), checkbox);
 
-    auto colorEdit = ya::FColorEditStyle{};
-    colorEdit.backgroundFill = FBrush::solid(fieldBg);
-    colorEdit.textColor      = text;
-    theme.define<ya::FColorEditStyle>("coloredit", colorEdit);
+    // Switch: same family as the checkbox, so a switch inherits theme intent
+    // instead of inventing a second palette.
+    theme.define<ya::FCheckBoxStyle>(std::string(StyleKey::Switch), checkbox);
+
+    auto combo = ya::FComboBoxStyle{};
+    combo.fieldFill   = surface(p.well, radius::kControl, p.borderStrong);
+    combo.hoveredFill = surface(p.well, radius::kControl, p.borderHover);
+    combo.textColor   = p.text;
+    combo.arrowColor  = p.text2;
+    combo.fontSize    = ya::gui_type::kSmall;
+    theme.define<ya::FComboBoxStyle>(std::string(StyleKey::ComboBox), combo);
 
     auto search = ya::FSearchComboStyle{};
-    search.backgroundFill = FBrush::solid(fieldBg);
-    search.hoveredFill    = FBrush::solid(hovered);
-    search.textColor      = text;
-    search.caretColor     = text;
-    theme.define<ya::FSearchComboStyle>("searchcombo", search);
+    search.backgroundFill = surface(p.well, radius::kControl, p.borderStrong);
+    search.hoveredFill    = surface(p.well, radius::kControl, p.borderHover);
+    search.textColor      = p.text;
+    search.caretColor     = p.accent;
+    search.fontSize       = ya::gui_type::kSmall;
+    theme.define<ya::FSearchComboStyle>(std::string(StyleKey::SearchCombo), search);
+
+    auto slider = ya::FSliderStyle{};
+    slider.trackFill = surface(p.borderStrong, radius::kChip);
+    slider.valueFill = surface(p.accent, radius::kChip);
+    slider.thumbFill = surface(p.text, radius::kChip);
+    theme.define<ya::FSliderStyle>(std::string(StyleKey::Slider), slider);
+
+    auto radio = ya::FRadioButtonStyle{};
+    radio.hoveredFill  = surface(p.hover, radius::kRow);
+    radio.dotColor     = surface(p.well, 0.0f, p.borderStrong);
+    radio.dotFillColor = p.accent;
+    radio.textColor    = p.text;
+    radio.fontSize     = ya::gui_type::kSmall;
+    theme.define<ya::FRadioButtonStyle>(std::string(StyleKey::Radio), radio);
+
+    auto colorEdit = ya::FColorEditStyle{};
+    colorEdit.backgroundFill = surface(p.well, radius::kControl, p.borderStrong);
+    colorEdit.textColor      = p.text;
+    colorEdit.padding        = {6.0f, 3.0f};
+    colorEdit.fontSize       = ya::gui_type::kSmall;
+    theme.define<ya::FColorEditStyle>(std::string(StyleKey::ColorEdit), colorEdit);
+
+    auto table = ya::FTableGridStyle{};
+    table.backgroundFill  = surface(p.well);
+    table.selectedFill    = surface(p.selected);
+    table.hoveredFill     = surface(p.hover);
+    table.textColor       = p.text;
+    table.headerTextColor = p.text3;
+    table.gridColor       = p.borderSubtle;
+    table.fontSize        = ya::gui_type::kSmall;
+    theme.define<ya::FTableGridStyle>(std::string(StyleKey::Table), table);
+
+    // === Menus / rows ======================================================
+    auto menu = ya::FMenuStyle{};
+    menu.itemNormalFill      = surface(kNoFill, radius::kRow);
+    menu.itemHoveredFill     = surface(p.selected, radius::kRow);
+    menu.textColor           = p.text;
+    menu.iconColor           = p.text2;
+    menu.checkmarkColor      = p.accent;
+    menu.checkBoxBorderColor = p.text3;
+    menu.shortcutColor       = p.text3;
+    menu.disabledTextColor   = p.disabled;
+    menu.disabledIconColor   = p.disabled;
+    menu.separatorColor      = p.borderSubtle;
+    menu.submenuArrowColor   = p.text3;
+    menu.fontSize            = ya::gui_type::kSmall;
+    theme.define<ya::FMenuStyle>(std::string(StyleKey::Menu), menu);
+
+    auto selectable = ya::FSelectableRowStyle{};
+    selectable.normalFill          = surface(kNoFill, radius::kRow);
+    selectable.hoveredFill         = surface(p.hover, radius::kRow);
+    selectable.selectedFill        = surface(p.selected, radius::kRow, p.accent);
+    selectable.selectedHoveredFill = surface(p.selected, radius::kRow, p.accent);
+    selectable.dropTargetFill      = surface(p.selected, radius::kRow, p.accent);
+    selectable.errorFill           = surface(p.error, radius::kRow);
+    selectable.disabledFill        = surface(kNoFill, radius::kRow);
+    theme.define<ya::FSelectableRowStyle>(std::string(StyleKey::Selectable), selectable);
 
     auto image = ya::FImageStyle{};
-    image.placeholderFill = FBrush::solid(bDark ? glm::vec4{0.24f, 0.26f, 0.31f, 1.0f}
-                                                : glm::vec4{0.78f, 0.80f, 0.84f, 1.0f});
-    theme.define<ya::FImageStyle>("image", image);
+    image.placeholderFill = surface(p.raised, radius::kChip, p.borderSubtle);
+    theme.define<ya::FImageStyle>(std::string(StyleKey::Image), image);
 
-    theme.define<ya::FPopupStyle>("popup", ya::FPopupStyle{});
-
-    auto tooltip = ya::FPanelStyle{};
-    tooltip.fillColor = FBrush::solid(bDark ? glm::vec4{0.14f, 0.15f, 0.18f, 0.97f}
-                                            : glm::vec4{0.98f, 0.98f, 0.99f, 0.97f});
-    theme.define<ya::FPanelStyle>("tooltip", tooltip);
-
-    auto ghost = ya::FPanelStyle{};
-    ghost.fillColor = FBrush::solid(bDark ? glm::vec4{0.24f, 0.46f, 0.82f, 0.75f}
-                                          : glm::vec4{0.32f, 0.55f, 0.90f, 0.75f});
-    theme.define<ya::FPanelStyle>("drag.ghost", ghost);
+    // No palette role yet: the popup host is a placement container, not a
+    // surface (the popup's own panel key paints it).
+    theme.define<ya::FPopupStyle>(std::string(StyleKey::Popup), ya::FPopupStyle{});
 
     auto dragSource = ya::FDragDropStyle{};
-    dragSource.normalFill = FBrush::solid(bDark ? glm::vec4{0.20f, 0.22f, 0.27f, 1.0f}
-                                                : glm::vec4{0.86f, 0.88f, 0.92f, 1.0f});
-    dragSource.activeFill = FBrush::solid(bDark ? glm::vec4{0.18f, 0.24f, 0.34f, 1.0f}
-                                                : glm::vec4{0.76f, 0.82f, 0.92f, 1.0f});
-    dragSource.textColor  = text;
-    theme.define<ya::FDragDropStyle>("drag.source", dragSource);
+    dragSource.normalFill = surface(p.raised, radius::kControl, p.borderStrong);
+    dragSource.activeFill = surface(p.selected, radius::kControl, p.accent);
+    dragSource.textColor  = p.text;
+    theme.define<ya::FDragDropStyle>(std::string(StyleKey::DragSource), dragSource);
 
     auto dragTarget = ya::FDragDropStyle{};
-    dragTarget.normalFill = FBrush::solid(bDark ? glm::vec4{0.13f, 0.15f, 0.19f, 1.0f}
-                                                : glm::vec4{0.90f, 0.91f, 0.93f, 1.0f});
-    dragTarget.activeFill = FBrush::solid(bDark ? glm::vec4{0.24f, 0.46f, 0.82f, 0.85f}
-                                                : glm::vec4{0.32f, 0.55f, 0.90f, 0.75f});
-    dragTarget.textColor  = text;
-    theme.define<ya::FDragDropStyle>("drag.target", dragTarget);
+    dragTarget.normalFill = surface(p.well, radius::kControl, p.borderStrong);
+    dragTarget.activeFill = surface({p.selected.r, p.selected.g, p.selected.b, 0.85f},
+                                    radius::kControl,
+                                    p.accent);
+    dragTarget.textColor  = p.text;
+    theme.define<ya::FDragDropStyle>(std::string(StyleKey::DragTarget), dragTarget);
 }
 
 /// Build the tree-level UITheme for a look (`bDark`). The theme defines every
 /// canonical typed-style key the framework controls resolve, so mounting it
-/// themes the whole workbench shell + demo pages. Values are baked from the
-/// token palette at construction.
+/// themes the whole workbench shell + demo pages.
 inline std::shared_ptr<ya::UITheme> buildTheme(bool bDark)
 {
-    using ya::FBrush;
-
     auto theme = std::make_shared<ya::UITheme>();
-    if (bDark) {
-        const glm::vec4 window = tokens::kWindowColor;
-        const glm::vec4 panel  = tokens::kPanelColor;
-
-        auto button = ya::FButtonStyle{};
-        button.normalFill  = FBrush::solid(tokens::kButtonNormal);
-        button.hoveredFill = FBrush::solid(tokens::kButtonHovered);
-        button.pressedFill = FBrush::solid(tokens::kButtonPressed);
-        button.focusedFill = FBrush::solid(tokens::kButtonFocused);
-        button.textColor   = tokens::kTextColor;
-        theme->define<ya::FButtonStyle>("button", button);
-
-        auto windowStyle = ya::FPanelStyle{};
-        windowStyle.fillColor = FBrush::solid(window);
-        theme->define<ya::FPanelStyle>("panel.window", windowStyle);
-        auto titlebarStyle = ya::FPanelStyle{};
-        titlebarStyle.fillColor = FBrush::solid({0.10f, 0.11f, 0.135f, 1.0f});
-        theme->define<ya::FPanelStyle>("panel.titlebar", titlebarStyle);
-        auto canvasStyle = ya::FPanelStyle{};
-        canvasStyle.fillColor = FBrush::solid(tokens::kCanvasColor);
-        theme->define<ya::FPanelStyle>("panel.canvas", canvasStyle);
-        auto panelStyle = ya::FPanelStyle{};
-        panelStyle.fillColor = FBrush::solid(panel);
-        theme->define<ya::FPanelStyle>("panel", panelStyle);
-        auto sidebarStyle = ya::FPanelStyle{};
-        sidebarStyle.fillColor = FBrush::solid({0.095f, 0.102f, 0.125f, 1.0f});
-        theme->define<ya::FPanelStyle>("panel.sidebar", sidebarStyle);
-        auto sidebarCardStyle = ya::FPanelStyle{};
-        sidebarCardStyle.fillColor = FBrush::solid({0.115f, 0.122f, 0.148f, 1.0f});
-        theme->define<ya::FPanelStyle>("panel.sidebar.card", sidebarCardStyle);
-        auto surfaceStyle = ya::FPanelStyle{};
-        surfaceStyle.fillColor = FBrush::solid({0.085f, 0.092f, 0.114f, 1.0f});
-        theme->define<ya::FPanelStyle>("panel.surface", surfaceStyle);
-
-        auto text = ya::FTextStyle{};
-        text.textColor = tokens::kTextColor;
-        text.fontSize  = 13;
-        text.fillColor = FBrush::solid({0.16f, 0.18f, 0.22f, 1.0f}); // badge fill
-        text.padding   = {8.0f, 4.0f};
-        theme->define<ya::FTextStyle>("text", text);
-
-        auto menubar = ya::FMenuBarItemStyle{};
-        // Lifted stops so hover is visible above the window background
-        // (the old pre-theme workbench regression: default 0.10 normal sat
-        // almost on the 0.075 backdrop; the shell previously re-colored the
-        // items by hand — Phase 4 moves that INTO the theme).
-        menubar.textColor   = tokens::kTextColor;
-        menubar.normalFill  = FBrush::solid({0.16f, 0.18f, 0.22f, 1.0f});
-        menubar.hoveredFill = FBrush::solid({0.30f, 0.33f, 0.40f, 1.0f});
-        menubar.separatorColor = {0.24f, 0.26f, 0.32f, 1.0f};
-        theme->define<ya::FMenuBarItemStyle>("menubar", menubar);
-
-        auto tab = ya::FTabStyle{};
-        tab.textColor    = tokens::kTextColor;
-        tab.normalFill   = FBrush::solid({0.15f, 0.16f, 0.19f, 1.0f});
-        tab.hoveredFill  = FBrush::solid({0.21f, 0.23f, 0.27f, 1.0f});
-        tab.selectedFill = FBrush::solid({0.12f, 0.13f, 0.17f, 1.0f});
-        tab.accentColor  = {0.30f, 0.55f, 0.92f, 1.0f};
-        tab.padding      = {8.0f, 2.0f};
-        theme->define<ya::FTabStyle>("tab", tab);
-        auto sideTab = tab;
-        sideTab.normalFill = FBrush::solid({0.12f, 0.13f, 0.16f, 0.0f});
-        sideTab.hoveredFill = FBrush::solid({0.17f, 0.19f, 0.24f, 1.0f});
-        sideTab.selectedFill = FBrush::solid({0.18f, 0.24f, 0.38f, 1.0f});
-        sideTab.padding = {10.0f, 4.0f};
-        sideTab.separatorColor = {0.20f, 0.22f, 0.28f, 1.0f};
-        theme->define<ya::FTabStyle>("tab.sidebar", sideTab);
-        auto dockTab = tab;
-        dockTab.normalFill = FBrush::solid({0.16f, 0.17f, 0.21f, 1.0f});
-        dockTab.hoveredFill = FBrush::solid({0.20f, 0.22f, 0.28f, 1.0f});
-        dockTab.selectedFill = FBrush::solid({0.18f, 0.20f, 0.25f, 1.0f});
-        dockTab.padding = {6.0f, 2.0f};
-        dockTab.separatorColor = {0.24f, 0.26f, 0.32f, 1.0f};
-        theme->define<ya::FTabStyle>("tab.dock", dockTab);
-
-        auto split = ya::FSplitPaneStyle{};
-        split.dividerFill         = FBrush::solid({0.11f, 0.12f, 0.15f, 1.0f});
-        split.dividerHoveredFill  = FBrush::solid({0.26f, 0.31f, 0.40f, 1.0f});
-        split.dividerDraggingFill = FBrush::solid({0.32f, 0.55f, 0.92f, 1.0f});
-        theme->define<ya::FSplitPaneStyle>("split", split);
-
-        auto scrollbar = ya::FScrollBarStyle{};
-        scrollbar.trackColor = FBrush::solid({0.10f, 0.11f, 0.14f, 0.9f});
-        scrollbar.thumbColor = FBrush::solid({0.34f, 0.38f, 0.46f, 1.0f});
-        scrollbar.width      = 8.0f;
-        theme->define<ya::FScrollBarStyle>("scrollbar", scrollbar);
-
-        auto dock = ya::FDockSpaceStyle{};
-        dock.canvasColor = FBrush::solid({0.075f, 0.082f, 0.10f, 1.0f});
-        dock.dropPreviewColor = FBrush::solid({0.28f, 0.52f, 0.90f, 0.16f});
-        dock.dropPreviewMergeColor = FBrush::solid({0.26f, 0.76f, 0.46f, 0.45f});
-        theme->define<ya::FDockSpaceStyle>("dock", dock);
-
-        auto floating = ya::FFloatingWindowStyle{};
-        floating.bodyFill  = FBrush::solid({0.145f, 0.150f, 0.180f, 0.985f});
-        floating.innerFill = FBrush::solid({0.08f, 0.09f, 0.12f, 0.55f});
-        floating.titleTextColor = tokens::kTextColor;
-        theme->define<ya::FFloatingWindowStyle>("floating", floating);
-    }
-    else {
-        const glm::vec4 window = tokens::kWindowColorLight;
-        const glm::vec4 panel  = tokens::kPanelColorLight;
-
-        auto button = ya::FButtonStyle{};
-        button.normalFill  = FBrush::solid(tokens::kButtonNormalLight);
-        button.hoveredFill = FBrush::solid(tokens::kButtonHoveredLight);
-        button.pressedFill = FBrush::solid(tokens::kButtonPressedLight);
-        button.focusedFill = FBrush::solid(tokens::kButtonFocusedLight);
-        button.textColor   = tokens::kTextColorLight;
-        theme->define<ya::FButtonStyle>("button", button);
-
-        auto windowStyle = ya::FPanelStyle{};
-        windowStyle.fillColor = FBrush::solid(window);
-        theme->define<ya::FPanelStyle>("panel.window", windowStyle);
-        auto titlebarStyle = ya::FPanelStyle{};
-        titlebarStyle.fillColor = FBrush::solid({0.80f, 0.82f, 0.86f, 1.0f});
-        theme->define<ya::FPanelStyle>("panel.titlebar", titlebarStyle);
-        auto canvasStyle = ya::FPanelStyle{};
-        canvasStyle.fillColor = FBrush::solid(tokens::kCanvasColorLight);
-        theme->define<ya::FPanelStyle>("panel.canvas", canvasStyle);
-        auto panelStyle = ya::FPanelStyle{};
-        panelStyle.fillColor = FBrush::solid(panel);
-        theme->define<ya::FPanelStyle>("panel", panelStyle);
-        auto sidebarStyle = ya::FPanelStyle{};
-        sidebarStyle.fillColor = FBrush::solid({0.90f, 0.91f, 0.94f, 1.0f});
-        theme->define<ya::FPanelStyle>("panel.sidebar", sidebarStyle);
-        auto sidebarCardStyle = ya::FPanelStyle{};
-        sidebarCardStyle.fillColor = FBrush::solid({0.95f, 0.96f, 0.98f, 1.0f});
-        theme->define<ya::FPanelStyle>("panel.sidebar.card", sidebarCardStyle);
-        auto surfaceStyle = ya::FPanelStyle{};
-        surfaceStyle.fillColor = FBrush::solid({0.88f, 0.89f, 0.93f, 1.0f});
-        theme->define<ya::FPanelStyle>("panel.surface", surfaceStyle);
-
-        auto text = ya::FTextStyle{};
-        text.textColor = tokens::kTextColorLight;
-        text.fontSize  = 13;
-        text.fillColor = FBrush::solid({0.94f, 0.95f, 0.97f, 1.0f});
-        text.padding   = {8.0f, 4.0f};
-        theme->define<ya::FTextStyle>("text", text);
-
-        auto menubar = ya::FMenuBarItemStyle{};
-        menubar.textColor   = tokens::kTextColorLight;
-        menubar.normalFill  = FBrush::solid({0.84f, 0.86f, 0.89f, 1.0f});
-        menubar.hoveredFill = FBrush::solid({0.78f, 0.80f, 0.85f, 1.0f});
-        menubar.separatorColor = {0.70f, 0.72f, 0.76f, 1.0f};
-        theme->define<ya::FMenuBarItemStyle>("menubar", menubar);
-
-        auto tab = ya::FTabStyle{};
-        tab.textColor    = tokens::kTextColorLight;
-        tab.normalFill   = FBrush::solid({0.86f, 0.87f, 0.90f, 1.0f});
-        tab.hoveredFill  = FBrush::solid({0.80f, 0.82f, 0.86f, 1.0f});
-        tab.selectedFill = FBrush::solid({0.93f, 0.94f, 0.96f, 1.0f});
-        tab.accentColor  = {0.30f, 0.55f, 0.92f, 1.0f};
-        tab.padding      = {8.0f, 2.0f};
-        tab.separatorColor      = {0.60f, 0.62f, 0.66f, 1.0f};
-        tab.placeholderTextColor = {0.45f, 0.48f, 0.55f, 1.0f};
-        theme->define<ya::FTabStyle>("tab", tab);
-        auto sideTab = tab;
-        sideTab.normalFill = FBrush::solid({0.90f, 0.91f, 0.94f, 0.0f});
-        sideTab.hoveredFill = FBrush::solid({0.83f, 0.85f, 0.89f, 1.0f});
-        sideTab.selectedFill = FBrush::solid({0.76f, 0.84f, 0.95f, 1.0f});
-        sideTab.padding = {10.0f, 4.0f};
-        sideTab.separatorColor = {0.72f, 0.74f, 0.78f, 1.0f};
-        theme->define<ya::FTabStyle>("tab.sidebar", sideTab);
-        auto dockTab = tab;
-        dockTab.normalFill = FBrush::solid({0.90f, 0.91f, 0.94f, 1.0f});
-        dockTab.hoveredFill = FBrush::solid({0.84f, 0.86f, 0.90f, 1.0f});
-        dockTab.selectedFill = FBrush::solid({0.94f, 0.95f, 0.98f, 1.0f});
-        dockTab.padding = {6.0f, 2.0f};
-        dockTab.separatorColor = {0.70f, 0.72f, 0.76f, 1.0f};
-        theme->define<ya::FTabStyle>("tab.dock", dockTab);
-
-        auto split = ya::FSplitPaneStyle{};
-        split.dividerFill         = FBrush::solid({0.70f, 0.72f, 0.76f, 1.0f});
-        split.dividerHoveredFill  = FBrush::solid({0.55f, 0.60f, 0.70f, 1.0f});
-        split.dividerDraggingFill = FBrush::solid({0.32f, 0.55f, 0.92f, 1.0f});
-        theme->define<ya::FSplitPaneStyle>("split", split);
-
-        auto scrollbar = ya::FScrollBarStyle{};
-        scrollbar.trackColor = FBrush::solid({0.82f, 0.84f, 0.87f, 0.9f});
-        scrollbar.thumbColor = FBrush::solid({0.55f, 0.58f, 0.64f, 1.0f});
-        scrollbar.width      = 8.0f;
-        theme->define<ya::FScrollBarStyle>("scrollbar", scrollbar);
-
-        auto dock = ya::FDockSpaceStyle{};
-        dock.canvasColor = FBrush::solid({0.75f, 0.77f, 0.81f, 1.0f});
-        dock.dropPreviewColor = FBrush::solid({0.28f, 0.52f, 0.90f, 0.18f});
-        dock.dropPreviewMergeColor = FBrush::solid({0.26f, 0.76f, 0.46f, 0.50f});
-        theme->define<ya::FDockSpaceStyle>("dock", dock);
-
-        auto floating = ya::FFloatingWindowStyle{};
-        floating.bodyFill  = FBrush::solid({0.93f, 0.94f, 0.96f, 0.985f});
-        floating.innerFill = FBrush::solid({0.86f, 0.87f, 0.90f, 0.55f});
-        floating.borderColor    = {0.45f, 0.48f, 0.55f, 1.0f};
-        floating.edgeAffordance = {0.50f, 0.56f, 0.70f, 0.42f};
-        floating.titleTextColor = tokens::kTextColorLight;
-        theme->define<ya::FFloatingWindowStyle>("floating", floating);
-    }
-    defineContentStyles(*theme, bDark);
+    defineChromeStyles(*theme, tokens::palette(bDark));
     return theme;
 }
 

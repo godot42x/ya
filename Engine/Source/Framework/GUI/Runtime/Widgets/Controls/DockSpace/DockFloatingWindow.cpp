@@ -573,11 +573,18 @@ void UIDockFloatingWindow::paintSelf(UIFrameBuilder& builder)
     // visual, Paint level (minSize is consumed by the resize interaction
     // path, not layout).
     const FFloatingWindowStyle& style = resolvedStyle();
+    // Body fill carries the window radius and outer edge (FBrush::borderColor).
     builder.addBrush(_layoutRect, style.bodyFill);
-    builder.addRectOutline(_layoutRect, style.borderColor, 1.0f);
-    builder.addRectOutline(
-        Rect2D{_layoutRect.pos + glm::vec2{1.0f, 1.0f}, _layoutRect.extent - glm::vec2{2.0f, 2.0f}},
-        style.innerFill.tintColor, 1.0f);
+    // Inner bevel: a hairline just inside the outer edge, lifted off the fill by
+    // `innerFill`'s tint. Drawn as a rounded hairline (transparent fill) so it
+    // follows the body's corners instead of framing them with a square.
+    if (style.innerFill.tintColor.a > 0.0f) {
+        builder.addRoundedSurface(insetRect(_layoutRect, 1.0f),
+                                  {0.0f, 0.0f, 0.0f, 0.0f},
+                                  style.innerFill.tintColor,
+                                  std::max(style.bodyFill.cornerRadius - 1.0f, 0.0f),
+                                  1.0f);
+    }
 }
 
 void UIDockFloatingWindow::beginWindowMove()
