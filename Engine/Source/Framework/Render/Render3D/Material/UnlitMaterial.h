@@ -6,7 +6,7 @@
 #include "RHI/Core/Std140Types.h"
 #include "RHI/Core/Texture.h"
 
-#include "Test.Unlit.glsl.h"
+#include "Unlit.slang.h"
 
 namespace ya
 {
@@ -53,9 +53,9 @@ YA_DISABLE_PADDED_STRUCT_WARNING_BEGIN()
     };
     // C++ side uses std140::b32 + std140::mat3 for reflection metadata & type safety.
     // Cross-validate with shader companion to ensure layout consistency.
-    static_assert(sizeof(TextureParam) == sizeof(glsl_types::Test::Unlit::TextureParam),
+    static_assert(sizeof(TextureParam) == sizeof(slang_types::Unlit::TextureParam),
                   "TextureParam size mismatch with shader companion");
-    static_assert(sizeof(ParamUBO) == sizeof(glsl_types::Test::Unlit::MaterialUBO),
+    static_assert(sizeof(ParamUBO) == sizeof(slang_types::Unlit::MaterialUBO),
                   "ParamUBO size mismatch with shader companion (MaterialUBO)");
 YA_DISABLE_PADDED_STRUCT_WARNING_END()
 

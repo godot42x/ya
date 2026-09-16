@@ -6,7 +6,7 @@
 #include "Render3D/Material/SimpleMaterial.h"
 #include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/RenderFrameData.h"
-#include "GLSL.Skybox.glsl.h"
+#include "Skybox.slang.h"
 
 #include <array>
 #include <vector>
@@ -49,7 +49,7 @@ class YA_RENDER_3D_API ForwardViewportAuxPasses
         uint32_t  colorType  = 0;
     };
 
-    using SkyboxFrameUBO = glsl_types::GLSL::Skybox::FrameUBO;
+    using SkyboxFrameUBO = slang_types::Skybox::FrameUBO;
 
     struct DebugUBO
     {

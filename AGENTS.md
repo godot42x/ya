@@ -62,7 +62,7 @@ xmake project -k compile_commands
 0. 禁止做 "目前能用就行" 的修复以及重构，应该以架构师的视角来思考问题。避免在补丁之上打补丁，hack之上补hack。遇到目前架构不合理，不支持的时候，及时重构，不断重构是项目良好迭代的关键。
 1. 只使用 XMake，不引入 CMake。
 2. 生成文件只读；修生成链，不手改 `Generated/*`。
-3. Shader-facing C++ 类型以 Slang/GLSL 生成头为单一事实源；不要手写 UBO / SSBO / push constant / indirect command 镜像结构。
+3. Shader-facing C++ 类型以 Slang 生成头为单一事实源（Slang 是唯一 shader 语言，GLSL/shaderc 路径已退役）；不要手写 UBO / SSBO / push constant / indirect command 镜像结构。
 4. 保持最小改动，不混入无关重构。
 5. 遵循现有抽象，不平行造新接口。
 6. 不在帧录制中途重建 GPU 资源；延迟到安全时机。
@@ -84,7 +84,7 @@ xmake project -k compile_commands
 - `Engine/Source/Runtime/Application/`：应用入口、生命周期与自动化
 - `Engine/Source/Runtime/Rendering/`：RenderRuntime、渲染管线与渲染服务
 - `Engine/Source/Editor/`：编辑器层
-- `Engine/Shader/`：Slang / GLSL 与生成头
+- `Engine/Shader/`：Slang 源与生成头
 - `Example/GUIWorkbench/`：retain-mode GUI demo app（页面注册进 FWorkbenchSurface）
 - `Example/`：项目 / 示例
 - `Test/`：GoogleTest

@@ -263,8 +263,8 @@ void VulkanRenderTarget::getViewAndProjMatrix(glm::mat4& view, glm::mat4& proj) 
 }
 ```
 
-**3. Shader 层（`Engine/Shader/GLSL/Test/Lit.glsl`）**：
-```glsl
+**3. Shader 层（`Engine/Shader/Slang/…`）**：
+```hlsl
 void main() {
     // 统一按 Vulkan 坐标系编写
     vec3 worldPos = (modelMat * vec4(aPos, 1.0)).xyz;

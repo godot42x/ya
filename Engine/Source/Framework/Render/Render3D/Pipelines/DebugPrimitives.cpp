@@ -260,7 +260,7 @@ void DebugPrimitives::initLinePipeline()
     GraphicsPipelineCreateInfo ci{};
     ci.renderPass = nullptr;
     ci.shaderDesc = {
-        .shaderName        = "Test/DebugPrimitiveLine.glsl",
+        .shaderName        = "DebugPrimitiveLine.slang",
         .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(LineVertex)}},
         .vertexAttributes  = {DEBUG_LINE_ATTRIBUTES.begin(), DEBUG_LINE_ATTRIBUTES.end()},
     };
@@ -293,7 +293,7 @@ void DebugPrimitives::initShapePipeline()
     GraphicsPipelineCreateInfo ci{};
     ci.renderPass = nullptr;
     ci.shaderDesc = {
-        .shaderName        = "Test/DebugPrimitiveShape.glsl",
+        .shaderName        = "DebugPrimitiveShape.slang",
         .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
         .vertexAttributes  = {
             {.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)},

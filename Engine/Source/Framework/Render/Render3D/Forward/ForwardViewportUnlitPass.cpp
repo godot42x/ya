@@ -120,7 +120,7 @@ void ForwardViewportUnlitPass::initUnlit(const InitDesc& desc)
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .pipelineLayout        = _unlitStatic.pipelineLayout.get(),
         .shaderDesc            = ShaderDesc{
-            .shaderName        = "Test/Unlit.glsl",
+            .shaderName        = "Unlit.slang",
             .vertexBufferDescs = {kUnlitVBDesc},
             .vertexAttributes  = kUnlitVertexAttributes3,
         },

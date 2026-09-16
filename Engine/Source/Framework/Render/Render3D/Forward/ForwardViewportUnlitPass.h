@@ -8,7 +8,7 @@
 #include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Forward/ForwardViewportLitPasses.h"
 
-#include "Test.Unlit.glsl.h"
+#include "Unlit.slang.h"
 
 #include <array>
 #include <glm/glm.hpp>
@@ -28,7 +28,7 @@ struct IRender;
 class ForwardViewportUnlitPass
 {
   public:
-    using UnlitFrameUBO = glsl_types::Test::Unlit::FrameUBO;
+    using UnlitFrameUBO = slang_types::Unlit::FrameUBO;
     using ShadingPipelineVariant = ForwardViewportLitPasses::ShadingPipelineVariant;
 
     struct UnlitPC

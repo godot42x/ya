@@ -62,7 +62,7 @@ xmake project -k compile_commands  # refresh compile_commands.json
 xmake ya-shader                    # regenerate shader C++ headers
 ```
 
-Generated shader headers under `Engine/Shader/*/Generated/` should be treated as build outputs. Change the Slang/GLSL sources or generation scripts instead of editing generated headers by hand.
+Generated shader headers under `Engine/Shader/*/Generated/` should be treated as build outputs. Change the Slang sources or generation scripts instead of editing generated headers by hand.
 
 ## Project Layout
 
@@ -75,7 +75,7 @@ Engine/Source/Resource/   asset loading, handles, metadata, dirty queues
 Engine/Source/Editor/     ImGui editor layers
 Engine/Source/Runtime/    app entry points and runtime orchestration
 Engine/Source/Scene/      scene graph and node hierarchy
-Engine/Shader/            Slang/GLSL sources and generated headers
+Engine/Shader/            Slang sources and generated headers
 Example/                  runnable examples
 Test/                     GoogleTest targets
 ```
@@ -85,7 +85,7 @@ Test/                     GoogleTest targets
 - XMake is the only supported build system.
 - Prefer the Makefile shortcuts for routine build, run, test, and configuration work.
 - The default engine target is `ya`; runnable entry points are usually example targets.
-- Shader-facing C++ types are generated from Slang/GLSL sources.
+- Shader-facing C++ types are generated from Slang sources; Slang is the engine's only shader language.
 - The engine currently develops Vulkan as the main backend.
 
 ## License

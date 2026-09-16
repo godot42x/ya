@@ -9,10 +9,10 @@
 #include "Render3D/Common/ViewDescriptorSetAllocator.h"
 #include "Render3D/Stage/IRenderStage.h"
 
-#include "GLSL.Skybox.glsl.h"
 #include "PBRForward.slang.h"
 #include "PhongLit.slang.h"
-#include "Test.Unlit.glsl.h"
+#include "Skybox.slang.h"
+#include "Unlit.slang.h"
 
 #include <array>
 
@@ -41,8 +41,8 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase<ForwardFram
     using PhongFrameUBO  = slang_types::PhongLit::FrameData;
     using PhongLightUBO  = slang_types::PhongLit::LightData;
     using PhongDebugUBO  = slang_types::PhongLit::DebugData;
-    using UnlitFrameUBO  = glsl_types::Test::Unlit::FrameUBO;
-    using SkyboxFrameUBO = glsl_types::GLSL::Skybox::FrameUBO;
+    using UnlitFrameUBO  = slang_types::Unlit::FrameUBO;
+    using SkyboxFrameUBO = slang_types::Skybox::FrameUBO;
 
     /// CPU payloads built by the viewport stage for the current View.
     struct FramePayloads

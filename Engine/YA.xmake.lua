@@ -81,14 +81,9 @@ add_requires("vulkansdk", {
         utils = {
             -- "VkLayer_khronos_validation", -- import layer
             "slang",
-            "shaderc",
-            "shaderc_util",
-            "shaderc_combined",
-            "shaderc_shared",
             "spirv-cross-core",
             "spirv-cross-util",
             "spirv-cross-reflect",
-            "spirv-cross-glsl",
         }
     }
 })
@@ -172,7 +167,6 @@ do
     set_pcheader("./Source/Framework/Core/Common/FWD.h")
 
     add_includedirs("./Shader/Slang/Generated", { public = true })
-    add_includedirs("./Shader/GLSL/Generated", { public = true })
 
     -- Public deps: consumers linking ya-engine transitively link every module
     -- shared library and receive each module's public include/define config.

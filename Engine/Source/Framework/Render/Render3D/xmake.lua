@@ -5,13 +5,11 @@ target("ya-render-3d")
     add_files("**.cpp")
     add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h")
-    -- Render3D public headers consume the generated shader-interface headers
-    -- (slang.h / glsl.h); the generated roots are propagated to consumers
-    -- as public include dirs, scoped to this module only.
+    -- Render3D public headers consume the generated Slang shader-interface
+    -- headers; the generated roots are propagated to consumers as public
+    -- include dirs, scoped to this module only.
     add_includedirs(path.join(os.projectdir(), "Engine/Shader/Slang/Generated"), { public = true })
-    add_includedirs(path.join(os.projectdir(), "Engine/Shader/GLSL/Generated"), { public = true })
     add_includedirs(path.join(os.projectdir(), "Engine/Shader/Slang/Generated/Common"), { public = true })
-    add_includedirs(path.join(os.projectdir(), "Engine/Shader/GLSL/Generated/Common"), { public = true })
     add_deps(
         "ya-render-resources",
         "ya-gui-compose",

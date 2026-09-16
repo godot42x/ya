@@ -18,7 +18,6 @@ WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_EDITOR_PLUGIN = WORKSPACE_ROOT / "Engine/Plugins/ya-game-editor/ya-game-editor.yaplugin"
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 ENGINE_CONTENT_DIR = WORKSPACE_ROOT / "Engine/Content"
-ENGINE_SHADER_GLSL_DIR = WORKSPACE_ROOT / "Engine/Shader" / "GLSL"
 ENGINE_SHADER_SLANG_DIR = WORKSPACE_ROOT / "Engine/Shader" / "Slang"
 RUNTIME_SHADER_SOURCE_DIRS = [
     WORKSPACE_ROOT / "Engine" / "Source" / "Render",
@@ -28,8 +27,8 @@ ENGINE_THIRDPARTY_RESOURCE_DIRS = [
     WORKSPACE_ROOT / "Engine/ThirdParty" / "LearnOpenGL" / "resources",
     WORKSPACE_ROOT / "Engine/ThirdParty" / "Vulkan-Samples-Assets",
 ]
-SHADER_LITERAL_RE = re.compile(r'"([^"\n]+\.(?:glsl|slang))"')
-GLSL_INCLUDE_RE = re.compile(r'^\s*#include\s*[<"]([^">]+)[">]')
+SHADER_LITERAL_RE = re.compile(r'"([^"\n]+\.slang)"')
+SHADER_INCLUDE_RE = re.compile(r'^\s*#include\s*[<"]([^">]+)[">]')
 SLANG_IMPORT_RE = re.compile(r'^\s*import\s+([A-Za-z0-9_.]+)\s*;')
 
 
@@ -364,14 +363,10 @@ def _iter_shader_scan_roots(project: ProjectDescriptor, include_editor: bool) ->
 
 
 def _resolve_engine_shader_path(shader_name: str) -> Path | None:
-    normalized = Path(shader_name)
-    if shader_name.endswith(".glsl"):
-        candidate = (ENGINE_SHADER_GLSL_DIR / normalized).resolve()
-        return candidate if candidate.is_file() else None
-    if shader_name.endswith(".slang"):
-        candidate = (ENGINE_SHADER_SLANG_DIR / normalized).resolve()
-        return candidate if candidate.is_file() else None
-    return None
+    if not shader_name.endswith(".slang"):
+        return None
+    candidate = (ENGINE_SHADER_SLANG_DIR / Path(shader_name)).resolve()
+    return candidate if candidate.is_file() else None
 
 
 def _collect_runtime_shader_roots(project: ProjectDescriptor, include_editor: bool) -> list[Path]:
@@ -392,14 +387,11 @@ def _collect_runtime_shader_roots(project: ProjectDescriptor, include_editor: bo
 
 
 def _resolve_shader_dependency_path(dependency: str, owner: Path) -> Path | None:
-    owner_root = ENGINE_SHADER_GLSL_DIR if owner.suffix == ".glsl" else ENGINE_SHADER_SLANG_DIR
     normalized_dependency = Path(dependency)
     candidates = [
         (owner.parent / normalized_dependency).resolve(),
-        (owner_root / normalized_dependency).resolve(),
+        (ENGINE_SHADER_SLANG_DIR / normalized_dependency).resolve(),
     ]
-    if owner.suffix == ".slang":
-        candidates.append((ENGINE_SHADER_SLANG_DIR / normalized_dependency).resolve())
     for candidate in candidates:
         if candidate.is_file():
             return candidate
@@ -422,20 +414,19 @@ def _collect_shader_dependency_closure(roots: list[Path]) -> set[Path]:
             continue
 
         for line in content.splitlines():
-            include_match = GLSL_INCLUDE_RE.match(line)
+            include_match = SHADER_INCLUDE_RE.match(line)
             if include_match:
                 dependency = _resolve_shader_dependency_path(include_match.group(1), current)
                 if dependency is not None and dependency not in closure:
                     stack.append(dependency)
                 continue
 
-            if current.suffix == ".slang":
-                import_match = SLANG_IMPORT_RE.match(line)
-                if import_match:
-                    dependency_name = import_match.group(1).replace(".", "/") + ".slang"
-                    dependency = _resolve_shader_dependency_path(dependency_name, current)
-                    if dependency is not None and dependency not in closure:
-                        stack.append(dependency)
+            import_match = SLANG_IMPORT_RE.match(line)
+            if import_match:
+                dependency_name = import_match.group(1).replace(".", "/") + ".slang"
+                dependency = _resolve_shader_dependency_path(dependency_name, current)
+                if dependency is not None and dependency not in closure:
+                    stack.append(dependency)
 
     return closure
 
@@ -447,7 +438,7 @@ def _copy_engine_runtime_resources(package_root: Path, project: ProjectDescripto
     shader_roots = _collect_runtime_shader_roots(project, include_editor)
     shader_closure = _collect_shader_dependency_closure(shader_roots)
     for shader_path in sorted(shader_closure):
-        destination = package_root / "Engine" / "Shader" / shader_path.relative_to(ENGINE_SHADER_GLSL_DIR.parent)
+        destination = package_root / "Engine" / "Shader" / shader_path.relative_to(ENGINE_SHADER_SLANG_DIR.parent)
         _copy_file(shader_path, package_root, destination)
 
     for resource_dir in ENGINE_THIRDPARTY_RESOURCE_DIRS:
@@ -834,8 +825,6 @@ def verify_package_contents(project: ProjectDescriptor,
         raise RuntimeError(f"Package verification failed; runtime-only package unexpectedly contains editor module: {editor_binary}")
     if (package_root / "Example").exists():
         raise RuntimeError(f"Package verification failed; packaged output still contains Example/: {package_root / 'Example'}")
-    if (package_root / "Engine" / "Shader" / "GLSL" / "Generated").exists():
-        raise RuntimeError("Package verification failed; Engine/Shader/GLSL/Generated should not be packaged")
     if (package_root / "Engine" / "Shader" / "Slang" / "Generated").exists():
         raise RuntimeError("Package verification failed; Engine/Shader/Slang/Generated should not be packaged")
     root_dylibs = sorted(path.name for path in package_root.glob("*.dylib"))

@@ -16,8 +16,6 @@
 #include <cstring>
 #include <fstream>
 #include <map>
-#include <shaderc/shaderc.h>
-#include <shaderc/shaderc.hpp>
 #include <sstream>
 #include <stdio.h>
 #include <string>
@@ -38,76 +36,6 @@
 
 namespace ya
 {
-namespace EShaderStage
-{
-
-
-
-const char* getOpenGLCacheFileExtension(EShaderStage::T stage)
-{
-    switch (stage) {
-    case EShaderStage::Vertex:
-        return ".cached.opengl.vert";
-    case EShaderStage::Fragment:
-        return ".cached.opengl.frag";
-    case EShaderStage::Geometry:
-        return ".cached.opengl.geom";
-    default:
-        UNREACHABLE();
-        break;
-    }
-    YA_CORE_ASSERT(false, "Unknown shader type!");
-    return "";
-}
-
-const char* getVulkanCacheFileExtension(EShaderStage::T stage)
-{
-    switch (stage) {
-    case EShaderStage::Vertex:
-        return ".cached.vulkan.vert";
-    case EShaderStage::Fragment:
-        return ".cached.vulkan.frag";
-    case EShaderStage::Geometry:
-        return ".cached.vulkan.geom";
-    case EShaderStage::Compute:
-        return ".cached.vulkan.comp";
-    case EShaderStage::Task:
-        return ".cached.vulkan.task";
-    case EShaderStage::Mesh:
-        return ".cached.vulkan.mesh";
-    default:
-        UNREACHABLE();
-        break;
-    }
-    YA_CORE_ASSERT(false, "Unknown shader type!");
-    return "";
-}
-
-const char* getSpvOutputExtension(EShaderStage::T stage)
-{
-    switch (stage) {
-    case EShaderStage::Vertex:
-        return "vert.spv";
-    case EShaderStage::Fragment:
-        return "frag.spv";
-    case EShaderStage::Geometry:
-        return "geom.spv";
-    case EShaderStage::Compute:
-        return "comp.spv";
-    case EShaderStage::Task:
-        return "task.spv";
-    case EShaderStage::Mesh:
-        return "mesh.spv";
-    default:
-        UNREACHABLE();
-        break;
-    }
-    // YA_CORE_ASSERT(false);
-    return "";
-}
-
-} // namespace EShaderStage
-
 namespace shader_internal
 {
 
@@ -195,12 +123,6 @@ std::optional<std::string> resolveShaderIncludePath(std::string_view requestedSo
     if (shaderPathExists(resolvedName)) {
         return resolvedName;
     }
-
-    auto fallback     = (std::filesystem::path("Engine/Shader/GLSL") / reqPath).lexically_normal();
-    auto fallbackName = fallback.generic_string();
-    if (shaderPathExists(fallbackName)) {
-        return fallbackName;
-    }
     return std::nullopt;
 }
 
@@ -266,7 +188,7 @@ bool appendShaderDependencyHash(const std::string& filePath, std::unordered_set<
             std::replace(moduleFilePath.begin(), moduleFilePath.end(), '.', '/');
             moduleFilePath += ".slang";
 
-            // Resolve: relative to current file, then Engine/Shader/GLSL fallback, then Slang base dir
+            // Resolve: relative to the current file, then the Slang base dir.
             auto resolvedPath = resolveShaderIncludePath(moduleFilePath, normalizedPath);
             if (!resolvedPath.has_value()) {
                 auto slangFallback    = (std::filesystem::path("Engine/Shader/Slang") / moduleFilePath).lexically_normal();

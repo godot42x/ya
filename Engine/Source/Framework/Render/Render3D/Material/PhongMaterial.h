@@ -6,7 +6,7 @@
 #include "RHI/Core/Std140Types.h"
 #include "RHI/Core/Texture.h"
 
-#include "PhongLit.Types.glsl.h"
+#include "PhongLit.slang.h"
 
 namespace ya
 {
@@ -35,7 +35,7 @@ struct PhongMaterial : public Material
     //     std140::mat3 uvTransform{1.0f};
     // };
 
-    using TextureParam = glsl_types::PhongLit::Types::TextureParam;
+    using TextureParam = slang_types::PhongLit::TextureParam;
 
     /// Texture resource enum
     enum EResource : int
@@ -61,7 +61,7 @@ YA_DISABLE_PADDED_STRUCT_WARNING_BEGIN()
     };
 
     // 暂时需要反射查看实际value，不去动头文件生成逻辑(未来反射框架定下来之后可以做拓展也生产代码代码)
-    // using ParamData = glsl_types::PhongLit::Types::ParamUBO
+    // using ParamData = slang_types::PhongLit::ParamUBO
 YA_DISABLE_PADDED_STRUCT_WARNING_END()
 
 

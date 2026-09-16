@@ -13,9 +13,9 @@
 #include <memory>
 #include <type_traits>
 
-// Single source of truth: MAX_POINT_LIGHTS lives in Engine/Shader/GLSL/Common/Limits.glsl.
-// The code generator emits it to ya::glsl_types::Common::Limits::MAX_POINT_LIGHTS.
-// #include "Common.Limits.glsl.h"
+// Single source of truth: MAX_POINT_LIGHTS lives in Engine/Config/Engine.jsonc
+// shader.defines. The code generator emits it to
+// ya::slang_types::Common::Limits::MAX_POINT_LIGHTS via Engine/Shader/Slang/Common/Limits.slang.
 #include "Common.Limits.slang.h"
 
 namespace ya
@@ -28,7 +28,7 @@ struct INativeWindow;
 /// of this size. Shared by the 2D batch renderer and the 3D render stages.
 constexpr uint32_t MAX_FLIGHTS_IN_FLIGHT = 2;
 
-// using glsl_types::Common::Limits::MAX_POINT_LIGHTS;
+// using slang_types::Common::Limits::MAX_POINT_LIGHTS;
 using slang_types::Common::Limits::MAX_BONE_COUNT;
 using slang_types::Common::Limits::MAX_BONE_WEIGHT_PER_VERTEX;
 using slang_types::Common::Limits::MAX_DIRECTIONAL_CASCADES;
@@ -302,7 +302,7 @@ struct ShaderDesc
     };
 
     ESourceMode                          sourceMode = ESourceMode::SingleShader;
-    std::string                          shaderName; // we use single glsl now
+    std::string                          shaderName; // single .slang file holding every stage
     std::vector<StageFile>               stageFiles{};
     ShaderReflectionConfig               reflection{};
     std::vector<VertexBufferDescription> vertexBufferDescs{};

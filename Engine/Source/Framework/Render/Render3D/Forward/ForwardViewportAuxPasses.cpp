@@ -142,7 +142,7 @@ void ForwardViewportAuxPasses::initSimple(const InitDesc& desc)
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .pipelineLayout        = _simplePPL.get(),
         .shaderDesc            = ShaderDesc{
-            .shaderName        = "Test/SimpleMaterial.glsl",
+            .shaderName        = "SimpleMaterial.slang",
             .vertexBufferDescs = {kAuxVBDesc},
             .vertexAttributes  = kAuxVertexAttributes3,
         },
@@ -188,7 +188,7 @@ void ForwardViewportAuxPasses::initSkybox(const InitDesc& desc)
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .pipelineLayout        = _skyboxPPL.get(),
         .shaderDesc            = ShaderDesc{
-            .shaderName        = "Skybox.glsl",
+            .shaderName        = "Skybox.slang",
             .vertexBufferDescs = {kAuxVBDesc},
             .vertexAttributes  = kAuxVertexAttributes3,
         },
@@ -228,7 +228,7 @@ void ForwardViewportAuxPasses::initDebug(const InitDesc& desc)
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .pipelineLayout        = _debugPPL.get(),
         .shaderDesc            = ShaderDesc{
-            .shaderName        = "Test/DebugRender.glsl",
+            .shaderName        = "DebugRender.slang",
             .vertexBufferDescs = {kAuxVBDesc},
             .vertexAttributes  = kAuxVertexAttributes3,
         },

@@ -2,34 +2,29 @@
 -- group. The engine profile generates all groups; the gui profile generates
 -- only shader-common (limits/layout shared by every profile) and shader-gui
 -- (Sprite2D), so no 3D shader is compiled, generated or packaged for GUI.
---   common    Slang/Common/** + GLSL/Common/**        -> Generated/Common/
+--   common    Slang/Common/**                         -> Generated/Common/
 --   gui       Sprite2D.slang + Sprite2DLine.slang     -> Generated/
---   render3d  remaining Slang/** + GLSL/**             -> Generated/
---   test      GLSL/Test/**                             -> Generated/
+--   render3d  remaining Slang/**                      -> Generated/
+--
+-- Slang is the only shader language of the engine: the GLSL/shaderc backend was
+-- retired, so there is no second source axis and no glsl_gen_header step.
 local SHADER_MANIFEST = {
     common = {
         slang = { "Engine/Shader/Slang/Common/" },
-        glsl  = { "Engine/Shader/GLSL/Common/" },
     },
     gui = {
         slang = {
             "Engine/Shader/Slang/Sprite2D.slang",
             "Engine/Shader/Slang/Sprite2DLine.slang",
         },
-        glsl = {},
     },
     render3d = {
         -- Everything that is not claimed by another group.
         slang = { "Engine/Shader/Slang/" },
-        glsl  = { "Engine/Shader/GLSL/" },
-    },
-    test = {
-        slang = {},
-        glsl  = { "Engine/Shader/GLSL/Test/" },
     },
 }
 
-local SHADER_GROUPS_ORDER = { "common", "gui", "render3d", "test" }
+local SHADER_GROUPS_ORDER = { "common", "gui", "render3d" }
 
 local function _profile_groups(profile)
     if profile == "gui" then
@@ -40,28 +35,19 @@ end
 
 local function _collect_group_files(group)
     local slangFiles = {}
-    local glslFiles  = {}
     for _, pat in ipairs(SHADER_MANIFEST[group].slang) do
         table.join2(slangFiles, os.files(pat .. "**.slang"))
     end
-    for _, pat in ipairs(SHADER_MANIFEST[group].glsl) do
-        table.join2(glslFiles, os.files(pat .. "**.glsl"))
-    end
     table.sort(slangFiles)
-    table.sort(glslFiles)
-    return slangFiles, glslFiles
+    return slangFiles
 end
 
 -- render3d is the catch-all group: it claims every file not owned by
--- common/gui/test.
+-- common/gui.
 local function _collect_render3d_files()
     local owned = {}
-    for _, group in ipairs({ "common", "gui", "test" }) do
-        local s, g = _collect_group_files(group)
-        for _, f in ipairs(s) do
-            owned[f] = true
-        end
-        for _, f in ipairs(g) do
+    for _, group in ipairs({ "common", "gui" }) do
+        for _, f in ipairs(_collect_group_files(group)) do
             owned[f] = true
         end
     end
@@ -71,45 +57,32 @@ local function _collect_render3d_files()
             table.insert(slangFiles, f)
         end
     end
-    local glslFiles = {}
-    for _, f in ipairs(os.files("Engine/Shader/GLSL/**.glsl")) do
-        if not owned[f] then
-            table.insert(glslFiles, f)
-        end
-    end
     table.sort(slangFiles)
-    table.sort(glslFiles)
-    return slangFiles, glslFiles
+    return slangFiles
 end
 
 local function _collect_groups_files(groups)
     local slangFiles = {}
-    local glslFiles  = {}
     for _, group in ipairs(groups) do
-        local s, g
+        local files
         if group == "render3d" then
-            s, g = _collect_render3d_files()
+            files = _collect_render3d_files()
         else
-            s, g = _collect_group_files(group)
+            files = _collect_group_files(group)
         end
-        table.join2(slangFiles, s)
-        table.join2(glslFiles, g)
+        table.join2(slangFiles, files)
     end
     table.sort(slangFiles)
-    table.sort(glslFiles)
-    return slangFiles, glslFiles
+    return slangFiles
 end
 
 local function _shader_codegen_inputs(groups)
     local files = {
         "Engine/Shader/slang_gen_header.py",
-        "Engine/Shader/glsl_gen_header.py",
         "Engine/Shader/shader_config.py",
         "requirements.txt",
     }
-    local slangFiles, glslFiles = _collect_groups_files(groups)
-    table.join2(files, slangFiles)
-    table.join2(files, glslFiles)
+    table.join2(files, _collect_groups_files(groups))
     table.sort(files)
     return files
 end
@@ -147,17 +120,16 @@ local function _run_shader_codegen(run_script, groups)
     do
         run_script("Engine/Shader/shader_config.py", {
             "--config", "Engine/Config/Engine.jsonc",
-            "--glsl-output", "Engine/Shader/GLSL/Common/Limits.glsl",
             "--slang-output", "Engine/Shader/Slang/Common/Limits.slang",
         })
     end
 
     for _, group in ipairs(groups) do
-        local slangFiles, glslFiles
+        local slangFiles
         if group == "render3d" then
-            slangFiles, glslFiles = _collect_render3d_files()
+            slangFiles = _collect_render3d_files()
         else
-            slangFiles, glslFiles = _collect_group_files(group)
+            slangFiles = _collect_group_files(group)
         end
 
         -- The common group is the shared generated-interface for every
@@ -166,8 +138,6 @@ local function _run_shader_codegen(run_script, groups)
         -- tree.
         local slangOut = group == "common" and "Engine/Shader/Slang/Generated/Common"
                         or "Engine/Shader/Slang/Generated"
-        local glslOut  = group == "common" and "Engine/Shader/GLSL/Generated/Common"
-                        or "Engine/Shader/GLSL/Generated"
 
         if #slangFiles > 0 then
             local args = {
@@ -179,18 +149,6 @@ local function _run_shader_codegen(run_script, groups)
                 table.insert(args, f)
             end
             run_script("Engine/Shader/slang_gen_header.py", args)
-        end
-
-        if #glslFiles > 0 then
-            local args = {
-                "--output-dir", glslOut,
-                "--namespace", "ya::glsl_types",
-                "--include-dir", "Engine/Shader/GLSL",
-            }
-            for _, f in ipairs(glslFiles) do
-                table.insert(args, f)
-            end
-            run_script("Engine/Shader/glsl_gen_header.py", args)
         end
     end
 

@@ -145,7 +145,7 @@ void ViewportOverlayStage::initSkybox(stdptr<IDescriptorSetLayout> skyboxFrameDS
         },
         .pipelineLayout = _skyboxPPL.get(),
         .shaderDesc     = ShaderDesc{
-            .shaderName        = "Skybox.glsl",
+            .shaderName        = "Skybox.slang",
             .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
             .vertexAttributes  = {
                 {.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)},
@@ -267,7 +267,7 @@ void ViewportOverlayStage::initOverlay()
         },
         .pipelineLayout = _overlayPPL.get(),
         .shaderDesc     = ShaderDesc{
-            .shaderName        = "Test/SimpleMaterial.glsl",
+            .shaderName        = "SimpleMaterial.slang",
             .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
             .vertexAttributes  = {
                 {.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)},

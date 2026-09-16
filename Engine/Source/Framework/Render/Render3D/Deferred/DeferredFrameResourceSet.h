@@ -12,7 +12,7 @@
 #include "DeferredRender.GBufferPass_PBR.slang.h"
 #include "DeferredRender.LightPass.slang.h"
 #include "DeferredRender.SSAO.slang.h"
-#include "GLSL.Skybox.glsl.h"
+#include "Skybox.slang.h"
 
 #include <array>
 #include <optional>
@@ -38,7 +38,7 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
     using FrameData = slang_types::DeferredRender::GBufferPass_PBR::FrameData;
     using LightData = slang_types::DeferredRender::LightPass::LightData;
     using SSAOFrameData = slang_types::DeferredRender::SSAO::FrameData;
-    using SkyboxFrameData = glsl_types::GLSL::Skybox::FrameUBO;
+    using SkyboxFrameData = slang_types::Skybox::FrameUBO;
 
     struct ViewPayloads
     {

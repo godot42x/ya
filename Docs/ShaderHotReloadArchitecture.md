@@ -219,8 +219,8 @@ DescriptorPoolCreateInfo calculatePoolSizeFromReflection(
 // 在 UnlitMaterialSystem.h 中添加
 void enableShaderHotReload() {
     FileWatcher::get()->watchDirectory(
-        "Engine/Shader/GLSL", 
-        ".glsl",
+        "Engine/Shader/Slang", 
+        ".slang",
         [this](const FileWatcher::FileEvent& e) {
             if (e.path.find(_pipelineDesc.shaderDesc.shaderName) != string::npos) {
                 _pipeline->reloadShaders();

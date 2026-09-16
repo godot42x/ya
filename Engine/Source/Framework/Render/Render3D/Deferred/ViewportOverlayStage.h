@@ -9,7 +9,7 @@
 #include "Render3D/Services/DebugRenderSystem.h"
 #include "Render3D/Common/RenderOverlay.h"
 
-#include "GLSL.Skybox.glsl.h"
+#include "Skybox.slang.h"
 
 #include <functional>
 #include <glm/glm.hpp>
@@ -59,7 +59,7 @@ struct YA_RENDER_3D_API ViewportOverlayStage : public IRenderStage
         SkyboxInput            skybox{};
     };
 
-    using SkyboxFrameUBO = glsl_types::GLSL::Skybox::FrameUBO;
+    using SkyboxFrameUBO = slang_types::Skybox::FrameUBO;
 
     struct OverlayPushConstant
     {

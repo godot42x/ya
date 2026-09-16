@@ -79,35 +79,30 @@ description: YA Engine 渲染架构、RenderRuntime 边界与 shader 生成链�
 2. 后端差异只在平台层扩散，不反向污染上层接口。
 3. 渲染编排优先放在 `RenderRuntime` / pipeline / system，不要把 orchestration 打散到 component。
 4. 遇到渲染异常时，优先检查初始化顺序、资源生命周期、layout transition，再查 shader / pipeline state。
-5. 生成文件是只读产物；shader 头不对时修 `Shader.xmake.lua`、`slang_gen_header.py`、`glsl_gen_header.py`，不要直接改 `Generated/*`。
+5. 生成文件是只读产物；shader 头不对时修 `Shader.xmake.lua`、`slang_gen_header.py`，不要直接改 `Generated/*`。
 
 ## Shader 生成流程
 
-当前链路不是单一 Slang 路径，而是配置 + Slang + GLSL 三段：
+Slang 是引擎唯一的 shader 语言（GLSL / shaderc 路径已退役，`Engine/Shader/GLSL` 与 `GLSLProcessor` 都已删除）。当前链路是配置 + Slang 两段：
 
 ```text
 Engine/Config/Engine.jsonc
   -> Shader.xmake.lua Step 0
-  -> 生成 Engine/Shader/GLSL/Common/Limits.glsl
   -> 生成 Engine/Shader/Slang/Common/Limits.slang
 
 Slang 源文件
   -> slang_gen_header.py
   -> Engine/Shader/Slang/Generated/*.slang.h
 
-GLSL 源文件
-  -> glsl_gen_header.py
-  -> Engine/Shader/GLSL/Generated/*.glsl.h
-
 C++
   -> include 生成头
-  -> 使用 slang_types:: / ya::glsl_types 命名空间中的常量与结构体
+  -> 使用 slang_types:: 命名空间中的常量与结构体
 ```
 
 落地规则：
 
 1. 不要手写与 shader-facing layout 对应的 C++ 结构体，包括 UBO、SSBO、push constant、indirect command。
-2. C++ 侧必须 include `Engine/Shader/Slang/Generated/*.slang.h` 或 `Engine/Shader/GLSL/Generated/*.glsl.h`，消费 `slang_types::` / `ya::glsl_types` 里的生成类型。
+2. C++ 侧必须 include `Engine/Shader/Slang/Generated/*.slang.h`，消费 `slang_types::` 里的生成类型。
 3. 若生成头缺少需要的 shader-facing 类型，修 shader 源或生成脚本，不在 C++ 侧补 mirror struct。
 4. 配置常量优先以 `Engine/Config/Engine.jsonc` 为单一事实源，其余文件只消费不重定义。
 5. 若值变更，优先改配置或生成脚本，再运行 `xmake ya-shader`。

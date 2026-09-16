@@ -38,21 +38,6 @@ def _to_define_literal(value: int | float | str | bool) -> str:
     return str(value)
 
 
-def build_glsl_limits_content(config_path: str | Path) -> str:
-    defines = extract_shader_defines(config_path)
-    header_lines = [
-        "#pragma once",
-        f"// Auto-generated from {config_path} - DO NOT EDIT.",
-        "// Modify Engine.jsonc shader.defines instead.",
-        "",
-    ]
-    for name, value in defines.items():
-        header_lines.append(f"#undef {name}")
-        header_lines.append(f"#define {name} {_to_define_literal(value)}")
-    header_lines.append("")
-    return "\n".join(header_lines)
-
-
 def build_slang_limits_content(config_path: str | Path) -> str:
     defines = extract_shader_defines(config_path)
     header_lines = [
@@ -78,11 +63,8 @@ def write_if_changed(path: str | Path, content: str) -> bool:
     return True
 
 
-def sync_limits_files(config_path: str | Path, glsl_path: str | Path, slang_path: str | Path) -> None:
-    glsl_content = build_glsl_limits_content(config_path)
+def sync_limits_files(config_path: str | Path, slang_path: str | Path) -> None:
     slang_content = build_slang_limits_content(config_path)
-    if write_if_changed(glsl_path, glsl_content):
-        print(f"[shader-config] Generated {glsl_path}")
     if write_if_changed(slang_path, slang_content):
         print(f"[shader-config] Generated {slang_path}")
 
@@ -90,11 +72,10 @@ def sync_limits_files(config_path: str | Path, glsl_path: str | Path, slang_path
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate shader limits headers from Engine.jsonc")
     parser.add_argument("--config", required=True, help="Path to Engine.jsonc")
-    parser.add_argument("--glsl-output", required=True, help="Path to generated GLSL limits file")
     parser.add_argument("--slang-output", required=True, help="Path to generated Slang limits file")
     args = parser.parse_args()
 
-    sync_limits_files(args.config, args.glsl_output, args.slang_output)
+    sync_limits_files(args.config, args.slang_output)
 
 
 if __name__ == "__main__":

@@ -65,23 +65,15 @@ void RenderRuntime::initRuntimeState(const InitDesc& desc)
 
 void RenderRuntime::initShaderSystems()
 {
-    auto shaderProcessor = ShaderProcessorFactory()
-                               .withProcessorType(ShaderProcessorFactory::EProcessorType::GLSL)
-                               .withShaderStoragePath("Engine/Shader/GLSL")
-                               .withCachedStoragePath("Engine/Intermediate/Shader/GLSL")
-                               .FactoryNew<GLSLProcessor>();
-    _shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
-
-    auto slangProcessor = ShaderProcessorFactory()
-                              .withProcessorType(ShaderProcessorFactory::EProcessorType::Slang)
-                              .withShaderStoragePath("Engine/Shader/Slang")
-                              .withCachedStoragePath("Engine/Intermediate/Shader/Slang")
-                              .FactoryNew<SlangProcessor>();
-    _shaderStorage->setSlangProcessor(slangProcessor);
+    _shaderStorage = std::make_shared<ShaderStorage>(
+        ShaderProcessorFactory()
+            .withShaderStoragePath("Engine/Shader/Slang")
+            .withCachedStoragePath("Engine/Intermediate/Shader/Slang")
+            .FactoryNew());
 
     _shaderStorage->preloadAsync({
-        ShaderDesc{.shaderName = "Test/Unlit.glsl"},
-        ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"},
+        ShaderDesc{.shaderName = "Unlit.slang"},
+        ShaderDesc{.shaderName = "SimpleMaterial.slang"},
         ShaderDesc{
             .sourceMode = ShaderDesc::ESourceMode::StageFiles,
             .stageFiles = {
@@ -89,12 +81,10 @@ void RenderRuntime::initShaderSystems()
                 ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2D.slang"},
             },
         },
-        ShaderDesc{.shaderName = "Test/DebugRender.glsl"},
-        ShaderDesc{.shaderName = "Test/DebugPrimitiveLine.glsl"},
-        ShaderDesc{.shaderName = "Test/DebugPrimitiveShape.glsl"},
-        ShaderDesc{.shaderName = "PostProcessing/Basic.glsl"},
-        ShaderDesc{.shaderName = "Skybox.glsl"},
-        ShaderDesc{.shaderName = "Shadow/DirectionalLightDepthBuffer.glsl"},
+        ShaderDesc{.shaderName = "DebugRender.slang"},
+        ShaderDesc{.shaderName = "DebugPrimitiveLine.slang"},
+        ShaderDesc{.shaderName = "DebugPrimitiveShape.slang"},
+        ShaderDesc{.shaderName = "Skybox.slang"},
         ShaderDesc{.shaderName = "CombineShadowMappingGenerate.slang"},
         ShaderDesc{.shaderName = "Shadow/PointShadowCull.comp.slang"},
         ShaderDesc{.shaderName = "Shadow/PointShadowIndirect.slang"},
@@ -172,7 +162,9 @@ void RenderRuntime::initSharedRenderResources()
                   { _sharedResourceProvider.shutdown(); });
 
     _shaderStorage->waitForPreload();
-    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit/PhongLit.glsl"});
+    // Compile check for the Forward lit path: PhongLit.slang is warmed here so a
+    // broken shader surfaces during init instead of at first pipeline build.
+    _shaderStorage->validate(ShaderDesc{.shaderName = "PhongLit.slang"});
 
     _pipelineCoordinator.init(PipelineCoordinator::InitDesc{
         .render                = _render,

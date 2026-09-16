@@ -623,15 +623,13 @@ bool GUIWindowHost::init()
     // edit; the events are routed like every other keyboard event.
     window.startTextInput();
 
-    // 2. Shader compile/cache service (Slang processor serves the GUI
+    // 2. Shader compile/cache service (the Slang processor serves the GUI
     //    Sprite2D shaders; injected into the backend before pipeline build).
-    auto shaderProcessor = ShaderProcessorFactory()
-                               .withProcessorType(ShaderProcessorFactory::EProcessorType::Slang)
-                               .withShaderStoragePath("Engine/Shader/Slang")
-                               .withCachedStoragePath("Engine/Intermediate/Shader/Slang")
-                               .FactoryNew<SlangProcessor>();
-    _impl->shaderStorage = std::make_shared<ShaderStorage>(shaderProcessor);
-    _impl->shaderStorage->setSlangProcessor(shaderProcessor);
+    _impl->shaderStorage = std::make_shared<ShaderStorage>(
+        ShaderProcessorFactory()
+            .withShaderStoragePath("Engine/Shader/Slang")
+            .withCachedStoragePath("Engine/Intermediate/Shader/Slang")
+            .FactoryNew());
 
     // 3. Render backend (same API as the primary native window).
     RenderCreateInfo renderCI{

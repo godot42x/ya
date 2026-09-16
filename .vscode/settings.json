@@ -160,16 +160,6 @@
     "explorer.fileNesting.patterns": {
         "*.h": "$(capture).*.cpp, $(capture).cpp"
     },
-    "glsllint.glslangValidatorPath": "uv",
-    "glsllint.glslangValidatorArgs": [
-        "run",
-        "python",
-        "Script/ya_glslang_validator.py",
-        "-V"
-    ],
-    "glsllint.fallBackStage": "vert",
-    "glsllint.linkShader": false,
-    "glsllint.useIncludeDirOfFile": true,
     "trae.tab.enableRename": false,
     "trae.tab.enableAutoImport": false,
 }

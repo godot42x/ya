@@ -167,11 +167,6 @@ struct Shader
     std::filesystem::path m_FilePath;
 };
 
-struct GLSLShader : public Shader
-{
-    uint32_t m_ShaderID{0};
-};
-
 enum class EShaderProcessMode
 {
     UseCache,
@@ -227,44 +222,10 @@ struct IShaderProcessor
     [[nodiscard]] virtual ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData)                      = 0;
 };
 
-struct YA_RHI_API GLSLProcessor : public IShaderProcessor
-{
-
-    friend class ShaderProcessorFactory;
-
-
-  private:
-
-    bool bOptimizeGLBinaries = false;
-    bool bValid              = false;
-
-  protected:
-    // GLSLProcessor() {}
-
-  public:
-
-    std::optional<stage2spirv_t>      process(const ShaderDesc& ci, EShaderProcessMode mode = EShaderProcessMode::UseCache) override;
-    ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData) override;
-
-    auto compileToSpv(std::string_view filename, std::string_view content, EShaderStage::T stage, const std::vector<std::string>& defines, std::vector<ir_t>& outSpv) -> bool;
-
-
-
-  private:
-
-    std::filesystem::path GetCachePath(bool bVulkan) const;
-
-    bool                                             processCombinedSource(const stdpath& filepath, const std::vector<std::string>& defines, stage2spirv_t& outSpvMap);
-    std::unordered_map<EShaderStage::T, std::string> preprocessCombinedSource(const stdpath& filepath);
-
-    bool processSpvFiles(std::string_view vertFile, std::string_view fragFile, stage2spirv_t& outSpvMap);
-};
-
-
 // ============================================================
 // SlangProcessor: compiles .slang source files to SPIR-V via
 // the Slang runtime API, and reflects shader resources using
-// SPIRV-Cross (same as GLSLProcessor).
+// SPIRV-Cross.
 // ============================================================
 // MARK: Slang
 struct YA_RHI_API SlangProcessor : public IShaderProcessor
@@ -298,7 +259,6 @@ struct YA_RHI_API ShaderStorage
     using cache_value_t = std::shared_ptr<stage2spirv_t>;
 
     std::shared_ptr<IShaderProcessor>               _processor;
-    std::shared_ptr<IShaderProcessor>               _slangProcessor; // optional, for .slang files
     std::unordered_map<std::string, cache_value_t>  _shaderCache;
     mutable std::mutex                              _cacheMutex;
     std::unique_ptr<std::thread>                    _preloadThread;
@@ -306,38 +266,10 @@ struct YA_RHI_API ShaderStorage
     ShaderStorage(std::shared_ptr<IShaderProcessor> processor)
         : _processor(std::move(processor)) {}
 
-    /// Attach an optional Slang processor.  When set, any ShaderDesc whose
-    /// shaderName ends with ".slang" (or whose stageFiles all end with ".slang")
-    /// will be routed to this processor instead of the default one.
-    void setSlangProcessor(std::shared_ptr<IShaderProcessor> slangProc)
-    {
-        _slangProcessor = std::move(slangProc);
-    }
-
+    /// The single processor behind this storage. Shader sources are Slang only;
+    /// the GLSL/shaderc backend was retired, so there is no per-ShaderDesc
+    /// backend selection any more.
     [[nodiscard]] std::shared_ptr<IShaderProcessor> getProcessor() const { return _processor; }
-
-    /// Select the appropriate processor for a given ShaderDesc.
-    [[nodiscard]] std::shared_ptr<IShaderProcessor> selectProcessor(const ShaderDesc& ci) const
-    {
-        if (_slangProcessor)
-        {
-            if (ci.sourceMode == ShaderDesc::ESourceMode::SingleShader &&
-                !ci.shaderName.empty())
-            {
-                if (ci.shaderName.ends_with(".slang"))
-                    return _slangProcessor;
-            }
-            if (ci.sourceMode == ShaderDesc::ESourceMode::StageFiles)
-            {
-                for (const auto& sf : ci.stageFiles)
-                {
-                    if (sf.file.ends_with(".slang"))
-                        return _slangProcessor;
-                }
-            }
-        }
-        return _processor;
-    }
 
     [[nodiscard]] std::shared_ptr<const stage2spirv_t> getCache(const std::string& key) const
     {
@@ -374,7 +306,7 @@ struct YA_RHI_API ShaderStorage
         }
 
         YA_PROFILE_SCOPE_LOG(std::format("ShaderStorage::load {}", cacheKey).c_str());
-        auto opt = selectProcessor(ci)->process(ci, mode);
+        auto opt = _processor->process(ci, mode);
         if (!opt.has_value()) {
             throw std::runtime_error(std::format("Failed to process shader: {}", cacheKey));
         }
@@ -405,7 +337,7 @@ struct YA_RHI_API ShaderStorage
         YA_CORE_ASSERT(!cacheKey.empty(), "Shader cache key is empty");
 
         YA_PROFILE_SCOPE_LOG(std::format("ShaderStorage::validate {}", cacheKey).c_str());
-        auto opt = selectProcessor(ci)->process(ci, EShaderProcessMode::ForceRecompile);
+        auto opt = _processor->process(ci, EShaderProcessMode::ForceRecompile);
         if (!opt.has_value()) {
             throw std::runtime_error(std::format("Failed to process shader: {}", cacheKey));
         }
@@ -425,22 +357,8 @@ class ShaderProcessorFactory
   public:
     using Self = ShaderProcessorFactory;
 
-    enum EProcessorType
-    {
-        GLSL,
-        HLSL,
-        Slang,
-    } processorType;
-
     std::string cachedStoragePath;
     std::string shaderStoragePath;
-
-    Self& withProcessorType(EProcessorType type)
-    {
-        processorType = type;
-        return *this;
-    }
-
 
     Self& withCachedStoragePath(std::string_view dirPath)
     {
@@ -455,27 +373,16 @@ class ShaderProcessorFactory
     }
 
 
-    template <typename T>
-    std::shared_ptr<T> FactoryNew()
+    /// Construct the engine's shader processor. Slang is the only backend: the
+    /// GLSL/shaderc path was retired, so the storage paths are the only knobs.
+    std::shared_ptr<IShaderProcessor> FactoryNew()
     {
-        std::shared_ptr<IShaderProcessor> processor;
-
-        switch (processorType) {
-        case GLSL:
-            processor = std::make_shared<GLSLProcessor>();
-            break;
-        case Slang:
-            processor = std::make_shared<SlangProcessor>();
-            break;
-        case HLSL:
-            throw std::runtime_error("HLSL not supported yet");
-            break;
-        };
+        auto processor = std::make_shared<SlangProcessor>();
 
         processor->shaderStoragePath       = shaderStoragePath;
         processor->intermediateStoragePath = cachedStoragePath;
 
-        return std::dynamic_pointer_cast<T>(processor);
+        return processor;
     }
 };
 

@@ -147,8 +147,8 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
 
 1. 先确认是不是生成头过期。
 2. 运行 `xmake ya-shader`。
-3. 若仍失败，回看 `Engine/Shader/Shader.xmake.lua`、`slang_gen_header.py`、`glsl_gen_header.py`。
-4. 不要直接编辑 `Generated/*.slang.h` 或 `Generated/*.glsl.h`。
+3. 若仍失败，回看 `Engine/Shader/Shader.xmake.lua`、`slang_gen_header.py`。
+4. 不要直接编辑 `Generated/*.slang.h`。
 
 ### 4. IntelliSense / clangd 不对
 

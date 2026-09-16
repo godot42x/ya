@@ -485,7 +485,7 @@ bool VulkanPipeline::createPipelineInternal()
 
     if (useShaderReflection) {
         // Reflect all shader stages
-        auto                                           processor = shaderStorage->selectProcessor(_ci.shaderDesc);
+        auto                                           processor = shaderStorage->getProcessor();
         std::vector<ShaderReflection::ShaderResources> allStageResources;
 
         for (const auto& [stage, spirv] : *stage2Spirv) {
@@ -905,7 +905,7 @@ bool VulkanComputePipeline::createPipelineInternal()
     _derivedPipelineLayout.reset();
 
     if (reflectPipelineLayout) {
-        auto processor = shaderStorage->selectProcessor(_ci.shaderDesc);
+        auto processor = shaderStorage->getProcessor();
         auto res       = processor->reflect(EShaderStage::Compute, stage2Spirv->at(EShaderStage::Compute));
 
         auto merged = ShaderReflection::merge({res});

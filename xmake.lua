@@ -32,7 +32,7 @@ option_end()
 
 if is_plat("windows") then
     set_exceptions("cxx")
-    set_runtimes("MD") -- use dynamic CRT to match VulkanSDK prebuilt libs (shaderc_combined etc.)
+    set_runtimes("MD") -- use dynamic CRT to match VulkanSDK prebuilt libs (slang, spirv-cross)
 end
 
 -- Shared xmake packages (SDL3, freetype, ...) are linked via @rpath; copy

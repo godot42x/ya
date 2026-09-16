@@ -379,11 +379,6 @@ MergedResources merge(const std::vector<ShaderResources>& stageResources)
 
 } // namespace ShaderReflection
 
-ShaderReflection::ShaderResources GLSLProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData)
-{
-    return ShaderReflection::reflectSpirvCross(stage, spirvData, curFileName);
-}
-
 ShaderReflection::ShaderResources SlangProcessor::reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData)
 {
     return ShaderReflection::reflectSpirvCross(stage, spirvData, curFileName);

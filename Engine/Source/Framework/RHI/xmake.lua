@@ -8,11 +8,10 @@ target("ya-rhi")
     set_kind(ya_target_kind())
     ya_std_module("YA_RHI_API")
     add_includedirs("./include", { public = true })
-    -- Only the shared shader-common generated headers (Common.*.slang.h /
-    -- Common.*.glsl.h) are public interface of the RHI; the render-3d group
-    -- lives in the Generated roots and is propagated by its own consumers.
+    -- Only the shared shader-common generated headers (Common.*.slang.h) are
+    -- public interface of the RHI; the render-3d group lives in the Generated
+    -- roots and is propagated by its own consumers.
     add_includedirs(path.join(os.scriptdir(), "../../../Shader/Slang/Generated/Common"), { public = true })
-    add_includedirs(path.join(os.scriptdir(), "../../../Shader/GLSL/Generated/Common"), { public = true })
     add_files("Core/**.cpp")
     add_files("Shader/**.cpp")
     add_files("RenderDefines.cpp", "Shader.cpp", "NativeWindow.cpp")
