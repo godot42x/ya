@@ -27,8 +27,9 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-16：Deferred FrameResourceSet 提供 beginSubmission/beginView；SSAO/skybox 写入同一 View slot。抽出 ViewDescriptorSetAllocator 供 Forward/Deferred 共用。RenderViewBindingTable 7/7，snapshot/draw-candidate/deferred 回归通过，ya-game-runtime 构建通过。
 - 2026-09-16：Forward FrameResourceSet 提供 beginSubmission/beginView；同一 submission 的 View 拥有独立 frame descriptor/slice。RenderViewBindingTable 6/6，snapshot/draw-candidate 回归通过，ya-game-runtime 构建通过。
 - 2026-09-16：View-owned draw bucket 已完成 source pointer + order indices 迁移；14 个 RenderRuntime/DrawCandidateView 测试通过，ya-game-runtime 构建通过。
 - 2026-09-16：Forward/Deferred 已移除跨 View 的 `_lastTickCtx` / `_lastFrameInput`，graph build 使用调用栈内 View-local context；渲染测试 14/14，ya-game-runtime 构建通过。
 - 2026-09-16：FrameUploadArena 同 `(flightIndex, frameToken)` 的 begin 改为幂等追加语义；同 submission 的后续 allocation 不 rewind cursor，FrameUploadArena 专项测试通过。
-- 保留未完成项：Deferred/Shadow View binding、RenderRuntime submission 保活到 fence、多 View command recording、双 View/双 Surface GPU 验收。
+- 保留未完成项：Shadow View binding、RenderRuntime submission 保活到 fence、多 View command recording、双 View/双 Surface GPU 验收。

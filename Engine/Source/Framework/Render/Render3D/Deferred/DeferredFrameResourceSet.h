@@ -5,6 +5,9 @@
 #include "Render3D/Stage/IRenderStage.h"
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Render3D/Common/PerFlightFrameResourceSetBase.h"
+#include "Render3D/Common/RenderRecordingContext.h"
+#include "Render3D/Common/RenderViewBindingTable.h"
+#include "Render3D/Common/ViewDescriptorSetAllocator.h"
 
 #include "DeferredRender.GBufferPass_PBR.slang.h"
 #include "DeferredRender.LightPass.slang.h"
@@ -18,13 +21,13 @@ namespace ya
 {
 
 /**
- * Owns Deferred's shared frame/light descriptor set and its per-flight data.
+ * Owns Deferred's persistent layouts/pools and the per-flight upload arena.
  *
- * The descriptor set layout and descriptor sets are pipeline resources. The
- * frame and light payloads are frame-local slices in a per-flight upload arena;
- * skinning uses capacity-managed per-flight storage buffers. The graph imports
- * those owner-backed resources after this object has prepared the current
- * flight.
+ * Layouts and descriptor pools are device-lifetime. Frame/light/SSAO/skybox
+ * descriptor sets and upload slices are View-owned: beginSubmission() opens a
+ * flight token, beginView() acquires an independent Binding so a second View
+ * cannot overwrite the first. Skinning palettes stay submission-scoped
+ * (shared by Views of the same Scene).
  */
 class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceSetBase<DeferredFrameResourceSet>
 {
@@ -36,6 +39,14 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
     using LightData = slang_types::DeferredRender::LightPass::LightData;
     using SSAOFrameData = slang_types::DeferredRender::SSAO::FrameData;
     using SkyboxFrameData = glsl_types::GLSL::Skybox::FrameUBO;
+
+    struct ViewPayloads
+    {
+        FrameData            frame{};
+        LightData            light{};
+        const SSAOFrameData* ssao   = nullptr;
+        const SkyboxFrameData* skybox = nullptr;
+    };
 
     struct Binding
     {
@@ -56,6 +67,13 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
         }
     };
 
+    /// Flight-local skinning storage consumed by PerFlightFrameResourceSetBase.
+    struct SkinningBinding
+    {
+        DescriptorSetHandle skinningDescriptorSet{};
+        stdptr<IBuffer>     skinningBuffer;
+    };
+
     void init(IRender* render);
     void destroy();
 
@@ -64,41 +82,57 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
         _shadowState = shadowState;
     }
 
-    /** Upload the current frame and light payloads for the fence-safe flight. */
-    bool prepare(const RenderStageContext& ctx);
-    /** Upload SSAO parameters into the current flight's shared frame arena. */
-    bool prepareSSAO(const RenderStageContext& ctx, const SSAOFrameData& frameData);
-    /** Upload skybox camera parameters into the current flight's shared frame arena. */
-    bool prepareSkybox(const RenderStageContext& ctx, const SkyboxFrameData& frameData);
+    bool beginSubmission(const RenderSubmissionContext& submission);
+    /// Upload this View's frame/light (and optional SSAO/skybox) slices into a
+    /// new Binding slot. On success, `view.viewSlot` is the live index and the
+    /// returned Binding stays stable for the rest of the submission.
+    const Binding* beginView(const RenderSubmissionContext& submission,
+                             RenderViewRecordingContext&    view,
+                             const SSAOFrameData*           ssao   = nullptr,
+                             const SkyboxFrameData*         skybox = nullptr);
+
+    bool prepareSkinning(const RenderStageContext& ctx)
+    {
+        return PerFlightFrameResourceSetBase<DeferredFrameResourceSet>::prepareSkinning(ctx);
+    }
+
+    /// Write View UBO slices into `binding` without touching descriptor sets.
+    static bool writeViewPayloads(FrameUploadArena&   arena,
+                                  uint32_t            flightIndex,
+                                  uint32_t            alignment,
+                                  const ViewPayloads& payloads,
+                                  Binding&            binding);
 
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameAndLightDSL() const { return _frameAndLightDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSSAOFrameDSL() const { return _ssaoFrameDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxFrameDSL() const { return _skyboxFrameDSL; }
-    [[nodiscard]] const Binding&               getBinding(uint32_t flightIndex) const;
+    [[nodiscard]] const Binding*               getViewBinding(uint32_t flightIndex, uint32_t viewSlot) const;
+    [[nodiscard]] uint32_t                     liveViewCount(uint32_t flightIndex) const;
     [[nodiscard]] uint32_t getMaxShadowedPointLights() const { return _shadowState.maxShadowedPointLights; }
     [[nodiscard]] uint32_t getLastShadowedPointLights() const { return _lastShadowedPointLights; }
 
   private:
-    stdptr<IDescriptorSetLayout>      _frameAndLightDSL;
-    stdptr<IDescriptorPool>           _frameAndLightDSP;
-    stdptr<IDescriptorSetLayout>      _ssaoFrameDSL;
-    stdptr<IDescriptorPool>           _ssaoFrameDSP;
-    stdptr<IDescriptorSetLayout>      _skyboxFrameDSL;
-    stdptr<IDescriptorPool>           _skyboxFrameDSP;
-    std::array<Binding, MAX_FLIGHTS_IN_FLIGHT> _bindings{};
+    stdptr<IDescriptorSetLayout> _frameAndLightDSL;
+    ViewDescriptorSetAllocator   _frameAndLightSets;
+    stdptr<IDescriptorSetLayout> _ssaoFrameDSL;
+    ViewDescriptorSetAllocator   _ssaoFrameSets;
+    stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
+    ViewDescriptorSetAllocator   _skyboxFrameSets;
+    std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT> _skinningBindings{};
+    RenderViewBindingTable<Binding> _viewBindings;
     ShadowRuntimeState _shadowState{};
     uint32_t _lastShadowedPointLights = 0;
 
-    /// CRTP contract: per-flight skinning slots consumed by the shared base.
-    std::array<Binding, MAX_FLIGHTS_IN_FLIGHT>& bindings() { return _bindings; }
+    std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT>& bindings() { return _skinningBindings; }
 
     [[nodiscard]] LightData buildLightData(const RenderFrameData& frameData) const;
     [[nodiscard]] static std::optional<uint32_t> calculateSkinningCapacity(
         uint32_t currentCapacity,
         uint32_t paletteCount);
-    void updateDescriptorSet(uint32_t flightIndex, const Binding& binding);
-    void updateSSAODescriptorSet(uint32_t flightIndex, const Binding& binding);
-    void updateSkyboxDescriptorSet(uint32_t flightIndex, const Binding& binding);
+    bool ensureViewDescriptors(Binding& binding);
+    void updateFrameAndLightDescriptorSet(const Binding& binding);
+    void updateSSAODescriptorSet(const Binding& binding);
+    void updateSkyboxDescriptorSet(const Binding& binding);
 };
 
 } // namespace ya

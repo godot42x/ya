@@ -1,7 +1,7 @@
 # Render View Family 与 GUI/GameUI 渲染边界重构计划
 
 > 建立日期：2026-09-12
-> 状态：R2 进行中；Forward FrameResourceSet 已提供 beginSubmission/beginView 与 View-owned frame binding。RenderRuntime 仍只录制单 View；Deferred/Shadow 仍是 per-flight 覆写。下一 checkpoint 将同一生命周期规则迁到 Deferred/Shadow，或让 Runtime 把 submission 保活到 fence。
+> 状态：R2 进行中；Forward 与 Deferred FrameResourceSet 已提供 beginSubmission/beginView 与 View-owned frame binding，并共用 ViewDescriptorSetAllocator。RenderRuntime 仍只录制单 View；Shadow 仍是 per-flight 覆写。下一 checkpoint 将同一生命周期规则迁到 Shadow，或让 Runtime 把 submission 保活到 fence。
 
 ## 1. 主线选择
 
@@ -137,10 +137,10 @@ frame-local content generation。
 1. 以一个原子迁移改造 RenderFrameData：引用共享 SceneFrameSnapshot，同时引入 View-owned draw buckets；不再按值复制或原地排序 Scene snapshot。该阶段已完成，View bucket 现在只保存 Scene 候选 vector 的借用指针和独立 order indices；后续只允许在此基础上继续拆 submission/View 生命周期。
 2. Forward 的 resource set 提供 beginSubmission / beginView 语义：layout 和 pipeline 资源持久化，upload allocation、descriptor binding、skinning buffer 和 View output 由 submission/View 持有。
 3. RenderRuntime 保存 submission lifetime 到 submit/fence 完成；不能让 transient arena、descriptor pool 或 graph-exported image 只活到 renderFrame() 返回。
-4. pipeline 的 recordView 只消费显式 View context，不再写 _lastTickCtx、_lastFrameInput 或单一 current binding。Forward/Deferred 的这两个 pipeline 临时槽位已移除；剩余 current binding/upload/descriptor 状态仍待下一切片拆分。
+4. pipeline 的 recordView 只消费显式 View context，不再写 _lastTickCtx、_lastFrameInput 或单一 current binding。Forward/Deferred 的这两个 pipeline 临时槽位已移除；Forward/Deferred frame binding 已按 View 拆开。剩余 Shadow current binding 与 Runtime submission 保活仍待下一切片拆分。
 5. 通过 View A/B identity 测试确认：B 的 allocation、descriptor write、output publish 不改变 A；同一 Scene 的 A/B 仍指向同一个 snapshot owner。
 
-这一切片不改变 Forward/Deferred 的 pass topology，也不引入新的 World 抽象；Deferred、Shadow、EntityId、Debug 和 PostProcess 在 Forward 方案验证后按同一生命周期规则迁移。
+这一切片不改变 Forward/Deferred 的 pass topology，也不引入新的 World 抽象；Shadow 在 Forward/Deferred 方案验证后按同一生命周期规则迁移。
 
 `RenderRuntime` 的持久对象不能同时充当一次 submission 和一个 View 的可变状态。后续 R2 必须按以下生命周期拆开：
 

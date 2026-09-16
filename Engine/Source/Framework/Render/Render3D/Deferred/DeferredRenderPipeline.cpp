@@ -12,6 +12,7 @@
 #include "Scene3D/TransformComponent.h"
 #include "Render/Resources/TextureSlotBinding.h"
 #include "Render3D/Common/PipelineCommon.h"
+#include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
 #include "Graph/RenderGraphImportUtils.h"
@@ -915,21 +916,16 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
             ? _runtimeServices->getSceneEnvironmentLightingDescriptorSet(activeScene)
             : DescriptorSetHandle{};
         _lightStage->setFrameInputs(LightStage::FrameInputs{
-            .frameAndLightDescriptorSet = _frameResources
-                ? _frameResources->getBinding(frame.camera.flightIndex).frameAndLightDescriptorSet
-                : DescriptorSetHandle{},
+            .frameAndLightDescriptorSet       = {},
             .environmentLightingDescriptorSet = _currentEnvironmentLightingDescriptorSet,
         });
     }
-    // GBufferStage no longer receives frame inputs here: its current-flight
-    // binding travels with DeferredGBufferPassParams in the graph pass (FG-302).
+    // GBufferStage no longer receives frame inputs here: its View binding
+    // travels with DeferredGBufferPassParams in the graph pass (FG-302).
 
     _currentOverlayFrameInputs = {};
     if (_overlayStage) {
         ViewportOverlayStage::FrameInputs frameInputs{};
-        frameInputs.skybox.frameDescriptorSet = _frameResources
-            ? _frameResources->getBinding(frame.camera.flightIndex).skyboxFrameDescriptorSet
-            : DescriptorSetHandle{};
         auto* envProcessor = _runtimeServices ? _runtimeServices->getEnvironmentLightingProcessor() : nullptr;
 
         if (activeScene) {
@@ -1194,24 +1190,56 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
 {
     clearPublishedGraphOutputs();
     YA_CORE_ASSERT(_frameResources != nullptr, "Deferred pipeline frame resources are not initialized");
-    if (!_frameResources->prepare(stageCtx)) {
+
+    RenderSubmissionContext submission = frame.submission;
+    submission.cmdBuf      = frame.cmdBuf;
+    submission.flightIndex = frame.camera.flightIndex;
+    submission.frameToken  = frame.camera.frameIndex;
+    if (!_frameResources->beginSubmission(submission)) {
         return;
     }
-    const bool bUseSSAO = _bEnableSSAO && _ssaoStage;
-    if (bUseSSAO && !_frameResources->prepareSSAO(stageCtx, _ssaoStage->buildFrameData(stageCtx))) {
-        return;
-    }
-    if (_overlayStage && !_frameResources->prepareSkybox(stageCtx, _overlayStage->buildSkyboxFrameData(stageCtx))) {
+    if (!_frameResources->prepareSkinning(stageCtx)) {
         return;
     }
 
-    const auto& frameBinding = _frameResources->getBinding(frame.camera.flightIndex);
-    // GBufferStage binding travels with DeferredGBufferPassParams in the graph
-    // pass (FG-302); only stages that still read frame inputs are pre-set here.
+    RenderViewRecordingContext view = frame.view;
+    if (!view.frameData) {
+        view.frameData = frame.camera.frameData;
+    }
+    if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
+        view.viewportExtent = stageCtx.viewportExtent;
+    }
+
+    const bool bUseSSAO = _bEnableSSAO && _ssaoStage;
+    DeferredFrameResourceSet::SSAOFrameData   ssaoStorage{};
+    DeferredFrameResourceSet::SkyboxFrameData skyboxStorage{};
+    const DeferredFrameResourceSet::SSAOFrameData*   ssao   = nullptr;
+    const DeferredFrameResourceSet::SkyboxFrameData* skybox = nullptr;
+    if (bUseSSAO) {
+        ssaoStorage = _ssaoStage->buildFrameData(stageCtx);
+        ssao        = &ssaoStorage;
+    }
+    if (_overlayStage) {
+        skyboxStorage = _overlayStage->buildSkyboxFrameData(stageCtx);
+        skybox        = &skyboxStorage;
+    }
+
+    const auto* viewBinding = _frameResources->beginView(submission, view, ssao, skybox);
+    if (!viewBinding) {
+        return;
+    }
+
+    if (_lightStage) {
+        _lightStage->setFrameInputs(LightStage::FrameInputs{
+            .frameAndLightDescriptorSet       = viewBinding->frameAndLightDescriptorSet,
+            .environmentLightingDescriptorSet = _currentEnvironmentLightingDescriptorSet,
+        });
+    }
+    _currentOverlayFrameInputs.skybox.frameDescriptorSet = viewBinding->skyboxFrameDescriptorSet;
     if (bUseSSAO) {
         _ssaoStage->setFrameInputs(SSAOStage::FrameInputs{
-            .descriptorSet = frameBinding.ssaoFrameDescriptorSet,
-            .frame         = frameBinding.ssaoFrame,
+            .descriptorSet = viewBinding->ssaoFrameDescriptorSet,
+            .frame         = viewBinding->ssaoFrame,
         });
     }
     _gBufferStage->prepare(stageCtx);
@@ -1239,7 +1267,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .graph                    = &graph,
             .graphResources           = &graphResources,
             .stageCtx                 = &stageCtx,
-            .frameBinding             = &frameBinding,
+            .frameBinding             = viewBinding,
             .frame                    = &frame,
             .gBufferRTSpec            = &_gBufferRTSpec,
             .viewportRTSpec           = &_viewportRTSpec,

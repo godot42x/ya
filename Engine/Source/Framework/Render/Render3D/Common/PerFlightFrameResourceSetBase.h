@@ -27,15 +27,16 @@ namespace ya
  * frame resource sets: the per-flight upload arena and the capacity-managed
  * skinning storage buffers (descriptor layout/pool, grow-on-demand capacity,
  * fence-safe retire of replaced buffers). The base deliberately owns nothing
- * of a pipeline's rendering strategy — descriptor sets, `Binding` arrays and
- * pass state stay in the derived class.
+ * of a pipeline's rendering strategy — View descriptor sets, payload structs
+ * and pass state stay in the derived class. View-owned UniformBuffer pools
+ * live in ViewDescriptorSetAllocator.
  *
  * CRTP contract: the derived class must grant friendship and expose the
  * per-flight skinning slots via
- *   std::array<Binding, MAX_FLIGHTS_IN_FLIGHT>& bindings();
- * where each `Binding` carries `skinningDescriptorSet` (DescriptorSetHandle)
- * and `skinningBuffer` (stdptr<IBuffer>) per flight. Binding field names are
- * verified at instantiation time by the compiler.
+ *   std::array<SkinningSlot, MAX_FLIGHTS_IN_FLIGHT>& bindings();
+ * where each slot carries `skinningDescriptorSet` (DescriptorSetHandle)
+ * and `skinningBuffer` (stdptr<IBuffer>). Field names are verified at
+ * instantiation time by the compiler.
  */
 template <typename Derived>
 class PerFlightFrameResourceSetBase

@@ -22,7 +22,7 @@ struct BillboardComponent;
 
 /// Deferred viewport overlay stage — Skybox background + SimpleMaterial debug overlay.
 ///
-/// Skybox: per-flight frame UBO (view/proj without translation) + cubemap DS from RenderRuntime.
+/// Skybox: View-owned frame UBO (view/proj without translation) + cubemap DS from RenderRuntime.
 /// Overlay: push constant only (view/proj/model/colorType), no UBO/DS.
 struct YA_RENDER_3D_API ViewportOverlayStage : public IRenderStage
 {

@@ -6,6 +6,7 @@
 #include "Render3D/Common/PerFlightFrameResourceSetBase.h"
 #include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/RenderViewBindingTable.h"
+#include "Render3D/Common/ViewDescriptorSetAllocator.h"
 #include "Render3D/Stage/IRenderStage.h"
 
 #include "GLSL.Skybox.glsl.h"
@@ -14,8 +15,6 @@
 #include "Test.Unlit.glsl.h"
 
 #include <array>
-#include <memory>
-#include <vector>
 
 namespace ya
 {
@@ -44,8 +43,6 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase<ForwardFram
     using PhongDebugUBO  = slang_types::PhongLit::DebugData;
     using UnlitFrameUBO  = glsl_types::Test::Unlit::FrameUBO;
     using SkyboxFrameUBO = glsl_types::GLSL::Skybox::FrameUBO;
-
-    static constexpr uint32_t kViewDescriptorChunk = 8;
 
     /// CPU payloads built by the viewport stage for the current View.
     struct FramePayloads
@@ -125,29 +122,19 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase<ForwardFram
 
   private:
     stdptr<IDescriptorSetLayout> _pbrFrameDSL;
-    std::vector<stdptr<IDescriptorPool>> _pbrFrameDSPs;
-    uint32_t _pbrAllocatedSets = 0;
+    ViewDescriptorSetAllocator   _pbrFrameSets;
     stdptr<IDescriptorSetLayout> _phongFrameDSL;
-    std::vector<stdptr<IDescriptorPool>> _phongFrameDSPs;
-    uint32_t _phongAllocatedSets = 0;
+    ViewDescriptorSetAllocator   _phongFrameSets;
     stdptr<IDescriptorSetLayout> _unlitFrameDSL;
-    std::vector<stdptr<IDescriptorPool>> _unlitFrameDSPs;
-    uint32_t _unlitAllocatedSets = 0;
+    ViewDescriptorSetAllocator   _unlitFrameSets;
     stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
-    std::vector<stdptr<IDescriptorPool>> _skyboxFrameDSPs;
-    uint32_t _skyboxAllocatedSets = 0;
+    ViewDescriptorSetAllocator   _skyboxFrameSets;
     std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT> _skinningBindings{};
     RenderViewBindingTable<Binding> _viewBindings;
 
     std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT>& bindings() { return _skinningBindings; }
 
-    stdptr<IDescriptorPool> createViewDescriptorPool(const char* label, uint32_t descriptorCount);
-    DescriptorSetHandle     allocateViewSet(std::vector<stdptr<IDescriptorPool>>& pools,
-                                            uint32_t&                             allocatedSets,
-                                            const stdptr<IDescriptorSetLayout>&   layout,
-                                            const char*                           poolLabel,
-                                            uint32_t                              descriptorsPerSet);
-    bool                    ensureViewDescriptors(Binding& binding);
+    bool ensureViewDescriptors(Binding& binding);
     void                    updatePBRFrameDescriptorSet(const Binding& binding);
     void                    updatePhongFrameDescriptorSet(const Binding& binding);
     void                    updateUnlitFrameDescriptorSet(const Binding& binding);
