@@ -50,6 +50,10 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] const AppRenderFrameState&             getRenderFrameState() const;
     void                                                 setExtensionRenderFrameState(const AppRenderFrameState& state);
     void                                                 clearExtensionRenderFrameState();
+    void                                                 setCameraPreviewHostOwned(bool bOwned);
+    void                                                 setCameraPreviewEntityUUID(uint64_t uuid);
+    [[nodiscard]] bool                                   isCameraPreviewHostOwned() const;
+    [[nodiscard]] uint64_t                               getCameraPreviewEntityUUID() const;
 
   private:
     AppRenderState* _state = nullptr;

@@ -42,15 +42,24 @@ struct RenderOverlayText2D
     float       depth       = 0.0f;
 };
 
+/// World-space debug line for the viewport overlay. Not screen-space Line2D.
+struct RenderOverlayLine3D
+{
+    glm::vec3 from  = glm::vec3(0.0f);
+    glm::vec3 to    = glm::vec3(0.0f);
+    glm::vec4 color = glm::vec4(1.0f);
+};
+
 struct RenderViewportOverlaySnapshot
 {
     std::vector<RenderOverlaySprite2D> screenSprites{};
     std::vector<RenderOverlaySprite3D> worldSprites{};
     std::vector<RenderOverlayText2D>   screenTexts{};
+    std::vector<RenderOverlayLine3D>   worldLines{};
 
     [[nodiscard]] bool empty() const
     {
-        return screenSprites.empty() && worldSprites.empty() && screenTexts.empty();
+        return screenSprites.empty() && worldSprites.empty() && screenTexts.empty() && worldLines.empty();
     }
 };
 

@@ -3,20 +3,34 @@
 #include "Core/Base.h"
 #include "Render3D/Common/RenderFrameInputs.h"
 
+#include <memory>
+#include <span>
+#include <vector>
+
 namespace ya
 {
 
 struct ICommandBuffer;
 struct RenderTexture;
+struct Texture;
 
-/// Game UI + editor overlay onto this Camera's offscreen display RT.
-/// Not display compose: must not write `swapchain[imageIndex]`, acquire, or
-/// present. `cameraDisplayRT` is `getViewportDisplayImageShared()` (post or
-/// raw WorldView color), and may be null on the first frame before the
-/// world graph creates it.
-YA_RENDER_3D_API void recordCameraViewCompose(ICommandBuffer*          cmdBuf,
-                                              RenderTexture*           cameraDisplayRT,
-                                              const CameraFrameInput&  camera,
-                                              const ViewComposeInput&  viewCompose);
+/// Resolved inset for ViewCompose: a published View's display image placed on
+/// the primary Camera RT. The Texture wrapper must stay alive through submit.
+struct ViewDisplayInsetImage
+{
+    std::shared_ptr<Texture> texture;
+    Rect2D                   destRect{};
+};
+
+/// Game UI + preview insets + editor overlay onto this Camera's offscreen
+/// display RT. Not display compose: must not write `swapchain[imageIndex]`,
+/// acquire, or present. `cameraDisplayRT` is
+/// `getViewportDisplayImageShared()` (post or raw WorldView color), and may
+/// be null on the first frame before the world graph creates it.
+YA_RENDER_3D_API void recordCameraViewCompose(ICommandBuffer*                         cmdBuf,
+                                              RenderTexture*                          cameraDisplayRT,
+                                              const CameraFrameInput&                 camera,
+                                              const ViewComposeInput&                 viewCompose,
+                                              std::span<const ViewDisplayInsetImage>  insets = {});
 
 } // namespace ya

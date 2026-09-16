@@ -10,13 +10,16 @@
 #include "GUI/Compose/Render2DComposePass.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderTexture.h"
+#include "RHI/Core/Texture.h"
 #include "RHI/Core/Swapchain.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
 #include "Render2D/Render2D.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
 #include "Render3D/Services/PipelineCoordinator.h"
 
+#include <format>
 #include <limits>
+#include <vector>
 
 namespace ya
 {
@@ -133,12 +136,37 @@ ICommandBuffer* RenderRuntime::renderFrame(const FrameInput& input)
             renderWorldFrame(input, cmdBuf.get());
         }
     }
-    // View compose writes this Camera's offscreen display RT (UI + gizmos).
-    // Display compose then writes swapchain[imageIndex]. Same cmdBuf / submit.
+    // View compose writes this Camera's offscreen display RT (UI + gizmos +
+    // extra View insets). Display compose then writes swapchain[imageIndex].
+    std::vector<ViewDisplayInsetImage> insetImages;
+    insetImages.reserve(input.viewCompose.insets.size());
+    for (const auto& inset : input.viewCompose.insets) {
+        const RenderViewOutput* output = getViewOutput(inset.viewId);
+        if (!output || inset.viewId == 0) {
+            continue;
+        }
+        auto display = output->displayImage();
+        if (!display || !display->getImageShared() || !display->getImageViewShared()) {
+            continue;
+        }
+        cmdBuf->transitionImageLayoutAuto(display->getImage(), EImageLayout::ShaderReadOnlyOptimal);
+        auto texture = Texture::wrap(display->getImageShared(),
+                                     display->getImageViewShared(),
+                                     std::format("ViewDisplayInset.view{}", inset.viewId));
+        _submissions.retain(input.camera.flightIndex, display);
+        _submissions.retain(input.camera.flightIndex, texture);
+        cmdBuf->retireResource(display);
+        cmdBuf->retireResource(texture);
+        insetImages.push_back(ViewDisplayInsetImage{
+            .texture  = std::move(texture),
+            .destRect = inset.destRect,
+        });
+    }
     recordCameraViewCompose(cmdBuf.get(),
                             getViewportDisplayImageShared().get(),
                             input.camera,
-                            input.viewCompose);
+                            input.viewCompose,
+                            insetImages);
     _presentationGraphService.recordDisplayCompose(input.camera.deltaTime,
                                                    input.displayCompose.extensions,
                                                    cmdBuf.get());
@@ -294,11 +322,19 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
 
 Extent2D RenderRuntime::getViewportExtent() const
 {
-    if (auto* pipeline = getActivePipeline()) {
-        return pipeline->getViewportExtent();
+    if (const auto* output = publishedViewOutput()) {
+        if (output->desc.hasExtent()) {
+            return output->desc.extent;
+        }
+        if (auto image = output->displayImage()) {
+            return image->getExtent();
+        }
     }
     if (_viewportState.getRect().extent.x > 0 && _viewportState.getRect().extent.y > 0) {
         return Extent2D::fromVec2(_viewportState.getRect().extent);
+    }
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->getViewportExtent();
     }
     return {};
 }

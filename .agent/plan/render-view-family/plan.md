@@ -1,7 +1,7 @@
 # Render View Family 与 GUI/GameUI 渲染边界重构计划
 
 > 建立日期：2026-09-12
-> 状态：R2 进行中；Forward / Deferred / Shadow 已提供 View-owned frame binding；Runtime 按 flight 持有 submission keepalives 和 View-keyed output 句柄；viewport persistent key 已按 View 分开。RenderRuntime 按 `SceneViewportTask` 循环录制，同一 Scene 的多个 View 共享 snapshot。GameRuntime 产品路径仍只 submit 一个 camera。不要把这当成双 Surface GPU 验收。下一 checkpoint 是录制两个 Scene 的两个 View，或把 editor/preview 的多个 request 接进 scheduler。
+> 状态：R2 进行中；Forward / Deferred / Shadow 已提供 View-owned frame binding；Runtime 按 flight 持有 submission keepalives 和 View-keyed output 句柄；viewport persistent key 已按 View 分开。RenderRuntime 按 `SceneViewportTask` 循环录制，同一 Scene 的多个 View 共享 snapshot。GameRuntime / Editor 可为选中的 world Camera submit 第二个 View，并把它合成到主 viewport 右下角。不要把这当成双 Surface GPU 验收。下一 checkpoint 是录制两个 Scene 的两个 View，或把 material preview 等其它 request 接进 scheduler。
 
 ## 1. 主线选择
 

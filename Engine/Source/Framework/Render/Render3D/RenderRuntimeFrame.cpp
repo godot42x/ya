@@ -29,6 +29,9 @@ std::shared_ptr<RenderViewportOverlaySnapshot> buildViewportOverlaySnapshot(cons
     if (overlay.screenTexts) {
         snapshot->screenTexts = *overlay.screenTexts;
     }
+    if (overlay.worldLines) {
+        snapshot->worldLines = *overlay.worldLines;
+    }
     return snapshot->empty() ? nullptr : snapshot;
 }
 

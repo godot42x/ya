@@ -23,6 +23,11 @@ struct AppRenderState
     bool                                               bRenderMirror  = false;
     AppRenderFrameState                                frameState;
     std::optional<AppRenderFrameState>                 extensionFrameState;
+    /// When true, `cameraPreviewEntityUUID` is the host's explicit choice
+    /// (editor selection). UUID 0 then means "do not preview". When false,
+    /// GameRuntime may auto-pick the first non-primary scene camera.
+    bool                                               bCameraPreviewHostOwned = false;
+    uint64_t                                           cameraPreviewEntityUUID = 0;
     SceneRenderScheduler                               sceneRenderScheduler;
     std::array<std::vector<RenderFrameData>, MAX_FLIGHTS_IN_FLIGHT> viewFrameDataPerFlight{};
 };

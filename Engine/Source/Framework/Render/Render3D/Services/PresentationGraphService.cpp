@@ -1,6 +1,7 @@
 #include "PresentationGraphService.h"
 
 #include "Core/Log.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"

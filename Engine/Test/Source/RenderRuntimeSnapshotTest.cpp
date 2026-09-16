@@ -1,5 +1,6 @@
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
+#include "Render3D/Common/CameraFrustumOverlay.h"
 #include "Render3D/RenderFrameData.h"
 #include "Render3D/RenderRuntime.h"
 
@@ -68,6 +69,7 @@ TEST(RenderRuntimeSnapshotTest, FrameInputGroupsCameraViewDisplayPresent)
     EXPECT_EQ(input.camera.viewProjection, makeCameraViewProjection(projection, view));
     EXPECT_TRUE(input.camera.hasOffscreenExtent());
     EXPECT_TRUE(input.viewCompose.empty());
+    EXPECT_TRUE(input.viewCompose.insets.empty());
     EXPECT_TRUE(input.displayCompose.extensions.empty());
     EXPECT_EQ(input.present.surface, nullptr);
     EXPECT_EQ(input.present.imageIndex, -1);
@@ -358,6 +360,69 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRejectsRequestsOutsideFrame)
     EXPECT_TRUE(scheduler.submit(request));
     scheduler.clearFrame();
     EXPECT_EQ(scheduler.pendingRequestCount(), 0u);
+}
+
+TEST(RenderRuntimeSnapshotTest, ViewComposeInsetsDescribePrimaryDisplayPreview)
+{
+    ViewComposeInput compose;
+    EXPECT_TRUE(compose.empty());
+
+    compose.insets.push_back(ViewDisplayInset{
+        .viewId   = kCameraPreviewViewId,
+        .destRect = makeBottomRightViewInset({1280.0f, 720.0f}),
+    });
+    EXPECT_FALSE(compose.empty());
+    ASSERT_EQ(compose.insets.size(), 1u);
+    EXPECT_EQ(compose.insets.front().viewId, kCameraPreviewViewId);
+    EXPECT_GT(compose.insets.front().destRect.extent.x, 0.0f);
+    EXPECT_GT(compose.insets.front().destRect.pos.x, 640.0f);
+}
+
+TEST(RenderRuntimeSnapshotTest, OverlaySnapshotEmptyIncludesWorldLines)
+{
+    RenderViewportOverlaySnapshot snapshot;
+    EXPECT_TRUE(snapshot.empty());
+    snapshot.worldLines.push_back(RenderOverlayLine3D{
+        .from  = {0.0f, 0.0f, 0.0f},
+        .to    = {0.0f, 0.0f, -1.0f},
+        .color = {1.0f, 1.0f, 1.0f, 1.0f},
+    });
+    EXPECT_FALSE(snapshot.empty());
+}
+
+TEST(RenderRuntimeSnapshotTest, PrimaryAndPreviewCameraRequestsShareSceneSnapshot)
+{
+    SceneRenderScheduler scheduler;
+    scheduler.beginFrame(9);
+
+    auto buildSnapshot = []()
+    {
+        return std::make_shared<const SceneFrameSnapshot>();
+    };
+
+    SceneRenderRequest primary;
+    primary.sceneId = 4;
+    primary.viewId = kPrimarySceneViewId;
+    primary.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
+    primary.buildSnapshot = buildSnapshot;
+
+    SceneRenderRequest preview;
+    preview.sceneId = 4;
+    preview.viewId = kCameraPreviewViewId;
+    preview.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {358.0f, 201.0f}};
+    preview.buildSnapshot = buildSnapshot;
+
+    ASSERT_TRUE(scheduler.submit(primary));
+    ASSERT_TRUE(scheduler.submit(preview));
+
+    const SceneRenderPlan plan = scheduler.seal();
+    ASSERT_EQ(plan.viewportTasks.size(), 2u);
+    EXPECT_EQ(plan.viewportTasks[0].viewId, kPrimarySceneViewId);
+    EXPECT_EQ(plan.viewportTasks[1].viewId, kCameraPreviewViewId);
+    EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]), plan.snapshotFor(plan.viewportTasks[1]));
+    EXPECT_NE(plan.viewportTasks[0].output.extent, plan.viewportTasks[1].output.extent);
+    EXPECT_EQ(plan.viewportTasks[1].output.extent.width, 358u);
+    EXPECT_EQ(plan.viewportTasks[1].output.extent.height, 201u);
 }
 
 } // namespace

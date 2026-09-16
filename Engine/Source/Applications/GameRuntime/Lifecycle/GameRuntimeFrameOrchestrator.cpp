@@ -36,8 +36,13 @@
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 
+#include "Core/Math/Math.h"
+#include "ECS/Component.h"
+#include "Render3D/Common/CameraFrustumOverlay.h"
+
 #include <algorithm>
 #include <format>
+#include <functional>
 #include <vector>
 
 namespace ya
@@ -45,21 +50,116 @@ namespace ya
 
 namespace
 {
-void syncRuntimeCameraAspect(Scene& scene, const Extent2D& viewportExtent)
+void syncRuntimeCameraAspect(Entity* runtimeCamera, const Extent2D& viewportExtent)
 {
-    // Single WorldView slot: unbound cameras with auto aspect currently share
-    // this extent. Multi-camera must apply aspect only to the bound camera.
+    if (!runtimeCamera || !runtimeCamera->isValid() || !runtimeCamera->hasComponent<CameraComponent>()) {
+        return;
+    }
     if (viewportExtent.width == 0 || viewportExtent.height == 0) {
         return;
     }
 
-    const float aspectRatio = static_cast<float>(viewportExtent.width) / static_cast<float>(viewportExtent.height);
-    auto        cameras     = scene.getRegistry().view<CameraComponent>();
-    for (auto entityHandle : cameras) {
-        auto& camera = cameras.get<CameraComponent>(entityHandle);
-        if (!camera._fixedAspectRatio) {
-            camera.setAspectRatio(aspectRatio);
+    auto* camera = runtimeCamera->getComponent<CameraComponent>();
+    if (!camera->_fixedAspectRatio) {
+        camera->setAspectRatio(static_cast<float>(viewportExtent.width) /
+                               static_cast<float>(viewportExtent.height));
+    }
+}
+
+uint64_t entityUUID(Entity* entity)
+{
+    if (!entity || !entity->isValid() || !entity->hasComponent<IDComponent>()) {
+        return 0;
+    }
+    return entity->getComponent<IDComponent>()->_id.value;
+}
+
+Entity* findNonPrimarySceneCamera(Scene& scene, Entity* primaryCamera)
+{
+    auto& registry = scene.getRegistry();
+    for (const auto& [handle, cameraComp] : registry.view<CameraComponent>().each()) {
+        (void)cameraComp;
+        Entity* entity = scene.getEntityByEnttID(handle);
+        if (!entity || entity == primaryCamera) {
+            continue;
         }
+        return entity;
+    }
+    return nullptr;
+}
+
+Entity* resolvePreviewCamera(Scene& scene, Entity* primaryCamera, bool bHostOwned, uint64_t previewEntityUUID)
+{
+    if (bHostOwned) {
+        if (previewEntityUUID == 0) {
+            return nullptr;
+        }
+        Entity* selected = scene.getEntityByUUID(previewEntityUUID);
+        if (!selected || !selected->isValid() || !selected->hasComponent<CameraComponent>() ||
+            !selected->hasComponent<TransformComponent>()) {
+            return nullptr;
+        }
+        return selected;
+    }
+    return findNonPrimarySceneCamera(scene, primaryCamera);
+}
+
+glm::mat4 cameraProjectionForOutput(const CameraComponent& camera, const glm::vec2& outputExtent)
+{
+    if (camera._fixedAspectRatio || outputExtent.x <= 0.0f || outputExtent.y <= 0.0f) {
+        return camera.getProjection();
+    }
+    return FMath::perspective(glm::radians(camera._fov),
+                              outputExtent.x / outputExtent.y,
+                              camera._nearClip,
+                              camera._farClip);
+}
+
+SceneRenderRequest makeSceneCameraRequest(SceneId                                  sceneId,
+                                          SceneViewId                              viewId,
+                                          const glm::mat4&                         view,
+                                          const glm::mat4&                         projection,
+                                          const glm::vec3&                         cameraPos,
+                                          const Rect2D&                            viewportRect,
+                                          std::function<std::shared_ptr<const SceneFrameSnapshot>()> buildSnapshot)
+{
+    return SceneRenderRequest{
+        .sceneId         = sceneId,
+        .sceneRevision   = 0,
+        .viewId          = viewId,
+        .familyId        = 1,
+        .view            = view,
+        .projection      = projection,
+        .viewProjection  = makeCameraViewProjection(projection, view),
+        .cameraPos       = cameraPos,
+        .viewportRect    = viewportRect,
+        .buildSnapshot   = std::move(buildSnapshot),
+    };
+}
+
+constexpr glm::vec4 kCameraFrustumColor         = {0.35f, 0.85f, 1.0f, 1.0f};
+constexpr glm::vec4 kSelectedCameraFrustumColor = {1.0f, 0.85f, 0.2f, 1.0f};
+
+void appendSceneCameraFrustumLines(Scene&                              scene,
+                                   Entity*                             primaryCamera,
+                                   uint64_t                            previewEntityUUID,
+                                   const glm::vec2&                    previewExtent,
+                                   std::vector<RenderOverlayLine3D>&   lines)
+{
+    auto& registry = scene.getRegistry();
+    for (const auto& [handle, cameraComp] : registry.view<CameraComponent>().each()) {
+        Entity* entity = scene.getEntityByEnttID(handle);
+        if (!entity || !entity->isValid() || entity == primaryCamera ||
+            !entity->hasComponent<TransformComponent>()) {
+            continue;
+        }
+        const uint64_t uuid = entityUUID(entity);
+        const glm::vec4 color = (previewEntityUUID != 0 && uuid == previewEntityUUID)
+                                    ? kSelectedCameraFrustumColor
+                                    : kCameraFrustumColor;
+        const glm::mat4 view = cameraComp.getFreeView();
+        const glm::mat4 projection = cameraProjectionForOutput(cameraComp, previewExtent);
+        appendCameraFrustumOverlayLines(lines, view, projection, color);
     }
 }
 
@@ -183,13 +283,13 @@ void GameRuntimeFrameOrchestrator::tickLogic(App& app, float dt)
         }
     }
 
-    if (auto* scene = app.getSceneServices().getActiveScene()) {
+    if (app.getSceneServices().getActiveScene()) {
         YA_PROFILE_SCOPE("Logic/RuntimeCamera");
         auto* renderRuntime = app.getRenderServices().getRenderRuntime();
         const Extent2D viewportExtent = resolveViewportExtent(app,
                                                               renderRuntime,
                                                               renderRuntime ? renderRuntime->getViewportRect() : Rect2D{});
-        syncRuntimeCameraAspect(*scene, viewportExtent);
+        syncRuntimeCameraAspect(getPrimaryCamera(app), viewportExtent);
     }
 
     {
@@ -431,29 +531,62 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
     } sceneSchedulerGuard{.scheduler = &sceneScheduler};
 
     SceneRenderPlan sceneRenderPlan;
+    std::vector<RenderOverlayLine3D> cameraFrustumLines;
+    Rect2D previewDestRect{};
     if (renderRuntime->isWorldSceneRenderEnabled() && scene) {
-        sceneScheduler.submit(SceneRenderRequest{
-            .sceneId = scene->getInstanceId(),
-            .sceneRevision = 0,
-            .viewId = 1,
-            .familyId = 1,
-            .view = frameState.view,
-            .projection = frameState.projection,
-            .viewProjection = viewProjection,
-            .cameraPos = frameState.cameraPos,
-            .viewportRect = frameState.viewportRect,
-            .buildSnapshot = [scene, terrainProcessor = renderRuntime->getTerrainProcessor()]
-            {
-                auto snapshot = std::make_shared<SceneFrameSnapshot>();
-                RenderFrameExtractor::extractSceneSnapshot(
-                    RenderFrameExtractor::SceneExtractInput{
-                        .scene = scene,
-                        .terrainProcessor = terrainProcessor,
-                    },
-                    *snapshot);
-                return std::shared_ptr<const SceneFrameSnapshot>(std::move(snapshot));
-            },
-        });
+        auto buildSnapshot = [scene, terrainProcessor = renderRuntime->getTerrainProcessor()]
+        {
+            auto snapshot = std::make_shared<SceneFrameSnapshot>();
+            RenderFrameExtractor::extractSceneSnapshot(
+                RenderFrameExtractor::SceneExtractInput{
+                    .scene = scene,
+                    .terrainProcessor = terrainProcessor,
+                },
+                *snapshot);
+            return std::shared_ptr<const SceneFrameSnapshot>(std::move(snapshot));
+        };
+
+        sceneScheduler.submit(makeSceneCameraRequest(scene->getInstanceId(),
+                                                     kPrimarySceneViewId,
+                                                     frameState.view,
+                                                     frameState.projection,
+                                                     frameState.cameraPos,
+                                                     frameState.viewportRect,
+                                                     buildSnapshot));
+
+        Entity* runtimeLookCamera = (app._appState == AppState::Runtime) ? getPrimaryCamera(app) : nullptr;
+        Entity* previewCamera     = resolvePreviewCamera(*scene,
+                                                         runtimeLookCamera,
+                                                         app._renderState->bCameraPreviewHostOwned,
+                                                         app._renderState->cameraPreviewEntityUUID);
+        if (previewCamera && previewCamera == runtimeLookCamera) {
+            previewCamera = nullptr;
+        }
+        previewDestRect = makeBottomRightViewInset(frameState.viewportRect.extent);
+        if (previewCamera && previewDestRect.extent.x > 0.0f && previewDestRect.extent.y > 0.0f) {
+            auto* cameraComp = previewCamera->getComponent<CameraComponent>();
+            auto* transform  = previewCamera->getComponent<TransformComponent>();
+            const Rect2D previewOutput{
+                .pos    = {0.0f, 0.0f},
+                .extent = previewDestRect.extent,
+            };
+            sceneScheduler.submit(makeSceneCameraRequest(scene->getInstanceId(),
+                                                         kCameraPreviewViewId,
+                                                         cameraComp->getFreeView(),
+                                                         cameraProjectionForOutput(*cameraComp, previewOutput.extent),
+                                                         transform->getWorldPosition(),
+                                                         previewOutput,
+                                                         buildSnapshot));
+        }
+        else {
+            previewDestRect = {};
+        }
+
+        appendSceneCameraFrustumLines(*scene,
+                                      runtimeLookCamera,
+                                      previewCamera ? entityUUID(previewCamera) : 0,
+                                      previewDestRect.extent,
+                                      cameraFrustumLines);
     }
     sceneRenderPlan = sceneScheduler.seal();
 
@@ -530,7 +663,10 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
         }
     }
 
-    cameraFrame.overlay         = {.screenSprites = &screenOverlaySprites};
+    cameraFrame.overlay         = {
+        .screenSprites = &screenOverlaySprites,
+        .worldLines    = &cameraFrustumLines,
+    };
     cameraFrame.uiFrameSnapshot = pUiFrameSnapshot;
 
     IRender*       render        = renderRuntime->getRender();
@@ -560,6 +696,14 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
                 if (commandBuffer) {
                     app.recordModuleViewportCompose(*commandBuffer, dt);
                 } },
+            .insets = (previewDestRect.extent.x > 0.0f && previewDestRect.extent.y > 0.0f)
+                          ? std::vector<ViewDisplayInset>{
+                                ViewDisplayInset{
+                                    .viewId   = kCameraPreviewViewId,
+                                    .destRect = previewDestRect,
+                                },
+                            }
+                          : std::vector<ViewDisplayInset>{},
         },
         .displayCompose = {
             .extensions = {

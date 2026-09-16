@@ -79,6 +79,7 @@ struct CameraFrameInput
         const std::vector<RenderOverlaySprite2D>* screenSprites = nullptr;
         const std::vector<RenderOverlaySprite3D>* worldSprites  = nullptr;
         const std::vector<RenderOverlayText2D>*   screenTexts   = nullptr;
+        const std::vector<RenderOverlayLine3D>*   worldLines    = nullptr;
     };
 
     uint32_t flightIndex = 0;
@@ -128,15 +129,25 @@ struct CameraFrameInput
     return camera;
 }
 
+/// Blit a published View onto the primary Camera display RT. `destRect` is in
+/// that RT's pixel space (origin at the RT top-left).
+struct ViewDisplayInset
+{
+    SceneViewId viewId = 0;
+    Rect2D      destRect{};
+};
+
 /// Overlay / gizmos onto this camera's offscreen RT (after graphics + UI).
-/// Not display compose; must not recreate GPU resources.
+/// Not display compose; must not recreate GPU resources. Insets are extra
+/// Views on the primary display, not a second Surface.
 struct ViewComposeInput
 {
     std::function<void(ICommandBuffer*)> recordCompose;
+    std::vector<ViewDisplayInset>        insets;
 
     [[nodiscard]] bool empty() const
     {
-        return !recordCompose;
+        return !recordCompose && insets.empty();
     }
 };
 

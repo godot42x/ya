@@ -79,6 +79,10 @@ void recordRenderViewportOverlayPass(const FrameContext& frameCtx,
                                text.color,
                                font.get());
         }
+
+        for (const auto& line : overlaySnapshot->worldLines) {
+            Render2D::makeWorldLine(line.from, line.to, line.color);
+        }
     }
 
     Render2D::onRender();

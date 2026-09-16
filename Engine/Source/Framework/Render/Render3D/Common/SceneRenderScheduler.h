@@ -15,6 +15,9 @@ namespace ya
 using SceneId = uint64_t;
 using SceneViewId = uint64_t;
 
+inline constexpr SceneViewId kPrimarySceneViewId     = 1;
+inline constexpr SceneViewId kCameraPreviewViewId    = 2;
+
 struct SceneRenderRequest
 {
     SceneId     sceneId  = 0;

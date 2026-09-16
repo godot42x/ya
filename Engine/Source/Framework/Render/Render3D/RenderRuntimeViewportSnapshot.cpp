@@ -11,14 +11,21 @@ RenderViewportSnapshot RenderRuntime::buildViewportSnapshot() const
     RenderViewportSnapshot snapshot;
     snapshot.bForwardPipeline       = (_pipelineCoordinator.getRenderPipeline() == ERenderPipeline::Forward);
     snapshot.bPostprocessingEnabled = debugOutputs.bPostprocessingEnabled;
-    snapshot.viewportImageOwner     = getViewportDisplayImageShared();
-    snapshot.viewportImageView      = snapshot.viewportImageOwner && snapshot.viewportImageOwner->getImageView()
-                                        ? snapshot.viewportImageOwner->getImageView()
-                                        : nullptr;
-    if (auto* pipeline = getActivePipeline()) {
-        snapshot.viewportDepthOwner = pipeline->getViewportDepthImageShared();
-        snapshot.entityIdImageOwner = pipeline->getEntityIdImageShared();
+    if (const auto* output = publishedViewOutput()) {
+        snapshot.viewportImageOwner = output->displayImage();
+        snapshot.viewportDepthOwner = output->depth;
+        snapshot.entityIdImageOwner = output->entityId;
     }
+    else {
+        snapshot.viewportImageOwner = getViewportDisplayImageShared();
+        if (auto* pipeline = getActivePipeline()) {
+            snapshot.viewportDepthOwner = pipeline->getViewportDepthImageShared();
+            snapshot.entityIdImageOwner = pipeline->getEntityIdImageShared();
+        }
+    }
+    snapshot.viewportImageView = snapshot.viewportImageOwner && snapshot.viewportImageOwner->getImageView()
+                                     ? snapshot.viewportImageOwner->getImageView()
+                                     : nullptr;
 
     ensureViewportDebugCatalog();
     snapshot.debugCatalog = _viewportDebugCatalog;

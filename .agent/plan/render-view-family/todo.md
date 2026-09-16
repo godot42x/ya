@@ -24,7 +24,7 @@
 - [x] 用 sceneRevision 防止同一 Scene 内容变化后错误复用旧 snapshot。
 - [x] 在 snapshotFor() 校验 snapshotIndex 对应的 SceneId/revision，拒绝错误 task 索引。
 - [x] 将 SceneRenderScheduler 的 snapshot builder 接到真实 Scene extractor，并让 plan snapshot 直接进入当前单 View preparation。
-- [ ] 扩展 SceneRenderScheduler request collection 到 GameEditor/preview 的多个 View。
+- [x] 扩展 SceneRenderScheduler request collection 到 GameEditor/preview 的多个 View。
 - [ ] 在 UI GPU compose 之前聚合 SceneRenderRequest，并禁止 UI paint/compose 期间临时抽取 Scene/ECS；不强制 UI widget tick 的相对顺序。
 - [x] 迁移 shadow/entity-id/debug/Forward/Deferred 消费者到显式 Scene snapshot / per-view 字段。
 - [x] 迁移 RenderFrameData 消费者到显式 `sceneSnapshot` + per-view 数据，并删除 SceneFrameSnapshot 继承关系。
