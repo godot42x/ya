@@ -5,12 +5,21 @@
 - 阶段：R0 基线审计已完成；R1 已完成 SceneRenderRequest/SceneRenderPlan 的最小 frame-local 调度切片、真实 extractor 的显式 Scene/View 分层，以及 GameRuntime 单 View 的 scheduler 接入；尚未让 RenderRuntime 接管多 View 录制。
 - 已确认：RenderFrameInputs.h 已有四组输入；RenderRuntime 仍按单 View、单 active Scene 记录，但 RenderFrameData 的 Scene snapshot owner 已与 View-owned draw buckets 分离。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
-- 本轮移除了 RenderRuntimeSnapshotTest 中依赖读取源码文本和 `find()` 的架构时序回归；保留运行时可执行的输入契约、scheduler 去重、revision 和 snapshot 索引校验，并完成同 Scene shared snapshot 的第一段运行时迁移。
-- 当前 checkpoint：SceneFrameSnapshot 的灯光数据已收敛为 view-independent source data；directional cascade/shadow matrices 与完整 RHI light packet 仅在 per-view RenderFrameData 中生成。
+- 当前 checkpoint：Forward FrameResourceSet 已按 submission/View 拆开 frame descriptor 与 upload slice；RenderRuntime 仍只录制一个 View，Deferred/Shadow 仍覆写 per-flight Binding。
 - 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是持有 shared snapshot 并独立保存 View-owned draw buckets；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 View buckets、shared skinning palettes 和 light presence。
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan/task 传入，Runtime 在 command recording 前验证 snapshot 索引和 SceneId/revision 归属。当前仍只录制首个单 View，未引入多 View output 或额外 submit。
-- GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op，避免重置 cursor 后覆写前一个 View 已录制命令引用的 UBO/light/shadow slices。Forward、Deferred、Shadow 资源准备均传入该 token。该语义只覆盖 upload cursor，descriptor binding/output ownership 仍未按 View 隔离。
-- 架构审计结论：token guard 只是迁移期护栏，不能作为最终 multi-view 方案。当前 `RenderRuntime` 持有的 pipeline/resource state、per-flight descriptor set、arena cursor 和 `_lastTickCtx` 仍混合了 persistent、submission、View 三种生命周期；下一步必须拆出 `RenderSubmissionContext` 与 `RenderViewRecordingContext`，让每个 View 拥有独立 descriptor/slice lifetime。
+- GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward 的 frame/light/skybox descriptor 已改为 View-owned；skinning 仍是 submission 共享（同 Scene 多 View 正确）。
+- 架构审计结论：RenderSubmissionContext / RenderViewRecordingContext 已进入 tick 输入，Forward beginView 不再按 flightIndex 覆写唯一 Binding。下一步不是再给 Forward 打补丁，而是把同一规则迁到 Deferred/Shadow，并让 Runtime 把 submission 保活到 fence。
+
+## 2026-09-16 checkpoint：Forward beginSubmission / beginView
+
+- 唯一目标：Forward resource set 为同一 submission 的每个 View 提供独立 Binding（descriptor set + upload slice），View B 的准备不得改写 View A。
+- 新增 `RenderSubmissionContext` / `RenderViewRecordingContext`，`RenderPipelineFrameContext` 携带它们；RenderRuntime 在 tick 时填入 flight/token/cmdBuf/task。
+- `RenderViewBindingTable` 按 flight 持有 View slot：同 token 追加，新 token rewind live count 并复用已有 slot。
+- `ForwardFrameResourceSet::beginSubmission` 打开 arena flight；`beginView` 分配/复用该 View 的 frame descriptor sets，写入独立 slices，再更新那一组 set。`getBinding(flightIndex)` 已删除。
+- Skinning 仍走 per-flight CRTP buffer，beginView 把 flight 的 skinning handle 抄进 View Binding；同 Scene 多 View 共享 palette，不同 Scene 的 skinning 隔离留到多 Scene 录制。
+- 验证：`xmake b ya-render-3d`、`xmake b ya-render-3d-test`、`xmake r ya-render-3d-test --gtest_filter='RenderViewBindingTableTest.*'`（6/6）、`RenderRuntimeSnapshotTest.*:DrawCandidateViewTest.*:RenderGraphCoreTest.FrameUploadArena*` 回归通过、`xmake b ya-game-runtime`、`git diff --check`。
+- 保留未完成：Deferred/Shadow 仍按 flight 覆写 Binding；RenderRuntime 不持有 submission 到 fence；仍只录制单 View；无独立 View output；无双 Surface。
 
 ## 2026-09-16 checkpoint：pipeline View-local graph context
 
@@ -79,13 +88,13 @@ R0 结论：world snapshot 与 UI snapshot 都在 renderFrame 前生成；Render
 | --- | --- | --- | --- |
 | R0 单 View 基线 | 已完成 | 单 View、现有 pass、单 submit、Forward/Deferred topology | 真实 GPU golden 仍依赖可运行窗口环境 |
 | R1 World/View 分离 | 已完成（单 View 契约） | RenderFrameData 组合 Scene snapshot；现有单 View pipeline topology | GameEditor/preview 多 request |
-| R2 ViewFamily | 进行中（输入契约切片） | Forward/Deferred topology、当前单 View submit | 多 View record、独立 output、双 Surface 验收 |
+| R2 ViewFamily | 进行中（Forward View binding） | Forward/Deferred topology、当前单 View submit、Deferred/Shadow per-flight binding | 多 View record、独立 output、双 Surface 验收、Runtime submission 保活 |
 | R3 GUI2D/GameUI | 未开始 | WidgetTree live source、UIFrameSnapshot 输入 | UI-only 与 GameUI[ViewId] |
 | R4 性能收口 | 未开始 | 优化由 profile 触发 | cache、submit、第三 pipeline 决策 |
 
 ## 下一轮接力点
 
-R0 已完成。SceneFrameSnapshot / RenderViewInput 的字段和所有权已明确，后续继续迁移 RenderFrameData 与 RenderRuntime::FrameInput。
+R0 已完成。Forward 已具备 beginSubmission/beginView。下一 checkpoint 把同一 View-owned binding 规则迁到 Deferred/Shadow，或让 RenderRuntime 把 submission 保活到 fence；不要在尚未隔离的 pipeline 上开始双 View GPU 录制。
 
 ## R1 审计结论
 

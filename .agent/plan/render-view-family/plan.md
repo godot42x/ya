@@ -1,7 +1,7 @@
 # Render View Family 与 GUI/GameUI 渲染边界重构计划
 
 > 建立日期：2026-09-12
-> 状态：R2 进行中；R1 单 View 调度与同 Scene snapshot 共享已落地，View-owned draw bucket 已迁移为共享候选数据上的 index/order ranges，下一 checkpoint 处理 submission/View 生命周期隔离。
+> 状态：R2 进行中；Forward FrameResourceSet 已提供 beginSubmission/beginView 与 View-owned frame binding。RenderRuntime 仍只录制单 View；Deferred/Shadow 仍是 per-flight 覆写。下一 checkpoint 将同一生命周期规则迁到 Deferred/Shadow，或让 Runtime 把 submission 保活到 fence。
 
 ## 1. 主线选择
 

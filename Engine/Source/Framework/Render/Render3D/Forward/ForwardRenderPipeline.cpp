@@ -599,13 +599,34 @@ void ForwardRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
 
 void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
+    RenderSubmissionContext submission = frame.submission;
+    submission.cmdBuf      = frame.cmdBuf;
+    submission.flightIndex = frame.camera.flightIndex;
+    submission.frameToken  = frame.camera.frameIndex;
+
+    if (_frameResources && !_frameResources->beginSubmission(submission)) {
+        YA_CORE_ERROR("Forward viewport submission begin failed");
+    }
     if (_frameResources && !_frameResources->prepareSkinning(stageCtx)) {
         YA_CORE_ERROR("Forward viewport skinning resource prepare failed");
     }
 
     _viewportStage->prepare(stageCtx);
-    if (_frameResources && !_frameResources->prepareFramePayloads(stageCtx, _viewportStage->getFramePayloads())) {
-        YA_CORE_ERROR("Forward viewport frame payload upload failed");
+
+    RenderViewRecordingContext view = frame.view;
+    if (!view.frameData) {
+        view.frameData = frame.camera.frameData;
+    }
+    if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
+        view.viewportExtent = stageCtx.viewportExtent;
+    }
+
+    const ForwardFrameResourceSet::Binding* viewBinding = nullptr;
+    if (_frameResources) {
+        viewBinding = _frameResources->beginView(submission, view, _viewportStage->getFramePayloads());
+        if (!viewBinding) {
+            YA_CORE_ERROR("Forward viewport view binding prepare failed");
+        }
     }
 
     YA_CORE_ASSERT(!_viewportRTSpec.attachments.colorAttach.empty(),
@@ -632,7 +653,11 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     postContext.cameraPos      = frame.camera.cameraPos;
     postContext.extent         = _viewportResources.extent;
 
-    [[maybe_unused]] const bool bExecuted = executeViewportPassGraph(frame, stageCtx, postContext);
+    [[maybe_unused]] const bool bExecuted = executeViewportPassGraph(
+        frame,
+        stageCtx,
+        postContext,
+        viewBinding ? *viewBinding : ForwardFrameResourceSet::Binding{});
     YA_CORE_ASSERT(bExecuted, "Forward viewport graph execution failed");
 }
 
@@ -655,7 +680,8 @@ void ForwardRenderPipeline::shutdown()
 
 bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameContext& frame,
                                                      RenderStageContext&             stageCtx,
-                                                     FrameContext&                    postContext)
+                                                     FrameContext&                    postContext,
+                                                     const ForwardFrameResourceSet::Binding& frameBinding)
 {
     YA_CORE_ASSERT(_graphExecutor != nullptr, "ForwardRenderPipeline graph executor is not initialized");
 
@@ -683,8 +709,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
         ForwardFrameGraphOrchestrator::BuildInputs{
             .graph                    = &graph,
             .stageCtx                 = &stageCtx,
-            .frameBinding             = _frameResources ? _frameResources->getBinding(stageCtx.flightIndex)
-                                                        : ForwardFrameResourceSet::Binding{},
+            .frameBinding             = frameBinding,
             .viewportRTSpec           = &_viewportRTSpec,
             .directionGizmos          = std::move(directionGizmos),
             .viewportPassContext      = &viewportPassContext,

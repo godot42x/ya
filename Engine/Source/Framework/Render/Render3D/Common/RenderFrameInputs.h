@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Services/PresentationGraphService.h"
@@ -102,12 +103,16 @@ struct PresentFrameInput
 
 /// Recording extras plus the camera packet consumed by Forward/Deferred.
 /// Pipelines read `camera` for matrices and extent; they do not query
-/// swapchain or NativeWindow.
+/// swapchain or NativeWindow. `submission` / `view` are the explicit
+/// lifetime contexts for resource-set beginSubmission/beginView; a missing
+/// view packet still means the current single-View path.
 struct RenderPipelineFrameContext
 {
     ICommandBuffer*  cmdBuf = nullptr;
     CameraFrameInput camera{};
     std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
+    RenderSubmissionContext    submission{};
+    RenderViewRecordingContext view{};
 };
 
 } // namespace ya

@@ -89,6 +89,17 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
         .cmdBuf                    = cmdBuf,
         .camera                    = input.camera,
         .viewportOverlaySnapshot   = std::move(overlaySnapshot),
+        .submission = RenderSubmissionContext{
+            .frameToken  = input.camera.frameIndex,
+            .flightIndex = input.camera.flightIndex,
+            .cmdBuf      = cmdBuf,
+            .hostSurface = input.present.surface,
+        },
+        .view = RenderViewRecordingContext{
+            .task            = input.sceneRender.task,
+            .frameData       = input.camera.frameData,
+            .viewportExtent  = Extent2D::fromVec2(input.camera.viewportRect.extent),
+        },
     });
 }
 

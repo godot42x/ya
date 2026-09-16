@@ -36,13 +36,14 @@
 - [x] 将 FrameUploadArena 同一 token 的 begin 改为幂等追加语义，避免多 View 准备时重置 cursor；descriptor binding 隔离仍留在后续切片。
 - [x] 原子迁移 RenderFrameData：Scene snapshot 改为 shared_ptr<const SceneFrameSnapshot>，并使用 View-owned draw bucket 副本承载 camera-dependent sort；禁止旧 sortDrawItems() 修改共享 snapshot。
 - [x] 将 View-owned draw bucket 副本替换为 index/order ranges，消除 RenderDrawItem 的重复拷贝；DrawCandidateView 提供 indexed read-only range。
+- [x] 引入 RenderSubmissionContext / RenderViewRecordingContext；ForwardFrameResourceSet 提供 beginSubmission/beginView，同一 submission 的每个 View 拥有独立 frame descriptor set 与 upload slice。
 - [ ] 将 DrawPacket grouping/packet ranges 的生命周期纳入 submission/View context，确认录制期不缓存失效的候选 span。
 - [x] 移除 Forward/Deferred pipeline 中跨 View 共享的 `_lastTickCtx` / `_lastFrameInput`，graph build 改用调用栈内 View-local post context。
 - [ ] 明确并实现同 Scene 复用表：snapshot/candidates/skinning/light sources 共享；visibility/sort/shadow/targets 按 View 生成。
 - [ ] 让同一逻辑帧的多个 surface/window 共用一个 SceneRenderScheduler/SceneRenderPlan，避免按窗口重复抽取同一 Scene。
-- [ ] 将 RenderRuntime 持久状态、RenderSubmissionContext、RenderViewRecordingContext 分离；明确哪些资源属于 device/runtime、submission、View。
-- [ ] 将 per-flight descriptor binding 与 upload slices 从单一 pipeline state 改为 submission/View-owned，允许同一 submission 安全录制多个 View。
-- [ ] 增加同一 submission 多 View 的 GPU data identity/lifetime 验证，证明 View A 的 descriptor/slice 不会被 View B 覆写。
+- [ ] 将 RenderRuntime 持久状态保活到 submit/fence；Deferred/Shadow 按 Forward 的 beginSubmission/beginView 规则迁移。
+- [ ] 将 Deferred/Shadow 的 per-flight descriptor binding 改为 View-owned，允许同一 submission 安全录制多个 View。
+- [x] 增加同一 submission 多 View 的 slot/slice identity 验证（RenderViewBindingTable + Forward writeViewPayloads）。真实 GPU descriptor write 与 output publish 隔离仍待录制切片。
 - [ ] 为每个 View 建立独立 output/extent/format 句柄。
 - [ ] 录制同一 Scene 的两个 View，共享一个 SceneFrameSnapshot。
 - [ ] 录制两个 Scene 的两个 View，验证 snapshot 和资源生命周期隔离。
