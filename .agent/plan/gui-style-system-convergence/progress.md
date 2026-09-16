@@ -571,3 +571,32 @@ Phase 1 遗留的九宫格渲染落地。`sliceBrush` 把 dest 切成 Image(1) /
 - `ya-testing` — 1134 PASSED，7 FAILED 与本切片无关（逐条在改动前复现：GUIWindowManagerTest.DragOverlay…、EditorPropertyGraphTest.Auto…/TextureAssetRow…、ScriptApiLibraryFixture.GameUIWidgetLifecycle…、GameUIHostTest.BuildSnapshotComposes…、GUIHeadlessHostTest.ReusesAppKernel…/UnthemedFallback…）。
 - `WidgetTreeTest.TextFieldOutlineSitsInsideLayoutRect` / `DragFloatOutlineSitsInsideLayoutRect` 改为断言 surface（外圈覆盖 layout rect、fill 内缩），不再断言 `Line` 项。
 - 22 个 gallery 页 `--scenario` 冒烟 + `theme.jsonl` + `animation_gallery.jsonl`（22 断言）全过；dark / light 两套 GPU 截图目视验收；近期所有 run 的日志无 `unknown key` / 断言失败。
+
+## 2026-09-16（续）— 表面台阶收紧 + 描边减负 + 编辑器与 host 对齐字体
+
+用户第二轮反馈：**编辑器**（GameEditor）的「背景色和控件轮廓、边界」配色不舒服。把编辑器真正跑起来截图对比后，问题不在色相而在三处：
+
+1. **编辑器根本没吃到新主题**。`AppLifecycle::findRuntimeDefaultFontPath()` 走的是 `findCjkFontCandidates()` 里第一个存在的**系统**字体当主字面 —— 那些字面自带一套拉丁设计（macOS 上是 Hiragino/PingFang，Windows 上是 msyh），和 GUI host 用的内置 Inter 不是同一套；本机 PingFang.ttc 已不存在，于是落到更老的系统字体。
+2. **表面台阶太大、蓝味太重、最深面压到近黑**：canvas #0a0c10 到 raised #1c212a 之间 1.98:1，配合每层都有描边，外壳读起来是一摞深浅不同的方块 + 一张线框网。
+3. **处处描边**：按钮 / tab / 选中行 / expander header 全都带边，填充本已能分层，这层边就是「线框感」的来源。
+
+### 本轮完成
+
+- **字体栈收口到一个策略**：新增 `FontManager::findDefaultUiFontPath()`（内置比例字面 Inter）+ `addDefaultUiFallbacks()`（一个 CJK fallback + 内置 emoji）；`GUIAppHost` 与 `AppLifecycle` 都改调这两个，不再各拼一套。runtime 主字面从「系统 CJK 字体」改回内置 UI 面，CJK 仍由 fallback 覆盖。
+- **表面阶梯收紧**：dark 从 canvas 0.039/window 0.063/panel 0.086/raised 0.110 改成 0.078/0.094/0.114/0.145，灰色转中性（blue 只比 red 高 3–6%）；相邻角色差从 1.08–1.15 收到 ~1.04–1.10。light 改为白内容 + 灰底 + 比白低一级的 chrome（raised 0.961），不再是「比白还白」。
+- **描边改半透明**：`borderSubtle/Strong/Hover` 从灰色常量改成 alpha 白（dark 0.06/0.10/0.16；light 黑 0.09/0.15/0.26），一条 token 在任何平面成立；量级从 ~1.24/1.54 收到 ~1.18/1.35。
+- **按钮 / tab / 选中行 / expander header 去环**：这些位置的填充台阶已足够分层；只有 focus / dropTarget / error 保留 accent 环（瞬时状态必须可辨）。
+- **gallery 页面改走主题 key**：10 个页面文件里的 `.setColor(kPanelColor/kHeaderColor/kTextColor)`（50 处）换成 `StyleKey::Panel / TextMuted / Text`，并删除 `DemoPageCommon.h` 里手抄的调色板别名。这些 key 在 dark 下与旧字面等值，light 下才会跟着主题走 —— 之前 light 主题下整个 gallery 仍是深色卡片。
+
+### 保留 / 未完成
+
+- `theme.jsonl` 第 6 行断言 `ThemeToggle` 这个控件不存在（scenario 与代码不一致，改动前即失败；只在断言失败处报一次，其余 checkpoint 正常）。
+- 编辑器底部约 5px 显示为 canvas 色（dock `kDockContentInset` 边），视觉上是「多出来的一条底边」；未在本轮处理。
+
+### 验证
+
+- `ya-engine / ya-gui-widgets / ya-gui-closure-test / GUIWorkbench / ya-game-editor / ya-testing` 全部构建通过。
+- `ya-gui-closure-test` — 574/574 PASSED。
+- `ya-testing` — 与改动前同一组 7 个既有失败（内容逐条一致）。
+- 22 个 gallery 页冒烟 + `animation_gallery.jsonl`（22 断言）全过；`theme.jsonl` 只有上述既有 `ThemeToggle` 断言失败。
+- 编辑器以 `ya-runtime --editor --width=1470 --height=836 --screenshot` 截真实 presentation 帧验收（含用户截图同尺寸复现）；dark / light 两套 workbench 截图验收。

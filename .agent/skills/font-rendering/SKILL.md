@@ -61,6 +61,7 @@ QuadRender.drawText       逐字形取 atlas、像素对齐、下发顶点
    - 理由：**chrome 排版要比例字体**。等宽字面（曾用的 JetBrainsMono）让每个 label / menu / field 都像终端输出，并且固定前进宽度在密集工具面板里浪费横向空间。
    - 打包而不是走系统路径，是为了让文本度量在 macOS / Windows 完全一致：golden 图像与 `dumpSnapshot` 摘要是**跨 run** 比对，系统字体探测会让它们跨机漂移。JetBrains Mono 仍在 `Engine/Content/Fonts/`，给需要等宽的 code / console 面用。
    - 注册名 `DEFAULT_RUNTIME_FONT_NAME`（`RuntimeDefault`）**不要改**：大量测试用它注册合成字体。换字体 = 换 `fontPath`，不是换这个名字。
+   - **只有一个入口**：`FontManager::findDefaultUiFontPath()`（主字面）+ `addDefaultUiFallbacks()`（一个 CJK fallback + 内置 emoji）。GUI host 与 game/editor runtime 都调这两个，不要再各自拼字体栈。曾经 runtime 单独去 `findCjkFontCandidates()` 里挑第一个存在的主字面——那些字面**不是只有 CJK**，它们自带一套拉丁设计，于是同一套框架下编辑器把英文渲染成 Hiragino/PingFang（Windows 上是 msyh），跟 host 不一致，而且在没有全覆封面孔的机器上会落到更老的系统字体。
 
 ## 排查清单
 
