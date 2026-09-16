@@ -121,8 +121,7 @@ UIMenuBarItem* UIMenuBar::addItem(const std::string& label, std::function<std::s
             _openMenuItem = nullptr;
         };
         // Anchor the menu below the bar item.
-        const glm::vec2 pos{item->_layoutRect.pos.x, item->_layoutRect.pos.y + item->_layoutRect.extent.y};
-        menu->openAt(*tree, pos);
+        menu->openAt(*tree, item->_layoutRect);
     };
     // While a menu is open, moving onto another entry switches to that
     // entry's menu (classic menu-bar hover behavior). Moving onto the entry

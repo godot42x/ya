@@ -647,12 +647,9 @@ void UIColorEdit::openPalette()
     picker->_onColorChanged = [this](const glm::vec4& picked) { setColor(picked); };
     const glm::vec2 pickerSize = picker->computeDesiredSize();
     const Rect2D    swatch     = _swatch ? _swatch->getLayoutRect() : _layoutRect;
-    glm::vec2       pos        = {swatch.pos.x, swatch.pos.y + swatch.extent.y + 4.0f};
+    glm::vec2 pos = {swatch.pos.x, swatch.pos.y + swatch.extent.y + 4.0f};
     if (WidgetTree* tree = getTree()) {
-        const float viewH = static_cast<float>(tree->getLogicalExtent().height);
-        if (pos.y + pickerSize.y > viewH && swatch.pos.y - 4.0f - pickerSize.y >= 0.0f) {
-            pos.y = swatch.pos.y - 4.0f - pickerSize.y;
-        }
+        pos = UIPopupOverlay::fitContentPos(*tree, pos, pickerSize, &swatch);
     }
     overlay->_contentPos    = pos;
     overlay->_contentExtent = pickerSize;

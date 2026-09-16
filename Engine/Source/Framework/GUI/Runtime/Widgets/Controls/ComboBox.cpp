@@ -97,8 +97,7 @@ void UIComboBox::openDropdown()
         });
     }
     auto menu = UIMenu::create(menuItems);
-    const glm::vec2 pos{_layoutRect.pos.x, _layoutRect.pos.y + _layoutRect.extent.y};
-    menu->openAt(*tree, pos);
+    menu->openAt(*tree, _layoutRect);
 }
 
 bool UIComboBox::handleInputEvent(const Event& event, const WidgetEventContext& ctx)

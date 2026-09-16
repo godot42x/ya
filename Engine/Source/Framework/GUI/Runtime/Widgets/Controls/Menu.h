@@ -59,7 +59,8 @@ struct YA_GUI_API UIMenuItem : public UIElement, public UIStyledWidget<UIMenuIte
 /// mouse hover + keyboard navigation (Up/Down/Enter/Esc).
 ///
 /// Build via create(); open via openAt(tree, pos) which anchors the top-left
-/// of the menu at `pos`. Selecting an item runs its action and closes.
+/// of the menu at `pos` (clamped into the viewport), or openAt(tree, anchor)
+/// which prefers below the control and flips above when the list would clip.
 struct YA_GUI_API UIMenu : public UIPopupOverlay
 {
     struct FItem
@@ -97,8 +98,12 @@ struct YA_GUI_API UIMenu : public UIPopupOverlay
     /// Create a menu with `items`; the returned menu is detached until open().
     static std::shared_ptr<UIMenu> create(const std::vector<FItem>& items);
 
-    /// Attach to `tree`'s Popup layer with the menu top-left at `pos`.
+    /// Attach to `tree`'s Popup layer with the menu top-left at `pos`,
+    /// clamped into the tree viewport.
     void openAt(WidgetTree& tree, const glm::vec2& pos);
+    /// Prefer opening below `anchor`; if that overflows the viewport, open
+    /// above it, then clamp remaining overflow so every row stays hittable.
+    void openAt(WidgetTree& tree, const Rect2D& anchor);
 
     static constexpr float kItemHorizontalPadding = 10.0f;
     static constexpr float kSeparatorHeight       = 9.0f;

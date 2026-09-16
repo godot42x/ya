@@ -56,6 +56,30 @@ void UIPopupOverlay::open(WidgetTree& tree)
     tree.setFocus(this);
 }
 
+glm::vec2 UIPopupOverlay::fitContentPos(const WidgetTree& tree,
+                                        glm::vec2         preferredTopLeft,
+                                        glm::vec2         contentExtent,
+                                        const Rect2D*     flipAroundAnchor)
+{
+    const glm::vec2 view = tree.getLogicalExtent().toVec2();
+    if (view.x <= 0.0f || view.y <= 0.0f) {
+        return preferredTopLeft;
+    }
+
+    if (preferredTopLeft.y + contentExtent.y > view.y && flipAroundAnchor) {
+        const float aboveY = flipAroundAnchor->pos.y - contentExtent.y;
+        if (aboveY >= 0.0f) {
+            preferredTopLeft = {flipAroundAnchor->pos.x, aboveY};
+        }
+    }
+
+    const float maxX = std::max(0.0f, view.x - contentExtent.x);
+    const float maxY = std::max(0.0f, view.y - contentExtent.y);
+    preferredTopLeft.x = std::clamp(preferredTopLeft.x, 0.0f, maxX);
+    preferredTopLeft.y = std::clamp(preferredTopLeft.y, 0.0f, maxY);
+    return preferredTopLeft;
+}
+
 void UIPopupOverlay::close()
 {
     WidgetTree*    tree      = getTree();

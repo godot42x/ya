@@ -12,6 +12,7 @@
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
+#include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/Image.h"
@@ -1533,6 +1534,61 @@ TEST(ToolControlsTest, MenuSizesPanelFromItemLabels)
     EXPECT_GE(row.extent.x - 20.0f, font->measureText("New Document"));
     // Second row packs directly below (no spacing between menu rows).
     EXPECT_FLOAT_EQ(items[1]->_layoutRect.pos.y, 50.0f);
+}
+
+TEST(ToolControlsTest, MenuClampsIntoViewportWhenOpenedPastTheBottom)
+{
+    registerMenuFont(13.0f, 8.0f);
+
+    WidgetTree tree({.width = 200, .height = 80});
+    auto       menu = UIMenu::create({
+        {"Cube", [] {}},
+        {"Sphere", [] {}},
+    });
+    menu->openAt(tree, {10.0f, 50.0f});
+    tree.layout();
+
+    const Rect2D& panelRect = menu->getChildren()[0]->_layoutRect;
+    EXPECT_GE(panelRect.pos.y, 0.0f);
+    EXPECT_LE(panelRect.pos.y + panelRect.extent.y, 80.0f);
+    EXPECT_FLOAT_EQ(panelRect.pos.y, 80.0f - panelRect.extent.y);
+}
+
+TEST(ToolControlsTest, ComboBoxOpensAboveWhenDropdownWouldOverflowViewport)
+{
+    registerMenuFont(13.0f, 8.0f);
+
+    WidgetTree tree({.width = 240, .height = 400});
+    auto       combo = std::make_shared<UIComboBox>("Primitive");
+    combo->_items    = {"None", "Cube", "Sphere", "Plane", "Cylinder", "Cone", "Quad"};
+    FCanvasSlotArgs slot;
+    slot.offset    = {20.0f, 350.0f};
+    slot.fixedSize = {180.0f, 24.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), combo, slot).valid());
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(110.0f, 362.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    tree.layout();
+
+    UIMenu* menu = nullptr;
+    for (const auto& child : tree.getLayer(WidgetTree::ELayer::Popup)->getChildren()) {
+        menu = dynamic_cast<UIMenu*>(child.get());
+        if (menu) {
+            break;
+        }
+    }
+    ASSERT_NE(menu, nullptr);
+    ASSERT_FALSE(menu->getChildren().empty());
+    const Rect2D& panel = menu->getChildren()[0]->_layoutRect;
+    EXPECT_FLOAT_EQ(panel.pos.y, 350.0f - panel.extent.y);
+    EXPECT_LE(panel.pos.y + panel.extent.y, 350.0f + 0.01f);
+
+    const auto items = menu->menuItems();
+    ASSERT_EQ(items.size(), 7u);
+    const Rect2D& last = items.back()->_layoutRect;
+    EXPECT_LT(last.pos.y + last.extent.y, 350.0f);
+    EXPECT_EQ(tree.pickAt({last.pos.x + 8.0f, last.pos.y + last.extent.y * 0.5f}), items.back());
 }
 
 TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)

@@ -336,7 +336,15 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
 void UIMenu::openAt(WidgetTree& tree, const glm::vec2& pos)
 {
     setRole(EOverlayRole::Popup);
-    _contentPos = pos;
+    _contentPos = fitContentPos(tree, pos, _contentExtent);
+    open(tree);
+}
+
+void UIMenu::openAt(WidgetTree& tree, const Rect2D& anchor)
+{
+    setRole(EOverlayRole::Popup);
+    const glm::vec2 below{anchor.pos.x, anchor.pos.y + anchor.extent.y};
+    _contentPos = fitContentPos(tree, below, _contentExtent, &anchor);
     open(tree);
 }
 

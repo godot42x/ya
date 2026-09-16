@@ -73,7 +73,7 @@ void UISearchComboBox::openFilteredMenu()
     };
     _openMenu = menu;
     if (WidgetTree* tree = getTree()) {
-        menu->openAt(*tree, {_layoutRect.pos.x, _layoutRect.pos.y + _layoutRect.extent.y});
+        menu->openAt(*tree, _layoutRect);
         // The popup steals focus for its own keyboard navigation; take it
         // back so typed characters keep filtering (menu navigation stays
         // mouse-driven for this control, Esc is handled here).

@@ -63,7 +63,8 @@ struct YA_GUI_API UISearchComboBox : public UIElement, public UIStyledWidget<UIS
     void clearTransientInputState() override;
 
   private:
-    /// Open (or refresh) the filtered popup menu below the control.
+    /// Open (or refresh) the filtered popup menu; placement flips above the
+    /// control when the list would clip out of the tree viewport.
     void openFilteredMenu();
     void closeMenu();
     [[nodiscard]] std::vector<int> filteredIndices() const;

@@ -78,6 +78,14 @@ struct YA_GUI_API UIPopupOverlay : public UIElement, public UIStyledWidget<UIPop
     /// Same as close(); used by shield/Esc handling.
     void dismiss() { close(); }
 
+    /// Place a popup panel inside the tree viewport. Prefer `preferredTopLeft`.
+    /// If that would overflow vertically and `flipAroundAnchor` is set, open
+    /// above the anchor when that fits; then clamp remaining overflow in.
+    [[nodiscard]] static glm::vec2 fitContentPos(const WidgetTree& tree,
+                                                 glm::vec2         preferredTopLeft,
+                                                 glm::vec2         contentExtent,
+                                                 const Rect2D*     flipAroundAnchor = nullptr);
+
     void appendRuntimeLayoutDiagnostics(nlohmann::json& node) const override { node["type"] = "canvas"; }
     void appendRuntimeDiagnostics(nlohmann::json& node, const WidgetTree&) const override {
         node["control"] = {{"type", "popupOverlay"}, {"modal", _bModal}};

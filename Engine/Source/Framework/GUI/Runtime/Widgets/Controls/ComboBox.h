@@ -13,8 +13,9 @@ namespace ya
 /// Drop-down combo box (gui-app-bootstrap Phase 4 tool primitive).
 ///
 /// Collapsed state shows the current selection in a button-like field; a
-/// click (or Space/Enter/Down on the focused box) opens a UIMenu below the
-/// field; selecting an item fires `_onSelectionChanged` and closes the menu.
+/// click (or Space/Enter/Down on the focused box) opens a UIMenu; the menu
+/// prefers below the field and flips above when it would clip out of the
+/// window. Selecting an item fires `_onSelectionChanged` and closes the menu.
 struct YA_GUI_API UIComboBox : public UIElement, public UIStyledWidget<UIComboBox, FComboBoxStyle>
 {
     YA_REFLECT_BEGIN(UIComboBox, UIElement)
@@ -67,7 +68,7 @@ struct YA_GUI_API UIComboBox : public UIElement, public UIStyledWidget<UIComboBo
     void clearTransientInputState() override { _bHovered = false; }
 
   private:
-    /// Open the dropdown menu below the field.
+    /// Open the dropdown, flipping above the field if it would clip.
     void openDropdown();
     VisualFlag _bHovered{*this};
     bool       _bMixed = false;
