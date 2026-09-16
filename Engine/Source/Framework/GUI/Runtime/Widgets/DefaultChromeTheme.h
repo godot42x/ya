@@ -116,24 +116,24 @@ inline constexpr float kMenu    = 8.0f;  // popup, tooltip, floating window
 inline constexpr float kCard    = 10.0f; // content card, dialog
 } // namespace radius
 
-/// Dark chrome: a NEUTRAL grey ladder, lifted well off black, with one bright
-/// accent and text held far above the noise floor. The greys are near-neutral
-/// on purpose (blue only ~3-6% above red): a strong blue cast turns every
-/// surface slightly navy, which fights the accent and reads as "murky" rather
-/// than dark. Nothing is crushed to near-black - the deepest plane is a normal
-/// dark grey, so dock/toolbar areas stop reading as holes cut into the shell.
+/// Dark chrome: a near-NEUTRAL grey ladder, lifted well off black, with one
+/// bright accent and text held far above the noise floor. The greys carry only
+/// a faint cool cast (~11-14% more blue than red): a stronger one turns every
+/// surface navy, which fights the accent and reads as "murky" rather than dark.
+/// Nothing is crushed to near-black - the deepest plane is an ordinary dark
+/// grey, so dock/toolbar areas stop reading as holes cut into the shell.
 [[nodiscard]] inline constexpr FPalette darkPalette()
 {
     FPalette p;
-    p.canvas = {0.078f, 0.082f, 0.094f, 1.0f};
-    p.window = {0.094f, 0.098f, 0.110f, 1.0f};
-    p.panel  = {0.114f, 0.118f, 0.133f, 1.0f};
-    p.raised = {0.145f, 0.151f, 0.169f, 1.0f};
-    p.well   = {0.098f, 0.102f, 0.114f, 1.0f};
+    p.canvas = {0.0706f, 0.0745f, 0.0784f, 1.0f};
+    p.window = {0.0863f, 0.0902f, 0.0980f, 1.0f};
+    p.panel  = {0.1098f, 0.1137f, 0.1216f, 1.0f};
+    p.raised = {0.1412f, 0.1451f, 0.1569f, 1.0f};
+    p.well   = {0.0941f, 0.0980f, 0.1059f, 1.0f};
 
-    p.hover    = {0.169f, 0.176f, 0.196f, 1.0f};
-    p.pressed  = {0.204f, 0.212f, 0.231f, 1.0f};
-    p.selected = {0.141f, 0.188f, 0.271f, 1.0f};
+    p.hover    = {0.1647f, 0.1725f, 0.1843f, 1.0f};
+    p.pressed  = {0.2000f, 0.2078f, 0.2235f, 1.0f};
+    p.selected = {0.1373f, 0.1843f, 0.2706f, 1.0f};
     p.accent   = {0.290f, 0.560f, 0.980f, 1.0f};
 
     p.text     = {0.925f, 0.933f, 0.949f, 1.0f};
