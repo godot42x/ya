@@ -59,9 +59,9 @@ description: YA Engine ECS 到材质系统到渲染管线的数据流整理与�
 
 目标：editor 只上报修改，不直接承担业务同步。
 
-1. `DetailsView` 通过 `RenderContext` 收集修改路径。
-2. 修改路径必须使用稳定 field name，而不是 prettyName。
-3. `PhongMaterialComponent::onEditorPropertiesChanged()` 负责把路径分类为：
+1. `EditorInspectorTab` 经 `PropertyGraph::project` + `PropertyHandle` 写回稳定 field name（不是 prettyName）。
+2. `project()` 对已注册 ECS 组件默认调用 `IComponent::onEdit()`；Mesh / Model / Billboard / Skybox / EnvironmentLighting / Terrain / SimpleMaterial 在 `onEdit` 里 `invalidate()`。
+3. 材质 projection 覆盖为 `onPropertyChanged(path)` → `onPropertiesChanged`，分类为：
    - 参数修改
    - texture slot 资源修改
    - texture slot 非资源修改（如 enable/uv）
@@ -69,6 +69,7 @@ description: YA Engine ECS 到材质系统到渲染管线的数据流整理与�
    - `invalidate()`
    - `syncParamsToMaterial()`
    - `syncTextureSlot()` / `syncTextureSlots()`
+5. Skybox / EnvironmentLighting / Terrain 的 processor 每帧 sweep `authoringVersion`，不要再依赖 editor 调 `App::get()->mark*Dirty()`。Mesh 走 `GameplayResourceBinding::resolvePendingMeshes` 的 `!isResolved()` 轮询。
 
 ## 路径规则
 

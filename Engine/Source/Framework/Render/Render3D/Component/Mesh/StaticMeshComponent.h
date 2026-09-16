@@ -55,6 +55,7 @@ struct StaticMeshComponent : public IComponent
     bool resolve() { return _mesh.resolve(); }
     void invalidate() { _mesh.invalidate(); }
     bool isResolved() const { return _mesh.isResolved(); }
+    void onEdit() override { invalidate(); }
 
     // ========================================
     // Access

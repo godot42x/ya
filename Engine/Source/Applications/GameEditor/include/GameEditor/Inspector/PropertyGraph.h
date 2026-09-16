@@ -43,7 +43,8 @@ struct FPropertyLabel
 [[nodiscard]] FPropertyLabel propertyLabelFromPath(std::string_view path);
 
 /// Ordered, metadata-aware editor field model. `project()` is the retained
-/// inspector entry: reflection `build` plus registered projections.
+/// inspector entry: reflection `build`, default `IComponent::onEdit()` hooks for
+/// registered ECS components, then type-specific projections.
 /// It contains no widget or rendering concerns.
 class PropertyGraph final
 {

@@ -12,6 +12,7 @@ struct SimpleMaterial;
 
 struct SimpleMaterialComponent : public MaterialComponent<SimpleMaterial>
 {
+    void onEdit() override { invalidate(); }
 };
 
 } // namespace ya

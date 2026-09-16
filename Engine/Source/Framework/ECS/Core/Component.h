@@ -37,6 +37,8 @@ struct IComponent
     [[nodiscard]] Entity* getOwner() const { return _owner; }
 
     virtual void onPostSerialize() {}
+    /// Authoring fields were written (inspector / PropertyHandle). Override to
+    /// drop runtime caches; do not assume the writer called a typed setter.
     virtual void onEdit() {}
 
     // Return false when the component owns its complete serialized representation.

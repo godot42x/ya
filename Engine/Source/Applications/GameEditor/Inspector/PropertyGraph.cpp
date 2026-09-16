@@ -5,6 +5,8 @@
 
 #include "Core/Reflection/MetadataSupport.h"
 #include "Core/Reflection/PropertyAccessor.h"
+#include "ECS/Component.h"
+#include "ECS/ECSRegistry.h"
 #include "reflects-core/lib.h"
 
 #include <algorithm>
@@ -72,6 +74,24 @@ bool isLeafEditableType(const PropertyNode& node)
         return true;
     }
     return reflection::PropertyAccessor::isLeafValueType(node.valueType);
+}
+
+void installDefaultComponentEditHooks(PropertyGraph& graph)
+{
+    // Widgets and other non-ECS graphs must not be treated as IComponent.
+    if (ECSRegistry::get().getComponentOps(graph.getOwnerType()) == nullptr) {
+        return;
+    }
+    const std::vector<void*> instances = graph.getRootInstances();
+    for (PropertyNode& node : graph.getNodesMutable()) {
+        node.binding.setChangeHook([instances]() {
+            for (void* instance : instances) {
+                if (instance) {
+                    static_cast<IComponent*>(instance)->onEdit();
+                }
+            }
+        });
+    }
 }
 
 } // namespace
@@ -149,6 +169,9 @@ PropertyGraph PropertyGraph::project(type_index_t ownerType, std::vector<void*> 
 {
     registerBuiltinPropertyProjections();
     PropertyGraph graph = build(ownerType, std::move(instances));
+    // Default: any reflected write on an ECS component calls IComponent::onEdit().
+    // Type-specific projections (materials, Transform setters) may replace the hook.
+    installDefaultComponentEditHooks(graph);
     PropertyProjectionRegistry::instance().apply(ownerType, graph);
     return graph;
 }

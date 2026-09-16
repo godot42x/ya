@@ -116,6 +116,7 @@ void TerrainProcessor::onUpdate(float dt)
         seedSceneResolveWork(scene);
     }
 
+    sweepAuthoringDirty(scene);
     auditResolveWork(scene);
     gcDerivedResources(currentFrame());
     resolvePendingTerrain(scene);
@@ -162,6 +163,22 @@ void TerrainProcessor::seedSceneResolveWork(Scene* scene)
 bool TerrainProcessor::isTerrainQueuedOrActive(entt::entity entity) const
 {
     return _dirtyTerrainSet.contains(entity) || _activeTerrain.contains(entity);
+}
+
+void TerrainProcessor::sweepAuthoringDirty(Scene* scene)
+{
+    if (!scene) {
+        return;
+    }
+
+    auto& registry = scene->getRegistry();
+    for (auto&& [entity, terrain] : registry.view<TerrainComponent>().each()) {
+        auto& state = _terrainStates[entity];
+        if (terrain.getAuthoringVersion() > state.lastCompletedAuthoringVersion &&
+            !isTerrainQueuedOrActive(entity)) {
+            markTerrainDirty(entity, "authoring-version sweep", terrain.getRebuildNotBeforeFrame());
+        }
+    }
 }
 
 void TerrainProcessor::auditResolveWork(Scene* scene)

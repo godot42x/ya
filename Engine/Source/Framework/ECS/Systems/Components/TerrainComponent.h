@@ -31,6 +31,7 @@ struct YA_ECS_SYSTEMS_API TerrainComponent : public IComponent
     [[nodiscard]] uint64_t getRebuildNotBeforeFrame() const { return _rebuildNotBeforeFrame; }
 
     void invalidate(uint64_t rebuildNotBeforeFrame = 0);
+    void onEdit() override { invalidate(); }
     void setRebuildNotBeforeFrame(uint64_t rebuildNotBeforeFrame) { _rebuildNotBeforeFrame = rebuildNotBeforeFrame; }
     void onPostSerialize() override;
 

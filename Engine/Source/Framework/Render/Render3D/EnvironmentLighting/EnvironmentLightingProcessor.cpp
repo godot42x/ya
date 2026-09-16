@@ -166,6 +166,7 @@ void EnvironmentLightingProcessor::onUpdate(float dt)
         seedSceneResolveWork(scene);
     }
 
+    sweepAuthoringDirty(scene);
     auditResolveWork(scene);
     gcDerivedResources(_getFrameIndex ? _getFrameIndex() : 0);
 
@@ -231,6 +232,33 @@ bool EnvironmentLightingProcessor::isSkyboxQueuedOrActive(entt::entity entity) c
 bool EnvironmentLightingProcessor::isEnvironmentQueuedOrActive(entt::entity entity) const
 {
     return _dirtyEnvironmentSet.contains(entity) || _activeEnvironment.contains(entity);
+}
+
+void EnvironmentLightingProcessor::sweepAuthoringDirty(Scene* scene)
+{
+    if (!scene) {
+        return;
+    }
+
+    auto& registry = scene->getRegistry();
+    for (auto&& [entity, skybox] : registry.view<SkyboxComponent>().each()) {
+        auto& state = _skyboxStates[entity];
+        if (skybox.authoringVersion > state.lastCompletedAuthoringVersion && !isSkyboxQueuedOrActive(entity)) {
+            markSkyboxDirty(entity, "authoring-version sweep");
+        }
+    }
+    for (auto&& [entity, environment] : registry.view<EnvironmentLightingComponent>().each()) {
+        if (environment.usesSceneSkybox()) {
+            _sceneSkyboxEnvironmentDependents.insert(entity);
+        }
+        else {
+            _sceneSkyboxEnvironmentDependents.erase(entity);
+        }
+        auto& state = _environmentStates[entity];
+        if (environment.authoringVersion > state.lastCompletedAuthoringVersion && !isEnvironmentQueuedOrActive(entity)) {
+            markEnvironmentLightingDirty(entity, "authoring-version sweep");
+        }
+    }
 }
 
 void EnvironmentLightingProcessor::auditResolveWork(Scene* scene)

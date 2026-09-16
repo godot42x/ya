@@ -239,6 +239,7 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     void seedSceneResolveWork(Scene* scene);
     void touchDerivedResourceUsage();
     void gcDerivedResources(uint64_t currentFrame);
+    void sweepAuthoringDirty(Scene* scene);
     void auditResolveWork(Scene* scene);
     void markAllSceneSkyboxEnvironmentDependentsDirty(const char* reason);
     void clearSceneResolveWork();

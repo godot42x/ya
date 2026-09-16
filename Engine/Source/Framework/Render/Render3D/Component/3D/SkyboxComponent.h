@@ -89,6 +89,7 @@ struct YA_RENDER_3D_API SkyboxComponent : public IComponent
     bool hasCubemapSource() const;
     bool hasCylindricalSource() const;
     void        invalidate();
+    void        onEdit() override { invalidate(); }
     void        onPostSerialize() override;
 };
 

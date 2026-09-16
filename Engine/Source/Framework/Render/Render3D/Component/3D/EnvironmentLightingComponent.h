@@ -176,6 +176,7 @@ struct YA_RENDER_3D_API EnvironmentLightingComponent : public IComponent
     }
     bool     hasCylindricalSource() const;
     void     invalidate();
+    void     onEdit() override { invalidate(); }
 
     uint32_t getResolvedIrradianceFaceSize() const;
     void     onPostSerialize() override;

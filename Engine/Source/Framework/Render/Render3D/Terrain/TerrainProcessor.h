@@ -81,6 +81,7 @@ class YA_RENDER_3D_API TerrainProcessor : public ISystem
 
   private:
     void seedSceneResolveWork(Scene* scene);
+    void sweepAuthoringDirty(Scene* scene);
     void auditResolveWork(Scene* scene);
     void gcDerivedResources(uint64_t currentFrame);
     void clearSceneResolveWork();

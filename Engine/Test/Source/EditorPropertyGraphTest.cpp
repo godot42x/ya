@@ -7,7 +7,9 @@
 #include "Scene3D/TransformComponent.h"
 #include "Physics/PhysicsBodyComponent.h"
 #include "Render3D/Component/Material/PBRMaterialComponent.h"
+#include "Render3D/Component/3D/EnvironmentLightingComponent.h"
 #include "Render3D/Component/3D/SkyboxComponent.h"
+#include "Render3D/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Systems/Components/TerrainComponent.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
@@ -1018,6 +1020,57 @@ TEST(EditorPropertyGraphTest, EditorThemeBakesEditorTypeScaleOnOverlayKeys)
     ASSERT_TRUE(color);
     EXPECT_EQ(color->value().fontSize, editor_type::kBody);
     EXPECT_EQ(color->value().padding, editor_density::kFieldPadding);
+}
+
+bool setEnumByLabel(const PropertyHandle& binding, std::string_view label)
+{
+    std::vector<std::string> labels;
+    if (!binding.enumLabels(labels)) {
+        return false;
+    }
+    const auto it = std::find(labels.begin(), labels.end(), label);
+    if (it == labels.end()) {
+        return false;
+    }
+    return binding.setEnumByIndex(static_cast<int>(it - labels.begin()));
+}
+
+TEST(EditorPropertyGraphTest, ProjectedMeshPrimitiveWriteInvalidatesResolvedCache)
+{
+    StaticMeshComponent mesh;
+    mesh._mesh._bResolved  = true;
+    mesh._mesh._cachedMesh = reinterpret_cast<Mesh*>(1);
+
+    auto graph = PropertyGraph::project(type_index_v<StaticMeshComponent>, {&mesh});
+    PropertyNode* primitive = graph.find("_mesh._primitiveGeometry");
+    ASSERT_NE(primitive, nullptr);
+    ASSERT_TRUE(primitive->binding.isEnum());
+
+    ASSERT_TRUE(setEnumByLabel(primitive->binding, "Sphere"));
+    EXPECT_EQ(mesh._mesh._primitiveGeometry, EPrimitiveGeometry::Sphere);
+    EXPECT_FALSE(mesh.isResolved());
+    EXPECT_EQ(mesh._mesh._cachedMesh, nullptr);
+}
+
+TEST(EditorPropertyGraphTest, ProjectedSkyboxAndTerrainWritesBumpAuthoringVersion)
+{
+    SkyboxComponent skybox;
+    const uint64_t skyboxBefore = skybox.authoringVersion;
+    auto skyboxGraph = PropertyGraph::project(type_index_v<SkyboxComponent>, {&skybox});
+    PropertyNode* sourceType = skyboxGraph.find("sourceType");
+    ASSERT_NE(sourceType, nullptr);
+    ASSERT_TRUE(setEnumByLabel(sourceType->binding, "Cylindrical"));
+    EXPECT_EQ(skybox.sourceType, ESkyboxSourceType::Cylindrical);
+    EXPECT_GT(skybox.authoringVersion, skyboxBefore);
+
+    TerrainComponent terrain;
+    const uint64_t terrainBefore = terrain.getAuthoringVersion();
+    auto terrainGraph = PropertyGraph::project(type_index_v<TerrainComponent>, {&terrain});
+    PropertyNode* size = terrainGraph.find("_size");
+    ASSERT_NE(size, nullptr);
+    ASSERT_TRUE(size->binding.set(glm::vec2(50.0f, 75.0f)));
+    EXPECT_EQ(terrain._size, glm::vec2(50.0f, 75.0f));
+    EXPECT_GT(terrain.getAuthoringVersion(), terrainBefore);
 }
 
 } // namespace ya

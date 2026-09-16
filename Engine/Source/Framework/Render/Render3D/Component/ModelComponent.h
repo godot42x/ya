@@ -122,6 +122,7 @@ struct YA_RENDER_3D_API ModelComponent : public IComponent
         _bResolved = false;
         // Note: Child entity cleanup should be handled by ModelInstantiationSystem
     }
+    void onEdit() override { invalidate(); }
 
     /**
      * @brief Check if this component has a valid Model reference

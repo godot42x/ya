@@ -40,6 +40,7 @@ struct YA_RENDER_3D_API BillboardComponent : public IComponent
 
     bool bDirty = true;
     void invalidate() { bDirty = true; }
+    void onEdit() override { invalidate(); }
 
     UnlitMaterial* getMaterial() const { return _material; }
 
