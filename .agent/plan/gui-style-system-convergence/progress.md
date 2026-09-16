@@ -600,3 +600,53 @@ Phase 1 遗留的九宫格渲染落地。`sliceBrush` 把 dest 切成 Image(1) /
 - `ya-testing` — 与改动前同一组 7 个既有失败（内容逐条一致）。
 - 22 个 gallery 页冒烟 + `animation_gallery.jsonl`（22 断言）全过；`theme.jsonl` 只有上述既有 `ThemeToggle` 断言失败。
 - 编辑器以 `ya-runtime --editor --width=1470 --height=836 --screenshot` 截真实 presentation 帧验收（含用户截图同尺寸复现）；dark / light 两套 workbench 截图验收。
+- 编辑器以 `ya-runtime --editor --width=1470 --height=836 --screenshot` 截真实 presentation 帧验收（含用户截图同尺寸复现）；dark / light 两套 workbench 截图验收。
+
+## 2026-09-16（续二）— 字面可选化 + one-dark 配色 + 输入/描边「硬度」
+
+用户第三轮反馈（附编辑器 Inspector 截图）：① 默认字体要统一、可配置、可在设置里切换，必要时可按控件换；② 配色仿 Godot/Unity 或给一套 one-dark；③ Inspector「还是有点虚」，缺 ImGui 工具面板 / UE Details 那种硬朗感。
+
+先把「虚」定量化，再动设计 —— 否则只能靠感觉改。对用户截图做像素检验：相邻像素相等率 94.5%、lag-2 89.0%（2× 放大应接近 100%），`|A00-A11|` = 19.6（真放大应≈0），**结论是原生分辨率渲染，不是被放大糊掉**。所以「虚」是设计差异，于是逐项量了 Inspector 的实际渲染值：
+
+| 量 | 旧值 | 问题 |
+| --- | --- | --- |
+| 输入框填充 vs 面板 | 1.045:1 | 输入框与父平面**是同一层**，看起来不像输入 |
+| borderStrong vs 填充 | 1.35:1 | 低于「可交互边能被找到」的阈值 —— 「虚」的主因 |
+| 深色阶梯色相 | 中性（蓝仅高 3–6%） | 贴黑的中性阶梯没有色相差可分辨，只剩明度，读作「闷」 |
+
+### 本轮完成
+
+**1. 字面从「一个路径」变成「可选目录」**
+- `FontManager::uiFontFaces()`（`FUiFontFace{id,label,bundledPath,systemPath,bMonospace}`）+ `findUiFontFace` / `resolveUiFontFacePath` / `defaultUiFontFace`。**按 id 选，不按路径选**（路径是机器细节）。
+- `FontManager::loadUiFontStack(render, faceId, size)` 是唯一入口：按 id 建**整个栈**（主字面 + 一个 CJK fallback + 内置 emoji + mono family `MONO_UI_FONT_NAME`）。
+- **重复调用 = 换字面**：`loadFont` 按 (name,size,dpi) 幂等，只再 load 一次会把旧字面原样返回、切换静默失效。所以先按 name 前缀逐出 `_fontCache`（**含视图**，它持有旧 base 的 shared_ptr）/ `_baseFontCache` / `_baseSizes` / `_fontPaths` / `_fallbackDefs`，再 load，最后 bump `resourceRevision()`；`WidgetTree` 已在 snapshot 开头 poll 它，**不需要新 dirty 钩子**。
+- `FGUIWindowHostConfig::fontPath` → `uiFontFace`（id）；`AppLifecycle` 删掉 `findRuntimeDefaultFontPath()`，改走 `ui_font_settings::apply`。
+- **app 策略层**：`GameRuntime/Utility/UiFontSettings.h`（`faceId` / `setFaceId` / `availableFaces` / `apply` / `applyAndStore`），config document `ui` / key `font.face`（在 `App::init` 开文档）。未知/过期 id 回落默认且**不覆写存值**；`applyAndStore` **加载成功才落盘**。
+- **单控件换族**：`FTextStyle::fontFamily`（反射）+ `UIText::setFontFamily`；paint 与 measure 共用 `resolveTextFont(style)`（否则度量与绘制会用不同字面）；族名未注册 → 回落 UI 主字面 + warn。
+- 设置 UI：`EditorSettingsDialog` 新增 "UI Font" combo（选项来自 binding，dialog 只是 view），选中的是 **id 不是 index**；不可用字面留在列表里并加 "(unavailable)" 后缀（选项不因机器而位移）；无目录的 host 用 `ui::when` 整行不挂。
+
+**2. one-dark 配色 + flavor 轴**
+- `EPaletteFlavor{OneDark, Neutral}`，`darkPalette(flavor)` 选**整张表**；`buildDefaultChromeTheme` / `buildWorkbenchTheme` / `buildEditorTheme` 逐层透传 flavor。逐 key 调色是外壳漂向「没人设计过的样子」的原因，只盖三个 key 的「flavor」无法被当作 look 评审。light 仍是**一张**表（flavor 是 dark 轴）。
+- dark 平面带真正的蓝灰味（蓝 ≈ 红的 1.3 倍），`Neutral` 保住旧外观可选。
+- **accent 拆成 ink / fill**：`accent`（focus 环 / caret / 勾 / tab 下划线）与 `accentFill`（toggle 按钮 / checked box / slider 已填充段、配白字）。一个蓝不可能同时在 dark 平面上够亮当墨、又够暗托白字；`error` / `errorFill` 同理。
+- 圆角收到工具比例：kChip 4→3 / kControl 6→4 / kTab 5→3 / kRow 5→4 / kMenu 8→6 / kCard 10→8（22px 高的输入框配 6px 圆角是**网页**比例）。
+
+**3. 输入下陷 + 可交互边可分**
+- `well` 相对所在平面下沉**整档**（dark 1.185:1 / light ~1.14:1），这是「克制台阶」规则的**刻意例外** —— 内陷就是输入的 affordance；没有台阶，输入框只是另一个矩形。
+- 描边**分两级**：`borderSubtle` 仍是 chrome 平面之间 ~1.2:1 发丝（按钮/tab/选中行/expander header **完全不画边**）；`borderStrong`/`borderHover` 描「可交互」的东西，提到 ~1.63:1 / ~2.35:1。
+- `FColorEditStyle` 新增 `swatchBorderColor` / `swatchHoverBorderColor` / `swatchCornerRadius` / `swatchBorderThickness`；色板改走 `addRoundedSurface`（跟得过圆角），替掉「textColor 半透明白冲洗」——用户恰好选到同色时那个冲洗什么也不是。
+
+**实测落屏值**（`GUIWorkbench --start-page=Widgets`，`/tmp/v1.png`）：panel `#23272e`、输入填充 `#16181d`（step 1.185）、输入描边 `#44474d`（对填充 1.906、对面板 1.609），描边**恰好 1px** 单行、无渐变柔边。
+
+### 保留 / 未完成 / 偏离
+
+- **未证明**：`NativeWindow.cpp` 的 DPI 查询顺序修复（`refreshDpiScale()` 原本在 `SDL_CreateWindow` 之前调用 → 必然失败 → 恒 1.0）。顺序确已修正，但本机 SDL 两种情况都报 scale 1，**尚未证明它能改变渲染**。commit message 已如实写明，未宣称为「虚」的成因。
+- **未做**：flavor 目前只由代码传参，没有暴露到设置 UI（只有字面进了设置）。light 表只有一份。
+- 并发 agent 的 in-flight 改动（`Render3D/*` 的 `ViewDrawBucket` 重构一度让 `ya-runtime` 编不过）与本轮无关，未触碰。
+
+### 验证
+
+- `ya-foundation-core / ya-render-resources / ya-gui-widgets / ya-gui-host / ya-game-runtime / ya-game-editor / GUIWorkbench / ya-runtime / ya-testing / ya-gui-closure-test` 全部构建通过。
+- `ya-gui-closure-test` — **574/574 PASSED**。
+- `ya-testing` — 1189 tests（1144 PASSED / 7 FAILED / 38 SKIPPED）；7 个失败与本轮无关（`GUIWindowManagerTest.DragOverlay…`、`EditorPropertyGraphTest.Auto…`/`TextureAssetRow…`、`ScriptApiLibraryFixture.GameUIWidgetLifecycle…`、`GameUIHostTest.BuildSnapshotComposes…`、`GUIHeadlessHostTest.ReusesAppKernel…`/`UnthemedFallback…`），改动前逐条复现过。新增 8 个测试全过：`UiFontSettingsTest`（6：目录 id 唯一/默认在表内、未知 id 不当作字面、缺文件回空路径、拒绝未知字面、`faceId` 恒可用、选项带可用性与目录顺序）+ `EditorSettingsDialogTest`（2：combo 回传 **catalog id 而非 index**、无字面目录时 dialog 仍可用且不挂空行）。
+- 换字面端到端验证：`Engine/Saved/Config/Ui.json` 写 `jetbrains-mono` → 日志 `UI font stack = 'jetbrains-mono' … + mono`，截图整壳变等宽；写非法 id → 回落 `inter`。换字面因此**证明了逐出逻辑生效**（不逐出就会继续拿到 Inter）。
