@@ -411,6 +411,22 @@ struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
     /// Bundled color-emoji font (seguiemj.ttf) when present.
     static std::string findEmojiFontPath();
 
+    /// The engine's default UI face: the BUNDLED proportional Latin font
+    /// (Inter, OFL) when present, else empty. One entry point so every host
+    /// agrees on the primary face - a host that instead picks a system CJK
+    /// font as its primary gets that machine's Latin design (Hiragino/PingFang
+    /// on macOS, YaHei on Windows), so chrome text differs per machine and
+    /// diverges from the host that did bundle one.
+    static std::string findDefaultUiFontPath();
+
+    /// Register the fallbacks that make a Latin-primary UI face usable for
+    /// CJK and emoji text: ONE CJK face plus the bundled color emoji face.
+    /// Must be called after loadFont for `fontName`. Exactly one CJK fallback
+    /// is registered on purpose (see findCjkFontCandidates): several faces
+    /// hint the same px with different stem weights, which makes adjacent
+    /// Chinese glyphs look brighter/darker than each other.
+    void addDefaultUiFallbacks(IRender& render, const FName& fontName);
+
     /// Pre-register a font under `name:size` so getFont() returns it without
     /// loading (rasterizer + GPU not needed). Hosts that pre-build glyph data
     /// and layout tests injecting synthetic fonts use this; getFont already

@@ -60,13 +60,15 @@ namespace
 {
 std::string findRuntimeDefaultFontPath()
 {
-    // Shared CJK candidate list (font-framework plan Phase 3): the game
-    // runtime prefers a CJK-capable primary font so UI text renders Chinese
-    // out of the box; JetBrainsMono is the final Latin fallback.
-    for (const std::string& candidate : FontManager::findCjkFontCandidates()) {
-        if (std::filesystem::exists(candidate)) {
-            return candidate;
-        }
+    // The engine's default UI face is the BUNDLED proportional one; CJK comes
+    // from a fallback face registered right after (addDefaultUiFallbacks), not
+    // from the primary. Picking a system CJK font as the primary - the old
+    // behaviour here - made the whole editor render in that machine's Latin
+    // design (Hiragino on macOS, YaHei on Windows) and diverge from the GUI
+    // host, which bundles a face. JetBrains Mono is the last resort only, for
+    // a tree with no bundled UI face at all.
+    if (std::string uiFont = FontManager::findDefaultUiFontPath(); !uiFont.empty()) {
+        return uiFont;
     }
     return "Engine/Content/Fonts/JetBrainsMono-Medium.ttf";
 }
@@ -434,6 +436,9 @@ void App::onInit(const AppDesc& ci)
         auto* render = app.getRenderServices().getRender();
         YA_CORE_ASSERT(render, "App::onInit requires a render backend");
         FontManager::get()->loadFont(*render, runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, DEFAULT_RUNTIME_FONT_SIZE);
+        // Same CJK/emoji stack the GUI host wires (shared policy), so editor and
+        // workbench chrome resolve missing glyphs identically.
+        FontManager::get()->addDefaultUiFallbacks(*render, DEFAULT_RUNTIME_FONT_NAME);
     }
 
 }

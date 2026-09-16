@@ -678,6 +678,29 @@ std::string FontManager::findEmojiFontPath()
     return std::filesystem::exists(kEmojiPath) ? std::string(kEmojiPath) : std::string{};
 }
 
+std::string FontManager::findDefaultUiFontPath()
+{
+    // Bundled so text metrics are identical on every machine. Chrome uses a
+    // PROPORTIONAL face: a monospace primary makes every label, menu and field
+    // read as terminal output, and its fixed advance wastes width in dense
+    // tool panels. JetBrains Mono stays in the repo for code/console surfaces.
+    constexpr const char* kUiFontPath = "Engine/Content/Fonts/Inter-Regular.ttf";
+    return std::filesystem::exists(kUiFontPath) ? std::string(kUiFontPath) : std::string{};
+}
+
+void FontManager::addDefaultUiFallbacks(IRender& render, const FName& fontName)
+{
+    for (const std::string& cjkPath : findCjkFontCandidates()) {
+        if (std::filesystem::exists(cjkPath)) {
+            addFontFallback(render, fontName, cjkPath, EFontRenderMode::Bitmap, 13);
+            break; // single CJK fallback only
+        }
+    }
+    if (const std::string emojiPath = findEmojiFontPath(); !emojiPath.empty()) {
+        addFontFallback(render, fontName, emojiPath, EFontRenderMode::Color, 32);
+    }
+}
+
 bool FontManager::requestGlyphs(Font& font, std::string_view text)
 {
     Font& target = font.isView() ? *font.baseFont : font;

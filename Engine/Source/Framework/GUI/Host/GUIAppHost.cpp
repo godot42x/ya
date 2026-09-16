@@ -689,33 +689,11 @@ bool GUIWindowHost::init()
     if (!FontManager::get()->loadFont(*render, config.fontPath, DEFAULT_RUNTIME_FONT_NAME, 128)) {
         YA_CORE_WARN("GUIAppHost: failed to load runtime font '{}'; text drawing disabled", config.fontPath);
     }
-    // Font stack (plan Phase 3): CJK + color-emoji fallbacks resolve glyphs
-    // the primary Latin face cannot render. Register EXACTLY ONE CJK fallback:
-    // the first existing candidate (findCjkFontCandidates returns best-first,
-    // full-coverage faces like PingFang/msyh). Multiple CJK fallbacks are
-    // intentionally avoided — different faces hint at the same px with
-    // different stem weights, making adjacent Chinese glyphs look
-    // brighter/darker than each other. The fallback inherits the base's
-    // flavor via attachFallbackToBase (small sizes stay bitmap -> crisp;
-    // large sizes SDF), so we don't force a mode here. Emoji uses the bundled
-    // color font.
-    for (const std::string& cjkPath : FontManager::findCjkFontCandidates()) {
-        if (std::filesystem::exists(cjkPath)) {
-            FontManager::get()->addFontFallback(*render,
-                                                DEFAULT_RUNTIME_FONT_NAME,
-                                                cjkPath,
-                                                EFontRenderMode::Bitmap,
-                                                13);
-            break; // single CJK fallback only
-        }
-    }
-    if (const std::string emojiPath = FontManager::findEmojiFontPath(); !emojiPath.empty()) {
-        FontManager::get()->addFontFallback(*render,
-                                            DEFAULT_RUNTIME_FONT_NAME,
-                                            emojiPath,
-                                            EFontRenderMode::Color,
-                                            32);
-    }
+    // Font stack (plan Phase 3): CJK + color-emoji fallbacks resolve glyphs the
+    // primary Latin face cannot render. The POLICY (one CJK face, bundled
+    // emoji) lives in FontManager so the game/editor runtime wires the same
+    // stack instead of inventing its own - see addDefaultUiFallbacks.
+    FontManager::get()->addDefaultUiFallbacks(*render, DEFAULT_RUNTIME_FONT_NAME);
 
     // Acquire the system DPI scale ONCE at startup (real device pixel ratio
     // from the window-system, not an extent ratio) and publish it to the font
