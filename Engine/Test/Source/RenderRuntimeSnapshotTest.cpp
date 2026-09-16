@@ -164,6 +164,13 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
               plan.snapshots[plan.viewportTasks[2].snapshotIndex].snapshot);
     EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]),
               plan.snapshotFor(plan.viewportTasks[1]));
+    ASSERT_EQ(plan.viewFamilies.size(), 2u);
+    ASSERT_EQ(plan.viewFamilies[0].viewportTaskIndices.size(), 2u);
+    ASSERT_EQ(plan.viewFamilies[1].viewportTaskIndices.size(), 1u);
+    EXPECT_EQ(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[1]));
+    EXPECT_NE(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[2]));
+    EXPECT_EQ(plan.viewportTasks[0].familyIndex, plan.viewportTasks[1].familyIndex);
+    EXPECT_NE(plan.viewportTasks[0].familyIndex, plan.viewportTasks[2].familyIndex);
     EXPECT_FALSE(scheduler.isFrameOpen());
 }
 
@@ -199,6 +206,8 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerCopiesIndependentViewOutputExtents
     EXPECT_NE(plan.viewportTasks[0].output.extent, plan.viewportTasks[1].output.extent);
     EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]),
               plan.snapshotFor(plan.viewportTasks[1]));
+    ASSERT_EQ(plan.viewFamilies.size(), 1u);
+    EXPECT_EQ(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[1]));
 }
 
 TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionChanges)

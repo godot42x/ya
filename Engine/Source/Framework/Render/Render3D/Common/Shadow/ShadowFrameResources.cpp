@@ -3,6 +3,7 @@
 #include "Core/Log.h"
 #include "RHI/Render.h"
 #include "Render3D/Common/FrameResourceSubmission.h"
+#include "Render3D/Common/SceneFamilyResources.h"
 #include "Render3D/RenderFrameData.h"
 
 #include <algorithm>
@@ -16,7 +17,7 @@ void ShadowFrameResources::init(IRender* render)
     destroy();
     YA_CORE_ASSERT(render != nullptr, "ShadowFrameResources requires a render backend");
 
-    initSkinnedUploadArena(render, "Shadow", "Shadow_Skinning_DSL", 1);
+    initSkinningLayout(render, "Shadow", "Shadow_Skinning_DSL", 1);
 
     _frameDSL = IDescriptorSetLayout::create(
         _render,
@@ -28,16 +29,26 @@ void ShadowFrameResources::init(IRender* render)
                           .descriptorCount = 1,
                           .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment}},
         });
-
-    YA_CORE_ASSERT(ensureSkinningCapacity(0), "ShadowFrameResources failed to create initial skinning resources");
 }
 
 void ShadowFrameResources::destroy()
 {
     _viewBindings.clear();
-    _skinningBindings = {};
-    destroySkinnedUploadArena();
+    destroySkinningLayout();
     _frameDSL.reset();
+}
+
+bool ShadowFrameResources::prepareSkinning(
+    RenderSubmission&                 submission,
+    const RenderViewRecordingContext& view)
+{
+    SceneFamilyResources* family = allocateSceneFamilyForView(submission, view);
+    IRenderResourceFactory* factory = submission.resourceFactory();
+    if (!family || !factory) {
+        return false;
+    }
+    return prepareSceneFamilySkinning(
+        submission, *family, *factory, _render, _skinningDSL, _resourceTag);
 }
 
 bool ShadowFrameResources::ensureViewDescriptors(
@@ -224,10 +235,17 @@ const ShadowFrameResources::Binding* ShadowFrameResources::beginView(
         return nullptr;
     }
 
-    const uint32_t         viewSlot = _viewBindings.liveViewCount(submission.flightIndex());
-    const SkinningBinding& skinning = _skinningBindings[submission.flightIndex()];
-    slot->skinningDS                = skinning.skinningDescriptorSet;
-    slot->skinningBuffer            = skinning.skinningBuffer;
+    const uint32_t viewSlot = _viewBindings.liveViewCount(submission.flightIndex());
+    if (!prepareSkinning(submission, view)) {
+        YA_CORE_ERROR("Shadow beginView failed to prepare scene-family skinning");
+        return nullptr;
+    }
+    SceneFamilyResources* family = allocateSceneFamilyForView(submission, view);
+    if (!family) {
+        return nullptr;
+    }
+    slot->skinningDS     = family->skinningDescriptorSet(_skinningDSL.get());
+    slot->skinningBuffer = family->gpu().skinningBuffer;
 
     const ViewPayloads payloads = buildViewPayloads(payload);
     if (!ensureViewDescriptors(submission, *slot, payloads.directionalCount, payloads.pointFaceCount)) {

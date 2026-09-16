@@ -95,6 +95,21 @@ SceneRenderPlan SceneRenderScheduler::seal()
         });
     }
 
+    std::unordered_map<SceneViewFamilyKey, uint32_t, SceneViewFamilyKeyHash> familyIndices;
+    familyIndices.reserve(plan.viewportTasks.size());
+    for (uint32_t taskIndex = 0; taskIndex < plan.viewportTasks.size(); ++taskIndex) {
+        SceneViewportTask& task = plan.viewportTasks[taskIndex];
+        const SceneViewFamilyKey familyKey = makeSceneViewFamilyKey(task);
+        auto [familyIt, familyInserted] =
+            familyIndices.try_emplace(familyKey, static_cast<uint32_t>(plan.viewFamilies.size()));
+        if (familyInserted) {
+            plan.viewFamilies.push_back(SceneViewFamilyPlan{.key = familyKey});
+        }
+        const uint32_t familyIndex = familyIt->second;
+        task.familyIndex = familyIndex;
+        plan.viewFamilies[familyIndex].viewportTaskIndices.push_back(taskIndex);
+    }
+
     _frameOpen = false;
     return plan;
 }

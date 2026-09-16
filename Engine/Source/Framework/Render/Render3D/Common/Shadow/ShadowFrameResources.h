@@ -27,12 +27,10 @@ class RenderSubmission;
  *
  * Layouts are device-lifetime. Cascade/face descriptor sets and upload slices
  * are allocated from `RenderSubmission` so a second View cannot overwrite the
- * first. Skinning palettes stay submission-scoped.
+ * first. Skinning palettes belong to the Scene family on `RenderSubmission`.
  */
-class ShadowFrameResources : public PerFlightFrameResourceSetBase<ShadowFrameResources>
+class ShadowFrameResources : public PerFlightFrameResourceSetBase
 {
-    friend class PerFlightFrameResourceSetBase<ShadowFrameResources>;
-
   public:
     using DirectionalFrameData = slang_types::CombineShadowMappingGenerate::FrameData;
     using PointFaceData        = slang_types::Shadow::PointShadowIndirect::PointShadowFaceData;
@@ -60,12 +58,6 @@ class ShadowFrameResources : public PerFlightFrameResourceSetBase<ShadowFrameRes
         }
     };
 
-    struct SkinningBinding
-    {
-        DescriptorSetHandle skinningDescriptorSet{};
-        stdptr<IBuffer>     skinningBuffer;
-    };
-
     void init(IRender* render);
     void destroy();
 
@@ -73,10 +65,7 @@ class ShadowFrameResources : public PerFlightFrameResourceSetBase<ShadowFrameRes
                              RenderViewRecordingContext&    view,
                              const BasicShadowFramePayload& payload);
 
-    bool prepareSkinning(const RenderStageContext& ctx)
-    {
-        return PerFlightFrameResourceSetBase<ShadowFrameResources>::prepareSkinning(ctx);
-    }
+    bool prepareSkinning(RenderSubmission& submission, const RenderViewRecordingContext& view);
 
     static bool writeViewPayloads(FrameUploadArena&   arena,
                                   uint32_t            flightIndex,
@@ -94,10 +83,7 @@ class ShadowFrameResources : public PerFlightFrameResourceSetBase<ShadowFrameRes
 
   private:
     stdptr<IDescriptorSetLayout> _frameDSL;
-    std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT> _skinningBindings{};
     RenderViewBindingTable<Binding> _viewBindings;
-
-    std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT>& bindings() { return _skinningBindings; }
 
     bool ensureViewDescriptors(RenderSubmission& submission, Binding& binding, uint32_t directionalCount, uint32_t pointFaceCount);
     void updateViewDescriptors(const Binding& binding, uint32_t directionalCount, uint32_t pointFaceCount);

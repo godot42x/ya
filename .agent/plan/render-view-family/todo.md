@@ -51,7 +51,7 @@
 - [x] 将 postprocess/bloom 输出与 CombinedImageSampler descriptor set 改为 View-owned，避免同一 cmdbuf 里两路 display 采样同一套 GPU 资源。这是迁移期隔离，Processor 上的 viewId map 在 4.0.2 Checkpoint C 删除并迁入 typed pass resources。
 - [x] 录制同一 Scene 的两个 View，共享一个 SceneFrameSnapshot。
 - [x] 4.0.2 A：建立 `RenderSubmission` / pool owner，统一 command buffer、upload、transient descriptor、keepalive 与 finish 协议；删除 pipeline/resource-set 的分散 beginSubmission。
-- [ ] 4.0.2 B：引入 `SceneViewFamilyPlan` 与 `SceneFamilyResources`；skinning/scene packet 不再按 flight 全局共享；同 Scene 双 View复用 family、双 Scene隔离。
+- [x] 4.0.2 B：引入 `SceneViewFamilyPlan` 与 `SceneFamilyResources`；skinning/scene packet 不再按 flight 全局共享；同 Scene 双 View复用 family、双 Scene隔离。
 - [ ] 4.0.2 C：引入 Deferred/Forward typed View/Pass resources；Stage 改为 pass recipe；删除 singleton CIS、processor viewId map；PointShadow buffer 归入 family/View owner。
 - [ ] 4.0.2 D：Deferred/Forward 改为 ViewFamily renderer；一个 family graph 产生多个 typed outputs；删除 tick/beginTick/getCurrent 与 pipeline last-view 资源袋。
 - [ ] 4.0.2 E：拆除 RenderRuntime facade 为 RenderDeviceState + RenderFrameCoordinator + family renderer + presentation；删除单一 ViewportState 与 active Scene service-locator 依赖。

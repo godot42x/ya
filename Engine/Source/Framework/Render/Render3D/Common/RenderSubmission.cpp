@@ -39,6 +39,11 @@ bool RenderSubmission::retain(RetainedResource resource)
     return true;
 }
 
+IRenderResourceFactory* RenderSubmission::resourceFactory() const
+{
+    return _pool ? _pool->resourceFactory() : nullptr;
+}
+
 bool RenderSubmission::finish()
 {
     if (!isRecording()) {
@@ -46,6 +51,53 @@ bool RenderSubmission::finish()
     }
     _finished = true;
     return true;
+}
+
+SceneFamilyResources* RenderSubmission::allocateSceneFamily(
+    const SceneViewFamilyKey& key,
+    const SceneFrameSnapshot* snapshot)
+{
+    if (!isRecording()) {
+        return nullptr;
+    }
+    for (auto& family : _families) {
+        if (family && family->key() == key) {
+            family->bindSnapshot(snapshot);
+            return family.get();
+        }
+    }
+    _families.push_back(std::make_unique<SceneFamilyResources>(key, snapshot));
+    return _families.back().get();
+}
+
+SceneFamilyResources* RenderSubmission::findSceneFamily(const SceneViewFamilyKey& key)
+{
+    return const_cast<SceneFamilyResources*>(
+        static_cast<const RenderSubmission*>(this)->findSceneFamily(key));
+}
+
+const SceneFamilyResources* RenderSubmission::findSceneFamily(const SceneViewFamilyKey& key) const
+{
+    for (const auto& family : _families) {
+        if (family && family->key() == key) {
+            return family.get();
+        }
+    }
+    return nullptr;
+}
+
+SceneFamilyResources* RenderSubmission::sceneFamilyAt(uint32_t index)
+{
+    return const_cast<SceneFamilyResources*>(
+        static_cast<const RenderSubmission*>(this)->sceneFamilyAt(index));
+}
+
+const SceneFamilyResources* RenderSubmission::sceneFamilyAt(uint32_t index) const
+{
+    if (index >= _families.size()) {
+        return nullptr;
+    }
+    return _families[index].get();
 }
 
 bool RenderSubmissionPool::init(IRender* render)
@@ -59,7 +111,8 @@ bool RenderSubmissionPool::init(IRender* render)
 bool RenderSubmissionPool::init(IRenderResourceFactory& factory, IRender* render)
 {
     destroy();
-    _render = render;
+    _render  = render;
+    _factory = &factory;
     _arena  = std::make_unique<FrameUploadArena>(
         factory,
         MAX_FLIGHTS_IN_FLIGHT,
@@ -83,6 +136,7 @@ void RenderSubmissionPool::destroy()
     _descriptorLanes.clear();
     for (auto& flight : _flights) {
         flight._keepalives.clear();
+        flight._families.clear();
         flight._cmdBuf      = nullptr;
         flight._hostSurface = nullptr;
         flight._occupied    = false;
@@ -92,7 +146,8 @@ void RenderSubmissionPool::destroy()
         flight._pool        = nullptr;
     }
     _arena.reset();
-    _render = nullptr;
+    _factory = nullptr;
+    _render  = nullptr;
 }
 
 RenderSubmission* RenderSubmissionPool::acquire(
@@ -116,6 +171,7 @@ RenderSubmission* RenderSubmissionPool::acquire(
     }
 
     flight._keepalives.clear();
+    flight._families.clear();
     flight._frameToken  = frameToken;
     flight._flightIndex = flightIndex;
     flight._cmdBuf      = cmdBuf;

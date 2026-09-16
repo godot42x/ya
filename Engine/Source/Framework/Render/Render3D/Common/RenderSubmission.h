@@ -4,6 +4,7 @@
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/FrameUploadArena.h"
 #include "RHI/RenderDefines.h"
+#include "Render3D/Common/SceneFamilyResources.h"
 #include "Render3D/Common/ViewDescriptorSetAllocator.h"
 
 #include <array>
@@ -19,6 +20,7 @@ struct ICommandBuffer;
 struct IRender;
 struct IRenderResourceFactory;
 struct IRenderSurfaceContext;
+struct SceneFrameSnapshot;
 class RenderSubmissionPool;
 
 /// One GPU command submission: command buffer, frame token, upload arena,
@@ -38,6 +40,7 @@ class RenderSubmission
     FrameUploadArena*                _arena       = nullptr;
     RenderSubmissionPool*            _pool        = nullptr;
     std::vector<RetainedResource>    _keepalives;
+    std::vector<std::unique_ptr<SceneFamilyResources>> _families;
     bool                             _occupied = false;
     bool                             _finished = false;
 
@@ -46,6 +49,7 @@ class RenderSubmission
     [[nodiscard]] uint32_t               flightIndex() const { return _flightIndex; }
     [[nodiscard]] ICommandBuffer*        commandBuffer() const { return _cmdBuf; }
     [[nodiscard]] IRenderSurfaceContext* hostSurface() const { return _hostSurface; }
+    [[nodiscard]] IRenderResourceFactory* resourceFactory() const;
     [[nodiscard]] bool                   occupied() const { return _occupied; }
     [[nodiscard]] bool                   isRecording() const { return _occupied && !_finished; }
     [[nodiscard]] bool                   isFinished() const { return _occupied && _finished; }
@@ -60,6 +64,18 @@ class RenderSubmission
         EPipelineDescriptorType::T          type = EPipelineDescriptorType::UniformBuffer);
     bool retain(RetainedResource resource);
     bool finish();
+
+    SceneFamilyResources* allocateSceneFamily(
+        const SceneViewFamilyKey&   key,
+        const SceneFrameSnapshot*   snapshot = nullptr);
+    [[nodiscard]] SceneFamilyResources*       findSceneFamily(const SceneViewFamilyKey& key);
+    [[nodiscard]] const SceneFamilyResources* findSceneFamily(const SceneViewFamilyKey& key) const;
+    [[nodiscard]] uint32_t                    sceneFamilyCount() const
+    {
+        return static_cast<uint32_t>(_families.size());
+    }
+    [[nodiscard]] SceneFamilyResources* sceneFamilyAt(uint32_t index);
+    [[nodiscard]] const SceneFamilyResources* sceneFamilyAt(uint32_t index) const;
 };
 
 /// Per-flight pool of live submissions. `MAX_FLIGHTS_IN_FLIGHT` is the GPU
@@ -75,6 +91,7 @@ class RenderSubmissionPool
     };
 
     IRender*                                          _render = nullptr;
+    IRenderResourceFactory*                           _factory = nullptr;
     std::unique_ptr<FrameUploadArena>                 _arena;
     std::vector<DescriptorLane>                       _descriptorLanes;
     std::array<RenderSubmission, MAX_FLIGHTS_IN_FLIGHT> _flights{};
@@ -93,6 +110,7 @@ class RenderSubmissionPool
 
     [[nodiscard]] RenderSubmission*       get(uint32_t flightIndex);
     [[nodiscard]] const RenderSubmission* get(uint32_t flightIndex) const;
+    [[nodiscard]] IRenderResourceFactory* resourceFactory() const { return _factory; }
 
     [[nodiscard]] DescriptorSetHandle allocateDescriptorSet(
         RenderSubmission&                   submission,

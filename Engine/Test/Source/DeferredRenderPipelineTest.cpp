@@ -1,5 +1,6 @@
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "Render3D/Deferred/DeferredFrameGraphPasses.h"
+#include "Render3D/Common/SceneFamilyResources.h"
 
 #include "Core/Config/ConfigManager.h"
 #include "Core/System/VirtualFileSystem.h"
@@ -35,9 +36,7 @@ class DeferredFrameResourceSetTestAccess
         uint32_t currentCapacity,
         uint32_t paletteCount)
     {
-        return DeferredFrameResourceSet::calculateSkinningCapacity(
-            currentCapacity,
-            paletteCount);
+        return calculateSceneFamilySkinningCapacity(currentCapacity, paletteCount);
     }
 };
 

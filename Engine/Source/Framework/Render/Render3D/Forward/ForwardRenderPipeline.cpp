@@ -627,12 +627,6 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     }
     RenderSubmission& submission = *frame.submission;
 
-    if (_frameResources && !_frameResources->prepareSkinning(stageCtx)) {
-        YA_CORE_ERROR("Forward viewport skinning resource prepare failed");
-    }
-
-    _viewportStage->prepare(stageCtx);
-
     RenderViewRecordingContext view = frame.view;
     if (!view.frameData) {
         view.frameData = frame.camera.frameData;
@@ -640,6 +634,12 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
         view.viewportExtent = stageCtx.viewportExtent;
     }
+
+    if (_frameResources && !_frameResources->prepareSkinning(submission, view)) {
+        YA_CORE_ERROR("Forward viewport skinning resource prepare failed");
+    }
+
+    _viewportStage->prepare(stageCtx);
 
     const ForwardFrameResourceSet::Binding* viewBinding = nullptr;
     if (_frameResources) {

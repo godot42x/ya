@@ -4,6 +4,7 @@
 #include "RHI/Core/Buffer.h"
 #include "RHI/Render.h"
 #include "Render3D/Common/FrameResourceSubmission.h"
+#include "Render3D/Common/SceneFamilyResources.h"
 
 #include <algorithm>
 
@@ -15,7 +16,7 @@ void ForwardFrameResourceSet::init(IRender* render)
     destroy();
     YA_CORE_ASSERT(render != nullptr, "ForwardFrameResourceSet requires a render backend");
 
-    initSkinnedUploadArena(render, "Forward", "Forward_Skinning_DSL", 5);
+    initSkinningLayout(render, "Forward", "Forward_Skinning_DSL", 5);
 
     _pbrFrameDSL = IDescriptorSetLayout::create(
         _render,
@@ -56,14 +57,13 @@ void ForwardFrameResourceSet::init(IRender* render)
             .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
         });
 
-    YA_CORE_ASSERT(ensureSkinningCapacity(0), "ForwardFrameResourceSet failed to create initial skinning resources");
+    YA_CORE_ASSERT(_skyboxFrameDSL != nullptr, "ForwardFrameResourceSet failed to create skybox frame layout");
 }
 
 void ForwardFrameResourceSet::destroy()
 {
     _viewBindings.clear();
-    _skinningBindings = {};
-    destroySkinnedUploadArena();
+    destroySkinningLayout();
     _pbrFrameDSL.reset();
     _phongFrameDSL.reset();
     _unlitFrameDSL.reset();
@@ -157,6 +157,19 @@ bool ForwardFrameResourceSet::writeViewPayloads(
     return true;
 }
 
+bool ForwardFrameResourceSet::prepareSkinning(
+    RenderSubmission&                 submission,
+    const RenderViewRecordingContext& view)
+{
+    SceneFamilyResources* family = allocateSceneFamilyForView(submission, view);
+    IRenderResourceFactory* factory = submission.resourceFactory();
+    if (!family || !factory) {
+        return false;
+    }
+    return prepareSceneFamilySkinning(
+        submission, *family, *factory, _render, _skinningDSL, _resourceTag);
+}
+
 const ForwardFrameResourceSet::Binding* ForwardFrameResourceSet::beginView(
     RenderSubmission&           submission,
     RenderViewRecordingContext& view,
@@ -175,10 +188,17 @@ const ForwardFrameResourceSet::Binding* ForwardFrameResourceSet::beginView(
         return nullptr;
     }
 
-    const uint32_t         viewSlot = _viewBindings.liveViewCount(submission.flightIndex());
-    const SkinningBinding& skinning = _skinningBindings[submission.flightIndex()];
-    slot->skinningDescriptorSet     = skinning.skinningDescriptorSet;
-    slot->skinningBuffer            = skinning.skinningBuffer;
+    const uint32_t viewSlot = _viewBindings.liveViewCount(submission.flightIndex());
+    if (!prepareSkinning(submission, view)) {
+        YA_CORE_ERROR("Forward beginView failed to prepare scene-family skinning");
+        return nullptr;
+    }
+    SceneFamilyResources* family = allocateSceneFamilyForView(submission, view);
+    if (!family) {
+        return nullptr;
+    }
+    slot->skinningDescriptorSet = family->skinningDescriptorSet(_skinningDSL.get());
+    slot->skinningBuffer        = family->gpu().skinningBuffer;
 
     if (!ensureViewDescriptors(submission, *slot)) {
         YA_CORE_ERROR("Forward beginView failed to allocate view descriptor sets");

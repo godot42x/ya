@@ -3,6 +3,7 @@
 #include "Core/Log.h"
 #include "RHI/Render.h"
 #include "Render3D/Common/FrameResourceSubmission.h"
+#include "Render3D/Common/SceneFamilyResources.h"
 
 #include <algorithm>
 #include <limits>
@@ -16,7 +17,7 @@ void DeferredFrameResourceSet::init(IRender* render)
     YA_CORE_ASSERT(render != nullptr, "DeferredFrameResourceSet requires a render backend");
     YA_CORE_ASSERT(render->getResourceFactory() != nullptr, "DeferredFrameResourceSet requires a resource factory");
 
-    initSkinnedUploadArena(render, "Deferred", "Deferred_Skinning_DSL", 3);
+    initSkinningLayout(render, "Deferred", "Deferred_Skinning_DSL", 3);
 
     _frameAndLightDSL = IDescriptorSetLayout::create(
         _render,
@@ -44,15 +45,12 @@ void DeferredFrameResourceSet::init(IRender* render)
             .set      = 0,
             .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
         });
-
-    YA_CORE_ASSERT(ensureSkinningCapacity(0), "DeferredFrameResourceSet failed to create initial skinning resources");
 }
 
 void DeferredFrameResourceSet::destroy()
 {
     _viewBindings.clear();
-    _skinningBindings = {};
-    destroySkinnedUploadArena();
+    destroySkinningLayout();
     _ssaoFrameDSL.reset();
     _skyboxFrameDSL.reset();
     _frameAndLightDSL.reset();
@@ -101,13 +99,17 @@ DeferredFrameResourceSet::LightData DeferredFrameResourceSet::buildLightData(con
     return lightData;
 }
 
-std::optional<uint32_t> DeferredFrameResourceSet::calculateSkinningCapacity(
-    uint32_t currentCapacity,
-    uint32_t paletteCount)
+bool DeferredFrameResourceSet::prepareSkinning(
+    RenderSubmission&                 submission,
+    const RenderViewRecordingContext& view)
 {
-    return PerFlightFrameResourceSetBase<DeferredFrameResourceSet>::calculateSkinningCapacity(
-        currentCapacity,
-        paletteCount);
+    SceneFamilyResources* family = allocateSceneFamilyForView(submission, view);
+    IRenderResourceFactory* factory = submission.resourceFactory();
+    if (!family || !factory) {
+        return false;
+    }
+    return prepareSceneFamilySkinning(
+        submission, *family, *factory, _render, _skinningDSL, _resourceTag);
 }
 
 bool DeferredFrameResourceSet::ensureViewDescriptors(RenderSubmission& submission, Binding& binding)
@@ -271,10 +273,17 @@ const DeferredFrameResourceSet::Binding* DeferredFrameResourceSet::beginView(
         return nullptr;
     }
 
-    const uint32_t         viewSlot = _viewBindings.liveViewCount(submission.flightIndex());
-    const SkinningBinding& skinning = _skinningBindings[submission.flightIndex()];
-    slot->skinningDescriptorSet     = skinning.skinningDescriptorSet;
-    slot->skinningBuffer            = skinning.skinningBuffer;
+    const uint32_t viewSlot = _viewBindings.liveViewCount(submission.flightIndex());
+    if (!prepareSkinning(submission, view)) {
+        YA_CORE_ERROR("Deferred beginView failed to prepare scene-family skinning");
+        return nullptr;
+    }
+    SceneFamilyResources* family = allocateSceneFamilyForView(submission, view);
+    if (!family) {
+        return nullptr;
+    }
+    slot->skinningDescriptorSet = family->skinningDescriptorSet(_skinningDSL.get());
+    slot->skinningBuffer        = family->gpu().skinningBuffer;
 
     if (!ensureViewDescriptors(submission, *slot)) {
         YA_CORE_ERROR("Deferred beginView failed to allocate view descriptor sets");

@@ -8,6 +8,7 @@
 #include <memory>
 #include <limits>
 #include <vector>
+#include <cstddef>
 
 namespace ya
 {
@@ -44,9 +45,46 @@ struct SceneRenderRequest
     std::function<std::shared_ptr<const SceneFrameSnapshot>()> buildSnapshot;
 };
 
+/// Graph / GPU-family grouping key. Same Scene snapshot + policy share one
+/// `SceneViewFamilyPlan` and one `SceneFamilyResources`. Different Scenes do
+/// not share skinning or scene GPU packets just because they share a flight.
+struct SceneViewFamilyKey
+{
+    SceneId     sceneId       = 0;
+    uint64_t    sceneRevision = 0;
+    uint32_t    snapshotIndex = 0;
+    uint32_t    renderFlags   = 0;
+    uint64_t    policyId      = 0;
+
+    bool operator==(const SceneViewFamilyKey&) const = default;
+};
+
+struct SceneViewFamilyKeyHash
+{
+    size_t operator()(const SceneViewFamilyKey& key) const
+    {
+        size_t hash = std::hash<SceneId>{}(key.sceneId);
+        const auto mix = [&hash](size_t value) {
+            hash ^= value + static_cast<size_t>(0x9e3779b9u) + (hash << 6u) + (hash >> 2u);
+        };
+        mix(std::hash<uint64_t>{}(key.sceneRevision));
+        mix(std::hash<uint32_t>{}(key.snapshotIndex));
+        mix(std::hash<uint32_t>{}(key.renderFlags));
+        mix(std::hash<uint64_t>{}(key.policyId));
+        return hash;
+    }
+};
+
+struct SceneViewFamilyPlan
+{
+    SceneViewFamilyKey     key;
+    std::vector<uint32_t>  viewportTaskIndices;
+};
+
 struct SceneViewportTask
 {
     static constexpr uint32_t kInvalidSnapshotIndex = std::numeric_limits<uint32_t>::max();
+    static constexpr uint32_t kInvalidFamilyIndex   = std::numeric_limits<uint32_t>::max();
 
     SceneId     sceneId  = 0;
     uint64_t    sceneRevision = 0;
@@ -64,9 +102,21 @@ struct SceneViewportTask
     RenderViewOutputDesc output{};
 
     uint32_t snapshotIndex = kInvalidSnapshotIndex;
+    uint32_t familyIndex   = kInvalidFamilyIndex;
 
     [[nodiscard]] bool ownsHostViewport() const { return composeOntoViewId == 0; }
 };
+
+[[nodiscard]] inline SceneViewFamilyKey makeSceneViewFamilyKey(const SceneViewportTask& task)
+{
+    return SceneViewFamilyKey{
+        .sceneId        = task.sceneId,
+        .sceneRevision  = task.sceneRevision,
+        .snapshotIndex  = task.snapshotIndex,
+        .renderFlags    = task.renderFlags,
+        .policyId       = task.familyId,
+    };
+}
 
 struct SceneSnapshotEntry
 {
@@ -80,6 +130,7 @@ struct SceneRenderPlan
     uint64_t frameId = 0;
     std::vector<SceneSnapshotEntry> snapshots;
     std::vector<SceneViewportTask> viewportTasks;
+    std::vector<SceneViewFamilyPlan> viewFamilies;
 
     [[nodiscard]] bool empty() const { return viewportTasks.empty(); }
 
@@ -94,6 +145,18 @@ struct SceneRenderPlan
             return nullptr;
         }
         return entry.snapshot;
+    }
+
+    [[nodiscard]] const SceneViewFamilyPlan* familyFor(const SceneViewportTask& task) const
+    {
+        if (task.familyIndex >= viewFamilies.size()) {
+            return nullptr;
+        }
+        const SceneViewFamilyPlan& family = viewFamilies[task.familyIndex];
+        if (family.key != makeSceneViewFamilyKey(task)) {
+            return nullptr;
+        }
+        return &family;
     }
 
     [[nodiscard]] const SceneViewportTask* displayRootTask() const

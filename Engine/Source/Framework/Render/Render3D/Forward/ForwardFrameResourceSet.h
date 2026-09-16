@@ -27,13 +27,11 @@ class RenderSubmission;
  *
  * Layouts are device-lifetime. Upload slices and frame/light/skybox
  * descriptor sets are allocated from `RenderSubmission` so a second View
- * cannot overwrite the first. Skinning palettes stay submission-scoped
- * (shared by Views of the same Scene).
+ * cannot overwrite the first. Skinning palettes belong to the Scene family
+ * on `RenderSubmission`, shared by Views of the same Scene.
  */
-class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase<ForwardFrameResourceSet>
+class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase
 {
-    friend class PerFlightFrameResourceSetBase<ForwardFrameResourceSet>;
-
   public:
     using PBRFrameUBO    = slang_types::PBRForward::FrameData;
     using PBRLightUBO    = slang_types::PBRForward::LightData;
@@ -81,13 +79,6 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase<ForwardFram
         }
     };
 
-    /// Flight-local skinning storage consumed by PerFlightFrameResourceSetBase.
-    struct SkinningBinding
-    {
-        DescriptorSetHandle skinningDescriptorSet{};
-        stdptr<IBuffer>     skinningBuffer;
-    };
-
     void init(IRender* render);
     void destroy();
 
@@ -98,10 +89,7 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase<ForwardFram
                              RenderViewRecordingContext& view,
                              const FramePayloads&        payloads);
 
-    bool prepareSkinning(const RenderStageContext& ctx)
-    {
-        return PerFlightFrameResourceSetBase<ForwardFrameResourceSet>::prepareSkinning(ctx);
-    }
+    bool prepareSkinning(RenderSubmission& submission, const RenderViewRecordingContext& view);
 
     /// Write View UBO slices into `binding` without touching descriptor sets.
     static bool writeViewPayloads(FrameUploadArena&    arena,
@@ -126,10 +114,7 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase<ForwardFram
     stdptr<IDescriptorSetLayout> _phongFrameDSL;
     stdptr<IDescriptorSetLayout> _unlitFrameDSL;
     stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
-    std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT> _skinningBindings{};
     RenderViewBindingTable<Binding> _viewBindings;
-
-    std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT>& bindings() { return _skinningBindings; }
 
     bool ensureViewDescriptors(RenderSubmission& submission, Binding& binding);
     void                    updatePBRFrameDescriptorSet(const Binding& binding);

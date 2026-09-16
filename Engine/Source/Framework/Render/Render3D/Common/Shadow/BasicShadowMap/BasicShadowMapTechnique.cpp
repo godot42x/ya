@@ -62,12 +62,7 @@ void BasicShadowMapTechnique::prepare(RenderSubmission& submission, RenderViewRe
         return;
     }
 
-    RenderStageContext skinningCtx{
-        .frameData   = view.frameData,
-        .flightIndex = submission.flightIndex(),
-        .frameIndex  = submission.frameToken(),
-    };
-    if (!_frameResources.prepareSkinning(skinningCtx)) {
+    if (!_frameResources.prepareSkinning(submission, view)) {
         YA_CORE_ERROR("BasicShadowMapTechnique failed to prepare shadow skinning");
         return;
     }

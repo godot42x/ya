@@ -28,14 +28,11 @@ class RenderSubmission;
  *
  * Layouts are device-lifetime. Frame/light/SSAO/skybox descriptor sets and
  * upload slices are allocated from `RenderSubmission` so a second View cannot
- * overwrite the first. Skinning palettes stay submission-scoped (shared by
- * Views of the same Scene).
+ * overwrite the first. Skinning palettes belong to the Scene family on
+ * `RenderSubmission`.
  */
-class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceSetBase<DeferredFrameResourceSet>
+class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceSetBase
 {
-    friend class PerFlightFrameResourceSetBase<DeferredFrameResourceSet>;
-    friend class DeferredFrameResourceSetTestAccess;
-
   public:
     using FrameData = slang_types::DeferredRender::GBufferPass_PBR::FrameData;
     using LightData = slang_types::DeferredRender::LightPass::LightData;
@@ -69,13 +66,6 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
         }
     };
 
-    /// Flight-local skinning storage consumed by PerFlightFrameResourceSetBase.
-    struct SkinningBinding
-    {
-        DescriptorSetHandle skinningDescriptorSet{};
-        stdptr<IBuffer>     skinningBuffer;
-    };
-
     void init(IRender* render);
     void destroy();
 
@@ -92,10 +82,7 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
                              const SSAOFrameData*        ssao   = nullptr,
                              const SkyboxFrameData*      skybox = nullptr);
 
-    bool prepareSkinning(const RenderStageContext& ctx)
-    {
-        return PerFlightFrameResourceSetBase<DeferredFrameResourceSet>::prepareSkinning(ctx);
-    }
+    bool prepareSkinning(RenderSubmission& submission, const RenderViewRecordingContext& view);
 
     /// Write View UBO slices into `binding` without touching descriptor sets.
     static bool writeViewPayloads(FrameUploadArena&   arena,
@@ -120,17 +107,11 @@ class YA_RENDER_3D_API DeferredFrameResourceSet : public PerFlightFrameResourceS
     stdptr<IDescriptorSetLayout> _frameAndLightDSL;
     stdptr<IDescriptorSetLayout> _ssaoFrameDSL;
     stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
-    std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT> _skinningBindings{};
     RenderViewBindingTable<Binding> _viewBindings;
     ShadowRuntimeState _shadowState{};
     uint32_t _lastShadowedPointLights = 0;
 
-    std::array<SkinningBinding, MAX_FLIGHTS_IN_FLIGHT>& bindings() { return _skinningBindings; }
-
     [[nodiscard]] LightData buildLightData(const RenderFrameData& frameData) const;
-    [[nodiscard]] static std::optional<uint32_t> calculateSkinningCapacity(
-        uint32_t currentCapacity,
-        uint32_t paletteCount);
     bool ensureViewDescriptors(RenderSubmission& submission, Binding& binding);
     void updateFrameAndLightDescriptorSet(const Binding& binding);
     void updateSSAODescriptorSet(const Binding& binding);

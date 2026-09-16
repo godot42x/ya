@@ -1214,9 +1214,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         return;
     }
     RenderSubmission& submission = *frame.submission;
-    if (!_frameResources->prepareSkinning(stageCtx)) {
-        return;
-    }
 
     RenderViewRecordingContext view = frame.view;
     if (!view.frameData) {
@@ -1224,6 +1221,10 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
     if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
         view.viewportExtent = stageCtx.viewportExtent;
+    }
+
+    if (!_frameResources->prepareSkinning(submission, view)) {
+        return;
     }
 
     const bool bUseSSAO = _bEnableSSAO && _ssaoStage;
