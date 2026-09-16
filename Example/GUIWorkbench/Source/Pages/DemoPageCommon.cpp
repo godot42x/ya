@@ -12,7 +12,10 @@ std::shared_ptr<ya::UIText> makeLabel(const std::string& text, float fontSize)
     auto label       = std::make_shared<ya::UIText>(text + "_Label");
     label->_fontSize = static_cast<uint32_t>(fontSize);
     label->setText(text);
-    label->setColor(kHeaderColor);
+    // Theme keys, not frozen palette literals: a page caption has to follow the
+    // mounted theme like any other ink, or the gallery keeps a dark caption on
+    // the light shell.
+    label->setStyleKey(std::string(ya::StyleKey::TextMuted));
     return label;
 }
 
@@ -21,7 +24,7 @@ std::shared_ptr<ya::UIText> makeBodyText(const std::string& text)
     auto label       = std::make_shared<ya::UIText>(text + "_Body");
     label->_fontSize = 13;
     label->setText(text);
-    label->setColor(kTextColor);
+    label->setStyleKey(std::string(ya::StyleKey::Text));
     return label;
 }
 

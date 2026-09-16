@@ -13,7 +13,7 @@ void buildTextDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& 
 {
     auto header = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kHeaderColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::TextMuted));
     };
 
     auto form = ya::ui::column("TextForm").setPadding({16.0f, 12.0f}).setSpacing(12.0f);
@@ -61,7 +61,7 @@ void buildTextDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState& 
     form.child(ya::ui::text("TextMutedKey").setText("text.muted").setStyleKey("text.muted").setFontSize(13));
     form.child(ya::ui::text("TextDefaultKey").setText("text").setStyleKey("text").setFontSize(13));
 
-    auto page = ya::ui::border("TextDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    auto page = ya::ui::border("TextDemo").setStyleKey(std::string(ya::StyleKey::Panel)).child(std::move(form), ya::ui::contentSlot().fill());
     (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;
     (void)log;
@@ -72,11 +72,11 @@ void buildFontsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState&
 {
     auto header = [](std::string key, const std::string& text, uint32_t fontSize = 13)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(fontSize).setColor(kHeaderColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(fontSize).setStyleKey(std::string(ya::StyleKey::TextMuted));
     };
     auto body = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kTextColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::Text));
     };
 
     auto form = ya::ui::column("FontsForm").setPadding({12.0f, 12.0f}).setSpacing(8.0f);
@@ -126,7 +126,7 @@ void buildFontsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState&
                       "日 本 语 言 学 中 文 字 体 测 试 标 题 验 收 简 体 繁 体 汉 字 笔 画 粗 细 亮 度 边 缘"));
 
     auto page = ya::ui::border("FontsDemo")
-                    .setColor(kPanelColor)
+                    .setStyleKey(std::string(ya::StyleKey::Panel))
                     .child(ya::ui::scroll("FontsScroll").child(std::move(form)), ya::ui::contentSlot().fill());
     (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     state.statusText = "Fonts page built (CJK fallback + emoji)";

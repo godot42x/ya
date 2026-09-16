@@ -16,11 +16,11 @@ void buildDragDropDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSta
 {
     auto header = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kHeaderColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::TextMuted));
     };
     auto body = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kTextColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::Text));
     };
 
     auto sourceRow = ya::ui::row("DragSourceRow").setSpacing(8.0f);
@@ -80,7 +80,7 @@ void buildDragDropDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSta
                                .child(dropZoneB, ya::ui::boxSlot().preferredSize({180.0f, 60.0f})))
                     .child(body("GalleryDropHint", "Zone B: only payload.2"));
     auto page = ya::ui::border("DragDropDemo")
-                    .setColor(kPanelColor)
+                    .setStyleKey(std::string(ya::StyleKey::Panel))
                     .child(std::move(form), ya::ui::contentSlot().fill());
     (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
 }
@@ -90,11 +90,11 @@ void buildEnableDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState
 {
     auto header = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kHeaderColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::TextMuted));
     };
     auto body = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kTextColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::Text));
     };
     auto demoButton = [](std::string name, const std::string& label)
     {
@@ -160,7 +160,7 @@ void buildEnableDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState
     form.child(body("VisibilityModesHint",
                     "Hidden keeps layout space; Collapsed does not. HitTestInvisible still paints; children remain hittable."));
 
-    auto page = ya::ui::border("EnableDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    auto page = ya::ui::border("EnableDemo").setStyleKey(std::string(ya::StyleKey::Panel)).child(std::move(form), ya::ui::contentSlot().fill());
     (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;
 }

@@ -17,12 +17,21 @@
 // light and dark looks drift apart; adding a key is now one role, not two
 // blocks.
 //
-// Contrast contract (relative luminance; the dark palette is the tightest
-// case): text >= 10:1 on every surface, text2 >= 5.9:1, text3 >= 3.6:1, i.e.
-// the usual >= 4.5:1 body / >= 3:1 secondary split. Surfaces step by
-// ~1.05-1.15:1 so adjacency stays readable without banding, and an edge
-// carries >= 1.5:1 against the fill it outlines (a frame that does not
-// separate is just a heavier fill).
+// Contrast contract (relative luminance). TEXT: >= 12:1 primary, >= 7:1
+// secondary, >= 4.4:1 tertiary on every surface - the usual >= 4.5:1 body /
+// >= 3:1 secondary split, with headroom so the darkest surface still passes.
+// SURFACES: adjacent roles step by only ~1.04-1.10:1. Chrome is a stack of
+// planes, and when each plane jumps a visible amount the shell reads as a pile
+// of differently-shaded boxes; the hierarchy should come from the step that is
+// *just* perceptible plus an edge, not from luminance alone.
+//
+// BORDERS are translucent white (dark look) / black (light look) rather than
+// opaque greys: a hairline then relates to whatever plane it is drawn on, so
+// one token works over every surface, and the ramp stays calm instead of
+// turning the shell into a wireframe. An edge is deliberately WEAKER than it
+// used to be (subtle ~1.18:1, strong ~1.35:1, hover ~1.65:1 against the fill):
+// the fill step plus a quiet edge separates controls, and a loud ring around
+// every button, tab and selected row is what makes a themed UI look busy.
 //
 // Radius lives in `radius`: roundness is part of the look's personality, not a
 // per-style accident. Controls that derive roundness from their OWN extent (a
@@ -107,66 +116,72 @@ inline constexpr float kMenu    = 8.0f;  // popup, tooltip, floating window
 inline constexpr float kCard    = 10.0f; // content card, dialog
 } // namespace radius
 
-/// Dark chrome: near-black surfaces with a cool cast, one bright accent, and
-/// text held far above the noise floor of the surface ladder.
+/// Dark chrome: a NEUTRAL grey ladder, lifted well off black, with one bright
+/// accent and text held far above the noise floor. The greys are near-neutral
+/// on purpose (blue only ~3-6% above red): a strong blue cast turns every
+/// surface slightly navy, which fights the accent and reads as "murky" rather
+/// than dark. Nothing is crushed to near-black - the deepest plane is a normal
+/// dark grey, so dock/toolbar areas stop reading as holes cut into the shell.
 [[nodiscard]] inline constexpr FPalette darkPalette()
 {
     FPalette p;
-    p.canvas = {0.039f, 0.047f, 0.063f, 1.0f};
-    p.window = {0.063f, 0.075f, 0.094f, 1.0f};
-    p.panel  = {0.086f, 0.102f, 0.129f, 1.0f};
-    p.raised = {0.110f, 0.129f, 0.165f, 1.0f};
-    p.well   = {0.047f, 0.059f, 0.078f, 1.0f};
+    p.canvas = {0.078f, 0.082f, 0.094f, 1.0f};
+    p.window = {0.094f, 0.098f, 0.110f, 1.0f};
+    p.panel  = {0.114f, 0.118f, 0.133f, 1.0f};
+    p.raised = {0.145f, 0.151f, 0.169f, 1.0f};
+    p.well   = {0.098f, 0.102f, 0.114f, 1.0f};
 
-    p.hover    = {0.137f, 0.165f, 0.204f, 1.0f};
-    p.pressed  = {0.169f, 0.200f, 0.247f, 1.0f};
-    p.selected = {0.106f, 0.200f, 0.345f, 1.0f};
-    p.accent   = {0.239f, 0.510f, 0.965f, 1.0f};
+    p.hover    = {0.169f, 0.176f, 0.196f, 1.0f};
+    p.pressed  = {0.204f, 0.212f, 0.231f, 1.0f};
+    p.selected = {0.141f, 0.188f, 0.271f, 1.0f};
+    p.accent   = {0.290f, 0.560f, 0.980f, 1.0f};
 
-    p.text     = {0.910f, 0.918f, 0.941f, 1.0f};
-    p.text2    = {0.663f, 0.698f, 0.753f, 1.0f};
-    p.text3    = {0.498f, 0.541f, 0.600f, 1.0f};
-    p.disabled = {0.357f, 0.392f, 0.447f, 1.0f};
+    p.text     = {0.925f, 0.933f, 0.949f, 1.0f};
+    p.text2    = {0.702f, 0.718f, 0.749f, 1.0f};
+    p.text3    = {0.529f, 0.549f, 0.584f, 1.0f};
+    p.disabled = {0.376f, 0.396f, 0.431f, 1.0f};
 
-    p.borderSubtle = {0.149f, 0.173f, 0.212f, 1.0f};
-    p.borderStrong = {0.200f, 0.231f, 0.278f, 1.0f};
-    p.borderHover  = {0.302f, 0.341f, 0.396f, 1.0f};
+    p.borderSubtle = {1.0f, 1.0f, 1.0f, 0.06f};
+    p.borderStrong = {1.0f, 1.0f, 1.0f, 0.10f};
+    p.borderHover  = {1.0f, 1.0f, 1.0f, 0.16f};
 
-    p.success = {0.247f, 0.725f, 0.314f, 1.0f};
-    p.error   = {0.941f, 0.322f, 0.322f, 1.0f};
-    p.warning = {0.824f, 0.600f, 0.133f, 1.0f};
+    p.success = {0.247f, 0.757f, 0.361f, 1.0f};
+    p.error   = {0.973f, 0.400f, 0.376f, 1.0f};
+    p.warning = {0.906f, 0.690f, 0.204f, 1.0f};
     return p;
 }
 
-/// Light chrome: white work surfaces over one grey canvas. On light, an edge
-/// does the separating work that a dark surface ladder cannot.
+/// Light chrome: white CONTENT surfaces over a grey backdrop, with chrome
+/// (toolbars, tab strips) one step off white. The ladder is deliberately not
+/// monotonic with dark: on light, "raised" means the chrome plane, which sits
+/// slightly BELOW white content rather than floating above it.
 [[nodiscard]] inline constexpr FPalette lightPalette()
 {
     FPalette p;
     p.bDark  = false;
-    p.canvas = {0.961f, 0.969f, 0.980f, 1.0f};
-    p.window = {1.000f, 1.000f, 1.000f, 1.0f};
+    p.canvas = {0.902f, 0.910f, 0.922f, 1.0f};
+    p.window = {0.949f, 0.953f, 0.961f, 1.0f};
     p.panel  = {1.000f, 1.000f, 1.000f, 1.0f};
-    p.raised = {0.976f, 0.980f, 0.988f, 1.0f};
-    p.well   = {1.000f, 1.000f, 1.000f, 1.0f};
+    p.raised = {0.961f, 0.965f, 0.973f, 1.0f};
+    p.well   = {0.976f, 0.980f, 0.984f, 1.0f};
 
-    p.hover    = {0.945f, 0.957f, 0.973f, 1.0f};
-    p.pressed  = {0.906f, 0.925f, 0.949f, 1.0f};
-    p.selected = {0.867f, 0.910f, 0.988f, 1.0f};
+    p.hover    = {0.910f, 0.918f, 0.929f, 1.0f};
+    p.pressed  = {0.859f, 0.867f, 0.878f, 1.0f};
+    p.selected = {0.855f, 0.902f, 0.988f, 1.0f};
     p.accent   = {0.184f, 0.435f, 0.894f, 1.0f};
 
-    p.text     = {0.082f, 0.094f, 0.114f, 1.0f};
-    p.text2    = {0.325f, 0.353f, 0.396f, 1.0f};
-    p.text3    = {0.447f, 0.478f, 0.525f, 1.0f};
-    p.disabled = {0.639f, 0.667f, 0.706f, 1.0f};
+    p.text     = {0.098f, 0.106f, 0.125f, 1.0f};
+    p.text2    = {0.353f, 0.373f, 0.408f, 1.0f};
+    p.text3    = {0.475f, 0.494f, 0.529f, 1.0f};
+    p.disabled = {0.671f, 0.686f, 0.710f, 1.0f};
 
-    p.borderSubtle = {0.878f, 0.898f, 0.925f, 1.0f};
-    p.borderStrong = {0.796f, 0.824f, 0.859f, 1.0f};
-    p.borderHover  = {0.643f, 0.678f, 0.729f, 1.0f};
+    p.borderSubtle = {0.0f, 0.0f, 0.0f, 0.09f};
+    p.borderStrong = {0.0f, 0.0f, 0.0f, 0.15f};
+    p.borderHover  = {0.0f, 0.0f, 0.0f, 0.26f};
 
-    p.success = {0.102f, 0.498f, 0.216f, 1.0f};
-    p.error   = {0.776f, 0.157f, 0.157f, 1.0f};
-    p.warning = {0.604f, 0.404f, 0.000f, 1.0f};
+    p.success = {0.114f, 0.522f, 0.239f, 1.0f};
+    p.error   = {0.784f, 0.180f, 0.184f, 1.0f};
+    p.warning = {0.616f, 0.412f, 0.000f, 1.0f};
     return p;
 }
 
@@ -250,12 +265,16 @@ inline void defineChromeStyles(ya::UITheme& theme, const tokens::FPalette& p)
     defineText(StyleKey::TextError, p.error, ya::gui_type::kSmall);
 
     // === Button ============================================================
+    // Buttons carry NO edge: the fill step alone separates a button from the
+    // toolbar it sits on, and a ring around every button is the single biggest
+    // source of "wireframe" chrome. Focus and drop-target keep an accent ring
+    // because those are transient STATES a user must be able to spot.
     auto button = ya::FButtonStyle{};
-    button.normalFill     = surface(p.raised, radius::kControl, p.borderStrong);
-    button.hoveredFill    = surface(p.hover, radius::kControl, p.borderStrong);
-    button.pressedFill    = surface(p.pressed, radius::kControl, p.borderStrong);
+    button.normalFill     = surface(p.raised, radius::kControl);
+    button.hoveredFill    = surface(p.hover, radius::kControl);
+    button.pressedFill    = surface(p.pressed, radius::kControl);
     button.focusedFill    = surface(p.selected, radius::kControl, p.accent);
-    button.disabledFill   = surface(p.raised, radius::kControl, p.borderSubtle);
+    button.disabledFill   = surface(p.raised, radius::kControl);
     button.selectedFill   = surface(p.accent, radius::kControl);
     button.errorFill      = surface(p.error, radius::kControl);
     button.dropTargetFill = surface(p.selected, radius::kControl, p.accent);
@@ -277,7 +296,9 @@ inline void defineChromeStyles(ya::UITheme& theme, const tokens::FPalette& p)
     tab.textColor    = p.text2;
     tab.normalFill   = surface(kNoFill, radius::kTab);
     tab.hoveredFill  = surface(p.hover, radius::kTab);
-    tab.selectedFill = surface(p.panel, radius::kTab, p.borderSubtle);
+    // Selected tab = fill + the accent underline UITabButton already draws; no
+    // ring, which would box the tab the way the fill deliberately does not.
+    tab.selectedFill = surface(p.panel, radius::kTab);
     tab.accentColor  = p.accent;
     tab.padding      = {9.0f, 3.0f};
     tab.separatorColor       = p.borderSubtle;
@@ -285,7 +306,7 @@ inline void defineChromeStyles(ya::UITheme& theme, const tokens::FPalette& p)
     theme.define<ya::FTabStyle>(std::string(StyleKey::Tab), tab);
 
     auto sideTab         = tab;
-    sideTab.selectedFill = surface(p.selected, radius::kRow, p.accent);
+    sideTab.selectedFill = surface(p.selected, radius::kRow);
     sideTab.padding      = {10.0f, 4.0f};
     sideTab.separatorColor = p.borderSubtle;
     theme.define<ya::FTabStyle>(std::string(StyleKey::TabSidebar), sideTab);
@@ -326,7 +347,9 @@ inline void defineChromeStyles(ya::UITheme& theme, const tokens::FPalette& p)
     // === Containers / rows =================================================
     auto tree = ya::FTreeViewStyle{};
     tree.textColor        = p.text;
-    tree.selectedFill     = surface(p.selected, radius::kRow, p.accent);
+    // Row selection is a wash, not an outline: a ring around one row in a long
+    // list reads as a box floating in the panel.
+    tree.selectedFill     = surface(p.selected, radius::kRow);
     tree.hoveredFill      = surface(p.hover, radius::kRow);
     tree.arrowColor       = p.text3;
     tree.arrowHoveredFill = surface(p.hover, radius::kChip);
@@ -339,7 +362,7 @@ inline void defineChromeStyles(ya::UITheme& theme, const tokens::FPalette& p)
     expander.headerFill      = surface(kNoFill, radius::kRow);
     expander.hoveredFill     = surface(p.hover, radius::kRow);
     expander.pressedFill     = surface(p.pressed, radius::kRow);
-    expander.focusedFill     = surface(p.selected, radius::kRow, p.accent);
+    expander.focusedFill     = surface(p.selected, radius::kRow);
     expander.arrowColor      = p.text3;
     expander.arrowHoveredFill = surface(p.hover, radius::kChip);
     expander.guideColor      = p.borderSubtle;
@@ -352,7 +375,7 @@ inline void defineChromeStyles(ya::UITheme& theme, const tokens::FPalette& p)
     expanderHeader.headerFill   = surface(p.raised, radius::kControl, p.borderSubtle);
     expanderHeader.hoveredFill  = surface(p.hover, radius::kControl, p.borderSubtle);
     expanderHeader.pressedFill  = surface(p.pressed, radius::kControl, p.borderSubtle);
-    expanderHeader.focusedFill  = surface(p.selected, radius::kControl, p.accent);
+    expanderHeader.focusedFill  = surface(p.selected, radius::kControl);
     expanderHeader.guideColor   = kNoFill;
     theme.define<ya::FExpanderStyle>(std::string(StyleKey::ExpanderHeader), expanderHeader);
 
@@ -471,8 +494,8 @@ inline void defineChromeStyles(ya::UITheme& theme, const tokens::FPalette& p)
     auto selectable = ya::FSelectableRowStyle{};
     selectable.normalFill          = surface(kNoFill, radius::kRow);
     selectable.hoveredFill         = surface(p.hover, radius::kRow);
-    selectable.selectedFill        = surface(p.selected, radius::kRow, p.accent);
-    selectable.selectedHoveredFill = surface(p.selected, radius::kRow, p.accent);
+    selectable.selectedFill        = surface(p.selected, radius::kRow);
+    selectable.selectedHoveredFill = surface(p.selected, radius::kRow);
     selectable.dropTargetFill      = surface(p.selected, radius::kRow, p.accent);
     selectable.errorFill           = surface(p.error, radius::kRow);
     selectable.disabledFill        = surface(kNoFill, radius::kRow);

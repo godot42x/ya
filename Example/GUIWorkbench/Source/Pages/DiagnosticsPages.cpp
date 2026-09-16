@@ -15,7 +15,7 @@ void buildRenderDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState
                      const std::function<void(const std::string&)>& log)
 {
     auto panel = std::make_shared<ya::UIBorder>("RenderDemo");
-    panel->setColor(kPanelColor);
+    panel->setStyleKey(std::string(ya::StyleKey::Panel));
     ya::ui::attach(tree, parent, panel, ya::ui::canvasSlot().fill());
 
     auto form = std::make_shared<ya::UIContainer>("RenderForm");

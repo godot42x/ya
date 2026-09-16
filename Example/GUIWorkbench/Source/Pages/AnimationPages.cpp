@@ -87,11 +87,11 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
 {
     auto header = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kHeaderColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::TextMuted));
     };
     auto body = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kTextColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::Text));
     };
     auto demoButton = [](std::string name, const std::string& label)
     {
@@ -382,7 +382,7 @@ void buildAnimationDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoSt
                    .child(std::move(left), ya::ui::boxSlot().preferredSize({520.0f, 0.0f}))
                    .child(std::move(right), ya::ui::boxSlot().preferredSize({380.0f, 0.0f})));
 
-    auto page = ya::ui::border("AnimationDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    auto page = ya::ui::border("AnimationDemo").setStyleKey(std::string(ya::StyleKey::Panel)).child(std::move(form), ya::ui::contentSlot().fill());
     (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
 
     // Page entry: the card pops in as soon as the tree ticks.

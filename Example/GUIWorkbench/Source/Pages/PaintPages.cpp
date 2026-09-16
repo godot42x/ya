@@ -15,11 +15,11 @@ void buildBrushDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState&
 {
     auto header = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kHeaderColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::TextMuted));
     };
     auto body = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kTextColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::Text));
     };
 
     auto grid = ya::ui::row("RoundedGrid").setSpacing(12.0f);
@@ -143,7 +143,7 @@ void buildBrushDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState&
                     .child(vectorCanvas,
                            ya::FBoxSlotArgs{.crossAlignment = ya::EUIBoxSlotCrossAlignment::Start,
                                             .preferredSize  = {430.0f, 110.0f}});
-    auto page = ya::ui::border("BrushDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    auto page = ya::ui::border("BrushDemo").setStyleKey(std::string(ya::StyleKey::Panel)).child(std::move(form), ya::ui::contentSlot().fill());
     (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     state.statusText = "Brush demo built";
     (void)log;

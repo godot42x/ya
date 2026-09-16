@@ -21,14 +21,6 @@ struct WidgetTree;
 namespace guiworkbench
 {
 
-// Demo-page palette aliases. These used to be literals restated here, which is
-// how the gallery drifted from the chrome when the theme moved (two copies of
-// "panel colour"). They now read the shared role palette, so a gallery caption
-// and the chrome it sits on can never disagree.
-constexpr glm::vec4 kPanelColor  = ya::gui_chrome::tokens::kPanelColor;
-constexpr glm::vec4 kHeaderColor = ya::gui_chrome::tokens::kHeaderColor;
-constexpr glm::vec4 kTextColor   = ya::gui_chrome::tokens::kTextColor;
-
 std::shared_ptr<ya::UIText> makeLabel(const std::string& text, float fontSize = 13.0f);
 std::shared_ptr<ya::UIText> makeBodyText(const std::string& text);
 std::shared_ptr<ya::UIButton> makeDemoButton(const std::string& name, const std::string& label, float width = 0.0f);

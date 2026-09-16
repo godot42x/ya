@@ -16,11 +16,11 @@ void buildLayoutDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState
 {
     auto header = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kHeaderColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::TextMuted));
     };
     auto body = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kTextColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::Text));
     };
     auto cellLabel = [&](std::string key, const std::string& text)
     {
@@ -119,7 +119,7 @@ void buildLayoutDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState
                                    ya::ui::boxSlot().preferredSize({90.0f, 36.0f}))
                             .child(body("VisibilityHint", "Hidden keeps a gap; Collapsed does not.")),
                            ya::ui::boxSlot().preferredSize({0.0f, 40.0f}));
-    auto page = ya::ui::border("LayoutDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    auto page = ya::ui::border("LayoutDemo").setStyleKey(std::string(ya::StyleKey::Panel)).child(std::move(form), ya::ui::contentSlot().fill());
     (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
 }
 
@@ -128,11 +128,11 @@ void buildHostsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState&
 {
     auto header = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kHeaderColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::TextMuted));
     };
     auto body = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kTextColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::Text));
     };
     auto cell = [&](std::string key, const std::string& text, const glm::vec4& color)
     {
@@ -198,10 +198,10 @@ void buildHostsDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState&
                             .child(ya::ui::text("CanvasAuto")
                                     .setText("Auto size, top-left")
                                     .setFontSize(13)
-                                    .setColor(kTextColor),
+                                    .setStyleKey(std::string(ya::StyleKey::Text)),
                                    ya::ui::canvasSlot().offset({12.0f, 88.0f})),
                            ya::ui::boxSlot().preferredSize({0.0f, 140.0f}));
-    auto page = ya::ui::border("HostsDemo").setColor(kPanelColor).child(std::move(form), ya::ui::contentSlot().fill());
+    auto page = ya::ui::border("HostsDemo").setStyleKey(std::string(ya::StyleKey::Panel)).child(std::move(form), ya::ui::contentSlot().fill());
     (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;
     (void)log;
@@ -212,11 +212,11 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemo
 {
     auto header = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kHeaderColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::TextMuted));
     };
     auto body = [](std::string key, const std::string& text)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setColor(kTextColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(13).setStyleKey(std::string(ya::StyleKey::Text));
     };
 
     auto list = ya::ui::column("DemoScrollList")
@@ -268,7 +268,7 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemo
     layout.child(std::move(split), ya::ui::boxSlot().fill());
 
     auto page = ya::ui::border("ScrollSplitDemo")
-                    .setColor(kPanelColor)
+                    .setStyleKey(std::string(ya::StyleKey::Panel))
                     .child(std::move(layout), ya::ui::contentSlot().fill());
     (void)ya::ui::attach(tree, parent, std::move(page).release(), ya::ui::canvasSlot().fill());
     (void)state;

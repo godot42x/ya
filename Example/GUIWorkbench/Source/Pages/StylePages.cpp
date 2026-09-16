@@ -16,7 +16,7 @@ void buildThemeDemo(ya::WidgetTree& tree, ya::UICanvasPanel& parent, FDemoState&
 {
     auto header = [](std::string key, const std::string& text, uint32_t fontSize = 13)
     {
-        return ya::ui::text(std::move(key)).setText(text).setFontSize(fontSize).setColor(kHeaderColor);
+        return ya::ui::text(std::move(key)).setText(text).setFontSize(fontSize).setStyleKey(std::string(ya::StyleKey::TextMuted));
     };
     auto themedButton = [](std::string key, const std::string& label)
     {
