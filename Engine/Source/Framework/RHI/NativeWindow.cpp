@@ -113,12 +113,6 @@ bool SDLNativeWindow::init()
 
 bool SDLNativeWindow::recreate(const WindowCreateInfo &ci)
 {
-    // Per-window content scale (== device pixel ratio on this display). Use
-    // the window's own display, not the primary one — otherwise a window on a
-    // secondary HiDPI monitor would wrongly inherit the primary's scale.
-    refreshDpiScale();
-    YA_CORE_INFO("system scale: {}, ci scale: {}, input size: {}x{}", dpiScale, ci.scale, ci.width, ci.height);
-
     int flags = 0;
     switch (ci.renderAPI) {
     case ERenderAPI::Vulkan: flags |= SDL_WINDOW_VULKAN; break;
@@ -153,6 +147,21 @@ bool SDLNativeWindow::recreate(const WindowCreateInfo &ci)
         return false;
     }
     nativeWindowHandle = window;
+    // Per-window content scale (== device pixel ratio). MUST be queried AFTER
+    // creation: the scale belongs to the window's display, so asking before the
+    // window exists always answered 1.0 and the whole app then rendered at 1x
+    // on a 2x display (macOS upscaled the frame -> everything, text and edges
+    // alike, came out soft). Use the window's own display rather than the
+    // primary one, or a window on a secondary HiDPI monitor inherits the
+    // primary's scale.
+    refreshDpiScale();
+    {
+        int logicalW = 0, logicalH = 0, pixelW = 0, pixelH = 0;
+        SDL_GetWindowSize(window, &logicalW, &logicalH);
+        SDL_GetWindowSizeInPixels(window, &pixelW, &pixelH);
+        YA_CORE_INFO("window created: scale {}, logical {}x{}, drawable {}x{}, requested {}x{}",
+                     dpiScale, logicalW, logicalH, pixelW, pixelH, ci.width, ci.height);
+    }
     if (ci.bAlwaysOnTop) {
         (void)SDL_SetWindowAlwaysOnTop(window, true);
     }
