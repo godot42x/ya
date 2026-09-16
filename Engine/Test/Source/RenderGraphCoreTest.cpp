@@ -2081,6 +2081,55 @@ TEST(RenderGraphCoreTest, ViewKeyedPersistentTexturesStayIndependent)
     EXPECT_EQ(factory.createdImages, 2u);
 }
 
+TEST(RenderGraphCoreTest, ViewKeyedPostprocessTexturesStayIndependentAcrossSequentialGraphs)
+{
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+
+    const auto desc = RGTextureDesc{
+        .label  = "Postprocessing.Output",
+        .format = EFormat::R8G8B8A8_UNORM,
+        .extent = Extent3D{64, 32, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    };
+
+    RenderGraph graphA;
+    const auto handleA = createViewPersistentTexture(graphA, desc, "Postprocessing.Output", 11);
+    registry.sync(graphA);
+    const auto* textureA = registry.resolveTexture(handleA);
+    ASSERT_NE(textureA, nullptr);
+
+    RenderGraph graphB;
+    const auto handleB = createViewPersistentTexture(graphB, desc, "Postprocessing.Output", 12);
+    registry.sync(graphB);
+    const auto* textureB = registry.resolveTexture(handleB);
+    ASSERT_NE(textureB, nullptr);
+    EXPECT_NE(textureA, textureB);
+    EXPECT_EQ(factory.createdImages, 2u);
+
+    RenderGraph graphBloomA;
+    const auto bloomHandleA = createViewPersistentTexture(graphBloomA, desc, "Bloom.CompositeOutput", 11);
+    registry.sync(graphBloomA);
+    const auto* bloomA = registry.resolveTexture(bloomHandleA);
+    ASSERT_NE(bloomA, nullptr);
+
+    RenderGraph graphBloomB;
+    const auto bloomHandleB = createViewPersistentTexture(graphBloomB, desc, "Bloom.CompositeOutput", 12);
+    registry.sync(graphBloomB);
+    const auto* bloomB = registry.resolveTexture(bloomHandleB);
+    ASSERT_NE(bloomB, nullptr);
+    EXPECT_NE(bloomA, bloomB);
+    EXPECT_NE(bloomA, textureA);
+    EXPECT_NE(bloomB, textureB);
+    EXPECT_EQ(factory.createdImages, 4u);
+
+    RenderGraph graphAReuse;
+    const auto handleAReuse = createViewPersistentTexture(graphAReuse, desc, "Postprocessing.Output", 11);
+    registry.sync(graphAReuse);
+    EXPECT_EQ(registry.resolveTexture(handleAReuse), textureA);
+    EXPECT_EQ(factory.createdImages, 4u);
+}
+
 TEST(RenderGraphCoreTest, ResourceRegistryKeepsPersistentResourcesAcrossTemporaryOmission)
 {
     TestResourceFactory factory;

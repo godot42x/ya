@@ -423,7 +423,8 @@ void appendPostprocessPasses(RenderGraph&                  graph,
         graph,
         postprocessInput,
         resources.viewportExtent,
-        inputs.postContext);
+        inputs.postContext,
+        inputs.viewId);
     const auto finalizeInput = bloomComposite.isValid() ? bloomComposite : postprocessInput;
     [[maybe_unused]] const auto postprocessOutput = deps.postProcessStage->appendFinalizeGraphPasses(
         graph,
@@ -432,6 +433,7 @@ void appendPostprocessPasses(RenderGraph&                  graph,
             .inputExtent   = resources.viewportExtent,
             .bOutputIsSRGB = inputs.bPostprocessOutputIsSRGB,
             .postContext   = inputs.postContext,
+            .viewId        = inputs.viewId,
         });
 }
 

@@ -37,4 +37,22 @@ TEST(ViewPersistentResourceKeyTest, BasesStayIndependentForTheSameView)
     EXPECT_EQ(ssao.value, "SSAO.Output.view7");
 }
 
+TEST(ViewPersistentResourceKeyTest, PostprocessAndBloomOutputsStayViewKeyed)
+{
+    const auto postA = makeViewPersistentTextureKey("Postprocessing.Output", 11);
+    const auto postB = makeViewPersistentTextureKey("Postprocessing.Output", 12);
+    const auto bloomA = makeViewPersistentTextureKey("Bloom.CompositeOutput", 11);
+    const auto bloomB = makeViewPersistentTextureKey("Bloom.CompositeOutput", 12);
+    const auto extractA = makeViewPersistentTextureKey("Bloom.Extract", 11);
+
+    EXPECT_NE(postA, postB);
+    EXPECT_NE(bloomA, bloomB);
+    EXPECT_NE(postA, bloomA);
+    EXPECT_NE(bloomA, extractA);
+    EXPECT_EQ(postA.value, "Postprocessing.Output.view11");
+    EXPECT_EQ(postB.value, "Postprocessing.Output.view12");
+    EXPECT_EQ(bloomA.value, "Bloom.CompositeOutput.view11");
+    EXPECT_EQ(extractA.value, "Bloom.Extract.view11");
+}
+
 } // namespace ya

@@ -75,31 +75,21 @@ void BasicPostprocessing::init(const InitDesc& initDesc)
     _pipeline = IGraphicsPipeline::create(_render);
     _pipeline->recreate(pipelineDesc);
 
-    _descriptorPool = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-                                                           .label     = "BasicPostprocessingPool",
-                                                           .maxSets   = 1,
-                                                           .poolSizes = {
-                                                               DescriptorPoolSize{
-                                                                   .type            = EPipelineDescriptorType::CombinedImageSampler,
-                                                                   .descriptorCount = 1,
-                                                               },
-                                                           },
-                                                       });
-
-    std::vector<DescriptorSetHandle> descriptorSets;
-    const bool                       ok = _descriptorPool->allocateDescriptorSets(_dslInputTexture, 1, descriptorSets);
-    YA_CORE_ASSERT(ok, "Failed to allocate descriptor set");
-    _descriptorSet = descriptorSets[0];
+    _viewSets.init(_render,
+                   "BasicPostprocessing_ViewDSP",
+                   1,
+                   ViewDescriptorSetAllocator::kDefaultChunk,
+                   EPipelineDescriptorType::CombinedImageSampler);
 }
 
 void BasicPostprocessing::shutdown()
 {
-    _descriptorPool.reset();
+    _viewBindings.clear();
+    _viewSets.destroy();
     _dslInputTexture.reset();
     _pipeline.reset();
     _pipelineLayout.reset();
-    _render                      = nullptr;
-    _currentInputImageViewHandle = nullptr;
+    _render = nullptr;
 }
 
 void BasicPostprocessing::beginFrame()
@@ -135,6 +125,37 @@ void BasicPostprocessing::rebuildPushConstants(const PostProcessingState& state,
         std::max(state.exposure, 0.0f));
 }
 
+DescriptorSetHandle BasicPostprocessing::bindViewInput(uint64_t viewId, IImageView* inputImageView)
+{
+    auto& binding = _viewBindings[viewId];
+    if (!binding.first) {
+        binding.first = _viewSets.allocate(_dslInputTexture);
+        YA_CORE_ASSERT(binding.first, "Failed to allocate BasicPostprocessing descriptor set for view {}", viewId);
+        binding.second = {};
+    }
+
+    const auto imageViewHandle = inputImageView->getHandle();
+    if (binding.second != imageViewHandle) {
+        binding.second = imageViewHandle;
+        static auto sampler = TextureLibrary::get().getDefaultSampler();
+        DescriptorImageInfo imageInfo(
+            imageViewHandle,
+            sampler->getHandle(),
+            EImageLayout::ShaderReadOnlyOptimal);
+        _render->getDescriptorHelper()->updateDescriptorSets(
+            {
+                IDescriptorSetHelper::genImageWrite(
+                    binding.first,
+                    0,
+                    0,
+                    EPipelineDescriptorType::CombinedImageSampler,
+                    {imageInfo}),
+            },
+            {});
+    }
+    return binding.first;
+}
+
 void BasicPostprocessing::render(const RenderDesc& desc)
 {
     if (!desc.cmdBuf || !desc.inputImageView || !desc.state) {
@@ -144,34 +165,13 @@ void BasicPostprocessing::render(const RenderDesc& desc)
         return;
     }
 
-    const auto imageViewHandle = desc.inputImageView->getHandle();
-    if (_currentInputImageViewHandle != imageViewHandle) {
-        _currentInputImageViewHandle = imageViewHandle;
-
-        static auto         sampler = TextureLibrary::get().getDefaultSampler();
-        DescriptorImageInfo imageInfo(
-            _currentInputImageViewHandle,
-            sampler->getHandle(),
-            EImageLayout::ShaderReadOnlyOptimal);
-
-        _render->getDescriptorHelper()->updateDescriptorSets(
-            {
-                IDescriptorSetHelper::genImageWrite(
-                    _descriptorSet,
-                    0,
-                    0,
-                    EPipelineDescriptorType::CombinedImageSampler,
-                    {imageInfo}),
-            },
-            {});
-    }
-
+    const DescriptorSetHandle viewSet = bindViewInput(desc.viewId, desc.inputImageView);
     rebuildPushConstants(*desc.state, desc.bOutputIsSRGB);
 
     desc.cmdBuf->bindPipeline(_pipeline.get());
     desc.cmdBuf->setViewport(0, 0, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
     desc.cmdBuf->setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
-    desc.cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {_descriptorSet}, {});
+    desc.cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {viewSet}, {});
     desc.cmdBuf->pushConstants(
         _pipelineLayout.get(),
         _pipelineLayoutDesc.pushConstants[0].stageFlags,

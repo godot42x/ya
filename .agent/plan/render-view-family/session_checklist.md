@@ -27,6 +27,7 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-17：postprocess/bloom 输出与 CombinedImageSampler set 按 View 持有；同一帧两个 View 不再共用 display GPU 资源。ViewPersistentResourceKeyTest 含 PostprocessAndBloomOutputsStayViewKeyed，RenderGraphCoreTest.ViewKeyedPostprocessTexturesStayIndependentAcrossSequentialGraphs，专项回归 56/56，ya-game-runtime / ya-game-editor 构建通过。
 - 2026-09-17：overlay View 的 composeRect 与 host viewport identity 分离；overlay 不得 resize host RT spec；camera frustum 为 compact gizmo。CameraFrustumOverlayTest 1/1，RenderRuntimeSnapshotTest 14/14，专项回归 52/52，ya-game-runtime / ya-game-editor 构建通过。
 - 2026-09-16：产品路径为选中的 world Camera submit 第二个 SceneRenderRequest，ViewCompose PiP 到主 viewport 右下角，world Camera 用 overlay 3D 线画锥体。CameraFrustumOverlayTest 2/2，RenderRuntimeSnapshotTest 14/14，专项回归 53/53，ya-game-runtime / ya-game-editor 构建通过。
 - 2026-09-16：RenderRuntime 按 SceneViewportTask 循环 tick/publish；同一 Scene 两个 View 共享 snapshot。RenderRuntimeSnapshotTest 11/11，专项与回归 48/48，ya-game-runtime 构建通过。

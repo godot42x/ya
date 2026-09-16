@@ -6,17 +6,17 @@
 #include "Graph/RenderGraphExecutor.h"
 #include "RHI/Core/RenderTexture.h"
 #include "Render3D/Common/PostProcessingState.h"
+#include "Render3D/Common/ViewDescriptorSetAllocator.h"
 
 #include "Misc.BloomBlur.slang.h"
 #include "Misc.BloomComposite.slang.h"
 #include "Misc.BloomExtract.slang.h"
 
 #include <string_view>
+#include <unordered_map>
 
 namespace ya
 {
-
-constexpr uint32_t MAX_BLOOM_BLUR_DESCRIPTOR_SETS = 64;
 
 struct BloomPostprocessing
 {
@@ -40,32 +40,42 @@ struct BloomPostprocessing
         RGTextureHandle            sceneHandle{};
         Extent2D                   renderExtent      = {};
         const PostProcessingState* state             = nullptr;
+        uint64_t                   viewId            = 0;
+    };
+
+    struct ViewSamplerBinding
+    {
+        DescriptorSetHandle set{};
+        ImageViewHandle     bound{};
+    };
+
+    struct ViewCompositeBinding
+    {
+        DescriptorSetHandle set{};
+        ImageViewHandle     scene{};
+        ImageViewHandle     bloom{};
     };
 
     IRender* _render = nullptr;
     InitDesc _initDesc{};
 
     stdptr<IDescriptorSetLayout> _extractDSL;
-    stdptr<IDescriptorPool>      _extractDSP;
     stdptr<IPipelineLayout>      _extractPPL;
     stdptr<IGraphicsPipeline>    _extractPipeline;
-    DescriptorSetHandle          _extractDS = nullptr;
-    ImageViewHandle              _extractInputImageViewHandle = nullptr;
+    ViewDescriptorSetAllocator   _extractSets;
+    std::unordered_map<uint64_t, ViewSamplerBinding> _extractBindings;
 
     stdptr<IDescriptorSetLayout> _blurDSL;
-    stdptr<IDescriptorPool>      _blurDSP;
     stdptr<IPipelineLayout>      _blurPPL;
     stdptr<IGraphicsPipeline>    _blurPipeline;
-    std::vector<DescriptorSetHandle> _blurDSs;
-    std::vector<ImageViewHandle>     _blurInputImageViewHandles;
+    ViewDescriptorSetAllocator   _blurSets;
+    std::unordered_map<uint64_t, ViewSamplerBinding> _blurBindings;
 
     stdptr<IDescriptorSetLayout> _compositeDSL;
-    stdptr<IDescriptorPool>      _compositeDSP;
     stdptr<IPipelineLayout>      _compositePPL;
     stdptr<IGraphicsPipeline>    _compositePipeline;
-    DescriptorSetHandle          _compositeDS = nullptr;
-    ImageViewHandle              _compositeSceneImageViewHandle = nullptr;
-    ImageViewHandle              _compositeBloomImageViewHandle = nullptr;
+    ViewDescriptorSetAllocator   _compositeSets;
+    std::unordered_map<uint64_t, ViewCompositeBinding> _compositeBindings;
 
     uint32_t _lastBlurPassCount = 0;
     stdptr<RenderTexture> _extractImage;
@@ -89,9 +99,9 @@ struct BloomPostprocessing
     void initExtractPipeline();
     void initBlurPipeline();
     void initCompositePipeline();
-    void updateExtractDescriptor(IImageView* inputImageView);
-    DescriptorSetHandle updateBlurDescriptor(uint32_t passIndex, IImageView* inputImageView);
-    void updateCompositeDescriptor(IImageView* sceneImageView, IImageView* bloomImageView);
+    DescriptorSetHandle bindExtract(uint64_t viewId, IImageView* inputImageView);
+    DescriptorSetHandle bindBlur(uint64_t viewId, uint32_t passIndex, IImageView* inputImageView);
+    DescriptorSetHandle bindComposite(uint64_t viewId, IImageView* sceneImageView, IImageView* bloomImageView);
 };
 
 } // namespace ya

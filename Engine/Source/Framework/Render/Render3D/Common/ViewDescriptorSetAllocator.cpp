@@ -9,16 +9,18 @@ namespace ya
 {
 
 void ViewDescriptorSetAllocator::init(
-    IRender*       render,
-    std::string_view label,
-    uint32_t       descriptorsPerSet,
-    uint32_t       chunkSize)
+    IRender*                   render,
+    std::string_view           label,
+    uint32_t                   descriptorsPerSet,
+    uint32_t                   chunkSize,
+    EPipelineDescriptorType::T descriptorType)
 {
     destroy();
     _render            = render;
     _label             = std::string(label);
     _descriptorsPerSet = std::max(1u, descriptorsPerSet);
     _chunkSize         = std::max(1u, chunkSize);
+    _descriptorType    = descriptorType;
     if (!grow()) {
         YA_CORE_ERROR("ViewDescriptorSetAllocator failed to create initial {} pool", _label);
     }
@@ -31,6 +33,7 @@ void ViewDescriptorSetAllocator::destroy()
     _render            = nullptr;
     _descriptorsPerSet = 1;
     _chunkSize         = kDefaultChunk;
+    _descriptorType    = EPipelineDescriptorType::UniformBuffer;
     _label.clear();
 }
 
@@ -46,7 +49,7 @@ bool ViewDescriptorSetAllocator::grow()
             .label     = _label,
             .maxSets   = _chunkSize,
             .poolSizes = {{
-                .type            = EPipelineDescriptorType::UniformBuffer,
+                .type            = _descriptorType,
                 .descriptorCount = _chunkSize * _descriptorsPerSet,
             }},
         });

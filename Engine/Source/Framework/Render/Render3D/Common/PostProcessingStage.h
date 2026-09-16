@@ -26,6 +26,7 @@ struct PostProcessingStage
         Extent2D        inputExtent{};
         bool            bOutputIsSRGB = false;
         FrameContext*   postContext    = nullptr;
+        uint64_t        viewId         = 0;
     };
 
     struct InitDesc
@@ -54,7 +55,8 @@ struct PostProcessingStage
     RGTextureHandle appendBloomGraphPasses(RenderGraph&   graph,
                                            RGTextureHandle input,
                                            Extent2D        inputExtent,
-                                           FrameContext*   ctx);
+                                           FrameContext*   ctx,
+                                           uint64_t        viewId = 0);
     RGTextureHandle appendFinalizeGraphPasses(RenderGraph& graph, const FinalizePassParams& params);
     RGTextureHandle appendGraphPasses(RenderGraph& graph,
                                       Texture*      inputTexture,

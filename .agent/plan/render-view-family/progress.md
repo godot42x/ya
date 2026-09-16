@@ -5,11 +5,20 @@
 - 阶段：R0 基线审计已完成；R1 已完成 SceneRenderRequest/SceneRenderPlan 的最小 frame-local 调度切片、真实 extractor 的显式 Scene/View 分层，以及 GameRuntime 的 scheduler 接入。RenderRuntime 按 SceneViewportTask 循环录制；选中的 world Camera 作为 overlay View submit，compose 到 display root，不改 host viewport identity。
 - 已确认：RenderFrameInputs.h 已有四组输入；RenderFrameData 的 Scene snapshot owner 已与 View-owned draw buckets 分离。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
-- 当前 checkpoint：Overlay View 的 output extent 与 host viewport 身份分离；compose 放置写在 request 上；camera gizmo 不再使用 clip far。
+- 当前 checkpoint：tone mapping / bloom 的 display 路径按 View 持有 persistent RT 和 descriptor set；同一帧两个 View 不得复用同一套 postprocess GPU 资源。
 - 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是持有 shared snapshot 并独立保存 View-owned draw buckets；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 View buckets、shared skinning palettes 和 light presence。
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 仍是 submission 共享（同 Scene 多 View 正确）。
-- 架构审计结论：RenderSubmissionContext / RenderViewRecordingContext 已进入 tick 输入，Forward/Deferred/Shadow beginView 不再按 flightIndex 覆写唯一 Binding。Runtime 已按 flight 持有 submission keepalives 和 View-keyed output 句柄。graph persistent key 已按 View 分开。Runtime 已循环 SceneViewportTask。Overlay View 用 composeRect 合成到 display root，不得 resize host `_viewportRTSpec`。下一步不要宣称双 Surface GPU 完成；可录制两个 Scene 的两个 View。
+- 架构审计结论：RenderSubmissionContext / RenderViewRecordingContext 已进入 tick 输入，Forward/Deferred/Shadow beginView 不再按 flightIndex 覆写唯一 Binding。Runtime 已按 flight 持有 submission keepalives 和 View-keyed output 句柄。graph persistent key（含 viewport 与 postprocess/bloom）已按 View 分开。Runtime 已循环 SceneViewportTask。Overlay View 用 composeRect 合成到 display root，不得 resize host `_viewportRTSpec`。下一步不要宣称双 Surface GPU 完成；可录制两个 Scene 的两个 View。
+
+## 2026-09-17 checkpoint：View-own postprocess / bloom display 资源
+
+- 唯一目标：同一 submission 里两个 View 不再共用 postprocess/bloom 的 GPU 图和 descriptor set，避免两路画面相同并闪烁。
+- 根因：tone mapping 默认开启。`BasicPostprocessing` / Bloom extract-composite 只有一套 CombinedImageSampler set，View B 在同一 cmdbuf 里原地 update 后，View A 已录制的 bind 在 submit 时也采样 View B。Bloom/Postprocess 输出曾是 transient，同 extent 时会被 registry 回收给下一个 graph。
+- `ViewDescriptorSetAllocator` 支持 CombinedImageSampler。`BasicPostprocessing` 与 Bloom extract/blur/composite 按 viewId（blur 再加 passIndex）分配独立 set。`Postprocessing.Output` 与 `Bloom.CompositeOutput/Extract/BlurPing/BlurPong` 走 `createViewPersistentTexture`。Forward/Deferred 把 task viewId 传入 bloom/finalize。
+- 未做双 Surface GPU 验收；PointShadow indirect 仍是 flight 轴；SSAO/EntityId 仍有 maxSets=1 的辅助路径，不在本切片。
+- 验证：`xmake b ya-render-3d`、`xmake b ya-render-3d-test`、`xmake r ya-render-3d-test --gtest_filter='ViewPersistentResourceKeyTest.*:ForwardGraphInputsTest.*:RenderGraphCoreTest.ViewKeyedPersistentTexturesStayIndependent:RenderGraphCoreTest.ViewKeyedPostprocessTexturesStayIndependentAcrossSequentialGraphs:RenderGraphCoreTest.ResourceRegistryReusesStableResourcesAcrossSyncs:PostProcessingStageTest.*:CameraFrustumOverlayTest.*:RenderViewOutputTableTest.*:RenderRuntimeSnapshotTest.*:RenderSubmissionTableTest.*:RenderViewBindingTableTest.*:DeferredFrameResourceSetTest.*:DeferredRenderPipelineTest.*:DeferredFrameGraphResourcesTest.*:DeferredPassParamsTest.*:DrawCandidateViewTest.*:RenderGraphCoreTest.FrameUploadArena*'`（56/56）、`xmake b ya-game-runtime`、`xmake b ya-game-editor`、`git diff --check`。
+- 保留未完成：双 Scene 录制；双 Surface；PointShadow indirect 仍是 flight 轴；viewport click picking 无 camera mesh。
 
 ## 2026-09-17 checkpoint：overlay View 与 host viewport identity 分离
 

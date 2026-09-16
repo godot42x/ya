@@ -443,7 +443,8 @@ void appendBloom(DeferredFrameGraphPassContext& context)
         context.graph,
         context.graphResources.textures.viewportColor,
         context.viewportExtent,
-        context.postContext);
+        context.postContext,
+        context.viewId);
     if (bloomComposite.isValid()) {
         context.graphResources.textures.bloomComposite = bloomComposite;
     }
@@ -608,6 +609,7 @@ void appendPostprocess(DeferredFrameGraphPassContext& context)
             .inputExtent   = context.viewportExtent,
             .bOutputIsSRGB = context.bPostprocessOutputIsSRGB,
             .postContext   = context.postContext,
+            .viewId        = context.viewId,
         });
     if (postprocessOutput.isValid()) {
         context.graphResources.textures.postprocessOutput = postprocessOutput;

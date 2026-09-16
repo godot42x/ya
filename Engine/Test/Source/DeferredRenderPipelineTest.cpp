@@ -288,6 +288,26 @@ TEST(PostProcessingStageTest, FinalizeParamsDefaultsStayEmpty)
     EXPECT_EQ(params.inputExtent.height, 0u);
     EXPECT_FALSE(params.bOutputIsSRGB);
     EXPECT_EQ(params.postContext, nullptr);
+    EXPECT_EQ(params.viewId, 0u);
+}
+
+TEST(PostProcessingStageTest, BloomAndFinalizeViewIdsStayIndependent)
+{
+    BloomPostprocessing::RenderDesc bloom{};
+    EXPECT_EQ(bloom.viewId, 0u);
+    bloom.viewId = 11;
+
+    PostProcessingStage::FinalizePassParams finalize{};
+    finalize.viewId = 12;
+
+    BasicPostprocessing::RenderDesc toneMap{};
+    EXPECT_EQ(toneMap.viewId, 0u);
+    toneMap.viewId = bloom.viewId;
+
+    EXPECT_EQ(bloom.viewId, 11u);
+    EXPECT_EQ(finalize.viewId, 12u);
+    EXPECT_EQ(toneMap.viewId, 11u);
+    EXPECT_NE(bloom.viewId, finalize.viewId);
 }
 
 TEST(SSAOStageTest, BuildsFrameDataWithoutOwningGpuResources)

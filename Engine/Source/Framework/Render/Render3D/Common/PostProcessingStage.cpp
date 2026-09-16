@@ -2,6 +2,7 @@
 
 #include "Graph/RenderGraphImportUtils.h"
 #include "RHI/Core/Swapchain.h"
+#include "Render3D/Common/ViewPersistentResourceKey.h"
 #include <algorithm>
 
 namespace ya
@@ -152,13 +153,15 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
                                                 .inputExtent   = inputExtent,
                                                 .bOutputIsSRGB = EFormat::isSRGB(_colorFormat),
                                                 .postContext   = ctx,
+                                                .viewId        = 0,
                                             });
 }
 
 RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph,
                                                             RGTextureHandle input,
                                                             Extent2D        inputExtent,
-                                                            FrameContext*   ctx)
+                                                            FrameContext*   ctx,
+                                                            uint64_t        viewId)
 {
     (void)ctx;
     clearPreparedResources();
@@ -171,6 +174,7 @@ RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph
             .sceneHandle  = input,
             .renderExtent = inputExtent,
             .state        = &_state,
+            .viewId       = viewId,
         });
     }
 
@@ -183,12 +187,18 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& grap
         return {};
     }
 
-    const auto output = params.output.isValid() ? params.output : graph.createTexture(RGTextureDesc{
-        .label  = "Postprocessing.Output",
-        .format = _colorFormat,
-        .extent = Extent3D{params.inputExtent.width, params.inputExtent.height, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
-    });
+    const auto output = params.output.isValid()
+                            ? params.output
+                            : createViewPersistentTexture(
+                                  graph,
+                                  RGTextureDesc{
+                                      .label  = "Postprocessing.Output",
+                                      .format = _colorFormat,
+                                      .extent = Extent3D{params.inputExtent.width, params.inputExtent.height, 1},
+                                      .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
+                                  },
+                                  "Postprocessing.Output",
+                                  params.viewId);
     [[maybe_unused]] const auto pass = graph.addPass(
         "Postprocessing",
         [input = params.input, output, inputExtent = params.inputExtent](RGPassBuilder& pass) {
@@ -203,7 +213,7 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& grap
                 }},
             });
         },
-        [this, input = params.input, inputExtent = params.inputExtent, bOutputIsSRGB = params.bOutputIsSRGB, state = &_state, postContext = params.postContext](RGRenderContext& rgCtx) {
+        [this, input = params.input, inputExtent = params.inputExtent, bOutputIsSRGB = params.bOutputIsSRGB, state = &_state, postContext = params.postContext, viewId = params.viewId](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
@@ -217,6 +227,7 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& grap
                 .renderExtent   = inputExtent,
                 .bOutputIsSRGB  = bOutputIsSRGB,
                 .state          = state,
+                .viewId         = viewId,
             });
 
             rgCtx.endRendering();
