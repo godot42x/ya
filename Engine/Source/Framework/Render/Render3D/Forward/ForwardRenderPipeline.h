@@ -89,8 +89,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     RenderAttachmentFormats _viewportFormats{};
     ForwardViewportResources _viewportResources{};
     EntityIdViewportPass     _entityIdPass{};
-    FrameContext  _lastTickCtx{};
-    RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
     std::optional<PostProcessingState> _pendingPostProcessSettings;
 
@@ -163,7 +161,9 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void               refreshViewportSnapshot();
     void               refreshViewportStageState();
     void               refreshShadowStageState();
-    bool               executeViewportPassGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
+    bool               executeViewportPassGraph(const RenderPipelineFrameContext& frame,
+                                                RenderStageContext&             stageCtx,
+                                                FrameContext&                    postContext);
     void               syncShadowSettings();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;

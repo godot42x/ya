@@ -613,27 +613,26 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     YA_CORE_ASSERT(_viewportRTSpec.attachments.depthAttach.has_value(),
                    "Forward viewport pass requires a depth attachment spec");
 
-    _lastTickCtx = {};
+    FrameContext postContext{};
     if (const RenderFrameData* frameData = frame.camera.frameData) {
-        _lastTickCtx.view                 = frameData->view;
-        _lastTickCtx.projection           = frameData->projection;
-        _lastTickCtx.viewProjection       = frameData->viewProjection;
-        _lastTickCtx.cameraPos            = frameData->cameraPos;
-        _lastTickCtx.bHasDirectionalLight = frameData->sceneSnapshot && frameData->sceneSnapshot->bHasDirectionalLight;
-        _lastTickCtx.directionalLight     = frameData->directionalLight;
-        _lastTickCtx.numPointLights       = frameData->numPointLights;
-        _lastTickCtx.pointLights          = frameData->pointLights;
-        _lastTickCtx.viewOwner            = frameData->viewOwner;
-        _lastTickCtx.extent               = frameData->viewportExtent;
+        postContext.view                 = frameData->view;
+        postContext.projection           = frameData->projection;
+        postContext.viewProjection       = frameData->viewProjection;
+        postContext.cameraPos            = frameData->cameraPos;
+        postContext.bHasDirectionalLight = frameData->sceneSnapshot && frameData->sceneSnapshot->bHasDirectionalLight;
+        postContext.directionalLight     = frameData->directionalLight;
+        postContext.numPointLights       = frameData->numPointLights;
+        postContext.pointLights          = frameData->pointLights;
+        postContext.viewOwner            = frameData->viewOwner;
+        postContext.extent               = frameData->viewportExtent;
     }
-    _lastTickCtx.view           = frame.camera.view;
-    _lastTickCtx.projection     = frame.camera.projection;
-    _lastTickCtx.viewProjection = frame.camera.viewProjection;
-    _lastTickCtx.cameraPos      = frame.camera.cameraPos;
-    _lastTickCtx.extent         = _viewportResources.extent;
-    _lastFrameInput     = frame;
+    postContext.view           = frame.camera.view;
+    postContext.projection     = frame.camera.projection;
+    postContext.viewProjection = frame.camera.viewProjection;
+    postContext.cameraPos      = frame.camera.cameraPos;
+    postContext.extent         = _viewportResources.extent;
 
-    [[maybe_unused]] const bool bExecuted = executeViewportPassGraph(frame, stageCtx);
+    [[maybe_unused]] const bool bExecuted = executeViewportPassGraph(frame, stageCtx, postContext);
     YA_CORE_ASSERT(bExecuted, "Forward viewport graph execution failed");
 }
 
@@ -654,7 +653,9 @@ void ForwardRenderPipeline::shutdown()
     _deleter.clear();
 }
 
-bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
+bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameContext& frame,
+                                                     RenderStageContext&             stageCtx,
+                                                     FrameContext&                    postContext)
 {
     YA_CORE_ASSERT(_graphExecutor != nullptr, "ForwardRenderPipeline graph executor is not initialized");
 
@@ -687,10 +688,10 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             .viewportRTSpec           = &_viewportRTSpec,
             .directionGizmos          = std::move(directionGizmos),
             .viewportPassContext      = &viewportPassContext,
-            .postContext              = &_lastTickCtx,
+            .postContext              = &postContext,
             .bEnableShadow            = _shadowStage && currentShadowSettings().isEnabled(),
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
-            .viewportOverlaySnapshot  = _lastFrameInput.viewportOverlaySnapshot,
+            .viewportOverlaySnapshot  = frame.viewportOverlaySnapshot,
         });
 
     RGCompiledGraph compiled{};

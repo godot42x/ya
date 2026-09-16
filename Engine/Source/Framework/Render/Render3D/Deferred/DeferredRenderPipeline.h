@@ -176,8 +176,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     EntityIdViewportPass       _entityIdPass{};
     ViewportOverlayStage::FrameInputs _currentOverlayFrameInputs{};
     DescriptorSetHandle        _currentEnvironmentLightingDescriptorSet{};
-    FrameContext               _lastTickCtx{};
-    RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
     EnvironmentLightingSceneResources _currentEnvironmentLightingTextures{};
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;

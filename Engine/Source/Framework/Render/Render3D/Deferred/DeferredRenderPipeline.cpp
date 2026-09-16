@@ -1216,14 +1216,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
     _gBufferStage->prepare(stageCtx);
 
-    _lastTickCtx = {
+    FrameContext postContext{
         .view           = frame.camera.view,
         .projection     = frame.camera.projection,
         .viewProjection = frame.camera.viewProjection,
         .cameraPos      = frame.camera.cameraPos,
         .extent         = {.width = vpW, .height = vpH},
     };
-    _lastFrameInput = frame;
     RenderGraph graph;
     DeferredFrameGraphResources graphResources{};
     _frameGraphOrchestrator.build(
@@ -1247,12 +1246,12 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .overlayInputs            = &_currentOverlayFrameInputs,
             .environmentLighting      = &_currentEnvironmentLightingTextures,
             .environmentLightingDS    = _currentEnvironmentLightingDescriptorSet,
-            .postContext              = &_lastTickCtx,
+            .postContext              = &postContext,
             .viewportExtent           = _viewportRTSpec.extent,
             .bUseSSAO                 = bUseSSAO,
             .bReverseViewportY        = _bReverseViewportY,
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
-            .viewportOverlaySnapshot  = _lastFrameInput.viewportOverlaySnapshot,
+            .viewportOverlaySnapshot  = frame.viewportOverlaySnapshot,
         });
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");

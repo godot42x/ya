@@ -12,6 +12,14 @@
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 会失败，避免重置 cursor 后覆写前一个 View 已录制命令引用的 UBO/light/shadow slices。Forward、Deferred、Shadow 资源准备均传入该 token。
 - 架构审计结论：token guard 只是迁移期护栏，不能作为最终 multi-view 方案。当前 `RenderRuntime` 持有的 pipeline/resource state、per-flight descriptor set、arena cursor 和 `_lastTickCtx` 仍混合了 persistent、submission、View 三种生命周期；下一步必须拆出 `RenderSubmissionContext` 与 `RenderViewRecordingContext`，让每个 View 拥有独立 descriptor/slice lifetime。
 
+## 2026-09-16 checkpoint：pipeline View-local graph context
+
+- Forward/Deferred pipeline 删除 `_lastTickCtx` 与 `_lastFrameInput` 两个跨调用保存槽位。
+- Forward 的 postprocess/overlay graph build 改为接收 `executeViewportPass()` 栈内构造的 `FrameContext`，当前 `frame.viewportOverlaySnapshot` 也直接从本次 View 输入传入。
+- Deferred 的 graph build 改为使用 `executeDeferredMainGraph()` 栈内构造的 `FrameContext`，不再把当前 frame input 存入 pipeline 成员。
+- 该切片只消除 pipeline 层的跨 View 临时状态，不代表 upload arena、descriptor binding 或 output 资源已经完成 View 隔离。
+- 验证：`xmake b ya-render-3d-test`、`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:DrawCandidateViewTest.*'`（14/14）、`xmake b ya-game-runtime`。
+
 ## 2026-09-16 checkpoint：View order ranges
 
 - RenderFrameData 的 View-owned draw bucket 已从 vector<RenderDrawItem> 副本迁移为 source + order：source 借用不可变 SceneFrameSnapshot 候选 vector，order 由每个 View 独立拥有。
