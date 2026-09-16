@@ -18,7 +18,10 @@
 // Builders convert to their plain args struct, so existing `child(node,
 // FBoxSlotArgs{...})` call sites keep working unchanged.
 
-#include "GUI/Layout/UILayout.h"
+#include "GUI/Layout/UIBoxLayout.h"
+#include "GUI/Layout/UICanvasLayout.h"
+#include "GUI/Layout/UIContentLayout.h"
+#include "GUI/Layout/UIOverlayLayout.h"
 
 #include <limits>
 

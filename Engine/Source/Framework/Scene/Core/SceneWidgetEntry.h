@@ -12,8 +12,8 @@
 // An entry carries an `inlineDocument` (inline UIDocument definition).
 // ============================================================================
 
+#include "GUI/Layout/UICanvasLayout.h"
 #include "GUI/Widgets/UIDocument.h"
-#include "GUI/Layout/UILayout.h"
 
 #include <cstdint>
 #include <string>

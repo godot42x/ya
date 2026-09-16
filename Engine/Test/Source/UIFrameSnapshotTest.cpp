@@ -7,6 +7,7 @@
 #include "Core/Profiling/Profiling.h"
 
 #include "GUI/Widgets/UIFrameSnapshot.h"
+#include "GUI/Layout/UICanvasLayout.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
 #include "GUI/Binding/Reactive.h"
 #include "GUI/Widgets/Style.h"

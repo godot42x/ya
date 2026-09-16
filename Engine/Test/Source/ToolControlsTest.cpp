@@ -7,6 +7,7 @@
 #include "GUI/Widgets/Theme.h"
 #include "Core/Event.h"
 #include "Core/KeyCode.h"
+#include "GUI/Layout/UIOverlayLayout.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Menu.h"

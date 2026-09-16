@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GUI/Layout/UILayout.h"
+#include "GUI/Layout/UIBoxLayout.h"
 #include "GUI/Widgets/UIElement.h"
 
 namespace ya

@@ -1,8 +1,8 @@
 #pragma once
 
+#include "GUI/Layout/UISlot.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetTree.h"
-#include "GUI/Layout/UILayout.h"
 
 #include <functional>
 #include <string>

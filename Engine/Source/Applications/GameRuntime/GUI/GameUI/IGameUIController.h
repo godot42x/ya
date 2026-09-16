@@ -12,9 +12,9 @@
 // multi-world or layered UI policies.
 // ============================================================================
 
+#include "GUI/Layout/UICanvasLayout.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetAttachment.h"
-#include "GUI/Layout/UILayout.h"
 
 #include <memory>
 

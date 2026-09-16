@@ -18,7 +18,7 @@
 // ============================================================================
 
 #include "GUI/Binding/Reactive.h"
-#include "GUI/Layout/UILayout.h"
+#include "GUI/Layout/UICanvasLayout.h"
 #include "GUI/Widgets/GuiFrameInspector.h"
 #include "GUI/Widgets/GuiTextureCatalog.h"
 #include "GUI/Widgets/UIElement.h"

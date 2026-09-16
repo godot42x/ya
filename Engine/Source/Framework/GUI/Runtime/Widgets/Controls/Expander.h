@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GUI/Layout/UILayout.h"
+#include "GUI/Layout/UIBoxLayout.h"
 #include "GUI/Widgets/Brush.h"
 #include "GUI/Widgets/Controls/DisclosureChrome.h"
 #include "GUI/Widgets/Theme.h"

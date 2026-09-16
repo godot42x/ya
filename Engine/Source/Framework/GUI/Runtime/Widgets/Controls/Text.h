@@ -1,7 +1,7 @@
 #pragma once
 
 #include "GUI/Binding/Reactive.h"
-#include "GUI/Layout/UILayout.h"
+#include "GUI/Layout/UILayoutTypes.h"
 #include "GUI/Widgets/Style.h"
 #include "GUI/Widgets/Theme.h"
 #include "GUI/Widgets/UIElement.h"

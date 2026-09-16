@@ -17,16 +17,14 @@
 // (FBoxSlotArgs, FCanvasSlotArgs, ...) are the per-layout parameter shapes.
 // ============================================================================
 
-#include "GUI/Layout/UILayout.h"
+#include "GUI/Layout/UICanvasLayout.h"
+#include "GUI/Layout/UILayoutTypes.h"
 
 #include <glm/glm.hpp>
 #include <limits>
 
 namespace ya
 {
-
-// EWidgetSizeMode is declared in UILayout.h (included above) so that UILayout
-// itself can use it for per-axis size resolution.
 
 /// Available space a parent offers a child during measure (path-A contract).
 /// `min`/`max` are in logical pixels; `max` defaults to +inf so a child may

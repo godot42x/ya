@@ -2,7 +2,7 @@
 
 #include "Core/Log.h"
 
-#include "GUI/Layout/UILayout.h"
+#include "GUI/Layout/UISlot.h"
 #include "GUI/Widgets/CompoundWidget.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/WidgetTree.h"

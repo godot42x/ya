@@ -2,7 +2,7 @@
 
 #include "Core/Log.h"
 #include "GUI/Declarative/Build.h"
-#include "GUI/Layout/UILayout.h"
+#include "GUI/Layout/UILayoutTypes.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/Text.h"
