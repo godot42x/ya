@@ -80,9 +80,9 @@ struct YA_GUI_API UIText : public UIElement, public UIStyledWidget<UIText, FText
     /// re-measure while fixed-size text only repaints.
     void setFontFamily(const std::string& value)
     {
-        if (resolvedStyle().fontFamily == value) {
-            return;
-        }
+        // No local "unchanged?" check: setStyleField already compares the
+        // serialized field and returns early, and asking resolvedStyle() here
+        // would touch the resolve cache from a plain setter.
         setStyleField("fontFamily", value,
                       isAutoSizeActive() ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
     }

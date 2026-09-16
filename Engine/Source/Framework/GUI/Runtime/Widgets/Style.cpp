@@ -281,7 +281,11 @@ namespace
 {
     // Name-based, not a per-type table. Do not treat generic "width" as
     // layout: FScrollBarStyle.width is overlay paint thickness.
-    return field == "fontSize" || field == "padding" || field == "minSize";
+    // "fontFamily" belongs here for the same reason as "fontSize": a family
+    // carries its own METRICS, so changing it moves where the glyphs land and an
+    // AutoSize text has to re-measure. Classifying it as paint-only would let a
+    // document-authored family draw at the new face inside the old measurement.
+    return field == "fontSize" || field == "fontFamily" || field == "padding" || field == "minSize";
 }
 
 } // namespace

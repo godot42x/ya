@@ -1872,6 +1872,14 @@ TEST(UIFrameSnapshotTest, StyleFieldImpactCatalogClassifiesPaintLayoutAndResourc
 
     const FStyleFieldImpact minSize = lookupStyleFieldImpact<FFloatingWindowStyle>("minSize");
     EXPECT_TRUE(minSize.bLayout);
+
+    // A font family carries its own metrics, so it has to classify as layout the
+    // same way fontSize does. Paint-only would let a document-authored family
+    // draw in the new face inside the old measurement.
+    const FStyleFieldImpact fontFamily = lookupStyleFieldImpact<FTextStyle>("fontFamily");
+    EXPECT_TRUE(fontFamily.bPaint);
+    EXPECT_TRUE(fontFamily.bLayout);
+    EXPECT_FALSE(fontFamily.bResource);
 }
 
 TEST(UIFrameSnapshotTest, StylePatchImpactUnionsFieldMetadata)
