@@ -477,7 +477,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
                     .deltaTime = dt,
                     .shadowSettings = &app.getRenderServices().getShadowSettings(),
                 },
-                *sceneSnapshot,
+                sceneSnapshot,
                 app._renderState->frameDataPerFlight[flightIndex]);
         }
     }

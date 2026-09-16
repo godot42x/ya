@@ -7,6 +7,7 @@
 
 #include <glm/glm.hpp>
 #include <array>
+#include <memory>
 #include <span>
 #include <vector>
 
@@ -233,11 +234,12 @@ struct SceneFrameSnapshot
 };
 
 /// All data a render pipeline needs for one camera view in one frame.
-/// Scene-owned data stays grouped in `sceneSnapshot`; camera, sorting and
-/// shadow preparation remain directly on this per-view packet.
+/// The immutable Scene snapshot is shared by all views of the same scene;
+/// camera-dependent draw ordering remains in the per-view buckets below.
 struct RenderFrameData
 {
-    SceneFrameSnapshot                                          sceneSnapshot;
+    std::shared_ptr<const SceneFrameSnapshot>                   sceneSnapshot;
+    RenderMeshClassDrawBuckets                                  drawBuckets;
     FrameContext::DirectionalLightData                          directionalLight;
     uint32_t                                                   numPointLights = 0;
     std::array<FrameContext::PointLightData, MAX_POINT_LIGHTS> pointLights;
@@ -260,7 +262,8 @@ struct RenderFrameData
     // ═══════════════════════════════════════════════════════════════
     void clear()
     {
-        sceneSnapshot.clearScene();
+        sceneSnapshot.reset();
+        drawBuckets.clear();
         directionalLight = {};
         numPointLights = 0;
         pointLights = {};
@@ -268,7 +271,7 @@ struct RenderFrameData
 
     [[nodiscard]] size_t totalDrawCount() const
     {
-        return sceneSnapshot.drawBuckets.totalDrawCount();
+        return drawBuckets.totalDrawCount();
     }
 };
 

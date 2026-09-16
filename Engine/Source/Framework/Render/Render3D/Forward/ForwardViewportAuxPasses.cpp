@@ -288,8 +288,8 @@ void ForwardViewportAuxPasses::drawSimple(const DrawContext& drawCtx)
 {
     const auto& ctx          = drawCtx.stageCtx;
     const auto& fd           = *ctx.frameData;
-    const auto& staticItems  = fd.sceneSnapshot.drawBuckets.staticMeshes.simpleDrawItems;
-    const auto& skinnedItems = fd.sceneSnapshot.drawBuckets.skinnedMeshes.simpleDrawItems;
+    const auto& staticItems  = fd.drawBuckets.staticMeshes.simpleDrawItems;
+    const auto& skinnedItems = fd.drawBuckets.skinnedMeshes.simpleDrawItems;
     auto*       cmdBuf       = ctx.cmdBuf;
 
     if (staticItems.empty() && skinnedItems.empty()) return;

@@ -470,8 +470,8 @@ void ForwardViewportLitPasses::preparePBRMaterials(const RenderFrameData& fd)
         }
     };
 
-    prepareBucket(fd.sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems);
-    prepareBucket(fd.sceneSnapshot.drawBuckets.skinnedMeshes.pbrDrawItems);
+    prepareBucket(fd.drawBuckets.staticMeshes.pbrDrawItems);
+    prepareBucket(fd.drawBuckets.skinnedMeshes.pbrDrawItems);
 }
 
 void ForwardViewportLitPasses::preparePhongMaterials(const RenderFrameData& fd)
@@ -515,16 +515,16 @@ void ForwardViewportLitPasses::preparePhongMaterials(const RenderFrameData& fd)
         }
     };
 
-    prepareBucket(fd.sceneSnapshot.drawBuckets.staticMeshes.phongDrawItems);
-    prepareBucket(fd.sceneSnapshot.drawBuckets.skinnedMeshes.phongDrawItems);
+    prepareBucket(fd.drawBuckets.staticMeshes.phongDrawItems);
+    prepareBucket(fd.drawBuckets.skinnedMeshes.phongDrawItems);
 }
 
 void ForwardViewportLitPasses::drawPBR(const DrawContext& drawCtx)
 {
     const auto& ctx          = drawCtx.stageCtx;
     const auto& fd           = *ctx.frameData;
-    const auto& staticItems  = fd.sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems;
-    const auto& skinnedItems = fd.sceneSnapshot.drawBuckets.skinnedMeshes.pbrDrawItems;
+    const auto& staticItems  = fd.drawBuckets.staticMeshes.pbrDrawItems;
+    const auto& skinnedItems = fd.drawBuckets.skinnedMeshes.pbrDrawItems;
     auto*       cmdBuf       = ctx.cmdBuf;
 
     if (staticItems.empty() && skinnedItems.empty()) {
@@ -588,8 +588,8 @@ void ForwardViewportLitPasses::drawPhong(const DrawContext& drawCtx)
 {
     const auto& ctx          = drawCtx.stageCtx;
     const auto& fd           = *ctx.frameData;
-    const auto& staticItems  = fd.sceneSnapshot.drawBuckets.staticMeshes.phongDrawItems;
-    const auto& skinnedItems = fd.sceneSnapshot.drawBuckets.skinnedMeshes.phongDrawItems;
+    const auto& staticItems  = fd.drawBuckets.staticMeshes.phongDrawItems;
+    const auto& skinnedItems = fd.drawBuckets.skinnedMeshes.phongDrawItems;
     auto*       cmdBuf       = ctx.cmdBuf;
 
     if (staticItems.empty() && skinnedItems.empty()) {
@@ -690,7 +690,7 @@ void ForwardViewportLitPasses::fillPBRLightFromFrameData(const RenderFrameData& 
 {
     outLight              = {};
     outLight.hasDirLight  = false;
-    if (fd.sceneSnapshot.bHasDirectionalLight) {
+    if (fd.sceneSnapshot && fd.sceneSnapshot->bHasDirectionalLight) {
         outLight.dirLight.dir          = fd.directionalLight.direction;
         outLight.dirLight.color        = fd.directionalLight.color;
         outLight.dirLight.intensity    = fd.directionalLight.intensity;
@@ -720,8 +720,8 @@ void ForwardViewportLitPasses::fillPBRLightFromFrameData(const RenderFrameData& 
 void ForwardViewportLitPasses::fillPhongLightFromFrameData(const RenderFrameData& fd,
                                                            PhongLightUBO& outLight)
 {
-    outLight.hasDirectionalLight = fd.sceneSnapshot.bHasDirectionalLight;
-    if (fd.sceneSnapshot.bHasDirectionalLight) {
+    outLight.hasDirectionalLight = fd.sceneSnapshot && fd.sceneSnapshot->bHasDirectionalLight;
+    if (fd.sceneSnapshot && fd.sceneSnapshot->bHasDirectionalLight) {
         outLight.dirLight.direction    = fd.directionalLight.direction;
         outLight.dirLight.color        = fd.directionalLight.color;
         outLight.dirLight.intensity    = fd.directionalLight.intensity;

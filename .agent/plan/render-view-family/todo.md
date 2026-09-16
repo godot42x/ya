@@ -33,6 +33,10 @@
 
 - [x] 扩展 RenderRuntime::FrameInput 为 SceneRenderPlanInput，并在录制前校验 plan/task/snapshot 归属。
 - [x] 为 FrameUploadArena 增加 frame token 防护，拒绝同一 submission 内重复 rewind flight backing。
+- [x] 原子迁移 RenderFrameData：Scene snapshot 改为 shared_ptr<const SceneFrameSnapshot>，并使用 View-owned draw bucket 副本承载 camera-dependent sort；禁止旧 sortDrawItems() 修改共享 snapshot。
+- [ ] 将 View-owned draw bucket 副本替换为 index/order/packet ranges，消除 RenderDrawItem 的重复拷贝。
+- [ ] 明确并实现同 Scene 复用表：snapshot/candidates/skinning/light sources 共享；visibility/sort/shadow/targets 按 View 生成。
+- [ ] 让同一逻辑帧的多个 surface/window 共用一个 SceneRenderScheduler/SceneRenderPlan，避免按窗口重复抽取同一 Scene。
 - [ ] 将 RenderRuntime 持久状态、RenderSubmissionContext、RenderViewRecordingContext 分离；明确哪些资源属于 device/runtime、submission、View。
 - [ ] 将 per-flight descriptor binding 与 upload slices 从单一 pipeline state 改为 submission/View-owned，允许同一 submission 安全录制多个 View。
 - [ ] 增加同一 submission 多 View 的 GPU data identity/lifetime 验证，证明 View A 的 descriptor/slice 不会被 View B 覆写。
@@ -42,6 +46,13 @@
 - [ ] 验证一个 View 到多个 Surface、多个 View 到一个 Surface。
 - [ ] 验证 surface acquire/present/recreate 不进入 View pipeline。
 - [ ] 只有在 trace 证明必要时再提出 submit 拆分。
+
+### R2 reuse gates
+
+- [ ] GameRuntime 不再提交固定 sceneRevision = 0；改为真实 Scene content generation。
+- [ ] 禁止 prepareView() 对共享 Scene snapshot 做按值复制或原地排序。
+- [ ] 为相同 Scene 的双 View 增加 snapshot pointer/index identity 验证。
+- [ ] 为不同 camera 的双 View 增加 draw-order / shadow-preparation 非共享验证。
 
 ## 设计评估门禁
 

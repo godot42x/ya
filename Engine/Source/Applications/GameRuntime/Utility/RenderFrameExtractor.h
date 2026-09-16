@@ -51,7 +51,7 @@ struct RenderFrameExtractor
     /// Build the pipeline-facing view packet from one immutable Scene snapshot.
     /// Camera-dependent shadow preparation and draw sorting happen here.
     static void prepareView(const ViewPrepareInput& input,
-                            const SceneFrameSnapshot& sceneSnapshot,
+                            std::shared_ptr<const SceneFrameSnapshot> sceneSnapshot,
                             RenderFrameData& outFrame);
 
   private:

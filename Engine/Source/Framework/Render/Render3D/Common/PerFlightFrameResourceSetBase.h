@@ -236,7 +236,8 @@ template <typename Derived>
 bool PerFlightFrameResourceSetBase<Derived>::prepareSkinning(const RenderStageContext& ctx)
 {
     YA_CORE_ASSERT(ctx.frameData != nullptr, "{} skinning prepare requires frame data", _resourceTag);
-    const auto& palettes = ctx.frameData->sceneSnapshot.skinningPalettes;
+    YA_CORE_ASSERT(ctx.frameData->sceneSnapshot != nullptr, "{} skinning prepare requires a scene snapshot", _resourceTag);
+    const auto& palettes = ctx.frameData->sceneSnapshot->skinningPalettes;
     if (palettes.size() > std::numeric_limits<uint32_t>::max()) {
         YA_CORE_ERROR("{} skinning palette count exceeds uint32 range", _resourceTag);
         return false;

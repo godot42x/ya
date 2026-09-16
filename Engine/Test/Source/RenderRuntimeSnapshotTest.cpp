@@ -75,26 +75,29 @@ TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
 
     RenderFrameData frame;
     frame.view = glm::translate(glm::mat4(1.0f), glm::vec3(4.0f, 0.0f, 0.0f));
-    frame.sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems.resize(1);
-    frame.sceneSnapshot.skinningPalettes.resize(1);
+    auto sceneSnapshot = std::make_shared<SceneFrameSnapshot>();
+    sceneSnapshot->skinningPalettes.resize(1);
+    frame.sceneSnapshot = sceneSnapshot;
+    frame.drawBuckets.staticMeshes.pbrDrawItems.resize(1);
 
-    SceneFrameSnapshot& sceneSnapshot = frame.sceneSnapshot;
-    EXPECT_EQ(sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems.size(), 1u);
-    EXPECT_EQ(sceneSnapshot.skinningPalettes.size(), 1u);
+    EXPECT_EQ(frame.sceneSnapshot.get(), sceneSnapshot.get());
+    EXPECT_EQ(frame.drawBuckets.staticMeshes.pbrDrawItems.size(), 1u);
+    EXPECT_EQ(frame.sceneSnapshot->skinningPalettes.size(), 1u);
     EXPECT_EQ(frame.view[3][0], 4.0f);
-    sceneSnapshot.bHasDirectionalLight = true;
-    sceneSnapshot.directionalLightSource.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-    sceneSnapshot.pointLightSourceCount = 1;
-    sceneSnapshot.pointLightSources[0].position = glm::vec3(2.0f, 3.0f, 4.0f);
-    EXPECT_EQ(sceneSnapshot.directionalLightSource.direction, glm::vec3(0.0f, -1.0f, 0.0f));
-    EXPECT_EQ(sceneSnapshot.pointLightSources[0].position, glm::vec3(2.0f, 3.0f, 4.0f));
+    EXPECT_EQ(frame.sceneSnapshot->directionalLightSource.direction, glm::vec3(0.0f, 0.0f, -1.0f));
 
-    sceneSnapshot.clearScene();
-    EXPECT_TRUE(frame.sceneSnapshot.drawBuckets.staticMeshes.pbrDrawItems.empty());
-    EXPECT_TRUE(frame.sceneSnapshot.skinningPalettes.empty());
-    EXPECT_FALSE(sceneSnapshot.bHasDirectionalLight);
-    EXPECT_EQ(sceneSnapshot.pointLightSourceCount, 0u);
+    frame.clear();
+    EXPECT_FALSE(frame.sceneSnapshot);
+    EXPECT_TRUE(frame.drawBuckets.staticMeshes.pbrDrawItems.empty());
     EXPECT_EQ(frame.view[3][0], 4.0f);
+
+    auto sharedSnapshot = std::make_shared<const SceneFrameSnapshot>();
+    RenderFrameData viewA;
+    RenderFrameData viewB;
+    viewA.sceneSnapshot = sharedSnapshot;
+    viewB.sceneSnapshot = sharedSnapshot;
+    EXPECT_EQ(viewA.sceneSnapshot.get(), viewB.sceneSnapshot.get());
+    EXPECT_EQ(viewA.sceneSnapshot.use_count(), 3);
 }
 
 TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)

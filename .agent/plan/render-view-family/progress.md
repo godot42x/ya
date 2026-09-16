@@ -3,14 +3,20 @@
 ## 当前状态
 
 - 阶段：R0 基线审计已完成；R1 已完成 SceneRenderRequest/SceneRenderPlan 的最小 frame-local 调度切片、真实 extractor 的显式 Scene/View 分层，以及 GameRuntime 单 View 的 scheduler 接入；尚未让 RenderRuntime 接管多 View 录制。
-- 已确认：RenderFrameInputs.h 已有四组输入；RenderFrameData 与 RenderFrameExtractor 仍混合 Scene 级和 View 级数据；RenderRuntime 仍按单 View、单 active Scene 记录。
+- 已确认：RenderFrameInputs.h 已有四组输入；RenderRuntime 仍按单 View、单 active Scene 记录，但 RenderFrameData 的 Scene snapshot owner 已与 View-owned draw buckets 分离。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
-- 本轮移除了 RenderRuntimeSnapshotTest 中依赖读取源码文本和 `find()` 的架构时序回归；保留运行时可执行的输入契约、scheduler 去重、revision 和 snapshot 索引校验。未修改运行时实现。
+- 本轮移除了 RenderRuntimeSnapshotTest 中依赖读取源码文本和 `find()` 的架构时序回归；保留运行时可执行的输入契约、scheduler 去重、revision 和 snapshot 索引校验，并完成同 Scene shared snapshot 的第一段运行时迁移。
 - 当前 checkpoint：SceneFrameSnapshot 的灯光数据已收敛为 view-independent source data；directional cascade/shadow matrices 与完整 RHI light packet 仅在 per-view RenderFrameData 中生成。
-- 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是组合 `sceneSnapshot`；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 Scene draw buckets、skinning palettes 和 light presence。
+- 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是持有 shared snapshot 并独立保存 View-owned draw buckets；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 View buckets、shared skinning palettes 和 light presence。
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan/task 传入，Runtime 在 command recording 前验证 snapshot 索引和 SceneId/revision 归属。当前仍只录制首个单 View，未引入多 View output 或额外 submit。
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 会失败，避免重置 cursor 后覆写前一个 View 已录制命令引用的 UBO/light/shadow slices。Forward、Deferred、Shadow 资源准备均传入该 token。
 - 架构审计结论：token guard 只是迁移期护栏，不能作为最终 multi-view 方案。当前 `RenderRuntime` 持有的 pipeline/resource state、per-flight descriptor set、arena cursor 和 `_lastTickCtx` 仍混合了 persistent、submission、View 三种生命周期；下一步必须拆出 `RenderSubmissionContext` 与 `RenderViewRecordingContext`，让每个 View 拥有独立 descriptor/slice lifetime。
+
+## 同 Scene View 复用审计
+
+SceneRenderPlan 已按 SceneId + sceneRevision 去重并持有 shared_ptr<const SceneFrameSnapshot>。本轮已将 RenderFrameData 改为共享 snapshot owner；RenderFrameExtractor::prepareView() 不再按值复制 snapshot，而是把 camera-dependent sort 写入 View-owned draw bucket 副本。当前仍有 RenderDrawItem 副本，后续再迁移为 index/order ranges。
+
+已确认的复用边界：transforms、mesh/material/entity 引用、原始灯光、skinning palette 和资源句柄可跨同 Scene 多 View 共享；camera 矩阵、viewport、visibility、LOD、sort order、shadow/cascade、View targets 和 GPU bindings 必须按 View 独立。shared snapshot 与 View-owned draw order 已作为一个原子迁移完成，下一步是消除 View-owned draw bucket 的 RenderDrawItem 拷贝。另一个边界是 scheduler scope：同一逻辑帧的多个 surface/window 必须共用一个 SceneRenderScheduler/SceneRenderPlan，否则会重复抽取同一 Scene。GameRuntime 当前 sceneRevision = 0 仍为迁移期占位，不能作为长期缓存 key。
 
 ## R0 真实调用链
 

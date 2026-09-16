@@ -174,7 +174,7 @@ bool PointShadowIndirectRenderer::collectBatches(const BasicShadowFramePayload& 
             pending[it->second].items.push_back(item);
         }
     };
-    const auto& s = payload.frameData->sceneSnapshot.drawBuckets.staticMeshes;
+    const auto& s = payload.frameData->drawBuckets.staticMeshes;
     pushItems(s.pbrDrawItems);
     pushItems(s.phongDrawItems);
     pushItems(s.unlitDrawItems);

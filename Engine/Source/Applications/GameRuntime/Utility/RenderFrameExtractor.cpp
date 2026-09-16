@@ -128,14 +128,19 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
 }
 
 void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
-                                       const SceneFrameSnapshot& sceneSnapshot,
+                                       std::shared_ptr<const SceneFrameSnapshot> sceneSnapshot,
                                        RenderFrameData& outFrame)
 {
     outFrame.clear();
-    outFrame.sceneSnapshot = sceneSnapshot;
-    outFrame.numPointLights = sceneSnapshot.pointLightSourceCount;
-    for (uint32_t index = 0; index < sceneSnapshot.pointLightSourceCount; ++index) {
-        const auto& source = sceneSnapshot.pointLightSources[index];
+    if (!sceneSnapshot) {
+        return;
+    }
+
+    outFrame.sceneSnapshot = std::move(sceneSnapshot);
+    outFrame.drawBuckets   = outFrame.sceneSnapshot->drawBuckets;
+    outFrame.numPointLights = outFrame.sceneSnapshot->pointLightSourceCount;
+    for (uint32_t index = 0; index < outFrame.sceneSnapshot->pointLightSourceCount; ++index) {
+        const auto& source = outFrame.sceneSnapshot->pointLightSources[index];
         auto&       target = outFrame.pointLights[index];
         target.position    = source.position;
         target.type        = source.type;
@@ -150,9 +155,9 @@ void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
         target.nearPlane   = source.nearPlane;
         target.farPlane    = source.farPlane;
     }
-    outFrame.directionalLight.direction = sceneSnapshot.directionalLightSource.direction;
-    outFrame.directionalLight.color     = sceneSnapshot.directionalLightSource.color;
-    outFrame.directionalLight.intensity = sceneSnapshot.directionalLightSource.intensity;
+    outFrame.directionalLight.direction = outFrame.sceneSnapshot->directionalLightSource.direction;
+    outFrame.directionalLight.color     = outFrame.sceneSnapshot->directionalLightSource.color;
+    outFrame.directionalLight.intensity = outFrame.sceneSnapshot->directionalLightSource.intensity;
     extractCamera(input, outFrame);
     prepareViewLights(input, outFrame);
     sortDrawItems(outFrame.cameraPos, outFrame);
@@ -225,7 +230,7 @@ void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneFrameSna
 
 void RenderFrameExtractor::prepareViewLights(const ViewPrepareInput& input, RenderFrameData& out)
 {
-    if (!out.sceneSnapshot.bHasDirectionalLight) {
+    if (!out.sceneSnapshot || !out.sceneSnapshot->bHasDirectionalLight) {
         return;
     }
 
@@ -468,8 +473,8 @@ void RenderFrameExtractor::sortDrawItems(const glm::vec3& cameraPos, RenderFrame
         sortFallbackBucket(buckets.fallbackDrawItems);
     };
 
-    sortBuckets(out.sceneSnapshot.drawBuckets.staticMeshes);
-    sortBuckets(out.sceneSnapshot.drawBuckets.skinnedMeshes);
+    sortBuckets(out.drawBuckets.staticMeshes);
+    sortBuckets(out.drawBuckets.skinnedMeshes);
 }
 
 } // namespace ya

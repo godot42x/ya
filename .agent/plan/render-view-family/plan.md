@@ -1,7 +1,7 @@
 # Render View Family 与 GUI/GameUI 渲染边界重构计划
 
 > 建立日期：2026-09-12
-> 状态：规划中，尚未开始本计划的代码 checkpoint
+> 状态：R2 进行中；R1 单 View 调度与同 Scene snapshot 共享已落地，下一 checkpoint 迁移 View-owned draw bucket 为 index/order ranges。
 
 ## 1. 主线选择
 
@@ -73,11 +73,74 @@ RenderViewInput 至少包含 ViewId、SceneId、owner 计算的 view/projection/
 
 对象语义必须分开：Camera/View 是一次 world 渲染；ViewportWidget 是显示 View 输出的 GUI 矩形；Surface 是 OS window 的 present 目标；Swapchain 是 Surface 的显示缓冲；ViewCompose 写 View RT；DisplayCompose 把一个或多个 View/preview/chrome image 排到 Surface；Present 提交 Surface。一个 View 可被多个 Surface 显示，一个 Surface 可显示多个 View。
 
+### 3.2 同一 Scene 的 View / Frame 复用策略
+
+同一帧、同一 SceneId + sceneRevision 的多个 View 必须共享同一个不可变
+SceneFrameSnapshot 身份，而不是把 snapshot 按值复制进每个 RenderFrameData。
+当前 RenderFrameData::sceneSnapshot 仍是值成员，RenderFrameExtractor::prepareView()
+会执行 outFrame.sceneSnapshot = sceneSnapshot 并随后原地排序；这会同时造成
+深拷贝和每个 View 重复排序。目标结构是：
+
+    SceneRenderPlan.snapshots[i]
+      -> shared_ptr<const SceneFrameSnapshot>
+           -> ViewPreparation A: shared snapshot + A-only derived data
+           -> ViewPreparation B: shared snapshot + B-only derived data
+
+复用边界固定如下：
+
+| 数据 | 同 Scene 多 View 策略 | 原因 |
+| --- | --- | --- |
+| transforms、mesh/material/entity 引用、原始灯光、skinning palette、资源句柄 | 直接共享 SceneFrameSnapshot | 与相机无关，禁止 View 原地修改 |
+| material/mesh 的稳定候选分桶 | 共享；必要时在 snapshot 构建阶段预计算 | 避免每个 View 重建相同候选集合 |
+| frustum visibility、LOD、camera distance、透明排序、View draw order | 每个 View 生成 | 依赖 camera / viewport / render flags |
+| directional cascade、point shadow view、shadow fitting | 每个 View 生成；结果只写入 View preparation | 阴影投影依赖 camera 和 shadow settings |
+| shader light packet | 每个 View 生成 upload slice；源数据从 snapshot 读取 | GPU packet 含 View-specific shadow 矩阵 |
+| Render target、GBuffer、postprocess、entity-id、overlay | 每个 View 独立 | attachment 和输出生命周期不同 |
+| 同一个 View 在多个 Surface 显示 | 复用同一个 View output / UI snapshot | Surface 只是 display/present 投影 |
+
+“共享 snapshot”与“View-owned draw order”必须作为一个原子迁移目标，不能
+先把 RenderFrameData::sceneSnapshot 改成 shared_ptr、再让旧的
+sortDrawItems() 继续修改 snapshot。落地时 RenderFrameData 持有
+shared_ptr<const SceneFrameSnapshot>，同时持有 View-owned 的 visibility /
+order / packet ranges；pipeline 消费者通过 View order 访问 snapshot 中的
+候选项。当前第一阶段允许使用 View-owned draw bucket 副本来保持现有
+消费者接口和渲染顺序，随后必须替换为 index/order ranges，消除
+RenderDrawItem 的重复拷贝。SceneFrameSnapshot 中的 sortKey 和可变 vector
+顺序必须删除、冻结或彻底改成候选数据语义。不得通过共享可变 vector、修改
+snapshot 内的 sortKey 或复用同一 View descriptor 来“节省拷贝”。
+
+同一逻辑帧的多个 surface/window 必须在同一个 SceneRenderScheduler 中提交
+并 seal，才能命中 SceneId + sceneRevision 去重。Scheduler 不能按每个 OS
+window 或每个 RenderRuntime 调用分别创建，否则同一 Scene 会被重复抽取。
+只有独立帧时钟或明确的跨线程隔离场景，才允许使用不同 plan。
+
+可选缓存只能在 profile 证明后加入：
+
+- 相同 SceneId + sceneRevision + ViewPreparationKey 可复用完整 View preparation；
+- 相同 frustum / render flags 可复用 visibility/order；
+- 相同 shadow camera/settings 可复用 shadow preparation。
+
+缓存 key 必须包含 scene revision、camera/view-projection、viewport extent、
+render flags、shadow/settings revision 和 resource generation；不能只按 SceneId
+缓存。当前 GameRuntime 提交的 sceneRevision = 0 仍是迁移期占位，接入多个
+editor/preview View 前必须由 Scene owner 提供真实递增 revision，或提供等价的
+frame-local content generation。
+
 ## 4. 分阶段实施
 
 每个 checkpoint 只有一个可验收目标；代码、测试、progress.md 与计划变更同一提交。禁止用目录移动、空 registry、兼容 facade 或只写文档冒充完成。
 
 ### 4.0 GPU submission state split (R2 prerequisite)
+
+本切片的真实迁移顺序固定为：
+
+1. 以一个原子迁移改造 RenderFrameData：引用共享 SceneFrameSnapshot，同时引入 View-owned draw buckets；不再按值复制或原地排序 Scene snapshot。下一小切片再把 draw buckets 替换为 index/order/packet ranges。
+2. Forward 的 resource set 提供 beginSubmission / beginView 语义：layout 和 pipeline 资源持久化，upload allocation、descriptor binding、skinning buffer 和 View output 由 submission/View 持有。
+3. RenderRuntime 保存 submission lifetime 到 submit/fence 完成；不能让 transient arena、descriptor pool 或 graph-exported image 只活到 renderFrame() 返回。
+4. pipeline 的 recordView 只消费显式 View context，不再写 _lastTickCtx、_lastFrameInput 或单一 current binding。
+5. 通过 View A/B identity 测试确认：B 的 allocation、descriptor write、output publish 不改变 A；同一 Scene 的 A/B 仍指向同一个 snapshot owner。
+
+这一切片不改变 Forward/Deferred 的 pass topology，也不引入新的 World 抽象；Deferred、Shadow、EntityId、Debug 和 PostProcess 在 Forward 方案验证后按同一生命周期规则迁移。
 
 `RenderRuntime` 的持久对象不能同时充当一次 submission 和一个 View 的可变状态。后续 R2 必须按以下生命周期拆开：
 

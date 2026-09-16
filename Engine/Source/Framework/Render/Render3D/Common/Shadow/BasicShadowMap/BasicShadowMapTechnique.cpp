@@ -182,7 +182,7 @@ BasicShadowFramePayload BasicShadowMapTechnique::buildFramePayload(uint32_t flig
         .frameUBO    = FrameUBO{
             .directionalLightMatrix = frameData.directionalLight.viewProjection,
             .numPointLights         = pointLightCount,
-            .hasDirectionalLight    = frameData.sceneSnapshot.bHasDirectionalLight ? 1u : 0u,
+            .hasDirectionalLight    = frameData.sceneSnapshot && frameData.sceneSnapshot->bHasDirectionalLight ? 1u : 0u,
         },
         .pointLightCount = pointLightCount,
     };

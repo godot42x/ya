@@ -180,7 +180,8 @@ bool ShadowFrameResources::prepare(const BasicShadowFramePayload& payload)
         return false;
     }
     if (!_uploadArena->beginFlight(payload.flightIndex, payload.frameIndex) ||
-        !ensureSkinningCapacity(static_cast<uint32_t>(payload.frameData->sceneSnapshot.skinningPalettes.size()))) {
+        !payload.frameData->sceneSnapshot ||
+        !ensureSkinningCapacity(static_cast<uint32_t>(payload.frameData->sceneSnapshot->skinningPalettes.size()))) {
         return false;
     }
 
@@ -258,7 +259,7 @@ bool ShadowFrameResources::prepare(const BasicShadowFramePayload& payload)
         next.pointFaces[faceGlobalIndex] = slice;
     }
 
-    const auto& palettes = payload.frameData->sceneSnapshot.skinningPalettes;
+    const auto& palettes = payload.frameData->sceneSnapshot->skinningPalettes;
     auto&       skinning = next.skinningBuffer;
     if (!palettes.empty()) {
         const uint64_t bytes = static_cast<uint64_t>(palettes.size()) * sizeof(RenderSkinningPalette);
