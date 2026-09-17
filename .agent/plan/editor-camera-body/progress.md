@@ -28,7 +28,12 @@ Landed (see `feature_matrix.json` for the per-capability state):
 Verified:
 
 - `xmake b ya-render-3d ya-scene-3d ya-resource-runtime ya-resource-core ya-render-ecs-adapters ya-game-runtime ya-game-editor ya-testing` — all build.
-- `ya-testing --gtest_filter='SceneSerializerTest.*:EditorHierarchyOpsTest.*:DeferredRenderPipelineTest.*:ViewPassResourcesTest.*:LinkageFrameworkTest.*:EditorPropertyGraphTest.*:SceneNodeLifecycleTest.*'` — 62 ran, 60 passed, 2 failed.
+- `ya-testing --gtest_filter='LinkageFrameworkTest.*:SceneSerializerTest.*:EditorHierarchyOpsTest.*:DeferredRenderPipelineTest.*:ViewPassResourcesTest.*:SceneNodeLifecycleTest.*'` — 29 ran, 29 passed.
+- With `EditorPropertyGraphTest.*` and `ToolControlsTest.*` included: 133 ran, 129 passed, 4 failed (all four are the pre-existing failures listed below).
+- `LinkageFrameworkTest` covers the sweep path (`CameraComponentGetsGeneratedBodyCompanion`
+  adds the component before the scene is activated), host-mesh coexistence, and
+  `ClonedCameraRebuildsItsOwnBodyCompanion` (a clone carries no companion and the
+  manager rebuilds it).
 - The 2 failures (`EditorPropertyGraphTest.AutoPropertySectionAssetPathCommitBrowseAndUndo`,
   `EditorPropertyGraphTest.TextureAssetRowShowsRetainedPreview`) are pre-existing
   and unrelated to this slice.

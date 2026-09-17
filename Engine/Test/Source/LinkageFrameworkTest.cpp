@@ -280,6 +280,55 @@ TEST(LinkageFrameworkTest, CameraCompanionLeavesHostMeshAlone)
     framework.shutdown();
 }
 
+// A cloned scene skips generated entities (companions are not authored
+// content), so the body has to be rebuilt for the camera in the copy rather
+// than carried over. This is the clone half of the companion boundary.
+TEST(LinkageFrameworkTest, ClonedCameraRebuildsItsOwnBodyCompanion)
+{
+    SceneManager sceneManager;
+    SceneLifecycleHostScope lifecycleHost(&sceneManager);
+    FrameTaskCapture sink;
+    LinkageFramework framework;
+    framework.setSceneManager(&sceneManager);
+    framework.setFrameTaskSink(std::ref(sink));
+    addCompanionRule(framework);
+    framework.init();
+
+    stdptr<Scene> scene = std::make_shared<Scene>("CloneSource");
+    auto*         node  = scene->createNode3D("Cam");
+    node->getEntity()->addComponent<CameraComponent>();
+    ASSERT_TRUE(sceneManager.activateScene(scene));
+    sink.drain();
+    ASSERT_NE(CompanionManager::findCompanion(*scene, *node->getEntity()), nullptr);
+
+    stdptr<Scene> clone = scene->clone();
+    ASSERT_NE(clone, nullptr);
+
+    Entity* clonedCamera = nullptr;
+    for (Node* child : clone->getRootNode()->getChildren()) {
+        Entity* candidate = child ? child->getEntity() : nullptr;
+        if (candidate && candidate->isValid() && candidate->hasComponent<CameraComponent>()) {
+            clonedCamera = candidate;
+            break;
+        }
+    }
+    ASSERT_NE(clonedCamera, nullptr);
+
+    // No companion travelled with the copy: it is derived state.
+    EXPECT_FALSE(clonedCamera->hasComponent<StaticMeshComponent>());
+
+    ASSERT_TRUE(sceneManager.activateScene(clone));
+    sink.drain();
+
+    Entity* clonedBody = CompanionManager::findCompanion(*clone, *clonedCamera);
+    ASSERT_NE(clonedBody, nullptr);
+    EXPECT_EQ(CompanionManager::hostOf(*clonedBody), clonedCamera);
+    ASSERT_TRUE(clonedBody->hasComponent<StaticMeshComponent>());
+    EXPECT_EQ(clonedBody->getComponent<StaticMeshComponent>()->_mesh._engineMesh, EEngineMesh::CameraBody);
+
+    framework.shutdown();
+}
+
 // Deferred tasks scheduled before shutdown must no-op once the framework is
 // gone, even if they are still queued on the host frame-task sink.
 TEST(LinkageFrameworkTest, DeferredTasksCancelledAfterShutdown)
