@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render3D/Material/Material.h"
+#include "Render3D/Common/RenderFeatures.h"
 #include "Resource/Mesh.h"
 #include "RHI/RenderDefines.h"
 #include "Common.Limits.slang.h"
@@ -38,6 +39,13 @@ struct RenderDrawItem
     uint32_t  entityId  = 0;   // raw entt entity handle, written by the entity-id pick pass
     float     sortKey;         // distance to camera (or other sort criterion)
     int32_t   skinningPaletteIndex = -1; // -1 means static draw, otherwise index into RenderFrameData::skinningPalettes
+    /// Which views may draw this item. Authored content is `Game`; a generated
+    /// editor companion is `Gizmo`, so a game view drops it without the owning
+    /// component having to know about views at all.
+    FRenderFeatureMask features = toMask(ERenderFeature::Game);
+    /// Host entity when this item belongs to a generated companion; 0 for
+    /// authored entities. A camera's own preview view drops its own body.
+    uint32_t  hostEntityId = 0;
 };
 
 /// Read-only view over extracted draw candidates.
@@ -379,6 +387,9 @@ struct RenderFrameData
     glm::vec3    cameraPos      = glm::vec3(0.0f);
     Extent2D     viewportExtent = {};
     entt::entity viewOwner      = entt::null;
+    /// Features this view draws (see RenderFeatures.h); the extraction bucket
+    /// binding filters against it.
+    FRenderFeatureMask viewFeatures = toMask(ERenderFeature::Game);
 
     // ═══════════════════════════════════════════════════════════════
     // Frame constants

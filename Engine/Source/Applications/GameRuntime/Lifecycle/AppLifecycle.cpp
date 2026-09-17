@@ -17,8 +17,12 @@
 #include "Core/System/FileWatcher.h"
 
 #include "ECS/Linkage/LinkageFramework.h"
-#include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
+#include "Render/Adapters/Companion/CompanionManager.h"
+#include "Render/Adapters/Companion/RenderCompanionSpecs.h"
 #include "Render/Adapters/Material/MaterialRenderLinkageRule.h"
+#include "ECS/Systems/Components/CameraComponent.h"
+#include "ECS/Systems/Components/DirectionalLightComponent.h"
+#include "ECS/Systems/Components/PointLightComponent.h"
 #include "ECS/Systems/LuaScriptingSystem.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/Systems/JSScriptingSystem.h"
@@ -58,6 +62,18 @@
 
 namespace ya
 {
+
+bool App::isEditorGizmoShown() const
+{
+    return _renderState && _renderState->bShowEditorGizmos;
+}
+
+void App::setEditorGizmoShown(bool bShow)
+{
+    if (_renderState) {
+        _renderState->bShowEditorGizmos = bShow;
+    }
+}
 namespace
 {
 std::string resolveProjectScenePath(const App& app, const std::string& requestedPath)
@@ -281,9 +297,15 @@ void App::init(AppDesc ci)
     billboardPolicy.directional.screenSizePixels = ConfigManager::get().getOr<float>("editor", "lightBillboards.directional.screenSizePixels", billboardPolicy.directional.screenSizePixels);
     billboardPolicy.directional.minWorldScale    = ConfigManager::get().getOr<float>("editor", "lightBillboards.directional.minWorldScale", billboardPolicy.directional.minWorldScale);
     billboardPolicy.directional.texturePath      = ConfigManager::get().getOr<std::string>("editor", "lightBillboards.directional.texturePath", billboardPolicy.directional.texturePath);
-    auto lightBillboardRule = ya::makeShared<LightBillboardLinkageRule>(sys5.get());
-    lightBillboardRule->setPolicy(billboardPolicy);
-    sys5->addRule(lightBillboardRule);
+    // Companion boundaries are declared once, here: the spec decides whether a
+    // generated companion is content or an editor gizmo, whether the editor may
+    // edit it and which pack it belongs to. Consumers (render, picking,
+    // inspector, packaging) ask the manager instead of inspecting components.
+    auto companionManager = ya::makeShared<CompanionManager>(sys5.get());
+    companionManager->declareHost<CameraComponent>(ya::makeCameraCompanionSpec(CameraCompanionPolicy{}));
+    companionManager->declareHost<PointLightComponent>(ya::makePointLightCompanionSpec(billboardPolicy.point));
+    companionManager->declareHost<DirectionalLightComponent>(ya::makeDirectionalLightCompanionSpec(billboardPolicy.directional));
+    sys5->addRule(companionManager);
     sys5->addRule(ya::makeShared<MaterialRenderLinkageRule>(sys5.get()));
     sys5->setSceneManager(app.getSceneServices().getSceneManager());
     sys5->setFrameTaskSink([&app](std::function<void()> task)

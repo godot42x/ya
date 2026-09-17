@@ -19,8 +19,10 @@
 #include "ECS/Systems/SkeletonAnimatorComponent.h"
 #include "ECS/Systems/Components/TerrainComponent.h"
 #include "Scene3D/TransformComponent.h"
+#include "Scene3D/ManagedChildComponent.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "Scene/Core/Scene.h"
+#include "Render/Adapters/Companion/CompanionManager.h"
 #include "Render3D/Common/Shadow/Common/DirectionalShadowMath.h"
 
 #include <algorithm>
@@ -121,7 +123,7 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
     auto drawCtx = DrawItemExtractionContext{
         .registry         = &registry,
         .sceneSnapshot    = &outSnapshot,
-        .viewOwner        = entt::null,
+        .scene            = input.scene,
         .terrainProcessor = input.terrainProcessor,
     };
     extractDrawItems(drawCtx);
@@ -137,11 +139,34 @@ void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
     }
 
     outFrame.sceneSnapshot = std::move(sceneSnapshot);
-    const auto bindBucket = [](const std::vector<RenderDrawItem>& source, ViewDrawBucket& target)
+    outFrame.viewFeatures  = input.viewFeatures;
+    const auto bindBucket = [&](const std::vector<RenderDrawItem>& source, ViewDrawBucket& target)
     {
         target.source = &source;
-        target.order.resize(source.size());
-        std::iota(target.order.begin(), target.order.end(), 0u);
+        target.order.clear();
+        target.order.reserve(source.size());
+        for (uint32_t index = 0; index < source.size(); ++index) {
+            const RenderDrawItem& item = source[index];
+
+            // One gate for every consumer of a view's buckets: GBuffer,
+            // Forward, shadow and the entity-id pick pass all read
+            // frameData.drawBuckets, so this is the single place view
+            // visibility is decided.
+            if (!rendersFeature(item.features, input.viewFeatures)) {
+                continue;
+            }
+
+            // A camera preview view must not draw the body of the camera it is
+            // rendering through. A companion reports its host, because the
+            // generated mesh is its own entity -- the host handle is what the
+            // view owns.
+            if (input.viewOwner != entt::null &&
+                item.hostEntityId != 0 &&
+                item.hostEntityId == static_cast<uint32_t>(input.viewOwner)) {
+                continue;
+            }
+            target.order.push_back(index);
+        }
     };
     const auto bindBuckets = [&](const RenderShadingDrawBuckets& source, ViewShadingDrawBuckets& target)
     {
@@ -317,9 +342,26 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
 {
     auto&      reg            = *ctx.registry;
     auto&      out            = *ctx.sceneSnapshot;
-    const auto viewOwner      = ctx.viewOwner;
     auto&      staticBuckets  = out.drawBuckets.staticMeshes;
     auto&      skinnedBuckets = out.drawBuckets.skinnedMeshes;
+
+    // View visibility is policy, not component state: authored content keeps
+    // the `Game` default while a generated companion takes the feature set and
+    // host declared for its host component. Only companions pay the lookup.
+    const auto tagCompanion = [&](RenderDrawItem& item, entt::entity entity)
+    {
+        if (!reg.all_of<ManagedChildComponent>(entity)) {
+            return;
+        }
+
+        Entity* owner = ctx.scene ? ctx.scene->getEntityByEnttID(entity) : nullptr;
+        if (!owner || !owner->isValid()) {
+            return;
+        }
+
+        item.features     = CompanionManager::featureMaskOf(*owner);
+        item.hostEntityId = CompanionManager::hostEntityIdOf(*owner);
+    };
 
     // Emit a RenderDrawItem for every (MeshComp, TransformComponent, MaterialComp)
     // triple. Runs once per mesh component type (Static/Skinned) so both authoring
@@ -327,8 +369,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     auto emitTyped = [&]<typename MeshComp, typename MatComp>(std::vector<RenderDrawItem>& bucket)
     {
         for (const auto& [e, mc, tc, matComp] :
-             reg.view<MeshComp, TransformComponent, MatComp>().each()) {
-            if (e == viewOwner) continue;
+            reg.view<MeshComp, TransformComponent, MatComp>().each()) {
             if (!mc.isResolved() || !mc.getMesh()) continue;
 
             auto* mat = matComp.getMaterial();
@@ -343,6 +384,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
                 .sortKey              = 0.0f,
                 .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
             });
+            tagCompanion(bucket.back(), e);
         }
     };
 
@@ -359,7 +401,6 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
         {
             for (const auto& [e, terrain, tc, matComp] :
                  reg.view<TerrainComponent, TransformComponent, MatComp>().each()) {
-                if (e == viewOwner) continue;
                 auto* mesh = terrainProcessor->getTerrainMesh(e);
                 if (!mesh) continue;
 
@@ -375,6 +416,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
                     .sortKey              = 0.0f,
                     .skinningPaletteIndex = registerSkinningPalette(ctx, e, mesh),
                 });
+                tagCompanion(bucket.back(), e);
             }
         };
 
@@ -395,7 +437,6 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     {
         for (const auto& [e, mc, tc] :
              reg.view<MeshComp, TransformComponent>().each()) {
-            if (e == viewOwner) continue;
             if (!mc.isResolved() || !mc.getMesh()) continue;
 
             if (reg.any_of<PBRMaterialComponent, PhongMaterialComponent, UnlitMaterialComponent, SimpleMaterialComponent>(e)) {
@@ -411,6 +452,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
                 .sortKey              = 0.0f,
                 .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
             });
+            tagCompanion(bucket.back(), e);
         }
     };
 
@@ -420,7 +462,6 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     // Terrain fallback: no material component
     if (terrainProcessor) {
         for (const auto& [e, terrain, tc] : reg.view<TerrainComponent, TransformComponent>().each()) {
-            if (e == viewOwner) continue;
             auto* mesh = terrainProcessor->getTerrainMesh(e);
             if (!mesh) continue;
             if (reg.any_of<PBRMaterialComponent, PhongMaterialComponent, UnlitMaterialComponent, SimpleMaterialComponent>(e)) {
@@ -436,6 +477,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
                 .sortKey              = 0.0f,
                 .skinningPaletteIndex = registerSkinningPalette(ctx, e, mesh),
             });
+            tagCompanion(staticBuckets.fallbackDrawItems.back(), e);
         }
     }
 }

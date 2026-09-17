@@ -1,5 +1,6 @@
 #include "ECS/Linkage/LinkageFramework.h"
-#include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
+#include "Render/Adapters/Companion/CompanionManager.h"
+#include "Render/Adapters/Companion/RenderCompanionSpecs.h"
 #include "Render/Adapters/Material/MaterialRenderLinkageRule.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
@@ -7,11 +8,14 @@
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/RenderComponent.h"
+#include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Systems/Components/PointLightComponent.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
+#include "Scene3D/ManagedChildComponent.h"
 #include "Scene3D/TransformComponent.h"
 
 #include <gtest/gtest.h>
@@ -72,6 +76,23 @@ class SceneLifecycleHostScope
 
 } // namespace
 
+namespace
+{
+
+/// The render-side companion declarations the Host composition root makes:
+/// the camera draws a body, point/directional lights draw an icon, all as
+/// generated editor companions.
+void addCompanionRule(LinkageFramework& framework)
+{
+    auto manager = std::make_shared<CompanionManager>(&framework);
+    manager->declareHost<CameraComponent>(makeCameraCompanionSpec(CameraCompanionPolicy{}));
+    manager->declareHost<PointLightComponent>(makePointLightCompanionSpec(LightBillboardConfig{}));
+    manager->declareHost<DirectionalLightComponent>(makeDirectionalLightCompanionSpec(LightBillboardConfig{}));
+    framework.addRule(manager);
+}
+
+} // namespace
+
 // Regression: rules must disconnect their entt signal connections when the
 // scene is destroyed (onSceneUnload, fired before the registry dies). A
 // connected rule would otherwise receive teardown on_destroy events and, if
@@ -86,7 +107,7 @@ TEST(LinkageFrameworkTest, RulesDisconnectOnSceneUnload)
     framework.setSceneManager(&sceneManager);
     framework.setFrameTaskSink(std::ref(sink));
     framework.addRule(std::make_shared<MaterialRenderLinkageRule>(&framework));
-    framework.addRule(std::make_shared<LightBillboardLinkageRule>(&framework));
+    addCompanionRule(framework);
     framework.init();
 
     stdptr<Scene> scene = std::make_shared<Scene>("LinkageScene");
@@ -99,6 +120,7 @@ TEST(LinkageFrameworkTest, RulesDisconnectOnSceneUnload)
     // Connected after scene init (sweep also schedules deferred linkage).
     ASSERT_FALSE(registry.on_construct<PBRMaterialComponent>().empty());
     ASSERT_FALSE(registry.on_construct<PointLightComponent>().empty());
+    ASSERT_FALSE(registry.on_construct<CameraComponent>().empty());
     ASSERT_FALSE(registry.on_update<TransformComponent>().empty());
     sink.drain();
     ASSERT_TRUE(node->getEntity()->hasComponent<RenderComponent>());
@@ -120,6 +142,7 @@ TEST(LinkageFrameworkTest, RulesDisconnectOnSceneUnload)
             reg.on_construct<SimpleMaterialComponent>().empty() &&
             reg.on_construct<PointLightComponent>().empty() &&
             reg.on_construct<DirectionalLightComponent>().empty() &&
+            reg.on_construct<CameraComponent>().empty() &&
             reg.on_update<TransformComponent>().empty();
     });
 
@@ -161,6 +184,100 @@ TEST(LinkageFrameworkTest, RuleDestroyedBeforeSceneTeardownIsSafe)
 
     // Scene teardown afterwards must not dereference the destroyed rule.
     EXPECT_NO_FATAL_FAILURE(sceneManager.destroyScene(scene));
+}
+
+TEST(LinkageFrameworkTest, CameraComponentGetsGeneratedBodyCompanion)
+{
+    SceneManager sceneManager;
+    SceneLifecycleHostScope lifecycleHost(&sceneManager);
+    FrameTaskCapture sink;
+    LinkageFramework framework;
+    framework.setSceneManager(&sceneManager);
+    framework.setFrameTaskSink(std::ref(sink));
+    framework.addRule(std::make_shared<MaterialRenderLinkageRule>(&framework));
+    addCompanionRule(framework);
+    framework.init();
+
+    // No declarative rule knows about CameraComponent yet, so the body has to
+    // come from the manager's initial sweep rather than from a construct event.
+    stdptr<Scene> scene = std::make_shared<Scene>("CameraCompanionScene");
+    auto*         node  = scene->createNode3D("Cam");
+    node->getEntity()->addComponent<CameraComponent>();
+    ASSERT_TRUE(sceneManager.activateScene(scene));
+    sink.drain();
+
+    Entity* camera = node->getEntity();
+
+    // The body is its own entity under the camera node: the camera keeps its
+    // mesh and material slots free for author content.
+    EXPECT_FALSE(camera->hasComponent<StaticMeshComponent>());
+
+    Entity* body = CompanionManager::findCompanion(*scene, *camera);
+    ASSERT_NE(body, nullptr);
+    EXPECT_NE(body, camera);
+    EXPECT_EQ(CompanionManager::hostOf(*body), camera);
+    EXPECT_EQ(CompanionManager::kindOf(*body), ECompanionKind::EditorGizmo);
+    EXPECT_FALSE(CompanionManager::isAuthorEditable(*body));
+    EXPECT_EQ(CompanionManager::packClassOf(*body), EAssetPackClass::EditorOnly);
+    EXPECT_EQ(CompanionManager::featureMaskOf(*body), toMask(ERenderFeature::Gizmo));
+    EXPECT_EQ(CompanionManager::hostEntityIdOf(*body), static_cast<uint32_t>(camera->getHandle()));
+    EXPECT_TRUE(CompanionManager::isGeneratedCompanion(*body));
+    EXPECT_TRUE(body->hasComponent<ManagedChildComponent>());
+
+    // The body geometry is an engine mesh, never an asset path: engine changes
+    // reach existing scenes and nothing about it is serialized.
+    ASSERT_TRUE(body->hasComponent<StaticMeshComponent>());
+    auto* bodyMesh = body->getComponent<StaticMeshComponent>();
+    EXPECT_EQ(bodyMesh->_mesh._engineMesh, EEngineMesh::CameraBody);
+    EXPECT_TRUE(bodyMesh->_mesh._sourceModelPath.empty());
+    EXPECT_TRUE(body->hasComponent<UnlitMaterialComponent>());
+
+    scene->removeComponent<CameraComponent>(camera->getHandle());
+    sink.drain();
+    EXPECT_EQ(CompanionManager::findCompanion(*scene, *camera), nullptr);
+
+    framework.shutdown();
+}
+
+TEST(LinkageFrameworkTest, CameraCompanionLeavesHostMeshAlone)
+{
+    SceneManager sceneManager;
+    SceneLifecycleHostScope lifecycleHost(&sceneManager);
+    FrameTaskCapture sink;
+    LinkageFramework framework;
+    framework.setSceneManager(&sceneManager);
+    framework.setFrameTaskSink(std::ref(sink));
+    addCompanionRule(framework);
+    framework.init();
+
+    stdptr<Scene> scene = std::make_shared<Scene>("CameraUserMeshScene");
+    auto*         node  = scene->createNode3D("Cam");
+    auto*         mesh  = node->getEntity()->addComponent<StaticMeshComponent>();
+    ASSERT_NE(mesh, nullptr);
+    mesh->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
+    node->getEntity()->addComponent<CameraComponent>();
+    ASSERT_TRUE(sceneManager.activateScene(scene));
+    sink.drain();
+
+    auto* entity = node->getEntity();
+    ASSERT_TRUE(entity->hasComponent<StaticMeshComponent>());
+    mesh = entity->getComponent<StaticMeshComponent>();
+    EXPECT_EQ(mesh->_mesh._primitiveGeometry, EPrimitiveGeometry::Cube);
+    EXPECT_TRUE(mesh->_mesh._sourceModelPath.empty());
+
+    // The author's mesh and the generated body coexist on one camera.
+    Entity* body = CompanionManager::findCompanion(*scene, *entity);
+    ASSERT_NE(body, nullptr);
+    EXPECT_NE(body, entity);
+    ASSERT_TRUE(body->hasComponent<StaticMeshComponent>());
+    EXPECT_EQ(body->getComponent<StaticMeshComponent>()->_mesh._engineMesh, EEngineMesh::CameraBody);
+
+    scene->removeComponent<CameraComponent>(entity->getHandle());
+    sink.drain();
+    EXPECT_TRUE(entity->hasComponent<StaticMeshComponent>());
+    EXPECT_EQ(CompanionManager::findCompanion(*scene, *entity), nullptr);
+
+    framework.shutdown();
 }
 
 // Deferred tasks scheduled before shutdown must no-op once the framework is

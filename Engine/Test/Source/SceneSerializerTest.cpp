@@ -3,9 +3,11 @@
 #include "Scene/Serialization/SceneSerializer.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Entity.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "Scene/Core/SceneWidgetEntry.h"
+#include "Scene3D/ManagedChildComponent.h"
 #include <gtest/gtest.h>
 
 namespace ya
@@ -356,6 +358,51 @@ TEST(SceneSerializerTest, WidgetEntriesSurviveClone)
     Node* clonedRoot = cloned->getRootNode();
     ASSERT_NE(clonedRoot, nullptr);
     ASSERT_EQ(clonedRoot->getChildCount(), 1u); // World only
+}
+
+// ============================================================================
+
+// A generated companion (camera body, light icon, model mesh child) is derived
+// state: it must never reach the scene file, neither as an entity nor as a node
+// row, because the host rebuilds it on load. This is the serialization half of
+// the companion boundary.
+TEST(SceneSerializerTest, GeneratedCompanionIsNotSerialized)
+{
+    ensureReflectionReady();
+
+    Scene scene("CompanionScene");
+    auto* cameraNode = scene.createNode3D("Camera", scene.getRootNode());
+    ASSERT_NE(cameraNode, nullptr);
+
+    Entity* camera = cameraNode->getEntity();
+    ASSERT_NE(camera, nullptr);
+    ASSERT_NE(camera->addComponent<StaticMeshComponent>(), nullptr);
+
+    // Exactly what CompanionManager builds: a child node plus the generated
+    // marker carrying its host. No component field is consulted to decide this.
+    auto* bodyNode = scene.createNode3D("Camera_CameraBody", cameraNode);
+    ASSERT_NE(bodyNode, nullptr);
+    Entity* body = bodyNode->getEntity();
+    ASSERT_NE(body, nullptr);
+    auto* marker = body->addComponent<ManagedChildComponent>();
+    ASSERT_NE(marker, nullptr);
+    marker->host = camera->getHandle();
+
+    SceneSerializer serializer(&scene);
+    const nlohmann::json saved = serializer.serialize();
+
+    ASSERT_TRUE(saved.contains("entities"));
+    ASSERT_EQ(saved["entities"].size(), 1u);
+    EXPECT_EQ(saved["entities"][0]["name"].get<std::string>(), "Camera");
+
+    ASSERT_TRUE(saved.contains("nodeTree"));
+    const auto& roots = saved["nodeTree"]["children"];
+    ASSERT_EQ(roots.size(), 1u);
+    EXPECT_EQ(roots[0]["name"].get<std::string>(), "Camera");
+    // The companion node is gone from the tree; the camera keeps its own mesh.
+    ASSERT_TRUE(roots[0].contains("children"));
+    EXPECT_TRUE(roots[0]["children"].empty());
+    EXPECT_TRUE(saved["entities"][0]["components"].contains("StaticMeshComponent"));
 }
 
 // ============================================================================

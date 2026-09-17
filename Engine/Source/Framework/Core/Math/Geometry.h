@@ -26,6 +26,23 @@ enum class EPrimitiveGeometry : uint8_t
     None = 255, // No primitive (use _modelRef instead)
 };
 
+/**
+ * @brief Procedural meshes the engine authors for itself.
+ *
+ * Deliberately a separate catalog from EPrimitiveGeometry: these are engine
+ * visuals (editor companions and gizmos), so they must never show up in the
+ * user-facing primitive picker. Identity is the enum value, not an asset path
+ * -- a companion that baked a mesh path into scene data would pin the geometry
+ * and never pick up engine changes.
+ */
+enum class EEngineMesh : uint8_t
+{
+    None = 0,
+    /// Camera body: box body, lens barrel and hood (toward -Z), viewfinder and
+    /// reels on top.
+    CameraBody,
+};
+
 } // namespace ya
 
 // Register EPrimitiveGeometry enum for reflection

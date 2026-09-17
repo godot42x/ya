@@ -176,6 +176,13 @@ PropertyGraph PropertyGraph::project(type_index_t ownerType, std::vector<void*> 
     return graph;
 }
 
+void PropertyGraph::markAllReadOnly()
+{
+    for (PropertyNode& node : _nodes) {
+        node.bEditable = false;
+    }
+}
+
 bool PropertyGraph::hasRetainedEditors() const
 {
     for (const PropertyNode& node : _nodes) {

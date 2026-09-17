@@ -44,19 +44,6 @@ namespace ya
 namespace
 {
 
-bool shouldRenderBillboard(const BillboardComponent& billboard, bool bAppStopped)
-{
-    if (!billboard.bVisible) {
-        return false;
-    }
-
-    if (!billboard.bManagedByLight) {
-        return true;
-    }
-
-    return bAppStopped;
-}
-
 EFormat::T chooseSupportedAttachmentFormat(IRender* render,
                                            std::string_view label,
                                            EImageUsage::T usage,
@@ -1150,8 +1137,15 @@ ViewportOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInput
         const float viewportHeight = static_cast<float>(frame.camera.viewportRect.extent.y);
         if (viewportHeight > 0.0f) {
             for (const auto& [entity, billboard, transform] : activeScene->getRegistry().view<BillboardComponent, TransformComponent>().each()) {
-                (void)entity;
-                if (!shouldRenderBillboard(billboard, frame.camera.bAppStopped)) {
+                if (!billboard.bVisible) {
+                    continue;
+                }
+
+                // Same gate the mesh buckets use: the component says which
+                // feature it belongs to, the view says which features it draws.
+                // A generated editor companion therefore disappears from a game
+                // view without the component knowing about views at all.
+                if (!rendersFeature(billboard.features, frame.camera.viewFeatures)) {
                     continue;
                 }
 

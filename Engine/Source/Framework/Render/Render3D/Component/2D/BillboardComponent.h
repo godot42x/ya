@@ -1,6 +1,7 @@
 #pragma once
 #include "ECS/Component.h"
 #include "Core/Common/TextureSlot.h"
+#include "Render3D/Common/RenderFeatures.h"
 
 
 namespace ya
@@ -36,7 +37,12 @@ struct YA_RENDER_3D_API BillboardComponent : public IComponent
     glm::vec3  worldDirection   = glm::vec3(0.0f, 0.0f, -1.0f);
     float      screenSizePixels = 30.0f;
     float      minWorldScale    = 0.0f;
-    bool       bManagedByLight  = false;
+
+    /// Which views may draw this sprite (see RenderFeatures.h). Authored
+    /// sprites are `Game`; a light icon generated as an editor companion is
+    /// `Gizmo`. This is the sprite's own feature set -- which one a given view
+    /// draws stays a view decision.
+    FRenderFeatureMask features = toMask(ERenderFeature::Game);
 
     bool bDirty = true;
     void invalidate() { bDirty = true; }

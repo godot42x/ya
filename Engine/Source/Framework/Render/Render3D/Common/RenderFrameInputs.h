@@ -166,8 +166,11 @@ struct CameraFrameInput
 
     uint32_t flightIndex = 0;
     uint64_t frameIndex  = 0;
-    bool     bAppStopped = false;
     float    deltaTime   = 0.0f;
+
+    /// Which features this view draws (see RenderFeatures.h). Per view, not
+    /// per scene: the editor world view draws gizmos, a game view does not.
+    FRenderFeatureMask viewFeatures = toMask(ERenderFeature::Game);
 
     glm::mat4 view           = glm::mat4(1.0f);
     glm::mat4 projection     = glm::mat4(1.0f);
@@ -221,6 +224,11 @@ struct CameraFrameInput
         }
     }
     camera.frameData = recording.frameData;
+    // The view's own feature set, not the host camera's: each recording may
+    // draw a different subset (editor world view vs camera preview).
+    if (recording.frameData) {
+        camera.viewFeatures = recording.frameData->viewFeatures;
+    }
     return camera;
 }
 

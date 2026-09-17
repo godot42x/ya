@@ -25,8 +25,7 @@ struct RenderFrameExtractor
     {
         entt::registry*      registry      = nullptr;
         SceneFrameSnapshot*  sceneSnapshot = nullptr;
-        entt::entity         viewOwner     = entt::null;
-
+        Scene*               scene         = nullptr;
         TerrainProcessor* terrainProcessor = nullptr;
         std::unordered_map<const SkeletonAnimatorComponent*, int32_t> skinningPaletteCache;
     };
@@ -39,6 +38,9 @@ struct RenderFrameExtractor
         glm::vec3      cameraPos      = glm::vec3(0.0f);
         Extent2D       viewportExtent = {};
         entt::entity   viewOwner  = entt::null;
+        /// Features this view draws; the bucket binding filters the immutable
+        /// snapshot against it (see RenderFeatures.h).
+        FRenderFeatureMask viewFeatures = toMask(ERenderFeature::Game);
         uint64_t       frameIndex = 0;
         float          deltaTime  = 0.0f;
         const ShadowSettings* shadowSettings = nullptr;

@@ -16,9 +16,10 @@ class LinkageFramework;
  * component types it watches and runs its work on the framework's deferred
  * frame-task scheduler (scene-validity checked).
  *
- * Rules are business logic (light billboards, material topology, ...); the
- * framework only dispatches events and schedules deferred work. Rules never
- * reach Host or the app singleton.
+ * Rules keep generated companion entities in sync with a host component
+ * (camera body, light icon, material topology, ...). The framework only
+ * dispatches events and schedules deferred work. Rules never reach Host or the
+ * app singleton.
  */
 struct ILinkageRule
 {

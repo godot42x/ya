@@ -52,6 +52,11 @@ class PropertyGraph final
     static PropertyGraph build(type_index_t ownerType, std::vector<void*> instances);
     /// Reflection → editor field model: `build` then the registered projection.
     static PropertyGraph project(type_index_t ownerType, std::vector<void*> instances);
+    /// Show every field but refuse writes. Used for entities the editor does
+    /// not own (generated companions such as the camera body or a light icon):
+    /// seeing what draws is useful, editing it would be a lie, because the
+    /// reconciler rebuilds the companion from the host on the next change.
+    void markAllReadOnly();
     [[nodiscard]] bool hasRetainedEditors() const;
     std::vector<PropertyNode>& getNodesMutable() { return _nodes; }
     [[nodiscard]] const std::vector<PropertyNode>& getNodes() const { return _nodes; }

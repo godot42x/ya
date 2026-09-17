@@ -1,5 +1,6 @@
 #include "GameEditor/UI/EditorHierarchyTab.h"
 #include "GameEditor/UI/EditorHierarchyOps.h"
+#include "Render/Adapters/Companion/CompanionManager.h"
 
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
@@ -52,6 +53,12 @@ UITreeView::FNode buildHierarchyNode(Node* node)
     }
     out.id    = editorHierarchyEntityIdKey(uuid);
     out.label = node->getName();
+    // Generated companions the author does not own (camera body, light icon)
+    // show up so the object's contents are visible, but read as disabled: they
+    // are rebuilt from the host, so nothing here is theirs to edit.
+    if (Entity* entity = node->getEntity()) {
+        out.bEnabled = CompanionManager::isAuthorEditable(*entity);
+    }
     out.children.reserve(node->getChildCount());
     for (Node* child : node->getChildren()) {
         out.children.push_back(buildHierarchyNode(child));

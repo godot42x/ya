@@ -42,7 +42,7 @@ xmake project -k compile_commands
 
 ## Skill Routing
 
-默认优先级：`ya-build > gui-framework > cross-platform > profiling > vscode > resource-system > material-flow > render-arch > cpp-style > code-reorganize > debug-review`
+默认优先级：`ya-build > gui-framework > cross-platform > profiling > vscode > resource-system > material-flow > scene-object-boundary > render-arch > cpp-style > code-reorganize > debug-review`
 
 - 构建、目标、编译、shader 生成、测试：`./.agent/skills/ya-build/SKILL.md`
 - GUI 框架（WidgetTree/控件/布局契约/Render2D pass slot/GUI host 诊断与 teardown）：`./.agent/skills/gui-framework/SKILL.md`
@@ -51,6 +51,7 @@ xmake project -k compile_commands
 - VS Code、clangd、launch、tasks：`./.agent/skills/vscode/SKILL.md`
 - 资源加载、resolve、dirty queue、environment lighting：`./.agent/skills/resource-system/SKILL.md`
 - ECS -> material -> render consumer：`./.agent/skills/material-flow/SKILL.md`
+- 生成物边界（gizmo / 图标 / 子 mesh、派生视觉的序列化与可编辑规则、视图 feature 位）：`./.agent/skills/scene-object-boundary/SKILL.md`
 - RenderRuntime、后端边界、shader 生成链：`./.agent/skills/render-arch/SKILL.md`
 - C++ 风格、所有权、类布局：`./.agent/skills/cpp-style/SKILL.md`
 - 文件拆分、目录重组：`./.agent/skills/code-reorganize/SKILL.md`

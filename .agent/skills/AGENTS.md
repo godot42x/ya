@@ -19,6 +19,7 @@
 - `vscode`：VS Code 任务、调试、clangd、compile_commands
 - `resource-system`：AssetManager、resolve、dirty queue、environment lighting、GPU 资源生命周期与保活（RetainedResource / retain vs retire）
 - `material-flow`：ECS 到 runtime material 到 render consumer 的数据流
+- `scene-object-boundary`：什么该由引擎生成（gizmo / 图标 / 子 mesh）、派生视觉的序列化与可编辑边界、视图可见性 feature 位
 - `render-arch`：RenderRuntime、后端边界、render pipeline、shader 生成链
 - `cpp-style`：命名、所有权、类布局、热路径风格
 - `code-reorganize`：文件拆分、目录重组、include 修复

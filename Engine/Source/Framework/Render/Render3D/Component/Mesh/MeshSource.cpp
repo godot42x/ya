@@ -15,6 +15,18 @@ bool MeshSource::resolve()
 
     _cachedMesh = nullptr;
 
+    // Priority 0: procedural engine mesh (companions / gizmos). No asset and
+    // no scene data: the catalog value is the whole source of truth.
+    if (_engineMesh != EEngineMesh::None) {
+        if (Mesh* mesh = PrimitiveMeshCache::get().getEngineMesh(_engineMesh)) {
+            _cachedMesh = mesh;
+            _bResolved  = true;
+            return true;
+        }
+        YA_CORE_ERROR("MeshSource: Failed to get engine mesh {} from cache", static_cast<int>(_engineMesh));
+        return false;
+    }
+
     // Priority 1: Mesh from Model by path and index
     if (!_sourceModelPath.empty()) {
         Model* model = nullptr;

@@ -160,6 +160,18 @@ bool UITreeView::dropPosition(const glm::vec2& point, int& outRowIndex, int& out
     if (rowIndex < 0) {
         return false;
     }
+
+    // A generated row (engine-managed companion) is not a reorder target: the
+    // host owns its order. It stays selectable, so only the drop is refused.
+    const std::vector<VisibleRow> rows = flattenVisible();
+    if (rowIndex >= static_cast<int>(rows.size())) {
+        return false;
+    }
+    const FNode* target = rows[static_cast<size_t>(rowIndex)].node;
+    if (target == nullptr || !target->bEnabled) {
+        return false;
+    }
+
     const float rowTop = _layoutRect.pos.y + static_cast<float>(rowIndex) * _rowHeight;
     const float third  = _rowHeight / 3.0f;
     const float localY = point.y - rowTop;
@@ -480,7 +492,8 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
         }
 
         if (font) {
-            builder.addText(leading.title, row.node->label, style.textColor, font,
+            const glm::vec4 labelColor = row.node->bEnabled ? style.textColor : style.disabledTextColor;
+            builder.addText(leading.title, row.node->label, labelColor, font,
                             EWidgetAlignH::Left, EWidgetAlignV::Center);
         }
     }
@@ -571,8 +584,8 @@ bool UITreeView::handleInputEvent(const Event& event, const WidgetEventContext& 
             if (_onSelectionChanged) {
                 _onSelectionChanged(row.node->id);
             }
-            if (_bReorderable) {
-                _pressRowId  = row.node->id;
+            if (_bReorderable && row.node->bEnabled) {
+                _pressRowId = row.node->id;
                 (void)UIElement::handleInputEvent(event, ctx);
             }
         }

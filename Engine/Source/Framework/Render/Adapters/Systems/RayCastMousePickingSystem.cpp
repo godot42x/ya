@@ -1,5 +1,6 @@
 #include "RayCastMousePickingSystem.h"
 #include "Core/Camera/Camera.h"
+#include "Render/Adapters/Companion/CompanionManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
@@ -100,13 +101,25 @@ std::optional<RaycastHit> RayCastMousePickingSystem::raycastBillboards(Scene* sc
     float                     closestDistance = std::numeric_limits<float>::max();
 
     for (const auto& [entityHandle, billboard, transform] : view.each()) {
-        if (!billboard.bVisible || !billboard.bManagedByLight) {
+        // Only generated editor icons are pickable through this path (a
+        // user-authored sprite is picked as ordinary content), and picking
+        // must agree with drawing: the gizmo feature set is what the editor
+        // view draws.
+        if (!billboard.bVisible ||
+            !rendersFeature(billboard.features, toMask(ERenderFeature::Gizmo))) {
             continue;
         }
 
-        Entity* entity = scene->getEntityByEnttID(entityHandle);
-        if (!entity) {
+        Entity* iconEntity = scene->getEntityByEnttID(entityHandle);
+        if (!iconEntity) {
             continue;
+        }
+
+        // The icon is a generated companion, so a hit resolves to its host:
+        // clicking a light icon selects the light.
+        Entity* entity = CompanionManager::hostOf(*iconEntity);
+        if (!entity) {
+            entity = iconEntity;
         }
 
         const glm::mat4 worldTransform = transform.getTransform();

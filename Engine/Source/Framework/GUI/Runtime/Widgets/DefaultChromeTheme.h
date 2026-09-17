@@ -456,6 +456,8 @@ inline void defineChromeStyles(ya::UITheme& theme, const tokens::FPalette& p)
     // === Containers / rows =================================================
     auto tree = ya::FTreeViewStyle{};
     tree.textColor        = p.text;
+    // Generated rows (engine companions) are shown muted, not hidden.
+    tree.disabledTextColor = p.text3;
     // Row selection is a wash, not an outline: a ring around one row in a long
     // list reads as a box floating in the panel.
     tree.selectedFill     = surface(p.selected, radius::kRow);

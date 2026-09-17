@@ -296,6 +296,8 @@ struct FFloatingWindowStyle
 struct FTreeViewStyle
 {
     glm::vec4 textColor         = {0.90f, 0.92f, 0.95f, 1.0f};
+    /// Muted label for a row that is shown but not the author's to edit.
+    glm::vec4 disabledTextColor = {0.52f, 0.55f, 0.60f, 1.0f};
     FBrush    selectedFill      = FBrush::solid({0.22f, 0.42f, 0.78f, 1.0f});
     FBrush    hoveredFill       = FBrush::solid({0.24f, 0.26f, 0.31f, 1.0f});
     glm::vec4 arrowColor        = {0.60f, 0.65f, 0.70f, 1.0f};

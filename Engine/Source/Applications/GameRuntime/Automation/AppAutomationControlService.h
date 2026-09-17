@@ -70,6 +70,7 @@ class YA_GAME_RUNTIME_API AppAutomationControlService
     void handleFindEntitiesNear(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleCreateBillboardRegressionScene(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleSetEditorConfigValue(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleSetEditorGizmosVisible(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleEntityRemoveComponent(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleEntitySetMeshVisible(App& app, const AppAutomationControlServer::RequestPtr& call);
     void handleEvalJS(App& app, const AppAutomationControlServer::RequestPtr& call);

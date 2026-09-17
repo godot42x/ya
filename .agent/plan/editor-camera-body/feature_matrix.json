@@ -1,0 +1,59 @@
+{
+  "topic": "editor-camera-body",
+  "capabilities": [
+    {
+      "id": "companion-contract",
+      "description": "Host type -> CompanionSpec declaration read by every consumer",
+      "state": "done",
+      "seam": "Scene3D/CompanionRegistry.h + Render/Adapters/Companion/CompanionManager.h"
+    },
+    {
+      "id": "camera-body-companion",
+      "description": "CameraComponent gets a generated EditorGizmo body entity (mesh + unlit)",
+      "state": "done",
+      "seam": "makeCameraCompanionSpec, declared in AppLifecycle"
+    },
+    {
+      "id": "light-icon-companion",
+      "description": "Point/directional light billboard moved onto a generated child entity",
+      "state": "done",
+      "seam": "makePointLightCompanionSpec / makeDirectionalLightCompanionSpec"
+    },
+    {
+      "id": "feature-gate",
+      "description": "Per-view feature mask filter in one bucket-binding funnel",
+      "state": "done",
+      "seam": "RenderFrameExtractor::prepareView bindBucket"
+    },
+    {
+      "id": "gizmo-global-toggle",
+      "description": "Global override drawing gizmos in game-like views",
+      "state": "done",
+      "seam": "App::setEditorGizmoShown + View menu + set_editor_gizmos_visible"
+    },
+    {
+      "id": "editor-readonly-boundary",
+      "description": "Companions selectable but not editable (inspector, hierarchy, manipulator)",
+      "state": "done",
+      "seam": "CompanionManager::isAuthorEditable + PropertyGraph::markAllReadOnly"
+    },
+    {
+      "id": "serialization-exclusion",
+      "description": "Companions never written to the scene file or cloned",
+      "state": "done",
+      "seam": "SceneSerializer exclude<ManagedChildComponent> (pre-existing) + test"
+    },
+    {
+      "id": "packaging-strip",
+      "description": "Release pack drops EditorOnly companions and their assets",
+      "state": "seam-only",
+      "seam": "EAssetPackClass + CompanionManager::eachCompanion"
+    },
+    {
+      "id": "model-mesh-through-manager",
+      "description": "ModelInstantiationSystem routes its children through CompanionManager",
+      "state": "not-started",
+      "seam": "ModelInstantiationSystem::createMeshNode"
+    }
+  ]
+}

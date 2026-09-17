@@ -2,6 +2,7 @@
 #include "GameEditor/UI/EditorAutoPropertySection.h"
 #include "GameEditor/UI/EditorAssetPicker.h"
 #include "GameEditor/UI/EditorHierarchyOps.h"
+#include "Render/Adapters/Companion/CompanionManager.h"
 
 #include "ECS/Component.h"
 #include "ECS/Component/ModelComponent.h"
@@ -424,6 +425,16 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
         identity += std::to_string(uuid);
     }
 
+    // A generated companion is not authored scene content: show its fields so
+    // the user can see what draws, but never let them pretend to own it.
+    bool bReadOnlySelection = false;
+    for (Entity* entity : entities) {
+        if (entity && !CompanionManager::isAuthorEditable(*entity)) {
+            bReadOnlySelection = true;
+            break;
+        }
+    }
+
     for (FEntry& entry : entries) {
         PropertyGraph graph = PropertyGraph::project(entry.type, std::move(entry.instances));
         if (!graph.hasRetainedEditors()) {
@@ -453,6 +464,11 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
         }
         for (PropertyNode& node : graph.getNodesMutable()) {
             node.binding.setInstanceBindings(rootBindings);
+        }
+        // Generated companions are rebuilt from their host, so their fields are
+        // shown but never writable: an edit would be silently reverted.
+        if (bReadOnlySelection) {
+            graph.markAllReadOnly();
         }
         auto section = std::make_shared<EditorAutoPropertySection>(
             "InspectorProps_" + entry.name,

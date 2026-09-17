@@ -8,6 +8,7 @@
 #include "ECS/Entity.h"
 #include "ECS/Systems/TransformSystem.h"
 #include "GameEditor/UI/EditorTransformUndo.h"
+#include "Render/Adapters/Companion/CompanionManager.h"
 #include "GameRuntime/App.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "Render2D/Render2D.h"
@@ -343,6 +344,13 @@ std::optional<FViewportGizmoFrame> buildViewportGizmoFrame(Entity*              
 {
     if (!selectedEntity || !selectedEntity->isValid() ||
         !selectedEntity->hasComponent<TransformComponent>()) {
+        return std::nullopt;
+    }
+
+    // Generated companions follow their host, so a manipulator on one would
+    // fight the reconciler that rebuilds it. The body stays selectable (the
+    // hit resolves to the host), it just carries no transform handles.
+    if (!CompanionManager::isAuthorEditable(*selectedEntity)) {
         return std::nullopt;
     }
 

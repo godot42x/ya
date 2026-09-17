@@ -42,6 +42,16 @@ class YA_RESOURCE_API PrimitiveMeshCache : public IResourceCache
     Mesh *getMesh(EPrimitiveGeometry type);
 
     /**
+     * @brief Get or create a procedural engine mesh (companion / gizmo visuals)
+     * @param type The engine mesh catalog entry
+     * @return Shared pointer to the cached mesh, or nullptr if type is None
+     *
+     * Same lifetime and sharing rules as getMesh: keyed by the catalog value,
+     * so two companions asking for the same body share one GPU mesh.
+     */
+    Mesh *getEngineMesh(EEngineMesh type);
+
+    /**
      * @brief Clear all cached meshes (implements IResourceCache)
      * Call this before shutting down the renderer
      * @note Must ensure GPU is idle before calling
@@ -54,6 +64,11 @@ class YA_RESOURCE_API PrimitiveMeshCache : public IResourceCache
      */
     bool hasMesh(EPrimitiveGeometry type) const;
 
+    /**
+     * @brief Check if an engine mesh is cached
+     */
+    bool hasEngineMesh(EEngineMesh type) const;
+
   private:
     PrimitiveMeshCache()  = default;
     ~PrimitiveMeshCache() = default;
@@ -63,10 +78,12 @@ class YA_RESOURCE_API PrimitiveMeshCache : public IResourceCache
     PrimitiveMeshCache &operator=(const PrimitiveMeshCache &) = delete;
 
     stdptr<Mesh> createMesh(EPrimitiveGeometry type);
+    stdptr<Mesh> createEngineMesh(EEngineMesh type);
 
     IRender*                                             _render = nullptr;
     mutable std::mutex                                   _mutex;
     std::unordered_map<EPrimitiveGeometry, stdptr<Mesh>> _cache;
+    std::unordered_map<EEngineMesh, stdptr<Mesh>>        _engineMeshCache;
 };
 
 } // namespace ya

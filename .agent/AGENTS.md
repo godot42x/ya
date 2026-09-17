@@ -25,8 +25,9 @@
 1. 构建、运行、测试、target、shader 生成：`./skills/ya-build/SKILL.md`
 2. GUI 框架（WidgetTree/控件/布局/pass slot/host）：`./skills/gui-framework/SKILL.md`
 3. VS Code / clangd / launch / tasks：`./skills/vscode/SKILL.md`
-4. 资源、材质、渲染、代码组织等专项问题：只进入对应单个 skill
-5. 历史坑与回归：按需补充 memory
+4. 生成物边界（gizmo / 图标 / 子 mesh、派生视觉的序列化与可编辑规则）：`./skills/scene-object-boundary/SKILL.md`
+5. 资源、材质、渲染、代码组织等专项问题：只进入对应单个 skill
+6. 历史坑与回归：按需补充 memory
 
 跨平台（Windows/MSVC 与 macOS/Clang 切换、DLL 导出、平台差异导致的编译/链接报错）：
 `./skills/cross-platform/SKILL.md`

@@ -463,6 +463,21 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
             UIMenu::FItem::separator(),
             UIMenu::FItem::fromAction(_rootSession->actions(), "editor.settings"),
         };
+        // Generated editor companions (camera body, light icons) stay out of
+        // game-like views; this is the debug override that draws them anyway.
+        {
+            UIMenu::FItem gizmoItem;
+            gizmoItem.label      = "Show Editor Gizmos";
+            gizmoItem.bCheckable = true;
+            gizmoItem.bChecked   = _app && _app->isEditorGizmoShown();
+            gizmoItem.action     = [this]() {
+                if (_app) {
+                    _app->setEditorGizmoShown(!_app->isEditorGizmoShown());
+                }
+            };
+            items.push_back(UIMenu::FItem::separator());
+            items.push_back(std::move(gizmoItem));
+        }
 #if !defined(YA_PROFILING_DISABLED)
         auto channelItem = [](const char* label, EGuiFrameInspectorChannel channel) {
             UIMenu::FItem item;

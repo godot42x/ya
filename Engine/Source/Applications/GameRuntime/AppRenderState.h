@@ -32,6 +32,11 @@ struct AppRenderState
     /// GameRuntime may auto-pick the first non-primary scene camera.
     bool                                               bCameraPreviewHostOwned = false;
     uint64_t                                           cameraPreviewEntityUUID = 0;
+    /// Global editor-gizmo override (`View > Show Editor Gizmos`). Off by
+    /// default: generated editor companions exist in every mode but are drawn
+    /// only by views that ask for them. A debug aid, so it is deliberately one
+    /// global switch instead of a per-object flag on every companion.
+    bool                                               bShowEditorGizmos = false;
     SceneRenderScheduler                               sceneRenderScheduler;
     std::array<std::vector<RenderFrameData>, MAX_FLIGHTS_IN_FLIGHT> viewFrameDataPerFlight{};
 };

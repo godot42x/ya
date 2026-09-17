@@ -67,6 +67,10 @@ struct YA_GUI_API UITreeView : public UIElement, public UIStyledWidget<UITreeVie
         /// Optional row icon after the disclosure (`+ icon Name`). Empty
         /// resource means no icon; TreeView still paints the row itself.
         FBrush icon;
+        /// Generated rows (editor companions, model mesh children) stay
+        /// selectable -- the user must be able to see what an object carries --
+        /// but read as disabled: muted label, no reorder drag source.
+        bool bEnabled = true;
     };
 
     explicit UITreeView(std::string name = "TreeView");

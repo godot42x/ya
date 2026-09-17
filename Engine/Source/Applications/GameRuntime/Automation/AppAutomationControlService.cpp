@@ -21,7 +21,7 @@
 #include "ECS/Component/RenderComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Systems/Components/CameraComponent.h"
-#include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
+#include "Render/Adapters/Companion/CompanionManager.h"
 #include "ECS/Systems/TransformSystem.h"
 
 #include "Render3D/RenderDeviceState.h"
@@ -212,7 +212,7 @@ Scene* createBillboardRegressionScene(App& app)
             light->color = glm::vec3(1.0f, 0.8f, 0.35f);
             light->intensity = 6.0f;
         }
-        LightBillboardLinkageRule::applyLinkage(rawScene, entity->getHandle(), LightBillboardPolicy{});
+        CompanionManager::reconcileNow(*rawScene, entity->getHandle());
     }
 
     auto* directionalNode = rawScene->createNode3D("RegressionDirectionalLight");
@@ -229,7 +229,7 @@ Scene* createBillboardRegressionScene(App& app)
             light->intensity = 3.0f;
             light->bEnable = true;
         }
-        LightBillboardLinkageRule::applyLinkage(rawScene, entity->getHandle(), LightBillboardPolicy{});
+        CompanionManager::reconcileNow(*rawScene, entity->getHandle());
     }
 
     app.getSceneServices().refreshSceneDerivedState(rawScene);
@@ -409,6 +409,10 @@ void AppAutomationControlService::handleCall(App& app, const AppAutomationContro
     }
     if (call->method == "set_editor_config_value") {
         handleSetEditorConfigValue(app, call);
+        return;
+    }
+    if (call->method == "set_editor_gizmos_visible") {
+        handleSetEditorGizmosVisible(app, call);
         return;
     }
     if (call->method == "entity_remove_component") {
@@ -743,15 +747,19 @@ void AppAutomationControlService::handleListOverlaySprites(App& app, const AppAu
 
     nlohmann::json spritesArray = nlohmann::json::array();
     for (const auto& [entity, billboard, transform] : scene->getRegistry().view<BillboardComponent, TransformComponent>().each()) {
-        (void)entity;
+        // A light icon lives on its own generated companion entity, so the
+        // sprite entity and the light it belongs to are two different ids.
+        Entity* companion = scene->getEntityByEnttID(entity);
+        Entity* host      = companion ? CompanionManager::hostOf(*companion) : nullptr;
 
         nlohmann::json entry = {
             {"world_center", {transform.getWorldPosition().x, transform.getWorldPosition().y, transform.getWorldPosition().z}},
             {"world_direction", {billboard.worldDirection.x, billboard.worldDirection.y, billboard.worldDirection.z}},
             {"screen_size_pixels", billboard.screenSizePixels},
             {"min_world_scale", billboard.minWorldScale},
-            {"managed_by_light", billboard.bManagedByLight},
-            {"owner_entity_id", static_cast<uint32_t>(entity)},
+            {"is_companion", CompanionManager::isGeneratedCompanion(*companion)},
+            {"entity_id", static_cast<uint32_t>(entity)},
+            {"host_entity_id", host ? static_cast<uint32_t>(host->getHandle()) : 0u},
         };
         spritesArray.push_back(std::move(entry));
     }
@@ -774,11 +782,14 @@ void AppAutomationControlService::handleListBillboardComponents(App& app, const 
 
     nlohmann::json billboards = nlohmann::json::array();
     for (const auto& [entity, billboard] : scene->getRegistry().view<BillboardComponent>().each()) {
+        Entity* companion = scene->getEntityByEnttID(entity);
+        Entity* host      = companion ? CompanionManager::hostOf(*companion) : nullptr;
+
         nlohmann::json entry = {
             {"entity_id", static_cast<uint32_t>(entity)},
             {"visible", billboard.bVisible},
-            {"managed_by_light", billboard.bManagedByLight},
-            {"owner_entity_id", static_cast<uint32_t>(entity)},
+            {"is_companion", CompanionManager::isGeneratedCompanion(*companion)},
+            {"host_entity_id", host ? static_cast<uint32_t>(host->getHandle()) : 0u},
             {"screen_size_pixels", billboard.screenSizePixels},
             {"min_world_scale", billboard.minWorldScale},
             {"world_direction", {billboard.worldDirection.x, billboard.worldDirection.y, billboard.worldDirection.z}},
@@ -998,6 +1009,22 @@ void AppAutomationControlService::handleSetEditorConfigValue(App& app, const App
                              {
                                  {"key", key},
                                  {"flushed", flushed},
+                             }));
+}
+
+void AppAutomationControlService::handleSetEditorGizmosVisible(App& app, const AppAutomationControlServer::RequestPtr& call)
+{
+    if (!call->params.contains("visible")) {
+        completeCall(call, makeError(*call, "set_editor_gizmos_visible requires params.visible"));
+        return;
+    }
+
+    const bool bVisible = call->params["visible"].get<bool>();
+    app.setEditorGizmoShown(bVisible);
+    completeCall(call,
+                 makeSuccess(*call,
+                             {
+                                 {"visible", bVisible},
                              }));
 }
 

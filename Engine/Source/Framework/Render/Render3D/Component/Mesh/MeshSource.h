@@ -45,6 +45,11 @@ struct MeshSource
     std::string        _sourceModelPath;
     uint32_t           _meshIndex = 0;
 
+    /// Procedural engine mesh (companion / gizmo visuals). Not serialized and
+    /// deliberately not a path: the identity is the catalog value, so engine
+    /// geometry changes reach every existing scene without a migration.
+    EEngineMesh _engineMesh = EEngineMesh::None;
+
     // ========================================
     // Runtime State (not serialized)
     // ========================================
@@ -74,7 +79,9 @@ struct MeshSource
 
     bool hasSource() const
     {
-        return _primitiveGeometry != EPrimitiveGeometry::None || !_sourceModelPath.empty();
+        return _engineMesh != EEngineMesh::None ||
+               _primitiveGeometry != EPrimitiveGeometry::None ||
+               !_sourceModelPath.empty();
     }
 
     // ========================================
@@ -83,7 +90,17 @@ struct MeshSource
 
     void setPrimitiveGeometry(EPrimitiveGeometry type)
     {
+        _engineMesh        = EEngineMesh::None;
         _primitiveGeometry = type;
+        _sourceModelPath.clear();
+        _meshIndex = 0;
+        invalidate();
+    }
+
+    void setEngineMesh(EEngineMesh type)
+    {
+        _engineMesh        = type;
+        _primitiveGeometry = EPrimitiveGeometry::None;
         _sourceModelPath.clear();
         _meshIndex = 0;
         invalidate();
@@ -91,6 +108,7 @@ struct MeshSource
 
     void setFromModel(const std::string& modelPath, uint32_t meshIndex, Mesh* mesh)
     {
+        _engineMesh        = EEngineMesh::None;
         _primitiveGeometry = EPrimitiveGeometry::None;
         _sourceModelPath   = modelPath;
         _meshIndex         = meshIndex;

@@ -26,8 +26,15 @@ struct ManagedChildComponent : public IComponent
     YA_REFLECT_BEGIN(ManagedChildComponent)
     YA_REFLECT_END()
 
-    // No serialized fields — the component's presence IS the signal.
-    // Parent entity handle is runtime-only (not serialized).
+    // No serialized fields — the component's presence IS the signal. The host
+    // handle is runtime-only as well: the serializer skips the entity by
+    // component presence, and the host rebuilds its companions on load, so
+    // there is nothing to persist.
+
+    /// Entity whose system generated this one. Null means "generated, host
+    /// unknown" (a companion whose host died); consumers resolve provenance
+    /// through CompanionRegistry, never by inspecting component fields.
+    entt::entity host = entt::null;
 };
 
 } // namespace ya

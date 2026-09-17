@@ -10,13 +10,17 @@ target("ya-render-ecs-adapters")
     add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h")
     -- Rules operate on ECS components and schedule through the generic
-    -- linkage framework; they never reach Host/App.
+    -- linkage framework; they never reach Host/App. The adapter layer's
+    -- exported headers bridge ECS components and the Render3D runtime (the
+    -- companion contract exposes scene-3d specs and render feature bits), so
+    -- both include trees are public: consumers are the Host composition root.
     add_deps("ya-foundation-core", "ya-component-linkage", { public = true })
+    add_deps("ya-scene-3d", "ya-render-3d", { public = true })
     add_deps("ya-ecs-core", "ya-ecs-systems", "ya-scene-core")
     -- The bridge layer is allowed to reach the resource and Render3D layers
     -- (Phase 2 closure: ecs-core + Resource + Render3D); resolve/binding
     -- services land here as the fat ECS module dissolves.
-    add_deps("ya-resource-core", "ya-resource-loader", "ya-resource-runtime", "ya-render-3d", "ya-scene-3d", "ya-scene-runtime")
+    add_deps("ya-resource-core", "ya-resource-loader", "ya-resource-runtime", "ya-scene-runtime")
     -- Model instantiation walks the scene tree base (Node) from ya-hierarchy.
     add_deps("ya-hierarchy")
     if is_plat("windows") then
