@@ -21,6 +21,7 @@
 - `./legacy_test_target_break_after_module_move.md`：模块迁移/类型收敛/API 折回后，遗留测试 target 编译失败的常见形态与修复方式（include 失效、API 删除、类型替换、字段可见性、生成头 include、枚举收紧）
 - `./derived_visual_on_host_component_slot.md`：把相机机身这类派生视觉塞进宿主组件槽的回归——场景文件被污染、资产路径被钉死、排除逻辑散落五处、宿主丢槽位；正确做法是生成子实体 + 声明式边界
 - `./app_teardown_order_and_instance_lock.md`：启动失败路径（控制端口被占用）崩溃 139/133——App 只有 `quit()` 一条有序 teardown 却没人走、模块 `onStop` 在 App 析构后执行、`unloadAll()` 提前于 App 的裸模块指针；含实例锁/墙钟上限运行策略的边界
+- `./control_instance_lifecycle.md`：agent 驱动引擎时实例堆积的四个根因——没有发现渠道、帧预算挡不住闲置进程、端口被占静默降级、harness `kill()` 杀的是启动器而不是引擎；对应 control 入口 + 实例记录 + 默认墙钟上限
 
 ## 边界
 

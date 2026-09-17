@@ -102,21 +102,43 @@ make package t=HelloMaterial
 
 ## 实例与生命周期（多 agent / 长驻运行）
 
-`ya-runtime`（game 与 editor 同一套入口）按「project|mode」持有一个进程锁，锁由内核在进程
-退出或被 kill 时自动释放：
+需要驱动引擎（自动化、脚本、MCP、截图、回归）时，**走 `control` 入口，不要手搓启动命令**：
+
+```bash
+python3 Script/ya.py control start --project Example/HelloMaterial/HelloMaterial.yaproject
+python3 Script/ya.py control status
+python3 Script/ya.py control call --project <p> eval_js '{"source": "1+1"}'
+python3 Script/ya.py control mcp --project <p>        # stdio MCP，工具目录 = 引擎 list_commands
+python3 Script/ya.py control stop --project <p>       # 退出；不听话则 SIGTERM→SIGKILL
+```
+
+`control start` 的行为就是「有则接入、无则只起一个」：
+
+- 同 project 同模式已有实例 → **直接复用**（打印它的 pid 与端口），不再开第二个进程；
+- 需要新起时，自己挑空闲端口、脱离当前 shell 存活，并**默认带 30 分钟墙钟上限**
+  （`--lifetime 0` 才是显式取消）；
+- 实例把自己登记在 `tempfile.gettempdir()/ya-instances/*.instance.json`（pid/project/mode/
+  controlPort/启动时间），所以「谁在跑、端口是多少」是查询而不是猜；
+- 进程被 SIGKILL 后记录可能残留，`status`/`stop` 会按 pid 存活情况清掉，不必手工删文件。
+
+引擎侧的同一条规则（`ya-runtime`，game 与 editor 同一套入口）：
 
 - 同一 project 同一模式只允许一个实例；第二个实例立刻以退出码 1 停止，日志给出
-  `Refusing to start '<project>|editor': already running as pid <PID>`。不同 project 可以
-  并存（合法的双开），不需要也不要手工删锁文件。
+  `Refusing to start '<project>|editor': already running as pid <PID> (automation control port <p>)`
+  —— 消息里直接给出可接入的端口，接到活的那一个而不是再起一个。不同 project 可以并存
+  （合法的双开），锁由内核在进程退出或被 kill 时释放，不需要手工删锁文件。
 - 长驻运行（agent 调试、录制、自动化）统一带上墙钟上限 `--max-lifetime-seconds=<s>`：
   到点退出码 0，日志 `App loop exited: reason=max-lifetime after N frames, Ts`。
   `--exit-after-frame` 只数帧，挡不住卡住或闲置的进程，墙钟才会。
 - 请求了 `--automation-control-port=<p>` 而端口已被占用时，启动直接失败（退出码 1，
   `automation control port <p> is already in use`），不会出现「进程看起来健康、但自动化
   调用实际打在别人身上」。
+- 脚本里 Popen 起引擎的：`engine.kill()` 杀的是启动器（`ya.py`/`xmake`），**不是引擎**。
+  这类 harness 必须给引擎传 `--max-lifetime-seconds`，否则 harness 自己死掉就留下孤儿。
 - 收工前确认没有自己的残留实例：
 
 ```bash
+python3 Script/ya.py control status
 ps -ax -o pid,etime,command | grep ya-runtime | grep -v grep
 ```
 

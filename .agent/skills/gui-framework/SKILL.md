@@ -764,8 +764,10 @@ exit 0 = 全 checkpoint 过）。页名必须是分组 rail 上的 Gallery 页�
 4. **双布局变体**：TreeView/Table 的行集变化测试，autoSize 和固定高度两种布局都要
    覆盖——前者 rect 变化掩盖了「Layout≠Paint」漏画，后者才暴露。
 5. **渲染级验证走真机**：scenario 模式不渲染帧（buildSnapshot 不跑），G2 校验帧
-   （漏标脏告警）和像素验证必须用真机：`--automation-control-port` 启动 + sleep +
-   `quit` JSON-RPC 收日志。行为断言归 scenario，渲染断言归真机，两条线分工。
+   （漏标脏告警）和像素验证必须用真机。真机走 `control` 入口，别自己拼启动命令：
+   `python3 Script/ya.py control start --project <p>`（有则接入、无则起一个且带墙钟上限）
+   → `control call` / `control mcp` → `control stop`（详见 `ya-build` skill）。行为断言归
+   scenario，渲染断言归真机，两条线分工。
 6. **环境随机崩溃重试**：GUI 反复启动偶发 init 崩溃（0xC0000005，swapchain 创建
    阶段，与场景内容无关）。自动化脚本对场景运行加重试（每场景最多 4 次，间隔
    1.5s），不要在单次失败上误判回归。
