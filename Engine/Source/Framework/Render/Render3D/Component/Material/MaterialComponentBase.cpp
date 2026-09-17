@@ -1,4 +1,4 @@
-#include "MaterialComponentBase.h"
+#include "ECS/Component/Material/MaterialComponentBase.h"
 
 #include "Render3D/Material/MaterialFactory.h"
 

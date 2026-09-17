@@ -1,8 +1,8 @@
-#include "VulkanRender.h"
-#include "VulkanCommandBuffer.h"
-#include "VulkanDescriptorSet.h"
-#include "VulkanSampler.h"
-#include "VulkanRenderSurfaceContext.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Backend/Vulkan/VulkanCommandBuffer.h"
+#include "RHI/Backend/Vulkan/VulkanDescriptorSet.h"
+#include "RHI/Backend/Vulkan/VulkanSampler.h"
+#include "RHI/Backend/Vulkan/VulkanRenderSurfaceContext.h"
 #include "RHI/NativeWindow.h"
 
 #include <Core/Base.h>
@@ -18,7 +18,7 @@
 #include <vector>
 
 #include "Core/Common/DeferredDeletionQueue.h"
-#include "VulkanUtils.h"
+#include "RHI/Backend/Vulkan/VulkanUtils.h"
 
 
 #ifdef _WIN32

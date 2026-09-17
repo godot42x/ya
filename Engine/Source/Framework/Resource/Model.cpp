@@ -1,4 +1,4 @@
-#include "Model.h"
+#include "Resource/Model.h"
 
 #include "Resource/EngineGeometryNormalizer.h"
 #include "Resource/Loader/Model/AssimpImporter.h"

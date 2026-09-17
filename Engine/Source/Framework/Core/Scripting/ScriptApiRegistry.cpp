@@ -1,4 +1,4 @@
-#include "ScriptApiRegistry.h"
+#include "Core/Scripting/ScriptApiRegistry.h"
 
 #include "Core/Log.h"
 

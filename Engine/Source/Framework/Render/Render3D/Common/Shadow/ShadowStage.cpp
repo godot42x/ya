@@ -1,6 +1,6 @@
-#include "ShadowStage.h"
+#include "Render3D/Common/Shadow/ShadowStage.h"
 
-#include "BasicShadowMap/BasicShadowMapTechnique.h"
+#include "Render3D/Common/Shadow/BasicShadowMap/BasicShadowMapTechnique.h"
 
 #include "Core/Profiling/Instrumentor.h"
 

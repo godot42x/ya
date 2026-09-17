@@ -1,4 +1,4 @@
-#include "Node3D.h"
+#include "Scene3D/Node3D.h"
 
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"

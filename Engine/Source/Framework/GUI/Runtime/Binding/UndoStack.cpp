@@ -1,4 +1,4 @@
-#include "UndoStack.h"
+#include "GUI/Binding/UndoStack.h"
 
 #include <memory>
 #include <utility>

@@ -1,4 +1,4 @@
-#include "RenderGraphResourceRegistry.h"
+#include "Graph/RenderGraphResourceRegistry.h"
 
 #include "Core/Common/DeferredDeletionQueue.h"
 

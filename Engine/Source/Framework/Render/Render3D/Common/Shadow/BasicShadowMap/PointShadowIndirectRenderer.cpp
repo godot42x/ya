@@ -1,4 +1,4 @@
-#include "PointShadowIndirectRenderer.h"
+#include "Render3D/Common/Shadow/BasicShadowMap/PointShadowIndirectRenderer.h"
 
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Common/DeferredDeletionQueue.h"

@@ -1,4 +1,4 @@
-#include "GameplayResourceBinding.h"
+#include "Render3D/Services/GameplayResourceBinding.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Systems/Components/UIComponent.h"

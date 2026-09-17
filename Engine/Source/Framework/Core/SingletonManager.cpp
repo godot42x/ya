@@ -1,4 +1,4 @@
-#include "SingletonManager.h"
+#include "Core/SingletonManager.h"
 #include <algorithm>
 #include <mutex>
 #include "Core/Log.h"

@@ -1,9 +1,9 @@
-#include "VulkanSwapChain.h"
+#include "RHI/Backend/Vulkan/VulkanSwapChain.h"
 
 #include "Core/Log.h"
 
-#include "VulkanRender.h"
-#include "VulkanUtils.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Backend/Vulkan/VulkanUtils.h"
 #include "utility.cc/ranges.h"
 
 #include <algorithm>

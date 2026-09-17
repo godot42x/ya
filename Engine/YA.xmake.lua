@@ -164,7 +164,7 @@ do
     add_files("./Module.cpp", { unity_ignored = true })
 
     add_headerfiles("./Source/**.h")
-    set_pcheader("./Source/Framework/Core/Common/FWD.h")
+    set_pcheader("./Source/Framework/Core/include/Core/Common/FWD.h")
 
     add_includedirs("./Shader/Slang/Generated", { public = true })
 

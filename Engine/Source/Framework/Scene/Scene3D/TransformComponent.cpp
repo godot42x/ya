@@ -1,4 +1,4 @@
-#include "TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 
 // TransformComponent is now a pure data container
 // All matrix computations are done by TransformSystem

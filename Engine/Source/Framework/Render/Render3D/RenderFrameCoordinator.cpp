@@ -1,6 +1,6 @@
-#include "RenderFrameCoordinator.h"
+#include "Render3D/RenderFrameCoordinator.h"
 
-#include "RenderDeviceState.h"
+#include "Render3D/RenderDeviceState.h"
 
 #include "Core/Log.h"
 #include "Core/Profiling/PerfKeys.h"

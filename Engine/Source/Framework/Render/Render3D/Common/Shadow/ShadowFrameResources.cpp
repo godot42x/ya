@@ -1,4 +1,4 @@
-#include "ShadowFrameResources.h"
+#include "Render3D/Common/Shadow/ShadowFrameResources.h"
 
 #include "Core/Log.h"
 #include "RHI/Render.h"

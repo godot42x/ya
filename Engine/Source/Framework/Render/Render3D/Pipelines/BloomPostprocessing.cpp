@@ -1,4 +1,4 @@
-#include "BloomPostprocessing.h"
+#include "Render3D/Pipelines/BloomPostprocessing.h"
 
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/DescriptorSet.h"

@@ -1,0 +1,310 @@
+#pragma once
+
+#include "Core/Base.h"
+#include "Core/Delegate.h"
+#include "RHI/Core/Image.h"
+#include "RHI/Core/ImageResource.h"
+#include "RHI/RenderDefines.h"
+#include "RHI/Core/Sampler.h"
+#include "RHI/Core/TextureCreateInfo.h"
+
+#include <array>
+#include <span>
+#include <vector>
+
+namespace ya
+{
+
+struct IRender;
+struct IRenderResourceFactory;
+
+// Forward declaration
+template <typename ComponentType>
+struct ColorRGBA
+{
+    using ty = ComponentType;
+    ty r;
+    ty g;
+    ty b;
+    ty a;
+};
+
+struct ITexture
+{
+};
+
+using ColorU8_t = ColorRGBA<uint8_t>;
+
+struct TextureMemoryView
+{
+    uint32_t    width     = 0;
+    uint32_t    height    = 0;
+    uint32_t    channels  = 4;
+    uint32_t    mipLevels = 1;
+    bool        generateMipmaps = false;
+    EFormat::T  format    = EFormat::R8G8B8A8_UNORM;
+    const void* data      = nullptr;
+    size_t      dataSize  = 0;
+
+    [[nodiscard]] size_t baseLevelDataSize() const
+    {
+        const auto blockExtent = EFormat::getCompressedBlockExtent(format);
+        const bool bCompressed = EFormat::isBlockCompressed(format);
+        const size_t blocksX = bCompressed
+                                   ? (static_cast<size_t>(width) + blockExtent.width - 1) / blockExtent.width
+                                   : width;
+        const size_t blocksY = bCompressed
+                                   ? (static_cast<size_t>(height) + blockExtent.height - 1) / blockExtent.height
+                                   : height;
+        return blocksX * blocksY * EFormat::getPixelSize(format);
+    }
+
+    [[nodiscard]] bool isValid() const
+    {
+        return data != nullptr && width > 0 && height > 0 &&
+               dataSize >= baseLevelDataSize();
+    }
+};
+
+struct TextureMemoryCreateInfo
+{
+    std::string       filepath;
+    std::string       label;
+    TextureMemoryView memory;
+};
+
+struct CubeMapMemoryCreateInfo
+{
+    std::string                                   label;
+    std::array<TextureMemoryView, CubeFace_Count> faces{};
+    bool                                          flipVertical = false;
+
+    [[nodiscard]] bool isValid() const
+    {
+        if (!faces[0].isValid()) {
+            return false;
+        }
+
+        const auto width    = faces[0].width;
+        const auto height   = faces[0].height;
+        const auto channels = faces[0].channels;
+        const auto format   = faces[0].format;
+
+        for (const auto& face : faces) {
+            if (!face.isValid()) {
+                return false;
+            }
+
+            if (face.width != width || face.height != height ||
+                face.channels != channels || face.format != format) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+};
+
+/// Declares the default sampler a texture wants to be sampled with, set once
+/// at creation (NOT inferred per-frame from the label string — see
+/// QuadRender::resolveSamplerForTexture). This keeps glyph atlas sampling
+/// decisions off the hot draw path.
+enum class ESamplerCategory : uint8_t
+{
+    Default      = 0, // linear + repeat (general color textures)
+    ClampLinear,      // SDF glyph atlas: lerp distance field, clamp to edge
+    ClampNearest,     // bitmap/coverage glyph atlas: snap texels, clamp to edge
+};
+
+struct YA_RHI_API Texture
+{
+    EFormat::T _format    = EFormat::R8G8B8A8_UNORM;
+    uint32_t   _width     = 0;
+    uint32_t   _height    = 0;
+    uint32_t   _channels  = 4; // RGBA by default
+    uint32_t   _mipLevels = 1; // Number of mip levels
+
+    std::string _label;
+    std::string _filepath;
+
+    std::shared_ptr<ImageResource> resource;
+    std::vector<RetainedResource>   retainedResources;
+
+    ESamplerCategory _samplerCategory = ESamplerCategory::Default;
+
+  public:
+
+    static std::shared_ptr<Texture> fromMemory(IRender& render, const TextureMemoryCreateInfo& ci);
+
+    static std::shared_ptr<Texture> fromData(IRender&                           render,
+                                             uint32_t                           width,
+                                             uint32_t                               height,
+                                             const std::vector<ColorRGBA<uint8_t>>& data,
+                                             const std::string&                     label = "");
+
+    static std::shared_ptr<Texture> fromData(IRender&           render,
+                                             uint32_t           width,
+                                             uint32_t           height,
+                                             const void*        data,
+                                             size_t             dataSize,
+                                             EFormat::T         format,
+                                             const std::string& label = "");
+
+    static std::shared_ptr<Texture> createCubeMap(IRender& render, const CubeMapCreateInfo& ci);
+    static std::shared_ptr<Texture> createCubeMapFromMemory(IRender& render, const CubeMapMemoryCreateInfo& ci);
+    static std::shared_ptr<Texture> createSolidCubeMap(IRender& render, const ColorU8_t&   color,
+                                                       const std::string& label = "");
+
+    /**
+     * @brief Wrap existing IImage/IImageView into a Texture
+     * @param img Existing image
+     * @param view Existing image view
+     * @param label Optional label for debugging
+     * @return Shared pointer to Texture
+     *
+     * Usage (internal): auto tex = Texture::wrap(vkImage, vkImageView, "label");
+     */
+    static std::shared_ptr<Texture> wrap(std::shared_ptr<IImage>     img,
+                                         std::shared_ptr<IImageView> view,
+                                         const std::string&          label = "");
+
+  private:
+    // Default constructor for factory use
+    Texture() = default;
+
+    // clang-format off
+  private: struct dummy {};
+  public: Texture(dummy d) {(void)d;}
+    // clang-format on
+
+  private:
+    static std::shared_ptr<Texture> createShared() { return ya::make_shared<Texture>(dummy{}); }
+
+    // Internal initialization methods (called by factory)
+    void initFromData(IRender& render,
+                      const void* pixels,
+                      size_t dataSize,
+                      uint32_t texWidth,
+                      uint32_t texHeight,
+                      EFormat::T format,
+                      uint32_t mipLevels = 1,
+                      bool generateMipmaps = false);
+    void initCubeMapFromMemory(IRender& render, const CubeMapMemoryCreateInfo& ci);
+    void initFallbackTexture(IRender& render, const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight);
+
+  public:
+    virtual ~Texture() = default;
+
+    // Disable copy, allow move
+    Texture(const Texture&)            = delete;
+    Texture& operator=(const Texture&) = delete;
+    Texture(Texture&&)                 = default;
+    Texture& operator=(Texture&&)      = default;
+
+    // Platform-independent accessors
+    [[nodiscard]] std::shared_ptr<ImageResource> getResourceShared() const { return resource; }
+    [[nodiscard]] IImage*                 getImage() const { return resource ? resource->getImage() : nullptr; }
+    [[nodiscard]] std::shared_ptr<IImage> getImageShared() const { return resource ? resource->getImageShared() : nullptr; }
+    [[nodiscard]] IImageView*             getImageView() const { return resource ? resource->getImageView() : nullptr; }
+    [[nodiscard]] std::shared_ptr<IImageView> getImageViewShared() const { return resource ? resource->getImageViewShared() : nullptr; }
+    const std::vector<RetainedResource>& getRetainedResources() const { return retainedResources; }
+
+    uint32_t   getWidth() const { return _width; }
+    uint32_t   getHeight() const { return _height; }
+    uint32_t   getChannels() const { return _channels; }
+    EFormat::T getFormat() const { return _format; }
+
+    void               setLabel(const std::string& label);
+    const std::string& getLabel() const { return _label; }
+    const std::string& getFilepath() const { return _filepath; }
+
+    /// Sampler category declared at creation (see ESamplerCategory). Drives
+    /// QuadRender::resolveSamplerForTexture without per-frame label matching.
+    void             setSamplerCategory(ESamplerCategory cat) { _samplerCategory = cat; }
+    [[nodiscard]] ESamplerCategory getSamplerCategory() const { return _samplerCategory; }
+    Extent2D           getExtent() const { return Extent2D{.width = _width, .height = _height}; }
+
+    bool isValid() const { return resource && resource->isValid() && _width > 0 && _height > 0; }
+
+    /**
+     * @brief Upload a sub-rectangle of pixels into the existing image, in place.
+     *
+     * Does NOT recreate the GPU image (unlike fromData). Pixels must be tightly
+     * packed rows of (w * pixelSize(format)) bytes. Used by append-mostly
+     * atlases (font glyphs) to avoid re-uploading the whole texture on every
+     * added glyph. Returns false if the image lacks TransferDst usage or the
+     * copy cannot be recorded. Mipmaps are NOT regenerated.
+     *
+     * @param baseArrayLayer  Target array layer (0 for single-layer 2D images).
+     * @param layerCount      Number of array layers written by this update (must be 1
+     *                        for non-array textures). Passed through to the RHI copy;
+     *                        never hardcoded, so callers updating array textures hit
+     *                        the correct layer instead of silently writing layer 0.
+     */
+    bool updateRegion(IRender&             render,
+                      uint32_t             x,
+                      uint32_t             y,
+                      uint32_t             w,
+                      uint32_t             h,
+                      const void*          pixels,
+                      uint32_t             baseArrayLayer = 0,
+                      uint32_t             layerCount     = 1);
+
+    /// Batched variant of @ref updateRegion. Each entry's rect is copied from
+    /// `pixels` (contiguous RGBA8) at `entry.offset` (byte offset of that
+    /// sub-rectangle inside `pixels`). All entries share one staging buffer,
+    /// one layout transition and one submit — call this when appending many
+    /// glyphs per frame instead of looping updateRegion(), which would allocate
+    /// N staging buffers and issue N submits.
+    struct RegionUpdate
+    {
+        uint32_t x               = 0;
+        uint32_t y               = 0;
+        uint32_t w               = 0;
+        uint32_t h               = 0;
+        size_t   offset          = 0; // byte offset of this rect's pixels within `pixels`
+        uint32_t baseArrayLayer  = 0;
+        uint32_t layerCount      = 1;
+    };
+    bool updateRegions(IRender& render, const void* pixels, std::span<const RegionUpdate> regions);
+
+};
+
+/**
+ * @brief Lightweight runtime texture binding - replaces TextureView
+ *
+ * Holds only the resolved resource pointers (Texture + Sampler).
+ * Does NOT store bEnable (that belongs in the param UBO).
+ * Provides convenience accessors that return GPU Handles with fallback.
+ */
+struct YA_RHI_API TextureBinding
+{
+    ya::Ptr<Texture> texture = nullptr;
+    ya::Ptr<Sampler> sampler = nullptr;
+
+    [[nodiscard]] bool isValid() const { return texture && sampler; }
+
+    /**
+     * @brief Get the GPU image-view handle, falling back to white texture if unset.
+     */
+    [[nodiscard]] ImageViewHandle getImageViewHandle() const;
+
+    /**
+     * @brief Get the GPU sampler handle, falling back to default sampler if unset.
+     */
+    [[nodiscard]] SamplerHandle getSamplerHandle() const;
+
+    // Convenience accessors
+    Texture* getTexture() const { return texture.get(); }
+    Sampler* getSampler() const { return sampler.get(); }
+
+    void setTexture(ya::Ptr<Texture> tex) { texture = std::move(tex); }
+    void setSampler(ya::Ptr<Sampler> smp) { sampler = std::move(smp); }
+
+    void clear()
+    {
+        texture = nullptr;
+        sampler = nullptr;
+    }
+};
+} // namespace ya

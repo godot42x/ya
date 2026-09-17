@@ -1,4 +1,4 @@
-#include "ShadowMapResources.h"
+#include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
 
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Render.h"

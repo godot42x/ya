@@ -1,4 +1,4 @@
-#include "ViewPassResources.h"
+#include "Render3D/Common/ViewPassResources.h"
 
 #include "RHI/Render.h"
 #include "Render3D/Common/FrameResourceSubmission.h"

@@ -1,4 +1,4 @@
-#include "EntityIdViewportPass.h"
+#include "Render3D/Common/EntityIdViewportPass.h"
 
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Render.h"

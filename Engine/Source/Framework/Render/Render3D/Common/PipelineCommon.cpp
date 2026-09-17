@@ -1,4 +1,4 @@
-#include "PipelineCommon.h"
+#include "Render3D/Common/PipelineCommon.h"
 
 #include "RHI/Core/Image.h"
 #include "RHI/Core/ImageResource.h"

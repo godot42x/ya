@@ -1,4 +1,4 @@
-#include "PBRGenerateBrdfLUT.h"
+#include "Render3D/Pipelines/PBRGenerateBrdfLUT.h"
 
 #include "RHI/Core/CommandBuffer.h"
 #include "Graph/RenderGraphExecutor.h"

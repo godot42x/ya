@@ -1,6 +1,6 @@
 #include "App/Kernel/AppKernel.h"
 #include "Core/KeyCode.h"
-#include "GUI/Host/GUIApp.h"
+#include "GUI/Host/GUIAppHost.h"
 #include "GUI/Host/GUIDockNativePlacement.h"
 #include "GUI/Host/GUIDragRouter.h"
 #include "GUI/Host/GUIWindowChrome.h"

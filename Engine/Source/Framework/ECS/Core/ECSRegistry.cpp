@@ -1,4 +1,4 @@
-#include "ECSRegistry.h"
+#include "ECS/ECSRegistry.h"
 
 namespace ya
 {

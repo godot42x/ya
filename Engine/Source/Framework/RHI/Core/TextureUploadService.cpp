@@ -1,4 +1,4 @@
-#include "TextureUploadService.h"
+#include "RHI/Core/TextureUploadService.h"
 
 #include "Core/Log.h"
 #include "RHI/Core/Buffer.h"

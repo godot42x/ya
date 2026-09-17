@@ -1,5 +1,5 @@
-#include "RenderGraph.h"
-#include "RenderGraphResourceRegistry.h"
+#include "Graph/RenderGraph.h"
+#include "Graph/RenderGraphResourceRegistry.h"
 #include "RHI/Core/RenderingInfoUtils.h"
 
 #include <algorithm>

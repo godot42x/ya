@@ -1,4 +1,4 @@
-#include "GBufferStage.h"
+#include "Render3D/Deferred/GBufferStage.h"
 
 #include "Core/Profiling/Instrumentor.h"
 

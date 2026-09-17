@@ -1,5 +1,5 @@
-#include "CameraComponent.h"
-#include "../TransformSystem.h"
+#include "ECS/Systems/Components/CameraComponent.h"
+#include "ECS/Systems/TransformSystem.h"
 
 #include "Scene3D/TransformComponent.h"
 

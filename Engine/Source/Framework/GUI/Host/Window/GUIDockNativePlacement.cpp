@@ -1,6 +1,6 @@
 #include "GUI/Host/GUIDockNativePlacement.h"
 
-#include "GUI/Host/GUIWindowHost.h"
+#include "GUI/Host/GUIAppHost.h"
 
 #include <algorithm>
 #include <cmath>

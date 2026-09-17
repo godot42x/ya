@@ -1,4 +1,4 @@
-#include "PrimitiveGeometryFactory.h"
+#include "Resource/Core/Mesh/PrimitiveGeometryFactory.h"
 
 #include "Core/Log.h"
 

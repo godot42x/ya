@@ -1,9 +1,9 @@
-#include "VulkanBuffer.h"
-#include "VulkanUtils.h"
+#include "RHI/Backend/Vulkan/VulkanBuffer.h"
+#include "RHI/Backend/Vulkan/VulkanUtils.h"
 
-#include "VulkanMemoryAllocator.h"
+#include "RHI/Backend/Vulkan/VulkanMemoryAllocator.h"
 
-#include "VulkanRender.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
 
 namespace ya
 {

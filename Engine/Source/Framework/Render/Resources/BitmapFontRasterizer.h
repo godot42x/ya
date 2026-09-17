@@ -8,7 +8,7 @@
 // so Phase 1 stays behavior-preserving.
 // ============================================================================
 
-#include "IFontRasterizer.h"
+#include "Render/Resources/IFontRasterizer.h"
 
 namespace ya
 {

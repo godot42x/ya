@@ -1,4 +1,4 @@
-#include "RenderDiagnosticsService.h"
+#include "Render3D/Services/RenderDiagnosticsService.h"
 
 
 

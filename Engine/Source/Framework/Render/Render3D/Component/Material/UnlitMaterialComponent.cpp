@@ -1,4 +1,4 @@
-#include "UnlitMaterialComponent.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
 
 #include "Core/Math/Math.h"
 #include "RHI/Backend/TextureLibrary.h"

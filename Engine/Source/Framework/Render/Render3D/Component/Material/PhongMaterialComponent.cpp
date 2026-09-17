@@ -1,4 +1,4 @@
-#include "PhongMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 
 #include "Core/Math/Math.h"
 #include "RHI/Backend/TextureLibrary.h"

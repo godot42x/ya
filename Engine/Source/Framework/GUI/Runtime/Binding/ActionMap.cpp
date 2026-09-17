@@ -1,4 +1,4 @@
-#include "ActionMap.h"
+#include "GUI/Binding/ActionMap.h"
 
 namespace ya
 {

@@ -1,4 +1,4 @@
-#include "PBRMaterialComponent.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
 
 #include "RHI/Backend/TextureLibrary.h"
 #include "Render/Resources/TextureSlotBinding.h"

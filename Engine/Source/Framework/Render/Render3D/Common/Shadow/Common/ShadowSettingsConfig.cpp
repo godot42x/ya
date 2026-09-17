@@ -1,4 +1,4 @@
-#include "ShadowSettingsConfig.h"
+#include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 
 #include "Core/Config/ConfigManager.h"
 #include "Render3D/Common/AppAutomation.h"

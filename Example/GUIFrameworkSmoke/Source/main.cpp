@@ -7,7 +7,7 @@
 // product closure only (Core/RHI/Vulkan backend + the four GUI modules +
 // the app host); no ECS/Physics/Resource/RenderGraph/Render3D/Host/Editor.
 
-#include "GUI/Host/GUIApp.h"
+#include "GUI/Host/GUIAppHost.h"
 
 #include "App/Control/AutomationRun.h"
 #include "Core/Log.h"

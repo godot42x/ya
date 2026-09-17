@@ -75,20 +75,29 @@ xmake project -k compile_commands
 12. 禁止以制造提交数量或表面进度为目标工作：每个 checkpoint 必须对应用户明确要求的单一可验收目标，不能把无关修复、占位实现、重复拆分或仅改文档伪装成推进。
 13. 禁止污染提交历史：提交前必须检查 diff、测试和计划映射；若一个目标尚未形成完整闭环，不得拆成多个“进度”提交。发现方向偏离时先停止编码并报告，不得继续用新提交掩盖偏离。
 14. 计划执行必须先复述当前目标和边界，再实施；每个 checkpoint 说明保留/未完成/偏离项。不得为了满足“继续”而臆造新任务。
+15. 一个头文件只有一个物理位置：需要公开的头放在 `<module>/include/<Module>/...`，
+    公开路径就是相对 include 根的路径；模块根不再保留同名副本，`include/` 下不得出现
+    转发 stub，一个物理头只能有一个公开路径。include 字符串一律写公开路径。
+    细则见 `./.agent/skills/code-reorganize/SKILL.md`。
 
 ## Repo Facts
 
-- `Engine/Source/Core/`：核心系统、日志、反射、脚本
-- `Engine/Source/Render/`：渲染抽象层
-- `Engine/Source/Framework/GUI/`：GUI 框架（widgets/compose/draw2d/resources/tooling/app-host 五模块 + 聚合 target）
-- `Engine/Source/Platform/Render/`：Vulkan / OpenGL 后端
-- `Engine/Source/Runtime/Application/`：应用入口、生命周期与自动化
-- `Engine/Source/Runtime/Rendering/`：RenderRuntime、渲染管线与渲染服务
-- `Engine/Source/Editor/`：编辑器层
-- `Engine/Shader/`：Slang 源与生成头
-- `Example/GUIWorkbench/`：retain-mode GUI demo app（页面注册进 FWorkbenchSurface）
-- `Example/`：项目 / 示例
-- `Test/`：GoogleTest
+- `Engine/Source/Framework/`：引擎无关可复用能力层（Core / RHI / App / GUI /
+  Render / Resource / Scene / Physics / ECS / Hierarchy）。每个子目录是一个
+  xmake target，自带 `xmake.lua`。
+- `Engine/Source/Applications/`：组装出的应用形态（GameRuntime / GameEditor）。
+- `Engine/Source/<tier>/<Module>/include/<Module>/...`：该模块公开头的唯一
+  物理位置，公开路径即相对 `include/` 的路径（如 `Core/Base.h`）。模块根目录
+  只放私有头与 `.cpp`；读任何头都从公开路径进。
+- `Engine/Source/Framework/GUI/`：GUI 框架。`Runtime/{Widgets,Layout,Binding,Declarative,Compose}`
+  是独立源码目录，但 `ya-gui-widgets` 一个 target 同时发布
+  `Widgets/include`、`Layout/include`、`Binding/include`、`Declarative/include`
+  四个 include 根，所以公开路径是 `GUI/Widgets/...`、`GUI/Layout/...` 等。
+- `Engine/Source/Framework/RHI/Backend/{Vulkan,OpenGL}/`：Vulkan / OpenGL 后端。
+- `Engine/Shader/`：Slang 源与生成头（`Generated/*` 只读）。
+- `Engine/Programs/`：可执行入口（YARuntime / ShaderCompiler / ya-cli）。
+- `Engine/Test/`：GoogleTest（`ya-testing`）；`test/`：零散的单文件 / 链接实验。
+- `Example/`：示例项目；`Example/GUIWorkbench/` 是 retain-mode GUI demo app。
 
 ## Documentation Policy
 

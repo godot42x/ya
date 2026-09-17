@@ -1,4 +1,4 @@
-#include "SelectionModel.h"
+#include "GUI/Binding/SelectionModel.h"
 
 #include <algorithm>
 

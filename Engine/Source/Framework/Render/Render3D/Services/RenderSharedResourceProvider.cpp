@@ -1,4 +1,4 @@
-#include "RenderSharedResourceProvider.h"
+#include "Render3D/Services/RenderSharedResourceProvider.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Core/RenderTexture.h"
 

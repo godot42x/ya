@@ -2,7 +2,7 @@
 // Created by nono on 10/14/23.
 //
 
-#include "Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 
 #include "Core/Log.h"
 #include <algorithm>

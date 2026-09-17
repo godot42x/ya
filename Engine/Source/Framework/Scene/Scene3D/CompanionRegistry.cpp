@@ -1,4 +1,4 @@
-#include "CompanionRegistry.h"
+#include "Scene3D/CompanionRegistry.h"
 
 #include <algorithm>
 

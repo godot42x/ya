@@ -1,4 +1,4 @@
-#include "EquidistantCylindrical2CubeMap.h"
+#include "Render3D/Pipelines/EquidistantCylindrical2CubeMap.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Core/RenderingInfoUtils.h"
 

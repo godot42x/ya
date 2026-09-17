@@ -1,4 +1,4 @@
-#include "ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
 
 #include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"

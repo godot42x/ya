@@ -1,4 +1,4 @@
-#include "SceneRenderScheduler.h"
+#include "Render3D/Common/SceneRenderScheduler.h"
 
 #include "Scene/Core/Scene.h"
 

@@ -1,4 +1,4 @@
-#include "FrameUploadArena.h"
+#include "RHI/Core/FrameUploadArena.h"
 
 #include "Core/Log.h"
 #include "Core/Common/DeferredDeletionQueue.h"

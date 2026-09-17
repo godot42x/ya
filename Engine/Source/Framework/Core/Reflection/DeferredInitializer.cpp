@@ -1,4 +1,4 @@
-#include "DeferredInitializer.h"
+#include "Core/Reflection/DeferredInitializer.h"
 
 namespace ya::reflection
 {

@@ -1,4 +1,4 @@
-#include "PointShadowPass.h"
+#include "Render3D/Common/Shadow/BasicShadowMap/PointShadowPass.h"
 
 #include "Graph/RenderGraphImportUtils.h"
 

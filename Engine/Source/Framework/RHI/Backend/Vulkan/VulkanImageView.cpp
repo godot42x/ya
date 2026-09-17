@@ -1,6 +1,6 @@
-#include "VulkanImageView.h"
-#include "VulkanImage.h"
-#include "VulkanRender.h"
+#include "RHI/Backend/Vulkan/VulkanImageView.h"
+#include "RHI/Backend/Vulkan/VulkanImage.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
 namespace ya
 {
 

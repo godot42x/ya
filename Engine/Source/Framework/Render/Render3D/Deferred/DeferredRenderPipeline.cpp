@@ -1,10 +1,10 @@
-#include "DeferredRenderPipeline.h"
+#include "Render3D/Deferred/DeferredRenderPipeline.h"
 
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
-#include "DeferredViewportResources.h"
-#include "DeferredAttachmentFormats.h"
+#include "Render3D/Deferred/DeferredViewportResources.h"
+#include "Render3D/Deferred/DeferredAttachmentFormats.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Systems/Components/DirectionComponent.h"

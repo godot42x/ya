@@ -1,5 +1,5 @@
-#include "Entity.h"
-#include "Component.h"
+#include "ECS/Entity.h"
+#include "ECS/Component.h"
 #include "ECS/ECSRegistry.h"
 
 #include <stdexcept>

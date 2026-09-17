@@ -1,4 +1,4 @@
-#include "LuaScriptingSystem.h"
+#include "ECS/Systems/LuaScriptingSystem.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/Reflection/MetadataSupport.h"

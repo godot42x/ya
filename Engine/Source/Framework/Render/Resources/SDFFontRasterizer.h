@@ -16,7 +16,7 @@
 // atlas / glyph cache / draw path.
 // ============================================================================
 
-#include "IFontRasterizer.h"
+#include "Render/Resources/IFontRasterizer.h"
 
 namespace ya
 {

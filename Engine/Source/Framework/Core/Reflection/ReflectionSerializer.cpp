@@ -1,7 +1,7 @@
-#include "ReflectionSerializer.h"
+#include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/Common/AssetRef.h"
 #include "Core/Log.h"
-#include "PropertyExtensions.h"
+#include "Core/Reflection/PropertyExtensions.h"
 
 namespace ya
 {

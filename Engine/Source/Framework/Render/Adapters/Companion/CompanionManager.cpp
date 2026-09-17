@@ -1,4 +1,4 @@
-#include "CompanionManager.h"
+#include "Render/Adapters/Companion/CompanionManager.h"
 
 #include "Core/Log.h"
 #include "ECS/Entity.h"

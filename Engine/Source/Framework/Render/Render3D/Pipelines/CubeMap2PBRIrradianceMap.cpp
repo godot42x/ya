@@ -1,4 +1,4 @@
-#include "CubeMap2PBRIrradianceMap.h"
+#include "Render3D/Pipelines/CubeMap2PBRIrradianceMap.h"
 #include "Graph/RenderGraphExecutor.h"
 #include "Graph/RenderGraphImportUtils.h"
 #include "RHI/Core/RenderResourceFactory.h"

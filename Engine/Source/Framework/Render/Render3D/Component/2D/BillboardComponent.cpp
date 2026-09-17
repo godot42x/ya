@@ -1,4 +1,4 @@
-#include "BillboardComponent.h"
+#include "ECS/Component/2D/BillboardComponent.h"
 
 #include "Core/Math/Math.h"
 #include "Render3D/Material/MaterialFactory.h"

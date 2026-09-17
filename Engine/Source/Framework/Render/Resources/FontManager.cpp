@@ -1,11 +1,11 @@
-#include "FontManager.h"
+#include "Render/Resources/FontManager.h"
 #include "BitmapFontRasterizer.h"
 #include "ColorFontRasterizer.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/System/PathUtils.h"
 #include "SDFFontRasterizer.h"
 #include "Core/System/VirtualFileSystem.h"
-#include "DynamicFontAtlas.h"
+#include "Render/Resources/DynamicFontAtlas.h"
 #include "freetype/freetype.h"
 
 #include <algorithm>

@@ -1,9 +1,9 @@
 #include "GameEditor/Inspector/PropertyProjection.h"
 
 #include "GameEditor/Inspector/PropertyGraph.h"
-#include "Render3D/Component/Material/PBRMaterialComponent.h"
-#include "Render3D/Component/Material/PhongMaterialComponent.h"
-#include "Render3D/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "Scene3D/TransformComponent.h"
 
 #include <mutex>

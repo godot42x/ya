@@ -1,4 +1,4 @@
-#include "AssetMeta.h"
+#include "Resource/Core/Meta/AssetMeta.h"
 
 #include "Core/Log.h"
 

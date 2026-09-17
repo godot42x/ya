@@ -1,5 +1,5 @@
-#include "ShadowViewBuilder.h"
-#include "ShadowMapResources.h"
+#include "Render3D/Common/Shadow/Common/ShadowViewBuilder.h"
+#include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
 
 #include <format>
 

@@ -1,4 +1,4 @@
-#include "StaticInitProfiler.h"
+#include "Core/Profiling/StaticInitProfiler.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
 #include <algorithm>

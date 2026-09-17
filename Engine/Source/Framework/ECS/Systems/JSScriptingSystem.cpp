@@ -1,4 +1,4 @@
-#include "JSScriptingSystem.h"
+#include "ECS/Systems/JSScriptingSystem.h"
 
 #include "Core/Log.h"
 #include "ECS/ECSRegistry.h"

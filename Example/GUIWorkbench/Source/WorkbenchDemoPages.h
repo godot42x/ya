@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GUI/Widgets/Reactive.h"
+#include "GUI/Binding/Reactive.h"
 
 #include <functional>
 #include <memory>

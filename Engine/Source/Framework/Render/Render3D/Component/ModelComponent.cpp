@@ -1,4 +1,4 @@
-#include "ModelComponent.h"
+#include "ECS/Component/ModelComponent.h"
 
 #include "Render3D/Material/MaterialFactory.h"
 #include "Resource/Model.h"

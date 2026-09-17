@@ -1,4 +1,4 @@
-#include "PrimitiveMeshCache.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Resource/Core/Mesh/PrimitiveGeometryFactory.h"
 
 #include "Core/Log.h"

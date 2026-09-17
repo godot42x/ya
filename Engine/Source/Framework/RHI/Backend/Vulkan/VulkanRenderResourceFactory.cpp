@@ -1,4 +1,4 @@
-#include "VulkanRenderResourceFactory.h"
+#include "RHI/Backend/Vulkan/VulkanRenderResourceFactory.h"
 
 #include "RHI/Backend/Vulkan/VulkanBuffer.h"
 #include "RHI/Backend/Vulkan/VulkanImage.h"

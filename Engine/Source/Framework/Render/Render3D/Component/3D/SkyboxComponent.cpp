@@ -1,4 +1,4 @@
-#include "SkyboxComponent.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
 #include "Resource/AssetManager.h"
 
 namespace ya

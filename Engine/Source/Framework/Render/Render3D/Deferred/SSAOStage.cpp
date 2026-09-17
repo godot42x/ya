@@ -1,4 +1,4 @@
-#include "SSAOStage.h"
+#include "Render3D/Deferred/SSAOStage.h"
 
 #include "Render3D/Deferred/DeferredFrameGraphPasses.h"
 #include "Render3D/Common/ViewPersistentResourceKey.h"

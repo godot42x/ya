@@ -1,4 +1,4 @@
-#include "FName.h"
+#include "Core/FName.h"
 
 namespace ya
 {

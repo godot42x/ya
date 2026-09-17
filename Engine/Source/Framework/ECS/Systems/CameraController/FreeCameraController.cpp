@@ -1,4 +1,4 @@
-#include "FreeCameraController.h"
+#include "ECS/Systems/CameraController/FreeCameraController.h"
 
 
 namespace ya

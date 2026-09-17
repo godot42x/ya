@@ -1,4 +1,4 @@
-#include "EnvironmentLightingComponent.h"
+#include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "Resource/AssetManager.h"
 
 namespace ya

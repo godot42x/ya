@@ -1,4 +1,4 @@
-#include "ModelInstantiationSystem.h"
+#include "Render/Adapters/ModelInstantiationSystem.h"
 
 #include "Hierarchy/Node.h"
 #include "Scene3D/Node3D.h"

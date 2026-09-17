@@ -1,4 +1,4 @@
-#include "PipelineCoordinator.h"
+#include "Render3D/Services/PipelineCoordinator.h"
 
 #include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/RenderRuntimeHostServices.h"

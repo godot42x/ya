@@ -1,8 +1,8 @@
-#include "ReflectionCopier.h"
+#include "Core/Reflection/ReflectionCopier.h"
 
 #include "Core/Log.h"
-#include "PropertyExtensions.h"
-#include "ReflectionSerializer.h"
+#include "Core/Reflection/PropertyExtensions.h"
+#include "Core/Reflection/ReflectionSerializer.h"
 
 namespace ya
 {

@@ -7,7 +7,7 @@
 
 #include "App/Control/GuiEventDriver.h"
 #include "App/Kernel/GuiScenarioEventSource.h"
-#include "GUI/Host/GUIApp.h"
+#include "GUI/Host/GUIAppHost.h"
 #include "GUI/Host/GUIHeadlessHost.h"
 #include "Render2D/Render2D.h"
 #include "Render/Resources/FontManager.h"

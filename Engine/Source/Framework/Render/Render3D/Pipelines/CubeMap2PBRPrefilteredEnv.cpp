@@ -1,4 +1,4 @@
-#include "CubeMap2PBRPrefilteredEnv.h"
+#include "Render3D/Pipelines/CubeMap2PBRPrefilteredEnv.h"
 #include "Graph/RenderGraphExecutor.h"
 #include "Graph/RenderGraphImportUtils.h"
 #include "RHI/Core/RenderResourceFactory.h"

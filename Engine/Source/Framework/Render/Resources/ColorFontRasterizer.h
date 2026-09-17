@@ -9,7 +9,7 @@
 // glyphs.
 // ============================================================================
 
-#include "IFontRasterizer.h"
+#include "Render/Resources/IFontRasterizer.h"
 
 namespace ya
 {

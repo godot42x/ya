@@ -1,4 +1,4 @@
-#include "SceneSerializer.h"
+#include "Scene/Serialization/SceneSerializer.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Log.h"
 #include "Core/Reflection/DeferredInitializer.h"

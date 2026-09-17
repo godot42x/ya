@@ -1,4 +1,4 @@
-#include "DebugPrimitives.h"
+#include "Render3D/Pipelines/DebugPrimitives.h"
 
 #include "RHI/Render.h"
 

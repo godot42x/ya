@@ -1,4 +1,4 @@
-#include "DynamicFontAtlas.h"
+#include "Render/Resources/DynamicFontAtlas.h"
 
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "Core/Log.h"

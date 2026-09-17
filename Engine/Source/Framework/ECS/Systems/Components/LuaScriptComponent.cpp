@@ -1,4 +1,4 @@
-#include "LuaScriptComponent.h"
+#include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "Core/System/PathUtils.h"
 #include "Resource/AssetManager.h"
 #include <cmath>

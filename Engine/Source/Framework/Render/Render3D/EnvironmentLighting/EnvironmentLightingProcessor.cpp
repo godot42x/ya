@@ -1,5 +1,5 @@
-#include "EnvironmentLightingProcessor.h"
-#include "EnvironmentLightingDetail.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingDetail.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"

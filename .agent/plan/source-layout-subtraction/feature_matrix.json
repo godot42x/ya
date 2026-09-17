@@ -1,0 +1,18 @@
+{
+  "plan": "source-layout-subtraction",
+  "status": "s1_landed",
+  "features": [
+    {"id": "public_header_single_home", "phase": "S1", "status": "verified", "evidence": ["493 forwarding stubs deleted", "476 public headers relocated onto their public path", "0 stubs remain under include/", "0 physical headers with multiple public paths", "550 public headers, 18 private headers kept at module roots"]},
+    {"id": "public_path_is_the_include_path", "phase": "S1", "status": "verified", "evidence": ["public path == path relative to the module include root", "232 files had includes rewritten to public paths", "no ../ include crosses a directory boundary"]},
+    {"id": "public_header_includes_public_only", "phase": "S1", "status": "verified", "evidence": ["6 private headers promoted because public headers include them: PointShadowIndirectResources.h, VulkanRenderSurfaceContext.h, LineRender.h, QuadRender.h, CompanionManager.inl, Entity.inl", "promotion chosen over adding another include root"]},
+    {"id": "move_preserves_blame", "phase": "S1", "status": "verified", "evidence": ["two commits: delete mirror stubs, then move real headers", "git show -M --summary reports 482 renames, 422 with zero line change", "git blame reaches 2025-06-20 history", "git log --follow walks pre-move paths", "rejected: single commit git mv -f collapses blame onto the stub"]},
+    {"id": "build_config_has_no_dead_patterns", "phase": "S1", "status": "verified", "evidence": ["9 module xmake.lua dead add_headerfiles patterns removed", "ya-gui-widgets headerfiles narrowed to ../Layout/include and ../Declarative/include", "ya-engine set_pcheader points at Core/include/Core/Common/FWD.h"]},
+    {"id": "rules_updated", "phase": "S1", "status": "verified", "evidence": ["code-reorganize: header layout and include rules + blame-preserving move procedure", "AGENTS.md core rule 15 + Repo Facts corrected to Framework/Applications", "render-arch directory anchors corrected"]},
+    {"id": "aggregate_boundaries", "phase": "S2", "status": "not_started", "evidence": ["ya-engine publicly contains ya-game-runtime", "ya-gui-framework mixes GUI + app shell + module system", "ya-scene-core -> ya-gui-widgets", "ya-render-3d -> ya-gui-compose", "ya-rhi-backend-common depends on itself"]},
+    {"id": "large_files", "phase": "S3", "status": "not_started", "evidence": ["EnvironmentLightingProcessor.cpp 2558", "RenderGraph.cpp 1987", "GUIAppHost.cpp 1910", "WidgetTree.cpp 1832", "UILayout.cpp 1774"]},
+    {"id": "naming", "phase": "S4", "status": "not_started", "evidence": ["~150 role-suffix names: Manager/System/Registry/State/Stage/Host/Service/Context/Orchestrator"]},
+    {"id": "plan_dir", "phase": "S5", "status": "not_started", "evidence": ["22 active plan directories"]},
+    {"id": "preexisting_gui_failures", "phase": "out-of-scope", "status": "known", "evidence": ["ya-gui-widgets-test missing ya-gui-compose dep", "WidgetLayoutTest.DockTabBarStripDoubleClickFiresHostCallback trips the pointer-capture assert added in e1c93a0e, an ancestor of the S1 base commit"]}
+  ]
+}
+

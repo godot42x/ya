@@ -44,6 +44,31 @@ description: YA Engine 代码拆分与目录重组指南：只在收益明确时
 5. 如果模块已经有既有分层，优先沿用当前风格，不再平行造一套新分法。
 6. 新目录若只承载一两个彼此强耦合的文件，且没有后续扩展预期，通常说明不值得为它增加一级导航层。
 
+## 头文件布局与 include 规则（2026-09-18 定稿）
+
+单一物理位置，永不镜像。一个头文件只存在一份，谁需要它就读那一份。
+
+1. 需要对外公开的头必须放在 `<module>/include/<Module>/...`。它的**公开
+   路径**就是相对该 include 根的路径，例如
+   `Framework/Core/include/Core/Base.h` 的公开路径是 `Core/Base.h`。
+2. 模块根目录下不再保留同名副本,也不允许 `include/` 下出现只有
+   `#include "../../Xxx.h"` 的转发 stub。历史镜像层已于
+   `[source] delete the include/ mirror stubs` /
+   `[source] make include/ the single home of public headers` 删除，禁止重建。
+3. 私有头留在模块根或子目录里，紧挨使用它的 `.cpp`；不放进 `include/`。
+4. 一个物理头**只能有一个公开路径**。禁止同一文件出现两个公开别名
+   （历史别名如 `GUI/Host/GUIApp.h`、`Render3D/Component/...` 已删除）。
+5. 公开头只能 include 公开头。若某个公开头必须拉进一个私有头，就把那个头
+   **提升为公开**（放进 `include/` 并随之改名），而不是把它的目录也加进
+   include 根。
+6. include 字符串一律写公开路径，不写 `../` 相对路径，也不写裸文件名跨
+   目录引用。同一模块内部的私有依赖同样走公开路径或保持同目录相对。
+7. 新增 include 根必须能在 xmake 里说清归属；`add_includedirs` 只暴露
+   `include` 根，不要把模块根目录本身暴露成 include 根。
+
+判定 `frame`/`include` 这类"同一份东西存在两个入口"的问题时，默认答案是
+删除其中一个，而不是给两边都补规则。
+
 ## 执行步骤
 
 1. 先读现有文件，列出其中的职责块和它们的边界。
@@ -56,11 +81,36 @@ description: YA Engine 代码拆分与目录重组指南：只在收益明确时
 
 ## include 路径与构建更新
 
-1. 文件移动后，优先全局检查旧 include 路径是否还残留。
+1. 文件移动后，优先全局检查旧 include 路径是否还残留：
+   `rg -n '#include "(\.\./|[A-Za-z0-9_]+/[^"]*)' <改动目录>`。
 2. 如果模块外部引用了旧路径，要一起修；不要只修当前目录内的 include。
 3. 新子目录落地后，确认 `xmake` 的源文件收集仍覆盖这些路径。
-4. 需要时运行 `python3 Script/ya.py cfg` 或 `xmake project -k compile_commands` 刷新 clangd 与导航。
-5. 完成后至少执行一次构建验证，优先 `python3 Script/ya.py build` 或 `python3 Script/ya.py build --project <path>`。
+4. 清理失效的 `add_headerfiles` 模式：移动头文件后，形如
+   `add_headerfiles("*.h")` / `add_headerfiles("Node.h")` 的旧位置模式会
+   变成死配置，必须一并删除，否则模块 xmake.lua 会持续撒谎。
+5. 用 PCH 的 target（`ya-engine` 的 `set_pcheader`）在移动公开头后要同步
+   改到新的物理位置。
+6. 需要时运行 `python3 Script/ya.py cfg` 或 `xmake project -k compile_commands` 刷新 clangd 与导航。
+7. 完成后至少执行一次构建验证，优先 `python3 Script/ya.py build` 或 `python3 Script/ya.py build --project <path>`。
+
+### 搬迁必须保留 blame
+
+git 的改名识别只在**删除路径**与**新增路径**之间配对。若目标路径在父提交
+里已存在（例如"模块根真身 + include/ 转发 stub"这种镜像布局），一次提交里
+无论先删哪边，git 都只能看到 `D 旧路径` + `M 目标路径`，于是目标路径的
+blame 会被算到被删掉的那个 stub 上，真身的历史整体丢失。
+
+正确做法是拆成两次提交：
+
+1. 先提交删除镜像文件（本步不构建，属于移动的一半）。
+2. 再提交把真身移动到公开路径 + 修 include。此时目标路径在父提交中不存在，
+   git 才能按内容相似度配对成 rename（可用
+   `git show -M --summary` 核对 rename 数量与 100% similarity）。
+3. 验证：`git blame <移动后的文件>` 应能看到搬移之前的作者与提交；
+   `git log --follow` 应能追到历史路径。
+
+不要用一次提交的 `git mv -f` 直接覆盖已有 stub：那会让 476 个公开头的
+blame 全部塌缩到"本提交 + stub 的引入提交"两次上。
 
 ## 验证清单
 
@@ -71,6 +121,10 @@ description: YA Engine 代码拆分与目录重组指南：只在收益明确时
 5. 目录结构比改动前更清晰，而不是把复杂度从一个文件搬到多个难懂文件。
 6. 读主流程时，不需要在多个同级实现文件之间反复横跳才能拼出完整时序。
 7. 如果改完后自己更难解释“从入口到关键状态变化是怎么走的”，说明这次拆分大概率失败。
+8. 每个公开头只有一个物理位置与一个公开路径；`include/` 下没有转发 stub
+   （`rg -n '^#include "\.\./\.\./' */include/ | wc -l` 应为 0）。
+9. 移动后 `add_headerfiles` 没有失效模式；公开头的 include 全部是公开路径。
+10. 大块移动用脚本按"内容相似度"核对而非按行号操作，并保留 blame（见上）。
 
 ## 常见错误模式
 
@@ -106,11 +160,13 @@ target：
 
 ## 边界与构建核查清单（拆分/归位后必查）
 
-1. 公共转发头必须由**所属模块**公开：`xmake show -t <target>` 后逐个确认
-   模块公开的每个转发头确实属于该模块。同目录多个 target 时小心
+1. 公开头必须由**所属模块**公开：`xmake show -t <target>` 后逐个确认模块
+   公开的每个公开路径确实属于该模块。同目录多个 target 时小心
    `./include` 相对路径陷阱（如 backend-common 与 ya-rhi-vulkan 同在
    Backend/ 目录，`./include` 会解析到同一位置，导致头从错误的 target
-   泄漏出去）。
+   泄漏出去）——这正是 ya-gui-widgets 同时发布
+   `./include`、`../Binding/include`、`../Layout/include`、
+   `../Declarative/include` 四个根的原因，改动前先确认公布面。
 2. 删除模块级 `ya_engine_defines()` 前先确认该模块所有头只用自己的
    `YA_*_API` 宏（`rg -o "YA_[A-Z_]+_API" <模块目录>` 应只有一种）。
 3. 生命周期回调必须在最后一个强引用释放**之前**发出；以引用形式传入成员

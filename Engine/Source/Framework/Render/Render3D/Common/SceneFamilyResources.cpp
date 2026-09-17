@@ -1,4 +1,4 @@
-#include "SceneFamilyResources.h"
+#include "Render3D/Common/SceneFamilyResources.h"
 
 #include "Core/Log.h"
 #include "RHI/Core/DescriptorSet.h"

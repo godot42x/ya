@@ -49,12 +49,15 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
 
 ## 目录锚点
 
-- `Engine/Source/Runtime/Application/`：应用入口、生命周期与自动化
-- `Engine/Source/Framework/Render/Render3D/`：Renderer 拆分中的 DeviceState/Coordinator、管线与渲染服务
-- `Engine/Source/Render/`
-- `Engine/Source/Platform/Render/Vulkan/`
-- `Engine/Source/Platform/Render/OpenGL/`
-- `Engine/Shader/`
+- `Engine/Source/Applications/GameRuntime/`：产品应用循环、生命周期与自动化
+- `Engine/Source/Framework/RHI/`：渲染硬件接口层（`Render.h` / `Core/` / `Shader/`）
+- `Engine/Source/Framework/RHI/Backend/Vulkan/` 与 `Backend/OpenGL/`：后端实现
+- `Engine/Source/Framework/Render/Render3D/`：DeviceState/Coordinator、管线与渲染服务
+- `Engine/Source/Framework/Render/Graph/`：RenderGraph 编译与执行
+- `Engine/Shader/`：Slang 源与生成头
+
+公开头一律从公开路径读（`RHI/Render.h`、`Render3D/RenderDeviceState.h`），
+模块根目录只有私有头与 `.cpp`。
 
 ## 相关 skills
 

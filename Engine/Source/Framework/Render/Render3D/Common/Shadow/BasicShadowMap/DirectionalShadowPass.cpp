@@ -1,4 +1,4 @@
-#include "DirectionalShadowPass.h"
+#include "Render3D/Common/Shadow/BasicShadowMap/DirectionalShadowPass.h"
 
 #include "Graph/RenderGraphImportUtils.h"
 

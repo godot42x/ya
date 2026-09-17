@@ -1,4 +1,4 @@
-#include "ImageResource.h"
+#include "RHI/Core/ImageResource.h"
 
 namespace ya
 {

@@ -1,4 +1,4 @@
-#include "RenderDocCapture.h"
+#include "Core/Debug/RenderDocCapture.h"
 
 #include "Core/Log.h"
 
