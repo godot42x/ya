@@ -27,6 +27,7 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-17：Surface 持有 presentation blit tone-map DS。Checkpoint C 删除 processor 内部 set 后 display compose 仍 bind `VkDescriptorSet 0x0`，MoltenVK encode 崩溃。`PresentationGraphService` 分配 Surface 生命周期 CIS；`BasicPostprocessing::render` 拒绝空 set。PostProcessing/ViewPass/Deferred 10/10；HelloMaterial `--exit-after-frame=3` 退出码 0。下一刀仍是 4.0.3 Renderer。
 - 2026-09-17：修正 C/D/E 计划状态为部分完成；目标收成公开 `Renderer`。不改引擎代码。下一刀是合并 DeviceState+Coordinator。
 - 2026-09-17：host 提交 live Scene 列表：`HostSceneViewSubmit` 按 Scene* 去重 extract；recording derivedScene 从列表查找。HostSceneRenderSubmitTest 3/3，专项与回归 76/76。产品双 viewport 排在 4.0.3 之后。
 - 2026-09-17：family-scoped derived Scene：删除 `RenderFramePlan::derivedScene`；recording 携带 host Scene；同 family 共享、跨 SceneId 隔离。Host 仍只提交一个 live Scene。专项与回归 76/76。下一刀是产品双 Scene 录制 / 双 Surface GPU。

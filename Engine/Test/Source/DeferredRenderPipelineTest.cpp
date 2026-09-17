@@ -291,6 +291,7 @@ TEST(PostProcessingStageTest, FinalizeParamsDefaultsStayEmpty)
     EXPECT_FALSE(params.bOutputIsSRGB);
     EXPECT_EQ(params.postContext, nullptr);
     EXPECT_EQ(params.viewId, 0u);
+    EXPECT_EQ(params.toneMap.input.set, DescriptorSetHandle{});
 }
 
 TEST(PostProcessingStageTest, BloomAndFinalizeViewIdsStayIndependent)
@@ -304,6 +305,7 @@ TEST(PostProcessingStageTest, BloomAndFinalizeViewIdsStayIndependent)
 
     BasicPostprocessing::RenderDesc toneMap{};
     EXPECT_EQ(toneMap.viewId, 0u);
+    EXPECT_EQ(toneMap.toneMap.input.set, DescriptorSetHandle{});
     toneMap.viewId = bloom.viewId;
 
     EXPECT_EQ(bloom.viewId, 11u);

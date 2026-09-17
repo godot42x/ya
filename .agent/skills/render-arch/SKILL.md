@@ -39,7 +39,8 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
     viewProjection / offscreen extent；Forward/Deferred/debug/overlay 只消费该包，
     不从 swapchain/window 猜尺寸。view compose 经 `recordCameraViewCompose` 写 Camera
     离屏 RT；display compose 经 `PresentationGraphService::recordDisplayCompose` 写
-    `swapchain[imageIndex]`。`GUIRenderSurface` 只是 compose target，不 acquire/present、
+    `swapchain[imageIndex]`。swapchain blit 使用 Surface 生命周期的 tone-map CIS，
+    不要把 View `post.toneMap` 或空 `RenderDesc` 默认值拿去 bind。`GUIRenderSurface` 只是 compose target，不 acquire/present、
     不读 live WidgetTree。Present 消费方只走 `IRenderSurfaceContext` / `ISwapchain` /
     `buildPresentationImages`，禁止 `as<VulkanSwapChain>()`。不要为 Material/UI 窗复制
     Renderer。对象模型见 `./.agent/plan/gui-multi-os-window-editor/c2_view_model.md`

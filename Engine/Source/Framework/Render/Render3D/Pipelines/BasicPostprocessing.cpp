@@ -1,5 +1,6 @@
 #include "BasicPostprocessing.h"
 
+#include "Core/Log.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Sampler.h"
@@ -149,6 +150,10 @@ void BasicPostprocessing::render(const RenderDesc& desc)
     }
 
     const DescriptorSetHandle viewSet = desc.toneMap.input.set;
+    if (!viewSet) {
+        YA_CORE_ERROR("BasicPostprocessing refuses to bind a null input descriptor set");
+        return;
+    }
     writeInput(viewSet, desc.inputImageView);
     rebuildPushConstants(*desc.state, desc.bOutputIsSRGB);
 

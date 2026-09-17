@@ -53,6 +53,7 @@
 - [x] 4.0.2 A：建立 `RenderSubmission` / pool owner，统一 command buffer、upload、transient descriptor、keepalive 与 finish 协议；删除 pipeline/resource-set 的分散 beginSubmission。
 - [x] 4.0.2 B：引入 `SceneViewFamilyPlan` 与 `SceneFamilyResources`；skinning/scene packet 不再按 flight 全局共享；同 Scene 双 View复用 family、双 Scene隔离。
 - [x] 4.0.2 C 入口：typed View/Pass resources；Bloom/BasicPost viewId map 与 Stage singleton CIS 删除；PointShadow packet 归 View Binding。
+- [x] Surface presentation blit 持有自己的 tone-map CIS；不再把 display compose 当成 View-owned set 的缺省调用方。
 - [ ] 4.0.2 C 收口：清除 `LightStage::_frameInputs`、`BasicShadowMapTechnique::_preparedViewSlot` 等 current-view 状态。
 - [x] 4.0.2 D 入口：`recordFamily` 一个 family graph；publish 不走 pipeline getter；删除 `tick`/`beginTick`。
 - [ ] 4.0.2 D 收口：真正的 ViewFamily compiler，不再是 per-view `beginView` 循环外包装 + `familyPredecessor` 串行。

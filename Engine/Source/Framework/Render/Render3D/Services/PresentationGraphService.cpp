@@ -64,6 +64,25 @@ void PresentationGraphService::init(const InitDesc& desc)
         },
     });
 
+    auto inputLayout = _presentationPostProcessor->getInputDSL();
+    YA_CORE_ASSERT(inputLayout, "Presentation postprocessor must expose an input DSL");
+    _presentationInputPool = IDescriptorPool::create(
+        _render,
+        DescriptorPoolCreateInfo{
+            .label     = "Presentation_ToneMap_DSP",
+            .maxSets   = 1,
+            .poolSizes = {
+                DescriptorPoolSize{
+                    .type            = EPipelineDescriptorType::CombinedImageSampler,
+                    .descriptorCount = 1,
+                },
+            },
+        });
+    YA_CORE_ASSERT(_presentationInputPool, "PresentationGraphService requires a tone-map descriptor pool");
+    _presentationToneMap.input.set = _presentationInputPool->allocateDescriptorSets(inputLayout);
+    YA_CORE_ASSERT(_presentationToneMap.input.set,
+                   "PresentationGraphService failed to allocate the swapchain blit descriptor set");
+
     swapchain->onRecreate.addLambda(
         this,
         [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
@@ -85,6 +104,8 @@ void PresentationGraphService::shutdown()
             swapchain->onRecreate.removeAll(this);
         }
     }
+    _presentationToneMap = {};
+    _presentationInputPool.reset();
     if (_presentationPostProcessor) {
         _presentationPostProcessor->shutdown();
         _presentationPostProcessor.reset();
@@ -224,6 +245,7 @@ void PresentationGraphService::recordDisplayCompose(float                       
                     .renderExtent   = presentationExtent,
                     .bOutputIsSRGB  = EFormat::isSRGB(getSwapchain() ? getSwapchain()->getFormat() : EFormat::Undefined),
                     .state          = &_presentationPostProcessState,
+                    .toneMap        = _presentationToneMap,
                 });
             }
 

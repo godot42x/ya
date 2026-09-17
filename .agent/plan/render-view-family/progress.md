@@ -5,7 +5,7 @@
 - 阶段：R0/R1 契约已落地。R2 功能向 ViewFamily 靠近，架构未收口。真实 loop 是 `AppKernel` → `GameRuntimeTickOrchestrator::tickRender` → `RenderFrameCoordinator::record` → `recordFamily` → host present。`RenderRuntime` 类已删除。
 - 已确认：RenderFrameInputs.h 已有四组输入；RenderFrameData 的 Scene snapshot owner 已与 View-owned draw buckets 分离。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
-- 当前 checkpoint：4.0.3 计划状态已按 2026-09-17 review 修正。下一刀是合并 `RenderDeviceState` + `RenderFrameCoordinator` 为公开 `Renderer` owner。不要发明 PIE authoring PiP，也不要把产品双 viewport / 双 Surface 当成下一刀。
+- 当前 checkpoint：Surface 持有 presentation blit 的 tone-map descriptor set。Checkpoint C 把 View tone-map DS 从 processor 挪走后，display compose 仍调用 `BasicPostprocessing::render` 且不传 set，MoltenVK 在 `vkQueueSubmit` encode 时对 `VkDescriptorSet 0x0` 空解引用。下一刀仍是 4.0.3 公开 `Renderer` owner。不要发明 PIE authoring PiP，也不要把产品双 viewport / 双 Surface 当成下一刀。
 - 架构审计结论（2026-09-17）：DeviceState+Coordinator 是不完整拆分（friend 越界）；DeviceState 是 persistent renderer 不是 RHI device；`RenderSubmission::finish` 不 submit；输入/context 层过多；`recordFamily` 仍是 per-view 状态机外包装；Stage 仍有 `_frameInputs` / `_preparedViewSlot`；Scene recording 仍与 present Surface 耦合；`tickRender` 淹没 orchestration。Checkpoint C/D/E 均为部分完成。A/B 入口仍有效。host live Scene 列表已落地，默认产品帧仍提交当前 viewport Scene。
 - 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是持有 shared snapshot 并独立保存 View-owned draw buckets；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 View buckets、shared skinning palettes 和 light presence。
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
@@ -19,6 +19,13 @@
 - 保留的判断：调度器的「帧内聚合 + 按 (SceneId, sceneRevision) 去重 snapshot + 按 ViewFamily 分组」对应 UE family/renderer 分层，是对的，不删；不引入 WorldRegistry；GUI Framework 仍不认识 Scene。
 - 落地：写入 plan §3.10（现状、六层重复、三处空转、目标形态、明确不做）、4.0.3 执行顺序第 4 刀（4a 抽取移出 seal / 4b plan 保留 Scene 句柄 / 4c 合并 `SceneViewDesc` / 4d `ISceneViewProducer`）、R1/R3 交叉引用、temporal_semantics M9 与批次 P1e、todo 六个工作项、feature_matrix `view_declaration_contract`。
 - 本 checkpoint 无代码改动、无测试执行；上面登记的是下一步待实现项，不当作已完成。
+
+## 2026-09-17 checkpoint：Surface 持有 presentation blit descriptor set
+
+- 唯一目标：display compose 不再绑定空的 `BasicPostprocessing` input set。View tone-map DS 仍在 `ViewResources::post.toneMap`；swapchain blit 是 Surface 轴，由 `PresentationGraphService` 在 `init` 分配并传入 `render()`。
+- 落地：`PresentationGraphService` 持有 `_presentationInputPool` / `_presentationToneMap`；`recordDisplayCompose` 传入 `.toneMap`；`BasicPostprocessing::render` 在 set 为空时拒绝 bind/draw。
+- 验证：`xmake b ya-game-runtime`、`xmake b ya-render-3d-test`；`xmake r ya-render-3d-test --gtest_filter='PostProcessingStageTest.*:ViewPassResourcesTest.*:DeferredPassParamsTest.*:DeferredRenderPipelineTest.*'` 10/10；`python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=3 --log-level=warn --log-detail-level=error` 退出码 0，无 `VkDescriptorSet 0x0` / MoltenVK `bindDescriptorSets` 崩溃；`git diff --check` 通过。
+- 保留未完成：4.0.3 Renderer 合并；FrameRecording/FlightResources 拆名；PreparedView；Stage current-view；压缩 tickRender；产品双 Scene 显示；双 Surface GPU。C 仍未清除 Stage current-view。
 
 ## 2026-09-17 checkpoint：automation / TaskManager 的 per-tick 命名（M1 P1d）
 
