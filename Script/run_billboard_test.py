@@ -58,6 +58,10 @@ def main():
             "--project", args.project,
             "--",
             f"--automation-control-port={args.port}",
+            # Ceiling for a harness-launched engine: the cleanup below kills
+            # this process, not the engine it spawned, so a harness that dies
+            # must not leave a run holding the port and the GPU forever.
+            f"--max-lifetime-seconds={args.timeout + 300}",
         ],
         cwd=os.path.dirname(script_dir),
         stdout=subprocess.DEVNULL,

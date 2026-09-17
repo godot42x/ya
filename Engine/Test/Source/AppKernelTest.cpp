@@ -5,6 +5,7 @@
 
 #include "App/Kernel/AppKernel.h"
 #include "Core/MessageBus.h"
+#include "Core/Os/InstanceRegistry.h"
 #include "Core/Os/OsProcessLock.h"
 
 #include <gtest/gtest.h>
@@ -169,6 +170,103 @@ TEST(AppKernelTest, KernelRefusesToRunWhenKeyIsHeld)
     EXPECT_NE(result, 0);
     EXPECT_EQ(delegate.ticks, 0);
     EXPECT_FALSE(delegate.started);
+}
+
+// The discovery record is what lets tooling attach to a live instance instead of
+// starting a second one, so it has to survive a round trip with every field the
+// reader (the control client) matches on.
+TEST(AppKernelTest, InstanceRecordRoundTripsAndIsRemoved)
+{
+    const std::string key = "AppKernelTest.InstanceRecordRoundTrips";
+    ASSERT_FALSE(Os::readInstanceRecord(key).has_value());
+
+    ASSERT_TRUE(Os::writeInstanceRecord(Os::FInstanceRecord{
+        .key         = key,
+        .project     = "/tmp/some project/Game.yaproject",
+        .mode        = "editor",
+        .controlPort = 8123,
+    }));
+
+    const auto record = Os::readInstanceRecord(key);
+    ASSERT_TRUE(record.has_value());
+    EXPECT_EQ(record->key, key);
+    EXPECT_EQ(record->project, "/tmp/some project/Game.yaproject");
+    EXPECT_EQ(record->mode, "editor");
+    EXPECT_EQ(record->controlPort, 8123);
+    // Filled in by the writer: the caller rarely knows its own pid.
+    EXPECT_EQ(record->pid, testProcessId());
+    EXPECT_GT(record->startedAtUnixMs, 0);
+
+    EXPECT_TRUE(Os::removeInstanceRecord(key));
+    EXPECT_FALSE(Os::readInstanceRecord(key).has_value());
+}
+
+// The product publishes the record, the kernel retracts it with the claim: a
+// record that outlives its instance would advertise a port nobody serves, and a
+// record dropped before the claim would leave a refusal that names nothing.
+TEST(AppKernelTest, InstanceRecordLivesExactlyAsLongAsTheClaim)
+{
+    const std::string key = "AppKernelTest.InstanceRecordLivesWithTheClaim";
+    ASSERT_FALSE(Os::readInstanceRecord(key).has_value());
+
+    struct PublishingDelegate final : IAppLoopDelegate
+    {
+        std::string key;
+        bool        bPublishedWhileRunning = false;
+        int         ticks                  = 0;
+
+        void onInit() override
+        {
+            Os::writeInstanceRecord(Os::FInstanceRecord{.key = key, .mode = "editor", .controlPort = 8123});
+        }
+        void onEvent(const Event&) override {}
+        void onTick(float) override { ++ticks; }
+        void onShutdown() override
+        {
+            // Still published here, and still claimed: the kernel retracts both
+            // at the very end, not when the loop stops.
+            bPublishedWhileRunning = Os::readInstanceRecord(key).has_value();
+        }
+        bool shouldClose() const override { return ticks >= 1; }
+    } delegate;
+    delegate.key = key;
+
+    AppKernel  kernel({.instanceKey = key}, delegate);
+    const int  result = kernel.run();
+
+    EXPECT_EQ(result, 0);
+    EXPECT_TRUE(delegate.bPublishedWhileRunning);
+    EXPECT_FALSE(Os::readInstanceRecord(key).has_value());
+
+    // And the name is free again, so the next run can publish on the same key.
+    uint32_t         ownerPid = 0;
+    Os::ProcessLock  lock;
+    EXPECT_TRUE(lock.tryAcquire(key, ownerPid));
+}
+
+// A refusal is the one place an operator learns which instance is in the way, so
+// the holder's record has to be readable while the holder still owns the claim.
+TEST(AppKernelTest, HeldInstanceRecordIsReadableFromAnotherProcessPerspective)
+{
+    const std::string key = "AppKernelTest.HeldInstanceRecordIsReadable";
+
+    uint32_t         ownerPid = 0;
+    Os::ProcessLock  holder;
+    ASSERT_TRUE(holder.tryAcquire(key, ownerPid));
+    ASSERT_TRUE(Os::writeInstanceRecord(Os::FInstanceRecord{
+        .key         = key,
+        .mode        = "editor",
+        .controlPort = 8123,
+    }));
+
+    // The claim file is held exclusively, which is exactly why the record is a
+    // separate, ordinary file: the holder is still discoverable.
+    const auto record = Os::readInstanceRecord(key);
+    ASSERT_TRUE(record.has_value());
+    EXPECT_EQ(record->controlPort, 8123);
+
+    holder.release();
+    EXPECT_TRUE(Os::removeInstanceRecord(key));
 }
 
 } // namespace ya

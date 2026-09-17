@@ -1,6 +1,7 @@
 #include "Core/Os/OsProcessLock.h"
 
 #include "Core/Log.h"
+#include "Core/Os/InstanceRegistry.h"
 
 #include <array>
 #include <cstdio>
@@ -39,26 +40,6 @@ uint32_t currentProcessId()
 #else
     return static_cast<uint32_t>(::getpid());
 #endif
-}
-
-/// Filename-safe key. The hash suffix keeps two different keys that sanitize to
-/// the same prefix (paths differing only in separators / case) apart, and bounds
-/// the filename length so a long absolute path cannot overflow the limit.
-std::string sanitizeName(std::string_view name)
-{
-    std::string out;
-    out.reserve(name.size() + 16);
-    for (const char c : name) {
-        const bool bKeep = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
-                           (c >= 'A' && c <= 'Z') || c == '-' || c == '_' || c == '.';
-        out.push_back(bKeep ? c : '_');
-    }
-    if (out.size() > 96) {
-        out.resize(96);
-    }
-    out.push_back('-');
-    out.append(std::to_string(std::hash<std::string>{}(std::string(name))));
-    return out;
 }
 
 uint32_t readOwnerPid(const std::filesystem::path& path)
@@ -120,13 +101,9 @@ void writeOwnerPid(const std::filesystem::path& path)
 
 std::filesystem::path ProcessLock::resolveLockPath(std::string_view name)
 {
-    std::error_code ec;
-    auto            dir = std::filesystem::temp_directory_path(ec);
-    if (ec || dir.empty()) {
-        dir = std::filesystem::current_path(ec);
-    }
-    dir /= "ya-instances";
-    return dir / (sanitizeName(name) + ".lock");
+    // Same directory and stem as the instance's discovery record: the claim and
+    // the record describe one instance and are found together.
+    return instanceDirectory() / (instanceFileStem(name) + ".lock");
 }
 
 ProcessLock::~ProcessLock()

@@ -8,6 +8,7 @@
 #include "GUI/Host/GUIWindowChrome.h"
 #include "App/Kernel/AppKernel.h"
 #include "Core/Config/ConfigManager.h"
+#include "Core/Os/InstanceRegistry.h"
 #include "Render3D/RenderDeviceState.h"
 
 #include "App/Module/ProjectDescriptor.h"
@@ -41,13 +42,19 @@ IRuntimeModule* getRuntimeModule(IModule* module)
 class GameRuntimeLoopDelegate final : public IAppLoopDelegate
 {
   public:
-    explicit GameRuntimeLoopDelegate(App& inApp)
+    GameRuntimeLoopDelegate(App& inApp, Os::FInstanceRecord instanceRecord)
         : app(inApp)
+        , record(std::move(instanceRecord))
     {
     }
 
     void onInit() override
     {
+        // Publish where this run can be reached. The kernel holds the claim ("may
+        // I start"); this record is the other half -- "a run is already here, and
+        // here is its automation port" -- which is what lets a tool attach to the
+        // live instance instead of launching a second one.
+        Os::writeInstanceRecord(record);
     }
 
     void onEvent(const Event& event) override
@@ -69,6 +76,7 @@ class GameRuntimeLoopDelegate final : public IAppLoopDelegate
 
   private:
     App& app;
+    Os::FInstanceRecord record;
 };
 }
 
@@ -147,8 +155,15 @@ int App::run()
                                                 _ci.projectPath.value_or(_ci.executablePath.value_or("ya")),
                                                 _ci.bEditor ? "|editor" : "|game");
 
+    Os::FInstanceRecord instanceRecord{
+        .key         = instanceKey,
+        .project     = _ci.projectPath.value_or(""),
+        .mode        = _ci.bEditor ? "editor" : "game",
+        .controlPort = _ci.automation.controlPort,
+    };
+
     HostSdlEventSource      eventSource;
-    GameRuntimeLoopDelegate delegate(*this);
+    GameRuntimeLoopDelegate delegate(*this, std::move(instanceRecord));
     AppKernel               kernel({.eventSource = &eventSource, .instanceKey = instanceKey}, delegate);
     // The runtime owns frame-level automation completion (scene stability,
     // screenshots, RenderDoc), so exitAfterTick stays off here. The wall-clock

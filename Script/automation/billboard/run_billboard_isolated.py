@@ -36,6 +36,9 @@ def main() -> int:
             args.project,
             "--",
             f"--automation-control-port={args.port}",
+            # Bounded on purpose: killing this process does not kill the
+            # engine it spawned, so the engine needs its own deadline.
+            f"--max-lifetime-seconds={args.timeout + 300}",
         ],
         cwd=workspace,
         stdout=subprocess.DEVNULL,

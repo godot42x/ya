@@ -66,6 +66,9 @@ def main() -> int:
                 "--",
                 "--editor-chrome=widgettree",
                 f"--automation-control-port={args.port}",
+                # Bounded on purpose: the finally-block kills this process,
+                # not the engine it spawned.
+                f"--max-lifetime-seconds={args.startup_timeout + 600}",
                 f"--exit-after-frame={args.frame_budget}",
             ],
             cwd=workspace,
