@@ -10,8 +10,10 @@ namespace ya
 
 struct AppAutomationControlServer::ServerState
 {
-    asio::io_context                          ioContext;
-    std::unique_ptr<asio::ip::tcp::acceptor> acceptor;
+    asio::io_context ioContext;
+    /// Bound and listening before the listener thread starts, so a port
+    /// conflict is reported by init() rather than discovered later by the client.
+    asio::ip::tcp::acceptor acceptor{ioContext};
 };
 
 namespace
@@ -33,10 +35,46 @@ bool AppAutomationControlServer::init(uint16_t port)
         return true;
     }
 
+    // Reserve the port here, synchronously. The listener thread cannot report a
+    // bind failure back to the caller, and a server that silently ends up
+    // disabled is worse than no server: the process stays up looking healthy
+    // while every automation call fails to connect, so a caller that launched it
+    // waiting for a port has no way to tell "still starting" from "never
+    // listening". Bind failure has to be the caller's problem to handle.
+    _serverState = std::make_unique<ServerState>();
+
+    asio::error_code ec;
+    const auto       address = asio::ip::make_address("127.0.0.1", ec);
+    if (ec) {
+        YA_CORE_ERROR("Automation control server failed to parse listen address: {}", ec.message());
+        _serverState.reset();
+        return false;
+    }
+
+    const asio::ip::tcp::endpoint endpoint(address, port);
+    auto&                         acceptor = _serverState->acceptor;
+    acceptor.open(endpoint.protocol(), ec);
+    if (!ec) {
+        // No reuse_address: two instances on one port is the thing worth
+        // refusing, and reuse semantics vary per platform.
+        acceptor.bind(endpoint, ec);
+    }
+    if (!ec) {
+        acceptor.listen(asio::socket_base::max_listen_connections, ec);
+    }
+    if (ec) {
+        YA_CORE_ERROR("Automation control server failed to listen on 127.0.0.1:{}: {}",
+                      port,
+                      ec.message());
+        asio::error_code closeEc;
+        acceptor.close(closeEc);
+        _serverState.reset();
+        return false;
+    }
+
     _port           = port;
     _bStopRequested = false;
     _bEnabled       = true;
-    _serverState    = std::make_unique<ServerState>();
     _listenerThread = std::thread([this]()
                                   { listenerMain(); });
     YA_CORE_INFO("Automation control server listening on 127.0.0.1:{}", _port);
@@ -50,9 +88,9 @@ void AppAutomationControlServer::shutdown()
 
     if (_serverState) {
         asio::error_code ec;
-        if (_serverState->acceptor) {
-            _serverState->acceptor->cancel(ec);
-            _serverState->acceptor->close(ec);
+        if (_serverState->acceptor.is_open()) {
+            _serverState->acceptor.cancel(ec);
+            _serverState->acceptor.close(ec);
         }
         _serverState->ioContext.stop();
     }
@@ -121,44 +159,9 @@ void AppAutomationControlServer::listenerMain()
 
     auto&            serverState = *_serverState;
     asio::error_code ec;
-    const auto       address = asio::ip::make_address("127.0.0.1", ec);
-    if (ec) {
-        YA_CORE_ERROR("Automation control server failed to parse listen address: {}", ec.message());
-        _bEnabled = false;
-        return;
-    }
-
-    const tcp::endpoint endpoint(address, _port);
-    serverState.acceptor = std::make_unique<tcp::acceptor>(serverState.ioContext);
-    serverState.acceptor->open(endpoint.protocol(), ec);
-    if (ec) {
-        YA_CORE_ERROR("Automation control server failed to open acceptor: {}", ec.message());
-        _bEnabled = false;
-        return;
-    }
-
-    serverState.acceptor->set_option(tcp::acceptor::reuse_address(true), ec);
-    if (ec) {
-        YA_CORE_WARN("Automation control server failed to set reuse_address: {}", ec.message());
-    }
-
-    serverState.acceptor->bind(endpoint, ec);
-    if (ec) {
-        YA_CORE_ERROR("Automation control server failed to bind port {}: {}", _port, ec.message());
-        _bEnabled = false;
-        return;
-    }
-
-    serverState.acceptor->listen(asio::socket_base::max_listen_connections, ec);
-    if (ec) {
-        YA_CORE_ERROR("Automation control server failed to listen on port {}: {}", _port, ec.message());
-        _bEnabled = false;
-        return;
-    }
-
     while (!_bStopRequested) {
         tcp::socket clientSocket(serverState.ioContext);
-        serverState.acceptor->accept(clientSocket, ec);
+        serverState.acceptor.accept(clientSocket, ec);
         if (ec) {
             if (_bStopRequested || ec == asio::error::operation_aborted) {
                 break;

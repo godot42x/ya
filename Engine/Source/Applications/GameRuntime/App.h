@@ -69,6 +69,12 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
   private:
     static App* _instance;
 
+    /// Set by quit(). App teardown is one ordered path: the implicit member
+    /// destruction order is not a valid order for a live device plus the native
+    /// windows it created surfaces from, and the teardown stack has to run while
+    /// those members are still alive.
+    bool _bTornDown = false;
+
     Deleter _deleter;
 
     SceneManager*                   _sceneManager = nullptr;
@@ -131,6 +137,10 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     App& operator=(const App&) = delete;
     App(App&&)                 = delete;
     App& operator=(App&&)      = delete;
+    /// Destruction runs the same teardown as quit(): an App that entered init()
+    /// owns a device, native windows and a teardown stack, and letting unord-
+    /// ered member destruction handle those is what turns a failed startup into
+    /// a crash instead of an exit code.
     virtual ~App();
 
     void init(AppDesc ci);

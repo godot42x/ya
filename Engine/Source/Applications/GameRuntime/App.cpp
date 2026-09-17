@@ -18,6 +18,8 @@
 #include "Scene/Core/Scene.h"
 #include "Render3D/Services/DebugRenderSystem.h"
 
+#include <format>
+
 namespace ya
 {
 namespace
@@ -116,7 +118,16 @@ App::App()
     inputRouter.setDefaultNode(gameInputNode);
 }
 
-App::~App() = default;
+App::~App()
+{
+    // Only an App that entered init() owns a teardown: unit tests (and tooling)
+    // build App for its services and never init it. `_instance` is assigned at
+    // the top of init and cleared by quit(), so it reads exactly as "init ran and
+    // teardown did not", which is when the ordered teardown below is needed.
+    if (App::_instance == this) {
+        quit();
+    }
+}
 
 int App::run()
 {
@@ -127,10 +138,25 @@ int App::run()
     _startTime = std::chrono::steady_clock::now();
     _lastTime  = _startTime;
 
+    // One instance per project and mode. Two editors on one project fight over
+    // the automation port and the build outputs, and the loser is silent: it
+    // starts, cannot bind, and keeps running with nothing attached to it. Two
+    // different projects are a legitimate pair, so the key is the project, not
+    // the executable.
+    const std::string instanceKey = std::format("{}{}",
+                                                _ci.projectPath.value_or(_ci.executablePath.value_or("ya")),
+                                                _ci.bEditor ? "|editor" : "|game");
+
     HostSdlEventSource      eventSource;
     GameRuntimeLoopDelegate delegate(*this);
-    AppKernel               kernel({.eventSource = &eventSource}, delegate);
-    return kernel.run();
+    AppKernel               kernel({.eventSource = &eventSource, .instanceKey = instanceKey}, delegate);
+    // The runtime owns frame-level automation completion (scene stability,
+    // screenshots, RenderDoc), so exitAfterTick stays off here. The wall-clock
+    // deadline is different: it is the one policy that has to hold even when
+    // nothing else asks the app to stop.
+    return kernel.run(AppAutomationRunOptions{
+        .maxLifetimeSeconds = _ci.automation.maxLifetimeSeconds,
+    });
 }
 
 void App::addModule(std::unique_ptr<IModule> module)

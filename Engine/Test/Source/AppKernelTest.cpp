@@ -5,13 +5,32 @@
 
 #include "App/Kernel/AppKernel.h"
 #include "Core/MessageBus.h"
+#include "Core/Os/OsProcessLock.h"
 
 #include <gtest/gtest.h>
+
+#include <chrono>
+#include <thread>
+
+#ifdef _WIN32
+    #include <process.h>
+#else
+    #include <unistd.h>
+#endif
 
 namespace ya
 {
 namespace
 {
+
+uint32_t testProcessId()
+{
+#ifdef _WIN32
+    return static_cast<uint32_t>(::_getpid());
+#else
+    return static_cast<uint32_t>(::getpid());
+#endif
+}
 
 struct CountingDelegate final : public IAppLoopDelegate
 {
@@ -91,6 +110,65 @@ TEST(AppKernelTest, RuntimeTypedEventBridgePublishesConcreteEvent)
 
     EXPECT_EQ(subscriber.count, 1);
     MessageBus::get()->unsubscribe(&subscriber);
+}
+
+// A deadline has to hold without anything else asking the app to stop: this is
+// the guard against an unattended instance outliving whoever launched it.
+TEST(AppKernelTest, HeadlessLoopHonorsMaxLifetime)
+{
+    CountingDelegate delegate;
+    AppKernel        kernel({}, delegate);
+
+    const int result = kernel.run(AppAutomationRunOptions{.maxLifetimeSeconds = 0.05});
+
+    EXPECT_EQ(result, 0);
+    EXPECT_TRUE(delegate.shutdown);
+    // No frame budget was given, so the loop can only have stopped on the clock.
+    EXPECT_GT(delegate.ticks, 0);
+}
+
+// The lock tracks a live process, not a file on disk: a second holder is
+// refused, and the key is usable again the moment the holder lets go, so an
+// interrupted run never leaves the name permanently taken.
+TEST(AppKernelTest, ProcessLockRefusesASecondHolderAndFreesOnRelease)
+{
+    const std::string key = "AppKernelTest.ProcessLockRefusesASecondHolder";
+
+    Os::ProcessLock holder;
+    uint32_t        ownerPid = 0;
+    ASSERT_TRUE(holder.tryAcquire(key, ownerPid));
+    EXPECT_TRUE(holder.isHeld());
+
+    Os::ProcessLock contender;
+    EXPECT_FALSE(contender.tryAcquire(key, ownerPid));
+    EXPECT_FALSE(contender.isHeld());
+    // The reported owner is best-effort, but must never be someone else here.
+    if (ownerPid != 0) {
+        EXPECT_EQ(ownerPid, testProcessId());
+    }
+
+    holder.release();
+    EXPECT_TRUE(contender.tryAcquire(key, ownerPid));
+    EXPECT_TRUE(contender.isHeld());
+}
+
+// The kernel is what makes the rule hold for every product line, so the refusal
+// has to surface as a non-zero run() without ever ticking the app.
+TEST(AppKernelTest, KernelRefusesToRunWhenKeyIsHeld)
+{
+    const std::string key = "AppKernelTest.KernelRefusesToRunWhenKeyIsHeld";
+
+    uint32_t        ownerPid = 0;
+    Os::ProcessLock holder;
+    ASSERT_TRUE(holder.tryAcquire(key, ownerPid));
+
+    CountingDelegate delegate;
+    AppKernel        kernel({.instanceKey = key}, delegate);
+    const int        result = kernel.run();
+
+    EXPECT_NE(result, 0);
+    EXPECT_EQ(delegate.ticks, 0);
+    EXPECT_FALSE(delegate.started);
 }
 
 } // namespace ya

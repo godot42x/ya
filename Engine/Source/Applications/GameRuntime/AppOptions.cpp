@@ -156,6 +156,7 @@ void AppDesc::init(int argc, char** argv)
         .opt<std::string>("", {"renderdoc-dll"}, "RenderDoc dll path", renderDocDllPath)
         .opt<std::string>("", {"renderdoc-output"}, "RenderDoc capture output directory", renderDocCaptureOutputDir)
         .opt<uint16_t>("", {"automation-control-port"}, "Automation control TCP port; 0 disables the server", "0")
+        .opt<double>("", {"max-lifetime-seconds"}, "Quit gracefully after this many seconds of wall clock; 0 = unlimited", "0")
         .parse(argc, argv);
 
     title = params._opt.program();
@@ -166,6 +167,7 @@ void AppDesc::init(int argc, char** argv)
     // every other engine option (no separate hand-written argv scan).
     params.tryGet<uint64_t>("exit-after-frame", automation.exitAfterTick);
     params.tryGet<uint16_t>("automation-control-port", automation.controlPort);
+    params.tryGet<double>("max-lifetime-seconds", automation.maxLifetimeSeconds);
     if (std::string automationConfigPath; params.tryGet<std::string>("automation-config", automationConfigPath)) {
         automation.configPath = std::move(automationConfigPath);
     }

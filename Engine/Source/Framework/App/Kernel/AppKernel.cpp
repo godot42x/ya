@@ -1,5 +1,7 @@
 #include "App/Kernel/AppKernel.h"
 
+#include "Core/Log.h"
+
 #include <algorithm>
 #include <chrono>
 
@@ -22,6 +24,26 @@ AppKernel::~AppKernel()
 
 int AppKernel::run(const AppAutomationRunOptions& options)
 {
+    if (!_config.instanceKey.empty()) {
+        uint32_t         ownerPid = 0;
+        const std::filesystem::path lockPath = Os::ProcessLock::resolveLockPath(_config.instanceKey);
+        if (!_instanceLock.tryAcquire(_config.instanceKey, ownerPid)) {
+            if (ownerPid != 0) {
+                YA_CORE_ERROR("Refusing to start '{}': already running as pid {}. Stop it first, or "
+                              "use a different instance key.",
+                              _config.instanceKey,
+                              ownerPid);
+            }
+            else {
+                YA_CORE_ERROR("Refusing to start '{}': another live process holds '{}'. Stop it "
+                              "first, or use a different instance key.",
+                              _config.instanceKey,
+                              lockPath.string());
+            }
+            return 1;
+        }
+    }
+
     _runController.reset(options);
     _delegate.onInit();
     _bDelegateStarted = true;
@@ -39,6 +61,13 @@ int AppKernel::run(const AppAutomationRunOptions& options)
 
     _delegate.onShutdown();
     _bDelegateStarted = false;
+
+    if (_runController.getExitReason() != EAppAutomationExitReason::None) {
+        YA_CORE_INFO("App loop exited: reason={} after {} frames, {:.1f}s",
+                     getAutomationExitReasonName(_runController.getExitReason()),
+                     _runController.getCompletedFrameCount(),
+                     _runController.getElapsedSeconds());
+    }
     return 0;
 }
 

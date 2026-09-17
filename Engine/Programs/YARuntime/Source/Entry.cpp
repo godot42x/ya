@@ -51,6 +51,19 @@ bool containsRootModule(const std::vector<std::string>& roots, std::string_view 
     return std::find(roots.begin(), roots.end(), moduleName) != roots.end();
 }
 
+/// Stops the modules while the App that hosted them is still alive. onStop()
+/// addresses the host the module was started with (the editor reads render state
+/// to persist its window layout), and the App still holds the module pointers it
+/// detaches during its own teardown. ModuleManager's destruction happens after
+/// the App, which inverts both; unloading the instances stays where the App can
+/// no longer reach them.
+struct FModuleTeardownScope
+{
+    ya::ModuleManager& manager;
+
+    ~FModuleTeardownScope() { manager.stopAll(); }
+};
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -107,6 +120,7 @@ int main(int argc, char** argv)
             }
         }
 
+        int exitCode = 0;
         {
             ya::App app;
             for (ya::IModule* module : moduleManager.getLoadedModules()) {
@@ -116,13 +130,18 @@ int main(int argc, char** argv)
                 std::fprintf(stderr, "%s\n", moduleManager.getLastError().c_str());
                 return 4;
             }
+
+            const FModuleTeardownScope modulesTeardown{moduleManager};
+
             app.init(std::move(appDesc));
-            app.run();
+            // Propagate the loop's result: a refused start (another live
+            // instance on this project) has to be a non-zero exit, otherwise a
+            // script cannot tell "ran and finished" from "never ran at all".
+            exitCode = app.run();
             app.quit();
-            moduleManager.stopAll();
         }
         moduleManager.unloadAll();
-        return 0;
+        return exitCode;
     }
     catch (const std::exception& exception) {
         std::fprintf(stderr, "ya-runtime startup failed: %s\n", exception.what());

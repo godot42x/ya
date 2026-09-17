@@ -12,6 +12,9 @@
 #include "Core/Async/TaskQueue.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
+
+#include <format>
+#include <stdexcept>
 #include "Core/Profiling/StaticInitProfiler.h"
 #include "App/Module/ProjectDescriptor.h"
 #include "Core/System/FileWatcher.h"
@@ -335,7 +338,17 @@ void App::init(AppDesc ci)
     app._deleter.push("Modules", [&app](void*) { app.detachModules(); });
 
     if (app._automationControlService) {
-        app._automationControlService->init(app._ci.automation.controlPort);
+        // A requested control port that cannot be bound has to stop the run.
+        // Continuing means an automation client connects to whoever *does* hold
+        // the port: the calls land on another process while this one looks
+        // healthy, which reads as the tooling randomly querying the wrong app.
+        const uint16_t controlPort = app._ci.automation.controlPort;
+        if (controlPort != 0 && !app._automationControlService->init(controlPort)) {
+            YA_CORE_ERROR("Automation control port {} is unavailable; refusing to start without it",
+                          controlPort);
+            throw std::runtime_error(
+                std::format("automation control port {} is already in use", controlPort));
+        }
     }
 
     app._luaScriptingSystem = new LuaScriptingSystem();
@@ -489,6 +502,11 @@ void App::onPostInit()
 void App::quit()
 {
     App& app = *this;
+    if (app._bTornDown) {
+        return;
+    }
+    app._bTornDown = true;
+
     if (app._automationControlService) {
         app._automationControlService->shutdown();
     }
@@ -532,9 +550,19 @@ void App::quit()
         app._nativeWindowManager.reset();
     }
 
-    MaterialFactory::get()->destroy();
+    // A startup that threw before MaterialFactory::init() still reaches here.
+    if (auto* materialFactory = MaterialFactory::get()) {
+        materialFactory->destroy();
+    }
     profiling::endRuntimeSession();
     ConfigManager::get().shutdown();
+
+    // Nothing may reach a destroyed App through the singleton: the signal
+    // handlers, mouse picking and gameplay paths all read App::get(), and it used
+    // to keep pointing at this object after destruction.
+    if (App::_instance == &app) {
+        App::_instance = nullptr;
+    }
 }
 
 bool App::loadSceneInternal(const std::string& path)
