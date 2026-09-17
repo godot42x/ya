@@ -387,7 +387,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
                 .frameData      = recording.frameData ? recording.frameData : camera.frameData,
                 .viewportExtent = viewExtent,
             },
-            .derivedScene            = recording.task ? recording.task->scene : nullptr,
+            .derivedScene            = recording.task ? recording.task->desc.scene : nullptr,
         };
         if (shouldSkipView(branch.frame)) {
             continue;
@@ -494,7 +494,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
     _lastFrameGraphTopology = graph.describeCompiledTopology(compiled);
 
     for (const ForwardFamilyViewBranch& branch : liveBranches) {
-        const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->viewId : 0;
+        const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
         RenderViewOutput output = collectViewOutput(
             execution, branch.frame.camera, branch.frame.view.task, viewId, branch.stageCtx.viewportExtent);
         const bool bDisplayRoot = branch.frame.view.task && ctx.plan &&
@@ -887,7 +887,7 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
             .bEnableShadow            = _shadowStage && currentShadowSettings().isEnabled(),
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
             .viewportOverlaySnapshot  = frame.viewportOverlaySnapshot,
-            .viewId                   = frame.view.task ? frame.view.task->viewId : 0,
+            .viewId                   = frame.view.task ? frame.view.task->desc.viewId : 0,
             .viewResources            = viewResources,
             .familyPredecessor        = familyPredecessor,
         });
@@ -904,7 +904,7 @@ RenderViewOutput ForwardRenderPipeline::collectViewOutput(const RenderGraphExecu
     if (task) {
         output.desc = task->output;
     }
-    output.desc.viewId = viewId != 0 ? viewId : (task ? task->viewId : 0);
+    output.desc.viewId = viewId != 0 ? viewId : (task ? task->desc.viewId : 0);
     if (!output.desc.hasExtent()) {
         output.desc.extent = viewExtent.width > 0 ? viewExtent : Extent2D::fromVec2(camera.viewportRect.extent);
     }

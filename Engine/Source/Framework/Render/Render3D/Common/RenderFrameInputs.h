@@ -22,11 +22,6 @@ class RenderSubmission;
 struct Scene;
 struct UIFrameSnapshot;
 
-[[nodiscard]] inline glm::mat4 makeCameraViewProjection(const glm::mat4& projection, const glm::mat4& view)
-{
-    return projection * view;
-}
-
 /// Immutable Camera / WorldView data for one graphics frame. The camera owner
 /// fills view, projection, viewProjection and offscreen extent before graph
 /// build. This is not a present surface and not swapchain size.
@@ -74,18 +69,19 @@ struct CameraFrameInput
     CameraFrameInput camera = host;
     if (recording.task) {
         const SceneViewportTask& task = *recording.task;
-        camera.view           = task.view;
-        camera.projection     = task.projection;
-        camera.viewProjection = task.viewProjection;
-        camera.cameraPos      = task.cameraPos;
+        const SceneViewDesc&     desc = task.desc;
+        camera.view           = desc.view;
+        camera.projection     = desc.projection;
+        camera.viewProjection = desc.viewProjection();
+        camera.cameraPos      = desc.cameraPos;
         const glm::vec2 outputExtent = task.output.hasExtent()
                                            ? glm::vec2{
                                                  static_cast<float>(task.output.extent.width),
                                                  static_cast<float>(task.output.extent.height),
                                              }
-                                           : task.viewportRect.extent;
-        if (task.ownsHostViewport()) {
-            camera.viewportRect = task.viewportRect;
+                                           : desc.viewportRect.extent;
+        if (desc.ownsHostViewport()) {
+            camera.viewportRect = desc.viewportRect;
             if (outputExtent.x > 0.0f && outputExtent.y > 0.0f) {
                 camera.viewportRect.extent = outputExtent;
             }
@@ -120,12 +116,13 @@ struct ViewDisplayInset
 {
     std::vector<ViewDisplayInset> insets;
     for (const auto& task : plan.viewportTasks) {
-        if (task.ownsHostViewport() || task.composeRect.extent.x <= 0.0f || task.composeRect.extent.y <= 0.0f) {
+        const SceneViewDesc& desc = task.desc;
+        if (desc.ownsHostViewport() || desc.composeRect.extent.x <= 0.0f || desc.composeRect.extent.y <= 0.0f) {
             continue;
         }
         insets.push_back(ViewDisplayInset{
-            .viewId   = task.viewId,
-            .destRect = task.composeRect,
+            .viewId   = desc.viewId,
+            .destRect = desc.composeRect,
         });
     }
     return insets;
@@ -184,7 +181,7 @@ struct ViewFamilyRecordContext
     const SceneRenderPlan*                               plan       = nullptr;
     const SceneViewFamilyPlan*                           family     = nullptr;
     /// The family's views, each carrying its own task and therefore its own
-    /// Scene; a family exists only for one (SceneId, revision, policy).
+    /// Scene; a family exists only for one (Scene, revision, policy).
     std::vector<SceneViewRecording>                      views;
     std::shared_ptr<const RenderViewportOverlaySnapshot> overlaySnapshot;
 };

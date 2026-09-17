@@ -43,7 +43,7 @@ std::shared_ptr<RenderViewportOverlaySnapshot> buildViewportOverlaySnapshot(cons
 }
 
 /// Every Scene the resolved plan actually renders, in snapshot-table order. The
-/// table is already deduplicated by (SceneId, sceneRevision); the Scene handle
+/// table is already deduplicated by (Scene, sceneRevision); the Scene handle
 /// is what derived per-Scene state is keyed on, so dedupe on that too.
 std::vector<Scene*> renderedScenes(const SceneRenderPlan& plan)
 {
@@ -155,8 +155,8 @@ ICommandBuffer* RenderFrameCoordinator::record(const RenderFramePlan& plan)
             auto overlaySnapshot = buildViewportOverlaySnapshot(plan.camera.overlay);
             recordViewFamilies(plan, cmdBuf.get(), overlaySnapshot);
             if (const SceneViewportTask* displayRoot = plan.sceneRender.primaryTask()) {
-                if (displayRoot->viewId != 0) {
-                    _device->_publishedOutputViewId = displayRoot->viewId;
+                if (displayRoot->desc.viewId != 0) {
+                    _device->_publishedOutputViewId = displayRoot->desc.viewId;
                     _device->_publishedOutputFlight = plan.camera.flightIndex;
                 }
             }

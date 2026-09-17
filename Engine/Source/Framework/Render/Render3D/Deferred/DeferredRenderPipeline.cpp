@@ -907,7 +907,7 @@ RenderPipelineFrameContext makeDeferredViewFrameContext(const ViewFamilyRecordCo
             .frameData      = recording.frameData ? recording.frameData : camera.frameData,
             .viewportExtent = viewExtent,
         },
-        .derivedScene            = recording.task ? recording.task->scene : nullptr,
+        .derivedScene            = recording.task ? recording.task->desc.scene : nullptr,
     };
 }
 
@@ -1030,7 +1030,7 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
     }
 
     for (const DeferredFamilyViewBranch& branch : liveBranches) {
-        const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->viewId : 0;
+        const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
         RenderViewOutput output = collectViewOutput(
             execution, branch.graphResources, branch.frame.camera, branch.frame.view.task, viewId);
         const bool bDisplayRoot = branch.frame.view.task && ctx.plan &&
@@ -1246,7 +1246,7 @@ RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     if (task) {
         output.desc = task->output;
     }
-    output.desc.viewId = viewId != 0 ? viewId : (task ? task->viewId : 0);
+    output.desc.viewId = viewId != 0 ? viewId : (task ? task->desc.viewId : 0);
     if (!output.desc.hasExtent()) {
         output.desc.extent = Extent2D::fromVec2(camera.viewportRect.extent);
     }
@@ -1504,7 +1504,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
             .bReverseViewportY        = _bReverseViewportY,
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
             .viewportOverlaySnapshot  = frame.viewportOverlaySnapshot,
-            .viewId                   = frame.view.task ? frame.view.task->viewId : 0,
+            .viewId                   = frame.view.task ? frame.view.task->desc.viewId : 0,
             .viewResources            = viewResources,
             .familyPredecessor        = familyPredecessor,
         });

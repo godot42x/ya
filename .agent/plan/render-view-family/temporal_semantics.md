@@ -230,6 +230,13 @@ M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**�
 - 消费者改为读自己 task 上的句柄：Forward/Deferred 的 `RenderPipelineFrameContext.derivedScene` 取 `recording.task->scene`；`uniqueDerivedScenes` 变成 coordinator 文件内的 `renderedScenes(plan)`（直接扫已解析的快照表）。
 - 验收证据：`ya-render-3d-test` 172/172、`ya-testing` 相关滤镜 89/89、两次 smoke（runtime / editor，`--exit-after-frame=90 --screenshot-target=viewport`）exit=0 且日志 0 error。
 
+#### M9 执行记录（4c，2026-09-18 已提交）
+
+- 一份声明结构：`SceneViewDesc`（新头文件 `Render3D/Common/SceneViewDesc.h`，带 `SceneViewId` / `kPrimarySceneViewId` / `makeCameraViewProjection`）取代 `HostSceneViewSubmit` 与 `SceneRenderRequest`。计划条目 `SceneViewportTask` 内嵌它（`desc`）+ `output` / `snapshotIndex` / `familyIndex`，`seal()` 不再逐字段搬运。
+- 键改用句柄：`SceneViewFamilyKey` / `SceneSnapshotEntry` / `SnapshotKey` / `snapshotFor` 校验都从派生整数 `sceneId` 换成 `Scene*`；`using SceneId` 与该别名全线删除。族键本就 tick-local（submission 重用时清空），句柄身份足够。
+- 删掉无写方的 `renderFlags`（含族键里恒 0 的分量）；`submitHostSceneViews` 转发层删除，宿主直接 `scheduler.submit(SceneViewDesc)`；`HostSceneRenderSubmit.*`（只剩抽取）改名 `HostSceneExtract.*`；`pendingRequestCount()` → `declaredViewCount()`。
+- 验收证据：`ya-render-3d-test` 172/172、`ya-testing` 相关滤镜 93/93（新增 `SceneFamilyResourcesTest` 进滤镜）、两次 smoke exit=0 且日志 0 error、截图字节数与 4b 一致。
+
 
 ## 3. 保留项（这些 `frame` 是正确的）
 
@@ -288,11 +295,11 @@ M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**�
 - P1b-2b 构建/测试证据：`xmake b ya-render-3d-test`、`xmake b ya-testing`、`xmake b ya-game-editor`；`xmake r ya-testing --gtest_filter='AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*:AppKernelTest.*'` 66/66；`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:ViewFamilyRendererTest.*:RenderViewBindingTableTest.*:ViewPassResourcesTest.*:SceneFamilyResourcesTest.*'` 41/41。
 - P1d 已满足：`rg -n 'isFrameAutomationEnabled|hasFrameAutomationConfig|shouldRequestQuitAfterFrame|ExitAfterFrame|StableFrameReady|registerFrameTask|hasFrameTasks|frameContext' Engine Example` 为空。
 - P1d 构建/测试证据：`xmake b ya-game-editor`、`xmake b ya-testing`；`xmake r ya-testing --gtest_filter='AppKernelTest.*:AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*'` 66/66（含改名后的 `AppKernelTest.HeadlessLoopHonorsExitAfterTick`）。
-- M9 / P1e 的目标（4d 落地后应可逐条验证）：`rg -n 'bWorldSceneRenderEnabled|setWorldSceneRenderEnabled|isWorldSceneRenderEnabled' Engine Example` 为空；`rg -n 'extensionHostView|setExtensionHostViewState|clearExtensionHostViewState' Engine` 为空；`rg -n 'bCameraPreviewHostOwned|cameraPreviewEntityUUID|resolvePreviewCamera|kHostOverlayPreviewViewId|bShowEditorGizmos' Engine` 为空；`rg -n 'derivedSceneForHostView|derivedScenesAgreeWithPlan|derivedSceneForFamily' Engine` 为空（4b）。
-- M9 4a–4c 的验收：4a `SceneRenderScheduler::seal()` 内不再出现 `buildSnapshot` 调用；4b plan/task/快照表项携带 Scene 句柄、`sceneId` 由句柄派生、无运行时反查校验（`rg -n 'derivedSceneForHostView|derivedScenesAgreeWithPlan|derivedSceneForFamily|complete\(\)' Engine/Source/Framework/Render/Render3D/Common/RenderFrameInputs.h` 为空）；4c 声明结构只剩一份，且 `HostSceneRenderSubmitTest` 的隔离语义不变（3/3）。
+- M9 / P1e 的目标（4d 落地后应可逐条验证）：`rg -n 'bWorldSceneRenderEnabled|setWorldSceneRenderEnabled|isWorldSceneRenderEnabled' Engine Example` 为空；`rg -n 'extensionHostView|setExtensionHostViewState|clearExtensionHostViewState' Engine` 为空；`rg -n 'bCameraPreviewHostOwned|cameraPreviewEntityUUID|resolvePreviewCamera|kHostOverlayPreviewViewId|bShowEditorGizmos' Engine` 为空；`rg -n 'derivedSceneForHostView|derivedScenesAgreeWithPlan|derivedSceneForFamily' Engine` 为空（4b 已满足）。
+- M9 4a–4c 的验收：4a `SceneRenderScheduler::seal()` 内不再出现 `buildSnapshot` 调用；4b plan/task/快照表项携带 Scene 句柄、`sceneId` 由句柄派生、无运行时反查校验（`rg -n 'derivedSceneForHostView|derivedScenesAgreeWithPlan|derivedSceneForFamily|complete\(\)' Engine/Source/Framework/Render/Render3D/Common/RenderFrameInputs.h` 为空）；4c 声明结构只剩一份（`rg -n 'HostSceneViewSubmit|SceneRenderRequest|submitHostSceneViews|renderFlags|\bSceneId\b' Engine Example` 为空，`SceneViewportTask` 只内嵌 `SceneViewDesc`），且 `HostSceneExtractTest` 的隔离语义不变（3/3）。
 - M9 4d 的验收：编辑器 2D 画布模式与 3D 模式的 view 集合差异由 producer 声明表达，`tickRender` 内不再有「某个 view 要不要渲染」的判断；`SkeletonAnimationSystem` 不再依赖世界渲染开关。
 - M9 4d 的第二条验收（2026-09-18 补充）：declare 路径上不再有 live-ECS 查询——`getPrimaryCamera`（`registry.view<CameraComponent>`）、`resolvePreviewCamera`（`getEntityByUUID`）、`appendSceneCameraFrustumLines`（再遍历 camera view）都要移出 `tickRender` 的声明段，由 producer 收集时给出或在 `SceneSnapshot` 里体现。`bShowEditorGizmos` 是第五个全局格子（写入方 `EditorSurface.cpp` Window 菜单，读取方 `featuresForView`），与 `setViewportRect` 同批降为 producer 输入。
-- M9 相关构建/测试基线（落地时逐刀执行）：`xmake b ya-game-editor ya-testing ya-render-3d-test`；`ya-testing` EditorDockWorkspace/EditorWindowSession/EditorRootSession/HostSceneRenderSubmit；`ya-render-3d-test` RenderRuntimeSnapshot/ViewFamilyRenderer/ViewPassResources/SceneFamilyResources。
+- M9 相关构建/测试基线（落地时逐刀执行）：`xmake b ya-game-editor ya-testing ya-render-3d-test`；`ya-testing` EditorDockWorkspace/EditorWindowSession/EditorRootSession/HostSceneExtract（4c 前的名字是 HostSceneRenderSubmit）；`ya-render-3d-test` RenderRuntimeSnapshot/ViewFamilyRenderer/ViewPassResources/SceneFamilyResources。
 - 仍待处理：`DebugPrimitives::updateFrameUBO`（随 P2 flight 轴）。
 - `rg -n '\bframeIndex\b|\bframeId\b|\bframeToken\b' Engine/Source` 只剩第 3 节保留项与 automation 外部键。
 - `rg -n 'flightIndex' Engine/Source` 为空。

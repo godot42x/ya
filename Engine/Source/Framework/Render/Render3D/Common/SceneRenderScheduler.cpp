@@ -15,12 +15,12 @@ namespace
 /// once per tick and shared by every View that references it.
 struct SnapshotKey
 {
-    SceneId  sceneId       = 0;
+    const Scene* scene     = nullptr;
     uint64_t sceneRevision = 0;
 
     bool operator==(const SnapshotKey& other) const
     {
-        return sceneId == other.sceneId && sceneRevision == other.sceneRevision;
+        return scene == other.scene && sceneRevision == other.sceneRevision;
     }
 };
 
@@ -28,7 +28,7 @@ struct SnapshotKeyHash
 {
     size_t operator()(const SnapshotKey& key) const
     {
-        const size_t sceneHash    = std::hash<SceneId>{}(key.sceneId);
+        const size_t sceneHash    = std::hash<const Scene*>{}(key.scene);
         const size_t revisionHash = std::hash<uint64_t>{}(key.sceneRevision);
         return sceneHash ^ (revisionHash + static_cast<size_t>(0x9e3779b9u) +
                             (sceneHash << 6u) + (sceneHash >> 2u));
@@ -65,17 +65,17 @@ void buildViewFamilies(SceneRenderPlan& plan)
 void SceneRenderScheduler::beginTick(uint64_t hostTick)
 {
     _hostTick = hostTick;
-    _requests.clear();
+    _declared.clear();
     _tickOpen = true;
 }
 
-bool SceneRenderScheduler::submit(SceneRenderRequest request)
+bool SceneRenderScheduler::submit(SceneViewDesc desc)
 {
-    if (!_tickOpen || !request.scene || request.viewId == 0) {
+    if (!_tickOpen || !desc.scene || desc.viewId == 0) {
         return false;
     }
 
-    _requests.push_back(std::move(request));
+    _declared.push_back(std::move(desc));
     return true;
 }
 
@@ -90,42 +90,30 @@ SceneRenderPlan SceneRenderScheduler::seal()
     // caller fills them through buildSceneSnapshots(); nothing here reads
     // Scene/ECS content.
     std::unordered_map<SnapshotKey, uint32_t, SnapshotKeyHash> snapshotIndices;
-    snapshotIndices.reserve(_requests.size());
+    snapshotIndices.reserve(_declared.size());
 
-    for (const auto& request : _requests) {
-        const SceneId sceneId = request.scene->getInstanceId();
+    for (const SceneViewDesc& desc : _declared) {
         const SnapshotKey key{
-            .sceneId = sceneId,
-            .sceneRevision = request.sceneRevision,
+            .scene         = desc.scene,
+            .sceneRevision = desc.sceneRevision,
         };
         auto [it, inserted] = snapshotIndices.try_emplace(key, static_cast<uint32_t>(plan.snapshots.size()));
         if (inserted) {
             plan.snapshots.push_back(SceneSnapshotEntry{
-                .scene = request.scene,
-                .sceneId = sceneId,
-                .sceneRevision = request.sceneRevision,
-                .snapshot = nullptr,
+                .scene         = desc.scene,
+                .sceneRevision = desc.sceneRevision,
+                .snapshot      = nullptr,
             });
         }
 
+        // The declaration is carried over whole; only the plan's own output
+        // identity and bookkeeping are added beside it.
         plan.viewportTasks.push_back(SceneViewportTask{
-            .scene              = request.scene,
-            .sceneId            = sceneId,
-            .sceneRevision      = request.sceneRevision,
-            .viewId             = request.viewId,
-            .familyId           = request.familyId,
-            .view               = request.view,
-            .projection         = request.projection,
-            .viewProjection     = request.viewProjection,
-            .cameraPos          = request.cameraPos,
-            .viewportRect       = request.viewportRect,
-            .renderFlags        = request.renderFlags,
-            .composeOntoViewId  = request.composeOntoViewId,
-            .composeRect        = request.composeRect,
+            .desc          = desc,
             .output =
                 {
-                    .viewId = request.viewId,
-                    .extent = Extent2D::fromVec2(request.viewportRect.extent),
+                    .viewId = desc.viewId,
+                    .extent = Extent2D::fromVec2(desc.viewportRect.extent),
                 },
             .snapshotIndex = it->second,
         });
@@ -167,7 +155,7 @@ ExtractedSceneRender buildSceneSnapshots(SceneRenderPlan plan, const SceneSnapsh
 
 void SceneRenderScheduler::clearTick()
 {
-    _requests.clear();
+    _declared.clear();
     _tickOpen = false;
 }
 

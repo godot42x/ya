@@ -1,4 +1,4 @@
-#include "GameRuntime/Lifecycle/HostSceneRenderSubmit.h"
+#include "GameRuntime/Lifecycle/HostSceneExtract.h"
 
 #include "Core/Log.h"
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
@@ -20,11 +20,11 @@ namespace ya
 namespace
 {
 
-HostSceneViewSubmit makeView(Scene& scene, SceneViewId viewId, const glm::vec3& cameraPos)
+SceneViewDesc makeViewDesc(Scene& scene, SceneViewId viewId, const glm::vec3& cameraPos)
 {
     const glm::mat4 view       = glm::translate(glm::mat4(1.0f), -cameraPos);
     const glm::mat4 projection = glm::perspective(1.0f, 1.5f, 0.1f, 100.0f);
-    return HostSceneViewSubmit{
+    return SceneViewDesc{
         .scene        = &scene,
         .viewId       = viewId,
         .view         = view,
@@ -32,6 +32,15 @@ HostSceneViewSubmit makeView(Scene& scene, SceneViewId viewId, const glm::vec3& 
         .cameraPos    = cameraPos,
         .viewportRect = {.pos = {0.0f, 0.0f}, .extent = {64.0f, 36.0f}},
     };
+}
+
+bool declareAll(SceneRenderScheduler& scheduler, std::span<const SceneViewDesc> views)
+{
+    bool bDeclared = false;
+    for (const SceneViewDesc& view : views) {
+        bDeclared = scheduler.submit(view) || bDeclared;
+    }
+    return bDeclared;
 }
 
 void addDirectionalLight(Scene& scene, const glm::vec3& color, float intensity)
@@ -46,7 +55,7 @@ void addDirectionalLight(Scene& scene, const glm::vec3& color, float intensity)
 
 } // namespace
 
-TEST(HostSceneRenderSubmitTest, DualLiveScenesExtractIsolatedSnapshots)
+TEST(HostSceneExtractTest, DualLiveScenesExtractIsolatedSnapshots)
 {
     Scene sceneA("Authoring");
     Scene sceneB("Play");
@@ -54,20 +63,25 @@ TEST(HostSceneRenderSubmitTest, DualLiveScenesExtractIsolatedSnapshots)
     addDirectionalLight(sceneA, glm::vec3(1.0f, 0.0f, 0.0f), 2.0f);
     addDirectionalLight(sceneB, glm::vec3(0.0f, 0.0f, 1.0f), 4.0f);
 
-    const HostSceneViewSubmit views[] = {
-        makeView(sceneA, 11, glm::vec3(1.0f, 0.0f, 0.0f)),
-        makeView(sceneB, 21, glm::vec3(0.0f, 2.0f, 0.0f)),
+    // Declarations are written once, as the owner means them, and handed to the
+    // scheduler unchanged.
+    const SceneViewDesc views[] = {
+        makeViewDesc(sceneA, 11, glm::vec3(1.0f, 0.0f, 0.0f)),
+        makeViewDesc(sceneB, 21, glm::vec3(0.0f, 2.0f, 0.0f)),
     };
 
     SceneRenderScheduler scheduler;
     scheduler.beginTick(31);
-    ASSERT_TRUE(submitHostSceneViews(scheduler, views));
+    ASSERT_TRUE(declareAll(scheduler, views));
     SceneRenderPlan sealed = scheduler.seal();
 
     // seal() only groups: the snapshot table exists, its content does not.
     ASSERT_EQ(sealed.snapshots.size(), 2u);
     EXPECT_FALSE(sealed.snapshots[0].snapshot);
     EXPECT_FALSE(sealed.snapshots[1].snapshot);
+    // The plan holds the declaration verbatim, so the camera is already here.
+    EXPECT_EQ(sealed.viewportTasks[0].desc.view, views[0].view);
+    EXPECT_EQ(sealed.viewportTasks[0].desc.cameraPos, views[0].cameraPos);
 
     const ExtractedSceneRender extracted = extractHostSceneSnapshots(std::move(sealed), nullptr);
     const SceneRenderPlan&      plan      = extracted.plan();
@@ -87,32 +101,32 @@ TEST(HostSceneRenderSubmitTest, DualLiveScenesExtractIsolatedSnapshots)
     EXPECT_NE(snapshotA->directionalLightSource.color, snapshotB->directionalLightSource.color);
     EXPECT_NE(snapshotA->directionalLightSource.intensity, snapshotB->directionalLightSource.intensity);
 
-    // Each task carries the Scene it was declared for, so nothing has to map a
-    // task back to the declaration list to find it again.
-    EXPECT_EQ(plan.viewportTasks[0].scene, &sceneA);
-    EXPECT_EQ(plan.viewportTasks[1].scene, &sceneB);
-    EXPECT_EQ(plan.viewportTasks[0].sceneId, sceneA.getInstanceId());
-    EXPECT_EQ(plan.viewportTasks[1].sceneId, sceneB.getInstanceId());
+    // Each plan entry carries the Scene its declaration named, so nothing has
+    // to map an entry back to the declaration list to find it again.
+    EXPECT_EQ(plan.viewportTasks[0].desc.scene, &sceneA);
+    EXPECT_EQ(plan.viewportTasks[1].desc.scene, &sceneB);
+    EXPECT_EQ(plan.snapshots[plan.viewportTasks[0].snapshotIndex].scene, &sceneA);
+    EXPECT_EQ(plan.snapshots[plan.viewportTasks[1].snapshotIndex].scene, &sceneB);
 
     RenderFrameData frameA;
     RenderFrameData frameB;
     RenderFrameExtractor::prepareView(
         RenderFrameExtractor::ViewPrepareInput{
-            .view           = plan.viewportTasks[0].view,
-            .projection     = plan.viewportTasks[0].projection,
-            .viewProjection = plan.viewportTasks[0].viewProjection,
-            .cameraPos      = plan.viewportTasks[0].cameraPos,
-            .viewportExtent = Extent2D::fromVec2(plan.viewportTasks[0].viewportRect.extent),
+            .view           = plan.viewportTasks[0].desc.view,
+            .projection     = plan.viewportTasks[0].desc.projection,
+            .viewProjection = plan.viewportTasks[0].desc.viewProjection(),
+            .cameraPos      = plan.viewportTasks[0].desc.cameraPos,
+            .viewportExtent = Extent2D::fromVec2(plan.viewportTasks[0].desc.viewportRect.extent),
         },
         snapshotA,
         frameA);
     RenderFrameExtractor::prepareView(
         RenderFrameExtractor::ViewPrepareInput{
-            .view           = plan.viewportTasks[1].view,
-            .projection     = plan.viewportTasks[1].projection,
-            .viewProjection = plan.viewportTasks[1].viewProjection,
-            .cameraPos      = plan.viewportTasks[1].cameraPos,
-            .viewportExtent = Extent2D::fromVec2(plan.viewportTasks[1].viewportRect.extent),
+            .view           = plan.viewportTasks[1].desc.view,
+            .projection     = plan.viewportTasks[1].desc.projection,
+            .viewProjection = plan.viewportTasks[1].desc.viewProjection(),
+            .cameraPos      = plan.viewportTasks[1].desc.cameraPos,
+            .viewportExtent = Extent2D::fromVec2(plan.viewportTasks[1].desc.viewportRect.extent),
         },
         snapshotB,
         frameB);
@@ -121,19 +135,19 @@ TEST(HostSceneRenderSubmitTest, DualLiveScenesExtractIsolatedSnapshots)
     EXPECT_NE(frameA.sceneSnapshot.get(), frameB.sceneSnapshot.get());
 }
 
-TEST(HostSceneRenderSubmitTest, SameLiveSceneTwoViewsShareSnapshot)
+TEST(HostSceneExtractTest, SameLiveSceneTwoViewsShareSnapshot)
 {
     Scene scene("World");
     addDirectionalLight(scene, glm::vec3(1.0f, 1.0f, 1.0f), 1.0f);
 
-    const HostSceneViewSubmit views[] = {
-        makeView(scene, 11, glm::vec3(1.0f, 0.0f, 0.0f)),
-        makeView(scene, 12, glm::vec3(0.0f, 4.0f, 0.0f)),
+    const SceneViewDesc views[] = {
+        makeViewDesc(scene, 11, glm::vec3(1.0f, 0.0f, 0.0f)),
+        makeViewDesc(scene, 12, glm::vec3(0.0f, 4.0f, 0.0f)),
     };
 
     SceneRenderScheduler scheduler;
     scheduler.beginTick(32);
-    ASSERT_TRUE(submitHostSceneViews(scheduler, views));
+    ASSERT_TRUE(declareAll(scheduler, views));
     const ExtractedSceneRender extracted = extractHostSceneSnapshots(scheduler.seal(), nullptr);
     const SceneRenderPlan&      plan      = extracted.plan();
 
@@ -142,16 +156,18 @@ TEST(HostSceneRenderSubmitTest, SameLiveSceneTwoViewsShareSnapshot)
     ASSERT_EQ(plan.viewportTasks.size(), 2u);
     EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]), plan.snapshotFor(plan.viewportTasks[1]));
     EXPECT_EQ(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[1]));
-    EXPECT_EQ(plan.viewportTasks[0].scene, &scene);
-    EXPECT_EQ(plan.viewportTasks[1].scene, &scene);
+    EXPECT_EQ(plan.viewportTasks[0].desc.scene, &scene);
+    EXPECT_EQ(plan.viewportTasks[1].desc.scene, &scene);
+    // One extracted snapshot, two Views: the camera is what differs.
+    EXPECT_NE(plan.viewportTasks[0].desc.view, plan.viewportTasks[1].desc.view);
 }
 
-TEST(HostSceneRenderSubmitTest, ClosedSchedulerRejectsSubmit)
+TEST(HostSceneExtractTest, DeclaringOutsideATickIsRejected)
 {
     Scene scene("Idle");
-    const HostSceneViewSubmit views[] = {makeView(scene, 11, glm::vec3(0.0f))};
+    const SceneViewDesc views[] = {makeViewDesc(scene, 11, glm::vec3(0.0f))};
     SceneRenderScheduler scheduler;
-    EXPECT_FALSE(submitHostSceneViews(scheduler, views));
+    EXPECT_FALSE(declareAll(scheduler, views));
 }
 
 } // namespace ya

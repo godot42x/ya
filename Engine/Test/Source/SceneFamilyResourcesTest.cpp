@@ -6,6 +6,7 @@
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Core/Common/DeferredDeletionQueue.h"
+#include "Scene/Core/Scene.h"
 
 #include <gtest/gtest.h>
 
@@ -94,8 +95,9 @@ TEST(SceneFamilyResourcesTest, SameSceneViewsShareFamilyOwner)
     RenderSubmission* live = pool.acquire(0, 1u, dummyCmdBuf(1));
     ASSERT_NE(live, nullptr);
 
-    SceneViewportTask viewA{.sceneId = 7, .viewId = 11, .snapshotIndex = 0};
-    SceneViewportTask viewB{.sceneId = 7, .viewId = 12, .snapshotIndex = 0};
+    Scene               scene("Family");
+    SceneViewportTask   viewA{.desc = {.scene = &scene, .viewId = 11}, .snapshotIndex = 0};
+    SceneViewportTask   viewB{.desc = {.scene = &scene, .viewId = 12}, .snapshotIndex = 0};
     EXPECT_EQ(makeSceneViewFamilyKey(viewA), makeSceneViewFamilyKey(viewB));
 
     SceneFamilyResources* familyA = live->allocateSceneFamily(makeSceneViewFamilyKey(viewA));
@@ -118,8 +120,10 @@ TEST(SceneFamilyResourcesTest, DifferentScenesGetDifferentFamilyOwners)
     RenderSubmission* live = pool.acquire(0, 1u, dummyCmdBuf(1));
     ASSERT_NE(live, nullptr);
 
-    SceneViewportTask viewA{.sceneId = 1, .viewId = 11, .snapshotIndex = 0};
-    SceneViewportTask viewB{.sceneId = 2, .viewId = 21, .snapshotIndex = 1};
+    Scene               sceneA("FamilyA");
+    Scene               sceneB("FamilyB");
+    SceneViewportTask   viewA{.desc = {.scene = &sceneA, .viewId = 11}, .snapshotIndex = 0};
+    SceneViewportTask   viewB{.desc = {.scene = &sceneB, .viewId = 21}, .snapshotIndex = 1};
     SceneFamilyResources* familyA = live->allocateSceneFamily(makeSceneViewFamilyKey(viewA));
     SceneFamilyResources* familyB = live->allocateSceneFamily(makeSceneViewFamilyKey(viewB));
     ASSERT_NE(familyA, nullptr);
@@ -143,10 +147,12 @@ TEST(SceneFamilyResourcesTest, DualSceneSkinningBuffersStayIndependent)
 
     SceneSnapshot snapA = makeSnapshotWithPalettes(1);
     SceneSnapshot snapB = makeSnapshotWithPalettes(2);
+    Scene                 sceneA("FamilyKeyA");
+    Scene                 sceneB("FamilyKeyB");
     SceneFamilyResources* familyA =
-        live->allocateSceneFamily(SceneViewFamilyKey{.sceneId = 1}, &snapA);
+        live->allocateSceneFamily(SceneViewFamilyKey{.scene = &sceneA}, &snapA);
     SceneFamilyResources* familyB =
-        live->allocateSceneFamily(SceneViewFamilyKey{.sceneId = 2}, &snapB);
+        live->allocateSceneFamily(SceneViewFamilyKey{.scene = &sceneB}, &snapB);
     ASSERT_NE(familyA, nullptr);
     ASSERT_NE(familyB, nullptr);
 
@@ -178,9 +184,10 @@ TEST(SceneFamilyResourcesTest, FinishRejectsLaterFamilyAllocation)
 
     RenderSubmission* live = pool.acquire(0, 4u, dummyCmdBuf(1));
     ASSERT_NE(live, nullptr);
-    ASSERT_NE(live->allocateSceneFamily(SceneViewFamilyKey{.sceneId = 1}), nullptr);
+    Scene scene("FinishRejects");
+    ASSERT_NE(live->allocateSceneFamily(SceneViewFamilyKey{.scene = &scene}), nullptr);
     ASSERT_TRUE(live->finish());
-    EXPECT_EQ(live->allocateSceneFamily(SceneViewFamilyKey{.sceneId = 1}), nullptr);
+    EXPECT_EQ(live->allocateSceneFamily(SceneViewFamilyKey{.scene = &scene}), nullptr);
     EXPECT_EQ(live->sceneFamilyCount(), 1u);
 }
 

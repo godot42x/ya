@@ -88,8 +88,8 @@
 - [x] 记录 View 声明 / 收集 / 抽取 / 录制边界（plan §3.10、temporal_semantics M9）：调度器帧内聚合正确，缺的是 producer 声明；五个全局格子（`bWorldSceneRenderEnabled` / `extensionHostView` / `cameraPreview*` / `viewportRect` / `bShowEditorGizmos`）、declare 路径上的 live-ECS 查询、六层重复声明、三处空转机制已登记。
 - [x] 4.0.3 4a：抽取移出 `SceneRenderScheduler::seal()` → `buildSceneSnapshots(plan, resolver)`；`SceneRenderRequest` 不再携带任何闭包，无法解析内容的 Scene 由该步骤剔除并重新分组。
 - [x] 4.0.3 4b：声明 / task / 快照表项保留 tick-local `Scene*`，`sceneId` 由 `seal()` 从句柄派生；删除 `derivedSceneForHostView`、`SceneRenderPlanInput::complete()`、`derivedScenesAgreeWithPlan()`、`derivedSceneForFamily` 与 `SceneSnapshotResolver`，改为 `ExtractedSceneRender` 的构造期不变量。
-- [ ] 4.0.3 4c：`HostSceneViewSubmit` 与 `SceneRenderRequest` 合并为一份 `SceneViewDesc`。
-- [ ] 4.0.3 4d：引入 `ISceneViewProducer` / `collectSceneViews`，编辑器作者视口与相机预览自己声明；删除 `bWorldSceneRenderEnabled`、`extensionHostView` 注入、`bCameraPreviewHostOwned`、`cameraPreviewEntityUUID`；`SkeletonAnimationSystem` 的 tick policy 另找诚实输入。
+- [x] 4.0.3 4c：`HostSceneViewSubmit` 与 `SceneRenderRequest` 合并为一份 `SceneViewDesc`（`SceneViewportTask` 内嵌它，`submitHostSceneViews` 转发删除，`renderFlags` 与派生 `sceneId` 删除，键改用句柄；宿主文件改名 `HostSceneExtract.*`，只剩抽取）。
+- [ ] 4.0.3 4d：引入 `ISceneViewProducer` / `collectSceneViews`，编辑器作者视口与相机预览自己声明（声明类型已经是 `SceneViewDesc`）；删除 `bWorldSceneRenderEnabled`、`extensionHostView` 注入、`bCameraPreviewHostOwned`、`cameraPreviewEntityUUID`、`bShowEditorGizmos` 与 `setViewportRect` 的全局格子，并把 declare 路径上的 live-ECS 查询（`getPrimaryCamera` / `resolvePreviewCamera` / `appendSceneCameraFrustumLines`）清零；`SkeletonAnimationSystem` 的 tick policy 另找诚实输入。
 - [ ] 4.0.3 checkpoint 5：view 身份改 owner-scoped `SceneViewKey`，并按此建立 `ViewHistoryStore` 稳定键（排在 4d 之后）。
 
 ## R3

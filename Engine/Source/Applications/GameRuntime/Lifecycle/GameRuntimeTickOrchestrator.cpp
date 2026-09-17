@@ -33,7 +33,7 @@
 #include "Render3D/RenderDeviceState.h"
 #include "Render3D/RenderFrameCoordinator.h"
 #include "Render3D/Material/Material.h"
-#include "GameRuntime/Lifecycle/HostSceneRenderSubmit.h"
+#include "GameRuntime/Lifecycle/HostSceneExtract.h"
 #include "GameRuntime/Utility/RenderFrameExtractor.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
@@ -523,11 +523,13 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     } sceneSchedulerGuard{.scheduler = &sceneScheduler};
 
     std::vector<RenderOverlayLine3D> cameraFrustumLines;
-    std::vector<HostSceneViewSubmit> hostViews;
+    // Declarations for this tick. Each one is handed to the scheduler as
+    // written: nothing translates it into a second declaration structure.
+    std::vector<SceneViewDesc> sceneViews;
     Entity* runtimeLookCamera = nullptr;
     Entity* previewCamera     = nullptr;
     if (app.getRenderServices().isWorldSceneRenderEnabled() && scene) {
-        hostViews.push_back(HostSceneViewSubmit{
+        sceneViews.push_back(SceneViewDesc{
             .scene        = scene,
             .viewId       = kPrimarySceneViewId,
             .view         = hostView.view,
@@ -554,7 +556,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
                 .pos    = {0.0f, 0.0f},
                 .extent = previewComposeRect.extent,
             };
-            hostViews.push_back(HostSceneViewSubmit{
+            sceneViews.push_back(SceneViewDesc{
                 .scene             = scene,
                 .viewId            = kHostOverlayPreviewViewId,
                 .view              = cameraComp->getFreeView(),
@@ -573,7 +575,9 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
                                           : 0,
                                       cameraFrustumLines);
     }
-    (void)submitHostSceneViews(sceneScheduler, hostViews);
+    for (const SceneViewDesc& view : sceneViews) {
+        (void)sceneScheduler.submit(view);
+    }
     // Extraction is its own step: seal() only grouped the declarations, so
     // Scene/ECS content is read here and nowhere earlier.
     ExtractedSceneRender sceneRender =
@@ -599,18 +603,19 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         YA_PROFILE_SCOPE("RenderFrameExtractor::sceneSnapshot");
         for (const SceneViewRecording& recording : sceneRender.views()) {
             const SceneViewportTask& task      = *recording.task;
+            const SceneViewDesc&     desc      = task.desc;
             RenderFrameData&         frameData = *recording.frameData;
             RenderFrameExtractor::prepareView(
                 RenderFrameExtractor::ViewPrepareInput{
-                    .view = task.view,
-                    .projection = task.projection,
-                    .viewProjection = task.viewProjection,
-                    .cameraPos = task.cameraPos,
-                    .viewportExtent = Extent2D::fromVec2(task.viewportRect.extent),
-                    .viewOwner = (task.viewId == kHostOverlayPreviewViewId && previewCamera)
+                    .view = desc.view,
+                    .projection = desc.projection,
+                    .viewProjection = desc.viewProjection(),
+                    .cameraPos = desc.cameraPos,
+                    .viewportExtent = Extent2D::fromVec2(desc.viewportRect.extent),
+                    .viewOwner = (desc.viewId == kHostOverlayPreviewViewId && previewCamera)
                                      ? previewCamera->getHandle()
                                      : (runtimeLookCamera ? runtimeLookCamera->getHandle() : entt::null),
-                    .viewFeatures = featuresForView(task.viewId),
+                    .viewFeatures = featuresForView(desc.viewId),
                     .frameIndex = App::_hostTick,
                     .deltaTime = dt,
                     .shadowSettings = &app.getRenderServices().getShadowSettings(),

@@ -23,6 +23,18 @@
 - 验证：`xmake b ya-render-3d-test ya-game-editor ya-testing`；`ya-render-3d-test` 174/174；`ya-testing` HostSceneRenderSubmit/RenderRuntimeSnapshot/ViewFamilyRenderer/AppKernel/AppAutomationConfig/Editor* 91/91；`HelloMaterial --exit-after-frame=90 --screenshot-target=viewport` 与 `run-editor` 同参数均 exit=0、日志 0 error，viewport 截图 1024x768 有 10625 种颜色 / 98.5% 非黑、编辑器截图 7733 种，说明世界抽取与录制确实在跑而不是退化成 UI-only 空帧。
 - 保留未完成：4b（plan 携带 tick-local `Scene*`、删三个反查校验）、4c（合并 `SceneViewDesc`）、4d（`ISceneViewProducer` 与删全局格子）。`SceneSnapshotResolver` 是 4b 要消掉的东西：计划拿到 Scene 句柄后这一步不再需要 resolver。
 
+## 2026-09-18 checkpoint：一份声明结构（4.0.3 4c）
+
+- 唯一目标：让「一个 View 的声明」在全链路上只有一份。改前声明被写了两遍——宿主 `HostSceneViewSubmit`（10 字段）逐字段搬进 `SceneRenderRequest`（11 字段），`seal()` 再逐字段搬进 `SceneViewportTask`（14 字段）；字段没增加表达能力，只增加「该在哪一层读」的记忆负担。
+- 一份 `SceneViewDesc`（新文件 `Render3D/Common/SceneViewDesc.h`）：Scene 句柄、viewId、sceneRevision、policyId、view/projection/cameraPos、viewportRect、composeOntoViewId/composeRect，加两个派生成员 `ownsHostViewport()` / `viewProjection()`（`makeCameraViewProjection` 也搬到这里，全仓库唯一一份实现）。`HostSceneViewSubmit` 与 `SceneRenderRequest` 两个类型删除，`SceneViewId` / `kPrimarySceneViewId` 随声明类型一起落到这个头文件。
+- 计划条目内嵌声明：`SceneViewportTask` 变成 `{ SceneViewDesc desc; RenderViewOutputDesc output; snapshotIndex; familyIndex; }`，`seal()` 只写 `desc = desc` 加自己派生的 output 与索引，不再逐字段抄；读侧统一 `task.desc.*`（Forward/Deferred/coordinator/cameraForViewRecording/viewDisplayInsetsFromPlan 共约 20 处）。
+- 键改用句柄：`SceneViewFamilyKey`、`SceneSnapshotEntry`、seal 内的 `SnapshotKey` 以及 `snapshotFor` 的校验都从派生整数 `sceneId` 换成 `Scene*`（`SceneId` 别名与 `scene->getInstanceId()` 调用从调度器里消失）。族键本来就是 tick-local（`RenderSubmission::_families` 在每次 submission 重用时清空），所以句柄身份足够，且比整数少一层派生。
+- 顺手删掉没有写方的 `renderFlags`：它在声明、计划条目、族键三处都存在，全仓库无一处写非 0；一份「唯一声明」不该带一个没人写的字段，族键也同步去掉这个恒 0 分量。
+- 宿主侧那层转发删除：`submitHostSceneViews`（只做 skip 空 Scene + `makeCameraViewProjection`）与 `HostSceneRenderSubmit.*` 一起消失；orchestrator 直接把 `SceneViewDesc` 交给 `scheduler.submit()`，文件只剩抽取这一步，改名 `HostSceneExtract.{h,cpp}`（`extractHostSceneSnapshots` 名字不变）。`pendingRequestCount()` 随「request」词汇一起改成 `declaredViewCount()`。
+- 测试：`HostSceneRenderSubmitTest.cpp` → `HostSceneExtractTest.cpp`（3 个用例：双 Scene 隔离、同 Scene 两 View 共享 snapshot 且相机不同、tick 外声明被拒；原来那个只测转发层的 `ClosedSchedulerRejectsSubmit` 与 `SceneSchedulerRejectsRequestsOutsideFrame` 重复，删掉）。`SceneFamilyResourcesTest` 的族键构造改用真实 Scene；`RenderRuntimeSnapshotTest` / `ViewFamilyRendererTest` 改用 `SceneViewDesc`，新增 `static_assert` 钉住「计划条目内嵌 desc」与「快照表项带句柄」。
+- 验证：`xmake b ya-render-3d ya-game-runtime ya-game-editor ya-testing`；`ya-render-3d-test` 172/172；`ya-testing` HostSceneExtract/RenderRuntimeSnapshot/ViewFamilyRenderer/SceneFamilyResources/AppKernel/AppAutomationConfig/Editor* 93/93；`HelloMaterial` 与 `run-editor` 各跑 `--exit-after-frame=90 --screenshot-target=viewport` 均 exit=0、日志 0 error，截图字节数与 4b 完全一致（1395200 / 679231），说明这一刀没有改变渲染结果。
+- 保留未完成：4d（`ISceneViewProducer`、五个全局格子、declare 路径清零 ECS 查询）、checkpoint 5（`PreparedView` 收口 `CameraFrameInput` patch 与 owner-scoped `SceneViewKey`）。
+
 ## 2026-09-18 checkpoint：计划保留 Scene 句柄（4.0.3 4b）
 
 - 唯一目标：把「这一 tick 每个 view 渲染哪个 Scene」从反查变成声明本身的事实，从而删掉 `derivedSceneForHostView`、`SceneRenderPlanInput::complete()`、`derivedScenesAgreeWithPlan()` 三个运行时校验和 4a 的过渡物 `SceneSnapshotResolver`。
