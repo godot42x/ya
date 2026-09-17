@@ -93,6 +93,15 @@ CompanionSpec makeLightCompanionSpec(const LightBillboardConfig& config, bool bD
     spec.bFollowsHostTransform = true;
 
     spec.onCreate = [config](Scene& scene, Entity& host) -> Entity* {
+        // Legacy scene files stored the icon on the light entity itself (the old
+        // rule kept a billboard component on the host). The declaration says it
+        // belongs to the companion now, so drop the old copy: left in place it
+        // would read as authored content and keep drawing in every view next to
+        // the new icon. Removing it here means a save also cleans the file.
+        if (host.hasComponent<BillboardComponent>()) {
+            scene.removeComponent<BillboardComponent>(host.getHandle());
+        }
+
         Entity* companion = createCompanionNode(scene, host, kLightIconSuffix);
         if (!companion) {
             return nullptr;

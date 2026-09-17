@@ -50,6 +50,12 @@
       "seam": "EAssetPackClass + CompanionManager::eachCompanion"
     },
     {
+      "id": "legacy-billboard-adoption",
+      "description": "A host-side billboard from an older scene file is dropped when the icon moves to the companion",
+      "state": "done",
+      "seam": "makeLightCompanionSpec onCreate"
+    },
+    {
       "id": "model-mesh-through-manager",
       "description": "ModelInstantiationSystem routes its children through CompanionManager",
       "state": "not-started",

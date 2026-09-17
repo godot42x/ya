@@ -329,6 +329,39 @@ TEST(LinkageFrameworkTest, ClonedCameraRebuildsItsOwnBodyCompanion)
     framework.shutdown();
 }
 
+// Scene files written before icons moved onto companions carry a
+// BillboardComponent on the light entity. The declaration adopts that legacy
+// placement: the stale host copy goes away so it cannot keep drawing as
+// content, and the icon lives only on the companion.
+TEST(LinkageFrameworkTest, LightCompanionAdoptsLegacyHostBillboard)
+{
+    SceneManager sceneManager;
+    SceneLifecycleHostScope lifecycleHost(&sceneManager);
+    FrameTaskCapture sink;
+    LinkageFramework framework;
+    framework.setSceneManager(&sceneManager);
+    framework.setFrameTaskSink(std::ref(sink));
+    addCompanionRule(framework);
+    framework.init();
+
+    stdptr<Scene> scene = std::make_shared<Scene>("LegacyBillboardScene");
+    auto*         node  = scene->createNode3D("Light");
+    node->getEntity()->addComponent<PointLightComponent>();
+    ASSERT_NE(node->getEntity()->addComponent<BillboardComponent>(), nullptr);
+    ASSERT_TRUE(sceneManager.activateScene(scene));
+    sink.drain();
+
+    Entity* light = node->getEntity();
+    EXPECT_FALSE(light->hasComponent<BillboardComponent>());
+
+    Entity* icon = CompanionManager::findCompanion(*scene, *light);
+    ASSERT_NE(icon, nullptr);
+    ASSERT_TRUE(icon->hasComponent<BillboardComponent>());
+    EXPECT_EQ(icon->getComponent<BillboardComponent>()->features, toMask(ERenderFeature::Gizmo));
+
+    framework.shutdown();
+}
+
 // Deferred tasks scheduled before shutdown must no-op once the framework is
 // gone, even if they are still queued on the host frame-task sink.
 TEST(LinkageFrameworkTest, DeferredTasksCancelledAfterShutdown)

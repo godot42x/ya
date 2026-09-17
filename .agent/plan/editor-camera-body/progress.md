@@ -50,3 +50,28 @@ Not verified / open:
 ## Round 2 — spec + routing
 
 - `.agent/skills/scene-object-boundary/SKILL.md`, memory entry, AGENTS routing.
+
+## Round 3 — legacy billboard placement
+
+Loading `Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json` showed the
+migration cost of moving icons onto companions: 7 entities (every point light,
+the directional light) carry a serialized `BillboardComponent` on the light
+entity itself. Left alone, those would read as authored content -- drawn in every
+view, next to the new `Gizmo` icon -- and the file would stay polluted.
+
+`makeLightCompanionSpec`'s `onCreate` now drops a legacy host-side billboard
+before building the companion, so the declaration adopts the old placement:
+
+- one icon per light, on the companion;
+- the host loses the stale component, so the next save cleans the file;
+- `LinkageFrameworkTest.LightCompanionAdoptsLegacyHostBillboard` pins it.
+
+`Camera` in the same scene has no mesh, so the camera body is a pure addition
+there and needs no migration.
+
+Verified: `LinkageFrameworkTest` 8/8; `ya-engine`, `ya-game-editor`,
+`GUIWorkbench`, `GreedySnake`, `ya-testing` all build.
+
+Still open: the example project was not launched, so the visual result (one icon
+per light, camera body visible, game view clean) has not been eyeballed, and the
+saved file has not been re-read after a round trip.
