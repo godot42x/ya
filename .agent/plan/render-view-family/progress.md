@@ -13,6 +13,18 @@
 
 ## 2026-09-17 checkpoint：View 声明 / 收集边界 review（无代码改动）
 
+## 2026-09-18 checkpoint：作者视口 rect 由声明方给出（4.0.3 4d-3b）
+
+- 唯一目标：把作者视口的 rect 从「编辑器经 `AppRenderServices::setViewportRect` 推给宿主、宿主再放进 collect context 让 producer 读回」这条往返，改成编辑器在声明里直接给出；顺带把编辑器里那套 pending-resize 同步机制（最后一个手写 sync）删掉。
+- 声明权归编辑器：`EditorLayer::getViewportRect()` 给出面板几何（尚未布局时用编辑器自己的默认尺寸兜底，View 不会以空 rect 被声明）；`EditorViewProducer` 的作者视口与预览 inset 的 composeRect 都用它，不再读 `context.viewportRect`。
+- 手写 sync 删除：`EditorLayer` 的 `_pendingViewportRect` / `_bViewportResizePending` / `_resizeTimerHandle` / `getPendingViewportResize()` / `queueViewportResize()` 与无人订阅的 `onViewportResized` 全部删除；`EditorModule::applyPendingViewportResize()` 及其在 onLogic 的调用删除（`setViewportRect` 与 `device->applyViewportResize` 都不再由编辑器调用）。
+- device extent 跟随声明：`tickRender` 找到主 view 后，除了原有的相机回填，还把 `primaryView->viewportRect` 回填进 `hostView.viewportRect` 并调用 `device->applyViewportResize(...)`——设备「expect 哪个 viewport extent」现在是声明的派生结果，而不是别处推入的状态（该调用本身在未变化时 early-out）。
+- automation：`smoke.viewportResize` 只写宿主 view rect（那个 rect 由游戏视口声明），不再直接 `device->applyViewportResize`。
+- 刻意接受的行为差异：automation 的 viewportResize 改的是宿主视图几何（独立游戏视口 / 游戏态），编辑器作者视口的尺寸由它自己的面板决定，所以该键在编辑器里不再改 RT 尺寸。「让编辑器视口变成某个尺寸」的诚实做法是改窗口/布局，而不是从外部改一个 docked 面板的渲染尺寸。另一处：`_viewportSize` 现在始终跟随面板 rect，删掉了「鼠标捕获时不更新」的分支——那条分支的唯一用途是延迟 RT resize。
+- 验收：`xmake b ya-game-editor`、`xmake b ya-testing`；`ya-testing` 相关滤镜 92/92（`EditorViewProducerTest` 扩到 3 例，新增「声明出来的 rect 就是面板 rect」与「未布局时用默认尺寸兜底」）；`rg -n 'getPendingViewportResize|queueViewportResize|_bViewportResizePending|_pendingViewportRect' Engine/Source` 为空，`EditorLayer::onViewportResized` 已删（`IRenderPipeline::onViewportResized` 是 device 级 hook，仍在，由 `RenderDeviceState::applyViewportResize` 调用）；runtime viewport 截图与 4d-3a 逐字节相同（MD5 `1c6668976be1cdd5d755d1f1365700f7`，1395200 字节）；编辑器 viewport 截图与 4d-3a 逐字节相同（MD5 `1bfb16e7ca543abb7b517325df508b90`，235x188、13649 色、98.7% 非黑，说明世界视图确实在画）。
+- 基线口径修正（本刀发现）：编辑器 viewport 截图不再有跨会话稳定的字节基线——本环境里编辑器面板尺寸受持久化 dock 布局/窗口状态影响，本会话是 235x188，而 4b–4d-2 记录过的 679231 字节来自当时更大的面板。因此编辑器侧改看「同一会话内的前后对比」（本次两刀之间逐字节相同），runtime 侧（1024x768 / 1395200）仍可跨会话比对。
+- 保留未完成：checkpoint 5（view 身份改 owner-scoped `SceneViewKey`，并按此建 `ViewHistoryStore` 稳定键）。
+
 ## 2026-09-18 checkpoint：gizmo 开关归编辑器（4.0.3 4d-3a）
 
 - 唯一目标：把「编辑器视口要不要画编辑器家具」从 `AppRenderState::bShowEditorGizmos` 这个跨层格子，交回编辑器自己的 view option，并让 automation 的开关经编辑器而不是经 App。4d-3 原含两件事（feature 归位 / 作者视口 rect 归位），拆成两刀，这一刀只做 feature。

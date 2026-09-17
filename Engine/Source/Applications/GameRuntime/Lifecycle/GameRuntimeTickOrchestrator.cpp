@@ -421,6 +421,11 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         hostView.view       = primaryView->view;
         hostView.projection = primaryView->projection;
         hostView.cameraPos  = primaryView->cameraPos;
+        // The declared rect is the primary view's geometry, so the host's copy
+        // and the extent the device expects follow the declaration instead of a
+        // rect the owner pushed into host state.
+        hostView.viewportRect = primaryView->viewportRect;
+        device->applyViewportResize(primaryView->viewportRect);
     }
     const glm::mat4 viewProjection = makeCameraViewProjection(hostView.projection, hostView.view);
 

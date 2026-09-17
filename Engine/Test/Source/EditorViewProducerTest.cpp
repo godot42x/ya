@@ -61,6 +61,7 @@ TEST(EditorViewProducerTest, AuthoringViewportDrawsEditorFurnitureWhileAuthoring
     producer.bind(app, layer);
 
     Scene scene("Authoring");
+    layer.notifyViewportWidgetRect(Rect2D{.pos = {12.0f, 24.0f}, .extent = {960.0f, 540.0f}});
 
     SceneViewCollector collector;
     producer.collectSceneViews(makeEditorContext(scene), collector);
@@ -68,11 +69,39 @@ TEST(EditorViewProducerTest, AuthoringViewportDrawsEditorFurnitureWhileAuthoring
     const SceneViewDesc* primary = findView(collector, kPrimarySceneViewId);
     ASSERT_NE(primary, nullptr);
     EXPECT_EQ(primary->scene, &scene);
+    // The editor's own panel geometry is what it declares, not the host rect the
+    // context carries: the panel is a fact only the editor has.
+    EXPECT_FLOAT_EQ(primary->viewportRect.extent.x, 960.0f);
+    EXPECT_FLOAT_EQ(primary->viewportRect.extent.y, 540.0f);
+    EXPECT_FLOAT_EQ(primary->viewportRect.pos.x, 12.0f);
     // Generated companions are editor furniture and the authoring viewport is
     // what shows the scene while authoring, so it draws them without asking.
     EXPECT_TRUE(drawsGizmos(*primary));
     // No camera is selected, so there is no camera preview inset to declare.
     EXPECT_EQ(findComposedInset(collector), nullptr);
+}
+
+TEST(EditorViewProducerTest, AuthoringViewportFallsBackToItsDefaultSizeBeforeLayout)
+{
+    App             app;
+    EditorLayer     layer(&app);
+    EditorViewProducer producer;
+    producer.bind(app, layer);
+
+    Scene scene("Authoring");
+
+    SceneViewCollector collector;
+    producer.collectSceneViews(makeEditorContext(scene), collector);
+
+    // No layout has run yet, so the editor's own default panel size stands in
+    // and the view is never declared with an empty rect.
+    const SceneViewDesc* primary = findView(collector, kPrimarySceneViewId);
+    ASSERT_NE(primary, nullptr);
+    const Rect2D declared = layer.getViewportRect();
+    EXPECT_GT(declared.extent.x, 0.0f);
+    EXPECT_GT(declared.extent.y, 0.0f);
+    EXPECT_FLOAT_EQ(primary->viewportRect.extent.x, declared.extent.x);
+    EXPECT_FLOAT_EQ(primary->viewportRect.extent.y, declared.extent.y);
 }
 
 TEST(EditorViewProducerTest, GizmoViewOptionOnlyReachesViewsThatAskForIt)

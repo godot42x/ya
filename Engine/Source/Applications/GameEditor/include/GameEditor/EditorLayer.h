@@ -65,8 +65,10 @@ struct EditorLayer
     UIDesignerPanel     _uiDesignerPanel;
     EditorDocumentRegistry* _documents = nullptr;
 
-    // ViewportWidget layout (chrome). Host copies image rect into the Camera
-    // WorldView extent; this is not the present surface.
+    // Authoring viewport geometry (chrome). The editor declares its authoring
+    // View with this rect and maps viewport input through it; it is not the
+    // present surface. Before the first layout the panel has no rect yet, so
+    // the default size stands in (see getViewportRect).
     glm::vec2                _viewportSize = {1280.f, 720.f};
     glm::vec2                _viewportBounds[2]; // Min and max bounds
     Rect2D                   viewportRect;
@@ -117,10 +119,6 @@ struct EditorLayer
         Nearest
     } _viewPortSamplerType = Linear;
 
-    uint32_t _resizeTimerHandle = 0;
-    Rect2D   _pendingViewportRect; // Pending resize event to be processed in next frame
-    bool     _bViewportResizePending = false;
-
     // Render resources explicitly passed in from App each frame
     EditorViewportContext          _viewportCtx;
     std::shared_ptr<RenderTexture> _viewportDisplayImage = nullptr;
@@ -150,7 +148,6 @@ struct EditorLayer
     std::vector<DebugGroupState> _debugGroupStates;
 
   public:
-    Delegate<void(Rect2D /*rect*/)> onViewportResized;
     MulticastDelegate<void()>       onSelectionChanged;
     MulticastDelegate<void()>       onHierarchyChanged;
     MulticastDelegate<void()>       onScenePathChanged;
@@ -322,24 +319,20 @@ struct EditorLayer
     void resetDefaultScenePathDraft();
     [[nodiscard]] bool defaultScenePathExists() const;
 
-    // Get and clear pending viewport resize - called from App before render
-    bool getPendingViewportResize(Rect2D& outRect)
+    /// The editor's authoring panel geometry: what the editor declares as its
+    /// authoring View's rect. Before the first layout the panel has no rect, so
+    /// the editor's own default size stands in and a View is never declared
+    /// with an empty rect.
+    [[nodiscard]] Rect2D getViewportRect() const
     {
-        if (_bViewportResizePending) {
-            outRect                 = _pendingViewportRect;
-            _bViewportResizePending = false;
-            return true;
+        if (viewportRect.extent.x > 0.0f && viewportRect.extent.y > 0.0f) {
+            return viewportRect;
         }
-        return false;
+        return Rect2D{.pos = {0.0f, 0.0f}, .extent = _viewportSize};
     }
 
     bool screenToViewport(float screenX, float screenY, float& outX, float& outY) const;
     bool screenToViewport(const glm::vec2 in, glm::vec2& out) const;
-    void queueViewportResize(Rect2D rect)
-    {
-        _pendingViewportRect    = rect;
-        _bViewportResizePending = true;
-    }
 
     void onEvent(const Event& event);
 

@@ -554,8 +554,10 @@ void applyScheduledSmokeActions(App& app, uint64_t hostTick)
         resizeRect.extent = glm::vec2(static_cast<float>(automation.viewportResize->width),
                                       static_cast<float>(automation.viewportResize->height));
 
+        // Host view geometry. The view that fills it declares this rect and the
+        // device extent follows that declaration, so nothing is pushed at the
+        // device from here; an editor's authoring viewport is sized by its panel.
         app.getRenderServices().setViewportRect(resizeRect);
-        device->applyViewportResize(resizeRect);
 
         runtimeState.bViewportResizeApplied = true;
         YA_CORE_INFO("Automation queued viewport resize to {}x{} at frame {}",

@@ -499,18 +499,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             chromeFormat);
     }
 
-    void applyPendingViewportResize(App& app)
-    {
-        Rect2D pendingRect;
-        if (!_layer->getPendingViewportResize(pendingRect)) {
-            return;
-        }
-        if (auto* device = app.getRenderServices().getDeviceState()) {
-            app.getRenderServices().setViewportRect(pendingRect);
-            device->applyViewportResize(pendingRect);
-        }
-    }
-
     void composeAuthoringViewport(App& app, ICommandBuffer& commandBuffer)
     {
         auto& renderServices = app.getRenderServices();
@@ -937,7 +925,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         syncPlayViewportMode(app);
         updateEditorCameraAndPrepareCompose(app, dt);
         _layer->onUpdate(dt);
-        applyPendingViewportResize(app);
     }
 
     void onViewportCompose(App& app, ICommandBuffer& commandBuffer, float dt) override

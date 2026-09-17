@@ -57,6 +57,10 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
     const FRenderFeatureMask baseFeatures = toMask(ERenderFeature::Game);
     const bool               bEditorGizmos = _app->isStopped() || _layer->isEditorGizmoShown();
 
+    // The authoring panel's geometry is the editor's own fact: the editor
+    // declares it rather than pushing it into host state and reading it back.
+    const Rect2D authoringRect = _layer->getViewportRect();
+
     // While the game runs, its own producer owns the world viewport: the editor
     // camera is not what that viewport shows, so only the preview is ours.
     if (!_app->isRuntimeMode()) {
@@ -67,7 +71,7 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
             .view         = editorCamera.getViewMatrix(),
             .projection   = editorCamera.getProjectionMatrix(),
             .cameraPos    = editorCamera.getPosition(),
-            .viewportRect = context.viewportRect,
+            .viewportRect = authoringRect,
             .features     = baseFeatures | (bEditorGizmos ? gizmoFeature : 0u),
         });
     }
@@ -84,7 +88,7 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
         return;
     }
 
-    const Rect2D composeRect = makeViewDisplayInsetRect(context.viewportRect.extent);
+    const Rect2D composeRect = makeViewDisplayInsetRect(authoringRect.extent);
     if (composeRect.extent.x <= 0.0f || composeRect.extent.y <= 0.0f) {
         return;
     }

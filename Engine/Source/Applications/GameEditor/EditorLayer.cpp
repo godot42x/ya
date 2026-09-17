@@ -155,12 +155,11 @@ void EditorLayer::notifyViewportWidgetRect(const Rect2D& rect)
         rect.pos.y + rect.extent.y * 0.5f,
     };
 
-    const bool bMouseCaptured = _app && _app->getInputRouter().isMouseCaptured();
-    if (!bMouseCaptured &&
-        (_viewportSize.x != rect.extent.x || _viewportSize.y != rect.extent.y) &&
-        rect.extent.x > 0.0f && rect.extent.y > 0.0f) {
+    // Panel geometry only. The editor declares its authoring View with this
+    // rect, so a change here is a declaration fact, not something to push into
+    // host state and read back.
+    if (rect.extent.x > 0.0f && rect.extent.y > 0.0f) {
         _viewportSize = rect.extent;
-        queueViewportResize(rect);
     }
 }
 

@@ -92,7 +92,7 @@
 - [x] 4.0.3 4d-1：`ISceneViewProducer` / `SceneViewCollector` / `SceneViewCollectContext` 接缝 + `RuntimeGameViewProducer` / `EditorAuthoringViewProducer` 各自声明世界视口；删除 `bWorldSceneRenderEnabled` 与 `extensionHostView` 两个格子；`SkeletonAnimationSystem` 策略改读 `renderedScenesLastTick`；`getPrimaryCamera` 移入 `Utility/SceneCameraQuery`。
 - [x] 4.0.3 4d-2：`EditorViewProducer` 声明编辑器两个 view（作者视口 + 选中相机的预览 inset）；删 `bCameraPreviewHostOwned` / `cameraPreviewEntityUUID` / 宿主铸造的 `kHostOverlayPreviewViewId`；`resolvePreviewCamera` / `cameraProjectionForOutput` 移入编辑器，FOV 线框移到编辑器 world overlay pass；`SceneViewDesc` 补 `features` 与 `viewOwner`。
 - [x] 4.0.3 4d-3a：删 `bShowEditorGizmos` 格子（开关归 `EditorLayer`，声明方读它而不是 App）；automation 的 `set_editor_gizmos_visible` 经 `IEditorAutomationControl` 打到编辑器；游戏视口不再受编辑器开关影响。
-- [ ] 4.0.3 4d-3b：作者视口 rect 由声明方给出（`setViewportRect` 不再由编辑器写）；automation 的 resize 用例改走声明。
+- [x] 4.0.3 4d-3b：作者视口 rect 由声明方给出（编辑器不再写 `setViewportRect`，pending-resize 同步与 `onViewportResized` 删除）；device extent 跟随主 view 声明；automation 的 resize 只改宿主视图几何。
 - [ ] 4.0.3 checkpoint 5：view 身份改 owner-scoped `SceneViewKey`，并按此建立 `ViewHistoryStore` 稳定键（排在 4d 之后）。
 
 ## R3
