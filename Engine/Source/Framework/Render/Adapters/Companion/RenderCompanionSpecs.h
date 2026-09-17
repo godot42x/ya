@@ -13,8 +13,12 @@ namespace ya
 /// source). The spec never reaches Host config.
 struct CameraCompanionPolicy
 {
-    glm::vec4 baseColor = glm::vec4(0.35f, 0.85f, 1.0f, 1.0f);
-    float     scale     = 1.0f;
+    glm::vec4   baseColor = glm::vec4(0.35f, 0.85f, 1.0f, 1.0f);
+    float       scale     = 1.0f;
+    /// Engine content, not a scene asset: the body is a normal mesh source
+    /// pointing at engine geometry, so it needs no special mesh pipeline.
+    std::string meshPath   = "Engine:Content/Editor/Gizmos/camera_body.obj";
+    uint32_t    meshIndex  = 0;
 };
 
 /// Render/editor policy for light billboards.

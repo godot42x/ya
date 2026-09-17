@@ -17,6 +17,7 @@
 #include "Scene/Runtime/SceneManager.h"
 #include "Scene3D/ManagedChildComponent.h"
 #include "Scene3D/TransformComponent.h"
+#include "ECS/Systems/TransformSystem.h"
 
 #include <gtest/gtest.h>
 
@@ -224,12 +225,14 @@ TEST(LinkageFrameworkTest, CameraComponentGetsGeneratedBodyCompanion)
     EXPECT_TRUE(CompanionManager::isGeneratedCompanion(*body));
     EXPECT_TRUE(body->hasComponent<ManagedChildComponent>());
 
-    // The body geometry is an engine mesh, never an asset path: engine changes
-    // reach existing scenes and nothing about it is serialized.
+    // The body is an ordinary mesh source pointing at engine content. Nothing
+    // about that path reaches scene data, because the companion itself is
+    // derived and never serialized.
     ASSERT_TRUE(body->hasComponent<StaticMeshComponent>());
     auto* bodyMesh = body->getComponent<StaticMeshComponent>();
-    EXPECT_EQ(bodyMesh->_mesh._engineMesh, EEngineMesh::CameraBody);
-    EXPECT_TRUE(bodyMesh->_mesh._sourceModelPath.empty());
+    EXPECT_EQ(bodyMesh->_mesh._sourceModelPath, CameraCompanionPolicy{}.meshPath);
+    EXPECT_EQ(bodyMesh->_mesh._meshIndex, CameraCompanionPolicy{}.meshIndex);
+    EXPECT_EQ(bodyMesh->_mesh._primitiveGeometry, EPrimitiveGeometry::None);
     EXPECT_TRUE(body->hasComponent<UnlitMaterialComponent>());
 
     scene->removeComponent<CameraComponent>(camera->getHandle());
@@ -270,12 +273,132 @@ TEST(LinkageFrameworkTest, CameraCompanionLeavesHostMeshAlone)
     ASSERT_NE(body, nullptr);
     EXPECT_NE(body, entity);
     ASSERT_TRUE(body->hasComponent<StaticMeshComponent>());
-    EXPECT_EQ(body->getComponent<StaticMeshComponent>()->_mesh._engineMesh, EEngineMesh::CameraBody);
+    EXPECT_EQ(body->getComponent<StaticMeshComponent>()->_mesh._sourceModelPath,
+              CameraCompanionPolicy{}.meshPath);
 
     scene->removeComponent<CameraComponent>(entity->getHandle());
     sink.drain();
     EXPECT_TRUE(entity->hasComponent<StaticMeshComponent>());
     EXPECT_EQ(CompanionManager::findCompanion(*scene, *entity), nullptr);
+
+    framework.shutdown();
+}
+
+// The companion is a child node, so it is supposed to follow the host for free
+// through the node hierarchy -- no per-frame copying. That only holds if the
+// generated node really is parented under the host; otherwise the body would be
+// drawn at the world origin, which reads as "the camera has no model" whenever
+// the camera is not at the origin.
+TEST(LinkageFrameworkTest, CameraBodyFollowsItsHostThroughTheHierarchy)
+{
+    SceneManager sceneManager;
+    SceneLifecycleHostScope lifecycleHost(&sceneManager);
+    FrameTaskCapture sink;
+    LinkageFramework framework;
+    framework.setSceneManager(&sceneManager);
+    framework.setFrameTaskSink(std::ref(sink));
+    addCompanionRule(framework);
+    framework.init();
+
+    const glm::vec3 cameraPos{3.0f, 4.0f, 5.0f};
+
+    stdptr<Scene> scene = std::make_shared<Scene>("CompanionFollowScene");
+    auto*         node  = scene->createNode3D("Cam");
+    ASSERT_NE(node, nullptr);
+    auto* cameraTc = node->getEntity()->getComponent<TransformComponent>();
+    ASSERT_NE(cameraTc, nullptr);
+    cameraTc->setPosition(cameraPos);
+    node->getEntity()->addComponent<CameraComponent>();
+    ASSERT_TRUE(sceneManager.activateScene(scene));
+    sink.drain();
+
+    Entity* body = CompanionManager::findCompanion(*scene, *node->getEntity());
+    ASSERT_NE(body, nullptr);
+
+    // The companion must be parented under the host node, not orphaned.
+    Node* bodyNode = scene->getNodeByEntity(body);
+    ASSERT_NE(bodyNode, nullptr);
+    ASSERT_NE(bodyNode->getParent(), nullptr);
+    EXPECT_EQ(bodyNode->getParent()->getEntity(), node->getEntity());
+
+    auto* bodyTc = body->getComponent<TransformComponent>();
+    ASSERT_NE(bodyTc, nullptr);
+
+    TransformSystem::computeLocalMatrix(cameraTc);
+    TransformSystem::computeWorldMatrix(cameraTc);
+    TransformSystem::computeLocalMatrix(bodyTc);
+    TransformSystem::computeWorldMatrix(bodyTc);
+
+    const glm::vec3 bodyWorld = glm::vec3(bodyTc->getWorldMatrix()[3]);
+    EXPECT_NEAR(bodyWorld.x, cameraPos.x, 1e-4f);
+    EXPECT_NEAR(bodyWorld.y, cameraPos.y, 1e-4f);
+    EXPECT_NEAR(bodyWorld.z, cameraPos.z, 1e-4f);
+
+    framework.shutdown();
+}
+
+// The camera's own view is what the preview inset and the FOV wireframe are
+// built from, while the body is a mesh placed by the entity's world matrix.
+// Both must describe the same camera, so a host transform inherited from a
+// parent has to reach the view exactly like it reaches the mesh.
+TEST(LinkageFrameworkTest, CameraViewAgreesWithItsBodyUnderAParentTransform)
+{
+    SceneManager sceneManager;
+    SceneLifecycleHostScope lifecycleHost(&sceneManager);
+    FrameTaskCapture sink;
+    LinkageFramework framework;
+    framework.setSceneManager(&sceneManager);
+    framework.setFrameTaskSink(std::ref(sink));
+    addCompanionRule(framework);
+    framework.init();
+
+    stdptr<Scene> scene = std::make_shared<Scene>("CameraViewPlacementScene");
+
+    // The parent carries both a translation and a rotation, so a view built
+    // from the camera's local transform lands somewhere else entirely.
+    auto* pivot = scene->createNode3D("Pivot");
+    ASSERT_NE(pivot, nullptr);
+    auto* pivotTc = pivot->getEntity()->getComponent<TransformComponent>();
+    ASSERT_NE(pivotTc, nullptr);
+    pivotTc->setPosition({10.0f, 0.0f, 0.0f});
+    pivotTc->setRotation({0.0f, 90.0f, 0.0f});
+
+    auto* cameraNode = scene->createNode3D("Cam", pivot);
+    ASSERT_NE(cameraNode, nullptr);
+    auto* cameraTc = cameraNode->getEntity()->getComponent<TransformComponent>();
+    ASSERT_NE(cameraTc, nullptr);
+    cameraTc->setRotation({0.0f, 30.0f, 0.0f});
+
+    auto* camera = cameraNode->getEntity()->addComponent<CameraComponent>();
+    ASSERT_NE(camera, nullptr);
+
+    ASSERT_TRUE(sceneManager.activateScene(scene));
+    sink.drain();
+
+    Entity* body = CompanionManager::findCompanion(*scene, *cameraNode->getEntity());
+    ASSERT_NE(body, nullptr);
+    auto* bodyTc = body->getComponent<TransformComponent>();
+    ASSERT_NE(bodyTc, nullptr);
+
+    TransformSystem::computeWorldMatrix(cameraTc);
+    TransformSystem::computeWorldMatrix(bodyTc);
+
+    const glm::mat4 world        = cameraTc->getWorldMatrix();
+    const glm::vec3 worldEye     = glm::vec3(world[3]);
+    const glm::vec3 worldForward = cameraTc->getForward();
+
+    // The mesh is placed by the world matrix; that is the camera's real pose.
+    const glm::vec3 bodyEye     = glm::vec3(bodyTc->getWorldMatrix()[3]);
+    const glm::vec3 bodyForward = bodyTc->getForward();
+    EXPECT_NEAR(glm::length(bodyEye - worldEye), 0.0f, 1e-4f);
+    EXPECT_NEAR(glm::dot(glm::normalize(bodyForward), glm::normalize(worldForward)), 1.0f, 1e-4f);
+
+    // The view the preview and the wireframe use has to be the same pose.
+    const glm::mat4 inverseView = glm::inverse(camera->getFreeView());
+    const glm::vec3 viewEye     = glm::vec3(inverseView[3]);
+    const glm::vec3 viewForward = -glm::vec3(inverseView[2]);
+    EXPECT_NEAR(glm::length(viewEye - worldEye), 0.0f, 1e-4f);
+    EXPECT_NEAR(glm::dot(glm::normalize(viewForward), glm::normalize(worldForward)), 1.0f, 1e-4f);
 
     framework.shutdown();
 }
@@ -324,7 +447,8 @@ TEST(LinkageFrameworkTest, ClonedCameraRebuildsItsOwnBodyCompanion)
     ASSERT_NE(clonedBody, nullptr);
     EXPECT_EQ(CompanionManager::hostOf(*clonedBody), clonedCamera);
     ASSERT_TRUE(clonedBody->hasComponent<StaticMeshComponent>());
-    EXPECT_EQ(clonedBody->getComponent<StaticMeshComponent>()->_mesh._engineMesh, EEngineMesh::CameraBody);
+    EXPECT_EQ(clonedBody->getComponent<StaticMeshComponent>()->_mesh._sourceModelPath,
+              CameraCompanionPolicy{}.meshPath);
 
     framework.shutdown();
 }

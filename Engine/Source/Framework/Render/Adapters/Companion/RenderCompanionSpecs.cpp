@@ -164,7 +164,7 @@ CompanionSpec makeCameraCompanionSpec(const CameraCompanionPolicy& policy)
         }
 
         if (auto* mesh = companion->addComponent<StaticMeshComponent>()) {
-            mesh->_mesh.setEngineMesh(EEngineMesh::CameraBody);
+            mesh->_mesh.setModelPath(policy.meshPath, policy.meshIndex);
             mesh->invalidate();
         }
         if (auto* unlit = companion->addComponent<UnlitMaterialComponent>()) {

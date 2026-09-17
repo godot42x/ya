@@ -45,8 +45,9 @@ Delivered:
 3. **Rule convergence** — the two `ILinkageRule` classes are replaced by
    declarations in the composition root; `bAppStopped` and
    `shouldRenderBillboard` are deleted.
-4. **Geometry** — `EEngineMesh` catalog, `EngineMeshBuilder`, procedural camera
-   body, `PrimitiveMeshCache::getEngineMesh`, `MeshSource::setEngineMesh`.
+4. **Geometry** — the camera body is engine content
+   (`Engine/Content/Editor/Gizmos/camera_body.obj`) referenced by
+   `MeshSource::setModelPath` from the declaration.
 5. **Editor boundary** — generated rows visible but disabled, inspector fields
    greyed (`PropertyGraph::markAllReadOnly`), no transform manipulator on a
    companion, structural commands still refused.

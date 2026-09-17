@@ -98,7 +98,10 @@ transform for free, and why companion components never track position themselves
 3. Does it need host-transform refresh beyond what the node hierarchy gives?
    Set `bFollowsHostTransform` (light icons do, for orientation) and refresh in
    `onUpdateHost`.
-4. Does it need geometry? Prefer an engine mesh (`EEngineMesh` +
-   `EngineMeshBuilder`) over a new asset; engine meshes have no path to pin.
+4. Does it need geometry? Point a normal `StaticMeshComponent` at engine
+   content (`Engine:Content/Editor/Gizmos/...`) with `setModelPath`. Engine
+   gizmos are ordinary mesh sources: the same resolve/material features work, and
+   the path lives in the declaration rather than in scene data, so it is still
+   swappable without a scene migration.
 5. Add a test that it is not serialized, that removing the host component removes
    it, and that a `Game`-only view does not draw it when it is a gizmo.

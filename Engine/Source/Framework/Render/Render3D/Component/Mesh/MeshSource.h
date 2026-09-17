@@ -15,10 +15,13 @@
 #include "Core/Math/Geometry.h"
 #include "Core/Reflection/Reflection.h"
 
+#include <memory>
+
 namespace ya
 {
 
 struct Mesh;
+struct Model;
 
 /**
  * @brief Reference to a concrete mesh, either from a primitive cache or a loaded Model.
@@ -45,17 +48,20 @@ struct MeshSource
     std::string        _sourceModelPath;
     uint32_t           _meshIndex = 0;
 
-    /// Procedural engine mesh (companion / gizmo visuals). Not serialized and
-    /// deliberately not a path: the identity is the catalog value, so engine
-    /// geometry changes reach every existing scene without a migration.
-    EEngineMesh _engineMesh = EEngineMesh::None;
-
     // ========================================
     // Runtime State (not serialized)
     // ========================================
 
     Mesh* _cachedMesh = nullptr;
     bool  _bResolved  = false;
+
+    /// The Model the resolved mesh belongs to.
+    ///
+    /// A path-sourced mesh is a mesh inside an asset: the Mesh is owned by the
+    /// Model, and the asset cache may evict a Model that nothing holds. Keeping
+    /// the owner alive here is what makes the cached Mesh pointer something the
+    /// component can actually rely on.
+    std::shared_ptr<Model> _ownerModel;
 
     // ========================================
     // Resource Resolution
@@ -67,6 +73,7 @@ struct MeshSource
     {
         _bResolved  = false;
         _cachedMesh = nullptr;
+        _ownerModel.reset();
     }
 
     bool isResolved() const { return _bResolved; }
@@ -79,8 +86,7 @@ struct MeshSource
 
     bool hasSource() const
     {
-        return _engineMesh != EEngineMesh::None ||
-               _primitiveGeometry != EPrimitiveGeometry::None ||
+        return _primitiveGeometry != EPrimitiveGeometry::None ||
                !_sourceModelPath.empty();
     }
 
@@ -90,25 +96,24 @@ struct MeshSource
 
     void setPrimitiveGeometry(EPrimitiveGeometry type)
     {
-        _engineMesh        = EEngineMesh::None;
         _primitiveGeometry = type;
         _sourceModelPath.clear();
         _meshIndex = 0;
         invalidate();
     }
 
-    void setEngineMesh(EEngineMesh type)
+    /// Point the slot at a mesh inside a Model without a handle to it yet, so
+    /// callers never have to load the asset themselves.
+    void setModelPath(const std::string& modelPath, uint32_t meshIndex = 0)
     {
-        _engineMesh        = type;
         _primitiveGeometry = EPrimitiveGeometry::None;
-        _sourceModelPath.clear();
-        _meshIndex = 0;
+        _sourceModelPath   = modelPath;
+        _meshIndex         = meshIndex;
         invalidate();
     }
 
     void setFromModel(const std::string& modelPath, uint32_t meshIndex, Mesh* mesh)
     {
-        _engineMesh        = EEngineMesh::None;
         _primitiveGeometry = EPrimitiveGeometry::None;
         _sourceModelPath   = modelPath;
         _meshIndex         = meshIndex;

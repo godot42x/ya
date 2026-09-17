@@ -14,9 +14,12 @@ Landed (see `feature_matrix.json` for the per-capability state):
 - Removed: `CameraMeshLinkageRule`, `LightBillboardLinkageRule` (classes +
   shims), `EComponentLifetime` / `_intrinsicTo` / `markIntrinsic` / `isIntrinsic`
   / `isEditorOnly`, `bManagedByLight`, `bAppStopped`, `shouldRenderBillboard`,
-  `Engine/Content/Editor/Gizmos/*`.
-- Geometry: `EEngineMesh`, `EngineMeshBuilder`, `PrimitiveGeometryFactory::createEngineMeshData(EEngineMesh)`,
-  `PrimitiveMeshCache::getEngineMesh`, `MeshSource::_engineMesh`.
+  the staged gizmo assets (`camera.obj` / `camera.blend`).
+- Geometry: the camera body is engine content
+  (`Engine/Content/Editor/Gizmos/camera_body.obj`) referenced through
+  `MeshSource::setModelPath`. An earlier revision generated it procedurally
+  (`EEngineMesh` + `EngineMeshBuilder`) and dropped it: gizmo meshes are
+  ordinary mesh sources, and a dedicated mesh axis bought nothing.
 - Editor: `PropertyGraph::markAllReadOnly`, disabled hierarchy rows
   (`UITreeView::FNode::bEnabled` + `FTreeViewStyle.disabledTextColor`), no
   manipulator on a companion, `View > Show Editor Gizmos`,

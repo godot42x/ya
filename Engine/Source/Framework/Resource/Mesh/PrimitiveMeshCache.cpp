@@ -41,7 +41,6 @@ void PrimitiveMeshCache::clearCache()
 {
     std::lock_guard<std::mutex> lock(_mutex);
     _cache.clear();
-    _engineMeshCache.clear();
     YA_CORE_INFO("PrimitiveMeshCache cleared");
 }
 
@@ -49,42 +48,6 @@ bool PrimitiveMeshCache::hasMesh(EPrimitiveGeometry type) const
 {
     // std::lock_guard<std::mutex> lock(_mutex);
     return _cache.contains(type);
-}
-
-Mesh *PrimitiveMeshCache::getEngineMesh(EEngineMesh type)
-{
-    if (type == EEngineMesh::None) {
-        return nullptr;
-    }
-
-    auto it = _engineMeshCache.find(type);
-    if (it != _engineMeshCache.end()) {
-        return it->second.get();
-    }
-
-    auto mesh = createEngineMesh(type);
-    if (!mesh) {
-        return nullptr;
-    }
-
-    auto* meshPtr          = mesh.get();
-    _engineMeshCache[type] = std::move(mesh);
-    return meshPtr;
-}
-
-bool PrimitiveMeshCache::hasEngineMesh(EEngineMesh type) const
-{
-    return _engineMeshCache.contains(type);
-}
-
-stdptr<Mesh> PrimitiveMeshCache::createEngineMesh(EEngineMesh type)
-{
-    if (type == EEngineMesh::None) {
-        return nullptr;
-    }
-
-    YA_CORE_ASSERT(_render, "PrimitiveMeshCache requires render before mesh creation");
-    return Mesh::create(*_render, PrimitiveGeometryFactory::createEngineMeshData(type));
 }
 
 stdptr<Mesh> PrimitiveMeshCache::createMesh(EPrimitiveGeometry type)
