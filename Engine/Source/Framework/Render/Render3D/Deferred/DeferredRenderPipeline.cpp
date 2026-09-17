@@ -961,8 +961,9 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
     std::vector<SceneViewRecording> recordings = ctx.views;
     if (recordings.empty()) {
         recordings.push_back(SceneViewRecording{
-            .task      = ctx.plan ? ctx.plan->displayRootTask() : nullptr,
-            .frameData = ctx.hostCamera.frameData,
+            .task         = ctx.plan ? ctx.plan->displayRootTask() : nullptr,
+            .frameData    = ctx.hostCamera.frameData,
+            .derivedScene = ctx.derivedScene,
         });
     }
 

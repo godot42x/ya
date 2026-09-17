@@ -633,8 +633,9 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
                     frameData);
             }
             viewRecordings.push_back(SceneViewRecording{
-                .task      = &task,
-                .frameData = &frameData,
+                .task         = &task,
+                .frameData    = &frameData,
+                .derivedScene = scene,
             });
         }
     }
@@ -742,7 +743,6 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
             .surface    = presentFrame.surface,
             .imageIndex = presentFrame.imageIndex,
         },
-        .derivedScene = (app.getRenderServices().isWorldSceneRenderEnabled() && scene) ? scene : nullptr,
     });
 
     {

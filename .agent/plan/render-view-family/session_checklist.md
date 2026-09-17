@@ -27,6 +27,7 @@
 
 ## 最近一次 checkpoint
 
+- 2026-09-17：family-scoped derived Scene：删除 `RenderFramePlan::derivedScene`；recording 携带 host Scene；同 family 共享、跨 SceneId 隔离。Host 仍只提交一个 live Scene。专项与回归 76/76。下一刀是产品双 Scene 录制 / 双 Surface GPU。
 - 2026-09-17：4.0.2 E：拆除 `RenderRuntime` 为 `RenderDeviceState` + `RenderFrameCoordinator`；删除 `ViewportStateService` 与 `getActiveScene` locator。Host 拥有 world-enable 与 viewport rect。空 `sceneRender` 是 UI-only。未引入空 ViewHistoryStore。专项与回归 72/72。下一刀是产品双 Scene / 双 Surface 验收。
 - 2026-09-17：4.0.2 C：typed `ViewResources` 持有 SSAO/Light/EntityId/Overlay/debug/post DS/UBO；Bloom/BasicPost viewId map 与 Stage singleton CIS 删除；PointShadow packet 在 Shadow View Binding。ViewPassResourcesTest 5/5，专项与回归 66/66。下一刀曾是 Checkpoint D（family renderer），不再扩大 mega Binding。
 - 2026-09-17：4.0.2 B：`SceneViewFamilyPlan` 在 seal 时物化；`SceneFamilyResources` 由 submission 持有 skinning SSBO。同 Scene 双 View owner 相同，双 Scene owner/buffer 不同。SceneFamilyResourcesTest 4/4，专项与回归 57/57。下一刀曾是 Checkpoint C（typed pass resources），不再扩大 mega Binding。

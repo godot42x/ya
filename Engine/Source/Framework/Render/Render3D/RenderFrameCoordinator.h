@@ -14,7 +14,7 @@ struct RenderViewportOverlaySnapshot;
 
 /// Consumes a sealed `RenderFramePlan`, acquires a submission, records Scene
 /// family graphs, then View/UI/display compose. Does not own the backend and
-/// does not locate an active Scene.
+/// does not locate an active Scene; each family binds the recording's Scene.
 struct YA_RENDER_3D_API RenderFrameCoordinator
 {
     explicit RenderFrameCoordinator(RenderDeviceState& device);

@@ -56,6 +56,10 @@ bool RenderFrameCoordinator::validateSceneRenderInput(const RenderFramePlan& pla
         YA_CORE_ERROR("Scene render input must provide a plan and one recording per viewport task");
         return false;
     }
+    if (!derivedScenesAgreeWithPlan(plan.sceneRender)) {
+        YA_CORE_ERROR("Family recordings must share one derived Scene per SceneId and isolate different SceneIds");
+        return false;
+    }
     return true;
 }
 
@@ -86,7 +90,7 @@ void RenderFrameCoordinator::recordViewFamilies(
             .family          = family,
             .views           = std::move(views),
             .overlaySnapshot = overlaySnapshot,
-            .derivedScene    = plan.derivedScene,
+            .derivedScene    = derivedSceneForFamily(plan.sceneRender, family),
         };
         _device->publishFamilyResult(plan.camera.flightIndex, pipeline->recordFamily(ctx));
     };
@@ -123,7 +127,15 @@ ICommandBuffer* RenderFrameCoordinator::record(const RenderFramePlan& plan)
     // display compose → PresentationGraphService onto swapchain[imageIndex]
     // Acquire/present stay on the host FPresentFrame coordinator.
 
-    _device->prepareDerivedState(plan.derivedScene, plan.camera.deltaTime);
+    const std::vector<Scene*> derivedScenes = uniqueDerivedScenes(plan.sceneRender);
+    if (derivedScenes.empty()) {
+        _device->prepareDerivedState(nullptr, plan.camera.deltaTime);
+    }
+    else {
+        for (Scene* scene : derivedScenes) {
+            _device->prepareDerivedState(scene, plan.camera.deltaTime);
+        }
+    }
     _device->applyPendingMutations();
     _device->applyViewportResize(plan.camera.viewportRect);
     _device->prepareComposePipelines();

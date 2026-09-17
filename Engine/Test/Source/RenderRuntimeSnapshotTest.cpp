@@ -5,6 +5,7 @@
 #include "Render3D/RenderDeviceState.h"
 #include "Render3D/RenderFrameCoordinator.h"
 
+#include <cstdint>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
@@ -47,7 +48,7 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsCameraViewDisplayPresent)
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.viewCompose), ViewComposeInput>);
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.displayCompose), DisplayComposeInput>);
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.present), PresentFrameInput>);
-    static_assert(std::is_same_v<decltype(RenderFramePlan{}.derivedScene), Scene*>);
+    static_assert(std::is_same_v<decltype(SceneViewRecording{}.derivedScene), Scene*>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.camera), CameraFrameInput>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.submission), RenderSubmission*>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.view), RenderViewRecordingContext>);
@@ -68,7 +69,6 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsCameraViewDisplayPresent)
         .viewCompose    = {},
         .displayCompose = {},
         .present        = {.surface = nullptr, .imageIndex = -1},
-        .derivedScene   = nullptr,
     };
 
     EXPECT_FLOAT_EQ(plan.camera.deltaTime, 0.016f);
@@ -80,7 +80,7 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsCameraViewDisplayPresent)
     EXPECT_EQ(plan.present.surface, nullptr);
     EXPECT_EQ(plan.present.imageIndex, -1);
     EXPECT_TRUE(plan.sceneRender.empty());
-    EXPECT_EQ(plan.derivedScene, nullptr);
+    EXPECT_TRUE(uniqueDerivedScenes(plan.sceneRender).empty());
 }
 
 TEST(RenderRuntimeSnapshotTest, EmptySceneRenderIsUiOnlyFrame)
@@ -88,7 +88,158 @@ TEST(RenderRuntimeSnapshotTest, EmptySceneRenderIsUiOnlyFrame)
     const RenderFramePlan plan{};
     EXPECT_TRUE(plan.sceneRender.empty());
     EXPECT_FALSE(plan.sceneRender.complete());
-    EXPECT_EQ(plan.derivedScene, nullptr);
+    EXPECT_TRUE(uniqueDerivedScenes(plan.sceneRender).empty());
+}
+
+TEST(RenderRuntimeSnapshotTest, DualSceneRecordingsKeepIndependentDerivedScenes)
+{
+    Scene* sceneA = reinterpret_cast<Scene*>(static_cast<uintptr_t>(0xA000));
+    Scene* sceneB = reinterpret_cast<Scene*>(static_cast<uintptr_t>(0xB000));
+
+    SceneRenderScheduler scheduler;
+    scheduler.beginFrame(21);
+    SceneRenderRequest requestA{.sceneId = 3, .viewId = 11};
+    requestA.buildSnapshot = [] {
+        return std::make_shared<const SceneFrameSnapshot>();
+    };
+    SceneRenderRequest requestB{.sceneId = 4, .viewId = 21};
+    requestB.buildSnapshot = [] {
+        return std::make_shared<const SceneFrameSnapshot>();
+    };
+    ASSERT_TRUE(scheduler.submit(requestA));
+    ASSERT_TRUE(scheduler.submit(requestB));
+    const SceneRenderPlan plan = scheduler.seal();
+    ASSERT_EQ(plan.viewFamilies.size(), 2u);
+
+    RenderFrameData frameA;
+    RenderFrameData frameB;
+    frameA.sceneSnapshot = plan.snapshotFor(plan.viewportTasks[0]);
+    frameB.sceneSnapshot = plan.snapshotFor(plan.viewportTasks[1]);
+
+    SceneRenderPlanInput input{
+        .plan = &plan,
+        .views =
+            {
+                {.task = &plan.viewportTasks[0], .frameData = &frameA, .derivedScene = sceneA},
+                {.task = &plan.viewportTasks[1], .frameData = &frameB, .derivedScene = sceneB},
+            },
+    };
+    ASSERT_TRUE(input.complete());
+    ASSERT_TRUE(derivedScenesAgreeWithPlan(input));
+
+    const std::vector<Scene*> unique = uniqueDerivedScenes(input);
+    ASSERT_EQ(unique.size(), 2u);
+    EXPECT_EQ(unique[0], sceneA);
+    EXPECT_EQ(unique[1], sceneB);
+    EXPECT_EQ(derivedSceneForFamily(input, plan.familyFor(plan.viewportTasks[0])), sceneA);
+    EXPECT_EQ(derivedSceneForFamily(input, plan.familyFor(plan.viewportTasks[1])), sceneB);
+    EXPECT_NE(derivedSceneForFamily(input, plan.familyFor(plan.viewportTasks[0])),
+              derivedSceneForFamily(input, plan.familyFor(plan.viewportTasks[1])));
+}
+
+TEST(RenderRuntimeSnapshotTest, SameSceneFamilySharesDerivedScene)
+{
+    Scene* scene = reinterpret_cast<Scene*>(static_cast<uintptr_t>(0xC000));
+
+    SceneRenderScheduler scheduler;
+    scheduler.beginFrame(22);
+    SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
+    viewA.buildSnapshot = [] {
+        return std::make_shared<const SceneFrameSnapshot>();
+    };
+    SceneRenderRequest viewB{.sceneId = 3, .viewId = 12};
+    viewB.buildSnapshot = viewA.buildSnapshot;
+    ASSERT_TRUE(scheduler.submit(viewA));
+    ASSERT_TRUE(scheduler.submit(viewB));
+    const SceneRenderPlan plan = scheduler.seal();
+    ASSERT_EQ(plan.viewFamilies.size(), 1u);
+
+    RenderFrameData frameA;
+    RenderFrameData frameB;
+    frameA.sceneSnapshot = plan.snapshotFor(plan.viewportTasks[0]);
+    frameB.sceneSnapshot = plan.snapshotFor(plan.viewportTasks[1]);
+
+    SceneRenderPlanInput input{
+        .plan = &plan,
+        .views =
+            {
+                {.task = &plan.viewportTasks[0], .frameData = &frameA, .derivedScene = scene},
+                {.task = &plan.viewportTasks[1], .frameData = &frameB, .derivedScene = scene},
+            },
+    };
+    ASSERT_TRUE(input.complete());
+    ASSERT_TRUE(derivedScenesAgreeWithPlan(input));
+    EXPECT_EQ(uniqueDerivedScenes(input).size(), 1u);
+    EXPECT_EQ(derivedSceneForFamily(input, &plan.viewFamilies[0]), scene);
+}
+
+TEST(RenderRuntimeSnapshotTest, MixedDerivedSceneInOneFamilyIsRejected)
+{
+    Scene* sceneA = reinterpret_cast<Scene*>(static_cast<uintptr_t>(0xA000));
+    Scene* sceneB = reinterpret_cast<Scene*>(static_cast<uintptr_t>(0xB000));
+
+    SceneRenderScheduler scheduler;
+    scheduler.beginFrame(23);
+    SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
+    viewA.buildSnapshot = [] {
+        return std::make_shared<const SceneFrameSnapshot>();
+    };
+    SceneRenderRequest viewB{.sceneId = 3, .viewId = 12};
+    viewB.buildSnapshot = viewA.buildSnapshot;
+    ASSERT_TRUE(scheduler.submit(viewA));
+    ASSERT_TRUE(scheduler.submit(viewB));
+    const SceneRenderPlan plan = scheduler.seal();
+
+    RenderFrameData frameA;
+    RenderFrameData frameB;
+    frameA.sceneSnapshot = plan.snapshotFor(plan.viewportTasks[0]);
+    frameB.sceneSnapshot = plan.snapshotFor(plan.viewportTasks[1]);
+
+    SceneRenderPlanInput mixedFamily{
+        .plan = &plan,
+        .views =
+            {
+                {.task = &plan.viewportTasks[0], .frameData = &frameA, .derivedScene = sceneA},
+                {.task = &plan.viewportTasks[1], .frameData = &frameB, .derivedScene = sceneB},
+            },
+    };
+    EXPECT_TRUE(mixedFamily.complete());
+    EXPECT_FALSE(derivedScenesAgreeWithPlan(mixedFamily));
+}
+
+TEST(RenderRuntimeSnapshotTest, SharedDerivedSceneAcrossSceneIdsIsRejected)
+{
+    Scene* scene = reinterpret_cast<Scene*>(static_cast<uintptr_t>(0xD000));
+
+    SceneRenderScheduler scheduler;
+    scheduler.beginFrame(24);
+    SceneRenderRequest requestA{.sceneId = 3, .viewId = 11};
+    requestA.buildSnapshot = [] {
+        return std::make_shared<const SceneFrameSnapshot>();
+    };
+    SceneRenderRequest requestB{.sceneId = 4, .viewId = 21};
+    requestB.buildSnapshot = [] {
+        return std::make_shared<const SceneFrameSnapshot>();
+    };
+    ASSERT_TRUE(scheduler.submit(requestA));
+    ASSERT_TRUE(scheduler.submit(requestB));
+    const SceneRenderPlan plan = scheduler.seal();
+
+    RenderFrameData frameA;
+    RenderFrameData frameB;
+    frameA.sceneSnapshot = plan.snapshotFor(plan.viewportTasks[0]);
+    frameB.sceneSnapshot = plan.snapshotFor(plan.viewportTasks[1]);
+
+    SceneRenderPlanInput aliased{
+        .plan = &plan,
+        .views =
+            {
+                {.task = &plan.viewportTasks[0], .frameData = &frameA, .derivedScene = scene},
+                {.task = &plan.viewportTasks[1], .frameData = &frameB, .derivedScene = scene},
+            },
+    };
+    EXPECT_TRUE(aliased.complete());
+    EXPECT_FALSE(derivedScenesAgreeWithPlan(aliased));
 }
 
 TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)

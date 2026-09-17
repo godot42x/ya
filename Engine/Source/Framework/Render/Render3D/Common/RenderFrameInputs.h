@@ -26,8 +26,11 @@ struct UIFrameSnapshot;
 /// and `frameData` is the host's View-owned preparation for that task.
 struct SceneViewRecording
 {
-    const SceneViewportTask* task      = nullptr;
-    RenderFrameData*         frameData = nullptr;
+    const SceneViewportTask* task         = nullptr;
+    RenderFrameData*         frameData    = nullptr;
+    /// Host Scene that produced this view's snapshot. Scheduler never owns it.
+    /// Same family / SceneId must share the pointer; different SceneIds must not.
+    Scene*                   derivedScene = nullptr;
 };
 
 /// Sealed SceneRenderPlan input for one host render call. The plan owns the
@@ -70,6 +73,78 @@ struct SceneRenderPlanInput
         return views.empty() ? nullptr : views.front().task;
     }
 };
+
+[[nodiscard]] inline Scene* derivedSceneForFamily(
+    const SceneRenderPlanInput& sceneRender,
+    const SceneViewFamilyPlan* family)
+{
+    if (family) {
+        for (uint32_t index : family->viewportTaskIndices) {
+            if (index < sceneRender.views.size()) {
+                return sceneRender.views[index].derivedScene;
+            }
+        }
+        return nullptr;
+    }
+    return sceneRender.views.empty() ? nullptr : sceneRender.views.front().derivedScene;
+}
+
+[[nodiscard]] inline std::vector<Scene*> uniqueDerivedScenes(const SceneRenderPlanInput& sceneRender)
+{
+    std::vector<Scene*> scenes;
+    for (const auto& recording : sceneRender.views) {
+        if (!recording.derivedScene) {
+            continue;
+        }
+        bool bSeen = false;
+        for (Scene* existing : scenes) {
+            if (existing == recording.derivedScene) {
+                bSeen = true;
+                break;
+            }
+        }
+        if (!bSeen) {
+            scenes.push_back(recording.derivedScene);
+        }
+    }
+    return scenes;
+}
+
+[[nodiscard]] inline bool derivedScenesAgreeWithPlan(const SceneRenderPlanInput& sceneRender)
+{
+    if (sceneRender.plan) {
+        for (const SceneViewFamilyPlan& family : sceneRender.plan->viewFamilies) {
+            Scene* familyScene = derivedSceneForFamily(sceneRender, &family);
+            for (uint32_t index : family.viewportTaskIndices) {
+                if (index < sceneRender.views.size() &&
+                    sceneRender.views[index].derivedScene != familyScene) {
+                    return false;
+                }
+            }
+        }
+    }
+    for (size_t i = 0; i < sceneRender.views.size(); ++i) {
+        const SceneViewRecording& a = sceneRender.views[i];
+        if (!a.task) {
+            continue;
+        }
+        for (size_t j = i + 1; j < sceneRender.views.size(); ++j) {
+            const SceneViewRecording& b = sceneRender.views[j];
+            if (!b.task) {
+                continue;
+            }
+            if (a.task->sceneId == b.task->sceneId) {
+                if (a.derivedScene != b.derivedScene) {
+                    return false;
+                }
+            }
+            else if (a.derivedScene && b.derivedScene && a.derivedScene == b.derivedScene) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 
 [[nodiscard]] inline glm::mat4 makeCameraViewProjection(const glm::mat4& projection, const glm::mat4& view)
 {
@@ -204,6 +279,7 @@ struct PresentFrameInput
 };
 
 /// Sealed host frame value consumed by `RenderFrameCoordinator::record`.
+/// Derived Scene pointers live on each `SceneViewRecording`, not on this plan.
 /// Not an active-Scene query and not swapchain ownership.
 struct RenderFramePlan
 {
@@ -212,9 +288,6 @@ struct RenderFramePlan
     ViewComposeInput    viewCompose{};
     DisplayComposeInput displayCompose{};
     PresentFrameInput   present{};
-    /// Host-provided Scene for this frame's derived processors / IBL / overlay
-    /// extraction. Null means UI-only: do not tick world derived state.
-    Scene* derivedScene = nullptr;
 };
 
 /// One Scene family to record into a single graph on the live submission.
