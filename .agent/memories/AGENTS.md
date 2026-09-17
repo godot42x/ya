@@ -20,6 +20,7 @@
 - `./rendergraph_import_reuse_wrapper_identity_regression.md`：RenderGraph imported 纹理跨帧复用失效——身份比较误用每帧重建的 `ImageResource` 包装指针（应比较底层 image/view）；症状是每帧 `replacing texture` + 每帧析构
 - `./legacy_test_target_break_after_module_move.md`：模块迁移/类型收敛/API 折回后，遗留测试 target 编译失败的常见形态与修复方式（include 失效、API 删除、类型替换、字段可见性、生成头 include、枚举收紧）
 - `./derived_visual_on_host_component_slot.md`：把相机机身这类派生视觉塞进宿主组件槽的回归——场景文件被污染、资产路径被钉死、排除逻辑散落五处、宿主丢槽位；正确做法是生成子实体 + 声明式边界
+- `./app_teardown_order_and_instance_lock.md`：启动失败路径（控制端口被占用）崩溃 139/133——App 只有 `quit()` 一条有序 teardown 却没人走、模块 `onStop` 在 App 析构后执行、`unloadAll()` 提前于 App 的裸模块指针；含实例锁/墙钟上限运行策略的边界
 
 ## 边界
 

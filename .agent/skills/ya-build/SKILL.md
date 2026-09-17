@@ -100,6 +100,26 @@ make package t=HelloMaterial
   直出 swapchain 会出现撕裂/闪烁；
 - GUI example 属于 gui profile 也能构建：`xmake f --ya_profile=gui` 后构建同一批目标。
 
+## 实例与生命周期（多 agent / 长驻运行）
+
+`ya-runtime`（game 与 editor 同一套入口）按「project|mode」持有一个进程锁，锁由内核在进程
+退出或被 kill 时自动释放：
+
+- 同一 project 同一模式只允许一个实例；第二个实例立刻以退出码 1 停止，日志给出
+  `Refusing to start '<project>|editor': already running as pid <PID>`。不同 project 可以
+  并存（合法的双开），不需要也不要手工删锁文件。
+- 长驻运行（agent 调试、录制、自动化）统一带上墙钟上限 `--max-lifetime-seconds=<s>`：
+  到点退出码 0，日志 `App loop exited: reason=max-lifetime after N frames, Ts`。
+  `--exit-after-frame` 只数帧，挡不住卡住或闲置的进程，墙钟才会。
+- 请求了 `--automation-control-port=<p>` 而端口已被占用时，启动直接失败（退出码 1，
+  `automation control port <p> is already in use`），不会出现「进程看起来健康、但自动化
+  调用实际打在别人身上」。
+- 收工前确认没有自己的残留实例：
+
+```bash
+ps -ax -o pid,etime,command | grep ya-runtime | grep -v grep
+```
+
 ## Profiling
 
 - profiling、automation trace 与 speedscope 规则已独立到 `profiling` skill。
