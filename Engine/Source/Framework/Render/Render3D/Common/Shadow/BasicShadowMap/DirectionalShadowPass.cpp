@@ -191,7 +191,7 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendCascadePass(
         .size   = binding->directionalFrames[cascadeIndex].size,
     };
     const auto shadowPass = graph.addPass(
-        std::format("Directional Shadow Cascade {}", cascadeIndex),
+        std::format("Directional Shadow Cascade {}.view{}", cascadeIndex, payload.viewSlot),
         [frameBuffer, frameRange, skinningBuffer, depth, dependency](RGPassBuilder& pass) {
             if (dependency.has_value()) pass.dependsOn(*dependency);
             pass.uniformRead(frameBuffer, frameRange);

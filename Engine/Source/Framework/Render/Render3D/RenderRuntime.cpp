@@ -288,11 +288,10 @@ std::shared_ptr<ImageResource> RenderRuntime::getShadowPointFaceDepthResource(ui
 
 std::shared_ptr<RenderTexture> RenderRuntime::getPostprocessOutputImageShared() const
 {
-    if (auto* pipeline = _pipelineCoordinator.getSelectedForwardPipeline()) {
-        return pipeline->getPostprocessOutputImageShared();
-    }
-    if (auto* pipeline = _pipelineCoordinator.getSelectedDeferredPipeline()) {
-        return pipeline->getPostprocessOutputImageShared();
+    if (const auto* output = publishedViewOutput()) {
+        if (output->display && output->display != output->color) {
+            return output->display;
+        }
     }
     return nullptr;
 }
@@ -320,24 +319,19 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
 
     catalog.bShadowMappingEnabled   = pipeline->isShadowMappingEnabled();
     catalog.shadowDirectionalDepthResource = pipeline->getShadowDirectionalDepthResource();
-    catalog.viewportDepthImageOwner = pipeline->getViewportDepthImageShared();
+    catalog.viewportDepthImageOwner = nullptr;
     catalog.bPostprocessingEnabled = pipeline->isPostprocessingEnabled();
 
-    if (auto* selectedForward = _pipelineCoordinator.getSelectedForwardPipeline()) {
-        catalog.viewportOutputImageOwner    = selectedForward->getViewportOutputImageShared();
-        catalog.postprocessOutputImageOwner = selectedForward->getPostprocessOutputImageShared();
-        catalog.bloomExtractOwner           = selectedForward->getBloomExtractImageShared();
-        catalog.bloomBlurOwner              = selectedForward->getBloomBlurImageShared();
-        catalog.bloomCompositeOwner         = selectedForward->getBloomCompositeImageShared();
+    if (const auto* output = publishedViewOutput()) {
+        catalog.viewportOutputImageOwner    = output->color;
+        catalog.viewportDepthImageOwner     = output->depth;
+        catalog.postprocessOutputImageOwner = (output->display && output->display != output->color)
+            ? output->display
+            : nullptr;
+        catalog.bloomExtractOwner           = output->bloomExtract;
+        catalog.bloomBlurOwner              = output->bloomBlur;
+        catalog.bloomCompositeOwner         = output->bloomComposite;
         return catalog;
-    }
-
-    if (auto* selectedDeferred = _pipelineCoordinator.getSelectedDeferredPipeline()) {
-        catalog.viewportOutputImageOwner    = selectedDeferred->getViewportOutputImageShared();
-        catalog.postprocessOutputImageOwner = selectedDeferred->getPostprocessOutputImageShared();
-        catalog.bloomExtractOwner           = selectedDeferred->getBloomExtractImageShared();
-        catalog.bloomBlurOwner              = selectedDeferred->getBloomBlurImageShared();
-        catalog.bloomCompositeOwner         = selectedDeferred->getBloomCompositeImageShared();
     }
 
     return catalog;

@@ -176,8 +176,11 @@ void appendGBuffer(DeferredFrameGraphPassContext& context)
     };
 
     graphResources.passes.gBuffer = graph.addPass(
-        std::string(kTopologyPassGBuffer),
-        [&params](RGPassBuilder& passBuilder) {
+        makeViewGraphName(kTopologyPassGBuffer, context.viewId),
+        [&params, predecessor = context.familyPredecessor](RGPassBuilder& passBuilder) {
+            if (predecessor.has_value()) {
+                passBuilder.dependsOn(*predecessor);
+            }
             passBuilder.uniformRead(params.frame.handle, params.frame.range);
             passBuilder.uniformRead(params.light.handle, params.light.range);
             passBuilder.storageRead(params.skinning);
@@ -300,7 +303,7 @@ void appendLight(DeferredFrameGraphPassContext& context)
     };
 
     graphResources.passes.light = graph.addPass(
-        std::string(kTopologyPassLight),
+        makeViewGraphName(kTopologyPassLight, context.viewId),
         [&params](RGPassBuilder& passBuilder) {
             passBuilder.uniformRead(params.frame.handle, params.frame.range);
             passBuilder.uniformRead(params.light.handle, params.light.range);
@@ -372,7 +375,7 @@ void appendForwardOpaque(DeferredFrameGraphPassContext& context)
     };
 
     context.graph.addPass(
-        std::string(kTopologyPassForwardOpaque),
+        makeViewGraphName(kTopologyPassForwardOpaque, context.viewId),
         [&params](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = params.renderArea,
@@ -418,7 +421,7 @@ void appendSkybox(DeferredFrameGraphPassContext& context)
     };
 
     context.graphResources.passes.skybox = context.graph.addPass(
-        std::string(kTopologyPassSkybox),
+        makeViewGraphName(kTopologyPassSkybox, context.viewId),
         [&params](RGPassBuilder& passBuilder) {
             passBuilder.uniformRead(params.frame.handle, params.frame.range);
             passBuilder.declareRaster({
@@ -477,7 +480,7 @@ void appendForwardTransparent(DeferredFrameGraphPassContext& context)
     };
 
     context.graphResources.passes.sceneOverlay = context.graph.addPass(
-        std::string(kTopologyPassForwardTransparent),
+        makeViewGraphName(kTopologyPassForwardTransparent, context.viewId),
         [&params](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = params.renderArea,
@@ -530,7 +533,7 @@ void appendEntityId(DeferredFrameGraphPassContext& context)
     }
 
     context.graph.addPass(
-        "Deferred EntityId",
+        makeViewGraphName("Deferred EntityId", context.viewId),
         [entityId, depth, extent](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = {.pos = {0, 0}, .extent = extent.toVec2()},
@@ -580,7 +583,7 @@ void appendOverlay(DeferredFrameGraphPassContext& context)
     };
 
     context.graphResources.passes.viewportOverlay = context.graph.addPass(
-        std::string(kTopologyPassOverlay),
+        makeViewGraphName(kTopologyPassOverlay, context.viewId),
         [&params](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = params.renderArea,

@@ -45,7 +45,7 @@
 - [ ] 让同一逻辑帧的多个 surface/window 共用一个 SceneRenderScheduler/SceneRenderPlan，避免按窗口重复抽取同一 Scene。
 - [x] 将 RenderRuntime 持久状态保活到 submit/fence。
 - [x] 将 Shadow 的 per-flight descriptor binding 改为 View-owned beginSubmission/beginView。
-- [x] 增加同一 submission 多 View 的 slot/slice identity 验证（RenderViewBindingTable + Forward/Deferred/Shadow writeViewPayloads）。Stage CIS 隔离见 4.0.2 C；last-view publish 隔离见 Checkpoint D。
+- [x] 增加同一 submission 多 View 的 slot/slice identity 验证（RenderViewBindingTable + Forward/Deferred/Shadow writeViewPayloads）。Stage CIS 隔离见 4.0.2 C；family result publish 隔离见 4.0.2 D。
 - [x] 为每个 View 建立独立 output/extent/format 句柄。
 - [x] 将 Forward/Deferred viewport persistent key / RT 改为 View-keyed，避免多 View 共用一份 GBuffer/color。
 - [x] 将 postprocess/bloom 输出与 CombinedImageSampler descriptor set 改为 View-owned，避免同一 cmdbuf 里两路 display 采样同一套 GPU 资源。Processor 上的 viewId map 已在 4.0.2 C 删除，descriptor 进入 typed `PostprocessPassBindings`。
@@ -53,7 +53,7 @@
 - [x] 4.0.2 A：建立 `RenderSubmission` / pool owner，统一 command buffer、upload、transient descriptor、keepalive 与 finish 协议；删除 pipeline/resource-set 的分散 beginSubmission。
 - [x] 4.0.2 B：引入 `SceneViewFamilyPlan` 与 `SceneFamilyResources`；skinning/scene packet 不再按 flight 全局共享；同 Scene 双 View复用 family、双 Scene隔离。
 - [x] 4.0.2 C：引入 Deferred/Forward typed View/Pass resources；Stage 改为 pass recipe；删除 singleton CIS、processor viewId map；PointShadow buffer 归入 View Binding。
-- [ ] 4.0.2 D：Deferred/Forward 改为 ViewFamily renderer；一个 family graph 产生多个 typed outputs；删除 tick/beginTick/getCurrent 与 pipeline last-view 资源袋。
+- [x] 4.0.2 D：Deferred/Forward 改为 `recordFamily`；一个 family graph 产生多个 typed outputs；删除 tick/beginTick 与 pipeline last-view 图袋作为 publish source。
 - [ ] 4.0.2 E：拆除 RenderRuntime facade 为 RenderDeviceState + RenderFrameCoordinator + family renderer + presentation；删除单一 ViewportState 与 active Scene service-locator 依赖。
 - [ ] 录制两个 Scene 的两个 View，验证 snapshot 和资源生命周期隔离（排在 4.0.2 之后）。
 - [ ] 验证一个 View 到多个 Surface、多个 View 到一个 Surface。

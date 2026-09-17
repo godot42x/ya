@@ -228,7 +228,7 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
         params.viewId);
 
     [[maybe_unused]] const auto pass = graph.addPass(
-        "SSAO Pass",
+        makeViewGraphName("SSAO Pass", params.viewId),
         [params, noise, output, viewportExtent = ctx.viewportExtent](RGPassBuilder& passBuilder) {
             passBuilder.uniformRead(params.frame, params.frameRange);
             passBuilder.read(params.albedo);

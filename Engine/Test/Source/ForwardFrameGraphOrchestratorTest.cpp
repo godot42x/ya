@@ -17,6 +17,7 @@ TEST(ForwardGraphInputsTest, BuildInputsDefaultsStayEmpty)
     EXPECT_FALSE(inputs.bPostprocessOutputIsSRGB);
     EXPECT_FALSE(inputs.viewportOverlaySnapshot);
     EXPECT_EQ(inputs.viewId, 0u);
+    EXPECT_FALSE(inputs.familyPredecessor.has_value());
 
     const forward_frame_graph::ViewportGraphResources resources{};
     EXPECT_FALSE(resources.color.isValid());

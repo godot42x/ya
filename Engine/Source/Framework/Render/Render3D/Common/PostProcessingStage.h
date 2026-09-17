@@ -73,7 +73,7 @@ struct PostProcessingStage
                                       RGTextureHandle input,
                                       Extent2D        inputExtent,
                                       FrameContext*   ctx);
-    void     capturePreparedResources(const RenderGraphExecutionResult& result);
+    void     capturePreparedResources(const RenderGraphExecutionResult& result, uint64_t viewId = 0);
     void     clearPreparedResources();
     [[nodiscard]] bool                       isEnabled() const { return bEnabled; }
     [[nodiscard]] stdptr<RenderTexture>      getBloomExtractImageShared() const { return _bloomProcessor ? _bloomProcessor->getExtractImageShared() : nullptr; }

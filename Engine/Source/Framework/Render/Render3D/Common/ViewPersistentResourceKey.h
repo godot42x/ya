@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <format>
+#include <string>
 #include <string_view>
 
 namespace ya
@@ -11,14 +12,20 @@ namespace ya
 
 /// Registry identity for a View-owned persistent texture.
 ///
-/// Export names stay unique within one graph. Persistent keys identify the
-/// executor registry across graphs; two Views must not share `ForwardViewport.Color`.
-/// ViewId 0 still uses `.view0` so a missing task cannot revive an unkeyed global name.
+/// Export and pass names must stay unique within one family graph. Persistent
+/// keys identify the executor registry across graphs; two Views must not share
+/// `ForwardViewport.Color`. ViewId 0 still uses `.view0` so a missing task
+/// cannot revive an unkeyed global name.
+[[nodiscard]] inline std::string makeViewGraphName(std::string_view base, uint64_t viewId)
+{
+    return std::format("{}.view{}", base, viewId);
+}
+
 [[nodiscard]] inline RGPersistentTextureKey makeViewPersistentTextureKey(
     std::string_view base,
     uint64_t         viewId)
 {
-    return RGPersistentTextureKey{.value = std::format("{}.view{}", base, viewId)};
+    return RGPersistentTextureKey{.value = makeViewGraphName(base, viewId)};
 }
 
 [[nodiscard]] inline RGTextureHandle createViewPersistentTexture(

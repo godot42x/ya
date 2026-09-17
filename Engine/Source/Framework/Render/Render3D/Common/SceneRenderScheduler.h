@@ -81,6 +81,14 @@ struct SceneViewFamilyPlan
     std::vector<uint32_t>  viewportTaskIndices;
 };
 
+/// Typed outputs of one family graph. Coordinator publishes these; it does not
+/// ask the renderer for a current View image.
+struct ViewFamilyRenderResult
+{
+    SceneViewFamilyKey            key{};
+    std::vector<RenderViewOutput> views;
+};
+
 struct SceneViewportTask
 {
     static constexpr uint32_t kInvalidSnapshotIndex = std::numeric_limits<uint32_t>::max();

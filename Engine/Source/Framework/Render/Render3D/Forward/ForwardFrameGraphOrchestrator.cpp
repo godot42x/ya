@@ -21,7 +21,7 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
 
     ShadowGraphOutputs shadowOutputs;
     if (deps.shadowStage && inputs.bEnableShadow) {
-        shadowOutputs = deps.shadowStage->appendGraphPasses(graph, *inputs.stageCtx);
+        shadowOutputs = deps.shadowStage->appendGraphPasses(graph, *inputs.stageCtx, inputs.familyPredecessor);
     }
 
     const auto graphResources = forward_frame_graph::createViewportResources(
@@ -37,7 +37,7 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
 
     forward_frame_graph::appendViewportPasses(graph, passDeps, inputs, graphResources);
     forward_frame_graph::appendPostprocessPasses(graph, passDeps, inputs, graphResources);
-    forward_frame_graph::exportGraphOutputs(graph, graphResources);
+    forward_frame_graph::exportGraphOutputs(graph, graphResources, inputs.viewId);
 }
 
 } // namespace ya

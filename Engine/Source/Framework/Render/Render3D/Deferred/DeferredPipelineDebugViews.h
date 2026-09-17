@@ -12,6 +12,10 @@ struct DeferredPipelineDebugViews
     DeferredGBufferResources  gBufferResources{};
     DeferredViewportResources viewportResources{};
     std::shared_ptr<RenderTexture> ssaoTextureOwner = nullptr;
+    std::shared_ptr<RenderTexture> postprocess      = nullptr;
+    std::shared_ptr<RenderTexture> bloomExtract     = nullptr;
+    std::shared_ptr<RenderTexture> bloomBlur        = nullptr;
+    std::shared_ptr<RenderTexture> bloomComposite   = nullptr;
 };
 
 } // namespace ya

@@ -6,8 +6,9 @@
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Common/IRenderPipeline.h"
 
-#include <functional>
 #include <cstdint>
+#include <functional>
+#include <optional>
 #include <vector>
 
 namespace ya
@@ -55,12 +56,13 @@ struct DeferredFrameGraphOrchestrator
         std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
         uint64_t                               viewId                    = 0;
         const DeferredFrameResourceSet::ViewResources* viewResources     = nullptr;
+        std::optional<RGPassHandle>            familyPredecessor         = std::nullopt;
     };
 
     void build(const BuildDependencies& deps, const BuildInputs& inputs) const;
 
   private:
-    void exportGraphOutputs(RenderGraph& graph, const DeferredFrameGraphResources& resources) const;
+    void exportGraphOutputs(RenderGraph& graph, const DeferredFrameGraphResources& resources, uint64_t viewId) const;
 };
 
 } // namespace ya

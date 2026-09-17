@@ -39,7 +39,8 @@ struct ShadowStage : public IRenderStage
     void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent);
     [[nodiscard]] ShadowGraphOutputs appendGraphPasses(
         RenderGraph& graph,
-        const RenderStageContext& ctx);
+        const RenderStageContext& ctx,
+        std::optional<RGPassHandle> dependency = std::nullopt);
 
     /// Apply shadow settings from App layer. Call each frame before prepare/execute.
     void applySettings(const ShadowSettings& settings);

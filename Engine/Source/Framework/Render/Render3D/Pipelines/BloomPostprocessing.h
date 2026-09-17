@@ -69,7 +69,7 @@ struct BloomPostprocessing
     void shutdown();
     void beginFrame();
     RGTextureHandle appendGraphPasses(RenderGraph& graph, const RenderDesc& desc);
-    void capturePreparedResources(const RenderGraphExecutionResult& result);
+    void capturePreparedResources(const RenderGraphExecutionResult& result, uint64_t viewId = 0);
     void clearPreparedResources();
     void render(const RenderDesc& desc);
     [[nodiscard]] stdptr<RenderTexture> getExtractImageShared() const { return _extractImage; }

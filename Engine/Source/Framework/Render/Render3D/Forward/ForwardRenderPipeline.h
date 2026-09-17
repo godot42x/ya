@@ -80,7 +80,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     RGTopologyDescription        _lastFrameGraphTopology{};
 
     bool                    bMSAA                    = false;
-    std::shared_ptr<RenderTexture> _currentPostprocessOutput = nullptr;
 
     Extent2D      _pendingViewportExtent{};
     uint32_t      _pendingResourceRefreshMask = 0;
@@ -93,7 +92,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     std::optional<PostProcessingState> _pendingPostProcessSettings;
 
     void init(const InitDesc& desc);
-    void tick(const RenderPipelineFrameContext& frame) override;
+    ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
     void shutdown();
 
     bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner,
@@ -113,7 +112,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     }
     [[nodiscard]] std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const
     {
-        return _currentPostprocessOutput;
+        return nullptr;
     }
     [[nodiscard]] std::shared_ptr<RenderTexture> getBloomExtractImageShared() const
     {
@@ -148,8 +147,8 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void               initPostProcessResources(const InitDesc& desc);
     void               initShadowResources();
     void               initStageResources();
-    [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
-    void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
+    [[nodiscard]] bool shouldSkipView(const RenderPipelineFrameContext& frame) const;
+    void               beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               markPendingResourceRefresh(EForwardPendingResourceRefresh refresh);
     [[nodiscard]] bool hasPendingResourceRefresh(EForwardPendingResourceRefresh refresh) const;
     void               clearPendingResourceRefresh(EForwardPendingResourceRefresh refresh);
@@ -161,17 +160,24 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void               refreshViewportSnapshot();
     void               refreshViewportStageState();
     void               refreshShadowStageState();
-    bool               executeViewportPassGraph(const RenderPipelineFrameContext& frame,
-                                                RenderStageContext&             stageCtx,
-                                                FrameContext&                    postContext,
-                                                const ForwardFrameResourceSet::Binding& frameBinding,
-                                                ForwardFrameResourceSet::ViewResources* viewResources);
+    bool               appendViewportPassGraph(RenderGraph& graph,
+                                               const RenderPipelineFrameContext& frame,
+                                               RenderStageContext&             stageCtx,
+                                               FrameContext&                    postContext,
+                                               ForwardViewportStage::PassContext& viewportPassContext,
+                                               const ForwardFrameResourceSet::Binding& frameBinding,
+                                               ForwardFrameResourceSet::ViewResources* viewResources,
+                                               std::optional<RGPassHandle> familyPredecessor);
+    [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
+                                                     const CameraFrameInput& camera,
+                                                     const SceneViewportTask* task,
+                                                     uint64_t viewId,
+                                                     Extent2D viewExtent) const;
     void               syncShadowSettings();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               executeShadowPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
-    void               executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               rebuildShadowViews();
     void               applyShadowSettings(const ShadowSettings& shadowSettings);
     void               applyPendingPostProcessSettings();

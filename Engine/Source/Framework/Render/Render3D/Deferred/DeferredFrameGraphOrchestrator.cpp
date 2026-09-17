@@ -3,7 +3,7 @@
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Profiling/Profiling.h"
 #include "Render3D/Common/Shadow/ShadowStage.h"
-#include "Render3D/Deferred/DeferredFrameGraphPasses.h"
+#include "Render3D/Common/ViewPersistentResourceKey.h"
 
 namespace ya
 {
@@ -29,8 +29,13 @@ void DeferredFrameGraphOrchestrator::build(
     auto&       graphResources = *inputs.graphResources;
     const auto& stageCtx       = *inputs.stageCtx;
 
+    std::optional<RGPassHandle> familyPredecessor = inputs.familyPredecessor;
+    bool                        bShadowAppended   = false;
     if (deps.shadowStage) {
-        graphResources.passes.shadow = deps.shadowStage->appendGraphPasses(graph, stageCtx);
+        const size_t passCountBefore = graph.getPasses().size();
+        graphResources.passes.shadow = deps.shadowStage->appendGraphPasses(
+            graph, stageCtx, familyPredecessor);
+        bShadowAppended = graph.getPasses().size() > passCountBefore;
     }
 
     DeferredFrameGraphPassContext context{
@@ -51,6 +56,7 @@ void DeferredFrameGraphOrchestrator::build(
         .bPostprocessOutputIsSRGB = inputs.bPostprocessOutputIsSRGB,
         .viewportOverlaySnapshot  = inputs.viewportOverlaySnapshot,
         .viewId                   = inputs.viewId,
+        .familyPredecessor        = bShadowAppended ? std::nullopt : familyPredecessor,
         .shadowStage              = deps.shadowStage,
         .gBufferStage             = *deps.gBufferStage,
         .lightStage               = *deps.lightStage,
@@ -73,23 +79,24 @@ void DeferredFrameGraphOrchestrator::build(
     deferred_frame_graph_passes::appendOverlay(context);
     deferred_frame_graph_passes::appendPostprocess(context);
 
-    exportGraphOutputs(graph, graphResources);
+    exportGraphOutputs(graph, graphResources, inputs.viewId);
 }
 
 void DeferredFrameGraphOrchestrator::exportGraphOutputs(
     RenderGraph& graph,
-    const DeferredFrameGraphResources& resources) const
+    const DeferredFrameGraphResources& resources,
+    uint64_t viewId) const
 {
     for (uint32_t attachmentIndex = 0; attachmentIndex < resources.textures.gBufferColors.size(); ++attachmentIndex) {
         graph.exportTexture(
             resources.textures.gBufferColors[attachmentIndex],
-            std::string(deferred_graph_exports::gBufferColor[attachmentIndex]));
+            makeViewGraphName(deferred_graph_exports::gBufferColor[attachmentIndex], viewId));
     }
-    graph.exportTexture(resources.textures.gBufferDepth, std::string(deferred_graph_exports::gBufferDepth));
-    graph.exportTexture(resources.textures.viewportColor, std::string(deferred_graph_exports::viewportColor));
-    graph.exportTexture(resources.textures.entityId, std::string(deferred_graph_exports::entityId));
+    graph.exportTexture(resources.textures.gBufferDepth, makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId));
+    graph.exportTexture(resources.textures.viewportColor, makeViewGraphName(deferred_graph_exports::viewportColor, viewId));
+    graph.exportTexture(resources.textures.entityId, makeViewGraphName(deferred_graph_exports::entityId, viewId));
     if (resources.textures.ssao.has_value()) {
-        graph.exportTexture(*resources.textures.ssao, std::string(deferred_graph_exports::ssao));
+        graph.exportTexture(*resources.textures.ssao, makeViewGraphName(deferred_graph_exports::ssao, viewId));
     }
 }
 

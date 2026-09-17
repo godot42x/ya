@@ -84,11 +84,11 @@ void PostProcessingStage::clearPreparedResources()
     }
 }
 
-void PostProcessingStage::capturePreparedResources(const RenderGraphExecutionResult& result)
+void PostProcessingStage::capturePreparedResources(const RenderGraphExecutionResult& result, uint64_t viewId)
 {
-    _preparedOutputImage = result.getExportedTextureShared(kOutputExportName);
+    _preparedOutputImage = result.getExportedTextureShared(makeViewGraphName(kOutputExportName, viewId));
     if (_bloomProcessor) {
-        _bloomProcessor->capturePreparedResources(result);
+        _bloomProcessor->capturePreparedResources(result, viewId);
     }
 }
 
@@ -202,7 +202,7 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& grap
                                   "Postprocessing.Output",
                                   params.viewId);
     [[maybe_unused]] const auto pass = graph.addPass(
-        "Postprocessing",
+        makeViewGraphName("Postprocessing", params.viewId),
         [input = params.input, output, inputExtent = params.inputExtent](RGPassBuilder& pass) {
             pass.read(input);
             pass.declareRaster({
@@ -236,7 +236,7 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& grap
             rgCtx.endRendering();
         });
 
-    graph.exportTexture(output, std::string(kOutputExportName));
+    graph.exportTexture(output, makeViewGraphName(kOutputExportName, params.viewId));
     return output;
 }
 

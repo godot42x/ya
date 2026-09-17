@@ -15,7 +15,9 @@
 #include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/ViewPassResources.h"
+#include "Render3D/Common/ViewPersistentResourceKey.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
+#include "Render3D/Pipelines/BloomPostprocessing.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
 #include "Graph/RenderGraphImportUtils.h"
@@ -27,11 +29,14 @@
 #include "Render3D/Common/PostProcessingStateConfig.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Graph/RenderGraphExecutor.h"
+#include "Graph/RenderGraph.h"
 #include "Core/Config/ConfigManager.h"
 #include "Scene/Core/Scene.h"
 #include <algorithm>
 #include <chrono>
 #include <format>
+#include <limits>
+#include <vector>
 
 namespace ya
 {
@@ -559,9 +564,13 @@ void DeferredRenderPipeline::loadPersistentSettings()
 DeferredPipelineDebugViews DeferredRenderPipeline::buildDebugViews() const
 {
     return DeferredPipelineDebugViews{
-        .gBufferResources  = _currentGBufferResources,
-        .viewportResources = _currentViewportResources,
-        .ssaoTextureOwner  = _publishedGraphOutputs.ssao,
+        .gBufferResources  = _debugViews.gBufferResources,
+        .viewportResources = _debugViews.viewportResources,
+        .ssaoTextureOwner  = _debugViews.ssaoTextureOwner,
+        .postprocess       = _debugViews.postprocess,
+        .bloomExtract      = _debugViews.bloomExtract,
+        .bloomBlur         = _debugViews.bloomBlur,
+        .bloomComposite    = _debugViews.bloomComposite,
     };
 }
 
@@ -575,12 +584,12 @@ void DeferredRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& cata
         .colorFormats = gbufferFormats.colorFormats,
         .depthFormat  = gbufferFormats.depthFormat,
         .colorAttachments = {
-            _currentGBufferResources.colorOwners[0],
-            _currentGBufferResources.colorOwners[1],
-            _currentGBufferResources.colorOwners[2],
-            _currentGBufferResources.colorOwners[3],
+            _debugViews.gBufferResources.colorOwners[0],
+            _debugViews.gBufferResources.colorOwners[1],
+            _debugViews.gBufferResources.colorOwners[2],
+            _debugViews.gBufferResources.colorOwners[3],
         },
-        .depthAttachment = _currentGBufferResources.depthOwner,
+        .depthAttachment = _debugViews.gBufferResources.depthOwner,
         .extent           = _gBufferRTSpec.extent,
         .frameBufferCount = 1,
     });
@@ -589,8 +598,8 @@ void DeferredRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& cata
         .owner        = RenderTargetCatalog::Entry::EOwner::DeferredViewport,
         .colorFormats = viewportFormats.colorFormats,
         .depthFormat  = viewportFormats.depthFormat,
-        .colorAttachments = {_currentViewportResources.colorOwner},
-        .depthAttachment  = _currentViewportResources.depthOwner,
+        .colorAttachments = {_debugViews.viewportResources.colorOwner},
+        .depthAttachment  = _debugViews.viewportResources.depthOwner,
         .extent           = _viewportRTSpec.extent,
         .frameBufferCount = 1,
     });
@@ -766,7 +775,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _runtimeServices              = desc.runtimeServices;
     _pendingSettings.reset();
     _pendingResourceRefreshMask   = 0;
-    clearPublishedGraphOutputs();
+    _debugViews                   = {};
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
     }
@@ -783,8 +792,8 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
 
     initRenderTargetSpecs(extent);
     _entityIdPass.init(_render, EFormat::R32_UINT, _sharedDepthFormat);
-    _currentGBufferResources.reset(buildGBufferSnapshotFormats());
-    _currentViewportResources.reset(buildViewportSnapshotFormats());
+    _debugViews.gBufferResources.reset(buildGBufferSnapshotFormats());
+    _debugViews.viewportResources.reset(buildViewportSnapshotFormats());
     if (currentShadowSettings().isEnabled()) {
         initShadowResources();
     }
@@ -817,7 +826,7 @@ void DeferredRenderPipeline::initStages()
         _frameResources->getSkinningDSL());
 
     _ssaoStage = ya::makeShared<SSAOStage>();
-    _ssaoStage->setup(_currentGBufferResources);
+    _ssaoStage->setup(_debugViews.gBufferResources);
     _ssaoStage->init(_render, _frameResources->getSSAOFrameDSL());
     _ssaoStage->setSettings(_ssaoRadius, _ssaoBias, _ssaoPower, _ssaoIntensity, _bReverseViewportY);
 
@@ -850,10 +859,7 @@ void DeferredRenderPipeline::shutdown()
     _cachedAlbedoSpecImageViewHandle = nullptr;
     _pendingViewportExtent           = {};
     _pendingResourceRefreshMask      = 0;
-    clearPublishedGraphOutputs();
-    _currentGBufferResources.reset();
-    _currentViewportResources.reset();
-    _currentEnvironmentLightingTextures = {};
+    _debugViews                      = {};
     if (_ssaoStage) {
     }
     _graphExecutor.reset();
@@ -889,66 +895,201 @@ void DeferredRenderPipeline::shutdown()
 
 
 // ═══════════════════════════════════════════════════════════════════════
-// Tick
+// Family graph
 // ═══════════════════════════════════════════════════════════════════════
 
-void DeferredRenderPipeline::tick(const RenderPipelineFrameContext& frame)
+namespace
+{
+
+RenderPipelineFrameContext makeDeferredViewFrameContext(const ViewFamilyRecordContext& ctx,
+                                                        const SceneViewRecording& recording)
+{
+    const CameraFrameInput camera = cameraForViewRecording(ctx.hostCamera, recording);
+    Extent2D viewExtent           = Extent2D::fromVec2(camera.viewportRect.extent);
+    if (recording.task && recording.task->output.hasExtent()) {
+        viewExtent = recording.task->output.extent;
+    }
+    const bool bDisplayRoot = recording.task && ctx.plan && recording.task == ctx.plan->displayRootTask();
+    return RenderPipelineFrameContext{
+        .cmdBuf                  = ctx.cmdBuf,
+        .camera                  = camera,
+        .viewportOverlaySnapshot = bDisplayRoot ? ctx.overlaySnapshot : nullptr,
+        .submission              = ctx.submission,
+        .view                    = RenderViewRecordingContext{
+            .task           = recording.task,
+            .frameData      = recording.frameData ? recording.frameData : camera.frameData,
+            .viewportExtent = viewExtent,
+        },
+    };
+}
+
+struct DeferredFamilyViewBranch
+{
+    RenderPipelineFrameContext            frame{};
+    RenderStageContext                    stageCtx{};
+    uint32_t                              vpW = 0;
+    uint32_t                              vpH = 0;
+    ViewportOverlayStage::FrameInputs     overlayInputs{};
+    EnvironmentLightingSceneResources     environmentLighting{};
+    DescriptorSetHandle                   environmentLightingDS{};
+    FrameContext                          postContext{};
+    DeferredFrameGraphResources           graphResources{};
+};
+
+} // namespace
+
+ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyRecordContext& ctx)
 {
     YA_PROFILE_FUNCTION();
 
-    frame.cmdBuf->debugBeginLabel("Deferred Pipeline");
-
-    if (shouldSkipTick(frame)) {
-        return;
+    ViewFamilyRenderResult result;
+    if (ctx.family) {
+        result.key = ctx.family->key;
+    }
+    if (!ctx.cmdBuf || !ctx.submission || !ctx.submission->isRecording()) {
+        return result;
     }
 
+    ctx.cmdBuf->debugBeginLabel("Deferred Family");
     YA_PERF_SCOPE(perf::sample::deferredTick(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    RenderStageContext stageCtx{};
-    uint32_t           vpW = 0;
-    uint32_t           vpH = 0;
-    {
-        YA_PROFILE_SCOPE("DeferredPipeline/BeginTick");
-        beginTick(frame, stageCtx, vpW, vpH);
-    }
-    {
-        YA_PROFILE_SCOPE("DeferredPipeline/SyncFrameSettings");
-        syncFrameSettings(frame);
-    }
-    {
-        YA_PROFILE_SCOPE("DeferredPipeline/ShadowPass");
-        prepareShadowPass(frame, stageCtx);
-    }
-    {
-        YA_PROFILE_SCOPE("DeferredPipeline/MainGraph");
-        executeDeferredMainGraph(frame, stageCtx, vpW, vpH);
-    }
-
-    frame.cmdBuf->debugEndLabel();
-}
-
-bool DeferredRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& frame) const
-{
-    YA_CORE_ASSERT(frame.cmdBuf, "DeferredRenderPipeline requires a command buffer");
-
-    if (!frame.camera.hasOffscreenExtent()) {
-        frame.cmdBuf->debugEndLabel();
-        return true;
-    }
-
-    if (!frame.camera.frameData) {
-        frame.cmdBuf->debugEndLabel();
-        return true;
-    }
-
-    return false;
-}
-
-void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH)
-{
     applyPendingSettings();
     applyPendingResourceRefreshes();
     _postProcessStage.beginFrame();
+
+    std::vector<SceneViewRecording> recordings = ctx.views;
+    if (recordings.empty()) {
+        recordings.push_back(SceneViewRecording{
+            .task      = ctx.plan ? ctx.plan->displayRootTask() : nullptr,
+            .frameData = ctx.hostCamera.frameData,
+        });
+    }
+
+    RenderGraph graph;
+    std::vector<DeferredFamilyViewBranch> liveBranches;
+    liveBranches.reserve(recordings.size());
+    std::optional<RGPassHandle> familyPredecessor;
+    bool preparedSkinning = false;
+
+    for (const SceneViewRecording& recording : recordings) {
+        DeferredFamilyViewBranch branch;
+        branch.frame = makeDeferredViewFrameContext(ctx, recording);
+        if (shouldSkipView(branch.frame)) {
+            continue;
+        }
+
+        beginViewRecording(branch.frame, branch.stageCtx, branch.vpW, branch.vpH);
+        syncFrameSettings(branch.frame);
+        applyPendingResourceRefreshes();
+        prepareShadowPass(branch.frame, branch.stageCtx);
+
+        if (!preparedSkinning) {
+            RenderViewRecordingContext view = branch.frame.view;
+            if (!view.frameData) {
+                view.frameData = branch.frame.camera.frameData;
+            }
+            if (!_frameResources->prepareSkinning(*branch.frame.submission, view)) {
+                continue;
+            }
+            preparedSkinning = true;
+        }
+
+        branch.overlayInputs = buildOverlayFrameInputs(
+            branch.frame, branch.environmentLighting, branch.environmentLightingDS);
+        liveBranches.push_back(std::move(branch));
+        DeferredFamilyViewBranch& live = liveBranches.back();
+        if (!appendDeferredViewToGraph(
+                graph,
+                live.frame,
+                live.stageCtx,
+                live.vpW,
+                live.vpH,
+                live.overlayInputs,
+                live.environmentLighting,
+                live.environmentLightingDS,
+                live.postContext,
+                live.graphResources,
+                familyPredecessor)) {
+            liveBranches.pop_back();
+            continue;
+        }
+        familyPredecessor = graph.lastPassHandle();
+    }
+
+    if (liveBranches.empty()) {
+        ctx.cmdBuf->debugEndLabel();
+        return result;
+    }
+
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
+    RGCompiledGraph compiled{};
+    RenderGraphExecutionResult execution;
+    if (!_graphExecutor->prepare(graph, compiled, &execution)) {
+        _lastFrameGraphTopology = {};
+        ctx.cmdBuf->debugEndLabel();
+        return result;
+    }
+    _lastFrameGraphTopology = graph.describeCompiledTopology(compiled);
+
+    if (_bEnableSSAO && _ssaoStage) {
+        _ssaoStage->prepare(liveBranches.back().stageCtx);
+    }
+    if (_lightStage) {
+        _lightStage->prepare(liveBranches.back().stageCtx);
+    }
+    if (_overlayStage) {
+        _overlayStage->prepare(liveBranches.back().stageCtx);
+    }
+
+    for (const DeferredFamilyViewBranch& branch : liveBranches) {
+        const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->viewId : 0;
+        RenderViewOutput output = collectViewOutput(
+            execution, branch.graphResources, branch.frame.camera, branch.frame.view.task, viewId);
+        const bool bDisplayRoot = branch.frame.view.task && ctx.plan &&
+                                  branch.frame.view.task == ctx.plan->displayRootTask();
+        if (bDisplayRoot || result.views.empty()) {
+            auto nextGBuffer = buildPublishedGBufferResources(execution, viewId);
+            auto nextViewport = buildPublishedViewportResources(execution, viewId, nextGBuffer.depthOwner);
+            const bool bGBufferChanged =
+                _debugViews.gBufferResources.formats.colorFormats != nextGBuffer.formats.colorFormats ||
+                _debugViews.gBufferResources.formats.depthFormat != nextGBuffer.formats.depthFormat;
+            const bool bViewportChanged =
+                _debugViews.viewportResources.formats.colorFormats != nextViewport.formats.colorFormats ||
+                _debugViews.viewportResources.formats.depthFormat != nextViewport.formats.depthFormat;
+            _debugViews.gBufferResources  = std::move(nextGBuffer);
+            _debugViews.viewportResources = std::move(nextViewport);
+            _debugViews.ssaoTextureOwner  = output.ssao;
+            _debugViews.postprocess       = output.display == output.color ? nullptr : output.display;
+            _debugViews.bloomExtract      = output.bloomExtract;
+            _debugViews.bloomBlur         = output.bloomBlur;
+            _debugViews.bloomComposite    = output.bloomComposite;
+            if (bGBufferChanged) {
+                refreshGBufferStageState();
+            }
+            if (bViewportChanged) {
+                refreshViewportStageState();
+            }
+        }
+        result.views.push_back(std::move(output));
+    }
+
+    if (!_graphExecutor->executeCompiled(graph, compiled, *ctx.cmdBuf)) {
+        _lastFrameGraphTopology = {};
+        result.views.clear();
+    }
+
+    ctx.cmdBuf->debugEndLabel();
+    return result;
+}
+
+bool DeferredRenderPipeline::shouldSkipView(const RenderPipelineFrameContext& frame) const
+{
+    YA_CORE_ASSERT(frame.cmdBuf, "DeferredRenderPipeline requires a command buffer");
+    return !frame.camera.hasOffscreenExtent() || !frame.camera.frameData;
+}
+
+void DeferredRenderPipeline::beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH)
+{
     captureShadowSettings(frame);
 
     vpW = static_cast<uint32_t>(frame.camera.viewportRect.extent.x);
@@ -981,88 +1122,83 @@ void DeferredRenderPipeline::captureShadowSettings(const RenderPipelineFrameCont
     }
 }
 
-void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameContext& frame)
+ViewportOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
+    const RenderPipelineFrameContext& frame,
+    EnvironmentLightingSceneResources& environmentLighting,
+    DescriptorSetHandle& environmentLightingDS) const
 {
     Scene* activeScene = _runtimeServices ? _runtimeServices->getActiveScene() : nullptr;
-    _currentEnvironmentLightingTextures =
+    environmentLighting =
         _runtimeServices
         ? _runtimeServices->resolveSceneEnvironmentLightingResources(activeScene)
         : EnvironmentLightingSceneResources{};
+    environmentLightingDS = _runtimeServices
+        ? _runtimeServices->getSceneEnvironmentLightingDescriptorSet(activeScene)
+        : DescriptorSetHandle{};
 
-    if (_lightStage) {
-        _currentEnvironmentLightingDescriptorSet = _runtimeServices
-            ? _runtimeServices->getSceneEnvironmentLightingDescriptorSet(activeScene)
-            : DescriptorSetHandle{};
-        _lightStage->setFrameInputs(LightStage::FrameInputs{
-            .frameAndLightDescriptorSet       = {},
-            .environmentLightingDescriptorSet = _currentEnvironmentLightingDescriptorSet,
-        });
+    ViewportOverlayStage::FrameInputs frameInputs{};
+    if (!_overlayStage) {
+        return frameInputs;
     }
-    // GBufferStage no longer receives frame inputs here: its View binding
-    // travels with DeferredGBufferPassParams in the graph pass (FG-302).
 
-    _currentOverlayFrameInputs = {};
-    if (_overlayStage) {
-        ViewportOverlayStage::FrameInputs frameInputs{};
-        auto* envProcessor = _runtimeServices ? _runtimeServices->getEnvironmentLightingProcessor() : nullptr;
+    auto* envProcessor = _runtimeServices ? _runtimeServices->getEnvironmentLightingProcessor() : nullptr;
 
-        if (activeScene) {
-            const float viewportHeight = static_cast<float>(frame.camera.viewportRect.extent.y);
-            if (viewportHeight > 0.0f) {
-                for (const auto& [entity, billboard, transform] : activeScene->getRegistry().view<BillboardComponent, TransformComponent>().each()) {
-                    (void)entity;
-                    if (!shouldRenderBillboard(billboard, frame.camera.bAppStopped)) {
-                        continue;
-                    }
-
-                    const glm::vec3 worldCenter = transform.getWorldPosition();
-                    const float distance        = glm::length(frame.camera.cameraPos - worldCenter);
-                    if (distance <= std::numeric_limits<float>::epsilon()) {
-                        continue;
-                    }
-
-                    const float screenSizePixels = std::max(billboard.screenSizePixels, 1.0f);
-                    const float scaleFactor      = screenSizePixels / viewportHeight;
-                    const float size             = std::max(billboard.minWorldScale, scaleFactor * distance * 2.0f);
-
-                    ViewportOverlayStage::FrameInputs::BillboardInput input{};
-                    input.worldCenter    = worldCenter;
-                    input.worldDirection = billboard.worldDirection;
-                    input.worldSize      = glm::vec2(size, size);
-                    input.tint           = billboard.tint;
-                    input.entityId       = static_cast<uint32_t>(entity);
-                    if (billboard.image.isReady()) {
-                        input.textureBinding = ya::slotToTextureBinding(billboard.image);
-                    }
-                    frameInputs.billboards.push_back(std::move(input));
+    if (activeScene) {
+        const float viewportHeight = static_cast<float>(frame.camera.viewportRect.extent.y);
+        if (viewportHeight > 0.0f) {
+            for (const auto& [entity, billboard, transform] : activeScene->getRegistry().view<BillboardComponent, TransformComponent>().each()) {
+                (void)entity;
+                if (!shouldRenderBillboard(billboard, frame.camera.bAppStopped)) {
+                    continue;
                 }
-            }
 
-            const auto& dirView = activeScene->getRegistry().view<TransformComponent, DirectionComponent>();
-            for (auto entity : dirView) {
-                const auto& [tc, direction] = dirView.get(entity);
-                (void)direction;
-                frameInputs.directionGizmos.push_back(buildDirectionGizmoInput(tc));
+                const glm::vec3 worldCenter = transform.getWorldPosition();
+                const float distance        = glm::length(frame.camera.cameraPos - worldCenter);
+                if (distance <= std::numeric_limits<float>::epsilon()) {
+                    continue;
+                }
+
+                const float screenSizePixels = std::max(billboard.screenSizePixels, 1.0f);
+                const float scaleFactor      = screenSizePixels / viewportHeight;
+                const float size             = std::max(billboard.minWorldScale, scaleFactor * distance * 2.0f);
+
+                ViewportOverlayStage::FrameInputs::BillboardInput input{};
+                input.worldCenter    = worldCenter;
+                input.worldDirection = billboard.worldDirection;
+                input.worldSize      = glm::vec2(size, size);
+                input.tint           = billboard.tint;
+                input.entityId       = static_cast<uint32_t>(entity);
+                if (billboard.image.isReady()) {
+                    input.textureBinding = ya::slotToTextureBinding(billboard.image);
+                }
+                frameInputs.billboards.push_back(std::move(input));
             }
         }
 
-        if (activeScene && envProcessor && _runtimeServices) {
-            const auto* skyboxState = envProcessor->findFirstSceneSkyboxState(activeScene);
-            if (skyboxState && skyboxState->hasRenderableCubemap()) {
-                frameInputs.skybox.descriptorSet = _runtimeServices->getSceneSkyboxDescriptorSet(activeScene);
-                frameInputs.skybox.mesh          = _defaultSkyboxMesh;
-                for (const auto& [entity, sc, mc] : activeScene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
-                    if (mc.isResolved() && mc.getMesh()) {
-                        frameInputs.skybox.mesh = mc.getMesh();
-                    }
-                    break;
-                }
-                frameInputs.skybox.bAvailable = frameInputs.skybox.descriptorSet && frameInputs.skybox.mesh;
-            }
+        const auto& dirView = activeScene->getRegistry().view<TransformComponent, DirectionComponent>();
+        for (auto entity : dirView) {
+            const auto& [tc, direction] = dirView.get(entity);
+            (void)direction;
+            frameInputs.directionGizmos.push_back(buildDirectionGizmoInput(tc));
         }
-
-        _currentOverlayFrameInputs = frameInputs;
     }
+
+    if (activeScene && envProcessor && _runtimeServices) {
+        const auto* skyboxState = envProcessor->findFirstSceneSkyboxState(activeScene);
+        if (skyboxState && skyboxState->hasRenderableCubemap()) {
+            frameInputs.skybox.descriptorSet = _runtimeServices->getSceneSkyboxDescriptorSet(activeScene);
+            frameInputs.skybox.mesh          = _defaultSkyboxMesh;
+            for (const auto& [entity, sc, mc] : activeScene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
+                if (mc.isResolved() && mc.getMesh()) {
+                    frameInputs.skybox.mesh = mc.getMesh();
+                }
+                break;
+            }
+            frameInputs.skybox.bAvailable = frameInputs.skybox.descriptorSet && frameInputs.skybox.mesh;
+        }
+    }
+
+    return frameInputs;
 }
 
 void DeferredRenderPipeline::invalidateGBufferDependentViews()
@@ -1070,93 +1206,81 @@ void DeferredRenderPipeline::invalidateGBufferDependentViews()
     _cachedAlbedoSpecImageViewHandle = nullptr;
     _debugAlbedoRGBView.reset();
     _debugSpecularAlphaView.reset();
-
-}
-
-void DeferredRenderPipeline::clearPublishedGraphOutputs()
-{
-    _publishedGraphOutputs.clear();
-}
-
-void DeferredRenderPipeline::publishGraphExecutionResult(
-    const RenderGraphExecutionResult& result,
-    const DeferredFrameGraphResources& graphResources)
-{
-    auto nextGBuffer = buildPublishedGBufferResources(result);
-    auto nextViewport = buildPublishedViewportResources(result, nextGBuffer.depthOwner);
-    publishAttachmentResources(std::move(nextGBuffer), std::move(nextViewport));
-    publishPostprocessOutputs(result, graphResources);
 }
 
 DeferredGBufferResources DeferredRenderPipeline::buildPublishedGBufferResources(
-    const RenderGraphExecutionResult& result) const
+    const RenderGraphExecutionResult& result, uint64_t viewId) const
 {
     std::array<std::shared_ptr<RenderTexture>, 4> nextGBufferColors{};
     for (uint32_t attachmentIndex = 0; attachmentIndex < std::size(deferred_graph_exports::gBufferColor); ++attachmentIndex) {
-        nextGBufferColors[attachmentIndex] = result.getExportedTextureShared(deferred_graph_exports::gBufferColor[attachmentIndex]);
+        nextGBufferColors[attachmentIndex] = result.getExportedTextureShared(
+            makeViewGraphName(deferred_graph_exports::gBufferColor[attachmentIndex], viewId));
     }
 
     DeferredGBufferResources resources{};
     resources.publish(
         std::move(nextGBufferColors),
-        result.getExportedTextureShared(deferred_graph_exports::gBufferDepth),
+        result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId)),
         buildGBufferSnapshotFormats());
     return resources;
 }
 
 DeferredViewportResources DeferredRenderPipeline::buildPublishedViewportResources(
     const RenderGraphExecutionResult& result,
+    uint64_t viewId,
     const std::shared_ptr<RenderTexture>& depthOwner) const
 {
     DeferredViewportResources resources{};
     resources.publish(
-        result.getExportedTextureShared(deferred_graph_exports::viewportColor),
+        result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::viewportColor, viewId)),
         depthOwner,
-        result.getExportedTextureShared(deferred_graph_exports::entityId),
+        result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::entityId, viewId)),
         buildViewportSnapshotFormats());
     return resources;
 }
 
-void DeferredRenderPipeline::publishAttachmentResources(
-    DeferredGBufferResources nextGBuffer,
-    DeferredViewportResources nextViewport)
-{
-    const bool bGBufferChanged = _currentGBufferResources.colorOwners != nextGBuffer.colorOwners ||
-                                 _currentGBufferResources.depthOwner != nextGBuffer.depthOwner ||
-                                 _currentGBufferResources.formats.colorFormats != nextGBuffer.formats.colorFormats ||
-                                 _currentGBufferResources.formats.depthFormat != nextGBuffer.formats.depthFormat;
-    const bool bViewportChanged = _currentViewportResources.colorOwner != nextViewport.colorOwner ||
-                                  _currentViewportResources.depthOwner != nextViewport.depthOwner ||
-                                  _currentViewportResources.formats.colorFormats != nextViewport.formats.colorFormats ||
-                                  _currentViewportResources.formats.depthFormat != nextViewport.formats.depthFormat;
-
-    _currentGBufferResources  = std::move(nextGBuffer);
-    _currentViewportResources = std::move(nextViewport);
-
-    if (bGBufferChanged) {
-        refreshGBufferStageState();
-    }
-    if (bViewportChanged) {
-        refreshViewportStageState();
-    }
-}
-
-void DeferredRenderPipeline::publishPostprocessOutputs(
+RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     const RenderGraphExecutionResult& result,
-    const DeferredFrameGraphResources& graphResources)
+    const DeferredFrameGraphResources& graphResources,
+    const CameraFrameInput& camera,
+    const SceneViewportTask* task,
+    uint64_t viewId) const
 {
-    _publishedGraphOutputs.ssao = graphResources.textures.ssao.has_value()
-        ? result.getExportedTextureShared(deferred_graph_exports::ssao)
-        : nullptr;
-    _publishedGraphOutputs.bloomExtract   = result.getExportedTextureShared(BloomPostprocessing::kExtractExportName);
-    _publishedGraphOutputs.bloomBlur      = result.getExportedTextureShared(BloomPostprocessing::kBlurPongExportName);
-    if (!_publishedGraphOutputs.bloomBlur) {
-        _publishedGraphOutputs.bloomBlur = result.getExportedTextureShared(BloomPostprocessing::kBlurPingExportName);
+    RenderViewOutput output;
+    if (task) {
+        output.desc = task->output;
     }
-    _publishedGraphOutputs.bloomComposite = result.getExportedTextureShared(BloomPostprocessing::kOutputExportName);
-    _publishedGraphOutputs.postprocess = graphResources.textures.postprocessOutput.has_value()
-        ? result.getExportedTextureShared(PostProcessingStage::kOutputExportName)
+    output.desc.viewId = viewId != 0 ? viewId : (task ? task->viewId : 0);
+    if (!output.desc.hasExtent()) {
+        output.desc.extent = Extent2D::fromVec2(camera.viewportRect.extent);
+    }
+
+    output.color    = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::viewportColor, viewId));
+    output.depth    = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId));
+    output.entityId = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::entityId, viewId));
+    output.ssao     = graphResources.textures.ssao.has_value()
+        ? result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::ssao, viewId))
         : nullptr;
+    output.bloomExtract = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kExtractExportName, viewId));
+    output.bloomBlur    = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kBlurPongExportName, viewId));
+    if (!output.bloomBlur) {
+        output.bloomBlur = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kBlurPingExportName, viewId));
+    }
+    output.bloomComposite = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kOutputExportName, viewId));
+    const auto postprocess = graphResources.textures.postprocessOutput.has_value()
+        ? result.getExportedTextureShared(makeViewGraphName(PostProcessingStage::kOutputExportName, viewId))
+        : nullptr;
+    output.display = postprocess ? postprocess : output.color;
+    if (output.color) {
+        output.desc.colorFormat = output.color->getFormat();
+        if (!output.desc.hasExtent()) {
+            output.desc.extent = output.color->getExtent();
+        }
+    }
+    if (output.depth) {
+        output.desc.depthFormat = output.depth->getFormat();
+    }
+    return output;
 }
 
 DeferredAttachmentFormats DeferredRenderPipeline::buildGBufferSnapshotFormats() const
@@ -1193,7 +1317,7 @@ void DeferredRenderPipeline::refreshGBufferStageState()
     }
 
     if (_gBufferStage) {
-        _gBufferStage->refreshPipelineFormats(_currentGBufferResources.formats);
+        _gBufferStage->refreshPipelineFormats(buildGBufferSnapshotFormats());
     }
 
     if (_lightStage) {
@@ -1206,11 +1330,11 @@ void DeferredRenderPipeline::refreshGBufferStageState()
 void DeferredRenderPipeline::refreshViewportStageState()
 {
     if (_lightStage) {
-        _lightStage->refreshPipelineFormats(_currentViewportResources.formats);
+        _lightStage->refreshPipelineFormats(buildViewportSnapshotFormats());
     }
 
     if (_overlayStage) {
-        _overlayStage->refreshPipelineFormats(_currentViewportResources.formats);
+        _overlayStage->refreshPipelineFormats(buildViewportSnapshotFormats());
     }
 }
 
@@ -1248,7 +1372,6 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
     (void)shadowSettings;
     (void)desiredShadowResolution;
     syncShadowSettings();
-    updateStageFrameInputs(frame);
 }
 
 void DeferredRenderPipeline::prepareShadowPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
@@ -1278,12 +1401,21 @@ void DeferredRenderPipeline::prepareShadowPass(const RenderPipelineFrameContext&
     PerfState::get().clearMetric(perf::sample::deferredShadow(), perf::metric::cpuTimeMs());
 }
 
-void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH)
+bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
+                                                       const RenderPipelineFrameContext& frame,
+                                                       RenderStageContext& stageCtx,
+                                                       uint32_t vpW,
+                                                       uint32_t vpH,
+                                                       ViewportOverlayStage::FrameInputs& overlayInputs,
+                                                       EnvironmentLightingSceneResources& environmentLighting,
+                                                       DescriptorSetHandle environmentLightingDS,
+                                                       FrameContext& postContext,
+                                                       DeferredFrameGraphResources& graphResources,
+                                                       std::optional<RGPassHandle> familyPredecessor)
 {
-    clearPublishedGraphOutputs();
     YA_CORE_ASSERT(_frameResources != nullptr, "Deferred pipeline frame resources are not initialized");
     if (!frame.submission || !frame.submission->isRecording()) {
-        return;
+        return false;
     }
     RenderSubmission& submission = *frame.submission;
 
@@ -1293,10 +1425,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
     if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
         view.viewportExtent = stageCtx.viewportExtent;
-    }
-
-    if (!_frameResources->prepareSkinning(submission, view)) {
-        return;
     }
 
     const bool bUseSSAO = _bEnableSSAO && _ssaoStage;
@@ -1315,11 +1443,11 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
 
     const auto* viewBinding = _frameResources->beginView(submission, view, ssao, skybox);
     if (!viewBinding) {
-        return;
+        return false;
     }
     auto* viewResources = _frameResources->mutableViewResources(submission.flightIndex(), view.viewSlot);
     if (!viewResources) {
-        return;
+        return false;
     }
     const uint32_t alignment = std::max(_render ? _render->getUniformBufferOffsetAlignment() : 1u, 1u);
     allocateDeferredViewPassResources(
@@ -1332,21 +1460,20 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         &_entityIdPass,
         _overlayStage.get(),
         &_postProcessStage,
-        &_currentOverlayFrameInputs,
+        &overlayInputs,
         *viewResources);
 
-    _currentOverlayFrameInputs.skybox.frameDescriptorSet = viewBinding->skyboxFrameDescriptorSet;
+    overlayInputs.skybox.frameDescriptorSet = viewBinding->skyboxFrameDescriptorSet;
     _gBufferStage->prepare(stageCtx);
 
-    FrameContext postContext{
+    postContext = FrameContext{
         .view           = frame.camera.view,
         .projection     = frame.camera.projection,
         .viewProjection = frame.camera.viewProjection,
         .cameraPos      = frame.camera.cameraPos,
         .extent         = {.width = vpW, .height = vpH},
     };
-    RenderGraph graph;
-    DeferredFrameGraphResources graphResources{};
+    graphResources = {};
     RenderTargetCreateInfo viewViewportSpec = _viewportRTSpec;
     RenderTargetCreateInfo viewGBufferSpec  = _gBufferRTSpec;
     const Extent2D viewExtent{vpW, vpH};
@@ -1372,9 +1499,9 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .frame                    = &frame,
             .gBufferRTSpec            = &viewGBufferSpec,
             .viewportRTSpec           = &viewViewportSpec,
-            .overlayInputs            = &_currentOverlayFrameInputs,
-            .environmentLighting      = &_currentEnvironmentLightingTextures,
-            .environmentLightingDS    = _currentEnvironmentLightingDescriptorSet,
+            .overlayInputs            = &overlayInputs,
+            .environmentLighting      = &environmentLighting,
+            .environmentLightingDS    = environmentLightingDS,
             .postContext              = &postContext,
             .viewportExtent           = viewViewportSpec.extent,
             .bUseSSAO                 = bUseSSAO,
@@ -1383,37 +1510,9 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .viewportOverlaySnapshot  = frame.viewportOverlaySnapshot,
             .viewId                   = frame.view.task ? frame.view.task->viewId : 0,
             .viewResources            = viewResources,
+            .familyPredecessor        = familyPredecessor,
         });
-
-    YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
-    RGCompiledGraph compiled{};
-    RenderGraphExecutionResult result;
-    if (!_graphExecutor->prepare(graph, compiled, &result)) {
-        _lastFrameGraphTopology = {};
-        clearPublishedGraphOutputs();
-        return;
-    }
-    _lastFrameGraphTopology = graph.describeCompiledTopology(compiled);
-
-    publishGraphExecutionResult(result, graphResources);
-
-    if (_bEnableSSAO && _ssaoStage) {
-        _ssaoStage->prepare(stageCtx);
-    }
-
-    if (_lightStage) {
-        _lightStage->prepare(stageCtx);
-    }
-    if (_overlayStage) {
-        _overlayStage->prepare(stageCtx);
-    }
-
-    [[maybe_unused]] const bool bExecuted = _graphExecutor->executeCompiled(graph, compiled, *frame.cmdBuf);
-    if (!bExecuted) {
-        _lastFrameGraphTopology = {};
-        clearPublishedGraphOutputs();
-        return;
-    }
+    return true;
 }
 
 // ═══════════════════════════════════════════════════════════════════════

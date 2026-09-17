@@ -162,8 +162,11 @@ void appendOpaquePass(RenderGraph& graph,
                       OpaquePassParams params)
 {
     [[maybe_unused]] const auto pass = graph.addPass(
-        std::string(kTopologyPassOpaque),
-        [&params, &resources](RGPassBuilder& passBuilder) {
+        makeViewGraphName(kTopologyPassOpaque, inputs.viewId),
+        [&params, &resources, predecessor = inputs.familyPredecessor](RGPassBuilder& passBuilder) {
+            if (predecessor.has_value()) {
+                passBuilder.dependsOn(*predecessor);
+            }
             if (resources.shadowDepth.has_value()) {
                 passBuilder.read(*resources.shadowDepth);
             }
@@ -211,7 +214,7 @@ void appendSkyboxPass(RenderGraph& graph,
                       SkyboxPassParams params)
 {
     [[maybe_unused]] const auto pass = graph.addPass(
-        std::string(kTopologyPassSkybox),
+        makeViewGraphName(kTopologyPassSkybox, inputs.viewId),
         [&params, &resources](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = params.renderArea,
@@ -249,7 +252,7 @@ void appendTransparentPass(RenderGraph& graph,
                            TransparentPassParams params)
 {
     [[maybe_unused]] const auto pass = graph.addPass(
-        std::string(kTopologyPassTransparent),
+        makeViewGraphName(kTopologyPassTransparent, inputs.viewId),
         [&params, &resources](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = params.renderArea,
@@ -283,7 +286,7 @@ void appendEntityIdPass(RenderGraph& graph,
                         EntityIdPassParams params)
 {
     [[maybe_unused]] const auto pass = graph.addPass(
-        std::string("Forward EntityId"),
+        makeViewGraphName("Forward EntityId", inputs.viewId),
         [&params, &resources](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = params.renderArea,
@@ -330,7 +333,7 @@ void appendOverlayPass(RenderGraph& graph,
                        OverlayPassParams params)
 {
     [[maybe_unused]] const auto pass = graph.addPass(
-        std::string(kTopologyPassOverlay),
+        makeViewGraphName(kTopologyPassOverlay, inputs.viewId),
         [&params, &resources](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = params.renderArea,
@@ -442,14 +445,14 @@ void appendPostprocessPasses(RenderGraph&                  graph,
         });
 }
 
-void exportGraphOutputs(RenderGraph& graph, const ViewportGraphResources& resources)
+void exportGraphOutputs(RenderGraph& graph, const ViewportGraphResources& resources, uint64_t viewId)
 {
-    graph.exportTexture(resources.color, std::string(forward_graph_exports::viewportColor));
-    graph.exportTexture(resources.depth, std::string(forward_graph_exports::viewportDepth));
+    graph.exportTexture(resources.color, makeViewGraphName(forward_graph_exports::viewportColor, viewId));
+    graph.exportTexture(resources.depth, makeViewGraphName(forward_graph_exports::viewportDepth, viewId));
     if (resources.resolve.isValid()) {
-        graph.exportTexture(resources.resolve, std::string(forward_graph_exports::viewportResolve));
+        graph.exportTexture(resources.resolve, makeViewGraphName(forward_graph_exports::viewportResolve, viewId));
     }
-    graph.exportTexture(resources.entityId, std::string(forward_graph_exports::entityId));
+    graph.exportTexture(resources.entityId, makeViewGraphName(forward_graph_exports::entityId, viewId));
 }
 
 } // namespace ya::forward_frame_graph

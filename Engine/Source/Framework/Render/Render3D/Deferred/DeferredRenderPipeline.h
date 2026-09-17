@@ -93,24 +93,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
         ShadowSettings shadow{};
         PostProcessingState postProcessing{};
     };
-
-    struct PublishedGraphOutputs
-    {
-        std::shared_ptr<RenderTexture> ssao{};
-        std::shared_ptr<RenderTexture> bloomExtract{};
-        std::shared_ptr<RenderTexture> bloomBlur{};
-        std::shared_ptr<RenderTexture> bloomComposite{};
-        std::shared_ptr<RenderTexture> postprocess{};
-
-        void clear()
-        {
-            ssao.reset();
-            bloomExtract.reset();
-            bloomBlur.reset();
-            bloomComposite.reset();
-            postprocess.reset();
-        }
-    };
     using InitDesc = DeferredRenderInitDesc;
 
     IRender* _render = nullptr;
@@ -168,16 +150,11 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     ImageViewHandle    _cachedAlbedoSpecImageViewHandle = nullptr;
     Extent2D           _pendingViewportExtent{};
     uint32_t           _pendingResourceRefreshMask = 0;
-    PublishedGraphOutputs _publishedGraphOutputs{};
+    DeferredPipelineDebugViews _debugViews{};
 
     // ── Frame state ───────────────────────────────────────────────────
-    DeferredGBufferResources   _currentGBufferResources{};
-    DeferredViewportResources  _currentViewportResources{};
     EntityIdViewportPass       _entityIdPass{};
-    ViewportOverlayStage::FrameInputs _currentOverlayFrameInputs{};
-    DescriptorSetHandle        _currentEnvironmentLightingDescriptorSet{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
-    EnvironmentLightingSceneResources _currentEnvironmentLightingTextures{};
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
     RGTopologyDescription               _lastFrameGraphTopology{};
 
@@ -185,33 +162,27 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     ~DeferredRenderPipeline();
 
     void init(const InitDesc& desc);
-    void tick(const RenderPipelineFrameContext& frame) override;
+    ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
     void shutdown();
 
     void onViewportResized(Rect2D rect) override;
 
     Extent2D getViewportExtent() const override
     {
-        if (_currentViewportResources.color) {
-            return _currentViewportResources.color->getExtent();
-        }
-        if (_currentViewportResources.depth) {
-            return _currentViewportResources.depth->getExtent();
-        }
-        return {};
+        return _viewportRTSpec.extent;
     }
     EFormat::T getViewportColorFormat() const override;
     EFormat::T getViewportDepthFormat() const override;
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
-    const DeferredGBufferResources& getCurrentGBufferResources() const { return _currentGBufferResources; }
-    const DeferredViewportResources& getCurrentViewportResources() const { return _currentViewportResources; }
-    std::shared_ptr<RenderTexture> getViewportOutputImageShared() const { return _currentViewportResources.colorOwner; }
-    std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const { return _publishedGraphOutputs.postprocess; }
-    std::shared_ptr<RenderTexture> getBloomExtractImageShared() const { return _publishedGraphOutputs.bloomExtract; }
-    std::shared_ptr<RenderTexture> getBloomBlurImageShared() const { return _publishedGraphOutputs.bloomBlur; }
-    std::shared_ptr<RenderTexture> getBloomCompositeImageShared() const { return _publishedGraphOutputs.bloomComposite; }
+    const DeferredGBufferResources& getCurrentGBufferResources() const { return _debugViews.gBufferResources; }
+    const DeferredViewportResources& getCurrentViewportResources() const { return _debugViews.viewportResources; }
+    std::shared_ptr<RenderTexture> getViewportOutputImageShared() const { return _debugViews.viewportResources.colorOwner; }
+    std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const { return _debugViews.postprocess; }
+    std::shared_ptr<RenderTexture> getBloomExtractImageShared() const { return _debugViews.bloomExtract; }
+    std::shared_ptr<RenderTexture> getBloomBlurImageShared() const { return _debugViews.bloomBlur; }
+    std::shared_ptr<RenderTexture> getBloomCompositeImageShared() const { return _debugViews.bloomComposite; }
     const RGTopologyDescription& getLastFrameGraphTopology() const { return _lastFrameGraphTopology; }
     void setSSAOEnabled(bool enabled)
     {
@@ -226,8 +197,8 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner, EFormat::T format) override;
     bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) override;
 
-    std::shared_ptr<RenderTexture> getViewportDepthImageShared() const override { return _currentViewportResources.depthOwner; }
-    std::shared_ptr<RenderTexture> getEntityIdImageShared() const override { return _currentViewportResources.entityIdOwner; }
+    std::shared_ptr<RenderTexture> getViewportDepthImageShared() const override { return _debugViews.viewportResources.depthOwner; }
+    std::shared_ptr<RenderTexture> getEntityIdImageShared() const override { return _debugViews.viewportResources.entityIdOwner; }
     bool           isShadowMappingEnabled() const override;
     std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
     std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
@@ -242,28 +213,40 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     void               resolveRuntimeFormats();
     [[nodiscard]] DeferredAttachmentFormats buildGBufferSnapshotFormats() const;
     [[nodiscard]] DeferredAttachmentFormats buildViewportSnapshotFormats() const;
-    [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
-    void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
+    [[nodiscard]] bool shouldSkipView(const RenderPipelineFrameContext& frame) const;
+    void               beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               invalidateGBufferDependentViews();
-    void               publishGraphExecutionResult(const RenderGraphExecutionResult& result,
-                                                   const DeferredFrameGraphResources& graphResources);
-    [[nodiscard]] DeferredGBufferResources buildPublishedGBufferResources(const RenderGraphExecutionResult& result) const;
+    [[nodiscard]] DeferredGBufferResources buildPublishedGBufferResources(const RenderGraphExecutionResult& result, uint64_t viewId) const;
     [[nodiscard]] DeferredViewportResources buildPublishedViewportResources(
         const RenderGraphExecutionResult& result,
+        uint64_t viewId,
         const std::shared_ptr<RenderTexture>& depthOwner) const;
-    void publishAttachmentResources(DeferredGBufferResources nextGBuffer,
-                                    DeferredViewportResources nextViewport);
-    void publishPostprocessOutputs(const RenderGraphExecutionResult& result,
-                                   const DeferredFrameGraphResources& graphResources);
-    void               clearPublishedGraphOutputs();
+    [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
+                                                     const DeferredFrameGraphResources& graphResources,
+                                                     const CameraFrameInput& camera,
+                                                     const SceneViewportTask* task,
+                                                     uint64_t viewId) const;
     void               refreshGBufferStageState();
     void               refreshViewportStageState();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
-    void               updateStageFrameInputs(const RenderPipelineFrameContext& frame);
+    [[nodiscard]] ViewportOverlayStage::FrameInputs buildOverlayFrameInputs(
+        const RenderPipelineFrameContext& frame,
+        EnvironmentLightingSceneResources& environmentLighting,
+        DescriptorSetHandle& environmentLightingDS) const;
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
     void               prepareShadowPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
-    void               executeDeferredMainGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
+    bool               appendDeferredViewToGraph(RenderGraph& graph,
+                                                 const RenderPipelineFrameContext& frame,
+                                                 RenderStageContext& stageCtx,
+                                                 uint32_t vpW,
+                                                 uint32_t vpH,
+                                                 ViewportOverlayStage::FrameInputs& overlayInputs,
+                                                 EnvironmentLightingSceneResources& environmentLighting,
+                                                 DescriptorSetHandle environmentLightingDS,
+                                                 FrameContext& postContext,
+                                                 DeferredFrameGraphResources& graphResources,
+                                                 std::optional<RGPassHandle> familyPredecessor);
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               markPendingResourceRefresh(EDeferredPendingResourceRefresh refresh);
     [[nodiscard]] bool hasPendingResourceRefresh(EDeferredPendingResourceRefresh refresh) const;

@@ -93,7 +93,8 @@ void BasicShadowMapTechnique::prepare(RenderSubmission& submission, RenderViewRe
 ShadowGraphOutputs BasicShadowMapTechnique::appendGraphPasses(
     RenderGraph& graph,
     uint32_t flightIndex,
-    const RenderFrameData& frameData)
+    const RenderFrameData& frameData,
+    std::optional<RGPassHandle> dependency)
 {
     ShadowGraphOutputs outputs{};
     if (!_settings.isEnabled() || _preparedViewSlot == RenderViewRecordingContext::kInvalidViewSlot) {
@@ -106,7 +107,7 @@ ShadowGraphOutputs BasicShadowMapTechnique::appendGraphPasses(
     if (auto* binding = _frameResources.mutableViewBinding(flightIndex, _preparedViewSlot)) {
         payload.pointShadow = &binding->pointShadow;
     }
-    std::optional<RGPassHandle> lastPass;
+    std::optional<RGPassHandle> lastPass = dependency;
 
     if (_depthResource && _shadowDepthArrayView) {
         outputs.shadowDepth = graph.importTexture(makeImportedTextureDesc(

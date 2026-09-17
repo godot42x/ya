@@ -246,7 +246,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
     if (graphFaces->empty()) return rasterDependency;
 
     const auto rasterPass = graph.addPass(
-        "Point Shadow Faces",
+        std::format("Point Shadow Faces.view{}", payload.viewSlot),
         [graphFaces, skinningBuffer, instanceData, drawCommands, visibleInstances, rasterDependency](RGPassBuilder& pass) {
             if (rasterDependency.has_value()) pass.dependsOn(*rasterDependency);
             pass.storageRead(skinningBuffer);

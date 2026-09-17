@@ -128,12 +128,12 @@ void BloomPostprocessing::clearPreparedResources()
     _compositeImage.reset();
 }
 
-void BloomPostprocessing::capturePreparedResources(const RenderGraphExecutionResult& result)
+void BloomPostprocessing::capturePreparedResources(const RenderGraphExecutionResult& result, uint64_t viewId)
 {
-    _extractImage   = result.getExportedTextureShared(kExtractExportName);
-    _blurPingImage  = result.getExportedTextureShared(kBlurPingExportName);
-    _blurPongImage  = result.getExportedTextureShared(kBlurPongExportName);
-    _compositeImage = result.getExportedTextureShared(kOutputExportName);
+    _extractImage   = result.getExportedTextureShared(makeViewGraphName(kExtractExportName, viewId));
+    _blurPingImage  = result.getExportedTextureShared(makeViewGraphName(kBlurPingExportName, viewId));
+    _blurPongImage  = result.getExportedTextureShared(makeViewGraphName(kBlurPongExportName, viewId));
+    _compositeImage = result.getExportedTextureShared(makeViewGraphName(kOutputExportName, viewId));
 }
 
 void BloomPostprocessing::initExtractPipeline()
@@ -230,15 +230,15 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
         blurPong     = createViewPersistentTexture(graph, bloomDesc, "Bloom.BlurPong", desc.viewId);
     }
 
-    graph.exportTexture(output, std::string(kOutputExportName));
+    graph.exportTexture(output, makeViewGraphName(kOutputExportName, desc.viewId));
     if (bloomExtract.has_value()) {
-        graph.exportTexture(*bloomExtract, std::string(kExtractExportName));
+        graph.exportTexture(*bloomExtract, makeViewGraphName(kExtractExportName, desc.viewId));
     }
     if (blurPing.has_value()) {
-        graph.exportTexture(*blurPing, std::string(kBlurPingExportName));
+        graph.exportTexture(*blurPing, makeViewGraphName(kBlurPingExportName, desc.viewId));
     }
     if (blurPong.has_value()) {
-        graph.exportTexture(*blurPong, std::string(kBlurPongExportName));
+        graph.exportTexture(*blurPong, makeViewGraphName(kBlurPongExportName, desc.viewId));
     }
 
     if (bBloomEnabled) {
@@ -248,7 +248,7 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
         extractPC.intensity = desc.state->bloomExtractIntensity;
         const RGTextureHandle bloomExtractHandle = *bloomExtract;
         [[maybe_unused]] const auto extractPass = graph.addPass(
-            "BloomExtract",
+            makeViewGraphName("BloomExtract", desc.viewId),
             [scene, bloomExtractHandle, renderExtent = desc.renderExtent](RGPassBuilder& pass) {
                 pass.read(scene);
                 pass.declareRaster({
@@ -294,7 +294,7 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
             blurPC.texelSize  = glm::vec2(1.0f / static_cast<float>(desc.renderExtent.width), 1.0f / static_cast<float>(desc.renderExtent.height));
             blurPC.horizontal = bHorizontal ? 1u : 0u;
             [[maybe_unused]] const auto blurPass = graph.addPass(
-                bHorizontal ? "BloomBlurHorizontal" : "BloomBlurVertical",
+                makeViewGraphName(bHorizontal ? "BloomBlurHorizontal" : "BloomBlurVertical", desc.viewId),
                 [blurInputHandle, blurTargetHandle, renderExtent = desc.renderExtent](RGPassBuilder& pass) {
                     pass.read(blurInputHandle);
                     pass.declareRaster({
@@ -333,7 +333,7 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
     compositePC.bloomStrength = desc.state->bloomStrength;
     compositePC.bloomEnabled  = bBloomEnabled ? 1u : 0u;
     [[maybe_unused]] const auto compositePass = graph.addPass(
-        "BloomComposite",
+        makeViewGraphName("BloomComposite", desc.viewId),
         [scene, bBloomEnabled, renderExtent = desc.renderExtent, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{}), output](RGPassBuilder& pass) {
             pass.read(scene);
             if (bBloomEnabled) {
@@ -397,7 +397,7 @@ void BloomPostprocessing::render(const RenderDesc& desc)
         return;
     }
 
-    capturePreparedResources(result);
+    capturePreparedResources(result, desc.viewId);
 }
 
 } // namespace ya

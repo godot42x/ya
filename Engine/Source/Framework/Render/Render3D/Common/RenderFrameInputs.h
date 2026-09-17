@@ -202,6 +202,18 @@ struct PresentFrameInput
     int32_t                imageIndex = -1;
 };
 
+/// One Scene family to record into a single graph on the live submission.
+struct ViewFamilyRecordContext
+{
+    ICommandBuffer*                                          cmdBuf       = nullptr;
+    CameraFrameInput                                         hostCamera{};
+    RenderSubmission*                                        submission   = nullptr;
+    const SceneRenderPlan*                                   plan         = nullptr;
+    const SceneViewFamilyPlan*                               family       = nullptr;
+    std::vector<SceneViewRecording>                          views;
+    std::shared_ptr<const RenderViewportOverlaySnapshot>     overlaySnapshot;
+};
+
 /// Recording extras plus the camera packet consumed by Forward/Deferred.
 /// Pipelines read `camera` for matrices and extent; they do not query
 /// swapchain or NativeWindow. `submission` is the live RenderSubmission

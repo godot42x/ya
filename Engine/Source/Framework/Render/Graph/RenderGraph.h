@@ -659,6 +659,13 @@ class RenderGraph
     [[nodiscard]] const std::vector<RGTextureResource>& getTextures() const { return _textures; }
     [[nodiscard]] const std::vector<RGBufferResource>& getBuffers() const { return _buffers; }
     [[nodiscard]] const std::vector<RGPass>& getPasses() const { return _passes; }
+    [[nodiscard]] std::optional<RGPassHandle> lastPassHandle() const
+    {
+        if (_passes.empty()) {
+            return std::nullopt;
+        }
+        return _passes.back().handle;
+    }
 };
 
 } // namespace ya

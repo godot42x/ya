@@ -31,6 +31,10 @@ struct RenderViewOutput
     std::shared_ptr<RenderTexture> depth;
     std::shared_ptr<RenderTexture> display;
     std::shared_ptr<RenderTexture> entityId;
+    std::shared_ptr<RenderTexture> bloomExtract;
+    std::shared_ptr<RenderTexture> bloomBlur;
+    std::shared_ptr<RenderTexture> bloomComposite;
+    std::shared_ptr<RenderTexture> ssao;
 
     [[nodiscard]] std::shared_ptr<RenderTexture> displayImage() const
     {

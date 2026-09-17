@@ -41,6 +41,7 @@ struct DeferredFrameGraphPassContext
     bool                                     bPostprocessOutputIsSRGB = false;
     std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
     uint64_t                                 viewId = 0;
+    std::optional<RGPassHandle>              familyPredecessor = std::nullopt;
 
     ShadowStage*          shadowStage = nullptr;
     GBufferStage&         gBufferStage;

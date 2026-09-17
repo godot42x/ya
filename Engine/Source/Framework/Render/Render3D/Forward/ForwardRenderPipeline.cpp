@@ -11,10 +11,15 @@
 #include "Render3D/Common/PostProcessingStateConfig.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/ViewPassResources.h"
+#include "Render3D/Common/ViewPersistentResourceKey.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
+#include "Render3D/Pipelines/BloomPostprocessing.h"
+#include "Graph/RenderGraph.h"
 #include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
 #include "Scene/Core/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <memory>
+#include <vector>
 
 namespace ya
 {
@@ -325,43 +330,190 @@ void ForwardRenderPipeline::initStageResources()
         if (_shadowStage) { _shadowStage->destroy(); _shadowStage.reset(); } });
 }
 
-void ForwardRenderPipeline::tick(const RenderPipelineFrameContext& frame)
+ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecordContext& ctx)
 {
     YA_PROFILE_FUNCTION();
 
-    if (shouldSkipTick(frame)) {
-        return;
+    ViewFamilyRenderResult result;
+    if (ctx.family) {
+        result.key = ctx.family->key;
+    }
+    if (!ctx.cmdBuf || !ctx.submission || !ctx.submission->isRecording()) {
+        return result;
     }
 
-    RenderStageContext stageCtx{};
-    {
-        YA_PROFILE_SCOPE("ForwardPipeline/BeginTick");
-        beginTick(frame, stageCtx);
+    applyPendingPostProcessSettings();
+    _postProcessStage.beginFrame();
+
+    std::vector<SceneViewRecording> recordings = ctx.views;
+    if (recordings.empty()) {
+        recordings.push_back(SceneViewRecording{
+            .task      = ctx.plan ? ctx.plan->displayRootTask() : nullptr,
+            .frameData = ctx.hostCamera.frameData,
+        });
     }
+
+    struct ForwardFamilyViewBranch
     {
-        YA_PROFILE_SCOPE("ForwardPipeline/ShadowPass");
-        executeShadowPass(frame, stageCtx);
+        RenderPipelineFrameContext frame{};
+        RenderStageContext         stageCtx{};
+        FrameContext               postContext{};
+        std::unique_ptr<ForwardViewportStage::PassContext> viewportPassContext;
+        ForwardFrameResourceSet::Binding frameBinding{};
+        ForwardFrameResourceSet::ViewResources* viewResources = nullptr;
+    };
+
+    RenderGraph graph;
+    std::vector<ForwardFamilyViewBranch> liveBranches;
+    liveBranches.reserve(recordings.size());
+    std::optional<RGPassHandle> familyPredecessor;
+    bool preparedSkinning = false;
+
+    for (const SceneViewRecording& recording : recordings) {
+        ForwardFamilyViewBranch branch;
+        const CameraFrameInput camera = cameraForViewRecording(ctx.hostCamera, recording);
+        Extent2D viewExtent           = Extent2D::fromVec2(camera.viewportRect.extent);
+        if (recording.task && recording.task->output.hasExtent()) {
+            viewExtent = recording.task->output.extent;
+        }
+        const bool bDisplayRoot = recording.task && ctx.plan && recording.task == ctx.plan->displayRootTask();
+        branch.frame = RenderPipelineFrameContext{
+            .cmdBuf                  = ctx.cmdBuf,
+            .camera                  = camera,
+            .viewportOverlaySnapshot = bDisplayRoot ? ctx.overlaySnapshot : nullptr,
+            .submission              = ctx.submission,
+            .view                    = RenderViewRecordingContext{
+                .task           = recording.task,
+                .frameData      = recording.frameData ? recording.frameData : camera.frameData,
+                .viewportExtent = viewExtent,
+            },
+        };
+        if (shouldSkipView(branch.frame)) {
+            continue;
+        }
+
+        captureShadowSettings(branch.frame);
+        syncFrameSettings(branch.frame);
+        applyPendingResourceRefreshes();
+        beginViewRecording(branch.frame, branch.stageCtx);
+        executeShadowPass(branch.frame, branch.stageCtx);
+
+        RenderViewRecordingContext view = branch.frame.view;
+        if (!view.frameData) {
+            view.frameData = branch.frame.camera.frameData;
+        }
+        if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
+            view.viewportExtent = branch.stageCtx.viewportExtent;
+        }
+        if (_frameResources && !preparedSkinning) {
+            if (!_frameResources->prepareSkinning(*branch.frame.submission, view)) {
+                YA_CORE_ERROR("Forward viewport skinning resource prepare failed");
+            }
+            preparedSkinning = true;
+        }
+
+        _viewportStage->prepare(branch.stageCtx);
+        if (_frameResources) {
+            const auto* binding = _frameResources->beginView(
+                *branch.frame.submission, view, _viewportStage->getFramePayloads());
+            if (!binding) {
+                YA_CORE_ERROR("Forward viewport view binding prepare failed");
+                continue;
+            }
+            branch.frameBinding = *binding;
+            branch.viewResources = _frameResources->mutableViewResources(
+                branch.frame.submission->flightIndex(), view.viewSlot);
+            if (branch.viewResources) {
+                const uint32_t alignment = std::max(_render ? _render->getUniformBufferOffsetAlignment() : 1u, 1u);
+                allocateForwardViewPassResources(
+                    *branch.frame.submission,
+                    _render,
+                    alignment,
+                    branch.stageCtx,
+                    &_entityIdPass,
+                    _viewportStage->getAuxPasses(),
+                    &_postProcessStage,
+                    *branch.viewResources);
+            }
+        }
+
+        branch.postContext = {};
+        if (const RenderFrameData* frameData = branch.frame.camera.frameData) {
+            branch.postContext.view                 = frameData->view;
+            branch.postContext.projection           = frameData->projection;
+            branch.postContext.viewProjection       = frameData->viewProjection;
+            branch.postContext.cameraPos            = frameData->cameraPos;
+            branch.postContext.bHasDirectionalLight = frameData->sceneSnapshot && frameData->sceneSnapshot->bHasDirectionalLight;
+            branch.postContext.directionalLight     = frameData->directionalLight;
+            branch.postContext.numPointLights       = frameData->numPointLights;
+            branch.postContext.pointLights          = frameData->pointLights;
+            branch.postContext.viewOwner            = frameData->viewOwner;
+            branch.postContext.extent               = frameData->viewportExtent;
+        }
+        branch.postContext.view           = branch.frame.camera.view;
+        branch.postContext.projection     = branch.frame.camera.projection;
+        branch.postContext.viewProjection = branch.frame.camera.viewProjection;
+        branch.postContext.cameraPos      = branch.frame.camera.cameraPos;
+        branch.postContext.extent         = branch.stageCtx.viewportExtent;
+
+        liveBranches.push_back(std::move(branch));
+        ForwardFamilyViewBranch& live = liveBranches.back();
+        live.viewportPassContext = std::make_unique<ForwardViewportStage::PassContext>(
+            _viewportStage->buildPassContext(live.stageCtx));
+        if (live.viewResources) {
+            live.viewportPassContext->debug = live.viewResources->debug;
+        }
+        if (!appendViewportPassGraph(
+                graph,
+                live.frame,
+                live.stageCtx,
+                live.postContext,
+                *live.viewportPassContext,
+                live.frameBinding,
+                live.viewResources,
+                familyPredecessor)) {
+            liveBranches.pop_back();
+            continue;
+        }
+        familyPredecessor = graph.lastPassHandle();
     }
-    {
-        YA_PROFILE_SCOPE("ForwardPipeline/ViewportPass");
-        executeViewportPass(frame, stageCtx);
+
+    if (liveBranches.empty()) {
+        return result;
     }
+
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "ForwardRenderPipeline graph executor is not initialized");
+    RGCompiledGraph compiled{};
+    RenderGraphExecutionResult execution;
+    const bool bExecuted = _graphExecutor->execute(graph, *ctx.cmdBuf, &compiled, &execution);
+    if (!bExecuted) {
+        _lastFrameGraphTopology = {};
+        return result;
+    }
+    _lastFrameGraphTopology = graph.describeCompiledTopology(compiled);
+
+    for (const ForwardFamilyViewBranch& branch : liveBranches) {
+        const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->viewId : 0;
+        RenderViewOutput output = collectViewOutput(
+            execution, branch.frame.camera, branch.frame.view.task, viewId, branch.stageCtx.viewportExtent);
+        const bool bDisplayRoot = branch.frame.view.task && ctx.plan &&
+                                  branch.frame.view.task == ctx.plan->displayRootTask();
+        if (bDisplayRoot || result.views.empty()) {
+            _viewportResources.publish(output.color, output.depth, nullptr, output.entityId, branch.stageCtx.viewportExtent);
+        }
+        result.views.push_back(std::move(output));
+    }
+    return result;
 }
 
-bool ForwardRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& frame) const
+bool ForwardRenderPipeline::shouldSkipView(const RenderPipelineFrameContext& frame) const
 {
     YA_CORE_ASSERT(frame.cmdBuf, "ForwardRenderPipeline requires command buffer");
     return !frame.camera.hasOffscreenExtent();
 }
 
-void ForwardRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
+void ForwardRenderPipeline::beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
-    applyPendingPostProcessSettings();
-    _postProcessStage.beginFrame();
-    captureShadowSettings(frame);
-    syncFrameSettings(frame);
-    applyPendingResourceRefreshes();
-
     Extent2D viewExtent = frame.view.viewportExtent;
     if (viewExtent.width == 0 || viewExtent.height == 0) {
         viewExtent = _viewportResources.extent;
@@ -674,88 +826,10 @@ void ForwardRenderPipeline::executeShadowPass(const RenderPipelineFrameContext& 
     _shadowStage->prepareView(*frame.submission, view);
 }
 
-void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
-{
-    if (!frame.submission || !frame.submission->isRecording()) {
-        YA_CORE_ERROR("Forward viewport pass requires a recording submission");
-        return;
-    }
-    RenderSubmission& submission = *frame.submission;
-
-    RenderViewRecordingContext view = frame.view;
-    if (!view.frameData) {
-        view.frameData = frame.camera.frameData;
-    }
-    if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
-        view.viewportExtent = stageCtx.viewportExtent;
-    }
-
-    if (_frameResources && !_frameResources->prepareSkinning(submission, view)) {
-        YA_CORE_ERROR("Forward viewport skinning resource prepare failed");
-    }
-
-    _viewportStage->prepare(stageCtx);
-
-    const ForwardFrameResourceSet::Binding* viewBinding = nullptr;
-    ForwardFrameResourceSet::ViewResources* viewResources = nullptr;
-    if (_frameResources) {
-        viewBinding = _frameResources->beginView(submission, view, _viewportStage->getFramePayloads());
-        if (!viewBinding) {
-            YA_CORE_ERROR("Forward viewport view binding prepare failed");
-        }
-        viewResources = _frameResources->mutableViewResources(submission.flightIndex(), view.viewSlot);
-        if (viewResources) {
-            const uint32_t alignment = std::max(_render ? _render->getUniformBufferOffsetAlignment() : 1u, 1u);
-            allocateForwardViewPassResources(
-                submission,
-                _render,
-                alignment,
-                stageCtx,
-                &_entityIdPass,
-                _viewportStage->getAuxPasses(),
-                &_postProcessStage,
-                *viewResources);
-        }
-    }
-
-    YA_CORE_ASSERT(!_viewportRTSpec.attachments.colorAttach.empty(),
-                   "Forward viewport pass requires a color attachment spec");
-    YA_CORE_ASSERT(_viewportRTSpec.attachments.depthAttach.has_value(),
-                   "Forward viewport pass requires a depth attachment spec");
-
-    FrameContext postContext{};
-    if (const RenderFrameData* frameData = frame.camera.frameData) {
-        postContext.view                 = frameData->view;
-        postContext.projection           = frameData->projection;
-        postContext.viewProjection       = frameData->viewProjection;
-        postContext.cameraPos            = frameData->cameraPos;
-        postContext.bHasDirectionalLight = frameData->sceneSnapshot && frameData->sceneSnapshot->bHasDirectionalLight;
-        postContext.directionalLight     = frameData->directionalLight;
-        postContext.numPointLights       = frameData->numPointLights;
-        postContext.pointLights          = frameData->pointLights;
-        postContext.viewOwner            = frameData->viewOwner;
-        postContext.extent               = frameData->viewportExtent;
-    }
-    postContext.view           = frame.camera.view;
-    postContext.projection     = frame.camera.projection;
-    postContext.viewProjection = frame.camera.viewProjection;
-    postContext.cameraPos      = frame.camera.cameraPos;
-    postContext.extent         = stageCtx.viewportExtent;
-
-    [[maybe_unused]] const bool bExecuted = executeViewportPassGraph(
-        frame,
-        stageCtx,
-        postContext,
-        viewBinding ? *viewBinding : ForwardFrameResourceSet::Binding{},
-        viewResources);
-    YA_CORE_ASSERT(bExecuted, "Forward viewport graph execution failed");
-}
-
 void ForwardRenderPipeline::shutdown()
 {
     _entityIdPass.destroy();
     _runtimeServices = nullptr;
-    _currentPostprocessOutput.reset();
     if (_frameResources) {
         _frameResources->destroy();
         _frameResources.reset();
@@ -768,16 +842,17 @@ void ForwardRenderPipeline::shutdown()
     _deleter.clear();
 }
 
-bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameContext& frame,
-                                                     RenderStageContext&             stageCtx,
-                                                     FrameContext&                    postContext,
-                                                     const ForwardFrameResourceSet::Binding& frameBinding,
-                                                     ForwardFrameResourceSet::ViewResources* viewResources)
+bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
+                                                    const RenderPipelineFrameContext& frame,
+                                                    RenderStageContext&             stageCtx,
+                                                    FrameContext&                    postContext,
+                                                    ForwardViewportStage::PassContext& viewportPassContext,
+                                                    const ForwardFrameResourceSet::Binding& frameBinding,
+                                                    ForwardFrameResourceSet::ViewResources* viewResources,
+                                                    std::optional<RGPassHandle> familyPredecessor)
 {
     YA_CORE_ASSERT(_graphExecutor != nullptr, "ForwardRenderPipeline graph executor is not initialized");
 
-    // FG-704: build the direction gizmo snapshot before graph construction so
-    // passes never query the ECS during execute.
     std::vector<ForwardDirectionGizmoInput> directionGizmos;
     if (auto* activeScene = _runtimeServices ? _runtimeServices->getActiveScene() : nullptr) {
         const auto& dirView = activeScene->getRegistry().view<TransformComponent, DirectionComponent>();
@@ -788,11 +863,6 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
         }
     }
 
-    RenderGraph graph;
-    auto viewportPassContext = _viewportStage->buildPassContext(stageCtx);
-    if (viewResources) {
-        viewportPassContext.debug = viewResources->debug;
-    }
     RenderTargetCreateInfo viewRTSpec = _viewportRTSpec;
     if (stageCtx.viewportExtent.width > 0 && stageCtx.viewportExtent.height > 0) {
         viewRTSpec.extent = stageCtx.viewportExtent;
@@ -817,25 +887,46 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             .viewportOverlaySnapshot  = frame.viewportOverlaySnapshot,
             .viewId                   = frame.view.task ? frame.view.task->viewId : 0,
             .viewResources            = viewResources,
+            .familyPredecessor        = familyPredecessor,
         });
+    return true;
+}
 
-    RGCompiledGraph compiled{};
-    RenderGraphExecutionResult result;
-    const bool bExecuted = _graphExecutor->execute(graph, *frame.cmdBuf, &compiled, &result);
-    if (bExecuted) {
-        _lastFrameGraphTopology = graph.describeCompiledTopology(compiled);
-        _viewportResources.publish(
-            result.getExportedTextureShared(forward_graph_exports::viewportColor),
-            result.getExportedTextureShared(forward_graph_exports::viewportDepth),
-            result.getExportedTextureShared(forward_graph_exports::viewportResolve),
-            result.getExportedTextureShared(forward_graph_exports::entityId),
-            viewRTSpec.extent);
-        _currentPostprocessOutput = result.getExportedTextureShared(PostProcessingStage::kOutputExportName);
+RenderViewOutput ForwardRenderPipeline::collectViewOutput(const RenderGraphExecutionResult& result,
+                                                          const CameraFrameInput& camera,
+                                                          const SceneViewportTask* task,
+                                                          uint64_t viewId,
+                                                          Extent2D viewExtent) const
+{
+    RenderViewOutput output;
+    if (task) {
+        output.desc = task->output;
     }
-    else {
-        _lastFrameGraphTopology = {};
+    output.desc.viewId = viewId != 0 ? viewId : (task ? task->viewId : 0);
+    if (!output.desc.hasExtent()) {
+        output.desc.extent = viewExtent.width > 0 ? viewExtent : Extent2D::fromVec2(camera.viewportRect.extent);
     }
-    return bExecuted;
+    output.color    = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::viewportColor, viewId));
+    output.depth    = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::viewportDepth, viewId));
+    output.entityId = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::entityId, viewId));
+    output.bloomExtract = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kExtractExportName, viewId));
+    output.bloomBlur    = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kBlurPongExportName, viewId));
+    if (!output.bloomBlur) {
+        output.bloomBlur = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kBlurPingExportName, viewId));
+    }
+    output.bloomComposite = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kOutputExportName, viewId));
+    const auto postprocess = result.getExportedTextureShared(makeViewGraphName(PostProcessingStage::kOutputExportName, viewId));
+    output.display = postprocess ? postprocess : output.color;
+    if (output.color) {
+        output.desc.colorFormat = output.color->getFormat();
+        if (!output.desc.hasExtent()) {
+            output.desc.extent = output.color->getExtent();
+        }
+    }
+    if (output.depth) {
+        output.desc.depthFormat = output.depth->getFormat();
+    }
+    return output;
 }
 
 void ForwardRenderPipeline::onViewportResized(Rect2D rect)

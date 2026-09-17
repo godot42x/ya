@@ -249,12 +249,11 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     void                   renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf);
     void                   ensureViewportRectInitialized(const FrameInput& input);
     bool                   beginFrameCommandBuffer(const FrameInput& input, std::shared_ptr<ICommandBuffer>& cmdBuf);
-    void                   beginViewportPassAndTickPipeline(
-                              const CameraFrameInput& camera,
-                              const SceneViewRecording& recording,
+    void                   recordViewFamilies(
+                              const FrameInput& input,
                               ICommandBuffer* cmdBuf,
                               std::shared_ptr<RenderViewportOverlaySnapshot> overlaySnapshot);
-    void                   publishRecordedViewOutput(const CameraFrameInput& camera, const SceneViewportTask* task);
+    void                   publishFamilyResult(uint32_t flightIndex, ViewFamilyRenderResult result);
     void                   retainPublishedViewOutputs(uint32_t flightIndex, ICommandBuffer* cmdBuf);
     [[nodiscard]] const RenderViewOutput* publishedViewOutput() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> pipelineViewportColorImage() const;

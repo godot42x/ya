@@ -42,7 +42,8 @@ class BasicShadowMapTechnique : public IShadowTechnique
     [[nodiscard]] ShadowGraphOutputs appendGraphPasses(
         RenderGraph& graph,
         uint32_t flightIndex,
-        const RenderFrameData& frameData);
+        const RenderFrameData& frameData,
+        std::optional<RGPassHandle> dependency = std::nullopt);
 
   private:
     void                    rebuildLayerTextures(const std::shared_ptr<IImage>& shadowImage);

@@ -49,6 +49,7 @@ struct BuildInputs
     std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
     uint64_t                                         viewId              = 0;
     const ForwardFrameResourceSet::ViewResources*    viewResources       = nullptr;
+    std::optional<RGPassHandle>                      familyPredecessor   = std::nullopt;
 };
 
 struct Dependencies
@@ -74,7 +75,7 @@ void appendPostprocessPasses(RenderGraph& graph,
                              const BuildInputs& inputs,
                              const ViewportGraphResources& resources);
 
-void exportGraphOutputs(RenderGraph& graph, const ViewportGraphResources& resources);
+void exportGraphOutputs(RenderGraph& graph, const ViewportGraphResources& resources, uint64_t viewId);
 
 } // namespace forward_frame_graph
 

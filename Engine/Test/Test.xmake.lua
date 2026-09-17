@@ -61,6 +61,7 @@ if get_config("ya_profile") ~= "gui" then
                   "./Source/RenderViewBindingTableTest.cpp",
                   "./Source/RenderViewOutputTableTest.cpp",
                   "./Source/ViewPersistentResourceKeyTest.cpp",
+                  "./Source/ViewFamilyRendererTest.cpp",
                   "./Source/ForwardFrameGraphOrchestratorTest.cpp",
                   "./Source/CameraFrustumOverlayTest.cpp")
         add_deps("ya-render-3d", "ya-render-graph", "ya-foundation-core")

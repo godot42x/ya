@@ -26,7 +26,9 @@ struct IRenderPipelineExecution
     virtual ~IRenderPipelineExecution() = default;
 
     virtual void onViewportResized(Rect2D rect) = 0;
-    virtual void tick(const RenderPipelineFrameContext& frame) = 0;
+    /// Compile and record one Scene family graph; return each View's output.
+    /// Product recording does not use tick/beginTick/getCurrent.
+    virtual ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) = 0;
 
     [[nodiscard]] virtual Extent2D   getViewportExtent() const          = 0;
     [[nodiscard]] virtual EFormat::T getViewportColorFormat() const     = 0;
@@ -64,5 +66,9 @@ struct IRenderPipeline : IRenderPipelineExecution,
 {
     ~IRenderPipeline() override = default;
 };
+
+/// Coordinator-facing name for the family graph renderer. Concrete
+/// Forward/Deferred pipelines keep their pass types.
+using ISceneViewFamilyRenderer = IRenderPipeline;
 
 } // namespace ya
