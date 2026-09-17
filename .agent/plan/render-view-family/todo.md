@@ -106,7 +106,8 @@
 清单见 `temporal_semantics.md`。每批只做一批，避免半改名状态；外部 automation config 键与脚本/UI 可见名不改。
 
 - [x] P1a：M1 host tick 主体——`GameRuntimeFrameOrchestrator`→`GameRuntimeTickOrchestrator`（含文件与转发头）、`RenderRuntimeClockState`→`HostClockState`（字段 `hostTick`）、`App::_frameIndex`/`getFrameIndex`/`currentFrameIndex`→`_hostTick`/`getHostTick`/`currentHostTick`、`IRenderRuntimeServices` 与 `RenderDeviceState` 的 `getHostTick`、`setHostTickProvider`/`_getHostTick`、`lastUsedTick`/`currentHostTick`、`SceneRenderScheduler.beginTick`/`clearTick`/`isTickOpen`/`hostTick`、`SceneRenderPlan::hostTick`、automation 的 `markTickCompleted`/`completedTickCount`/`exitAfterTick`/`AppAutomationTickContext`/`recordedTick`/`earliestTick`/`screenshotTick`。构建与专项测试全通过。
-- [ ] P1b：M1 剩余——`AppRenderFrameState`→`HostViewState`（等 GameEditor 在途改动落地）、`DebugPrimitives::updateFrameUBO`/`_frameData`、perf key `Frame/*`、tick 排期字段（`_nextResolveAuditFrame` 等）。
+- [x] P1b-1：`AppRenderFrameState`→`HostViewState`（文件/转发头、`AppRenderState` 字段、`AppRenderServices` 访问器、`EditorViewportCompositor`/`EditorSurfaceContext` 参数）。
+- [ ] P1b-2：`DebugPrimitives::updateFrameUBO`/`_frameData`（按 `flightIndex` 索引，随 P2 flight 轴）、perf key `Frame/*`、tick 排期字段（`_nextResolveAuditFrame` 等）。
 - [ ] P1c：M2 `SceneFrameSnapshot`→`SceneSnapshot`。
 - [ ] P2：M4 recording / flight（`RenderSubmission`→`FrameRecording`、`frameToken`→`recordingSerial`、`flightIndex`→`flightSlot`、`FrameUploadArena`→`UploadArena`、`PerFlightFrameResourceSetBase`→`SkinningLayoutProvider`）+ M5 present（`PresentFrameInput`、`FPresentFrame`）+ 公开 `Renderer` 合并（4.0.3 checkpoint 2 / 3）。
 - [ ] P3：M3 C++ 部分（`RenderFrameData`→`PreparedViewRenderData`、删除 `CameraFrameInput` / `RenderPipelineFrameContext` / `RenderViewRecordingContext` / `SceneViewRecording` 四层转译、`RenderStageContext`→`PassRecordContext`、`FrameContext`→`ViewPassContext`、`RenderFrameExtractor` 拆为 SceneSnapshotBuilder + ViewPreparer）+ 4.0.3 checkpoint 4。

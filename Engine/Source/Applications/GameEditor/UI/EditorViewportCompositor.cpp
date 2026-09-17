@@ -2,7 +2,7 @@
 
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/UI/EditorViewportOverlayRecord.h"
-#include "GameRuntime/AppRenderFrameState.h"
+#include "GameRuntime/HostViewState.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "GUI/Compose/Render2DComposePass.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
@@ -41,15 +41,15 @@ std::shared_ptr<RenderTexture> createEditorViewportImage(IRender& render, const 
         });
 }
 
-FRender2DComposePassDesc worldComposeDesc(const AppRenderFrameState& renderFrame)
+FRender2DComposePassDesc worldComposeDesc(const HostViewState& hostView)
 {
     return FRender2DComposePassDesc{
         .kind   = ERender2DComposePassKind::EditorViewportCompose,
         .camera = {
-            .position       = renderFrame.cameraPos,
-            .view           = renderFrame.view,
-            .projection     = renderFrame.projection,
-            .viewProjection = renderFrame.projection * renderFrame.view,
+            .position       = hostView.cameraPos,
+            .view           = hostView.view,
+            .projection     = hostView.projection,
+            .viewProjection = hostView.projection * hostView.view,
         },
     };
 }
@@ -69,7 +69,7 @@ void EditorViewportCompositor::compose(IRender&                      render,
                                        ICommandBuffer&               commandBuffer,
                                        const RenderViewportSnapshot& snapshot,
                                        EditorLayer&                  layer,
-                                       const AppRenderFrameState&    renderFrame,
+                                       const HostViewState&          hostView,
                                        const Extent2D&               canvasTargetExtent)
 {
     // 2D always takes the canvas path: the world graph is disabled, so a
@@ -81,10 +81,10 @@ void EditorViewportCompositor::compose(IRender&                      render,
 
     auto source = snapshot.viewportImageOwner;
     if (!source || !source->getImageShared() || !source->getImageView()) {
-        composeWorldFallback(render, commandBuffer, layer, renderFrame, canvasTargetExtent);
+        composeWorldFallback(render, commandBuffer, layer, hostView, canvasTargetExtent);
         return;
     }
-    composeWorldFromScene(render, commandBuffer, snapshot, layer, renderFrame);
+    composeWorldFromScene(render, commandBuffer, snapshot, layer, hostView);
 }
 
 void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
@@ -164,7 +164,7 @@ void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
 void EditorViewportCompositor::composeWorldFallback(IRender&                   render,
                                                     ICommandBuffer&            commandBuffer,
                                                     EditorLayer&               layer,
-                                                    const AppRenderFrameState& renderFrame,
+                                                    const HostViewState&       hostView,
                                                     const Extent2D&            canvasTargetExtent)
 {
     Extent2D fallback = canvasTargetExtent;
@@ -182,7 +182,7 @@ void EditorViewportCompositor::composeWorldFallback(IRender&                   r
     commandBuffer.retireResource(_composedViewportImage->getImageViewShared());
     commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(),
                                             EImageLayout::ColorAttachmentOptimal);
-    FRender2DComposePassDesc desc = worldComposeDesc(renderFrame);
+    FRender2DComposePassDesc desc = worldComposeDesc(hostView);
     recordRender2DComposePass(
         &commandBuffer,
         *_composedViewportImage,
@@ -196,7 +196,7 @@ void EditorViewportCompositor::composeWorldFromScene(IRender&                   
                                                      ICommandBuffer&               commandBuffer,
                                                      const RenderViewportSnapshot& snapshot,
                                                      EditorLayer&                  layer,
-                                                     const AppRenderFrameState&    renderFrame)
+                                                     const HostViewState&          hostView)
 {
     auto source = snapshot.viewportImageOwner;
     ensureTarget(render, *source);
@@ -225,7 +225,7 @@ void EditorViewportCompositor::composeWorldFromScene(IRender&                   
                                                 EImageLayout::DepthStencilAttachmentOptimal);
     }
 
-    FRender2DComposePassDesc desc = worldComposeDesc(renderFrame);
+    FRender2DComposePassDesc desc = worldComposeDesc(hostView);
     desc.sceneSourceTexture = resolveSourceTexture(*source);
     recordRender2DComposePass(
         &commandBuffer,

@@ -77,12 +77,13 @@ hostTick = 1200
 - `AppScreenshotCaptureState::recordedFrameIndex` / `earliestFrameIndex` → `recordedTick` / `earliestTick`；`tryFinalize(currentFrameIndex)` → `(currentHostTick)`；`appendPresentationCapture(frameIndex)` → `(hostTick)`。
 - `AppOptions`：`viewportResize.frameIndex`、`pipelineSwitch.frameIndex`、`screenshotFrameIndex`、`screenshotWarmupFrames`、`screenshotSettleFrames` → `hostTick` / `screenshotTick` / `screenshotWarmupTicks` / `screenshotSettleTicks`；run-state 的 `warmupFrames` / `settleFrames` / `stableFrames` → `*Ticks`。JSON 键 `frame_index`、`warmup_frames`、`smoke.*.frame` 不变。
 - 调用方与测试同步：`App.cpp`、`AppSceneServices.cpp`、`AppLifecycle.cpp`、`HostSceneRenderSubmit.cpp`、`EditorStatsTab.cpp`、`EditorRuntimeToolsTab.cpp`、`AppKernelTest`、`AppAutomationConfigTest`、`EditorWindowSessionTest`、`GUIHeadlessHostTest`、`GUIWindowManagerTest`、`RenderRuntimeSnapshotTest`、`HostSceneRenderSubmitTest`、`ViewFamilyRendererTest`、两个 GUI Example。
+- P1b-1（后续提交）：`AppRenderFrameState` → `HostViewState`（定义文件与 `include/` 转发头一起改名）；`AppRenderState::frameState` → `hostView`、`extensionFrameState` → `extensionHostView`；`AppRenderServices::getRenderFrameState` / `setExtensionRenderFrameState` / `clearExtensionRenderFrameState` → `getHostViewState` / `setExtensionHostViewState` / `clearExtensionHostViewState`；`EditorViewportCompositor` 与 `EditorSurfaceContext` 的声明、定义与参数名同步。
 
 刻意延后（仍在 M1 范围内，需要独立批次）：
 
 | 未做项 | 原因 |
 | --- | --- |
-| `AppRenderFrameState` → `HostViewState` | 消费方 `EditorModule.cpp` 与新增的 `EditorViewportCompositor.{h,cpp}` 属于另一条在途改动，此刻改名会产生既不能独立提交、也无法编译的中间态 |
+| `AppRenderFrameState` → `HostViewState` | 曾延后（消费方 `EditorModule.cpp` 与 `EditorViewportCompositor.{h,cpp}` 属另一条在途改动）；前置提交落地后已由 P1b-1 完成 |
 | `DebugPrimitives::updateFrameUBO` / `_frameData` | 它按 `flightIndex` 索引，是 flight 轴而不是 host tick；等 P2 `FrameFlightResources` 落地后一并改名 |
 | perf key / profile scope `Frame/*`、`frameLogic()`、`Render/Frame` | 属 perf 命名面（`PerfKeys.h` 定义 + 约 30 处调用），与 host tick 改名分开批 |
 | `RenderRuntimeSnapshotTest` → `RenderFramePlanningTest` | 与 `RenderRuntime` 遗留命名一起处理，避免和 `Test.xmake.lua` 显式文件列表混批 |
@@ -207,7 +208,8 @@ hostTick = 1200
 | 批次 | 内容 | 与 4.0.3 的关系 |
 | --- | --- | --- |
 | P1a | M1 的 host tick 主体（orchestrator 文件与类、HostClockState、App tick、provider、scheduler、automation 计数） | 已提交，不减任何功能 |
-| P1b | M1 剩余：`AppRenderFrameState` → `HostViewState`（等 GameEditor 在途改动落地）、DebugPrimitives flight UBO、perf key `Frame/*`、tick 排期字段 | 独立小批 |
+| P1b-1 | M1 剩余之一：`AppRenderFrameState` → `HostViewState` | 已提交，纯重命名 |
+| P1b-2 | M1 剩余之二：DebugPrimitives flight UBO（随 P2）、perf key `Frame/*`、tick 排期字段 | 独立小批 |
 | P1c | M2 `SceneFrameSnapshot` → `SceneSnapshot` | 独立：纯重命名 |
 | P2 | M4 + M5 + `Renderer` 合并 | 对应 4.0.3 checkpoint 2 / 3 |
 | P3 | M3（C++ 部分） | 对应 4.0.3 checkpoint 4（PreparedView） |
@@ -229,7 +231,9 @@ hostTick = 1200
 - P1a 已满足：`rg -n 'scheduler.beginFrame|scheduler.clearFrame|scheduler.isFrameOpen|plan.frameId' Engine` 为空。
 - P1a 构建证据：`xmake b ya-render-3d-test ya-game-runtime ya-game-editor ya-testing ya-gui-closure-test ya-gui-headless-host-test ya-gui-minimal-host GUIWorkbench` 全部通过；`ya-gui-widgets-test` 因既有的 `GUI/Compose` include 缺口失败，与本次改名无关。
 - P1a 测试证据：`ya-render-3d-test` 25/25、`ya-gui-closure-test --gtest_filter=AppKernelTest.*` 3/3、`ya-testing --gtest_filter=AppAutomationConfigTest.*:EditorWindowSessionTest.*:HostSceneRenderSubmitTest.*` 20/20。
-- P1a 之后仍待处理：`AppRenderFrameState`、`DebugPrimitives::updateFrameUBO`、perf key `Frame/*`、tick 排期字段。
+- P1b-1 已满足：`rg -n 'AppRenderFrameState|getRenderFrameState|setExtensionRenderFrameState|clearExtensionRenderFrameState|extensionFrameState|frameState' Engine` 为空。
+- P1b-1 构建/测试证据：`xmake b ya-game-editor`、`xmake b ya-testing`；`xmake r ya-testing --gtest_filter='EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*:AppAutomationConfigTest.*:AppKernelTest.*'` 66/66。
+- 仍待处理：`DebugPrimitives::updateFrameUBO`（随 P2 flight 轴）、perf key `Frame/*`、tick 排期字段。
 - `rg -n '\bframeIndex\b|\bframeId\b|\bframeToken\b' Engine/Source` 只剩第 3 节保留项与 automation 外部键。
 - `rg -n 'flightIndex' Engine/Source` 为空。
 - `rg -n 'SceneFrameSnapshot|RenderFrameData|CameraFrameInput|RenderPipelineFrameContext|RenderViewRecordingContext|SceneViewRecording' Engine/Source` 为空。

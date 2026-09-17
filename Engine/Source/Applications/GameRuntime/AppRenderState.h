@@ -4,7 +4,7 @@
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Stage/IRenderStage.h"
-#include "GameRuntime/AppRenderFrameState.h"
+#include "GameRuntime/HostViewState.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/RenderDeviceState.h"
 #include "Render3D/RenderFrameCoordinator.h"
@@ -23,8 +23,8 @@ struct AppRenderState
     std::unique_ptr<RenderFrameCoordinator>            coordinator;
     ShadowSettings                                     shadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
     bool                                               bRenderMirror  = false;
-    AppRenderFrameState                                frameState;
-    std::optional<AppRenderFrameState>                 extensionFrameState;
+    HostViewState                                      hostView;
+    std::optional<HostViewState>                       extensionHostView;
     /// Host policy: skip Scene family record for UI-only frames (editor 2D canvas).
     bool                                               bWorldSceneRenderEnabled = true;
     /// When true, `cameraPreviewEntityUUID` is the host's explicit choice

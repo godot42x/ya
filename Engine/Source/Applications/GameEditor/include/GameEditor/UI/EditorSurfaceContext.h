@@ -8,7 +8,7 @@ namespace ya
 {
 
 struct App;
-struct AppRenderFrameState;
+struct HostViewState;
 struct IRenderSurfaceContext;
 struct WidgetTree;
 
@@ -36,7 +36,7 @@ struct EditorWindowMetrics
 
 /// Layer, tree, spawners and viewport host stay Surface-owned. Selection /
 /// actions / undo live on the window's active EditorRootSession (ES-3).
-/// Viewport view/projection are Camera frame data, not swapchain state.
+/// View/projection come from the host view state, not from swapchain state.
 struct FEditorSurfaceContext
 {
     App*                     app = nullptr;
@@ -59,6 +59,6 @@ void applyEditorWindowMetrics(WidgetTree& tree, const EditorWindowMetrics& metri
 [[nodiscard]] FEditorSurfaceContext makeEditorSurfaceContext(
     App& app,
     IRenderSurfaceContext& surface,
-    const AppRenderFrameState& frame);
+    const HostViewState& hostView);
 
 } // namespace ya

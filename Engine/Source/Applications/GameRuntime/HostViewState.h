@@ -9,7 +9,10 @@
 namespace ya
 {
 
-struct AppRenderFrameState
+/// The host's own view state for the current tick: clock, viewport rect and the
+/// camera matrices the host derived from its camera. One per App - not a
+/// per-View packet and not present/swapchain state.
+struct HostViewState
 {
     HostClockState clock{};
     Rect2D    viewportRect             = {};

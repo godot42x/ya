@@ -43,25 +43,25 @@ bool AppRenderServices::isWorldSceneRenderEnabled() const
 void AppRenderServices::setViewportFrameBufferScale(float scale)
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->frameState.viewportFrameBufferScale = scale;
+    _state->hostView.viewportFrameBufferScale = scale;
 }
 
 float AppRenderServices::getViewportFrameBufferScale() const
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    return _state->frameState.viewportFrameBufferScale;
+    return _state->hostView.viewportFrameBufferScale;
 }
 
 void AppRenderServices::setViewportRect(Rect2D rect)
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->frameState.viewportRect = rect;
+    _state->hostView.viewportRect = rect;
 }
 
 Rect2D AppRenderServices::getViewportRect() const
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    return _state->frameState.viewportRect;
+    return _state->hostView.viewportRect;
 }
 
 ShadowSettings& AppRenderServices::getShadowSettings()
@@ -109,22 +109,22 @@ bool AppRenderServices::isPostprocessingEnabled() const
     return _state && _state->device && _state->device->isPostprocessingEnabled();
 }
 
-const AppRenderFrameState& AppRenderServices::getRenderFrameState() const
+const HostViewState& AppRenderServices::getHostViewState() const
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    return _state->frameState;
+    return _state->hostView;
 }
 
-void AppRenderServices::setExtensionRenderFrameState(const AppRenderFrameState& state)
+void AppRenderServices::setExtensionHostViewState(const HostViewState& state)
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->extensionFrameState = state;
+    _state->extensionHostView = state;
 }
 
-void AppRenderServices::clearExtensionRenderFrameState()
+void AppRenderServices::clearExtensionHostViewState()
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->extensionFrameState.reset();
+    _state->extensionHostView.reset();
 }
 
 void AppRenderServices::setCameraPreviewHostOwned(bool bOwned)

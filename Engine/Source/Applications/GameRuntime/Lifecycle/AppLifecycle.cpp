@@ -195,7 +195,7 @@ void App::init(AppDesc ci)
     app._renderState->device->init(RenderDeviceState::InitDesc{
         .hostServices = &app,
         .offscreenScheduler = &app.getTaskManager(),
-        .clockState = &app._renderState->frameState.clock,
+        .clockState = &app._renderState->hostView.clock,
         // Narrow read-only environment-lighting result provider: Render3D
         // consumes derived-resource handles through this contract instead of
         // locating the processor via the App singleton.
@@ -218,7 +218,7 @@ void App::init(AppDesc ci)
         .renderDocCaptureOutputDir = app._ci.renderDocCaptureOutputDir,
     });
     app._renderState->coordinator = std::make_unique<RenderFrameCoordinator>(*app._renderState->device);
-    app._renderState->frameState.viewportRect = Rect2D{
+    app._renderState->hostView.viewportRect = Rect2D{
         .pos    = {0.0f, 0.0f},
         .extent = {static_cast<float>(app._ci.width), static_cast<float>(app._ci.height)},
     };

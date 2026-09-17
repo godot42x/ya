@@ -466,7 +466,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                                         editorCamera._nearClip,
                                         editorCamera._farClip);
         }
-        renderServices.setExtensionRenderFrameState({
+        renderServices.setExtensionHostViewState({
             .view       = editorCamera.getViewMatrix(),
             .projection = editorCamera.getProjectionMatrix(),
             .cameraPos  = editorCamera.getPosition(),
@@ -545,7 +545,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                                     commandBuffer,
                                     snapshot,
                                     *_layer,
-                                    app.getRenderServices().getRenderFrameState(),
+                                    app.getRenderServices().getHostViewState(),
                                     canvasTargetExtent);
         // Keep the last valid frame instead of clobbering the display with a
         // transiently null output (startup / mode-switch / resize gaps).
@@ -572,7 +572,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         const FEditorSurfaceContext surfaceContext = makeEditorSurfaceContext(
             app,
             *surface,
-            app.getRenderServices().getRenderFrameState());
+            app.getRenderServices().getHostViewState());
         session->tick(surfaceContext, dt);
         const UIFrameSnapshot& snapshot = session->snapshot();
         const Extent2D targetExtent = surface->getSwapchain()
@@ -837,7 +837,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _app = nullptr;
         _playSession.shutdown(app);
         gEditorAuthoringScene = nullptr;
-        app.getRenderServices().clearExtensionRenderFrameState();
+        app.getRenderServices().clearExtensionHostViewState();
         _viewportCompositor.shutdown();
         if (_layer) {
             _layer->setViewportDisplayImage(nullptr);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GameRuntime/AppRenderFrameState.h"
+#include "GameRuntime/HostViewState.h"
 #include "Render3D/Common/RenderOverlay.h"
 
 #include <cstdint>
@@ -55,9 +55,9 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] std::shared_ptr<ImageResource>         getShadowDirectionalDepthResource() const;
     [[nodiscard]] std::shared_ptr<ImageResource>         getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const;
     [[nodiscard]] bool                                   isPostprocessingEnabled() const;
-    [[nodiscard]] const AppRenderFrameState&             getRenderFrameState() const;
-    void                                                 setExtensionRenderFrameState(const AppRenderFrameState& state);
-    void                                                 clearExtensionRenderFrameState();
+    [[nodiscard]] const HostViewState&                   getHostViewState() const;
+    void                                                 setExtensionHostViewState(const HostViewState& state);
+    void                                                 clearExtensionHostViewState();
     void                                                 setCameraPreviewHostOwned(bool bOwned);
     void                                                 setCameraPreviewEntityUUID(uint64_t uuid);
     [[nodiscard]] bool                                   isCameraPreviewHostOwned() const;

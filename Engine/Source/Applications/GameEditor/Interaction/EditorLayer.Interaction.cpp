@@ -303,9 +303,9 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
         return;
     }
 
-    const auto& frameState = app->getRenderServices().getRenderFrameState();
-    glm::mat4   view       = frameState.view;
-    glm::mat4   projection = frameState.projection;
+    const auto& hostView = app->getRenderServices().getHostViewState();
+    glm::mat4   view       = hostView.view;
+    glm::mat4   projection = hostView.projection;
 
     // Pixel-accurate picking: read the entity id the viewport graph wrote at
     // the cursor position. Falls back to the CPU raycast when the id target is

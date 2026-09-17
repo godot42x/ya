@@ -716,7 +716,7 @@ void AppAutomationControlService::handleGetWorldViewState(App& app, const AppAut
         return;
     }
 
-    const auto& frameState = app.getRenderServices().getRenderFrameState();
+    const auto& hostView = app.getRenderServices().getHostViewState();
     const auto  viewportRect = app.getRenderServices().getViewportRect();
 
     nlohmann::json result = {
@@ -724,7 +724,7 @@ void AppAutomationControlService::handleGetWorldViewState(App& app, const AppAut
         {"is_runtime", app.isRuntimeMode()},
         {"is_simulation", app.isSimulationMode()},
         {"is_paused", app.isPaused()},
-        {"camera_pos", {frameState.cameraPos.x, frameState.cameraPos.y, frameState.cameraPos.z}},
+        {"camera_pos", {hostView.cameraPos.x, hostView.cameraPos.y, hostView.cameraPos.z}},
         {"viewport_rect", {
             {"x", viewportRect.pos.x},
             {"y", viewportRect.pos.y},

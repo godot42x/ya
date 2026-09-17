@@ -1,7 +1,7 @@
 #include "GameRuntime/Lifecycle/GameRuntimeTickOrchestrator.h"
 
 #include "GameRuntime/App.h"
-#include "GameRuntime/AppRenderFrameState.h"
+#include "GameRuntime/HostViewState.h"
 #include "GameRuntime/AppRenderState.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
@@ -275,7 +275,7 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
         auto* device = app.getRenderServices().getDeviceState();
         const Extent2D viewportExtent = resolveViewportExtent(app,
                                                               device,
-                                                              app._renderState->frameState.viewportRect);
+                                                              app._renderState->hostView.viewportRect);
         syncRuntimeCameraAspect(getPrimaryCamera(app), viewportExtent);
     }
 
@@ -375,14 +375,14 @@ void GameRuntimeTickOrchestrator::prepareHostViewState(App& app, float dt)
 {
     auto* device = app.getRenderServices().getDeviceState();
     if (!device) {
-        app._renderState->frameState = {};
+        app._renderState->hostView = {};
         return;
     }
 
-    app._renderState->frameState.clock.hostTick    = App::_hostTick;
-    app._renderState->frameState.clock.elapsedTimeMS = app.getElapsedTimeMS();
+    app._renderState->hostView.clock.hostTick    = App::_hostTick;
+    app._renderState->hostView.clock.elapsedTimeMS = app.getElapsedTimeMS();
 
-    Rect2D viewportRect = app._renderState->frameState.viewportRect;
+    Rect2D viewportRect = app._renderState->hostView.viewportRect;
     if (viewportRect.extent.x <= 0.0f || viewportRect.extent.y <= 0.0f) {
         viewportRect = Rect2D{
             .pos    = {0.0f, 0.0f},
@@ -398,29 +398,29 @@ void GameRuntimeTickOrchestrator::prepareHostViewState(App& app, float dt)
                                    runtimeCamera && runtimeCamera->isValid() &&
                                    runtimeCamera->hasComponent<CameraComponent>();
 
-    const float viewportFrameBufferScale = app._renderState->frameState.viewportFrameBufferScale;
-    const HostClockState clock  = app._renderState->frameState.clock;
+    const float viewportFrameBufferScale = app._renderState->hostView.viewportFrameBufferScale;
+    const HostClockState clock  = app._renderState->hostView.clock;
 
-    AppRenderFrameState frameState{};
-    frameState.clock                    = clock;
-    frameState.viewportRect             = viewportRect;
-    frameState.viewportFrameBufferScale = viewportFrameBufferScale;
+    HostViewState hostView{};
+    hostView.clock                    = clock;
+    hostView.viewportRect             = viewportRect;
+    hostView.viewportFrameBufferScale = viewportFrameBufferScale;
     if (bUseRuntimeCamera) {
         auto cc                      = runtimeCamera->getComponent<CameraComponent>();
         auto tc                      = runtimeCamera->getComponent<TransformComponent>();
-        frameState.view              = cc->getFreeView();
-        frameState.projection        = cc->getProjection();
-        frameState.cameraPos         = tc->getWorldPosition();
-        app._renderState->frameState = frameState;
+        hostView.view              = cc->getFreeView();
+        hostView.projection        = cc->getProjection();
+        hostView.cameraPos         = tc->getWorldPosition();
+        app._renderState->hostView = hostView;
         return;
     }
 
-    if (app._renderState->extensionFrameState) {
-        frameState.view       = app._renderState->extensionFrameState->view;
-        frameState.projection = app._renderState->extensionFrameState->projection;
-        frameState.cameraPos  = app._renderState->extensionFrameState->cameraPos;
+    if (app._renderState->extensionHostView) {
+        hostView.view       = app._renderState->extensionHostView->view;
+        hostView.projection = app._renderState->extensionHostView->projection;
+        hostView.cameraPos  = app._renderState->extensionHostView->cameraPos;
     }
-    app._renderState->frameState = frameState;
+    app._renderState->hostView = hostView;
 }
 
 uint32_t GameRuntimeTickOrchestrator::resolveFlightIndex(const App& app)
@@ -506,8 +506,8 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     // graph, so extraction would be pure waste. Drop the stale per-flight
     // snapshot instead, mirroring the world output handling in
     // getViewportDisplayImageShared.
-    const auto& frameState = app._renderState->frameState;
-    const glm::mat4 viewProjection = makeCameraViewProjection(frameState.projection, frameState.view);
+    const auto& hostView = app._renderState->hostView;
+    const glm::mat4 viewProjection = makeCameraViewProjection(hostView.projection, hostView.view);
 
     auto& sceneScheduler = app._renderState->sceneRenderScheduler;
     sceneScheduler.beginTick(App::_hostTick);
@@ -531,10 +531,10 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         hostViews.push_back(HostSceneViewSubmit{
             .scene        = scene,
             .viewId       = kPrimarySceneViewId,
-            .view         = frameState.view,
-            .projection   = frameState.projection,
-            .cameraPos    = frameState.cameraPos,
-            .viewportRect = frameState.viewportRect,
+            .view         = hostView.view,
+            .projection   = hostView.projection,
+            .cameraPos    = hostView.cameraPos,
+            .viewportRect = hostView.viewportRect,
         });
 
         runtimeLookCamera = (app._appState == AppState::Runtime) ? getPrimaryCamera(app) : nullptr;
@@ -546,7 +546,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
             previewCamera = nullptr;
         }
         const Rect2D previewComposeRect = previewCamera
-                                              ? makeViewDisplayInsetRect(frameState.viewportRect.extent)
+                                              ? makeViewDisplayInsetRect(hostView.viewportRect.extent)
                                               : Rect2D{};
         if (previewCamera && previewComposeRect.extent.x > 0.0f && previewComposeRect.extent.y > 0.0f) {
             auto* cameraComp = previewCamera->getComponent<CameraComponent>();
@@ -640,12 +640,12 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         .frameIndex               = App::_hostTick,
         .deltaTime                = dt,
         .viewFeatures             = editorViewFeatures,
-        .view                     = frameState.view,
-        .projection               = frameState.projection,
+        .view                     = hostView.view,
+        .projection               = hostView.projection,
         .viewProjection           = viewProjection,
-        .cameraPos                = frameState.cameraPos,
-        .viewportRect             = frameState.viewportRect,
-        .viewportFrameBufferScale = frameState.viewportFrameBufferScale,
+        .cameraPos                = hostView.cameraPos,
+        .viewportRect             = hostView.viewportRect,
+        .viewportFrameBufferScale = hostView.viewportFrameBufferScale,
         .frameData                = &viewFrames.front(),
         .shadowSettings           = &app.getRenderServices().getShadowSettings(),
     };
