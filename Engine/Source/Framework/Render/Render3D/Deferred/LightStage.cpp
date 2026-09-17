@@ -74,11 +74,6 @@ void LightStage::setEnvironmentLightingInput(EnvironmentLightingInput input)
     _environmentLightingDSL = std::move(input.environmentLightingDSL);
 }
 
-void LightStage::setFrameInputs(FrameInputs frameInputs)
-{
-    _frameInputs = frameInputs;
-}
-
 void LightStage::applyShadowState(const ShadowRuntimeState& shadowState)
 {
     const bool bDefinesChanged = _shadowState.bEnableShadowMapping != shadowState.bEnableShadowMapping ||
@@ -204,7 +199,6 @@ void LightStage::destroy()
     _frameAndLightDSL.reset();
     _fullscreenQuad = nullptr;
     _environmentLightingDSL.reset();
-    _frameInputs = {};
     _shadowState = {};
 }
 
@@ -325,11 +319,12 @@ void LightStage::execute(const RenderStageContext& ctx,
 
 void LightStage::execute(const RenderStageContext& ctx)
 {
-    execute(ctx,
-            _frameInputs.frameAndLightDescriptorSet,
-            _frameInputs.environmentLightingDescriptorSet,
-            {},
-            {});
+    (void)ctx;
+    // The light pass is recorded by the deferred frame-graph pass, which hands
+    // this stage the View-owned descriptor sets explicitly. This entry exists
+    // because IRenderStage requires it and draws nothing on its own: a stored
+    // "current View inputs" set would already be stale for the second View of
+    // the same graph.
 }
 
 } // namespace ya

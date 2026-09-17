@@ -13,6 +13,14 @@
 
 ## 2026-09-17 checkpoint：View 声明 / 收集边界 review（无代码改动）
 
+## 2026-09-18 checkpoint：Stage 不再记住当前 view（4.0.2 C 收口 6a）
+
+- 唯一目标：删掉 Stage 上「上一次准备的是哪个 view」这类隐式槽位里的死的那一半。计划的 4.0.2 C 收口点了两个名字，这一刀先处理 `LightStage`（另一半 `BasicShadowMapTechnique::_preparedViewSlot` 需要把 prepare 的结果显式回传，拆成 6b）。
+- 死状态确认：`LightStage::_frameInputs` 的唯一写入方是 `setFrameInputs()`，而它在全仓库没有调用方（`rg -n 'setFrameInputs' Engine` 只有定义与声明）——真正在录 light pass 的是 `DeferredFrameGraphPasses`，它把 View-owned descriptor set 显式传给 `LightStage::execute(ctx, frameAndLight, environmentLighting, gBufferTextures, shadows)`。因此 `IRenderStage::execute(ctx)` 这个入口过去只会用空 handle 转调，必然早退。
+- 落地：删 `LightStage::FrameInputs`、`_frameInputs`、`setFrameInputs()`，destroy 里的 `_frameInputs = {}` 一并去掉；`execute(const RenderStageContext&)` 保留为有注释的空实现（`IRenderStage` 要求它存在），注释写明「一个存下来的当前 View 输入对同一 graph 里的第二个 View 必然是过期的」。
+- 验收：`xmake b ya-render-3d ya-render-3d-test ya-game-editor`；`ya-render-3d-test` 172/172；runtime 与 editor 的 viewport 截图与 4d-3b 逐字节相同（`1c6668976be1cdd5d755d1f1365700f7` / `1bfb16e7ca543abb7b517325df508b90`）——删掉的是从未被写入的状态，渲染结果不变。
+- 保留未完成：6b（`BasicShadowMapTechnique::_preparedViewSlot` / `_lastPreparedPointLightCount` → prepare 返回显式 token，穿过 `ShadowStage` 与两个 orchestrator 的 BuildInputs 由 pipeline 在 append 时传回；顺带删掉 append 里对缓存计数的二次 clamp，`getEffectivePointLightCount()` 已经 clamp 到 `MAX_POINT_LIGHTS`）。
+
 ## 2026-09-18 checkpoint：作者视口 rect 由声明方给出（4.0.3 4d-3b）
 
 - 唯一目标：把作者视口的 rect 从「编辑器经 `AppRenderServices::setViewportRect` 推给宿主、宿主再放进 collect context 让 producer 读回」这条往返，改成编辑器在声明里直接给出；顺带把编辑器里那套 pending-resize 同步机制（最后一个手写 sync）删掉。

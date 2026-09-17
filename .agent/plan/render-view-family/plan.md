@@ -23,7 +23,7 @@ GUI 动画属于 gui-invalidation-architecture 的独立小切片，可在 R0 �
 - 真实主 loop 只有一条：`AppKernel::run` → `GameRuntimeFrameOrchestrator::tickRender` → `RenderFrameCoordinator::record` → `pipeline.recordFamily` → compose → host submit/present。`RenderRuntime` 类已删除，但拆出的 `RenderDeviceState` 与 `RenderFrameCoordinator` 不是两个独立 owner：Coordinator 几乎无状态，经 friend 写 DeviceState 的 submissions / viewOutputs / presentation / published output。DeviceState 实际是 persistent renderer（cmd、submission pool、pipeline、presentation、environment、terrain、diagnostics），不是 RHI device（RHI 已是 `IRender`）。
 - `RenderSubmission::finish()` 只置 `_finished`，不 queue submit。Host 拥有 world-enable、viewport rect 与 present。`activeSceneProvider` / `ViewportStateService` 已删除。本帧 Scene 经 `SceneViewRecording::derivedScene` 进入各 family，由 `HostSceneViewSubmit` 列表绑定。TAA 未使用，未引入空的 `ViewHistoryStore`。
 - `beginFrameCommandBuffer()` 在没有 Surface/imageIndex 时拒绝录制，因此 Scene recording 仍与 present Surface 耦合；一个 View 供多个 Surface、headless/offscreen、先录全部 View 再分窗 present 均未实现。
-- `recordFamily()` 已是 family graph 入口，但 Deferred/Forward 内部仍是 per-view `beginViewRecording` / `beginView` / `appendViewToGraph` 循环，并用 `familyPredecessor` 串行连接。LightStage::_frameInputs、BasicShadowMapTechnique::_preparedViewSlot 仍是隐式 current View。
+- `recordFamily()` 已是 family graph 入口，但 Deferred/Forward 内部仍是 per-view `beginViewRecording` / `beginView` / `appendViewToGraph` 循环，并用 `familyPredecessor` 串行连接。`LightStage::_frameInputs` 已随 4.0.2 C 收口 6a 删除；`BasicShadowMapTechnique::_preparedViewSlot` 仍是隐式 current View（6b）。
 - Forward 与 Deferred 保留各自的 FrameGraphOrchestrator 和 pass topology；不抽强制 BaseRenderPipeline。
 - Applications/GameRuntime/Utility/RenderFrameExtractor.* 从 ECS 抽取 RenderFrameData。
 - RenderFrameData 当前同时承载 camera、lights、draw buckets、skinning，混合了 Scene、View 和 frame-flight 语义；SceneSnapshot 现在是唯一场景快照名称。RenderFrameData 仍是 pipeline 消费的 per-view packet，后续继续拆出 View preparation 数据。
@@ -411,7 +411,7 @@ RenderViewRecordingContext
 
 入口已落地：SSAO / Light / EntityId / Overlay / Forward-debug / postprocess 的 DS/UBO 由 `ViewResources` typed 子结构持有；Bloom/BasicPost viewId map 与 Stage singleton CIS 已删除；PointShadow packet 在 Shadow View Binding。
 
-未收口：Stage 仍有隐式 current View。源码仍有 `LightStage::_frameInputs` / `setFrameInputs()`、`BasicShadowMapTechnique::_preparedViewSlot`。部分 `_debugViews` / `_frameShadowSettings` 是调试或 persistent settings，可以保留；`_preparedViewSlot`、`_frameInputs` 必须清掉。
+未收口：Stage 仍有隐式 current View。`LightStage::_frameInputs` / `setFrameInputs()` / `FrameInputs` 已删除（6a：唯一写入方没有调用方，真正的 light pass 由 frame-graph pass 显式传 View-owned descriptor set）；`BasicShadowMapTechnique::_preparedViewSlot` / `_lastPreparedPointLightCount` 待 6b 换成 `prepare()` 返回的显式 token。部分 `_debugViews` / `_frameShadowSettings` 是调试或 persistent settings，可以保留。
 
 已完成的入口工作：
 
@@ -496,7 +496,7 @@ AppKernel::run
      - 4d-3a **feature 归位**（已完成）：gizmo 开关归 `EditorLayer`（编辑器自己的 view option），删 `AppRenderState::bShowEditorGizmos` 与 `App::is/setEditorGizmoShown`；`EditorViewProducer` 的两个 view 都读它；automation 的 `set_editor_gizmos_visible` 经 `IEditorAutomationControl` 打到编辑器（无编辑器即失败）；`RuntimeGameViewProducer` 只声明 `features = Game`——编辑器不再能改变不由它声明的视口（刻意接受的行为差异）。新增 `EditorViewProducerTest` / `RuntimeGameViewProducerTest`。
      - 4d-3b **作者视口 rect 归位**（已完成）：作者视口的 rect 由 `EditorViewProducer` 从 `EditorLayer::getViewportRect()` 声明（未布局时用编辑器默认尺寸兜底），编辑器不再写 `setViewportRect`、不再调 `device->applyViewportResize`；`EditorLayer` 的 pending-resize 三件套 / `queueViewportResize` / `onViewportResized` 与 `EditorModule::applyPendingViewportResize` 删除；`tickRender` 把主 view 的 rect 回填 `hostView.viewportRect` 并`device->applyViewportResize(...)`，device 的预期 extent 改由声明派生；automation 的 `smoke.viewportResize` 只改宿主视图几何（编辑器作者视口尺寸由面板决定）。新增 `EditorViewProducerTest` 第 3 例（声明的 rect 就是面板 rect / 未布局兜底）。
 5. **PreparedView**：删除 CameraFrameInput patching、SceneViewRecording、RenderPipelineFrameContext 之间的重复层。view 身份改为 owner-scoped `SceneViewKey`（4d 之后），并按此建立 `ViewHistoryStore` 的稳定键。
-6. **清除 Stage current-view**：删除 `_frameInputs` / `_preparedViewSlot` 等隐式槽位。
+6. **清除 Stage current-view**：删除 `_frameInputs` / `_preparedViewSlot` 等隐式槽位。**6a 已完成**（`LightStage` 的死状态：`FrameInputs` / `_frameInputs` / `setFrameInputs`，唯一写入方无调用方）。**6b 未完成**：`_preparedViewSlot` / `_lastPreparedPointLightCount` 换成 `prepare()` 返回的显式 token，由 pipeline 在 append 时传回（见 todo.md）。
 7. **压缩 `tickRender`**：保留该入口，收成 collectSceneViews → extractScenes → prepareViews → prepareModules → buildGameRenderFrame → acquire → recordFrame → submitPresent → presentModuleExtras。camera preview、Scene request、UI snapshot 下沉到普通 builder；`tickRender` 里不再有「某个 view 要不要渲染」的判断。
 
 Surface 与 View 正交、产品帧同时显示两个 Scene viewport、双 Surface GPU 排在 4.0.3 之后。不要为了“继续”发明 PIE authoring PiP。

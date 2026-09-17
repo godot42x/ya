@@ -38,12 +38,6 @@ struct YA_RENDER_3D_API LightStage : public IRenderStage
         stdptr<IDescriptorSetLayout> frameAndLightDSL = nullptr;
     };
 
-    struct FrameInputs
-    {
-        DescriptorSetHandle frameAndLightDescriptorSet = nullptr;
-        DescriptorSetHandle environmentLightingDescriptorSet = nullptr;
-    };
-
     using PushConstant = slang_types::DeferredRender::LightPass::PushConstants;
     using LightData    = slang_types::DeferredRender::LightPass::LightData;
 
@@ -68,7 +62,6 @@ struct YA_RENDER_3D_API LightStage : public IRenderStage
     Mesh*                        _fullscreenQuad = nullptr;
 
     stdptr<IDescriptorSetLayout> _environmentLightingDSL;
-    FrameInputs _frameInputs{};
 
     // Vertex attributes (for fullscreen quad)
     std::vector<VertexAttribute> _commonVertexAttributes = {
@@ -83,7 +76,6 @@ struct YA_RENDER_3D_API LightStage : public IRenderStage
     /// @param sharedInputs  Provides frame+light descriptor layout for set 0
     void setup(SharedInputs sharedInputs);
     void setEnvironmentLightingInput(EnvironmentLightingInput input);
-    void setFrameInputs(FrameInputs frameInputs);
     /// Write GBuffer CIS into a View-owned set. Does not mutate this recipe.
     void writeGBufferTextureDescriptors(
         DescriptorSetHandle                          gBufferTextureDS,
