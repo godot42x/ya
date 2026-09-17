@@ -1,5 +1,5 @@
 #include "RHI/Core/RenderTexture.h"
-#include "RenderRuntime.h"
+#include "RenderDeviceState.h"
 
 
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
@@ -111,13 +111,12 @@ void appendShadowDebugSlots(ViewportDebugBuilder&          builder,
     }
 }
 
-void appendSkyboxDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder& builder)
+void appendSkyboxDebugSlots(const RenderDeviceState& runtime, Scene* scene, ViewportDebugBuilder& builder)
 {
-    if (!runtime.getActiveScene() && !runtime.getEnvironmentLightingProcessor()) {
+    if (!scene && !runtime.getEnvironmentLightingProcessor()) {
         return;
     }
 
-    auto* scene = runtime.getActiveScene();
     auto* envProcessor = runtime.getEnvironmentLightingProcessor();
     if (!scene || !envProcessor) {
         return;
@@ -163,7 +162,7 @@ void appendSkyboxDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder& 
     }
 }
 
-void appendForwardDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder& builder, const RenderPipelineDebugOutputCatalog& debugOutputs)
+void appendForwardDebugSlots(const RenderDeviceState& runtime, Scene* scene, ViewportDebugBuilder& builder, const RenderPipelineDebugOutputCatalog& debugOutputs)
 {
     if (!runtime._pipelineCoordinator.hasForwardPipeline()) {
         return;
@@ -178,7 +177,7 @@ void appendForwardDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder&
             CATEGORY_SHADOW);
     }
 
-    appendSkyboxDebugSlots(runtime, builder);
+    appendSkyboxDebugSlots(runtime, scene, builder);
 
     if (auto viewportDepth = debugOutputs.viewportDepthImageOwner; viewportDepth && viewportDepth->getImageView()) {
         builder.addSlot({
@@ -194,7 +193,7 @@ void appendForwardDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder&
     }
 }
 
-void appendDeferredDebugSlots(const RenderRuntime&                    runtime,
+void appendDeferredDebugSlots(const RenderDeviceState&                    runtime,
                               ViewportDebugBuilder&                   builder,
                               const RenderPipelineDebugOutputCatalog& debugOutputs,
                               const DeferredPipelineDebugViews&       deferredViews)
@@ -354,13 +353,13 @@ void appendDeferredDebugSlots(const RenderRuntime&                    runtime,
     }
 }
 
-void appendEnvironmentDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder& builder)
+void appendEnvironmentDebugSlots(const RenderDeviceState& runtime, Scene* scene, ViewportDebugBuilder& builder)
 {
-    if (!runtime.getEnvironmentLightingProcessor() && !runtime.getActiveScene()) {
+    if (!runtime.getEnvironmentLightingProcessor() && !scene) {
         return;
     }
 
-    if (auto* scene = runtime.getActiveScene()) {
+    if (scene) {
         auto* envProcessor = runtime.getEnvironmentLightingProcessor();
         if (!envProcessor) {
             return;
@@ -483,7 +482,7 @@ void appendEnvironmentDebugSlots(const RenderRuntime& runtime, ViewportDebugBuil
 
 } // namespace
 
-size_t RenderRuntime::buildViewportDebugCatalogSignature() const
+size_t RenderDeviceState::buildViewportDebugCatalogSignature(Scene* inspectScene) const
 {
     size_t seed = 0;
     hashCombineValue(seed, static_cast<int>(_pipelineCoordinator.getRenderPipeline()));
@@ -525,8 +524,8 @@ size_t RenderRuntime::buildViewportDebugCatalogSignature() const
         hashCombineValue(seed, deferredViews.ssaoTextureOwner != nullptr);
     }
 
-    if (getActiveScene()) {
-        if (auto* scene = getActiveScene()) {
+    if (inspectScene) {
+        if (auto* scene = inspectScene) {
             auto* envProcessor = getEnvironmentLightingProcessor();
             if (envProcessor) {
                 bool     bHasSkybox     = false;
@@ -588,7 +587,7 @@ size_t RenderRuntime::buildViewportDebugCatalogSignature() const
     return seed;
 }
 
-void RenderRuntime::buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog) const
+void RenderDeviceState::buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog, Scene* inspectScene) const
 {
     catalog.categories = {
         {.id = "shadow", .label = "Shadow"},
@@ -603,18 +602,19 @@ void RenderRuntime::buildViewportDebugCatalog(RenderViewportDebugCatalog& catalo
     catalog.groups.clear();
 
     std::vector<RenderViewportDebugImageSlot> scratchImages;
-    appendViewportDebugImages(scratchImages, &catalog);
+    appendViewportDebugImages(scratchImages, &catalog, inspectScene);
 }
 
-void RenderRuntime::appendViewportDebugImages(std::vector<RenderViewportDebugImageSlot>& images,
-                                              RenderViewportDebugCatalog*                catalog) const
+void RenderDeviceState::appendViewportDebugImages(std::vector<RenderViewportDebugImageSlot>& images,
+                                              RenderViewportDebugCatalog*                catalog,
+                                              Scene*                                     inspectScene) const
 {
     const auto           debugOutputs  = buildPipelineDebugOutputCatalog();
     const auto           deferredViews = getDeferredPipelineDebugViews();
     ViewportDebugBuilder builder{.catalog = catalog, .images = images};
 
     if (_pipelineCoordinator.getRenderPipeline() == ERenderPipeline::Forward) {
-        appendForwardDebugSlots(*this, builder, debugOutputs);
+        appendForwardDebugSlots(*this, inspectScene, builder, debugOutputs);
     }
     else {
         appendDeferredDebugSlots(*this, builder, debugOutputs, deferredViews);
@@ -633,18 +633,18 @@ void RenderRuntime::appendViewportDebugImages(std::vector<RenderViewportDebugIma
                         });
     }
 
-    appendEnvironmentDebugSlots(*this, builder);
+    appendEnvironmentDebugSlots(*this, inspectScene, builder);
 }
 
-void RenderRuntime::ensureViewportDebugCatalog() const
+void RenderDeviceState::ensureViewportDebugCatalog(Scene* inspectScene) const
 {
-    const size_t signature = buildViewportDebugCatalogSignature();
+    const size_t signature = buildViewportDebugCatalogSignature(inspectScene);
     if (_viewportDebugCatalog && _viewportDebugCatalogSignature == signature) {
         return;
     }
 
     auto catalog = std::make_shared<RenderViewportDebugCatalog>();
-    buildViewportDebugCatalog(*catalog);
+    buildViewportDebugCatalog(*catalog, inspectScene);
     _viewportDebugCatalog          = std::move(catalog);
     _viewportDebugCatalogSignature = signature;
 }

@@ -5,11 +5,18 @@
 - 阶段：R0 基线审计已完成；R1 已完成 SceneRenderRequest/SceneRenderPlan 的最小 frame-local 调度切片、真实 extractor 的显式 Scene/View 分层，以及 GameRuntime 的 scheduler 接入。RenderRuntime 按 SceneViewportTask 循环录制；选中的 world Camera 作为 overlay View submit，compose 到 display root，不改 host viewport identity。
 - 已确认：RenderFrameInputs.h 已有四组输入；RenderFrameData 的 Scene snapshot owner 已与 View-owned draw buckets 分离。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
-- 当前 checkpoint：4.0.2 E — 拆除 `RenderRuntime` facade 为 device state + frame coordinator + family renderer + presentation。
-- 架构审计结论：`RenderSubmission` 拥有 command recording；`SceneFamilyResources` 拥有同 Scene 的 skinning GPU packet；typed `ViewResources` 拥有 SSAO/Light/EntityId/Overlay/debug/post DS/UBO；PointShadow instance/cull 在 Shadow View Binding。Bloom/BasicPost viewId map 与 Stage singleton CIS 已删除。`ISceneViewFamilyRenderer::recordFamily` 编译一个 family graph 并返回 typed outputs；Runtime 只 publish `result.views`。不要宣称双 Surface GPU 完成，也不要先录两个 Scene。
+- 当前 checkpoint：4.0.2 之后 — 产品双 Scene 录制与双 Surface GPU 验收。A–E 已落地。
+- 架构审计结论：`RenderSubmission` 拥有 command recording；`SceneFamilyResources` 拥有同 Scene 的 skinning GPU packet；typed `ViewResources` 拥有 SSAO/Light/EntityId/Overlay/debug/post DS/UBO；PointShadow instance/cull 在 Shadow View Binding。Bloom/BasicPost viewId map 与 Stage singleton CIS 已删除。`ISceneViewFamilyRenderer::recordFamily` 编译一个 family graph 并返回 typed outputs；`RenderFrameCoordinator` 只 publish `result.views`。`RenderRuntime` 已删除。不要宣称双 Surface GPU 完成，也不要先录两个 Scene。
 - 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是持有 shared snapshot 并独立保存 View-owned draw buckets；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 View buckets、shared skinning palettes 和 light presence。
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 已按 Scene family 持有，同 Scene 多 View 共享一份 SSBO，不同 Scene 不再以 flightIndex 为共享 key。
+
+## 2026-09-17 checkpoint：拆除 RenderRuntime facade
+
+- 唯一目标：host frame 编排、device 持久状态、Scene view rendering、compose/present 不再由一个类同时拥有。
+- `RenderDeviceState` 拥有 backend、persistent services 与 safe-point mutation（`applyViewportResize` / `applyPendingMutations` / `prepareDerivedState`）。`RenderFrameCoordinator::record(RenderFramePlan)` 创建 submission、按 family 调用 `recordFamily`、compose/present。`RenderFramePlan::derivedScene` 是本帧 Scene，不是 InitDesc locator。Host `AppRenderState` 拥有 `bWorldSceneRenderEnabled` 与 viewport rect；空 `sceneRender` 是 UI-only。删除 `RenderRuntime`、`ViewportStateService`、`getActiveScene`。未引入空的 `ViewHistoryStore`（TAA 无消费者）。
+- 验证：`xmake b ya-render-3d`、`xmake b ya-game-runtime`、`xmake b ya-game-editor`、`xmake b ya-render-3d-test`、`xmake r ya-render-3d-test --gtest_filter='ViewFamilyRendererTest.*:ViewPassResourcesTest.*:SceneFamilyResourcesTest.*:RenderSubmissionTest.*:RenderViewBindingTableTest.*:RenderRuntimeSnapshotTest.*:RenderViewOutputTableTest.*:DeferredFrameResourceSetTest.*:DeferredRenderPipelineTest.*:DrawCandidateViewTest.*:RenderGraphCoreTest.FrameUploadArena*:ViewPersistentResourceKeyTest.*:CameraFrustumOverlayTest.*:DirectionalShadowMathTest.*:ForwardGraphInputsTest.*:DeferredPassParamsTest.*:PostProcessingStageTest.*'`（72/72）、`git diff --check`。
+- 保留未完成：display-root inspector getter fallback；双 Scene 产品录制；双 Surface GPU 验收；ViewHistoryStore 待 TAA。
 
 ## 2026-09-17 checkpoint：ViewFamily renderer
 
@@ -225,13 +232,13 @@ R0 结论：world snapshot 与 UI snapshot 都在 renderFrame 前生成；Render
 | --- | --- | --- | --- |
 | R0 单 View 基线 | 已完成 | 单 View、现有 pass、单 submit、Forward/Deferred topology | 真实 GPU golden 仍依赖可运行窗口环境 |
 | R1 World/View 分离 | 已完成（单 View 契约） | RenderFrameData 组合 Scene snapshot；现有单 View pipeline topology | GameEditor/preview 多 request |
-| R2 ViewFamily | 进行中（A–D 已落地：Submission + SceneFamily + typed View/Pass + family renderer；View binding + keepalives + output 句柄 + View-keyed RT + editor camera PiP） | Forward/Deferred topology；display-root inspector getter fallback | Checkpoint E 拆 Runtime、双 Scene 产品录制、双 Surface 验收 |
+| R2 ViewFamily | 进行中（A–E 已落地：Submission + SceneFamily + typed View/Pass + family renderer + Device/Coordinator；View binding + keepalives + output 句柄 + View-keyed RT + editor camera PiP） | Forward/Deferred topology；display-root inspector getter fallback | 双 Scene 产品录制、双 Surface 验收 |
 | R3 GUI2D/GameUI | 未开始 | WidgetTree live source、UIFrameSnapshot 输入 | UI-only 与 GameUI[ViewId] |
 | R4 性能收口 | 未开始 | 优化由 profile 触发 | cache、submit、第三 pipeline 决策 |
 
 ## 下一轮接力点
 
-R0 已完成。`RenderSubmission` 拥有 command recording；`SceneFamilyResources` 拥有同 Scene 的 skinning packet；typed `ViewResources` 拥有 pass DS/UBO；`recordFamily` 编译 family graph 并返回 typed outputs。下一 checkpoint 是 4.0.2 E（拆 RenderRuntime facade）；不要宣称双 Surface GPU 完成，也不要先录两个 Scene。
+R0 已完成。`RenderSubmission` 拥有 command recording；`SceneFamilyResources` 拥有同 Scene 的 skinning packet；typed `ViewResources` 拥有 pass DS/UBO；`recordFamily` 编译 family graph 并返回 typed outputs；`RenderDeviceState` + `RenderFrameCoordinator` 取代 `RenderRuntime`。下一刀是产品双 Scene / 双 Surface 验收；不要宣称完成，也不要先录两个 Scene。
 
 ## R1 审计结论
 

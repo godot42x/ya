@@ -11,8 +11,8 @@
 namespace ya
 {
 
-/// Offscreen identity of one View. Not an OS window, swapchain, or
-/// ViewportStateService slot. Extent/format belong to this View; another View
+/// Offscreen identity of one View. Not an OS window, swapchain, or a global
+/// viewport-state slot. Extent/format belong to this View; another View
 /// in the same submission must not share or overwrite this record.
 struct RenderViewOutputDesc
 {

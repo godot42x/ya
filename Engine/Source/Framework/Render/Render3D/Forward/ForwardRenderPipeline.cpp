@@ -387,6 +387,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
                 .frameData      = recording.frameData ? recording.frameData : camera.frameData,
                 .viewportExtent = viewExtent,
             },
+            .derivedScene            = ctx.derivedScene,
         };
         if (shouldSkipView(branch.frame)) {
             continue;
@@ -526,6 +527,7 @@ void ForwardRenderPipeline::beginViewRecording(const RenderPipelineFrameContext&
         .frameIndex     = frame.camera.frameIndex,
         .deltaTime      = frame.camera.deltaTime,
         .viewportExtent = viewExtent,
+        .derivedScene   = frame.derivedScene,
     };
 }
 
@@ -854,7 +856,7 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
     YA_CORE_ASSERT(_graphExecutor != nullptr, "ForwardRenderPipeline graph executor is not initialized");
 
     std::vector<ForwardDirectionGizmoInput> directionGizmos;
-    if (auto* activeScene = _runtimeServices ? _runtimeServices->getActiveScene() : nullptr) {
+    if (auto* activeScene = frame.derivedScene) {
         const auto& dirView = activeScene->getRegistry().view<TransformComponent, DirectionComponent>();
         for (auto entity : dirView) {
             const auto& [tc, direction] = dirView.get(entity);

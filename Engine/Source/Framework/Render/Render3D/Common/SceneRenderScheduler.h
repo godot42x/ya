@@ -184,7 +184,7 @@ struct SceneRenderPlan
 }
 
 /// Frame-local request collector. It does not own Scene/ECS objects and does
-/// not record GPU commands; RenderRuntime consumes the sealed immutable plan.
+/// not record GPU commands; RenderFrameCoordinator consumes the sealed immutable plan.
 class SceneRenderScheduler
 {
   public:

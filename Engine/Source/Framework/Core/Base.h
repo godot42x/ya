@@ -28,7 +28,7 @@
 #define USE_VULKAN 1
 #define USE_STB_IMG 1
 #define USE_SDL 1
-// NOTE: FORWARD macro removed — pipeline selection is now runtime via RenderRuntime::ERenderPipeline
+// NOTE: FORWARD macro removed — pipeline selection is now runtime via RenderDeviceState::ERenderPipeline
 
 
 

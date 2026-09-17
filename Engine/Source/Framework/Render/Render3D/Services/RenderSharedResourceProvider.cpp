@@ -140,8 +140,8 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneSkyboxDescriptorSet(Sc
         return _skybox.fallbackDS;
     }
 
-    if (!scene && _getActiveScene) {
-        scene = _getActiveScene();
+    if (!scene) {
+        return _skybox.fallbackDS;
     }
 
     auto skyboxResource = _environmentLightingProvider.resolveSceneSkyboxResource
@@ -224,10 +224,6 @@ EnvironmentLightingSceneResources RenderSharedResourceProvider::resolveSceneEnvi
 {
     EnvironmentLightingSceneResources resources{};
 
-    if (!scene && _getActiveScene) {
-        scene = _getActiveScene();
-    }
-
     if (_environmentLightingProvider.resolveSceneEnvironmentLightingResources) {
         resources = _environmentLightingProvider.resolveSceneEnvironmentLightingResources(scene);
     }
@@ -246,12 +242,10 @@ EnvironmentLightingSceneResources RenderSharedResourceProvider::resolveSceneEnvi
 }
 
 void RenderSharedResourceProvider::init(IRender* render,
-                                        EnvironmentLightingResultProvider environmentLightingProvider,
-                                        std::function<Scene*()>          activeSceneProvider)
+                                        EnvironmentLightingResultProvider environmentLightingProvider)
 {
     _render = render;
     _environmentLightingProvider = std::move(environmentLightingProvider);
-    _getActiveScene              = std::move(activeSceneProvider);
 
     initSharedPipelineResources();
     initSkyboxResources();

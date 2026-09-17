@@ -43,7 +43,8 @@
 #include "Scene/Runtime/SceneManager.h"
 #include "RHI/NativeWindow.h"
 #include "GUI/Host/NativeWindowManager.h"
-#include "Render3D/RenderRuntime.h"
+#include "Render3D/RenderDeviceState.h"
+#include "Render3D/RenderFrameCoordinator.h"
 
 #include <format>
 #include <csignal>
@@ -174,8 +175,8 @@ void App::init(AppDesc ci)
     app._nativeWindowManager = std::make_unique<NativeWindowManager>();
     YA_CORE_ASSERT(app._nativeWindowManager->init(), "Failed to initialize NativeWindowManager");
 
-    app._renderState->runtime = std::make_unique<RenderRuntime>();
-    app._renderState->runtime->init(RenderRuntime::InitDesc{
+    app._renderState->device = std::make_unique<RenderDeviceState>();
+    app._renderState->device->init(RenderDeviceState::InitDesc{
         .hostServices = &app,
         .offscreenScheduler = &app.getTaskManager(),
         .clockState = &app._renderState->frameState.clock,
@@ -193,7 +194,6 @@ void App::init(AppDesc ci)
                                     : EnvironmentLightingSceneResources{};
             },
         },
-        .activeSceneProvider = [&app]() -> Scene* { return app.getSceneServices().getActiveScene(); },
         .windowWidth  = static_cast<uint32_t>(app._ci.width),
         .windowHeight = static_cast<uint32_t>(app._ci.height),
         .windowTitle  = app._ci.title,
@@ -201,6 +201,12 @@ void App::init(AppDesc ci)
         .renderDocDllPath = app._ci.renderDocDllPath,
         .renderDocCaptureOutputDir = app._ci.renderDocCaptureOutputDir,
     });
+    app._renderState->coordinator = std::make_unique<RenderFrameCoordinator>(*app._renderState->device);
+    app._renderState->frameState.viewportRect = Rect2D{
+        .pos    = {0.0f, 0.0f},
+        .extent = {static_cast<float>(app._ci.width), static_cast<float>(app._ci.height)},
+    };
+    app._renderState->bWorldSceneRenderEnabled = true;
     if (ConfigManager::get().hasDocument("automation")) {
         AppAutomation::applyRuntimeOverrides(app);
     }
@@ -259,8 +265,7 @@ void App::init(AppDesc ci)
     // freeze sampling while the editor 2D canvas mode disables world rendering.
     sys4->setTickPolicy([&app]()
     {
-        auto* renderRuntime = app.getRenderServices().getRenderRuntime();
-        return !renderRuntime || renderRuntime->isWorldSceneRenderEnabled();
+        return app.getRenderServices().isWorldSceneRenderEnabled();
     });
     sys4->init();
     app._systems.push_back(sys4);
@@ -488,9 +493,12 @@ void App::quit()
     // ("Unfreed dedicated allocations found" assertion).
     AssetManager::get()->clearTextures();
 
-    if (app._renderState->runtime) {
-        app._renderState->runtime->shutdown(/*bRenderAlreadyIdle=*/true);
-        app._renderState->runtime.reset();
+    if (app._renderState->coordinator) {
+        app._renderState->coordinator.reset();
+    }
+    if (app._renderState->device) {
+        app._renderState->device->shutdown(/*bRenderAlreadyIdle=*/true);
+        app._renderState->device.reset();
     }
     if (app._nativeWindowManager) {
         app._nativeWindowManager->shutdown();
@@ -571,9 +579,9 @@ void App::handleSceneDestroy(Scene* scene)
         }
     }
 
-    if (app._renderState->runtime) {
-        app._renderState->runtime->resetSkyboxPool();
-        app._renderState->runtime->resetEnvironmentLightingPool();
+    if (app._renderState->device) {
+        app._renderState->device->resetSkyboxPool();
+        app._renderState->device->resetEnvironmentLightingPool();
     }
 }
 

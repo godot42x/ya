@@ -1,4 +1,4 @@
-#include "RenderRuntime.h"
+#include "RenderDeviceState.h"
 
 #include "Render3D/Common/RenderRuntimeHostServices.h"
 #include "Render3D/Services/DebugRenderSystem.h"
@@ -18,25 +18,25 @@
 namespace ya
 {
 
-DescriptorSetHandle RenderRuntime::getSceneSkyboxDescriptorSet(Scene* scene)
+DescriptorSetHandle RenderDeviceState::getSceneSkyboxDescriptorSet(Scene* scene)
 {
     return _sharedResourceProvider.getSceneSkyboxDescriptorSet(scene);
 }
 
-DescriptorSetHandle RenderRuntime::getSceneEnvironmentLightingDescriptorSet(Scene* scene)
+DescriptorSetHandle RenderDeviceState::getSceneEnvironmentLightingDescriptorSet(Scene* scene)
 {
     return _sharedResourceProvider.getSceneEnvironmentLightingDescriptorSet(scene);
 }
 
-EnvironmentLightingSceneResources RenderRuntime::resolveSceneEnvironmentLightingResources(Scene* scene) const
+EnvironmentLightingSceneResources RenderDeviceState::resolveSceneEnvironmentLightingResources(Scene* scene) const
 {
     return _sharedResourceProvider.resolveSceneEnvironmentLightingResources(scene);
 }
 
-void RenderRuntime::init(const InitDesc& desc)
+void RenderDeviceState::init(const InitDesc& desc)
 {
     YA_PROFILE_FUNCTION_LOG();
-    YA_CORE_ASSERT(desc.hostServices != nullptr, "RenderRuntime init requires host services");
+    YA_CORE_ASSERT(desc.hostServices != nullptr, "RenderDeviceState init requires host services");
 
     initRuntimeState(desc);
     initShaderSystems();
@@ -49,22 +49,21 @@ void RenderRuntime::init(const InitDesc& desc)
     initFrameServices();
 }
 
-void RenderRuntime::initRuntimeState(const InitDesc& desc)
+void RenderDeviceState::initRuntimeState(const InitDesc& desc)
 {
     _hostServices       = desc.hostServices;
     _offscreenScheduler = desc.offscreenScheduler;
     _clockState                 = desc.clockState;
     _environmentLightingProvider = desc.environmentLightingProvider;
-    _activeSceneProvider         = desc.activeSceneProvider;
 
     currentRenderAPI = ERenderAPI::Vulkan;
-    _viewportState.setRect(Rect2D{
-                 .pos    = {0.0f, 0.0f},
-                 .extent = {static_cast<float>(desc.windowWidth), static_cast<float>(desc.windowHeight)},
-    });
+    _pipelineViewportRect = Rect2D{
+        .pos    = {0.0f, 0.0f},
+        .extent = {static_cast<float>(desc.windowWidth), static_cast<float>(desc.windowHeight)},
+    };
 }
 
-void RenderRuntime::initShaderSystems()
+void RenderDeviceState::initShaderSystems()
 {
     _shaderStorage = std::make_shared<ShaderStorage>(
         ShaderProcessorFactory()
@@ -95,16 +94,16 @@ void RenderRuntime::initShaderSystems()
                   { _shaderStorage.reset(); });
 }
 
-void RenderRuntime::initDiagnostics(const InitDesc& desc)
+void RenderDeviceState::initDiagnostics(const InitDesc& desc)
 {
     _diagnostics.init(_render, desc.bEnableRenderDoc, desc.renderDocDllPath, desc.renderDocCaptureOutputDir);
     _deleter.push("RenderDiagnostics", [this](void*)
                   { _diagnostics.shutdown(); });
 }
 
-void RenderRuntime::initRenderBackend(const InitDesc& desc)
+void RenderDeviceState::initRenderBackend(const InitDesc& desc)
 {
-    YA_CORE_ASSERT(_hostServices != nullptr, "RenderRuntime requires host services before initializing render backend");
+    YA_CORE_ASSERT(_hostServices != nullptr, "RenderDeviceState requires host services before initializing render backend");
     auto* nativeWindow = _hostServices->getOrCreateMainNativeWindow(WindowCreateInfo{
         .index      = 0,
         .renderAPI  = currentRenderAPI,
@@ -143,7 +142,7 @@ void RenderRuntime::initRenderBackend(const InitDesc& desc)
     _render->init(renderCI);
 }
 
-void RenderRuntime::initResourceCaches()
+void RenderDeviceState::initResourceCaches()
 {
     TextureLibrary::get().init(_render);
     AssetManager::get()->setRender(_render);
@@ -155,9 +154,9 @@ void RenderRuntime::initResourceCaches()
     ResourceRegistry::get().registerCache(AssetManager::get(), 70);
 }
 
-void RenderRuntime::initSharedRenderResources()
+void RenderDeviceState::initSharedRenderResources()
 {
-    _sharedResourceProvider.init(_render, _environmentLightingProvider, _activeSceneProvider);
+    _sharedResourceProvider.init(_render, _environmentLightingProvider);
 
     _deleter.push("RenderBindings", [this](void*)
                   { _sharedResourceProvider.shutdown(); });
@@ -172,18 +171,20 @@ void RenderRuntime::initSharedRenderResources()
         .hostServices          = _hostServices,
         .sharedResourceProvider = &_sharedResourceProvider,
         .runtimeServices       = this,
-        .viewportWidth         = static_cast<int>(_viewportState.getRect().extent.x),
-        .viewportHeight        = static_cast<int>(_viewportState.getRect().extent.y),
+        .viewportWidth         = static_cast<int>(_pipelineViewportRect.extent.x),
+        .viewportHeight        = static_cast<int>(_pipelineViewportRect.extent.y),
         .reapplyViewportSink   = [this]()
         {
-            if (_viewportState.isRectInitialized()) {
-                onViewportResized(_viewportState.getRect());
+            if (_pipelineViewportRect.extent.x > 0.0f && _pipelineViewportRect.extent.y > 0.0f) {
+                if (auto* pipeline = getActivePipeline()) {
+                    pipeline->onViewportResized(_pipelineViewportRect);
+                }
             }
         },
     });
 }
 
-void RenderRuntime::initPresentationResources()
+void RenderDeviceState::initPresentationResources()
 {
     // Main world window display compose only. Acquire/present stay on the host
     // FPresentFrame coordinator; this service never calls begin/end.
@@ -201,7 +202,7 @@ void RenderRuntime::initPresentationResources()
         _presentationGraphService.shutdown(); });
 }
 
-void RenderRuntime::initCommandResources()
+void RenderDeviceState::initCommandResources()
 {
     std::vector<stdptr<ICommandBuffer>> cmdBufs;
     _render->allocateCommandBuffers(MAX_FLIGHTS_IN_FLIGHT, cmdBufs);
@@ -211,7 +212,7 @@ void RenderRuntime::initCommandResources()
         _commandBuffers.clear(); });
 
     if (!_submissions.init(_render)) {
-        YA_CORE_ERROR("RenderRuntime failed to initialize the submission pool");
+        YA_CORE_ERROR("RenderDeviceState failed to initialize the submission pool");
     }
     _deleter.push("RenderSubmissionPool", [this](void*)
                   { _submissions.destroy(); });
@@ -221,7 +222,7 @@ void RenderRuntime::initCommandResources()
                   { _offscreen.shutdown(); });
 }
 
-void RenderRuntime::initFrameServices()
+void RenderDeviceState::initFrameServices()
 {
     DeferredDeletionQueue::get().init(/*framesInFlight=*/1);
 
@@ -229,13 +230,11 @@ void RenderRuntime::initFrameServices()
     // environment-lighting/terrain processors live with the render runtime
     // (injected narrow services only; never located through the Host).
     _gameplayResourceBinding = std::make_unique<GameplayResourceBinding>();
-    _gameplayResourceBinding->setActiveSceneProvider(_activeSceneProvider);
     _gameplayResourceBinding->setFrameIndexProvider([this]() { return getFrameIndex(); });
     _gameplayResourceBinding->init();
 
     _environmentLightingProcessor = std::make_unique<EnvironmentLightingProcessor>();
     _environmentLightingProcessor->setRender(_render);
-    _environmentLightingProcessor->setActiveSceneProvider(_activeSceneProvider);
     _environmentLightingProcessor->setFrameIndexProvider([this]() { return getFrameIndex(); });
     if (_hostServices) {
         _environmentLightingProcessor->setOffscreenJobQueueService(_hostServices->getOffscreenJobQueueService());
@@ -244,12 +243,11 @@ void RenderRuntime::initFrameServices()
 
     _terrainProcessor = std::make_unique<TerrainProcessor>();
     _terrainProcessor->setRender(_render);
-    _terrainProcessor->setActiveSceneProvider(_activeSceneProvider);
     _terrainProcessor->setFrameIndexProvider([this]() { return getFrameIndex(); });
     _terrainProcessor->init();
 }
 
-void RenderRuntime::shutdown(bool bRenderAlreadyIdle)
+void RenderDeviceState::shutdown(bool bRenderAlreadyIdle)
 {
     if (_render && !bRenderAlreadyIdle) {
         _render->waitIdle();
@@ -280,7 +278,7 @@ void RenderRuntime::shutdown(bool bRenderAlreadyIdle)
     destroyRenderBackend();
 }
 
-void RenderRuntime::shutdownRuntimeServices()
+void RenderDeviceState::shutdownRuntimeServices()
 {
     YA_CORE_ASSERT(!_pipelineCoordinator.hasAnyPipeline(),
                    "shutdownRuntimeServices requires active pipelines to be torn down first");
@@ -290,7 +288,7 @@ void RenderRuntime::shutdownRuntimeServices()
     ResourceRegistry::get().clearAll();
 }
 
-void RenderRuntime::destroyRenderBackend()
+void RenderDeviceState::destroyRenderBackend()
 {
     if (!_render) {
         return;
@@ -303,12 +301,12 @@ void RenderRuntime::destroyRenderBackend()
     _render = nullptr;
 }
 
-void RenderRuntime::resetSkyboxPool()
+void RenderDeviceState::resetSkyboxPool()
 {
     _sharedResourceProvider.resetSkyboxPool();
 }
 
-void RenderRuntime::resetEnvironmentLightingPool()
+void RenderDeviceState::resetEnvironmentLightingPool()
 {
     _sharedResourceProvider.resetEnvironmentLightingPool();
 }

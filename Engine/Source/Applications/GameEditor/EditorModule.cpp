@@ -49,7 +49,7 @@
 #include "GUI/Compose/GUIRenderSurface.h"
 #include "RHI/Core/Swapchain.h"
 #include "RHI/NativeWindow.h"
-#include "Render3D/RenderRuntime.h"
+#include "Render3D/RenderDeviceState.h"
 #include "Scene/Core/Scene.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
 
@@ -892,8 +892,8 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
     void onAttach(App& app) override
     {
         auto& renderServices = app.getRenderServices();
-        auto* renderRuntime  = renderServices.getRenderRuntime();
-        YA_CORE_ASSERT(renderRuntime, "Editor extension requires an initialized RenderRuntime");
+        auto* device         = renderServices.getDeviceState();
+        YA_CORE_ASSERT(device, "Editor extension requires an initialized RenderDeviceState");
 
         _layer = std::make_unique<EditorLayer>(&app);
         initializeEditorCamera(app, *_layer);
@@ -1145,14 +1145,14 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _layer->setSceneContext(_layer->getViewportInteractionScene());
 
         auto& renderServices = app.getRenderServices();
-        if (auto* renderRuntime = renderServices.getRenderRuntime()) {
+        if (auto* device = renderServices.getDeviceState()) {
             // The 2D canvas workspace only needs the UI compose pass and the
             // editor viewport panel; skip the whole world scene graph there.
             // PIE/sim already forced the viewport back to 3D above.
-            renderRuntime->setWorldSceneRenderEnabled(!_layer->isViewportMode2D());
+            renderServices.setWorldSceneRenderEnabled(!_layer->isViewportMode2D());
 
             auto&          editorCamera   = _layer->getCamera();
-            const Extent2D viewportExtent = renderRuntime->getViewportExtent();
+            const Extent2D viewportExtent = device->getViewportExtent();
             // Keep the editor camera controllable during simulation; only full
             // runtime (PIE) hands viewport input over to the game. 2D canvas
             // preview uses its own pan/zoom navigation instead of the camera.
@@ -1175,7 +1175,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             // the screen-space sprite pipeline's dynamic-rendering formats in
             // sync before presentation starts; recreating a pipeline while a
             // command buffer is recording invalidates that command buffer.
-            const auto* activePipeline = renderRuntime->getActivePipeline();
+            const auto* activePipeline = device->getActivePipeline();
             const EFormat::T depthFormat = activePipeline
                                                ? activePipeline->getViewportDepthFormat()
                                                : EFormat::Undefined;
@@ -1212,8 +1212,9 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _layer->onUpdate(dt);
         Rect2D pendingRect;
         if (_layer->getPendingViewportResize(pendingRect)) {
-            if (auto* renderRuntime = renderServices.getRenderRuntime()) {
-                renderRuntime->onViewportResized(pendingRect);
+            if (auto* device = renderServices.getDeviceState()) {
+                renderServices.setViewportRect(pendingRect);
+                device->applyViewportResize(pendingRect);
             }
         }
     }
@@ -1226,21 +1227,21 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         }
 
         auto& renderServices = app.getRenderServices();
-        auto* renderRuntime  = renderServices.getRenderRuntime();
+        auto* device         = renderServices.getDeviceState();
         auto* render         = renderServices.getRender();
-        if (!renderRuntime || !render) {
+        if (!device || !render) {
             _layer->setViewportDisplayImage(nullptr);
             return;
         }
 
-        const auto snapshot = renderRuntime->buildViewportSnapshot();
+        const auto snapshot = device->buildViewportSnapshot();
         _layer->setViewportContext(snapshot);
         _layer->setEntityIdPickImage(snapshot.entityIdImageOwner);
         // 2D mode disables the world scene graph, so the runtime pipeline never
         // publishes viewport resources and getViewportExtent() stays 0x0;
         // size the canvas target from the editor panel instead (same fallback
         // guards a degenerate pipeline extent in 3D).
-        Extent2D canvasTargetExtent = renderRuntime->getViewportExtent();
+        Extent2D canvasTargetExtent = device->getViewportExtent();
         if (_layer->isViewportMode2D() ||
             canvasTargetExtent.width == 0 || canvasTargetExtent.height == 0) {
             canvasTargetExtent = Extent2D::fromVec2(_layer->getViewportSize());

@@ -9,7 +9,7 @@ namespace ya
 
 struct App;
 struct Entity;
-struct RenderRuntime;
+struct RenderDeviceState;
 
 class GameRuntimeFrameOrchestrator
 {
@@ -23,7 +23,7 @@ class GameRuntimeFrameOrchestrator
   private:
     static void     tickLogic(App& app, float dt);
     static void     syncViewportState(App& app);
-    static Extent2D resolveViewportExtent(const App& app, RenderRuntime* renderRuntime, const Rect2D& viewportRect);
+    static Extent2D resolveViewportExtent(const App& app, RenderDeviceState* device, const Rect2D& viewportRect);
     static void     prepareRenderFrameState(App& app, float dt);
     static void     tickRender(App& app, float dt);
     static uint32_t resolveFlightIndex(const App& app);

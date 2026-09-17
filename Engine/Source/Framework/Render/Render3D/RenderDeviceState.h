@@ -22,7 +22,6 @@
 #include "Render3D/Services/PipelineCoordinator.h"
 #include "Render3D/Services/PresentationGraphService.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
-#include "Render3D/Services/ViewportStateService.h"
 #include "Render3D/Services/RenderSharedResourceProvider.h"
 #include "Render3D/Services/GameplayResourceBinding.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
@@ -51,6 +50,7 @@ struct EnvironmentLightingComponent;
 struct RenderFrameData;
 struct DebugRenderSystem;
 struct Node;
+struct RenderFrameCoordinator;
 
 struct RenderPipelineDebugOutputCatalog
 {
@@ -65,55 +65,32 @@ struct RenderPipelineDebugOutputCatalog
     bool                         bPostprocessingEnabled      = false;
 };
 
-struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
+/// Device-lifetime backend, persistent renderer services, and fence-safe
+/// mutations. Does not record a frame and does not locate the active Scene.
+struct YA_RENDER_3D_API RenderDeviceState : IRenderRuntimeServices
 {
-    using ERenderPipeline = PipelineCoordinator::ERenderPipeline;
+    friend struct RenderFrameCoordinator;
 
-    // =========================================================================
-    // Public protocol
-    // =========================================================================
+    using ERenderPipeline = PipelineCoordinator::ERenderPipeline;
 
     struct InitDesc
     {
-        /// Narrow host services injected by the Host; Render3D never locates
-        /// App through globals.
         IRenderRuntimeHostServices*       hostServices = nullptr;
         IOffscreenTaskScheduler*          offscreenScheduler = nullptr;
         const RenderRuntimeClockState*    clockState = nullptr;
-        /// Injected narrow environment-lighting result provider (bound by the
-        /// Host; Render3D never locates the processor through App).
         EnvironmentLightingResultProvider environmentLightingProvider;
-        std::function<Scene*()>           activeSceneProvider;
-        /// Presentation/app window metrics (copied from AppDesc by the Host).
         uint32_t    windowWidth  = 0;
         uint32_t    windowHeight = 0;
         std::string windowTitle;
-        /// RenderDoc diagnostics knobs (copied from AppDesc by the Host).
         bool        bEnableRenderDoc      = false;
         std::string renderDocDllPath;
         std::string renderDocCaptureOutputDir;
-    };
-
-    /// One Camera chain plus one present surface for this host call.
-    /// Grouping is typed; submit count stays one (R-1). The host acquires and
-    /// presents via `FPresentFrame`; R-5 may split submits with evidence.
-    struct FrameInput
-    {
-        SceneRenderPlanInput sceneRender{};
-        CameraFrameInput    camera{};
-        ViewComposeInput    viewCompose{};
-        DisplayComposeInput displayCompose{};
-        PresentFrameInput   present{};
     };
 
     IRenderRuntimeHostServices* _hostServices = nullptr;
     IOffscreenTaskScheduler*    _offscreenScheduler = nullptr;
     const RenderRuntimeClockState* _clockState = nullptr;
     EnvironmentLightingResultProvider _environmentLightingProvider;
-    std::function<Scene*()>           _activeSceneProvider;
-    /// Owned derived-processing systems (gameplay binding / environment
-    /// lighting / terrain); ticked by renderFrame. Created by Render3D so
-    /// the module never reaches the Host to locate them.
     std::unique_ptr<GameplayResourceBinding>       _gameplayResourceBinding;
     std::unique_ptr<EnvironmentLightingProcessor>  _environmentLightingProcessor;
     std::unique_ptr<TerrainProcessor>              _terrainProcessor;
@@ -135,26 +112,22 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     RenderDiagnosticsService     _diagnostics{};
     PipelineCoordinator          _pipelineCoordinator{};
     PresentationGraphService     _presentationGraphService{};
-    ViewportStateService         _viewportState{};
+    // default rect for default rt creation
+    Rect2D                       _pipelineViewportRect{};
 
     mutable size_t _viewportDebugCatalogSignature = 0;
     mutable std::shared_ptr<RenderViewportDebugCatalog> _viewportDebugCatalog = nullptr;
 
     void init(const InitDesc& desc);
     void shutdown(bool bRenderAlreadyIdle = false);
-    /// Records graphics → UI → view compose → display compose. Caller must
-    /// already have acquired `input.present` and must `submitPresentFrame`
-    /// with the returned command buffer (or an empty list if null). The live
-    /// submission for this flight stays occupied after return until that
-    /// flight is begun again (fence-safe command-buffer reuse).
-    [[nodiscard]] ICommandBuffer* renderFrame(const FrameInput& input);
 
-  public:
-    // =========================================================================
-    // Runtime control / services
-    // =========================================================================
-    /// Resize the single WorldView[0] offscreen target. Not the present surface.
-    void onViewportResized(Rect2D rect);
+    /// Safe-point mutation: pipeline RT specs. Call before command recording.
+    void applyViewportResize(Rect2D rect);
+    void applyPendingMutations();
+    /// Tick derived processors and rewrite IBL sets for this frame's Scene.
+    void prepareDerivedState(Scene* scene, float dt);
+    void prepareComposePipelines();
+
     void resetSkyboxPool();
     void resetEnvironmentLightingPool();
 
@@ -163,7 +136,6 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     [[nodiscard]] IRenderPipeline*               getActivePipeline() const;
     [[nodiscard]] uint64_t                       getFrameIndex() const override;
     [[nodiscard]] double                         getElapsedTimeSeconds() const override;
-    [[nodiscard]] Scene*                         getActiveScene() const override;
     [[nodiscard]] GameplayResourceBinding*         getGameplayResourceBinding() const override;
     [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const override;
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
@@ -176,15 +148,9 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     [[nodiscard]] RenderDiagnosticsService&      getDiagnosticsService() { return _diagnostics; }
     [[nodiscard]] const RenderDiagnosticsService& getDiagnosticsService() const { return _diagnostics; }
 
-    // =========================================================================
-    // Runtime outputs / debug inspection
-    // =========================================================================
     [[nodiscard]] std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> getActiveViewportImageShared() const;
-    /// Output of this Camera chain after graphics + UI + view compose (post
-    /// when enabled, else raw world color). Not the OS window / swapchain image.
     [[nodiscard]] std::shared_ptr<RenderTexture> getViewportDisplayImageShared() const;
-    /// Format of that camera display RT, known before the world graph creates it.
     [[nodiscard]] EFormat::T getViewportDisplayImageFormat() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> getPresentationImageShared() const;
     [[nodiscard]] const RenderSubmission* getLiveSubmission(uint32_t flightIndex) const
@@ -198,11 +164,6 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     [[nodiscard]] ERenderPipeline getPendingRenderPipeline() const { return _pipelineCoordinator.getPendingRenderPipeline(); }
     void setPendingRenderPipeline(ERenderPipeline renderPipeline) { _pipelineCoordinator.setPendingRenderPipeline(renderPipeline); }
     void requestActivePipelineReload() { _pipelineCoordinator.requestActivePipelineReload(); }
-    /// Enable/disable the world scene graph for the current frame. The editor
-    /// 2D canvas mode disables it: only the UI compose pass and the editor
-    /// viewport panel need rendering in that mode.
-    void setWorldSceneRenderEnabled(bool bEnabled) { _viewportState.setWorldSceneRenderEnabled(bEnabled); }
-    [[nodiscard]] bool isWorldSceneRenderEnabled() const { return _viewportState.isWorldSceneRenderEnabled(); }
 
     [[nodiscard]] stdptr<IDescriptorPool>      getSkyboxDescriptorPool() const { return _sharedResourceProvider.getSkyboxDescriptorPool(); }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxDescriptorSetLayout() const { return _sharedResourceProvider.getSkyboxDescriptorSetLayout(); }
@@ -214,21 +175,14 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene = nullptr) const override;
     [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const override;
 
-
-    [[nodiscard]] const Rect2D& getViewportRect() const { return _viewportState.getRect(); }
-    [[nodiscard]] float         getViewportFrameBufferScale() const { return _viewportState.getFrameBufferScale(); }
-    void                        setViewportFrameBufferScale(float scale) { _viewportState.setFrameBufferScale(scale); }
     [[nodiscard]] Extent2D      getViewportExtent() const;
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
     [[nodiscard]] RenderTargetCatalog buildRenderTargetCatalog() const;
-    [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot() const;
+    [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot(Scene* inspectScene = nullptr) const;
     [[nodiscard]] bool            isDeferredPipelineActive() const { return _pipelineCoordinator.isDeferredPipelineActive(); }
     void requestRenderTargetFormat(const RenderTargetFormatCommand& command);
 
   private:
-    // =========================================================================
-    // Lifecycle / startup
-    // =========================================================================
     void                   initRuntimeState(const InitDesc& desc);
     void                   initShaderSystems();
     void                   initDiagnostics(const InitDesc& desc);
@@ -241,39 +195,21 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     void                   shutdownRuntimeServices();
     void                   destroyRenderBackend();
 
-    // =========================================================================
-    // Per-frame orchestration
-    // =========================================================================
-    bool                   prepareFrame(const FrameInput& input, std::shared_ptr<ICommandBuffer>& cmdBuf);
-    [[nodiscard]] bool      validateSceneRenderInput(const FrameInput& input) const;
-    void                   renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf);
-    void                   ensureViewportRectInitialized(const FrameInput& input);
-    bool                   beginFrameCommandBuffer(const FrameInput& input, std::shared_ptr<ICommandBuffer>& cmdBuf);
-    void                   recordViewFamilies(
-                              const FrameInput& input,
-                              ICommandBuffer* cmdBuf,
-                              std::shared_ptr<RenderViewportOverlaySnapshot> overlaySnapshot);
+    bool                   beginFrameCommandBuffer(const RenderFramePlan& plan, std::shared_ptr<ICommandBuffer>& cmdBuf);
+    void                   clearPublishedViewOutputs();
     void                   publishFamilyResult(uint32_t flightIndex, ViewFamilyRenderResult result);
     void                   retainPublishedViewOutputs(uint32_t flightIndex, ICommandBuffer* cmdBuf);
     [[nodiscard]] const RenderViewOutput* publishedViewOutput() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> pipelineViewportColorImage() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> pipelineViewportDisplayImage() const;
-    /// Ends GPU timing and the flight command buffer. Present stays on the
-    /// host `FPresentFrame` coordinator (R-4).
     void                   endFrameCommandBuffer(ICommandBuffer* cmdBuf);
 
-    // =========================================================================
-    // Debug viewport catalog
-    // =========================================================================
-    void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog) const;
+    void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog, Scene* inspectScene) const;
     void appendViewportDebugImages(std::vector<RenderViewportDebugImageSlot>& images,
-                                   RenderViewportDebugCatalog*                catalog) const;
-    [[nodiscard]] size_t buildViewportDebugCatalogSignature() const;
-    void ensureViewportDebugCatalog() const;
-
-    // =========================================================================
-    // Internal pipeline / presentation helpers
-    // =========================================================================
+                                   RenderViewportDebugCatalog*                catalog,
+                                   Scene*                                     inspectScene) const;
+    [[nodiscard]] size_t buildViewportDebugCatalogSignature(Scene* inspectScene) const;
+    void ensureViewportDebugCatalog(Scene* inspectScene) const;
 };
 
 } // namespace ya

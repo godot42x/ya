@@ -920,6 +920,7 @@ RenderPipelineFrameContext makeDeferredViewFrameContext(const ViewFamilyRecordCo
             .frameData      = recording.frameData ? recording.frameData : camera.frameData,
             .viewportExtent = viewExtent,
         },
+        .derivedScene            = ctx.derivedScene,
     };
 }
 
@@ -1109,6 +1110,7 @@ void DeferredRenderPipeline::beginViewRecording(const RenderPipelineFrameContext
         .frameIndex     = frame.camera.frameIndex,
         .deltaTime      = frame.camera.deltaTime,
         .viewportExtent = {.width = vpW, .height = vpH},
+        .derivedScene   = frame.derivedScene,
     };
 }
 
@@ -1127,7 +1129,7 @@ ViewportOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInput
     EnvironmentLightingSceneResources& environmentLighting,
     DescriptorSetHandle& environmentLightingDS) const
 {
-    Scene* activeScene = _runtimeServices ? _runtimeServices->getActiveScene() : nullptr;
+    Scene* activeScene = frame.derivedScene;
     environmentLighting =
         _runtimeServices
         ? _runtimeServices->resolveSceneEnvironmentLightingResources(activeScene)

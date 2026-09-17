@@ -31,6 +31,8 @@
 #include "Render2D/Render2D.h"
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Material/Material.h"
+#include "Render3D/RenderDeviceState.h"
+#include "Render3D/RenderFrameCoordinator.h"
 
 #include "GameRuntime/Utility/RenderFrameExtractor.h"
 #include "Scene/Core/Scene.h"
@@ -213,27 +215,27 @@ int GameRuntimeFrameOrchestrator::iterate(App& app, float dt)
     ++App::_frameIndex;
 
     auto& renderServices = app.getRenderServices();
-    auto* renderRuntime  = renderServices.getRenderRuntime();
+    auto* device         = renderServices.getDeviceState();
     if (auto* automationControl = app.getAutomationControlService()) {
         automationControl->onFrameCompleted(app,
                                             renderServices.getRender(),
-                                            renderRuntime ? renderRuntime->getPostprocessOutputImageShared() : nullptr,
-                                            renderRuntime ? renderRuntime->getActiveViewportImageShared() : nullptr,
-                                            renderRuntime ? renderRuntime->getPresentationImageShared() : nullptr,
+                                            device ? device->getPostprocessOutputImageShared() : nullptr,
+                                            device ? device->getActiveViewportImageShared() : nullptr,
+                                            device ? device->getPresentationImageShared() : nullptr,
                                             App::_frameIndex);
     }
 
     if (AppAutomation::isFrameAutomationEnabled(app)) {
         YA_PROFILE_SCOPE("Frame/Automation");
         YA_PERF_SCOPE(perf::sample::frameAutomation(), perf::metric::cpuTimeMs(), perf::domain::render());
-        auto* diagnosticsService = renderRuntime ? &renderRuntime->getDiagnosticsService() : nullptr;
+        auto* diagnosticsService = device ? &device->getDiagnosticsService() : nullptr;
 
         AppAutomation::onFrameCompleted(app,
                                         AppAutomationFrameContext{
                                             .render                     = renderServices.getRender(),
-                                            .postprocessImage           = renderRuntime ? renderRuntime->getPostprocessOutputImageShared() : nullptr,
-                                            .viewportImage              = renderRuntime ? renderRuntime->getActiveViewportImageShared() : nullptr,
-                                            .presentationImage          = renderRuntime ? renderRuntime->getPresentationImageShared() : nullptr,
+                                            .postprocessImage           = device ? device->getPostprocessOutputImageShared() : nullptr,
+                                            .viewportImage              = device ? device->getActiveViewportImageShared() : nullptr,
+                                            .presentationImage          = device ? device->getPresentationImageShared() : nullptr,
                                             .requestRenderDocCapture    = diagnosticsService
                                                                             ? [diagnosticsService]()
                                                                            { return diagnosticsService->requestAutomationRenderDocCapture(); }
@@ -291,10 +293,10 @@ void GameRuntimeFrameOrchestrator::tickLogic(App& app, float dt)
 
     if (app.getSceneServices().getActiveScene()) {
         YA_PROFILE_SCOPE("Logic/RuntimeCamera");
-        auto* renderRuntime = app.getRenderServices().getRenderRuntime();
+        auto* device = app.getRenderServices().getDeviceState();
         const Extent2D viewportExtent = resolveViewportExtent(app,
-                                                              renderRuntime,
-                                                              renderRuntime ? renderRuntime->getViewportRect() : Rect2D{});
+                                                              device,
+                                                              app._renderState->frameState.viewportRect);
         syncRuntimeCameraAspect(getPrimaryCamera(app), viewportExtent);
     }
 
@@ -347,10 +349,10 @@ void GameRuntimeFrameOrchestrator::syncViewportState(App& app)
     (void)app;
 }
 
-Extent2D GameRuntimeFrameOrchestrator::resolveViewportExtent(const App& app, RenderRuntime* renderRuntime, const Rect2D& viewportRect)
+Extent2D GameRuntimeFrameOrchestrator::resolveViewportExtent(const App& app, RenderDeviceState* device, const Rect2D& viewportRect)
 {
-    if (renderRuntime) {
-        Extent2D extent = renderRuntime->getViewportExtent();
+    if (device) {
+        Extent2D extent = device->getViewportExtent();
         if (extent.width > 0 && extent.height > 0) {
             return extent;
         }
@@ -392,8 +394,8 @@ Entity* GameRuntimeFrameOrchestrator::getPrimaryCamera(const App& app)
 
 void GameRuntimeFrameOrchestrator::prepareRenderFrameState(App& app, float dt)
 {
-    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
-    if (!renderRuntime) {
+    auto* device = app.getRenderServices().getDeviceState();
+    if (!device) {
         app._renderState->frameState = {};
         return;
     }
@@ -401,7 +403,7 @@ void GameRuntimeFrameOrchestrator::prepareRenderFrameState(App& app, float dt)
     app._renderState->frameState.clock.frameIndex    = App::_frameIndex;
     app._renderState->frameState.clock.elapsedTimeMS = app.getElapsedTimeMS();
 
-    Rect2D viewportRect = renderRuntime->getViewportRect();
+    Rect2D viewportRect = app._renderState->frameState.viewportRect;
     if (viewportRect.extent.x <= 0.0f || viewportRect.extent.y <= 0.0f) {
         viewportRect = Rect2D{
             .pos    = {0.0f, 0.0f},
@@ -417,9 +419,13 @@ void GameRuntimeFrameOrchestrator::prepareRenderFrameState(App& app, float dt)
                                    runtimeCamera && runtimeCamera->isValid() &&
                                    runtimeCamera->hasComponent<CameraComponent>();
 
+    const float viewportFrameBufferScale = app._renderState->frameState.viewportFrameBufferScale;
+    const RenderRuntimeClockState clock  = app._renderState->frameState.clock;
+
     AppRenderFrameState frameState{};
+    frameState.clock                    = clock;
     frameState.viewportRect             = viewportRect;
-    frameState.viewportFrameBufferScale = renderRuntime->getViewportFrameBufferScale();
+    frameState.viewportFrameBufferScale = viewportFrameBufferScale;
     if (bUseRuntimeCamera) {
         auto cc                      = runtimeCamera->getComponent<CameraComponent>();
         auto tc                      = runtimeCamera->getComponent<TransformComponent>();
@@ -484,8 +490,9 @@ std::vector<RenderOverlaySprite2D> GameRuntimeFrameOrchestrator::buildScreenOver
 
 void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
 {
-    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
-    if (!renderRuntime) {
+    auto* device      = app.getRenderServices().getDeviceState();
+    auto* coordinator = app.getRenderServices().getFrameCoordinator();
+    if (!device || !coordinator) {
         return;
     }
 
@@ -495,7 +502,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
         prepareRenderFrameState(app, dt);
     }
 
-    auto& diagnostics = renderRuntime->getDiagnosticsService();
+    auto& diagnostics = device->getDiagnosticsService();
     diagnostics.onFrameBegin();
 
     struct DiagnosticsGuard
@@ -510,7 +517,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
         }
     } diagnosticsGuard{.diagnostics = &diagnostics};
 
-    renderRuntime->getOffscreenTaskService().tick(app.getTaskManager());
+    device->getOffscreenTaskService().tick(app.getTaskManager());
 
     const uint32_t flightIndex = resolveFlightIndex(app);
 
@@ -538,8 +545,8 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
 
     SceneRenderPlan sceneRenderPlan;
     std::vector<RenderOverlayLine3D> cameraFrustumLines;
-    if (renderRuntime->isWorldSceneRenderEnabled() && scene) {
-        auto buildSnapshot = [scene, terrainProcessor = renderRuntime->getTerrainProcessor()]
+    if (app.getRenderServices().isWorldSceneRenderEnabled() && scene) {
+        auto buildSnapshot = [scene, terrainProcessor = device->getTerrainProcessor()]
         {
             auto snapshot = std::make_shared<SceneFrameSnapshot>();
             RenderFrameExtractor::extractSceneSnapshot(
@@ -674,7 +681,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
     };
     cameraFrame.uiFrameSnapshot = pUiFrameSnapshot;
 
-    IRender*       render        = renderRuntime->getRender();
+    IRender*       render        = device->getRender();
     FPresentFrame  presentFrame{.surface = render ? render->getPrimarySurfaceContext() : nullptr};
     {
         YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -689,7 +696,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
         return;
     }
 
-    ICommandBuffer* recorded = renderRuntime->renderFrame(RenderRuntime::FrameInput{
+    ICommandBuffer* recorded = coordinator->record(RenderFramePlan{
         .sceneRender = {
             .plan  = viewRecordings.empty() ? nullptr : &sceneRenderPlan,
             .views = std::move(viewRecordings),
@@ -735,6 +742,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
             .surface    = presentFrame.surface,
             .imageIndex = presentFrame.imageIndex,
         },
+        .derivedScene = (app.getRenderServices().isWorldSceneRenderEnabled() && scene) ? scene : nullptr,
     });
 
     {

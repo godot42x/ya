@@ -90,7 +90,7 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     static uint32_t _frameIndex;
     bool            _bPause     = false;
     /// Main present surface unpresentable (minimize). Not a process pause:
-    /// logic still ticks; RenderRuntime skips GPU when `begin` returns -1.
+    /// logic still ticks; coordinator skips GPU when `begin` returns -1.
     bool            _bMinimized = false;
 
     AppDesc   _ci;

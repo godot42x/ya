@@ -205,7 +205,7 @@ void ForwardViewportStage::executeDebug(const RenderStageContext& ctx, const Pas
 
 ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const RenderStageContext& ctx)
 {
-    auto* activeScene           = _runtimeServices ? _runtimeServices->getActiveScene() : nullptr;
+    auto* activeScene           = ctx.derivedScene;
     auto* envProcessor          = _runtimeServices ? _runtimeServices->getEnvironmentLightingProcessor() : nullptr;
     return PassContext{
         .stageCtx = ctx,

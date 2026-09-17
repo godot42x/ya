@@ -54,7 +54,7 @@
 - [x] 4.0.2 B：引入 `SceneViewFamilyPlan` 与 `SceneFamilyResources`；skinning/scene packet 不再按 flight 全局共享；同 Scene 双 View复用 family、双 Scene隔离。
 - [x] 4.0.2 C：引入 Deferred/Forward typed View/Pass resources；Stage 改为 pass recipe；删除 singleton CIS、processor viewId map；PointShadow buffer 归入 View Binding。
 - [x] 4.0.2 D：Deferred/Forward 改为 `recordFamily`；一个 family graph 产生多个 typed outputs；删除 tick/beginTick 与 pipeline last-view 图袋作为 publish source。
-- [ ] 4.0.2 E：拆除 RenderRuntime facade 为 RenderDeviceState + RenderFrameCoordinator + family renderer + presentation；删除单一 ViewportState 与 active Scene service-locator 依赖。
+- [x] 4.0.2 E：拆除 RenderRuntime facade 为 RenderDeviceState + RenderFrameCoordinator + family renderer + presentation；删除单一 ViewportState 与 active Scene service-locator 依赖。
 - [ ] 录制两个 Scene 的两个 View，验证 snapshot 和资源生命周期隔离（排在 4.0.2 之后）。
 - [ ] 验证一个 View 到多个 Surface、多个 View 到一个 Surface。
 - [ ] 验证 surface acquire/present/recreate 不进入 View pipeline。

@@ -19,6 +19,7 @@ struct ICommandBuffer;
 struct IRenderSurfaceContext;
 struct RenderFrameData;
 class RenderSubmission;
+struct Scene;
 struct UIFrameSnapshot;
 
 /// One View inside a sealed plan: the task must point at `plan.viewportTasks[i]`,
@@ -31,10 +32,10 @@ struct SceneViewRecording
 
 /// Sealed SceneRenderPlan input for one host render call. The plan owns the
 /// immutable Scene snapshot table; `views` is parallel to `plan.viewportTasks`.
-/// RenderRuntime records every view in this list. It does not own the plan,
-/// tasks, or frameData. Graph-exported image and overlay handles used while
-/// recording are retained on the live submission until that flight is reused
-/// after its fence.
+/// `RenderFrameCoordinator` records every view in this list. It does not own
+/// the plan, tasks, or frameData. Graph-exported image and overlay handles used
+/// while recording are retained on the live submission until that flight is reused
+/// after its fence. Empty `sceneRender` is a UI-only frame: no Scene family.
 struct SceneRenderPlanInput
 {
     const SceneRenderPlan*           plan = nullptr;
@@ -193,13 +194,27 @@ struct DisplayComposeInput
 };
 
 /// Acquire / present destination for this frame. The host/present coordinator
-/// must call `acquirePresentFrame` before `renderFrame` and
-/// `submitPresentFrame` after. RenderRuntime does not acquire or present.
+/// must call `acquirePresentFrame` before `RenderFrameCoordinator::record` and
+/// `submitPresentFrame` after. Device/coordinator do not acquire or present.
 /// `imageIndex < 0` means this surface is not presenting this frame.
 struct PresentFrameInput
 {
     IRenderSurfaceContext* surface    = nullptr;
     int32_t                imageIndex = -1;
+};
+
+/// Sealed host frame value consumed by `RenderFrameCoordinator::record`.
+/// Not an active-Scene query and not swapchain ownership.
+struct RenderFramePlan
+{
+    SceneRenderPlanInput sceneRender{};
+    CameraFrameInput    camera{};
+    ViewComposeInput    viewCompose{};
+    DisplayComposeInput displayCompose{};
+    PresentFrameInput   present{};
+    /// Host-provided Scene for this frame's derived processors / IBL / overlay
+    /// extraction. Null means UI-only: do not tick world derived state.
+    Scene* derivedScene = nullptr;
 };
 
 /// One Scene family to record into a single graph on the live submission.
@@ -212,6 +227,7 @@ struct ViewFamilyRecordContext
     const SceneViewFamilyPlan*                               family       = nullptr;
     std::vector<SceneViewRecording>                          views;
     std::shared_ptr<const RenderViewportOverlaySnapshot>     overlaySnapshot;
+    Scene*                                                   derivedScene = nullptr;
 };
 
 /// Recording extras plus the camera packet consumed by Forward/Deferred.
@@ -226,6 +242,7 @@ struct RenderPipelineFrameContext
     std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
     RenderSubmission*          submission = nullptr;
     RenderViewRecordingContext view{};
+    Scene*                     derivedScene = nullptr;
 };
 
 } // namespace ya

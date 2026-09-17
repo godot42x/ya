@@ -21,7 +21,7 @@
 #include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
-#include "Render3D/RenderRuntime.h"
+#include "Render3D/RenderDeviceState.h"
 #include "RHI/RenderDefines.h"
 
 #include <algorithm>
@@ -140,7 +140,7 @@ void mutateDeferred(App* app, Fn&& fn)
     if (!app) {
         return;
     }
-    auto* runtime = app->getRenderServices().getRenderRuntime();
+    auto* runtime = app->getRenderServices().getDeviceState();
     if (!runtime) {
         return;
     }
@@ -160,7 +160,7 @@ void mutatePostProcess(App* app, Fn&& fn)
     if (!app) {
         return;
     }
-    auto* runtime = app->getRenderServices().getRenderRuntime();
+    auto* runtime = app->getRenderServices().getDeviceState();
     if (!runtime) {
         return;
     }
@@ -185,7 +185,7 @@ void mutateShadow(App* app, Fn&& fn)
     if (!app) {
         return;
     }
-    auto* runtime = app->getRenderServices().getRenderRuntime();
+    auto* runtime = app->getRenderServices().getDeviceState();
     if (!runtime) {
         return;
     }
@@ -418,17 +418,15 @@ void RuntimeRenderSettingsSection::bindCallbacks()
         if (_bSyncing || !_app) {
             return;
         }
-        if (auto* runtime = _app->getRenderServices().getRenderRuntime()) {
-            runtime->setPendingRenderPipeline(static_cast<RenderRuntime::ERenderPipeline>(index));
+        if (auto* runtime = _app->getRenderServices().getDeviceState()) {
+            runtime->setPendingRenderPipeline(static_cast<RenderDeviceState::ERenderPipeline>(index));
         }
     };
     _viewportScale->_onValueChanged = [this](float value) {
         if (_bSyncing || !_app) {
             return;
         }
-        if (auto* runtime = _app->getRenderServices().getRenderRuntime()) {
-            runtime->setViewportFrameBufferScale(value);
-        }
+        _app->getRenderServices().setViewportFrameBufferScale(value);
     };
     _vsync->_onChanged = [this](bool value) {
         if (_bSyncing || !_presentSurface) {
@@ -453,7 +451,7 @@ void RuntimeRenderSettingsSection::bindCallbacks()
         if (!_app) {
             return;
         }
-        if (auto* runtime = _app->getRenderServices().getRenderRuntime()) {
+        if (auto* runtime = _app->getRenderServices().getDeviceState()) {
             runtime->requestActivePipelineReload();
         }
     };
@@ -732,7 +730,7 @@ void RuntimeRenderSettingsSection::sync(const App* app, IRenderSurfaceContext* p
         return;
     }
     _app = const_cast<App*>(app);
-    auto* runtime = app->getRenderServices().getRenderRuntime();
+    auto* runtime = app->getRenderServices().getDeviceState();
     if (!runtime) {
         return;
     }
@@ -743,7 +741,7 @@ void RuntimeRenderSettingsSection::sync(const App* app, IRenderSurfaceContext* p
     const bool pending = runtime->getPendingRenderPipeline() != runtime->getRenderPipeline();
     _pipeline->setSelectedIndex(pipeline, false);
     _pipelinePending->setText(pending ? "(switch pending)" : "");
-    _viewportScale->setValue(runtime->getViewportFrameBufferScale(), false);
+    _viewportScale->setValue(app->getRenderServices().getViewportFrameBufferScale(), false);
     if (_presentSurface) {
         if (auto* sc = _presentSurface->getSwapchain()) {
             _vsync->setChecked(sc->getVsync());

@@ -24,7 +24,7 @@
 #include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
 #include "ECS/Systems/TransformSystem.h"
 
-#include "Render3D/RenderRuntime.h"
+#include "Render3D/RenderDeviceState.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 
@@ -544,9 +544,9 @@ void AppAutomationControlService::handleGetDirectionalLightInfo(App& app, const 
 
 void AppAutomationControlService::handleSetRenderPipeline(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
-    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
-    if (!renderRuntime) {
-        completeCall(call, makeError(*call, "render runtime is unavailable"));
+    auto* device = app.getRenderServices().getDeviceState();
+    if (!device) {
+        completeCall(call, makeError(*call, "render device is unavailable"));
         return;
     }
 
@@ -558,14 +558,14 @@ void AppAutomationControlService::handleSetRenderPipeline(App& app, const AppAut
     }
 
     const auto runtimeTarget = target == EAutomationRenderPipeline::Forward
-                                  ? RenderRuntime::ERenderPipeline::Forward
-                                  : RenderRuntime::ERenderPipeline::Deferred;
-    renderRuntime->setPendingRenderPipeline(runtimeTarget);
+                                  ? RenderDeviceState::ERenderPipeline::Forward
+                                  : RenderDeviceState::ERenderPipeline::Deferred;
+    device->setPendingRenderPipeline(runtimeTarget);
     completeCall(call,
                  makeSuccess(*call,
                              {
                                  {"target", target == EAutomationRenderPipeline::Forward ? "forward" : "deferred"},
-                                 {"applied", renderRuntime->getRenderPipeline() == runtimeTarget},
+                                 {"applied", device->getRenderPipeline() == runtimeTarget},
                              }));
 }
 
@@ -706,14 +706,14 @@ void AppAutomationControlService::handleQuit(App& app, const AppAutomationContro
 
 void AppAutomationControlService::handleGetWorldViewState(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
-    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
-    if (!renderRuntime) {
-        completeCall(call, makeError(*call, "render runtime is unavailable"));
+    auto* device = app.getRenderServices().getDeviceState();
+    if (!device) {
+        completeCall(call, makeError(*call, "render device is unavailable"));
         return;
     }
 
     const auto& frameState = app.getRenderServices().getRenderFrameState();
-    const auto  viewportRect = renderRuntime->getViewportRect();
+    const auto  viewportRect = app.getRenderServices().getViewportRect();
 
     nlohmann::json result = {
         {"is_stopped", app.isStopped()},

@@ -11,6 +11,7 @@ namespace ya
 
 struct IRender;
 struct ICommandBuffer;
+struct Scene;
 
 /// Context passed to every RenderStage each frame.
 struct RenderStageContext
@@ -21,6 +22,7 @@ struct RenderStageContext
     uint64_t               frameIndex     = 0;
     float                  deltaTime      = 0.0f;
     Extent2D               viewportExtent = {};
+    Scene*                 derivedScene   = nullptr;
 };
 
 /// Base class for a render stage — a logical phase in the rendering pipeline.

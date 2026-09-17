@@ -6,7 +6,8 @@
 #include "Render3D/Stage/IRenderStage.h"
 #include "GameRuntime/AppRenderFrameState.h"
 #include "Render3D/Common/RenderOverlay.h"
-#include "Render3D/RenderRuntime.h"
+#include "Render3D/RenderDeviceState.h"
+#include "Render3D/RenderFrameCoordinator.h"
 
 #include <array>
 #include <memory>
@@ -18,11 +19,14 @@ namespace ya
 
 struct AppRenderState
 {
-    std::unique_ptr<RenderRuntime>                     runtime;
+    std::unique_ptr<RenderDeviceState>                 device;
+    std::unique_ptr<RenderFrameCoordinator>            coordinator;
     ShadowSettings                                     shadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
     bool                                               bRenderMirror  = false;
     AppRenderFrameState                                frameState;
     std::optional<AppRenderFrameState>                 extensionFrameState;
+    /// Host policy: skip Scene family record for UI-only frames (editor 2D canvas).
+    bool                                               bWorldSceneRenderEnabled = true;
     /// When true, `cameraPreviewEntityUUID` is the host's explicit choice
     /// (editor selection). UUID 0 then means "do not preview". When false,
     /// GameRuntime may auto-pick the first non-primary scene camera.

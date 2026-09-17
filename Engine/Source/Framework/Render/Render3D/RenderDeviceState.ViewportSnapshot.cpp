@@ -1,10 +1,10 @@
 #include "RHI/Core/RenderTexture.h"
-#include "RenderRuntime.h"
+#include "RenderDeviceState.h"
 
 namespace ya
 {
 
-RenderViewportSnapshot RenderRuntime::buildViewportSnapshot() const
+RenderViewportSnapshot RenderDeviceState::buildViewportSnapshot(Scene* inspectScene) const
 {
     const auto debugOutputs = buildPipelineDebugOutputCatalog();
 
@@ -27,13 +27,13 @@ RenderViewportSnapshot RenderRuntime::buildViewportSnapshot() const
                                      ? snapshot.viewportImageOwner->getImageView()
                                      : nullptr;
 
-    ensureViewportDebugCatalog();
+    ensureViewportDebugCatalog(inspectScene);
     snapshot.debugCatalog = _viewportDebugCatalog;
     if (snapshot.debugCatalog) {
         snapshot.debugImages.reserve(snapshot.debugCatalog->slots.size());
     }
 
-    appendViewportDebugImages(snapshot.debugImages, nullptr);
+    appendViewportDebugImages(snapshot.debugImages, nullptr, inspectScene);
     return snapshot;
 }
 

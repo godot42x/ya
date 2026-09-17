@@ -27,7 +27,7 @@
 
 ## 最近一次 checkpoint
 
-- 2026-09-17：4.0.2 D：`recordFamily` 编译一个 family graph 返回多个 typed `RenderViewOutput`；删除 tick 与 last-view 图袋作为 publish source。ViewFamilyRendererTest 5/5，专项与回归 71/71。下一刀是 Checkpoint E（拆 RenderRuntime facade）。
+- 2026-09-17：4.0.2 E：拆除 `RenderRuntime` 为 `RenderDeviceState` + `RenderFrameCoordinator`；删除 `ViewportStateService` 与 `getActiveScene` locator。Host 拥有 world-enable 与 viewport rect。空 `sceneRender` 是 UI-only。未引入空 ViewHistoryStore。专项与回归 72/72。下一刀是产品双 Scene / 双 Surface 验收。
 - 2026-09-17：4.0.2 C：typed `ViewResources` 持有 SSAO/Light/EntityId/Overlay/debug/post DS/UBO；Bloom/BasicPost viewId map 与 Stage singleton CIS 删除；PointShadow packet 在 Shadow View Binding。ViewPassResourcesTest 5/5，专项与回归 66/66。下一刀曾是 Checkpoint D（family renderer），不再扩大 mega Binding。
 - 2026-09-17：4.0.2 B：`SceneViewFamilyPlan` 在 seal 时物化；`SceneFamilyResources` 由 submission 持有 skinning SSBO。同 Scene 双 View owner 相同，双 Scene owner/buffer 不同。SceneFamilyResourcesTest 4/4，专项与回归 57/57。下一刀曾是 Checkpoint C（typed pass resources），不再扩大 mega Binding。
 - 2026-09-17：4.0.2 A：`RenderSubmission` / `RenderSubmissionPool` 拥有 cmd/upload/transient DS/keepalive/finish；删除 `RenderSubmissionContext` / `RenderSubmissionTable` 与 resource-set `beginSubmission`。RenderSubmissionTest 7/7，专项与回归 53/53。下一刀曾是 Checkpoint B（SceneFamily），不再扩大 mega Binding。
@@ -45,4 +45,4 @@
 - 2026-09-16：View-owned draw bucket 已完成 source pointer + order indices 迁移；14 个 RenderRuntime/DrawCandidateView 测试通过，ya-game-runtime 构建通过。
 - 2026-09-16：Forward/Deferred 已移除跨 View 的 `_lastTickCtx` / `_lastFrameInput`，graph build 使用调用栈内 View-local context；渲染测试 14/14，ya-game-runtime 构建通过。
 - 2026-09-16：FrameUploadArena 同 `(flightIndex, frameToken)` 的 begin 改为幂等追加语义；同 submission 的后续 allocation 不 rewind cursor，FrameUploadArena 专项测试通过。
-- 保留未完成项：4.0.2 E 拆除 RenderRuntime facade、双 Scene/双 ViewFamily 产品录制、双 Surface GPU 验收、viewport click picking 仍需 mesh/billboard 写 entityId。
+- 保留未完成项：双 Scene/双 ViewFamily 产品录制、双 Surface GPU 验收、viewport click picking 仍需 mesh/billboard 写 entityId。

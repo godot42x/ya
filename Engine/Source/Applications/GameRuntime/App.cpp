@@ -8,7 +8,7 @@
 #include "GUI/Host/GUIWindowChrome.h"
 #include "App/Kernel/AppKernel.h"
 #include "Core/Config/ConfigManager.h"
-#include "Render3D/RenderRuntime.h"
+#include "Render3D/RenderDeviceState.h"
 
 #include "App/Module/ProjectDescriptor.h"
 #include "Core/Profiling/Profiling.h"
@@ -424,20 +424,20 @@ OffscreenJobQueueService App::getOffscreenJobQueueService()
 
 GameplayResourceBinding* App::getGameplayResourceBinding() const
 {
-    auto* runtime = getRenderServices().getRenderRuntime();
-    return runtime ? runtime->getGameplayResourceBinding() : nullptr;
+    auto* device = getRenderServices().getDeviceState();
+    return device ? device->getGameplayResourceBinding() : nullptr;
 }
 
 EnvironmentLightingProcessor* App::getEnvironmentLightingProcessor() const
 {
-    auto* runtime = getRenderServices().getRenderRuntime();
-    return runtime ? runtime->getEnvironmentLightingProcessor() : nullptr;
+    auto* device = getRenderServices().getDeviceState();
+    return device ? device->getEnvironmentLightingProcessor() : nullptr;
 }
 
 TerrainProcessor* App::getTerrainProcessor() const
 {
-    auto* runtime = getRenderServices().getRenderRuntime();
-    return runtime ? runtime->getTerrainProcessor() : nullptr;
+    auto* device = getRenderServices().getDeviceState();
+    return device ? device->getTerrainProcessor() : nullptr;
 }
 uint64_t App::getElapsedTimeMS() const
 {

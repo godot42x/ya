@@ -2,7 +2,8 @@
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ViewCompose.h"
 #include "Render3D/RenderFrameData.h"
-#include "Render3D/RenderRuntime.h"
+#include "Render3D/RenderDeviceState.h"
+#include "Render3D/RenderFrameCoordinator.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -15,16 +16,17 @@ namespace ya
 namespace
 {
 
-TEST(RenderRuntimeSnapshotTest, EmptyRuntimePublishesEmptyViewportResources)
+TEST(RenderRuntimeSnapshotTest, EmptyDevicePublishesEmptyViewportResources)
 {
-    RenderRuntime runtime;
+    RenderDeviceState device;
+    RenderFrameCoordinator coordinator(device);
 
-    EXPECT_EQ(runtime.getLiveSubmission(0), nullptr);
-    EXPECT_EQ(runtime.getLiveSubmission(MAX_FLIGHTS_IN_FLIGHT), nullptr);
-    EXPECT_EQ(runtime.getViewOutput(1), nullptr);
+    EXPECT_EQ(device.getLiveSubmission(0), nullptr);
+    EXPECT_EQ(device.getLiveSubmission(MAX_FLIGHTS_IN_FLIGHT), nullptr);
+    EXPECT_EQ(device.getViewOutput(1), nullptr);
 
-    const RenderViewportSnapshot viewport = runtime.buildViewportSnapshot();
-    const RenderTargetCatalog    targets  = runtime.buildRenderTargetCatalog();
+    const RenderViewportSnapshot viewport = device.buildViewportSnapshot();
+    const RenderTargetCatalog    targets  = device.buildRenderTargetCatalog();
 
     EXPECT_EQ(viewport.viewportImageOwner, nullptr);
     EXPECT_EQ(viewport.viewportImageView, nullptr);
@@ -37,22 +39,25 @@ TEST(RenderRuntimeSnapshotTest, EmptyRuntimePublishesEmptyViewportResources)
     EXPECT_TRUE(targets.entries.empty());
 }
 
-TEST(RenderRuntimeSnapshotTest, FrameInputGroupsCameraViewDisplayPresent)
+TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsCameraViewDisplayPresent)
 {
-    static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.camera), CameraFrameInput>);
-    static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.sceneRender), SceneRenderPlanInput>);
+    static_assert(std::is_same_v<decltype(RenderFramePlan{}.camera), CameraFrameInput>);
+    static_assert(std::is_same_v<decltype(RenderFramePlan{}.sceneRender), SceneRenderPlanInput>);
     static_assert(std::is_same_v<decltype(SceneRenderPlanInput{}.views), std::vector<SceneViewRecording>>);
-    static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.viewCompose), ViewComposeInput>);
-    static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.displayCompose), DisplayComposeInput>);
-    static_assert(std::is_same_v<decltype(RenderRuntime::FrameInput{}.present), PresentFrameInput>);
+    static_assert(std::is_same_v<decltype(RenderFramePlan{}.viewCompose), ViewComposeInput>);
+    static_assert(std::is_same_v<decltype(RenderFramePlan{}.displayCompose), DisplayComposeInput>);
+    static_assert(std::is_same_v<decltype(RenderFramePlan{}.present), PresentFrameInput>);
+    static_assert(std::is_same_v<decltype(RenderFramePlan{}.derivedScene), Scene*>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.camera), CameraFrameInput>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.submission), RenderSubmission*>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.view), RenderViewRecordingContext>);
+    static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.derivedScene), Scene*>);
+    static_assert(std::is_same_v<decltype(ViewFamilyRecordContext{}.derivedScene), Scene*>);
 
     const glm::mat4 view       = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
     const glm::mat4 projection = glm::perspective(1.0f, 1.5f, 0.1f, 100.0f);
 
-    RenderRuntime::FrameInput input{
+    RenderFramePlan plan{
         .camera = {
             .deltaTime      = 0.016f,
             .view           = view,
@@ -63,16 +68,27 @@ TEST(RenderRuntimeSnapshotTest, FrameInputGroupsCameraViewDisplayPresent)
         .viewCompose    = {},
         .displayCompose = {},
         .present        = {.surface = nullptr, .imageIndex = -1},
+        .derivedScene   = nullptr,
     };
 
-    EXPECT_FLOAT_EQ(input.camera.deltaTime, 0.016f);
-    EXPECT_EQ(input.camera.viewProjection, makeCameraViewProjection(projection, view));
-    EXPECT_TRUE(input.camera.hasOffscreenExtent());
-    EXPECT_TRUE(input.viewCompose.empty());
-    EXPECT_TRUE(input.viewCompose.insets.empty());
-    EXPECT_TRUE(input.displayCompose.extensions.empty());
-    EXPECT_EQ(input.present.surface, nullptr);
-    EXPECT_EQ(input.present.imageIndex, -1);
+    EXPECT_FLOAT_EQ(plan.camera.deltaTime, 0.016f);
+    EXPECT_EQ(plan.camera.viewProjection, makeCameraViewProjection(projection, view));
+    EXPECT_TRUE(plan.camera.hasOffscreenExtent());
+    EXPECT_TRUE(plan.viewCompose.empty());
+    EXPECT_TRUE(plan.viewCompose.insets.empty());
+    EXPECT_TRUE(plan.displayCompose.extensions.empty());
+    EXPECT_EQ(plan.present.surface, nullptr);
+    EXPECT_EQ(plan.present.imageIndex, -1);
+    EXPECT_TRUE(plan.sceneRender.empty());
+    EXPECT_EQ(plan.derivedScene, nullptr);
+}
+
+TEST(RenderRuntimeSnapshotTest, EmptySceneRenderIsUiOnlyFrame)
+{
+    const RenderFramePlan plan{};
+    EXPECT_TRUE(plan.sceneRender.empty());
+    EXPECT_FALSE(plan.sceneRender.complete());
+    EXPECT_EQ(plan.derivedScene, nullptr);
 }
 
 TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)

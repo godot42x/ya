@@ -8,7 +8,7 @@
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
-#include "Render3D/RenderRuntime.h"
+#include "Render3D/RenderDeviceState.h"
 #include "GameRuntime/Utility/AppScreenshotCapture.h"
 #include "GameRuntime/Utility/OffscreenJobRunner.h"
 
@@ -484,8 +484,8 @@ bool hasPendingAutomationWork(const App& app, const AppAutomationFrameContext* f
         if (frameContext && frameContext->isRenderDocCaptureTerminal) {
             bRenderDocPending = !frameContext->isRenderDocCaptureTerminal();
         }
-        else if (const RenderRuntime* renderRuntime = app.getRenderServices().getRenderRuntime()) {
-            bRenderDocPending = !renderRuntime->getDiagnosticsService().isAutomationRenderDocCaptureTerminal();
+        else if (const RenderDeviceState* device = app.getRenderServices().getDeviceState()) {
+            bRenderDocPending = !device->getDiagnosticsService().isAutomationRenderDocCaptureTerminal();
         }
     }
 
@@ -517,30 +517,30 @@ void applyPostprocessAutomationOverrides(PostProcessingStage& stage, const AppAu
     }
 }
 
-RenderRuntime::ERenderPipeline toRuntimeRenderPipeline(EAutomationRenderPipeline pipeline)
+RenderDeviceState::ERenderPipeline toRuntimeRenderPipeline(EAutomationRenderPipeline pipeline)
 {
     switch (pipeline) {
     case EAutomationRenderPipeline::Forward:
-        return RenderRuntime::ERenderPipeline::Forward;
+        return RenderDeviceState::ERenderPipeline::Forward;
     case EAutomationRenderPipeline::Deferred:
-        return RenderRuntime::ERenderPipeline::Deferred;
+        return RenderDeviceState::ERenderPipeline::Deferred;
     }
-    return RenderRuntime::ERenderPipeline::Deferred;
+    return RenderDeviceState::ERenderPipeline::Deferred;
 }
 
 void applyScheduledSmokeActions(App& app, uint64_t frameIndex)
 {
     auto&                       runtimeState = getAutomationRuntimeState();
     const AppAutomationOptions& automation   = app.getDesc().automation;
-    auto*                       renderRuntime = app.getRenderServices().getRenderRuntime();
-    if (!renderRuntime) {
+    auto*                       device = app.getRenderServices().getDeviceState();
+    if (!device) {
         return;
     }
 
     if (automation.pipelineSwitch &&
         !runtimeState.bPipelineSwitchApplied &&
         frameIndex >= automation.pipelineSwitch->frameIndex) {
-        renderRuntime->setPendingRenderPipeline(toRuntimeRenderPipeline(automation.pipelineSwitch->target));
+        device->setPendingRenderPipeline(toRuntimeRenderPipeline(automation.pipelineSwitch->target));
         runtimeState.bPipelineSwitchApplied = true;
         YA_CORE_INFO("Automation queued render pipeline switch to {} at frame {}",
                      automation.pipelineSwitch->target == EAutomationRenderPipeline::Forward ? "Forward" : "Deferred",
@@ -550,11 +550,12 @@ void applyScheduledSmokeActions(App& app, uint64_t frameIndex)
     if (automation.viewportResize &&
         !runtimeState.bViewportResizeApplied &&
         frameIndex >= automation.viewportResize->frameIndex) {
-        Rect2D resizeRect = renderRuntime->getViewportRect();
+        Rect2D resizeRect = app.getRenderServices().getViewportRect();
         resizeRect.extent = glm::vec2(static_cast<float>(automation.viewportResize->width),
                                       static_cast<float>(automation.viewportResize->height));
 
-        renderRuntime->onViewportResized(resizeRect);
+        app.getRenderServices().setViewportRect(resizeRect);
+        device->applyViewportResize(resizeRect);
 
         runtimeState.bViewportResizeApplied = true;
         YA_CORE_INFO("Automation queued viewport resize to {}x{} at frame {}",
@@ -727,16 +728,16 @@ void AppAutomation::applyRuntimeOverrides(App& app)
 {
     shadow_settings::applyAutomationOverrides(app.getDesc().automation.shadow, app.getRenderServices().getShadowSettings());
 
-    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
-    if (!renderRuntime) {
+    auto* device = app.getRenderServices().getDeviceState();
+    if (!device) {
         return;
     }
 
     const auto& automation = app.getDesc().automation;
-    if (auto* forward = renderRuntime->_pipelineCoordinator.getSelectedForwardPipeline()) {
+    if (auto* forward = device->_pipelineCoordinator.getSelectedForwardPipeline()) {
         applyPostprocessAutomationOverrides(forward->_postProcessStage, automation.postprocess);
     }
-    if (auto* deferred = renderRuntime->_pipelineCoordinator.getSelectedDeferredPipeline()) {
+    if (auto* deferred = device->_pipelineCoordinator.getSelectedDeferredPipeline()) {
         if (automation.deferred.ssaoEnabled.has_value()) {
             deferred->setSSAOEnabled(*automation.deferred.ssaoEnabled);
         }

@@ -2,7 +2,7 @@
 #include "GameRuntime/App.h"
 #include "GUI/Declarative/Build.h"
 #include "GUI/Widgets/Controls/Text.h"
-#include "Render3D/RenderRuntime.h"
+#include "Render3D/RenderDeviceState.h"
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
 
@@ -25,7 +25,7 @@ void RuntimeRenderGraphSection::construct()
 void RuntimeRenderGraphSection::sync(const App* app)
 {
     if (!_pipeline || !_passes || !_dependencies || !_status || !app) return;
-    auto* runtime = app->getRenderServices().getRenderRuntime();
+    auto* runtime = app->getRenderServices().getDeviceState();
     if (!runtime) { _status->setText("Frame graph unavailable"); return; }
     const auto* active = runtime->getActivePipeline();
     const RGTopologyDescription* topology = nullptr;

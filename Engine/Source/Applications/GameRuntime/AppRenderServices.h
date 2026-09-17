@@ -17,7 +17,8 @@ struct ShaderStorage;
 struct ShadowSettings;
 struct ImageResource;
 struct DebugRenderSystem;
-struct RenderRuntime;
+struct RenderDeviceState;
+struct RenderFrameCoordinator;
 struct AppRenderState;
 
 class YA_GAME_RUNTIME_API AppRenderServices
@@ -38,7 +39,14 @@ class YA_GAME_RUNTIME_API AppRenderServices
         return static_cast<T*>(getRender());
     }
     [[nodiscard]] std::shared_ptr<ShaderStorage>         getShaderStorage() const;
-    [[nodiscard]] RenderRuntime*                         getRenderRuntime() const;
+    [[nodiscard]] RenderDeviceState*                     getDeviceState() const;
+    [[nodiscard]] RenderFrameCoordinator*                getFrameCoordinator() const;
+    void                                                 setWorldSceneRenderEnabled(bool bEnabled);
+    [[nodiscard]] bool                                   isWorldSceneRenderEnabled() const;
+    void                                                 setViewportFrameBufferScale(float scale);
+    [[nodiscard]] float                                  getViewportFrameBufferScale() const;
+    void                                                 setViewportRect(Rect2D rect);
+    [[nodiscard]] Rect2D                                 getViewportRect() const;
     [[nodiscard]] ShadowSettings&                        getShadowSettings();
     [[nodiscard]] const ShadowSettings&                  getShadowSettings() const;
     [[nodiscard]] IRenderPipeline*                       getRenderPipeline() const;

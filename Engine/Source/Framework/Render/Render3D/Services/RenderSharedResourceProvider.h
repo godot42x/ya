@@ -19,8 +19,6 @@ struct RenderSharedResourceProvider
 {
     IRender* _render = nullptr;
 
-    /// Injected seams (bound by the Host composition; no App access here).
-    std::function<Scene*()>               _getActiveScene;
     EnvironmentLightingResultProvider     _environmentLightingProvider;
 
     struct SkyboxResources
@@ -59,12 +57,10 @@ struct RenderSharedResourceProvider
     PBRGenerateBrdfLUT           _pbrGenerateBrdfLUT{};
 
     void init(IRender* render,
-              EnvironmentLightingResultProvider environmentLightingProvider = {},
-              std::function<Scene*()>          activeSceneProvider         = {});
+              EnvironmentLightingResultProvider environmentLightingProvider = {});
     void shutdown();
 
     void setEnvironmentLightingProvider(EnvironmentLightingResultProvider provider) { _environmentLightingProvider = std::move(provider); }
-    void setActiveSceneProvider(std::function<Scene*()> provider) { _getActiveScene = std::move(provider); }
 
     void resetSkyboxPool();
     void resetEnvironmentLightingPool();
