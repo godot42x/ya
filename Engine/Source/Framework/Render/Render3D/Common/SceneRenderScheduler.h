@@ -135,7 +135,7 @@ struct SceneSnapshotEntry
 
 struct SceneRenderPlan
 {
-    uint64_t frameId = 0;
+    uint64_t hostTick = 0;
     std::vector<SceneSnapshotEntry> snapshots;
     std::vector<SceneViewportTask> viewportTasks;
     std::vector<SceneViewFamilyPlan> viewFamilies;
@@ -183,23 +183,23 @@ struct SceneRenderPlan
     return !task || task->ownsHostViewport();
 }
 
-/// Frame-local request collector. It does not own Scene/ECS objects and does
+/// Tick-local request collector. It does not own Scene/ECS objects and does
 /// not record GPU commands; RenderFrameCoordinator consumes the sealed immutable plan.
 class SceneRenderScheduler
 {
   public:
-    void beginFrame(uint64_t frameId);
+    void beginTick(uint64_t hostTick);
     bool submit(SceneRenderRequest request);
     [[nodiscard]] SceneRenderPlan seal();
-    void clearFrame();
+    void clearTick();
 
-    [[nodiscard]] bool isFrameOpen() const { return _frameOpen; }
-    [[nodiscard]] uint64_t frameId() const { return _frameId; }
+    [[nodiscard]] bool isTickOpen() const { return _tickOpen; }
+    [[nodiscard]] uint64_t hostTick() const { return _hostTick; }
     [[nodiscard]] size_t pendingRequestCount() const { return _requests.size(); }
 
   private:
-    uint64_t                    _frameId = 0;
-    bool                        _frameOpen = false;
+    uint64_t                    _hostTick = 0;
+    bool                        _tickOpen = false;
     std::vector<SceneRenderRequest> _requests;
 };
 

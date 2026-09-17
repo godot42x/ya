@@ -338,7 +338,7 @@ void App::init(AppDesc ci)
         .input           = &app.getInputManager(),
         .isMouseCaptured = [&app]() { return app.getInputRouter().isMouseCaptured(); },
         .elapsedSeconds  = [&app]() { return static_cast<double>(app.getElapsedTimeMS()) / 1000.0; },
-        .frameIndex      = [&app]() { return app.getFrameIndex(); },
+        .frameIndex      = [&app]() { return app.getHostTick(); },
         .activeScene     = [&app]() -> Scene* { return app.getSceneServices().getActiveScene(); },
     });
     app._luaScriptingSystem->init();

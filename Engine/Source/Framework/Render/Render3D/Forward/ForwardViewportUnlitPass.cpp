@@ -185,7 +185,7 @@ void ForwardViewportUnlitPass::prepareUnlit(const RenderStageContext& ctx,
     outFrame.projMat    = ctx.frameData->projection;
     outFrame.viewMat    = ctx.frameData->view;
     outFrame.resolution = glm::ivec2(ctx.viewportExtent.width, ctx.viewportExtent.height);
-    outFrame.frameIdx   = _runtimeServices ? static_cast<int32_t>(_runtimeServices->getFrameIndex()) : 0;
+    outFrame.frameIdx   = _runtimeServices ? static_cast<int32_t>(_runtimeServices->getHostTick()) : 0;
     outFrame.time       = _runtimeServices ? static_cast<float>(_runtimeServices->getElapsedTimeSeconds()) : 0.0f;
 
     prepareUnlitMaterials(fd);

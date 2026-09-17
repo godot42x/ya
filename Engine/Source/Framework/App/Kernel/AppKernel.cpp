@@ -51,7 +51,7 @@ int AppKernel::iterate(float dt)
 
     _delegate.onTick(dt);
 
-    _runController.markFrameCompleted();
+    _runController.markTickCompleted();
     if (_delegate.shouldClose()) {
         _runController.requestAppClose();
     }

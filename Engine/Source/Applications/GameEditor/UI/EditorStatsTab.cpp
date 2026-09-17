@@ -39,7 +39,7 @@ void EditorStatsTab::tick(float deltaSeconds)
     const glm::vec2 viewport = _layer->getViewportSize();
     _statsText->setText(std::format(
         "Frame {}\nDelta {:.2f} ms\nFPS {:.1f}\nViewport {:.0f} x {:.0f}",
-        app ? app->getFrameIndex() : 0,
+        app ? app->getHostTick() : 0,
         deltaSeconds * 1000.0f,
         fps,
         viewport.x,

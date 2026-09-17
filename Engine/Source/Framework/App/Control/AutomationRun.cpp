@@ -20,13 +20,13 @@ void AppAutomationRunController::reset(const AppAutomationRunOptions& options)
     _state   = {};
 }
 
-void AppAutomationRunController::markFrameCompleted()
+void AppAutomationRunController::markTickCompleted()
 {
-    ++_state.completedFrameCount;
+    ++_state.completedTickCount;
     if (_state.exitReason != EAppAutomationExitReason::None) {
         return;
     }
-    if (shouldAutomationExitAfterFrame(_state.completedFrameCount, _options.exitAfterFrame)) {
+    if (shouldAutomationExitAfterTick(_state.completedTickCount, _options.exitAfterTick)) {
         _state.exitReason = EAppAutomationExitReason::ExitAfterFrame;
     }
 }
@@ -54,7 +54,7 @@ bool AppAutomationRunController::shouldExit() const
 
 uint64_t AppAutomationRunController::getCompletedFrameCount() const
 {
-    return _state.completedFrameCount;
+    return _state.completedTickCount;
 }
 
 EAppAutomationExitReason AppAutomationRunController::getExitReason() const
@@ -80,7 +80,7 @@ void applyAutomationRunArgs(int argc, char** argv, AppAutomationRunOptions& outO
 
     try {
         const auto result = options.parse(argc, argv);
-        outOptions.exitAfterFrame = result["exit-after-frame"].as<uint64_t>();
+        outOptions.exitAfterTick = result["exit-after-frame"].as<uint64_t>();
         outOptions.controlPort    = result["automation-control-port"].as<uint16_t>();
     }
     catch (const std::exception& e) {
@@ -88,15 +88,15 @@ void applyAutomationRunArgs(int argc, char** argv, AppAutomationRunOptions& outO
     }
 }
 
-bool shouldAutomationExitAfterFrame(uint64_t completedFrameCount, uint64_t exitAfterFrame)
+bool shouldAutomationExitAfterTick(uint64_t completedTickCount, uint64_t exitAfterTick)
 {
-    return exitAfterFrame > 0 && completedFrameCount >= exitAfterFrame;
+    return exitAfterTick > 0 && completedTickCount >= exitAfterTick;
 }
 
-EAppAutomationExitReason evaluateAutomationExitReason(uint64_t completedFrameCount,
+EAppAutomationExitReason evaluateAutomationExitReason(uint64_t completedTickCount,
                                                       const AppAutomationRunOptions& options)
 {
-    return shouldAutomationExitAfterFrame(completedFrameCount, options.exitAfterFrame)
+    return shouldAutomationExitAfterTick(completedTickCount, options.exitAfterTick)
              ? EAppAutomationExitReason::ExitAfterFrame
              : EAppAutomationExitReason::None;
 }

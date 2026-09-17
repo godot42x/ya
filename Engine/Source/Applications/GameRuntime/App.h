@@ -47,7 +47,7 @@ class NativeWindowManager;
 struct GameplayResourceBinding;
 struct EnvironmentLightingProcessor;
 class TerrainProcessor;
-class GameRuntimeFrameOrchestrator;
+class GameRuntimeTickOrchestrator;
 class AppModuleTestAccess;
 class AppAutomationControlService;
 class InputRouter;
@@ -60,7 +60,7 @@ enum AppMode : int
 
 struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
 {
-    friend class GameRuntimeFrameOrchestrator;
+    friend class GameRuntimeTickOrchestrator;
     friend class AppModuleTestAccess;
     friend class AppSceneServices;
     friend class InputRouter;
@@ -87,7 +87,7 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     time_point_t _lastTime;
     time_point_t _startTime;
 
-    static uint32_t _frameIndex;
+    static uint32_t _hostTick;
     bool            _bPause     = false;
     /// Main present surface unpresentable (minimize). Not a process pause:
     /// logic still ticks; coordinator skips GPU when `begin` returns -1.
@@ -178,10 +178,10 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
 
     // Defined in App.cpp. Kept out of the header so consumers resolve the
     // singleton through the DLL import thunk instead of inlining a direct
-    // read of the static data members `_instance`/`_frameIndex` (a dllexport
+    // read of the static data members `_instance`/`_hostTick` (a dllexport
     // data symbol cannot be imported from another DLL and would fail LNK2001).
     static App* get();
-    [[nodiscard]] static uint32_t currentFrameIndex();
+    [[nodiscard]] static uint32_t currentHostTick();
 
     [[nodiscard]] AppRenderServices&       getRenderServices() { return _renderServices; }
     [[nodiscard]] const AppRenderServices& getRenderServices() const { return _renderServices; }
@@ -207,8 +207,8 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     [[nodiscard]] TaskManager&                   getTaskManager() { return taskManager; }
     [[nodiscard]] const TaskManager&             getTaskManager() const { return taskManager; }
 
-    // Defined in App.cpp (see the data-symbol note on get()/currentFrameIndex()).
-    [[nodiscard]] uint32_t                getFrameIndex() const;
+    // Defined in App.cpp (see the data-symbol note on get()/currentHostTick()).
+    [[nodiscard]] uint32_t                getHostTick() const;
     [[nodiscard]] uint64_t                getElapsedTimeMS() const;
 
     [[nodiscard]] AppState getAppState() const { return _appState; }

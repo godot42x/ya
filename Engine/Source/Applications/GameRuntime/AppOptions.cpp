@@ -164,14 +164,14 @@ void AppDesc::init(int argc, char** argv)
     params.tryGet<bool>("fullscreen", fullscreen);
     // Automation options are parsed by the same cxxopts-backed CliParams as
     // every other engine option (no separate hand-written argv scan).
-    params.tryGet<uint64_t>("exit-after-frame", automation.exitAfterFrame);
+    params.tryGet<uint64_t>("exit-after-frame", automation.exitAfterTick);
     params.tryGet<uint16_t>("automation-control-port", automation.controlPort);
     if (std::string automationConfigPath; params.tryGet<std::string>("automation-config", automationConfigPath)) {
         automation.configPath = std::move(automationConfigPath);
     }
-    params.tryGet<uint64_t>("screenshot-frame", automation.screenshotFrameIndex);
-    params.tryGet<uint64_t>("screenshot-warmup-frames", automation.screenshotWarmupFrames);
-    params.tryGet<uint64_t>("screenshot-settle-frames", automation.screenshotSettleFrames);
+    params.tryGet<uint64_t>("screenshot-frame", automation.screenshotTick);
+    params.tryGet<uint64_t>("screenshot-warmup-frames", automation.screenshotWarmupTicks);
+    params.tryGet<uint64_t>("screenshot-settle-frames", automation.screenshotSettleTicks);
     if (bool renderDocCapture; params.tryGet<bool>("renderdoc-capture", renderDocCapture)) {
         automation.renderDocCapture             = renderDocCapture;
         automation.bRenderDocCaptureOverridden = true;

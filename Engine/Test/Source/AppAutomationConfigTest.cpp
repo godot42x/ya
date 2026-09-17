@@ -144,7 +144,7 @@ TEST_F(AppAutomationConfigTest, LoadConfigDefaultsToStandardAutomationConfigPath
     EXPECT_TRUE(appDesc.automation.renderDocCapture);
     EXPECT_EQ(appDesc.renderDocCaptureOutputDir, "Engine/Saved/RenderDocDefault");
     EXPECT_EQ(appDesc.automation.screenshotTarget, EAutomationScreenshotTarget::Presentation);
-    EXPECT_EQ(appDesc.automation.screenshotFrameIndex, 1500u);
+    EXPECT_EQ(appDesc.automation.screenshotTick, 1500u);
     ASSERT_TRUE(appDesc.automation.shadow.quality.has_value());
     EXPECT_EQ(*appDesc.automation.shadow.quality, EShadowQuality::High);
     ASSERT_TRUE(appDesc.automation.shadow.directionalEnabled.has_value());
@@ -175,11 +175,11 @@ TEST_F(AppAutomationConfigTest, LoadConfigReadsSmokeViewportResizeAndPipelineSwi
     ASSERT_TRUE(appDesc.automation.viewportResize.has_value());
     EXPECT_EQ(appDesc.automation.viewportResize->width, 1600u);
     EXPECT_EQ(appDesc.automation.viewportResize->height, 900u);
-    EXPECT_EQ(appDesc.automation.viewportResize->frameIndex, 4u);
+    EXPECT_EQ(appDesc.automation.viewportResize->hostTick, 4u);
 
     ASSERT_TRUE(appDesc.automation.pipelineSwitch.has_value());
     EXPECT_EQ(appDesc.automation.pipelineSwitch->target, EAutomationRenderPipeline::Forward);
-    EXPECT_EQ(appDesc.automation.pipelineSwitch->frameIndex, 7u);
+    EXPECT_EQ(appDesc.automation.pipelineSwitch->hostTick, 7u);
 }
 
 TEST_F(AppAutomationConfigTest, LoadConfigReadsShadowResolutionAutomationOverride)

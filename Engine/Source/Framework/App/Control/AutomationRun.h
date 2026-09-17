@@ -9,7 +9,7 @@ namespace ya
 
 struct YA_APP_CONTROL_API AppAutomationRunOptions
 {
-    uint64_t exitAfterFrame = 0;
+    uint64_t exitAfterTick = 0;
     uint16_t controlPort    = 0;
 };
 
@@ -23,7 +23,7 @@ enum class EAppAutomationExitReason : uint8_t
 
 struct YA_APP_CONTROL_API AppAutomationRunState
 {
-    uint64_t                 completedFrameCount = 0;
+    uint64_t                 completedTickCount  = 0;
     EAppAutomationExitReason exitReason          = EAppAutomationExitReason::None;
 };
 
@@ -36,7 +36,7 @@ public:
     explicit AppAutomationRunController(const AppAutomationRunOptions& options);
 
     void reset(const AppAutomationRunOptions& options = {});
-    void markFrameCompleted();
+    void markTickCompleted();
     void requestAppClose();
     void requestRemoteQuit();
 
@@ -50,9 +50,9 @@ private:
     AppAutomationRunState   _state{};
 };
 
-[[nodiscard]] YA_APP_CONTROL_API bool shouldAutomationExitAfterFrame(uint64_t completedFrameCount,
-                                                              uint64_t exitAfterFrame);
-[[nodiscard]] YA_APP_CONTROL_API EAppAutomationExitReason evaluateAutomationExitReason(uint64_t completedFrameCount,
+[[nodiscard]] YA_APP_CONTROL_API bool shouldAutomationExitAfterTick(uint64_t completedTickCount,
+                                                              uint64_t exitAfterTick);
+[[nodiscard]] YA_APP_CONTROL_API EAppAutomationExitReason evaluateAutomationExitReason(uint64_t completedTickCount,
                                                                                 const AppAutomationRunOptions& options);
 [[nodiscard]] YA_APP_CONTROL_API const char* getAutomationExitReasonName(EAppAutomationExitReason reason);
 

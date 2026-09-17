@@ -230,12 +230,12 @@ void RenderDeviceState::initFrameServices()
     // environment-lighting/terrain processors live with the render runtime
     // (injected narrow services only; never located through the Host).
     _gameplayResourceBinding = std::make_unique<GameplayResourceBinding>();
-    _gameplayResourceBinding->setFrameIndexProvider([this]() { return getFrameIndex(); });
+    _gameplayResourceBinding->setHostTickProvider([this]() { return getHostTick(); });
     _gameplayResourceBinding->init();
 
     _environmentLightingProcessor = std::make_unique<EnvironmentLightingProcessor>();
     _environmentLightingProcessor->setRender(_render);
-    _environmentLightingProcessor->setFrameIndexProvider([this]() { return getFrameIndex(); });
+    _environmentLightingProcessor->setHostTickProvider([this]() { return getHostTick(); });
     if (_hostServices) {
         _environmentLightingProcessor->setOffscreenJobQueueService(_hostServices->getOffscreenJobQueueService());
     }
@@ -243,7 +243,7 @@ void RenderDeviceState::initFrameServices()
 
     _terrainProcessor = std::make_unique<TerrainProcessor>();
     _terrainProcessor->setRender(_render);
-    _terrainProcessor->setFrameIndexProvider([this]() { return getFrameIndex(); });
+    _terrainProcessor->setHostTickProvider([this]() { return getHostTick(); });
     _terrainProcessor->init();
 }
 

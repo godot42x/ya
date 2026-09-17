@@ -2,7 +2,7 @@
 
 ## R0
 
-- [x] 画出 GameRuntimeFrameOrchestrator、RenderFrameExtractor、RenderRuntime、Forward/Deferred、ViewCompose、DisplayCompose、Present 的真实调用图。
+- [x] 画出 GameRuntimeTickOrchestrator、RenderFrameExtractor、RenderRuntime、Forward/Deferred、ViewCompose、DisplayCompose、Present 的真实调用图。
 - [x] 核对 RenderGraph build/execute 的 snapshot 时序和 live-state 访问。
 - [ ] 登记并修复影响 R0 的 GUI widget test include/target 配置。
 - [ ] 添加单 Camera golden：矩阵、离屏 extent、output format、surface imageIndex。
@@ -99,3 +99,17 @@
 - [ ] 决定是否引入 culling/sort/cache。
 - [ ] 决定是否拆 world/view 与 display/present submit。
 - [ ] 评估第三种 pipeline 的接入契约，不新增强制 BaseRenderPipeline。
+- [ ] 删除 `IRenderRuntimeServices`：时间改走 `HostClockState` 输入；env lighting 句柄在 graph build 前解析进 `PreparedView` 或并入 `EnvironmentLightingResultProvider`；`DebugRenderSystem` 由 overlay pass 构造注入；删除死方法 `getGameplayResourceBinding()`；随后删除 `PipelineCoordinator::InitDesc::runtimeServices`。随 P3 / 4.0.3 checkpoint 4 一起做。
+
+## 时间语义迁移
+
+清单见 `temporal_semantics.md`。每批只做一批，避免半改名状态；外部 automation config 键与脚本/UI 可见名不改。
+
+- [x] P1a：M1 host tick 主体——`GameRuntimeFrameOrchestrator`→`GameRuntimeTickOrchestrator`（含文件与转发头）、`RenderRuntimeClockState`→`HostClockState`（字段 `hostTick`）、`App::_frameIndex`/`getFrameIndex`/`currentFrameIndex`→`_hostTick`/`getHostTick`/`currentHostTick`、`IRenderRuntimeServices` 与 `RenderDeviceState` 的 `getHostTick`、`setHostTickProvider`/`_getHostTick`、`lastUsedTick`/`currentHostTick`、`SceneRenderScheduler.beginTick`/`clearTick`/`isTickOpen`/`hostTick`、`SceneRenderPlan::hostTick`、automation 的 `markTickCompleted`/`completedTickCount`/`exitAfterTick`/`AppAutomationTickContext`/`recordedTick`/`earliestTick`/`screenshotTick`。构建与专项测试全通过。
+- [ ] P1b：M1 剩余——`AppRenderFrameState`→`HostViewState`（等 GameEditor 在途改动落地）、`DebugPrimitives::updateFrameUBO`/`_frameData`、perf key `Frame/*`、tick 排期字段（`_nextResolveAuditFrame` 等）。
+- [ ] P1c：M2 `SceneFrameSnapshot`→`SceneSnapshot`。
+- [ ] P2：M4 recording / flight（`RenderSubmission`→`FrameRecording`、`frameToken`→`recordingSerial`、`flightIndex`→`flightSlot`、`FrameUploadArena`→`UploadArena`、`PerFlightFrameResourceSetBase`→`SkinningLayoutProvider`）+ M5 present（`PresentFrameInput`、`FPresentFrame`）+ 公开 `Renderer` 合并（4.0.3 checkpoint 2 / 3）。
+- [ ] P3：M3 C++ 部分（`RenderFrameData`→`PreparedViewRenderData`、删除 `CameraFrameInput` / `RenderPipelineFrameContext` / `RenderViewRecordingContext` / `SceneViewRecording` 四层转译、`RenderStageContext`→`PassRecordContext`、`FrameContext`→`ViewPassContext`、`RenderFrameExtractor` 拆为 SceneSnapshotBuilder + ViewPreparer）+ 4.0.3 checkpoint 4。
+- [ ] P4：M3 Slang 部分（删除无消费方的 `frameIdx`；`FrameData`/`FrameUBO`→`ViewUbo`/`ViewData` 与 C++ alias 同批），需 `xmake ya-shader` 重新生成头。
+- [ ] P5：M6 pipeline 文件与类改名（`*FrameGraphOrchestrator`、`*FrameGraphPasses`、`*FrameGraphResources`、`*FrameResourceSet`、`ShadowFrameResources`、`RenderDeviceState.Frame.cpp`）。
+- [ ] P6：M7 GUI 命名（`UIFrameSnapshot`→`UISnapshot`、`UIFrameBuildContext`、`UIFrameComposeReplay`、`GuiFrameInspectorOverlay`、dump/digest 函数）。

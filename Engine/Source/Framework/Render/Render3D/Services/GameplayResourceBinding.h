@@ -21,7 +21,7 @@ struct YA_RENDER_3D_API GameplayResourceBinding : public ISystem
 {
   private:
     std::function<Scene*()>  _getActiveScene;
-    std::function<uint64_t()> _getFrameIndex;
+    std::function<uint64_t()> _getHostTick;
     Scene*                   _pendingStateScene = nullptr;
     std::deque<entt::entity> _dirtyMaterialQueue;
     std::unordered_set<entt::entity> _dirtyMaterialSet;
@@ -39,7 +39,7 @@ struct YA_RENDER_3D_API GameplayResourceBinding : public ISystem
   public:
     void setActiveSceneProvider(std::function<Scene*()> provider) { _getActiveScene = std::move(provider); }
     /// Frame counter for the periodic staleness audit; bound by the Host.
-    void setFrameIndexProvider(std::function<uint64_t()> provider) { _getFrameIndex = std::move(provider); }
+    void setHostTickProvider(std::function<uint64_t()> provider) { _getHostTick = std::move(provider); }
     void init() override;
 
     /**

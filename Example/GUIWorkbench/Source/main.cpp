@@ -115,7 +115,7 @@ int main(int argc, char** argv)
 
     try {
         const auto result = options.parse(argc, argv);
-        config.automation.exitAfterFrame = result["exit-after-frame"].as<uint64_t>();
+        config.automation.exitAfterTick = result["exit-after-frame"].as<uint64_t>();
         config.bScenarioRender          = result.count("scenario-render") > 0;
         config.automation.controlPort    = result["automation-control-port"].as<uint16_t>();
         app.bSmokeActions = result.count("smoke-actions") > 0;

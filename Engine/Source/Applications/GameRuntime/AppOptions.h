@@ -34,13 +34,13 @@ struct AppAutomationViewportResize
 {
     uint32_t width      = 0;
     uint32_t height     = 0;
-    uint64_t frameIndex = 1;
+    uint64_t hostTick = 1;
 };
 
 struct AppAutomationPipelineSwitch
 {
     EAutomationRenderPipeline target = EAutomationRenderPipeline::Deferred;
-    uint64_t                  frameIndex = 1;
+    uint64_t                  hostTick = 1;
 };
 
 struct AppAutomationDeferredOverrides
@@ -68,9 +68,9 @@ struct AppProfilingOptions
 
 struct AppAutomationOptions : AppAutomationRunOptions
 {
-    uint64_t                     screenshotFrameIndex         = 0;
-    uint64_t                     screenshotWarmupFrames       = 30;
-    uint64_t                     screenshotSettleFrames       = 5;
+    uint64_t                     screenshotTick         = 0;
+    uint64_t                     screenshotWarmupTicks       = 30;
+    uint64_t                     screenshotSettleTicks       = 5;
     bool                         renderDocCapture             = false;
     bool                         bRenderDocCaptureOverridden  = false;
     bool                         bScreenshotTargetOverridden  = false;

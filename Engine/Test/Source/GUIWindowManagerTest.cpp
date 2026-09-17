@@ -320,7 +320,7 @@ TEST(GUIAppExtraWindowTest, RoutesExtraEventsWithoutCopyingPrimaryLoop)
     source.id = extraId;
 
     AppKernel kernel({.eventSource = &source}, app);
-    EXPECT_EQ(kernel.run(AppAutomationRunOptions{.exitAfterFrame = 2}), 0);
+    EXPECT_EQ(kernel.run(AppAutomationRunOptions{.exitAfterTick = 2}), 0);
     EXPECT_EQ(extraTree->getHovered(), extra.button.get());
     EXPECT_GT(extra.updates, 0);
     EXPECT_FALSE(app.getPrimaryWindow().isInitialized());

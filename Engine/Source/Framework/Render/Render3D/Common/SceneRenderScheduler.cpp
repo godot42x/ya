@@ -6,16 +6,16 @@
 namespace ya
 {
 
-void SceneRenderScheduler::beginFrame(uint64_t frameId)
+void SceneRenderScheduler::beginTick(uint64_t hostTick)
 {
-    _frameId = frameId;
+    _hostTick = hostTick;
     _requests.clear();
-    _frameOpen = true;
+    _tickOpen = true;
 }
 
 bool SceneRenderScheduler::submit(SceneRenderRequest request)
 {
-    if (!_frameOpen || request.sceneId == 0 || request.viewId == 0 || !request.buildSnapshot) {
+    if (!_tickOpen || request.sceneId == 0 || request.viewId == 0 || !request.buildSnapshot) {
         return false;
     }
 
@@ -25,8 +25,8 @@ bool SceneRenderScheduler::submit(SceneRenderRequest request)
 
 SceneRenderPlan SceneRenderScheduler::seal()
 {
-    SceneRenderPlan plan{.frameId = _frameId};
-    if (!_frameOpen) {
+    SceneRenderPlan plan{.hostTick = _hostTick};
+    if (!_tickOpen) {
         return plan;
     }
 
@@ -110,14 +110,14 @@ SceneRenderPlan SceneRenderScheduler::seal()
         plan.viewFamilies[familyIndex].viewportTaskIndices.push_back(taskIndex);
     }
 
-    _frameOpen = false;
+    _tickOpen = false;
     return plan;
 }
 
-void SceneRenderScheduler::clearFrame()
+void SceneRenderScheduler::clearTick()
 {
     _requests.clear();
-    _frameOpen = false;
+    _tickOpen = false;
 }
 
 } // namespace ya

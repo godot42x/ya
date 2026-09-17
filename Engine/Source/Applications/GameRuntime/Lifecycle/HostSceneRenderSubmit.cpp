@@ -34,7 +34,7 @@ bool submitHostSceneViews(SceneRenderScheduler&                scheduler,
                           TerrainProcessor*                    terrainProcessor,
                           std::span<const HostSceneViewSubmit> views)
 {
-    if (!scheduler.isFrameOpen()) {
+    if (!scheduler.isTickOpen()) {
         return false;
     }
 

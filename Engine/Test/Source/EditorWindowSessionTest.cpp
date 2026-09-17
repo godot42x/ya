@@ -248,7 +248,7 @@ TEST(EditorWindowSessionTest, InputRoutesByWindowId)
     EXPECT_NE(dockSpaceCpp.find("realizeNoTargetTearOff"), std::string::npos);
 
     const std::string orchestrator =
-        readEngineSource("Source/Applications/GameRuntime/Lifecycle/GameRuntimeFrameOrchestrator.cpp");
+        readEngineSource("Source/Applications/GameRuntime/Lifecycle/GameRuntimeTickOrchestrator.cpp");
     EXPECT_NE(orchestrator.find("presentModuleExtras"), std::string::npos);
     EXPECT_NE(orchestrator.find("app.presentModuleExtras(dt)"), std::string::npos);
 

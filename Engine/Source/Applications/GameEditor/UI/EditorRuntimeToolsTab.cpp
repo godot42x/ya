@@ -112,7 +112,7 @@ void EditorRuntimeToolsTab::refresh()
     }
     const char* state = _app->isRuntimeMode() ? "Playing" : (_app->isSimulationMode() ? "Simulating" : "Stopped");
     _statusText->setText(state);
-    _frameText->setText(std::format("Frame {}", _app->getFrameIndex()));
+    _frameText->setText(std::format("Frame {}", _app->getHostTick()));
     _diagnostics->sync(_app);
     _profiling->sync(_app);
     _renderGraph->sync(_app);

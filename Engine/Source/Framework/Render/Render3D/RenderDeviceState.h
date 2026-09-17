@@ -13,7 +13,7 @@
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/PostProcessingState.h"
-#include "Common/RenderRuntimeClockState.h"
+#include "Common/HostClockState.h"
 #include "Render3D/Services/EnvironmentLightingResultProvider.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
 #include "Render3D/Common/RenderViewportSnapshot.h"
@@ -77,7 +77,7 @@ struct YA_RENDER_3D_API RenderDeviceState : IRenderRuntimeServices
     {
         IRenderRuntimeHostServices*       hostServices = nullptr;
         IOffscreenTaskScheduler*          offscreenScheduler = nullptr;
-        const RenderRuntimeClockState*    clockState = nullptr;
+        const HostClockState*    clockState = nullptr;
         EnvironmentLightingResultProvider environmentLightingProvider;
         uint32_t    windowWidth  = 0;
         uint32_t    windowHeight = 0;
@@ -89,7 +89,7 @@ struct YA_RENDER_3D_API RenderDeviceState : IRenderRuntimeServices
 
     IRenderRuntimeHostServices* _hostServices = nullptr;
     IOffscreenTaskScheduler*    _offscreenScheduler = nullptr;
-    const RenderRuntimeClockState* _clockState = nullptr;
+    const HostClockState* _clockState = nullptr;
     EnvironmentLightingResultProvider _environmentLightingProvider;
     std::unique_ptr<GameplayResourceBinding>       _gameplayResourceBinding;
     std::unique_ptr<EnvironmentLightingProcessor>  _environmentLightingProcessor;
@@ -134,7 +134,7 @@ struct YA_RENDER_3D_API RenderDeviceState : IRenderRuntimeServices
     [[nodiscard]] IRender*                       getRender() const { return _render; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
     [[nodiscard]] IRenderPipeline*               getActivePipeline() const;
-    [[nodiscard]] uint64_t                       getFrameIndex() const override;
+    [[nodiscard]] uint64_t                       getHostTick() const override;
     [[nodiscard]] double                         getElapsedTimeSeconds() const override;
     [[nodiscard]] GameplayResourceBinding*         getGameplayResourceBinding() const override;
     [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const override;

@@ -118,7 +118,7 @@ void TerrainProcessor::onUpdate(float dt)
 
     sweepAuthoringDirty(scene);
     auditResolveWork(scene);
-    gcDerivedResources(currentFrame());
+    gcDerivedResources(currentHostTick());
     resolvePendingTerrain(scene);
 }
 
@@ -187,11 +187,11 @@ void TerrainProcessor::auditResolveWork(Scene* scene)
         return;
     }
 
-    const uint64_t currentFrame = this->currentFrame();
-    if (_nextResolveAuditFrame != 0 && currentFrame < _nextResolveAuditFrame) {
+    const uint64_t currentTick = this->currentHostTick();
+    if (_nextResolveAuditFrame != 0 && currentTick < _nextResolveAuditFrame) {
         return;
     }
-    _nextResolveAuditFrame = currentFrame + 120;
+    _nextResolveAuditFrame = currentTick + 120;
 
     auto& registry = scene->getRegistry();
     auto* assets   = AssetManager::get();
@@ -218,10 +218,10 @@ void TerrainProcessor::auditResolveWork(Scene* scene)
     }
 }
 
-void TerrainProcessor::gcDerivedResources(uint64_t currentFrame)
+void TerrainProcessor::gcDerivedResources(uint64_t currentTick)
 {
-    const auto shouldKeep = [currentFrame](uint64_t lastUsedFrame) {
-        return lastUsedFrame + DERIVED_RESOURCE_GC_DELAY_FRAMES > currentFrame;
+    const auto shouldKeep = [currentTick](uint64_t lastUsedFrame) {
+        return lastUsedFrame + DERIVED_RESOURCE_GC_DELAY_FRAMES > currentTick;
     };
 
     for (auto it = _terrainDerivedResources.begin(); it != _terrainDerivedResources.end();) {
@@ -300,9 +300,9 @@ void TerrainProcessor::resolvePendingTerrain(Scene* scene)
 
         auto& terrain = registry.get<TerrainComponent>(entity);
         auto& state   = _terrainStates[entity];
-        const uint64_t currentFrame = this->currentFrame();
+        const uint64_t currentTick = this->currentHostTick();
 
-        if (terrain.getRebuildNotBeforeFrame() > currentFrame) {
+        if (terrain.getRebuildNotBeforeFrame() > currentTick) {
             _activeTerrain.insert(entity);
             return;
         }
@@ -328,7 +328,7 @@ void TerrainProcessor::resolvePendingTerrain(Scene* scene)
 
         if (auto it = _terrainDerivedResources.find(derivedKey); it != _terrainDerivedResources.end() &&
             it->second && it->second->mesh) {
-            it->second->lastUsedFrame = currentFrame;
+            it->second->lastUsedFrame = currentTick;
             state.currentDerivedKey   = derivedKey;
             state.boundResource       = it->second;
             state.lastBuiltHeightMapVersion = it->second->heightMapVersion;
@@ -411,7 +411,7 @@ void TerrainProcessor::resolvePendingTerrain(Scene* scene)
         YA_CORE_ASSERT(render, "TerrainProcessor mesh creation requires render backend");
         resource->mesh           = Mesh::create(*render, meshData);
         resource->heightMapVersion = heightMapVersion;
-        resource->lastUsedFrame  = currentFrame;
+        resource->lastUsedFrame  = currentTick;
         _terrainDerivedResources[derivedKey] = resource;
 
         state.currentDerivedKey  = derivedKey;

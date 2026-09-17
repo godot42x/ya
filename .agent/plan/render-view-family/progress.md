@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- 阶段：R0/R1 契约已落地。R2 功能向 ViewFamily 靠近，架构未收口。真实 loop 是 `AppKernel` → `GameRuntimeFrameOrchestrator::tickRender` → `RenderFrameCoordinator::record` → `recordFamily` → host present。`RenderRuntime` 类已删除。
+- 阶段：R0/R1 契约已落地。R2 功能向 ViewFamily 靠近，架构未收口。真实 loop 是 `AppKernel` → `GameRuntimeTickOrchestrator::tickRender` → `RenderFrameCoordinator::record` → `recordFamily` → host present。`RenderRuntime` 类已删除。
 - 已确认：RenderFrameInputs.h 已有四组输入；RenderFrameData 的 Scene snapshot owner 已与 View-owned draw buckets 分离。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
 - 当前 checkpoint：4.0.3 计划状态已按 2026-09-17 review 修正。下一刀是合并 `RenderDeviceState` + `RenderFrameCoordinator` 为公开 `Renderer` owner。不要发明 PIE authoring PiP，也不要把产品双 viewport / 双 Surface 当成下一刀。
@@ -10,6 +10,17 @@
 - 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是持有 shared snapshot 并独立保存 View-owned draw buckets；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 View buckets、shared skinning palettes 和 light presence。
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 已按 Scene family 持有，同 Scene 多 View 共享一份 SSBO，不同 Scene 不再以 flightIndex 为共享 key。
+
+## 2026-09-17 checkpoint：host tick 命名（M1 P1a）
+
+- 唯一目标：把 host 调度批次的命名从 frame 改成 tick，不改任何行为。理由与逐符号清单见 `temporal_semantics.md`：`frame` 现在同时表示 host tick、Scene 内容版本、View 渲染采样、录制作用域、GPU submission、flight 槽和 Surface present 次数，单窗口单 View 时这些值恰好同步递增，多 View 后不再成立。
+- 落地：`GameRuntimeFrameOrchestrator` → `GameRuntimeTickOrchestrator`（类 + `.h`/`.cpp` + `include/` 转发头；`prepareRenderFrameState` → `prepareHostViewState`）；`RenderRuntimeClockState` → `HostClockState` 且字段 `frameIndex` → `hostTick`；`App::_frameIndex`/`getFrameIndex()`/`currentFrameIndex()` → `_hostTick`/`getHostTick()`/`currentHostTick()`；`IRenderRuntimeServices` 与 `RenderDeviceState` 的 `getFrameIndex()` → `getHostTick()`；`setFrameIndexProvider`/`_getFrameIndex` → `setHostTickProvider`/`_getHostTick`；`lastUsedFrame` → `lastUsedTick`、`TerrainProcessor::currentFrame()` → `currentHostTick()`；`SceneRenderScheduler` 的 `beginFrame`/`clearFrame`/`isFrameOpen`/`frameId()` 与 `SceneRenderPlan::frameId` → tick 命名；automation 的 `markFrameCompleted`/`completedFrameCount`/`shouldAutomationExitAfterFrame`/`exitAfterFrame`/`AppAutomationFrameContext`/`onFrameCompleted`/`recordedFrameIndex`/`earliestFrameIndex`/`screenshotFrameIndex`/`screenshotWarmupFrames`/`screenshotSettleFrames` → tick 命名。
+- 明确的边界（不改名）：CLI / config 键 `--exit-after-frame`、`exitAfterFrame`、`screenshot.frame`、`smoke.*.frame`；automation 协议键 `frame_index`、`warmup_frames`；Lua 脚本 API `time.getFrameIndex`；UI 文案 `Frame {}`；`DeferredDeletionQueue::currentFrame()`、`VulkanRender::_frameIndex`、`Instrumentor::_frameIndex`（fence 轴 / profile 事件索引，与本语义无关）。
+- 刻意延后：`AppRenderFrameState` → `HostViewState` 因消费方 `EditorModule.cpp` 与新增的 `EditorViewportCompositor.{h,cpp}` 属于另一条在途改动（该文件当前带未提交改写）而无法形成可编译、可独立提交的改动；`DebugPrimitives::updateFrameUBO`（按 flightIndex 索引，属 P2 flight 轴）；perf key / profile scope `Frame/*`（`PerfKeys.h` + 约 30 处调用）；`RenderRuntimeSnapshotTest` → `RenderFramePlanningTest`；`_nextResolveAuditFrame` 等 tick 排期字段。
+- 验证：`xmake b ya-render-3d-test`、`ya-game-runtime`、`ya-game-editor`、`ya-testing`、`ya-gui-closure-test`、`ya-gui-headless-host-test`、`ya-gui-minimal-host`、`GUIWorkbench` 全部通过；`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:ViewFamilyRendererTest.*'` 25/25；`xmake r ya-gui-closure-test --gtest_filter='AppKernelTest.*'` 3/3；`xmake r ya-testing --gtest_filter='AppAutomationConfigTest.*:EditorWindowSessionTest.*:HostSceneRenderSubmitTest.*'` 20/20；`git diff --check` 通过。
+- 与本轮无关的既有失败（已确认不在改动面内）：`ya-gui-widgets-test` 因 `Engine/Test/Source/GuiFrameInspectorTest.cpp` 找不到 `GUI/Compose/GuiFrameInspectorOverlay.h`（该 target 的 deps 不含 compose 模块）而编译失败；`ya-gui-headless-host-test` 有 3 个 GUI snapshot 断言失败（`lastItemCount` 期望 > 0，实际 0，日志显示 `draw=0 painted=6`）。两者都落在另一条进行中的 GUI 改动上，本轮未触碰任何 GUI widget / layout / snapshot 代码。
+
+本轮同时写入计划结论：`IRenderRuntimeServices` 作为抽象没必要（唯一实现者、无 mock、死方法 `getGameplayResourceBinding()`、与 `EnvironmentLightingResultProvider` 重复、并被 pass 用来在录制期查 live ECS），处置见 `plan.md` 3.9 与 `temporal_semantics.md` M8，随 P3 `PreparedView` 收口一起删除。
 
 ## 2026-09-17 checkpoint：修正 C/D/E 计划状态
 

@@ -31,13 +31,13 @@ class YA_GAME_RUNTIME_API AppAutomationControlService
     [[nodiscard]] uint16_t getPort() const { return _server.getPort(); }
 
     void update(App& app);
-    void onFrameCompleted(App& app,
+    void onTickCompleted(App& app,
                           IRender* render,
                           std::shared_ptr<RenderTexture> postprocessImage,
                           std::shared_ptr<RenderTexture> viewportImage,
                           std::shared_ptr<RenderTexture> presentationImage,
-                          uint64_t frameIndex);
-    bool appendPresentationCapture(uint64_t frameIndex,
+                          uint64_t hostTick);
+    bool appendPresentationCapture(uint64_t hostTick,
                                    RenderGraph&    graph,
                                    RGTextureHandle presentationOutput,
                                    Extent2D        presentationExtent);
@@ -48,7 +48,7 @@ class YA_GAME_RUNTIME_API AppAutomationControlService
         AppAutomationControlServer::RequestPtr waiter;
         std::string                            outputPath;
         EAutomationScreenshotTarget            target = EAutomationScreenshotTarget::Viewport;
-        uint64_t                               earliestFrameIndex = 0;
+        uint64_t                               earliestTick = 0;
         AppScreenshotCaptureState              state;
     };
 

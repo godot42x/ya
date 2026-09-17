@@ -127,7 +127,7 @@ TEST(GUIHeadlessHostTest, MenuBarItemHoverRepaintsWithHoveredColor)
         FGUIHeadlessHostConfig{
             .logicalExtent = {320, 200},
             .eventSource   = &eventSource,
-            .automation    = {.exitAfterFrame = 4},
+            .automation    = {.exitAfterTick = 4},
             .onSnapshot    = [&](const ya::UIFrameSnapshot& snap) {
                 // Capture the last frame's color at the File item after hover.
                 hovered = sampleSpriteColorAt(snap, 5.0f, 5.0f);
@@ -157,7 +157,7 @@ TEST(GUIHeadlessHostTest, ReusesAppKernelAndBuildsSnapshotsWithoutWindowOrRhi)
         FGUIHeadlessHostConfig{
             .logicalExtent = {160, 100},
             .eventSource   = &eventSource,
-            .automation    = {.exitAfterFrame = 3},
+            .automation    = {.exitAfterTick = 3},
             .onSnapshot    = [&](const UIFrameSnapshot& snapshot) {
                 ++snapshotCount;
                 lastExtent    = snapshot.logicalExtent;
@@ -222,7 +222,7 @@ TEST(GUIHeadlessHostTest, UnthemedFallbackThenThemeSwitchRepaintsSnapshot)
     GUIHeadlessHost  host(
         FGUIHeadlessHostConfig{
             .logicalExtent = {160, 80},
-            .automation    = {.exitAfterFrame = 3},
+            .automation    = {.exitAfterTick = 3},
             .onSnapshot    = [&](const UIFrameSnapshot& snap) {
                 const glm::vec4 panelSample = sampleSpriteColorAt(snap, 10.0f, 10.0f);
                 const glm::vec4 imageSample = sampleSpriteColorAt(snap, 90.0f, 10.0f);

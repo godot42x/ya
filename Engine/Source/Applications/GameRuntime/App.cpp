@@ -2,7 +2,7 @@
 #include "GameRuntime/AppRenderState.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/IRuntimeModule.h"
-#include "GameRuntime/Lifecycle/GameRuntimeFrameOrchestrator.h"
+#include "GameRuntime/Lifecycle/GameRuntimeTickOrchestrator.h"
 #include "Lifecycle/HostSdlEventSource.h"
 #include "GUI/Host/NativeWindowManager.h"
 #include "GUI/Host/GUIWindowChrome.h"
@@ -55,7 +55,7 @@ class GameRuntimeLoopDelegate final : public IAppLoopDelegate
 
     void onTick(float dt) override
     {
-        GameRuntimeFrameOrchestrator::iterate(app, dt);
+        GameRuntimeTickOrchestrator::iterate(app, dt);
     }
 
     void onShutdown() override {}
@@ -71,21 +71,21 @@ class GameRuntimeLoopDelegate final : public IAppLoopDelegate
 }
 
 App*     App::_instance        = nullptr;
-uint32_t App::App::_frameIndex = 0;
+uint32_t App::App::_hostTick = 0;
 
 App* App::get()
 {
     return _instance;
 }
 
-uint32_t App::currentFrameIndex()
+uint32_t App::currentHostTick()
 {
-    return _frameIndex;
+    return _hostTick;
 }
 
-uint32_t App::getFrameIndex() const
+uint32_t App::getHostTick() const
 {
-    return _frameIndex;
+    return _hostTick;
 }
 
 namespace

@@ -268,6 +268,25 @@ Render3D/
 
 目录移动必须跟随对应 owner/协议迁移，不单独作为 checkpoint。
 
+### 3.8 时间语义与 `Frame` 命名迁移
+
+`frame` 目前同时表示 host tick、Scene 内容版本、View 渲染采样、命令录制作用域、GPU submission、flight 槽与 Surface present 次数。单窗口单 View 时这些值恰好同步递增；一旦同一 editor UI 内存在多个 View（level viewport、material preview、thumbnail），它们各有独立渲染次数与 temporal 历史，`frameIndex` 就不能再同时代表它们。
+
+判定规则：
+
+- 可以叫 `Frame`：一次 host 调度批次，即 `AppKernel` 一次 iterate 决定的工作集合。
+- 不能叫 `Frame`：Scene 内容版本、单个 View 的采样序号、命令录制作用域、GPU submission、fence 飞行槽、单个 Surface 的 present 次数。
+
+逐符号迁移清单（M1 host tick / M2 Scene snapshot / M3 View / M4 recording-flight / M5 present / M6 pipeline 文件与类 / M7 GUI）、保留项与批次顺序见 `temporal_semantics.md`。该清单只消除同名异义，不改行为；与 4.0.3 分阶段合并执行，不单开一条并行重构线。
+
+### 3.9 `IRenderRuntimeServices` 结论
+
+`IRenderRuntimeServices` 作为抽象没有必要，作为数据有必要：它只有一个实现者 `RenderDeviceState`，全仓库没有任何替代实现或 mock；接口同时暴露时间、环境光照、调试绘制、gameplay 绑定四类无关能力，其中 `getGameplayResourceBinding()` 是死方法，三个 env lighting 方法与既有窄契约 `EnvironmentLightingResultProvider` 重复。
+
+真正的问题是层级倒置：pass/stage 是 device-lifetime 配方，却经这个指针在录制期查 live ECS（`DeferredRenderPipeline::buildOverlayFrameInputs` 遍历 billboard / direction gizmo，`ForwardViewportStage` 遍历 skybox mesh），违反 3.1 与 4.0 的「ECS/Scene 查询必须在 graph build 前完成」。
+
+处置：不单独开一刀，随 P3 `PreparedView` 收口一起删除——时间走 `HostClockState` 作为 pass 输入；env lighting 句柄在 graph build 前解析进 `PreparedView` 或并入 `EnvironmentLightingResultProvider`；`DebugRenderSystem` 由 overlay pass 构造注入；`getGameplayResourceBinding()` 直接删。删完后 `RenderDeviceState` 不再继承任何渲染接口，`PipelineCoordinator::InitDesc::runtimeServices` 随之消失，这是公开 `Renderer` owner 的净收益。
+
 ## 4. 分阶段实施
 
 每个 checkpoint 只有一个可验收目标；代码、测试、progress.md 与计划变更同一提交。禁止用目录移动、空 registry、兼容 facade 或只写文档冒充完成。

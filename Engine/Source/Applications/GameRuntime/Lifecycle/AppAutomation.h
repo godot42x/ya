@@ -20,7 +20,7 @@ struct OffscreenJobQueueService;
 struct RenderTexture;
 struct Texture;
 
-struct AppAutomationFrameContext
+struct AppAutomationTickContext
 {
     IRender*                                render                            = nullptr;
     std::shared_ptr<RenderTexture>          postprocessImage                  = nullptr;
@@ -31,7 +31,7 @@ struct AppAutomationFrameContext
     std::function<bool()>                   isRenderDocCaptureTerminal;
     std::function<const std::string&()>     getRenderDocCapturePath;
     std::function<const std::string&()>     getRenderDocPassSummaryPath;
-    uint64_t                                frameIndex                        = 0;
+    uint64_t                                hostTick                          = 0;
 };
 
 class YA_GAME_RUNTIME_API AppAutomation
@@ -44,11 +44,11 @@ class YA_GAME_RUNTIME_API AppAutomation
     static void applyRuntimeOverrides(App& app);
     static bool shouldDeferQuit(const App& app);
     static OffscreenJobQueueService buildOffscreenJobQueueService(App& app);
-    static bool appendPresentationCapture(uint64_t frameIndex,
+    static bool appendPresentationCapture(uint64_t        hostTick,
                                           RenderGraph&    graph,
                                           RGTextureHandle presentationOutput,
                                           Extent2D        presentationExtent);
-    static void onFrameCompleted(App& app, const AppAutomationFrameContext& frameContext);
+    static void onTickCompleted(App& app, const AppAutomationTickContext& frameContext);
 };
 
 } // namespace ya

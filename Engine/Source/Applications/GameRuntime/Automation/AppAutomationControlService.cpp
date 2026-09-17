@@ -272,19 +272,19 @@ void AppAutomationControlService::update(App& app)
     }
 }
 
-void AppAutomationControlService::onFrameCompleted(App&                         app,
+void AppAutomationControlService::onTickCompleted(App&                         app,
                                                    IRender*                     render,
                                                    std::shared_ptr<RenderTexture> postprocessImage,
                                                    std::shared_ptr<RenderTexture> viewportImage,
                                                    std::shared_ptr<RenderTexture> presentationImage,
-                                                   uint64_t                     frameIndex)
+                                                   uint64_t                     hostTick)
 {
     if (!_pendingScreenshot) {
         return;
     }
 
     auto& screenshot = *_pendingScreenshot;
-    AppScreenshotCapture::tryFinalize(frameIndex, screenshot.state);
+    AppScreenshotCapture::tryFinalize(hostTick, screenshot.state);
     if (screenshot.state.bCompleted) {
         completeCall(screenshot.waiter,
                      makeSuccess(*screenshot.waiter,
@@ -306,7 +306,7 @@ void AppAutomationControlService::onFrameCompleted(App&                         
         return;
     }
 
-    if (frameIndex < screenshot.earliestFrameIndex) {
+    if (hostTick < screenshot.earliestTick) {
         return;
     }
 
@@ -324,7 +324,7 @@ void AppAutomationControlService::onFrameCompleted(App&                         
     }
 }
 
-bool AppAutomationControlService::appendPresentationCapture(uint64_t frameIndex,
+bool AppAutomationControlService::appendPresentationCapture(uint64_t hostTick,
                                                             RenderGraph&    graph,
                                                             RGTextureHandle presentationOutput,
                                                             Extent2D        presentationExtent)
@@ -334,7 +334,7 @@ bool AppAutomationControlService::appendPresentationCapture(uint64_t frameIndex,
     }
 
     return AppScreenshotCapture::appendPresentationCapture(
-        frameIndex,
+        hostTick,
         _pendingScreenshot->state,
         graph,
         presentationOutput,
@@ -693,12 +693,12 @@ void AppAutomationControlService::handleCaptureScreenshot(App& app, const AppAut
         return;
     }
 
-    const uint64_t warmupFrames = call->params.value("warmup_frames", static_cast<uint64_t>(60));
+    const uint64_t warmupTicks = call->params.value("warmup_frames", static_cast<uint64_t>(60));
     _pendingScreenshot          = ScreenshotRequest{
         .waiter             = call,
         .outputPath         = outputPath,
         .target             = *target,
-        .earliestFrameIndex = App::currentFrameIndex() + warmupFrames,
+        .earliestTick = App::currentHostTick() + warmupTicks,
     };
 }
 
@@ -731,7 +731,7 @@ void AppAutomationControlService::handleGetWorldViewState(App& app, const AppAut
             {"width", viewportRect.extent.x},
             {"height", viewportRect.extent.y},
         }},
-        {"frame_index", App::currentFrameIndex()},
+        {"frame_index", App::currentHostTick()},
     };
 
     completeCall(call, makeSuccess(*call, std::move(result)));

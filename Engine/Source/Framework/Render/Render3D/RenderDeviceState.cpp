@@ -95,9 +95,9 @@ IRenderPipeline* RenderDeviceState::getActivePipeline() const
     return _pipelineCoordinator.getActivePipeline();
 }
 
-uint64_t RenderDeviceState::getFrameIndex() const
+uint64_t RenderDeviceState::getHostTick() const
 {
-    return _clockState ? _clockState->frameIndex : 0;
+    return _clockState ? _clockState->hostTick : 0;
 }
 
 double RenderDeviceState::getElapsedTimeSeconds() const

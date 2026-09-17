@@ -384,7 +384,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
     state.height                       = extent.height;
     state.sourceFormat                 = source.format;
     state.target                       = target;
-    state.recordedFrameIndex           = 0;
+    state.recordedTick           = 0;
     state.bCompleted                   = false;
     state.bFailed                      = false;
     state.bPendingPresentationCapture  = false;
@@ -419,7 +419,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
     return true;
 }
 
-bool AppScreenshotCapture::appendPresentationCapture(uint64_t frameIndex,
+bool AppScreenshotCapture::appendPresentationCapture(uint64_t hostTick,
                                                      AppScreenshotCaptureState& state,
                                                      RenderGraph&               graph,
                                                      RGTextureHandle            presentationOutput,
@@ -459,17 +459,17 @@ bool AppScreenshotCapture::appendPresentationCapture(uint64_t frameIndex,
     state.width                       = extent.width;
     state.height                      = extent.height;
     state.sourceFormat                = sourceRenderTexture->getFormat();
-    state.recordedFrameIndex          = frameIndex + 1;
+    state.recordedTick          = hostTick + 1;
     state.presentationSourceImage.reset();
     state.bPendingPresentationCapture = false;
     state.bPresentationCopyRecorded   = true;
     return true;
 }
 
-bool AppScreenshotCapture::tryFinalize(uint64_t currentFrameIndex, AppScreenshotCaptureState& state)
+bool AppScreenshotCapture::tryFinalize(uint64_t currentHostTick, AppScreenshotCaptureState& state)
 {
     if (state.bPresentationCopyRecorded) {
-        if (currentFrameIndex <= state.recordedFrameIndex) {
+        if (currentHostTick <= state.recordedTick) {
             return false;
         }
 

@@ -49,7 +49,7 @@ struct SkyboxDerivedResource
     stdptr<Texture>                                cubemapTexture       = nullptr;
     stdptr<Texture>                                sourcePreviewTexture = nullptr;
     std::array<stdptr<IImageView>, CubeFace_Count> cubemapFacePreviewViews{};
-    uint64_t                                       lastUsedFrame = 0;
+    uint64_t                                       lastUsedTick = 0;
 
     [[nodiscard]] bool hasRenderableCubemap() const
     {
@@ -101,7 +101,7 @@ struct EnvironmentLightingDerivedResource
     std::shared_ptr<RenderTexture>                            prefilterRenderImage     = nullptr;
     std::array<std::array<stdptr<IImageView>, CubeFace_Count>, MAX_PREFILTER_PREVIEW_MIPS> prefilterMipFacePreviewViews{};
     uint32_t                                                  prefilterPreviewMipCount = 0;
-    uint64_t                                                  lastUsedFrame            = 0;
+    uint64_t                                                  lastUsedTick            = 0;
 
     [[nodiscard]] bool hasRenderableCubemap() const
     {
@@ -217,7 +217,7 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     IRender*                                                         _render = nullptr;
     OffscreenJobQueueService                                         _offscreenQueueService{};
     std::function<Scene*()>                                          _getActiveScene;
-    std::function<uint64_t()>                                        _getFrameIndex;
+    std::function<uint64_t()>                                        _getHostTick;
 
     EquidistantCylindrical2CubeMap                                    _equidistantCylindrical2CubeMap;
     CubeMap2PBRIrradianceMap                                          _cubeMap2IrradianceMap;
@@ -255,7 +255,7 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     void setOffscreenJobQueueService(OffscreenJobQueueService queueService) { _offscreenQueueService = std::move(queueService); }
     [[nodiscard]] const OffscreenJobQueueService& getOffscreenJobQueueService() const { return _offscreenQueueService; }
     void setActiveSceneProvider(std::function<Scene*()> provider) { _getActiveScene = std::move(provider); }
-    void setFrameIndexProvider(std::function<uint64_t()> provider) { _getFrameIndex = std::move(provider); }
+    void setHostTickProvider(std::function<uint64_t()> provider) { _getHostTick = std::move(provider); }
     void init() override;
 
     /// Resolve all pending skybox / environment / terrain derived GPU work.

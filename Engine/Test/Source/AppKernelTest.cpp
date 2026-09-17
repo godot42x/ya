@@ -57,7 +57,7 @@ TEST(AppKernelTest, HeadlessLoopHonorsExitAfterFrame)
 {
     CountingDelegate delegate;
     AppKernel        kernel({}, delegate); // no event source, no frame sink
-    const int        result = kernel.run(AppAutomationRunOptions{.exitAfterFrame = 5});
+    const int        result = kernel.run(AppAutomationRunOptions{.exitAfterTick = 5});
 
     EXPECT_EQ(result, 0);
     EXPECT_EQ(delegate.ticks, 5);

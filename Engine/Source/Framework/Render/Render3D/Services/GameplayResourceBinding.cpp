@@ -38,11 +38,11 @@ void GameplayResourceBinding::auditMaterialWork(Scene* scene)
         return;
     }
 
-    const uint64_t currentFrame = _getFrameIndex ? _getFrameIndex() : 0;
-    if (_nextMaterialAuditFrame != 0 && currentFrame < _nextMaterialAuditFrame) {
+    const uint64_t currentTick = _getHostTick ? _getHostTick() : 0;
+    if (_nextMaterialAuditFrame != 0 && currentTick < _nextMaterialAuditFrame) {
         return;
     }
-    _nextMaterialAuditFrame = currentFrame + MATERIAL_AUDIT_INTERVAL_FRAMES;
+    _nextMaterialAuditFrame = currentTick + MATERIAL_AUDIT_INTERVAL_FRAMES;
 
     auto& registry = scene->getRegistry();
 

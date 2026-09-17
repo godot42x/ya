@@ -59,7 +59,7 @@ TEST(HostSceneRenderSubmitTest, DualLiveScenesExtractIsolatedSnapshots)
     };
 
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(31);
+    scheduler.beginTick(31);
     ASSERT_TRUE(submitHostSceneViews(scheduler, nullptr, views));
     const SceneRenderPlan plan = scheduler.seal();
 
@@ -119,7 +119,7 @@ TEST(HostSceneRenderSubmitTest, SameLiveSceneTwoViewsShareSnapshot)
     };
 
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(32);
+    scheduler.beginTick(32);
     ASSERT_TRUE(submitHostSceneViews(scheduler, nullptr, views));
     const SceneRenderPlan plan = scheduler.seal();
 

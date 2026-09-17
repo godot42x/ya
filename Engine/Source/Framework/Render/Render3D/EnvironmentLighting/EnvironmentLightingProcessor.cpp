@@ -168,7 +168,7 @@ void EnvironmentLightingProcessor::onUpdate(float dt)
 
     sweepAuthoringDirty(scene);
     auditResolveWork(scene);
-    gcDerivedResources(_getFrameIndex ? _getFrameIndex() : 0);
+    gcDerivedResources(_getHostTick ? _getHostTick() : 0);
 
     {
         YA_PROFILE_SCOPE("ResourceResolve/Skybox");
@@ -267,11 +267,11 @@ void EnvironmentLightingProcessor::auditResolveWork(Scene* scene)
         return;
     }
 
-    const uint64_t currentFrame = _getFrameIndex ? _getFrameIndex() : 0;
-    if (_nextResolveAuditFrame != 0 && currentFrame < _nextResolveAuditFrame) {
+    const uint64_t currentTick = _getHostTick ? _getHostTick() : 0;
+    if (_nextResolveAuditFrame != 0 && currentTick < _nextResolveAuditFrame) {
         return;
     }
-    _nextResolveAuditFrame = currentFrame + 120;
+    _nextResolveAuditFrame = currentTick + 120;
 
     auto& registry = scene->getRegistry();
     // auto* assets   = AssetManager::get();
@@ -318,29 +318,29 @@ void EnvironmentLightingProcessor::markAllSceneSkyboxEnvironmentDependentsDirty(
 
 void EnvironmentLightingProcessor::touchDerivedResourceUsage()
 {
-    const uint64_t currentFrame = _getFrameIndex ? _getFrameIndex() : 0;
+    const uint64_t currentTick = _getHostTick ? _getHostTick() : 0;
     for (const auto& [entity, state] : _skyboxStates) {
         (void)entity;
         if (state.boundResource) {
-            state.boundResource->lastUsedFrame = currentFrame;
+            state.boundResource->lastUsedTick = currentTick;
         }
     }
     for (const auto& [entity, state] : _environmentStates) {
         (void)entity;
         if (state.boundResource) {
-            state.boundResource->lastUsedFrame = currentFrame;
+            state.boundResource->lastUsedTick = currentTick;
         }
     }
 }
 
-void EnvironmentLightingProcessor::gcDerivedResources(uint64_t currentFrame)
+void EnvironmentLightingProcessor::gcDerivedResources(uint64_t currentTick)
 {
-    const auto shouldKeep = [currentFrame](uint64_t lastUsedFrame) {
-        return lastUsedFrame + DERIVED_RESOURCE_GC_DELAY_FRAMES > currentFrame;
+    const auto shouldKeep = [currentTick](uint64_t lastUsedTick) {
+        return lastUsedTick + DERIVED_RESOURCE_GC_DELAY_FRAMES > currentTick;
     };
 
     for (auto it = _skyboxDerivedResources.begin(); it != _skyboxDerivedResources.end();) {
-        if (!it->second || shouldKeep(it->second->lastUsedFrame)) {
+        if (!it->second || shouldKeep(it->second->lastUsedTick)) {
             ++it;
             continue;
         }
@@ -352,7 +352,7 @@ void EnvironmentLightingProcessor::gcDerivedResources(uint64_t currentFrame)
     }
 
     for (auto it = _environmentDerivedResources.begin(); it != _environmentDerivedResources.end();) {
-        if (!it->second || shouldKeep(it->second->lastUsedFrame)) {
+        if (!it->second || shouldKeep(it->second->lastUsedTick)) {
             ++it;
             continue;
         }
@@ -978,14 +978,14 @@ void applySkyboxResource(const std::shared_ptr<SkyboxDerivedResource>& resource,
     }
 }
 
-std::shared_ptr<SkyboxDerivedResource> snapshotSkyboxResource(const SkyboxRuntimeState& state, uint64_t currentFrame)
+std::shared_ptr<SkyboxDerivedResource> snapshotSkyboxResource(const SkyboxRuntimeState& state, uint64_t currentTick)
 {
     auto resource                    = std::make_shared<SkyboxDerivedResource>();
     resource->cubemapRenderImage     = state.cubemapRenderImage;
     resource->cubemapTexture         = state.cubemapTexture;
     resource->sourcePreviewTexture   = state.sourcePreviewTexture;
     resource->cubemapFacePreviewViews = state.cubemapFacePreviewViews;
-    resource->lastUsedFrame          = currentFrame;
+    resource->lastUsedTick          = currentTick;
     return resource;
 }
 
@@ -1098,7 +1098,7 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(Scene* scene)
                                            pendingState.derivedKey != derivedKey ||
                                            pendingState.boundResource.get() != it->second.get() ||
                                            pendingState.resolveState != ESkyboxResolveState::Ready;
-                it->second->lastUsedFrame = _getFrameIndex ? _getFrameIndex() : 0;
+                it->second->lastUsedTick = _getHostTick ? _getHostTick() : 0;
                 applySkyboxResource(it->second, pendingState);
                 pendingState.derivedKey = derivedKey;
                 if (bCacheRebound) {
@@ -1200,7 +1200,7 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(Scene* scene)
                 detail::rebuildSkyboxViews(getRender(), pendingState);
                 pendingState.derivedKey = derivedKey;
                 ++pendingState.resultVersion;
-                auto resource = snapshotSkyboxResource(pendingState, _getFrameIndex ? _getFrameIndex() : 0);
+                auto resource = snapshotSkyboxResource(pendingState, _getHostTick ? _getHostTick() : 0);
                 _skyboxDerivedResources[derivedKey] = resource;
                 pendingState.boundResource = resource;
                 transition.to(ESkyboxResolveState::Ready, "cubemap source resolved");
@@ -1311,7 +1311,7 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(Scene* scene)
             detail::rebuildSkyboxViews(getRender(), pendingState);
             pendingState.derivedKey = derivedKey;
             ++pendingState.resultVersion;
-            auto resource = snapshotSkyboxResource(pendingState, _getFrameIndex ? _getFrameIndex() : 0);
+            auto resource = snapshotSkyboxResource(pendingState, _getHostTick ? _getHostTick() : 0);
             _skyboxDerivedResources[derivedKey] = resource;
             pendingState.boundResource = resource;
             makeTransition(pendingState.resolveState, "Skybox")
@@ -1488,7 +1488,7 @@ void applyEnvironmentResource(const std::shared_ptr<EnvironmentLightingDerivedRe
     }
 }
 
-std::shared_ptr<EnvironmentLightingDerivedResource> snapshotEnvironmentResource(const EnvironmentLightingRuntimeState& state, uint64_t currentFrame)
+std::shared_ptr<EnvironmentLightingDerivedResource> snapshotEnvironmentResource(const EnvironmentLightingRuntimeState& state, uint64_t currentTick)
 {
     auto resource                         = std::make_shared<EnvironmentLightingDerivedResource>();
     resource->cubemapRenderImage         = state.cubemapRenderImage;
@@ -1499,7 +1499,7 @@ std::shared_ptr<EnvironmentLightingDerivedResource> snapshotEnvironmentResource(
     resource->prefilterRenderImage       = state.prefilterRenderImage;
     resource->prefilterMipFacePreviewViews = state.prefilterMipFacePreviewViews;
     resource->prefilterPreviewMipCount   = state.prefilterPreviewMipCount;
-    resource->lastUsedFrame              = currentFrame;
+    resource->lastUsedTick              = currentTick;
     return resource;
 }
 
@@ -2457,7 +2457,7 @@ void EnvironmentLightingProcessor::resolvePendingEnvironmentLighting(Scene* scen
                                            pendingState.sourceState != EEnvironmentLightingSourceResolveState::Ready ||
                                            (elc.bEnableIrradiance && pendingState.irradianceState != EEnvironmentLightingIrradianceResolveState::Ready) ||
                                            (elc.bEnablePrefilter && pendingState.prefilterState != EEnvironmentLightingPrefilterResolveState::Ready);
-                it->second->lastUsedFrame = _getFrameIndex ? _getFrameIndex() : 0;
+                it->second->lastUsedTick = _getHostTick ? _getHostTick() : 0;
                 applyEnvironmentResource(it->second, pendingState);
                 pendingState.derivedKey = derivedKey;
                 if (bCacheRebound) {
@@ -2508,7 +2508,7 @@ void EnvironmentLightingProcessor::resolvePendingEnvironmentLighting(Scene* scen
 
         if (!derivedKey.empty() && isEnvironmentResolveComplete(elc, pendingState)) {
             pendingState.derivedKey = derivedKey;
-            auto resource = snapshotEnvironmentResource(pendingState, _getFrameIndex ? _getFrameIndex() : 0);
+            auto resource = snapshotEnvironmentResource(pendingState, _getHostTick ? _getHostTick() : 0);
             _environmentDerivedResources[derivedKey] = resource;
             pendingState.boundResource = resource;
         }

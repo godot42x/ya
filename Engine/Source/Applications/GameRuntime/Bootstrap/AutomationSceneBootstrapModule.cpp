@@ -20,7 +20,7 @@ void AutomationSceneBootstrapModule::onConfigure(App& app, AppDesc& desc)
     if (desc.automation.scenePath.has_value()) {
         return;
     }
-    if (desc.automation.exitAfterFrame == 0) {
+    if (desc.automation.exitAfterTick == 0) {
         return;
     }
 

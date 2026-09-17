@@ -17,7 +17,7 @@ struct IRenderRuntimeServices
 {
     virtual ~IRenderRuntimeServices() = default;
 
-    [[nodiscard]] virtual uint64_t                         getFrameIndex() const = 0;
+    [[nodiscard]] virtual uint64_t                         getHostTick() const = 0;
     [[nodiscard]] virtual double                           getElapsedTimeSeconds() const = 0;
     [[nodiscard]] virtual GameplayResourceBinding*           getGameplayResourceBinding() const = 0;
     [[nodiscard]] virtual EnvironmentLightingProcessor*    getEnvironmentLightingProcessor() const = 0;

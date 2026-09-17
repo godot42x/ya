@@ -1,4 +1,4 @@
-#include "GameRuntime/Lifecycle/GameRuntimeFrameOrchestrator.h"
+#include "GameRuntime/Lifecycle/GameRuntimeTickOrchestrator.h"
 
 #include "GameRuntime/App.h"
 #include "GameRuntime/AppRenderFrameState.h"
@@ -152,7 +152,7 @@ void appendSceneCameraFrustumLines(Scene&                            scene,
 
 } // namespace
 
-int GameRuntimeFrameOrchestrator::iterate(App& app, float dt)
+int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
 {
     YA_PROFILE_FUNCTION()
     YA_PERF_FUNCTION(perf::metric::cpuTimeMs(), perf::domain::render());
@@ -191,17 +191,17 @@ int GameRuntimeFrameOrchestrator::iterate(App& app, float dt)
         YA_PERF_SCOPE(perf::sample::frameRenderCallbacks(), perf::metric::cpuTimeMs(), perf::domain::render());
         TaskQueue::get().processMainThreadCallbacks();
     }
-    ++App::_frameIndex;
+    ++App::_hostTick;
 
     auto& renderServices = app.getRenderServices();
     auto* device         = renderServices.getDeviceState();
     if (auto* automationControl = app.getAutomationControlService()) {
-        automationControl->onFrameCompleted(app,
+        automationControl->onTickCompleted(app,
                                             renderServices.getRender(),
                                             device ? device->getPostprocessOutputImageShared() : nullptr,
                                             device ? device->getActiveViewportImageShared() : nullptr,
                                             device ? device->getPresentationImageShared() : nullptr,
-                                            App::_frameIndex);
+                                            App::_hostTick);
     }
 
     if (AppAutomation::isFrameAutomationEnabled(app)) {
@@ -209,8 +209,8 @@ int GameRuntimeFrameOrchestrator::iterate(App& app, float dt)
         YA_PERF_SCOPE(perf::sample::frameAutomation(), perf::metric::cpuTimeMs(), perf::domain::render());
         auto* diagnosticsService = device ? &device->getDiagnosticsService() : nullptr;
 
-        AppAutomation::onFrameCompleted(app,
-                                        AppAutomationFrameContext{
+        AppAutomation::onTickCompleted(app,
+                                        AppAutomationTickContext{
                                             .render                     = renderServices.getRender(),
                                             .postprocessImage           = device ? device->getPostprocessOutputImageShared() : nullptr,
                                             .viewportImage              = device ? device->getActiveViewportImageShared() : nullptr,
@@ -235,14 +235,14 @@ int GameRuntimeFrameOrchestrator::iterate(App& app, float dt)
                                             ? [diagnosticsService]() -> const std::string&
                                             { return diagnosticsService->getAutomationRenderDocPassSummaryPath(); }
                                             : std::function<const std::string&()>{},
-                                            .frameIndex = App::_frameIndex,
+                                            .hostTick = App::_hostTick,
                                         });
     }
 
     return 0;
 }
 
-void GameRuntimeFrameOrchestrator::tickLogic(App& app, float dt)
+void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
 {
     YA_PROFILE_FUNCTION()
     {
@@ -323,12 +323,12 @@ void GameRuntimeFrameOrchestrator::tickLogic(App& app, float dt)
     }
 }
 
-void GameRuntimeFrameOrchestrator::syncViewportState(App& app)
+void GameRuntimeTickOrchestrator::syncViewportState(App& app)
 {
     (void)app;
 }
 
-Extent2D GameRuntimeFrameOrchestrator::resolveViewportExtent(const App& app, RenderDeviceState* device, const Rect2D& viewportRect)
+Extent2D GameRuntimeTickOrchestrator::resolveViewportExtent(const App& app, RenderDeviceState* device, const Rect2D& viewportRect)
 {
     if (device) {
         Extent2D extent = device->getViewportExtent();
@@ -347,7 +347,7 @@ Extent2D GameRuntimeFrameOrchestrator::resolveViewportExtent(const App& app, Ren
     };
 }
 
-Entity* GameRuntimeFrameOrchestrator::getPrimaryCamera(const App& app)
+Entity* GameRuntimeTickOrchestrator::getPrimaryCamera(const App& app)
 {
     if (!app._sceneManager) {
         return nullptr;
@@ -371,7 +371,7 @@ Entity* GameRuntimeFrameOrchestrator::getPrimaryCamera(const App& app)
     return anyCam;
 }
 
-void GameRuntimeFrameOrchestrator::prepareRenderFrameState(App& app, float dt)
+void GameRuntimeTickOrchestrator::prepareHostViewState(App& app, float dt)
 {
     auto* device = app.getRenderServices().getDeviceState();
     if (!device) {
@@ -379,7 +379,7 @@ void GameRuntimeFrameOrchestrator::prepareRenderFrameState(App& app, float dt)
         return;
     }
 
-    app._renderState->frameState.clock.frameIndex    = App::_frameIndex;
+    app._renderState->frameState.clock.hostTick    = App::_hostTick;
     app._renderState->frameState.clock.elapsedTimeMS = app.getElapsedTimeMS();
 
     Rect2D viewportRect = app._renderState->frameState.viewportRect;
@@ -399,7 +399,7 @@ void GameRuntimeFrameOrchestrator::prepareRenderFrameState(App& app, float dt)
                                    runtimeCamera->hasComponent<CameraComponent>();
 
     const float viewportFrameBufferScale = app._renderState->frameState.viewportFrameBufferScale;
-    const RenderRuntimeClockState clock  = app._renderState->frameState.clock;
+    const HostClockState clock  = app._renderState->frameState.clock;
 
     AppRenderFrameState frameState{};
     frameState.clock                    = clock;
@@ -423,7 +423,7 @@ void GameRuntimeFrameOrchestrator::prepareRenderFrameState(App& app, float dt)
     app._renderState->frameState = frameState;
 }
 
-uint32_t GameRuntimeFrameOrchestrator::resolveFlightIndex(const App& app)
+uint32_t GameRuntimeTickOrchestrator::resolveFlightIndex(const App& app)
 {
     auto* render = app.getRenderServices().getRender();
     if (!render) {
@@ -441,7 +441,7 @@ uint32_t GameRuntimeFrameOrchestrator::resolveFlightIndex(const App& app)
     return present->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT;
 }
 
-std::vector<RenderOverlaySprite2D> GameRuntimeFrameOrchestrator::buildScreenOverlaySprites(const App& app)
+std::vector<RenderOverlaySprite2D> GameRuntimeTickOrchestrator::buildScreenOverlaySprites(const App& app)
 {
     std::vector<RenderOverlaySprite2D> sprites;
     if (app._appMode != AppMode::Drawing || app.clicked.empty()) {
@@ -467,7 +467,7 @@ std::vector<RenderOverlaySprite2D> GameRuntimeFrameOrchestrator::buildScreenOver
     return sprites;
 }
 
-void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
+void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 {
     auto* device      = app.getRenderServices().getDeviceState();
     auto* coordinator = app.getRenderServices().getFrameCoordinator();
@@ -478,7 +478,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
     app.prepareModulesForRender(dt);
     {
         YA_PROFILE_SCOPE("Render/PrepareRenderFrameState");
-        prepareRenderFrameState(app, dt);
+        prepareHostViewState(app, dt);
     }
 
     auto& diagnostics = device->getDiagnosticsService();
@@ -510,14 +510,14 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
     const glm::mat4 viewProjection = makeCameraViewProjection(frameState.projection, frameState.view);
 
     auto& sceneScheduler = app._renderState->sceneRenderScheduler;
-    sceneScheduler.beginFrame(App::_frameIndex);
+    sceneScheduler.beginTick(App::_hostTick);
     struct SceneSchedulerGuard
     {
         SceneRenderScheduler* scheduler = nullptr;
         ~SceneSchedulerGuard()
         {
             if (scheduler) {
-                scheduler->clearFrame();
+                scheduler->clearTick();
             }
         }
     } sceneSchedulerGuard{.scheduler = &sceneScheduler};
@@ -616,7 +616,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
                                          ? previewCamera->getHandle()
                                          : (runtimeLookCamera ? runtimeLookCamera->getHandle() : entt::null),
                         .viewFeatures = featuresForView(task.viewId),
-                        .frameIndex = App::_frameIndex,
+                        .frameIndex = App::_hostTick,
                         .deltaTime = dt,
                         .shadowSettings = &app.getRenderServices().getShadowSettings(),
                     },
@@ -637,7 +637,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
 
     CameraFrameInput cameraFrame{
         .flightIndex              = flightIndex,
-        .frameIndex               = App::_frameIndex,
+        .frameIndex               = App::_hostTick,
         .deltaTime                = dt,
         .viewFeatures             = editorViewFeatures,
         .view                     = frameState.view,
@@ -650,7 +650,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
         .shadowSettings           = &app.getRenderServices().getShadowSettings(),
     };
 
-    auto screenOverlaySprites = GameRuntimeFrameOrchestrator::buildScreenOverlaySprites(app);
+    auto screenOverlaySprites = GameRuntimeTickOrchestrator::buildScreenOverlaySprites(app);
 
     // Game UI: build the immutable frame snapshot BEFORE the RenderGraph.
     // Command recording consumes only this packet; the live WidgetTree is
@@ -715,12 +715,12 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
                     } },
                 .appendCapture = [&app](RenderGraph& graph, RGTextureHandle presentationOutput, Extent2D presentationExtent)
                 {
-                    bool bAppended = AppAutomation::appendPresentationCapture(app.getFrameIndex(),
+                    bool bAppended = AppAutomation::appendPresentationCapture(app.getHostTick(),
                                                                               graph,
                                                                               presentationOutput,
                                                                               presentationExtent);
                     if (auto* automationControl = app.getAutomationControlService()) {
-                        bAppended = automationControl->appendPresentationCapture(app.getFrameIndex(),
+                        bAppended = automationControl->appendPresentationCapture(app.getHostTick(),
                                                                                  graph,
                                                                                  presentationOutput,
                                                                                  presentationExtent) ||

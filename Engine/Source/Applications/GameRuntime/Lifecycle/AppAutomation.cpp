@@ -36,8 +36,8 @@ struct AppAutomationRuntimeState
 {
     AppScreenshotCaptureState screenshot;
     const Scene*              stableScene          = nullptr;
-    uint64_t                  warmupFrames         = 0;
-    uint64_t                  stableFrames         = 0;
+    uint64_t                  warmupTicks         = 0;
+    uint64_t                  stableTicks         = 0;
     bool                      bScreenshotRequested = false;
     bool                      bQuitDeferred        = false;
     bool                      bViewportResizeApplied = false;
@@ -127,7 +127,7 @@ void loadScreenshotAutomationOverrides(AppDesc& appDesc)
         }
     }
 
-    configManager.tryGet<uint64_t>(AUTOMATION_CONFIG_DOC_NAME, "screenshot.frame", appDesc.automation.screenshotFrameIndex);
+    configManager.tryGet<uint64_t>(AUTOMATION_CONFIG_DOC_NAME, "screenshot.frame", appDesc.automation.screenshotTick);
 }
 
 void loadRenderDocAutomationOverrides(AppDesc& appDesc)
@@ -176,7 +176,7 @@ void loadViewportResizeAutomationOverrides(AppDesc& appDesc)
         .width  = width,
         .height = height,
     };
-    configManager.tryGet<uint64_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.viewportResize.frame", resize.frameIndex);
+    configManager.tryGet<uint64_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.viewportResize.frame", resize.hostTick);
     appDesc.automation.viewportResize = resize;
 }
 
@@ -202,7 +202,7 @@ void loadPipelineSwitchAutomationOverrides(AppDesc& appDesc)
     AppAutomationPipelineSwitch pipelineSwitch{
         .target = target,
     };
-    configManager.tryGet<uint64_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.renderPipeline.frame", pipelineSwitch.frameIndex);
+    configManager.tryGet<uint64_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.renderPipeline.frame", pipelineSwitch.hostTick);
     appDesc.automation.pipelineSwitch = pipelineSwitch;
 }
 
@@ -260,14 +260,14 @@ bool isScreenshotTerminal(const AppAutomationRuntimeState& runtimeState)
 bool shouldRequestQuitAfterFrame(const App& app)
 {
     const AppAutomationOptions& automation = app.getDesc().automation;
-    return evaluateAutomationExitReason(app.getFrameIndex(), automation) == EAppAutomationExitReason::ExitAfterFrame;
+    return evaluateAutomationExitReason(app.getHostTick(), automation) == EAppAutomationExitReason::ExitAfterFrame;
 }
 
 void resetAutomationStability(AppAutomationRuntimeState& runtimeState, const Scene* activeScene)
 {
     runtimeState.stableScene  = activeScene;
-    runtimeState.warmupFrames = 0;
-    runtimeState.stableFrames = 0;
+    runtimeState.warmupTicks = 0;
+    runtimeState.stableTicks = 0;
 }
 
 bool hasLoadingSkybox(const Scene& scene)
@@ -360,29 +360,29 @@ bool isAutomationStableFrameReady(App& app)
     }
 
     const AppAutomationOptions& automation = app.getDesc().automation;
-    if (automation.screenshotFrameIndex > 0 && app.getFrameIndex() < automation.screenshotFrameIndex) {
-        runtimeState.stableFrames = 0;
+    if (automation.screenshotTick > 0 && app.getHostTick() < automation.screenshotTick) {
+        runtimeState.stableTicks = 0;
         return false;
     }
 
-    if (automation.screenshotFrameIndex == 0) {
-        ++runtimeState.warmupFrames;
-        if (runtimeState.warmupFrames <= automation.screenshotWarmupFrames) {
+    if (automation.screenshotTick == 0) {
+        ++runtimeState.warmupTicks;
+        if (runtimeState.warmupTicks <= automation.screenshotWarmupTicks) {
             return false;
         }
     }
 
     if (!isSceneStableForAutomation(*activeScene)) {
-        runtimeState.stableFrames = 0;
+        runtimeState.stableTicks = 0;
         return false;
     }
 
-    ++runtimeState.stableFrames;
-    const uint64_t settleFrames = automation.screenshotSettleFrames > 0 ? automation.screenshotSettleFrames : 1;
-    return runtimeState.stableFrames >= settleFrames;
+    ++runtimeState.stableTicks;
+    const uint64_t settleTicks = automation.screenshotSettleTicks > 0 ? automation.screenshotSettleTicks : 1;
+    return runtimeState.stableTicks >= settleTicks;
 }
 
-bool handleScreenshotAutomation(App& app, const AppAutomationFrameContext& frameContext, bool bStableFrameReady)
+bool handleScreenshotAutomation(App& app, const AppAutomationTickContext& frameContext, bool bStableFrameReady)
 {
     auto& runtimeState = getAutomationRuntimeState();
 
@@ -391,7 +391,7 @@ bool handleScreenshotAutomation(App& app, const AppAutomationFrameContext& frame
         return false;
     }
 
-    AppScreenshotCapture::tryFinalize(frameContext.frameIndex, runtimeState.screenshot);
+    AppScreenshotCapture::tryFinalize(frameContext.hostTick, runtimeState.screenshot);
     if (runtimeState.bScreenshotRequested || isScreenshotTerminal(runtimeState)) {
         return !isScreenshotTerminal(runtimeState);
     }
@@ -413,11 +413,11 @@ bool handleScreenshotAutomation(App& app, const AppAutomationFrameContext& frame
                                                                       *automation.screenshotPath,
                                                                       automation.screenshotTarget);
     if (runtimeState.bScreenshotRequested) {
-        const uint64_t settleFrames = automation.screenshotSettleFrames > 0 ? automation.screenshotSettleFrames : 1;
+        const uint64_t settleTicks = automation.screenshotSettleTicks > 0 ? automation.screenshotSettleTicks : 1;
         YA_CORE_INFO("Automation requested screenshot at frame {} after {} warmup frames and {} stable frames: {}",
-                     frameContext.frameIndex,
-                     automation.screenshotWarmupFrames,
-                     settleFrames,
+                     frameContext.hostTick,
+                     automation.screenshotWarmupTicks,
+                     settleTicks,
                      *automation.screenshotPath);
     }
 
@@ -425,7 +425,7 @@ bool handleScreenshotAutomation(App& app, const AppAutomationFrameContext& frame
 }
 
 bool handleRenderDocAutomation(const AppAutomationOptions& automation,
-                               const AppAutomationFrameContext& frameContext,
+                               const AppAutomationTickContext& frameContext,
                                bool bStableFrameReady)
 {
     if (!frameContext.isRenderDocCapturePending ||
@@ -452,10 +452,10 @@ bool handleRenderDocAutomation(const AppAutomationOptions& automation,
 
     const bool bRequested = frameContext.requestRenderDocCapture();
     if (bRequested) {
-        const uint64_t settleFrames = automation.screenshotSettleFrames > 0 ? automation.screenshotSettleFrames : 1;
+        const uint64_t settleTicks = automation.screenshotSettleTicks > 0 ? automation.screenshotSettleTicks : 1;
         YA_CORE_INFO("Automation requested a single RenderDoc capture after {} warmup frames and {} stable frames",
-                     automation.screenshotWarmupFrames,
-                     settleFrames);
+                     automation.screenshotWarmupTicks,
+                     settleTicks);
     }
 
     return frameContext.isRenderDocCapturePending();
@@ -472,7 +472,7 @@ std::string getAutomationCapturePath(const std::function<const std::string&()>& 
     return pathProvider ? pathProvider() : getAutomationCapturePathFallback();
 }
 
-bool hasPendingAutomationWork(const App& app, const AppAutomationFrameContext* frameContext = nullptr)
+bool hasPendingAutomationWork(const App& app, const AppAutomationTickContext* frameContext = nullptr)
 {
     auto&                       runtimeState = getAutomationRuntimeState();
     const AppAutomationOptions& automation   = app.getDesc().automation;
@@ -494,7 +494,7 @@ bool hasPendingAutomationWork(const App& app, const AppAutomationFrameContext* f
 
 bool hasFrameAutomationConfig(const AppAutomationOptions& automation)
 {
-    return automation.exitAfterFrame > 0 ||
+    return automation.exitAfterTick > 0 ||
            automation.viewportResize.has_value() ||
            automation.pipelineSwitch.has_value() ||
            hasScreenshotAutomation(automation) ||
@@ -528,7 +528,7 @@ RenderDeviceState::ERenderPipeline toRuntimeRenderPipeline(EAutomationRenderPipe
     return RenderDeviceState::ERenderPipeline::Deferred;
 }
 
-void applyScheduledSmokeActions(App& app, uint64_t frameIndex)
+void applyScheduledSmokeActions(App& app, uint64_t hostTick)
 {
     auto&                       runtimeState = getAutomationRuntimeState();
     const AppAutomationOptions& automation   = app.getDesc().automation;
@@ -539,17 +539,17 @@ void applyScheduledSmokeActions(App& app, uint64_t frameIndex)
 
     if (automation.pipelineSwitch &&
         !runtimeState.bPipelineSwitchApplied &&
-        frameIndex >= automation.pipelineSwitch->frameIndex) {
+        hostTick >= automation.pipelineSwitch->hostTick) {
         device->setPendingRenderPipeline(toRuntimeRenderPipeline(automation.pipelineSwitch->target));
         runtimeState.bPipelineSwitchApplied = true;
         YA_CORE_INFO("Automation queued render pipeline switch to {} at frame {}",
                      automation.pipelineSwitch->target == EAutomationRenderPipeline::Forward ? "Forward" : "Deferred",
-                     frameIndex);
+                     hostTick);
     }
 
     if (automation.viewportResize &&
         !runtimeState.bViewportResizeApplied &&
-        frameIndex >= automation.viewportResize->frameIndex) {
+        hostTick >= automation.viewportResize->hostTick) {
         Rect2D resizeRect = app.getRenderServices().getViewportRect();
         resizeRect.extent = glm::vec2(static_cast<float>(automation.viewportResize->width),
                                       static_cast<float>(automation.viewportResize->height));
@@ -561,7 +561,7 @@ void applyScheduledSmokeActions(App& app, uint64_t frameIndex)
         YA_CORE_INFO("Automation queued viewport resize to {}x{} at frame {}",
                      automation.viewportResize->width,
                      automation.viewportResize->height,
-                     frameIndex);
+                     hostTick);
     }
 }
 } // namespace
@@ -745,14 +745,14 @@ void AppAutomation::applyRuntimeOverrides(App& app)
     }
 }
 
-bool AppAutomation::appendPresentationCapture(uint64_t frameIndex,
+bool AppAutomation::appendPresentationCapture(uint64_t hostTick,
                                               RenderGraph&    graph,
                                               RGTextureHandle presentationOutput,
                                               Extent2D        presentationExtent)
 {
     auto& runtimeState = getAutomationRuntimeState();
     return AppScreenshotCapture::appendPresentationCapture(
-        frameIndex,
+        hostTick,
         runtimeState.screenshot,
         graph,
         presentationOutput,
@@ -769,13 +769,13 @@ OffscreenJobQueueService AppAutomation::buildOffscreenJobQueueService(App& app)
     return queueService;
 }
 
-void AppAutomation::onFrameCompleted(App& app, const AppAutomationFrameContext& frameContext)
+void AppAutomation::onTickCompleted(App& app, const AppAutomationTickContext& frameContext)
 {
     YA_PROFILE_FUNCTION()
 
     {
         YA_PROFILE_SCOPE("Automation/SmokeActions");
-        applyScheduledSmokeActions(app, frameContext.frameIndex);
+        applyScheduledSmokeActions(app, frameContext.hostTick);
     }
 
     auto&      runtimeState       = getAutomationRuntimeState();
@@ -818,7 +818,7 @@ void AppAutomation::onFrameCompleted(App& app, const AppAutomationFrameContext& 
         return;
     }
 
-    YA_CORE_INFO("Automation requested graceful shutdown after frame {}", app.getDesc().automation.exitAfterFrame);
+    YA_CORE_INFO("Automation requested graceful shutdown after frame {}", app.getDesc().automation.exitAfterTick);
     app.requestQuit();
 }
 

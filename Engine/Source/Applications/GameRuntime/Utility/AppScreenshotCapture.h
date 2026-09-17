@@ -30,7 +30,7 @@ struct AppScreenshotCaptureState
     std::shared_ptr<RenderTexture>     presentationSourceImage;
     uint32_t                           width                         = 0;
     uint32_t                           height                        = 0;
-    uint64_t                           recordedFrameIndex            = 0;
+    uint64_t                           recordedTick                  = 0;
     EFormat::T                         sourceFormat                  = EFormat::Undefined;
     EAutomationScreenshotTarget        target                        = static_cast<EAutomationScreenshotTarget>(0);
     bool                               bCompleted                    = false;
@@ -52,12 +52,12 @@ class YA_GAME_RUNTIME_API AppScreenshotCapture
                         EAutomationScreenshotTarget target);
     /// Append a presentation readback copy pass to the live presentation
     /// graph, instead of recording a standalone copy outside the graph.
-    static bool appendPresentationCapture(uint64_t frameIndex,
+    static bool appendPresentationCapture(uint64_t                   hostTick,
                                           AppScreenshotCaptureState& state,
                                           RenderGraph&               graph,
                                           RGTextureHandle            presentationOutput,
                                           Extent2D                   presentationExtent);
-    static bool tryFinalize(uint64_t currentFrameIndex, AppScreenshotCaptureState& state);
+    static bool tryFinalize(uint64_t currentHostTick, AppScreenshotCaptureState& state);
     static void reset(AppScreenshotCaptureState& state);
 };
 

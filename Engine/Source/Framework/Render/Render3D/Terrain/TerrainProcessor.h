@@ -64,7 +64,7 @@ class YA_RENDER_3D_API TerrainProcessor : public ISystem
     void setRender(IRender* render) { _render = render; }
     [[nodiscard]] IRender* getRender() const { return _render; }
     void setActiveSceneProvider(std::function<Scene*()> provider) { _getActiveScene = std::move(provider); }
-    void setFrameIndexProvider(std::function<uint64_t()> provider) { _getFrameIndex = std::move(provider); }
+    void setHostTickProvider(std::function<uint64_t()> provider) { _getHostTick = std::move(provider); }
 
     void init() override;
     void onUpdate(float dt) override;
@@ -87,11 +87,11 @@ class YA_RENDER_3D_API TerrainProcessor : public ISystem
     void clearSceneResolveWork();
     void cleanupTerrainState(entt::entity entity);
     [[nodiscard]] bool isTerrainQueuedOrActive(entt::entity entity) const;
-    [[nodiscard]] uint64_t currentFrame() const { return _getFrameIndex ? _getFrameIndex() : 0; }
+    [[nodiscard]] uint64_t currentHostTick() const { return _getHostTick ? _getHostTick() : 0; }
 
     IRender*                      _render = nullptr;
     std::function<Scene*()>       _getActiveScene;
-    std::function<uint64_t()>     _getFrameIndex;
+    std::function<uint64_t()>     _getHostTick;
     Scene*                        _pendingStateScene = nullptr;
     std::unordered_map<entt::entity, TerrainRuntimeState> _terrainStates;
     std::unordered_map<std::string, std::shared_ptr<TerrainDerivedResource>> _terrainDerivedResources;

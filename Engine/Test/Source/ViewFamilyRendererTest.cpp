@@ -29,7 +29,7 @@ TEST(ViewFamilyRendererTest, DualViewExportNamesStayUniqueInOneFamilyGraph)
 TEST(ViewFamilyRendererTest, SameSceneDualViewSealsOneFamilyPlan)
 {
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(7);
+    scheduler.beginTick(7);
 
     SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
     viewA.buildSnapshot = [] {
@@ -51,7 +51,7 @@ TEST(ViewFamilyRendererTest, SameSceneDualViewSealsOneFamilyPlan)
 TEST(ViewFamilyRendererTest, DualSceneSealsTwoFamilyPlans)
 {
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(8);
+    scheduler.beginTick(8);
 
     SceneRenderRequest sceneA{.sceneId = 3, .viewId = 11};
     sceneA.buildSnapshot = [] {

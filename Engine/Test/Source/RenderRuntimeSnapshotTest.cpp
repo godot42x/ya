@@ -97,7 +97,7 @@ TEST(RenderRuntimeSnapshotTest, DualSceneRecordingsKeepIndependentDerivedScenes)
     Scene* sceneB = reinterpret_cast<Scene*>(static_cast<uintptr_t>(0xB000));
 
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(21);
+    scheduler.beginTick(21);
     SceneRenderRequest requestA{.sceneId = 3, .viewId = 11};
     requestA.buildSnapshot = [] {
         return std::make_shared<const SceneFrameSnapshot>();
@@ -142,7 +142,7 @@ TEST(RenderRuntimeSnapshotTest, SameSceneFamilySharesDerivedScene)
     Scene* scene = reinterpret_cast<Scene*>(static_cast<uintptr_t>(0xC000));
 
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(22);
+    scheduler.beginTick(22);
     SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
     viewA.buildSnapshot = [] {
         return std::make_shared<const SceneFrameSnapshot>();
@@ -179,7 +179,7 @@ TEST(RenderRuntimeSnapshotTest, MixedDerivedSceneInOneFamilyIsRejected)
     Scene* sceneB = reinterpret_cast<Scene*>(static_cast<uintptr_t>(0xB000));
 
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(23);
+    scheduler.beginTick(23);
     SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
     viewA.buildSnapshot = [] {
         return std::make_shared<const SceneFrameSnapshot>();
@@ -212,7 +212,7 @@ TEST(RenderRuntimeSnapshotTest, SharedDerivedSceneAcrossSceneIdsIsRejected)
     Scene* scene = reinterpret_cast<Scene*>(static_cast<uintptr_t>(0xD000));
 
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(24);
+    scheduler.beginTick(24);
     SceneRenderRequest requestA{.sceneId = 3, .viewId = 11};
     requestA.buildSnapshot = [] {
         return std::make_shared<const SceneFrameSnapshot>();
@@ -296,7 +296,7 @@ TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
 TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
 {
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(42);
+    scheduler.beginTick(42);
 
     int buildCalls = 0;
     auto makeRequest = [&](SceneId sceneId, SceneViewId viewId)
@@ -319,7 +319,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
     ASSERT_TRUE(scheduler.submit(makeRequest(2, 21)));
 
     const SceneRenderPlan plan = scheduler.seal();
-    ASSERT_EQ(plan.frameId, 42u);
+    ASSERT_EQ(plan.hostTick, 42u);
     ASSERT_EQ(plan.snapshots.size(), 2u);
     ASSERT_EQ(plan.viewportTasks.size(), 3u);
     EXPECT_EQ(buildCalls, 2);
@@ -338,13 +338,13 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
     EXPECT_NE(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[2]));
     EXPECT_EQ(plan.viewportTasks[0].familyIndex, plan.viewportTasks[1].familyIndex);
     EXPECT_NE(plan.viewportTasks[0].familyIndex, plan.viewportTasks[2].familyIndex);
-    EXPECT_FALSE(scheduler.isFrameOpen());
+    EXPECT_FALSE(scheduler.isTickOpen());
 }
 
 TEST(RenderRuntimeSnapshotTest, SceneSchedulerCopiesIndependentViewOutputExtents)
 {
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(3);
+    scheduler.beginTick(3);
 
     auto makeRequest = [](SceneViewId viewId, glm::vec2 extent)
     {
@@ -380,7 +380,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerCopiesIndependentViewOutputExtents
 TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionChanges)
 {
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(9);
+    scheduler.beginTick(9);
 
     int buildCalls = 0;
     auto makeRequest = [&](uint64_t revision, SceneViewId viewId)
@@ -443,7 +443,7 @@ TEST(RenderRuntimeSnapshotTest, SceneRenderPlanInputRequiresPlanAndMatchingViewR
 TEST(RenderRuntimeSnapshotTest, SceneRenderPlanInputRecordsEveryViewportTaskWithSharedSnapshot)
 {
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(8);
+    scheduler.beginTick(8);
 
     auto makeRequest = [](SceneViewId viewId, const glm::mat4& view)
     {
@@ -528,13 +528,13 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRejectsRequestsOutsideFrame)
     request.buildSnapshot = [] { return std::make_shared<const SceneFrameSnapshot>(); };
 
     EXPECT_FALSE(scheduler.submit(request));
-    scheduler.beginFrame(7);
+    scheduler.beginTick(7);
     request.sceneId = 0;
     EXPECT_FALSE(scheduler.submit(request));
     request.sceneId = 1;
     request.viewId = 1;
     EXPECT_TRUE(scheduler.submit(request));
-    scheduler.clearFrame();
+    scheduler.clearTick();
     EXPECT_EQ(scheduler.pendingRequestCount(), 0u);
 }
 
@@ -574,7 +574,7 @@ TEST(RenderRuntimeSnapshotTest, OverlaySnapshotEmptyIncludesWorldLines)
 TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
 {
     SceneRenderScheduler scheduler;
-    scheduler.beginFrame(9);
+    scheduler.beginTick(9);
 
     auto buildSnapshot = []()
     {

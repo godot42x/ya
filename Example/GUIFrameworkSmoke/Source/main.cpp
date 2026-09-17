@@ -148,9 +148,9 @@ int main(int argc, char** argv)
     }
     const int result = guiApp.run();
     guiApp.shutdown();
-    if (config.automation.exitAfterFrame > 0) {
+    if (config.automation.exitAfterTick > 0) {
         YA_CORE_INFO("Minimal GUI host finished after automation frame budget {}",
-                     config.automation.exitAfterFrame);
+                     config.automation.exitAfterTick);
     }
     else {
         YA_CORE_INFO("Minimal GUI host finished");
