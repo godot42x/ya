@@ -82,8 +82,12 @@ transform for free, and why companion components never track position themselves
   instead of in the declaration.
 - Pushing a view policy (e.g. `bAppStopped`) into the shared scene snapshot.
 - Generating children from inside `paint` / layout callbacks.
-- `Entity::getComponent<T>()` on a path where `T` may be absent — it asserts. Use
-  `hasComponent<T>()` first.
+- `Entity::getComponent<T>()` on a path where `T` may be absent — **it asserts in
+  debug and aborts the editor**. Use `Entity::tryGetComponent<T>()` (or
+  `hasComponent<T>()` first) whenever presence is a question. This is not
+  theoretical: an unconditional `getComponent<ModelComponent>()` in the
+  inspector's instance notice aborted the editor on selecting any camera, light
+  or empty, because only model instances carry that component.
 
 ## Checklist for a new generated object
 

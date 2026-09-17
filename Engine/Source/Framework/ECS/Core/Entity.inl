@@ -42,6 +42,20 @@ const T* Entity::getComponent() const
 }
 
 template <typename T>
+T* Entity::tryGetComponent()
+{
+    YA_CORE_ASSERT(_registry != nullptr, "Entity registry is null!");
+    return _registry->all_of<T>(_entityHandle) ? &_registry->get<T>(_entityHandle) : nullptr;
+}
+
+template <typename T>
+const T* Entity::tryGetComponent() const
+{
+    YA_CORE_ASSERT(_registry != nullptr, "Entity registry is null!");
+    return _registry->all_of<T>(_entityHandle) ? &_registry->get<T>(_entityHandle) : nullptr;
+}
+
+template <typename T>
 [[nodiscard]] bool Entity::hasComponent() const
 {
     YA_CORE_ASSERT(_entityHandle != entt::null, "Entity handle is null!");

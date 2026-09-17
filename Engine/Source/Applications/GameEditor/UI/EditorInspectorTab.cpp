@@ -520,29 +520,16 @@ void EditorInspectorTab::updateInstanceNotice(const std::vector<Entity*>& entiti
         return;
     }
 
-    if (editorIsInstanceChild(primary)) {
-        Entity* root = editorResolveInstanceRoot(*scene, primary);
-        _instanceBodyText->setText(std::format(
-            "Generated mesh of model instance '{}'. Material, parameter and transform edits last for this "
-            "session only — rebuilding the instance restores the imported values. Delete, duplicate and "
-            "reorder are disabled; select the instance root to act on the whole model.",
-            root ? root->getName() : std::string_view("<unknown>")));
-        _instanceHost->setVisibility(EWidgetVisibility::Visible);
+    // The decision sits with the other instance helpers (and is unit tested
+    // there); this tab only shows or hides the line.
+    const std::string notice = editorInstanceNotice(*scene, primary);
+    if (notice.empty()) {
+        _instanceHost->setVisibility(EWidgetVisibility::Collapsed);
         return;
     }
 
-    if (const auto* model = primary->getComponent<ModelComponent>()) {
-        _instanceBodyText->setText(std::format(
-            "{} generated mesh(es) from '{}', sharing {} runtime material(s). Select a mesh in the Hierarchy "
-            "— or Alt+click it in the viewport — to edit that mesh's material.",
-            editorCountInstanceChildren(*scene, primary),
-            model->_modelRef.getPath(),
-            model->_cachedMaterials.size()));
-        _instanceHost->setVisibility(EWidgetVisibility::Visible);
-        return;
-    }
-
-    _instanceHost->setVisibility(EWidgetVisibility::Collapsed);
+    _instanceBodyText->setText(notice);
+    _instanceHost->setVisibility(EWidgetVisibility::Visible);
 }
 
 void EditorInspectorTab::refreshFromTree(WidgetTree& tree)

@@ -1,12 +1,15 @@
 #include "GameEditor/UI/EditorHierarchyOps.h"
 
 #include "ECS/Component.h"
+#include "ECS/Component/ModelComponent.h"
 #include "ECS/Entity.h"
 #include "Hierarchy/Node.h"
 #include "Scene3D/ManagedChildComponent.h"
 #include "Scene/Core/Scene.h"
 
 #include <gtest/gtest.h>
+
+#include <string>
 
 namespace ya
 {
@@ -56,6 +59,49 @@ TEST(EditorHierarchyOpsTest, InstanceChildPredicateTracksManagedChildComponent)
     EXPECT_FALSE(editorIsInstanceChild(plain->getEntity()));
     EXPECT_TRUE(editorIsInstanceChild(mesh->getEntity()));
     EXPECT_FALSE(editorIsInstanceChild(nullptr));
+}
+
+// Regression: the Inspector's instance notice used to call
+// `getComponent<ModelComponent>()` unconditionally, so selecting any entity
+// without a model -- a camera, a light, an empty -- aborted the editor on the
+// `Entity::getComponent` presence assert. Every non-instance entity must now
+// produce "nothing to say" instead of a crash.
+TEST(EditorHierarchyOpsTest, InstanceNoticeIsEmptyForEntitiesWithoutAModel)
+{
+    Scene scene("Test");
+    Node* camera = scene.createNode3D("Camera");
+    Node* light  = scene.createNode3D("Light");
+    Node* empty  = scene.createNode("Empty");
+
+    EXPECT_TRUE(camera);
+
+    EXPECT_TRUE(editorInstanceNotice(scene, camera->getEntity()).empty());
+    EXPECT_TRUE(editorInstanceNotice(scene, light->getEntity()).empty());
+    EXPECT_TRUE(editorInstanceNotice(scene, empty->getEntity()).empty());
+    EXPECT_TRUE(editorInstanceNotice(scene, nullptr).empty());
+}
+
+// The notice still explains both instance-shaped selections: the model root and
+// one of its generated mesh children (which reports its root's name).
+TEST(EditorHierarchyOpsTest, InstanceNoticeDescribesModelRootAndItsMeshChild)
+{
+    Scene scene("Test");
+    Node* root = scene.createNode3D("Model");
+    Node* mesh = scene.createNode3D("Model_Mesh_0", root);
+    markAsInstanceChild(mesh);
+
+    ASSERT_TRUE(root->getEntity());
+    ASSERT_TRUE(root->getEntity()->addComponent<ModelComponent>());
+
+    const std::string rootNotice = editorInstanceNotice(scene, root->getEntity());
+    EXPECT_FALSE(rootNotice.empty());
+    // Names the model source and how many meshes it generated, not the entity.
+    EXPECT_NE(rootNotice.find("generated mesh(es)"), std::string::npos);
+
+    const std::string meshNotice = editorInstanceNotice(scene, mesh->getEntity());
+    EXPECT_FALSE(meshNotice.empty());
+    // A mesh child reports the root it belongs to, so the user knows where to go.
+    EXPECT_NE(meshNotice.find("Model"), std::string::npos);
 }
 
 TEST(EditorHierarchyOpsTest, ResolveInstanceRootWalksPastManagedAncestors)

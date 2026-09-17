@@ -2,6 +2,7 @@
 
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
+#include "ECS/Component/ModelComponent.h"
 #include "GUI/Binding/SelectionModel.h"
 #include "GameEditor/EditorLayer.h"
 #include "Hierarchy/Node.h"
@@ -104,6 +105,34 @@ size_t editorCountInstanceChildren(Scene& scene, Entity* instanceRoot)
         }
     }
     return count;
+}
+
+std::string editorInstanceNotice(Scene& scene, Entity* entity)
+{
+    if (!entity || !entity->isValid()) {
+        return {};
+    }
+
+    if (editorIsInstanceChild(entity)) {
+        Entity* root = editorResolveInstanceRoot(scene, entity);
+        return std::format(
+            "Generated mesh of model instance '{}'. Material, parameter and transform edits last for this "
+            "session only — rebuilding the instance restores the imported values. Delete, duplicate and "
+            "reorder are disabled; select the instance root to act on the whole model.",
+            root ? root->getName() : std::string_view("<unknown>"));
+    }
+
+    // Presence must be asked for, not assumed: most entities have no model.
+    if (const auto* model = entity->tryGetComponent<ModelComponent>()) {
+        return std::format(
+            "{} generated mesh(es) from '{}', sharing {} runtime material(s). Select a mesh in the Hierarchy "
+            "— or Alt+click it in the viewport — to edit that mesh's material.",
+            editorCountInstanceChildren(scene, entity),
+            model->_modelRef.getPath(),
+            model->_cachedMaterials.size());
+    }
+
+    return {};
 }
 
 bool parseEditorHierarchyEntityIdKey(const std::string& id, uint64_t& outUuid)

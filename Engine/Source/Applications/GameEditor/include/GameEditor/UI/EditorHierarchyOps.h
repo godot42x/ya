@@ -44,6 +44,16 @@ struct SelectionModel;
 /// whole managed subtree, so it matches what the viewport draws for an instance.
 [[nodiscard]] size_t editorCountInstanceChildren(Scene& scene, Entity* instanceRoot);
 
+/// One-line explanation of what the selected entity is, for the Inspector's
+/// instance notice: empty when the selection has nothing instance-shaped to say
+/// (a light, a camera, a plain empty).
+///
+/// The decision lives here with the other instance helpers because it must not
+/// assume any particular component is present: the previous inline version
+/// called `Entity::getComponent<ModelComponent>()`, which asserts when the
+/// component is absent, so selecting any non-model entity aborted the editor.
+[[nodiscard]] std::string editorInstanceNotice(Scene& scene, Entity* entity);
+
 /// Resolve inspector/hierarchy entities from the owner session's SelectionModel
 /// when it has entity ids; otherwise fall back to Layer document selection.
 [[nodiscard]] std::vector<Entity*> editorSelectionEntities(EditorLayer& layer,

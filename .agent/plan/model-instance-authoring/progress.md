@@ -65,3 +65,20 @@ xmake b ya-game-editor ya-testing
 
 - 删父实体留下的孤儿 mesh 会继续渲染：由 Phase 2 的级联销毁修复。
 - 在 Hierarchy 删掉子 mesh 后再让 `ModelComponent` 失效会在 cleanup 里 use-after-free：由删除 `_childNodes` 清册修复。
+
+### 后续修复：选中任意非模型实体崩溃（本计划引入的回归）
+
+`updateInstanceNotice`（本计划 Phase 2 新增）在 Phase 2 里用的是
+`primary->getComponent<ModelComponent>()`，而 `Entity::getComponent` 在组件缺失时
+**assert**。于是选中任何不带 `ModelComponent` 的实体（相机、灯光、空节点）都会让编辑器
+abort——用户点 Hierarchy 里的相机即可复现。
+
+修复分两层：
+
+1. `Entity::tryGetComponent<T>()`（ecs-core）：安全访问器成为一次调用即可用的惯用法，
+   替代「先 `hasComponent` 再 `getComponent`」这种容易漏写的两步式。
+2. 判断逻辑从 Inspector tab 提取为 `editorInstanceNotice(Scene&, Entity*)`，与其它 instance
+   助手同处 `EditorHierarchyOps`，并由 `EditorHierarchyOpsTest` 覆盖（非模型实体返回空串、
+   模型根与 mesh 子节点各自的文案）。
+
+教训已写入 `.agent/skills/scene-object-boundary/SKILL.md` 的反面清单。

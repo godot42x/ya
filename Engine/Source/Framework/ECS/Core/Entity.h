@@ -47,6 +47,16 @@ struct YA_ECS_CORE_API Entity
     template <typename T>
     const T* getComponent() const;
 
+    /// Component or nullptr. `getComponent` asserts when the component is
+    /// absent, so "does it have one?" must be asked through this or through
+    /// `hasComponent`; `if (auto* c = entity->getComponent<T>())` is only safe
+    /// when `T` is guaranteed present on the entity.
+    template <typename T>
+    T* tryGetComponent();
+
+    template <typename T>
+    const T* tryGetComponent() const;
+
     template <typename T>
     [[nodiscard]] bool hasComponent() const;
 
