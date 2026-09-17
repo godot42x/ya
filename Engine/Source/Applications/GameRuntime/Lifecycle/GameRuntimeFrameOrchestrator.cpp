@@ -34,6 +34,7 @@
 #include "Render3D/RenderDeviceState.h"
 #include "Render3D/RenderFrameCoordinator.h"
 
+#include "GameRuntime/Lifecycle/HostSceneRenderSubmit.h"
 #include "GameRuntime/Utility/RenderFrameExtractor.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
@@ -116,32 +117,6 @@ glm::mat4 cameraProjectionForOutput(const CameraComponent& camera, const glm::ve
                               outputExtent.x / outputExtent.y,
                               camera._nearClip,
                               camera._farClip);
-}
-
-SceneRenderRequest makeSceneCameraRequest(SceneId                                  sceneId,
-                                          SceneViewId                              viewId,
-                                          const glm::mat4&                         view,
-                                          const glm::mat4&                         projection,
-                                          const glm::vec3&                         cameraPos,
-                                          const Rect2D&                            viewportRect,
-                                          std::function<std::shared_ptr<const SceneFrameSnapshot>()> buildSnapshot,
-                                          SceneViewId                              composeOntoViewId = 0,
-                                          const Rect2D&                            composeRect = {})
-{
-    return SceneRenderRequest{
-        .sceneId           = sceneId,
-        .sceneRevision     = 0,
-        .viewId            = viewId,
-        .familyId          = 1,
-        .view              = view,
-        .projection        = projection,
-        .viewProjection    = makeCameraViewProjection(projection, view),
-        .cameraPos         = cameraPos,
-        .viewportRect      = viewportRect,
-        .composeOntoViewId = composeOntoViewId,
-        .composeRect       = composeRect,
-        .buildSnapshot     = std::move(buildSnapshot),
-    };
 }
 
 constexpr glm::vec4 kCameraFrustumColor         = {0.35f, 0.85f, 1.0f, 1.0f};
@@ -545,26 +520,16 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
 
     SceneRenderPlan sceneRenderPlan;
     std::vector<RenderOverlayLine3D> cameraFrustumLines;
+    std::vector<HostSceneViewSubmit> hostViews;
     if (app.getRenderServices().isWorldSceneRenderEnabled() && scene) {
-        auto buildSnapshot = [scene, terrainProcessor = device->getTerrainProcessor()]
-        {
-            auto snapshot = std::make_shared<SceneFrameSnapshot>();
-            RenderFrameExtractor::extractSceneSnapshot(
-                RenderFrameExtractor::SceneExtractInput{
-                    .scene = scene,
-                    .terrainProcessor = terrainProcessor,
-                },
-                *snapshot);
-            return std::shared_ptr<const SceneFrameSnapshot>(std::move(snapshot));
-        };
-
-        sceneScheduler.submit(makeSceneCameraRequest(scene->getInstanceId(),
-                                                     kPrimarySceneViewId,
-                                                     frameState.view,
-                                                     frameState.projection,
-                                                     frameState.cameraPos,
-                                                     frameState.viewportRect,
-                                                     buildSnapshot));
+        hostViews.push_back(HostSceneViewSubmit{
+            .scene        = scene,
+            .viewId       = kPrimarySceneViewId,
+            .view         = frameState.view,
+            .projection   = frameState.projection,
+            .cameraPos    = frameState.cameraPos,
+            .viewportRect = frameState.viewportRect,
+        });
 
         Entity* runtimeLookCamera = (app._appState == AppState::Runtime) ? getPrimaryCamera(app) : nullptr;
         Entity* previewCamera     = resolvePreviewCamera(*scene,
@@ -584,15 +549,16 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
                 .pos    = {0.0f, 0.0f},
                 .extent = previewComposeRect.extent,
             };
-            sceneScheduler.submit(makeSceneCameraRequest(scene->getInstanceId(),
-                                                         kHostOverlayPreviewViewId,
-                                                         cameraComp->getFreeView(),
-                                                         cameraProjectionForOutput(*cameraComp, previewOutput.extent),
-                                                         transform->getWorldPosition(),
-                                                         previewOutput,
-                                                         buildSnapshot,
-                                                         kPrimarySceneViewId,
-                                                         previewComposeRect));
+            hostViews.push_back(HostSceneViewSubmit{
+                .scene             = scene,
+                .viewId            = kHostOverlayPreviewViewId,
+                .view              = cameraComp->getFreeView(),
+                .projection        = cameraProjectionForOutput(*cameraComp, previewOutput.extent),
+                .cameraPos         = transform->getWorldPosition(),
+                .viewportRect      = previewOutput,
+                .composeOntoViewId = kPrimarySceneViewId,
+                .composeRect       = previewComposeRect,
+            });
         }
 
         appendSceneCameraFrustumLines(*scene,
@@ -600,6 +566,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
                                       previewCamera ? entityUUID(previewCamera) : 0,
                                       cameraFrustumLines);
     }
+    (void)submitHostSceneViews(sceneScheduler, device->getTerrainProcessor(), hostViews);
     sceneRenderPlan = sceneScheduler.seal();
 
     auto& viewFrames = app._renderState->viewFrameDataPerFlight[flightIndex];
@@ -635,7 +602,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
             viewRecordings.push_back(SceneViewRecording{
                 .task         = &task,
                 .frameData    = &frameData,
-                .derivedScene = scene,
+                .derivedScene = derivedSceneForHostView(hostViews, task),
             });
         }
     }

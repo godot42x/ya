@@ -1,7 +1,7 @@
 # Render View Family 与 GUI/GameUI 渲染边界重构计划
 
 > 建立日期：2026-09-12
-> 状态：R2 架构收口中。Scene snapshot、View-keyed attachment、双 View 录制、PiP、family renderer、Runtime facade 拆除与 family-scoped derived Scene 已落地。下一阶段不要再向 Binding 或 Stage 追加字段；产品双 Scene 录制（host 提交两个 live Scene）与双 Surface GPU 仍未完成。
+> 状态：R2 架构收口中。Scene snapshot、View-keyed attachment、双 View 录制、PiP、family renderer、Runtime facade 拆除、family-scoped derived Scene 与 host live Scene 列表提交已落地。下一阶段不要再向 Binding 或 Stage 追加字段；产品帧默认仍提交当前 viewport 的 Scene，双 Surface GPU 仍未完成。
 
 ## 1. 主线选择
 
@@ -20,7 +20,7 @@ GUI 动画属于 gui-invalidation-architecture 的独立小切片，可在 R0 �
 ## 2. 当前仓库事实
 
 - Framework/Render/Render3D/Common/RenderFrameInputs.h 已有 CameraFrameInput、ViewComposeInput、DisplayComposeInput、PresentFrameInput。
-- `RenderDeviceState` 位于 Framework/Render/Render3D/RenderDeviceState.*，拥有 backend 与持久服务；`RenderFrameCoordinator` 消费 sealed `RenderFramePlan` 并调用 `recordFamily`。Host 拥有 world-enable 与 viewport rect。`activeSceneProvider` / `ViewportStateService` 已删除。本帧 Scene 经 `SceneViewRecording::derivedScene` 进入各 family，不再放在 `RenderFramePlan` 上。TAA 未使用，未引入空的 `ViewHistoryStore`。
+- `RenderDeviceState` 位于 Framework/Render/Render3D/RenderDeviceState.*，拥有 backend 与持久服务；`RenderFrameCoordinator` 消费 sealed `RenderFramePlan` 并调用 `recordFamily`。Host 拥有 world-enable 与 viewport rect。`activeSceneProvider` / `ViewportStateService` 已删除。本帧 Scene 经 `SceneViewRecording::derivedScene` 进入各 family，由 `HostSceneViewSubmit` 列表绑定，不再放在 `RenderFramePlan` 上。TAA 未使用，未引入空的 `ViewHistoryStore`。
 - Forward 与 Deferred 保留各自的 FrameGraphOrchestrator 和 pass topology；不抽强制 BaseRenderPipeline。
 - Applications/GameRuntime/Utility/RenderFrameExtractor.* 从 ECS 抽取 RenderFrameData。
 - RenderFrameData 当前同时承载 camera、lights、draw buckets、skinning，混合了 Scene、View 和 frame-flight 语义；SceneFrameSnapshot 现在是唯一场景快照名称。RenderFrameData 仍是 pipeline 消费的 per-view packet，后续继续拆出 View preparation 数据。
@@ -341,6 +341,13 @@ RenderViewRecordingContext
 - `ViewFamilyRecordContext::derivedScene` 来自该 family 的 recording，不是 plan 字段。
 - 验收：双 Scene 两个 family 得到两个独立 derived Scene；同 Scene 双 View 共享一个；family 内混用或跨 SceneId 别名指针被拒绝。Scheduler 仍不拥有 Scene。Host 当前仍只提交一个 live Scene；不要宣称产品双 Scene GPU 录制完成。
 
+**产品双 Scene 第二刀 — host 提交 live Scene 列表（已完成）**
+
+唯一目标：host 不再把 `getActiveScene()` 当成唯一可提交的 Scene。`HostSceneViewSubmit` 列出本帧每个 live Scene viewport；同 Scene* 共享一次 extract；不同 Scene 产生隔离 snapshot / family；recording 的 `derivedScene` 从该列表查找，不回退成单一 active Scene。
+
+- GameRuntime 经 `submitHostSceneViews` 提交列表；默认产品帧仍把当前 viewport Scene（及同 Scene 的 camera overlay）放进列表。
+- 验收：两个 live `Scene` 对象抽出不同 snapshot 与两个 family，灯光数据不串；同 Scene 双 View 共享 snapshot。未宣称编辑器 PIE 同时显示 authoring+play，也未做双 Surface GPU。
+
 Checkpoint A–E 完成前，不把新增 pipeline feature、双 Surface 视觉效果或目录搬迁当作主线进度。
 
 ### R0 — 建立单 View 正确性基线
@@ -381,7 +388,7 @@ R1 字段分类不能按现有结构名整体搬迁，必须按语义拆分：
 
 将 host `RenderFramePlan` 作为 SceneRenderPlan/SceneViewportTask 输入；当前单 View 已由 GameRuntime 经 scheduler 生成 plan 并作为 coordinator 的正式输入。Scheduler 负责 Scene snapshot 去重和任务排序，Coordinator 负责 frame resources、pipeline record、ViewCompose 和输出句柄；两者都不创建 OS window、不 acquire/present；Forward/Deferred 只接收对应 Scene snapshot 和 RenderViewInput；每个 View 建立独立 output/format/extent 句柄，不用全局 ViewportStateService 隐式表示所有 View；当前保持一条 command buffer/submit，只有 trace 证明同步或资源压力后才讨论拆分。
 
-R2 当前执行顺序：4.0.2 A–E 已落地；family-scoped derived Scene 已落地。下一刀是 host 提交两个 live Scene 的产品录制，以及双 Surface GPU 验收。不要提前宣称完成。
+R2 当前执行顺序：4.0.2 A–E、family-scoped derived Scene、host live Scene 列表提交已落地。下一刀是产品帧同时显示两个 Scene viewport，以及双 Surface GPU 验收。不要提前宣称完成。
 
 验收：同一 Scene snapshot 渲染两个 Camera；两个 Scene 各自提交并渲染一个 viewport；一个 View 输出被两个 Surface display compose；一个 Surface display compose 多个 View；未提交 request 的 Scene 不产生 render task；关闭/最小化一个 Surface 不影响另一 Surface、其它 Scene request 和 View；GPU 资源在 submit 完成前存活。
 

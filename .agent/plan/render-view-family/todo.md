@@ -56,7 +56,8 @@
 - [x] 4.0.2 D：Deferred/Forward 改为 `recordFamily`；一个 family graph 产生多个 typed outputs；删除 tick/beginTick 与 pipeline last-view 图袋作为 publish source。
 - [x] 4.0.2 E：拆除 RenderRuntime facade 为 RenderDeviceState + RenderFrameCoordinator + family renderer + presentation；删除单一 ViewportState 与 active Scene service-locator 依赖。
 - [x] family-scoped derived Scene：`SceneViewRecording::derivedScene` 按 family 绑定；删除 `RenderFramePlan::derivedScene`。Host 仍只提交一个 live Scene。
-- [ ] 录制两个 Scene 的两个 View，验证 snapshot 和资源生命周期隔离（host 提交两个 live Scene）。
+- [x] host 提交 live Scene 列表：`HostSceneViewSubmit` / `submitHostSceneViews`；两 live Scene 抽出隔离 snapshot 与两个 family。默认产品帧仍提交当前 viewport Scene。
+- [ ] 产品帧同时显示两个 Scene viewport（例如 PIE authoring + play）。
 - [ ] 验证一个 View 到多个 Surface、多个 View 到一个 Surface。
 - [ ] 验证 surface acquire/present/recreate 不进入 View pipeline。
 - [ ] 只有在 trace 证明必要时再提出 submit 拆分。
