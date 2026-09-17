@@ -17,6 +17,15 @@ namespace ya
 namespace
 {
 
+/// Seal and run the explicit extraction step with empty content. Most plan
+/// tests only care about the structure seal() grouped, not about Scene content.
+SceneRenderPlan sealWithEmptySnapshots(SceneRenderScheduler& scheduler)
+{
+    SceneRenderPlan plan = scheduler.seal();
+    buildSceneSnapshots(plan, [](SceneId, uint64_t) { return std::make_shared<const SceneSnapshot>(); });
+    return plan;
+}
+
 TEST(RenderRuntimeSnapshotTest, EmptyDevicePublishesEmptyViewportResources)
 {
     RenderDeviceState device;
@@ -98,17 +107,11 @@ TEST(RenderRuntimeSnapshotTest, DualSceneRecordingsKeepIndependentDerivedScenes)
 
     SceneRenderScheduler scheduler;
     scheduler.beginTick(21);
-    SceneRenderRequest requestA{.sceneId = 3, .viewId = 11};
-    requestA.buildSnapshot = [] {
-        return std::make_shared<const SceneSnapshot>();
-    };
-    SceneRenderRequest requestB{.sceneId = 4, .viewId = 21};
-    requestB.buildSnapshot = [] {
-        return std::make_shared<const SceneSnapshot>();
-    };
+    const SceneRenderRequest requestA{.sceneId = 3, .viewId = 11};
+    const SceneRenderRequest requestB{.sceneId = 4, .viewId = 21};
     ASSERT_TRUE(scheduler.submit(requestA));
     ASSERT_TRUE(scheduler.submit(requestB));
-    const SceneRenderPlan plan = scheduler.seal();
+    const SceneRenderPlan plan = sealWithEmptySnapshots(scheduler);
     ASSERT_EQ(plan.viewFamilies.size(), 2u);
 
     RenderFrameData frameA;
@@ -143,15 +146,11 @@ TEST(RenderRuntimeSnapshotTest, SameSceneFamilySharesDerivedScene)
 
     SceneRenderScheduler scheduler;
     scheduler.beginTick(22);
-    SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
-    viewA.buildSnapshot = [] {
-        return std::make_shared<const SceneSnapshot>();
-    };
-    SceneRenderRequest viewB{.sceneId = 3, .viewId = 12};
-    viewB.buildSnapshot = viewA.buildSnapshot;
+    const SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
+    const SceneRenderRequest viewB{.sceneId = 3, .viewId = 12};
     ASSERT_TRUE(scheduler.submit(viewA));
     ASSERT_TRUE(scheduler.submit(viewB));
-    const SceneRenderPlan plan = scheduler.seal();
+    const SceneRenderPlan plan = sealWithEmptySnapshots(scheduler);
     ASSERT_EQ(plan.viewFamilies.size(), 1u);
 
     RenderFrameData frameA;
@@ -180,15 +179,11 @@ TEST(RenderRuntimeSnapshotTest, MixedDerivedSceneInOneFamilyIsRejected)
 
     SceneRenderScheduler scheduler;
     scheduler.beginTick(23);
-    SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
-    viewA.buildSnapshot = [] {
-        return std::make_shared<const SceneSnapshot>();
-    };
-    SceneRenderRequest viewB{.sceneId = 3, .viewId = 12};
-    viewB.buildSnapshot = viewA.buildSnapshot;
+    const SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
+    const SceneRenderRequest viewB{.sceneId = 3, .viewId = 12};
     ASSERT_TRUE(scheduler.submit(viewA));
     ASSERT_TRUE(scheduler.submit(viewB));
-    const SceneRenderPlan plan = scheduler.seal();
+    const SceneRenderPlan plan = sealWithEmptySnapshots(scheduler);
 
     RenderFrameData frameA;
     RenderFrameData frameB;
@@ -213,17 +208,11 @@ TEST(RenderRuntimeSnapshotTest, SharedDerivedSceneAcrossSceneIdsIsRejected)
 
     SceneRenderScheduler scheduler;
     scheduler.beginTick(24);
-    SceneRenderRequest requestA{.sceneId = 3, .viewId = 11};
-    requestA.buildSnapshot = [] {
-        return std::make_shared<const SceneSnapshot>();
-    };
-    SceneRenderRequest requestB{.sceneId = 4, .viewId = 21};
-    requestB.buildSnapshot = [] {
-        return std::make_shared<const SceneSnapshot>();
-    };
+    const SceneRenderRequest requestA{.sceneId = 3, .viewId = 11};
+    const SceneRenderRequest requestB{.sceneId = 4, .viewId = 21};
     ASSERT_TRUE(scheduler.submit(requestA));
     ASSERT_TRUE(scheduler.submit(requestB));
-    const SceneRenderPlan plan = scheduler.seal();
+    const SceneRenderPlan plan = sealWithEmptySnapshots(scheduler);
 
     RenderFrameData frameA;
     RenderFrameData frameB;
@@ -299,18 +288,11 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
     scheduler.beginTick(42);
 
     int buildCalls = 0;
-    auto makeRequest = [&](SceneId sceneId, SceneViewId viewId)
+    auto makeRequest = [](SceneId sceneId, SceneViewId viewId)
     {
         SceneRenderRequest request;
         request.sceneId = sceneId;
         request.viewId = viewId;
-        request.buildSnapshot = [&, sceneId]()
-        {
-            ++buildCalls;
-            auto snapshot = std::make_shared<SceneSnapshot>();
-            snapshot->pointLightSourceCount = static_cast<uint32_t>(sceneId);
-            return std::shared_ptr<const SceneSnapshot>(std::move(snapshot));
-        };
         return request;
     };
 
@@ -318,10 +300,20 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
     ASSERT_TRUE(scheduler.submit(makeRequest(1, 12)));
     ASSERT_TRUE(scheduler.submit(makeRequest(2, 21)));
 
-    const SceneRenderPlan plan = scheduler.seal();
+    SceneRenderPlan plan = scheduler.seal();
     ASSERT_EQ(plan.hostTick, 42u);
     ASSERT_EQ(plan.snapshots.size(), 2u);
     ASSERT_EQ(plan.viewportTasks.size(), 3u);
+    // Grouping does not extract; the explicit step extracts once per Scene.
+    EXPECT_EQ(buildCalls, 0);
+    EXPECT_EQ(buildSceneSnapshots(plan, [&buildCalls](SceneId sceneId, uint64_t)
+              {
+                  ++buildCalls;
+                  auto snapshot = std::make_shared<SceneSnapshot>();
+                  snapshot->pointLightSourceCount = static_cast<uint32_t>(sceneId);
+                  return std::shared_ptr<const SceneSnapshot>(std::move(snapshot));
+              }),
+              0u);
     EXPECT_EQ(buildCalls, 2);
     EXPECT_EQ(plan.viewportTasks[0].snapshotIndex, plan.viewportTasks[1].snapshotIndex);
     EXPECT_NE(plan.viewportTasks[0].snapshotIndex, plan.viewportTasks[2].snapshotIndex);
@@ -352,17 +344,13 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerCopiesIndependentViewOutputExtents
         request.sceneId = 1;
         request.viewId = viewId;
         request.viewportRect = {.pos = {0.0f, 0.0f}, .extent = extent};
-        request.buildSnapshot = []()
-        {
-            return std::make_shared<const SceneSnapshot>();
-        };
         return request;
     };
 
     ASSERT_TRUE(scheduler.submit(makeRequest(11, {1280.0f, 720.0f})));
     ASSERT_TRUE(scheduler.submit(makeRequest(12, {256.0f, 256.0f})));
 
-    const SceneRenderPlan plan = scheduler.seal();
+    const SceneRenderPlan plan = sealWithEmptySnapshots(scheduler);
     ASSERT_EQ(plan.viewportTasks.size(), 2u);
     EXPECT_EQ(plan.viewportTasks[0].output.viewId, 11u);
     EXPECT_EQ(plan.viewportTasks[1].output.viewId, 12u);
@@ -383,17 +371,12 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionC
     scheduler.beginTick(9);
 
     int buildCalls = 0;
-    auto makeRequest = [&](uint64_t revision, SceneViewId viewId)
+    auto makeRequest = [](uint64_t revision, SceneViewId viewId)
     {
         SceneRenderRequest request;
         request.sceneId = 5;
         request.sceneRevision = revision;
         request.viewId = viewId;
-        request.buildSnapshot = [&buildCalls]
-        {
-            ++buildCalls;
-            return std::make_shared<const SceneSnapshot>();
-        };
         return request;
     };
 
@@ -401,7 +384,13 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionC
     ASSERT_TRUE(scheduler.submit(makeRequest(1, 52)));
     ASSERT_TRUE(scheduler.submit(makeRequest(2, 53)));
 
-    const SceneRenderPlan plan = scheduler.seal();
+    SceneRenderPlan plan = scheduler.seal();
+    EXPECT_EQ(buildCalls, 0);
+    buildSceneSnapshots(plan, [&buildCalls](SceneId, uint64_t)
+    {
+        ++buildCalls;
+        return std::make_shared<const SceneSnapshot>();
+    });
     ASSERT_EQ(buildCalls, 2);
     ASSERT_EQ(plan.snapshots.size(), 2u);
     ASSERT_EQ(plan.viewportTasks[0].snapshotIndex, plan.viewportTasks[1].snapshotIndex);
@@ -415,6 +404,36 @@ TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsInvalidSnapshotIndex)
     SceneRenderPlan plan;
     SceneViewportTask task;
     EXPECT_EQ(plan.snapshotFor(task), nullptr);
+}
+
+TEST(RenderRuntimeSnapshotTest, SceneSchedulerDropsViewsOfUnresolvedScene)
+{
+    SceneRenderScheduler scheduler;
+    scheduler.beginTick(11);
+
+    ASSERT_TRUE(scheduler.submit(SceneRenderRequest{.sceneId = 1, .viewId = 11}));
+    ASSERT_TRUE(scheduler.submit(SceneRenderRequest{.sceneId = 1, .viewId = 12}));
+    ASSERT_TRUE(scheduler.submit(SceneRenderRequest{.sceneId = 2, .viewId = 21}));
+
+    SceneRenderPlan plan = scheduler.seal();
+    ASSERT_EQ(plan.viewFamilies.size(), 2u);
+
+    // Scene 2 has no content this tick. Its View is dropped, Scene 1's Views
+    // still record, and the surviving Scene keeps its own family.
+    const uint32_t unresolved = buildSceneSnapshots(plan, [](SceneId sceneId, uint64_t)
+    {
+        return sceneId == 1 ? std::make_shared<const SceneSnapshot>()
+                            : std::shared_ptr<const SceneSnapshot>{};
+    });
+
+    EXPECT_EQ(unresolved, 1u);
+    ASSERT_EQ(plan.viewportTasks.size(), 2u);
+    EXPECT_EQ(plan.viewportTasks[0].viewId, 11u);
+    EXPECT_EQ(plan.viewportTasks[1].viewId, 12u);
+    EXPECT_TRUE(plan.snapshotFor(plan.viewportTasks[0]) != nullptr);
+    ASSERT_EQ(plan.viewFamilies.size(), 1u);
+    EXPECT_EQ(plan.viewFamilies.front().viewportTaskIndices.size(), 2u);
+    EXPECT_EQ(plan.viewportTasks[0].familyIndex, plan.viewportTasks[1].familyIndex);
 }
 
 TEST(RenderRuntimeSnapshotTest, SceneRenderPlanInputRequiresPlanAndMatchingViewRecordings)
@@ -452,10 +471,6 @@ TEST(RenderRuntimeSnapshotTest, SceneRenderPlanInputRecordsEveryViewportTaskWith
         request.viewId = viewId;
         request.view = view;
         request.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {640.0f, 360.0f}};
-        request.buildSnapshot = []()
-        {
-            return std::make_shared<const SceneSnapshot>();
-        };
         return request;
     };
 
@@ -464,7 +479,7 @@ TEST(RenderRuntimeSnapshotTest, SceneRenderPlanInputRecordsEveryViewportTaskWith
     ASSERT_TRUE(scheduler.submit(makeRequest(11, viewA)));
     ASSERT_TRUE(scheduler.submit(makeRequest(12, viewB)));
 
-    const SceneRenderPlan plan = scheduler.seal();
+    const SceneRenderPlan plan = sealWithEmptySnapshots(scheduler);
     ASSERT_EQ(plan.viewportTasks.size(), 2u);
     EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]), plan.snapshotFor(plan.viewportTasks[1]));
 
@@ -525,7 +540,6 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRejectsRequestsOutsideFrame)
     SceneRenderRequest request;
     request.sceneId = 1;
     request.viewId = 1;
-    request.buildSnapshot = [] { return std::make_shared<const SceneSnapshot>(); };
 
     EXPECT_FALSE(scheduler.submit(request));
     scheduler.beginTick(7);
@@ -576,16 +590,10 @@ TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
     SceneRenderScheduler scheduler;
     scheduler.beginTick(9);
 
-    auto buildSnapshot = []()
-    {
-        return std::make_shared<const SceneSnapshot>();
-    };
-
     SceneRenderRequest primary;
     primary.sceneId = 4;
     primary.viewId = kPrimarySceneViewId;
     primary.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
-    primary.buildSnapshot = buildSnapshot;
 
     const Rect2D composeRect = makeViewDisplayInsetRect({1280.0f, 720.0f});
     SceneRenderRequest overlay;
@@ -594,12 +602,11 @@ TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
     overlay.viewportRect = {.pos = {0.0f, 0.0f}, .extent = composeRect.extent};
     overlay.composeOntoViewId = kPrimarySceneViewId;
     overlay.composeRect = composeRect;
-    overlay.buildSnapshot = buildSnapshot;
 
     ASSERT_TRUE(scheduler.submit(primary));
     ASSERT_TRUE(scheduler.submit(overlay));
 
-    const SceneRenderPlan plan = scheduler.seal();
+    const SceneRenderPlan plan = sealWithEmptySnapshots(scheduler);
     ASSERT_EQ(plan.viewportTasks.size(), 2u);
     EXPECT_TRUE(plan.viewportTasks[0].ownsHostViewport());
     EXPECT_FALSE(plan.viewportTasks[1].ownsHostViewport());

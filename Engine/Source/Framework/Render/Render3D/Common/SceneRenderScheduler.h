@@ -20,6 +20,10 @@ using SceneViewId = uint64_t;
 /// host-assigned ids; they must not resize this View's output identity.
 inline constexpr SceneViewId kPrimarySceneViewId = 1;
 
+/// One View the host wants rendered this tick. Pure declaration: it names the
+/// Scene content, the camera and the output, and carries no Scene handle and no
+/// extraction callback. Grouping happens in `seal()`; content is resolved by
+/// the separate `buildSceneSnapshots()` step.
 struct SceneRenderRequest
 {
     SceneId     sceneId  = 0;
@@ -39,10 +43,6 @@ struct SceneRenderRequest
     /// `composeRect` onto that View's display RT after recording.
     SceneViewId composeOntoViewId = 0;
     Rect2D      composeRect{};
-
-    /// Product code owns the Scene. The scheduler invokes this once per Scene
-    /// in the frame and retains only the immutable result in the plan.
-    std::function<std::shared_ptr<const SceneSnapshot>()> buildSnapshot;
 };
 
 /// Graph / GPU-family grouping key. Same Scene snapshot + policy share one
@@ -130,6 +130,8 @@ struct SceneSnapshotEntry
 {
     SceneId sceneId = 0;
     uint64_t sceneRevision = 0;
+    /// Empty until `buildSceneSnapshots()` resolves it. A null snapshot means
+    /// the host had no content for that Scene this tick.
     std::shared_ptr<const SceneSnapshot> snapshot;
 };
 
@@ -183,8 +185,24 @@ struct SceneRenderPlan
     return !task || task->ownsHostViewport();
 }
 
+/// Resolves the immutable Scene snapshot for one (sceneId, sceneRevision).
+/// Scene content belongs to the host, so the scheduler asks for it instead of
+/// reaching into ECS itself.
+using SceneSnapshotResolver =
+    std::function<std::shared_ptr<const SceneSnapshot>(SceneId sceneId, uint64_t sceneRevision)>;
+
+/// Explicit extraction step, run by the host after `seal()` and before
+/// recording. Fills every empty entry in the plan's snapshot table, then drops
+/// the views of entries it could not resolve and regroups the families: a Scene
+/// without content contributes no view, and one unresolved Scene must not take
+/// the rest of the tick down with it. Returns the number of unresolved entries.
+[[nodiscard]] YA_RENDER_3D_API uint32_t buildSceneSnapshots(SceneRenderPlan& plan,
+                                                           const SceneSnapshotResolver& resolve);
+
 /// Tick-local request collector. It does not own Scene/ECS objects and does
 /// not record GPU commands; RenderFrameCoordinator consumes the sealed immutable plan.
+/// Its two phases are separate: `seal()` groups declarations, and extraction
+/// is the caller's explicit `buildSceneSnapshots()` step.
 class SceneRenderScheduler
 {
   public:

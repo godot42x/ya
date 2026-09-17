@@ -574,8 +574,11 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
                                           : 0,
                                       cameraFrustumLines);
     }
-    (void)submitHostSceneViews(sceneScheduler, device->getTerrainProcessor(), hostViews);
+    (void)submitHostSceneViews(sceneScheduler, hostViews);
     sceneRenderPlan = sceneScheduler.seal();
+    // Extraction is its own step: seal() only grouped the declarations, so
+    // Scene/ECS content is read here and nowhere earlier.
+    (void)extractHostSceneSnapshots(sceneRenderPlan, hostViews, device->getTerrainProcessor());
 
     // View visibility is policy, decided here and nowhere else: the editor
     // world view draws generated editor companions, a camera preview (what a

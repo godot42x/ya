@@ -5,7 +5,6 @@
 #include "Render3D/Common/SceneRenderScheduler.h"
 
 #include <span>
-#include <vector>
 
 namespace ya
 {
@@ -30,12 +29,20 @@ struct HostSceneViewSubmit
     Rect2D      composeRect      = {};
 };
 
-/// Submit every live Scene viewport. Same Scene* shares one extract builder;
-/// different Scenes produce different snapshot table entries and families.
-/// Null `scene` entries are skipped. The scheduler frame must already be open.
+/// Declare every live Scene viewport for this tick. Same Scene* lands in one
+/// snapshot table entry; different Scenes produce different entries and
+/// families. Null `scene` entries are skipped. The scheduler tick must already
+/// be open. Declarations only - no Scene/ECS content is read here.
 [[nodiscard]] YA_GAME_RUNTIME_API bool submitHostSceneViews(SceneRenderScheduler&                scheduler,
-                                                            TerrainProcessor*                    terrainProcessor,
                                                             std::span<const HostSceneViewSubmit> views);
+
+/// Explicit extraction step for the declared views: resolve the sealed plan's
+/// snapshot table, one extract per unique Scene. Views of a Scene this list
+/// cannot resolve are dropped from the plan.
+[[nodiscard]] YA_GAME_RUNTIME_API uint32_t extractHostSceneSnapshots(
+    SceneRenderPlan&                     plan,
+    std::span<const HostSceneViewSubmit> views,
+    TerrainProcessor*                    terrainProcessor);
 
 [[nodiscard]] YA_GAME_RUNTIME_API Scene* derivedSceneForHostView(std::span<const HostSceneViewSubmit> views,
                                                                  const SceneViewportTask&             task);

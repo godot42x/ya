@@ -13,6 +13,17 @@
 
 ## 2026-09-17 checkpoint：View 声明 / 收集边界 review（无代码改动）
 
+## 2026-09-18 checkpoint：抽取移出 seal（4.0.3 4a）
+
+- 唯一目标：让 `SceneRenderScheduler::seal()` 只做分组，把 ECS 抽取变成调用方的显式一步。改前 `seal()` 在给请求分组的同时调用 `request.buildSnapshot()`，于是「抽 Scene」不是一步而是分组步骤的副作用，且请求队列里躺着捕获 `Scene*` / `TerrainProcessor*` 的闭包。
+- 落地：`SceneRenderRequest` 删掉 `buildSnapshot`，成为纯声明（SceneId/revision、viewId、familyId、相机、rect、compose）；`seal()` 只建表与分组（快照表按 (sceneId, revision) 去重建好、内容为空），family 分组抽成文件内 `buildViewFamilies()` 供两步复用；新增显式第二步 `buildSceneSnapshots(SceneRenderPlan&, const SceneSnapshotResolver&)`，按每个表项向宿主要不可变快照。
+- 行为保持：无法解析内容的 Scene 由第二步剔除其 view 并重新分组（回到「该 Scene 这一 tick 不产生 view、其余 Scene 照常录制」），旧的 `if (!snapshot) continue` 语义没有丢；`submit()` 的校验从「有 builder」改成「有 sceneId 与 viewId」。
+- 宿主侧：`submitHostSceneViews(scheduler, views)` 不再收 `TerrainProcessor*`、不再建 builder 表；新增 `extractHostSceneSnapshots(plan, views, terrainProcessor)` 承担抽取（按 (sceneId, revision) 在提交列表里找 `Scene*`）。`tickRender` 现在是三步：declare → seal → extract。
+- 测试：`HostSceneRenderSubmitTest` 明确断言「seal 之后快照表存在但内容为空」，再断言抽取成功；`RenderRuntimeSnapshotTest` 去掉所有 builder，改由 `sealWithEmptySnapshots` 或显式 resolver 驱动，并新增 `SceneSchedulerDropsViewsOfUnresolvedScene`（坏 Scene 被剔除、好 Scene 不受影响）；`SceneSchedulerDeduplicatesSnapshotPerScene` 与 `SceneSchedulerRebuildsSnapshotWhenSceneRevisionChanges` 现在同时断言「分组不抽取」（buildCalls==0）与「每唯一 Scene 抽一次」。
+- 验证：`xmake b ya-render-3d-test ya-game-editor ya-testing`；`ya-render-3d-test` 174/174；`ya-testing` HostSceneRenderSubmit/RenderRuntimeSnapshot/ViewFamilyRenderer/AppKernel/AppAutomationConfig/Editor* 91/91；`HelloMaterial --exit-after-frame=90 --screenshot-target=viewport` 与 `run-editor` 同参数均 exit=0、日志 0 error，viewport 截图 1024x768 有 10625 种颜色 / 98.5% 非黑、编辑器截图 7733 种，说明世界抽取与录制确实在跑而不是退化成 UI-only 空帧。
+- 保留未完成：4b（plan 携带 tick-local `Scene*`、删三个反查校验）、4c（合并 `SceneViewDesc`）、4d（`ISceneViewProducer` 与删全局格子）。`SceneSnapshotResolver` 是 4b 要消掉的东西：计划拿到 Scene 句柄后这一步不再需要 resolver。
+
+
 - 触发：核查 `isWorldSceneRenderEnabled()` 该属于 Scene 还是 viewport client。结论：它既不属于 Scene 也不属于 Renderer，而属于**声明方是否声明**；该格子的存在是 view 收集链缺少 producer 接口的症状。
 - 盘点的现状（登记进 plan §3.10 / temporal_semantics M9）：真正的 view 声明只有 GameRuntime 一处；GameEditor 经四个全局格子（`bWorldSceneRenderEnabled`、`extensionHostView`、`bCameraPreviewHostOwned`+`cameraPreviewEntityUUID`、`viewportRect`）影响它，且全靠 hook 顺序成立（写在 `onLogic`、读在 `tickRender`）。一个 view 被声明六次（`HostSceneViewSubmit` → `SceneRenderRequest` → `SceneViewportTask` → `SceneViewRecording` → `CameraFrameInput` → `RenderViewOutputDesc`），字段只被机械搬运。
 - 三处空转：① `renderFlags` 无写方、`sceneRevision` 恒 0、`familyId` 恒 1，于是 `SceneViewFamilyKey` 退化为 `snapshotIndex` 单键；② `seal()` 内直接调 `buildSnapshot()`，ECS 抽取是分组步骤的副作用；③ plan 丢弃 Scene 指针，导致宿主必须用 `derivedSceneForHostView` / `complete()` / `derivedScenesAgreeWithPlan()` 三个函数反查校验。

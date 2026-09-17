@@ -331,7 +331,7 @@ UE 对照：`UGameViewportClient::bDisableWorldRendering` 与 world 选择同在
 
 1. **一份声明结构** `SceneViewDesc`（取代 `HostSceneViewSubmit` 与 `SceneRenderRequest` 的重复）：Scene 句柄、稳定 view key、相机矩阵、输出 rect、feature mask、compose 目标。`SceneViewportTask` / `SceneViewRecording` 塌陷为「计划里的同一条 + 本帧的 `PreparedView`」。
 2. **`ISceneViewProducer`**：`collectSceneViews(SceneViewCollector&)`。运行世界视口、编辑器作者视口、相机预览各自实现。这一条直接删除 `extensionHostView`、`hostView` patch、`bWorldSceneRenderEnabled`、`bCameraPreviewHostOwned`、`cameraPreviewEntityUUID`，以及 orchestrator 里铸造 `kHostOverlayPreviewViewId` 与 `resolvePreviewCamera` 的那一段——预览相机的选择策略回到持有选择的编辑器。
-3. **collect / extract / record 三步分离**：`collect()` 只收声明；`SceneSnapshotBuilder::build(plan)` 按唯一 Scene 显式抽一次；`Renderer::recordFrame(plan, surface)` 只消费。抽取不再是 `seal` 的副作用。
+3. **collect / extract / record 三步分离**：`collect()` 只收声明；`buildSceneSnapshots(plan, resolver)` 按唯一 Scene 显式抽一次；`Renderer::recordFrame(plan, surface)` 只消费。抽取不再是 `seal` 的副作用。4a 已落地这一形态（函数当前叫 `buildSceneSnapshots`，接 `SceneSnapshotResolver`；M3 把 `RenderFrameExtractor` 改名为 `SceneSnapshotBuilder` 时把提取那一半并进去，不另立同名类型）。
 4. **计划保留 Scene 句柄**（tick-local；Scene 生命周期更长）：删除 `derivedSceneForHostView` 与两个校验函数，改为构造期不变量。
 5. **View 身份 owner-scoped**：`kPrimarySceneViewId = 1` 现在同时承担「编辑器作者视口」与「独立游戏视口」两个产品的持久身份，`kHostOverlayPreviewViewId = 2` 由 host 铸造。改为 producer 注册时铸 `SceneViewKey{ownerId, localId}`。这是 `ViewHistoryStore`（TAA/exposure）与「同一 View 显示在两个 Surface」稳定键的前提。
 6. **`plan.camera` 拆开**：`CameraFrameInput` 同时装 `flightIndex` / `frameIndex` / `deltaTime`（帧作用域）与一个 view 的相机矩阵（view 作用域）。前者进 `FrameContext`，后者进声明。与 M3 的 `CameraFrameInput` 删除同批。
@@ -480,7 +480,7 @@ AppKernel::run
 2. **公开 `Renderer` owner**：合并 `RenderDeviceState` + `RenderFrameCoordinator`；关闭 friend 越界。产品层只调用 `Renderer::recordFrame(plan, surfaceTarget) -> RecordedFrame`。不引入第三个全能 coordinator。
 3. **recording 与 flight 拆名**：`RenderSubmission` 拆成 `FrameRecording`（cmd/allocate/retain/seal）与 `FrameFlightResources`（fence-safe arena/descriptors/keepalives）。`RecordedFrame` 带 command buffer 与 flightIndex，由 host submit。
 4. **view 声明与收集收口（2026-09-17 review 新增，见 §3.10）**：补齐「谁声明 view」，再让抽取成为显式一步。四刀，每刀可独立验收：
-   - 4a **抽取移出 seal**：`SceneRenderScheduler::seal()` 不再调用 `request.buildSnapshot()`；改为 `seal()` 只分组、`SceneSnapshotBuilder::build(plan)` 显式抽取。请求队列不再携带捕获 `Scene*` 的闭包。
+   - 4a **抽取移出 seal**（已完成）：`SceneRenderScheduler::seal()` 不再调用 `request.buildSnapshot()`；改为 `seal()` 只分组（快照表建好但内容为空）、`buildSceneSnapshots(plan, resolver)` 显式抽取。请求结构不再携带任何闭包；无法解析内容的 Scene 由该步骤剔除并重新分组，其余 Scene 仍照常录制。
    - 4b **计划保留 Scene 句柄**：plan / task 携带 tick-local `Scene*`，删除 `derivedSceneForHostView`、`SceneRenderPlanInput::complete()` 与 `derivedScenesAgreeWithPlan()` 的运行时校验，改为构造期不变量。
    - 4c **合并声明结构**：`HostSceneViewSubmit` 与 `SceneRenderRequest` 合成一份 `SceneViewDesc`，消掉 12 / 14 字段的两次机械搬运。
    - 4d **`ISceneViewProducer` 与编辑器提交自己的视口**：运行世界视口、编辑器作者视口、相机预览各自 `collectSceneViews`。删除 `bWorldSceneRenderEnabled`、`extensionHostView` 注入、`bCameraPreviewHostOwned`、`cameraPreviewEntityUUID`；预览相机选择回到编辑器；orchestrator 不再铸造 `kHostOverlayPreviewViewId`。

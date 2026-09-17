@@ -31,17 +31,14 @@ TEST(ViewFamilyRendererTest, SameSceneDualViewSealsOneFamilyPlan)
     SceneRenderScheduler scheduler;
     scheduler.beginTick(7);
 
-    SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
-    viewA.buildSnapshot = [] {
-        return std::make_shared<const SceneSnapshot>();
-    };
-    SceneRenderRequest viewB{.sceneId = 3, .viewId = 12};
-    viewB.buildSnapshot = viewA.buildSnapshot;
+    const SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
+    const SceneRenderRequest viewB{.sceneId = 3, .viewId = 12};
 
     ASSERT_TRUE(scheduler.submit(viewA));
     ASSERT_TRUE(scheduler.submit(viewB));
 
-    const SceneRenderPlan plan = scheduler.seal();
+    SceneRenderPlan plan = scheduler.seal();
+    buildSceneSnapshots(plan, [](SceneId, uint64_t) { return std::make_shared<const SceneSnapshot>(); });
     ASSERT_EQ(plan.viewFamilies.size(), 1u);
     ASSERT_EQ(plan.viewportTasks.size(), 2u);
     EXPECT_EQ(plan.viewFamilies.front().viewportTaskIndices.size(), 2u);
@@ -53,19 +50,14 @@ TEST(ViewFamilyRendererTest, DualSceneSealsTwoFamilyPlans)
     SceneRenderScheduler scheduler;
     scheduler.beginTick(8);
 
-    SceneRenderRequest sceneA{.sceneId = 3, .viewId = 11};
-    sceneA.buildSnapshot = [] {
-        return std::make_shared<const SceneSnapshot>();
-    };
-    SceneRenderRequest sceneB{.sceneId = 4, .viewId = 21};
-    sceneB.buildSnapshot = [] {
-        return std::make_shared<const SceneSnapshot>();
-    };
+    const SceneRenderRequest sceneA{.sceneId = 3, .viewId = 11};
+    const SceneRenderRequest sceneB{.sceneId = 4, .viewId = 21};
 
     ASSERT_TRUE(scheduler.submit(sceneA));
     ASSERT_TRUE(scheduler.submit(sceneB));
 
-    const SceneRenderPlan plan = scheduler.seal();
+    SceneRenderPlan plan = scheduler.seal();
+    buildSceneSnapshots(plan, [](SceneId, uint64_t) { return std::make_shared<const SceneSnapshot>(); });
     ASSERT_EQ(plan.viewFamilies.size(), 2u);
     EXPECT_NE(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[1]));
 }

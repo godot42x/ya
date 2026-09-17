@@ -3,57 +3,32 @@
 #include "GameRuntime/Utility/RenderFrameExtractor.h"
 #include "Scene/Core/Scene.h"
 
-#include <functional>
-#include <vector>
-
 namespace ya
 {
 
 namespace
 {
 
-std::function<std::shared_ptr<const SceneSnapshot>()> makeExtractBuilder(
-    Scene* scene, TerrainProcessor* terrainProcessor)
+std::shared_ptr<const SceneSnapshot> extractSceneSnapshot(Scene& scene, TerrainProcessor* terrainProcessor)
 {
-    return [scene, terrainProcessor]
-    {
-        auto snapshot = std::make_shared<SceneSnapshot>();
-        RenderFrameExtractor::extractSceneSnapshot(
-            RenderFrameExtractor::SceneExtractInput{
-                .scene            = scene,
-                .terrainProcessor = terrainProcessor,
-            },
-            *snapshot);
-        return std::shared_ptr<const SceneSnapshot>(std::move(snapshot));
-    };
+    auto snapshot = std::make_shared<SceneSnapshot>();
+    RenderFrameExtractor::extractSceneSnapshot(
+        RenderFrameExtractor::SceneExtractInput{
+            .scene            = &scene,
+            .terrainProcessor = terrainProcessor,
+        },
+        *snapshot);
+    return std::shared_ptr<const SceneSnapshot>(std::move(snapshot));
 }
 
 } // namespace
 
 bool submitHostSceneViews(SceneRenderScheduler&                scheduler,
-                          TerrainProcessor*                    terrainProcessor,
                           std::span<const HostSceneViewSubmit> views)
 {
     if (!scheduler.isTickOpen()) {
         return false;
     }
-
-    std::vector<Scene*> uniqueScenes;
-    std::vector<std::function<std::shared_ptr<const SceneSnapshot>()>> builders;
-    uniqueScenes.reserve(views.size());
-    builders.reserve(views.size());
-
-    auto builderFor = [&](Scene* scene) -> std::function<std::shared_ptr<const SceneSnapshot>()>
-    {
-        for (size_t index = 0; index < uniqueScenes.size(); ++index) {
-            if (uniqueScenes[index] == scene) {
-                return builders[index];
-            }
-        }
-        uniqueScenes.push_back(scene);
-        builders.push_back(makeExtractBuilder(scene, terrainProcessor));
-        return builders.back();
-    };
 
     bool bSubmitted = views.empty();
     for (const HostSceneViewSubmit& view : views) {
@@ -72,12 +47,28 @@ bool submitHostSceneViews(SceneRenderScheduler&                scheduler,
                 .viewportRect      = view.viewportRect,
                 .composeOntoViewId = view.composeOntoViewId,
                 .composeRect       = view.composeRect,
-                .buildSnapshot     = builderFor(view.scene),
             })) {
             bSubmitted = true;
         }
     }
     return bSubmitted;
+}
+
+uint32_t extractHostSceneSnapshots(SceneRenderPlan&                     plan,
+                                   std::span<const HostSceneViewSubmit> views,
+                                   TerrainProcessor*                    terrainProcessor)
+{
+    return buildSceneSnapshots(plan, [&views, terrainProcessor](SceneId sceneId, uint64_t sceneRevision)
+    {
+        for (const HostSceneViewSubmit& view : views) {
+            if (!view.scene || view.sceneRevision != sceneRevision ||
+                view.scene->getInstanceId() != sceneId) {
+                continue;
+            }
+            return extractSceneSnapshot(*view.scene, terrainProcessor);
+        }
+        return std::shared_ptr<const SceneSnapshot>{};
+    });
 }
 
 Scene* derivedSceneForHostView(std::span<const HostSceneViewSubmit> views,

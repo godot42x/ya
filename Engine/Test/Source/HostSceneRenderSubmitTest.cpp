@@ -60,8 +60,15 @@ TEST(HostSceneRenderSubmitTest, DualLiveScenesExtractIsolatedSnapshots)
 
     SceneRenderScheduler scheduler;
     scheduler.beginTick(31);
-    ASSERT_TRUE(submitHostSceneViews(scheduler, nullptr, views));
-    const SceneRenderPlan plan = scheduler.seal();
+    ASSERT_TRUE(submitHostSceneViews(scheduler, views));
+    SceneRenderPlan plan = scheduler.seal();
+
+    // seal() only groups: the snapshot table exists, its content does not.
+    ASSERT_EQ(plan.snapshots.size(), 2u);
+    EXPECT_FALSE(plan.snapshots[0].snapshot);
+    EXPECT_FALSE(plan.snapshots[1].snapshot);
+
+    EXPECT_EQ(extractHostSceneSnapshots(plan, views, nullptr), 0u);
 
     ASSERT_EQ(plan.viewFamilies.size(), 2u);
     ASSERT_EQ(plan.snapshots.size(), 2u);
@@ -120,8 +127,9 @@ TEST(HostSceneRenderSubmitTest, SameLiveSceneTwoViewsShareSnapshot)
 
     SceneRenderScheduler scheduler;
     scheduler.beginTick(32);
-    ASSERT_TRUE(submitHostSceneViews(scheduler, nullptr, views));
-    const SceneRenderPlan plan = scheduler.seal();
+    ASSERT_TRUE(submitHostSceneViews(scheduler, views));
+    SceneRenderPlan plan = scheduler.seal();
+    EXPECT_EQ(extractHostSceneSnapshots(plan, views, nullptr), 0u);
 
     ASSERT_EQ(plan.viewFamilies.size(), 1u);
     ASSERT_EQ(plan.snapshots.size(), 1u);
@@ -137,7 +145,7 @@ TEST(HostSceneRenderSubmitTest, ClosedSchedulerRejectsSubmit)
     Scene scene("Idle");
     const HostSceneViewSubmit views[] = {makeView(scene, 11, glm::vec3(0.0f))};
     SceneRenderScheduler scheduler;
-    EXPECT_FALSE(submitHostSceneViews(scheduler, nullptr, views));
+    EXPECT_FALSE(submitHostSceneViews(scheduler, views));
 }
 
 } // namespace ya

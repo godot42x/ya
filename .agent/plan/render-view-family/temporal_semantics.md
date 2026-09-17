@@ -213,6 +213,15 @@ M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**�
 
 判定规则（与 M1 同构）：一个值若由「某个视口的持有者」决定，它属于该 producer 的声明；若由「本帧的调度批次」决定，它属于 `FrameContext`；若由「Scene 内容」决定，它属于 `SceneSnapshot`。全局可变格子是这三者都没有归属时的症状。
 
+#### M9 执行记录（4a，2026-09-18 已提交）
+
+- `SceneRenderRequest` 去掉 `buildSnapshot`，成为纯声明：请求队列不再持有任何捕获 `Scene*` / `TerrainProcessor*` 的闭包。
+- `SceneRenderScheduler::seal()` 只分组：按 (sceneId, sceneRevision) 去重建好快照表但内容为空，family 分组走文件内 `buildViewFamilies()`；不再触碰 Scene/ECS。
+- 新增显式第二步 `buildSceneSnapshots(SceneRenderPlan&, const SceneSnapshotResolver&)`：按表项向宿主要不可变快照，未解析的表项剔除其 view 并重新分组（坏 Scene 不拖垮整帧）。`SceneSnapshotResolver` 是 4b 的过渡物——计划携带 tick-local `Scene*` 后即可删除。
+- 宿主侧 `submitHostSceneViews` 收窄为「只声明」，抽取移到新的 `extractHostSceneSnapshots`；`tickRender` 变成 declare → seal → extract 三步。
+- 下一步 4b 要消掉的东西：`derivedSceneForHostView`、`SceneRenderPlanInput::complete()`、`derivedScenesAgreeWithPlan()` 三个运行时反查，以及本阶段的 `SceneSnapshotResolver`。
+
+
 ## 3. 保留项（这些 `frame` 是正确的）
 
 - `FrameBuffer` / `IFrameBuffer` / `VulkanFrameBuffer`：真实 GPU framebuffer。
