@@ -257,10 +257,10 @@ bool isScreenshotTerminal(const AppAutomationRuntimeState& runtimeState)
     return runtimeState.screenshot.bCompleted || runtimeState.screenshot.bFailed;
 }
 
-bool shouldRequestQuitAfterFrame(const App& app)
+bool shouldRequestQuitAfterTick(const App& app)
 {
     const AppAutomationOptions& automation = app.getDesc().automation;
-    return evaluateAutomationExitReason(app.getHostTick(), automation) == EAppAutomationExitReason::ExitAfterFrame;
+    return evaluateAutomationExitReason(app.getHostTick(), automation) == EAppAutomationExitReason::ExitAfterTick;
 }
 
 void resetAutomationStability(AppAutomationRuntimeState& runtimeState, const Scene* activeScene)
@@ -346,7 +346,7 @@ bool isSceneStableForAutomation(const Scene& scene)
            !hasPendingTerrainResolve(scene);
 }
 
-bool isAutomationStableFrameReady(App& app)
+bool isAutomationStableTickReady(App& app)
 {
     auto& runtimeState = getAutomationRuntimeState();
 
@@ -382,7 +382,7 @@ bool isAutomationStableFrameReady(App& app)
     return runtimeState.stableTicks >= settleTicks;
 }
 
-bool handleScreenshotAutomation(App& app, const AppAutomationTickContext& frameContext, bool bStableFrameReady)
+bool handleScreenshotAutomation(App& app, const AppAutomationTickContext& tickContext, bool bStableTickReady)
 {
     auto& runtimeState = getAutomationRuntimeState();
 
@@ -391,31 +391,31 @@ bool handleScreenshotAutomation(App& app, const AppAutomationTickContext& frameC
         return false;
     }
 
-    AppScreenshotCapture::tryFinalize(frameContext.hostTick, runtimeState.screenshot);
+    AppScreenshotCapture::tryFinalize(tickContext.hostTick, runtimeState.screenshot);
     if (runtimeState.bScreenshotRequested || isScreenshotTerminal(runtimeState)) {
         return !isScreenshotTerminal(runtimeState);
     }
 
-    if (!bStableFrameReady) {
+    if (!bStableTickReady) {
         return true;
     }
 
-    if (!frameContext.render) {
+    if (!tickContext.render) {
         return false;
     }
 
-    runtimeState.bScreenshotRequested = AppScreenshotCapture::request(frameContext.render,
+    runtimeState.bScreenshotRequested = AppScreenshotCapture::request(tickContext.render,
                                                                       AppAutomation::buildOffscreenJobQueueService(app),
-                                                                      frameContext.postprocessImage,
-                                                                      frameContext.viewportImage,
-                                                                      frameContext.presentationImage,
+                                                                      tickContext.postprocessImage,
+                                                                      tickContext.viewportImage,
+                                                                      tickContext.presentationImage,
                                                                       runtimeState.screenshot,
                                                                       *automation.screenshotPath,
                                                                       automation.screenshotTarget);
     if (runtimeState.bScreenshotRequested) {
         const uint64_t settleTicks = automation.screenshotSettleTicks > 0 ? automation.screenshotSettleTicks : 1;
         YA_CORE_INFO("Automation requested screenshot at frame {} after {} warmup frames and {} stable frames: {}",
-                     frameContext.hostTick,
+                     tickContext.hostTick,
                      automation.screenshotWarmupTicks,
                      settleTicks,
                      *automation.screenshotPath);
@@ -425,12 +425,12 @@ bool handleScreenshotAutomation(App& app, const AppAutomationTickContext& frameC
 }
 
 bool handleRenderDocAutomation(const AppAutomationOptions& automation,
-                               const AppAutomationTickContext& frameContext,
-                               bool bStableFrameReady)
+                               const AppAutomationTickContext& tickContext,
+                               bool bStableTickReady)
 {
-    if (!frameContext.isRenderDocCapturePending ||
-        !frameContext.isRenderDocCaptureTerminal ||
-        !frameContext.requestRenderDocCapture) {
+    if (!tickContext.isRenderDocCapturePending ||
+        !tickContext.isRenderDocCaptureTerminal ||
+        !tickContext.requestRenderDocCapture) {
         return false;
     }
 
@@ -438,19 +438,19 @@ bool handleRenderDocAutomation(const AppAutomationOptions& automation,
         return false;
     }
 
-    if (frameContext.isRenderDocCapturePending()) {
+    if (tickContext.isRenderDocCapturePending()) {
         return true;
     }
 
-    if (frameContext.isRenderDocCaptureTerminal()) {
+    if (tickContext.isRenderDocCaptureTerminal()) {
         return false;
     }
 
-    if (!bStableFrameReady) {
+    if (!bStableTickReady) {
         return true;
     }
 
-    const bool bRequested = frameContext.requestRenderDocCapture();
+    const bool bRequested = tickContext.requestRenderDocCapture();
     if (bRequested) {
         const uint64_t settleTicks = automation.screenshotSettleTicks > 0 ? automation.screenshotSettleTicks : 1;
         YA_CORE_INFO("Automation requested a single RenderDoc capture after {} warmup frames and {} stable frames",
@@ -458,7 +458,7 @@ bool handleRenderDocAutomation(const AppAutomationOptions& automation,
                      settleTicks);
     }
 
-    return frameContext.isRenderDocCapturePending();
+    return tickContext.isRenderDocCapturePending();
 }
 
 const std::string& getAutomationCapturePathFallback()
@@ -472,7 +472,7 @@ std::string getAutomationCapturePath(const std::function<const std::string&()>& 
     return pathProvider ? pathProvider() : getAutomationCapturePathFallback();
 }
 
-bool hasPendingAutomationWork(const App& app, const AppAutomationTickContext* frameContext = nullptr)
+bool hasPendingAutomationWork(const App& app, const AppAutomationTickContext* tickContext = nullptr)
 {
     auto&                       runtimeState = getAutomationRuntimeState();
     const AppAutomationOptions& automation   = app.getDesc().automation;
@@ -481,8 +481,8 @@ bool hasPendingAutomationWork(const App& app, const AppAutomationTickContext* fr
 
     bool bRenderDocPending = false;
     if (hasRenderDocAutomation(automation)) {
-        if (frameContext && frameContext->isRenderDocCaptureTerminal) {
-            bRenderDocPending = !frameContext->isRenderDocCaptureTerminal();
+        if (tickContext && tickContext->isRenderDocCaptureTerminal) {
+            bRenderDocPending = !tickContext->isRenderDocCaptureTerminal();
         }
         else if (const RenderDeviceState* device = app.getRenderServices().getDeviceState()) {
             bRenderDocPending = !device->getDiagnosticsService().isAutomationRenderDocCaptureTerminal();
@@ -492,7 +492,7 @@ bool hasPendingAutomationWork(const App& app, const AppAutomationTickContext* fr
     return bScreenshotPending || bRenderDocPending;
 }
 
-bool hasFrameAutomationConfig(const AppAutomationOptions& automation)
+bool hasTickAutomationConfig(const AppAutomationOptions& automation)
 {
     return automation.exitAfterTick > 0 ||
            automation.viewportResize.has_value() ||
@@ -566,9 +566,9 @@ void applyScheduledSmokeActions(App& app, uint64_t hostTick)
 }
 } // namespace
 
-bool AppAutomation::isFrameAutomationEnabled(const App& app)
+bool AppAutomation::isTickAutomationEnabled(const App& app)
 {
-    return hasFrameAutomationConfig(app.getDesc().automation);
+    return hasTickAutomationConfig(app.getDesc().automation);
 }
 
 bool AppAutomation::shouldDeferQuit(const App& app)
@@ -769,38 +769,38 @@ OffscreenJobQueueService AppAutomation::buildOffscreenJobQueueService(App& app)
     return queueService;
 }
 
-void AppAutomation::onTickCompleted(App& app, const AppAutomationTickContext& frameContext)
+void AppAutomation::onTickCompleted(App& app, const AppAutomationTickContext& tickContext)
 {
     YA_PROFILE_FUNCTION()
 
     {
         YA_PROFILE_SCOPE("Automation/SmokeActions");
-        applyScheduledSmokeActions(app, frameContext.hostTick);
+        applyScheduledSmokeActions(app, tickContext.hostTick);
     }
 
     auto&      runtimeState       = getAutomationRuntimeState();
-    bool       bStableFrameReady  = false;
+    bool       bStableTickReady   = false;
     bool       bScreenshotPending = false;
     bool       bRenderDocPending  = false;
 
     {
         YA_PROFILE_SCOPE("Automation/Stability");
-        bStableFrameReady = isAutomationStableFrameReady(app);
+        bStableTickReady = isAutomationStableTickReady(app);
     }
     {
         YA_PROFILE_SCOPE("Automation/Screenshot");
-        bScreenshotPending = handleScreenshotAutomation(app, frameContext, bStableFrameReady);
+        bScreenshotPending = handleScreenshotAutomation(app, tickContext, bStableTickReady);
     }
     {
         YA_PROFILE_SCOPE("Automation/RenderDoc");
-        bRenderDocPending = handleRenderDocAutomation(app.getDesc().automation, frameContext, bStableFrameReady);
+        bRenderDocPending = handleRenderDocAutomation(app.getDesc().automation, tickContext, bStableTickReady);
     }
     const bool bAutomationPending = bScreenshotPending || bRenderDocPending;
 
-    if (frameContext.getRenderDocCapturePath && frameContext.getRenderDocPassSummaryPath) {
+    if (tickContext.getRenderDocCapturePath && tickContext.getRenderDocPassSummaryPath) {
         YA_PROFILE_SCOPE("Automation/UpdateArtifacts");
-        profiling::setGpuCapturePath(getAutomationCapturePath(frameContext.getRenderDocCapturePath));
-        profiling::setPassSummaryPath(getAutomationCapturePath(frameContext.getRenderDocPassSummaryPath));
+        profiling::setGpuCapturePath(getAutomationCapturePath(tickContext.getRenderDocCapturePath));
+        profiling::setPassSummaryPath(getAutomationCapturePath(tickContext.getRenderDocPassSummaryPath));
         profiling::setScreenshotPath(runtimeState.screenshot.outputPath);
     }
     if (runtimeState.bQuitDeferred && !bAutomationPending) {
@@ -814,7 +814,7 @@ void AppAutomation::onTickCompleted(App& app, const AppAutomationTickContext& fr
         YA_PROFILE_SCOPE("Automation/FlushArtifacts");
         profiling::flushRuntimeArtifacts();
     }
-    if (bAutomationPending || !shouldRequestQuitAfterFrame(app)) {
+    if (bAutomationPending || !shouldRequestQuitAfterTick(app)) {
         return;
     }
 

@@ -111,6 +111,7 @@
 - [x] P1b-2b：tick 排期字段——`_nextResolveAuditFrame`/`_nextMaterialAuditFrame`→`*AuditTick`、`MATERIAL_AUDIT_INTERVAL_FRAMES`/`DERIVED_RESOURCE_GC_DELAY_FRAMES`→`*_TICKS`、`TerrainDerivedResource::lastUsedFrame`→`lastUsedTick`、`TerrainComponent::get/setRebuildNotBeforeFrame`/`_rebuildNotBeforeFrame`→`*Tick`。
 - [ ] P1b-2c：`DebugPrimitives::updateFrameUBO`/`_frameData`（按 `flightIndex` 索引，随 P2 flight 轴）。
 - [x] P1c：M2 `SceneFrameSnapshot`→`SceneSnapshot`（定义、转发声明、`SceneRenderScheduler`/`SceneFamilyResources`/`RenderSubmission`/extractor 及测试）。
+- [x] P1d：M1 同轴遗留——automation 与 TaskManager 的 per-tick 命名（`isTickAutomationEnabled`、`hasTickAutomationConfig`、`shouldRequestQuitAfterTick`、`ExitAfterTick`、`isAutomationStableTickReady`、`bStableTickReady`、`registerTickTask`/`hasTickTasks`、`tickContext` 参数）。
 - [ ] P2：M4 recording / flight（`RenderSubmission`→`FrameRecording`、`frameToken`→`recordingSerial`、`flightIndex`→`flightSlot`、`FrameUploadArena`→`UploadArena`、`PerFlightFrameResourceSetBase`→`SkinningLayoutProvider`）+ M5 present（`PresentFrameInput`、`FPresentFrame`）+ 公开 `Renderer` 合并（4.0.3 checkpoint 2 / 3）。
 - [ ] P3：M3 C++ 部分（`RenderFrameData`→`PreparedViewRenderData`、删除 `CameraFrameInput` / `RenderPipelineFrameContext` / `RenderViewRecordingContext` / `SceneViewRecording` 四层转译、`RenderStageContext`→`PassRecordContext`、`FrameContext`→`ViewPassContext`、`RenderFrameExtractor` 拆为 SceneSnapshotBuilder + ViewPreparer）+ 4.0.3 checkpoint 4。
 - [ ] P4：M3 Slang 部分（删除无消费方的 `frameIdx`；`FrameData`/`FrameUBO`→`ViewUbo`/`ViewData` 与 C++ alias 同批），需 `xmake ya-shader` 重新生成头。

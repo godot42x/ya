@@ -179,7 +179,7 @@ void App::init(AppDesc ci)
         MaterialFactory::init();
         AssetManager::setFrameTaskSink([&app](std::function<void()> task)
         {
-            app.getTaskManager().registerFrameTask(std::move(task));
+            app.getTaskManager().registerTickTask(std::move(task));
         });
         TaskQueue::get().start(/*numThreads=*/2);
         profiling::beginRuntimeSession(app._ci);
@@ -310,7 +310,7 @@ void App::init(AppDesc ci)
     sys5->setSceneManager(app.getSceneServices().getSceneManager());
     sys5->setFrameTaskSink([&app](std::function<void()> task)
     {
-        app.getTaskManager().registerFrameTask(std::move(task));
+        app.getTaskManager().registerTickTask(std::move(task));
     });
     sys5->init();
     app._systems.push_back(sys5);

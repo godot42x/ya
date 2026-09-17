@@ -126,7 +126,7 @@ void registerEditorActions(ActionMap& actions,
         .label   = "Play",
         .execute = []() {
             if (auto* app = App::get()) {
-                app->getTaskManager().registerFrameTask([app]() { app->startRuntime(); });
+                app->getTaskManager().registerTickTask([app]() { app->startRuntime(); });
             }
         },
     });
@@ -135,7 +135,7 @@ void registerEditorActions(ActionMap& actions,
         .label   = "Simulate",
         .execute = []() {
             if (auto* app = App::get()) {
-                app->getTaskManager().registerFrameTask([app]() { app->startSimulation(); });
+                app->getTaskManager().registerTickTask([app]() { app->startSimulation(); });
             }
         },
     });
@@ -144,7 +144,7 @@ void registerEditorActions(ActionMap& actions,
         .label   = "Stop",
         .execute = []() {
             if (auto* app = App::get()) {
-                app->getTaskManager().registerFrameTask([app]() {
+                app->getTaskManager().registerTickTask([app]() {
                     if (app->isRuntimeMode()) {
                         app->stopRuntime();
                     }

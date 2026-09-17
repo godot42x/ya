@@ -445,7 +445,7 @@ void RuntimeRenderSettingsSection::bindCallbacks()
             return;
         }
         const auto mode = static_cast<EPresentMode::T>(value);
-        _app->getTaskManager().registerFrameTask([sc, mode]() { sc->setPresentMode(mode); });
+        _app->getTaskManager().registerTickTask([sc, mode]() { sc->setPresentMode(mode); });
     };
     _reload->_onClick = [this]() {
         if (!_app) {

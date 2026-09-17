@@ -20,10 +20,10 @@ struct TaskManager : public IOffscreenTaskScheduler
     std::deque<std::function<void()>> tasks;
     std::deque<std::pair<std::shared_ptr<OffscreenJobState>, std::function<void(ICommandBuffer*)>>> offscreenTasks;
 
-    [[nodiscard]] bool hasFrameTasks() const { return !tasks.empty(); }
+    [[nodiscard]] bool hasTickTasks() const { return !tasks.empty(); }
     [[nodiscard]] bool hasOffscreenTasks() const { return !offscreenTasks.empty(); }
 
-    void registerFrameTask(std::function<void()> task)
+    void registerTickTask(std::function<void()> task)
     {
         tasks.push_back(std::move(task));
     }

@@ -613,7 +613,7 @@ void AppAutomationControlService::handleSetAppState(App& app, const AppAutomatio
         return;
     }
 
-    app.getTaskManager().registerFrameTask([&app, state]() {
+    app.getTaskManager().registerTickTask([&app, state]() {
         if (state == "runtime" && app.isStopped()) {
             app.startRuntime();
         }

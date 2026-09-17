@@ -184,7 +184,7 @@ void EditorLayer::setViewportHoverFocus(bool hovered, bool focused)
 
 void EditorLayer::cmdNewScene()
 {
-    App::get()->getTaskManager().registerFrameTask([this]() {
+    App::get()->getTaskManager().registerTickTask([this]() {
         auto* app = App::get();
         if (!app) {
             return;
@@ -210,7 +210,7 @@ void EditorLayer::cmdLoadScene(std::string scenePath)
     if (!_app || scenePath.empty()) {
         return;
     }
-    _app->getTaskManager().registerFrameTask([this, scenePath = std::move(scenePath)]() {
+    _app->getTaskManager().registerTickTask([this, scenePath = std::move(scenePath)]() {
         if (!_app) {
             return;
         }

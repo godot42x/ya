@@ -81,6 +81,7 @@ hostTick = 1200
 - P1b-1（后续提交）：`AppRenderFrameState` → `HostViewState`（定义文件与 `include/` 转发头一起改名）；`AppRenderState::frameState` → `hostView`、`extensionFrameState` → `extensionHostView`；`AppRenderServices::getRenderFrameState` / `setExtensionRenderFrameState` / `clearExtensionRenderFrameState` → `getHostViewState` / `setExtensionHostViewState` / `clearExtensionHostViewState`；`EditorViewportCompositor` 与 `EditorSurfaceContext` 的声明、定义与参数名同步。
 - 后续批次 P1b-2a 落地（perf 命名面）：`perf::sample::renderFrame()` → `hostTick()`（key `Render/Frame` → `Tick/Total`）；`frameLogic` / `frameEventPump` / `frameFpsControl` / `frameRender` / `frameMainThreadCallbacks` / `frameAutomation` / `frameUnaccounted` / `frameRenderCallbacks` → `tick*`，key `Frame/*` → `Tick/*`；`YA_PERF_FRAME_SCOPE` → `YA_PERF_TICK_SCOPE`、`PerfFrameScopeTimerConditional` → `PerfTickScopeTimerConditional`（含 `frameSampleKey` → `tickSampleKey`、`ya_perf_frame_timer_` → `ya_perf_tick_timer_`、局部 `frameValue` → `tickValue`）；profile 产物 `frameCycle` / `frameCpuMs` / `frameGpuMs` → `tickCycle` / `tickCpuMs` / `tickGpuMs`。UI 文案 `Frame CPU:` / `Frame GPU:` 与 `Frame {}` 保留。
 - 后续批次 P1b-2b 落地（按 tick 排期的二级命名）：`TerrainProcessor` / `EnvironmentLightingProcessor` 的 `_nextResolveAuditFrame` 与 `GameplayResourceBinding::_nextMaterialAuditFrame` → `*AuditTick`；`DERIVED_RESOURCE_GC_DELAY_FRAMES` / `MATERIAL_AUDIT_INTERVAL_FRAMES` → `*_TICKS`（连同 `AppAutomationConfigTest` 的常量断言）；`TerrainDerivedResource::lastUsedFrame` → `lastUsedTick`；`TerrainComponent::getRebuildNotBeforeFrame` / `setRebuildNotBeforeFrame` / `_rebuildNotBeforeFrame` / `invalidate(rebuildNotBeforeFrame)` 与 `TerrainProcessor::markTerrainDirty(..., rebuildNotBeforeFrame)` → `*Tick`。
+- 后续批次 P1d 落地（M1 同轴遗留，2026-09-17 扫到后补）：`AppAutomation::isFrameAutomationEnabled` / `hasFrameAutomationConfig` → `isTickAutomationEnabled` / `hasTickAutomationConfig`；`shouldRequestQuitAfterFrame` → `shouldRequestQuitAfterTick`；`EAppAutomationExitReason::ExitAfterFrame` → `ExitAfterTick`（`getAutomationExitReasonName` 仍返回外部名 `exit-after-frame`）；`isAutomationStableFrameReady` / `bStableFrameReady` → `isAutomationStableTickReady` / `bStableTickReady`（计数器本就是 `stableTicks`）；`TaskManager::registerFrameTask` / `hasFrameTasks` → `registerTickTask` / `hasTickTasks`（`taskManager.update()` 每 tick 调一次）；`AppAutomationTickContext` 参数名 `frameContext` → `tickContext`。保留：日志文案 `warmup frames` / `stable frames`、reason 字符串 `exit-after-frame`、CLI/config 键。
 
 刻意延后（仍在 M1 范围内，需要独立批次）：
 
@@ -222,6 +223,7 @@ hostTick = 1200
 | P1b-2b | M1 剩余之三：按 tick 排期的字段（audit 间隔、derived resource GC 延迟、terrain rebuild 门槛） | 已提交，纯重命名 |
 | P1b-2c | M1 剩余之四：DebugPrimitives flight UBO | 随 P2 flight 轴 |
 | P1c | M2 `SceneFrameSnapshot` → `SceneSnapshot` | 已提交，纯重命名 |
+| P1d | M1 同轴遗留：automation / TaskManager 的 per-tick 命名 | 已提交，纯重命名 |
 | P2 | M4 + M5 + `Renderer` 合并 | 对应 4.0.3 checkpoint 2 / 3 |
 | P3 | M3（C++ 部分） | 对应 4.0.3 checkpoint 4（PreparedView） |
 | P4 | M3 的 Slang 部分：删 `frameIdx`、`FrameData/FrameUBO` → `ViewUbo/ViewData` | 需 `xmake ya-shader` 重新生成头，单独提交 |
@@ -248,6 +250,8 @@ hostTick = 1200
 - P1b-2a 构建/测试证据：`xmake b ya-game-editor`、`xmake b ya-testing`、`xmake b ya-render-3d-test`；`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:ViewFamilyRendererTest.*:RenderViewBindingTableTest.*:ViewPassResourcesTest.*:SceneFamilyResourcesTest.*'` 41/41；`xmake r ya-testing --gtest_filter='AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*:AppKernelTest.*'` 66/66。
 - P1b-2b 已满足：`rg -n 'AuditFrame|RebuildNotBeforeFrame|MATERIAL_AUDIT_INTERVAL_FRAMES|DERIVED_RESOURCE_GC_DELAY_FRAMES|lastUsedFrame' Engine` 为空。
 - P1b-2b 构建/测试证据：`xmake b ya-render-3d-test`、`xmake b ya-testing`、`xmake b ya-game-editor`；`xmake r ya-testing --gtest_filter='AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*:AppKernelTest.*'` 66/66；`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:ViewFamilyRendererTest.*:RenderViewBindingTableTest.*:ViewPassResourcesTest.*:SceneFamilyResourcesTest.*'` 41/41。
+- P1d 已满足：`rg -n 'isFrameAutomationEnabled|hasFrameAutomationConfig|shouldRequestQuitAfterFrame|ExitAfterFrame|StableFrameReady|registerFrameTask|hasFrameTasks|frameContext' Engine Example` 为空。
+- P1d 构建/测试证据：`xmake b ya-game-editor`、`xmake b ya-testing`；`xmake r ya-testing --gtest_filter='AppKernelTest.*:AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*'` 66/66（含改名后的 `AppKernelTest.HeadlessLoopHonorsExitAfterTick`）。
 - 仍待处理：`DebugPrimitives::updateFrameUBO`（随 P2 flight 轴）。
 - `rg -n '\bframeIndex\b|\bframeId\b|\bframeToken\b' Engine/Source` 只剩第 3 节保留项与 automation 外部键。
 - `rg -n 'flightIndex' Engine/Source` 为空。

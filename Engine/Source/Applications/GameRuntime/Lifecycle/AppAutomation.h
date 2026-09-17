@@ -37,7 +37,7 @@ struct AppAutomationTickContext
 class YA_GAME_RUNTIME_API AppAutomation
 {
   public:
-    static bool isFrameAutomationEnabled(const App& app);
+    static bool isTickAutomationEnabled(const App& app);
     static void loadConfig(AppDesc& appDesc);
     static void applyStartupOverrides(AppDesc& appDesc);
     static void applyLogOverrides(const AppDesc& appDesc);
@@ -48,7 +48,7 @@ class YA_GAME_RUNTIME_API AppAutomation
                                           RenderGraph&    graph,
                                           RGTextureHandle presentationOutput,
                                           Extent2D        presentationExtent);
-    static void onTickCompleted(App& app, const AppAutomationTickContext& frameContext);
+    static void onTickCompleted(App& app, const AppAutomationTickContext& tickContext);
 };
 
 } // namespace ya

@@ -53,7 +53,7 @@ struct DynamicMouseSubscriber
 
 } // namespace
 
-TEST(AppKernelTest, HeadlessLoopHonorsExitAfterFrame)
+TEST(AppKernelTest, HeadlessLoopHonorsExitAfterTick)
 {
     CountingDelegate delegate;
     AppKernel        kernel({}, delegate); // no event source, no frame sink

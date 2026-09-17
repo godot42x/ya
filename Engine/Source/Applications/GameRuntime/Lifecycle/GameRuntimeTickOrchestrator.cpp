@@ -204,7 +204,7 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
                                             App::_hostTick);
     }
 
-    if (AppAutomation::isFrameAutomationEnabled(app)) {
+    if (AppAutomation::isTickAutomationEnabled(app)) {
         YA_PROFILE_SCOPE("Tick/Automation");
         YA_PERF_SCOPE(perf::sample::tickAutomation(), perf::metric::cpuTimeMs(), perf::domain::render());
         auto* diagnosticsService = device ? &device->getDiagnosticsService() : nullptr;

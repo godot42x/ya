@@ -18,7 +18,7 @@ enum class EAppAutomationExitReason : uint8_t
     None = 0,
     AppRequestedClose,
     RemoteQuit,
-    ExitAfterFrame,
+    ExitAfterTick,
 };
 
 struct YA_APP_CONTROL_API AppAutomationRunState

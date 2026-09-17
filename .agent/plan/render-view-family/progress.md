@@ -11,6 +11,14 @@
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 已按 Scene family 持有，同 Scene 多 View 共享一份 SSBO，不同 Scene 不再以 flightIndex 为共享 key。
 
+## 2026-09-17 checkpoint：automation / TaskManager 的 per-tick 命名（M1 P1d）
+
+- 来源：P1b-2a 扫 perf 命名面时发现同一根轴上还有一批 host tick 语义的符号仍叫 frame。它们不在原 M1 清单里，属于「同轴遗留」，单独补一批，避免 M1 收尾后 automation 内部同时存在 tick 与 frame 两套叫法。
+- 落地：`AppAutomation::isFrameAutomationEnabled` / `hasFrameAutomationConfig` → `isTickAutomationEnabled` / `hasTickAutomationConfig`；`shouldRequestQuitAfterFrame` → `shouldRequestQuitAfterTick`；`EAppAutomationExitReason::ExitAfterFrame` → `ExitAfterTick`；`isAutomationStableFrameReady` / `bStableFrameReady` → `isAutomationStableTickReady` / `bStableTickReady`（它们比较的本来就是 `stableTicks` / `settleTicks`）；`TaskManager::registerFrameTask` / `hasFrameTasks` → `registerTickTask` / `hasTickTasks`（`taskManager.update()` 在 `tickLogic` 每 tick 调一次）；`AppAutomationTickContext` 的 `frameContext` 参数 → `tickContext`。调用方同步：`GameRuntimeTickOrchestrator`、`AppAutomationControlService`、`AppLifecycle`、`EditorLayer`、`EditorActionCatalog`、`RuntimeRenderSettingsSection`、`AppKernelTest`。
+- 保留的边界：日志文案 `warmup frames` / `stable frames`、`getAutomationExitReasonName` 返回的 `exit-after-frame`、以及 `--exit-after-frame` / `frame_index` 等 CLI、config、协议键都不改——它们是外部可见面。
+- 列对齐：`onTickCompleted` 里的 `bStableTickReady` 赋值列已补回，diff 只剩标识符。
+- 验证：`xmake b ya-game-editor`、`xmake b ya-testing`；`xmake r ya-testing --gtest_filter='AppKernelTest.*:AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*'` 66/66（含改名后的 `AppKernelTest.HeadlessLoopHonorsExitAfterTick`）；`git diff --check` 通过。
+
 ## 2026-09-17 checkpoint：Scene snapshot 命名（M2 P1c）
 
 - 唯一目标：把 `SceneFrameSnapshot` 改成 `SceneSnapshot`，不改任何行为。它是「某个 Scene 在某个内容版本上的不可变内容」，Scene 不变时被同一帧的多个 View 共用；名字里的 Frame 会让它看起来像按渲染帧产出的数据，而它恰恰是跨 View 共享、与 host tick 无关的那部分。

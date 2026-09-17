@@ -27,7 +27,7 @@ void AppAutomationRunController::markTickCompleted()
         return;
     }
     if (shouldAutomationExitAfterTick(_state.completedTickCount, _options.exitAfterTick)) {
-        _state.exitReason = EAppAutomationExitReason::ExitAfterFrame;
+        _state.exitReason = EAppAutomationExitReason::ExitAfterTick;
     }
 }
 
@@ -97,7 +97,7 @@ EAppAutomationExitReason evaluateAutomationExitReason(uint64_t completedTickCoun
                                                       const AppAutomationRunOptions& options)
 {
     return shouldAutomationExitAfterTick(completedTickCount, options.exitAfterTick)
-             ? EAppAutomationExitReason::ExitAfterFrame
+             ? EAppAutomationExitReason::ExitAfterTick
              : EAppAutomationExitReason::None;
 }
 
@@ -108,7 +108,7 @@ const char* getAutomationExitReasonName(EAppAutomationExitReason reason)
         return "app-requested-close";
     case EAppAutomationExitReason::RemoteQuit:
         return "remote-quit";
-    case EAppAutomationExitReason::ExitAfterFrame:
+    case EAppAutomationExitReason::ExitAfterTick:
         return "exit-after-frame";
     case EAppAutomationExitReason::None:
     default:
