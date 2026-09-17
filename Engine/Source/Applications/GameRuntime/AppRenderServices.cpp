@@ -114,28 +114,4 @@ const HostViewState& AppRenderServices::getHostViewState() const
     return _state->hostView;
 }
 
-void AppRenderServices::setCameraPreviewHostOwned(bool bOwned)
-{
-    YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->bCameraPreviewHostOwned = bOwned;
-}
-
-void AppRenderServices::setCameraPreviewEntityUUID(uint64_t uuid)
-{
-    YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->cameraPreviewEntityUUID = uuid;
-}
-
-bool AppRenderServices::isCameraPreviewHostOwned() const
-{
-    YA_CORE_ASSERT(_state, "Render services are not available");
-    return _state->bCameraPreviewHostOwned;
-}
-
-uint64_t AppRenderServices::getCameraPreviewEntityUUID() const
-{
-    YA_CORE_ASSERT(_state, "Render services are not available");
-    return _state->cameraPreviewEntityUUID;
-}
-
 } // namespace ya

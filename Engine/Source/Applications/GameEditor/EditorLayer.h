@@ -384,6 +384,10 @@ struct EditorLayer
 
     Entity*  getSelectedEntity() const { return _selections.empty() ? nullptr : _selections.front(); }
     uint64_t getSelectedEntityUUID() const { return _selectedEntityUUID; }
+    /// The camera the camera-preview inset shows: the selected entity when it
+    /// holds a camera, otherwise nothing. Null in the 2D canvas workspace, which
+    /// has no world view to inset onto.
+    [[nodiscard]] Entity* getCameraPreviewEntity() const;
     /// Active scene used for viewport interaction. In the 2D workspace this is
     /// always the authoring scene so runtime UI editing never mutates the play
     /// clone. In the 3D workspace it follows the active scene.

@@ -1,9 +1,12 @@
 #pragma once
 
 #include "Core/Common/Types.h"
+#include "Render3D/Common/RenderFeatures.h"
 
 #include <cstdint>
 #include <glm/glm.hpp>
+
+#include "entt/entt.hpp"
 
 namespace ya
 {
@@ -52,6 +55,15 @@ struct SceneViewDesc
     /// blit `composeRect` onto that View's display RT after recording.
     SceneViewId composeOntoViewId = 0;
     Rect2D      composeRect{};
+
+    /// What this View draws (see RenderFeatures.h). The declarer decides: the
+    /// editor's views include generated editor companions, a game view does not.
+    FRenderFeatureMask features = toMask(ERenderFeature::Game);
+    /// The entity this View is rendered from, when one owns it. That entity's
+    /// generated companions are dropped from this View, so a camera preview does
+    /// not draw the camera's own body. entt::null when no entity owns the View
+    /// (the editor's authoring camera is not a Scene entity).
+    entt::entity viewOwner = entt::null;
 
     [[nodiscard]] bool ownsHostViewport() const { return composeOntoViewId == 0; }
 

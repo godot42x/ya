@@ -35,6 +35,18 @@
 - 验证：`xmake b ya-render-3d ya-game-runtime ya-game-editor ya-testing`；`ya-render-3d-test` 172/172；`ya-testing` HostSceneExtract/RenderRuntimeSnapshot/ViewFamilyRenderer/SceneFamilyResources/AppKernel/AppAutomationConfig/Editor* 93/93；`HelloMaterial` 与 `run-editor` 各跑 `--exit-after-frame=90 --screenshot-target=viewport` 均 exit=0、日志 0 error，截图字节数与 4b 完全一致（1395200 / 679231），说明这一刀没有改变渲染结果。
 - 保留未完成：4d（`ISceneViewProducer`、五个全局格子、declare 路径清零 ECS 查询）、checkpoint 5（`PreparedView` 收口 `CameraFrameInput` patch 与 owner-scoped `SceneViewKey`）。
 
+## 2026-09-18 checkpoint：相机预览与它的选择归编辑器（4.0.3 4d-2）
+
+- 唯一目标：把「预览显示哪台相机」从宿主铸造的 view + 两个全局格子，交回持有选择的编辑器；顺带把声明里两件只有声明方知道的事（画什么 feature、从哪个实体渲染）从 orchestrator 的拼装挪进声明。
+- 预览归位：`EditorViewProducer`（原 `EditorAuthoringViewProducer` 改名——它现在声明编辑器的两个 view）在声明作者视口之外，按 `EditorLayer::getCameraPreviewEntity()`（用户在 Hierarchy 选中的相机实体）声明预览 inset：`composeOntoViewId = kPrimarySceneViewId`、`composeRect = makeViewDisplayInsetRect(...)`、`viewOwner = 该相机实体`。view id `kEditorPreviewViewId = 2` 是编辑器自持常量，宿主不再铸造 `kHostOverlayPreviewViewId`；`cameraProjectionForOutput`（按输出 rect 的 aspect 出投影）随之落到编辑器。
+- 两个格子删除：`AppRenderState::bCameraPreviewHostOwned` 与 `cameraPreviewEntityUUID`（含 `AppRenderServices` 的四个访问器）。`EditorLayer::onUpdate` 因此只剩 `_lastDeltaTime`——它的全部职责就是往这两个格子里写状态。`resolvePreviewCamera` 同时删除。
+- FOV 线框换家：选中相机的线框原本经 `cameraFrame.overlay.worldLines`（宿主相机包络）画进世界图，选择信息来自 `cameraPreviewEntityUUID`。现在它由编辑器自己的 world overlay pass 画（`recordSelectedCameraFrustum`，与网格/gizmo/HUD 同批），用的是同一个 `appendCameraFrustumOverlayLines`，所以「选择」这条信息不再需要穿越宿主。
+- 声明补两件事：`SceneViewDesc` 增加 `features`（`FRenderFeatureMask`）与 `viewOwner`（`entt::entity`）。前者让 orchestrator 的 `featuresForView` 与其「按 viewId 猜这是谁的 view」的逻辑消失；后者让 `prepareView` 的 viewOwner 直接来自声明，而不是「是不是预览 → 用预览相机，否则用 runtime 相机」的三分支猜法。RuntimeGameViewProducer 因此显式声明 `features = Game | (gizmo 开关 ? Gizmo : 0)`（保留 PIE 下的调试覆盖）与 `viewOwner = 游戏相机实体`（那台相机自己的机身体不该出现在它自己的视野里）。
+- 验收：`ya-render-3d-test` 172/172；`ya-testing` 相关滤镜 101/101（`GameUIHostTest.BuildSnapshotComposesMountedWidgets` 是并发工作线那侧的既有失败，与本刀无关，已在 4d-1 记录过一次）；`HelloMaterial` 与 `run-editor` 各跑 `--exit-after-frame=90 --screenshot-target=viewport` exit=0、日志 0 error、截图字节数仍与 4b/4c/4d-1 完全一致（1395200 / 679231）。
+- 刻意接受的行为差异（两条，都需要知会）：① 独立游戏（无编辑器）在 Runtime 态若有第二台相机，过去宿主会自动在角落声明一个预览 inset，现在没有——按计划「预览相机的选择策略回到持有选择的编辑器」，游戏二进制不该自己挑一台相机做画中画；若将来要，`RuntimeGameViewProducer` 显式声明即可（接缝已在）。② 选中相机的 FOV 线框从「世界图 overlay（可能被几何遮挡关系按原 pass 处理）」改为「编辑器 world overlay pass 的非深度测试段（与网格同批）」，即线框现在与网格同样始终可见。
+- 未覆盖：预览 inset 与 FOV 线框需要「用户选中一台相机」才会出现，而 smoke 场景只有一台相机、也没有 UI 选择动作，所以两条路径只经过代码审查与构建验证，没有被自动化覆盖；补法要么给 `EditorViewProducer` 一个能构造 `EditorLayer` 的夹具（当前 `ya-testing` 没有构造 `EditorLayer` 的先例，需要带 device 的 App 夹具），要么经 automation `invoke` 走一次选择动作。已登记为待补。
+- 保留未完成：4d-3（`bShowEditorGizmos` 格子归 `EditorLayer`；作者视口 rect 由声明方给出）、checkpoint 5（owner-scoped `SceneViewKey`）。
+
 ## 2026-09-18 checkpoint：世界视口由持有方声明（4.0.3 4d-1）
 
 - 唯一目标：让「这个 tick 渲染哪个视口」由**持有该视口的 owner** 声明，而不是编辑器写全局格子、runtime 再去读。4d 按计划拆三刀，这一刀做接缝 + 世界视口。

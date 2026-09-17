@@ -70,73 +70,6 @@ void syncRuntimeCameraAspect(Entity* runtimeCamera, const Extent2D& viewportExte
     }
 }
 
-uint64_t entityUUID(Entity* entity)
-{
-    if (!entity || !entity->isValid() || !entity->hasComponent<IDComponent>()) {
-        return 0;
-    }
-    return entity->getComponent<IDComponent>()->_id.value;
-}
-
-Entity* resolvePreviewCamera(Scene& scene, Entity* primaryCamera, bool bHostOwned, uint64_t previewEntityUUID)
-{
-    if (bHostOwned) {
-        if (previewEntityUUID == 0) {
-            return nullptr;
-        }
-        Entity* selected = scene.getEntityByUUID(previewEntityUUID);
-        if (!selected || !selected->isValid() || !selected->hasComponent<CameraComponent>() ||
-            !selected->hasComponent<TransformComponent>()) {
-            return nullptr;
-        }
-        return selected;
-    }
-    return findSecondaryCamera(scene, primaryCamera);
-}
-
-glm::mat4 cameraProjectionForOutput(const CameraComponent& camera, const glm::vec2& outputExtent)
-{
-    if (camera._fixedAspectRatio || outputExtent.x <= 0.0f || outputExtent.y <= 0.0f) {
-        return camera.getProjection();
-    }
-    return FMath::perspective(glm::radians(camera._fov),
-                              outputExtent.x / outputExtent.y,
-                              camera._nearClip,
-                              camera._farClip);
-}
-
-constexpr glm::vec4 kSelectedCameraFrustumColor = {1.0f, 0.85f, 0.2f, 1.0f};
-constexpr SceneViewId kHostOverlayPreviewViewId = 2;
-
-// Compact FOV wireframe for the host-selected camera only. The camera body is a
-// world-space mesh (CameraMeshLinkageRule); these lines stay procedural so they
-// can follow FOV without a new pipeline.
-void appendSceneCameraFrustumLines(Scene&                            scene,
-                                   Entity*                           primaryCamera,
-                                   uint64_t                          previewEntityUUID,
-                                   std::vector<RenderOverlayLine3D>& lines)
-{
-    if (previewEntityUUID == 0) {
-        return;
-    }
-
-    auto& registry = scene.getRegistry();
-    for (const auto& [handle, cameraComp] : registry.view<CameraComponent>().each()) {
-        Entity* entity = scene.getEntityByEnttID(handle);
-        if (!entity || !entity->isValid() || entity == primaryCamera ||
-            !entity->hasComponent<TransformComponent>()) {
-            continue;
-        }
-        if (entityUUID(entity) != previewEntityUUID) {
-            continue;
-        }
-        appendCameraFrustumOverlayLines(lines,
-                                        cameraComp.getFreeView(),
-                                        cameraComp.getProjection(),
-                                        kSelectedCameraFrustumColor);
-    }
-}
-
 } // namespace
 
 int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
@@ -491,49 +424,6 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     }
     const glm::mat4 viewProjection = makeCameraViewProjection(hostView.projection, hostView.view);
 
-    // A camera preview rides on top of the primary view's display RT, so it only
-    // exists while somebody declared that view.
-    std::vector<RenderOverlayLine3D> cameraFrustumLines;
-    Entity* runtimeLookCamera = nullptr;
-    Entity* previewCamera     = nullptr;
-    if (scene && primaryView) {
-        runtimeLookCamera = (app._appState == AppState::Runtime) ? findPrimaryCamera(*scene) : nullptr;
-        previewCamera     = resolvePreviewCamera(*scene,
-                                                 runtimeLookCamera,
-                                                 app._renderState->bCameraPreviewHostOwned,
-                                                 app._renderState->cameraPreviewEntityUUID);
-        if (previewCamera && previewCamera == runtimeLookCamera) {
-            previewCamera = nullptr;
-        }
-        const Rect2D previewComposeRect = previewCamera
-                                              ? makeViewDisplayInsetRect(hostView.viewportRect.extent)
-                                              : Rect2D{};
-        if (previewCamera && previewComposeRect.extent.x > 0.0f && previewComposeRect.extent.y > 0.0f) {
-            auto* cameraComp = previewCamera->getComponent<CameraComponent>();
-            auto* transform  = previewCamera->getComponent<TransformComponent>();
-            const Rect2D previewOutput{
-                .pos    = {0.0f, 0.0f},
-                .extent = previewComposeRect.extent,
-            };
-            (void)sceneScheduler.submit(SceneViewDesc{
-                .scene             = scene,
-                .viewId            = kHostOverlayPreviewViewId,
-                .view              = cameraComp->getFreeView(),
-                .projection        = cameraProjectionForOutput(*cameraComp, previewOutput.extent),
-                .cameraPos         = transform->getWorldPosition(),
-                .viewportRect      = previewOutput,
-                .composeOntoViewId = kPrimarySceneViewId,
-                .composeRect       = previewComposeRect,
-            });
-        }
-
-        appendSceneCameraFrustumLines(*scene,
-                                      runtimeLookCamera,
-                                      app._renderState->bCameraPreviewHostOwned
-                                          ? app._renderState->cameraPreviewEntityUUID
-                                          : 0,
-                                      cameraFrustumLines);
-    }
     // Extraction is its own step: seal() only grouped the declarations, so
     // Scene/ECS content is read here and nowhere earlier.
     ExtractedSceneRender sceneRender =
@@ -544,19 +434,6 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     // "is some viewport's world switch on". One tick of lag by construction --
     // systems run before views are declared.
     app._renderState->renderedScenesLastTick = renderedScenes(sceneRender.plan());
-
-    // View visibility is policy, decided here and nowhere else: the editor
-    // world view draws generated editor companions, a camera preview (what a
-    // camera sees) does not, and the global debug toggle overrides both.
-    const FRenderFeatureMask gizmoFeature = toMask(ERenderFeature::Gizmo);
-    const FRenderFeatureMask baseFeatures = toMask(ERenderFeature::Game);
-    const FRenderFeatureMask editorViewFeatures =
-        baseFeatures | ((app.isStopped() || app._renderState->bShowEditorGizmos) ? gizmoFeature : 0u);
-    const FRenderFeatureMask previewViewFeatures =
-        baseFeatures | (app._renderState->bShowEditorGizmos ? gizmoFeature : 0u);
-    const auto featuresForView = [&](SceneViewId viewId) {
-        return viewId == kHostOverlayPreviewViewId ? previewViewFeatures : editorViewFeatures;
-    };
 
     auto& viewFrames = app._renderState->viewFrameDataPerFlight[flightIndex];
     sceneRender.pairViewFrames(viewFrames);
@@ -574,10 +451,8 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
                     .viewProjection = desc.viewProjection(),
                     .cameraPos = desc.cameraPos,
                     .viewportExtent = Extent2D::fromVec2(desc.viewportRect.extent),
-                    .viewOwner = (desc.viewId == kHostOverlayPreviewViewId && previewCamera)
-                                     ? previewCamera->getHandle()
-                                     : (runtimeLookCamera ? runtimeLookCamera->getHandle() : entt::null),
-                    .viewFeatures = featuresForView(desc.viewId),
+                    .viewOwner = desc.viewOwner,
+                    .viewFeatures = desc.features,
                     .frameIndex = App::_hostTick,
                     .deltaTime = dt,
                     .shadowSettings = &app.getRenderServices().getShadowSettings(),
@@ -591,7 +466,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         .flightIndex              = flightIndex,
         .frameIndex               = App::_hostTick,
         .deltaTime                = dt,
-        .viewFeatures             = editorViewFeatures,
+        .viewFeatures             = primaryView ? primaryView->features : toMask(ERenderFeature::Game),
         .view                     = hostView.view,
         .projection               = hostView.projection,
         .viewProjection           = viewProjection,
@@ -621,7 +496,6 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 
     cameraFrame.overlay         = {
         .screenSprites = &screenOverlaySprites,
-        .worldLines    = &cameraFrustumLines,
     };
     cameraFrame.uiFrameSnapshot = pUiFrameSnapshot;
 

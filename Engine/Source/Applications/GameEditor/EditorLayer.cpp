@@ -58,8 +58,6 @@ void EditorLayer::onDetach()
         if (auto* sceneManager = _app->getSceneServices().getSceneManager()) {
             sceneManager->onSceneActivated.removeAll(this);
         }
-        _app->getRenderServices().setCameraPreviewHostOwned(false);
-        _app->getRenderServices().setCameraPreviewEntityUUID(0);
     }
 }
 
@@ -67,29 +65,19 @@ void EditorLayer::onUpdate(float dt)
 {
     YA_PROFILE_FUNCTION();
     _lastDeltaTime = dt;
-    if (!_app) {
-        return;
-    }
+}
 
-    auto& renderServices = _app->getRenderServices();
-    renderServices.setCameraPreviewHostOwned(true);
+Entity* EditorLayer::getCameraPreviewEntity() const
+{
     if (isViewportMode2D()) {
-        renderServices.setCameraPreviewEntityUUID(0);
-        return;
+        return nullptr;
     }
-
     Entity* selected = getSelectedEntity();
     if (!selected || !selected->isValid() || !selected->hasComponent<CameraComponent>() ||
         !selected->hasComponent<TransformComponent>()) {
-        renderServices.setCameraPreviewEntityUUID(0);
-        return;
+        return nullptr;
     }
-
-    uint64_t uuid = 0;
-    if (auto* id = selected->getComponent<IDComponent>()) {
-        uuid = id->_id.value;
-    }
-    renderServices.setCameraPreviewEntityUUID(uuid);
+    return selected;
 }
 
 void EditorLayer::setEditableScene(Scene* scene)

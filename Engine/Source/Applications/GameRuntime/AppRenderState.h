@@ -36,11 +36,6 @@ struct AppRenderState
     /// gets drawn (SkeletonAnimationSystem), so they stop depending on a switch
     /// that describes a viewport instead of a Scene.
     std::vector<Scene*>                     renderedScenesLastTick;
-    /// When true, `cameraPreviewEntityUUID` is the host's explicit choice
-    /// (editor selection). UUID 0 then means "do not preview". When false,
-    /// GameRuntime may auto-pick the first non-primary scene camera.
-    bool                                    bCameraPreviewHostOwned = false;
-    uint64_t                                cameraPreviewEntityUUID = 0;
     /// Global editor-gizmo override (`View > Show Editor Gizmos`). Off by
     /// default: generated editor companions exist in every mode but are drawn
     /// only by views that ask for them. A debug aid, so it is deliberately one

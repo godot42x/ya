@@ -59,10 +59,6 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] std::shared_ptr<ImageResource>         getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const;
     [[nodiscard]] bool                                   isPostprocessingEnabled() const;
     [[nodiscard]] const HostViewState&                   getHostViewState() const;
-    void                                                 setCameraPreviewHostOwned(bool bOwned);
-    void                                                 setCameraPreviewEntityUUID(uint64_t uuid);
-    [[nodiscard]] bool                                   isCameraPreviewHostOwned() const;
-    [[nodiscard]] uint64_t                               getCameraPreviewEntityUUID() const;
 
   private:
     AppRenderState* _state = nullptr;

@@ -1,6 +1,7 @@
 #include "GameEditor/UI/EditorViewportOverlayRecord.h"
 
 #include "Core/Math/AABB.h"
+#include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Entity.h"
@@ -10,6 +11,7 @@
 #include "RHI/Backend/TextureLibrary.h"
 #include "Render/Resources/FontManager.h"
 #include "Render2D/Render2D.h"
+#include "Render3D/Common/CameraFrustumOverlay.h"
 #include "Render3D/Debug/PhysicsDebugDraw.h"
 #include "Scene/Core/Scene.h"
 
@@ -20,6 +22,10 @@ namespace ya
 
 namespace
 {
+
+/// Selected-camera wireframe tint: the one editor accent that reads as "this is
+/// the view I am looking through".
+constexpr glm::vec4 kSelectedCameraFrustumColor = {1.0f, 0.85f, 0.2f, 1.0f};
 
 void recordEntityBounds(Entity* entity, const glm::vec4& color)
 {
@@ -114,6 +120,32 @@ void recordCameraHud(EditorLayer& layer)
     }
 }
 
+/// Compact FOV wireframe for the camera the user selected: the same camera the
+/// preview inset shows. The camera body is a world-space mesh
+/// (CameraMeshLinkageRule); these lines stay procedural so they follow FOV
+/// without a new pipeline, and they belong to the editor's overlay pass because
+/// they report the editor's own selection.
+void recordSelectedCameraFrustum(EditorLayer& layer)
+{
+    Entity* selected = layer.getCameraPreviewEntity();
+    if (!selected) {
+        return;
+    }
+    auto* camera = selected->getComponent<CameraComponent>();
+    if (!camera) {
+        return;
+    }
+
+    std::vector<RenderOverlayLine3D> lines;
+    appendCameraFrustumOverlayLines(lines,
+                                    camera->getFreeView(),
+                                    camera->getProjection(),
+                                    kSelectedCameraFrustumColor);
+    for (const RenderOverlayLine3D& line : lines) {
+        Render2D::makeWorldLine(line.from, line.to, line.color);
+    }
+}
+
 void recordPhysicsCollision(EditorLayer& layer)
 {
     Scene* scene = layer.getViewportInteractionScene();
@@ -139,6 +171,7 @@ void recordEditorWorldViewportOverlays(EditorLayer& layer, bool bDepthTestedWorl
     recordEditorWorldGrid();
     layer.gizmo().recordOverlay();
     recordCameraHud(layer);
+    recordSelectedCameraFrustum(layer);
     if (!bDepthTestedWorld) {
         return;
     }

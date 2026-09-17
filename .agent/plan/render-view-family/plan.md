@@ -299,9 +299,9 @@ Render3D/
 | --- | --- | --- |
 | ~~我的视口相机矩阵~~ | ~~`setExtensionHostViewState` → `extensionHostView`~~ | **已删（4d-1）**：编辑器的 `EditorAuthoringViewProducer` 直接声明相机 |
 | ~~我这 tick 没有世界视口~~ | ~~`setWorldSceneRenderEnabled` → `bWorldSceneRenderEnabled`~~ | **已删（4d-1）**：不声明即不渲染；动画策略改读 `renderedScenesLastTick` |
-| 预览视图用哪个相机 | `setCameraPreviewHostOwned` + `setCameraPreviewEntityUUID` | `resolvePreviewCamera`；view id 由 orchestrator 铸成常量 2 |
-| 我的视口尺寸 | `setViewportRect` | `tickRender` → view 1 的 `viewportRect` |
-| 我的视口要不要画 gizmo | `setEditorGizmoShown(bool)` → `AppRenderState::bShowEditorGizmos` | `featuresForView`（`tickRender` 内拼 feature mask） |
+| ~~预览视图用哪个相机~~ | ~~`setCameraPreviewHostOwned` + `setCameraPreviewEntityUUID`~~ | **已删（4d-2）**：`EditorViewProducer` 据用户选中项声明预览 inset（view id 由编辑器自持） |
+| 我的视口尺寸 | `setViewportRect`（仍是宿主几何，producer 以 context 读入） | `tickRender` → view 1 的 `viewportRect`；4d-3 让声明方给出作者视口 rect |
+| 我的视口要不要画 gizmo | `setEditorGizmoShown(bool)` → `AppRenderState::bShowEditorGizmos` | ~~`featuresForView`~~ → **4d-2 起**由声明方写进 `SceneViewDesc.features`；格子本身待 4d-3 归 `EditorLayer` |
 
 格子当时的写入方全在 `EditorLayer.cpp` / `EditorModule.cpp` / `EditorSurface.cpp`（gizmo 开关由 Window 菜单写），解析方全在 GameRuntime：编辑器无接口可声明自己的 view，只能「改状态再看运气」，且能成立全靠 hook 顺序（写在 `onLogic`，读在 `tickRender`）——与 GUI 侧已删除的「手写 tab sync」同类。4d-1 之后作者视口已经是声明（`EditorAuthoringViewProducer`），预览与 gizmo 两行仍是上面的通道。
 
@@ -336,7 +336,7 @@ UE 对照：`UGameViewportClient::bDisableWorldRendering` 与 world 选择同在
 
 一句话：**owner 声明自己的 view，collector 只做分组，抽取是显式一步，Renderer 只录计划。**
 
-1. **一份声明结构** `SceneViewDesc`（取代 `HostSceneViewSubmit` 与 `SceneRenderRequest` 的重复）：Scene 句柄、稳定 view key、相机矩阵、输出 rect、compose 目标。**4c 已完成**：`SceneViewDesc` 落在 `Render3D/Common/SceneViewDesc.h`，`SceneViewportTask` 内嵌它而不是重新列一遍字段，宿主 `submitHostSceneViews` 这层机械搬运随之删除（orchestrator 直接 `scheduler.submit()`）。**未完成的是余下两点**：feature mask 仍由 `tickRender` 按 view 拼（4d 随 gizmo 格子一起交给声明方），`SceneViewportTask` / `SceneViewRecording` 也还没塌陷成「计划里的同一条 + 本帧的 `PreparedView`」（checkpoint 5）。
+1. **一份声明结构** `SceneViewDesc`（取代 `HostSceneViewSubmit` 与 `SceneRenderRequest` 的重复）：Scene 句柄、稳定 view key、相机矩阵、输出 rect、feature mask、compose 目标。**4c 已完成**布局，**4d-2 已补上 `features` 与 `viewOwner`**（这两件事只有声明方知道：编辑器 view 画 gizmo、相机预览不画且要丢掉自己那台相机的机身体）。**未完成**：稳定 view key（owner-scoped `SceneViewKey`，checkpoint 5），`SceneViewportTask` / `SceneViewRecording` 也还没塌陷成「计划里的同一条 + 本帧的 `PreparedView`」。
 2. **`ISceneViewProducer`**：`collectSceneViews(const SceneViewCollectContext&, SceneViewCollector&)`（比原计划多一个显式的 per-tick 上下文参数：tick / dt / viewport 几何是帧事实，应当读而不是写；把它们塞进 collector 会把 sink 和输入混在一起）。运行世界视口、编辑器作者视口、相机预览各自实现。**4d-1 已完成**：生产者接缝 + 世界视口由持有方声明，`extensionHostView`、`bWorldSceneRenderEnabled` 两个格子删除。**未完成**：`bCameraPreviewHostOwned` / `cameraPreviewEntityUUID` / `kHostOverlayPreviewViewId` 与 `resolvePreviewCamera` / `appendSceneCameraFrustumLines` 仍由 orchestrator 代声明（4d-2），gizmo feature 与 `viewportRect` 仍由 orchestrator 决定（4d-3）。
 3. **collect / extract / record 三步分离**：`collect()` 只收声明；`buildSceneSnapshots(plan, extractor)` 按唯一 Scene 显式抽一次；`Renderer::recordFrame(plan, surface)` 只消费。抽取不再是 `seal` 的副作用。4a 已落地这一形态，4b 把注入点从 `(SceneId, revision)` 收窄为 `SceneSnapshotExtractor(Scene&)`（M3 把 `RenderFrameExtractor` 改名为 `SceneSnapshotBuilder` 时把提取那一半并进去，不另立同名类型）。
 4. **计划保留 Scene 句柄**（tick-local；Scene 生命周期更长）：**4b 已完成**——`derivedSceneForHostView` 与两个校验函数已删，改为 `ExtractedSceneRender` 的构造期不变量；4c 进一步把 `SceneViewFamilyKey` / `SceneSnapshotEntry` 的键从派生的 `sceneId` 换成句柄本身。
@@ -492,7 +492,7 @@ AppKernel::run
    - 4c **合并声明结构**（已完成）：`HostSceneViewSubmit` 与 `SceneRenderRequest` 合成一份 `SceneViewDesc`（`Render3D/Common/SceneViewDesc.h`）。`SceneViewportTask` 内嵌它，`seal()` 不再逐字段搬运；`submitHostSceneViews` 这层转发删除，宿主直接 `scheduler.submit()`；无写方的 `renderFlags`、派生的 `sceneId`（键改为句柄本身）、`HostSceneRenderSubmit.*` 也一并消失（该文件只剩抽取，改名 `HostSceneExtract.*`）。
    - 4d **`ISceneViewProducer` 与编辑器提交自己的视口**：运行世界视口、编辑器作者视口、相机预览各自 `collectSceneViews`。删除 `bWorldSceneRenderEnabled`、`extensionHostView` 注入、`bCameraPreviewHostOwned`、`cameraPreviewEntityUUID`、`bShowEditorGizmos`；预览相机选择回到编辑器；`viewportRect` 降为 producer 输入；gizmo 由声明方按 view 声明；orchestrator 不再铸造 `kHostOverlayPreviewViewId`。验收含第二条：declare 路径上不再有 `registry.view` / `getEntityByUUID` / `getPrimaryCamera` 这类 live-ECS 查询（见 §3.10.1）。三刀：
      - 4d-1 **producer 接缝 + 世界视口归位**（已完成）：新增 `ISceneViewProducer` / `SceneViewCollector` / `SceneViewCollectContext`（Render3D）；宿主注册列表在 `AppRenderState::viewProducers`；`RuntimeGameViewProducer`（Runtime 态，用游戏相机）与 `EditorAuthoringViewProducer`（非 Runtime 态且非 2D canvas，用编辑器相机）各自声明主 view。删除 `extensionHostView` 与 `bWorldSceneRenderEnabled` 两个格子；`prepareHostViewState` 收成「宿主几何 + 时钟」，相机由声明回填；`getPrimaryCamera` 从 orchestrator 静态函数移入 `Utility/SceneCameraQuery`（Scene 查询不该是 orchestrator 私有）。`SkeletonAnimationSystem` 的策略改为「上一 tick 是否为该 Scene 产出了内容」（`AppRenderState::renderedScenesLastTick`，渲染侧派生事实，替代按 viewport 的开关）。
-     - 4d-2 **相机预览归位**：`CameraPreviewViewProducer` 进 GameEditor，删 `bCameraPreviewHostOwned` / `cameraPreviewEntityUUID` 与 `kHostOverlayPreviewViewId` 的宿主铸造，`resolvePreviewCamera` / `cameraProjectionForOutput` / `appendSceneCameraFrustumLines` 移回编辑器。
+     - 4d-2 **相机预览归位**（已完成）：`EditorViewProducer`（原 `EditorAuthoringViewProducer` 改名，因为现在声明的是编辑器的两个 view）同时声明作者视口与预览 inset；删 `bCameraPreviewHostOwned` / `cameraPreviewEntityUUID` 与宿主铸造的 `kHostOverlayPreviewViewId`（view id 归编辑器）；`resolvePreviewCamera` / `cameraProjectionForOutput` 移入编辑器，选中相机直接从 `EditorLayer::getCameraPreviewEntity()` 来；选中相机的 FOV 线框从宿主相机包络移到编辑器自己的 world overlay pass（`recordSelectedCameraFrustum`）。同时给 `SceneViewDesc` 补上 `features` 与 `viewOwner`——这两件事都只有声明方知道。
      - 4d-3 **feature 与 viewportRect 归位**：`SceneViewDesc` 增加 `features`，删 `bShowEditorGizmos` 格子（开关归 `EditorLayer`）、删 orchestrator 里的 `featuresForView`；作者视口的 rect 由编辑器按面板声明，automation 的 resize 用例改走声明。
 5. **PreparedView**：删除 CameraFrameInput patching、SceneViewRecording、RenderPipelineFrameContext 之间的重复层。view 身份改为 owner-scoped `SceneViewKey`（4d 之后），并按此建立 `ViewHistoryStore` 的稳定键。
 6. **清除 Stage current-view**：删除 `_frameInputs` / `_preparedViewSlot` 等隐式槽位。

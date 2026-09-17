@@ -13,7 +13,7 @@
 #include "ECS/Systems/Components/PointLightComponent.h"
 #include "ECS/Systems/Components/TerrainComponent.h"
 #include "GameEditor/EditorChrome.h"
-#include "GameEditor/EditorAuthoringViewProducer.h"
+#include "GameEditor/EditorViewProducer.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/EditorPlaySession.h"
 #include "GameEditor/EditorProfilingSettings.h"
@@ -127,8 +127,8 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
 {
   private:
     std::unique_ptr<EditorLayer>   _layer;
-    /// Owns the editor's declaration of the primary world view.
-    EditorAuthoringViewProducer    _authoringViewProducer;
+    /// Owns the editor's view declarations (authoring view, camera preview).
+    EditorViewProducer             _viewProducer;
     EditorPlaySession              _playSession;
     FreeCameraController           _cameraController;
     EditorViewportCompositor       _viewportCompositor;
@@ -755,10 +755,11 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _inputNode.bind(app, *_layer, _windows, window->windowId(), &_guiWindows, &_dragRouter);
         _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);
         gEditorLayer           = _layer.get();
-        // The editor owns the authoring viewport, so it declares the primary
-        // world view while that viewport is what the user sees.
-        _authoringViewProducer.bind(app, *_layer);
-        app.addSceneViewProducer(_authoringViewProducer);
+        // The editor owns its viewport, so it declares the views in it: the
+        // authoring view while that is what the user sees, and the camera
+        // preview inset of the camera the user selected.
+        _viewProducer.bind(app, *_layer);
+        app.addSceneViewProducer(_viewProducer);
         registerEditorPresets();
         registerEditorScriptApis();
         YA_CORE_INFO("Editor chrome host: {}", editorChromeHostName(_chromeHost));
@@ -833,7 +834,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _app = nullptr;
         _playSession.shutdown(app);
         gEditorAuthoringScene = nullptr;
-        app.removeSceneViewProducer(_authoringViewProducer);
+        app.removeSceneViewProducer(_viewProducer);
         _viewportCompositor.shutdown();
         if (_layer) {
             _layer->setViewportDisplayImage(nullptr);
