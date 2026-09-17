@@ -36,7 +36,7 @@ public:
     /// accepts this payload, so a new slot type does not edit a central switch.
     /// Args stay aggregates so designated initializers keep working.
     template<typename TArgs>
-    [[nodiscard]] bool applyArgs(const TArgs& args)
+    bool applyArgs(const TArgs& args)
     {
         auto* typed = as<typename TArgs::SlotType>();
         if (typed == nullptr) {
