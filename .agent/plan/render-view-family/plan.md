@@ -287,6 +287,62 @@ Render3D/
 
 处置：不单独开一刀，随 P3 `PreparedView` 收口一起删除——时间走 `HostClockState` 作为 pass 输入；env lighting 句柄在 graph build 前解析进 `PreparedView` 或并入 `EnvironmentLightingResultProvider`；`DebugRenderSystem` 由 overlay pass 构造注入；`getGameplayResourceBinding()` 直接删。删完后 `RenderDeviceState` 不再继承任何渲染接口，`PipelineCoordinator::InitDesc::runtimeServices` 随之消失，这是公开 `Renderer` owner 的净收益。
 
+### 3.10 View 的声明、收集、抽取与录制边界（2026-09-17 review）
+
+2026-09-17 review 的结论：**View 收集（collect）分层是对的，声明（declare）层缺失**。调度器「帧内聚合 + 按 (SceneId, sceneRevision) 去重 snapshot + 按 ViewFamily 分组」对应 UE 的 family/renderer 分层，保留；问题在于没有任何 owner 能声明自己的 view，于是编辑器的诉求只能经全局可变格子注入调度器。
+
+#### 3.10.1 当前实际路径
+
+真正的「view 声明」只有 GameRuntime 一处（`tickRender` 内构造 `HostSceneViewSubmit`）。GameEditor 不是提交方，它通过全局格子影响那一份声明：
+
+| 编辑器想表达 | 实际通道 | 读取方 |
+| --- | --- | --- |
+| 我的视口相机矩阵 | `AppRenderServices::setExtensionHostViewState` → `AppRenderState::extensionHostView` | `prepareHostViewState` |
+| 我这 tick 没有世界视口 | `setWorldSceneRenderEnabled(bool)` → `bWorldSceneRenderEnabled` | `tickRender`、`SkeletonAnimationSystem::setTickPolicy` |
+| 预览视图用哪个相机 | `setCameraPreviewHostOwned` + `setCameraPreviewEntityUUID` | `resolvePreviewCamera`；view id 由 orchestrator 铸成常量 2 |
+| 我的视口尺寸 | `setViewportRect` | `tickRender` → view 1 的 `viewportRect` |
+
+四个格子的写入方全在 `EditorLayer.cpp` / `EditorModule.cpp`，解析方全在 GameRuntime。编辑器无接口可声明自己的 view，只能「改状态再看运气」，且能成立全靠 hook 顺序（写在 `onLogic`，读在 `tickRender`）——与 GUI 侧已删除的「手写 tab sync」同类。本计划 §2 与 R1/R3 已写明「GameEditor / Material preview 各自提交 SceneRenderRequest」，该句至今未实现。
+
+UE 对照：`UGameViewportClient::bDisableWorldRendering` 与 world 选择同在 viewport client 上；Godot 是 `Viewport::world_3d`；Unity 由 `SceneView` 持有自己的 camera。三家都没有「中央提交者 + 全局开关」，`UWorld` / `World3D` 上不存在「我该被渲染吗」。因此该开关既不属于 Scene，也不属于 Renderer，而属于**声明方是否声明**。
+
+#### 3.10.2 一个 View 被声明六次
+
+| 层 | 结构 | 相对上一层新增 |
+| --- | --- | --- |
+| 宿主提交 | `HostSceneViewSubmit` | `Scene*` |
+| 调度请求 | `SceneRenderRequest` | 换成 `sceneId` + `buildSnapshot` 闭包 |
+| 计划任务 | `SceneViewportTask` | `snapshotIndex` / `familyIndex` / `output` |
+| 录制项 | `SceneViewRecording` | `frameData` / `derivedScene` |
+| pipeline 上下文 | `CameraFrameInput`（`plan.camera`，再由 `cameraForViewRecording` patch 一次） | |
+| 输出 | `RenderViewOutputDesc` | |
+
+`submitHostSceneViews` 做一次 12 字段搬运，`seal()` 再做一次 14 字段搬运，`cameraForViewRecording` 再 patch 一次；字段没有增加表达能力，只增加「该在哪一层读」的记忆负担。
+
+#### 3.10.3 三处正在空转的机制
+
+- `SceneRenderRequest::renderFlags` 全仓库无一处写非 0；`sceneRevision` 恒为 0（`HostSceneViewSubmit` 默认值）；`familyId` 恒为 1。于是 `SceneViewFamilyKey` 实际退化为 `snapshotIndex` 单键——两个不透明的 magic 数字决定哪些 view 共享 GPU family，而它们现在是常数。
+- `SceneRenderScheduler::seal()` 内直接调用 `request.buildSnapshot()`，**分组步骤顺带执行 ECS 抽取**：抽取不是一步，而是 `seal` 的副作用；闭包捕获的 `Scene*` 活在被 seal 前的请求队列里。
+- plan 只留 `sceneId`，丢弃了 Scene 指针，于是宿主必须留着提交列表反查：`derivedSceneForHostView`、`SceneRenderPlanInput::complete()`、`derivedScenesAgreeWithPlan()` 三个函数存在的唯一理由是计划把自己需要的信息丢掉了。这是「先丢指针再回头校验」的成本。
+
+#### 3.10.4 目标形态
+
+一句话：**owner 声明自己的 view，collector 只做分组，抽取是显式一步，Renderer 只录计划。**
+
+1. **一份声明结构** `SceneViewDesc`（取代 `HostSceneViewSubmit` 与 `SceneRenderRequest` 的重复）：Scene 句柄、稳定 view key、相机矩阵、输出 rect、feature mask、compose 目标。`SceneViewportTask` / `SceneViewRecording` 塌陷为「计划里的同一条 + 本帧的 `PreparedView`」。
+2. **`ISceneViewProducer`**：`collectSceneViews(SceneViewCollector&)`。运行世界视口、编辑器作者视口、相机预览各自实现。这一条直接删除 `extensionHostView`、`hostView` patch、`bWorldSceneRenderEnabled`、`bCameraPreviewHostOwned`、`cameraPreviewEntityUUID`，以及 orchestrator 里铸造 `kHostOverlayPreviewViewId` 与 `resolvePreviewCamera` 的那一段——预览相机的选择策略回到持有选择的编辑器。
+3. **collect / extract / record 三步分离**：`collect()` 只收声明；`SceneSnapshotBuilder::build(plan)` 按唯一 Scene 显式抽一次；`Renderer::recordFrame(plan, surface)` 只消费。抽取不再是 `seal` 的副作用。
+4. **计划保留 Scene 句柄**（tick-local；Scene 生命周期更长）：删除 `derivedSceneForHostView` 与两个校验函数，改为构造期不变量。
+5. **View 身份 owner-scoped**：`kPrimarySceneViewId = 1` 现在同时承担「编辑器作者视口」与「独立游戏视口」两个产品的持久身份，`kHostOverlayPreviewViewId = 2` 由 host 铸造。改为 producer 注册时铸 `SceneViewKey{ownerId, localId}`。这是 `ViewHistoryStore`（TAA/exposure）与「同一 View 显示在两个 Surface」稳定键的前提。
+6. **`plan.camera` 拆开**：`CameraFrameInput` 同时装 `flightIndex` / `frameIndex` / `deltaTime`（帧作用域）与一个 view 的相机矩阵（view 作用域）。前者进 `FrameContext`，后者进声明。与 M3 的 `CameraFrameInput` 删除同批。
+
+#### 3.10.5 明确不做
+
+- 不引入 WorldRegistry，不让 Scene 直接调 RHI/Renderer；仍由宿主调用 submit。
+- 不删除 `SceneRenderScheduler` 的帧内聚合与 snapshot 去重；它是 family/renderer 分层的正确部分。
+- 不让 GUI Framework 认识 Scene；Surface/present 与 View 正交的结论不变。
+- 不为「一个 Scene 是否该渲染」引入 per-Scene 开关：该问题的答案是「没有 producer 声明这个 view」。
+
 ## 4. 分阶段实施
 
 每个 checkpoint 只有一个可验收目标；代码、测试、progress.md 与计划变更同一提交。禁止用目录移动、空 registry、兼容 facade 或只写文档冒充完成。
@@ -420,12 +476,17 @@ AppKernel::run
 
 执行顺序（每个 checkpoint 一个可验收目标）：
 
-1. **修计划状态（本刀）**：C/D/E 改为部分完成；删除把 DeviceState+Coordinator 当成闭环、把 RenderRuntime 当成现行 orchestrator 的叙述。
+1. **修计划状态（已完成）**：C/D/E 改为部分完成；删除把 DeviceState+Coordinator 当成闭环、把 RenderRuntime 当成现行 orchestrator 的叙述。
 2. **公开 `Renderer` owner**：合并 `RenderDeviceState` + `RenderFrameCoordinator`；关闭 friend 越界。产品层只调用 `Renderer::recordFrame(plan, surfaceTarget) -> RecordedFrame`。不引入第三个全能 coordinator。
 3. **recording 与 flight 拆名**：`RenderSubmission` 拆成 `FrameRecording`（cmd/allocate/retain/seal）与 `FrameFlightResources`（fence-safe arena/descriptors/keepalives）。`RecordedFrame` 带 command buffer 与 flightIndex，由 host submit。
-4. **PreparedView**：删除 CameraFrameInput patching、SceneViewRecording、RenderPipelineFrameContext 之间的重复层。
-5. **清除 Stage current-view**：删除 `_frameInputs` / `_preparedViewSlot` 等隐式槽位。
-6. **压缩 `tickRender`**：保留该入口，收成 prepareModules → buildGameRenderFrame → acquire → recordFrame → submitPresent → presentModuleExtras。camera preview、Scene request、UI snapshot 下沉到普通 builder。
+4. **view 声明与收集收口（2026-09-17 review 新增，见 §3.10）**：补齐「谁声明 view」，再让抽取成为显式一步。四刀，每刀可独立验收：
+   - 4a **抽取移出 seal**：`SceneRenderScheduler::seal()` 不再调用 `request.buildSnapshot()`；改为 `seal()` 只分组、`SceneSnapshotBuilder::build(plan)` 显式抽取。请求队列不再携带捕获 `Scene*` 的闭包。
+   - 4b **计划保留 Scene 句柄**：plan / task 携带 tick-local `Scene*`，删除 `derivedSceneForHostView`、`SceneRenderPlanInput::complete()` 与 `derivedScenesAgreeWithPlan()` 的运行时校验，改为构造期不变量。
+   - 4c **合并声明结构**：`HostSceneViewSubmit` 与 `SceneRenderRequest` 合成一份 `SceneViewDesc`，消掉 12 / 14 字段的两次机械搬运。
+   - 4d **`ISceneViewProducer` 与编辑器提交自己的视口**：运行世界视口、编辑器作者视口、相机预览各自 `collectSceneViews`。删除 `bWorldSceneRenderEnabled`、`extensionHostView` 注入、`bCameraPreviewHostOwned`、`cameraPreviewEntityUUID`；预览相机选择回到编辑器；orchestrator 不再铸造 `kHostOverlayPreviewViewId`。
+5. **PreparedView**：删除 CameraFrameInput patching、SceneViewRecording、RenderPipelineFrameContext 之间的重复层。view 身份改为 owner-scoped `SceneViewKey`（4d 之后），并按此建立 `ViewHistoryStore` 的稳定键。
+6. **清除 Stage current-view**：删除 `_frameInputs` / `_preparedViewSlot` 等隐式槽位。
+7. **压缩 `tickRender`**：保留该入口，收成 collectSceneViews → extractScenes → prepareViews → prepareModules → buildGameRenderFrame → acquire → recordFrame → submitPresent → presentModuleExtras。camera preview、Scene request、UI snapshot 下沉到普通 builder；`tickRender` 里不再有「某个 view 要不要渲染」的判断。
 
 Surface 与 View 正交、产品帧同时显示两个 Scene viewport、双 Surface GPU 排在 4.0.3 之后。不要为了“继续”发明 PIE authoring PiP。
 
@@ -461,6 +522,8 @@ R1 字段分类不能按现有结构名整体搬迁，必须按语义拆分：
 
 验收：同一 Scene 的两个 View 共用一个 SceneSnapshot；两个不同 Scene 产生两个 snapshot 且实体/灯光/资源生命周期不串；View A 的矩阵/extent 不修改 View B；UIOnly 不需要 Scene request；pipeline 不从 window/swapchain 反查矩阵或尺寸；单 View golden 不变。
 
+「谁声明 view」尚未落地：当前只有 GameRuntime 一处提交点，编辑器通过 `extensionHostView` / `bWorldSceneRenderEnabled` / `bCameraPreview*` 几个全局格子影响它。契约、代价与目标形态见 §3.10，落地排在 4.0.3 第 4 刀（4d）。本条的「UIOnly 不需要 Scene request」在 4d 之后应表现为「没有 producer 声明 view」，而不是提交一个空 request。
+
 ### R2 — SceneRenderScheduler 编排离屏任务
 
 唯一目标：在 UI 之前由 SceneRenderScheduler 聚合本帧 Scene viewport 离屏任务，并由公开 `Renderer` 只消费 sealed SceneRenderPlan / PreparedViewFamily。
@@ -478,6 +541,8 @@ R2 当前执行顺序：4.0.2 A/B 入口已落地；C/D/E 部分完成；family-
 GUI Framework 保留 WidgetTree、UIFrameSnapshot、Render2D compose、GUIRenderSurface，以及每 native window 的 tree/snapshot/focus/input。GameRuntime/GameEditor 负责 GameUIHost[ViewId] 生命周期、input rect、focus/capture、UI scale、snapshot 与 ViewCompose 绑定；Level Editor、Material Preview 等功能各自提交 SceneRenderRequest。UI Editor 默认走 WidgetTree → UIFrameSnapshot → Render2D → PresentSurface；3D 预览必须显式提交对应 Scene request，不能偷用 active runtime Scene。
 
 规则：每个可交互 Game View 默认独立 WidgetTree；同一 View 被多个 Surface 显示时复用 snapshot；不同 View 不共享 live widget tree；UIOnly 不提交 Scene request。
+
+R3 的「各自提交 SceneRenderRequest」与 §3.10 是同一件事：`ISceneViewProducer` / `collectSceneViews` 是它的接口形态。Material Preview、UI Editor 3D 预览、相机预览都必须成为 producer，而不是经由全局格子寄生在 runtime 视口声明上。
 
 验收：UI Editor 无 world render 仍可运行；两个 Game View 的 input/focus/snapshot 不串扰；同一 View 在两个 Surface 显示时只生成一份 UI snapshot；录制期只读 immutable UIFrameSnapshot。
 

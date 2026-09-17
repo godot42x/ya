@@ -11,6 +11,15 @@
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 已按 Scene family 持有，同 Scene 多 View 共享一份 SSBO，不同 Scene 不再以 flightIndex 为共享 key。
 
+## 2026-09-17 checkpoint：View 声明 / 收集边界 review（无代码改动）
+
+- 触发：核查 `isWorldSceneRenderEnabled()` 该属于 Scene 还是 viewport client。结论：它既不属于 Scene 也不属于 Renderer，而属于**声明方是否声明**；该格子的存在是 view 收集链缺少 producer 接口的症状。
+- 盘点的现状（登记进 plan §3.10 / temporal_semantics M9）：真正的 view 声明只有 GameRuntime 一处；GameEditor 经四个全局格子（`bWorldSceneRenderEnabled`、`extensionHostView`、`bCameraPreviewHostOwned`+`cameraPreviewEntityUUID`、`viewportRect`）影响它，且全靠 hook 顺序成立（写在 `onLogic`、读在 `tickRender`）。一个 view 被声明六次（`HostSceneViewSubmit` → `SceneRenderRequest` → `SceneViewportTask` → `SceneViewRecording` → `CameraFrameInput` → `RenderViewOutputDesc`），字段只被机械搬运。
+- 三处空转：① `renderFlags` 无写方、`sceneRevision` 恒 0、`familyId` 恒 1，于是 `SceneViewFamilyKey` 退化为 `snapshotIndex` 单键；② `seal()` 内直接调 `buildSnapshot()`，ECS 抽取是分组步骤的副作用；③ plan 丢弃 Scene 指针，导致宿主必须用 `derivedSceneForHostView` / `complete()` / `derivedScenesAgreeWithPlan()` 三个函数反查校验。
+- 保留的判断：调度器的「帧内聚合 + 按 (SceneId, sceneRevision) 去重 snapshot + 按 ViewFamily 分组」对应 UE family/renderer 分层，是对的，不删；不引入 WorldRegistry；GUI Framework 仍不认识 Scene。
+- 落地：写入 plan §3.10（现状、六层重复、三处空转、目标形态、明确不做）、4.0.3 执行顺序第 4 刀（4a 抽取移出 seal / 4b plan 保留 Scene 句柄 / 4c 合并 `SceneViewDesc` / 4d `ISceneViewProducer`）、R1/R3 交叉引用、temporal_semantics M9 与批次 P1e、todo 六个工作项、feature_matrix `view_declaration_contract`。
+- 本 checkpoint 无代码改动、无测试执行；上面登记的是下一步待实现项，不当作已完成。
+
 ## 2026-09-17 checkpoint：automation / TaskManager 的 per-tick 命名（M1 P1d）
 
 - 来源：P1b-2a 扫 perf 命名面时发现同一根轴上还有一批 host tick 语义的符号仍叫 frame。它们不在原 M1 清单里，属于「同轴遗留」，单独补一批，避免 M1 收尾后 automation 内部同时存在 tick 与 frame 两套叫法。

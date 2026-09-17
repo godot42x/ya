@@ -197,6 +197,22 @@ hostTick = 1200
 
 删除 `IRenderRuntimeServices` 之后 `RenderDeviceState` 不再继承任何渲染接口，`PipelineCoordinator::InitDesc::runtimeServices` 随之消失，这是公开 `Renderer` owner 那一刀的净收益。
 
+### M9 — View 声明权的归属迁移（2026-09-17 review，见 plan §3.10）
+
+M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**：编辑器视口的几个诉求经 `AppRenderState` 的全局格子传进 GameRuntime，而编辑器侧本来就有直接来源（`EditorLayer::isViewportMode2D()`、`EditorLayer::getCamera()`、选中相机 UUID）。每个格子的去处如下，落地排在 4.0.3 第 4 刀（4d `ISceneViewProducer`）。
+
+| 现状 | 语义 | 目标归属 | 处置 |
+| --- | --- | --- | --- |
+| `AppRenderState::bWorldSceneRenderEnabled`（`AppRenderServices::set/isWorldSceneRenderEnabled`） | 本 tick 有没有世界视口要提交 | 声明方决定 | 删除。替代物是「没有 producer 声明 view」，不是任何按 Scene 或按 host 的开关。同时解除 `SkeletonAnimationSystem::setTickPolicy` 对它的依赖（动画策略另找诚实输入：per-scene 可见性或 per-component 策略，对齐 UE `OnlyTickPoseWhenRendered`） |
+| `AppRenderState::extensionHostView`（`setExtensionHostViewState` / `clearExtensionHostViewState`） | 编辑器作者视口的相机矩阵 | producer 自己填 `SceneViewDesc` | 删除。当前由 `prepareHostViewState` 回填进 `hostView`，再经 `HostSceneViewSubmit` 变成 view 1 的相机 |
+| `AppRenderState::bCameraPreviewHostOwned` + `cameraPreviewEntityUUID` | 预览视图用哪个相机 | 声明方决定 | 删除。`resolvePreviewCamera` 与 `appendSceneCameraFrustumLines` 的相机选择前移回编辑器；producer 直接声明预览 view |
+| `AppRenderServices::setViewportRect` / `getViewportRect` | 作者视口的离屏 rect | producer 自己填 `SceneViewDesc` | 降为 producer 输入；automation 的 resize 用例改走 producer 声明的 rect |
+| `kPrimarySceneViewId = 1` / `kHostOverlayPreviewViewId = 2` | view 的持久身份 | owner-scoped `SceneViewKey{ownerId, localId}` | 现在 view 1 同时是两个产品（编辑器作者视口 / 独立游戏视口）的身份，view 2 由 host 铸造。改为 producer 注册时铸键，作为 `ViewHistoryStore` 与跨 Surface 复用的稳定键 |
+| `CameraFrameInput` 的 `flightIndex` / `frameIndex` / `deltaTime` | 帧作用域 | `FrameContext` | 与 M3 的 `CameraFrameInput` 删除同批；`flightIndex` 另见 M4 |
+| `CameraFrameInput` 的 `view` / `projection` / `viewportRect` / `viewFeatures` | view 作用域 | `SceneViewDesc` → `PreparedView` | 与 M3 同批 |
+
+判定规则（与 M1 同构）：一个值若由「某个视口的持有者」决定，它属于该 producer 的声明；若由「本帧的调度批次」决定，它属于 `FrameContext`；若由「Scene 内容」决定，它属于 `SceneSnapshot`。全局可变格子是这三者都没有归属时的症状。
+
 ## 3. 保留项（这些 `frame` 是正确的）
 
 - `FrameBuffer` / `IFrameBuffer` / `VulkanFrameBuffer`：真实 GPU framebuffer。
@@ -224,6 +240,7 @@ hostTick = 1200
 | P1b-2c | M1 剩余之四：DebugPrimitives flight UBO | 随 P2 flight 轴 |
 | P1c | M2 `SceneFrameSnapshot` → `SceneSnapshot` | 已提交，纯重命名 |
 | P1d | M1 同轴遗留：automation / TaskManager 的 per-tick 命名 | 已提交，纯重命名 |
+| P1e | M9 view 声明权迁移（4.0.3 的 4a–4d：抽取移出 seal、plan 保留 Scene 句柄、合并 `SceneViewDesc`、`ISceneViewProducer`） | 对应 4.0.3 checkpoint 4；4a–4c 纯结构，4d 删全局格子 |
 | P2 | M4 + M5 + `Renderer` 合并 | 对应 4.0.3 checkpoint 2 / 3 |
 | P3 | M3（C++ 部分） | 对应 4.0.3 checkpoint 4（PreparedView） |
 | P4 | M3 的 Slang 部分：删 `frameIdx`、`FrameData/FrameUBO` → `ViewUbo/ViewData` | 需 `xmake ya-shader` 重新生成头，单独提交 |
@@ -235,6 +252,7 @@ hostTick = 1200
 - 一次提交里只改一半符号，留下 `RenderFrameData` 与 `PreparedView` 并存。
 - 用 `using` / `typedef` 做长期兼容别名（违反根 `AGENTS.md` 规则 0、5）。
 - 把 `flightIndex` 机械改名与 flight 归属修正混成一批：改名是纯机械，归属修正需要 `FrameFlightResources` 设计。
+- M9 不属于改名：它删格子、加接口，必须按 4a–4d 逐刀验收，不能与 P2 的 `Renderer` 合并混批。
 
 ## 5. 验收
 
@@ -252,6 +270,10 @@ hostTick = 1200
 - P1b-2b 构建/测试证据：`xmake b ya-render-3d-test`、`xmake b ya-testing`、`xmake b ya-game-editor`；`xmake r ya-testing --gtest_filter='AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*:AppKernelTest.*'` 66/66；`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:ViewFamilyRendererTest.*:RenderViewBindingTableTest.*:ViewPassResourcesTest.*:SceneFamilyResourcesTest.*'` 41/41。
 - P1d 已满足：`rg -n 'isFrameAutomationEnabled|hasFrameAutomationConfig|shouldRequestQuitAfterFrame|ExitAfterFrame|StableFrameReady|registerFrameTask|hasFrameTasks|frameContext' Engine Example` 为空。
 - P1d 构建/测试证据：`xmake b ya-game-editor`、`xmake b ya-testing`；`xmake r ya-testing --gtest_filter='AppKernelTest.*:AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*'` 66/66（含改名后的 `AppKernelTest.HeadlessLoopHonorsExitAfterTick`）。
+- M9 / P1e 的目标（4d 落地后应可逐条验证）：`rg -n 'bWorldSceneRenderEnabled|setWorldSceneRenderEnabled|isWorldSceneRenderEnabled' Engine Example` 为空；`rg -n 'extensionHostView|setExtensionHostViewState|clearExtensionHostViewState' Engine` 为空；`rg -n 'bCameraPreviewHostOwned|cameraPreviewEntityUUID|resolvePreviewCamera|kHostOverlayPreviewViewId' Engine` 为空；`rg -n 'derivedSceneForHostView|derivedScenesAgreeWithPlan' Engine` 为空（4b）。
+- M9 4a–4c 的验收：4a `SceneRenderScheduler::seal()` 内不再出现 `buildSnapshot` 调用；4b plan/task 携带 Scene 句柄且无运行时反查校验；4c 声明结构只剩一份，且 `HostSceneRenderSubmitTest` 的隔离语义不变（3/3）。
+- M9 4d 的验收：编辑器 2D 画布模式与 3D 模式的 view 集合差异由 producer 声明表达，`tickRender` 内不再有「某个 view 要不要渲染」的判断；`SkeletonAnimationSystem` 不再依赖世界渲染开关。
+- M9 相关构建/测试基线（落地时逐刀执行）：`xmake b ya-game-editor ya-testing ya-render-3d-test`；`ya-testing` EditorDockWorkspace/EditorWindowSession/EditorRootSession/HostSceneRenderSubmit；`ya-render-3d-test` RenderRuntimeSnapshot/ViewFamilyRenderer/ViewPassResources/SceneFamilyResources。
 - 仍待处理：`DebugPrimitives::updateFrameUBO`（随 P2 flight 轴）。
 - `rg -n '\bframeIndex\b|\bframeId\b|\bframeToken\b' Engine/Source` 只剩第 3 节保留项与 automation 外部键。
 - `rg -n 'flightIndex' Engine/Source` 为空。
