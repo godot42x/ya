@@ -112,7 +112,7 @@ struct YA_CORE_API PerfScopeTimerConditional
     PerfScopeTimerConditional& operator=(PerfScopeTimerConditional&&)      = delete;
 };
 
-struct YA_CORE_API PerfFrameScopeTimerConditional
+struct YA_CORE_API PerfTickScopeTimerConditional
 {
   private:
     bool               _bEnabled = false;
@@ -124,18 +124,18 @@ struct YA_CORE_API PerfFrameScopeTimerConditional
     size_t                   _accountedSampleCount = 0;
 
   public:
-    PerfFrameScopeTimerConditional(bool bEnabled,
-                                   FName frameSampleKey,
+    PerfTickScopeTimerConditional(bool bEnabled,
+                                   FName tickSampleKey,
                                    FName metricKey,
                                    FName domainKey,
                                    FName unaccountedSampleKey,
                                    std::initializer_list<FName> accountedSampleKeys);
-    ~PerfFrameScopeTimerConditional();
+    ~PerfTickScopeTimerConditional();
 
-    PerfFrameScopeTimerConditional(const PerfFrameScopeTimerConditional&)            = delete;
-    PerfFrameScopeTimerConditional& operator=(const PerfFrameScopeTimerConditional&) = delete;
-    PerfFrameScopeTimerConditional(PerfFrameScopeTimerConditional&&)                 = delete;
-    PerfFrameScopeTimerConditional& operator=(PerfFrameScopeTimerConditional&&)      = delete;
+    PerfTickScopeTimerConditional(const PerfTickScopeTimerConditional&)            = delete;
+    PerfTickScopeTimerConditional& operator=(const PerfTickScopeTimerConditional&) = delete;
+    PerfTickScopeTimerConditional(PerfTickScopeTimerConditional&&)                 = delete;
+    PerfTickScopeTimerConditional& operator=(PerfTickScopeTimerConditional&&)      = delete;
 };
 
 } // namespace ya
@@ -155,7 +155,7 @@ inline Metrics& metrics()
     #define YA_PERF_SET_ENABLED(enabled) ((void)0)
     #define YA_PERF_IS_ENABLED() (false)
     #define YA_PERF_SCOPE(sampleKey, metricKey, domainKey) ((void)0)
-    #define YA_PERF_FRAME_SCOPE(frameSampleKey, metricKey, domainKey, unaccountedSampleKey, ...) ((void)0)
+    #define YA_PERF_TICK_SCOPE(tickSampleKey, metricKey, domainKey, unaccountedSampleKey, ...) ((void)0)
     #define YA_PERF_FUNCTION(metricKey, domainKey) ((void)0)
 
 #elif defined(YA_PERF_CONDITIONAL)
@@ -164,9 +164,9 @@ inline Metrics& metrics()
     #define YA_PERF_IS_ENABLED() (::ya::profiling::isPerfMetricsEnabled())
     #define YA_PERF_SCOPE(sampleKey, metricKey, domainKey) \
         ::ya::PerfScopeTimerConditional YA_CONCAT(ya_perf_timer_, __LINE__)(::ya::profiling::isPerfMetricsEnabled(), sampleKey, metricKey, domainKey);
-    #define YA_PERF_FRAME_SCOPE(frameSampleKey, metricKey, domainKey, unaccountedSampleKey, ...) \
-        ::ya::PerfFrameScopeTimerConditional YA_CONCAT(ya_perf_frame_timer_, __LINE__)( \
-            ::ya::profiling::isPerfMetricsEnabled(), frameSampleKey, metricKey, domainKey, unaccountedSampleKey, {__VA_ARGS__});
+    #define YA_PERF_TICK_SCOPE(tickSampleKey, metricKey, domainKey, unaccountedSampleKey, ...) \
+        ::ya::PerfTickScopeTimerConditional YA_CONCAT(ya_perf_tick_timer_, __LINE__)( \
+            ::ya::profiling::isPerfMetricsEnabled(), tickSampleKey, metricKey, domainKey, unaccountedSampleKey, {__VA_ARGS__});
     #define YA_PERF_FUNCTION(metricKey, domainKey) YA_PERF_SCOPE(YA_PRETTY_FUNCTION, metricKey, domainKey)
 
 #elif defined(YA_PERF_ENABLED)
@@ -175,9 +175,9 @@ inline Metrics& metrics()
     #define YA_PERF_IS_ENABLED() (true)
     #define YA_PERF_SCOPE(sampleKey, metricKey, domainKey) \
         ::ya::PerfScopeTimer YA_CONCAT(ya_perf_timer_, __LINE__)(sampleKey, metricKey, domainKey);
-    #define YA_PERF_FRAME_SCOPE(frameSampleKey, metricKey, domainKey, unaccountedSampleKey, ...) \
-        ::ya::PerfFrameScopeTimerConditional YA_CONCAT(ya_perf_frame_timer_, __LINE__)( \
-            true, frameSampleKey, metricKey, domainKey, unaccountedSampleKey, {__VA_ARGS__});
+    #define YA_PERF_TICK_SCOPE(tickSampleKey, metricKey, domainKey, unaccountedSampleKey, ...) \
+        ::ya::PerfTickScopeTimerConditional YA_CONCAT(ya_perf_tick_timer_, __LINE__)( \
+            true, tickSampleKey, metricKey, domainKey, unaccountedSampleKey, {__VA_ARGS__});
     #define YA_PERF_FUNCTION(metricKey, domainKey) YA_PERF_SCOPE(YA_PRETTY_FUNCTION, metricKey, domainKey)
 
 #endif

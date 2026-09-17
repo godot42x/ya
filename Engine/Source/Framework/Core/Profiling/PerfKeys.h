@@ -67,59 +67,59 @@ inline const FName& threadTimeMs()
 namespace sample
 {
 
-inline const FName& renderFrame()
+inline const FName& hostTick()
 {
     using namespace ya::literals;
-    static const FName key = "Render/Frame"_name;
+    static const FName key = "Tick/Total"_name;
     return key;
 }
 
-inline const FName& frameLogic()
+inline const FName& tickLogic()
 {
     using namespace ya::literals;
-    static const FName key = "Frame/Logic"_name;
+    static const FName key = "Tick/Logic"_name;
     return key;
 }
 
-inline const FName& frameEventPump()
+inline const FName& tickEventPump()
 {
     using namespace ya::literals;
-    static const FName key = "Frame/EventPump"_name;
+    static const FName key = "Tick/EventPump"_name;
     return key;
 }
 
-inline const FName& frameFpsControl()
+inline const FName& tickFpsControl()
 {
     using namespace ya::literals;
-    static const FName key = "Frame/FpsControl"_name;
+    static const FName key = "Tick/FpsControl"_name;
     return key;
 }
 
-inline const FName& frameRender()
+inline const FName& tickRender()
 {
     using namespace ya::literals;
-    static const FName key = "Frame/Render"_name;
+    static const FName key = "Tick/Render"_name;
     return key;
 }
 
-inline const FName& frameMainThreadCallbacks()
+inline const FName& tickMainThreadCallbacks()
 {
     using namespace ya::literals;
-    static const FName key = "Frame/MainThreadCallbacks"_name;
+    static const FName key = "Tick/MainThreadCallbacks"_name;
     return key;
 }
 
-inline const FName& frameAutomation()
+inline const FName& tickAutomation()
 {
     using namespace ya::literals;
-    static const FName key = "Frame/Automation"_name;
+    static const FName key = "Tick/Automation"_name;
     return key;
 }
 
-inline const FName& frameUnaccounted()
+inline const FName& tickUnaccounted()
 {
     using namespace ya::literals;
-    static const FName key = "Frame/Unaccounted"_name;
+    static const FName key = "Tick/Unaccounted"_name;
     return key;
 }
 
@@ -193,10 +193,10 @@ inline const FName& renderSubmit()
     return key;
 }
 
-inline const FName& frameRenderCallbacks()
+inline const FName& tickRenderCallbacks()
 {
     using namespace ya::literals;
-    static const FName key = "Frame/RenderCallbacks"_name;
+    static const FName key = "Tick/RenderCallbacks"_name;
     return key;
 }
 

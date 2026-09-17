@@ -11,6 +11,17 @@
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 已按 Scene family 持有，同 Scene 多 View 共享一份 SSBO，不同 Scene 不再以 flightIndex 为共享 key。
 
+## 2026-09-17 checkpoint：perf 命名面收口（M1 P1b-2a）
+
+- 唯一目标：把 perf 采样轴上残留的 `Frame` 改成 `Tick`，不改任何采样行为。host tick 的相位（logic / render / event pump / …）现在与代码其余部分说同一种话；trace 里再出现 `Frame/Logic` 就一定是别的语义。
+- 落地：`perf::sample::renderFrame()` → `hostTick()`，key `Render/Frame` → `Tick/Total`（它就是整个 host tick 的 CPU/GPU 总量，也是 unaccounted 的基准）；`frameLogic` / `frameEventPump` / `frameFpsControl` / `frameRender` / `frameMainThreadCallbacks` / `frameAutomation` / `frameUnaccounted` / `frameRenderCallbacks` → `tick*`，key `Frame/*` → `Tick/*`；`YA_PERF_FRAME_SCOPE` → `YA_PERF_TICK_SCOPE`、`PerfFrameScopeTimerConditional` → `PerfTickScopeTimerConditional`（含 `frameSampleKey`、`ya_perf_frame_timer_`、局部 `frameValue`）。
+- 名字选择：总量没按组名改成 `Render/Tick`，因为 tick 内还有一个 `Tick/Render`；`renderTick` 与 `tickRender` 只差词序，正是本轮要消除的阅读负担。总量用 `Tick/Total`，与 `Tick/*` 相位同组。
+- profile 产物同步：`frameCycle` / `frameCpuMs` / `frameGpuMs` → `tickCycle` / `tickCpuMs` / `tickGpuMs`；`buildFrameCycleJson` → `buildTickCycleJson`。产物 Schema 在仓库内无消费方（`Script`、`Engine/Config`、`Example`、`.agent` 均无引用），因此随命名一起改，不保留别名。
+- 明确的边界（不改）：用户可见文案 `Frame CPU:` / `Frame GPU:`（profiling 面板）与 `Frame {}`（stats 面板）保留，与 `--exit-after-frame` / `frame_index` 等外部键同类。
+- 验证：`xmake b ya-game-editor`、`xmake b ya-testing`、`xmake b ya-render-3d-test`；`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:ViewFamilyRendererTest.*:RenderViewBindingTableTest.*:ViewPassResourcesTest.*:SceneFamilyResourcesTest.*'` 41/41；`xmake r ya-testing --gtest_filter='AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*:AppKernelTest.*'` 66/66；`git diff --check` 通过。
+- 保留未完成：tick 排期字段（`_nextResolveAuditFrame`、`MATERIAL_AUDIT_INTERVAL_FRAMES`、`DERIVED_RESOURCE_GC_DELAY_FRAMES`、`getRebuildNotBeforeFrame()`）；`DebugPrimitives::updateFrameUBO`（随 P2 flight 轴）；P1c `SceneFrameSnapshot` → `SceneSnapshot`。
+- 本轮扫到的同轴遗留（未做，登记备查）：`AppAutomation::isFrameAutomationEnabled` / `hasFrameAutomationConfig`、`shouldRequestQuitAfterFrame`、`AppAutomationTickContext` 参数名 `frameContext`、`AppTaskManager::registerFrameTask`/`hasFrameTasks` 仍是 host tick 语义。
+
 ## 2026-09-17 checkpoint：host view state 命名（M1 P1b-1）
 
 - 唯一目标：把 `AppRenderFrameState` 改成 `HostViewState`，不改任何行为。它保存的是 host 自己那个 view 的 clock、viewport rect 与相机矩阵，既不是 per-View packet，也不是 present/swapchain 状态；`frameState` 这个名字会让读者以为它就是「这一帧的渲染状态」。

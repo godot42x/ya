@@ -203,7 +203,7 @@ void RenderDeviceState::endFrameCommandBuffer(ICommandBuffer* cmdBuf)
     if (YA_PERF_IS_ENABLED()) {
         YA_PROFILE_SCOPE("RenderDeviceState::publishGpuMetrics");
         PerfState::get().setValue(
-            perf::sample::renderFrame(),
+            perf::sample::hostTick(),
             perf::metric::gpuTimeMs(),
             _render->getLastCompletedFrameGpuTimeMs(),
             perf::domain::gpu());

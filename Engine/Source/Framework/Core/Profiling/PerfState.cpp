@@ -223,12 +223,12 @@ PerfScopeTimerConditional::~PerfScopeTimerConditional()
     }
 }
 
-PerfFrameScopeTimerConditional::PerfFrameScopeTimerConditional(bool bEnabled,
-                                                               FName frameSampleKey,
-                                                               FName metricKey,
-                                                               FName domainKey,
-                                                               FName unaccountedSampleKey,
-                                                               std::initializer_list<FName> accountedSampleKeys)
+PerfTickScopeTimerConditional::PerfTickScopeTimerConditional(bool bEnabled,
+                                                             FName tickSampleKey,
+                                                             FName metricKey,
+                                                             FName domainKey,
+                                                             FName unaccountedSampleKey,
+                                                             std::initializer_list<FName> accountedSampleKeys)
     : _bEnabled(bEnabled),
       _metricKey(metricKey),
       _domainKey(domainKey),
@@ -238,11 +238,11 @@ PerfFrameScopeTimerConditional::PerfFrameScopeTimerConditional(bool bEnabled,
     std::copy_n(accountedSampleKeys.begin(), _accountedSampleCount, _accountedSampleKeys.begin());
 
     if (_bEnabled) {
-        _token = PerfState::get().beginSample(frameSampleKey, metricKey, domainKey);
+        _token = PerfState::get().beginSample(tickSampleKey, metricKey, domainKey);
     }
 }
 
-PerfFrameScopeTimerConditional::~PerfFrameScopeTimerConditional()
+PerfTickScopeTimerConditional::~PerfTickScopeTimerConditional()
 {
     if (!_bEnabled) {
         return;
@@ -256,8 +256,8 @@ PerfFrameScopeTimerConditional::~PerfFrameScopeTimerConditional()
         accountedValue += perf.getLastValue(_accountedSampleKeys[i], _metricKey);
     }
 
-    const float frameValue = perf.getLastValue(_token.sampleKey, _metricKey);
-    perf.setValue(_unaccountedSampleKey, _metricKey, std::max(0.0f, frameValue - accountedValue), _domainKey);
+    const float tickValue = perf.getLastValue(_token.sampleKey, _metricKey);
+    perf.setValue(_unaccountedSampleKey, _metricKey, std::max(0.0f, tickValue - accountedValue), _domainKey);
 }
 
 } // namespace ya

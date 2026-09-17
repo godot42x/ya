@@ -269,21 +269,21 @@ nlohmann::json buildCpuMetricMap(const std::array<std::pair<FName, const char*>,
     return json;
 }
 
-nlohmann::json buildFrameCycleJson()
+nlohmann::json buildTickCycleJson()
 {
     static const std::array metricDefs = {
-        std::pair{perf::sample::renderFrame(), "frameCpuMs"},
-        std::pair{perf::sample::frameEventPump(), "eventPumpCpuMs"},
-        std::pair{perf::sample::frameFpsControl(), "fpsControlCpuMs"},
-        std::pair{perf::sample::frameLogic(), "logicCpuMs"},
-        std::pair{perf::sample::frameRender(), "renderCpuMs"},
-        std::pair{perf::sample::frameMainThreadCallbacks(), "mainThreadCallbacksCpuMs"},
-        std::pair{perf::sample::frameAutomation(), "automationCpuMs"},
-        std::pair{perf::sample::frameUnaccounted(), "unaccountedCpuMs"},
+        std::pair{perf::sample::hostTick(), "tickCpuMs"},
+        std::pair{perf::sample::tickEventPump(), "eventPumpCpuMs"},
+        std::pair{perf::sample::tickFpsControl(), "fpsControlCpuMs"},
+        std::pair{perf::sample::tickLogic(), "logicCpuMs"},
+        std::pair{perf::sample::tickRender(), "renderCpuMs"},
+        std::pair{perf::sample::tickMainThreadCallbacks(), "mainThreadCallbacksCpuMs"},
+        std::pair{perf::sample::tickAutomation(), "automationCpuMs"},
+        std::pair{perf::sample::tickUnaccounted(), "unaccountedCpuMs"},
     };
 
     auto json          = buildCpuMetricMap(metricDefs);
-    json["frameGpuMs"] = getMetricValue(perf::sample::renderFrame(), perf::metric::gpuTimeMs());
+    json["tickGpuMs"]  = getMetricValue(perf::sample::hostTick(), perf::metric::gpuTimeMs());
     return json;
 }
 
@@ -299,7 +299,7 @@ nlohmann::json buildRenderStagesJson()
         std::pair{perf::sample::renderViewportOverlay(), "viewportOverlayCpuMs"},
         std::pair{perf::sample::renderPostProcess(), "postProcessCpuMs"},
         std::pair{perf::sample::renderPresentation(), "presentationCpuMs"},
-        std::pair{perf::sample::frameRenderCallbacks(), "renderCallbacksCpuMs"},
+        std::pair{perf::sample::tickRenderCallbacks(), "renderCallbacksCpuMs"},
         std::pair{perf::sample::renderSubmit(), "submitCpuMs"},
         std::pair{perf::sample::appEventRoute(), "eventRouteCpuMs"},
         std::pair{perf::sample::appInputEvent(), "inputEventCpuMs"},
@@ -350,14 +350,14 @@ nlohmann::json buildGpuSummaryJson(const RuntimeArtifactState& state)
 {
     auto metricJson = nlohmann::json::array();
     const std::array metricDefs = {
-        std::pair{perf::sample::renderFrame(), "Render/Frame"},
-        std::pair{perf::sample::frameEventPump(), "Frame/EventPump"},
-        std::pair{perf::sample::frameFpsControl(), "Frame/FpsControl"},
-        std::pair{perf::sample::frameLogic(), "Frame/Logic"},
-        std::pair{perf::sample::frameRender(), "Frame/Render"},
-        std::pair{perf::sample::frameMainThreadCallbacks(), "Frame/MainThreadCallbacks"},
-        std::pair{perf::sample::frameAutomation(), "Frame/Automation"},
-        std::pair{perf::sample::frameUnaccounted(), "Frame/Unaccounted"},
+        std::pair{perf::sample::hostTick(), "Tick/Total"},
+        std::pair{perf::sample::tickEventPump(), "Tick/EventPump"},
+        std::pair{perf::sample::tickFpsControl(), "Tick/FpsControl"},
+        std::pair{perf::sample::tickLogic(), "Tick/Logic"},
+        std::pair{perf::sample::tickRender(), "Tick/Render"},
+        std::pair{perf::sample::tickMainThreadCallbacks(), "Tick/MainThreadCallbacks"},
+        std::pair{perf::sample::tickAutomation(), "Tick/Automation"},
+        std::pair{perf::sample::tickUnaccounted(), "Tick/Unaccounted"},
         std::pair{perf::sample::renderExtract(), "Render/Extract"},
         std::pair{perf::sample::renderRuntime(), "Render/Runtime"},
         std::pair{perf::sample::renderPrepareFrame(), "Render/PrepareFrame"},
@@ -367,7 +367,7 @@ nlohmann::json buildGpuSummaryJson(const RuntimeArtifactState& state)
         std::pair{perf::sample::renderViewportOverlay(), "Render/ViewportOverlay"},
         std::pair{perf::sample::renderPostProcess(), "Render/PostProcess"},
         std::pair{perf::sample::renderPresentation(), "Render/Presentation"},
-        std::pair{perf::sample::frameRenderCallbacks(), "Frame/RenderCallbacks"},
+        std::pair{perf::sample::tickRenderCallbacks(), "Tick/RenderCallbacks"},
         std::pair{perf::sample::renderSubmit(), "Render/Submit"},
         std::pair{perf::sample::appEventRoute(), "App/EventRoute"},
         std::pair{perf::sample::appInputEvent(), "App/InputEvent"},
@@ -419,7 +419,7 @@ nlohmann::json buildGpuSummaryJson(const RuntimeArtifactState& state)
         {"gpuCapturePath", state.gpuCapturePath.empty() ? nlohmann::json(nullptr) : nlohmann::json(std::filesystem::path(state.gpuCapturePath).generic_string())},
         {"passSummary", state.passSummaryPath.empty() ? nlohmann::json(nullptr) : nlohmann::json(std::filesystem::path(state.passSummaryPath).generic_string())},
         {"topMetrics", metricJson},
-        {"frameCycle", buildFrameCycleJson()},
+        {"tickCycle", buildTickCycleJson()},
         {"renderStages", buildRenderStagesJson()},
         {"syncDiagnostics", buildSyncDiagnosticsJson()},
     };
@@ -427,14 +427,14 @@ nlohmann::json buildGpuSummaryJson(const RuntimeArtifactState& state)
 
 nlohmann::json buildProfileSummaryJson(const RuntimeArtifactState& state)
 {
-    const float frameCpuMs = getMetricValue(perf::sample::renderFrame(), perf::metric::cpuTimeMs());
-    const float frameGpuMs = getMetricValue(perf::sample::renderFrame(), perf::metric::gpuTimeMs());
+    const float tickCpuMs = getMetricValue(perf::sample::hostTick(), perf::metric::cpuTimeMs());
+    const float tickGpuMs = getMetricValue(perf::sample::hostTick(), perf::metric::gpuTimeMs());
 
     nlohmann::json nextStep = nlohmann::json::array();
-    if (frameCpuMs >= frameGpuMs && !state.paths.cpuProfilePath.empty()) {
+    if (tickCpuMs >= tickGpuMs && !state.paths.cpuProfilePath.empty()) {
         nextStep.push_back("open cpuProfile in speedscope and inspect hottest frame scopes");
     }
-    if (frameGpuMs > frameCpuMs && !state.paths.gpuSummaryPath.empty()) {
+    if (tickGpuMs > tickCpuMs && !state.paths.gpuSummaryPath.empty()) {
         nextStep.push_back(state.passSummaryPath.empty()
                                ? "read gpuSummary topMetrics before opening full .rdc"
                                : "read gpuSummary topMetrics and passSummary before opening full .rdc");
@@ -444,19 +444,19 @@ nlohmann::json buildProfileSummaryJson(const RuntimeArtifactState& state)
     }
 
     const char* bottleneck = "unknown";
-    if (frameCpuMs > 0.0f || frameGpuMs > 0.0f) {
-        bottleneck = frameCpuMs >= frameGpuMs ? "cpu" : "gpu";
+    if (tickCpuMs > 0.0f || tickGpuMs > 0.0f) {
+        bottleneck = tickCpuMs >= tickGpuMs ? "cpu" : "gpu";
     }
 
     return {
         {"schemaVersion", 1},
         {"runId", state.paths.runId},
         {"summary", {
-            {"frameCpuMs", frameCpuMs},
-            {"frameGpuMs", frameGpuMs},
+            {"tickCpuMs", tickCpuMs},
+            {"tickGpuMs", tickGpuMs},
             {"suspectedBottleneck", bottleneck},
         }},
-        {"frameCycle", buildFrameCycleJson()},
+        {"tickCycle", buildTickCycleJson()},
         {"renderStages", buildRenderStagesJson()},
         {"syncDiagnostics", buildSyncDiagnosticsJson()},
         {"artifacts", {

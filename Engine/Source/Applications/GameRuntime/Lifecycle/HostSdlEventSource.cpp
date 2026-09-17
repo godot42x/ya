@@ -12,8 +12,8 @@ namespace ya
 
 void HostSdlEventSource::pollEvents(const std::function<void(const Event&)>& emit)
 {
-    YA_PROFILE_SCOPE("Frame/EventPump");
-    YA_PERF_SCOPE(perf::sample::frameEventPump(), perf::metric::cpuTimeMs(), perf::domain::game());
+    YA_PROFILE_SCOPE("Tick/EventPump");
+    YA_PERF_SCOPE(perf::sample::tickEventPump(), perf::metric::cpuTimeMs(), perf::domain::game());
     OsEventPump::poll([&emit](const Event& event) {
         switch (event.getEventType()) {
         case EEvent::WindowMinimize: {

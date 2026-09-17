@@ -85,7 +85,7 @@ void RuntimeProfilingSection::sync(const App*)
     for (int i = 0; i < 4; ++i) if (window == windows[i]) selected = i;
     _averageWindow->setSelectedIndex(selected, false);
     const auto& metrics = profiling::metrics();
-    _frameCpu->setText(std::format("Frame CPU: {:.3f} ms", metrics.getDisplayValue(perf::sample::renderFrame(), perf::metric::cpuTimeMs())));
-    _frameGpu->setText(std::format("Frame GPU: {:.3f} ms", metrics.getDisplayValue(perf::sample::renderFrame(), perf::metric::gpuTimeMs())));
+    _frameCpu->setText(std::format("Frame CPU: {:.3f} ms", metrics.getDisplayValue(perf::sample::hostTick(), perf::metric::cpuTimeMs())));
+    _frameGpu->setText(std::format("Frame GPU: {:.3f} ms", metrics.getDisplayValue(perf::sample::hostTick(), perf::metric::gpuTimeMs())));
 }
 }

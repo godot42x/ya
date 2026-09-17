@@ -157,38 +157,38 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
     YA_PROFILE_FUNCTION()
     YA_PERF_FUNCTION(perf::metric::cpuTimeMs(), perf::domain::render());
 
-    YA_PERF_FRAME_SCOPE(
-        perf::sample::renderFrame(),
+    YA_PERF_TICK_SCOPE(
+        perf::sample::hostTick(),
         perf::metric::cpuTimeMs(),
         perf::domain::render(),
-        perf::sample::frameUnaccounted(),
-        perf::sample::frameEventPump(),
-        perf::sample::frameFpsControl(),
-        perf::sample::frameLogic(),
-        perf::sample::frameRender(),
-        perf::sample::frameMainThreadCallbacks(),
-        perf::sample::frameAutomation());
+        perf::sample::tickUnaccounted(),
+        perf::sample::tickEventPump(),
+        perf::sample::tickFpsControl(),
+        perf::sample::tickLogic(),
+        perf::sample::tickRender(),
+        perf::sample::tickMainThreadCallbacks(),
+        perf::sample::tickAutomation());
 
     {
-        YA_PROFILE_SCOPE("Frame/FpsControl");
-        YA_PERF_SCOPE(perf::sample::frameFpsControl(), perf::metric::cpuTimeMs(), perf::domain::game());
+        YA_PROFILE_SCOPE("Tick/FpsControl");
+        YA_PERF_SCOPE(perf::sample::tickFpsControl(), perf::metric::cpuTimeMs(), perf::domain::game());
         dt += FPSControl::get()->update(dt);
     }
 
     if (!app._bPause) {
-        YA_PROFILE_SCOPE("Frame/Logic");
-        YA_PERF_SCOPE(perf::sample::frameLogic(), perf::metric::cpuTimeMs(), perf::domain::game());
+        YA_PROFILE_SCOPE("Tick/Logic");
+        YA_PERF_SCOPE(perf::sample::tickLogic(), perf::metric::cpuTimeMs(), perf::domain::game());
         tickLogic(app, dt);
     }
     {
-        YA_PROFILE_SCOPE("Frame/Render");
-        YA_PERF_SCOPE(perf::sample::frameRender(), perf::metric::cpuTimeMs(), perf::domain::render());
+        YA_PROFILE_SCOPE("Tick/Render");
+        YA_PERF_SCOPE(perf::sample::tickRender(), perf::metric::cpuTimeMs(), perf::domain::render());
         tickRender(app, dt);
     }
     {
-        YA_PROFILE_SCOPE("Frame/MainThreadCallbacks");
-        YA_PERF_SCOPE(perf::sample::frameMainThreadCallbacks(), perf::metric::cpuTimeMs(), perf::domain::game());
-        YA_PERF_SCOPE(perf::sample::frameRenderCallbacks(), perf::metric::cpuTimeMs(), perf::domain::render());
+        YA_PROFILE_SCOPE("Tick/MainThreadCallbacks");
+        YA_PERF_SCOPE(perf::sample::tickMainThreadCallbacks(), perf::metric::cpuTimeMs(), perf::domain::game());
+        YA_PERF_SCOPE(perf::sample::tickRenderCallbacks(), perf::metric::cpuTimeMs(), perf::domain::render());
         TaskQueue::get().processMainThreadCallbacks();
     }
     ++App::_hostTick;
@@ -205,8 +205,8 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
     }
 
     if (AppAutomation::isFrameAutomationEnabled(app)) {
-        YA_PROFILE_SCOPE("Frame/Automation");
-        YA_PERF_SCOPE(perf::sample::frameAutomation(), perf::metric::cpuTimeMs(), perf::domain::render());
+        YA_PROFILE_SCOPE("Tick/Automation");
+        YA_PERF_SCOPE(perf::sample::tickAutomation(), perf::metric::cpuTimeMs(), perf::domain::render());
         auto* diagnosticsService = device ? &device->getDiagnosticsService() : nullptr;
 
         AppAutomation::onTickCompleted(app,
