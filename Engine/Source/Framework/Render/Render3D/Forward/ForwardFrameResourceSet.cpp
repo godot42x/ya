@@ -182,7 +182,7 @@ const ForwardFrameResourceSet::Binding* ForwardFrameResourceSet::beginView(
         return nullptr;
     }
 
-    Binding* slot = _viewBindings.mutableNextView(submission.flightIndex());
+    ViewResources* slot = _viewBindings.mutableNextView(submission.flightIndex());
     if (!slot) {
         YA_CORE_ERROR("Forward beginView requires a recording submission on flight {}", submission.flightIndex());
         return nullptr;
@@ -197,36 +197,51 @@ const ForwardFrameResourceSet::Binding* ForwardFrameResourceSet::beginView(
     if (!family) {
         return nullptr;
     }
-    slot->skinningDescriptorSet = family->skinningDescriptorSet(_skinningDSL.get());
-    slot->skinningBuffer        = family->gpu().skinningBuffer;
+    slot->frame.skinningDescriptorSet = family->skinningDescriptorSet(_skinningDSL.get());
+    slot->frame.skinningBuffer        = family->gpu().skinningBuffer;
 
-    if (!ensureViewDescriptors(submission, *slot)) {
+    if (!ensureViewDescriptors(submission, slot->frame)) {
         YA_CORE_ERROR("Forward beginView failed to allocate view descriptor sets");
         return nullptr;
     }
 
     const uint32_t alignment = std::max(_render->getUniformBufferOffsetAlignment(), 1u);
-    if (!writeViewPayloads(submission, alignment, payloads, *slot)) {
+    if (!writeViewPayloads(submission, alignment, payloads, slot->frame)) {
         YA_CORE_ERROR("Forward beginView failed to upload view payloads");
         return nullptr;
     }
 
-    updatePBRFrameDescriptorSet(*slot);
-    updatePhongFrameDescriptorSet(*slot);
-    updateUnlitFrameDescriptorSet(*slot);
-    updateSkyboxFrameDescriptorSet(*slot);
+    updatePBRFrameDescriptorSet(slot->frame);
+    updatePhongFrameDescriptorSet(slot->frame);
+    updateUnlitFrameDescriptorSet(slot->frame);
+    updateSkyboxFrameDescriptorSet(slot->frame);
 
     if (!_viewBindings.commitNextView(submission.flightIndex())) {
         return nullptr;
     }
 
     view.viewSlot = viewSlot;
-    return _viewBindings.getView(submission.flightIndex(), viewSlot);
+    return &_viewBindings.getView(submission.flightIndex(), viewSlot)->frame;
 }
 
 const ForwardFrameResourceSet::Binding* ForwardFrameResourceSet::getViewBinding(
     uint32_t flightIndex,
     uint32_t viewSlot) const
+{
+    const ViewResources* resources = _viewBindings.getView(flightIndex, viewSlot);
+    return resources ? &resources->frame : nullptr;
+}
+
+const ForwardFrameResourceSet::ViewResources* ForwardFrameResourceSet::getViewResources(
+    uint32_t flightIndex,
+    uint32_t viewSlot) const
+{
+    return _viewBindings.getView(flightIndex, viewSlot);
+}
+
+ForwardFrameResourceSet::ViewResources* ForwardFrameResourceSet::mutableViewResources(
+    uint32_t flightIndex,
+    uint32_t viewSlot)
 {
     return _viewBindings.getView(flightIndex, viewSlot);
 }

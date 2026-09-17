@@ -29,28 +29,13 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
     DeferredGBufferResources _gBufferResources{};
     stdptr<IGraphicsPipeline>    _pipeline;
     stdptr<IPipelineLayout>      _pipelineLayout;
-    stdptr<IDescriptorSetLayout> _inputDSL;
-    stdptr<IDescriptorPool>      _descriptorPool;
-
     // Kept alive for the pipeline layout; frame descriptor sets and upload
-    // slices are owned by DeferredFrameResourceSet.
+    // slices are owned by DeferredFrameResourceSet. SSAO input CIS is owned by
+    // ViewResources, not this recipe.
     stdptr<IDescriptorSetLayout> _frameDSL;
-    struct FrameInputs
-    {
-        DescriptorSetHandle          descriptorSet{};
-        FrameUploadArena::Allocation frame;
-
-        [[nodiscard]] bool isValid() const
-        {
-            return descriptorSet && frame.valid();
-        }
-    };
-    FrameInputs _frameInputs{};
-    DescriptorSetHandle _inputDS = nullptr;
+    stdptr<IDescriptorSetLayout> _inputDSL;
 
     stdptr<Texture> _noiseTexture;
-
-    uint32_t                       _lastInputDescriptorWriteCount   = 0;
     float _radius = 0.6f;
     float _bias   = 0.025f;
     float _power  = 1.5f;
@@ -69,10 +54,14 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
     void execute(const RenderStageContext& ctx) override;
 
     [[nodiscard]] FrameData buildFrameData(const RenderStageContext& ctx) const;
-    void setFrameInputs(FrameInputs frameInputs)
-    {
-        _frameInputs = std::move(frameInputs);
-    }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getInputDSL() const { return _inputDSL; }
+    void writeInputDescriptors(
+        DescriptorSetHandle                          inputDS,
+        const RGRenderContext::RGPassBindingContext& binding,
+        RGTextureHandle                              albedo,
+        RGTextureHandle                              normal,
+        RGTextureHandle                              depth,
+        RGTextureHandle                              noise) const;
 
     RGTextureHandle appendGraphPass(RenderGraph& graph,
                                     const RenderStageContext& ctx,
@@ -82,7 +71,6 @@ struct YA_RENDER_3D_API SSAOStage : public IRenderStage
     [[nodiscard]] float getPower() const { return _power; }
     [[nodiscard]] float getIntensity() const { return _intensity; }
     [[nodiscard]] bool  isReverseYEnabled() const { return _bReverseY; }
-    [[nodiscard]] uint32_t getLastInputDescriptorWriteCount() const { return _lastInputDescriptorWriteCount; }
     [[nodiscard]] IGraphicsPipeline* getPipeline() const { return _pipeline.get(); }
     void setSettings(float radius, float bias, float power, float intensity, bool bReverseY);
 

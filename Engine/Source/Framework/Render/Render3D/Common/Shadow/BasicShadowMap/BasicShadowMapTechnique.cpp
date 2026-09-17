@@ -69,12 +69,16 @@ void BasicShadowMapTechnique::prepare(RenderSubmission& submission, RenderViewRe
 
     auto payload = buildFramePayload(submission.flightIndex(), *view.frameData);
     payload.frameIndex = submission.frameToken();
+    payload.submission = &submission;
     if (!_frameResources.beginView(submission, view, payload)) {
         YA_CORE_ERROR("BasicShadowMapTechnique failed to prepare shadow frame resources");
         return;
     }
 
     payload.viewSlot = view.viewSlot;
+    if (auto* binding = _frameResources.mutableViewBinding(submission.flightIndex(), view.viewSlot)) {
+        payload.pointShadow = &binding->pointShadow;
+    }
     _preparedViewSlot = view.viewSlot;
     _lastPreparedPointLightCount = payload.pointLightCount;
 
@@ -99,6 +103,9 @@ ShadowGraphOutputs BasicShadowMapTechnique::appendGraphPasses(
     auto payload = buildFramePayload(flightIndex, frameData);
     payload.viewSlot = _preparedViewSlot;
     payload.pointLightCount = std::min(_lastPreparedPointLightCount, static_cast<uint32_t>(MAX_POINT_LIGHTS));
+    if (auto* binding = _frameResources.mutableViewBinding(flightIndex, _preparedViewSlot)) {
+        payload.pointShadow = &binding->pointShadow;
+    }
     std::optional<RGPassHandle> lastPass;
 
     if (_depthResource && _shadowDepthArrayView) {

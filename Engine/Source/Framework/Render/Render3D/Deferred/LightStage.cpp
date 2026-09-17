@@ -62,7 +62,6 @@ void LightStage::setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecul
         _shadowState.bEnableShadowMapping,
         _shadowState.bEnablePointLightShadow);
     _pipeline->updateDesc(std::move(ci));
-    _bShadowDescriptorsInitialized = false;
 }
 
 void LightStage::setup(SharedInputs sharedInputs)
@@ -84,15 +83,8 @@ void LightStage::applyShadowState(const ShadowRuntimeState& shadowState)
 {
     const bool bDefinesChanged = _shadowState.bEnableShadowMapping != shadowState.bEnableShadowMapping ||
                                  _shadowState.bEnablePointLightShadow != shadowState.bEnablePointLightShadow;
-    const bool bResourcesChanged = _shadowState.directionalDepthIV != shadowState.directionalDepthIV ||
-                                   _shadowState.sampler != shadowState.sampler ||
-                                   _shadowState.pointCubeDepthIVs != shadowState.pointCubeDepthIVs;
 
     _shadowState = shadowState;
-
-    if (bResourcesChanged) {
-        invalidateShadowDescriptors();
-    }
 
     if (!bDefinesChanged || !_pipeline) {
         return;
@@ -105,7 +97,6 @@ void LightStage::applyShadowState(const ShadowRuntimeState& shadowState)
         _shadowState.bEnableShadowMapping,
         _shadowState.bEnablePointLightShadow);
     _pipeline->updateDesc(std::move(ci));
-    _bShadowDescriptorsInitialized = false;
 }
 
 void LightStage::refreshPipelineFormats(const DeferredAttachmentFormats& formats)
@@ -118,34 +109,6 @@ void LightStage::refreshPipelineFormats(const DeferredAttachmentFormats& formats
     ci.pipelineRenderingInfo.colorAttachmentFormats = {formats.colorFormats.front()};
     ci.pipelineRenderingInfo.depthAttachmentFormat  = formats.depthFormat.value_or(EFormat::Undefined);
     _pipeline->updateDesc(std::move(ci));
-}
-
-void LightStage::invalidateShadowDescriptors()
-{
-    _lastShadowDirectionalImageViewHandle = nullptr;
-    _lastShadowPointCubeImageViewHandles.fill(nullptr);
-    _bShadowDescriptorsInitialized = false;
-    _lastShadowDescriptorWriteCount = 0;
-}
-
-bool LightStage::shouldRefreshShadowDescriptors() const
-{
-    if (!_bShadowDescriptorsInitialized || !_shadowState.directionalDepthIV || !_shadowState.sampler) {
-        return true;
-    }
-
-    if (_lastShadowDirectionalImageViewHandle != _shadowState.directionalDepthIV->getHandle()) {
-        return true;
-    }
-
-    for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
-        const auto currentHandle = _shadowState.pointCubeDepthIVs[lightIndex] ? _shadowState.pointCubeDepthIVs[lightIndex]->getHandle() : ImageViewHandle{};
-        if (_lastShadowPointCubeImageViewHandles[lightIndex] != currentHandle) {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 void LightStage::init(IRender* render)
@@ -229,24 +192,6 @@ void LightStage::init(IRender* render)
     };
     _pipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_pipeline && _pipeline->recreate(_pipelineCI), "Failed to create Light pipeline");
-
-    // Descriptor pool for deferred light pass descriptor sets:
-    //   1 set for GBuffer textures
-    //   1 set for shadow maps
-
-    _dsp = IDescriptorPool::create(
-        _render, DescriptorPoolCreateInfo{
-                     .label     = "LightStage_GBuffer_DSP",
-                     .maxSets   = 2,
-                     .poolSizes = {
-                         {
-                             .type            = EPipelineDescriptorType::CombinedImageSampler,
-                             .descriptorCount = 5 + 1 + MAX_POINT_LIGHTS,
-                        },
-                    },
-                });
-    _gBufferTextureDS = _dsp->allocateDescriptorSets(_gBufferTextureDSL);
-    _shadowDS         = _dsp->allocateDescriptorSets(_shadowDSL);
 }
 
 void LightStage::destroy()
@@ -255,18 +200,12 @@ void LightStage::destroy()
     _pipelineLayout.reset();
     _gBufferTextureDSL.reset();
     _shadowDSL.reset();
-    _dsp.reset();
-    _render                   = nullptr;
+    _render = nullptr;
     _frameAndLightDSL.reset();
-    _fullscreenQuad           = nullptr;
+    _fullscreenQuad = nullptr;
     _environmentLightingDSL.reset();
     _frameInputs = {};
-    _shadowState              = {};
-    _lastShadowDirectionalImageViewHandle = nullptr;
-    _lastShadowPointCubeImageViewHandles.fill(nullptr);
-    _bShadowDescriptorsInitialized   = false;
-    _lastGBufferDescriptorWriteCount = 0;
-    _lastShadowDescriptorWriteCount  = 0;
+    _shadowState = {};
 }
 
 void LightStage::prepare(const RenderStageContext& ctx)
@@ -276,50 +215,48 @@ void LightStage::prepare(const RenderStageContext& ctx)
     if (_pipeline) {
         _pipeline->beginFrame();
     }
-
-    if (_shadowState.bEnableShadowMapping && _shadowState.directionalDepthIV && _shadowState.sampler && shouldRefreshShadowDescriptors()) {
-        std::vector<DescriptorImageInfo> pointShadowInfos(MAX_POINT_LIGHTS);
-        for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
-            pointShadowInfos[lightIndex] = DescriptorImageInfo{
-                .imageView   = _shadowState.pointCubeDepthIVs[lightIndex] ? _shadowState.pointCubeDepthIVs[lightIndex]->getHandle() : ImageViewHandle{},
-                .sampler     = _shadowState.sampler->getHandle(),
-                .imageLayout = EImageLayout::ShaderReadOnlyOptimal,
-            };
-        }
-
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneImage(_shadowDS, 0, _shadowState.directionalDepthIV, _shadowState.sampler),
-            WriteDescriptorSet{
-                .dstSet          = _shadowDS,
-                .dstBinding      = 1,
-                .dstArrayElement = 0,
-                .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
-                .descriptorCount = MAX_POINT_LIGHTS,
-                .imageInfos      = pointShadowInfos,
-            },
-        });
-        _lastShadowDirectionalImageViewHandle = _shadowState.directionalDepthIV->getHandle();
-        for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
-            _lastShadowPointCubeImageViewHandles[lightIndex] = _shadowState.pointCubeDepthIVs[lightIndex] ? _shadowState.pointCubeDepthIVs[lightIndex]->getHandle() : ImageViewHandle{};
-        }
-        _bShadowDescriptorsInitialized  = true;
-        _lastShadowDescriptorWriteCount = 1 + MAX_POINT_LIGHTS;
-    }
-    else {
-        _lastShadowDescriptorWriteCount = 0;
-    }
 }
 
-void LightStage::updateGBufferTextureDescriptors(
+void LightStage::writeShadowDescriptors(DescriptorSetHandle shadowDS) const
+{
+    if (!_render || !shadowDS || !_shadowState.bEnableShadowMapping ||
+        !_shadowState.directionalDepthIV || !_shadowState.sampler) {
+        return;
+    }
+
+    std::vector<DescriptorImageInfo> pointShadowInfos(MAX_POINT_LIGHTS);
+    for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
+        pointShadowInfos[lightIndex] = DescriptorImageInfo{
+            .imageView   = _shadowState.pointCubeDepthIVs[lightIndex] ? _shadowState.pointCubeDepthIVs[lightIndex]->getHandle() : ImageViewHandle{},
+            .sampler     = _shadowState.sampler->getHandle(),
+            .imageLayout = EImageLayout::ShaderReadOnlyOptimal,
+        };
+    }
+
+    _render->getDescriptorHelper()->updateDescriptorSets({
+        IDescriptorSetHelper::writeOneImage(shadowDS, 0, _shadowState.directionalDepthIV, _shadowState.sampler),
+        WriteDescriptorSet{
+            .dstSet          = shadowDS,
+            .dstBinding      = 1,
+            .dstArrayElement = 0,
+            .descriptorType  = EPipelineDescriptorType::CombinedImageSampler,
+            .descriptorCount = MAX_POINT_LIGHTS,
+            .imageInfos      = pointShadowInfos,
+        },
+    });
+}
+
+void LightStage::writeGBufferTextureDescriptors(
+    DescriptorSetHandle                          gBufferTextureDS,
     const RGRenderContext::RGPassBindingContext& binding,
     RGTextureHandle                              albedo,
     RGTextureHandle                              normal,
     RGTextureHandle                              orm,
     RGTextureHandle                              shading,
     RGTextureHandle                              depth,
-    std::optional<RGTextureHandle>               ssao)
+    std::optional<RGTextureHandle>               ssao) const
 {
-    if (!_render || !_gBufferTextureDS) {
+    if (!_render || !gBufferTextureDS) {
         return;
     }
 
@@ -347,16 +284,19 @@ void LightStage::updateGBufferTextureDescriptors(
     }
 
     _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::genImageWrite(_gBufferTextureDS, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {*albedoInfo}),
-        IDescriptorSetHelper::genImageWrite(_gBufferTextureDS, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {*normalInfo}),
-        IDescriptorSetHelper::genImageWrite(_gBufferTextureDS, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {*ormInfo}),
-        IDescriptorSetHelper::genImageWrite(_gBufferTextureDS, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {*shadingInfo}),
-        IDescriptorSetHelper::genImageWrite(_gBufferTextureDS, 4, 0, EPipelineDescriptorType::CombinedImageSampler, {*ssaoInfo}),
+        IDescriptorSetHelper::genImageWrite(gBufferTextureDS, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {*albedoInfo}),
+        IDescriptorSetHelper::genImageWrite(gBufferTextureDS, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {*normalInfo}),
+        IDescriptorSetHelper::genImageWrite(gBufferTextureDS, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {*ormInfo}),
+        IDescriptorSetHelper::genImageWrite(gBufferTextureDS, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {*shadingInfo}),
+        IDescriptorSetHelper::genImageWrite(gBufferTextureDS, 4, 0, EPipelineDescriptorType::CombinedImageSampler, {*ssaoInfo}),
     });
-    _lastGBufferDescriptorWriteCount = 5;
 }
 
-void LightStage::execute(const RenderStageContext& ctx, DescriptorSetHandle frameAndLight, DescriptorSetHandle environmentLighting)
+void LightStage::execute(const RenderStageContext& ctx,
+                         DescriptorSetHandle       frameAndLight,
+                         DescriptorSetHandle       environmentLighting,
+                         DescriptorSetHandle       gBufferTextures,
+                         DescriptorSetHandle       shadows)
 {
     YA_PERF_SCOPE(perf::sample::deferredLightExecute(), perf::metric::cpuTimeMs(), perf::domain::render());
     if (!ctx.cmdBuf || !frameAndLight || !_fullscreenQuad) return;
@@ -371,13 +311,11 @@ void LightStage::execute(const RenderStageContext& ctx, DescriptorSetHandle fram
     cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(vpW), static_cast<float>(vpH));
     cmdBuf->setScissor(0, 0, vpW, vpH);
 
-    // set 0 = frame+light (from graph pass params), set 1 = GBuffer textures,
-    // set 2 = environment, set 3 = shadow
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {
                                                              frameAndLight,
-                                                             _gBufferTextureDS,
+                                                             gBufferTextures,
                                                              environmentLighting,
-                                                             _shadowDS,
+                                                             shadows,
                                                          });
 
     _fullscreenQuad->draw(cmdBuf);
@@ -387,9 +325,11 @@ void LightStage::execute(const RenderStageContext& ctx, DescriptorSetHandle fram
 
 void LightStage::execute(const RenderStageContext& ctx)
 {
-    // Graph passes must call the parameterized overload with an explicit
-    // current-flight binding.
-    execute(ctx, _frameInputs.frameAndLightDescriptorSet, _frameInputs.environmentLightingDescriptorSet);
+    execute(ctx,
+            _frameInputs.frameAndLightDescriptorSet,
+            _frameInputs.environmentLightingDescriptorSet,
+            {},
+            {});
 }
 
 } // namespace ya

@@ -48,6 +48,7 @@ struct BuildInputs
     bool                                             bPostprocessOutputIsSRGB = false;
     std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
     uint64_t                                         viewId              = 0;
+    const ForwardFrameResourceSet::ViewResources*    viewResources       = nullptr;
 };
 
 struct Dependencies

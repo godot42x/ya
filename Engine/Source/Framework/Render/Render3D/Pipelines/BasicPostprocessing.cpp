@@ -74,18 +74,10 @@ void BasicPostprocessing::init(const InitDesc& initDesc)
     };
     _pipeline = IGraphicsPipeline::create(_render);
     _pipeline->recreate(pipelineDesc);
-
-    _viewSets.init(_render,
-                   "BasicPostprocessing_ViewDSP",
-                   1,
-                   ViewDescriptorSetAllocator::kDefaultChunk,
-                   EPipelineDescriptorType::CombinedImageSampler);
 }
 
 void BasicPostprocessing::shutdown()
 {
-    _viewBindings.clear();
-    _viewSets.destroy();
     _dslInputTexture.reset();
     _pipeline.reset();
     _pipelineLayout.reset();
@@ -125,35 +117,26 @@ void BasicPostprocessing::rebuildPushConstants(const PostProcessingState& state,
         std::max(state.exposure, 0.0f));
 }
 
-DescriptorSetHandle BasicPostprocessing::bindViewInput(uint64_t viewId, IImageView* inputImageView)
+void BasicPostprocessing::writeInput(DescriptorSetHandle set, IImageView* inputImageView)
 {
-    auto& binding = _viewBindings[viewId];
-    if (!binding.first) {
-        binding.first = _viewSets.allocate(_dslInputTexture);
-        YA_CORE_ASSERT(binding.first, "Failed to allocate BasicPostprocessing descriptor set for view {}", viewId);
-        binding.second = {};
+    if (!_render || !set || !inputImageView) {
+        return;
     }
-
-    const auto imageViewHandle = inputImageView->getHandle();
-    if (binding.second != imageViewHandle) {
-        binding.second = imageViewHandle;
-        static auto sampler = TextureLibrary::get().getDefaultSampler();
-        DescriptorImageInfo imageInfo(
-            imageViewHandle,
-            sampler->getHandle(),
-            EImageLayout::ShaderReadOnlyOptimal);
-        _render->getDescriptorHelper()->updateDescriptorSets(
-            {
-                IDescriptorSetHelper::genImageWrite(
-                    binding.first,
-                    0,
-                    0,
-                    EPipelineDescriptorType::CombinedImageSampler,
-                    {imageInfo}),
-            },
-            {});
-    }
-    return binding.first;
+    static auto sampler = TextureLibrary::get().getDefaultSampler();
+    DescriptorImageInfo imageInfo(
+        inputImageView->getHandle(),
+        sampler->getHandle(),
+        EImageLayout::ShaderReadOnlyOptimal);
+    _render->getDescriptorHelper()->updateDescriptorSets(
+        {
+            IDescriptorSetHelper::genImageWrite(
+                set,
+                0,
+                0,
+                EPipelineDescriptorType::CombinedImageSampler,
+                {imageInfo}),
+        },
+        {});
 }
 
 void BasicPostprocessing::render(const RenderDesc& desc)
@@ -165,7 +148,8 @@ void BasicPostprocessing::render(const RenderDesc& desc)
         return;
     }
 
-    const DescriptorSetHandle viewSet = bindViewInput(desc.viewId, desc.inputImageView);
+    const DescriptorSetHandle viewSet = desc.toneMap.input.set;
+    writeInput(viewSet, desc.inputImageView);
     rebuildPushConstants(*desc.state, desc.bOutputIsSRGB);
 
     desc.cmdBuf->bindPipeline(_pipeline.get());

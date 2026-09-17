@@ -4,6 +4,7 @@
 #include "Render3D/RenderFrameData.h"
 #include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/ShadowSettings.h"
+#include "PointShadowIndirectResources.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
 #include "Shadow.PointShadowIndirect.slang.h"
@@ -16,17 +17,20 @@ namespace ya
 struct RenderFrameData;
 struct IImage;
 struct IImageView;
+class RenderSubmission;
 
 struct BasicShadowFramePayload
 {
     using FrameUBO     = slang_types::CombineShadowMappingGenerate::FrameData;
     using PointFaceUBO = slang_types::Shadow::PointShadowIndirect::PointShadowFaceData;
 
-    uint32_t               flightIndex = 0;
-    uint64_t               frameIndex  = 0;
-    uint32_t               viewSlot    = RenderViewRecordingContext::kInvalidViewSlot;
-    const RenderFrameData* frameData   = nullptr;
-    const ShadowSettings*  settings    = nullptr;
+    uint32_t                      flightIndex = 0;
+    uint64_t                      frameIndex  = 0;
+    uint32_t                      viewSlot    = RenderViewRecordingContext::kInvalidViewSlot;
+    const RenderFrameData*        frameData   = nullptr;
+    const ShadowSettings*         settings    = nullptr;
+    RenderSubmission*             submission  = nullptr;
+    PointShadowIndirectResources* pointShadow = nullptr;
 
     FrameUBO frameUBO{};
     uint32_t pointLightCount = 0;

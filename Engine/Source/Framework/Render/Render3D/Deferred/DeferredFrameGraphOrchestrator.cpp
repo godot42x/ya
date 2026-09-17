@@ -41,6 +41,7 @@ void DeferredFrameGraphOrchestrator::build(
         .gBufferRTSpec            = *inputs.gBufferRTSpec,
         .viewportRTSpec           = *inputs.viewportRTSpec,
         .overlayInputs            = inputs.overlayInputs,
+        .viewResources            = inputs.viewResources,
         .environmentLighting      = inputs.environmentLighting,
         .environmentLightingDS    = inputs.environmentLightingDS,
         .postContext              = inputs.postContext,

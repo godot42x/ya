@@ -8,6 +8,7 @@
 #include "Render3D/Stage/IRenderStage.h"
 #include "Render3D/Services/DebugRenderSystem.h"
 #include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/ViewPassResources.h"
 
 #include "Skybox.slang.h"
 
@@ -35,7 +36,8 @@ struct YA_RENDER_3D_API ViewportOverlayStage : public IRenderStage
             glm::vec2      worldSize      = glm::vec2(1.0f);
             glm::vec4      tint           = glm::vec4(1.0f);
             TextureBinding textureBinding{};
-            uint32_t       entityId       = 0; // Raw entt handle, used by the entity-id pick pass
+            uint32_t       entityId       = 0;
+            uint32_t       textureIndex   = 0;
         };
 
         struct DirectionGizmoInput
@@ -101,12 +103,7 @@ struct YA_RENDER_3D_API ViewportOverlayStage : public IRenderStage
     stdptr<IPipelineLayout>      _billboardPPL;
     stdptr<IDescriptorSetLayout> _billboardFrameDSL;
     stdptr<IDescriptorSetLayout> _billboardTextureDSL;
-    stdptr<IDescriptorPool>      _billboardDSP;
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _billboardFrameDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _billboardFrameUBO{};
-    DescriptorSetHandle _billboardTextureDS{};
     Mesh* _billboardMesh = nullptr;
-    std::vector<TextureBinding> _billboardTextureBindings{};
 
     bool bReverseViewportY = true;
 
@@ -132,11 +129,8 @@ struct YA_RENDER_3D_API ViewportOverlayStage : public IRenderStage
     /// executeSkybox/executeOverlay overloads.
     void execute(const RenderStageContext& ctx) override;
     void executeSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput);
-    void executeOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs);
-    /// Rebuild the billboard texture descriptor set from this frame's
-    /// overlay inputs. Must be called before the overlay pass begins command
-    /// recording (descriptor updates are not allowed inside a render pass).
-    void updateBillboardTextures(const FrameInputs& frameInputs);
+    void executeOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs, const OverlayPassBindings& overlay);
+    void updateBillboardTextures(FrameInputs& frameInputs, OverlayPassBindings& overlay);
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     void setDebugRenderSystem(DebugRenderSystem* debugRenderSystem);
     [[nodiscard]] SkyboxFrameUBO buildSkyboxFrameData(const RenderStageContext& ctx) const;
@@ -145,13 +139,16 @@ struct YA_RENDER_3D_API ViewportOverlayStage : public IRenderStage
     [[nodiscard]] DebugRenderSystem* getDebugRenderSystem() const { return _debugRenderSystem; }
     [[nodiscard]] DebugSkinning&       getDebugSkinning() { return _debugSkinning; }
     [[nodiscard]] const DebugSkinning& getDebugSkinning() const { return _debugSkinning; }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getBillboardFrameDSL() const { return _billboardFrameDSL; }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getBillboardTextureDSL() const { return _billboardTextureDSL; }
+    static constexpr uint32_t kBillboardTextureCount = 16;
 
   private:
     void initSkybox(stdptr<IDescriptorSetLayout> skyboxFrameDSL);
     void initOverlay();
     void initBillboards();
-    uint32_t resolveBillboardTextureIndex(const TextureBinding& binding);
-    void drawBillboards(const RenderStageContext& ctx, const FrameInputs& frameInputs);
+    uint32_t resolveBillboardTextureIndex(std::vector<TextureBinding>& bindings, const TextureBinding& binding);
+    void drawBillboards(const RenderStageContext& ctx, const FrameInputs& frameInputs, const OverlayPassBindings& overlay);
     void drawSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput);
     void drawOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs);
 };

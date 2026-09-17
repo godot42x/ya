@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BasicShadowMap/BasicShadowPayload.h"
+#include "BasicShadowMap/PointShadowIndirectResources.h"
 
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/FrameUploadArena.h"
@@ -51,6 +52,7 @@ class ShadowFrameResources : public PerFlightFrameResourceSetBase
         std::array<DescriptorSetHandle, ShadowConstants::POINT_SHADOW_FACE_COUNT>           pointFaceDS{};
         stdptr<IBuffer>        skinningBuffer;
         DescriptorSetHandle    skinningDS{};
+        PointShadowIndirectResources pointShadow{};
 
         [[nodiscard]] bool isValid() const
         {
@@ -79,6 +81,7 @@ class ShadowFrameResources : public PerFlightFrameResourceSetBase
 
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameDSL() const { return _frameDSL; }
     [[nodiscard]] const Binding*               getViewBinding(uint32_t flightIndex, uint32_t viewSlot) const;
+    [[nodiscard]] Binding*                     mutableViewBinding(uint32_t flightIndex, uint32_t viewSlot);
     [[nodiscard]] uint32_t                     liveViewCount(uint32_t flightIndex) const;
 
   private:

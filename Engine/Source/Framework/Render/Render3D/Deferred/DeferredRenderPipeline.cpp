@@ -14,6 +14,7 @@
 #include "Render3D/Common/PipelineCommon.h"
 #include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/RenderSubmission.h"
+#include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
@@ -242,6 +243,77 @@ DeferredAttachmentFormats buildDeferredFormatsFromSpec(const RenderTargetCreateI
         formats.depthFormat = spec.attachments.depthAttach->format;
     }
     return formats;
+}
+
+void allocateDeferredViewPassResources(
+    RenderSubmission&                         submission,
+    IRender*                                  render,
+    uint32_t                                  alignment,
+    const RenderFrameData*                    frameData,
+    SSAOStage*                                ssaoStage,
+    LightStage*                               lightStage,
+    EntityIdViewportPass*                     entityIdPass,
+    ViewportOverlayStage*                     overlayStage,
+    PostProcessingStage*                      postStage,
+    ViewportOverlayStage::FrameInputs*        overlayInputs,
+    DeferredFrameResourceSet::ViewResources&  resources)
+{
+    if (ssaoStage) {
+        resources.ssao.inputs.set = allocateCombinedImageSamplerSet(submission, ssaoStage->getInputDSL(), 4);
+    }
+    if (lightStage) {
+        resources.lighting.gBufferTextures.set = allocateCombinedImageSamplerSet(
+            submission, lightStage->getGBufferTextureDSL(), 5);
+        resources.lighting.shadows.set = allocateCombinedImageSamplerSet(
+            submission,
+            lightStage->getShadowDSL(),
+            1u + static_cast<uint32_t>(MAX_POINT_LIGHTS));
+        lightStage->writeShadowDescriptors(resources.lighting.shadows.set);
+    }
+    if (entityIdPass && frameData) {
+        EntityIdViewportPass::FrameUBO ubo{};
+        ubo.viewProj = frameData->viewProjection;
+        ubo.view     = frameData->view;
+        writeUniformPassBinding(
+            submission,
+            render,
+            entityIdPass->getFrameDSL(),
+            alignment,
+            &ubo,
+            sizeof(ubo),
+            resources.entityId.frame);
+    }
+    if (overlayStage && frameData) {
+        ViewportOverlayStage::BillboardFrameUBO ubo{
+            .viewProjection = frameData->viewProjection,
+            .view           = frameData->view,
+        };
+        writeUniformPassBinding(
+            submission,
+            render,
+            overlayStage->getBillboardFrameDSL(),
+            alignment,
+            &ubo,
+            sizeof(ubo),
+            resources.overlay.billboardFrame);
+        resources.overlay.billboardTextures.set = allocateCombinedImageSamplerSet(
+            submission,
+            overlayStage->getBillboardTextureDSL(),
+            ViewportOverlayStage::kBillboardTextureCount);
+        if (overlayInputs) {
+            overlayStage->updateBillboardTextures(*overlayInputs, resources.overlay);
+        }
+    }
+    if (postStage) {
+        allocateBloomPassBindings(
+            submission,
+            postStage->getBloomExtractDSL(),
+            postStage->getBloomBlurDSL(),
+            postStage->getBloomCompositeDSL(),
+            resources.post.bloom);
+        resources.post.toneMap.input.set = allocateCombinedImageSamplerSet(
+            submission, postStage->getToneMapInputDSL(), 1);
+    }
 }
 
 } // namespace
@@ -1245,20 +1317,25 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (!viewBinding) {
         return;
     }
+    auto* viewResources = _frameResources->mutableViewResources(submission.flightIndex(), view.viewSlot);
+    if (!viewResources) {
+        return;
+    }
+    const uint32_t alignment = std::max(_render ? _render->getUniformBufferOffsetAlignment() : 1u, 1u);
+    allocateDeferredViewPassResources(
+        submission,
+        _render,
+        alignment,
+        view.frameData,
+        _ssaoStage.get(),
+        _lightStage.get(),
+        &_entityIdPass,
+        _overlayStage.get(),
+        &_postProcessStage,
+        &_currentOverlayFrameInputs,
+        *viewResources);
 
-    if (_lightStage) {
-        _lightStage->setFrameInputs(LightStage::FrameInputs{
-            .frameAndLightDescriptorSet       = viewBinding->frameAndLightDescriptorSet,
-            .environmentLightingDescriptorSet = _currentEnvironmentLightingDescriptorSet,
-        });
-    }
     _currentOverlayFrameInputs.skybox.frameDescriptorSet = viewBinding->skyboxFrameDescriptorSet;
-    if (bUseSSAO) {
-        _ssaoStage->setFrameInputs(SSAOStage::FrameInputs{
-            .descriptorSet = viewBinding->ssaoFrameDescriptorSet,
-            .frame         = viewBinding->ssaoFrame,
-        });
-    }
     _gBufferStage->prepare(stageCtx);
 
     FrameContext postContext{
@@ -1305,6 +1382,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
             .viewportOverlaySnapshot  = frame.viewportOverlaySnapshot,
             .viewId                   = frame.view.task ? frame.view.task->viewId : 0,
+            .viewResources            = viewResources,
         });
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
@@ -1328,7 +1406,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
     if (_overlayStage) {
         _overlayStage->prepare(stageCtx);
-        _overlayStage->updateBillboardTextures(_currentOverlayFrameInputs);
     }
 
     [[maybe_unused]] const bool bExecuted = _graphExecutor->executeCompiled(graph, compiled, *frame.cmdBuf);

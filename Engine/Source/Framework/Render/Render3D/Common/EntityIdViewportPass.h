@@ -4,6 +4,7 @@
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Pipeline.h"
+#include "Render3D/Common/ViewPassResources.h"
 #include "EntityId.slang.h"
 
 #include <glm/glm.hpp>
@@ -13,6 +14,7 @@ namespace ya
 {
 
 struct IRender;
+class RenderSubmission;
 struct RenderDrawItem;
 struct RenderFrameData;
 class DrawCandidateView;
@@ -46,7 +48,10 @@ struct EntityIdViewportPass
                  const glm::mat4& view,
                  const RenderFrameData& frameData,
                  DescriptorSetHandle    skinningDescriptorSet,
+                 const EntityIdPassBindings& frameBindings,
                  const std::vector<EntityIdBillboard>& billboards = {});
+
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameDSL() const { return _frameDSL; }
 
   private:
     void drawStaticBucket(ICommandBuffer* cmdBuf, DrawCandidateView items);
@@ -55,11 +60,8 @@ struct EntityIdViewportPass
 
     IRender* _render = nullptr;
 
-    std::shared_ptr<IDescriptorPool>       _descriptorPool;
     std::shared_ptr<IDescriptorSetLayout>  _frameDSL;
     std::shared_ptr<IDescriptorSetLayout>  _skinningDSL;
-    DescriptorSetHandle                    _frameDS = nullptr;
-    std::shared_ptr<IBuffer>               _frameUBO;
     std::shared_ptr<IPipelineLayout>       _pipelineLayout;
     std::shared_ptr<IGraphicsPipeline>     _pipeline;
     std::shared_ptr<IPipelineLayout>       _billboardPipelineLayout;

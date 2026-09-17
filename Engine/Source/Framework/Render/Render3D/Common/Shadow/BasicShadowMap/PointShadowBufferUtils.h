@@ -7,9 +7,8 @@
 namespace ya
 {
 
-/// Allocates a per-flight point shadow backing buffer. Point shadow passes
-/// keep these as capacity-managed cross-frame owners; they are never RDG
-/// transient resources.
+/// Allocates a View-owned point shadow backing buffer. Capacity lives on
+/// `PointShadowIndirectResources`; these are never RDG transient resources.
 inline stdptr<IBuffer> createPointShadowBuffer(IRender* render,
                                                std::string label,
                                                EBufferUsage usage,

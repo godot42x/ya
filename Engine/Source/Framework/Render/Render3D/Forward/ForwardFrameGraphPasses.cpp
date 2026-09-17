@@ -4,6 +4,7 @@
 #include "Render3D/Common/EntityIdViewportPass.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Common/ViewPersistentResourceKey.h"
 
 #include <string>
@@ -304,7 +305,8 @@ void appendEntityIdPass(RenderGraph& graph,
         },
         [entityIdPass = deps.entityIdPass,
          stageCtx = inputs.stageCtx,
-         frameBinding = inputs.frameBinding](RGRenderContext& rgCtx) {
+         frameBinding = inputs.frameBinding,
+         entityIdBindings = inputs.viewResources ? inputs.viewResources->entityId : EntityIdPassBindings{}](RGRenderContext& rgCtx) {
             const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
             stageCtx->viewportExtent = viewportExtent;
@@ -315,7 +317,8 @@ void appendEntityIdPass(RenderGraph& graph,
                                       stageCtx->frameData->projection * stageCtx->frameData->view,
                                       stageCtx->frameData->view,
                                       *stageCtx->frameData,
-                                      frameBinding.skinningDescriptorSet);
+                                      frameBinding.skinningDescriptorSet,
+                                      entityIdBindings);
             }
             rgCtx.endRendering();
         });
@@ -424,7 +427,8 @@ void appendPostprocessPasses(RenderGraph&                  graph,
         postprocessInput,
         resources.viewportExtent,
         inputs.postContext,
-        inputs.viewId);
+        inputs.viewId,
+        inputs.viewResources ? inputs.viewResources->post.bloom : BloomPassBindings{});
     const auto finalizeInput = bloomComposite.isValid() ? bloomComposite : postprocessInput;
     [[maybe_unused]] const auto postprocessOutput = deps.postProcessStage->appendFinalizeGraphPasses(
         graph,
@@ -434,6 +438,7 @@ void appendPostprocessPasses(RenderGraph&                  graph,
             .bOutputIsSRGB = inputs.bPostprocessOutputIsSRGB,
             .postContext   = inputs.postContext,
             .viewId        = inputs.viewId,
+            .toneMap       = inputs.viewResources ? inputs.viewResources->post.toneMap : ToneMapPassBindings{},
         });
 }
 

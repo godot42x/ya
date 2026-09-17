@@ -5,6 +5,7 @@
 #include "RHI/Core/Pipeline.h"
 #include "Render3D/Material/SimpleMaterial.h"
 #include "Render3D/Common/IRenderRuntimeServices.h"
+#include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/RenderFrameData.h"
 #include "Skybox.slang.h"
 
@@ -112,6 +113,7 @@ class YA_RENDER_3D_API ForwardViewportAuxPasses
         DebugDrawInput            debugDraw{};
         std::vector<ForwardDirectionGizmoInput> directionGizmos{};
         DescriptorSetHandle       skyboxFrameDescriptorSet = nullptr;
+        ForwardDebugPassBindings  debug{};
         bool                      bReverseViewportY = true;
     };
 
@@ -135,6 +137,8 @@ class YA_RENDER_3D_API ForwardViewportAuxPasses
     void                     setDebugMode(EDebugMode mode);
     [[nodiscard]] DebugUBO&       getDebugUBO() { return _debugUBO; }
     [[nodiscard]] const DebugUBO& getDebugUBO() const { return _debugUBO; }
+
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getDebugDSL() const { return _debugDSL; }
 
     [[nodiscard]] IGraphicsPipeline* getSimplePipeline() const { return _simplePipeline.get(); }
     [[nodiscard]] IGraphicsPipeline* getSkyboxPipeline() const { return _skyboxPipeline.get(); }
@@ -161,9 +165,6 @@ class YA_RENDER_3D_API ForwardViewportAuxPasses
     stdptr<IPipelineLayout>      _debugPPL;
     stdptr<IGraphicsPipeline>    _debugPipeline;
     GraphicsPipelineCreateInfo   _debugPipelineCI;
-    stdptr<IDescriptorPool>      _debugDSP;
-    DescriptorSetHandle          _debugUboDS = nullptr;
-    stdptr<IBuffer>              _debugUboBuffer;
     DebugUBO                     _debugUBO{};
     EDebugMode                   _debugMode = DebugNone;
 };

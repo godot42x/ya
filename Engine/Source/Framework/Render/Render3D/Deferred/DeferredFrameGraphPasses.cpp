@@ -244,6 +244,7 @@ void appendSSAO(DeferredFrameGraphPassContext& context)
             .normal             = context.graphResources.textures.gBufferColors[1],
             .depth              = context.graphResources.textures.gBufferDepth,
             .frameDescriptorSet = frameBinding.ssaoFrameDescriptorSet,
+            .inputDescriptorSet = context.viewResources ? context.viewResources->ssao.inputs.set : DescriptorSetHandle{},
             .viewId             = context.viewId,
         });
 }
@@ -294,6 +295,8 @@ void appendLight(DeferredFrameGraphPassContext& context)
         .layerCount                      = 1,
         .frameAndLightDescriptorSet      = frameBinding.frameAndLightDescriptorSet,
         .environmentLightingDescriptorSet = context.environmentLightingDS,
+        .gBufferTextureDescriptorSet     = context.viewResources ? context.viewResources->lighting.gBufferTextures.set : DescriptorSetHandle{},
+        .shadowDescriptorSet             = context.viewResources ? context.viewResources->lighting.shadows.set : DescriptorSetHandle{},
     };
 
     graphResources.passes.light = graph.addPass(
@@ -337,7 +340,8 @@ void appendLight(DeferredFrameGraphPassContext& context)
         },
         [stageCtx = context.stageCtx, params, lightStage = &context.lightStage](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
-            lightStage->updateGBufferTextureDescriptors(
+            lightStage->writeGBufferTextureDescriptors(
+                params.gBufferTextureDescriptorSet,
                 rgCtx.getBindingContext(),
                 params.gBufferColors[0],
                 params.gBufferColors[1],
@@ -348,7 +352,12 @@ void appendLight(DeferredFrameGraphPassContext& context)
 
             rgCtx.beginDeclaredRasterRendering();
             YA_PERF_SCOPE(perf::sample::deferredLight(), perf::metric::cpuTimeMs(), perf::domain::render());
-            lightStage->execute(stageCtx, params.frameAndLightDescriptorSet, params.environmentLightingDescriptorSet);
+            lightStage->execute(
+                stageCtx,
+                params.frameAndLightDescriptorSet,
+                params.environmentLightingDescriptorSet,
+                params.gBufferTextureDescriptorSet,
+                params.shadowDescriptorSet);
             rgCtx.endRendering();
         });
 }
@@ -444,7 +453,8 @@ void appendBloom(DeferredFrameGraphPassContext& context)
         context.graphResources.textures.viewportColor,
         context.viewportExtent,
         context.postContext,
-        context.viewId);
+        context.viewId,
+        context.viewResources ? context.viewResources->post.bloom : BloomPassBindings{});
     if (bloomComposite.isValid()) {
         context.graphResources.textures.bloomComposite = bloomComposite;
     }
@@ -463,6 +473,7 @@ void appendForwardTransparent(DeferredFrameGraphPassContext& context)
         .overlay    = context.overlayInputs
             ? *context.overlayInputs
             : ViewportOverlayStage::FrameInputs{},
+        .overlayBindings = context.viewResources ? context.viewResources->overlay : OverlayPassBindings{},
     };
 
     context.graphResources.passes.sceneOverlay = context.graph.addPass(
@@ -489,7 +500,7 @@ void appendForwardTransparent(DeferredFrameGraphPassContext& context)
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
             YA_PERF_SCOPE(perf::sample::deferredOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-            overlayStage->executeOverlay(stageCtx, params.overlay);
+            overlayStage->executeOverlay(stageCtx, params.overlay, params.overlayBindings);
             rgCtx.endRendering();
         });
 }
@@ -539,7 +550,7 @@ void appendEntityId(DeferredFrameGraphPassContext& context)
                 },
             });
         },
-        [stageCtx, entityIdPass, frameBinding, billboards = std::move(billboards)](RGRenderContext& rgCtx) {
+        [stageCtx, entityIdPass, frameBinding, entityIdBindings = context.viewResources ? context.viewResources->entityId : EntityIdPassBindings{}, billboards = std::move(billboards)](RGRenderContext& rgCtx) {
             const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
             if (entityIdPass && stageCtx.frameData) {
@@ -550,6 +561,7 @@ void appendEntityId(DeferredFrameGraphPassContext& context)
                                       stageCtx.frameData->view,
                                       *stageCtx.frameData,
                                       frameBinding.skinningDescriptorSet,
+                                      entityIdBindings,
                                       billboards);
             }
             rgCtx.endRendering();
@@ -610,6 +622,7 @@ void appendPostprocess(DeferredFrameGraphPassContext& context)
             .bOutputIsSRGB = context.bPostprocessOutputIsSRGB,
             .postContext   = context.postContext,
             .viewId        = context.viewId,
+            .toneMap       = context.viewResources ? context.viewResources->post.toneMap : ToneMapPassBindings{},
         });
     if (postprocessOutput.isValid()) {
         context.graphResources.textures.postprocessOutput = postprocessOutput;

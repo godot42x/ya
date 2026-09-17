@@ -164,7 +164,8 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     bool               executeViewportPassGraph(const RenderPipelineFrameContext& frame,
                                                 RenderStageContext&             stageCtx,
                                                 FrameContext&                    postContext,
-                                                const ForwardFrameResourceSet::Binding& frameBinding);
+                                                const ForwardFrameResourceSet::Binding& frameBinding,
+                                                ForwardFrameResourceSet::ViewResources* viewResources);
     void               syncShadowSettings();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;

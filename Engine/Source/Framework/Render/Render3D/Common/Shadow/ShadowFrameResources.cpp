@@ -276,6 +276,13 @@ const ShadowFrameResources::Binding* ShadowFrameResources::getViewBinding(
     return _viewBindings.getView(flightIndex, viewSlot);
 }
 
+ShadowFrameResources::Binding* ShadowFrameResources::mutableViewBinding(
+    uint32_t flightIndex,
+    uint32_t viewSlot)
+{
+    return _viewBindings.getView(flightIndex, viewSlot);
+}
+
 uint32_t ShadowFrameResources::liveViewCount(uint32_t flightIndex) const
 {
     return _viewBindings.liveViewCount(flightIndex);

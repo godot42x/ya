@@ -47,18 +47,6 @@ void EntityIdViewportPass::init(IRender* render, EFormat::T colorFormat, EFormat
 {
     _render = render;
 
-    _descriptorPool = IDescriptorPool::create(
-        render,
-        DescriptorPoolCreateInfo{
-            .maxSets   = 1,
-            .poolSizes = {
-                DescriptorPoolSize{
-                    .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = 1,
-                },
-            },
-        });
-
     _frameDSL = IDescriptorSetLayout::create(render, DescriptorSetLayoutDesc{
                                                          .label    = "EntityId_Frame_DSL",
                                                          .set      = 0,
@@ -74,13 +62,6 @@ void EntityIdViewportPass::init(IRender* render, EFormat::T colorFormat, EFormat
             .set      = 1,
             .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
         });
-    _frameDS = _descriptorPool->allocateDescriptorSets(_frameDSL);
-    _frameUBO = render->getResourceFactory()->createBuffer(BufferCreateInfo{
-        .label       = "EntityId_Frame_UBO",
-        .usage       = EBufferUsage::UniformBuffer,
-        .size        = sizeof(FrameUBO),
-        .memoryUsage = EMemoryUsage::CpuToGpu,
-    });
 
     const auto pushConstantRange = PushConstantRange{
         .offset     = 0,
@@ -201,11 +182,8 @@ void EntityIdViewportPass::destroy()
     _skinnedPipelineLayout.reset();
     _pipeline.reset();
     _pipelineLayout.reset();
-    _frameUBO.reset();
-    _frameDS = nullptr;
     _skinningDSL.reset();
     _frameDSL.reset();
-    _descriptorPool.reset();
     _render = nullptr;
 }
 
@@ -215,22 +193,16 @@ void EntityIdViewportPass::execute(ICommandBuffer*        cmdBuf,
                                    const glm::mat4&       viewProj,
                                    const glm::mat4&       view,
                                    const RenderFrameData& frameData,
-                                   DescriptorSetHandle    skinningDescriptorSet,
-                                   const std::vector<EntityIdBillboard>& billboards)
+                 DescriptorSetHandle    skinningDescriptorSet,
+                 const EntityIdPassBindings& frameBindings,
+                 const std::vector<EntityIdBillboard>& billboards)
 {
-    if (!_render || !cmdBuf || viewportWidth == 0 || viewportHeight == 0) {
+    if (!_render || !cmdBuf || viewportWidth == 0 || viewportHeight == 0 || !frameBindings.frame.set) {
         return;
     }
 
-    FrameUBO ubo{
-        .viewProj = viewProj,
-        .view     = view,
-    };
-    _frameUBO->writeData(&ubo, sizeof(ubo), 0);
-    DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBO->getHandle()), 0, static_cast<uint64_t>(sizeof(FrameUBO)));
-    _render->getDescriptorHelper()->updateDescriptorSets(
-        {IDescriptorSetHelper::genBufferWrite(_frameDS, 0, 0, EPipelineDescriptorType::UniformBuffer, {bufferInfo})},
-        {});
+    (void)viewProj;
+    (void)view;
 
     // Match the viewport passes' reverse-Y convention.
     const auto applyViewport = [&](IPipelineLayout* layout)
@@ -249,7 +221,7 @@ void EntityIdViewportPass::execute(ICommandBuffer*        cmdBuf,
 
     cmdBuf->bindPipeline(_pipeline.get());
     applyViewport(_pipelineLayout.get());
-    cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {_frameDS});
+    cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {frameBindings.frame.set});
     drawStaticBucket(cmdBuf, buckets.staticMeshes.pbrDrawItems);
     drawStaticBucket(cmdBuf, buckets.staticMeshes.phongDrawItems);
     drawStaticBucket(cmdBuf, buckets.staticMeshes.unlitDrawItems);
@@ -259,7 +231,7 @@ void EntityIdViewportPass::execute(ICommandBuffer*        cmdBuf,
     if (skinningDescriptorSet) {
         cmdBuf->bindPipeline(_skinnedPipeline.get());
         applyViewport(_skinnedPipelineLayout.get());
-        cmdBuf->bindDescriptorSets(_skinnedPipelineLayout.get(), 0, {_frameDS, skinningDescriptorSet});
+        cmdBuf->bindDescriptorSets(_skinnedPipelineLayout.get(), 0, {frameBindings.frame.set, skinningDescriptorSet});
         drawSkinnedBucket(cmdBuf, buckets.skinnedMeshes.pbrDrawItems);
         drawSkinnedBucket(cmdBuf, buckets.skinnedMeshes.phongDrawItems);
         drawSkinnedBucket(cmdBuf, buckets.skinnedMeshes.unlitDrawItems);
@@ -270,7 +242,7 @@ void EntityIdViewportPass::execute(ICommandBuffer*        cmdBuf,
     if (!billboards.empty()) {
         cmdBuf->bindPipeline(_billboardPipeline.get());
         applyViewport(_billboardPipelineLayout.get());
-        cmdBuf->bindDescriptorSets(_billboardPipelineLayout.get(), 0, {_frameDS});
+        cmdBuf->bindDescriptorSets(_billboardPipelineLayout.get(), 0, {frameBindings.frame.set});
         drawBillboards(cmdBuf, billboards);
     }
 }

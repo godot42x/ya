@@ -62,18 +62,10 @@ struct YA_RENDER_3D_API LightStage : public IRenderStage
     bool                         _bEnablePBRSpecularIBL = true;
     ShadowRuntimeState           _shadowState{};
 
-    // GBuffer texture DS + pool (updated each frame from GBuffer RT)
-    stdptr<IDescriptorPool> _dsp;
-    DescriptorSetHandle     _gBufferTextureDS = nullptr;
+    // GBuffer / shadow layouts are device-lifetime. Per-View CIS sets live on
+    // DeferredViewResources, not this recipe.
     stdptr<IDescriptorSetLayout> _shadowDSL;
-    DescriptorSetHandle          _shadowDS = nullptr;
     Mesh*                        _fullscreenQuad = nullptr;
-
-    ImageViewHandle _lastShadowDirectionalImageViewHandle = nullptr;
-    std::array<ImageViewHandle, MAX_POINT_LIGHTS> _lastShadowPointCubeImageViewHandles{};
-    bool _bShadowDescriptorsInitialized = false;
-    uint32_t _lastGBufferDescriptorWriteCount = 0;
-    uint32_t _lastShadowDescriptorWriteCount = 0;
 
     stdptr<IDescriptorSetLayout> _environmentLightingDSL;
     FrameInputs _frameInputs{};
@@ -92,35 +84,35 @@ struct YA_RENDER_3D_API LightStage : public IRenderStage
     void setup(SharedInputs sharedInputs);
     void setEnvironmentLightingInput(EnvironmentLightingInput input);
     void setFrameInputs(FrameInputs frameInputs);
-    /// Update set 1 (GBuffer texture DS) from graph handles resolved through
-    /// the pass binding context. `ssao` may be empty to bind the white
-    /// fallback texture. No graph-owned image-view handle is cached across
-    /// frames; resolved owners are retained by the binding context.
-    void updateGBufferTextureDescriptors(
+    /// Write GBuffer CIS into a View-owned set. Does not mutate this recipe.
+    void writeGBufferTextureDescriptors(
+        DescriptorSetHandle                          gBufferTextureDS,
         const RGRenderContext::RGPassBindingContext& binding,
         RGTextureHandle                              albedo,
         RGTextureHandle                              normal,
         RGTextureHandle                              orm,
         RGTextureHandle                              shading,
         RGTextureHandle                              depth,
-        std::optional<RGTextureHandle>               ssao);
+        std::optional<RGTextureHandle>               ssao) const;
+    /// Write shadow CIS into a View-owned set from the current shadow recipe.
+    void writeShadowDescriptors(DescriptorSetHandle shadowDS) const;
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
-    void invalidateShadowDescriptors();
-    [[nodiscard]] bool shouldRefreshShadowDescriptors() const;
     [[nodiscard]] bool isPBRDiffuseIBLEnabled() const { return _bEnablePBRDiffuseIBL; }
     [[nodiscard]] bool isPBRSpecularIBLEnabled() const { return _bEnablePBRSpecularIBL; }
-    [[nodiscard]] uint32_t getLastGBufferDescriptorWriteCount() const { return _lastGBufferDescriptorWriteCount; }
-    [[nodiscard]] uint32_t getLastShadowDescriptorWriteCount() const { return _lastShadowDescriptorWriteCount; }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getGBufferTextureDSL() const { return _gBufferTextureDSL; }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getShadowDSL() const { return _shadowDSL; }
     [[nodiscard]] IGraphicsPipeline* getPipeline() const { return _pipeline.get(); }
 
     void init(IRender* render) override;
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
-    /// Graph pass entry: explicit current-flight binding. Does not read stage members.
-    void execute(const RenderStageContext& ctx, DescriptorSetHandle frameAndLight, DescriptorSetHandle environmentLighting);
-    /// IRenderStage conformance; graph passes must use the parameterized overload.
+    void execute(const RenderStageContext& ctx,
+                 DescriptorSetHandle       frameAndLight,
+                 DescriptorSetHandle       environmentLighting,
+                 DescriptorSetHandle       gBufferTextures,
+                 DescriptorSetHandle       shadows);
     void execute(const RenderStageContext& ctx) override;
 
 };

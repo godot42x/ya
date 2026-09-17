@@ -12,6 +12,7 @@
 
 #include <format>
 #include <limits>
+#include <vector>
 
 namespace ya
 {
@@ -44,48 +45,24 @@ void PointShadowCullPass::init(IRender* render)
                        .shaderDesc     = ShaderDesc{.shaderName = "Shadow/PointShadowCull.comp.slang"},
                    }),
                    "Failed to create point shadow cull pipeline");
-
-    _dsp = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-                                                .label     = "PointShadowCull_DSP",
-                                                .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
-                                                .poolSizes = {{.type = EPipelineDescriptorType::StorageBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * 4}},
-                                            });
-
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _perFlight[i].cullDS = _dsp->allocateDescriptorSets(_cullDSL);
-    }
 }
 
 void PointShadowCullPass::destroy()
 {
-    for (auto& flight : _perFlight) {
-        flight.faceFrustumUploadBuffer.reset();
-        flight.faceFrustumExecBuffer.reset();
-        flight.drawCommandUploadBuffer.reset();
-        flight.drawCommandExecBuffer.reset();
-        flight.visibleInstancesUploadBuffer.reset();
-        flight.visibleInstancesExecBuffer.reset();
-        flight.instanceBuffer.reset();
-        flight.cullDS = nullptr;
-        flight.allocatedBucketCount = 0;
-    }
-    _dsp.reset();
     _pipeline.reset();
     _pipelineLayout.reset();
     _cullDSL.reset();
-    _render               = nullptr;
+    _render = nullptr;
 }
 
-bool PointShadowCullPass::ensureCapacity(uint32_t flightIndex, uint32_t bucketCount)
+bool PointShadowCullPass::ensureCapacity(PointShadowIndirectResources& packet, uint32_t bucketCount)
 {
     YA_PROFILE_FUNCTION();
-    if (flightIndex >= _perFlight.size()) return false;
-    auto& flight = _perFlight[flightIndex];
     if (bucketCount == 0) return true;
-    if (bucketCount <= flight.allocatedBucketCount &&
-        flight.drawCommandUploadBuffer && flight.drawCommandExecBuffer &&
-        flight.visibleInstancesUploadBuffer && flight.visibleInstancesExecBuffer &&
-        flight.faceFrustumUploadBuffer && flight.faceFrustumExecBuffer) {
+    if (bucketCount <= packet.allocatedBucketCount &&
+        packet.drawCommandUploadBuffer && packet.drawCommandExecBuffer &&
+        packet.visibleInstancesUploadBuffer && packet.visibleInstancesExecBuffer &&
+        packet.faceFrustumUploadBuffer && packet.faceFrustumExecBuffer) {
         return true;
     }
 
@@ -100,61 +77,55 @@ bool PointShadowCullPass::ensureCapacity(uint32_t flightIndex, uint32_t bucketCo
     }
 
     auto nextFrustumUpload = createPointShadowBuffer(_render,
-                                                     std::format("PointShadowCull_Frustum_{}", flightIndex),
+                                                     "PointShadowCull_Frustum",
                                                      EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
                                                      static_cast<uint32_t>(frustumBytes),
                                                      EMemoryUsage::CpuToGpu);
     auto nextFrustumExec = createPointShadowBuffer(_render,
-                                                   std::format("PointShadowCull_FrustumExec_{}", flightIndex),
+                                                   "PointShadowCull_FrustumExec",
                                                    EBufferUsage::StorageBuffer | EBufferUsage::TransferDst,
                                                    static_cast<uint32_t>(frustumBytes),
                                                    EMemoryUsage::GpuOnly);
     auto nextDrawCommandsUpload = createPointShadowBuffer(_render,
-                                                          std::format("PointShadowCull_DrawCmd_{}", flightIndex),
+                                                          "PointShadowCull_DrawCmd",
                                                           EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
                                                           static_cast<uint32_t>(cmdBytes),
                                                           EMemoryUsage::CpuToGpu);
     auto nextDrawCommandsExec = createPointShadowBuffer(_render,
-                                                        std::format("PointShadowCull_DrawCmdExec_{}", flightIndex),
+                                                        "PointShadowCull_DrawCmdExec",
                                                         EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer | EBufferUsage::TransferDst,
                                                         static_cast<uint32_t>(cmdBytes),
                                                         EMemoryUsage::GpuOnly);
     auto nextVisibleInstancesUpload = createPointShadowBuffer(_render,
-                                                              std::format("PointShadowCull_VisInst_{}", flightIndex),
+                                                              "PointShadowCull_VisInst",
                                                               EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
                                                               static_cast<uint32_t>(visibleBytes64),
                                                               EMemoryUsage::CpuToGpu);
     auto nextVisibleInstancesExec = createPointShadowBuffer(_render,
-                                                            std::format("PointShadowCull_VisInstExec_{}", flightIndex),
+                                                            "PointShadowCull_VisInstExec",
                                                             EBufferUsage::StorageBuffer | EBufferUsage::TransferDst,
                                                             static_cast<uint32_t>(visibleBytes64),
                                                             EMemoryUsage::GpuOnly);
     if (!nextFrustumUpload || !nextFrustumExec ||
         !nextDrawCommandsUpload || !nextDrawCommandsExec ||
         !nextVisibleInstancesUpload || !nextVisibleInstancesExec) {
-        YA_CORE_ERROR("PointShadowCullPass failed to allocate buffers for flight {}", flightIndex);
+        YA_CORE_ERROR("PointShadowCullPass failed to allocate View cull buffers");
         return false;
     }
 
-    auto oldFrustumUpload = std::move(flight.faceFrustumUploadBuffer);
-    auto oldFrustumExec = std::move(flight.faceFrustumExecBuffer);
-    auto oldDrawCommandsUpload = std::move(flight.drawCommandUploadBuffer);
-    auto oldDrawCommandsExec = std::move(flight.drawCommandExecBuffer);
-    auto oldVisibleInstancesUpload = std::move(flight.visibleInstancesUploadBuffer);
-    auto oldVisibleInstancesExec = std::move(flight.visibleInstancesExecBuffer);
-    flight.faceFrustumUploadBuffer = std::move(nextFrustumUpload);
-    flight.faceFrustumExecBuffer = std::move(nextFrustumExec);
-    flight.drawCommandUploadBuffer = std::move(nextDrawCommandsUpload);
-    flight.drawCommandExecBuffer = std::move(nextDrawCommandsExec);
-    flight.visibleInstancesUploadBuffer = std::move(nextVisibleInstancesUpload);
-    flight.visibleInstancesExecBuffer = std::move(nextVisibleInstancesExec);
-    flight.allocatedBucketCount = bucketCount;
-
-    _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneStorageBuffer(flight.cullDS, 1, flight.faceFrustumExecBuffer.get()),
-        IDescriptorSetHelper::writeOneStorageBuffer(flight.cullDS, 2, flight.drawCommandExecBuffer.get()),
-        IDescriptorSetHelper::writeOneStorageBuffer(flight.cullDS, 3, flight.visibleInstancesExecBuffer.get()),
-    });
+    auto oldFrustumUpload = std::move(packet.faceFrustumUploadBuffer);
+    auto oldFrustumExec = std::move(packet.faceFrustumExecBuffer);
+    auto oldDrawCommandsUpload = std::move(packet.drawCommandUploadBuffer);
+    auto oldDrawCommandsExec = std::move(packet.drawCommandExecBuffer);
+    auto oldVisibleInstancesUpload = std::move(packet.visibleInstancesUploadBuffer);
+    auto oldVisibleInstancesExec = std::move(packet.visibleInstancesExecBuffer);
+    packet.faceFrustumUploadBuffer = std::move(nextFrustumUpload);
+    packet.faceFrustumExecBuffer = std::move(nextFrustumExec);
+    packet.drawCommandUploadBuffer = std::move(nextDrawCommandsUpload);
+    packet.drawCommandExecBuffer = std::move(nextDrawCommandsExec);
+    packet.visibleInstancesUploadBuffer = std::move(nextVisibleInstancesUpload);
+    packet.visibleInstancesExecBuffer = std::move(nextVisibleInstancesExec);
+    packet.allocatedBucketCount = bucketCount;
 
     DeferredDeletionQueue::get().retire(std::move(oldFrustumUpload));
     DeferredDeletionQueue::get().retire(std::move(oldFrustumExec));
@@ -165,81 +136,101 @@ bool PointShadowCullPass::ensureCapacity(uint32_t flightIndex, uint32_t bucketCo
     return true;
 }
 
-void PointShadowCullPass::bindInstanceBuffer(uint32_t flightIndex, const stdptr<IBuffer>& instanceBuffer)
+void PointShadowCullPass::bindInstanceBuffer(PointShadowIndirectResources& packet, const stdptr<IBuffer>& instanceBuffer)
 {
     if (!instanceBuffer || !_render) return;
-    _perFlight[flightIndex].instanceBuffer = instanceBuffer;
+    packet.cullInstanceBuffer = instanceBuffer;
+    packet.instanceBuffer     = instanceBuffer;
+    if (!packet.cullDS) {
+        return;
+    }
     _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneStorageBuffer(_perFlight[flightIndex].cullDS, 0, instanceBuffer.get()),
+        IDescriptorSetHelper::writeOneStorageBuffer(packet.cullDS, 0, instanceBuffer.get()),
     });
 }
 
-void PointShadowCullPass::writeDrawCommandTemplate(uint32_t                          flightIndex,
-                                                    const PointShadowIndirectCommand* cmds,
-                                                    uint32_t                          bucketCount)
+void PointShadowCullPass::updateCullDescriptors(PointShadowIndirectResources& packet)
+{
+    if (!_render || !packet.cullDS) {
+        return;
+    }
+    std::vector<WriteDescriptorSet> writes;
+    if (packet.cullInstanceBuffer) {
+        writes.push_back(IDescriptorSetHelper::writeOneStorageBuffer(packet.cullDS, 0, packet.cullInstanceBuffer.get()));
+    }
+    if (packet.faceFrustumExecBuffer) {
+        writes.push_back(IDescriptorSetHelper::writeOneStorageBuffer(packet.cullDS, 1, packet.faceFrustumExecBuffer.get()));
+    }
+    if (packet.drawCommandExecBuffer) {
+        writes.push_back(IDescriptorSetHelper::writeOneStorageBuffer(packet.cullDS, 2, packet.drawCommandExecBuffer.get()));
+    }
+    if (packet.visibleInstancesExecBuffer) {
+        writes.push_back(IDescriptorSetHelper::writeOneStorageBuffer(packet.cullDS, 3, packet.visibleInstancesExecBuffer.get()));
+    }
+    if (!writes.empty()) {
+        _render->getDescriptorHelper()->updateDescriptorSets(writes);
+    }
+}
+
+void PointShadowCullPass::writeDrawCommandTemplate(PointShadowIndirectResources&     packet,
+                                                   const PointShadowIndirectCommand* cmds,
+                                                   uint32_t                          bucketCount)
 {
     YA_PROFILE_FUNCTION();
     if (bucketCount == 0) return;
-    auto& flight = _perFlight[flightIndex];
-    if (!flight.drawCommandUploadBuffer) return;
-    flight.drawCommandUploadBuffer->writeData(cmds, bucketCount * sizeof(PointShadowIndirectCommand), 0);
-    flight.drawCommandUploadBuffer->flush();
+    if (!packet.drawCommandUploadBuffer) return;
+    packet.drawCommandUploadBuffer->writeData(cmds, bucketCount * sizeof(PointShadowIndirectCommand), 0);
+    packet.drawCommandUploadBuffer->flush();
 }
 
-void PointShadowCullPass::writeVisibleInstances(uint32_t        flightIndex,
-                                                const uint32_t* data,
-                                                uint32_t        count)
+void PointShadowCullPass::writeVisibleInstances(PointShadowIndirectResources& packet,
+                                                const uint32_t*               data,
+                                                uint32_t                      count)
 {
     YA_PROFILE_FUNCTION();
     if (count == 0) return;
-    auto& flight = _perFlight[flightIndex];
-    if (!flight.visibleInstancesUploadBuffer) return;
-    flight.visibleInstancesUploadBuffer->writeData(data, count * sizeof(uint32_t), 0);
-    flight.visibleInstancesUploadBuffer->flush();
+    if (!packet.visibleInstancesUploadBuffer) return;
+    packet.visibleInstancesUploadBuffer->writeData(data, count * sizeof(uint32_t), 0);
+    packet.visibleInstancesUploadBuffer->flush();
 }
 
-void PointShadowCullPass::prepareCompute(uint32_t                      flightIndex,
-                                          const PointShadowFaceFrustum* faceFrustums,
-                                          uint32_t                      activeFaceCount,
-                                          uint32_t                      instanceCount,
-                                          uint32_t                      batchCount)
+void PointShadowCullPass::prepareCompute(PointShadowIndirectResources& packet,
+                                         const PointShadowFaceFrustum* faceFrustums,
+                                         uint32_t                      activeFaceCount,
+                                         uint32_t                      instanceCount,
+                                         uint32_t                      batchCount)
 {
     YA_PROFILE_FUNCTION();
-    auto& flight            = _perFlight[flightIndex];
-    flight.activeFaceCount  = activeFaceCount;
-    flight.activeBatchCount = batchCount;
-    flight.instanceCount    = instanceCount;
+    packet.activeFaceCount  = activeFaceCount;
+    packet.activeBatchCount = batchCount;
+    packet.cullInstanceCount = instanceCount;
     if (activeFaceCount == 0 || instanceCount == 0 || batchCount == 0) return;
 
-    flight.faceFrustumUploadBuffer->writeData(faceFrustums, activeFaceCount * sizeof(PointShadowFaceFrustum), 0);
-    flight.faceFrustumUploadBuffer->flush();
+    packet.faceFrustumUploadBuffer->writeData(faceFrustums, activeFaceCount * sizeof(PointShadowFaceFrustum), 0);
+    packet.faceFrustumUploadBuffer->flush();
 }
 
-void PointShadowCullPass::prepareNoCull(uint32_t flightIndex, uint32_t activeFaceCount, uint32_t batchCount)
+void PointShadowCullPass::prepareNoCull(PointShadowIndirectResources& packet, uint32_t activeFaceCount, uint32_t batchCount)
 {
-    if (flightIndex >= _perFlight.size()) return;
-    auto& flight            = _perFlight[flightIndex];
-    flight.activeFaceCount  = activeFaceCount;
-    flight.activeBatchCount = batchCount;
-    flight.instanceCount    = 0;
+    packet.activeFaceCount   = activeFaceCount;
+    packet.activeBatchCount  = batchCount;
+    packet.cullInstanceCount = 0;
 }
 
 std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGraphPass(
-    RenderGraph& graph,
-    uint32_t flightIndex,
-    bool bDispatchCull,
-    std::optional<RGPassHandle> dependency)
+    RenderGraph&                  graph,
+    PointShadowIndirectResources& packet,
+    bool                          bDispatchCull,
+    std::optional<RGPassHandle>   dependency)
 {
-    if (flightIndex >= _perFlight.size()) return std::nullopt;
-    const auto& flight = _perFlight[flightIndex];
-    if (!flight.instanceBuffer ||
-        !flight.drawCommandUploadBuffer || !flight.drawCommandExecBuffer ||
-        !flight.visibleInstancesUploadBuffer || !flight.visibleInstancesExecBuffer) {
+    if (!packet.instanceBuffer ||
+        !packet.drawCommandUploadBuffer || !packet.drawCommandExecBuffer ||
+        !packet.visibleInstancesUploadBuffer || !packet.visibleInstancesExecBuffer) {
         return std::nullopt;
     }
     if (bDispatchCull &&
-        (!flight.instanceBuffer || !flight.faceFrustumUploadBuffer || !flight.faceFrustumExecBuffer ||
-         flight.activeFaceCount == 0 || flight.instanceCount == 0 || flight.activeBatchCount == 0)) {
+        (!packet.instanceBuffer || !packet.faceFrustumUploadBuffer || !packet.faceFrustumExecBuffer ||
+         packet.activeFaceCount == 0 || packet.cullInstanceCount == 0 || packet.activeBatchCount == 0)) {
         return std::nullopt;
     }
 
@@ -259,11 +250,11 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
     };
     const BufferResourceState executionInitialState{};
     const auto instanceBuffer = importBuffer(
-        graph, flight.instanceBuffer, "PointShadowCull.Instances", EBufferUsage::StorageBuffer, hostWriteState);
-    const uint64_t bucketCount = static_cast<uint64_t>(flight.activeFaceCount) * flight.activeBatchCount;
+        graph, packet.instanceBuffer, "PointShadowCull.Instances", EBufferUsage::StorageBuffer, hostWriteState);
+    const uint64_t bucketCount = static_cast<uint64_t>(packet.activeFaceCount) * packet.activeBatchCount;
     const uint64_t commandBytes = bucketCount * sizeof(PointShadowIndirectCommand);
     const uint64_t visibleBytes = bucketCount * ShadowConstants::MAX_DRAWS_PER_FACE * sizeof(uint32_t);
-    const uint64_t frustumBytes = static_cast<uint64_t>(flight.activeFaceCount) * sizeof(PointShadowFaceFrustum);
+    const uint64_t frustumBytes = static_cast<uint64_t>(packet.activeFaceCount) * sizeof(PointShadowFaceFrustum);
     if (bucketCount == 0 || commandBytes > std::numeric_limits<uint32_t>::max() ||
         visibleBytes > std::numeric_limits<uint32_t>::max() ||
         (bDispatchCull && frustumBytes > std::numeric_limits<uint32_t>::max())) {
@@ -272,25 +263,25 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
 
     const auto drawCommandUpload = importBuffer(
         graph,
-        flight.drawCommandUploadBuffer,
+        packet.drawCommandUploadBuffer,
         "PointShadowCull.DrawCommands.Upload",
         EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
         hostWriteState);
     const auto drawCommands = importBuffer(
         graph,
-        flight.drawCommandExecBuffer,
+        packet.drawCommandExecBuffer,
         "PointShadowCull.DrawCommands.Exec",
         EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer | EBufferUsage::TransferDst,
         executionInitialState);
     const auto visibleInstancesUpload = importBuffer(
         graph,
-        flight.visibleInstancesUploadBuffer,
+        packet.visibleInstancesUploadBuffer,
         "PointShadowCull.VisibleInstances.Upload",
         EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
         hostWriteState);
     const auto visibleInstances = importBuffer(
         graph,
-        flight.visibleInstancesExecBuffer,
+        packet.visibleInstancesExecBuffer,
         "PointShadowCull.VisibleInstances.Exec",
         EBufferUsage::StorageBuffer | EBufferUsage::TransferDst,
         executionInitialState);
@@ -306,13 +297,13 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
     if (bDispatchCull) {
         frustumUpload = importBuffer(
             graph,
-            flight.faceFrustumUploadBuffer,
+            packet.faceFrustumUploadBuffer,
             "PointShadowCull.Frustums.Upload",
             EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
             hostWriteState);
         frustumBuffer = importBuffer(
             graph,
-            flight.faceFrustumExecBuffer,
+            packet.faceFrustumExecBuffer,
             "PointShadowCull.Frustums.Exec",
             EBufferUsage::StorageBuffer | EBufferUsage::TransferDst,
             executionInitialState);
@@ -356,12 +347,12 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
     }
 
     PushConstants pc{
-        .instanceCount = flight.instanceCount,
-        .faceCount     = flight.activeFaceCount,
-        .batchCount    = flight.activeBatchCount,
+        .instanceCount = packet.cullInstanceCount,
+        .faceCount     = packet.activeFaceCount,
+        .batchCount    = packet.activeBatchCount,
         ._pad          = 0,
     };
-    const uint32_t groupsX = (flight.instanceCount + ShadowConstants::CULL_WORKGROUP_SIZE - 1) / ShadowConstants::CULL_WORKGROUP_SIZE;
+    const uint32_t groupsX = (packet.cullInstanceCount + ShadowConstants::CULL_WORKGROUP_SIZE - 1) / ShadowConstants::CULL_WORKGROUP_SIZE;
     const auto cullPass = graph.addPass(
         "Point Shadow Cull",
         [instanceBuffer, frustumHandle, drawCommands, visibleInstances, uploadPass](RGPassBuilder& pass) {
@@ -372,8 +363,8 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
             pass.storageReadWrite(drawCommands);
             pass.storageWrite(visibleInstances);
         },
-        [this, cullDS = flight.cullDS, instanceBuffer, frustumHandle, drawCommands, visibleInstances,
-         pc, groupsX, faceCount = flight.activeFaceCount](RGRenderContext& ctx) {
+        [this, cullDS = packet.cullDS, instanceBuffer, frustumHandle, drawCommands, visibleInstances,
+         pc, groupsX, faceCount = packet.activeFaceCount](RGRenderContext& ctx) {
             YA_PROFILE_SCOPE("PointShadowPass::CullDispatch");
             YA_PERF_SCOPE(perf::sample::shadowPointCull(), perf::metric::cpuTimeMs(), perf::domain::render());
             _render->getDescriptorHelper()->updateDescriptorSets({
@@ -390,16 +381,6 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
         });
     resources.cullPass = cullPass;
     return resources;
-}
-
-IBuffer* PointShadowCullPass::getDrawCommandBuffer(uint32_t flightIndex) const
-{
-    return _perFlight[flightIndex].drawCommandExecBuffer.get();
-}
-
-IBuffer* PointShadowCullPass::getVisibleInstancesBuffer(uint32_t flightIndex) const
-{
-    return _perFlight[flightIndex].visibleInstancesExecBuffer.get();
 }
 
 } // namespace ya

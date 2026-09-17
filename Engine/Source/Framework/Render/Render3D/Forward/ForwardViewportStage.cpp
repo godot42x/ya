@@ -298,6 +298,7 @@ ForwardViewportAuxPasses::DrawContext ForwardViewportStage::makeAuxDrawContext(
         .debugDraw = bIncludeDebug ? passCtx.debugDraw : ForwardViewportAuxPasses::DrawContext::DebugDrawInput{},
         .directionGizmos = bIncludeDirection ? passCtx.directionGizmos : std::vector<ForwardDirectionGizmoInput>{},
         .skyboxFrameDescriptorSet = bIncludeSkybox ? passCtx.skyboxFrameDescriptorSet : nullptr,
+        .debug = bIncludeDebug ? passCtx.debug : ForwardDebugPassBindings{},
         .bReverseViewportY = bReverseViewportY,
     };
 }

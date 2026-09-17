@@ -137,32 +137,19 @@ void SSAOStage::init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL)
         .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
     }), "Failed to create SSAO pipeline");
 
-    _descriptorPool = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-        .label     = "Deferred_SSAO_DSP",
-        .maxSets   = 1,
-        .poolSizes = {
-            {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 4},
-        },
-    });
-
-    _inputDS = _descriptorPool->allocateDescriptorSets(_inputDSL);
-
     initNoiseTexture();
 }
 
 void SSAOStage::destroy()
 {
     _noiseTexture.reset();
-    _descriptorPool.reset();
     _inputDSL.reset();
     _frameDSL.reset();
-    _frameInputs = {};
     _pipeline.reset();
     _pipelineLayout.reset();
 
-    _render                       = nullptr;
-    _gBufferResources             = {};
-    _lastInputDescriptorWriteCount = 0;
+    _render           = nullptr;
+    _gBufferResources = {};
 }
 
 SSAOStage::FrameData SSAOStage::buildFrameData(const RenderStageContext& ctx) const
@@ -194,6 +181,32 @@ void SSAOStage::execute(const RenderStageContext& ctx)
 {
     (void)ctx;
     // SSAO is recorded exclusively by DeferredFrameGraphOrchestrator.
+}
+
+void SSAOStage::writeInputDescriptors(
+    DescriptorSetHandle                          inputDS,
+    const RGRenderContext::RGPassBindingContext& binding,
+    RGTextureHandle                              albedo,
+    RGTextureHandle                              normal,
+    RGTextureHandle                              depth,
+    RGTextureHandle                              noise) const
+{
+    if (!_render || !inputDS) {
+        return;
+    }
+    auto sampler = TextureLibrary::get().getDefaultSampler();
+    const auto albedoInfo = binding.resolveTextureDescriptor(albedo, sampler.get());
+    const auto normalInfo = binding.resolveTextureDescriptor(normal, sampler.get());
+    const auto depthInfo  = binding.resolveTextureDescriptor(depth, sampler.get());
+    const auto noiseInfo  = binding.resolveTextureDescriptor(noise, sampler.get());
+    YA_CORE_ASSERT(albedoInfo && normalInfo && depthInfo && noiseInfo,
+                   "SSAO pass failed to resolve input textures");
+    _render->getDescriptorHelper()->updateDescriptorSets({
+        IDescriptorSetHelper::genImageWrite(inputDS, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {*albedoInfo}),
+        IDescriptorSetHelper::genImageWrite(inputDS, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {*normalInfo}),
+        IDescriptorSetHelper::genImageWrite(inputDS, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {*depthInfo}),
+        IDescriptorSetHelper::genImageWrite(inputDS, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {*noiseInfo}),
+    });
 }
 
 RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
@@ -233,36 +246,25 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
             });
         },
         [this, params, noise](RGRenderContext& rgCtx) {
-            // FG-502: set 1 (input DS) is written each pass from the graph
-            // binding context, so no image-view handles are cached across
-            // frames. Resolved image/view owners are retained on the command
-            // buffer by the binding context.
-            const auto binding = rgCtx.getBindingContext();
-            auto sampler       = TextureLibrary::get().getDefaultSampler();
-            const auto albedo = binding.resolveTextureDescriptor(params.albedo, sampler.get());
-            const auto normal = binding.resolveTextureDescriptor(params.normal, sampler.get());
-            const auto depth  = binding.resolveTextureDescriptor(params.depth, sampler.get());
-            const auto noiseDescriptor = binding.resolveTextureDescriptor(noise, sampler.get());
-            YA_CORE_ASSERT(albedo && normal && depth && noiseDescriptor,
-                           "SSAO pass failed to resolve input textures");
-            _render->getDescriptorHelper()->updateDescriptorSets({
-                IDescriptorSetHelper::genImageWrite(_inputDS, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {*albedo}),
-                IDescriptorSetHelper::genImageWrite(_inputDS, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {*normal}),
-                IDescriptorSetHelper::genImageWrite(_inputDS, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {*depth}),
-                IDescriptorSetHelper::genImageWrite(_inputDS, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {*noiseDescriptor}),
-            });
-            _lastInputDescriptorWriteCount = 4;
+            writeInputDescriptors(
+                params.inputDescriptorSet,
+                rgCtx.getBindingContext(),
+                params.albedo,
+                params.normal,
+                params.depth,
+                noise);
 
-            const auto rasterParams  = rgCtx.getRasterPassExecutionParams();
-            const auto renderExtent  = rasterParams.getRenderExtent();
-            const auto viewportWidth = renderExtent.width;
+            const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
+            const auto renderExtent   = rasterParams.getRenderExtent();
+            const auto viewportWidth  = renderExtent.width;
             const auto viewportHeight = renderExtent.height;
             rgCtx.beginDeclaredRasterRendering();
 
             rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
             rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
             rgCtx.getCommandBuffer().setScissor(0, 0, viewportWidth, viewportHeight);
-            rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {params.frameDescriptorSet, _inputDS});
+            rgCtx.getCommandBuffer().bindDescriptorSets(
+                _pipelineLayout.get(), 0, {params.frameDescriptorSet, params.inputDescriptorSet});
             rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
             rgCtx.endRendering();
         });

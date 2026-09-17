@@ -5,11 +5,19 @@
 - 阶段：R0 基线审计已完成；R1 已完成 SceneRenderRequest/SceneRenderPlan 的最小 frame-local 调度切片、真实 extractor 的显式 Scene/View 分层，以及 GameRuntime 的 scheduler 接入。RenderRuntime 按 SceneViewportTask 循环录制；选中的 world Camera 作为 overlay View submit，compose 到 display root，不改 host viewport identity。
 - 已确认：RenderFrameInputs.h 已有四组输入；RenderFrameData 的 Scene snapshot owner 已与 View-owned draw buckets 分离。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
-- 当前 checkpoint：4.0.2 C — typed View/Pass resources，Stage 改为 pass recipe；删除 singleton CIS 与 processor viewId map。不要继续扩大 `FrameResourceSet::Binding`。
-- 架构审计结论：`RenderSubmission` 拥有 command recording；`SceneFamilyResources` 拥有同 Scene 的 skinning GPU packet，双 Scene 不再按 flight 共享 skinning。`SceneRenderPlan` 已物化 `SceneViewFamilyPlan[]`。Forward/Deferred/Shadow **frame UBO** 按 View 隔离。Bloom/BasicPost 的 viewId map、SSAO/Light/EntityId maxSets=1、pipeline last-view 图袋仍是 hack。下一刀是 Checkpoint C，不要宣称双 Surface GPU 完成，也不要先录两个 Scene。
+- 当前 checkpoint：4.0.2 D — `DeferredViewFamilyRenderer` / `ForwardViewFamilyRenderer` 编译 family graph；删除 tick/beginTick/getCurrent 与 pipeline last-view 资源袋。
+- 架构审计结论：`RenderSubmission` 拥有 command recording；`SceneFamilyResources` 拥有同 Scene 的 skinning GPU packet；typed `ViewResources` 拥有 SSAO/Light/EntityId/Overlay/debug/post DS/UBO；PointShadow instance/cull 在 Shadow View Binding。Bloom/BasicPost viewId map 与 Stage singleton CIS 已删除。剩余：pipeline last-view 图袋与 `tick()/getCurrent*()`，以及把一 View 一 graph 收成 family graph。不要宣称双 Surface GPU 完成，也不要先录两个 Scene。
 - 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是持有 shared snapshot 并独立保存 View-owned draw buckets；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 View buckets、shared skinning palettes 和 light presence。
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 已按 Scene family 持有，同 Scene 多 View 共享一份 SSBO，不同 Scene 不再以 flightIndex 为共享 key。
+
+## 2026-09-17 checkpoint：typed View/Pass resources
+
+- 唯一目标：SSAO / Light / EntityId / Overlay / Forward-debug / postprocess 的 graph execute 不再更新 persistent Stage/Processor；每个 View 的 DS/UBO 由 typed `ViewResources` 子结构持有。
+- `DeferredFrameResourceSet::ViewResources` / `ForwardFrameResourceSet::ViewResources` 组合 frame Binding 与 typed pass bindings（`SSAOPassBindings`、`DeferredLightingPassBindings`、`EntityIdPassBindings`、`OverlayPassBindings`、`ForwardDebugPassBindings`、`PostprocessPassBindings`）。Bloom/BasicPost 的 viewId map 删除。PointShadow instance/cull packet 进入 Shadow View Binding。
+- graph-resolved CIS 仍可在 execute 写入 captured View DS；Stage 只保留 layout/PSO。未重命名 FrameResourceSet / Stage，也未改 `recordFamily`。
+- 验证：`xmake b ya-render-3d`、`xmake b ya-render-3d-test`、`xmake r ya-render-3d-test --gtest_filter='ViewPassResourcesTest.*:SceneFamilyResourcesTest.*:RenderSubmissionTest.*:RenderViewBindingTableTest.*:RenderRuntimeSnapshotTest.*:RenderViewOutputTableTest.*:DeferredFrameResourceSetTest.*:DeferredRenderPipelineTest.*:DrawCandidateViewTest.*:RenderGraphCoreTest.FrameUploadArena*:ViewPersistentResourceKeyTest.*:CameraFrustumOverlayTest.*:DirectionalShadowMathTest.*:ForwardGraphInputsTest.*:DeferredPassParamsTest.*:PostProcessingStageTest.*'`（66/66）、`git diff --check`。
+- 保留未完成：Checkpoint D–E；pipeline last-view 图袋与 tick/getCurrent；双 Scene 产品录制；双 Surface GPU 验收。
 
 ## 2026-09-17 checkpoint：SceneFamily owner
 
@@ -17,7 +25,7 @@
 - `SceneRenderScheduler::seal()` 物化 `SceneViewFamilyPlan[]`（按 sceneId/revision/snapshot/renderFlags/policyId 分组）。`RenderSubmission::allocateSceneFamily()` 按 key 返回稳定 owner。Forward/Deferred/Shadow `prepareSkinning` 写入 family SSBO，不再按 `flightIndex` 共用 `PerFlightFrameResourceSetBase` 槽位。
 - 未改 Stage CIS、processor viewId map、PointShadow indirect、也未把 pipeline 改成 `recordFamily`。
 - 验证：`xmake b ya-render-3d`、`xmake b ya-render-3d-test`、`xmake r ya-render-3d-test --gtest_filter='SceneFamilyResourcesTest.*:RenderSubmissionTest.*:RenderViewBindingTableTest.*:RenderRuntimeSnapshotTest.*:RenderViewOutputTableTest.*:DeferredFrameResourceSetTest.*:DeferredRenderPipelineTest.*:DrawCandidateViewTest.*:RenderGraphCoreTest.FrameUploadArena*:ViewPersistentResourceKeyTest.*:CameraFrustumOverlayTest.*:DirectionalShadowMathTest.*:ForwardGraphInputsTest.*'`（57/57）、`git diff --check`。
-- 保留未完成：Checkpoint C–E；Stage CIS / last-view 图袋；双 Scene 产品录制；双 Surface GPU 验收。
+- 保留未完成：Checkpoint D–E；pipeline last-view 图袋；双 Scene 产品录制；双 Surface GPU 验收。
 
 ## 2026-09-17 checkpoint：RenderSubmission owner
 
@@ -209,13 +217,13 @@ R0 结论：world snapshot 与 UI snapshot 都在 renderFrame 前生成；Render
 | --- | --- | --- | --- |
 | R0 单 View 基线 | 已完成 | 单 View、现有 pass、单 submit、Forward/Deferred topology | 真实 GPU golden 仍依赖可运行窗口环境 |
 | R1 World/View 分离 | 已完成（单 View 契约） | RenderFrameData 组合 Scene snapshot；现有单 View pipeline topology | GameEditor/preview 多 request |
-| R2 ViewFamily | 进行中（Submission owner + SceneFamily owner 已落地；View binding + keepalives + output 句柄 + View-keyed RT + task 循环录制 + editor camera PiP） | Forward/Deferred topology、PointShadow indirect per-flight | typed pass resources、family renderer、拆 Runtime、双 Scene 录制、双 Surface 验收 |
+| R2 ViewFamily | 进行中（Submission + SceneFamily + typed View/Pass resources 已落地；View binding + keepalives + output 句柄 + View-keyed RT + task 循环录制 + editor camera PiP） | Forward/Deferred topology | family renderer、拆 Runtime、双 Scene 录制、双 Surface 验收 |
 | R3 GUI2D/GameUI | 未开始 | WidgetTree live source、UIFrameSnapshot 输入 | UI-only 与 GameUI[ViewId] |
 | R4 性能收口 | 未开始 | 优化由 profile 触发 | cache、submit、第三 pipeline 决策 |
 
 ## 下一轮接力点
 
-R0 已完成。`RenderSubmission` 拥有 command recording；`SceneFamilyResources` 拥有同 Scene 的 skinning packet。下一 checkpoint 是 4.0.2 C（typed pass resources / Stage recipes）；不要宣称双 Surface GPU 完成，也不要先录两个 Scene。
+R0 已完成。`RenderSubmission` 拥有 command recording；`SceneFamilyResources` 拥有同 Scene 的 skinning packet；typed `ViewResources` 拥有 pass DS/UBO。下一 checkpoint 是 4.0.2 D（ViewFamily renderer / 删除 last-view 图袋）；不要宣称双 Surface GPU 完成，也不要先录两个 Scene。
 
 ## R1 审计结论
 

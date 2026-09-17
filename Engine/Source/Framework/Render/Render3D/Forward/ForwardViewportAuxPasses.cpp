@@ -51,8 +51,6 @@ void ForwardViewportAuxPasses::destroy()
     _debugPipeline.reset();
     _debugPPL.reset();
     _debugDSL.reset();
-    _debugDSP.reset();
-    _debugUboBuffer.reset();
 
     _runtimeServices = nullptr;
     _render = nullptr;
@@ -251,21 +249,6 @@ void ForwardViewportAuxPasses::initDebug(const InitDesc& desc)
     };
     _debugPipeline = IGraphicsPipeline::create(_render);
     _debugPipeline->recreate(_debugPipelineCI);
-
-    _debugDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-        .maxSets   = 1,
-        .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1}},
-    });
-    _debugUboDS = _debugDSP->allocateDescriptorSets(_debugDSL);
-    _debugUboBuffer = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-        .label       = "FwdDebug_UBO",
-        .usage       = EBufferUsage::UniformBuffer,
-        .size        = sizeof(DebugUBO),
-        .memoryUsage = EMemoryUsage::CpuToGpu,
-    });
-    _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::genSingleBufferWrite(_debugUboDS, 0, EPipelineDescriptorType::UniformBuffer, _debugUboBuffer.get()),
-    }, {});
 }
 
 void ForwardViewportAuxPasses::drawSkybox(const DrawContext& drawCtx)
@@ -357,20 +340,13 @@ void ForwardViewportAuxPasses::drawDirectionOverlay(const DrawContext& drawCtx)
 
 void ForwardViewportAuxPasses::drawDebug(const DrawContext& drawCtx)
 {
-    if (_debugMode == DebugNone || !_debugPipeline || !_debugUboBuffer || !drawCtx.debugDraw.bHasDraws) return;
+    if (_debugMode == DebugNone || !_debugPipeline || !drawCtx.debug.ubo.set || !drawCtx.debugDraw.bHasDraws) return;
 
     const auto& ctx = drawCtx.stageCtx;
     auto*       cmdBuf = ctx.cmdBuf;
-    const auto& fd = *ctx.frameData;
     auto vpW = ctx.viewportExtent.width;
     auto vpH = ctx.viewportExtent.height;
     if (vpW == 0 || vpH == 0) return;
-
-    _debugUBO.projection = fd.projection;
-    _debugUBO.view       = fd.view;
-    _debugUBO.resolution = glm::ivec2(static_cast<int>(vpW), static_cast<int>(vpH));
-    _debugUBO.time       = _runtimeServices ? static_cast<float>(_runtimeServices->getElapsedTimeSeconds()) : 0.0f;
-    _debugUboBuffer->writeData(&_debugUBO, sizeof(DebugUBO), 0);
 
     cmdBuf->debugBeginLabel("ForwardDebug");
     cmdBuf->bindPipeline(_debugPipeline.get());
@@ -381,7 +357,7 @@ void ForwardViewportAuxPasses::drawDebug(const DrawContext& drawCtx)
         for (const auto& item : items) {
             if (!item.mesh) continue;
             DebugModelPC pc{.modelMat = item.worldMatrix};
-            cmdBuf->bindDescriptorSets(_debugPPL.get(), 0, {_debugUboDS});
+            cmdBuf->bindDescriptorSets(_debugPPL.get(), 0, {drawCtx.debug.ubo.set});
             cmdBuf->pushConstants(_debugPPL.get(), EShaderStage::Vertex, 0, sizeof(DebugModelPC), &pc);
             if (bSkinned) {
                 item.mesh->drawSkinned(cmdBuf);

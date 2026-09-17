@@ -75,11 +75,6 @@ GraphicsPipelineCreateInfo makePipelineDesc(const BloomPostprocessing::InitDesc&
     };
 }
 
-[[nodiscard]] uint64_t bloomBlurBindingKey(uint64_t viewId, uint32_t passIndex)
-{
-    return (viewId << 32) | static_cast<uint64_t>(passIndex);
-}
-
 } // namespace
 
 void BloomPostprocessing::init(const InitDesc& initDesc)
@@ -95,18 +90,12 @@ void BloomPostprocessing::init(const InitDesc& initDesc)
 void BloomPostprocessing::shutdown()
 {
     _graphExecutor.reset();
-    _extractBindings.clear();
-    _extractSets.destroy();
     _extractDSL.reset();
     _extractPipeline.reset();
     _extractPPL.reset();
-    _blurBindings.clear();
-    _blurSets.destroy();
     _blurDSL.reset();
     _blurPipeline.reset();
     _blurPPL.reset();
-    _compositeBindings.clear();
-    _compositeSets.destroy();
     _compositeDSL.reset();
     _compositePipeline.reset();
     _compositePPL.reset();
@@ -157,12 +146,6 @@ void BloomPostprocessing::initExtractPipeline()
     _extractPPL      = IPipelineLayout::create(_render, layoutDesc.label, layoutDesc.pushConstants, dsls);
     _extractPipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_extractPipeline->recreate(makePipelineDesc(_initDesc, _extractPPL.get(), "Misc/BloomExtract.slang")), "Failed to create BloomExtract pipeline");
-
-    _extractSets.init(_render,
-                      "BloomExtract_ViewDSP",
-                      1,
-                      ViewDescriptorSetAllocator::kDefaultChunk,
-                      EPipelineDescriptorType::CombinedImageSampler);
 }
 
 void BloomPostprocessing::initBlurPipeline()
@@ -175,12 +158,6 @@ void BloomPostprocessing::initBlurPipeline()
     _blurPPL        = IPipelineLayout::create(_render, layoutDesc.label, layoutDesc.pushConstants, dsls);
     _blurPipeline   = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_blurPipeline->recreate(makePipelineDesc(_initDesc, _blurPPL.get(), "Misc/BloomBlur.slang")), "Failed to create BloomBlur pipeline");
-
-    _blurSets.init(_render,
-                   "BloomBlur_ViewDSP",
-                   1,
-                   ViewDescriptorSetAllocator::kDefaultChunk,
-                   EPipelineDescriptorType::CombinedImageSampler);
 }
 
 void BloomPostprocessing::initCompositePipeline()
@@ -193,78 +170,30 @@ void BloomPostprocessing::initCompositePipeline()
     _compositePPL      = IPipelineLayout::create(_render, layoutDesc.label, layoutDesc.pushConstants, dsls);
     _compositePipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_compositePipeline->recreate(makePipelineDesc(_initDesc, _compositePPL.get(), "Misc/BloomComposite.slang")), "Failed to create BloomComposite pipeline");
-
-    _compositeSets.init(_render,
-                        "BloomComposite_ViewDSP",
-                        2,
-                        ViewDescriptorSetAllocator::kDefaultChunk,
-                        EPipelineDescriptorType::CombinedImageSampler);
 }
 
-DescriptorSetHandle BloomPostprocessing::bindExtract(uint64_t viewId, IImageView* inputImageView)
+void BloomPostprocessing::writeSampler(DescriptorSetHandle set, IImageView* inputImageView)
 {
-    auto& binding = _extractBindings[viewId];
-    if (!binding.set) {
-        binding.set = _extractSets.allocate(_extractDSL);
-        YA_CORE_ASSERT(binding.set, "Failed to allocate BloomExtract descriptor set for view {}", viewId);
-        binding.bound = {};
+    if (!_render || !set) {
+        return;
     }
-
-    const auto imageViewHandle = inputImageView ? inputImageView->getHandle() : ImageViewHandle{};
-    if (binding.bound != imageViewHandle) {
-        binding.bound = imageViewHandle;
-        auto sampler  = TextureLibrary::get().getDefaultSampler();
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneImage(binding.set, 0, inputImageView, sampler.get()),
-        });
-    }
-    return binding.set;
+    auto sampler = TextureLibrary::get().getDefaultSampler();
+    _render->getDescriptorHelper()->updateDescriptorSets({
+        IDescriptorSetHelper::writeOneImage(set, 0, inputImageView, sampler.get()),
+    });
 }
 
-DescriptorSetHandle BloomPostprocessing::bindBlur(uint64_t viewId, uint32_t passIndex, IImageView* inputImageView)
+void BloomPostprocessing::writeComposite(DescriptorSetHandle set, IImageView* sceneImageView, IImageView* bloomImageView)
 {
-    const uint64_t key = bloomBlurBindingKey(viewId, passIndex);
-    auto& binding = _blurBindings[key];
-    if (!binding.set) {
-        binding.set = _blurSets.allocate(_blurDSL);
-        YA_CORE_ASSERT(binding.set, "Failed to allocate BloomBlur descriptor set for view {} pass {}", viewId, passIndex);
-        binding.bound = {};
+    if (!_render || !set) {
+        return;
     }
-
-    const auto imageViewHandle = inputImageView ? inputImageView->getHandle() : ImageViewHandle{};
-    if (binding.bound != imageViewHandle) {
-        binding.bound = imageViewHandle;
-        auto sampler  = TextureLibrary::get().getDefaultSampler();
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneImage(binding.set, 0, inputImageView, sampler.get()),
-        });
-    }
-    return binding.set;
-}
-
-DescriptorSetHandle BloomPostprocessing::bindComposite(uint64_t viewId, IImageView* sceneImageView, IImageView* bloomImageView)
-{
-    auto& binding = _compositeBindings[viewId];
-    if (!binding.set) {
-        binding.set = _compositeSets.allocate(_compositeDSL);
-        YA_CORE_ASSERT(binding.set, "Failed to allocate BloomComposite descriptor set for view {}", viewId);
-        binding.scene = {};
-        binding.bloom = {};
-    }
-
-    auto*      resolvedBloomImageView = bloomImageView ? bloomImageView : TextureLibrary::get().getBlackTexture()->getImageView();
-    const auto sceneHandle            = sceneImageView ? sceneImageView->getHandle() : ImageViewHandle{};
-    const auto bloomHandle            = resolvedBloomImageView ? resolvedBloomImageView->getHandle() : ImageViewHandle{};
-    if (binding.scene != sceneHandle || binding.bloom != bloomHandle) {
-        binding.scene = sceneHandle;
-        binding.bloom = bloomHandle;
-        auto sampler  = TextureLibrary::get().getDefaultSampler();
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneImage(binding.set, 0, sceneImageView, sampler.get()),
-            IDescriptorSetHelper::writeOneImage(binding.set, 1, resolvedBloomImageView, sampler.get()),
-        });
-    }
-    return binding.set;
+    auto* resolvedBloomImageView = bloomImageView ? bloomImageView : TextureLibrary::get().getBlackTexture()->getImageView();
+    auto sampler = TextureLibrary::get().getDefaultSampler();
+    _render->getDescriptorHelper()->updateDescriptorSets({
+        IDescriptorSetHelper::writeOneImage(set, 0, sceneImageView, sampler.get()),
+        IDescriptorSetHelper::writeOneImage(set, 1, resolvedBloomImageView, sampler.get()),
+    });
 }
 
 RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const RenderDesc& desc)
@@ -332,14 +261,14 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
                     }},
                 });
             },
-            [this, scene, extractPC, viewId = desc.viewId](RGRenderContext& rgCtx) {
+            [this, scene, extractPC, extractDS = desc.bloom.extract.set](RGRenderContext& rgCtx) {
                 const auto rasterParams = rgCtx.getRasterPassExecutionParams();
                 const auto renderExtent = rasterParams.getRenderExtent();
                 rgCtx.beginDeclaredRasterRendering();
                 const auto* sceneImage = rgCtx.resolveTexture(scene);
                 YA_CORE_ASSERT(sceneImage != nullptr && sceneImage->getImageView() != nullptr,
                                "Bloom extract pass failed to resolve scene texture {}", scene.index);
-                const DescriptorSetHandle extractDS = bindExtract(viewId, sceneImage->getImageView());
+                writeSampler(extractDS, sceneImage->getImageView());
                 rgCtx.getCommandBuffer().bindPipeline(_extractPipeline.get());
                 rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(renderExtent.width), static_cast<float>(renderExtent.height));
                 rgCtx.getCommandBuffer().setScissor(0, 0, renderExtent.width, renderExtent.height);
@@ -349,8 +278,10 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
                 rgCtx.endRendering();
             });
 
-        const uint32_t blurPassCount = std::max<uint32_t>(1, desc.state->bloomBlurPasses * 2);
-        _lastBlurPassCount           = blurPassCount;
+        const uint32_t blurPassCount = std::min(
+            kMaxBloomBlurPasses,
+            std::max<uint32_t>(1, desc.state->bloomBlurPasses * 2));
+        _lastBlurPassCount = blurPassCount;
 
         for (uint32_t passIndex = 0; passIndex < blurPassCount; ++passIndex) {
             const bool bHorizontal = (passIndex % 2) == 0;
@@ -376,14 +307,14 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
                         }},
                     });
                 },
-                [this, passIndex, blurInputHandle, blurPC, viewId = desc.viewId](RGRenderContext& rgCtx) {
+                [this, blurInputHandle, blurPC, blurDS = desc.bloom.blur[passIndex].set](RGRenderContext& rgCtx) {
                     const auto rasterParams = rgCtx.getRasterPassExecutionParams();
                     const auto renderExtent = rasterParams.getRenderExtent();
                     rgCtx.beginDeclaredRasterRendering();
                     const auto* blurInputImage = rgCtx.resolveTexture(blurInputHandle);
                     YA_CORE_ASSERT(blurInputImage != nullptr && blurInputImage->getImageView() != nullptr,
                                    "Bloom blur pass failed to resolve input texture {}", blurInputHandle.index);
-                    const DescriptorSetHandle blurDS = bindBlur(viewId, passIndex, blurInputImage->getImageView());
+                    writeSampler(blurDS, blurInputImage->getImageView());
                     rgCtx.getCommandBuffer().bindPipeline(_blurPipeline.get());
                     rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(renderExtent.width), static_cast<float>(renderExtent.height));
                     rgCtx.getCommandBuffer().setScissor(0, 0, renderExtent.width, renderExtent.height);
@@ -418,7 +349,7 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
                 }},
             });
         },
-        [this, scene, bBloomEnabled, compositePC, viewId = desc.viewId, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{})](RGRenderContext& rgCtx) {
+        [this, scene, bBloomEnabled, compositePC, compositeDS = desc.bloom.composite.set, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{})](RGRenderContext& rgCtx) {
             const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             const auto renderExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
@@ -432,7 +363,7 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
                                "Bloom composite pass failed to resolve bloom texture {}", finalBloomHandle.index);
                 compositeBloomImageView = finalBloomImage->getImageView();
             }
-            const DescriptorSetHandle compositeDS = bindComposite(viewId, sceneImage->getImageView(), compositeBloomImageView);
+            writeComposite(compositeDS, sceneImage->getImageView(), compositeBloomImageView);
             rgCtx.getCommandBuffer().bindPipeline(_compositePipeline.get());
             rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(renderExtent.width), static_cast<float>(renderExtent.height));
             rgCtx.getCommandBuffer().setScissor(0, 0, renderExtent.width, renderExtent.height);

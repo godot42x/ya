@@ -148,7 +148,8 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
 {
     if (!payload.frameData || payload.pointLightCount == 0 || !_shadowResource || !_shadowResource->getImage()) return std::nullopt;
 
-    const bool useIndirect = payload.pointIndirectRequested() && _indirectRenderer.hasRenderableInstances(payload.flightIndex);
+    const bool useIndirect = payload.pointIndirectRequested() &&
+                             _indirectRenderer.hasRenderableInstances(payload.pointShadow);
 
     std::optional<RGPassHandle> rasterDependency = dependency;
 
@@ -175,10 +176,11 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
     std::optional<RGBufferHandle> visibleInstances;
     std::optional<RGBufferHandle> instanceData;
     if (useIndirect) {
+        YA_CORE_ASSERT(payload.pointShadow != nullptr, "Point shadow indirect graph requires a View packet");
         auto& cullPass = _indirectRenderer.getCullPass();
         const bool gpuCullEnabled = payload.pointIndirectCullEnabled();
         const auto cullResources = cullPass.appendGraphPass(
-            graph, payload.flightIndex, gpuCullEnabled, dependency);
+            graph, *payload.pointShadow, gpuCullEnabled, dependency);
         YA_CORE_ASSERT(cullResources.has_value(),
                        "Point shadow graph requires cull resources");
         drawCommands     = cullResources->drawCommands;
@@ -268,7 +270,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
                 indirectCommandBuffer = ctx.resolveBuffer(*drawCommands);
                 if (visibleInstances.has_value()) {
                     _indirectRenderer.bindGraphVisibleInstances(
-                        payload.flightIndex,
+                        *payload.pointShadow,
                         ctx.resolveBuffer(*visibleInstances));
                 }
             }

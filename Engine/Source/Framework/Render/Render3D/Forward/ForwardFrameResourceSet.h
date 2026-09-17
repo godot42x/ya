@@ -7,6 +7,7 @@
 #include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewBindingTable.h"
+#include "Render3D/Common/ViewPassResources.h"
 
 #include "PBRForward.slang.h"
 #include "PhongLit.slang.h"
@@ -79,6 +80,14 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase
         }
     };
 
+    struct ViewResources
+    {
+        Binding                  frame{};
+        EntityIdPassBindings     entityId{};
+        ForwardDebugPassBindings debug{};
+        PostprocessPassBindings  post{};
+    };
+
     void init(IRender* render);
     void destroy();
 
@@ -107,6 +116,8 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase
     [[nodiscard]] stdptr<IDescriptorSetLayout> getUnlitFrameDSL() const { return _unlitFrameDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxFrameDSL() const { return _skyboxFrameDSL; }
     [[nodiscard]] const Binding*               getViewBinding(uint32_t flightIndex, uint32_t viewSlot) const;
+    [[nodiscard]] const ViewResources*         getViewResources(uint32_t flightIndex, uint32_t viewSlot) const;
+    [[nodiscard]] ViewResources*               mutableViewResources(uint32_t flightIndex, uint32_t viewSlot);
     [[nodiscard]] uint32_t                     liveViewCount(uint32_t flightIndex) const;
 
   private:
@@ -114,7 +125,7 @@ class ForwardFrameResourceSet : public PerFlightFrameResourceSetBase
     stdptr<IDescriptorSetLayout> _phongFrameDSL;
     stdptr<IDescriptorSetLayout> _unlitFrameDSL;
     stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
-    RenderViewBindingTable<Binding> _viewBindings;
+    RenderViewBindingTable<ViewResources> _viewBindings;
 
     bool ensureViewDescriptors(RenderSubmission& submission, Binding& binding);
     void                    updatePBRFrameDescriptorSet(const Binding& binding);

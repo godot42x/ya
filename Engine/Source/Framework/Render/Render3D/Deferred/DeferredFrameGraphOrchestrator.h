@@ -54,6 +54,7 @@ struct DeferredFrameGraphOrchestrator
         bool                                   bPostprocessOutputIsSRGB  = false;
         std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
         uint64_t                               viewId                    = 0;
+        const DeferredFrameResourceSet::ViewResources* viewResources     = nullptr;
     };
 
     void build(const BuildDependencies& deps, const BuildInputs& inputs) const;

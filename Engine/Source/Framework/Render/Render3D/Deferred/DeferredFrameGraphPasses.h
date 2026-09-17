@@ -31,6 +31,7 @@ struct DeferredFrameGraphPassContext
     const RenderTargetCreateInfo&            gBufferRTSpec;
     const RenderTargetCreateInfo&            viewportRTSpec;
     const ViewportOverlayStage::FrameInputs* overlayInputs = nullptr;
+    const DeferredFrameResourceSet::ViewResources* viewResources = nullptr;
     const EnvironmentLightingSceneResources*  environmentLighting = nullptr;
     DescriptorSetHandle                      environmentLightingDS{};
     FrameContext*                            postContext = nullptr;
@@ -78,6 +79,7 @@ struct DeferredSSAOPassParams
     RGTextureHandle     depth{};
     RGTextureHandle     output{};
     DescriptorSetHandle frameDescriptorSet{};
+    DescriptorSetHandle inputDescriptorSet{};
     uint64_t            viewId = 0;
 };
 
@@ -104,6 +106,8 @@ struct DeferredLightPassParams
     uint32_t                       layerCount = 1;
     DescriptorSetHandle            frameAndLightDescriptorSet{};
     DescriptorSetHandle            environmentLightingDescriptorSet{};
+    DescriptorSetHandle            gBufferTextureDescriptorSet{};
+    DescriptorSetHandle            shadowDescriptorSet{};
 };
 
 struct DeferredSkyboxPassParams
@@ -137,6 +141,7 @@ struct DeferredForwardTransparentPassParams
     Rect2D                            renderArea{};
     uint32_t                          layerCount = 1;
     ViewportOverlayStage::FrameInputs overlay{};
+    OverlayPassBindings               overlayBindings{};
 };
 
 struct DeferredOverlayPassParams

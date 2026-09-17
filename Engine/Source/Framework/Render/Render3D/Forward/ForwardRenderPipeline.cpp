@@ -10,6 +10,7 @@
 #include "Render3D/Common/PipelineCommon.h"
 #include "Render3D/Common/PostProcessingStateConfig.h"
 #include "Render3D/Common/RenderSubmission.h"
+#include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
 #include "Scene/Core/Scene.h"
@@ -90,6 +91,60 @@ RenderTargetCreateInfo buildForwardViewportRenderTargetSpec(Extent2D extent, EFo
             },
         },
     };
+}
+
+void allocateForwardViewPassResources(
+    RenderSubmission&                        submission,
+    IRender*                                 render,
+    uint32_t                                 alignment,
+    const RenderStageContext&                stageCtx,
+    EntityIdViewportPass*                    entityIdPass,
+    ForwardViewportAuxPasses&                auxPasses,
+    PostProcessingStage*                     postStage,
+    ForwardFrameResourceSet::ViewResources&  resources)
+{
+    const RenderFrameData* frameData = stageCtx.frameData;
+    if (entityIdPass && frameData) {
+        EntityIdViewportPass::FrameUBO ubo{};
+        ubo.viewProj = frameData->viewProjection;
+        ubo.view     = frameData->view;
+        writeUniformPassBinding(
+            submission,
+            render,
+            entityIdPass->getFrameDSL(),
+            alignment,
+            &ubo,
+            sizeof(ubo),
+            resources.entityId.frame);
+    }
+
+    if (auxPasses.getDebugDSL() && frameData) {
+        auto& debugUBO = auxPasses.getDebugUBO();
+        debugUBO.projection = frameData->projection;
+        debugUBO.view       = frameData->view;
+        debugUBO.resolution = glm::ivec2(
+            static_cast<int>(stageCtx.viewportExtent.width),
+            static_cast<int>(stageCtx.viewportExtent.height));
+        writeUniformPassBinding(
+            submission,
+            render,
+            auxPasses.getDebugDSL(),
+            alignment,
+            &debugUBO,
+            sizeof(debugUBO),
+            resources.debug.ubo);
+    }
+
+    if (postStage) {
+        allocateBloomPassBindings(
+            submission,
+            postStage->getBloomExtractDSL(),
+            postStage->getBloomBlurDSL(),
+            postStage->getBloomCompositeDSL(),
+            resources.post.bloom);
+        resources.post.toneMap.input.set = allocateCombinedImageSamplerSet(
+            submission, postStage->getToneMapInputDSL(), 1);
+    }
 }
 
 } // namespace
@@ -642,10 +697,24 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     _viewportStage->prepare(stageCtx);
 
     const ForwardFrameResourceSet::Binding* viewBinding = nullptr;
+    ForwardFrameResourceSet::ViewResources* viewResources = nullptr;
     if (_frameResources) {
         viewBinding = _frameResources->beginView(submission, view, _viewportStage->getFramePayloads());
         if (!viewBinding) {
             YA_CORE_ERROR("Forward viewport view binding prepare failed");
+        }
+        viewResources = _frameResources->mutableViewResources(submission.flightIndex(), view.viewSlot);
+        if (viewResources) {
+            const uint32_t alignment = std::max(_render ? _render->getUniformBufferOffsetAlignment() : 1u, 1u);
+            allocateForwardViewPassResources(
+                submission,
+                _render,
+                alignment,
+                stageCtx,
+                &_entityIdPass,
+                _viewportStage->getAuxPasses(),
+                &_postProcessStage,
+                *viewResources);
         }
     }
 
@@ -677,7 +746,8 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
         frame,
         stageCtx,
         postContext,
-        viewBinding ? *viewBinding : ForwardFrameResourceSet::Binding{});
+        viewBinding ? *viewBinding : ForwardFrameResourceSet::Binding{},
+        viewResources);
     YA_CORE_ASSERT(bExecuted, "Forward viewport graph execution failed");
 }
 
@@ -701,7 +771,8 @@ void ForwardRenderPipeline::shutdown()
 bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameContext& frame,
                                                      RenderStageContext&             stageCtx,
                                                      FrameContext&                    postContext,
-                                                     const ForwardFrameResourceSet::Binding& frameBinding)
+                                                     const ForwardFrameResourceSet::Binding& frameBinding,
+                                                     ForwardFrameResourceSet::ViewResources* viewResources)
 {
     YA_CORE_ASSERT(_graphExecutor != nullptr, "ForwardRenderPipeline graph executor is not initialized");
 
@@ -719,6 +790,9 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
 
     RenderGraph graph;
     auto viewportPassContext = _viewportStage->buildPassContext(stageCtx);
+    if (viewResources) {
+        viewportPassContext.debug = viewResources->debug;
+    }
     RenderTargetCreateInfo viewRTSpec = _viewportRTSpec;
     if (stageCtx.viewportExtent.width > 0 && stageCtx.viewportExtent.height > 0) {
         viewRTSpec.extent = stageCtx.viewportExtent;
@@ -742,6 +816,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
             .viewportOverlaySnapshot  = frame.viewportOverlaySnapshot,
             .viewId                   = frame.view.task ? frame.view.task->viewId : 0,
+            .viewResources            = viewResources,
         });
 
     RGCompiledGraph compiled{};

@@ -5,9 +5,9 @@
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Pipeline.h"
 #include "Render3D/Common/PostProcessingState.h"
-#include "Render3D/Common/ViewDescriptorSetAllocator.h"
+#include "Render3D/Common/ViewPassResources.h"
 
-#include <unordered_map>
+#include <algorithm>
 
 namespace ya
 {
@@ -30,6 +30,7 @@ struct BasicPostprocessing
         bool                       bOutputIsSRGB  = false;
         const PostProcessingState* state          = nullptr;
         uint64_t                   viewId         = 0;
+        ToneMapPassBindings        toneMap{};
     };
 
     using PushConstants = slang_types::Misc::BasicPostprocessing::PushConstants;
@@ -40,8 +41,6 @@ struct BasicPostprocessing
     stdptr<IPipelineLayout>          _pipelineLayout;
     stdptr<IGraphicsPipeline>        _pipeline;
     stdptr<IDescriptorSetLayout>     _dslInputTexture;
-    ViewDescriptorSetAllocator       _viewSets;
-    std::unordered_map<uint64_t, std::pair<DescriptorSetHandle, ImageViewHandle>> _viewBindings;
 
     PipelineLayoutDesc _pipelineLayoutDesc{
         .label         = "BasicPostprocessing_PipelineLayout",
@@ -72,9 +71,10 @@ struct BasicPostprocessing
     void shutdown();
     void beginFrame();
     void render(const RenderDesc& desc);
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getInputDSL() const { return _dslInputTexture; }
   private:
     void rebuildPushConstants(const PostProcessingState& state, bool bOutputIsSRGB);
-    DescriptorSetHandle bindViewInput(uint64_t viewId, IImageView* inputImageView);
+    void writeInput(DescriptorSetHandle set, IImageView* inputImageView);
 };
 
 } // namespace ya

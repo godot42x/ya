@@ -29,7 +29,7 @@ namespace ya
 namespace
 {
 
-constexpr uint32_t BILLBOARD_TEXTURE_SET_SIZE = 16;
+constexpr uint32_t BILLBOARD_TEXTURE_SET_SIZE = ViewportOverlayStage::kBillboardTextureCount;
 
 bool hasDebugSkinningDrawItem(DrawCandidateView items)
 {
@@ -227,30 +227,6 @@ void ViewportOverlayStage::initBillboards()
     };
     _billboardPipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_billboardPipeline && _billboardPipeline->recreate(ci), "Failed to create billboard overlay pipeline");
-
-    _billboardDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-                                                      .label     = "BillboardOverlay_DSP",
-                                                      .maxSets   = MAX_FLIGHTS_IN_FLIGHT + 1,
-                                                      .poolSizes = {
-                                                          {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT},
-                                                          {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = BILLBOARD_TEXTURE_SET_SIZE},
-                                                      },
-                                                  });
-
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _billboardFrameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-                                                             .label       = std::format("BillboardOverlay_Frame_UBO_{}", i),
-                                                             .usage       = EBufferUsage::UniformBuffer,
-                                                             .size        = sizeof(BillboardFrameUBO),
-                                                             .memoryUsage = EMemoryUsage::CpuToGpu,
-                                                         });
-        _billboardFrameDS[i] = _billboardDSP->allocateDescriptorSets(_billboardFrameDSL);
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneUniformBuffer(_billboardFrameDS[i], 0, _billboardFrameUBO[i].get()),
-        });
-    }
-
-    _billboardTextureDS = _billboardDSP->allocateDescriptorSets(_billboardTextureDSL);
 }
 
 void ViewportOverlayStage::initOverlay()
@@ -297,11 +273,7 @@ void ViewportOverlayStage::destroy()
     _billboardPPL.reset();
     _billboardFrameDSL.reset();
     _billboardTextureDSL.reset();
-    _billboardDSP.reset();
-    _billboardTextureDS = {};
-    _billboardTextureBindings.clear();
     _billboardMesh = nullptr;
-    for (auto& ubo : _billboardFrameUBO) ubo.reset();
 
     _overlayPipeline.reset();
     _overlayPPL.reset();
@@ -332,14 +304,6 @@ void ViewportOverlayStage::prepare(const RenderStageContext& ctx)
         _debugRenderSystem->beginFrame();
     }
     _debugSkinning.beginFrame();
-
-    if (!ctx.frameData) return;
-
-    BillboardFrameUBO billboardUbo{
-        .viewProjection = ctx.frameData->viewProjection,
-        .view           = ctx.frameData->view,
-    };
-    _billboardFrameUBO[ctx.flightIndex]->writeData(&billboardUbo, sizeof(billboardUbo), 0);
 }
 
 ViewportOverlayStage::SkyboxFrameUBO ViewportOverlayStage::buildSkyboxFrameData(const RenderStageContext& ctx) const
@@ -367,15 +331,15 @@ void ViewportOverlayStage::executeSkybox(const RenderStageContext& ctx, const Fr
     drawSkybox(ctx, skyboxInput);
 }
 
-void ViewportOverlayStage::executeOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs)
+void ViewportOverlayStage::executeOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs, const OverlayPassBindings& overlay)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    drawBillboards(ctx, frameInputs);
+    drawBillboards(ctx, frameInputs, overlay);
     drawOverlay(ctx, frameInputs);
 }
 
-uint32_t ViewportOverlayStage::resolveBillboardTextureIndex(const TextureBinding& binding)
+uint32_t ViewportOverlayStage::resolveBillboardTextureIndex(std::vector<TextureBinding>& bindings, const TextureBinding& binding)
 {
     const auto matches = [&](const TextureBinding& existing)
     {
@@ -383,40 +347,40 @@ uint32_t ViewportOverlayStage::resolveBillboardTextureIndex(const TextureBinding
                existing.getSamplerHandle() == binding.getSamplerHandle();
     };
 
-    for (uint32_t index = 0; index < _billboardTextureBindings.size(); ++index) {
-        if (matches(_billboardTextureBindings[index])) {
+    for (uint32_t index = 0; index < bindings.size(); ++index) {
+        if (matches(bindings[index])) {
             return index;
         }
     }
 
-    if (_billboardTextureBindings.size() >= BILLBOARD_TEXTURE_SET_SIZE) {
+    if (bindings.size() >= BILLBOARD_TEXTURE_SET_SIZE) {
         return 0;
     }
 
-    _billboardTextureBindings.push_back(binding);
-    return static_cast<uint32_t>(_billboardTextureBindings.size() - 1);
+    bindings.push_back(binding);
+    return static_cast<uint32_t>(bindings.size() - 1);
 }
 
-void ViewportOverlayStage::updateBillboardTextures(const FrameInputs& frameInputs)
+void ViewportOverlayStage::updateBillboardTextures(FrameInputs& frameInputs, OverlayPassBindings& overlay)
 {
-    _billboardTextureBindings.clear();
-    _billboardTextureBindings.push_back(TextureBinding{
+    std::vector<TextureBinding> bindings;
+    bindings.push_back(TextureBinding{
         .texture = TextureLibrary::get().getWhiteTexture(),
         .sampler = TextureLibrary::get().getDefaultSampler(),
     });
-    if (!_billboardTextureDS) {
+    if (!overlay.billboardTextures.set) {
         return;
     }
 
-    for (const auto& billboard : frameInputs.billboards) {
-        resolveBillboardTextureIndex(billboard.textureBinding);
+    for (auto& billboard : frameInputs.billboards) {
+        billboard.textureIndex = resolveBillboardTextureIndex(bindings, billboard.textureBinding);
     }
 
     std::vector<DescriptorImageInfo> imageInfos;
     imageInfos.reserve(BILLBOARD_TEXTURE_SET_SIZE);
-    const TextureBinding fallbackBinding = _billboardTextureBindings.front();
+    const TextureBinding fallbackBinding = bindings.front();
     for (uint32_t index = 0; index < BILLBOARD_TEXTURE_SET_SIZE; ++index) {
-        const TextureBinding& binding = index < _billboardTextureBindings.size() ? _billboardTextureBindings[index] : fallbackBinding;
+        const TextureBinding& binding = index < bindings.size() ? bindings[index] : fallbackBinding;
         imageInfos.push_back(DescriptorImageInfo{
             .imageView   = binding.getImageViewHandle(),
             .sampler     = binding.getSamplerHandle(),
@@ -425,13 +389,16 @@ void ViewportOverlayStage::updateBillboardTextures(const FrameInputs& frameInput
     }
 
     _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::genImageWrite(_billboardTextureDS, 0, 0, EPipelineDescriptorType::CombinedImageSampler, std::move(imageInfos)),
+        IDescriptorSetHelper::genImageWrite(overlay.billboardTextures.set, 0, 0, EPipelineDescriptorType::CombinedImageSampler, std::move(imageInfos)),
     });
 }
 
-void ViewportOverlayStage::drawBillboards(const RenderStageContext& ctx, const FrameInputs& frameInputs)
+void ViewportOverlayStage::drawBillboards(const RenderStageContext& ctx, const FrameInputs& frameInputs, const OverlayPassBindings& overlay)
 {
     if (frameInputs.billboards.empty() || !_billboardPipeline || !_billboardPPL || !_billboardMesh) {
+        return;
+    }
+    if (!overlay.billboardFrame.set || !overlay.billboardTextures.set) {
         return;
     }
 
@@ -453,7 +420,7 @@ void ViewportOverlayStage::drawBillboards(const RenderStageContext& ctx, const F
     }
     cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(vpW), viewportHeight);
     cmdBuf->setScissor(0, 0, vpW, vpH);
-    cmdBuf->bindDescriptorSets(_billboardPPL.get(), 0, {_billboardFrameDS[ctx.flightIndex], _billboardTextureDS});
+    cmdBuf->bindDescriptorSets(_billboardPPL.get(), 0, {overlay.billboardFrame.set, overlay.billboardTextures.set});
 
     for (const auto& billboard : frameInputs.billboards) {
         BillboardPushConstant pc{};
@@ -461,7 +428,7 @@ void ViewportOverlayStage::drawBillboards(const RenderStageContext& ctx, const F
         pc.worldDirection = billboard.worldDirection;
         pc.worldSize      = billboard.worldSize;
         pc.tint           = billboard.tint;
-        pc.textureIndex   = resolveBillboardTextureIndex(billboard.textureBinding);
+        pc.textureIndex   = billboard.textureIndex;
 
         cmdBuf->pushConstants(_billboardPPL.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(pc), &pc);
         _billboardMesh->drawStatic(cmdBuf);

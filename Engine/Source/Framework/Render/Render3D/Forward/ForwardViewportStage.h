@@ -71,6 +71,7 @@ struct ForwardViewportStage : public IRenderStage
         DescriptorSetHandle       skyboxFrameDescriptorSet = nullptr;
         SkyboxInput               skybox{};
         DebugDrawInput            debugDraw{};
+        ForwardDebugPassBindings  debug{};
         std::vector<ForwardDirectionGizmoInput> directionGizmos{};
     };
 

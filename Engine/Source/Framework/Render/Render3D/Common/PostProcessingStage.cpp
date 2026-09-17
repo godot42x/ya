@@ -161,7 +161,8 @@ RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph
                                                             RGTextureHandle input,
                                                             Extent2D        inputExtent,
                                                             FrameContext*   ctx,
-                                                            uint64_t        viewId)
+                                                            uint64_t        viewId,
+                                                            const BloomPassBindings& bloom)
 {
     (void)ctx;
     clearPreparedResources();
@@ -175,6 +176,7 @@ RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph
             .renderExtent = inputExtent,
             .state        = &_state,
             .viewId       = viewId,
+            .bloom        = bloom,
         });
     }
 
@@ -213,7 +215,7 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& grap
                 }},
             });
         },
-        [this, input = params.input, inputExtent = params.inputExtent, bOutputIsSRGB = params.bOutputIsSRGB, state = &_state, postContext = params.postContext, viewId = params.viewId](RGRenderContext& rgCtx) {
+        [this, input = params.input, inputExtent = params.inputExtent, bOutputIsSRGB = params.bOutputIsSRGB, state = &_state, postContext = params.postContext, viewId = params.viewId, toneMap = params.toneMap](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
@@ -228,6 +230,7 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& grap
                 .bOutputIsSRGB  = bOutputIsSRGB,
                 .state          = state,
                 .viewId         = viewId,
+                .toneMap        = toneMap,
             });
 
             rgCtx.endRendering();

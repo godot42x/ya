@@ -223,6 +223,7 @@ TEST(DeferredPassParamsTest, SSAOAndLightDefaultsAreEmptyAndHandlesRemainFrameLo
     EXPECT_EQ(ssao.frameRange.offset, 0u);
     EXPECT_EQ(ssao.frameRange.size, 0u);
     EXPECT_FALSE(ssao.frameDescriptorSet);
+    EXPECT_FALSE(ssao.inputDescriptorSet);
     EXPECT_EQ(ssao.viewId, 0u);
 
     ssao.frame  = RGBufferHandle{.index = 1, .generation = 2};
@@ -236,6 +237,8 @@ TEST(DeferredPassParamsTest, SSAOAndLightDefaultsAreEmptyAndHandlesRemainFrameLo
     EXPECT_FALSE(light.gBufferDepth.isValid());
     EXPECT_FALSE(light.ssao.has_value());
     EXPECT_FALSE(light.viewportColor.isValid());
+    EXPECT_FALSE(light.gBufferTextureDescriptorSet);
+    EXPECT_FALSE(light.shadowDescriptorSet);
     EXPECT_EQ(light.layerCount, 1u);
     for (const auto& color : light.gBufferColors) {
         EXPECT_FALSE(color.isValid());

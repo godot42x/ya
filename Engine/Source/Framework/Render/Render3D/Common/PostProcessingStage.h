@@ -8,6 +8,7 @@
 #include "RHI/Render.h"
 #include "RHI/RenderDefines.h"
 #include "Render3D/Common/PostProcessingState.h"
+#include "Render3D/Common/ViewPassResources.h"
 
 #include <string_view>
 
@@ -27,6 +28,7 @@ struct PostProcessingStage
         bool            bOutputIsSRGB = false;
         FrameContext*   postContext    = nullptr;
         uint64_t        viewId         = 0;
+        ToneMapPassBindings toneMap{};
     };
 
     struct InitDesc
@@ -56,7 +58,8 @@ struct PostProcessingStage
                                            RGTextureHandle input,
                                            Extent2D        inputExtent,
                                            FrameContext*   ctx,
-                                           uint64_t        viewId = 0);
+                                           uint64_t        viewId = 0,
+                                           const BloomPassBindings& bloom = {});
     RGTextureHandle appendFinalizeGraphPasses(RenderGraph& graph, const FinalizePassParams& params);
     RGTextureHandle appendGraphPasses(RenderGraph& graph,
                                       Texture*      inputTexture,
@@ -79,6 +82,22 @@ struct PostProcessingStage
     [[nodiscard]] stdptr<RenderTexture>      getPreparedOutputImageShared() const { return _preparedOutputImage; }
     [[nodiscard]] PostProcessingState&       getState() { return _state; }
     [[nodiscard]] const PostProcessingState& getState() const { return _state; }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getBloomExtractDSL() const
+    {
+        return _bloomProcessor ? _bloomProcessor->getExtractDSL() : nullptr;
+    }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getBloomBlurDSL() const
+    {
+        return _bloomProcessor ? _bloomProcessor->getBlurDSL() : nullptr;
+    }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getBloomCompositeDSL() const
+    {
+        return _bloomProcessor ? _bloomProcessor->getCompositeDSL() : nullptr;
+    }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getToneMapInputDSL() const
+    {
+        return _postProcessor ? _postProcessor->getInputDSL() : nullptr;
+    }
 };
 
 } // namespace ya
