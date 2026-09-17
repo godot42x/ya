@@ -52,8 +52,6 @@ enum class EViewportMode : uint8_t
 
 struct EditorLayer
 {
-    friend class EditorViewportCompositor;
-
   private:
     App*                 _app                = nullptr;
     uint64_t             _selectedEntityUUID = 0;

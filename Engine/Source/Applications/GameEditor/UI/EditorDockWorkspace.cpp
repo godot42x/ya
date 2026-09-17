@@ -847,8 +847,40 @@ EditorDockWorkspace* EditorDockWorkspace::nestedWorkspaceFor(EditorRootId rootId
     return nullptr;
 }
 
+EditorDockWorkspace* EditorDockWorkspace::workspaceHoldingTab(std::string_view tabId) const
+{
+    if (hasTab(tabId)) {
+        return const_cast<EditorDockWorkspace*>(this);
+    }
+    const FEditorTabSpawner* spawner = _host.spawners ? _host.spawners->find(tabId) : nullptr;
+    if (spawner && spawner->scope == EEditorTabScope::EditorOwnedTool &&
+        spawner->ownerEditorId != kInvalidEditorRootId) {
+        EditorDockWorkspace* nested = nestedWorkspaceFor(spawner->ownerEditorId);
+        if (nested && nested != this && nested->hasTab(tabId)) {
+            return nested;
+        }
+        return nullptr;
+    }
+    if (_host.nestedWorkspace && _host.nestedWorkspace != this &&
+        _host.nestedWorkspace->hasTab(tabId)) {
+        return _host.nestedWorkspace;
+    }
+    return nullptr;
+}
+
 bool EditorDockWorkspace::invokeTab(std::string_view tabId)
 {
+    if (EditorDockWorkspace* existing = workspaceHoldingTab(tabId)) {
+        if (existing != this) {
+            return existing->invokeTab(tabId);
+        }
+        if (!_host.dock) {
+            return false;
+        }
+        repairPlacement();
+        return _host.dock->activatePanel(tabId);
+    }
+
     const FEditorTabSpawner* spawner = _host.spawners ? _host.spawners->find(tabId) : nullptr;
     if (spawner && spawner->scope == EEditorTabScope::EditorOwnedTool &&
         spawner->ownerEditorId != kInvalidEditorRootId &&
@@ -870,9 +902,6 @@ bool EditorDockWorkspace::invokeTab(std::string_view tabId)
         return false;
     }
     repairPlacement();
-    if (_host.dock->hasPanel(tabId)) {
-        return _host.dock->activatePanel(tabId);
-    }
     if (!materializeTab(tabId)) {
         return false;
     }

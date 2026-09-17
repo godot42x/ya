@@ -82,22 +82,30 @@ AppKernel
   │    GUIWorkbench：IGUIAppDelegate 挂 FWorkbenchSurface
   └─ ya::App                    游戏 / 编辑器产品壳
        GameRuntimeFrameOrchestrator
-         tickLogic → modules.onLogic
-         tickRender → RenderRuntime
-           modules.onViewportCompose
-           modules.onPresentation
-             EditorModule → EditorWindowSession::tick（default window id）
+         tickLogic → EditorModule::onLogic
+           play-mode viewport | editor camera | prepare compose pipelines
+           EditorLayer::onUpdate | pending viewport resize
+         tickRender → RenderRuntime world graph
+           EditorModule::onViewportCompose
+             EditorViewportCompositor
+               2D: canvas preview + recordEditorCanvasSelectionOverlay
+               3D: world RT + recordEditorWorldViewportOverlays
+             setViewportDisplayImage
+           EditorModule::onPresentation
+             EditorWindowSession::tick（default window）
                → EditorSurface::tick
                rebuild-if-needed → window metrics
                → WidgetTree::tick → shell dialogs
                → pushViewportDisplay → buildSnapshot
-               → publishViewportRect → viewport overlay bridge
+               → publishViewportRect → viewport overlay host
              replayUIFrameSnapshot(..., EditorToolSurface)
            submitPresentFrame
-         modules.onAfterPresent
-           extra closeEditorWindow → GUIWindowManager::tickTrees + renderAll
+         EditorModule::onAfterPresent
+           close extras | reclaim empty | orphan GUI sessions
+           GUIWindowManager::tickTrees + renderAll
 ```
 
+Editor 全链路以 `Applications/GameEditor/EditorModule.cpp` 文件头注释为准；不要再造第二条产品宿主。
 `EditorWindowSession::tick` 是 Module 侧 chrome 入口；`EditorSurface::tick` 仍是窗口内编排。Tab 由 `EditorTabSpawnerRegistry`
 spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `WidgetTree`
 驱动。Surface 只编排 shell、dock persist、viewport host bridge 和 dialogs。
@@ -254,6 +262,7 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   `overlaySlot` → 仅 `UIOverlay`（以及 dock leaf / floating window 这类真叠放 host）；
   `contentSlot` → 单 child 内容 host（`UIBorder` / Button / CheckBox / SelectableRow / SizeBox / ScrollViewport / SplitPane pane / CompoundWidget）。
   不要给 Expander / SplitPane 再包一层隐藏 wrapper child；SplitPane 的 pane 复用 `contentSlot`，不另造 `splitSlot`。
+- Layout 类型按头文件隔离。控件头只 include 自己的 family（`UILayoutTypes.h` / `UIBoxLayout.h` / `UIContentLayout.h` / `UIOverlayLayout.h` / `UICanvasLayout.h` / `UISplitLayout.h` / `UITableLayout.h` / `UIScrollLayout.h`）。`GUI/Layout/UILayout.h` 是兼容聚合头，给实现 .cpp 用；不要在 Button/Text/WidgetTree 这类宽扇出头里再 include 它，否则改一个 layout 仍会全模块重编。
 - Slot args 应用走 `UISlot::applyArgs(args)`：`TArgs::SlotType` 指向接受该 payload 的 slot 类，没有按类型 if/else。新增 slot 类型时加 `FNewSlotArgs::SlotType` + `apply(const FNewSlotArgs&)` + `serialize`/`deserialize`/`isAutoSizeActive`，不要改 `applySlotBuilder` / `UIDocument`。layout arrange 读取 typed 字段仍可用 `as<T>()`。
 - 运行时类型是 `UICanvasPanel`；DSL 是 `ui::canvasPanel`。没有 `ui::panel` / `ui::canvas()` 别名。type id 仍是 `"engine.panel"`（`kTypeIdCanvasPanel`）。Canvas **不 paint**。`"panel"` / `"panel.canvas"` / `"canvas"` 是 visual theme key，挂在 `UIBorder` 上，不是 layout 类型。`ui::canvasPanel(...).setStyleKey("canvas")` 不再产生 chrome。
 
@@ -550,8 +559,10 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   paint 把文字/caret clip 到 padded inner rect，并在焦点下横向滚到 caret；不要自适应字号，
   也不要为了长路径撑开 Fill 表单行。`TextureRef` 是「path 填满一行 + Browse + Show」，预览在下一行；
   禁止把缩略图、路径框、Browse 塞进同一行。Show 经 `EditorRevealAssetCallback`
-  （`EditorLayer::revealInContentBrowser` → `EditorSurface::showContentBrowser` / `content-browser` tab
-  → `FileExplorer::setSelectedPath`）。`propertyLabelFromPath` 的 `" / "` group 是 expander **路径**，
+  （`EditorLayer::revealInContentBrowser` → `EditorSurface::showContentBrowser` / `invokeTab("content-browser")`
+  → `FileExplorer::setSelectedPath`）。`invokeTab` 必须先激活 **本窗已有实例**（window-root 或
+  Level nested，用户把 Content 拖进内层 dock 之后仍在），禁止只查当前 dock 再 spawn 第二份。
+  `propertyLabelFromPath` 的 `" / "` group 是 expander **路径**，
   Sampler Config 嵌在 Texture Slot 里，不要做成同级 collapsing header。
 - Canvas `fill()` / `anchor({0,0},{1,1})` 的 `offset({x,y})` **只移动 min 角**，span 仍是父矩形全高/全宽
   （`resolveCanvasRect`）。菜单下的 Dock 必须用
@@ -564,7 +575,7 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
 - `SelectionModel` 是 identity 选择源（`GUI/Binding/SelectionModel.h`）：selected 有序集合 + primary（空或不在集合外）+ hover/active/focus。不持有 Entity*。控件绑 `primaryRef()`；多选走 `add`/`toggle`；`replace` 批量同步。`EditorHierarchyTab` 在 `onAttached` 拉一次 Layer 选择，之后只订 `EditorLayer::onSelectionChanged`。
 - `ActionMap` 是 identity 命令表（`GUI/Binding/ActionMap.h`）：菜单、快捷键、toolbar 都 `execute(id)`。`FActionChord::primary` 在 macOS 是 Cmd、别处是 Ctrl。WidgetTree 未处理的 KeyPressed 才走 shortcut；文本焦点下只匹配带 modifier 的 chord。`UIMenu::FItem::fromAction` 生成同一 execute 的菜单行。
 - `UndoStack` 是 identity 撤销历史（`GUI/Binding/UndoStack.h`）：`push` 记录已应用的 undo/redo 闭包，不在 push 时调用 redo。`beginMerge`/`endMerge` 把同一 `mergeKey` 的连续 push 收成一步（拖动）；`UndoTransaction` 把嵌套 push 收成一步。栈不持有 Entity*。`edit.undo` / `edit.redo` 走 ActionMap（macOS Redo 是 Cmd+Shift+Z，别处 Ctrl+Y）。Inspector 拖动 `UIDragFloat` 在 `_onDragBegan/Ended` 开闭 merge；`setValue(..., false)` 是 sync，不进 undo。Gizmo / viewport 选择仍未接入。
-- `PropertyGraph::project` 是反射字段 → editor field model 的入口（`PropertyAccessor::collectLeaves` + `PropertyProjectionRegistry`）。单实例 typed get/set/equals/validation 在 `Core/Reflection/PropertyAccessor`；`PropertyHandle` 只做多选 mixed、undo copy/restore、asset picker kind 和 owner callback。Transform projection 负责显示名和 `setPosition/setRotation/setScale` 写回。Inspector 对多选的 **交集** component 物化 `EditorAutoPropertySection`；`UIDragFloat` mixed 显示 "—"，编辑写回全部 instance，undo 按 instance 快照恢复。enum 字段走 `UIComboBox`；`.color()` 元数据的 `glm::vec3`/`glm::vec4` 走 `UIColorEdit`（非 color vec3 仍走 DragFloat）。`TextureRef`/`ModelRef`/`MeshRef` 走 path `UITextField` + Browse + Show；Browse 经 `EditorAssetPickerCallback`（widgettree：`EditorLayer::setAssetPickerHandler` → `EditorSurface::openAssetPickerDialog`；handler 缺失时 `FilePicker::open*` 仍作 fallback，无 ImGui `render`）。Show 经 `EditorRevealAssetCallback`（`EditorLayer::revealInContentBrowser` → activate `content-browser`）。`EditorAutoPropertySection` 把 `" / "` group path 展成嵌套 `UIExpander`（`Diffuse Slot` 含 `Sampler Config`），不要平铺成同级 header。`PropertyHandle::validationError` 转调 `PropertyAccessor` 的 manipulate spec 范围；`hasAssetResolveError` 对 failed resolve 画 error fill；`UIDragFloat`/`UITextField` `setError` 画 error fill。`UIImage` 对缺失 asset / `setResourceMissing` 画 error fill。没有 retained 可编辑字段的类型跳过。ImGui `DetailsView` / `TypeRenderer` 已删；`EditorInspectorTab` 是实体/component 唯一正式 Inspector UI，并显示 Game UI Entry 摘要 + Open in UI Designer。
+- `PropertyGraph::project` 是反射字段 → editor field model 的入口（`PropertyAccessor::collectLeaves` + `PropertyProjectionRegistry`）。单实例 typed get/set/equals/validation 在 `Core/Reflection/PropertyAccessor`；`PropertyHandle` 只做多选 mixed、undo copy/restore、asset picker kind 和 owner callback。**写回必须标脏：** `project()` 对已注册 ECS 组件默认装 `IComponent::onEdit()` change hook（Mesh/Model/Billboard/Skybox/Environment/Terrain/SimpleMaterial 在 `onEdit` 里 `invalidate()`）。材质 projection 覆盖为 `onPropertyChanged(path)`；Transform projection 只装 `setPosition/setRotation/setScale`。禁止只 poke 反射字段、不丢 runtime cache——那是 imgui `DetailsView` 在 `hasModifications()` 后 `invalidate()` 的合同。`build()` 无 hook，不是 Inspector 入口。Inspector 对多选的 **交集** component 物化 `EditorAutoPropertySection`；`UIDragFloat` mixed 显示 "—"，编辑写回全部 instance，undo 按 instance 快照恢复。enum 字段走 `UIComboBox`；`.color()` 元数据的 `glm::vec3`/`glm::vec4` 走 `UIColorEdit`（非 color vec3 仍走 DragFloat）。`TextureRef`/`ModelRef`/`MeshRef` 走 path `UITextField` + Browse + Show；Browse 经 `EditorAssetPickerCallback`（widgettree：`EditorLayer::setAssetPickerHandler` → `EditorSurface::openAssetPickerDialog`；handler 缺失时 `FilePicker::open*` 仍作 fallback，无 ImGui `render`）。Show 经 `EditorRevealAssetCallback`（`EditorLayer::revealInContentBrowser` → activate `content-browser`）。`EditorAutoPropertySection` 把 `" / "` group path 展成嵌套 `UIExpander`（`Diffuse Slot` 含 `Sampler Config`），不要平铺成同级 header。`PropertyHandle::validationError` 转调 `PropertyAccessor` 的 manipulate spec 范围；`hasAssetResolveError` 对 failed resolve 画 error fill；`UIDragFloat`/`UITextField` `setError` 画 error fill。`UIImage` 对缺失 asset / `setResourceMissing` 画 error fill。没有 retained 可编辑字段的类型跳过。ImGui `DetailsView` / `TypeRenderer` 已删；`EditorInspectorTab` 是实体/component 唯一正式 Inspector UI，并显示 Game UI Entry 摘要 + Open in UI Designer。
 - `EditorSurface` Content Browser：`EditorContentBrowserTab` 持有 `FileExplorer` 与 keyed window。
   `FileExplorer::contentGeneration()` 才是 catalog 身份（mount/dir/search/view/filter）；
   tick **禁止**每帧 `collectEntries` 拼 fingerprint。tick 只做 O(1)：generation +

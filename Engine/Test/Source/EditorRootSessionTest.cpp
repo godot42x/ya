@@ -453,6 +453,103 @@ TEST(EditorDockWorkspaceTest, InvokeTabForwardsOwnedToolToNestedWorkspace)
     EXPECT_FALSE(rootDock.hasPanel("hierarchy"));
 }
 
+TEST(EditorDockWorkspaceTest, InvokeTabActivatesNestedWindowToolWithoutSpawningDuplicate)
+{
+    EditorTabSpawnerRegistry spawners;
+    spawners.add({
+        .tabId          = "content-browser",
+        .title          = "Content",
+        .toolsMenuLabel = "Content Browser",
+        .scope          = EEditorTabScope::WindowTool,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
+    });
+    spawners.add({
+        .tabId          = "hierarchy",
+        .title          = "Hierarchy",
+        .toolsMenuLabel = "Hierarchy",
+        .scope          = EEditorTabScope::EditorOwnedTool,
+        .ownerEditorId  = kLevelEditorRootId,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("H"); },
+    });
+
+    FDockContext nestedDock;
+    FDockContext rootDock;
+    EditorDockWorkspace nestedWorkspace;
+    nestedWorkspace.bind({
+        .spawners        = &spawners,
+        .dock            = &nestedDock,
+        .activeRootId    = kLevelEditorRootId,
+        .targetPlacement = EEditorTabPlacement::EditorOwnedNested,
+    });
+    EditorDockWorkspace rootWorkspace;
+    rootWorkspace.bind({
+        .spawners        = &spawners,
+        .dock            = &rootDock,
+        .activeRootId    = kLevelEditorRootId,
+        .targetPlacement = EEditorTabPlacement::WindowRootDock,
+        .nestedWorkspace = &nestedWorkspace,
+    });
+
+    const nlohmann::json layout = nlohmann::json::parse(R"JSON(
+{
+  "version": 1,
+  "root": {
+    "kind": "leaf",
+    "panels": ["hierarchy", "content-browser"],
+    "selected": "hierarchy"
+  },
+  "floating": []
+}
+)JSON");
+    ASSERT_TRUE(nestedWorkspace.applyLayoutDocument(layout, false));
+    ASSERT_TRUE(nestedDock.hasPanel("content-browser"));
+    ASSERT_FALSE(rootDock.hasPanel("content-browser"));
+
+    EXPECT_TRUE(nestedWorkspace.invokeTab("content-browser"));
+    EXPECT_TRUE(rootWorkspace.invokeTab("content-browser"));
+    EXPECT_FALSE(rootDock.hasPanel("content-browser"));
+    EXPECT_TRUE(nestedDock.hasPanel("content-browser"));
+    const FDockContext::FPanel* panel = nestedDock.findPanelByStableKey("content-browser");
+    ASSERT_NE(panel, nullptr);
+    const FDockNode* leaf = nestedDock.dockModel().findLeafForPanel(panel->id);
+    ASSERT_NE(leaf, nullptr);
+    EXPECT_EQ(leaf->selectedPanel, panel->id);
+}
+
+TEST(EditorDockWorkspaceTest, InvokeTabSpawnsWindowToolOnWindowRootWhenMissingEverywhere)
+{
+    EditorTabSpawnerRegistry spawners;
+    spawners.add({
+        .tabId          = "content-browser",
+        .title          = "Content",
+        .toolsMenuLabel = "Content Browser",
+        .scope          = EEditorTabScope::WindowTool,
+        .spawn          = [](FEditorTabSpawnContext&) { return std::make_shared<UICanvasPanel>("C"); },
+    });
+
+    FDockContext nestedDock;
+    FDockContext rootDock;
+    EditorDockWorkspace nestedWorkspace;
+    nestedWorkspace.bind({
+        .spawners        = &spawners,
+        .dock            = &nestedDock,
+        .activeRootId    = kLevelEditorRootId,
+        .targetPlacement = EEditorTabPlacement::EditorOwnedNested,
+    });
+    EditorDockWorkspace rootWorkspace;
+    rootWorkspace.bind({
+        .spawners        = &spawners,
+        .dock            = &rootDock,
+        .activeRootId    = kLevelEditorRootId,
+        .targetPlacement = EEditorTabPlacement::WindowRootDock,
+        .nestedWorkspace = &nestedWorkspace,
+    });
+
+    EXPECT_TRUE(rootWorkspace.invokeTab("content-browser"));
+    EXPECT_TRUE(rootDock.hasPanel("content-browser"));
+    EXPECT_FALSE(nestedDock.hasPanel("content-browser"));
+}
+
 TEST(EditorDockWorkspaceTest, LockedTabRejectsClose)
 {
     EditorTabSpawnerRegistry spawners;

@@ -43,10 +43,12 @@ struct FEditorProjectBrowser;
 struct UIDragDropOperation;
 enum class EWidgetRouteResult : uint8_t;
 
-/// Game Editor chrome owned as one WidgetTree.
+/// Game Editor chrome owned as one WidgetTree. Per-window orchestrator, not
+/// a product loop: `EditorModule::onPresentation` calls
+/// `EditorWindowSession::tick` → `EditorSurface::tick`.
 ///
 /// tick: rebuild-if-needed -> window metrics -> WidgetTree::tick ->
-/// shell chrome -> buildSnapshot -> viewport host bridge.
+/// shell chrome -> pushViewportDisplay -> buildSnapshot -> viewport host bridge.
 /// rebuild: new tree/theme/dock -> shell chrome -> spawn tabs into FDockContext.
 struct EditorSurface : IEditorViewportHostSink
 {

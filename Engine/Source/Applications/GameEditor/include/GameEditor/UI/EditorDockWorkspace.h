@@ -59,6 +59,10 @@ class EditorDockWorkspace
     FHost _host{};
     void applyAdoptPolicy();
     [[nodiscard]] DockNodeId ensureToolsLeaf();
+    /// This dock, or a nested dock that already hosts `tabId`. Spawn must not
+    /// run while an instance exists in the same window (WindowTool may live on
+    /// the Level nested dock after a user drag / layout restore).
+    [[nodiscard]] EditorDockWorkspace* workspaceHoldingTab(std::string_view tabId) const;
 
   public:
     void bind(FHost host);
@@ -94,6 +98,9 @@ class EditorDockWorkspace
     /// and prune abandoned empty Generic / Tools splits. Does not create an
     /// empty Tools well just to host a drop placeholder.
     void repairPlacement();
+    /// Activate an existing tab in this dock or a nested dock that already
+    /// hosts it. Spawn only when no instance exists and this placement may
+    /// spawn the tab (`canSpawnEditorTab`).
     bool invokeTab(std::string_view tabId);
     bool closeTab(std::string_view tabId);
     [[nodiscard]] bool hasTab(std::string_view tabId) const;

@@ -21,6 +21,10 @@ enum class EWidgetRouteResult : uint8_t;
 /// references the active root editor; it does not absorb selection/undo/actions
 /// (those live on EditorRootSession) or become a window manager. Extra sessions
 /// must not share the default window's WidgetTree.
+///
+/// `tick` is the Module-side chrome entry for one window. The default window
+/// is ticked from `EditorModule::onPresentation`; extra windows tick from
+/// `EditorModule::onAfterPresent` via `GUIWindowManager`.
 struct EditorWindowSession
 {
 private:
