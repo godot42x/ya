@@ -2,14 +2,20 @@
 
 ## 当前状态
 
-- 阶段：R0 基线审计已完成；R1 已完成 SceneRenderRequest/SceneRenderPlan 的最小 frame-local 调度切片、真实 extractor 的显式 Scene/View 分层，以及 GameRuntime 的 scheduler 接入。RenderRuntime 按 SceneViewportTask 循环录制；选中的 world Camera 作为 overlay View submit，compose 到 display root，不改 host viewport identity。
+- 阶段：R0/R1 契约已落地。R2 功能向 ViewFamily 靠近，架构未收口。真实 loop 是 `AppKernel` → `GameRuntimeFrameOrchestrator::tickRender` → `RenderFrameCoordinator::record` → `recordFamily` → host present。`RenderRuntime` 类已删除。
 - 已确认：RenderFrameInputs.h 已有四组输入；RenderFrameData 的 Scene snapshot owner 已与 View-owned draw buckets 分离。
 - 已确认前置：多 OS window 的 surface/present 改造属于 gui-multi-os-window-editor，不在本计划重复实现；本计划也不引入 WorldInstance/WorldRegistry。
-- 当前 checkpoint：4.0.2 之后 — host 用 `HostSceneViewSubmit` 提交 live Scene 列表。下一刀是产品帧同时显示两个 Scene viewport，以及双 Surface GPU 验收。
-- 架构审计结论：`RenderSubmission` 拥有 command recording；`SceneFamilyResources` 拥有同 Scene 的 skinning GPU packet；typed `ViewResources` 拥有 SSAO/Light/EntityId/Overlay/debug/post DS/UBO；PointShadow instance/cull 在 Shadow View Binding。Bloom/BasicPost viewId map 与 Stage singleton CIS 已删除。`ISceneViewFamilyRenderer::recordFamily` 编译一个 family graph 并返回 typed outputs；`RenderFrameCoordinator` 只 publish `result.views`。`RenderRuntime` 已删除。derived Scene 在 `SceneViewRecording` 上按 host 提交列表绑定。不要宣称双 Surface GPU 完成，也不要宣称编辑器已同时显示两个 Scene viewport。
+- 当前 checkpoint：4.0.3 计划状态已按 2026-09-17 review 修正。下一刀是合并 `RenderDeviceState` + `RenderFrameCoordinator` 为公开 `Renderer` owner。不要发明 PIE authoring PiP，也不要把产品双 viewport / 双 Surface 当成下一刀。
+- 架构审计结论（2026-09-17）：DeviceState+Coordinator 是不完整拆分（friend 越界）；DeviceState 是 persistent renderer 不是 RHI device；`RenderSubmission::finish` 不 submit；输入/context 层过多；`recordFamily` 仍是 per-view 状态机外包装；Stage 仍有 `_frameInputs` / `_preparedViewSlot`；Scene recording 仍与 present Surface 耦合；`tickRender` 淹没 orchestration。Checkpoint C/D/E 均为部分完成。A/B 入口仍有效。host live Scene 列表已落地，默认产品帧仍提交当前 viewport Scene。
 - 本轮完成 RenderFrameData ownership 收口：RenderFrameData 不再继承 SceneFrameSnapshot，而是持有 shared snapshot 并独立保存 View-owned draw buckets；Forward/Deferred/Shadow/Debug/EntityId 消费者通过显式路径读取 View buckets、shared skinning palettes 和 light presence。
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 已按 Scene family 持有，同 Scene 多 View 共享一份 SSBO，不同 Scene 不再以 flightIndex 为共享 key。
+
+## 2026-09-17 checkpoint：修正 C/D/E 计划状态
+
+- 唯一目标：把计划改成与源码一致。C/D/E 从“完成”改为“部分完成”；删除把 DeviceState+Coordinator 当成闭环、把 RenderRuntime 当成现行 orchestrator 的叙述；下一刀改为公开 `Renderer` owner。
+- 本刀不改引擎代码、不跑测试。
+- 保留未完成：4.0.3 Renderer 合并；FrameRecording/FlightResources 拆名；PreparedView；Stage current-view；压缩 tickRender；Surface 与 View 正交；产品双 Scene 显示；双 Surface GPU。
 
 ## 2026-09-17 checkpoint：host 提交 live Scene 列表
 
@@ -246,13 +252,13 @@ R0 结论：world snapshot 与 UI snapshot 都在 renderFrame 前生成；Render
 | --- | --- | --- | --- |
 | R0 单 View 基线 | 已完成 | 单 View、现有 pass、单 submit、Forward/Deferred topology | 真实 GPU golden 仍依赖可运行窗口环境 |
 | R1 World/View 分离 | 已完成（单 View 契约） | RenderFrameData 组合 Scene snapshot；现有单 View pipeline topology | GameEditor/preview 多 request |
-| R2 ViewFamily | 进行中（A–E、family-scoped derived Scene、host live Scene 列表已落地；View binding + keepalives + output 句柄 + View-keyed RT + editor camera PiP） | Forward/Deferred topology；display-root inspector getter fallback | 产品帧同时显示两个 Scene viewport、双 Surface 验收 |
+| R2 ViewFamily | 进行中（A/B 入口落地；C/D/E 部分完成；host live Scene 列表落地） | Forward/Deferred topology；display-root inspector getter fallback；DeviceState+Coordinator 不完整拆分 | 4.0.3 Renderer owner，随后才是产品双 viewport / 双 Surface |
 | R3 GUI2D/GameUI | 未开始 | WidgetTree live source、UIFrameSnapshot 输入 | UI-only 与 GameUI[ViewId] |
 | R4 性能收口 | 未开始 | 优化由 profile 触发 | cache、submit、第三 pipeline 决策 |
 
 ## 下一轮接力点
 
-R0 已完成。`RenderSubmission` 拥有 command recording；`SceneFamilyResources` 拥有同 Scene 的 skinning packet；typed `ViewResources` 拥有 pass DS/UBO；`recordFamily` 编译 family graph 并返回 typed outputs；`RenderDeviceState` + `RenderFrameCoordinator` 取代 `RenderRuntime`。host 用 `HostSceneViewSubmit` 提交 live Scene 列表。下一刀是产品帧同时显示两个 Scene viewport，以及双 Surface GPU 验收；不要宣称完成。
+R0/R1 已完成。A/B 入口有效。C：typed pass 入口在，Stage current-view 未清。D：`recordFamily` 入口在，内部仍是 per-view 状态机。E：RenderRuntime 类已删，DeviceState+Coordinator 未闭环。下一刀是公开 `Renderer` owner，不是产品双 viewport。
 
 ## R1 审计结论
 

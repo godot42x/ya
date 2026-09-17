@@ -1,17 +1,17 @@
 ---
 name: ya-render-arch
-description: YA Engine 渲染架构、RenderRuntime 边界与 shader 生成链路。
+description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
 ---
 
 ## 适用场景
 
-- 修改渲染管线、RenderRuntime、后端实现或 RenderTarget / RenderPass
+- 修改渲染管线、Renderer/DeviceState、后端实现或 RenderTarget / RenderPass
 - 需要判断改动应放在抽象层、运行时编排层，还是平台后端层
-- 关键词涉及：`RenderRuntime`、`IRender`、`IRenderTarget`、`IRenderPass`、`VulkanRender`、`OpenGLRender`
+- 关键词涉及：`Renderer`、`RenderDeviceState`、`IRender`、`IRenderTarget`、`IRenderPass`、`VulkanRender`、`OpenGLRender`
 
 ## 当前架构要点
 
-1. `App` 不再直接编排整条渲染管线；当前是 `App` 持有 `std::unique_ptr<RenderRuntime>`，由 `RenderRuntime` 持有 `IRender*`、管线对象、screen RT / render pass、offscreen command buffer。
+1. `App` 不再直接编排整条渲染管线。当前产品层持有 `RenderDeviceState` + `RenderFrameCoordinator`；这是一次不完整拆分（Coordinator 经 friend 写 DeviceState），不是两个独立 owner。目标是公开 `Renderer::recordFrame(plan, surfaceTarget) -> RecordedFrame`。`IRender` / `VulkanRender` 才是 RHI backend。不要再引入名为 Coordinator 的第二套产品层概念。
 2. 渲染抽象仍以 `IRender` 为核心；Vulkan 是主后端，OpenGL 仍是兼容后端。
 3. `IRenderPass` / `IRenderTarget` 仍然是有效抽象，不要假设项目已经完全去掉 render pass 概念。
 4. 离屏预处理（如 cylindrical -> cubemap、cubemap -> irradiance）由 `ResourceResolveSystem` + `OffscreenJobRunner` 编排，不要把这类流程重新塞回组件里。
@@ -32,27 +32,24 @@ description: YA Engine 渲染架构、RenderRuntime 边界与 shader 生成链�
 10. `ya-gui-widgets` 无 Scene/ECS/Render3D/Host/RHI 依赖；texture 归资产缓存、
     font 由 snapshot item 强引用；UI 合成在 world graph 之后（不进 bloom）。
 11. 一帧按 Camera 链组织，不是按窗口：`graphics → UI → view compose` 写该相机离屏 RT；
-    `display compose → present` 才碰 swapchain。`RenderRuntime::FrameInput` 分组为
-    `CameraFrameInput` / `ViewComposeInput` / `DisplayComposeInput` / `PresentFrameInput`；
-    一次 host 调用仍是一次 `prepareFrame` + 一次 `endFrameCommandBuffer`；acquire/present
-    由 host `FPresentFrame` coordinator 配对。`CameraFrameInput` 在 graph
-    build 前携带 owner 计算的 view / projection / viewProjection / offscreen extent；
-    Forward/Deferred/debug/overlay 只消费该包，不从 swapchain/window 猜尺寸。view compose
-    经 `recordCameraViewCompose` 写 Camera 离屏 RT；display compose 经
-    `PresentationGraphService::recordDisplayCompose` 写 `swapchain[imageIndex]`。
-    `GUIRenderSurface` 只是 compose target，不 acquire/present、不读 live WidgetTree。
-    acquire/present 由 host `FPresentFrame` coordinator 调用，不在 `RenderRuntime` 内。
-    Present 消费方（`GUIAppHost`、`GUIWindowPresent`、`PresentationGraphService`）只走
-    `IRenderSurfaceContext` / `ISwapchain` / `buildPresentationImages`，禁止
-    `as<VulkanSwapChain>()`。Vulkan 细节留在 `VulkanRenderSurfaceContext`。
-    `ViewportState` 迁移期等于唯一 `WorldView[0]`。对象模型见
-    `./.agent/plan/gui-multi-os-window-editor/c2_view_model.md`
-    与 `c2_present_compose_model.md`。不要为 Material/UI 窗复制 `RenderRuntime`。
+    `display compose → present` 才碰 swapchain。当前 `RenderFramePlan` 仍同时携带 Scene
+    与 `PresentFrameInput`，`beginFrameCommandBuffer()` 无 Surface 则拒绝录制，因此
+    Scene recording 仍与 present Surface 耦合。acquire/present 由 host `FPresentFrame`
+    配对。`CameraFrameInput` 在 graph build 前携带 owner 计算的 view / projection /
+    viewProjection / offscreen extent；Forward/Deferred/debug/overlay 只消费该包，
+    不从 swapchain/window 猜尺寸。view compose 经 `recordCameraViewCompose` 写 Camera
+    离屏 RT；display compose 经 `PresentationGraphService::recordDisplayCompose` 写
+    `swapchain[imageIndex]`。`GUIRenderSurface` 只是 compose target，不 acquire/present、
+    不读 live WidgetTree。Present 消费方只走 `IRenderSurfaceContext` / `ISwapchain` /
+    `buildPresentationImages`，禁止 `as<VulkanSwapChain>()`。不要为 Material/UI 窗复制
+    Renderer。对象模型见 `./.agent/plan/gui-multi-os-window-editor/c2_view_model.md`
+    与 `c2_present_compose_model.md`；R2 ownership 收口见
+    `./.agent/plan/render-view-family/plan.md` 4.0.3。
 
 ## 目录锚点
 
 - `Engine/Source/Runtime/Application/`：应用入口、生命周期与自动化
-- `Engine/Source/Runtime/Rendering/`：RenderRuntime、渲染管线与渲染服务
+- `Engine/Source/Framework/Render/Render3D/`：Renderer 拆分中的 DeviceState/Coordinator、管线与渲染服务
 - `Engine/Source/Render/`
 - `Engine/Source/Platform/Render/Vulkan/`
 - `Engine/Source/Platform/Render/OpenGL/`
@@ -77,7 +74,7 @@ description: YA Engine 渲染架构、RenderRuntime 边界与 shader 生成链�
 
 1. 公共能力先落抽象层，再按后端补实现。
 2. 后端差异只在平台层扩散，不反向污染上层接口。
-3. 渲染编排优先放在 `RenderRuntime` / pipeline / system，不要把 orchestration 打散到 component。
+3. 渲染编排优先放在公开 `Renderer` / pipeline / system，不要把 orchestration 打散到 component，也不要再并列一个几乎无状态的 Coordinator。
 4. 遇到渲染异常时，优先检查初始化顺序、资源生命周期、layout transition，再查 shader / pipeline state。
 5. 生成文件是只读产物；shader 头不对时修 `Shader.xmake.lua`、`slang_gen_header.py`，不要直接改 `Generated/*`。
 
@@ -116,6 +113,6 @@ C++
 
 ## 退出条件
 
-- 能明确回答一段逻辑属于抽象层、RenderRuntime / pipeline 编排层，还是平台后端层
+- 能明确回答一段逻辑属于抽象层、Renderer / pipeline 编排层，还是平台后端层
 - shader 常量、生成头与 C++ 使用链路一致
 - 渲染问题已经定位到初始化、时序、layout、shader 或 pipeline state 之一，而不是混在一起

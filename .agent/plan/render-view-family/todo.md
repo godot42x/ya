@@ -52,12 +52,18 @@
 - [x] 录制同一 Scene 的两个 View，共享一个 SceneFrameSnapshot。
 - [x] 4.0.2 A：建立 `RenderSubmission` / pool owner，统一 command buffer、upload、transient descriptor、keepalive 与 finish 协议；删除 pipeline/resource-set 的分散 beginSubmission。
 - [x] 4.0.2 B：引入 `SceneViewFamilyPlan` 与 `SceneFamilyResources`；skinning/scene packet 不再按 flight 全局共享；同 Scene 双 View复用 family、双 Scene隔离。
-- [x] 4.0.2 C：引入 Deferred/Forward typed View/Pass resources；Stage 改为 pass recipe；删除 singleton CIS、processor viewId map；PointShadow buffer 归入 View Binding。
-- [x] 4.0.2 D：Deferred/Forward 改为 `recordFamily`；一个 family graph 产生多个 typed outputs；删除 tick/beginTick 与 pipeline last-view 图袋作为 publish source。
-- [x] 4.0.2 E：拆除 RenderRuntime facade 为 RenderDeviceState + RenderFrameCoordinator + family renderer + presentation；删除单一 ViewportState 与 active Scene service-locator 依赖。
-- [x] family-scoped derived Scene：`SceneViewRecording::derivedScene` 按 family 绑定；删除 `RenderFramePlan::derivedScene`。Host 仍只提交一个 live Scene。
+- [x] 4.0.2 C 入口：typed View/Pass resources；Bloom/BasicPost viewId map 与 Stage singleton CIS 删除；PointShadow packet 归 View Binding。
+- [ ] 4.0.2 C 收口：清除 `LightStage::_frameInputs`、`BasicShadowMapTechnique::_preparedViewSlot` 等 current-view 状态。
+- [x] 4.0.2 D 入口：`recordFamily` 一个 family graph；publish 不走 pipeline getter；删除 `tick`/`beginTick`。
+- [ ] 4.0.2 D 收口：真正的 ViewFamily compiler，不再是 per-view `beginView` 循环外包装 + `familyPredecessor` 串行。
+- [x] 4.0.2 E 入口：删除 `RenderRuntime` 类，拆成 `RenderDeviceState` + `RenderFrameCoordinator`；删除 ViewportState 与 active Scene locator。
+- [ ] 4.0.3：合并 DeviceState+Coordinator 为公开 `Renderer`；关闭 friend 越界；`recordFrame(plan, surfaceTarget) -> RecordedFrame`。
+- [ ] 将 `RenderSubmission` 拆成 `FrameRecording` 与 `FrameFlightResources`；host 提交真正的 command buffer。
+- [ ] 引入 `PreparedView`，删除 CameraFrameInput patching / SceneViewRecording / RenderPipelineFrameContext 重复层。
+- [ ] 压缩 `tickRender` 为 prepare → buildFrame → acquire → recordFrame → submitPresent，不引入新的全能 coordinator。
+- [x] family-scoped derived Scene：`SceneViewRecording::derivedScene` 按 family 绑定；删除 `RenderFramePlan::derivedScene`。
 - [x] host 提交 live Scene 列表：`HostSceneViewSubmit` / `submitHostSceneViews`；两 live Scene 抽出隔离 snapshot 与两个 family。默认产品帧仍提交当前 viewport Scene。
-- [ ] 产品帧同时显示两个 Scene viewport（例如 PIE authoring + play）。
+- [ ] 产品帧同时显示两个 Scene viewport（排在 4.0.3 之后；不要发明 PIE authoring PiP）。
 - [ ] 验证一个 View 到多个 Surface、多个 View 到一个 Surface。
 - [ ] 验证 surface acquire/present/recreate 不进入 View pipeline。
 - [ ] 只有在 trace 证明必要时再提出 submit 拆分。
@@ -74,10 +80,10 @@
 - [x] 对照 UE Scene/FSceneRenderer/ViewFamily、Unity Camera/ScriptableRenderContext、Godot Viewport/SubViewport、ImGui draw data。
 - [x] 明确 Scene owner 不直接依赖 RHI；Scheduler 属于 Render3D orchestration，不属于 GUI Framework。
 - [x] 明确 UI 之前只指 UI GPU compose 之前。
-- [x] 明确 Stage 是 device 配方、View GPU 数据进 Binding / RDG persistent、录制 lambda 不改 Stage 成员；禁止再叠 viewId map。
-- [x] 补齐 Device / Submission / SceneFamily / View / Pass / Surface 六轴生命周期；确认 submission 级 skinning 不能支持双 Scene。
-- [x] 将 ViewFamily 定义为 graph 编译单位：同 family 共享 work 并分出 per-view branch；不同 Scene/策略分 graph但可共 submission。
-- [x] 明确 RHI begin/end 保留在 submission/graph executor，删除的是 persistent pipeline 的隐式 current begin/tick 协议。
+- [x] 明确 Stage 是 device 配方、View GPU 数据进 Binding / RDG persistent；禁止再叠 viewId map。`_frameInputs` / `_preparedViewSlot` 仍待 4.0.3 清除。
+- [x] 补齐 SceneFamily 轴并确认 submission 级 skinning 不能支持双 Scene。Device/Coordinator/Surface 正交尚未闭环。
+- [x] 将 ViewFamily 定义为 graph 编译单位。`recordFamily` 入口已在；真正 compiler 仍待 4.0.3。
+- [x] 明确 RHI begin/end 保留在 recording/graph executor；应删除的是 persistent pipeline 的隐式 current begin/tick。`tick` 已删，Stage current-view 未清。
 
 ## R3
 
