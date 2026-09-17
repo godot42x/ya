@@ -12,7 +12,9 @@
 #include "RHI/Core/Texture.h"
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/ViewCompose.h"
+#include "Scene/Core/Scene.h"
 
+#include <algorithm>
 #include <format>
 #include <vector>
 
@@ -40,27 +42,29 @@ std::shared_ptr<RenderViewportOverlaySnapshot> buildViewportOverlaySnapshot(cons
     return snapshot->empty() ? nullptr : snapshot;
 }
 
+/// Every Scene the resolved plan actually renders, in snapshot-table order. The
+/// table is already deduplicated by (SceneId, sceneRevision); the Scene handle
+/// is what derived per-Scene state is keyed on, so dedupe on that too.
+std::vector<Scene*> renderedScenes(const SceneRenderPlan& plan)
+{
+    std::vector<Scene*> scenes;
+    scenes.reserve(plan.snapshots.size());
+    for (const SceneSnapshotEntry& entry : plan.snapshots) {
+        if (!entry.scene || !entry.snapshot) {
+            continue;
+        }
+        if (std::find(scenes.begin(), scenes.end(), entry.scene) == scenes.end()) {
+            scenes.push_back(entry.scene);
+        }
+    }
+    return scenes;
+}
+
 } // namespace
 
 RenderFrameCoordinator::RenderFrameCoordinator(RenderDeviceState& device)
     : _device(&device)
 {
-}
-
-bool RenderFrameCoordinator::validateSceneRenderInput(const RenderFramePlan& plan) const
-{
-    if (plan.sceneRender.empty()) {
-        return true;
-    }
-    if (!plan.sceneRender.complete()) {
-        YA_CORE_ERROR("Scene render input must provide a plan and one recording per viewport task");
-        return false;
-    }
-    if (!derivedScenesAgreeWithPlan(plan.sceneRender)) {
-        YA_CORE_ERROR("Family recordings must share one derived Scene per SceneId and isolate different SceneIds");
-        return false;
-    }
-    return true;
 }
 
 void RenderFrameCoordinator::recordViewFamilies(
@@ -86,30 +90,25 @@ void RenderFrameCoordinator::recordViewFamilies(
             .cmdBuf          = live->commandBuffer(),
             .hostCamera      = plan.camera,
             .submission      = live,
-            .plan            = plan.sceneRender.plan,
+            .plan            = &plan.sceneRender.plan(),
             .family          = family,
             .views           = std::move(views),
             .overlaySnapshot = overlaySnapshot,
-            .derivedScene    = derivedSceneForFamily(plan.sceneRender, family),
         };
         _device->publishFamilyResult(plan.camera.flightIndex, pipeline->recordFamily(ctx));
     };
 
-    if (!plan.sceneRender.views.empty() && plan.sceneRender.plan && !plan.sceneRender.plan->viewFamilies.empty()) {
-        for (const SceneViewFamilyPlan& family : plan.sceneRender.plan->viewFamilies) {
-            std::vector<SceneViewRecording> familyViews;
-            familyViews.reserve(family.viewportTaskIndices.size());
-            for (uint32_t index : family.viewportTaskIndices) {
-                if (index < plan.sceneRender.views.size()) {
-                    familyViews.push_back(plan.sceneRender.views[index]);
-                }
-            }
-            recordOneFamily(&family, std::move(familyViews));
+    // The plan arrives extracted, so its views hold one recording per viewport
+    // task and the family indices always land inside them.
+    const std::vector<SceneViewRecording>& views = plan.sceneRender.views();
+    for (const SceneViewFamilyPlan& family : plan.sceneRender.plan().viewFamilies) {
+        std::vector<SceneViewRecording> familyViews;
+        familyViews.reserve(family.viewportTaskIndices.size());
+        for (uint32_t index : family.viewportTaskIndices) {
+            familyViews.push_back(views[index]);
         }
-        return;
+        recordOneFamily(&family, std::move(familyViews));
     }
-
-    recordOneFamily(nullptr, plan.sceneRender.views);
 }
 
 ICommandBuffer* RenderFrameCoordinator::record(const RenderFramePlan& plan)
@@ -117,22 +116,18 @@ ICommandBuffer* RenderFrameCoordinator::record(const RenderFramePlan& plan)
     YA_PROFILE_SCOPE("RenderFrameCoordinator::record");
     YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    if (!validateSceneRenderInput(plan)) {
-        return nullptr;
-    }
-
     // graphics → world graph into this camera's offscreen RT
     // UI → game UI onto that RT (after post, never into bloom)
     // view compose → editor overlays onto that RT
     // display compose → PresentationGraphService onto swapchain[imageIndex]
     // Acquire/present stay on the host FPresentFrame coordinator.
 
-    const std::vector<Scene*> derivedScenes = uniqueDerivedScenes(plan.sceneRender);
-    if (derivedScenes.empty()) {
+    const std::vector<Scene*> scenes = renderedScenes(plan.sceneRender.plan());
+    if (scenes.empty()) {
         _device->prepareDerivedState(nullptr, plan.camera.deltaTime);
     }
     else {
-        for (Scene* scene : derivedScenes) {
+        for (Scene* scene : scenes) {
             _device->prepareDerivedState(scene, plan.camera.deltaTime);
         }
     }
@@ -172,8 +167,8 @@ ICommandBuffer* RenderFrameCoordinator::record(const RenderFramePlan& plan)
     }
 
     std::vector<ViewDisplayInset> composeInsets = plan.viewCompose.insets;
-    if (plan.sceneRender.plan) {
-        for (const auto& inset : viewDisplayInsetsFromPlan(*plan.sceneRender.plan)) {
+    if (!plan.sceneRender.empty()) {
+        for (const auto& inset : viewDisplayInsetsFromPlan(plan.sceneRender.plan())) {
             bool bExists = false;
             for (const auto& existing : composeInsets) {
                 if (existing.viewId == inset.viewId) {

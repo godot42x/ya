@@ -1,5 +1,7 @@
 #include "SceneRenderScheduler.h"
 
+#include "Scene/Core/Scene.h"
+
 #include <unordered_map>
 #include <utility>
 
@@ -69,7 +71,7 @@ void SceneRenderScheduler::beginTick(uint64_t hostTick)
 
 bool SceneRenderScheduler::submit(SceneRenderRequest request)
 {
-    if (!_tickOpen || request.sceneId == 0 || request.viewId == 0) {
+    if (!_tickOpen || !request.scene || request.viewId == 0) {
         return false;
     }
 
@@ -91,21 +93,24 @@ SceneRenderPlan SceneRenderScheduler::seal()
     snapshotIndices.reserve(_requests.size());
 
     for (const auto& request : _requests) {
+        const SceneId sceneId = request.scene->getInstanceId();
         const SnapshotKey key{
-            .sceneId = request.sceneId,
+            .sceneId = sceneId,
             .sceneRevision = request.sceneRevision,
         };
         auto [it, inserted] = snapshotIndices.try_emplace(key, static_cast<uint32_t>(plan.snapshots.size()));
         if (inserted) {
             plan.snapshots.push_back(SceneSnapshotEntry{
-                .sceneId = request.sceneId,
+                .scene = request.scene,
+                .sceneId = sceneId,
                 .sceneRevision = request.sceneRevision,
                 .snapshot = nullptr,
             });
         }
 
         plan.viewportTasks.push_back(SceneViewportTask{
-            .sceneId            = request.sceneId,
+            .scene              = request.scene,
+            .sceneId            = sceneId,
             .sceneRevision      = request.sceneRevision,
             .viewId             = request.viewId,
             .familyId           = request.familyId,
@@ -132,31 +137,32 @@ SceneRenderPlan SceneRenderScheduler::seal()
     return plan;
 }
 
-uint32_t buildSceneSnapshots(SceneRenderPlan& plan, const SceneSnapshotResolver& resolve)
+ExtractedSceneRender buildSceneSnapshots(SceneRenderPlan plan, const SceneSnapshotExtractor& extract)
 {
-    uint32_t unresolvedCount = 0;
+    bool bUnresolved = false;
     for (SceneSnapshotEntry& entry : plan.snapshots) {
-        if (entry.snapshot) {
+        if (entry.snapshot || !entry.scene) {
             continue;
         }
-        if (resolve) {
-            entry.snapshot = resolve(entry.sceneId, entry.sceneRevision);
+        if (extract) {
+            entry.snapshot = extract(*entry.scene);
         }
         if (!entry.snapshot) {
-            ++unresolvedCount;
+            bUnresolved = true;
         }
     }
 
-    if (unresolvedCount == 0) {
-        return 0;
+    if (bUnresolved) {
+        // A View whose Scene content never arrived must not reach recording, and
+        // the Views of the Scenes that did arrive still record this tick.
+        std::erase_if(plan.viewportTasks,
+                      [&plan](const SceneViewportTask& task) { return !plan.snapshotFor(task); });
+        buildViewFamilies(plan);
     }
 
-    // A View whose Scene content never arrived must not reach recording, and
-    // the Views of the Scenes that did arrive still record this tick.
-    std::erase_if(plan.viewportTasks,
-                  [&plan](const SceneViewportTask& task) { return !plan.snapshotFor(task); });
-    buildViewFamilies(plan);
-    return unresolvedCount;
+    ExtractedSceneRender extracted;
+    extracted._plan = std::move(plan);
+    return extracted;
 }
 
 void SceneRenderScheduler::clearTick()

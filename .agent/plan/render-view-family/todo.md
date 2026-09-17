@@ -85,9 +85,9 @@
 - [x] 补齐 SceneFamily 轴并确认 submission 级 skinning 不能支持双 Scene。Device/Coordinator/Surface 正交尚未闭环。
 - [x] 将 ViewFamily 定义为 graph 编译单位。`recordFamily` 入口已在；真正 compiler 仍待 4.0.3。
 - [x] 明确 RHI begin/end 保留在 recording/graph executor；应删除的是 persistent pipeline 的隐式 current begin/tick。`tick` 已删，Stage current-view 未清。
-- [x] 记录 View 声明 / 收集 / 抽取 / 录制边界（plan §3.10、temporal_semantics M9）：调度器帧内聚合正确，缺的是 producer 声明；四个全局格子（`bWorldSceneRenderEnabled` / `extensionHostView` / `cameraPreview*` / `viewportRect`）、六层重复声明、三处空转机制已登记。
+- [x] 记录 View 声明 / 收集 / 抽取 / 录制边界（plan §3.10、temporal_semantics M9）：调度器帧内聚合正确，缺的是 producer 声明；五个全局格子（`bWorldSceneRenderEnabled` / `extensionHostView` / `cameraPreview*` / `viewportRect` / `bShowEditorGizmos`）、declare 路径上的 live-ECS 查询、六层重复声明、三处空转机制已登记。
 - [x] 4.0.3 4a：抽取移出 `SceneRenderScheduler::seal()` → `buildSceneSnapshots(plan, resolver)`；`SceneRenderRequest` 不再携带任何闭包，无法解析内容的 Scene 由该步骤剔除并重新分组。
-- [ ] 4.0.3 4b：plan / task 保留 tick-local `Scene*`；删除 `derivedSceneForHostView`、`SceneRenderPlanInput::complete()`、`derivedScenesAgreeWithPlan()` 的运行时反查校验。
+- [x] 4.0.3 4b：声明 / task / 快照表项保留 tick-local `Scene*`，`sceneId` 由 `seal()` 从句柄派生；删除 `derivedSceneForHostView`、`SceneRenderPlanInput::complete()`、`derivedScenesAgreeWithPlan()`、`derivedSceneForFamily` 与 `SceneSnapshotResolver`，改为 `ExtractedSceneRender` 的构造期不变量。
 - [ ] 4.0.3 4c：`HostSceneViewSubmit` 与 `SceneRenderRequest` 合并为一份 `SceneViewDesc`。
 - [ ] 4.0.3 4d：引入 `ISceneViewProducer` / `collectSceneViews`，编辑器作者视口与相机预览自己声明；删除 `bWorldSceneRenderEnabled`、`extensionHostView` 注入、`bCameraPreviewHostOwned`、`cameraPreviewEntityUUID`；`SkeletonAnimationSystem` 的 tick policy 另找诚实输入。
 - [ ] 4.0.3 checkpoint 5：view 身份改 owner-scoped `SceneViewKey`，并按此建立 `ViewHistoryStore` 稳定键（排在 4d 之后）。

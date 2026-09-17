@@ -22,130 +22,6 @@ class RenderSubmission;
 struct Scene;
 struct UIFrameSnapshot;
 
-/// One View inside a sealed plan: the task must point at `plan.viewportTasks[i]`,
-/// and `frameData` is the host's View-owned preparation for that task.
-struct SceneViewRecording
-{
-    const SceneViewportTask* task         = nullptr;
-    RenderFrameData*         frameData    = nullptr;
-    /// Host Scene that produced this view's snapshot. Scheduler never owns it.
-    /// Same family / SceneId must share the pointer; different SceneIds must not.
-    Scene*                   derivedScene = nullptr;
-};
-
-/// Sealed SceneRenderPlan input for one host render call. The plan owns the
-/// immutable Scene snapshot table; `views` is parallel to `plan.viewportTasks`.
-/// `RenderFrameCoordinator` records every view in this list. It does not own
-/// the plan, tasks, or frameData. Graph-exported image and overlay handles used
-/// while recording are retained on the live submission until that flight is reused
-/// after its fence. Empty `sceneRender` is a UI-only frame: no Scene family.
-struct SceneRenderPlanInput
-{
-    const SceneRenderPlan*           plan = nullptr;
-    std::vector<SceneViewRecording>  views;
-
-    [[nodiscard]] bool empty() const { return plan == nullptr && views.empty(); }
-
-    [[nodiscard]] bool complete() const
-    {
-        if (!plan || views.size() != plan->viewportTasks.size()) {
-            return false;
-        }
-        for (size_t index = 0; index < views.size(); ++index) {
-            const SceneViewRecording& recording = views[index];
-            if (!recording.task || recording.task != &plan->viewportTasks[index] || !recording.frameData) {
-                return false;
-            }
-            if (!plan->snapshotFor(*recording.task)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    [[nodiscard]] const SceneViewportTask* primaryTask() const
-    {
-        if (plan) {
-            if (const SceneViewportTask* root = plan->displayRootTask()) {
-                return root;
-            }
-        }
-        return views.empty() ? nullptr : views.front().task;
-    }
-};
-
-[[nodiscard]] inline Scene* derivedSceneForFamily(
-    const SceneRenderPlanInput& sceneRender,
-    const SceneViewFamilyPlan* family)
-{
-    if (family) {
-        for (uint32_t index : family->viewportTaskIndices) {
-            if (index < sceneRender.views.size()) {
-                return sceneRender.views[index].derivedScene;
-            }
-        }
-        return nullptr;
-    }
-    return sceneRender.views.empty() ? nullptr : sceneRender.views.front().derivedScene;
-}
-
-[[nodiscard]] inline std::vector<Scene*> uniqueDerivedScenes(const SceneRenderPlanInput& sceneRender)
-{
-    std::vector<Scene*> scenes;
-    for (const auto& recording : sceneRender.views) {
-        if (!recording.derivedScene) {
-            continue;
-        }
-        bool bSeen = false;
-        for (Scene* existing : scenes) {
-            if (existing == recording.derivedScene) {
-                bSeen = true;
-                break;
-            }
-        }
-        if (!bSeen) {
-            scenes.push_back(recording.derivedScene);
-        }
-    }
-    return scenes;
-}
-
-[[nodiscard]] inline bool derivedScenesAgreeWithPlan(const SceneRenderPlanInput& sceneRender)
-{
-    if (sceneRender.plan) {
-        for (const SceneViewFamilyPlan& family : sceneRender.plan->viewFamilies) {
-            Scene* familyScene = derivedSceneForFamily(sceneRender, &family);
-            for (uint32_t index : family.viewportTaskIndices) {
-                if (index < sceneRender.views.size() &&
-                    sceneRender.views[index].derivedScene != familyScene) {
-                    return false;
-                }
-            }
-        }
-    }
-    for (size_t i = 0; i < sceneRender.views.size(); ++i) {
-        const SceneViewRecording& a = sceneRender.views[i];
-        if (!a.task) {
-            continue;
-        }
-        for (size_t j = i + 1; j < sceneRender.views.size(); ++j) {
-            const SceneViewRecording& b = sceneRender.views[j];
-            if (!b.task) {
-                continue;
-            }
-            if (a.task->sceneId == b.task->sceneId) {
-                if (a.derivedScene != b.derivedScene) {
-                    return false;
-                }
-            }
-            else if (a.derivedScene && b.derivedScene && a.derivedScene == b.derivedScene) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
 [[nodiscard]] inline glm::mat4 makeCameraViewProjection(const glm::mat4& projection, const glm::mat4& view)
 {
     return projection * view;
@@ -287,28 +163,30 @@ struct PresentFrameInput
 };
 
 /// Sealed host frame value consumed by `RenderFrameCoordinator::record`.
-/// Derived Scene pointers live on each `SceneViewRecording`, not on this plan.
+/// `sceneRender` owns the extracted plan together with the recordings paired
+/// with it, so the Scene a view renders is already on that view's own task.
 /// Not an active-Scene query and not swapchain ownership.
 struct RenderFramePlan
 {
-    SceneRenderPlanInput sceneRender{};
-    CameraFrameInput    camera{};
-    ViewComposeInput    viewCompose{};
-    DisplayComposeInput displayCompose{};
-    PresentFrameInput   present{};
+    ExtractedSceneRender sceneRender{};
+    CameraFrameInput     camera{};
+    ViewComposeInput     viewCompose{};
+    DisplayComposeInput  displayCompose{};
+    PresentFrameInput    present{};
 };
 
 /// One Scene family to record into a single graph on the live submission.
 struct ViewFamilyRecordContext
 {
-    ICommandBuffer*                                          cmdBuf       = nullptr;
-    CameraFrameInput                                         hostCamera{};
-    RenderSubmission*                                        submission   = nullptr;
-    const SceneRenderPlan*                                   plan         = nullptr;
-    const SceneViewFamilyPlan*                               family       = nullptr;
-    std::vector<SceneViewRecording>                          views;
-    std::shared_ptr<const RenderViewportOverlaySnapshot>     overlaySnapshot;
-    Scene*                                                   derivedScene = nullptr;
+    ICommandBuffer*                                      cmdBuf     = nullptr;
+    CameraFrameInput                                     hostCamera{};
+    RenderSubmission*                                    submission = nullptr;
+    const SceneRenderPlan*                               plan       = nullptr;
+    const SceneViewFamilyPlan*                           family     = nullptr;
+    /// The family's views, each carrying its own task and therefore its own
+    /// Scene; a family exists only for one (SceneId, revision, policy).
+    std::vector<SceneViewRecording>                      views;
+    std::shared_ptr<const RenderViewportOverlaySnapshot> overlaySnapshot;
 };
 
 /// Recording extras plus the camera packet consumed by Forward/Deferred.
@@ -323,6 +201,7 @@ struct RenderPipelineFrameContext
     std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
     RenderSubmission*          submission = nullptr;
     RenderViewRecordingContext view{};
+    /// The Scene `view` was declared against, taken from that view's task.
     Scene*                     derivedScene = nullptr;
 };
 

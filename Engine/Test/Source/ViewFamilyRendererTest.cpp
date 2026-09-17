@@ -2,6 +2,7 @@
 #include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ViewPersistentResourceKey.h"
+#include "Scene/Core/Scene.h"
 
 #include <gtest/gtest.h>
 
@@ -28,17 +29,17 @@ TEST(ViewFamilyRendererTest, DualViewExportNamesStayUniqueInOneFamilyGraph)
 
 TEST(ViewFamilyRendererTest, SameSceneDualViewSealsOneFamilyPlan)
 {
+    Scene scene("Family");
+
     SceneRenderScheduler scheduler;
     scheduler.beginTick(7);
 
-    const SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
-    const SceneRenderRequest viewB{.sceneId = 3, .viewId = 12};
+    ASSERT_TRUE(scheduler.submit(SceneRenderRequest{.scene = &scene, .viewId = 11}));
+    ASSERT_TRUE(scheduler.submit(SceneRenderRequest{.scene = &scene, .viewId = 12}));
 
-    ASSERT_TRUE(scheduler.submit(viewA));
-    ASSERT_TRUE(scheduler.submit(viewB));
-
-    SceneRenderPlan plan = scheduler.seal();
-    buildSceneSnapshots(plan, [](SceneId, uint64_t) { return std::make_shared<const SceneSnapshot>(); });
+    const ExtractedSceneRender extracted = buildSceneSnapshots(
+        scheduler.seal(), [](Scene&) { return std::make_shared<const SceneSnapshot>(); });
+    const SceneRenderPlan& plan = extracted.plan();
     ASSERT_EQ(plan.viewFamilies.size(), 1u);
     ASSERT_EQ(plan.viewportTasks.size(), 2u);
     EXPECT_EQ(plan.viewFamilies.front().viewportTaskIndices.size(), 2u);
@@ -47,17 +48,18 @@ TEST(ViewFamilyRendererTest, SameSceneDualViewSealsOneFamilyPlan)
 
 TEST(ViewFamilyRendererTest, DualSceneSealsTwoFamilyPlans)
 {
+    Scene sceneA("DualA");
+    Scene sceneB("DualB");
+
     SceneRenderScheduler scheduler;
     scheduler.beginTick(8);
 
-    const SceneRenderRequest sceneA{.sceneId = 3, .viewId = 11};
-    const SceneRenderRequest sceneB{.sceneId = 4, .viewId = 21};
+    ASSERT_TRUE(scheduler.submit(SceneRenderRequest{.scene = &sceneA, .viewId = 11}));
+    ASSERT_TRUE(scheduler.submit(SceneRenderRequest{.scene = &sceneB, .viewId = 21}));
 
-    ASSERT_TRUE(scheduler.submit(sceneA));
-    ASSERT_TRUE(scheduler.submit(sceneB));
-
-    SceneRenderPlan plan = scheduler.seal();
-    buildSceneSnapshots(plan, [](SceneId, uint64_t) { return std::make_shared<const SceneSnapshot>(); });
+    const ExtractedSceneRender extracted = buildSceneSnapshots(
+        scheduler.seal(), [](Scene&) { return std::make_shared<const SceneSnapshot>(); });
+    const SceneRenderPlan& plan = extracted.plan();
     ASSERT_EQ(plan.viewFamilies.size(), 2u);
     EXPECT_NE(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[1]));
 }

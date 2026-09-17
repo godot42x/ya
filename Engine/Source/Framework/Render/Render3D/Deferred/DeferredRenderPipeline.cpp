@@ -907,7 +907,7 @@ RenderPipelineFrameContext makeDeferredViewFrameContext(const ViewFamilyRecordCo
             .frameData      = recording.frameData ? recording.frameData : camera.frameData,
             .viewportExtent = viewExtent,
         },
-        .derivedScene            = ctx.derivedScene,
+        .derivedScene            = recording.task ? recording.task->scene : nullptr,
     };
 }
 
@@ -948,9 +948,8 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
     std::vector<SceneViewRecording> recordings = ctx.views;
     if (recordings.empty()) {
         recordings.push_back(SceneViewRecording{
-            .task         = ctx.plan ? ctx.plan->displayRootTask() : nullptr,
-            .frameData    = ctx.hostCamera.frameData,
-            .derivedScene = ctx.derivedScene,
+            .task      = ctx.plan ? ctx.plan->displayRootTask() : nullptr,
+            .frameData = ctx.hostCamera.frameData,
         });
     }
 

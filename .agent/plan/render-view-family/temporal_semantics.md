@@ -207,6 +207,7 @@ M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**�
 | `AppRenderState::extensionHostView`（`setExtensionHostViewState` / `clearExtensionHostViewState`） | 编辑器作者视口的相机矩阵 | producer 自己填 `SceneViewDesc` | 删除。当前由 `prepareHostViewState` 回填进 `hostView`，再经 `HostSceneViewSubmit` 变成 view 1 的相机 |
 | `AppRenderState::bCameraPreviewHostOwned` + `cameraPreviewEntityUUID` | 预览视图用哪个相机 | 声明方决定 | 删除。`resolvePreviewCamera` 与 `appendSceneCameraFrustumLines` 的相机选择前移回编辑器；producer 直接声明预览 view |
 | `AppRenderServices::setViewportRect` / `getViewportRect` | 作者视口的离屏 rect | producer 自己填 `SceneViewDesc` | 降为 producer 输入；automation 的 resize 用例改走 producer 声明的 rect |
+| `AppRenderState::bShowEditorGizmos`（`App::set/isEditorGizmoShown`） | 编辑器视口这 tick 要不画 gizmo | 声明方按 view 声明 | 删除。写入方是 EditorSurface 的 Window 菜单，读取方是 `featuresForView` 拼 feature mask；与 `viewportRect` 同批降为 producer 输入 |
 | `kPrimarySceneViewId = 1` / `kHostOverlayPreviewViewId = 2` | view 的持久身份 | owner-scoped `SceneViewKey{ownerId, localId}` | 现在 view 1 同时是两个产品（编辑器作者视口 / 独立游戏视口）的身份，view 2 由 host 铸造。改为 producer 注册时铸键，作为 `ViewHistoryStore` 与跨 Surface 复用的稳定键 |
 | `CameraFrameInput` 的 `flightIndex` / `frameIndex` / `deltaTime` | 帧作用域 | `FrameContext` | 与 M3 的 `CameraFrameInput` 删除同批；`flightIndex` 另见 M4 |
 | `CameraFrameInput` 的 `view` / `projection` / `viewportRect` / `viewFeatures` | view 作用域 | `SceneViewDesc` → `PreparedView` | 与 M3 同批 |
@@ -220,6 +221,14 @@ M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**�
 - 新增显式第二步 `buildSceneSnapshots(SceneRenderPlan&, const SceneSnapshotResolver&)`：按表项向宿主要不可变快照，未解析的表项剔除其 view 并重新分组（坏 Scene 不拖垮整帧）。`SceneSnapshotResolver` 是 4b 的过渡物——计划携带 tick-local `Scene*` 后即可删除。
 - 宿主侧 `submitHostSceneViews` 收窄为「只声明」，抽取移到新的 `extractHostSceneSnapshots`；`tickRender` 变成 declare → seal → extract 三步。
 - 下一步 4b 要消掉的东西：`derivedSceneForHostView`、`SceneRenderPlanInput::complete()`、`derivedScenesAgreeWithPlan()` 三个运行时反查，以及本阶段的 `SceneSnapshotResolver`。
+
+#### M9 执行记录（4b，2026-09-18 已提交）
+
+- 计划字面持有 Scene：`SceneRenderRequest.scene`（取代 `sceneId`）、`SceneViewportTask.scene`、`SceneSnapshotEntry.scene`；`sceneId` 由 `seal()` 调 `scene->getInstanceId()` 派生，只作为分组键存在一次。
+- 抽取接口收窄：`SceneSnapshotResolver(SceneId, uint64_t)` → `SceneSnapshotExtractor(Scene&)`；`extractHostSceneSnapshots(SceneRenderPlan, TerrainProcessor*)` 收 sealed plan，不再收提交列表，去掉了「每条快照表项扫一遍 view 列表」的反查。
+- 三个运行时校验换成构造期不变量：新增 `ExtractedSceneRender`（`buildSceneSnapshots()` 是唯一能造出非空实例的地方，`pairViewFrames()` 是唯一能放进 recording 的地方）。`SceneRenderPlanInput`、`complete()`、`derivedScenesAgreeWithPlan()`、`derivedSceneForFamily()`、`SceneViewRecording::derivedScene`、`ViewFamilyRecordContext::derivedScene` 全部删除；`derivedScenesAgreeWithPlan` 的两种错误在只剩一份句柄后无法构造。
+- 消费者改为读自己 task 上的句柄：Forward/Deferred 的 `RenderPipelineFrameContext.derivedScene` 取 `recording.task->scene`；`uniqueDerivedScenes` 变成 coordinator 文件内的 `renderedScenes(plan)`（直接扫已解析的快照表）。
+- 验收证据：`ya-render-3d-test` 172/172、`ya-testing` 相关滤镜 89/89、两次 smoke（runtime / editor，`--exit-after-frame=90 --screenshot-target=viewport`）exit=0 且日志 0 error。
 
 
 ## 3. 保留项（这些 `frame` 是正确的）
@@ -279,9 +288,10 @@ M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**�
 - P1b-2b 构建/测试证据：`xmake b ya-render-3d-test`、`xmake b ya-testing`、`xmake b ya-game-editor`；`xmake r ya-testing --gtest_filter='AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*:AppKernelTest.*'` 66/66；`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:ViewFamilyRendererTest.*:RenderViewBindingTableTest.*:ViewPassResourcesTest.*:SceneFamilyResourcesTest.*'` 41/41。
 - P1d 已满足：`rg -n 'isFrameAutomationEnabled|hasFrameAutomationConfig|shouldRequestQuitAfterFrame|ExitAfterFrame|StableFrameReady|registerFrameTask|hasFrameTasks|frameContext' Engine Example` 为空。
 - P1d 构建/测试证据：`xmake b ya-game-editor`、`xmake b ya-testing`；`xmake r ya-testing --gtest_filter='AppKernelTest.*:AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*'` 66/66（含改名后的 `AppKernelTest.HeadlessLoopHonorsExitAfterTick`）。
-- M9 / P1e 的目标（4d 落地后应可逐条验证）：`rg -n 'bWorldSceneRenderEnabled|setWorldSceneRenderEnabled|isWorldSceneRenderEnabled' Engine Example` 为空；`rg -n 'extensionHostView|setExtensionHostViewState|clearExtensionHostViewState' Engine` 为空；`rg -n 'bCameraPreviewHostOwned|cameraPreviewEntityUUID|resolvePreviewCamera|kHostOverlayPreviewViewId' Engine` 为空；`rg -n 'derivedSceneForHostView|derivedScenesAgreeWithPlan' Engine` 为空（4b）。
-- M9 4a–4c 的验收：4a `SceneRenderScheduler::seal()` 内不再出现 `buildSnapshot` 调用；4b plan/task 携带 Scene 句柄且无运行时反查校验；4c 声明结构只剩一份，且 `HostSceneRenderSubmitTest` 的隔离语义不变（3/3）。
+- M9 / P1e 的目标（4d 落地后应可逐条验证）：`rg -n 'bWorldSceneRenderEnabled|setWorldSceneRenderEnabled|isWorldSceneRenderEnabled' Engine Example` 为空；`rg -n 'extensionHostView|setExtensionHostViewState|clearExtensionHostViewState' Engine` 为空；`rg -n 'bCameraPreviewHostOwned|cameraPreviewEntityUUID|resolvePreviewCamera|kHostOverlayPreviewViewId|bShowEditorGizmos' Engine` 为空；`rg -n 'derivedSceneForHostView|derivedScenesAgreeWithPlan|derivedSceneForFamily' Engine` 为空（4b）。
+- M9 4a–4c 的验收：4a `SceneRenderScheduler::seal()` 内不再出现 `buildSnapshot` 调用；4b plan/task/快照表项携带 Scene 句柄、`sceneId` 由句柄派生、无运行时反查校验（`rg -n 'derivedSceneForHostView|derivedScenesAgreeWithPlan|derivedSceneForFamily|complete\(\)' Engine/Source/Framework/Render/Render3D/Common/RenderFrameInputs.h` 为空）；4c 声明结构只剩一份，且 `HostSceneRenderSubmitTest` 的隔离语义不变（3/3）。
 - M9 4d 的验收：编辑器 2D 画布模式与 3D 模式的 view 集合差异由 producer 声明表达，`tickRender` 内不再有「某个 view 要不要渲染」的判断；`SkeletonAnimationSystem` 不再依赖世界渲染开关。
+- M9 4d 的第二条验收（2026-09-18 补充）：declare 路径上不再有 live-ECS 查询——`getPrimaryCamera`（`registry.view<CameraComponent>`）、`resolvePreviewCamera`（`getEntityByUUID`）、`appendSceneCameraFrustumLines`（再遍历 camera view）都要移出 `tickRender` 的声明段，由 producer 收集时给出或在 `SceneSnapshot` 里体现。`bShowEditorGizmos` 是第五个全局格子（写入方 `EditorSurface.cpp` Window 菜单，读取方 `featuresForView`），与 `setViewportRect` 同批降为 producer 输入。
 - M9 相关构建/测试基线（落地时逐刀执行）：`xmake b ya-game-editor ya-testing ya-render-3d-test`；`ya-testing` EditorDockWorkspace/EditorWindowSession/EditorRootSession/HostSceneRenderSubmit；`ya-render-3d-test` RenderRuntimeSnapshot/ViewFamilyRenderer/ViewPassResources/SceneFamilyResources。
 - 仍待处理：`DebugPrimitives::updateFrameUBO`（随 P2 flight 轴）。
 - `rg -n '\bframeIndex\b|\bframeId\b|\bframeToken\b' Engine/Source` 只剩第 3 节保留项与 automation 外部键。

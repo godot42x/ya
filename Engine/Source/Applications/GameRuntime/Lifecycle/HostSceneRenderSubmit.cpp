@@ -36,7 +36,7 @@ bool submitHostSceneViews(SceneRenderScheduler&                scheduler,
             continue;
         }
         if (scheduler.submit(SceneRenderRequest{
-                .sceneId           = view.scene->getInstanceId(),
+                .scene             = view.scene,
                 .sceneRevision     = view.sceneRevision,
                 .viewId            = view.viewId,
                 .familyId          = view.familyId,
@@ -54,39 +54,13 @@ bool submitHostSceneViews(SceneRenderScheduler&                scheduler,
     return bSubmitted;
 }
 
-uint32_t extractHostSceneSnapshots(SceneRenderPlan&                     plan,
-                                   std::span<const HostSceneViewSubmit> views,
-                                   TerrainProcessor*                    terrainProcessor)
+ExtractedSceneRender extractHostSceneSnapshots(SceneRenderPlan   plan,
+                                               TerrainProcessor* terrainProcessor)
 {
-    return buildSceneSnapshots(plan, [&views, terrainProcessor](SceneId sceneId, uint64_t sceneRevision)
+    return buildSceneSnapshots(std::move(plan), [terrainProcessor](Scene& scene)
     {
-        for (const HostSceneViewSubmit& view : views) {
-            if (!view.scene || view.sceneRevision != sceneRevision ||
-                view.scene->getInstanceId() != sceneId) {
-                continue;
-            }
-            return extractSceneSnapshot(*view.scene, terrainProcessor);
-        }
-        return std::shared_ptr<const SceneSnapshot>{};
+        return extractSceneSnapshot(scene, terrainProcessor);
     });
-}
-
-Scene* derivedSceneForHostView(std::span<const HostSceneViewSubmit> views,
-                               const SceneViewportTask&             task)
-{
-    Scene* bySceneId = nullptr;
-    for (const HostSceneViewSubmit& view : views) {
-        if (!view.scene || view.scene->getInstanceId() != task.sceneId) {
-            continue;
-        }
-        if (view.viewId == task.viewId) {
-            return view.scene;
-        }
-        if (!bySceneId) {
-            bySceneId = view.scene;
-        }
-    }
-    return bySceneId;
 }
 
 } // namespace ya

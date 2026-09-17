@@ -522,7 +522,6 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         }
     } sceneSchedulerGuard{.scheduler = &sceneScheduler};
 
-    SceneRenderPlan sceneRenderPlan;
     std::vector<RenderOverlayLine3D> cameraFrustumLines;
     std::vector<HostSceneViewSubmit> hostViews;
     Entity* runtimeLookCamera = nullptr;
@@ -575,10 +574,10 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
                                       cameraFrustumLines);
     }
     (void)submitHostSceneViews(sceneScheduler, hostViews);
-    sceneRenderPlan = sceneScheduler.seal();
     // Extraction is its own step: seal() only grouped the declarations, so
     // Scene/ECS content is read here and nowhere earlier.
-    (void)extractHostSceneSnapshots(sceneRenderPlan, hostViews, device->getTerrainProcessor());
+    ExtractedSceneRender sceneRender =
+        extractHostSceneSnapshots(sceneScheduler.seal(), device->getTerrainProcessor());
 
     // View visibility is policy, decided here and nowhere else: the editor
     // world view draws generated editor companions, a camera preview (what a
@@ -594,48 +593,31 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     };
 
     auto& viewFrames = app._renderState->viewFrameDataPerFlight[flightIndex];
-    std::vector<SceneViewRecording> viewRecordings;
-    if (!sceneRenderPlan.viewportTasks.empty()) {
+    sceneRender.pairViewFrames(viewFrames);
+    if (!sceneRender.empty()) {
         YA_PERF_SCOPE(perf::sample::renderExtract(), perf::metric::cpuTimeMs(), perf::domain::render());
         YA_PROFILE_SCOPE("RenderFrameExtractor::sceneSnapshot");
-        viewFrames.resize(sceneRenderPlan.viewportTasks.size());
-        viewRecordings.reserve(viewFrames.size());
-        for (size_t index = 0; index < sceneRenderPlan.viewportTasks.size(); ++index) {
-            const SceneViewportTask& task = sceneRenderPlan.viewportTasks[index];
-            RenderFrameData& frameData = viewFrames[index];
-            const auto sceneSnapshot = sceneRenderPlan.snapshotFor(task);
-            if (!sceneSnapshot) {
-                frameData.clear();
-            }
-            else {
-                RenderFrameExtractor::prepareView(
-                    RenderFrameExtractor::ViewPrepareInput{
-                        .view = task.view,
-                        .projection = task.projection,
-                        .viewProjection = task.viewProjection,
-                        .cameraPos = task.cameraPos,
-                        .viewportExtent = Extent2D::fromVec2(task.viewportRect.extent),
-                        .viewOwner = (task.viewId == kHostOverlayPreviewViewId && previewCamera)
-                                         ? previewCamera->getHandle()
-                                         : (runtimeLookCamera ? runtimeLookCamera->getHandle() : entt::null),
-                        .viewFeatures = featuresForView(task.viewId),
-                        .frameIndex = App::_hostTick,
-                        .deltaTime = dt,
-                        .shadowSettings = &app.getRenderServices().getShadowSettings(),
-                    },
-                    sceneSnapshot,
-                    frameData);
-            }
-            viewRecordings.push_back(SceneViewRecording{
-                .task         = &task,
-                .frameData    = &frameData,
-                .derivedScene = derivedSceneForHostView(hostViews, task),
-            });
+        for (const SceneViewRecording& recording : sceneRender.views()) {
+            const SceneViewportTask& task      = *recording.task;
+            RenderFrameData&         frameData = *recording.frameData;
+            RenderFrameExtractor::prepareView(
+                RenderFrameExtractor::ViewPrepareInput{
+                    .view = task.view,
+                    .projection = task.projection,
+                    .viewProjection = task.viewProjection,
+                    .cameraPos = task.cameraPos,
+                    .viewportExtent = Extent2D::fromVec2(task.viewportRect.extent),
+                    .viewOwner = (task.viewId == kHostOverlayPreviewViewId && previewCamera)
+                                     ? previewCamera->getHandle()
+                                     : (runtimeLookCamera ? runtimeLookCamera->getHandle() : entt::null),
+                    .viewFeatures = featuresForView(task.viewId),
+                    .frameIndex = App::_hostTick,
+                    .deltaTime = dt,
+                    .shadowSettings = &app.getRenderServices().getShadowSettings(),
+                },
+                sceneRender.snapshotFor(task),
+                frameData);
         }
-    }
-    else {
-        viewFrames.resize(1);
-        viewFrames[0].clear();
     }
 
     CameraFrameInput cameraFrame{
@@ -692,10 +674,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     }
 
     ICommandBuffer* recorded = coordinator->record(RenderFramePlan{
-        .sceneRender = {
-            .plan  = viewRecordings.empty() ? nullptr : &sceneRenderPlan,
-            .views = std::move(viewRecordings),
-        },
+        .sceneRender = std::move(sceneRender),
         .camera = cameraFrame,
         .viewCompose = {
             .recordCompose = [&app, dt](ICommandBuffer* commandBuffer)

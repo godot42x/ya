@@ -64,7 +64,9 @@ if get_config("ya_profile") ~= "gui" then
                   "./Source/ViewFamilyRendererTest.cpp",
                   "./Source/ForwardFrameGraphOrchestratorTest.cpp",
                   "./Source/CameraFrustumOverlayTest.cpp")
-        add_deps("ya-render-3d", "ya-render-graph", "ya-foundation-core")
+        -- Plan tests declare real Scenes: a Scene handle, not an invented id, is
+        -- what a view declaration carries.
+        add_deps("ya-render-3d", "ya-render-graph", "ya-foundation-core", "ya-scene-core")
         add_packages("gtest")
     end
 

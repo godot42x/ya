@@ -14,7 +14,9 @@ struct RenderViewportOverlaySnapshot;
 
 /// Consumes a sealed `RenderFramePlan`, acquires a submission, records Scene
 /// family graphs, then View/UI/display compose. Does not own the backend and
-/// does not locate an active Scene; each family binds the recording's Scene.
+/// does not locate an active Scene; every view binds the Scene on its own task.
+/// `record` accepts only an `ExtractedSceneRender`, so a plan whose Scene
+/// content was never extracted cannot be recorded.
 struct YA_RENDER_3D_API RenderFrameCoordinator
 {
     explicit RenderFrameCoordinator(RenderDeviceState& device);
@@ -27,11 +29,9 @@ struct YA_RENDER_3D_API RenderFrameCoordinator
   private:
     RenderDeviceState* _device = nullptr;
 
-    [[nodiscard]] bool validateSceneRenderInput(const RenderFramePlan& plan) const;
-    void               recordViewFamilies(
-                          const RenderFramePlan& plan,
-                          ICommandBuffer* cmdBuf,
-                          std::shared_ptr<RenderViewportOverlaySnapshot> overlaySnapshot);
+    void recordViewFamilies(const RenderFramePlan&                         plan,
+                            ICommandBuffer*                                cmdBuf,
+                            std::shared_ptr<RenderViewportOverlaySnapshot> overlaySnapshot);
 };
 
 } // namespace ya

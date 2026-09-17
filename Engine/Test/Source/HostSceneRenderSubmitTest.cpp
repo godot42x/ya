@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace ya
@@ -61,14 +62,15 @@ TEST(HostSceneRenderSubmitTest, DualLiveScenesExtractIsolatedSnapshots)
     SceneRenderScheduler scheduler;
     scheduler.beginTick(31);
     ASSERT_TRUE(submitHostSceneViews(scheduler, views));
-    SceneRenderPlan plan = scheduler.seal();
+    SceneRenderPlan sealed = scheduler.seal();
 
     // seal() only groups: the snapshot table exists, its content does not.
-    ASSERT_EQ(plan.snapshots.size(), 2u);
-    EXPECT_FALSE(plan.snapshots[0].snapshot);
-    EXPECT_FALSE(plan.snapshots[1].snapshot);
+    ASSERT_EQ(sealed.snapshots.size(), 2u);
+    EXPECT_FALSE(sealed.snapshots[0].snapshot);
+    EXPECT_FALSE(sealed.snapshots[1].snapshot);
 
-    EXPECT_EQ(extractHostSceneSnapshots(plan, views, nullptr), 0u);
+    const ExtractedSceneRender extracted = extractHostSceneSnapshots(std::move(sealed), nullptr);
+    const SceneRenderPlan&      plan      = extracted.plan();
 
     ASSERT_EQ(plan.viewFamilies.size(), 2u);
     ASSERT_EQ(plan.snapshots.size(), 2u);
@@ -85,8 +87,12 @@ TEST(HostSceneRenderSubmitTest, DualLiveScenesExtractIsolatedSnapshots)
     EXPECT_NE(snapshotA->directionalLightSource.color, snapshotB->directionalLightSource.color);
     EXPECT_NE(snapshotA->directionalLightSource.intensity, snapshotB->directionalLightSource.intensity);
 
-    EXPECT_EQ(derivedSceneForHostView(views, plan.viewportTasks[0]), &sceneA);
-    EXPECT_EQ(derivedSceneForHostView(views, plan.viewportTasks[1]), &sceneB);
+    // Each task carries the Scene it was declared for, so nothing has to map a
+    // task back to the declaration list to find it again.
+    EXPECT_EQ(plan.viewportTasks[0].scene, &sceneA);
+    EXPECT_EQ(plan.viewportTasks[1].scene, &sceneB);
+    EXPECT_EQ(plan.viewportTasks[0].sceneId, sceneA.getInstanceId());
+    EXPECT_EQ(plan.viewportTasks[1].sceneId, sceneB.getInstanceId());
 
     RenderFrameData frameA;
     RenderFrameData frameB;
@@ -128,16 +134,16 @@ TEST(HostSceneRenderSubmitTest, SameLiveSceneTwoViewsShareSnapshot)
     SceneRenderScheduler scheduler;
     scheduler.beginTick(32);
     ASSERT_TRUE(submitHostSceneViews(scheduler, views));
-    SceneRenderPlan plan = scheduler.seal();
-    EXPECT_EQ(extractHostSceneSnapshots(plan, views, nullptr), 0u);
+    const ExtractedSceneRender extracted = extractHostSceneSnapshots(scheduler.seal(), nullptr);
+    const SceneRenderPlan&      plan      = extracted.plan();
 
     ASSERT_EQ(plan.viewFamilies.size(), 1u);
     ASSERT_EQ(plan.snapshots.size(), 1u);
     ASSERT_EQ(plan.viewportTasks.size(), 2u);
     EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]), plan.snapshotFor(plan.viewportTasks[1]));
     EXPECT_EQ(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[1]));
-    EXPECT_EQ(derivedSceneForHostView(views, plan.viewportTasks[0]), &scene);
-    EXPECT_EQ(derivedSceneForHostView(views, plan.viewportTasks[1]), &scene);
+    EXPECT_EQ(plan.viewportTasks[0].scene, &scene);
+    EXPECT_EQ(plan.viewportTasks[1].scene, &scene);
 }
 
 TEST(HostSceneRenderSubmitTest, ClosedSchedulerRejectsSubmit)

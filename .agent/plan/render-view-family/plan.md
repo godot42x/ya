@@ -301,8 +301,11 @@ Render3D/
 | 我这 tick 没有世界视口 | `setWorldSceneRenderEnabled(bool)` → `bWorldSceneRenderEnabled` | `tickRender`、`SkeletonAnimationSystem::setTickPolicy` |
 | 预览视图用哪个相机 | `setCameraPreviewHostOwned` + `setCameraPreviewEntityUUID` | `resolvePreviewCamera`；view id 由 orchestrator 铸成常量 2 |
 | 我的视口尺寸 | `setViewportRect` | `tickRender` → view 1 的 `viewportRect` |
+| 我的视口要不要画 gizmo | `setEditorGizmoShown(bool)` → `AppRenderState::bShowEditorGizmos` | `featuresForView`（`tickRender` 内拼 feature mask） |
 
-四个格子的写入方全在 `EditorLayer.cpp` / `EditorModule.cpp`，解析方全在 GameRuntime。编辑器无接口可声明自己的 view，只能「改状态再看运气」，且能成立全靠 hook 顺序（写在 `onLogic`，读在 `tickRender`）——与 GUI 侧已删除的「手写 tab sync」同类。本计划 §2 与 R1/R3 已写明「GameEditor / Material preview 各自提交 SceneRenderRequest」，该句至今未实现。
+五个格子的写入方全在 `EditorLayer.cpp` / `EditorModule.cpp` / `EditorSurface.cpp`（gizmo 开关由 Window 菜单写），解析方全在 GameRuntime。编辑器无接口可声明自己的 view，只能「改状态再看运气」，且能成立全靠 hook 顺序（写在 `onLogic`，读在 `tickRender`）——与 GUI 侧已删除的「手写 tab sync」同类。本计划 §2 与 R1/R3 已写明「GameEditor / Material preview 各自提交 SceneRenderRequest」，该句至今未实现。
+
+同一类症状还在 declare 阶段内以「直接读 ECS」的形式出现：`getPrimaryCamera`（`registry.view<CameraComponent>`）、`resolvePreviewCamera`（`scene.getEntityByUUID`）、`appendSceneCameraFrustumLines`（再遍历一遍 camera view）都在 `tickRender` 里对 live Scene 做查询。4d 把相机选择交回声明方时必须一并处理：这些查询要么由 producer 在收集时给出结果，要么明确归属 `SceneSnapshot`，不能继续留在 declare 路径上。**4d 的验收除了删除五个全局格子，还要把 declare 路径上的 ECS 查询清零。**
 
 UE 对照：`UGameViewportClient::bDisableWorldRendering` 与 world 选择同在 viewport client 上；Godot 是 `Viewport::world_3d`；Unity 由 `SceneView` 持有自己的 camera。三家都没有「中央提交者 + 全局开关」，`UWorld` / `World3D` 上不存在「我该被渲染吗」。因此该开关既不属于 Scene，也不属于 Renderer，而属于**声明方是否声明**。
 
@@ -481,9 +484,9 @@ AppKernel::run
 3. **recording 与 flight 拆名**：`RenderSubmission` 拆成 `FrameRecording`（cmd/allocate/retain/seal）与 `FrameFlightResources`（fence-safe arena/descriptors/keepalives）。`RecordedFrame` 带 command buffer 与 flightIndex，由 host submit。
 4. **view 声明与收集收口（2026-09-17 review 新增，见 §3.10）**：补齐「谁声明 view」，再让抽取成为显式一步。四刀，每刀可独立验收：
    - 4a **抽取移出 seal**（已完成）：`SceneRenderScheduler::seal()` 不再调用 `request.buildSnapshot()`；改为 `seal()` 只分组（快照表建好但内容为空）、`buildSceneSnapshots(plan, resolver)` 显式抽取。请求结构不再携带任何闭包；无法解析内容的 Scene 由该步骤剔除并重新分组，其余 Scene 仍照常录制。
-   - 4b **计划保留 Scene 句柄**：plan / task 携带 tick-local `Scene*`，删除 `derivedSceneForHostView`、`SceneRenderPlanInput::complete()` 与 `derivedScenesAgreeWithPlan()` 的运行时校验，改为构造期不变量。
+   - 4b **计划保留 Scene 句柄**（已完成）：声明 / task / 快照表项携带 tick-local `Scene*`，`sceneId` 由 `seal()` 从句柄派生；抽取接口收窄为 `SceneSnapshotExtractor(Scene&)`。`derivedSceneForHostView`、`SceneRenderPlanInput`（含 `complete()`）、`derivedScenesAgreeWithPlan()`、`derivedSceneForFamily()`、`SceneViewRecording::derivedScene` 全部删除，改建为 `ExtractedSceneRender`：只有 `buildSceneSnapshots()` 能造出非空 plan、只有 `pairViewFrames()` 能放入 recording，于是「忘了抽取」与两列错位都变成编译错误而不是运行时日志。
    - 4c **合并声明结构**：`HostSceneViewSubmit` 与 `SceneRenderRequest` 合成一份 `SceneViewDesc`，消掉 12 / 14 字段的两次机械搬运。
-   - 4d **`ISceneViewProducer` 与编辑器提交自己的视口**：运行世界视口、编辑器作者视口、相机预览各自 `collectSceneViews`。删除 `bWorldSceneRenderEnabled`、`extensionHostView` 注入、`bCameraPreviewHostOwned`、`cameraPreviewEntityUUID`；预览相机选择回到编辑器；orchestrator 不再铸造 `kHostOverlayPreviewViewId`。
+   - 4d **`ISceneViewProducer` 与编辑器提交自己的视口**：运行世界视口、编辑器作者视口、相机预览各自 `collectSceneViews`。删除 `bWorldSceneRenderEnabled`、`extensionHostView` 注入、`bCameraPreviewHostOwned`、`cameraPreviewEntityUUID`、`bShowEditorGizmos`；预览相机选择回到编辑器；`viewportRect` 降为 producer 输入；gizmo 由声明方按 view 声明；orchestrator 不再铸造 `kHostOverlayPreviewViewId`。验收含第二条：declare 路径上不再有 `registry.view` / `getEntityByUUID` / `getPrimaryCamera` 这类 live-ECS 查询（见 §3.10.1）。
 5. **PreparedView**：删除 CameraFrameInput patching、SceneViewRecording、RenderPipelineFrameContext 之间的重复层。view 身份改为 owner-scoped `SceneViewKey`（4d 之后），并按此建立 `ViewHistoryStore` 的稳定键。
 6. **清除 Stage current-view**：删除 `_frameInputs` / `_preparedViewSlot` 等隐式槽位。
 7. **压缩 `tickRender`**：保留该入口，收成 collectSceneViews → extractScenes → prepareViews → prepareModules → buildGameRenderFrame → acquire → recordFrame → submitPresent → presentModuleExtras。camera preview、Scene request、UI snapshot 下沉到普通 builder；`tickRender` 里不再有「某个 view 要不要渲染」的判断。

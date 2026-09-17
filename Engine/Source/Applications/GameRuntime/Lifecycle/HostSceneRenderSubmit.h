@@ -36,15 +36,12 @@ struct HostSceneViewSubmit
 [[nodiscard]] YA_GAME_RUNTIME_API bool submitHostSceneViews(SceneRenderScheduler&                scheduler,
                                                             std::span<const HostSceneViewSubmit> views);
 
-/// Explicit extraction step for the declared views: resolve the sealed plan's
-/// snapshot table, one extract per unique Scene. Views of a Scene this list
-/// cannot resolve are dropped from the plan.
-[[nodiscard]] YA_GAME_RUNTIME_API uint32_t extractHostSceneSnapshots(
-    SceneRenderPlan&                     plan,
-    std::span<const HostSceneViewSubmit> views,
-    TerrainProcessor*                    terrainProcessor);
-
-[[nodiscard]] YA_GAME_RUNTIME_API Scene* derivedSceneForHostView(std::span<const HostSceneViewSubmit> views,
-                                                                 const SceneViewportTask&             task);
+/// Explicit extraction step for a sealed plan: resolve the snapshot table, one
+/// extract per declared Scene, and drop the views of any Scene the host has no
+/// content for. The returned value pairs the surviving views with their tasks;
+/// the host fills their frame data in with `pairViewFrames()`.
+[[nodiscard]] YA_GAME_RUNTIME_API ExtractedSceneRender extractHostSceneSnapshots(
+    SceneRenderPlan   plan,
+    TerrainProcessor* terrainProcessor);
 
 } // namespace ya
