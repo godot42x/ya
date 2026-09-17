@@ -8,11 +8,11 @@ TerrainComponent::TerrainComponent()
     setupCallbacks();
 }
 
-void TerrainComponent::invalidate(uint64_t rebuildNotBeforeFrame)
+void TerrainComponent::invalidate(uint64_t rebuildNotBeforeTick)
 {
     ++_authoringVersion;
     _heightMapRef.invalidate();
-    _rebuildNotBeforeFrame = rebuildNotBeforeFrame;
+    _rebuildNotBeforeTick = rebuildNotBeforeTick;
 }
 
 void TerrainComponent::onPostSerialize()

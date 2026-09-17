@@ -24,7 +24,7 @@ struct TerrainDerivedResource
 {
     std::shared_ptr<Mesh> mesh            = nullptr;
     uint64_t              heightMapVersion = 0;
-    uint64_t              lastUsedFrame    = 0;
+    uint64_t              lastUsedTick     = 0;
 };
 
 /// Per-entity terrain resolve state (height-map load + mesh rebuild).
@@ -71,10 +71,10 @@ class YA_RENDER_3D_API TerrainProcessor : public ISystem
     void shutdown() override;
 
     void clearPendingResolveStates();
-    void markTerrainDirty(entt::entity entity, const char* reason, uint64_t rebuildNotBeforeFrame = 0);
+    void markTerrainDirty(entt::entity entity, const char* reason, uint64_t rebuildNotBeforeTick = 0);
     void resolvePendingTerrain(Scene* scene);
 
-    static constexpr uint64_t DERIVED_RESOURCE_GC_DELAY_FRAMES = 300;
+    static constexpr uint64_t DERIVED_RESOURCE_GC_DELAY_TICKS = 300;
 
     [[nodiscard]] Mesh* getTerrainMesh(entt::entity entity) const;
     [[nodiscard]] const TerrainRuntimeState* findTerrainState(entt::entity entity) const;
@@ -98,7 +98,7 @@ class YA_RENDER_3D_API TerrainProcessor : public ISystem
     std::deque<entt::entity>      _dirtyTerrainQueue;
     std::unordered_set<entt::entity> _dirtyTerrainSet;
     std::unordered_set<entt::entity> _activeTerrain;
-    uint64_t                      _nextResolveAuditFrame = 0;
+    uint64_t                      _nextResolveAuditTick  = 0;
 };
 
 } // namespace ya

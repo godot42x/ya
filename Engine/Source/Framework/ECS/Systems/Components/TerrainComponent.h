@@ -28,11 +28,11 @@ struct YA_ECS_SYSTEMS_API TerrainComponent : public IComponent
 
     [[nodiscard]] bool hasHeightMap() const { return _heightMapRef.hasPath(); }
     [[nodiscard]] uint64_t getAuthoringVersion() const { return _authoringVersion; }
-    [[nodiscard]] uint64_t getRebuildNotBeforeFrame() const { return _rebuildNotBeforeFrame; }
+    [[nodiscard]] uint64_t getRebuildNotBeforeTick() const { return _rebuildNotBeforeTick; }
 
-    void invalidate(uint64_t rebuildNotBeforeFrame = 0);
+    void invalidate(uint64_t rebuildNotBeforeTick = 0);
     void onEdit() override { invalidate(); }
-    void setRebuildNotBeforeFrame(uint64_t rebuildNotBeforeFrame) { _rebuildNotBeforeFrame = rebuildNotBeforeFrame; }
+    void setRebuildNotBeforeTick(uint64_t rebuildNotBeforeTick) { _rebuildNotBeforeTick = rebuildNotBeforeTick; }
     void onPostSerialize() override;
 
     // Terrain acts as a mesh source for the frame extractor; always considered resolved.
@@ -44,7 +44,7 @@ struct YA_ECS_SYSTEMS_API TerrainComponent : public IComponent
     void setupCallbacks();
 
     uint64_t _authoringVersion      = 1;
-    uint64_t _rebuildNotBeforeFrame = 0;
+    uint64_t _rebuildNotBeforeTick  = 0;
 };
 
 } // namespace ya

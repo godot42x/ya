@@ -234,7 +234,7 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     std::unordered_set<entt::entity>                                  _activeSkybox;
     std::unordered_set<entt::entity>                                  _activeEnvironment;
     std::unordered_set<entt::entity>                                  _sceneSkyboxEnvironmentDependents;
-    uint64_t                                                          _nextResolveAuditFrame = 0;
+    uint64_t                                                          _nextResolveAuditTick  = 0;
 
     void seedSceneResolveWork(Scene* scene);
     void touchDerivedResourceUsage();
@@ -269,7 +269,7 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     void resolvePendingSkybox(Scene* scene);
     void resolvePendingEnvironmentLighting(Scene* scene);
 
-    static constexpr uint64_t DERIVED_RESOURCE_GC_DELAY_FRAMES = 300;
+    static constexpr uint64_t DERIVED_RESOURCE_GC_DELAY_TICKS = 300;
 
     // Pipeline accessors — used by step functions to bind concrete execute lambdas
     EquidistantCylindrical2CubeMap& getCylindrical2CubePipeline() { return _equidistantCylindrical2CubeMap; }

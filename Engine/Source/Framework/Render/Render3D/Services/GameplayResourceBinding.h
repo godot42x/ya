@@ -26,10 +26,10 @@ struct YA_RENDER_3D_API GameplayResourceBinding : public ISystem
     std::deque<entt::entity> _dirtyMaterialQueue;
     std::unordered_set<entt::entity> _dirtyMaterialSet;
     std::unordered_set<entt::entity> _activeMaterial;
-    uint64_t                 _nextMaterialAuditFrame = 0;
+    uint64_t                 _nextMaterialAuditTick  = 0;
 
-    /// How often the material staleness audit runs (frames).
-    static constexpr uint64_t MATERIAL_AUDIT_INTERVAL_FRAMES = 30;
+    /// How often the material staleness audit runs (ticks).
+    static constexpr uint64_t MATERIAL_AUDIT_INTERVAL_TICKS = 30;
 
     void auditMaterialWork(Scene* scene);
     void clearSceneResolveWork();

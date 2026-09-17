@@ -80,6 +80,7 @@ hostTick = 1200
 - 调用方与测试同步：`App.cpp`、`AppSceneServices.cpp`、`AppLifecycle.cpp`、`HostSceneRenderSubmit.cpp`、`EditorStatsTab.cpp`、`EditorRuntimeToolsTab.cpp`、`AppKernelTest`、`AppAutomationConfigTest`、`EditorWindowSessionTest`、`GUIHeadlessHostTest`、`GUIWindowManagerTest`、`RenderRuntimeSnapshotTest`、`HostSceneRenderSubmitTest`、`ViewFamilyRendererTest`、两个 GUI Example。
 - P1b-1（后续提交）：`AppRenderFrameState` → `HostViewState`（定义文件与 `include/` 转发头一起改名）；`AppRenderState::frameState` → `hostView`、`extensionFrameState` → `extensionHostView`；`AppRenderServices::getRenderFrameState` / `setExtensionRenderFrameState` / `clearExtensionRenderFrameState` → `getHostViewState` / `setExtensionHostViewState` / `clearExtensionHostViewState`；`EditorViewportCompositor` 与 `EditorSurfaceContext` 的声明、定义与参数名同步。
 - 后续批次 P1b-2a 落地（perf 命名面）：`perf::sample::renderFrame()` → `hostTick()`（key `Render/Frame` → `Tick/Total`）；`frameLogic` / `frameEventPump` / `frameFpsControl` / `frameRender` / `frameMainThreadCallbacks` / `frameAutomation` / `frameUnaccounted` / `frameRenderCallbacks` → `tick*`，key `Frame/*` → `Tick/*`；`YA_PERF_FRAME_SCOPE` → `YA_PERF_TICK_SCOPE`、`PerfFrameScopeTimerConditional` → `PerfTickScopeTimerConditional`（含 `frameSampleKey` → `tickSampleKey`、`ya_perf_frame_timer_` → `ya_perf_tick_timer_`、局部 `frameValue` → `tickValue`）；profile 产物 `frameCycle` / `frameCpuMs` / `frameGpuMs` → `tickCycle` / `tickCpuMs` / `tickGpuMs`。UI 文案 `Frame CPU:` / `Frame GPU:` 与 `Frame {}` 保留。
+- 后续批次 P1b-2b 落地（按 tick 排期的二级命名）：`TerrainProcessor` / `EnvironmentLightingProcessor` 的 `_nextResolveAuditFrame` 与 `GameplayResourceBinding::_nextMaterialAuditFrame` → `*AuditTick`；`DERIVED_RESOURCE_GC_DELAY_FRAMES` / `MATERIAL_AUDIT_INTERVAL_FRAMES` → `*_TICKS`（连同 `AppAutomationConfigTest` 的常量断言）；`TerrainDerivedResource::lastUsedFrame` → `lastUsedTick`；`TerrainComponent::getRebuildNotBeforeFrame` / `setRebuildNotBeforeFrame` / `_rebuildNotBeforeFrame` / `invalidate(rebuildNotBeforeFrame)` 与 `TerrainProcessor::markTerrainDirty(..., rebuildNotBeforeFrame)` → `*Tick`。
 
 刻意延后（仍在 M1 范围内，需要独立批次）：
 
@@ -89,7 +90,7 @@ hostTick = 1200
 | `DebugPrimitives::updateFrameUBO` / `_frameData` | 它按 `flightIndex` 索引，是 flight 轴而不是 host tick；等 P2 `FrameFlightResources` 落地后一并改名 |
 | perf key / profile scope `Frame/*`、`frameLogic()`、`Render/Frame` | 曾延后（`PerfKeys.h` 定义 + 约 30 处调用属独立命名面）；已由 P1b-2a 完成 |
 | `RenderRuntimeSnapshotTest` → `RenderFramePlanningTest` | 与 `RenderRuntime` 遗留命名一起处理，避免和 `Test.xmake.lua` 显式文件列表混批 |
-| `_nextResolveAuditFrame`、`MATERIAL_AUDIT_INTERVAL_FRAMES`、`DERIVED_RESOURCE_GC_DELAY_FRAMES`、`getRebuildNotBeforeFrame()` | 是「按 tick 排期」的二级命名，数量多且含组件 API，单独一批 |
+| `_nextResolveAuditFrame`、`MATERIAL_AUDIT_INTERVAL_FRAMES`、`DERIVED_RESOURCE_GC_DELAY_FRAMES`、`getRebuildNotBeforeFrame()` | 曾延后（「按 tick 排期」的二级命名，含组件 API）；已由 P1b-2b 完成 |
 
 ### M2 — Scene snapshot 命名
 
@@ -212,7 +213,8 @@ hostTick = 1200
 | P1a | M1 的 host tick 主体（orchestrator 文件与类、HostClockState、App tick、provider、scheduler、automation 计数） | 已提交，不减任何功能 |
 | P1b-1 | M1 剩余之一：`AppRenderFrameState` → `HostViewState` | 已提交，纯重命名 |
 | P1b-2a | M1 剩余之二：perf 命名面 `Frame/*` → `Tick/*`（含 profile 产物键与 perf scope 宏） | 已提交，纯重命名 |
-| P1b-2b | M1 剩余之三：DebugPrimitives flight UBO（随 P2）、tick 排期字段 | 独立小批 |
+| P1b-2b | M1 剩余之三：按 tick 排期的字段（audit 间隔、derived resource GC 延迟、terrain rebuild 门槛） | 已提交，纯重命名 |
+| P1b-2c | M1 剩余之四：DebugPrimitives flight UBO | 随 P2 flight 轴 |
 | P1c | M2 `SceneFrameSnapshot` → `SceneSnapshot` | 独立：纯重命名 |
 | P2 | M4 + M5 + `Renderer` 合并 | 对应 4.0.3 checkpoint 2 / 3 |
 | P3 | M3（C++ 部分） | 对应 4.0.3 checkpoint 4（PreparedView） |
@@ -238,7 +240,9 @@ hostTick = 1200
 - P1b-1 构建/测试证据：`xmake b ya-game-editor`、`xmake b ya-testing`；`xmake r ya-testing --gtest_filter='EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*:AppAutomationConfigTest.*:AppKernelTest.*'` 66/66。
 - P1b-2a 已满足：`rg -n 'perf::sample::(renderFrame|frame)[A-Za-z]*|YA_PERF_FRAME_SCOPE|PerfFrameScopeTimerConditional|frameCycle|frameCpuMs|frameGpuMs|"Frame/' Engine` 为空。
 - P1b-2a 构建/测试证据：`xmake b ya-game-editor`、`xmake b ya-testing`、`xmake b ya-render-3d-test`；`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:ViewFamilyRendererTest.*:RenderViewBindingTableTest.*:ViewPassResourcesTest.*:SceneFamilyResourcesTest.*'` 41/41；`xmake r ya-testing --gtest_filter='AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*:AppKernelTest.*'` 66/66。
-- 仍待处理：`DebugPrimitives::updateFrameUBO`（随 P2 flight 轴）、tick 排期字段。
+- P1b-2b 已满足：`rg -n 'AuditFrame|RebuildNotBeforeFrame|MATERIAL_AUDIT_INTERVAL_FRAMES|DERIVED_RESOURCE_GC_DELAY_FRAMES|lastUsedFrame' Engine` 为空。
+- P1b-2b 构建/测试证据：`xmake b ya-render-3d-test`、`xmake b ya-testing`、`xmake b ya-game-editor`；`xmake r ya-testing --gtest_filter='AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*:AppKernelTest.*'` 66/66；`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:ViewFamilyRendererTest.*:RenderViewBindingTableTest.*:ViewPassResourcesTest.*:SceneFamilyResourcesTest.*'` 41/41。
+- 仍待处理：`DebugPrimitives::updateFrameUBO`（随 P2 flight 轴）。
 - `rg -n '\bframeIndex\b|\bframeId\b|\bframeToken\b' Engine/Source` 只剩第 3 节保留项与 automation 外部键。
 - `rg -n 'flightIndex' Engine/Source` 为空。
 - `rg -n 'SceneFrameSnapshot|RenderFrameData|CameraFrameInput|RenderPipelineFrameContext|RenderViewRecordingContext|SceneViewRecording' Engine/Source` 为空。

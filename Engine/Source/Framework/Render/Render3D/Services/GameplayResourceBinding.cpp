@@ -23,7 +23,7 @@ void GameplayResourceBinding::clearSceneResolveWork()
     _dirtyMaterialQueue.clear();
     _dirtyMaterialSet.clear();
     _activeMaterial.clear();
-    _nextMaterialAuditFrame = 0;
+    _nextMaterialAuditTick = 0;
     _pendingStateScene = nullptr;
 }
 
@@ -39,10 +39,10 @@ void GameplayResourceBinding::auditMaterialWork(Scene* scene)
     }
 
     const uint64_t currentTick = _getHostTick ? _getHostTick() : 0;
-    if (_nextMaterialAuditFrame != 0 && currentTick < _nextMaterialAuditFrame) {
+    if (_nextMaterialAuditTick != 0 && currentTick < _nextMaterialAuditTick) {
         return;
     }
-    _nextMaterialAuditFrame = currentTick + MATERIAL_AUDIT_INTERVAL_FRAMES;
+    _nextMaterialAuditTick = currentTick + MATERIAL_AUDIT_INTERVAL_TICKS;
 
     auto& registry = scene->getRegistry();
 

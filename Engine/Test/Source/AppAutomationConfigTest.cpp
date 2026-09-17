@@ -246,7 +246,7 @@ TEST_F(AppAutomationConfigTest, LoadConfigReadsDeferredSsaoAndPostprocessAutomat
 
 TEST_F(AppAutomationConfigTest, ResourceResolveDerivedResourceGcDelayConstantIsStable)
 {
-    EXPECT_EQ(EnvironmentLightingProcessor::DERIVED_RESOURCE_GC_DELAY_FRAMES, 300u);
+    EXPECT_EQ(EnvironmentLightingProcessor::DERIVED_RESOURCE_GC_DELAY_TICKS, 300u);
 }
 
 } // namespace

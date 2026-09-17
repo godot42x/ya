@@ -137,7 +137,7 @@ void TerrainProcessor::clearSceneResolveWork()
     _dirtyTerrainQueue.clear();
     _dirtyTerrainSet.clear();
     _activeTerrain.clear();
-    _nextResolveAuditFrame = 0;
+    _nextResolveAuditTick = 0;
     _pendingStateScene = nullptr;
 }
 
@@ -156,7 +156,7 @@ void TerrainProcessor::seedSceneResolveWork(Scene* scene)
     auto& registry = scene->getRegistry();
     for (auto&& [entity, terrain] : registry.view<TerrainComponent>().each()) {
         (void)terrain;
-        markTerrainDirty(entity, "scene seed", terrain.getRebuildNotBeforeFrame());
+        markTerrainDirty(entity, "scene seed", terrain.getRebuildNotBeforeTick());
     }
 }
 
@@ -176,7 +176,7 @@ void TerrainProcessor::sweepAuthoringDirty(Scene* scene)
         auto& state = _terrainStates[entity];
         if (terrain.getAuthoringVersion() > state.lastCompletedAuthoringVersion &&
             !isTerrainQueuedOrActive(entity)) {
-            markTerrainDirty(entity, "authoring-version sweep", terrain.getRebuildNotBeforeFrame());
+            markTerrainDirty(entity, "authoring-version sweep", terrain.getRebuildNotBeforeTick());
         }
     }
 }
@@ -188,10 +188,10 @@ void TerrainProcessor::auditResolveWork(Scene* scene)
     }
 
     const uint64_t currentTick = this->currentHostTick();
-    if (_nextResolveAuditFrame != 0 && currentTick < _nextResolveAuditFrame) {
+    if (_nextResolveAuditTick != 0 && currentTick < _nextResolveAuditTick) {
         return;
     }
-    _nextResolveAuditFrame = currentTick + 120;
+    _nextResolveAuditTick = currentTick + 120;
 
     auto& registry = scene->getRegistry();
     auto* assets   = AssetManager::get();
@@ -213,19 +213,19 @@ void TerrainProcessor::auditResolveWork(Scene* scene)
                          terrain.getAuthoringVersion(),
                          bHeightMapStale);
             markTerrainDirty(entity, bHeightMapStale ? "audit: height map stale" : "audit: missed terrain enqueue",
-                             terrain.getRebuildNotBeforeFrame());
+                             terrain.getRebuildNotBeforeTick());
         }
     }
 }
 
 void TerrainProcessor::gcDerivedResources(uint64_t currentTick)
 {
-    const auto shouldKeep = [currentTick](uint64_t lastUsedFrame) {
-        return lastUsedFrame + DERIVED_RESOURCE_GC_DELAY_FRAMES > currentTick;
+    const auto shouldKeep = [currentTick](uint64_t lastUsedTick) {
+        return lastUsedTick + DERIVED_RESOURCE_GC_DELAY_TICKS > currentTick;
     };
 
     for (auto it = _terrainDerivedResources.begin(); it != _terrainDerivedResources.end();) {
-        if (!it->second || shouldKeep(it->second->lastUsedFrame)) {
+        if (!it->second || shouldKeep(it->second->lastUsedTick)) {
             ++it;
             continue;
         }
@@ -241,7 +241,7 @@ void TerrainProcessor::cleanupTerrainState(entt::entity entity)
     std::erase(_dirtyTerrainQueue, entity);
 }
 
-void TerrainProcessor::markTerrainDirty(entt::entity entity, const char* reason, uint64_t rebuildNotBeforeFrame)
+void TerrainProcessor::markTerrainDirty(entt::entity entity, const char* reason, uint64_t rebuildNotBeforeTick)
 {
     if (!_pendingStateScene) {
         return;
@@ -254,8 +254,8 @@ void TerrainProcessor::markTerrainDirty(entt::entity entity, const char* reason,
     }
 
     auto& terrain = registry.get<TerrainComponent>(entity);
-    if (rebuildNotBeforeFrame > terrain.getRebuildNotBeforeFrame()) {
-        terrain.setRebuildNotBeforeFrame(rebuildNotBeforeFrame);
+    if (rebuildNotBeforeTick > terrain.getRebuildNotBeforeTick()) {
+        terrain.setRebuildNotBeforeTick(rebuildNotBeforeTick);
     }
 
     auto& state = _terrainStates[entity];
@@ -302,7 +302,7 @@ void TerrainProcessor::resolvePendingTerrain(Scene* scene)
         auto& state   = _terrainStates[entity];
         const uint64_t currentTick = this->currentHostTick();
 
-        if (terrain.getRebuildNotBeforeFrame() > currentTick) {
+        if (terrain.getRebuildNotBeforeTick() > currentTick) {
             _activeTerrain.insert(entity);
             return;
         }
@@ -328,7 +328,7 @@ void TerrainProcessor::resolvePendingTerrain(Scene* scene)
 
         if (auto it = _terrainDerivedResources.find(derivedKey); it != _terrainDerivedResources.end() &&
             it->second && it->second->mesh) {
-            it->second->lastUsedFrame = currentTick;
+            it->second->lastUsedTick  = currentTick;
             state.currentDerivedKey   = derivedKey;
             state.boundResource       = it->second;
             state.lastBuiltHeightMapVersion = it->second->heightMapVersion;
@@ -382,7 +382,7 @@ void TerrainProcessor::resolvePendingTerrain(Scene* scene)
         const auto& texture = batchMemory.textures.front();
         if (AssetManager::normalizeAssetPath(texture.filepath) != AssetManager::normalizeAssetPath(terrain._heightMapRef.getPath())) {
             state.state = TerrainRuntimeState::EResolveState::Dirty;
-            markTerrainDirty(entity, "terrain stale async result", terrain.getRebuildNotBeforeFrame());
+            markTerrainDirty(entity, "terrain stale async result", terrain.getRebuildNotBeforeTick());
             return;
         }
 
@@ -411,7 +411,7 @@ void TerrainProcessor::resolvePendingTerrain(Scene* scene)
         YA_CORE_ASSERT(render, "TerrainProcessor mesh creation requires render backend");
         resource->mesh           = Mesh::create(*render, meshData);
         resource->heightMapVersion = heightMapVersion;
-        resource->lastUsedFrame  = currentTick;
+        resource->lastUsedTick   = currentTick;
         _terrainDerivedResources[derivedKey] = resource;
 
         state.currentDerivedKey  = derivedKey;

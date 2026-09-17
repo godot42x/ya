@@ -11,6 +11,14 @@
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 已按 Scene family 持有，同 Scene 多 View 共享一份 SSBO，不同 Scene 不再以 flightIndex 为共享 key。
 
+## 2026-09-17 checkpoint：按 tick 排期的字段（M1 P1b-2b）
+
+- 唯一目标：把「按 tick 排期」的字段名从 frame 改成 tick，不改任何排期行为。这些值都是 host tick 序号（`App::_hostTick` / `EnvironmentLightingResultProvider` 的 tick provider），不是 Scene 版本、View 采样或 flight 槽。
+- 落地：`TerrainProcessor::_nextResolveAuditFrame` 与 `EnvironmentLightingProcessor::_nextResolveAuditFrame`、`GameplayResourceBinding::_nextMaterialAuditFrame` → `_nextResolveAuditTick` / `_nextMaterialAuditTick`；`DERIVED_RESOURCE_GC_DELAY_FRAMES`、`MATERIAL_AUDIT_INTERVAL_FRAMES` → `*_TICKS`（含 `AppAutomationConfigTest.ResourceResolveDerivedResourceGcDelayConstantIsStable` 的常量断言）；`TerrainDerivedResource::lastUsedFrame` → `lastUsedTick`；`TerrainComponent` 的 `getRebuildNotBeforeFrame` / `setRebuildNotBeforeFrame` / `_rebuildNotBeforeFrame` / `invalidate(rebuildNotBeforeFrame)` 与 `TerrainProcessor::markTerrainDirty(..., rebuildNotBeforeFrame)` → `*Tick`。
+- 列对齐：改名缩短了成员名，`TerrainComponent`、`TerrainDerivedResource`、`TerrainProcessor`、`GameplayResourceBinding` 的声明列与 `TerrainProcessor.cpp` 里两处赋值块已按原列补回，diff 只剩标识符本身。
+- 验证：`xmake b ya-render-3d-test`、`xmake b ya-testing`、`xmake b ya-game-editor`；`xmake r ya-testing --gtest_filter='AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*:AppKernelTest.*'` 66/66；`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:ViewFamilyRendererTest.*:RenderViewBindingTableTest.*:ViewPassResourcesTest.*:SceneFamilyResourcesTest.*'` 41/41；`git diff --check` 通过。
+- 保留未完成：`DebugPrimitives::updateFrameUBO` / `_frameData`（按 `flightIndex` 索引，属 P2 flight 轴，随 `FrameFlightResources` 一起改）；P1c `SceneFrameSnapshot` → `SceneSnapshot`。
+
 ## 2026-09-17 checkpoint：perf 命名面收口（M1 P1b-2a）
 
 - 唯一目标：把 perf 采样轴上残留的 `Frame` 改成 `Tick`，不改任何采样行为。host tick 的相位（logic / render / event pump / …）现在与代码其余部分说同一种话；trace 里再出现 `Frame/Logic` 就一定是别的语义。

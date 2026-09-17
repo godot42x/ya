@@ -201,7 +201,7 @@ void EnvironmentLightingProcessor::clearSceneResolveWork()
     _activeSkybox.clear();
     _activeEnvironment.clear();
     _sceneSkyboxEnvironmentDependents.clear();
-    _nextResolveAuditFrame = 0;
+    _nextResolveAuditTick = 0;
     _pendingStateScene = nullptr;
 }
 
@@ -268,10 +268,10 @@ void EnvironmentLightingProcessor::auditResolveWork(Scene* scene)
     }
 
     const uint64_t currentTick = _getHostTick ? _getHostTick() : 0;
-    if (_nextResolveAuditFrame != 0 && currentTick < _nextResolveAuditFrame) {
+    if (_nextResolveAuditTick != 0 && currentTick < _nextResolveAuditTick) {
         return;
     }
-    _nextResolveAuditFrame = currentTick + 120;
+    _nextResolveAuditTick = currentTick + 120;
 
     auto& registry = scene->getRegistry();
     // auto* assets   = AssetManager::get();
@@ -336,7 +336,7 @@ void EnvironmentLightingProcessor::touchDerivedResourceUsage()
 void EnvironmentLightingProcessor::gcDerivedResources(uint64_t currentTick)
 {
     const auto shouldKeep = [currentTick](uint64_t lastUsedTick) {
-        return lastUsedTick + DERIVED_RESOURCE_GC_DELAY_FRAMES > currentTick;
+        return lastUsedTick + DERIVED_RESOURCE_GC_DELAY_TICKS > currentTick;
     };
 
     for (auto it = _skyboxDerivedResources.begin(); it != _skyboxDerivedResources.end();) {
