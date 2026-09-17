@@ -13,6 +13,18 @@
 
 ## 2026-09-17 checkpoint：View 声明 / 收集边界 review（无代码改动）
 
+## 2026-09-18 checkpoint：gizmo 开关归编辑器（4.0.3 4d-3a）
+
+- 唯一目标：把「编辑器视口要不要画编辑器家具」从 `AppRenderState::bShowEditorGizmos` 这个跨层格子，交回编辑器自己的 view option，并让 automation 的开关经编辑器而不是经 App。4d-3 原含两件事（feature 归位 / 作者视口 rect 归位），拆成两刀，这一刀只做 feature。
+- 开关归编辑器：`EditorLayer` 增加 `isEditorGizmoShown()` / `setEditorGizmoShown(bool)`（view option，与 `_bShowViewportCameraOverlay` 同类，默认 false）。`EditorViewProducer` 的作者视口仍是「authoring 时一律画、之后按开关」，预览 inset 读同一个开关；`EditorSurface` 的 View 菜单直接读写 layer。
+- 格子删除：`AppRenderState::bShowEditorGizmos` 与 `App::isEditorGizmoShown` / `App::setEditorGizmoShown` 删除（`AppLifecycle.cpp` 里那两个函数体是它的全部实现）。编辑器不再经 App 的渲染状态表达自己的视图诉求。
+- 游戏视口不再受编辑器开关影响：`RuntimeGameViewProducer` 只声明 `features = Game`。刻意接受的行为差异——「Show Editor Gizmos」是编辑器的 view option，一个不由编辑器声明的视口不该被它改变；独立游戏本就没有这个开关可点。
+- automation 改走编辑器：`IEditorAutomationControl` 增加 `setEditorGizmosVisible(bool)`，`EditorModule` 转给 `_layer`；`handleSetEditorGizmosVisible` 不再写 App，改为「有编辑器才成功，没有则报 `set_editor_gizmos_visible requires a loaded editor`」。
+- 新测试：`Engine/Test/Source/EditorViewProducerTest.cpp`（2 例：authoring 视口恒画编辑器家具；预览 inset 的 gizmo feature 由编辑器的 view option 决定）与 `RuntimeGameViewProducerTest.cpp`（2 例：Runtime 态只声明 `Game`；authoring 态什么都不声明）。前者顺带补上了 4d-2 登记的空缺——预览 inset 第一次被「真实选中一台相机实体」驱动（`App app;` + `EditorLayer layer(&app)` 夹具，不需要 device）。
+- 验收：`xmake b ya-game-editor`、`xmake b ya-testing`；`ya-testing` 相关滤镜 114/114（含新增 4 例）；`rg -n 'bShowEditorGizmos' Engine Example` 只剩 `EditorLayer` 自己的 `_bShowEditorGizmos`，`rg -n 'featuresForView|App::isEditorGizmoShown' Engine Example` 为空；经 control 入口起 editor 实例（pid/端口由 `control start` 给出），`set_editor_gizmos_visible {"visible": true}` 返回 `{"visible": true}`（新路由生效），同一调用打到 game 实例返回 `requires a loaded editor`（无编辑器时明确失败而不是静默成功）；game 实例 viewport 截图 1395200 字节，与 4b/4c/4d-1/4d-2 基线一致，说明 runtime 视口输出没变。
+- 保留未完成：4d-3b（作者视口 rect 由声明方给出，`setViewportRect` 不再由编辑器写，automation 的 resize 改走声明）、checkpoint 5（owner-scoped `SceneViewKey`）。
+- 记录的既有失败（非本刀）：`EditorWindowSessionTest.DockContextDoesNotKnowEditorRoots` 与 `InputRoutesByWindowId` 失败，原因是这两个源码守卫用例硬编码的源文件路径被 include/ 归并（`4c1c6e3c`）挪了位置；同批还有并发工作线的 `GameUIHostTest.BuildSnapshotComposesMountedWidgets`。
+
 ## 2026-09-18 checkpoint：抽取移出 seal（4.0.3 4a）
 
 - 唯一目标：让 `SceneRenderScheduler::seal()` 只做分组，把 ECS 抽取变成调用方的显式一步。改前 `seal()` 在给请求分组的同时调用 `request.buildSnapshot()`，于是「抽 Scene」不是一步而是分组步骤的副作用，且请求队列里躺着捕获 `Scene*` / `TerrainProcessor*` 的闭包。

@@ -66,17 +66,6 @@
 namespace ya
 {
 
-bool App::isEditorGizmoShown() const
-{
-    return _renderState && _renderState->bShowEditorGizmos;
-}
-
-void App::setEditorGizmoShown(bool bShow)
-{
-    if (_renderState) {
-        _renderState->bShowEditorGizmos = bShow;
-    }
-}
 namespace
 {
 std::string resolveProjectScenePath(const App& app, const std::string& requestedPath)

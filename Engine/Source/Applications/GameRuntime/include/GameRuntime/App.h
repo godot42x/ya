@@ -236,14 +236,6 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     [[nodiscard]] bool     isSimulationMode() const { return _appState == AppState::Simulation; }
     [[nodiscard]] bool     isRuntimeMode() const { return _appState == AppState::Runtime; }
 
-    // === Editor gizmo override (View menu / automation) ===
-    /// Generated editor companions exist in every mode; this only decides
-    /// whether game-like views also draw them. One global switch by design: a
-    /// per-object flag would scatter gizmo state through scene data.
-    /// Out-of-line: App.h only forward-declares AppRenderState.
-    [[nodiscard]] bool isEditorGizmoShown() const;
-    void               setEditorGizmoShown(bool bShow);
-
     /// Broadcast after every app mode transition (Runtime / Simulation / Stopped).
     MulticastDelegate<void(AppState)> onAppStateChanged;
     bool                   isPaused() const { return _bPause; }

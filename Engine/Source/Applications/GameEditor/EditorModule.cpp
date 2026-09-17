@@ -815,6 +815,15 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         return true;
     }
 
+    bool setEditorGizmosVisible(bool bVisible) override
+    {
+        if (!_layer) {
+            return false;
+        }
+        _layer->setEditorGizmoShown(bVisible);
+        return true;
+    }
+
     void onDetach(App& app) override
     {
         app.getInputRouter().cancelInput(EInputCancelReason::ModuleDetached);

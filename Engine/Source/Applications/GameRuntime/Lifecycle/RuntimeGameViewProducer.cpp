@@ -21,10 +21,11 @@ void RuntimeGameViewProducer::collectSceneViews(const SceneViewCollectContext& c
         .scene        = context.activeScene,
         .viewId       = kPrimarySceneViewId,
         .viewportRect = context.viewportRect,
-        // Generated editor companions are editor furniture; a game view draws
-        // authored content. The debug override can still ask for them.
-        .features = toMask(ERenderFeature::Game) |
-                    (_app->isEditorGizmoShown() ? toMask(ERenderFeature::Gizmo) : 0u),
+        // Generated editor companions are editor furniture and this is the game
+        // view, so it draws authored content, always. "Show Editor Gizmos" is
+        // the editor's view option; it never reaches a view the editor does not
+        // declare.
+        .features = toMask(ERenderFeature::Game),
     };
 
     Entity* camera = findPrimaryCamera(*context.activeScene);

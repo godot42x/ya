@@ -50,10 +50,12 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
 
     // Generated editor companions are editor furniture: the authoring view draws
     // them while the app is stopped and on request afterwards, a camera preview
-    // shows what that camera sees, and the game view never draws them.
+    // shows what that camera sees, and the game view never draws them. The
+    // request itself is the editor's own view option, so it is read from the
+    // editor rather than from app-wide render state.
     const FRenderFeatureMask gizmoFeature = toMask(ERenderFeature::Gizmo);
     const FRenderFeatureMask baseFeatures = toMask(ERenderFeature::Game);
-    const bool               bEditorGizmos = _app->isStopped() || _app->isEditorGizmoShown();
+    const bool               bEditorGizmos = _app->isStopped() || _layer->isEditorGizmoShown();
 
     // While the game runs, its own producer owns the world viewport: the editor
     // camera is not what that viewport shows, so only the preview is ours.
@@ -99,7 +101,7 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
         .viewportRect      = previewOutput,
         .composeOntoViewId = kPrimarySceneViewId,
         .composeRect       = composeRect,
-        .features          = baseFeatures | (_app->isEditorGizmoShown() ? gizmoFeature : 0u),
+        .features          = baseFeatures | (_layer->isEditorGizmoShown() ? gizmoFeature : 0u),
         .viewOwner         = previewCamera->getHandle(),
     });
 }

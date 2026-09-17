@@ -206,8 +206,8 @@ M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**�
 | `AppRenderState::bWorldSceneRenderEnabled`（`AppRenderServices::set/isWorldSceneRenderEnabled`） | 本 tick 有没有世界视口要提交 | 声明方决定 | **已删（4d-1）**：替代物是「没有 producer 声明 view」；`SkeletonAnimationSystem::setTickPolicy` 改读渲染侧派生事实 `AppRenderState::renderedScenesLastTick`（上一 tick 是否为该 Scene 产出内容，对齐 UE `OnlyTickPoseWhenRendered`） |
 | `AppRenderState::extensionHostView`（`setExtensionHostViewState` / `clearExtensionHostViewState`） | 编辑器作者视口的相机矩阵 | producer 自己填 `SceneViewDesc` | **已删（4d-1）**：`EditorAuthoringViewProducer` 直接声明；`prepareHostViewState` 收成宿主几何 + 时钟，主 view 的相机由声明回填进 `hostView` |
 | `AppRenderState::bCameraPreviewHostOwned` + `cameraPreviewEntityUUID` | 预览视图用哪个相机 | 声明方决定 | **已删（4d-2）**：`EditorViewProducer` 按 `EditorLayer::getCameraPreviewEntity()`（用户选中项）声明预览 inset，view id 由编辑器自持；`resolvePreviewCamera` 删除，FOV 线框改由编辑器 world overlay pass 绘制 |
-| `AppRenderServices::setViewportRect` / `getViewportRect` | 作者视口的离屏 rect | producer 自己填 `SceneViewDesc` | 降为 producer 输入；automation 的 resize 用例改走 producer 声明的 rect |
-| `AppRenderState::bShowEditorGizmos`（`App::set/isEditorGizmoShown`） | 编辑器视口这 tick 要不画 gizmo | 声明方按 view 声明 | 删除。写入方是 EditorSurface 的 Window 菜单，读取方是 `featuresForView` 拼 feature mask；与 `viewportRect` 同批降为 producer 输入 |
+| `AppRenderServices::setViewportRect` / `getViewportRect` | 作者视口的离屏 rect | producer 自己填 `SceneViewDesc` | **待 4d-3b**：降为 producer 输入；automation 的 resize 用例改走 producer 声明的 rect |
+| `AppRenderState::bShowEditorGizmos`（`App::set/isEditorGizmoShown`） | 编辑器视口这 tick 要不画 gizmo | 声明方按 view 声明 | **已删（4d-3a）**：开关是编辑器的 view option（`EditorLayer`），`EditorViewProducer` 读它声明 feature，`EditorSurface` 菜单写它；automation 的 `set_editor_gizmos_visible` 经 `IEditorAutomationControl` 打到编辑器（无编辑器即失败）；游戏视口只声明 `Game`，不再受这个开关影响 |
 | `kPrimarySceneViewId = 1` / `kHostOverlayPreviewViewId = 2` | view 的持久身份 | owner-scoped `SceneViewKey{ownerId, localId}` | 现在 view 1 同时是两个产品（编辑器作者视口 / 独立游戏视口）的身份，view 2 由 host 铸造。改为 producer 注册时铸键，作为 `ViewHistoryStore` 与跨 Surface 复用的稳定键 |
 | `CameraFrameInput` 的 `flightIndex` / `frameIndex` / `deltaTime` | 帧作用域 | `FrameContext` | 与 M3 的 `CameraFrameInput` 删除同批；`flightIndex` 另见 M4 |
 | `CameraFrameInput` 的 `view` / `projection` / `viewportRect` / `viewFeatures` | view 作用域 | `SceneViewDesc` → `PreparedView` | 与 M3 同批 |
@@ -248,6 +248,14 @@ M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**�
 - 已知行为差异（刻意）：Runtime 态且场景没有相机实体时，主 view 仍会被声明（与之前一致），但相机是单位矩阵而不是借用编辑器相机——「游戏视口借用编辑器相机」正是被删除的那条耦合。
 - 保留未完成：4d-2（相机预览生产者 + 删 `bCameraPreviewHostOwned` / `cameraPreviewEntityUUID` / `kHostOverlayPreviewViewId`，`resolvePreviewCamera` / `cameraProjectionForOutput` / `appendSceneCameraFrustumLines` 移回编辑器）、4d-3（`SceneViewDesc.features` + 删 `bShowEditorGizmos` 与 `featuresForView`，作者视口 rect 由声明方给出）。
 
+
+#### M9 执行记录（4d-3a，2026-09-18 已提交）
+
+- 开关归编辑器：`EditorLayer` 增加 `isEditorGizmoShown()` / `setEditorGizmoShown(bool)`（编辑器自己的 view option，默认 false）。`EditorViewProducer` 的两个 view 都读它——authoring 视口在 authoring 态一律画编辑器家具，其余情况与预览 inset 一样只在这个选项打开时画。
+- 格子删除：`AppRenderState::bShowEditorGizmos`、`App::isEditorGizmoShown` / `App::setEditorGizmoShown` 删除；`RuntimeGameViewProducer` 只声明 `features = Game`（编辑器不再能改变一个不由它声明的视口）。
+- automation 改走编辑器：`IEditorAutomationControl` 增加 `setEditorGizmosVisible(bool)`，`EditorModule` 转给 `_layer`；`handleSetEditorGizmosVisible` 在有编辑器时成功、没有时返回错误，不再写 App。
+- 验收证据：`ya-testing` 相关滤镜 114/114（新增 `EditorViewProducerTest` 2 例、`RuntimeGameViewProducerTest` 2 例）；`rg -n 'bShowEditorGizmos' Engine Example` 只剩 `EditorLayer` 的私有成员，`featuresForView` 与 `App::isEditorGizmoShown` 为空；经 `control start` 起的 editor 实例接受 `set_editor_gizmos_visible`，game 实例返回 `requires a loaded editor`，game viewport 截图 1395200 字节与 4b 起各刀基线一致。
+- 保留未完成：4d-3b（作者视口 rect 由声明方给出；`setViewportRect` 不再由编辑器写，automation 的 resize 改走声明）。
 
 ## 3. 保留项（这些 `frame` 是正确的）
 
@@ -308,6 +316,7 @@ M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**�
 - P1d 构建/测试证据：`xmake b ya-game-editor`、`xmake b ya-testing`；`xmake r ya-testing --gtest_filter='AppKernelTest.*:AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*'` 66/66（含改名后的 `AppKernelTest.HeadlessLoopHonorsExitAfterTick`）。
 - M9 / P1e 的目标（4d 落地后应可逐条验证）：`rg -n 'bWorldSceneRenderEnabled|setWorldSceneRenderEnabled|isWorldSceneRenderEnabled' Engine Example` 为空；`rg -n 'extensionHostView|setExtensionHostViewState|clearExtensionHostViewState' Engine` 为空；`rg -n 'bCameraPreviewHostOwned|cameraPreviewEntityUUID|resolvePreviewCamera|kHostOverlayPreviewViewId|bShowEditorGizmos' Engine` 为空；`rg -n 'derivedSceneForHostView|derivedScenesAgreeWithPlan|derivedSceneForFamily' Engine` 为空（4b 已满足）。
 - 4d-2 已满足：`rg -n 'bCameraPreviewHostOwned|cameraPreviewEntityUUID|resolvePreviewCamera|kHostOverlayPreviewViewId' Engine Example` 为空（gizmo 格子留待 4d-3）。`SceneViewDesc` 现在自带 `features` / `viewOwner`，orchestrator 里不再有 `featuresForView` 或 viewOwner 三分支。
+- 4d-3a 已满足：`rg -n 'bShowEditorGizmos' Engine Example` 只剩 `EditorLayer` 自己的私有成员（编辑器 view option），`rg -n 'App::isEditorGizmoShown|featuresForView' Engine Example` 为空；`EditorViewProducerTest` / `RuntimeGameViewProducerTest` 钉住「authoring 视口恒画编辑器家具、预览 inset 按编辑器的 view option 声明 feature、游戏视口只画 authored 内容」。4d-3b 仍需把作者视口 rect 交给声明方。
 - M9 4a–4c 的验收：4a `SceneRenderScheduler::seal()` 内不再出现 `buildSnapshot` 调用；4b plan/task/快照表项携带 Scene 句柄、`sceneId` 由句柄派生、无运行时反查校验（`rg -n 'derivedSceneForHostView|derivedScenesAgreeWithPlan|derivedSceneForFamily|complete\(\)' Engine/Source/Framework/Render/Render3D/Common/RenderFrameInputs.h` 为空）；4c 声明结构只剩一份（`rg -n 'HostSceneViewSubmit|SceneRenderRequest|submitHostSceneViews|renderFlags|\bSceneId\b' Engine Example` 为空，`SceneViewportTask` 只内嵌 `SceneViewDesc`），且 `HostSceneExtractTest` 的隔离语义不变（3/3）。
 - M9 4d 的验收：编辑器 2D 画布模式与 3D 模式的 view 集合差异由 producer 声明表达，`tickRender` 内不再有「某个 view 要不要渲染」的判断；`SkeletonAnimationSystem` 不再依赖世界渲染开关。
 - M9 4d 的第二条验收（2026-09-18 补充）：declare 路径上不再有 live-ECS 查询——`getPrimaryCamera`（`registry.view<CameraComponent>`）、`resolvePreviewCamera`（`getEntityByUUID`）、`appendSceneCameraFrustumLines`（再遍历 camera view）都要移出 `tickRender` 的声明段，由 producer 收集时给出或在 `SceneSnapshot` 里体现。`bShowEditorGizmos` 是第五个全局格子（写入方 `EditorSurface.cpp` Window 菜单，读取方 `featuresForView`），与 `setViewportRect` 同批降为 producer 输入。

@@ -91,7 +91,8 @@
 - [x] 4.0.3 4c：`HostSceneViewSubmit` 与 `SceneRenderRequest` 合并为一份 `SceneViewDesc`（`SceneViewportTask` 内嵌它，`submitHostSceneViews` 转发删除，`renderFlags` 与派生 `sceneId` 删除，键改用句柄；宿主文件改名 `HostSceneExtract.*`，只剩抽取）。
 - [x] 4.0.3 4d-1：`ISceneViewProducer` / `SceneViewCollector` / `SceneViewCollectContext` 接缝 + `RuntimeGameViewProducer` / `EditorAuthoringViewProducer` 各自声明世界视口；删除 `bWorldSceneRenderEnabled` 与 `extensionHostView` 两个格子；`SkeletonAnimationSystem` 策略改读 `renderedScenesLastTick`；`getPrimaryCamera` 移入 `Utility/SceneCameraQuery`。
 - [x] 4.0.3 4d-2：`EditorViewProducer` 声明编辑器两个 view（作者视口 + 选中相机的预览 inset）；删 `bCameraPreviewHostOwned` / `cameraPreviewEntityUUID` / 宿主铸造的 `kHostOverlayPreviewViewId`；`resolvePreviewCamera` / `cameraProjectionForOutput` 移入编辑器，FOV 线框移到编辑器 world overlay pass；`SceneViewDesc` 补 `features` 与 `viewOwner`。
-- [ ] 4.0.3 4d-3：删 `bShowEditorGizmos` 格子（开关归 `EditorLayer`，声明方读它而不是 App）；作者视口 rect 由声明方给出，automation resize 改走声明。
+- [x] 4.0.3 4d-3a：删 `bShowEditorGizmos` 格子（开关归 `EditorLayer`，声明方读它而不是 App）；automation 的 `set_editor_gizmos_visible` 经 `IEditorAutomationControl` 打到编辑器；游戏视口不再受编辑器开关影响。
+- [ ] 4.0.3 4d-3b：作者视口 rect 由声明方给出（`setViewportRect` 不再由编辑器写）；automation 的 resize 用例改走声明。
 - [ ] 4.0.3 checkpoint 5：view 身份改 owner-scoped `SceneViewKey`，并按此建立 `ViewHistoryStore` 稳定键（排在 4d 之后）。
 
 ## R3

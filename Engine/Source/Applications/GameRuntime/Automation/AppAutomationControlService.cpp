@@ -1020,7 +1020,15 @@ void AppAutomationControlService::handleSetEditorGizmosVisible(App& app, const A
     }
 
     const bool bVisible = call->params["visible"].get<bool>();
-    app.setEditorGizmoShown(bVisible);
+
+    // Show Editor Gizmos is an editor view option, so the call goes through the
+    // editor that owns it instead of through app-wide render state.
+    IEditorAutomationControl* editorControl = getEditorAutomationControl(app);
+    if (!editorControl || !editorControl->setEditorGizmosVisible(bVisible)) {
+        completeCall(call, makeError(*call, "set_editor_gizmos_visible requires a loaded editor"));
+        return;
+    }
+
     completeCall(call,
                  makeSuccess(*call,
                              {

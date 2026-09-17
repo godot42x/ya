@@ -18,11 +18,13 @@ struct IEditorAutomationControl
 
     [[nodiscard]] virtual Scene* getAuthoringScene() const = 0;
     virtual bool setEditorCameraTransform(const glm::vec3& position, const glm::vec3& rotation) = 0;
+    /// The editor view option `View > Show Editor Gizmos`: the same switch the
+    /// editor's own menu drives. Returns false when there is no editor to set it on.
+    virtual bool setEditorGizmosVisible(bool bVisible) = 0;
     virtual bool focusEditorCameraOnWorldPoint(const glm::vec3& target,
                                                float             distance,
                                                float             heightOffset) = 0;
 };
 
 } // namespace ya
-
 

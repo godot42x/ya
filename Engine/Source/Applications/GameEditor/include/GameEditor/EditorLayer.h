@@ -102,6 +102,12 @@ struct EditorLayer
     char      _defaultScenePathBuffer[512] = {};
     bool      _bDefaultScenePathDirty      = false;
     bool      _bShowViewportCameraOverlay  = true;
+    /// Editor view option (`View > Show Editor Gizmos`). Generated editor
+    /// companions (camera body, light icons) are editor furniture: the
+    /// authoring viewport draws them while authoring regardless, and this
+    /// requests them outside authoring. One switch by design -- a per-object
+    /// flag would scatter gizmo state through scene data.
+    bool      _bShowEditorGizmos           = false;
 
     EditorViewportGizmoController _gizmo;
 
@@ -296,6 +302,10 @@ struct EditorLayer
     bool viewportToCanvas(const glm::vec2& viewportLocal, glm::vec2& outCanvas) const;
     /// Inverse of viewportToCanvas (viewport-local px from canvas logical px).
     [[nodiscard]] glm::vec2 canvasToViewport(const glm::vec2& canvasPoint) const;
+
+    // === Editor view options (what the editor's own views draw) ===
+    [[nodiscard]] bool isEditorGizmoShown() const { return _bShowEditorGizmos; }
+    void               setEditorGizmoShown(bool bShow) { _bShowEditorGizmos = bShow; }
 
     /// True while the viewport has hover/focus, or while RMB look is held so
     /// the editor camera keeps receiving InputManager state after the pointer

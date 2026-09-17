@@ -463,16 +463,17 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
             UIMenu::FItem::separator(),
             UIMenu::FItem::fromAction(_rootSession->actions(), "editor.settings"),
         };
-        // Generated editor companions (camera body, light icons) stay out of
-        // game-like views; this is the debug override that draws them anyway.
+        // Generated editor companions (camera body, light icons) are editor
+        // furniture, so the authoring viewport draws them while authoring and
+        // on request afterwards. The option belongs to the editor, not the app.
         {
             UIMenu::FItem gizmoItem;
             gizmoItem.label      = "Show Editor Gizmos";
             gizmoItem.bCheckable = true;
-            gizmoItem.bChecked   = _app && _app->isEditorGizmoShown();
+            gizmoItem.bChecked   = _layer && _layer->isEditorGizmoShown();
             gizmoItem.action     = [this]() {
-                if (_app) {
-                    _app->setEditorGizmoShown(!_app->isEditorGizmoShown());
+                if (_layer) {
+                    _layer->setEditorGizmoShown(!_layer->isEditorGizmoShown());
                 }
             };
             items.push_back(UIMenu::FItem::separator());

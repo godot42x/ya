@@ -36,11 +36,6 @@ struct AppRenderState
     /// gets drawn (SkeletonAnimationSystem), so they stop depending on a switch
     /// that describes a viewport instead of a Scene.
     std::vector<Scene*>                     renderedScenesLastTick;
-    /// Global editor-gizmo override (`View > Show Editor Gizmos`). Off by
-    /// default: generated editor companions exist in every mode but are drawn
-    /// only by views that ask for them. A debug aid, so it is deliberately one
-    /// global switch instead of a per-object flag on every companion.
-    bool                                    bShowEditorGizmos = false;
     SceneRenderScheduler                    sceneRenderScheduler;
     std::array<std::vector<RenderFrameData>, MAX_FLIGHTS_IN_FLIGHT> viewFrameDataPerFlight{};
 };
