@@ -12,19 +12,19 @@ namespace ya
 namespace
 {
 
-std::function<std::shared_ptr<const SceneFrameSnapshot>()> makeExtractBuilder(
+std::function<std::shared_ptr<const SceneSnapshot>()> makeExtractBuilder(
     Scene* scene, TerrainProcessor* terrainProcessor)
 {
     return [scene, terrainProcessor]
     {
-        auto snapshot = std::make_shared<SceneFrameSnapshot>();
+        auto snapshot = std::make_shared<SceneSnapshot>();
         RenderFrameExtractor::extractSceneSnapshot(
             RenderFrameExtractor::SceneExtractInput{
                 .scene            = scene,
                 .terrainProcessor = terrainProcessor,
             },
             *snapshot);
-        return std::shared_ptr<const SceneFrameSnapshot>(std::move(snapshot));
+        return std::shared_ptr<const SceneSnapshot>(std::move(snapshot));
     };
 }
 
@@ -39,11 +39,11 @@ bool submitHostSceneViews(SceneRenderScheduler&                scheduler,
     }
 
     std::vector<Scene*> uniqueScenes;
-    std::vector<std::function<std::shared_ptr<const SceneFrameSnapshot>()>> builders;
+    std::vector<std::function<std::shared_ptr<const SceneSnapshot>()>> builders;
     uniqueScenes.reserve(views.size());
     builders.reserve(views.size());
 
-    auto builderFor = [&](Scene* scene) -> std::function<std::shared_ptr<const SceneFrameSnapshot>()>
+    auto builderFor = [&](Scene* scene) -> std::function<std::shared_ptr<const SceneSnapshot>()>
     {
         for (size_t index = 0; index < uniqueScenes.size(); ++index) {
             if (uniqueScenes[index] == scene) {

@@ -246,7 +246,7 @@ struct RenderMeshClassDrawBuckets
 };
 
 /// View-owned ordering over immutable scene candidates. The source vector is
-/// borrowed from SceneFrameSnapshot; only the camera-dependent order is owned
+/// borrowed from SceneSnapshot; only the camera-dependent order is owned
 /// by the view.
 struct ViewDrawBucket
 {
@@ -349,7 +349,7 @@ struct ScenePointLightData
 
 /// Scene-level render data that can be shared by multiple camera views in the
 /// same frame. Camera and shadow state belongs to RenderFrameData below.
-struct SceneFrameSnapshot
+struct SceneSnapshot
 {
     bool                                                     bHasDirectionalLight = false;
     SceneDirectionalLightData                                directionalLightSource;
@@ -375,7 +375,7 @@ struct SceneFrameSnapshot
 /// camera-dependent draw ordering remains in the per-view buckets below.
 struct RenderFrameData
 {
-    std::shared_ptr<const SceneFrameSnapshot>                   sceneSnapshot;
+    std::shared_ptr<const SceneSnapshot>                        sceneSnapshot;
     ViewMeshClassDrawBuckets                                    drawBuckets;
     FrameContext::DirectionalLightData                          directionalLight;
     uint32_t                                                   numPointLights = 0;

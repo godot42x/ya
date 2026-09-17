@@ -11,6 +11,15 @@
 - R2 第一切片：RenderRuntime::FrameInput 已显式携带 SceneRenderPlanInput；GameRuntime 将 sealed plan 与 parallel view recordings 传入，Runtime 在 command recording 前校验每个 task 的 snapshot 归属。
 - GPU lifetime guard：FrameUploadArena 现在按 `flightIndex + frameToken` 识别一次 submission；同一 token 的第二次 begin 已改为幂等 no-op。Forward / Deferred / Shadow 的 frame descriptor 已改为 View-owned；skinning 已按 Scene family 持有，同 Scene 多 View 共享一份 SSBO，不同 Scene 不再以 flightIndex 为共享 key。
 
+## 2026-09-17 checkpoint：Scene snapshot 命名（M2 P1c）
+
+- 唯一目标：把 `SceneFrameSnapshot` 改成 `SceneSnapshot`，不改任何行为。它是「某个 Scene 在某个内容版本上的不可变内容」，Scene 不变时被同一帧的多个 View 共用；名字里的 Frame 会让它看起来像按渲染帧产出的数据，而它恰恰是跨 View 共享、与 host tick 无关的那部分。
+- 落地：定义（`RenderFrameData.h`）与全部前置声明；`SceneRenderScheduler` 的 `SceneSnapshotEntry` / `SceneRenderPlan::snapshotFor` / `SceneRenderRequest::buildSnapshot`；`SceneFamilyResources`（成员、ctor、`snapshot()`、`bindSnapshot()`）；`RenderSubmission::allocateSceneFamily`；`RenderFrameExtractor::extractSceneSnapshot` / `prepareView` / `extractSceneLights`；`HostSceneRenderSubmit` 的 builder 类型；`RenderRuntimeSnapshotTest` / `SceneFamilyResourcesTest` / `ViewFamilyRendererTest`。
+- 列对齐：`RenderFrameExtractor`（成员块与续行参数）、`RenderSubmission`、`SceneFamilyResources`、`RenderFrameData` 的声明列按原列补回；测试里两处 `static_assert` 的续行缩进随锚点一起左移，diff 只剩标识符。
+- 计划同步：`plan.md` 里描述现行类型的 `SceneFrameSnapshot` 一并改成 `SceneSnapshot`（旧名只保留在 M1/M2 的 old→new 映射记录里）。
+- 验证：`xmake b ya-render-3d-test`、`xmake b ya-testing`、`xmake b ya-game-editor`；`xmake r ya-render-3d-test --gtest_filter='RenderRuntimeSnapshotTest.*:ViewFamilyRendererTest.*:RenderViewBindingTableTest.*:ViewPassResourcesTest.*:SceneFamilyResourcesTest.*'` 41/41；`xmake r ya-testing --gtest_filter='AppAutomationConfigTest.*:EditorWindowSessionTest.*:EditorRootSessionTest.*:EditorDockWorkspaceTest.*:HostSceneRenderSubmitTest.*:AppKernelTest.*'` 66/66；`git diff --check` 通过。
+- 保留未完成：测试文件名 `RenderRuntimeSnapshotTest.cpp` 仍是旧命名（它的内容也已不是「runtime snapshot」，与 `RenderFrameExtractor` 拆分一起处理，属 P3）。
+
 ## 2026-09-17 checkpoint：按 tick 排期的字段（M1 P1b-2b）
 
 - 唯一目标：把「按 tick 排期」的字段名从 frame 改成 tick，不改任何排期行为。这些值都是 host tick 序号（`App::_hostTick` / `EnvironmentLightingResultProvider` 的 tick provider），不是 Scene 版本、View 采样或 flight 槽。

@@ -43,7 +43,7 @@ SceneFamilyResources* allocateSceneFamilyForView(
     RenderSubmission&                 submission,
     const RenderViewRecordingContext& view)
 {
-    const SceneFrameSnapshot* snapshot = nullptr;
+    const SceneSnapshot* snapshot = nullptr;
     if (view.frameData) {
         snapshot = view.frameData->sceneSnapshot.get();
     }

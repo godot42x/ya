@@ -96,8 +96,14 @@ hostTick = 1200
 
 | 现状 | 目标 | 主要位置 | 备注 |
 | --- | --- | --- | --- |
-| `SceneFrameSnapshot` | `SceneSnapshot` | 定义 `Render3D/RenderFrameData.h:344`；消费方 Forward/Deferred/Shadow/EntityId/Debug/`RenderFrameExtractor`/Scheduler | 它是某 Scene 在一个内容版本上的不可变内容，与 host tick 无关；Scene 不变时被多个 View 共用 |
+| `SceneFrameSnapshot` | `SceneSnapshot` | 定义 `Render3D/RenderFrameData.h:352`；消费方 `SceneRenderScheduler` / `SceneFamilyResources` / `RenderSubmission` / `RenderFrameExtractor` / `HostSceneRenderSubmit` 与三个测试 | 它是某 Scene 在一个内容版本上的不可变内容，与 host tick 无关；Scene 不变时被多个 View 共用 |
 | `SceneSnapshotEntry`、`SceneRenderPlan::snapshots` | 保持 | `Render3D/Common/SceneRenderScheduler.h` | 已按 Scene 命名 |
+
+#### M2 执行记录（2026-09-17，P1c 已提交）
+
+- `SceneFrameSnapshot` → `SceneSnapshot`：定义与全部前置声明、`SceneRenderScheduler::SceneSnapshotEntry` / `SceneRenderPlan::snapshotFor` / `SceneRenderRequest::buildSnapshot`、`SceneFamilyResources`（成员、ctor、`snapshot()`、`bindSnapshot()`）、`RenderSubmission::allocateSceneFamily`、`RenderFrameExtractor::extractSceneSnapshot` / `prepareView` / `extractSceneLights`、`HostSceneRenderSubmit` 的 builder 类型、以及 `RenderRuntimeSnapshotTest` / `SceneFamilyResourcesTest` / `ViewFamilyRendererTest`。
+- 声明列与续行缩进按原列补回（`RenderFrameExtractor`、`RenderSubmission`、`SceneFamilyResources`、`RenderFrameData`），diff 只剩标识符。
+- 仍保留：测试文件名 `RenderRuntimeSnapshotTest.cpp`（与 `RenderFrameExtractor` 拆分一起处理，见 P3）。
 
 ### M3 — View 语义（核心）
 
@@ -215,7 +221,7 @@ hostTick = 1200
 | P1b-2a | M1 剩余之二：perf 命名面 `Frame/*` → `Tick/*`（含 profile 产物键与 perf scope 宏） | 已提交，纯重命名 |
 | P1b-2b | M1 剩余之三：按 tick 排期的字段（audit 间隔、derived resource GC 延迟、terrain rebuild 门槛） | 已提交，纯重命名 |
 | P1b-2c | M1 剩余之四：DebugPrimitives flight UBO | 随 P2 flight 轴 |
-| P1c | M2 `SceneFrameSnapshot` → `SceneSnapshot` | 独立：纯重命名 |
+| P1c | M2 `SceneFrameSnapshot` → `SceneSnapshot` | 已提交，纯重命名 |
 | P2 | M4 + M5 + `Renderer` 合并 | 对应 4.0.3 checkpoint 2 / 3 |
 | P3 | M3（C++ 部分） | 对应 4.0.3 checkpoint 4（PreparedView） |
 | P4 | M3 的 Slang 部分：删 `frameIdx`、`FrameData/FrameUBO` → `ViewUbo/ViewData` | 需 `xmake ya-shader` 重新生成头，单独提交 |
@@ -245,7 +251,8 @@ hostTick = 1200
 - 仍待处理：`DebugPrimitives::updateFrameUBO`（随 P2 flight 轴）。
 - `rg -n '\bframeIndex\b|\bframeId\b|\bframeToken\b' Engine/Source` 只剩第 3 节保留项与 automation 外部键。
 - `rg -n 'flightIndex' Engine/Source` 为空。
-- `rg -n 'SceneFrameSnapshot|RenderFrameData|CameraFrameInput|RenderPipelineFrameContext|RenderViewRecordingContext|SceneViewRecording' Engine/Source` 为空。
+- P1c 已满足：`rg -n 'SceneFrameSnapshot' Engine Example` 为空。
+- `rg -n 'RenderFrameData|CameraFrameInput|RenderPipelineFrameContext|RenderViewRecordingContext|SceneViewRecording' Engine/Source` 为空。
 - `rg -n 'UIFrameSnapshot' Engine/Source/Framework/GUI` 为空。
 - 构建与专项：`xmake b ya-render-3d-test`、`ya-game-runtime`、`ya-game-editor`、GUI 目标；`xmake r ya-render-3d-test --gtest_filter='RenderFramePlanningTest.*:ViewFamilyRendererTest.*:RenderViewBindingTableTest.*:ViewPassResourcesTest.*:SceneFamilyResourcesTest.*'`。
 - `git diff --check`。

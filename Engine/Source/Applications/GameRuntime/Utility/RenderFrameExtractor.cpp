@@ -108,7 +108,7 @@ glm::mat4 buildDirectionalShadowViewProjection(const glm::vec3& lightDirection,
 
 } // namespace
 
-void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, SceneFrameSnapshot& outSnapshot)
+void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, SceneSnapshot& outSnapshot)
 {
     outSnapshot.clearScene();
     outSnapshot.bHasDirectionalLight = false;
@@ -130,7 +130,7 @@ void RenderFrameExtractor::extractSceneSnapshot(const SceneExtractInput& input, 
 }
 
 void RenderFrameExtractor::prepareView(const ViewPrepareInput& input,
-                                       std::shared_ptr<const SceneFrameSnapshot> sceneSnapshot,
+                                       std::shared_ptr<const SceneSnapshot> sceneSnapshot,
                                        RenderFrameData& outFrame)
 {
     outFrame.clear();
@@ -215,7 +215,7 @@ void RenderFrameExtractor::extractCamera(const ViewPrepareInput& input, RenderFr
     out.deltaTime      = input.deltaTime;
 }
 
-void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneFrameSnapshot& out)
+void RenderFrameExtractor::extractSceneLights(entt::registry& reg, SceneSnapshot& out)
 {
     // Directional light (take the first one with a transform)
     out.bHasDirectionalLight = false;

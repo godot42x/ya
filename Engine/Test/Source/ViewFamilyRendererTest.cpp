@@ -33,7 +33,7 @@ TEST(ViewFamilyRendererTest, SameSceneDualViewSealsOneFamilyPlan)
 
     SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
     viewA.buildSnapshot = [] {
-        return std::make_shared<const SceneFrameSnapshot>();
+        return std::make_shared<const SceneSnapshot>();
     };
     SceneRenderRequest viewB{.sceneId = 3, .viewId = 12};
     viewB.buildSnapshot = viewA.buildSnapshot;
@@ -55,11 +55,11 @@ TEST(ViewFamilyRendererTest, DualSceneSealsTwoFamilyPlans)
 
     SceneRenderRequest sceneA{.sceneId = 3, .viewId = 11};
     sceneA.buildSnapshot = [] {
-        return std::make_shared<const SceneFrameSnapshot>();
+        return std::make_shared<const SceneSnapshot>();
     };
     SceneRenderRequest sceneB{.sceneId = 4, .viewId = 21};
     sceneB.buildSnapshot = [] {
-        return std::make_shared<const SceneFrameSnapshot>();
+        return std::make_shared<const SceneSnapshot>();
     };
 
     ASSERT_TRUE(scheduler.submit(sceneA));

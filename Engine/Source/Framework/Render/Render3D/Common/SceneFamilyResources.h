@@ -19,7 +19,7 @@ struct IRender;
 struct IRenderResourceFactory;
 class RenderSubmission;
 struct RenderViewRecordingContext;
-struct SceneFrameSnapshot;
+struct SceneSnapshot;
 
 /// GPU packet shared by every View in one Scene family.
 /// Skinning SSBO is family-owned; descriptor sets are per pipeline layout
@@ -44,18 +44,18 @@ class SceneFamilyResources
     };
 
     SceneViewFamilyKey          _key;
-    const SceneFrameSnapshot*   _snapshot = nullptr;
+    const SceneSnapshot*        _snapshot = nullptr;
     SceneFamilyGpuPacket        _gpu;
     std::vector<SkinningSet>    _skinningSets;
 
   public:
-    explicit SceneFamilyResources(SceneViewFamilyKey key, const SceneFrameSnapshot* snapshot = nullptr)
+    explicit SceneFamilyResources(SceneViewFamilyKey key, const SceneSnapshot* snapshot = nullptr)
         : _key(key), _snapshot(snapshot)
     {}
 
     [[nodiscard]] const SceneViewFamilyKey& key() const { return _key; }
-    [[nodiscard]] const SceneFrameSnapshot* snapshot() const { return _snapshot; }
-    void bindSnapshot(const SceneFrameSnapshot* snapshot)
+    [[nodiscard]] const SceneSnapshot* snapshot() const { return _snapshot; }
+    void bindSnapshot(const SceneSnapshot* snapshot)
     {
         if (!_snapshot) {
             _snapshot = snapshot;

@@ -72,9 +72,9 @@ ICommandBuffer* dummyCmdBuf(uintptr_t token)
     return reinterpret_cast<ICommandBuffer*>(token);
 }
 
-SceneFrameSnapshot makeSnapshotWithPalettes(uint32_t count)
+SceneSnapshot makeSnapshotWithPalettes(uint32_t count)
 {
-    SceneFrameSnapshot snapshot;
+    SceneSnapshot snapshot;
     snapshot.skinningPalettes.resize(count);
     return snapshot;
 }
@@ -141,8 +141,8 @@ TEST(SceneFamilyResourcesTest, DualSceneSkinningBuffersStayIndependent)
     RenderSubmission* live = pool.acquire(0, 1u, dummyCmdBuf(1));
     ASSERT_NE(live, nullptr);
 
-    SceneFrameSnapshot snapA = makeSnapshotWithPalettes(1);
-    SceneFrameSnapshot snapB = makeSnapshotWithPalettes(2);
+    SceneSnapshot snapA = makeSnapshotWithPalettes(1);
+    SceneSnapshot snapB = makeSnapshotWithPalettes(2);
     SceneFamilyResources* familyA =
         live->allocateSceneFamily(SceneViewFamilyKey{.sceneId = 1}, &snapA);
     SceneFamilyResources* familyB =

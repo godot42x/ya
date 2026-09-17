@@ -100,11 +100,11 @@ TEST(RenderRuntimeSnapshotTest, DualSceneRecordingsKeepIndependentDerivedScenes)
     scheduler.beginTick(21);
     SceneRenderRequest requestA{.sceneId = 3, .viewId = 11};
     requestA.buildSnapshot = [] {
-        return std::make_shared<const SceneFrameSnapshot>();
+        return std::make_shared<const SceneSnapshot>();
     };
     SceneRenderRequest requestB{.sceneId = 4, .viewId = 21};
     requestB.buildSnapshot = [] {
-        return std::make_shared<const SceneFrameSnapshot>();
+        return std::make_shared<const SceneSnapshot>();
     };
     ASSERT_TRUE(scheduler.submit(requestA));
     ASSERT_TRUE(scheduler.submit(requestB));
@@ -145,7 +145,7 @@ TEST(RenderRuntimeSnapshotTest, SameSceneFamilySharesDerivedScene)
     scheduler.beginTick(22);
     SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
     viewA.buildSnapshot = [] {
-        return std::make_shared<const SceneFrameSnapshot>();
+        return std::make_shared<const SceneSnapshot>();
     };
     SceneRenderRequest viewB{.sceneId = 3, .viewId = 12};
     viewB.buildSnapshot = viewA.buildSnapshot;
@@ -182,7 +182,7 @@ TEST(RenderRuntimeSnapshotTest, MixedDerivedSceneInOneFamilyIsRejected)
     scheduler.beginTick(23);
     SceneRenderRequest viewA{.sceneId = 3, .viewId = 11};
     viewA.buildSnapshot = [] {
-        return std::make_shared<const SceneFrameSnapshot>();
+        return std::make_shared<const SceneSnapshot>();
     };
     SceneRenderRequest viewB{.sceneId = 3, .viewId = 12};
     viewB.buildSnapshot = viewA.buildSnapshot;
@@ -215,11 +215,11 @@ TEST(RenderRuntimeSnapshotTest, SharedDerivedSceneAcrossSceneIdsIsRejected)
     scheduler.beginTick(24);
     SceneRenderRequest requestA{.sceneId = 3, .viewId = 11};
     requestA.buildSnapshot = [] {
-        return std::make_shared<const SceneFrameSnapshot>();
+        return std::make_shared<const SceneSnapshot>();
     };
     SceneRenderRequest requestB{.sceneId = 4, .viewId = 21};
     requestB.buildSnapshot = [] {
-        return std::make_shared<const SceneFrameSnapshot>();
+        return std::make_shared<const SceneSnapshot>();
     };
     ASSERT_TRUE(scheduler.submit(requestA));
     ASSERT_TRUE(scheduler.submit(requestB));
@@ -244,16 +244,16 @@ TEST(RenderRuntimeSnapshotTest, SharedDerivedSceneAcrossSceneIdsIsRejected)
 
 TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
 {
-    static_assert(!std::is_base_of_v<SceneFrameSnapshot, RenderFrameData>);
-    static_assert(std::is_same_v<decltype(SceneFrameSnapshot{}.directionalLightSource), SceneDirectionalLightData>);
-    static_assert(std::is_same_v<std::remove_cvref_t<decltype(SceneFrameSnapshot{}.pointLightSources[0])>,
+    static_assert(!std::is_base_of_v<SceneSnapshot, RenderFrameData>);
+    static_assert(std::is_same_v<decltype(SceneSnapshot{}.directionalLightSource), SceneDirectionalLightData>);
+    static_assert(std::is_same_v<std::remove_cvref_t<decltype(SceneSnapshot{}.pointLightSources[0])>,
                                  ScenePointLightData>);
-    static_assert(!std::is_same_v<decltype(SceneFrameSnapshot{}.directionalLightSource),
+    static_assert(!std::is_same_v<decltype(SceneSnapshot{}.directionalLightSource),
                                   FrameContext::DirectionalLightData>);
 
     RenderFrameData frame;
     frame.view = glm::translate(glm::mat4(1.0f), glm::vec3(4.0f, 0.0f, 0.0f));
-    auto sceneSnapshot = std::make_shared<SceneFrameSnapshot>();
+    auto sceneSnapshot = std::make_shared<SceneSnapshot>();
     sceneSnapshot->skinningPalettes.resize(1);
     sceneSnapshot->drawBuckets.staticMeshes.pbrDrawItems.resize(1);
     frame.sceneSnapshot = sceneSnapshot;
@@ -272,7 +272,7 @@ TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
     EXPECT_TRUE(frame.drawBuckets.staticMeshes.pbrDrawItems.empty());
     EXPECT_EQ(frame.view[3][0], 4.0f);
 
-    auto sharedSnapshot = std::make_shared<const SceneFrameSnapshot>();
+    auto sharedSnapshot = std::make_shared<const SceneSnapshot>();
     RenderFrameData viewA;
     RenderFrameData viewB;
     viewA.sceneSnapshot = sharedSnapshot;
@@ -307,9 +307,9 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
         request.buildSnapshot = [&, sceneId]()
         {
             ++buildCalls;
-            auto snapshot = std::make_shared<SceneFrameSnapshot>();
+            auto snapshot = std::make_shared<SceneSnapshot>();
             snapshot->pointLightSourceCount = static_cast<uint32_t>(sceneId);
-            return std::shared_ptr<const SceneFrameSnapshot>(std::move(snapshot));
+            return std::shared_ptr<const SceneSnapshot>(std::move(snapshot));
         };
         return request;
     };
@@ -354,7 +354,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerCopiesIndependentViewOutputExtents
         request.viewportRect = {.pos = {0.0f, 0.0f}, .extent = extent};
         request.buildSnapshot = []()
         {
-            return std::make_shared<const SceneFrameSnapshot>();
+            return std::make_shared<const SceneSnapshot>();
         };
         return request;
     };
@@ -392,7 +392,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionC
         request.buildSnapshot = [&buildCalls]
         {
             ++buildCalls;
-            return std::make_shared<const SceneFrameSnapshot>();
+            return std::make_shared<const SceneSnapshot>();
         };
         return request;
     };
@@ -454,7 +454,7 @@ TEST(RenderRuntimeSnapshotTest, SceneRenderPlanInputRecordsEveryViewportTaskWith
         request.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {640.0f, 360.0f}};
         request.buildSnapshot = []()
         {
-            return std::make_shared<const SceneFrameSnapshot>();
+            return std::make_shared<const SceneSnapshot>();
         };
         return request;
     };
@@ -509,7 +509,7 @@ TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsSnapshotMetadataMismatch)
     plan.snapshots.push_back(SceneSnapshotEntry{
         .sceneId = 7,
         .sceneRevision = 3,
-        .snapshot = std::make_shared<const SceneFrameSnapshot>(),
+        .snapshot = std::make_shared<const SceneSnapshot>(),
     });
 
     SceneViewportTask task;
@@ -525,7 +525,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRejectsRequestsOutsideFrame)
     SceneRenderRequest request;
     request.sceneId = 1;
     request.viewId = 1;
-    request.buildSnapshot = [] { return std::make_shared<const SceneFrameSnapshot>(); };
+    request.buildSnapshot = [] { return std::make_shared<const SceneSnapshot>(); };
 
     EXPECT_FALSE(scheduler.submit(request));
     scheduler.beginTick(7);
@@ -578,7 +578,7 @@ TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
 
     auto buildSnapshot = []()
     {
-        return std::make_shared<const SceneFrameSnapshot>();
+        return std::make_shared<const SceneSnapshot>();
     };
 
     SceneRenderRequest primary;

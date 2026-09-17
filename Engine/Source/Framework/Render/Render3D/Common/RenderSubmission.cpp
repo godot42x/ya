@@ -55,7 +55,7 @@ bool RenderSubmission::finish()
 
 SceneFamilyResources* RenderSubmission::allocateSceneFamily(
     const SceneViewFamilyKey& key,
-    const SceneFrameSnapshot* snapshot)
+    const SceneSnapshot* snapshot)
 {
     if (!isRecording()) {
         return nullptr;

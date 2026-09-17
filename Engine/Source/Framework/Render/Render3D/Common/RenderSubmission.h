@@ -20,7 +20,7 @@ struct ICommandBuffer;
 struct IRender;
 struct IRenderResourceFactory;
 struct IRenderSurfaceContext;
-struct SceneFrameSnapshot;
+struct SceneSnapshot;
 class RenderSubmissionPool;
 
 /// One GPU command submission: command buffer, frame token, upload arena,
@@ -67,7 +67,7 @@ class RenderSubmission
 
     SceneFamilyResources* allocateSceneFamily(
         const SceneViewFamilyKey&   key,
-        const SceneFrameSnapshot*   snapshot = nullptr);
+        const SceneSnapshot*        snapshot = nullptr);
     [[nodiscard]] SceneFamilyResources*       findSceneFamily(const SceneViewFamilyKey& key);
     [[nodiscard]] const SceneFamilyResources* findSceneFamily(const SceneViewFamilyKey& key) const;
     [[nodiscard]] uint32_t                    sceneFamilyCount() const
