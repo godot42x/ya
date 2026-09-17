@@ -147,6 +147,25 @@ void App::addModule(IModule& module)
     _modules.push_back({.module = &module});
 }
 
+void App::addSceneViewProducer(ISceneViewProducer& producer)
+{
+    if (!_renderState) {
+        return;
+    }
+    auto& producers = _renderState->viewProducers;
+    if (std::find(producers.begin(), producers.end(), &producer) == producers.end()) {
+        producers.push_back(&producer);
+    }
+}
+
+void App::removeSceneViewProducer(ISceneViewProducer& producer)
+{
+    if (!_renderState) {
+        return;
+    }
+    std::erase(_renderState->viewProducers, &producer);
+}
+
 void App::configureModules()
 {
     YA_PROFILE_FUNCTION();

@@ -7,6 +7,7 @@
 #include "GameRuntime/Lifecycle/AppAutomation.h"
 #include "HostSdlEventSource.h"
 #include "GameRuntime/Utility/FPSCtrl.h"
+#include "GameRuntime/Utility/SceneCameraQuery.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
 
 #include "Core/Async/TaskQueue.h"
@@ -77,20 +78,6 @@ uint64_t entityUUID(Entity* entity)
     return entity->getComponent<IDComponent>()->_id.value;
 }
 
-Entity* findNonPrimarySceneCamera(Scene& scene, Entity* primaryCamera)
-{
-    auto& registry = scene.getRegistry();
-    for (const auto& [handle, cameraComp] : registry.view<CameraComponent>().each()) {
-        (void)cameraComp;
-        Entity* entity = scene.getEntityByEnttID(handle);
-        if (!entity || entity == primaryCamera) {
-            continue;
-        }
-        return entity;
-    }
-    return nullptr;
-}
-
 Entity* resolvePreviewCamera(Scene& scene, Entity* primaryCamera, bool bHostOwned, uint64_t previewEntityUUID)
 {
     if (bHostOwned) {
@@ -104,7 +91,7 @@ Entity* resolvePreviewCamera(Scene& scene, Entity* primaryCamera, bool bHostOwne
         }
         return selected;
     }
-    return findNonPrimarySceneCamera(scene, primaryCamera);
+    return findSecondaryCamera(scene, primaryCamera);
 }
 
 glm::mat4 cameraProjectionForOutput(const CameraComponent& camera, const glm::vec2& outputExtent)
@@ -276,7 +263,7 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
         const Extent2D viewportExtent = resolveViewportExtent(app,
                                                               device,
                                                               app._renderState->hostView.viewportRect);
-        syncRuntimeCameraAspect(getPrimaryCamera(app), viewportExtent);
+        syncRuntimeCameraAspect(findPrimaryCamera(*app.getSceneServices().getActiveScene()), viewportExtent);
     }
 
     {
@@ -347,80 +334,30 @@ Extent2D GameRuntimeTickOrchestrator::resolveViewportExtent(const App& app, Rend
     };
 }
 
-Entity* GameRuntimeTickOrchestrator::getPrimaryCamera(const App& app)
-{
-    if (!app._sceneManager) {
-        return nullptr;
-    }
-
-    Scene* scene = app._sceneManager->getActiveScene();
-    if (!scene || !scene->isValid()) {
-        return nullptr;
-    }
-
-    auto& registry = scene->getRegistry();
-
-    Entity* anyCam = nullptr;
-    for (const auto& [entity, cameraComp] : registry.view<CameraComponent>().each()) {
-        if (cameraComp.bPrimary) {
-            return scene->getEntityByEnttID(entity);
-        }
-        anyCam = scene->getEntityByEnttID(entity);
-    }
-
-    return anyCam;
-}
-
 void GameRuntimeTickOrchestrator::prepareHostViewState(App& app, float dt)
 {
-    auto* device = app.getRenderServices().getDeviceState();
-    if (!device) {
-        app._renderState->hostView = {};
+    (void)dt;
+
+    // Host geometry only: the surface area a view renders into, its framebuffer
+    // scale and the clock. The world camera is not host state; whichever
+    // producer declares the primary view supplies it (see tickRender).
+    HostViewState& hostView = app._renderState->hostView;
+    if (!app.getRenderServices().getDeviceState()) {
+        hostView = {};
         return;
     }
 
-    app._renderState->hostView.clock.hostTick    = App::_hostTick;
-    app._renderState->hostView.clock.elapsedTimeMS = app.getElapsedTimeMS();
-
-    Rect2D viewportRect = app._renderState->hostView.viewportRect;
-    if (viewportRect.extent.x <= 0.0f || viewportRect.extent.y <= 0.0f) {
-        viewportRect = Rect2D{
+    hostView.clock.hostTick      = App::_hostTick;
+    hostView.clock.elapsedTimeMS = app.getElapsedTimeMS();
+    hostView.view       = glm::mat4(1.0f);
+    hostView.projection = glm::mat4(1.0f);
+    hostView.cameraPos  = glm::vec3(0.0f);
+    if (hostView.viewportRect.extent.x <= 0.0f || hostView.viewportRect.extent.y <= 0.0f) {
+        hostView.viewportRect = Rect2D{
             .pos    = {0.0f, 0.0f},
             .extent = app._windowSize,
         };
     }
-
-    (void)dt;
-
-    Entity* runtimeCamera = getPrimaryCamera(app);
-
-    const bool bUseRuntimeCamera = app._appState == AppState::Runtime &&
-                                   runtimeCamera && runtimeCamera->isValid() &&
-                                   runtimeCamera->hasComponent<CameraComponent>();
-
-    const float viewportFrameBufferScale = app._renderState->hostView.viewportFrameBufferScale;
-    const HostClockState clock  = app._renderState->hostView.clock;
-
-    HostViewState hostView{};
-    hostView.clock                    = clock;
-    hostView.viewportRect             = viewportRect;
-    hostView.viewportFrameBufferScale = viewportFrameBufferScale;
-    if (bUseRuntimeCamera) {
-        auto cc                      = runtimeCamera->getComponent<CameraComponent>();
-        auto tc                      = runtimeCamera->getComponent<TransformComponent>();
-        hostView.view              = cc->getFreeView();
-        hostView.projection        = cc->getProjection();
-        hostView.cameraPos         = tc->getWorldPosition();
-        app._renderState->hostView = hostView;
-        return;
-    }
-
-    if (app._renderState->extensionHostView) {
-        hostView.view       = app._renderState->extensionHostView->view;
-        hostView.projection = app._renderState->extensionHostView->projection;
-        hostView.cameraPos  = app._renderState->extensionHostView->cameraPos;
-    }
-    app._renderState->hostView = hostView;
 }
 
 uint32_t GameRuntimeTickOrchestrator::resolveFlightIndex(const App& app)
@@ -501,13 +438,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     const uint32_t flightIndex = resolveFlightIndex(app);
 
     auto* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
-    // The extracted snapshot (draw items / lights / skinning palettes) is only
-    // consumed by the world pipeline; 2D canvas mode disables the world scene
-    // graph, so extraction would be pure waste. Drop the stale per-flight
-    // snapshot instead, mirroring the world output handling in
-    // getViewportDisplayImageShared.
-    const auto& hostView = app._renderState->hostView;
-    const glm::mat4 viewProjection = makeCameraViewProjection(hostView.projection, hostView.view);
+    HostViewState& hostView = app._renderState->hostView;
 
     auto& sceneScheduler = app._renderState->sceneRenderScheduler;
     sceneScheduler.beginTick(App::_hostTick);
@@ -522,27 +453,55 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         }
     } sceneSchedulerGuard{.scheduler = &sceneScheduler};
 
+    // Declare this tick's views. Every owner declares its own (the game
+    // viewport, the editor's authoring viewport, the camera preview below), so a
+    // view exists exactly because somebody asked for it: no layer has to flip a
+    // global switch to hide a view another layer declared.
+    const SceneViewCollectContext collectContext{
+        .activeScene    = scene,
+        .viewportRect   = hostView.viewportRect,
+        .viewportExtent = resolveViewportExtent(app, device, hostView.viewportRect),
+        .hostTick       = App::_hostTick,
+        .deltaTime      = dt,
+    };
+    SceneViewCollector collector;
+    for (ISceneViewProducer* producer : app._renderState->viewProducers) {
+        if (producer) {
+            producer->collectSceneViews(collectContext, collector);
+        }
+    }
+    for (const SceneViewDesc& view : collector.views()) {
+        (void)sceneScheduler.submit(view);
+    }
+
+    // The primary view's camera is what the host reports as "the world view":
+    // the camera packet and the offscreen extent follow the declaration instead
+    // of an injected copy of it.
+    const SceneViewDesc* primaryView = nullptr;
+    for (const SceneViewDesc& view : collector.views()) {
+        if (view.viewId == kPrimarySceneViewId) {
+            primaryView = &view;
+            break;
+        }
+    }
+    if (primaryView) {
+        hostView.view       = primaryView->view;
+        hostView.projection = primaryView->projection;
+        hostView.cameraPos  = primaryView->cameraPos;
+    }
+    const glm::mat4 viewProjection = makeCameraViewProjection(hostView.projection, hostView.view);
+
+    // A camera preview rides on top of the primary view's display RT, so it only
+    // exists while somebody declared that view.
     std::vector<RenderOverlayLine3D> cameraFrustumLines;
-    // Declarations for this tick. Each one is handed to the scheduler as
-    // written: nothing translates it into a second declaration structure.
-    std::vector<SceneViewDesc> sceneViews;
     Entity* runtimeLookCamera = nullptr;
     Entity* previewCamera     = nullptr;
-    if (app.getRenderServices().isWorldSceneRenderEnabled() && scene) {
-        sceneViews.push_back(SceneViewDesc{
-            .scene        = scene,
-            .viewId       = kPrimarySceneViewId,
-            .view         = hostView.view,
-            .projection   = hostView.projection,
-            .cameraPos    = hostView.cameraPos,
-            .viewportRect = hostView.viewportRect,
-        });
-
-        runtimeLookCamera = (app._appState == AppState::Runtime) ? getPrimaryCamera(app) : nullptr;
+    if (scene && primaryView) {
+        runtimeLookCamera = (app._appState == AppState::Runtime) ? findPrimaryCamera(*scene) : nullptr;
         previewCamera     = resolvePreviewCamera(*scene,
-                                                         runtimeLookCamera,
-                                                         app._renderState->bCameraPreviewHostOwned,
-                                                         app._renderState->cameraPreviewEntityUUID);
+                                                 runtimeLookCamera,
+                                                 app._renderState->bCameraPreviewHostOwned,
+                                                 app._renderState->cameraPreviewEntityUUID);
         if (previewCamera && previewCamera == runtimeLookCamera) {
             previewCamera = nullptr;
         }
@@ -556,7 +515,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
                 .pos    = {0.0f, 0.0f},
                 .extent = previewComposeRect.extent,
             };
-            sceneViews.push_back(SceneViewDesc{
+            (void)sceneScheduler.submit(SceneViewDesc{
                 .scene             = scene,
                 .viewId            = kHostOverlayPreviewViewId,
                 .view              = cameraComp->getFreeView(),
@@ -575,13 +534,16 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
                                           : 0,
                                       cameraFrustumLines);
     }
-    for (const SceneViewDesc& view : sceneViews) {
-        (void)sceneScheduler.submit(view);
-    }
     // Extraction is its own step: seal() only grouped the declarations, so
     // Scene/ECS content is read here and nowhere earlier.
     ExtractedSceneRender sceneRender =
         extractHostSceneSnapshots(sceneScheduler.seal(), device->getTerrainProcessor());
+
+    // Animation policy input: poses are consumed by the world pipeline, so the
+    // honest question is "did the renderer produce content for this Scene", not
+    // "is some viewport's world switch on". One tick of lag by construction --
+    // systems run before views are declared.
+    app._renderState->renderedScenesLastTick = renderedScenes(sceneRender.plan());
 
     // View visibility is policy, decided here and nowhere else: the editor
     // world view draws generated editor companions, a camera preview (what a

@@ -5,6 +5,8 @@
 #include "Core/Log.h"
 #include "Render3D/Services/DebugRenderSystem.h"
 
+#include <algorithm>
+
 namespace ya
 {
 
@@ -28,16 +30,13 @@ RenderFrameCoordinator* AppRenderServices::getFrameCoordinator() const
     return _state ? _state->coordinator.get() : nullptr;
 }
 
-void AppRenderServices::setWorldSceneRenderEnabled(bool bEnabled)
+bool AppRenderServices::wasSceneRenderedLastTick(const Scene* scene) const
 {
-    YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->bWorldSceneRenderEnabled = bEnabled;
-}
-
-bool AppRenderServices::isWorldSceneRenderEnabled() const
-{
-    YA_CORE_ASSERT(_state, "Render services are not available");
-    return _state->bWorldSceneRenderEnabled;
+    if (!_state || !scene) {
+        return false;
+    }
+    const auto& rendered = _state->renderedScenesLastTick;
+    return std::find(rendered.begin(), rendered.end(), scene) != rendered.end();
 }
 
 void AppRenderServices::setViewportFrameBufferScale(float scale)
@@ -113,18 +112,6 @@ const HostViewState& AppRenderServices::getHostViewState() const
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
     return _state->hostView;
-}
-
-void AppRenderServices::setExtensionHostViewState(const HostViewState& state)
-{
-    YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->extensionHostView = state;
-}
-
-void AppRenderServices::clearExtensionHostViewState()
-{
-    YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->extensionHostView.reset();
 }
 
 void AppRenderServices::setCameraPreviewHostOwned(bool bOwned)

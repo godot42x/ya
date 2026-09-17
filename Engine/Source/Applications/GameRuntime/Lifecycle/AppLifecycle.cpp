@@ -222,7 +222,10 @@ void App::init(AppDesc ci)
         .pos    = {0.0f, 0.0f},
         .extent = {static_cast<float>(app._ci.width), static_cast<float>(app._ci.height)},
     };
-    app._renderState->bWorldSceneRenderEnabled = true;
+    // The game viewport is one of the view owners; the App keeps the list it
+    // collects from each tick (the editor registers its own on attach).
+    app._gameViewProducer.bind(app);
+    app.addSceneViewProducer(app._gameViewProducer);
     if (ConfigManager::get().hasDocument("automation")) {
         AppAutomation::applyRuntimeOverrides(app);
     }
@@ -277,11 +280,13 @@ void App::init(AppDesc ci)
     {
         return app.getSceneServices().getActiveScene();
     });
-    // World-render tick policy: poses are only consumed by the world pipeline;
-    // freeze sampling while the editor 2D canvas mode disables world rendering.
+    // Pose sampling is only worth doing for a Scene somebody draws: the honest
+    // input is what the renderer produced last tick, not a viewport switch. One
+    // tick of lag is inherent -- systems run before views are declared.
     sys4->setTickPolicy([&app]()
     {
-        return app.getRenderServices().isWorldSceneRenderEnabled();
+        Scene* activeScene = app.getSceneServices().getActiveScene();
+        return !activeScene || app.getRenderServices().wasSceneRenderedLastTick(activeScene);
     });
     sys4->init();
     app._systems.push_back(sys4);

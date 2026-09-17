@@ -13,6 +13,7 @@
 #include "ECS/Systems/Components/PointLightComponent.h"
 #include "ECS/Systems/Components/TerrainComponent.h"
 #include "GameEditor/EditorChrome.h"
+#include "GameEditor/EditorAuthoringViewProducer.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/EditorPlaySession.h"
 #include "GameEditor/EditorProfilingSettings.h"
@@ -126,6 +127,8 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
 {
   private:
     std::unique_ptr<EditorLayer>   _layer;
+    /// Owns the editor's declaration of the primary world view.
+    EditorAuthoringViewProducer    _authoringViewProducer;
     EditorPlaySession              _playSession;
     FreeCameraController           _cameraController;
     EditorViewportCompositor       _viewportCompositor;
@@ -447,11 +450,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             return;
         }
 
-        // The 2D canvas workspace only needs the UI compose pass and the
-        // editor viewport panel; skip the whole world scene graph there.
-        // PIE/sim already forced the viewport back to 3D above.
-        renderServices.setWorldSceneRenderEnabled(!_layer->isViewportMode2D());
-
         auto&          editorCamera   = _layer->getCamera();
         const Extent2D viewportExtent = device->getViewportExtent();
         // Keep the editor camera controllable during simulation; only full
@@ -466,12 +464,6 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
                                         editorCamera._nearClip,
                                         editorCamera._farClip);
         }
-        renderServices.setExtensionHostViewState({
-            .view       = editorCamera.getViewMatrix(),
-            .projection = editorCamera.getProjectionMatrix(),
-            .cameraPos  = editorCamera.getPosition(),
-        });
-
         // The editor compositor always targets an HDR color image. Keep
         // the screen-space sprite pipeline's dynamic-rendering formats in
         // sync before presentation starts; recreating a pipeline while a
@@ -763,6 +755,10 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _inputNode.bind(app, *_layer, _windows, window->windowId(), &_guiWindows, &_dragRouter);
         _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);
         gEditorLayer           = _layer.get();
+        // The editor owns the authoring viewport, so it declares the primary
+        // world view while that viewport is what the user sees.
+        _authoringViewProducer.bind(app, *_layer);
+        app.addSceneViewProducer(_authoringViewProducer);
         registerEditorPresets();
         registerEditorScriptApis();
         YA_CORE_INFO("Editor chrome host: {}", editorChromeHostName(_chromeHost));
@@ -837,7 +833,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _app = nullptr;
         _playSession.shutdown(app);
         gEditorAuthoringScene = nullptr;
-        app.getRenderServices().clearExtensionHostViewState();
+        app.removeSceneViewProducer(_authoringViewProducer);
         _viewportCompositor.shutdown();
         if (_layer) {
             _layer->setViewportDisplayImage(nullptr);

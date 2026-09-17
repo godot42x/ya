@@ -35,6 +35,18 @@
 - 验证：`xmake b ya-render-3d ya-game-runtime ya-game-editor ya-testing`；`ya-render-3d-test` 172/172；`ya-testing` HostSceneExtract/RenderRuntimeSnapshot/ViewFamilyRenderer/SceneFamilyResources/AppKernel/AppAutomationConfig/Editor* 93/93；`HelloMaterial` 与 `run-editor` 各跑 `--exit-after-frame=90 --screenshot-target=viewport` 均 exit=0、日志 0 error，截图字节数与 4b 完全一致（1395200 / 679231），说明这一刀没有改变渲染结果。
 - 保留未完成：4d（`ISceneViewProducer`、五个全局格子、declare 路径清零 ECS 查询）、checkpoint 5（`PreparedView` 收口 `CameraFrameInput` patch 与 owner-scoped `SceneViewKey`）。
 
+## 2026-09-18 checkpoint：世界视口由持有方声明（4.0.3 4d-1）
+
+- 唯一目标：让「这个 tick 渲染哪个视口」由**持有该视口的 owner** 声明，而不是编辑器写全局格子、runtime 再去读。4d 按计划拆三刀，这一刀做接缝 + 世界视口。
+- 接缝：`Render3D/Common/SceneViewProducer.h` 新增三件套——`SceneViewCollectContext`（activeScene / viewportRect / viewportExtent / hostTick / deltaTime）、`SceneViewCollector`（纯 sink，无策略：不想要就不要 declare）、`ISceneViewProducer::collectSceneViews(context, collector)`。比计划原文多一个显式上下文参数：帧事实应当被读，塞进 collector 会把 sink 和输入混在一起。宿主侧 `AppRenderState::viewProducers` + `App::add/removeSceneViewProducer`。
+- 两个声明方：`RuntimeGameViewProducer`（GameRuntime，Runtime 态用游戏相机；无相机实体时仍声明、相机为单位矩阵）与 `EditorAuthoringViewProducer`（GameEditor，非 Runtime 态且非 2D canvas 时用编辑器相机；2D canvas 与 PIE 都不声明）。`EditorModule` 在 onAttach/onDetach 注册与注销。
+- 删掉的两个格子：`AppRenderState::extensionHostView`（含 `set/clearExtensionHostViewState`）与 `AppRenderState::bWorldSceneRenderEnabled`（含 `set/isWorldSceneRenderEnabled`）。`prepareHostViewState` 相应收成「宿主几何 + 时钟」（viewportRect / framebuffer scale / clock），主 view 的相机由声明回填进 `hostView`——相机包络与 offscreen resize 仍读 `hostView`，渲染结果不变。
+- 动画策略的诚实输入：`SkeletonAnimationSystem::setTickPolicy` 从「某个 viewport 的世界开关」改为「上一 tick 是否为该 Scene 产出了内容」——`AppRenderState::renderedScenesLastTick`，由 `renderedScenes(plan)` 在抽取后写入（该 helper 从 coordinator 文件内提到 `SceneRenderScheduler.h` 与宿主共用）。一 tick 滞后是结构性的（system 跑在 view 声明之前），正是 UE `bRecentlyRendered` 的形态。
+- 场景查询归位：orchestrator 静态函数 `getPrimaryCamera` 移入 `Utility/SceneCameraQuery`（`findPrimaryCamera` / `findSecondaryCamera`），`AppSceneServices::getPrimaryCamera` 与 `syncRuntimeCameraAspect` 改用它；orchestrator 内的 `findNonPrimarySceneCamera` 删除（`resolvePreviewCamera` 复用 `findSecondaryCamera`）。预览相机选择与 frustum 线仍留在此文件，属 4d-2。
+- 验收：`ya-render-3d-test` 172/172；`ya-testing` 相关滤镜 101/101（新增 `AppLifecycleTest.*`）；`rg -n 'extensionHostView|setWorldSceneRenderEnabled|isWorldSceneRenderEnabled|bWorldSceneRenderEnabled|findNonPrimarySceneCamera' Engine Example` 为空；`HelloMaterial` 与 `run-editor` 各跑 `--exit-after-frame=90 --screenshot-target=viewport` exit=0、日志 0 error、截图字节数与 4b/4c 完全一致（1395200 / 679231），说明 runtime 与 editor 两条线的主 view 都由 producer 正确声明。
+- 过程中的一次误判记录：`AppLifecycleTest.SaveScenePersistsAndReloadsRoundTrip` 曾失败一次，用 `git stash` 隔离并强制重建后复跑 5 次全绿，确认与本刀无关；当时是可执行文件与 dylib 处于两次部分重建之间的不一致状态。
+- 保留未完成：4d-2（相机预览生产者 + 删 `bCameraPreviewHostOwned` / `cameraPreviewEntityUUID` / 宿主铸造的 `kHostOverlayPreviewViewId`）、4d-3（`SceneViewDesc.features` + 删 `bShowEditorGizmos` 与 `featuresForView`）、checkpoint 5（owner-scoped `SceneViewKey`）。
+
 ## 2026-09-18 checkpoint：计划保留 Scene 句柄（4.0.3 4b）
 
 - 唯一目标：把「这一 tick 每个 view 渲染哪个 Scene」从反查变成声明本身的事实，从而删掉 `derivedSceneForHostView`、`SceneRenderPlanInput::complete()`、`derivedScenesAgreeWithPlan()` 三个运行时校验和 4a 的过渡物 `SceneSnapshotResolver`。

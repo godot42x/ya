@@ -4,6 +4,7 @@
 #include "Render3D/Common/SceneViewDesc.h"
 #include "Render3D/RenderFrameData.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -144,6 +145,24 @@ struct SceneRenderPlan
 [[nodiscard]] inline bool sceneViewOwnsHostViewport(const SceneViewportTask* task)
 {
     return !task || task->desc.ownsHostViewport();
+}
+
+/// Every Scene an extracted plan actually produces content for, in snapshot-table
+/// order. The table is deduplicated by (Scene, sceneRevision) already, so this
+/// only collapses the remaining case: one Scene declared at two revisions.
+[[nodiscard]] inline std::vector<Scene*> renderedScenes(const SceneRenderPlan& plan)
+{
+    std::vector<Scene*> scenes;
+    scenes.reserve(plan.snapshots.size());
+    for (const SceneSnapshotEntry& entry : plan.snapshots) {
+        if (!entry.scene || !entry.snapshot) {
+            continue;
+        }
+        if (std::find(scenes.begin(), scenes.end(), entry.scene) == scenes.end()) {
+            scenes.push_back(entry.scene);
+        }
+    }
+    return scenes;
 }
 
 /// One View inside an extracted plan: the task must point at

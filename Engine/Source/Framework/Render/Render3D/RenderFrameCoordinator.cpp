@@ -42,24 +42,6 @@ std::shared_ptr<RenderViewportOverlaySnapshot> buildViewportOverlaySnapshot(cons
     return snapshot->empty() ? nullptr : snapshot;
 }
 
-/// Every Scene the resolved plan actually renders, in snapshot-table order. The
-/// table is already deduplicated by (Scene, sceneRevision); the Scene handle
-/// is what derived per-Scene state is keyed on, so dedupe on that too.
-std::vector<Scene*> renderedScenes(const SceneRenderPlan& plan)
-{
-    std::vector<Scene*> scenes;
-    scenes.reserve(plan.snapshots.size());
-    for (const SceneSnapshotEntry& entry : plan.snapshots) {
-        if (!entry.scene || !entry.snapshot) {
-            continue;
-        }
-        if (std::find(scenes.begin(), scenes.end(), entry.scene) == scenes.end()) {
-            scenes.push_back(entry.scene);
-        }
-    }
-    return scenes;
-}
-
 } // namespace
 
 RenderFrameCoordinator::RenderFrameCoordinator(RenderDeviceState& device)

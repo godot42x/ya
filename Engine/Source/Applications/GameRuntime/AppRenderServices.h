@@ -19,6 +19,7 @@ struct ImageResource;
 struct DebugRenderSystem;
 struct RenderDeviceState;
 struct RenderFrameCoordinator;
+struct Scene;
 struct AppRenderState;
 
 class YA_GAME_RUNTIME_API AppRenderServices
@@ -41,8 +42,10 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] std::shared_ptr<ShaderStorage>         getShaderStorage() const;
     [[nodiscard]] RenderDeviceState*                     getDeviceState() const;
     [[nodiscard]] RenderFrameCoordinator*                getFrameCoordinator() const;
-    void                                                 setWorldSceneRenderEnabled(bool bEnabled);
-    [[nodiscard]] bool                                   isWorldSceneRenderEnabled() const;
+    /// Renderer-derived: did the previous tick produce content for this Scene?
+    /// Answers "will poses sampled here be consumed" for systems that only need
+    /// to work for what gets drawn, without a switch that describes a viewport.
+    [[nodiscard]] bool                                   wasSceneRenderedLastTick(const Scene* scene) const;
     void                                                 setViewportFrameBufferScale(float scale);
     [[nodiscard]] float                                  getViewportFrameBufferScale() const;
     void                                                 setViewportRect(Rect2D rect);
@@ -56,8 +59,6 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] std::shared_ptr<ImageResource>         getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const;
     [[nodiscard]] bool                                   isPostprocessingEnabled() const;
     [[nodiscard]] const HostViewState&                   getHostViewState() const;
-    void                                                 setExtensionHostViewState(const HostViewState& state);
-    void                                                 clearExtensionHostViewState();
     void                                                 setCameraPreviewHostOwned(bool bOwned);
     void                                                 setCameraPreviewEntityUUID(uint64_t uuid);
     [[nodiscard]] bool                                   isCameraPreviewHostOwned() const;

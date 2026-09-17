@@ -17,6 +17,7 @@
 #include "Core/Common/AppState.h"
 #include "GameRuntime/AppTaskManager.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
+#include "GameRuntime/Lifecycle/RuntimeGameViewProducer.h"
 
 #include <chrono>
 #include <glm/glm.hpp>
@@ -73,6 +74,8 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     SceneManager*                   _sceneManager = nullptr;
     std::unique_ptr<NativeWindowManager> _nativeWindowManager;
     std::unique_ptr<AppRenderState> _renderState;
+    /// The game's world viewport declaration (see RuntimeGameViewProducer).
+    RuntimeGameViewProducer                      _gameViewProducer;
     AppRenderServices                            _renderServices;
     AppSceneServices                             _sceneServices;
     std::unique_ptr<AppAutomationControlService> _automationControlService;
@@ -155,6 +158,12 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
 
     void addModule(std::unique_ptr<IModule> module);
     void addModule(IModule& module);
+
+    /// Register/unregister a view owner. Producers are owned by whoever shows
+    /// the viewport (the runtime owns the game view, a module owns its own), so
+    /// the App only keeps the list it collects from each tick.
+    void addSceneViewProducer(ISceneViewProducer& producer);
+    void removeSceneViewProducer(ISceneViewProducer& producer);
 
     void requestQuit()
     {

@@ -203,8 +203,8 @@ M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**�
 
 | 现状 | 语义 | 目标归属 | 处置 |
 | --- | --- | --- | --- |
-| `AppRenderState::bWorldSceneRenderEnabled`（`AppRenderServices::set/isWorldSceneRenderEnabled`） | 本 tick 有没有世界视口要提交 | 声明方决定 | 删除。替代物是「没有 producer 声明 view」，不是任何按 Scene 或按 host 的开关。同时解除 `SkeletonAnimationSystem::setTickPolicy` 对它的依赖（动画策略另找诚实输入：per-scene 可见性或 per-component 策略，对齐 UE `OnlyTickPoseWhenRendered`） |
-| `AppRenderState::extensionHostView`（`setExtensionHostViewState` / `clearExtensionHostViewState`） | 编辑器作者视口的相机矩阵 | producer 自己填 `SceneViewDesc` | 删除。当前由 `prepareHostViewState` 回填进 `hostView`，再经 `HostSceneViewSubmit` 变成 view 1 的相机 |
+| `AppRenderState::bWorldSceneRenderEnabled`（`AppRenderServices::set/isWorldSceneRenderEnabled`） | 本 tick 有没有世界视口要提交 | 声明方决定 | **已删（4d-1）**：替代物是「没有 producer 声明 view」；`SkeletonAnimationSystem::setTickPolicy` 改读渲染侧派生事实 `AppRenderState::renderedScenesLastTick`（上一 tick 是否为该 Scene 产出内容，对齐 UE `OnlyTickPoseWhenRendered`） |
+| `AppRenderState::extensionHostView`（`setExtensionHostViewState` / `clearExtensionHostViewState`） | 编辑器作者视口的相机矩阵 | producer 自己填 `SceneViewDesc` | **已删（4d-1）**：`EditorAuthoringViewProducer` 直接声明；`prepareHostViewState` 收成宿主几何 + 时钟，主 view 的相机由声明回填进 `hostView` |
 | `AppRenderState::bCameraPreviewHostOwned` + `cameraPreviewEntityUUID` | 预览视图用哪个相机 | 声明方决定 | 删除。`resolvePreviewCamera` 与 `appendSceneCameraFrustumLines` 的相机选择前移回编辑器；producer 直接声明预览 view |
 | `AppRenderServices::setViewportRect` / `getViewportRect` | 作者视口的离屏 rect | producer 自己填 `SceneViewDesc` | 降为 producer 输入；automation 的 resize 用例改走 producer 声明的 rect |
 | `AppRenderState::bShowEditorGizmos`（`App::set/isEditorGizmoShown`） | 编辑器视口这 tick 要不画 gizmo | 声明方按 view 声明 | 删除。写入方是 EditorSurface 的 Window 菜单，读取方是 `featuresForView` 拼 feature mask；与 `viewportRect` 同批降为 producer 输入 |
@@ -236,6 +236,17 @@ M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**�
 - 键改用句柄：`SceneViewFamilyKey` / `SceneSnapshotEntry` / `SnapshotKey` / `snapshotFor` 校验都从派生整数 `sceneId` 换成 `Scene*`；`using SceneId` 与该别名全线删除。族键本就 tick-local（submission 重用时清空），句柄身份足够。
 - 删掉无写方的 `renderFlags`（含族键里恒 0 的分量）；`submitHostSceneViews` 转发层删除，宿主直接 `scheduler.submit(SceneViewDesc)`；`HostSceneRenderSubmit.*`（只剩抽取）改名 `HostSceneExtract.*`；`pendingRequestCount()` → `declaredViewCount()`。
 - 验收证据：`ya-render-3d-test` 172/172、`ya-testing` 相关滤镜 93/93（新增 `SceneFamilyResourcesTest` 进滤镜）、两次 smoke exit=0 且日志 0 error、截图字节数与 4b 一致。
+
+#### M9 执行记录（4d-1，2026-09-18 已提交）
+
+- 接缝：新增 `ISceneViewProducer` / `SceneViewCollector` / `SceneViewCollectContext`（`Render3D/Common/SceneViewProducer.h`）。签名比计划原文多一个显式上下文参数（tick / dt / viewport 几何）：这些是帧事实，应当由生产者**读**；放进 collector 会把 sink 和输入混在一起。宿主注册列表在 `AppRenderState::viewProducers`，`App::add/removeSceneViewProducer` 增删。
+- 世界视口归位：`RuntimeGameViewProducer`（Runtime 态、用游戏相机）与 `EditorAuthoringViewProducer`（非 Runtime 态且非 2D canvas、用编辑器相机）各自声明主 view。谁在显示视口就由谁声明，不再需要编辑器通知 runtime「我这 tick 没有世界视口」。
+- 格子删除：`extensionHostView`（含 set/clear）与 `bWorldSceneRenderEnabled`（含 set/is）两个格子连同 `prepareHostViewState` 里的相机分支一起删除；`prepareHostViewState` 现在只写宿主几何（viewportRect / framebuffer scale / clock），主 view 的相机由声明回填进 `hostView`（相机包络与 offscreen resize 仍读它，行为不变）。
+- 动画策略换诚实输入：`SkeletonAnimationSystem::setTickPolicy` 从「某个 viewport 的世界开关」改为「上一 tick 是否为该 Scene 产出了内容」（`AppRenderState::renderedScenesLastTick`，由 `renderedScenes(plan)` 写入；该 helper 从 coordinator 文件内提到 `SceneRenderScheduler.h` 与宿主共用）。一 tick 滞后是结构性的：system 跑在 view 声明之前。
+- 场景查询归位：`getPrimaryCamera` 从 orchestrator 静态函数移入 `Utility/SceneCameraQuery`（`findPrimaryCamera` / `findSecondaryCamera`），`AppSceneServices::getPrimaryCamera` 与宣布段都改用它；orchestrator 里的 `findNonPrimarySceneCamera` 删除，`resolvePreviewCamera` 复用 `findSecondaryCamera`。
+- 验收证据：`ya-render-3d-test` 172/172；`ya-testing` 相关滤镜 101/101（含 `AppLifecycleTest.*`，强制重建后复跑 5 次一致）；`rg -n 'extensionHostView|setWorldSceneRenderEnabled|isWorldSceneRenderEnabled|bWorldSceneRenderEnabled|findNonPrimarySceneCamera' Engine Example` 为空；两次 smoke（runtime / editor，`--exit-after-frame=90 --screenshot-target=viewport`）exit=0、日志 0 error、截图字节数与 4b/4c 完全一致（1395200 / 679231）。
+- 已知行为差异（刻意）：Runtime 态且场景没有相机实体时，主 view 仍会被声明（与之前一致），但相机是单位矩阵而不是借用编辑器相机——「游戏视口借用编辑器相机」正是被删除的那条耦合。
+- 保留未完成：4d-2（相机预览生产者 + 删 `bCameraPreviewHostOwned` / `cameraPreviewEntityUUID` / `kHostOverlayPreviewViewId`，`resolvePreviewCamera` / `cameraProjectionForOutput` / `appendSceneCameraFrustumLines` 移回编辑器）、4d-3（`SceneViewDesc.features` + 删 `bShowEditorGizmos` 与 `featuresForView`，作者视口 rect 由声明方给出）。
 
 
 ## 3. 保留项（这些 `frame` 是正确的）
