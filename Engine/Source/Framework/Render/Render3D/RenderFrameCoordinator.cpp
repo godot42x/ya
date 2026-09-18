@@ -93,7 +93,7 @@ void RenderFrameCoordinator::recordViewFamilies(
     }
 }
 
-ICommandBuffer* RenderFrameCoordinator::record(const RenderFramePlan& plan)
+RecordedFrame RenderFrameCoordinator::record(const RenderFramePlan& plan)
 {
     YA_PROFILE_SCOPE("RenderFrameCoordinator::record");
     YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -128,7 +128,7 @@ ICommandBuffer* RenderFrameCoordinator::record(const RenderFramePlan& plan)
 
     std::shared_ptr<ICommandBuffer> cmdBuf;
     if (!_device->beginFrameCommandBuffer(plan, cmdBuf)) {
-        return nullptr;
+        return {};
     }
 
     {
@@ -214,12 +214,20 @@ ICommandBuffer* RenderFrameCoordinator::record(const RenderFramePlan& plan)
     retain(_device->getPostprocessOutputImageShared());
 
     _device->endFrameCommandBuffer(cmdBuf.get());
-    if (RenderSubmission* submission = _device->_submissions.get(flightIndex)) {
-        if (!submission->finish()) {
-            YA_CORE_ERROR("Recording flight {} failed to finish submission", flightIndex);
-        }
+    RenderSubmission* submission = _device->_submissions.get(flightIndex);
+    if (!submission || !submission->finish()) {
+        // Sealing failed, so the command buffer must not be submitted: its
+        // kept resources and finish state are what the fence slot expects, and
+        // an empty present still legalizes the image the host acquired.
+        YA_CORE_ERROR("Recording flight {} failed to seal its submission", flightIndex);
+        return {};
     }
-    return cmdBuf.get();
+
+    return RecordedFrame{
+        .commandBuffer = cmdBuf.get(),
+        .flightIndex   = submission->flightIndex(),
+        .frameToken    = submission->frameToken(),
+    };
 }
 
 } // namespace ya

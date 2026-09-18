@@ -13,6 +13,16 @@
 
 ## 2026-09-17 checkpoint：View 声明 / 收集边界 review（无代码改动）
 
+## 2026-09-18 checkpoint：录制结果成为一个值（4.0.3 checkpoint 2/3 入口）
+
+- 唯一目标：把「这一次录制产出了什么、host 该提交什么」从裸 `ICommandBuffer*` 变成一个显式值，并把 host 那条 record→submit 边界变得可观测。这是 checkpoint 2（公开 `Renderer` owner，`recordFrame(plan, surfaceTarget) -> RecordedFrame`）的入口产物，不提前做类合并。
+- `RecordedFrame`（`Render3D/Common/RecordedFrame.h`）：`commandBuffer` + `flightIndex` + `frameToken` + `valid()`。`RenderFrameCoordinator::record()` 返回它；orchestrator 只提交它（`valid() ? {handle} : {}`），不再用「指针是否为空」表达成功/失败，也不再需要另一处推导才能提交。
+- 合同收紧（刻意）：seal 失败（`RenderSubmission::finish()` 拒绝）现在返回**无效** `RecordedFrame`，host 走空提交——acquired image 仍被 present 合法化（`FPresentFrame` 的既有语义：「空 command list 仍然合法化已 acquire 的 image」）。旧代码在同样失败下只打一条 error 然后**照旧提交**那个 command buffer，属于「补丁之上再打补丁」；改成值之后失败是可表达的。诚实说明：今天 `finish()` 只在 submission 非 recording 时失败，而 `beginFrameCommandBuffer` 已经保证了 recording，所以这条路径当前不可达——它定义的是 P2 拆出 `FrameRecording`/`FrameFlightResources` 之后 seal 会真正失败时的契约（arena/descriptor 耗尽等）。
+- 可观测性：`tickRender` 的 record→submit 边界新增一条 trace（`Submit tick N: flight=F token=T recorded=B`）。这不只是装饰——它当场暴露了下面那条 flight 发现。
+- 验证：`xmake b ya-render-3d ya-game-editor`；`ya-render-3d-test` 174/174；`ya-testing` 相关滤镜 108/108；runtime 与 editor 的 viewport 截图与上一刀逐字节相同（`1c6668976be1cdd5d755d1f1365700f7` / `1bfb16e7ca543abb7b517325df508b90`）；游戏→编辑器序列不再崩溃。无新增单测：`RecordedFrame` 是纯值类型，给它写 `valid()` 断言是同义反复，而 seal 失败路径当前不可达，所以这一刀的验收是「构建 + 两条 smoke + 截图不变 + trace 可读」，不假装有单测覆盖。
+- **顺带发现（已登记，未改）**：trace 显示 90 tick 全部 `flight=0`。原因不在本刀改动，而在 `VulkanRenderSurfaceContext::flightFrameSize = 1`（`advanceFrame()` 取模后 `currentFrameIdx` 恒为 0），于是 `resolveFlightIndex` 恒返回 0，渲染侧双槽 flight 表（`RenderSubmissionPool` / `RenderViewOutputTable` / `viewFrameDataPerFlight` / `FrameUploadArena`）在生产里只走槽位 0；它之所以仍安全，是 `begin()` 在 acquire 前调 `waitAllGraphicsFences()`（每帧等齐 GPU）——与 `flightFrameSize = 1` 自洽的 wait-idle 策略。结论与动作项见 temporal_semantics.md「M4 现状发现」与 todo.md：先判定 flight 深度是 1（余量）还是 2（需要改三处并两后端验证），再决定 M4 的记账范围。
+- 保留未完成：checkpoint 2 的类合并（`RenderDeviceState` + `RenderFrameCoordinator` → 公开 `Renderer`）与 friend 收口；checkpoint 3 的 `RenderSubmission` 拆分与 `flightIndex` → `flightSlot` 改名（P2）。
+
 ## 2026-09-18 checkpoint：一条 View 声明必须描述整像素（4d-3 收口）
 
 - 触发：4d-3b 落地后，`run`（游戏）紧接 `run-editor` 会让编辑器以 exit 255 退出（连中 3 次），单独跑编辑器则正常。崩溃报告 `EXC_BREAKPOINT`，栈是 `RenderGraph::createTexture`（`RenderGraph.cpp:1027` 的 extent 非零断言）← `SSAOStage::appendGraphPass` ← `DeferredFrameGraphOrchestrator::build` ← `tickRender`。

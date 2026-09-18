@@ -141,6 +141,32 @@ hostTick = 1200
 | `RenderSurfaceContext::getCurrentFrameIndex()` | `getPresentCycleIndex()` | `RHI/Core/RenderSurfaceContext.h:69`、`RHI/Backend/Vulkan/VulkanRenderSurfaceContext.h:77`、`RHI/Render.h:109`、`VulkanRender.cpp:1197,1270,1291` | 它同时被 GPU timing query ring 当作槽位使用，改名需一并核对 |
 | `MAX_FLIGHTS_IN_FLIGHT` | 保持 | | flight 轴语义正确 |
 
+#### M4 现状发现（2026-09-18，加 submit trace 时暴露）
+
+`resolveFlightIndex` 从 primary surface 的 present 计数推导 flight，而 Vulkan surface 的
+`flightFrameSize = 1`（`RHI/Backend/Vulkan/VulkanRenderSurfaceContext.h:27`），`advanceFrame()`
+对它取模后 `currentFrameIdx` 恒为 0。实测证据：一帧一条 `Submit tick N: flight=0 token=N recorded=1`，
+90 tick 全是 `flight=0`（runtime 与 editor 都是）。
+
+后果：渲染侧那套双槽 flight 设计（`RenderSubmissionPool`、`RenderViewOutputTable`、
+`AppRenderState::viewFrameDataPerFlight`、`FrameUploadArena`）在生产里**只会走到槽位 0**，
+槽位 1 从未被真实执行过；而它之所以仍然安全，是因为 `VulkanRenderSurfaceContext::begin()`
+在 acquire 前调 `waitAllGraphicsFences()`（等待**所有** frame fence，当前即那一个），
+等于每帧 CPU 等上一帧 GPU 做完——「wait-idle-per-frame」策略，与 `flightFrameSize = 1` 自洽。
+
+因此 M4 的结论要加一条前置判断：**flight 深度到底是 1 还是 2**。若要保持 1，则渲染侧的
+双槽表、keepalive 与 `FrameFlightResources` 拆分都只是余量，不必为 overlap 记账；若要真正
+overlap，需要同时 (a) 提高 `flightFrameSize`、(b) 把 `waitAllGraphicsFences()` 改成只等
+`frameFences[currentFrameIdx]`、(c) 验证渲染侧 per-flight 表真的会轮转到槽位 1。这三件事
+都不在本刀范围内（属 R2/R4 的性能决策，且要两个后端一起验），先记录为待决项。
+
+#### M4 执行记录（P2 前置，2026-09-18 已提交）
+
+- `RecordedFrame`（`Render3D/Common/RecordedFrame.h`）：一次录制的**结果值**——`commandBuffer` + `flightIndex` + `frameToken` + `valid()`。`RenderFrameCoordinator::record()` 返回它，取代裸 `ICommandBuffer*`；host 只提交它，不再靠「指针是否为空」表达成功/失败。
+- 合同收紧：seal（`RenderSubmission::finish()`）失败时返回**无效** `RecordedFrame`，host 走空提交——acquired image 仍被 present 合法化。旧代码在同样的失败下会照旧提交那个 command buffer（只打一条 error），即「补丁之上再打补丁」。
+- host 侧：`tickRender` 的 record→submit 边界现在有一条 trace（`Submit tick N: flight=F token=T recorded=B`），这正是发现 `flightFrameSize = 1` 的入口。
+- M4 的改名（`RenderSubmission` → `FrameRecording`、`flightIndex` → `flightSlot`、`RenderSubmissionPool` 拆池等）仍未开始；本刀只把「录制结果」这一件事从裸指针变成值，并保留 `flightIndex` 现名以免与 P2 改名混批。
+
 ### M5 — Present / surface
 
 | 现状 | 目标 | 主要位置 | 备注 |

@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "Render3D/Common/RenderFrameInputs.h"
+#include "Render3D/Common/RecordedFrame.h"
 
 #include <memory>
 
@@ -22,9 +23,10 @@ struct YA_RENDER_3D_API RenderFrameCoordinator
     explicit RenderFrameCoordinator(RenderDeviceState& device);
 
     /// Records graphics → UI → view compose → display compose. Caller must
-    /// already have acquired `plan.present` and must `submitPresentFrame`
-    /// with the returned command buffer (or an empty list if null).
-    [[nodiscard]] ICommandBuffer* record(const RenderFramePlan& plan);
+    /// already have acquired `plan.present`, and then submits what comes back:
+    /// the recorded command buffer, or an empty frame when the result is
+    /// invalid (see RecordedFrame).
+    [[nodiscard]] RecordedFrame record(const RenderFramePlan& plan);
 
   private:
     RenderDeviceState* _device = nullptr;

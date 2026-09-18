@@ -31,6 +31,7 @@
 
 #include "Render2D/Render2D.h"
 #include "Render3D/Common/RenderFrameInputs.h"
+#include "Render3D/Common/RecordedFrame.h"
 #include "Render3D/RenderDeviceState.h"
 #include "Render3D/RenderFrameCoordinator.h"
 #include "Render3D/Material/Material.h"
@@ -280,7 +281,7 @@ void GameRuntimeTickOrchestrator::prepareHostViewState(App& app, float dt)
         return;
     }
 
-    hostView.clock.hostTick      = App::_hostTick;
+    hostView.clock.hostTick      = App::currentHostTick();
     hostView.clock.elapsedTimeMS = app.getElapsedTimeMS();
     hostView.view       = glm::mat4(1.0f);
     hostView.projection = glm::mat4(1.0f);
@@ -519,7 +520,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         return;
     }
 
-    ICommandBuffer* recorded = coordinator->record(RenderFramePlan{
+    const RecordedFrame recorded = coordinator->record(RenderFramePlan{
         .sceneRender = std::move(sceneRender),
         .camera = cameraFrame,
         .viewCompose = {
@@ -566,12 +567,16 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 
     {
         YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
-        if (recorded) {
-            submitPresentFrame(presentFrame, {recorded->getHandle()});
-        }
-        else {
-            submitPresentFrame(presentFrame, {});
-        }
+        // The host submits what the renderer recorded, or an empty frame when
+        // the recording was refused; the image is presented either way.
+        YA_CORE_TRACE("Submit tick {}: flight={} token={} recorded={}",
+                      app.getHostTick(),
+                      recorded.flightIndex,
+                      recorded.frameToken,
+                      recorded.valid());
+        submitPresentFrame(presentFrame,
+                           recorded.valid() ? std::vector<void*>{recorded.commandBuffer->getHandle()}
+                                            : std::vector<void*>{});
     }
     app.presentModuleExtras(dt);
 }

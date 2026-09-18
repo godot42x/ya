@@ -60,6 +60,7 @@
 - [ ] 4.0.2 D 收口：真正的 ViewFamily compiler，不再是 per-view `beginView` 循环外包装 + `familyPredecessor` 串行。
 - [x] 4.0.2 E 入口：删除 `RenderRuntime` 类，拆成 `RenderDeviceState` + `RenderFrameCoordinator`；删除 ViewportState 与 active Scene locator。
 - [ ] 4.0.3：合并 DeviceState+Coordinator 为公开 `Renderer`；关闭 friend 越界；`recordFrame(plan, surfaceTarget) -> RecordedFrame`。
+- [x] 引入 `RecordedFrame`（command buffer + flight/token 身份 + `valid()`），`RenderFrameCoordinator::record()` 返回它，host 只提交该值；seal 失败返回无效值（host 空提交），取代「提交一个未封口的录制」。
 - [ ] 将 `RenderSubmission` 拆成 `FrameRecording` 与 `FrameFlightResources`；host 提交真正的 command buffer。
 - [ ] 引入 `PreparedView`，删除 CameraFrameInput patching / SceneViewRecording / RenderPipelineFrameContext 重复层。
 - [ ] 压缩 `tickRender` 为 prepare → buildFrame → acquire → recordFrame → submitPresent，不引入新的全能 coordinator。
@@ -69,6 +70,7 @@
 - [ ] 验证一个 View 到多个 Surface、多个 View 到一个 Surface。
 - [ ] 验证 surface acquire/present/recreate 不进入 View pipeline。
 - [ ] 只有在 trace 证明必要时再提出 submit 拆分。
+- [ ] 判定 flight 深度：Vulkan surface 的 `flightFrameSize = 1` 使 `getCurrentFrameIndex()` 恒为 0（实测 90 tick 全部 `flight=0`），所以渲染侧双槽表（`RenderSubmissionPool` / `RenderViewOutputTable` / `viewFrameDataPerFlight` / `FrameUploadArena`）生产里只走槽位 0，而 `begin()` 的 `waitAllGraphicsFences()` 是每帧等齐 GPU 的 wait-idle 策略。要保持 1 就把余量当余量（不必为 overlap 记账）；要真 overlap 需同时提高 `flightFrameSize`、只等 `frameFences[currentFrameIdx]`、并验证槽位 1 真的被轮转到（两后端一起验）。属 R2/R4 性能决策，见 temporal_semantics.md M4。
 
 ### R2 reuse gates
 

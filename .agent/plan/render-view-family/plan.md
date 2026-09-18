@@ -486,8 +486,9 @@ AppKernel::run
 执行顺序（每个 checkpoint 一个可验收目标）：
 
 1. **修计划状态（已完成）**：C/D/E 改为部分完成；删除把 DeviceState+Coordinator 当成闭环、把 RenderRuntime 当成现行 orchestrator 的叙述。
-2. **公开 `Renderer` owner**：合并 `RenderDeviceState` + `RenderFrameCoordinator`；关闭 friend 越界。产品层只调用 `Renderer::recordFrame(plan, surfaceTarget) -> RecordedFrame`。不引入第三个全能 coordinator。
-3. **recording 与 flight 拆名**：`RenderSubmission` 拆成 `FrameRecording`（cmd/allocate/retain/seal）与 `FrameFlightResources`（fence-safe arena/descriptors/keepalives）。`RecordedFrame` 带 command buffer 与 flightIndex，由 host submit。
+2. **公开 `Renderer` owner**：合并 `RenderDeviceState` + `RenderFrameCoordinator`；关闭 friend 越界。产品层只调用 `Renderer::recordFrame(plan, surfaceTarget) -> RecordedFrame`。不引入第三个全能 coordinator。**入口已完成（RecordedFrame 值）**：`RenderFrameCoordinator::record()` 现在返回 `RecordedFrame`（command buffer + flight/token 身份 + `valid()`），host 只提交该值、seal 失败即空提交；类合并与 friend 收口仍未开始（见 todo.md）。
+3. **recording 与 flight 拆名**：`RenderSubmission` 拆成 `FrameRecording`（cmd/allocate/retain/seal）与 `FrameFlightResources`（fence-safe arena/descriptors/keepalives）。**`RecordedFrame` 已完成**（带 command buffer、`flightIndex`、`frameToken`，由 host submit；见 temporal_semantics M4 执行记录）。
+   - **前置待决**：flight 深度。Vulkan surface 的 `flightFrameSize = 1` 让 `getCurrentFrameIndex()` 恒为 0（实测 90 tick 全 `flight=0`），所以渲染侧双槽表在生产里只走槽位 0，而 `begin()` 的 `waitAllGraphicsFences()` 是每帧等齐 GPU 的 wait-idle 策略。先判定要 1 还是 2，再决定本条的记账范围（详见 temporal_semantics.md M4 现状发现）。
 4. **view 声明与收集收口（2026-09-17 review 新增，见 §3.10）**：补齐「谁声明 view」，再让抽取成为显式一步。四刀，每刀可独立验收：
    - 4a **抽取移出 seal**（已完成）：`SceneRenderScheduler::seal()` 不再调用 `request.buildSnapshot()`；改为 `seal()` 只分组（快照表建好但内容为空）、`buildSceneSnapshots(plan, resolver)` 显式抽取。请求结构不再携带任何闭包；无法解析内容的 Scene 由该步骤剔除并重新分组，其余 Scene 仍照常录制。
    - 4b **计划保留 Scene 句柄**（已完成）：声明 / task / 快照表项携带 tick-local `Scene*`，`sceneId` 由 `seal()` 从句柄派生；抽取接口收窄为 `SceneSnapshotExtractor(Scene&)`。`derivedSceneForHostView`、`SceneRenderPlanInput`（含 `complete()`）、`derivedScenesAgreeWithPlan()`、`derivedSceneForFamily()`、`SceneViewRecording::derivedScene` 全部删除，改建为 `ExtractedSceneRender`：只有 `buildSceneSnapshots()` 能造出非空 plan、只有 `pairViewFrames()` 能放入 recording，于是「忘了抽取」与两列错位都变成编译错误而不是运行时日志。
