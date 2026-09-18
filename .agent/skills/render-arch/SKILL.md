@@ -82,13 +82,36 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
     长得完全一样，它会带着**一整条每帧空跑的 pass** 活很久（`kTopologyPassOverlay` 就这么活到
     2026-09-19）。删除前先回答“生产者是谁”：找不到生产者的字段 / 通道 / pass 一律删除，不要为它
     补一个消费者。
-16. 一帧的录制顺序只写在一个地方：`RenderFrameCoordinator::record`。host 通过
+16. 一帧的录制顺序只写在一个地方：`RenderDeviceState::record`。host 通过
     `IFrameRecordExtensions`（`recordViewCompose` / `recordBeforeDisplayExtensions` /
     `recordDisplayExtensions` / `appendDisplayCapture`）在这些阶段里录自己的东西，
     阶段名是 Render3D 的词汇。**不要**把 `std::function` 放进 `RenderFramePlan`：
     plan 是数据，行为挂在数据上会让顺序一半在 host 构造处、一半在 renderer 调用处，
     两边都读不出完整时序。每个阶段无条件被调用，“这一步什么都不录”用默认空实现表达
     （headless / UI-only 帧合法如此），不要用断言把合法帧判成错误。
+    它拆成 `prepareFrameRecord()`（所有改状态 / 备 GPU 资源的动作）与 `record()`（只录命令）两段：
+    "safe point 在哪"必须是一条能被读出来的边界，不是没写下来的约定。
+17. **窗口是呈现面，渲染分辨率是设置。** `HostViewState::renderResolution` 是"宿主视口要渲染
+    多大"，`INativeWindow::getWindowSize()` 是"窗口多大"，两者可以不同且**互不派生**：
+    presentation pass 把渲染图拉伸到 swapchain image 上，所以 resize 窗口不改变渲染内容
+    （默认分辨率与窗口创建尺寸一致，于是开箱是 1:1 呈现）。因此：
+
+    - 不要把窗口尺寸喂给 View 的 rect / camera aspect / UI 逻辑视口。跟着窗口走会让"渲染内容"依赖
+      一个只影响呈现的量。
+    - 不要让"渲染分辨率"以"窗口大小"为唯一来源却没有设置通道；调分辨率是一个产品能力（降分辨率换
+      性能），它需要一个显式的设置入口（`AppRenderServices::setRenderResolution`），
+      而不是一个只能由 CLI 尺寸冻结的隐式值。
+    - View 的 rect 属于声明它的那一方。不要把某个 View 的 rect 抄进宿主状态再让别处从宿主读——
+      "这一帧实际渲染成多大"问 renderer 的已发布输出（`getViewportExtent()`）。
+    - presentation 的拉伸是**按渲染图像素 1:1** 贴上去的（只 tone map，不做 fit）。宽高比不同的
+      窗口会被拉伸；letterbox / fit 是一个需要先决定"多出来的像素画什么"的呈现特性，要单独做。
+
+### 复盘：一个字段同时承担多种语义时怎么发现
+2026-09-19 修掉的两处都是同一形态——**同一个字段在不同模式下指不同东西，因此谁也不敢删它**：
+`HostViewState::viewportRect` 在三种模式下分别是"CLI 冻结尺寸 / 编辑器面板 rect / 上一次残留"，
+`AppRenderServices::setViewportRect` 于是既像设置又像测量。查法是把每个写者和读者按模式列一遍，
+问"这一行在每种模式下读到的是什么"；答不出来的那个字段就是错的。修法通常是**按语义拆成两个名字
+不同的东西**（`renderResolution` 设置 vs `getWindowSize()` 测量），而不是继续加注释解释它。
 
 ## 目录锚点
 

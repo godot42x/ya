@@ -85,7 +85,8 @@ S2 的候选清单（每条独立可验收，动手前先确认消费面）：
   这正是"抽不出独立 GUI app"的根因。`Tooling/Workbench` 是 demo app，不属于 GUI 库。
 - 断 `ya-scene-core -> ya-gui-widgets`（SceneWidgetEntry）与
   `ya-render-3d -> ya-gui-compose`（`Render2DComposePass` 出现在
-  `RenderDeviceState.cpp` / `RenderFrameCoordinator.cpp` / `ViewCompose.cpp`）。
+  `RenderDeviceState.cpp` / `RenderDeviceState.Frame.cpp` / `ViewCompose.cpp`；
+  2026-09-19 起 `RenderFrameCoordinator.cpp` 已并入 `RenderDeviceState.Frame.cpp`）。
 - 修 `ya-rhi-backend-common` 自依赖自身的笔误。
 
 ## 4. 退出条件
