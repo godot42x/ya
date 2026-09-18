@@ -573,45 +573,14 @@ RecordedFrame GameRuntimeTickOrchestrator::recordFrame(App&                    a
         .sceneRender = std::move(sceneRender),
         .frame = frame,
         .viewCompose = {
-            .recordCompose = [&app, dt](ICommandBuffer* commandBuffer)
-            {
-                if (commandBuffer) {
-                    app.recordModuleViewportCompose(*commandBuffer, dt);
-                } },
-        },
-        .displayCompose = {
-            .extensions = {
-                .recordBeforeExtensions = [&app, dt](ICommandBuffer* commandBuffer)
-                {
-                    if (commandBuffer) {
-                        app.recordModuleBeforePresentation(*commandBuffer, dt);
-                    } },
-                .recordExtensions = [&app, dt](ICommandBuffer* commandBuffer)
-                {
-                    if (commandBuffer) {
-                        app.recordModulePresentation(*commandBuffer, dt);
-                    } },
-                .appendCapture = [&app](RenderGraph& graph, RGTextureHandle presentationOutput, Extent2D presentationExtent)
-                {
-                    bool bAppended = AppAutomation::appendPresentationCapture(app.getHostTick(),
-                                                                              graph,
-                                                                              presentationOutput,
-                                                                              presentationExtent);
-                    if (auto* automationControl = app.getAutomationControlService()) {
-                        bAppended = automationControl->appendPresentationCapture(app.getHostTick(),
-                                                                                 graph,
-                                                                                 presentationOutput,
-                                                                                 presentationExtent) ||
-                                    bAppended;
-                    }
-                    return bAppended;
-                },
-            },
+            // Empty: the host's View-inset list. Overlay recording is a stage of
+            // `recordExtensions`, not data on the plan.
         },
         .present = {
             .surface    = presentFrame.surface,
             .imageIndex = presentFrame.imageIndex,
         },
+        .recordExtensions = &app,
     });
 }
 

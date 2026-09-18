@@ -32,7 +32,7 @@ class AppModuleTestAccess
     static void prepareRender(App& app, float dt) { app.prepareModulesForRender(dt); }
     static void recordPresentation(App& app, ICommandBuffer& commandBuffer, float dt)
     {
-        app.recordModulePresentation(commandBuffer, dt);
+        app.recordDisplayExtensions(commandBuffer, dt);
     }
     static void presentExtras(App& app, float dt)
     {

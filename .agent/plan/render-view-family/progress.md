@@ -1,5 +1,79 @@
 # Progress
 
++## 2026-09-19 checkpoint：V6 RenderFramePlan 去掉回调
+
+### 唯一目标
+
+让"一帧的录制顺序"在一个文件里连续可读。原先 `RenderFramePlan` 携带四个
+`std::function`（`viewCompose.recordCompose`、`displayCompose.extensions.recordBeforeExtensions`、
+`recordExtensions`、`appendCapture`）：host 在 GameRuntime 里组装闭包，Render3D 决定
+它们在哪一行被调用，**两边都读不出完整时序**。
+
+### 做法
+
+新增 `Render3D/Common/FrameRecordExtensions.h` 定义 `IFrameRecordExtensions`，
+把阶段命名成渲染侧的词汇：
+
+| 接口方法 | 原回调 | 阶段 |
+| --- | --- | --- |
+| `recordViewCompose` | `viewCompose.recordCompose` | world/UI/view compose 之后，display compose 之前 |
+| `recordBeforeDisplayExtensions` | `extensions.recordBeforeExtensions` | display compose 内，presentation graph build 之前 |
+| `recordDisplayExtensions` | `extensions.recordExtensions` | display compose 内，host 自己的 graph 内容 |
+| `appendDisplayCapture` | `extensions.appendCapture` | display compose 内，追加 capture pass（automation） |
+
+每一个都是带默认空实现的虚函数——"这个 host 在这一步什么都不录"是合法状态
+（headless、UI-only 帧正是如此）。
+
+- `RenderFramePlan` 现在只有一个 `IFrameRecordExtensions* recordExtensions`，
+  **`std::function` 数量 0**（验收要求 ≤1）。
+- `DisplayComposeInput` 整个删除（它本来只装 extensions）。
+  `ViewComposeInput` 只剩 `insets` 数据——行为不再挂在数据上。
+- `PresentationGraphService::Extensions` 整个删除（它是一份平行的阶段描述），
+  `recordDisplayCompose(float, IFrameRecordExtensions*, ICommandBuffer*)` 直接吃接口。
+- `App` 实现 `IFrameRecordExtensions`；三个 `recordModule*` 转发方法改名为接口方法
+  并直接写循环，`appendDisplayCapture` 吸收原先在 GameRuntime 里那两个 automation
+  调用。host 侧因此不再有"装配回调"的代码。
+- `recordCameraViewCompose` 丢掉 `viewCompose` 形参（它只用来调 `recordCompose`）；
+  该阶段调用点移到 coordinator —— 位置等价（都在 Render2D compose pass 之后、
+  display compose 之前），但顺序现在写在 `record()` 里。
+- `record()` 头部补一段顺序注释，把
+  `graphics → UI → view compose → display compose → capture` 一次说清。
+
+### 诚实边界：这一刀修的是什么，不是什么
+
+- **修了**：顺序只在一处（`record()`）；plan 不再携带行为；阶段成为 Render3D 的
+  词汇，不再由 host 侧定义一份平行描述。
+- **没修**：host 忘记实现某一步仍然是静默空转（默认虚函数是 no-op）。这一点与
+  回调版本一致，且**不能**用断言消除——headless / UI-only 帧本来就不该录任何东西。
+  计划附.2 原写的"缺 step 时 assert"因此被否决，记在这里。
+- 也没有引入 plan 原文提的"贡献者列表（span）"：当前只有一个 host（`App`），
+  span 只是给将来留位，现在做会多一层生命周期负担而收益为零。真需要多贡献者时
+  再把指针换成 span，改动是局部的。
+
+### 验证
+
+| 检查 | 结果 |
+| --- | --- |
+| `rg 'std::function' RenderFrameInputs.h FrameRecordExtensions.h` | 0（`PresentationGraphService.h` 只剩 init 期一次性的 `viewportDisplayImageProvider`，不是 per-frame 行为） |
+| `rg 'DisplayComposeInput\|recordModuleViewportCompose\|recordModulePresentation\|recordBeforeExtensions\|recordExtensions\(\|appendCapture\)'`（Engine + Example） | 仅剩新名字，旧名字 0 |
+| `xmake b` | `ya-render-3d` / `ya-game-runtime` / `ya-game-editor` / `ya-testing` / `ya-render-3d-test` / `ya-engine` / `GUIWorkbench` / `GreedySnake` / `ya-gui-closure-test` / `ya-gui-headless-host-test` / `ya-render-2d-test` 全部 ok |
+| `xmake r ya-render-3d-test` | **176/176** |
+| `ya-testing` 渲染/编辑器滤镜 | 265 passed / 3 failed（与 V1–V5 基线逐项相同） |
+| `HelloMaterial --screenshot-target=viewport` | exit=0，0 error，`md5=1c6668976be1cdd5d755d1f1365700f7` **逐字节相同** |
+| `run-editor --screenshot-target=viewport` | exit=0，0 error，`md5=5b8f5dd8acdbc90bd5c383feb3f7bcec` **逐字节相同** |
+
+两张 smoke 都带 `--screenshot`，因此 `appendDisplayCapture` 这条被移动过的阶段确实
+被执行过；编辑器的 `onPresentation`（编辑器 chrome）与 `onBeforePresentation` 也被
+执行过，画面逐字节相同说明阶段搬位是等价的。
+
+### 无单测的部分
+
+`RenderFrameCoordinator::record` 需要活 device + swapchain，因此"阶段顺序"没有单测，
+旧的回调版本同样没有。新增的静态断言只钉住"plan 里装的是接口指针"这一形状。
+顺序的可验证性来自代码本身（一个函数、五步），而不是测试——这一点记录在此，
+避免下次误以为它被覆盖了。
+
+
 +## 2026-09-19 checkpoint：V4 + V5 IRenderRuntimeServices 删除与 FramePacket/PreparedView
 
 ### 唯一目标

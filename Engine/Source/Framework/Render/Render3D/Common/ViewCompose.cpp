@@ -66,7 +66,6 @@ YA_RENDER_3D_API void recordCameraViewCompose(ICommandBuffer*                   
                                               RenderTexture*                         cameraDisplayRT,
                                               const UIFrameSnapshot*                 uiFrameSnapshot,
                                               Extent2D                               logicalViewportExtent,
-                                              const ViewComposeInput&                viewCompose,
                                               std::span<const ViewDisplayInsetImage> insets)
 {
     if (!cmdBuf) {
@@ -88,10 +87,6 @@ YA_RENDER_3D_API void recordCameraViewCompose(ICommandBuffer*                   
                                   [&]() { recordViewDisplayInsets(insets); });
     }
 
-    // Editor gizmos / viewport compose still write a Camera or PreviewTarget RT.
-    if (viewCompose.recordCompose) {
-        viewCompose.recordCompose(cmdBuf);
-    }
 }
 
 } // namespace ya

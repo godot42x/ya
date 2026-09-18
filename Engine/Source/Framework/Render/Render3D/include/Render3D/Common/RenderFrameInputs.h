@@ -4,10 +4,9 @@
 #include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ShadowSettings.h"
-#include "Render3D/Services/PresentationGraphService.h"
+#include "Render3D/Common/FrameRecordExtensions.h"
 
 #include <cstddef>
-#include <functional>
 #include <glm/glm.hpp>
 #include <memory>
 #include <vector>
@@ -80,25 +79,14 @@ struct ViewDisplayInset
     return insets;
 }
 
-/// Overlay / gizmos onto this camera's offscreen RT (after graphics + UI).
-/// Not display compose; must not recreate GPU resources. Insets are extra
-/// Views on the primary display, not a second Surface.
+/// Host-declared insets: extra Views blitted onto the display root's RT after
+/// graphics + UI. Not a second Surface, and not behavior -- the host code that
+/// records overlays lives behind `IFrameRecordExtensions::recordViewCompose`.
 struct ViewComposeInput
 {
-    std::function<void(ICommandBuffer*)> recordCompose;
-    std::vector<ViewDisplayInset>        insets;
+    std::vector<ViewDisplayInset> insets;
 
-    [[nodiscard]] bool empty() const
-    {
-        return !recordCompose && insets.empty();
-    }
-};
-
-/// Images onto the present surface's swapchain[imageIndex] via
-/// `PresentationGraphService::recordDisplayCompose`. Not Camera view compose.
-struct DisplayComposeInput
-{
-    PresentationGraphService::Extensions extensions{};
+    [[nodiscard]] bool empty() const { return insets.empty(); }
 };
 
 /// Acquire / present destination for this frame. The host/present coordinator
@@ -120,8 +108,12 @@ struct RenderFramePlan
     ExtractedSceneRender sceneRender{};
     FramePacket          frame{};
     ViewComposeInput     viewCompose{};
-    DisplayComposeInput  displayCompose{};
     PresentFrameInput    present{};
+    /// What the host records at the stages the coordinator defines. Null means
+    /// the host contributes nothing; the renderer's own order is unaffected
+    /// either way, and no stage can be installed out of order because the plan
+    /// no longer names an order at all.
+    IFrameRecordExtensions* recordExtensions = nullptr;
 };
 
 /// One Scene family to record into a single graph on the live submission.

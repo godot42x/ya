@@ -6,6 +6,7 @@
 #include "Graph/RenderGraph.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/RenderDefines.h"
+#include "Render3D/Common/FrameRecordExtensions.h"
 #include "Render3D/Common/PostProcessingState.h"
 #include "Render3D/Common/ViewPassResources.h"
 
@@ -36,21 +37,6 @@ struct BasicPostprocessing;
  */
 struct YA_RENDER_3D_API PresentationGraphService
 {
-    /// Presentation graph extension points recorded by the app. A single
-    /// descriptor object keeps the presentation boundary explicit instead of
-    /// threading several parallel callbacks through FrameInput.
-    struct Extensions
-    {
-        std::function<void(ICommandBuffer*)>                         recordBeforeExtensions;
-        std::function<void(ICommandBuffer*)>                         recordExtensions;
-        std::function<bool(RenderGraph&, RGTextureHandle, Extent2D)> appendCapture;
-
-        [[nodiscard]] bool empty() const
-        {
-            return !recordBeforeExtensions && !recordExtensions && !appendCapture;
-        }
-    };
-
     struct InitDesc
     {
         IRender*                render  = nullptr;
@@ -70,7 +56,10 @@ struct YA_RENDER_3D_API PresentationGraphService
 
     /// Display compose: blit the Camera display RT onto this surface's
     /// `swapchain[imageIndex]`. Not view compose; does not write Camera RTs.
-    void recordDisplayCompose(float deltaTime, const Extensions& extensions, ICommandBuffer* cmdBuf);
+    /// `extensions` is the host's contribution to this stage; null when the
+    /// host records nothing here. The stage order is owned here and in the
+    /// coordinator, not by the caller.
+    void recordDisplayCompose(float deltaTime, IFrameRecordExtensions* extensions, ICommandBuffer* cmdBuf);
 
     [[nodiscard]] std::shared_ptr<RenderTexture> getCurrentPresentationImageShared() const;
     [[nodiscard]] uint32_t                     getCurrentPresentationImageIndex() const;

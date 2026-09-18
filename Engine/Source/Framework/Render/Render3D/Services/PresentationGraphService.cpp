@@ -171,9 +171,9 @@ std::shared_ptr<RenderTexture> PresentationGraphService::getCurrentPresentationI
     return _presentationImages[imageIndex];
 }
 
-void PresentationGraphService::recordDisplayCompose(float                              deltaTime,
-                                                    const Extensions&                  extensions,
-                                                    ICommandBuffer*                    cmdBuf)
+void PresentationGraphService::recordDisplayCompose(float                     deltaTime,
+                                                    IFrameRecordExtensions* extensions,
+                                                    ICommandBuffer*         cmdBuf)
 {
     YA_PROFILE_FUNCTION();
 
@@ -201,13 +201,13 @@ void PresentationGraphService::recordDisplayCompose(float                       
         _presentationPostProcessor->beginFrame();
     }
 
-    if (extensions.recordBeforeExtensions) {
+    if (extensions) {
         // Contract: this hook runs before the presentation graph is built and
         // recorded, inside the already-open frame command buffer. Content
         // recorded here (e.g. ImGui draw data consumed later by the graph) must
         // not recreate GPU resources; layout transitions must go through the
         // shared resource state tracker.
-        extensions.recordBeforeExtensions(cmdBuf);
+        extensions->recordBeforeDisplayExtensions(*cmdBuf, deltaTime);
     }
 
     const Extent2D presentationExtent = presentationImage->getExtent();
@@ -249,15 +249,15 @@ void PresentationGraphService::recordDisplayCompose(float                       
                 });
             }
 
-            if (extensions.recordExtensions) {
-                extensions.recordExtensions(&rgCtx.getCommandBuffer());
+            if (extensions) {
+                extensions->recordDisplayExtensions(rgCtx.getCommandBuffer(), deltaTime);
             }
 
             rgCtx.endRendering();
         });
 
-    if (extensions.appendCapture) {
-        extensions.appendCapture(graph, output, presentationExtent);
+    if (extensions) {
+        extensions->appendDisplayCapture(graph, output, presentationExtent);
     }
 
     [[maybe_unused]] const bool bExecuted = presentationExecutor->execute(graph, *cmdBuf);

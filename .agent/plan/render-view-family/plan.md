@@ -620,7 +620,7 @@ view 身份目前是**全局小整数**，所以"谁是谁"只能靠读声明方
 
 ### 附.2 切片（按风险从低到高；每条独立可验收）
 
-> 状态：V1–V5 已落地（2026-09-19，见 `progress.md`）；V6–V8 未开始。
+> 状态：V1–V6 已落地（2026-09-19，见 `progress.md`）；V7–V8 未开始。
 > 实现时在 V1 追加了两处 plan 原文漏登记的同类写法（Forward/Deferred 的
 > `recordings.empty()` 合成与 `|| result.views.empty()`），在 V3 追加了一处死代码
 > （`pipelineViewportDisplayImage()`）；`buildViewportSnapshot` 的 else 分支仍读
@@ -635,6 +635,15 @@ view 身份目前是**全局小整数**，所以"谁是谁"只能靠读声明方
 > - `PreparedView` 没有作为新类型引入：`RenderFrameData` 已经是那个东西（V4 之后
 >   连 scene resources 与 clock 都在它上面）。改名 `PreparedViewRenderData` 属 P3 的
 >   命名批次，与本次结构迁移分开。
+>
+> V6 落地时的两处否决：
+>
+> - 原写「贡献者列表（`std::span<IFrameContribution* const>`）」。当前只有一个 host
+>   （`App`），span 只是给将来留位，现在做会多一层生命周期负担而收益为零；真需要多
+>   贡献者时再把接口指针换成 span，改动是局部的。
+> - 原写「缺 step 时 assert」。放弃：headless / UI-only 帧合法地什么都不录，断言会
+>   把合法帧判成错误。现在的诚实说法是「每个阶段都被无条件调用，这一步做什么是
+>   host 的事」。
 
 **V1 — 主 view 身份单一来源（纯删除）**
 

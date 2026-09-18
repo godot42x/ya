@@ -74,6 +74,13 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
     需要的东西要么进 View 数据（上面的 scene resources / clock），要么在构造时注入
     （`DebugRenderSystem` 走 InitDesc）。`getGameplayResourceBinding()` 这类只有声明没有
     消费者的接口方法，出现即删——否则它会成为下一个“录制期全局查询”的入口。
+16. 一帧的录制顺序只写在一个地方：`RenderFrameCoordinator::record`。host 通过
+    `IFrameRecordExtensions`（`recordViewCompose` / `recordBeforeDisplayExtensions` /
+    `recordDisplayExtensions` / `appendDisplayCapture`）在这些阶段里录自己的东西，
+    阶段名是 Render3D 的词汇。**不要**把 `std::function` 放进 `RenderFramePlan`：
+    plan 是数据，行为挂在数据上会让顺序一半在 host 构造处、一半在 renderer 调用处，
+    两边都读不出完整时序。每个阶段无条件被调用，“这一步什么都不录”用默认空实现表达
+    （headless / UI-only 帧合法如此），不要用断言把合法帧判成错误。
 
 ## 目录锚点
 

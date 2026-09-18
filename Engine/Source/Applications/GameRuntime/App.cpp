@@ -382,25 +382,46 @@ void App::prepareModulesForRender(float dt)
     }
 }
 
-void App::recordModuleViewportCompose(ICommandBuffer& commandBuffer, float dt)
+void App::recordViewCompose(ICommandBuffer& cmdBuf, float deltaTime)
 {
     for (const auto& slot : _modules) {
-        getRuntimeModule(slot.module)->onViewportCompose(*this, commandBuffer, dt);
+        getRuntimeModule(slot.module)->onViewportCompose(*this, cmdBuf, deltaTime);
     }
 }
 
-void App::recordModuleBeforePresentation(ICommandBuffer& commandBuffer, float dt)
+void App::recordBeforeDisplayExtensions(ICommandBuffer& cmdBuf, float deltaTime)
 {
     for (const auto& slot : _modules) {
-        getRuntimeModule(slot.module)->onBeforePresentation(*this, commandBuffer, dt);
+        getRuntimeModule(slot.module)->onBeforePresentation(*this, cmdBuf, deltaTime);
     }
 }
 
-void App::recordModulePresentation(ICommandBuffer& commandBuffer, float dt)
+void App::recordDisplayExtensions(ICommandBuffer& cmdBuf, float deltaTime)
 {
     for (const auto& slot : _modules) {
-        getRuntimeModule(slot.module)->onPresentation(*this, commandBuffer, dt);
+        getRuntimeModule(slot.module)->onPresentation(*this, cmdBuf, deltaTime);
     }
+}
+
+bool App::appendDisplayCapture(RenderGraph&    graph,
+                               RGTextureHandle presentationOutput,
+                               Extent2D        presentationExtent)
+{
+    // Automation's screenshot pass. Both the config-driven capture and the
+    // control-service request append one; the graph reads its output when
+    // either did.
+    bool bAppended = AppAutomation::appendPresentationCapture(getHostTick(),
+                                                              graph,
+                                                              presentationOutput,
+                                                              presentationExtent);
+    if (auto* automationControl = getAutomationControlService()) {
+        bAppended = automationControl->appendPresentationCapture(getHostTick(),
+                                                                graph,
+                                                                presentationOutput,
+                                                                presentationExtent) ||
+                    bAppended;
+    }
+    return bAppended;
 }
 
 void App::presentModuleExtras(float dt)

@@ -12,6 +12,7 @@
 #include "GameRuntime/AppOptions.h"
 #include "GameRuntime/AppRenderServices.h"
 #include "Render3D/Common/RenderRuntimeHostServices.h"
+#include "Render3D/Common/FrameRecordExtensions.h"
 #include "GameRuntime/AppSceneServices.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "Core/Common/AppState.h"
@@ -59,7 +60,8 @@ enum AppMode : int
     Drawing,
 };
 
-struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
+struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
+                                 public IFrameRecordExtensions
 {
     friend class GameRuntimeTickOrchestrator;
     friend class AppModuleTestAccess;
@@ -295,9 +297,15 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     [[nodiscard]] bool dispatchInputFallbackEvent(const Event& event);
     void tickModules(float dt);
     void prepareModulesForRender(float dt);
-    void recordModuleViewportCompose(ICommandBuffer& commandBuffer, float dt);
-    void recordModuleBeforePresentation(ICommandBuffer& commandBuffer, float dt);
-    void recordModulePresentation(ICommandBuffer& commandBuffer, float dt);
+    /// IFrameRecordExtensions: the host's contribution to the renderer's record
+    /// order. Each stage loops the attached runtime modules, which is where the
+    /// editor records its chrome and overlays; capture is automation's.
+    void recordViewCompose(ICommandBuffer& cmdBuf, float deltaTime) override;
+    void recordBeforeDisplayExtensions(ICommandBuffer& cmdBuf, float deltaTime) override;
+    void recordDisplayExtensions(ICommandBuffer& cmdBuf, float deltaTime) override;
+    [[nodiscard]] bool appendDisplayCapture(RenderGraph& graph,
+                                            RGTextureHandle presentationOutput,
+                                            Extent2D presentationExtent) override;
     void presentModuleExtras(float dt);
     [[nodiscard]] bool notifyModulesBeforeAppStateChange(AppState nextState);
     void notifyModulesAfterAppStateChange(AppState previousState);

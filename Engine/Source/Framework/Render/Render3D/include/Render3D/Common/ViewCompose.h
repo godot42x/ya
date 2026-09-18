@@ -38,7 +38,6 @@ YA_RENDER_3D_API void recordCameraViewCompose(ICommandBuffer*                   
                                               RenderTexture*                          cameraDisplayRT,
                                               const UIFrameSnapshot*                  uiFrameSnapshot,
                                               Extent2D                                logicalViewportExtent,
-                                              const ViewComposeInput&                 viewCompose,
                                               std::span<const ViewDisplayInsetImage>  insets = {});
 
 } // namespace ya

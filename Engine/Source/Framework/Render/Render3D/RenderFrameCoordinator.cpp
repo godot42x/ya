@@ -98,10 +98,25 @@ RecordedFrame RenderFrameCoordinator::record(const RenderFramePlan& plan)
     YA_PROFILE_SCOPE("RenderFrameCoordinator::record");
     YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    // graphics → world graph into this camera's offscreen RT
-    // UI → game UI onto that RT (after post, never into bloom)
-    // view compose → editor overlays onto that RT
-    // display compose → PresentationGraphService onto swapchain[imageIndex]
+    // The whole record order is spelled out here, in the order it happens, and
+    // the host's contribution enters through `recordExtensions` at the points
+    // below. Before, the order was split: the host assembled callbacks into
+    // the plan, and this function decided where they ran, so neither file
+    // showed the sequence.
+    //
+    //   graphics       → world graph into the display root's offscreen RT
+    //   UI             → game UI onto that RT (after post, never into bloom)
+    //   view compose   → View insets, then the host's View-compose stage
+    //   display compose→ PresentationGraphService onto swapchain[imageIndex],
+    //                    running the host's display stages inside it
+    //   capture        → the host's appendDisplayCapture, inside display
+    //                    compose (automation screenshots)
+    //
+    // Every stage is called unconditionally; what happens at each is the
+    // host's, and a host that records nothing there is a legitimate frame
+    // (headless, or UI-only). The host also cannot reorder these, because the
+    // plan no longer names an order.
+    //
     // Acquire/present stay on the host FPresentFrame coordinator.
 
     // The View whose output the host viewport shows. It is the plan's answer
@@ -207,10 +222,12 @@ RecordedFrame RenderFrameCoordinator::record(const RenderFramePlan& plan)
                             _device->getViewportDisplayImageShared().get(),
                             plan.frame.uiFrameSnapshot,
                             logicalViewportExtent,
-                            plan.viewCompose,
                             insetImages);
+    if (plan.recordExtensions) {
+        plan.recordExtensions->recordViewCompose(*cmdBuf, plan.frame.deltaTime);
+    }
     _device->_presentationGraphService.recordDisplayCompose(plan.frame.deltaTime,
-                                                            plan.displayCompose.extensions,
+                                                            plan.recordExtensions,
                                                             cmdBuf.get());
 
     const uint32_t flightIndex = plan.frame.flightIndex;

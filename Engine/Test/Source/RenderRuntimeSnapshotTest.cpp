@@ -79,8 +79,10 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsFrameViewDisplayPresent)
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.sceneRender), ExtractedSceneRender>);
     static_assert(std::is_same_v<decltype(ExtractedSceneRender{}.views()), const std::vector<SceneViewRecording>&>);
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.viewCompose), ViewComposeInput>);
-    static_assert(std::is_same_v<decltype(RenderFramePlan{}.displayCompose), DisplayComposeInput>);
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.present), PresentFrameInput>);
+    /// The plan carries behavior only as one named interface: the stages live
+    /// in the interface and their order lives in the coordinator.
+    static_assert(std::is_same_v<decltype(RenderFramePlan{}.recordExtensions), IFrameRecordExtensions*>);
     /// One declaration type: the plan entry holds the desc verbatim and only
     /// adds its own output identity and bookkeeping.
     static_assert(std::is_same_v<decltype(SceneViewportTask{}.desc), SceneViewDesc>);
@@ -99,14 +101,13 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsFrameViewDisplayPresent)
     RenderFramePlan plan{
         .frame          = {.deltaTime = 0.016f},
         .viewCompose    = {},
-        .displayCompose = {},
         .present        = {.surface = nullptr, .imageIndex = -1},
     };
 
     EXPECT_FLOAT_EQ(plan.frame.deltaTime, 0.016f);
     EXPECT_TRUE(plan.viewCompose.empty());
     EXPECT_TRUE(plan.viewCompose.insets.empty());
-    EXPECT_TRUE(plan.displayCompose.extensions.empty());
+    EXPECT_EQ(plan.recordExtensions, nullptr);
     EXPECT_EQ(plan.present.surface, nullptr);
     EXPECT_EQ(plan.present.imageIndex, -1);
     EXPECT_TRUE(plan.sceneRender.empty());
