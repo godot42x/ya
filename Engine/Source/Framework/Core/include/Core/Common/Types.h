@@ -27,14 +27,19 @@ struct Extent2D
     }
 };
 
+/// Rectangle in logical pixels. Members are default-initialized because a
+/// Rect2D is often a member that only receives a real value after the first
+/// layout tick: glm::vec2 has a trivial default constructor, so an
+/// uninitialized Rect2D would hold garbage (commonly denormals that still
+/// compare greater than zero) instead of "no rectangle yet".
 struct Rect2D
 {
     union
     {
-        glm::vec2 pos;
+        glm::vec2 pos{0.0f};
         glm::vec2 offset;
     };
-    glm::vec2 extent;
+    glm::vec2 extent{0.0f};
 
     Extent2D extent2D() { return Extent2D::fromVec2(extent); }
 };

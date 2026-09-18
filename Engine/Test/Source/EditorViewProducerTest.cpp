@@ -104,6 +104,30 @@ TEST(EditorViewProducerTest, AuthoringViewportFallsBackToItsDefaultSizeBeforeLay
     EXPECT_FLOAT_EQ(primary->viewportRect.extent.y, declared.extent.y);
 }
 
+TEST(EditorViewProducerTest, PanelGeometryTooSmallForAPixelDoesNotBecomeTheViewRect)
+{
+    App             app;
+    EditorLayer     layer(&app);
+    EditorViewProducer producer;
+    producer.bind(app, layer);
+
+    // A collapsed panel, or geometry that was never written, reports extents
+    // that pass a plain "greater than zero" test and then truncate to a
+    // zero-sized View -- which cannot be sized into render targets.
+    layer.notifyViewportWidgetRect(Rect2D{.pos = {0.0f, 0.0f}, .extent = {0.4f, 1.4e-43f}});
+
+    Scene              scene("Authoring");
+    SceneViewCollector collector;
+    producer.collectSceneViews(makeEditorContext(scene), collector);
+
+    const SceneViewDesc* primary = findView(collector, kPrimarySceneViewId);
+    ASSERT_NE(primary, nullptr);
+    const Extent2D declaredPixels = Extent2D::fromVec2(primary->viewportRect.extent);
+    EXPECT_GT(declaredPixels.width, 0u);
+    EXPECT_GT(declaredPixels.height, 0u);
+    EXPECT_TRUE(layer.describesPixels(layer.getViewportRect()));
+}
+
 TEST(EditorViewProducerTest, GizmoViewOptionOnlyReachesViewsThatAskForIt)
 {
     App             app;

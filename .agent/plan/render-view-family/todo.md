@@ -94,6 +94,7 @@
 - [x] 4.0.3 4d-2：`EditorViewProducer` 声明编辑器两个 view（作者视口 + 选中相机的预览 inset）；删 `bCameraPreviewHostOwned` / `cameraPreviewEntityUUID` / 宿主铸造的 `kHostOverlayPreviewViewId`；`resolvePreviewCamera` / `cameraProjectionForOutput` 移入编辑器，FOV 线框移到编辑器 world overlay pass；`SceneViewDesc` 补 `features` 与 `viewOwner`。
 - [x] 4.0.3 4d-3a：删 `bShowEditorGizmos` 格子（开关归 `EditorLayer`，声明方读它而不是 App）；automation 的 `set_editor_gizmos_visible` 经 `IEditorAutomationControl` 打到编辑器；游戏视口不再受编辑器开关影响。
 - [x] 4.0.3 4d-3b：作者视口 rect 由声明方给出（编辑器不再写 `setViewportRect`，pending-resize 同步与 `onViewportResized` 删除）；device extent 跟随主 view 声明；automation 的 resize 只改宿主视图几何。
+- [x] 4.0.3 4d-3 收口：一条 View 声明必须描述整像素——`Rect2D` 成员默认初始化（关闭未初始化几何这一类坑）；`EditorLayer::describesPixels()` 要求有限且至少一像素，未布局/折叠面板回落默认尺寸；`SceneRenderScheduler::submit()` 拒绝非有限或截断为 0×0 的声明。修复 4d-3b 引入的编辑器首帧 exit 255 崩溃。
 - [ ] 4.0.3 checkpoint 5：view 身份改 owner-scoped `SceneViewKey`，并按此建立 `ViewHistoryStore` 稳定键（排在 4d 之后）。
 
 ## R3

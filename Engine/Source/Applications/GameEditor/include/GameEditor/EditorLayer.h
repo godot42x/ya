@@ -22,6 +22,7 @@
 #include "Render3D/Common/RenderViewportSnapshot.h"
 
 #include <algorithm>
+#include <cmath>
 #include <array>
 #include <functional>
 #include <string>
@@ -320,15 +321,29 @@ struct EditorLayer
     [[nodiscard]] bool defaultScenePathExists() const;
 
     /// The editor's authoring panel geometry: what the editor declares as its
-    /// authoring View's rect. Before the first layout the panel has no rect, so
-    /// the editor's own default size stands in and a View is never declared
-    /// with an empty rect.
+    /// authoring View's rect. A declared View rect has to describe whole pixels
+    /// (the render graph sizes the View's textures from it), so a panel that has
+    /// not been laid out yet -- or one too small to hold a pixel -- falls back to
+    /// the editor's own default size instead of declaring a rect that rounds to
+    /// nothing.
     [[nodiscard]] Rect2D getViewportRect() const
     {
-        if (viewportRect.extent.x > 0.0f && viewportRect.extent.y > 0.0f) {
+        if (describesPixels(viewportRect)) {
             return viewportRect;
         }
         return Rect2D{.pos = {0.0f, 0.0f}, .extent = _viewportSize};
+    }
+
+    /// True when a rect is finite and at least one whole pixel wide and tall on
+    /// both axes. A positive comparison alone is not enough: uninitialized or
+    /// sub-pixel geometry passes it and then rounds to a zero-sized View.
+    [[nodiscard]] static bool describesPixels(const Rect2D& rect)
+    {
+        if (!std::isfinite(rect.extent.x) || !std::isfinite(rect.extent.y)) {
+            return false;
+        }
+        const Extent2D pixelExtent = Extent2D::fromVec2(rect.extent);
+        return pixelExtent.width > 0 && pixelExtent.height > 0;
     }
 
     bool screenToViewport(float screenX, float screenY, float& outX, float& outY) const;

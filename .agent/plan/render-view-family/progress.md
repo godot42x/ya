@@ -13,6 +13,16 @@
 
 ## 2026-09-17 checkpoint：View 声明 / 收集边界 review（无代码改动）
 
+## 2026-09-18 checkpoint：一条 View 声明必须描述整像素（4d-3 收口）
+
+- 触发：4d-3b 落地后，`run`（游戏）紧接 `run-editor` 会让编辑器以 exit 255 退出（连中 3 次），单独跑编辑器则正常。崩溃报告 `EXC_BREAKPOINT`，栈是 `RenderGraph::createTexture`（`RenderGraph.cpp:1027` 的 extent 非零断言）← `SSAOStage::appendGraphPass` ← `DeferredFrameGraphOrchestrator::build` ← `tickRender`。
+- 根因：`Rect2D` 没有默认成员初始化器、glm 默认构造平凡，于是 `EditorLayer` 的 `viewportRect` / `_viewportMouseRect` / `_viewportBounds[2]` 是未初始化内存；未初始化浮点常是**非规格化小数**（观测到位模式 `0x00000096` / `0x00000001`，另一次是 `(0, 1.17e27)`），`extent > 0.0f` 判真，于是「还没布局的作者视口」被当成有尺寸；`seal()` 的 `Extent2D::fromVec2` 截断成 0×0，进到 SSAO 的 persistent texture 时命中断言。4d-2 及之前同一根因经 pending-resize 传播（只在尺寸变化且鼠标未捕获时），4d-3b 把声明提到每帧，垃圾值就每帧进图。
+- 处置三处（缺一不可）：① `Rect2D` 成员默认初始化——类型本身不该能是垃圾，一处覆盖仓库里 13 个同类声明；② `EditorLayer::describesPixels()`——rect 必须有限且至少一整个像素，`notifyViewportWidgetRect` 与 `getViewportRect` 都用它，未布局/折叠面板回落到编辑器默认尺寸；③ `SceneRenderScheduler::submit()` 拒绝非有限或截断后为 0×0 的声明——View 的贴图尺寸来自这个 rect，"描述不了一个像素的声明不是 View"，失败留在声明边界。
+- 测试数据随之修正：`RenderRuntimeSnapshotTest` / `ViewFamilyRendererTest` 原来有 11 处不带 rect 的 `SceneViewDesc{.scene=..., .viewId=...}`，在新契约下不可受理，改为共用的 `makeView(scene, viewId)`（声明一个 1280×720 的合法 View）。新增 `HostSceneExtractTest.DeclaringWithoutAWholePixelIsRejected`（亚像素与非规格化小数被拒、1 像素通过）与 `EditorViewProducerTest.PanelGeometryTooSmallForAPixelDoesNotBecomeTheViewRect`。
+- 验收：修复前「游戏→编辑器」3/3 崩溃；修复后同一序列 8/8 通过（5 轮 + 3 轮），editor 与 runtime 的 viewport 截图仍与 4d-3b 逐字节相同（`1bfb16e7ca543abb7b517325df508b90` / `1c6668976be1cdd5d755d1f1365700f7`）；`ya-render-3d-test` 174/174；`ya-testing` 相关滤镜 103/103。
+- 排查方法记入 `.agent/memories/uninitialized_rect_and_view_rect_contract.md`：调试构建的断言文本会随异步日志丢失，用 `atos -o <debug dylib> -l <image base> <faulting addr>` 从 .ips 直接反查源码行；lldb 会改变时序与堆布局从而掩盖该 bug；只在出错条件命中时写 stderr 诊断，从声明侧与消费侧同时取值。
+- 对本计划的影响（口径修正）：4d-3b 的验收当时只跑了「单独 editor」的 smoke，把一次「游戏→编辑器」的 255 当成偶发；这一刀把该序列纳入常规验证。声明语义也补上一条此前没写下的不变量：**View 的 rect 是整数像素语义**（`> 0` 不等于「有一像素」）。
+
 ## 2026-09-18 checkpoint：shadow 的准备结果显式回传（4.0.2 C 收口 6b）
 
 - 唯一目标：删掉计划点名的另一半隐式 current View——`BasicShadowMapTechnique` 记住「上一次 prepare 的是哪个 view slot、其中有多少盏点光」并在 append 时复用。与 6a 的差别是这一半不是死状态（它真的被读），所以要把 prepare 的结果显式传回去。

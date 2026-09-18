@@ -3,6 +3,7 @@
 #include "Scene/Core/Scene.h"
 
 #include <unordered_map>
+#include <cmath>
 #include <utility>
 
 namespace ya
@@ -72,6 +73,20 @@ void SceneRenderScheduler::beginTick(uint64_t hostTick)
 bool SceneRenderScheduler::submit(SceneViewDesc desc)
 {
     if (!_tickOpen || !desc.scene || desc.viewId == 0) {
+        return false;
+    }
+
+    // A View's textures are sized from its rect, so a declaration that cannot
+    // describe a single pixel (or is not a finite rect at all) is not a View.
+    // Rejecting it here keeps the failure at the declaration edge instead of
+    // letting it surface as an unsized resource in the middle of graph
+    // building.
+    const glm::vec2 declaredExtent = desc.viewportRect.extent;
+    if (!std::isfinite(declaredExtent.x) || !std::isfinite(declaredExtent.y)) {
+        return false;
+    }
+    const Extent2D declaredPixels = Extent2D::fromVec2(declaredExtent);
+    if (declaredPixels.width == 0 || declaredPixels.height == 0) {
         return false;
     }
 

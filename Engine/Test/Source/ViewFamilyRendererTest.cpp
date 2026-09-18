@@ -11,6 +11,21 @@
 
 namespace ya
 {
+namespace
+{
+
+/// A declaration the scheduler may accept: an owned Scene, a view id, and a
+/// View rect that describes at least one pixel.
+SceneViewDesc makeView(Scene* scene, SceneViewId viewId)
+{
+    return SceneViewDesc{
+        .scene        = scene,
+        .viewId       = viewId,
+        .viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
+    };
+}
+
+} // namespace
 
 TEST(ViewFamilyRendererTest, DualViewExportNamesStayUniqueInOneFamilyGraph)
 {
@@ -34,8 +49,8 @@ TEST(ViewFamilyRendererTest, SameSceneDualViewSealsOneFamilyPlan)
     SceneRenderScheduler scheduler;
     scheduler.beginTick(7);
 
-    ASSERT_TRUE(scheduler.submit(SceneViewDesc{.scene = &scene, .viewId = 11}));
-    ASSERT_TRUE(scheduler.submit(SceneViewDesc{.scene = &scene, .viewId = 12}));
+    ASSERT_TRUE(scheduler.submit(makeView(&scene, 11)));
+    ASSERT_TRUE(scheduler.submit(makeView(&scene, 12)));
 
     const ExtractedSceneRender extracted = buildSceneSnapshots(
         scheduler.seal(), [](Scene&) { return std::make_shared<const SceneSnapshot>(); });
@@ -54,8 +69,8 @@ TEST(ViewFamilyRendererTest, DualSceneSealsTwoFamilyPlans)
     SceneRenderScheduler scheduler;
     scheduler.beginTick(8);
 
-    ASSERT_TRUE(scheduler.submit(SceneViewDesc{.scene = &sceneA, .viewId = 11}));
-    ASSERT_TRUE(scheduler.submit(SceneViewDesc{.scene = &sceneB, .viewId = 21}));
+    ASSERT_TRUE(scheduler.submit(makeView(&sceneA, 11)));
+    ASSERT_TRUE(scheduler.submit(makeView(&sceneB, 21)));
 
     const ExtractedSceneRender extracted = buildSceneSnapshots(
         scheduler.seal(), [](Scene&) { return std::make_shared<const SceneSnapshot>(); });

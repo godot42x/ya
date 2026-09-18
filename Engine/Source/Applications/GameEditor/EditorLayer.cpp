@@ -157,8 +157,10 @@ void EditorLayer::notifyViewportWidgetRect(const Rect2D& rect)
 
     // Panel geometry only. The editor declares its authoring View with this
     // rect, so a change here is a declaration fact, not something to push into
-    // host state and read back.
-    if (rect.extent.x > 0.0f && rect.extent.y > 0.0f) {
+    // host state and read back. The default only follows a rect that can hold a
+    // whole pixel: the tab reports zero-sized geometry while it is collapsed or
+    // not yet laid out, and that must not become the editor's view size.
+    if (describesPixels(rect)) {
         _viewportSize = rect.extent;
     }
 }

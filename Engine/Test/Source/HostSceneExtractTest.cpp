@@ -170,4 +170,30 @@ TEST(HostSceneExtractTest, DeclaringOutsideATickIsRejected)
     EXPECT_FALSE(declareAll(scheduler, views));
 }
 
+TEST(HostSceneExtractTest, DeclaringWithoutAWholePixelIsRejected)
+{
+    Scene scene("Authoring");
+
+    // A View's textures are sized from its rect. Sub-pixel geometry -- what an
+    // unlaid-out or collapsed panel reports, and what uninitialized geometry
+    // looks like -- truncates to nothing, so it is not a View at all.
+    SceneViewDesc subPixel = makeViewDesc(scene, 11, glm::vec3(0.0f));
+    subPixel.viewportRect.extent = {0.4f, 0.4f};
+
+    SceneViewDesc denormal = makeViewDesc(scene, 12, glm::vec3(0.0f));
+    denormal.viewportRect.extent = {1.4e-43f, 1.4e-45f};
+
+    SceneRenderScheduler scheduler;
+    scheduler.beginTick(5);
+    EXPECT_FALSE(scheduler.submit(subPixel));
+    EXPECT_FALSE(scheduler.submit(denormal));
+
+    // One pixel is enough, so a genuinely tiny panel still renders.
+    SceneViewDesc onePixel = makeViewDesc(scene, 13, glm::vec3(0.0f));
+    onePixel.viewportRect.extent = {1.2f, 1.2f};
+    EXPECT_TRUE(scheduler.submit(onePixel));
+
+    ASSERT_EQ(scheduler.seal().viewportTasks.size(), 1u);
+}
+
 } // namespace ya

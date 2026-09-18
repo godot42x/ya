@@ -18,6 +18,18 @@ namespace ya
 namespace
 {
 
+/// A declaration the scheduler may accept: an owned Scene, a view id, and a
+/// View rect that describes at least one pixel, because a View's textures are
+/// sized from its rect.
+SceneViewDesc makeView(Scene* scene, SceneViewId viewId)
+{
+    return SceneViewDesc{
+        .scene        = scene,
+        .viewId       = viewId,
+        .viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
+    };
+}
+
 /// Seal and run the explicit extraction step with stub content. Most plan tests
 /// only care about the structure seal() grouped, not about what the Scene holds.
 ExtractedSceneRender sealWithEmptySnapshots(SceneRenderScheduler& scheduler)
@@ -115,8 +127,8 @@ TEST(RenderRuntimeSnapshotTest, EveryTaskCarriesTheSceneItsDeclarationNamed)
 
     SceneRenderScheduler scheduler;
     scheduler.beginTick(21);
-    ASSERT_TRUE(scheduler.submit(SceneViewDesc{.scene = &sceneA, .viewId = 11}));
-    ASSERT_TRUE(scheduler.submit(SceneViewDesc{.scene = &sceneB, .viewId = 21}));
+    ASSERT_TRUE(scheduler.submit(makeView(&sceneA, 11)));
+    ASSERT_TRUE(scheduler.submit(makeView(&sceneB, 21)));
 
     const ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
     const SceneRenderPlan&      plan      = extracted.plan();
@@ -138,8 +150,8 @@ TEST(RenderRuntimeSnapshotTest, SameSceneViewsShareOneSnapshotAndScene)
 
     SceneRenderScheduler scheduler;
     scheduler.beginTick(22);
-    ASSERT_TRUE(scheduler.submit(SceneViewDesc{.scene = &scene, .viewId = 11}));
-    ASSERT_TRUE(scheduler.submit(SceneViewDesc{.scene = &scene, .viewId = 12}));
+    ASSERT_TRUE(scheduler.submit(makeView(&scene, 11)));
+    ASSERT_TRUE(scheduler.submit(makeView(&scene, 12)));
 
     const ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
     const SceneRenderPlan&      plan      = extracted.plan();
@@ -212,7 +224,11 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
 
     auto makeRequest = [](Scene* scene, SceneViewId viewId)
     {
-        return SceneViewDesc{.scene = scene, .viewId = viewId};
+        return SceneViewDesc{
+            .scene        = scene,
+            .viewId       = viewId,
+            .viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
+        };
     };
 
     ASSERT_TRUE(scheduler.submit(makeRequest(&sceneA, 11)));
@@ -307,6 +323,9 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionC
         request.scene = &scene;
         request.sceneRevision = revision;
         request.viewId = viewId;
+        // A declaration a scheduler may accept: a View rect has to describe at
+        // least one pixel, since its textures are sized from it.
+        request.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
         return request;
     };
 
@@ -345,9 +364,9 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDropsViewsOfUnresolvedScene)
 
     scheduler.beginTick(11);
 
-    ASSERT_TRUE(scheduler.submit(SceneViewDesc{.scene = &sceneWithContent, .viewId = 11}));
-    ASSERT_TRUE(scheduler.submit(SceneViewDesc{.scene = &sceneWithContent, .viewId = 12}));
-    ASSERT_TRUE(scheduler.submit(SceneViewDesc{.scene = &sceneWithoutContent, .viewId = 21}));
+    ASSERT_TRUE(scheduler.submit(makeView(&sceneWithContent, 11)));
+    ASSERT_TRUE(scheduler.submit(makeView(&sceneWithContent, 12)));
+    ASSERT_TRUE(scheduler.submit(makeView(&sceneWithoutContent, 21)));
 
     SceneRenderPlan sealed = scheduler.seal();
     ASSERT_EQ(sealed.viewFamilies.size(), 2u);
@@ -473,6 +492,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRejectsRequestsOutsideFrame)
     SceneViewDesc request;
     request.scene = &scene;
     request.viewId = 1;
+    request.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
 
     EXPECT_FALSE(scheduler.submit(request));
     scheduler.beginTick(7);
