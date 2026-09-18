@@ -1,6 +1,6 @@
 {
   "plan": "source-layout-subtraction",
-  "status": "s1_landed",
+  "status": "s1_s5_landed",
   "features": [
     {"id": "public_header_single_home", "phase": "S1", "status": "verified", "evidence": ["493 forwarding stubs deleted", "476 public headers relocated onto their public path", "0 stubs remain under include/", "0 physical headers with multiple public paths", "550 public headers, 18 private headers kept at module roots"]},
     {"id": "public_path_is_the_include_path", "phase": "S1", "status": "verified", "evidence": ["public path == path relative to the module include root", "232 files had includes rewritten to public paths", "no ../ include crosses a directory boundary"]},
@@ -11,8 +11,7 @@
     {"id": "aggregate_boundaries", "phase": "S2", "status": "not_started", "evidence": ["ya-engine publicly contains ya-game-runtime", "ya-gui-framework mixes GUI + app shell + module system", "ya-scene-core -> ya-gui-widgets", "ya-render-3d -> ya-gui-compose", "ya-rhi-backend-common depends on itself"]},
     {"id": "large_files", "phase": "S3", "status": "not_started", "evidence": ["EnvironmentLightingProcessor.cpp 2558", "RenderGraph.cpp 1987", "GUIAppHost.cpp 1910", "WidgetTree.cpp 1832", "UILayout.cpp 1774"]},
     {"id": "naming", "phase": "S4", "status": "not_started", "evidence": ["~150 role-suffix names: Manager/System/Registry/State/Stage/Host/Service/Context/Orchestrator"]},
-    {"id": "plan_dir", "phase": "S5", "status": "not_started", "evidence": ["22 active plan directories"]},
+    {"id": "plan_dir", "phase": "S5", "status": "verified", "evidence": ["25 active plan directories -> 12", "13 lines archived with a written reason each, in .agent/plan/AGENTS.md", "archive criteria: done / superseded / explicitly deferred", "4 skill references + 1 test comment repointed at archive paths", "9 of the remaining 12 still have open checkpoints, so the original '2-3 active lines' target was not pursued over hiding work"]},
     {"id": "preexisting_gui_failures", "phase": "out-of-scope", "status": "known", "evidence": ["ya-gui-widgets-test missing ya-gui-compose dep", "WidgetLayoutTest.DockTabBarStripDoubleClickFiresHostCallback trips the pointer-capture assert added in e1c93a0e, an ancestor of the S1 base commit"]}
   ]
 }
-

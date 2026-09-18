@@ -4,6 +4,11 @@
 
 让 GUI Framework + GameEditor 能顺着读完整 orchestration：`EditorSurface` 只做编排，tab 各自有 owner，目录不再说谎。不合并 `GUIApp` 与 `ya::App`。
 
+> 目录那一半已单独落地：`GameEditor/UI` 的 89 个平铺文件按关切拆成
+> `Shell/ Dock/ Tabs/ Sections/ Viewport/ Dialogs/ Ops/`，公开路径变成
+> `GameEditor/UI/<Group>/<Name>.h`。见 `.agent/plan/editor-ui-grouping/`。
+> 本线继续负责剩下的一半：谁在驱动、谁拥有 tab。
+
 ## 硬边界
 
 1. 不合并 `GUIWindowHost` 与 `ya::App` 的 present / 输入栈。两条产品线有意分叉：Workbench 保持 GUI closure；Editor 吃 3D viewport + swapchain。

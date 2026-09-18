@@ -317,7 +317,7 @@ TEST(GuiAnimationTest, RenderTransformReachesSubtreeItems)
 // time): a leaf transform animation repaints exactly the animating widget, while
 // a subtree-wide transform repaints the whole subtree. That ratio is the reason
 // HUD motion should animate leaves (button / knob / card) and that page-scale
-// transitions are the expensive case - see .agent/plan/gui-animation/plan.md.
+// transitions are the expensive case - see .agent/plan/archive/gui-animation/plan.md.
 TEST(GuiAnimationTest, RenderTransformCostModelIsLeafVsSubtree)
 {
     WidgetTree tree({.width = 800, .height = 600});

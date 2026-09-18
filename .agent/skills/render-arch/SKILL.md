@@ -43,7 +43,7 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
     不要把 View `post.toneMap` 或空 `RenderDesc` 默认值拿去 bind。`GUIRenderSurface` 只是 compose target，不 acquire/present、
     不读 live WidgetTree。Present 消费方只走 `IRenderSurfaceContext` / `ISwapchain` /
     `buildPresentationImages`，禁止 `as<VulkanSwapChain>()`。不要为 Material/UI 窗复制
-    Renderer。对象模型见 `./.agent/plan/gui-multi-os-window-editor/c2_view_model.md`
+    Renderer。对象模型见 `./.agent/plan/archive/gui-multi-os-window-editor/c2_view_model.md`
     与 `c2_present_compose_model.md`；R2 ownership 收口见
     `./.agent/plan/render-view-family/plan.md` 4.0.3。
 

@@ -110,7 +110,7 @@ Editor 全链路以 `Applications/GameEditor/EditorModule.cpp` 文件头注释�
 spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `WidgetTree`
 驱动。Surface 只编排 shell、dock persist、viewport host bridge 和 dialogs。
 禁止 `tab->sync`、禁止 Surface 持有 Tab 控件指针。不要再引入 `EditorPanel` 或中心
-事件总线。长线见 `.agent/plan/gui-editor-tab-lifecycle/`。
+事件总线。长线见 `.agent/plan/archive/gui-editor-tab-lifecycle/`。
 
 ## WidgetTree 模型
 
@@ -161,7 +161,7 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
 边界：框架只做 Slate 那一半（时钟 + easing + 少量可动画属性）。轨道/关键帧/
 clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结果通过
 **同一个可动画属性接缝**写回 widget，绝不在 widgets 内核里再造第二套
-属性/失效系统。设计记录见 `.agent/plan/gui-animation/plan.md`。
+属性/失效系统。设计记录见 `.agent/plan/archive/gui-animation/plan.md`。
 
 - 接缝（OCP）：一个 widget 类型用 `FUIAnimPropertyTable` 声明自己可被动画
   操纵的属性（own entries + base 链，见 `UIAnimation.h`）。驱动者（tween /
@@ -208,7 +208,7 @@ clip player 属于未来 Game UI 层（对标 UMG WidgetAnimation），评价结
   一个 `UITweenBehavior` 驱动自己声明的 `progress` 通道（`kAnimSwitchProgress`）：值立即
   翻转，knob 位移 + track 配色插值；静止时 `wantsTick()==false`，
   `setTransitionSeconds(0)` 可整体关掉动画。
-  哪些控件该默认携带动画、哪些应 opt-in，见 `.agent/plan/gui-animation/plan.md` §8。
+  哪些控件该默认携带动画、哪些应 opt-in，见 `.agent/plan/archive/gui-animation/plan.md` §8。
 - 零时长时钟语义：`duration<=0` 表示“无动画”，`getLerp()` 返回被放置的那个端点
   （play→1、playReverse→0、setLerp(v)→v）。不要写回“恒返回 1”，否则 instant 控件会被画成
   终态（已由 `ZeroLengthClockReportsTheEndpointItWasPlacedAt` 锁住）。
@@ -501,7 +501,7 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   `registerEditorActions`。`onAttached` 拉权威状态并订阅所属边界的 `MulticastDelegate`，
   `onDetached` 按 handle 退订。未选中 dock tab 是 detached subtree，不会 tick。
   不要再引入 `EditorPanel`、中心 MessageBus，或 `EditorTabRegistry` 那种 `std::function`
-  袋子。结构见 `.agent/plan/gui-editor-tab-lifecycle/`。
+  袋子。结构见 `.agent/plan/archive/gui-editor-tab-lifecycle/`。
 - 启动时 **WidgetTree 唯一 chrome**：整窗 default `EditorWindowSession`（持有 `EditorSurface`）+ `replayUIFrameSnapshot`；3D 仍离屏
   compose，树只采样那张 RT。`--editor-chrome=imgui` / `editor.chrome.host=imgui` 会被忽略并打 WARN。
 - WidgetTree 输入：`EditorInputNode` 绑 `EditorWindowSession*` → session `dispatchEvent` →

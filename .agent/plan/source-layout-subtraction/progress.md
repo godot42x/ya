@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-- S1 已完成并提交（两次提交，保留 blame）。S2–S5 未开始。
+- S1 已完成并提交（两次提交，保留 blame）。S2–S4 未开始。S5 已落地。
 - 已知且与本线无关的既有失败：见文末"环境现状"。
 
 ## 2026-09-18 checkpoint：S1 公开头唯一物理位置
@@ -76,6 +76,59 @@
 - 结构自检：0 转发 stub、0 多公开路径、0 未解析 include（第三方除外）、
   0 失效 `add_headerfiles` 模式。
 
+## 2026-09-18 checkpoint：S5 计划目录收敛
+
+### 唯一目标
+
+让 `./.agent/plan` 能一眼区分"现在要改什么"和"当初想过什么"：活跃目录只留
+仍有代码要改的线，已收口/被接手/显式延后的进 `./archive/`，并在
+`./AGENTS.md` 留一份活跃线入口表 + 归档理由表。
+
+### 归档判据（写进 `./AGENTS.md`）
+
+1. **已完成**：checkpoint 全绿，且结论已沉淀进 skill。
+2. **已交由别的线接手**：原方向被另一条活跃线的章节覆盖。
+3. **明确延后**：本轮该做的已落地，剩下的是显式推迟的层。
+
+### 归档明细（13 条）
+
+| 目录 | 判据 | 依据 |
+| --- | --- | --- |
+| `gui-editor-dock-layout` | 1 | 2/2 |
+| `gui-editor-tab-lifecycle` | 1 | 5/5，结论已进 `skills/gui-framework` |
+| `gui-framework-architecture-hardening` | 1 | 9/9 |
+| `gui-gallery-ux-pass` | 1 | 18/18 |
+| `gui-perf-observability` | 1 | 5/5 |
+| `gui-god-class-peel` | 1 | 3/3 |
+| `gui-multi-os-window-editor` | 1 | 50/50，多窗口能力已进代码 |
+| `model-instance-authoring` | 1 | 自述"已实现（本轮）" |
+| `editor-camera-body` | 1 | 代码已落地，仅剩人工目视确认 |
+| `gui-animation` | 1、3 | 框架层已落地并进 skill；Game UI 轨道层延后，记录在 `gui-invalidation-architecture/animation-integration.md` |
+| `gui-capability-gap` | 2 | 被 `gui-framework-editor-readiness`（Phase 8 移除 ImGui 双栈）接手 |
+| `render-pipeline-dedup-runtime-split` | 2 | 被 `render-view-family` §4.0.2 接手 |
+| `dockspace-node-tree` | 2 | 已由 `gui-editor-dock-layout` / `gui-editor-tab-lifecycle` 落地并收口 |
+
+### 保留 12 条活跃线
+
+`render-view-family`、`gui-framework-editor-readiness`、
+`gui-framework-editor-runtime-refactor`、`gui-kernel-ux-parity`、
+`gui-invalidation-architecture`、`gui-style-system-convergence`、
+`gui-anchor-to-slot`、`gui-editor-structure`、`font-framework-convergence`、
+`editor-undo-redo`、`source-layout-subtraction`、`editor-ui-grouping`。
+其中 9 条仍有开放 checkpoint，压到 2–3 条不现实；原计划里的"2–3 条"是理想值，
+不是本轮验收项。
+
+### 顺带修复的引用
+
+搬目录会打断指向它们的链接。同步修改 5 处：
+
+- `skills/gui-framework/SKILL.md` 4 处（`gui-editor-tab-lifecycle` ×2、
+  `gui-animation/plan.md` ×2）
+- `skills/render-arch/SKILL.md` 1 处（`gui-multi-os-window-editor/c2_view_model.md`）
+- `Engine/Test/Source/GuiAnimationTest.cpp` 注释 1 处
+
+理由：这些引用是"设计记录在这里"的指路牌。不跟着改，归档就等于把结论弄丢。
+
 ## 环境现状（与本线无关的既有失败，动手前先确认是否仍存在）
 
 1. `ya-gui-widgets-test` 编译失败：`Engine/Test/Source/GuiFrameInspectorTest.cpp`
@@ -87,4 +140,3 @@
    该断言由 `e1c93a0e [gui] crash on leftover pointer capture instead of eating
    the first click`（2026-09-17）引入，且是本次 S1 base 提交的祖先；S1 未触碰
    该测试与指针逻辑，故为既有失败。
-

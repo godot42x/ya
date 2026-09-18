@@ -37,3 +37,53 @@
 - `session_checklist.md`：每轮固定开工/收尾步骤。
 
 若某条计划暂时缺这些工件，后续迭代时应优先补齐，而不是继续只在单个 plan 文件上堆文字。
+
+## 当前活跃线
+
+只有下面这些目录代表"现在还有代码要改"的线。不在列表里的都在 `./archive/`，
+不需要读，也不要在那里继续追加进度。
+
+| 目录 | 主题 |
+| --- | --- |
+| `render-view-family/` | view/frame 语义拆分、`PreparedView`、RenderRuntime 状态与逻辑分离（开放项最多） |
+| `gui-framework-editor-readiness/` | retained GUI 承载完整编辑器的能力补齐，含 Phase 8 移除 ImGui 双栈 |
+| `gui-framework-editor-runtime-refactor/` | 编辑器向 GUI framework 收敛的运行期契约 |
+| `gui-kernel-ux-parity/` | 独立 GUI app 与引擎内 GUI 的 UX 对齐 |
+| `gui-invalidation-architecture/` | invalidate / dirty / 增量绘制与动画集成 |
+| `gui-style-system-convergence/` | style / theme 收敛 |
+| `gui-anchor-to-slot/` | slot-first layout 迁移尾巴 |
+| `gui-editor-structure/` | GameEditor 结构收敛 |
+| `font-framework-convergence/` | 字体栈收敛 |
+| `editor-undo-redo/` | 编辑器 undo/redo |
+| `source-layout-subtraction/` | 目录/头文件布局减法（S1 已落地，S2–S5 进行中） |
+| `editor-ui-grouping/` | GameEditor/UI 关切分组（G1 已落地） |
+
+## 归档判据
+
+一条线进 `./archive/` 的条件（满足任一即可，理由记在下表；不要在每个被归档的
+目录里再写一份）：
+
+1. **已完成**：checkpoint 全绿，且结论已沉淀进 skill（没有 skill 吸收的要先吸收再归档）。
+2. **已交由别的线接手**：原计划的方向被另一条活跃线的章节覆盖，原目录只留历史。
+3. **明确延后**：本轮该做的已落地，剩下的是被显式推迟的层，且不打算近期开工。
+
+归档 ≠ 删除。历史命令、当时的 baseline、被推翻的方案都保留，方便查"当初为什么
+不那样做"。但归档目录里的路径可能指向已经不存在的位置。
+
+### 2026-09-18 归档
+
+| 目录 | 理由 |
+| --- | --- |
+| `dockspace-node-tree/` | 已交由 `gui-editor-dock-layout` / `gui-editor-tab-lifecycle` 落地，两者均已收口（3） |
+| `gui-editor-dock-layout/` | 2/2 完成（1） |
+| `gui-editor-tab-lifecycle/` | 5/5 完成，结论已进 `skills/gui-framework`（1） |
+| `gui-framework-architecture-hardening/` | 9/9 完成（1） |
+| `gui-gallery-ux-pass/` | 18/18 完成（1） |
+| `gui-perf-observability/` | 5/5 完成（1） |
+| `gui-god-class-peel/` | 3/3 完成（1） |
+| `gui-multi-os-window-editor/` | 50/50 完成，多窗口能力已进代码（1） |
+| `model-instance-authoring/` | 自述"已实现（本轮）"（1） |
+| `editor-camera-body/` | 代码已落地；仅剩人工目视确认，不构成待规划项（1） |
+| `gui-animation/` | 框架层已落地并写进 skill；Game UI 轨道层显式延后，留在 `gui-invalidation-architecture/animation-integration.md`（1、3） |
+| `gui-capability-gap/` | 方向被 `gui-framework-editor-readiness`（Phase 8 移除 ImGui 双栈）接手（2） |
+| `render-pipeline-dedup-runtime-split/` | 被 `render-view-family` §4.0.2 明确接手（2） |
