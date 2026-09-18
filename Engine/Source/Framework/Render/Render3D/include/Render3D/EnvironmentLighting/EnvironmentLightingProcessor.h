@@ -16,6 +16,7 @@
 #include "RHI/Core/OffscreenJob.h"
 #include "RHI/Core/ImageResource.h"
 #include "RHI/Core/RenderTexture.h"
+#include "Render3D/Common/EnvironmentLightingSceneResources.h"
 #include "Render3D/Pipelines/CubeMap2PBRIrradianceMap.h"
 #include "Render3D/Pipelines/CubeMap2PBRPrefilteredEnv.h"
 #include "Render3D/Pipelines/EquidistantCylindrical2CubeMap.h"
@@ -195,21 +196,6 @@ struct EnvironmentLightingPreviewInfo
     bool                                    bHasIrradianceMap     = false;
     bool                                    bHasPrefilterMap      = false;
 };
-
-struct EnvironmentLightingSceneResources
-{
-    std::shared_ptr<ImageResource> cubemap = nullptr;
-    std::shared_ptr<ImageResource> irradiance = nullptr;
-    std::shared_ptr<ImageResource> prefilter = nullptr;
-    std::shared_ptr<RenderTexture> brdfLut = nullptr;
-
-    [[nodiscard]] bool isComplete() const
-    {
-        return cubemap && cubemap->isValid() && irradiance && irradiance->isValid() && prefilter && prefilter->isValid() &&
-               brdfLut && brdfLut->getImageView();
-    }
-};
-
 
 struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
 {

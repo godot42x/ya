@@ -71,9 +71,11 @@ TEST(RenderRuntimeSnapshotTest, EmptyDevicePublishesEmptyViewportResources)
     EXPECT_TRUE(targets.entries.empty());
 }
 
-TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsCameraViewDisplayPresent)
+TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsFrameViewDisplayPresent)
 {
-    static_assert(std::is_same_v<decltype(RenderFramePlan{}.camera), CameraFrameInput>);
+    /// The plan carries frame-level facts, not a camera: each View's camera is
+    /// on that View's own declaration and prepared data.
+    static_assert(std::is_same_v<decltype(RenderFramePlan{}.frame), FramePacket>);
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.sceneRender), ExtractedSceneRender>);
     static_assert(std::is_same_v<decltype(ExtractedSceneRender{}.views()), const std::vector<SceneViewRecording>&>);
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.viewCompose), ViewComposeInput>);
@@ -85,7 +87,7 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsCameraViewDisplayPresent)
     static_assert(std::is_same_v<decltype(SceneViewDesc{}.scene), Scene*>);
     static_assert(std::is_same_v<decltype(SceneSnapshotEntry{}.scene), Scene*>);
     static_assert(std::is_same_v<decltype(SceneViewRecording{}.task), const SceneViewportTask*>);
-    static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.camera), CameraFrameInput>);
+    static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.frame), const FramePacket*>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.submission), RenderSubmission*>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.view), RenderViewRecordingContext>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.derivedScene), Scene*>);
@@ -94,25 +96,14 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsCameraViewDisplayPresent)
     static_assert(!std::is_copy_constructible_v<ExtractedSceneRender>);
     static_assert(std::is_move_constructible_v<ExtractedSceneRender>);
 
-    const glm::mat4 view       = glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-    const glm::mat4 projection = glm::perspective(1.0f, 1.5f, 0.1f, 100.0f);
-
     RenderFramePlan plan{
-        .camera = {
-            .deltaTime      = 0.016f,
-            .view           = view,
-            .projection     = projection,
-            .viewProjection = makeCameraViewProjection(projection, view),
-            .viewportRect   = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
-        },
+        .frame          = {.deltaTime = 0.016f},
         .viewCompose    = {},
         .displayCompose = {},
         .present        = {.surface = nullptr, .imageIndex = -1},
     };
 
-    EXPECT_FLOAT_EQ(plan.camera.deltaTime, 0.016f);
-    EXPECT_EQ(plan.camera.viewProjection, makeCameraViewProjection(projection, view));
-    EXPECT_TRUE(plan.camera.hasOffscreenExtent());
+    EXPECT_FLOAT_EQ(plan.frame.deltaTime, 0.016f);
     EXPECT_TRUE(plan.viewCompose.empty());
     EXPECT_TRUE(plan.viewCompose.insets.empty());
     EXPECT_TRUE(plan.displayCompose.extensions.empty());
@@ -520,17 +511,14 @@ TEST(RenderRuntimeSnapshotTest, ExtractedSceneRenderPairsEveryTaskWithItsOwnFram
     EXPECT_EQ(extracted.views()[1].frameData, &frames[1]);
     EXPECT_EQ(extracted.displayRootTask(), &plan.viewportTasks[0]);
 
-    const CameraFrameInput host{
-        .view         = glm::mat4(1.0f),
-        .viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
-        .frameData    = &frames[0],
-    };
-    const CameraFrameInput cameraB = cameraForViewRecording(host, extracted.views()[1]);
-    EXPECT_EQ(cameraB.view, viewB);
-    EXPECT_NE(cameraB.view, host.view);
-    EXPECT_EQ(cameraB.frameData, &frames[1]);
-    EXPECT_FLOAT_EQ(cameraB.viewportRect.extent.x, 640.0f);
-    EXPECT_FLOAT_EQ(cameraB.viewportRect.extent.y, 360.0f);
+    // Each View is its own camera: the second View's matrices and extent are on
+    // its own declaration and its own prepared slot, so there is no host camera
+    // to copy and then override field by field.
+    EXPECT_EQ(plan.viewportTasks[1].desc.view, viewB);
+    EXPECT_NE(plan.viewportTasks[1].desc.view, plan.viewportTasks[0].desc.view);
+    EXPECT_EQ(plan.viewportTasks[1].output.extent.width, 640u);
+    EXPECT_EQ(plan.viewportTasks[1].output.extent.height, 360u);
+    EXPECT_EQ(extracted.views()[1].frameData, &frames[1]);
 }
 
 TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsSnapshotMetadataMismatch)
@@ -647,20 +635,12 @@ TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
     EXPECT_FLOAT_EQ(insets.front().destRect.pos.x, composeRect.pos.x);
     EXPECT_FLOAT_EQ(insets.front().destRect.pos.y, composeRect.pos.y);
 
-    RenderFrameData overlayFrame;
-    const SceneViewRecording recording{
-        .task      = &plan.viewportTasks[1],
-        .frameData = &overlayFrame,
-    };
-    CameraFrameInput host;
-    host.viewportRect = {.pos = {40.0f, 80.0f}, .extent = {1280.0f, 720.0f}};
-    const CameraFrameInput overlayCamera = cameraForViewRecording(host, recording);
-    EXPECT_FLOAT_EQ(overlayCamera.viewportRect.pos.x, 0.0f);
-    EXPECT_FLOAT_EQ(overlayCamera.viewportRect.pos.y, 0.0f);
-    EXPECT_FLOAT_EQ(overlayCamera.viewportRect.extent.x,
-                    static_cast<float>(plan.viewportTasks[1].output.extent.width));
-    EXPECT_NE(overlayCamera.viewportRect.pos.x, composeRect.pos.x);
-    EXPECT_LT(overlayCamera.viewportRect.extent.x, host.viewportRect.extent.x);
+    // The overlay View records into its own output extent, and its compose dest
+    // is a separate fact: the host view's rect plays no part in either.
+    EXPECT_EQ(plan.viewportTasks[1].output.extent.width, static_cast<uint32_t>(composeRect.extent.x));
+    EXPECT_NE(plan.viewportTasks[1].desc.composeRect.pos.x, plan.viewportTasks[1].desc.viewportRect.pos.x);
+    EXPECT_LT(static_cast<float>(plan.viewportTasks[1].output.extent.width),
+              plan.viewportTasks[0].output.extent.width);
 }
 
 } // namespace

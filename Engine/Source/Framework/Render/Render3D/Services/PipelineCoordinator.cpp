@@ -1,6 +1,5 @@
 #include "Render3D/Services/PipelineCoordinator.h"
 
-#include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/RenderRuntimeHostServices.h"
 #include "Render3D/Services/RenderSharedResourceProvider.h"
 #include "Render2D/Render2D.h"
@@ -29,7 +28,7 @@ void PipelineCoordinator::init(const InitDesc& desc)
     _render                = desc.render;
     _hostServices          = desc.hostServices;
     _sharedResourceProvider = desc.sharedResourceProvider;
-    _runtimeServices       = desc.runtimeServices;
+    _debugRenderSystem     = desc.debugRenderSystem;
     _reapplyViewportSink   = desc.reapplyViewportSink;
     _viewportWidth         = desc.viewportWidth;
     _viewportHeight        = desc.viewportHeight;
@@ -46,7 +45,7 @@ void PipelineCoordinator::shutdown()
     _render                = nullptr;
     _hostServices          = nullptr;
     _sharedResourceProvider = nullptr;
-    _runtimeServices       = nullptr;
+    _debugRenderSystem     = nullptr;
     _reapplyViewportSink   = {};
     _viewportWidth         = 0;
     _viewportHeight        = 0;
@@ -120,7 +119,6 @@ void PipelineCoordinator::initForwardPipeline(int windowWidth, int windowHeight)
         .windowW         = windowWidth,
         .windowH         = windowHeight,
         .shadowSettings  = _hostServices ? _hostServices->getShadowSettings() : nullptr,
-        .runtimeServices = _runtimeServices,
     });
 }
 
@@ -136,7 +134,7 @@ void PipelineCoordinator::initDeferredPipeline(int windowWidth, int windowHeight
         .environmentLightingDSL    = _sharedResourceProvider
                                          ? _sharedResourceProvider->getEnvironmentLightingDescriptorSetLayout()
                                          : nullptr,
-        .runtimeServices = _runtimeServices,
+        .debugRenderSystem         = _debugRenderSystem,
     });
 }
 

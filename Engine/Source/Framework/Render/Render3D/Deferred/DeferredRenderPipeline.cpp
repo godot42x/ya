@@ -759,7 +759,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _shadowSettings               = desc.shadowSettings;
     _automationShadowOverrides    = desc.automationShadowOverrides;
     _environmentLightingDSL       = desc.environmentLightingDSL;
-    _runtimeServices              = desc.runtimeServices;
+    _debugRenderSystem            = desc.debugRenderSystem;
     _pendingSettings.reset();
     _pendingResourceRefreshMask   = 0;
     _debugViews                   = {};
@@ -829,7 +829,7 @@ void DeferredRenderPipeline::initStages()
     syncShadowSettings();
 
     _overlayStage = ya::makeShared<ViewportOverlayStage>();
-    _overlayStage->setDebugRenderSystem(_runtimeServices ? &_runtimeServices->getDebugRenderSystem() : nullptr);
+    _overlayStage->setDebugRenderSystem(_debugRenderSystem);
     _overlayStage->init(_render, _frameResources->getSkyboxFrameDSL());
 
     refreshGBufferStageState();
@@ -876,7 +876,7 @@ void DeferredRenderPipeline::shutdown()
     _defaultSkyboxMesh = nullptr;
     _pendingSettings.reset();
     _environmentLightingDSL.reset();
-    _runtimeServices = nullptr;
+    _debugRenderSystem = nullptr;
     _render                       = nullptr;
 }
 
@@ -891,20 +891,18 @@ namespace
 RenderPipelineFrameContext makeDeferredViewFrameContext(const ViewFamilyRecordContext& ctx,
                                                         const SceneViewRecording& recording)
 {
-    const CameraFrameInput camera = cameraForViewRecording(ctx.hostCamera, recording);
-    Extent2D viewExtent           = Extent2D::fromVec2(camera.viewportRect.extent);
-    if (recording.task && recording.task->output.hasExtent()) {
-        viewExtent = recording.task->output.extent;
-    }
+    // The View's own declaration and prepared data are the camera; there is no
+    // host packet to copy and override field by field.
+    const Extent2D viewExtent = recording.task ? recording.task->output.extent : Extent2D{};
     const bool bDisplayRoot = recording.task && ctx.plan && recording.task == ctx.plan->displayRootTask();
     return RenderPipelineFrameContext{
         .cmdBuf                  = ctx.cmdBuf,
-        .camera                  = camera,
+        .frame                   = ctx.frame,
         .viewportOverlaySnapshot = bDisplayRoot ? ctx.overlaySnapshot : nullptr,
         .submission              = ctx.submission,
         .view                    = RenderViewRecordingContext{
             .task           = recording.task,
-            .frameData      = recording.frameData ? recording.frameData : camera.frameData,
+            .frameData      = recording.frameData,
             .viewportExtent = viewExtent,
         },
         .derivedScene            = recording.task ? recording.task->desc.scene : nullptr,
@@ -976,9 +974,6 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
 
         if (!preparedSkinning) {
             RenderViewRecordingContext view = branch.frame.view;
-            if (!view.frameData) {
-                view.frameData = branch.frame.camera.frameData;
-            }
             if (!_frameResources->prepareSkinning(*branch.frame.submission, view)) {
                 continue;
             }
@@ -1036,7 +1031,7 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
     for (const DeferredFamilyViewBranch& branch : liveBranches) {
         const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
         RenderViewOutput output = collectViewOutput(
-            execution, branch.graphResources, branch.frame.camera, branch.frame.view.task, viewId);
+            execution, branch.graphResources, branch.frame.view.task, viewId);
         const bool bDisplayRoot = branch.frame.view.task && ctx.plan &&
                                   branch.frame.view.task == ctx.plan->displayRootTask();
         if (bDisplayRoot) {
@@ -1077,29 +1072,26 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
 bool DeferredRenderPipeline::shouldSkipView(const RenderPipelineFrameContext& frame) const
 {
     YA_CORE_ASSERT(frame.cmdBuf, "DeferredRenderPipeline requires a command buffer");
-    return !frame.camera.hasOffscreenExtent() || !frame.camera.frameData;
+    return frame.view.viewportExtent.width == 0 || frame.view.viewportExtent.height == 0 ||
+           !frame.view.frameData;
 }
 
 void DeferredRenderPipeline::beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH)
 {
     captureShadowSettings(frame);
 
-    vpW = static_cast<uint32_t>(frame.camera.viewportRect.extent.x);
-    vpH = static_cast<uint32_t>(frame.camera.viewportRect.extent.y);
-    if (frame.view.viewportExtent.width > 0 && frame.view.viewportExtent.height > 0) {
-        vpW = frame.view.viewportExtent.width;
-        vpH = frame.view.viewportExtent.height;
-    }
+    vpW = frame.view.viewportExtent.width;
+    vpH = frame.view.viewportExtent.height;
 
-    _lastPointLightCount = frame.camera.frameData->numPointLights;
-    _lastDrawCount       = static_cast<uint32_t>(frame.camera.frameData->totalDrawCount());
+    _lastPointLightCount = frame.view.frameData->numPointLights;
+    _lastDrawCount       = static_cast<uint32_t>(frame.view.frameData->totalDrawCount());
 
     stageCtx = RenderStageContext{
         .cmdBuf         = frame.cmdBuf,
-        .frameData      = frame.camera.frameData,
-        .flightIndex    = frame.camera.flightIndex,
-        .frameIndex     = frame.camera.frameIndex,
-        .deltaTime      = frame.camera.deltaTime,
+        .frameData      = frame.view.frameData,
+        .flightIndex    = frame.frame ? frame.frame->flightIndex : 0,
+        .frameIndex     = frame.frame ? frame.frame->frameIndex : 0,
+        .deltaTime      = frame.frame ? frame.frame->deltaTime : 0.0f,
         .viewportExtent = {.width = vpW, .height = vpH},
         .derivedScene   = frame.derivedScene,
     };
@@ -1107,8 +1099,8 @@ void DeferredRenderPipeline::beginViewRecording(const RenderPipelineFrameContext
 
 void DeferredRenderPipeline::captureShadowSettings(const RenderPipelineFrameContext& frame)
 {
-    if (frame.camera.shadowSettings) {
-        _frameShadowSettings = *frame.camera.shadowSettings;
+    if (frame.frame && frame.frame->shadowSettings) {
+        _frameShadowSettings = *frame.frame->shadowSettings;
     }
     else if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
@@ -1120,24 +1112,23 @@ ViewportOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInput
     EnvironmentLightingSceneResources& environmentLighting,
     DescriptorSetHandle& environmentLightingDS) const
 {
+    // The View's own scene resources, resolved before recording began: this pass
+    // binds the Scene its View declared instead of asking which one is current.
     Scene* activeScene = frame.derivedScene;
-    environmentLighting =
-        _runtimeServices
-        ? _runtimeServices->resolveSceneEnvironmentLightingResources(activeScene)
-        : EnvironmentLightingSceneResources{};
-    environmentLightingDS = _runtimeServices
-        ? _runtimeServices->getSceneEnvironmentLightingDescriptorSet(activeScene)
-        : DescriptorSetHandle{};
+    const RenderViewSceneResources& sceneResources =
+        frame.view.frameData ? frame.view.frameData->sceneResources : RenderViewSceneResources{};
+    environmentLighting   = sceneResources.environmentLightingResources;
+    environmentLightingDS = sceneResources.environmentLightingDescriptorSet;
 
     ViewportOverlayStage::FrameInputs frameInputs{};
     if (!_overlayStage) {
         return frameInputs;
     }
 
-    auto* envProcessor = _runtimeServices ? _runtimeServices->getEnvironmentLightingProcessor() : nullptr;
+    auto* envProcessor = sceneResources.environmentLighting;
 
     if (activeScene) {
-        const float viewportHeight = static_cast<float>(frame.camera.viewportRect.extent.y);
+        const float viewportHeight = static_cast<float>(frame.view.viewportExtent.height);
         if (viewportHeight > 0.0f) {
             for (const auto& [entity, billboard, transform] : activeScene->getRegistry().view<BillboardComponent, TransformComponent>().each()) {
                 if (!billboard.bVisible) {
@@ -1148,12 +1139,12 @@ ViewportOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInput
                 // feature it belongs to, the view says which features it draws.
                 // A generated editor companion therefore disappears from a game
                 // view without the component knowing about views at all.
-                if (!rendersFeature(billboard.features, frame.camera.viewFeatures)) {
+                if (!rendersFeature(billboard.features, frame.view.frameData->viewFeatures)) {
                     continue;
                 }
 
                 const glm::vec3 worldCenter = transform.getWorldPosition();
-                const float distance        = glm::length(frame.camera.cameraPos - worldCenter);
+                const float distance        = glm::length(frame.view.frameData->cameraPos - worldCenter);
                 if (distance <= std::numeric_limits<float>::epsilon()) {
                     continue;
                 }
@@ -1183,10 +1174,10 @@ ViewportOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInput
         }
     }
 
-    if (activeScene && envProcessor && _runtimeServices) {
+    if (activeScene && envProcessor) {
         const auto* skyboxState = envProcessor->findFirstSceneSkyboxState(activeScene);
         if (skyboxState && skyboxState->hasRenderableCubemap()) {
-            frameInputs.skybox.descriptorSet = _runtimeServices->getSceneSkyboxDescriptorSet(activeScene);
+            frameInputs.skybox.descriptorSet = sceneResources.skyboxDescriptorSet;
             frameInputs.skybox.mesh          = _defaultSkyboxMesh;
             for (const auto& [entity, sc, mc] : activeScene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
                 if (mc.isResolved() && mc.getMesh()) {
@@ -1242,7 +1233,6 @@ DeferredViewportResources DeferredRenderPipeline::buildPublishedViewportResource
 RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     const RenderGraphExecutionResult& result,
     const DeferredFrameGraphResources& graphResources,
-    const CameraFrameInput& camera,
     const SceneViewportTask* task,
     uint64_t viewId) const
 {
@@ -1252,7 +1242,7 @@ RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     }
     output.desc.viewId = viewId != 0 ? viewId : (task ? task->desc.viewId : 0);
     if (!output.desc.hasExtent()) {
-        output.desc.extent = Extent2D::fromVec2(camera.viewportRect.extent);
+        output.desc.extent = task ? task->output.extent : Extent2D{};
     }
 
     output.color    = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::viewportColor, viewId));
@@ -1341,8 +1331,11 @@ void DeferredRenderPipeline::refreshViewportStageState()
 void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
     if (sceneViewOwnsHostViewport(frame.view.task)) {
-        const float frameBufferScale = std::max(frame.camera.viewportFrameBufferScale, 1.0f);
-        const Extent2D desiredExtent  = Extent2D::fromVec2(frame.camera.viewportRect.extent / frameBufferScale);
+        const float frameBufferScale = std::max(frame.frame ? frame.frame->viewportFrameBufferScale : 1.0f, 1.0f);
+        const Extent2D desiredExtent = Extent2D::fromVec2(
+            glm::vec2{static_cast<float>(frame.view.viewportExtent.width),
+                      static_cast<float>(frame.view.viewportExtent.height)} /
+            frameBufferScale);
         if (desiredExtent.width > 0 && desiredExtent.height > 0 && desiredExtent != _viewportRTSpec.extent) {
             requestViewportResize(desiredExtent);
         }
@@ -1387,10 +1380,7 @@ ShadowPreparedView DeferredRenderPipeline::prepareShadowPass(const RenderPipelin
         }
 
         RenderViewRecordingContext view = frame.view;
-        if (!view.frameData) {
-            view.frameData = frame.camera.frameData;
-        }
-        if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
+            if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
             view.viewportExtent = stageCtx.viewportExtent;
         }
         return _shadowStage->prepareView(*frame.submission, view);
@@ -1420,9 +1410,6 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
     RenderSubmission& submission = *frame.submission;
 
     RenderViewRecordingContext view = frame.view;
-    if (!view.frameData) {
-        view.frameData = frame.camera.frameData;
-    }
     if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
         view.viewportExtent = stageCtx.viewportExtent;
     }
@@ -1467,10 +1454,10 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
     _gBufferStage->prepare(stageCtx);
 
     postContext = FrameContext{
-        .view           = frame.camera.view,
-        .projection     = frame.camera.projection,
-        .viewProjection = frame.camera.viewProjection,
-        .cameraPos      = frame.camera.cameraPos,
+        .view           = frame.view.frameData->view,
+        .projection     = frame.view.frameData->projection,
+        .viewProjection = frame.view.frameData->viewProjection,
+        .cameraPos      = frame.view.frameData->cameraPos,
         .extent         = {.width = vpW, .height = vpH},
     };
     graphResources = {};

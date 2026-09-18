@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
+#include "Render3D/Common/EnvironmentLightingSceneResources.h"
 
 #include <functional>
 

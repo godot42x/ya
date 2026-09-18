@@ -4,7 +4,7 @@
 #include "RHI/Core/RenderAttachmentFormats.h"
 #include "RHI/Core/Pipeline.h"
 #include "Render3D/Stage/IRenderStage.h"
-#include "Render3D/Common/IRenderRuntimeServices.h"
+#include "Render3D/Common/RenderViewSceneResources.h"
 #include "Render3D/Common/RenderViewportUtils.h"
 #include "Render3D/Forward/ForwardViewportAuxPasses.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
@@ -41,7 +41,6 @@ struct ForwardViewportStage : public IRenderStage
         stdptr<IDescriptorSetLayout>          skyboxFrameDSL;
         DescriptorSetHandle                  depthBufferShadowDS                  = nullptr;
         ShadowRuntimeState                   shadowState                          = {};
-        IRenderRuntimeServices*              runtimeServices                      = nullptr;
     };
 
     enum class EPass : uint8_t
@@ -89,7 +88,6 @@ struct ForwardViewportStage : public IRenderStage
 
     DescriptorSetHandle _depthBufferShadowDS = nullptr;
     ForwardFrameResourceSet::FramePayloads _framePayloads{};
-    IRenderRuntimeServices* _runtimeServices = nullptr;
 
     // Kept alive for graphics pipeline layouts; storage buffers, descriptor
     // sets and capacity are owned by ForwardFrameResourceSet.
@@ -134,7 +132,10 @@ struct ForwardViewportStage : public IRenderStage
     [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
 
   private:
-    [[nodiscard]] PassContext::SkyboxInput buildSkyboxInput(Scene* activeScene, EnvironmentLightingProcessor* envProcessor) const;
+    [[nodiscard]] PassContext::SkyboxInput buildSkyboxInput(
+        Scene*                          activeScene,
+        EnvironmentLightingProcessor*   envProcessor,
+        const RenderViewSceneResources& sceneResources) const;
     [[nodiscard]] PassContext::DebugDrawInput buildDebugDrawInput(const RenderFrameData* frameData) const;
     [[nodiscard]] ForwardViewportAuxPasses::DrawContext makeAuxDrawContext(
         const PassContext& passCtx,

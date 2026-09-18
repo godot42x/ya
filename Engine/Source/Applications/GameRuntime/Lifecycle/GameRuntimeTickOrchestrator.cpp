@@ -392,13 +392,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 
     const std::vector<RenderOverlaySprite2D> screenOverlaySprites = buildScreenOverlaySprites(app);
     UIFrameSnapshot                          uiFrameSnapshot;
-    const CameraFrameInput cameraFrame = buildGameRenderFrame(app,
-                                                              dt,
-                                                              flightIndex,
-                                                              hostViewDesc,
-                                                              sceneRender.hostFrameData(),
-                                                              screenOverlaySprites,
-                                                              uiFrameSnapshot);
+    const FramePacket frame = buildGameRenderFrame(app, dt, flightIndex, screenOverlaySprites, uiFrameSnapshot);
 
     IRender*       render        = device->getRender();
     FPresentFrame  presentFrame{.surface = render ? render->getPrimarySurfaceContext() : nullptr};
@@ -415,7 +409,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         return;
     }
 
-    const RecordedFrame recorded = recordFrame(app, *coordinator, dt, std::move(sceneRender), cameraFrame, presentFrame);
+    const RecordedFrame recorded = recordFrame(app, *coordinator, dt, std::move(sceneRender), frame, presentFrame);
     submitRecordedFrame(app, presentFrame, recorded);
     app.presentModuleExtras(dt);
 }
@@ -521,6 +515,7 @@ void GameRuntimeTickOrchestrator::prepareViews(App&                  app,
                 .viewFeatures = desc.features,
                 .frameIndex = App::_hostTick,
                 .deltaTime = dt,
+                .elapsedTimeSeconds = app._renderState->hostView.clock.elapsedTimeMS / 1000.0f,
                 .shadowSettings = &app.getRenderServices().getShadowSettings(),
             },
             sceneRender.snapshotFor(task),
@@ -528,38 +523,26 @@ void GameRuntimeTickOrchestrator::prepareViews(App&                  app,
     }
 }
 
-CameraFrameInput GameRuntimeTickOrchestrator::buildGameRenderFrame(
+FramePacket GameRuntimeTickOrchestrator::buildGameRenderFrame(
     App&                                      app,
     float                                     dt,
     uint32_t                                  flightIndex,
-    const SceneViewDesc*                      hostViewDesc,
-    RenderFrameData*                          hostFrameData,
     const std::vector<RenderOverlaySprite2D>& screenSprites,
     UIFrameSnapshot&                          outUiSnapshot)
 {
     const HostViewState& hostView = app._renderState->hostView;
 
-    CameraFrameInput cameraFrame{
+    // Frame-level only: which cameras draw and where their outputs go is on
+    // each View's declaration and prepared data. The host contributes the
+    // tick's clock, its render scale and the screen overlay.
+    FramePacket frame{
         .flightIndex   = flightIndex,
         .frameIndex    = App::_hostTick,
         .deltaTime     = dt,
-        // Gizmo/editor furniture policy is the declaring View's, and with no
-        // host View declared there is no host camera drawing anything, so the
-        // authored-content default is the honest one rather than a guess.
-        .viewFeatures  = hostViewDesc ? hostViewDesc->features : toMask(ERenderFeature::Game),
-        .view          = hostView.view,
-        .projection    = hostView.projection,
-        .viewProjection = makeCameraViewProjection(hostView.projection, hostView.view),
-        .cameraPos     = hostView.cameraPos,
-        .viewportRect  = hostView.viewportRect,
         .viewportFrameBufferScale = hostView.viewportFrameBufferScale,
-        // Null when no declared View owns the host viewport: the host camera
-        // then has no prepared View this tick, which is a fact rather than a
-        // slot to fill with another View's data.
-        .frameData     = hostFrameData,
         .shadowSettings = &app.getRenderServices().getShadowSettings(),
     };
-    cameraFrame.overlay = {
+    frame.overlay = {
         .screenSprites = &screenSprites,
     };
 
@@ -570,25 +553,25 @@ CameraFrameInput GameRuntimeTickOrchestrator::buildGameRenderFrame(
     const Scene* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
     if ((app.isRuntimeMode() || app.isSimulationMode()) && scene) {
         if (auto* gameUIHost = app.getGameUIHost()) {
-            gameUIHost->setPresentation(cameraFrame.viewportRect,
-                                        glm::vec2(cameraFrame.viewportFrameBufferScale));
+            gameUIHost->setPresentation(hostView.viewportRect,
+                                        glm::vec2(frame.viewportFrameBufferScale));
             outUiSnapshot            = gameUIHost->buildSnapshot();
-            cameraFrame.uiFrameSnapshot = &outUiSnapshot;
+            frame.uiFrameSnapshot = &outUiSnapshot;
         }
     }
-    return cameraFrame;
+    return frame;
 }
 
 RecordedFrame GameRuntimeTickOrchestrator::recordFrame(App&                    app,
                                                        RenderFrameCoordinator& coordinator,
                                                        float                   dt,
                                                        ExtractedSceneRender    sceneRender,
-                                                       const CameraFrameInput& cameraFrame,
+                                                       const FramePacket&      frame,
                                                        const FPresentFrame&    presentFrame)
 {
     return coordinator.record(RenderFramePlan{
         .sceneRender = std::move(sceneRender),
-        .camera = cameraFrame,
+        .frame = frame,
         .viewCompose = {
             .recordCompose = [&app, dt](ICommandBuffer* commandBuffer)
             {

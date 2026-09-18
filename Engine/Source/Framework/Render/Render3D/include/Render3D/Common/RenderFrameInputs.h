@@ -22,10 +22,15 @@ class RenderSubmission;
 struct Scene;
 struct UIFrameSnapshot;
 
-/// Immutable Camera / WorldView data for one graphics frame. The camera owner
-/// fills view, projection, viewProjection and offscreen extent before graph
-/// build. This is not a present surface and not swapchain size.
-struct CameraFrameInput
+/// Frame-level facts of one recorded host frame.
+///
+/// This deliberately holds no camera: which Views are drawn, from which
+/// cameras and into which outputs is declared by their owners and carried on
+/// each View's plan entry (`SceneViewDesc` / `SceneViewportTask`) and its
+/// prepared data (`RenderFrameData`). A camera packet here would be a second
+/// spelling of that, and every consumer would have to ask which View a given
+/// field came from.
+struct FramePacket
 {
     struct OverlayInput
     {
@@ -39,70 +44,17 @@ struct CameraFrameInput
     uint64_t frameIndex  = 0;
     float    deltaTime   = 0.0f;
 
-    /// Which features this view draws (see RenderFeatures.h). Per view, not
-    /// per scene: the editor world view draws gizmos, a game view does not.
-    FRenderFeatureMask viewFeatures = toMask(ERenderFeature::Game);
+    /// Host render scale for this tick: a View's rect is divided by it to get
+    /// the render target extent. One host setting, not a per-View property, so
+    /// it stays here next to the frame facts.
+    float viewportFrameBufferScale = 1.0f;
 
-    glm::mat4 view           = glm::mat4(1.0f);
-    glm::mat4 projection     = glm::mat4(1.0f);
-    glm::mat4 viewProjection = glm::mat4(1.0f);
-    glm::vec3 cameraPos      = glm::vec3(0.0f);
-    /// Offscreen WorldView extent, not swapchain.
-    Rect2D viewportRect             = {};
-    float  viewportFrameBufferScale = 1.0f;
-
-    RenderFrameData*      frameData      = nullptr;
     const ShadowSettings* shadowSettings = nullptr;
     OverlayInput          overlay{};
+    /// Game UI snapshot for this tick, consumed by the display compose. Built
+    /// before graph build; the live WidgetTree is never read while recording.
     const UIFrameSnapshot* uiFrameSnapshot = nullptr;
-
-    [[nodiscard]] bool hasOffscreenExtent() const
-    {
-        return viewportRect.extent.x > 0.0f && viewportRect.extent.y > 0.0f;
-    }
 };
-
-[[nodiscard]] inline CameraFrameInput cameraForViewRecording(
-    const CameraFrameInput&   host,
-    const SceneViewRecording& recording)
-{
-    CameraFrameInput camera = host;
-    if (recording.task) {
-        const SceneViewportTask& task = *recording.task;
-        const SceneViewDesc&     desc = task.desc;
-        camera.view           = desc.view;
-        camera.projection     = desc.projection;
-        camera.viewProjection = desc.viewProjection();
-        camera.cameraPos      = desc.cameraPos;
-        const glm::vec2 outputExtent = task.output.hasExtent()
-                                           ? glm::vec2{
-                                                 static_cast<float>(task.output.extent.width),
-                                                 static_cast<float>(task.output.extent.height),
-                                             }
-                                           : desc.viewportRect.extent;
-        if (desc.ownsHostViewport()) {
-            camera.viewportRect = desc.viewportRect;
-            if (outputExtent.x > 0.0f && outputExtent.y > 0.0f) {
-                camera.viewportRect.extent = outputExtent;
-            }
-        }
-        else {
-            // Overlay Views record into their own RT. Compose dest lives on
-            // the task, not in the camera rect that drives host resize.
-            camera.viewportRect = Rect2D{
-                .pos    = {0.0f, 0.0f},
-                .extent = outputExtent,
-            };
-        }
-    }
-    camera.frameData = recording.frameData;
-    // The view's own feature set, not the host camera's: each recording may
-    // draw a different subset (editor world view vs camera preview).
-    if (recording.frameData) {
-        camera.viewFeatures = recording.frameData->viewFeatures;
-    }
-    return camera;
-}
 
 /// Blit a published View onto the primary Camera display RT. `destRect` is in
 /// that RT's pixel space (origin at the RT top-left).
@@ -166,7 +118,7 @@ struct PresentFrameInput
 struct RenderFramePlan
 {
     ExtractedSceneRender sceneRender{};
-    CameraFrameInput     camera{};
+    FramePacket          frame{};
     ViewComposeInput     viewCompose{};
     DisplayComposeInput  displayCompose{};
     PresentFrameInput    present{};
@@ -176,7 +128,9 @@ struct RenderFramePlan
 struct ViewFamilyRecordContext
 {
     ICommandBuffer*                                      cmdBuf     = nullptr;
-    CameraFrameInput                                     hostCamera{};
+    /// Frame-level facts for this recording. Each View carries its own camera
+    /// on its own recording (`SceneViewRecording.task` / `frameData`).
+    const FramePacket*                                   frame      = nullptr;
     RenderSubmission*                                    submission = nullptr;
     const SceneRenderPlan*                               plan       = nullptr;
     const SceneViewFamilyPlan*                           family     = nullptr;
@@ -186,15 +140,14 @@ struct ViewFamilyRecordContext
     std::shared_ptr<const RenderViewportOverlaySnapshot> overlaySnapshot;
 };
 
-/// Recording extras plus the camera packet consumed by Forward/Deferred.
-/// Pipelines read `camera` for matrices and extent; they do not query
-/// swapchain or NativeWindow. `submission` is the live RenderSubmission
-/// owner; `view` is the View being recorded. A missing view packet still
-/// means the current single-View path.
+/// One View being recorded, plus the frame-level facts it shares with its
+/// siblings. Pipelines read matrices and extent from `view` -- the View's own
+/// declaration and prepared data -- and the tick/flight/clock facts from
+/// `frame`. They never query swapchain or NativeWindow.
 struct RenderPipelineFrameContext
 {
-    ICommandBuffer*  cmdBuf = nullptr;
-    CameraFrameInput camera{};
+    ICommandBuffer*    cmdBuf = nullptr;
+    const FramePacket* frame  = nullptr;
     std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
     RenderSubmission*          submission = nullptr;
     RenderViewRecordingContext view{};

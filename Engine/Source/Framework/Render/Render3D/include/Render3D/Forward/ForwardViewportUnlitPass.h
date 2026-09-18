@@ -5,7 +5,6 @@
 #include "RHI/Core/Pipeline.h"
 #include "Render3D/Material/MaterialDescPool.h"
 #include "Render3D/Material/UnlitMaterial.h"
-#include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Forward/ForwardViewportLitPasses.h"
 
 #include "Unlit.slang.h"
@@ -44,7 +43,6 @@ class ForwardViewportUnlitPass
         PipelineRenderingInfo        pipelineRenderingInfo = {};
         stdptr<IDescriptorSetLayout> skinningDSL;
         stdptr<IDescriptorSetLayout> unlitFrameDSL;
-        IRenderRuntimeServices*      runtimeServices = nullptr;
     };
 
     struct DrawContext
@@ -72,7 +70,6 @@ class ForwardViewportUnlitPass
 
     IRender* _render = nullptr;
     stdptr<IDescriptorSetLayout> _skinningDSL;
-    IRenderRuntimeServices* _runtimeServices = nullptr;
 
     stdptr<IDescriptorSetLayout> _unlitFrameDSL;
     stdptr<IDescriptorSetLayout> _unlitParamDSL;

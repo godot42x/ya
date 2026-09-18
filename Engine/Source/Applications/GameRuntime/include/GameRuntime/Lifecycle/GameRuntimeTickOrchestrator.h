@@ -13,7 +13,7 @@ struct Entity;
 struct RenderDeviceState;
 struct RenderFrameCoordinator;
 class SceneRenderScheduler;
-struct CameraFrameInput;
+struct FramePacket;
 struct FPresentFrame;
 struct SceneViewDesc;
 struct UIFrameSnapshot;
@@ -62,19 +62,17 @@ class GameRuntimeTickOrchestrator
     /// because the packet points into it). `hostFrameData` is the host viewport
     /// View's preparation from this tick's plan, or null when the tick declared
     /// no such View.
-    static CameraFrameInput buildGameRenderFrame(App&                                       app,
-                                                 float                                      dt,
-                                                 uint32_t                                   flightIndex,
-                                                 const SceneViewDesc*                       hostViewDesc,
-                                                 RenderFrameData*                           hostFrameData,
-                                                 const std::vector<RenderOverlaySprite2D>&  screenSprites,
-                                                 UIFrameSnapshot&                           outUiSnapshot);
+    static FramePacket buildGameRenderFrame(App&                                       app,
+                                            float                                      dt,
+                                            uint32_t                                   flightIndex,
+                                            const std::vector<RenderOverlaySprite2D>&  screenSprites,
+                                            UIFrameSnapshot&                           outUiSnapshot);
     /// Records the tick in one renderer call and returns what the host submits.
     static RecordedFrame recordFrame(App&                        app,
                                      RenderFrameCoordinator&     coordinator,
                                      float                       dt,
                                      ExtractedSceneRender        sceneRender,
-                                     const CameraFrameInput&     cameraFrame,
+                                     const FramePacket&          frame,
                                      const FPresentFrame&        presentFrame);
     /// Submits the recording (or an empty frame) and presents the surface.
     static void submitRecordedFrame(App& app, FPresentFrame& presentFrame, const RecordedFrame& recorded);

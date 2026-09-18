@@ -62,6 +62,18 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
     什么”。published 身份由 `RenderDeviceState::publishViewOutputIdentity` 一处写入
     （`0` 清空），不要回到“遍历 family 逐个写、最后写入者赢”，也不要让 pipeline 上
     再留一份上次发布的图当兜底。
+14. 录制期不许向“当前状态”提问。帧级事实在 `FramePacket`（tick/flight/clock、host render
+    scale、shadow settings、overlay、UI snapshot），View 级事实在该 View 自己的
+    `SceneViewDesc` / `SceneViewportTask` / `RenderFrameData` 上。没有 `CameraFrameInput`
+    这种“既是这一帧又是主 View”的包，也没有 `cameraForViewRecording` 这种“拷贝宿主再
+    逐字段覆盖”的 patching；需要 Scene 相关的 GPU 绑定（skybox / IBL descriptor set、
+    env lighting 派生资源）时，由 `RenderDeviceState::resolveViewSceneResources` 在
+    `beginFrameCommandBuffer` 之前按 View 解析进 `RenderFrameData.sceneResources`，
+    而不是让 pass 在录制中途问 owner“现在哪个 Scene 是当前的”。
+15. 不要在 pass 之间共享一个 `IRenderRuntimeServices` 式接口去取 device 上的东西。
+    需要的东西要么进 View 数据（上面的 scene resources / clock），要么在构造时注入
+    （`DebugRenderSystem` 走 InitDesc）。`getGameplayResourceBinding()` 这类只有声明没有
+    消费者的接口方法，出现即删——否则它会成为下一个“录制期全局查询”的入口。
 
 ## 目录锚点
 

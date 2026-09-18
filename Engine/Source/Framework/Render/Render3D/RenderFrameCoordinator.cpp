@@ -24,7 +24,7 @@ namespace ya
 namespace
 {
 
-std::shared_ptr<RenderViewportOverlaySnapshot> buildViewportOverlaySnapshot(const CameraFrameInput::OverlayInput& overlay)
+std::shared_ptr<RenderViewportOverlaySnapshot> buildViewportOverlaySnapshot(const FramePacket::OverlayInput& overlay)
 {
     auto snapshot = std::make_shared<RenderViewportOverlaySnapshot>();
     if (overlay.screenSprites) {
@@ -59,7 +59,7 @@ void RenderFrameCoordinator::recordViewFamilies(
     ISceneViewFamilyRenderer* pipeline = _device->getActivePipeline();
     YA_CORE_ASSERT(pipeline, "Active render pipeline is null while recording a view family");
 
-    RenderSubmission* live = _device->_submissions.get(plan.camera.flightIndex);
+    RenderSubmission* live = _device->_submissions.get(plan.frame.flightIndex);
     YA_CORE_ASSERT(live && live->isRecording(), "Family record requires a recording submission");
 
     if (overlaySnapshot) {
@@ -70,14 +70,14 @@ void RenderFrameCoordinator::recordViewFamilies(
     const auto recordOneFamily = [&](const SceneViewFamilyPlan* family, std::vector<SceneViewRecording> views) {
         ViewFamilyRecordContext ctx{
             .cmdBuf          = live->commandBuffer(),
-            .hostCamera      = plan.camera,
+            .frame           = &plan.frame,
             .submission      = live,
             .plan            = &plan.sceneRender.plan(),
             .family          = family,
             .views           = std::move(views),
             .overlaySnapshot = overlaySnapshot,
         };
-        _device->publishFamilyResult(plan.camera.flightIndex, pipeline->recordFamily(ctx));
+        _device->publishFamilyResult(plan.frame.flightIndex, pipeline->recordFamily(ctx));
     };
 
     // The plan arrives extracted, so its views hold one recording per viewport
@@ -104,19 +104,34 @@ RecordedFrame RenderFrameCoordinator::record(const RenderFramePlan& plan)
     // display compose → PresentationGraphService onto swapchain[imageIndex]
     // Acquire/present stay on the host FPresentFrame coordinator.
 
+    // The View whose output the host viewport shows. It is the plan's answer
+    // (V1/V2) and it also supplies the host-level geometry below: the viewport
+    // rect a freshly built pipeline is sized from.
+    const SceneViewportTask* displayRoot = plan.sceneRender.displayRootTask();
+
     const std::vector<Scene*> scenes = renderedScenes(plan.sceneRender.plan());
     if (scenes.empty()) {
-        _device->prepareDerivedState(nullptr, plan.camera.deltaTime);
+        _device->prepareDerivedState(nullptr, plan.frame.deltaTime);
     }
     else {
         for (Scene* scene : scenes) {
-            _device->prepareDerivedState(scene, plan.camera.deltaTime);
+            _device->prepareDerivedState(scene, plan.frame.deltaTime);
         }
     }
     _device->applyPendingMutations();
-    _device->applyViewportResize(plan.camera.viewportRect);
+    _device->applyViewportResize(displayRoot ? displayRoot->desc.viewportRect : Rect2D{});
     _device->prepareComposePipelines();
-    if (plan.camera.uiFrameSnapshot) {
+    // Pre-record preparation: resolve each View's Scene-keyed GPU bindings now,
+    // while the View's own declaration still names its Scene, so recording never
+    // has to ask which Scene is current. Skipping this would leave every pass
+    // with empty IBL/skybox bindings rather than an obviously wrong one.
+    for (const SceneViewRecording& recording : plan.sceneRender.views()) {
+        if (recording.frameData) {
+            _device->resolveViewSceneResources(recording.task ? recording.task->desc.scene : nullptr,
+                                               recording.frameData->sceneResources);
+        }
+    }
+    if (plan.frame.uiFrameSnapshot) {
         if (auto uiTarget = _device->getViewportDisplayImageShared()) {
             prepareRender2DComposePassPipeline(
                 FRender2DComposePassDesc{
@@ -134,16 +149,13 @@ RecordedFrame RenderFrameCoordinator::record(const RenderFramePlan& plan)
     {
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
         if (!plan.sceneRender.empty()) {
-            auto overlaySnapshot = buildViewportOverlaySnapshot(plan.camera.overlay);
+            auto overlaySnapshot = buildViewportOverlaySnapshot(plan.frame.overlay);
             recordViewFamilies(plan, cmdBuf.get(), overlaySnapshot);
         }
-        // Which View's output the host viewport shows is the plan's answer, not
-        // a summary of which family was recorded last. Everything below -- the
-        // compose insets, this Camera's display target, the host's later reads
-        // -- resolves through this one identity, so it is set before any of
-        // them, and a tick with no display root clears it.
-        const SceneViewportTask* displayRoot = plan.sceneRender.displayRootTask();
-        _device->publishViewOutputIdentity(plan.camera.flightIndex,
+        // Everything below -- the compose insets, the display target, the
+        // host's later reads -- resolves through this one identity, so it is set
+        // before any of them, and a tick with no display root clears it.
+        _device->publishViewOutputIdentity(plan.frame.flightIndex,
                                            displayRoot ? displayRoot->desc.viewId : 0);
     }
 
@@ -177,7 +189,7 @@ RecordedFrame RenderFrameCoordinator::record(const RenderFramePlan& plan)
         auto texture = Texture::wrap(display->getImageShared(),
                                      display->getImageViewShared(),
                                      std::format("ViewDisplayInset.view{}", inset.viewId));
-        if (RenderSubmission* submission = _device->_submissions.get(plan.camera.flightIndex)) {
+        if (RenderSubmission* submission = _device->_submissions.get(plan.frame.flightIndex)) {
             submission->retain(display);
             submission->retain(texture);
         }
@@ -188,16 +200,20 @@ RecordedFrame RenderFrameCoordinator::record(const RenderFramePlan& plan)
             .destRect = inset.destRect,
         });
     }
+    // The game-UI compose lands on the display root's image, so its logical
+    // viewport is that View's declared geometry rather than a host camera copy.
+    const Extent2D logicalViewportExtent = displayRoot ? displayRoot->output.extent : Extent2D{};
     recordCameraViewCompose(cmdBuf.get(),
                             _device->getViewportDisplayImageShared().get(),
-                            plan.camera,
+                            plan.frame.uiFrameSnapshot,
+                            logicalViewportExtent,
                             plan.viewCompose,
                             insetImages);
-    _device->_presentationGraphService.recordDisplayCompose(plan.camera.deltaTime,
+    _device->_presentationGraphService.recordDisplayCompose(plan.frame.deltaTime,
                                                             plan.displayCompose.extensions,
                                                             cmdBuf.get());
 
-    const uint32_t flightIndex = plan.camera.flightIndex;
+    const uint32_t flightIndex = plan.frame.flightIndex;
     _device->retainPublishedViewOutputs(flightIndex, cmdBuf.get());
     auto retain = [&](auto resource) {
         if (!resource) {

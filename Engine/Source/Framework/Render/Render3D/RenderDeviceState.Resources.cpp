@@ -170,7 +170,7 @@ void RenderDeviceState::initSharedRenderResources()
         .render                = _render,
         .hostServices          = _hostServices,
         .sharedResourceProvider = &_sharedResourceProvider,
-        .runtimeServices       = this,
+        .debugRenderSystem     = &DebugRenderSystem::get(),
         .viewportWidth         = static_cast<int>(_pipelineViewportRect.extent.x),
         .viewportHeight        = static_cast<int>(_pipelineViewportRect.extent.y),
         .reapplyViewportSink   = [this]()

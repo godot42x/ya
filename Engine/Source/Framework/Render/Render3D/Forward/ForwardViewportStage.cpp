@@ -39,7 +39,6 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
     _skinningDSL                              = desc.skinningDSL;
     _depthBufferShadowDS                      = desc.depthBufferShadowDS;
     _shadowState                              = desc.shadowState;
-    _runtimeServices                          = desc.runtimeServices;
 
     _litPasses.init(ForwardViewportLitPasses::InitDesc{
         .render = desc.render,
@@ -49,7 +48,6 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
         .skinningDSL = _skinningDSL,
         .pbrFrameDSL = desc.pbrFrameDSL,
         .phongFrameDSL = desc.phongFrameDSL,
-        .runtimeServices = _runtimeServices,
     });
     _unlitPass.init(ForwardViewportUnlitPass::InitDesc{
         .render = desc.render,
@@ -57,14 +55,12 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .skinningDSL = _skinningDSL,
         .unlitFrameDSL = desc.unlitFrameDSL,
-        .runtimeServices = _runtimeServices,
     });
     _auxPasses.init(ForwardViewportAuxPasses::InitDesc{
         .render = desc.render,
         .renderPass = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .skyboxFrameDSL = desc.skyboxFrameDSL,
-        .runtimeServices = _runtimeServices,
     });
 }
 
@@ -94,7 +90,6 @@ void ForwardViewportStage::destroy()
     _unlitPass.destroy();
     _auxPasses.destroy();
     _skinningDSL.reset();
-    _runtimeServices = nullptr;
 
     _render = nullptr;
 }
@@ -205,30 +200,34 @@ void ForwardViewportStage::executeDebug(const RenderStageContext& ctx, const Pas
 
 ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const RenderStageContext& ctx)
 {
-    auto* activeScene           = ctx.derivedScene;
-    auto* envProcessor          = _runtimeServices ? _runtimeServices->getEnvironmentLightingProcessor() : nullptr;
+    // The View's own scene resources, resolved before recording began. Reading
+    // them here means this pass binds what the View declared, not what some
+    // owner answers to "which Scene is current".
+    const RenderViewSceneResources& sceneResources =
+        ctx.frameData ? ctx.frameData->sceneResources : RenderViewSceneResources{};
+    auto* activeScene  = ctx.derivedScene;
+    auto* envProcessor = sceneResources.environmentLighting;
     return PassContext{
         .stageCtx = ctx,
         .activeScene = activeScene,
         .environmentLightingProcessor = envProcessor,
-        .sceneEnvironmentLightingDescriptorSet = (_runtimeServices && activeScene)
-            ? _runtimeServices->getSceneEnvironmentLightingDescriptorSet(activeScene)
-            : DescriptorSetHandle{},
-        .skybox = buildSkyboxInput(activeScene, envProcessor),
+        .sceneEnvironmentLightingDescriptorSet = sceneResources.environmentLightingDescriptorSet,
+        .skybox = buildSkyboxInput(activeScene, envProcessor, sceneResources),
         .debugDraw = buildDebugDrawInput(ctx.frameData),
     };
 }
 
 ForwardViewportStage::PassContext::SkyboxInput ForwardViewportStage::buildSkyboxInput(
     Scene* activeScene,
-    EnvironmentLightingProcessor* envProcessor) const
+    EnvironmentLightingProcessor* envProcessor,
+    const RenderViewSceneResources& sceneResources) const
 {
     PassContext::SkyboxInput input{};
-    if (!activeScene || !_runtimeServices) {
+    if (!activeScene) {
         return input;
     }
 
-    input.descriptorSet = _runtimeServices->getSceneSkyboxDescriptorSet(activeScene);
+    input.descriptorSet = sceneResources.skyboxDescriptorSet;
     if (!envProcessor) {
         return input;
     }

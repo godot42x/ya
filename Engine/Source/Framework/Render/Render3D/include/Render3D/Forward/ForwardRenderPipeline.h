@@ -11,7 +11,6 @@
 #include "RHI/Render.h"
 #include "Render3D/RenderFrameData.h"
 #include "Render3D/Common/IRenderPipeline.h"
-#include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/EntityIdViewportPass.h"
 #include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
@@ -53,14 +52,12 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
         int      windowW = 0;
         int      windowH = 0;
         ShadowSettings* shadowSettings = nullptr;
-        IRenderRuntimeServices* runtimeServices = nullptr;
     };
 
     Deleter _deleter;
 
     IRender*                 _render          = nullptr;
     ShadowSettings*          _shadowSettings  = nullptr;
-    IRenderRuntimeServices*  _runtimeServices = nullptr;
 
     stdptr<IDescriptorPool> _descriptorPool = nullptr;
 
@@ -170,7 +167,6 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
                                                ForwardFrameResourceSet::ViewResources* viewResources,
                                                std::optional<RGPassHandle> familyPredecessor);
     [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
-                                                     const CameraFrameInput& camera,
                                                      const SceneViewportTask* task,
                                                      uint64_t viewId,
                                                      Extent2D viewExtent) const;

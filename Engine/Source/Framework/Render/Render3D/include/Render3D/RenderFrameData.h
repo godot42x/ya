@@ -2,6 +2,7 @@
 
 #include "Render3D/Material/Material.h"
 #include "Render3D/Common/RenderFeatures.h"
+#include "Render3D/Common/RenderViewSceneResources.h"
 #include "Resource/Mesh.h"
 #include "RHI/RenderDefines.h"
 #include "Common.Limits.slang.h"
@@ -391,11 +392,19 @@ struct RenderFrameData
     /// binding filters against it.
     FRenderFeatureMask viewFeatures = toMask(ERenderFeature::Game);
 
+    /// GPU bindings keyed on this View's Scene, resolved before graph build.
+    /// Passes read them from here so recording never asks an owner which Scene
+    /// is current (see RenderViewSceneResources.h).
+    RenderViewSceneResources sceneResources{};
+
     // ═══════════════════════════════════════════════════════════════
     // Frame constants
     // ═══════════════════════════════════════════════════════════════
     uint64_t frameIndex = 0;
     float    deltaTime  = 0.0f;
+    /// Seconds since the host clock started, the value the shader-facing frame
+    /// UBO carries as `time`. Not the same as `deltaTime`.
+    float    timeSeconds = 0.0f;
 
     // ═══════════════════════════════════════════════════════════════
     // Helpers
@@ -407,6 +416,7 @@ struct RenderFrameData
         directionalLight = {};
         numPointLights = 0;
         pointLights = {};
+        sceneResources.clear();
     }
 
     [[nodiscard]] size_t totalDrawCount() const

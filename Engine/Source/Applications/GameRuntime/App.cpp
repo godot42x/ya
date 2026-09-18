@@ -482,12 +482,6 @@ OffscreenJobQueueService App::getOffscreenJobQueueService()
     };
 }
 
-GameplayResourceBinding* App::getGameplayResourceBinding() const
-{
-    auto* device = getRenderServices().getDeviceState();
-    return device ? device->getGameplayResourceBinding() : nullptr;
-}
-
 EnvironmentLightingProcessor* App::getEnvironmentLightingProcessor() const
 {
     auto* device = getRenderServices().getDeviceState();

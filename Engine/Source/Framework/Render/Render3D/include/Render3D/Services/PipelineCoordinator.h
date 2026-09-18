@@ -16,7 +16,6 @@ namespace ya
 
 struct IRender;
 struct IRenderRuntimeHostServices;
-struct IRenderRuntimeServices;
 struct RenderSharedResourceProvider;
 
 /**
@@ -40,8 +39,8 @@ struct YA_RENDER_3D_API PipelineCoordinator
         IRender*                      render                = nullptr;
         IRenderRuntimeHostServices*   hostServices          = nullptr;
         RenderSharedResourceProvider* sharedResourceProvider = nullptr;
-        /// Injected as `runtimeServices` into both pipelines.
-        IRenderRuntimeServices*       runtimeServices       = nullptr;
+        /// Debug overlay sink, injected into the pipelines that draw it.
+        DebugRenderSystem*            debugRenderSystem     = nullptr;
         /// Host viewport size in pixels. Not swapchain extent.
         int                           viewportWidth         = 0;
         int                           viewportHeight        = 0;
@@ -82,7 +81,7 @@ struct YA_RENDER_3D_API PipelineCoordinator
     IRender*                         _render                = nullptr;
     IRenderRuntimeHostServices*      _hostServices          = nullptr;
     RenderSharedResourceProvider*    _sharedResourceProvider = nullptr;
-    IRenderRuntimeServices*          _runtimeServices       = nullptr;
+    DebugRenderSystem*               _debugRenderSystem      = nullptr;
     std::function<void()>            _reapplyViewportSink;
     int                              _viewportWidth         = 0;
     int                              _viewportHeight        = 0;

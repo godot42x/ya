@@ -70,7 +70,6 @@ void ForwardViewportLitPasses::init(const InitDesc& desc)
     _skinningDSL           = desc.skinningDSL;
     _pbrFrameDSL           = desc.pbrFrameDSL;
     _phongFrameDSL         = desc.phongFrameDSL;
-    _runtimeServices       = desc.runtimeServices;
 
     initPBR(desc);
     initPhong(desc);
@@ -92,7 +91,6 @@ void ForwardViewportLitPasses::destroy()
     _phongResourceDSL.reset();
     _phongParamDSL.reset();
 
-    _runtimeServices = nullptr;
     _skinningDSL.reset();
     _render = nullptr;
 }
@@ -411,8 +409,11 @@ void ForwardViewportLitPasses::preparePhong(const RenderStageContext& ctx,
     outFrame.projMat    = fd.projection;
     outFrame.viewMat    = fd.view;
     outFrame.resolution = glm::ivec2(ctx.viewportExtent.width, ctx.viewportExtent.height);
-    outFrame.frameIdx   = _runtimeServices ? static_cast<int32_t>(_runtimeServices->getHostTick()) : 0;
-    outFrame.time       = _runtimeServices ? static_cast<float>(_runtimeServices->getElapsedTimeSeconds()) : 0.0f;
+    // Frame constants come from the View's own prepared data, not from a clock
+    // the pass would have to locate: the View already carries the tick and the
+    // elapsed time it was prepared with.
+    outFrame.frameIdx   = static_cast<int32_t>(fd.frameIndex);
+    outFrame.time       = fd.timeSeconds;
     outFrame.cameraPos  = fd.cameraPos;
 
     fillPhongLightFromFrameData(fd, outLight);

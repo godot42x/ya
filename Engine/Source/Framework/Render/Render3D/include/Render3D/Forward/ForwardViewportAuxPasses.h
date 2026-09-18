@@ -4,7 +4,6 @@
 #include "RHI/Core/RenderAttachmentFormats.h"
 #include "RHI/Core/Pipeline.h"
 #include "Render3D/Material/SimpleMaterial.h"
-#include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/RenderFrameData.h"
 #include "Skybox.slang.h"
@@ -82,7 +81,6 @@ class YA_RENDER_3D_API ForwardViewportAuxPasses
         IRenderPass*           renderPass = nullptr;
         PipelineRenderingInfo  pipelineRenderingInfo = {};
         stdptr<IDescriptorSetLayout> skyboxFrameDSL;
-        IRenderRuntimeServices* runtimeServices = nullptr;
     };
 
     struct DrawContext
@@ -150,7 +148,6 @@ class YA_RENDER_3D_API ForwardViewportAuxPasses
     void initDebug(const InitDesc& desc);
 
     IRender* _render = nullptr;
-    IRenderRuntimeServices* _runtimeServices = nullptr;
 
     stdptr<IPipelineLayout>   _simplePPL;
     stdptr<IGraphicsPipeline> _simplePipeline;

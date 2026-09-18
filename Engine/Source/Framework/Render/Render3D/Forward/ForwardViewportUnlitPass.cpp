@@ -32,7 +32,6 @@ void ForwardViewportUnlitPass::init(const InitDesc& desc)
 {
     _render                = desc.render;
     _skinningDSL           = desc.skinningDSL;
-    _runtimeServices       = desc.runtimeServices;
     _unlitFrameDSL         = desc.unlitFrameDSL;
     initUnlit(desc);
 }
@@ -46,7 +45,6 @@ void ForwardViewportUnlitPass::destroy()
     _unlitParamDSL.reset();
     _unlitResourceDSL.reset();
 
-    _runtimeServices = nullptr;
     _skinningDSL.reset();
     _render = nullptr;
 }
@@ -185,8 +183,9 @@ void ForwardViewportUnlitPass::prepareUnlit(const RenderStageContext& ctx,
     outFrame.projMat    = ctx.frameData->projection;
     outFrame.viewMat    = ctx.frameData->view;
     outFrame.resolution = glm::ivec2(ctx.viewportExtent.width, ctx.viewportExtent.height);
-    outFrame.frameIdx   = _runtimeServices ? static_cast<int32_t>(_runtimeServices->getHostTick()) : 0;
-    outFrame.time       = _runtimeServices ? static_cast<float>(_runtimeServices->getElapsedTimeSeconds()) : 0.0f;
+    // Frame constants come from the View's own prepared data (see the lit pass).
+    outFrame.frameIdx   = static_cast<int32_t>(fd.frameIndex);
+    outFrame.time       = fd.timeSeconds;
 
     prepareUnlitMaterials(fd);
     _unlitPoolRecreated = false;

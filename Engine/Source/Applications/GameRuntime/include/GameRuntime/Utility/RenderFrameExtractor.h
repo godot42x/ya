@@ -43,6 +43,9 @@ struct RenderFrameExtractor
         FRenderFeatureMask viewFeatures = toMask(ERenderFeature::Game);
         uint64_t       frameIndex = 0;
         float          deltaTime  = 0.0f;
+        /// Seconds since the host clock started; the shader-facing frame UBO's
+        /// `time`. Not `deltaTime`.
+        float          elapsedTimeSeconds = 0.0f;
         const ShadowSettings* shadowSettings = nullptr;
     };
 

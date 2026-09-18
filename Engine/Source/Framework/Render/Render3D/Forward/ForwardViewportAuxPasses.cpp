@@ -31,7 +31,6 @@ static const VertexBufferDescription kAuxVBDesc{.slot = 0, .pitch = sizeof(ya::V
 void ForwardViewportAuxPasses::init(const InitDesc& desc)
 {
     _render          = desc.render;
-    _runtimeServices = desc.runtimeServices;
     _skyboxFrameDSL  = desc.skyboxFrameDSL;
     initSimple(desc);
     initSkybox(desc);
@@ -52,7 +51,6 @@ void ForwardViewportAuxPasses::destroy()
     _debugPPL.reset();
     _debugDSL.reset();
 
-    _runtimeServices = nullptr;
     _render = nullptr;
 }
 

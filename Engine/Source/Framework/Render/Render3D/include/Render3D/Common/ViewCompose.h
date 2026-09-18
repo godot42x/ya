@@ -36,7 +36,8 @@ struct ViewDisplayInsetImage
 /// be null on the first frame before the world graph creates it.
 YA_RENDER_3D_API void recordCameraViewCompose(ICommandBuffer*                         cmdBuf,
                                               RenderTexture*                          cameraDisplayRT,
-                                              const CameraFrameInput&                 camera,
+                                              const UIFrameSnapshot*                  uiFrameSnapshot,
+                                              Extent2D                                logicalViewportExtent,
                                               const ViewComposeInput&                 viewCompose,
                                               std::span<const ViewDisplayInsetImage>  insets = {});
 

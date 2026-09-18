@@ -64,7 +64,8 @@ void recordViewDisplayInsets(std::span<const ViewDisplayInsetImage> insets)
 
 YA_RENDER_3D_API void recordCameraViewCompose(ICommandBuffer*                        cmdBuf,
                                               RenderTexture*                         cameraDisplayRT,
-                                              const CameraFrameInput&                camera,
+                                              const UIFrameSnapshot*                 uiFrameSnapshot,
+                                              Extent2D                               logicalViewportExtent,
                                               const ViewComposeInput&                viewCompose,
                                               std::span<const ViewDisplayInsetImage> insets)
 {
@@ -75,17 +76,14 @@ YA_RENDER_3D_API void recordCameraViewCompose(ICommandBuffer*                   
     // UI + extra View insets: after graphics/post so Game UI never enters
     // bloom or tonemapping. Target is the Camera WorldView display image.
     const bool bHasInsets = !insets.empty();
-    if (cameraDisplayRT && (camera.uiFrameSnapshot || bHasInsets)) {
+    if (cameraDisplayRT && (uiFrameSnapshot || bHasInsets)) {
         recordRender2DComposePass(cmdBuf,
                                   *cameraDisplayRT,
                                   nullptr,
-                                  camera.uiFrameSnapshot,
+                                  uiFrameSnapshot,
                                   FRender2DComposePassDesc{
                                       .kind                  = ERender2DComposePassKind::RuntimeUIComposite,
-                                      .logicalViewportExtent = Extent2D{
-                                          .width  = static_cast<uint32_t>(camera.viewportRect.extent.x),
-                                          .height = static_cast<uint32_t>(camera.viewportRect.extent.y),
-                                      },
+                                      .logicalViewportExtent = logicalViewportExtent,
                                   },
                                   [&]() { recordViewDisplayInsets(insets); });
     }

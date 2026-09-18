@@ -1,5 +1,107 @@
 # Progress
 
++## 2026-09-19 checkpoint：V4 + V5 IRenderRuntimeServices 删除与 FramePacket/PreparedView
+
+### 唯一目标
+
+删掉让 pass 在录制中途向"当前状态"提问的两个出口（V4），并让每个 View 的相机数据
+只存在于该 View 自己身上（V5）。两条同批的理由见 plan 附.3：`IRenderRuntimeServices`
+的 env lighting 出口正是 PreparedView 要接的东西，分开做会留下"一半 pass 从全局拿、
+一半从 view 拿"的半迁移状态。
+
+### V4a 时间：从接口查询变成 View 自己的数据
+
+`RenderFrameData` 已经有 `frameIndex`；新增 `timeSeconds`（`ViewPrepareInput.
+elapsedTimeSeconds`，host 从 `HostViewState.clock.elapsedTimeMS` 填）。
+Forward 的 lit/unlit pass 从 `fd.frameIndex` / `fd.timeSeconds` 取帧常量，
+不再 `_runtimeServices->getHostTick()` / `getElapsedTimeSeconds()`。
+
+### V4b 场景资源：录制前解析进 View
+
+新增 `Render3D/Common/RenderViewSceneResources.h`：一个 View 录制期要绑的
+Scene-keyed GPU 绑定（skybox DS / IBL DS / 派生资源 / env lighting processor）。
+`RenderDeviceState::resolveViewSceneResources(scene, out)` 在 `record()` 里、
+`beginFrameCommandBuffer` **之前**按 View 逐个解析（与 `prepareDerivedState` /
+`applyPendingMutations` / `applyViewportResize` 同一个 pre-record 接缝）。
+Forward 的 `buildPassContext` / `buildSkyboxInput` 与 Deferred 的
+`buildOverlayFrameInputs` 改读 `frame.view.frameData->sceneResources`。
+
+顺带把 `EnvironmentLightingSceneResources` 从 `EnvironmentLightingProcessor.h`
+拆到 `Render3D/Common/EnvironmentLightingSceneResources.h`：它是**结果类型**不是
+processor 状态，单独存在后 `EnvironmentLightingResultProvider.h` 不必再拉进整个
+processor 头（ECS 组件 + cubemap 管线）。
+
+### V4c DebugRenderSystem 改为构造注入
+
+`DeferredRenderInitDesc` / `PipelineCoordinator::InitDesc` 的 `runtimeServices`
+换成 `debugRenderSystem`，由 `RenderDeviceState.Resources.cpp` 在建 pipeline 时
+传入（值仍是 `DebugRenderSystem::get()`，但出口从接口方法变成构造参数）。
+
+### V4d 删除
+
+- `IRenderRuntimeServices.h` 整个删除；`RenderDeviceState` 不再继承它，其具体方法
+  保留（`getHostTick` / `getEnvironmentLightingProcessor` / `getSceneSkyboxDescriptorSet`
+  / `getDebugRenderSystem` 等仍有内部与编辑器消费者），去掉 `override`。
+- `getGameplayResourceBinding()` 删除：接口上的零调用方，`App::getGameplayResourceBinding()`
+  也跟着删（它只转发给前者，全仓无调用方）。`_gameplayResourceBinding` 本身保留
+  （每 tick 在 `prepareDerivedState` 里驱动）。
+- 五个 pass 类（Lit/Unlit/Aux/ForwardViewportStage/Deferred）的 `_runtimeServices`
+  成员、InitDesc 字段与 `runtimeServices` 转发链全部删除。AuxPasses 的
+  `_runtimeServices` 本来就只赋不用，属死字段。
+
+### V5 `CameraFrameInput` → `FramePacket`，删掉整条 per-view patching
+
+原 struct 同时是"这一帧"和"主 view"，`cameraForViewRecording(host, recording)` 靠
+"拷贝 host 再按 recording 覆盖"把两组字段粘在一起。现在：
+
+- `FramePacket` 只留帧级事实：`flightIndex` / `frameIndex` / `deltaTime` /
+  `viewportFrameBufferScale`（host render scale，不是 View 属性）/ `shadowSettings` /
+  `overlay` / `uiFrameSnapshot`。
+- `cameraForViewRecording` 删除。view 级字段本来就在 View 上：矩阵与 extent 来自
+  `SceneViewDesc` / `SceneViewportTask`，特征位与相机位置来自 `RenderFrameData`
+  （V4 之后还带 scene resources）。
+- `RenderPipelineFrameContext.camera` → `const FramePacket* frame`；
+  Forward/Deferred 的 `shouldSkipView` / `beginViewRecording` / `syncFrameSettings` /
+  `captureShadowSettings` / `postContext` / `collectViewOutput` 全部改读
+  `frame.view.*`。`collectViewOutput` 的 `camera` 形参删除（它只用 View 的 extent）。
+- `renderViewFamilies` 里 `view.frameData ? view.frameData : camera.frameData` 这类
+  兜底删除：`pairViewFrames` 保证每个存活 View 都有自己的 frameData，兜底永远不可达。
+- `recordCameraViewCompose` 不再吃 camera 包，改为 `(uiFrameSnapshot,
+  logicalViewportExtent)`；coordinator 用 display root 的 `output.extent` 作为
+  逻辑视口（= 原 `plan.camera.viewportRect.extent`，同一个值）。
+- `RenderFramePlan.camera` → `.frame`；`record()` 里 `applyViewportResize` 与
+  `publishViewOutputIdentity` 都改用 `displayRoot`，不再经由 host camera 副本。
+
+保留未动：`derivedScene`（它本来就是"从该 View 的 task 读 Scene"，不是 patch），
+`RenderViewRecordingContext`（它本身已是 View 级），`SceneViewRecording`（task +
+frameData 的配对）。plan 附.2 原列的"删掉四层转译"因此收敛为"删掉 patching 与相机包
+这一层"；剩下两层的合并（`RenderViewRecordingContext` 并入 `RenderPipelineFrameContext`）
+留到 P3 收尾，因为它们的字段此刻都在被真实消费者读写。
+
+### 验证
+
+| 检查 | 结果 |
+| --- | --- |
+| `xmake b` | `ya-render-3d` / `ya-game-runtime` / `ya-game-editor` / `ya-testing` / `ya-engine` / `GUIWorkbench` / `GreedySnake` / `ya-render-2d-test` / `ya-gui-closure-test` / `ya-gui-headless-host-test` 全部 ok |
+| `rg IRenderRuntimeServices\|CameraFrameInput\|runtimeServices\|getGameplayResourceBinding`（Engine + Example） | **0 命中** |
+| `xmake r ya-render-3d-test` | **176/176** |
+| `ya-testing` 渲染/编辑器滤镜 | 265 passed / 3 failed（与 V1–V3 基线逐项相同） |
+| `HelloMaterial --exit-after-frame=90 --screenshot-target=viewport` | exit=0，0 error，`md5=1c6668976be1cdd5d755d1f1365700f7` **与基线逐字节相同** |
+| `run-editor` 同参数 | exit=0，0 error，`md5=5b8f5dd8acdbc90bd5c383feb3f7bcec` **与基线逐字节相同** |
+
+两张截图都与 V1–V3 之前（乃至 4d-3 收口时记录）的基线相同，说明这一刀是纯结构迁移，
+没有改变渲染结果。V4 与 V5 各自落地后各跑过一次同样的双 smoke，两次都逐字节相同，
+所以"V4 没动画面"与"V5 没动画面"是分别成立的。
+
+### 遗留
+
+- `RenderFramePlan` 上仍有 4 个 `std::function`（I1 / V6），录制顺序仍跨两个文件。
+- 离屏任务仍由 `tickRender` 顺带 pump（I6 / V7）。
+- viewport debug catalog 仍挂在 device 上（I7 / V8），`buildViewportSnapshot` 的
+  else 分支也仍读 pipeline 的 depth/entityId 句柄。
+- `RenderViewRecordingContext` 与 `RenderPipelineFrameContext` 仍是两层（P3 收尾）。
+
+
 +## 2026-09-19 checkpoint：V1–V3 主 view 身份 + 输出发布 + 兜底链
 
 ### 唯一目标

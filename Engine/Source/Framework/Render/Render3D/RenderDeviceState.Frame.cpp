@@ -27,7 +27,7 @@ bool RenderDeviceState::beginFrameCommandBuffer(const RenderFramePlan& plan, std
         return false;
     }
 
-    const uint32_t flightIndex = plan.camera.flightIndex;
+    const uint32_t flightIndex = plan.frame.flightIndex;
     if (flightIndex >= _commandBuffers.size() || !_commandBuffers[flightIndex]) {
         YA_CORE_ERROR("Recording flight {} has no command buffer", flightIndex);
         return false;
@@ -40,11 +40,11 @@ bool RenderDeviceState::beginFrameCommandBuffer(const RenderFramePlan& plan, std
         _render->beginFrameGpuTiming(cmdBuf.get());
     }
 
-    if (!_submissions.acquire(flightIndex, plan.camera.frameIndex, cmdBuf.get(), plan.present.surface)) {
+    if (!_submissions.acquire(flightIndex, plan.frame.frameIndex, cmdBuf.get(), plan.present.surface)) {
         YA_CORE_ERROR("Recording flight {} failed to begin a live submission", flightIndex);
         return false;
     }
-    if (!_viewOutputs.beginSubmission(flightIndex, plan.camera.frameIndex)) {
+    if (!_viewOutputs.beginSubmission(flightIndex, plan.frame.frameIndex)) {
         YA_CORE_ERROR("Recording flight {} failed to begin view outputs", flightIndex);
         return false;
     }
@@ -55,6 +55,19 @@ void RenderDeviceState::clearPublishedViewOutputs()
 {
     _publishedOutputFlight = MAX_FLIGHTS_IN_FLIGHT;
     _publishedOutputViewId = 0;
+}
+
+void RenderDeviceState::resolveViewSceneResources(Scene* scene, RenderViewSceneResources& out)
+{
+    // Same calls the passes used to make through the services interface, moved
+    // to the point where the View's Scene is known and recording has not begun.
+    // Nothing here reads "the current Scene": the caller names the Scene.
+    out.clear();
+    out.environmentLighting            = _environmentLightingProcessor.get();
+    out.environmentLightingResources   = _sharedResourceProvider.resolveSceneEnvironmentLightingResources(scene);
+    out.skyboxDescriptorSet            = _sharedResourceProvider.getSceneSkyboxDescriptorSet(scene);
+    out.environmentLightingDescriptorSet =
+        _sharedResourceProvider.getSceneEnvironmentLightingDescriptorSet(scene);
 }
 
 void RenderDeviceState::publishViewOutputIdentity(uint32_t flightIndex, SceneViewId displayViewId)

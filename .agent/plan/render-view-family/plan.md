@@ -620,11 +620,21 @@ view 身份目前是**全局小整数**，所以"谁是谁"只能靠读声明方
 
 ### 附.2 切片（按风险从低到高；每条独立可验收）
 
-> 状态：V1–V3 已落地（2026-09-19，见 `progress.md`）；V4–V8 未开始。
+> 状态：V1–V5 已落地（2026-09-19，见 `progress.md`）；V6–V8 未开始。
 > 实现时在 V1 追加了两处 plan 原文漏登记的同类写法（Forward/Deferred 的
 > `recordings.empty()` 合成与 `|| result.views.empty()`），在 V3 追加了一处死代码
 > （`pipelineViewportDisplayImage()`）；`buildViewportSnapshot` 的 else 分支仍读
 > pipeline 句柄，明确留给 V8 而不是本批删。
+>
+> V4/V5 落地时的两处范围修正：
+>
+> - V5 原写「删掉四层转译」。实际收敛为「删掉 per-view patching 与相机包这一层」：
+>   `SceneViewRecording`（task + frameData 配对）与 `RenderViewRecordingContext`
+>   （View 级）的字段此刻都有真实消费者，强行并层只是改名不是删除；`derivedScene`
+>   本来就是从该 View 的 task 读的，不是 patch。剩下两层合并留 P3 收尾。
+> - `PreparedView` 没有作为新类型引入：`RenderFrameData` 已经是那个东西（V4 之后
+>   连 scene resources 与 clock 都在它上面）。改名 `PreparedViewRenderData` 属 P3 的
+>   命名批次，与本次结构迁移分开。
 
 **V1 — 主 view 身份单一来源（纯删除）**
 

@@ -6,7 +6,6 @@
 #include "Render3D/Material/MaterialDescPool.h"
 #include "Render3D/Material/PBRMaterial.h"
 #include "Render3D/Material/PhongMaterial.h"
-#include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
 
@@ -61,7 +60,6 @@ class ForwardViewportLitPasses
         stdptr<IDescriptorSetLayout> skinningDSL;
         stdptr<IDescriptorSetLayout> pbrFrameDSL;
         stdptr<IDescriptorSetLayout> phongFrameDSL;
-        IRenderRuntimeServices*    runtimeServices = nullptr;
     };
 
     struct DrawContext
@@ -130,7 +128,6 @@ class ForwardViewportLitPasses
 
     ShadowRuntimeState      _shadowState{};
     stdptr<IDescriptorSetLayout> _skinningDSL;
-    IRenderRuntimeServices* _runtimeServices = nullptr;
 };
 
 } // namespace ya

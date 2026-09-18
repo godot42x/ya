@@ -214,7 +214,6 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     _render                 = desc.render;
     _graphExecutor          = _render ? std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()) : nullptr;
     _shadowSettings         = desc.shadowSettings;
-    _runtimeServices        = desc.runtimeServices;
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
     }
@@ -321,7 +320,6 @@ void ForwardRenderPipeline::initStageResources()
         .skyboxFrameDSL                     = _frameResources ? _frameResources->getSkyboxFrameDSL() : nullptr,
         .depthBufferShadowDS                = depthBufferShadowDS,
         .shadowState                        = buildShadowState(),
-        .runtimeServices                    = _runtimeServices,
     });
 
     _deleter.push("Stages", [this](void*)
@@ -374,20 +372,18 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
 
     for (const SceneViewRecording& recording : recordings) {
         ForwardFamilyViewBranch branch;
-        const CameraFrameInput camera = cameraForViewRecording(ctx.hostCamera, recording);
-        Extent2D viewExtent           = Extent2D::fromVec2(camera.viewportRect.extent);
-        if (recording.task && recording.task->output.hasExtent()) {
-            viewExtent = recording.task->output.extent;
-        }
+        // The View's own declaration and prepared data are the camera: there is
+        // no host packet to copy and override field by field.
+        const Extent2D viewExtent = recording.task ? recording.task->output.extent : Extent2D{};
         const bool bDisplayRoot = recording.task && ctx.plan && recording.task == ctx.plan->displayRootTask();
         branch.frame = RenderPipelineFrameContext{
             .cmdBuf                  = ctx.cmdBuf,
-            .camera                  = camera,
+            .frame                   = ctx.frame,
             .viewportOverlaySnapshot = bDisplayRoot ? ctx.overlaySnapshot : nullptr,
             .submission              = ctx.submission,
             .view                    = RenderViewRecordingContext{
                 .task           = recording.task,
-                .frameData      = recording.frameData ? recording.frameData : camera.frameData,
+                .frameData      = recording.frameData,
                 .viewportExtent = viewExtent,
             },
             .derivedScene            = recording.task ? recording.task->desc.scene : nullptr,
@@ -403,9 +399,6 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         branch.shadowPrepared = executeShadowPass(branch.frame, branch.stageCtx);
 
         RenderViewRecordingContext view = branch.frame.view;
-        if (!view.frameData) {
-            view.frameData = branch.frame.camera.frameData;
-        }
         if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
             view.viewportExtent = branch.stageCtx.viewportExtent;
         }
@@ -442,7 +435,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         }
 
         branch.postContext = {};
-        if (const RenderFrameData* frameData = branch.frame.camera.frameData) {
+        if (const RenderFrameData* frameData = branch.frame.view.frameData) {
             branch.postContext.view                 = frameData->view;
             branch.postContext.projection           = frameData->projection;
             branch.postContext.viewProjection       = frameData->viewProjection;
@@ -454,10 +447,6 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
             branch.postContext.viewOwner            = frameData->viewOwner;
             branch.postContext.extent               = frameData->viewportExtent;
         }
-        branch.postContext.view           = branch.frame.camera.view;
-        branch.postContext.projection     = branch.frame.camera.projection;
-        branch.postContext.viewProjection = branch.frame.camera.viewProjection;
-        branch.postContext.cameraPos      = branch.frame.camera.cameraPos;
         branch.postContext.extent         = branch.stageCtx.viewportExtent;
 
         liveBranches.push_back(std::move(branch));
@@ -500,7 +489,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
     for (const ForwardFamilyViewBranch& branch : liveBranches) {
         const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
         RenderViewOutput output = collectViewOutput(
-            execution, branch.frame.camera, branch.frame.view.task, viewId, branch.stageCtx.viewportExtent);
+            execution, branch.frame.view.task, viewId, branch.stageCtx.viewportExtent);
         const bool bDisplayRoot = branch.frame.view.task && ctx.plan &&
                                   branch.frame.view.task == ctx.plan->displayRootTask();
         if (bDisplayRoot) {
@@ -514,7 +503,8 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
 bool ForwardRenderPipeline::shouldSkipView(const RenderPipelineFrameContext& frame) const
 {
     YA_CORE_ASSERT(frame.cmdBuf, "ForwardRenderPipeline requires command buffer");
-    return !frame.camera.hasOffscreenExtent();
+    // A View with no extent has no offscreen output to record into.
+    return frame.view.viewportExtent.width == 0 || frame.view.viewportExtent.height == 0;
 }
 
 void ForwardRenderPipeline::beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
@@ -526,10 +516,10 @@ void ForwardRenderPipeline::beginViewRecording(const RenderPipelineFrameContext&
 
     stageCtx = RenderStageContext{
         .cmdBuf         = frame.cmdBuf,
-        .frameData      = frame.camera.frameData,
-        .flightIndex    = frame.camera.flightIndex,
-        .frameIndex     = frame.camera.frameIndex,
-        .deltaTime      = frame.camera.deltaTime,
+        .frameData      = frame.view.frameData,
+        .flightIndex    = frame.frame ? frame.frame->flightIndex : 0,
+        .frameIndex     = frame.frame ? frame.frame->frameIndex : 0,
+        .deltaTime      = frame.frame ? frame.frame->deltaTime : 0.0f,
         .viewportExtent = viewExtent,
         .derivedScene   = frame.derivedScene,
     };
@@ -646,7 +636,9 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
 void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
     if (sceneViewOwnsHostViewport(frame.view.task)) {
-        const auto desiredExtent = Extent2D::fromVec2(frame.camera.viewportRect.extent / frame.camera.viewportFrameBufferScale);
+        const float frameBufferScale = std::max(frame.frame ? frame.frame->viewportFrameBufferScale : 1.0f, 1.0f);
+        const auto  desiredExtent    = Extent2D::fromVec2(glm::vec2{static_cast<float>(frame.view.viewportExtent.width),
+                                                                    static_cast<float>(frame.view.viewportExtent.height)} / frameBufferScale);
         if (desiredExtent.width > 0 && desiredExtent.height > 0 && !(desiredExtent == _viewportResources.extent)) {
             requestViewportResize(desiredExtent);
         }
@@ -703,8 +695,8 @@ void ForwardRenderPipeline::syncShadowSettings()
 
 void ForwardRenderPipeline::captureShadowSettings(const RenderPipelineFrameContext& frame)
 {
-    if (frame.camera.shadowSettings) {
-        _frameShadowSettings = *frame.camera.shadowSettings;
+    if (frame.frame && frame.frame->shadowSettings) {
+        _frameShadowSettings = *frame.frame->shadowSettings;
     }
     else if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
@@ -824,9 +816,6 @@ ShadowPreparedView ForwardRenderPipeline::executeShadowPass(const RenderPipeline
     }
 
     RenderViewRecordingContext view = frame.view;
-    if (!view.frameData) {
-        view.frameData = frame.camera.frameData;
-    }
     if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
         view.viewportExtent = stageCtx.viewportExtent;
     }
@@ -836,7 +825,6 @@ ShadowPreparedView ForwardRenderPipeline::executeShadowPass(const RenderPipeline
 void ForwardRenderPipeline::shutdown()
 {
     _entityIdPass.destroy();
-    _runtimeServices = nullptr;
     if (_frameResources) {
         _frameResources->destroy();
         _frameResources.reset();
@@ -902,7 +890,6 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
 }
 
 RenderViewOutput ForwardRenderPipeline::collectViewOutput(const RenderGraphExecutionResult& result,
-                                                          const CameraFrameInput& camera,
                                                           const SceneViewportTask* task,
                                                           uint64_t viewId,
                                                           Extent2D viewExtent) const
@@ -913,7 +900,7 @@ RenderViewOutput ForwardRenderPipeline::collectViewOutput(const RenderGraphExecu
     }
     output.desc.viewId = viewId != 0 ? viewId : (task ? task->desc.viewId : 0);
     if (!output.desc.hasExtent()) {
-        output.desc.extent = viewExtent.width > 0 ? viewExtent : Extent2D::fromVec2(camera.viewportRect.extent);
+        output.desc.extent = viewExtent;
     }
     output.color    = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::viewportColor, viewId));
     output.depth    = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::viewportDepth, viewId));

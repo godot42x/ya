@@ -17,7 +17,6 @@
 #include "RHI/Render.h"
 #include "Render3D/RenderFrameData.h"
 #include "Render3D/Common/IRenderPipeline.h"
-#include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/EntityIdViewportPass.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/PostProcessingState.h"
@@ -73,7 +72,10 @@ struct DeferredRenderInitDesc
     ShadowSettings* shadowSettings = nullptr;
     const AppAutomationShadowOverrides* automationShadowOverrides = nullptr;
     stdptr<IDescriptorSetLayout> environmentLightingDSL = nullptr;
-    IRenderRuntimeServices* runtimeServices = nullptr;
+    /// Debug overlay sink. Injected at construction like the other
+    /// device-lifetime collaborators instead of reached for through a services
+    /// interface during recording.
+    DebugRenderSystem* debugRenderSystem = nullptr;
 };
 
 struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
@@ -99,7 +101,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     ShadowSettings* _shadowSettings = nullptr;
     const AppAutomationShadowOverrides* _automationShadowOverrides = nullptr;
     stdptr<IDescriptorSetLayout> _environmentLightingDSL = nullptr;
-    IRenderRuntimeServices* _runtimeServices = nullptr;
+    DebugRenderSystem* _debugRenderSystem = nullptr;
 
     // ── Render targets ────────────────────────────────────────────────
     RenderTargetCreateInfo _gBufferRTSpec;
@@ -223,7 +225,6 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
         const std::shared_ptr<RenderTexture>& depthOwner) const;
     [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
                                                      const DeferredFrameGraphResources& graphResources,
-                                                     const CameraFrameInput& camera,
                                                      const SceneViewportTask* task,
                                                      uint64_t viewId) const;
     void               refreshGBufferStageState();

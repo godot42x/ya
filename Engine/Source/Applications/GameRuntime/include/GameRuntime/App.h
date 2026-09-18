@@ -210,7 +210,6 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     [[nodiscard]] JSScriptingSystem*                  getJSScriptingSystem() const { return _jsScriptingSystem; }
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
-    [[nodiscard]] GameplayResourceBinding*         getGameplayResourceBinding() const;
     [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const;
     [[nodiscard]] TerrainProcessor*              getTerrainProcessor() const;
 

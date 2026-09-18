@@ -8,7 +8,6 @@
 #include "RHI/Render.h"
 #include "RHI/Shader.h"
 #include "Render3D/Common/IRenderPipeline.h"
-#include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewOutput.h"
@@ -48,6 +47,7 @@ struct DeferredRenderPipeline;
 struct Sampler;
 struct EnvironmentLightingComponent;
 struct RenderFrameData;
+struct RenderViewSceneResources;
 struct DebugRenderSystem;
 struct Node;
 struct RenderFrameCoordinator;
@@ -67,7 +67,7 @@ struct RenderPipelineDebugOutputCatalog
 
 /// Device-lifetime backend, persistent renderer services, and fence-safe
 /// mutations. Does not record a frame and does not locate the active Scene.
-struct YA_RENDER_3D_API RenderDeviceState : IRenderRuntimeServices
+struct YA_RENDER_3D_API RenderDeviceState
 {
     friend struct RenderFrameCoordinator;
 
@@ -124,6 +124,12 @@ struct YA_RENDER_3D_API RenderDeviceState : IRenderRuntimeServices
     /// Safe-point mutation: pipeline RT specs. Call before command recording.
     void applyViewportResize(Rect2D rect);
     void applyPendingMutations();
+    /// Resolve the Scene-keyed GPU bindings one View's passes bind (skybox /
+    /// IBL descriptor sets and derived resources). Called per View before
+    /// recording starts, so a pass reads its own View's scene resources instead
+    /// of asking this owner which Scene is current. Not const: binding a Scene's
+    /// skybox/IBL descriptor set updates the cached binding for that set.
+    void resolveViewSceneResources(Scene* scene, RenderViewSceneResources& out);
     /// Tick derived processors and rewrite IBL sets for this frame's Scene.
     void prepareDerivedState(Scene* scene, float dt);
     void prepareComposePipelines();
@@ -134,10 +140,9 @@ struct YA_RENDER_3D_API RenderDeviceState : IRenderRuntimeServices
     [[nodiscard]] IRender*                       getRender() const { return _render; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
     [[nodiscard]] IRenderPipeline*               getActivePipeline() const;
-    [[nodiscard]] uint64_t                       getHostTick() const override;
-    [[nodiscard]] double                         getElapsedTimeSeconds() const override;
-    [[nodiscard]] GameplayResourceBinding*         getGameplayResourceBinding() const override;
-    [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const override;
+    [[nodiscard]] uint64_t                       getHostTick() const;
+    [[nodiscard]] double                         getElapsedTimeSeconds() const;
+    [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const;
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const;
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const;
@@ -173,11 +178,11 @@ struct YA_RENDER_3D_API RenderDeviceState : IRenderRuntimeServices
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxDescriptorSetLayout() const { return _sharedResourceProvider.getSkyboxDescriptorSetLayout(); }
     [[nodiscard]] Sampler*                     getSkyboxSampler() const { return _sharedResourceProvider.getSkyboxSampler(); }
     [[nodiscard]] DescriptorSetHandle          getFallbackSkyboxDescriptorSet() const { return _sharedResourceProvider.getFallbackSkyboxDescriptorSet(); }
-    [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr) override;
+    [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(); }
-    [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr) override;
-    [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene = nullptr) const override;
-    [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const override;
+    [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
+    [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene = nullptr) const;
+    [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
 
     [[nodiscard]] Extent2D      getViewportExtent() const;
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;

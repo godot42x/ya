@@ -105,11 +105,6 @@ double RenderDeviceState::getElapsedTimeSeconds() const
     return _clockState ? static_cast<double>(_clockState->elapsedTimeMS) / 1000.0 : 0.0;
 }
 
-GameplayResourceBinding* RenderDeviceState::getGameplayResourceBinding() const
-{
-    return _gameplayResourceBinding.get();
-}
-
 EnvironmentLightingProcessor* RenderDeviceState::getEnvironmentLightingProcessor() const
 {
     return _environmentLightingProcessor.get();
