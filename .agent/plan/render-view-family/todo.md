@@ -1,5 +1,18 @@
 # TODO
 
+## V 系列（隐式驱动收口，见 plan 附.1–附.4）
+
+按风险从低到高；V1–V3 一个 commit，V4+V5 一批，其余独立。
+
+- [ ] V1 主 view 身份单一来源：删 `buildGameRenderFrame` 的 `viewFrames.front()`（`pairViewFrames` 顺带给出 host/display-root pair index）；`primaryView`（声明方）与 `displayRootTask()`（输出方）二选一作权威，保留的写清它回答的是另一问；宿主 view 缺失时显式拒绝而非落到默认 index。
+- [ ] V2 输出发布显式化：`publishFamilyResult(flightIndex, familyResult, displayViewId)`，删 `SceneViewFamilyPlan` 循环里的 `_publishedOutputViewId` 最后写入者赢；随删 `beginFrameCommandBuffer` 的 "published 不在本 flight 就清空" 补偿与 `record()` 里的 `displayRootTask()->desc.viewId != 0` 分支。
+- [ ] V3 删兜底链：`getActiveViewportImageShared` / `getViewportDisplayImageShared` 只认 published（删 `pipelineViewportColorImage()` 兜底）；`getViewportExtent()` 四段收一段；`getViewOutput(viewId)` 删跨 flight 扫描；新增 "未发布返回 nullptr/{}" 测试。
+- [ ] V4 删 `IRenderRuntimeServices`：时间走 `HostClockState`，env lighting 进 `PreparedView`，`DebugRenderSystem` 由 overlay pass 注入，删死方法 `getGameplayResourceBinding()`，最后删 `PipelineCoordinator::InitDesc::runtimeServices`。
+- [ ] V5 `CameraFrameInput` → `FramePacket` + `PreparedView`：删 `cameraForViewRecording()` patching 与四层转译；同批完成 P3 的 `RenderFrameData`→`PreparedViewRenderData`。
+- [ ] V6 `RenderFramePlan` 去回调：贡献者列表替代 `recordCompose` / `recordBeforeExtensions` / `recordExtensions`，顺序由 coordinator 一处拥有（`appendCapture` 保留到 capture 另有归属）；若一次换不动则把 step 具名化并 assert 缺项。
+- [ ] V7 离屏 pump 显式化：`OffscreenTaskService::tick` 提成具名 host step。
+- [ ] V8 viewport debug catalog 移出 device（652 行 + `mutable` 缓存），顺带断开 Render3D→GUI/Compose 的 debug 面。
+
 ## R0
 
 - [x] 画出 GameRuntimeTickOrchestrator、RenderFrameExtractor、RenderRuntime、Forward/Deferred、ViewCompose、DisplayCompose、Present 的真实调用图。

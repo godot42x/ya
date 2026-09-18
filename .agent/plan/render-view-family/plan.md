@@ -594,3 +594,93 @@ R3 的「各自提交 SceneRenderRequest」与 §3.10 是同一件事：`ISceneV
 - GUI2D、GameUI、SceneViewport 依赖方向清楚。
 - 至少有单 Scene 单 View、单 Scene 双 View、双 Scene 双 View、双 Surface、UI-only 五类可重复验证场景。
 - 后续性能优化由 trace/profile 选择，而不是继续增加隐式状态。
+
+## 附：隐式驱动审计（I1–I7）与切片（V1–V8）
+
+> 2026-09-18 审计。附在 7 之后而不是插进 4.x：它不改阶段目标，只回答"还剩
+> 哪些地方没人明说、但代码照样跑"，并按**能删什么**排序。每条都挂到已有的
+> 4.0.3 / R4 / P3 checkpoint 上，不新开计划线。
+
+### 附.1 清单（每条都可指到代码）
+
+| 编号 | 隐式规则 | 现状证据 | 为什么是复杂度 |
+| --- | --- | --- | --- |
+| I1 | 计划里带**行为**，不只带数据 | `RenderFramePlan` 的 `viewCompose.recordCompose`、`displayCompose.extensions.{recordBeforeExtensions,recordExtensions,appendCapture}` 都是捕获 `App&`+`dt` 的 `std::function`（`GameRuntimeTickOrchestrator::recordFrame` 构造，`RenderFrameCoordinator::record` 调用） | "world → module compose → before-present → present → capture" 的真实顺序，一半在 GameRuntime、一半在 Render3D；两边都读不出完整时序。漏挂一个 step 是静默的：`ViewComposeInput::empty()` / `Extensions::empty()` 只判断"有没有" |
+| I2 | "主 view"有**四个**答案 | ① `declareViews()` 返回的 `primaryView`（给 `viewFeatures`）② `viewFrames.front()`（给 `frameData`，index 0 = host camera 是 `pairViewFrames` 的顺序约定）③ `plan.sceneRender.primaryTask()`/`displayRootTask()`（给 displayRoot 与 publish）④ `publishFamilyResult()` 在 `SceneViewFamilyPlan` 循环里逐 view 写 `_publishedOutputViewId`，**最后写入者赢** | 问"哪个 view 是宿主视口"要读三个文件；输出身份由一次循环的迭代顺序决定 |
+| I3 | 找不到就**换地方找** | `getActiveViewportImageShared()` = published view output → 否则 `pipelineViewportColorImage()`；`getViewOutput(viewId)` = 先 published flight → 再扫 0..`MAX_FLIGHTS_IN_FLIGHT`；`getViewportExtent()` = published → `_pipelineViewportRect` → active pipeline → `{}`；`buildPipelineDebugOutputCatalog()` 在"有 published"和"没有"时是两条不同装配路径 | 兜底链把"所有权错了"变成"看起来能跑"；同一次编辑里两个窗口给出不同答案时，没人能判断哪个是真的 |
+| I4 | 录制期做变更，安全点靠**惯例** | `RenderFrameCoordinator::record` 依次 `prepareDerivedState` / `applyPendingMutations` / `applyViewportResize` / `prepareComposePipelines` / `prepareRender2DComposePassPipeline`，之后才 `beginFrameCommandBuffer`。注释写的是"call before command recording"，但调用点就在 `record` 里 | 安全点是"`begin()` 之前"这条口头约定；新加的 prep 放错位置只在设备上炸 |
+| I5 | pass 自己去**全局格子**取东西 | `IRenderRuntimeServices` 8 个 virtual 由 `RenderDeviceState` 实现：host tick、elapsed、`GameplayResourceBinding`、`EnvironmentLightingProcessor`、两个 scene descriptor set、`resolveSceneEnvironmentLightingResources`、`DebugRenderSystem` | pass 只要拿到 device 就能在录制中途问全局状态，于是"这一帧用什么"不在 `PreparedView` 里，而在录制时刻的全局值 |
+| I6 | 离屏任务被渲染 tick **顺带驱动** | `tickRender` 里 `device->getOffscreenTaskService().tick(app.getTaskManager())`；`AppTaskManager` 实现 `IOffscreenTaskScheduler` | "上一帧排的任务在这一帧录制前跑完"是隐含节奏；离屏产物什么时候可用，读不到声明 |
+| I7 | GUI 面向的呈现关切**挂在 device** 上 | `RenderDeviceState.ViewportDebug.cpp` 652 行：debug image 目录、7 个 category 常量、签名 hash、`mutable` 缓存；同时 `Render3D` include `GUI/Compose/Render2DComposePass.h`（`RenderDeviceState.cpp`、`RenderFrameCoordinator.cpp`） | 给面板看的目录构建占用设备状态的公开面；`ya-render-3d -> ya-gui-compose` 也是 S2 列的依赖倒置 |
+
+补充（不算独立条目，属 I2/I3 的同一根）：`kPrimarySceneViewId = 1` 硬编码在两个 producer 里、
+`kEditorPreviewViewId = 2` 在编辑器里，而 `viewId == 0` 同时表示"没有 view"和"没发布过"。
+view 身份目前是**全局小整数**，所以"谁是谁"只能靠读声明方。这对应 4.0.3 checkpoint 5
+（owner-scoped `SceneViewKey`），也是 V2 之后**才**能动的前提。
+
+### 附.2 切片（按风险从低到高；每条独立可验收）
+
+**V1 — 主 view 身份单一来源（纯删除）**
+
+- 删 `buildGameRenderFrame` 的 `viewFrames.front()`：`pairViewFrames` 顺带产出
+  "host/display-root view 的 pair index"，`ExtractedSceneRender` 暴露
+  `hostFrameData()`，索引不再由调用方猜。
+- `primaryView`（声明）与 `displayRootTask()`（plan）二选一作为"宿主 view"权威，
+  另一个保留的必须说明它回答的是另一个问题（声明方 vs 输出方）。
+- 验收：`GameRuntimeTickOrchestrator` 里不再出现 `.front()`；宿主 view 缺失时
+  是显式拒绝（返回空 plan）而不是落到某个默认 index。
+
+**V2 — 输出发布显式化**
+
+- `publishFamilyResult(flightIndex, familyResult, displayViewId)`："这一帧给 swapchain 看的是哪个 view 输出"由 plan 显式给出，不再是 family 循环的最后一次赋值。
+- 随之删掉两处补偿：`beginFrameCommandBuffer` 里"published 的 view 不在本 flight 就清空"（这是"published 可能是旧的"这个隐含状态的补丁），以及 `record()` 里 `displayRootTask()->desc.viewId != 0` 才写 published 的分支。
+- 验收：`_publishedOutputViewId` 只有一个显式写入点；无 scene / 无 display root 时是显式 `clearPublishedViewOutputs()`。
+
+**V3 — 删兜底链**
+
+- `getActiveViewportImageShared()` 与 `getViewportDisplayImageShared()` 只认 published view output，删 `pipelineViewportColorImage()` 兜底；需要"pipeline 的 viewport color"的调用方显式调 pipeline。
+- `getViewportExtent()` 四段兜底收到一段：published 没有就返回 `{}`，调用方自己决定回落（谁需要 fallback 谁写，不藏在 getter 里）。
+- `getViewOutput(viewId)` 删跨 flight 扫描，只查本 flight；若 viewport debug 确实需要跨帧，那说明 debug 目录该持有自己的句柄（见 V8），不是让 getter 全局找。
+- 验收：每个图片/尺寸访问器只有一个来源；新增断言"未发布时返回 nullptr/{}"，并有一条测试钉住它。
+
+**V4 — `IRenderRuntimeServices` 删除（R4 已列，与 V5 同批）**
+
+- 时间走 `HostClockState` 输入；env lighting 句柄在 graph build 前解析进 `PreparedView`，或并入 `EnvironmentLightingResultProvider`；`DebugRenderSystem` 由 overlay pass 构造注入；删死方法 `getGameplayResourceBinding()`；随后删 `PipelineCoordinator::InitDesc::runtimeServices`。
+- 验收：`rg IRenderRuntimeServices` 为 0；pass 拿 view 输入的唯一入口是 `PreparedView` 与显式参数。
+
+**V5 — `CameraFrameInput` → `FramePacket` + `PreparedView`（P3 主线）**
+
+- 现在这一个 struct 同时是"这一帧"和"主 view"：`flightIndex/frameIndex/deltaTime/uiFrameSnapshot/overlay` 是 frame 级，`view/projection/cameraPos/viewportRect/viewportFrameBufferScale/viewFeatures/frameData` 是 view 级；`cameraForViewRecording()` 靠"拷贝 + 按 recording 覆盖"把 frame 级的东西搬进 view 级（patching）。
+- 拆成 `FramePacket{flightIndex, frameIndex, deltaTime, uiFrameSnapshot, overlay, present}` 与 `PreparedView{camera, extent, features, frameData, shadowPrepared}`；`cameraForViewRecording()` 随之删除，因为 view 级字段本来就在 view 上。
+- 这是删掉四层转译（`CameraFrameInput` / `RenderPipelineFrameContext` / `RenderViewRecordingContext` / `SceneViewRecording`）的核心动作；顺序上必须在 V1/V2/V3 之后（否则拆到一半会同时存在"旧 front() 约定 + 新 PreparedView"两套主 view 概念）。
+- 验收：`rg 'cameraForViewRecording|CameraFrameInput'` 为 0；同 Scene 双 View 的 snapshot identity 测试保持；`pairViewFrames` 的 index 约定随 V1 一起消失。
+
+**V6 — 计划去掉回调**
+
+- 把 `recordCompose` / `recordBeforeExtensions` / `recordExtensions` / `appendCapture` 换成**声明的贡献者列表**（例如 `std::span<IFrameContribution* const>`），顺序由 coordinator 一处拥有，host 只注册；`appendCapture` 保留到 capture 有别的归属方式（automation 截图）。
+- 保守替代（若一次换不动）：保留顺序在 host，但把 step 具名化，缺 step 时 assert 而不是静默跳过。
+- 验收：`RenderFramePlan` 里 `std::function` 数量降到 ≤1；"world → UI compose → view compose → display compose → capture"在**单个文件**里连续可读（`rg` 不再需要跨 GameRuntime/Render3D 拼顺序）。
+
+**V7 — 离屏任务驱动显式化**
+
+- `OffscreenTaskService::tick` 从 `tickRender` 内部提到具名 host step（`pumpOffscreenTasks`），或声明为"录制前的前置阶段"并让它在 plan 里可见。
+- 验收：`tickRender` 的主体步骤列表里能看到离屏 pump；`isOffscreenPending()` 的消费者说明它在等什么。
+
+**V8 — viewport debug catalog 移出 device**
+
+- `RenderDeviceState.ViewportDebug.cpp`（652 行）与 `buildViewportDebugCatalog` / `appendViewportDebugImages` / `ensureViewportDebugCatalog` / `RenderPipelineDebugOutputCatalog` 移成独立的 debug/呈现服务；`_viewportDebugCatalogSignature` 这类 `mutable` 缓存随实现走。
+- 顺带断 `ya-render-3d -> ya-gui-compose` 中属于 debug/compose 的那部分（S2 的聚合边界条目）。
+- 验收：`RenderDeviceState` 公开面不再有"给面板看的目录"；`rg 'ViewportDebug' Engine/Source/Framework/Render/Render3D/RenderDeviceState*` 为 0。
+
+### 附.3 执行顺序与理由
+
+1. **V1 + V2 + V3 一个 commit**：都是删隐式身份/兜底，不动 GPU 时序，也不需要先有 owner-scoped key。做完之后"谁是宿主 view"只有一个答案——这是 V5 的前置。
+2. **V4 + V5 同一批**：`IRenderRuntimeServices` 的 env lighting 出口正好是 `PreparedView` 要接的东西，分两次做会出现"一半 pass 从全局拿、一半从 view 拿"的半迁移状态（比两端都差）。
+3. **V6**：可以在 V5 之后单独做，因为它只动 plan 的形状，不动 view 数据。
+4. **V7 / V8**：互不相干，任何时候都能插；V8 还能顺带减 S2 的依赖倒置。
+
+### 附.4 不做什么
+
+- 不在这一批做 owner-scoped `SceneViewKey`（4.0.3 checkpoint 5）：它是 V2 之后才有的价值，先做会让 V1–V3 的删除被"新键"掩盖。
+- 不为"隐式"这件事新增抽象：I1–I7 每一条的修法都是**删除**（删 `front()`、删循环赋值、删兜底、删回调、删中间 struct），不引入新 bus/registry/中央调度器。
+- 不顺手改 pass topology（Forward/Deferred 保持现状），也不在录制中途重建 GPU 资源。

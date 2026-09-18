@@ -1,5 +1,33 @@
 # Progress
 
+## 2026-09-18 隐式驱动审计（V1–V8）
+
+问题：R2/R3/R4 已经写清"往哪走"，但渲染路径上仍有一批**没人明说、代码照样跑**
+的规则。本轮先登记再动手，结论进 `plan.md` 附.1–附.4、checkpoint 进 `todo.md`。
+
+查证到的七条（每条都能指到代码）：
+
+1. `RenderFramePlan` 带 `std::function`（`recordCompose` / `recordBeforeExtensions` /
+   `recordExtensions` / `appendCapture`），真实录制顺序一半在 GameRuntime、一半在
+   Render3D；漏挂 step 静默跳过。
+2. "主 view"四个答案：`declareViews()` 的 `primaryView`、`viewFrames.front()`、
+   `displayRootTask()`、`publishFamilyResult` 循环里最后写入者赢。
+3. 兜底链：`getActiveViewportImageShared` / `getViewOutput` / `getViewportExtent` /
+   `buildPipelineDebugOutputCatalog` 都是"找不到就换地方找"。
+4. `record()` 内部做 `prepareDerivedState` / `applyPendingMutations` /
+   `applyViewportResize` / `prepareComposePipelines`，安全点是"`begin()` 之前"的惯例。
+5. `IRenderRuntimeServices` 让 pass 在录制中途取全局状态。
+6. 离屏任务被 `tickRender` 顺带 pump。
+7. `RenderDeviceState.ViewportDebug.cpp` 652 行呈现目录挂在 device 上；`Render3D`
+   还 include `GUI/Compose/Render2DComposePass.h`。
+
+排序结论：V1–V3 是纯删除、不动 GPU 时序，先做（做完"谁是宿主 view"才有唯一答案，
+是 V5 的前置）；V4+V5 必须同批，否则会出现"一半 pass 从全局拿、一半从 view 拿"的
+半迁移状态；V6/V7/V8 独立。owner-scoped `SceneViewKey`（4.0.3 checkpoint 5）排在
+V2 之后，不提前做。
+
+本轮只登记，未动代码；工作区仍只有用户自己改的三个文件。
+
 ## 当前状态
 
 - 阶段：R0/R1 契约已落地。R2 功能向 ViewFamily 靠近，架构未收口。真实 loop 是 `AppKernel` → `GameRuntimeTickOrchestrator::tickRender` → `RenderFrameCoordinator::record` → `recordFamily` → host present。`RenderRuntime` 类已删除。
