@@ -18,11 +18,12 @@ struct SceneViewCollectContext
     /// Scene the host is currently working with, or null. A producer that wants
     /// Scene content reads its own Scene; this is only the host's default.
     Scene*   activeScene = nullptr;
-    /// Host viewport geometry for this tick (surface client area). Not an OS
-    /// window and not a swapchain image. A producer that needs an extent
-    /// derives it from this rect rather than reading a second field that could
-    /// disagree with it.
-    Rect2D   viewportRect{};
+    /// Resolution the host viewport renders at, in pixels. A render setting, not
+    /// the window's client area and not a swapchain image: a producer that fills
+    /// the host viewport declares this and the presentation pass stretches the
+    /// result onto whatever surface is showing it. A producer with its own
+    /// geometry (an editor panel) ignores this and declares its own rect.
+    Extent2D renderResolution{};
     uint64_t hostTick  = 0;
     float    deltaTime = 0.0f;
 };

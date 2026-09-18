@@ -78,7 +78,12 @@ class GameRuntimeTickOrchestrator
     /// they consume instead of the live WidgetTree. The snapshot stays empty on
     /// frames with no Game UI (UI-only frames and the editor's authoring
     /// viewport), which is what the packet reports as "no UI to compose".
-    static TickFrame buildGameRenderFrame(App& app, float dt, uint32_t flightIndex);
+    /// `sceneRender` supplies the View the UI will be composed onto, which is
+    /// what sizes its logical viewport.
+    static TickFrame buildGameRenderFrame(App&                        app,
+                                          float                       dt,
+                                          uint32_t                    flightIndex,
+                                          const ExtractedSceneRender& sceneRender);
     /// Records the tick in one renderer call and returns what the host submits.
     static RecordedFrame recordFrame(App&                        app,
                                      RenderDeviceState&          device,

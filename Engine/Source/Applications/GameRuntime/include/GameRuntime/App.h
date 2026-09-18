@@ -99,7 +99,6 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     bool            _bMinimized = false;
 
     AppDesc   _ci;
-    glm::vec2 _windowSize = {0, 0};
     AppState  _appState   = AppState::Stopped;
 
     InputManager inputManager;
@@ -303,7 +302,6 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     void notifyModulesAfterAppStateChange(AppState previousState);
     void notifyModulesSceneActivated(Scene* scene);
     void notifyModulesSceneDestroyed(Scene* scene);
-    [[nodiscard]] const glm::vec2& getWindowSize() const { return _windowSize; }
 };
 
 } // namespace ya

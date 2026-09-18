@@ -40,7 +40,7 @@ struct AppAutomationRuntimeState
     uint64_t                  stableTicks         = 0;
     bool                      bScreenshotRequested = false;
     bool                      bQuitDeferred        = false;
-    bool                      bViewportResizeApplied = false;
+    bool                      bRenderResolutionApplied = false;
     bool                      bPipelineSwitchApplied = false;
 };
 
@@ -152,7 +152,7 @@ void loadRenderDocAutomationOverrides(AppDesc& appDesc)
     }
 }
 
-void loadViewportResizeAutomationOverrides(AppDesc& appDesc)
+void loadRenderResolutionAutomationOverrides(AppDesc& appDesc)
 {
     auto& configManager = ConfigManager::get();
     if (!configManager.hasDocument(AUTOMATION_CONFIG_DOC_NAME)) {
@@ -161,23 +161,23 @@ void loadViewportResizeAutomationOverrides(AppDesc& appDesc)
 
     uint32_t width  = 0;
     uint32_t height = 0;
-    const bool bHasWidth  = configManager.tryGet<uint32_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.viewportResize.width", width);
-    const bool bHasHeight = configManager.tryGet<uint32_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.viewportResize.height", height);
+    const bool bHasWidth  = configManager.tryGet<uint32_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.renderResolution.width", width);
+    const bool bHasHeight = configManager.tryGet<uint32_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.renderResolution.height", height);
     if (!bHasWidth && !bHasHeight) {
         return;
     }
 
     if (width == 0 || height == 0) {
-        YA_CORE_WARN("Ignoring invalid automation viewport resize override: {}x{}", width, height);
+        YA_CORE_WARN("Ignoring invalid automation render resolution override: {}x{}", width, height);
         return;
     }
 
-    AppAutomationViewportResize resize{
+    AppAutomationRenderResolution resolution{
         .width  = width,
         .height = height,
     };
-    configManager.tryGet<uint64_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.viewportResize.frame", resize.hostTick);
-    appDesc.automation.viewportResize = resize;
+    configManager.tryGet<uint64_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.renderResolution.frame", resolution.hostTick);
+    appDesc.automation.renderResolution = resolution;
 }
 
 void loadPipelineSwitchAutomationOverrides(AppDesc& appDesc)
@@ -495,7 +495,7 @@ bool hasPendingAutomationWork(const App& app, const AppAutomationTickContext* ti
 bool hasTickAutomationConfig(const AppAutomationOptions& automation)
 {
     return automation.exitAfterTick > 0 ||
-           automation.viewportResize.has_value() ||
+           automation.renderResolution.has_value() ||
            automation.pipelineSwitch.has_value() ||
            hasScreenshotAutomation(automation) ||
            hasRenderDocAutomation(automation);
@@ -547,22 +547,23 @@ void applyScheduledSmokeActions(App& app, uint64_t hostTick)
                      hostTick);
     }
 
-    if (automation.viewportResize &&
-        !runtimeState.bViewportResizeApplied &&
-        hostTick >= automation.viewportResize->hostTick) {
-        Rect2D resizeRect = app.getRenderServices().getViewportRect();
-        resizeRect.extent = glm::vec2(static_cast<float>(automation.viewportResize->width),
-                                      static_cast<float>(automation.viewportResize->height));
-
-        // Host view geometry. The view that fills it declares this rect and the
+    if (automation.renderResolution &&
+        !runtimeState.bRenderResolutionApplied &&
+        hostTick >= automation.renderResolution->hostTick) {
+        // A render-resolution change, not a window resize: the window keeps its
+        // size and the presentation pass stretches the new resolution onto it.
+        // The View that fills the host viewport declares this resolution and the
         // device extent follows that declaration, so nothing is pushed at the
         // device from here; an editor's authoring viewport is sized by its panel.
-        app.getRenderServices().setViewportRect(resizeRect);
+        app.getRenderServices().setRenderResolution(Extent2D{
+            .width  = automation.renderResolution->width,
+            .height = automation.renderResolution->height,
+        });
 
-        runtimeState.bViewportResizeApplied = true;
-        YA_CORE_INFO("Automation queued viewport resize to {}x{} at frame {}",
-                     automation.viewportResize->width,
-                     automation.viewportResize->height,
+        runtimeState.bRenderResolutionApplied = true;
+        YA_CORE_INFO("Automation queued render resolution change to {}x{} at frame {}",
+                     automation.renderResolution->width,
+                     automation.renderResolution->height,
                      hostTick);
     }
 }
@@ -696,7 +697,7 @@ void AppAutomation::applyStartupOverrides(AppDesc& appDesc)
     loadScreenshotAutomationOverrides(appDesc);
     loadRenderDocAutomationOverrides(appDesc);
     loadSmokeLogAutomationOverrides(appDesc);
-    loadViewportResizeAutomationOverrides(appDesc);
+    loadRenderResolutionAutomationOverrides(appDesc);
     loadPipelineSwitchAutomationOverrides(appDesc);
     loadPostprocessAutomationOverrides(appDesc);
     loadAutomationShadowOverridesFromConfig(appDesc.automation.shadow);

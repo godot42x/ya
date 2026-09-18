@@ -11,10 +11,13 @@
 - [x] 删主机 screen-overlay 通道（整条 pass）：`FramePacket::OverlayInput` / `overlay`、`RenderViewportOverlaySnapshot`、`recordRenderViewportOverlayPass`、`prepareRenderViewportOverlayPipeline`、`RenderOverlay.cpp`、Forward/Deferred 的 overlay pass 与 `perf::sample::renderViewportOverlay()`。
 - [x] `tickRender` 每一步自己持有自己的存储：`declareViews` 收回 collector 并删掉没人用的返回指针；`buildGameRenderFrame -> TickFrame`（自带 UI snapshot，`boundFrame()` 在读取时绑定 packet 指针）；`hostViewDesc` 局部指针消失。顺带把头文件里已死的 `RenderOverlay.h` include 与三个过期前向声明删掉。
 - [x] `HostViewState` 每个字段一个写者：`prepareHostViewState` 只写 `clock`（退化几何修补搬到 init 种子），identity 与生效几何的唯一每帧写者是 `declareViews`（含"没人声明 host viewport"分支），请求侧只有 `AppRenderServices::setViewportRect` 一条路径（init 也走它）；`HostViewState.h` 列出写者表。
+- [x] 窗口是呈现面、渲染分辨率是设置（B 方案，用户决定）：`HostViewState::viewportRect`(Rect2D) → `renderResolution`(Extent2D)；`setViewportRect/getViewportRect` → `setRenderResolution/getRenderResolution`；删 `App::_windowSize`/`getWindowSize()`（窗口尺寸到不了渲染输入的副本，权威是 `INativeWindow::getWindowSize()`）；`SceneViewCollectContext::viewportRect` → `renderResolution`；`declareViews` 不再抄回 View 的 rect；camera aspect 读设置而非窗口；Game UI 逻辑视口改从 `displayRootTask()->desc.viewportRect` 派生；automation `viewportResize` → `renderResolution`；`get_world_view_state` 分开上报设置与实际产出 extent。正面证据：`smoke.renderResolution=640x360` 时 viewport 截图 640x360、presentation 仍 1024x768 且目视确认被拉伸填满。
 
 下一批次（各自独立可验收，按此顺序）：
 
 - [x] 公开 `Renderer` 合并（4.0.3 checkpoint 2/3）：`record` / `recordViewFamilies` / `prepareFrameRecord` 移入 `RenderDeviceState`，`friend` 与 5 处 `_device->_` 私有写入删除，`RenderFrameCoordinator.{h,cpp}` 整文件删除；App 侧 `AppRenderState::coordinator` 与 `AppRenderServices::getFrameCoordinator()` 删除。顺带修掉 unity build 掩盖的 `RenderStageContext` include 缺口。**未做**：`RenderSubmission` 拆 `FrameRecording` / `FrameFlightResources`、4.0.3 checkpoint 5（owner-scoped `SceneViewKey`）。
+- [ ] presentation fit/letterbox 模式：今天是把渲染图按像素 1:1 贴到 swapchain 上（只 tone map），宽高比不同的窗口会被拉伸。要做 fit 必须先决定多出来的像素画什么（黑边 / 背景色）。
+- [ ] `RenderSubmission` 拆成 `FrameRecording` 与 `FrameFlightResources`（4.0.3 的另一半）。
 
 ## V 系列（隐式驱动收口，见 plan 附.1–附.4）
 

@@ -188,15 +188,15 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
 
     if (app.getSceneServices().getActiveScene()) {
         YA_PROFILE_SCOPE("Logic/RuntimeCamera");
-        // The aspect follows the *host surface area this tick is sized for*, not
-        // last tick's published View output. Reading the device's published
-        // extent made the camera's aspect depend on what was rendered before,
-        // which is exactly the "global viewport" this chain is removing: every
-        // View declares its own extent, so the only thing the game camera can
-        // honestly match is the area the host is giving the views.
+        // The game camera's aspect follows the resolution its viewport renders
+        // at: a setting this tick reads directly. Not last tick's published View
+        // output (that made the aspect depend on what was rendered before), and
+        // not the window (the window only decides how the image is presented, so
+        // following it would change what is rendered on a resize that changes
+        // nothing about the image).
         // `syncRuntimeCameraAspect` ignores a degenerate extent.
-        const Extent2D viewportExtent = Extent2D::fromVec2(app._renderState->hostView.viewportRect.extent);
-        syncRuntimeCameraAspect(findPrimaryCamera(*app.getSceneServices().getActiveScene()), viewportExtent);
+        syncRuntimeCameraAspect(findPrimaryCamera(*app.getSceneServices().getActiveScene()),
+                               app._renderState->hostView.renderResolution);
     }
 
     {
@@ -331,7 +331,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     ExtractedSceneRender sceneRender = extractScenes(app, sceneScheduler, device);
     prepareViews(app, dt, flightIndex, sceneRender);
 
-    TickFrame gameFrame = buildGameRenderFrame(app, dt, flightIndex);
+    TickFrame gameFrame = buildGameRenderFrame(app, dt, flightIndex, sceneRender);
 
     IRender*       render        = device->getRender();
     FPresentFrame  presentFrame{.surface = render ? render->getPrimarySurfaceContext() : nullptr};
@@ -365,7 +365,7 @@ void GameRuntimeTickOrchestrator::declareViews(App& app, float dt, RenderDeviceS
     auto* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
     const SceneViewCollectContext collectContext{
         .activeScene    = scene,
-        .viewportRect   = hostView.viewportRect,
+        .renderResolution = hostView.renderResolution,
         .hostTick       = App::_hostTick,
         .deltaTime      = dt,
     };
@@ -389,22 +389,21 @@ void GameRuntimeTickOrchestrator::declareViews(App& app, float dt, RenderDeviceS
     // well-known view id here would be a second definition of "the host view"
     // that can disagree with it.
     //
-    // This is the only per-tick writer of the host camera and of the resolved
-    // geometry: the request `AppRenderServices::setViewportRect` seeded stands
-    // until a View claims the host viewport, and no View claiming it this tick
-    // means "no host camera" rather than "keep the previous one".
+    // This is the only per-tick writer of the host camera: the View's own rect is
+    // not copied here (it belongs to the declaration, and a reader that wants the
+    // rendered rectangle reads the renderer's published output), and no View
+    // claiming the host viewport this tick means "no host camera" rather than
+    // "keep the previous one".
     bool bHostViewportDeclared = false;
     for (const SceneViewDesc& view : collector.views()) {
         if (!view.ownsHostViewport()) {
             continue;
         }
-        // The declared rect is the host view's geometry, so the host's copy and
-        // the extent the device expects follow the declaration instead of a rect
-        // the owner pushed into host state.
+        // The extent the device expects follows the declaration instead of a rect
+        // pushed into host state.
         hostView.view       = view.view;
         hostView.projection = view.projection;
         hostView.cameraPos  = view.cameraPos;
-        hostView.viewportRect = view.viewportRect;
         device->applyViewportResize(view.viewportRect);
         bHostViewportDeclared = true;
         break;
@@ -469,9 +468,11 @@ void GameRuntimeTickOrchestrator::prepareViews(App&                  app,
     }
 }
 
-GameRuntimeTickOrchestrator::TickFrame GameRuntimeTickOrchestrator::buildGameRenderFrame(App&     app,
-                                                                                         float    dt,
-                                                                                         uint32_t flightIndex)
+GameRuntimeTickOrchestrator::TickFrame GameRuntimeTickOrchestrator::buildGameRenderFrame(
+    App&                        app,
+    float                       dt,
+    uint32_t                    flightIndex,
+    const ExtractedSceneRender& sceneRender)
 {
     const HostViewState& hostView = app._renderState->hostView;
 
@@ -491,10 +492,19 @@ GameRuntimeTickOrchestrator::TickFrame GameRuntimeTickOrchestrator::buildGameRen
     // Command recording consumes only this packet; the live WidgetTree is
     // never touched while recording. Runtime/simulation only (standalone game
     // and PIE); the editor's 3D authoring viewport has no game UI.
+    //
+    // The UI is composed onto the host viewport's View, so its logical viewport
+    // is that View's declared rect. Deriving it from the plan rather than from a
+    // host copy is what makes PIE correct: there the host viewport is the
+    // editor's authoring panel, not the game's render resolution. A tick that
+    // declares no host viewport presents no Game UI, so the tree keeps the size
+    // it was last presented at instead of being resized to a target that does not
+    // exist.
     const Scene* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
-    if ((app.isRuntimeMode() || app.isSimulationMode()) && scene) {
+    const SceneViewportTask* displayRoot = sceneRender.displayRootTask();
+    if ((app.isRuntimeMode() || app.isSimulationMode()) && scene && displayRoot) {
         if (auto* gameUIHost = app.getGameUIHost()) {
-            gameUIHost->setPresentation(hostView.viewportRect,
+            gameUIHost->setPresentation(displayRoot->desc.viewportRect,
                                         glm::vec2(tickFrame.frame.viewportFrameBufferScale));
             tickFrame.uiSnapshot = gameUIHost->buildSnapshot();
         }

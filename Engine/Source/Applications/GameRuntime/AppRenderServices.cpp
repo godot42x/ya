@@ -46,16 +46,16 @@ float AppRenderServices::getViewportFrameBufferScale() const
     return _state->hostView.viewportFrameBufferScale;
 }
 
-void AppRenderServices::setViewportRect(Rect2D rect)
+void AppRenderServices::setRenderResolution(Extent2D resolution)
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->hostView.viewportRect = rect;
+    _state->hostView.renderResolution = resolution;
 }
 
-Rect2D AppRenderServices::getViewportRect() const
+Extent2D AppRenderServices::getRenderResolution() const
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    return _state->hostView.viewportRect;
+    return _state->hostView.renderResolution;
 }
 
 ShadowSettings& AppRenderServices::getShadowSettings()

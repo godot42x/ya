@@ -75,9 +75,16 @@ def main() -> int:
 
     print("2. verify editor world view state")
     state = require_ok(client.call("get_world_view_state"), "get_world_view_state")
-    viewport = state.get("viewport_rect", {})
-    if float(viewport.get("width", 0.0)) <= 0.0 or float(viewport.get("height", 0.0)) <= 0.0:
-        raise RuntimeError(f"invalid viewport rect: {viewport}")
+    # The extent the renderer actually produced for the host viewport: the editor
+    # authoring panel. A window resize or a resolution setting change must not be
+    # what makes this non-empty, so an empty extent means the world view is not
+    # being rendered at all.
+    rendered = state.get("rendered_viewport_extent", {})
+    if float(rendered.get("width", 0.0)) <= 0.0 or float(rendered.get("height", 0.0)) <= 0.0:
+        raise RuntimeError(f"world view did not render: {rendered}")
+    resolution = state.get("render_resolution", {})
+    if float(resolution.get("width", 0.0)) <= 0.0 or float(resolution.get("height", 0.0)) <= 0.0:
+        raise RuntimeError(f"invalid render resolution: {resolution}")
 
     print("3. set editor camera")
     require_ok(

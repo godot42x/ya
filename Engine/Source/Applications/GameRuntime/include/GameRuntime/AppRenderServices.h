@@ -46,17 +46,16 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] bool                                   wasSceneRenderedLastTick(const Scene* scene) const;
     void                                                 setViewportFrameBufferScale(float scale);
     [[nodiscard]] float                                  getViewportFrameBufferScale() const;
-    /// The host's request for its viewport geometry: seeded once from the window
-    /// the surface was created with and overridden by the control plane. It is
-    /// one of the two writers of `HostViewState::viewportRect`; the other is
-    /// `GameRuntimeTickOrchestrator::declareViews`, which replaces it with the
-    /// rect the View owning the host viewport declares. Do not use it as "the
-    /// geometry in effect" - read getViewportRect() for that.
-    void                                                 setViewportRect(Rect2D rect);
-    /// Geometry in effect for the host viewport (the declaration when a View owns
-    /// it, otherwise the request). Reporting and control-plane read-modify-write
-    /// use this; a caller that wants to size a View declares that View's rect.
-    [[nodiscard]] Rect2D                                 getViewportRect() const;
+    /// The resolution the host viewport's View renders at, in pixels. A render
+    /// setting, not a window measurement: the window only decides how the
+    /// resulting image is presented. Seeded from the size the window was created
+    /// with; changing it resizes what is rendered, not the window.
+    void                                                 setRenderResolution(Extent2D resolution);
+    /// The *requested* resolution. It is what the host viewport's View will be
+    /// sized from, so it is the honest answer for reporting and for a
+    /// read-modify-write in the control plane. The rectangle actually rendered
+    /// last tick is the renderer's published output, not this.
+    [[nodiscard]] Extent2D                               getRenderResolution() const;
     [[nodiscard]] ShadowSettings&                        getShadowSettings();
     [[nodiscard]] const ShadowSettings&                  getShadowSettings() const;
     [[nodiscard]] IRenderPipeline*                       getRenderPipeline() const;

@@ -717,7 +717,12 @@ void AppAutomationControlService::handleGetWorldViewState(App& app, const AppAut
     }
 
     const auto& hostView = app.getRenderServices().getHostViewState();
-    const auto  viewportRect = app.getRenderServices().getViewportRect();
+    // Two different things, reported separately so neither has to stand in for
+    // the other: the resolution the host viewport is asked to render at (a
+    // setting), and the extent the renderer actually produced last tick (empty
+    // when no View claimed the host viewport). A window resize changes neither.
+    const Extent2D requestedResolution = app.getRenderServices().getRenderResolution();
+    const Extent2D renderedExtent      = device->getViewportExtent();
 
     nlohmann::json result = {
         {"is_stopped", app.isStopped()},
@@ -725,11 +730,13 @@ void AppAutomationControlService::handleGetWorldViewState(App& app, const AppAut
         {"is_simulation", app.isSimulationMode()},
         {"is_paused", app.isPaused()},
         {"camera_pos", {hostView.cameraPos.x, hostView.cameraPos.y, hostView.cameraPos.z}},
-        {"viewport_rect", {
-            {"x", viewportRect.pos.x},
-            {"y", viewportRect.pos.y},
-            {"width", viewportRect.extent.x},
-            {"height", viewportRect.extent.y},
+        {"render_resolution", {
+            {"width", requestedResolution.width},
+            {"height", requestedResolution.height},
+        }},
+        {"rendered_viewport_extent", {
+            {"width", renderedExtent.width},
+            {"height", renderedExtent.height},
         }},
         {"frame_index", App::currentHostTick()},
     };

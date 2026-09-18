@@ -1,5 +1,85 @@
 # Progress
 
+## 2026-09-19 checkpoint：窗口是呈现面，渲染分辨率是设置（B 方案）
+
+接上一刀（`HostViewState` 每个字段一个写者）暴露出来的问题：`viewportRect` 这个字段在不同模式下
+指三种不同的东西（纯 game 下是启动时按 CI 冻结的尺寸、Editor 下是 authoring 面板 rect、PIE 下是
+沿用上一次编辑态的残留），而它同时还被当成"请求"暴露在 `AppRenderServices` 上。用户问
+"`setViewportRect()` 里的 viewport 到底指什么"，查证后确认了三个后果：
+
+1. `App::_windowSize` 只剩写者（`handleWindowResized`），最后一个读点已在前一刀搬进 init 种子；
+2. **窗口尺寸到不了 View rect**：runtime 下改窗口大小，View 仍按启动尺寸渲染再被缩放贴上去，而这个
+   "固定分辨率"行为没有任何地方声明过；
+3. `AppRenderServices` 上的 `setViewportRect/getViewportRect` 是一个跨三种语义的可变副本。
+
+用户在两条路里选了 **B**：**窗口放大不改变渲染内容，渲染分辨率是一个可以调低的设置**（"打好地基，
+一般游戏都支持调整分辨率来提升性能"）。
+
+### 落地：把"渲染分辨率"和"窗口"彻底分开
+
+- `HostViewState::viewportRect`（Rect2D）→ `renderResolution`（Extent2D）。类型本身就在说
+  "这不是一个位置，是一张离屏图的分辨率"；头注释写明**窗口是呈现面，不是渲染尺寸**：渲染分辨率
+  从它来，presentation pass 把这张图拉伸到 swapchain image 上，两者可以不同尺寸。
+- `AppRenderServices::setViewportRect/getViewportRect` → `setRenderResolution/getRenderResolution`。
+  仍然只有一条写入路径（init 种子 + 控制面），但语义从"视口几何"变成"渲染分辨率设置"。
+- 种子仍是"与窗口创建尺寸一致"——开箱即 1:1 呈现；**但 resize 不再是它的写者**。
+- `App::_windowSize` 与 `getWindowSize()` 删除：删掉这个到不了渲染输入的窗口尺寸副本。窗口尺寸的
+  唯一权威是 `INativeWindow::getWindowSize()`（swapchain 自己就在查它）。
+- `SceneViewCollectContext::viewportRect`（Rect2D）→ `renderResolution`（Extent2D）：producer 拿到
+  的就是"宿主视口要渲染多大"，而不是一个既可能是窗口、又可能是面板的 rect。
+- `declareViews` 不再把 View 的 rect 抄回 host state（View 自己的 rect 属于声明；要读"上一帧实际渲染
+  成多大"就读 `RenderDeviceState::getViewportExtent()`，即已发布输出）。
+- runtime camera aspect 直接读 `hostView.renderResolution`：不读窗口（窗口只决定怎么呈现，跟着它会在
+  "什么都没变"的 resize 上改变渲染内容），也不读上一帧输出。
+- Game UI 的逻辑视口改成 `sceneRender.displayRootTask()->desc.viewportRect`：UI 被合到 host viewport
+  的 View 上，所以它的逻辑视口就是那个 View 声明的 rect。这顺带修掉 PIE 下的一处不精确（PIE 的 host
+  viewport 是 game view，只有从 plan 派生才不会和 host 副本分叉），以及"这一帧没有 host viewport 时
+  仍用上一次的 rect 去 setPresentation"。
+- automation：`AppAutomationViewportResize` → `AppAutomationRenderResolution`，配置键
+  `smoke.viewportResize` → `smoke.renderResolution`，日志改为 "queued render resolution change to
+  WxH"。它请求的是渲染分辨率，不是窗口尺寸。
+- `get_world_view_state` 把两件事分开上报：`render_resolution`（设置）与
+  `rendered_viewport_extent`（上一帧 renderer 实际产出的尺寸，没有 host viewport 时为空）。编辑器
+  smoke 相应改为断言**实际渲染出的 extent 非退化**（比断言一个设置字段更能证明"世界视图真的在渲染"），
+  并额外断言设置非退化。
+
+### 验证：B 真的成立，而不只是编译过
+
+| 检查 | 结果 |
+| --- | --- |
+| `xmake b` | `ya-game-runtime` / `ya-game-editor` / `ya-testing` / `ya-render-3d-test` / `ya-runtime` / `ya-engine` / `GUIWorkbench` 全部 ok |
+| `ya-render-3d-test` | 175/175 |
+| `ya-testing` 渲染/编辑器滤镜 | 282 passed / 3 failed，与基线同 3 个 |
+| HelloMaterial viewport 截图（无 override） | exit=0，0 error，`md5=1c6668976be1cdd5d755d1f1365700f7` **逐字节相同** |
+| run-editor viewport 截图（无 override） | exit=0，0 error，`md5=5b8f5dd8acdbc90bd5c383feb3f7bcec` **逐字节相同** |
+| `run_widgettree_editor_smoke.py --skip-build` | 六步全过（含新的两项断言） |
+
+**B 的正面证据**（这是本刀的关键：逐字节相同只能证明没坏，不能证明这个设置有用）：
+
+~~~text
+smoke.renderResolution = 640x360 @ frame 5
+  → 日志 "Automation queued render resolution change to 640x360 at frame 5"
+  → --screenshot-target=viewport      产出 640x360   （View 真的按设置渲染）
+  → --screenshot-target=presentation  产出 1024x768  （窗口/present 尺寸不变）
+~~~
+
+目视确认该 presentation 图：640x360 的世界 + Game UI 被拉伸填满 1024x768 窗口，UI 元素按逻辑尺寸渲染
+后一起被放大（不是先按窗口尺寸渲染 UI）。这正是 B 的语义——改分辨率提升性能，窗口照旧。
+
+### 已知且刻意不改的边界
+
+presentation 的拉伸是**按渲染图像素 1:1** 贴到 swapchain 上的（`PresentationGraphService` 用
+presentationImage 的 extent 当 renderArea，只做 tone map，不做 fit）。因此当窗口宽高比与渲染分辨率
+不同时，会在该方向上被拉伸。头注释写明了这是刻意保留：letterbox / fit 是一个需要先决定"多出来的像素
+画什么"的呈现特性，不该在这里偷偷塞一个值解决。默认分辨率与窗口一致时宽高比相同，所以开箱表现不变
+（两张截图逐字节相同即是证明）。
+
+### 本刀边界
+
+- 未做：presentation fit/letterbox 模式（需先决定多出来的像素画什么）。
+- 未做：`RenderSubmission` 拆 `FrameRecording` / `FrameFlightResources`、4.0.3 checkpoint 5
+  （owner-scoped `SceneViewKey`）。
+
 ## 2026-09-19 checkpoint：合并成公开 Renderer（4.0.3 checkpoint 2/3）
 
 `todo.md`「逻辑→渲染链减法」批次第 3 项，也是 4.0.3 原文的 checkpoint 2/3。`RenderDeviceState`

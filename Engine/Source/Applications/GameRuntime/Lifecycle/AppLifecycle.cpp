@@ -220,22 +220,20 @@ void App::init(AppDesc ci)
         if (auto* window = render->primaryWindow()) {
             window->getWindowSize(winW, winH);
         }
-        app._windowSize.x = static_cast<float>(winW);
-        app._windowSize.y = static_cast<float>(winH);
         app.inputRouter.setWindow(render->primaryWindow());
-    }
 
-    // Seed the host viewport geometry through the render services so the field
-    // has a single write path: this init-time seed and the automation control
-    // plane both go through AppRenderServices::setViewportRect, and the tick's
-    // only writer is declareViews (see HostViewState.h).
-    // The size the window was created with wins; a surface created without one is
-    // sized by the window it actually got.
-    app.getRenderServices().setViewportRect(Rect2D{
-        .pos    = {0.0f, 0.0f},
-        .extent = {app._ci.width > 0 ? static_cast<float>(app._ci.width) : app._windowSize.x,
-                   app._ci.height > 0 ? static_cast<float>(app._ci.height) : app._windowSize.y},
-    });
+        // Seed the render resolution through the render services, so the setting
+        // has one write path: this init-time seed and the control plane both go
+        // through AppRenderServices::setRenderResolution (see HostViewState.h).
+        // The window is only the presentation surface, so this is the *default*
+        // resolution, chosen to match the window the surface was created with -
+        // out of the box the image is presented 1:1 - and any later resolution
+        // change is a setting change rather than a reaction to a resize.
+        app.getRenderServices().setRenderResolution(Extent2D{
+            .width  = app._ci.width > 0 ? static_cast<uint32_t>(app._ci.width) : static_cast<uint32_t>(winW),
+            .height = app._ci.height > 0 ? static_cast<uint32_t>(app._ci.height) : static_cast<uint32_t>(winH),
+        });
+    }
 
     app._sceneManager = new SceneManager();
     // Scene registers itself with the lifecycle host through the injected

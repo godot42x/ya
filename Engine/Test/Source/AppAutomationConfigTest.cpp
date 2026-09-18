@@ -151,13 +151,13 @@ TEST_F(AppAutomationConfigTest, LoadConfigDefaultsToStandardAutomationConfigPath
     EXPECT_TRUE(*appDesc.automation.shadow.directionalEnabled);
 }
 
-TEST_F(AppAutomationConfigTest, LoadConfigReadsSmokeViewportResizeAndPipelineSwitch)
+TEST_F(AppAutomationConfigTest, LoadConfigReadsSmokeRenderResolutionAndPipelineSwitch)
 {
     writeAutomationConfig(DEFAULT_AUTOMATION_CONFIG_PATH,
                           R"({
   "smoke": {
     "log": { "level": "warn", "detailLevel": "error" },
-    "viewportResize": { "width": 1600, "height": 900, "frame": 4 },
+    "renderResolution": { "width": 1600, "height": 900, "frame": 4 },
     "renderPipeline": { "target": "forward", "frame": 7 }
   }
 })");
@@ -172,10 +172,10 @@ TEST_F(AppAutomationConfigTest, LoadConfigReadsSmokeViewportResizeAndPipelineSwi
     ASSERT_TRUE(appDesc.automation.logDetailLevel.has_value());
     EXPECT_EQ(*appDesc.automation.logDetailLevel, logcc::LogLevel::Error);
 
-    ASSERT_TRUE(appDesc.automation.viewportResize.has_value());
-    EXPECT_EQ(appDesc.automation.viewportResize->width, 1600u);
-    EXPECT_EQ(appDesc.automation.viewportResize->height, 900u);
-    EXPECT_EQ(appDesc.automation.viewportResize->hostTick, 4u);
+    ASSERT_TRUE(appDesc.automation.renderResolution.has_value());
+    EXPECT_EQ(appDesc.automation.renderResolution->width, 1600u);
+    EXPECT_EQ(appDesc.automation.renderResolution->height, 900u);
+    EXPECT_EQ(appDesc.automation.renderResolution->hostTick, 4u);
 
     ASSERT_TRUE(appDesc.automation.pipelineSwitch.has_value());
     EXPECT_EQ(appDesc.automation.pipelineSwitch->target, EAutomationRenderPipeline::Forward);

@@ -30,7 +30,10 @@ enum class EAutomationRenderPipeline : uint8_t
     Deferred,
 };
 
-struct AppAutomationViewportResize
+/// Ask the host viewport to render at a different resolution from a given tick.
+/// This is a render-resolution change, not a window resize: the window keeps its
+/// size and the presentation pass stretches the new resolution onto it.
+struct AppAutomationRenderResolution
 {
     uint32_t width      = 0;
     uint32_t height     = 0;
@@ -80,7 +83,7 @@ struct AppAutomationOptions : AppAutomationRunOptions
     std::optional<std::string>   screenshotPath;
     std::optional<glm::vec3>     editorCameraPosition;
     std::optional<glm::vec3>     editorCameraRotation;
-    std::optional<AppAutomationViewportResize> viewportResize;
+    std::optional<AppAutomationRenderResolution> renderResolution;
     std::optional<AppAutomationPipelineSwitch> pipelineSwitch;
     std::optional<logcc::LogLevel::T> logLevel;
     std::optional<logcc::LogLevel::T> logDetailLevel;
