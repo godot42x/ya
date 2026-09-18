@@ -35,6 +35,13 @@ class GameRuntimeTickOrchestrator
     static Extent2D resolveViewportExtent(const App& app, RenderDeviceState* device, const Rect2D& viewportRect);
     static void     prepareHostViewState(App& app, float dt);
     static void     tickRender(App& app, float dt);
+    /// Pre-record prerequisite, before anything reads a derived resource: waits
+    /// for the previous tick's offscreen submission and finalizes it, then
+    /// records and submits whatever earlier ticks queued (IBL preprocess,
+    /// cubemap conversions, terrain rebuilds). A job submitted here becomes
+    /// readable on the next pump, which is why this runs before this tick's View
+    /// preparation instead of after it.
+    static void     pumpOffscreenTasks(App& app, RenderDeviceState* device);
     static uint32_t resolveFlightIndex(const App& app);
     static std::vector<RenderOverlaySprite2D> buildScreenOverlaySprites(const App& app);
 

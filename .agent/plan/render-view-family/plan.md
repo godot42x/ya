@@ -620,7 +620,8 @@ view 身份目前是**全局小整数**，所以"谁是谁"只能靠读声明方
 
 ### 附.2 切片（按风险从低到高；每条独立可验收）
 
-> 状态：V1–V6 已落地（2026-09-19，见 `progress.md`）；V7–V8 未开始。
+> 状态：V1–V8 全部落地（2026-09-19，见 `progress.md`）。本节至此收口；后续是 P3 命名
+> 批次、owner-scoped `SceneViewKey`（4.0.3 checkpoint 5）与公开 `Renderer` 合并。
 > 实现时在 V1 追加了两处 plan 原文漏登记的同类写法（Forward/Deferred 的
 > `recordings.empty()` 合成与 `|| result.views.empty()`），在 V3 追加了一处死代码
 > （`pipelineViewportDisplayImage()`）；`buildViewportSnapshot` 的 else 分支仍读

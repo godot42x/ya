@@ -1,5 +1,78 @@
 # Progress
 
++## 2026-09-19 checkpoint：V7 离屏 pump 具名 + V8 viewport debug catalog 移出 device
+
+两条独立、互不相关，同一个 commit：都属「把隐式/错位的东西显式化」，且都不动 GPU 时序。
+
+### V7 离屏 pump 从 tickRender 的一行变成具名步骤
+
+`tickRender` 里原先只有一行 `device->getOffscreenTaskService().tick(app.getTaskManager());`，
+读代码看不出它在等什么、为什么必须在 View 准备之前。现在提成
+`GameRuntimeTickOrchestrator::pumpOffscreenTasks(app, device)`，带 profile scope，并在
+`tickRender` 与头文件两处说明它是**录制前的前置阶段**：上一次 tick 提交的离屏任务在这里
+被 fence 等待并 finalize，本 tick 排队的任务在这里录制提交（下一个 pump 才可读），所以它
+必须在任何 View 准备读派生资源之前。
+
+顺带删掉 `RenderDeviceState::isOffscreenPending()`：全仓零消费者，正是上一轮写进 skill 第 15
+条的「只有声明没有消费者的接口方法，出现即删」。V7 的验收原文是「isOffscreenPending() 的
+消费者说明它在等什么」——它没有消费者，所以处置是删除，不是补一个消费者。
+
+### V8 viewport debug catalog 移出 device
+
+`RenderDeviceState.ViewportDebug.cpp`（652 行）整体移到
+`Render3D/Debug/ViewportDebugCatalogBuilder.cpp`，公开头
+`Render3D/Debug/ViewportDebugCatalogBuilder.h`。搬法不是「换个地方继续读 device」，而是把它
+变成**已解析句柄的纯函数**：
+
+- 新增 `ViewportDebugCatalogInput`：`bForwardPipeline` / `bDeferredPipeline` /
+  `RenderPipelineDebugOutputCatalog` / `DeferredPipelineDebugViews` / brdfLut /
+  `environmentLighting` / `inspectScene` / **铺平的 36 个 point-shadow face 句柄**。
+- 三个自由函数取代三个 device 方法：`buildViewportDebugCatalog(input)`、
+  `appendViewportDebugImages(images, catalog, input)`、`viewportDebugCatalogSignature(input)`。
+- 原先 builder 内部把点光面查询包成 lambda 的写法（`runtime.getShadowPointFaceDepthResource`）
+  改成直接读 `input.pointShadowFaces[]`——**输入是数据，没有回调**，与 V6 的原则一致。
+- `mutable` 缓存移出 device，变成 `ViewportDebugCatalogCache`（持 digest + catalog），device 只留
+  `mutable ViewportDebugCatalogCache _viewportDebugCache{}`。
+- device 保留唯一的解析点 `makeViewportDebugCatalogInput(Scene*)`：它决定「这个 renderer 愿意给
+  检查器看哪些资源」，是这条路里唯一有资格读 device 内部的地方。
+- `RenderPipelineDebugOutputCatalog` 从 `RenderDeviceState.h` 移到 builder 头。
+
+**验收偏离（如实记录）**：plan 附.2 的 V8 验收写「rg ViewportDebug 在 RenderDeviceState* 为 0」。
+实际不成立，也不该成立：device 仍有两处提到这个类型——`makeViewportDebugCatalogInput`（解析句柄）
+与 `buildViewportSnapshot`（取 catalog 与 images）。真正达标的是**实质**：`RenderDeviceState` 的
+公开面不再有 `buildViewportDebugCatalog` / `appendViewportDebugImages` /
+`buildViewportDebugCatalogSignature` / `ensureViewportDebugCatalog`，650 行实现也不在 device 的文件里。
+把「device 完全不许提这个类型」当目标是错的——它必须提供句柄来源。
+
+**没做的部分**：plan 原文说「顺带断 `ya-render-3d -> ya-gui-compose` 中属于 debug/compose 的那部分」。
+查证后这两者无关：debug catalog 的旧文件并没有 include GUI/Compose；`Render2DComposePass.h` 出现在
+`RenderDeviceState.cpp` 与 `RenderFrameCoordinator.cpp`，用途是 `prepareRender2DComposePassPipeline`
+（runtime UI compose 的 pipeline 准备），属 compose 而非 debug。把它移出 renderer 需要先把 compose
+prep 交给 host 调用（编辑器已经自己调了，runtime 路径没有），是一个独立的依赖边界改动，记在
+`source-layout-subtraction` S2（`ya-render-3d -> ya-gui-compose`）而不是塞进本刀。
+
+### 验证
+
+| 检查 | 结果 |
+| --- | --- |
+| `xmake b` | `ya-render-3d` / `ya-game-runtime` / `ya-game-editor` / `ya-testing` / `ya-render-3d-test` / `ya-engine` / `GUIWorkbench` / `GreedySnake` / `ya-gui-closure-test` / `ya-gui-headless-host-test` / `ya-render-2d-test` 全部 ok |
+| `xmake r ya-render-3d-test` | **176/176** |
+| `ya-testing` 渲染/编辑器滤镜 | 265 passed / 3 failed（与 V1–V6 基线逐项相同） |
+| `HelloMaterial` viewport 截图 | exit=0，0 error，`md5=1c6668976be1cdd5d755d1f1365700f7` **逐字节相同** |
+| `run-editor` viewport 截图 | exit=0，0 error，`md5=5b8f5dd8acdbc90bd5c383feb3f7bcec` **逐字节相同** |
+
+debug catalog 只在编辑器 Debug Images 面板消费，smoke 不打开该面板，因此两张截图相同主要证明
+「这条路的搬移没有波及渲染主链」。catalog 内容等价性由代码保证：搬移是把 `runtime.X()` 换成
+`input.X`，唯一语义变化是 point-shadow face 查询改成读预解析数组，而那个数组由同一个
+`getShadowPointFaceDepthResource` 在同一帧填出。
+
+### 遗留（V 系列至此收口）
+
+V1–V8 全部落地。剩余的是计划里本就排在别处的项：`RenderViewRecordingContext` 与
+`RenderPipelineFrameContext` 并层、`RenderFrameData` → `PreparedViewRenderData` 改名（P3 命名批次）、
+owner-scoped `SceneViewKey`（4.0.3 checkpoint 5）、公开 `Renderer` 合并（4.0.3 checkpoint 2/3 与
+P2 flight 改名）。
+
 +## 2026-09-19 checkpoint：V6 RenderFramePlan 去掉回调
 
 ### 唯一目标

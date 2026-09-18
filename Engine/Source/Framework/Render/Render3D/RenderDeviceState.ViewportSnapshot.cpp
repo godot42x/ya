@@ -27,13 +27,17 @@ RenderViewportSnapshot RenderDeviceState::buildViewportSnapshot(Scene* inspectSc
                                      ? snapshot.viewportImageOwner->getImageView()
                                      : nullptr;
 
-    ensureViewportDebugCatalog(inspectScene);
-    snapshot.debugCatalog = _viewportDebugCatalog;
+    // One resolved input for both: the catalog (metadata, cached by digest) and
+    // the images the panel uploads. Resolving here keeps the builder a pure
+    // function of handles -- it never asks the renderer which pipeline ran.
+    const ViewportDebugCatalogInput debugInput = makeViewportDebugCatalogInput(inspectScene);
+
+    snapshot.debugCatalog = _viewportDebugCache.get(debugInput);
     if (snapshot.debugCatalog) {
         snapshot.debugImages.reserve(snapshot.debugCatalog->slots.size());
     }
 
-    appendViewportDebugImages(snapshot.debugImages, nullptr, inspectScene);
+    appendViewportDebugImages(snapshot.debugImages, nullptr, debugInput);
     return snapshot;
 }
 

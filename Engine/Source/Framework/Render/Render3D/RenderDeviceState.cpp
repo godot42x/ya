@@ -201,6 +201,32 @@ Extent2D RenderDeviceState::getViewportExtent() const
     return {};
 }
 
+ViewportDebugCatalogInput RenderDeviceState::makeViewportDebugCatalogInput(Scene* inspectScene) const
+{
+    // The one place that decides which of this renderer's resources the
+    // inspector may show. Everything downstream is a pure function of this
+    // value, so "what the panel displays" cannot drift from what the device
+    // actually published.
+    ViewportDebugCatalogInput input;
+    input.bForwardPipeline  = (_pipelineCoordinator.getRenderPipeline() == ERenderPipeline::Forward);
+    input.bDeferredPipeline = _pipelineCoordinator.hasDeferredPipeline();
+    input.debugOutputs      = buildPipelineDebugOutputCatalog();
+    input.deferredViews     = getDeferredPipelineDebugViews();
+    input.brdfLut           = _sharedResourceProvider.getBrdfLutTextureShared();
+    input.environmentLighting = _environmentLightingProcessor.get();
+    input.inspectScene        = inspectScene;
+
+    for (uint32_t pointLightIndex = 0; pointLightIndex < MAX_POINT_LIGHTS; ++pointLightIndex) {
+        for (uint32_t faceIndex = 0; faceIndex < ShadowConstants::FACES_PER_POINT_LIGHT; ++faceIndex) {
+            const size_t index = static_cast<size_t>(pointLightIndex) * ShadowConstants::FACES_PER_POINT_LIGHT + faceIndex;
+            if (index < input.pointShadowFaces.size()) {
+                input.pointShadowFaces[index] = getShadowPointFaceDepthResource(pointLightIndex, faceIndex);
+            }
+        }
+    }
+    return input;
+}
+
 DeferredPipelineDebugViews RenderDeviceState::getDeferredPipelineDebugViews() const
 {
     if (auto* pipeline = _pipelineCoordinator.getSelectedDeferredPipeline()) {

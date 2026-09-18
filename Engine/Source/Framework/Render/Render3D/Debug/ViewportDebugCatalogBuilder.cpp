@@ -1,19 +1,18 @@
-#include "RHI/Core/RenderTexture.h"
-#include "Render3D/RenderDeviceState.h"
+#include "Render3D/Debug/ViewportDebugCatalogBuilder.h"
 
-
-#include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
-#include "Render3D/Forward/ForwardRenderPipeline.h"
 #include "Scene/Core/Scene.h"
-#include "Scene/Runtime/SceneManager.h"
 
 #include <bit>
+#include <format>
 
 namespace ya
 {
+
+using ShadowConstants::FACES_PER_POINT_LIGHT;
+using ShadowConstants::POINT_SHADOW_FACE_COUNT;
 
 namespace
 {
@@ -111,13 +110,10 @@ void appendShadowDebugSlots(ViewportDebugBuilder&          builder,
     }
 }
 
-void appendSkyboxDebugSlots(const RenderDeviceState& runtime, Scene* scene, ViewportDebugBuilder& builder)
+void appendSkyboxDebugSlots(const ViewportDebugCatalogInput& input, ViewportDebugBuilder& builder)
 {
-    if (!scene && !runtime.getEnvironmentLightingProcessor()) {
-        return;
-    }
-
-    auto* envProcessor = runtime.getEnvironmentLightingProcessor();
+    Scene* scene = input.inspectScene;
+    auto*  envProcessor = input.environmentLighting;
     if (!scene || !envProcessor) {
         return;
     }
@@ -162,24 +158,28 @@ void appendSkyboxDebugSlots(const RenderDeviceState& runtime, Scene* scene, View
     }
 }
 
-void appendForwardDebugSlots(const RenderDeviceState& runtime, Scene* scene, ViewportDebugBuilder& builder, const RenderPipelineDebugOutputCatalog& debugOutputs)
+void appendForwardDebugSlots(const ViewportDebugCatalogInput& input, ViewportDebugBuilder& builder)
 {
-    if (!runtime._pipelineCoordinator.hasForwardPipeline()) {
+    if (!input.bForwardPipeline) {
         return;
     }
 
-    if (debugOutputs.bShadowMappingEnabled) {
+    if (input.debugOutputs.bShadowMappingEnabled) {
         appendShadowDebugSlots(
             builder,
-            debugOutputs.shadowDirectionalDepthResource,
-            [&runtime](uint32_t pointLightIndex, uint32_t faceIndex)
-            { return runtime.getShadowPointFaceDepthResource(pointLightIndex, faceIndex); },
+            input.debugOutputs.shadowDirectionalDepthResource,
+            [&input](uint32_t pointLightIndex, uint32_t faceIndex)
+            {
+                const size_t index = static_cast<size_t>(pointLightIndex) * FACES_PER_POINT_LIGHT + faceIndex;
+                return index < input.pointShadowFaces.size() ? input.pointShadowFaces[index] : nullptr;
+            },
             CATEGORY_SHADOW);
     }
 
-    appendSkyboxDebugSlots(runtime, scene, builder);
+    appendSkyboxDebugSlots(input, builder);
 
-    if (auto viewportDepth = debugOutputs.viewportDepthImageOwner; viewportDepth && viewportDepth->getImageView()) {
+    if (auto viewportDepth = input.debugOutputs.viewportDepthImageOwner;
+        viewportDepth && viewportDepth->getImageView()) {
         builder.addSlot({
                             .label         = "ViewportDepth",
                             .categoryIndex = CATEGORY_VIEWPORT,
@@ -193,15 +193,14 @@ void appendForwardDebugSlots(const RenderDeviceState& runtime, Scene* scene, Vie
     }
 }
 
-void appendDeferredDebugSlots(const RenderDeviceState&                    runtime,
-                              ViewportDebugBuilder&                   builder,
-                              const RenderPipelineDebugOutputCatalog& debugOutputs,
-                              const DeferredPipelineDebugViews&       deferredViews)
+void appendDeferredDebugSlots(const ViewportDebugCatalogInput& input, ViewportDebugBuilder& builder)
 {
-    if (!runtime._pipelineCoordinator.hasDeferredPipeline()) {
+    if (!input.bDeferredPipeline) {
         return;
     }
 
+    const auto&        debugOutputs  = input.debugOutputs;
+    const auto&        deferredViews = input.deferredViews;
     auto* positionTexture      = deferredViews.gBufferResources.color[0];
     auto* normalTexture        = deferredViews.gBufferResources.color[1];
     auto* albedoSpecTexture    = deferredViews.gBufferResources.color[2];
@@ -347,24 +346,24 @@ void appendDeferredDebugSlots(const RenderDeviceState&                    runtim
         appendShadowDebugSlots(
             builder,
             debugOutputs.shadowDirectionalDepthResource,
-            [&runtime](uint32_t pointLightIndex, uint32_t faceIndex)
-            { return runtime.getShadowPointFaceDepthResource(pointLightIndex, faceIndex); },
+            [&input](uint32_t pointLightIndex, uint32_t faceIndex)
+            {
+                const size_t index = static_cast<size_t>(pointLightIndex) * FACES_PER_POINT_LIGHT + faceIndex;
+                return index < input.pointShadowFaces.size() ? input.pointShadowFaces[index] : nullptr;
+            },
             CATEGORY_SHADOW);
     }
 }
 
-void appendEnvironmentDebugSlots(const RenderDeviceState& runtime, Scene* scene, ViewportDebugBuilder& builder)
+void appendEnvironmentDebugSlots(const ViewportDebugCatalogInput& input, ViewportDebugBuilder& builder)
 {
-    if (!runtime.getEnvironmentLightingProcessor() && !scene) {
+    Scene* scene        = input.inspectScene;
+    auto*  envProcessor = input.environmentLighting;
+    if (!scene || !envProcessor) {
         return;
     }
 
-    if (scene) {
-        auto* envProcessor = runtime.getEnvironmentLightingProcessor();
-        if (!envProcessor) {
-            return;
-        }
-
+    {
         for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
             (void)elc;
             auto preview = envProcessor->getEnvironmentLightingPreview(entity);
@@ -482,13 +481,13 @@ void appendEnvironmentDebugSlots(const RenderDeviceState& runtime, Scene* scene,
 
 } // namespace
 
-size_t RenderDeviceState::buildViewportDebugCatalogSignature(Scene* inspectScene) const
+size_t viewportDebugCatalogSignature(const ViewportDebugCatalogInput& input)
 {
     size_t seed = 0;
-    hashCombineValue(seed, static_cast<int>(_pipelineCoordinator.getRenderPipeline()));
+    hashCombineValue(seed, input.bDeferredPipeline);
 
-    const auto debugOutputs  = buildPipelineDebugOutputCatalog();
-    const auto deferredViews = getDeferredPipelineDebugViews();
+    const auto& debugOutputs  = input.debugOutputs;
+    const auto& deferredViews = input.deferredViews;
 
     hashCombineValue(seed, debugOutputs.bShadowMappingEnabled);
     hashCombineValue(seed, debugOutputs.shadowDirectionalDepthResource != nullptr);
@@ -497,7 +496,7 @@ size_t RenderDeviceState::buildViewportDebugCatalogSignature(Scene* inspectScene
     hashCombineValue(seed, debugOutputs.bloomBlurOwner != nullptr);
     hashCombineValue(seed, debugOutputs.bloomCompositeOwner != nullptr);
     hashCombineValue(seed, debugOutputs.postprocessOutputImageOwner != nullptr);
-    hashCombineValue(seed, _sharedResourceProvider.getBrdfLutTextureShared() != nullptr);
+    hashCombineValue(seed, input.brdfLut != nullptr);
 
     uint64_t pointShadowFaceMask = 0;
     for (uint32_t pointLightIndex = 0; pointLightIndex < MAX_POINT_LIGHTS; ++pointLightIndex) {
@@ -506,14 +505,15 @@ size_t RenderDeviceState::buildViewportDebugCatalogSignature(Scene* inspectScene
             if (bitIndex >= 64) {
                 break;
             }
-            if (getShadowPointFaceDepthResource(pointLightIndex, faceIndex)) {
+            const size_t index = static_cast<size_t>(pointLightIndex) * FACES_PER_POINT_LIGHT + faceIndex;
+            if (index < input.pointShadowFaces.size() && input.pointShadowFaces[index]) {
                 pointShadowFaceMask |= (uint64_t{1} << bitIndex);
             }
         }
     }
     hashCombineValue(seed, pointShadowFaceMask);
 
-    if (_pipelineCoordinator.getRenderPipeline() == ERenderPipeline::Deferred) {
+    if (input.bDeferredPipeline) {
         hashCombineValue(seed, deferredViews.gBufferResources.color[0] != nullptr);
         hashCombineValue(seed, deferredViews.gBufferResources.color[1] != nullptr);
         hashCombineValue(seed, deferredViews.gBufferResources.color[2] != nullptr);
@@ -524,9 +524,9 @@ size_t RenderDeviceState::buildViewportDebugCatalogSignature(Scene* inspectScene
         hashCombineValue(seed, deferredViews.ssaoTextureOwner != nullptr);
     }
 
-    if (inspectScene) {
-        if (auto* scene = inspectScene) {
-            auto* envProcessor = getEnvironmentLightingProcessor();
+    if (input.inspectScene) {
+        if (auto* scene = input.inspectScene) {
+            auto* envProcessor = input.environmentLighting;
             if (envProcessor) {
                 bool     bHasSkybox     = false;
                 uint32_t skyboxFaceMask = 0;
@@ -587,8 +587,9 @@ size_t RenderDeviceState::buildViewportDebugCatalogSignature(Scene* inspectScene
     return seed;
 }
 
-void RenderDeviceState::buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog, Scene* inspectScene) const
+RenderViewportDebugCatalog buildViewportDebugCatalog(const ViewportDebugCatalogInput& input)
 {
+    RenderViewportDebugCatalog catalog;
     catalog.categories = {
         {.id = "shadow", .label = "Shadow"},
         {.id = "skybox", .label = "Skybox"},
@@ -598,29 +599,28 @@ void RenderDeviceState::buildViewportDebugCatalog(RenderViewportDebugCatalog& ca
         {.id = "shared", .label = "Shared"},
         {.id = "postprocess", .label = "PostFX"},
     };
-    catalog.slots.clear();
-    catalog.groups.clear();
 
+    // The catalog path only needs metadata: the images are consumed straight
+    // into the snapshot, so this builds the slot list without a second copy.
     std::vector<RenderViewportDebugImageSlot> scratchImages;
-    appendViewportDebugImages(scratchImages, &catalog, inspectScene);
+    appendViewportDebugImages(scratchImages, &catalog, input);
+    return catalog;
 }
 
-void RenderDeviceState::appendViewportDebugImages(std::vector<RenderViewportDebugImageSlot>& images,
-                                              RenderViewportDebugCatalog*                catalog,
-                                              Scene*                                     inspectScene) const
+void appendViewportDebugImages(std::vector<RenderViewportDebugImageSlot>& images,
+                               RenderViewportDebugCatalog*                catalog,
+                               const ViewportDebugCatalogInput&           input)
 {
-    const auto           debugOutputs  = buildPipelineDebugOutputCatalog();
-    const auto           deferredViews = getDeferredPipelineDebugViews();
     ViewportDebugBuilder builder{.catalog = catalog, .images = images};
 
-    if (_pipelineCoordinator.getRenderPipeline() == ERenderPipeline::Forward) {
-        appendForwardDebugSlots(*this, inspectScene, builder, debugOutputs);
+    if (input.bForwardPipeline) {
+        appendForwardDebugSlots(input, builder);
     }
     else {
-        appendDeferredDebugSlots(*this, builder, debugOutputs, deferredViews);
+        appendDeferredDebugSlots(input, builder);
     }
 
-    if (auto pbrLut = _sharedResourceProvider.getBrdfLutTextureShared(); pbrLut && pbrLut->getImageView()) {
+    if (auto pbrLut = input.brdfLut; pbrLut && pbrLut->getImageView()) {
         builder.addSlot(catalog ? RenderViewportDebugCatalog::Slot{
                                      .label         = "PBR_BRDF_LUT",
                                      .categoryIndex = CATEGORY_SHARED,
@@ -633,20 +633,20 @@ void RenderDeviceState::appendViewportDebugImages(std::vector<RenderViewportDebu
                         });
     }
 
-    appendEnvironmentDebugSlots(*this, inspectScene, builder);
+    appendEnvironmentDebugSlots(input, builder);
 }
 
-void RenderDeviceState::ensureViewportDebugCatalog(Scene* inspectScene) const
+std::shared_ptr<const RenderViewportDebugCatalog> ViewportDebugCatalogCache::get(
+    const ViewportDebugCatalogInput& input)
 {
-    const size_t signature = buildViewportDebugCatalogSignature(inspectScene);
-    if (_viewportDebugCatalog && _viewportDebugCatalogSignature == signature) {
-        return;
+    const size_t signature = viewportDebugCatalogSignature(input);
+    if (_catalog && _signature == signature) {
+        return _catalog;
     }
 
-    auto catalog = std::make_shared<RenderViewportDebugCatalog>();
-    buildViewportDebugCatalog(*catalog, inspectScene);
-    _viewportDebugCatalog          = std::move(catalog);
-    _viewportDebugCatalogSignature = signature;
+    _catalog   = std::make_shared<const RenderViewportDebugCatalog>(buildViewportDebugCatalog(input));
+    _signature = signature;
+    return _catalog;
 }
 
 } // namespace ya

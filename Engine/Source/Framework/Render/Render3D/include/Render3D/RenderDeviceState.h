@@ -16,7 +16,7 @@
 #include "Render3D/Services/EnvironmentLightingResultProvider.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
 #include "Render3D/Common/RenderViewportSnapshot.h"
-#include "Render3D/Deferred/DeferredPipelineDebugViews.h"
+#include "Render3D/Debug/ViewportDebugCatalogBuilder.h"
 #include "Render3D/Services/OffscreenTaskService.h"
 #include "Render3D/Services/PipelineCoordinator.h"
 #include "Render3D/Services/PresentationGraphService.h"
@@ -51,19 +51,6 @@ struct RenderViewSceneResources;
 struct DebugRenderSystem;
 struct Node;
 struct RenderFrameCoordinator;
-
-struct RenderPipelineDebugOutputCatalog
-{
-    bool                          bShadowMappingEnabled         = false;
-    std::shared_ptr<ImageResource> shadowDirectionalDepthResource = nullptr;
-    std::shared_ptr<RenderTexture> viewportOutputImageOwner    = nullptr;
-    std::shared_ptr<RenderTexture> viewportDepthImageOwner     = nullptr;
-    std::shared_ptr<RenderTexture> postprocessOutputImageOwner = nullptr;
-    std::shared_ptr<RenderTexture> bloomExtractOwner           = nullptr;
-    std::shared_ptr<RenderTexture> bloomBlurOwner              = nullptr;
-    std::shared_ptr<RenderTexture> bloomCompositeOwner         = nullptr;
-    bool                         bPostprocessingEnabled      = false;
-};
 
 /// Device-lifetime backend, persistent renderer services, and fence-safe
 /// mutations. Does not record a frame and does not locate the active Scene.
@@ -115,8 +102,10 @@ struct YA_RENDER_3D_API RenderDeviceState
     // default rect for default rt creation
     Rect2D                       _pipelineViewportRect{};
 
-    mutable size_t _viewportDebugCatalogSignature = 0;
-    mutable std::shared_ptr<RenderViewportDebugCatalog> _viewportDebugCatalog = nullptr;
+    /// Cached inspector catalog, rebuilt only when its digest changes. The
+    /// snapshot is logically const, so this cache is too -- the state belongs to
+    /// the presentation, not to frame execution.
+    mutable ViewportDebugCatalogCache _viewportDebugCache{};
 
     void init(const InitDesc& desc);
     void shutdown(bool bRenderAlreadyIdle = false);
@@ -146,7 +135,6 @@ struct YA_RENDER_3D_API RenderDeviceState
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const;
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const;
-    [[nodiscard]] bool                           isOffscreenPending() const { return _offscreen.isPending(); }
     [[nodiscard]] OffscreenTaskService&          getOffscreenTaskService() { return _offscreen; }
     [[nodiscard]] TerrainProcessor*               getTerrainProcessor() const { return _terrainProcessor.get(); }
     [[nodiscard]] const OffscreenTaskService&    getOffscreenTaskService() const { return _offscreen; }
@@ -212,11 +200,8 @@ struct YA_RENDER_3D_API RenderDeviceState
     void                   endFrameCommandBuffer(ICommandBuffer* cmdBuf);
 
     void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog, Scene* inspectScene) const;
-    void appendViewportDebugImages(std::vector<RenderViewportDebugImageSlot>& images,
-                                   RenderViewportDebugCatalog*                catalog,
-                                   Scene*                                     inspectScene) const;
-    [[nodiscard]] size_t buildViewportDebugCatalogSignature(Scene* inspectScene) const;
-    void ensureViewportDebugCatalog(Scene* inspectScene) const;
+    /// Resolve the handles this renderer is willing to expose to the inspector.
+    [[nodiscard]] ViewportDebugCatalogInput makeViewportDebugCatalogInput(Scene* inspectScene) const;
 };
 
 } // namespace ya

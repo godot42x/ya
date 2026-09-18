@@ -10,8 +10,8 @@
 - [x] V4 删 `IRenderRuntimeServices`：时间改由 `RenderFrameData.timeSeconds`/`frameIndex` 携带；scene bindings 由 `RenderDeviceState::resolveViewSceneResources` 在录制前解析进 `RenderFrameData.sceneResources`；`DebugRenderSystem` 改构造注入到 Deferred/PipelineCoordinator InitDesc；接口文件、5 个 pass 的 `_runtimeServices`、死方法 `getGameplayResourceBinding()`（连同只转发它的 `App::getGameplayResourceBinding`）全删；`EnvironmentLightingSceneResources` 拆到独立头避免结果类型拉进整个 processor。
 - [x] V5 `CameraFrameInput` → `FramePacket`：`cameraForViewRecording()` 与整条 per-view patching 删除；`RenderPipelineFrameContext.camera` → `const FramePacket* frame`，view 级数据一律读 `frame.view`；`recordCameraViewCompose` 改吃 `(uiFrameSnapshot, logicalViewportExtent)`；`RenderFramePlan.camera` → `.frame`。未做（留 P3 收尾）：`RenderFrameData`→`PreparedViewRenderData` 改名，以及把 `RenderViewRecordingContext` 并进 `RenderPipelineFrameContext`——两层此刻字段都有真实消费者，且 `derivedScene` 本来就是从该 View 的 task 读的，不是 patch。
 - [x] V6 `RenderFramePlan` 去回调：新增 `IFrameRecordExtensions`（4 个具名阶段），plan 上只剩一个接口指针 → `std::function` 归零；`DisplayComposeInput` 与 `PresentationGraphService::Extensions` 两份平行描述删除；`App` 实现接口，host 侧不再装配闭包；`record()` 头部写明完整顺序。**未采用**贡献者 span（当前只有一个 host）与「缺 step 时 assert」（headless / UI-only 帧合法地什么都不录）。顺序无单测：`record()` 需要活 device，旧回调版本同样没有，已在 progress 记录。
-- [ ] V7 离屏 pump 显式化：`OffscreenTaskService::tick` 提成具名 host step。
-- [ ] V8 viewport debug catalog 移出 device（652 行 + `mutable` 缓存），顺带断开 Render3D→GUI/Compose 的 debug 面。
+- [x] V7 离屏 pump 显式化：提成 `GameRuntimeTickOrchestrator::pumpOffscreenTasks`，`tickRender` 与头文件都写明它是录制前的前置阶段（上一次提交在这里 fence+finalize，本 tick 排队的下一个 pump 才可读）。顺带删除零消费者的 `RenderDeviceState::isOffscreenPending()`。
+- [x] V8 viewport debug catalog 移出 device：652 行整体搬到 `Render3D/Debug/ViewportDebugCatalogBuilder.{h,cpp}`，并改成**已解析句柄的纯函数**（`ViewportDebugCatalogInput`，含铺平的 36 个 point-shadow face，无回调）；`mutable` 缓存移成 `ViewportDebugCatalogCache`；device 只留唯一解析点 `makeViewportDebugCatalogInput()`。**偏离**：plan 原文的验收「rg ViewportDebug 在 RenderDeviceState* 为 0」不成立且不该成立（device 必须给出句柄来源），达标的是公开面不再有四个 catalog 方法、实现不在 device 文件里；「顺带断 Render3D→GUI/Compose」经查证属 compose prep 而非 debug，记在 `source-layout-subtraction` S2。
 
 ## R0
 

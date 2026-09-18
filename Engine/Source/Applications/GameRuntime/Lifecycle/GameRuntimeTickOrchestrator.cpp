@@ -249,6 +249,16 @@ void GameRuntimeTickOrchestrator::syncViewportState(App& app)
     (void)app;
 }
 
+void GameRuntimeTickOrchestrator::pumpOffscreenTasks(App& app, RenderDeviceState* device)
+{
+    YA_PROFILE_SCOPE("Render/PumpOffscreenTasks");
+    // Pre-record prerequisite. Named as a step because it is one: the derived
+    // resources this tick's Views bind were produced by offscreen jobs queued on
+    // earlier ticks, and reading them before their fence has been waited on is a
+    // use-before-ready, not a slower frame.
+    pumpOffscreenTasks(app, device);
+}
+
 Extent2D GameRuntimeTickOrchestrator::resolveViewportExtent(const App& app, RenderDeviceState* device, const Rect2D& viewportRect)
 {
     if (device) {
