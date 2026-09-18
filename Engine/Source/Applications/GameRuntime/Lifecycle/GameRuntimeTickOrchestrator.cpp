@@ -371,9 +371,6 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 
     const uint32_t flightIndex = resolveFlightIndex(app);
 
-    auto* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
-    HostViewState& hostView = app._renderState->hostView;
-
     auto& sceneScheduler = app._renderState->sceneRenderScheduler;
     sceneScheduler.beginTick(App::_hostTick);
     struct SceneSchedulerGuard
@@ -387,10 +384,49 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         }
     } sceneSchedulerGuard{.scheduler = &sceneScheduler};
 
+    // declare → extract → prepare → build → acquire → record → submit → extras
+    SceneViewCollector collector;
+    const SceneViewDesc* primaryView = declareViews(app, dt, device, collector);
+    ExtractedSceneRender sceneRender = extractScenes(app, sceneScheduler, device);
+    prepareViews(app, dt, flightIndex, sceneRender);
+
+    const std::vector<RenderOverlaySprite2D> screenOverlaySprites = buildScreenOverlaySprites(app);
+    UIFrameSnapshot                          uiFrameSnapshot;
+    const CameraFrameInput cameraFrame =
+        buildGameRenderFrame(app, dt, flightIndex, primaryView, screenOverlaySprites, uiFrameSnapshot);
+
+    IRender*       render        = device->getRender();
+    FPresentFrame  presentFrame{.surface = render ? render->getPrimarySurfaceContext() : nullptr};
+    {
+        YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());
+        if (!acquirePresentFrame(presentFrame)) {
+            app.presentModuleExtras(dt);
+            return;
+        }
+    }
+    if (!presentFrame.acquired()) {
+        submitPresentFrame(presentFrame, {});
+        app.presentModuleExtras(dt);
+        return;
+    }
+
+    const RecordedFrame recorded = recordFrame(app, *coordinator, dt, std::move(sceneRender), cameraFrame, presentFrame);
+    submitRecordedFrame(app, presentFrame, recorded);
+    app.presentModuleExtras(dt);
+}
+
+const SceneViewDesc* GameRuntimeTickOrchestrator::declareViews(App&                app,
+                                                               float               dt,
+                                                               RenderDeviceState*  device,
+                                                               SceneViewCollector& collector)
+{
+    HostViewState& hostView = app._renderState->hostView;
+
     // Declare this tick's views. Every owner declares its own (the game
-    // viewport, the editor's authoring viewport, the camera preview below), so a
-    // view exists exactly because somebody asked for it: no layer has to flip a
+    // viewport, the editor's authoring viewport, the camera preview), so a view
+    // exists exactly because somebody asked for it: no layer has to flip a
     // global switch to hide a view another layer declared.
+    auto* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
     const SceneViewCollectContext collectContext{
         .activeScene    = scene,
         .viewportRect   = hostView.viewportRect,
@@ -398,12 +434,13 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         .hostTick       = App::_hostTick,
         .deltaTime      = dt,
     };
-    SceneViewCollector collector;
     for (ISceneViewProducer* producer : app._renderState->viewProducers) {
         if (producer) {
             producer->collectSceneViews(collectContext, collector);
         }
     }
+
+    auto& sceneScheduler = app._renderState->sceneRenderScheduler;
     for (const SceneViewDesc& view : collector.views()) {
         (void)sceneScheduler.submit(view);
     }
@@ -428,99 +465,114 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         hostView.viewportRect = primaryView->viewportRect;
         device->applyViewportResize(primaryView->viewportRect);
     }
-    const glm::mat4 viewProjection = makeCameraViewProjection(hostView.projection, hostView.view);
+    return primaryView;
+}
 
+ExtractedSceneRender GameRuntimeTickOrchestrator::extractScenes(App&                 app,
+                                                               SceneRenderScheduler& scheduler,
+                                                               RenderDeviceState*   device)
+{
     // Extraction is its own step: seal() only grouped the declarations, so
     // Scene/ECS content is read here and nowhere earlier.
     ExtractedSceneRender sceneRender =
-        extractHostSceneSnapshots(sceneScheduler.seal(), device->getTerrainProcessor());
+        extractHostSceneSnapshots(scheduler.seal(), device->getTerrainProcessor());
 
     // Animation policy input: poses are consumed by the world pipeline, so the
     // honest question is "did the renderer produce content for this Scene", not
     // "is some viewport's world switch on". One tick of lag by construction --
     // systems run before views are declared.
     app._renderState->renderedScenesLastTick = renderedScenes(sceneRender.plan());
+    return sceneRender;
+}
 
+void GameRuntimeTickOrchestrator::prepareViews(App&                  app,
+                                              float                 dt,
+                                              uint32_t              flightIndex,
+                                              ExtractedSceneRender& sceneRender)
+{
     auto& viewFrames = app._renderState->viewFrameDataPerFlight[flightIndex];
     sceneRender.pairViewFrames(viewFrames);
-    if (!sceneRender.empty()) {
-        YA_PERF_SCOPE(perf::sample::renderExtract(), perf::metric::cpuTimeMs(), perf::domain::render());
-        YA_PROFILE_SCOPE("RenderFrameExtractor::sceneSnapshot");
-        for (const SceneViewRecording& recording : sceneRender.views()) {
-            const SceneViewportTask& task      = *recording.task;
-            const SceneViewDesc&     desc      = task.desc;
-            RenderFrameData&         frameData = *recording.frameData;
-            RenderFrameExtractor::prepareView(
-                RenderFrameExtractor::ViewPrepareInput{
-                    .view = desc.view,
-                    .projection = desc.projection,
-                    .viewProjection = desc.viewProjection(),
-                    .cameraPos = desc.cameraPos,
-                    .viewportExtent = Extent2D::fromVec2(desc.viewportRect.extent),
-                    .viewOwner = desc.viewOwner,
-                    .viewFeatures = desc.features,
-                    .frameIndex = App::_hostTick,
-                    .deltaTime = dt,
-                    .shadowSettings = &app.getRenderServices().getShadowSettings(),
-                },
-                sceneRender.snapshotFor(task),
-                frameData);
-        }
+    if (sceneRender.empty()) {
+        return;
     }
 
-    CameraFrameInput cameraFrame{
-        .flightIndex              = flightIndex,
-        .frameIndex               = App::_hostTick,
-        .deltaTime                = dt,
-        .viewFeatures             = primaryView ? primaryView->features : toMask(ERenderFeature::Game),
-        .view                     = hostView.view,
-        .projection               = hostView.projection,
-        .viewProjection           = viewProjection,
-        .cameraPos                = hostView.cameraPos,
-        .viewportRect             = hostView.viewportRect,
-        .viewportFrameBufferScale = hostView.viewportFrameBufferScale,
-        .frameData                = &viewFrames.front(),
-        .shadowSettings           = &app.getRenderServices().getShadowSettings(),
-    };
+    YA_PERF_SCOPE(perf::sample::renderExtract(), perf::metric::cpuTimeMs(), perf::domain::render());
+    YA_PROFILE_SCOPE("RenderFrameExtractor::sceneSnapshot");
+    for (const SceneViewRecording& recording : sceneRender.views()) {
+        const SceneViewportTask& task      = *recording.task;
+        const SceneViewDesc&     desc      = task.desc;
+        RenderFrameData&         frameData = *recording.frameData;
+        RenderFrameExtractor::prepareView(
+            RenderFrameExtractor::ViewPrepareInput{
+                .view = desc.view,
+                .projection = desc.projection,
+                .viewProjection = desc.viewProjection(),
+                .cameraPos = desc.cameraPos,
+                .viewportExtent = Extent2D::fromVec2(desc.viewportRect.extent),
+                .viewOwner = desc.viewOwner,
+                .viewFeatures = desc.features,
+                .frameIndex = App::_hostTick,
+                .deltaTime = dt,
+                .shadowSettings = &app.getRenderServices().getShadowSettings(),
+            },
+            sceneRender.snapshotFor(task),
+            frameData);
+    }
+}
 
-    auto screenOverlaySprites = GameRuntimeTickOrchestrator::buildScreenOverlaySprites(app);
+CameraFrameInput GameRuntimeTickOrchestrator::buildGameRenderFrame(
+    App&                                      app,
+    float                                     dt,
+    uint32_t                                  flightIndex,
+    const SceneViewDesc*                      primaryView,
+    const std::vector<RenderOverlaySprite2D>& screenSprites,
+    UIFrameSnapshot&                          outUiSnapshot)
+{
+    const HostViewState& hostView = app._renderState->hostView;
+    auto&                viewFrames = app._renderState->viewFrameDataPerFlight[flightIndex];
+
+    CameraFrameInput cameraFrame{
+        .flightIndex   = flightIndex,
+        .frameIndex    = App::_hostTick,
+        .deltaTime     = dt,
+        .viewFeatures  = primaryView ? primaryView->features : toMask(ERenderFeature::Game),
+        .view          = hostView.view,
+        .projection    = hostView.projection,
+        .viewProjection = makeCameraViewProjection(hostView.projection, hostView.view),
+        .cameraPos     = hostView.cameraPos,
+        .viewportRect  = hostView.viewportRect,
+        .viewportFrameBufferScale = hostView.viewportFrameBufferScale,
+        .frameData     = &viewFrames.front(),
+        .shadowSettings = &app.getRenderServices().getShadowSettings(),
+    };
+    cameraFrame.overlay = {
+        .screenSprites = &screenSprites,
+    };
 
     // Game UI: build the immutable frame snapshot BEFORE the RenderGraph.
     // Command recording consumes only this packet; the live WidgetTree is
     // never touched while recording. Runtime/simulation only (standalone game
     // and PIE); the editor's 3D authoring viewport has no game UI.
-    UIFrameSnapshot          uiFrameSnapshot;
-    const UIFrameSnapshot*   pUiFrameSnapshot = nullptr;
+    const Scene* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
     if ((app.isRuntimeMode() || app.isSimulationMode()) && scene) {
         if (auto* gameUIHost = app.getGameUIHost()) {
             gameUIHost->setPresentation(cameraFrame.viewportRect,
                                         glm::vec2(cameraFrame.viewportFrameBufferScale));
-            uiFrameSnapshot  = gameUIHost->buildSnapshot();
-            pUiFrameSnapshot = &uiFrameSnapshot;
+            outUiSnapshot            = gameUIHost->buildSnapshot();
+            cameraFrame.uiFrameSnapshot = &outUiSnapshot;
         }
     }
+    return cameraFrame;
+}
 
-    cameraFrame.overlay         = {
-        .screenSprites = &screenOverlaySprites,
-    };
-    cameraFrame.uiFrameSnapshot = pUiFrameSnapshot;
-
-    IRender*       render        = device->getRender();
-    FPresentFrame  presentFrame{.surface = render ? render->getPrimarySurfaceContext() : nullptr};
-    {
-        YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());
-        if (!acquirePresentFrame(presentFrame)) {
-            app.presentModuleExtras(dt);
-            return;
-        }
-    }
-    if (!presentFrame.acquired()) {
-        submitPresentFrame(presentFrame, {});
-        app.presentModuleExtras(dt);
-        return;
-    }
-
-    const RecordedFrame recorded = coordinator->record(RenderFramePlan{
+RecordedFrame GameRuntimeTickOrchestrator::recordFrame(App&                    app,
+                                                       RenderFrameCoordinator& coordinator,
+                                                       float                   dt,
+                                                       ExtractedSceneRender    sceneRender,
+                                                       const CameraFrameInput& cameraFrame,
+                                                       const FPresentFrame&    presentFrame)
+{
+    return coordinator.record(RenderFramePlan{
         .sceneRender = std::move(sceneRender),
         .camera = cameraFrame,
         .viewCompose = {
@@ -564,21 +616,23 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
             .imageIndex = presentFrame.imageIndex,
         },
     });
+}
 
-    {
-        YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
-        // The host submits what the renderer recorded, or an empty frame when
-        // the recording was refused; the image is presented either way.
-        YA_CORE_TRACE("Submit tick {}: flight={} token={} recorded={}",
-                      app.getHostTick(),
-                      recorded.flightIndex,
-                      recorded.frameToken,
-                      recorded.valid());
-        submitPresentFrame(presentFrame,
-                           recorded.valid() ? std::vector<void*>{recorded.commandBuffer->getHandle()}
-                                            : std::vector<void*>{});
-    }
-    app.presentModuleExtras(dt);
+void GameRuntimeTickOrchestrator::submitRecordedFrame(App&                 app,
+                                                      FPresentFrame&       presentFrame,
+                                                      const RecordedFrame& recorded)
+{
+    YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
+    // The host submits what the renderer recorded, or an empty frame when the
+    // recording was refused; the image is presented either way.
+    YA_CORE_TRACE("Submit tick {}: flight={} token={} recorded={}",
+                  app.getHostTick(),
+                  recorded.flightIndex,
+                  recorded.frameToken,
+                  recorded.valid());
+    submitPresentFrame(presentFrame,
+                       recorded.valid() ? std::vector<void*>{recorded.commandBuffer->getHandle()}
+                                        : std::vector<void*>{});
 }
 
 } // namespace ya

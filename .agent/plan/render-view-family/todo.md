@@ -63,7 +63,7 @@
 - [x] 引入 `RecordedFrame`（command buffer + flight/token 身份 + `valid()`），`RenderFrameCoordinator::record()` 返回它，host 只提交该值；seal 失败返回无效值（host 空提交），取代「提交一个未封口的录制」。
 - [ ] 将 `RenderSubmission` 拆成 `FrameRecording` 与 `FrameFlightResources`；host 提交真正的 command buffer。
 - [ ] 引入 `PreparedView`，删除 CameraFrameInput patching / SceneViewRecording / RenderPipelineFrameContext 重复层。
-- [ ] 压缩 `tickRender` 为 prepare → buildFrame → acquire → recordFrame → submitPresent，不引入新的全能 coordinator。
+- [x] 压缩 `tickRender` 为 `declareViews → extractScenes → prepareViews → buildGameRenderFrame → acquire → recordFrame → submitRecordedFrame`（步骤均为该类的私有静态函数，不引入新的全能 coordinator）；顺序与实现一致，`prepareModules` 仍在最前（计划原文的排后顺序属未验证的行为变更）。
 - [x] family-scoped derived Scene：`SceneViewRecording::derivedScene` 按 family 绑定；删除 `RenderFramePlan::derivedScene`。
 - [x] host 提交 live Scene 列表：`HostSceneViewSubmit` / `submitHostSceneViews`；两 live Scene 抽出隔离 snapshot 与两个 family。默认产品帧仍提交当前 viewport Scene。
 - [ ] 产品帧同时显示两个 Scene viewport（排在 4.0.3 之后；不要发明 PIE authoring PiP）。

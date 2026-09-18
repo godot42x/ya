@@ -13,6 +13,15 @@
 
 ## 2026-09-17 checkpoint：View 声明 / 收集边界 review（无代码改动）
 
+## 2026-09-18 checkpoint：tickRender 读起来就是它的步骤（4.0.3 第 7 条）
+
+- 唯一目标：把 `tickRender` 那 240 行内联实现收成有名字的步骤，让「一个 tick 的编排」不用逐行读也能看清。只做命名抽取，**不改行为、不改顺序**。
+- 拆出的步骤（全部是 `GameRuntimeTickOrchestrator` 的私有静态函数，不新增 coordinator/packet 层次）：`declareViews`（跑 producer、提交声明、把主 view 的相机与 rect 采纳进 hostView）、`extractScenes`（seal + 抽取 + `renderedScenesLastTick`）、`prepareViews`（配对 View 记录并逐个 `prepareView`）、`buildGameRenderFrame`（相机包 + UI snapshot）、`recordFrame`（一次 `coordinator.record()`）、`submitRecordedFrame`（提交 + present + trace）。
+- 所有权安排：`SceneViewCollector` 与 `UIFrameSnapshot` 由 `tickRender` 持有并传入，因为返回的声明指针与相机包要指向它们——builder 不返回「指向自己局部量的指针」这种结构。`declareViews` 返回的 `const SceneViewDesc*` 因此活到 tick 结束。
+- 顺序发现（保留现状并登记）：计划原文把 `prepareModules` 排在 `prepareViews` 之后，而实际代码一直在最前面（早于 `prepareHostViewState`）。本刀不动顺序；「模块准备 vs view 声明」的先后是行为变更，要单独验，已写进 plan §4.0.3 第 7 条与 todo。
+- 验证：`xmake b ya-render-3d ya-game-editor ya-testing`；`ya-render-3d-test` 174/174；`ya-testing` 相关滤镜 110/110；游戏→编辑器两轮（4 次运行）全部 exit=0、日志 0 error，四张截图与基线逐字节相同（`1c6668976be1cdd5d755d1f1365700f7` / `1bfb16e7ca543abb7b517325df508b90`），`Submit tick` trace 90 条/次——纯重排，像素与流程都不变。
+- 头文件代价：步骤签名需要 `CameraFrameInput` / `ExtractedSceneRender` / `SceneViewCollector` 等类型，用前置声明（`class SceneRenderScheduler;` 等）而不是把它们全 include 进来；MSVC 兼容面因此踩到一次 `-Wmismatched-tags`（`SceneRenderScheduler` 是 class，不能前置声明成 struct），按类实际关键字声明即可。
+
 ## 2026-09-18 checkpoint：录制结果成为一个值（4.0.3 checkpoint 2/3 入口）
 
 - 唯一目标：把「这一次录制产出了什么、host 该提交什么」从裸 `ICommandBuffer*` 变成一个显式值，并把 host 那条 record→submit 边界变得可观测。这是 checkpoint 2（公开 `Renderer` owner，`recordFrame(plan, surfaceTarget) -> RecordedFrame`）的入口产物，不提前做类合并。

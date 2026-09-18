@@ -501,7 +501,9 @@ AppKernel::run
        - 4d-3b 需要收口（已完成）：这一刀让编辑器每帧直接声明面板 rect，于是把「未初始化的 `Rect2D` 被当成 View 尺寸」这个老坑变成崩溃（游戏→编辑器序列下编辑器首帧 exit 255）。收口见本条第 7 点与 progress.md：`Rect2D` 默认初始化、`describesPixels()` 整像素契约、`submit()` 拒绝退化声明。
 5. **PreparedView**：删除 CameraFrameInput patching、SceneViewRecording、RenderPipelineFrameContext 之间的重复层。view 身份改为 owner-scoped `SceneViewKey`（4d 之后），并按此建立 `ViewHistoryStore` 的稳定键。
 6. **清除 Stage current-view**（已完成）：**6a** 删除 `LightStage` 的死状态（`FrameInputs` / `_frameInputs` / `setFrameInputs`，唯一写入方无调用方）；**6b** 把 `BasicShadowMapTechnique` 的 `_preparedViewSlot` / `_lastPreparedPointLightCount` 换成 `prepare()` 返回的 `ShadowPreparedView` token（`IShadowTechnique` → `ShadowStage::prepareView` → pipeline per-view 分支 → `BuildInputs.shadowPrepared` → `ShadowStage::appendGraphPasses`）。一台 Stage 现在只描述配方，一个 View 的 shadow 准备结果作为值在调用栈里流动。
-7. **压缩 `tickRender`**：保留该入口，收成 collectSceneViews → extractScenes → prepareViews → prepareModules → buildGameRenderFrame → acquire → recordFrame → submitPresent → presentModuleExtras。camera preview、Scene request、UI snapshot 下沉到普通 builder；`tickRender` 里不再有「某个 view 要不要渲染」的判断。
+7. **压缩 `tickRender`**（已完成）：入口保留，函数体现在读起来就是它的步骤序列：prepareModules → prepareHostViewState → declareViews → extractScenes → prepareViews → buildGameRenderFrame → acquire → recordFrame → submitRecordedFrame → presentModuleExtras。相机预览与 Scene request 早在 4d-1/4d-2 就已下沉到 producer，UI snapshot 现在由 `buildGameRenderFrame` 产出（`tickRender` 只持有它的存储），录制与提交各自一个命名步骤。`tickRender` 里不再有「某个 view 要不要渲染」的判断。
+   - **与计划原文的顺序差异（保留现状，不擅自改）**：原文把 `prepareModules` 排在 `prepareViews` 之后，实际代码里 `app.prepareModulesForRender(dt)` 在整条链路的**最前面**（早于 `prepareHostViewState`）。这次只做命名抽取、不动顺序；顺序本身是否应该调整（模块准备与 view 声明的先后）是需要单独验证的行为变更，不在本刀范围内。
+   - 不做的：不引入新的 coordinator/packet 层次——步骤全是 `GameRuntimeTickOrchestrator` 的私有静态函数，`tickRender` 仍是唯一入口。
 
 Surface 与 View 正交、产品帧同时显示两个 Scene viewport、双 Surface GPU 排在 4.0.3 之后。不要为了“继续”发明 PIE authoring PiP。
 
