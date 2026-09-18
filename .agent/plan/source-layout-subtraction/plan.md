@@ -37,7 +37,7 @@
 | S3 | 削掉两个最大的文件（只做有明确接缝的） | 待做 |
 | S4 | 命名收敛（在 S1/S2 之后） | 待做 |
 | S5 | 计划目录收敛：已收口/被接手的线归档，只留仍有代码要改的线 | 已落地 |
-| S6 | 2026-09-19 复查：死公开头（已落地）、`Utility/` 杂物抽屉、`Panels` 命名、Render3D→Physics | 进行中 |
+| S6 | 2026-09-19 复查：死公开头（已落地）、`Utility/` 杂物抽屉（已落地）、`Panels` 命名、Render3D→Physics | 进行中 |
 
 ### S5：计划目录收敛
 
@@ -122,7 +122,7 @@ Framework/Core/include/Core/Reflection/ReflectionHelper.h  41 行
 
 若 `ScreenUtil` 的世界→屏幕换算以后有需要，它属于 Render2D / 相机投影，不该以一个孤立头的形式回来。
 
-### 6.2 `GameRuntime/Utility/` 是杂物抽屉，且藏了渲染主流程的一步
+### 6.2 `GameRuntime/Utility/` 是杂物抽屉，且藏了渲染主流程的一步（已落地 2026-09-19）
 
 6 个文件彼此无关：`AppScreenshotCapture`（自动化）、`FPSCtrl`（计时）、`OffscreenJobRunner`（离屏
 pump）、`RenderFrameExtractor`（**场景抽取：declareViews 与 prepareViews 之间的那一步**）、
@@ -131,10 +131,36 @@ pump）、`RenderFrameExtractor`（**场景抽取：declareViews 与 prepareView
 代价是**可发现性**：一个读者顺着 `tickRender` 追 `extractScenes` 会落到 `Utility/`——没人会去那里找
 主流程。而 `Utility` 这个名字本身不描述任何职责，所以它还会继续收东西。
 
-处置方向（每条是纯搬迁 + 按读者能找到的位置命名，不改行为）：
-`RenderFrameExtractor` / `OffscreenJobRunner` / `SceneCameraQuery` → `Lifecycle/` 或一个描述
-"帧准备"的目录；`AppScreenshotCapture` → `Automation/`；`FPSCtrl` / `UiFontSettings` 各自归位。
-`Utility/` 清空后删除。
+**处置已执行**：`Utility/` 与 `include/GameRuntime/Utility/` 两个目录已删除。按"读者会去哪找"分配：
+
+| 文件 | 新位置 | 依据 |
+| --- | --- | --- |
+| `RenderFrameExtractor` | `Lifecycle/` | 它是 `declareViews` 与 `prepareViews` 之间的那一步，两个生产消费者（`GameRuntimeTickOrchestrator`、`HostSceneExtract`）都在 Lifecycle |
+| `SceneCameraQuery` | `Lifecycle/` | `findPrimaryCamera` 被 tick 的 camera aspect 与 game view producer 使用，两者都在 Lifecycle |
+| `FPSCtrl` | `Lifecycle/` | 帧节奏属于循环的计时（`iterate` 调 `update`，`AppLifecycle` 从配置设值） |
+| `AppScreenshotCapture` | `Automation/` | 唯一生产消费者是自动化（tick 自动化 + 控制面） |
+| `UiFontSettings` | `Settings/`（新） | 头文件自己声明它是"用户可见、持久化、跨 shell 共享的应用策略"，并预留更多 UI 设置（text scale / density）加入同一个 `ui` 配置文档 |
+| `OffscreenJobRunner` | **删除** | 见下 |
+
+**`OffscreenJobRunner` 为什么是删除而不是搬迁**：`queueOffscreenJob(App*, render, job)` 在整个生产代码里
+**零调用方**——三个 .cpp（`AppAutomation` / `AppAutomationControlService` / `AppScreenshotCapture`）include
+了它却从不调用，是历史残留的 include（已一并删除）。生产上真正在用的是
+`AppAutomation::buildOffscreenJobQueueService(App&)`，而 `queueOffscreenJob(App*,...)` 的内部就是
+"用 app 构造同一个 service 再委托"，即**重复了一个活着的 helper**。测试是它唯一的调用方，于是按
+"找不到生产者一律删除"处置：`OffscreenAsyncTest` 的 8 处改为走 `buildOffscreenJobQueueService`
+（`&app` 分支）与空 service（null-app 分支，RHI 对空 service 的拒绝与对 null renderer 的拒绝一致），
+覆盖语义不变，且测的是产品真正走的接线。
+
+**搬迁方式**：全部 `git mv`（保留 blame），include 用逐模式 `perl -pi` 精确替换而非行号 sed；改完用
+`rg 'GameRuntime/Utility' Engine Example` 归零作为验收。`GameRuntime/xmake.lua` 用
+`add_files("**.cpp")` 与 `add_headerfiles("./include/**.h")` 两个 glob，所以新目录自动纳入，无需改构建。
+
+验证：`ya-testing` / `ya-game-runtime` / `ya-game-editor` / `ya-engine` / `ya-runtime` /
+`GUIWorkbench` / `ya-render-3d-test` 全部 build ok；受影响用例
+（`OffscreenAsyncTest` / `AppScreenshotCaptureTest` / `UiFontSettingsTest` /
+`HostSceneExtractTest` / `EditorSettingsDialogTest`）31/31；`ya-render-3d-test` 175/175；
+渲染/编辑器滤镜 304 passed / 3 failed（与基线同 3 个 pre-existing）；两张 smoke 截图逐字节相同；
+编辑器 smoke 六步全过。
 
 ### 6.3 `GameEditor/Panels/` 的名字与 `UI/Tabs/` 冲突
 

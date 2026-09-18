@@ -1,7 +1,7 @@
 #pragma once
 
 #include "GameEditor/UI/Dialogs/EditorFilePicker.h"
-#include "GameRuntime/Utility/UiFontSettings.h"
+#include "GameRuntime/Settings/UiFontSettings.h"
 
 #include <functional>
 #include <memory>

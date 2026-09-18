@@ -1,4 +1,4 @@
-#include "GameRuntime/Utility/FPSCtrl.h"
+#include "GameRuntime/Lifecycle/FPSCtrl.h"
 
 namespace ya
 {

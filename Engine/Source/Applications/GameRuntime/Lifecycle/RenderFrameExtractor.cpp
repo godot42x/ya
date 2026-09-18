@@ -1,4 +1,4 @@
-#include "GameRuntime/Utility/RenderFrameExtractor.h"
+#include "GameRuntime/Lifecycle/RenderFrameExtractor.h"
 
 #include "Render3D/Material/PBRMaterial.h"
 #include "Render3D/Material/PhongMaterial.h"

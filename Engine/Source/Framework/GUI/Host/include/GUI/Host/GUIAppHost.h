@@ -81,7 +81,7 @@ struct FGUIWindowHostConfig
     /// identical across macOS/Windows.
     ///
     /// Applications that expose a font setting should not read this struct:
-    /// resolve the user's choice once (see GameRuntime/Utility/UiFontSettings.h)
+    /// resolve the user's choice once (see GameRuntime/Settings/UiFontSettings.h)
     /// and pass the id here.
     std::string              uiFontFace = "inter";
     /// Debug: dump the first UI snapshot as a BMP (CPU-side raster of the

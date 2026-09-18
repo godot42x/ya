@@ -1,5 +1,4 @@
-#include "GameRuntime/Utility/AppScreenshotCapture.h"
-#include "GameRuntime/Utility/OffscreenJobRunner.h"
+#include "GameRuntime/Automation/AppScreenshotCapture.h"
 #include "GameRuntime/App.h"
 
 #include "RHI/Render.h"

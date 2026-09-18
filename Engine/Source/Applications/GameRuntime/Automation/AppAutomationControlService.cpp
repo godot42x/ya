@@ -5,7 +5,6 @@
 #include "GameRuntime/AppSceneServices.h"
 #include "GameRuntime/Automation/EditorAutomationControl.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
-#include "GameRuntime/Utility/OffscreenJobRunner.h"
 
 #include "Core/Config/ConfigManager.h"
 

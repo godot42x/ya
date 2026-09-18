@@ -3,7 +3,7 @@
 #include "Graph/RenderGraph.h"
 #include "App/Control/AutomationControlServer.h"
 #include "GameRuntime/AppOptions.h"
-#include "GameRuntime/Utility/AppScreenshotCapture.h"
+#include "GameRuntime/Automation/AppScreenshotCapture.h"
 
 #include <memory>
 #include <optional>

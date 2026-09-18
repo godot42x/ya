@@ -2,8 +2,8 @@
 #include "GameRuntime/AppRenderState.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
-#include "GameRuntime/Utility/FPSCtrl.h"
-#include "GameRuntime/Utility/UiFontSettings.h"
+#include "GameRuntime/Lifecycle/FPSCtrl.h"
+#include "GameRuntime/Settings/UiFontSettings.h"
 #include "GUI/Host/AppBootstrap.h"
 #include "RHI/NativeWindow.h"
 

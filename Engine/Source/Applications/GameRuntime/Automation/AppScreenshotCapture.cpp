@@ -1,7 +1,6 @@
-#include "GameRuntime/Utility/AppScreenshotCapture.h"
+#include "GameRuntime/Automation/AppScreenshotCapture.h"
 #include "GameRuntime/AppOptions.h"
 
-#include "GameRuntime/Utility/OffscreenJobRunner.h"
 
 #include "Core/Log.h"
 #include "Graph/RenderGraphExecutor.h"

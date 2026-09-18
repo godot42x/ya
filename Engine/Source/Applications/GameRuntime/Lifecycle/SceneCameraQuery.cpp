@@ -1,4 +1,4 @@
-#include "GameRuntime/Utility/SceneCameraQuery.h"
+#include "GameRuntime/Lifecycle/SceneCameraQuery.h"
 
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "Scene/Core/Scene.h"

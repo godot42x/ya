@@ -1,7 +1,10 @@
 #include "RHI/Core/OffscreenJob.h"
 #include "RHI/Core/CommandBuffer.h"
-#include "GameRuntime/Utility/OffscreenJobRunner.h"
 #include "GameRuntime/App.h"
+// The App-backed offscreen queue the product uses: these cases drive the RHI
+// queue through the same wiring a runtime does, rather than through a second
+// convenience entry point that only tests would call.
+#include "GameRuntime/Lifecycle/AppAutomation.h"
 
 #include <gtest/gtest.h>
 
@@ -83,6 +86,14 @@ std::shared_ptr<OffscreenJobState> makeJob(EOffscreenJobPhase phase = EOffscreen
     auto job   = std::make_shared<OffscreenJobState>();
     job->phase = phase;
     return job;
+}
+
+/// The queue service the product builds for itself: an enqueue that hands the
+/// work to the App's task manager. An empty service is what a caller with no App
+/// would pass, and the RHI rejects it the same way it rejects a null renderer.
+OffscreenJobQueueService buildQueueService(App& app)
+{
+    return AppAutomation::buildOffscreenJobQueueService(app);
 }
 
 std::vector<PlannedAsyncStep> makePlannedAsyncSteps(uint32_t seed, int jobCount)
@@ -287,15 +298,15 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobRejectsInvalidInputs)
     App app;
     auto job = makeJob();
 
-    queueOffscreenJob(nullptr, reinterpret_cast<IRender*>(0x1), job);
+    queueOffscreenJob(OffscreenJobQueueService{}, reinterpret_cast<IRender*>(0x1), job);
     EXPECT_EQ(job->phase, EOffscreenJobPhase::Failed);
 
     job = makeJob();
-    queueOffscreenJob(&app, nullptr, job);
+    queueOffscreenJob(buildQueueService(app), nullptr, job);
     EXPECT_EQ(job->phase, EOffscreenJobPhase::Failed);
 
     job = makeJob();
-    queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
+    queueOffscreenJob(buildQueueService(app), reinterpret_cast<IRender*>(0x1), job);
     EXPECT_EQ(job->phase, EOffscreenJobPhase::Failed);
 }
 
@@ -308,7 +319,7 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobRecordsAndPublishesSuccessfulTask)
     job->createOutputFn = [](IRender*) -> std::shared_ptr<ImageResource> { return makeFakeImageResource(); };
     job->executeFn      = [](ICommandBuffer*, ImageResource* output) -> bool { return output != nullptr; };
 
-    queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
+    queueOffscreenJob(buildQueueService(app), reinterpret_cast<IRender*>(0x1), job);
 
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);
     ASSERT_EQ(app.getTaskManager().offscreenTasks.size(), 1u);
@@ -341,7 +352,7 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobPublishesRecordedKeepAliveResources)
         return true;
     };
 
-    queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
+    queueOffscreenJob(buildQueueService(app), reinterpret_cast<IRender*>(0x1), job);
 
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);
 
@@ -371,7 +382,7 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobKeepsRecordedResourcesAliveThroughGpuC
         return true;
     };
 
-    queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
+    queueOffscreenJob(buildQueueService(app), reinterpret_cast<IRender*>(0x1), job);
 
     std::vector<std::shared_ptr<OffscreenJobState>> submittedJobs;
     app.getTaskManager().updateOffscreenTasks(&cmdBuf, &submittedJobs);
@@ -408,7 +419,7 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobMarksExecutionFailure)
     job->createOutputFn = [](IRender*) -> std::shared_ptr<ImageResource> { return makeFakeImageResource(); };
     job->executeFn      = [](ICommandBuffer*, ImageResource*) -> bool { return false; };
 
-    queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
+    queueOffscreenJob(buildQueueService(app), reinterpret_cast<IRender*>(0x1), job);
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);
 
     app.getTaskManager().updateOffscreenTasks(&cmdBuf);
@@ -427,7 +438,7 @@ TEST(OffscreenAsyncTest, CancelledQueuedJobRemainsCancelledWhenQueuedWorkerRuns)
     job->createOutputFn = [](IRender*) -> std::shared_ptr<ImageResource> { return makeFakeImageResource(); };
     job->executeFn      = [](ICommandBuffer*, ImageResource*) -> bool { return true; };
 
-    queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
+    queueOffscreenJob(buildQueueService(app), reinterpret_cast<IRender*>(0x1), job);
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);
 
     auto queuedJob = job;

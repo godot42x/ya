@@ -6,8 +6,8 @@
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
 #include "HostSdlEventSource.h"
-#include "GameRuntime/Utility/FPSCtrl.h"
-#include "GameRuntime/Utility/SceneCameraQuery.h"
+#include "GameRuntime/Lifecycle/FPSCtrl.h"
+#include "GameRuntime/Lifecycle/SceneCameraQuery.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
 
 #include "Core/Async/TaskQueue.h"
@@ -35,7 +35,7 @@
 #include "Render3D/RenderDeviceState.h"
 #include "Render3D/Material/Material.h"
 #include "GameRuntime/Lifecycle/HostSceneExtract.h"
-#include "GameRuntime/Utility/RenderFrameExtractor.h"
+#include "GameRuntime/Lifecycle/RenderFrameExtractor.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 

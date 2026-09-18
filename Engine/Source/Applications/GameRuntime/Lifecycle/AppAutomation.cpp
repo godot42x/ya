@@ -9,8 +9,7 @@
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "Render3D/RenderDeviceState.h"
-#include "GameRuntime/Utility/AppScreenshotCapture.h"
-#include "GameRuntime/Utility/OffscreenJobRunner.h"
+#include "GameRuntime/Automation/AppScreenshotCapture.h"
 
 #include "Core/Config/ConfigManager.h"
 #include "Render3D/Common/ShadowSettings.h"

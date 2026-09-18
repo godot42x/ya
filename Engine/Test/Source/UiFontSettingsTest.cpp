@@ -1,4 +1,4 @@
-#include "GameRuntime/Utility/UiFontSettings.h"
+#include "GameRuntime/Settings/UiFontSettings.h"
 
 #include "Render/Resources/FontManager.h"
 

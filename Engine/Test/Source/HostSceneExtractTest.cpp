@@ -2,7 +2,7 @@
 
 #include "Core/Log.h"
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
-#include "GameRuntime/Utility/RenderFrameExtractor.h"
+#include "GameRuntime/Lifecycle/RenderFrameExtractor.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Scene/Core/Scene.h"
 #include "Scene3D/TransformComponent.h"

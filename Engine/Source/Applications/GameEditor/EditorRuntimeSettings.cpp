@@ -1,7 +1,7 @@
 #include "GameEditor/EditorRuntimeSettings.h"
 
 #include "Core/Config/ConfigManager.h"
-#include "GameRuntime/Utility/FPSCtrl.h"
+#include "GameRuntime/Lifecycle/FPSCtrl.h"
 
 #include <string_view>
 
