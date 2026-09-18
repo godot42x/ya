@@ -78,3 +78,65 @@ Verified: `LinkageFrameworkTest` 8/8; `ya-engine`, `ya-game-editor`,
 Still open: the example project was not launched, so the visual result (one icon
 per light, camera body visible, game view clean) has not been eyeballed, and the
 saved file has not been re-read after a round trip.
++
+## Round 4 - the three defects the first eyeball pass found
+
+Launching Example/HelloMaterial surfaced three concrete bugs the plan had not
+covered. Two were architecture, one was a declaration mistake.
+
+### 1. The world overlay drew on top of the preview (grid over the preview)
+
+EditorViewProducer declared the preview View with
+composeOntoViewId = kPrimarySceneViewId + composeRect, so the runtime blitted the
+preview onto the world display RT **before** recordEditorWorldViewportOverlays
+ran: the x-z grid, manipulator and frustum wireframe were recorded over it. The
+first attempt made the editor compose the inset itself (a public
+recordViewDisplayInsets reached through EditorViewportCompositor); it rendered
+nothing and was the wrong shape anyway - the editor was still sharing one compose
+pass with world content.
+
+Final shape: the preview View keeps composeOntoViewId (so it is not the display
+root) but composeRect stays empty, which is exactly "rendered into its own image,
+shown by whoever asked for it". The editor reads that image and the GUI composes
+it as **viewport chrome**: EditorViewportTab is now a UIOverlay of world UIImage
++ UIBorder-framed preview UIImage, so overlays are under it by construction (they
+are content of the world image below), not by recording order.
+recordViewDisplayInsets went back to file local, and EditorViewportCompositor lost
+the insets parameter it never needed.
+
+The preview also stopped drawing gizmos (features = Game): a preview is what that
+camera sees, not an authoring view.
+
+### 2. The body mesh did not follow its host
+
+TransformSystem::updateNodeTree recomputed a dirty node's own world matrix and
+nothing else, so a child kept its stale world matrix whenever the parent changed
+through a path that did not use TransformComponent's setters (Inspector / undo /
+reflection / scene load). The frustum wireframe reads the authored transform and
+moved; the generated body did not. Fixed at both ends: children are marked stale
+whenever a node is recomputed (the place no writer can forget), and
+onPostSerialize notifies children because a reflected write never touches a setter.
+See memories/reflected_transform_write_bypasses_child_dirty.md.
+
+### 3. The body looked flat because it *was* flat
+
+The body carried UnlitMaterialComponent with a single tint: a silhouette with no
+surfaces, which reads as "missing normals" even though the OBJ has them. It now
+carries PhongMaterialComponent and takes the scene's lighting like any other mesh
+(UE's ACameraActor.CameraMesh is a real mesh too).
+
+Verified in this round:
+
+- LinkageFrameworkTest 11/11 (incl. the new follower test), EditorViewProducerTest
+  5/5, EditorViewportTabTest 3/3, plus 311 tests across 14 suites (WidgetLayoutTest
+  / DeclarativeContractTest / UIFrameSnapshotTest / ECSTest /
+  SceneManagerLifecycleTest / editor input + viewport overlay contracts) all pass.
+- Live: with a camera selected, the preview panel appears at the declared rect with
+  a hairline frame; component.set on the camera host moved both host and body to
+  [1.5, 6.0, 14.0]; the shaded body shows a lit gradient instead of a flat fill;
+  the world grid stops at the panel border (sampled inside the panel: no
+  line-coloured pixels).
+
+Still not done: an automated click test that drives Hierarchy selection (the
+automation surface has no selection method, so this round drove it with a temporary
+scene.create_preset auto-select that was reverted before committing).

@@ -2,7 +2,7 @@
 
 #include "Core/Log.h"
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Systems/Components/DirectionalLightComponent.h"
@@ -37,15 +37,6 @@ Entity* createCompanionNode(Scene& scene, Entity& host, const char* suffix)
 
     Node* node = scene.createNode3D(std::format("{}{}", host.getName(), suffix), hostNode);
     return node ? node->getEntity() : nullptr;
-}
-
-/// Editor visuals read as flat tinted shapes: one unlit colour, no texture.
-void applyUnlitTint(UnlitMaterialComponent& unlit, const glm::vec4& color)
-{
-    unlit._params.baseColor0 = glm::vec3(color);
-    unlit._params.baseColor1 = glm::vec3(color);
-    unlit._params.mixValue   = 0.0f;
-    unlit.invalidate();
 }
 
 void applyBillboardDefaults(BillboardComponent& billboard, const LightBillboardConfig& config)
@@ -167,8 +158,14 @@ CompanionSpec makeCameraCompanionSpec(const CameraCompanionPolicy& policy)
             mesh->_mesh.setModelPath(policy.meshPath, policy.meshIndex);
             mesh->invalidate();
         }
-        if (auto* unlit = companion->addComponent<UnlitMaterialComponent>()) {
-            applyUnlitTint(*unlit, policy.baseColor);
+        // Shaded, not tinted flat: the body has to read as a solid with
+        // surfaces, so it takes the scene's lighting like any other mesh.
+        if (auto* phong = companion->addComponent<PhongMaterialComponent>()) {
+            phong->_params.ambient   = policy.ambient;
+            phong->_params.diffuse   = policy.diffuse;
+            phong->_params.specular  = policy.specular;
+            phong->_params.shininess = policy.shininess;
+            phong->invalidate();
         }
         if (auto* transform = companion->getComponent<TransformComponent>()) {
             transform->setScale(glm::vec3(policy.scale));

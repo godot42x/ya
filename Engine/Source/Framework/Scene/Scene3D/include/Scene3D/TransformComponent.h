@@ -219,6 +219,13 @@ struct TransformComponent : public IComponent
     {
         _localDirty = true;
         _worldDirty = true;
+        // A reflected write goes straight at the fields, so it cannot go
+        // through the setters -- but it changes this node's world matrix just
+        // the same, and every descendant's world matrix is derived from it.
+        // Inspector edits, undo/redo, script writes and scene loads all arrive
+        // here; a child left clean keeps its old world matrix and draws in the
+        // wrong place until something else happens to mark it dirty.
+        notifyChildrenDirty();
     }
 
     // ========================================================================

@@ -60,6 +60,30 @@
       "description": "ModelInstantiationSystem routes its children through CompanionManager",
       "state": "not-started",
       "seam": "ModelInstantiationSystem::createMeshNode"
+    },
+    {
+      "id": "preview-as-chrome",
+      "description": "The camera preview View renders into its own image and the GUI stacks it as viewport chrome, so world overlays stay under it",
+      "state": "done",
+      "seam": "EditorViewProducer (composeRect empty) + IEditorViewportHost::setPreviewImage + EditorViewportTab UIOverlay"
+    },
+    {
+      "id": "preview-input-follows-hit-test",
+      "description": "World interaction asks the host's hit test, so a point on chrome (the preview panel) is not mapped into world coordinates",
+      "state": "done",
+      "seam": "IEditorViewportHost::isWorldPoint + EditorLayer::screenToViewport exclusion"
+    },
+    {
+      "id": "companion-follows-reflected-host-writes",
+      "description": "A generated body follows its host when the host moves through reflection/undo/load, not only through setters",
+      "state": "done",
+      "seam": "TransformSystem::updateNodeTree child marking + TransformComponent::onPostSerialize"
+    },
+    {
+      "id": "camera-body-shading",
+      "description": "The camera body is a lit solid (Phong), not a flat unlit tint",
+      "state": "done",
+      "seam": "makeCameraCompanionSpec + CameraCompanionPolicy"
     }
   ]
 }

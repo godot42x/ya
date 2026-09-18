@@ -184,6 +184,21 @@ void TransformSystem::updateNodeTree(Node *node, const glm::mat4 *parentWorldMat
     // Update self if dirty
     if (needsUpdate) {
         updateNode3D(node3D, parentWorldMatrix);
+
+        // The node's world matrix just changed, so every child's world matrix is
+        // stale by definition -- whatever that child's own flags say. The
+        // write-time callback on TransformComponent only covers writers that go
+        // through the setters (and the root node never gets one); reflection,
+        // serialization and inspector writes touch the fields directly. Without
+        // this, a descendant keeps drawing at its old place: a generated
+        // companion body stays behind while the frustum wireframe, which reads
+        // the authored transform, moves on. Marking the children here is the
+        // one place that cannot be forgotten by a writer.
+        for (Node* child : node->getChildren()) {
+            if (child) {
+                child->onHierarchyDirty();
+            }
+        }
     }
 
     // Use this node's world matrix as the parent matrix for children.

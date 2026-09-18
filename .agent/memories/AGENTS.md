@@ -26,6 +26,7 @@
 - `./unity_build_duplicate_private_symbol.md`：批量搬迁重排 unity 批次后，平铺布局掩盖的重复私有符号（结构体/自由函数）突然变成 duplicate symbol；不能用加命名空间糊过去，应抽私有头或改名
 - `./pointer_session_lost_release.md`：GUI pointer session 的 press 缓存只有 release 才清，而 release 会丢（focus 丢失、指针离开窗口、注入 press）→ `WidgetTree::beginPointerDispatch` 断言在拖 splitter/dock 时频发 abort；现在由框架 `cancelPointerSession` / `reconcilePointerButtons` 回收并计数
 - `./dead_snapshot_channel_survives_empty_input.md`：没有生产者的 `FramePacket::overlay` 通道让 Forward/Deferred 的 overlay pass 每帧空跑（"空输入是合法输入"掩盖了死通道）；含"兜底链恒非空分支即死代码"（`resolveViewportExtent`）
+- `./reflected_transform_write_bypasses_child_dirty.md`：反射/undo/反序列化直写 `TransformComponent` 字段绕过 setter，子节点 world matrix 不标脏 → 生成物（相机机身）停在旧位置；含"父脏必然子脏"应落在 `updateNodeTree` 的理由
 
 ## 边界
 

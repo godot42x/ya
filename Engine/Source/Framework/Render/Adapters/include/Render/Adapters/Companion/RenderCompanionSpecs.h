@@ -13,7 +13,12 @@ namespace ya
 /// source). The spec never reaches Host config.
 struct CameraCompanionPolicy
 {
-    glm::vec4   baseColor = glm::vec4(0.35f, 0.85f, 1.0f, 1.0f);
+    /// The body is a shaded solid, like UE's ACameraActor camera mesh: an
+    /// unlit flat fill reads as a silhouette with no shape at all.
+    glm::vec3   diffuse   = glm::vec3(0.35f, 0.85f, 1.0f);
+    glm::vec3   ambient   = glm::vec3(0.09f, 0.21f, 0.25f);
+    glm::vec3   specular  = glm::vec3(0.30f);
+    float       shininess = 32.0f;
     float       scale     = 1.0f;
     /// Engine content, not a scene asset: the body is a normal mesh source
     /// pointing at engine geometry, so it needs no special mesh pipeline.

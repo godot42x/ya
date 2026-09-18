@@ -233,7 +233,11 @@ TEST(LinkageFrameworkTest, CameraComponentGetsGeneratedBodyCompanion)
     EXPECT_EQ(bodyMesh->_mesh._sourceModelPath, CameraCompanionPolicy{}.meshPath);
     EXPECT_EQ(bodyMesh->_mesh._meshIndex, CameraCompanionPolicy{}.meshIndex);
     EXPECT_EQ(bodyMesh->_mesh._primitiveGeometry, EPrimitiveGeometry::None);
-    EXPECT_TRUE(body->hasComponent<UnlitMaterialComponent>());
+    // Shaded, not tinted flat: a solid with no lighting reads as a silhouette.
+    ASSERT_TRUE(body->hasComponent<PhongMaterialComponent>());
+    const PhongMaterialComponent* bodyMaterial = body->getComponent<PhongMaterialComponent>();
+    EXPECT_EQ(bodyMaterial->_params.diffuse, CameraCompanionPolicy{}.diffuse);
+    EXPECT_FALSE(body->hasComponent<UnlitMaterialComponent>());
 
     scene->removeComponent<CameraComponent>(camera->getHandle());
     sink.drain();
@@ -524,6 +528,94 @@ TEST(LinkageFrameworkTest, DeferredTaskSkippedForDestroyedScene)
     sink.drain();
     ASSERT_EQ(ran, 0);
 
+    framework.shutdown();
+}
+
+// A generated companion is a child node, so its world matrix is derived from
+// the host's. That only holds while every writer of the host transform also
+// invalidates the child: the inspector, undo/redo and scene loads write the
+// reflected fields directly instead of going through the setters, so the dirty
+// propagation has to hold at the point where world matrices are computed.
+// Without it the body keeps its old world matrix while the frustum wireframe --
+// which reads the authored transform -- moves, i.e. "the model and the
+// wireframe do not line up".
+TEST(LinkageFrameworkTest, CameraBodyFollowsItsHostAfterTheCompanionExists)
+{
+    SceneManager sceneManager;
+    SceneLifecycleHostScope lifecycleHost(&sceneManager);
+    FrameTaskCapture sink;
+    LinkageFramework framework;
+    framework.setSceneManager(&sceneManager);
+    framework.setFrameTaskSink(std::ref(sink));
+    addCompanionRule(framework);
+    framework.init();
+
+    stdptr<Scene> scene = std::make_shared<Scene>("CompanionMoveScene");
+    auto*         node  = scene->createNode3D("Cam");
+    ASSERT_NE(node, nullptr);
+    auto* hostTc = node->getEntity()->getComponent<TransformComponent>();
+    ASSERT_NE(hostTc, nullptr);
+    node->getEntity()->addComponent<CameraComponent>();
+    ASSERT_TRUE(sceneManager.activateScene(scene));
+    sink.drain();
+
+    Entity* body = CompanionManager::findCompanion(*scene, *node->getEntity());
+    ASSERT_NE(body, nullptr);
+    auto* bodyTc = body->getComponent<TransformComponent>();
+    ASSERT_NE(bodyTc, nullptr);
+
+    // TransformSystem is the only thing that updates world matrices, so run it
+    // the way the app does (one system over the scene tree).
+    TransformSystem transforms;
+    transforms.setSceneProvider([&scene]() -> Scene* { return scene.get(); });
+    transforms.init();
+
+    const auto worldOf = [](TransformComponent* tc) {
+        TransformSystem::computeWorldMatrix(tc);
+        return tc->getWorldPosition();
+    };
+
+    // 1. Setter path (gizmo drag, editor camera write).
+    hostTc->setPosition({3.0f, 4.0f, 5.0f});
+    transforms.onUpdate(0.0f);
+    EXPECT_NEAR(worldOf(bodyTc).x, 3.0f, 1e-4f);
+    EXPECT_NEAR(worldOf(bodyTc).y, 4.0f, 1e-4f);
+    EXPECT_NEAR(worldOf(bodyTc).z, 5.0f, 1e-4f);
+
+    // 2. Reflected write (inspector / undo / script / scene load): the fields
+    //    are written directly and only the component's own flags are marked.
+    hostTc->_position = {7.0f, 8.0f, 9.0f};
+    hostTc->onPostSerialize();
+    transforms.onUpdate(0.0f);
+    EXPECT_NEAR(worldOf(bodyTc).x, 7.0f, 1e-4f);
+    EXPECT_NEAR(worldOf(bodyTc).y, 8.0f, 1e-4f);
+    EXPECT_NEAR(worldOf(bodyTc).z, 9.0f, 1e-4f);
+
+    // 3. Nested: a descendant is derived through the body as well.
+    auto* nestedNode = scene->createNode3D("Nested", scene->getNodeByEntity(body));
+    ASSERT_NE(nestedNode, nullptr);
+    sink.drain();
+    auto* nestedTc = nestedNode->getEntity()->getComponent<TransformComponent>();
+    ASSERT_NE(nestedTc, nullptr);
+    nestedTc->setPosition({1.0f, 0.0f, 0.0f});
+    hostTc->setPosition({-2.0f, 0.0f, 0.0f});
+    transforms.onUpdate(0.0f);
+    EXPECT_NEAR(worldOf(nestedTc).x, -1.0f, 1e-4f);
+
+    // 4. The scene root never gets a dirty callback (it is created directly and
+    //    never reparented), so a descendant of any node must be derived from a
+    //    recomputed parent matrix rather than from a notification the parent
+    //    happened to send.
+    Node*  rootNode = scene->getRootNode();
+    ASSERT_NE(rootNode, nullptr);
+    auto*  rootTc   = rootNode->getEntity()->getComponent<TransformComponent>();
+    ASSERT_NE(rootTc, nullptr);
+    rootTc->_position = {10.0f, 0.0f, 0.0f};
+    rootTc->onPostSerialize();
+    transforms.onUpdate(0.0f);
+    EXPECT_NEAR(worldOf(nestedTc).x, 9.0f, 1e-4f);
+
+    transforms.shutdown();
     framework.shutdown();
 }
 
