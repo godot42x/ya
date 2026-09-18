@@ -3,7 +3,7 @@
 > 建立：2026-09-18
 > 关联：`./.agent/skills/code-reorganize/SKILL.md`、`./.agent/plan/source-layout-subtraction/plan.md`、
 > `./.agent/skills/gui-framework/SKILL.md`
-> 状态：G1 已落地
+> 状态：G1、G2 已落地
 
 ## 0. 问题
 
@@ -58,7 +58,7 @@ S1 之后 `include/` 影子层消失，主流程仍然读不出来：
 | 阶段 | 目标 | 状态 |
 | --- | --- | --- |
 | G1 | `UI/` 按关切分组，公开路径改为 `GameEditor/UI/<Group>/...` | 已落地 |
-| G2 | 分组契约写进 skill，并把 `include/` 路径规则与 `UI/<Group>` 对齐到文档 | 待做 |
+| G2 | 分组契约写进 skill，并把 `include/` 路径规则与 `UI/<Group>` 对齐到文档 | 已落地 |
 | G3 | 同标准扫其余平铺目录（候选见下），一条一条立项 | 待做 |
 
 ### G1 验收（已满足）
@@ -72,6 +72,17 @@ S1 之后 `include/` 影子层消失，主流程仍然读不出来：
 5. 构建：`ya-game-editor`、`ya-testing`、`ya-game-runtime`、`ya-engine`。
 6. 测试集合对比 HEAD 基线：**0 新增回归**，另修好 4 条此前被 S1 打断的
    源码守卫测试。
+
+### G2：契约落点（已落地）
+
+- `./.agent/skills/code-reorganize/SKILL.md` 新增「关切分组」一节：判据是关切
+  不是被谁 include、组名即契约、私有与公开共用组名、不问"放哪"就不动、
+  搬完必须重建 target、新路径搬迁不需要两次提交、搬完查旧路径。
+- 「include 路径与构建更新」补一条反向规则：**新落地的私有头要确认被
+  `add_headerfiles` pattern 收进来**，否则不进 IDE 与安装清单。
+- 「验证清单」与「常见错误模式」各加一条（重建 target、unity 批次重排）。
+- `./.agent/memories/unity_build_duplicate_private_symbol.md` 记录 unity 批次
+  重排暴露重复私有符号的形态与修法。
 
 ### G3 候选（未立项）
 

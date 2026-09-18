@@ -91,7 +91,25 @@ include。`EditorNativeTearOff.cpp` 里的同义函数 `editorWindowHasPanels`
 
 ### 未完成 / 下一步
 
-- G2：把分组契约写进 skill（`code-reorganize` 的目录规则 + `gui-framework` 的 UI 布局约定）。
+- ~~G2：把分组契约写进 skill~~ —— 已落地，见下。
 - G3：`Engine/Test/Source`（114 文件）、`Render3D/Common`（33）、
   `GUI/Runtime/Widgets/Controls`（32/31）、`RHI/Core`（26）同标准评估，
   每条先说明"解决哪个读者问题"。
+
+## 2026-09-18 — G2 契约落点
+
+把 G1 的判断写进 `./.agent/skills/code-reorganize/SKILL.md`，下次新增文件不用
+重新推导，也不用问"放哪"：
+
+- 新增「关切分组」一节：判据是**关切**不是"被谁 include"；组名即契约；
+  私有实现与公开头共用组名；分工要能一句话说清（`Shell/` 驱动这一帧、
+  `Dock/` 面板停在哪）；答不上来的文件留在原地；搬完必须重建 target；
+  新路径搬迁天然是 rename，不需要两次提交；搬完 `rg` 旧路径（排除
+  `build/` 与 `.agent/plan/`）。
+- 「include 路径与构建更新」补反向规则：新落地的私有头要确认被
+  `add_headerfiles` pattern 收进——子目录私有头不会自动进 IDE 与安装清单。
+- 「验证清单」加第 11 条，「常见错误模式」加第 10 条（批量搬迁后不重建）。
+- memory 记录 unity 批次重排这一形态。
+
+没有改 `gui-framework` skill：它的内容契约（snapshot、控件、布局）不受文件
+放哪影响；把目录规则同时写进两个 skill 只会造出第二个真相来源。

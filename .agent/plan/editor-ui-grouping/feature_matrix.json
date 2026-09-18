@@ -1,6 +1,6 @@
 {
   "plan": "editor-ui-grouping",
-  "status": "g1_landed",
+  "status": "g1_g2_landed",
   "features": [
     {"id": "ui_dir_grouped_by_concern", "phase": "G1", "status": "verified", "evidence": ["7 groups: Shell / Dock / Tabs / Sections / Viewport / Dialogs / Ops", "no flat file remains under UI/ or include/GameEditor/UI/", "91 renames: 48 headers + 41 sources + 2 dock layout JSON"]},
     {"id": "public_path_carries_group", "phase": "G1", "status": "verified", "evidence": ["include path is GameEditor/UI/<Group>/<Name>.h", "90 files had includes rewritten (201 lines)", "0 unresolved GameEditor/* includes out of 291"]},
@@ -9,7 +9,7 @@
     {"id": "unity_build_duplicate_symbol_removed", "phase": "G1", "status": "verified", "evidence": ["unity_7 held both EditorNativeTearOff.cpp and EditorWindowLayout.cpp", "each privately defined FEmptyGuiDelegate and dockHasPanels", "extracted into UI/Dock/EditorDockSupport.h", "editorWindowHasPanels renamed to sessionHasDockPanels"]},
     {"id": "no_new_test_regressions", "phase": "G1", "status": "verified", "evidence": ["HEAD baseline 1230 passed / 14 failed", "after change 1234 passed / 10 failed", "set comparison: 0 new failures, 4 guards repaired"]},
     {"id": "s1_stale_source_guards_repaired", "phase": "G1", "status": "verified", "evidence": ["7 paths across 3 guard tests were broken by S1, not by G1", "EditorWindowSessionTest / GUIRenderSurfaceTest / GUIWindowChromeTest", "resolved by basename against real locations"]},
-    {"id": "grouping_contract_in_skill", "phase": "G2", "status": "not_started", "evidence": ["code-reorganize: UI concern-group naming rules", "gui-framework: where a new editor UI file goes"]},
+    {"id": "grouping_contract_in_skill", "phase": "G2", "status": "verified", "evidence": ["code-reorganize gained a Concern Grouping section: judgement is the concern not the includer, a group name is a contract, private and public dirs share the group name, rebuild the target after moving, new-path moves need no two-commit dance", "include-path section gained the reverse add_headerfiles rule: a new private header must be covered by some pattern or it silently misses IDE and install lists", "verification checklist item 11 and common-mistake item 10 added", "deliberately not duplicated into the gui-framework skill: that skill describes snapshot/control/layout contracts, not where files live"]},
     {"id": "remaining_flat_dirs", "phase": "G3", "status": "not_started", "evidence": ["Engine/Test/Source 114 files", "Render3D/include/Render3D/Common 33", "GUI/Runtime/Widgets/Controls 32 sources / 31 headers", "RHI/include/RHI/Core 26"]},
     {"id": "preexisting_failures", "phase": "out-of-scope", "status": "known", "evidence": ["14 failures at the G1 base commit, none touched by this line", "ya-gui-widgets-test missing ya-gui-compose dep", "two SIGTRAP assertions: WidgetTree::beginPointerDispatch, WidgetTree::detach"]}
   ]

@@ -44,6 +44,36 @@ description: YA Engine 代码拆分与目录重组指南：只在收益明确时
 5. 如果模块已经有既有分层，优先沿用当前风格，不再平行造一套新分法。
 6. 新目录若只承载一两个彼此强耦合的文件，且没有后续扩展预期，通常说明不值得为它增加一级导航层。
 
+## 关切分组（平铺目录的收敛方式，2026-09-18 定稿）
+
+当一个目录的文件数已经让读者只能靠猜文件名找东西（约 40+ 个文件、且混着
+多个不相关关切），处理方式是**按关切分组**——不是拆 target，不是造抽象，
+只回答"这个文件属于哪个关切"。
+
+1. 判据是**关切**，不是"被谁 include"。同一个文件被两个 tab 复用，它属于
+   `Sections/`（被复用的区段），不属于任意一个 tab。
+2. 一组的名字要能承载未来同类文件继续收敛；组名一旦落地就成契约，
+   重命名组等于改公开路径，属破坏性改动。
+3. 私有实现目录与公开头目录**共用同一组组名**，公开路径就是
+   `<Module>/<Sub>/<Group>/<Name>.h`（见下例）。分组不新增 include 根。
+4. 分工要能一句话说清，例如：谁在驱动这一帧（`Shell/`）与面板停在哪
+   （`Dock/`）必须是两组，不能互相搬。
+5. 答不上"属于哪个关切"的文件留在原地，并在计划里记一笔；不要为了消灭
+   平铺而硬塞。
+6. 搬完必须**重新构建该 target**：`add_files("**.cpp")` 的 unity 批次会随
+   文件顺序变化，平铺时被掩盖的重复私有符号会突然变成 duplicate symbol。
+   看到这种情况不要加命名空间糊过去，把重复的 `struct`/自由函数抽进同目录
+   私有头（见 `.agent/memories/unity_build_duplicate_private_symbol.md`）。
+7. 目标路径本来是新的，搬迁天然被识别为 rename，**不需要**走"先删镜像再搬
+   真身"的两次提交；那条流程只服务于"目标路径已被占用"的镜像布局。
+8. 搬完 `rg` 一次旧路径：`Engine/Test` 里有一批源码守卫测试会
+   `readEngineSource(...)` 后 grep 路径，`.agent/plan/` 下的历史计划文档则
+   允许保留旧路径。
+
+已落地样例：`Applications/GameEditor/UI`（89 个平铺文件 → `Shell/ Dock/ Tabs/
+Sections/ Viewport/ Dialogs/ Ops/`，公开路径 `GameEditor/UI/<Group>/<Name>.h`），
+见 `.agent/plan/editor-ui-grouping/`。
+
 ## 头文件布局与 include 规则（2026-09-18 定稿）
 
 单一物理位置，永不镜像。一个头文件只存在一份，谁需要它就读那一份。
@@ -88,6 +118,10 @@ description: YA Engine 代码拆分与目录重组指南：只在收益明确时
 4. 清理失效的 `add_headerfiles` 模式：移动头文件后，形如
    `add_headerfiles("*.h")` / `add_headerfiles("Node.h")` 的旧位置模式会
    变成死配置，必须一并删除，否则模块 xmake.lua 会持续撒谎。
+   反向也成立：**新落地的私有头要确认被某个 pattern 收进来**。子目录里的
+   私有头不会自动进 IDE 与安装清单，形如 `add_headerfiles("**.h")` 的条目
+   缺了就会静默丢（`Applications/GameEditor` 此前一个私有头都没有，补上这条
+   才收得到 `UI/Dock/EditorDockSupport.h`）。
 5. 用 PCH 的 target（`ya-engine` 的 `set_pcheader`）在移动公开头后要同步
    改到新的物理位置。
 6. 需要时运行 `python3 Script/ya.py cfg` 或 `xmake project -k compile_commands` 刷新 clangd 与导航。
@@ -125,6 +159,8 @@ blame 全部塌缩到"本提交 + stub 的引入提交"两次上。
    （`rg -n '^#include "\.\./\.\./' */include/ | wc -l` 应为 0）。
 9. 移动后 `add_headerfiles` 没有失效模式；公开头的 include 全部是公开路径。
 10. 大块移动用脚本按"内容相似度"核对而非按行号操作，并保留 blame（见上）。
+11. 关切分组后：目标 target 重新构建通过；全仓不再引用旧平铺路径
+    （排除 `build/` 与 `.agent/plan/`）；同一目录内没有两个私有定义同名符号。
 
 ## 常见错误模式
 
@@ -140,6 +176,9 @@ blame 全部塌缩到"本提交 + stub 的引入提交"两次上。
    `.agent/memories/module_split_sed_regression.md` 与
    `terrain_processor_active_pump_regression.md`）；删除后必须核对函数与
    循环清单（`rg -n "activeEntities|ClassName::"` 对比 HEAD）。
+10. 批量搬迁后不重新构建：重排 unity 批次会暴露平铺时被掩盖的重复私有符号，
+    直到下一次别人改动才爆炸（见
+    `.agent/memories/unity_build_duplicate_private_symbol.md`）。
 
 ## 模块 target 拆分标准（2026-08-09 定稿，计划决策 14-A..14-E）
 
