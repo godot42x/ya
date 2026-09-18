@@ -221,7 +221,7 @@ void EditorLayer::onEvent(const Event& event)
             if (keyEvent.getKeyCode() == EKey::Delete) {
                 // Delete the selected preview widget (root is protected).
                 endCanvasPress();
-                _uiDesignerPanel.deleteWidget(_uiDesignerPanel.getSelectedWidget());
+                _uiDesignerSession.deleteWidget(_uiDesignerSession.getSelectedWidget());
             }
         } break;
         default:
@@ -342,7 +342,7 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
     if (selectionTarget) {
         // Ctrl/Cmd toggles membership, Shift extends from the anchor; plain
         // clicks replace the selection.
-        _sceneHierarchyPanel.handleEntityClick(selectionTarget);
+        _selection.handleEntityClick(selectionTarget);
         if (selectionTarget != pickedEntity) {
             YA_CORE_INFO("Picked entity: {} (model instance root; Alt+click for '{}')",
                          selectionTarget->getName(),
@@ -353,7 +353,7 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
         }
     }
     else {
-        _sceneHierarchyPanel.setSelection(nullptr);
+        _selection.setSelection(nullptr);
         YA_CORE_INFO("No entity picked");
     }
 }
@@ -362,19 +362,19 @@ void EditorLayer::pickNode2D(float viewportLocalX, float viewportLocalY)
 {
     glm::vec2 canvasPoint{viewportLocalX, viewportLocalY};
     if (!viewportToCanvas(canvasPoint, canvasPoint)) {
-        _uiDesignerPanel.clearSelection();
+        _uiDesignerSession.clearSelection();
         return;
     }
 
     // Game UI picking hits the UI Designer's preview tree (the authoring fact
     // source); scene entries are runtime data instantiated by GameUIHost.
-    if (UIElement* picked = _uiDesignerPanel.pickAt(canvasPoint)) {
-        _uiDesignerPanel.select(picked);
+    if (UIElement* picked = _uiDesignerSession.pickAt(canvasPoint)) {
+        _uiDesignerSession.select(picked);
         YA_CORE_INFO("Picked UI widget: {}", picked->_name);
         return;
     }
 
-    _uiDesignerPanel.clearSelection();
+    _uiDesignerSession.clearSelection();
 }
 
 // === 2D canvas direct manipulation (designer preview) ===
@@ -411,14 +411,14 @@ uint8_t EditorLayer::hitTestCanvasResizeHandles(const UIElement& widget) const
     };
 
     uint8_t mask = 0;
-    if (hit(corners[0])) mask |= UIDesignerPanel::kResizeHandleLeft | UIDesignerPanel::kResizeHandleTop;
-    if (hit(corners[1])) mask |= UIDesignerPanel::kResizeHandleRight | UIDesignerPanel::kResizeHandleTop;
-    if (hit(corners[2])) mask |= UIDesignerPanel::kResizeHandleLeft | UIDesignerPanel::kResizeHandleBottom;
-    if (hit(corners[3])) mask |= UIDesignerPanel::kResizeHandleRight | UIDesignerPanel::kResizeHandleBottom;
-    if (hit(edges[0])) mask |= UIDesignerPanel::kResizeHandleTop;
-    if (hit(edges[1])) mask |= UIDesignerPanel::kResizeHandleBottom;
-    if (hit(edges[2])) mask |= UIDesignerPanel::kResizeHandleLeft;
-    if (hit(edges[3])) mask |= UIDesignerPanel::kResizeHandleRight;
+    if (hit(corners[0])) mask |= EditorUIDesignerSession::kResizeHandleLeft | EditorUIDesignerSession::kResizeHandleTop;
+    if (hit(corners[1])) mask |= EditorUIDesignerSession::kResizeHandleRight | EditorUIDesignerSession::kResizeHandleTop;
+    if (hit(corners[2])) mask |= EditorUIDesignerSession::kResizeHandleLeft | EditorUIDesignerSession::kResizeHandleBottom;
+    if (hit(corners[3])) mask |= EditorUIDesignerSession::kResizeHandleRight | EditorUIDesignerSession::kResizeHandleBottom;
+    if (hit(edges[0])) mask |= EditorUIDesignerSession::kResizeHandleTop;
+    if (hit(edges[1])) mask |= EditorUIDesignerSession::kResizeHandleBottom;
+    if (hit(edges[2])) mask |= EditorUIDesignerSession::kResizeHandleLeft;
+    if (hit(edges[3])) mask |= EditorUIDesignerSession::kResizeHandleRight;
     return mask;
 }
 
@@ -435,32 +435,32 @@ void EditorLayer::beginCanvasPress()
     glm::vec2 canvasPoint = vpLocal;
     if (!viewportToCanvas(canvasPoint, canvasPoint)) {
         // Outside the visible canvas region: treat as empty.
-        _uiDesignerPanel.clearSelection();
+        _uiDesignerSession.clearSelection();
         return;
     }
     _canvasPressPoint = canvasPoint;
 
     // 1) Resize handles of the current selection take priority over picking
     //    (grab the edge/corner without de-selecting the widget).
-    if (UIElement* selected = _uiDesignerPanel.getSelectedWidget()) {
+    if (UIElement* selected = _uiDesignerSession.getSelectedWidget()) {
         if (const uint8_t mask = hitTestCanvasResizeHandles(*selected)) {
             _canvasPressHit = selected;
-            _uiDesignerPanel.beginResize(selected, canvasPoint, mask);
+            _uiDesignerSession.beginResize(selected, canvasPoint, mask);
             return;
         }
     }
 
     // 2) Hit the preview tree: select on press and start a move session.
-    if (UIElement* picked = _uiDesignerPanel.pickAt(canvasPoint)) {
-        _uiDesignerPanel.select(picked);
+    if (UIElement* picked = _uiDesignerSession.pickAt(canvasPoint)) {
+        _uiDesignerSession.select(picked);
         _canvasPressHit = picked;
-        _uiDesignerPanel.beginMove(picked, canvasPoint);
+        _uiDesignerSession.beginMove(picked, canvasPoint);
         YA_CORE_INFO("Picked UI widget: {}", picked->_name);
         return;
     }
 
     // 3) Empty canvas: clear the selection.
-    _uiDesignerPanel.clearSelection();
+    _uiDesignerSession.clearSelection();
 }
 
 void EditorLayer::updateCanvasDrag()
@@ -476,8 +476,8 @@ void EditorLayer::updateCanvasDrag()
     if (!viewportToCanvas(canvasPoint, canvasPoint)) {
         return;
     }
-    if (_uiDesignerPanel.isDragging(_canvasPressHit)) {
-        if (!_uiDesignerPanel.applyDragDelta(canvasPoint - _canvasPressPoint)) {
+    if (_uiDesignerSession.isDragging(_canvasPressHit)) {
+        if (!_uiDesignerSession.applyDragDelta(canvasPoint - _canvasPressPoint)) {
             endCanvasPress();
         }
     }
@@ -488,7 +488,7 @@ void EditorLayer::endCanvasPress()
     _canvasPressHit     = nullptr;
     _canvasPressPoint   = {0.0f, 0.0f};
     _bCanvasPressActive = false;
-    _uiDesignerPanel.endDrag();
+    _uiDesignerSession.endDrag();
 }
 
 void EditorLayer::focusCameraOnSelection()

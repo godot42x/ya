@@ -11,7 +11,8 @@ struct EditorLayer;
 struct UIElement;
 struct WidgetTree;
 
-/// Retained Asset Inspector tab. Inspected path lives on AssetInspectorPanel.
+/// Retained Asset Inspector tab. The inspected path lives on EditorLayer (the
+/// Content Browser writes it); this tab only reads it.
 class EditorAssetInspectorTab : public UICompoundWidget
 {
   public:

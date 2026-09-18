@@ -14,7 +14,7 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/Inspector/PropertyGraph.h"
-#include "GameEditor/Panels/UIDesignerPanel.h"
+#include "GameEditor/EditorUIDesignerSession.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
 #include <optional>
@@ -116,7 +116,7 @@ void EditorUIHierarchyTab::construct()
                                if (!path) {
                                    return;
                                }
-                               _layer->getUIDesignerPanel().selectByChildPath(*path);
+                               _layer->getEditorUIDesignerSession().selectByChildPath(*path);
                            })
                            .setOnReorderHandler([this](const std::string& fromId,
                                                        const std::string& toId,
@@ -129,18 +129,18 @@ void EditorUIHierarchyTab::construct()
                                if (!fromPath || !toPath) {
                                    return;
                                }
-                               UIDesignerPanel& panel = _layer->getUIDesignerPanel();
+                               EditorUIDesignerSession& panel = _layer->getEditorUIDesignerSession();
                                UIElement* dragged = panel.findByChildPath(*fromPath);
                                UIElement* target  = panel.findByChildPath(*toPath);
                                if (!dragged || !target) {
                                    return;
                                }
-                               UIDesignerPanel::EDropPos position = UIDesignerPanel::EDropPos::Before;
+                               EditorUIDesignerSession::EDropPos position = EditorUIDesignerSession::EDropPos::Before;
                                if (mode == 1) {
-                                   position = UIDesignerPanel::EDropPos::Into;
+                                   position = EditorUIDesignerSession::EDropPos::Into;
                                }
                                else if (mode == 2) {
-                                   position = UIDesignerPanel::EDropPos::After;
+                                   position = EditorUIDesignerSession::EDropPos::After;
                                }
                                panel.applyWidgetDrop(dragged, *target, position);
                            });
@@ -167,7 +167,7 @@ void EditorUIHierarchyTab::refresh()
     if (!_layer || !_treeView) {
         return;
     }
-    UIDesignerPanel& designer = _layer->getUIDesignerPanel();
+    EditorUIDesignerSession& designer = _layer->getEditorUIDesignerSession();
     std::string fingerprint;
     std::vector<UITreeView::FNode> roots;
     if (UIElement* root = designer.getPreviewRoot()) {
@@ -235,7 +235,7 @@ void EditorUIInspectorTab::refresh()
     if (!tree || !_layer) {
         return;
     }
-    UIDesignerPanel& designer = _layer->getUIDesignerPanel();
+    EditorUIDesignerSession& designer = _layer->getEditorUIDesignerSession();
     if (EditorDocumentSession* session = designer.documentSession()) {
         _undo = &session->undo();
     }
@@ -294,10 +294,10 @@ void EditorUIPaletteTab::construct()
     if (_layer) {
         EditorLayer& layer = *_layer;
         for (const std::string& typeId : UITypeRegistry::instance().getTypeIds()) {
-            const std::string label = UIDesignerPanel::paletteDisplayName(typeId);
+            const std::string label = EditorUIDesignerSession::paletteDisplayName(typeId);
             palette = palette.child(labeledButton("UIDesignerPalette_" + label, label)
                                         .setOnClick([&layer, typeId]() {
-                                            (void)layer.getUIDesignerPanel().addPaletteWidget(typeId);
+                                            (void)layer.getEditorUIDesignerSession().addPaletteWidget(typeId);
                                         }),
                                     ui::boxSlot().preferredSize({0.0f, 24.0f}));
         }
@@ -355,7 +355,7 @@ void EditorUIPreviewTab::refresh()
     if (!_layer || !_statusText) {
         return;
     }
-    const auto& designer = _layer->getUIDesignerPanel();
+    const auto& designer = _layer->getEditorUIDesignerSession();
     const auto& document = designer.getOpenDocument();
     std::string status = document ? "Document: " + document->typeId : "No document open";
     if (designer.isDocumentDirty()) {

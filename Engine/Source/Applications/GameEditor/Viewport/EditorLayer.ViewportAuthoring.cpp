@@ -90,7 +90,7 @@ void EditorLayer::cmdDuplicateSelection()
         1,
         [this, duplicated = std::move(duplicated)]()
         {
-            _sceneHierarchyPanel.replaceSelection(duplicated, duplicated.front());
+            _selection.replaceSelection(duplicated, duplicated.front());
         });
 }
 
@@ -102,7 +102,7 @@ void EditorLayer::cmdDeleteSelection()
     if (!getEditableScene()) {
         return;
     }
-    _sceneHierarchyPanel.deleteSelection();
+    _selection.deleteSelection();
     notifyHierarchyChanged();
 }
 

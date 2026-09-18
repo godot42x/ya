@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// UIDesignerPanel - Game UI document/preview model, not a retained chrome tab.
+// EditorUIDesignerSession - Game UI document/preview model, not a retained chrome tab.
 //
 // Edits one UIDocument through a live PREVIEW WidgetTree that is strictly
 // separate from the runtime tree: PIE mounts fresh instances from scene
@@ -27,13 +27,13 @@ struct EditorLayer;
 struct Scene;
 struct SceneWidgetEntry;
 
-struct UIDesignerPanel
+struct EditorUIDesignerSession
 {
-    explicit UIDesignerPanel(EditorLayer* owner);
-    ~UIDesignerPanel();
+    explicit EditorUIDesignerSession(EditorLayer* owner);
+    ~EditorUIDesignerSession();
 
-    UIDesignerPanel(const UIDesignerPanel&)            = delete;
-    UIDesignerPanel& operator=(const UIDesignerPanel&) = delete;
+    EditorUIDesignerSession(const EditorUIDesignerSession&)            = delete;
+    EditorUIDesignerSession& operator=(const EditorUIDesignerSession&) = delete;
 
     // === Document lifecycle ===
     [[nodiscard]] bool hasDocument() const { return _document != nullptr; }

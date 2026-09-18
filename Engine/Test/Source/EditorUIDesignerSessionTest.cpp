@@ -1,8 +1,8 @@
-// Regression guards for UIDesignerPanel's direct-manipulation path: when a
+// Regression guards for EditorUIDesignerSession's direct-manipulation path: when a
 // preview child lives under a canvas host, drag edits must read/write the
 // parent-owned slot edge consistently across multiple drags.
 
-#include "GameEditor/Panels/UIDesignerPanel.h"
+#include "GameEditor/EditorUIDesignerSession.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
 #include "GUI/Widgets/UIDocument.h"
@@ -17,7 +17,7 @@
 namespace ya
 {
 
-TEST(UIDesignerPanelTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceOfTruth)
+TEST(EditorUIDesignerSessionTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceOfTruth)
 {
     auto& registry = UITypeRegistry::instance();
     auto root = registry.createInstance(kTypeIdCanvasPanel);
@@ -38,7 +38,7 @@ TEST(UIDesignerPanelTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceOfTruth)
     auto document = UIDocument::fromWidget(*root);
     ASSERT_NE(document, nullptr);
 
-    UIDesignerPanel designer(nullptr);
+    EditorUIDesignerSession designer(nullptr);
     designer.openDocument(document);
     const UIFrameSnapshot initial = designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
     (void)initial;
@@ -47,7 +47,7 @@ TEST(UIDesignerPanelTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceOfTruth)
     UIElement* previewChild = designer.getSelectedWidget();
     ASSERT_NE(previewChild, nullptr);
 
-    designer.beginResize(previewChild, {0.0f, 0.0f}, UIDesignerPanel::kResizeHandleRight);
+    designer.beginResize(previewChild, {0.0f, 0.0f}, EditorUIDesignerSession::kResizeHandleRight);
     ASSERT_TRUE(designer.applyDragDelta({20.0f, 0.0f}));
     designer.endDrag();
     const UIFrameSnapshot afterFirstSnapshot = designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
@@ -57,7 +57,7 @@ TEST(UIDesignerPanelTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceOfTruth)
     const glm::vec2 firstPos = afterFirst->pos;
     EXPECT_FLOAT_EQ(afterFirst->extent.x, 100.0f);
 
-    designer.beginResize(previewChild, {0.0f, 0.0f}, UIDesignerPanel::kResizeHandleRight);
+    designer.beginResize(previewChild, {0.0f, 0.0f}, EditorUIDesignerSession::kResizeHandleRight);
     ASSERT_TRUE(designer.applyDragDelta({10.0f, 0.0f}));
     designer.endDrag();
     const UIFrameSnapshot afterSecondSnapshot = designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
@@ -69,7 +69,7 @@ TEST(UIDesignerPanelTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceOfTruth)
     EXPECT_FLOAT_EQ(afterSecond->extent.y, 40.0f);
 }
 
-TEST(UIDesignerPanelTest, FindByChildPathResolvesRootAndNestedWidgets)
+TEST(EditorUIDesignerSessionTest, FindByChildPathResolvesRootAndNestedWidgets)
 {
     auto& registry = UITypeRegistry::instance();
     auto  root     = registry.createInstance(kTypeIdCanvasPanel);
@@ -83,7 +83,7 @@ TEST(UIDesignerPanelTest, FindByChildPathResolvesRootAndNestedWidgets)
     auto document = UIDocument::fromWidget(*root);
     ASSERT_NE(document, nullptr);
 
-    UIDesignerPanel designer(nullptr);
+    EditorUIDesignerSession designer(nullptr);
     designer.openDocument(document);
     (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
 
@@ -98,7 +98,7 @@ TEST(UIDesignerPanelTest, FindByChildPathResolvesRootAndNestedWidgets)
     EXPECT_EQ(designer.findByChildPath({1}), nullptr);
 }
 
-TEST(UIDesignerPanelTest, ApplyWidgetDropReordersPreviewSiblings)
+TEST(EditorUIDesignerSessionTest, ApplyWidgetDropReordersPreviewSiblings)
 {
     auto& registry = UITypeRegistry::instance();
     auto  root     = registry.createInstance(kTypeIdCanvasPanel);
@@ -116,7 +116,7 @@ TEST(UIDesignerPanelTest, ApplyWidgetDropReordersPreviewSiblings)
     auto document = UIDocument::fromWidget(*root);
     ASSERT_NE(document, nullptr);
 
-    UIDesignerPanel designer(nullptr);
+    EditorUIDesignerSession designer(nullptr);
     designer.openDocument(document);
     (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
 
@@ -127,7 +127,7 @@ TEST(UIDesignerPanelTest, ApplyWidgetDropReordersPreviewSiblings)
     EXPECT_EQ(previewFirst->_name, "First");
     EXPECT_EQ(previewSecond->_name, "Second");
 
-    designer.applyWidgetDrop(previewFirst, *previewSecond, UIDesignerPanel::EDropPos::After);
+    designer.applyWidgetDrop(previewFirst, *previewSecond, EditorUIDesignerSession::EDropPos::After);
 
     UIElement* after0 = designer.findByChildPath({0});
     UIElement* after1 = designer.findByChildPath({1});
@@ -137,7 +137,7 @@ TEST(UIDesignerPanelTest, ApplyWidgetDropReordersPreviewSiblings)
     EXPECT_EQ(after1->_name, "First");
 }
 
-TEST(UIDesignerPanelTest, ApplyWidgetDropIntoNestsChild)
+TEST(EditorUIDesignerSessionTest, ApplyWidgetDropIntoNestsChild)
 {
     auto& registry = UITypeRegistry::instance();
     auto  root     = registry.createInstance(kTypeIdCanvasPanel);
@@ -155,7 +155,7 @@ TEST(UIDesignerPanelTest, ApplyWidgetDropIntoNestsChild)
     auto document = UIDocument::fromWidget(*root);
     ASSERT_NE(document, nullptr);
 
-    UIDesignerPanel designer(nullptr);
+    EditorUIDesignerSession designer(nullptr);
     designer.openDocument(document);
     (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
 
@@ -166,7 +166,7 @@ TEST(UIDesignerPanelTest, ApplyWidgetDropIntoNestsChild)
     ASSERT_NE(previewFirst, nullptr);
     ASSERT_NE(previewSecond, nullptr);
 
-    designer.applyWidgetDrop(previewSecond, *previewFirst, UIDesignerPanel::EDropPos::Into);
+    designer.applyWidgetDrop(previewSecond, *previewFirst, EditorUIDesignerSession::EDropPos::Into);
 
     EXPECT_EQ(previewRoot->getChildren().size(), 1u);
     UIElement* nestedParent = designer.findByChildPath({0});
@@ -177,10 +177,10 @@ TEST(UIDesignerPanelTest, ApplyWidgetDropIntoNestsChild)
     EXPECT_EQ(nestedChild->_name, "Second");
 }
 
-TEST(UIDesignerPanelTest, DocumentRegistryTracksDirtyCloseAndSingleton)
+TEST(EditorUIDesignerSessionTest, DocumentRegistryTracksDirtyCloseAndSingleton)
 {
     EditorDocumentRegistry documents;
-    UIDesignerPanel        designer(nullptr);
+    EditorUIDesignerSession        designer(nullptr);
     designer.bindDocuments(&documents);
 
     designer.newDocument(kTypeIdCanvasPanel);
@@ -201,7 +201,7 @@ TEST(UIDesignerPanelTest, DocumentRegistryTracksDirtyCloseAndSingleton)
     EXPECT_EQ(documents.size(), 0u);
 }
 
-TEST(UIDesignerPanelTest, OpenSceneEntrySharesDocumentSession)
+TEST(EditorUIDesignerSessionTest, OpenSceneEntrySharesDocumentSession)
 {
     auto& registry = UITypeRegistry::instance();
     auto  root     = registry.createInstance(kTypeIdCanvasPanel);
@@ -216,8 +216,8 @@ TEST(UIDesignerPanelTest, OpenSceneEntrySharesDocumentSession)
     entry.inlineDocument = document;
 
     EditorDocumentRegistry documents;
-    UIDesignerPanel        first(nullptr);
-    UIDesignerPanel        second(nullptr);
+    EditorUIDesignerSession        first(nullptr);
+    EditorUIDesignerSession        second(nullptr);
     first.bindDocuments(&documents);
     second.bindDocuments(&documents);
     first.openSceneEntry(scene, entry);

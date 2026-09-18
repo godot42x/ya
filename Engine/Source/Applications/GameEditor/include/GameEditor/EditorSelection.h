@@ -13,7 +13,7 @@ struct Node;
 
 /// Entity selection bus for viewport pick. Not a WidgetTree view.
 /// Retained hierarchy UI lives on EditorSurface; ImGui sceneTree was removed.
-struct SceneHierarchyPanel
+struct EditorSelection
 {
     EditorLayer*         _owner             = nullptr;
     Scene*               _context           = nullptr;
@@ -23,7 +23,7 @@ struct SceneHierarchyPanel
     std::vector<Entity*> _flatEntities;
 
   public:
-    explicit SceneHierarchyPanel(EditorLayer* owner) : _owner(owner) {}
+    explicit EditorSelection(EditorLayer* owner) : _owner(owner) {}
 
     void setContext(Scene* scene);
 

@@ -3,7 +3,6 @@
 #include "Core/Common/FWD.h"
 
 #include "Core/Base.h"
-#include "GameEditor/Panels/AssetInspectorPanel.h"
 
 #include "Core/Camera/Camera.h"
 
@@ -13,8 +12,8 @@
 #include "GameEditor/UI/Dialogs/EditorAssetPicker.h"
 #include "GameEditor/UI/Dialogs/EditorFilePicker.h"
 #include "GameEditor/UI/Viewport/EditorViewportGizmoController.h"
-#include "GameEditor/Panels/SceneHierarchyPanel.h"
-#include "GameEditor/Panels/UIDesignerPanel.h"
+#include "GameEditor/EditorSelection.h"
+#include "GameEditor/EditorUIDesignerSession.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 #include "RHI/Core/Image.h"
 #include "RHI/Core/RenderTexture.h"
@@ -61,9 +60,11 @@ struct EditorLayer
     std::string          _selectedWidgetEntryId; // Mutually exclusive with the above
 
     // Domain models (not retained UI). WidgetTree views live on EditorSurface tabs.
-    SceneHierarchyPanel _sceneHierarchyPanel;
-    AssetInspectorPanel _assetInspectorPanel;
-    UIDesignerPanel     _uiDesignerPanel;
+    EditorSelection         _selection;
+    EditorUIDesignerSession _uiDesignerSession;
+    /// Content Browser -> Asset Inspector tab. An empty path means nothing is
+    /// being inspected.
+    std::string _inspectedAssetPath;
     EditorDocumentRegistry* _documents = nullptr;
 
     // Authoring viewport geometry (chrome). The editor declares its authoring
@@ -171,8 +172,12 @@ struct EditorLayer
     void onAttach();
     void onDetach();
 
-    /// Open the Asset Inspector for the given relative path
-    void inspectAsset(const std::string& relativePath) { _assetInspectorPanel.inspectTexture(relativePath); }
+    /// Open the Asset Inspector for the given relative path. The path is the
+    /// whole state: "nothing inspected" is an empty path, so there is no separate
+    /// visible flag to keep in step with it. It lives here because the Content
+    /// Browser writes it and the Asset Inspector tab reads it.
+    void inspectAsset(const std::string& relativePath) { _inspectedAssetPath = relativePath; }
+    [[nodiscard]] const std::string& inspectedAssetPath() const { return _inspectedAssetPath; }
 
     // Set viewport render context before chrome tick - called from App each frame
     void                                                setViewportContext(const EditorViewportContext& ctx) { _viewportCtx = ctx; }
@@ -217,13 +222,13 @@ struct EditorLayer
     [[nodiscard]] Scene*             getHierarchyScene() const { return getSceneHierarchyContext(); }
     void                             setSceneContext(Scene* scene)
     {
-        _sceneHierarchyPanel.setContext(scene);
+        _selection.setContext(scene);
         notifyHierarchyChanged();
     }
     void notifyHierarchyChanged() { onHierarchyChanged.broadcast(); }
     void selectEntity(Entity* entity)
     {
-        _sceneHierarchyPanel.setSelection(entity);
+        _selection.setSelection(entity);
     }
 
     /// Select a SceneWidgetEntry (clears entity selection).
@@ -397,8 +402,7 @@ struct EditorLayer
     [[nodiscard]] const EditorViewportGizmoController& gizmo() const { return _gizmo; }
     bool                             isRightMouseDragging() const { return _bRightMouseDragging; }
     const std::vector<Entity*>&      getSelections() const { return _selections; }
-    [[nodiscard]] UIDesignerPanel&   getUIDesignerPanel() { return _uiDesignerPanel; }
-    [[nodiscard]] AssetInspectorPanel& getAssetInspectorPanel() { return _assetInspectorPanel; }
+    [[nodiscard]] EditorUIDesignerSession&   getEditorUIDesignerSession() { return _uiDesignerSession; }
 
     Entity*  getSelectedEntity() const { return _selections.empty() ? nullptr : _selections.front(); }
     uint64_t getSelectedEntityUUID() const { return _selectedEntityUUID; }

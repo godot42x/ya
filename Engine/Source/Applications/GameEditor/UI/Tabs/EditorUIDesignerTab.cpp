@@ -7,7 +7,7 @@
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GameEditor/EditorLayer.h"
-#include "GameEditor/Panels/UIDesignerPanel.h"
+#include "GameEditor/EditorUIDesignerSession.h"
 #include "GameEditor/UI/Dock/EditorDockWorkspace.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 #include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
@@ -32,18 +32,18 @@ void EditorUIDesignerTab::construct()
     auto newBuilder = ui::button("UIDesignerNew").child(ui::text("UIDesignerNewLabel").setText("New Panel"));
     newBuilder.setOnClick([this]() {
         if (_layer) {
-            _layer->getUIDesignerPanel().newDocument("panel");
+            _layer->getEditorUIDesignerSession().newDocument("panel");
         }
     });
     auto saveBuilder = ui::button("UIDesignerSave").child(ui::text("UIDesignerSaveLabel").setText("Save"));
     saveBuilder.setOnClick([this]() {
         if (_layer) {
-            (void)_layer->getUIDesignerPanel().saveDocument();
+            (void)_layer->getEditorUIDesignerSession().saveDocument();
         }
     });
     auto closeBuilder = ui::button("UIDesignerClose").child(ui::text("UIDesignerCloseLabel").setText("Close"));
     closeBuilder.setOnClick([this]() {
-        if (_layer && !_layer->getUIDesignerPanel().closeDocument()) {
+        if (_layer && !_layer->getEditorUIDesignerSession().closeDocument()) {
             YA_CORE_WARN("UI Designer: close rejected (document is dirty; save first)");
         }
     });
@@ -81,7 +81,7 @@ void EditorUIDesignerTab::refreshStatus()
     if (!_layer || !_statusText) {
         return;
     }
-    UIDesignerPanel& designer = _layer->getUIDesignerPanel();
+    EditorUIDesignerSession& designer = _layer->getEditorUIDesignerSession();
     const auto& document = designer.getOpenDocument();
     std::string status = document ? "UI: " + document->typeId : "No UI document";
     if (designer.isDocumentDirty()) {

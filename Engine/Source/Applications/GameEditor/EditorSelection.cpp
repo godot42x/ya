@@ -1,4 +1,4 @@
-#include "GameEditor/Panels/SceneHierarchyPanel.h"
+#include "GameEditor/EditorSelection.h"
 
 #include "ECS/Component.h"
 #include "GameEditor/EditorLayer.h"
@@ -30,7 +30,7 @@ bool isRangeSelectModifierPressed()
 
 } // namespace
 
-void SceneHierarchyPanel::setContext(Scene* scene)
+void EditorSelection::setContext(Scene* scene)
 {
     if (_context == scene) {
         return;
@@ -57,7 +57,7 @@ void SceneHierarchyPanel::setContext(Scene* scene)
     }
 }
 
-void SceneHierarchyPanel::setSelection(Entity* entity)
+void EditorSelection::setSelection(Entity* entity)
 {
     if (entity && entity->isValid()) {
         _selections       = {entity};
@@ -72,7 +72,7 @@ void SceneHierarchyPanel::setSelection(Entity* entity)
     notifyOwnerSelection();
 }
 
-void SceneHierarchyPanel::handleEntityClick(Entity* entity)
+void EditorSelection::handleEntityClick(Entity* entity)
 {
     if (!entity || !entity->isValid()) {
         return;
@@ -119,7 +119,7 @@ void SceneHierarchyPanel::handleEntityClick(Entity* entity)
     notifyOwnerSelection();
 }
 
-void SceneHierarchyPanel::replaceSelection(const std::vector<Entity*>& entities, Entity* primary)
+void EditorSelection::replaceSelection(const std::vector<Entity*>& entities, Entity* primary)
 {
     _selections       = entities;
     _primarySelection = primary ? primary : (_selections.empty() ? nullptr : _selections.front());
@@ -127,7 +127,7 @@ void SceneHierarchyPanel::replaceSelection(const std::vector<Entity*>& entities,
     notifyOwnerSelection();
 }
 
-void SceneHierarchyPanel::deleteSelection()
+void EditorSelection::deleteSelection()
 {
     if (!_context) {
         replaceSelection({}, nullptr);
@@ -152,14 +152,14 @@ void SceneHierarchyPanel::deleteSelection()
     replaceSelection({}, nullptr);
 }
 
-void SceneHierarchyPanel::notifyOwnerSelection()
+void EditorSelection::notifyOwnerSelection()
 {
     if (_owner) {
         _owner->setSelections(_selections, _primarySelection);
     }
 }
 
-void SceneHierarchyPanel::buildFlatEntityList()
+void EditorSelection::buildFlatEntityList()
 {
     _flatEntities.clear();
     if (!_context) {
@@ -181,7 +181,7 @@ void SceneHierarchyPanel::buildFlatEntityList()
     }
 }
 
-void SceneHierarchyPanel::collectEntities(Node* node)
+void EditorSelection::collectEntities(Node* node)
 {
     if (!node) {
         return;

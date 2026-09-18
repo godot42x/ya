@@ -56,7 +56,7 @@ void EditorLayer::syncEditorSettingsFromConfig()
                                                                    _bShowViewportCameraOverlay);
     const std::string viewportMode = ConfigManager::get().getOr<std::string>("editor", "viewport.mode", "3d");
     _viewportMode                  = viewportMode == "2d" ? EViewportMode::Mode2D : EViewportMode::Mode3D;
-    _sceneHierarchyPanel.setContext(getSceneHierarchyContext());
+    _selection.setContext(getSceneHierarchyContext());
 }
 
 bool EditorLayer::hasProjectLoaded() const

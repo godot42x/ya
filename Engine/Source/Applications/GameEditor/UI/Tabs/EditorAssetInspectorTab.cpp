@@ -58,7 +58,7 @@ void EditorAssetInspectorTab::tick(float)
 
 void EditorAssetInspectorTab::refresh()
 {
-    const std::string& path = _layer->getAssetInspectorPanel().inspectedPath();
+    const std::string& path = _layer->inspectedAssetPath();
     _pathText->setText(path.empty() ? "No asset selected" : path);
     _statusText->setText(path.empty() ? "Select a texture in Content Browser" : "Texture preview");
     _preview->setAssetPath(path);

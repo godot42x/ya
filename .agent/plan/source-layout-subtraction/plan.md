@@ -37,7 +37,7 @@
 | S3 | 削掉两个最大的文件（只做有明确接缝的） | 待做 |
 | S4 | 命名收敛（在 S1/S2 之后） | 待做 |
 | S5 | 计划目录收敛：已收口/被接手的线归档，只留仍有代码要改的线 | 已落地 |
-| S6 | 2026-09-19 复查：死公开头（已落地）、`Utility/` 杂物抽屉（已落地）、`Panels` 命名、Render3D→Physics | 进行中 |
+| S6 | 2026-09-19 复查：死公开头（已落地）、`Utility/` 杂物抽屉（已落地）、`Panels` 命名（已落地）、`EditorSelection` 去重（待做）、Render3D→Physics | 进行中 |
 
 ### S5：计划目录收敛
 
@@ -162,7 +162,7 @@ pump）、`RenderFrameExtractor`（**场景抽取：declareViews 与 prepareView
 渲染/编辑器滤镜 304 passed / 3 failed（与基线同 3 个 pre-existing）；两张 smoke 截图逐字节相同；
 编辑器 smoke 六步全过。
 
-### 6.3 `GameEditor/Panels/` 的名字与 `UI/Tabs/` 冲突
+### 6.3 `GameEditor/Panels/` 的名字与 `UI/Tabs/` 冲突（已落地 2026-09-19）
 
 三个 `*Panel` 都不是 retained 控件，而是 **tab 的领域状态**：
 
@@ -173,8 +173,38 @@ pump）、`RenderFrameExtractor`（**场景抽取：declareViews 与 prepareView
 | `AssetInspectorPanel` | 27 | 一个 `inspectedPath` 字符串 | `EditorAssetInspectorTab` |
 
 于是同一对概念有两个名字：**`Panel` = 模型，`Tab` = 视图**。读者看到 `Panels/` 与 `UI/Tabs/` 无法
-判断哪个才是面板。`gui-editor-structure` 的 C1/C2 已经登记过"三份 domain panel 尚未改名"，本项就是把
-它落掉：按"它们是什么"命名并放到 tab 视图旁边。
+判断哪个才是面板。`gui-editor-structure` 的 C1/C2 已经登记过"三份 domain panel 尚未改名"，本项把它落掉。
+
+**处置已执行**：`Panels/` 与 `include/GameEditor/Panels/` 两个目录删除。三个文件按"它是什么"处理：
+
+| 原名 | 处置 | 依据 |
+| --- | --- | --- |
+| `SceneHierarchyPanel` | → `EditorSelection`（模块根） | 它是**编辑器的实体选择状态**（成员 `_selections` / `_primarySelection` / `_rangeAnchor`），viewport picking、gizmo、ops、Interaction 都在用它，不专属 hierarchy tab。头注释原本就写"Entity selection bus for viewport pick" |
+| `UIDesignerPanel` | → `EditorUIDesignerSession`（模块根） | 它是 UI designer 的**会话**：一个打开的文档 + 独立 preview 树 + 选择 + 拖放/缩放操作。与既有的 `EditorPlaySession` 同类；改名后 `Session`（状态）对 `EditorUIDesignerTab`（视图）不再含混 |
+| `AssetInspectorPanel` | **删除**，状态并进 `EditorLayer` | 它只有 27 行，是 `_inspectedPath` 一个字符串的包装；`_owner` 从未被使用（唯一 setter 里 `(void)_owner`），`isVisible()` / `clear()` 零调用方，`_bVisible` 只是 `!path.empty()` 的副本且唯一的读点也在被删除的 `isVisible()` 里。真正的状态是"Content Browser 写、Asset Inspector tab 读"的一条路径，直接放 `EditorLayer::_inspectedAssetPath`（+ `inspectAsset` setter / `inspectedAssetPath` getter）即可 |
+
+**修正了原计划的一处判断**：原计划写"按'它们是什么'命名并放到 tab 视图旁边"。实测 `EditorSelection` 的
+消费者几乎全在 `EditorLayer` 自己的 TU（Interaction / Startup / ViewportAuthoring），并不专属某个 tab；
+所以落点是**模块根**（与 `EditorPlaySession` / `EditorViewProducer` / `EditorRuntimeSettings` 并列的
+"编辑器会话级对象"），不是 `UI/Tabs/`。
+
+**顺带发现、本轮不做的**：`EditorSelection` 的选择状态与 `EditorLayer` 持有的副本（`_selections` /
+`_selectionGeneration` / `getSelectedEntity()`）是同一事实的两份存储，靠 `notifyOwnerSelection()` →
+`setSelections()` 手动同步——与 `viewportRect` 同类。合并成单一所有者会改动跨文件的选中语义，需要
+自己的验证切片，登记在下面而不是塞进这次改名。
+
+**搬迁方式**同 6.2（`git mv` + 逐模式 perl），验收：`rg 'GameEditor/Panels/' Engine` 归零。
+验证：`ya-game-editor` / `ya-testing` / `ya-game-runtime` / `ya-engine` / `ya-runtime` /
+`GUIWorkbench` / `ya-render-3d-test` 全部 build ok；改名后的 `EditorUIDesignerSessionTest` 6/6；
+渲染/编辑器滤镜 310 passed / 3 failed（与基线同 3 个）；两张 smoke 截图逐字节相同（runtime
+`1c666897…`、editor `5b8f5dd8…`）；编辑器 smoke 六步全过。
+
+### 6.3b 待做：`EditorSelection` 与 `EditorLayer` 的选择状态去重
+
+今天 `EditorSelection::_selections` 与 `EditorLayer::_selections` 并存，由
+`notifyOwnerSelection()` 推一次 `setSelections()` 保持同步。两个写者对同一事实，读者分散在两处。
+目标：一个所有者，另一侧只读。验收：选中相关成员只存在一份；多选/框选/删除/复制/上下文菜单的
+行为与 `EditorHierarchyOps` 相关用例不变。
 
 ### 6.4 `ya-render-3d -> ya-physics` 只为画调试线
 

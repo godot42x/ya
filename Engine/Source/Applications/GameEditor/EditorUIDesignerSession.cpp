@@ -1,4 +1,4 @@
-#include "GameEditor/Panels/UIDesignerPanel.h"
+#include "GameEditor/EditorUIDesignerSession.h"
 
 #include "Core/Log.h"
 
@@ -43,16 +43,16 @@ UIElementRef refOf(UIElement* widget)
 
 } // namespace
 
-UIDesignerPanel::UIDesignerPanel(EditorLayer* owner) : _owner(owner)
+EditorUIDesignerSession::EditorUIDesignerSession(EditorLayer* owner) : _owner(owner)
 {
 }
 
-UIDesignerPanel::~UIDesignerPanel()
+EditorUIDesignerSession::~EditorUIDesignerSession()
 {
     abandonDocument();
 }
 
-EditorDocumentRegistry* UIDesignerPanel::documents() const
+EditorDocumentRegistry* EditorUIDesignerSession::documents() const
 {
     if (_documents) {
         return _documents;
@@ -60,14 +60,14 @@ EditorDocumentRegistry* UIDesignerPanel::documents() const
     return _owner ? _owner->documentRegistry() : nullptr;
 }
 
-void UIDesignerPanel::markDirty()
+void EditorUIDesignerSession::markDirty()
 {
     if (_session) {
         _session->markDirty();
     }
 }
 
-void UIDesignerPanel::dropLocalDocument()
+void EditorUIDesignerSession::dropLocalDocument()
 {
     _document.reset();
     _previewTree.reset();
@@ -78,7 +78,7 @@ void UIDesignerPanel::dropLocalDocument()
     endDrag();
 }
 
-bool UIDesignerPanel::closeSession(EEditorDocumentCloseMode mode)
+bool EditorUIDesignerSession::closeSession(EEditorDocumentCloseMode mode)
 {
     if (!_session) {
         dropLocalDocument();
@@ -107,7 +107,7 @@ bool UIDesignerPanel::closeSession(EEditorDocumentCloseMode mode)
     return true;
 }
 
-bool UIDesignerPanel::adoptSession(const FEditorDocumentId& id)
+bool EditorUIDesignerSession::adoptSession(const FEditorDocumentId& id)
 {
     if (_session && _session->id() == id) {
         return true;
@@ -126,25 +126,25 @@ bool UIDesignerPanel::adoptSession(const FEditorDocumentId& id)
     return true;
 }
 
-bool UIDesignerPanel::closeDocument()
+bool EditorUIDesignerSession::closeDocument()
 {
     return closeSession(EEditorDocumentCloseMode::Request);
 }
 
-void UIDesignerPanel::clearDocument()
+void EditorUIDesignerSession::clearDocument()
 {
     (void)closeSession(EEditorDocumentCloseMode::Discard);
 }
 
-void UIDesignerPanel::abandonDocument()
+void EditorUIDesignerSession::abandonDocument()
 {
     (void)closeSession(EEditorDocumentCloseMode::Force);
 }
 
-void UIDesignerPanel::openDocument(const std::shared_ptr<UIDocument>& document)
+void EditorUIDesignerSession::openDocument(const std::shared_ptr<UIDocument>& document)
 {
     if (!document) {
-        YA_CORE_WARN("UIDesignerPanel::openDocument: null document");
+        YA_CORE_WARN("EditorUIDesignerSession::openDocument: null document");
         return;
     }
     EditorDocumentRegistry* docs = documents();
@@ -161,7 +161,7 @@ void UIDesignerPanel::openDocument(const std::shared_ptr<UIDocument>& document)
     }
 }
 
-bool UIDesignerPanel::installPreview(const std::shared_ptr<UIDocument>& document)
+bool EditorUIDesignerSession::installPreview(const std::shared_ptr<UIDocument>& document)
 {
     _document     = document;
     _previewTree  = std::make_unique<WidgetTree>(Extent2D{800, 600});
@@ -169,7 +169,7 @@ bool UIDesignerPanel::installPreview(const std::shared_ptr<UIDocument>& document
     _previewRoot  = document->instantiate();
     _selected     = nullptr;
     if (!_previewRoot) {
-        YA_CORE_ERROR("UIDesignerPanel::openDocument: document '{}' failed to instantiate",
+        YA_CORE_ERROR("EditorUIDesignerSession::openDocument: document '{}' failed to instantiate",
                       document->typeId);
         _document.reset();
         _previewTree.reset();
@@ -181,12 +181,12 @@ bool UIDesignerPanel::installPreview(const std::shared_ptr<UIDocument>& document
     const WidgetAttachment attachment = _previewTree->attachToLayer(WidgetTree::ELayer::Content,
                                                                      _previewRoot,
                                                                      fillArgs);
-    YA_CORE_ASSERT(attachment.valid(), "UIDesignerPanel: failed to attach preview root");
+    YA_CORE_ASSERT(attachment.valid(), "EditorUIDesignerSession: failed to attach preview root");
     _selected = _previewRoot.get();
     return true;
 }
 
-void UIDesignerPanel::newDocument(const std::string& typeId)
+void EditorUIDesignerSession::newDocument(const std::string& typeId)
 {
     auto document     = std::make_shared<UIDocument>();
     document->typeId  = typeId;
@@ -194,10 +194,10 @@ void UIDesignerPanel::newDocument(const std::string& typeId)
     openDocument(document);
 }
 
-void UIDesignerPanel::openSceneEntry(Scene& scene, SceneWidgetEntry& entry)
+void EditorUIDesignerSession::openSceneEntry(Scene& scene, SceneWidgetEntry& entry)
 {
     if (!entry.inlineDocument) {
-        YA_CORE_WARN("UIDesignerPanel::openSceneEntry: entry '{}' has no inline document", entry.entryId);
+        YA_CORE_WARN("EditorUIDesignerSession::openSceneEntry: entry '{}' has no inline document", entry.entryId);
         return;
     }
     const FEditorDocumentId id = makeEditorUIDocumentId(scene.getName() + "#" + entry.entryId);
@@ -213,7 +213,7 @@ void UIDesignerPanel::openSceneEntry(Scene& scene, SceneWidgetEntry& entry)
     }
 }
 
-void UIDesignerPanel::rebuildDocumentFromPreview()
+void EditorUIDesignerSession::rebuildDocumentFromPreview()
 {
     if (!_previewRoot) {
         return;
@@ -221,10 +221,10 @@ void UIDesignerPanel::rebuildDocumentFromPreview()
     _document = UIDocument::fromWidget(*_previewRoot);
 }
 
-bool UIDesignerPanel::saveDocument()
+bool EditorUIDesignerSession::saveDocument()
 {
     if (!_document || !_previewRoot) {
-        YA_CORE_WARN("UIDesignerPanel::saveDocument: no document open");
+        YA_CORE_WARN("EditorUIDesignerSession::saveDocument: no document open");
         return false;
     }
     rebuildDocumentFromPreview();
@@ -234,7 +234,7 @@ bool UIDesignerPanel::saveDocument()
         for (auto& entry : _entryScene->getWidgetEntries()) {
             if (entry.entryId == _entryId) {
                 entry.inlineDocument = _document;
-                YA_CORE_INFO("UIDesignerPanel: saved entry '{}' back to scene '{}'",
+                YA_CORE_INFO("EditorUIDesignerSession: saved entry '{}' back to scene '{}'",
                              _entryId, _entryScene->getName());
                 if (_session) {
                     _session->clearDirty();
@@ -242,20 +242,20 @@ bool UIDesignerPanel::saveDocument()
                 return true;
             }
         }
-        YA_CORE_ERROR("UIDesignerPanel::saveDocument: entry '{}' no longer exists", _entryId);
+        YA_CORE_ERROR("EditorUIDesignerSession::saveDocument: entry '{}' no longer exists", _entryId);
         return false;
     }
 
     // Standalone document: the rebuilt document is held in `_document`; callers
     // (e.g. scene-entry open) consume it from getOpenDocument(). No file format.
-    YA_CORE_INFO("UIDesignerPanel: rebuilt document '{}'", _document->typeId);
+    YA_CORE_INFO("EditorUIDesignerSession: rebuilt document '{}'", _document->typeId);
     if (_session) {
         _session->clearDirty();
     }
     return true;
 }
 
-UIFrameSnapshot UIDesignerPanel::buildPreviewSnapshot(const glm::vec2& uiScale, const glm::vec2& offset)
+UIFrameSnapshot EditorUIDesignerSession::buildPreviewSnapshot(const glm::vec2& uiScale, const glm::vec2& offset)
 {
     if (!_previewTree) {
         return {};
@@ -270,12 +270,12 @@ UIFrameSnapshot UIDesignerPanel::buildPreviewSnapshot(const glm::vec2& uiScale, 
     return _previewTree->buildSnapshot(ctx);
 }
 
-UIElement* UIDesignerPanel::pickAt(const glm::vec2& logicalPoint)
+UIElement* EditorUIDesignerSession::pickAt(const glm::vec2& logicalPoint)
 {
     return _previewTree ? _previewTree->pickAt(logicalPoint) : nullptr;
 }
 
-const Rect2D* UIDesignerPanel::getSelectedLayoutRect() const
+const Rect2D* EditorUIDesignerSession::getSelectedLayoutRect() const
 {
     if (!_selected || !_selected->isAttached() || _selected->getTree() != _previewTree.get()) {
         return nullptr;
@@ -283,7 +283,7 @@ const Rect2D* UIDesignerPanel::getSelectedLayoutRect() const
     return &_selected->_layoutRect;
 }
 
-UIElement* UIDesignerPanel::findByChildPath(const std::vector<size_t>& path) const
+UIElement* EditorUIDesignerSession::findByChildPath(const std::vector<size_t>& path) const
 {
     if (!_previewRoot) {
         return nullptr;
@@ -299,12 +299,12 @@ UIElement* UIDesignerPanel::findByChildPath(const std::vector<size_t>& path) con
     return node;
 }
 
-void UIDesignerPanel::selectByChildPath(const std::vector<size_t>& path)
+void EditorUIDesignerSession::selectByChildPath(const std::vector<size_t>& path)
 {
     _selected = findByChildPath(path);
 }
 
-void UIDesignerPanel::syncPreviewToDocument()
+void EditorUIDesignerSession::syncPreviewToDocument()
 {
     if (!_previewRoot) {
         return;
@@ -328,7 +328,7 @@ void UIDesignerPanel::syncPreviewToDocument()
     }
 }
 
-UIDesignerPanel::EDropPos UIDesignerPanel::computeDropPos(float itemMinY, float itemMaxY, float mouseY)
+EditorUIDesignerSession::EDropPos EditorUIDesignerSession::computeDropPos(float itemMinY, float itemMaxY, float mouseY)
 {
     const float itemHeight      = std::max(itemMaxY - itemMinY, 1.0f);
     const float boundaryPadding = std::clamp(itemHeight * 0.33f, 8.0f, 14.0f);
@@ -341,7 +341,7 @@ UIDesignerPanel::EDropPos UIDesignerPanel::computeDropPos(float itemMinY, float 
     return EDropPos::Into;
 }
 
-void UIDesignerPanel::applyWidgetDrop(UIElement* dragged, UIElement& target, EDropPos position)
+void EditorUIDesignerSession::applyWidgetDrop(UIElement* dragged, UIElement& target, EDropPos position)
 {
     if (!dragged || dragged == &target || !_previewTree) {
         return;
@@ -355,7 +355,7 @@ void UIDesignerPanel::applyWidgetDrop(UIElement* dragged, UIElement& target, EDr
     // Cycle guard: the target must not live inside the dragged subtree.
     for (UIElement* node = &target; node != nullptr; node = node->getParent()) {
         if (node == dragged) {
-            YA_CORE_WARN("UIDesignerPanel: cannot drop into the dragged subtree");
+            YA_CORE_WARN("EditorUIDesignerSession: cannot drop into the dragged subtree");
             return;
         }
     }
@@ -379,12 +379,12 @@ void UIDesignerPanel::applyWidgetDrop(UIElement* dragged, UIElement& target, EDr
     syncPreviewToDocument();
 }
 
-std::string UIDesignerPanel::paletteDisplayName(const std::string& typeId)
+std::string EditorUIDesignerSession::paletteDisplayName(const std::string& typeId)
 {
     return shortTypeName(typeId);
 }
 
-bool UIDesignerPanel::addPaletteWidget(const std::string& typeId)
+bool EditorUIDesignerSession::addPaletteWidget(const std::string& typeId)
 {
     if (!_previewTree || !_previewRoot) {
         newDocument(typeId);
@@ -407,20 +407,20 @@ bool UIDesignerPanel::addPaletteWidget(const std::string& typeId)
     return true;
 }
 
-void UIDesignerPanel::invalidatePreview()
+void EditorUIDesignerSession::invalidatePreview()
 {
     if (_previewTree) {
         _previewTree->invalidateLayout();
     }
 }
 
-bool UIDesignerPanel::deleteWidget(UIElement* widget)
+bool EditorUIDesignerSession::deleteWidget(UIElement* widget)
 {
     if (!widget || !widget->isAttached() || widget == _previewRoot.get()) {
         // The document root is the document: deleting it would orphan the
         // preview (and Save would rebuild an empty document).
         if (widget == _previewRoot.get()) {
-            YA_CORE_WARN("UIDesignerPanel: cannot delete the document root");
+            YA_CORE_WARN("EditorUIDesignerSession: cannot delete the document root");
         }
         return false;
     }
@@ -473,7 +473,7 @@ bool readCanvasIntent(const UIElement& widget,
 
 } // namespace
 
-void UIDesignerPanel::beginMove(UIElement* widget, const glm::vec2& canvasPoint)
+void EditorUIDesignerSession::beginMove(UIElement* widget, const glm::vec2& canvasPoint)
 {
     if (!widget || !widget->isAttached()) {
         return;
@@ -482,7 +482,7 @@ void UIDesignerPanel::beginMove(UIElement* widget, const glm::vec2& canvasPoint)
     _dragWidget      = widget;
     _resizeMask      = 0;
     if (!readCanvasIntent(*widget, _dragStartPos, _dragStartSize, _dragStartAnchorMin, _dragStartAnchorMax)) {
-        YA_CORE_WARN("UIDesignerPanel::beginMove: widget '{}' is not attached through a canvas slot",
+        YA_CORE_WARN("EditorUIDesignerSession::beginMove: widget '{}' is not attached through a canvas slot",
                      widget->_name);
         _dragMode = EDragMode::None;
         _dragWidget = nullptr;
@@ -493,7 +493,7 @@ void UIDesignerPanel::beginMove(UIElement* widget, const glm::vec2& canvasPoint)
     (void)canvasPoint;
 }
 
-void UIDesignerPanel::beginResize(UIElement* widget, const glm::vec2& canvasPoint, uint8_t resizeMask)
+void EditorUIDesignerSession::beginResize(UIElement* widget, const glm::vec2& canvasPoint, uint8_t resizeMask)
 {
     if (!widget || !widget->isAttached()) {
         return;
@@ -502,7 +502,7 @@ void UIDesignerPanel::beginResize(UIElement* widget, const glm::vec2& canvasPoin
     _dragWidget      = widget;
     _resizeMask      = resizeMask;
     if (!readCanvasIntent(*widget, _dragStartPos, _dragStartSize, _dragStartAnchorMin, _dragStartAnchorMax)) {
-        YA_CORE_WARN("UIDesignerPanel::beginResize: widget '{}' is not attached through a canvas slot",
+        YA_CORE_WARN("EditorUIDesignerSession::beginResize: widget '{}' is not attached through a canvas slot",
                      widget->_name);
         _dragMode = EDragMode::None;
         _dragWidget = nullptr;
@@ -513,7 +513,7 @@ void UIDesignerPanel::beginResize(UIElement* widget, const glm::vec2& canvasPoin
     (void)canvasPoint;
 }
 
-bool UIDesignerPanel::applyDragDelta(const glm::vec2& canvasDelta)
+bool EditorUIDesignerSession::applyDragDelta(const glm::vec2& canvasDelta)
 {
     if (_dragMode == EDragMode::None || !_dragWidget || !_dragWidget->isAttached()) {
         endDrag();
@@ -536,7 +536,7 @@ bool UIDesignerPanel::applyDragDelta(const glm::vec2& canvasDelta)
                 return true;
             }
         }
-        YA_CORE_ERROR("UIDesignerPanel::applyDragDelta: move lost its parent canvas slot");
+        YA_CORE_ERROR("EditorUIDesignerSession::applyDragDelta: move lost its parent canvas slot");
         endDrag();
         return false;
     }
@@ -619,7 +619,7 @@ bool UIDesignerPanel::applyDragDelta(const glm::vec2& canvasDelta)
             }
         }
 
-        YA_CORE_ERROR("UIDesignerPanel::applyDragDelta: canvas drag lost its parent canvas slot");
+        YA_CORE_ERROR("EditorUIDesignerSession::applyDragDelta: canvas drag lost its parent canvas slot");
         endDrag();
         return false;
     }
@@ -628,7 +628,7 @@ bool UIDesignerPanel::applyDragDelta(const glm::vec2& canvasDelta)
     return true;
 }
 
-void UIDesignerPanel::endDrag()
+void EditorUIDesignerSession::endDrag()
 {
     const bool moved = _bDragMoved;
     _dragMode   = EDragMode::None;
@@ -640,7 +640,7 @@ void UIDesignerPanel::endDrag()
     }
 }
 
-void UIDesignerPanel::applyPreviewExtent()
+void EditorUIDesignerSession::applyPreviewExtent()
 {
     if (!_previewTree || !_owner) {
         return;

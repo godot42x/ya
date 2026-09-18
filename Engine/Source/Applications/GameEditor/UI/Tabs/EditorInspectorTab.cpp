@@ -22,7 +22,7 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/Inspector/PropertyGraph.h"
-#include "GameEditor/Panels/UIDesignerPanel.h"
+#include "GameEditor/EditorUIDesignerSession.h"
 #include "GameEditor/UI/Shell/EditorTheme.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
@@ -246,7 +246,7 @@ void EditorInspectorTab::construct()
         if (!entry || !scene || !entry->inlineDocument) {
             return;
         }
-        _layer->getUIDesignerPanel().openSceneEntry(*scene, *entry);
+        _layer->getEditorUIDesignerSession().openSceneEntry(*scene, *entry);
     };
 
     auto widgetEntryForm = ui::column("InspectorWidgetEntryForm")

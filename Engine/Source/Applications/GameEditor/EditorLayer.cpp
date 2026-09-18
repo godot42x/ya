@@ -1,5 +1,5 @@
 #include "GameEditor/EditorLayerInternal.h"
-#include "GameEditor/Panels/UIDesignerPanel.h"
+#include "GameEditor/EditorUIDesignerSession.h"
 #include "ECS/Component.h"
 #include "ECS/Systems/Components/CameraComponent.h"
 
@@ -7,9 +7,8 @@ namespace ya
 {
 EditorLayer::EditorLayer(App* app)
     : _app(app),
-      _sceneHierarchyPanel(this),
-      _assetInspectorPanel(this),
-      _uiDesignerPanel(this)
+      _selection(this),
+      _uiDesignerSession(this)
 {
     _gizmo.bind(_app, FEditorViewportGizmoSources{
         .getSelectedEntity = [this]() { return getSelectedEntity(); },
@@ -40,7 +39,7 @@ void EditorLayer::onAttach()
     // Initialize editor panels
     if (auto scene = getEditableScene())
     {
-        _sceneHierarchyPanel.setContext(scene);
+        _selection.setContext(scene);
         notifyHierarchyChanged();
     }
 
@@ -52,7 +51,7 @@ void EditorLayer::onAttach()
 void EditorLayer::onDetach()
 {
     YA_CORE_INFO("EditorLayer::onDetach");
-    _uiDesignerPanel.abandonDocument();
+    _uiDesignerSession.abandonDocument();
     // Unsubscribe from scene manager events
     if (_app) {
         if (auto* sceneManager = _app->getSceneServices().getSceneManager()) {
@@ -83,13 +82,13 @@ Entity* EditorLayer::getCameraPreviewEntity() const
 void EditorLayer::setEditableScene(Scene* scene)
 {
     _editableScene = scene;
-    _sceneHierarchyPanel.setContext(getSceneHierarchyContext());
+    _selection.setContext(getSceneHierarchyContext());
 }
 
 void EditorLayer::setDocumentRegistry(EditorDocumentRegistry* documents)
 {
     _documents = documents;
-    _uiDesignerPanel.bindDocuments(documents);
+    _uiDesignerSession.bindDocuments(documents);
 }
 
 void EditorLayer::setCurrentScenePath(std::string scenePath)
@@ -109,13 +108,13 @@ void EditorLayer::setViewportMode(EViewportMode mode, bool bPersist)
 
     _viewportMode = mode;
     _gizmo.cancelDrag();
-    _sceneHierarchyPanel.setContext(getSceneHierarchyContext());
+    _selection.setContext(getSceneHierarchyContext());
 
     // Cancel any in-flight 2D canvas manipulation on mode switch.
     _canvasPressHit     = nullptr;
     _canvasPressPoint   = {0.0f, 0.0f};
     _bCanvasPressActive = false;
-    _uiDesignerPanel.endDrag();
+    _uiDesignerSession.endDrag();
 
     if (_app && mode == EViewportMode::Mode2D) {
         _app->getInputRouter().cancelInput(EInputCancelReason::CaptureReleased);

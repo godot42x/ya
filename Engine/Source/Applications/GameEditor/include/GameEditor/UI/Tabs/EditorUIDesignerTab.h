@@ -9,7 +9,7 @@ struct EditorLayer;
 
 /// UI WindowRootEditor host. Palette / tree / inspector / preview chrome
 /// live in nested owned tools; document/preview WidgetTree stay on
-/// UIDesignerPanel (not the Level Editor tree).
+/// EditorUIDesignerSession (not the Level Editor tree).
 class EditorUIDesignerTab : public EditorNestedDockHost
 {
   public:

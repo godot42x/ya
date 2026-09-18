@@ -116,10 +116,10 @@ void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
     UIFrameSnapshot        uiPreviewSnapshot;
     const UIFrameSnapshot* pUiPreviewSnapshot = nullptr;
     const Rect2D*          pSelectionRect     = nullptr;
-    if (layer.getUIDesignerPanel().hasDocument()) {
-        uiPreviewSnapshot  = layer.getUIDesignerPanel().buildPreviewSnapshot(uiScale, offset);
+    if (layer.getEditorUIDesignerSession().hasDocument()) {
+        uiPreviewSnapshot  = layer.getEditorUIDesignerSession().buildPreviewSnapshot(uiScale, offset);
         pUiPreviewSnapshot = &uiPreviewSnapshot;
-        pSelectionRect = layer.getUIDesignerPanel().getSelectedLayoutRect();
+        pSelectionRect = layer.getEditorUIDesignerSession().getSelectedLayoutRect();
     }
     else if (Scene* scene = layer.getViewportInteractionScene()) {
         WidgetTree previewTree(logicalExtent);
