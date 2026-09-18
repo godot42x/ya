@@ -17,6 +17,7 @@
 #include "GameEditor/UI/Shell/EditorListRows.h"
 #include "GUI/Declarative/Build.h"
 #include "GameEditor/EditorLayer.h"
+#include "GameEditor/EditorViewProducer.h"
 #include "GameEditor/UI/Shell/EditorTheme.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "GameRuntime/App.h"
@@ -789,33 +790,34 @@ void EditorSurface::pushViewportDisplay()
     }
     const auto& display = _layer->getViewportDisplayImage();
     const bool expectsViewport = _layer->getHierarchyScene() != nullptr;
-    if (!display || !display->isValid() || !display->getImageView()) {
+
+    auto sourceImage     = display ? display->getImageShared() : nullptr;
+    auto sourceImageView = display ? display->getImageViewShared() : nullptr;
+    if (!display || !display->isValid() || !sourceImage || !sourceImageView) {
         _viewportHost->setDisplayImage(nullptr, expectsViewport);
         _viewportTexture.reset();
         _viewportImageResource.reset();
         _viewportImageView.reset();
-        return;
     }
-
-    auto sourceImage     = display->getImageShared();
-    auto sourceImageView = display->getImageViewShared();
-    if (!sourceImage || !sourceImageView) {
-        _viewportHost->setDisplayImage(nullptr, expectsViewport);
-        return;
-    }
-    if (_viewportTexture &&
-        _viewportImageResource == sourceImage &&
-        _viewportImageView == sourceImageView) {
+    else if (_viewportTexture &&
+             _viewportImageResource == sourceImage &&
+             _viewportImageView == sourceImageView) {
         _viewportHost->setDisplayImage(_viewportTexture, false);
-        return;
+    }
+    else {
+        _viewportImageResource = std::move(sourceImage);
+        _viewportImageView     = std::move(sourceImageView);
+        _viewportTexture       = Texture::wrap(_viewportImageResource,
+                                         _viewportImageView,
+                                         "EditorSurfaceViewport");
+        _viewportHost->setDisplayImage(_viewportTexture, false);
     }
 
-    _viewportImageResource = std::move(sourceImage);
-    _viewportImageView     = std::move(sourceImageView);
-    _viewportTexture       = Texture::wrap(_viewportImageResource,
-                                     _viewportImageView,
-                                     "EditorSurfaceViewport");
-    _viewportHost->setDisplayImage(_viewportTexture, false);
+    // Chrome stacked on the world image is pushed with it: same frame, same
+    // origin, same coordinate space (viewport-local logical pixels). A cleared
+    // texture collapses the panel, which is also what stops the layer from
+    // excluding that area from world input.
+    _viewportHost->setPreviewImage(_layer->getViewportPreviewImage(), previewPanelLocalRect());
 }
 
 void EditorSurface::openSceneSaveDialog()
@@ -962,10 +964,30 @@ void EditorSurface::publishViewportRect()
         return;
     }
     const Rect2D rect = _viewportHost->imageRect();
-    _layer->notifyViewportWidgetRect(rect);
+    // Panel geometry, both rects of it: the world image and the camera preview
+    // panel stacked on it. The layer needs the second one because chrome sits
+    // over the world image, so a point on the panel must not map to a world
+    // point (see EditorLayer::screenToViewport).
+    const Rect2D previewLocal = previewPanelLocalRect();
+    _layer->notifyViewportWidgetRect(
+        rect,
+        Rect2D{
+            .pos    = rect.pos + previewLocal.pos,
+            .extent = previewLocal.extent,
+        });
     const bool hovered = _viewportHost->isHovered();
     const bool focused = _viewportHost->isFocused() || hovered;
     _layer->setViewportHoverFocus(hovered, focused);
+}
+
+Rect2D EditorSurface::previewPanelLocalRect() const
+{
+    if (!_layer || !_layer->getViewportPreviewImage() || !_viewportHost) {
+        return {};
+    }
+    // Viewport-local, computed from the same rect the panel is placed with, so
+    // the chrome and the layer's input exclusion never disagree.
+    return EditorViewProducer::previewRect(_viewportHost->imageRect());
 }
 
 void EditorSurface::syncViewportHostState(const FEditorSurfaceContext& context)
@@ -1011,9 +1033,13 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
     }
 
     constexpr float kViewportContextDragSlop = 4.0f;
+    // World interaction only on the world image. Chrome stacked over it (the
+    // camera preview panel) answers through the GUI router instead, so a gizmo
+    // handle drawn underneath the panel does not steal a click on the panel.
+    const bool bOnWorldImage = isPointInViewport(windowPoint) && _viewportHost->isWorldPoint(windowPoint);
     const bool overlayCandidate =
         _viewportHost &&
-        (isPointInViewport(windowPoint) || _viewportOverlayHost.wantsPointerCapture() ||
+        (bOnWorldImage || _viewportOverlayHost.wantsPointerCapture() ||
          _bViewportRightPressPending);
     if (overlayCandidate) {
         const glm::vec2 localPoint = windowPoint - _viewportHost->imageRect().pos;
@@ -1042,7 +1068,7 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
             break;
         }
         _bViewportRightPressPending = false;
-        if (canAuthor && isPointInViewport(windowPoint)) {
+        if (canAuthor && bOnWorldImage) {
             _bViewportRightPressPending = true;
             _viewportRightPressPos      = windowPoint;
         }
@@ -1064,7 +1090,7 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
             break;
         }
         const bool openMenu =
-            _bViewportRightPressPending && canAuthor && isPointInViewport(windowPoint);
+            _bViewportRightPressPending && canAuthor && bOnWorldImage;
         _bViewportRightPressPending = false;
         if (openMenu) {
             openViewportContextMenu(windowPoint);

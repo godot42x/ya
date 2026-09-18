@@ -74,6 +74,11 @@ struct EditorLayer
     glm::vec2                _viewportSize = {1280.f, 720.f};
     glm::vec2                _viewportBounds[2]; // Min and max bounds
     Rect2D                   viewportRect;
+    /// Camera preview panel stacked on the viewport image, in tree-logical
+    /// pixels; empty when no preview is shown. It is chrome, so a point on it
+    /// is not a point on the world image and the layer must not map it into
+    /// viewport-local world coordinates.
+    Rect2D                   _viewportPreviewPanelRect;
     Rect2D                   _viewportMouseRect;
     glm::vec2                _viewportMouseCenter     = {0.0f, 0.0f};
     bool                     bViewportFocused         = false;
@@ -124,6 +129,7 @@ struct EditorLayer
     // Render resources explicitly passed in from App each frame
     EditorViewportContext          _viewportCtx;
     std::shared_ptr<RenderTexture> _viewportDisplayImage = nullptr;
+    std::shared_ptr<Texture>       _viewportPreviewImage = nullptr;
     std::shared_ptr<RenderTexture> _entityIdPickImage    = nullptr;
     FreeCamera                     _camera;
     float                          _lastDeltaTime = 0.0f;
@@ -182,6 +188,11 @@ struct EditorLayer
     // Set viewport render context before chrome tick - called from App each frame
     void                                                setViewportContext(const EditorViewportContext& ctx) { _viewportCtx = ctx; }
     void                                                setViewportDisplayImage(std::shared_ptr<RenderTexture> image) { _viewportDisplayImage = std::move(image); }
+    /// The camera preview's image, published by the viewport compose step from
+    /// the preview View's own output. Null when no preview this tick, which is
+    /// what collapses the preview panel.
+    void                                                setViewportPreviewImage(std::shared_ptr<Texture> image) { _viewportPreviewImage = std::move(image); }
+    [[nodiscard]] const std::shared_ptr<Texture>&       getViewportPreviewImage() const { return _viewportPreviewImage; }
     void                                                setEntityIdPickImage(std::shared_ptr<RenderTexture> image) { _entityIdPickImage = std::move(image); }
     [[nodiscard]] const std::shared_ptr<RenderTexture>& getEntityIdPickImage() const { return _entityIdPickImage; }
     [[nodiscard]] FreeCamera&                           getCamera() { return _camera; }
@@ -208,7 +219,12 @@ struct EditorLayer
     [[nodiscard]] int getDebugGroupItemSlot(int groupIndex, uint32_t itemIndex);
     void setDebugGroupItemSlot(int groupIndex, uint32_t itemIndex, int selectedSlot);
     [[nodiscard]] std::shared_ptr<Texture> getDebugSlotPreviewTexture(uint32_t slotIndex);
-    void                                          notifyViewportWidgetRect(const Rect2D& rect);
+    /// Panel geometry of the viewport tab, in tree-logical pixels: the world
+    /// image rect and the camera preview panel stacked on it (empty when no
+    /// preview is shown). Both are chrome geometry of the same host and arrive
+    /// together, so the layer can tell "on the world image" from "on the
+    /// preview panel" without holding a second copy of the layout.
+    void notifyViewportWidgetRect(const Rect2D& rect, const Rect2D& previewPanelRect);
     void                                          setViewportHoverFocus(bool hovered, bool focused);
     [[nodiscard]] const std::vector<std::string>& getDiscoveredProjects() const
     {

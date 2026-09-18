@@ -169,6 +169,9 @@ struct EditorSurface : IEditorViewportHostSink
     void pushViewportDisplay();
     void refreshProjectBrowserRows();
     void publishViewportRect();
+    /// The camera preview panel's rect in viewport-local logical pixels. Empty
+    /// when no preview is shown.
+    [[nodiscard]] Rect2D previewPanelLocalRect() const;
     void syncViewportHostState(const FEditorSurfaceContext& context);
     void applyWindowMetrics(const EditorWindowMetrics& metrics);
     void persistDockLayouts();

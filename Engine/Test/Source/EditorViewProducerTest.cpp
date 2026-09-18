@@ -60,7 +60,7 @@ TEST(EditorViewProducerTest, AuthoringViewportDrawsEditorFurnitureWhileAuthoring
     producer.bind(app, layer);
 
     Scene scene("Authoring");
-    layer.notifyViewportWidgetRect(Rect2D{.pos = {12.0f, 24.0f}, .extent = {960.0f, 540.0f}});
+    layer.notifyViewportWidgetRect(Rect2D{.pos = {12.0f, 24.0f}, .extent = {960.0f, 540.0f}}, {});
 
     SceneViewCollector collector;
     producer.collectSceneViews(makeEditorContext(scene), collector);
@@ -113,7 +113,7 @@ TEST(EditorViewProducerTest, PanelGeometryTooSmallForAPixelDoesNotBecomeTheViewR
     // A collapsed panel, or geometry that was never written, reports extents
     // that pass a plain "greater than zero" test and then truncate to a
     // zero-sized View -- which cannot be sized into render targets.
-    layer.notifyViewportWidgetRect(Rect2D{.pos = {0.0f, 0.0f}, .extent = {0.4f, 1.4e-43f}});
+    layer.notifyViewportWidgetRect(Rect2D{.pos = {0.0f, 0.0f}, .extent = {0.4f, 1.4e-43f}}, {});
 
     Scene              scene("Authoring");
     SceneViewCollector collector;
@@ -145,8 +145,9 @@ TEST(EditorViewProducerTest, GizmoViewOptionOnlyReachesViewsThatAskForIt)
     producer.collectSceneViews(makeEditorContext(scene), collector);
     const SceneViewDesc* preview = findComposedInset(collector);
     ASSERT_NE(preview, nullptr);
-    // A camera preview shows what that camera sees, so editor furniture stays
-    // out of it until the editor asks for it.
+    // A camera preview shows what that camera sees: generated editor
+    // companions are authoring furniture and never appear in it, whatever the
+    // editor's gizmo option says.
     EXPECT_FALSE(drawsGizmos(*preview));
 
     layer.setEditorGizmoShown(true);
@@ -155,15 +156,41 @@ TEST(EditorViewProducerTest, GizmoViewOptionOnlyReachesViewsThatAskForIt)
     producer.collectSceneViews(makeEditorContext(scene), withOption);
     const SceneViewDesc* previewWithOption = findComposedInset(withOption);
     ASSERT_NE(previewWithOption, nullptr);
-    EXPECT_TRUE(drawsGizmos(*previewWithOption));
+    EXPECT_FALSE(drawsGizmos(*previewWithOption));
 
     // The option lives on the editor, which is what the View menu and the
-    // automation call both drive; the authoring viewport keeps drawing its
-    // furniture either way.
+    // automation call both drive, and the authoring viewport is the view it
+    // reaches.
     EXPECT_TRUE(layer.isEditorGizmoShown());
     const SceneViewDesc* primaryWithOption = findView(withOption, kPrimarySceneViewId);
     ASSERT_NE(primaryWithOption, nullptr);
     EXPECT_TRUE(drawsGizmos(*primaryWithOption));
+}
+
+TEST(EditorViewProducerTest, PreviewPanelKeepsWorldInputOutOfThePanel)
+{
+    App         app;
+    EditorLayer layer(&app);
+
+    const Rect2D world{.pos = {100.0f, 50.0f}, .extent = {800.0f, 600.0f}};
+    const Rect2D panel{.pos = {760.0f, 500.0f}, .extent = {120.0f, 90.0f}};
+    layer.notifyViewportWidgetRect(world, panel);
+
+    glm::vec2 local{};
+    // The world image still maps into viewport-local coordinates.
+    ASSERT_TRUE(layer.screenToViewport(200.0f, 100.0f, local.x, local.y));
+    EXPECT_FLOAT_EQ(local.x, 100.0f);
+    EXPECT_FLOAT_EQ(local.y, 50.0f);
+    ASSERT_TRUE(layer.screenToViewport(200.0f, 300.0f, local.x, local.y));
+
+    // Chrome stacked on the image owns its own area: a point on the preview
+    // panel is not a world point, so it cannot pick what the world shows under
+    // the panel.
+    EXPECT_FALSE(layer.screenToViewport(800.0f, 540.0f, local.x, local.y));
+
+    // With no preview panel there is nothing to exclude.
+    layer.notifyViewportWidgetRect(world, {});
+    EXPECT_TRUE(layer.screenToViewport(800.0f, 540.0f, local.x, local.y));
 }
 
 } // namespace ya

@@ -31,7 +31,25 @@ struct IEditorViewportHost
 {
     virtual ~IEditorViewportHost() = default;
     virtual void setDisplayImage(const std::shared_ptr<Texture>& texture, bool missing) = 0;
+
+    /// Camera preview panel stacked on top of the viewport image. Viewport
+    /// chrome owns it: the preview View renders into its own image and this
+    /// places it, so nothing has to blit it onto the world render target (which
+    /// would put every world overlay recorded afterwards on top of it).
+    ///
+    /// localRect is viewport-local logical pixels (origin = top-left of the
+    /// viewport image), matching the overlay/gizmo convention. A null texture or
+    /// a zero-extent rect collapses the panel.
+    virtual void setPreviewImage(const std::shared_ptr<Texture>& texture, const Rect2D& localRect) = 0;
+
     [[nodiscard]] virtual Rect2D imageRect() const = 0;
+
+    /// True when the tree-logical point is on the world image and nothing
+    /// chrome-like is stacked over it there. The editor's world interaction asks
+    /// this so pointer input follows the hit test the GUI router used, instead
+    /// of assuming the whole viewport rect is world.
+    [[nodiscard]] virtual bool isWorldPoint(const glm::vec2& logicalPoint) const = 0;
+
     [[nodiscard]] virtual bool isHovered() const = 0;
     [[nodiscard]] virtual bool isFocused() const = 0;
     /// Clicking the viewport image must take keyboard focus so WASD reaches

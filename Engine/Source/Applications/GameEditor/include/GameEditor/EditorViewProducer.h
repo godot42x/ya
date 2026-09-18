@@ -20,6 +20,15 @@ struct EditorLayer;
 class EditorViewProducer final : public ISceneViewProducer
 {
   public:
+    /// View identity of the editor's camera preview. Editor-owned: the host does
+    /// not mint ids for views it does not show.
+    static constexpr SceneViewId kPreviewViewId = 2;
+
+    /// Where the preview sits inside the authoring viewport, in viewport pixels.
+    /// The preview View renders at this size and the editor's viewport chrome
+    /// shows it at this rect, so the placement is stated once.
+    [[nodiscard]] static Rect2D previewRect(const Rect2D& authoringRect);
+
     void bind(App& app, EditorLayer& layer)
     {
         _app   = &app;

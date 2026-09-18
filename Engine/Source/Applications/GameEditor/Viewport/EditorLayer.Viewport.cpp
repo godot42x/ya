@@ -42,6 +42,19 @@ bool EditorLayer::screenToViewport(float screenX, float screenY, float& outX, fl
         return false;
     }
 
+    // The camera preview panel is chrome stacked on the world image, so a point
+    // on it is not a point on the world: mapping it would pick whatever the
+    // world shows underneath the panel. The GUI router already gives such a
+    // point to the panel; this is the world side of the same rule.
+    if (_viewportPreviewPanelRect.extent.x > 0.0f && _viewportPreviewPanelRect.extent.y > 0.0f &&
+        screenX >= _viewportPreviewPanelRect.pos.x &&
+        screenX <= _viewportPreviewPanelRect.pos.x + _viewportPreviewPanelRect.extent.x &&
+        screenY >= _viewportPreviewPanelRect.pos.y &&
+        screenY <= _viewportPreviewPanelRect.pos.y + _viewportPreviewPanelRect.extent.y)
+    {
+        return false;
+    }
+
     // Transform to viewport-local coordinates (0,0 at top-left of viewport)
     outX = screenX - _viewportBounds[0].x;
     outY = screenY - _viewportBounds[0].y;

@@ -536,8 +536,22 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   7. `shouldCaptureInput()` = viewport hover/focus **或** RMB held。`FreeCameraController` 只读 IM，不读 WidgetTree。
   8. `UISplitPane` 分隔条双击（400ms / 6px，与 SpinBox 相同时钟）把 ratio 重置为 0.5，并写回 binding / dock callback。
 - Viewport gizmo 已改为 retained host + native math controller：`EditorViewportGizmoOverlay`
-  只路由输入，`EditorViewportGizmoController` 负责世界空间 translate/rotate/scale 与 undo，绘制在
-  `EditorModule` 的 viewport compose callback 中走 `Render2D`（`layer.gizmo().recordOverlay()`）。
+ 只路由输入，`EditorViewportGizmoController` 负责世界空间 translate/rotate/scale 与 undo，绘制在
+ `EditorModule` 的 viewport compose callback 中走 `Render2D`（`layer.gizmo().recordOverlay()`）。
+- Camera preview 是 **chrome，不是 runtime compose inset**：`EditorViewProducer` 声明的 preview
+  View（`kPreviewViewId` = 2）只渲染到自己的 RT，`composeRect` 为空，所以 runtime 不把它 blit 到世界
+  RT（那样世界 overlay——x-z 网格 / manipulator / 相机视锥线框——会盖在预览上，因为它们是世界空间内容，
+  而 inset 是后画的）。同帧顺序不变：`onViewportCompose` 里 `EditorModule` 读
+  `getViewOutput(kPreviewViewId)` → `EditorLayer::setViewportPreviewImage` →
+  `EditorSurface::pushViewportDisplay`（device → layer → chrome 三段，和世界 viewport 同一条）→
+  `EditorViewportTab::setPreviewImage`；Tab 内部是 `UIOverlay` 叠两兄弟：世界 `UIImage` 占满，
+  `UIBorder`（`panel` 主题 + 1px padding）包住预览 `UIImage`，End/End 对齐、位置由 slot 的
+  padding + preferredSize 表达（不要手写 rect）。preview View 的 features 只含 `Game`：
+  预览=该相机所见，不画编辑器 gizmo。面板尺寸/位置唯一拼写是
+  `EditorViewProducer::previewRect(imageRect)`（Tab 与 Layer 都从它取），所以 chrome 摆放与 Layer
+  的输入排除不会各自漂移。**世界交互必须先问宿主**：`EditorViewportTab::isWorldPoint`（= `pickAt(point)
+  == ViewportImage`）为 false 时 `screenToViewport` 直接返回 false、overlay candidate 也不成立，
+  否则点在预览面板上会去 pick 面板下面的世界对象。收起预览 = 推 null 纹理（Collapsed），不保留空面板。
 - `onImGuiRender` 编辑器 chrome shell（menu/toolbar/dockspace/viewport/debug/settings/project browser）已删除。
 - GUIWorkbench 是独立 Feature Gallery（`FWorkbenchSurface` 挂 GUIApp）。左侧 rail 是
   分组 `UISelectableRow` 列表（`UIScrollViewport` + group `UIText`），**不是**垂直 `UITabBar`。

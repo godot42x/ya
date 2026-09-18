@@ -143,11 +143,12 @@ glm::vec2 EditorLayer::canvasToViewport(const glm::vec2& canvasPoint) const
 }
 
 
-void EditorLayer::notifyViewportWidgetRect(const Rect2D& rect)
+void EditorLayer::notifyViewportWidgetRect(const Rect2D& rect, const Rect2D& previewPanelRect)
 {
     _viewportBounds[0] = rect.pos;
     _viewportBounds[1] = rect.pos + rect.extent;
     viewportRect       = rect;
+    _viewportPreviewPanelRect = previewPanelRect;
     _viewportMouseRect = rect;
     _viewportMouseCenter = {
         rect.pos.x + rect.extent.x * 0.5f,

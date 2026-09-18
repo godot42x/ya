@@ -2,6 +2,7 @@
 
 #include "GameEditor/EditorLayer.h"
 #include "GameRuntime/App.h"
+#include "GameRuntime/AppRenderServices.h"
 
 #include "Core/Camera/Camera.h"
 #include "Core/Math/Math.h"
@@ -14,10 +15,6 @@ namespace ya
 
 namespace
 {
-
-/// View identity of the editor's camera preview inset. Editor-owned: the host no
-/// longer mints view ids for views it does not show.
-constexpr SceneViewId kEditorPreviewViewId = 2;
 
 /// The preview renders into its own small RT, so its projection follows that
 /// rect's aspect unless the camera pins its own.
@@ -33,6 +30,11 @@ glm::mat4 cameraProjectionForOutput(const CameraComponent& camera, const glm::ve
 }
 
 } // namespace
+
+Rect2D EditorViewProducer::previewRect(const Rect2D& authoringRect)
+{
+    return makeViewDisplayInsetRect(authoringRect.extent);
+}
 
 void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& context,
                                           SceneViewCollector&            collector)
@@ -76,8 +78,8 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
         });
     }
 
-    // The preview inset shows the camera the user selected, composed onto the
-    // primary view's display. Which camera that is stays the editor's choice.
+    // The preview shows the camera the user selected. Which camera that is stays
+    // the editor's choice.
     Entity* previewCamera = _layer->getCameraPreviewEntity();
     if (!previewCamera) {
         return;
@@ -88,24 +90,33 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
         return;
     }
 
-    const Rect2D composeRect = makeViewDisplayInsetRect(authoringRect.extent);
-    if (composeRect.extent.x <= 0.0f || composeRect.extent.y <= 0.0f) {
+    const Rect2D previewRect = EditorViewProducer::previewRect(authoringRect);
+    if (previewRect.extent.x <= 0.0f || previewRect.extent.y <= 0.0f) {
         return;
     }
     const Rect2D previewOutput{
         .pos    = {0.0f, 0.0f},
-        .extent = composeRect.extent,
+        .extent = previewRect.extent,
     };
     collector.declare(SceneViewDesc{
         .scene             = context.activeScene,
-        .viewId            = kEditorPreviewViewId,
+        .viewId            = kPreviewViewId,
         .view              = cameraComponent->getFreeView(),
         .projection        = cameraProjectionForOutput(*cameraComponent, previewOutput.extent),
         .cameraPos         = transformComponent->getWorldPosition(),
         .viewportRect      = previewOutput,
         .composeOntoViewId = kPrimarySceneViewId,
-        .composeRect       = composeRect,
-        .features          = baseFeatures | (_layer->isEditorGizmoShown() ? gizmoFeature : 0u),
+        // No inset rect: the runtime must not blit this View onto the world
+        // render target. The preview is viewport chrome, and chrome is composed
+        // by the GUI after the world image, so the world overlays (grid,
+        // manipulator, frustum wireframe) stay under it by construction instead
+        // of by recording order. Declaring the View as non-display-root but
+        // without an inset is exactly "rendered into its own image, shown by
+        // whoever asked for it".
+        .composeRect       = {},
+        // What that camera sees, and only that: a preview is not an authoring
+        // view, so it draws no generated editor companions.
+        .features          = baseFeatures,
         .viewOwner         = previewCamera->getHandle(),
     });
 }

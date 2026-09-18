@@ -41,6 +41,7 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/Swapchain.h"
+#include "RHI/Core/Texture.h"
 #include "RHI/NativeWindow.h"
 #include "RHI/Render.h"
 #include "Render/Resources/FontManager.h"
@@ -533,6 +534,38 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             output && output->isValid() && output->getImageView()) {
             _layer->setViewportDisplayImage(std::move(output));
         }
+
+        // The camera preview is the editor's own View, and it is shown as
+        // viewport chrome: read its image here (the world graph has already
+        // recorded it, this flight is still open) and hand it to the layer, the
+        // same three steps the world viewport uses: device -> layer -> chrome
+        // widget. The chrome composes it after the world image, which is what
+        // keeps the world overlays under it. No preview this tick (2D mode, no
+        // camera selected) publishes null, which collapses the panel.
+        _layer->setViewportPreviewImage(
+            previewImageForChrome(app, commandBuffer));
+    }
+
+    /// The preview View's image as chrome can sample it: wrapped for the GUI and
+    /// moved to a readable layout. Null when the tick recorded no preview View.
+    static std::shared_ptr<Texture> previewImageForChrome(App& app, ICommandBuffer& commandBuffer)
+    {
+        auto* device = app.getRenderServices().getDeviceState();
+        if (!device) {
+            return nullptr;
+        }
+        const RenderViewOutput* output = device->getViewOutput(EditorViewProducer::kPreviewViewId);
+        if (!output) {
+            return nullptr;
+        }
+        auto display = output->displayImage();
+        if (!display || !display->getImageShared() || !display->getImageViewShared()) {
+            return nullptr;
+        }
+        commandBuffer.transitionImageLayoutAuto(display->getImage(), EImageLayout::ShaderReadOnlyOptimal);
+        return Texture::wrap(display->getImageShared(),
+                             display->getImageViewShared(),
+                             "EditorCameraPreview");
     }
 
     void presentDefaultChrome(App& app, ICommandBuffer& commandBuffer, float dt)
