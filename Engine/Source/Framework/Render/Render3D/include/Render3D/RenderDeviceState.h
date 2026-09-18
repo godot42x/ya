@@ -158,6 +158,10 @@ struct YA_RENDER_3D_API RenderDeviceState : IRenderRuntimeServices
         return _submissions.get(flightIndex);
     }
     [[nodiscard]] const RenderViewOutput* getViewOutput(uint64_t viewId) const;
+    /// Decide which View's published output the host viewport displays for
+    /// `flightIndex`. `displayViewId == 0` clears it. Called once per recorded
+    /// tick by the coordinator, from the plan's display root.
+    void publishViewOutputIdentity(uint32_t flightIndex, SceneViewId displayViewId);
     [[nodiscard]] bool     isPostprocessingEnabled() const;
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
     [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _pipelineCoordinator.getRenderPipeline(); }
@@ -200,8 +204,6 @@ struct YA_RENDER_3D_API RenderDeviceState : IRenderRuntimeServices
     void                   publishFamilyResult(uint32_t flightIndex, ViewFamilyRenderResult result);
     void                   retainPublishedViewOutputs(uint32_t flightIndex, ICommandBuffer* cmdBuf);
     [[nodiscard]] const RenderViewOutput* publishedViewOutput() const;
-    [[nodiscard]] std::shared_ptr<RenderTexture> pipelineViewportColorImage() const;
-    [[nodiscard]] std::shared_ptr<RenderTexture> pipelineViewportDisplayImage() const;
     void                   endFrameCommandBuffer(ICommandBuffer* cmdBuf);
 
     void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog, Scene* inspectScene) const;

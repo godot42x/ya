@@ -948,12 +948,12 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
     applyPendingResourceRefreshes();
     _postProcessStage.beginFrame();
 
+    // A family exists because a Scene has content and a View declared it, so an
+    // empty family is not a tick to synthesize a View for: there is no View id,
+    // no output identity and no declared geometry to record into.
     std::vector<SceneViewRecording> recordings = ctx.views;
     if (recordings.empty()) {
-        recordings.push_back(SceneViewRecording{
-            .task      = ctx.plan ? ctx.plan->displayRootTask() : nullptr,
-            .frameData = ctx.hostCamera.frameData,
-        });
+        return result;
     }
 
     RenderGraph graph;
@@ -1039,7 +1039,7 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
             execution, branch.graphResources, branch.frame.camera, branch.frame.view.task, viewId);
         const bool bDisplayRoot = branch.frame.view.task && ctx.plan &&
                                   branch.frame.view.task == ctx.plan->displayRootTask();
-        if (bDisplayRoot || result.views.empty()) {
+        if (bDisplayRoot) {
             auto nextGBuffer = buildPublishedGBufferResources(execution, viewId);
             auto nextViewport = buildPublishedViewportResources(execution, viewId, nextGBuffer.depthOwner);
             const bool bGBufferChanged =

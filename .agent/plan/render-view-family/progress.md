@@ -1,5 +1,115 @@
 # Progress
 
++## 2026-09-19 checkpoint：V1–V3 主 view 身份 + 输出发布 + 兜底链
+
+### 唯一目标
+
+让"宿主视口是哪个 View"只有一个答案，并删掉围绕它的兜底与循环赋值。
+三条（V1/V2/V3）同批，理由见 plan 附.3：它们都是删隐式身份、不动 GPU 时序，
+且必须排在 V5 之前，否则迁移中途会同时存在旧 `front()` 约定与新 `PreparedView`。
+
+### 权威定义
+
+`SceneViewDesc::ownsHostViewport()`（`composeOntoViewId == 0`，结构属性）是唯一
+判据。原先 `declareViews` 按 `viewId == kPrimarySceneViewId`（id 约定）找宿主
+view，而 `displayRootTask()` 按结构找——两个谓词回答了同一个问题，所以一个
+声明了 `viewId=7, composeOntoViewId=0` 的 View 可以在 plan 里成为 display root，
+却不是宿主相机的来源。现在两边都读结构，`kPrimarySceneViewId` 退回它的本义：
+**预览视图 compose 的目标槽位**。
+
+### V1 删掉的四处"主 view"副本
+
+实现时又找到两处 plan 附.1 没登记的同类写法（一并删除）：
+
+| 位置 | 原写法 | 现写法 |
+| --- | --- | --- |
+| `declareViews` | `view.viewId == kPrimarySceneViewId` | `view.ownsHostViewport()` |
+| `buildGameRenderFrame` | `&viewFrames.front()` | `sceneRender.hostFrameData()` |
+| `pairViewFrames` | 只写 `views[]`，索引含义留在注释里 | 顺带记录 `_hostFrameData` |
+| `SceneRenderPlan::displayRootTask` | 没人 owns 就回退 `viewportTasks.front()` | 返回 `nullptr` |
+| Forward/Deferred `recordFamily` | `recordings.empty()` 时合成一个 `task=nullptr` 的 View；输出里 `bDisplayRoot \|\| result.views.empty()` | 空 family 直接返回；只认 `bDisplayRoot` |
+| `sceneViewOwnsHostViewport(nullptr)` | 视为 owns | 视为不 owns |
+
+最后两条是同一个隐式规则的第四、五个写法，plan 附.1 只登记了前三条，已回填。
+`recordings.empty()` 那条路径在代码里没有任何生产调用方或测试，属于 legacy 合成
+入口，按"不留 legacy"直接删除。
+
+`ExtractedSceneRender::primaryTask()` 删除，统一叫 `displayRootTask()`——
+同一个对象上一个方法的两个名字，也是同一类重复。
+
+### V2 输出发布显式化
+
+- 新增 `RenderDeviceState::publishViewOutputIdentity(flightIndex, displayViewId)`：
+  `_publishedOutputViewId` 的唯一写入点，`0` 表示显式清空。
+- `publishFamilyResult` 只发布 outputs，不再在 `SceneViewFamilyPlan` 循环里
+  逐 view 写身份（"最后写入者赢"）。
+- 删 `beginFrameCommandBuffer` 里"published 的 view 不在本 flight 就清空"的补偿：
+  它只是把陈旧身份归零，而 `publishedViewOutput()` 本来就会 `find` 失败返回
+  nullptr；V2 之后每帧录制都显式重设身份，这个窗口不再存在。
+- `record()` 里两分支 set/clear 收成一句：`displayRoot ? viewId : 0`。
+  位置在 `recordViewFamilies` 之后、compose insets 之前——那一句之后的所有读取
+  （inset 的 `getViewOutput`、`recordCameraViewCompose` 的 display 目标）都落到本
+  帧的同一个身份上。
+- 顺带修掉一个 latent bug：原先 plan 非空但 `displayRoot == nullptr`、或
+  `displayRoot->desc.viewId == 0` 时，**不会**清空身份，上一帧的 View 会继续被
+  当作本帧输出。现在两种情况都显式清空。
+
+### V3 删兜底链
+
+| 访问器 | 原来源链 | 现来源 |
+| --- | --- | --- |
+| `getActiveViewportImageShared` | published → `pipelineViewportColorImage()` | published |
+| `getViewportDisplayImageShared` | published | published（未变） |
+| `getViewportExtent` | published → `_pipelineViewportRect` → active pipeline → `{}` | published → `{}` |
+| `getViewOutput(viewId)` | published flight → 扫 0..`MAX_FLIGHTS_IN_FLIGHT` | published flight |
+| `pipelineViewportDisplayImage` | `getPostprocessOutputImageShared()` → `pipelineViewportColorImage()` | 删除（**零调用方**，死代码） |
+| `pipelineViewportColorImage` | — | 删除（删掉上面两处兜底后零调用方） |
+
+调用方的显式回落已经有：编辑器 2D 画布用面板尺寸（`EditorModule` 原注释就写着
+"2D 模式 pipeline 不发布 viewport resources、`getViewportExtent()` 恒为 0x0，所以
+按面板尺寸`"），host 用 `resolveViewportExtent` 的 `viewportRect` → 窗口尺寸。
+截图源为空时 `AppScreenshotCapture::request` 已有分支返回 "failed to enqueue"。
+
+### 尚未完成（本刀明确不做，避免半迁移）
+
+- `buildViewportSnapshot` 的 else 分支仍读 `pipeline->getViewportDepthImageShared()`
+  / `getEntityIdImageShared()`。它是"给面板看的目录"，归 V8（debug/presentation
+  移出 device），现在删会让 2D 编辑器的深度/拾取句柄来源无处安放。
+- `IRenderRuntimeServices`（I5）与 `CameraFrameInput` 拆分（V5）未动，按附.3 同批做。
+- `RenderFramePlan` 的 `std::function`（I1/V6）、离屏 pump（I6/V7）未动。
+
+### 验证
+
+| 检查 | 结果 |
+| --- | --- |
+| `xmake b` | `ya-render-3d` / `ya-game-runtime` / `ya-game-editor` / `ya-testing` / `ya-engine` / `GUIWorkbench` / `GreedySnake` 全部 ok |
+| `xmake r ya-render-3d-test` | **176/176**（174 + 本轮 2 个新用例） |
+| `ya-testing` 渲染/编辑器滤镜 | 265 passed / 3 failed |
+| 同滤镜 stash 基线（只回退本刀 9 个文件） | 263 passed / 3 failed |
+| 回归对比 | **+2 通过，0 新增失败**，失败集合相同 |
+| `HelloMaterial --exit-after-frame=90 --screenshot-target=viewport` | exit=0，日志 0 error，`md5=1c6668976be1cdd5d755d1f1365700f7` **与基线逐字节相同**（1395200B） |
+| `run-editor` 同参数 | exit=0，`md5=5b8f5dd8acdbc90bd5c383feb3f7bcec`（570289B）；同会话 stash 前后两次运行同 md5，编辑器侧"同一会话内前后对比"成立 |
+
+编辑器截图的历史基线 `1bfb16e7ca543abb7b517325df508b90`（679231B）来自面板更大的
+持久化 dock 布局，本轮不与其比较：改用同会话 stash 探针（本刀代码回退后重编再跑），
+前后 md5 一致，说明本刀没有改变渲染结果。
+
+本轮**修好**的既有失败：无。3 个失败（`EditorPropertyGraphTest` ×2、
+`GameUIHostTest.BuildSnapshotComposesMountedWidgets`）在基线上同样失败，与本刀无关；
+`WidgetTreeTest.SystemLayersCannotBeDetached` 的 SIGTRAP 仍在（全量跑会中断，
+故滤镜显式排除它）。
+
+### 新增用例钉住的契约
+
+- `RenderRuntimeSnapshotTest.EmptyDevicePublishesEmptyViewportResources`（扩充）：
+  未发布时四个访问器全部返回 `nullptr` / `0x0`。
+- `RenderRuntimeSnapshotTest.HostFrameDataFollowsTheDisplayRootNotThePairingSlot`：
+  overlay View 先声明（落在 slot 0）时，`hostFrameData()` 仍指向 display root 的
+  slot，钉住"配对顺序不等于主 view"。
+- `RenderRuntimeSnapshotTest.TickThatDeclaresNoDisplayRootHasNoHostFrameData`：
+  只声明 overlay 的 tick 没有 display root，也没有宿主 frame data。
+
+
 ## 2026-09-18 隐式驱动审计（V1–V8）
 
 问题：R2/R3/R4 已经写清"往哪走"，但渲染路径上仍有一批**没人明说、代码照样跑**

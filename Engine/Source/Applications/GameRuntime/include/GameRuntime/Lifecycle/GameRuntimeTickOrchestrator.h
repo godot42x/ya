@@ -17,6 +17,7 @@ struct CameraFrameInput;
 struct FPresentFrame;
 struct SceneViewDesc;
 struct UIFrameSnapshot;
+struct RenderFrameData;
 class SceneViewCollector;
 class ExtractedSceneRender;
 
@@ -43,9 +44,9 @@ class GameRuntimeTickOrchestrator
     ///
     /// Declares this tick's views from every registered producer into
     /// `collector` (which the caller owns, because the declarations it hands
-    /// back are referenced later in the tick), and adopts the primary view's
-    /// camera and rect into the host view state. Returns the primary
-    /// declaration, or null when nobody declared one.
+    /// back are referenced later in the tick), and adopts the host viewport
+    /// View's camera and rect into the host view state. Returns that
+    /// declaration, or null when nobody declared a View for the host viewport.
     static const SceneViewDesc* declareViews(App&                     app,
                                             float                    dt,
                                             RenderDeviceState*       device,
@@ -58,11 +59,14 @@ class GameRuntimeTickOrchestrator
     static void prepareViews(App& app, float dt, uint32_t flightIndex, ExtractedSceneRender& sceneRender);
     /// Builds the camera packet the pipelines record from, plus the UI snapshot
     /// they must consume instead of the live WidgetTree (caller-owned storage,
-    /// because the packet points into it).
+    /// because the packet points into it). `hostFrameData` is the host viewport
+    /// View's preparation from this tick's plan, or null when the tick declared
+    /// no such View.
     static CameraFrameInput buildGameRenderFrame(App&                                       app,
                                                  float                                      dt,
                                                  uint32_t                                   flightIndex,
-                                                 const SceneViewDesc*                       primaryView,
+                                                 const SceneViewDesc*                       hostViewDesc,
+                                                 RenderFrameData*                           hostFrameData,
                                                  const std::vector<RenderOverlaySprite2D>&  screenSprites,
                                                  UIFrameSnapshot&                           outUiSnapshot);
     /// Records the tick in one renderer call and returns what the host submits.

@@ -136,16 +136,15 @@ RecordedFrame RenderFrameCoordinator::record(const RenderFramePlan& plan)
         if (!plan.sceneRender.empty()) {
             auto overlaySnapshot = buildViewportOverlaySnapshot(plan.camera.overlay);
             recordViewFamilies(plan, cmdBuf.get(), overlaySnapshot);
-            if (const SceneViewportTask* displayRoot = plan.sceneRender.primaryTask()) {
-                if (displayRoot->desc.viewId != 0) {
-                    _device->_publishedOutputViewId = displayRoot->desc.viewId;
-                    _device->_publishedOutputFlight = plan.camera.flightIndex;
-                }
-            }
         }
-        else {
-            _device->clearPublishedViewOutputs();
-        }
+        // Which View's output the host viewport shows is the plan's answer, not
+        // a summary of which family was recorded last. Everything below -- the
+        // compose insets, this Camera's display target, the host's later reads
+        // -- resolves through this one identity, so it is set before any of
+        // them, and a tick with no display root clears it.
+        const SceneViewportTask* displayRoot = plan.sceneRender.displayRootTask();
+        _device->publishViewOutputIdentity(plan.camera.flightIndex,
+                                           displayRoot ? displayRoot->desc.viewId : 0);
     }
 
     std::vector<ViewDisplayInset> composeInsets = plan.viewCompose.insets;

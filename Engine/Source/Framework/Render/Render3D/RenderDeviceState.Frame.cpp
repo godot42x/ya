@@ -48,12 +48,6 @@ bool RenderDeviceState::beginFrameCommandBuffer(const RenderFramePlan& plan, std
         YA_CORE_ERROR("Recording flight {} failed to begin view outputs", flightIndex);
         return false;
     }
-    if (_publishedOutputFlight == flightIndex &&
-        _viewOutputs.find(flightIndex, _publishedOutputViewId) == nullptr) {
-        _publishedOutputFlight = MAX_FLIGHTS_IN_FLIGHT;
-        _publishedOutputViewId = 0;
-    }
-
     return true;
 }
 
@@ -63,23 +57,32 @@ void RenderDeviceState::clearPublishedViewOutputs()
     _publishedOutputViewId = 0;
 }
 
-std::shared_ptr<RenderTexture> RenderDeviceState::getActiveViewportImageShared() const
+void RenderDeviceState::publishViewOutputIdentity(uint32_t flightIndex, SceneViewId displayViewId)
 {
-    if (const auto* output = publishedViewOutput()) {
-        if (output->color) {
-            return output->color;
-        }
+    // The one place that decides which View's output the host viewport shows.
+    // The plan names it, so the answer is not "whichever family was recorded
+    // last", and a tick that declared no display root clears the identity
+    // instead of leaving the previous tick's View readable as if this frame had
+    // produced it. Readers go through publishedViewOutput(), which resolves the
+    // identity against this flight's table, so a stale identity cannot outlive
+    // the outputs it names.
+    if (displayViewId == 0) {
+        clearPublishedViewOutputs();
+        return;
     }
-    return pipelineViewportColorImage();
+
+    _publishedOutputFlight = flightIndex;
+    _publishedOutputViewId = displayViewId;
 }
 
-std::shared_ptr<RenderTexture> RenderDeviceState::pipelineViewportColorImage() const
+std::shared_ptr<RenderTexture> RenderDeviceState::getActiveViewportImageShared() const
 {
-    if (auto* pipeline = _pipelineCoordinator.getSelectedForwardPipeline()) {
-        return pipeline->getViewportOutputImageShared();
-    }
-    if (auto* pipeline = _pipelineCoordinator.getSelectedDeferredPipeline()) {
-        return pipeline->getViewportOutputImageShared();
+    // The host viewport's colour, and nothing else: this is the View the plan
+    // named as its display root, so a tick that published none has no viewport
+    // image. Falling back to "whatever the pipeline last published" would answer
+    // a question about a different frame with a plausible-looking image.
+    if (const auto* output = publishedViewOutput()) {
+        return output->color;
     }
     return nullptr;
 }
@@ -92,14 +95,6 @@ std::shared_ptr<RenderTexture> RenderDeviceState::getViewportDisplayImageShared(
         }
     }
     return nullptr;
-}
-
-std::shared_ptr<RenderTexture> RenderDeviceState::pipelineViewportDisplayImage() const
-{
-    if (auto postprocessOutput = getPostprocessOutputImageShared()) {
-        return postprocessOutput;
-    }
-    return pipelineViewportColorImage();
 }
 
 const RenderViewOutput* RenderDeviceState::publishedViewOutput() const
@@ -115,17 +110,15 @@ const RenderViewOutput* RenderDeviceState::getViewOutput(uint64_t viewId) const
     if (viewId == 0) {
         return nullptr;
     }
-    if (_publishedOutputFlight < MAX_FLIGHTS_IN_FLIGHT) {
-        if (const auto* output = _viewOutputs.find(_publishedOutputFlight, viewId)) {
-            return output;
-        }
+    // This flight only. The question is "the View this frame recorded", and
+    // scanning other flights answers it with a View from another frame that
+    // happens to share an id -- which is exactly how a stale image gets shown as
+    // if it were current. A consumer that genuinely needs an older image (the
+    // viewport debug catalog) holds its own handle instead of searching here.
+    if (_publishedOutputFlight >= MAX_FLIGHTS_IN_FLIGHT) {
+        return nullptr;
     }
-    for (uint32_t flightIndex = 0; flightIndex < MAX_FLIGHTS_IN_FLIGHT; ++flightIndex) {
-        if (const auto* output = _viewOutputs.find(flightIndex, viewId)) {
-            return output;
-        }
-    }
-    return nullptr;
+    return _viewOutputs.find(_publishedOutputFlight, viewId);
 }
 
 void RenderDeviceState::publishFamilyResult(uint32_t flightIndex, ViewFamilyRenderResult familyResult)
@@ -137,10 +130,7 @@ void RenderDeviceState::publishFamilyResult(uint32_t flightIndex, ViewFamilyRend
         }
         if (!_viewOutputs.publish(flightIndex, std::move(output))) {
             YA_CORE_ERROR("Failed to publish view output for view {}", viewId);
-            continue;
         }
-        _publishedOutputFlight = flightIndex;
-        _publishedOutputViewId = viewId;
     }
 }
 

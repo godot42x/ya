@@ -345,12 +345,12 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
     applyPendingPostProcessSettings();
     _postProcessStage.beginFrame();
 
+    // A family exists because a Scene has content and a View declared it, so an
+    // empty family is not a tick to synthesize a View for: there is no View id,
+    // no output identity and no declared geometry to record into.
     std::vector<SceneViewRecording> recordings = ctx.views;
     if (recordings.empty()) {
-        recordings.push_back(SceneViewRecording{
-            .task      = ctx.plan ? ctx.plan->displayRootTask() : nullptr,
-            .frameData = ctx.hostCamera.frameData,
-        });
+        return result;
     }
 
     struct ForwardFamilyViewBranch
@@ -503,7 +503,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
             execution, branch.frame.camera, branch.frame.view.task, viewId, branch.stageCtx.viewportExtent);
         const bool bDisplayRoot = branch.frame.view.task && ctx.plan &&
                                   branch.frame.view.task == ctx.plan->displayRootTask();
-        if (bDisplayRoot || result.views.empty()) {
+        if (bDisplayRoot) {
             _viewportResources.publish(output.color, output.depth, nullptr, output.entityId, branch.stageCtx.viewportExtent);
         }
         result.views.push_back(std::move(output));

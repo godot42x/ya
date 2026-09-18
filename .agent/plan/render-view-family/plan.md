@@ -620,6 +620,12 @@ view 身份目前是**全局小整数**，所以"谁是谁"只能靠读声明方
 
 ### 附.2 切片（按风险从低到高；每条独立可验收）
 
+> 状态：V1–V3 已落地（2026-09-19，见 `progress.md`）；V4–V8 未开始。
+> 实现时在 V1 追加了两处 plan 原文漏登记的同类写法（Forward/Deferred 的
+> `recordings.empty()` 合成与 `|| result.views.empty()`），在 V3 追加了一处死代码
+> （`pipelineViewportDisplayImage()`）；`buildViewportSnapshot` 的 else 分支仍读
+> pipeline 句柄，明确留给 V8 而不是本批删。
+
 **V1 — 主 view 身份单一来源（纯删除）**
 
 - 删 `buildGameRenderFrame` 的 `viewFrames.front()`：`pairViewFrames` 顺带产出

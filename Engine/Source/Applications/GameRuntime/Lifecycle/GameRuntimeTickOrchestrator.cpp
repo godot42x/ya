@@ -386,14 +386,19 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 
     // declare → extract → prepare → build → acquire → record → submit → extras
     SceneViewCollector collector;
-    const SceneViewDesc* primaryView = declareViews(app, dt, device, collector);
-    ExtractedSceneRender sceneRender = extractScenes(app, sceneScheduler, device);
+    const SceneViewDesc* hostViewDesc = declareViews(app, dt, device, collector);
+    ExtractedSceneRender sceneRender  = extractScenes(app, sceneScheduler, device);
     prepareViews(app, dt, flightIndex, sceneRender);
 
     const std::vector<RenderOverlaySprite2D> screenOverlaySprites = buildScreenOverlaySprites(app);
     UIFrameSnapshot                          uiFrameSnapshot;
-    const CameraFrameInput cameraFrame =
-        buildGameRenderFrame(app, dt, flightIndex, primaryView, screenOverlaySprites, uiFrameSnapshot);
+    const CameraFrameInput cameraFrame = buildGameRenderFrame(app,
+                                                              dt,
+                                                              flightIndex,
+                                                              hostViewDesc,
+                                                              sceneRender.hostFrameData(),
+                                                              screenOverlaySprites,
+                                                              uiFrameSnapshot);
 
     IRender*       render        = device->getRender();
     FPresentFrame  presentFrame{.surface = render ? render->getPrimarySurfaceContext() : nullptr};
@@ -445,27 +450,30 @@ const SceneViewDesc* GameRuntimeTickOrchestrator::declareViews(App&             
         (void)sceneScheduler.submit(view);
     }
 
-    // The primary view's camera is what the host reports as "the world view":
+    // The host viewport's camera is what the host reports as "the world view":
     // the camera packet and the offscreen extent follow the declaration instead
-    // of an injected copy of it.
-    const SceneViewDesc* primaryView = nullptr;
+    // of an injected copy of it. Which declaration that is comes from the same
+    // structural predicate the plan uses for its display root -- matching a
+    // well-known view id here would be a second definition of "the host view"
+    // that can disagree with it.
+    const SceneViewDesc* hostViewDesc = nullptr;
     for (const SceneViewDesc& view : collector.views()) {
-        if (view.viewId == kPrimarySceneViewId) {
-            primaryView = &view;
+        if (view.ownsHostViewport()) {
+            hostViewDesc = &view;
             break;
         }
     }
-    if (primaryView) {
-        hostView.view       = primaryView->view;
-        hostView.projection = primaryView->projection;
-        hostView.cameraPos  = primaryView->cameraPos;
-        // The declared rect is the primary view's geometry, so the host's copy
-        // and the extent the device expects follow the declaration instead of a
-        // rect the owner pushed into host state.
-        hostView.viewportRect = primaryView->viewportRect;
-        device->applyViewportResize(primaryView->viewportRect);
+    if (hostViewDesc) {
+        hostView.view       = hostViewDesc->view;
+        hostView.projection = hostViewDesc->projection;
+        hostView.cameraPos  = hostViewDesc->cameraPos;
+        // The declared rect is the host view's geometry, so the host's copy and
+        // the extent the device expects follow the declaration instead of a rect
+        // the owner pushed into host state.
+        hostView.viewportRect = hostViewDesc->viewportRect;
+        device->applyViewportResize(hostViewDesc->viewportRect);
     }
-    return primaryView;
+    return hostViewDesc;
 }
 
 ExtractedSceneRender GameRuntimeTickOrchestrator::extractScenes(App&                 app,
@@ -524,25 +532,31 @@ CameraFrameInput GameRuntimeTickOrchestrator::buildGameRenderFrame(
     App&                                      app,
     float                                     dt,
     uint32_t                                  flightIndex,
-    const SceneViewDesc*                      primaryView,
+    const SceneViewDesc*                      hostViewDesc,
+    RenderFrameData*                          hostFrameData,
     const std::vector<RenderOverlaySprite2D>& screenSprites,
     UIFrameSnapshot&                          outUiSnapshot)
 {
     const HostViewState& hostView = app._renderState->hostView;
-    auto&                viewFrames = app._renderState->viewFrameDataPerFlight[flightIndex];
 
     CameraFrameInput cameraFrame{
         .flightIndex   = flightIndex,
         .frameIndex    = App::_hostTick,
         .deltaTime     = dt,
-        .viewFeatures  = primaryView ? primaryView->features : toMask(ERenderFeature::Game),
+        // Gizmo/editor furniture policy is the declaring View's, and with no
+        // host View declared there is no host camera drawing anything, so the
+        // authored-content default is the honest one rather than a guess.
+        .viewFeatures  = hostViewDesc ? hostViewDesc->features : toMask(ERenderFeature::Game),
         .view          = hostView.view,
         .projection    = hostView.projection,
         .viewProjection = makeCameraViewProjection(hostView.projection, hostView.view),
         .cameraPos     = hostView.cameraPos,
         .viewportRect  = hostView.viewportRect,
         .viewportFrameBufferScale = hostView.viewportFrameBufferScale,
-        .frameData     = &viewFrames.front(),
+        // Null when no declared View owns the host viewport: the host camera
+        // then has no prepared View this tick, which is a fact rather than a
+        // slot to fill with another View's data.
+        .frameData     = hostFrameData,
         .shadowSettings = &app.getRenderServices().getShadowSettings(),
     };
     cameraFrame.overlay = {
@@ -625,11 +639,11 @@ void GameRuntimeTickOrchestrator::submitRecordedFrame(App&                 app,
     YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
     // The host submits what the renderer recorded, or an empty frame when the
     // recording was refused; the image is presented either way.
-    YA_CORE_TRACE("Submit tick {}: flight={} token={} recorded={}",
-                  app.getHostTick(),
-                  recorded.flightIndex,
-                  recorded.frameToken,
-                  recorded.valid());
+    // YA_CORE_TRACE("Submit tick {}: flight={} token={} recorded={}",
+    //               app.getHostTick(),
+    //               recorded.flightIndex,
+    //               recorded.frameToken,
+    //               recorded.valid());
     submitPresentFrame(presentFrame,
                        recorded.valid() ? std::vector<void*>{recorded.commandBuffer->getHandle()}
                                         : std::vector<void*>{});

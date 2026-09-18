@@ -46,6 +46,22 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
     Renderer。对象模型见 `./.agent/plan/archive/gui-multi-os-window-editor/c2_view_model.md`
     与 `c2_present_compose_model.md`；R2 ownership 收口见
     `./.agent/plan/render-view-family/plan.md` 4.0.3。
+12. 宿主视口是哪个 View 只有一个判据：`SceneViewDesc::ownsHostViewport()`
+    （`composeOntoViewId == 0`，结构属性）。`kPrimarySceneViewId` 不是“主 View”的
+    别名，它只是**相机预览 inset 这类离屏 View compose 的目标槽位**；按 id 去找宿主
+    View 会造出第二个定义，并让一个 `viewId=7` 的声明在 plan 里成为 display root 却
+    不是宿主相机的来源。`SceneRenderPlan::displayRootTask()` 在没人 owns 时返回 null，
+    这是正常答案（该 tick 不往宿主视口显示任何东西）；`ExtractedSceneRender::
+    hostFrameData()` 同理返回 null，绝不回落到“配对 slot 0”——配对顺序是声明顺序，
+    与谁是宿主 View 无关。
+13. 宿主视口的图片/尺寸访问器只有**一个来源**，没有兜底链：
+    `getActiveViewportImageShared` / `getViewportDisplayImageShared` /
+    `getViewportExtent` / `getViewOutput` 都只读本帧 published 的 display root，
+    未发布就返回 `nullptr` / `{}`。要回落的调用方自己回落（编辑器 2D 画布用面板
+    尺寸、host 用 viewportRect → 窗口尺寸），因为只有调用方知道“没有视口时该显示
+    什么”。published 身份由 `RenderDeviceState::publishViewOutputIdentity` 一处写入
+    （`0` 清空），不要回到“遍历 family 逐个写、最后写入者赢”，也不要让 pipeline 上
+    再留一份上次发布的图当兜底。
 
 ## 目录锚点
 

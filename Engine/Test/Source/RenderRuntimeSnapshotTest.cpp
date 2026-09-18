@@ -47,6 +47,16 @@ TEST(RenderRuntimeSnapshotTest, EmptyDevicePublishesEmptyViewportResources)
     EXPECT_EQ(device.getLiveSubmission(MAX_FLIGHTS_IN_FLIGHT), nullptr);
     EXPECT_EQ(device.getViewOutput(1), nullptr);
 
+    // No tick has published a display root, so every host-viewport accessor
+    // answers "nothing". Falling back to pipeline state would answer with an
+    // image from another frame, which is how a stale viewport gets read as the
+    // current one.
+    EXPECT_EQ(device.getActiveViewportImageShared(), nullptr);
+    EXPECT_EQ(device.getViewportDisplayImageShared(), nullptr);
+    EXPECT_EQ(device.getPostprocessOutputImageShared(), nullptr);
+    EXPECT_EQ(device.getViewportExtent().width, 0u);
+    EXPECT_EQ(device.getViewportExtent().height, 0u);
+
     const RenderViewportSnapshot viewport = device.buildViewportSnapshot();
     const RenderTargetCatalog    targets  = device.buildRenderTargetCatalog();
 
@@ -117,7 +127,8 @@ TEST(RenderRuntimeSnapshotTest, EmptySceneRenderIsUiOnlyFrame)
     const RenderFramePlan plan{};
     EXPECT_TRUE(plan.sceneRender.empty());
     EXPECT_TRUE(plan.sceneRender.views().empty());
-    EXPECT_EQ(plan.sceneRender.primaryTask(), nullptr);
+    EXPECT_EQ(plan.sceneRender.displayRootTask(), nullptr);
+    EXPECT_EQ(plan.sceneRender.hostFrameData(), nullptr);
 }
 
 TEST(RenderRuntimeSnapshotTest, EveryTaskCarriesTheSceneItsDeclarationNamed)
@@ -402,7 +413,8 @@ TEST(RenderRuntimeSnapshotTest, UiOnlyTickKeepsOneFrameSlotAndPairsNoView)
 
     ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
     EXPECT_TRUE(extracted.empty());
-    EXPECT_EQ(extracted.primaryTask(), nullptr);
+    EXPECT_EQ(extracted.displayRootTask(), nullptr);
+    EXPECT_EQ(extracted.hostFrameData(), nullptr);
 
     // A previous tick left Scene content in the per-flight slot; a UI-only tick
     // must not hand the camera packet a stale snapshot.
@@ -413,6 +425,61 @@ TEST(RenderRuntimeSnapshotTest, UiOnlyTickKeepsOneFrameSlotAndPairsNoView)
     ASSERT_EQ(frames.size(), 1u);
     EXPECT_FALSE(frames[0].sceneSnapshot);
     EXPECT_TRUE(extracted.views().empty());
+}
+
+TEST(RenderRuntimeSnapshotTest, HostFrameDataFollowsTheDisplayRootNotThePairingSlot)
+{
+    Scene scene("Shared");
+
+    SceneRenderScheduler scheduler;
+    scheduler.beginTick(11);
+
+    // The overlay View is declared first, so it lands in slot 0. Pairing order
+    // is declaration order and says nothing about which View is the host's, so
+    // the host camera packet must not read slot 0.
+    SceneViewDesc overlay;
+    overlay.scene             = &scene;
+    overlay.viewId            = 2;
+    overlay.viewportRect      = {.pos = {0.0f, 0.0f}, .extent = {320.0f, 180.0f}};
+    overlay.composeOntoViewId = kPrimarySceneViewId;
+    ASSERT_TRUE(scheduler.submit(overlay));
+    ASSERT_TRUE(scheduler.submit(makeView(&scene, kPrimarySceneViewId)));
+
+    ExtractedSceneRender   extracted = sealWithEmptySnapshots(scheduler);
+    const SceneRenderPlan& plan      = extracted.plan();
+    ASSERT_EQ(plan.viewportTasks.size(), 2u);
+    EXPECT_EQ(plan.displayRootTask(), &plan.viewportTasks[1]);
+
+    std::vector<RenderFrameData> frames;
+    extracted.pairViewFrames(frames);
+    ASSERT_EQ(frames.size(), 2u);
+    EXPECT_EQ(extracted.hostFrameData(), &frames[1]);
+}
+
+TEST(RenderRuntimeSnapshotTest, TickThatDeclaresNoDisplayRootHasNoHostFrameData)
+{
+    Scene scene("Preview");
+
+    SceneRenderScheduler scheduler;
+    scheduler.beginTick(12);
+
+    // Only an overlay View: nothing owns the host viewport, so there is no
+    // display root, no host frame data, and no substitute View to fall back to.
+    SceneViewDesc overlay;
+    overlay.scene             = &scene;
+    overlay.viewId            = 2;
+    overlay.viewportRect      = {.pos = {0.0f, 0.0f}, .extent = {320.0f, 180.0f}};
+    overlay.composeOntoViewId = kPrimarySceneViewId;
+    ASSERT_TRUE(scheduler.submit(overlay));
+
+    ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
+    ASSERT_FALSE(extracted.empty());
+    EXPECT_EQ(extracted.displayRootTask(), nullptr);
+
+    std::vector<RenderFrameData> frames;
+    extracted.pairViewFrames(frames);
+    ASSERT_EQ(frames.size(), 1u);
+    EXPECT_EQ(extracted.hostFrameData(), nullptr);
 }
 
 TEST(RenderRuntimeSnapshotTest, ExtractedSceneRenderPairsEveryTaskWithItsOwnFrameData)
@@ -451,7 +518,7 @@ TEST(RenderRuntimeSnapshotTest, ExtractedSceneRenderPairsEveryTaskWithItsOwnFram
     EXPECT_EQ(extracted.views()[1].task, &plan.viewportTasks[1]);
     EXPECT_EQ(extracted.views()[0].frameData, &frames[0]);
     EXPECT_EQ(extracted.views()[1].frameData, &frames[1]);
-    EXPECT_EQ(extracted.primaryTask(), &plan.viewportTasks[0]);
+    EXPECT_EQ(extracted.displayRootTask(), &plan.viewportTasks[0]);
 
     const CameraFrameInput host{
         .view         = glm::mat4(1.0f),

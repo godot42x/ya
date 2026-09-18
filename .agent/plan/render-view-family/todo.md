@@ -4,9 +4,9 @@
 
 按风险从低到高；V1–V3 一个 commit，V4+V5 一批，其余独立。
 
-- [ ] V1 主 view 身份单一来源：删 `buildGameRenderFrame` 的 `viewFrames.front()`（`pairViewFrames` 顺带给出 host/display-root pair index）；`primaryView`（声明方）与 `displayRootTask()`（输出方）二选一作权威，保留的写清它回答的是另一问；宿主 view 缺失时显式拒绝而非落到默认 index。
-- [ ] V2 输出发布显式化：`publishFamilyResult(flightIndex, familyResult, displayViewId)`，删 `SceneViewFamilyPlan` 循环里的 `_publishedOutputViewId` 最后写入者赢；随删 `beginFrameCommandBuffer` 的 "published 不在本 flight 就清空" 补偿与 `record()` 里的 `displayRootTask()->desc.viewId != 0` 分支。
-- [ ] V3 删兜底链：`getActiveViewportImageShared` / `getViewportDisplayImageShared` 只认 published（删 `pipelineViewportColorImage()` 兜底）；`getViewportExtent()` 四段收一段；`getViewOutput(viewId)` 删跨 flight 扫描；新增 "未发布返回 nullptr/{}" 测试。
+- [x] V1 主 view 身份单一来源。权威 = `SceneViewDesc::ownsHostViewport()`（结构），`kPrimarySceneViewId` 退回"预览 compose 的目标槽位"。删 `declareViews` 的 id 搜索、`buildGameRenderFrame` 的 `viewFrames.front()`、`displayRootTask()` 的 `.front()` 回退、`sceneViewOwnsHostViewport(nullptr)` 视为 owns、Forward/Deferred 的 `recordings.empty()` 合成与 `bDisplayRoot || result.views.empty()`（后两条是 plan 附.1 漏登记的同类写法，已回填）。`primaryTask()` 与 `displayRootTask()` 两个名字合并。
+- [x] V2 输出发布显式化。新增 `publishViewOutputIdentity(flightIndex, displayViewId)` 作 `_publishedOutputViewId` 唯一写入点（`0` 清空）；`publishFamilyResult` 只发 outputs；删 `beginFrameCommandBuffer` 的陈旧身份补偿与 `record()` 的 set/clear 两分支；顺带修掉"plan 非空但无 display root / viewId==0 时不清空、沿用上一帧身份"的 latent bug。
+- [x] V3 删兜底链。`getActiveViewportImageShared` / `getViewportDisplayImageShared` 只认 published；`getViewportExtent()` 两段（published → `{}`）；`getViewOutput(viewId)` 只看本 flight；删死代码 `pipelineViewportDisplayImage()` 与随之无调用方的 `pipelineViewportColorImage()`；三个新用例钉住 "未发布返回 nullptr/{}" 与 "配对 slot ≠ 主 view"。
 - [ ] V4 删 `IRenderRuntimeServices`：时间走 `HostClockState`，env lighting 进 `PreparedView`，`DebugRenderSystem` 由 overlay pass 注入，删死方法 `getGameplayResourceBinding()`，最后删 `PipelineCoordinator::InitDesc::runtimeServices`。
 - [ ] V5 `CameraFrameInput` → `FramePacket` + `PreparedView`：删 `cameraForViewRecording()` patching 与四层转译；同批完成 P3 的 `RenderFrameData`→`PreparedViewRenderData`。
 - [ ] V6 `RenderFramePlan` 去回调：贡献者列表替代 `recordCompose` / `recordBeforeExtensions` / `recordExtensions`，顺序由 coordinator 一处拥有（`appendCapture` 保留到 capture 另有归属）；若一次换不动则把 step 具名化并 assert 缺项。

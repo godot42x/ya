@@ -192,6 +192,9 @@ RenderPipelineDebugOutputCatalog RenderDeviceState::buildPipelineDebugOutputCata
 
 Extent2D RenderDeviceState::getViewportExtent() const
 {
+    // One source: the published host viewport View. A tick that published none
+    // has no viewport, and the caller decides what to show instead (the editor
+    // sizes its 2D canvas from its own panel rect, the host from its window).
     if (const auto* output = publishedViewOutput()) {
         if (output->desc.hasExtent()) {
             return output->desc.extent;
@@ -199,12 +202,6 @@ Extent2D RenderDeviceState::getViewportExtent() const
         if (auto image = output->displayImage()) {
             return image->getExtent();
         }
-    }
-    if (_pipelineViewportRect.extent.x > 0 && _pipelineViewportRect.extent.y > 0) {
-        return Extent2D::fromVec2(_pipelineViewportRect.extent);
-    }
-    if (auto* pipeline = getActivePipeline()) {
-        return pipeline->getViewportExtent();
     }
     return {};
 }

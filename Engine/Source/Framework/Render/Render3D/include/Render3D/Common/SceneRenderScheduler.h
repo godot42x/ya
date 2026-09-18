@@ -131,6 +131,17 @@ struct SceneRenderPlan
         return &family;
     }
 
+    /// The View whose output the host viewport displays, or null when this tick
+    /// declares none.
+    ///
+    /// A View owns the host viewport by structure (`composeOntoViewId == 0`),
+    /// never by holding a well-known id, so this answers the same question every
+    /// caller asks: the pipelines' display-root branch, the publish identity and
+    /// the compose inset filter all read this one predicate. Null is a real
+    /// answer -- the tick still renders what its other Views asked for, nothing
+    /// is displayed on the host viewport, and no caller gets a substitute View
+    /// it did not ask for. With several display roots (one per surface, the
+    /// multi-window case) the first wins until a surface-scoped identity exists.
     [[nodiscard]] const SceneViewportTask* displayRootTask() const
     {
         for (const auto& task : viewportTasks) {
@@ -138,13 +149,15 @@ struct SceneRenderPlan
                 return &task;
             }
         }
-        return viewportTasks.empty() ? nullptr : &viewportTasks.front();
+        return nullptr;
     }
 };
 
+/// A View owns the host viewport by structure. A recording without a task owns
+/// nothing: there is no View, so there is no host viewport belonging to it.
 [[nodiscard]] inline bool sceneViewOwnsHostViewport(const SceneViewportTask* task)
 {
-    return !task || task->desc.ownsHostViewport();
+    return task && task->desc.ownsHostViewport();
 }
 
 /// Every Scene an extracted plan actually produces content for, in snapshot-table
@@ -204,11 +217,13 @@ class ExtractedSceneRender
     /// Pair one recording with every surviving viewport task, in plan order.
     /// `frameData` ends up with exactly one slot per surviving view; slots left
     /// over from a wider tick are released so they cannot keep that tick's Scene
-    /// snapshot alive. A UI-only tick leaves the single slot the camera packet
-    /// reads and drops any stale Scene snapshot.
+    /// snapshot alive. A UI-only tick keeps one emptied slot for that release and
+    /// no host frame data: the slot exists to drop the previous tick's snapshot,
+    /// not because the camera packet reads it.
     void pairViewFrames(std::vector<RenderFrameData>& frameData)
     {
         _views.clear();
+        _hostFrameData = nullptr;
         if (_plan.viewportTasks.empty()) {
             frameData.resize(1);
             frameData.front().clear();
@@ -222,6 +237,13 @@ class ExtractedSceneRender
                 .task      = &_plan.viewportTasks[index],
                 .frameData = &frameData[index],
             });
+            // Frame data is indexed by declaration order, which says nothing
+            // about which View is the host's. The host camera packet needs the
+            // latter, so record it here instead of letting the caller read
+            // slot 0 and hope the producer declared the host View first.
+            if (!_hostFrameData && _plan.viewportTasks[index].desc.ownsHostViewport()) {
+                _hostFrameData = &frameData[index];
+            }
         }
     }
 
@@ -231,7 +253,12 @@ class ExtractedSceneRender
 
     [[nodiscard]] const std::vector<SceneViewRecording>& views() const { return _views; }
 
-    [[nodiscard]] const SceneViewportTask* primaryTask() const { return _plan.displayRootTask(); }
+    [[nodiscard]] const SceneViewportTask* displayRootTask() const { return _plan.displayRootTask(); }
+
+    /// This tick's preparation for the View whose output goes to the host
+    /// viewport, or null when no declared View owns it. The host camera packet
+    /// reads this rather than the first paired slot.
+    [[nodiscard]] RenderFrameData* hostFrameData() const { return _hostFrameData; }
 
     [[nodiscard]] std::shared_ptr<const SceneSnapshot> snapshotFor(const SceneViewportTask& task) const
     {
@@ -243,6 +270,7 @@ class ExtractedSceneRender
 
     SceneRenderPlan                 _plan;
     std::vector<SceneViewRecording> _views;
+    RenderFrameData*                _hostFrameData = nullptr;
 };
 
 /// Explicit extraction step: consumed by the host after `seal()` and before
