@@ -317,9 +317,38 @@ struct YA_GUI_API WidgetTree final
         }
         return false;
     }
+    /// Pointer capture contract: capture is legal only inside a live press
+    /// session (asserted), and it cannot outlive that session. The tree closes
+    /// the session on the matching release; when the framework has to close it
+    /// because the platform lost the release, the captor is told through
+    /// clearTransientInputState() and the capture is dropped by the tree. A
+    /// widget therefore never has to remember to release capture on a path the
+    /// platform may not deliver.
     void setPointerCapture(UIElement* widget);
     void releasePointerCapture(UIElement* widget);
     [[nodiscard]] UIElement* getPointerCapture() const { return _captured; }
+    /// Physical buttons this tree last saw held, encoded `1u << EMouse::T`.
+    /// Zero means no pointer session can be live.
+    [[nodiscard]] uint32_t getPointerButtonsDown() const { return _pointerButtonsDown; }
+    /// Count of pointer sessions the framework had to end on its own because
+    /// the platform never delivered their release (focus loss, pointer left
+    /// every window, re-press with no release in between, or capture that
+    /// outlived its press). Non-zero is a lost-release diagnostic, published as
+    /// `gui.tree.pointer_recoveries`.
+    [[nodiscard]] uint64_t getPointerSessionRecoveries() const { return _pointerSessionRecoveries; }
+    /// End the live pointer session without a release: drop a tentative drag
+    /// candidate, cancel an active drag session (observers receive
+    /// EDragFinishResult::Cancelled), tell and drop the pointer capture, and
+    /// clear the button mask. Idempotent; a tree with no live session does
+    /// nothing. Framework-owned recovery for a release the platform did not
+    /// deliver.
+    void cancelPointerSession(std::string_view cause);
+    /// Reconcile the cached button mask with the platform's authoritative state
+    /// (`osButtonsDown` uses the same `1u << EMouse::T` encoding). When the
+    /// platform reports no button held while the tree still owns a session, the
+    /// session is cancelled: a tree never keeps a press the pointer ended.
+    /// Hosts call this on focus loss and when the pointer leaves their window.
+    void reconcilePointerButtons(uint32_t osButtonsDown, std::string_view cause);
     [[nodiscard]] bool hasModalPopup() const;
     [[nodiscard]] UIElement* getHovered() const { return _hovered; }
     [[nodiscard]] UIElement* getTooltipHost() const { return _tooltipHost.get(); }
@@ -448,7 +477,7 @@ struct YA_GUI_API WidgetTree final
     /// the first click.
     void beginPointerDispatch(const Event& event);
     void endPointerDispatch(const Event& event);
-    void assertPointerSessionConsistent() const;
+    void repairPointerSession(std::string_view where);
     void updateHovered(UIElement* widget);
     void beginRouteTrace(EWidgetRoutePolicy policy, UIElement* target);
     void appendRouteTraceStep(const UIElement& widget,
@@ -543,8 +572,10 @@ struct YA_GUI_API WidgetTree final
     UIElement*    _focused      = nullptr;
     UIElement*    _captured     = nullptr;
     /// Bits indexed by `EMouse::T`. Capture may exist only while a bit is set;
-    /// a press whose bit is already set is a leftover session.
-    uint8_t       _pointerButtonsDown = 0;
+    /// a press whose bit is already set is a leftover session, recovered as a
+    /// cancel rather than treated as a fatal invariant violation.
+    uint32_t       _pointerButtonsDown = 0;
+    uint64_t       _pointerSessionRecoveries = 0;
     UIElement*    _hovered      = nullptr;
     /// Tooltip host widget currently mounted on the Tooltip layer (null
     /// when no tooltip is shown). Owned by the tree via attachment.

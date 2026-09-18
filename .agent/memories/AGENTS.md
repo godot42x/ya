@@ -24,6 +24,7 @@
 - `./control_instance_lifecycle.md`：agent 驱动引擎时实例堆积的四个根因——没有发现渠道、帧预算挡不住闲置进程、端口被占静默降级、harness `kill()` 杀的是启动器而不是引擎；对应 control 入口 + 实例记录 + 默认墙钟上限
 - `./uninitialized_rect_and_view_rect_contract.md`：未初始化的 `Rect2D`（非规格化小数骗过 `> 0`）被当成 View 尺寸 → 截断成 0×0 → `createTexture` 断言 → 编辑器 exit 255；含从 .ips 指令地址用 `atos` 反查源码行、以及为什么 lldb 会掩盖这类 bug
 - `./unity_build_duplicate_private_symbol.md`：批量搬迁重排 unity 批次后，平铺布局掩盖的重复私有符号（结构体/自由函数）突然变成 duplicate symbol；不能用加命名空间糊过去，应抽私有头或改名
+- `./pointer_session_lost_release.md`：GUI pointer session 的 press 缓存只有 release 才清，而 release 会丢（focus 丢失、指针离开窗口、注入 press）→ `WidgetTree::beginPointerDispatch` 断言在拖 splitter/dock 时频发 abort；现在由框架 `cancelPointerSession` / `reconcilePointerButtons` 回收并计数
 
 ## 边界
 

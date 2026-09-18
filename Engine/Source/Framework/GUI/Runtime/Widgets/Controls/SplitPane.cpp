@@ -110,12 +110,19 @@ bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext&
 {
     if (WidgetTree* tree = getTree()) {
         const bool bHasCapture = tree->getPointerCapture() == this;
-        YA_CORE_ASSERT(bHasCapture == static_cast<bool>(_bDraggingDivider),
-                       "UISplitPane '{}': pointer capture and divider-drag session diverged "
-                       "(capture={} dragging={}); leftover capture steals the next click",
-                       _name,
-                       bHasCapture,
-                       static_cast<bool>(_bDraggingDivider));
+        if (bHasCapture != static_cast<bool>(_bDraggingDivider)) {
+            // The tree ends a pointer session on its own when the platform
+            // loses the release (focus loss, pointer leaving the window). The
+            // pane must not keep half a divider drag after that: drop the
+            // session and start from a clean state for this event.
+            YA_CORE_WARN("UISplitPane '{}': pointer capture and divider-drag session diverged "
+                         "(capture={} dragging={}); the drag session ends here",
+                         _name,
+                         bHasCapture,
+                         static_cast<bool>(_bDraggingDivider));
+            _bDraggingDivider = false;
+            tree->releasePointerCapture(this);
+        }
     }
 
     const EEvent::T eventType = event.getEventType();

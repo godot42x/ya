@@ -66,7 +66,18 @@ int App::onEvent(const Event& event)
         }
         break;
     case EEvent::WindowMouseEnter:
+        break;
     case EEvent::WindowMouseLeave:
+    {
+        const auto& windowEvent = static_cast<const WindowEvent&>(event);
+        if (isMainWindowEvent(windowEvent)) {
+            // The pointer left the window: if it left with the button already
+            // physically up, this window will never receive the release and the
+            // session it opened is stale. The cancel reason lets the input node
+            // compare its cached press against the platform's real state.
+            inputRouter.cancelInput(EInputCancelReason::PointerLeftWindow);
+        }
+    } break;
     case EEvent::AppTick:
     case EEvent::AppUpdate:
     case EEvent::AppRender:

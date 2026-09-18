@@ -23,6 +23,11 @@ enum class EInputCancelReason : uint8_t
     NodeChanged,
     CaptureReleased,
     WindowFocusLost,
+    /// The pointer left the window the session started in. Unlike
+    /// WindowFocusLost the window may stay focused (a second monitor, a dock
+    /// tear-off window), but the platform stops delivering this pointer stream
+    /// to a session that never captured the mouse.
+    PointerLeftWindow,
     AppStateChanged,
     ModuleDetached,
 };

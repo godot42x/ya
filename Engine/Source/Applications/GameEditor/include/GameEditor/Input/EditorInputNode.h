@@ -47,6 +47,10 @@ class EditorInputNode final : public IInputNode
   private:
     [[nodiscard]] EditorWindowSession* session() const;
     void syncDragRouter(uint32_t primaryNativeId, INativeWindow* native = nullptr);
+    /// Compare every editor WidgetTree's cached pointer session against the
+    /// platform's physical button state. Called when the platform may stop
+    /// delivering a release (key focus loss, pointer left the window).
+    void reconcilePointerSessionsWithPlatform(EInputCancelReason reason);
 };
 
 } // namespace ya

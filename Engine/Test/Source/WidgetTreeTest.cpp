@@ -1662,6 +1662,227 @@ TEST(WidgetTreeTest, PointerCaptureOverridesHitWalk)
 namespace
 {
 
+/// Owns its pointer session the way a real control does (capture on press,
+/// release on release) so a test can model the two events the platform may not
+/// deliver: a release that never arrives, and a release the widget swallows.
+struct TestPointerSessionWidget final : public UIElement
+{
+    explicit TestPointerSessionWidget(std::string name) : UIElement(std::move(name))
+    {
+        // Behaves like a real control: it consumes the press exclusively.
+        _hitFilter = EWidgetHitFilter::Stop;
+    }
+
+    bool bTakeCaptureOnPress = true;
+    bool bReleaseOnRelease   = true;
+    int  pressCount          = 0;
+    int  releaseCount        = 0;
+    int  cancelCount         = 0;
+
+    bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override
+    {
+        (void)ctx;
+        WidgetTree* tree = getTree();
+        switch (event.getEventType()) {
+        case EEvent::MouseButtonPressed:
+            ++pressCount;
+            if (bTakeCaptureOnPress && tree) {
+                tree->setPointerCapture(this);
+            }
+            return true;
+        case EEvent::MouseButtonReleased:
+            ++releaseCount;
+            if (bReleaseOnRelease && tree) {
+                tree->releasePointerCapture(this);
+            }
+            return true;
+        case EEvent::MouseMoved:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    void clearTransientInputState() override
+    {
+        ++cancelCount;
+        if (WidgetTree* tree = getTree()) {
+            tree->releasePointerCapture(this);
+        }
+    }
+};
+
+FCanvasSlotArgs sessionSlot(glm::vec2 pos, glm::vec2 size)
+{
+    FCanvasSlotArgs args;
+    args.offset    = pos;
+    args.fixedSize = size;
+    return args;
+}
+
+} // namespace
+
+// A lost release (focus loss, pointer leaving the window, a torn-off pane)
+// used to leave the tree holding a press forever and abort on the next click.
+// The next press proves the release never arrived, so the session is recovered
+// and the click is served.
+TEST(WidgetTreeTest, LostReleaseIsRecoveredInsteadOfEatingTheNextPress)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       widget = std::make_shared<TestPointerSessionWidget>("Session");
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    tree.layout();
+
+    ASSERT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_EQ(tree.getPointerCapture(), widget.get());
+    ASSERT_EQ(tree.getPointerButtonsDown(), 1u << EMouse::Left);
+    ASSERT_EQ(tree.getPointerSessionRecoveries(), 0u);
+
+    // No release in between: the second press is the proof, and it must neither
+    // abort nor be swallowed.
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getPointerSessionRecoveries(), 1u);
+    EXPECT_EQ(widget->cancelCount, 1);
+    EXPECT_EQ(widget->pressCount, 2);
+    EXPECT_EQ(tree.getPointerCapture(), widget.get());
+    EXPECT_EQ(tree.getPointerButtonsDown(), 1u << EMouse::Left);
+
+    // The session still completes normally afterwards.
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(widget->releaseCount, 1);
+    EXPECT_EQ(tree.getPointerButtonsDown(), 0u);
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+    EXPECT_EQ(tree.getPointerSessionRecoveries(), 1u);
+}
+
+// The platform owns the physical state: when it reports no button held, a
+// cached press can never be completed, and the session ends without waiting for
+// a release that is not coming.
+TEST(WidgetTreeTest, PlatformButtonStateReconcilesAStalePress)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       widget = std::make_shared<TestPointerSessionWidget>("Session");
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    tree.layout();
+
+    ASSERT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getPointerCapture(), widget.get());
+
+    // Pointer left the window, no button physically held: the session is over.
+    tree.reconcilePointerButtons(0, "test: pointer left the window");
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+    EXPECT_EQ(tree.getPointerButtonsDown(), 0u);
+    EXPECT_EQ(tree.getPointerSessionRecoveries(), 1u);
+    EXPECT_EQ(widget->cancelCount, 1);
+
+    // Still held down (cross-window drag): the session has to survive.
+    ASSERT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    tree.reconcilePointerButtons(1u << EMouse::Left, "test: focus lost while dragging");
+    EXPECT_EQ(tree.getPointerCapture(), widget.get());
+    EXPECT_EQ(tree.getPointerButtonsDown(), 1u << EMouse::Left);
+    EXPECT_EQ(tree.getPointerSessionRecoveries(), 1u);
+}
+
+// Capture is a promise the framework makes for one press. A widget that keeps
+// it past the release cannot be allowed to eat the next click.
+TEST(WidgetTreeTest, CaptureCannotOutliveItsPress)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       widget = std::make_shared<TestPointerSessionWidget>("Leaky");
+    widget->bReleaseOnRelease = false;
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    tree.layout();
+
+    ASSERT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_EQ(tree.getPointerCapture(), widget.get());
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getPointerButtonsDown(), 0u);
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+    EXPECT_EQ(tree.getPointerSessionRecoveries(), 1u);
+
+    // The next press belongs to the user, not to the leaked capture.
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(widget->pressCount, 2);
+}
+
+// An injected capture with no press could never be ended by a release, so the
+// request is refused rather than armed into the next click.
+TEST(WidgetTreeTest, CaptureWithoutAPressIsRefused)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       widget = std::make_shared<TestPointerSessionWidget>("Idle");
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    tree.layout();
+
+    tree.setPointerCapture(widget.get());
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(widget->pressCount, 1);
+}
+
+// The liveness sweep and the frame-boundary repair both have to fix stale
+// session state instead of aborting a frame over it.
+TEST(WidgetTreeTest, DetachedCaptureAndStaleSessionAreRepairedNotFatal)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       widget = std::make_shared<TestPointerSessionWidget>("Gone");
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), widget, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    tree.layout();
+
+    ASSERT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_EQ(tree.getPointerCapture(), widget.get());
+
+    tree.detach(*widget);
+    // Detach clears the session; a stale capture planted afterwards must still
+    // be repaired by the next dispatch instead of aborting.
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(10.0f, 10.0f), pointAt(10.0f, 10.0f)),
+              EWidgetRouteResult::NotHandled);
+    tree.tick(0.016f);
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+}
+
+// A drag session the platform interrupts (focus loss, pane torn into another
+// window) ends as Cancelled so observers roll back instead of half-applying.
+TEST(WidgetTreeTest, CancelPointerSessionEndsALiveDragSession)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       source = std::make_shared<TestPointerSessionWidget>("Source");
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), source, sessionSlot({100.0f, 100.0f}, {80.0f, 32.0f}));
+    tree.layout();
+
+    int                              finishedCount = 0;
+    EDragFinishResult                finishResult   = EDragFinishResult::NoTarget;
+    DragSessionObserver              observer;
+    observer.onFinished = [&](EDragFinishResult result, const glm::vec2&, std::string_view) {
+        ++finishedCount;
+        finishResult = result;
+    };
+    tree.beginDrag(source.get(), UIDragDropOperation::make("panel", "Panel"), std::move(observer));
+    ASSERT_TRUE(tree.isDragging());
+
+    tree.cancelPointerSession("test: platform stopped delivering the stream");
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_EQ(finishedCount, 1);
+    EXPECT_EQ(finishResult, EDragFinishResult::Cancelled);
+    EXPECT_EQ(tree.getPointerButtonsDown(), 0u);
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+}
+
+namespace
+{
+
 KeyPressedEvent makeKeyPress(EKey::T key, uint32_t mod = 0, bool bRepeat = false)
 {
     KeyPressedEvent ev;

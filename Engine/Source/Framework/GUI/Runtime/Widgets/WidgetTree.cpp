@@ -249,10 +249,10 @@ EWidgetRouteResult WidgetTree::dispatchCapturedPointerEvent(const Event& event,
         return EWidgetRouteResult::NotHandled;
     }
     if (!_captured->isAttached()) {
-        YA_CORE_ASSERT(false,
-                       "WidgetTree: dispatching to detached pointer capture '{}'",
-                       _captured->_name);
+        YA_CORE_WARN("WidgetTree: dropped pointer capture on detached '{}' before dispatch",
+                     _captured->_name);
         _captured = nullptr;
+        ++_pointerSessionRecoveries;
         return EWidgetRouteResult::NotHandled;
     }
 
@@ -781,7 +781,7 @@ void WidgetTree::invalidateLayout(EWidgetLayoutInvalidation scope)
 
 void WidgetTree::tick(float deltaSeconds)
 {
-    assertPointerSessionConsistent();
+    repairPointerSession("tick");
     for (const auto& layer : _layers) {
         tickSubtree(layer.get(), deltaSeconds);
     }
@@ -828,7 +828,7 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 {
     using clock_t = std::chrono::steady_clock;
 
-    assertPointerSessionConsistent();
+    repairPointerSession("buildSnapshot");
     _perfStats = GuiPerfStats{};
 
     // Font atlas / glyph identity lives on FontManager so the render layer
@@ -984,6 +984,9 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     perf.setValue("gui.tree.painted"_name, "count"_name, static_cast<float>(_perfStats.paintedWidgets));
     perf.setValue("gui.tree.rebuilt"_name, "count"_name, static_cast<float>(_perfStats.rebuiltWidgets));
     perf.setValue("gui.tree.items"_name, "count"_name, static_cast<float>(_perfStats.drawItems));
+    perf.setValue("gui.tree.pointer_recoveries"_name,
+                  "count"_name,
+                  static_cast<float>(_pointerSessionRecoveries));
 
     return snapshot;
 }
@@ -1178,10 +1181,16 @@ void WidgetTree::setPointerCapture(UIElement* widget)
         return;
     }
     if (widget) {
-        YA_CORE_ASSERT(_pointerButtonsDown != 0,
-                       "WidgetTree: setPointerCapture('{}') with no mouse button down; "
-                       "injected capture without a press steals the next click",
-                       widget->_name);
+        if (_pointerButtonsDown == 0) {
+            // Capture is the tree's routing promise for a live press; without
+            // one there is no release that could ever end the session, so the
+            // request is refused instead of arming a capture that steals the
+            // next click.
+            YA_CORE_WARN("WidgetTree: refused pointer capture for '{}'; no mouse button is down so "
+                         "no release could end the session",
+                         widget->_name);
+            return;
+        }
     }
     _captured = widget;
 }
@@ -1443,10 +1452,14 @@ void WidgetTree::pruneTransientState()
         _focusPath.clear();
     }
     if (_captured && !_captured->isAttached()) {
-        YA_CORE_ASSERT(false,
-                       "WidgetTree: pointer capture held by detached '{}'; leftover capture steals the next click",
-                       _captured->_name);
+        // Liveness sweep: the capture target is gone, so the session cannot
+        // continue. Repair it and keep the count visible instead of aborting a
+        // frame over input state the platform can no longer complete.
+        YA_CORE_WARN("WidgetTree: dropped pointer capture held by detached '{}'; the session "
+                     "cannot continue",
+                     _captured->_name);
         _captured = nullptr;
+        ++_pointerSessionRecoveries;
     }
     if (_hovered && !_hovered->isAttached()) {
         _hovered = nullptr;
@@ -1470,9 +1483,9 @@ void WidgetTree::pruneTransientState()
 namespace
 {
 
-[[nodiscard]] uint8_t pointerButtonBit(EMouse::T button)
+[[nodiscard]] uint32_t pointerButtonBit(EMouse::T button)
 {
-    return static_cast<uint8_t>(1u << static_cast<uint8_t>(button));
+    return 1u << static_cast<uint8_t>(button);
 }
 
 [[nodiscard]] EMouse::T pointerButtonOf(const Event& event)
@@ -1495,36 +1508,104 @@ void WidgetTree::beginPointerDispatch(const Event& event)
         return;
     }
     const EMouse::T button = pointerButtonOf(event);
-    const uint8_t   bit    = pointerButtonBit(button);
-    YA_CORE_ASSERT((_pointerButtonsDown & bit) == 0,
-                   "WidgetTree: MouseButtonPressed ({}) while that button is still down "
-                   "(capture={}); leftover pointer session steals the first click",
-                   EMouse::toString(button),
-                   _captured ? _captured->_name.c_str() : "<none>");
-    _pointerButtonsDown = static_cast<uint8_t>(_pointerButtonsDown | bit);
+    const uint32_t  bit    = pointerButtonBit(button);
+    if ((_pointerButtonsDown & bit) != 0) {
+        // The platform just delivered a press for a button this tree still
+        // believes is held, so the release in between never reached the tree
+        // (key-focus loss, pointer left the window, the pane was torn into
+        // another window, an injected press). The physical state belongs to
+        // the platform: recover the stale session and serve this press. A lost
+        // release must never eat the click and must never abort the frame.
+        cancelPointerSession(std::string{"re-press of "} + EMouse::toString(button) +
+                             " with no release in between");
+    }
+    _pointerButtonsDown |= bit;
 }
 
 void WidgetTree::endPointerDispatch(const Event& event)
 {
     if (event.getEventType() == EEvent::MouseButtonReleased) {
-        const uint8_t bit = pointerButtonBit(pointerButtonOf(event));
-        _pointerButtonsDown = static_cast<uint8_t>(_pointerButtonsDown & ~bit);
+        _pointerButtonsDown &= ~pointerButtonBit(pointerButtonOf(event));
     }
-    assertPointerSessionConsistent();
+    repairPointerSession("pointer dispatch");
 }
 
-void WidgetTree::assertPointerSessionConsistent() const
+void WidgetTree::cancelPointerSession(std::string_view cause)
+{
+    const bool bHasSession = _pointerButtonsDown != 0 || _captured != nullptr || isDragging() ||
+                             _dragCandidate != nullptr;
+    if (!bHasSession) {
+        return;
+    }
+
+    ++_pointerSessionRecoveries;
+
+    if (isDragging()) {
+        // Observers (DockSpace / TreeView / Designer) learn the session ended
+        // without a drop, so they roll back instead of keeping a half-drop.
+        cancelDrag();
+    }
+    _dragCandidate = nullptr;
+
+    if (_captured) {
+        UIElement* captured = _captured;
+        _captured           = nullptr;
+        if (captured->isAttached()) {
+            // The widget never saw a release: hand it the one terminal
+            // notification the framework promises for a cancelled session.
+            captured->clearTransientInputState();
+        }
+    }
+
+    _pointerButtonsDown = 0;
+    clearPointerOverState();
+
+    YA_CORE_WARN("WidgetTree: cancelled the live pointer session ({}); a release the platform "
+                 "never delivered would otherwise poison the next click",
+                 cause);
+}
+
+void WidgetTree::reconcilePointerButtons(uint32_t osButtonsDown, std::string_view cause)
+{
+    if (osButtonsDown == _pointerButtonsDown) {
+        return;
+    }
+    if (osButtonsDown != 0) {
+        // A button is still physically held: the session may legitimately
+        // continue (cross-window capture / drag). Nothing to repair.
+        return;
+    }
+    // The platform holds no button, so every press this tree cached is over —
+    // whether or not its release was ever delivered.
+    cancelPointerSession(cause);
+}
+
+void WidgetTree::repairPointerSession(std::string_view where)
 {
     if (!_captured) {
         return;
     }
-    YA_CORE_ASSERT(_captured->isAttached(),
-                   "WidgetTree: pointer capture held by detached '{}'",
-                   _captured->_name);
-    YA_CORE_ASSERT(_pointerButtonsDown != 0,
-                   "WidgetTree: pointer capture held by '{}' with no mouse button down; "
-                   "the next click would be eaten",
-                   _captured->_name);
+    if (!_captured->isAttached()) {
+        YA_CORE_WARN("WidgetTree: dropped pointer capture held by detached '{}' ({}); the "
+                     "session cannot continue",
+                     _captured->_name,
+                     where);
+        _captured = nullptr;
+        ++_pointerSessionRecoveries;
+        return;
+    }
+    if (_pointerButtonsDown == 0) {
+        // Capture cannot outlive its press: every button is up, so no widget
+        // is still driving a gesture that needs the capture. A widget that
+        // keeps capture past the release is dropped here so it cannot eat the
+        // next click.
+        YA_CORE_WARN("WidgetTree: '{}' still held pointer capture with every button up ({}); "
+                     "capture released by the framework",
+                     _captured->_name,
+                     where);
+        _captured = nullptr;
+        ++_pointerSessionRecoveries;
+    }
 }
 
 void WidgetTree::beginRouteTrace(EWidgetRoutePolicy policy, UIElement* target)

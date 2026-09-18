@@ -13,6 +13,10 @@ struct FOsMouseQuery
     uint32_t windowID   = 0;
     float    x          = 0.0f;
     float    y          = 0.0f;
+    /// Physically held buttons, encoded `1u << EMouse::T` (the encoding
+    /// WidgetTree's pointer session uses). Zero means every button is up, which
+    /// is how a host proves a cached press the platform already ended is dead.
+    uint32_t buttonMask = 0;
     bool     bHasWindow = false;
     bool     bValid     = false;
 };

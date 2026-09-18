@@ -122,12 +122,20 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   persistent pointer state、pointer path、focus path 和 route trace；`WidgetTreeDump`
   输出 `pointer`、`focusPath`、`lastRoute`（policy/path/phase/handled/result）。route callback
   可 detach 自身，executor 会持有 path 并重查 membership。
-  **Pointer session 不变量（违反即 `YA_CORE_ASSERT` 崩溃，不要静默吞第一次点击）：**
-  capture 只在对应鼠标键仍按下时存在；同一键第二次 `MouseButtonPressed` 而第一次
-  的 release 丢失、或 capture 握在已 detach 的控件上、或 `UISplitPane` 的 capture 与
-  `_bDraggingDivider` 分叉、或 `UIDockSpace` 在 capture 仍落在 dock 子树里时
-  `syncProjection(Structure)`，都是“要点两下才有反应”的根因。禁止用“divider 外
-  再按一次放 capture”当修复。标题 Client 洞必须在 `buildSnapshot`（layout）之后发布。
+  **Pointer session 所有权（平台是物理状态的事实来源，框架不允许被它拖垮）：** press
+  打开 session，session 只能以 release 或 cancel 结束。release 路由结束后框架自己回收
+  仍被握住的 capture（`repairPointerSession`），控件不需要在每条路径上记得释放；没有
+  press 的 `setPointerCapture` 直接拒绝。平台可能永远不投递 release（key focus 丢失、
+  指针离开窗口、pane 被撕成另一个窗口、注入 press）：`WindowFocusLost` /
+  `WindowMouseLeave` 时 host 用 `FOsMouseQuery::buttonMask`（`1u << EMouse::T` 编码）调
+  `WidgetTree::reconcilePointerButtons`，同键第二次 press 时树自己
+  `cancelPointerSession`（计数见 `getPointerSessionRecoveries()` /
+  `gui.tree.pointer_recoveries`），并给 capture 控件一次 `clearTransientInputState()`；
+  cancel 也必须结束 drag session（observer 收到 `EDragFinishResult::Cancelled`）。
+  禁止把这类丢失 release 当成 `YA_CORE_ASSERT` 崩溃、静默吞第一次点击，或用“divider 外
+  再按一次放 capture”当修复。另一条仍然成立的根因：`UIDockSpace` 在 capture 落在 dock
+  子树里时 `syncProjection(Structure)`。标题 Client 洞必须在 `buildSnapshot`（layout）
+  之后发布。
   drag&drop 的 source-local 状态（`beginDrag/updateDrag/endDrag/cancelDrag`、payload、ghost、observer）由树管理，唯一入口是
   `beginDrag(source, UIDragDropOperationRef)`。跨窗的 source/hover window 身份由 host `GUIDragRouter` 唯一持有。基类带通用 `payload` slot；领域拖拽
   继承加字段（`FDockPanelDragDropOp` / `FTreeReorderDragDropOp`）。目标用

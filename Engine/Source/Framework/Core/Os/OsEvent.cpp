@@ -14,6 +14,20 @@ namespace ya
 namespace
 {
 
+/// SDL reports buttons as `1 << (button - 1)`; the engine's pointer session
+/// indexes them as `1 << EMouse::T` so tree state and platform state compare
+/// directly.
+[[nodiscard]] uint32_t mouseButtonMask(uint32_t sdlMask)
+{
+    uint32_t mask = 0;
+    for (uint8_t button = EMouse::Left; button <= EMouse::X2; ++button) {
+        if ((sdlMask & (1u << (button - 1))) != 0) {
+            mask |= 1u << button;
+        }
+    }
+    return mask;
+}
+
 void emitSdlEvent(const SDL_Event& event, const std::function<void(const Event&)>& emit)
 {
     switch (event.type) {
@@ -159,7 +173,7 @@ FOsMouseQuery OsEventPump::queryMouse()
     query.bHasWindow = true;
     query.bValid     = true;
     query.windowID   = SDL_GetWindowID(focusedWindow);
-    SDL_GetMouseState(&query.x, &query.y);
+    query.buttonMask = mouseButtonMask(SDL_GetMouseState(&query.x, &query.y));
 #endif
     return query;
 }
@@ -168,8 +182,8 @@ FOsMouseQuery OsEventPump::queryGlobalMouse()
 {
     FOsMouseQuery query;
 #if USE_SDL
-    SDL_GetGlobalMouseState(&query.x, &query.y);
-    query.bValid = true;
+    query.buttonMask = mouseButtonMask(SDL_GetGlobalMouseState(&query.x, &query.y));
+    query.bValid     = true;
 #endif
     return query;
 }

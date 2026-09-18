@@ -2,6 +2,7 @@
 
 #include "Core/Input/InputManager.h"
 #include "Core/KeyCode.h"
+#include "Core/Os/OsEvent.h"
 #include "GUI/Host/GUIDragRouter.h"
 #include "GUI/Host/GUIWindowManager.h"
 #include "GameEditor/EditorLayer.h"
@@ -376,6 +377,14 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
 void EditorInputNode::cancelInput(FInputRouteContext& context, EInputCancelReason reason)
 {
     (void)context;
+
+    if (reason == EInputCancelReason::PointerLeftWindow) {
+        // Narrow cancel: the pointer stream stopped, the keyboard did not. Held
+        // keys must survive the pointer leaving the viewport.
+        reconcilePointerSessionsWithPlatform(reason);
+        return;
+    }
+
     _bLooking     = false;
     _bFeedingKeys = false;
     // Focus leaving a window is how a unique pointer drag crosses OS windows.
@@ -384,8 +393,38 @@ void EditorInputNode::cancelInput(FInputRouteContext& context, EInputCancelReaso
                         reason == EInputCancelReason::AppStateChanged)) {
         _dragRouter->cancel();
     }
+    if (reason == EInputCancelReason::WindowFocusLost) {
+        reconcilePointerSessionsWithPlatform(reason);
+    }
     if (_app) {
         _app->getInputManager().cancelInput();
+    }
+}
+
+void EditorInputNode::reconcilePointerSessionsWithPlatform(EInputCancelReason reason)
+{
+    // Key focus loss and the pointer leaving the window both end the delivery
+    // of the platform's pointer stream to a session that never captured the
+    // mouse. A press whose button is already physically up can therefore never
+    // receive its release: the tree compares its cached session against the
+    // real state and cancels the stale one, instead of holding a click that
+    // never ended (what used to abort on the next press). A session whose
+    // button is still held stays alive, which is how a drag crosses OS windows.
+    const uint32_t osButtons = OsEventPump::queryGlobalMouse().buttonMask;
+    const std::string_view cause =
+        reason == EInputCancelReason::WindowFocusLost ? "editor window lost key focus"
+                                                     : "pointer left the editor window";
+    if (_windows) {
+        _windows->forEach([&](EditorWindowSession& window) {
+            if (WidgetTree* tree = window.tree()) {
+                tree->reconcilePointerButtons(osButtons, cause);
+            }
+        });
+    }
+    if (_app) {
+        if (GameUIHost* host = _app->getGameUIHost(); host && host->getMountedScene()) {
+            host->getTree().reconcilePointerButtons(osButtons, cause);
+        }
     }
 }
 

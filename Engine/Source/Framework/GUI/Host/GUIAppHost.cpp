@@ -485,6 +485,11 @@ struct SdlEventSource final : IAppEventSource
                 leave._windowID = leaveEvent.getWindowID();
                 emit(leave);
                 bPointerKnown = false;
+                // The leave itself still has to reach the app: it is the
+                // boundary where a pointer session the platform will not
+                // release any more has to be reconciled against the physical
+                // button state (the far-pointer move above only clears hover).
+                emit(leaveEvent);
                 break;
             }
             case EEvent::MouseMoved:
@@ -1012,6 +1017,21 @@ void GUIWindowHost::onEvent(const Event& event)
         _impl->bWindowMinimized = true;
         _impl->bSwapchainRecreatePending = true;
         return;
+    case EEvent::WindowFocusLost:
+    case EEvent::WindowMouseLeave: {
+        // Key focus loss and the pointer leaving this window both stop the
+        // platform from delivering the pointer stream it started here. Compare
+        // the tree's cached press against the physical button state: a press
+        // whose button is already up can never be completed, and leaving it
+        // armed is what turns the next click into a crash.
+        const bool bFocusLost = event.getEventType() == EEvent::WindowFocusLost;
+        if (_impl->tree) {
+            _impl->tree->reconcilePointerButtons(
+                OsEventPump::queryGlobalMouse().buttonMask,
+                bFocusLost ? "window lost key focus" : "pointer left the window");
+        }
+        return;
+    }
     case EEvent::WindowRestore:
         _impl->bWindowMinimized = false;
         _impl->bSwapchainRecreatePending = true;
