@@ -210,10 +210,6 @@ void App::init(AppDesc ci)
         .renderDocCaptureOutputDir = app._ci.renderDocCaptureOutputDir,
     });
     app._renderState->coordinator = std::make_unique<RenderFrameCoordinator>(*app._renderState->device);
-    app._renderState->hostView.viewportRect = Rect2D{
-        .pos    = {0.0f, 0.0f},
-        .extent = {static_cast<float>(app._ci.width), static_cast<float>(app._ci.height)},
-    };
     // The game viewport is one of the view owners; the App keeps the list it
     // collects from each tick (the editor registers its own on attach).
     app._gameViewProducer.bind(app);
@@ -230,6 +226,18 @@ void App::init(AppDesc ci)
         app._windowSize.y = static_cast<float>(winH);
         app.inputRouter.setWindow(render->primaryWindow());
     }
+
+    // Seed the host viewport geometry through the render services so the field
+    // has a single write path: this init-time seed and the automation control
+    // plane both go through AppRenderServices::setViewportRect, and the tick's
+    // only writer is declareViews (see HostViewState.h).
+    // The size the window was created with wins; a surface created without one is
+    // sized by the window it actually got.
+    app.getRenderServices().setViewportRect(Rect2D{
+        .pos    = {0.0f, 0.0f},
+        .extent = {app._ci.width > 0 ? static_cast<float>(app._ci.width) : app._windowSize.x,
+                   app._ci.height > 0 ? static_cast<float>(app._ci.height) : app._windowSize.y},
+    });
 
     app._sceneManager = new SceneManager();
     // Scene registers itself with the lifecycle host through the injected

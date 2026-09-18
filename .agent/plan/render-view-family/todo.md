@@ -10,10 +10,10 @@
 - [x] 删 `resolveViewportExtent` 与 `SceneViewCollectContext::viewportExtent`：host camera aspect 直接读 `hostView.viewportRect.extent`，logic 段不再读上一 tick 发布的 device extent。
 - [x] 删主机 screen-overlay 通道（整条 pass）：`FramePacket::OverlayInput` / `overlay`、`RenderViewportOverlaySnapshot`、`recordRenderViewportOverlayPass`、`prepareRenderViewportOverlayPipeline`、`RenderOverlay.cpp`、Forward/Deferred 的 overlay pass 与 `perf::sample::renderViewportOverlay()`。
 - [x] `tickRender` 每一步自己持有自己的存储：`declareViews` 收回 collector 并删掉没人用的返回指针；`buildGameRenderFrame -> TickFrame`（自带 UI snapshot，`boundFrame()` 在读取时绑定 packet 指针）；`hostViewDesc` 局部指针消失。顺带把头文件里已死的 `RenderOverlay.h` include 与三个过期前向声明删掉。
+- [x] `HostViewState` 每个字段一个写者：`prepareHostViewState` 只写 `clock`（退化几何修补搬到 init 种子），identity 与生效几何的唯一每帧写者是 `declareViews`（含"没人声明 host viewport"分支），请求侧只有 `AppRenderServices::setViewportRect` 一条路径（init 也走它）；`HostViewState.h` 列出写者表。
 
 下一批次（各自独立可验收，按此顺序）：
 
-- [ ] `HostViewState` 单一写者：今天 4 个写者 / 3 个文件（`AppLifecycle.cpp`、`AppRenderServices::setViewportRect`、`prepareHostViewState` 的 identity reset + `declareViews` 覆盖）。
 - [ ] 公开 `Renderer` 合并（4.0.3 checkpoint 2/3）：合并 `RenderDeviceState` + `RenderFrameCoordinator`，删 `friend struct RenderFrameCoordinator` 与 5 处 `_device->_` 私有写入；`record()` 拆成 `prepareFrame()` / `recordFrame()`。
 
 ## V 系列（隐式驱动收口，见 plan 附.1–附.4）

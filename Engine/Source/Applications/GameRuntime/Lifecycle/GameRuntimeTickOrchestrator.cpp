@@ -249,26 +249,19 @@ void GameRuntimeTickOrchestrator::prepareHostViewState(App& app, float dt)
 {
     (void)dt;
 
-    // Host geometry only: the surface area a view renders into, its framebuffer
-    // scale and the clock. The world camera is not host state; whichever
-    // producer declares the primary view supplies it (see tickRender).
+    // The clock is the only host fact this step owns. Geometry and camera belong
+    // to declareViews, which is their single per-tick writer (see
+    // HostViewState.h for the full writer map); resetting them here as well
+    // would make the tick's final value readable only by reading both steps.
     HostViewState& hostView = app._renderState->hostView;
     if (!app.getRenderServices().getDeviceState()) {
+        // No renderer: there is no host view this tick, not even a clock.
         hostView = {};
         return;
     }
 
     hostView.clock.hostTick      = App::currentHostTick();
     hostView.clock.elapsedTimeMS = app.getElapsedTimeMS();
-    hostView.view       = glm::mat4(1.0f);
-    hostView.projection = glm::mat4(1.0f);
-    hostView.cameraPos  = glm::vec3(0.0f);
-    if (hostView.viewportRect.extent.x <= 0.0f || hostView.viewportRect.extent.y <= 0.0f) {
-        hostView.viewportRect = Rect2D{
-            .pos    = {0.0f, 0.0f},
-            .extent = app._windowSize,
-        };
-    }
 }
 
 uint32_t GameRuntimeTickOrchestrator::resolveFlightIndex(const App& app)
@@ -397,6 +390,12 @@ void GameRuntimeTickOrchestrator::declareViews(App& app, float dt, RenderDeviceS
     // structural predicate the plan uses for its display root -- matching a
     // well-known view id here would be a second definition of "the host view"
     // that can disagree with it.
+    //
+    // This is the only per-tick writer of the host camera and of the resolved
+    // geometry: the request `AppRenderServices::setViewportRect` seeded stands
+    // until a View claims the host viewport, and no View claiming it this tick
+    // means "no host camera" rather than "keep the previous one".
+    bool bHostViewportDeclared = false;
     for (const SceneViewDesc& view : collector.views()) {
         if (!view.ownsHostViewport()) {
             continue;
@@ -409,7 +408,13 @@ void GameRuntimeTickOrchestrator::declareViews(App& app, float dt, RenderDeviceS
         hostView.cameraPos  = view.cameraPos;
         hostView.viewportRect = view.viewportRect;
         device->applyViewportResize(view.viewportRect);
+        bHostViewportDeclared = true;
         break;
+    }
+    if (!bHostViewportDeclared) {
+        hostView.view       = glm::mat4(1.0f);
+        hostView.projection = glm::mat4(1.0f);
+        hostView.cameraPos  = glm::vec3(0.0f);
     }
 }
 

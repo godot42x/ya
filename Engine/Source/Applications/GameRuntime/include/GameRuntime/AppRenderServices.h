@@ -48,7 +48,16 @@ class YA_GAME_RUNTIME_API AppRenderServices
     [[nodiscard]] bool                                   wasSceneRenderedLastTick(const Scene* scene) const;
     void                                                 setViewportFrameBufferScale(float scale);
     [[nodiscard]] float                                  getViewportFrameBufferScale() const;
+    /// The host's request for its viewport geometry: seeded once from the window
+    /// the surface was created with and overridden by the control plane. It is
+    /// one of the two writers of `HostViewState::viewportRect`; the other is
+    /// `GameRuntimeTickOrchestrator::declareViews`, which replaces it with the
+    /// rect the View owning the host viewport declares. Do not use it as "the
+    /// geometry in effect" - read getViewportRect() for that.
     void                                                 setViewportRect(Rect2D rect);
+    /// Geometry in effect for the host viewport (the declaration when a View owns
+    /// it, otherwise the request). Reporting and control-plane read-modify-write
+    /// use this; a caller that wants to size a View declares that View's rect.
     [[nodiscard]] Rect2D                                 getViewportRect() const;
     [[nodiscard]] ShadowSettings&                        getShadowSettings();
     [[nodiscard]] const ShadowSettings&                  getShadowSettings() const;

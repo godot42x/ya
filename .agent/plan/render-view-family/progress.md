@@ -1,5 +1,62 @@
 # Progress
 
+## 2026-09-19 checkpoint：HostViewState 每个字段一个写者
+
+`todo.md`「逻辑→渲染链减法」批次第 2 项。改之前 `HostViewState` 有 4 个写者、跨 3 个文件：
+`AppLifecycle.cpp` 的初值、`AppRenderServices::setViewportRect`（控制面）、`prepareHostViewState`
+的"reset identity + 退化时用窗口尺寸补"、以及 `declareViews` 的覆盖。于是"这一帧最终的 host view
+是什么"必须把 tick 按顺序读一遍才能拼出来，而且同一个字段在同一帧里被先写后覆盖。
+
+### 改法：把"每帧写"和"请求"分开，每类只剩一个写者
+
+| 字段 | 写者 |
+| --- | --- |
+| `clock` | `prepareHostViewState`（每帧一次） |
+| `viewportFrameBufferScale` | `AppRenderServices::setViewportFrameBufferScale` |
+| `viewportRect` / `view` / `projection` / `cameraPos` | `declareViews`（每帧一次）：采用 host viewport View 的声明；这一帧没人声明就丢弃相机、保留请求几何 |
+| `viewportRect`（请求侧） | `AppRenderServices::setViewportRect`：初值 + 控制面，只有这一条写入路径 |
+
+具体三处：
+
+1. `prepareHostViewState` 只写 `clock`（以及"没有 renderer 就整体清空"这一个明确情形）。原先
+   每帧先 reset identity 再等 `declareViews` 覆盖，是同一帧内的两次写；现在 identity 的唯一写者是
+   `declareViews`——它在"没人声明 host viewport"分支里写 identity，即把原来的 reset 挪到它真正
+   表达意思的地方（不是"先清空"，而是"这一帧没有 host 相机"）。
+2. 退化几何的修补从每帧搬到 **init 的种子**：`CI 给的窗口尺寸 > 0 ? CI : 窗口实际尺寸`。原来的
+   `prepareHostViewState` 分支只在 `extent <= 0` 时用 `_windowSize` 补，而 init 之后请求恒非零，
+   所以那段在正常运行里永远不可达（与上一刀删掉的 `resolveViewportExtent` 是同一类"恒非空分支"）。
+   现在它在唯一能同时知道这两个尺寸的地方（窗口创建并查询到实际尺寸之后）解析一次。下游
+   `RenderDeviceState::applyViewportResize` 本来就会忽略退化 rect，所以不需要每帧再兜底。
+3. `AppLifecycle` 不再直接写 `hostView.viewportRect`，改走 `AppRenderServices::setViewportRect`：
+   请求侧因此只有一条写入路径（调用方是 init 与控制面 automation 两处，函数只有一个）。
+
+`HostViewState.h` 顶部的注释现在直接列出这张"谁写哪个字段"的表——这一刀真正的产物是"不用读 tick
+就能回答谁设置了这个值"，而不只是少了一次赋值。
+
+### 验证
+
+| 检查 | 结果 |
+| --- | --- |
+| `xmake b` | `ya-game-runtime` / `ya-runtime` / `ya-engine` / `ya-game-editor` 全部 ok |
+| `ya-testing` 渲染/编辑器滤镜 | 282 passed / 3 failed，与基线同 3 个 |
+| HelloMaterial viewport 截图 | exit=0，`md5=1c6668976be1cdd5d755d1f1365700f7` **逐字节相同** |
+| run-editor viewport 截图 | exit=0，`md5=5b8f5dd8acdbc90bd5c383feb3f7bcec` **逐字节相同** |
+| `Script/automation/editor/run_widgettree_editor_smoke.py --skip-build` | 六步全过（含"viewport_rect 非退化"与"设置编辑器相机"） |
+
+这一个 smoke 脚本正好断言 `get_world_view_state` 返回的 `viewport_rect` 非退化，也就是这次改动的
+目标值本身；它通过说明"声明 → 生效几何"这条链在编辑器路径上仍然成立。
+
+### 行为差异（零）
+
+刻意保持的语义：声明存在时采用声明；声明不存在时**保留请求几何**（编辑器 2D 画布模式今天也是这样），
+只把相机换成 identity。运行时模式下 game producer 回显 `context.viewportRect`，而该值在 tick 顶部
+就是请求本身，因此第一帧与后续帧同值——两张截图逐字节相同正是这条的验证。
+
+### 本刀边界
+
+- 未做：公开 `Renderer` 合并（4.0.3 checkpoint 2/3）：`friend struct RenderFrameCoordinator`、
+  5 处 `_device->_` 私有写入、`record()` 的"录制前准备 / 录制"两段尚未拆开。
+
 ## 2026-09-19 checkpoint：tickRender 的每一步自己持有自己的存储
 
 接同一天上一刀（删 overlay 通道 + per-tick 后端查询）。这一刀是 `todo.md`「逻辑→渲染链减法」批次的
