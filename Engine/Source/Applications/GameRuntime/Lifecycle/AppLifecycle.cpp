@@ -51,7 +51,6 @@
 #include "RHI/NativeWindow.h"
 #include "GUI/Host/NativeWindowManager.h"
 #include "Render3D/RenderDeviceState.h"
-#include "Render3D/RenderFrameCoordinator.h"
 
 #include <format>
 #include <csignal>
@@ -209,7 +208,6 @@ void App::init(AppDesc ci)
         .renderDocDllPath = app._ci.renderDocDllPath,
         .renderDocCaptureOutputDir = app._ci.renderDocCaptureOutputDir,
     });
-    app._renderState->coordinator = std::make_unique<RenderFrameCoordinator>(*app._renderState->device);
     // The game viewport is one of the view owners; the App keeps the list it
     // collects from each tick (the editor registers its own on attach).
     app._gameViewProducer.bind(app);
@@ -535,9 +533,6 @@ void App::quit()
     // ("Unfreed dedicated allocations found" assertion).
     AssetManager::get()->clearTextures();
 
-    if (app._renderState->coordinator) {
-        app._renderState->coordinator.reset();
-    }
     if (app._renderState->device) {
         app._renderState->device->shutdown(/*bRenderAlreadyIdle=*/true);
         app._renderState->device.reset();

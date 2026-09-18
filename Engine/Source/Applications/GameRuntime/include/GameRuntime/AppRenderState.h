@@ -8,7 +8,6 @@
 #include "GameRuntime/HostViewState.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/RenderDeviceState.h"
-#include "Render3D/RenderFrameCoordinator.h"
 
 #include <array>
 #include <memory>
@@ -21,7 +20,6 @@ namespace ya
 struct AppRenderState
 {
     std::unique_ptr<RenderDeviceState>      device;
-    std::unique_ptr<RenderFrameCoordinator> coordinator;
     ShadowSettings                          shadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
     bool                                    bRenderMirror  = false;
     /// Host geometry for the product view: the surface area a view renders into

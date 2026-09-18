@@ -14,7 +14,7 @@
 
 下一批次（各自独立可验收，按此顺序）：
 
-- [ ] 公开 `Renderer` 合并（4.0.3 checkpoint 2/3）：合并 `RenderDeviceState` + `RenderFrameCoordinator`，删 `friend struct RenderFrameCoordinator` 与 5 处 `_device->_` 私有写入；`record()` 拆成 `prepareFrame()` / `recordFrame()`。
+- [x] 公开 `Renderer` 合并（4.0.3 checkpoint 2/3）：`record` / `recordViewFamilies` / `prepareFrameRecord` 移入 `RenderDeviceState`，`friend` 与 5 处 `_device->_` 私有写入删除，`RenderFrameCoordinator.{h,cpp}` 整文件删除；App 侧 `AppRenderState::coordinator` 与 `AppRenderServices::getFrameCoordinator()` 删除。顺带修掉 unity build 掩盖的 `RenderStageContext` include 缺口。**未做**：`RenderSubmission` 拆 `FrameRecording` / `FrameFlightResources`、4.0.3 checkpoint 5（owner-scoped `SceneViewKey`）。
 
 ## V 系列（隐式驱动收口，见 plan 附.1–附.4）
 

@@ -33,7 +33,6 @@
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/RecordedFrame.h"
 #include "Render3D/RenderDeviceState.h"
-#include "Render3D/RenderFrameCoordinator.h"
 #include "Render3D/Material/Material.h"
 #include "GameRuntime/Lifecycle/HostSceneExtract.h"
 #include "GameRuntime/Utility/RenderFrameExtractor.h"
@@ -284,9 +283,8 @@ uint32_t GameRuntimeTickOrchestrator::resolveFlightIndex(const App& app)
 
 void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
 {
-    auto* device      = app.getRenderServices().getDeviceState();
-    auto* coordinator = app.getRenderServices().getFrameCoordinator();
-    if (!device || !coordinator) {
+    auto* device = app.getRenderServices().getDeviceState();
+    if (!device) {
         return;
     }
 
@@ -350,7 +348,7 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         return;
     }
 
-    const RecordedFrame recorded = recordFrame(app, *coordinator, dt, std::move(sceneRender), gameFrame, presentFrame);
+    const RecordedFrame recorded = recordFrame(app, *device, dt, std::move(sceneRender), gameFrame, presentFrame);
     submitRecordedFrame(app, presentFrame, recorded);
     app.presentModuleExtras(dt);
 }
@@ -505,13 +503,13 @@ GameRuntimeTickOrchestrator::TickFrame GameRuntimeTickOrchestrator::buildGameRen
 }
 
 RecordedFrame GameRuntimeTickOrchestrator::recordFrame(App&                    app,
-                                                       RenderFrameCoordinator& coordinator,
+                                                       RenderDeviceState&      device,
                                                        float                   dt,
                                                        ExtractedSceneRender    sceneRender,
                                                        TickFrame&              frame,
                                                        const FPresentFrame&    presentFrame)
 {
-    return coordinator.record(RenderFramePlan{
+    return device.record(RenderFramePlan{
         .sceneRender = std::move(sceneRender),
         .frame = frame.boundFrame(),
         .viewCompose = {

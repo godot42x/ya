@@ -9,6 +9,7 @@
 #include "RHI/Shader.h"
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/RenderFrameInputs.h"
+#include "Render3D/Common/RecordedFrame.h"
 #include "Render3D/Common/RenderSubmission.h"
 #include "Render3D/Common/RenderViewOutput.h"
 #include "Render3D/Common/PostProcessingState.h"
@@ -50,14 +51,18 @@ struct RenderFrameData;
 struct RenderViewSceneResources;
 struct DebugRenderSystem;
 struct Node;
-struct RenderFrameCoordinator;
 
-/// Device-lifetime backend, persistent renderer services, and fence-safe
-/// mutations. Does not record a frame and does not locate the active Scene.
+/// Device-lifetime backend, persistent renderer services, fence-safe mutations,
+/// and one frame's recording. The single owner of the recording: consuming a
+/// sealed plan and writing commands into a submission are the same lifetime, so
+/// `record` lives here instead of on a second object that would have to reach
+/// back into this one for the submission table, the presentation graph and the
+/// pipeline. Does not own the backend's swapchain and does not locate the active
+/// Scene; every View binds its own Scene, and `record` accepts only an
+/// `ExtractedSceneRender`, so a plan whose Scene content was never extracted
+/// cannot be recorded.
 struct YA_RENDER_3D_API RenderDeviceState
 {
-    friend struct RenderFrameCoordinator;
-
     using ERenderPipeline = PipelineCoordinator::ERenderPipeline;
 
     struct InitDesc
@@ -109,6 +114,13 @@ struct YA_RENDER_3D_API RenderDeviceState
 
     void init(const InitDesc& desc);
     void shutdown(bool bRenderAlreadyIdle = false);
+
+    /// Records graphics → UI → view compose → display compose for one sealed
+    /// plan and returns what the host submits. The caller must already have
+    /// acquired `plan.present` and submits what comes back: the recorded
+    /// command buffer, or an empty frame when the result is invalid (see
+    /// RecordedFrame).
+    [[nodiscard]] RecordedFrame record(const RenderFramePlan& plan);
 
     /// Safe-point mutation: pipeline RT specs. Call before command recording.
     void applyViewportResize(Rect2D rect);
@@ -180,6 +192,16 @@ struct YA_RENDER_3D_API RenderDeviceState
     void requestRenderTargetFormat(const RenderTargetFormatCommand& command);
 
   private:
+    void recordViewFamilies(const RenderFramePlan& plan);
+    /// Everything that mutates pipeline state or prepares GPU resources for this
+    /// plan, before the command buffer opens: derived state for each Scene this
+    /// plan renders, pending mutations, the display root's viewport resize,
+    /// compose pipeline prep, each View's Scene-keyed GPU bindings, and the Game
+    /// UI compose pipeline when the plan carries a UI snapshot. Split from
+    /// `record` so "what happens before recording" and "what is recorded" are
+    /// two readable steps instead of one 170-line function.
+    void prepareFrameRecord(const RenderFramePlan& plan, const SceneViewportTask* displayRoot);
+
     void                   initRuntimeState(const InitDesc& desc);
     void                   initShaderSystems();
     void                   initDiagnostics(const InitDesc& desc);

@@ -1,5 +1,56 @@
 # Progress
 
+## 2026-09-19 checkpoint：合并成公开 Renderer（4.0.3 checkpoint 2/3）
+
+`todo.md`「逻辑→渲染链减法」批次第 3 项，也是 4.0.3 原文的 checkpoint 2/3。`RenderDeviceState`
+（device 生命周期 + 持久服务 + fence-safe 变更）与 `RenderFrameCoordinator`（消费已封口 plan 并录制）
+被 `friend struct RenderFrameCoordinator;` 缝在一起：coordinator 有 **5 处**
+`_device->_submissions` / `_device->_presentationGraphService` 的私有写入。两个对象共用同一份
+生命周期（coordinator 只持一个 `RenderDeviceState*`，从不独立存在），所以那一行 friend 与 5 处越界
+读的净收益是零。
+
+### 做法：录制回到拥有它的那个对象
+
+- `record(RenderFramePlan) -> RecordedFrame`、`recordViewFamilies(plan, cmdBuf)`、
+  `prepareFrameRecord(plan, displayRoot)` 移入 `RenderDeviceState`；头文件里留了它为什么属于这里的
+  一句话（"消费已封口 plan" 与 "往 submission 里写命令" 是同一条生命周期），以及"它不拥有
+  swapchain、不定位 active Scene"的边界。
+- 删掉 `friend struct RenderFrameCoordinator;`；5 处 `_device->_` 变成直接成员访问。
+- `RenderFrameCoordinator.{h,cpp}` 整文件删除。
+- App 侧：`AppRenderState::coordinator` 字段、`AppRenderServices::getFrameCoordinator()`、
+  `AppLifecycle` 的构造与 teardown 分支全部删除；`tickRender` 与 `recordFrame` 的形参从
+  `RenderFrameCoordinator&` 改成 `RenderDeviceState&`。
+- 顺带把 `record()` 拆成两段：`prepareFrameRecord()`（录制前的 7 步：derived state / pending
+  mutations / display root resize / compose pipeline prep / per-View scene resources / Game UI compose
+  pipeline）+ `record()`（拿 cmdBuf、world、publish identity、insets、UI compose、display compose、
+  keepalive、seal）。原函数 171 行里"改状态"和"录命令"混在一起，正是 4.0.3 里 I4
+  （"safe point 是一条没写下来的约定"）的那条。
+
+### 一个被 unity build 掩盖的 include 缺口
+
+搬动 `RenderFrameCoordinator.cpp` 的 include 集合后，`ya-render-3d` 报了
+`ForwardViewportLitPasses.cpp:139: member access into incomplete type 'const RenderStageContext'`。
+这不是本次改动引入的：这两个 .cpp 读 `RenderStageContext` 成员，但只通过自己的头拿到前向声明，
+过去靠 unity 批次里别的 .cpp 先 include 了 `Stage/IRenderStage.h` 才编过。修法是给
+`ForwardViewportLitPasses.cpp` 与 `ForwardViewportUnlitPass.cpp` 补上该 include（并注明原因），
+而不是靠调整批次顺序躲开。
+
+### 验证
+
+| 检查 | 结果 |
+| --- | --- |
+| `xmake b` | `ya-render-3d` / `ya-game-runtime` / `ya-game-editor` / `ya-testing` / `ya-render-3d-test` / `ya-runtime` / `ya-engine` / `GUIWorkbench` 全部 ok |
+| `ya-render-3d-test` | 175/175 |
+| `ya-testing` 渲染/编辑器滤镜 | 282 passed / 3 failed，与基线同 3 个 |
+| HelloMaterial viewport 截图 | exit=0，0 error，`md5=1c6668976be1cdd5d755d1f1365700f7` **逐字节相同** |
+| run-editor viewport 截图 | exit=0，0 error，`md5=5b8f5dd8acdbc90bd5c383feb3f7bcec` **逐字节相同** |
+
+### 本刀边界
+
+- `RenderSubmission` 拆成 `FrameRecording` / `FrameFlightResources`（todo 里 4.0.3 的另一半）
+  未做。
+- 4.0.3 checkpoint 5（owner-scoped `SceneViewKey`）未做。
+
 ## 2026-09-19 checkpoint：HostViewState 每个字段一个写者
 
 `todo.md`「逻辑→渲染链减法」批次第 2 项。改之前 `HostViewState` 有 4 个写者、跨 3 个文件：

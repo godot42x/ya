@@ -3,7 +3,6 @@
 #include "Render3D/Common/ViewCompose.h"
 #include "Render3D/RenderFrameData.h"
 #include "Render3D/RenderDeviceState.h"
-#include "Render3D/RenderFrameCoordinator.h"
 #include "Scene/Core/Scene.h"
 
 #include <cstdint>
@@ -41,7 +40,6 @@ ExtractedSceneRender sealWithEmptySnapshots(SceneRenderScheduler& scheduler)
 TEST(RenderRuntimeSnapshotTest, EmptyDevicePublishesEmptyViewportResources)
 {
     RenderDeviceState device;
-    RenderFrameCoordinator coordinator(device);
 
     EXPECT_EQ(device.getLiveSubmission(0), nullptr);
     EXPECT_EQ(device.getLiveSubmission(MAX_FLIGHTS_IN_FLIGHT), nullptr);

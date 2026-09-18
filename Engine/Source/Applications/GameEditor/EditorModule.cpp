@@ -76,7 +76,7 @@ namespace
 //         EditorLayer::onUpdate
 //         applyPendingViewportResize → RenderDeviceState
 //     tickRender
-//       RenderFrameCoordinator world graph (disabled in 2D canvas)
+//       RenderDeviceState::record world graph (disabled in 2D canvas)
 //       EditorModule::onViewportCompose          [command recording]
 //         viewport snapshot → EditorViewportCompositor
 //           2D: canvas preview + recordEditorCanvasSelectionOverlay

@@ -18,7 +18,6 @@ struct ShadowSettings;
 struct ImageResource;
 struct DebugRenderSystem;
 struct RenderDeviceState;
-struct RenderFrameCoordinator;
 struct Scene;
 struct AppRenderState;
 
@@ -41,7 +40,6 @@ class YA_GAME_RUNTIME_API AppRenderServices
     }
     [[nodiscard]] std::shared_ptr<ShaderStorage>         getShaderStorage() const;
     [[nodiscard]] RenderDeviceState*                     getDeviceState() const;
-    [[nodiscard]] RenderFrameCoordinator*                getFrameCoordinator() const;
     /// Renderer-derived: did the previous tick produce content for this Scene?
     /// Answers "will poses sampled here be consumed" for systems that only need
     /// to work for what gets drawn, without a switch that describes a viewport.

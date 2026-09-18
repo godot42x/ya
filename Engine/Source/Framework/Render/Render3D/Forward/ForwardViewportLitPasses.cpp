@@ -7,6 +7,8 @@
 #include "RHI/Render.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
 #include "Render3D/Common/RenderViewportUtils.h"
+// Reads RenderStageContext members; its own header only forward-declares it.
+#include "Render3D/Stage/IRenderStage.h"
 
 namespace ya
 {

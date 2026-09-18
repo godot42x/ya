@@ -80,8 +80,8 @@ struct ViewComposeInput
 };
 
 /// Acquire / present destination for this frame. The host/present coordinator
-/// must call `acquirePresentFrame` before `RenderFrameCoordinator::record` and
-/// `submitPresentFrame` after. Device/coordinator do not acquire or present.
+/// must call `acquirePresentFrame` before `RenderDeviceState::record` and
+/// `submitPresentFrame` after. The renderer does not acquire or present.
 /// `imageIndex < 0` means this surface is not presenting this frame.
 struct PresentFrameInput
 {
@@ -89,7 +89,7 @@ struct PresentFrameInput
     int32_t                imageIndex = -1;
 };
 
-/// Sealed host frame value consumed by `RenderFrameCoordinator::record`.
+/// Sealed host frame value consumed by `RenderDeviceState::record`.
 /// `sceneRender` owns the extracted plan together with the recordings paired
 /// with it, so the Scene a view renders is already on that view's own task.
 /// Not an active-Scene query and not swapchain ownership.

@@ -25,11 +25,6 @@ RenderDeviceState* AppRenderServices::getDeviceState() const
     return _state ? _state->device.get() : nullptr;
 }
 
-RenderFrameCoordinator* AppRenderServices::getFrameCoordinator() const
-{
-    return _state ? _state->coordinator.get() : nullptr;
-}
-
 bool AppRenderServices::wasSceneRenderedLastTick(const Scene* scene) const
 {
     if (!_state || !scene) {
