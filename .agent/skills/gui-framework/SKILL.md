@@ -72,7 +72,19 @@ Primary 仍是 `GUIWindowHost`，extra 仍是 `GUIWindowManager`；并成一种 
 
 ## 产品循环
 
-唯一 while-loop 是 `AppKernel`。两条产品线在 kernel 之下分叉，不要读成「GameApp vs GuiApp」类型对：
+唯一 while-loop 是 `AppKernel`。两条产品线在 kernel 之下分叉，不要读成「GameApp vs GuiApp」类型对。
+
+**AppKernel 是共享控制面，不是应用基类——不要为了「让独立 GUI 更轻」而删它。**
+它只持有三件每条产品线都需要、且各自实现会失真的东西：单实例 `OsProcessLock`、`AppAutomationRunController`
+（exit-after-frame / 墙钟上限 / 远端退出）、以及唯一的事件泵 + 帧计时 + `exit` 判定。
+实现 `IAppLoopDelegate` 的成本是 5 个虚函数，而 `GUIWindowHost` / `GUIApp` / `GUIHeadlessHost`
+各自只在 `run()` 里写 4 行来构造它。
+
+真正会让人误判的是 `ya-gui-framework` 这个**聚合目标**：它公开拉入 `ya-app-kernel` /
+`ya-app-control` / `ya-hierarchy`，于是"GUI framework"看起来等于 GUI + app shell + module system。
+要修的是这个聚合边界（见 `.agent/plan/source-layout-subtraction` S2），不是 Kernel 本身。
+删 Kernel 会把上面三件事复制到 3 条产品线上，而它们各有 memory
+（`control_instance_lifecycle`、`app_teardown_order_and_instance_lock`）记录过坑。
 
 ```text
 AppKernel
