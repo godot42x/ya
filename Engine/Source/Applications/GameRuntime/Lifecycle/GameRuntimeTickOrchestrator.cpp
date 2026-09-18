@@ -336,13 +336,11 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     } sceneSchedulerGuard{.scheduler = &sceneScheduler};
 
     // declare → extract → prepare → build → acquire → record → submit → extras
-    SceneViewCollector collector;
-    const SceneViewDesc* hostViewDesc = declareViews(app, dt, device, collector);
-    ExtractedSceneRender sceneRender  = extractScenes(app, sceneScheduler, device);
+    declareViews(app, dt, device);
+    ExtractedSceneRender sceneRender = extractScenes(app, sceneScheduler, device);
     prepareViews(app, dt, flightIndex, sceneRender);
 
-    UIFrameSnapshot uiFrameSnapshot;
-    const FramePacket frame = buildGameRenderFrame(app, dt, flightIndex, uiFrameSnapshot);
+    TickFrame gameFrame = buildGameRenderFrame(app, dt, flightIndex);
 
     IRender*       render        = device->getRender();
     FPresentFrame  presentFrame{.surface = render ? render->getPrimarySurfaceContext() : nullptr};
@@ -359,15 +357,12 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
         return;
     }
 
-    const RecordedFrame recorded = recordFrame(app, *coordinator, dt, std::move(sceneRender), frame, presentFrame);
+    const RecordedFrame recorded = recordFrame(app, *coordinator, dt, std::move(sceneRender), gameFrame, presentFrame);
     submitRecordedFrame(app, presentFrame, recorded);
     app.presentModuleExtras(dt);
 }
 
-const SceneViewDesc* GameRuntimeTickOrchestrator::declareViews(App&                app,
-                                                               float               dt,
-                                                               RenderDeviceState*  device,
-                                                               SceneViewCollector& collector)
+void GameRuntimeTickOrchestrator::declareViews(App& app, float dt, RenderDeviceState* device)
 {
     HostViewState& hostView = app._renderState->hostView;
 
@@ -375,6 +370,7 @@ const SceneViewDesc* GameRuntimeTickOrchestrator::declareViews(App&             
     // viewport, the editor's authoring viewport, the camera preview), so a view
     // exists exactly because somebody asked for it: no layer has to flip a
     // global switch to hide a view another layer declared.
+    SceneViewCollector collector;
     auto* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
     const SceneViewCollectContext collectContext{
         .activeScene    = scene,
@@ -388,6 +384,8 @@ const SceneViewDesc* GameRuntimeTickOrchestrator::declareViews(App&             
         }
     }
 
+    // submit() stores a copy, so from here on the declarations live in the
+    // scheduler's frame and this collector has no readers.
     auto& sceneScheduler = app._renderState->sceneRenderScheduler;
     for (const SceneViewDesc& view : collector.views()) {
         (void)sceneScheduler.submit(view);
@@ -399,24 +397,20 @@ const SceneViewDesc* GameRuntimeTickOrchestrator::declareViews(App&             
     // structural predicate the plan uses for its display root -- matching a
     // well-known view id here would be a second definition of "the host view"
     // that can disagree with it.
-    const SceneViewDesc* hostViewDesc = nullptr;
     for (const SceneViewDesc& view : collector.views()) {
-        if (view.ownsHostViewport()) {
-            hostViewDesc = &view;
-            break;
+        if (!view.ownsHostViewport()) {
+            continue;
         }
-    }
-    if (hostViewDesc) {
-        hostView.view       = hostViewDesc->view;
-        hostView.projection = hostViewDesc->projection;
-        hostView.cameraPos  = hostViewDesc->cameraPos;
         // The declared rect is the host view's geometry, so the host's copy and
         // the extent the device expects follow the declaration instead of a rect
         // the owner pushed into host state.
-        hostView.viewportRect = hostViewDesc->viewportRect;
-        device->applyViewportResize(hostViewDesc->viewportRect);
+        hostView.view       = view.view;
+        hostView.projection = view.projection;
+        hostView.cameraPos  = view.cameraPos;
+        hostView.viewportRect = view.viewportRect;
+        device->applyViewportResize(view.viewportRect);
+        break;
     }
-    return hostViewDesc;
 }
 
 ExtractedSceneRender GameRuntimeTickOrchestrator::extractScenes(App&                 app,
@@ -472,18 +466,17 @@ void GameRuntimeTickOrchestrator::prepareViews(App&                  app,
     }
 }
 
-FramePacket GameRuntimeTickOrchestrator::buildGameRenderFrame(
-    App&                                      app,
-    float                                     dt,
-    uint32_t                                  flightIndex,
-    UIFrameSnapshot&                          outUiSnapshot)
+GameRuntimeTickOrchestrator::TickFrame GameRuntimeTickOrchestrator::buildGameRenderFrame(App&     app,
+                                                                                         float    dt,
+                                                                                         uint32_t flightIndex)
 {
     const HostViewState& hostView = app._renderState->hostView;
 
+    TickFrame tickFrame;
     // Frame-level only: which cameras draw and where their outputs go is on
     // each View's declaration and prepared data. The host contributes the
     // tick's clock and its render scale.
-    FramePacket frame{
+    tickFrame.frame = FramePacket{
         .flightIndex   = flightIndex,
         .frameIndex    = App::_hostTick,
         .deltaTime     = dt,
@@ -499,24 +492,23 @@ FramePacket GameRuntimeTickOrchestrator::buildGameRenderFrame(
     if ((app.isRuntimeMode() || app.isSimulationMode()) && scene) {
         if (auto* gameUIHost = app.getGameUIHost()) {
             gameUIHost->setPresentation(hostView.viewportRect,
-                                        glm::vec2(frame.viewportFrameBufferScale));
-            outUiSnapshot            = gameUIHost->buildSnapshot();
-            frame.uiFrameSnapshot = &outUiSnapshot;
+                                        glm::vec2(tickFrame.frame.viewportFrameBufferScale));
+            tickFrame.uiSnapshot = gameUIHost->buildSnapshot();
         }
     }
-    return frame;
+    return tickFrame;
 }
 
 RecordedFrame GameRuntimeTickOrchestrator::recordFrame(App&                    app,
                                                        RenderFrameCoordinator& coordinator,
                                                        float                   dt,
                                                        ExtractedSceneRender    sceneRender,
-                                                       const FramePacket&      frame,
+                                                       TickFrame&              frame,
                                                        const FPresentFrame&    presentFrame)
 {
     return coordinator.record(RenderFramePlan{
         .sceneRender = std::move(sceneRender),
-        .frame = frame,
+        .frame = frame.boundFrame(),
         .viewCompose = {
             // Empty: the host's View-inset list. Overlay recording is a stage of
             // `recordExtensions`, not data on the plan.

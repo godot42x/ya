@@ -1,5 +1,53 @@
 # Progress
 
+## 2026-09-19 checkpoint：tickRender 的每一步自己持有自己的存储
+
+接同一天上一刀（删 overlay 通道 + per-tick 后端查询）。这一刀是 `todo.md`「逻辑→渲染链减法」批次的
+第 1 项：让 `tickRender` 的三处"调用方持有的生命周期"不再靠注释说明。三处是同一个根因——
+**一个步骤把自己的临时存储交给调用方**，于是"它活到什么时候"只能写在注释里。
+
+1. `declareViews(..., SceneViewCollector& collector)` → `declareViews(app, dt, device)`，collector 变成
+   这一步的局部变量。原来的签名与注释声称"调用方要持有 collector，因为拿回去的声明后面还会被引用"，
+   查证后**两半都不成立**：`SceneRenderScheduler::submit(SceneViewDesc desc)` 是按值接收（拷贝进本帧
+   调度状态），而返回的 `const SceneViewDesc*` 在 `tickRender` 里**根本没有被使用**——V1 之后 host
+   camera 走 `ExtractedSceneRender::hostFrameData()`，不再需要那个指针。于是返回值删除（只有声明没有
+   消费者，出现即删），collector 收回本步。`SceneViewDesc` 内只有值字段与 `Scene*`（Scene 活得比本帧
+   长），没有指回 collector 的引用，所以这个收回是安全的。
+2. `buildGameRenderFrame(app, dt, flightIndex, UIFrameSnapshot& outUiSnapshot)` → 返回 `TickFrame`。
+   out-param 存在的唯一理由是"返回的 `FramePacket` 指向它"，于是调用方必须先声明 `uiFrameSnapshot`、
+   再在调用之后继续保持它活着——一条只写在头文件注释里的契约。现在 `TickFrame{ uiSnapshot; frame; }`
+   把两者放在一起，`boundFrame()` 在读取时把 `frame.uiFrameSnapshot` 绑到自己的 snapshot 上。
+   **绑在读取时而不是存储时**，是因为这个值是按值返回的：存下来的指针会留在被移动走的那个对象上。
+3. `hostViewDesc`（指进 collector vector 的局部指针）随第 1 条一起消失。
+
+顺带的头文件清理：`TickFrame` 按值持有 `UIFrameSnapshot` 与 `FramePacket`，所以 orchestrator 头
+显式 include `GUI/Widgets/UIFrameSnapshot.h` 与 `Render3D/Common/RenderFrameInputs.h`（后者原本靠
+`IRenderPipeline.h` 传递才完整，属于"碰巧能编"）；上一刀之后已经没人用的 `RenderOverlay.h` include
+与 `UIFrameSnapshot` / `SceneViewCollector` / `FramePacket` 三个已由 include 满足的前向声明删除。
+
+### 验证
+
+| 检查 | 结果 |
+| --- | --- |
+| `xmake b` | `ya-game-runtime` / `ya-game-editor` / `ya-runtime` / `ya-engine` 全部 ok |
+| `ya-testing` 渲染/编辑器滤镜 | 282 passed / 3 failed，3 个失败与基线逐项相同 |
+| HelloMaterial viewport 截图 | exit=0，`md5=1c6668976be1cdd5d755d1f1365700f7` **逐字节相同** |
+| run-editor viewport 截图 | exit=0，`md5=5b8f5dd8acdbc90bd5c383feb3f7bcec` **逐字节相同** |
+
+这一刀不只是"移动代码"：runtime 截图走的正是 UI snapshot 被 `boundFrame()` 绑定后送进 display compose
+的那条路，所以逐字节相同证明绑定点真的生效（如果绑定漏了，snapshot 指针为空、Game UI 不会上屏）。
+
+三个失败逐个核对：`EditorPropertyGraphTest.AutoPropertySectionAssetPathCommitBrowseAndUndo` 与
+`EditorPropertyGraphTest.TextureAssetRowShowsRetainedPreview` 是资产路径/预览，`GameUIHostTest.BuildSnapshotComposesMountedWidgets`
+失败在 `GameUIHost::buildSnapshot()` **内部**（`snapshot.items.size()` 为 0，测试环境问题），三者都不经过
+本次改动的代码路径。
+
+### 本刀边界（未做）
+
+- `HostViewState` 单一写者（今天 4 个写者 / 3 个文件）。
+- 公开 `Renderer` 合并（4.0.3 checkpoint 2/3）：`friend struct RenderFrameCoordinator` 与 5 处
+  `_device->_` 私有写入仍在。
+
 ## 2026-09-19 checkpoint：删掉主机 screen-overlay 通道与 per-tick 后端查询
 
 本轮范围仍是用户本轮的目标：**只做 app 主流程 + 渲染主流程上的减法**。判据只有两条——

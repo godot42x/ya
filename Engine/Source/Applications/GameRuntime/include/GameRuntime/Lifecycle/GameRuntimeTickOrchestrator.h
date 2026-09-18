@@ -1,8 +1,9 @@
 #pragma once
 
+#include "GUI/Widgets/UIFrameSnapshot.h"
 #include "RHI/Render.h"
 #include "Render3D/Common/IRenderPipeline.h"
-#include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/RecordedFrame.h"
 
 namespace ya
@@ -13,12 +14,8 @@ struct Entity;
 struct RenderDeviceState;
 struct RenderFrameCoordinator;
 class SceneRenderScheduler;
-struct FramePacket;
 struct FPresentFrame;
-struct SceneViewDesc;
-struct UIFrameSnapshot;
 struct RenderFrameData;
-class SceneViewCollector;
 class ExtractedSceneRender;
 
 class GameRuntimeTickOrchestrator
@@ -46,36 +43,49 @@ class GameRuntimeTickOrchestrator
     /// product frame, so the sequence is readable without following every
     /// branch of a single long function.
     ///
-    /// Declares this tick's views from every registered producer into
-    /// `collector` (which the caller owns, because the declarations it hands
-    /// back are referenced later in the tick), and adopts the host viewport
-    /// View's camera and rect into the host view state. Returns that
-    /// declaration, or null when nobody declared a View for the host viewport.
-    static const SceneViewDesc* declareViews(App&                     app,
-                                            float                    dt,
-                                            RenderDeviceState*       device,
-                                            SceneViewCollector&      collector);
+    /// Declares this tick's views from every registered producer, submits each
+    /// declaration to the scheduler (which stores a copy of it), and adopts the
+    /// host viewport View's camera and rect into the host view state. The
+    /// collector is this step's own storage: nothing downstream refers to it, so
+    /// no caller has to keep it alive.
+    static void declareViews(App& app, float dt, RenderDeviceState* device);
     /// Groups the declarations and extracts Scene content for them. Grouping
     /// and extraction stay separate: seal() reads no ECS, this step does.
     static ExtractedSceneRender extractScenes(App& app, SceneRenderScheduler& scheduler, RenderDeviceState* device);
     /// Pairs this tick's View recordings with their frame data and prepares one
     /// View's camera-dependent packet each.
     static void prepareViews(App& app, float dt, uint32_t flightIndex, ExtractedSceneRender& sceneRender);
-    /// Builds the camera packet the pipelines record from, plus the UI snapshot
-    /// they must consume instead of the live WidgetTree (caller-owned storage,
-    /// because the packet points into it). `hostFrameData` is the host viewport
-    /// View's preparation from this tick's plan, or null when the tick declared
-    /// no such View.
-    static FramePacket buildGameRenderFrame(App&                                       app,
-                                            float                                      dt,
-                                            uint32_t                                   flightIndex,
-                                            UIFrameSnapshot&                           outUiSnapshot);
+    /// One tick's frame facts together with the UI snapshot the packet borrows.
+    /// They are built as one value because the packet points into the snapshot:
+    /// returning them separately made the caller declare a local before the call
+    /// and keep it alive by convention.
+    struct TickFrame
+    {
+        UIFrameSnapshot uiSnapshot{};
+        FramePacket     frame{};
+
+        /// The packet with `uiFrameSnapshot` bound to this value's snapshot.
+        /// Bound on read instead of stored, because this value is returned by
+        /// value and a stored pointer would be left behind on the moved-from
+        /// object.
+        [[nodiscard]] const FramePacket& boundFrame()
+        {
+            frame.uiFrameSnapshot = &uiSnapshot;
+            return frame;
+        }
+    };
+
+    /// Builds the frame facts the pipelines record from, plus the UI snapshot
+    /// they consume instead of the live WidgetTree. The snapshot stays empty on
+    /// frames with no Game UI (UI-only frames and the editor's authoring
+    /// viewport), which is what the packet reports as "no UI to compose".
+    static TickFrame buildGameRenderFrame(App& app, float dt, uint32_t flightIndex);
     /// Records the tick in one renderer call and returns what the host submits.
     static RecordedFrame recordFrame(App&                        app,
                                      RenderFrameCoordinator&     coordinator,
                                      float                       dt,
                                      ExtractedSceneRender        sceneRender,
-                                     const FramePacket&          frame,
+                                     TickFrame&                  frame,
                                      const FPresentFrame&        presentFrame);
     /// Submits the recording (or an empty frame) and presents the surface.
     static void submitRecordedFrame(App& app, FPresentFrame& presentFrame, const RecordedFrame& recorded);
