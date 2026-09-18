@@ -1,4 +1,4 @@
-#include "GameEditor/UI/EditorFilePickerDialog.h"
+#include "GameEditor/UI/Dialogs/EditorFilePickerDialog.h"
 
 #include "GUI/Widgets/WidgetTree.h"
 

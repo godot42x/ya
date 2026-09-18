@@ -1,0 +1,16 @@
+{
+  "plan": "editor-ui-grouping",
+  "status": "g1_landed",
+  "features": [
+    {"id": "ui_dir_grouped_by_concern", "phase": "G1", "status": "verified", "evidence": ["7 groups: Shell / Dock / Tabs / Sections / Viewport / Dialogs / Ops", "no flat file remains under UI/ or include/GameEditor/UI/", "91 renames: 48 headers + 41 sources + 2 dock layout JSON"]},
+    {"id": "public_path_carries_group", "phase": "G1", "status": "verified", "evidence": ["include path is GameEditor/UI/<Group>/<Name>.h", "90 files had includes rewritten (201 lines)", "0 unresolved GameEditor/* includes out of 291"]},
+    {"id": "move_preserves_blame", "phase": "G1", "status": "verified", "evidence": ["git diff -M --summary reports 91 renames + 1 create", "no delete/add pair; destinations were all new paths so no mirror-stub dance needed"]},
+    {"id": "private_header_added_to_manifest", "phase": "G1", "status": "verified", "evidence": ["UI/Dock/EditorDockSupport.h is the first private header in this target", "xmake.lua gained add_headerfiles(\"**.h\")", "same-directory bare include, matching Draw2DInternal.h / OpenGLBuffer.h convention"]},
+    {"id": "unity_build_duplicate_symbol_removed", "phase": "G1", "status": "verified", "evidence": ["unity_7 held both EditorNativeTearOff.cpp and EditorWindowLayout.cpp", "each privately defined FEmptyGuiDelegate and dockHasPanels", "extracted into UI/Dock/EditorDockSupport.h", "editorWindowHasPanels renamed to sessionHasDockPanels"]},
+    {"id": "no_new_test_regressions", "phase": "G1", "status": "verified", "evidence": ["HEAD baseline 1230 passed / 14 failed", "after change 1234 passed / 10 failed", "set comparison: 0 new failures, 4 guards repaired"]},
+    {"id": "s1_stale_source_guards_repaired", "phase": "G1", "status": "verified", "evidence": ["7 paths across 3 guard tests were broken by S1, not by G1", "EditorWindowSessionTest / GUIRenderSurfaceTest / GUIWindowChromeTest", "resolved by basename against real locations"]},
+    {"id": "grouping_contract_in_skill", "phase": "G2", "status": "not_started", "evidence": ["code-reorganize: UI concern-group naming rules", "gui-framework: where a new editor UI file goes"]},
+    {"id": "remaining_flat_dirs", "phase": "G3", "status": "not_started", "evidence": ["Engine/Test/Source 114 files", "Render3D/include/Render3D/Common 33", "GUI/Runtime/Widgets/Controls 32 sources / 31 headers", "RHI/include/RHI/Core 26"]},
+    {"id": "preexisting_failures", "phase": "out-of-scope", "status": "known", "evidence": ["14 failures at the G1 base commit, none touched by this line", "ya-gui-widgets-test missing ya-gui-compose dep", "two SIGTRAP assertions: WidgetTree::beginPointerDispatch, WidgetTree::detach"]}
+  ]
+}

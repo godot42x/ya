@@ -3,7 +3,7 @@
 #include "Core/Log.h"
 
 #include "GameEditor/EditorLayer.h"
-#include "GameEditor/UI/EditorDocumentSession.h"
+#include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/UITypeRegistry.h"

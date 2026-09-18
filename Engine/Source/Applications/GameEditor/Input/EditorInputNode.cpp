@@ -5,7 +5,7 @@
 #include "GUI/Host/GUIDragRouter.h"
 #include "GUI/Host/GUIWindowManager.h"
 #include "GameEditor/EditorLayer.h"
-#include "GameEditor/UI/EditorWindowRegistry.h"
+#include "GameEditor/UI/Shell/EditorWindowRegistry.h"
 #include "GameRuntime/App.h"
 #include "RHI/NativeWindow.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"

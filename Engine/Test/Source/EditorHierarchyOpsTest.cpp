@@ -1,4 +1,4 @@
-#include "GameEditor/UI/EditorHierarchyOps.h"
+#include "GameEditor/UI/Ops/EditorHierarchyOps.h"
 
 #include "ECS/Component.h"
 #include "ECS/Component/ModelComponent.h"

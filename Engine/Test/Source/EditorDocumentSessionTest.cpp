@@ -1,6 +1,6 @@
-#include "GameEditor/UI/EditorDocumentSession.h"
-#include "GameEditor/UI/EditorWindowRegistry.h"
-#include "GameEditor/UI/EditorWindowSession.h"
+#include "GameEditor/UI/Shell/EditorDocumentSession.h"
+#include "GameEditor/UI/Shell/EditorWindowRegistry.h"
+#include "GameEditor/UI/Shell/EditorWindowSession.h"
 
 #include "GUI/Binding/UndoStack.h"
 
@@ -156,9 +156,9 @@ TEST(EditorDocumentSessionTest, TwoWindowsShareSceneDocumentUndo)
 TEST(EditorDocumentSessionTest, SurfaceAndWindowSessionDoNotOwnDocumentRegistry)
 {
     const std::string surfaceH =
-        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/EditorSurface.h");
+        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorSurface.h");
     const std::string sessionH =
-        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/EditorWindowSession.h");
+        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorWindowSession.h");
     EXPECT_EQ(surfaceH.find("EditorDocumentRegistry _"), std::string::npos);
     EXPECT_NE(surfaceH.find("EditorDocumentRegistry*"), std::string::npos);
     EXPECT_EQ(sessionH.find("EditorDocumentRegistry _"), std::string::npos);
@@ -170,7 +170,7 @@ TEST(EditorDocumentSessionTest, SurfaceAndWindowSessionDoNotOwnDocumentRegistry)
     EXPECT_NE(moduleCpp.find("window->bind(*_layer, &_tabSpawners, &_documents)"), std::string::npos);
 
     const std::string contentCpp =
-        readEngineSource("Source/Applications/GameEditor/UI/EditorContentBrowserTab.cpp");
+        readEngineSource("Source/Applications/GameEditor/UI/Tabs/EditorContentBrowserTab.cpp");
     EXPECT_NE(contentCpp.find("EEditorDocumentKind::Script"), std::string::npos);
     EXPECT_NE(contentCpp.find("EEditorDocumentKind::Material"), std::string::npos);
     EXPECT_NE(contentCpp.find("openDocumentEditor"), std::string::npos);

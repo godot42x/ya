@@ -1,4 +1,4 @@
-#include "GameEditor/UI/EditorDebugCatalogView.h"
+#include "GameEditor/UI/Tabs/EditorDebugCatalogView.h"
 
 #include <gtest/gtest.h>
 

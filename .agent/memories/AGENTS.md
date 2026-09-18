@@ -23,6 +23,7 @@
 - `./app_teardown_order_and_instance_lock.md`：启动失败路径（控制端口被占用）崩溃 139/133——App 只有 `quit()` 一条有序 teardown 却没人走、模块 `onStop` 在 App 析构后执行、`unloadAll()` 提前于 App 的裸模块指针；含实例锁/墙钟上限运行策略的边界
 - `./control_instance_lifecycle.md`：agent 驱动引擎时实例堆积的四个根因——没有发现渠道、帧预算挡不住闲置进程、端口被占静默降级、harness `kill()` 杀的是启动器而不是引擎；对应 control 入口 + 实例记录 + 默认墙钟上限
 - `./uninitialized_rect_and_view_rect_contract.md`：未初始化的 `Rect2D`（非规格化小数骗过 `> 0`）被当成 View 尺寸 → 截断成 0×0 → `createTexture` 断言 → 编辑器 exit 255；含从 .ips 指令地址用 `atos` 反查源码行、以及为什么 lldb 会掩盖这类 bug
+- `./unity_build_duplicate_private_symbol.md`：批量搬迁重排 unity 批次后，平铺布局掩盖的重复私有符号（结构体/自由函数）突然变成 duplicate symbol；不能用加命名空间糊过去，应抽私有头或改名
 
 ## 边界
 

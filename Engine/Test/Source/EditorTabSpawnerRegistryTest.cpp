@@ -1,5 +1,5 @@
-#include "GameEditor/UI/EditorTabSpawnerRegistry.h"
-#include "GameEditor/UI/EditorViewportHost.h"
+#include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
+#include "GameEditor/UI/Viewport/EditorViewportHost.h"
 
 #include "GUI/Widgets/Controls/Panel.h"
 

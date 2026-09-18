@@ -1,4 +1,4 @@
-#include "GameEditor/UI/EditorViewportTab.h"
+#include "GameEditor/UI/Tabs/EditorViewportTab.h"
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Panel.h"

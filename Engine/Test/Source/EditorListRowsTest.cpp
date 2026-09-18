@@ -1,4 +1,4 @@
-#include "GameEditor/UI/EditorListRows.h"
+#include "GameEditor/UI/Shell/EditorListRows.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/Text.h"
 

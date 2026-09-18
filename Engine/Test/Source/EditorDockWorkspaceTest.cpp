@@ -1,5 +1,5 @@
-#include "GameEditor/UI/EditorDockWorkspace.h"
-#include "GameEditor/UI/EditorTabSpawnerRegistry.h"
+#include "GameEditor/UI/Dock/EditorDockWorkspace.h"
+#include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
 
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/DockSpace/DockNode.h"

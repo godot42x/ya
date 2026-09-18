@@ -38,7 +38,7 @@ TEST(GUIRenderSurfaceTest, DisplayComposeLayoutIsPresentSrc)
 TEST(GUIRenderSurfaceTest, ComposeTargetDoesNotAcquirePresentOrReadLiveTree)
 {
     const char* sources[] = {
-        "Source/Framework/GUI/Runtime/Compose/GUIRenderSurface.h",
+        "Source/Framework/GUI/Runtime/Compose/include/GUI/Compose/GUIRenderSurface.h",
         "Source/Framework/GUI/Runtime/Compose/GUIRenderSurface.cpp",
         "Source/Framework/GUI/Runtime/Compose/Render2DComposePass.cpp",
     };
@@ -54,7 +54,7 @@ TEST(GUIRenderSurfaceTest, ComposeTargetDoesNotAcquirePresentOrReadLiveTree)
         EXPECT_EQ(countLiteral(text, "acquire("), 0u) << relative;
     }
 
-    const std::string passH = readEngineSource("Source/Framework/GUI/Runtime/Compose/Render2DComposePass.h");
+    const std::string passH = readEngineSource("Source/Framework/GUI/Runtime/Compose/include/GUI/Compose/Render2DComposePass.h");
     EXPECT_NE(passH.find("never touches the live widget tree"), std::string::npos);
 
     const std::string surfaceCpp = readEngineSource("Source/Framework/GUI/Runtime/Compose/GUIRenderSurface.cpp");

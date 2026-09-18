@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GameEditor/UI/EditorAssetPicker.h"
+#include "GameEditor/UI/Dialogs/EditorAssetPicker.h"
 #include "Core/TypeIndex.h"
 
 #include <optional>

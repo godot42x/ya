@@ -2,7 +2,7 @@
 
 #include "ECS/Component.h"
 #include "GameEditor/EditorLayer.h"
-#include "GameEditor/UI/EditorHierarchyOps.h"
+#include "GameEditor/UI/Ops/EditorHierarchyOps.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 #include "Scene3D/TransformComponent.h"

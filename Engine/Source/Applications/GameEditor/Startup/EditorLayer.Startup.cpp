@@ -1,5 +1,5 @@
 #include "GameEditor/EditorLayerInternal.h"
-#include "GameEditor/UI/EditorFilePicker.h"
+#include "GameEditor/UI/Dialogs/EditorFilePicker.h"
 
 namespace ya
 {

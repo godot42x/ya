@@ -1,4 +1,4 @@
-#include "GameEditor/UI/EditorSurfaceContext.h"
+#include "GameEditor/UI/Shell/EditorSurfaceContext.h"
 
 #include "GUI/Widgets/WidgetTree.h"
 

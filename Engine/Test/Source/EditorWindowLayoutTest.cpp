@@ -1,12 +1,12 @@
-#include "GameEditor/UI/EditorWindowLayout.h"
+#include "GameEditor/UI/Dock/EditorWindowLayout.h"
 
 #include "GUI/Host/GUIWindowManager.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/WidgetTree.h"
-#include "GameEditor/UI/EditorDockWorkspace.h"
-#include "GameEditor/UI/EditorDocumentSession.h"
-#include "GameEditor/UI/EditorTabSpawnerRegistry.h"
+#include "GameEditor/UI/Dock/EditorDockWorkspace.h"
+#include "GameEditor/UI/Shell/EditorDocumentSession.h"
+#include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
 
 #include <filesystem>
 #include <fstream>
@@ -252,7 +252,7 @@ TEST(EditorWindowLayoutTest, V3EnvelopeHasNoOsWindowsArray)
 
 TEST(EditorWindowLayoutTest, DockWorkspaceSourceDoesNotCreateNativeWindows)
 {
-    const std::string text = readEngineSource("Source/Applications/GameEditor/UI/EditorDockWorkspace.cpp");
+    const std::string text = readEngineSource("Source/Applications/GameEditor/UI/Dock/EditorDockWorkspace.cpp");
     EXPECT_EQ(text.find("IGUIWindowCoordinator"), std::string::npos);
     EXPECT_EQ(text.find("createSession"), std::string::npos);
     EXPECT_EQ(text.find("SDL_CreateWindow"), std::string::npos);

@@ -1,4 +1,4 @@
-#include "GameEditor/UI/EditorWindowRegistry.h"
+#include "GameEditor/UI/Shell/EditorWindowRegistry.h"
 
 #include <filesystem>
 #include <fstream>
@@ -83,7 +83,7 @@ TEST(EditorWindowSessionTest, SessionOwnsSurfaceWithoutBuildingChrome)
 TEST(EditorWindowSessionTest, ChromeStacksPageTabsThenMenu)
 {
     const std::string surfaceCpp =
-        readEngineSource("Source/Applications/GameEditor/UI/EditorSurface.cpp");
+        readEngineSource("Source/Applications/GameEditor/UI/Shell/EditorSurface.cpp");
     EXPECT_NE(surfaceCpp.find("EditorPageTabs"), std::string::npos);
     EXPECT_NE(surfaceCpp.find("syncPageTabs"), std::string::npos);
     EXPECT_NE(surfaceCpp.find("WindowPageTab"), std::string::npos);
@@ -92,7 +92,7 @@ TEST(EditorWindowSessionTest, ChromeStacksPageTabsThenMenu)
 TEST(EditorWindowSessionTest, WindowRootHostDeclaresWindowRootDockScope)
 {
     const std::string surfaceCpp =
-        readEngineSource("Source/Applications/GameEditor/UI/EditorSurface.cpp");
+        readEngineSource("Source/Applications/GameEditor/UI/Shell/EditorSurface.cpp");
     EXPECT_NE(surfaceCpp.find("targetPlacement = EEditorTabPlacement::WindowRootDock"),
               std::string::npos);
     EXPECT_NE(surfaceCpp.find("targetPlacement = EEditorTabPlacement::EditorOwnedNested"),
@@ -104,7 +104,7 @@ TEST(EditorWindowSessionTest, WindowRootHostDeclaresWindowRootDockScope)
 TEST(EditorWindowSessionTest, DockContextDoesNotKnowEditorRoots)
 {
     const std::string dockH =
-        readEngineSource("Source/Framework/GUI/Runtime/Widgets/Controls/DockSpace/DockContext.h");
+        readEngineSource("Source/Framework/GUI/Runtime/Widgets/include/GUI/Widgets/Controls/DockSpace/DockContext.h");
     const std::string dockCpp =
         readEngineSource("Source/Framework/GUI/Runtime/Widgets/Controls/DockSpace/DockContext.cpp");
     for (const std::string* text : {&dockH, &dockCpp}) {
@@ -123,9 +123,9 @@ TEST(EditorWindowSessionTest, DockContextDoesNotKnowEditorRoots)
     EXPECT_EQ(dockCpp.find("createSession"), std::string::npos);
 
     const std::string windowSessionH =
-        readEngineSource("Source/Framework/GUI/Host/Window/GUIWindowSession.h");
+        readEngineSource("Source/Framework/GUI/Host/include/GUI/Host/GUIWindowSession.h");
     const std::string windowManagerH =
-        readEngineSource("Source/Framework/GUI/Host/Window/GUIWindowManager.h");
+        readEngineSource("Source/Framework/GUI/Host/include/GUI/Host/GUIWindowManager.h");
     EXPECT_EQ(windowSessionH.find("DockContext.h"), std::string::npos);
     EXPECT_EQ(windowSessionH.find("FDockContext"), std::string::npos);
     EXPECT_EQ(windowSessionH.find("FDockFloatingWindowId"), std::string::npos);
@@ -133,14 +133,14 @@ TEST(EditorWindowSessionTest, DockContextDoesNotKnowEditorRoots)
     EXPECT_EQ(windowManagerH.find("realizeNativeDockPlacement"), std::string::npos);
 
     const std::string editorThemeH =
-        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/EditorTheme.h");
+        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorTheme.h");
     EXPECT_EQ(editorThemeH.find("WorkbenchTheme.h"), std::string::npos);
     EXPECT_NE(editorThemeH.find("DefaultChromeTheme.h"), std::string::npos);
 
     const std::string workspaceH =
-        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/EditorDockWorkspace.h");
+        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/Dock/EditorDockWorkspace.h");
     const std::string workspaceCpp =
-        readEngineSource("Source/Applications/GameEditor/UI/EditorDockWorkspace.cpp");
+        readEngineSource("Source/Applications/GameEditor/UI/Dock/EditorDockWorkspace.cpp");
     for (const std::string* text : {&workspaceH, &workspaceCpp}) {
         EXPECT_EQ(text->find("GUIWindowManager"), std::string::npos);
         EXPECT_EQ(text->find("IGUIWindowCoordinator"), std::string::npos);
@@ -148,9 +148,9 @@ TEST(EditorWindowSessionTest, DockContextDoesNotKnowEditorRoots)
     }
 
     const std::string tearOffH =
-        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/EditorNativeTearOff.h");
+        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/Dock/EditorNativeTearOff.h");
     const std::string tearOffCpp =
-        readEngineSource("Source/Applications/GameEditor/UI/EditorNativeTearOff.cpp");
+        readEngineSource("Source/Applications/GameEditor/UI/Dock/EditorNativeTearOff.cpp");
     EXPECT_NE(tearOffH.find("IGUIWindowCoordinator"), std::string::npos);
     EXPECT_NE(tearOffCpp.find("realizeNativeDockPlacement"), std::string::npos);
     EXPECT_NE(tearOffCpp.find("transferNativePlacementTo"), std::string::npos);
@@ -159,13 +159,13 @@ TEST(EditorWindowSessionTest, DockContextDoesNotKnowEditorRoots)
 TEST(EditorWindowSessionTest, TickAppForwardingIsGone)
 {
     const std::string surfaceH =
-        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/EditorSurface.h");
+        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorSurface.h");
     const std::string surfaceCpp =
-        readEngineSource("Source/Applications/GameEditor/UI/EditorSurface.cpp");
+        readEngineSource("Source/Applications/GameEditor/UI/Shell/EditorSurface.cpp");
     const std::string sessionH =
-        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/EditorWindowSession.h");
+        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorWindowSession.h");
     const std::string sessionCpp =
-        readEngineSource("Source/Applications/GameEditor/UI/EditorWindowSession.cpp");
+        readEngineSource("Source/Applications/GameEditor/UI/Shell/EditorWindowSession.cpp");
     for (const std::string* text : {&surfaceH, &surfaceCpp, &sessionH, &sessionCpp}) {
         EXPECT_EQ(text->find("tick(App"), std::string::npos);
     }
@@ -174,12 +174,12 @@ TEST(EditorWindowSessionTest, TickAppForwardingIsGone)
 TEST(EditorWindowSessionTest, HostAndSurfaceDoNotReadPrimarySwapchain)
 {
     const char* files[] = {
-        "Source/Applications/GameEditor/include/GameEditor/UI/EditorSurface.h",
-        "Source/Applications/GameEditor/UI/EditorSurface.cpp",
-        "Source/Applications/GameEditor/include/GameEditor/UI/EditorWindowSession.h",
-        "Source/Applications/GameEditor/UI/EditorWindowSession.cpp",
-        "Source/Applications/GameEditor/include/GameEditor/UI/EditorSurfaceContext.h",
-        "Source/Applications/GameEditor/UI/EditorSurfaceContext.cpp",
+        "Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorSurface.h",
+        "Source/Applications/GameEditor/UI/Shell/EditorSurface.cpp",
+        "Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorWindowSession.h",
+        "Source/Applications/GameEditor/UI/Shell/EditorWindowSession.cpp",
+        "Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorSurfaceContext.h",
+        "Source/Applications/GameEditor/UI/Shell/EditorSurfaceContext.cpp",
         "Source/Applications/GameEditor/EditorModule.cpp",
     };
     for (const char* relative : files) {
@@ -192,7 +192,7 @@ TEST(EditorWindowSessionTest, HostAndSurfaceDoNotReadPrimarySwapchain)
 TEST(EditorWindowSessionTest, InputRoutesByWindowId)
 {
     const std::string inputH =
-        readEngineSource("Source/Applications/GameEditor/Input/EditorInputNode.h");
+        readEngineSource("Source/Applications/GameEditor/include/GameEditor/Input/EditorInputNode.h");
     EXPECT_NE(inputH.find("EditorWindowRegistry& windows"), std::string::npos);
     EXPECT_NE(inputH.find("_windowId"), std::string::npos);
     EXPECT_NE(inputH.find("GUIWindowManager* extraWindows"), std::string::npos);
@@ -236,9 +236,9 @@ TEST(EditorWindowSessionTest, InputRoutesByWindowId)
     EXPECT_EQ(managerCpp.find("Tree-local in-memory clipboard"), std::string::npos);
 
     const std::string surfaceH =
-        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/EditorSurface.h");
+        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/Shell/EditorSurface.h");
     const std::string surfaceCpp =
-        readEngineSource("Source/Applications/GameEditor/UI/EditorSurface.cpp");
+        readEngineSource("Source/Applications/GameEditor/UI/Shell/EditorSurface.cpp");
     EXPECT_EQ(surfaceH.find("IGUIWindowCoordinator"), std::string::npos);
     EXPECT_EQ(surfaceCpp.find("IGUIWindowCoordinator"), std::string::npos);
     EXPECT_NE(surfaceH.find("setOnDockNoTargetTearOff"), std::string::npos);
@@ -262,7 +262,7 @@ TEST(EditorWindowSessionTest, InputRoutesByWindowId)
 TEST(EditorWindowSessionTest, ImeUsesTreeCapabilityNotInspectorCast)
 {
     const std::string surfaceCpp =
-        readEngineSource("Source/Applications/GameEditor/UI/EditorSurface.cpp");
+        readEngineSource("Source/Applications/GameEditor/UI/Shell/EditorSurface.cpp");
     EXPECT_NE(surfaceCpp.find("_tree->wantsTextInput()"), std::string::npos);
     EXPECT_EQ(surfaceCpp.find("dynamic_cast<EditorInspectorTab"), std::string::npos);
     EXPECT_EQ(surfaceCpp.find("EditorInspectorTab"), std::string::npos);
@@ -274,30 +274,30 @@ TEST(EditorWindowSessionTest, ImeUsesTreeCapabilityNotInspectorCast)
     EXPECT_EQ(inputCpp.find("EditorInspectorTab"), std::string::npos);
 
     const std::string inspectorH =
-        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/EditorInspectorTab.h");
+        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/Tabs/EditorInspectorTab.h");
     EXPECT_EQ(inspectorH.find("wantsTextInput"), std::string::npos);
 
     const std::string sectionH =
-        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/EditorAutoPropertySection.h");
+        readEngineSource("Source/Applications/GameEditor/include/GameEditor/UI/Sections/EditorAutoPropertySection.h");
     EXPECT_EQ(sectionH.find("wantsTextInput"), std::string::npos);
 }
 
 TEST(EditorWindowSessionTest, SessionOwnedTabsDoNotUseAppGetOrPrimarySwapchain)
 {
     const char* files[] = {
-        "Source/Applications/GameEditor/UI/EditorContentBrowserTab.cpp",
-        "Source/Applications/GameEditor/UI/EditorRuntimeToolsTab.cpp",
-        "Source/Applications/GameEditor/UI/EditorRenderSettingsTab.cpp",
-        "Source/Applications/GameEditor/UI/EditorPlayToolbarTab.cpp",
-        "Source/Applications/GameEditor/UI/EditorFontAtlasTab.cpp",
-        "Source/Applications/GameEditor/UI/RuntimeRenderSettingsSection.cpp",
-        "Source/Applications/GameEditor/UI/EditorInspectorTab.cpp",
-        "Source/Applications/GameEditor/UI/EditorViewportTab.cpp",
-        "Source/Applications/GameEditor/UI/EditorHierarchyTab.cpp",
-        "Source/Applications/GameEditor/UI/EditorUIDesignerTab.cpp",
-        "Source/Applications/GameEditor/UI/EditorUIDesignerTools.cpp",
-        "Source/Applications/GameEditor/UI/EditorDocumentEditorTab.cpp",
-        "Source/Applications/GameEditor/UI/EditorNestedDockHost.cpp",
+        "Source/Applications/GameEditor/UI/Tabs/EditorContentBrowserTab.cpp",
+        "Source/Applications/GameEditor/UI/Tabs/EditorRuntimeToolsTab.cpp",
+        "Source/Applications/GameEditor/UI/Tabs/EditorRenderSettingsTab.cpp",
+        "Source/Applications/GameEditor/UI/Tabs/EditorPlayToolbarTab.cpp",
+        "Source/Applications/GameEditor/UI/Tabs/EditorFontAtlasTab.cpp",
+        "Source/Applications/GameEditor/UI/Sections/RuntimeRenderSettingsSection.cpp",
+        "Source/Applications/GameEditor/UI/Tabs/EditorInspectorTab.cpp",
+        "Source/Applications/GameEditor/UI/Tabs/EditorViewportTab.cpp",
+        "Source/Applications/GameEditor/UI/Tabs/EditorHierarchyTab.cpp",
+        "Source/Applications/GameEditor/UI/Tabs/EditorUIDesignerTab.cpp",
+        "Source/Applications/GameEditor/UI/Tabs/EditorUIDesignerTools.cpp",
+        "Source/Applications/GameEditor/UI/Tabs/EditorDocumentEditorTab.cpp",
+        "Source/Applications/GameEditor/UI/Dock/EditorNestedDockHost.cpp",
     };
     for (const char* relative : files) {
         const std::string text = readEngineSource(relative);
@@ -306,7 +306,7 @@ TEST(EditorWindowSessionTest, SessionOwnedTabsDoNotUseAppGetOrPrimarySwapchain)
     }
 
     const std::string settings = readEngineSource(
-        "Source/Applications/GameEditor/UI/RuntimeRenderSettingsSection.cpp");
+        "Source/Applications/GameEditor/UI/Sections/RuntimeRenderSettingsSection.cpp");
     EXPECT_EQ(settings.find("LightStage.h"), std::string::npos);
     EXPECT_EQ(settings.find("SSAOStage.h"), std::string::npos);
     EXPECT_EQ(settings.find("getState()"), std::string::npos);

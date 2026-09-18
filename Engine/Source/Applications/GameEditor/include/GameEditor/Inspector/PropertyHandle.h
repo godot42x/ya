@@ -5,7 +5,7 @@
 #include "Core/Reflection/MetadataSupport.h"
 #include "Core/Reflection/PropertyAccessor.h"
 
-#include "GameEditor/UI/EditorAssetPicker.h"
+#include "GameEditor/UI/Dialogs/EditorAssetPicker.h"
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>

@@ -3,6 +3,7 @@ target("ya-game-editor")
     ya_std_module("YA_GAME_EDITOR_API")
     add_includedirs("./include", { public = true })
     add_headerfiles("./include/**.h", { public = true })
+    add_headerfiles("**.h")
     add_files("**.cpp")
     if get_config("ya_linkage") == "monolith" then
         -- Loaded by the runtime host; engine symbols resolve from the host

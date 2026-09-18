@@ -1,8 +1,8 @@
-#include "GameEditor/UI/EditorRootSession.h"
-#include "GameEditor/UI/EditorWindowRegistry.h"
-#include "GameEditor/UI/EditorWindowSession.h"
-#include "GameEditor/UI/EditorDockWorkspace.h"
-#include "GameEditor/UI/EditorTabSpawnerRegistry.h"
+#include "GameEditor/UI/Shell/EditorRootSession.h"
+#include "GameEditor/UI/Shell/EditorWindowRegistry.h"
+#include "GameEditor/UI/Shell/EditorWindowSession.h"
+#include "GameEditor/UI/Dock/EditorDockWorkspace.h"
+#include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
 
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"

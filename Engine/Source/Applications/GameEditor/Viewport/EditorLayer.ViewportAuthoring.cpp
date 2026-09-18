@@ -1,6 +1,6 @@
 #include "GameEditor/EditorLayerInternal.h"
 
-#include "GameEditor/UI/EditorHierarchyOps.h"
+#include "GameEditor/UI/Ops/EditorHierarchyOps.h"
 #include "GameEditor/Services/NodeCreateRegistry.h"
 #include "Hierarchy/Node.h"
 #include "Scene3D/Node3D.h"

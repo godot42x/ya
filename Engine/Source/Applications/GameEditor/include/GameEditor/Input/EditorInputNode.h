@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GameEditor/UI/EditorRootSession.h"
+#include "GameEditor/UI/Shell/EditorRootSession.h"
 #include "GameRuntime/InputRouter.h"
 
 #include <optional>

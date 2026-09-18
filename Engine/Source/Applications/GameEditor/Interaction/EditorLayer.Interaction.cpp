@@ -1,5 +1,5 @@
 #include "GameEditor/EditorLayerInternal.h"
-#include "GameEditor/UI/EditorHierarchyOps.h"
+#include "GameEditor/UI/Ops/EditorHierarchyOps.h"
 
 #include "Core/Os/Os.h"
 #include "ECS/System/RayCastMousePickingSystem.h"

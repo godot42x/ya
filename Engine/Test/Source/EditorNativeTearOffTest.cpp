@@ -1,4 +1,4 @@
-#include "GameEditor/UI/EditorNativeTearOff.h"
+#include "GameEditor/UI/Dock/EditorNativeTearOff.h"
 
 #include "Core/Event.h"
 #include "GUI/Host/GUIWindowChrome.h"
@@ -10,7 +10,7 @@
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
-#include "GameEditor/UI/EditorDocumentSession.h"
+#include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
 #include <gtest/gtest.h>
 

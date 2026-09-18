@@ -3,7 +3,7 @@
 // parent-owned slot edge consistently across multiple drags.
 
 #include "GameEditor/Panels/UIDesignerPanel.h"
-#include "GameEditor/UI/EditorDocumentSession.h"
+#include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UITypeIds.h"

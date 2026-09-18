@@ -13,7 +13,7 @@
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
-#include "GameEditor/UI/EditorDocumentSession.h"
+#include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
 #include <memory>
 #include <string>

@@ -1,4 +1,4 @@
-#include "GameEditor/UI/EditorSettingsDialog.h"
+#include "GameEditor/UI/Dialogs/EditorSettingsDialog.h"
 
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/WidgetTree.h"
