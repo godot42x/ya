@@ -357,6 +357,9 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
     {
         RenderPipelineFrameContext frame{};
         RenderStageContext         stageCtx{};
+        /// The View's own shadow preparation result, carried from prepare to the
+        /// graph build so the shadow stage needs no "current View".
+        ShadowPreparedView         shadowPrepared{};
         FrameContext               postContext{};
         std::unique_ptr<ForwardViewportStage::PassContext> viewportPassContext;
         ForwardFrameResourceSet::Binding frameBinding{};
@@ -397,7 +400,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         syncFrameSettings(branch.frame);
         applyPendingResourceRefreshes();
         beginViewRecording(branch.frame, branch.stageCtx);
-        executeShadowPass(branch.frame, branch.stageCtx);
+        branch.shadowPrepared = executeShadowPass(branch.frame, branch.stageCtx);
 
         RenderViewRecordingContext view = branch.frame.view;
         if (!view.frameData) {
@@ -468,6 +471,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
                 graph,
                 live.frame,
                 live.stageCtx,
+                live.shadowPrepared,
                 live.postContext,
                 *live.viewportPassContext,
                 live.frameBinding,
@@ -804,18 +808,19 @@ EFormat::T ForwardRenderPipeline::getViewportDepthFormat() const
     return _viewportFormats.depthFormat.value_or(EFormat::Undefined);
 }
 
-void ForwardRenderPipeline::executeShadowPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
+ShadowPreparedView ForwardRenderPipeline::executeShadowPass(const RenderPipelineFrameContext& frame,
+                                                            RenderStageContext&               stageCtx)
 {
     const ShadowSettings shadowSettings = currentShadowSettings();
     if (!shadowSettings.isEnabled() || !_shadowStage) {
-        return;
+        return {};
     }
 
     _shadowStage->applySettings(shadowSettings);
 
     if (!frame.submission || !frame.submission->isRecording()) {
         YA_CORE_ERROR("Forward shadow pass requires a recording submission");
-        return;
+        return {};
     }
 
     RenderViewRecordingContext view = frame.view;
@@ -825,7 +830,7 @@ void ForwardRenderPipeline::executeShadowPass(const RenderPipelineFrameContext& 
     if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
         view.viewportExtent = stageCtx.viewportExtent;
     }
-    _shadowStage->prepareView(*frame.submission, view);
+    return _shadowStage->prepareView(*frame.submission, view);
 }
 
 void ForwardRenderPipeline::shutdown()
@@ -847,6 +852,7 @@ void ForwardRenderPipeline::shutdown()
 bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
                                                     const RenderPipelineFrameContext& frame,
                                                     RenderStageContext&             stageCtx,
+                                                    const ShadowPreparedView&       shadowPrepared,
                                                     FrameContext&                    postContext,
                                                     ForwardViewportStage::PassContext& viewportPassContext,
                                                     const ForwardFrameResourceSet::Binding& frameBinding,
@@ -885,6 +891,7 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
             .viewportPassContext      = &viewportPassContext,
             .postContext              = &postContext,
             .bEnableShadow            = _shadowStage && currentShadowSettings().isEnabled(),
+            .shadowPrepared           = shadowPrepared,
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
             .viewportOverlaySnapshot  = frame.viewportOverlaySnapshot,
             .viewId                   = frame.view.task ? frame.view.task->desc.viewId : 0,

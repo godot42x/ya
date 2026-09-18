@@ -55,7 +55,7 @@
 - [x] 4.0.2 C 入口：typed View/Pass resources；Bloom/BasicPost viewId map 与 Stage singleton CIS 删除；PointShadow packet 归 View Binding。
 - [x] Surface presentation blit 持有自己的 tone-map CIS；不再把 display compose 当成 View-owned set 的缺省调用方。
 - [x] 4.0.2 C 收口 6a：删 `LightStage::FrameInputs` / `_frameInputs` / `setFrameInputs()`（死状态：唯一写入方无调用方，真正的 light pass 由 frame-graph pass 显式传 View-owned descriptor set）。
-- [ ] 4.0.2 C 收口 6b：`BasicShadowMapTechnique::_preparedViewSlot` / `_lastPreparedPointLightCount` 换成 `prepare()` 返回的显式 token（`ShadowPreparedView`），经 `ShadowStage::prepareView` → pipeline 的 per-view 分支 → 两个 orchestrator 的 `BuildInputs` → `ShadowStage::appendGraphPasses(graph, preparedView, ctx, dep)` 传回；同时删掉 append 里对缓存计数的二次 clamp（`getEffectivePointLightCount()` 已 clamp 到 `MAX_POINT_LIGHTS`）与无人使用的 `getLastPreparedPointLightCount()`。
+- [x] 4.0.2 C 收口 6b：`ShadowPreparedView`（`viewSlot` + `pointLightCount`）取代 `BasicShadowMapTechnique::_preparedViewSlot` / `_lastPreparedPointLightCount`；`IShadowTechnique::prepare()` 返回该 token，经 `ShadowStage::prepareView` → pipeline 的 per-view 分支 → 两个 orchestrator 的 `BuildInputs.shadowPrepared` → `ShadowStage::appendGraphPasses(graph, ctx, prepared, dep)` 传回。附带删掉 append 里对缓存计数的二次 clamp 与无人使用的 `getLastPreparedPointLightCount()`。行为修正：prepare 被拒（无 frameData / 未在录制）的 View 现在不会 append 上一个 View 留下的 shadow pass。
 - [x] 4.0.2 D 入口：`recordFamily` 一个 family graph；publish 不走 pipeline getter；删除 `tick`/`beginTick`。
 - [ ] 4.0.2 D 收口：真正的 ViewFamily compiler，不再是 per-view `beginView` 循环外包装 + `familyPredecessor` 串行。
 - [x] 4.0.2 E 入口：删除 `RenderRuntime` 类，拆成 `RenderDeviceState` + `RenderFrameCoordinator`；删除 ViewportState 与 active Scene locator。
@@ -82,7 +82,7 @@
 - [x] 对照 UE Scene/FSceneRenderer/ViewFamily、Unity Camera/ScriptableRenderContext、Godot Viewport/SubViewport、ImGui draw data。
 - [x] 明确 Scene owner 不直接依赖 RHI；Scheduler 属于 Render3D orchestration，不属于 GUI Framework。
 - [x] 明确 UI 之前只指 UI GPU compose 之前。
-- [x] 明确 Stage 是 device 配方、View GPU 数据进 Binding / RDG persistent；禁止再叠 viewId map。`_frameInputs` 已随 4.0.2 C 收口 6a 删除；`_preparedViewSlot` 待 6b。
+- [x] 明确 Stage 是 device 配方、View GPU 数据进 Binding / RDG persistent；禁止再叠 viewId map。`_frameInputs` 随 4.0.2 C 收口 6a 删除，`_preparedViewSlot` 随 6b 换成显式 token；Stage 上不再有隐式 current View。
 - [x] 补齐 SceneFamily 轴并确认 submission 级 skinning 不能支持双 Scene。Device/Coordinator/Surface 正交尚未闭环。
 - [x] 将 ViewFamily 定义为 graph 编译单位。`recordFamily` 入口已在；真正 compiler 仍待 4.0.3。
 - [x] 明确 RHI begin/end 保留在 recording/graph executor；应删除的是 persistent pipeline 的隐式 current begin/tick。`tick` 已删，Stage current-view 未清。

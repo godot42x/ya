@@ -37,13 +37,14 @@ void ShadowStage::prepare(const RenderStageContext& ctx)
     // Shadow GPU allocation requires a live RenderSubmission via prepareView.
 }
 
-void ShadowStage::prepareView(RenderSubmission& submission, RenderViewRecordingContext& view)
+ShadowPreparedView ShadowStage::prepareView(RenderSubmission&           submission,
+                                            RenderViewRecordingContext& view)
 {
     YA_PROFILE_FUNCTION();
     if (!view.frameData || !_technique || !_settings.isEnabled()) {
-        return;
+        return {};
     }
-    _technique->prepare(submission, view);
+    return _technique->prepare(submission, view);
 }
 
 void ShadowStage::execute(const RenderStageContext& ctx)
@@ -55,12 +56,13 @@ void ShadowStage::execute(const RenderStageContext& ctx)
 ShadowGraphOutputs ShadowStage::appendGraphPasses(
     RenderGraph& graph,
     const RenderStageContext& ctx,
+    const ShadowPreparedView& prepared,
     std::optional<RGPassHandle> dependency)
 {
-    if (!ctx.frameData || !_technique || !_settings.isEnabled()) return {};
+    if (!ctx.frameData || !_technique || !_settings.isEnabled() || !prepared.valid()) return {};
     auto* basicShadowMapTechnique = dynamic_cast<BasicShadowMapTechnique*>(_technique.get());
     if (!basicShadowMapTechnique) return {};
-    return basicShadowMapTechnique->appendGraphPasses(graph, ctx.flightIndex, *ctx.frameData, dependency);
+    return basicShadowMapTechnique->appendGraphPasses(graph, ctx.flightIndex, *ctx.frameData, prepared, dependency);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

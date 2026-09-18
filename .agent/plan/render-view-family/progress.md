@@ -13,6 +13,18 @@
 
 ## 2026-09-17 checkpoint：View 声明 / 收集边界 review（无代码改动）
 
+## 2026-09-18 checkpoint：shadow 的准备结果显式回传（4.0.2 C 收口 6b）
+
+- 唯一目标：删掉计划点名的另一半隐式 current View——`BasicShadowMapTechnique` 记住「上一次 prepare 的是哪个 view slot、其中有多少盏点光」并在 append 时复用。与 6a 的差别是这一半不是死状态（它真的被读），所以要把 prepare 的结果显式传回去。
+- token：新增 `ShadowPreparedView{viewSlot, pointLightCount, valid()}`（`Render3D/Shadow/IShadowTechnique.h`）。`IShadowTechnique::prepare()` 改为返回它；`pointLightCount` 随 token 走，是因为 append 会用自己的 `frameData` 重建 payload，而那份 `frameData` 未必是 prepare 看过的那个包（Forward 的 `stageCtx.frameData` 是相机包，prepare 用的是 `recording.frameData`），显式带回才能保证 pass 用的就是「为它准备过的」那份计数。
+- 传递链：`ShadowStage::prepareView` 返回 token → Forward 的 `ForwardFamilyViewBranch.shadowPrepared` / Deferred 的 `DeferredFamilyViewBranch.shadowPrepared` → `appendViewportPassGraph(...)` / `appendDeferredViewToGraph(...)` → 两个 orchestrator 的 `BuildInputs.shadowPrepared` → `ShadowStage::appendGraphPasses(graph, ctx, prepared, dependency)` → technique。Stage 与 technique 上不再有 `_preparedViewSlot` / `_lastPreparedPointLightCount`。
+- 顺手去掉两处：append 里对 `pointLightCount` 的二次 `std::min(..., MAX_POINT_LIGHTS)`（prepare 时已经 clamp 过）与无人使用的 `getLastPreparedPointLightCount()`。
+- 行为修正（刻意）：prepare 被拒（无 `frameData`、或 submission 未在录制）的 View 现在以无效 token append，什么都不加。旧代码在这种情况下会复用上一个 View 的 slot 与计数，把别人的 shadow pass 加进这一帧的图里——这正是「Stage 记住当前 view」会造成的错误。
+- 新测试：`Engine/Test/Source/ShadowPreparedViewTest.cpp`——token 默认无效；在 shadow 打开的前提下，未 prepare 的 View append 出来的是空输出且图里不多出 pass。`ForwardFrameGraphOrchestratorTest.BuildInputsDefaultsStayEmpty` 补一条 `shadowPrepared` 默认无效。
+- 验收：`xmake b ya-render-3d ya-render-3d-test ya-game-editor ya-testing`；`ya-render-3d-test` 174/174（原 172 + 2）；runtime 与 editor 的 viewport 截图与 4d-3b 逐字节相同。
+- 验证口径补强（这一刀顺手做了）：先确认 shadow 确实影响这两张图，再谈截图不变。用 `--automation-config` 把 `shadow.quality` 设为 0（注意该键在 automation 文档根下，与 `smoke.postprocess.*` 的前缀不同）：runtime 视口整幅变化（bbox 全图、单通道最大差 162），editor 视口同样整幅变化（最大差 96）。所以「开关 shadow 会改变像素、而本刀前后截图逐字节相同」才构成 shadow 路径未被改坏的证据。
+- 保留未完成：无（Stage current-view 至此清空）。
+
 ## 2026-09-18 checkpoint：Stage 不再记住当前 view（4.0.2 C 收口 6a）
 
 - 唯一目标：删掉 Stage 上「上一次准备的是哪个 view」这类隐式槽位里的死的那一半。计划的 4.0.2 C 收口点了两个名字，这一刀先处理 `LightStage`（另一半 `BasicShadowMapTechnique::_preparedViewSlot` 需要把 prepare 的结果显式回传，拆成 6b）。

@@ -34,7 +34,7 @@ void DeferredFrameGraphOrchestrator::build(
     if (deps.shadowStage) {
         const size_t passCountBefore = graph.getPasses().size();
         graphResources.passes.shadow = deps.shadowStage->appendGraphPasses(
-            graph, stageCtx, familyPredecessor);
+            graph, stageCtx, inputs.shadowPrepared, familyPredecessor);
         bShadowAppended = graph.getPasses().size() > passCountBefore;
     }
 

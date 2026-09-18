@@ -5,6 +5,7 @@
 #include "Render3D/Deferred/ViewportOverlayStage.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Common/IRenderPipeline.h"
+#include "Render3D/Shadow/IShadowTechnique.h"
 
 #include <cstdint>
 #include <functional>
@@ -50,6 +51,9 @@ struct DeferredFrameGraphOrchestrator
         DescriptorSetHandle                    environmentLightingDS     = nullptr;
         FrameContext*                          postContext               = nullptr;
         Extent2D                               viewportExtent            {};
+        /// What the View's shadow preparation produced. Passing it in keeps the
+        /// stage from remembering which View it prepared last.
+        ShadowPreparedView                     shadowPrepared            {};
         bool                                   bUseSSAO                  = false;
         bool                                   bReverseViewportY         = true;
         bool                                   bPostprocessOutputIsSRGB  = false;

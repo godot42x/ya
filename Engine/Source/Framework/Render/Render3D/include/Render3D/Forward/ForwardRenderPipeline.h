@@ -163,6 +163,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     bool               appendViewportPassGraph(RenderGraph& graph,
                                                const RenderPipelineFrameContext& frame,
                                                RenderStageContext&             stageCtx,
+                                               const ShadowPreparedView&       shadowPrepared,
                                                FrameContext&                    postContext,
                                                ForwardViewportStage::PassContext& viewportPassContext,
                                                const ForwardFrameResourceSet::Binding& frameBinding,
@@ -177,7 +178,10 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
-    void               executeShadowPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
+    /// Returns the token the View's graph build must hand back to the shadow
+    /// stage. An invalid token means this View appends no shadow passes.
+    [[nodiscard]] ShadowPreparedView executeShadowPass(const RenderPipelineFrameContext& frame,
+                                                       RenderStageContext&               stageCtx);
     void               rebuildShadowViews();
     void               applyShadowSettings(const ShadowSettings& shadowSettings);
     void               applyPendingPostProcessSettings();

@@ -4,6 +4,7 @@
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
 #include "Render3D/Forward/ForwardViewportStage.h"
+#include "Render3D/Shadow/IShadowTechnique.h"
 
 #include <cstdint>
 #include <memory>
@@ -45,6 +46,9 @@ struct BuildInputs
     ForwardViewportStage::PassContext*               viewportPassContext = nullptr;
     FrameContext*                                    postContext         = nullptr;
     bool                                             bEnableShadow       = false;
+    /// What the View's shadow preparation produced; invalid means no shadow
+    /// passes for this View, so the stage never has to remember one.
+    ShadowPreparedView                               shadowPrepared      = {};
     bool                                             bPostprocessOutputIsSRGB = false;
     std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
     uint64_t                                         viewId              = 0;

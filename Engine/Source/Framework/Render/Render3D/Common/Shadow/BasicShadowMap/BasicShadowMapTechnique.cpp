@@ -50,21 +50,21 @@ void BasicShadowMapTechnique::applySettings(const ShadowSettings& settings)
 // Prepare / Execute
 // ═══════════════════════════════════════════════════════════════════════════
 
-void BasicShadowMapTechnique::prepare(RenderSubmission& submission, RenderViewRecordingContext& view)
+ShadowPreparedView BasicShadowMapTechnique::prepare(RenderSubmission&           submission,
+                                                    RenderViewRecordingContext& view)
 {
     YA_PROFILE_FUNCTION();
-    _preparedViewSlot = RenderViewRecordingContext::kInvalidViewSlot;
     if (!_settings.isEnabled() || !view.frameData) {
-        return;
+        return {};
     }
     if (!submission.isRecording()) {
         YA_CORE_ERROR("BasicShadowMapTechnique requires a recording submission");
-        return;
+        return {};
     }
 
     if (!_frameResources.prepareSkinning(submission, view)) {
         YA_CORE_ERROR("BasicShadowMapTechnique failed to prepare shadow skinning");
-        return;
+        return {};
     }
 
     auto payload = buildFramePayload(submission.flightIndex(), *view.frameData);
@@ -72,15 +72,13 @@ void BasicShadowMapTechnique::prepare(RenderSubmission& submission, RenderViewRe
     payload.submission = &submission;
     if (!_frameResources.beginView(submission, view, payload)) {
         YA_CORE_ERROR("BasicShadowMapTechnique failed to prepare shadow frame resources");
-        return;
+        return {};
     }
 
     payload.viewSlot = view.viewSlot;
     if (auto* binding = _frameResources.mutableViewBinding(submission.flightIndex(), view.viewSlot)) {
         payload.pointShadow = &binding->pointShadow;
     }
-    _preparedViewSlot = view.viewSlot;
-    _lastPreparedPointLightCount = payload.pointLightCount;
 
     if (payload.directionalEnabled()) {
         _directionalPass.prepare(payload);
@@ -88,23 +86,31 @@ void BasicShadowMapTechnique::prepare(RenderSubmission& submission, RenderViewRe
     if (payload.pointEnabled()) {
         _pointPass.prepare(payload);
     }
+
+    return ShadowPreparedView{
+        .viewSlot        = view.viewSlot,
+        .pointLightCount = payload.pointLightCount,
+    };
 }
 
 ShadowGraphOutputs BasicShadowMapTechnique::appendGraphPasses(
     RenderGraph& graph,
     uint32_t flightIndex,
     const RenderFrameData& frameData,
+    const ShadowPreparedView& prepared,
     std::optional<RGPassHandle> dependency)
 {
     ShadowGraphOutputs outputs{};
-    if (!_settings.isEnabled() || _preparedViewSlot == RenderViewRecordingContext::kInvalidViewSlot) {
+    if (!_settings.isEnabled() || !prepared.valid()) {
         return outputs;
     }
 
     auto payload = buildFramePayload(flightIndex, frameData);
-    payload.viewSlot = _preparedViewSlot;
-    payload.pointLightCount = std::min(_lastPreparedPointLightCount, static_cast<uint32_t>(MAX_POINT_LIGHTS));
-    if (auto* binding = _frameResources.mutableViewBinding(flightIndex, _preparedViewSlot)) {
+    payload.viewSlot = prepared.viewSlot;
+    // Already clamped when it was prepared, and it is the count the View's
+    // resources were actually built for, not a recomputation.
+    payload.pointLightCount = prepared.pointLightCount;
+    if (auto* binding = _frameResources.mutableViewBinding(flightIndex, prepared.viewSlot)) {
         payload.pointShadow = &binding->pointShadow;
     }
     std::optional<RGPassHandle> lastPass = dependency;

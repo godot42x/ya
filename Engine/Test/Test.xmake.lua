@@ -63,6 +63,7 @@ if get_config("ya_profile") ~= "gui" then
                   "./Source/ViewPersistentResourceKeyTest.cpp",
                   "./Source/ViewFamilyRendererTest.cpp",
                   "./Source/ForwardFrameGraphOrchestratorTest.cpp",
+                  "./Source/ShadowPreparedViewTest.cpp",
                   "./Source/CameraFrustumOverlayTest.cpp")
         -- Plan tests declare real Scenes: a Scene handle, not an invented id, is
         -- what a view declaration carries.

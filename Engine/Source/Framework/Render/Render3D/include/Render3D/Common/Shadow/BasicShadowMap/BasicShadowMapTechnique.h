@@ -30,19 +30,21 @@ class BasicShadowMapTechnique : public IShadowTechnique
     void init(IRender* render, const ShadowSettings& settings) override;
     void destroy() override;
     void applySettings(const ShadowSettings& settings) override;
-    void prepare(RenderSubmission& submission, RenderViewRecordingContext& view) override;
+    [[nodiscard]] ShadowPreparedView prepare(RenderSubmission&           submission,
+                                             RenderViewRecordingContext& view) override;
     [[nodiscard]] DirectionalShadowPass& getDirectionalPass() { return _directionalPass; }
     [[nodiscard]] PointShadowPass&       getPointPass() { return _pointPass; }
     [[nodiscard]] const DirectionalShadowPass& getDirectionalPass() const { return _directionalPass; }
     [[nodiscard]] const PointShadowPass&       getPointPass() const { return _pointPass; }
     [[nodiscard]] const ShadowSettings&        getSettings() const { return _settings; }
-    [[nodiscard]] uint32_t                     getLastPreparedPointLightCount() const { return _lastPreparedPointLightCount; }
 
     void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent) override;
+    /// Append this technique's graph passes for the View a prepare() produced.
     [[nodiscard]] ShadowGraphOutputs appendGraphPasses(
         RenderGraph& graph,
         uint32_t flightIndex,
         const RenderFrameData& frameData,
+        const ShadowPreparedView& prepared,
         std::optional<RGPassHandle> dependency = std::nullopt);
 
   private:
@@ -56,8 +58,6 @@ class BasicShadowMapTechnique : public IShadowTechnique
     stdptr<IImageView> _shadowDepthArrayView;
 
     ShadowSettings _settings;
-    uint32_t       _lastPreparedPointLightCount = 0;
-    uint32_t       _preparedViewSlot = RenderViewRecordingContext::kInvalidViewSlot;
     ShadowFrameResources _frameResources;
     DirectionalShadowPass _directionalPass;
     PointShadowPass       _pointPass;

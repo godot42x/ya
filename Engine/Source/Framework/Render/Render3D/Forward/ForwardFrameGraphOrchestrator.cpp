@@ -21,7 +21,8 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
 
     ShadowGraphOutputs shadowOutputs;
     if (deps.shadowStage && inputs.bEnableShadow) {
-        shadowOutputs = deps.shadowStage->appendGraphPasses(graph, *inputs.stageCtx, inputs.familyPredecessor);
+        shadowOutputs = deps.shadowStage->appendGraphPasses(
+            graph, *inputs.stageCtx, inputs.shadowPrepared, inputs.familyPredecessor);
     }
 
     const auto graphResources = forward_frame_graph::createViewportResources(

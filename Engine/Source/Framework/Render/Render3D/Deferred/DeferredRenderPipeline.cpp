@@ -915,6 +915,9 @@ struct DeferredFamilyViewBranch
 {
     RenderPipelineFrameContext            frame{};
     RenderStageContext                    stageCtx{};
+    /// The View's own shadow preparation result, carried from prepare to the
+    /// graph build so the shadow stage needs no "current View".
+    ShadowPreparedView                    shadowPrepared{};
     uint32_t                              vpW = 0;
     uint32_t                              vpH = 0;
     ViewportOverlayStage::FrameInputs     overlayInputs{};
@@ -969,7 +972,7 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
         beginViewRecording(branch.frame, branch.stageCtx, branch.vpW, branch.vpH);
         syncFrameSettings(branch.frame);
         applyPendingResourceRefreshes();
-        prepareShadowPass(branch.frame, branch.stageCtx);
+        branch.shadowPrepared = prepareShadowPass(branch.frame, branch.stageCtx);
 
         if (!preparedSkinning) {
             RenderViewRecordingContext view = branch.frame.view;
@@ -990,6 +993,7 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
                 graph,
                 live.frame,
                 live.stageCtx,
+                live.shadowPrepared,
                 live.vpW,
                 live.vpH,
                 live.overlayInputs,
@@ -1370,36 +1374,36 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
     syncShadowSettings();
 }
 
-void DeferredRenderPipeline::prepareShadowPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
+ShadowPreparedView DeferredRenderPipeline::prepareShadowPass(const RenderPipelineFrameContext& frame,
+                                                             RenderStageContext&               stageCtx)
 {
     const auto shadowSettings = currentShadowSettings();
-        if (_shadowStage && shadowSettings.isEnabled()) {
+    if (_shadowStage && shadowSettings.isEnabled()) {
         _shadowStage->applySettings(shadowSettings);
-        {
-            YA_PERF_SCOPE(perf::sample::deferredShadow(), perf::metric::cpuTimeMs(), perf::domain::render());
-            if (!frame.submission || !frame.submission->isRecording()) {
-                YA_CORE_ERROR("Deferred shadow pass requires a recording submission");
-                return;
-            }
-
-            RenderViewRecordingContext view = frame.view;
-            if (!view.frameData) {
-                view.frameData = frame.camera.frameData;
-            }
-            if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
-                view.viewportExtent = stageCtx.viewportExtent;
-            }
-            _shadowStage->prepareView(*frame.submission, view);
+        YA_PERF_SCOPE(perf::sample::deferredShadow(), perf::metric::cpuTimeMs(), perf::domain::render());
+        if (!frame.submission || !frame.submission->isRecording()) {
+            YA_CORE_ERROR("Deferred shadow pass requires a recording submission");
+            return {};
         }
-        return;
+
+        RenderViewRecordingContext view = frame.view;
+        if (!view.frameData) {
+            view.frameData = frame.camera.frameData;
+        }
+        if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
+            view.viewportExtent = stageCtx.viewportExtent;
+        }
+        return _shadowStage->prepareView(*frame.submission, view);
     }
 
     PerfState::get().clearMetric(perf::sample::deferredShadow(), perf::metric::cpuTimeMs());
+    return {};
 }
 
 bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
                                                        const RenderPipelineFrameContext& frame,
                                                        RenderStageContext& stageCtx,
+                                                       const ShadowPreparedView& shadowPrepared,
                                                        uint32_t vpW,
                                                        uint32_t vpH,
                                                        ViewportOverlayStage::FrameInputs& overlayInputs,
@@ -1500,6 +1504,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
             .environmentLightingDS    = environmentLightingDS,
             .postContext              = &postContext,
             .viewportExtent           = viewViewportSpec.extent,
+            .shadowPrepared           = shadowPrepared,
             .bUseSSAO                 = bUseSSAO,
             .bReverseViewportY        = _bReverseViewportY,
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),

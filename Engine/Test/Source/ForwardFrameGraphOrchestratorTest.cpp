@@ -14,6 +14,8 @@ TEST(ForwardGraphInputsTest, BuildInputsDefaultsStayEmpty)
     EXPECT_EQ(inputs.postContext, nullptr);
     EXPECT_TRUE(inputs.directionGizmos.empty());
     EXPECT_FALSE(inputs.bEnableShadow);
+    // No View was prepared for this graph, so no shadow passes may be appended.
+    EXPECT_FALSE(inputs.shadowPrepared.valid());
     EXPECT_FALSE(inputs.bPostprocessOutputIsSRGB);
     EXPECT_FALSE(inputs.viewportOverlaySnapshot);
     EXPECT_EQ(inputs.viewId, 0u);

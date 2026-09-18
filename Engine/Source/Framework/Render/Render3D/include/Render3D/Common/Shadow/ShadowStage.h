@@ -30,7 +30,10 @@ struct ShadowStage : public IRenderStage
     void init(IRender* render) override;
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
-    void prepareView(RenderSubmission& submission, RenderViewRecordingContext& view);
+    /// Prepare one View's shadow frame resources. The returned token is what
+    /// appendGraphPasses() needs; this stage keeps no "current View" of its own.
+    [[nodiscard]] ShadowPreparedView prepareView(RenderSubmission&           submission,
+                                                RenderViewRecordingContext& view);
     void execute(const RenderStageContext& ctx) override;
 
     [[nodiscard]] IShadowTechnique* getTechnique() const { return _technique.get(); }
@@ -40,6 +43,7 @@ struct ShadowStage : public IRenderStage
     [[nodiscard]] ShadowGraphOutputs appendGraphPasses(
         RenderGraph& graph,
         const RenderStageContext& ctx,
+        const ShadowPreparedView& prepared,
         std::optional<RGPassHandle> dependency = std::nullopt);
 
     /// Apply shadow settings from App layer. Call each frame before prepare/execute.
