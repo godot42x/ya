@@ -17,7 +17,6 @@ TEST(ForwardGraphInputsTest, BuildInputsDefaultsStayEmpty)
     // No View was prepared for this graph, so no shadow passes may be appended.
     EXPECT_FALSE(inputs.shadowPrepared.valid());
     EXPECT_FALSE(inputs.bPostprocessOutputIsSRGB);
-    EXPECT_FALSE(inputs.viewportOverlaySnapshot);
     EXPECT_EQ(inputs.viewId, 0u);
     EXPECT_FALSE(inputs.familyPredecessor.has_value());
 

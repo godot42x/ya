@@ -710,3 +710,33 @@ view 身份目前是**全局小整数**，所以"谁是谁"只能靠读声明方
 - 不在这一批做 owner-scoped `SceneViewKey`（4.0.3 checkpoint 5）：它是 V2 之后才有的价值，先做会让 V1–V3 的删除被"新键"掩盖。
 - 不为"隐式"这件事新增抽象：I1–I7 每一条的修法都是**删除**（删 `front()`、删循环赋值、删兜底、删回调、删中间 struct），不引入新 bus/registry/中央调度器。
 - 不顺手改 pass topology（Forward/Deferred 保持现状），也不在录制中途重建 GPU 资源。
+
+### 附.5 逻辑→渲染链减法（2026-09-19 追加，V 系列之后）
+
+用户把范围收窄成"**只关注 app 主流程和渲染主流程的链路**"，判据是**没有生产者的东西删掉、
+每 tick 重复的展示工作移出 tick**。这一批不属于 I1–I7，但用的是同一条修法（删除），并列在这里：
+
+- 删不可达 demo（`AppMode` / `_appMode` / `clicked` / 绘图分支 / `buildScreenOverlaySprites`）；
+- 窗口标题移出 tick：新增 `IRender::getDeviceName()` 取代 `render->as<VulkanRender>()` 降型，
+  标题在 `RenderDeviceState::initRenderBackend` 里设一次；
+- 删死步骤 `syncViewportState`；
+- 删 `resolveViewportExtent` 与 `SceneViewCollectContext::viewportExtent`：host camera aspect 直接读
+  `hostView.viewportRect.extent`，logic 链不再读上一 tick 发布的 device extent；
+- **删主机 screen-overlay 通道**：`FramePacket::overlay` 的唯一生产者就是上面那条 demo，四路输入全空
+  时 snapshot 为 `nullptr` 而 pass 仍然每帧 append，于是整条 `kTopologyPassOverlay` 在所有被测
+  路径上空跑。这是"没有生产者的数据通道"在**更大颗粒度**上的实例（一条 pass，而不是一个方法）。
+
+**对 V5 目标形状的修正**：V5 原文把 `FramePacket` 的目标形状写成
+`{flightIndex, frameIndex, deltaTime, uiFrameSnapshot, overlay, present}`。`overlay` 已按上一条删除——
+"宿主把 screen overlay 交给 renderer"这个通道不存在了。`RenderOverlay.h` 只剩
+`RenderOverlayText2D` / `RenderOverlayLine3D` 两个**值**，由录 overlay 的一方（编辑器在自己的
+viewport compose 里）直接读。将来若真的需要"宿主给 renderer 一批 screen sprite"，那是一个需要重新
+论证的新通道，不是把旧字段加回来。
+
+**viewport 概念的处置**（用户提问）：没有消失，它就是已经存在的两件事——`SceneViewDesc::extent`
+（声明方说"这个 view 要多大"）与 `RenderDeviceState::getViewportExtent()`（自 V3 起只有 published /
+`{}` 两个来源，读的是**已发布输出**尺寸）。被删的是两者之间的**投影函数**，它把"上一帧的输出尺寸"
+当成"这一帧的输入尺寸"。producer 要 extent 就从 `viewportRect` 自己派生。
+
+**下一批次（未做，已记入 `todo.md`）**：`tickRender` 三处"调用方持有的生命周期"去注释化、
+`HostViewState` 单一写者、公开 `Renderer` 合并（4.0.3 checkpoint 2/3）。

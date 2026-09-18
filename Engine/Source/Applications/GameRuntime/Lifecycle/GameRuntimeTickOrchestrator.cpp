@@ -181,10 +181,6 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
         }
     }
     {
-        YA_PROFILE_SCOPE("Logic/ViewportSync");
-        syncViewportState(app);
-    }
-    {
         YA_PROFILE_SCOPE("Logic/Systems");
         for (auto& sys : app._systems) {
             sys->onUpdate(dt);
@@ -193,10 +189,14 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
 
     if (app.getSceneServices().getActiveScene()) {
         YA_PROFILE_SCOPE("Logic/RuntimeCamera");
-        auto* device = app.getRenderServices().getDeviceState();
-        const Extent2D viewportExtent = resolveViewportExtent(app,
-                                                              device,
-                                                              app._renderState->hostView.viewportRect);
+        // The aspect follows the *host surface area this tick is sized for*, not
+        // last tick's published View output. Reading the device's published
+        // extent made the camera's aspect depend on what was rendered before,
+        // which is exactly the "global viewport" this chain is removing: every
+        // View declares its own extent, so the only thing the game camera can
+        // honestly match is the area the host is giving the views.
+        // `syncRuntimeCameraAspect` ignores a degenerate extent.
+        const Extent2D viewportExtent = Extent2D::fromVec2(app._renderState->hostView.viewportRect.extent);
         syncRuntimeCameraAspect(findPrimaryCamera(*app.getSceneServices().getActiveScene()), viewportExtent);
     }
 
@@ -232,21 +232,6 @@ void GameRuntimeTickOrchestrator::tickLogic(App& app, float dt)
         YA_PROFILE_SCOPE("Logic/InputPreUpdate");
         app.inputManager.preUpdate();
     }
-    auto* render = app.getRenderServices().getRender();
-    if (!render) {
-        return;
-    }
-    auto        vkRender       = render->as<VulkanRender>();
-    auto        nativeWindow   = render->primaryWindow();
-    std::string title          = std::format("{}({})", app._ci.title, vkRender->_selectedDeviceInfo.deviceName);
-    if (nativeWindow) {
-        nativeWindow->setTitle(title);
-    }
-}
-
-void GameRuntimeTickOrchestrator::syncViewportState(App& app)
-{
-    (void)app;
 }
 
 void GameRuntimeTickOrchestrator::pumpOffscreenTasks(App& app, RenderDeviceState* device)
@@ -259,24 +244,6 @@ void GameRuntimeTickOrchestrator::pumpOffscreenTasks(App& app, RenderDeviceState
     pumpOffscreenTasks(app, device);
 }
 
-Extent2D GameRuntimeTickOrchestrator::resolveViewportExtent(const App& app, RenderDeviceState* device, const Rect2D& viewportRect)
-{
-    if (device) {
-        Extent2D extent = device->getViewportExtent();
-        if (extent.width > 0 && extent.height > 0) {
-            return extent;
-        }
-    }
-
-    if (viewportRect.extent.x > 0 && viewportRect.extent.y > 0) {
-        return Extent2D::fromVec2(viewportRect.extent);
-    }
-
-    return Extent2D{
-        .width  = static_cast<uint32_t>(app._windowSize.x),
-        .height = static_cast<uint32_t>(app._windowSize.y),
-    };
-}
 
 void GameRuntimeTickOrchestrator::prepareHostViewState(App& app, float dt)
 {
@@ -320,32 +287,6 @@ uint32_t GameRuntimeTickOrchestrator::resolveFlightIndex(const App& app)
     // coincidence: end() advances after present, so this is the slot begin()
     // will wait. World recording uses this flight, not swapchain imageIndex.
     return present->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT;
-}
-
-std::vector<RenderOverlaySprite2D> GameRuntimeTickOrchestrator::buildScreenOverlaySprites(const App& app)
-{
-    std::vector<RenderOverlaySprite2D> sprites;
-    if (app._appMode != AppMode::Drawing || app.clicked.empty()) {
-        return sprites;
-    }
-
-    sprites.reserve(app.clicked.size());
-    for (size_t idx = 0; idx < app.clicked.size(); ++idx) {
-        const auto& screenPos     = app.clicked[idx];
-        auto        textureHandle = idx % 2 == 0
-                                      ? AssetManager::get()->getTextureByName("uv1")
-                                      : AssetManager::get()->getTextureByName("face");
-        auto*       texture       = textureHandle.get();
-        YA_CORE_ASSERT(texture, "Texture not found");
-
-        RenderOverlaySprite2D sprite;
-        sprite.viewportPos = screenPos;
-        sprite.size        = {50.0f, 50.0f};
-        sprite.texture     = texture;
-        sprites.push_back(sprite);
-    }
-
-    return sprites;
 }
 
 void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
@@ -400,9 +341,8 @@ void GameRuntimeTickOrchestrator::tickRender(App& app, float dt)
     ExtractedSceneRender sceneRender  = extractScenes(app, sceneScheduler, device);
     prepareViews(app, dt, flightIndex, sceneRender);
 
-    const std::vector<RenderOverlaySprite2D> screenOverlaySprites = buildScreenOverlaySprites(app);
-    UIFrameSnapshot                          uiFrameSnapshot;
-    const FramePacket frame = buildGameRenderFrame(app, dt, flightIndex, screenOverlaySprites, uiFrameSnapshot);
+    UIFrameSnapshot uiFrameSnapshot;
+    const FramePacket frame = buildGameRenderFrame(app, dt, flightIndex, uiFrameSnapshot);
 
     IRender*       render        = device->getRender();
     FPresentFrame  presentFrame{.surface = render ? render->getPrimarySurfaceContext() : nullptr};
@@ -439,7 +379,6 @@ const SceneViewDesc* GameRuntimeTickOrchestrator::declareViews(App&             
     const SceneViewCollectContext collectContext{
         .activeScene    = scene,
         .viewportRect   = hostView.viewportRect,
-        .viewportExtent = resolveViewportExtent(app, device, hostView.viewportRect),
         .hostTick       = App::_hostTick,
         .deltaTime      = dt,
     };
@@ -537,23 +476,19 @@ FramePacket GameRuntimeTickOrchestrator::buildGameRenderFrame(
     App&                                      app,
     float                                     dt,
     uint32_t                                  flightIndex,
-    const std::vector<RenderOverlaySprite2D>& screenSprites,
     UIFrameSnapshot&                          outUiSnapshot)
 {
     const HostViewState& hostView = app._renderState->hostView;
 
     // Frame-level only: which cameras draw and where their outputs go is on
     // each View's declaration and prepared data. The host contributes the
-    // tick's clock, its render scale and the screen overlay.
+    // tick's clock and its render scale.
     FramePacket frame{
         .flightIndex   = flightIndex,
         .frameIndex    = App::_hostTick,
         .deltaTime     = dt,
         .viewportFrameBufferScale = hostView.viewportFrameBufferScale,
         .shadowSettings = &app.getRenderServices().getShadowSettings(),
-    };
-    frame.overlay = {
-        .screenSprites = &screenSprites,
     };
 
     // Game UI: build the immutable frame snapshot BEFORE the RenderGraph.

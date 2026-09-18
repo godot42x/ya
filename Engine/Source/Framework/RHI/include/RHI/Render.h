@@ -5,6 +5,7 @@
 #include "RHI/Core/RenderSurfaceContext.h"
 
 #include <memory>
+#include <string>
 
 namespace ya
 {
@@ -115,6 +116,12 @@ struct YA_RHI_API IRender : public plat_base<IRender>
     [[nodiscard]] virtual std::unique_ptr<IRenderSurfaceContext> createSurfaceContext(INativeWindow& window);
 
     [[nodiscard]] ERenderAPI::T getAPI() const { return _renderAPI; }
+
+    /// Human-readable name of the device this backend selected, or empty when
+    /// the API has none. A window/tooling label: callers that only want to
+    /// print which GPU is running should not have to downcast to a concrete
+    /// backend to read its device info.
+    [[nodiscard]] virtual std::string getDeviceName() const { return {}; }
 
     /**
      * @brief Allocate command buffers (returns generic ICommandBuffer interface)

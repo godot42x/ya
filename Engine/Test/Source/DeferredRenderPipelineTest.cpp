@@ -274,11 +274,6 @@ TEST(DeferredPassParamsTest, SkyboxOverlayDefaultsAreEmptyAndCallbacksRemainExpl
     EXPECT_TRUE(transparent.overlay.billboards.empty());
     EXPECT_TRUE(transparent.overlay.directionGizmos.empty());
 
-    DeferredOverlayPassParams overlay{};
-    EXPECT_FALSE(overlay.color.isValid());
-    EXPECT_FALSE(overlay.depth.isValid());
-    EXPECT_EQ(overlay.layerCount, 1u);
-    EXPECT_FALSE(overlay.overlaySnapshot);
 }
 
 TEST(PostProcessingStageTest, FinalizeParamsDefaultsStayEmpty)

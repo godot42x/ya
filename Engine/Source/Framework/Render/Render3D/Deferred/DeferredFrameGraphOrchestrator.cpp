@@ -54,7 +54,6 @@ void DeferredFrameGraphOrchestrator::build(
         .bUseSSAO                 = inputs.bUseSSAO,
         .bReverseViewportY        = inputs.bReverseViewportY,
         .bPostprocessOutputIsSRGB = inputs.bPostprocessOutputIsSRGB,
-        .viewportOverlaySnapshot  = inputs.viewportOverlaySnapshot,
         .viewId                   = inputs.viewId,
         .familyPredecessor        = bShadowAppended ? std::nullopt : familyPredecessor,
         .shadowStage              = deps.shadowStage,
@@ -76,7 +75,6 @@ void DeferredFrameGraphOrchestrator::build(
     deferred_frame_graph_passes::appendBloom(context);
     deferred_frame_graph_passes::appendForwardTransparent(context);
     deferred_frame_graph_passes::appendEntityId(context);
-    deferred_frame_graph_passes::appendOverlay(context);
     deferred_frame_graph_passes::appendPostprocess(context);
 
     exportGraphOutputs(graph, graphResources, inputs.viewId);

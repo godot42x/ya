@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Common/RenderRecordingContext.h"
 #include "Render3D/Common/SceneRenderScheduler.h"
 #include "Render3D/Common/ShadowSettings.h"
@@ -31,14 +30,6 @@ struct UIFrameSnapshot;
 /// field came from.
 struct FramePacket
 {
-    struct OverlayInput
-    {
-        const std::vector<RenderOverlaySprite2D>* screenSprites = nullptr;
-        const std::vector<RenderOverlaySprite3D>* worldSprites  = nullptr;
-        const std::vector<RenderOverlayText2D>*   screenTexts   = nullptr;
-        const std::vector<RenderOverlayLine3D>*   worldLines    = nullptr;
-    };
-
     uint32_t flightIndex = 0;
     uint64_t frameIndex  = 0;
     float    deltaTime   = 0.0f;
@@ -49,7 +40,6 @@ struct FramePacket
     float viewportFrameBufferScale = 1.0f;
 
     const ShadowSettings* shadowSettings = nullptr;
-    OverlayInput          overlay{};
     /// Game UI snapshot for this tick, consumed by the display compose. Built
     /// before graph build; the live WidgetTree is never read while recording.
     const UIFrameSnapshot* uiFrameSnapshot = nullptr;
@@ -129,7 +119,6 @@ struct ViewFamilyRecordContext
     /// The family's views, each carrying its own task and therefore its own
     /// Scene; a family exists only for one (Scene, revision, policy).
     std::vector<SceneViewRecording>                      views;
-    std::shared_ptr<const RenderViewportOverlaySnapshot> overlaySnapshot;
 };
 
 /// One View being recorded, plus the frame-level facts it shares with its
@@ -140,7 +129,6 @@ struct RenderPipelineFrameContext
 {
     ICommandBuffer*    cmdBuf = nullptr;
     const FramePacket* frame  = nullptr;
-    std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
     RenderSubmission*          submission = nullptr;
     RenderViewRecordingContext view{};
     /// The Scene `view` was declared against, taken from that view's task.

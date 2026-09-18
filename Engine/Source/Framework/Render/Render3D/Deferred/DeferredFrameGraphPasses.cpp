@@ -21,7 +21,6 @@ constexpr std::string_view kTopologyPassLight             = "Deferred Light";
 constexpr std::string_view kTopologyPassForwardOpaque     = "Deferred Forward Opaque";
 constexpr std::string_view kTopologyPassSkybox            = "Deferred Skybox";
 constexpr std::string_view kTopologyPassForwardTransparent = "Deferred Forward Transparent";
-constexpr std::string_view kTopologyPassOverlay           = "Deferred Overlay";
 
 RGImportedTextureDesc makeEnvironmentImportedDesc(const std::shared_ptr<ImageResource>& resource,
                                                   std::string_view                    label)
@@ -571,48 +570,6 @@ void appendEntityId(DeferredFrameGraphPassContext& context)
         });
 }
 
-void appendOverlay(DeferredFrameGraphPassContext& context)
-{
-    DeferredOverlayPassParams params{
-        .color          = context.graphResources.textures.overlayInput,
-        .depth          = context.graphResources.textures.gBufferDepth,
-        .renderArea     = {.pos = {0, 0}, .extent = context.viewportExtent.toVec2()},
-        .layerCount     = 1,
-        .overlaySnapshot = context.viewportOverlaySnapshot,
-        .frameCtx       = context.postContext ? *context.postContext : FrameContext{},
-    };
-
-    context.graphResources.passes.viewportOverlay = context.graph.addPass(
-        makeViewGraphName(kTopologyPassOverlay, context.viewId),
-        [&params](RGPassBuilder& passBuilder) {
-            passBuilder.declareRaster({
-                .renderArea = params.renderArea,
-                .layerCount = params.layerCount,
-                .colors = {{
-                    .color       = params.color,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                }},
-                .depth = RGDepthAttachmentDesc{
-                    .depth       = params.depth,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                },
-            });
-        },
-        [params](RGRenderContext& rgCtx) mutable {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
-            rgCtx.beginDeclaredRasterRendering();
-            params.frameCtx.extent = viewportExtent;
-            recordRenderViewportOverlayPass(
-                params.frameCtx,
-                params.overlaySnapshot,
-                &rgCtx.getCommandBuffer());
-            rgCtx.endRendering();
-        });
-}
 
 void appendPostprocess(DeferredFrameGraphPassContext& context)
 {

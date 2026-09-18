@@ -165,13 +165,6 @@ inline const FName& renderWorld()
     return key;
 }
 
-inline const FName& renderViewportOverlay()
-{
-    using namespace ya::literals;
-    static const FName key = "Render/ViewportOverlay"_name;
-    return key;
-}
-
 inline const FName& renderPostProcess()
 {
     using namespace ya::literals;

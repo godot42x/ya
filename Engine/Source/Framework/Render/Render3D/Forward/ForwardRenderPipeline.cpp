@@ -375,11 +375,9 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         // The View's own declaration and prepared data are the camera: there is
         // no host packet to copy and override field by field.
         const Extent2D viewExtent = recording.task ? recording.task->output.extent : Extent2D{};
-        const bool bDisplayRoot = recording.task && ctx.plan && recording.task == ctx.plan->displayRootTask();
         branch.frame = RenderPipelineFrameContext{
             .cmdBuf                  = ctx.cmdBuf,
             .frame                   = ctx.frame,
-            .viewportOverlaySnapshot = bDisplayRoot ? ctx.overlaySnapshot : nullptr,
             .submission              = ctx.submission,
             .view                    = RenderViewRecordingContext{
                 .task           = recording.task,
@@ -881,7 +879,6 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
             .bEnableShadow            = _shadowStage && currentShadowSettings().isEnabled(),
             .shadowPrepared           = shadowPrepared,
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(POSTPROCESS_COLOR_FORMAT),
-            .viewportOverlaySnapshot  = frame.viewportOverlaySnapshot,
             .viewId                   = frame.view.task ? frame.view.task->desc.viewId : 0,
             .viewResources            = viewResources,
             .familyPredecessor        = familyPredecessor,

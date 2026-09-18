@@ -58,12 +58,15 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
     `getActiveViewportImageShared` / `getViewportDisplayImageShared` /
     `getViewportExtent` / `getViewOutput` 都只读本帧 published 的 display root，
     未发布就返回 `nullptr` / `{}`。要回落的调用方自己回落（编辑器 2D 画布用面板
-    尺寸、host 用 viewportRect → 窗口尺寸），因为只有调用方知道“没有视口时该显示
-    什么”。published 身份由 `RenderDeviceState::publishViewOutputIdentity` 一处写入
+    尺寸、host camera 用 `hostView.viewportRect.extent`），因为只有调用方知道“没有视口时该显示
+    什么”。回落必须落在**本 tick 的输入**上：不要写 `resolveViewportExtent` 那种“先读 device
+    已发布的尺寸、读不到再回落”的投影函数（2026-09-19 已删除）——它把上一帧的输出尺寸当成了这一帧
+    的输入尺寸，而且 init 之后那个分支恒非零，后面的兜底永远不可达。
+    published 身份由 `RenderDeviceState::publishViewOutputIdentity` 一处写入
     （`0` 清空），不要回到“遍历 family 逐个写、最后写入者赢”，也不要让 pipeline 上
     再留一份上次发布的图当兜底。
 14. 录制期不许向“当前状态”提问。帧级事实在 `FramePacket`（tick/flight/clock、host render
-    scale、shadow settings、overlay、UI snapshot），View 级事实在该 View 自己的
+    scale、shadow settings、UI snapshot），View 级事实在该 View 自己的
     `SceneViewDesc` / `SceneViewportTask` / `RenderFrameData` 上。没有 `CameraFrameInput`
     这种“既是这一帧又是主 View”的包，也没有 `cameraForViewRecording` 这种“拷贝宿主再
     逐字段覆盖”的 patching；需要 Scene 相关的 GPU 绑定（skybox / IBL descriptor set、
@@ -74,6 +77,11 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
     需要的东西要么进 View 数据（上面的 scene resources / clock），要么在构造时注入
     （`DebugRenderSystem` 走 InitDesc）。`getGameplayResourceBinding()` 这类只有声明没有
     消费者的接口方法，出现即删——否则它会成为下一个“录制期全局查询”的入口。
+    同一条判据适用于**字段和整条 pass**：如果一个数据通道（`FramePacket::overlay` 的四路可选
+    vector）没有任何生产者，而“空输入”又是合法输入，那“没有生产者”和“这一帧没有 overlay”在代码里
+    长得完全一样，它会带着**一整条每帧空跑的 pass** 活很久（`kTopologyPassOverlay` 就这么活到
+    2026-09-19）。删除前先回答“生产者是谁”：找不到生产者的字段 / 通道 / pass 一律删除，不要为它
+    补一个消费者。
 16. 一帧的录制顺序只写在一个地方：`RenderFrameCoordinator::record`。host 通过
     `IFrameRecordExtensions`（`recordViewCompose` / `recordBeforeDisplayExtensions` /
     `recordDisplayExtensions` / `appendDisplayCapture`）在这些阶段里录自己的东西，

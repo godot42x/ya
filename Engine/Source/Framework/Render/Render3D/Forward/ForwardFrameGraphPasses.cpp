@@ -3,7 +3,6 @@
 #include "RHI/Core/RenderTargetCreateInfo.h"
 #include "Render3D/Common/EntityIdViewportPass.h"
 #include "Render3D/Common/PostProcessingStage.h"
-#include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Common/ViewPersistentResourceKey.h"
 
@@ -20,8 +19,6 @@ namespace
 constexpr std::string_view kTopologyPassOpaque      = "Forward Opaque";
 constexpr std::string_view kTopologyPassSkybox      = "Forward Skybox";
 constexpr std::string_view kTopologyPassTransparent = "Forward Transparent";
-constexpr std::string_view kTopologyPassOverlay    = "Forward Overlay";
-
 struct OpaquePassParams
 {
     RGTextureHandle                    viewportColor{};
@@ -59,25 +56,12 @@ struct TransparentPassParams
     EImageLayout::T finalLayout = EImageLayout::ColorAttachmentOptimal;
 };
 
-struct OverlayPassParams
-{
-    RGTextureHandle color{};
-    RGTextureHandle depth{};
-    RGTextureHandle resolve{};
-    Rect2D          renderArea{};
-    uint32_t        layerCount = 1;
-    EImageLayout::T finalLayout = EImageLayout::ColorAttachmentOptimal;
-    std::shared_ptr<const RenderViewportOverlaySnapshot> snapshot = nullptr;
-    FrameContext frameCtx{};
-};
-
 struct ViewportPassParams
 {
     OpaquePassParams      opaque{};
     SkyboxPassParams      skybox{};
     TransparentPassParams transparent{};
     EntityIdPassParams    entityId{};
-    OverlayPassParams     overlay{};
 };
 
 RGTextureDesc makeViewportTextureDesc(const AttachmentDescription& attachment,
@@ -141,16 +125,6 @@ ViewportPassParams buildViewportPassParams(const BuildInputs& inputs,
             .renderArea    = resources.renderArea,
             .layerCount    = 1,
             .finalLayout   = EImageLayout::ColorAttachmentOptimal,
-        },
-        .overlay = {
-            .color        = resources.color,
-            .depth        = resources.depth,
-            .resolve      = resources.resolve,
-            .renderArea   = resources.renderArea,
-            .layerCount   = 1,
-            .finalLayout  = resources.colorAttachment.finalLayout,
-            .snapshot     = inputs.viewportOverlaySnapshot,
-            .frameCtx     = inputs.postContext ? *inputs.postContext : FrameContext{},
         },
     };
 }
@@ -327,45 +301,6 @@ void appendEntityIdPass(RenderGraph& graph,
         });
 }
 
-void appendOverlayPass(RenderGraph& graph,
-                       const BuildInputs& inputs,
-                       const ViewportGraphResources& resources,
-                       OverlayPassParams params)
-{
-    [[maybe_unused]] const auto pass = graph.addPass(
-        makeViewGraphName(kTopologyPassOverlay, inputs.viewId),
-        [&params, &resources](RGPassBuilder& passBuilder) {
-            passBuilder.declareRaster({
-                .renderArea = params.renderArea,
-                .layerCount = params.layerCount,
-                .colors = {{
-                    .color       = params.color,
-                    .resolve     = params.resolve,
-                    .resolveMode = params.resolve.isValid() ? EResolveMode::Average : EResolveMode::None,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = params.finalLayout,
-                }},
-                .depth = RGDepthAttachmentDesc{
-                    .depth       = params.depth,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = resources.depthAttachment.finalLayout,
-                },
-            });
-        },
-        [stageCtx = inputs.stageCtx, params = std::move(params)](RGRenderContext& rgCtx) mutable {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
-            rgCtx.beginDeclaredRasterRendering();
-            stageCtx->viewportExtent = viewportExtent;
-            params.frameCtx.extent = viewportExtent;
-            recordRenderViewportOverlayPass(
-                params.frameCtx,
-                params.snapshot,
-                &rgCtx.getCommandBuffer());
-            rgCtx.endRendering();
-        });
-}
 
 } // namespace
 
@@ -416,7 +351,6 @@ void appendViewportPasses(RenderGraph&                     graph,
     appendSkyboxPass(graph, deps, inputs, resources, params.skybox);
     appendTransparentPass(graph, deps, inputs, resources, params.transparent);
     appendEntityIdPass(graph, deps, inputs, resources, params.entityId);
-    appendOverlayPass(graph, inputs, resources, params.overlay);
 }
 
 void appendPostprocessPasses(RenderGraph&                  graph,

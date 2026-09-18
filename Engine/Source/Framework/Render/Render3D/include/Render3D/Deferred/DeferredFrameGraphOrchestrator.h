@@ -57,7 +57,6 @@ struct DeferredFrameGraphOrchestrator
         bool                                   bUseSSAO                  = false;
         bool                                   bReverseViewportY         = true;
         bool                                   bPostprocessOutputIsSRGB  = false;
-        std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
         uint64_t                               viewId                    = 0;
         const DeferredFrameResourceSet::ViewResources* viewResources     = nullptr;
         std::optional<RGPassHandle>            familyPredecessor         = std::nullopt;

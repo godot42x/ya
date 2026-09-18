@@ -4,15 +4,11 @@
 #include "Render3D/Common/RenderFrameInputs.h"
 #include "Render3D/Common/RecordedFrame.h"
 
-#include <memory>
-
 namespace ya
 {
 
 struct ICommandBuffer;
 struct RenderDeviceState;
-struct RenderViewportOverlaySnapshot;
-
 /// Consumes a sealed `RenderFramePlan`, acquires a submission, records Scene
 /// family graphs, then View/UI/display compose. Does not own the backend and
 /// does not locate an active Scene; every view binds the Scene on its own task.
@@ -31,9 +27,8 @@ struct YA_RENDER_3D_API RenderFrameCoordinator
   private:
     RenderDeviceState* _device = nullptr;
 
-    void recordViewFamilies(const RenderFramePlan&                         plan,
-                            ICommandBuffer*                                cmdBuf,
-                            std::shared_ptr<RenderViewportOverlaySnapshot> overlaySnapshot);
+    void recordViewFamilies(const RenderFramePlan& plan,
+                            ICommandBuffer*        cmdBuf);
 };
 
 } // namespace ya

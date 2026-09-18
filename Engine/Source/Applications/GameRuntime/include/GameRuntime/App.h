@@ -54,12 +54,6 @@ class AppModuleTestAccess;
 class AppAutomationControlService;
 class InputRouter;
 
-enum AppMode : int
-{
-    Control,
-    Drawing,
-};
-
 struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
                                  public IFrameRecordExtensions
 {
@@ -115,10 +109,8 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
 
     EInputMode                _inputMode = EInputMode::GameAndUI;
     std::vector<EInputMode>   _inputModeStack;
-    AppMode   _appMode      = AppMode::Control;
     glm::vec2 _lastMousePos = {0, 0};
 
-    std::vector<glm::vec2>       clicked;
     std::vector<stdptr<ISystem>> _systems;
 
     struct FModuleSlot

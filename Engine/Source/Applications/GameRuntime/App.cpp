@@ -288,14 +288,6 @@ bool App::dispatchInputFallbackEvent(const Event& event)
         }
     }
 
-    if (event.getEventType() == EEvent::MouseButtonReleased && _appMode == AppMode::Drawing) {
-        const auto& mouseEvent = static_cast<const MouseButtonReleasedEvent&>(event);
-        if (mouseEvent.GetMouseButton() == EMouse::Left) {
-            clicked.push_back(_lastMousePos);
-            return true;
-        }
-    }
-
     // Game-UI picking lives in the input node chain (GameInputNode /
     // EditorInputNode) so that an exclusive UI hit can keep the event away
     // from gameplay.

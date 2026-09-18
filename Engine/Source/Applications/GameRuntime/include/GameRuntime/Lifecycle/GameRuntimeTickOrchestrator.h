@@ -31,8 +31,6 @@ class GameRuntimeTickOrchestrator
 
   private:
     static void     tickLogic(App& app, float dt);
-    static void     syncViewportState(App& app);
-    static Extent2D resolveViewportExtent(const App& app, RenderDeviceState* device, const Rect2D& viewportRect);
     static void     prepareHostViewState(App& app, float dt);
     static void     tickRender(App& app, float dt);
     /// Pre-record prerequisite, before anything reads a derived resource: waits
@@ -43,7 +41,6 @@ class GameRuntimeTickOrchestrator
     /// preparation instead of after it.
     static void     pumpOffscreenTasks(App& app, RenderDeviceState* device);
     static uint32_t resolveFlightIndex(const App& app);
-    static std::vector<RenderOverlaySprite2D> buildScreenOverlaySprites(const App& app);
 
     /// The steps tickRender runs, in order. Each one is a named phase of the
     /// product frame, so the sequence is readable without following every
@@ -72,7 +69,6 @@ class GameRuntimeTickOrchestrator
     static FramePacket buildGameRenderFrame(App&                                       app,
                                             float                                      dt,
                                             uint32_t                                   flightIndex,
-                                            const std::vector<RenderOverlaySprite2D>&  screenSprites,
                                             UIFrameSnapshot&                           outUiSnapshot);
     /// Records the tick in one renderer call and returns what the host submits.
     static RecordedFrame recordFrame(App&                        app,

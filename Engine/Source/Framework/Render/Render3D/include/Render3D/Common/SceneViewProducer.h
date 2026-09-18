@@ -19,9 +19,10 @@ struct SceneViewCollectContext
     /// Scene content reads its own Scene; this is only the host's default.
     Scene*   activeScene = nullptr;
     /// Host viewport geometry for this tick (surface client area). Not an OS
-    /// window and not a swapchain image.
+    /// window and not a swapchain image. A producer that needs an extent
+    /// derives it from this rect rather than reading a second field that could
+    /// disagree with it.
     Rect2D   viewportRect{};
-    Extent2D viewportExtent{};
     uint64_t hostTick  = 0;
     float    deltaTime = 0.0f;
 };

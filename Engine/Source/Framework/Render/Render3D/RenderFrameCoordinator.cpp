@@ -21,29 +21,6 @@
 namespace ya
 {
 
-namespace
-{
-
-std::shared_ptr<RenderViewportOverlaySnapshot> buildViewportOverlaySnapshot(const FramePacket::OverlayInput& overlay)
-{
-    auto snapshot = std::make_shared<RenderViewportOverlaySnapshot>();
-    if (overlay.screenSprites) {
-        snapshot->screenSprites = *overlay.screenSprites;
-    }
-    if (overlay.worldSprites) {
-        snapshot->worldSprites = *overlay.worldSprites;
-    }
-    if (overlay.screenTexts) {
-        snapshot->screenTexts = *overlay.screenTexts;
-    }
-    if (overlay.worldLines) {
-        snapshot->worldLines = *overlay.worldLines;
-    }
-    return snapshot->empty() ? nullptr : snapshot;
-}
-
-} // namespace
-
 RenderFrameCoordinator::RenderFrameCoordinator(RenderDeviceState& device)
     : _device(&device)
 {
@@ -51,8 +28,7 @@ RenderFrameCoordinator::RenderFrameCoordinator(RenderDeviceState& device)
 
 void RenderFrameCoordinator::recordViewFamilies(
     const RenderFramePlan& plan,
-    ICommandBuffer* cmdBuf,
-    std::shared_ptr<RenderViewportOverlaySnapshot> overlaySnapshot)
+    ICommandBuffer* cmdBuf)
 {
     YA_PROFILE_FUNCTION();
 
@@ -62,11 +38,6 @@ void RenderFrameCoordinator::recordViewFamilies(
     RenderSubmission* live = _device->_submissions.get(plan.frame.flightIndex);
     YA_CORE_ASSERT(live && live->isRecording(), "Family record requires a recording submission");
 
-    if (overlaySnapshot) {
-        live->retain(overlaySnapshot);
-        cmdBuf->retireResource(overlaySnapshot);
-    }
-
     const auto recordOneFamily = [&](const SceneViewFamilyPlan* family, std::vector<SceneViewRecording> views) {
         ViewFamilyRecordContext ctx{
             .cmdBuf          = live->commandBuffer(),
@@ -75,7 +46,6 @@ void RenderFrameCoordinator::recordViewFamilies(
             .plan            = &plan.sceneRender.plan(),
             .family          = family,
             .views           = std::move(views),
-            .overlaySnapshot = overlaySnapshot,
         };
         _device->publishFamilyResult(plan.frame.flightIndex, pipeline->recordFamily(ctx));
     };
@@ -164,8 +134,7 @@ RecordedFrame RenderFrameCoordinator::record(const RenderFramePlan& plan)
     {
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
         if (!plan.sceneRender.empty()) {
-            auto overlaySnapshot = buildViewportOverlaySnapshot(plan.frame.overlay);
-            recordViewFamilies(plan, cmdBuf.get(), overlaySnapshot);
+            recordViewFamilies(plan, cmdBuf.get());
         }
         // Everything below -- the compose insets, the display target, the
         // host's later reads -- resolves through this one identity, so it is set

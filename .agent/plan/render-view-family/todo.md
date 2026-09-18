@@ -1,5 +1,21 @@
 # TODO
 
+## 逻辑→渲染链减法（2026-09-19，见 progress 同名 checkpoint）
+
+判据只有两条：**没有生产者的东西删掉；每 tick 重复的展示工作移出 tick**。已落地：
+
+- [x] 删不可达 demo：`AppMode` / `App::_appMode` / `App::clicked` / `dispatchInputFallbackEvent` 的绘图分支 / `buildScreenOverlaySprites`（保留 `_lastMousePos`）。
+- [x] 窗口标题移出 per-tick：新增 `IRender::getDeviceName()` 取代 `render->as<VulkanRender>()` 降型；标题在 `RenderDeviceState::initRenderBackend` 里设一次。
+- [x] 删死步骤 `syncViewportState(app)` 与它的 `Logic/ViewportSync` profile scope。
+- [x] 删 `resolveViewportExtent` 与 `SceneViewCollectContext::viewportExtent`：host camera aspect 直接读 `hostView.viewportRect.extent`，logic 段不再读上一 tick 发布的 device extent。
+- [x] 删主机 screen-overlay 通道（整条 pass）：`FramePacket::OverlayInput` / `overlay`、`RenderViewportOverlaySnapshot`、`recordRenderViewportOverlayPass`、`prepareRenderViewportOverlayPipeline`、`RenderOverlay.cpp`、Forward/Deferred 的 overlay pass 与 `perf::sample::renderViewportOverlay()`。
+
+下一批次（各自独立可验收，按此顺序）：
+
+- [ ] 让 `tickRender` 里三处"调用方持有的生命周期"不再依赖注释：`buildGameRenderFrame` 返回自带 UI snapshot 的值，或让 `ExtractedSceneRender` 暴露 `hostViewDesc()`，而不是让调用方维持一个指向 collector 内部的裸指针。
+- [ ] `HostViewState` 单一写者：今天 4 个写者 / 3 个文件（`AppLifecycle.cpp`、`AppRenderServices::setViewportRect`、`prepareHostViewState` 的 identity reset + `declareViews` 覆盖）。
+- [ ] 公开 `Renderer` 合并（4.0.3 checkpoint 2/3）：合并 `RenderDeviceState` + `RenderFrameCoordinator`，删 `friend struct RenderFrameCoordinator` 与 5 处 `_device->_` 私有写入；`record()` 拆成 `prepareFrame()` / `recordFrame()`。
+
 ## V 系列（隐式驱动收口，见 plan 附.1–附.4）
 
 按风险从低到高；V1–V3 一个 commit，V4+V5 一批，其余独立。

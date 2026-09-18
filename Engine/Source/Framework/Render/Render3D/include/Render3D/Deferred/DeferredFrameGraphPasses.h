@@ -39,7 +39,6 @@ struct DeferredFrameGraphPassContext
     bool                                     bUseSSAO = false;
     bool                                     bReverseViewportY = true;
     bool                                     bPostprocessOutputIsSRGB = false;
-    std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
     uint64_t                                 viewId = 0;
     std::optional<RGPassHandle>              familyPredecessor = std::nullopt;
 
@@ -145,16 +144,6 @@ struct DeferredForwardTransparentPassParams
     OverlayPassBindings               overlayBindings{};
 };
 
-struct DeferredOverlayPassParams
-{
-    RGTextureHandle                                      color{};
-    RGTextureHandle                                      depth{};
-    Rect2D                                               renderArea{};
-    uint32_t                                             layerCount = 1;
-    std::shared_ptr<const RenderViewportOverlaySnapshot> overlaySnapshot = nullptr;
-    FrameContext                                         frameCtx{};
-};
-
 namespace deferred_frame_graph_passes
 {
 
@@ -168,7 +157,6 @@ void appendSkybox(DeferredFrameGraphPassContext& context);
 void appendBloom(DeferredFrameGraphPassContext& context);
 void appendForwardTransparent(DeferredFrameGraphPassContext& context);
 void appendEntityId(DeferredFrameGraphPassContext& context);
-void appendOverlay(DeferredFrameGraphPassContext& context);
 void appendPostprocess(DeferredFrameGraphPassContext& context);
 
 } // namespace deferred_frame_graph_passes

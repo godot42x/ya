@@ -582,18 +582,6 @@ TEST(RenderRuntimeSnapshotTest, ViewComposeInsetsDescribePrimaryDisplayPreview)
     EXPECT_LE(compose.insets.front().destRect.pos.x + compose.insets.front().destRect.extent.x, 1280.0f);
 }
 
-TEST(RenderRuntimeSnapshotTest, OverlaySnapshotEmptyIncludesWorldLines)
-{
-    RenderViewportOverlaySnapshot snapshot;
-    EXPECT_TRUE(snapshot.empty());
-    snapshot.worldLines.push_back(RenderOverlayLine3D{
-        .from  = {0.0f, 0.0f, 0.0f},
-        .to    = {0.0f, 0.0f, -1.0f},
-        .color = {1.0f, 1.0f, 1.0f, 1.0f},
-    });
-    EXPECT_FALSE(snapshot.empty());
-}
-
 TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
 {
     Scene scene("Preview");

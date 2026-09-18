@@ -1,6 +1,120 @@
 # Progress
 
-+## 2026-09-19 checkpoint：V7 离屏 pump 具名 + V8 viewport debug catalog 移出 device
+## 2026-09-19 checkpoint：删掉主机 screen-overlay 通道与 per-tick 后端查询
+
+本轮范围仍是用户本轮的目标：**只做 app 主流程 + 渲染主流程上的减法**。判据只有两条——
+"没有生产者的东西"删掉；"每个 tick 重复做的展示工作"从 tick 里移出。四条删除：
+不可达 demo、per-tick 后端查询、死步骤 `syncViewportState`、`resolveViewportExtent` +
+`SceneViewCollectContext::viewportExtent`；以及第 5 条——**主机 screen-overlay 通道，含一整条
+每帧都在跑的 graph pass**。第 5 条是本刀最大的净删除，也是"同一原则在更大颗粒度上的实例"。
+
+### 1. 不可达的 demo 路径
+
+`AppMode` / `App::_appMode` / `App::clicked`、`dispatchInputFallbackEvent` 里的
+`MouseButtonReleased && _appMode == Drawing` 分支、`buildScreenOverlaySprites`（26 行）全删。
+`_appMode` 只有初值 `Control` 且全仓无写入点，所以那个分支恒假、`buildScreenOverlaySprites`
+首行即返回空 vector：这是当年留下的 demo，不是产品路径。保留 `_lastMousePos`
+（`gameUIHost->dispatchEvent` 在用）。
+
+这条 demo 正是下面第 5 条 overlay 通道的**唯一生产者**——它一删，通道就没有生产者了。
+
+### 2. 窗口标题移出 per-tick
+
+tickLogic 末尾每帧做两件不该在 tick 里的事：`render->as<VulkanRender>()` 取
+`_selectedDeviceInfo.deviceName`，再 `nativeWindow->setTitle(...)`。`as<>` 是无运行时检查的
+后端降型（非 Vulkan 构建下就是错值/UB），setTitle 是每帧重复的展示工作。
+
+- 新增 `IRender::getDeviceName()`（默认返回 `{}`，`VulkanRender` override 返回
+  `_selectedDeviceInfo.deviceName`），替代降型。
+- 标题改在 `RenderDeviceState::initRenderBackend` 里 `_render->init(renderCI)` 之后设一次：
+  它是**设备初始化**的事实，不是每帧事实。
+
+**偏离说明（如实记录）**：一开始把标题整段删掉了，随后恢复成一次性 init。删掉等于无解释地砍掉
+一个特性；改成 init 才是"净效果相同 + 归属诚实"。
+
+### 3. 死步骤 `syncViewportState`
+
+唯一实现是 `(void)app;`，还带一个 `Logic/ViewportSync` profile scope（profile 里会出现一个
+恒定零耗时的行）。删。
+
+### 4. `resolveViewportExtent` 与 `SceneViewCollectContext::viewportExtent`
+
+（用户提出的问题：viewport 概念是否也需要移除。）查证结果：
+
+- `SceneViewCollectContext::viewportExtent` **零读者**；
+- `context.viewportRect` 只有一个消费者 `RuntimeGameViewProducer`；
+- 三段兜底里 `device->getViewportExtent()` 在 init 之后恒非零，所以 `viewportRect` 段与
+  `_windowSize` 段都是死代码；
+- 于是它实际返回的永远是"**上一 tick 发布的 device extent**"——正是这条链在删的"全局 viewport"。
+
+现在 host camera 的 aspect 直接读 `app._renderState->hostView.viewportRect.extent`
+（`syncRuntimeCameraAspect` 自己忽略退化 extent）。这是 logic 链上对"上一 tick 发布结果"的
+最后一次读取，去掉后 logic 段只依赖本 tick 的 host 事实。
+
+**语义澄清（"viewport 概念"的处置）**：没有消失，而是它就是已存在的两件事——
+`SceneViewDesc::extent`（声明方说"这个 view 要多大"）与 `RenderDeviceState::getViewportExtent()`
+（V3 起只有 published / `{}` 两个来源，读的是**已发布输出**的尺寸）。真正被删掉的是两者之间的
+**投影函数**：一个把"上一帧的输出尺寸"当成"这一帧的输入尺寸"的转译层。producer 需要 extent 就
+从 `viewportRect` 自己派生（`SceneViewProducer.h` 的字段注释已如此写）。
+
+### 5. 主机 screen-overlay 通道（整条 pass 删除）
+
+顺链路 trace 时才看出来：`FramePacket::OverlayInput`（screenSprites / worldSprites /
+screenTexts / worldLines 四路可选 vector）的唯一生产者是第 1 条删掉的 demo；
+`buildViewportOverlaySnapshot` 在四路全空时返回 `nullptr`；而 Forward/Deferred 的 overlay
+pass 在 `nullptr` 下**仍然 append 并每帧录制一次**。即 `kTopologyPassOverlay` 在每个被测
+路径上都以空 snapshot 运行，且没有任何测试能发现——因为**空输入是合法输入**。
+
+删除清单：
+
+- 输入/上下文：`FramePacket::OverlayInput` 与 `FramePacket::overlay`、
+  `ViewFamilyRecordContext::overlaySnapshot`、`RenderPipelineFrameContext::viewportOverlaySnapshot`、
+  `ForwardFrameGraphPasses::BuildInputs::viewportOverlaySnapshot`、
+  `DeferredFrameGraphPassContext::viewportOverlaySnapshot`。
+- pass：`DeferredOverlayPassParams`、`deferred_frame_graph_passes::appendOverlay`、
+  `kTopologyPassOverlay`（Forward/Deferred 各一）、`appendOverlayPass`、`OverlayPassParams`、
+  `ForwardViewportPassParams::overlay`、两处 `.viewportOverlaySnapshot =` 赋值。
+- 类型与实现：`RenderViewportOverlaySnapshot`、`recordRenderViewportOverlayPass`、
+  `prepareRenderViewportOverlayPipeline`；`RenderOverlay.cpp` 整文件 `git rm`。
+- 观测：`perf::sample::renderViewportOverlay()` 与 `GameRuntime/Profiling.cpp` 里对应的两行。
+- 签名：`RenderFrameCoordinator::recordViewFamilies(plan, cmdBuf, overlaySnapshot)` 去掉第三参；
+  `buildViewportOverlaySnapshot` helper 删除。
+
+`RenderOverlay.h` 保留 `RenderOverlayText2D` / `RenderOverlayLine3D`（编辑器 HUD 与选中相机
+视锥仍用），但头注释写明它们是**值**、由"谁录 overlay 谁直接读"，不是让 renderer 携带的 snapshot：
+编辑器在自己的 viewport compose 里画 overlay，所以"编辑器的 overlay"是编辑器自己的事实。
+
+**为什么能活到现在**：这条通道的输入是"四路可选 vector"，空是合法值，于是"没有生产者"与"这一帧
+没有 overlay"在代码里长得完全一样。修法是删除，不是补一个消费者。已同步进
+`.agent/skills/render-arch/SKILL.md` 第 15 条（把"只有声明没有消费者的接口方法"扩到"接口方法 /
+字段 / 整条 pass"），并写下 `.agent/memories/dead_snapshot_channel_survives_empty_input.md`。
+
+### 验证
+
+| 检查 | 结果 |
+| --- | --- |
+| `xmake b` | `ya-render-3d` / `ya-game-runtime` / `ya-game-editor` / `ya-testing` / `ya-render-3d-test` / `ya-engine` / `GUIWorkbench` / `GreedySnake` / `ya-gui-closure-test` / `ya-gui-headless-host-test` / `ya-render-2d-test` / `ya-gui-widgets` 全部 ok |
+| `xmake r ya-render-3d-test` | **175/175**（176 → 175；唯一减少的是钉住已删状态的 `OverlaySnapshotEmptyIncludesWorldLines`） |
+| `ya-testing` 渲染/编辑器滤镜 | 271 passed / 3 failed，3 个失败与 V1–V8 基线逐项相同（`EditorPropertyGraphTest` ×2 + `GameUIHostTest.BuildSnapshotComposesMountedWidgets`） |
+| HelloMaterial viewport 截图 | exit=0，0 error，`md5=1c6668976be1cdd5d755d1f1365700f7` **逐字节相同** |
+| run-editor viewport 截图 | exit=0，0 error，`md5=5b8f5dd8acdbc90bd5c383feb3f7bcec` **逐字节相同** |
+
+删除的测试：`RenderRuntimeSnapshotTest.OverlaySnapshotEmptyIncludesWorldLines`、
+`DeferredRenderPipelineTest` 里的 `DeferredOverlayPassParams` 断言块、
+`ForwardFrameGraphOrchestratorTest` 的 `EXPECT_FALSE(inputs.viewportOverlaySnapshot)`，
+以及两个 producer 测试 context 里的 `.viewportExtent`。两张截图逐字节相同说明：这条通道在
+**实际产品路径上本来就是空跑**，删掉它不改变任何像素。
+
+### 本刀边界（未做项，已记入 todo.md）
+
+- `tickRender` 里三处"调用方持有的生命周期"（`SceneViewCollector` / `UIFrameSnapshot` /
+  指向 collector 的 `hostViewDesc` 指针）仍靠注释解释谁活到什么时候。
+- `HostViewState` 仍是 4 个写者 / 3 个文件（`AppLifecycle.cpp`、`AppRenderServices::setViewportRect`、
+  `prepareHostViewState` 的 identity reset + `declareViews` 覆盖）。
+- 公开 `Renderer` 合并（4.0.3 checkpoint 2/3）：`friend struct RenderFrameCoordinator` 与 5 处
+  `_device->_` 私有写入仍在，`record()` 的 7 步录制前准备与 10 步录制还没拆成两个函数。
+
+## 2026-09-19 checkpoint：V7 离屏 pump 具名 + V8 viewport debug catalog 移出 device
 
 两条独立、互不相关，同一个 commit：都属「把隐式/错位的东西显式化」，且都不动 GPU 时序。
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Render3D/Forward/ForwardFrameGraphResources.h"
-#include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
 #include "Render3D/Forward/ForwardViewportStage.h"
 #include "Render3D/Shadow/IShadowTechnique.h"
@@ -50,7 +49,6 @@ struct BuildInputs
     /// passes for this View, so the stage never has to remember one.
     ShadowPreparedView                               shadowPrepared      = {};
     bool                                             bPostprocessOutputIsSRGB = false;
-    std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
     uint64_t                                         viewId              = 0;
     const ForwardFrameResourceSet::ViewResources*    viewResources       = nullptr;
     std::optional<RGPassHandle>                      familyPredecessor   = std::nullopt;

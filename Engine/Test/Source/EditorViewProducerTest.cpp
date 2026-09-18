@@ -18,7 +18,6 @@ SceneViewCollectContext makeEditorContext(Scene& scene)
     return SceneViewCollectContext{
         .activeScene    = &scene,
         .viewportRect   = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
-        .viewportExtent = {.width = 1280u, .height = 720u},
         .hostTick       = 7,
         .deltaTime      = 1.0f / 60.0f,
     };

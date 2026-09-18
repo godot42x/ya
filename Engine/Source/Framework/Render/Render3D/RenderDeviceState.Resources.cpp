@@ -15,6 +15,9 @@
 #include "RHI/Backend/TextureLibrary.h"
 #include "RHI/RenderDefines.h"
 
+#include <format>
+#include <string>
+
 namespace ya
 {
 
@@ -140,6 +143,17 @@ void RenderDeviceState::initRenderBackend(const InitDesc& desc)
     // of host-layer lookups (initShaderSystems runs before this point).
     _render->setShaderStorage(_shaderStorage);
     _render->init(renderCI);
+
+    // Label the window with the device that actually came up, now that the
+    // backend can report it. A label is set once, where the fact exists, instead
+    // of being re-formatted every tick by the app loop through a backend
+    // downcast (see `IRender::getDeviceName`).
+    if (!desc.windowTitle.empty()) {
+        const std::string deviceName = _render->getDeviceName();
+        nativeWindow->setTitle(deviceName.empty()
+                                   ? desc.windowTitle
+                                   : std::format("{}({})", desc.windowTitle, deviceName));
+    }
 }
 
 void RenderDeviceState::initResourceCaches()

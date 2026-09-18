@@ -69,8 +69,6 @@ void RenderDeviceState::prepareDerivedState(Scene* scene, float dt)
 void RenderDeviceState::prepareComposePipelines()
 {
     if (auto* pipeline = getActivePipeline()) {
-        prepareRenderViewportOverlayPipeline(pipeline->getViewportColorFormat(),
-                                             pipeline->getViewportDepthFormat());
         prepareRender2DComposePassPipeline(
             FRender2DComposePassDesc{
                 .kind = ERender2DComposePassKind::EditorViewportCompose,

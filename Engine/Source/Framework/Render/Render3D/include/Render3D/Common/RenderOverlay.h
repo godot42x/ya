@@ -5,34 +5,18 @@
 #include "RHI/RenderDefines.h"
 
 #include <glm/glm.hpp>
-#include <memory>
 #include <string>
-#include <vector>
 
 namespace ya
 {
 
-struct Texture;
-struct FrameContext;
-struct ICommandBuffer;
-
-struct RenderOverlaySprite2D
-{
-    glm::vec2 viewportPos = glm::vec2(0.0f);
-    glm::vec2 size        = glm::vec2(50.0f);
-    Texture*  texture     = nullptr;
-    glm::vec4 tint        = glm::vec4(1.0f);
-};
-
-struct RenderOverlaySprite3D
-{
-    glm::vec3 worldCenter    = glm::vec3(0.0f);
-    glm::vec3 worldDirection = glm::vec3(0.0f, 0.0f, -1.0f);
-    glm::vec2 worldSize      = glm::vec2(1.0f);
-    Texture*  texture        = nullptr;
-    glm::vec4 tint           = glm::vec4(1.0f);
-};
-
+/// Overlay items an owner hands to its own Render2D recording window.
+///
+/// These are values, not a pipeline feature: whoever records the overlay reads
+/// them straight into `Render2D::makeText` / `makeWorldLine`. There is no
+/// central overlay pass -- the editor draws its HUD and gizmo overlays inside
+/// its viewport compose, which is what makes "the editor's overlay" the
+/// editor's own fact rather than a snapshot the renderer has to carry.
 struct RenderOverlayText2D
 {
     std::string text{};
@@ -49,30 +33,5 @@ struct RenderOverlayLine3D
     glm::vec3 to    = glm::vec3(0.0f);
     glm::vec4 color = glm::vec4(1.0f);
 };
-
-struct RenderViewportOverlaySnapshot
-{
-    std::vector<RenderOverlaySprite2D> screenSprites{};
-    std::vector<RenderOverlaySprite3D> worldSprites{};
-    std::vector<RenderOverlayText2D>   screenTexts{};
-    std::vector<RenderOverlayLine3D>   worldLines{};
-
-    [[nodiscard]] bool empty() const
-    {
-        return screenSprites.empty() && worldSprites.empty() && screenTexts.empty() && worldLines.empty();
-    }
-};
-
-/// Record the world/screen overlay pass (sprites, debug lines, texts) inside
-/// one Render2D recording window. Engine-side: consumed by the 3D frame graph
-/// viewport composition, kept out of the UI framework closure.
-void recordRenderViewportOverlayPass(const FrameContext& frameCtx,
-                                     const std::shared_ptr<const RenderViewportOverlaySnapshot>& overlaySnapshot,
-                                     ICommandBuffer* cmdBuf);
-
-/// Prepare the Render2D screen pipeline used by the viewport overlay pass for
-/// the given viewport attachment formats. Must be called before command
-/// recording begins; idempotent per (colorFormat, depthFormat).
-void prepareRenderViewportOverlayPipeline(EFormat::T colorFormat, EFormat::T depthFormat);
 
 } // namespace ya
