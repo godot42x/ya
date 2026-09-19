@@ -6,9 +6,11 @@ do
         -- Engine symbols resolve from the host exe at dlopen time (single
         -- engine instance); compile-only dependency, no engine static libs.
         add_deps("ya-engine", { links = false })
+        add_deps("ya-game-runtime", { links = false })
         add_shflags("-undefined", "dynamic_lookup", { force = true })
     else
         add_deps("ya-engine")
+        add_deps("ya-game-runtime")
     end
     add_rules("c++.unity_build", { batchsize = -1 })
 

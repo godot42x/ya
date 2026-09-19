@@ -136,8 +136,9 @@ end
 -- Per-module targets live next to their sources, organized in two tiers:
 -- Framework/ (engine-agnostic reusable capabilities) and Applications/
 -- (assembled app forms). Modules are shared libraries themselves; `ya-engine`
--- is the transition-period aggregate that re-exports every module as public
--- deps so editor / examples / tests keep linking one entry point.
+-- is the transition-period aggregate that re-exports the Framework tier as
+-- public deps so editor / examples / tests keep linking one entry point. The
+-- Applications tier is deliberately not re-exported; see the dep list below.
 -- ==========================================================================
 
 -- The engine aggregate facade is an engine-profile concept; the gui profile
@@ -170,6 +171,14 @@ do
 
     -- Public deps: consumers linking ya-engine transitively link every module
     -- shared library and receive each module's public include/define config.
+    --
+    -- Engine capabilities only. `ya-game-runtime` is an assembled app form (the
+    -- game shell), not a capability, so it is not re-exported: a consumer of
+    -- "the engine" must not silently acquire the game shell's include roots and
+    -- link line. Whoever *is* that app form names it directly -- the runtime
+    -- executable, the editor module, the examples that host it, the test
+    -- runner -- which also makes those edges visible in the build graph.
+    -- ya-game-editor is the same case and was never re-exported here.
     add_deps(
         "ya-foundation-core",
         "ya-app-kernel",
@@ -194,7 +203,6 @@ do
         "ya-render-graph",
         "ya-render-3d",
         "ya-physics",
-        "ya-game-runtime",
         { public = true })
     add_deps("utility.cc", "log.cc", "reflects-core", { public = true })
 

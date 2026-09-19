@@ -17,6 +17,8 @@ if get_config("ya_profile") ~= "gui" then
         add_files("./Source/**.cpp")
 
         add_deps("ya-engine", "ya-module-fixture", "ya-game-editor")
+        -- The engine tests drive the App shell directly.
+        add_deps("ya-game-runtime")
         add_packages("gtest")
         add_packages("quickjs-ng")
         add_packages("asio")

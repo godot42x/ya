@@ -1,5 +1,57 @@
 # Progress
 
+## 2026-09-19 checkpoint：S2a `ya-engine` 不再公开包含 `ya-game-runtime`
+
+### 唯一目标
+
+`ya-engine` 是 Framework 层的聚合门面。`ya-game-runtime` 是 Applications 层的应用形态
+（游戏 shell），却挂在它的 public deps 里，于是"链接 engine"隐含"你有一个游戏 app"。
+本刀断开这条边，让消费方自己点名。
+
+### 改动
+
+`Engine/YA.xmake.lua`：从 `ya-engine` 的 public deps 删掉 `ya-game-runtime`，并把
+"为什么不在里面"写进 dep 列表上方的注释。同时修正文件头对聚合门面的描述
+（原文说 "re-exports every module"，现在是 Framework 层）。
+
+四条真实消费方改为显式声明（都是本来就是应用形态的地方）：
+
+| 目标 | 为什么需要 |
+| --- | --- |
+| `ya-runtime`（`Engine/Programs/YARuntime`） | `Entry.cpp` include `GameRuntime/`，这个 exe 就是游戏 app 本体 |
+| `ya-game-editor` | 编辑器是 App 的一个 `IModule`，24 个 TU 用 `GameRuntime/App.h` 等 |
+| `HelloMaterial`（Example） | 示例以 `IModule` 挂进 App |
+| `ya-testing` | 测试直接驱动 App shell |
+
+两条带 monolith 分支的目标（`ya-game-editor` / `HelloMaterial`）在 monolith 下用
+`{ links = false }`，与它们已有的 `ya-engine` 写法一致：monolith 里模块是静态库、由宿主 exe
+持有唯一实例，插件通过 `dynamic_lookup` 解析符号。
+
+`GreedySnake` 与 `test/` 下的单文件目标**未改动**——实测它们不使用 `GameRuntime/` 头，
+所以是这条边为多余的直接证据。
+
+### 验证
+
+1. `xmake show -t ya-engine` 的 deps 列表里不再有 `ya-game-runtime`（用 xmake 自己的解析结果，
+   不是读源码）；只剩 `ya-game-editor`（本来就没在里面）。
+2. `rg 'ya-game-runtime' --glob '*.lua'` 只剩 4 处显式声明的消费方 + 它自己的 target 定义 +
+   `YA.xmake.lua` 里那条解释性注释。没有任何路径把它重新带回 engine 闭包
+   （`ya-gui-framework` / `ya-gui-host` 都不 deps 它）。
+3. `xmake show -t GreedySnake`（只 deps `ya-engine`）的 `includedirs` 里**没有**
+   `GameRuntime/include`——engine-only 消费方确实拿不到应用形态的 include 根。
+4. 构建：`ya-engine` / `ya-game-runtime` / `ya-game-editor` / `ya-runtime` / `ya-testing` /
+   `HelloMaterial` / `GreedySnake` 全部 build ok。
+
+### 保留 / 未完成 / 偏离
+
+- **保留**：`ya-engine` 仍然公开聚合整个 Framework 层，这条没动。
+- **未完成**：S2b（拆 `ya-gui-framework` 聚合）、S2c（断 `ya-scene-core -> ya-gui-widgets` 与
+  `ya-render-3d -> ya-gui-compose`）。
+- **偏离**：无。原计划只写了"不再公开包含"，实测还需要给 4 个消费方补显式声明；
+  这不是偏离，是原文没写清的实施面。
+- 顺带核实：原 S2 候选里的"修 `ya-rhi-backend-common` 自依赖自身的笔误"**已不存在**，
+  当前 `Backend/xmake.lua` 里它只 deps `ya-rhi`。属过时假设，已在 `plan.md` 划掉。
+
 ## 当前状态
 
 - S1 已完成并提交（两次提交，保留 blame）。S2–S4 未开始。S5 已落地。

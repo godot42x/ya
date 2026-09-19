@@ -9,9 +9,13 @@ target("ya-game-editor")
         -- Loaded by the runtime host; engine symbols resolve from the host
         -- exe (single engine instance) instead of embedding static libs.
         add_deps("ya-engine", { links = false })
+        add_deps("ya-game-runtime", { links = false })
         add_shflags("-undefined", "dynamic_lookup", { force = true })
     else
         add_deps("ya-engine")
+        -- The editor is an IModule of the App, so the runtime shell is a
+        -- direct dependency of it, not something the engine aggregate lends.
+        add_deps("ya-game-runtime")
         add_links("ya-engine")
     end
     if is_plat("windows") then

@@ -2,7 +2,7 @@
 
 > 建立：2026-09-18
 > 关联：`./.agent/skills/code-reorganize/SKILL.md`（头文件布局与 include 规则）
-> 状态：S1、S5 已落地
+> 状态：S1、S5 已落地；S2 进行中
 
 ## 0. 问题
 
@@ -33,7 +33,7 @@
 | 阶段 | 目标 | 状态 |
 | --- | --- | --- |
 | S1 | 删掉 `include/` 影子层：公开头唯一物理位置 | 已落地 |
-| S2 | 修正聚合边界与依赖倒置 | 待做 |
+| S2 | 修正聚合边界与依赖倒置 | 进行中（2a 已落地） |
 | S3 | 削掉两个最大的文件（只做有明确接缝的） | 待做 |
 | S4 | 命名收敛（在 S1/S2 之后） | 待做 |
 | S5 | 计划目录收敛：已收口/被接手的线归档，只留仍有代码要改的线 | 已落地 |
@@ -81,14 +81,16 @@ archive 路径。剩余 12 条里有 9 条仍有开放 checkpoint，压不动。
 
 S2 的候选清单（每条独立可验收，动手前先确认消费面）：
 
-- `ya-engine` 不再公开包含 `ya-game-runtime`（应用形态不该被"引擎聚合"公开）。
-- 拆 `ya-gui-framework`：它现在是 GUI + app shell + module system 的混合体，
+- **S2a（已落地 2026-09-19）**：`ya-engine` 不再公开包含 `ya-game-runtime`。见 `progress.md`。
+- **S2b（待做）**：拆 `ya-gui-framework`：它现在是 GUI + app shell + module system 的混合体，
   这正是"抽不出独立 GUI app"的根因。`Tooling/Workbench` 是 demo app，不属于 GUI 库。
-- 断 `ya-scene-core -> ya-gui-widgets`（SceneWidgetEntry）与
+- **S2c（待做）**：断 `ya-scene-core -> ya-gui-widgets`（SceneWidgetEntry）与
   `ya-render-3d -> ya-gui-compose`（`Render2DComposePass` 出现在
   `RenderDeviceState.cpp` / `RenderDeviceState.Frame.cpp` / `ViewCompose.cpp`；
   2026-09-19 起 `RenderFrameCoordinator.cpp` 已并入 `RenderDeviceState.Frame.cpp`）。
-- 修 `ya-rhi-backend-common` 自依赖自身的笔误。
+- ~~修 `ya-rhi-backend-common` 自依赖自身的笔误。~~ **2026-09-19 复查：此条已不存在**。
+  `Engine/Source/Framework/RHI/Backend/xmake.lua` 里 `ya-rhi-backend-common` 只 deps `ya-rhi`，
+  唯一引用它自己的是 `ya-rhi-vulkan`（合法的单向依赖）。原条目是过时假设。
 
 ## 4. 退出条件
 
