@@ -1,6 +1,6 @@
 {
   "plan": "gui-editor-structure",
-  "as_of": "2026-09-06",
+  "as_of": "2026-09-19",
   "features": [
     {
       "id": "orchestration_map",
@@ -42,6 +42,35 @@
         "Controls.h forwards those headers",
         "no InputExtras includes remain",
         "dock panel vs floating title drag diverge; no shared helper"
+      ]
+    },
+    {
+      "id": "hidden_viewport_declares_no_view",
+      "status": "implemented",
+      "phase": "C4d-1",
+      "evidence": [
+        "EditorLayer::_shownViewportCount written by EditorSurface::setViewportHost at the widget attach/detach edge",
+        "EditorViewProducer::collectSceneViews returns early when no viewport is on screen",
+        "hiding the last viewport clears hover/focus so the editor camera stops capturing input",
+        "one window hiding its viewport does not hide another window's",
+        "EditorViewProducerTest 9/9; render-3d 175/175; filter 562 passed / 3 baseline failures"
+      ]
+    },
+    {
+      "id": "hidden_viewport_composes_nothing",
+      "status": "pending",
+      "phase": "C4d-2",
+      "evidence": [
+        "EditorViewportCompositor still records a fallback compose pass when no View was declared"
+      ]
+    },
+    {
+      "id": "collapsed_viewport_geometry_ownership",
+      "status": "pending",
+      "phase": "C4d-3",
+      "evidence": [
+        "publishViewportRect is still the only last-valid geometry snapshot point",
+        "open decision: does a collapsed viewport tab mean hidden or shown-but-not-laid-out"
       ]
     }
   ]

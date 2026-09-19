@@ -43,6 +43,16 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
         return;
     }
 
+    // No viewport on screen means declaring nothing at all. The viewport is a
+    // docked tab and the dock detaches its widget when another tab in the stack
+    // is selected, so this is the ordinary "the user is looking at the Inspector"
+    // case, not an error state. Gating here rather than making the passes skip
+    // their work keeps the decision with the View's owner: no View means no
+    // family, no targets, no graph.
+    if (!_layer->isViewportShown()) {
+        return;
+    }
+
     // The 2D canvas workspace draws no world view at all, so it has neither a
     // primary view nor a preview inset. That is a declaration the editor makes
     // here rather than a switch the runtime has to honour.

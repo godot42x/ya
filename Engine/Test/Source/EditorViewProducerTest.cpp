@@ -1,7 +1,12 @@
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/EditorViewProducer.h"
+#include "GameEditor/UI/Shell/EditorSurface.h"
+#include "GameEditor/UI/Tabs/EditorViewportTab.h"
 
 #include "ECS/Systems/Components/CameraComponent.h"
+#include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/WidgetTree.h"
 #include "GameRuntime/App.h"
 #include "Render3D/Common/RenderFeatures.h"
 #include "Scene/Core/Scene.h"
@@ -58,6 +63,8 @@ TEST(EditorViewProducerTest, AuthoringViewportDrawsEditorFurnitureWhileAuthoring
     EditorLayer     layer(&app);
     EditorViewProducer producer;
     producer.bind(app, layer);
+    // A viewport is on screen; the producer declares its views only then.
+    layer.addViewportShown();
 
     Scene scene("Authoring");
     layer.notifyViewportWidgetRect(Rect2D{.pos = {12.0f, 24.0f}, .extent = {960.0f, 540.0f}}, {});
@@ -86,6 +93,7 @@ TEST(EditorViewProducerTest, AuthoringViewportFallsBackToItsDefaultSizeBeforeLay
     EditorLayer     layer(&app);
     EditorViewProducer producer;
     producer.bind(app, layer);
+    layer.addViewportShown();
 
     Scene scene("Authoring");
 
@@ -109,6 +117,7 @@ TEST(EditorViewProducerTest, PanelGeometryTooSmallForAPixelDoesNotBecomeTheViewR
     EditorLayer     layer(&app);
     EditorViewProducer producer;
     producer.bind(app, layer);
+    layer.addViewportShown();
 
     // A collapsed panel, or geometry that was never written, reports extents
     // that pass a plain "greater than zero" test and then truncate to a
@@ -133,6 +142,7 @@ TEST(EditorViewProducerTest, GizmoViewOptionOnlyReachesViewsThatAskForIt)
     EditorLayer     layer(&app);
     EditorViewProducer producer;
     producer.bind(app, layer);
+    layer.addViewportShown();
 
     Scene scene("Authoring");
     Node3D* cameraNode = scene.createNode3D("PreviewCamera");
@@ -167,6 +177,67 @@ TEST(EditorViewProducerTest, GizmoViewOptionOnlyReachesViewsThatAskForIt)
     EXPECT_TRUE(drawsGizmos(*primaryWithOption));
 }
 
+TEST(EditorViewProducerTest, HidingTheViewportDeclaresNoEditorViewAtAll)
+{
+    App             app;
+    EditorLayer     layer(&app);
+    EditorViewProducer producer;
+    producer.bind(app, layer);
+
+    Scene scene("Authoring");
+    Node3D* cameraNode = scene.createNode3D("PreviewCamera");
+    ASSERT_NE(cameraNode, nullptr);
+    ASSERT_NE(cameraNode->getEntity(), nullptr);
+    ASSERT_NE(cameraNode->getEntity()->addComponent<CameraComponent>(), nullptr);
+    layer.setSelectedEntity(cameraNode->getEntity());
+    layer.notifyViewportWidgetRect(Rect2D{.pos = {0.0f, 0.0f}, .extent = {960.0f, 540.0f}}, {});
+
+    layer.addViewportShown();
+    SceneViewCollector shown;
+    producer.collectSceneViews(makeEditorContext(scene), shown);
+    ASSERT_NE(findView(shown, kPrimarySceneViewId), nullptr);
+    ASSERT_NE(findComposedInset(shown), nullptr);
+
+    // Selecting another tab in the viewport's stack -- or the level editor tab
+    // that owns that stack -- detaches the widget. There is then no image to draw
+    // into, so the editor declares no View and the tick records no world graph at
+    // all, rather than recording one nothing samples.
+    layer.removeViewportShown();
+    SceneViewCollector hidden;
+    producer.collectSceneViews(makeEditorContext(scene), hidden);
+    EXPECT_TRUE(hidden.views().empty());
+
+    // Coming back the declared geometry is the panel's, and neither the stale
+    // last-laid-out rect nor the default size is involved.
+    layer.notifyViewportWidgetRect(Rect2D{.pos = {4.0f, 8.0f}, .extent = {800.0f, 450.0f}}, {});
+    layer.addViewportShown();
+    SceneViewCollector reshown;
+    producer.collectSceneViews(makeEditorContext(scene), reshown);
+    const SceneViewDesc* primary = findView(reshown, kPrimarySceneViewId);
+    ASSERT_NE(primary, nullptr);
+    EXPECT_FLOAT_EQ(primary->viewportRect.extent.x, 800.0f);
+    EXPECT_FLOAT_EQ(primary->viewportRect.extent.y, 450.0f);
+}
+
+TEST(EditorViewProducerTest, AHiddenViewportStopsCapturingViewportInput)
+{
+    App         app;
+    EditorLayer layer(&app);
+
+    layer.addViewportShown();
+    layer.notifyViewportWidgetRect(Rect2D{.pos = {0.0f, 0.0f}, .extent = {960.0f, 540.0f}}, {});
+    layer.setViewportHoverFocus(true, true);
+    ASSERT_TRUE(layer.shouldCaptureInput());
+
+    // The widget left the tree, so nothing can hover or focus it. A hover flag
+    // left standing would keep feeding the editor camera input meant for the tab
+    // that replaced the viewport.
+    layer.removeViewportShown();
+    EXPECT_FALSE(layer.isViewportHovered());
+    EXPECT_FALSE(layer.isViewportFocused());
+    EXPECT_FALSE(layer.shouldCaptureInput());
+}
+
 TEST(EditorViewProducerTest, PreviewPanelKeepsWorldInputOutOfThePanel)
 {
     App         app;
@@ -191,6 +262,92 @@ TEST(EditorViewProducerTest, PreviewPanelKeepsWorldInputOutOfThePanel)
     // With no preview panel there is nothing to exclude.
     layer.notifyViewportWidgetRect(world, {});
     EXPECT_TRUE(layer.screenToViewport(800.0f, 540.0f, local.x, local.y));
+}
+
+/// The viewport tab registers itself with the shell on attach and clears on
+/// detach. This case drives that production edge end to end -- dock detach ->
+/// sink -> layer -> producer -- because the wiring, not the flag, is what makes
+/// a hidden viewport cost nothing.
+TEST(EditorViewProducerTest, DockTabDetachIsWhatHidesTheViewport)
+{
+    App           app;
+    EditorLayer   layer(&app);
+    EditorSurface surface;
+    surface.bind(layer);
+
+    WidgetTree tree({.width = 400, .height = 300});
+    auto root = std::make_shared<UICanvasPanel>("Root");
+    FCanvasSlotArgs rootSlot;
+    rootSlot.anchorMin = {0.0f, 0.0f};
+    rootSlot.anchorMax = {1.0f, 1.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), root, rootSlot).valid());
+
+    // Before the tab is in the tree there is no viewport, so nothing is declared.
+    EditorViewProducer producer;
+    producer.bind(app, layer);
+    Scene              scene("Authoring");
+    SceneViewCollector beforeAttach;
+    producer.collectSceneViews(makeEditorContext(scene), beforeAttach);
+    ASSERT_TRUE(beforeAttach.views().empty());
+
+    auto tab = std::make_shared<EditorViewportTab>(&surface);
+    ASSERT_TRUE(tree.attach(*root, tab).valid());
+    EXPECT_TRUE(layer.isViewportShown());
+
+    SceneViewCollector attached;
+    producer.collectSceneViews(makeEditorContext(scene), attached);
+    EXPECT_NE(findView(attached, kPrimarySceneViewId), nullptr);
+
+    // The dock detaches the widget when another tab in the stack is selected.
+    tree.detach(*tab);
+    EXPECT_FALSE(layer.isViewportShown());
+
+    SceneViewCollector detached;
+    producer.collectSceneViews(makeEditorContext(scene), detached);
+    EXPECT_TRUE(detached.views().empty());
+}
+
+/// A second editor window has its own chrome and its own viewport, and the
+/// layer tracks the whole editor's authoring view. One window switching tabs
+/// must not stop a viewport the other window is still showing.
+TEST(EditorViewProducerTest, OneWindowHidingItsViewportDoesNotHideTheOtherWindows)
+{
+    App           app;
+    EditorLayer   layer(&app);
+    EditorSurface firstWindow;
+    EditorSurface secondWindow;
+    firstWindow.bind(layer);
+    secondWindow.bind(layer);
+
+    WidgetTree firstTree({.width = 400, .height = 300});
+    WidgetTree secondTree({.width = 400, .height = 300});
+    auto       attachViewport = [](WidgetTree& source, EditorSurface& sink) {
+        auto root = std::make_shared<UICanvasPanel>("Root");
+        FCanvasSlotArgs rootSlot;
+        rootSlot.anchorMin = {0.0f, 0.0f};
+        rootSlot.anchorMax = {1.0f, 1.0f};
+        EXPECT_TRUE(source.attach(*source.getLayer(WidgetTree::ELayer::Content), root, rootSlot).valid());
+        auto tab = std::make_shared<EditorViewportTab>(&sink);
+        EXPECT_TRUE(source.attach(*root, tab).valid());
+        return tab;
+    };
+
+    auto firstTab  = attachViewport(firstTree, firstWindow);
+    auto secondTab = attachViewport(secondTree, secondWindow);
+    EXPECT_TRUE(layer.isViewportShown());
+
+    firstTree.detach(*firstTab);
+    EXPECT_TRUE(layer.isViewportShown());
+
+    EditorViewProducer producer;
+    producer.bind(app, layer);
+    Scene              scene("Authoring");
+    SceneViewCollector stillShown;
+    producer.collectSceneViews(makeEditorContext(scene), stillShown);
+    EXPECT_NE(findView(stillShown, kPrimarySceneViewId), nullptr);
+
+    secondTree.detach(*secondTab);
+    EXPECT_FALSE(layer.isViewportShown());
 }
 
 } // namespace ya

@@ -26,6 +26,26 @@ bool EditorLayer::shouldCaptureInput() const
     return _app && _app->getInputManager().isMouseButtonPressed(EMouse::Right);
 }
 
+void EditorLayer::addViewportShown()
+{
+    ++_shownViewportCount;
+}
+
+void EditorLayer::removeViewportShown()
+{
+    if (_shownViewportCount > 0) {
+        --_shownViewportCount;
+    }
+    if (_shownViewportCount == 0) {
+        // The last viewport widget left the tree, so nothing can hover or focus
+        // it. Keeping the last frame's answer would leave the editor camera
+        // eating input -- WASD and the camera controller -- meant for whichever
+        // tab replaced it.
+        bViewportHovered = false;
+        bViewportFocused = false;
+    }
+}
+
 void EditorLayer::onAttach()
 {
     YA_PROFILE_FUNCTION();

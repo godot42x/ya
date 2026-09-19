@@ -132,7 +132,7 @@ void EditorSurface::shutdown()
     _dockSpace.reset();
     _dockContext.reset();
     _ownedDockContext.reset();
-    _viewportHost = nullptr;
+    setViewportHost(nullptr);
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
     _projectBrowser.reset();
@@ -193,7 +193,7 @@ void EditorSurface::rebuild(const FEditorSurfaceContext& context)
     _dockSpace.reset();
     _dockContext.reset();
     _ownedDockContext.reset();
-    _viewportHost = nullptr;
+    setViewportHost(nullptr);
     _viewportGizmoOverlay.reset();
     _viewportOverlayHost.clearOverlay();
     _projectBrowser.reset();
@@ -766,6 +766,25 @@ void EditorSurface::refreshProjectBrowserRows()
     }
     if (_projectBrowser && _projectBrowser->errorText) {
         _projectBrowser->errorText->setText(_layer->getProjectBrowserError());
+    }
+}
+
+void EditorSurface::setViewportHost(IEditorViewportHost* host)
+{
+    if (_viewportHost == host) {
+        return;
+    }
+    _viewportHost = host;
+    if (_layer) {
+        // The widget's presence in the tree is the editor viewport's visibility:
+        // the dock detaches it whenever another tab in its stack is selected, and
+        // detach recurses into the level editor tab that owns that stack.
+        if (host) {
+            _layer->addViewportShown();
+        }
+        else {
+            _layer->removeViewportShown();
+        }
     }
 }
 

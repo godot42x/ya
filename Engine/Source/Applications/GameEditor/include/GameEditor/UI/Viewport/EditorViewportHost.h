@@ -60,6 +60,10 @@ struct IEditorViewportHost
 struct IEditorViewportHostSink
 {
     virtual ~IEditorViewportHostSink() = default;
+    /// The chrome widget registers itself while it is in the tree. That edge is
+    /// also the viewport's visibility: the dock detaches the widget when another
+    /// tab in its stack is selected, so `nullptr` means "no viewport on screen"
+    /// rather than "the rect is unchanged".
     virtual void setViewportHost(IEditorViewportHost* host) = 0;
 };
 

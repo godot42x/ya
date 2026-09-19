@@ -150,7 +150,11 @@ struct EditorSurface : IEditorViewportHostSink
     [[nodiscard]] EditorViewportOverlayHost& viewportOverlayHost() { return _viewportOverlayHost; }
     [[nodiscard]] const EditorViewportOverlayHost& viewportOverlayHost() const { return _viewportOverlayHost; }
     [[nodiscard]] bool isViewportOverlayActive() const { return _viewportOverlayHost.isActive(); }
-    void setViewportHost(IEditorViewportHost* host) override { _viewportHost = host; }
+    /// The viewport widget registers itself on attach and clears on detach. That
+    /// edge is also the viewport's visibility, and the layer is told here rather
+    /// than at tick time: the dock detaches the widget during input dispatch, so
+    /// this way the same frame's view declaration already sees the viewport gone.
+    void setViewportHost(IEditorViewportHost* host) override;
     void openSceneSaveDialog();
     void openFilePickerDialog(FEditorFilePickerRequest request);
     void openAssetPickerDialog(EEditorAssetPickerKind kind,

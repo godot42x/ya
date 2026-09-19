@@ -67,6 +67,17 @@ struct EditorLayer
     std::string _inspectedAssetPath;
     EditorDocumentRegistry* _documents = nullptr;
 
+    /// How many editor viewports are on screen. The viewport is a docked tab, so
+    /// the dock detaches its widget whenever another tab in its stack is selected
+    /// (or the level editor tab that owns that stack is), and there is then no
+    /// viewport to draw into. The editor declares its authoring View only while
+    /// this is nonzero: a hidden viewport costs no world graph. A count rather
+    /// than a flag because a second editor window has its own chrome and its own
+    /// viewport, and one window switching tabs must not stop the other's.
+    /// Written only by the window chrome, at the viewport widget's attach/detach
+    /// edge.
+    uint32_t _shownViewportCount = 0;
+
     // Authoring viewport geometry (chrome). The editor declares its authoring
     // View with this rect and maps viewport input through it; it is not the
     // present surface. Before the first layout the panel has no rect yet, so
@@ -354,6 +365,18 @@ struct EditorLayer
         }
         return Rect2D{.pos = {0.0f, 0.0f}, .extent = _viewportSize};
     }
+
+    /// Whether any editor viewport is on screen. False means the editor declares
+    /// no authoring View at all, so a viewport that is not displayed (another tab
+    /// in its stack is selected, or the level editor tab owning that stack is)
+    /// costs no world graph. `getViewportRect()` keeps its last-laid-out fallback
+    /// for the remaining case: shown, but not laid out yet.
+    [[nodiscard]] bool isViewportShown() const { return _shownViewportCount > 0; }
+    /// Paired with the viewport widget's attach/detach. Each editor window calls
+    /// these once per transition, so a window that is not showing its viewport
+    /// never cancels one that is.
+    void addViewportShown();
+    void removeViewportShown();
 
     /// True when a rect is finite and at least one whole pixel wide and tall on
     /// both axes. A positive comparison alone is not enough: uninitialized or
