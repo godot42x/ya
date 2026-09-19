@@ -227,12 +227,10 @@ struct DragDetectWidget final : public UIElement
 
 struct TickCounterWidget final : public UIElement
 {
-    explicit TickCounterWidget(std::string name) : UIElement(std::move(name)) {}
+    explicit TickCounterWidget(std::string name) : UIElement(std::move(name)) { enableTick(); }
 
     int ticks = 0;
-    bool bTick = true;
 
-    [[nodiscard]] bool wantsTick() const override { return bTick; }
     void tick(float) override { ++ticks; }
 };
 
@@ -257,6 +255,17 @@ struct TickHostCompound final : public UICompoundWidget
         child = std::make_shared<TickCounterWidget>("TickChild");
         addDetachedChild(child);
     }
+};
+
+/// A leaf control (not a compound) that opts into the frame lifecycle from its
+/// own class, the way any widget whose per-frame state lives in its type does.
+struct TickEnabledBorder final : public UIBorder
+{
+    explicit TickEnabledBorder(std::string name) : UIBorder(std::move(name)) { enableTick(); }
+
+    int ticks = 0;
+
+    void tick(float) override { ++ticks; }
 };
 
 struct TestBehavior final : public UIBehavior
@@ -545,7 +554,7 @@ TEST(WidgetTreeTest, TickVisitsOnlyAttachedVisibleOptInNodes)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto idle = std::make_shared<TickCounterWidget>("Idle");
-    idle->bTick = false;
+    idle->enableTick(false);
     auto live = std::make_shared<TickCounterWidget>("Live");
     auto hidden = std::make_shared<TickCounterWidget>("Hidden");
     FCanvasSlotArgs slot;
@@ -588,6 +597,64 @@ TEST(WidgetTreeTest, TickRecursesCompoundChildrenWithoutCompoundDrivingThem)
     tree.tick(1.0f / 60.0f);
     EXPECT_EQ(host->ticks, 1);
     EXPECT_EQ(host->child->ticks, 2);
+}
+
+TEST(WidgetTreeTest, BehaviorTicksOnAWidgetThatNeverOptedInItself)
+{
+    // The behaviour door is for per-frame work that is not the widget's own
+    // type. It must stay open regardless of the host class: UICompoundWidget
+    // used to report wantsTick() from its own flag only, so a tween attached
+    // to a compound was never ticked and never reported an error.
+    WidgetTree tree({.width = 400, .height = 300});
+    auto host = std::make_shared<TickHostCompound>("TickBehaviorHost");
+    auto behavior = std::make_shared<TestBehavior>();
+    behavior->bTick = true;
+    host->addBehavior(behavior);
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {120.0f, 80.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), host, slot).valid());
+
+    // Nobody called enableTick(): the behaviour alone opens the gate.
+    EXPECT_TRUE(host->wantsTick());
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(behavior->tickHits, 1);
+    // One gate per widget, not one per door: the open gate runs the class hook
+    // too. That is why an override of tick() must forward with
+    // UIElement::tick() - TickHostCompound does, so the behaviour above ran.
+    EXPECT_EQ(host->ticks, 1);
+
+    behavior->bTick = false;
+    tree.tick(1.0f / 60.0f);
+    EXPECT_FALSE(host->wantsTick());
+    EXPECT_EQ(behavior->tickHits, 1);
+    EXPECT_EQ(host->ticks, 1);
+}
+
+TEST(WidgetTreeTest, EnableTickIsAvailableToAnyWidgetNotOnlyCompounds)
+{
+    // The other door: the state lives in the widget's own class, so the class
+    // overrides tick() and opts in from its constructor. It is not a property
+    // of UICompoundWidget - a leaf control uses it exactly the same way.
+    WidgetTree tree({.width = 400, .height = 300});
+    auto leaf = std::make_shared<TickEnabledBorder>("TickLeaf");
+    FCanvasSlotArgs slot;
+    slot.fixedSize = {80.0f, 40.0f};
+    ASSERT_TRUE(tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), leaf, slot).valid());
+
+    EXPECT_TRUE(leaf->wantsTick());
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(leaf->ticks, 1);
+
+    // A hidden widget is not visited, so opting in cannot keep a subtree busy.
+    leaf->setVisibility(EWidgetVisibility::Hidden);
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(leaf->ticks, 1);
+
+    leaf->setVisibility(EWidgetVisibility::Visible);
+    leaf->enableTick(false);
+    tree.tick(1.0f / 60.0f);
+    EXPECT_EQ(leaf->ticks, 1);
+    EXPECT_FALSE(leaf->wantsTick());
 }
 
 TEST(WidgetTreeTest, BehaviorParticipatesInPreviewTargetAndBubbleRouting)

@@ -23,6 +23,12 @@ UIElement::UIElement(std::string name, std::string styleKey)
 
 bool UIElement::wantsTick() const
 {
+    // Two doors, one answer: the widget's own class (enableTick) and the
+    // behaviours attached to it. They are reported together so no subclass can
+    // accidentally hide the behaviour door by overriding wantsTick().
+    if (_bTickEnabled) {
+        return true;
+    }
     for (const UIBehaviorRef& behavior : _behaviors) {
         if (behavior && behavior->wantsTick()) {
             return true;

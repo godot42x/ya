@@ -559,9 +559,8 @@ TEST(DockNodeTest, ActivatePanelGraftsSelectedTabAndDetachedStopsTick)
 {
     struct TickProbe final : public UICanvasPanel
     {
-        explicit TickProbe(std::string name) : UICanvasPanel(std::move(name)) {}
+        explicit TickProbe(std::string name) : UICanvasPanel(std::move(name)) { enableTick(); }
         int ticks = 0;
-        [[nodiscard]] bool wantsTick() const override { return true; }
         void tick(float) override { ++ticks; }
     };
 

@@ -175,6 +175,17 @@ spawn，root 是 `UIElement` / `UICompoundWidget`；attach/detach/tick 只由 `W
   长时结构 soak 在 `EditorLongRunSoakTest`：同 subtree attach/detach、destroy/recreate、theme 切换、
   deferred texture generation。GPU/offscreen 像素门禁：`Script/automation/gui/run_workbench_gpu_parity.py`
   （headless lastRoute + snapshot digest + windowed `--gpu-shot`/`--offscreen-diff` 零容差）。
+- 帧生命周期（**两扇门，一条协议，门归框架**）：`WidgetTree::tickSubtree` 只拜访可见子树
+  （折叠/隐藏即停），门是 `UIElement::wantsTick()` = `_bTickEnabled || 任一 behavior 想跑`。
+  两扇门覆盖不同的事：控件**自己的类**用 `enableTick()` + override `tick()`（每帧状态在自己类型里，
+  editor tab / section 是这一类）；**别人的部件**用 `addBehavior(UIBehavior)`（tween、对话框自刷新、
+  drag；behavior 自己回答 `wantsTick()`）。门是**整个 widget 一扇**而不是每扇门一扇：behavior 想要帧，
+  这个 widget 的 `tick()` 就会跑；因此谁 override `tick()`，谁就必须转发 `UIElement::tick(dt)`，
+  否则挂在这个类型上的 behavior 静默不跑、也不报错。
+  `wantsTick()` **故意非虚**：让它由子类回答，就等于允许子类藏掉 behavior 那半扇门
+  （`UICompoundWidget` 曾 `return _bTickEnabled;`，`ui::animate(...)` 挂在 compound 上无效，
+  见 `memories/widget_tick_gate_hidden_by_override.md`）。要「某类控件被动加入帧」就改
+  `UIElement`，不要给每个控件造 compound 子类。
 
 ## 动画（framework 层）
 

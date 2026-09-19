@@ -178,8 +178,28 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     virtual void onDetached() {}
     /// Optional frame-driven lifecycle. WidgetTree invokes this once per
     /// frame for attached widgets that opt in through wantsTick().
+    /// An override MUST forward with UIElement::tick(deltaSeconds) when it
+    /// wants the behaviours attached to this widget to keep running; the
+    /// framework cannot call them for you once the class takes over the hook.
     virtual void tick(float deltaSeconds);
-    [[nodiscard]] virtual bool wantsTick() const;
+    /// The single gate for the frame lifecycle, called once per frame per
+    /// visible node. Deliberately not virtual: participation is only ever
+    /// "this class said so" (enableTick) or "a behaviour wants a frame", and
+    /// a subclass override could silently hide the second half. WidgetTree
+    /// only visits VISIBLE subtrees, so opting in never keeps a collapsed or
+    /// hidden widget busy.
+    [[nodiscard]] bool wantsTick() const;
+    /// Opt this widget into the frame lifecycle. There are two doors into the
+    /// same protocol and they cover different things:
+    ///   - this one, called from the widget's OWN class, which overrides
+    ///     tick() because the per-frame state lives in that type;
+    ///   - addBehavior(UIBehavior) for per-frame work that is not the widget's
+    ///     type (tween, drag, a dialog refreshing itself) - the behaviour
+    ///     reports wantsTick() on its own.
+    /// A subclass that overrides wantsTick() MUST chain to
+    /// UIElement::wantsTick(), or every behaviour attached to that type is
+    /// silently never ticked.
+    void enableTick(bool enabled = true) { _bTickEnabled = enabled; }
 
     /// Cross-cutting capabilities (tween, drag, drop). WidgetTree ticks a
     /// widget that wantsTick(); UIElement::wantsTick/tick forward to this list.
@@ -250,6 +270,11 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// model state into widget fields each frame). Costs the incremental-reuse
     /// win for this widget; keeps data/display consistency the invariant.
     bool _bVolatile = false;
+
+    /// Frame lifecycle opt-in for this widget's own class (see enableTick).
+    /// Not an invalidation input: WidgetTree polls wantsTick() every frame, so
+    /// toggling it needs no dirty mark. Behaviours opt in independently.
+    bool _bTickEnabled = false;
 
     /// Enabled state (editor-parity P6). A disabled widget (or one inside a
     /// disabled ancestor) does not receive input; paint graying is left to

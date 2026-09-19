@@ -56,6 +56,16 @@ tick 里手写把状态推给各个子 UI。
 （`UIBehavior` 子类，带一个 `std::function<void(UIElement&, float)>`），两个对话框在 `open()` 时把它
 挂到自己的 overlay 上，刷新由 `WidgetTree` 的子树 tick 驱动。
 
+**C4a-2 已落地 2026-09-20（门归框架）**：C4a 补上了 `UITickBehavior`，但「门」本身还是
+子类自己回答的虚函数——`UICompoundWidget::wantsTick()` 返回 `_bTickEnabled`，于是挂到
+compound 上的 behavior（含 tween）被静默藏掉：门说「不想要帧」，而 `UIElement::tick()`
+仍然转发 `_behaviors`，两边对同一件事给出不同答案，且不报错。现在 `_bTickEnabled` /
+`enableTick()` 搬到 `UIElement`，`wantsTick()` 改为**非虚**，返回 `_bTickEnabled || 任一
+behavior 想跑`。两扇门（「每帧状态在自己类型里」/「把别人的每帧工作挂上去」）从此是同一条
+协议的两种用法，任何一类都不能单方面把它关掉；门仍然是整块 widget 一扇，所以 override
+`tick()` 的类必须转发 `UIElement::tick(dt)`。**仍未做**：`tick()` 本身还是虚函数，override
+忘了转发照样丢 behavior（15 个 editor tab / section + 3 个测试替身），收在 C4e。
+
 关键收尾：**`EditorFilePickerDialog::sync` / `EditorSettingsDialog::sync` 改为 private**。这是本刀
 真正的验收——契约不能只是"现在没人调"，而是"别人调不到"。在此之前两个 `sync` 是公开的，等于公开邀请
 shell 回来推；改完之后 shell 想推也没有入口。

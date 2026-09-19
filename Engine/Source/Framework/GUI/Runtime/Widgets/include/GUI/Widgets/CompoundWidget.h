@@ -22,6 +22,12 @@ namespace ya
 /// reusable cross-cutting interaction stays in UIBehavior, and future
 /// document/component adapters may target the same kernel without routing
 /// through UICompoundWidget.
+///
+/// Frame lifecycle is UIElement's, not this type's: a compound with per-frame
+/// state calls the inherited enableTick() and overrides tick(), while
+/// behaviours attached to it are ticked through the same wantsTick(). This
+/// type used to answer wantsTick() from its own flag only, which silently
+/// dropped every behaviour (tween included) attached to a compound.
 struct YA_GUI_API UICompoundWidget : public UIElement
 {
     using SlotArgs = FContentSlotArgs;
@@ -39,14 +45,10 @@ struct YA_GUI_API UICompoundWidget : public UIElement
     {
         node["type"] = "singleChild";
     }
-    bool wantsTick() const override { return _bTickEnabled; }
 
   protected:
     virtual void construct() = 0;
-    bool _bTickEnabled  = false;
     bool _bConstructed = false;
-
-    void enableTick(bool enabled = true) { _bTickEnabled = enabled; }
 
   private:
     UISingleChildLayout _contentLayout;
