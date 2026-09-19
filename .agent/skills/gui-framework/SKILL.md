@@ -541,10 +541,10 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
  只路由输入，`EditorViewportGizmoController` 负责世界空间 translate/rotate/scale 与 undo，绘制在
  `EditorModule` 的 viewport compose callback 中走 `Render2D`（`layer.gizmo().recordOverlay()`）。
 - Camera preview 是 **chrome，不是 runtime compose inset**：`EditorViewProducer` 声明的 preview
-  View（`kPreviewViewId` = 2）只渲染到自己的 RT，`composeRect` 为空，所以 runtime 不把它 blit 到世界
-  RT（那样世界 overlay——x-z 网格 / manipulator / 相机视锥线框——会盖在预览上，因为它们是世界空间内容，
-  而 inset 是后画的）。同帧顺序不变：`onViewportCompose` 里 `EditorModule` 读
-  `getViewOutput(kPreviewViewId)` → `EditorLayer::setViewportPreviewImage` →
+  View（`previewKey()`，owner 2 + local 2）只渲染到自己的 RT，`composeRect` 为空，所以 runtime 不把它
+  blit 到世界 RT（那样世界 overlay——x-z 网格 / manipulator / 相机视锥线框——会盖在预览上，因为它们
+  是世界空间内容，而 inset 是后画的）。同帧顺序不变：`onViewportCompose` 里 `EditorModule` 读
+  `getViewOutput(producer.previewKey().viewId())` → `EditorLayer::setViewportPreviewImage` →
   `EditorSurface::pushViewportDisplay`（device → layer → chrome 三段，和世界 viewport 同一条）→
   `EditorViewportTab::setPreviewImage`；Tab 内部是 `UIOverlay` 叠两兄弟：世界 `UIImage` 占满，
   `UIBorder`（`panel` 主题 + 1px padding）包住预览 `UIImage`，End/End 对齐、位置由 slot 的
