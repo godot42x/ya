@@ -1,5 +1,8 @@
 #include "ECS/Component.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Entity.h"
+#include "ECS/Systems/Components/CameraComponent.h"
 #include "Hierarchy/Node.h"
 #include "Scene3D/ManagedChildComponent.h"
 #include "Scene/Core/Scene.h"
@@ -123,6 +126,33 @@ TEST(SceneNodeLifecycleTest, DestroyingOneGeneratedMeshLeavesTheRestOfTheInstanc
 
     EXPECT_EQ(scene.getNodeByEntity(modelHandle), nullptr);
     EXPECT_EQ(scene.getNodeByEntity(mesh1Handle), nullptr);
+}
+
+TEST(SceneNodeLifecycleTest, CreatingAComponentOnAnEntityAssignsThatEntityAsItsOwner)
+{
+    Scene   scene("OwnerScene");
+    Entity* entity = scene.createNode3D("Owner")->getEntity();
+    ASSERT_NE(entity, nullptr);
+
+    // A component that reads its owner (a camera builds its view from the owner
+    // transform) needs the back-pointer whichever funnel created it: the typed
+    // API, the name-based API scripts and automation use, or the Scene handle the
+    // loader uses.
+    ASSERT_NE(entity->addComponent<CameraComponent>(), nullptr);
+    EXPECT_EQ(entity->getComponent<CameraComponent>()->getOwner(), entity);
+
+    auto* mesh = static_cast<StaticMeshComponent*>(entity->addComponentByName("StaticMeshComponent").instance);
+    ASSERT_NE(mesh, nullptr);
+    EXPECT_EQ(mesh->getOwner(), entity);
+
+    auto* skybox = scene.addComponent<SkyboxComponent>(entity->getHandle());
+    ASSERT_NE(skybox, nullptr);
+    EXPECT_EQ(skybox->getOwner(), entity);
+
+    // "Get or create" answers for this entity even when the component was
+    // already there.
+    EXPECT_EQ(entity->addComponentByName("StaticMeshComponent").instance, mesh);
+    EXPECT_EQ(mesh->getOwner(), entity);
 }
 
 } // namespace ya

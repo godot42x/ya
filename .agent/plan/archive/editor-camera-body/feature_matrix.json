@@ -84,6 +84,12 @@
       "description": "The camera body is a lit solid (Phong), not a flat unlit tint",
       "state": "done",
       "seam": "makeCameraCompanionSpec + CameraCompanionPolicy"
+    },
+    {
+      "id": "component-owner-at-creation",
+      "description": "Every creation funnel assigns the owning entity, so a loaded component reads the right owner (camera pose, etc.)",
+      "state": "done",
+      "seam": "detail_component_mutation::addComponent(registry, entity, owner) + ECSRegistry::addComponent + serializer/script funnels"
     }
   ]
 }

@@ -18,6 +18,7 @@ namespace ya
 {
 
 struct IComponent;
+struct Entity;
 
 /**
  * @brief How to copy a component during clone/duplicate.
@@ -48,7 +49,10 @@ struct ECSRegistry
     struct IComponentOps
     {
         virtual ~IComponentOps()                                               = default;
-        virtual void* create(entt::registry& registry, entt::entity entity)    = 0;
+        /// `owner` is the Entity that will hold the new component; creation is
+        /// where ownership is established, so it cannot be omitted (see
+        /// detail_component_mutation::addComponent).
+        virtual void* create(entt::registry& registry, entt::entity entity, Entity* owner) = 0;
         virtual void* get(const entt::registry& registry, entt::entity entity) = 0;
         virtual bool  remove(entt::registry& registry, entt::entity entity)    = 0;
 
@@ -69,9 +73,9 @@ struct ECSRegistry
     template <typename T>
     struct ComponentOps : public IComponentOps
     {
-        void* create(entt::registry& registry, entt::entity entity) override
+        void* create(entt::registry& registry, entt::entity entity, Entity* owner) override
         {
-            return detail_component_mutation::addComponent<T>(registry, entity);
+            return detail_component_mutation::addComponent<T>(registry, entity, owner);
         }
         void* get(const entt::registry& registry, entt::entity entity) override
         {
@@ -172,17 +176,19 @@ struct ECSRegistry
         }
         return nullptr;
     }
-    void* addComponent(ya::type_index_t typeIndex, entt::registry& registry, entt::entity entity)
+    /// `owner` is required: typing the name of a component does not remove the
+    /// need to say whose component it is (detail_component_mutation::addComponent).
+    void* addComponent(ya::type_index_t typeIndex, entt::registry& registry, entt::entity entity, Entity* owner)
     {
         if (auto opsIt = _componentOps.find(typeIndex); opsIt != _componentOps.end()) {
-            return opsIt->second->create(registry, entity);
+            return opsIt->second->create(registry, entity, owner);
         }
         return nullptr;
     }
-    void* addComponent(FName name, entt::registry& registry, entt::entity entity)
+    void* addComponent(FName name, entt::registry& registry, entt::entity entity, Entity* owner)
     {
         if (auto typeIndex = getTypeIndex(name)) {
-            return addComponent(typeIndex.value(), registry, entity);
+            return addComponent(typeIndex.value(), registry, entity, owner);
         }
         return nullptr;
     }

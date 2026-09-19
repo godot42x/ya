@@ -71,6 +71,16 @@ transform for free, and why companion components never track position themselves
    children depend on this: they are ordinary content with transform editing.
 8. **Companions do not change the collision/physics contract.** No collision, no
    decals, no shadow contribution unless the view asked for their feature set.
+9. **A component is created with its owner, not fixed up afterwards.**
+   `IComponent::_owner` is what lets a component read the entity that holds it
+   (`CameraComponent::getFreeView` resolves the owner's world pose from it);
+   ownership is therefore an argument to the single creation funnel
+   (`detail_component_mutation::addComponent`) and every path that emplaces a
+   component passes the `Entity*`. A funnel that creates a component without an
+   owner is a silent-wrong-pose bug, not a missing feature: the component falls
+   back to a default and the mesh, the view and the wireframe drawn from it
+   disagree while only one of them is right. Never create-then-patch: patch is
+   forgettable, an argument is not.
 
 ## Anti-patterns
 

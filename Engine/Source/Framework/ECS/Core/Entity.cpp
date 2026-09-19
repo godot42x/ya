@@ -87,7 +87,13 @@ InstanceRef Entity::addComponentByName(const std::string& typeName)
     }
     void* ptr = ecs.getComponent(*typeIndex, *_registry, _entityHandle);
     if (ptr == nullptr) {
-        ptr = ecs.addComponent(*typeIndex, *_registry, _entityHandle);
+        ptr = ecs.addComponent(*typeIndex, *_registry, _entityHandle, this);
+    }
+    else if (auto* component = static_cast<IComponent*>(ptr)) {
+        // "Get or create this component on this entity" answers for this entity
+        // either way, so a component that arrived here through some other path
+        // still ends up knowing its owner.
+        component->setOwner(this);
     }
     return InstanceRef{*typeIndex, ptr};
 }

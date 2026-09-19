@@ -11,9 +11,8 @@ T* Entity::addComponent(Args&&... args)
     static_assert(!std::is_base_of_v<T, IComponent>, "Component type must not derive from IComponent directly");
     YA_CORE_ASSERT(_registry != nullptr, "Entity registry is null!");
     YA_CORE_ASSERT(!hasComponent<T>(), "Entity already has component!");
-    T* comp = detail_component_mutation::addComponent<T>(*_registry, _entityHandle, std::forward<Args>(args)...);
+    T* comp = detail_component_mutation::addComponent<T>(*_registry, _entityHandle, this, std::forward<Args>(args)...);
     YA_CORE_ASSERT(comp != nullptr, "Failed to add component!");
-    static_cast<IComponent*>(comp)->setOwner(this);
     return comp;
 }
 

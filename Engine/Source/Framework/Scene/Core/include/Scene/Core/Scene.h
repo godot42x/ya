@@ -86,7 +86,15 @@ struct YA_SCENE_CORE_API Scene
             YA_CORE_WARN("Scene is invalid");
             return nullptr;
         }
-        return detail_component_mutation::addComponent<ComponentType>(_registry, entity, std::forward<Args>(args)...);
+        // The Scene is the only thing that can name a wrapped entity for a given
+        // handle, so it resolves the owner here instead of letting the caller
+        // leave the component with no back-pointer.
+        Entity* owner = getEntityByEnttID(entity);
+        if (owner == nullptr) {
+            YA_CORE_WARN("Scene::addComponent on an entity the Scene does not know");
+            return nullptr;
+        }
+        return detail_component_mutation::addComponent<ComponentType>(_registry, entity, owner, std::forward<Args>(args)...);
     }
 
     template <typename ComponentType>

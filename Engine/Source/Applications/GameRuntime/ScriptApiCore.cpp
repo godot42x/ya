@@ -311,7 +311,10 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
             }
             void* ptr = ecs.getComponent(*typeIndex, scene.getRegistry(), handle);
             if (ptr == nullptr) {
-                ptr = ecs.addComponent(*typeIndex, scene.getRegistry(), handle);
+                // A component belongs to the entity it was added to; scripts can
+                // read a component back through the Entity side, so the same
+                // entity has to be the owner here.
+                ptr = ecs.addComponent(*typeIndex, scene.getRegistry(), handle, scene.getEntityByEnttID(handle));
             }
             if (ptr == nullptr) {
                 throw Error(std::format("failed to add component '{}'", typeName));

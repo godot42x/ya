@@ -7,13 +7,34 @@
 #include <entt/entt.hpp>
 #include <utility>
 
-namespace ya::detail_component_mutation
+namespace ya
 {
 
-template <typename ComponentType, typename... Args>
-ComponentType* addComponent(entt::registry& registry, entt::entity entity, Args&&... args)
+/// The entity that holds a component. Declared here because the creation
+/// funnel below needs to name it; the definition lives in ECS/Entity.h.
+struct Entity;
+
+} // namespace ya
+
+namespace ya::detail_component_mutation
 {
-    return &registry.emplace<ComponentType>(entity, std::forward<Args>(args)...);
+/// The one place a component instance is created.
+///
+/// A component has to know the entity that owns it: CameraComponent reads its
+/// owner's transform to build a view, for one. The registry cannot answer that
+/// question on its own -- `Entity` wrappers belong to the Scene -- so ownership
+/// is an argument here rather than something the caller patches afterwards.
+/// Every creation funnel (typed, name-based, type-erased) passes through this
+/// function, so no path can leave the back-pointer unset, and "created without
+/// an owner" is not expressible.
+template <typename ComponentType, typename... Args>
+ComponentType* addComponent(entt::registry& registry, entt::entity entity, Entity* owner, Args&&... args)
+{
+    ComponentType* component = &registry.emplace<ComponentType>(entity, std::forward<Args>(args)...);
+    if (component) {
+        component->setOwner(owner);
+    }
+    return component;
 }
 
 template <typename ComponentType>

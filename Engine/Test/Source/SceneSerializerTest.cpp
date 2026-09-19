@@ -4,10 +4,14 @@
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/Systems/Components/CameraComponent.h"
+#include "ECS/Systems/TransformSystem.h"
 #include "ECS/Entity.h"
 #include "GUI/Widgets/Controls/Button.h"
+#include "Render3D/Common/CameraFrustumOverlay.h"
 #include "Scene/Core/SceneWidgetEntry.h"
 #include "Scene3D/ManagedChildComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include <gtest/gtest.h>
 
 namespace ya
@@ -403,6 +407,64 @@ TEST(SceneSerializerTest, GeneratedCompanionIsNotSerialized)
     ASSERT_TRUE(roots[0].contains("children"));
     EXPECT_TRUE(roots[0]["children"].empty());
     EXPECT_TRUE(saved["entities"][0]["components"].contains("StaticMeshComponent"));
+}
+
+TEST(SceneSerializerTest, LoadedCameraViewAndWireframeUseItsAuthoredPose)
+{
+    ensureReflectionReady();
+
+    const glm::vec3 kAuthoredPosition{3.5f, 6.0f, 12.25f};
+    const glm::vec3 kAuthoredRotation{0.0f, 90.0f, 0.0f};
+
+    Scene scene("CameraRoundTripScene");
+    auto* cameraNode = scene.createNode3D("Camera", scene.getRootNode());
+    ASSERT_NE(cameraNode, nullptr);
+    Entity* camera = cameraNode->getEntity();
+    ASSERT_NE(camera, nullptr);
+    ASSERT_NE(camera->addComponent<CameraComponent>(), nullptr);
+    auto* authoredTc = camera->getComponent<TransformComponent>();
+    ASSERT_NE(authoredTc, nullptr);
+    authoredTc->setPosition(kAuthoredPosition);
+    authoredTc->setRotation(kAuthoredRotation);
+
+    SceneSerializer serializer(&scene);
+    const nlohmann::json saved = serializer.serialize();
+
+    Scene         loadedScene("LoadedCameraScene");
+    SceneSerializer loadedSerializer(&loadedScene);
+    loadedSerializer.deserialize(saved);
+
+    Entity* loaded = loadedScene.getEntityByName("Camera");
+    ASSERT_NE(loaded, nullptr);
+    ASSERT_TRUE(loaded->hasComponent<CameraComponent>());
+    auto* loadedTc = loaded->getComponent<TransformComponent>();
+    ASSERT_NE(loadedTc, nullptr);
+    TransformSystem::computeWorldMatrix(loadedTc);
+
+    const glm::vec3 worldEye = glm::vec3(loadedTc->getWorldMatrix()[3]);
+    EXPECT_NEAR(glm::length(worldEye - kAuthoredPosition), 0.0f, 1e-4f);
+
+    // A camera reads the pose of the entity that owns it. A component created by
+    // the deserializer must therefore know its owner: without it the view (and
+    // the FOV wireframe drawn from the same matrix) silently falls back to the
+    // orbit default near the world origin while the mesh sits at the authored
+    // transform -- three things that disagree, and only one of them is right.
+    auto* loadedCamera = loaded->getComponent<CameraComponent>();
+    EXPECT_EQ(loadedCamera->getOwner(), loaded);
+
+    const glm::mat4 inverseView = glm::inverse(loadedCamera->getFreeView());
+    const glm::vec3 viewEye     = glm::vec3(inverseView[3]);
+    EXPECT_NEAR(glm::length(viewEye - worldEye), 0.0f, 1e-3f);
+
+    std::vector<RenderOverlayLine3D> lines;
+    appendCameraFrustumOverlayLines(lines,
+                                    loadedCamera->getFreeView(),
+                                    loadedCamera->getProjection(),
+                                    glm::vec4(1.0f));
+    ASSERT_FALSE(lines.empty());
+    // The wireframe eye is the view eye: the drawn frustum has to sit on the
+    // same pose as the mesh.
+    EXPECT_NEAR(glm::length(lines.back().from - worldEye), 0.0f, 1e-3f);
 }
 
 // ============================================================================

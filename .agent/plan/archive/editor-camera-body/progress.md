@@ -140,3 +140,36 @@ Verified in this round:
 Still not done: an automated click test that drives Hierarchy selection (the
 automation surface has no selection method, so this round drove it with a temporary
 scene.create_preset auto-select that was reverted before committing).
+
+## Round 5 - the loaded camera rendered from the origin (owner was null)
+
+Reporting the three-way disagreement live (body mesh / gizmo wireframe /
+preview content) turned up a different bug than round 4's: it only reproduced on
+a camera that came from a scene file. The body mesh sat at the authored pose
+while the preview and the FOV wireframe both sat near the world origin, which is
+the orbit fallback in `CameraComponent::getFreeView`.
+
+Root cause: `IComponent::_owner` was assigned in two places (`Entity::addComponent`
+after `emplace`, and `Scene::clone`) but the serializer creates components through
+a third funnel -- `ECSRegistry::addComponent(FName, registry, handle)` -- that is
+name-based and type-erased and therefore never had an `Entity*` to set. A loaded
+camera kept `_owner == nullptr`, `resolveOwnerWorldPose()` returned false, and
+`getFreeView()` fell back to `lookAt(vec3(0,0,_distance), _focusPoint, up)`.
+Everything that reads the view agreed with each other and disagreed with the
+mesh, which is exactly the report.
+
+Fixed by making ownership an argument of the one creation funnel instead of a
+field a caller patches afterwards: `detail_component_mutation::addComponent(
+registry, entity, Entity* owner, ...)` sets it at emplace, and `IComponentOps::
+create`, both `ECSRegistry::addComponent` overloads, `Entity::addComponentByName`, 
+`Scene::addComponent` (resolves the owner through `getEntityByEnttID`), the
+serializer and the `component.add` script API all pass it. `_owner` is now
+default-initialized to null. The typed path lost its now-redundant `setOwner`.
+
+Verified: the new `SceneSerializerTest.LoadedCameraViewAndWireframeUseItsAuthoredPose`
+fails before the fix (9.34 units of disagreement) and passes after;
+`SceneNodeLifecycleTest.CreatingAComponentOnAnEntityAssignsThatEntityAsItsOwner`
+pins all three funnels. Live, with entity 55 (the camera loaded from
+HelloMaterial.scene.json) selected: the body mesh, the RGB manipulator and the
+yellow frustum wireframe sit on the same pose, and the preview contents move
+with the camera entity transform.

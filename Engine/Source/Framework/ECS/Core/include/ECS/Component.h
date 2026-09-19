@@ -30,7 +30,10 @@ struct IComponent
     YA_REFLECT_BEGIN(IComponent)
     YA_REFLECT_END()
 
-    Entity* _owner;
+    /// The entity this instance belongs to. Assigned where the component is
+    /// created (detail_component_mutation::addComponent) and re-pointed after a
+    /// clone; null only for a component no entity holds.
+    Entity* _owner = nullptr;
     virtual ~IComponent() = default;
 
     void                  setOwner(Entity* entity) { _owner = entity; }

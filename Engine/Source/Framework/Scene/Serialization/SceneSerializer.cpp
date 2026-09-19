@@ -389,7 +389,12 @@ Entity* SceneSerializer::deserializeEntity(const nlohmann::json& j)
             auto typeIndex = reg.getTypeIndex(FName(typeName));
             if (typeIndex) {
                 auto  id           = *typeIndex;
-                void* componentPtr = reg.addComponent(FName(typeName), _scene->getRegistry(), entity->getHandle());
+                // A component created here belongs to this entity and says so.
+                // Several consumers ask a component for its owner (a camera
+                // builds its view from the owner transform), so an instance that
+                // loads with no owner silently reads the wrong pose.
+                void* componentPtr =
+                    reg.addComponent(FName(typeName), _scene->getRegistry(), entity->getHandle(), entity);
                 ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
                 auto* ops = reg.getComponentOps(id);
                 auto  cls = ClassRegistry::instance().getClass(id);
