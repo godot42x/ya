@@ -7,5 +7,5 @@
 - [x] C4a：对话框自持刷新。新增 `UITickBehavior`；两个对话框 `open()` 时挂到自己的 overlay，刷新由 `WidgetTree` 子树 tick 驱动；`syncShellDialogs()` 与 `tick` 里的调用删除；两个 `sync` 改 **private**（契约"别人调不到"，不只是"现在没人调"）；对话框测试改为驱动 `tree.tick()` 而非直接调 `sync`
 - [ ] C4b：viewport 显示改为 tab 自持（`pushViewportDisplay` + `previewPanelLocalRect` + Surface 的 `_viewportTexture`/`_viewportImageResource`/`_viewportImageView` 一并搬到 `EditorViewportTab`）。**先决条件**：验证"折叠中的 tab 不 tick"不会让切回来的首帧显示旧图（`WidgetTree::tickSubtree` 对不可见子树 return）
 - [ ] C4c：`syncViewportHostState` 的 `FEditorViewportHostState` 消失——overlay host 从 viewport host + 相机来源直接读，而不是 Surface 每帧拼一个推入结构
-- [ ] C4d：`publishViewportRect` / `publishTitleClientHits` 改为树层查询，而不是 Surface 广播几何
+- [~] C4d：**判定阻塞**。`publishViewportRect` 是"last-valid viewport geometry"的唯一快照点（widget 折叠时报退化 rect，`notifyViewportWidgetRect` 的 `describesPixels` 守卫就是为此而设），拉取只会把状态搬到约 20 个读点。`publishTitleClientHits` 归 C5。动它之前先决定"last-valid 几何归谁"（layer / widget / 显式 `FEditorViewportFrame`）
 - [ ] C5：page tab 交还 dock 侧——删 `_pageTabBar` / `_pageTabKeys` / `beginPageTabDrag` / `acceptPageTabDrop` / `dropOntoPageTabs` 与 `syncPageTabs` 的并列向量投影，以及为它强制改写的 `bHideTabBar`

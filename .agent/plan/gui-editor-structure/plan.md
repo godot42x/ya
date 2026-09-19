@@ -97,6 +97,40 @@ shell 回来推；改完之后 shell 想推也没有入口。
 来自"这一帧 host viewport 是谁的相机"，也就是 Surface 收到的那份 context——所以这项的收益只是把
 6 个字段的装配换个地方，`FEditorViewportHostState` 并不会消失。**判断：不做。**
 
+**C4d 同样是阻塞而非待办（2026-09-19）**：`publishViewportRect` 看起来是纯搬运（`EditorLayer::
+notifyViewportWidgetRect` / `setViewportHoverFocus` 只是存字段），但其中一条规则决定了它不能简单变
+成拉取：
+
+~~~cpp
+// EditorLayer::notifyViewportWidgetRect
+if (describesPixels(rect)) {
+    _viewportSize = rect.extent;
+}
+~~~
+
+注释写明"tab 在折叠或尚未布局时会报零尺寸几何，那不能变成编辑器的视口尺寸"。也就是说 layer 存的是
+**"最后一次有效几何"**的快照，而 widget 只能报"它当前的 rect"——折叠时是退化的。改成拉取，就要么把
+这个"last-valid"缓存搬到每个读点（`EditorLayer.Viewport.cpp` + `Interaction.cpp` 共约 20 处），要么
+搬进 widget。两种都是**把状态换个地方，不是删掉状态**。
+
+**于是 C4 的结论是**：`EditorSurface::tick` 剩下的 4 个 push 各有承重理由——
+
+| push | 为什么留着 |
+| --- | --- |
+| `applyWindowMetrics` | host→tree 的窗口度量（尺寸/dpi/chrome inset），tree 不可能自己知道窗口；属正常输入，不是 sub-UI 推 |
+| `pushViewportDisplay` | 未选中的 tab 被 dock **摘出树**（C4b），推是唯一能让纹理在切回来时就正确的做法 |
+| `publishViewportRect` | 它是"last-valid viewport geometry"的唯一快照点（C4d） |
+| `syncViewportHostState` | 相机只能是"这一帧 host viewport 的相机"（C4c） |
+| `publishTitleClientHits` | 属于 C5：它发布的就是 page tab bar 的 rect |
+
+真正还没有解的不是"谁在推"，而是**"viewport 的 last-valid 几何归谁"**：今天归 layer（由 Surface 推入），
+也可以归 widget 或归一个显式的 `FEditorViewportFrame`。这是一个设计决定，不是机械重构——下一次动
+`publishViewportRect` 之前要先回答它，否则就是把状态搬家。
+
+**剩下真正可动的是 C5**：page tab 的第二份表示（`_pageTabBar` + `_pageTabKeys` + 三个拖放函数 +
+`bHideTabBar` 强制改写 + `publishTitleClientHits` + `installEmptyTabBarZoom`）。它要改的是 dock
+控件的投影（让 page leaf 的 well 渲染在 chrome 行），不是编辑器壳的接线，因此需要独立一轮。
+
 现状（`EditorSurface.cpp` 1322 行 / 36 个成员函数）：`tick` 是"Dock 模型 / 度量 → 一串 push →
 buildSnapshot"的混排：
 
