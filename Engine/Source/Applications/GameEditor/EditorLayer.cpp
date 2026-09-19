@@ -2,6 +2,7 @@
 #include "GameEditor/EditorUIDesignerSession.h"
 #include "ECS/Component.h"
 #include "ECS/Systems/Components/CameraComponent.h"
+#include "Core/Log.h"
 
 namespace ya
 {
@@ -15,6 +16,7 @@ EditorLayer::EditorLayer(App* app)
         .getSelections = [this]() -> const std::vector<Entity*>& { return getSelections(); },
         .getViewportInteractionScene = [this]() { return getViewportInteractionScene(); },
         .isViewportMode2D = [this]() { return isViewportMode2D(); },
+        .onTransformCommitted = [this]() { markSceneDirty(); },
     });
 }
 
@@ -191,41 +193,70 @@ void EditorLayer::setViewportHoverFocus(bool hovered, bool focused)
     bViewportFocused = focused;
 }
 
+void EditorLayer::runAfterUnsavedResolved(std::function<void()> proceed)
+{
+    if (!proceed) {
+        return;
+    }
+    if (!_bSceneDirty) {
+        proceed();
+        return;
+    }
+    if (_unsavedGuard) {
+        _unsavedGuard(std::move(proceed));
+        return;
+    }
+    proceed();
+}
+
 void EditorLayer::cmdNewScene()
 {
-    App::get()->getTaskManager().registerTickTask([this]() {
+    runAfterUnsavedResolved([this]() {
         auto* app = App::get();
         if (!app) {
             return;
         }
-
-        auto* sceneManager = app->getSceneServices().getSceneManager();
-        if (sceneManager && sceneManager->hasScene()) {
-            if (auto* render = app->getRenderServices().getRender()) {
-                render->waitIdle();
+        app->getTaskManager().registerTickTask([this]() {
+            auto* taskApp = App::get();
+            if (!taskApp) {
+                return;
             }
-        }
-        auto scene = makeShared<Scene>();
-        if (sceneManager) {
-            sceneManager->unloadScene();
-            sceneManager->activateScene(scene);
-        }
-        setCurrentScenePath({});
+
+            auto* sceneManager = taskApp->getSceneServices().getSceneManager();
+            if (sceneManager && sceneManager->hasScene()) {
+                if (auto* render = taskApp->getRenderServices().getRender()) {
+                    render->waitIdle();
+                }
+            }
+            auto scene = makeShared<Scene>();
+            if (sceneManager) {
+                sceneManager->unloadScene();
+                sceneManager->activateScene(scene);
+            }
+            setCurrentScenePath({});
+            clearSceneDirty();
+        });
     });
 }
 
 void EditorLayer::cmdLoadScene(std::string scenePath)
 {
-    if (!_app || scenePath.empty()) {
+    if (scenePath.empty()) {
         return;
     }
-    _app->getTaskManager().registerTickTask([this, scenePath = std::move(scenePath)]() {
-        if (!_app) {
+    runAfterUnsavedResolved([this, scenePath = std::move(scenePath)]() {
+        if (!_app || scenePath.empty()) {
             return;
         }
-        if (_app->getSceneServices().loadScene(scenePath)) {
-            setCurrentScenePath(scenePath);
-        }
+        _app->getTaskManager().registerTickTask([this, scenePath]() {
+            if (!_app) {
+                return;
+            }
+            if (_app->getSceneServices().loadScene(scenePath)) {
+                setCurrentScenePath(scenePath);
+                clearSceneDirty();
+            }
+        });
     });
 }
 
@@ -235,8 +266,10 @@ void EditorLayer::cmdSaveScene()
         if (_app && _app->getSceneServices().getSceneManager()) {
             if (auto* scene = getEditableScene()) {
                 (void)scene;
-                _app->getSceneServices().saveScene(_currentScenePath);
-                YA_CORE_INFO("Scene saved to: {}", _currentScenePath);
+                if (_app->getSceneServices().saveScene(_currentScenePath)) {
+                    YA_CORE_INFO("Scene saved to: {}", _currentScenePath);
+                    clearSceneDirty();
+                }
             }
         }
         return;
@@ -265,11 +298,50 @@ void EditorLayer::cmdSaveSceneAs()
             if (_app && _app->getSceneServices().getSceneManager()) {
                 if (auto* scene = getEditableScene()) {
                     scene->setName(sceneName);
-                    _app->getSceneServices().saveScene(_currentScenePath);
-                    YA_CORE_INFO("Scene saved to: {}", _currentScenePath);
+                    if (_app->getSceneServices().saveScene(_currentScenePath)) {
+                        YA_CORE_INFO("Scene saved to: {}", _currentScenePath);
+                        clearSceneDirty();
+                    }
                 }
             }
         });
+}
+
+void EditorLayer::cmdOpenScene()
+{
+    runAfterUnsavedResolved([this]() {
+        auto onPicked = [this](std::string path) {
+            if (path.empty()) {
+                return;
+            }
+            if (!_app) {
+                return;
+            }
+            _app->getTaskManager().registerTickTask([this, path = std::move(path)]() {
+                if (!_app) {
+                    return;
+                }
+                if (_app->getSceneServices().loadScene(path)) {
+                    setCurrentScenePath(path);
+                    clearSceneDirty();
+                }
+            });
+        };
+        if (_filePickerHandler) {
+            _filePickerHandler(makeSceneOpenPickerRequest(_currentScenePath, std::move(onPicked)));
+            return;
+        }
+        _filePicker.open("Open Scene", _currentScenePath, {".scene.json"}, std::move(onPicked));
+    });
+}
+
+void EditorLayer::cmdRequestQuit()
+{
+    runAfterUnsavedResolved([]() {
+        if (auto* app = App::get()) {
+            app->requestQuit();
+        }
+    });
 }
 
 } // namespace ya

@@ -1,5 +1,6 @@
 #include "GameEditor/UI/Tabs/EditorHierarchyTab.h"
 #include "GameEditor/UI/Ops/EditorHierarchyOps.h"
+#include "GameEditor/UI/Ops/EditorCreateMenu.h"
 #include "Render/Adapters/Companion/CompanionManager.h"
 
 #include "ECS/Component.h"
@@ -127,6 +128,7 @@ void EditorHierarchyTab::construct()
                         }
                         if (Entity* moved = moveEditorHierarchyEntity(*scene, fromId, toId, dropMode)) {
                             _layer->notifyHierarchyChanged();
+                            _layer->markSceneDirty();
                             _layer->setSelectedEntity(moved);
                         }
                     })
@@ -250,15 +252,14 @@ void EditorHierarchyTab::pullSelectionFromLayer()
 void EditorHierarchyTab::openContextMenu(const glm::vec2& logicalPoint)
 {
     WidgetTree* tree = getTree();
-    if (!tree || !_actions) {
+    if (!tree || !_actions || !_layer) {
         return;
     }
-    auto menu = UIMenu::create({
-        UIMenu::FItem::fromAction(*_actions, "selection.createEmpty"),
-        UIMenu::FItem::separator(),
-        UIMenu::FItem::fromAction(*_actions, "selection.duplicate"),
-        UIMenu::FItem::fromAction(*_actions, "selection.delete"),
-    });
+    std::vector<UIMenu::FItem> items = makeEditorCreateMenuItems(*_layer, *_actions);
+    items.push_back(UIMenu::FItem::separator());
+    items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.duplicate"));
+    items.push_back(UIMenu::FItem::fromAction(*_actions, "selection.delete"));
+    auto menu = UIMenu::create(std::move(items));
     menu->openAt(*tree, logicalPoint);
 }
 

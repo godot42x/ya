@@ -163,6 +163,16 @@ void EditorAutoPropertySection::bindDragMerge(UIDragFloat& drag)
     drag._onDragEnded = [this]() { _undo->endMerge(); };
 }
 
+void EditorAutoPropertySection::pushUndo(FUndoCommand command)
+{
+    if (_undo) {
+        (void)_undo->push(std::move(command));
+    }
+    if (_onMutated) {
+        _onMutated();
+    }
+}
+
 void EditorAutoPropertySection::commitAssetPath(size_t editorIndex, const std::string& value)
 {
     PropertyHandle binding = _editors[editorIndex].node->binding;
@@ -173,11 +183,8 @@ void EditorAutoPropertySection::commitAssetPath(size_t editorIndex, const std::s
     if (!binding.setAssetPath(value)) {
         return;
     }
-    if (!_undo) {
-        return;
-    }
     auto after = binding.copyAssetPath();
-    (void)_undo->push({
+    pushUndo({
         .label = "Set " + _editors[editorIndex].node->displayName,
         .undo  = [binding, before]() { binding.restoreAssetPath(before); },
         .redo  = [binding, after]() { binding.restoreAssetPath(after); },
@@ -253,13 +260,11 @@ void EditorAutoPropertySection::construct()
                                    return;
                                }
                                const size_t added = binding.containerSize() - 1;
-                               if (_undo) {
-                                   (void)_undo->push({
-                                       .label = "Add " + _editors[index].node->displayName,
-                                       .undo  = [binding, added]() { binding.removeAtIndex(static_cast<int>(added)); },
-                                       .redo  = [binding]() { binding.appendEmpty(); },
-                                   });
-                               }
+                               pushUndo({
+                                   .label = "Add " + _editors[index].node->displayName,
+                                   .undo  = [binding, added]() { binding.removeAtIndex(static_cast<int>(added)); },
+                                   .redo  = [binding]() { binding.appendEmpty(); },
+                               });
                                rebuildRows();
                            })
                            .child(ui::text(node.name + "_AddLabel").setText("+"))
@@ -292,9 +297,8 @@ void EditorAutoPropertySection::construct()
                 auto before = binding.copyColor();
                 if (before.empty()) return;
                 if (!binding.setColor(value)) return;
-                if (!_undo) return;
                 auto after = binding.copyColor();
-                (void)_undo->push({
+                pushUndo({
                     .label = "Set " + _editors[index].node->displayName,
                     .undo  = [binding, before]() { binding.restoreColor(before); },
                     .redo  = [binding, after]() { binding.restoreColor(after); },
@@ -316,9 +320,8 @@ void EditorAutoPropertySection::construct()
                     glm::vec2 patched = before.front();
                     patched[axis] = value;
                     if (!binding.set(patched)) return;
-                    if (!_undo) return;
                     auto after = binding.copy<glm::vec2>();
-                    (void)_undo->push({
+                    pushUndo({
                         .label    = "Set " + _editors[index].node->displayName,
                         .mergeKey = mergeKey(*_editors[index].node, axis),
                         .undo     = [binding, before]() { binding.restore(before); },
@@ -346,9 +349,8 @@ void EditorAutoPropertySection::construct()
                     glm::vec3 patched = before.front();
                     patched[axis] = value;
                     if (!binding.set(patched)) return;
-                    if (!_undo) return;
                     auto after = binding.copy<glm::vec3>();
-                    (void)_undo->push({
+                    pushUndo({
                         .label    = "Set " + _editors[index].node->displayName,
                         .mergeKey = mergeKey(*_editors[index].node, axis),
                         .undo     = [binding, before]() { binding.restore(before); },
@@ -376,9 +378,8 @@ void EditorAutoPropertySection::construct()
                     glm::vec4 patched = before.front();
                     patched[axis] = value;
                     if (!binding.set(patched)) return;
-                    if (!_undo) return;
                     auto after = binding.copy<glm::vec4>();
-                    (void)_undo->push({
+                    pushUndo({
                         .label    = "Set " + _editors[index].node->displayName,
                         .mergeKey = mergeKey(*_editors[index].node, axis),
                         .undo     = [binding, before]() { binding.restore(before); },
@@ -404,9 +405,8 @@ void EditorAutoPropertySection::construct()
                 auto before = binding.copy<float>();
                 if (before.empty()) return;
                 if (!binding.set(value)) return;
-                if (!_undo) return;
                 auto after = binding.copy<float>();
-                (void)_undo->push({
+                pushUndo({
                     .label    = "Set " + _editors[index].node->displayName,
                     .mergeKey = mergeKey(*_editors[index].node),
                     .undo     = [binding, before]() { binding.restore(before); },
@@ -432,9 +432,8 @@ void EditorAutoPropertySection::construct()
                 if (before.empty()) return;
                 const int64_t rounded = static_cast<int64_t>(std::llround(value));
                 if (!binding.setInteger(rounded)) return;
-                if (!_undo) return;
                 auto after = binding.copyInteger();
-                (void)_undo->push({
+                pushUndo({
                     .label    = "Set " + _editors[index].node->displayName,
                     .mergeKey = mergeKey(*_editors[index].node),
                     .undo     = [binding, before]() { binding.restoreInteger(before); },
@@ -452,9 +451,8 @@ void EditorAutoPropertySection::construct()
                 auto before = binding.copyBool();
                 if (before.empty()) return;
                 if (!binding.set(value)) return;
-                if (!_undo) return;
                 auto after = binding.copyBool();
-                (void)_undo->push({
+                pushUndo({
                     .label = "Set " + _editors[index].node->displayName,
                     .undo  = [binding, before]() { binding.restoreBool(before); },
                     .redo  = [binding, after]() { binding.restoreBool(after); },
@@ -472,9 +470,8 @@ void EditorAutoPropertySection::construct()
                 auto before = binding.copy<std::string>();
                 if (before.empty()) return;
                 if (!binding.set(value)) return;
-                if (!_undo) return;
                 auto after = binding.copy<std::string>();
-                (void)_undo->push({
+                pushUndo({
                     .label = "Set " + _editors[index].node->displayName,
                     .undo  = [binding, before]() { binding.restore(before); },
                     .redo  = [binding, after]() { binding.restore(after); },
@@ -493,9 +490,8 @@ void EditorAutoPropertySection::construct()
                 auto before = binding.copyEnum();
                 if (before.empty()) return;
                 if (!binding.setEnumByIndex(selected)) return;
-                if (!_undo) return;
                 auto after = binding.copyEnum();
-                (void)_undo->push({
+                pushUndo({
                     .label = "Set " + _editors[index].node->displayName,
                     .undo  = [binding, before]() { binding.restoreEnum(before); },
                     .redo  = [binding, after]() { binding.restoreEnum(after); },
@@ -591,35 +587,33 @@ void EditorAutoPropertySection::construct()
                                   if (!removed) {
                                       return;
                                   }
-                                  if (_undo) {
-                                      (void)_undo->push({
-                                          .label = "Remove " + _editors[index].node->displayName,
-                                          .undo  = [binding, mapKey, elementIndex, hadString, previousString, hadFloat, previousFloat]() {
-                                              if (mapKey.has_value()) {
-                                                  if (!binding.insertMapKey(*mapKey)) {
-                                                      return;
-                                                  }
-                                              }
-                                              else if (!binding.insertEmptyAt(elementIndex)) {
+                                  pushUndo({
+                                      .label = "Remove " + _editors[index].node->displayName,
+                                      .undo  = [binding, mapKey, elementIndex, hadString, previousString, hadFloat, previousFloat]() {
+                                          if (mapKey.has_value()) {
+                                              if (!binding.insertMapKey(*mapKey)) {
                                                   return;
                                               }
-                                              if (hadString) {
-                                                  (void)binding.set(previousString);
-                                              }
-                                              else if (hadFloat) {
-                                                  (void)binding.set(previousFloat);
-                                              }
-                                          },
-                                          .redo  = [binding, mapKey]() {
-                                              if (mapKey.has_value()) {
-                                                  (void)binding.removeMapKey();
-                                              }
-                                              else {
-                                                  (void)binding.removeAt();
-                                              }
-                                          },
-                                      });
-                                  }
+                                          }
+                                          else if (!binding.insertEmptyAt(elementIndex)) {
+                                              return;
+                                          }
+                                          if (hadString) {
+                                              (void)binding.set(previousString);
+                                          }
+                                          else if (hadFloat) {
+                                              (void)binding.set(previousFloat);
+                                          }
+                                      },
+                                      .redo  = [binding, mapKey]() {
+                                          if (mapKey.has_value()) {
+                                              (void)binding.removeMapKey();
+                                          }
+                                          else {
+                                              (void)binding.removeAt();
+                                          }
+                                      },
+                                  });
                                   rebuildRows();
                               })
                               .child(ui::text(node.name + "_RemoveLabel").setText("X"))

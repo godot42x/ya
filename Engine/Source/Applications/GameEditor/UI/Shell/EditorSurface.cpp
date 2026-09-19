@@ -6,6 +6,8 @@
 #include "GameEditor/UI/Dialogs/EditorFilePicker.h"
 #include "GameEditor/UI/Dialogs/EditorFilePickerDialog.h"
 #include "GameEditor/UI/Dialogs/EditorSettingsDialog.h"
+#include "GameEditor/UI/Dialogs/EditorConfirmDialog.h"
+#include "GameEditor/UI/Ops/EditorCreateMenu.h"
 #include "GameEditor/UI/Shell/EditorTabSpawnerRegistry.h"
 
 #include "Core/Config/ConfigManager.h"
@@ -19,7 +21,6 @@
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/EditorViewProducer.h"
 #include "GameEditor/UI/Shell/EditorTheme.h"
-#include "GameEditor/Services/NodeCreateRegistry.h"
 #include "GameRuntime/App.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "GUI/Host/GUIWindowChrome.h"
@@ -79,22 +80,6 @@ namespace
 
 constexpr float kMenuHeight = editor_density::kMenuHeight;
 
-std::vector<UIMenu::FItem> makePresetMenuItems(EditorLayer& layer, const std::string& category)
-{
-    std::vector<UIMenu::FItem> items;
-    for (const editor::NodeCreateEntry& entry : editor::NodeCreateRegistry::get().presets()) {
-        if (entry.category != category) {
-            continue;
-        }
-        const std::string presetName = entry.displayName;
-        items.push_back({
-            .label  = presetName,
-            .action = [&layer, presetName]() { layer.cmdCreateNodePreset(presetName); },
-        });
-    }
-    return items;
-}
-
 } // namespace
 
 EditorSurface::EditorSurface()
@@ -105,10 +90,27 @@ EditorSurface::EditorSurface()
 
 EditorSurface::~EditorSurface() = default;
 
+void EditorSurface::unbind()
+{
+    if (_layer && _windowId == kDefaultEditorWindowId) {
+        _layer->clearUnsavedGuard();
+    }
+    _layer = nullptr;
+    _tabSpawners = nullptr;
+    _rootSession = nullptr;
+    _documents = nullptr;
+    _roots = {};
+    _windowId = kDefaultEditorWindowId;
+    _presentSurface = nullptr;
+}
+
 void EditorSurface::shutdown()
 {
     closeViewportContextMenu();
     _bViewportRightPressPending = false;
+    if (_layer && _windowId == kDefaultEditorWindowId) {
+        _layer->clearUnsavedGuard();
+    }
     if (_filePicker) {
         _filePicker->reset();
     }
@@ -117,6 +119,11 @@ void EditorSurface::shutdown()
         _settings->reset();
     }
     _settings.reset();
+    if (_confirm) {
+        _confirm->reset();
+    }
+    _confirm.reset();
+    _windowTitle.clear();
     _tree.reset();
     _theme.reset();
     _snapshot = {};
@@ -166,6 +173,7 @@ void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
     }
 
     applyWindowMetrics(context.metrics);
+    syncWindowTitle();
     _tree->tick(dt);
     pushViewportDisplay();
     UIFrameBuildContext snapshotCtx;
@@ -206,6 +214,10 @@ void EditorSurface::rebuild(const FEditorSurfaceContext& context)
         _settings->reset();
     }
     _settings.reset();
+    if (_confirm) {
+        _confirm->reset();
+    }
+    _confirm.reset();
 
     _tree = std::make_unique<WidgetTree>(Extent2D{
         .width  = std::max(context.metrics.logicalExtent.width, 1u),
@@ -243,9 +255,9 @@ void EditorSurface::buildProjectBrowser(App& app)
                            refreshProjectBrowserRows();
                        });
     auto exitBtn = labeledButton("ExitEditor", "Exit Editor")
-                       .setOnClick([]() {
-                           if (auto* app = App::get()) {
-                               app->requestQuit();
+                       .setOnClick([this]() {
+                           if (_layer) {
+                               _layer->cmdRequestQuit();
                            }
                        });
 
@@ -307,6 +319,11 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
                               undo,
                               [this]() { openSceneSaveDialog(); },
                               [this]() { openEditorSettingsDialog(); });
+    }
+    if (_windowId == kDefaultEditorWindowId) {
+        _layer->setUnsavedGuard([this](std::function<void()> proceed) {
+            promptUnsavedChanges(std::move(proceed));
+        });
     }
     _root = ui::canvasPanel("EditorRoot").share();
     FCanvasSlotArgs fillArgs;
@@ -441,6 +458,7 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
     _menuBar->addItem("File", [this]() {
         return UIMenu::create({
             UIMenu::FItem::fromAction(_rootSession->actions(), "scene.new"),
+            UIMenu::FItem::fromAction(_rootSession->actions(), "scene.open"),
             UIMenu::FItem::fromAction(_rootSession->actions(), "scene.save"),
             UIMenu::FItem::fromAction(_rootSession->actions(), "scene.saveAs"),
             UIMenu::FItem::separator(),
@@ -709,34 +727,13 @@ void EditorSurface::closeViewportContextMenu()
 
 void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
 {
-    if (!_tree || !_layer || !_layer->canViewportAuthor()) {
+    if (!_tree || !_layer || !_rootSession || !_layer->canViewportAuthor()) {
         return;
     }
 
     closeViewportContextMenu();
 
-    EditorLayer& layer = *_layer;
-    std::vector<UIMenu::FItem> items;
-    items.push_back(UIMenu::FItem::fromAction(_rootSession->actions(), "selection.createEmpty"));
-    items.push_back({
-        .label          = "Create 3D Object",
-        .submenuFactory = [&layer]()
-        {
-            return UIMenu::create(makePresetMenuItems(layer, "3D Object"));
-        },
-    });
-
-    for (const editor::NodeCreateEntry& entry : editor::NodeCreateRegistry::get().presets()) {
-        if (entry.category != "Light") {
-            continue;
-        }
-        const std::string presetName = entry.displayName;
-        items.push_back({
-            .label  = std::format("Create {}", presetName),
-            .action = [&layer, presetName]() { layer.cmdCreateNodePreset(presetName); },
-        });
-    }
-
+    std::vector<UIMenu::FItem> items = makeEditorCreateMenuItems(*_layer, _rootSession->actions());
     items.push_back(UIMenu::FItem::separator());
     items.push_back(UIMenu::FItem::fromAction(_rootSession->actions(), "selection.duplicate"));
     items.push_back(UIMenu::FItem::fromAction(_rootSession->actions(), "selection.delete"));
@@ -825,7 +822,7 @@ void EditorSurface::pushViewportDisplay()
     _viewportHost->setPreviewImage(_layer->getViewportPreviewImage(), previewPanelLocalRect());
 }
 
-void EditorSurface::openSceneSaveDialog()
+void EditorSurface::openSceneSaveDialog(std::function<void()> onSaved)
 {
     if (!_tree || !_root || !_layer) {
         return;
@@ -844,19 +841,102 @@ void EditorSurface::openSceneSaveDialog()
     openFilePickerDialog(makeSceneSavePickerRequest(
         std::move(defaultName),
         std::move(currentPath),
-        [this](std::string scenePath) {
+        [this, onSaved = std::move(onSaved)](std::string scenePath) {
             if (!_layer) {
                 return;
             }
-            _layer->setCurrentScenePath(scenePath);
             if (Scene* scene = _layer->getEditableScene()) {
                 scene->setName(std::filesystem::path(scenePath).stem().string());
             }
             if (App* app = App::get()) {
-                app->getSceneServices().saveScene(scenePath);
+                if (!app->getSceneServices().saveScene(scenePath)) {
+                    return;
+                }
             }
+            _layer->setCurrentScenePath(scenePath);
+            _layer->clearSceneDirty();
             YA_CORE_INFO("Scene saved to: {}", scenePath);
+            if (onSaved) {
+                onSaved();
+            }
         }));
+}
+
+void EditorSurface::promptUnsavedChanges(std::function<void()> proceed)
+{
+    if (!_tree || !_layer) {
+        if (proceed) {
+            proceed();
+        }
+        return;
+    }
+    if (!_confirm) {
+        _confirm = std::make_unique<EditorConfirmDialog>();
+    }
+    if (_confirm->isOpen()) {
+        return;
+    }
+
+    FEditorConfirmRequest request;
+    request.title    = "Unsaved Changes";
+    request.message  = "The current scene has unsaved changes. Save before continuing?";
+    request.onPrimary = [this, proceed]() { saveThenContinue(proceed); };
+    request.onSecondary = [this, proceed]() {
+        if (_layer) {
+            _layer->clearSceneDirty();
+        }
+        if (proceed) {
+            proceed();
+        }
+    };
+    _confirm->open(*_tree, std::move(request));
+}
+
+void EditorSurface::saveThenContinue(std::function<void()> proceed)
+{
+    if (!_layer) {
+        return;
+    }
+    if (!_layer->getCurrentScenePath().empty()) {
+        _layer->cmdSaveScene();
+        if (_layer->isSceneDirty()) {
+            return;
+        }
+        if (proceed) {
+            proceed();
+        }
+        return;
+    }
+    openSceneSaveDialog(std::move(proceed));
+}
+
+void EditorSurface::syncWindowTitle()
+{
+    if (!_presentSurface || !_layer) {
+        return;
+    }
+    INativeWindow* native = _presentSurface->getNativeWindow();
+    if (!native) {
+        return;
+    }
+
+    std::string title = "YA Editor";
+    const std::string& path = _layer->getCurrentScenePath();
+    if (!path.empty()) {
+        title += " - ";
+        title += std::filesystem::path(path).filename().string();
+    }
+    else {
+        title += " - Untitled";
+    }
+    if (_layer->isSceneDirty()) {
+        title += " *";
+    }
+    if (_windowTitle == title) {
+        return;
+    }
+    _windowTitle = title;
+    native->setTitle(_windowTitle);
 }
 
 void EditorSurface::openAssetPickerDialog(EEditorAssetPickerKind kind,

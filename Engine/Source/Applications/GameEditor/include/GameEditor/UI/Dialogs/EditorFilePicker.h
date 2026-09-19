@@ -82,6 +82,19 @@ using EditorFilePickerCallback = std::function<void(FEditorFilePickerRequest req
     return request;
 }
 
+[[nodiscard]] inline FEditorFilePickerRequest makeSceneOpenPickerRequest(std::string currentPath,
+                                                                        std::function<void(std::string)> onPicked)
+{
+    FEditorFilePickerRequest request;
+    request.title        = "Open Scene";
+    request.configScope  = "filePicker.openScene";
+    request.extensions   = {".scene.json"};
+    request.confirmLabel = "Open";
+    request.currentPath  = std::move(currentPath);
+    request.onPicked     = std::move(onPicked);
+    return request;
+}
+
 [[nodiscard]] inline FEditorFilePickerRequest makeSceneJsonFilePickerRequest(std::string currentPath,
                                                                            std::function<void(std::string)> onPicked)
 {

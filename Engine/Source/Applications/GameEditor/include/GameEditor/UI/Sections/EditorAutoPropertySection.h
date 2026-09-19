@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Widgets/CompoundWidget.h"
+#include "GUI/Binding/UndoStack.h"
 #include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/UI/Dialogs/EditorAssetPicker.h"
 
@@ -37,6 +38,7 @@ class EditorAutoPropertySection final : public UICompoundWidget
                               EditorRevealAssetCallback revealAsset = {});
 
     void sync(WidgetTree& tree);
+    void setOnMutated(std::function<void()> fn) { _onMutated = std::move(fn); }
 
   protected:
     void construct() override;
@@ -68,6 +70,7 @@ class EditorAutoPropertySection final : public UICompoundWidget
     std::string _mergeIdentity;
     EditorAssetPickerCallback _assetPicker;
     EditorRevealAssetCallback _revealAsset;
+    std::function<void()> _onMutated;
     std::vector<EditorSlot> _editors;
     std::string _structureFingerprint;
     std::unordered_map<std::string, bool> _groupExpanded;
@@ -75,6 +78,7 @@ class EditorAutoPropertySection final : public UICompoundWidget
     void bindDragMerge(UIDragFloat& drag);
     void commitAssetPath(size_t editorIndex, const std::string& value);
     void rebuildRows();
+    void pushUndo(FUndoCommand command);
     [[nodiscard]] std::string mergeKey(const PropertyNode& node, int axis = -1) const;
 };
 

@@ -43,6 +43,7 @@ struct FEditorViewportGizmoSources
     std::function<const std::vector<Entity*>&()> getSelections;
     std::function<Scene*()> getViewportInteractionScene;
     std::function<bool()> isViewportMode2D;
+    std::function<void()> onTransformCommitted;
 };
 
 /// Native viewport TRS gizmo: hit/drag math, undo capture, and Render2D overlay.

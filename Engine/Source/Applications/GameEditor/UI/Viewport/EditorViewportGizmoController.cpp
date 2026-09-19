@@ -723,6 +723,9 @@ void EditorViewportGizmoController::endDrag()
     _bConsumeReleasePick = true;
     _undoBefore.clear();
     setPointer(_pointerLocal, _bPointerInside);
+    if (_sources.onTransformCommitted) {
+        _sources.onTransformCommitted();
+    }
 }
 
 void EditorViewportGizmoController::cancelDrag()

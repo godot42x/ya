@@ -1,6 +1,9 @@
 #include "GameEditor/UI/Tabs/EditorInspectorTab.h"
 #include "GameEditor/UI/Sections/EditorAutoPropertySection.h"
+#include "GameEditor/UI/Sections/EditorLuaScriptSection.h"
 #include "GameEditor/UI/Dialogs/EditorAssetPicker.h"
+#include "GameEditor/UI/Dialogs/EditorFilePicker.h"
+#include "GameEditor/UI/Ops/EditorComponentOps.h"
 #include "GameEditor/UI/Ops/EditorHierarchyOps.h"
 #include "Render/Adapters/Companion/CompanionManager.h"
 
@@ -8,6 +11,7 @@
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/ECSRegistry.h"
+#include "ECS/Systems/Components/LuaScriptComponent.h"
 #include "GUI/Binding/UndoStack.h"
 #include "GUI/Binding/SelectionModel.h"
 #include "GUI/Declarative/Build.h"
@@ -15,6 +19,7 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Expander.h"
+#include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
@@ -23,6 +28,7 @@
 #include "GameEditor/EditorLayer.h"
 #include "GameEditor/Inspector/PropertyGraph.h"
 #include "GameEditor/EditorUIDesignerSession.h"
+#include "GameEditor/UI/Shell/EditorListRows.h"
 #include "GameEditor/UI/Shell/EditorTheme.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
@@ -143,6 +149,20 @@ EditorRevealAssetCallback makeRevealAsset(EditorLayer* layer)
     };
 }
 
+EditorLuaScriptSection::ScriptPicker makeScriptPicker(EditorLayer* layer)
+{
+    return [layer](std::string currentPath, std::function<void(std::string)> onPicked) {
+        if (!layer) {
+            return;
+        }
+        if (layer->_filePickerHandler) {
+            layer->_filePickerHandler(makeScriptFilePickerRequest(std::move(currentPath), std::move(onPicked)));
+            return;
+        }
+        layer->_filePicker.openScriptPicker(currentPath, std::move(onPicked));
+    };
+}
+
 } // namespace
 
 EditorInspectorTab::EditorInspectorTab(EditorLayer& layer, SelectionModel& selection, UndoStack* undo)
@@ -156,6 +176,11 @@ EditorInspectorTab::EditorInspectorTab(EditorLayer& layer, SelectionModel& selec
 
 EditorInspectorTab::~EditorInspectorTab()
 {
+    if (_addComponentMenu) {
+        _addComponentMenu->_onDismiss = nullptr;
+        _addComponentMenu->close();
+        _addComponentMenu.reset();
+    }
     unbindLayerDelegates();
 }
 
@@ -179,6 +204,7 @@ void EditorInspectorTab::construct()
         if (old == text) return;
         node->setName(text);
         _layer->notifyHierarchyChanged();
+        _layer->markSceneDirty();
         if (!_undo) return;
         uint64_t uuid = 0;
         if (auto* id = entity->getComponent<IDComponent>()) {
@@ -206,9 +232,15 @@ void EditorInspectorTab::construct()
     _projectedHost = projected.share();
 
     const FBoxSlotArgs labelSlot{.preferredSize = {editor_density::kLabelColumn, editor_density::kRowHeight}};
+    auto addComponent = labeledButton("InspectorAddComponent", "Add Component");
+    addComponent.setOnClick([this]() { openAddComponentMenu(); });
+    _addComponentButton = addComponent.share();
+
     auto entityForm = ui::column("InspectorEntityForm")
                           .setSpacing(editor_density::kRowSpacing)
                           .setClipChildren(true)
+                          .child(_addComponentButton,
+                                 ui::boxSlot().preferredSize({0.0f, editor_density::kToolbarHeight}))
                           .child(ui::row("InspectorIdRow")
                                      .setSpacing(editor_density::kControlSpacing)
                                      .child(ui::text("InspectorIdLabel")
@@ -315,6 +347,11 @@ void EditorInspectorTab::onAttached()
 
 void EditorInspectorTab::onDetached()
 {
+    if (_addComponentMenu) {
+        _addComponentMenu->_onDismiss = nullptr;
+        _addComponentMenu->close();
+        _addComponentMenu.reset();
+    }
     unbindLayerDelegates();
 }
 
@@ -367,6 +404,11 @@ void EditorInspectorTab::refresh()
 
 void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<Entity*>& entities)
 {
+    if (_addComponentMenu) {
+        _addComponentMenu->_onDismiss = nullptr;
+        _addComponentMenu->close();
+        _addComponentMenu.reset();
+    }
     for (const auto& widget : _projectedWidgets) {
         if (widget && widget->isAttached()) {
             tree.detach(*widget);
@@ -374,7 +416,11 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
     }
     _projectedWidgets.clear();
     _projectedSections.clear();
+    _luaSections.clear();
     if (entities.empty() || !_projectedHost) {
+        if (_addComponentButton) {
+            _addComponentButton->setVisibility(EWidgetVisibility::Collapsed);
+        }
         return;
     }
 
@@ -425,8 +471,6 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
         identity += std::to_string(uuid);
     }
 
-    // A generated companion is not authored scene content: show its fields so
-    // the user can see what draws, but never let them pretend to own it.
     bool bReadOnlySelection = false;
     for (Entity* entity : entities) {
         if (entity && !CompanionManager::isAuthorEditable(*entity)) {
@@ -434,8 +478,85 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
             break;
         }
     }
+    if (_addComponentButton) {
+        const bool bCanAdd = !bReadOnlySelection &&
+                             std::any_of(entities.begin(), entities.end(), [](Entity* entity) {
+                                 return entity && canMutateAuthoringComponents(*entity);
+                             });
+        _addComponentButton->setVisibility(bCanAdd ? EWidgetVisibility::Visible
+                                                   : EWidgetVisibility::Collapsed);
+        _addComponentButton->setEnabled(bCanAdd);
+    }
+
+    auto attachExpander = [this, &tree](const std::string& name,
+                                        std::shared_ptr<UIElement> body,
+                                        type_index_t type,
+                                        const std::vector<Entity*>& targets) -> bool {
+        bool expanded = true;
+        if (const auto it = _componentExpanded.find(name); it != _componentExpanded.end()) {
+            expanded = it->second;
+        }
+        else {
+            _componentExpanded.emplace(name, true);
+        }
+
+        auto column = ui::column("InspectorCompBody_" + name)
+                          .setSpacing(editor_density::kRowSpacing)
+                          .child(body);
+        if (canRemoveAuthoringComponent(targets, type)) {
+            auto remove = labeledButton("InspectorRemove_" + name, "Remove Component");
+            (void)remove.setOnClick([this, type]() {
+                const std::vector<Entity*> current = editorSelectionEntities(*_layer, _selection);
+                if (!removeAuthoringComponent(current, type)) {
+                    return;
+                }
+                noteSceneMutated();
+                if (_layer) {
+                    _layer->notifyHierarchyChanged();
+                }
+            });
+            column.child(std::move(remove),
+                         ui::boxSlot().preferredSize({0.0f, editor_density::kToolbarHeight}));
+        }
+
+        auto expander = ui::collapsingHeader("InspectorComp_" + name)
+                            .setTitle(name)
+                            .setExpanded(expanded)
+                            .setPadding({editor_density::kPanelPadding, editor_density::kPanelPadding})
+                            .setSpacing(editor_density::kRowSpacing)
+                            .child(std::move(column))
+                            .share();
+        expander->_onExpandedChanged = [this, name](bool value) {
+            _componentExpanded[name] = value;
+        };
+        if (!tree.attach(*_projectedHost, expander).valid()) {
+            return false;
+        }
+        _projectedWidgets.push_back(std::move(expander));
+        return true;
+    };
 
     for (FEntry& entry : entries) {
+        if (entry.type == type_index_v<LuaScriptComponent>) {
+            if (entities.size() != 1) {
+                continue;
+            }
+            uint64_t uuid = 0;
+            if (auto* id = entities.front()->getComponent<IDComponent>()) {
+                uuid = id->_id.value;
+            }
+            auto luaSection = std::make_shared<EditorLuaScriptSection>(
+                "InspectorLua_" + entry.name,
+                *_layer,
+                uuid,
+                [this]() { noteSceneMutated(); },
+                makeScriptPicker(_layer));
+            if (attachExpander(entry.name, luaSection, entry.type, entities)) {
+                _luaSections.push_back(std::move(luaSection));
+            }
+            continue;
+        }
+
         PropertyGraph graph = PropertyGraph::project(entry.type, std::move(entry.instances));
         if (!graph.hasRetainedEditors()) {
             continue;
@@ -465,8 +586,6 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
         for (PropertyNode& node : graph.getNodesMutable()) {
             node.binding.setInstanceBindings(rootBindings);
         }
-        // Generated companions are rebuilt from their host, so their fields are
-        // shown but never writable: an edit would be silently reverted.
         if (bReadOnlySelection) {
             graph.markAllReadOnly();
         }
@@ -477,28 +596,10 @@ void EditorInspectorTab::rebuildProjected(WidgetTree& tree, const std::vector<En
             identity.empty() ? entry.name : identity + ":" + entry.name,
             makeAssetPicker(_layer),
             makeRevealAsset(_layer));
-        bool expanded = true;
-        if (const auto it = _componentExpanded.find(entry.name); it != _componentExpanded.end()) {
-            expanded = it->second;
+        section->setOnMutated([this]() { noteSceneMutated(); });
+        if (attachExpander(entry.name, section, entry.type, entities)) {
+            _projectedSections.push_back(std::move(section));
         }
-        else {
-            _componentExpanded.emplace(entry.name, true);
-        }
-        auto expander = ui::collapsingHeader("InspectorComp_" + entry.name)
-                            .setTitle(entry.name)
-                            .setExpanded(expanded)
-                            .setPadding({editor_density::kPanelPadding, editor_density::kPanelPadding})
-                            .setSpacing(editor_density::kRowSpacing)
-                            .child(section)
-                            .share();
-        expander->_onExpandedChanged = [this, name = entry.name](bool value) {
-            _componentExpanded[name] = value;
-        };
-        if (!tree.attach(*_projectedHost, expander).valid()) {
-            continue;
-        }
-        _projectedWidgets.push_back(std::move(expander));
-        _projectedSections.push_back(section);
     }
 }
 
@@ -617,6 +718,60 @@ void EditorInspectorTab::syncProjectedValues(WidgetTree& tree)
             section->sync(tree);
         }
     }
+    for (const auto& section : _luaSections) {
+        if (section) {
+            section->sync(tree);
+        }
+    }
+}
+
+void EditorInspectorTab::noteSceneMutated()
+{
+    if (_layer) {
+        _layer->markSceneDirty();
+    }
+}
+
+void EditorInspectorTab::openAddComponentMenu()
+{
+    WidgetTree* tree = getTree();
+    if (!tree || !_layer || !_addComponentButton) {
+        return;
+    }
+
+    const std::vector<Entity*> entities = editorSelectionEntities(*_layer, _selection);
+    std::vector<UIMenu::FItem> items;
+    for (const auto& [name, type] : authoringComponentTypes()) {
+        const bool bCanAdd = canAddAuthoringComponent(entities, type);
+        items.push_back({
+            .label    = name,
+            .action   = [this, type]() {
+                if (!_layer) {
+                    return;
+                }
+                const std::vector<Entity*> current = editorSelectionEntities(*_layer, _selection);
+                if (!addAuthoringComponent(current, type)) {
+                    return;
+                }
+                noteSceneMutated();
+                _layer->notifyHierarchyChanged();
+            },
+            .bEnabled = bCanAdd,
+        });
+    }
+    if (items.empty()) {
+        return;
+    }
+
+    if (_addComponentMenu) {
+        _addComponentMenu->_onDismiss = nullptr;
+        _addComponentMenu->close();
+        _addComponentMenu.reset();
+    }
+    auto menu = UIMenu::create(std::move(items));
+    _addComponentMenu = menu;
+    menu->_onDismiss = [this]() { _addComponentMenu.reset(); };
+    menu->openAt(*tree, _addComponentButton->getLayoutRect());
 }
 
 } // namespace ya

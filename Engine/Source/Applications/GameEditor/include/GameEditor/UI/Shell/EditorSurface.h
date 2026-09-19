@@ -28,6 +28,7 @@ class EditorViewportGizmoOverlay;
 struct Texture;
 class EditorFilePickerDialog;
 class EditorSettingsDialog;
+class EditorConfirmDialog;
 struct UIDockSpace;
 struct FDockContext;
 struct UIDockFloatingHost;
@@ -89,6 +90,8 @@ struct EditorSurface : IEditorViewportHostSink
 
     std::unique_ptr<EditorFilePickerDialog> _filePicker;
     std::unique_ptr<EditorSettingsDialog> _settings;
+    std::unique_ptr<EditorConfirmDialog> _confirm;
+    std::string _windowTitle;
 
     std::shared_ptr<Texture>    _viewportTexture;
     std::shared_ptr<IImage>     _viewportImageResource;
@@ -122,16 +125,7 @@ struct EditorSurface : IEditorViewportHostSink
     void setPersistLayout(std::function<void()> fn) { _persistLayout = std::move(fn); }
     void setOnDockNoTargetTearOff(
         std::function<bool(FDockContext&, uint64_t, const glm::vec2&, const glm::vec2&)> fn);
-    void unbind()
-    {
-        _layer = nullptr;
-        _tabSpawners = nullptr;
-        _rootSession = nullptr;
-        _documents = nullptr;
-        _roots = {};
-        _windowId = kDefaultEditorWindowId;
-        _presentSurface = nullptr;
-    }
+    void unbind();
     void shutdown();
 
     void tick(const FEditorSurfaceContext& context, float dt);
@@ -155,7 +149,8 @@ struct EditorSurface : IEditorViewportHostSink
     /// than at tick time: the dock detaches the widget during input dispatch, so
     /// this way the same frame's view declaration already sees the viewport gone.
     void setViewportHost(IEditorViewportHost* host) override;
-    void openSceneSaveDialog();
+    void openSceneSaveDialog(std::function<void()> onSaved = {});
+    void promptUnsavedChanges(std::function<void()> proceed);
     void openFilePickerDialog(FEditorFilePickerRequest request);
     void openAssetPickerDialog(EEditorAssetPickerKind kind,
                                std::string currentPath,
@@ -191,6 +186,8 @@ struct EditorSurface : IEditorViewportHostSink
     void dropOntoPageTabs(const UIDragDropOperation& operation);
     void openViewportContextMenu(const glm::vec2& windowPoint);
     void closeViewportContextMenu();
+    void syncWindowTitle();
+    void saveThenContinue(std::function<void()> proceed);
 };
 
 } // namespace ya

@@ -18,7 +18,9 @@ struct UIText;
 struct UITextField;
 struct UIContainer;
 struct UIButton;
+struct UIMenu;
 class EditorAutoPropertySection;
+class EditorLuaScriptSection;
 struct WidgetTree;
 class UndoStack;
 struct SelectionModel;
@@ -53,8 +55,11 @@ class EditorInspectorTab : public UICompoundWidget
     std::shared_ptr<UIContainer> _instanceHost;
     std::shared_ptr<UIText> _instanceBodyText;
     std::shared_ptr<UIContainer> _projectedHost;
+    std::shared_ptr<UIButton> _addComponentButton;
+    std::shared_ptr<UIMenu> _addComponentMenu;
     std::vector<std::shared_ptr<UIElement>> _projectedWidgets;
     std::vector<std::shared_ptr<EditorAutoPropertySection>> _projectedSections;
+    std::vector<std::shared_ptr<EditorLuaScriptSection>> _luaSections;
     std::string _projectedFingerprint;
     DelegateHandle _selectionHandle = INVALID_HANDLE;
     DelegateHandle _hierarchyHandle = INVALID_HANDLE;
@@ -67,6 +72,8 @@ class EditorInspectorTab : public UICompoundWidget
     void updateInstanceNotice(const std::vector<Entity*>& entities);
     void syncProjectedValues(WidgetTree& tree);
     void rebuildProjected(WidgetTree& tree, const std::vector<Entity*>& entities);
+    void openAddComponentMenu();
+    void noteSceneMutated();
 };
 
 } // namespace ya

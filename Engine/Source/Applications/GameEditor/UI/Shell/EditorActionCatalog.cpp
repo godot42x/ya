@@ -30,6 +30,12 @@ void registerEditorActions(ActionMap& actions,
         .execute = [&layer]() { layer.cmdNewScene(); },
     });
     define({
+        .id      = "scene.open",
+        .label   = "Open Scene",
+        .chord   = FActionChord::primary(EKey::K_O),
+        .execute = [&layer]() { layer.cmdOpenScene(); },
+    });
+    define({
         .id      = "scene.save",
         .label   = "Save Scene",
         .chord   = FActionChord::primary(EKey::K_S),
@@ -96,11 +102,7 @@ void registerEditorActions(ActionMap& actions,
     define({
         .id      = "app.exit",
         .label   = "Exit",
-        .execute = []() {
-            if (auto* app = App::get()) {
-                app->requestQuit();
-            }
-        },
+        .execute = [&layer]() { layer.cmdRequestQuit(); },
     });
     define({
         .id      = "editor.settings",

@@ -181,6 +181,8 @@ struct EditorLayer
     std::string               _pendingContentReveal;
     std::string _currentScenePath; // Current scene file path
     Scene*      _editableScene = nullptr;
+    bool        _bSceneDirty = false;
+    std::function<void(std::function<void()>)> _unsavedGuard;
 
   public:
     EditorLayer(App* app);
@@ -216,6 +218,15 @@ struct EditorLayer
     [[nodiscard]] EditorDocumentRegistry*               documentRegistry() const { return _documents; }
     void                                                setCurrentScenePath(std::string scenePath);
     [[nodiscard]] const std::string&                    getCurrentScenePath() const { return _currentScenePath; }
+    void                                                markSceneDirty() { _bSceneDirty = true; }
+    void                                                clearSceneDirty() { _bSceneDirty = false; }
+    [[nodiscard]] bool                                  isSceneDirty() const { return _bSceneDirty; }
+    void setUnsavedGuard(std::function<void(std::function<void()>)> handler)
+    {
+        _unsavedGuard = std::move(handler);
+    }
+    void clearUnsavedGuard() { _unsavedGuard = nullptr; }
+    void runAfterUnsavedResolved(std::function<void()> proceed);
     [[nodiscard]] bool                                  isProjectLoaded() const { return hasProjectLoaded(); }
     [[nodiscard]] const std::shared_ptr<RenderTexture>& getViewportDisplayImage() const
     {
@@ -458,6 +469,8 @@ struct EditorLayer
     void cmdLoadScene(std::string scenePath);
     void cmdSaveScene();
     void cmdSaveSceneAs();
+    void cmdOpenScene();
+    void cmdRequestQuit();
     [[nodiscard]] bool canViewportAuthor() const;
     void cmdCreateEmptyNode();
     void cmdCreateNodePreset(const std::string& presetDisplayName);
