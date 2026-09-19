@@ -1,5 +1,24 @@
 # Progress
 
+## C4d-2 当前 checkpoint（2026-09-19）
+
+**目标**：视口不在屏上时，compose 也不录。
+
+**根因**：C4d-1 之后渲染侧已经不为隐藏视口声明 View，但 `composeAuthoringViewport` 照旧跑：`snapshot.viewportImageOwner` 为空 → `composeWorldFallback` 把 fallback 空图录进 `_composedViewportImage`，然后被推给一个已经不在树上的 widget。等于白录一个 pass，还在往一个看不见的控件推数据。
+
+**改动**：`composeAuthoringViewport` 开头读 `_layer->isViewportShown()`，为假就清掉 `setViewportDisplayImage(nullptr)` / `setViewportPreviewImage(nullptr)` 并返回，不录任何 pass。清而不是留着，是为了让重新显示时不可能捡到上一次可见时的 handle。
+
+**切回来那一帧为什么不会缺图**：重新挂上发生在输入回调（dock rebuild）里，早于本 tick 的 `declareViews`；本 tick 的 compose 又跑在 chrome `pushViewportDisplay` 之前。所以首个可见帧拿到的是本 tick 的图，不是旧图也不是占位。
+
+**验证**：
+
+- 默认编辑器 smoke 与改动前逐字节相同（`174c44cb`）——视口可见时门禁不触发，是 no-op。
+- runtime smoke 不变（`c775245a`）。
+- `ya-game-editor` / `ya-testing` / `ya-runtime` build ok。
+- 滤镜跑出 5 个失败，但**没有一个来自本轮**：3 个是既有基线（`EditorPropertyGraphTest` 两例 + `GameUIHostTest.BuildSnapshotComposesMountedWidgets`），另 2 个（`EditorDockWorkspaceTest.ToolsOnlyWindowAdoptsFullLeafWithoutPageSplit`、`WidgetLayoutTest.FloatingWindowResizeHandlesLiveOnOverlaySlots`）用 `git stash` 去掉本轮改动后**同样失败**，属并发作者正在做的 dock 改动（工作区里 `DockNode.cpp` / `DockHideTabBarAffordance.h` 处于编辑中）。
+
+**未做**：C4d-3（折叠的视口 tab 算隐藏还是算显示中未布局）仍未定。今天折叠走 `describesPixels` 失败 → fallback 默认尺寸那条老路，与本条（detach）不是同一条；折叠时视口仍会声明并渲染。
+
 ## C4d-1 当前 checkpoint（2026-09-19）
 
 **目标**：视口被切走（或它所在的 level editor tab 被切走）时，编辑器不再向渲染侧声明作者视口，整条 3D 图不跑。

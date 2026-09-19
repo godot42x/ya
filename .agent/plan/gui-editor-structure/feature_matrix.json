@@ -58,10 +58,12 @@
     },
     {
       "id": "hidden_viewport_composes_nothing",
-      "status": "pending",
+      "status": "implemented",
       "phase": "C4d-2",
       "evidence": [
-        "EditorViewportCompositor still records a fallback compose pass when no View was declared"
+        "composeAuthoringViewport returns before recording anything when no viewport is on screen",
+        "display and preview handles are cleared so a re-show cannot pick up a handle from the last visible tick",
+        "default editor smoke byte-identical (gate is a no-op while the viewport is visible)"
       ]
     },
     {

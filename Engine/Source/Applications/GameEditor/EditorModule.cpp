@@ -510,6 +510,20 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
             return;
         }
 
+        // No viewport on screen: nothing to compose into. The authoring View was
+        // not declared this tick either (see EditorViewProducer), so there is no
+        // image to compose and no widget to show it; recording the pass anyway
+        // would draw the fallback empty image into a target nothing samples.
+        // Both images are cleared rather than left standing so a later re-show
+        // cannot pick up a handle from the last time the tab was visible: the
+        // tick that re-shows the viewport composes before chrome pushes the
+        // display, so it gets this tick's image rather than a stale one.
+        if (!_layer->isViewportShown()) {
+            _layer->setViewportDisplayImage(nullptr);
+            _layer->setViewportPreviewImage(nullptr);
+            return;
+        }
+
         const auto snapshot = device->buildViewportSnapshot(app.getSceneServices().getActiveScene());
         _layer->setViewportContext(snapshot);
         _layer->setEntityIdPickImage(snapshot.entityIdImageOwner);
