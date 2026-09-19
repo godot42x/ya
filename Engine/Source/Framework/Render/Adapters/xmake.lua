@@ -23,6 +23,10 @@ target("ya-render-ecs-adapters")
     add_deps("ya-resource-core", "ya-resource-loader", "ya-resource-runtime", "ya-scene-runtime")
     -- Model instantiation walks the scene tree base (Node) from ya-hierarchy.
     add_deps("ya-hierarchy")
+    -- The physics collision debug draw reads PhysicsBodyComponent and turns it
+    -- into wireframe lines, so the bridge layer owns the physics dependency and
+    -- ya-render-3d does not have to.
+    add_deps("ya-physics")
     if is_plat("windows") then
         add_cxxflags("/bigobj")
     end

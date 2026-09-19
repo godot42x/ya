@@ -80,6 +80,23 @@ shell 回来推；改完之后 shell 想推也没有入口。
 > **停止拉取**，而今天的 push 不管可见性每帧都更新纹理。切回来的那一帧需要"先变可见、再 tick、
 > 再 buildSnapshot"的顺序真的成立才不出旧帧。改 C4b 前必须先把这条时序验证清楚，不能靠推理。
 
+**C4b 的阻塞已查实，比预想的更硬（2026-09-19）**：dock 对未选中的页签不是折叠，而是**把面板 widget
+从树上摘掉**——`UIDockSpace::rebuildStack` 先 `unlinkWidgetFromVisualParent` 清空 content 的所有
+子节点，再 `graftPanelIntoContent` 把当前选中的那个挂回去（`DockSpace.cpp:692`）。摘下来的 widget
+不在树上，`tickSubtree` 根本走不到它。而这个 graft 发生在**输入回调**（`_onTabSelected`）或
+**投影同步**里，不保证在 tick 之前。
+
+结论：`pushViewportDisplay` 的"每帧推、不管可见性"在这里是**承重的**，不是在补丁之上打补丁。
+要改成拉取，必须先让"选中 → 挂回 → tick → buildSnapshot"这个顺序在该帧成立，并有一条**切换页签后
+首帧不显示旧图**的测试；否则就是拿一个看起来更干净的结构换掉每切一次页签闪一帧旧图的回归。
+
+**C4c 经分析后判定不该做（2026-09-19）**：`FEditorViewportHostState.view/projection` 不能改成读
+`EditorLayer` 的相机。PIE 下 host viewport 归 game view，相机是**游戏相机**；
+`recordEditorWorldViewportOverlays` 在 compose 期仍然按那台相机画 grid/gizmo/视锥
+（`EditorViewportOverlayRecord.cpp`）。读编辑器相机只在编辑态对，PIE 下会画错。相机本来就只能
+来自"这一帧 host viewport 是谁的相机"，也就是 Surface 收到的那份 context——所以这项的收益只是把
+6 个字段的装配换个地方，`FEditorViewportHostState` 并不会消失。**判断：不做。**
+
 现状（`EditorSurface.cpp` 1322 行 / 36 个成员函数）：`tick` 是"Dock 模型 / 度量 → 一串 push →
 buildSnapshot"的混排：
 

@@ -12,7 +12,7 @@
 #include "Render/Resources/FontManager.h"
 #include "Render2D/Render2D.h"
 #include "Render3D/Common/CameraFrustumOverlay.h"
-#include "Render3D/Debug/PhysicsDebugDraw.h"
+#include "Render/Adapters/Debug/PhysicsDebugDraw.h"
 #include "Scene/Core/Scene.h"
 
 #include <glm/gtc/matrix_transform.hpp>

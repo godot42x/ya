@@ -17,10 +17,11 @@ target("ya-render-3d")
         "ya-render-graph",
         { public = true })
     add_deps("ya-ecs-core", "ya-ecs-systems")
-    -- Implementation-only deps: scene data/lifecycle, physics debug lines and
-    -- the backend builtin texture library (GUI resources/compose are already
-    -- public above: render-3d public headers expose them).
-    add_deps("ya-physics", "ya-rhi-backend-common", "ya-rhi-vulkan", "ya-scene-3d", "ya-scene-core", "ya-scene-runtime")
+    -- Implementation-only deps: scene data/lifecycle and the backend builtin
+    -- texture library (GUI resources/compose are already public above: render-3d
+    -- public headers expose them). No ya-physics: the physics collision debug
+    -- draw is an ECS-to-render bridge and lives in ya-render-ecs-adapters.
+    add_deps("ya-rhi-backend-common", "ya-rhi-vulkan", "ya-scene-3d", "ya-scene-core", "ya-scene-runtime")
     add_packages("glm", "entt", "nlohmann_json", { public = true })
     add_packages("cxxopts", "vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk", "stb")
     if is_plat("windows") then

@@ -1,4 +1,4 @@
-#include "Render3D/Debug/PhysicsDebugDraw.h"
+#include "Render/Adapters/Debug/PhysicsDebugDraw.h"
 
 #include "Scene3D/TransformComponent.h"
 #include "Physics/PhysicsBodyComponent.h"

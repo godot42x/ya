@@ -208,6 +208,18 @@ pump）、`RenderFrameExtractor`（**场景抽取：declareViews 与 prepareView
 
 ### 6.4 `ya-render-3d -> ya-physics` 只为画调试线
 
+**已落地 2026-09-19**：`PhysicsDebugDraw.{h,cpp}` 从 `Render3D/Debug/` 移到
+`Adapters/Debug/`（公开路径 `Render/Adapters/Debug/PhysicsDebugDraw.h`，导出宏改
+`YA_RENDER_ECS_ADAPTERS_API`），`ya-render-3d` 去掉 `ya-physics`，改由
+`ya-render-ecs-adapters` 持有——它本来就是"ECS 组件 ↔ 渲染"的桥。验证：`rg 'Physics/|PhysicsBody|drawPhysicsCollision'
+Engine/Source/Framework/Render/Render3D` 归零，render-3d 的 xmake 里只剩注释提到 physics；
+7 个目标 build ok；`ya-render-3d-test` 175/175；滤镜 558 passed / 3 failed（同基线 3 个）；
+两张 smoke 截图逐字节相同。
+
+这条修的不只是"少一个 dep"：之前`渲染器`知道 `PhysicsBodyShape` 枚举与 `kDefaultSphereRadius` /
+`kDefaultBoxHalfExtent`，头注释还写着"与 PhysicsSystem 的创建规则保持同步"——一条靠人维护的跨模块
+耦合，现在它落在桥接层，语义与位置一致。
+
 `add_deps("ya-physics", ...)` 是 implementation-only，唯一消费者是 `Render3D/Debug/PhysicsDebugDraw.cpp`：
 
 ```cpp

@@ -26,7 +26,8 @@ struct PhysicsBodyComponent : public IComponent
     YA_REFLECT_END()
 
     // Single source of truth for the v1 body sizes, shared by the body
-    // creation (PhysicsSystem) and the debug overlay (PhysicsDebugDraw).
+    // creation (PhysicsSystem) and the debug overlay
+    // (Render/Adapters/Debug/PhysicsDebugDraw.h).
     static constexpr float kDefaultBoxHalfExtent = 0.5f;
     static constexpr float kDefaultSphereRadius  = 0.5f;
 
