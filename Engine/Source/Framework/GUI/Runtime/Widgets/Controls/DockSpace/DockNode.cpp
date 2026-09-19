@@ -15,6 +15,16 @@ bool fail(std::string* error, std::string message)
     return false;
 }
 
+void normalizeHiddenTabBar(FDockNode& leaf)
+{
+    if (leaf.kind != EDockNodeKind::Stack || leaf.leafRole == EDockLeafRole::Page) {
+        return;
+    }
+    if (leaf.bHideTabBar && leaf.panelIds.size() > 1) {
+        leaf.bHideTabBar = false;
+    }
+}
+
 nlohmann::json exportNode(const FDockTreeModel& model, const FDockNode& node)
 {
     if (node.kind == EDockNodeKind::Stack) {
@@ -139,6 +149,7 @@ bool FDockTreeModel::addPanel(DockPanelId panelId, DockNodeId leafId)
     leaf->panelIds.push_back(panelId);
     leaf->selectedPanel = panelId;
     leaf->persistentEmptyLeaf = false;
+    normalizeHiddenTabBar(*leaf);
     return validateInvariants();
 }
 
@@ -210,6 +221,7 @@ bool FDockTreeModel::movePanel(DockPanelId panelId, DockNodeId targetLeafId, siz
     if (insertIndex == SIZE_MAX || insertIndex > target->panelIds.size()) insertIndex = target->panelIds.size();
     target->panelIds.insert(target->panelIds.begin() + static_cast<std::ptrdiff_t>(insertIndex), panelId);
     target->selectedPanel = panelId;
+    normalizeHiddenTabBar(*target);
     if (collapseSource && source->panelIds.empty()) collapseEmptiedNonPageLeaf(source);
     if (validateInvariants()) return true;
     _root = std::move(backup);
@@ -236,6 +248,9 @@ bool FDockTreeModel::setHideTabBar(DockNodeId leafId, bool hide)
 {
     FDockNode* node = findNode(leafId);
     if (!node || node->kind != EDockNodeKind::Stack) {
+        return false;
+    }
+    if (hide && !stackCanHideTabBar(*node)) {
         return false;
     }
     node->bHideTabBar = hide;

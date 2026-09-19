@@ -7,6 +7,7 @@
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/UIBehavior.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
@@ -337,6 +338,33 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
             behavior->beginPanelDrag(*this, _panelId, _title);
         }
     };
+    _tabBar->_onTabContextMenu = [this](int, const glm::vec2& logicalPoint)
+    {
+        WidgetTree* tree = getTree();
+        const auto* rec = _context ? _context->findFloatingById(_floatingId) : nullptr;
+        if (!tree || !rec || rec->bHideTabBar || rec->panelIds.size() != 1) {
+            return;
+        }
+        auto menu = UIMenu::create({
+            UIMenu::FItem{
+                .label = "Hide Tab Bar",
+                .action = [this]()
+                {
+                    if (!_context) {
+                        return;
+                    }
+                    const auto* current = _context->findFloatingById(_floatingId);
+                    if (!current || current->panelIds.size() != 1) {
+                        return;
+                    }
+                    _context->setFloatingHideTabBar(_floatingId, true);
+                    _context->fireFloatingUpdated();
+                    refreshFromContext();
+                },
+            },
+        });
+        menu->openAt(*tree, logicalPoint);
+    };
     header->addDetachedChild(_tabBar);
 
     auto close = std::make_shared<UIButton>(std::format("{}_Close", _name));
@@ -370,18 +398,14 @@ UIDockFloatingWindow::UIDockFloatingWindow(std::string name, FDockFloatingWindow
                 return;
             }
             const auto* rec = _context->findFloatingById(_floatingId);
-            if (!rec) {
+            if (!rec || !rec->bHideTabBar) {
                 return;
             }
-            _context->setFloatingHideTabBar(_floatingId, !rec->bHideTabBar);
+            _context->setFloatingHideTabBar(_floatingId, false);
             _context->fireFloatingUpdated();
             refreshFromContext();
-        },
-        [this]()
-        {
-            const auto* rec = _context ? _context->findFloatingById(_floatingId) : nullptr;
-            return rec && rec->bHideTabBar;
         });
+    _hideAffordance = hideBar.get();
     addDetachedChild(hideBar, [](UIElement&, UISlot& slot)
     {
         slot.applyArgs(FOverlaySlotArgs{
@@ -501,6 +525,10 @@ void UIDockFloatingWindow::refreshFromContext()
     if (_header) {
         _header->setVisibility(rec->bHideTabBar ? EWidgetVisibility::Collapsed
                                                 : EWidgetVisibility::Visible);
+    }
+    if (_hideAffordance) {
+        _hideAffordance->setVisibility(rec->bHideTabBar ? EWidgetVisibility::Visible
+                                                        : EWidgetVisibility::Collapsed);
     }
     _tabBar->_onTabSelected = [this](int index)
     {

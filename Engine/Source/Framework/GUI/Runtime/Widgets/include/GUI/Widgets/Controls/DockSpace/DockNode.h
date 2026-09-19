@@ -74,10 +74,25 @@ struct FDockNode
     /// because they are chrome-only (no inner tab well).
     bool                       persistentEmptyLeaf = false;
     /// When true the leaf tab strip (title bar) is hidden; panel content still
-    /// fills the leaf. A corner affordance or context menu restores the strip.
+    /// fills the leaf. Tools/Generic stacks may hide only with at most one tab.
+    /// A top-left reveal triangle restores the strip.
     bool                       bHideTabBar         = false;
     EDockLeafRole              leafRole            = EDockLeafRole::Generic;
 };
+
+/// Page wells are chrome-owned and may hide the inner strip at any count.
+/// Tools/Generic stacks may hide the title bar only when they hold at most
+/// one tab (empty extra-window wells included).
+[[nodiscard]] inline bool stackCanHideTabBar(const FDockNode& leaf)
+{
+    if (leaf.kind != EDockNodeKind::Stack) {
+        return false;
+    }
+    if (leaf.leafRole == EDockLeafRole::Page) {
+        return true;
+    }
+    return leaf.panelIds.size() <= 1;
+}
 
 /// Pure layout model: Split + Stack only. No WidgetTree, UIElement, or visual-control ownership.
 struct YA_GUI_API FDockTreeModel
@@ -113,6 +128,7 @@ struct YA_GUI_API FDockTreeModel
     /// collapse the emptied source.
     bool movePanel(DockPanelId panelId, DockNodeId targetLeafId, size_t insertIndex = SIZE_MAX, bool collapseSource = true);
     bool setSplitRatio(DockNodeId splitId, float ratio);
+    /// Hide the stack tab well. Non-page stacks may hide only with at most one tab.
     bool setHideTabBar(DockNodeId leafId, bool hide);
     bool setLeafRole(DockNodeId leafId, EDockLeafRole role);
     [[nodiscard]] DockNodeId findFirstLeafWithRole(EDockLeafRole role) const;

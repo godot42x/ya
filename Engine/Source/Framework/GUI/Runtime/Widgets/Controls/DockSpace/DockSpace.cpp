@@ -555,8 +555,9 @@ void UIDockSpace::applyStackTabBarVisibility(DockNodeId leafId)
     view->well->setVisibility(bHideWell ? EWidgetVisibility::Collapsed
                                         : EWidgetVisibility::Visible);
     if (view->hideAffordance) {
-        view->hideAffordance->setVisibility(bPageChrome ? EWidgetVisibility::Collapsed
-                                                        : EWidgetVisibility::Visible);
+        const bool bShowReveal = !bPageChrome && leaf->bHideTabBar;
+        view->hideAffordance->setVisibility(bShowReveal ? EWidgetVisibility::Visible
+                                                        : EWidgetVisibility::Collapsed);
     }
     markLayoutDirty();
     markPaintDirty();
@@ -578,18 +579,21 @@ void UIDockSpace::openStackTabBarMenu(DockNodeId leafId, const glm::vec2& pos)
         leaf->leafRole == EDockLeafRole::Page) {
         return;
     }
-    const bool bHidden = leaf->bHideTabBar;
+    if (leaf->bHideTabBar || leaf->panelIds.size() != 1) {
+        return;
+    }
     auto menu = UIMenu::create({
         UIMenu::FItem{
-            .label = bHidden ? "Show Tab Bar" : "Hide Tab Bar",
+            .label = "Hide Tab Bar",
             .action = [this, leafId]()
             {
                 const FDockNode* current = _context->dockModel().findNode(leafId);
                 if (!current || current->kind != EDockNodeKind::Stack ||
-                    current->leafRole == EDockLeafRole::Page) {
+                    current->leafRole == EDockLeafRole::Page ||
+                    current->panelIds.size() != 1) {
                     return;
                 }
-                if (_context->dockModel().setHideTabBar(leafId, !current->bHideTabBar)) {
+                if (_context->dockModel().setHideTabBar(leafId, true)) {
                     applyStackTabBarVisibility(leafId);
                     _context->notifyDockLayoutListeners();
                 }
@@ -776,7 +780,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     bar->_bDraggableTabs = true;
     bar->_styleKey = "tab.dock";
     bar->setClipChildren(true);
-    bar->setPadding({kDockHideTabBarSize, 1.0f});
+    bar->setPadding({2.0f, 1.0f});
     bar->setSpacing(1.0f);
     chrome->addDetachedChild(bar);
 
@@ -803,18 +807,13 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
         {
             const FDockNode* current = _context->dockModel().findNode(leafId);
             if (!current || current->kind != EDockNodeKind::Stack ||
-                current->leafRole == EDockLeafRole::Page) {
+                current->leafRole == EDockLeafRole::Page || !current->bHideTabBar) {
                 return;
             }
-            if (_context->dockModel().setHideTabBar(leafId, !current->bHideTabBar)) {
+            if (_context->dockModel().setHideTabBar(leafId, false)) {
                 applyStackTabBarVisibility(leafId);
                 _context->notifyDockLayoutListeners();
             }
-        },
-        [this, leafId = node.id]()
-        {
-            const FDockNode* current = _context->dockModel().findNode(leafId);
-            return current && current->kind == EDockNodeKind::Stack && current->bHideTabBar;
         });
     stack->addDetachedChild(hideBar, [](UIElement&, UISlot& slot)
     {

@@ -92,6 +92,7 @@ struct YA_GUI_API UIDockFloatingWindow : public UIElement, public UIStyledWidget
     /// empty area starts the dock-panel drag (dock on a DockSpace, move on
     /// empty space) — mirrors the tab-strip drag.
     std::shared_ptr<UIContainer> _header;
+    UIElement*                   _hideAffordance = nullptr;
     /// Transient title-drag arm state (mirrors UITabBar's 6px threshold).
     bool      _bTitlePressed = false;
     bool      _bTitleMoving  = false;

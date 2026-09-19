@@ -27,6 +27,7 @@
 #include "GUI/Widgets/Controls/DockSpace/DockFloatingWindow.h"
 #include "GUI/Widgets/Controls/DockSpace/DockSpace.h"
 #include "GUI/Widgets/Controls/DockSpace/DockContext.h"
+#include "GUI/Widgets/Controls/DockSpace/DockHideTabBarAffordance.h"
 #include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/CompoundWidget.h"
@@ -2400,8 +2401,7 @@ TEST(WidgetLayoutTest, DockLeafTabBarIsCompactAndCanHide)
 
     UIElement* hide = findNamedDescendant(*dock, "DockHideTabBar");
     ASSERT_NE(hide, nullptr);
-    EXPECT_FLOAT_EQ(hide->_layoutRect.extent.x, 12.0f);
-    EXPECT_FLOAT_EQ(hide->_layoutRect.extent.y, 12.0f);
+    EXPECT_EQ(hide->getVisibility(), EWidgetVisibility::Collapsed);
 
     FDockNode* leaf = ws->dockModel().getRootNode();
     ASSERT_NE(leaf, nullptr);
@@ -2416,7 +2416,13 @@ TEST(WidgetLayoutTest, DockLeafTabBarIsCompactAndCanHide)
     EXPECT_FLOAT_EQ(bar->_layoutRect.extent.y, 0.0f);
     hide = findNamedDescendant(*dock, "DockHideTabBar");
     ASSERT_NE(hide, nullptr);
-    EXPECT_FLOAT_EQ(hide->_layoutRect.extent.x, 12.0f);
+    EXPECT_EQ(hide->getVisibility(), EWidgetVisibility::Visible);
+    EXPECT_FLOAT_EQ(hide->_layoutRect.extent.x, kDockHideTabBarSize);
+    EXPECT_FLOAT_EQ(hide->_layoutRect.extent.y, kDockHideTabBarSize);
+    UIElement* stack = findNamedDescendant(*dock, "DockStack1");
+    ASSERT_NE(stack, nullptr);
+    EXPECT_FLOAT_EQ(hide->_layoutRect.pos.x, stack->_layoutRect.pos.x);
+    EXPECT_FLOAT_EQ(hide->_layoutRect.pos.y, stack->_layoutRect.pos.y);
 
     EXPECT_TRUE(panel->isAttached());
     EXPECT_NE(panel->getParent(), nullptr);
@@ -2454,7 +2460,7 @@ TEST(WidgetLayoutTest, PageRoleLeafNeverShowsInnerTabWell)
     EXPECT_EQ(hide->getVisibility(), EWidgetVisibility::Collapsed);
 }
 
-TEST(WidgetLayoutTest, DockHideTabBarClickHidesStripAndKeepsPanelContent)
+TEST(WidgetLayoutTest, DockHiddenTabBarRevealTriangleShowsStrip)
 {
     registerSyntheticFont(13, 7.0f);
     WidgetTree tree({.width = 800, .height = 600});
@@ -2478,10 +2484,12 @@ TEST(WidgetLayoutTest, DockHideTabBarClickHidesStripAndKeepsPanelContent)
     ASSERT_NE(contentHost, nullptr);
     UIElement* hide = findNamedDescendant(*dock, "DockHideTabBar");
     ASSERT_NE(hide, nullptr);
+    EXPECT_EQ(hide->getVisibility(), EWidgetVisibility::Collapsed);
 
-    const glm::vec2 hideCenter = hide->_layoutRect.pos + hide->_layoutRect.extent * 0.5f;
-    ASSERT_TRUE(hide->handleInputEvent(MouseButtonPressedEvent(EMouse::Left),
-                                       pointAt(hideCenter.x, hideCenter.y)));
+    FDockNode* leaf = ws->dockModel().getRootNode();
+    ASSERT_NE(leaf, nullptr);
+    ASSERT_TRUE(ws->dockModel().setHideTabBar(leaf->id, true));
+    dock->syncTabBarVisibility();
     tree.layout();
 
     bar = findNamedDescendant(*dock, "DockTabBar1");
@@ -2490,19 +2498,25 @@ TEST(WidgetLayoutTest, DockHideTabBarClickHidesStripAndKeepsPanelContent)
     EXPECT_FLOAT_EQ(bar->_layoutRect.extent.y, 0.0f);
     EXPECT_EQ(panel->getParent(), contentHost);
     EXPECT_TRUE(panel->isAttached());
-    EXPECT_GT(panel->_layoutRect.extent.y, 0.0f);
     EXPECT_GT(panel->_layoutRect.extent.y, 500.0f);
     EXPECT_TRUE(ws->dockModel().getRootNode()->bHideTabBar);
 
     hide = findNamedDescendant(*dock, "DockHideTabBar");
     ASSERT_NE(hide, nullptr);
-    const glm::vec2 restoreCenter = hide->_layoutRect.pos + hide->_layoutRect.extent * 0.5f;
+    EXPECT_EQ(hide->getVisibility(), EWidgetVisibility::Visible);
+    auto* reveal = dynamic_cast<FDockHideTabBarAffordance*>(hide);
+    ASSERT_NE(reveal, nullptr);
+    EXPECT_TRUE(reveal->containsRevealTriangle(hide->_layoutRect.pos));
+    EXPECT_TRUE(reveal->containsRevealTriangle(hide->_layoutRect.pos + glm::vec2{2.0f, 2.0f}));
+    EXPECT_FALSE(reveal->containsRevealTriangle(hide->_layoutRect.pos + glm::vec2{11.0f, 11.0f}));
+    const glm::vec2 restorePoint = hide->_layoutRect.pos + glm::vec2{2.0f, 2.0f};
     ASSERT_TRUE(hide->handleInputEvent(MouseButtonPressedEvent(EMouse::Left),
-                                       pointAt(restoreCenter.x, restoreCenter.y)));
+                                       pointAt(restorePoint.x, restorePoint.y)));
     tree.layout();
     EXPECT_EQ(bar->getVisibility(), EWidgetVisibility::Visible);
     EXPECT_GT(bar->_layoutRect.extent.y, 10.0f);
     EXPECT_FALSE(ws->dockModel().getRootNode()->bHideTabBar);
+    EXPECT_EQ(hide->getVisibility(), EWidgetVisibility::Collapsed);
 }
 
 TEST(WidgetLayoutTest, DockTabBarContextMenuHidesTitleBarOnly)
@@ -2552,6 +2566,89 @@ TEST(WidgetLayoutTest, DockTabBarContextMenuHidesTitleBarOnly)
     EXPECT_EQ(panel->getParent(), contentHost);
     EXPECT_TRUE(panel->isAttached());
     EXPECT_GT(panel->_layoutRect.extent.y, 500.0f);
+    UIElement* hide = findNamedDescendant(*dock, "DockHideTabBar");
+    ASSERT_NE(hide, nullptr);
+    EXPECT_EQ(hide->getVisibility(), EWidgetVisibility::Visible);
+}
+
+TEST(WidgetLayoutTest, DockTabBarContextMenuDoesNotHideWhenStackHasMultipleTabs)
+{
+    registerSyntheticFont(13, 7.0f);
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<FDockContext>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    ASSERT_NE(ws->addPanel("Scene", std::make_shared<UICanvasPanel>("SceneBody")), kInvalidDockPanelId);
+    ASSERT_NE(ws->addPanel("Inspector", std::make_shared<UICanvasPanel>("InspectorBody")),
+              kInvalidDockPanelId);
+    tree.layout();
+
+    FDockNode* leaf = ws->dockModel().getRootNode();
+    ASSERT_NE(leaf, nullptr);
+    EXPECT_FALSE(ws->dockModel().setHideTabBar(leaf->id, true));
+    EXPECT_FALSE(leaf->bHideTabBar);
+
+    UIElement* tab = findNamedDescendant(*dock, "Tab_Scene");
+    ASSERT_NE(tab, nullptr);
+    const glm::vec2 tabCenter = tab->_layoutRect.pos + tab->_layoutRect.extent * 0.5f;
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Right),
+                                 pointAt(tabCenter.x, tabCenter.y)),
+              EWidgetRouteResult::HandledExclusive);
+
+    UIElement* popupLayer = tree.getLayer(WidgetTree::ELayer::Popup);
+    ASSERT_NE(popupLayer, nullptr);
+    UIMenu* menu = nullptr;
+    for (UIElement* child : popupLayer->getChildrenInPaintOrder()) {
+        menu = dynamic_cast<UIMenu*>(child);
+        if (menu) {
+            break;
+        }
+    }
+    EXPECT_EQ(menu, nullptr);
+
+    UIElement* bar = findNamedDescendant(*dock, "DockTabBar1");
+    ASSERT_NE(bar, nullptr);
+    EXPECT_EQ(bar->getVisibility(), EWidgetVisibility::Visible);
+    UIElement* hide = findNamedDescendant(*dock, "DockHideTabBar");
+    ASSERT_NE(hide, nullptr);
+    EXPECT_EQ(hide->getVisibility(), EWidgetVisibility::Collapsed);
+}
+
+TEST(WidgetLayoutTest, AddingSecondTabUnhidesStackTitleBar)
+{
+    registerSyntheticFont(13, 7.0f);
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       ws   = std::make_shared<FDockContext>();
+    auto       dock = std::make_shared<UIDockSpace>("Dock");
+    FCanvasSlotArgs dockArgs;
+    dockArgs.anchorMin = {0.0f, 0.0f};
+    dockArgs.anchorMax = {1.0f, 1.0f};
+    dock->setContext(ws);
+    tree.attach(*tree.getLayer(WidgetTree::ELayer::Content), dock, dockArgs);
+
+    ASSERT_NE(ws->addPanel("Scene", std::make_shared<UICanvasPanel>("SceneBody")), kInvalidDockPanelId);
+    FDockNode* leaf = ws->dockModel().getRootNode();
+    ASSERT_NE(leaf, nullptr);
+    ASSERT_TRUE(ws->dockModel().setHideTabBar(leaf->id, true));
+    dock->syncTabBarVisibility();
+    tree.layout();
+    EXPECT_TRUE(leaf->bHideTabBar);
+
+    ASSERT_NE(ws->addPanel("Inspector", std::make_shared<UICanvasPanel>("InspectorBody")),
+              kInvalidDockPanelId);
+    tree.layout();
+    EXPECT_FALSE(ws->dockModel().getRootNode()->bHideTabBar);
+    UIElement* bar = findNamedDescendant(*dock, "DockTabBar1");
+    ASSERT_NE(bar, nullptr);
+    EXPECT_EQ(bar->getVisibility(), EWidgetVisibility::Visible);
+    UIElement* hide = findNamedDescendant(*dock, "DockHideTabBar");
+    ASSERT_NE(hide, nullptr);
+    EXPECT_EQ(hide->getVisibility(), EWidgetVisibility::Collapsed);
 }
 
 TEST(WidgetLayoutTest, DockTabBarStripDoubleClickFiresHostCallback)

@@ -324,6 +324,41 @@ TEST(DockNodeTest, HideTabBarRoundTripsLayoutJson)
     EXPECT_TRUE(restored.findLeafForPanel(1)->bHideTabBar);
 }
 
+TEST(DockNodeTest, HideTabBarRejectedWhenStackHasMultipleTabs)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "viewport");
+    registerPanel(model, 2, "inspector");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.addPanel(2));
+    EXPECT_FALSE(model.setHideTabBar(model.getRootNode()->id, true));
+    EXPECT_FALSE(model.getRootNode()->bHideTabBar);
+}
+
+TEST(DockNodeTest, AddingSecondPanelClearsHiddenTabBar)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "viewport");
+    registerPanel(model, 2, "inspector");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.setHideTabBar(model.getRootNode()->id, true));
+    EXPECT_TRUE(model.getRootNode()->bHideTabBar);
+    ASSERT_TRUE(model.addPanel(2));
+    EXPECT_FALSE(model.getRootNode()->bHideTabBar);
+}
+
+TEST(DockNodeTest, PageRoleMayHideTabBarWithMultipleTabs)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "level-editor");
+    registerPanel(model, 2, "ui-editor");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.addPanel(2));
+    ASSERT_TRUE(model.setLeafRole(model.getRootNode()->id, EDockLeafRole::Page));
+    ASSERT_TRUE(model.setHideTabBar(model.getRootNode()->id, true));
+    EXPECT_TRUE(model.getRootNode()->bHideTabBar);
+}
+
 TEST(DockNodeTest, LeafRoleRoundTripsLayoutJson)
 {
     FDockTreeModel model;

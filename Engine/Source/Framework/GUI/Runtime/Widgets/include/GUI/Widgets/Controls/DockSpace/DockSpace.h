@@ -164,6 +164,7 @@ struct YA_GUI_API UIDockSpace : public UIElement, public UIStyledWidget<UIDockSp
     void applyDrop(const UIDragDropOperation& operation, const glm::vec2& logicalPoint);
     /// Re-apply leaf tab-well / hide-affordance visibility from the model.
     /// Page-role stacks never show an inner well (chrome owns those tabs).
+    /// Tools/Generic stacks show the reveal triangle only while the title bar is hidden.
     void syncTabBarVisibility();
 
   protected:

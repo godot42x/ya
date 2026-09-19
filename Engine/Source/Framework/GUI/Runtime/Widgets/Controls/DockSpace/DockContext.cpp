@@ -431,6 +431,9 @@ bool FDockContext::addPanelToFloating(FDockFloatingWindowId targetId, DockPanelI
     endFloatingForPanel(panelId); // no-op unless floating in another window
     target->panelIds.push_back(panelId);
     target->activePanelId = panelId;
+    if (target->panelIds.size() != 1) {
+        target->bHideTabBar = false;
+    }
     fireFloatingUpdated();
     fireDockUpdated();
     return true;
@@ -531,9 +534,14 @@ void FDockContext::setFloatingWindowActivePanel(FDockFloatingWindowId id, DockPa
 
 void FDockContext::setFloatingHideTabBar(FDockFloatingWindowId id, bool hide)
 {
-    if (FFloatingWindow* window = findFloatingByIdMutable(id)) {
-        window->bHideTabBar = hide;
+    FFloatingWindow* window = findFloatingByIdMutable(id);
+    if (!window) {
+        return;
     }
+    if (hide && window->panelIds.size() != 1) {
+        return;
+    }
+    window->bHideTabBar = hide;
 }
 
 bool FDockContext::bindFloatingTargetWindow(FDockFloatingWindowId id, uint32_t windowId)
@@ -884,7 +892,10 @@ bool FDockContext::importLayoutJson(const nlohmann::json& layout)
             if (entry.contains("size") && entry["size"].is_array() && entry["size"].size() == 2) {
                 window.size = {entry["size"][0].get<float>(), entry["size"][1].get<float>()};
             }
-            window.bHideTabBar = entry.value("hideTabBar", false);
+            window.bHideTabBar = entry.value("hideTabBar", false) && window.panelIds.size() == 1;
+            if (window.bHideTabBar && window.panelIds.size() != 1) {
+                window.bHideTabBar = false;
+            }
             if (!projectionFromJson(entry, fallback, window.projection) ||
                 !geometrySpaceFromJson(entry, window.geometrySpace) ||
                 !sourceScopeFromJson(entry, sourceScope, window.sourceScope)) {

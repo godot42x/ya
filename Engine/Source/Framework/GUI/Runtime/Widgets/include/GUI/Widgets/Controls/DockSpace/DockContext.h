@@ -231,6 +231,7 @@ struct YA_GUI_API FDockContext
     /// Update a floating window's logical position and size without notifying listeners.
     void setFloatingWindowRect(FDockFloatingWindowId id, const glm::vec2& pos, const glm::vec2& size);
     void setFloatingWindowActivePanel(FDockFloatingWindowId id, DockPanelId panelId);
+    /// Hide the floating tab strip. Allowed only when the window holds one tab.
     void setFloatingHideTabBar(FDockFloatingWindowId id, bool hide);
 
     /// Serialize dock topology (`root` + overlay `floating`) separately from

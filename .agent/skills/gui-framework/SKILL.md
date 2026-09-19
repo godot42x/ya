@@ -357,8 +357,10 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   已收口为 `UIScrollLayout` / `UISplitLayout` / `UIOverlayLayout`；`UIButton`、`UISelectableRow`、`UICheckBox`、`UICompoundWidget` 与 `UISizeBox`
   使用 `UISingleChildLayout`。  `UIDockSpace` 也是 single-child host：投影根填满 dock。  `FDockTreeModel::exportLayoutJson` /
   `importLayoutJson` 按 panel `stableKey` 持久化 split/leaf 树（不持久化 NodeId），leaf 可带
-  `hideTabBar`（默认展示 tab strip；右键菜单或左上角 12px 折角只 Collapsed 掉 title bar，
-  面板内容继续填满 leaf。split ratio / 选 tab / hide-tab-bar 只改 live chrome 并
+  `hideTabBar`（默认展示 tab strip；Tools/Generic 仅在至多一个 tab 时可通过右键
+  「Hide Tab Bar」Collapsed 掉 title bar，面板内容继续填满 leaf。title bar 隐藏后
+  在内容左上角画 UE 式直角三角，hover 高亮，点击恢复 strip。
+  split ratio / 选 tab / hide-tab-bar 只改 live chrome 并
   `notifyDockLayoutListeners()`；结构变化才 `syncProjection(Structure)`，且会先 unlink 再
   reparent/attach 已挂载的 panel widget，禁止对仍有 parent 的 panel `addDetachedChild`。
   floating 停靠 cardinal split 时，drag keepAlive 仍握着刚 detach 的 floating window，
@@ -368,7 +370,7 @@ GameEditor：`FEditorTabSpawner` / `FEditorTabSpawnContext`（typed factory）�
   新叶是空白，直到再切一次 tab。
   叶内 tab 可关（`UITabButton` close hit-zone → `FDockContext::closePanel`）。
   Page-role leaf 的 inner well 与 hide-affordance 永远 Collapsed（title chrome 才是
-  page tabs）；`hideTabBar` 折角不得把 Level/UI 再画进 dock。
+  page tabs）；reveal 三角不得把 Level/UI 再画进 dock。
   TabWell 内左右拖只 `movePanel` 重排，不开始 dock session、不画 ghost。指针离开 well
   才 `_onTabDragBegin`。同 stack 的内容区显示 chooser；hover 到 cardinal 块则
   `splitStack`（含把当前 leaf 的一个 tab 拆出去）。未落在 chooser 块或 well 上的

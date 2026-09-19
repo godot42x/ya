@@ -1,4 +1,5 @@
 add_rules("mode.debug", "mode.releasedbg", "mode.release", "mode.profile")
+add_rules("plugin.compile_commands.autoupdate", {outputdir = "."})
 set_languages("c++20")
 
 -- Product profile: which product line enters the build graph.
@@ -117,8 +118,6 @@ end
 
 set_rundir(os.scriptdir())
 
-
-add_rules("plugin.compile_commands.autoupdate", { outputdir = os.scriptdir() })
 
 
 -- Example products: the standalone GUI examples (GUIFrameworkSmoke /
