@@ -465,13 +465,9 @@ void LuaScriptingSystem::onStop()
             }
             script.bLoaded = false;
             script.bAuthoringPreviewAttempted = false;
+            script.bAuthoringPreviewLoaded = false;
             script.properties.clear();
-            script.self = sol::lua_nil;
-            script.onInit = sol::lua_nil;
-            script.onUpdate = sol::lua_nil;
-            script.onDestroy = sol::lua_nil;
-            script.onEnable = sol::lua_nil;
-            script.onDisable = sol::lua_nil;
+            script.releaseLuaHandles();
         }
     }
 }

@@ -515,6 +515,9 @@ void App::quit()
         }
     }
     const bool bHadSceneBeforeUnload = app._sceneManager && app._sceneManager->hasScene();
+    if (app._luaScriptingSystem) {
+        app._luaScriptingSystem->onStop();
+    }
     (void)app.unloadSceneInternal();
 
     if (!bHadSceneBeforeUnload) {

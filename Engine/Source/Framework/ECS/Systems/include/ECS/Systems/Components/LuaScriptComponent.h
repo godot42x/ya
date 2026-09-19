@@ -8,6 +8,7 @@
 #include "ECS/Component.h"
 
 #include <algorithm>
+#include <any>
 #include <sol/sol.hpp>
 #include <string>
 #include <unordered_map>
@@ -26,52 +27,43 @@ struct LuaScriptComponent : public IComponent
     struct ScriptProperty
     {
         std::string name;
-        sol::object value;          // 当前值
-        std::string typeHint;       // "float", "int", "bool", "string", "Vec3" 等
-        float       min     = 0.0f; // 数值范围（可选）
+        std::any    value;
+        std::string typeHint;
+        float       min     = 0.0f;
         float       max     = 100.0f;
-        std::string tooltip = ""; // 提示信息
-
-        // 序列化值（用于持久化和运行时应用）
+        std::string tooltip = "";
         std::string serializedValue = "";
     };
 
     struct ScriptInstance
     {
         std::string scriptPath;
-        bool        bLoaded                 = false;
+        bool        bLoaded                    = false;
         bool        bAuthoringPreviewAttempted = false;
+        bool        bAuthoringPreviewLoaded    = false;
 
         sol::table self;
-        // 注：不再使用独立环境，所有脚本共享全局环境以支持 require()
 
-        // 生命周期回调
         sol::function onInit;
         sol::function onUpdate;
         sol::function onDestroy;
         sol::function onEnable;
         sol::function onDisable;
 
-        // 可编辑属性（从 Lua 表中提取）
         std::vector<ScriptProperty> properties;
-
-        // 属性覆盖值（编辑器修改后的值，运行时应用）
-        // Key: 属性名, Value: std::any 存储的实际值
         std::unordered_map<std::string, std::any> propertyOverrides;
 
         bool enabled = true;
 
-        // 刷新属性列表（从 self 表中读取）
         YA_ECS_SYSTEMS_API void refreshProperties();
-
-        // 应用属性覆盖（在运行时初始化后调用）
-        void applyPropertyOverrides(sol::state &lua);
+        YA_ECS_SYSTEMS_API void capturePropertiesFrom(sol::table table);
+        YA_ECS_SYSTEMS_API void applyPropertyOverrides(sol::state& lua);
+        YA_ECS_SYSTEMS_API void applyPropertyOverridesTo(sol::table table, sol::state& lua);
+        /// Drop sol handles while their lua_State is still alive. Keeps path,
+        /// enabled, propertyOverrides, and captured C++ property rows.
+        YA_ECS_SYSTEMS_API void releaseLuaHandles();
 
         static YA_ECS_SYSTEMS_API std::string normalizeScriptPath(std::string_view path);
-
-      private:
-        // 类型推断辅助函数
-        static std::string inferType(const sol::object &value);
     };
 
     std::vector<ScriptInstance> scripts;
@@ -100,23 +92,18 @@ struct LuaScriptComponent : public IComponent
                       scripts.end());
     }
 
-    /**
-     * @brief Cleanup all Lua references safely
-     * Should be called before lua state is destroyed
-     */
-    void cleanup()
+    void releaseLuaHandles()
     {
         for (auto& script : scripts) {
-            script.properties.clear();
-            script.propertyOverrides.clear();
-            // Release sol references explicitly
-            script.self = sol::lua_nil;
-            script.onInit = sol::lua_nil;
-            script.onUpdate = sol::lua_nil;
-            script.onDestroy = sol::lua_nil;
-            script.onEnable = sol::lua_nil;
-            script.onDisable = sol::lua_nil;
+            script.releaseLuaHandles();
         }
+    }
+
+    /// Drop Lua handles then discard every script row. Call only when the
+    /// component itself is going away, not when pausing play.
+    void cleanup()
+    {
+        releaseLuaHandles();
         scripts.clear();
     }
 
