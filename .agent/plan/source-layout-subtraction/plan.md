@@ -33,7 +33,7 @@
 | 阶段 | 目标 | 状态 |
 | --- | --- | --- |
 | S1 | 删掉 `include/` 影子层：公开头唯一物理位置 | 已落地 |
-| S2 | 修正聚合边界与依赖倒置 | 进行中（2a 已落地） |
+| S2 | 修正聚合边界与依赖倒置 | 进行中（2a、2b 已落地） |
 | S3 | 削掉两个最大的文件（只做有明确接缝的） | 待做 |
 | S4 | 命名收敛（在 S1/S2 之后） | 待做 |
 | S5 | 计划目录收敛：已收口/被接手的线归档，只留仍有代码要改的线 | 已落地 |
@@ -82,8 +82,10 @@ archive 路径。剩余 12 条里有 9 条仍有开放 checkpoint，压不动。
 S2 的候选清单（每条独立可验收，动手前先确认消费面）：
 
 - **S2a（已落地 2026-09-19）**：`ya-engine` 不再公开包含 `ya-game-runtime`。见 `progress.md`。
-- **S2b（待做）**：拆 `ya-gui-framework`：它现在是 GUI + app shell + module system 的混合体，
-  这正是"抽不出独立 GUI app"的根因。`Tooling/Workbench` 是 demo app，不属于 GUI 库。
+- **S2b（已落地 2026-09-19）**：`ya-gui-framework` 不再公开聚合 app main chain 与 demo app。
+  见 `progress.md`。**待补**：`skills/gui-framework/SKILL.md` 里两处"这个聚合目标公开拉入
+  ya-app-kernel / ya-app-control / ya-hierarchy"的描述要跟着改，但该文件当时被另一条线的
+  dock 改动占着（`git status` 显示 dirty），未在本次一并提交，避免把别人的在飞改动卷进本提交。
 - **S2c（待做）**：断 `ya-scene-core -> ya-gui-widgets`（SceneWidgetEntry）与
   `ya-render-3d -> ya-gui-compose`（`Render2DComposePass` 出现在
   `RenderDeviceState.cpp` / `RenderDeviceState.Frame.cpp` / `ViewCompose.cpp`；

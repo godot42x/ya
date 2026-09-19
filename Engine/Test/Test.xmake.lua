@@ -142,6 +142,10 @@ do
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-framework")
+    -- This target also covers AppKernelTest, which drives the windowless main
+    -- chain directly. The kernel is not part of the GUI library, so it is
+    -- named here rather than inherited from the aggregate.
+    add_deps("ya-app-kernel")
     add_packages("gtest")
 
     if is_plat("windows") then

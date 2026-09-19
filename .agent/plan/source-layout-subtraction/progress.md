@@ -1,5 +1,58 @@
 # Progress
 
+## 2026-09-19 checkpoint：S2b `ya-gui-framework` 只聚合 GUI 库
+
+### 唯一目标
+
+`ya-gui-framework` 是"纯 GUI 代码的唯一链接目标"，但它公开拉入 `ya-app-kernel` /
+`ya-app-control` / `ya-hierarchy` / `ya-gui-tooling`。于是**"链接 GUI framework"等于"你有一个
+应用 + 一个 demo 工具"**，这正是"抽不出独立 GUI app"读不出来的根因。
+
+### 改动
+
+`Engine/Source/Framework/GUI/xmake.lua`：public deps 收敛为 GUI 库闭包
+（`ya-foundation-core` / `ya-rhi` / `ya-rhi-backend-common` / `ya-rhi-vulkan` /
+`ya-render-resources` / `ya-render-2d` / `ya-gui-widgets` / `ya-gui-compose`），
+并把每条被删掉的 dep"为什么不该在聚合里"写进 dep 列表上方的注释：
+
+| 删掉的 dep | 依据 |
+| --- | --- |
+| `ya-app-kernel` / `ya-app-control` | windowless main chain。`ya-gui-host` 已经自己 deps kernel（host 就是 app）；`GUI/Runtime/**` 里**没有任何文件** include `App/Kernel` 或 `App/Control` |
+| `ya-hierarchy` | `Framework/GUI/` 下**没有一个文件** include `Hierarchy/` |
+| `ya-gui-tooling` | Workbench demo app，不是库。`GUIWorkbench` 已经显式 deps 它 |
+
+`Engine/Test/Test.xmake.lua`：`ya-gui-closure-test` 补 `add_deps("ya-app-kernel")`。该 target
+包含 `AppKernelTest.cpp`，它直接驱动 windowless main chain；kernel 不属于 GUI 库，所以由它自己点名
+（`ya-app-kernel` 已 public deps `ya-app-control`，control 不需要再写）。
+
+### 验证
+
+1. `xmake l` 读出的 `ya-gui-framework` deps = 上面 8 个，`app-kernel` / `app-control` /
+   `hierarchy` / `tooling` 都不在。
+2. `xmake show -t GreedySnake` 那类 engine-only 消费方的 include 根不受影响（本刀只动 GUI 行）。
+3. `rg -l 'Workbench' Engine/Test/Source/` 命中的两个文件里，`ToolControlsTest.cpp` 只有注释与
+   字符串字面量（`"YA Workbench"`），没有真的用 tooling —— 所以断开不损失覆盖。
+4. 构建：`ya-gui-framework` / `ya-gui-closure-test` / `ya-gui-host` / `GUIWorkbench` /
+   `ya-gui-minimal-host` / `ya-engine` / `ya-runtime` 全部 build ok。
+5. 回归：`ya-gui-closure-test` 排除两个既有 SIGTRAP 崩溃用例后 **589 passed / 3 failed**；
+   用 `git stash` 去掉本刀改动后**同样是 589 passed / 3 failed**，逐条相同
+   （`ToolControlsTest.SplitPaneDividerDragChangesRatioAndEndsSession`、
+   `ToolControlsTest.ScrollViewportNestedInsideSplitKeepsCustomLayout`、
+   `WidgetLayoutTest.FloatingWindowResizeHandlesLiveOnOverlaySlots`）——
+   三条都来自并发作者在飞的 dock 改动，本刀零回归。
+
+### 保留 / 未完成 / 偏离
+
+- **保留**：`ya-gui-host` 仍然公开 deps `ya-app-kernel` / `ya-app-control`（host 确实需要它们）。
+- **未完成**：(1) S2c（`ya-scene-core -> ya-gui-widgets` 与 `ya-render-3d -> ya-gui-compose`）；
+  (2) `skills/gui-framework/SKILL.md` 里描述旧聚合的两处文字待改 —— 该文件当时被另一条线的
+  dock 改动占着，不并入本提交以免卷进别人的在飞改动。
+- **顺带登记（本轮未修）**：`ya-gui-widgets-test` **编译失败**，
+  `GuiFrameInspectorTest.cpp` 找不到 `GUI/Compose/GuiFrameInspectorOverlay.h` —— 该 target 的
+  deps 只有 `ya-gui-widgets` + `ya-render-resources`，而 overlay 属于 `ya-gui-compose`。
+  这是 `render-view-family` R0 里已登记的既有缺口，早于本刀存在（本刀 stash 后同样失败），
+  且属于另一条目标清单，故不在 S2b 里修。
+
 ## 2026-09-19 checkpoint：S2a `ya-engine` 不再公开包含 `ya-game-runtime`
 
 ### 唯一目标
