@@ -61,12 +61,14 @@ struct FEditorSettingsScenePathStatus
 }
 
 /// Retained editor-settings modal. EditorSurface hosts it but does not own
-/// the overlay or the sampler/overlay/startup-scene controls.
+/// the overlay or the sampler/overlay/startup-scene controls: it opens and
+/// closes this dialog and nothing more. The per-frame refresh is this dialog's
+/// own, driven by the tree's tick while it is open, so there is no public
+/// "sync me" for a shell to call.
 class EditorSettingsDialog
 {
   public:
     void open(WidgetTree& tree, FEditorSettingsBindings bindings);
-    void sync(WidgetTree& tree);
     void close();
     void reset();
 
@@ -75,6 +77,10 @@ class EditorSettingsDialog
     void browseStartupScene();
 
   private:
+    /// Push current bindings into the controls. Called from this dialog's own
+    /// tree-tick, never by a shell.
+    void sync(WidgetTree& tree);
+
     FEditorSettingsBindings _bindings;
     std::shared_ptr<UIPopupOverlay> _overlay;
     std::shared_ptr<UIBorder> _panel;

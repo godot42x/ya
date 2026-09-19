@@ -86,4 +86,27 @@ struct YA_GUI_API UIDropTargetBehavior : public UIBehavior
 
 using UIBehaviorRef = std::shared_ptr<UIBehavior>;
 
+/// Forwards the owning tree's per-frame tick to a callback.
+///
+/// This is how a widget says "I need a frame" and gets it from the tree, rather
+/// than the code that created it remembering to push a refresh every frame.
+/// Attach it to the widget that owns the state and the frame loop reaches it
+/// through the normal subtree walk, so a surface that only opens/closes the
+/// widget never has to know it has per-frame work.
+///
+/// A widget that is not visible in the tree is not ticked, so this is for state
+/// that only matters while shown; use it instead of a parallel clock.
+struct YA_GUI_API UITickBehavior : public UIBehavior
+{
+    std::function<void(UIElement& owner, float deltaSeconds)> onTick;
+
+    [[nodiscard]] bool wantsTick() const override { return static_cast<bool>(onTick); }
+    void               tick(UIElement& owner, float deltaSeconds) override
+    {
+        if (onTick) {
+            onTick(owner, deltaSeconds);
+        }
+    }
+};
+
 } // namespace ya

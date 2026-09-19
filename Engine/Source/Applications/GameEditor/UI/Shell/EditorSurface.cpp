@@ -167,7 +167,6 @@ void EditorSurface::tick(const FEditorSurfaceContext& context, float dt)
 
     applyWindowMetrics(context.metrics);
     _tree->tick(dt);
-    syncShellDialogs();
     pushViewportDisplay();
     UIFrameBuildContext snapshotCtx;
     snapshotCtx.textureResolver = &resolveGameUITexture;
@@ -746,19 +745,6 @@ void EditorSurface::openViewportContextMenu(const glm::vec2& windowPoint)
     _viewportContextMenu = menu;
     menu->_onDismiss = [this]() { _viewportContextMenu.reset(); };
     menu->openAt(*_tree, windowPoint);
-}
-
-void EditorSurface::syncShellDialogs()
-{
-    if (!_tree) {
-        return;
-    }
-    if (_filePicker) {
-        _filePicker->sync(*_tree);
-    }
-    if (_settings) {
-        _settings->sync(*_tree);
-    }
 }
 
 void EditorSurface::refreshProjectBrowserRows()

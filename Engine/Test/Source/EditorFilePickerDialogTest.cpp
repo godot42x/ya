@@ -71,7 +71,7 @@ TEST(EditorFilePickerDialogTest, PickModeConfirmsSelectedFile)
     dialog.open(tree, request);
     ASSERT_TRUE(dialog.isOpen());
     dialog.selectPath(mount / "albedo.png");
-    dialog.sync(tree);
+    tree.tick(1.0f / 60.0f);
     EXPECT_TRUE(dialog.confirm());
     EXPECT_EQ(std::filesystem::path(picked).filename(), "albedo.png");
     EXPECT_FALSE(dialog.isOpen());
@@ -95,7 +95,7 @@ TEST(EditorFilePickerDialogTest, SaveAsModeComposesDirectoryAndName)
     dialog.open(tree, std::move(request));
     dialog.selectPath(mount);
     dialog.setSaveAsName("Castle");
-    dialog.sync(tree);
+    tree.tick(1.0f / 60.0f);
     EXPECT_TRUE(dialog.confirm());
     EXPECT_EQ(std::filesystem::path(picked).filename(), "Castle.scene.json");
     EXPECT_EQ(std::filesystem::path(picked).parent_path(), mount);

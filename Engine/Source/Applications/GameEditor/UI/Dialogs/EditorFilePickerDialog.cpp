@@ -12,6 +12,7 @@
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Widgets/UIBehavior.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameEditor/UI/Shell/EditorListRows.h"
 
@@ -146,6 +147,16 @@ void EditorFilePickerDialog::open(WidgetTree& tree, FEditorFilePickerRequest req
 
     _fingerprint.clear();
     _bRowsDirty = true;
+    // Refresh from the tree's own tick, not from the shell: an open dialog is
+    // visible, so the subtree walk reaches it and the shell only has to open and
+    // close it. Nothing outside this file needs to know it has per-frame work.
+    auto tick = std::make_shared<UITickBehavior>();
+    tick->onTick = [this](UIElement& owner, float) {
+        if (WidgetTree* ownerTree = owner.getTree()) {
+            sync(*ownerTree);
+        }
+    };
+    _overlay->addBehavior(std::move(tick));
     _overlay->open(tree);
     if (_nameField) {
         tree.setFocus(_nameField.get());

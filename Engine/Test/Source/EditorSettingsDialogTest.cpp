@@ -87,12 +87,12 @@ TEST(EditorSettingsDialogTest, SyncEnablesApplyWhenDraftIsDirty)
     EditorSettingsDialog dialog;
     dialog.open(tree, bindings);
     ASSERT_TRUE(dialog.isOpen());
-    dialog.sync(tree);
+    tree.tick(1.0f / 60.0f);
     EXPECT_FALSE(dialog.isApplyEnabled());
 
     path = "Castle.scene.json";
     dirty = true;
-    dialog.sync(tree);
+    tree.tick(1.0f / 60.0f);
     EXPECT_TRUE(dialog.isApplyEnabled());
 }
 
@@ -147,7 +147,7 @@ TEST(EditorSettingsDialogTest, FontFacePickReportsCatalogIdNotIndex)
     EditorSettingsDialog dialog;
     dialog.open(tree, bindings);
     ASSERT_TRUE(dialog.isOpen());
-    dialog.sync(tree);
+    tree.tick(1.0f / 60.0f);
 
     UIElement* root = tree.getRoot();
     ASSERT_NE(root, nullptr);
@@ -181,7 +181,7 @@ TEST(EditorSettingsDialogTest, MissingFontOptionsStillOpensTheDialog)
     EditorSettingsDialog dialog;
     dialog.open(tree, requiredBindings(sampler, overlay, path, dirty, exists));
     ASSERT_TRUE(dialog.isOpen());
-    dialog.sync(tree);
+    tree.tick(1.0f / 60.0f);
 
     UIElement* root = tree.getRoot();
     ASSERT_NE(root, nullptr);

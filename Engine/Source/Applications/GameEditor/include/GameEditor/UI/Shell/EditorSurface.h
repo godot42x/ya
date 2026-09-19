@@ -165,7 +165,6 @@ struct EditorSurface : IEditorViewportHostSink
     void rebuild(const FEditorSurfaceContext& context);
     void buildProjectBrowser(App& app);
     void buildEditorChrome(const FEditorSurfaceContext& context);
-    void syncShellDialogs();
     void pushViewportDisplay();
     void refreshProjectBrowserRows();
     void publishViewportRect();

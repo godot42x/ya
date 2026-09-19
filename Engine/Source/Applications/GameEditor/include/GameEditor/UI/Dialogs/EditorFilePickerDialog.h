@@ -20,12 +20,14 @@ struct UITextField;
 struct WidgetTree;
 
 /// Retained file/directory/save-as dialog. EditorSurface hosts it but does not
-/// own the overlay, explorer, or keyed mount/entry rows.
+/// own the overlay, explorer, or keyed mount/entry rows: it opens and closes
+/// this dialog and nothing more. The per-frame refresh is this dialog's own,
+/// driven by the tree's tick while it is open, so there is no public "sync me"
+/// for a shell to call.
 class EditorFilePickerDialog
 {
   public:
     void open(WidgetTree& tree, FEditorFilePickerRequest request);
-    void sync(WidgetTree& tree);
     void close();
     void reset();
 
@@ -35,6 +37,10 @@ class EditorFilePickerDialog
     bool confirm();
 
   private:
+    /// Rebuild the visible rows/status for the current explorer state. Called
+    /// from this dialog's own tree-tick, never by a shell.
+    void sync(WidgetTree& tree);
+
     FEditorFilePickerRequest _request;
     std::shared_ptr<FileExplorer> _explorer;
     std::shared_ptr<UIPopupOverlay> _overlay;

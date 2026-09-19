@@ -51,6 +51,35 @@ tick 里手写把状态推给各个子 UI。
 
 ### C4：`EditorSurface::tick` 从 push 改成子 UI 自己读
 
+**C4a 已落地 2026-09-19（对话框自持刷新）**：`syncShellDialogs()` 从 `tick` 里消失，
+`EditorSurface` 不再每帧推对话框。做法是补上框架缺的那件小事：新增 `UITickBehavior`
+（`UIBehavior` 子类，带一个 `std::function<void(UIElement&, float)>`），两个对话框在 `open()` 时把它
+挂到自己的 overlay 上，刷新由 `WidgetTree` 的子树 tick 驱动。
+
+关键收尾：**`EditorFilePickerDialog::sync` / `EditorSettingsDialog::sync` 改为 private**。这是本刀
+真正的验收——契约不能只是"现在没人调"，而是"别人调不到"。在此之前两个 `sync` 是公开的，等于公开邀请
+shell 回来推；改完之后 shell 想推也没有入口。
+
+**为什么 tick 驱动的刷新是安全的**：对话框只有在打开时才存在，打开即成树、即可见，
+`WidgetTree::tickSubtree` 只在 `isVisibleInTree()` 时 skips —— 对一个"打开就可见"的 modal 来说
+不存在"已打开但跳过 tick"的窗口。（这条推理只对对话框成立，对**会被折叠的 dock tab 不成立**，
+见下面 C4b 的注意事项。）
+
+**验证口径的加强**：原来的对话框测试直接调 `dialog.sync(tree)`，所以**即使接线断了也会通过**——
+这正是不值得信任的那类测试。现在改成 `tree.tick(dt)`，测试走的是产品路径。其中
+`EditorSettingsDialogTest` 里"改绑定 → tick → `isApplyEnabled()` 翻转"是真实守卫：
+`_applyButton->setEnabled(dirty)` 只在 `sync()` 里写过（这一刀之前也一样），所以接线断了第二次断言必挂。
+
+验证：`ya-gui-widgets` / `ya-game-editor` / `ya-testing` build ok；对话框用例 8/8；渲染/编辑器+GUI
+滤镜 547 passed / 3 failed（与基线同 3 个 pre-existing）；两张 smoke 截图逐字节相同；编辑器 smoke 六步全过。
+
+**C4b–C4d 未做**（原样保留在下面），并新增一条本刀查到的约束：
+
+> `WidgetTree::tickSubtree` 对不可见子树直接 return。所以"把 viewport tab 的显示图从 push 改成
+> 它自己 tick 时拉取"会引入一个真实差异：viewport tab 在被同 leaf 的其它 tab 顶掉时会变成不可见而
+> **停止拉取**，而今天的 push 不管可见性每帧都更新纹理。切回来的那一帧需要"先变可见、再 tick、
+> 再 buildSnapshot"的顺序真的成立才不出旧帧。改 C4b 前必须先把这条时序验证清楚，不能靠推理。
+
 现状（`EditorSurface.cpp` 1322 行 / 36 个成员函数）：`tick` 是"Dock 模型 / 度量 → 一串 push →
 buildSnapshot"的混排：
 
