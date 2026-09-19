@@ -68,18 +68,12 @@ void RenderDeviceState::prepareDerivedState(Scene* scene, float dt)
 
 void RenderDeviceState::prepareComposePipelines()
 {
+    // The runtime's own UI compose only: the packet that goes onto the display
+    // RT after the world graph. The editor's compose kinds (its viewport image
+    // and canvas preview) are the editor's pipelines -- it records them onto
+    // its own targets and prepares them itself, earlier in the same tick -- so
+    // the renderer must not know they exist.
     if (auto* pipeline = getActivePipeline()) {
-        prepareRender2DComposePassPipeline(
-            FRender2DComposePassDesc{
-                .kind = ERender2DComposePassKind::EditorViewportCompose,
-            },
-            kEditorViewportComposeColorFormat,
-            pipeline->getViewportDepthFormat());
-        prepareRender2DComposePassPipeline(
-            FRender2DComposePassDesc{
-                .kind = ERender2DComposePassKind::EditorCanvasPreview,
-            },
-            kEditorViewportComposeColorFormat);
         prepareRender2DComposePassPipeline(
             FRender2DComposePassDesc{
                 .kind = ERender2DComposePassKind::RuntimeUIComposite,

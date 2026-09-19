@@ -1,5 +1,47 @@
 # Progress
 
+## 2026-09-20 checkpoint：S2c-1 渲染器不再了解编辑器
+
+### 唯一目标
+
+`rg 'Editor[A-Z]' Framework/Render/Render3D` 归零。
+
+### 根因
+
+`RenderDeviceState::prepareComposePipelines()`（渲染器，Framework 层）准备了
+`EditorViewportCompose` 和 `EditorCanvasPreview` 两个 pipeline。全仓扫 `rg 'Editor[A-Z]'
+Framework/Render/Render3D`，这两处就是**唯一**的 editor 知识。而这两个 kind 的记录方是编辑器，
+它已经在同一帧更早的 `onLogic`（`updateEditorCameraAndPrepareCompose`）里 prepare 过同样的
+kind + 同样的格式（depth 也来自同一个 `activePipeline->getViewportDepthFormat()`）。
+`preparePassPipeline` 对相同 slot + colorFormat + depthFormat 是缓存早退，所以这是冗余调用。
+运行时没有编辑器时，这两个 kind 没人记录，prepare 是纯浪费。
+
+### 改动
+
+删除那两处 prep，只留 `RuntimeUIComposite`（运行时自己的 UI packet，记录方是渲染器的
+view compose 阶段，不属于编辑器），并在函数头写明"为什么编辑器的 kind 不在这里"。
+
+**没删的**：`prepareComposePipelines()` 本身与 `RuntimeUIComposite`。查过 `ViewCompose.cpp`：
+`recordCameraViewCompose` 的守卫是 `cameraDisplayRT && (uiFrameSnapshot || bHasInsets)`，
+即**只画 inset、没有 UI packet** 也会录这个 kind；而 `prepareFrameRecord` 里那处守卫
+`if (plan.frame.uiFrameSnapshot)` 只覆盖有 UI snapshot 的情况。删掉这里会让 insets-only
+的 compose 拿到未准备好的 pipeline。
+
+### 验证
+
+- `rg 'Editor[A-Z]' Framework/Render/Render3D` 只剩 `RenderFeatures.h` 里 `Gizmo = ... ///< Editor
+  companion visuals` 一条注释——那是声明方设置的 feature 位，渲染器不知道"编辑器"。
+- `ya-render-3d` / `ya-testing` / `ya-game-editor` / `ya-runtime` / `ya-engine` / `GUIWorkbench`
+  build ok；`ya-render-3d-test` **175/175**。
+- runtime smoke `c775245a` 逐字节不变。
+- editor smoke 是 `451fe3cd`；把本刀改动 `git stash` 后重跑**同样是 `451fe3cd`**——
+  是并发作者的 dock 改动 / `editor.dockLayout` 持久化状态在漂移，不是本刀。
+
+### 保留 / 未完成
+
+- **保留**：`ya-render-3d -> ya-gui-compose` 这条 target 边（理由见 `plan.md` S2c 的复查结论）。
+- **未完成**：Scene 侧（`ya-scene-core -> ya-gui-widgets`），见下一节。
+
 ## 2026-09-19 checkpoint：S2b `ya-gui-framework` 只聚合 GUI 库
 
 ### 唯一目标
