@@ -234,7 +234,7 @@ M1–M8 消除的是同名异义；这一节处理**同一事实存了两份**�
 | `AppRenderState::bCameraPreviewHostOwned` + `cameraPreviewEntityUUID` | 预览视图用哪个相机 | 声明方决定 | **已删（4d-2）**：`EditorViewProducer` 按 `EditorLayer::getCameraPreviewEntity()`（用户选中项）声明预览 inset，view id 由编辑器自持；`resolvePreviewCamera` 删除，FOV 线框改由编辑器 world overlay pass 绘制 |
 | `AppRenderServices::setViewportRect` / `getViewportRect` | 作者视口的离屏 rect | producer 自己填 `SceneViewDesc` | **已删（4d-3b）**：编辑器不再写它，作者视口的 rect 由 `EditorLayer::getViewportRect()` 直接进声明；这套访问器只剩宿主几何（automation 的 `viewportResize` 只改游戏视口）与 `get_world_view_state` 读数 |
 | `AppRenderState::bShowEditorGizmos`（`App::set/isEditorGizmoShown`） | 编辑器视口这 tick 要不画 gizmo | 声明方按 view 声明 | **已删（4d-3a）**：开关是编辑器的 view option（`EditorLayer`），`EditorViewProducer` 读它声明 feature，`EditorSurface` 菜单写它；automation 的 `set_editor_gizmos_visible` 经 `IEditorAutomationControl` 打到编辑器（无编辑器即失败）；游戏视口只声明 `Game`，不再受这个开关影响 |
-| `kPrimarySceneViewId = 1` / `kHostOverlayPreviewViewId = 2` | view 的持久身份 | owner-scoped `SceneViewKey{ownerId, localId}` | 现在 view 1 同时是两个产品（编辑器作者视口 / 独立游戏视口）的身份，view 2 由 host 铸造。改为 producer 注册时铸键，作为 `ViewHistoryStore` 与跨 Surface 复用的稳定键 |
+| ~~`kPrimarySceneViewId = 1` / `kHostOverlayPreviewViewId = 2`~~ | view 的持久身份 | **已迁（2026-09-19）**：owner-scoped `SceneViewKey{owner, local}`，owner 由 producer 自命名（`viewOwner()`），扁平 `viewId = owner << 32 | local` | view 1 曾经同时是两个产品（编辑器作者视口 / 独立游戏视口）的身份，view 2 由 host 铸造。已迁完；**偏离**：不是「注册时铸键」而是 producer 自命名——注册顺序派的 id 会在别人插入 producer 时漂移，与「稳定键」目标冲突 |
 | `CameraFrameInput` 的 `flightIndex` / `frameIndex` / `deltaTime` | 帧作用域 | `FrameContext` | 与 M3 的 `CameraFrameInput` 删除同批；`flightIndex` 另见 M4 |
 | `CameraFrameInput` 的 `view` / `projection` / `viewportRect` / `viewFeatures` | view 作用域 | `SceneViewDesc` → `PreparedView` | 与 M3 同批 |
 

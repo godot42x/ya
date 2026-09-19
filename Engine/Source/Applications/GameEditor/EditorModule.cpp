@@ -562,13 +562,15 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
 
     /// The preview View's image as chrome can sample it: wrapped for the GUI and
     /// moved to a readable layout. Null when the tick recorded no preview View.
-    static std::shared_ptr<Texture> previewImageForChrome(App& app, ICommandBuffer& commandBuffer)
+    std::shared_ptr<Texture> previewImageForChrome(App& app, ICommandBuffer& commandBuffer)
     {
         auto* device = app.getRenderServices().getDeviceState();
         if (!device) {
             return nullptr;
         }
-        const RenderViewOutput* output = device->getViewOutput(EditorViewProducer::kPreviewViewId);
+        // The preview's identity belongs to this producer, not to a global slot:
+        // ask the producer that declares it which View to read.
+        const RenderViewOutput* output = device->getViewOutput(_viewProducer.previewKey().viewId());
         if (!output) {
             return nullptr;
         }

@@ -41,7 +41,10 @@ TEST(RuntimeGameViewProducerTest, GameViewportDeclaresAuthoredContentOnly)
     ASSERT_EQ(collector.views().size(), 1u);
     const SceneViewDesc& primary = collector.views().front();
     EXPECT_EQ(primary.scene, &scene);
-    EXPECT_EQ(primary.viewId, kPrimarySceneViewId);
+    // The game owns its own View identity; it does not share the editor's
+    // "primary" slot. The key is what the output tables are keyed on.
+    EXPECT_EQ(primary.viewId, producer.hostViewportKey().viewId());
+    EXPECT_NE(primary.viewId, 0u);
     // Generated companions are editor furniture; this viewport belongs to the
     // game, and nothing an editor switched on reaches it.
     EXPECT_TRUE(rendersFeature(toMask(ERenderFeature::Game), primary.features));

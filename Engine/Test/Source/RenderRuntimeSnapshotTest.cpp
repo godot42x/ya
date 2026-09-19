@@ -17,6 +17,14 @@ namespace ya
 namespace
 {
 
+/// This test's own View owner. These cases declare Views straight into the
+/// scheduler instead of going through a producer, so the test names its own
+/// owner rather than borrowing a product's identity. The point of owner-scoped
+/// keys is exactly that two owners never share an id space.
+constexpr SceneViewOwnerId kTestOwner   = 0x7E57;
+constexpr SceneViewKey     kDisplayView = SceneViewKey{.owner = kTestOwner, .local = 1};
+constexpr SceneViewKey     kOverlayView = SceneViewKey{.owner = kTestOwner, .local = 2};
+
 /// A declaration the scheduler may accept: an owned Scene, a view id, and a
 /// View rect that describes at least one pixel, because a View's textures are
 /// sized from its rect.
@@ -429,11 +437,11 @@ TEST(RenderRuntimeSnapshotTest, HostFrameDataFollowsTheDisplayRootNotThePairingS
     // the host camera packet must not read slot 0.
     SceneViewDesc overlay;
     overlay.scene             = &scene;
-    overlay.viewId            = 2;
+    overlay.viewId            = kOverlayView.viewId();
     overlay.viewportRect      = {.pos = {0.0f, 0.0f}, .extent = {320.0f, 180.0f}};
-    overlay.composeOntoViewId = kPrimarySceneViewId;
+    overlay.composeOntoViewId = kDisplayView.viewId();
     ASSERT_TRUE(scheduler.submit(overlay));
-    ASSERT_TRUE(scheduler.submit(makeView(&scene, kPrimarySceneViewId)));
+    ASSERT_TRUE(scheduler.submit(makeView(&scene, kDisplayView.viewId())));
 
     ExtractedSceneRender   extracted = sealWithEmptySnapshots(scheduler);
     const SceneRenderPlan& plan      = extracted.plan();
@@ -457,9 +465,9 @@ TEST(RenderRuntimeSnapshotTest, TickThatDeclaresNoDisplayRootHasNoHostFrameData)
     // display root, no host frame data, and no substitute View to fall back to.
     SceneViewDesc overlay;
     overlay.scene             = &scene;
-    overlay.viewId            = 2;
+    overlay.viewId            = kOverlayView.viewId();
     overlay.viewportRect      = {.pos = {0.0f, 0.0f}, .extent = {320.0f, 180.0f}};
-    overlay.composeOntoViewId = kPrimarySceneViewId;
+    overlay.composeOntoViewId = kDisplayView.viewId();
     ASSERT_TRUE(scheduler.submit(overlay));
 
     ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
@@ -589,15 +597,15 @@ TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
 
     SceneViewDesc primary;
     primary.scene = &scene;
-    primary.viewId = kPrimarySceneViewId;
+    primary.viewId = kDisplayView.viewId();
     primary.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
 
     const Rect2D composeRect = makeViewDisplayInsetRect({1280.0f, 720.0f});
     SceneViewDesc overlay;
     overlay.scene = &scene;
-    overlay.viewId = 2;
+    overlay.viewId = kOverlayView.viewId();
     overlay.viewportRect = {.pos = {0.0f, 0.0f}, .extent = composeRect.extent};
-    overlay.composeOntoViewId = kPrimarySceneViewId;
+    overlay.composeOntoViewId = kDisplayView.viewId();
     overlay.composeRect = composeRect;
 
     ASSERT_TRUE(scheduler.submit(primary));
@@ -618,7 +626,9 @@ TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
 
     const auto insets = viewDisplayInsetsFromPlan(plan);
     ASSERT_EQ(insets.size(), 1u);
-    EXPECT_EQ(insets.front().viewId, 2u);
+    // The derived inset names the overlay View it composes onto the display
+    // root -- whichever key that View was declared with, not a literal.
+    EXPECT_EQ(insets.front().viewId, kOverlayView.viewId());
     EXPECT_FLOAT_EQ(insets.front().destRect.pos.x, composeRect.pos.x);
     EXPECT_FLOAT_EQ(insets.front().destRect.pos.y, composeRect.pos.y);
 

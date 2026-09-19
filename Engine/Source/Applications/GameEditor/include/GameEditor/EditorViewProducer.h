@@ -22,9 +22,16 @@ struct EditorLayer;
 class EditorViewProducer final : public ISceneViewProducer
 {
   public:
-    /// View identity of the editor's camera preview. Editor-owned: the host does
-    /// not mint ids for views it does not show.
-    static constexpr SceneViewId kPreviewViewId = 2;
+    /// The editor's owner id, and the local ids it mints inside it. The editor
+    /// names its own owner, so its authoring viewport and the game's world
+    /// viewport can both be "the primary View" without colliding -- which is the
+    /// point of owner-scoped identity. Values name a product, not a registration
+    /// slot; `App::addSceneViewProducer` asserts registered owners stay distinct.
+    static constexpr SceneViewOwnerId kViewOwner        = 2;
+    /// The editor's authoring viewport.
+    static constexpr uint32_t         kAuthoringLocalId = 1;
+    /// The selected camera's preview inset.
+    static constexpr uint32_t         kPreviewLocalId   = 2;
 
     /// Where the preview sits inside the authoring viewport, in viewport pixels.
     /// The preview View renders at this size and the editor's viewport chrome
@@ -36,6 +43,10 @@ class EditorViewProducer final : public ISceneViewProducer
         _app   = &app;
         _layer = &layer;
     }
+
+    [[nodiscard]] SceneViewOwnerId viewOwner() const override { return kViewOwner; }
+    [[nodiscard]] SceneViewKey     authoringKey() const { return viewKey(kAuthoringLocalId); }
+    [[nodiscard]] SceneViewKey     previewKey() const { return viewKey(kPreviewLocalId); }
 
     void collectSceneViews(const SceneViewCollectContext& context,
                            SceneViewCollector&            collector) override;

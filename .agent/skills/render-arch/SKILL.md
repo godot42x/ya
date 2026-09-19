@@ -47,10 +47,16 @@ description: YA Engine 渲染架构、Renderer 边界与 shader 生成链路。
     与 `c2_present_compose_model.md`；R2 ownership 收口见
     `./.agent/plan/render-view-family/plan.md` 4.0.3。
 12. 宿主视口是哪个 View 只有一个判据：`SceneViewDesc::ownsHostViewport()`
-    （`composeOntoViewId == 0`，结构属性）。`kPrimarySceneViewId` 不是“主 View”的
-    别名，它只是**相机预览 inset 这类离屏 View compose 的目标槽位**；按 id 去找宿主
-    View 会造出第二个定义，并让一个 `viewId=7` 的声明在 plan 里成为 display root 却
-    不是宿主相机的来源。`SceneRenderPlan::displayRootTask()` 在没人 owns 时返回 null，
+    （`composeOntoViewId == 0`，结构属性）。按 id 去找宿主 View 会造出第二个定义，
+    并让一个 `viewId=7` 的声明在 plan 里成为 display root 却不是宿主相机的来源。
+    **View 身份是 owner-scoped 的**：`SceneViewKey{owner, local}`，owner 由 producer
+    自己命名（`ISceneViewProducer::viewOwner()`），local 是它自己的编号；交给输出表
+    的扁平 `viewId` 由 key 派生（`owner << 32 | local`），未命名的 owner 或 0 local
+    读作 0＝“没有 View”。所以游戏的世界视口与编辑器的作者视口可以各自都是 primary
+    而不撞号——全局小整数时代它们只能轮流占 1，"这是哪个 View" 只能去读声明方。
+    不要退回全局 id 常量，也不要按 registration 顺序发 owner：那样 key 会随别人插入
+    一个 producer 而漂移，`ViewHistoryStore` 这类跨帧历史的键就不稳定了。
+    `SceneRenderPlan::displayRootTask()` 在没人 owns 时返回 null，
     这是正常答案（该 tick 不往宿主视口显示任何东西）；`ExtractedSceneRender::
     hostFrameData()` 同理返回 null，绝不回落到“配对 slot 0”——配对顺序是声明顺序，
     与谁是宿主 View 无关。

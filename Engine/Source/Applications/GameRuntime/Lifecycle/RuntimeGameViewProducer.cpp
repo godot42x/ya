@@ -19,7 +19,7 @@ void RuntimeGameViewProducer::collectSceneViews(const SceneViewCollectContext& c
 
     SceneViewDesc primary{
         .scene        = context.activeScene,
-        .viewId       = kPrimarySceneViewId,
+        .viewId       = hostViewportKey().viewId(),
         // Fills the host viewport, so its offscreen rect is the host's render
         // resolution. The window is not consulted: how this image is presented is
         // the presentation pass's business.

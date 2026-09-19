@@ -129,7 +129,7 @@
 - [x] 4.0.3 4d-3a：删 `bShowEditorGizmos` 格子（开关归 `EditorLayer`，声明方读它而不是 App）；automation 的 `set_editor_gizmos_visible` 经 `IEditorAutomationControl` 打到编辑器；游戏视口不再受编辑器开关影响。
 - [x] 4.0.3 4d-3b：作者视口 rect 由声明方给出（编辑器不再写 `setViewportRect`，pending-resize 同步与 `onViewportResized` 删除）；device extent 跟随主 view 声明；automation 的 resize 只改宿主视图几何。
 - [x] 4.0.3 4d-3 收口：一条 View 声明必须描述整像素——`Rect2D` 成员默认初始化（关闭未初始化几何这一类坑）；`EditorLayer::describesPixels()` 要求有限且至少一像素，未布局/折叠面板回落默认尺寸；`SceneRenderScheduler::submit()` 拒绝非有限或截断为 0×0 的声明。修复 4d-3b 引入的编辑器首帧 exit 255 崩溃。
-- [ ] 4.0.3 checkpoint 5：view 身份改 owner-scoped `SceneViewKey`，并按此建立 `ViewHistoryStore` 稳定键（排在 4d 之后）。
+- [x] 4.0.3 checkpoint 5：view 身份改 owner-scoped `SceneViewKey`（2026-09-19）。`SceneViewKey{owner, local}` + `SceneViewOwnerId`；owner 由 producer 自己命名（`ISceneViewProducer::viewOwner()`，纯虚），local 是它自己的编号；扁平 `viewId` 由 key 派生（`owner << 32 | local`，未命名 owner/0 local → 0）。删除全局 `kPrimarySceneViewId` 与 `EditorViewProducer::kPreviewViewId`：`RuntimeGameViewProducer::hostViewportKey()`（owner 1）与 `EditorViewProducer::authoringKey()`（owner 2）/ `previewKey()` 各自成键，预览的 `composeOntoViewId` 指向**同一 owner** 的作者视口而不是全局槽位。`App::addSceneViewProducer` 断言 owner 非 0 且注册集合内不重复。**未做**：`ViewHistoryStore` 本身（本条只提供它的稳定键前提）、公开 `Renderer` 合并。**选项说明**：owner 用 producer 自命名而非注册时分配（计划原文写“注册时铸键”）——注册顺序派的 id 会在别人插入 producer 时漂移，而本条要的正是稳定键；该偏离已记入 progress。
 
 ## R3
 

@@ -79,7 +79,7 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
         const FreeCamera& editorCamera = _layer->getCamera();
         collector.declare(SceneViewDesc{
             .scene        = context.activeScene,
-            .viewId       = kPrimarySceneViewId,
+            .viewId       = authoringKey().viewId(),
             .view         = editorCamera.getViewMatrix(),
             .projection   = editorCamera.getProjectionMatrix(),
             .cameraPos    = editorCamera.getPosition(),
@@ -110,12 +110,15 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
     };
     collector.declare(SceneViewDesc{
         .scene             = context.activeScene,
-        .viewId            = kPreviewViewId,
+        .viewId            = previewKey().viewId(),
         .view              = cameraComponent->getFreeView(),
         .projection        = cameraProjectionForOutput(*cameraComponent, previewOutput.extent),
         .cameraPos         = transformComponent->getWorldPosition(),
         .viewportRect      = previewOutput,
-        .composeOntoViewId = kPrimarySceneViewId,
+        // The preview composes onto the authoring viewport of the *same* owner:
+        // the key names that owner rather than a global "primary" id, so a
+        // preview can only ever land on a View this producer declared.
+        .composeOntoViewId = authoringKey().viewId(),
         // No inset rect: the runtime must not blit this View onto the world
         // render target. The preview is viewport chrome, and chrome is composed
         // by the GUI after the world image, so the world overlays (grid,

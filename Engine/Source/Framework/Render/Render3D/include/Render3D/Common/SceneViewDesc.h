@@ -15,9 +15,39 @@ struct Scene;
 
 using SceneViewId = uint64_t;
 
-/// Stable persistent-key slot for the host WorldView. Overlay Views use other
-/// host-assigned ids; they must not resize this View's output identity.
-inline constexpr SceneViewId kPrimarySceneViewId = 1;
+/// Owner half of a View's identity. An opaque id a producer names for itself;
+/// the framework does not enumerate the products that own Views.
+using SceneViewOwnerId = uint32_t;
+
+/// A View's identity, scoped to whoever owns it.
+///
+/// This used to be a global small integer: `kPrimarySceneViewId = 1` was the
+/// persistent identity of *both* products' host viewport -- the standalone game
+/// view and the editor's authoring view -- and the camera preview was minted at
+/// 2 inside the editor. Two owners sharing one id space means neither can have
+/// its own "primary", and "which View is this" could only be answered by going
+/// and reading the declarer.
+///
+/// A key is (owner, local): the producer names its owner and mints local ids
+/// inside it. The flat id the output tables key on is derived from the key --
+/// those tables never needed a compound key, the *source* of identity did.
+struct SceneViewKey
+{
+    SceneViewOwnerId owner = 0;
+    uint32_t         local = 0;
+
+    /// A key is an identity only when both halves are set. An unnamed owner or
+    /// a 0 local is not "the View at 0"; it is absent, and `viewId()` reports it
+    /// as the same 0 the output tables already read as "no View".
+    [[nodiscard]] constexpr bool valid() const { return owner != 0 && local != 0; }
+
+    [[nodiscard]] constexpr SceneViewId viewId() const
+    {
+        return valid() ? (static_cast<SceneViewId>(owner) << 32) | static_cast<SceneViewId>(local) : 0;
+    }
+
+    friend constexpr bool operator==(const SceneViewKey&, const SceneViewKey&) = default;
+};
 
 [[nodiscard]] inline glm::mat4 makeCameraViewProjection(const glm::mat4& projection, const glm::mat4& view)
 {

@@ -52,6 +52,21 @@ class ISceneViewProducer
   public:
     virtual ~ISceneViewProducer() = default;
 
+    /// Who owns the Views this producer declares. The producer names itself
+    /// rather than being handed an id at registration: the owner is a property
+    /// of who is showing the View, and an id derived from registration order
+    /// would stop being a stable key the moment somebody registered a producer
+    /// earlier in the list. `App::addSceneViewProducer` asserts the registered
+    /// owners stay distinct.
+    [[nodiscard]] virtual SceneViewOwnerId viewOwner() const = 0;
+
+    /// This producer's key for one of its Views. Local ids are the producer's
+    /// own business; they only have to be stable for as long as the View is.
+    [[nodiscard]] SceneViewKey viewKey(uint32_t local) const
+    {
+        return SceneViewKey{.owner = viewOwner(), .local = local};
+    }
+
     virtual void collectSceneViews(const SceneViewCollectContext& context,
                                    SceneViewCollector&            collector) = 0;
 };

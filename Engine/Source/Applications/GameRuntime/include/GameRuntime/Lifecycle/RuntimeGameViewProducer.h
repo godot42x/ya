@@ -16,7 +16,20 @@ struct App;
 class YA_GAME_RUNTIME_API RuntimeGameViewProducer final : public ISceneViewProducer
 {
   public:
+    /// The game's owner id. Values name a product, not a registration slot: a
+    /// key that shifted because somebody registered a producer earlier would not
+    /// be a stable key. `App::addSceneViewProducer` asserts registered owners
+    /// stay distinct.
+    static constexpr SceneViewOwnerId kViewOwner = 1;
+    /// The game's world viewport inside that owner. The editor's authoring
+    /// viewport is a different owner declaring its own primary View, so neither
+    /// has to know the other exists.
+    static constexpr uint32_t         kHostViewportLocalId = 1;
+
     void bind(App& app) { _app = &app; }
+
+    [[nodiscard]] SceneViewOwnerId viewOwner() const override { return kViewOwner; }
+    [[nodiscard]] SceneViewKey     hostViewportKey() const { return viewKey(kHostViewportLocalId); }
 
     void collectSceneViews(const SceneViewCollectContext& context,
                            SceneViewCollector&            collector) override;

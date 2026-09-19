@@ -1,5 +1,77 @@
 # Progress
 
+## 2026-09-19 checkpoint：4.0.3 checkpoint 5 view 身份 owner-scoped
+
+### 唯一目标
+
+`kPrimarySceneViewId = 1` 同时是两个产品的持久身份（独立游戏的世界视口 / 编辑器的作者视口），
+`kPreviewViewId = 2` 由编辑器在自己那套空间里铸。一个 id 空间被两个 owner 共享，结果是：
+**谁都不是自己的 "primary"，而且"这是哪个 View"只能去读声明方**。改成 owner-scoped key。
+
+### 改动
+
+`Render3D/Common/SceneViewDesc.h`：新增 `SceneViewOwnerId` 与
+`SceneViewKey{owner, local}`，`viewId()` 派生输出表用的扁平 id（`owner << 32 | local`）。
+**未命名的 owner 或 0 local 不是"0 号 View"，而是缺席**——读作 0，正是输出表已经理解的
+"没有 View"。删除 `kPrimarySceneViewId`。
+
+`Render3D/Common/SceneViewProducer.h`：`ISceneViewProducer` 增加**纯虚** `viewOwner()`
+与 `viewKey(local)`。纯虚是刻意的：漏实现是编译错误，而不是静默拿到 owner 0。
+
+两个 producer 各自命名 owner 并给出具名键：
+
+| producer | owner | 键 |
+| --- | --- | --- |
+| `RuntimeGameViewProducer` | 1 | `hostViewportKey()` = local 1（游戏世界视口） |
+| `EditorViewProducer` | 2 | `authoringKey()` = local 1（作者视口）、`previewKey()` = local 2（预览 inset） |
+
+预览的 `composeOntoViewId` 现在指向**同一 owner** 的作者视口，而不是一个全局"主槽位"——
+一个 owner 的 inset 在构造上只能压到它自己声明的 View 上。
+
+`App::addSceneViewProducer`：断言 owner 非 0，且注册集合内没有别的 producer 用同一个 owner。
+这是唯一能看到全部 producer 的地方，而 key 撞号的后果（输出表按扁平 id 取图）要到很晚才显形。
+
+`EditorModule`：`previewImageForChrome` 从 static 改成成员，读
+`_viewProducer.previewKey().viewId()` 而不是全局常量。
+
+### 与计划原文的一处偏离（记录，不藏）
+
+原文写的是"producer **注册时**铸 `SceneViewKey{ownerId, localId}`"。实现改成 **producer 自己命名
+owner**（`viewOwner()`），理由是本条要的东西是**稳定键**：由注册顺序派生的 owner 会在任何人往
+列表前面插一个 producer 时整体漂移，而 `ViewHistoryStore`（TAA/exposure）正是按这个键做跨帧历史。
+自命名让 owner 成为"谁在显示这个 View"的属性（游戏 / 编辑器），而不是运行时的一个槽位号。
+唯一性由注册处断言保证，不靠约定。
+
+### 验证
+
+1. 新增 `EditorViewProducerTest.EditorAndGameViewportsAreDistinctIdentities`：编辑器作者视口、
+   预览、游戏视口三个 id 两两不等且都非 0；两个编辑器 View 共享 owner 而游戏 owner 不同；
+   `owner=0` / `local=0` 的 key 判为 invalid 且 `viewId()==0`。
+2. **这次改动静默地推翻了一个过时断言**：
+   `RenderRuntimeSnapshotTest.OverlayComposeRectDoesNotBecomeOutputExtent` 原本断言派生出来的
+   inset `viewId == 2u`——把"overlay 的 id"写成了字面量。改成 `kOverlayView.viewId()`。
+   这条恰好是本次要修的病：view 身份以魔法数字的形式漏进了测试。
+3. `ya-render-3d-test` **175/175**（先出现该 1 例失败，修断言后恢复）。
+4. `EditorViewProducerTest.*` + `RuntimeGameViewProducerTest.*` 12/12。
+5. 渲染/编辑器滤镜 **567 passed / 4 failed**；把本轮改动 `git stash` 后**同样这 4 条失败**
+   （`EditorPropertyGraphTest` 两例 + `GameUIHostTest.BuildSnapshotComposesMountedWidgets` 属基线，
+   `WidgetLayoutTest.FloatingWindowResizeHandlesLiveOnOverlaySlots` 属并发作者的 dock 改动）——
+   本刀零回归。
+6. 8 个目标 build ok：`ya-game-editor` / `ya-testing` / `ya-game-runtime` / `ya-engine` /
+   `ya-runtime` / `GUIWorkbench` / `ya-render-3d-test` / `ya-gui-closure-test`。
+7. 两张 smoke 截图逐字节不变：runtime `c775245a`、editor `174c44cb`——owner 换了 id 空间
+   但**渲染结果一个像素没动**，说明这只是身份来源的改变。
+
+### 保留 / 未完成
+
+- **未做**：`ViewHistoryStore` 本身。本条只交出它的稳定键前提（计划把两者写在一起，
+  但先建一个没有消费者的 store 就是制造死代码，见 skill 规则 15）。
+- **未做**：`PreparedView` 收口（删 `CameraFrameInput` patch 与 `SceneViewRecording` /
+  `RenderViewRecordingContext` 的重复层）——那是 P3 命名批次。
+- **待补的文档**：`skills/gui-framework/SKILL.md` 有两处引用 `kPreviewViewId`（原为 2）；
+  该文件当时被另一条线的 dock 改动占着，不并入本提交以免卷进别人的在飞改动。
+- `skills/render-arch/SKILL.md` 规则 12 已随本提交更新（该文件当时是干净的）。
+
 ## 2026-09-19 checkpoint：窗口是呈现面，渲染分辨率是设置（B 方案）
 
 接上一刀（`HostViewState` 每个字段一个写者）暴露出来的问题：`viewportRect` 这个字段在不同模式下

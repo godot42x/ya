@@ -3,6 +3,8 @@
 #include "GameEditor/UI/Shell/EditorSurface.h"
 #include "GameEditor/UI/Tabs/EditorViewportTab.h"
 
+#include "GameRuntime/Lifecycle/RuntimeGameViewProducer.h"
+
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Panel.h"
@@ -72,7 +74,7 @@ TEST(EditorViewProducerTest, AuthoringViewportDrawsEditorFurnitureWhileAuthoring
     SceneViewCollector collector;
     producer.collectSceneViews(makeEditorContext(scene), collector);
 
-    const SceneViewDesc* primary = findView(collector, kPrimarySceneViewId);
+    const SceneViewDesc* primary = findView(collector, producer.authoringKey().viewId());
     ASSERT_NE(primary, nullptr);
     EXPECT_EQ(primary->scene, &scene);
     // The editor's own panel geometry is what it declares, not the host rect the
@@ -102,7 +104,7 @@ TEST(EditorViewProducerTest, AuthoringViewportFallsBackToItsDefaultSizeBeforeLay
 
     // No layout has run yet, so the editor's own default panel size stands in
     // and the view is never declared with an empty rect.
-    const SceneViewDesc* primary = findView(collector, kPrimarySceneViewId);
+    const SceneViewDesc* primary = findView(collector, producer.authoringKey().viewId());
     ASSERT_NE(primary, nullptr);
     const Rect2D declared = layer.getViewportRect();
     EXPECT_GT(declared.extent.x, 0.0f);
@@ -128,7 +130,7 @@ TEST(EditorViewProducerTest, PanelGeometryTooSmallForAPixelDoesNotBecomeTheViewR
     SceneViewCollector collector;
     producer.collectSceneViews(makeEditorContext(scene), collector);
 
-    const SceneViewDesc* primary = findView(collector, kPrimarySceneViewId);
+    const SceneViewDesc* primary = findView(collector, producer.authoringKey().viewId());
     ASSERT_NE(primary, nullptr);
     const Extent2D declaredPixels = Extent2D::fromVec2(primary->viewportRect.extent);
     EXPECT_GT(declaredPixels.width, 0u);
@@ -172,7 +174,7 @@ TEST(EditorViewProducerTest, GizmoViewOptionOnlyReachesViewsThatAskForIt)
     // automation call both drive, and the authoring viewport is the view it
     // reaches.
     EXPECT_TRUE(layer.isEditorGizmoShown());
-    const SceneViewDesc* primaryWithOption = findView(withOption, kPrimarySceneViewId);
+    const SceneViewDesc* primaryWithOption = findView(withOption, producer.authoringKey().viewId());
     ASSERT_NE(primaryWithOption, nullptr);
     EXPECT_TRUE(drawsGizmos(*primaryWithOption));
 }
@@ -195,7 +197,7 @@ TEST(EditorViewProducerTest, HidingTheViewportDeclaresNoEditorViewAtAll)
     layer.addViewportShown();
     SceneViewCollector shown;
     producer.collectSceneViews(makeEditorContext(scene), shown);
-    ASSERT_NE(findView(shown, kPrimarySceneViewId), nullptr);
+    ASSERT_NE(findView(shown, producer.authoringKey().viewId()), nullptr);
     ASSERT_NE(findComposedInset(shown), nullptr);
 
     // Selecting another tab in the viewport's stack -- or the level editor tab
@@ -213,7 +215,7 @@ TEST(EditorViewProducerTest, HidingTheViewportDeclaresNoEditorViewAtAll)
     layer.addViewportShown();
     SceneViewCollector reshown;
     producer.collectSceneViews(makeEditorContext(scene), reshown);
-    const SceneViewDesc* primary = findView(reshown, kPrimarySceneViewId);
+    const SceneViewDesc* primary = findView(reshown, producer.authoringKey().viewId());
     ASSERT_NE(primary, nullptr);
     EXPECT_FLOAT_EQ(primary->viewportRect.extent.x, 800.0f);
     EXPECT_FLOAT_EQ(primary->viewportRect.extent.y, 450.0f);
@@ -236,6 +238,43 @@ TEST(EditorViewProducerTest, AHiddenViewportStopsCapturingViewportInput)
     EXPECT_FALSE(layer.isViewportHovered());
     EXPECT_FALSE(layer.isViewportFocused());
     EXPECT_FALSE(layer.shouldCaptureInput());
+}
+
+/// The point of owner-scoped identity: the game's world viewport and the
+/// editor's authoring viewport are two different Views that happen to be the
+/// only one shown at a time. Under one global id space they had to take turns on
+/// slot 1, so "which View is this" was answerable only by reading the declarer;
+/// now each owner names its own primary and the ids cannot collide.
+TEST(EditorViewProducerTest, EditorAndGameViewportsAreDistinctIdentities)
+{
+    App                 app;
+    EditorLayer         layer(&app);
+    EditorViewProducer  editor;
+    RuntimeGameViewProducer game;
+    editor.bind(app, layer);
+    game.bind(app);
+
+    const SceneViewId editorAuthoring = editor.authoringKey().viewId();
+    const SceneViewId editorPreview   = editor.previewKey().viewId();
+    const SceneViewId gameViewport    = game.hostViewportKey().viewId();
+
+    // Every View this build can show has its own identity...
+    EXPECT_NE(editorAuthoring, 0u);
+    EXPECT_NE(editorPreview, 0u);
+    EXPECT_NE(gameViewport, 0u);
+    EXPECT_NE(editorAuthoring, editorPreview);
+    EXPECT_NE(editorAuthoring, gameViewport);
+    EXPECT_NE(editorPreview, gameViewport);
+
+    // ...and a key's owner half is what keeps them apart, not the local half.
+    EXPECT_EQ(editor.authoringKey().owner, editor.previewKey().owner);
+    EXPECT_NE(editor.authoringKey().owner, game.hostViewportKey().owner);
+
+    // An unnamed owner is not a View at all: it reads as the same 0 the output
+    // tables already treat as "nothing published".
+    EXPECT_FALSE((SceneViewKey{.owner = 0, .local = 1}.valid()));
+    EXPECT_FALSE((SceneViewKey{.owner = 1, .local = 0}.valid()));
+    EXPECT_EQ((SceneViewKey{.owner = 0, .local = 1}.viewId()), 0u);
 }
 
 TEST(EditorViewProducerTest, PreviewPanelKeepsWorldInputOutOfThePanel)
@@ -296,7 +335,7 @@ TEST(EditorViewProducerTest, DockTabDetachIsWhatHidesTheViewport)
 
     SceneViewCollector attached;
     producer.collectSceneViews(makeEditorContext(scene), attached);
-    EXPECT_NE(findView(attached, kPrimarySceneViewId), nullptr);
+    EXPECT_NE(findView(attached, producer.authoringKey().viewId()), nullptr);
 
     // The dock detaches the widget when another tab in the stack is selected.
     tree.detach(*tab);
@@ -344,7 +383,7 @@ TEST(EditorViewProducerTest, OneWindowHidingItsViewportDoesNotHideTheOtherWindow
     Scene              scene("Authoring");
     SceneViewCollector stillShown;
     producer.collectSceneViews(makeEditorContext(scene), stillShown);
-    EXPECT_NE(findView(stillShown, kPrimarySceneViewId), nullptr);
+    EXPECT_NE(findView(stillShown, producer.authoringKey().viewId()), nullptr);
 
     secondTree.detach(*secondTab);
     EXPECT_FALSE(layer.isViewportShown());

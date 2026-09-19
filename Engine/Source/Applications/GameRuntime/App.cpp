@@ -195,6 +195,17 @@ void App::addSceneViewProducer(ISceneViewProducer& producer)
     }
     auto& producers = _renderState->viewProducers;
     if (std::find(producers.begin(), producers.end(), &producer) == producers.end()) {
+        // View keys are owner-scoped, and the owner is what makes a key unique:
+        // two producers claiming one owner would mint colliding View ids, and
+        // the output tables key on that id. Cheap here, impossible to notice
+        // later, so it is asserted at the one place every producer passes.
+        YA_CORE_ASSERT(producer.viewOwner() != 0,
+                       "a scene view producer must name the owner its View keys belong to");
+        for (const ISceneViewProducer* other : producers) {
+            YA_CORE_ASSERT(other->viewOwner() != producer.viewOwner(),
+                           "scene view owner {} is claimed by more than one producer; View keys must not collide",
+                           producer.viewOwner());
+        }
         producers.push_back(&producer);
     }
 }
