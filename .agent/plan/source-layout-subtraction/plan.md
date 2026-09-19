@@ -96,6 +96,12 @@ S2 的候选清单（每条独立可验收，动手前先确认消费面）：
   这是渲染关切而不是编辑器倒置；硬砍成 0 会把 `ViewDisplayInsetImage`（Render3D）和
   `recordRender2DComposePass`（GUI/Compose）翻转成 GUI→Render3D，更差。
   **待做**：Scene 侧（见 progress 的 Scene 章节）。
+- **S2c-2（已落地 2026-09-20）**：删掉从未接线的 Game UI 层级拖拽。
+  `moveWidgetEntryDocument` / `canMoveWidgetEntryDocument` / `EWidgetEntryDropPosition` 及五个
+  匿名 helper **零生产调用方**（头注释写“the editor uses it”，实测 `Applications/GameEditor` 里
+  `rg 'reparentWidget|WidgetEntry.*[Dd]rop|_widgetEntries'` 为空）。`SceneWidgetEntry.cpp`
+  437 → 226 行，`SceneWidgetEntryReparentTest.cpp` 随之删除。**保留**
+  `UIInstanceOverrideSet::applyTo`（生产调用方：`GameUIHost.cpp`、`ScriptApiCore.cpp`）。
 - ~~修 `ya-rhi-backend-common` 自依赖自身的笔误。~~ **2026-09-19 复查：此条已不存在**。
   `Engine/Source/Framework/RHI/Backend/xmake.lua` 里 `ya-rhi-backend-common` 只 deps `ya-rhi`，
   唯一引用它自己的是 `ya-rhi-vulkan`（合法的单向依赖）。原条目是过时假设。

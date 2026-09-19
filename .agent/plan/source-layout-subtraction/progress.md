@@ -1,5 +1,60 @@
 # Progress
 
+## 2026-09-20 checkpoint：S2c-2 删掉从未接线的 Game UI 层级拖拽
+
+### 唯一目标
+
+`rg 'moveWidgetEntryDocument|canMoveWidgetEntryDocument|EWidgetEntryDropPosition' Engine Example`
+归零。
+
+### 根因
+
+`SceneWidgetEntry.h` 的注释承诺“Game UI hierarchy drag-drop 操作”，并写明
+“The editor uses it to reject invalid drops visually (red feedback) before delivery”。
+实测全仓扫（`Engine` / `Example` / `Script` / `.agent`，排除定义文件与测试）：
+`moveWidgetEntryDocument` / `canMoveWidgetEntryDocument` / `EWidgetEntryDropPosition`
+**零生产调用方**——唯一调用方是 `SceneWidgetEntryReparentTest.cpp`。编辑器里
+`rg 'reparentWidget|WidgetEntry.*[Dd]rop|_widgetEntries' Applications/GameEditor` 也是空。
+
+那两段 + 支撑它们的五个匿名命名空间 helper（`resolveEntryNode` / `documentContains` /
+`FDocumentChildEdge` / `takeChildEdge` / `insertChildEdge`）共 **~145 行**，
+占 `SceneWidgetEntry.cpp`（437 → 226 行）的近一半。它们是 Scene 模块里最大的 GUI 代码块，
+而 Scene 模块本该是引擎能力层。
+
+### 改动
+
+`SceneWidgetEntry.cpp`：从 437 行减到 226 行；`SceneWidgetEntry.h` 删掉
+`EWidgetEntryDropPosition` / `moveWidgetEntryDocument` / `canMoveWidgetEntryDocument`
+及各自的注释；删除 `SceneWidgetEntryReparentTest.cpp`（它只测这段死代码）。
+
+**保留**：`UIInstanceOverrideSet::applyTo(UIElement&)` —— 生产调用方在
+`GameUIHost.cpp:244`（scene 激活时挂载 entry）与 `ScriptApiCore.cpp:508`，不是死的。
+
+### 为什么这不是“砍掉功能”
+
+这条注释描述的是编辑器 UI Designer 的层级拖拽重排。但编辑器里
+`rg 'reparentWidget|reparent.*[Ww]idget|WidgetEntry.*[Dd]rop|_widgetEntries' Applications/GameEditor`
+是**空**的——这段 API 从实现那天起就没被接上，头注释描述的是一个未兑现的承诺。
+与 `OffscreenJobRunner`（2026-09-19）同一形状：找不到生产者一律删除。
+
+### 验证
+
+- `rg` 三条全部归零。
+- `ya-scene-core` / `ya-testing` / `ya-game-editor` / `ya-game-runtime` / `ya-engine` /
+  `ya-runtime` / `ya-render-3d-test` build ok；`ya-render-3d-test` **175/175**。
+- `SceneWidgetEntryTest.*` + `SceneSerializerTest.*` + `UIDocumentTest.*` +
+  `EditorUIDesignerSessionTest.*` + `GameUIHostTest.*` + `HostSceneExtractTest.*` =
+  **49 passed / 1 failed**，那条（`GameUIHostTest.BuildSnapshotComposesMountedWidgets`）是基线。
+- runtime smoke `c775245a`、editor smoke `451fe3cd` 逐字节不变。
+
+### 保留 / 未完成
+
+- **未完成**：`ya-scene-core -> ya-gui-widgets` 这条 target 边仍在。剩下的 226 行里，
+  Scene 模块对 GUI 的真实需求是 `UIDocument`（authoring 文档）+ `FCanvasSlotArgs`（槽位意图）。
+  要把这条边砍到 0 需要先定 “Game UI 授权数据住在哪”（Scene 按值持有 `std::vector<SceneWidgetEntry>`，
+  编辑器授权、GameUIHost 挂载，三者跨 Framework/Application 两层）——这是产品/架构决策，
+  已登记在 `plan.md` S2c，不在本刀范围。
+
 ## 2026-09-20 checkpoint：S2c-1 渲染器不再了解编辑器
 
 ### 唯一目标

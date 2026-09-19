@@ -61,46 +61,4 @@ struct YA_SCENE_CORE_API SceneWidgetEntry
     static SceneWidgetEntry fromJson(const nlohmann::json& json);
 };
 
-/// Drop position for document-level reparenting (Game UI hierarchy
-/// drag-drop; the editor's ENodeDropPosition mirrors these values).
-enum class EWidgetEntryDropPosition : uint8_t
-{
-    Before,
-    Into,
-    After,
-};
-
-/// Move a UIDocument subtree between scene widget entries (the Game UI
-/// hierarchy drag-drop operation). `srcPath`/`dstPath` are child-index paths
-/// inside the entry root document (empty = the entry root itself).
-///
-///   Into        - the source document becomes a child of the target document
-///   Before/After- the source becomes a sibling of the target (when both
-///                 paths are empty this reorders the entries themselves)
-///
-/// A top-level (empty srcPath) source nested into another top-level entry
-/// transfers its parent-owned root slot to the destination document edge.
-///
-/// Returns true on success; mutates `entries` in place. Fails (with a
-/// diagnostic) on unresolvable paths, cycles, non-inline targets, or when a
-/// nested widget would need to become a top-level entry.
-YA_SCENE_CORE_API bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
-                                               size_t                    srcEntryIndex,
-                                               const std::vector<size_t>& srcPath,
-                                               size_t                    dstEntryIndex,
-                                               const std::vector<size_t>& dstPath,
-                                               EWidgetEntryDropPosition  position);
-
-/// Validation-only preview of moveWidgetEntryDocument: runs the same rules
-/// (documents resolvable, not a self-drop, no cycle, nested-into-entry-root
-/// restriction) WITHOUT mutating `entries`. The editor uses it to reject
-/// invalid drops visually (red feedback) before delivery. Unlike the move,
-/// self-drops and no-ops report false (there is nothing meaningful to do).
-YA_SCENE_CORE_API bool canMoveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
-                                                  size_t                    srcEntryIndex,
-                                                  const std::vector<size_t>& srcPath,
-                                                  size_t                    dstEntryIndex,
-                                                  const std::vector<size_t>& dstPath,
-                                                  EWidgetEntryDropPosition  position);
-
 } // namespace ya
