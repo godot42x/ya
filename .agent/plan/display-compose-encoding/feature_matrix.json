@@ -1,0 +1,83 @@
+{
+  "plan": "display-compose-encoding",
+  "status": "f1_landed_in_3a4144d4",
+  "features": [
+    {
+      "id": "display_image_is_always_finalize_output",
+      "phase": "F1",
+      "status": "verified",
+      "evidence": [
+        "both pipelines assign output.display = postprocess with no color fallback",
+        "PresentPresentationGraphService and RenderDeviceState agree on the display image",
+        "viewport screenshot md5 c775245ae636f15b41da8485319a2267 identical to the pre-F1 baseline"
+      ]
+    },
+    {
+      "id": "present_is_a_pass_through",
+      "phase": "F1",
+      "status": "verified",
+      "evidence": [
+        "PresentationGraphService uses kDisplayComposeState = PostProcessingState::passThrough()",
+        "the parallel _presentationPostProcessState is deleted",
+        "presentation screenshot md5 equals the viewport screenshot md5"
+      ]
+    },
+    {
+      "id": "grading_off_does_not_skip_encoding",
+      "phase": "F1",
+      "status": "verified",
+      "evidence": [
+        "bEnabled renamed to bGradingEnabled; finalize no longer early-returns",
+        "withoutGrading() keeps the display encoding and zeroes only the look stages",
+        "appendBloomGraphPasses returns the input handle when grading is off"
+      ]
+    },
+    {
+      "id": "no_mode_branch_left_in_display_format",
+      "phase": "F1",
+      "status": "verified",
+      "evidence": [
+        "getViewDisplayImageFormat returns getPostprocessColorFormat unconditionally"
+      ]
+    },
+    {
+      "id": "gate_script",
+      "phase": "F1",
+      "status": "verified",
+      "evidence": [
+        "Script/automation/render/run_display_compose_parity.py compares the two screenshot targets and PASSes"
+      ]
+    },
+    {
+      "id": "editor_does_not_double_blit_the_world",
+      "phase": "F2",
+      "status": "not_started",
+      "evidence": [
+        "the editor authoring view is the display root with no composeOntoViewId, so present blits the world full-screen and the editor chrome then covers it"
+      ]
+    },
+    {
+      "id": "gamma_off_semantics",
+      "phase": "F2",
+      "status": "open",
+      "evidence": [
+        "bEnableGammaCorrection=false writes a linear image on both paths now; whether the switch should exist is undecided"
+      ]
+    },
+    {
+      "id": "rendergraph_retention_flake",
+      "phase": "out-of-scope",
+      "status": "observed",
+      "evidence": [
+        "RenderGraphCoreTest.ResourceRegistryUsesProvidedImportedImageViewAndRetainsOwner failed once in the wide filter, then passed 3/3 runs; test file untouched at HEAD; outside this slice"
+      ]
+    }
+  ],
+  "baseline_failures": [
+    "EditorPropertyGraphTest.AutoPropertySectionAssetPathCommitBrowseAndUndo",
+    "EditorPropertyGraphTest.TextureAssetRowShowsRetainedPreview",
+    "WidgetLayoutTest.FloatingWindowResizeHandlesLiveOnOverlaySlots",
+    "ScriptApiLibraryFixture.GameUIWidgetLifecycleThroughRegistry",
+    "GameUIHostTest.BuildSnapshotComposesMountedWidgets"
+  ]
+}
