@@ -1332,3 +1332,8 @@ R1 第一小步已完成：SceneFrameSnapshot 显式承载当前可识别的 Sce
 - graph 内部：`ViewportPassParams`→`ViewPassParams`、`makeViewportTextureDesc`→`makeViewTextureDesc`、`buildViewportPassParams`→`buildViewPassParams`。
 - 明确保留：`RenderDeviceState::InitDesc.windowWidth/windowHeight/windowTitle`（它们创建 NativeWindow 并种子 swapchain 尺寸——window→swapchain 的本体）；`EPipelineDynamicFeature::Viewport`/`ViewportState`/`Viewport::defaults()`/`setViewportAndScissor`/`bReverseViewportY`（Vulkan 光栅状态）；`RenderViewportUtils.h`（GPU viewport helper）；inspector 族（`RenderViewportSnapshot`/`ViewportDebugCatalog*`/`buildViewportSnapshot`）留给 V8 搬出 device 时收口。
 - 验收证据：`ya-render-3d-test` 175/175；`ya-testing` 专项 25/25（EditorViewProducer/RuntimeGameViewProducer/HostSceneExtract/AppAutomationConfig/EditorViewportOverlayHost）；runtime smoke 与基线逐字节一致（`c775245ae636f15b41da8485319a2267`），editor smoke exit=0（同会话 235x188 基线）。
+
+### 全量 ya-testing 说明（2026-09-21 复核）
+
+- 与本线相关的目标全绿：`ya-render-3d-test` 175/175；`ya-testing` 滤镜组（EditorViewProducer/RuntimeGameViewProducer/HostSceneExtract/AppAutomationConfig/EditorViewportOverlayHost）25/25；runtime/editor smoke 与基线逐字节一致。
+- `ya-testing` 全量在同一 `SystemLayersCannotBeDetached` 处退出：`WidgetTree::detach` 对系统层的 `YA_CORE_ASSERT(false)` 触发 `__builtin_trap`（EXC_BREAKPOINT/133）。测试语义与断言路径相撞，属 GUI 线预存问题（R0 已登记的 GUI widget test 项；且 `ya-gui-widgets-test` 因 GuiFrameInspectorOverlay 头在 Compose、而该 target 只依赖 widgets+render-resources 编不过，同属该登记项）。不属本词汇批次，未混入提交。
