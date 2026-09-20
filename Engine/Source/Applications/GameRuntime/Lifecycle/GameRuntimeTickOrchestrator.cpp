@@ -54,19 +54,19 @@ namespace ya
 
 namespace
 {
-void syncRuntimeCameraAspect(Entity* runtimeCamera, const Extent2D& viewportExtent)
+void syncRuntimeCameraAspect(Entity* runtimeCamera, const Extent2D& viewExtent)
 {
     if (!runtimeCamera || !runtimeCamera->isValid() || !runtimeCamera->hasComponent<CameraComponent>()) {
         return;
     }
-    if (viewportExtent.width == 0 || viewportExtent.height == 0) {
+    if (viewExtent.width == 0 || viewExtent.height == 0) {
         return;
     }
 
     auto* camera = runtimeCamera->getComponent<CameraComponent>();
     if (!camera->_fixedAspectRatio) {
-        camera->setAspectRatio(static_cast<float>(viewportExtent.width) /
-                               static_cast<float>(viewportExtent.height));
+        camera->setAspectRatio(static_cast<float>(viewExtent.width) /
+                               static_cast<float>(viewExtent.height));
     }
 }
 
@@ -119,7 +119,7 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
         automationControl->onTickCompleted(app,
                                             renderServices.getRender(),
                                             device ? device->getPostprocessOutputImageShared() : nullptr,
-                                            device ? device->getActiveViewportImageShared() : nullptr,
+                                            device ? device->getActiveViewImageShared() : nullptr,
                                             device ? device->getPresentationImageShared() : nullptr,
                                             App::_hostTick);
     }
@@ -133,7 +133,7 @@ int GameRuntimeTickOrchestrator::iterate(App& app, float dt)
                                         AppAutomationTickContext{
                                             .render                     = renderServices.getRender(),
                                             .postprocessImage           = device ? device->getPostprocessOutputImageShared() : nullptr,
-                                            .viewportImage              = device ? device->getActiveViewportImageShared() : nullptr,
+                                            .viewportImage              = device ? device->getActiveViewImageShared() : nullptr,
                                             .presentationImage          = device ? device->getPresentationImageShared() : nullptr,
                                             .requestRenderDocCapture    = diagnosticsService
                                                                             ? [diagnosticsService]()
@@ -396,7 +396,7 @@ void GameRuntimeTickOrchestrator::declareViews(App& app, float dt, RenderDeviceS
     // "keep the previous one".
     bool bHostViewportDeclared = false;
     for (const SceneViewDesc& view : collector.views()) {
-        if (!view.ownsHostViewport()) {
+        if (!view.isDisplayRoot()) {
             continue;
         }
         // The extent the device expects follows the declaration instead of a rect
@@ -404,7 +404,7 @@ void GameRuntimeTickOrchestrator::declareViews(App& app, float dt, RenderDeviceS
         hostView.view       = view.view;
         hostView.projection = view.projection;
         hostView.cameraPos  = view.cameraPos;
-        device->applyViewportResize(view.viewportRect);
+        device->applyViewResize(view.outputRect);
         bHostViewportDeclared = true;
         break;
     }
@@ -446,7 +446,7 @@ void GameRuntimeTickOrchestrator::prepareViews(App&                  app,
     YA_PERF_SCOPE(perf::sample::renderExtract(), perf::metric::cpuTimeMs(), perf::domain::render());
     YA_PROFILE_SCOPE("RenderFrameExtractor::sceneSnapshot");
     for (const SceneViewRecording& recording : sceneRender.views()) {
-        const SceneViewportTask& task      = *recording.task;
+        const SceneViewTask& task      = *recording.task;
         const SceneViewDesc&     desc      = task.desc;
         RenderFrameData&         frameData = *recording.frameData;
         RenderFrameExtractor::prepareView(
@@ -455,7 +455,7 @@ void GameRuntimeTickOrchestrator::prepareViews(App&                  app,
                 .projection = desc.projection,
                 .viewProjection = desc.viewProjection(),
                 .cameraPos = desc.cameraPos,
-                .viewportExtent = Extent2D::fromVec2(desc.viewportRect.extent),
+                .viewExtent = Extent2D::fromVec2(desc.outputRect.extent),
                 .viewOwner = desc.viewOwner,
                 .viewFeatures = desc.features,
                 .frameIndex = App::_hostTick,
@@ -484,7 +484,7 @@ GameRuntimeTickOrchestrator::TickFrame GameRuntimeTickOrchestrator::buildGameRen
         .flightIndex   = flightIndex,
         .frameIndex    = App::_hostTick,
         .deltaTime     = dt,
-        .viewportFrameBufferScale = hostView.viewportFrameBufferScale,
+        .renderScale = hostView.renderScale,
         .shadowSettings = &app.getRenderServices().getShadowSettings(),
     };
 
@@ -501,11 +501,11 @@ GameRuntimeTickOrchestrator::TickFrame GameRuntimeTickOrchestrator::buildGameRen
     // it was last presented at instead of being resized to a target that does not
     // exist.
     const Scene* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
-    const SceneViewportTask* displayRoot = sceneRender.displayRootTask();
+    const SceneViewTask* displayRoot = sceneRender.displayRootTask();
     if ((app.isRuntimeMode() || app.isSimulationMode()) && scene && displayRoot) {
         if (auto* gameUIHost = app.getGameUIHost()) {
-            gameUIHost->setPresentation(displayRoot->desc.viewportRect,
-                                        glm::vec2(tickFrame.frame.viewportFrameBufferScale));
+            gameUIHost->setPresentation(displayRoot->desc.outputRect,
+                                        glm::vec2(tickFrame.frame.renderScale));
             tickFrame.uiSnapshot = gameUIHost->buildSnapshot();
         }
     }

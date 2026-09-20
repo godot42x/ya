@@ -23,7 +23,7 @@ struct ForwardFrameGraphOrchestrator
 {
     struct BuildDependencies
     {
-        ForwardViewStage* viewportStage    = nullptr;
+        ForwardViewStage* viewStage    = nullptr;
         EntityIdPass* entityIdPass     = nullptr;
         ShadowStage*          shadowStage      = nullptr;
         PostProcessingStage*  postProcessStage = nullptr;

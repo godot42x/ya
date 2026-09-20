@@ -1451,7 +1451,7 @@ void GUIWindowHost::onTick(float dt)
         FRender2DComposePassDesc{
             .kind                  = ERender2DComposePassKind::RuntimeUIComposite,
             .passSlot              = _impl->presentPassSlot,
-            .logicalViewportExtent = _impl->tree->getLogicalExtent(),
+            .logicalExtent = _impl->tree->getLogicalExtent(),
         },
         inspectorExtra);
 
@@ -1500,7 +1500,7 @@ void GUIWindowHost::onTick(float dt)
                 FRender2DComposePassDesc{
                     .kind                  = ERender2DComposePassKind::RuntimeUIOffscreen,
                     .passSlot              = _impl->offscreenPassSlot,
-                    .logicalViewportExtent = _impl->tree->getLogicalExtent(),
+                    .logicalExtent = _impl->tree->getLogicalExtent(),
                 });
             offscreenImage = _impl->offscreenSurface->getRenderImage();
 

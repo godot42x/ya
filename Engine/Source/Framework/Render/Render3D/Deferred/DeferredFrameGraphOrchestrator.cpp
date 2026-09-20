@@ -18,7 +18,7 @@ void DeferredFrameGraphOrchestrator::build(
     YA_CORE_ASSERT(inputs.stageCtx != nullptr, "DeferredFrameGraphOrchestrator requires a stage context");
     YA_CORE_ASSERT(inputs.frameBinding != nullptr, "DeferredFrameGraphOrchestrator requires frame bindings");
     YA_CORE_ASSERT(inputs.gBufferRTSpec != nullptr, "DeferredFrameGraphOrchestrator requires a GBuffer render target spec");
-    YA_CORE_ASSERT(inputs.viewportRTSpec != nullptr, "DeferredFrameGraphOrchestrator requires a viewport render target spec");
+    YA_CORE_ASSERT(inputs.viewRTSpec != nullptr, "DeferredFrameGraphOrchestrator requires a viewport render target spec");
     YA_CORE_ASSERT(inputs.postContext != nullptr, "DeferredFrameGraphOrchestrator requires a postprocess context");
     YA_CORE_ASSERT(deps.gBufferStage != nullptr, "DeferredFrameGraphOrchestrator requires a GBuffer stage");
     YA_CORE_ASSERT(deps.lightStage != nullptr, "DeferredFrameGraphOrchestrator requires a light stage");
@@ -44,13 +44,13 @@ void DeferredFrameGraphOrchestrator::build(
         .stageCtx                 = *inputs.stageCtx,
         .frameBinding             = *inputs.frameBinding,
         .gBufferRTSpec            = *inputs.gBufferRTSpec,
-        .viewportRTSpec           = *inputs.viewportRTSpec,
+        .viewRTSpec           = *inputs.viewRTSpec,
         .overlayInputs            = inputs.overlayInputs,
         .viewResources            = inputs.viewResources,
         .environmentLighting      = inputs.environmentLighting,
         .environmentLightingDS    = inputs.environmentLightingDS,
         .postContext              = inputs.postContext,
-        .viewportExtent           = inputs.viewportExtent,
+        .viewExtent           = inputs.viewExtent,
         .bUseSSAO                 = inputs.bUseSSAO,
         .bReverseViewportY        = inputs.bReverseViewportY,
         .bPostprocessOutputIsSRGB = inputs.bPostprocessOutputIsSRGB,
@@ -91,7 +91,7 @@ void DeferredFrameGraphOrchestrator::exportGraphOutputs(
             makeViewGraphName(deferred_graph_exports::gBufferColor[attachmentIndex], viewId));
     }
     graph.exportTexture(resources.textures.gBufferDepth, makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId));
-    graph.exportTexture(resources.textures.viewportColor, makeViewGraphName(deferred_graph_exports::viewportColor, viewId));
+    graph.exportTexture(resources.textures.viewColor, makeViewGraphName(deferred_graph_exports::viewColor, viewId));
     graph.exportTexture(resources.textures.entityId, makeViewGraphName(deferred_graph_exports::entityId, viewId));
     if (resources.textures.ssao.has_value()) {
         graph.exportTexture(*resources.textures.ssao, makeViewGraphName(deferred_graph_exports::ssao, viewId));

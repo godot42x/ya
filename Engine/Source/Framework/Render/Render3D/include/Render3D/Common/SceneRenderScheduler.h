@@ -48,7 +48,7 @@ struct SceneViewFamilyKeyHash
 struct SceneViewFamilyPlan
 {
     SceneViewFamilyKey     key;
-    std::vector<uint32_t>  viewportTaskIndices;
+    std::vector<uint32_t>  viewTaskIndices;
 };
 
 /// Typed outputs of one family graph. Coordinator publishes these; it does not
@@ -59,7 +59,7 @@ struct ViewFamilyRenderResult
     std::vector<RenderViewOutput> views;
 };
 
-struct SceneViewportTask
+struct SceneViewTask
 {
     static constexpr uint32_t kInvalidSnapshotIndex = std::numeric_limits<uint32_t>::max();
     static constexpr uint32_t kInvalidFamilyIndex   = std::numeric_limits<uint32_t>::max();
@@ -75,7 +75,7 @@ struct SceneViewportTask
     uint32_t familyIndex   = kInvalidFamilyIndex;
 };
 
-[[nodiscard]] inline SceneViewFamilyKey makeSceneViewFamilyKey(const SceneViewportTask& task)
+[[nodiscard]] inline SceneViewFamilyKey makeSceneViewFamilyKey(const SceneViewTask& task)
 {
     return SceneViewFamilyKey{
         .scene         = task.desc.scene,
@@ -101,13 +101,13 @@ struct SceneRenderPlan
 {
     uint64_t hostTick = 0;
     std::vector<SceneSnapshotEntry> snapshots;
-    std::vector<SceneViewportTask> viewportTasks;
+    std::vector<SceneViewTask> viewTasks;
     std::vector<SceneViewFamilyPlan> viewFamilies;
 
-    [[nodiscard]] bool empty() const { return viewportTasks.empty(); }
+    [[nodiscard]] bool empty() const { return viewTasks.empty(); }
 
     [[nodiscard]] std::shared_ptr<const SceneSnapshot> snapshotFor(
-        const SceneViewportTask& task) const
+        const SceneViewTask& task) const
     {
         if (task.snapshotIndex >= snapshots.size()) {
             return nullptr;
@@ -119,7 +119,7 @@ struct SceneRenderPlan
         return entry.snapshot;
     }
 
-    [[nodiscard]] const SceneViewFamilyPlan* familyFor(const SceneViewportTask& task) const
+    [[nodiscard]] const SceneViewFamilyPlan* familyFor(const SceneViewTask& task) const
     {
         if (task.familyIndex >= viewFamilies.size()) {
             return nullptr;
@@ -142,10 +142,10 @@ struct SceneRenderPlan
     /// is displayed on the host viewport, and no caller gets a substitute View
     /// it did not ask for. With several display roots (one per surface, the
     /// multi-window case) the first wins until a surface-scoped identity exists.
-    [[nodiscard]] const SceneViewportTask* displayRootTask() const
+    [[nodiscard]] const SceneViewTask* displayRootTask() const
     {
-        for (const auto& task : viewportTasks) {
-            if (task.desc.ownsHostViewport()) {
+        for (const auto& task : viewTasks) {
+            if (task.desc.isDisplayRoot()) {
                 return &task;
             }
         }
@@ -155,9 +155,9 @@ struct SceneRenderPlan
 
 /// A View owns the host viewport by structure. A recording without a task owns
 /// nothing: there is no View, so there is no host viewport belonging to it.
-[[nodiscard]] inline bool sceneViewOwnsHostViewport(const SceneViewportTask* task)
+[[nodiscard]] inline bool sceneViewIsDisplayRoot(const SceneViewTask* task)
 {
-    return task && task->desc.ownsHostViewport();
+    return task && task->desc.isDisplayRoot();
 }
 
 /// Every Scene an extracted plan actually produces content for, in snapshot-table
@@ -179,11 +179,11 @@ struct SceneRenderPlan
 }
 
 /// One View inside an extracted plan: the task must point at
-/// `plan.viewportTasks[i]`, and `frameData` is the host's View-owned
+/// `plan.viewTasks[i]`, and `frameData` is the host's View-owned
 /// preparation for that task.
 struct SceneViewRecording
 {
-    const SceneViewportTask* task      = nullptr;
+    const SceneViewTask* task      = nullptr;
     RenderFrameData*         frameData = nullptr;
 };
 
@@ -224,43 +224,43 @@ class ExtractedSceneRender
     {
         _views.clear();
         _hostFrameData = nullptr;
-        if (_plan.viewportTasks.empty()) {
+        if (_plan.viewTasks.empty()) {
             frameData.resize(1);
             frameData.front().clear();
             return;
         }
 
-        frameData.resize(_plan.viewportTasks.size());
-        _views.reserve(_plan.viewportTasks.size());
-        for (size_t index = 0; index < _plan.viewportTasks.size(); ++index) {
+        frameData.resize(_plan.viewTasks.size());
+        _views.reserve(_plan.viewTasks.size());
+        for (size_t index = 0; index < _plan.viewTasks.size(); ++index) {
             _views.push_back(SceneViewRecording{
-                .task      = &_plan.viewportTasks[index],
+                .task      = &_plan.viewTasks[index],
                 .frameData = &frameData[index],
             });
             // Frame data is indexed by declaration order, which says nothing
             // about which View is the host's. The host camera packet needs the
             // latter, so record it here instead of letting the caller read
             // slot 0 and hope the producer declared the host View first.
-            if (!_hostFrameData && _plan.viewportTasks[index].desc.ownsHostViewport()) {
+            if (!_hostFrameData && _plan.viewTasks[index].desc.isDisplayRoot()) {
                 _hostFrameData = &frameData[index];
             }
         }
     }
 
-    [[nodiscard]] bool empty() const { return _plan.viewportTasks.empty(); }
+    [[nodiscard]] bool empty() const { return _plan.viewTasks.empty(); }
 
     [[nodiscard]] const SceneRenderPlan& plan() const { return _plan; }
 
     [[nodiscard]] const std::vector<SceneViewRecording>& views() const { return _views; }
 
-    [[nodiscard]] const SceneViewportTask* displayRootTask() const { return _plan.displayRootTask(); }
+    [[nodiscard]] const SceneViewTask* displayRootTask() const { return _plan.displayRootTask(); }
 
     /// This tick's preparation for the View whose output goes to the host
     /// viewport, or null when no declared View owns it. The host camera packet
     /// reads this rather than the first paired slot.
     [[nodiscard]] RenderFrameData* hostFrameData() const { return _hostFrameData; }
 
-    [[nodiscard]] std::shared_ptr<const SceneSnapshot> snapshotFor(const SceneViewportTask& task) const
+    [[nodiscard]] std::shared_ptr<const SceneSnapshot> snapshotFor(const SceneViewTask& task) const
     {
         return _plan.snapshotFor(task);
     }

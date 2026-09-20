@@ -21,7 +21,7 @@ SceneViewDesc makeView(Scene* scene, SceneViewId viewId)
     return SceneViewDesc{
         .scene        = scene,
         .viewId       = viewId,
-        .viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
+        .outputRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
     };
 }
 
@@ -29,16 +29,16 @@ SceneViewDesc makeView(Scene* scene, SceneViewId viewId)
 
 TEST(ViewFamilyRendererTest, DualViewExportNamesStayUniqueInOneFamilyGraph)
 {
-    const std::string colorA = makeViewGraphName("Deferred.Viewport.Color", 11);
-    const std::string colorB = makeViewGraphName("Deferred.Viewport.Color", 12);
+    const std::string colorA = makeViewGraphName("Deferred.View.Color", 11);
+    const std::string colorB = makeViewGraphName("Deferred.View.Color", 12);
     const std::string bloomA = makeViewGraphName("Bloom.Output", 11);
     const std::string postA  = makeViewGraphName("Postprocessing.Output", 11);
 
     EXPECT_NE(colorA, colorB);
     EXPECT_NE(colorA, bloomA);
     EXPECT_NE(colorA, postA);
-    EXPECT_EQ(colorA, "Deferred.Viewport.Color.view11");
-    EXPECT_EQ(colorB, "Deferred.Viewport.Color.view12");
+    EXPECT_EQ(colorA, "Deferred.View.Color.view11");
+    EXPECT_EQ(colorB, "Deferred.View.Color.view12");
     EXPECT_EQ(makeViewGraphName("Deferred GBuffer", 11), "Deferred GBuffer.view11");
 }
 
@@ -56,9 +56,9 @@ TEST(ViewFamilyRendererTest, SameSceneDualViewSealsOneFamilyPlan)
         scheduler.seal(), [](Scene&) { return std::make_shared<const SceneSnapshot>(); });
     const SceneRenderPlan& plan = extracted.plan();
     ASSERT_EQ(plan.viewFamilies.size(), 1u);
-    ASSERT_EQ(plan.viewportTasks.size(), 2u);
-    EXPECT_EQ(plan.viewFamilies.front().viewportTaskIndices.size(), 2u);
-    EXPECT_EQ(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[1]));
+    ASSERT_EQ(plan.viewTasks.size(), 2u);
+    EXPECT_EQ(plan.viewFamilies.front().viewTaskIndices.size(), 2u);
+    EXPECT_EQ(plan.familyFor(plan.viewTasks[0]), plan.familyFor(plan.viewTasks[1]));
 }
 
 TEST(ViewFamilyRendererTest, DualSceneSealsTwoFamilyPlans)
@@ -76,7 +76,7 @@ TEST(ViewFamilyRendererTest, DualSceneSealsTwoFamilyPlans)
         scheduler.seal(), [](Scene&) { return std::make_shared<const SceneSnapshot>(); });
     const SceneRenderPlan& plan = extracted.plan();
     ASSERT_EQ(plan.viewFamilies.size(), 2u);
-    EXPECT_NE(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[1]));
+    EXPECT_NE(plan.familyFor(plan.viewTasks[0]), plan.familyFor(plan.viewTasks[1]));
 }
 
 TEST(ViewFamilyRendererTest, ViewFamilyRenderResultPublishesWithoutPipelineGetters)

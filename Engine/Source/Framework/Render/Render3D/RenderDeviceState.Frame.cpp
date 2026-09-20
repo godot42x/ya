@@ -84,15 +84,15 @@ void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan)
     const std::vector<SceneViewRecording>& views = plan.sceneRender.views();
     for (const SceneViewFamilyPlan& family : plan.sceneRender.plan().viewFamilies) {
         std::vector<SceneViewRecording> familyViews;
-        familyViews.reserve(family.viewportTaskIndices.size());
-        for (uint32_t index : family.viewportTaskIndices) {
+        familyViews.reserve(family.viewTaskIndices.size());
+        for (uint32_t index : family.viewTaskIndices) {
             familyViews.push_back(views[index]);
         }
         recordOneFamily(&family, std::move(familyViews));
     }
 }
 
-void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan, const SceneViewportTask* displayRoot)
+void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan, const SceneViewTask* displayRoot)
 {
     const std::vector<Scene*> scenes = renderedScenes(plan.sceneRender.plan());
     if (scenes.empty()) {
@@ -104,7 +104,7 @@ void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan, const Sc
         }
     }
     applyPendingMutations();
-    applyViewportResize(displayRoot ? displayRoot->desc.viewportRect : Rect2D{});
+    applyViewResize(displayRoot ? displayRoot->desc.outputRect : Rect2D{});
     prepareComposePipelines();
     // Pre-record preparation: resolve each View's Scene-keyed GPU bindings now,
     // while the View's own declaration still names its Scene, so recording never
@@ -117,7 +117,7 @@ void RenderDeviceState::prepareFrameRecord(const RenderFramePlan& plan, const Sc
         }
     }
     if (plan.frame.uiFrameSnapshot) {
-        if (auto uiTarget = getViewportDisplayImageShared()) {
+        if (auto uiTarget = getViewDisplayImageShared()) {
             prepareRender2DComposePassPipeline(
                 FRender2DComposePassDesc{
                     .kind = ERender2DComposePassKind::RuntimeUIComposite,
@@ -157,7 +157,7 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     // The View whose output the host viewport shows. It is the plan's answer
     // (V1/V2) and it also supplies the host-level geometry below: the viewport
     // rect a freshly built pipeline is sized from.
-    const SceneViewportTask* displayRoot = plan.sceneRender.displayRootTask();
+    const SceneViewTask* displayRoot = plan.sceneRender.displayRootTask();
     prepareFrameRecord(plan, displayRoot);
 
     std::shared_ptr<ICommandBuffer> cmdBuf;
@@ -219,11 +219,11 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     }
     // The game-UI compose lands on the display root's image, so its logical
     // viewport is that View's declared geometry rather than a host camera copy.
-    const Extent2D logicalViewportExtent = displayRoot ? displayRoot->output.extent : Extent2D{};
+    const Extent2D logicalViewExtent = displayRoot ? displayRoot->output.extent : Extent2D{};
     recordCameraViewCompose(cmdBuf.get(),
-                            getViewportDisplayImageShared().get(),
+                            getViewDisplayImageShared().get(),
                             plan.frame.uiFrameSnapshot,
-                            logicalViewportExtent,
+                            logicalViewExtent,
                             insetImages);
     if (plan.recordExtensions) {
         plan.recordExtensions->recordViewCompose(*cmdBuf, plan.frame.deltaTime);
@@ -241,8 +241,8 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
         }
         cmdBuf->retireResource(resource);
     };
-    retain(getViewportDisplayImageShared());
-    retain(getActiveViewportImageShared());
+    retain(getViewDisplayImageShared());
+    retain(getActiveViewImageShared());
     retain(getPostprocessOutputImageShared());
 
     endFrameCommandBuffer(cmdBuf.get());
@@ -299,7 +299,7 @@ void RenderDeviceState::publishViewOutputIdentity(uint32_t flightIndex, SceneVie
     _publishedOutputViewId = displayViewId;
 }
 
-std::shared_ptr<RenderTexture> RenderDeviceState::getActiveViewportImageShared() const
+std::shared_ptr<RenderTexture> RenderDeviceState::getActiveViewImageShared() const
 {
     // The host viewport's colour, and nothing else: this is the View the plan
     // named as its display root, so a tick that published none has no viewport
@@ -311,7 +311,7 @@ std::shared_ptr<RenderTexture> RenderDeviceState::getActiveViewportImageShared()
     return nullptr;
 }
 
-std::shared_ptr<RenderTexture> RenderDeviceState::getViewportDisplayImageShared() const
+std::shared_ptr<RenderTexture> RenderDeviceState::getViewDisplayImageShared() const
 {
     if (const auto* output = publishedViewOutput()) {
         if (auto image = output->displayImage()) {
@@ -383,19 +383,19 @@ void RenderDeviceState::retainPublishedViewOutputs(uint32_t flightIndex, IComman
     }
 }
 
-EFormat::T RenderDeviceState::getViewportDisplayImageFormat() const
+EFormat::T RenderDeviceState::getViewDisplayImageFormat() const
 {
-    // Mirrors getViewportDisplayImageShared(): post-process output when
+    // Mirrors getViewDisplayImageShared(): post-process output when
     // postprocessing runs, else the raw viewport image. Both formats are
     // pipeline-configured and stable, so they are known before the world graph
     // creates the actual images (first-frame Render2D pipeline prep).
     if (auto* pipeline = _pipelineCoordinator.getSelectedForwardPipeline()) {
         return pipeline->isPostprocessingEnabled() ? pipeline->getPostprocessColorFormat()
-                                                   : pipeline->getViewportColorFormat();
+                                                   : pipeline->getViewColorFormat();
     }
     if (auto* pipeline = _pipelineCoordinator.getSelectedDeferredPipeline()) {
         return pipeline->isPostprocessingEnabled() ? pipeline->getPostprocessColorFormat()
-                                                   : pipeline->getViewportColorFormat();
+                                                   : pipeline->getViewColorFormat();
     }
     return EFormat::Undefined;
 }

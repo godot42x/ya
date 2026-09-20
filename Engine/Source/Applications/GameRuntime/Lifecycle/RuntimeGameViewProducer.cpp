@@ -19,11 +19,11 @@ void RuntimeGameViewProducer::collectSceneViews(const SceneViewCollectContext& c
 
     SceneViewDesc primary{
         .scene        = context.activeScene,
-        .viewId       = hostViewportKey().viewId(),
+        .viewId       = displayRootKey().viewId(),
         // Fills the host viewport, so its offscreen rect is the host's render
         // resolution. The window is not consulted: how this image is presented is
         // the presentation pass's business.
-        .viewportRect = Rect2D{.pos = {0.0f, 0.0f}, .extent = context.renderResolution.toVec2()},
+        .outputRect = Rect2D{.pos = {0.0f, 0.0f}, .extent = context.renderResolution.toVec2()},
         // Generated editor companions are editor furniture and this is the game
         // view, so it draws authored content, always. "Show Editor Gizmos" is
         // the editor's view option; it never reaches a view the editor does not

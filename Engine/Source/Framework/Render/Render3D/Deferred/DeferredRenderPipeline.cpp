@@ -202,7 +202,7 @@ RenderTargetCreateInfo buildDeferredGBufferRenderTargetSpec(Extent2D extent,
 RenderTargetCreateInfo buildDeferredViewRenderTargetSpec(Extent2D extent, EFormat::T colorFormat)
 {
     return RenderTargetCreateInfo{
-        .label            = "Deferred Viewport RT",
+        .label            = "Deferred View RT",
         .bSwapChainTarget = false,
         .extent           = extent,
         .attachments      = {
@@ -343,9 +343,9 @@ void DeferredRenderPipeline::resolveRuntimeFormats()
         "Deferred GBuffer HDR",
         sampledColorUsage,
         {SIGNED_LINEAR_FORMAT, EFormat::R8G8B8A8_UNORM});
-    _viewportColorFormat = chooseSupportedAttachmentFormat(
+    _viewColorFormat = chooseSupportedAttachmentFormat(
         _render,
-        "Deferred Viewport Color",
+        "Deferred View Color",
         static_cast<EImageUsage::T>(sampledColorUsage | EImageUsage::TransferSrc),
         {VIEWPORT_COLOR_FORMAT, EFormat::R8G8B8A8_UNORM});
     _sharedDepthFormat = chooseSupportedAttachmentFormat(
@@ -369,7 +369,7 @@ void DeferredRenderPipeline::initRenderTargetSpecs(Extent2D extent)
         LINEAR_FORMAT,
         SHADING_MODEL_FORMAT,
         _sharedDepthFormat);
-    _viewportRTSpec = buildDeferredViewRenderTargetSpec(extent, _viewportColorFormat);
+    _viewRTSpec = buildDeferredViewRenderTargetSpec(extent, _viewColorFormat);
 }
 
 void DeferredRenderPipeline::destroyShadowResources()
@@ -564,7 +564,7 @@ DeferredPipelineDebugViews DeferredRenderPipeline::buildDebugViews() const
 void DeferredRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& catalog) const
 {
     const DeferredAttachmentFormats gbufferFormats  = buildGBufferSnapshotFormats();
-    const DeferredAttachmentFormats viewportFormats = buildViewportSnapshotFormats();
+    const DeferredAttachmentFormats viewportFormats = buildViewSnapshotFormats();
     catalog.entries.push_back({
         .label        = "Deferred GBuffer",
         .owner        = RenderTargetCatalog::Entry::EOwner::DeferredGBuffer,
@@ -581,13 +581,13 @@ void DeferredRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& cata
         .frameBufferCount = 1,
     });
     catalog.entries.push_back({
-        .label        = "Deferred Viewport",
-        .owner        = RenderTargetCatalog::Entry::EOwner::DeferredViewport,
+        .label        = "Deferred View",
+        .owner        = RenderTargetCatalog::Entry::EOwner::DeferredView,
         .colorFormats = viewportFormats.colorFormats,
         .depthFormat  = viewportFormats.depthFormat,
         .colorAttachments = {_debugViews.viewportResources.colorOwner},
         .depthAttachment  = _debugViews.viewportResources.depthOwner,
-        .extent           = _viewportRTSpec.extent,
+        .extent           = _viewRTSpec.extent,
         .frameBufferCount = 1,
     });
     catalog.entries.push_back({
@@ -619,7 +619,7 @@ bool DeferredRenderPipeline::setRenderTargetDepthFormat(
 {
     switch (owner) {
     case RenderTargetCatalog::Entry::EOwner::DeferredGBuffer:
-    case RenderTargetCatalog::Entry::EOwner::DeferredViewport:
+    case RenderTargetCatalog::Entry::EOwner::DeferredView:
         setDeferredSharedDepthFormat(format);
         return true;
     case RenderTargetCatalog::Entry::EOwner::DeferredShadow:
@@ -651,17 +651,17 @@ bool DeferredRenderPipeline::setRenderTargetColorFormat(RenderTargetCatalog::Ent
             markPendingResourceRefresh(EDeferredPendingResourceRefresh::GBufferAttachments);
         }
         break;
-    case RenderTargetCatalog::Entry::EOwner::DeferredViewport:
-        if (attachmentIndex >= _viewportRTSpec.attachments.colorAttach.size()) {
+    case RenderTargetCatalog::Entry::EOwner::DeferredView:
+        if (attachmentIndex >= _viewRTSpec.attachments.colorAttach.size()) {
             return false;
         }
-        if (_viewportRTSpec.attachments.colorAttach[attachmentIndex].format != format) {
-            _viewportRTSpec.attachments.colorAttach[attachmentIndex].format = format;
+        if (_viewRTSpec.attachments.colorAttach[attachmentIndex].format != format) {
+            _viewRTSpec.attachments.colorAttach[attachmentIndex].format = format;
             bFormatChanged                                                  = true;
         }
         if (bFormatChanged) {
-            _viewportColorFormat = _viewportRTSpec.attachments.colorAttach[0].format;
-            markPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportAttachments);
+            _viewColorFormat = _viewRTSpec.attachments.colorAttach[0].format;
+            markPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewAttachments);
         }
         break;
     default:
@@ -685,14 +685,14 @@ void DeferredRenderPipeline::clearPendingResourceRefresh(EDeferredPendingResourc
     _pendingResourceRefreshMask &= ~static_cast<uint32_t>(refresh);
 }
 
-void DeferredRenderPipeline::requestViewportResize(Extent2D extent)
+void DeferredRenderPipeline::requestViewResize(Extent2D extent)
 {
     if (extent.width == 0 || extent.height == 0) {
         return;
     }
 
-    _pendingViewportExtent  = extent;
-    markPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportResize);
+    _pendingViewExtent  = extent;
+    markPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewResize);
 }
 
 void DeferredRenderPipeline::requestShadowResourceRefresh()
@@ -702,10 +702,10 @@ void DeferredRenderPipeline::requestShadowResourceRefresh()
 
 void DeferredRenderPipeline::applyPendingResourceRefreshes()
 {
-    if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportResize)) {
-        _gBufferRTSpec.extent  = _pendingViewportExtent;
-        _viewportRTSpec.extent = _pendingViewportExtent;
-        clearPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportResize);
+    if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewResize)) {
+        _gBufferRTSpec.extent  = _pendingViewExtent;
+        _viewRTSpec.extent = _pendingViewExtent;
+        clearPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewResize);
     }
 
     if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::ShadowResources) && _render) {
@@ -735,8 +735,8 @@ void DeferredRenderPipeline::applyPendingResourceRefreshes()
         clearPendingResourceRefresh(EDeferredPendingResourceRefresh::GBufferAttachments);
     }
 
-    if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportAttachments)) {
-        clearPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportAttachments);
+    if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewAttachments)) {
+        clearPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewAttachments);
     }
 }
 
@@ -780,7 +780,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     initRenderTargetSpecs(extent);
     _entityIdPass.init(_render, EFormat::R32_UINT, _sharedDepthFormat);
     _debugViews.gBufferResources.reset(buildGBufferSnapshotFormats());
-    _debugViews.viewportResources.reset(buildViewportSnapshotFormats());
+    _debugViews.viewportResources.reset(buildViewSnapshotFormats());
     if (currentShadowSettings().isEnabled()) {
         initShadowResources();
     }
@@ -833,7 +833,7 @@ void DeferredRenderPipeline::initStages()
     _overlayStage->init(_render, _frameResources->getSkyboxFrameDSL());
 
     refreshGBufferStageState();
-    refreshViewportStageState();
+    refreshViewStageState();
 }
 
 void DeferredRenderPipeline::shutdown()
@@ -844,7 +844,7 @@ void DeferredRenderPipeline::shutdown()
     _debugAlbedoRGBView.reset();
     _debugSpecularAlphaView.reset();
     _cachedAlbedoSpecImageViewHandle = nullptr;
-    _pendingViewportExtent           = {};
+    _pendingViewExtent           = {};
     _pendingResourceRefreshMask      = 0;
     _debugViews                      = {};
     if (_ssaoStage) {
@@ -901,7 +901,7 @@ RenderPipelineFrameContext makeDeferredViewFrameContext(const ViewFamilyRecordCo
         .view                    = RenderViewRecordingContext{
             .task           = recording.task,
             .frameData      = recording.frameData,
-            .viewportExtent = viewExtent,
+            .viewExtent = viewExtent,
         },
         .derivedScene            = recording.task ? recording.task->desc.scene : nullptr,
     };
@@ -1052,7 +1052,7 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
                 refreshGBufferStageState();
             }
             if (bViewportChanged) {
-                refreshViewportStageState();
+                refreshViewStageState();
             }
         }
         result.views.push_back(std::move(output));
@@ -1070,7 +1070,7 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
 bool DeferredRenderPipeline::shouldSkipView(const RenderPipelineFrameContext& frame) const
 {
     YA_CORE_ASSERT(frame.cmdBuf, "DeferredRenderPipeline requires a command buffer");
-    return frame.view.viewportExtent.width == 0 || frame.view.viewportExtent.height == 0 ||
+    return frame.view.viewExtent.width == 0 || frame.view.viewExtent.height == 0 ||
            !frame.view.frameData;
 }
 
@@ -1078,8 +1078,8 @@ void DeferredRenderPipeline::beginViewRecording(const RenderPipelineFrameContext
 {
     captureShadowSettings(frame);
 
-    vpW = frame.view.viewportExtent.width;
-    vpH = frame.view.viewportExtent.height;
+    vpW = frame.view.viewExtent.width;
+    vpH = frame.view.viewExtent.height;
 
     _lastPointLightCount = frame.view.frameData->numPointLights;
     _lastDrawCount       = static_cast<uint32_t>(frame.view.frameData->totalDrawCount());
@@ -1090,7 +1090,7 @@ void DeferredRenderPipeline::beginViewRecording(const RenderPipelineFrameContext
         .flightIndex    = frame.frame ? frame.frame->flightIndex : 0,
         .frameIndex     = frame.frame ? frame.frame->frameIndex : 0,
         .deltaTime      = frame.frame ? frame.frame->deltaTime : 0.0f,
-        .viewportExtent = {.width = vpW, .height = vpH},
+        .viewExtent = {.width = vpW, .height = vpH},
         .derivedScene   = frame.derivedScene,
     };
 }
@@ -1126,7 +1126,7 @@ ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
     auto* envProcessor = sceneResources.environmentLighting;
 
     if (activeScene) {
-        const float viewportHeight = static_cast<float>(frame.view.viewportExtent.height);
+        const float viewportHeight = static_cast<float>(frame.view.viewExtent.height);
         if (viewportHeight > 0.0f) {
             for (const auto& [entity, billboard, transform] : activeScene->getRegistry().view<BillboardComponent, TransformComponent>().each()) {
                 if (!billboard.bVisible) {
@@ -1221,17 +1221,17 @@ DeferredViewResources DeferredRenderPipeline::buildPublishedViewResources(
 {
     DeferredViewResources resources{};
     resources.publish(
-        result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::viewportColor, viewId)),
+        result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::viewColor, viewId)),
         depthOwner,
         result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::entityId, viewId)),
-        buildViewportSnapshotFormats());
+        buildViewSnapshotFormats());
     return resources;
 }
 
 RenderViewOutput DeferredRenderPipeline::collectViewOutput(
     const RenderGraphExecutionResult& result,
     const DeferredFrameGraphResources& graphResources,
-    const SceneViewportTask* task,
+    const SceneViewTask* task,
     uint64_t viewId) const
 {
     RenderViewOutput output;
@@ -1243,7 +1243,7 @@ RenderViewOutput DeferredRenderPipeline::collectViewOutput(
         output.desc.extent = task ? task->output.extent : Extent2D{};
     }
 
-    output.color    = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::viewportColor, viewId));
+    output.color    = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::viewColor, viewId));
     output.depth    = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::gBufferDepth, viewId));
     output.entityId = result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::entityId, viewId));
     output.ssao     = graphResources.textures.ssao.has_value()
@@ -1276,22 +1276,22 @@ DeferredAttachmentFormats DeferredRenderPipeline::buildGBufferSnapshotFormats() 
     return buildDeferredFormatsFromSpec(_gBufferRTSpec);
 }
 
-DeferredAttachmentFormats DeferredRenderPipeline::buildViewportSnapshotFormats() const
+DeferredAttachmentFormats DeferredRenderPipeline::buildViewSnapshotFormats() const
 {
-    DeferredAttachmentFormats formats = buildDeferredFormatsFromSpec(_viewportRTSpec);
+    DeferredAttachmentFormats formats = buildDeferredFormatsFromSpec(_viewRTSpec);
     formats.depthFormat               = buildGBufferSnapshotFormats().depthFormat;
     return formats;
 }
 
-EFormat::T DeferredRenderPipeline::getViewportColorFormat() const
+EFormat::T DeferredRenderPipeline::getViewColorFormat() const
 {
-    if (_viewportRTSpec.attachments.colorAttach.empty()) {
+    if (_viewRTSpec.attachments.colorAttach.empty()) {
         return EFormat::Undefined;
     }
-    return _viewportRTSpec.attachments.colorAttach.front().format;
+    return _viewRTSpec.attachments.colorAttach.front().format;
 }
 
-EFormat::T DeferredRenderPipeline::getViewportDepthFormat() const
+EFormat::T DeferredRenderPipeline::getViewDepthFormat() const
 {
     return buildGBufferSnapshotFormats().depthFormat.value_or(EFormat::Undefined);
 }
@@ -1315,27 +1315,27 @@ void DeferredRenderPipeline::refreshGBufferStageState()
     }
 }
 
-void DeferredRenderPipeline::refreshViewportStageState()
+void DeferredRenderPipeline::refreshViewStageState()
 {
     if (_lightStage) {
-        _lightStage->refreshPipelineFormats(buildViewportSnapshotFormats());
+        _lightStage->refreshPipelineFormats(buildViewSnapshotFormats());
     }
 
     if (_overlayStage) {
-        _overlayStage->refreshPipelineFormats(buildViewportSnapshotFormats());
+        _overlayStage->refreshPipelineFormats(buildViewSnapshotFormats());
     }
 }
 
 void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
-    if (sceneViewOwnsHostViewport(frame.view.task)) {
-        const float frameBufferScale = std::max(frame.frame ? frame.frame->viewportFrameBufferScale : 1.0f, 1.0f);
+    if (sceneViewIsDisplayRoot(frame.view.task)) {
+        const float frameBufferScale = std::max(frame.frame ? frame.frame->renderScale : 1.0f, 1.0f);
         const Extent2D desiredExtent = Extent2D::fromVec2(
-            glm::vec2{static_cast<float>(frame.view.viewportExtent.width),
-                      static_cast<float>(frame.view.viewportExtent.height)} /
+            glm::vec2{static_cast<float>(frame.view.viewExtent.width),
+                      static_cast<float>(frame.view.viewExtent.height)} /
             frameBufferScale);
-        if (desiredExtent.width > 0 && desiredExtent.height > 0 && desiredExtent != _viewportRTSpec.extent) {
-            requestViewportResize(desiredExtent);
+        if (desiredExtent.width > 0 && desiredExtent.height > 0 && desiredExtent != _viewRTSpec.extent) {
+            requestViewResize(desiredExtent);
         }
     }
 
@@ -1378,8 +1378,8 @@ ShadowPreparedView DeferredRenderPipeline::prepareShadowPass(const RenderPipelin
         }
 
         RenderViewRecordingContext view = frame.view;
-            if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
-            view.viewportExtent = stageCtx.viewportExtent;
+            if (view.viewExtent.width == 0 && view.viewExtent.height == 0) {
+            view.viewExtent = stageCtx.viewExtent;
         }
         return _shadowStage->prepareView(*frame.submission, view);
     }
@@ -1408,8 +1408,8 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
     RenderSubmission& submission = *frame.submission;
 
     RenderViewRecordingContext view = frame.view;
-    if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
-        view.viewportExtent = stageCtx.viewportExtent;
+    if (view.viewExtent.width == 0 && view.viewExtent.height == 0) {
+        view.viewExtent = stageCtx.viewExtent;
     }
 
     const bool bUseSSAO = _bEnableSSAO && _ssaoStage;
@@ -1459,7 +1459,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
         .extent         = {.width = vpW, .height = vpH},
     };
     graphResources = {};
-    RenderTargetCreateInfo viewViewportSpec = _viewportRTSpec;
+    RenderTargetCreateInfo viewViewportSpec = _viewRTSpec;
     RenderTargetCreateInfo viewGBufferSpec  = _gBufferRTSpec;
     const Extent2D viewExtent{vpW, vpH};
     if (viewExtent.width > 0 && viewExtent.height > 0) {
@@ -1483,12 +1483,12 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
             .frameBinding             = viewBinding,
             .frame                    = &frame,
             .gBufferRTSpec            = &viewGBufferSpec,
-            .viewportRTSpec           = &viewViewportSpec,
+            .viewRTSpec           = &viewViewportSpec,
             .overlayInputs            = &overlayInputs,
             .environmentLighting      = &environmentLighting,
             .environmentLightingDS    = environmentLightingDS,
             .postContext              = &postContext,
-            .viewportExtent           = viewViewportSpec.extent,
+            .viewExtent           = viewViewportSpec.extent,
             .shadowPrepared           = shadowPrepared,
             .bUseSSAO                 = bUseSSAO,
             .bReverseViewportY        = _bReverseViewportY,
@@ -1508,14 +1508,14 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
 // Viewport Pass
 // ═══════════════════════════════════════════════════════════════════════
 
-void DeferredRenderPipeline::onViewportResized(Rect2D rect)
+void DeferredRenderPipeline::onViewResized(Rect2D rect)
 {
     Extent2D newExtent{
         .width  = static_cast<uint32_t>(rect.extent.x),
         .height = static_cast<uint32_t>(rect.extent.y),
     };
 
-    requestViewportResize(newExtent);
+    requestViewResize(newExtent);
 }
 
 } // namespace ya

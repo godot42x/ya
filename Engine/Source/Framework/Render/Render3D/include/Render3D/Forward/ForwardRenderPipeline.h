@@ -29,7 +29,7 @@ namespace ya
 enum class EForwardPendingResourceRefresh : uint32_t
 {
     None             = 0,
-    ViewportResize   = 1 << 0,
+    ViewResize   = 1 << 0,
     ShadowResources  = 1 << 1,
     AttachmentFormat = 1 << 2,
 };
@@ -69,7 +69,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
 
     // ── Render stages ─────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
-    stdptr<ForwardViewStage> _viewportStage;
+    stdptr<ForwardViewStage> _viewStage;
     PostProcessingStage          _postProcessStage;
     ForwardFrameGraphOrchestrator _frameGraphOrchestrator{};
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
@@ -78,12 +78,12 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
 
     bool                    bMSAA                    = false;
 
-    Extent2D      _pendingViewportExtent{};
+    Extent2D      _pendingViewExtent{};
     uint32_t      _pendingResourceRefreshMask = 0;
-    RenderingInfo _viewportRI{};
-    RenderTargetCreateInfo _viewportRTSpec{};
-    RenderAttachmentFormats _viewportFormats{};
-    ForwardViewResources _viewportResources{};
+    RenderingInfo _viewRI{};
+    RenderTargetCreateInfo _viewRTSpec{};
+    RenderAttachmentFormats _viewFormats{};
+    ForwardViewResources _viewResources{};
     EntityIdPass     _entityIdPass{};
     ShadowSettings _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
     std::optional<PostProcessingState> _pendingPostProcessSettings;
@@ -98,14 +98,14 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner,
                                     EFormat::T                               format) override;
 
-    void                         onViewportResized(Rect2D rect) override;
-    Extent2D                     getViewportExtent() const override;
-    [[nodiscard]] EFormat::T     getViewportColorFormat() const override;
-    [[nodiscard]] EFormat::T     getViewportDepthFormat() const override;
-    [[nodiscard]] const ForwardViewResources& getCurrentViewportResources() const { return _viewportResources; }
-    [[nodiscard]] std::shared_ptr<RenderTexture>    getViewportOutputImageShared() const
+    void                         onViewResized(Rect2D rect) override;
+    Extent2D                     getViewExtent() const override;
+    [[nodiscard]] EFormat::T     getViewColorFormat() const override;
+    [[nodiscard]] EFormat::T     getViewDepthFormat() const override;
+    [[nodiscard]] const ForwardViewResources& getCurrentViewportResources() const { return _viewResources; }
+    [[nodiscard]] std::shared_ptr<RenderTexture>    getViewOutputImageShared() const
     {
-        return bMSAA ? _viewportResources.resolveOwner : _viewportResources.colorOwner;
+        return bMSAA ? _viewResources.resolveOwner : _viewResources.colorOwner;
     }
     [[nodiscard]] std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const
     {
@@ -127,8 +127,8 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;
 
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
-    [[nodiscard]] std::shared_ptr<RenderTexture> getViewportDepthImageShared() const override { return _viewportResources.depthOwner; }
-    [[nodiscard]] std::shared_ptr<RenderTexture> getEntityIdImageShared() const override { return _viewportResources.entityIdOwner; }
+    [[nodiscard]] std::shared_ptr<RenderTexture> getViewDepthImageShared() const override { return _viewResources.depthOwner; }
+    [[nodiscard]] std::shared_ptr<RenderTexture> getEntityIdImageShared() const override { return _viewResources.entityIdOwner; }
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
     [[nodiscard]] std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     [[nodiscard]] bool           isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
@@ -140,7 +140,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void                         requestPostProcessSettings(const PostProcessingState& settings);
 
   private:
-    void               initViewportResources(const InitDesc& desc);
+    void               initViewResources(const InitDesc& desc);
     void               initPostProcessResources(const InitDesc& desc);
     void               initShadowResources();
     void               initStageResources();
@@ -149,25 +149,25 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void               markPendingResourceRefresh(EForwardPendingResourceRefresh refresh);
     [[nodiscard]] bool hasPendingResourceRefresh(EForwardPendingResourceRefresh refresh) const;
     void               clearPendingResourceRefresh(EForwardPendingResourceRefresh refresh);
-    void               requestViewportResize(Extent2D extent);
+    void               requestViewResize(Extent2D extent);
     void               requestShadowResourceRefresh();
     void               applyPendingResourceRefreshes();
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
-    void               recreateViewportResources();
-    void               refreshViewportSnapshot();
-    void               refreshViewportStageState();
+    void               recreateViewResources();
+    void               refreshViewSnapshot();
+    void               refreshViewStageState();
     void               refreshShadowStageState();
     bool               appendViewportPassGraph(RenderGraph& graph,
                                                const RenderPipelineFrameContext& frame,
                                                RenderStageContext&             stageCtx,
                                                const ShadowPreparedView&       shadowPrepared,
                                                FrameContext&                    postContext,
-                                               ForwardViewStage::PassContext& viewportPassContext,
+                                               ForwardViewStage::PassContext& viewPassContext,
                                                const ForwardFrameResourceSet::Binding& frameBinding,
                                                ForwardFrameResourceSet::ViewResources* viewResources,
                                                std::optional<RGPassHandle> familyPredecessor);
     [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
-                                                     const SceneViewportTask* task,
+                                                     const SceneViewTask* task,
                                                      uint64_t viewId,
                                                      Extent2D viewExtent) const;
     void               syncShadowSettings();

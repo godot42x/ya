@@ -44,8 +44,8 @@ class YA_GAME_RUNTIME_API AppRenderServices
     /// Answers "will poses sampled here be consumed" for systems that only need
     /// to work for what gets drawn, without a switch that describes a viewport.
     [[nodiscard]] bool                                   wasSceneRenderedLastTick(const Scene* scene) const;
-    void                                                 setViewportFrameBufferScale(float scale);
-    [[nodiscard]] float                                  getViewportFrameBufferScale() const;
+    void                                                 setRenderScale(float scale);
+    [[nodiscard]] float                                  getRenderScale() const;
     /// The resolution the host viewport's View renders at, in pixels. A render
     /// setting, not a window measurement: the window only decides how the
     /// resulting image is presented. Seeded from the size the window was created

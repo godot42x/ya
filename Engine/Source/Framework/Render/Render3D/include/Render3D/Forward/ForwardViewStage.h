@@ -97,7 +97,7 @@ struct ForwardViewStage : public IRenderStage
     // IRenderStage interface
     // ═══════════════════════════════════════════════════════════════
 
-    ForwardViewStage() : IRenderStage("ForwardViewport") {}
+    ForwardViewStage() : IRenderStage("ForwardView") {}
 
     void initWithDesc(const InitDesc& desc);
     void init(IRender* render) override;

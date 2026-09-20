@@ -34,16 +34,16 @@ bool AppRenderServices::wasSceneRenderedLastTick(const Scene* scene) const
     return std::find(rendered.begin(), rendered.end(), scene) != rendered.end();
 }
 
-void AppRenderServices::setViewportFrameBufferScale(float scale)
+void AppRenderServices::setRenderScale(float scale)
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    _state->hostView.viewportFrameBufferScale = scale;
+    _state->hostView.renderScale = scale;
 }
 
-float AppRenderServices::getViewportFrameBufferScale() const
+float AppRenderServices::getRenderScale() const
 {
     YA_CORE_ASSERT(_state, "Render services are not available");
-    return _state->hostView.viewportFrameBufferScale;
+    return _state->hostView.renderScale;
 }
 
 void AppRenderServices::setRenderResolution(Extent2D resolution)

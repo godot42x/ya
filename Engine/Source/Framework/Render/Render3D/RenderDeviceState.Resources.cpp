@@ -60,7 +60,7 @@ void RenderDeviceState::initRuntimeState(const InitDesc& desc)
     _environmentLightingProvider = desc.environmentLightingProvider;
 
     currentRenderAPI = ERenderAPI::Vulkan;
-    _pipelineViewportRect = Rect2D{
+    _pipelineViewRect = Rect2D{
         .pos    = {0.0f, 0.0f},
         .extent = {static_cast<float>(desc.windowWidth), static_cast<float>(desc.windowHeight)},
     };
@@ -185,13 +185,13 @@ void RenderDeviceState::initSharedRenderResources()
         .hostServices          = _hostServices,
         .sharedResourceProvider = &_sharedResourceProvider,
         .debugRenderSystem     = &DebugRenderSystem::get(),
-        .viewportWidth         = static_cast<int>(_pipelineViewportRect.extent.x),
-        .viewportHeight        = static_cast<int>(_pipelineViewportRect.extent.y),
+        .viewportWidth         = static_cast<int>(_pipelineViewRect.extent.x),
+        .viewportHeight        = static_cast<int>(_pipelineViewRect.extent.y),
         .reapplyViewportSink   = [this]()
         {
-            if (_pipelineViewportRect.extent.x > 0.0f && _pipelineViewportRect.extent.y > 0.0f) {
+            if (_pipelineViewRect.extent.x > 0.0f && _pipelineViewRect.extent.y > 0.0f) {
                 if (auto* pipeline = getActivePipeline()) {
-                    pipeline->onViewportResized(_pipelineViewportRect);
+                    pipeline->onViewResized(_pipelineViewRect);
                 }
             }
         },
@@ -207,7 +207,7 @@ void RenderDeviceState::initPresentationResources()
         .present = _render->getPrimarySurfaceContext(),
         .viewportDisplayImageProvider = [this]()
         {
-            return getViewportDisplayImageShared();
+            return getViewDisplayImageShared();
         },
     });
 

@@ -63,11 +63,11 @@ struct PostProcessingStage
     RGTextureHandle appendFinalizeGraphPasses(RenderGraph& graph, const FinalizePassParams& params);
     RGTextureHandle appendGraphPasses(RenderGraph& graph,
                                       Texture*      inputTexture,
-                                      glm::vec2     viewportExtent,
+                                      glm::vec2     viewExtent,
                                       FrameContext* ctx);
     RGTextureHandle appendGraphPasses(RenderGraph& graph,
                                       RenderTexture* inputImage,
-                                      glm::vec2      viewportExtent,
+                                      glm::vec2      viewExtent,
                                       FrameContext*  ctx);
     RGTextureHandle appendGraphPasses(RenderGraph& graph,
                                       RGTextureHandle input,

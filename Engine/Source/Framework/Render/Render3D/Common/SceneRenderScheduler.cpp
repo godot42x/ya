@@ -43,10 +43,10 @@ void buildViewFamilies(SceneRenderPlan& plan)
     plan.viewFamilies.clear();
 
     std::unordered_map<SceneViewFamilyKey, uint32_t, SceneViewFamilyKeyHash> familyIndices;
-    familyIndices.reserve(plan.viewportTasks.size());
+    familyIndices.reserve(plan.viewTasks.size());
 
-    for (uint32_t taskIndex = 0; taskIndex < plan.viewportTasks.size(); ++taskIndex) {
-        SceneViewportTask& task = plan.viewportTasks[taskIndex];
+    for (uint32_t taskIndex = 0; taskIndex < plan.viewTasks.size(); ++taskIndex) {
+        SceneViewTask& task = plan.viewTasks[taskIndex];
 
         const SceneViewFamilyKey familyKey = makeSceneViewFamilyKey(task);
         auto [familyIt, familyInserted] =
@@ -57,7 +57,7 @@ void buildViewFamilies(SceneRenderPlan& plan)
 
         const uint32_t familyIndex = familyIt->second;
         task.familyIndex           = familyIndex;
-        plan.viewFamilies[familyIndex].viewportTaskIndices.push_back(taskIndex);
+        plan.viewFamilies[familyIndex].viewTaskIndices.push_back(taskIndex);
     }
 }
 
@@ -81,7 +81,7 @@ bool SceneRenderScheduler::submit(SceneViewDesc desc)
     // Rejecting it here keeps the failure at the declaration edge instead of
     // letting it surface as an unsized resource in the middle of graph
     // building.
-    const glm::vec2 declaredExtent = desc.viewportRect.extent;
+    const glm::vec2 declaredExtent = desc.outputRect.extent;
     if (!std::isfinite(declaredExtent.x) || !std::isfinite(declaredExtent.y)) {
         return false;
     }
@@ -123,12 +123,12 @@ SceneRenderPlan SceneRenderScheduler::seal()
 
         // The declaration is carried over whole; only the plan's own output
         // identity and bookkeeping are added beside it.
-        plan.viewportTasks.push_back(SceneViewportTask{
+        plan.viewTasks.push_back(SceneViewTask{
             .desc          = desc,
             .output =
                 {
                     .viewId = desc.viewId,
-                    .extent = Extent2D::fromVec2(desc.viewportRect.extent),
+                    .extent = Extent2D::fromVec2(desc.outputRect.extent),
                 },
             .snapshotIndex = it->second,
         });
@@ -158,8 +158,8 @@ ExtractedSceneRender buildSceneSnapshots(SceneRenderPlan plan, const SceneSnapsh
     if (bUnresolved) {
         // A View whose Scene content never arrived must not reach recording, and
         // the Views of the Scenes that did arrive still record this tick.
-        std::erase_if(plan.viewportTasks,
-                      [&plan](const SceneViewportTask& task) { return !plan.snapshotFor(task); });
+        std::erase_if(plan.viewTasks,
+                      [&plan](const SceneViewTask& task) { return !plan.snapshotFor(task); });
         buildViewFamilies(plan);
     }
 

@@ -150,7 +150,7 @@ void presentGuiSnapshot(FGUISurfacePresentResources& resources,
         FRender2DComposePassDesc{
             .kind                  = ERender2DComposePassKind::RuntimeUIComposite,
             .passSlot              = passSlot,
-            .logicalViewportExtent = logicalExtent,
+            .logicalExtent = logicalExtent,
         });
     cmdBuf->end();
     submitPresentFrame(presentFrame, {cmdBuf->getHandle()});

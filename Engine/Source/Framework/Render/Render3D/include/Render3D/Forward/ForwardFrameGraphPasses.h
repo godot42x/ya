@@ -21,14 +21,14 @@ struct RenderTargetCreateInfo;
 namespace forward_frame_graph
 {
 
-struct ViewportGraphResources
+struct ViewGraphResources
 {
     RGTextureHandle       color{};
     RGTextureHandle       resolve{};
     RGTextureHandle       depth{};
     RGTextureHandle       entityId{};
     std::optional<RGTextureHandle> shadowDepth{};
-    Extent2D              viewportExtent{};
+    Extent2D              viewExtent{};
     AttachmentDescription colorAttachment{};
     AttachmentDescription depthAttachment{};
     AttachmentDescription entityIdAttachment{};
@@ -40,9 +40,9 @@ struct BuildInputs
     RenderGraph*                                     graph               = nullptr;
     RenderStageContext*                              stageCtx            = nullptr;
     ForwardFrameResourceSet::Binding                 frameBinding        = {};
-    const RenderTargetCreateInfo*                    viewportRTSpec      = nullptr;
+    const RenderTargetCreateInfo*                    viewRTSpec      = nullptr;
     std::vector<ForwardDirectionGizmoInput>          directionGizmos     = {};
-    ForwardViewStage::PassContext*               viewportPassContext = nullptr;
+    ForwardViewStage::PassContext*               viewPassContext = nullptr;
     FrameContext*                                    postContext         = nullptr;
     bool                                             bEnableShadow       = false;
     /// What the View's shadow preparation produced; invalid means no shadow
@@ -56,28 +56,28 @@ struct BuildInputs
 
 struct Dependencies
 {
-    ForwardViewStage* viewportStage = nullptr;
+    ForwardViewStage* viewStage = nullptr;
     EntityIdPass* entityIdPass  = nullptr;
     PostProcessingStage*  postProcessStage = nullptr;
 };
 
-[[nodiscard]] ViewportGraphResources createViewportResources(
+[[nodiscard]] ViewGraphResources createViewResources(
     RenderGraph& graph,
-    const RenderTargetCreateInfo& viewportRTSpec,
+    const RenderTargetCreateInfo& viewRTSpec,
     std::optional<RGTextureHandle> shadowDepth,
     uint64_t viewId);
 
-void appendViewportPasses(RenderGraph& graph,
+void appendViewPasses(RenderGraph& graph,
                           const Dependencies& deps,
                           const BuildInputs& inputs,
-                          const ViewportGraphResources& resources);
+                          const ViewGraphResources& resources);
 
 void appendPostprocessPasses(RenderGraph& graph,
                              const Dependencies& deps,
                              const BuildInputs& inputs,
-                             const ViewportGraphResources& resources);
+                             const ViewGraphResources& resources);
 
-void exportGraphOutputs(RenderGraph& graph, const ViewportGraphResources& resources, uint64_t viewId);
+void exportGraphOutputs(RenderGraph& graph, const ViewGraphResources& resources, uint64_t viewId);
 
 } // namespace forward_frame_graph
 

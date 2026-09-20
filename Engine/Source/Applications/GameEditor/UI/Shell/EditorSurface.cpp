@@ -141,7 +141,7 @@ void EditorSurface::shutdown()
     _ownedDockContext.reset();
     setViewportHost(nullptr);
     _viewportGizmoOverlay.reset();
-    _viewportOverlayHost.clearOverlay();
+    _viewOverlayHost.clearOverlay();
     _projectBrowser.reset();
     _projectSelection.reset();
     _viewportTexture.reset();
@@ -203,7 +203,7 @@ void EditorSurface::rebuild(const FEditorSurfaceContext& context)
     _ownedDockContext.reset();
     setViewportHost(nullptr);
     _viewportGizmoOverlay.reset();
-    _viewportOverlayHost.clearOverlay();
+    _viewOverlayHost.clearOverlay();
     _projectBrowser.reset();
     _projectSelection.reset();
     if (_filePicker) {
@@ -606,7 +606,7 @@ void EditorSurface::buildEditorChrome(const FEditorSurfaceContext& context)
     }
 
     _viewportGizmoOverlay = std::make_shared<EditorViewportGizmoOverlay>(_layer->gizmo());
-    _viewportOverlayHost.setOverlay(_viewportGizmoOverlay);
+    _viewOverlayHost.setOverlay(_viewportGizmoOverlay);
     _layer->gizmo().setUndoStack(&_rootSession->undo());
 }
 
@@ -1089,7 +1089,7 @@ void EditorSurface::syncViewportHostState(const FEditorSurfaceContext& context)
     state.view       = context.view;
     state.projection = context.projection;
 
-    _viewportOverlayHost.syncHost(state);
+    _viewOverlayHost.syncHost(state);
 }
 
 EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::vec2& windowPoint)
@@ -1124,11 +1124,11 @@ EWidgetRouteResult EditorSurface::dispatchEvent(const Event& event, const glm::v
     const bool bOnWorldImage = isPointInViewport(windowPoint) && _viewportHost->isWorldPoint(windowPoint);
     const bool overlayCandidate =
         _viewportHost &&
-        (bOnWorldImage || _viewportOverlayHost.wantsPointerCapture() ||
+        (bOnWorldImage || _viewOverlayHost.wantsPointerCapture() ||
          _bViewportRightPressPending);
     if (overlayCandidate) {
         const glm::vec2 localPoint = windowPoint - _viewportHost->imageRect().pos;
-        const EWidgetRouteResult overlayResult = _viewportOverlayHost.dispatchEvent(event, localPoint);
+        const EWidgetRouteResult overlayResult = _viewOverlayHost.dispatchEvent(event, localPoint);
         if (overlayResult != EWidgetRouteResult::NotHandled) {
             _bViewportRightPressPending = false;
             return overlayResult;

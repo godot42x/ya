@@ -25,14 +25,14 @@ struct IRenderPipelineExecution
 {
     virtual ~IRenderPipelineExecution() = default;
 
-    virtual void onViewportResized(Rect2D rect) = 0;
+    virtual void onViewResized(Rect2D rect) = 0;
     /// Compile and record one Scene family graph; return each View's output.
     /// Product recording does not use tick/beginTick/getCurrent.
     virtual ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) = 0;
 
-    [[nodiscard]] virtual Extent2D   getViewportExtent() const          = 0;
-    [[nodiscard]] virtual EFormat::T getViewportColorFormat() const     = 0;
-    [[nodiscard]] virtual EFormat::T getViewportDepthFormat() const     = 0;
+    [[nodiscard]] virtual Extent2D   getViewExtent() const          = 0;
+    [[nodiscard]] virtual EFormat::T getViewColorFormat() const     = 0;
+    [[nodiscard]] virtual EFormat::T getViewDepthFormat() const     = 0;
 };
 
 struct IRenderPipelineRenderTargets
@@ -49,7 +49,7 @@ struct IRenderPipelineDebugOutputs
     virtual ~IRenderPipelineDebugOutputs() = default;
 
     [[nodiscard]] virtual bool isShadowMappingEnabled() const = 0;
-    [[nodiscard]] virtual std::shared_ptr<RenderTexture> getViewportDepthImageShared() const = 0;
+    [[nodiscard]] virtual std::shared_ptr<RenderTexture> getViewDepthImageShared() const = 0;
     /// R32_UINT viewport target holding per-pixel entity ids (editor picking).
     [[nodiscard]] virtual std::shared_ptr<RenderTexture> getEntityIdImageShared() const { return nullptr; }
     [[nodiscard]] virtual std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const = 0;

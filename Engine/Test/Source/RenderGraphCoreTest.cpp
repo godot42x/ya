@@ -2051,13 +2051,13 @@ TEST(RenderGraphCoreTest, ViewKeyedPersistentTexturesStayIndependent)
     TestResourceFactory factory;
     RenderGraphResourceRegistry registry(factory);
 
-    const auto keyA = makeViewPersistentTextureKey("ForwardViewport.Color", 11);
-    const auto keyB = makeViewPersistentTextureKey("ForwardViewport.Color", 12);
+    const auto keyA = makeViewPersistentTextureKey("ForwardView.Color", 11);
+    const auto keyB = makeViewPersistentTextureKey("ForwardView.Color", 12);
     ASSERT_NE(keyA, keyB);
 
     RenderGraph graph;
     const auto desc = RGTextureDesc{
-        .label  = "ForwardViewport.Color",
+        .label  = "ForwardView.Color",
         .format = EFormat::R8G8B8A8_UNORM,
         .extent = Extent3D{64, 32, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,

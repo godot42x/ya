@@ -23,20 +23,20 @@
 namespace ya
 {
 
-void RenderDeviceState::applyViewportResize(Rect2D rect)
+void RenderDeviceState::applyViewResize(Rect2D rect)
 {
     if (rect.extent.x <= 0.0f || rect.extent.y <= 0.0f) {
         return;
     }
-    if (_pipelineViewportRect.extent.x == rect.extent.x &&
-        _pipelineViewportRect.extent.y == rect.extent.y &&
-        _pipelineViewportRect.pos.x == rect.pos.x &&
-        _pipelineViewportRect.pos.y == rect.pos.y) {
+    if (_pipelineViewRect.extent.x == rect.extent.x &&
+        _pipelineViewRect.extent.y == rect.extent.y &&
+        _pipelineViewRect.pos.x == rect.pos.x &&
+        _pipelineViewRect.pos.y == rect.pos.y) {
         return;
     }
-    _pipelineViewportRect = rect;
+    _pipelineViewRect = rect;
     if (auto* pipeline = getActivePipeline()) {
-        pipeline->onViewportResized(rect);
+        pipeline->onViewResized(rect);
     }
 }
 
@@ -78,7 +78,7 @@ void RenderDeviceState::prepareComposePipelines()
             FRender2DComposePassDesc{
                 .kind = ERender2DComposePassKind::RuntimeUIComposite,
             },
-            getViewportDisplayImageFormat());
+            getViewDisplayImageFormat());
     }
 }
 
@@ -159,12 +159,12 @@ RenderPipelineDebugOutputCatalog RenderDeviceState::buildPipelineDebugOutputCata
 
     catalog.bShadowMappingEnabled   = pipeline->isShadowMappingEnabled();
     catalog.shadowDirectionalDepthResource = pipeline->getShadowDirectionalDepthResource();
-    catalog.viewportDepthImageOwner = nullptr;
+    catalog.viewDepthImageOwner = nullptr;
     catalog.bPostprocessingEnabled = pipeline->isPostprocessingEnabled();
 
     if (const auto* output = publishedViewOutput()) {
-        catalog.viewportOutputImageOwner    = output->color;
-        catalog.viewportDepthImageOwner     = output->depth;
+        catalog.viewOutputImageOwner    = output->color;
+        catalog.viewDepthImageOwner     = output->depth;
         catalog.postprocessOutputImageOwner = (output->display && output->display != output->color)
             ? output->display
             : nullptr;
@@ -177,7 +177,7 @@ RenderPipelineDebugOutputCatalog RenderDeviceState::buildPipelineDebugOutputCata
     return catalog;
 }
 
-Extent2D RenderDeviceState::getViewportExtent() const
+Extent2D RenderDeviceState::getViewExtent() const
 {
     // One source: the published host viewport View. A tick that published none
     // has no viewport, and the caller decides what to show instead (the editor

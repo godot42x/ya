@@ -20,10 +20,10 @@ struct RenderTargetCatalog
         enum class EOwner
         {
             Presentation,
-            ForwardViewport,
+            ForwardView,
             ForwardShadow,
             DeferredGBuffer,
-            DeferredViewport,
+            DeferredView,
             DeferredShadow,
         } owner = EOwner::Presentation;
         std::vector<EFormat::T>          colorFormats{};

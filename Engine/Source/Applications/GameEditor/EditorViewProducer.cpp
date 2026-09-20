@@ -83,7 +83,7 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
             .view         = editorCamera.getViewMatrix(),
             .projection   = editorCamera.getProjectionMatrix(),
             .cameraPos    = editorCamera.getPosition(),
-            .viewportRect = authoringRect,
+            .outputRect = authoringRect,
             .features     = baseFeatures | (bEditorGizmos ? gizmoFeature : 0u),
         });
     }
@@ -114,7 +114,7 @@ void EditorViewProducer::collectSceneViews(const SceneViewCollectContext& contex
         .view              = cameraComponent->getFreeView(),
         .projection        = cameraProjectionForOutput(*cameraComponent, previewOutput.extent),
         .cameraPos         = transformComponent->getWorldPosition(),
-        .viewportRect      = previewOutput,
+        .outputRect      = previewOutput,
         // The preview composes onto the authoring viewport of the *same* owner:
         // the key names that owner rather than a global "primary" id, so a
         // preview can only ever land on a View this producer declared.

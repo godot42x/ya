@@ -43,7 +43,7 @@ TEST(RuntimeGameViewProducerTest, GameViewportDeclaresAuthoredContentOnly)
     EXPECT_EQ(primary.scene, &scene);
     // The game owns its own View identity; it does not share the editor's
     // "primary" slot. The key is what the output tables are keyed on.
-    EXPECT_EQ(primary.viewId, producer.hostViewportKey().viewId());
+    EXPECT_EQ(primary.viewId, producer.displayRootKey().viewId());
     EXPECT_NE(primary.viewId, 0u);
     // Generated companions are editor furniture; this viewport belongs to the
     // game, and nothing an editor switched on reaches it.

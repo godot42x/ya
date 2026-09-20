@@ -80,7 +80,7 @@ struct SceneViewDesc
     glm::vec3 cameraPos  = glm::vec3(0.0f);
     /// This View's own offscreen camera rect (origin at its RT top-left). Not
     /// chrome widget offset, and not the compose dest on another View.
-    Rect2D    viewportRect{};
+    Rect2D    outputRect{};
     /// 0: this View is a display root (the host viewport identity). Non-zero:
     /// blit `composeRect` onto that View's display RT after recording.
     SceneViewId composeOntoViewId = 0;
@@ -95,7 +95,7 @@ struct SceneViewDesc
     /// (the editor's authoring camera is not a Scene entity).
     entt::entity viewOwner = entt::null;
 
-    [[nodiscard]] bool ownsHostViewport() const { return composeOntoViewId == 0; }
+    [[nodiscard]] bool isDisplayRoot() const { return composeOntoViewId == 0; }
 
     /// Derived on read: `view` and `projection` are the truth, and a stored
     /// product would be one more copy that can disagree with them.

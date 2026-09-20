@@ -75,7 +75,7 @@ namespace
 //         updateEditorCameraAndPrepareCompose   (world graph on/off, camera,
 //                                                Render2D pipeline prep)
 //         EditorLayer::onUpdate
-//         applyPendingViewportResize → RenderDeviceState
+//         applyPendingViewResize → RenderDeviceState
 //     tickRender
 //       RenderDeviceState::record world graph (disabled in 2D canvas)
 //       EditorModule::onViewportCompose          [command recording]
@@ -452,16 +452,16 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         }
 
         auto&          editorCamera   = _layer->getCamera();
-        const Extent2D viewportExtent = device->getViewportExtent();
+        const Extent2D viewExtent = device->getViewExtent();
         // Keep the editor camera controllable during simulation; only full
         // runtime (PIE) hands viewport input over to the game. 2D canvas
         // preview uses its own pan/zoom navigation instead of the camera.
         if (!app.isRuntimeMode() && !_layer->isViewportMode2D() && _layer->shouldCaptureInput()) {
             _cameraController.update(editorCamera, app.getInputManager(), dt);
         }
-        if (viewportExtent.height > 0) {
+        if (viewExtent.height > 0) {
             editorCamera.setPerspective(editorCamera._fov,
-                                        static_cast<float>(viewportExtent.width) / static_cast<float>(viewportExtent.height),
+                                        static_cast<float>(viewExtent.width) / static_cast<float>(viewExtent.height),
                                         editorCamera._nearClip,
                                         editorCamera._farClip);
         }
@@ -471,7 +471,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         // command buffer is recording invalidates that command buffer.
         const auto* activePipeline = device->getActivePipeline();
         const EFormat::T depthFormat = activePipeline
-                                           ? activePipeline->getViewportDepthFormat()
+                                           ? activePipeline->getViewDepthFormat()
                                            : EFormat::Undefined;
         prepareRender2DComposePassPipeline(
             FRender2DComposePassDesc{
@@ -528,10 +528,10 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _layer->setViewportContext(snapshot);
         _layer->setEntityIdPickImage(snapshot.entityIdImageOwner);
         // 2D mode disables the world scene graph, so the runtime pipeline never
-        // publishes viewport resources and getViewportExtent() stays 0x0;
+        // publishes viewport resources and getViewExtent() stays 0x0;
         // size the canvas target from the editor panel instead (same fallback
         // guards a degenerate pipeline extent in 3D).
-        Extent2D canvasTargetExtent = device->getViewportExtent();
+        Extent2D canvasTargetExtent = device->getViewExtent();
         if (_layer->isViewportMode2D() ||
             canvasTargetExtent.width == 0 || canvasTargetExtent.height == 0) {
             canvasTargetExtent = Extent2D::fromVec2(_layer->getViewportSize());

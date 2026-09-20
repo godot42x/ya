@@ -48,11 +48,11 @@ class DeferredRenderPipelineTestAccess;
 enum class EDeferredPendingResourceRefresh : uint32_t
 {
     None                = 0,
-    ViewportResize      = 1 << 0,
+    ViewResize      = 1 << 0,
     ShadowResources     = 1 << 1,
     SharedDepth         = 1 << 2,
     GBufferAttachments  = 1 << 3,
-    ViewportAttachments = 1 << 4,
+    ViewAttachments = 1 << 4,
 };
 
 // Shading Model IDs written to GBuffer RT3 (encoded as id/255.0 in R8_UNORM)
@@ -105,7 +105,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
 
     // ── Render targets ────────────────────────────────────────────────
     RenderTargetCreateInfo _gBufferRTSpec;
-    RenderTargetCreateInfo _viewportRTSpec;
+    RenderTargetCreateInfo _viewRTSpec;
 
     static constexpr EFormat::T LINEAR_FORMAT            = EFormat::R8G8B8A8_UNORM;
     static constexpr EFormat::T SIGNED_LINEAR_FORMAT     = EFormat::R16G16B16A16_SFLOAT;
@@ -115,7 +115,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     static constexpr EFormat::T DEPTH_FORMAT             = EFormat::D32_SFLOAT;
     static constexpr EFormat::T SHADOW_DEPTH_FORMAT      = EFormat::D32_SFLOAT;
     EFormat::T _gBufferSignedLinearFormat                = SIGNED_LINEAR_FORMAT;
-    EFormat::T _viewportColorFormat                      = VIEWPORT_COLOR_FORMAT;
+    EFormat::T _viewColorFormat                      = VIEWPORT_COLOR_FORMAT;
     EFormat::T _sharedDepthFormat                        = DEPTH_FORMAT;
 
     // ── Render stages ─────────────────────────────────────────────────
@@ -150,7 +150,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     stdptr<IImageView> _debugAlbedoRGBView;
     stdptr<IImageView> _debugSpecularAlphaView;
     ImageViewHandle    _cachedAlbedoSpecImageViewHandle = nullptr;
-    Extent2D           _pendingViewportExtent{};
+    Extent2D           _pendingViewExtent{};
     uint32_t           _pendingResourceRefreshMask = 0;
     DeferredPipelineDebugViews _debugViews{};
 
@@ -167,20 +167,20 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     ViewFamilyRenderResult recordFamily(const ViewFamilyRecordContext& ctx) override;
     void shutdown();
 
-    void onViewportResized(Rect2D rect) override;
+    void onViewResized(Rect2D rect) override;
 
-    Extent2D getViewportExtent() const override
+    Extent2D getViewExtent() const override
     {
-        return _viewportRTSpec.extent;
+        return _viewRTSpec.extent;
     }
-    EFormat::T getViewportColorFormat() const override;
-    EFormat::T getViewportDepthFormat() const override;
+    EFormat::T getViewColorFormat() const override;
+    EFormat::T getViewDepthFormat() const override;
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
     const DeferredGBufferResources& getCurrentGBufferResources() const { return _debugViews.gBufferResources; }
     const DeferredViewResources& getCurrentViewportResources() const { return _debugViews.viewportResources; }
-    std::shared_ptr<RenderTexture> getViewportOutputImageShared() const { return _debugViews.viewportResources.colorOwner; }
+    std::shared_ptr<RenderTexture> getViewOutputImageShared() const { return _debugViews.viewportResources.colorOwner; }
     std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const { return _debugViews.postprocess; }
     std::shared_ptr<RenderTexture> getBloomExtractImageShared() const { return _debugViews.bloomExtract; }
     std::shared_ptr<RenderTexture> getBloomBlurImageShared() const { return _debugViews.bloomBlur; }
@@ -199,7 +199,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner, EFormat::T format) override;
     bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) override;
 
-    std::shared_ptr<RenderTexture> getViewportDepthImageShared() const override { return _debugViews.viewportResources.depthOwner; }
+    std::shared_ptr<RenderTexture> getViewDepthImageShared() const override { return _debugViews.viewportResources.depthOwner; }
     std::shared_ptr<RenderTexture> getEntityIdImageShared() const override { return _debugViews.viewportResources.entityIdOwner; }
     bool           isShadowMappingEnabled() const override;
     std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
@@ -214,7 +214,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     void               initStages();
     void               resolveRuntimeFormats();
     [[nodiscard]] DeferredAttachmentFormats buildGBufferSnapshotFormats() const;
-    [[nodiscard]] DeferredAttachmentFormats buildViewportSnapshotFormats() const;
+    [[nodiscard]] DeferredAttachmentFormats buildViewSnapshotFormats() const;
     [[nodiscard]] bool shouldSkipView(const RenderPipelineFrameContext& frame) const;
     void               beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               invalidateGBufferDependentViews();
@@ -225,10 +225,10 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
         const std::shared_ptr<RenderTexture>& depthOwner) const;
     [[nodiscard]] RenderViewOutput collectViewOutput(const RenderGraphExecutionResult& result,
                                                      const DeferredFrameGraphResources& graphResources,
-                                                     const SceneViewportTask* task,
+                                                     const SceneViewTask* task,
                                                      uint64_t viewId) const;
     void               refreshGBufferStageState();
-    void               refreshViewportStageState();
+    void               refreshViewStageState();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ViewOverlayStage::FrameInputs buildOverlayFrameInputs(
         const RenderPipelineFrameContext& frame,
@@ -257,7 +257,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool hasPendingResourceRefresh(EDeferredPendingResourceRefresh refresh) const;
     void               clearPendingResourceRefresh(EDeferredPendingResourceRefresh refresh);
     void               applyPendingResourceRefreshes();
-    void               requestViewportResize(Extent2D extent);
+    void               requestViewResize(Extent2D extent);
     void               requestShadowResourceRefresh();
     void               applyPendingSettings();
     void               setDeferredSharedDepthFormat(EFormat::T format);

@@ -10,7 +10,7 @@ namespace ya
 
 struct ICommandBuffer;
 struct RenderFrameData;
-struct SceneViewportTask;
+struct SceneViewTask;
 
 /// One View being recorded inside a submission. The resource set assigns
 /// `viewSlot` when beginView succeeds; callers must not treat flightIndex as
@@ -19,10 +19,10 @@ struct RenderViewRecordingContext
 {
     static constexpr uint32_t kInvalidViewSlot = std::numeric_limits<uint32_t>::max();
 
-    const SceneViewportTask* task      = nullptr;
+    const SceneViewTask* task      = nullptr;
     const RenderFrameData*   frameData = nullptr;
     uint32_t                 viewSlot  = kInvalidViewSlot;
-    Extent2D                 viewportExtent{};
+    Extent2D                 viewExtent{};
 
     [[nodiscard]] bool valid() const { return frameData != nullptr; }
 };

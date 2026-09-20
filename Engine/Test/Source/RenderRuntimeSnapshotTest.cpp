@@ -33,7 +33,7 @@ SceneViewDesc makeView(Scene* scene, SceneViewId viewId)
     return SceneViewDesc{
         .scene        = scene,
         .viewId       = viewId,
-        .viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
+        .outputRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
     };
 }
 
@@ -57,11 +57,11 @@ TEST(RenderRuntimeSnapshotTest, EmptyDevicePublishesEmptyViewportResources)
     // answers "nothing". Falling back to pipeline state would answer with an
     // image from another frame, which is how a stale viewport gets read as the
     // current one.
-    EXPECT_EQ(device.getActiveViewportImageShared(), nullptr);
-    EXPECT_EQ(device.getViewportDisplayImageShared(), nullptr);
+    EXPECT_EQ(device.getActiveViewImageShared(), nullptr);
+    EXPECT_EQ(device.getViewDisplayImageShared(), nullptr);
     EXPECT_EQ(device.getPostprocessOutputImageShared(), nullptr);
-    EXPECT_EQ(device.getViewportExtent().width, 0u);
-    EXPECT_EQ(device.getViewportExtent().height, 0u);
+    EXPECT_EQ(device.getViewExtent().width, 0u);
+    EXPECT_EQ(device.getViewExtent().height, 0u);
 
     const RenderViewportSnapshot viewport = device.buildViewportSnapshot();
     const RenderTargetCatalog    targets  = device.buildRenderTargetCatalog();
@@ -91,10 +91,10 @@ TEST(RenderRuntimeSnapshotTest, RenderFramePlanGroupsFrameViewDisplayPresent)
     static_assert(std::is_same_v<decltype(RenderFramePlan{}.recordExtensions), IFrameRecordExtensions*>);
     /// One declaration type: the plan entry holds the desc verbatim and only
     /// adds its own output identity and bookkeeping.
-    static_assert(std::is_same_v<decltype(SceneViewportTask{}.desc), SceneViewDesc>);
+    static_assert(std::is_same_v<decltype(SceneViewTask{}.desc), SceneViewDesc>);
     static_assert(std::is_same_v<decltype(SceneViewDesc{}.scene), Scene*>);
     static_assert(std::is_same_v<decltype(SceneSnapshotEntry{}.scene), Scene*>);
-    static_assert(std::is_same_v<decltype(SceneViewRecording{}.task), const SceneViewportTask*>);
+    static_assert(std::is_same_v<decltype(SceneViewRecording{}.task), const SceneViewTask*>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.frame), const FramePacket*>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.submission), RenderSubmission*>);
     static_assert(std::is_same_v<decltype(RenderPipelineFrameContext{}.view), RenderViewRecordingContext>);
@@ -142,15 +142,15 @@ TEST(RenderRuntimeSnapshotTest, EveryTaskCarriesTheSceneItsDeclarationNamed)
     const ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
     const SceneRenderPlan&      plan      = extracted.plan();
     ASSERT_EQ(plan.viewFamilies.size(), 2u);
-    ASSERT_EQ(plan.viewportTasks.size(), 2u);
+    ASSERT_EQ(plan.viewTasks.size(), 2u);
 
-    EXPECT_EQ(plan.viewportTasks[0].desc.scene, &sceneA);
-    EXPECT_EQ(plan.viewportTasks[1].desc.scene, &sceneB);
+    EXPECT_EQ(plan.viewTasks[0].desc.scene, &sceneA);
+    EXPECT_EQ(plan.viewTasks[1].desc.scene, &sceneB);
     // The plan owns one declaration entry per View, so the Scene has exactly
     // one spelling between the declaration and the extraction table.
-    EXPECT_EQ(plan.snapshots[plan.viewportTasks[0].snapshotIndex].scene, &sceneA);
-    EXPECT_EQ(plan.snapshots[plan.viewportTasks[1].snapshotIndex].scene, &sceneB);
-    EXPECT_NE(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[1]));
+    EXPECT_EQ(plan.snapshots[plan.viewTasks[0].snapshotIndex].scene, &sceneA);
+    EXPECT_EQ(plan.snapshots[plan.viewTasks[1].snapshotIndex].scene, &sceneB);
+    EXPECT_NE(plan.familyFor(plan.viewTasks[0]), plan.familyFor(plan.viewTasks[1]));
 }
 
 TEST(RenderRuntimeSnapshotTest, SameSceneViewsShareOneSnapshotAndScene)
@@ -166,10 +166,10 @@ TEST(RenderRuntimeSnapshotTest, SameSceneViewsShareOneSnapshotAndScene)
     const SceneRenderPlan&      plan      = extracted.plan();
     ASSERT_EQ(plan.viewFamilies.size(), 1u);
     ASSERT_EQ(plan.snapshots.size(), 1u);
-    EXPECT_EQ(plan.viewportTasks[0].desc.scene, &scene);
-    EXPECT_EQ(plan.viewportTasks[1].desc.scene, &scene);
-    EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]), plan.snapshotFor(plan.viewportTasks[1]));
-    EXPECT_EQ(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[1]));
+    EXPECT_EQ(plan.viewTasks[0].desc.scene, &scene);
+    EXPECT_EQ(plan.viewTasks[1].desc.scene, &scene);
+    EXPECT_EQ(plan.snapshotFor(plan.viewTasks[0]), plan.snapshotFor(plan.viewTasks[1]));
+    EXPECT_EQ(plan.familyFor(plan.viewTasks[0]), plan.familyFor(plan.viewTasks[1]));
 }
 
 TEST(RenderRuntimeSnapshotTest, RenderFrameDataSeparatesSceneAndViewOwnership)
@@ -236,7 +236,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
         return SceneViewDesc{
             .scene        = scene,
             .viewId       = viewId,
-            .viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
+            .outputRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}},
         };
     };
 
@@ -247,7 +247,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
     SceneRenderPlan sealed = scheduler.seal();
     ASSERT_EQ(sealed.hostTick, 42u);
     ASSERT_EQ(sealed.snapshots.size(), 2u);
-    ASSERT_EQ(sealed.viewportTasks.size(), 3u);
+    ASSERT_EQ(sealed.viewTasks.size(), 3u);
     // Grouping does not extract; the explicit step extracts once per Scene.
     std::vector<Scene*> extractedScenes;
     const ExtractedSceneRender extracted = buildSceneSnapshots(
@@ -265,21 +265,21 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDeduplicatesSnapshotPerScene)
     EXPECT_EQ(extractedScenes[1], &sceneB);
 
     const SceneRenderPlan& plan = extracted.plan();
-    EXPECT_EQ(plan.viewportTasks[0].snapshotIndex, plan.viewportTasks[1].snapshotIndex);
-    EXPECT_NE(plan.viewportTasks[0].snapshotIndex, plan.viewportTasks[2].snapshotIndex);
-    EXPECT_EQ(plan.snapshots[plan.viewportTasks[0].snapshotIndex].snapshot,
-              plan.snapshots[plan.viewportTasks[1].snapshotIndex].snapshot);
-    EXPECT_NE(plan.snapshots[plan.viewportTasks[0].snapshotIndex].snapshot,
-              plan.snapshots[plan.viewportTasks[2].snapshotIndex].snapshot);
-    EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]),
-              plan.snapshotFor(plan.viewportTasks[1]));
+    EXPECT_EQ(plan.viewTasks[0].snapshotIndex, plan.viewTasks[1].snapshotIndex);
+    EXPECT_NE(plan.viewTasks[0].snapshotIndex, plan.viewTasks[2].snapshotIndex);
+    EXPECT_EQ(plan.snapshots[plan.viewTasks[0].snapshotIndex].snapshot,
+              plan.snapshots[plan.viewTasks[1].snapshotIndex].snapshot);
+    EXPECT_NE(plan.snapshots[plan.viewTasks[0].snapshotIndex].snapshot,
+              plan.snapshots[plan.viewTasks[2].snapshotIndex].snapshot);
+    EXPECT_EQ(plan.snapshotFor(plan.viewTasks[0]),
+              plan.snapshotFor(plan.viewTasks[1]));
     ASSERT_EQ(plan.viewFamilies.size(), 2u);
-    ASSERT_EQ(plan.viewFamilies[0].viewportTaskIndices.size(), 2u);
-    ASSERT_EQ(plan.viewFamilies[1].viewportTaskIndices.size(), 1u);
-    EXPECT_EQ(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[1]));
-    EXPECT_NE(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[2]));
-    EXPECT_EQ(plan.viewportTasks[0].familyIndex, plan.viewportTasks[1].familyIndex);
-    EXPECT_NE(plan.viewportTasks[0].familyIndex, plan.viewportTasks[2].familyIndex);
+    ASSERT_EQ(plan.viewFamilies[0].viewTaskIndices.size(), 2u);
+    ASSERT_EQ(plan.viewFamilies[1].viewTaskIndices.size(), 1u);
+    EXPECT_EQ(plan.familyFor(plan.viewTasks[0]), plan.familyFor(plan.viewTasks[1]));
+    EXPECT_NE(plan.familyFor(plan.viewTasks[0]), plan.familyFor(plan.viewTasks[2]));
+    EXPECT_EQ(plan.viewTasks[0].familyIndex, plan.viewTasks[1].familyIndex);
+    EXPECT_NE(plan.viewTasks[0].familyIndex, plan.viewTasks[2].familyIndex);
     EXPECT_FALSE(scheduler.isTickOpen());
 }
 
@@ -295,7 +295,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerCopiesIndependentViewOutputExtents
         SceneViewDesc request;
         request.scene = &scene;
         request.viewId = viewId;
-        request.viewportRect = {.pos = {0.0f, 0.0f}, .extent = extent};
+        request.outputRect = {.pos = {0.0f, 0.0f}, .extent = extent};
         return request;
     };
 
@@ -304,18 +304,18 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerCopiesIndependentViewOutputExtents
 
     const ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
     const SceneRenderPlan&      plan      = extracted.plan();
-    ASSERT_EQ(plan.viewportTasks.size(), 2u);
-    EXPECT_EQ(plan.viewportTasks[0].output.viewId, 11u);
-    EXPECT_EQ(plan.viewportTasks[1].output.viewId, 12u);
-    EXPECT_EQ(plan.viewportTasks[0].output.extent.width, 1280u);
-    EXPECT_EQ(plan.viewportTasks[0].output.extent.height, 720u);
-    EXPECT_EQ(plan.viewportTasks[1].output.extent.width, 256u);
-    EXPECT_EQ(plan.viewportTasks[1].output.extent.height, 256u);
-    EXPECT_NE(plan.viewportTasks[0].output.extent, plan.viewportTasks[1].output.extent);
-    EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]),
-              plan.snapshotFor(plan.viewportTasks[1]));
+    ASSERT_EQ(plan.viewTasks.size(), 2u);
+    EXPECT_EQ(plan.viewTasks[0].output.viewId, 11u);
+    EXPECT_EQ(plan.viewTasks[1].output.viewId, 12u);
+    EXPECT_EQ(plan.viewTasks[0].output.extent.width, 1280u);
+    EXPECT_EQ(plan.viewTasks[0].output.extent.height, 720u);
+    EXPECT_EQ(plan.viewTasks[1].output.extent.width, 256u);
+    EXPECT_EQ(plan.viewTasks[1].output.extent.height, 256u);
+    EXPECT_NE(plan.viewTasks[0].output.extent, plan.viewTasks[1].output.extent);
+    EXPECT_EQ(plan.snapshotFor(plan.viewTasks[0]),
+              plan.snapshotFor(plan.viewTasks[1]));
     ASSERT_EQ(plan.viewFamilies.size(), 1u);
-    EXPECT_EQ(plan.familyFor(plan.viewportTasks[0]), plan.familyFor(plan.viewportTasks[1]));
+    EXPECT_EQ(plan.familyFor(plan.viewTasks[0]), plan.familyFor(plan.viewTasks[1]));
 }
 
 TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionChanges)
@@ -334,7 +334,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionC
         request.viewId = viewId;
         // A declaration a scheduler may accept: a View rect has to describe at
         // least one pixel, since its textures are sized from it.
-        request.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
+        request.outputRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
         return request;
     };
 
@@ -352,8 +352,8 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionC
     const SceneRenderPlan& plan = extracted.plan();
     ASSERT_EQ(buildCalls, 2);
     ASSERT_EQ(plan.snapshots.size(), 2u);
-    ASSERT_EQ(plan.viewportTasks[0].snapshotIndex, plan.viewportTasks[1].snapshotIndex);
-    EXPECT_NE(plan.viewportTasks[0].snapshotIndex, plan.viewportTasks[2].snapshotIndex);
+    ASSERT_EQ(plan.viewTasks[0].snapshotIndex, plan.viewTasks[1].snapshotIndex);
+    EXPECT_NE(plan.viewTasks[0].snapshotIndex, plan.viewTasks[2].snapshotIndex);
     EXPECT_EQ(plan.snapshots[0].sceneRevision, 1u);
     EXPECT_EQ(plan.snapshots[1].sceneRevision, 2u);
 }
@@ -361,7 +361,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRebuildsSnapshotWhenSceneRevisionC
 TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsInvalidSnapshotIndex)
 {
     SceneRenderPlan plan;
-    SceneViewportTask task;
+    SceneViewTask task;
     EXPECT_EQ(plan.snapshotFor(task), nullptr);
 }
 
@@ -392,13 +392,13 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerDropsViewsOfUnresolvedScene)
                             });
     const SceneRenderPlan& plan = extracted.plan();
 
-    ASSERT_EQ(plan.viewportTasks.size(), 2u);
-    EXPECT_EQ(plan.viewportTasks[0].desc.viewId, 11u);
-    EXPECT_EQ(plan.viewportTasks[1].desc.viewId, 12u);
-    EXPECT_TRUE(plan.snapshotFor(plan.viewportTasks[0]) != nullptr);
+    ASSERT_EQ(plan.viewTasks.size(), 2u);
+    EXPECT_EQ(plan.viewTasks[0].desc.viewId, 11u);
+    EXPECT_EQ(plan.viewTasks[1].desc.viewId, 12u);
+    EXPECT_TRUE(plan.snapshotFor(plan.viewTasks[0]) != nullptr);
     ASSERT_EQ(plan.viewFamilies.size(), 1u);
-    EXPECT_EQ(plan.viewFamilies.front().viewportTaskIndices.size(), 2u);
-    EXPECT_EQ(plan.viewportTasks[0].familyIndex, plan.viewportTasks[1].familyIndex);
+    EXPECT_EQ(plan.viewFamilies.front().viewTaskIndices.size(), 2u);
+    EXPECT_EQ(plan.viewTasks[0].familyIndex, plan.viewTasks[1].familyIndex);
     // Views are paired with tasks after extraction, so a dropped Scene cannot
     // leave a recording pointing at a task that no longer exists.
     EXPECT_TRUE(extracted.views().empty());
@@ -438,15 +438,15 @@ TEST(RenderRuntimeSnapshotTest, HostFrameDataFollowsTheDisplayRootNotThePairingS
     SceneViewDesc overlay;
     overlay.scene             = &scene;
     overlay.viewId            = kOverlayView.viewId();
-    overlay.viewportRect      = {.pos = {0.0f, 0.0f}, .extent = {320.0f, 180.0f}};
+    overlay.outputRect      = {.pos = {0.0f, 0.0f}, .extent = {320.0f, 180.0f}};
     overlay.composeOntoViewId = kDisplayView.viewId();
     ASSERT_TRUE(scheduler.submit(overlay));
     ASSERT_TRUE(scheduler.submit(makeView(&scene, kDisplayView.viewId())));
 
     ExtractedSceneRender   extracted = sealWithEmptySnapshots(scheduler);
     const SceneRenderPlan& plan      = extracted.plan();
-    ASSERT_EQ(plan.viewportTasks.size(), 2u);
-    EXPECT_EQ(plan.displayRootTask(), &plan.viewportTasks[1]);
+    ASSERT_EQ(plan.viewTasks.size(), 2u);
+    EXPECT_EQ(plan.displayRootTask(), &plan.viewTasks[1]);
 
     std::vector<RenderFrameData> frames;
     extracted.pairViewFrames(frames);
@@ -466,7 +466,7 @@ TEST(RenderRuntimeSnapshotTest, TickThatDeclaresNoDisplayRootHasNoHostFrameData)
     SceneViewDesc overlay;
     overlay.scene             = &scene;
     overlay.viewId            = kOverlayView.viewId();
-    overlay.viewportRect      = {.pos = {0.0f, 0.0f}, .extent = {320.0f, 180.0f}};
+    overlay.outputRect      = {.pos = {0.0f, 0.0f}, .extent = {320.0f, 180.0f}};
     overlay.composeOntoViewId = kDisplayView.viewId();
     ASSERT_TRUE(scheduler.submit(overlay));
 
@@ -493,7 +493,7 @@ TEST(RenderRuntimeSnapshotTest, ExtractedSceneRenderPairsEveryTaskWithItsOwnFram
         request.scene = &scene;
         request.viewId = viewId;
         request.view = view;
-        request.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {640.0f, 360.0f}};
+        request.outputRect = {.pos = {0.0f, 0.0f}, .extent = {640.0f, 360.0f}};
         return request;
     };
 
@@ -504,27 +504,27 @@ TEST(RenderRuntimeSnapshotTest, ExtractedSceneRenderPairsEveryTaskWithItsOwnFram
 
     ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
     const SceneRenderPlan& plan   = extracted.plan();
-    ASSERT_EQ(plan.viewportTasks.size(), 2u);
-    EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]), plan.snapshotFor(plan.viewportTasks[1]));
+    ASSERT_EQ(plan.viewTasks.size(), 2u);
+    EXPECT_EQ(plan.snapshotFor(plan.viewTasks[0]), plan.snapshotFor(plan.viewTasks[1]));
 
     std::vector<RenderFrameData> frames;
     extracted.pairViewFrames(frames);
 
     ASSERT_EQ(frames.size(), 2u);
     ASSERT_EQ(extracted.views().size(), 2u);
-    EXPECT_EQ(extracted.views()[0].task, &plan.viewportTasks[0]);
-    EXPECT_EQ(extracted.views()[1].task, &plan.viewportTasks[1]);
+    EXPECT_EQ(extracted.views()[0].task, &plan.viewTasks[0]);
+    EXPECT_EQ(extracted.views()[1].task, &plan.viewTasks[1]);
     EXPECT_EQ(extracted.views()[0].frameData, &frames[0]);
     EXPECT_EQ(extracted.views()[1].frameData, &frames[1]);
-    EXPECT_EQ(extracted.displayRootTask(), &plan.viewportTasks[0]);
+    EXPECT_EQ(extracted.displayRootTask(), &plan.viewTasks[0]);
 
     // Each View is its own camera: the second View's matrices and extent are on
     // its own declaration and its own prepared slot, so there is no host camera
     // to copy and then override field by field.
-    EXPECT_EQ(plan.viewportTasks[1].desc.view, viewB);
-    EXPECT_NE(plan.viewportTasks[1].desc.view, plan.viewportTasks[0].desc.view);
-    EXPECT_EQ(plan.viewportTasks[1].output.extent.width, 640u);
-    EXPECT_EQ(plan.viewportTasks[1].output.extent.height, 360u);
+    EXPECT_EQ(plan.viewTasks[1].desc.view, viewB);
+    EXPECT_NE(plan.viewTasks[1].desc.view, plan.viewTasks[0].desc.view);
+    EXPECT_EQ(plan.viewTasks[1].output.extent.width, 640u);
+    EXPECT_EQ(plan.viewTasks[1].output.extent.height, 360u);
     EXPECT_EQ(extracted.views()[1].frameData, &frames[1]);
 }
 
@@ -539,7 +539,7 @@ TEST(RenderRuntimeSnapshotTest, SceneRenderPlanRejectsSnapshotMetadataMismatch)
         .snapshot      = std::make_shared<const SceneSnapshot>(),
     });
 
-    SceneViewportTask task;
+    SceneViewTask task;
     task.desc.scene         = &scene;
     task.desc.sceneRevision = 4;
     task.snapshotIndex      = 0;
@@ -554,7 +554,7 @@ TEST(RenderRuntimeSnapshotTest, SceneSchedulerRejectsRequestsOutsideFrame)
     SceneViewDesc request;
     request.scene = &scene;
     request.viewId = 1;
-    request.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
+    request.outputRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
 
     EXPECT_FALSE(scheduler.submit(request));
     scheduler.beginTick(7);
@@ -598,13 +598,13 @@ TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
     SceneViewDesc primary;
     primary.scene = &scene;
     primary.viewId = kDisplayView.viewId();
-    primary.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
+    primary.outputRect = {.pos = {0.0f, 0.0f}, .extent = {1280.0f, 720.0f}};
 
     const Rect2D composeRect = makeViewDisplayInsetRect({1280.0f, 720.0f});
     SceneViewDesc overlay;
     overlay.scene = &scene;
     overlay.viewId = kOverlayView.viewId();
-    overlay.viewportRect = {.pos = {0.0f, 0.0f}, .extent = composeRect.extent};
+    overlay.outputRect = {.pos = {0.0f, 0.0f}, .extent = composeRect.extent};
     overlay.composeOntoViewId = kDisplayView.viewId();
     overlay.composeRect = composeRect;
 
@@ -613,16 +613,16 @@ TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
 
     const ExtractedSceneRender extracted = sealWithEmptySnapshots(scheduler);
     const SceneRenderPlan&      plan      = extracted.plan();
-    ASSERT_EQ(plan.viewportTasks.size(), 2u);
-    EXPECT_TRUE(plan.viewportTasks[0].desc.ownsHostViewport());
-    EXPECT_FALSE(plan.viewportTasks[1].desc.ownsHostViewport());
-    EXPECT_EQ(plan.snapshotFor(plan.viewportTasks[0]), plan.snapshotFor(plan.viewportTasks[1]));
-    EXPECT_EQ(plan.displayRootTask(), &plan.viewportTasks[0]);
-    EXPECT_NE(plan.viewportTasks[0].output.extent, plan.viewportTasks[1].output.extent);
-    EXPECT_EQ(plan.viewportTasks[1].output.extent.width,
+    ASSERT_EQ(plan.viewTasks.size(), 2u);
+    EXPECT_TRUE(plan.viewTasks[0].desc.isDisplayRoot());
+    EXPECT_FALSE(plan.viewTasks[1].desc.isDisplayRoot());
+    EXPECT_EQ(plan.snapshotFor(plan.viewTasks[0]), plan.snapshotFor(plan.viewTasks[1]));
+    EXPECT_EQ(plan.displayRootTask(), &plan.viewTasks[0]);
+    EXPECT_NE(plan.viewTasks[0].output.extent, plan.viewTasks[1].output.extent);
+    EXPECT_EQ(plan.viewTasks[1].output.extent.width,
               static_cast<uint32_t>(composeRect.extent.x));
-    EXPECT_GT(plan.viewportTasks[1].desc.composeRect.pos.x, 640.0f);
-    EXPECT_FLOAT_EQ(plan.viewportTasks[1].desc.viewportRect.pos.x, 0.0f);
+    EXPECT_GT(plan.viewTasks[1].desc.composeRect.pos.x, 640.0f);
+    EXPECT_FLOAT_EQ(plan.viewTasks[1].desc.outputRect.pos.x, 0.0f);
 
     const auto insets = viewDisplayInsetsFromPlan(plan);
     ASSERT_EQ(insets.size(), 1u);
@@ -634,10 +634,10 @@ TEST(RenderRuntimeSnapshotTest, OverlayComposeRectDoesNotBecomeOutputExtent)
 
     // The overlay View records into its own output extent, and its compose dest
     // is a separate fact: the host view's rect plays no part in either.
-    EXPECT_EQ(plan.viewportTasks[1].output.extent.width, static_cast<uint32_t>(composeRect.extent.x));
-    EXPECT_NE(plan.viewportTasks[1].desc.composeRect.pos.x, plan.viewportTasks[1].desc.viewportRect.pos.x);
-    EXPECT_LT(static_cast<float>(plan.viewportTasks[1].output.extent.width),
-              plan.viewportTasks[0].output.extent.width);
+    EXPECT_EQ(plan.viewTasks[1].output.extent.width, static_cast<uint32_t>(composeRect.extent.x));
+    EXPECT_NE(plan.viewTasks[1].desc.composeRect.pos.x, plan.viewTasks[1].desc.outputRect.pos.x);
+    EXPECT_LT(static_cast<float>(plan.viewTasks[1].output.extent.width),
+              plan.viewTasks[0].output.extent.width);
 }
 
 } // namespace

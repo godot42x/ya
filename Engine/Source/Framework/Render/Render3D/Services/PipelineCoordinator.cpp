@@ -107,7 +107,7 @@ void PipelineCoordinator::initActivePipeline()
     // destroy it: editor compose/chrome already hold pass slots, and
     // preparePassPipeline recreates format-specific variants.
     if (auto* pipeline = getActivePipeline(); pipeline && !Render2D::isInitialized()) {
-        Render2D::init(_render, pipeline->getViewportColorFormat(), pipeline->getViewportDepthFormat());
+        Render2D::init(_render, pipeline->getViewColorFormat(), pipeline->getViewDepthFormat());
     }
 }
 

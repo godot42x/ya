@@ -721,7 +721,7 @@ void AppAutomationControlService::handleGetWorldViewState(App& app, const AppAut
     // setting), and the extent the renderer actually produced last tick (empty
     // when no View claimed the host viewport). A window resize changes neither.
     const Extent2D requestedResolution = app.getRenderServices().getRenderResolution();
-    const Extent2D renderedExtent      = device->getViewportExtent();
+    const Extent2D renderedExtent      = device->getViewExtent();
 
     nlohmann::json result = {
         {"is_stopped", app.isStopped()},

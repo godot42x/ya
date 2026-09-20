@@ -28,7 +28,7 @@ struct FEditorInputSnapshot
     bool               keyboardEvent    = false;
     bool               pointerInViewport = false;
     bool               viewportFocused  = false;
-    bool               viewportOverlayDragging = false;
+    bool               viewOverlayDragging = false;
     bool               textInput        = false;
     bool               widgetTreeChrome = false;
 };
@@ -53,7 +53,7 @@ FEditorInputSnapshot buildSnapshot(App& app, EditorLayer& layer, EditorWindowSes
         snapshot.pointerInViewport =
             session->isPointInViewport(windowPoint) || session->isViewportHovered();
         snapshot.viewportFocused         = session->isViewportFocused();
-        snapshot.viewportOverlayDragging = session->isViewportOverlayActive();
+        snapshot.viewOverlayDragging = session->isViewportOverlayActive();
     }
     else {
         snapshot.pointerInViewport = layer.isViewportHovered();
@@ -129,7 +129,7 @@ FInputReply routeViewportToolInput(
         return {};
     }
 
-    if (snapshot.viewportOverlayDragging && snapshot.pointerEvent && !looking) {
+    if (snapshot.viewOverlayDragging && snapshot.pointerEvent && !looking) {
         layer.onEvent(event);
         return FInputReply{.handled = true};
     }

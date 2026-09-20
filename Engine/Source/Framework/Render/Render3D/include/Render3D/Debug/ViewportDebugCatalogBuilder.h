@@ -26,8 +26,8 @@ struct RenderPipelineDebugOutputCatalog
 {
     bool                          bShadowMappingEnabled         = false;
     std::shared_ptr<ImageResource> shadowDirectionalDepthResource = nullptr;
-    std::shared_ptr<RenderTexture> viewportOutputImageOwner      = nullptr;
-    std::shared_ptr<RenderTexture> viewportDepthImageOwner       = nullptr;
+    std::shared_ptr<RenderTexture> viewOutputImageOwner      = nullptr;
+    std::shared_ptr<RenderTexture> viewDepthImageOwner       = nullptr;
     std::shared_ptr<RenderTexture> postprocessOutputImageOwner   = nullptr;
     std::shared_ptr<RenderTexture> bloomExtractOwner             = nullptr;
     std::shared_ptr<RenderTexture> bloomBlurOwner                = nullptr;

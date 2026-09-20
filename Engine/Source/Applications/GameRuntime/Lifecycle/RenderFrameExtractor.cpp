@@ -209,7 +209,7 @@ void RenderFrameExtractor::extractCamera(const ViewPrepareInput& input, RenderFr
     out.projection     = input.projection;
     out.viewProjection = input.viewProjection;
     out.cameraPos      = input.cameraPos;
-    out.viewportExtent = input.viewportExtent;
+    out.viewExtent = input.viewExtent;
     out.viewOwner      = input.viewOwner;
     out.frameIndex     = input.frameIndex;
     out.deltaTime      = input.deltaTime;

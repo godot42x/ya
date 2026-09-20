@@ -45,12 +45,12 @@ struct DeferredFrameGraphOrchestrator
         const DeferredFrameResourceSet::Binding* frameBinding            = nullptr;
         const RenderPipelineFrameContext*      frame                     = nullptr;
         const RenderTargetCreateInfo*          gBufferRTSpec             = nullptr;
-        const RenderTargetCreateInfo*          viewportRTSpec            = nullptr;
+        const RenderTargetCreateInfo*          viewRTSpec            = nullptr;
         const ViewOverlayStage::FrameInputs* overlayInputs           = nullptr;
         const EnvironmentLightingSceneResources* environmentLighting     = nullptr;
         DescriptorSetHandle                    environmentLightingDS     = nullptr;
         FrameContext*                          postContext               = nullptr;
-        Extent2D                               viewportExtent            {};
+        Extent2D                               viewExtent            {};
         /// What the View's shadow preparation produced. Passing it in keeps the
         /// stage from remembering which View it prepared last.
         ShadowPreparedView                     shadowPrepared            {};

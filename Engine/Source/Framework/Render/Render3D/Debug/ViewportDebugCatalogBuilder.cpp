@@ -178,17 +178,17 @@ void appendForwardDebugSlots(const ViewportDebugCatalogInput& input, ViewportDeb
 
     appendSkyboxDebugSlots(input, builder);
 
-    if (auto viewportDepth = input.debugOutputs.viewportDepthImageOwner;
-        viewportDepth && viewportDepth->getImageView()) {
+    if (auto viewDepth = input.debugOutputs.viewDepthImageOwner;
+        viewDepth && viewDepth->getImageView()) {
         builder.addSlot({
                             .label         = "ViewportDepth",
                             .categoryIndex = CATEGORY_VIEWPORT,
                             .aspectFlags   = EImageAspect::Depth,
                         },
                         {
-                            .defaultView = viewportDepth->getImageView(),
+                            .defaultView = viewDepth->getImageView(),
                             .ownedView   = nullptr,
-                            .image       = viewportDepth->getImageShared(),
+                            .image       = viewDepth->getImageShared(),
                         });
     }
 }
@@ -206,10 +206,10 @@ void appendDeferredDebugSlots(const ViewportDebugCatalogInput& input, ViewportDe
     auto* albedoSpecTexture    = deferredViews.gBufferResources.color[2];
     auto* shadingModelTexture  = deferredViews.gBufferResources.color[3];
     auto* gbufferDepthTexture  = deferredViews.gBufferResources.depth;
-    auto* viewportColorTexture = deferredViews.viewportResources.color;
-    auto* viewportDepthTexture = deferredViews.viewportResources.depth;
+    auto* viewColorTexture = deferredViews.viewportResources.color;
+    auto* viewDepthTexture = deferredViews.viewportResources.depth;
     if (!positionTexture || !normalTexture || !albedoSpecTexture || !shadingModelTexture || !gbufferDepthTexture ||
-        !viewportColorTexture || !viewportDepthTexture) {
+        !viewColorTexture || !viewDepthTexture) {
         return;
     }
 
@@ -278,9 +278,9 @@ void appendDeferredDebugSlots(const ViewportDebugCatalogInput& input, ViewportDe
                         .categoryIndex = CATEGORY_VIEWPORT,
                     },
                     {
-                        .defaultView = viewportColorTexture->getImageView(),
+                        .defaultView = viewColorTexture->getImageView(),
                         .ownedView   = nullptr,
-                        .image       = viewportColorTexture->getImageShared(),
+                        .image       = viewColorTexture->getImageShared(),
                     });
     builder.addSlot({
                         .label         = "ViewportDepth",
@@ -289,9 +289,9 @@ void appendDeferredDebugSlots(const ViewportDebugCatalogInput& input, ViewportDe
                         .tint          = {1, 0, 0, 1},
                     },
                     {
-                        .defaultView = viewportDepthTexture->getImageView(),
+                        .defaultView = viewDepthTexture->getImageView(),
                         .ownedView   = nullptr,
-                        .image       = viewportDepthTexture->getImageShared(),
+                        .image       = viewDepthTexture->getImageShared(),
                     });
 
     if (auto bloomExtract = debugOutputs.bloomExtractOwner; bloomExtract && bloomExtract->getImageView()) {
@@ -491,7 +491,7 @@ size_t viewportDebugCatalogSignature(const ViewportDebugCatalogInput& input)
 
     hashCombineValue(seed, debugOutputs.bShadowMappingEnabled);
     hashCombineValue(seed, debugOutputs.shadowDirectionalDepthResource != nullptr);
-    hashCombineValue(seed, debugOutputs.viewportDepthImageOwner != nullptr);
+    hashCombineValue(seed, debugOutputs.viewDepthImageOwner != nullptr);
     hashCombineValue(seed, debugOutputs.bloomExtractOwner != nullptr);
     hashCombineValue(seed, debugOutputs.bloomBlurOwner != nullptr);
     hashCombineValue(seed, debugOutputs.bloomCompositeOwner != nullptr);

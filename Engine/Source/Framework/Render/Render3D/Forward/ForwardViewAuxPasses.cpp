@@ -253,8 +253,8 @@ void ForwardViewAuxPasses::drawSkybox(const DrawContext& drawCtx)
 {
     const auto& ctx = drawCtx.stageCtx;
     auto* cmdBuf = ctx.cmdBuf;
-    auto  vpW    = ctx.viewportExtent.width;
-    auto  vpH    = ctx.viewportExtent.height;
+    auto  vpW    = ctx.viewExtent.width;
+    auto  vpH    = ctx.viewExtent.height;
     if (vpW == 0 || vpH == 0 || !drawCtx.skybox.bAvailable) return;
 
     cmdBuf->debugBeginLabel("ForwardSkybox");
@@ -277,7 +277,7 @@ void ForwardViewAuxPasses::drawSimple(const DrawContext& drawCtx)
 
     cmdBuf->debugBeginLabel("ForwardSimple");
     cmdBuf->bindPipeline(_simplePipeline.get());
-    setViewportAndScissor(*cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height, drawCtx.bReverseViewportY);
+    setViewportAndScissor(*cmdBuf, ctx.viewExtent.width, ctx.viewExtent.height, drawCtx.bReverseViewportY);
 
     SimplePC pc{};
     pc.view       = fd.view;
@@ -313,7 +313,7 @@ void ForwardViewAuxPasses::drawDirectionOverlay(const DrawContext& drawCtx)
     auto* cmdBuf = ctx.cmdBuf;
     cmdBuf->debugBeginLabel("ForwardDirectionOverlay");
     cmdBuf->bindPipeline(_simplePipeline.get());
-    setViewportAndScissor(*cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height, drawCtx.bReverseViewportY);
+    setViewportAndScissor(*cmdBuf, ctx.viewExtent.width, ctx.viewExtent.height, drawCtx.bReverseViewportY);
 
     SimplePC pc{};
     pc.view       = ctx.frameData->view;
@@ -342,8 +342,8 @@ void ForwardViewAuxPasses::drawDebug(const DrawContext& drawCtx)
 
     const auto& ctx = drawCtx.stageCtx;
     auto*       cmdBuf = ctx.cmdBuf;
-    auto vpW = ctx.viewportExtent.width;
-    auto vpH = ctx.viewportExtent.height;
+    auto vpW = ctx.viewExtent.width;
+    auto vpH = ctx.viewExtent.height;
     if (vpW == 0 || vpH == 0) return;
 
     cmdBuf->debugBeginLabel("ForwardDebug");

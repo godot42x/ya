@@ -386,7 +386,7 @@ struct RenderFrameData
     glm::mat4    projection     = glm::mat4(1.0f);
     glm::mat4    viewProjection = glm::mat4(1.0f);
     glm::vec3    cameraPos      = glm::vec3(0.0f);
-    Extent2D     viewportExtent = {};
+    Extent2D     viewExtent = {};
     entt::entity viewOwner      = entt::null;
     /// Features this view draws (see RenderFeatures.h); the extraction bucket
     /// binding filters against it.

@@ -13,13 +13,13 @@ RenderViewportSnapshot RenderDeviceState::buildViewportSnapshot(Scene* inspectSc
     snapshot.bPostprocessingEnabled = debugOutputs.bPostprocessingEnabled;
     if (const auto* output = publishedViewOutput()) {
         snapshot.viewportImageOwner = output->displayImage();
-        snapshot.viewportDepthOwner = output->depth;
+        snapshot.viewDepthOwner = output->depth;
         snapshot.entityIdImageOwner = output->entityId;
     }
     else {
-        snapshot.viewportImageOwner = getViewportDisplayImageShared();
+        snapshot.viewportImageOwner = getViewDisplayImageShared();
         if (auto* pipeline = getActivePipeline()) {
-            snapshot.viewportDepthOwner = pipeline->getViewportDepthImageShared();
+            snapshot.viewDepthOwner = pipeline->getViewDepthImageShared();
             snapshot.entityIdImageOwner = pipeline->getEntityIdImageShared();
         }
     }

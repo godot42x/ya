@@ -24,7 +24,7 @@ struct UIFrameSnapshot;
 ///
 /// This deliberately holds no camera: which Views are drawn, from which
 /// cameras and into which outputs is declared by their owners and carried on
-/// each View's plan entry (`SceneViewDesc` / `SceneViewportTask`) and its
+/// each View's plan entry (`SceneViewDesc` / `SceneViewTask`) and its
 /// prepared data (`RenderFrameData`). A camera packet here would be a second
 /// spelling of that, and every consumer would have to ask which View a given
 /// field came from.
@@ -37,7 +37,7 @@ struct FramePacket
     /// Host render scale for this tick: a View's rect is divided by it to get
     /// the render target extent. One host setting, not a per-View property, so
     /// it stays here next to the frame facts.
-    float viewportFrameBufferScale = 1.0f;
+    float renderScale = 1.0f;
 
     const ShadowSettings* shadowSettings = nullptr;
     /// Game UI snapshot for this tick, consumed by the display compose. Built
@@ -56,9 +56,9 @@ struct ViewDisplayInset
 [[nodiscard]] inline std::vector<ViewDisplayInset> viewDisplayInsetsFromPlan(const SceneRenderPlan& plan)
 {
     std::vector<ViewDisplayInset> insets;
-    for (const auto& task : plan.viewportTasks) {
+    for (const auto& task : plan.viewTasks) {
         const SceneViewDesc& desc = task.desc;
-        if (desc.ownsHostViewport() || desc.composeRect.extent.x <= 0.0f || desc.composeRect.extent.y <= 0.0f) {
+        if (desc.isDisplayRoot() || desc.composeRect.extent.x <= 0.0f || desc.composeRect.extent.y <= 0.0f) {
             continue;
         }
         insets.push_back(ViewDisplayInset{

@@ -79,9 +79,9 @@ TEST(EditorViewProducerTest, AuthoringViewportDrawsEditorFurnitureWhileAuthoring
     EXPECT_EQ(primary->scene, &scene);
     // The editor's own panel geometry is what it declares, not the host rect the
     // context carries: the panel is a fact only the editor has.
-    EXPECT_FLOAT_EQ(primary->viewportRect.extent.x, 960.0f);
-    EXPECT_FLOAT_EQ(primary->viewportRect.extent.y, 540.0f);
-    EXPECT_FLOAT_EQ(primary->viewportRect.pos.x, 12.0f);
+    EXPECT_FLOAT_EQ(primary->outputRect.extent.x, 960.0f);
+    EXPECT_FLOAT_EQ(primary->outputRect.extent.y, 540.0f);
+    EXPECT_FLOAT_EQ(primary->outputRect.pos.x, 12.0f);
     // Generated companions are editor furniture and the authoring viewport is
     // what shows the scene while authoring, so it draws them without asking.
     EXPECT_TRUE(drawsGizmos(*primary));
@@ -109,8 +109,8 @@ TEST(EditorViewProducerTest, AuthoringViewportFallsBackToItsDefaultSizeBeforeLay
     const Rect2D declared = layer.getViewportRect();
     EXPECT_GT(declared.extent.x, 0.0f);
     EXPECT_GT(declared.extent.y, 0.0f);
-    EXPECT_FLOAT_EQ(primary->viewportRect.extent.x, declared.extent.x);
-    EXPECT_FLOAT_EQ(primary->viewportRect.extent.y, declared.extent.y);
+    EXPECT_FLOAT_EQ(primary->outputRect.extent.x, declared.extent.x);
+    EXPECT_FLOAT_EQ(primary->outputRect.extent.y, declared.extent.y);
 }
 
 TEST(EditorViewProducerTest, PanelGeometryTooSmallForAPixelDoesNotBecomeTheViewRect)
@@ -132,7 +132,7 @@ TEST(EditorViewProducerTest, PanelGeometryTooSmallForAPixelDoesNotBecomeTheViewR
 
     const SceneViewDesc* primary = findView(collector, producer.authoringKey().viewId());
     ASSERT_NE(primary, nullptr);
-    const Extent2D declaredPixels = Extent2D::fromVec2(primary->viewportRect.extent);
+    const Extent2D declaredPixels = Extent2D::fromVec2(primary->outputRect.extent);
     EXPECT_GT(declaredPixels.width, 0u);
     EXPECT_GT(declaredPixels.height, 0u);
     EXPECT_TRUE(layer.describesPixels(layer.getViewportRect()));
@@ -217,8 +217,8 @@ TEST(EditorViewProducerTest, HidingTheViewportDeclaresNoEditorViewAtAll)
     producer.collectSceneViews(makeEditorContext(scene), reshown);
     const SceneViewDesc* primary = findView(reshown, producer.authoringKey().viewId());
     ASSERT_NE(primary, nullptr);
-    EXPECT_FLOAT_EQ(primary->viewportRect.extent.x, 800.0f);
-    EXPECT_FLOAT_EQ(primary->viewportRect.extent.y, 450.0f);
+    EXPECT_FLOAT_EQ(primary->outputRect.extent.x, 800.0f);
+    EXPECT_FLOAT_EQ(primary->outputRect.extent.y, 450.0f);
 }
 
 TEST(EditorViewProducerTest, AHiddenViewportStopsCapturingViewportInput)
@@ -256,7 +256,7 @@ TEST(EditorViewProducerTest, EditorAndGameViewportsAreDistinctIdentities)
 
     const SceneViewId editorAuthoring = editor.authoringKey().viewId();
     const SceneViewId editorPreview   = editor.previewKey().viewId();
-    const SceneViewId gameViewport    = game.hostViewportKey().viewId();
+    const SceneViewId gameViewport    = game.displayRootKey().viewId();
 
     // Every View this build can show has its own identity...
     EXPECT_NE(editorAuthoring, 0u);
@@ -268,7 +268,7 @@ TEST(EditorViewProducerTest, EditorAndGameViewportsAreDistinctIdentities)
 
     // ...and a key's owner half is what keeps them apart, not the local half.
     EXPECT_EQ(editor.authoringKey().owner, editor.previewKey().owner);
-    EXPECT_NE(editor.authoringKey().owner, game.hostViewportKey().owner);
+    EXPECT_NE(editor.authoringKey().owner, game.displayRootKey().owner);
 
     // An unnamed owner is not a View at all: it reads as the same 0 the output
     // tables already treat as "nothing published".

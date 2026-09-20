@@ -403,8 +403,8 @@ void ViewOverlayStage::drawBillboards(const RenderStageContext& ctx, const Frame
     }
 
     auto* cmdBuf = ctx.cmdBuf;
-    const auto vpW = ctx.viewportExtent.width;
-    const auto vpH = ctx.viewportExtent.height;
+    const auto vpW = ctx.viewExtent.width;
+    const auto vpH = ctx.viewExtent.height;
     if (vpW == 0 || vpH == 0) {
         return;
     }
@@ -440,8 +440,8 @@ void ViewOverlayStage::drawBillboards(const RenderStageContext& ctx, const Frame
 void ViewOverlayStage::drawSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput)
 {
     auto* cmdBuf = ctx.cmdBuf;
-    auto  vpW    = ctx.viewportExtent.width;
-    auto  vpH    = ctx.viewportExtent.height;
+    auto  vpW    = ctx.viewExtent.width;
+    auto  vpH    = ctx.viewExtent.height;
     if (vpW == 0 || vpH == 0) return;
 
     // Check if skybox is available
@@ -469,8 +469,8 @@ void ViewOverlayStage::drawSkybox(const RenderStageContext& ctx, const FrameInpu
 void ViewOverlayStage::drawOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs)
 {
     auto* cmdBuf = ctx.cmdBuf;
-    auto  vpW    = ctx.viewportExtent.width;
-    auto  vpH    = ctx.viewportExtent.height;
+    auto  vpW    = ctx.viewExtent.width;
+    auto  vpH    = ctx.viewExtent.height;
     if (vpW == 0 || vpH == 0) return;
 
     const auto& fd                     = *ctx.frameData;

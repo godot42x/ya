@@ -157,7 +157,7 @@ SSAOStage::FrameData SSAOStage::buildFrameData(const RenderStageContext& ctx) co
     YA_CORE_ASSERT(ctx.frameData != nullptr, "SSAOStage requires frame data to build frame parameters");
 
     FrameData frameData{};
-    frameData.screenResolution = {static_cast<int32_t>(ctx.viewportExtent.width), static_cast<int32_t>(ctx.viewportExtent.height)};
+    frameData.screenResolution = {static_cast<int32_t>(ctx.viewExtent.width), static_cast<int32_t>(ctx.viewExtent.height)};
     frameData.radius           = _radius;
     frameData.bias             = _bias;
     frameData.power            = _power;
@@ -221,7 +221,7 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
         RGTextureDesc{
             .label  = "SSAO.Output",
             .format = AO_FORMAT,
-            .extent = Extent3D{ctx.viewportExtent.width, ctx.viewportExtent.height, 1},
+            .extent = Extent3D{ctx.viewExtent.width, ctx.viewExtent.height, 1},
             .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
         },
         "SSAO.Output",
@@ -229,14 +229,14 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
 
     [[maybe_unused]] const auto pass = graph.addPass(
         makeViewGraphName("SSAO Pass", params.viewId),
-        [params, noise, output, viewportExtent = ctx.viewportExtent](RGPassBuilder& passBuilder) {
+        [params, noise, output, viewExtent = ctx.viewExtent](RGPassBuilder& passBuilder) {
             passBuilder.uniformRead(params.frame, params.frameRange);
             passBuilder.read(params.albedo);
             passBuilder.read(params.normal);
             passBuilder.read(params.depth);
             passBuilder.read(noise);
             passBuilder.declareRaster({
-                .renderArea  = Rect2D{.pos = {0.0f, 0.0f}, .extent = glm::vec2(viewportExtent.width, viewportExtent.height)},
+                .renderArea  = Rect2D{.pos = {0.0f, 0.0f}, .extent = glm::vec2(viewExtent.width, viewExtent.height)},
                 .layerCount  = 1,
                 .colors = {{
                     .color       = output,

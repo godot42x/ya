@@ -8,10 +8,10 @@ namespace ya
 namespace forward_graph_exports
 {
 
-inline constexpr std::string_view viewportColor   = "ForwardViewport.Color";
-inline constexpr std::string_view viewportDepth   = "ForwardViewport.Depth";
-inline constexpr std::string_view viewportResolve = "ForwardViewport.Resolve";
-inline constexpr std::string_view entityId        = "ForwardViewport.EntityId";
+inline constexpr std::string_view viewColor   = "ForwardView.Color";
+inline constexpr std::string_view viewDepth   = "ForwardView.Depth";
+inline constexpr std::string_view viewResolve = "ForwardView.Resolve";
+inline constexpr std::string_view entityId        = "ForwardView.EntityId";
 
 } // namespace forward_graph_exports
 

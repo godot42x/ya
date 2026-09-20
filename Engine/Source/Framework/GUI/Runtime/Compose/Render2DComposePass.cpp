@@ -232,8 +232,8 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
     // UI is authored in logical viewport pixels; map to render-target pixels
     // (viewport frame buffer scale).
     const glm::vec2 uiScale{
-        static_cast<float>(rtExtent.width) / static_cast<float>(std::max(passDesc.logicalViewportExtent.width, 1u)),
-        static_cast<float>(rtExtent.height) / static_cast<float>(std::max(passDesc.logicalViewportExtent.height, 1u)),
+        static_cast<float>(rtExtent.width) / static_cast<float>(std::max(passDesc.logicalExtent.width, 1u)),
+        static_cast<float>(rtExtent.height) / static_cast<float>(std::max(passDesc.logicalExtent.height, 1u)),
     };
 
     cmdBuf->retireResource(target.getImageShared());

@@ -96,8 +96,8 @@ TEST(SceneFamilyResourcesTest, SameSceneViewsShareFamilyOwner)
     ASSERT_NE(live, nullptr);
 
     Scene               scene("Family");
-    SceneViewportTask   viewA{.desc = {.scene = &scene, .viewId = 11}, .snapshotIndex = 0};
-    SceneViewportTask   viewB{.desc = {.scene = &scene, .viewId = 12}, .snapshotIndex = 0};
+    SceneViewTask   viewA{.desc = {.scene = &scene, .viewId = 11}, .snapshotIndex = 0};
+    SceneViewTask   viewB{.desc = {.scene = &scene, .viewId = 12}, .snapshotIndex = 0};
     EXPECT_EQ(makeSceneViewFamilyKey(viewA), makeSceneViewFamilyKey(viewB));
 
     SceneFamilyResources* familyA = live->allocateSceneFamily(makeSceneViewFamilyKey(viewA));
@@ -122,8 +122,8 @@ TEST(SceneFamilyResourcesTest, DifferentScenesGetDifferentFamilyOwners)
 
     Scene               sceneA("FamilyA");
     Scene               sceneB("FamilyB");
-    SceneViewportTask   viewA{.desc = {.scene = &sceneA, .viewId = 11}, .snapshotIndex = 0};
-    SceneViewportTask   viewB{.desc = {.scene = &sceneB, .viewId = 21}, .snapshotIndex = 1};
+    SceneViewTask   viewA{.desc = {.scene = &sceneA, .viewId = 11}, .snapshotIndex = 0};
+    SceneViewTask   viewB{.desc = {.scene = &sceneB, .viewId = 21}, .snapshotIndex = 1};
     SceneFamilyResources* familyA = live->allocateSceneFamily(makeSceneViewFamilyKey(viewA));
     SceneFamilyResources* familyB = live->allocateSceneFamily(makeSceneViewFamilyKey(viewB));
     ASSERT_NE(familyA, nullptr);

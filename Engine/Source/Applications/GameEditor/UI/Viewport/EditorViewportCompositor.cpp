@@ -151,7 +151,7 @@ void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
                               pUiPreviewSnapshot,
                               FRender2DComposePassDesc{
                                   .kind = ERender2DComposePassKind::EditorCanvasPreview,
-                                  .logicalViewportExtent = logicalExtent,
+                                  .logicalExtent = logicalExtent,
                                   .canvasPan  = layer.getCanvasPan(),
                                   .canvasZoom = layer.getCanvasZoom(),
                               },
@@ -215,7 +215,7 @@ void EditorViewportCompositor::composeWorldFromScene(IRender&                   
     commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(),
                                             EImageLayout::ColorAttachmentOptimal);
 
-    const auto depthOwner   = snapshot.viewportDepthOwner;
+    const auto depthOwner   = snapshot.viewDepthOwner;
     const bool bAttachDepth = depthOwner && depthOwner->isValid() &&
                               depthOwner->getExtent() == _composedViewportImage->getExtent();
     if (bAttachDepth) {

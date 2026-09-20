@@ -19,9 +19,9 @@ inline constexpr std::string_view gBufferColor[4] = {
     "Deferred.GBuffer.Color3",
 };
 inline constexpr std::string_view gBufferDepth  = "Deferred.GBuffer.Depth";
-inline constexpr std::string_view viewportColor = "Deferred.Viewport.Color";
+inline constexpr std::string_view viewColor = "Deferred.View.Color";
 inline constexpr std::string_view ssao          = "Deferred.SSAO.Output";
-inline constexpr std::string_view entityId      = "Deferred.Viewport.EntityId";
+inline constexpr std::string_view entityId      = "Deferred.View.EntityId";
 
 } // namespace deferred_graph_exports
 
@@ -45,7 +45,7 @@ struct DeferredFrameGraphResources
     {
         std::array<RGTextureHandle, 4> gBufferColors{};
         RGTextureHandle                 gBufferDepth{};
-        RGTextureHandle                 viewportColor{};
+        RGTextureHandle                 viewColor{};
         std::optional<RGTextureHandle>  ssao{};
         std::optional<RGTextureHandle>  environmentCubemap{};
         std::optional<RGTextureHandle>  environmentIrradiance{};
@@ -65,7 +65,7 @@ struct DeferredFrameGraphResources
         std::optional<RGPassHandle> light{};
         std::optional<RGPassHandle> skybox{};
         std::optional<RGPassHandle> sceneOverlay{};
-        std::optional<RGPassHandle> viewportOverlay{};
+        std::optional<RGPassHandle> viewOverlay{};
     } passes{};
 };
 

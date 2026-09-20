@@ -14,7 +14,7 @@ namespace ya
 ///
 /// Export and pass names must stay unique within one family graph. Persistent
 /// keys identify the executor registry across graphs; two Views must not share
-/// `ForwardViewport.Color`. ViewId 0 still uses `.view0` so a missing task
+/// `ForwardView.Color`. ViewId 0 still uses `.view0` so a missing task
 /// cannot revive an unkeyed global name.
 [[nodiscard]] inline std::string makeViewGraphName(std::string_view base, uint64_t viewId)
 {

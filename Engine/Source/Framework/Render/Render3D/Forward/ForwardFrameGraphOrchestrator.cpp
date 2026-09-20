@@ -11,9 +11,9 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
 {
     YA_CORE_ASSERT(inputs.graph != nullptr, "ForwardFrameGraphOrchestrator requires a render graph");
     YA_CORE_ASSERT(inputs.stageCtx != nullptr, "ForwardFrameGraphOrchestrator requires a stage context");
-    YA_CORE_ASSERT(inputs.viewportRTSpec != nullptr, "ForwardFrameGraphOrchestrator requires a viewport render target spec");
+    YA_CORE_ASSERT(inputs.viewRTSpec != nullptr, "ForwardFrameGraphOrchestrator requires a viewport render target spec");
     YA_CORE_ASSERT(inputs.postContext != nullptr, "ForwardFrameGraphOrchestrator requires a postprocess context");
-    YA_CORE_ASSERT(deps.viewportStage != nullptr, "ForwardFrameGraphOrchestrator requires a viewport stage");
+    YA_CORE_ASSERT(deps.viewStage != nullptr, "ForwardFrameGraphOrchestrator requires a viewport stage");
     YA_CORE_ASSERT(deps.entityIdPass != nullptr, "ForwardFrameGraphOrchestrator requires an entity-id pass");
     YA_CORE_ASSERT(deps.postProcessStage != nullptr, "ForwardFrameGraphOrchestrator requires a postprocess stage");
 
@@ -25,18 +25,18 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
             graph, *inputs.stageCtx, inputs.shadowPrepared, inputs.familyPredecessor);
     }
 
-    const auto graphResources = forward_frame_graph::createViewportResources(
+    const auto graphResources = forward_frame_graph::createViewResources(
         graph,
-        *inputs.viewportRTSpec,
+        *inputs.viewRTSpec,
         shadowOutputs.shadowDepth,
         inputs.viewId);
     const forward_frame_graph::Dependencies passDeps{
-        .viewportStage    = deps.viewportStage,
+        .viewStage    = deps.viewStage,
         .entityIdPass     = deps.entityIdPass,
         .postProcessStage = deps.postProcessStage,
     };
 
-    forward_frame_graph::appendViewportPasses(graph, passDeps, inputs, graphResources);
+    forward_frame_graph::appendViewPasses(graph, passDeps, inputs, graphResources);
     forward_frame_graph::appendPostprocessPasses(graph, passDeps, inputs, graphResources);
     forward_frame_graph::exportGraphOutputs(graph, graphResources, inputs.viewId);
 }

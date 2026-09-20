@@ -10,7 +10,7 @@ TEST(ForwardGraphInputsTest, BuildInputsDefaultsStayEmpty)
     const forward_frame_graph::BuildInputs inputs{};
     EXPECT_EQ(inputs.graph, nullptr);
     EXPECT_EQ(inputs.stageCtx, nullptr);
-    EXPECT_EQ(inputs.viewportRTSpec, nullptr);
+    EXPECT_EQ(inputs.viewRTSpec, nullptr);
     EXPECT_EQ(inputs.postContext, nullptr);
     EXPECT_TRUE(inputs.directionGizmos.empty());
     EXPECT_FALSE(inputs.bEnableShadow);
@@ -20,7 +20,7 @@ TEST(ForwardGraphInputsTest, BuildInputsDefaultsStayEmpty)
     EXPECT_EQ(inputs.viewId, 0u);
     EXPECT_FALSE(inputs.familyPredecessor.has_value());
 
-    const forward_frame_graph::ViewportGraphResources resources{};
+    const forward_frame_graph::ViewGraphResources resources{};
     EXPECT_FALSE(resources.color.isValid());
     EXPECT_FALSE(resources.resolve.isValid());
     EXPECT_FALSE(resources.depth.isValid());

@@ -57,8 +57,8 @@ TEST(EditorWindowSessionTest, RegistryCreatesIsolatedSecondSession)
     EXPECT_NE(&windows.defaultSession().surface(), &extra->surface());
     EXPECT_NE(windows.defaultSession().surface().windowRootDock(), extra->surface().windowRootDock());
     EXPECT_NE(windows.defaultSession().surface().ownedNestedDock(), extra->surface().ownedNestedDock());
-    EXPECT_NE(&windows.defaultSession().surface().viewportOverlayHost(),
-              &extra->surface().viewportOverlayHost());
+    EXPECT_NE(&windows.defaultSession().surface().viewOverlayHost(),
+              &extra->surface().viewOverlayHost());
     EXPECT_EQ(windows.defaultSession().tree(), nullptr);
     EXPECT_EQ(extra->tree(), nullptr);
 

@@ -105,7 +105,7 @@ struct YA_RENDER_3D_API RenderDeviceState
     PipelineCoordinator          _pipelineCoordinator{};
     PresentationGraphService     _presentationGraphService{};
     // default rect for default rt creation
-    Rect2D                       _pipelineViewportRect{};
+    Rect2D                       _pipelineViewRect{};
 
     /// Cached inspector catalog, rebuilt only when its digest changes. The
     /// snapshot is logically const, so this cache is too -- the state belongs to
@@ -123,7 +123,7 @@ struct YA_RENDER_3D_API RenderDeviceState
     [[nodiscard]] RecordedFrame record(const RenderFramePlan& plan);
 
     /// Safe-point mutation: pipeline RT specs. Call before command recording.
-    void applyViewportResize(Rect2D rect);
+    void applyViewResize(Rect2D rect);
     void applyPendingMutations();
     /// Resolve the Scene-keyed GPU bindings one View's passes bind (skybox /
     /// IBL descriptor sets and derived resources). Called per View before
@@ -154,9 +154,9 @@ struct YA_RENDER_3D_API RenderDeviceState
     [[nodiscard]] const RenderDiagnosticsService& getDiagnosticsService() const { return _diagnostics; }
 
     [[nodiscard]] std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const;
-    [[nodiscard]] std::shared_ptr<RenderTexture> getActiveViewportImageShared() const;
-    [[nodiscard]] std::shared_ptr<RenderTexture> getViewportDisplayImageShared() const;
-    [[nodiscard]] EFormat::T getViewportDisplayImageFormat() const;
+    [[nodiscard]] std::shared_ptr<RenderTexture> getActiveViewImageShared() const;
+    [[nodiscard]] std::shared_ptr<RenderTexture> getViewDisplayImageShared() const;
+    [[nodiscard]] EFormat::T getViewDisplayImageFormat() const;
     [[nodiscard]] std::shared_ptr<RenderTexture> getPresentationImageShared() const;
     [[nodiscard]] const RenderSubmission* getLiveSubmission(uint32_t flightIndex) const
     {
@@ -184,7 +184,7 @@ struct YA_RENDER_3D_API RenderDeviceState
     [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene = nullptr) const;
     [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
 
-    [[nodiscard]] Extent2D      getViewportExtent() const;
+    [[nodiscard]] Extent2D      getViewExtent() const;
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
     [[nodiscard]] RenderTargetCatalog buildRenderTargetCatalog() const;
     [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot(Scene* inspectScene = nullptr) const;
@@ -200,7 +200,7 @@ struct YA_RENDER_3D_API RenderDeviceState
     /// UI compose pipeline when the plan carries a UI snapshot. Split from
     /// `record` so "what happens before recording" and "what is recorded" are
     /// two readable steps instead of one 170-line function.
-    void prepareFrameRecord(const RenderFramePlan& plan, const SceneViewportTask* displayRoot);
+    void prepareFrameRecord(const RenderFramePlan& plan, const SceneViewTask* displayRoot);
 
     void                   initRuntimeState(const InitDesc& desc);
     void                   initShaderSystems();

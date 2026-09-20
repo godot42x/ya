@@ -43,7 +43,7 @@ struct FRender2DComposePassDesc
     /// kind pool (single-window editor/runtime). Multi-window hosts must set
     /// a slot from `Render2D::acquirePassSlot()`.
     Render2DPassSlot         passSlot = kInvalidRender2DPassSlot;
-    Extent2D                 logicalViewportExtent{};
+    Extent2D                 logicalExtent{};
     glm::vec2                canvasPan  = glm::vec2(0.0f);
     float                    canvasZoom = 1.0f;
 

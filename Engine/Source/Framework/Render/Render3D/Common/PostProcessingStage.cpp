@@ -94,10 +94,10 @@ void PostProcessingStage::capturePreparedResources(const RenderGraphExecutionRes
 
 RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
                                                        Texture*     inputTexture,
-                                                       glm::vec2    viewportExtent,
+                                                       glm::vec2    viewExtent,
                                                        FrameContext* ctx)
 {
-    (void)viewportExtent;
+    (void)viewExtent;
     if (!inputTexture || !inputTexture->isValid()) {
         clearPreparedResources();
         return {};
@@ -115,10 +115,10 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
 
 RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
                                                        RenderTexture* inputImage,
-                                                       glm::vec2      viewportExtent,
+                                                       glm::vec2      viewExtent,
                                                        FrameContext*  ctx)
 {
-    (void)viewportExtent;
+    (void)viewExtent;
 
     if (!inputImage || !inputImage->isValid()) {
         clearPreparedResources();

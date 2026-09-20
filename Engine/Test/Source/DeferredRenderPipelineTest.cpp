@@ -236,7 +236,7 @@ TEST(DeferredPassParamsTest, SSAOAndLightDefaultsAreEmptyAndHandlesRemainFrameLo
     EXPECT_FALSE(light.light.handle.isValid());
     EXPECT_FALSE(light.gBufferDepth.isValid());
     EXPECT_FALSE(light.ssao.has_value());
-    EXPECT_FALSE(light.viewportColor.isValid());
+    EXPECT_FALSE(light.viewColor.isValid());
     EXPECT_FALSE(light.gBufferTextureDescriptorSet);
     EXPECT_FALSE(light.shadowDescriptorSet);
     EXPECT_EQ(light.layerCount, 1u);
@@ -259,7 +259,7 @@ TEST(DeferredPassParamsTest, SkyboxOverlayDefaultsAreEmptyAndCallbacksRemainExpl
 {
     DeferredSkyboxPassParams skybox{};
     EXPECT_FALSE(skybox.frame.handle.isValid());
-    EXPECT_FALSE(skybox.viewportColor.isValid());
+    EXPECT_FALSE(skybox.viewColor.isValid());
     EXPECT_FALSE(skybox.depth.isValid());
     EXPECT_EQ(skybox.layerCount, 1u);
     EXPECT_FALSE(skybox.skybox.bAvailable);
@@ -319,7 +319,7 @@ TEST(SSAOStageTest, BuildsFrameDataWithoutOwningGpuResources)
     frameData.view       = glm::mat4(1.0f);
     RenderStageContext ctx{
         .frameData      = &frameData,
-        .viewportExtent = {.width = 640, .height = 480},
+        .viewExtent = {.width = 640, .height = 480},
     };
 
     const auto payload = stage.buildFrameData(ctx);

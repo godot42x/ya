@@ -37,7 +37,7 @@ class RuntimeRenderSettingsSection final : public UICompoundWidget
 
     std::shared_ptr<UIComboBox> _pipeline;
     std::shared_ptr<UIText> _pipelinePending;
-    std::shared_ptr<UIDragFloat> _viewportScale;
+    std::shared_ptr<UIDragFloat> _renderScale;
     std::shared_ptr<UICheckBox> _vsync;
     std::shared_ptr<UIText> _presentState;
     std::shared_ptr<UIComboBox> _presentMode;

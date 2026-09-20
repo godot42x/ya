@@ -97,7 +97,7 @@ struct EditorSurface : IEditorViewportHostSink
     std::shared_ptr<IImage>     _viewportImageResource;
     std::shared_ptr<IImageView> _viewportImageView;
 
-    EditorViewportOverlayHost _viewportOverlayHost;
+    EditorViewportOverlayHost _viewOverlayHost;
     std::shared_ptr<EditorViewportGizmoOverlay> _viewportGizmoOverlay;
     IEditorViewportHost* _viewportHost = nullptr;
     std::shared_ptr<UIMenu> _viewportContextMenu;
@@ -141,9 +141,9 @@ struct EditorSurface : IEditorViewportHostSink
     [[nodiscard]] FDockContext* ownedNestedDock() const { return _ownedDockContext.get(); }
     [[nodiscard]] std::shared_ptr<FDockContext> windowRootDockPtr() const { return _dockContext; }
     [[nodiscard]] std::shared_ptr<FDockContext> ownedNestedDockPtr() const { return _ownedDockContext; }
-    [[nodiscard]] EditorViewportOverlayHost& viewportOverlayHost() { return _viewportOverlayHost; }
-    [[nodiscard]] const EditorViewportOverlayHost& viewportOverlayHost() const { return _viewportOverlayHost; }
-    [[nodiscard]] bool isViewportOverlayActive() const { return _viewportOverlayHost.isActive(); }
+    [[nodiscard]] EditorViewportOverlayHost& viewOverlayHost() { return _viewOverlayHost; }
+    [[nodiscard]] const EditorViewportOverlayHost& viewOverlayHost() const { return _viewOverlayHost; }
+    [[nodiscard]] bool isViewportOverlayActive() const { return _viewOverlayHost.isActive(); }
     /// The viewport widget registers itself on attach and clears on detach. That
     /// edge is also the viewport's visibility, and the layer is told here rather
     /// than at tick time: the dock detaches the widget during input dispatch, so

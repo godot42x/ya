@@ -128,8 +128,8 @@ void allocateForwardViewPassResources(
         debugUBO.projection = frameData->projection;
         debugUBO.view       = frameData->view;
         debugUBO.resolution = glm::ivec2(
-            static_cast<int>(stageCtx.viewportExtent.width),
-            static_cast<int>(stageCtx.viewportExtent.height));
+            static_cast<int>(stageCtx.viewExtent.width),
+            static_cast<int>(stageCtx.viewExtent.height));
         writeUniformPassBinding(
             submission,
             render,
@@ -157,13 +157,13 @@ void allocateForwardViewPassResources(
 void ForwardRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& catalog) const
 {
     catalog.entries.push_back({
-        .label            = "Forward Viewport",
-        .owner            = RenderTargetCatalog::Entry::EOwner::ForwardViewport,
-        .colorFormats     = _viewportFormats.colorFormats,
-        .depthFormat      = _viewportFormats.depthFormat,
-        .colorAttachments = {_viewportResources.colorOwner},
-        .depthAttachment  = _viewportResources.depthOwner,
-        .extent           = _viewportResources.extent,
+        .label            = "Forward View",
+        .owner            = RenderTargetCatalog::Entry::EOwner::ForwardView,
+        .colorFormats     = _viewFormats.colorFormats,
+        .depthFormat      = _viewFormats.depthFormat,
+        .colorAttachments = {_viewResources.colorOwner},
+        .depthAttachment  = _viewResources.depthOwner,
+        .extent           = _viewResources.extent,
         .frameBufferCount = 1,
     });
     catalog.entries.push_back({
@@ -218,21 +218,21 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
         _frameShadowSettings = *_shadowSettings;
     }
 
-    initViewportResources(desc);
+    initViewResources(desc);
     initPostProcessResources(desc);
     initShadowResources();
     initStageResources();
 }
 
-void ForwardRenderPipeline::initViewportResources(const InitDesc& desc)
+void ForwardRenderPipeline::initViewResources(const InitDesc& desc)
 {
-    _viewportRTSpec = buildForwardViewRenderTargetSpec(
+    _viewRTSpec = buildForwardViewRenderTargetSpec(
         {.width = static_cast<uint32_t>(desc.windowW), .height = static_cast<uint32_t>(desc.windowH)},
         VIEWPORT_COLOR_FORMAT,
         DEPTH_FORMAT);
     _entityIdPass.init(_render, EFormat::R32_UINT, DEPTH_FORMAT);
-    recreateViewportResources();
-    refreshViewportSnapshot();
+    recreateViewResources();
+    refreshViewSnapshot();
 }
 
 void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
@@ -304,12 +304,12 @@ void ForwardRenderPipeline::initStageResources()
     }
 
     PipelineRenderingInfo viewportPRI{
-        .label                  = "Forward Viewport",
-        .colorAttachmentFormats = _viewportFormats.colorFormats,
-        .depthAttachmentFormat  = _viewportFormats.depthFormat.value_or(EFormat::Undefined),
+        .label                  = "Forward View",
+        .colorAttachmentFormats = _viewFormats.colorFormats,
+        .depthAttachmentFormat  = _viewFormats.depthFormat.value_or(EFormat::Undefined),
     };
-    _viewportStage = ya::makeShared<ForwardViewStage>();
-    _viewportStage->initWithDesc(ForwardViewStage::InitDesc{
+    _viewStage = ya::makeShared<ForwardViewStage>();
+    _viewStage->initWithDesc(ForwardViewStage::InitDesc{
         .render                             = _render,
         .renderPass                         = nullptr,
         .pipelineRenderingInfo              = viewportPRI,
@@ -324,7 +324,7 @@ void ForwardRenderPipeline::initStageResources()
 
     _deleter.push("Stages", [this](void*)
                   {
-        if (_viewportStage) { _viewportStage->destroy(); _viewportStage.reset(); }
+        if (_viewStage) { _viewStage->destroy(); _viewStage.reset(); }
         if (_shadowStage) { _shadowStage->destroy(); _shadowStage.reset(); } });
 }
 
@@ -359,7 +359,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         /// graph build so the shadow stage needs no "current View".
         ShadowPreparedView         shadowPrepared{};
         FrameContext               postContext{};
-        std::unique_ptr<ForwardViewStage::PassContext> viewportPassContext;
+        std::unique_ptr<ForwardViewStage::PassContext> viewPassContext;
         ForwardFrameResourceSet::Binding frameBinding{};
         ForwardFrameResourceSet::ViewResources* viewResources = nullptr;
     };
@@ -382,7 +382,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
             .view                    = RenderViewRecordingContext{
                 .task           = recording.task,
                 .frameData      = recording.frameData,
-                .viewportExtent = viewExtent,
+                .viewExtent = viewExtent,
             },
             .derivedScene            = recording.task ? recording.task->desc.scene : nullptr,
         };
@@ -397,8 +397,8 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         branch.shadowPrepared = executeShadowPass(branch.frame, branch.stageCtx);
 
         RenderViewRecordingContext view = branch.frame.view;
-        if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
-            view.viewportExtent = branch.stageCtx.viewportExtent;
+        if (view.viewExtent.width == 0 && view.viewExtent.height == 0) {
+            view.viewExtent = branch.stageCtx.viewExtent;
         }
         if (_frameResources && !preparedSkinning) {
             if (!_frameResources->prepareSkinning(*branch.frame.submission, view)) {
@@ -407,10 +407,10 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
             preparedSkinning = true;
         }
 
-        _viewportStage->prepare(branch.stageCtx);
+        _viewStage->prepare(branch.stageCtx);
         if (_frameResources) {
             const auto* binding = _frameResources->beginView(
-                *branch.frame.submission, view, _viewportStage->getFramePayloads());
+                *branch.frame.submission, view, _viewStage->getFramePayloads());
             if (!binding) {
                 YA_CORE_ERROR("Forward viewport view binding prepare failed");
                 continue;
@@ -426,7 +426,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
                     alignment,
                     branch.stageCtx,
                     &_entityIdPass,
-                    _viewportStage->getAuxPasses(),
+                    _viewStage->getAuxPasses(),
                     &_postProcessStage,
                     *branch.viewResources);
             }
@@ -443,16 +443,16 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
             branch.postContext.numPointLights       = frameData->numPointLights;
             branch.postContext.pointLights          = frameData->pointLights;
             branch.postContext.viewOwner            = frameData->viewOwner;
-            branch.postContext.extent               = frameData->viewportExtent;
+            branch.postContext.extent               = frameData->viewExtent;
         }
-        branch.postContext.extent         = branch.stageCtx.viewportExtent;
+        branch.postContext.extent         = branch.stageCtx.viewExtent;
 
         liveBranches.push_back(std::move(branch));
         ForwardFamilyViewBranch& live = liveBranches.back();
-        live.viewportPassContext = std::make_unique<ForwardViewStage::PassContext>(
-            _viewportStage->buildPassContext(live.stageCtx));
+        live.viewPassContext = std::make_unique<ForwardViewStage::PassContext>(
+            _viewStage->buildPassContext(live.stageCtx));
         if (live.viewResources) {
-            live.viewportPassContext->debug = live.viewResources->debug;
+            live.viewPassContext->debug = live.viewResources->debug;
         }
         if (!appendViewportPassGraph(
                 graph,
@@ -460,7 +460,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
                 live.stageCtx,
                 live.shadowPrepared,
                 live.postContext,
-                *live.viewportPassContext,
+                *live.viewPassContext,
                 live.frameBinding,
                 live.viewResources,
                 familyPredecessor)) {
@@ -487,11 +487,11 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
     for (const ForwardFamilyViewBranch& branch : liveBranches) {
         const uint64_t viewId = branch.frame.view.task ? branch.frame.view.task->desc.viewId : 0;
         RenderViewOutput output = collectViewOutput(
-            execution, branch.frame.view.task, viewId, branch.stageCtx.viewportExtent);
+            execution, branch.frame.view.task, viewId, branch.stageCtx.viewExtent);
         const bool bDisplayRoot = branch.frame.view.task && ctx.plan &&
                                   branch.frame.view.task == ctx.plan->displayRootTask();
         if (bDisplayRoot) {
-            _viewportResources.publish(output.color, output.depth, nullptr, output.entityId, branch.stageCtx.viewportExtent);
+            _viewResources.publish(output.color, output.depth, nullptr, output.entityId, branch.stageCtx.viewExtent);
         }
         result.views.push_back(std::move(output));
     }
@@ -502,14 +502,14 @@ bool ForwardRenderPipeline::shouldSkipView(const RenderPipelineFrameContext& fra
 {
     YA_CORE_ASSERT(frame.cmdBuf, "ForwardRenderPipeline requires command buffer");
     // A View with no extent has no offscreen output to record into.
-    return frame.view.viewportExtent.width == 0 || frame.view.viewportExtent.height == 0;
+    return frame.view.viewExtent.width == 0 || frame.view.viewExtent.height == 0;
 }
 
 void ForwardRenderPipeline::beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
-    Extent2D viewExtent = frame.view.viewportExtent;
+    Extent2D viewExtent = frame.view.viewExtent;
     if (viewExtent.width == 0 || viewExtent.height == 0) {
-        viewExtent = _viewportResources.extent;
+        viewExtent = _viewResources.extent;
     }
 
     stageCtx = RenderStageContext{
@@ -518,7 +518,7 @@ void ForwardRenderPipeline::beginViewRecording(const RenderPipelineFrameContext&
         .flightIndex    = frame.frame ? frame.frame->flightIndex : 0,
         .frameIndex     = frame.frame ? frame.frame->frameIndex : 0,
         .deltaTime      = frame.frame ? frame.frame->deltaTime : 0.0f,
-        .viewportExtent = viewExtent,
+        .viewExtent = viewExtent,
         .derivedScene   = frame.derivedScene,
     };
 }
@@ -529,9 +529,9 @@ bool ForwardRenderPipeline::setRenderTargetColorFormat(RenderTargetCatalog::Entr
 {
     bool bFormatChanged = false;
     switch (owner) {
-    case RenderTargetCatalog::Entry::EOwner::ForwardViewport:
-        if (attachmentIndex < _viewportRTSpec.attachments.colorAttach.size()) {
-            auto& colorDesc = _viewportRTSpec.attachments.colorAttach[attachmentIndex];
+    case RenderTargetCatalog::Entry::EOwner::ForwardView:
+        if (attachmentIndex < _viewRTSpec.attachments.colorAttach.size()) {
+            auto& colorDesc = _viewRTSpec.attachments.colorAttach[attachmentIndex];
             bFormatChanged  = colorDesc.format != format;
             colorDesc.format = format;
         }
@@ -575,14 +575,14 @@ void ForwardRenderPipeline::clearPendingResourceRefresh(EForwardPendingResourceR
     _pendingResourceRefreshMask &= ~static_cast<uint32_t>(refresh);
 }
 
-void ForwardRenderPipeline::requestViewportResize(Extent2D extent)
+void ForwardRenderPipeline::requestViewResize(Extent2D extent)
 {
     if (extent.width == 0 || extent.height == 0) {
         return;
     }
 
-    _pendingViewportExtent = extent;
-    markPendingResourceRefresh(EForwardPendingResourceRefresh::ViewportResize);
+    _pendingViewExtent = extent;
+    markPendingResourceRefresh(EForwardPendingResourceRefresh::ViewResize);
 }
 
 void ForwardRenderPipeline::requestShadowResourceRefresh()
@@ -596,12 +596,12 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
     bool bRefreshViewportStageState = false;
     bool bRefreshShadowStageState   = false;
 
-    if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::ViewportResize)) {
-        _viewportRTSpec.extent = _pendingViewportExtent;
-        recreateViewportResources();
+    if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::ViewResize)) {
+        _viewRTSpec.extent = _pendingViewExtent;
+        recreateViewResources();
         bRefreshViewportSnapshot   = true;
         bRefreshViewportStageState = true;
-        clearPendingResourceRefresh(EForwardPendingResourceRefresh::ViewportResize);
+        clearPendingResourceRefresh(EForwardPendingResourceRefresh::ViewResize);
     }
 
     if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::ShadowResources) && _render) {
@@ -614,17 +614,17 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
     }
 
     if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat)) {
-        recreateViewportResources();
+        recreateViewResources();
         bRefreshViewportSnapshot   = true;
         bRefreshViewportStageState = true;
         clearPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat);
     }
 
     if (bRefreshViewportSnapshot) {
-        refreshViewportSnapshot();
+        refreshViewSnapshot();
     }
     if (bRefreshViewportStageState) {
-        refreshViewportStageState();
+        refreshViewStageState();
     }
     if (bRefreshShadowStageState) {
         refreshShadowStageState();
@@ -633,12 +633,12 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
 
 void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
-    if (sceneViewOwnsHostViewport(frame.view.task)) {
-        const float frameBufferScale = std::max(frame.frame ? frame.frame->viewportFrameBufferScale : 1.0f, 1.0f);
-        const auto  desiredExtent    = Extent2D::fromVec2(glm::vec2{static_cast<float>(frame.view.viewportExtent.width),
-                                                                    static_cast<float>(frame.view.viewportExtent.height)} / frameBufferScale);
-        if (desiredExtent.width > 0 && desiredExtent.height > 0 && !(desiredExtent == _viewportResources.extent)) {
-            requestViewportResize(desiredExtent);
+    if (sceneViewIsDisplayRoot(frame.view.task)) {
+        const float frameBufferScale = std::max(frame.frame ? frame.frame->renderScale : 1.0f, 1.0f);
+        const auto  desiredExtent    = Extent2D::fromVec2(glm::vec2{static_cast<float>(frame.view.viewExtent.width),
+                                                                    static_cast<float>(frame.view.viewExtent.height)} / frameBufferScale);
+        if (desiredExtent.width > 0 && desiredExtent.height > 0 && !(desiredExtent == _viewResources.extent)) {
+            requestViewResize(desiredExtent);
         }
     }
 
@@ -656,27 +656,27 @@ void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& 
     syncShadowSettings();
 }
 
-void ForwardRenderPipeline::recreateViewportResources()
+void ForwardRenderPipeline::recreateViewResources()
 {
-    _viewportResources.reset(_viewportRTSpec.extent);
+    _viewResources.reset(_viewRTSpec.extent);
 }
 
-void ForwardRenderPipeline::refreshViewportSnapshot()
+void ForwardRenderPipeline::refreshViewSnapshot()
 {
-    _viewportFormats = buildForwardViewFormats(_viewportRTSpec);
+    _viewFormats = buildForwardViewFormats(_viewRTSpec);
 }
 
-void ForwardRenderPipeline::refreshViewportStageState()
+void ForwardRenderPipeline::refreshViewStageState()
 {
-    if (_viewportStage) {
-        _viewportStage->refreshPipelineFormats(_viewportFormats);
+    if (_viewStage) {
+        _viewStage->refreshPipelineFormats(_viewFormats);
     }
 }
 
 void ForwardRenderPipeline::refreshShadowStageState()
 {
-    if (_viewportStage) {
-        _viewportStage->setDepthBufferShadowDescriptorSet(depthBufferShadowDS);
+    if (_viewStage) {
+        _viewStage->setDepthBufferShadowDescriptorSet(depthBufferShadowDS);
     }
     if (currentShadowSettings().isEnabled() && _shadowResources.depthImage) {
         rebuildShadowViews();
@@ -686,8 +686,8 @@ void ForwardRenderPipeline::refreshShadowStageState()
 
 void ForwardRenderPipeline::syncShadowSettings()
 {
-    if (_viewportStage) {
-        _viewportStage->applyShadowState(buildShadowState());
+    if (_viewStage) {
+        _viewStage->applyShadowState(buildShadowState());
     }
 }
 
@@ -788,14 +788,14 @@ ShadowRuntimeState ForwardRenderPipeline::buildShadowState() const
     return shadowState;
 }
 
-EFormat::T ForwardRenderPipeline::getViewportColorFormat() const
+EFormat::T ForwardRenderPipeline::getViewColorFormat() const
 {
-    return !_viewportFormats.colorFormats.empty() ? _viewportFormats.colorFormats.front() : EFormat::Undefined;
+    return !_viewFormats.colorFormats.empty() ? _viewFormats.colorFormats.front() : EFormat::Undefined;
 }
 
-EFormat::T ForwardRenderPipeline::getViewportDepthFormat() const
+EFormat::T ForwardRenderPipeline::getViewDepthFormat() const
 {
-    return _viewportFormats.depthFormat.value_or(EFormat::Undefined);
+    return _viewFormats.depthFormat.value_or(EFormat::Undefined);
 }
 
 ShadowPreparedView ForwardRenderPipeline::executeShadowPass(const RenderPipelineFrameContext& frame,
@@ -814,8 +814,8 @@ ShadowPreparedView ForwardRenderPipeline::executeShadowPass(const RenderPipeline
     }
 
     RenderViewRecordingContext view = frame.view;
-    if (view.viewportExtent.width == 0 && view.viewportExtent.height == 0) {
-        view.viewportExtent = stageCtx.viewportExtent;
+    if (view.viewExtent.width == 0 && view.viewExtent.height == 0) {
+        view.viewExtent = stageCtx.viewExtent;
     }
     return _shadowStage->prepareView(*frame.submission, view);
 }
@@ -828,10 +828,10 @@ void ForwardRenderPipeline::shutdown()
         _frameResources.reset();
     }
     _graphExecutor.reset();
-    _pendingViewportExtent = {};
+    _pendingViewExtent = {};
     _pendingResourceRefreshMask = 0;
-    _viewportFormats = {};
-    _viewportResources.reset();
+    _viewFormats = {};
+    _viewResources.reset();
     _deleter.clear();
 }
 
@@ -840,7 +840,7 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
                                                     RenderStageContext&             stageCtx,
                                                     const ShadowPreparedView&       shadowPrepared,
                                                     FrameContext&                    postContext,
-                                                    ForwardViewStage::PassContext& viewportPassContext,
+                                                    ForwardViewStage::PassContext& viewPassContext,
                                                     const ForwardFrameResourceSet::Binding& frameBinding,
                                                     ForwardFrameResourceSet::ViewResources* viewResources,
                                                     std::optional<RGPassHandle> familyPredecessor)
@@ -857,13 +857,13 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
         }
     }
 
-    RenderTargetCreateInfo viewRTSpec = _viewportRTSpec;
-    if (stageCtx.viewportExtent.width > 0 && stageCtx.viewportExtent.height > 0) {
-        viewRTSpec.extent = stageCtx.viewportExtent;
+    RenderTargetCreateInfo viewRTSpec = _viewRTSpec;
+    if (stageCtx.viewExtent.width > 0 && stageCtx.viewExtent.height > 0) {
+        viewRTSpec.extent = stageCtx.viewExtent;
     }
     _frameGraphOrchestrator.build(
         ForwardFrameGraphOrchestrator::BuildDependencies{
-            .viewportStage    = _viewportStage.get(),
+            .viewStage    = _viewStage.get(),
             .entityIdPass     = &_entityIdPass,
             .shadowStage      = _shadowStage.get(),
             .postProcessStage = &_postProcessStage,
@@ -872,9 +872,9 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
             .graph                    = &graph,
             .stageCtx                 = &stageCtx,
             .frameBinding             = frameBinding,
-            .viewportRTSpec           = &viewRTSpec,
+            .viewRTSpec           = &viewRTSpec,
             .directionGizmos          = std::move(directionGizmos),
-            .viewportPassContext      = &viewportPassContext,
+            .viewPassContext      = &viewPassContext,
             .postContext              = &postContext,
             .bEnableShadow            = _shadowStage && currentShadowSettings().isEnabled(),
             .shadowPrepared           = shadowPrepared,
@@ -887,7 +887,7 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
 }
 
 RenderViewOutput ForwardRenderPipeline::collectViewOutput(const RenderGraphExecutionResult& result,
-                                                          const SceneViewportTask* task,
+                                                          const SceneViewTask* task,
                                                           uint64_t viewId,
                                                           Extent2D viewExtent) const
 {
@@ -899,8 +899,8 @@ RenderViewOutput ForwardRenderPipeline::collectViewOutput(const RenderGraphExecu
     if (!output.desc.hasExtent()) {
         output.desc.extent = viewExtent;
     }
-    output.color    = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::viewportColor, viewId));
-    output.depth    = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::viewportDepth, viewId));
+    output.color    = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::viewColor, viewId));
+    output.depth    = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::viewDepth, viewId));
     output.entityId = result.getExportedTextureShared(makeViewGraphName(forward_graph_exports::entityId, viewId));
     output.bloomExtract = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kExtractExportName, viewId));
     output.bloomBlur    = result.getExportedTextureShared(makeViewGraphName(BloomPostprocessing::kBlurPongExportName, viewId));
@@ -922,18 +922,18 @@ RenderViewOutput ForwardRenderPipeline::collectViewOutput(const RenderGraphExecu
     return output;
 }
 
-void ForwardRenderPipeline::onViewportResized(Rect2D rect)
+void ForwardRenderPipeline::onViewResized(Rect2D rect)
 {
     Extent2D newExtent{
         .width  = static_cast<uint32_t>(rect.extent.x),
         .height = static_cast<uint32_t>(rect.extent.y),
     };
-    requestViewportResize(newExtent);
+    requestViewResize(newExtent);
 }
 
-Extent2D ForwardRenderPipeline::getViewportExtent() const
+Extent2D ForwardRenderPipeline::getViewExtent() const
 {
-    return _viewportResources.extent;
+    return _viewResources.extent;
 }
 
 std::shared_ptr<ImageResource> ForwardRenderPipeline::getShadowDirectionalDepthResource() const

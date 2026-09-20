@@ -296,8 +296,8 @@ void LightStage::execute(const RenderStageContext& ctx,
     if (!ctx.cmdBuf || !frameAndLight || !_fullscreenQuad) return;
 
     auto* cmdBuf = ctx.cmdBuf;
-    auto  vpW    = ctx.viewportExtent.width;
-    auto  vpH    = ctx.viewportExtent.height;
+    auto  vpW    = ctx.viewExtent.width;
+    auto  vpH    = ctx.viewExtent.height;
 
     cmdBuf->debugBeginLabel("LightStage");
 

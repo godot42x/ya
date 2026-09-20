@@ -32,12 +32,12 @@ struct ViewDisplayInsetImage
 /// Game UI + preview insets + editor overlay onto this Camera's offscreen
 /// display RT. Not display compose: must not write `swapchain[imageIndex]`,
 /// acquire, or present. `cameraDisplayRT` is
-/// `getViewportDisplayImageShared()` (post or raw WorldView color), and may
+/// `getViewDisplayImageShared()` (post or raw WorldView color), and may
 /// be null on the first frame before the world graph creates it.
 YA_RENDER_3D_API void recordCameraViewCompose(ICommandBuffer*                         cmdBuf,
                                               RenderTexture*                          cameraDisplayRT,
                                               const UIFrameSnapshot*                  uiFrameSnapshot,
-                                              Extent2D                                logicalViewportExtent,
+                                              Extent2D                                logicalViewExtent,
                                               std::span<const ViewDisplayInsetImage>  insets = {});
 
 } // namespace ya

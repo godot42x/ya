@@ -224,7 +224,7 @@ void RuntimeRenderSettingsSection::construct()
 {
     _pipeline = makeCombo("RenderPipeline", {"Forward", "Deferred"});
     _pipelinePending = ui::text("RenderPipelinePending").setStyleKey("text.muted").share();
-    _viewportScale = makeDrag("RenderViewportScale", 1.0f, 10.0f, 0.1f, 1);
+    _renderScale = makeDrag("RenderScale", 1.0f, 10.0f, 0.1f, 1);
     _vsync = makeCheck("RenderVsync", "VSync");
     _presentState = ui::text("RenderPresentState").setStyleKey("text.muted").share();
     _presentMode = makeCombo("RenderPresentMode", {"Immediate", "Mailbox", "FIFO", "FIFO Relaxed"});
@@ -375,7 +375,7 @@ void RuntimeRenderSettingsSection::construct()
                                     .setSpacing(editor_density::kRowSpacing)
                                     .child(labeledRow("RenderPipelineRow", "Render Pipeline", _pipeline))
                                     .child(_pipelinePending)
-                                    .child(labeledRow("RenderViewportScaleRow", "Viewport Scale", _viewportScale))
+                                    .child(labeledRow("RenderScaleRow", "Render Scale", _renderScale))
                                     .child(_vsync)
                                     .child(_presentState)
                                     .child(labeledRow("RenderPresentModeRow", "Present Mode", _presentMode))
@@ -422,11 +422,11 @@ void RuntimeRenderSettingsSection::bindCallbacks()
             runtime->setPendingRenderPipeline(static_cast<RenderDeviceState::ERenderPipeline>(index));
         }
     };
-    _viewportScale->_onValueChanged = [this](float value) {
+    _renderScale->_onValueChanged = [this](float value) {
         if (_bSyncing || !_app) {
             return;
         }
-        _app->getRenderServices().setViewportFrameBufferScale(value);
+        _app->getRenderServices().setRenderScale(value);
     };
     _vsync->_onChanged = [this](bool value) {
         if (_bSyncing || !_presentSurface) {
@@ -741,7 +741,7 @@ void RuntimeRenderSettingsSection::sync(const App* app, IRenderSurfaceContext* p
     const bool pending = runtime->getPendingRenderPipeline() != runtime->getRenderPipeline();
     _pipeline->setSelectedIndex(pipeline, false);
     _pipelinePending->setText(pending ? "(switch pending)" : "");
-    _viewportScale->setValue(app->getRenderServices().getViewportFrameBufferScale(), false);
+    _renderScale->setValue(app->getRenderServices().getRenderScale(), false);
     if (_presentSurface) {
         if (auto* sc = _presentSurface->getSwapchain()) {
             _vsync->setChecked(sc->getVsync());

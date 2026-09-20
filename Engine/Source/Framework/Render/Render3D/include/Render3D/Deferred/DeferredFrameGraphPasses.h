@@ -29,13 +29,13 @@ struct DeferredFrameGraphPassContext
     const RenderStageContext&                stageCtx;
     const DeferredFrameResourceSet::Binding& frameBinding;
     const RenderTargetCreateInfo&            gBufferRTSpec;
-    const RenderTargetCreateInfo&            viewportRTSpec;
+    const RenderTargetCreateInfo&            viewRTSpec;
     const ViewOverlayStage::FrameInputs* overlayInputs = nullptr;
     const DeferredFrameResourceSet::ViewResources* viewResources = nullptr;
     const EnvironmentLightingSceneResources*  environmentLighting = nullptr;
     DescriptorSetHandle                      environmentLightingDS{};
     FrameContext*                            postContext = nullptr;
-    Extent2D                                 viewportExtent{};
+    Extent2D                                 viewExtent{};
     bool                                     bUseSSAO = false;
     bool                                     bReverseViewportY = true;
     bool                                     bPostprocessOutputIsSRGB = false;
@@ -101,7 +101,7 @@ struct DeferredLightPassParams
     std::optional<RGTextureHandle> environmentPrefilter{};
     std::optional<RGTextureHandle> environmentBrdfLut{};
     std::optional<RGTextureHandle> shadowDepth{};
-    RGTextureHandle                viewportColor{};
+    RGTextureHandle                viewColor{};
     Rect2D                         renderArea{};
     uint32_t                       layerCount = 1;
     DescriptorSetHandle            frameAndLightDescriptorSet{};
@@ -119,7 +119,7 @@ struct DeferredSkyboxPassParams
     };
 
     BufferInput                                    frame{};
-    RGTextureHandle                                viewportColor{};
+    RGTextureHandle                                viewColor{};
     RGTextureHandle                                depth{};
     Rect2D                                         renderArea{};
     uint32_t                                       layerCount = 1;

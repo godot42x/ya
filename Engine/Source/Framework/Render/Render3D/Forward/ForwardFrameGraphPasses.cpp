@@ -21,8 +21,8 @@ constexpr std::string_view kTopologyPassSkybox      = "Forward Skybox";
 constexpr std::string_view kTopologyPassTransparent = "Forward Transparent";
 struct OpaquePassParams
 {
-    RGTextureHandle                    viewportColor{};
-    RGTextureHandle                    viewportDepth{};
+    RGTextureHandle                    viewColor{};
+    RGTextureHandle                    viewDepth{};
     Rect2D                             renderArea{};
     uint32_t                           layerCount = 1;
     EImageLayout::T                    finalLayout = EImageLayout::ColorAttachmentOptimal;
@@ -31,8 +31,8 @@ struct OpaquePassParams
 
 struct SkyboxPassParams
 {
-    RGTextureHandle viewportColor{};
-    RGTextureHandle viewportDepth{};
+    RGTextureHandle viewColor{};
+    RGTextureHandle viewDepth{};
     Rect2D          renderArea{};
     uint32_t        layerCount = 1;
     EImageLayout::T finalLayout = EImageLayout::ColorAttachmentOptimal;
@@ -40,8 +40,8 @@ struct SkyboxPassParams
 
 struct EntityIdPassParams
 {
-    RGTextureHandle viewportColor{};
-    RGTextureHandle viewportDepth{};
+    RGTextureHandle viewColor{};
+    RGTextureHandle viewDepth{};
     Rect2D          renderArea{};
     uint32_t        layerCount = 1;
     EImageLayout::T finalLayout = EImageLayout::ColorAttachmentOptimal;
@@ -49,8 +49,8 @@ struct EntityIdPassParams
 
 struct TransparentPassParams
 {
-    RGTextureHandle viewportColor{};
-    RGTextureHandle viewportDepth{};
+    RGTextureHandle viewColor{};
+    RGTextureHandle viewDepth{};
     Rect2D          renderArea{};
     uint32_t        layerCount = 1;
     EImageLayout::T finalLayout = EImageLayout::ColorAttachmentOptimal;
@@ -94,34 +94,34 @@ AttachmentDescription makeEntityIdAttachmentDesc()
 }
 
 ViewportPassParams buildViewportPassParams(const BuildInputs& inputs,
-                                           const ViewportGraphResources& resources)
+                                           const ViewGraphResources& resources)
 {
     return ViewportPassParams{
         .opaque = {
-            .viewportColor   = resources.color,
-            .viewportDepth   = resources.depth,
+            .viewColor   = resources.color,
+            .viewDepth   = resources.depth,
             .renderArea      = resources.renderArea,
             .layerCount      = 1,
             .finalLayout     = EImageLayout::ColorAttachmentOptimal,
             .directionGizmos = inputs.directionGizmos,
         },
         .skybox = {
-            .viewportColor = resources.color,
-            .viewportDepth = resources.depth,
+            .viewColor = resources.color,
+            .viewDepth = resources.depth,
             .renderArea    = resources.renderArea,
             .layerCount    = 1,
             .finalLayout   = EImageLayout::ColorAttachmentOptimal,
         },
         .transparent = {
-            .viewportColor = resources.color,
-            .viewportDepth = resources.depth,
+            .viewColor = resources.color,
+            .viewDepth = resources.depth,
             .renderArea    = resources.renderArea,
             .layerCount    = 1,
             .finalLayout   = EImageLayout::ColorAttachmentOptimal,
         },
         .entityId = {
-            .viewportColor = resources.entityId,
-            .viewportDepth = resources.depth,
+            .viewColor = resources.entityId,
+            .viewDepth = resources.depth,
             .renderArea    = resources.renderArea,
             .layerCount    = 1,
             .finalLayout   = EImageLayout::ColorAttachmentOptimal,
@@ -132,7 +132,7 @@ ViewportPassParams buildViewportPassParams(const BuildInputs& inputs,
 void appendOpaquePass(RenderGraph& graph,
                       const Dependencies& deps,
                       const BuildInputs& inputs,
-                      const ViewportGraphResources& resources,
+                      const ViewGraphResources& resources,
                       OpaquePassParams params)
 {
     [[maybe_unused]] const auto pass = graph.addPass(
@@ -148,14 +148,14 @@ void appendOpaquePass(RenderGraph& graph,
                 .renderArea = params.renderArea,
                 .layerCount = params.layerCount,
                 .colors = {{
-                    .color       = params.viewportColor,
+                    .color       = params.viewColor,
                     .clearValue  = ClearValue::black(),
                     .loadOp      = resources.colorAttachment.loadOp,
                     .storeOp     = resources.colorAttachment.storeOp,
                     .finalLayout = params.finalLayout,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = params.viewportDepth,
+                    .depth       = params.viewDepth,
                     .clearValue  = ClearValue(1.0f, 0),
                     .loadOp      = resources.depthAttachment.loadOp,
                     .storeOp     = resources.depthAttachment.storeOp,
@@ -163,14 +163,14 @@ void appendOpaquePass(RenderGraph& graph,
                 },
             });
         },
-        [stage = deps.viewportStage,
+        [stage = deps.viewStage,
          stageCtx = inputs.stageCtx,
          frameBinding = inputs.frameBinding,
          directionGizmos = std::move(params.directionGizmos),
-         passContext = inputs.viewportPassContext](RGRenderContext& rgCtx) mutable {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
+         passContext = inputs.viewPassContext](RGRenderContext& rgCtx) mutable {
+            const auto viewExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
-            stageCtx->viewportExtent = viewportExtent;
+            stageCtx->viewExtent = viewExtent;
             stage->executePBR(*stageCtx, frameBinding, passContext);
             stage->executePhong(*stageCtx, frameBinding, passContext);
             stage->executeUnlit(*stageCtx, frameBinding, passContext);
@@ -184,7 +184,7 @@ void appendOpaquePass(RenderGraph& graph,
 void appendSkyboxPass(RenderGraph& graph,
                       const Dependencies& deps,
                       const BuildInputs& inputs,
-                      const ViewportGraphResources& resources,
+                      const ViewGraphResources& resources,
                       SkyboxPassParams params)
 {
     [[maybe_unused]] const auto pass = graph.addPass(
@@ -194,26 +194,26 @@ void appendSkyboxPass(RenderGraph& graph,
                 .renderArea = params.renderArea,
                 .layerCount = params.layerCount,
                 .colors = {{
-                    .color       = params.viewportColor,
+                    .color       = params.viewColor,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = params.finalLayout,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = params.viewportDepth,
+                    .depth       = params.viewDepth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = resources.depthAttachment.finalLayout,
                 },
             });
         },
-        [stage = deps.viewportStage,
+        [stage = deps.viewStage,
          stageCtx = inputs.stageCtx,
          frameBinding = inputs.frameBinding,
-         passContext = inputs.viewportPassContext](RGRenderContext& rgCtx) {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
+         passContext = inputs.viewPassContext](RGRenderContext& rgCtx) {
+            const auto viewExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
-            stageCtx->viewportExtent = viewportExtent;
+            stageCtx->viewExtent = viewExtent;
             stage->executeSkybox(*stageCtx, frameBinding, passContext);
             rgCtx.endRendering();
         });
@@ -222,7 +222,7 @@ void appendSkyboxPass(RenderGraph& graph,
 void appendTransparentPass(RenderGraph& graph,
                            const Dependencies& deps,
                            const BuildInputs& inputs,
-                           const ViewportGraphResources& resources,
+                           const ViewGraphResources& resources,
                            TransparentPassParams params)
 {
     [[maybe_unused]] const auto pass = graph.addPass(
@@ -232,13 +232,13 @@ void appendTransparentPass(RenderGraph& graph,
                 .renderArea = params.renderArea,
                 .layerCount = params.layerCount,
                 .colors = {{
-                    .color       = params.viewportColor,
+                    .color       = params.viewColor,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = params.finalLayout,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = params.viewportDepth,
+                    .depth       = params.viewDepth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = resources.depthAttachment.finalLayout,
@@ -246,9 +246,9 @@ void appendTransparentPass(RenderGraph& graph,
             });
         },
         [stageCtx = inputs.stageCtx](RGRenderContext& rgCtx) {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
+            const auto viewExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
-            stageCtx->viewportExtent = viewportExtent;
+            stageCtx->viewExtent = viewExtent;
             rgCtx.endRendering();
         });
 }
@@ -256,7 +256,7 @@ void appendTransparentPass(RenderGraph& graph,
 void appendEntityIdPass(RenderGraph& graph,
                         const Dependencies& deps,
                         const BuildInputs& inputs,
-                        const ViewportGraphResources& resources,
+                        const ViewGraphResources& resources,
                         EntityIdPassParams params)
 {
     [[maybe_unused]] const auto pass = graph.addPass(
@@ -266,14 +266,14 @@ void appendEntityIdPass(RenderGraph& graph,
                 .renderArea = params.renderArea,
                 .layerCount = params.layerCount,
                 .colors = {{
-                    .color       = params.viewportColor,
+                    .color       = params.viewColor,
                     .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
                     .loadOp      = resources.entityIdAttachment.loadOp,
                     .storeOp     = resources.entityIdAttachment.storeOp,
                     .finalLayout = params.finalLayout,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = params.viewportDepth,
+                    .depth       = params.viewDepth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = resources.depthAttachment.finalLayout,
@@ -284,13 +284,13 @@ void appendEntityIdPass(RenderGraph& graph,
          stageCtx = inputs.stageCtx,
          frameBinding = inputs.frameBinding,
          entityIdBindings = inputs.viewResources ? inputs.viewResources->entityId : EntityIdPassBindings{}](RGRenderContext& rgCtx) {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
+            const auto viewExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
-            stageCtx->viewportExtent = viewportExtent;
+            stageCtx->viewExtent = viewExtent;
             if (stageCtx->frameData) {
                 entityIdPass->execute(&rgCtx.getCommandBuffer(),
-                                      viewportExtent.width,
-                                      viewportExtent.height,
+                                      viewExtent.width,
+                                      viewExtent.height,
                                       stageCtx->frameData->projection * stageCtx->frameData->view,
                                       stageCtx->frameData->view,
                                       *stageCtx->frameData,
@@ -304,47 +304,47 @@ void appendEntityIdPass(RenderGraph& graph,
 
 } // namespace
 
-ViewportGraphResources createViewportResources(RenderGraph&                   graph,
-                                               const RenderTargetCreateInfo& viewportRTSpec,
+ViewGraphResources createViewResources(RenderGraph&                   graph,
+                                               const RenderTargetCreateInfo& viewRTSpec,
                                                std::optional<RGTextureHandle> shadowDepth,
                                                uint64_t                       viewId)
 {
-    const auto colorAttachment = viewportRTSpec.attachments.colorAttach[0];
-    const auto depthAttachment = *viewportRTSpec.attachments.depthAttach;
-    const uint32_t layerCount = viewportRTSpec.layerCount;
+    const auto colorAttachment = viewRTSpec.attachments.colorAttach[0];
+    const auto depthAttachment = *viewRTSpec.attachments.depthAttach;
+    const uint32_t layerCount = viewRTSpec.layerCount;
     const auto createKeyed = [&](const AttachmentDescription& attachment, std::string_view base) {
         return createViewPersistentTexture(
             graph,
-            makeViewportTextureDesc(attachment, viewportRTSpec.extent, layerCount, std::string(base)),
+            makeViewportTextureDesc(attachment, viewRTSpec.extent, layerCount, std::string(base)),
             base,
             viewId);
     };
-    const auto color = createKeyed(colorAttachment, "ForwardViewport.Color");
-    const RGTextureHandle resolve = viewportRTSpec.attachments.resolveAttach.has_value()
-        ? createKeyed(*viewportRTSpec.attachments.resolveAttach, "ForwardViewport.Resolve")
+    const auto color = createKeyed(colorAttachment, "ForwardView.Color");
+    const RGTextureHandle resolve = viewRTSpec.attachments.resolveAttach.has_value()
+        ? createKeyed(*viewRTSpec.attachments.resolveAttach, "ForwardView.Resolve")
         : RGTextureHandle{};
-    const auto depth = createKeyed(depthAttachment, "ForwardViewport.Depth");
+    const auto depth = createKeyed(depthAttachment, "ForwardView.Depth");
     const auto entityIdAttachment = makeEntityIdAttachmentDesc();
-    const auto entityId = createKeyed(entityIdAttachment, "ForwardViewport.EntityId");
+    const auto entityId = createKeyed(entityIdAttachment, "ForwardView.EntityId");
 
-    return ViewportGraphResources{
+    return ViewGraphResources{
         .color            = color,
         .resolve          = resolve,
         .depth            = depth,
         .entityId         = entityId,
         .shadowDepth      = shadowDepth,
-        .viewportExtent   = viewportRTSpec.extent,
+        .viewExtent   = viewRTSpec.extent,
         .colorAttachment  = colorAttachment,
         .depthAttachment  = depthAttachment,
         .entityIdAttachment = entityIdAttachment,
-        .renderArea       = Rect2D{.pos = {0, 0}, .extent = viewportRTSpec.extent.toVec2()},
+        .renderArea       = Rect2D{.pos = {0, 0}, .extent = viewRTSpec.extent.toVec2()},
     };
 }
 
-void appendViewportPasses(RenderGraph&                     graph,
+void appendViewPasses(RenderGraph&                     graph,
                           const Dependencies&              deps,
                           const BuildInputs&               inputs,
-                          const ViewportGraphResources&    resources)
+                          const ViewGraphResources&    resources)
 {
     const auto params = buildViewportPassParams(inputs, resources);
     appendOpaquePass(graph, deps, inputs, resources, params.opaque);
@@ -356,13 +356,13 @@ void appendViewportPasses(RenderGraph&                     graph,
 void appendPostprocessPasses(RenderGraph&                  graph,
                              const Dependencies&           deps,
                              const BuildInputs&            inputs,
-                             const ViewportGraphResources& resources)
+                             const ViewGraphResources& resources)
 {
     const auto postprocessInput = resources.resolve.isValid() ? resources.resolve : resources.color;
     const auto bloomComposite   = deps.postProcessStage->appendBloomGraphPasses(
         graph,
         postprocessInput,
-        resources.viewportExtent,
+        resources.viewExtent,
         inputs.postContext,
         inputs.viewId,
         inputs.viewResources ? inputs.viewResources->post.bloom : BloomPassBindings{});
@@ -371,7 +371,7 @@ void appendPostprocessPasses(RenderGraph&                  graph,
         graph,
         PostProcessingStage::FinalizePassParams{
             .input         = finalizeInput,
-            .inputExtent   = resources.viewportExtent,
+            .inputExtent   = resources.viewExtent,
             .bOutputIsSRGB = inputs.bPostprocessOutputIsSRGB,
             .postContext   = inputs.postContext,
             .viewId        = inputs.viewId,
@@ -379,12 +379,12 @@ void appendPostprocessPasses(RenderGraph&                  graph,
         });
 }
 
-void exportGraphOutputs(RenderGraph& graph, const ViewportGraphResources& resources, uint64_t viewId)
+void exportGraphOutputs(RenderGraph& graph, const ViewGraphResources& resources, uint64_t viewId)
 {
-    graph.exportTexture(resources.color, makeViewGraphName(forward_graph_exports::viewportColor, viewId));
-    graph.exportTexture(resources.depth, makeViewGraphName(forward_graph_exports::viewportDepth, viewId));
+    graph.exportTexture(resources.color, makeViewGraphName(forward_graph_exports::viewColor, viewId));
+    graph.exportTexture(resources.depth, makeViewGraphName(forward_graph_exports::viewDepth, viewId));
     if (resources.resolve.isValid()) {
-        graph.exportTexture(resources.resolve, makeViewGraphName(forward_graph_exports::viewportResolve, viewId));
+        graph.exportTexture(resources.resolve, makeViewGraphName(forward_graph_exports::viewResolve, viewId));
     }
     graph.exportTexture(resources.entityId, makeViewGraphName(forward_graph_exports::entityId, viewId));
 }

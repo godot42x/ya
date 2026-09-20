@@ -410,7 +410,7 @@ void ForwardViewLitPasses::preparePhong(const RenderStageContext& ctx,
 
     outFrame.projMat    = fd.projection;
     outFrame.viewMat    = fd.view;
-    outFrame.resolution = glm::ivec2(ctx.viewportExtent.width, ctx.viewportExtent.height);
+    outFrame.resolution = glm::ivec2(ctx.viewExtent.width, ctx.viewExtent.height);
     // Frame constants come from the View's own prepared data, not from a clock
     // the pass would have to locate: the View already carries the tick and the
     // elapsed time it was prepared with.
@@ -535,7 +535,7 @@ void ForwardViewLitPasses::drawPBR(const DrawContext& drawCtx)
     }
 
     cmdBuf->debugBeginLabel("ForwardPBR");
-    setViewportAndScissor(*cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height, drawCtx.bReverseViewportY);
+    setViewportAndScissor(*cmdBuf, ctx.viewExtent.width, ctx.viewExtent.height, drawCtx.bReverseViewportY);
 
     auto drawBucket = [&](DrawCandidateView items, bool bSkinned)
     {
@@ -600,7 +600,7 @@ void ForwardViewLitPasses::drawPhong(const DrawContext& drawCtx)
     }
 
     cmdBuf->debugBeginLabel("ForwardPhong");
-    setViewportAndScissor(*cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height, drawCtx.bReverseViewportY);
+    setViewportAndScissor(*cmdBuf, ctx.viewExtent.width, ctx.viewExtent.height, drawCtx.bReverseViewportY);
 
     auto drawBucket = [&](DrawCandidateView items, bool bSkinned)
     {

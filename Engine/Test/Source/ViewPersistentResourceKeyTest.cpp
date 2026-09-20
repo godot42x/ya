@@ -7,18 +7,18 @@ namespace ya
 
 TEST(ViewPersistentResourceKeyTest, SameViewIdProducesSameKey)
 {
-    const auto a = makeViewPersistentTextureKey("ForwardViewport.Color", 11);
-    const auto b = makeViewPersistentTextureKey("ForwardViewport.Color", 11);
+    const auto a = makeViewPersistentTextureKey("ForwardView.Color", 11);
+    const auto b = makeViewPersistentTextureKey("ForwardView.Color", 11);
     EXPECT_EQ(a, b);
-    EXPECT_EQ(a.value, "ForwardViewport.Color.view11");
+    EXPECT_EQ(a.value, "ForwardView.Color.view11");
 }
 
 TEST(ViewPersistentResourceKeyTest, DifferentViewIdsDoNotAlias)
 {
-    const auto a = makeViewPersistentTextureKey("ForwardViewport.Color", 11);
-    const auto b = makeViewPersistentTextureKey("ForwardViewport.Color", 12);
+    const auto a = makeViewPersistentTextureKey("ForwardView.Color", 11);
+    const auto b = makeViewPersistentTextureKey("ForwardView.Color", 12);
     EXPECT_NE(a, b);
-    EXPECT_EQ(b.value, "ForwardViewport.Color.view12");
+    EXPECT_EQ(b.value, "ForwardView.Color.view12");
 }
 
 TEST(ViewPersistentResourceKeyTest, MissingViewStillNamespacesZero)
@@ -30,10 +30,10 @@ TEST(ViewPersistentResourceKeyTest, MissingViewStillNamespacesZero)
 
 TEST(ViewPersistentResourceKeyTest, BasesStayIndependentForTheSameView)
 {
-    const auto color = makeViewPersistentTextureKey("DeferredViewport.Color", 7);
+    const auto color = makeViewPersistentTextureKey("DeferredView.Color", 7);
     const auto ssao  = makeViewPersistentTextureKey("SSAO.Output", 7);
     EXPECT_NE(color, ssao);
-    EXPECT_EQ(color.value, "DeferredViewport.Color.view7");
+    EXPECT_EQ(color.value, "DeferredView.Color.view7");
     EXPECT_EQ(ssao.value, "SSAO.Output.view7");
 }
 

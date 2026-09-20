@@ -91,7 +91,7 @@ void createAttachmentTextures(DeferredFrameGraphPassContext& context)
 {
     auto&       graphResources = context.graphResources;
     const auto& gBufferSpec    = context.gBufferRTSpec;
-    const auto& viewportSpec   = context.viewportRTSpec;
+    const auto& viewportSpec   = context.viewRTSpec;
 
     const auto makeAttachmentDesc = [](const RenderTargetCreateInfo& spec,
                                        const AttachmentDescription&  attachment,
@@ -129,10 +129,10 @@ void createAttachmentTextures(DeferredFrameGraphPassContext& context)
 
     YA_CORE_ASSERT(!viewportSpec.attachments.colorAttach.empty(),
                    "Deferred viewport graph requires a color attachment spec");
-    graphResources.textures.viewportColor = createViewPersistentTexture(
+    graphResources.textures.viewColor = createViewPersistentTexture(
         context.graph,
-        makeAttachmentDesc(viewportSpec, viewportSpec.attachments.colorAttach.front(), "DeferredViewport.Color"),
-        "DeferredViewport.Color",
+        makeAttachmentDesc(viewportSpec, viewportSpec.attachments.colorAttach.front(), "DeferredView.Color"),
+        "DeferredView.Color",
         context.viewId);
 
     AttachmentDescription entityIdDesc{};
@@ -144,8 +144,8 @@ void createAttachmentTextures(DeferredFrameGraphPassContext& context)
     entityIdDesc.finalLayout = EImageLayout::ColorAttachmentOptimal;
     graphResources.textures.entityId = createViewPersistentTexture(
         context.graph,
-        makeAttachmentDesc(viewportSpec, entityIdDesc, "DeferredViewport.EntityId"),
-        "DeferredViewport.EntityId",
+        makeAttachmentDesc(viewportSpec, entityIdDesc, "DeferredView.EntityId"),
+        "DeferredView.EntityId",
         context.viewId);
 }
 
@@ -292,8 +292,8 @@ void appendLight(DeferredFrameGraphPassContext& context)
         .environmentPrefilter             = graphResources.textures.environmentPrefilter,
         .environmentBrdfLut               = graphResources.textures.environmentBrdfLut,
         .shadowDepth                      = graphResources.textures.shadowDepth,
-        .viewportColor                    = graphResources.textures.viewportColor,
-        .renderArea                      = Rect2D{.pos = {0, 0}, .extent = context.viewportExtent.toVec2()},
+        .viewColor                    = graphResources.textures.viewColor,
+        .renderArea                      = Rect2D{.pos = {0, 0}, .extent = context.viewExtent.toVec2()},
         .layerCount                      = 1,
         .frameAndLightDescriptorSet      = frameBinding.frameAndLightDescriptorSet,
         .environmentLightingDescriptorSet = context.environmentLightingDS,
@@ -332,7 +332,7 @@ void appendLight(DeferredFrameGraphPassContext& context)
                 .renderArea = params.renderArea,
                 .layerCount = params.layerCount,
                 .colors = {{
-                    .color       = params.viewportColor,
+                    .color       = params.viewColor,
                     .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
                     .loadOp      = EAttachmentLoadOp::Clear,
                     .storeOp     = EAttachmentStoreOp::Store,
@@ -367,9 +367,9 @@ void appendLight(DeferredFrameGraphPassContext& context)
 void appendForwardOpaque(DeferredFrameGraphPassContext& context)
 {
     DeferredForwardOpaquePassParams params{
-        .color      = context.graphResources.textures.viewportColor,
+        .color      = context.graphResources.textures.viewColor,
         .depth      = context.graphResources.textures.gBufferDepth,
-        .renderArea = {.pos = {0, 0}, .extent = context.viewportExtent.toVec2()},
+        .renderArea = {.pos = {0, 0}, .extent = context.viewExtent.toVec2()},
         .layerCount = 1,
     };
 
@@ -410,9 +410,9 @@ void appendSkybox(DeferredFrameGraphPassContext& context)
                 .size   = frameBinding.skyboxFrame.size,
             },
         },
-        .viewportColor = context.graphResources.textures.viewportColor,
+        .viewColor = context.graphResources.textures.viewColor,
         .depth         = context.graphResources.textures.gBufferDepth,
-        .renderArea    = {.pos = {0, 0}, .extent = context.viewportExtent.toVec2()},
+        .renderArea    = {.pos = {0, 0}, .extent = context.viewExtent.toVec2()},
         .layerCount    = 1,
         .skybox        = context.overlayInputs
             ? context.overlayInputs->skybox
@@ -427,7 +427,7 @@ void appendSkybox(DeferredFrameGraphPassContext& context)
                 .renderArea = params.renderArea,
                 .layerCount = params.layerCount,
                 .colors = {{
-                    .color       = params.viewportColor,
+                    .color       = params.viewColor,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
@@ -452,8 +452,8 @@ void appendBloom(DeferredFrameGraphPassContext& context)
 {
     const auto bloomComposite = context.postProcessStage.appendBloomGraphPasses(
         context.graph,
-        context.graphResources.textures.viewportColor,
-        context.viewportExtent,
+        context.graphResources.textures.viewColor,
+        context.viewExtent,
         context.postContext,
         context.viewId,
         context.viewResources ? context.viewResources->post.bloom : BloomPassBindings{});
@@ -462,7 +462,7 @@ void appendBloom(DeferredFrameGraphPassContext& context)
     }
     context.graphResources.textures.overlayInput = bloomComposite.isValid()
         ? bloomComposite
-        : context.graphResources.textures.viewportColor;
+        : context.graphResources.textures.viewColor;
 }
 
 void appendForwardTransparent(DeferredFrameGraphPassContext& context)
@@ -470,7 +470,7 @@ void appendForwardTransparent(DeferredFrameGraphPassContext& context)
     DeferredForwardTransparentPassParams params{
         .color      = context.graphResources.textures.overlayInput,
         .depth      = context.graphResources.textures.gBufferDepth,
-        .renderArea = {.pos = {0, 0}, .extent = context.viewportExtent.toVec2()},
+        .renderArea = {.pos = {0, 0}, .extent = context.viewExtent.toVec2()},
         .layerCount = 1,
         .overlay    = context.overlayInputs
             ? *context.overlayInputs
@@ -511,7 +511,7 @@ void appendEntityId(DeferredFrameGraphPassContext& context)
 {
     const auto entityId = context.graphResources.textures.entityId;
     const auto depth    = context.graphResources.textures.gBufferDepth;
-    const auto extent   = context.viewportExtent;
+    const auto extent   = context.viewExtent;
     const auto stageCtx = context.stageCtx;
     const auto frameBinding = context.frameBinding;
     auto* const entityIdPass = context.entityIdPass;
@@ -553,12 +553,12 @@ void appendEntityId(DeferredFrameGraphPassContext& context)
             });
         },
         [stageCtx, entityIdPass, frameBinding, entityIdBindings = context.viewResources ? context.viewResources->entityId : EntityIdPassBindings{}, billboards = std::move(billboards)](RGRenderContext& rgCtx) {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
+            const auto viewExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
             if (entityIdPass && stageCtx.frameData) {
                 entityIdPass->execute(&rgCtx.getCommandBuffer(),
-                                      viewportExtent.width,
-                                      viewportExtent.height,
+                                      viewExtent.width,
+                                      viewExtent.height,
                                       stageCtx.frameData->projection * stageCtx.frameData->view,
                                       stageCtx.frameData->view,
                                       *stageCtx.frameData,
@@ -578,7 +578,7 @@ void appendPostprocess(DeferredFrameGraphPassContext& context)
         PostProcessingStage::FinalizePassParams{
             .input         = context.graphResources.textures.overlayInput,
             .output        = context.graphResources.textures.postprocessOutput.value_or(RGTextureHandle{}),
-            .inputExtent   = context.viewportExtent,
+            .inputExtent   = context.viewExtent,
             .bOutputIsSRGB = context.bPostprocessOutputIsSRGB,
             .postContext   = context.postContext,
             .viewId        = context.viewId,
