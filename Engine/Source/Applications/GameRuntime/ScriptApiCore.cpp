@@ -376,8 +376,8 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
 
     // ========================================================================
     // Scene tree (world nodes, path-addressed). Game UI authoring uses the
-    // ui.* service (WidgetTree); documents are authored inline (no file
-    // format) and mounted through SceneWidgetEntry.
+    // ui.* service (WidgetTree); a scene mounts Game UI through
+    // SceneWidgetEntry::documentPath (a .yaui document in UIDocumentStore).
     // ========================================================================
 
     registry.registerFunction(
@@ -558,28 +558,39 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
         });
 
     registry.registerFunction(
-        "ui.add_to_scene",
-        "Adds a script widget into the active scene's 2D (Game UI) section as an "
-        "authoring entry (Godot add_child semantics; the runtime re-instantiates "
-        "it into the WidgetTree on scene activation). Args: {handle, name?}.",
-        Json{{"handle", {{"type", "integer"}}}, {"name", {{"type", "string"}}}},
+        "ui.mount_document",
+        "Mounts a Game UI document asset into the active scene as an auto-mount "
+        "authoring entry. The entry stores the document PATH; the runtime "
+        "instantiates it on scene activation, so editing the document updates "
+        "every scene that mounts it. Args: {path, name?, zOrder?}.",
+        Json{{"path", {{"type", "string"}}},
+             {"name", {{"type", "string"}}},
+             {"zOrder", {{"type", "integer"}}}},
         [](const Json& args) -> Json {
-            UIElementRef widget = requireScriptWidget(args);
-            Scene&        scene  = requireActiveScene();
-            auto          document = UIDocument::fromWidget(*widget);
-            if (!document) {
-                throw Error("ui.add_to_scene: widget has no registry type id");
+            Scene&            scene = requireActiveScene();
+            const std::string path  = args.at("path").get<std::string>();
+            if (path.empty()) {
+                throw Error("ui.mount_document: empty document path");
             }
-            // Unique entry id derived from the widget name.
-            std::string entryId = widget->_name;
+
+            // Default entry id is the document stem ("Content/UI/HUD.yaui" ->
+            // "HUD"), made unique within the scene.
+            std::string entryId;
+            if (const auto it = args.find("name"); it != args.end() && !it->is_null()) {
+                entryId = it->get<std::string>();
+            }
+            else {
+                const size_t slash = path.find_last_of('/');
+                const size_t dot   = path.find_last_of('.');
+                const size_t begin = slash == std::string::npos ? 0 : slash + 1;
+                const size_t end   = dot == std::string::npos || dot < begin ? path.size() : dot;
+                entryId            = path.substr(begin, end - begin);
+            }
             if (entryId.empty()) {
-                entryId = document->typeId;
+                throw Error(std::format(
+                    "ui.mount_document: cannot derive an entry id from '{}'; pass name", path));
             }
-            const size_t dot = entryId.find_last_of('.');
-            if (dot != std::string::npos) {
-                entryId = entryId.substr(dot + 1);
-            }
-            int suffix = 1;
+
             const auto& entries = scene.getWidgetEntries();
             const auto  bTaken  = [&](const std::string& id) {
                 for (const auto& entry : entries) {
@@ -590,16 +601,17 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
                 return false;
             };
             const std::string baseId = entryId;
-            while (bTaken(entryId)) {
-                entryId = baseId + "_" + std::to_string(suffix++);
+            for (int suffix = 1; bTaken(entryId); ++suffix) {
+                entryId = baseId + "_" + std::to_string(suffix);
             }
 
             SceneWidgetEntry entry;
-            entry.entryId        = entryId;
-            entry.inlineDocument = document;
-            entry.autoMount      = true;
+            entry.entryId      = entryId;
+            entry.documentPath = path;
+            entry.zOrder       = args.value("zOrder", 0);
+            entry.autoMount    = true;
             scene.addWidgetEntry(std::move(entry));
-            return Json{{"entryId", entryId}, {"mounted", true}};
+            return Json{{"entryId", entryId}, {"document", path}, {"mounted", true}};
         });
 
     // ========================================================================

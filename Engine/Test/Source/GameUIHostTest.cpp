@@ -9,6 +9,7 @@
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/UIDocument.h"
+#include "GUI/Widgets/UIDocumentStore.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "Scene/Core/Scene.h"
 
@@ -20,14 +21,28 @@ namespace ya
 namespace
 {
 
-SceneWidgetEntry makeEntry(const std::string& entryId, const std::string& typeId, int32_t zOrder)
+/// Publish one live document under a test asset path. The mount path resolves
+/// through the store, so a test does not need a file on disk.
+std::string publishDocument(UIDocumentStore&     store,
+                            std::string_view     name,
+                            const std::string&   typeId,
+                            nlohmann::json       fields = nlohmann::json::object())
+{
+    auto document    = std::make_shared<UIDocument>();
+    document->typeId = typeId;
+    document->fields = std::move(fields);
+    std::string path = "Test/UI/" + std::string(name) + ".yaui";
+    store.put(path, std::move(document));
+    return path;
+}
+
+SceneWidgetEntry makeEntry(const std::string& entryId, const std::string& documentPath, int32_t zOrder)
 {
     SceneWidgetEntry entry;
-    entry.entryId        = entryId;
-    entry.inlineDocument = std::make_shared<UIDocument>();
-    entry.inlineDocument->typeId = typeId;
-    entry.zOrder    = zOrder;
-    entry.autoMount = true;
+    entry.entryId      = entryId;
+    entry.documentPath = documentPath;
+    entry.zOrder       = zOrder;
+    entry.autoMount    = true;
     return entry;
 }
 
@@ -68,11 +83,13 @@ struct TestPersistentController : public IGameUIController
 TEST(GameUIHostTest, ActivateMountsAutoMountEntriesByZOrder)
 {
     GameUIHost host;
+    UIDocumentStore documents;
+    host.setDocumentStore(&documents);
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
 
     Scene scene("World");
-    scene.addWidgetEntry(makeEntry("A", "engine.panel", 0));
-    scene.addWidgetEntry(makeEntry("B", "engine.button", 10));
+    scene.addWidgetEntry(makeEntry("A", publishDocument(documents, "A", "engine.panel"), 0));
+    scene.addWidgetEntry(makeEntry("B", publishDocument(documents, "B", "engine.button"), 10));
 
     host.onSceneActivated(scene);
 
@@ -91,12 +108,14 @@ TEST(GameUIHostTest, ActivateMountsAutoMountEntriesByZOrder)
 TEST(GameUIHostTest, SceneSwitchUnmountsPreviousAndMountsNext)
 {
     GameUIHost host;
+    UIDocumentStore documents;
+    host.setDocumentStore(&documents);
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
 
     Scene sceneA("A");
-    sceneA.addWidgetEntry(makeEntry("A1", "engine.panel", 0));
+    sceneA.addWidgetEntry(makeEntry("A1", publishDocument(documents, "A1", "engine.panel"), 0));
     Scene sceneB("B");
-    sceneB.addWidgetEntry(makeEntry("B1", "engine.button", 5));
+    sceneB.addWidgetEntry(makeEntry("B1", publishDocument(documents, "B1", "engine.button"), 5));
 
     host.onSceneActivated(sceneA);
     host.onSceneActivated(sceneB);
@@ -170,10 +189,12 @@ TEST(GameUIHostTest, InputRoutesThroughPresentationMapping)
 TEST(GameUIHostTest, BuildSnapshotComposesMountedWidgets)
 {
     GameUIHost host;
+    UIDocumentStore documents;
+    host.setDocumentStore(&documents);
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
 
     Scene scene("World");
-    scene.addWidgetEntry(makeEntry("P", "engine.panel", 0));
+    scene.addWidgetEntry(makeEntry("P", publishDocument(documents, "P", "engine.panel"), 0));
     host.onSceneActivated(scene);
 
     const UIFrameSnapshot snapshot = host.buildSnapshot();
@@ -182,18 +203,21 @@ TEST(GameUIHostTest, BuildSnapshotComposesMountedWidgets)
     EXPECT_EQ(snapshot.logicalExtent.width, 800u);
 }
 
-TEST(GameUIHostTest, InlineDocumentFieldsApplyOnActivation)
+TEST(GameUIHostTest, DocumentFieldsApplyOnActivation)
 {
     GameUIHost host;
+    UIDocumentStore documents;
+    host.setDocumentStore(&documents);
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
 
     Scene scene("World");
     SceneWidgetEntry entry;
-    entry.entryId        = "HUD";
-    entry.inlineDocument = std::make_shared<UIDocument>();
-    entry.inlineDocument->typeId  = "engine.border";
-    entry.inlineDocument->fields  = nlohmann::json{{"_color", {0.1, 0.2, 0.3, 0.9}}};
-    entry.autoMount      = true;
+    entry.entryId      = "HUD";
+    entry.documentPath = publishDocument(documents,
+                                         "HUD",
+                                         "engine.border",
+                                         nlohmann::json{{"_color", {0.1, 0.2, 0.3, 0.9}}});
+    entry.autoMount = true;
     scene.addWidgetEntry(std::move(entry));
 
     host.onSceneActivated(scene);
@@ -228,11 +252,13 @@ TEST(GameUIHostTest, PersistentWidgetSurvivesSceneSwitch)
 TEST(GameUIHostTest, ControllerReplacementPerformsHandover)
 {
     GameUIHost host;
+    UIDocumentStore documents;
+    host.setDocumentStore(&documents);
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
 
     Scene scene("World");
-    scene.addWidgetEntry(makeEntry("A", "engine.panel", 0));
-    scene.addWidgetEntry(makeEntry("B", "engine.button", 10));
+    scene.addWidgetEntry(makeEntry("A", publishDocument(documents, "A", "engine.panel"), 0));
+    scene.addWidgetEntry(makeEntry("B", publishDocument(documents, "B", "engine.button"), 10));
     host.onSceneActivated(scene);
     ASSERT_EQ(host.getTree().getLayer(WidgetTree::ELayer::Content)->getChildren().size(), 2u);
 
@@ -248,10 +274,12 @@ TEST(GameUIHostTest, ControllerReplacementPerformsHandover)
 TEST(GameUIHostTest, PieRestartDoesNotAccumulateWidgets)
 {
     GameUIHost host;
+    UIDocumentStore documents;
+    host.setDocumentStore(&documents);
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
 
     Scene scene("World");
-    scene.addWidgetEntry(makeEntry("HUD", "engine.panel", 0));
+    scene.addWidgetEntry(makeEntry("HUD", publishDocument(documents, "HUD", "engine.panel"), 0));
     host.onSceneActivated(scene);
 
     auto dynamic = UITypeRegistry::instance().createInstance("engine.button");
@@ -267,22 +295,25 @@ TEST(GameUIHostTest, PieRestartDoesNotAccumulateWidgets)
     EXPECT_EQ(host.getTree().getLayer(WidgetTree::ELayer::Content)->getChildren().size(), 1u);
 }
 
-TEST(GameUIHostTest, InlineDocumentEntrySurvivesClone)
+TEST(GameUIHostTest, DocumentReferenceSurvivesClone)
 {
     GameUIHost host;
+    UIDocumentStore documents;
+    host.setDocumentStore(&documents);
     host.setPresentation(Rect2D{.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}}, {1.0f, 1.0f});
 
     Scene scene("Authoring");
     SceneWidgetEntry entry;
-    entry.entryId        = "HUD";
-    entry.inlineDocument = std::make_shared<UIDocument>();
-    entry.inlineDocument->typeId  = "engine.text";
-    entry.inlineDocument->fields  = nlohmann::json{{"_text", "Cloned UI"}};
-    entry.autoMount      = true;
+    entry.entryId      = "HUD";
+    entry.documentPath = publishDocument(documents,
+                                         "Cloned",
+                                         "engine.text",
+                                         nlohmann::json{{"_text", "Cloned UI"}});
+    entry.autoMount = true;
     scene.addWidgetEntry(std::move(entry));
 
-    // PIE clones the authoring scene; the clone's inline entry must mount
-    // through the same runtime controller path.
+    // PIE clones the authoring scene; the clone's entry still points at the
+    // same document and must mount through the same runtime controller path.
     stdptr<Scene> play = scene.clone();
     ASSERT_NE(play, nullptr);
     host.onSceneActivated(*play);

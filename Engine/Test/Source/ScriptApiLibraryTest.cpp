@@ -149,6 +149,26 @@ TEST_F(ScriptApiLibraryFixture, GameUIUnknownTypeIsDiagnosed)
     EXPECT_NE(result.value.get<std::string>().find("unknown Game UI type"), std::string::npos);
 }
 
+TEST_F(ScriptApiLibraryFixture, MountDocumentCreatesAReferenceEntry)
+{
+    const auto result = _system.evalJS(R"(
+        const first  = ya.ui.mount_document({path: "Content/UI/HUD.yaui"});
+        const second = ya.ui.mount_document({path: "Content/UI/HUD.yaui", zOrder: 4});
+        [first.entryId, second.entryId, first.document, first.mounted]
+    )");
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_EQ(result.value, Json::array({"HUD", "HUD_1", "Content/UI/HUD.yaui", true}));
+
+    // The entry stores the path, never a copy of the document.
+    ASSERT_EQ(_scene->getWidgetEntries().size(), 2u);
+    const auto& entry = _scene->getWidgetEntries().front();
+    EXPECT_EQ(entry.entryId, "HUD");
+    EXPECT_EQ(entry.documentPath, "Content/UI/HUD.yaui");
+    EXPECT_EQ(entry.zOrder, 0);
+    EXPECT_TRUE(entry.autoMount);
+    EXPECT_EQ(_scene->getWidgetEntries().back().zOrder, 4);
+}
+
 TEST_F(ScriptApiLibraryFixture, MultiArgCommandTakesParamsObject)
 {
     const auto result = _system.evalJS(R"(

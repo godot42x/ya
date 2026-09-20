@@ -726,7 +726,7 @@ class EditorModule final : public IModule, public IRuntimeModule, public IEditor
         _layer->setCurrentScenePath(app.getDesc().defaultScenePath.value_or(std::string{}));
         _layer->onAttach();
         registerBuiltinEditorTabSpawners(_tabSpawners);
-        _layer->setDocumentRegistry(&_documents);
+        _layer->bindDocumentServices(&_documents, app.getUIDocumentStore());
         EditorWindowSession* window = _windows.find(kDefaultEditorWindowId);
         YA_CORE_ASSERT(window, "EditorWindowRegistry always owns the default editor window");
         window->bind(*_layer, &_tabSpawners, &_documents);

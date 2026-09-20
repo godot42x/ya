@@ -5,6 +5,7 @@
 #include "GameRuntime/Lifecycle/GameRuntimeTickOrchestrator.h"
 #include "Lifecycle/HostSdlEventSource.h"
 #include "GUI/Host/NativeWindowManager.h"
+#include "GUI/Widgets/UIDocumentStore.h"
 #include "GUI/Host/GUIWindowChrome.h"
 #include "App/Kernel/AppKernel.h"
 #include "Core/Config/ConfigManager.h"
@@ -120,10 +121,12 @@ App::App()
     , _sceneServices(this)
     , _automationControlService(std::make_unique<AppAutomationControlService>())
     , _gameUIHost(std::make_unique<GameUIHost>())
+    , _uiDocuments(std::make_unique<UIDocumentStore>())
     , gameInputNode(inputManager)
 {
     inputRouter.setApp(*this);
     inputRouter.setDefaultNode(gameInputNode);
+    _gameUIHost->setDocumentStore(_uiDocuments.get());
 }
 
 App::~App()

@@ -185,8 +185,9 @@ TEST(SceneSerializerTest, MaterialComponentBaseClassSerializedWithBaseBlock)
 
 // ============================================================================
 // Game UI migration (ui-widget-tree-refactor Phase 2b): the serializer now
-// stores Game UI as widgetEntries (inline UIDocuments) instead of Node2D
-// scene-tree subtrees. Legacy nodeType data migrates to entries on load.
+// stores Game UI as widgetEntries. An entry is a *reference* to a .yaui
+// document (UIDocumentStore), never an inline document, so the scene file
+// stays small and a document is editable/usable on its own.
 // ============================================================================
 
 TEST(SceneSerializerTest, EntriesAndWorldTreeRoundtrip)
@@ -195,28 +196,16 @@ TEST(SceneSerializerTest, EntriesAndWorldTreeRoundtrip)
 
     Scene scene("UIScene");
     scene.addWidgetEntry(SceneWidgetEntry{
-        .entryId        = "Title",
-        .inlineDocument = std::make_shared<UIDocument>(UIDocument{
-            .typeId = "engine.text",
-            .fields = nlohmann::json{
-                {"_text", "Hello UI"},
-                {"_fontSize", 24},
-                {"__base__", nlohmann::json{{"UIElement", nlohmann::json{{"_zOrder", 3}}}}},
-            },
-        }),
-        .rootSlot = FCanvasSlotArgs{.offset = {10.0f, 20.0f}},
-        .zOrder   = 3,
+        .entryId      = "Title",
+        .documentPath = "Example/Game/Content/UI/Title.yaui",
+        .rootSlot     = FCanvasSlotArgs{.offset = {10.0f, 20.0f}},
+        .zOrder       = 3,
         .autoMount = true,
     });
     scene.addWidgetEntry(SceneWidgetEntry{
-        .entryId        = "OK",
-        .inlineDocument = std::make_shared<UIDocument>(UIDocument{
-            .typeId = "engine.button",
-            .fields = nlohmann::json{
-                {"__base__", nlohmann::json{{"UIElement", nlohmann::json{{"_hitFilter", "Stop"}}}}},
-            },
-        }),
-        .rootSlot = FCanvasSlotArgs{.fixedSize = {80.0f, 32.0f}},
+        .entryId      = "OK",
+        .documentPath = "Example/Game/Content/UI/OK.yaui",
+        .rootSlot     = FCanvasSlotArgs{.fixedSize = {80.0f, 32.0f}},
     });
 
     // A 3D entity sibling to verify mixed-tree serialization.
@@ -233,7 +222,7 @@ TEST(SceneSerializerTest, EntriesAndWorldTreeRoundtrip)
     EXPECT_TRUE(children[0].contains("entityRef"));
     EXPECT_EQ(children[0]["name"], "Cube");
 
-    // Entries serialize with their inline documents.
+    // Entries serialize with their document references.
     ASSERT_TRUE(json.contains("widgetEntries"));
     const auto& entries = json["widgetEntries"];
     ASSERT_EQ(entries.size(), 2);
@@ -241,11 +230,11 @@ TEST(SceneSerializerTest, EntriesAndWorldTreeRoundtrip)
     const nlohmann::json* titleJson = nullptr;
     const nlohmann::json* okJson    = nullptr;
     for (const auto& entry : entries) {
-        const std::string typeId = entry["inline"]["typeId"].get<std::string>();
-        if (typeId == "engine.text") {
+        const std::string document = entry["document"].get<std::string>();
+        if (document.ends_with("Title.yaui")) {
             titleJson = &entry;
         }
-        else if (typeId == "engine.button") {
+        else if (document.ends_with("OK.yaui")) {
             okJson = &entry;
         }
     }
@@ -256,11 +245,9 @@ TEST(SceneSerializerTest, EntriesAndWorldTreeRoundtrip)
     EXPECT_EQ((*titleJson)["zOrder"].get<int32_t>(), 3);
     EXPECT_TRUE((*titleJson)["autoMount"].get<bool>());
     EXPECT_TRUE((*titleJson).contains("rootSlot"));
-    EXPECT_FALSE((*titleJson)["inline"]["fields"]["__base__"]["UIElement"].contains("_position"));
-    EXPECT_EQ((*titleJson)["inline"]["fields"]["_text"], "Hello UI");
-    EXPECT_EQ((*titleJson)["inline"]["fields"]["_fontSize"], 24);
-    EXPECT_EQ((*okJson)["inline"]["fields"]["__base__"]["UIElement"]["_hitFilter"], "Stop");
-    EXPECT_FALSE((*okJson)["inline"]["fields"]["__base__"]["UIElement"].contains("_size"));
+    // The scene file must not carry the widget tree: a document is an asset.
+    EXPECT_FALSE((*titleJson).contains("inline"));
+    EXPECT_EQ((*okJson)["document"], "Example/Game/Content/UI/OK.yaui");
 
     Scene loadedScene("LoadedUIScene");
     SceneSerializer loadedSerializer(&loadedScene);
@@ -287,10 +274,9 @@ TEST(SceneSerializerTest, EntriesAndWorldTreeRoundtrip)
     }
     ASSERT_NE(loadedTextEntry, nullptr);
     ASSERT_NE(loadedOkEntry, nullptr);
-    ASSERT_NE(loadedTextEntry->inlineDocument, nullptr);
-    EXPECT_EQ(loadedTextEntry->inlineDocument->typeId, "engine.text");
+    EXPECT_EQ(loadedTextEntry->documentPath, "Example/Game/Content/UI/Title.yaui");
     EXPECT_EQ(loadedTextEntry->zOrder, 3);
-    EXPECT_EQ(loadedOkEntry->inlineDocument->typeId, "engine.button");
+    EXPECT_EQ(loadedOkEntry->documentPath, "Example/Game/Content/UI/OK.yaui");
 }
 
 TEST(SceneSerializerTest, SceneSaveWritesEntriesOnly)
@@ -300,9 +286,9 @@ TEST(SceneSerializerTest, SceneSaveWritesEntriesOnly)
     Scene scene("NoDupScene");
     // Scene-authored entry (the authoring fact source).
     scene.addWidgetEntry(SceneWidgetEntry{
-        .entryId        = "HUD",
-        .inlineDocument = std::make_shared<UIDocument>(UIDocument{.typeId = "engine.text"}),
-        .autoMount      = true,
+        .entryId      = "HUD",
+        .documentPath = "Example/Game/Content/UI/HUD.yaui",
+        .autoMount    = true,
     });
     auto* world = scene.createNode3D("World", scene.getRootNode());
     ASSERT_NE(world, nullptr);
@@ -314,7 +300,7 @@ TEST(SceneSerializerTest, SceneSaveWritesEntriesOnly)
     ASSERT_TRUE(json.contains("widgetEntries"));
     ASSERT_EQ(json["widgetEntries"].size(), 1u);
     EXPECT_EQ(json["widgetEntries"][0]["entryId"], "HUD");
-    EXPECT_EQ(json["widgetEntries"][0]["inline"]["typeId"], "engine.text");
+    EXPECT_EQ(json["widgetEntries"][0]["document"], "Example/Game/Content/UI/HUD.yaui");
     ASSERT_TRUE(json.contains("nodeTree"));
     ASSERT_EQ(json["nodeTree"]["children"].size(), 1u);
     EXPECT_EQ(json["nodeTree"]["children"][0]["name"], "World");
@@ -327,20 +313,10 @@ TEST(SceneSerializerTest, WidgetEntriesSurviveClone)
     Scene scene("CloneUIScene");
     // Scene-authored entries: the clone copies the authoring recipe.
     scene.addWidgetEntry(SceneWidgetEntry{
-        .entryId        = "HUD",
-        .inlineDocument = std::make_shared<UIDocument>(UIDocument{
-            .typeId = "engine.button",
-            .fields = [] {
-                nlohmann::json f;
-                f["__base__"]           = nlohmann::json::object();
-                f["__base__"]["UIElement"] = nlohmann::json{
-                    {"_zOrder", 5},
-                };
-                return f;
-            }(),
-        }),
-        .rootSlot = FCanvasSlotArgs{.offset = {50.0f, 60.0f}, .fixedSize = {120.0f, 40.0f}},
-        .zOrder   = 5,
+        .entryId      = "HUD",
+        .documentPath = "Example/Game/Content/UI/HUD.yaui",
+        .rootSlot     = FCanvasSlotArgs{.offset = {50.0f, 60.0f}, .fixedSize = {120.0f, 40.0f}},
+        .zOrder       = 5,
         .autoMount = true,
     });
 
@@ -350,12 +326,11 @@ TEST(SceneSerializerTest, WidgetEntriesSurviveClone)
     stdptr<Scene> cloned = scene.clone();
     ASSERT_NE(cloned, nullptr);
 
-    // Authoring entries survive the clone (documents are immutable recipes).
+    // Authoring entries survive the clone (the reference is the recipe).
     ASSERT_EQ(cloned->getWidgetEntries().size(), 1u);
     const auto& clonedEntry = cloned->getWidgetEntries().front();
     EXPECT_EQ(clonedEntry.entryId, "HUD");
-    ASSERT_NE(clonedEntry.inlineDocument, nullptr);
-    EXPECT_EQ(clonedEntry.inlineDocument->typeId, "engine.button");
+    EXPECT_EQ(clonedEntry.documentPath, "Example/Game/Content/UI/HUD.yaui");
     EXPECT_EQ(clonedEntry.zOrder, 5);
     EXPECT_EQ(clonedEntry.rootSlot.offset, glm::vec2(50.0f, 60.0f));
 

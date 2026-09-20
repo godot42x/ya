@@ -274,11 +274,10 @@ void EditorInspectorTab::construct()
             return;
         }
         SceneWidgetEntry* entry = _layer->getSelectedWidgetEntry();
-        Scene* scene = _layer->getViewportInteractionScene();
-        if (!entry || !scene || !entry->inlineDocument) {
+        if (!entry || entry->documentPath.empty()) {
             return;
         }
-        _layer->getEditorUIDesignerSession().openSceneEntry(*scene, *entry);
+        _layer->getEditorUIDesignerSession().openSceneEntry(*entry);
     };
 
     auto widgetEntryForm = ui::column("InspectorWidgetEntryForm")
@@ -298,7 +297,7 @@ void EditorInspectorTab::construct()
                                .child(ui::row("InspectorWidgetEntryTypeRow")
                                           .setSpacing(editor_density::kControlSpacing)
                                           .child(ui::text("InspectorWidgetEntryTypeLabel")
-                                                     .setText("Type")
+                                                     .setText("Document")
                                                      .setStyleKey("text.muted")
                                                      .setVAlign(EWidgetAlignV::Center),
                                                  labelSlot)
@@ -656,15 +655,12 @@ void EditorInspectorTab::refreshFromTree(WidgetTree& tree)
             _widgetEntryIdText->setText(widgetEntry->entryId);
         }
         if (_widgetEntryTypeText) {
-            if (widgetEntry->inlineDocument) {
-                _widgetEntryTypeText->setText(widgetEntry->inlineDocument->typeId);
-            }
-            else {
-                _widgetEntryTypeText->setText("<invalid: no document>");
-            }
+            _widgetEntryTypeText->setText(widgetEntry->documentPath.empty()
+                                              ? std::string("<invalid: no document>")
+                                              : widgetEntry->documentPath);
         }
         if (_openDesignerButton) {
-            _openDesignerButton->setEnabled(widgetEntry->inlineDocument != nullptr);
+            _openDesignerButton->setEnabled(!widgetEntry->documentPath.empty());
         }
         if (!_projectedFingerprint.empty()) {
             _projectedFingerprint.clear();

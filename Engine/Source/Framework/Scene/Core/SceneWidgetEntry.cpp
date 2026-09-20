@@ -3,6 +3,8 @@
 #include "Core/Log.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 
+#include "GUI/Widgets/UIElement.h"
+
 #include <functional>
 
 namespace
@@ -177,14 +179,13 @@ nlohmann::json SceneWidgetEntry::toJson() const
     j["entryId"]   = entryId;
     j["zOrder"]    = zOrder;
     j["autoMount"] = autoMount;
-    if (inlineDocument) {
-        j["inline"] = inlineDocument->toJson();
-        j["rootSlot"] = canvasSlotToJson(rootSlot);
+    if (!documentPath.empty()) {
+        j["document"] = documentPath;
     }
     else {
-        YA_CORE_ERROR("SceneWidgetEntry::toJson: entry '{}' has no inline document definition",
-                      entryId);
+        YA_CORE_ERROR("SceneWidgetEntry::toJson: entry '{}' has no document path", entryId);
     }
+    j["rootSlot"] = canvasSlotToJson(rootSlot);
     j["overrides"] = overrides.toJson();
     return j;
 }
@@ -201,20 +202,15 @@ SceneWidgetEntry SceneWidgetEntry::fromJson(const nlohmann::json& json)
     if (json.contains("autoMount")) {
         entry.autoMount = json["autoMount"].get<bool>();
     }
-    if (json.contains("inline")) {
-        entry.inlineDocument = UIDocument::fromJson(json["inline"]);
-        if (!entry.inlineDocument) {
-            YA_CORE_ERROR("SceneWidgetEntry::fromJson: entry '{}' has an invalid inline document",
-                          entry.entryId);
-        }
+    if (json.contains("document")) {
+        entry.documentPath = json["document"].get<std::string>();
     }
     else {
-        YA_CORE_ERROR("SceneWidgetEntry::fromJson: entry '{}' has no inline document definition",
-                      entry.entryId);
+        YA_CORE_ERROR("SceneWidgetEntry::fromJson: entry '{}' has no document path", entry.entryId);
     }
     if (!json.contains("rootSlot") || !canvasSlotFromJson(json["rootSlot"], entry.rootSlot)) {
         YA_CORE_ERROR("SceneWidgetEntry::fromJson: entry '{}' has no valid rootSlot", entry.entryId);
-        entry.inlineDocument.reset();
+        entry.documentPath.clear();
         return entry;
     }
     if (json.contains("overrides")) {
@@ -224,4 +220,3 @@ SceneWidgetEntry SceneWidgetEntry::fromJson(const nlohmann::json& json)
 }
 
 } // namespace ya
-

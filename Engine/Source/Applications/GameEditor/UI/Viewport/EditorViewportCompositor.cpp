@@ -126,6 +126,7 @@ void EditorViewportCompositor::composeCanvasPreview(IRender&        render,
         previewTree.setTextureSource(&gameUITextureSource());
         std::string errors;
         (void)mountSceneAutoMountEntries(*scene, previewTree,
+                                         layer.uiDocumentStore(),
                                          [&errors](std::string_view message) {
                                              errors.append(message);
                                              errors.push_back('\n');

@@ -34,6 +34,7 @@ namespace ya
 
 struct App;
 struct EditorDocumentRegistry;
+struct UIDocumentStore;
 struct IImageView;
 struct IImage;
 struct RenderTexture;
@@ -66,6 +67,7 @@ struct EditorLayer
     /// being inspected.
     std::string _inspectedAssetPath;
     EditorDocumentRegistry* _documents = nullptr;
+    UIDocumentStore*        _uiDocumentStore = nullptr;
 
     /// How many editor viewports are on screen. The viewport is a docked tab, so
     /// the dock detaches its widget whenever another tab in its stack is selected
@@ -214,8 +216,12 @@ struct EditorLayer
 
     void                                                onUpdate(float dt);
     void                                                setEditableScene(Scene* scene);
-    void                                                setDocumentRegistry(EditorDocumentRegistry* documents);
+    /// Both tables the designer session reads: the dirty/undo registry and the
+    /// Game UI document store (SceneWidgetEntry::documentPath -> live
+    /// UIDocument). They are app-owned, so the layer only forwards them.
+    void bindDocumentServices(EditorDocumentRegistry* documents, UIDocumentStore* uiDocuments);
     [[nodiscard]] EditorDocumentRegistry*               documentRegistry() const { return _documents; }
+    [[nodiscard]] UIDocumentStore*                      uiDocumentStore() const { return _uiDocumentStore; }
     void                                                setCurrentScenePath(std::string scenePath);
     [[nodiscard]] const std::string&                    getCurrentScenePath() const { return _currentScenePath; }
     void                                                markSceneDirty() { _bSceneDirty = true; }

@@ -6,11 +6,12 @@
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/UIDocumentStore.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 
-#include "Scene/Core/Scene.h"
+#include "Scene/Core/SceneWidgetEntry.h"
 
 #include "GameRuntime/App.h"
 
@@ -54,10 +55,12 @@ EditorUIDesignerSession::~EditorUIDesignerSession()
 
 EditorDocumentRegistry* EditorUIDesignerSession::documents() const
 {
-    if (_documents) {
-        return _documents;
-    }
     return _owner ? _owner->documentRegistry() : nullptr;
+}
+
+UIDocumentStore* EditorUIDesignerSession::documentStore() const
+{
+    return _owner ? _owner->uiDocumentStore() : nullptr;
 }
 
 void EditorUIDesignerSession::markDirty()
@@ -72,9 +75,8 @@ void EditorUIDesignerSession::dropLocalDocument()
     _document.reset();
     _previewTree.reset();
     _previewRoot.reset();
-    _selected   = nullptr;
-    _entryScene = nullptr;
-    _entryId.clear();
+    _selected = nullptr;
+    _documentPath.clear();
     endDrag();
 }
 
@@ -141,24 +143,46 @@ void EditorUIDesignerSession::abandonDocument()
     (void)closeSession(EEditorDocumentCloseMode::Force);
 }
 
-void EditorUIDesignerSession::openDocument(const std::shared_ptr<UIDocument>& document)
+void EditorUIDesignerSession::openDocument(std::string_view path)
 {
-    if (!document) {
-        YA_CORE_WARN("EditorUIDesignerSession::openDocument: null document");
+    if (path.empty()) {
+        YA_CORE_WARN("EditorUIDesignerSession::openDocument: empty document path");
         return;
     }
+    UIDocumentStore* store = documentStore();
+    if (!store) {
+        YA_CORE_ERROR("EditorUIDesignerSession::openDocument: no document store bound; "
+                      "cannot open '{}'",
+                      path);
+        return;
+    }
+    const std::shared_ptr<UIDocument> document = store->resolve(path);
+    if (!document) {
+        return;
+    }
+    if (!adoptSession(makeEditorUIDocumentId(path))) {
+        return;
+    }
+    if (!installPreview(document)) {
+        (void)closeSession(EEditorDocumentCloseMode::Force);
+        return;
+    }
+    _documentPath = std::string(path);
+}
+
+void EditorUIDesignerSession::openUntitled(const std::shared_ptr<UIDocument>& document)
+{
     EditorDocumentRegistry* docs = documents();
     const FEditorDocumentId id =
         makeEditorUIDocumentId(docs ? docs->makeUntitledKey() : std::string("local"));
     if (!adoptSession(id)) {
         return;
     }
-    _document     = document;
-    _entryScene   = nullptr;
-    _entryId.clear();
     if (!installPreview(document)) {
         (void)closeSession(EEditorDocumentCloseMode::Force);
+        return;
     }
+    _documentPath.clear();
 }
 
 bool EditorUIDesignerSession::installPreview(const std::shared_ptr<UIDocument>& document)
@@ -191,26 +215,17 @@ void EditorUIDesignerSession::newDocument(const std::string& typeId)
     auto document     = std::make_shared<UIDocument>();
     document->typeId  = typeId;
     document->fields  = nlohmann::json::object();
-    openDocument(document);
+    openUntitled(document);
 }
 
-void EditorUIDesignerSession::openSceneEntry(Scene& scene, SceneWidgetEntry& entry)
+void EditorUIDesignerSession::openSceneEntry(const SceneWidgetEntry& entry)
 {
-    if (!entry.inlineDocument) {
-        YA_CORE_WARN("EditorUIDesignerSession::openSceneEntry: entry '{}' has no inline document", entry.entryId);
+    if (entry.documentPath.empty()) {
+        YA_CORE_WARN("EditorUIDesignerSession::openSceneEntry: entry '{}' has no document path",
+                     entry.entryId);
         return;
     }
-    const FEditorDocumentId id = makeEditorUIDocumentId(scene.getName() + "#" + entry.entryId);
-    if (!adoptSession(id)) {
-        return;
-    }
-    _entryScene = &scene;
-    _entryId    = entry.entryId;
-    if (!installPreview(entry.inlineDocument)) {
-        (void)closeSession(EEditorDocumentCloseMode::Force);
-        _entryScene = nullptr;
-        _entryId.clear();
-    }
+    openDocument(entry.documentPath);
 }
 
 void EditorUIDesignerSession::rebuildDocumentFromPreview()
@@ -229,26 +244,27 @@ bool EditorUIDesignerSession::saveDocument()
     }
     rebuildDocumentFromPreview();
 
-    // Scene-entry mode: write the rebuilt document back to the entry.
-    if (_entryScene && !_entryId.empty()) {
-        for (auto& entry : _entryScene->getWidgetEntries()) {
-            if (entry.entryId == _entryId) {
-                entry.inlineDocument = _document;
-                YA_CORE_INFO("EditorUIDesignerSession: saved entry '{}' back to scene '{}'",
-                             _entryId, _entryScene->getName());
-                if (_session) {
-                    _session->clearDirty();
-                }
-                return true;
-            }
+    if (!_documentPath.empty()) {
+        UIDocumentStore* store = documentStore();
+        if (!store) {
+            YA_CORE_ERROR("EditorUIDesignerSession::saveDocument: no document store bound; "
+                          "cannot save '{}'",
+                          _documentPath);
+            return false;
         }
-        YA_CORE_ERROR("EditorUIDesignerSession::saveDocument: entry '{}' no longer exists", _entryId);
-        return false;
+        // Publish first: the hierarchy and every mounted tree read the store, so
+        // an edit is visible even if the file write fails.
+        store->put(_documentPath, _document);
+        if (!store->save(_documentPath)) {
+            return false;
+        }
+    }
+    else {
+        // Untitled: the rebuilt document stays in `_document`. There is no
+        // save target until the asset is created (see the UI asset browser).
+        YA_CORE_INFO("EditorUIDesignerSession: rebuilt untitled document '{}'", _document->typeId);
     }
 
-    // Standalone document: the rebuilt document is held in `_document`; callers
-    // (e.g. scene-entry open) consume it from getOpenDocument(). No file format.
-    YA_CORE_INFO("EditorUIDesignerSession: rebuilt document '{}'", _document->typeId);
     if (_session) {
         _session->clearDirty();
     }
@@ -316,14 +332,11 @@ void EditorUIDesignerSession::syncPreviewToDocument()
     _document = std::move(synced);
     markDirty();
 
-    // Inline scene-entry mode: write back to the entry so the Scene
-    // Hierarchy's Game UI Entries tree reflects the edit immediately.
-    if (_entryScene && !_entryId.empty()) {
-        for (auto& entry : _entryScene->getWidgetEntries()) {
-            if (entry.entryId == _entryId) {
-                entry.inlineDocument = _document;
-                break;
-            }
+    // Publish the edit so the Scene Hierarchy / inspector read the same
+    // document. The file is only written on an explicit save.
+    if (!_documentPath.empty()) {
+        if (UIDocumentStore* store = documentStore()) {
+            store->put(_documentPath, _document);
         }
     }
 }

@@ -12,13 +12,11 @@
 namespace ya
 {
 
-TEST(SceneWidgetEntryTest, EntryJsonRoundtripWithInlineDocumentAndOverrides)
+TEST(SceneWidgetEntryTest, EntryJsonRoundtripWithDocumentReferenceAndOverrides)
 {
     SceneWidgetEntry entry;
-    entry.entryId = "HUD";
-    entry.inlineDocument = std::make_shared<UIDocument>();
-    entry.inlineDocument->typeId = "engine.border";
-    entry.inlineDocument->fields = nlohmann::json{{"_color", {0.1, 0.2, 0.3, 0.9}}};
+    entry.entryId      = "HUD";
+    entry.documentPath = "Example/Game/Content/UI/HUD.yaui";
     entry.zOrder    = 7;
     entry.autoMount = false;
     entry.overrides.fieldOverrides["_color"] = nlohmann::json{1.0, 0.0, 0.0, 1.0};
@@ -27,17 +25,16 @@ TEST(SceneWidgetEntryTest, EntryJsonRoundtripWithInlineDocumentAndOverrides)
     EXPECT_EQ(json["entryId"], "HUD");
     EXPECT_EQ(json["zOrder"].get<int32_t>(), 7);
     EXPECT_FALSE(json["autoMount"].get<bool>());
-    EXPECT_EQ(json["inline"]["typeId"], "engine.border");
+    EXPECT_EQ(json["document"], "Example/Game/Content/UI/HUD.yaui");
     ASSERT_TRUE(json["rootSlot"].is_object());
     EXPECT_EQ(json["rootSlot"]["anchorMax"][0], 1.0f);
-    EXPECT_FALSE(json.contains("document"));
+    EXPECT_FALSE(json.contains("inline"));
 
     const SceneWidgetEntry reloaded = SceneWidgetEntry::fromJson(json);
     EXPECT_EQ(reloaded.entryId, "HUD");
     EXPECT_EQ(reloaded.zOrder, 7);
     EXPECT_FALSE(reloaded.autoMount);
-    ASSERT_NE(reloaded.inlineDocument, nullptr);
-    EXPECT_EQ(reloaded.inlineDocument->typeId, "engine.border");
+    EXPECT_EQ(reloaded.documentPath, "Example/Game/Content/UI/HUD.yaui");
     EXPECT_EQ(reloaded.rootSlot.anchorMin, glm::vec2(0.0f, 0.0f));
     EXPECT_EQ(reloaded.rootSlot.anchorMax, glm::vec2(1.0f, 1.0f));
     EXPECT_EQ(reloaded.overrides.fieldOverrides.at("_color")[0], 1.0);

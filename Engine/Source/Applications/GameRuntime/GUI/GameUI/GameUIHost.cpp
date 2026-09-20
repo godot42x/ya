@@ -9,6 +9,7 @@
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/GuiTextureCatalog.h"
+#include "GUI/Widgets/UIDocumentStore.h"
 
 #include "Scene/Core/Scene.h"
 
@@ -213,6 +214,7 @@ std::shared_ptr<Texture> resolveGameUITexture(const std::string& assetPath)
 
 std::vector<WidgetAttachment> mountSceneAutoMountEntries(Scene&                                       scene,
                                                          WidgetTree&                                  tree,
+                                                         UIDocumentStore*                             documents,
                                                          const std::function<void(std::string_view)>& onError)
 {
     const auto report = [&onError](const std::string& message) {
@@ -229,9 +231,15 @@ std::vector<WidgetAttachment> mountSceneAutoMountEntries(Scene&                 
         if (!entry.autoMount) {
             continue;
         }
-        std::shared_ptr<UIDocument> document = entry.inlineDocument;
+        if (!documents) {
+            report(std::format("SceneWidgetEntry '{}' cannot mount: no Game UI document store",
+                               entry.entryId));
+            continue;
+        }
+        std::shared_ptr<UIDocument> document = documents->resolve(entry.documentPath);
         if (!document) {
-            report(std::format("SceneWidgetEntry '{}' has no inline document", entry.entryId));
+            report(std::format("SceneWidgetEntry '{}' cannot mount document '{}'",
+                               entry.entryId, entry.documentPath));
             continue;
         }
 

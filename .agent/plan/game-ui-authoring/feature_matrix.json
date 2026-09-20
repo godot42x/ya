@@ -1,0 +1,116 @@
+{
+  "plan": "game-ui-authoring",
+  "status": "phase1_landed",
+  "features": [
+    {
+      "id": "document_is_an_asset",
+      "phase": "P1",
+      "status": "verified",
+      "evidence": [
+        "UIDocumentStore keyed by asset path; resolve/put/find/save",
+        "disk form is UIDocument::toJson, .yaui",
+        "UIDocumentStoreTest covers save+reload, put+save overwrite, missing path, malformed JSON, unknown-path save"
+      ]
+    },
+    {
+      "id": "scene_stores_reference_only",
+      "phase": "P1",
+      "status": "verified",
+      "evidence": [
+        "SceneWidgetEntry::documentPath serialized as \"document\"",
+        "Scene/Core header no longer includes UIDocument",
+        "SceneWidgetEntryTest/SceneSerializerTest round-trip the path, not the widget tree"
+      ]
+    },
+    {
+      "id": "single_document_owner",
+      "phase": "P1",
+      "status": "verified",
+      "evidence": [
+        "App owns UIDocumentStore and hands it to GameUIHost",
+        "EditorLayer::bindDocumentServices is the only holder of registry + store; the designer session has no parallel bind path",
+        "no second document cache"
+      ]
+    },
+    {
+      "id": "mount_path_resolves_the_store",
+      "phase": "P1",
+      "status": "verified",
+      "evidence": [
+        "mountSceneAutoMountEntries takes UIDocumentStore* and reports a null store instead of guessing",
+        "runtime controller and editor canvas preview pass the same store"
+      ]
+    },
+    {
+      "id": "editor_saves_the_asset",
+      "phase": "P1",
+      "status": "verified",
+      "evidence": [
+        "openDocument(path) loads through the store; openSceneEntry(entry) is the reference form",
+        "saveDocument puts then saves; syncPreviewToDocument only puts",
+        "inspector shows the document path"
+      ]
+    },
+    {
+      "id": "entry_producer_is_honest",
+      "phase": "P1",
+      "status": "verified",
+      "evidence": [
+        "ui.add_to_scene deleted (inline-document producer, zero callers)",
+        "ui.mount_document({path,name?,zOrder?}) replaces it and stores only the path",
+        "ScriptApiLibraryFixture.MountDocumentCreatesAReferenceEntry"
+      ]
+    },
+    {
+      "id": "scene_to_gui_widgets_edge",
+      "phase": "P1",
+      "status": "partially_cut",
+      "evidence": [
+        "UIDocument is out of the Scene/Core header",
+        "ya-scene-core still needs ya-gui-widgets for UIInstanceOverrideSet::applyTo(UIElement)",
+        "cutting it needs the instance/appearance override boundary (P4)"
+      ]
+    },
+    {
+      "id": "scene_ui_composition_split",
+      "phase": "P2",
+      "status": "not_started",
+      "evidence": [
+        "mount lifecycle still inside GameUIHost + DefaultGameUIController"
+      ]
+    },
+    {
+      "id": "viewport_game_ui_preview",
+      "phase": "P3",
+      "status": "not_started",
+      "evidence": [
+        "no SceneOnly/SceneWithGameUI/GamePreview mode",
+        "editor canvas preview still falls back to a full mount instead of a declared preview"
+      ]
+    },
+    {
+      "id": "ui_asset_browser",
+      "phase": "P4",
+      "status": "not_started",
+      "evidence": [
+        "no Content Browser entry for .yaui",
+        "no create/save-as path for a new document"
+      ]
+    },
+    {
+      "id": "world_space_ui",
+      "phase": "P5",
+      "status": "deferred",
+      "evidence": [
+        "needs a separate renderer feature, not a scene-model change"
+      ]
+    }
+  ],
+  "known_baseline_failures": [
+    "EditorPropertyGraphTest.AutoPropertySectionAssetPathCommitBrowseAndUndo",
+    "EditorPropertyGraphTest.TextureAssetRowShowsRetainedPreview",
+    "WidgetLayoutTest.FloatingWindowResizeHandlesLiveOnOverlaySlots",
+    "ScriptApiLibraryFixture.GameUIWidgetLifecycleThroughRegistry",
+    "GameUIHostTest.BuildSnapshotComposesMountedWidgets"
+  ]
+}

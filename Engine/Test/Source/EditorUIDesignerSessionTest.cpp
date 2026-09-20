@@ -3,19 +3,46 @@
 // parent-owned slot edge consistently across multiple drags.
 
 #include "GameEditor/EditorUIDesignerSession.h"
+#include "GameEditor/EditorLayer.h"
 #include "GameEditor/UI/Shell/EditorDocumentSession.h"
 
 #include "GUI/Widgets/UIDocument.h"
+#include "GUI/Widgets/UIDocumentStore.h"
 #include "GUI/Widgets/UITypeIds.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Layout/UILayout.h"
-#include "Scene/Core/Scene.h"
+#include "Scene/Core/SceneWidgetEntry.h"
 
 #include <gtest/gtest.h>
 
 namespace ya
 {
+
+namespace
+{
+
+/// The designer session reads both tables from its layer, so a test needs a
+/// headless layer. A document is an asset now: it is published into the store
+/// under a path and opened by that path (no scene and no file involved).
+struct FDesignerFixture
+{
+    EditorDocumentRegistry documents;
+    UIDocumentStore        uiDocuments;
+    EditorLayer            layer{nullptr};
+
+    static constexpr std::string_view kDocumentPath = "Test/UI/Designer.yaui";
+
+    FDesignerFixture() { layer.bindDocumentServices(&documents, &uiDocuments); }
+
+    /// Publish `widget`'s subtree as the fixture document.
+    void publish(const UIElement& widget)
+    {
+        uiDocuments.put(kDocumentPath, UIDocument::fromWidget(widget));
+    }
+};
+
+} // namespace
 
 TEST(EditorUIDesignerSessionTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceOfTruth)
 {
@@ -35,11 +62,10 @@ TEST(EditorUIDesignerSessionTest, ConsecutiveResizesUseTheCanvasSlotAsTheSourceO
         slot->apply(args);
     });
 
-    auto document = UIDocument::fromWidget(*root);
-    ASSERT_NE(document, nullptr);
-
-    EditorUIDesignerSession designer(nullptr);
-    designer.openDocument(document);
+    FDesignerFixture       fixture;
+    EditorUIDesignerSession designer(&fixture.layer);
+    fixture.publish(*root);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
     const UIFrameSnapshot initial = designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
     (void)initial;
     designer.selectByChildPath({0});
@@ -80,11 +106,10 @@ TEST(EditorUIDesignerSessionTest, FindByChildPathResolvesRootAndNestedWidgets)
     child->_name = "Child";
     root->addDetachedChild(child);
 
-    auto document = UIDocument::fromWidget(*root);
-    ASSERT_NE(document, nullptr);
-
-    EditorUIDesignerSession designer(nullptr);
-    designer.openDocument(document);
+    FDesignerFixture       fixture;
+    EditorUIDesignerSession designer(&fixture.layer);
+    fixture.publish(*root);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
     (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
 
     UIElement* previewRoot = designer.findByChildPath({});
@@ -113,11 +138,10 @@ TEST(EditorUIDesignerSessionTest, ApplyWidgetDropReordersPreviewSiblings)
     root->addDetachedChild(first);
     root->addDetachedChild(second);
 
-    auto document = UIDocument::fromWidget(*root);
-    ASSERT_NE(document, nullptr);
-
-    EditorUIDesignerSession designer(nullptr);
-    designer.openDocument(document);
+    FDesignerFixture       fixture;
+    EditorUIDesignerSession designer(&fixture.layer);
+    fixture.publish(*root);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
     (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
 
     UIElement* previewFirst  = designer.findByChildPath({0});
@@ -152,11 +176,10 @@ TEST(EditorUIDesignerSessionTest, ApplyWidgetDropIntoNestsChild)
     root->addDetachedChild(first);
     root->addDetachedChild(second);
 
-    auto document = UIDocument::fromWidget(*root);
-    ASSERT_NE(document, nullptr);
-
-    EditorUIDesignerSession designer(nullptr);
-    designer.openDocument(document);
+    FDesignerFixture       fixture;
+    EditorUIDesignerSession designer(&fixture.layer);
+    fixture.publish(*root);
+    designer.openDocument(FDesignerFixture::kDocumentPath);
     (void)designer.buildPreviewSnapshot({1.0f, 1.0f}, {0.0f, 0.0f});
 
     UIElement* previewRoot   = designer.getPreviewRoot();
@@ -179,9 +202,8 @@ TEST(EditorUIDesignerSessionTest, ApplyWidgetDropIntoNestsChild)
 
 TEST(EditorUIDesignerSessionTest, DocumentRegistryTracksDirtyCloseAndSingleton)
 {
-    EditorDocumentRegistry documents;
-    EditorUIDesignerSession        designer(nullptr);
-    designer.bindDocuments(&documents);
+    FDesignerFixture       fixture;
+    EditorUIDesignerSession designer(&fixture.layer);
 
     designer.newDocument(kTypeIdCanvasPanel);
     ASSERT_TRUE(designer.hasDocument());
@@ -198,7 +220,7 @@ TEST(EditorUIDesignerSessionTest, DocumentRegistryTracksDirtyCloseAndSingleton)
     EXPECT_FALSE(designer.isDocumentDirty());
     EXPECT_TRUE(designer.closeDocument());
     EXPECT_FALSE(designer.hasDocument());
-    EXPECT_EQ(documents.size(), 0u);
+    EXPECT_EQ(fixture.documents.size(), 0u);
 }
 
 TEST(EditorUIDesignerSessionTest, OpenSceneEntrySharesDocumentSession)
@@ -207,25 +229,23 @@ TEST(EditorUIDesignerSessionTest, OpenSceneEntrySharesDocumentSession)
     auto  root     = registry.createInstance(kTypeIdCanvasPanel);
     ASSERT_NE(root, nullptr);
     root->_name = "Root";
-    auto document = UIDocument::fromWidget(*root);
-    ASSERT_NE(document, nullptr);
 
-    Scene scene("Level");
+    FDesignerFixture fixture;
+    fixture.publish(*root);
+
     SceneWidgetEntry entry;
-    entry.entryId = "hud";
-    entry.inlineDocument = document;
+    entry.entryId      = "hud";
+    entry.documentPath = std::string(FDesignerFixture::kDocumentPath);
 
-    EditorDocumentRegistry documents;
-    EditorUIDesignerSession        first(nullptr);
-    EditorUIDesignerSession        second(nullptr);
-    first.bindDocuments(&documents);
-    second.bindDocuments(&documents);
-    first.openSceneEntry(scene, entry);
-    second.openSceneEntry(scene, entry);
+    EditorUIDesignerSession first(&fixture.layer);
+    EditorUIDesignerSession second(&fixture.layer);
+    first.openSceneEntry(entry);
+    second.openSceneEntry(entry);
 
     ASSERT_NE(first.documentSession(), nullptr);
     EXPECT_EQ(first.documentSession(), second.documentSession());
-    EXPECT_EQ(first.documentSession()->id(), makeEditorUIDocumentId("Level#hud"));
+    EXPECT_EQ(first.documentSession()->id(),
+              makeEditorUIDocumentId(FDesignerFixture::kDocumentPath));
     EXPECT_TRUE(first.documentSession()->ownsPreview());
 }
 

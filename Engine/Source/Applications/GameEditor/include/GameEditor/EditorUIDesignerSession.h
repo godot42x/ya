@@ -24,8 +24,8 @@ namespace ya
 
 struct EditorDocumentRegistry;
 struct EditorLayer;
-struct Scene;
 struct SceneWidgetEntry;
+struct UIDocumentStore;
 
 struct EditorUIDesignerSession
 {
@@ -38,26 +38,22 @@ struct EditorUIDesignerSession
     // === Document lifecycle ===
     [[nodiscard]] bool hasDocument() const { return _document != nullptr; }
 
-    /// Open a document standalone (from a palette type or an externally built
-    /// document).
-    void openDocument(const std::shared_ptr<UIDocument>& document);
-    /// Create a fresh document with the given root type.
+    /// Open the Game UI document asset at `path` through the store.
+    void openDocument(std::string_view path);
+    /// Create a fresh untitled document with the given root type. It has no
+    /// path yet, so saving only refreshes the in-memory document.
     void newDocument(const std::string& typeId);
-    /// Open the inline document of a scene entry; saving writes back to the
-    /// entry instead of a file.
-    void openSceneEntry(Scene& scene, SceneWidgetEntry& entry);
-    /// Rebuild + persist the document. In scene-entry mode the inline document
-    /// is written back to the entry; otherwise it is held for the next
-    /// save/open. Returns false (with diagnostics) when nothing is open or the
-    /// document is invalid.
-    /// Rebuild + persist the document. In scene-entry mode the inline document
-    /// is written back to the entry; otherwise it is held for the next
-    /// save/open. Returns false (with diagnostics) when nothing is open or the
+    /// Open the document a scene entry mounts. The entry only carries the
+    /// reference, so the edited instance is the store's.
+    void openSceneEntry(const SceneWidgetEntry& entry);
+    /// Rebuild the document from the preview and persist it. A document with a
+    /// path is published to the store (so the hierarchy and the mounted tree
+    /// see the edit immediately) and written to disk; an untitled one is only
+    /// held. Returns false (with diagnostics) when nothing is open or the
     /// document is invalid. Clears document dirty on success.
     bool saveDocument();
-    /// The currently open document (shared with the scene entry it came from
-    /// when opened via openSceneEntry). Used to detect stale designer state
-    /// after external document edits (e.g. hierarchy drag-drop).
+    /// The currently open document. For an asset it is the store's instance,
+    /// so the inspector and the mounted tree read the same edits.
     [[nodiscard]] const std::shared_ptr<UIDocument>& getOpenDocument() const { return _document; }
     [[nodiscard]] UIElement* getPreviewRoot() const { return _previewRoot.get(); }
     [[nodiscard]] EditorDocumentSession* documentSession() { return _session; }
@@ -69,10 +65,9 @@ struct EditorUIDesignerSession
     void clearDocument();
     /// Detach-time drop: ignore dirty, still honor Locked.
     void abandonDocument();
-    void bindDocuments(EditorDocumentRegistry* documents) { _documents = documents; }
     /// Rebuild the document from the preview after a structural edit and
-    /// propagate it (scene-entry mode writes back to the entry's inline
-    /// document). Keeps the left hierarchy in sync.
+    /// publish it to the store (memory only), so the Scene Hierarchy and the
+    /// inspector see the edit before an explicit save.
     void syncPreviewToDocument();
 
     // === Preview (independent WidgetTree, never shared with the runtime) ===
@@ -147,14 +142,16 @@ struct EditorUIDesignerSession
     void rebuildDocumentFromPreview();
     void applyPreviewExtent();
     void markDirty();
+    /// Install an in-memory document under a fresh untitled session key.
+    void openUntitled(const std::shared_ptr<UIDocument>& document);
     [[nodiscard]] EditorDocumentRegistry* documents() const;
+    [[nodiscard]] UIDocumentStore*        documentStore() const;
     bool adoptSession(const FEditorDocumentId& id);
     bool closeSession(EEditorDocumentCloseMode mode);
     void dropLocalDocument();
     bool installPreview(const std::shared_ptr<UIDocument>& document);
 
     EditorLayer* _owner = nullptr;
-    EditorDocumentRegistry* _documents = nullptr;
     EditorDocumentSession*  _session   = nullptr;
 
     std::shared_ptr<UIDocument> _document;
@@ -162,9 +159,8 @@ struct EditorUIDesignerSession
     UIElementRef                _previewRoot;
     UIElement*                  _selected = nullptr;
 
-    /// Scene-entry edit mode (save writes back to the entry).
-    Scene*    _entryScene = nullptr;
-    std::string _entryId;
+    /// Asset path of the open document; empty for an untitled one.
+    std::string _documentPath;
 
     // === Canvas direct-manipulation session state ===
     enum class EDragMode : uint8_t

@@ -39,6 +39,7 @@ YA_GAME_RUNTIME_API ClearValue& getDepthClearValue();
 struct Scene;
 enum class EWidgetRouteResult : uint8_t;
 struct SceneManager;
+struct UIDocumentStore;
 struct Entity;
 struct ICommandBuffer;
 struct LuaScriptingSystem;
@@ -84,6 +85,10 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     /// Game UI presentation adapter: owns the live WidgetTree of the current
     /// game presentation area and resolves scenes/input/frames to it.
     std::unique_ptr<GameUIHost> _gameUIHost;
+    /// Game UI document table (SceneWidgetEntry::documentPath -> live
+    /// UIDocument). The app owns it so the editor designer, the inspector and
+    /// the runtime host resolve the same instance.
+    std::unique_ptr<UIDocumentStore> _uiDocuments;
 
     bool bRunning = true;
 
@@ -200,6 +205,7 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
     [[nodiscard]] AppSceneServices&        getSceneServices() { return _sceneServices; }
     [[nodiscard]] const AppSceneServices&  getSceneServices() const { return _sceneServices; }
     [[nodiscard]] GameUIHost*                        getGameUIHost() { return _gameUIHost.get(); }
+    [[nodiscard]] UIDocumentStore*                   getUIDocumentStore() { return _uiDocuments.get(); }
     [[nodiscard]] JSScriptingSystem*                  getJSScriptingSystem() const { return _jsScriptingSystem; }
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }

@@ -9,11 +9,13 @@
 // instantiates autoMount entries into the active WidgetTree when the scene
 // activates and unmounts them on deactivate.
 //
-// An entry carries an `inlineDocument` (inline UIDocument definition).
+// An entry carries a `documentPath`: a reference to a Game UI document asset
+// (`.yaui`), not the document itself. Storage lives in UIDocumentStore, so one
+// scene can mount a document that the editor is editing, and two scenes can
+// mount the same document without copying it.
 // ============================================================================
 
 #include "GUI/Layout/UICanvasLayout.h"
-#include "GUI/Widgets/UIDocument.h"
 
 #include <cstdint>
 #include <string>
@@ -46,8 +48,9 @@ struct YA_SCENE_CORE_API SceneWidgetEntry
 {
     /// Stable within a Scene; used by editor selection and overrides.
     std::string entryId;
-    /// Inline UIDocument definition.
-    std::shared_ptr<UIDocument> inlineDocument;
+    /// Asset path of the mounted Game UI document (UIDocumentStore key, e.g.
+    /// "Example/Game/Content/UI/HUD.yaui"). Empty means "nothing to mount".
+    std::string documentPath;
     /// Parent-owned Canvas edge from the scene content layer to this root.
     FCanvasSlotArgs rootSlot{.anchorMin = {0.0f, 0.0f}, .anchorMax = {1.0f, 1.0f}};
     /// Paint/hit order among entries in the content layer.

@@ -107,10 +107,10 @@ void EditorLayer::setEditableScene(Scene* scene)
     _selection.setContext(getSceneHierarchyContext());
 }
 
-void EditorLayer::setDocumentRegistry(EditorDocumentRegistry* documents)
+void EditorLayer::bindDocumentServices(EditorDocumentRegistry* documents, UIDocumentStore* uiDocuments)
 {
-    _documents = documents;
-    _uiDesignerSession.bindDocuments(documents);
+    _documents       = documents;
+    _uiDocumentStore = uiDocuments;
 }
 
 void EditorLayer::setCurrentScenePath(std::string scenePath)
