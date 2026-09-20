@@ -11,7 +11,7 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
 {
     YA_CORE_ASSERT(inputs.graph != nullptr, "ForwardFrameGraphOrchestrator requires a render graph");
     YA_CORE_ASSERT(inputs.stageCtx != nullptr, "ForwardFrameGraphOrchestrator requires a stage context");
-    YA_CORE_ASSERT(inputs.viewRTSpec != nullptr, "ForwardFrameGraphOrchestrator requires a viewport render target spec");
+    YA_CORE_ASSERT(inputs.viewRTSpec != nullptr, "ForwardFrameGraphOrchestrator requires a view render target spec");
     YA_CORE_ASSERT(inputs.postContext != nullptr, "ForwardFrameGraphOrchestrator requires a postprocess context");
     YA_CORE_ASSERT(deps.viewStage != nullptr, "ForwardFrameGraphOrchestrator requires a viewport stage");
     YA_CORE_ASSERT(deps.entityIdPass != nullptr, "ForwardFrameGraphOrchestrator requires an entity-id pass");

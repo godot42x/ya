@@ -79,7 +79,7 @@ void RenderDeviceState::recordViewFamilies(const RenderFramePlan& plan)
         publishFamilyResult(plan.frame.flightIndex, pipeline->recordFamily(ctx));
     };
 
-    // The plan arrives extracted, so its views hold one recording per viewport
+    // The plan arrives extracted, so its views hold one recording per view
     // task and the family indices always land inside them.
     const std::vector<SceneViewRecording>& views = plan.sceneRender.views();
     for (const SceneViewFamilyPlan& family : plan.sceneRender.plan().viewFamilies) {
@@ -154,7 +154,7 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     //
     // Acquire/present stay on the host FPresentFrame coordinator.
 
-    // The View whose output the host viewport shows. It is the plan's answer
+    // The View whose output the host view shows. It is the plan's answer
     // (V1/V2) and it also supplies the host-level geometry below: the viewport
     // rect a freshly built pipeline is sized from.
     const SceneViewTask* displayRoot = plan.sceneRender.displayRootTask();
@@ -283,7 +283,7 @@ void RenderDeviceState::resolveViewSceneResources(Scene* scene, RenderViewSceneR
 
 void RenderDeviceState::publishViewOutputIdentity(uint32_t flightIndex, SceneViewId displayViewId)
 {
-    // The one place that decides which View's output the host viewport shows.
+    // The one place that decides which View's output the host view shows.
     // The plan names it, so the answer is not "whichever family was recorded
     // last", and a tick that declared no display root clears the identity
     // instead of leaving the previous tick's View readable as if this frame had

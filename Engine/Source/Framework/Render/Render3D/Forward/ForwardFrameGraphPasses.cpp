@@ -56,7 +56,7 @@ struct TransparentPassParams
     EImageLayout::T finalLayout = EImageLayout::ColorAttachmentOptimal;
 };
 
-struct ViewportPassParams
+struct ViewPassParams
 {
     OpaquePassParams      opaque{};
     SkyboxPassParams      skybox{};
@@ -64,7 +64,7 @@ struct ViewportPassParams
     EntityIdPassParams    entityId{};
 };
 
-RGTextureDesc makeViewportTextureDesc(const AttachmentDescription& attachment,
+RGTextureDesc makeViewTextureDesc(const AttachmentDescription& attachment,
                                       Extent2D                    extent,
                                       uint32_t                    layerCount,
                                       std::string                  label)
@@ -93,10 +93,10 @@ AttachmentDescription makeEntityIdAttachmentDesc()
     };
 }
 
-ViewportPassParams buildViewportPassParams(const BuildInputs& inputs,
+ViewPassParams buildViewPassParams(const BuildInputs& inputs,
                                            const ViewGraphResources& resources)
 {
-    return ViewportPassParams{
+    return ViewPassParams{
         .opaque = {
             .viewColor   = resources.color,
             .viewDepth   = resources.depth,
@@ -315,7 +315,7 @@ ViewGraphResources createViewResources(RenderGraph&                   graph,
     const auto createKeyed = [&](const AttachmentDescription& attachment, std::string_view base) {
         return createViewPersistentTexture(
             graph,
-            makeViewportTextureDesc(attachment, viewRTSpec.extent, layerCount, std::string(base)),
+            makeViewTextureDesc(attachment, viewRTSpec.extent, layerCount, std::string(base)),
             base,
             viewId);
     };
@@ -346,7 +346,7 @@ void appendViewPasses(RenderGraph&                     graph,
                           const BuildInputs&               inputs,
                           const ViewGraphResources&    resources)
 {
-    const auto params = buildViewportPassParams(inputs, resources);
+    const auto params = buildViewPassParams(inputs, resources);
     appendOpaquePass(graph, deps, inputs, resources, params.opaque);
     appendSkyboxPass(graph, deps, inputs, resources, params.skybox);
     appendTransparentPass(graph, deps, inputs, resources, params.transparent);

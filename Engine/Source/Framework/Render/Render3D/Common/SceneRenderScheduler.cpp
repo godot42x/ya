@@ -36,7 +36,7 @@ struct SnapshotKeyHash
     }
 };
 
-/// Group viewport tasks into family buckets. seal() calls this once, and
+/// Group view tasks into family buckets. seal() calls this once, and
 /// buildSceneSnapshots() calls it again when it had to drop unresolved views.
 void buildViewFamilies(SceneRenderPlan& plan)
 {

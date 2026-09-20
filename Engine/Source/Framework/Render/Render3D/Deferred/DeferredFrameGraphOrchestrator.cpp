@@ -18,7 +18,7 @@ void DeferredFrameGraphOrchestrator::build(
     YA_CORE_ASSERT(inputs.stageCtx != nullptr, "DeferredFrameGraphOrchestrator requires a stage context");
     YA_CORE_ASSERT(inputs.frameBinding != nullptr, "DeferredFrameGraphOrchestrator requires frame bindings");
     YA_CORE_ASSERT(inputs.gBufferRTSpec != nullptr, "DeferredFrameGraphOrchestrator requires a GBuffer render target spec");
-    YA_CORE_ASSERT(inputs.viewRTSpec != nullptr, "DeferredFrameGraphOrchestrator requires a viewport render target spec");
+    YA_CORE_ASSERT(inputs.viewRTSpec != nullptr, "DeferredFrameGraphOrchestrator requires a view render target spec");
     YA_CORE_ASSERT(inputs.postContext != nullptr, "DeferredFrameGraphOrchestrator requires a postprocess context");
     YA_CORE_ASSERT(deps.gBufferStage != nullptr, "DeferredFrameGraphOrchestrator requires a GBuffer stage");
     YA_CORE_ASSERT(deps.lightStage != nullptr, "DeferredFrameGraphOrchestrator requires a light stage");

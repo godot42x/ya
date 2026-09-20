@@ -1323,3 +1323,12 @@ R1 第一小步已完成：SceneFrameSnapshot 显式承载当前可识别的 Sce
 - 保留（正确语义，不改）：`setViewportAndScissor`/`bReverseViewportY`/`DebugPrimitives` 的 GPU viewport 参数；`EditorLayer::getViewportRect`/`EditorViewport*` 面板族（编辑器 chrome）；`RenderViewportSnapshot`/`ViewportDebugCatalog*`/`buildViewportSnapshot`/`RenderDeviceState.Viewport{Snapshot,Debug}.cpp`（inspector 展示族，留给 V8 搬出 device 时一并收口）。
 - 修复：`isPostprocessingEnabled`→`isGradingEnabled`（接口语义对齐 `PostProcessingStage::isGradingEnabled`，非本批重命名字段）。
 - 验收证据：`ya-render-3d-test` 175/175（含 `ViewPersistentResourceKeyTest`/`ViewFamilyRendererTest` 断言新导出名）；`ya-testing` 专项 27/27（EditorViewProducer/RuntimeGameViewProducer/HostSceneExtract/EditorDebugCatalogView/EditorViewportOverlayHost/AppAutomationConfig）；runtime smoke `--exit-after-frame=90 --screenshot-target=viewport` 与改名前基线逐字节相同（`c775245ae636f15b41da8485319a2267`），editor smoke exit=0。
+
+### 批次三（4b6ba4c2，21 files）：初始 extent 归 view，window 留给窗口创建
+- `PipelineCoordinator::InitDesc.viewportWidth/Height`→`viewWidth/viewHeight`（注释改为 Initial view extent，swapchain 仍从窗口创建参数拿自己的尺寸）、`reapplyViewportSink`→`reapplyViewRectSink`、`_viewportWidth/_viewportHeight`→`_viewWidth/_viewHeight`；`ForwardRenderPipeline::InitDesc.windowW/windowH` 与 Deferred 同型→`viewWidth/viewHeight`。
+- `PresentationGraphService::viewportDisplayImageProvider`→`viewDisplayImageProvider`（喂给 presentation 的是已发布 view 的 display image）。
+- 调试/拾取 pass 参数按 view 语义：`EntityIdPass::execute`、`DebugRenderSystem::draw`、`DebugPrimitives::draw`、`DebugSkinning::draw` 的 `viewportWidth/Height`→`viewWidth/Height`（它们最终喂给 GPU setViewportAndScissor，那是 GPU 状态，保持不动）；SSAOStage 局部量同步。
+- `RenderOverlayText2D::viewportPos`→`viewPos`（overlay 是 view 空间坐标，editor HUD 消费）。
+- graph 内部：`ViewportPassParams`→`ViewPassParams`、`makeViewportTextureDesc`→`makeViewTextureDesc`、`buildViewportPassParams`→`buildViewPassParams`。
+- 明确保留：`RenderDeviceState::InitDesc.windowWidth/windowHeight/windowTitle`（它们创建 NativeWindow 并种子 swapchain 尺寸——window→swapchain 的本体）；`EPipelineDynamicFeature::Viewport`/`ViewportState`/`Viewport::defaults()`/`setViewportAndScissor`/`bReverseViewportY`（Vulkan 光栅状态）；`RenderViewportUtils.h`（GPU viewport helper）；inspector 族（`RenderViewportSnapshot`/`ViewportDebugCatalog*`/`buildViewportSnapshot`）留给 V8 搬出 device 时收口。
+- 验收证据：`ya-render-3d-test` 175/175；`ya-testing` 专项 25/25（EditorViewProducer/RuntimeGameViewProducer/HostSceneExtract/AppAutomationConfig/EditorViewportOverlayHost）；runtime smoke 与基线逐字节一致（`c775245ae636f15b41da8485319a2267`），editor smoke exit=0（同会话 235x188 基线）。
