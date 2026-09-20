@@ -1308,3 +1308,18 @@ R1 第一小步已完成：SceneFrameSnapshot 显式承载当前可识别的 Sce
 - 与 ImGui 对齐点：后端只消费 immutable UIFrameSnapshot/SceneRenderPlan，不读取 live WidgetTree/Scene。
 - 必须坚持的修正：Scene 不直接依赖 RHI/RenderRuntime；SceneRenderScheduler 不属于 GUI Framework；UI 之前指 GPU compose 之前，不是强制 UI logic/snapshot 晚于 request collection。
 - SceneFrameSnapshot 是当前唯一场景快照语义，不得重新引入 WorldFrameSnapshot、RenderFrameExtractor::extract() 或全局 world 抽象。
+
+## 执行记录（2026-09-21，viewport → view 词汇收口，两批已提交）
+
+背景：editor viewport tab 的词汇曾渗入渲染路径。判定口径——**view = 渲染单元（身份/声明/输出/录制）；window/swapchain/present = 显示；GPU vkViewport = 光栅状态；editor viewport 面板 = chrome**。本批为纯机械改名（无行为变化），属于 P5/M6 的前置词汇刀。
+
+批次一（19f8ea77，26 files）：真正 per-view 的 viewport 家族改说 view——`ForwardViewStage/Resources/AuxPasses/LitPasses/UnlitPass`（文件同步改名）、`ViewOverlayStage`、`EntityIdPass`、`DeferredViewResources`、`RenderTargetCatalog::EOwner::ForwardView/DeferredView`、graph 导出名 `ForwardView.*` / `Deferred.View.*`。
+
+批次二（3a4144d4，81 files）：
+- 计划/声明：`SceneViewportTask`→`SceneViewTask`、`plan.viewportTasks`→`viewTasks`、`viewportTaskIndices`→`viewTaskIndices`；`SceneViewDesc::viewportRect`→`outputRect`（View 自己的离屏输出矩形）、`ownsHostViewport()`→`isDisplayRoot()`、`sceneViewOwnsHostViewport`→`sceneViewIsDisplayRoot`；runtime 生产者键 `hostViewportKey`/`kHostViewportLocalId`→`displayRootKey`/`kDisplayRootLocalId`。
+- per-view extent 统一为 `viewExtent`：`RenderViewRecordingContext`、`RenderStageContext`、`RenderFrameData`、`RenderFrameExtractor::ViewPrepareInput`、graph passes/BuildInputs、pipeline 局部量；GUI 共享 2D compose 的 `logicalViewportExtent`→`logicalExtent`（该字段语义就是逻辑布局尺寸，与 view 无关）。
+- host 渲染比例：`viewportFrameBufferScale`→`renderScale`（`FramePacket`、`HostViewState`、`AppRenderServices::setRenderScale/getRenderScale`、编辑器 Render Scale 拖条 `_renderScale`）。
+- device/pipeline API：`applyViewportResize`→`applyViewResize`、`_pipelineViewportRect`→`_pipelineViewRect`、`getViewportExtent`→`getViewExtent`、`getActiveViewportImageShared`→`getActiveViewImageShared`、`getViewportDisplayImageShared/Format`→`getViewDisplayImageShared/Format`、`IRenderPipeline::onViewportResized`→`onViewResized`、`getViewportColorFormat/DepthFormat/DepthImageShared/OutputImageShared`→view 系列；Forward 内部 `_viewRTSpec/_viewFormats/_viewRI/_pendingViewExtent/_viewStage/_viewResources`、`requestViewResize/recreateViewResources/refreshViewSnapshot/refreshViewStageState/initViewResources`、`EForwardPendingResourceRefresh::ViewResize`、`EDeferredPendingResourceRefresh::ViewAttachments`、`buildForwardViewFormats/buildForwardViewRenderTargetSpec/buildDeferredViewFormats/buildDeferredViewRenderTargetSpec/buildViewSnapshotFormats/buildPublishedViewResources`。
+- 保留（正确语义，不改）：`setViewportAndScissor`/`bReverseViewportY`/`DebugPrimitives` 的 GPU viewport 参数；`EditorLayer::getViewportRect`/`EditorViewport*` 面板族（编辑器 chrome）；`RenderViewportSnapshot`/`ViewportDebugCatalog*`/`buildViewportSnapshot`/`RenderDeviceState.Viewport{Snapshot,Debug}.cpp`（inspector 展示族，留给 V8 搬出 device 时一并收口）。
+- 修复：`isPostprocessingEnabled`→`isGradingEnabled`（接口语义对齐 `PostProcessingStage::isGradingEnabled`，非本批重命名字段）。
+- 验收证据：`ya-render-3d-test` 175/175（含 `ViewPersistentResourceKeyTest`/`ViewFamilyRendererTest` 断言新导出名）；`ya-testing` 专项 27/27（EditorViewProducer/RuntimeGameViewProducer/HostSceneExtract/EditorDebugCatalogView/EditorViewportOverlayHost/AppAutomationConfig）；runtime smoke `--exit-after-frame=90 --screenshot-target=viewport` 与改名前基线逐字节相同（`c775245ae636f15b41da8485319a2267`），editor smoke exit=0。
