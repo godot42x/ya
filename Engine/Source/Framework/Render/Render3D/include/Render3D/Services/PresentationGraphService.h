@@ -44,7 +44,7 @@ struct YA_RENDER_3D_API PresentationGraphService
         /// Supplies the final viewport display image (postprocessed output or
         /// raw viewport image) that the presentation graph composits onto the
         /// acquired swapchain image.
-        std::function<std::shared_ptr<RenderTexture>()> viewportDisplayImageProvider;
+        std::function<std::shared_ptr<RenderTexture>()> viewDisplayImageProvider;
     };
 
     void init(const InitDesc& desc);
@@ -68,7 +68,7 @@ struct YA_RENDER_3D_API PresentationGraphService
   private:
     IRender*               _render  = nullptr;
     IRenderSurfaceContext* _present = nullptr;
-    std::function<std::shared_ptr<RenderTexture>()> _viewportDisplayImageProvider;
+    std::function<std::shared_ptr<RenderTexture>()> _viewDisplayImageProvider;
     std::vector<std::unique_ptr<RenderGraphExecutor>> _presentationGraphExecutors;
     std::vector<std::shared_ptr<RenderTexture>>       _presentationImages;
     stdptr<BasicPostprocessing>                       _presentationPostProcessor = nullptr;

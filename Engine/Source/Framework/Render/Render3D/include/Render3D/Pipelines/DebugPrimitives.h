@@ -104,8 +104,8 @@ struct DebugPrimitives
     void addConeImmediate(const glm::mat4& model, const glm::vec4& color = glm::vec4(1.0f));
 
     void draw(ICommandBuffer*  cmdBuf,
-              uint32_t         viewportWidth,
-              uint32_t         viewportHeight,
+              uint32_t         viewWidth,
+              uint32_t         viewHeight,
               const glm::mat4& projection,
               const glm::mat4& view,
               uint32_t         flightIndex);
@@ -132,15 +132,15 @@ struct DebugPrimitives
     void applyPipelineFormats(stdptr<IGraphicsPipeline>& pipeline, const RenderAttachmentFormats& formats);
     void updateDepthState();
     void clearImmediate();
-    void setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t viewportWidth, uint32_t viewportHeight) const;
+    void setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t viewWidth, uint32_t viewHeight) const;
     void drawLines(ICommandBuffer* cmdBuf,
-                   uint32_t viewportWidth,
-                   uint32_t viewportHeight,
+                   uint32_t viewWidth,
+                   uint32_t viewHeight,
                    uint32_t flightIndex,
                    const std::vector<LineVertex>& vertices);
     void drawShapes(ICommandBuffer* cmdBuf,
-                    uint32_t viewportWidth,
-                    uint32_t viewportHeight,
+                    uint32_t viewWidth,
+                    uint32_t viewHeight,
                     uint32_t flightIndex,
                     const std::vector<ShapeInstance>& shapes);
     static glm::mat4 buildSphereModel(const glm::vec3& center, float radius);

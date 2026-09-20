@@ -29,9 +29,9 @@ void PipelineCoordinator::init(const InitDesc& desc)
     _hostServices          = desc.hostServices;
     _sharedResourceProvider = desc.sharedResourceProvider;
     _debugRenderSystem     = desc.debugRenderSystem;
-    _reapplyViewportSink   = desc.reapplyViewportSink;
-    _viewportWidth         = desc.viewportWidth;
-    _viewportHeight        = desc.viewportHeight;
+    _reapplyViewRectSink   = desc.reapplyViewRectSink;
+    _viewWidth         = desc.viewWidth;
+    _viewHeight        = desc.viewHeight;
 
     initActivePipeline();
 }
@@ -46,9 +46,9 @@ void PipelineCoordinator::shutdown()
     _hostServices          = nullptr;
     _sharedResourceProvider = nullptr;
     _debugRenderSystem     = nullptr;
-    _reapplyViewportSink   = {};
-    _viewportWidth         = 0;
-    _viewportHeight        = 0;
+    _reapplyViewRectSink   = {};
+    _viewWidth         = 0;
+    _viewHeight        = 0;
     _pendingRenderTargetFormatCommands.clear();
 }
 
@@ -93,8 +93,8 @@ DeferredRenderPipeline* PipelineCoordinator::getSelectedDeferredPipeline() const
 
 void PipelineCoordinator::initActivePipeline()
 {
-    const int windowWidth  = _viewportWidth;
-    const int windowHeight = _viewportHeight;
+    const int windowWidth  = _viewWidth;
+    const int windowHeight = _viewHeight;
 
     if (_renderPipeline == ERenderPipeline::Forward) {
         initForwardPipeline(windowWidth, windowHeight);
@@ -111,24 +111,24 @@ void PipelineCoordinator::initActivePipeline()
     }
 }
 
-void PipelineCoordinator::initForwardPipeline(int windowWidth, int windowHeight)
+void PipelineCoordinator::initForwardPipeline(int viewWidth, int viewHeight)
 {
     _forwardPipeline = ya::makeShared<ForwardRenderPipeline>();
     _forwardPipeline->init(ForwardRenderPipeline::InitDesc{
         .render          = _render,
-        .windowW         = windowWidth,
-        .windowH         = windowHeight,
+        .viewWidth         = viewWidth,
+        .viewHeight         = viewHeight,
         .shadowSettings  = _hostServices ? _hostServices->getShadowSettings() : nullptr,
     });
 }
 
-void PipelineCoordinator::initDeferredPipeline(int windowWidth, int windowHeight)
+void PipelineCoordinator::initDeferredPipeline(int viewWidth, int viewHeight)
 {
     _deferredPipeline = ya::makeShared<DeferredRenderPipeline>();
     _deferredPipeline->init(DeferredRenderPipeline::InitDesc{
         .render                    = _render,
-        .windowW                   = windowWidth,
-        .windowH                   = windowHeight,
+        .viewWidth                   = viewWidth,
+        .viewHeight                   = viewHeight,
         .shadowSettings            = _hostServices ? _hostServices->getShadowSettings() : nullptr,
         .automationShadowOverrides = _hostServices ? _hostServices->getAutomationShadowOverrides() : nullptr,
         .environmentLightingDSL    = _sharedResourceProvider
@@ -167,8 +167,8 @@ void PipelineCoordinator::applyPendingRenderPipelineSwitch()
     _pendingActivePipelineReload = false;
     initActivePipeline();
 
-    if (_reapplyViewportSink) {
-        _reapplyViewportSink();
+    if (_reapplyViewRectSink) {
+        _reapplyViewRectSink();
     }
 }
 

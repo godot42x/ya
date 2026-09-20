@@ -184,13 +184,13 @@ void DebugPrimitives::addConeImmediate(const glm::mat4& model, const glm::vec4& 
 }
 
 void DebugPrimitives::draw(ICommandBuffer*  cmdBuf,
-                           uint32_t         viewportWidth,
-                           uint32_t         viewportHeight,
+                           uint32_t         viewWidth,
+                           uint32_t         viewHeight,
                            const glm::mat4& projection,
                            const glm::mat4& view,
                            uint32_t         flightIndex)
 {
-    if (!_bEnabled || !cmdBuf || viewportWidth == 0 || viewportHeight == 0) {
+    if (!_bEnabled || !cmdBuf || viewWidth == 0 || viewHeight == 0) {
         return;
     }
 
@@ -202,18 +202,18 @@ void DebugPrimitives::draw(ICommandBuffer*  cmdBuf,
 
     if (_bDrawLines) {
         if (!_frameLineVertices.empty()) {
-            drawLines(cmdBuf, viewportWidth, viewportHeight, recordingFlight, _frameLineVertices);
+            drawLines(cmdBuf, viewWidth, viewHeight, recordingFlight, _frameLineVertices);
         }
         if (!_immediateLineVertices.empty()) {
-            drawLines(cmdBuf, viewportWidth, viewportHeight, recordingFlight, _immediateLineVertices);
+            drawLines(cmdBuf, viewWidth, viewHeight, recordingFlight, _immediateLineVertices);
         }
     }
     if (_bDrawShapes) {
         if (!_frameShapeInstances.empty()) {
-            drawShapes(cmdBuf, viewportWidth, viewportHeight, recordingFlight, _frameShapeInstances);
+            drawShapes(cmdBuf, viewWidth, viewHeight, recordingFlight, _frameShapeInstances);
         }
         if (!_immediateShapeInstances.empty()) {
-            drawShapes(cmdBuf, viewportWidth, viewportHeight, recordingFlight, _immediateShapeInstances);
+            drawShapes(cmdBuf, viewWidth, viewHeight, recordingFlight, _immediateShapeInstances);
         }
     }
 }
@@ -381,22 +381,22 @@ void DebugPrimitives::clearImmediate()
     _immediateShapeInstances.clear();
 }
 
-void DebugPrimitives::setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t viewportWidth, uint32_t viewportHeight) const
+void DebugPrimitives::setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t viewWidth, uint32_t viewHeight) const
 {
     float viewportY      = 0.0f;
-    float viewportHeightSigned = static_cast<float>(viewportHeight);
+    float viewHeightSigned = static_cast<float>(viewHeight);
     if (_bReverseViewportY) {
-        viewportY             = static_cast<float>(viewportHeight);
-        viewportHeightSigned  = -viewportHeightSigned;
+        viewportY             = static_cast<float>(viewHeight);
+        viewHeightSigned  = -viewHeightSigned;
     }
 
-    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(viewportWidth), viewportHeightSigned, 0.0f, 1.0f);
-    cmdBuf->setScissor(0, 0, viewportWidth, viewportHeight);
+    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(viewWidth), viewHeightSigned, 0.0f, 1.0f);
+    cmdBuf->setScissor(0, 0, viewWidth, viewHeight);
 }
 
 void DebugPrimitives::drawLines(ICommandBuffer*                cmdBuf,
-                                uint32_t                       viewportWidth,
-                                uint32_t                       viewportHeight,
+                                uint32_t                       viewWidth,
+                                uint32_t                       viewHeight,
                                 uint32_t                       flightIndex,
                                 const std::vector<LineVertex>& vertices)
 {
@@ -404,20 +404,20 @@ void DebugPrimitives::drawLines(ICommandBuffer*                cmdBuf,
     _lineVertexBuffer->writeData(vertices.data(), static_cast<uint32_t>(sizeof(LineVertex) * vertices.size()), 0);
 
     cmdBuf->bindPipeline(_linePipeline.get());
-    setViewportAndScissor(cmdBuf, viewportWidth, viewportHeight);
+    setViewportAndScissor(cmdBuf, viewWidth, viewHeight);
     cmdBuf->bindDescriptorSets(_linePipelineLayout.get(), 0, {_frameDS[flightIndex]});
     cmdBuf->bindVertexBuffer(0, _lineVertexBuffer.get(), 0);
     cmdBuf->draw(static_cast<uint32_t>(vertices.size()));
 }
 
 void DebugPrimitives::drawShapes(ICommandBuffer*  cmdBuf,
-                                 uint32_t         viewportWidth,
-                                 uint32_t         viewportHeight,
+                                 uint32_t         viewWidth,
+                                 uint32_t         viewHeight,
                                  uint32_t         flightIndex,
                                  const std::vector<ShapeInstance>& shapes)
 {
     cmdBuf->bindPipeline(_shapePipeline.get());
-    setViewportAndScissor(cmdBuf, viewportWidth, viewportHeight);
+    setViewportAndScissor(cmdBuf, viewWidth, viewHeight);
     cmdBuf->bindDescriptorSets(_shapePipelineLayout.get(), 0, {_frameDS[flightIndex]});
 
     for (const auto& instance : shapes) {

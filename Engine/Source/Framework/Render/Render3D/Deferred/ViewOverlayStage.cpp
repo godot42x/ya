@@ -413,12 +413,12 @@ void ViewOverlayStage::drawBillboards(const RenderStageContext& ctx, const Frame
     cmdBuf->bindPipeline(_billboardPipeline.get());
 
     float viewportY      = 0.0f;
-    float viewportHeight = static_cast<float>(vpH);
+    float viewHeight = static_cast<float>(vpH);
     if (bReverseViewportY) {
         viewportY      = static_cast<float>(vpH);
-        viewportHeight = -static_cast<float>(vpH);
+        viewHeight = -static_cast<float>(vpH);
     }
-    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(vpW), viewportHeight);
+    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(vpW), viewHeight);
     cmdBuf->setScissor(0, 0, vpW, vpH);
     cmdBuf->bindDescriptorSets(_billboardPPL.get(), 0, {overlay.billboardFrame.set, overlay.billboardTextures.set});
 
@@ -452,12 +452,12 @@ void ViewOverlayStage::drawSkybox(const RenderStageContext& ctx, const FrameInpu
     cmdBuf->bindPipeline(_skyboxPipeline.get());
 
     float viewportY      = 0.0f;
-    float viewportHeight = static_cast<float>(vpH);
+    float viewHeight = static_cast<float>(vpH);
     if (bReverseViewportY) {
         viewportY      = static_cast<float>(vpH);
-        viewportHeight = -static_cast<float>(vpH);
+        viewHeight = -static_cast<float>(vpH);
     }
-    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(vpW), viewportHeight, 0.0f, 1.0f);
+    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(vpW), viewHeight, 0.0f, 1.0f);
     cmdBuf->setScissor(0, 0, vpW, vpH);
 
     cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {skyboxInput.frameDescriptorSet, skyboxInput.descriptorSet});
@@ -501,12 +501,12 @@ void ViewOverlayStage::drawOverlay(const RenderStageContext& ctx, const FrameInp
     cmdBuf->bindPipeline(_overlayPipeline.get());
 
     float viewportY      = 0.0f;
-    float viewportHeight = static_cast<float>(vpH);
+    float viewHeight = static_cast<float>(vpH);
     if (bReverseViewportY) {
         viewportY      = static_cast<float>(vpH);
-        viewportHeight = -static_cast<float>(vpH);
+        viewHeight = -static_cast<float>(vpH);
     }
-    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(vpW), viewportHeight);
+    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(vpW), viewHeight);
     cmdBuf->setScissor(0, 0, vpW, vpH);
 
     _overlayPC.view       = fd.view;

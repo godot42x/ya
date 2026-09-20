@@ -116,7 +116,7 @@ void recordCameraHud(EditorLayer& layer)
         if (!font) {
             continue;
         }
-        Render2D::makeText(text.text, glm::vec3(text.viewportPos, text.depth), text.color, font.get());
+        Render2D::makeText(text.text, glm::vec3(text.viewPos, text.depth), text.color, font.get());
     }
 }
 

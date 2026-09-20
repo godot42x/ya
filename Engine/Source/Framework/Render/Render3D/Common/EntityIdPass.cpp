@@ -188,8 +188,8 @@ void EntityIdPass::destroy()
 }
 
 void EntityIdPass::execute(ICommandBuffer*        cmdBuf,
-                                   uint32_t               viewportWidth,
-                                   uint32_t               viewportHeight,
+                                   uint32_t               viewWidth,
+                                   uint32_t               viewHeight,
                                    const glm::mat4&       viewProj,
                                    const glm::mat4&       view,
                                    const RenderFrameData& frameData,
@@ -197,7 +197,7 @@ void EntityIdPass::execute(ICommandBuffer*        cmdBuf,
                  const EntityIdPassBindings& frameBindings,
                  const std::vector<EntityIdBillboard>& billboards)
 {
-    if (!_render || !cmdBuf || viewportWidth == 0 || viewportHeight == 0 || !frameBindings.frame.set) {
+    if (!_render || !cmdBuf || viewWidth == 0 || viewHeight == 0 || !frameBindings.frame.set) {
         return;
     }
 
@@ -208,12 +208,12 @@ void EntityIdPass::execute(ICommandBuffer*        cmdBuf,
     const auto applyViewport = [&](IPipelineLayout* layout)
     {
         cmdBuf->setViewport(0.0f,
-                            static_cast<float>(viewportHeight),
-                            static_cast<float>(viewportWidth),
-                            -static_cast<float>(viewportHeight),
+                            static_cast<float>(viewHeight),
+                            static_cast<float>(viewWidth),
+                            -static_cast<float>(viewHeight),
                             0.0f,
                             1.0f);
-        cmdBuf->setScissor(0, 0, viewportWidth, viewportHeight);
+        cmdBuf->setScissor(0, 0, viewWidth, viewHeight);
         (void)layout;
     };
 

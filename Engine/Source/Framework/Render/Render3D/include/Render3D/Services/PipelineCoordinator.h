@@ -41,12 +41,12 @@ struct YA_RENDER_3D_API PipelineCoordinator
         RenderSharedResourceProvider* sharedResourceProvider = nullptr;
         /// Debug overlay sink, injected into the pipelines that draw it.
         DebugRenderSystem*            debugRenderSystem     = nullptr;
-        /// Host viewport size in pixels. Not swapchain extent.
-        int                           viewportWidth         = 0;
-        int                           viewportHeight        = 0;
+        /// Initial view extent in pixels. Not swapchain extent.
+        int                           viewWidth         = 0;
+        int                           viewHeight        = 0;
         /// Invoked after a pipeline switch/reload so the owner can re-apply
-        /// its current viewport rect to the freshly built pipeline.
-        std::function<void()>         reapplyViewportSink;
+        /// its current view rect to the freshly built pipeline.
+        std::function<void()>         reapplyViewRectSink;
     };
 
     void init(const InitDesc& desc);
@@ -72,8 +72,8 @@ struct YA_RENDER_3D_API PipelineCoordinator
 
   private:
     void initActivePipeline();
-    void initForwardPipeline(int windowWidth, int windowHeight);
-    void initDeferredPipeline(int windowWidth, int windowHeight);
+    void initForwardPipeline(int viewWidth, int viewHeight);
+    void initDeferredPipeline(int viewWidth, int viewHeight);
     void shutdownActivePipeline();
     void applyPendingRenderPipelineSwitch();
     void applyPendingRenderTargetFormatCommands();
@@ -82,9 +82,9 @@ struct YA_RENDER_3D_API PipelineCoordinator
     IRenderRuntimeHostServices*      _hostServices          = nullptr;
     RenderSharedResourceProvider*    _sharedResourceProvider = nullptr;
     DebugRenderSystem*               _debugRenderSystem      = nullptr;
-    std::function<void()>            _reapplyViewportSink;
-    int                              _viewportWidth         = 0;
-    int                              _viewportHeight        = 0;
+    std::function<void()>            _reapplyViewRectSink;
+    int                              _viewWidth         = 0;
+    int                              _viewHeight        = 0;
 
     ERenderPipeline _renderPipeline          = ERenderPipeline::Deferred;
     ERenderPipeline _pendingRenderPipeline   = ERenderPipeline::Deferred;

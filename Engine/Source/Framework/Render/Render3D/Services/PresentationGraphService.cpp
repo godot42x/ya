@@ -55,7 +55,7 @@ void PresentationGraphService::init(const InitDesc& desc)
 
     _render                       = desc.render;
     _present                      = desc.present;
-    _viewportDisplayImageProvider = desc.viewportDisplayImageProvider;
+    _viewDisplayImageProvider = desc.viewDisplayImageProvider;
 
     rebuildImages();
 
@@ -121,7 +121,7 @@ void PresentationGraphService::shutdown()
     }
     _presentationGraphExecutors.clear();
     _presentationImages.clear();
-    _viewportDisplayImageProvider = {};
+    _viewDisplayImageProvider = {};
     _present = nullptr;
     _render  = nullptr;
 }
@@ -219,7 +219,7 @@ void PresentationGraphService::recordDisplayCompose(float                     de
     }
 
     const Extent2D presentationExtent = presentationImage->getExtent();
-    auto           sourceImage        = _viewportDisplayImageProvider ? _viewportDisplayImageProvider() : nullptr;
+    auto           sourceImage        = _viewDisplayImageProvider ? _viewDisplayImageProvider() : nullptr;
     RenderGraph graph;
     const auto  output = graph.importTexture(
         makePresentationImportedTextureDesc(*presentationImage,

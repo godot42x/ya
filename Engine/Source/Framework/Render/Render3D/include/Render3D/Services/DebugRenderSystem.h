@@ -31,8 +31,8 @@ struct YA_RENDER_3D_API DebugRenderSystem
     void beginFrame();
     void refreshPipelineFormats(const RenderAttachmentFormats& formats);
     void draw(ICommandBuffer* cmdBuf,
-              uint32_t viewportWidth,
-              uint32_t viewportHeight,
+              uint32_t viewWidth,
+              uint32_t viewHeight,
               const glm::mat4& projection,
               const glm::mat4& view,
               uint32_t flightIndex);

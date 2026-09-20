@@ -227,7 +227,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
 void ForwardRenderPipeline::initViewResources(const InitDesc& desc)
 {
     _viewRTSpec = buildForwardViewRenderTargetSpec(
-        {.width = static_cast<uint32_t>(desc.windowW), .height = static_cast<uint32_t>(desc.windowH)},
+        {.width = static_cast<uint32_t>(desc.viewWidth), .height = static_cast<uint32_t>(desc.viewHeight)},
         VIEWPORT_COLOR_FORMAT,
         DEPTH_FORMAT);
     _entityIdPass.init(_render, EFormat::R32_UINT, DEPTH_FORMAT);
@@ -240,8 +240,8 @@ void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
     _postProcessStage.init(PostProcessingStage::InitDesc{
         .render      = _render,
         .colorFormat = POSTPROCESS_COLOR_FORMAT,
-        .width       = static_cast<uint32_t>(desc.windowW),
-        .height      = static_cast<uint32_t>(desc.windowH),
+        .width       = static_cast<uint32_t>(desc.viewWidth),
+        .height      = static_cast<uint32_t>(desc.viewHeight),
     });
     _postProcessStage.getState() = postprocess_settings::loadRuntimeSettings(_postProcessStage.getState());
     _deleter.push("PostProcessStage", [this](void*)

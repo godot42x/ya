@@ -67,8 +67,8 @@ constexpr uint32_t Unlit = 3; // no lighting, direct albedo output
 struct DeferredRenderInitDesc
 {
     IRender* render  = nullptr;
-    int      windowW = 0;
-    int      windowH = 0;
+    int      viewWidth = 0;
+    int      viewHeight = 0;
     ShadowSettings* shadowSettings = nullptr;
     const AppAutomationShadowOverrides* automationShadowOverrides = nullptr;
     stdptr<IDescriptorSetLayout> environmentLightingDSL = nullptr;

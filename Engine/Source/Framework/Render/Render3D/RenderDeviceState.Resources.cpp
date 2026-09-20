@@ -185,9 +185,9 @@ void RenderDeviceState::initSharedRenderResources()
         .hostServices          = _hostServices,
         .sharedResourceProvider = &_sharedResourceProvider,
         .debugRenderSystem     = &DebugRenderSystem::get(),
-        .viewportWidth         = static_cast<int>(_pipelineViewRect.extent.x),
-        .viewportHeight        = static_cast<int>(_pipelineViewRect.extent.y),
-        .reapplyViewportSink   = [this]()
+        .viewWidth         = static_cast<int>(_pipelineViewRect.extent.x),
+        .viewHeight        = static_cast<int>(_pipelineViewRect.extent.y),
+        .reapplyViewRectSink   = [this]()
         {
             if (_pipelineViewRect.extent.x > 0.0f && _pipelineViewRect.extent.y > 0.0f) {
                 if (auto* pipeline = getActivePipeline()) {
@@ -205,7 +205,7 @@ void RenderDeviceState::initPresentationResources()
     _presentationGraphService.init(PresentationGraphService::InitDesc{
         .render  = _render,
         .present = _render->getPrimarySurfaceContext(),
-        .viewportDisplayImageProvider = [this]()
+        .viewDisplayImageProvider = [this]()
         {
             return getViewDisplayImageShared();
         },

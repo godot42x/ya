@@ -256,13 +256,13 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
 
             const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
             const auto renderExtent   = rasterParams.getRenderExtent();
-            const auto viewportWidth  = renderExtent.width;
-            const auto viewportHeight = renderExtent.height;
+            const auto viewWidth  = renderExtent.width;
+            const auto viewHeight = renderExtent.height;
             rgCtx.beginDeclaredRasterRendering();
 
             rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
-            rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
-            rgCtx.getCommandBuffer().setScissor(0, 0, viewportWidth, viewportHeight);
+            rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(viewWidth), static_cast<float>(viewHeight));
+            rgCtx.getCommandBuffer().setScissor(0, 0, viewWidth, viewHeight);
             rgCtx.getCommandBuffer().bindDescriptorSets(
                 _pipelineLayout.get(), 0, {params.frameDescriptorSet, params.inputDescriptorSet});
             rgCtx.getCommandBuffer().draw(3, 1, 0, 0);

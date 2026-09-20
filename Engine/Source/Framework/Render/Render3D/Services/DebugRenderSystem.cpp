@@ -77,13 +77,13 @@ void DebugRenderSystem::refreshPipelineFormats(const RenderAttachmentFormats& fo
 }
 
 void DebugRenderSystem::draw(ICommandBuffer*  cmdBuf,
-                             uint32_t         viewportWidth,
-                             uint32_t         viewportHeight,
+                             uint32_t         viewWidth,
+                             uint32_t         viewHeight,
                              const glm::mat4& projection,
                              const glm::mat4& view,
                              uint32_t         flightIndex)
 {
-    _primitives.draw(cmdBuf, viewportWidth, viewportHeight, projection, view, flightIndex);
+    _primitives.draw(cmdBuf, viewWidth, viewHeight, projection, view, flightIndex);
 }
 
 DebugPrimitives::SettingsSnapshot DebugRenderSystem::buildSettingsSnapshot() const

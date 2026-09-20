@@ -114,26 +114,26 @@ struct DebugSkinning
 
     void draw(ICommandBuffer*  cmdBuf,
               Mesh*            mesh,
-              uint32_t         viewportWidth,
-              uint32_t         viewportHeight,
+              uint32_t         viewWidth,
+              uint32_t         viewHeight,
               const glm::mat4& projection,
               const glm::mat4& view,
               const glm::mat4& model) const
     {
-        if (!bEnabled || !_pipeline || !_pipelineLayout || !cmdBuf || !mesh || viewportWidth == 0 || viewportHeight == 0) {
+        if (!bEnabled || !_pipeline || !_pipelineLayout || !cmdBuf || !mesh || viewWidth == 0 || viewHeight == 0) {
             return;
         }
 
         cmdBuf->bindPipeline(_pipeline.get());
 
         float viewportY            = 0.0f;
-        float viewportHeightSigned = static_cast<float>(viewportHeight);
+        float viewHeightSigned = static_cast<float>(viewHeight);
         if (bReverseViewportY) {
-            viewportY            = static_cast<float>(viewportHeight);
-            viewportHeightSigned = -viewportHeightSigned;
+            viewportY            = static_cast<float>(viewHeight);
+            viewHeightSigned = -viewHeightSigned;
         }
-        cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(viewportWidth), viewportHeightSigned, 0.0f, 1.0f);
-        cmdBuf->setScissor(0, 0, viewportWidth, viewportHeight);
+        cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(viewWidth), viewHeightSigned, 0.0f, 1.0f);
+        cmdBuf->setScissor(0, 0, viewWidth, viewHeight);
 
         PushConstant pc{
             .projection  = projection,

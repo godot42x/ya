@@ -49,8 +49,8 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     struct InitDesc
     {
         IRender* render  = nullptr;
-        int      windowW = 0;
-        int      windowH = 0;
+        int      viewWidth = 0;
+        int      viewHeight = 0;
         ShadowSettings* shadowSettings = nullptr;
     };
 

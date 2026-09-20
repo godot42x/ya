@@ -42,8 +42,8 @@ struct EntityIdPass
     void destroy();
 
     void execute(ICommandBuffer*  cmdBuf,
-                 uint32_t         viewportWidth,
-                 uint32_t         viewportHeight,
+                 uint32_t         viewWidth,
+                 uint32_t         viewHeight,
                  const glm::mat4& viewProj,
                  const glm::mat4& view,
                  const RenderFrameData& frameData,

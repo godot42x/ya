@@ -773,8 +773,8 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     resolveRuntimeFormats();
 
     Extent2D extent{
-        .width  = static_cast<uint32_t>(desc.windowW),
-        .height = static_cast<uint32_t>(desc.windowH),
+        .width  = static_cast<uint32_t>(desc.viewWidth),
+        .height = static_cast<uint32_t>(desc.viewHeight),
     };
 
     initRenderTargetSpecs(extent);
@@ -1126,8 +1126,8 @@ ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
     auto* envProcessor = sceneResources.environmentLighting;
 
     if (activeScene) {
-        const float viewportHeight = static_cast<float>(frame.view.viewExtent.height);
-        if (viewportHeight > 0.0f) {
+        const float viewHeight = static_cast<float>(frame.view.viewExtent.height);
+        if (viewHeight > 0.0f) {
             for (const auto& [entity, billboard, transform] : activeScene->getRegistry().view<BillboardComponent, TransformComponent>().each()) {
                 if (!billboard.bVisible) {
                     continue;
@@ -1148,7 +1148,7 @@ ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
                 }
 
                 const float screenSizePixels = std::max(billboard.screenSizePixels, 1.0f);
-                const float scaleFactor      = screenSizePixels / viewportHeight;
+                const float scaleFactor      = screenSizePixels / viewHeight;
                 const float size             = std::max(billboard.minWorldScale, scaleFactor * distance * 2.0f);
 
                 ViewOverlayStage::FrameInputs::BillboardInput input{};

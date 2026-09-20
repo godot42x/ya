@@ -16,14 +16,14 @@ std::vector<RenderOverlayText2D> EditorLayer::buildViewportCameraOverlayTexts() 
     texts.reserve(2);
     texts.push_back(RenderOverlayText2D{
         .text        = std::format("Pos {:+.2f} {:+.2f} {:+.2f}", position.x, position.y, position.z),
-        .viewportPos = {kViewportCameraOverlayMarginX, kViewportCameraOverlayMarginY},
+        .viewPos = {kViewportCameraOverlayMarginX, kViewportCameraOverlayMarginY},
         .color       = {0.92f, 0.92f, 0.92f, 0.92f},
         .fontSize    = 16,
         .depth       = 0.0f,
     });
     texts.push_back(RenderOverlayText2D{
         .text        = std::format("Dir {:+.2f} {:+.2f} {:+.2f}", forward.x, forward.y, forward.z),
-        .viewportPos = {kViewportCameraOverlayMarginX, kViewportCameraOverlayMarginY + 18.0f + kViewportCameraOverlayLineSpacing},
+        .viewPos = {kViewportCameraOverlayMarginX, kViewportCameraOverlayMarginY + 18.0f + kViewportCameraOverlayLineSpacing},
         .color       = {0.75f, 0.86f, 1.0f, 0.92f},
         .fontSize    = 16,
         .depth       = 0.0f,
