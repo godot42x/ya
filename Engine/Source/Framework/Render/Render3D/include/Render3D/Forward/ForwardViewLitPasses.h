@@ -26,7 +26,7 @@ struct IDescriptorSetLayout;
 struct IDescriptorPool;
 struct IRender;
 
-class ForwardViewportLitPasses
+class ForwardViewLitPasses
 {
   public:
     using PBRPushConstant = slang_types::PBRForward::PushConstants;

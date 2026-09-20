@@ -416,7 +416,7 @@ void appendSkybox(DeferredFrameGraphPassContext& context)
         .layerCount    = 1,
         .skybox        = context.overlayInputs
             ? context.overlayInputs->skybox
-            : ViewportOverlayStage::FrameInputs::SkyboxInput{},
+            : ViewOverlayStage::FrameInputs::SkyboxInput{},
     };
 
     context.graphResources.passes.skybox = context.graph.addPass(
@@ -474,7 +474,7 @@ void appendForwardTransparent(DeferredFrameGraphPassContext& context)
         .layerCount = 1,
         .overlay    = context.overlayInputs
             ? *context.overlayInputs
-            : ViewportOverlayStage::FrameInputs{},
+            : ViewOverlayStage::FrameInputs{},
         .overlayBindings = context.viewResources ? context.viewResources->overlay : OverlayPassBindings{},
     };
 

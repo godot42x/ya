@@ -38,7 +38,7 @@ struct ForwardDirectionGizmoInput
     glm::vec3 lineEnd       = glm::vec3(0.0f);
 };
 
-class YA_RENDER_3D_API ForwardViewportAuxPasses
+class YA_RENDER_3D_API ForwardViewAuxPasses
 {
   public:
     struct SimplePC

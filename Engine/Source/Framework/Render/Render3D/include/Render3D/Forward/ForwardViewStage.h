@@ -6,10 +6,10 @@
 #include "Render3D/Stage/IRenderStage.h"
 #include "Render3D/Common/RenderViewSceneResources.h"
 #include "Render3D/Common/RenderViewportUtils.h"
-#include "Render3D/Forward/ForwardViewportAuxPasses.h"
+#include "Render3D/Forward/ForwardViewAuxPasses.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
-#include "Render3D/Forward/ForwardViewportLitPasses.h"
-#include "Render3D/Forward/ForwardViewportUnlitPass.h"
+#include "Render3D/Forward/ForwardViewLitPasses.h"
+#include "Render3D/Forward/ForwardViewUnlitPass.h"
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
 
 #include <array>
@@ -27,7 +27,7 @@ struct EnvironmentLightingProcessor;
 /// SkyBoxSystem and DebugRenderSystem.
 ///
 /// Consumes RenderFrameData snapshot for draw items.
-struct ForwardViewportStage : public IRenderStage
+struct ForwardViewStage : public IRenderStage
 {
     struct InitDesc
     {
@@ -56,8 +56,8 @@ struct ForwardViewportStage : public IRenderStage
 
     struct PassContext
     {
-        using SkyboxInput    = ForwardViewportAuxPasses::DrawContext::SkyboxInput;
-        using DebugDrawInput = ForwardViewportAuxPasses::DrawContext::DebugDrawInput;
+        using SkyboxInput    = ForwardViewAuxPasses::DrawContext::SkyboxInput;
+        using DebugDrawInput = ForwardViewAuxPasses::DrawContext::DebugDrawInput;
 
         const RenderStageContext& stageCtx;
         Scene*                    activeScene             = nullptr;
@@ -82,9 +82,9 @@ struct ForwardViewportStage : public IRenderStage
     bool     bReverseViewportY = true;
 
     ShadowRuntimeState _shadowState{};
-    ForwardViewportAuxPasses _auxPasses{};
-    ForwardViewportLitPasses _litPasses{};
-    ForwardViewportUnlitPass _unlitPass{};
+    ForwardViewAuxPasses _auxPasses{};
+    ForwardViewLitPasses _litPasses{};
+    ForwardViewUnlitPass _unlitPass{};
 
     DescriptorSetHandle _depthBufferShadowDS = nullptr;
     ForwardFrameResourceSet::FramePayloads _framePayloads{};
@@ -97,7 +97,7 @@ struct ForwardViewportStage : public IRenderStage
     // IRenderStage interface
     // ═══════════════════════════════════════════════════════════════
 
-    ForwardViewportStage() : IRenderStage("ForwardViewport") {}
+    ForwardViewStage() : IRenderStage("ForwardViewport") {}
 
     void initWithDesc(const InitDesc& desc);
     void init(IRender* render) override;
@@ -122,12 +122,12 @@ struct ForwardViewportStage : public IRenderStage
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS);
     void refreshPipelineFormats(const RenderAttachmentFormats& formats);
-    [[nodiscard]] ForwardViewportAuxPasses&       getAuxPasses() { return _auxPasses; }
-    [[nodiscard]] const ForwardViewportAuxPasses& getAuxPasses() const { return _auxPasses; }
-    [[nodiscard]] ForwardViewportLitPasses&       getLitPasses() { return _litPasses; }
-    [[nodiscard]] const ForwardViewportLitPasses& getLitPasses() const { return _litPasses; }
-    [[nodiscard]] ForwardViewportUnlitPass&       getUnlitPass() { return _unlitPass; }
-    [[nodiscard]] const ForwardViewportUnlitPass& getUnlitPass() const { return _unlitPass; }
+    [[nodiscard]] ForwardViewAuxPasses&       getAuxPasses() { return _auxPasses; }
+    [[nodiscard]] const ForwardViewAuxPasses& getAuxPasses() const { return _auxPasses; }
+    [[nodiscard]] ForwardViewLitPasses&       getLitPasses() { return _litPasses; }
+    [[nodiscard]] const ForwardViewLitPasses& getLitPasses() const { return _litPasses; }
+    [[nodiscard]] ForwardViewUnlitPass&       getUnlitPass() { return _unlitPass; }
+    [[nodiscard]] const ForwardViewUnlitPass& getUnlitPass() const { return _unlitPass; }
     [[nodiscard]] const ForwardFrameResourceSet::FramePayloads& getFramePayloads() const { return _framePayloads; }
     [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
 
@@ -137,14 +137,14 @@ struct ForwardViewportStage : public IRenderStage
         EnvironmentLightingProcessor*   envProcessor,
         const RenderViewSceneResources& sceneResources) const;
     [[nodiscard]] PassContext::DebugDrawInput buildDebugDrawInput(const RenderFrameData* frameData) const;
-    [[nodiscard]] ForwardViewportAuxPasses::DrawContext makeAuxDrawContext(
+    [[nodiscard]] ForwardViewAuxPasses::DrawContext makeAuxDrawContext(
         const PassContext& passCtx,
         bool               bIncludeSkybox = false,
         bool               bIncludeDebug = false,
         bool               bIncludeDirection = false) const;
-    [[nodiscard]] ForwardViewportLitPasses::DrawContext makePBRDrawContext(const PassContext& passCtx) const;
-    [[nodiscard]] ForwardViewportLitPasses::DrawContext makePhongDrawContext(const PassContext& passCtx) const;
-    [[nodiscard]] ForwardViewportUnlitPass::DrawContext makeUnlitDrawContext(const PassContext& passCtx) const;
+    [[nodiscard]] ForwardViewLitPasses::DrawContext makePBRDrawContext(const PassContext& passCtx) const;
+    [[nodiscard]] ForwardViewLitPasses::DrawContext makePhongDrawContext(const PassContext& passCtx) const;
+    [[nodiscard]] ForwardViewUnlitPass::DrawContext makeUnlitDrawContext(const PassContext& passCtx) const;
     void                                            executePass(EPass pass, const PassContext& passCtx);
 };
 

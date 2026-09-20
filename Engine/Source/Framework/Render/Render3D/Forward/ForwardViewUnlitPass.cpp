@@ -1,4 +1,4 @@
-#include "Render3D/Forward/ForwardViewportUnlitPass.h"
+#include "Render3D/Forward/ForwardViewUnlitPass.h"
 
 #include "RHI/Core/Buffer.h"
 #include "RHI/Core/RenderResourceFactory.h"
@@ -30,7 +30,7 @@ static const VertexBufferDescription kUnlitVBDesc{.slot = 0, .pitch = sizeof(ya:
 
 } // namespace
 
-void ForwardViewportUnlitPass::init(const InitDesc& desc)
+void ForwardViewUnlitPass::init(const InitDesc& desc)
 {
     _render                = desc.render;
     _skinningDSL           = desc.skinningDSL;
@@ -38,7 +38,7 @@ void ForwardViewportUnlitPass::init(const InitDesc& desc)
     initUnlit(desc);
 }
 
-void ForwardViewportUnlitPass::destroy()
+void ForwardViewUnlitPass::destroy()
 {
     _unlitMatPool = {};
     _unlitStatic = {};
@@ -51,7 +51,7 @@ void ForwardViewportUnlitPass::destroy()
     _render = nullptr;
 }
 
-void ForwardViewportUnlitPass::beginFrame()
+void ForwardViewUnlitPass::beginFrame()
 {
     if (_unlitStatic.pipeline) {
         _unlitStatic.pipeline->beginFrame();
@@ -61,7 +61,7 @@ void ForwardViewportUnlitPass::beginFrame()
     }
 }
 
-void ForwardViewportUnlitPass::refreshPipelineFormats(const RenderAttachmentFormats& formats)
+void ForwardViewUnlitPass::refreshPipelineFormats(const RenderAttachmentFormats& formats)
 {
     if (!formats.hasColor()) {
         return;
@@ -80,7 +80,7 @@ void ForwardViewportUnlitPass::refreshPipelineFormats(const RenderAttachmentForm
     }
 }
 
-void ForwardViewportUnlitPass::prepare(const RenderStageContext& ctx,
+void ForwardViewUnlitPass::prepare(const RenderStageContext& ctx,
                                        UnlitFrameUBO& outFrame)
 {
     if (!ctx.frameData) {
@@ -89,7 +89,7 @@ void ForwardViewportUnlitPass::prepare(const RenderStageContext& ctx,
     prepareUnlit(ctx, outFrame);
 }
 
-void ForwardViewportUnlitPass::initUnlit(const InitDesc& desc)
+void ForwardViewUnlitPass::initUnlit(const InitDesc& desc)
 {
     auto dsls = IDescriptorSetLayout::create(_render, {
         DescriptorSetLayoutDesc{
@@ -173,7 +173,7 @@ void ForwardViewportUnlitPass::initUnlit(const InitDesc& desc)
     _unlitPoolRecreated = true;
 }
 
-void ForwardViewportUnlitPass::prepareUnlit(const RenderStageContext& ctx,
+void ForwardViewUnlitPass::prepareUnlit(const RenderStageContext& ctx,
                                             UnlitFrameUBO& outFrame)
 {
     const auto& fd = *ctx.frameData;
@@ -193,7 +193,7 @@ void ForwardViewportUnlitPass::prepareUnlit(const RenderStageContext& ctx,
     _unlitPoolRecreated = false;
 }
 
-void ForwardViewportUnlitPass::prepareUnlitMaterials(const RenderFrameData& fd)
+void ForwardViewUnlitPass::prepareUnlitMaterials(const RenderFrameData& fd)
 {
     uint32_t          materialCount   = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();
     std::vector<bool> preparedMaterial(materialCount);
@@ -235,7 +235,7 @@ void ForwardViewportUnlitPass::prepareUnlitMaterials(const RenderFrameData& fd)
     prepareBucket(fd.drawBuckets.skinnedMeshes.unlitDrawItems);
 }
 
-void ForwardViewportUnlitPass::draw(const DrawContext& drawCtx)
+void ForwardViewUnlitPass::draw(const DrawContext& drawCtx)
 {
     const auto& ctx          = drawCtx.stageCtx;
     const auto& fd           = *ctx.frameData;

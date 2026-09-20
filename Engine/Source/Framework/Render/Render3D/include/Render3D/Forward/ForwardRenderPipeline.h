@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Render3D/Forward/ForwardViewportStage.h"
-#include "Render3D/Forward/ForwardViewportResources.h"
+#include "Render3D/Forward/ForwardViewStage.h"
+#include "Render3D/Forward/ForwardViewResources.h"
 #include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
 #include "Graph/RenderGraphExecutor.h"
@@ -12,7 +12,7 @@
 #include "Render3D/RenderFrameData.h"
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/PostProcessingStage.h"
-#include "Render3D/Common/EntityIdViewportPass.h"
+#include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Render3D/Common/Shadow/ShadowStage.h"
@@ -69,7 +69,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
 
     // ── Render stages ─────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
-    stdptr<ForwardViewportStage> _viewportStage;
+    stdptr<ForwardViewStage> _viewportStage;
     PostProcessingStage          _postProcessStage;
     ForwardFrameGraphOrchestrator _frameGraphOrchestrator{};
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
@@ -83,8 +83,8 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     RenderingInfo _viewportRI{};
     RenderTargetCreateInfo _viewportRTSpec{};
     RenderAttachmentFormats _viewportFormats{};
-    ForwardViewportResources _viewportResources{};
-    EntityIdViewportPass     _entityIdPass{};
+    ForwardViewResources _viewportResources{};
+    EntityIdPass     _entityIdPass{};
     ShadowSettings _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
     std::optional<PostProcessingState> _pendingPostProcessSettings;
 
@@ -102,7 +102,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     Extent2D                     getViewportExtent() const override;
     [[nodiscard]] EFormat::T     getViewportColorFormat() const override;
     [[nodiscard]] EFormat::T     getViewportDepthFormat() const override;
-    [[nodiscard]] const ForwardViewportResources& getCurrentViewportResources() const { return _viewportResources; }
+    [[nodiscard]] const ForwardViewResources& getCurrentViewportResources() const { return _viewportResources; }
     [[nodiscard]] std::shared_ptr<RenderTexture>    getViewportOutputImageShared() const
     {
         return bMSAA ? _viewportResources.resolveOwner : _viewportResources.colorOwner;
@@ -162,7 +162,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
                                                RenderStageContext&             stageCtx,
                                                const ShadowPreparedView&       shadowPrepared,
                                                FrameContext&                    postContext,
-                                               ForwardViewportStage::PassContext& viewportPassContext,
+                                               ForwardViewStage::PassContext& viewportPassContext,
                                                const ForwardFrameResourceSet::Binding& frameBinding,
                                                ForwardFrameResourceSet::ViewResources* viewResources,
                                                std::optional<RGPassHandle> familyPredecessor);

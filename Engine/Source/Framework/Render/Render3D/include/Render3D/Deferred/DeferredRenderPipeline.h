@@ -6,7 +6,7 @@
 #include "Render3D/Deferred/DeferredFrameGraphOrchestrator.h"
 #include "Render3D/Deferred/DeferredFrameResourceSet.h"
 #include "Render3D/Deferred/DeferredPipelineDebugViews.h"
-#include "Render3D/Deferred/DeferredViewportResources.h"
+#include "Render3D/Deferred/DeferredViewResources.h"
 #include "Render3D/Deferred/GBufferStage.h"
 #include "Render3D/Deferred/LightStage.h"
 #include "RHI/Core/DescriptorSet.h"
@@ -17,7 +17,7 @@
 #include "RHI/Render.h"
 #include "Render3D/RenderFrameData.h"
 #include "Render3D/Common/IRenderPipeline.h"
-#include "Render3D/Common/EntityIdViewportPass.h"
+#include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/PostProcessingState.h"
 #include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
@@ -25,7 +25,7 @@
 #include "Render3D/Common/Shadow/ShadowStage.h"
 #include "Render3D/Services/RenderSharedResourceProvider.h"
 #include "Render3D/Deferred/SSAOStage.h"
-#include "Render3D/Deferred/ViewportOverlayStage.h"
+#include "Render3D/Deferred/ViewOverlayStage.h"
 
 
 #include <array>
@@ -125,7 +125,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     stdptr<GBufferStage>         _gBufferStage;
     stdptr<SSAOStage>            _ssaoStage;
     stdptr<LightStage>           _lightStage;
-    stdptr<ViewportOverlayStage> _overlayStage;
+    stdptr<ViewOverlayStage> _overlayStage;
     PostProcessingStage          _postProcessStage;
 
     ShadowMapResources                                              _shadowResources;
@@ -155,7 +155,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     DeferredPipelineDebugViews _debugViews{};
 
     // ── Frame state ───────────────────────────────────────────────────
-    EntityIdViewportPass       _entityIdPass{};
+    EntityIdPass       _entityIdPass{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
     RGTopologyDescription               _lastFrameGraphTopology{};
@@ -179,7 +179,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
     const DeferredGBufferResources& getCurrentGBufferResources() const { return _debugViews.gBufferResources; }
-    const DeferredViewportResources& getCurrentViewportResources() const { return _debugViews.viewportResources; }
+    const DeferredViewResources& getCurrentViewportResources() const { return _debugViews.viewportResources; }
     std::shared_ptr<RenderTexture> getViewportOutputImageShared() const { return _debugViews.viewportResources.colorOwner; }
     std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const { return _debugViews.postprocess; }
     std::shared_ptr<RenderTexture> getBloomExtractImageShared() const { return _debugViews.bloomExtract; }
@@ -219,7 +219,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     void               beginViewRecording(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               invalidateGBufferDependentViews();
     [[nodiscard]] DeferredGBufferResources buildPublishedGBufferResources(const RenderGraphExecutionResult& result, uint64_t viewId) const;
-    [[nodiscard]] DeferredViewportResources buildPublishedViewportResources(
+    [[nodiscard]] DeferredViewResources buildPublishedViewResources(
         const RenderGraphExecutionResult& result,
         uint64_t viewId,
         const std::shared_ptr<RenderTexture>& depthOwner) const;
@@ -230,7 +230,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     void               refreshGBufferStageState();
     void               refreshViewportStageState();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
-    [[nodiscard]] ViewportOverlayStage::FrameInputs buildOverlayFrameInputs(
+    [[nodiscard]] ViewOverlayStage::FrameInputs buildOverlayFrameInputs(
         const RenderPipelineFrameContext& frame,
         EnvironmentLightingSceneResources& environmentLighting,
         DescriptorSetHandle& environmentLightingDS) const;
@@ -246,7 +246,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
                                                  const ShadowPreparedView& shadowPrepared,
                                                  uint32_t vpW,
                                                  uint32_t vpH,
-                                                 ViewportOverlayStage::FrameInputs& overlayInputs,
+                                                 ViewOverlayStage::FrameInputs& overlayInputs,
                                                  EnvironmentLightingSceneResources& environmentLighting,
                                                  DescriptorSetHandle environmentLightingDS,
                                                  FrameContext& postContext,

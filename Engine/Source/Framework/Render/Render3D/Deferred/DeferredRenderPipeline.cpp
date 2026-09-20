@@ -3,7 +3,7 @@
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
-#include "Render3D/Deferred/DeferredViewportResources.h"
+#include "Render3D/Deferred/DeferredViewResources.h"
 #include "Render3D/Deferred/DeferredAttachmentFormats.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
@@ -63,7 +63,7 @@ EFormat::T chooseSupportedAttachmentFormat(IRender* render,
     return preferred != candidates.end() ? *preferred : EFormat::Undefined;
 }
 
-ViewportOverlayStage::FrameInputs::DirectionGizmoInput buildDirectionGizmoInput(const TransformComponent& tc)
+ViewOverlayStage::FrameInputs::DirectionGizmoInput buildDirectionGizmoInput(const TransformComponent& tc)
 {
     const glm::mat4 worldTransform = glm::translate(glm::mat4(1.0f), tc.getWorldPosition()) *
                                      glm::mat4_cast(glm::quat(glm::radians(tc.getRotation())));
@@ -74,7 +74,7 @@ ViewportOverlayStage::FrameInputs::DirectionGizmoInput buildDirectionGizmoInput(
         glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1, 0, 0)) *
         glm::scale(glm::mat4(1.0f), glm::vec3(0.1f, 1.0f, 0.1f));
 
-    return ViewportOverlayStage::FrameInputs::DirectionGizmoInput{
+    return ViewOverlayStage::FrameInputs::DirectionGizmoInput{
         .coneModel     = glm::translate(glm::mat4(1.0f), -tc.getForward()) * coneLocalTransf * worldTransform,
         .cylinderModel = worldTransform * cylinderLocalTransf,
         .lineStart     = tc.getWorldPosition(),
@@ -86,13 +86,13 @@ DeferredAttachmentFormats buildDeferredGBufferFormats(EFormat::T signedLinearFor
                                                       EFormat::T linearFormat,
                                                       EFormat::T shadingModelFormat,
                                                       EFormat::T depthFormat);
-DeferredAttachmentFormats buildDeferredViewportFormats(EFormat::T colorFormat, EFormat::T depthFormat);
+DeferredAttachmentFormats buildDeferredViewFormats(EFormat::T colorFormat, EFormat::T depthFormat);
 RenderTargetCreateInfo buildDeferredGBufferRenderTargetSpec(Extent2D extent,
                                                             EFormat::T signedLinearFormat,
                                                             EFormat::T linearFormat,
                                                             EFormat::T shadingModelFormat,
                                                             EFormat::T depthFormat);
-RenderTargetCreateInfo buildDeferredViewportRenderTargetSpec(Extent2D extent, EFormat::T colorFormat);
+RenderTargetCreateInfo buildDeferredViewRenderTargetSpec(Extent2D extent, EFormat::T colorFormat);
 DeferredAttachmentFormats buildDeferredFormatsFromSpec(const RenderTargetCreateInfo& spec);
 
 RGImportedTextureDesc makeDeferredEnvironmentImportedDesc(const std::shared_ptr<ImageResource>& resource,
@@ -133,7 +133,7 @@ DeferredAttachmentFormats buildDeferredGBufferFormats(EFormat::T signedLinearFor
     return formats;
 }
 
-DeferredAttachmentFormats buildDeferredViewportFormats(EFormat::T colorFormat, EFormat::T depthFormat)
+DeferredAttachmentFormats buildDeferredViewFormats(EFormat::T colorFormat, EFormat::T depthFormat)
 {
     DeferredAttachmentFormats formats{};
     formats.colorFormats = {colorFormat};
@@ -199,7 +199,7 @@ RenderTargetCreateInfo buildDeferredGBufferRenderTargetSpec(Extent2D extent,
     };
 }
 
-RenderTargetCreateInfo buildDeferredViewportRenderTargetSpec(Extent2D extent, EFormat::T colorFormat)
+RenderTargetCreateInfo buildDeferredViewRenderTargetSpec(Extent2D extent, EFormat::T colorFormat)
 {
     return RenderTargetCreateInfo{
         .label            = "Deferred Viewport RT",
@@ -244,10 +244,10 @@ void allocateDeferredViewPassResources(
     const RenderFrameData*                    frameData,
     SSAOStage*                                ssaoStage,
     LightStage*                               lightStage,
-    EntityIdViewportPass*                     entityIdPass,
-    ViewportOverlayStage*                     overlayStage,
+    EntityIdPass*                     entityIdPass,
+    ViewOverlayStage*                     overlayStage,
     PostProcessingStage*                      postStage,
-    ViewportOverlayStage::FrameInputs*        overlayInputs,
+    ViewOverlayStage::FrameInputs*        overlayInputs,
     DeferredFrameResourceSet::ViewResources&  resources)
 {
     if (ssaoStage) {
@@ -263,7 +263,7 @@ void allocateDeferredViewPassResources(
         lightStage->writeShadowDescriptors(resources.lighting.shadows.set);
     }
     if (entityIdPass && frameData) {
-        EntityIdViewportPass::FrameUBO ubo{};
+        EntityIdPass::FrameUBO ubo{};
         ubo.viewProj = frameData->viewProjection;
         ubo.view     = frameData->view;
         writeUniformPassBinding(
@@ -276,7 +276,7 @@ void allocateDeferredViewPassResources(
             resources.entityId.frame);
     }
     if (overlayStage && frameData) {
-        ViewportOverlayStage::BillboardFrameUBO ubo{
+        ViewOverlayStage::BillboardFrameUBO ubo{
             .viewProjection = frameData->viewProjection,
             .view           = frameData->view,
         };
@@ -291,7 +291,7 @@ void allocateDeferredViewPassResources(
         resources.overlay.billboardTextures.set = allocateCombinedImageSamplerSet(
             submission,
             overlayStage->getBillboardTextureDSL(),
-            ViewportOverlayStage::kBillboardTextureCount);
+            ViewOverlayStage::kBillboardTextureCount);
         if (overlayInputs) {
             overlayStage->updateBillboardTextures(*overlayInputs, resources.overlay);
         }
@@ -369,7 +369,7 @@ void DeferredRenderPipeline::initRenderTargetSpecs(Extent2D extent)
         LINEAR_FORMAT,
         SHADING_MODEL_FORMAT,
         _sharedDepthFormat);
-    _viewportRTSpec = buildDeferredViewportRenderTargetSpec(extent, _viewportColorFormat);
+    _viewportRTSpec = buildDeferredViewRenderTargetSpec(extent, _viewportColorFormat);
 }
 
 void DeferredRenderPipeline::destroyShadowResources()
@@ -828,7 +828,7 @@ void DeferredRenderPipeline::initStages()
     _lightStage->setIBLSettings(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL);
     syncShadowSettings();
 
-    _overlayStage = ya::makeShared<ViewportOverlayStage>();
+    _overlayStage = ya::makeShared<ViewOverlayStage>();
     _overlayStage->setDebugRenderSystem(_debugRenderSystem);
     _overlayStage->init(_render, _frameResources->getSkyboxFrameDSL());
 
@@ -916,7 +916,7 @@ struct DeferredFamilyViewBranch
     ShadowPreparedView                    shadowPrepared{};
     uint32_t                              vpW = 0;
     uint32_t                              vpH = 0;
-    ViewportOverlayStage::FrameInputs     overlayInputs{};
+    ViewOverlayStage::FrameInputs     overlayInputs{};
     EnvironmentLightingSceneResources     environmentLighting{};
     DescriptorSetHandle                   environmentLightingDS{};
     FrameContext                          postContext{};
@@ -1034,7 +1034,7 @@ ViewFamilyRenderResult DeferredRenderPipeline::recordFamily(const ViewFamilyReco
                                   branch.frame.view.task == ctx.plan->displayRootTask();
         if (bDisplayRoot) {
             auto nextGBuffer = buildPublishedGBufferResources(execution, viewId);
-            auto nextViewport = buildPublishedViewportResources(execution, viewId, nextGBuffer.depthOwner);
+            auto nextViewport = buildPublishedViewResources(execution, viewId, nextGBuffer.depthOwner);
             const bool bGBufferChanged =
                 _debugViews.gBufferResources.formats.colorFormats != nextGBuffer.formats.colorFormats ||
                 _debugViews.gBufferResources.formats.depthFormat != nextGBuffer.formats.depthFormat;
@@ -1105,7 +1105,7 @@ void DeferredRenderPipeline::captureShadowSettings(const RenderPipelineFrameCont
     }
 }
 
-ViewportOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
+ViewOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInputs(
     const RenderPipelineFrameContext& frame,
     EnvironmentLightingSceneResources& environmentLighting,
     DescriptorSetHandle& environmentLightingDS) const
@@ -1118,7 +1118,7 @@ ViewportOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInput
     environmentLighting   = sceneResources.environmentLightingResources;
     environmentLightingDS = sceneResources.environmentLightingDescriptorSet;
 
-    ViewportOverlayStage::FrameInputs frameInputs{};
+    ViewOverlayStage::FrameInputs frameInputs{};
     if (!_overlayStage) {
         return frameInputs;
     }
@@ -1151,7 +1151,7 @@ ViewportOverlayStage::FrameInputs DeferredRenderPipeline::buildOverlayFrameInput
                 const float scaleFactor      = screenSizePixels / viewportHeight;
                 const float size             = std::max(billboard.minWorldScale, scaleFactor * distance * 2.0f);
 
-                ViewportOverlayStage::FrameInputs::BillboardInput input{};
+                ViewOverlayStage::FrameInputs::BillboardInput input{};
                 input.worldCenter    = worldCenter;
                 input.worldDirection = billboard.worldDirection;
                 input.worldSize      = glm::vec2(size, size);
@@ -1214,12 +1214,12 @@ DeferredGBufferResources DeferredRenderPipeline::buildPublishedGBufferResources(
     return resources;
 }
 
-DeferredViewportResources DeferredRenderPipeline::buildPublishedViewportResources(
+DeferredViewResources DeferredRenderPipeline::buildPublishedViewResources(
     const RenderGraphExecutionResult& result,
     uint64_t viewId,
     const std::shared_ptr<RenderTexture>& depthOwner) const
 {
-    DeferredViewportResources resources{};
+    DeferredViewResources resources{};
     resources.publish(
         result.getExportedTextureShared(makeViewGraphName(deferred_graph_exports::viewportColor, viewId)),
         depthOwner,
@@ -1394,7 +1394,7 @@ bool DeferredRenderPipeline::appendDeferredViewToGraph(RenderGraph& graph,
                                                        const ShadowPreparedView& shadowPrepared,
                                                        uint32_t vpW,
                                                        uint32_t vpH,
-                                                       ViewportOverlayStage::FrameInputs& overlayInputs,
+                                                       ViewOverlayStage::FrameInputs& overlayInputs,
                                                        EnvironmentLightingSceneResources& environmentLighting,
                                                        DescriptorSetHandle environmentLightingDS,
                                                        FrameContext& postContext,

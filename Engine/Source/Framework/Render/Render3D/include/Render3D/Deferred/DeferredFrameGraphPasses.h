@@ -4,12 +4,12 @@
 #include "Render3D/Deferred/DeferredFrameResourceSet.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/RenderTargetCreateInfo.h"
-#include "Render3D/Common/EntityIdViewportPass.h"
+#include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Deferred/GBufferStage.h"
 #include "Render3D/Deferred/LightStage.h"
 #include "Render3D/Deferred/SSAOStage.h"
-#include "Render3D/Deferred/ViewportOverlayStage.h"
+#include "Render3D/Deferred/ViewOverlayStage.h"
 
 #include <array>
 #include <cstdint>
@@ -30,7 +30,7 @@ struct DeferredFrameGraphPassContext
     const DeferredFrameResourceSet::Binding& frameBinding;
     const RenderTargetCreateInfo&            gBufferRTSpec;
     const RenderTargetCreateInfo&            viewportRTSpec;
-    const ViewportOverlayStage::FrameInputs* overlayInputs = nullptr;
+    const ViewOverlayStage::FrameInputs* overlayInputs = nullptr;
     const DeferredFrameResourceSet::ViewResources* viewResources = nullptr;
     const EnvironmentLightingSceneResources*  environmentLighting = nullptr;
     DescriptorSetHandle                      environmentLightingDS{};
@@ -45,10 +45,10 @@ struct DeferredFrameGraphPassContext
     ShadowStage*          shadowStage = nullptr;
     GBufferStage&         gBufferStage;
     LightStage&           lightStage;
-    ViewportOverlayStage& overlayStage;
+    ViewOverlayStage& overlayStage;
     PostProcessingStage&  postProcessStage;
     SSAOStage*            ssaoStage = nullptr;
-    EntityIdViewportPass* entityIdPass = nullptr;
+    EntityIdPass* entityIdPass = nullptr;
 };
 
 struct DeferredGBufferPassParams
@@ -123,7 +123,7 @@ struct DeferredSkyboxPassParams
     RGTextureHandle                                depth{};
     Rect2D                                         renderArea{};
     uint32_t                                       layerCount = 1;
-    ViewportOverlayStage::FrameInputs::SkyboxInput skybox{};
+    ViewOverlayStage::FrameInputs::SkyboxInput skybox{};
 };
 
 struct DeferredForwardOpaquePassParams
@@ -140,7 +140,7 @@ struct DeferredForwardTransparentPassParams
     RGTextureHandle                   depth{};
     Rect2D                            renderArea{};
     uint32_t                          layerCount = 1;
-    ViewportOverlayStage::FrameInputs overlay{};
+    ViewOverlayStage::FrameInputs overlay{};
     OverlayPassBindings               overlayBindings{};
 };
 

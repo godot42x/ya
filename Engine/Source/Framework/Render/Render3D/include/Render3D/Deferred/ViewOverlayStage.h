@@ -25,7 +25,7 @@ struct BillboardComponent;
 ///
 /// Skybox: View-owned frame UBO (view/proj without translation) + cubemap DS from RenderRuntime.
 /// Overlay: push constant only (view/proj/model/colorType), no UBO/DS.
-struct YA_RENDER_3D_API ViewportOverlayStage : public IRenderStage
+struct YA_RENDER_3D_API ViewOverlayStage : public IRenderStage
 {
     struct FrameInputs
     {
@@ -119,7 +119,7 @@ struct YA_RENDER_3D_API ViewportOverlayStage : public IRenderStage
     DebugSkinning                          _debugSkinning;
 
     // ── IRenderStage ─────────────────────────────────────────────
-    ViewportOverlayStage() : IRenderStage("ViewportOverlay") {}
+    ViewOverlayStage() : IRenderStage("ViewportOverlay") {}
 
     void init(IRender* render, stdptr<IDescriptorSetLayout> skyboxFrameDSL);
     void init(IRender* render) override { init(render, nullptr); }

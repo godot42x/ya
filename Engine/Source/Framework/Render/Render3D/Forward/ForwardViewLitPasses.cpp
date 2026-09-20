@@ -1,4 +1,4 @@
-#include "Render3D/Forward/ForwardViewportLitPasses.h"
+#include "Render3D/Forward/ForwardViewLitPasses.h"
 
 #include "Core/Config/ConfigManager.h"
 #include "RHI/Core/Buffer.h"
@@ -65,7 +65,7 @@ std::vector<std::string> buildPBRShaderDefines(bool bEnablePBRDiffuseIBL,
 
 } // namespace
 
-void ForwardViewportLitPasses::init(const InitDesc& desc)
+void ForwardViewLitPasses::init(const InitDesc& desc)
 {
     _render                = desc.render;
     _shadowState           = desc.shadowState;
@@ -77,7 +77,7 @@ void ForwardViewportLitPasses::init(const InitDesc& desc)
     initPhong(desc);
 }
 
-void ForwardViewportLitPasses::destroy()
+void ForwardViewLitPasses::destroy()
 {
     _pbrMatPool = {};
     _pbrStatic = {};
@@ -97,7 +97,7 @@ void ForwardViewportLitPasses::destroy()
     _render = nullptr;
 }
 
-void ForwardViewportLitPasses::beginFrame()
+void ForwardViewLitPasses::beginFrame()
 {
     if (_pbrStatic.pipeline) {
         _pbrStatic.pipeline->beginFrame();
@@ -113,7 +113,7 @@ void ForwardViewportLitPasses::beginFrame()
     }
 }
 
-void ForwardViewportLitPasses::refreshPipelineFormats(const RenderAttachmentFormats& formats)
+void ForwardViewLitPasses::refreshPipelineFormats(const RenderAttachmentFormats& formats)
 {
     if (!formats.hasColor()) {
         return;
@@ -135,7 +135,7 @@ void ForwardViewportLitPasses::refreshPipelineFormats(const RenderAttachmentForm
     refreshVariant(_phongSkinned);
 }
 
-void ForwardViewportLitPasses::prepare(const RenderStageContext& ctx,
+void ForwardViewLitPasses::prepare(const RenderStageContext& ctx,
                                        ForwardFrameResourceSet::FramePayloads& outPayloads)
 {
     if (!ctx.frameData) {
@@ -146,7 +146,7 @@ void ForwardViewportLitPasses::prepare(const RenderStageContext& ctx,
     preparePhong(ctx, outPayloads.phongFrame, outPayloads.phongLight, outPayloads.phongDebug);
 }
 
-void ForwardViewportLitPasses::initPBR(const InitDesc& desc)
+void ForwardViewLitPasses::initPBR(const InitDesc& desc)
 {
     auto& configManager    = ConfigManager::get();
     _bEnablePBRDiffuseIBL  = configManager.getOr<bool>(FORWARD_PBR_CONFIG_DOC_NAME, FORWARD_PBR_CONFIG_KEY_IBL_DIFFUSE, _bEnablePBRDiffuseIBL);
@@ -267,7 +267,7 @@ void ForwardViewportLitPasses::initPBR(const InitDesc& desc)
     _pbrPoolRecreated = true;
 }
 
-void ForwardViewportLitPasses::initPhong(const InitDesc& desc)
+void ForwardViewLitPasses::initPhong(const InitDesc& desc)
 {
     auto dsls = IDescriptorSetLayout::create(
         _render,
@@ -375,7 +375,7 @@ void ForwardViewportLitPasses::initPhong(const InitDesc& desc)
     _phongDebug = {};
 }
 
-void ForwardViewportLitPasses::preparePBR(const RenderStageContext& ctx,
+void ForwardViewLitPasses::preparePBR(const RenderStageContext& ctx,
                                           PBRFrameUBO& outFrame,
                                           PBRLightUBO& outLight)
 {
@@ -396,7 +396,7 @@ void ForwardViewportLitPasses::preparePBR(const RenderStageContext& ctx,
     _pbrPoolRecreated = false;
 }
 
-void ForwardViewportLitPasses::preparePhong(const RenderStageContext& ctx,
+void ForwardViewLitPasses::preparePhong(const RenderStageContext& ctx,
                                             PhongFrameUBO& outFrame,
                                             PhongLightUBO& outLight,
                                             PhongDebugUBO& outDebug)
@@ -425,7 +425,7 @@ void ForwardViewportLitPasses::preparePhong(const RenderStageContext& ctx,
     _phongPoolRecreated = false;
 }
 
-void ForwardViewportLitPasses::preparePBRMaterials(const RenderFrameData& fd)
+void ForwardViewLitPasses::preparePBRMaterials(const RenderFrameData& fd)
 {
     uint32_t         materialCount   = MaterialFactory::get()->getMaterialSize<PBRMaterial>();
     std::vector<int> preparedMaterial(materialCount, 0);
@@ -477,7 +477,7 @@ void ForwardViewportLitPasses::preparePBRMaterials(const RenderFrameData& fd)
     prepareBucket(fd.drawBuckets.skinnedMeshes.pbrDrawItems);
 }
 
-void ForwardViewportLitPasses::preparePhongMaterials(const RenderFrameData& fd)
+void ForwardViewLitPasses::preparePhongMaterials(const RenderFrameData& fd)
 {
     uint32_t         materialCount   = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
     std::vector<int> preparedMaterial(materialCount, 0);
@@ -522,7 +522,7 @@ void ForwardViewportLitPasses::preparePhongMaterials(const RenderFrameData& fd)
     prepareBucket(fd.drawBuckets.skinnedMeshes.phongDrawItems);
 }
 
-void ForwardViewportLitPasses::drawPBR(const DrawContext& drawCtx)
+void ForwardViewLitPasses::drawPBR(const DrawContext& drawCtx)
 {
     const auto& ctx          = drawCtx.stageCtx;
     const auto& fd           = *ctx.frameData;
@@ -587,7 +587,7 @@ void ForwardViewportLitPasses::drawPBR(const DrawContext& drawCtx)
     cmdBuf->debugEndLabel();
 }
 
-void ForwardViewportLitPasses::drawPhong(const DrawContext& drawCtx)
+void ForwardViewLitPasses::drawPhong(const DrawContext& drawCtx)
 {
     const auto& ctx          = drawCtx.stageCtx;
     const auto& fd           = *ctx.frameData;
@@ -653,7 +653,7 @@ void ForwardViewportLitPasses::drawPhong(const DrawContext& drawCtx)
     cmdBuf->debugEndLabel();
 }
 
-void ForwardViewportLitPasses::applyShadowState(const ShadowRuntimeState& shadowState)
+void ForwardViewLitPasses::applyShadowState(const ShadowRuntimeState& shadowState)
 {
     const bool bShadowDefinesChanged = _shadowState.bEnableShadowMapping != shadowState.bEnableShadowMapping;
     const bool bPbrDefinesChanged = bShadowDefinesChanged ||
@@ -688,7 +688,7 @@ void ForwardViewportLitPasses::applyShadowState(const ShadowRuntimeState& shadow
     }
 }
 
-void ForwardViewportLitPasses::fillPBRLightFromFrameData(const RenderFrameData& fd,
+void ForwardViewLitPasses::fillPBRLightFromFrameData(const RenderFrameData& fd,
                                                          PBRLightUBO& outLight)
 {
     outLight              = {};
@@ -720,7 +720,7 @@ void ForwardViewportLitPasses::fillPBRLightFromFrameData(const RenderFrameData& 
     }
 }
 
-void ForwardViewportLitPasses::fillPhongLightFromFrameData(const RenderFrameData& fd,
+void ForwardViewLitPasses::fillPhongLightFromFrameData(const RenderFrameData& fd,
                                                            PhongLightUBO& outLight)
 {
     outLight.hasDirectionalLight = fd.sceneSnapshot && fd.sceneSnapshot->bHasDirectionalLight;
@@ -755,7 +755,7 @@ void ForwardViewportLitPasses::fillPhongLightFromFrameData(const RenderFrameData
     }
 }
 
-DescriptorImageInfo ForwardViewportLitPasses::getDescriptorImageInfo(const TextureBinding& tb) const
+DescriptorImageInfo ForwardViewLitPasses::getDescriptorImageInfo(const TextureBinding& tb) const
 {
     return DescriptorImageInfo(tb.getImageViewHandle(), tb.getSamplerHandle(), EImageLayout::ShaderReadOnlyOptimal);
 }

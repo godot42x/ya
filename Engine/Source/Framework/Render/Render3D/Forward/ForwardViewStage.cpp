@@ -1,4 +1,4 @@
-#include "Render3D/Forward/ForwardViewportStage.h"
+#include "Render3D/Forward/ForwardViewStage.h"
 
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
@@ -27,20 +27,20 @@ static const std::vector<VertexAttribute> kSkinningVertexAttributes = {
 // Init
 // ═══════════════════════════════════════════════════════════════════════
 
-void ForwardViewportStage::init(IRender* render)
+void ForwardViewStage::init(IRender* render)
 {
     // Stub — use initWithDesc() instead.
     _render = render;
 }
 
-void ForwardViewportStage::initWithDesc(const InitDesc& desc)
+void ForwardViewStage::initWithDesc(const InitDesc& desc)
 {
     _render                                   = desc.render;
     _skinningDSL                              = desc.skinningDSL;
     _depthBufferShadowDS                      = desc.depthBufferShadowDS;
     _shadowState                              = desc.shadowState;
 
-    _litPasses.init(ForwardViewportLitPasses::InitDesc{
+    _litPasses.init(ForwardViewLitPasses::InitDesc{
         .render = desc.render,
         .renderPass = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
@@ -49,14 +49,14 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
         .pbrFrameDSL = desc.pbrFrameDSL,
         .phongFrameDSL = desc.phongFrameDSL,
     });
-    _unlitPass.init(ForwardViewportUnlitPass::InitDesc{
+    _unlitPass.init(ForwardViewUnlitPass::InitDesc{
         .render = desc.render,
         .renderPass = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .skinningDSL = _skinningDSL,
         .unlitFrameDSL = desc.unlitFrameDSL,
     });
-    _auxPasses.init(ForwardViewportAuxPasses::InitDesc{
+    _auxPasses.init(ForwardViewAuxPasses::InitDesc{
         .render = desc.render,
         .renderPass = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
@@ -64,7 +64,7 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
     });
 }
 
-void ForwardViewportStage::refreshPipelineFormats(const RenderAttachmentFormats& formats)
+void ForwardViewStage::refreshPipelineFormats(const RenderAttachmentFormats& formats)
 {
     if (!formats.hasColor()) {
         return;
@@ -75,7 +75,7 @@ void ForwardViewportStage::refreshPipelineFormats(const RenderAttachmentFormats&
     _auxPasses.refreshPipelineFormats(formats);
 }
 
-void ForwardViewportStage::setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS)
+void ForwardViewStage::setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS)
 {
     _depthBufferShadowDS = depthBufferShadowDS;
 }
@@ -84,7 +84,7 @@ void ForwardViewportStage::setDepthBufferShadowDescriptorSet(DescriptorSetHandle
 // Destroy
 // ═══════════════════════════════════════════════════════════════════════
 
-void ForwardViewportStage::destroy()
+void ForwardViewStage::destroy()
 {
     _litPasses.destroy();
     _unlitPass.destroy();
@@ -98,7 +98,7 @@ void ForwardViewportStage::destroy()
 // Prepare
 // ═══════════════════════════════════════════════════════════════════════
 
-void ForwardViewportStage::prepare(const RenderStageContext& ctx)
+void ForwardViewStage::prepare(const RenderStageContext& ctx)
 {
     _litPasses.beginFrame();
     _unlitPass.beginFrame();
@@ -116,15 +116,15 @@ void ForwardViewportStage::prepare(const RenderStageContext& ctx)
 // Execute
 // ═══════════════════════════════════════════════════════════════════════
 
-void ForwardViewportStage::execute(const RenderStageContext& ctx)
+void ForwardViewStage::execute(const RenderStageContext& ctx)
 {
     // Conformance stub: the top-level Forward graph calls the per-pass
     // overloads (FG-702) with an explicit current-flight binding. A bare
     // IRenderStage execute has no binding and must not hide the pass order.
-    YA_CORE_WARN("ForwardViewportStage::execute(ctx) is a conformance stub; graph passes must use the per-pass overloads");
+    YA_CORE_WARN("ForwardViewStage::execute(ctx) is a conformance stub; graph passes must use the per-pass overloads");
 }
 
-void ForwardViewportStage::executeSkybox(const RenderStageContext& ctx,
+void ForwardViewStage::executeSkybox(const RenderStageContext& ctx,
                                          const ForwardFrameResourceSet::Binding& binding,
                                          const PassContext* snapshot)
 {
@@ -135,7 +135,7 @@ void ForwardViewportStage::executeSkybox(const RenderStageContext& ctx,
     executePass(EPass::Skybox, passCtx);
 }
 
-void ForwardViewportStage::executePBR(const RenderStageContext& ctx,
+void ForwardViewStage::executePBR(const RenderStageContext& ctx,
                                       const ForwardFrameResourceSet::Binding& binding,
                                       const PassContext* snapshot)
 {
@@ -147,7 +147,7 @@ void ForwardViewportStage::executePBR(const RenderStageContext& ctx,
     executePass(EPass::PBR, passCtx);
 }
 
-void ForwardViewportStage::executePhong(const RenderStageContext& ctx,
+void ForwardViewStage::executePhong(const RenderStageContext& ctx,
                                         const ForwardFrameResourceSet::Binding& binding,
                                         const PassContext* snapshot)
 {
@@ -159,7 +159,7 @@ void ForwardViewportStage::executePhong(const RenderStageContext& ctx,
     executePass(EPass::Phong, passCtx);
 }
 
-void ForwardViewportStage::executeUnlit(const RenderStageContext& ctx,
+void ForwardViewStage::executeUnlit(const RenderStageContext& ctx,
                                         const ForwardFrameResourceSet::Binding& binding,
                                         const PassContext* snapshot)
 {
@@ -171,7 +171,7 @@ void ForwardViewportStage::executeUnlit(const RenderStageContext& ctx,
     executePass(EPass::Unlit, passCtx);
 }
 
-void ForwardViewportStage::executeSimple(const RenderStageContext& ctx, const PassContext* snapshot)
+void ForwardViewStage::executeSimple(const RenderStageContext& ctx, const PassContext* snapshot)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
@@ -179,7 +179,7 @@ void ForwardViewportStage::executeSimple(const RenderStageContext& ctx, const Pa
     executePass(EPass::Simple, passCtx);
 }
 
-void ForwardViewportStage::executeDirection(const RenderStageContext& ctx,
+void ForwardViewStage::executeDirection(const RenderStageContext& ctx,
                                             std::vector<ForwardDirectionGizmoInput> directionGizmos,
                                             const PassContext* snapshot)
 {
@@ -190,7 +190,7 @@ void ForwardViewportStage::executeDirection(const RenderStageContext& ctx,
     executePass(EPass::DirectionOverlay, passCtx);
 }
 
-void ForwardViewportStage::executeDebug(const RenderStageContext& ctx, const PassContext* snapshot)
+void ForwardViewStage::executeDebug(const RenderStageContext& ctx, const PassContext* snapshot)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
@@ -198,7 +198,7 @@ void ForwardViewportStage::executeDebug(const RenderStageContext& ctx, const Pas
     executePass(EPass::Debug, passCtx);
 }
 
-ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const RenderStageContext& ctx)
+ForwardViewStage::PassContext ForwardViewStage::buildPassContext(const RenderStageContext& ctx)
 {
     // The View's own scene resources, resolved before recording began. Reading
     // them here means this pass binds what the View declared, not what some
@@ -217,7 +217,7 @@ ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const R
     };
 }
 
-ForwardViewportStage::PassContext::SkyboxInput ForwardViewportStage::buildSkyboxInput(
+ForwardViewStage::PassContext::SkyboxInput ForwardViewStage::buildSkyboxInput(
     Scene* activeScene,
     EnvironmentLightingProcessor* envProcessor,
     const RenderViewSceneResources& sceneResources) const
@@ -250,7 +250,7 @@ ForwardViewportStage::PassContext::SkyboxInput ForwardViewportStage::buildSkybox
     return input;
 }
 
-ForwardViewportStage::PassContext::DebugDrawInput ForwardViewportStage::buildDebugDrawInput(
+ForwardViewStage::PassContext::DebugDrawInput ForwardViewStage::buildDebugDrawInput(
     const RenderFrameData* frameData) const
 {
     PassContext::DebugDrawInput input{};
@@ -284,17 +284,17 @@ ForwardViewportStage::PassContext::DebugDrawInput ForwardViewportStage::buildDeb
     return input;
 }
 
-ForwardViewportAuxPasses::DrawContext ForwardViewportStage::makeAuxDrawContext(
+ForwardViewAuxPasses::DrawContext ForwardViewStage::makeAuxDrawContext(
     const PassContext& passCtx,
     bool               bIncludeSkybox,
     bool               bIncludeDebug,
     bool               bIncludeDirection) const
 {
-    return ForwardViewportAuxPasses::DrawContext{
+    return ForwardViewAuxPasses::DrawContext{
         .stageCtx = passCtx.stageCtx,
         .activeScene = passCtx.activeScene,
-        .skybox = bIncludeSkybox ? passCtx.skybox : ForwardViewportAuxPasses::DrawContext::SkyboxInput{},
-        .debugDraw = bIncludeDebug ? passCtx.debugDraw : ForwardViewportAuxPasses::DrawContext::DebugDrawInput{},
+        .skybox = bIncludeSkybox ? passCtx.skybox : ForwardViewAuxPasses::DrawContext::SkyboxInput{},
+        .debugDraw = bIncludeDebug ? passCtx.debugDraw : ForwardViewAuxPasses::DrawContext::DebugDrawInput{},
         .directionGizmos = bIncludeDirection ? passCtx.directionGizmos : std::vector<ForwardDirectionGizmoInput>{},
         .skyboxFrameDescriptorSet = bIncludeSkybox ? passCtx.skyboxFrameDescriptorSet : nullptr,
         .debug = bIncludeDebug ? passCtx.debug : ForwardDebugPassBindings{},
@@ -302,9 +302,9 @@ ForwardViewportAuxPasses::DrawContext ForwardViewportStage::makeAuxDrawContext(
     };
 }
 
-ForwardViewportLitPasses::DrawContext ForwardViewportStage::makePBRDrawContext(const PassContext& passCtx) const
+ForwardViewLitPasses::DrawContext ForwardViewStage::makePBRDrawContext(const PassContext& passCtx) const
 {
-    return ForwardViewportLitPasses::DrawContext{
+    return ForwardViewLitPasses::DrawContext{
         .stageCtx = passCtx.stageCtx,
         .environmentLightingDescriptorSet = passCtx.sceneEnvironmentLightingDescriptorSet,
         .depthBufferShadowDS = _depthBufferShadowDS,
@@ -314,9 +314,9 @@ ForwardViewportLitPasses::DrawContext ForwardViewportStage::makePBRDrawContext(c
     };
 }
 
-ForwardViewportLitPasses::DrawContext ForwardViewportStage::makePhongDrawContext(const PassContext& passCtx) const
+ForwardViewLitPasses::DrawContext ForwardViewStage::makePhongDrawContext(const PassContext& passCtx) const
 {
-    return ForwardViewportLitPasses::DrawContext{
+    return ForwardViewLitPasses::DrawContext{
         .stageCtx = passCtx.stageCtx,
         .skyboxDescriptorSet = passCtx.skybox.descriptorSet,
         .depthBufferShadowDS = _depthBufferShadowDS,
@@ -326,9 +326,9 @@ ForwardViewportLitPasses::DrawContext ForwardViewportStage::makePhongDrawContext
     };
 }
 
-ForwardViewportUnlitPass::DrawContext ForwardViewportStage::makeUnlitDrawContext(const PassContext& passCtx) const
+ForwardViewUnlitPass::DrawContext ForwardViewStage::makeUnlitDrawContext(const PassContext& passCtx) const
 {
-    return ForwardViewportUnlitPass::DrawContext{
+    return ForwardViewUnlitPass::DrawContext{
         .stageCtx = passCtx.stageCtx,
         .skinningDS = passCtx.skinningDescriptorSet,
         .unlitFrameDescriptorSet = passCtx.unlitFrameDescriptorSet,
@@ -336,7 +336,7 @@ ForwardViewportUnlitPass::DrawContext ForwardViewportStage::makeUnlitDrawContext
     };
 }
 
-void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
+void ForwardViewStage::executePass(EPass pass, const PassContext& passCtx)
 {
     switch (pass) {
         case EPass::Skybox:
@@ -367,7 +367,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
 // Shadow mapping toggle
 // ═══════════════════════════════════════════════════════════════════════
 
-void ForwardViewportStage::applyShadowState(const ShadowRuntimeState& shadowState)
+void ForwardViewStage::applyShadowState(const ShadowRuntimeState& shadowState)
 {
     _shadowState = shadowState;
     _litPasses.applyShadowState(shadowState);

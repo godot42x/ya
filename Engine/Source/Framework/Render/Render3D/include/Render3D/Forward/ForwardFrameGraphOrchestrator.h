@@ -2,7 +2,7 @@
 
 #include "Render3D/Forward/ForwardFrameGraphPasses.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
-#include "Render3D/Forward/ForwardViewportStage.h"
+#include "Render3D/Forward/ForwardViewStage.h"
 #include "Render3D/Common/IRenderPipeline.h"
 
 #include <memory>
@@ -23,8 +23,8 @@ struct ForwardFrameGraphOrchestrator
 {
     struct BuildDependencies
     {
-        ForwardViewportStage* viewportStage    = nullptr;
-        EntityIdViewportPass* entityIdPass     = nullptr;
+        ForwardViewStage* viewportStage    = nullptr;
+        EntityIdPass* entityIdPass     = nullptr;
         ShadowStage*          shadowStage      = nullptr;
         PostProcessingStage*  postProcessStage = nullptr;
     };

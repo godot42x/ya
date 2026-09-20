@@ -9,7 +9,7 @@ namespace ya
 
 struct RenderTexture;
 
-struct ForwardViewportResources
+struct ForwardViewResources
 {
     std::shared_ptr<RenderTexture> colorOwner   = nullptr;
     std::shared_ptr<RenderTexture> depthOwner   = nullptr;

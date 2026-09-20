@@ -33,7 +33,7 @@ struct EntityIdBillboard
 /// pixel value. Depth-testing against the viewport depth keeps the ids aligned
 /// with what is actually visible, so a readback at a screen position yields the
 /// exact entity under the cursor.
-struct EntityIdViewportPass
+struct EntityIdPass
 {
     using FrameUBO      = slang_types::EntityId::FrameData;
     using PushConstants = slang_types::EntityId::PushConstants;

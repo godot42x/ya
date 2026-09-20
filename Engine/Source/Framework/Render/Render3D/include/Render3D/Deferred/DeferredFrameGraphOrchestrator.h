@@ -2,7 +2,7 @@
 
 #include "Render3D/Deferred/DeferredFrameGraphResources.h"
 #include "Render3D/Deferred/DeferredFrameResourceSet.h"
-#include "Render3D/Deferred/ViewportOverlayStage.h"
+#include "Render3D/Deferred/ViewOverlayStage.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Shadow/IShadowTechnique.h"
@@ -22,7 +22,7 @@ struct LightStage;
 struct SSAOStage;
 struct PostProcessingStage;
 struct RenderTargetCreateInfo;
-struct EntityIdViewportPass;
+struct EntityIdPass;
 
 struct DeferredFrameGraphOrchestrator
 {
@@ -31,10 +31,10 @@ struct DeferredFrameGraphOrchestrator
         ShadowStage*          shadowStage          = nullptr;
         GBufferStage*         gBufferStage         = nullptr;
         LightStage*           lightStage           = nullptr;
-        ViewportOverlayStage* overlayStage         = nullptr;
+        ViewOverlayStage* overlayStage         = nullptr;
         PostProcessingStage*  postProcessStage     = nullptr;
         SSAOStage*            ssaoStage            = nullptr;
-        EntityIdViewportPass* entityIdPass         = nullptr;
+        EntityIdPass* entityIdPass         = nullptr;
     };
 
     struct BuildInputs
@@ -46,7 +46,7 @@ struct DeferredFrameGraphOrchestrator
         const RenderPipelineFrameContext*      frame                     = nullptr;
         const RenderTargetCreateInfo*          gBufferRTSpec             = nullptr;
         const RenderTargetCreateInfo*          viewportRTSpec            = nullptr;
-        const ViewportOverlayStage::FrameInputs* overlayInputs           = nullptr;
+        const ViewOverlayStage::FrameInputs* overlayInputs           = nullptr;
         const EnvironmentLightingSceneResources* environmentLighting     = nullptr;
         DescriptorSetHandle                    environmentLightingDS     = nullptr;
         FrameContext*                          postContext               = nullptr;

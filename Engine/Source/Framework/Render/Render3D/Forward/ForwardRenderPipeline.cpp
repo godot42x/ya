@@ -46,7 +46,7 @@ ForwardDirectionGizmoInput buildForwardDirectionGizmoInput(const TransformCompon
     };
 }
 
-RenderAttachmentFormats buildForwardViewportFormats(const RenderTargetCreateInfo& spec)
+RenderAttachmentFormats buildForwardViewFormats(const RenderTargetCreateInfo& spec)
 {
     RenderAttachmentFormats formats{};
     formats.colorFormats.reserve(spec.attachments.colorAttach.size());
@@ -61,7 +61,7 @@ RenderAttachmentFormats buildForwardViewportFormats(const RenderTargetCreateInfo
     return formats;
 }
 
-RenderTargetCreateInfo buildForwardViewportRenderTargetSpec(Extent2D extent, EFormat::T colorFormat, EFormat::T depthFormat)
+RenderTargetCreateInfo buildForwardViewRenderTargetSpec(Extent2D extent, EFormat::T colorFormat, EFormat::T depthFormat)
 {
     return RenderTargetCreateInfo{
         .label            = "Viewport RenderTarget",
@@ -103,14 +103,14 @@ void allocateForwardViewPassResources(
     IRender*                                 render,
     uint32_t                                 alignment,
     const RenderStageContext&                stageCtx,
-    EntityIdViewportPass*                    entityIdPass,
-    ForwardViewportAuxPasses&                auxPasses,
+    EntityIdPass*                    entityIdPass,
+    ForwardViewAuxPasses&                auxPasses,
     PostProcessingStage*                     postStage,
     ForwardFrameResourceSet::ViewResources&  resources)
 {
     const RenderFrameData* frameData = stageCtx.frameData;
     if (entityIdPass && frameData) {
-        EntityIdViewportPass::FrameUBO ubo{};
+        EntityIdPass::FrameUBO ubo{};
         ubo.viewProj = frameData->viewProjection;
         ubo.view     = frameData->view;
         writeUniformPassBinding(
@@ -226,7 +226,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
 
 void ForwardRenderPipeline::initViewportResources(const InitDesc& desc)
 {
-    _viewportRTSpec = buildForwardViewportRenderTargetSpec(
+    _viewportRTSpec = buildForwardViewRenderTargetSpec(
         {.width = static_cast<uint32_t>(desc.windowW), .height = static_cast<uint32_t>(desc.windowH)},
         VIEWPORT_COLOR_FORMAT,
         DEPTH_FORMAT);
@@ -308,8 +308,8 @@ void ForwardRenderPipeline::initStageResources()
         .colorAttachmentFormats = _viewportFormats.colorFormats,
         .depthAttachmentFormat  = _viewportFormats.depthFormat.value_or(EFormat::Undefined),
     };
-    _viewportStage = ya::makeShared<ForwardViewportStage>();
-    _viewportStage->initWithDesc(ForwardViewportStage::InitDesc{
+    _viewportStage = ya::makeShared<ForwardViewStage>();
+    _viewportStage->initWithDesc(ForwardViewStage::InitDesc{
         .render                             = _render,
         .renderPass                         = nullptr,
         .pipelineRenderingInfo              = viewportPRI,
@@ -359,7 +359,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
         /// graph build so the shadow stage needs no "current View".
         ShadowPreparedView         shadowPrepared{};
         FrameContext               postContext{};
-        std::unique_ptr<ForwardViewportStage::PassContext> viewportPassContext;
+        std::unique_ptr<ForwardViewStage::PassContext> viewportPassContext;
         ForwardFrameResourceSet::Binding frameBinding{};
         ForwardFrameResourceSet::ViewResources* viewResources = nullptr;
     };
@@ -449,7 +449,7 @@ ViewFamilyRenderResult ForwardRenderPipeline::recordFamily(const ViewFamilyRecor
 
         liveBranches.push_back(std::move(branch));
         ForwardFamilyViewBranch& live = liveBranches.back();
-        live.viewportPassContext = std::make_unique<ForwardViewportStage::PassContext>(
+        live.viewportPassContext = std::make_unique<ForwardViewStage::PassContext>(
             _viewportStage->buildPassContext(live.stageCtx));
         if (live.viewResources) {
             live.viewportPassContext->debug = live.viewResources->debug;
@@ -663,7 +663,7 @@ void ForwardRenderPipeline::recreateViewportResources()
 
 void ForwardRenderPipeline::refreshViewportSnapshot()
 {
-    _viewportFormats = buildForwardViewportFormats(_viewportRTSpec);
+    _viewportFormats = buildForwardViewFormats(_viewportRTSpec);
 }
 
 void ForwardRenderPipeline::refreshViewportStageState()
@@ -840,7 +840,7 @@ bool ForwardRenderPipeline::appendViewportPassGraph(RenderGraph& graph,
                                                     RenderStageContext&             stageCtx,
                                                     const ShadowPreparedView&       shadowPrepared,
                                                     FrameContext&                    postContext,
-                                                    ForwardViewportStage::PassContext& viewportPassContext,
+                                                    ForwardViewStage::PassContext& viewportPassContext,
                                                     const ForwardFrameResourceSet::Binding& frameBinding,
                                                     ForwardFrameResourceSet::ViewResources* viewResources,
                                                     std::optional<RGPassHandle> familyPredecessor)

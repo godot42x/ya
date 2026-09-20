@@ -2,7 +2,7 @@
 
 #include "Render3D/Forward/ForwardFrameGraphResources.h"
 #include "Render3D/Forward/ForwardFrameResourceSet.h"
-#include "Render3D/Forward/ForwardViewportStage.h"
+#include "Render3D/Forward/ForwardViewStage.h"
 #include "Render3D/Shadow/IShadowTechnique.h"
 
 #include <cstdint>
@@ -13,7 +13,7 @@
 namespace ya
 {
 
-struct EntityIdViewportPass;
+struct EntityIdPass;
 struct FrameContext;
 struct PostProcessingStage;
 struct RenderTargetCreateInfo;
@@ -42,7 +42,7 @@ struct BuildInputs
     ForwardFrameResourceSet::Binding                 frameBinding        = {};
     const RenderTargetCreateInfo*                    viewportRTSpec      = nullptr;
     std::vector<ForwardDirectionGizmoInput>          directionGizmos     = {};
-    ForwardViewportStage::PassContext*               viewportPassContext = nullptr;
+    ForwardViewStage::PassContext*               viewportPassContext = nullptr;
     FrameContext*                                    postContext         = nullptr;
     bool                                             bEnableShadow       = false;
     /// What the View's shadow preparation produced; invalid means no shadow
@@ -56,8 +56,8 @@ struct BuildInputs
 
 struct Dependencies
 {
-    ForwardViewportStage* viewportStage = nullptr;
-    EntityIdViewportPass* entityIdPass  = nullptr;
+    ForwardViewStage* viewportStage = nullptr;
+    EntityIdPass* entityIdPass  = nullptr;
     PostProcessingStage*  postProcessStage = nullptr;
 };
 

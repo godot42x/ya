@@ -5,7 +5,7 @@
 #include "RHI/Core/Pipeline.h"
 #include "Render3D/Material/MaterialDescPool.h"
 #include "Render3D/Material/UnlitMaterial.h"
-#include "Render3D/Forward/ForwardViewportLitPasses.h"
+#include "Render3D/Forward/ForwardViewLitPasses.h"
 
 #include "Unlit.slang.h"
 
@@ -24,11 +24,11 @@ struct IDescriptorSetLayout;
 struct IDescriptorPool;
 struct IRender;
 
-class ForwardViewportUnlitPass
+class ForwardViewUnlitPass
 {
   public:
     using UnlitFrameUBO = slang_types::Unlit::FrameUBO;
-    using ShadingPipelineVariant = ForwardViewportLitPasses::ShadingPipelineVariant;
+    using ShadingPipelineVariant = ForwardViewLitPasses::ShadingPipelineVariant;
 
     struct UnlitPC
     {

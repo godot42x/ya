@@ -1,7 +1,7 @@
 #include "Render3D/Forward/ForwardFrameGraphPasses.h"
 
 #include "RHI/Core/RenderTargetCreateInfo.h"
-#include "Render3D/Common/EntityIdViewportPass.h"
+#include "Render3D/Common/EntityIdPass.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/ViewPassResources.h"
 #include "Render3D/Common/ViewPersistentResourceKey.h"

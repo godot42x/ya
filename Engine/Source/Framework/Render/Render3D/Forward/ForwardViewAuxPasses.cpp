@@ -1,4 +1,4 @@
-#include "Render3D/Forward/ForwardViewportAuxPasses.h"
+#include "Render3D/Forward/ForwardViewAuxPasses.h"
 
 #include "Core/Math/Math.h"
 #include "RHI/Core/Buffer.h"
@@ -28,7 +28,7 @@ static const VertexBufferDescription kAuxVBDesc{.slot = 0, .pitch = sizeof(ya::V
 
 } // namespace
 
-void ForwardViewportAuxPasses::init(const InitDesc& desc)
+void ForwardViewAuxPasses::init(const InitDesc& desc)
 {
     _render          = desc.render;
     _skyboxFrameDSL  = desc.skyboxFrameDSL;
@@ -37,7 +37,7 @@ void ForwardViewportAuxPasses::init(const InitDesc& desc)
     initDebug(desc);
 }
 
-void ForwardViewportAuxPasses::destroy()
+void ForwardViewAuxPasses::destroy()
 {
     _simplePipeline.reset();
     _simplePPL.reset();
@@ -54,7 +54,7 @@ void ForwardViewportAuxPasses::destroy()
     _render = nullptr;
 }
 
-void ForwardViewportAuxPasses::beginFrame()
+void ForwardViewAuxPasses::beginFrame()
 {
     if (_simplePipeline) {
         _simplePipeline->beginFrame();
@@ -67,7 +67,7 @@ void ForwardViewportAuxPasses::beginFrame()
     }
 }
 
-void ForwardViewportAuxPasses::setDebugMode(EDebugMode mode)
+void ForwardViewAuxPasses::setDebugMode(EDebugMode mode)
 {
     if (mode == _debugMode) {
         return;
@@ -88,7 +88,7 @@ void ForwardViewportAuxPasses::setDebugMode(EDebugMode mode)
     _debugUBO.mode = static_cast<int>(_debugMode);
 }
 
-void ForwardViewportAuxPasses::refreshPipelineFormats(const RenderAttachmentFormats& formats)
+void ForwardViewAuxPasses::refreshPipelineFormats(const RenderAttachmentFormats& formats)
 {
     if (!formats.hasColor()) {
         return;
@@ -115,7 +115,7 @@ void ForwardViewportAuxPasses::refreshPipelineFormats(const RenderAttachmentForm
     }
 }
 
-void ForwardViewportAuxPasses::prepare(const RenderStageContext& ctx,
+void ForwardViewAuxPasses::prepare(const RenderStageContext& ctx,
                                        SkyboxFrameUBO& outFrame)
 {
     if (!ctx.frameData) {
@@ -128,7 +128,7 @@ void ForwardViewportAuxPasses::prepare(const RenderStageContext& ctx,
     };
 }
 
-void ForwardViewportAuxPasses::initSimple(const InitDesc& desc)
+void ForwardViewAuxPasses::initSimple(const InitDesc& desc)
 {
     _simplePPL = IPipelineLayout::create(
         _render, "FwdSimple_PPL", {PushConstantRange{.offset = 0, .size = sizeof(SimplePC), .stageFlags = EShaderStage::Vertex}}, {});
@@ -164,7 +164,7 @@ void ForwardViewportAuxPasses::initSimple(const InitDesc& desc)
     _simplePipeline->recreate(ci);
 }
 
-void ForwardViewportAuxPasses::initSkybox(const InitDesc& desc)
+void ForwardViewAuxPasses::initSkybox(const InitDesc& desc)
 {
     auto dsls = IDescriptorSetLayout::create(_render, std::vector<DescriptorSetLayoutDesc>{
         DescriptorSetLayoutDesc{
@@ -200,7 +200,7 @@ void ForwardViewportAuxPasses::initSkybox(const InitDesc& desc)
 
 }
 
-void ForwardViewportAuxPasses::initDebug(const InitDesc& desc)
+void ForwardViewAuxPasses::initDebug(const InitDesc& desc)
 {
     if (!_render->supportsGeometryShader()) {
         _debugMode = DebugNone;
@@ -249,7 +249,7 @@ void ForwardViewportAuxPasses::initDebug(const InitDesc& desc)
     _debugPipeline->recreate(_debugPipelineCI);
 }
 
-void ForwardViewportAuxPasses::drawSkybox(const DrawContext& drawCtx)
+void ForwardViewAuxPasses::drawSkybox(const DrawContext& drawCtx)
 {
     const auto& ctx = drawCtx.stageCtx;
     auto* cmdBuf = ctx.cmdBuf;
@@ -265,7 +265,7 @@ void ForwardViewportAuxPasses::drawSkybox(const DrawContext& drawCtx)
     cmdBuf->debugEndLabel();
 }
 
-void ForwardViewportAuxPasses::drawSimple(const DrawContext& drawCtx)
+void ForwardViewAuxPasses::drawSimple(const DrawContext& drawCtx)
 {
     const auto& ctx          = drawCtx.stageCtx;
     const auto& fd           = *ctx.frameData;
@@ -305,7 +305,7 @@ void ForwardViewportAuxPasses::drawSimple(const DrawContext& drawCtx)
     cmdBuf->debugEndLabel();
 }
 
-void ForwardViewportAuxPasses::drawDirectionOverlay(const DrawContext& drawCtx)
+void ForwardViewAuxPasses::drawDirectionOverlay(const DrawContext& drawCtx)
 {
     if (drawCtx.directionGizmos.empty()) return;
 
@@ -336,7 +336,7 @@ void ForwardViewportAuxPasses::drawDirectionOverlay(const DrawContext& drawCtx)
     cmdBuf->debugEndLabel();
 }
 
-void ForwardViewportAuxPasses::drawDebug(const DrawContext& drawCtx)
+void ForwardViewAuxPasses::drawDebug(const DrawContext& drawCtx)
 {
     if (_debugMode == DebugNone || !_debugPipeline || !drawCtx.debug.ubo.set || !drawCtx.debugDraw.bHasDraws) return;
 

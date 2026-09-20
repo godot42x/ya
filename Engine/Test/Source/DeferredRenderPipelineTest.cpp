@@ -334,9 +334,9 @@ TEST(SSAOStageTest, BuildsFrameDataWithoutOwningGpuResources)
     EXPECT_FLOAT_EQ(payload.invProjectMat[0][0], 0.5f);
 }
 
-TEST(ViewportOverlayStageTest, BuildsSkyboxFrameDataWithoutCameraTranslation)
+TEST(ViewOverlayStageTest, BuildsSkyboxFrameDataWithoutCameraTranslation)
 {
-    ViewportOverlayStage stage;
+    ViewOverlayStage stage;
 
     RenderFrameData frameData{};
     frameData.projection = glm::mat4(2.0f);

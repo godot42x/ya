@@ -1,4 +1,4 @@
-#include "Render3D/Common/EntityIdViewportPass.h"
+#include "Render3D/Common/EntityIdPass.h"
 
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Render.h"
@@ -43,7 +43,7 @@ constexpr std::array<VertexAttribute, 3> ID_SKINNED_ATTRIBUTES = {
 
 } // namespace
 
-void EntityIdViewportPass::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
+void EntityIdPass::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
 {
     _render = render;
 
@@ -174,7 +174,7 @@ void EntityIdViewportPass::init(IRender* render, EFormat::T colorFormat, EFormat
                    "Failed to create entity-id skinned pipeline");
 }
 
-void EntityIdViewportPass::destroy()
+void EntityIdPass::destroy()
 {
     _billboardPipeline.reset();
     _billboardPipelineLayout.reset();
@@ -187,7 +187,7 @@ void EntityIdViewportPass::destroy()
     _render = nullptr;
 }
 
-void EntityIdViewportPass::execute(ICommandBuffer*        cmdBuf,
+void EntityIdPass::execute(ICommandBuffer*        cmdBuf,
                                    uint32_t               viewportWidth,
                                    uint32_t               viewportHeight,
                                    const glm::mat4&       viewProj,
@@ -247,7 +247,7 @@ void EntityIdViewportPass::execute(ICommandBuffer*        cmdBuf,
     }
 }
 
-void EntityIdViewportPass::drawStaticBucket(ICommandBuffer* cmdBuf, DrawCandidateView items)
+void EntityIdPass::drawStaticBucket(ICommandBuffer* cmdBuf, DrawCandidateView items)
 {
     for (const auto& item : items) {
         if (!item.mesh) {
@@ -262,7 +262,7 @@ void EntityIdViewportPass::drawStaticBucket(ICommandBuffer* cmdBuf, DrawCandidat
     }
 }
 
-void EntityIdViewportPass::drawSkinnedBucket(ICommandBuffer* cmdBuf, DrawCandidateView items)
+void EntityIdPass::drawSkinnedBucket(ICommandBuffer* cmdBuf, DrawCandidateView items)
 {
     for (const auto& item : items) {
         if (!item.mesh) {
@@ -275,7 +275,7 @@ void EntityIdViewportPass::drawSkinnedBucket(ICommandBuffer* cmdBuf, DrawCandida
     }
 }
 
-void EntityIdViewportPass::drawBillboards(ICommandBuffer* cmdBuf, const std::vector<EntityIdBillboard>& billboards)
+void EntityIdPass::drawBillboards(ICommandBuffer* cmdBuf, const std::vector<EntityIdBillboard>& billboards)
 {
     for (const auto& billboard : billboards) {
         if (billboard.entityId == 0) {
