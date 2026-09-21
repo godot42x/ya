@@ -263,6 +263,17 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices,
         return static_cast<T*>(queryModuleInterface(interfaceId));
     }
 
+    /// What the primary surface shows before the host's own display passes: a
+    /// View's display image (true), or nothing but the pass clear (false)
+    /// because a module fills the surface itself.
+    ///
+    /// Not a question about AppState. The editor's Play runs the game in
+    /// Runtime mode and still draws its chrome across the whole window, so
+    /// "runtime" does not mean "the window is the game's view". The module that
+    /// owns the surface is what decides; see
+    /// `IRuntimeModule::fillsPrimarySurface`.
+    [[nodiscard]] bool presentsViewDisplayImage() const;
+
     glm::vec2 getLastMousePos() const { return _lastMousePos; }
 
   protected:

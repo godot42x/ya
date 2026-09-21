@@ -143,7 +143,10 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     //   UI             → game UI onto that RT (after post, never into bloom)
     //   view compose   → View insets, then the host's View-compose stage
     //   display compose→ PresentationGraphService onto swapchain[imageIndex],
-    //                    running the host's display stages inside it
+    //                    running the host's display stages inside it. The
+    //                    surface's backdrop is the host's declaration: a View
+    //                    display image, or only the pass clear when the host's
+    //                    chrome fills the surface (plan.present).
     //   capture        → the host's appendDisplayCapture, inside display
     //                    compose (automation screenshots)
     //
@@ -228,7 +231,10 @@ RecordedFrame RenderDeviceState::record(const RenderFramePlan& plan)
     if (plan.recordExtensions) {
         plan.recordExtensions->recordViewCompose(*cmdBuf, plan.frame.deltaTime);
     }
-    _presentationGraphService.recordDisplayCompose(plan.frame.deltaTime, plan.recordExtensions, cmdBuf.get());
+    _presentationGraphService.recordDisplayCompose(plan.present.bCopyViewDisplayImage,
+                                                   plan.frame.deltaTime,
+                                                   plan.recordExtensions,
+                                                   cmdBuf.get());
 
     const uint32_t flightIndex = plan.frame.flightIndex;
     retainPublishedViewOutputs(flightIndex, cmdBuf.get());

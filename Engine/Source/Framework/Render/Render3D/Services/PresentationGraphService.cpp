@@ -36,13 +36,14 @@ RGImportedTextureDesc makePresentationImportedTextureDesc(const RenderTexture& i
     return desc;
 }
 
-/// Display compose copies a display-ready image onto the swapchain, so it runs
-/// the postprocessor in its pass-through configuration: every grading stage off.
-/// The input is a View's display image, which the finalize pass already gave its
-/// output encoding and the view's grading. Grading it again here is the
-/// double-grade this constant replaced: the windowed image used to receive an
-/// ACES curve plus a second gamma on top of the view's own finalize, while the
-/// editor viewport (which samples the display image directly) received one.
+/// The copy samples a display-ready image and stretches it over the swapchain,
+/// so it runs the copy pipeline in its pass-through configuration: every
+/// grading stage off. The input is a View's display image, which the finalize
+/// pass already gave its output encoding and the view's grading. Grading it
+/// again here is the double-grade this constant replaced: the windowed image
+/// used to receive an ACES curve plus a second gamma on top of the view's own
+/// finalize, while the editor viewport (which samples the display image
+/// directly) received one.
 const PostProcessingState kDisplayComposeState = PostProcessingState::passThrough();
 
 } // namespace
@@ -60,8 +61,8 @@ void PresentationGraphService::init(const InitDesc& desc)
     rebuildImages();
 
     auto* swapchain = _present->getSwapchain();
-    _presentationPostProcessor = ya::makeShared<BasicPostprocessing>();
-    _presentationPostProcessor->init(BasicPostprocessing::InitDesc{
+    _displayImageCopy = ya::makeShared<BasicPostprocessing>();
+    _displayImageCopy->init(BasicPostprocessing::InitDesc{
         .render                = _render,
         .renderPass            = nullptr,
         .pipelineRenderingInfo = PipelineRenderingInfo{
@@ -73,12 +74,12 @@ void PresentationGraphService::init(const InitDesc& desc)
         },
     });
 
-    auto inputLayout = _presentationPostProcessor->getInputDSL();
-    YA_CORE_ASSERT(inputLayout, "Presentation postprocessor must expose an input DSL");
+    auto inputLayout = _displayImageCopy->getInputDSL();
+    YA_CORE_ASSERT(inputLayout, "Presentation display copy must expose an input DSL");
     _presentationInputPool = IDescriptorPool::create(
         _render,
         DescriptorPoolCreateInfo{
-            .label     = "Presentation_ToneMap_DSP",
+            .label     = "Presentation_DisplayCopy_DSP",
             .maxSets   = 1,
             .poolSizes = {
                 DescriptorPoolSize{
@@ -87,9 +88,9 @@ void PresentationGraphService::init(const InitDesc& desc)
                 },
             },
         });
-    YA_CORE_ASSERT(_presentationInputPool, "PresentationGraphService requires a tone-map descriptor pool");
-    _presentationToneMap.input.set = _presentationInputPool->allocateDescriptorSets(inputLayout);
-    YA_CORE_ASSERT(_presentationToneMap.input.set,
+    YA_CORE_ASSERT(_presentationInputPool, "PresentationGraphService requires a display-copy descriptor pool");
+    _displayImageCopyBindings.input.set = _presentationInputPool->allocateDescriptorSets(inputLayout);
+    YA_CORE_ASSERT(_displayImageCopyBindings.input.set,
                    "PresentationGraphService failed to allocate the swapchain blit descriptor set");
 
     swapchain->onRecreate.addLambda(
@@ -113,11 +114,11 @@ void PresentationGraphService::shutdown()
             swapchain->onRecreate.removeAll(this);
         }
     }
-    _presentationToneMap = {};
+    _displayImageCopyBindings = {};
     _presentationInputPool.reset();
-    if (_presentationPostProcessor) {
-        _presentationPostProcessor->shutdown();
-        _presentationPostProcessor.reset();
+    if (_displayImageCopy) {
+        _displayImageCopy->shutdown();
+        _displayImageCopy.reset();
     }
     _presentationGraphExecutors.clear();
     _presentationImages.clear();
@@ -179,9 +180,10 @@ std::shared_ptr<RenderTexture> PresentationGraphService::getCurrentPresentationI
     return _presentationImages[imageIndex];
 }
 
-void PresentationGraphService::recordDisplayCompose(float                     deltaTime,
-                                                    IFrameRecordExtensions* extensions,
-                                                    ICommandBuffer*         cmdBuf)
+void PresentationGraphService::recordDisplayCompose(bool                     bCopyViewDisplayImage,
+                                                    float                    deltaTime,
+                                                    IFrameRecordExtensions*  extensions,
+                                                    ICommandBuffer*          cmdBuf)
 {
     YA_PROFILE_FUNCTION();
 
@@ -205,8 +207,8 @@ void PresentationGraphService::recordDisplayCompose(float                     de
     if (!presentationImage) {
         return;
     }
-    if (_presentationPostProcessor) {
-        _presentationPostProcessor->beginFrame();
+    if (_displayImageCopy) {
+        _displayImageCopy->beginFrame();
     }
 
     if (extensions) {
@@ -219,7 +221,12 @@ void PresentationGraphService::recordDisplayCompose(float                     de
     }
 
     const Extent2D presentationExtent = presentationImage->getExtent();
-    auto           sourceImage        = _viewDisplayImageProvider ? _viewDisplayImageProvider() : nullptr;
+    // Asked only when the host says the window shows this View: a host that
+    // fills the surface itself has no use for a provider answer, and calling it
+    // would make the frame depend on a View the host is not going to show.
+    auto sourceImage = (bCopyViewDisplayImage && _viewDisplayImageProvider)
+                           ? _viewDisplayImageProvider()
+                           : nullptr;
     RenderGraph graph;
     const auto  output = graph.importTexture(
         makePresentationImportedTextureDesc(*presentationImage,
@@ -245,15 +252,15 @@ void PresentationGraphService::recordDisplayCompose(float                     de
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
-            if (_presentationPostProcessor && sourceImage && sourceImage->getImageView()) {
-                _presentationPostProcessor->render(BasicPostprocessing::RenderDesc{
+            if (_displayImageCopy && sourceImage && sourceImage->getImageView()) {
+                _displayImageCopy->render(BasicPostprocessing::RenderDesc{
                     .cmdBuf         = &rgCtx.getCommandBuffer(),
                     .ctx            = nullptr,
                     .inputImageView = sourceImage->getImageView(),
                     .renderExtent   = presentationExtent,
                     .bOutputIsSRGB  = EFormat::isSRGB(getSwapchain() ? getSwapchain()->getFormat() : EFormat::Undefined),
                     .state          = &kDisplayComposeState,
-                    .toneMap        = _presentationToneMap,
+                    .toneMap        = _displayImageCopyBindings,
                 });
             }
 

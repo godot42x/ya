@@ -57,7 +57,7 @@
 | `editor-undo-redo/` | 编辑器 undo/redo |
 | `source-layout-subtraction/` | 目录/头文件布局减法（S1 已落地，S2–S5 进行中） |
 | `editor-ui-grouping/` | GameEditor/UI 关切分组（G1 已落地） |
-| `display-compose-encoding/` | display compose 只搬运不改色（F1 已落地，F2 未做） |
+| `display-compose-encoding/` | display compose 只搬运不改色（F1、F2 均已落地；仅剩 gamma 开关语义待定） |
 
 ## 归档判据
 

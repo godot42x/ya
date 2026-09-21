@@ -87,6 +87,21 @@ struct PresentFrameInput
 {
     IRenderSurfaceContext* surface    = nullptr;
     int32_t                imageIndex = -1;
+    /// What the surface shows before the host's own display extensions: the
+    /// published View's display image (true), or nothing but display compose's
+    /// own clear (false) because the host's chrome fills the surface.
+    ///
+    /// This is the host's declaration, not something the renderer may infer.
+    /// An editor authoring View is a display root by compose structure
+    /// (`composeOntoViewId == 0`) and is still not what the window shows: the
+    /// editor's chrome widget samples it, so copying it across the surface
+    /// first would overwrite the whole window and be overwritten in turn.
+    /// Defaulting to true keeps a host that says nothing on the plain path: the
+    /// surface shows the View. The host's answer is
+    /// `App::presentsViewDisplayImage`, which asks the modules whether one of
+    /// them fills the surface. See plan
+    /// `.agent/plan/display-compose-encoding/plan.md` (F2).
+    bool bCopyViewDisplayImage = true;
 };
 
 /// Sealed host frame value consumed by `RenderDeviceState::record`.

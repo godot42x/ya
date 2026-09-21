@@ -102,6 +102,19 @@ struct IRuntimeModule
         (void)app;
         (void)dt;
     }
+
+    /// Display-compose coverage: do this module's own passes fill the whole
+    /// primary surface? True means those passes *are* the window's content, so
+    /// the renderer must not first copy a View's display image across the
+    /// surface -- that copy would be overdrawn and thrown away. The editor's
+    /// chrome answers true; a module that only contributes an overlay leaves it
+    /// false and keeps the View as the surface's backdrop.
+    ///
+    /// A query rather than a switch the module flips, so there is no frame
+    /// where the answer and what gets recorded can disagree. See
+    /// `App::presentsViewDisplayImage` and
+    /// `PresentFrameInput::bCopyViewDisplayImage`.
+    [[nodiscard]] virtual bool fillsPrimarySurface() const { return false; }
 };
 
 } // namespace ya

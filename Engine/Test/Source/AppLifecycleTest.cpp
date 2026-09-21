@@ -123,6 +123,22 @@ struct CountingEventModule final : IModule, IRuntimeModule
     }
 };
 
+/// A module that draws the whole surface itself (the editor's chrome does).
+struct SurfaceFillingModule final : IModule, IRuntimeModule
+{
+    bool bFills = true;
+
+    bool onLoad(FModuleContext&) override { return true; }
+    bool onStart(const FEngineContext&) override { return true; }
+    void onStop() override {}
+    void onUnload() override {}
+    void* queryInterface(FInterfaceId interfaceId) override
+    {
+        return interfaceId == YA_RUNTIME_MODULE_INTERFACE ? static_cast<IRuntimeModule*>(this) : nullptr;
+    }
+    [[nodiscard]] bool fillsPrimarySurface() const override { return bFills; }
+};
+
 class AppLifecycleTest : public ::testing::Test
 {
   protected:
@@ -190,6 +206,29 @@ TEST_F(AppLifecycleTest, ActiveSceneSwitchKeepsCallerOwnedScenesAlive)
     EXPECT_EQ(playScene, nullptr);
     EXPECT_EQ(sceneManager->getActiveScene(), authoringScene.get());
     EXPECT_EQ(sceneManager->getSceneByRegistry(&authoringScene->getRegistry()), authoringScene.get());
+}
+
+TEST_F(AppLifecycleTest, TheSurfaceBackdropIsWhatTheLoadedModulesSayItIs)
+{
+    /// A host with no surface-filling module shows the View: this is the
+    /// standalone runtime, where display compose must copy the View across the
+    /// window.
+    EXPECT_TRUE(app.presentsViewDisplayImage());
+
+    auto filler = std::make_unique<SurfaceFillingModule>();
+    SurfaceFillingModule* fillerModule = filler.get();
+    app.addModule(std::move(filler));
+    AppModuleTestAccess::configure(app);
+    AppModuleTestAccess::attach(app);
+
+    /// One module filling the surface is enough: the View copy would be
+    /// overdrawn, so display compose must not make it. The editor is this case
+    /// in every state it is loaded in, including a play session.
+    EXPECT_FALSE(app.presentsViewDisplayImage());
+
+    /// The answer follows the module, not a registration-time decision.
+    fillerModule->bFills = false;
+    EXPECT_TRUE(app.presentsViewDisplayImage());
 }
 
 TEST_F(AppLifecycleTest, ModulesDispatchInRegistrationOrderAndDetachInReverseOrder)

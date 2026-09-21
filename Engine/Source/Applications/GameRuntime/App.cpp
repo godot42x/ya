@@ -388,6 +388,22 @@ void App::prepareModulesForRender(float dt)
     }
 }
 
+bool App::presentsViewDisplayImage() const
+{
+    // Asked before display compose records, and answered from module state
+    // rather than from a flag a module set earlier in the frame: the renderer
+    // gets the same answer the recording below will produce. The loop is the
+    // whole policy -- one module filling the surface is enough to make the View
+    // copy pointless, and a host with no such module (a standalone runtime)
+    // shows the View.
+    for (const auto& slot : _modules) {
+        if (getRuntimeModule(slot.module)->fillsPrimarySurface()) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void App::recordViewCompose(ICommandBuffer& cmdBuf, float deltaTime)
 {
     for (const auto& slot : _modules) {

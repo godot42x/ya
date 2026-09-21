@@ -1,6 +1,6 @@
 {
   "plan": "display-compose-encoding",
-  "status": "f1_landed_as_its_own_commit",
+  "status": "f1_and_f2_landed",
   "commits": {
     "rename_only": "57c55862",
     "f1_code": "4a78b5fd",
@@ -58,9 +58,37 @@
     {
       "id": "editor_does_not_double_blit_the_world",
       "phase": "F2",
-      "status": "not_started",
+      "status": "verified",
       "evidence": [
-        "the editor authoring view is the display root with no composeOntoViewId, so present blits the world full-screen and the editor chrome then covers it"
+        "PresentFrameInput::bCopyViewDisplayImage is the host's declaration of the surface backdrop and defaults to true (the window shows the View)",
+        "IRuntimeModule::fillsPrimarySurface is a query (default false); App::presentsViewDisplayImage loops the modules and GameRuntimeTickOrchestrator::recordFrame puts the answer on the plan",
+        "AppState is not the predicate: the editor's Play calls App::startRuntime() and still runs inside a chrome-owned window, so keying on isRuntimeMode() would put the wasted copy back during editor Play",
+        "one-shot probe: standalone runtime 20/20 frames copy=1 source=1; editor stopped copy=0 source=0; editor Play (entered for real through the automation control port) runtime_mode=1 presents_view=0 copy=0 for every one of 2839 frames",
+        "editor presentation screenshots are byte-identical before and after the change outside the Frame Inspector HUD text band"
+      ]
+    },
+    {
+      "id": "backdrop_policy_is_locked_by_a_test",
+      "phase": "F2",
+      "status": "verified",
+      "evidence": [
+        "AppLifecycleTest.TheSurfaceBackdropIsWhatTheLoadedModulesSayItIs: no filling module -> true, one filling module -> false, module stops filling -> true again"
+      ]
+    },
+    {
+      "id": "display_compose_names_are_honest",
+      "phase": "F2",
+      "status": "verified",
+      "evidence": [
+        "PresentationGraphService members renamed to _displayImageCopy / _displayImageCopyBindings, descriptor pool label Presentation_DisplayCopy_DSP; the pipeline is a pass-through sampled copy, not a tonemap"
+      ]
+    },
+    {
+      "id": "surface_backdrop_is_not_inferred_from_view_structure",
+      "phase": "F2",
+      "status": "verified",
+      "evidence": [
+        "an editor authoring View is still a display root by compose structure (composeOntoViewId == 0) for publish identity and view extent, but being a display root no longer means the window shows it"
       ]
     },
     {
@@ -86,5 +114,12 @@
     "WidgetLayoutTest.FloatingWindowResizeHandlesLiveOnOverlaySlots",
     "ScriptApiLibraryFixture.GameUIWidgetLifecycleThroughRegistry",
     "GameUIHostTest.BuildSnapshotComposesMountedWidgets"
+  ],
+  "known_broken_tests": [
+    "WidgetTreeTest.SystemLayersCannotBeDetached kills the test process (SIGTRAP) at HEAD: the case deliberately detaches a system layer and YA_CORE_ASSERT calls PLATFORM_BREAK(). Exclude it from wide filters until the GUI owner decides whether detaching a system layer should trap or return refused."
+  ],
+  "baseline_failure_note": "wide filter re-run after F2: 696 ran, 679 passed, 6 failed, matching the recorded baseline set (5 known + the RenderGraphCoreTest flake)",
+  "unattributed_observations": [
+    "first control-start editor instance died with SIGBUS (KERN_PROTECTION_FAILURE in App::presentsViewDisplayImage, fault address inside the dyld shared cache). Not reproduced across many later identical runs, including 2800+ frames through a real editor Play session; the function is a read-only loop. Suspected build/mapping race, unverified."
   ]
 }
